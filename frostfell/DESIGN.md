@@ -397,8 +397,34 @@ no further rewrite of the amount will fix it — and there is a reading in the
 fight arm that says why: the pilot's gear-before-body threshold measured FLAT
 end to end. If *when* you spend gear does not matter, a course whose rule is
 "spend gear sooner" cannot matter either, however much of it you are handed.
-Scrap is a tempo rule on an axis this board does not price. Change what it pays
-in; do not sweep it again.
+
+**So a second axis was tried and it is also flat, which narrows the question
+rather than answering it.** "Change what it pays in, not how much" was the
+conclusion, and the axis picked was card advantage — a larger opening hand,
+chosen because the constructed-deck arm had just shown at p=0.009 that what a
+caravan holds decides runs. At 450 an arm against 40% for declaring nothing:
+
+```
++0 (ships) 40%   ·   +1 40%   ·   +2 37%   ·   +3 39%      spread 3, bar ±8.9
+```
+
+**Reverted**, on the standing rule that a mechanic measuring zero is not free.
+Two rules tried, two nulls, and the pair rules out the whole "hand" half of the
+game for this course — how much you hold and when you spend it — at every
+magnitude either was tried at.
+
+What is left untried is the axis every course that WORKS uses: **something that
+happens on the board during a fight, every fight, from turn one.** Hearth mends
+the line each upkeep, Bodies puts armour on every arrival, Cold takes the opening
+wave's turn. Scrap's only rule on that axis is `patched`, and it fires on a
+death — late and rare, the same shape that took Hearth five rewrites to escape.
+Scrap has now failed twice for the reason Hearth failed five times, which is the
+strongest hint available about where the third attempt goes.
+
+**And the sweep arm stopped re-asking.** Scrap comes out of it: re-sweeping a
+third magnitude on a course whose problem is demonstrably not magnitude costs
+1,350 runs a round to re-learn the same null. Both readings live in the course's
+own definition where the next person to touch it will read them.
 
 Shipping the +17 version would have been the same mistake Cold made when Frost
 landed on every arrival: 58% against a 40% courseless baseline is not a choice,
@@ -652,13 +678,48 @@ each deck's rate is noisier, the sort is noisier, and the composition gaps
 attenuate — the two are not a controlled comparison of deck count. What they ARE
 is two configurations, and **the gaps failed to clear in both.**
 
-So the standing claim is the weak one: after four rounds, one headline that was
-an artefact of its own split, and four composition gaps that do not clear a null
-at any sample tried. The thing that would settle it is not more of either knob —
-it is decks that differ **by construction** on the axis in question (a gear-heavy
-half and a body-heavy half, dealt that way) rather than decks dealt at random and
-sorted by outcome afterwards. That is a different arm, and it is the one to build
-before this finding is quoted again.
+**AND THE DIRECT ARM WAS BUILT, AND IT ANSWERS IN ONE RUN.** Everything above is
+observational: deal decks at random, sort them by outcome, ask what the winning
+end has in common. Four rounds of that produced one artefact and four nulls. The
+direct question — deal decks that differ **on purpose** and run them against the
+same trails — had never been asked.
+
+Six decks of 4 gear + 2 wardens against six of 5 wardens + 1 gear, sampled from
+the same pool by the same seeded shuffle, alternately so neither side is dealt
+what the other already spent, on the same seeds. Two wardens is the floor a
+caravan can function on, so the contrast is as wide as the game allows rather
+than as wide as looks impressive. At **3,600 runs a side**:
+
+```
+                    crossed        how far it got (0-3)
+4 gear + 2 wardens    4.1%              1.36 zones
+5 wardens + 1 gear    1.4%              1.24 zones
+                     +2.7 points        +0.13 zones
+             p=0.009 over 924       p=0.009 over 924
+```
+
+**Composition is real, and both responses agree at p=0.009.** The null is the
+same enumeration used above — every way of calling six of the twelve decks one
+thing — so nothing is assumed about independence, which matters because runs
+sharing a deck are correlated and the binomial band (±0.5) badly overstates the
+certainty.
+
+**The direction of the retracted headline was right and its size was nonsense.**
+Gear beats bodies; it beats them by **2.7 points**, not fourteen. In relative
+terms that is a tripled crossing rate, which sounds enormous and is measured
+against a 1.4% floor — the honest absolute number is small, and both are worth
+saying.
+
+One limit, and it is the file's own rule: this is the LOCKED arm, so it is a
+finding about locked decks. A real caravan drafts, and the whole question of
+whether a starting lean survives twenty cards of drafting is untouched.
+
+**The transferable half is about method, not gear.** Four rounds of observational
+work on a question that a constructed comparison settled in one run, and the
+reason the observational versions kept failing was never the sample size — it was
+that sorting on the outcome cannot separate a cause from the sorting. *When a
+finding refuses to resolve, check whether the question is observational before
+buying more runs.*
 ### FINDING — the three unsupported nulls, spent and settled
 
 `topic: null-audit`
@@ -766,9 +827,34 @@ the gap between two rows is that one thing. `FF_RUNS=70`, 210 runs an arm:
 | + the trader | spends well | 39% (**+13**) |
 | + steering the pool | drafts to a course | 41% (+2) |
 
-**33 points, and the six-point jump from 27 came from taking three cards out**,
-not from anything added to a pilot — see [auras](#finding--the-prescription-for-a-flat-pool-was-an-aura-and-it-did-not-work).
-That is the largest single move the ladder has made, and it was made by deletion.
+**AND A FIFTH RUNG, WHICH IS THE LARGEST MOVE THIS NUMBER HAS EVER MADE.**
+
+| pilot | | worth |
+|---|---|---|
+| + choosing its road | takes every fight rather than an arbitrary fork | 50% (**+9**) |
+
+**33 → 42 points.** The total had read 33 for two rounds and 27 for four before
+that, and the only thing that ever moved it was *deleting* three cards. The
+question that finally moved it was not "what else can be tuned" but **what is
+the ladder not asking about at all**.
+
+Every rung was a thing the pilot KNOWS — how to fight, how to spend, how to
+steer the offers. None was about which way it GOES, and the top rung had been
+choosing forks with `(seed + step) % length` since the trail was built: an
+arbitrary pick, once a step, on the one screen that offers a decision. The dodge
+arm has had the number for rounds — it reads "takes every fight" at 49% against
+the ladder's 41% — and nobody made it a rung.
+
+So **33 was not the instrument's ceiling; it was the ceiling of what the
+instrument was asking.** On a ±2.8 ladder band (2σ = ±5.5) nine points clears
+comfortably. The general form is worth more than the number: *a ladder measures
+the dimensions you gave it, and a total that will not move is as likely to be a
+missing dimension as a game that does not reward skill.*
+
+The six-point jump from 27 to 33 the round before came from taking three cards
+out — see [auras](#finding--the-prescription-for-a-flat-pool-was-an-aura-and-it-did-not-work).
+Two rounds, two moves, and neither came from tuning anything: one from deleting
+content, one from measuring something nobody had measured.
 
 **Every reading before this round is on a different footing and is not
 comparable.** Unlocks used to accumulate across runs, so the four arms each
@@ -870,6 +956,31 @@ never told 7%   ·   told once 18%   ·   always knew 19%
 **Being told carries eleven of the twelve points that knowing is worth.** The
 limit was real for the pilot as built, not for the instrument.
 
+
+**AND A STAMP CAN DESCRIBE A GAME THAT NO LONGER EXISTS**, which is the failure
+mode the stamp file was not built for and had already suffered. It exists to
+catch an arm listed as standing and never run — "no reading recorded, run it".
+The opposite defect is worse and looks like an answer: `FF_CARDS` had been
+reporting **"widest coldbearer −6.7, best backdrift +1.7"** every default run,
+and both cards were CUT two rounds ago. The summary was quoting a measurement of
+a card set the game does not have.
+
+A reading is prose with numbers in it and almost none of it can be validated —
+but it quotes **card ids**, and those can be. Any lowercase word in a stamp that
+used to be a card id and no longer is now fails the suite, against a register of
+cut ids kept beside the arms list. It cannot know a number went stale; it can
+know the game changed underneath one, which is the case that actually happened.
+Re-run, `FF_CARDS` reads *no card of 57 clears 3.33σ, widest sleetrunner −10.8;
+giving from a locked floor: 0 clear it, best frostmite +4.2*.
+
+**`FF_GIVE` came off the standing list rather than being run**, and it is the
+same defect from the other side. It read "no reading recorded — run it" for three
+rounds because it was listed as something that produces a reading, and it is not
+one: it narrows `FF_CARDS` to a named handful exactly as `FF_HABIT` narrows
+`FF_ABLATE`, and reports through that arm's table. **A modifier listed as an arm
+makes the summary claim something untrue about the state of the measurements**,
+which is the same harm as an arm never run, and three rounds of reading "run it"
+never prompted anyone to ask whether it was runnable.
 ### FINDING — the dose of a lesson is irrelevant; the subject is everything
 
 `topic: lesson`
@@ -1605,6 +1716,45 @@ Fixed the same way as the card names — the labels are fitted to their cell les
 gutter and ellipsised when the floor will not let them shrink that far, so the
 fold shows `FIGHTS W…` where a desktop shows `FIGHTS WON`. Truncation is the
 cost; the alternative was two labels reading as one.
+
+**AND THE STUB STOPPED GUESSING AT WIDTHS, WHICH TURNED ONE FIX INTO FOUR.**
+`length × size × 0.5` was one constant for every character in both faces, and
+this game's typeface is GENERATED — every glyph carries an exact advance in font
+units, so the error was measurable rather than arguable:
+
+```
+                 UPPERCASE   lowercase   space
+Frostwork Bold     0.667       0.594     0.331     ← the body face
+Frostwork          0.655       0.585     0.332
+Frostcut           0.578       0.512     0.284
+the stub said      0.500       0.500     0.500
+```
+
+**Uppercase in the body face was understated by a third**, which is most of the
+game's labels. The advances now come out of `tools/frostfont/alphabet.mjs` — the
+same source the shipped `.woff2` is cut from, per character rather than per face,
+so an `I` and a `W` stop being the same width. Remaining error, stated rather
+than hidden: no kerning pairs and no `letterSpacing`, both of which make the stub
+read NARROWER than the truth, so it misses a marginal collision before inventing
+one.
+
+**Then the corrected widths showed the check itself was the wrong shape.** With
+real advances, `FIGHTS WON` and `FOES FELLED` have **3 units of gap at 23-unit
+type** — they never overlapped, so an overlap check could not have caught them
+however accurate its arithmetic. What the eye reads as "touching" is a gutter too
+thin to separate two words, and the threshold for that is a fraction of the type
+size, not zero. A quarter of the size is the bar.
+
+Turned from an overlap check into a gutter check, it found **three more live
+defects on the fold cover in its first run** — the trail checklist, the shop
+counter, and the reward screen's three buttons — none of which anyone had seen.
+Two of the three shared one cause: `button()` drew its label at a fixed 19 units
+and **never fitted it to its own button**, in a game where every button had that
+bug for forty-nine rounds. It fits now.
+
+**The generalisable half: an instrument's approximations decide which bugs it can
+have an opinion about.** The width model was accurate enough for paragraphs and
+useless for gutters, and nothing said so until a defect landed exactly there.
 
 ### FINDING — contrast, the third thing nobody was checking
 

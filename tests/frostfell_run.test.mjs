@@ -38,6 +38,10 @@ const ARMS = {
   },
   save() { try { writeFileSync(ARMS_FILE, JSON.stringify(this.all, null, 1) + '\n'); } catch { /* read-only tree */ } },
 };
+/* Cards this game HAS HAD and cut. Not a graveyard for its own sake — it is the
+   only way a check can tell "this word was a card and is not any more" from
+   "this word is prose". Add an id here when you cut one. */
+const GONE = new Set(['coldbearer', 'backdrift', 'grudgehorn', 'dawnpiper', 'trailmarshal', 'cairnwarden']);
 const STANDING = [
   ['FF_ABLATE=60', 'which fight habits are worth anything, added and removed'],
   ['FF_LESSON=1', 'what a lesson is worth, and at what dose'],
@@ -48,14 +52,23 @@ const STANDING = [
   ['FF_NOWAVE=1', 'the ladder with the wave telegraph off, same build, same seeds'],
   ['FF_NOSCARS=1', 'the ladder with the scar rule switched off'],
   ['FF_CARDS=40', 'every card priced by taking it out of the offer'],
-  ['FF_GIVE=a,b,c', 'a NAMED handful of cards priced deep, so the family bar is 3 tests and not 60'],
   ['FF_CALIBRATE=70', 'what a band actually is on this instrument — measured, not derived'],
   ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
   ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
+  ['FF_BUILT=200', 'gear-heavy against body-heavy decks, built on purpose rather than sorted on outcome'],
   ['FF_DIAL=150', 'the two flat courses swept by magnitude — a dial or decoration'],
   ['FF_GEARBAR=1', 'the pilot\'s gear-before-body bar swept — is the gear finding the deck or the pilot'],
 ];
-/* FF_HABIT, FF_CONTRAST, FF_VDECKS, FF_VSEED and FF_TIME are deliberately NOT
+/* FF_GIVE CAME OFF THIS LIST RATHER THAN BEING RUN, and the argument is the
+   file's own: it narrows FF_CARDS to a named handful the way FF_HABIT narrows
+   FF_ABLATE to one habit, and it reports through FF_CARDS' table rather than
+   writing a reading of its own. It read "no reading recorded — run it" for
+   three rounds because it was listed as a thing that produces a reading and it
+   is not one. A modifier listed as an arm is the same defect as an arm never
+   run: the summary claims something about the state of the measurements that is
+   not true.
+
+   FF_HABIT, FF_CONTRAST, FF_VDECKS, FF_VSEED and FF_TIME are deliberately NOT
    here, and that is the answer to
    "six arms exist and three are stamped". Neither is an arm: FF_HABIT narrows
    FF_ABLATE to one habit so a single number can be run deep, and it reports
@@ -182,7 +195,7 @@ section('whole runs, start to finish');
     }
     return out;
   };
-  const MODES = ['careless', 'tactics', 'trader', 'careful'];
+  const MODES = ['careless', 'tactics', 'trader', 'careful', 'router'];
   const sweepMany = async (modes, tweak, base = 1000) => {
     const jobs = [];
     for (const mode of modes) for (const tribe of tribes) {
@@ -194,7 +207,7 @@ section('whole runs, start to finish');
     return modes.map((m, mi) => tally(
       answers.slice(mi * tribes.length, (mi + 1) * tribes.length).flatMap((a) => a.stats)));
   };
-  const [careless, tactics, trader, careful] = await sweepMany(MODES);
+  const [careless, tactics, trader, careful, router] = await sweepMany(MODES);
 
   /* CAN THIS INSTRUMENT RESOLVE ITS OWN HEADLINE NUMBER? It had never been asked.
 
@@ -275,7 +288,8 @@ section('whole runs, start to finish');
     return out.padEnd(wide).slice(0, wide);
   };
   const rows = [['careless', careless], ['+ the fight', tactics],
-    ['+ the trader', trader], ['+ steering the pool', careful]];
+    ['+ the trader', trader], ['+ steering the pool', careful],
+    ['+ choosing its road', router]];
   console.log('');
   console.log(`    ${''.padEnd(20)}${'zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █'.padEnd(48)}  won`);
   for (const [name, o] of rows) {
@@ -288,7 +302,9 @@ section('whole runs, start to finish');
   };
   console.log(`    what each thing is worth:  the fight ${rung(careless, tactics)}   ` +
     `the trader ${rung(tactics, trader)}   steering the pool ${rung(trader, careful)}   ` +
-    `= ${pct(careful) - pct(careless)} points, all told`);
+    `choosing its road ${rung(careful, router)}   = ${pct(router) - pct(careless)} points, all told`);
+  console.log(`    (four rungs and 33 points was the headline for two rounds; ` +
+    `the fifth rung is worth ${pct(router) - pct(careful)} and takes it to ${pct(router) - pct(careless)})`);
   for (const [name, o] of rows) {
     console.log(`    ${name.padEnd(20)}${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns a fight · ` +
       `${o.reachedTwo}/${o.runs} saw the second zone, ${o.reachedThree} the third`);
@@ -759,6 +775,141 @@ section('is the gear preference the deck or the pilot');
     `the gear-before-body dial is flat end to end (${spread} points across ${BARS.length} bars)`);
 }
 
+/* ------------------------------------ gear against bodies, built on purpose -- */
+/* THE ARM THAT SHOULD HAVE BEEN BUILT FOUR ROUNDS AGO.
+
+   "Gear-heavy hands win by 14 points" was the headline for three rounds and it
+   was retracted last round as an artefact: the halves it compared were made by
+   SORTING EIGHT DECKS ON WIN RATE, so they differ by construction whether or not
+   anything about the decks does. The composition gaps that survive that
+   objection were then put through an exact permutation null and cleared nothing
+   at any sample tried — p=0.06 at eight decks, p=0.52 at fourteen.
+
+   Every one of those measurements is INDIRECT. They deal decks at random, sort
+   them by outcome, and ask what the winning end has in common — which is
+   observational, and which is why four rounds of it produced one artefact and
+   four nulls. The direct question was never asked: **deal decks that differ ON
+   PURPOSE and run them against the same trails.**
+
+   Six gear-heavy decks (4 gear, 2 wardens) against six body-heavy ones (5
+   wardens, 1 gear), sampled from the same pool by the same seeded shuffle, run
+   on the same seeds. Two bodies is the floor a deck can function on — a caravan
+   with no wardens cannot hold a lane — so the contrast is as wide as the game
+   allows rather than as wide as looks impressive.
+
+   The band comes two ways and both are printed, because they answer different
+   objections. The binomial band treats runs as independent and understates the
+   truth, since runs sharing a deck are correlated. The permutation null does
+   not: if composition is worth nothing then which six of the twelve get called
+   "gear" is arbitrary, so relabelling across all C(12,6) = 924 splits gives the
+   distribution of gaps under exactly that hypothesis. Where the built split
+   falls in it is the answer, with no independence assumed. */
+section('gear against bodies, dealt on purpose');
+{
+  const N = Number(process.env.FF_BUILT || 0);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const each = N || Math.min(14, Number(process.env.FF_RUNS || DEFAULT_N));
+  const SIDE = 6;
+  const pool = Object.values(FF.CARDS).filter((c) => !c.leader && !c.noPool);
+  const gearPool = pool.filter((c) => c.type === 'item').map((c) => c.id).sort();
+  const bodyPool = pool.filter((c) => c.type === 'unit').map((c) => c.id).sort();
+  let x = (Number(process.env.FF_VSEED || 20250814) >>> 0) || 1;
+  const rnd = () => { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
+  const take = (src, k) => {
+    const bag = src.slice();
+    for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+    return bag.slice(0, k);
+  };
+  /* Built alternately rather than all-gear-then-all-body, so the two sides draw
+     from the same stretch of the PRNG and one is not systematically dealt the
+     cards the other already spent. */
+  const built = [];
+  for (let i = 0; i < SIDE; i++) {
+    built.push({ kind: 'gear', ids: take(gearPool, 4).concat(take(bodyPool, 2)) });
+    built.push({ kind: 'body', ids: take(bodyPool, 5).concat(take(gearPool, 1)) });
+  }
+  /* AND THE RESPONSE IS NOT WON/LOST, or not only.
+
+     A locked six-card deck crosses about 3% of the time, so "did it win" is 0 in
+     97 cells of 100 and most of its variance is the rarity of a 1 — the variance
+     arm learned this two rounds ago and switched to HOW FAR IT GOT, which reads
+     the same ordering at six times the resolution. The first run of this arm
+     showed exactly why: every body-heavy deck read 0.0%, which is a real signal
+     and an unusable one, because a floor cannot say how far below it something
+     is. Both responses are collected and both are tested. */
+  const jobs = built.flatMap((b) => tribes.map((tribe) => ({
+    tribes: [tribe], n: each, base: 1000, step: 37, mode: 'tactics', stats: true,
+    tweak: { set: { lockDeck: true, mend: 8 }, give: b.ids },
+  })));
+  const answers = await runJobs(jobs);
+  const rows = built.map((b, k) => {
+    const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
+    const wins = part.reduce((n, a) => n + a.wins, 0);
+    const runs = part.reduce((n, a) => n + a.runs, 0);
+    const st = part.flatMap((a) => a.stats);
+    const zones = st.reduce((n, q) => n + (q.won ? FF.ZONES.length : (q.zone || 0)), 0) / Math.max(1, st.length);
+    return { kind: b.kind, ids: b.ids, wins, runs, zones, pct: (wins / Math.max(1, runs)) * 100 };
+  });
+  const side = (k) => rows.filter((r) => r.kind === k);
+  const rate = (rs) => (rs.reduce((n, r) => n + r.wins, 0) / Math.max(1, rs.reduce((n, r) => n + r.runs, 0))) * 100;
+  const gearPct = rate(side('gear')), bodyPct = rate(side('body'));
+  const gap = gearPct - bodyPct;
+  const runsEach = side('gear').reduce((n, r) => n + r.runs, 0);
+  console.log('');
+  console.log(`    ${SIDE} decks of 4 gear + 2 wardens   ${'█'.repeat(Math.round(gearPct / 2)).padEnd(24)} ${gearPct.toFixed(1)}%`);
+  console.log(`    ${SIDE} decks of 5 wardens + 1 gear   ${'█'.repeat(Math.round(bodyPct / 2)).padEnd(24)} ${bodyPct.toFixed(1)}%`);
+  const bband = BAND.gap(gearPct / 100, runsEach) * Math.SQRT2;
+  console.log(`    → gear-heavy is ${gap >= 0 ? '+' : ''}${gap.toFixed(1)} points, ` +
+    `${runsEach} runs a side, binomial band ±${bband.toFixed(1)} (understates: runs sharing a deck are correlated)`);
+
+  /* THE NULL THAT DOES NOT ASSUME INDEPENDENCE. Twelve decks, every way of
+     calling six of them one thing — the same enumeration the split-half arm
+     uses, applied to a split that was made on purpose instead of on outcome. */
+  const combos = [];
+  const walk = (start, pickd) => {
+    if (pickd.length === SIDE) { combos.push(pickd.slice()); return; }
+    for (let i = start; i < rows.length; i++) { pickd.push(i); walk(i + 1, pickd); pickd.pop(); }
+  };
+  walk(0, []);
+  const gapOf = (chosen) => {
+    const inA = new Set(chosen);
+    let aw = 0, ar = 0, bw = 0, br = 0;
+    rows.forEach((r, i) => { if (inA.has(i)) { aw += r.wins; ar += r.runs; } else { bw += r.wins; br += r.runs; } });
+    return (aw / Math.max(1, ar)) * 100 - (bw / Math.max(1, br)) * 100;
+  };
+  const pOf = (fn, obs) => {
+    const all2 = combos.map((cm) => Math.abs(fn(cm)));
+    return all2.filter((v) => v >= Math.abs(obs) - 1e-9).length / all2.length;
+  };
+  const pv = pOf(gapOf, gap);
+  console.log(`    → against all ${combos.length} ways to label six of the twelve: p=${pv.toFixed(3)}` +
+    ` — ${pv <= 0.05 ? 'COMPOSITION IS REAL' : 'not distinguishable from an arbitrary relabelling'}`);
+
+  // and the same again on depth, which has resolution where won/lost has none
+  const zoneOf = (chosen) => {
+    const inA = new Set(chosen);
+    let a = 0, na = 0, b = 0, nb = 0;
+    rows.forEach((r, i) => { if (inA.has(i)) { a += r.zones; na++; } else { b += r.zones; nb++; } });
+    return a / Math.max(1, na) - b / Math.max(1, nb);
+  };
+  const zGear = side('gear').reduce((n, r) => n + r.zones, 0) / SIDE;
+  const zBody = side('body').reduce((n, r) => n + r.zones, 0) / SIDE;
+  const zGap = zGear - zBody;
+  const zp = pOf(zoneOf, zGap);
+  console.log(`    and on HOW FAR IT GOT (0-${FF.ZONES.length}), where the floor is not in the way: ` +
+    `gear ${zGear.toFixed(2)} vs bodies ${zBody.toFixed(2)} — ${zGap >= 0 ? '+' : ''}${zGap.toFixed(2)} zones, ` +
+    `p=${zp.toFixed(3)} ${zp <= 0.05 ? 'REAL' : 'not resolved'}`);
+  const perDeck = rows.map((r) => `${r.kind[0]}${r.pct.toFixed(0)}/${r.zones.toFixed(1)}`).join(' ');
+  console.log(`    (deck by deck as won%/zones, g=gear b=body: ${perDeck})`);
+  if (N) {
+    ARMS.stamp('FF_BUILT=200', `gear-heavy ${gearPct.toFixed(1)}% vs body-heavy ${bodyPct.toFixed(1)}% ` +
+      `(${gap >= 0 ? '+' : ''}${gap.toFixed(1)} points, p=${pv.toFixed(3)}); on depth ` +
+      `${zGear.toFixed(2)} vs ${zBody.toFixed(2)} zones (${zGap >= 0 ? '+' : ''}${zGap.toFixed(2)}, p=${zp.toFixed(3)}) ` +
+      `over ${combos.length} relabellings`, tribes.length * each * SIDE);
+  }
+  ok(rows.every((r) => r.runs > 0), `all ${rows.length} built decks played (${runsEach} runs a side)`);
+}
+
 /* --------------------------------- do the flat courses have a dial either? -- */
 /* THREE OF FIVE COURSES SIT AT THE COURSELESS BASELINE, AND ONE METHOD JUST WORKED.
 
@@ -796,10 +947,14 @@ section('do the two flat courses have a dial');
     { k: 'bodies  Shell 4', course: 'line', dial: { 'line.shellN': 4 } },
     { k: 'bodies  Shell 6', course: 'line', dial: { 'line.shellN': 6 } },
     { k: 'bodies  Shell 9', course: 'line', dial: { 'line.shellN': 9 } },
-    { k: 'scrap   1 free', course: 'scrap', dial: { 'scrap.freeN': 1 }, ships: true },
-    { k: 'scrap   2 free', course: 'scrap', dial: { 'scrap.freeN': 2 } },
-    { k: 'scrap   3 free', course: 'scrap', dial: { 'scrap.freeN': 3 } },
-    { k: 'scrap   all free', course: 'scrap', dial: { 'scrap.freeN': 99 } },
+    /* SCRAP CAME OUT OF THIS SWEEP, having been run twice and read flat twice.
+       Free gear at 1/2/3/all spanned 6 points; a larger opening hand at
+       +0/1/2/3 spanned 3. Both against a family bar of ±8.9. Re-sweeping a
+       third magnitude on a course whose problem is demonstrably not magnitude
+       would be paying 1,350 runs a round to re-learn the same null, so the
+       course's own definition records both readings and this arm sweeps the one
+       dial that is live. */
+    { k: 'scrap   as it ships', course: 'scrap', dial: null, ships: true },
   ];
   if (N) console.log(`    (dials turned up: ${3 * N} runs an arm)`);
   const answers = await runJobs(ARMSD.flatMap((a) =>
@@ -816,7 +971,7 @@ section('do the two flat courses have a dial');
   });
   console.log('');
   for (const r of rows) {
-    console.log(`    ${r.k.padEnd(18)}${bar(r.pct)} ${String(r.pct + '%').padStart(4)}` +
+    console.log(`    ${r.k.padEnd(20)}${bar(r.pct)} ${String(r.pct + '%').padStart(4)}` +
       (r.ships ? '   ← what ships' : ''));
   }
   const none = rows[0];
@@ -830,6 +985,10 @@ section('do the two flat courses have a dial');
   const verdicts = [];
   for (const co of ['line', 'scrap']) {
     const mine = rows.filter((r) => r.course === co);
+    if (mine.length < 2) { const only = mine[0];
+      console.log(`    → SCRAP: ${only.pct}% against ${rows[0].pct}% for none — swept flat on two axes ` +
+        `(free gear span 6, opening hand span 3, bar ±${(familyZ(4) * BAND.gap(rows[0].pct / 100, rows[0].runs) * Math.SQRT2).toFixed(1)}); ` +
+        'its problem is not magnitude'); continue; }
     const hi = mine.reduce((a, z) => (z.pct > a.pct ? z : a));
     const lo = mine.reduce((a, z) => (z.pct < a.pct ? z : a));
     const ship = mine.find((r) => r.ships);
@@ -1761,11 +1920,39 @@ section('the arms that are not run by default');
      bumped by hand is a list that goes stale. */
   const inSource = [...readFileSync(new URL(import.meta.url), 'utf8')
     .matchAll(/process\.env\.(FF_[A-Z]+)/g)].map((m2) => m2[1]);
-  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
+  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_GIVE', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');
   ok(STANDING.length >= 10, 'and all ten of them are');
+  /* AND A STAMP THAT DESCRIBES A GAME THAT NO LONGER EXISTS.
+
+     The stamp file was built to catch an arm listed as standing and never run.
+     It has a second failure mode nobody had looked for, and `FF_CARDS` was
+     sitting in it: its reading named `coldbearer` and `backdrift` as the widest
+     and best cards in the pool, and both were CUT two rounds ago. The summary
+     printed that every default run, so the check was reporting a measurement of
+     a card set the game does not have — which is worse than "no reading
+     recorded", because it looks like an answer.
+
+     A reading quotes card ids and nothing else in it can be validated, so that
+     is what gets validated: any lowercase word in a stamp that used to be a
+     card id and no longer is fails here. It cannot know a number went stale; it
+     can know the game changed underneath one, which is the case that actually
+     happened. */
+  {
+    const ghosts = [];
+    for (const [knob] of STANDING) {
+      const rec = ARMS.read(knob);
+      if (!rec) continue;
+      for (const w of String(rec.said).match(/\b[a-z]{5,}\b/g) || []) {
+        if (FF.CARDS[w] || FF.FOES[w]) continue;
+        if (GONE.has(w)) ghosts.push(`${knob}: ${w}`);
+      }
+    }
+    eq([...new Set(ghosts)].join(' | '), '',
+      'no stamped reading names a card the game no longer has');
+  }
 }
 
 /* ------------------------------------------------- can a lesson be priced -- *//* ------------------------------------------------- can a lesson be priced -- */

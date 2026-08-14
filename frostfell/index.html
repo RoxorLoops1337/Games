@@ -3153,7 +3153,30 @@ const COURSES = [
      end to end at 450 runs a bar. If when you spend gear does not matter, a
      course whose rule is "spend gear sooner" cannot matter either, however much
      of it you are given. Scrap's free action is a tempo rule on an axis this
-     board does not price. Do not sweep it again; change what it pays in. */
+     board does not price.
+
+     SO A SECOND AXIS WAS TRIED, AND IT IS ALSO FLAT. "Change what it pays in,
+     not how much" was the conclusion, and the axis picked was card advantage —
+     a larger opening hand. Not damage, not recycling (Gear's), not tempo, and
+     chosen because the constructed-deck arm had just shown at p=0.009 that what
+     a caravan HOLDS decides runs. At 450 an arm against 40% for declaring
+     nothing:
+
+         +0 (ships) 40%   ·   +1 40%   ·   +2 37%   ·   +3 39%
+
+     Spread 3 on a family-of-4 bar of ±8.9. REVERTED, on the standing rule that
+     a mechanic measuring zero is not free.
+
+     Two dead axes are more useful than one. Together they rule out the "hand"
+     half of the game for this course — how much you hold and when you spend it
+     — at every magnitude either was tried at. What is left untried is the axis
+     every course that WORKS uses: something that happens on the board during a
+     fight, every fight, from turn one. Hearth mends the line each upkeep;
+     Bodies puts armour on every arrival; Cold takes the opening wave's turn.
+     Scrap's `patched` is its only rule on that axis and it fires on a death,
+     which is late and rare — the same "lands late" shape that took Hearth five
+     rewrites to escape. That is the next thing to move, and it is a rule change
+     rather than a sweep. */
   { id: 'scrap', name: 'THE SCRAP TRAIL', short: 'SCRAP', col: '#c9b28a',
     get text() {
       return 'Scrap cards on every table, the first ' + (this.freeN > 1 ? this.freeN + ' pieces of gear you use each fight do' : 'gear you use each fight does') +
@@ -6170,7 +6193,24 @@ function button(c, id, x, y, w, h, label, col, dis, small) {
     rr(c, x + 4, y + 3, w - 8, h * 0.42, 9); c.fillStyle = '#ffffff'; c.fill();
     c.restore();
   }
-  txt(c, label, x + w / 2, y + h / 2 + 1, small ? 15 : 19, dis ? '#8b97b0' : '#ffffff', 'center', 'd');
+  /* A BUTTON THAT DOES NOT FIT ITS OWN LABEL, which every button in the game
+     was until the gutter check went in.
+
+     The label was drawn at a fixed 19 (or 15) units and the legibility floor
+     lifts that to about 23 on a fold's cover display, so a row of three reward
+     buttons reading COPY A CARD / TEMPER A CARD / BURN A CARD came out with
+     four units of air between them at 23-unit type. Nothing overlapped — they
+     simply ran together, which is the failure a collision check cannot see and
+     a gutter check can.
+
+     The label is fitted to the button and ellipsised if the floor will not let
+     it shrink far enough, the same rule as a card's name band and the victory
+     tally. On a desktop the floor is inert and every label renders exactly as
+     it always did. */
+  const cap = w - 18;
+  const ls2 = fitText(c, label, cap, small ? 15 : 19, 9, 'd');
+  txt(c, ellipsize(c, label, ls2, cap), x + w / 2, y + h / 2 + 1, ls2,
+    dis ? '#8b97b0' : '#ffffff', 'center', 'd');
   c.restore();
   if (!dis) hit(id, x, y, w, h);
 }
@@ -7116,11 +7156,25 @@ function drawTrail(c, t) {
     txt(c, (cold ? 'THE FELL HOLDS BACK ' : hot ? 'THE FELL HAS RISEN ' : 'LEVEL WITH THE FELL ') +
       (ans > 0 ? '+' : '') + ans + '%', px + 14, py + ph - 31, 10.5, col, 'left', 't');
   }
+  /* THE NAME YIELDS TO THE TALLY, not the other way round.
+
+     A checklist row is a name on the left and a count on the right, both at
+     12.5 units — which the legibility floor lifts to about 23 on a fold's cover
+     display, where `A LEAN DECK` ended three units from `7 / 2`. The count is
+     the part you read at a glance and it is short, so it keeps its size and the
+     name is fitted to whatever is left, with a gutter the row can be read
+     across. Measured against the tally actually drawn rather than a guess at
+     how wide a tally gets. */
   rd.forEach((r, i) => {
     const yy = py + 58 + i * 22;
     txt(c, r.ok ? '✓' : '!', px + 16, yy, 14, r.ok ? '#7de08f' : '#ffd166', 'center', 'd');
-    txt(c, r.name, px + 30, yy - 6, 12.5, r.ok ? '#c8dcf4' : '#eaf6ff', 'left', 't');
-    txt(c, r.got + ' / ' + r.want, px + pw - 14, yy - 6, 12.5, r.ok ? '#7de08f' : '#ffd166', 'right', 't');
+    const tally = r.got + ' / ' + r.want;
+    const ts = textSize(12.5);
+    c.font = '600 ' + ts + "px 'Frostwork','Trebuchet MS',sans-serif";
+    const room = (pw - 14 - c.measureText(tally).width) - 30 - ts * 0.4;
+    const ns = fitText(c, r.name, room, 12.5, 8, 't');
+    txt(c, ellipsize(c, r.name, ns, room), px + 30, yy - 6, ns, r.ok ? '#c8dcf4' : '#eaf6ff', 'left', 't');
+    txt(c, tally, px + pw - 14, yy - 6, 12.5, r.ok ? '#7de08f' : '#ffd166', 'right', 't');
   });
   const need = caravanNeeds(run);
   txt(c, need ? need.why : 'ready for what is ahead', px + pw / 2, py + ph + 10, 12,

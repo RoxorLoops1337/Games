@@ -8,11 +8,57 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { buildFace } from '../tools/frostfont/alphabet.mjs';
+import { FROSTWORK_BOLD, FROSTCUT } from '../tools/frostfont/build.mjs';
 
 export const HERE = dirname(fileURLToPath(import.meta.url));
 export const GAME = process.env.FF_GAME || join(HERE, '..', 'frostfell', 'index.html');
 
 const noop = () => {};
+
+/* WHAT A GLYPH IS ACTUALLY WIDE, WHICH THE STUB USED TO GUESS AT.
+
+   `measureText` returned `length * size * 0.5` — one constant for every
+   character in both faces — and that guess has a measurable error, because this
+   game's typeface is GENERATED and every glyph carries an exact advance in font
+   units. Averaged over the alphabet:
+
+     Frostwork Bold   UPPERCASE 0.667   lowercase 0.594   space 0.331
+     Frostwork        UPPERCASE 0.655   lowercase 0.585   space 0.332
+     Frostcut         UPPERCASE 0.578   lowercase 0.512   space 0.284
+
+   **The stub understated uppercase text in the body face by a third.** That is
+   not a rounding error, it is the difference between a comfortable gutter and
+   none — the victory screen's `FIGHTS WON` / `FOES FELLED` had a 30-unit gap by
+   the stub's arithmetic and zero by Chromium's, which is exactly how a visible
+   collision passed an overlap assertion built to catch collisions.
+
+   So it stops guessing. The advances come out of `tools/frostfont/alphabet.mjs`
+   — the same source the shipped .woff2 is cut from, so this cannot drift from
+   what a browser renders without the font itself changing. Per character, not
+   per face average: an `I` and a `W` are not the same width and averaging them
+   is how you get a check that is right about paragraphs and wrong about labels.
+
+   The remaining error is real and worth stating rather than hiding: no kerning
+   pairs, and `letterSpacing` (which the game uses on display type) is not
+   modelled. Both make the stub read NARROWER than the truth, so it stays the
+   conservative direction — it will miss a marginal collision before it invents
+   one. */
+const ADV = (() => {
+  const of = (M) => Object.fromEntries(
+    Object.entries(buildFace(M)).map(([ch, v]) => [ch, v.adv / 1000]));
+  return { t: of(FROSTWORK_BOLD), d: of(FROSTCUT) };
+})();
+const FALLBACK = 0.5;
+/** The width of `s` at `size`, in the face the context has set. */
+export function advance(s, size, face) {
+  const t = ADV[face === 'd' ? 'd' : 't'];
+  const str = String(s);
+  if (!t) return str.length * size * FALLBACK;
+  let n = 0;
+  for (const ch of str) n += t[ch] !== undefined ? t[ch] : FALLBACK;
+  return n * size;
+}
 
 /** A 2d context that answers every call. `log` collects the calls worth
  *  asserting on — a render suite needs to know that something was drawn, and
@@ -165,7 +211,7 @@ export function mkCtx(log) {
   return new Proxy({}, {
     get(_t, k) {
       if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
-      if (k === 'measureText') return (s) => ({ width: String(s).length * st.size * 0.5 });
+      if (k === 'measureText') return (s) => ({ width: advance(s, st.size, st.face) });
       if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       if (k === 'canvas') return { width: 1280, height: 720 };
       /* save/restore has to carry the STYLE as well as the transform. It did
@@ -189,7 +235,7 @@ export function mkCtx(log) {
         return (s, x, y) => {
           const p = at(x, y);
           const size = st.size * zoom();
-          const w = String(s).length * size * 0.5;      // the same advance measureText reports
+          const w = advance(String(s), size, st.face);  // the same advance measureText reports
           const left = st.align === 'center' ? p[0] - w / 2 : st.align === 'right' ? p[0] - w : p[0];
           log.push(['fillText', s, p[0], p[1], size, st.align, st.fill, st.alpha,
             groundAt(p[0], p[1]), groundsUnder(left, p[1], w, size)]);

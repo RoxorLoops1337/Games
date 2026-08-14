@@ -40,8 +40,8 @@
   }
  },
  "FF_CARDS=40": {
-  "said": "removing: no card of 6 clears 2.64σ, widest coldbearer -6.7; giving from a locked floor: 0 clear it, best backdrift +1.7, span 3.1",
-  "sample": 360
+  "said": "removing: no card of 57 clears 3.33σ, widest sleetrunner -10.8; giving from a locked floor: 0 clear it, best frostmite +4.2, span 10.0",
+  "sample": 120
  },
  "FF_VARIANCE=40": {
   "said": "trail 13.9%, deck 1.6%, draw 0.0%",
@@ -60,7 +60,11 @@
   "sample": 450
  },
  "FF_DIAL=150": {
-  "said": "bodies spans 11 (41-52%, ships 41%) A DIAL · scrap spans 6 (39-45%, ships 40%) flat against 40% for no course, family bar ±8.9",
+  "said": "bodies spans 11 (41-52%, ships 41%) A DIAL · scrap spans 3 (37-40%, ships 40%) flat against 40% for no course, family bar ±8.9",
   "sample": 450
+ },
+ "FF_BUILT=200": {
+  "said": "gear-heavy 4.1% vs body-heavy 1.4% (+2.7 points, p=0.009); on depth 1.36 vs 1.24 zones (+0.13, p=0.009) over 924 relabellings",
+  "sample": 3600
  }
 }

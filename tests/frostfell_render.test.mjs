@@ -700,15 +700,33 @@ section('the shape of a phone');
           const a = sp[i - 1], b = sp[i];
           if (Math.abs(a.e.size - b.e.size) > 0.6) continue;
           // a real overlap, not two glyph boxes touching at the kerning
-          const over = a.s[1] - b.s[0];
-          if (over > Math.max(2, a.e.size * 0.25)) {
+          /* NOT AN OVERLAP — A GUTTER. This began as an overlap check and the
+             corrected advance table showed why that was the wrong shape.
+
+             On the fold cover the victory tally read `FIGHTS WON FOES FELLED`
+             as one word. With the stub's old `length * size * 0.5` the two had
+             a 30-unit gap; with the real advances they have **3 units at
+             23-unit type** — 0.13 of the size. So they never overlapped, and an
+             overlap check could not have caught them however accurate its
+             widths were. What the eye reads as "touching" is a gap too small to
+             separate two words, and the threshold for that is a fraction of the
+             type size rather than zero.
+
+             A quarter of the size is the bar: at 23 units that asks for 6 and
+             the collision had 3. Sub-zero gaps (real overlaps) are reported as
+             such, because the two failures want different fixes — an overlap is
+             a layout that does not fit, a thin gutter is a layout that fits and
+             cannot be read. */
+          const gap2 = b.s[0] - a.s[1];
+          const need = a.e.size * 0.25;
+          if (gap2 < need) {
             collided.push(JSON.stringify(a.e.s).slice(0, 14) + '/' + JSON.stringify(b.e.s).slice(0, 14) +
-              ' by ' + Math.round(over));
+              (gap2 < 0 ? ' OVERLAP ' + Math.round(-gap2) : ' gutter ' + Math.round(gap2) + '<' + Math.round(need)));
           }
         }
       }
       eq([...new Set(collided)].slice(0, 4).join(' | '), '',
-        `${w}x${h} ${scr}: no two labels on one line run through each other`);
+        `${w}x${h} ${scr}: every two labels on one line keep a readable gutter`);
       log.length = 0;
 
       eq(small.join(','), '', `${w}x${h} ${scr}: every touch target is thumb-sized`);
