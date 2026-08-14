@@ -12,13 +12,38 @@ is in [README.md](README.md).
 | **RULE** | settled, and it constrains what comes next |
 | **DEAD ENDS** | built, measured, thrown away — the most valuable half |
 
-**The rule this file lives by, replacing the 1000-line cap on the README:**
-*every entry states a number, and an entry that cannot state one gets cut.* A
-line count is a proxy for readability and it failed as one — holding the README
+**Two rules, and neither of them is a line count.**
+
+*1. Every entry states a number, and an entry that cannot state one gets cut.*
+A line count is a proxy for readability and it failed as one — holding the README
 at exactly 999 for two rounds cost the reference section real detail while the
 design record kept growing, which is precisely backwards. A record of
 measurements should be allowed to grow; what it may not do is accumulate
 sentences that are not measurements.
+
+*2. An entry a later measurement contradicts is REWRITTEN IN PLACE. Never
+appended to, never left standing next to its own correction.*
+
+The second rule is the one that decides whether this file is still useful at
+2,000 lines, and it is the one that was missing. Rule 1 only stops the file
+filling with prose; it does nothing about the far worse failure, which is a file
+where every entry states a number and a third of the numbers are superseded.
+Nobody reads a design record front to back — they grep it, land on one entry, and
+act on it. An entry that was true four rounds ago and is quietly wrong now is
+therefore not neutral, it is a trap, and appending a correction underneath it
+does not spring the trap for a reader who never scrolls that far.
+
+It has already bitten twice in one round. Two entries below were rewritten
+head-to-toe rather than annotated: *rarity carries no information* had shipped a
+card change that the next round's ladder disproved, and *the probe can be 2.6x
+faster* projected a speedup that came in at 1.7x when it was actually built. Both
+now read as what is currently true, with the retracted claim kept **inside** the
+entry as the thing that was wrong and why — which is the part worth keeping.
+
+The mechanical half: the suite checks rule 1 (every entry states a number).
+Rule 2 cannot be checked by a script and is not pretended to be. What enforces it
+is the closing step of every round: **before writing a new entry, grep this file
+for the thing you just measured, and fix what you find.**
 
 ---
 
@@ -33,10 +58,17 @@ the gap between two rows is that one thing:
 
 | pilot | | worth |
 |---|---|---|
-| careless | takes the leftmost card, swings at the nearest thing | 9% |
-| + the fight | denies schemes, answers a named wave, places bodies, holds gear | 26% (**+17**) |
-| + the trader | spends well | 39% (**+13**) |
-| + steering the pool | drafts to a course | 38% (−1) |
+| careless | takes the leftmost card, swings at the nearest thing | 7% |
+| + the fight | denies schemes, answers a named wave, places bodies, holds gear | 19% (**+12**) |
+| + the trader | spends well | 38% (**+19**) |
+| + steering the pool | drafts to a course | 37% (−1) |
+
+At `FF_RUNS=70`, 210 runs an arm. **Read the total, not the rungs.** The previous
+reading of this same table was 9 / 26 / 39 / 38 — fight **+17**, trader **+13** —
+and the total was **30** then too. The fight and the trader have swapped five
+points between them across a round in which neither was touched, which is the
+clearest statement available of how much rung-to-rung movement is noise and how
+little the total is.
 
 **The commitment is withdrawn.** For three rounds this file said the fight
 *should* be the rung that matters and the trader was bigger every time. Rather
@@ -247,6 +279,73 @@ carried over, or it invents a disagreement.**
 So: **points against a fixed control, odds across different ones.** The careless
 floor's story has been told on the right scale for ten rounds after all.
 
+### RULE — five cards rewrite a rule, and the rest of the pool cannot
+
+Fifty-six of fifty-seven cards measured indistinguishable from the pool median.
+Two rounds read that as a *tiering* problem. It is a **shape** problem, and the
+shape is nameable: every card in the pool was built out of stats, keywords or
+per-unit hooks, and **all three are local**. A card whose whole effect lands on
+one body cannot change how the other five are played, so nothing you pick up
+changes how you play — which is the definition of a flat pool, however carefully
+each card is costed.
+
+So five cards now hang a **global** rule off a living body. One per rule the
+engine actually has, each read at exactly one site:
+
+| card | the rule it rewrites | what it charges |
+|---|---|---|
+| Coldbearer | a packed line warms anyway | takes Frost **2** a turn, forever, while packed |
+| Backdrift | the **back** column burns 2 and the front burns 1 | re-prices all 6 slots, foes' clock unchanged |
+| Dawnpiper | your wardens tick **before** the foes | **4 hp**; the rule leaves with it |
+| Grudgehorn | keeps its Spice for the rest of the **run** | falling empties the bank |
+| Trailmarshal | a body onto the board **without spending the turn** | does nothing unless a slot is free |
+
+Three constraints made these buildable inside the doctrine that had already cut
+five cards. **They carry no bigger numbers** — every one is at or below the stat
+line of an ordinary card of its tier, so the effect is the rule and nothing else.
+**None deletes a decision**: Coldbearer is the interesting case, because the
+obvious version simply switches the room rule off and takes the game's central
+question with it (doctrine test 4), whereas *pricing* the rule leaves the question
+and adds a way to pay. **No aura may outlive its carrier** — that is asserted for
+all three aura cards in the suite, because an aura that persists is a permanent
+upgrade wearing a card's clothes.
+
+**Three shipped into the offer; two are held back, and that was measured rather
+than felt.** At `FF_RUNS=70`:
+
+| build | careless | + fight | + trader | + steering | ladder |
+|---|---|---|---|---|---|
+| 57 cards, before this round | 9% | 26% | 39% | 38% | **30** |
+| + all five new | 7% | 20% | 37% | 34% | **27** |
+| + only the three always-on | 7% | 19% | 38% | 37% | **30** |
+
+The three whose rule is **always on** — Coldbearer, Backdrift, Grudgehorn — cost
+the ladder **nothing**. The two whose rule only pays if the player **plans for
+it** — protect a glass body, keep a slot empty — cost **three points**, and
+raising their stat lines first (Dawnpiper 4→7 hp, Trailmarshal 10/2→13/4) moved
+the reading by **nothing**, so it is not that they are weak bodies.
+
+The mechanism is this round's own rarity lesson pointed the other way: **a rare a
+pilot cannot use still occupies a rare slot and displaces one that pays.** The
+probe's pilot never plans, so it cannot see their upside — but *"my instrument
+cannot see the good half"* is not evidence the good half exists, and shipping a
+measured three-point regression on that reasoning is shipping on faith. They are
+`noPool` until the pilot can express the two habits; the cards, the auras, the
+hooks and the suite coverage all stay. That is the flag coming off and the arm
+being re-run, not a rewrite.
+
+The generalisation worth keeping: **an always-on rule is safe to put in a pool
+and a conditional one is not**, because the pool charges every card the same
+frequency cost whether or not the holder knows what to do with it.
+
+One thing found while building them, worth more than the cards: `def()` let a
+second card claim an id and **win silently**. One of the five was named
+`cairnwarden`, which already existed 100 lines further down; the later definition
+overwrote it, the new card vanished from the game entirely, and the suite went
+green at 602 checks because every one of them happened to test the survivor. A
+collision that deletes content and passes every test is the worst shape a bug can
+have. `def()` throws on a duplicate id now.
+
 ### FINDING — the cards do differentiate, on the scale that works
 
 A flat removal table has two readings and only one of them is health. Taking a
@@ -322,6 +421,21 @@ measured rather than asserted from "every card is played".
 One limit, stated rather than discovered later: a card removed from the OFFER can
 still arrive in a starting deck, so this prices **draftability**. A card that
 only ever comes free with a leader reads as zero here whatever it is worth.
+
+**And one result that sits in tension with it, kept here rather than filed
+somewhere it would not be read.** Removing a card from the pool entirely costs
+nothing measurable. Making one card five times *rarer* — Frostmite common → rare,
+one character — cost the ladder 2, 5, 2 and 1 points at its four rungs. Both are
+this file's own measurements and both are believed.
+
+They are reconcilable and the reconciliation is the useful part: **removal is
+compensated and rarity is not.** Take a card out of the offer and the offer shows
+something else in the same slot, so the pilot's hand is the same size and roughly
+the same strength — that is the substitution the flat table is made of. Move a
+card down the frequency curve and nothing fills the gap; the slot it used to
+occupy in an early offer now holds a *median* card instead of the best common in
+the game, and the beginner who most needed the strong card is the one who now
+sees it least. The pool substitutes for absence. It cannot substitute for scarcity.
 
 ### FINDING — denial, settled
 
@@ -740,6 +854,42 @@ badge — a slab in ORDER shows 3 numbers in near-identical pips. And the
 collection's last row of 7 tiles is left-aligned under 4 rows of 16, which reads
 as unfinished.
 
+### FINDING — the defeat screen, looked at properly, had five defects
+
+It shipped last round with one pass and one glance at one size. Opened at
+1280x720, 2400x1080 and a phone, it had **five** things wrong with it, and the
+severity ordering is the finding: the worst one was invisible at the size it was
+built at.
+
+1. **A hard vertical seam through all three ridges.** The ridge loop stepped
+   `x += 60` from 0 and then closed with `lineTo(VW, VH)`, so it dropped straight
+   down from the last multiple of 60. At **VW=1280** that lands at 1260 — 20 units
+   from the edge, indistinguishable from the frame. At **VW=1600** it lands at
+   1560 and cuts a 40-unit-wide notch out of the weather. *Built at one size,
+   broken at another, and only the three-size walk could see it.*
+2. **The name was drawn across the creature's feet.** `drawCreature(x, y, h)`
+   draws a body about **2.2h** tall anchored near its middle, so an 88-unit
+   Frostwyrm spans ky−110 to ky+88. This is the **third** measurement of that
+   anchor: +30 put the name on the belly, +78 put it on the feet, and both were
+   guesses. It is hung off a computed `feet` now, as is the shadow — which had
+   been drawn at ky+0.2h, *inside* the creature, where nothing could see it.
+3. **The last log line sat on the plate's top border**, four units inside it,
+   with the corner radius cutting its descenders. On **both** end screens.
+4. **The ninth stat wrapped to a row of its own**, centred under the other eight,
+   looking like an accident — because `perRow` was the constant **8** and a loss
+   shows **9** cells. Nine fit at every size the game builds: even at VW=1180 the
+   narrowest stage, nine cells of 122 sit inside the safe area with room over.
+5. **Ninety identical dashes is not snow, it is a scratched lens.** One length,
+   one weight, one of four alphas. Replaced with 120 streaks on a single depth
+   number driving length, alpha, width, drift and fall *together* — the fix that
+   matters is the coupling, not the variation. A streak that is long and dim
+   reads as noise however carefully each property was randomised alone.
+
+The pattern across 2, 3 and 4 is the same one the shrine and the reward captions
+had: **a lower element pinned to a constant while an upper element moved.** Three
+rounds, three screens, one bug. Everything on this screen is now derived from the
+element above it, and `statTop` from the portrait's actual bottom.
+
 ### FINDING — the shot walk is still the only thing that sees
 
 Three assertions over eight shapes is 668 checks and none has ever found what a
@@ -929,41 +1079,85 @@ rare       8 cards · median 1.05x · range 0.72–2.49x
 often as the rares it beats; and 4 of the 8 rares sit below the overall median,
 Snowbeard and Bellowsbear at 0.72x.
 
-**One change shipped: Frostmite common → rare.** It and Avalanche are the only
-two cards of 57 that clear the 3.33σ family bar, and Avalanche is already rare.
-Nothing else clears, and re-tiering 57 cards on sub-bar evidence is fitting
-noise — the eight cards sitting between 2σ and the family bar would need about
-**2.8x the sample (1,750 runs an arm, ~100,000 runs, 45 minutes)** to be licensed,
-which is affordable and is the obvious next use of the arm.
+**The change that shipped was wrong and has been reverted.** Frostmite went
+common → rare on the reasoning that a common worth 3.5x is a bug. The ladder,
+same seeds and same sample, disagreed:
 
-The finding underneath is not about one card: **rarity is currently a promise
-the game does not keep.** A tier says how often a card appears and implies how
-good it is; the second half is uncorrelated with the first.
+| | careless | + fight | + trader | + steering |
+|---|---|---|---|---|
+| Frostmite common | **9%** | **26%** | **39%** | **38%** |
+| Frostmite rare | **7%** | **21%** | **37%** | **37%** |
 
-### RULE — the probe can be 2.6x faster and it is a refactor, not a flag
+Four rungs, all down, off one character. No single move clears its own band; four
+consistent moves off a one-line change do. **The measurement that licensed the
+promotion could not see the thing the promotion changed** — the locked-deck arm
+*hands* the card over, so rarity does nothing inside it. Worth was measured in
+the one context where the dial being turned is inert.
 
-"The next 3x is a different probe" was left as an assertion, so it was measured.
-Three copies of the same workload run concurrently on this machine:
+So the finding stands and the action inverts: rarity carries no information
+about worth, AND worth carries no licence over rarity. In a draft the tier is
+pure frequency, and thinning the strongest early common out of a beginner's hand
+costs the careless pilot two points and the fight rung five. **A strong common is
+the floor holding itself up, not an imbalance.**
+
+The eight cards sitting between 2σ and the family bar would still need about
+**2.8x the sample (1,750 runs an arm, ~100,000 runs)** to be licensed — but note
+what that would license: a statement about worth, which is now known not to be a
+reason to touch a tier.
+
+### RULE — a worth measured in a locked deck cannot license a frequency change
+
+The general form of the mistake above, because it is the third costume the same
+error has worn in three rounds (after the points-vs-odds scale error and the
+band that was 1.3x too wide).
+
+**An arm can only license a change to something the arm can see.** The locked
+deck was built to answer "is this card any good, with nothing able to substitute
+for it" and it answers that well. It cannot answer "how often should this card
+appear", because it does not draft — it deals. Reading a number off one and
+spending it on the other is not a small extrapolation; it is a claim about a
+mechanism the instrument had switched off.
+
+The check, before any change: **name the arm, then name the thing the change
+alters, then say where in the arm that thing appears.** If the honest answer is
+"it doesn't", the arm is silent on the change however loud the number is.
+
+### FINDING — the probe is parallel now, and it is worth 1.7x rather than 2.6x
+
+The refactor named last round is **done**, and the projection it was based on was
+too optimistic by half.
+
+What shipped: the pilot moved out of the probe into `tests/frostfell_pilot.mjs`
+(a worker cannot import the probe — importing it *runs* every arm), tweaks became
+serialisable descriptors instead of closures at 16 call sites, and
+`tests/frostfell_pool.mjs` runs jobs across a fixed, reusable worker pool.
+
+Measured on the card arm, 63 arms x 18 runs, wall clock including worker startup:
 
 ```
-1 process     20.0s
-3 concurrent  22.9s   → 3x the work in 1.14x the time = 2.6x
-4 concurrent  25.0s   → 4x the work in 1.25x the time = 3.2x
+FF_JOBS=1   9.1s   (inline, no worker, no clone)
+FF_JOBS=2   5.3s   1.72x
+FF_JOBS=3   5.7s   1.60x
+FF_JOBS=4   7.0s   1.30x
 ```
 
-**The parallelism is there**, and a worker costs almost nothing to start: loading
-and evaluating the whole game in a fresh context is **12ms**. Every arm in the
-file is a tribe loop, so three tribes is the natural split.
+**It peaks at two threads on a four-core box and gets worse from there.** Last
+round's estimate of 2.6x came from running 3 whole probe *processes* at once and
+reading the wall clock — which measures how well the OS interleaves three
+independent programs, not how well one program splits. The pool has a main thread
+that is also doing work, structured-clone traffic on every job, and four workers
+on four cores leaves nothing to schedule them. `JOBS` defaults to
+`floor(cores/2)`, from this table rather than from `cores - 1`.
 
-**The blocker is closures.** Arms pass tweaks as functions — `(run) => { run.course = co.id; }` — at about 15 call sites, and a function cannot cross a
-worker boundary. Splitting by tribe means the pilot and its counters (`SKILL`,
-`ROOM`, `DUCKS`, `LANE`, `TELL`, `MEND`, `DRAFT`, `TAUGHT`) move to a shared
-module with a serialisable arm descriptor, and the main thread merges counters
-rather than reading globals.
+**Where it is NOT wired, deliberately.** An arm that reads what the pilot
+accumulated as it played (which card got played, who killed whom, how many forks
+were taken) cannot use a pool at all — that state lives in whichever thread did
+the playing. An arm whose jobs are unequal in size finishes at the pace of its
+longest job either way. Only whole-count arms with equal jobs qualify, and the
+card arm is the one that is 58 of them.
 
-That is a bounded refactor with a named cost, and it is **committed to rather
-than done here** — it is the whole of a round, not a corner of one. Written down
-so the next round starts from the design instead of the question.
+1.7x on the slowest arm in the file is worth having and is not the 3x that was
+hoped for. The remaining cost is in the pilot itself, not in the scheduling.
 
 ### RULE — the source split is retracted
 

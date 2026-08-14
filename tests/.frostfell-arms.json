@@ -1,6 +1,6 @@
 {
  "FF_ABLATE=60": {
-  "said": "denying schemes +9 of the 14; next best holding gear until it earns the turn +3",
+  "said": "denying schemes +15 of the 12; next best holding gear until it earns the turn +4",
   "sample": 210
  },
  "FF_LESSON=1": {
@@ -40,7 +40,7 @@
   }
  },
  "FF_CARDS=40": {
-  "said": "removing: no card of 57 clears 3.33σ, widest snowbomb -5.7; giving from a locked floor: 0 clear it, best frostmite +6.3, span 7.9",
-  "sample": 630
+  "said": "removing: no card of 62 clears 3.35σ, widest patchkit -5.0; giving from a locked floor: 0 clear it, best avalanche +8.3, span 13.3",
+  "sample": 60
  }
 }
