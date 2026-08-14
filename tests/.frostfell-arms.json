@@ -4,8 +4,8 @@
   "sample": 210
  },
  "FF_LESSON=1": {
-  "said": "being told once is +6; every larger dose reads the same",
-  "sample": 210
+  "said": "being told once is +8; every larger dose reads the same",
+  "sample": 840
  },
  "FF_MONEY=70": {
   "said": "charm is −9 of 20 removed; free meal is +28 given",
@@ -16,12 +16,12 @@
   "sample": 210
  },
  "FF_NOWAVE=1": {
-  "said": "floor 8% → 9%; trader +14 → +13 against +15 predicted by compression alone",
-  "sample": 210
+  "said": "floor 11% → 11%; trader +18 → +16 against +18 predicted by compression alone",
+  "sample": 840
  },
  "FF_COURSE=150": {
-  "said": "gear 47% is the best of five, hearth 39% the worst, against 40% for none (±2.2)",
-  "sample": 450
+  "said": "cold 46% is the best of five, hearth 38% the worst, against 42% for none (±1.8)",
+  "sample": 840
  },
  "FF_PAIRS=70": {
   "said": "best is denying schemes + keeping a slot in reserve at +1.8, against ±4.1 derived but ±5.9 MEASURED — shared seeds make the real band 0.7x narrower than the printed one",

@@ -2528,6 +2528,28 @@ const waveGap = (g) => Math.max(2, WAVE_GAP + ((g.run && g.run.waveBonus) || 0)
   - ((g.run && g.run.zone >= ZONES.length - 1) ? 1 : 0));
 
 /* Locked in per run so a reload does not reroll the beast you were beaten by. */
+/* DEAD END — BOSS NORMALISATION, BUILT AND REVERTED IN ONE ROUND.
+
+   A locked-deck arm said the trail decides 32.5% of how far a run gets, and that
+   fixing the boss per zone took it to 13.9% — so "over half the trail is which
+   beast you drew" and the fix was to draw the beast but scale its difficulty
+   toward the zone's average. It was built. Three measurements killed it:
+
+   1. THE STRENGTHS ARE ALREADY EQUAL. The normalisation factors come out at
+      0.98 / 1.03, 0.93 / 1.08, 1.02 / 0.98 — the two beasts in a zone differ by
+      under 8% on total stats. There was no numeric gap to close.
+   2. AND SO ARE THE KILL RATES. Across 2,592 locked runs the two Long Shelf
+      beasts kill 19.4% and 17.3% of all runs — a coin flip between two equally
+      lethal things is not a difficulty roll.
+   3. AND THE WHOLE FINDING WAS AN ARTEFACT OF THE CAGE. Re-run on REAL runs —
+      drafting, shopping, tempering — the Weeper falls from 19.4% of deaths to
+      4.7%, deaths move from 73% in zone 2 to 67% in zone 3, and the top killer
+      is not a beast at all but the Frostwyrm at 24%.
+
+   With normalisation on, the trail read 31.6% against 32.5% off: nothing, as the
+   factors predicted. Reverted. The lesson is not about bosses — it is that a
+   finding measured on a locked deck is a finding about locked decks, and this one
+   was carried three rounds before anyone ran it on the real game. */
 function zoneBoss(g, zi) {
   const zone = ZONES[clamp(zi, 0, ZONES.length - 1)];
   const list = zone.bosses || [zone.boss];

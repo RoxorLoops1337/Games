@@ -1489,7 +1489,7 @@ section('the arms that are not run by default');
      bumped by hand is a list that goes stale. */
   const inSource = [...readFileSync(new URL(import.meta.url), 'utf8')
     .matchAll(/process\.env\.(FF_[A-Z]+)/g)].map((m2) => m2[1]);
-  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
+  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');
@@ -1838,13 +1838,29 @@ section('where a run is actually decided');
   const rot = (a, k) => a.slice(k).concat(a.slice(0, k));
   const PERMS = 3;
 
+  /* LOCKED IS NOT THE GAME, AND THE WHOLE FINDING WAS MEASURED ON IT.
+
+     Every number this arm has produced — trail 32.5%, deck 4.4%, matchup 27% —
+     came from a caravan that cannot draft, shop or temper. That is a deliberately
+     crippled run, and generalising from it to "the trail is the biggest lever in
+     the game" is a claim about a game nobody plays.
+
+     FF_VLIVE deals the same starting decks and then lets the run BE a run. The
+     deck is no longer held fixed, so "the deck" stops meaning "what you hold all
+     the way" and starts meaning "the hand you were dealt to build from" — which
+     is the honest question anyway, because a real player's deck is an outcome as
+     much as an input. If its share stays near 4%, the finding generalises. If it
+     jumps, the locked arm was measuring the cage. */
+  const LIVE = !!process.env.FF_VLIVE;
   const jobs = [];
   for (let d = 0; d < DECKS.length; d++) {
     for (let p = 0; p < PERMS; p++) {
-      jobs.push({ tribes, n: M, base: 1000, step: 37, mode: 'tactics', stats: true,
-        tweak: { set: { lockDeck: true, mend: 8 }, give: rot(DECKS[d], p * 2) } });
+      jobs.push({ tribes, n: M, base: 1000, step: 37, mode: LIVE ? 'careful' : 'tactics', stats: true,
+        tweak: LIVE ? { give: rot(DECKS[d], p * 2) }
+          : { set: { lockDeck: true, mend: 8 }, give: rot(DECKS[d], p * 2) } });
     }
   }
+  if (LIVE) console.log('    (FF_VLIVE: real runs — the dealt deck is a STARTING hand, and it grows)');
   const answers = await runJobs(jobs);
   /* y[d][p][s] — one run, 1 for a crossing and 0 for a death. The seed index
      runs across tribes too, so a "seed" here is one (tribe, seed) trail. */
@@ -1915,6 +1931,56 @@ section('where a run is actually decided');
   console.log(`      the three-way remainder           ${pct(ss3way).padStart(6)}`);
   console.log(`      best deck ${(Math.max(...deckMeans) * 100).toFixed(0)}% vs worst ${(Math.min(...deckMeans) * 100).toFixed(0)}% · ` +
     `best draw order ${(Math.max(...permMeans) * 100).toFixed(0)}% vs worst ${(Math.min(...permMeans) * 100).toFixed(0)}%`);
+
+  /* WHAT A MATCHUP ACTUALLY IS — the biggest term in the table, and for one round
+     it got a single sentence while `killedBy` and `diedZone` sat unread on every
+     run in this arm. They are the whole answer to "27% of what?". */
+  {
+    const all = [];
+    for (let d = 0; d < DECKS.length; d++) {
+      for (let p = 0; p < PERMS; p++) {
+        answers[d * PERMS + p].stats.forEach((x, s2) => all.push({ d, s2, st: x }));
+      }
+    }
+    const byKiller = {};
+    const byZone = [0, 0, 0];
+    for (const r of all) {
+      if (r.st.won) continue;
+      const k = r.st.killedBy || 'the cold';
+      byKiller[k] = (byKiller[k] || 0) + 1;
+      byZone[Math.min(2, r.st.diedZone === undefined ? 0 : r.st.diedZone)]++;
+    }
+    const dead = all.filter((r) => !r.st.won).length;
+    const top = Object.entries(byKiller).sort((a2, z2) => z2[1] - a2[1]).slice(0, 6);
+    console.log(`    WHAT A MATCHUP IS. ${dead} of ${all.length} runs ended in a death; where and to what:`);
+    console.log(`      zone 1 ${((byZone[0] / dead) * 100).toFixed(0)}% · ` +
+      `zone 2 ${((byZone[1] / dead) * 100).toFixed(0)}% · zone 3 ${((byZone[2] / dead) * 100).toFixed(0)}%`);
+    console.log('      ' + top.map(([k, n]) => `${k} ${((n / dead) * 100).toFixed(0)}%`).join(' · '));
+    /* AND THE ONE THAT DECIDES A ZONE: the two beasts a zone can draw, side by
+       side. If one of them kills twice as often as the other, the coin flip at
+       the end of a zone is a difficulty roll and the run is deciding itself. */
+    const bosses = new Set();
+    for (const z of FF.ZONES) for (const b of (z.bosses || [])) bosses.add(FF.FOES[b] ? FF.FOES[b].name : b);
+    const bossKills = top.concat(Object.entries(byKiller)).filter(([k]) => bosses.has(k));
+    const seen = {};
+    for (const [k, n] of bossKills) seen[k] = n;
+    const rows = Object.entries(seen).sort((a2, z2) => z2[1] - a2[1]);
+    if (rows.length) {
+      console.log('      of those, the beasts: ' +
+        rows.map(([k, n]) => `${k} ${((n / dead) * 100).toFixed(1)}%`).join(' · '));
+    }
+    /* Which decks lose to which beast — the matchup in the literal sense. Printed
+       only as a spread, because a 6x6 table nobody reads is not a finding. */
+    const perDeck = [];
+    for (let d = 0; d < DECKS.length; d++) {
+      const mine = all.filter((r) => r.d === d && !r.st.won);
+      const kk = {};
+      for (const r of mine) kk[r.st.killedBy || 'the cold'] = (kk[r.st.killedBy || 'the cold'] || 0) + 1;
+      const worst = Object.entries(kk).sort((a2, z2) => z2[1] - a2[1])[0];
+      if (worst) perDeck.push(`deck ${d}: ${worst[0]} ${((worst[1] / Math.max(1, mine.length)) * 100).toFixed(0)}%`);
+    }
+    console.log('      what each deck died to most: ' + perDeck.join(' · '));
+  }
   /* AND THE SAME DECOMPOSITION ON A RESPONSE THAT IS NOT ALMOST ALL ZEROES.
 
      A locked six-card deck crosses about 3% of the time, so "did it win" is a
