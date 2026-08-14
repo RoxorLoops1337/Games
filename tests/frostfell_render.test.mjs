@@ -16,6 +16,9 @@ FF.setCtx(mkCtx(log));
 
 const frame = (n = 1) => { for (let i = 0; i < n; i++) { FF.update(1 / 60); FF.render(); } };
 const drew = (label) => { ok(log.length > 0, label); log.length = 0; };
+/* How much of the contrast check's resolution is a guess. Accumulated across
+   every screen and every device shape, printed once at the end. */
+const CELLS = { total: 0, one: 0, straddle: 0, mixed: 0, anchorBlind: 0 };
 
 /* ---------------------------------------------------------- every screen -- */
 section('every screen draws');
@@ -506,6 +509,7 @@ section('the shape of a phone');
       };
       const grounds = [];
       const dim = [];
+      const cellHist = { total: 0, one: 0, straddle: 0, mixed: 0, anchorBlind: 0 };
       let unpaired = 0, paired = 0, stroked = null, lastStrokeKey = null;
       for (const e of log) {
         if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9) {
@@ -546,10 +550,42 @@ section('the shape of a phone');
              fixed the rule can be what it should always have been: an outline
              gives a glyph its edge, but edge definition is not figure-ground,
              so BOTH are measured and the worse one is the answer. */
+          /* AND THE WORST CELL THE STRING COVERS, not the one its anchor
+             happens to sit in.
+
+             The raster is eight units to a cell and a line of body type is
+             thirteen tall and tens wide, so nearly every string straddles a
+             boundary; reading the anchor's cell is a guess wherever a caption
+             is half on a panel and half off it. The stub now hands back every
+             distinct ground under the string's box and the worst of them is
+             the answer. The distribution is printed under FF_CONTRAST, because
+             a check whose resolution is a guess should say how often the guess
+             would have mattered. */
+          /* A QUARTER OF THE STRING IS THE BAR.
+
+             The band is approximate in both directions, so a ground that shows
+             up in one cell out of twenty is a pip on the row above rather than
+             the thing the caption is written on. A ground that carries a
+             quarter of the string is genuinely half-on-half-off, which is the
+             case the anchor lookup could not see. */
+          const SHARE = 0.25;
           const outlined = lastStrokeKey === String(e[1]) && stroked;
-          const g3 = e[8] || (g2 && g2.col);
+          const span = e[9] || { cells: 1, cols: [] };
+          const real = span.cols.filter((c) => c.share >= SHARE).map((c) => c.col);
+          const covered = real.length ? real : [e[8] || (g2 && g2.col)].filter(Boolean);
+          cellHist.total++;
+          if (span.cells <= 1) cellHist.one++;
+          else {
+            cellHist.straddle++;
+            if (real.length > 1) cellHist.mixed++;
+            if (real.length > 1 && real.indexOf(e[8]) < 0) cellHist.anchorBlind++;
+          }
+          let rGnd = null, g3 = null;
+          for (const c of covered) {
+            const rc = ratio(e[6], c);
+            if (rc !== null && (rGnd === null || rc < rGnd)) { rGnd = rc; g3 = c; }
+          }
           const rOut = outlined ? ratio(e[6], stroked) : null;
-          const rGnd = g3 ? ratio(e[6], g3) : null;
           if (rOut === null && rGnd === null) { unpaired++; continue; }
           paired++;
           const r = (rOut !== null && rGnd !== null) ? Math.min(rOut, rGnd)
@@ -565,6 +601,9 @@ section('the shape of a phone');
       if (process.env.FF_CONTRAST) {
         console.log(`      ${w}x${h} ${scr}: ${paired} paired, ${unpaired} with no ground under them`);
       }
+      CELLS.total += cellHist.total; CELLS.one += cellHist.one;
+      CELLS.straddle += cellHist.straddle; CELLS.mixed += cellHist.mixed;
+      CELLS.anchorBlind += cellHist.anchorBlind;
 
       // a run of lines is a column: same alignment, same x, sorted down the page
       const cols = new Map();
@@ -640,6 +679,24 @@ section('the loop stays upright');
   while (G.screen === 'battle' && !G.battle.over && turns++ < 300) { FF.passTurn(G); FF.drainAll(); }
   ok(G.battle.over, 'a fight nobody plays does eventually end');
   eq(G.battle.won, false, 'badly');
+}
+
+/* WHAT THE EIGHT-UNIT CELL COSTS, said out loud rather than assumed away.
+
+   The raster's resolution is the one thing about this check that is a
+   compromise, and for two rounds it went unstated. Every string is now measured
+   against every ground its box covers, so the number that matters is how many
+   strings cross a boundary at all and how many of those cross a real COLOUR
+   boundary — the ones an anchor-only lookup would have had to guess about. */
+if (CELLS.total) {
+  const pc = (n) => Math.round((n / CELLS.total) * 100) + '%';
+  console.log(`  · ${CELLS.total} strings measured against the raster: ` +
+    `${CELLS.one} (${pc(CELLS.one)}) sit inside a single 8-unit cell, ` +
+    `${CELLS.straddle} (${pc(CELLS.straddle)}) straddle, and of those ` +
+    `${CELLS.mixed} (${pc(CELLS.mixed)}) cross two or more distinct grounds`);
+  console.log(`    the check takes the WORST ground a string covers, not the anchor's — ` +
+    `on ${CELLS.anchorBlind} of them the anchor's cell is not even one of the grounds under the text`);
+  ok(CELLS.mixed <= CELLS.straddle, 'a mixed string is a straddling string');
 }
 
 done('frostfell-render');

@@ -338,6 +338,7 @@ function carefulItem(card) {
 const ROOM = { plays: 0, declined: 0, packed: 0, spare: 0, free: [], efree: [] };
 const CROOM = { turns: 0, free: [] };
 const DUCKS = { forks: 0, taken: 0, wound: 0, bar: 0.22 };
+const LANE = { on: false, by: {} };
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 const HABITS = [
   ['deny', 'denying schemes'],
@@ -400,6 +401,28 @@ function carefulTurn() {
      with free moves, so a pilot that looks at the board pays nothing for it.
      A pilot that does not look eats a double lunge and a frozen lane. */
   if (SKILL.deny) denySchemes();
+
+  /* CAN THIS CARAVAN ANSWER A NAMED WAVE AT ALL?
+
+     The front-slot-only telegraph was worth +8 to a run carrying no course and
+     nothing to any of the five, and shipping around it left the reading
+     unexplained. The suspicion it points at predates the telegraph: a course
+     narrows the pool, and a narrowed pool may not hold enough BODIES for the
+     board's own geometry. So count, on every turn a telegraph is live, whether
+     the lane is already held and whether the pilot could hold it if it wanted
+     to — a creature in hand and a free slot in the named lane. Broken out by
+     course, against a run that declared none. */
+  if (LANE.on && b.waveLane !== undefined) {
+    const co = (G.run && G.run.course) || 'none';
+    const r = LANE.by[co] || (LANE.by[co] = { live: 0, held: 0, could: 0, bodies: 0 });
+    r.live++;
+    const held = FF.laneHeldBy(G, b.waveLane);
+    if (held) r.held++;
+    const spare = [0, 1, 2].some((col) => FF.slotFree(G, 'p', b.waveLane, col));
+    const inHand = b.hand.some((c) => c.type === 'unit');
+    if (held || (spare && inHand)) r.could++;
+    r.bodies += FF.playerUnits(G).length;
+  }
 
   /* THE LEADER DOES NOT BELONG AT THE BACK.
 
@@ -733,7 +756,19 @@ const STANDING = [
   ['FF_LESSON=1', 'what a lesson is worth, and at what dose'],
   ['FF_MONEY=70', 'what a purse buys, one ware removed and one ware given'],
   ['FF_COURSE=150', 'the five courses against declaring nothing'],
+  ['FF_PAIRS=70', 'fight habits two at a time — does any pair beat its halves'],
+  ['FF_PAIR=holdGear+keepSlot', 'and the one pair worth settling, four times as deep'],
+  ['FF_NOWAVE=1', 'the ladder with the wave telegraph off, same build, same seeds'],
+  ['FF_NOSCARS=1', 'the ladder with the scar rule switched off'],
 ];
+/* FF_HABIT and FF_CONTRAST are deliberately NOT here, and that is the answer to
+   "six arms exist and three are stamped". Neither is an arm: FF_HABIT narrows
+   FF_ABLATE to one habit so a single number can be run deep, and it reports
+   through FF_ABLATE's own table; FF_CONTRAST prints how much text the contrast
+   check paired and asserts nothing. An arm produces a reading somebody would
+   quote a round later. A modifier and a print flag do not, and listing them
+   beside arms is what made "three of six are stamped" look like rot when it was
+   a miscount. */
 
 const MEND = { on: false, by: {}, hurt: 0, last: null, where: 'start' };
 const wounds = () => (G.run ? G.run.deck.concat([G.run.leader])
@@ -1196,6 +1231,89 @@ section('whole runs, start to finish');
       `${o.reachedTwo}/${o.runs} saw the second zone, ${o.reachedThree} the third`);
   }
 
+  /* FF_NOSCARS had no headline for three rounds, which is why it sat in the
+     README as an arm and never wrote a reading: a control that changes the
+     whole game and is read by eye cannot stamp anything. Give it the one number
+     it is actually about — what the ladder does with the rule switched off —
+     and it becomes an arm like the others. */
+  if (NO_SCARS) {
+    ARMS.stamp('FF_NOSCARS=1', `with every scar wiped: ${rows.map(([n2, o]) => n2.replace('+ ', '') + ' ' + pct(o) + '%').join(', ')}`,
+      tribes.length * N);
+  }
+
+  /* WAS THE TRADER'S RUNG COMPRESSED, OR DID IT ACTUALLY FALL?
+
+     Shipping the telegraph took the trader from +18 to +13 and that was written
+     off in one sentence as "a floor that rises compresses everything above it".
+     That is a hypothesis dressed as an explanation, and it was compared against
+     a reading taken from a DIFFERENT BUILD a round earlier, which is the same
+     mistake the fight ablation made for four rounds.
+
+     So: same build, same seeds, one flag down. And say what compression
+     actually predicts rather than gesturing at it. A rung that is unchanged in
+     STRENGTH multiplies the odds of winning by a constant — odds, not points,
+     because points cannot be constant when a floor moves. If the odds ratios
+     hold and only the point gaps shrink, compression is the whole story. If an
+     odds ratio falls, that rung genuinely got weaker and the sentence was
+     wrong. */
+  if (process.env.FF_NOWAVE) {
+    const odds = (p) => (p <= 0 ? 0 : p >= 100 ? Infinity : (p / 100) / (1 - p / 100));
+    const before = FF.WAVE_TELL.on;
+    FF.WAVE_TELL.on = false;
+    const off = [sweep('careless'), sweep('tactics'), sweep('trader'), sweep('careful')];
+    FF.WAVE_TELL.on = before;
+    const on = [careless, tactics, trader, careful];
+    const names = ['the fight', 'the trader', 'steering the pool'];
+    console.log('');
+    console.log('    the telegraph, against the same build with the flag down:');
+    console.log(`      ${'rung'.padEnd(20)}${'off'.padStart(12)}${'on'.padStart(12)}` +
+      `${'odds ratio off'.padStart(16)}${'on'.padStart(8)}`);
+    console.log(`      ${'careless (the floor)'.padEnd(20)}` +
+      `${String(pct(off[0]) + '%').padStart(12)}${String(pct(on[0]) + '%').padStart(12)}`);
+    /* An odds ratio wants both ends strictly between 0 and 100. At a sample
+       small enough to produce a 0% rung it is not a number, and printing one
+       anyway is how a divide-by-epsilon ends up in a table looking like data. */
+    const ratio = (lo, hi) => {
+      const a2 = odds(lo), z2 = odds(hi);
+      return (a2 > 0 && Number.isFinite(a2) && Number.isFinite(z2)) ? z2 / a2 : null;
+    };
+    const show = (r) => (r === null ? '—' : r.toFixed(2));
+    const pts = (a2, z2) => { const d = pct(z2) - pct(a2); return (d >= 0 ? '+' : '') + d; };
+    const ors = [];
+    for (let i = 0; i < 3; i++) {
+      const oOff = ratio(pct(off[i]), pct(off[i + 1]));
+      const oOn = ratio(pct(on[i]), pct(on[i + 1]));
+      ors.push({ name: names[i], oOff, oOn });
+      console.log(`      ${names[i].padEnd(20)}${pts(off[i], off[i + 1]).padStart(12)}` +
+        `${pts(on[i], on[i + 1]).padStart(12)}${show(oOff).padStart(16)}${show(oOn).padStart(8)}`);
+    }
+    /* And the arithmetic the sentence owed: hold every odds ratio at its
+       flag-down value, move the floor to where the telegraph put it, and read
+       off what each rung SHOULD be worth in points if nothing but the floor
+       changed. */
+    let p = pct(on[0]);
+    const predicted = [];
+    for (const r of ors) {
+      if (r.oOff === null) { predicted.push(null); continue; }
+      const o2 = odds(p) * r.oOff;
+      const next = 100 * o2 / (1 + o2);
+      predicted.push(Math.round(next - p));
+      p = next;
+    }
+    console.log(`      if ONLY the floor moved (${pct(off[0])}% → ${pct(on[0])}%), the rungs would read ` +
+      predicted.map((d, i) => `${names[i]} ${d === null ? '—' : (d >= 0 ? '+' : '') + d}`).join(', '));
+    console.log('      they actually read ' +
+      names.map((n2, i) => {
+        const d = pct(on[i + 1]) - pct(on[i]);
+        return `${n2} ${d >= 0 ? '+' : ''}${d}`;
+      }).join(', '));
+    ARMS.stamp('FF_NOWAVE=1', `floor ${pct(off[0])}% → ${pct(on[0])}%; ` +
+      `trader +${pct(off[2]) - pct(off[1])} → +${pct(on[2]) - pct(on[1])} against ` +
+      `${predicted[1] === null ? '—' : '+' + predicted[1]} predicted by compression alone`,
+      tribes.length * N);
+    ok(off.every((o) => o.thrown === null), 'the flag-down ladder runs clean too');
+  }
+
   /* What is actually killing a competent pilot in the last zone. A zone that
      kills is a difficulty setting; a zone where the same three things kill
      every time is a design problem, and telling them apart needs the names. */
@@ -1355,8 +1473,10 @@ section('does money change anything');
     return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
   } : sweep2;
   if (CN) console.log(`    (courses turned up: ${3 * CN} runs an arm)`);
+  LANE.on = true; LANE.by = {};
   const noCourse = sweepC((run) => { run.course = null; });
   const byCourse = FF.COURSES.map((co) => ({ co, r: sweepC((run) => { run.course = co.id; }) }));
+  LANE.on = false;
   console.log('');
   console.log(`    ${'no course'.padEnd(19)}${bar(noCourse.pct)} ${String(noCourse.pct + '%').padStart(4)}`);
   for (const { co, r } of byCourse) {
@@ -1364,8 +1484,55 @@ section('does money change anything');
   }
   const cband = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, 3 * (CN || N)))).toFixed(1);
   console.log(`    (±${cband} is one standard deviation on the course rows)`);
+
+  /* DOES A COURSE STARVE THE BOARD OF BODIES?
+
+     The front-only telegraph paid a courseless run +8 and every course nothing,
+     which is a reading about the POOL rather than about the telegraph: if a
+     course narrows what you draw below what the board's geometry needs, that is
+     a balance problem the telegraph merely exposed. So on every turn a wave has
+     named a lane, count whether that lane is already held and whether the pilot
+     COULD hold it — a creature in hand and a free slot in the lane — split by
+     what the run declared. */
+  {
+    const key = { none: 'no course' };
+    for (const co of FF.COURSES) key[co.id] = co.short.toLowerCase();
+    const rows = Object.entries(LANE.by)
+      .map(([k, r]) => ({
+        k: key[k] || k,
+        live: r.live,
+        held: r.held / Math.max(1, r.live),
+        could: r.could / Math.max(1, r.live),
+        bodies: r.bodies / Math.max(1, r.live),
+      }))
+      .sort((a2, z) => z.could - a2.could);
+    console.log('    and whether the board can answer a named wave at all:');
+    for (const r of rows) {
+      console.log(`      ${r.k.padEnd(19)}` +
+        `held ${String(Math.round(r.held * 100) + '%').padStart(4)} · ` +
+        `could ${String(Math.round(r.could * 100) + '%').padStart(4)} · ` +
+        `${r.bodies.toFixed(1)} bodies standing   (${r.live} live telegraphs)`);
+    }
+    const noc = rows.find((r) => r.k === 'no course');
+    const worst = rows[rows.length - 1];
+    if (noc && worst && worst !== noc) {
+      const gap = Math.round((noc.could - worst.could) * 100);
+      console.log(`      → the narrowest pool answers ${gap} points ` +
+        `${gap >= 0 ? 'less' : 'more'} often than declaring nothing` +
+        (Math.abs(gap) < 5 ? ' — no course starves the board' : ''));
+    }
+  }
   const bestCourse = byCourse.reduce((a, z) => (z.r.pct > a.r.pct ? z : a));
   const worstCourse = byCourse.reduce((a, z) => (z.r.pct < a.r.pct ? z : a));
+  /* Stamped like every other turned-up arm. It was listed as standing for two
+     rounds and never wrote a reading, so the summary said "run it" about
+     something that had in fact been run — which is the failure the stamp file
+     exists to prevent, wearing the opposite face. */
+  if (CN) {
+    ARMS.stamp('FF_COURSE=150', `${bestCourse.co.short.toLowerCase()} ${bestCourse.r.pct}% is the best of five, ` +
+      `${worstCourse.co.short.toLowerCase()} ${worstCourse.r.pct}% the worst, against ${noCourse.pct}% for none ` +
+      `(±${cband})`, 3 * CN);
+  }
   ok(bestCourse.r.pct >= noCourse.pct - band, 'declaring a course is never worse than declaring none');
   /* And no course may run away with the game. One of them shipped for about
      ten minutes paying its warmth unconditionally and measured 73% against a
@@ -1577,6 +1744,176 @@ section('which parts of playing well are worth anything');
       '█'.repeat(Math.round(pct / 2)).padEnd(14) + ` ${String(pct + '%').padStart(4)}  ` +
       (d > 0 ? '+' + d : String(d)) + ' of the ' + (all - none) + sig(d));
   }
+  /* AND THE QUESTION NEITHER TABLE CAN ANSWER: DO ANY TWO OF THEM COMBINE?
+
+     Shipping the wave telegraph took denial from 17-of-17 down to 8-of-17 while
+     the SET stayed at 17. Nine points went somewhere no single-habit arm can
+     see, and there is only one place they can be: pairs. Two habits that are
+     each worth nothing alone and something together are the signature of a
+     second decision — the thing four rounds of one-at-a-time ablation has been
+     structurally unable to find.
+
+     So turn them on TWO at a time and look for INTERACTION, which is the pair
+     measured against the sum of its parts:
+
+         interaction = pair − none − (a − none) − (b − none)
+
+     Zero means they simply add and there is nothing there. Positive past two
+     standard deviations means the pair is worth more than its halves — that is
+     the second decision, found by measurement rather than by building another
+     mechanic. Negative past the band means they SUBSTITUTE, which is its own
+     answer and the one the subtractive table has been quietly assuming.
+
+     The band is wider than a single row's: the interaction is a sum of four
+     measured rates, so its variance is four times one row's and its standard
+     deviation twice. Nothing here is reported that does not clear 2× that.
+
+     It ran first on the four habits that plausibly touch a named wave — deny,
+     place, reposition, keepSlot — on the grounds that holding gear and calling
+     waves early have nothing to do with which lane a body stands in. All six
+     pairs read "they simply add", and the ARITHMETIC said the exclusion was
+     the mistake: those four together reach about +9 and the whole set is worth
+     +17, so eight points were sitting in the two habits that had been reasoned
+     away. All fifteen pairs run now. An intuition about which things could
+     interact is exactly the thing this arm exists to replace.
+
+     And a CUMULATIVE row underneath, best single first, because a pair table
+     locates an interaction between two things and says nothing about where a
+     set's value accumulates. FF_PAIRS turns the whole thing on: twenty-seven
+     arms is not something an ordinary check should pay for. */
+  const PN = Number(process.env.FF_PAIRS || 0);
+  if (PN) {
+    /* FF_PAIR=a+b prices ONE pair, the way FF_HABIT prices one habit, because
+       the interaction band is twice a row's and settling a single interaction
+       therefore costs four times the sample. Fifteen pairs at that depth
+       answers fourteen questions nobody asked. */
+    const ONE = (process.env.FF_PAIR || '').split('+').filter(Boolean);
+    const KEYS = ONE.length === 2 ? ONE : HABITS.map(([k]) => k);
+    if (ONE.length === 2) console.log(`    (one pair only: ${ONE.join(' + ')})`);
+    const nameOf = (k) => HABITS.find((h) => h[0] === k)[1].replace(' (removed)', '');
+    const at = (keys, base = 1000) => {
+      for (const [k2] of HABITS) SKILL[k2] = false;
+      for (const k of keys) SKILL[k] = true;
+      let wins = 0, runs = 0;
+      for (const tribe of tribes) {
+        for (let i = 0; i < PN; i++) {
+          const st = playRun(tribe, base + i * 37, 'tactics'); runs++; if (st.won) wins++;
+        }
+      }
+      return (wins / Math.max(1, runs)) * 100;
+    };
+    const zero = at([]);
+    const solo = {};
+    for (const k of KEYS) solo[k] = at([k]);
+    const pband = 100 * Math.sqrt(0.2 * 0.8 / Math.max(1, tribes.length * PN));
+    const iband = pband * 2;                       // four rates, so twice the sd
+    console.log('');
+    console.log(`    IN PAIRS (${tribes.length * PN} runs an arm, ±${pband.toFixed(1)} a row, ` +
+      `±${iband.toFixed(1)} on an interaction)`);
+    const signed = (n) => (n >= 0 ? '+' : '') + n.toFixed(1);
+    console.log(`      knowing none: ${zero.toFixed(0)}%   ` +
+      KEYS.map((k) => `${k} ${signed(solo[k] - zero)}`).join('  '));
+    const pairs = [];
+    for (let i = 0; i < KEYS.length; i++) {
+      for (let j = i + 1; j < KEYS.length; j++) {
+        const a2 = KEYS[i], b2 = KEYS[j];
+        const both = at([a2, b2]);
+        const parts = (solo[a2] - zero) + (solo[b2] - zero);
+        pairs.push({ a: a2, b: b2, both, gain: both - zero, parts, inter: both - zero - parts });
+      }
+    }
+    /* WHERE THE SET'S VALUE ACTUALLY ACCUMULATES.
+
+       A pair table can only find an interaction between two named things. The
+       question underneath it is different: six habits worth about eight points
+       between them one at a time add up to a set worth seventeen, and the nine
+       missing points have to enter SOMEWHERE. Turning them on cumulatively,
+       best single first, says at which rung they arrive. */
+    const order = KEYS.slice().sort((x, y) => solo[y] - solo[x]);
+    const ladder = [];
+    for (let i = 1; i <= order.length; i++) ladder.push({ n: i, pct: at(order.slice(0, i)) });
+    Object.assign(SKILL, before);
+    pairs.sort((x, y) => y.inter - x.inter);
+    for (const p of pairs) {
+      const verdict = Math.abs(p.inter) < 2 * iband ? 'they simply add'
+        : (p.inter > 0 ? '>>> MORE THAN ITS HALVES' : 'they substitute');
+      console.log(`      ${(nameOf(p.a) + ' + ' + nameOf(p.b)).padEnd(52)}` +
+        `${String(p.both.toFixed(0) + '%').padStart(4)}  ` +
+        `together ${signed(p.gain).padStart(5)} · apart ${signed(p.parts).padStart(5)} · ` +
+        `interaction ${signed(p.inter).padStart(5)}  ${verdict}`);
+    }
+    /* IS THE PRINTED BAND THE REAL BAND? IT IS NOT.
+
+       Every band this suite prints is the textbook one for a proportion and it
+       assumes the arms are independent samples. THEY ARE NOT: every arm plays
+       the same seeds, so two arms differ only by what the pilot did with an
+       identical trail. Paired samples make the band on a DIFFERENCE narrower
+       than the independent formula says, and a band that is wrong in the safe
+       direction is still wrong — it rejects real results.
+
+       So measure it rather than derive it. Run the same comparison at five
+       different seed bases and take the spread of the answers: that is the
+       band, with no formula and no independence assumption in it. Five points
+       is a thin estimate of a standard deviation and it is an honest one, which
+       the derived number was not.
+
+       Both quantities the table gates on are measured: a plain GAIN (one habit
+       against none) and an INTERACTION (a pair against the sum of its parts),
+       because they are built out of two rates and four and there is no reason
+       to assume the same narrowing applies to both. */
+    const seedBands = (() => {
+      const bases = [1000, 4000, 7000, 11000, 15000];
+      const sd = (xs) => {
+        const mu = xs.reduce((n, v) => n + v, 0) / xs.length;
+        return Math.sqrt(xs.reduce((n, v) => n + (v - mu) * (v - mu), 0) / (xs.length - 1));
+      };
+      /* The two habits that DO something, by their own single-arm size. The
+         first cut used KEYS[0] and KEYS[1] and measured an interaction of
+         exactly 0.0 at all five bases, because `reposition` is a switch over an
+         empty block: its arms are byte-identical to the ones without it, so the
+         interaction is zero by construction and the "band" came out 110x
+         narrower than derived. A band of zero is not a narrow band, it is a
+         broken instrument, and the assertion below is what caught it. */
+      const rank = KEYS.slice().sort((x, y) => Math.abs(solo[y] - zero) - Math.abs(solo[x] - zero));
+      const A = rank[0], B = rank[1];
+      const gains = [], inters = [];
+      for (const bse of bases) {
+        const z = at([], bse), a2 = at([A], bse), b2 = at([B], bse), ab = at([A, B], bse);
+        gains.push(a2 - z);
+        inters.push(ab - z - (a2 - z) - (b2 - z));
+      }
+      Object.assign(SKILL, before);
+      return { gains, inters, A, B, gain: sd(gains), inter: sd(inters) };
+    })();
+    console.log(`      the band, MEASURED at five seed bases rather than derived:`);
+    console.log(`        a gain (${nameOf(seedBands.A)} against none) reads ` +
+      seedBands.gains.map((v) => v.toFixed(1)).join(', ') +
+      ` — sd ±${seedBands.gain.toFixed(1)} against ±${(pband * Math.SQRT2).toFixed(1)} derived`);
+    console.log(`        an interaction (${nameOf(seedBands.A)} + ${nameOf(seedBands.B)}) reads ` +
+      seedBands.inters.map((v) => v.toFixed(1)).join(', ') +
+      ` — sd ±${seedBands.inter.toFixed(1)} against ±${iband.toFixed(1)} derived`);
+    const shrink = iband / Math.max(0.05, seedBands.inter);
+    console.log(`        → shared seeds make the real band ${shrink.toFixed(1)}x narrower than the printed one, ` +
+      `so every "under 2σ" in this suite is measured against a band that is too wide`);
+    console.log(`        on the MEASURED band (2σ = ±${(2 * seedBands.inter).toFixed(1)}), the pairs that clear are: ` +
+      (pairs.filter((p) => Math.abs(p.inter) >= 2 * seedBands.inter)
+        .map((p) => `${nameOf(p.a)} + ${nameOf(p.b)} ${signed(p.inter)}`).join(', ') || 'none'));
+    console.log(`      and cumulatively, best single first (${order.join(' → ')}):`);
+    console.log('        ' + ladder.map((r) => `${r.n}:${r.pct.toFixed(0)}%`).join('  ') +
+      `   · one at a time they sum to ${signed(KEYS.reduce((n, k) => n + (solo[k] - zero), 0))}, ` +
+      `together they are ${signed(ladder[ladder.length - 1].pct - zero)}`);
+    const bestPair = pairs[0];
+    ARMS.stamp(ONE.length === 2 ? 'FF_PAIR=' + ONE.join('+') : 'FF_PAIRS=70', bestPair.inter >= 2 * iband
+      ? `${nameOf(bestPair.a)} + ${nameOf(bestPair.b)} is +${bestPair.inter.toFixed(1)} past its halves ` +
+        `(needs ±${(2 * iband).toFixed(1)})`
+      : `best is ${nameOf(bestPair.a)} + ${nameOf(bestPair.b)} at +${bestPair.inter.toFixed(1)}, ` +
+        `against ±${(2 * iband).toFixed(1)} derived but ±${(2 * seedBands.inter).toFixed(1)} MEASURED ` +
+        `— shared seeds make the real band ${shrink.toFixed(1)}x narrower than the printed one`,
+      tribes.length * PN);
+    ok(pairs.length === (KEYS.length * (KEYS.length - 1)) / 2, 'every pair of the set was priced');
+    ok(seedBands.inter > 0, 'the measured band is a number, not a coincidence of five identical runs');
+  }
+
   const rows = [];
   for (const [key, label] of HABITS) {
     if (ONLY && key !== ONLY) continue;
@@ -1676,12 +2013,22 @@ section('the arms that are not run by default');
   }
   console.log('  · arms that do not run by default');
   for (const [knob, what, rec] of rows) {
-    console.log(`    ${knob.padEnd(24)}${what}`);
-    console.log(`    ${''.padEnd(24)}→ ` + (rec
+    console.log(`    ${knob.padEnd(26)} ${what}`);
+    console.log(`    ${''.padEnd(26)} → ` + (rec
       ? `${rec.said}   (at ${rec.sample} an arm)`
       : 'no reading recorded — run it'));
   }
-  ok(STANDING.length >= 4, 'every arm that needs a knob is listed');
+  /* Every knob in the file that GATES A SECTION is an arm and has to be listed
+     here, or the summary quietly stops mentioning something that exists. Read
+     off the source rather than trusted to a number: a list that has to be
+     bumped by hand is a list that goes stale. */
+  const inSource = [...readFileSync(new URL(import.meta.url), 'utf8')
+    .matchAll(/process\.env\.(FF_[A-Z]+)/g)].map((m2) => m2[1]);
+  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_CONTRAST'];
+  const listed = STANDING.map(([k]) => k.split('=')[0]);
+  const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
+  eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');
+  ok(STANDING.length >= 8, 'and all eight of them are');
 }
 
 /* ------------------------------------------------- can a lesson be priced -- *//* ------------------------------------------------- can a lesson be priced -- */
