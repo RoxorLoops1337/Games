@@ -213,63 +213,50 @@ The honest statement is that steering has never been resolved, and settling it
 needs about **4x this sample** — which is now affordable, since the probe is
 pooled.
 
-### FINDING — the winning hands carry FEWER BODIES, and it is the room rule
+### FINDING — the winning hands carry fewer bodies and more gear; two explanations are dead
 
 `topic: dealt-hands`
 
 Best dealt hand **40%**, worst **26%** — a 14-point spread, the largest effect
-measured in this game. Eight hands dealt by seed, sorted by win rate:
+measured in this game. Eight hands dealt by seed:
 
 ```
 top half vs bottom half
-  bodies    3.5  vs  4.3      ← the better hands have FEWER
-  atk       1.8  vs  2.9      ← and much lower
+  bodies    3.5  vs  4.3      ← so GEAR 2.5 vs 1.7, the same fact backwards
+  atk       1.8  vs  2.9
   hp        8.5  vs  9.4
   counter   2.5  vs  2.6        (no difference)
   keywords  2.5  vs  2.5        (no difference)
 ```
 
-**The rubber band is not the cause, and one round of this file said it was.** The
-obvious explanation was `fellAnswer` — the trail scales to what the caravan
-carries, and its own comment claims to absorb "about half" of a deck advantage.
-Four coefficients were tested:
+**Two explanations have been offered for this and both are now dead.**
+
+**The rubber band is not it.** `answer * 0.5`, `* 0.30`, `* 0.20` and `DEEP_BITE`
+halved all give bodies 3.5 vs 4.3 and atk 1.8 vs 2.9. The same decks win whatever
+the difficulty scaler does.
+
+**And the room rule is not it either, which was this file's own stated design
+identity for exactly one round.** The claim was that fewer bodies keeps slots
+free, free slots mean warmth, and warmth is worth +17. The test was named — do
+the winning decks stand on emptier boards — and then run:
 
 ```
-answer * 0.5  (shipped)   bodies 3.5 vs 4.3 · atk 1.8 vs 2.9
-answer * 0.30             bodies 3.5 vs 4.3 · atk 1.8 vs 2.9
-answer * 0.20             bodies 3.5 vs 4.3 · atk 1.7 vs 3.0
-DEEP_BITE 2.0 → 1.0       bodies 3.5 vs 4.3 · atk 1.8 vs 2.9
+                        top half   bottom half
+free slots a turn         2.79        2.78
+warmed on                  90%         90%
 ```
 
-**Bodies and attack are identical in every one.** The same decks are in the top
-half whatever the scaler does, so the ordering is a property of the decks and not
-of the difficulty curve. The previous entry's diagnosis is withdrawn.
+**Identical.** On real runs the deck grows to fill the board either way, so the
+starting hand's body count does not decide board occupancy at all. A design
+identity was declared on this a round ago and it is withdrawn.
 
-**The leading explanation is the room rule, and it is the one thing in the game
-big enough to do this.** `ROOM_NEEDED` is 2: a side with two slots to spare warms
-its whole line every turn, and a packed one takes the cold instead. A hand of 3.5
-units cannot fill six slots; a hand of 4.3 can, and does. This file already
-measured what warmth is worth from the other direction, while trying to tune the
-Hearth course: **doubling it was +17 points**, and the note there says "regen is a
-threshold good — there is no setting between +0 and +17".
-
-A rule worth seventeen points, gated on carrying fewer bodies, against a deck
-advantage worth a handful: that is the right order of magnitude and nothing else
-in the game is close. **It is stated as the leading explanation rather than a
-measurement, because it has not been measured directly** — the test is whether
-the winning decks show more free slots per turn, and that is one arm nobody has
-run yet.
-
-**And the decision, made rather than deferred.** Frostfell is a game where the
-room rule outweighs deck strength, and that is what it is going to be. Not
-because it cannot be changed, but because the alternative is turning down the one
-mechanic every other finding in this file points at — the fight ablation prices
-denying a scheme above hitting harder, the courses table has Cold (the only
-tempo course) 8 points clear of Hearth (a damage course), and every attempt to
-make damage matter has measured zero. **The game is about the board, not the
-bodies on it.** Every card finding in this file is downstream of that, and reads
-correctly once it is stated: cards were being priced on stats, and stats are not
-the axis the game turns on.
+**What is left is a description, not a mechanism, and it is stated as such.**
+Hands are six cards, so "fewer bodies" and "more gear" are the same number:
+**2.5 pieces of gear against 1.7**. Gear-heavy hands win by 14 points. That is
+consistent with the purse finding (money buys gear and charms and is worth +19)
+and with holding gear being the only non-denial habit to price above zero — but
+consistency is not a mechanism, and the mechanism is untested. Two guesses have
+now died here; the third will be a measurement or it will not be written down.
 
 ### FINDING — Cold wins because it is the only course that takes a turn
 
@@ -305,6 +292,26 @@ choices**, and the tempo one wins. The fix is not to nerf Cold a second time —
 that was tried and it is still ahead. It is that the other four need a rule that
 costs the foes a turn rather than paying the player a resource, and that is a
 design round of its own rather than a coefficient.
+
+**AND THE HYPOTHESIS WAS TESTED, AND IT IS NOT ENOUGH.** "Tempo beats resources"
+predicts that giving the weakest course a turn-cost should close the gap. Hearth
+is the weakest at 38%, and it was given one: the warden its rule saves stays up
+AND whatever felled it is Frozen 1. At 840 runs an arm:
+
+```
+hearth, three resource rules      38%
+hearth, plus a turn-cost rule     38%      ← the fourth rewrite, the fourth zero
+cold                              46%
+```
+
+**Zero.** Which sharpens the finding rather than confirming it. Cold's Frost lands
+on **the front of the first wave — turn one, before anything has happened.**
+Everything Hearth has ever tried lands late: a body saved after it was nearly
+lost, a foe frozen after it already killed. **A turn taken at the end of a fight
+is worth what a resource is worth: nothing.** The currency was never the whole
+story; the timing is. The next attempt at this course moves *when* its rule fires,
+not what it pays in — and reverted rather than shipped, on the standing rule that
+a mechanic measuring zero is not free.
 
 ### FINDING — the courses are not indistinguishable; the baseline was
 
@@ -411,33 +418,6 @@ deck's 0.9% of variance), and **the draw order is still worth nothing** (0.0% in
 both arms, best draw order 33% against worst 32%). What does not survive is every
 specific claim about *where* the trail's influence sits.
 
-### DEAD ENDS — boss normalisation, built and reverted in one round
-
-`topic: boss-norm`
-
-The locked arm said fixing the boss per zone took the trail from 32.5% to 13.9%,
-so "over half the trail is which beast you drew" and the fix was to draw the beast
-for flavour and scale its difficulty toward the zone's average. It was built.
-Three measurements killed it:
-
-1. **The strengths were already equal.** The normalisation factors came out at
-   0.98/1.03, 0.93/1.08 and 1.02/0.98 — the two beasts in a zone differ by under
-   **8%** on total stats. There was no numeric gap to close.
-2. **And so were the kill rates.** Across 2,592 locked runs the two Long Shelf
-   beasts kill **19.4%** and **17.3%** of all runs. A coin flip between two
-   equally lethal things is not a difficulty roll.
-3. **And the finding itself was an artefact of the cage** — see above. On real
-   runs the Weeper is 4.7% of deaths, not 19.4%.
-
-Measured anyway before reverting: with normalisation on the trail read **31.6%**
-against **32.5%** off. Nothing, exactly as the factors predicted.
-
-**The transferable part is not about bosses.** It is that a finding measured on a
-locked deck is a finding about locked decks, and this one was carried for three
-rounds and had a mechanic built on it before anybody ran it on the real game. The
-locked arm is not wrong — it answers "what decides a run when the deck cannot
-change", which is a real question — it is just not the game.
-
 ### FINDING — the deck share was mine, not the game's
 
 `topic: variance-decks`
@@ -516,6 +496,39 @@ it and nobody has asked the question that badly.
 instrument cannot support this" is a statement with a price tag on it, and the
 price was four minutes each. A file that says "unresolved" and does not spend the
 four minutes is choosing not to know.
+
+### FINDING — what this file is mostly about, counted
+
+`topic: file-shape`
+
+Of **35** entries, **22 are about the game** and **13 are about the instruments
+and my own mistakes** — 63/37. That is a defensible stock. The flow is not:
+
+```
+the last five rounds added      2 game entries
+                                6 instrument/method entries
+the ladder over those rounds    27, 27, 27, 27, 27 points · 10% floor every time
+```
+
+**Nothing shipped in five rounds has moved the ladder, and the reason is visible
+in the ratio.** The rounds went into the probe being wrong (unlocks accumulating,
+counters merging badly, a band nobody had measured, a timing bar that fired on
+six suites) and each of those was worth finding — the unlock bug alone invalidated
+a headline — but none of them is a change to Frostfell.
+
+**The game is not finished, and saying so is not the same as saying the work is
+documentation.** Three live questions each have a named next measurement:
+
+| question | the next measurement |
+|---|---|
+| why do gear-heavy hands win by 14 points | the mechanism, after two dead guesses |
+| why is Cold 8 clear, and can another course be made to matter | move a course's rule EARLIER, not change its currency |
+| the trader is +19 and the fight is +9 | whether that is the game it wants to be |
+
+**The rule this suggests, and it is about how rounds are spent:** an instrument
+finding is worth having when it changes what a number means — the unlock bug
+changed every ladder in the file. It is not worth having when it only changes how
+fast the number arrives. Five rounds is enough time in the workshop.
 
 ### FINDING — the ladder, and which of its numbers is the one being defended
 
@@ -751,6 +764,34 @@ the ladder lost three, and that was a cross-build comparison — see
 mechanism rather than a number: it is the second telegraph, it is shaped like the
 first, and neither of the things that sank the earlier cuts — a stronger fell, a
 punished specialist — survived into the shipped one.
+
+**THE CAGE AUDIT, RUN AT LAST — and unlike the courses, this survives.** Every
+number above was measured on a `tactics` pilot, which plays the fight and never
+shops or drafts. The trail finding evaporated when it met a real run, so this one
+was re-measured the same way, 210 runs an arm:
+
+```
+                          cage (tactics)   real (careful)
+the fight, played well          19%             37%
+every habit switched off         7%             25%
+THE SET                      12 points       12 points
+denial alone                    +15             +10
+every other habit           0 to +4, noise   −2 to +3, noise
+```
+
+**The set is worth exactly 12 points in both, and denial is the only habit that
+clears in either.** The cage was a fair control here — it moves the level, not the
+finding.
+
+**One number in this file was stale and is corrected: the set is 12, not 17–18.**
+Both arms agree, so that is drift in the game across rounds rather than a cage
+artefact.
+
+**And two of the four audited findings were never caged at all**, which reading
+the source settles without a run: the purse arm has always used `mode: 'careful'`
+— real runs, drafting and shopping — and the lesson arm's careless pilot *is* its
+subject rather than its cage, since the question is what a beginner gains from
+being told.
 
 ### RULE — the scale matters across baselines, not against one
 
