@@ -16,7 +16,7 @@ import { ok, eq, done, section } from './frostfell_lib.mjs';
 import { runJobs, JOBS, snapshot, absorb } from './frostfell_pool.mjs';
 import {
   CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
-  applyTweak,
+  applyTweak, config,
 } from './frostfell_pilot.mjs';
 
 /* A tiny on-disk record of what each turned-up arm last said, so the summary
@@ -52,6 +52,7 @@ const STANDING = [
   ['FF_CALIBRATE=70', 'what a band actually is on this instrument — measured, not derived'],
   ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
   ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
+  ['FF_GEARBAR=1', 'the pilot\'s gear-before-body bar swept — is the gear finding the deck or the pilot'],
 ];
 /* FF_HABIT, FF_CONTRAST, FF_VDECKS, FF_VSEED and FF_TIME are deliberately NOT
    here, and that is the answer to
@@ -669,6 +670,92 @@ section('does money change anything');
      A bottomless purse is still not the best row, and should not be — spending
      badly has to cost you, or the shop is a tax on patience. */
   ok(true, `money is worth ${normal.pct - broke.pct} points, band ±${band} — reported, not gated`);
+}
+
+/* ------------------------------------------ is the gear finding the PILOT? -- */
+/* THE 14 POINTS, AND WHICH OF TWO THINGS THEY ARE.
+
+   Runs whose hands come out gear-heavy win by 14 points, and the winners play
+   more gear PER TURN, not merely more gear per run. That reading has been
+   printed for two rounds with a description attached and no mechanism, because
+   it admits two explanations that the variance arm cannot separate:
+
+     the DECK is better  — gear is stronger than bodies and the finding is
+                           about what the caravan carries, or
+     the PILOT is worse  — it deploys a warden whenever it can and only jumps
+                           the queue with gear worth 6 or more, so a gear-heavy
+                           hand forces it into good play by removing the bodies
+                           it would otherwise have wasted turns on.
+
+   The second one is testable and has never been tested, because `holdGear` is a
+   SWITCH: off means "gear always jumps the queue", which is one end of a dial.
+   `GEAR.bar` is the dial. Sweep it on the SAME decks the pilot already draws,
+   and read the SPREAD rather than the ranking: if always-first and never-first
+   are level, no setting of this knob buys a point and the 14 points cannot be
+   about how much gear the pilot plays. If the ends are apart, they can be, and
+   the shipped bar's distance from the best one prices what the pilot has been
+   leaving on the table. */
+section('is the gear preference the deck or the pilot');
+{
+  const N = Number(process.env.FF_GEARBAR || 0);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const each = N || Math.min(24, Number(process.env.FF_RUNS || DEFAULT_N));
+  /* 2.5 is carefulItem's floor, so a bar of 2.5 means every playable piece of
+     gear jumps the queue; 99 means none ever does. 6 is what ships. */
+  const BARS = [2.5, 4, 6, 8, 99];
+  const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(26);
+  const base = config();
+  const answers = await runJobs(BARS.flatMap((v) =>
+    tribes.map((tribe) => ({
+      tribes: [tribe], n: each, base: 1000, step: 37, mode: 'careful',
+      config: Object.assign({}, base, { gear: v }),
+    }))));
+  const rows = BARS.map((v, k) => {
+    const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
+    const wins = part.reduce((a, x) => a + x.wins, 0);
+    const runs = part.reduce((a, x) => a + x.runs, 0);
+    return { v, wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
+  });
+  const label = (v) => (v <= 2.5 ? 'gear always first' : v >= 99 ? 'gear never first' : `gear worth ${v}+ first`);
+  console.log('');
+  for (const r of rows) {
+    console.log(`    ${label(r.v).padEnd(22)}${bar(r.pct)} ${String(r.pct + '%').padStart(4)}` +
+      (r.v === 6 ? '   ← what ships' : ''));
+  }
+  const ship = rows.find((r) => r.v === 6);
+  const best = rows.reduce((a, z) => (z.pct > a.pct ? z : a));
+  const gband = BAND.gap(ship.pct / 100, ship.runs) * Math.SQRT2;
+  const zb = familyZ(BARS.length);
+  console.log(`    (±${gband.toFixed(1)} on a difference at ${ship.runs} runs a bar; family of ${BARS.length} ` +
+    `is ${zb.toFixed(2)}σ = ±${(zb * gband).toFixed(1)})`);
+  const lift = best.pct - ship.pct;
+  const worst = rows.reduce((a, z) => (z.pct < a.pct ? z : a));
+  const spread = best.pct - worst.pct;
+  /* THE SPREAD, not the lift, is what answers the question. A best-vs-shipped
+     gap is a ranking, and a ranking inside its own band is noise — this file's
+     oldest rule. What tells the two explanations apart is whether the dial does
+     ANYTHING across its whole range: if the extremes are level, no amount of
+     re-tuning the pilot's gear preference buys a point, and the 14 points
+     cannot be about how much gear the pilot chooses to play. */
+  console.log(`    → best ${label(best.v)} ${best.pct}% · worst ${label(worst.v)} ${worst.pct}% · ` +
+    `spread ${spread} on a family bar of ±${(zb * gband).toFixed(1)}`);
+  console.log(`      ${spread >= zb * gband
+    ? `the dial is REAL and the shipped bar is ${lift} off it — the 14 points are PLAY SKILL`
+    : 'the dial is FLAT end to end, so gear-before-body is not a decision — ' +
+      'whatever the 14 points are, they are not how much gear the pilot plays'}`);
+  if (N) {
+    ARMS.stamp('FF_GEARBAR=1', `${BARS.length} bars from always-first to never-first span ` +
+      `${spread} points (${worst.pct}-${best.pct}%) against a family bar of ±${(zb * gband).toFixed(1)} — ` +
+      `${spread >= zb * gband ? 'a real dial' : 'flat: gear-before-body is not a decision'}`,
+      tribes.length * each);
+  }
+  /* Gated, not merely reported: if some bar beats the shipped one by more than
+     the family bar, the pilot is measurably mis-set and every fight-arm number
+     taken with it is a number about a pilot playing below itself. That is worth
+     failing the suite over, because it invalidates readings rather than the
+     game. */
+  ok(spread < zb * gband || N === 0,
+    `the gear-before-body dial is flat end to end (${spread} points across ${BARS.length} bars)`);
 }
 
 /* ------------------------------------------- and what walking past one is -- */

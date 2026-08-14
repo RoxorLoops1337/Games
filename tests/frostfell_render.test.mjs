@@ -647,6 +647,52 @@ section('the shape of a phone');
          and the exclusion is gone. Every shape in the list is checked for
          everything it is in the list for. */
       eq([...new Set(stacked)].join(' | '), '', `${w}x${h} ${scr}: no two lines drawn on top of each other`);
+
+      /* AND THE SAME CHECK TURNED NINETY DEGREES, which is the half that was
+         missing and the half that broke.
+
+         The stacking check catches a line STEP that stopped growing with its
+         text. It cannot catch a BOX that stopped containing it, because that
+         failure runs sideways: on the leader screen at phone scale the text
+         floor lifted every preview card's name past what `fitText` could shrink
+         it to, and the four names were drawn straight through each other —
+         `CINDERPUP CINDERPUP KETTLEBEAK` read as one word across three cards.
+         Every one of them passed the floor check and the stacking check,
+         because each was individually legible and none shared a column.
+
+         Same rule, other axis: two strings drawn on the same baseline may not
+         overlap horizontally. The stub reports the advance it measures, so the
+         span is known; a shared baseline is what makes them a row. Single
+         glyphs are exempt for the same reason they are exempt above — a stat
+         pip beside a name is placed deliberately and is not a wrap. */
+      const spanOf = (e) => {
+        const w2 = e.s.length * e.size * 0.5;
+        const left = e.align === 'center' ? e.x - w2 / 2 : e.align === 'right' ? e.x - w2 : e.x;
+        return [left, left + w2];
+      };
+      const rows = new Map();
+      for (const e of texts) {
+        if (e.s.trim().length < 3) continue;
+        const key = Math.round(e.y);
+        if (!rows.has(key)) rows.set(key, []);
+        rows.get(key).push(e);
+      }
+      const collided = [];
+      for (const row of rows.values()) {
+        const sp = row.map((e) => ({ e, s: spanOf(e) })).sort((a, b) => a.s[0] - b.s[0]);
+        for (let i = 1; i < sp.length; i++) {
+          const a = sp[i - 1], b = sp[i];
+          if (Math.abs(a.e.size - b.e.size) > 0.6) continue;
+          // a real overlap, not two glyph boxes touching at the kerning
+          const over = a.s[1] - b.s[0];
+          if (over > Math.max(2, a.e.size * 0.25)) {
+            collided.push(JSON.stringify(a.e.s).slice(0, 14) + '/' + JSON.stringify(b.e.s).slice(0, 14) +
+              ' by ' + Math.round(over));
+          }
+        }
+      }
+      eq([...new Set(collided)].slice(0, 4).join(' | '), '',
+        `${w}x${h} ${scr}: no two labels on one line run through each other`);
       log.length = 0;
 
       eq(small.join(','), '', `${w}x${h} ${scr}: every touch target is thumb-sized`);

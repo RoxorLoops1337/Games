@@ -402,6 +402,18 @@ const DUCKS = { forks: 0, taken: 0, wound: 0, bar: 0.22 };
 const LANE = { on: false, by: {} };
 const TELL = { on: false, live: 0, moved: 0, held: 0, fights: 0, turns: 0, allTurns: 0, lastB: null, lastHeld: 0 };
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
+/* HOW GOOD A PIECE OF GEAR HAS TO BE TO BEAT PUTTING A BODY DOWN.
+
+   `holdGear` is a switch and a switch cannot answer the question the gear
+   finding actually asks. The pilot deploys a warden whenever it can and only
+   jumps the queue with gear worth 6 or more; runs whose hands happened to be
+   gear-heavy win by 14 points. Two readings fit that: the deck is better
+   (a deck finding), or the pilot is under-spending gear and gear-heavy hands
+   force it to play well by accident (a play-skill finding). The switch cannot
+   tell them apart because off means "always gear first" — one end of a dial,
+   not the dial. This is the dial. 2.5 is the carefulItem floor, so GEAR.bar at
+   2.5 means gear always jumps the queue and 99 means it never does. */
+const GEAR = { bar: 6 };
 const HABITS = [
   ['deny', 'denying schemes'],
   ['reposition', 'repositioning at all (removed)'],
@@ -541,7 +553,7 @@ function carefulTurn() {
   // a kill this turn beats a body next turn — that is the single judgement the
   // careless bot never makes, because it always reaches for a warden first
   if (!SKILL.holdGear && bestI >= 0 && FF.playCard(G, bestI, bestT)) return;
-  if (bestI >= 0 && bestW >= 6 && FF.playCard(G, bestI, bestT)) return;
+  if (bestI >= 0 && bestW >= GEAR.bar && FF.playCard(G, bestI, bestT)) return;
 
   /* Filling the last slot costs the whole line its warmth and hands somebody
      frostbite, and it takes away the room to step out of a lunge. A pilot
@@ -1338,6 +1350,7 @@ export function absorb(snap) {
 export function applyConfig(cfg) {
   if (!cfg) return;
   if (cfg.skill) Object.assign(SKILL, cfg.skill);
+  if (cfg.gear !== undefined) GEAR.bar = cfg.gear;
   if (cfg.draft) Object.assign(DRAFT, cfg.draft);
   if (cfg.taught) Object.assign(TAUGHT, cfg.taught);
   if (cfg.flags) {
@@ -1350,11 +1363,11 @@ export function applyConfig(cfg) {
 /** What this thread's arm was configured with, to send to a worker. */
 export function config() {
   return { skill: Object.assign({}, SKILL), draft: Object.assign({}, DRAFT),
-    taught: Object.assign({}, TAUGHT),
+    taught: Object.assign({}, TAUGHT), gear: GEAR.bar,
     flags: { lane: LANE.on, tell: TELL.on, mend: MEND.on, room: ROOM.on } };
 }
 
 export {
-  CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
+  CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, GEAR, HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
   applyTweak,
 };
