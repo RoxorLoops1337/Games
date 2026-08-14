@@ -4968,8 +4968,10 @@ function drawUnit(c, u, t) {
   txt(c, u.name.toUpperCase(), u.px, y + h - 30, nSize, u.side === 'p' ? '#dbeaff' : '#ffd8d8', 'center', 't');
 
   // stats
-  if (u.atk > 0 || u.leader) statPip(c, x + 14, y + h - 13, 12, '#ff8b7a', u.atk + stat(u, 'spice'));
-  statPip(c, x + w - 14, y + h - 13, 12, '#7de08f', u.hp);
+  /* The same three silhouettes the card face uses. A slab and a card showing
+     the same warden were reading its attack off two different shapes. */
+  if (u.atk > 0 || u.leader) statBadge(c, 'atk', x + 14, y + h - 13, 12, '#ff8b7a', u.atk + stat(u, 'spice'));
+  statBadge(c, 'hp', x + w - 14, y + h - 13, 12, '#7de08f', u.hp);
   // the counter: it drops with a physical knock rather than swapping numbers
   const ready = u.cnt <= 1;
   const kick = u.tick || 0;
@@ -5065,13 +5067,48 @@ const RARE_NAME = { 1: 'common', 2: 'uncommon', 3: 'rare' };
 /* A card in hand: the full face. Three frames — warden, gear, charm — each
    with its own shape, so a glance at the silhouette tells you what kind of
    thing you are holding before you have read a word of it. */
+/* A stat badge with a SHAPE of its own, because three coloured circles in a row
+   is a traffic light: the eye has to read the colour before it knows which
+   number it is looking at. Attack is a shard, the counter is a disc, health is
+   a shield — the silhouettes are distinguishable at hand size and in the corner
+   of your eye, which is where a card is actually read. */
+function statBadge(c, kind, x, y, r, col, val) {
+  c.beginPath();
+  if (kind === 'atk') {                       // a shard, point down
+    c.moveTo(x - r, y - r * 0.72);
+    c.lineTo(x + r, y - r * 0.72);
+    c.lineTo(x + r * 0.62, y + r * 0.5);
+    c.lineTo(x, y + r * 1.05);
+    c.lineTo(x - r * 0.62, y + r * 0.5);
+    c.closePath();
+  } else if (kind === 'hp') {                 // a shield, flat top, round foot
+    c.moveTo(x - r, y - r * 0.8);
+    c.lineTo(x + r, y - r * 0.8);
+    c.lineTo(x + r, y + r * 0.15);
+    c.quadraticCurveTo(x + r, y + r, x, y + r * 1.05);
+    c.quadraticCurveTo(x - r, y + r, x - r, y + r * 0.15);
+    c.closePath();
+  } else {                                    // the clock
+    c.arc(x, y, r, 0, TAU);
+  }
+  inked(c, col, Math.max(2, r * 0.24), C.ink);
+  const n = String(val);
+  const sz = r * (n.length >= 3 ? 0.92 : n.length === 2 ? 1.12 : 1.42);
+  txt(c, n, x, y + r * 0.06, sz, '#12203a', 'center', 'd', 0);
+}
+
 function drawCard(c, card, x, y, w, h, o) {
   o = o || {};
   const d = CARDS[card.def];
   const isUnit = card.type === 'unit';
   const rare = card.rare || 1;
   const edge = RARE_COL[rare] || '#8fa6c4';
-  const tribeCol = card.tribe ? TRIBES[card.tribe].col : '#b9c8dc';
+  /* An untribed card used to take a near-white band that vanished into the
+     body, so half a row of cards had no band at all. Slate instead: every card
+     carries the same shape, and the colour says WHICH tribe rather than
+     whether there is one. */
+  const tribeCol = card.tribe ? TRIBES[card.tribe].col : '#8ea7c6';
+  const tribeLit = card.tribe ? TRIBES[card.tribe].col2 : '#c3d5ea';
   const S = w / 126;                       // every measurement is card-relative
   c.save();
   if (o.alpha !== undefined) c.globalAlpha = o.alpha;
@@ -5088,61 +5125,142 @@ function drawCard(c, card, x, y, w, h, o) {
     c.fillStyle = edge; c.globalAlpha = 0.5; c.fill();
     c.restore();
   }
-  panel(c, 0, 0, w, h, 13 * S, '#f3e9d6', edge);
-  // an inner keyline: two rules apart is what stops a flat fill reading as a box
-  rr(c, 4 * S, 4 * S, w - 8 * S, h - 8 * S, 10 * S);
-  c.lineWidth = 1.5; c.strokeStyle = 'rgba(60,48,32,.28)'; c.stroke();
 
-  /* ---------------- the name banner, shaped by type ---------------- */
-  const bh = 25 * S;
-  c.beginPath();
-  if (isUnit) {
-    rr(c, 6 * S, 6 * S, w - 12 * S, bh, 8 * S);
-  } else if (card.type === 'charm') {
-    rr(c, 6 * S, 6 * S, w - 12 * S, bh, bh / 2);
-  } else {
-    // gear wears a cut-corner tag
-    const k = 7 * S;
-    c.moveTo(6 * S + k, 6 * S);
-    c.lineTo(w - 6 * S, 6 * S);
-    c.lineTo(w - 6 * S, 6 * S + bh);
-    c.lineTo(6 * S + k, 6 * S + bh);
-    c.lineTo(6 * S, 6 * S + bh / 2);
-    c.closePath();
-  }
-  inked(c, tribeCol, 2 * S, C.ink);
-  const nameSize = fitText(c, card.name.toUpperCase(), w - 26 * S, 15 * S, 8 * S, 't');
-  txt(c, card.name.toUpperCase(), w / 2, 6 * S + bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.5)');
-
-  /* ---------------- the art window, filled rather than floated -------- */
-  const ax = 7 * S, ay = 34 * S;
-  const aw = w - 14 * S;
-  const ah = isUnit ? h * 0.38 : h * 0.36;
+  /* ---------------- the body ----------------
+     COLD, NOT CREAM. The card used to be parchment (#f3e9d6) in a game painted
+     entirely in night blues, so a hand of them read as a stack of receipts laid
+     on snow. It is an ice-white now with a blue cast and a vertical fall, which
+     belongs to the palette and still gives black rules text its contrast. */
   c.save();
-  rr(c, ax, ay, aw, ah, 9 * S);
+  c.shadowColor = 'rgba(0,0,0,.5)'; c.shadowBlur = 18 * S; c.shadowOffsetY = 7 * S;
+  rr(c, 0, 0, w, h, 12 * S);
+  const body = c.createLinearGradient(0, 0, 0, h);
+  body.addColorStop(0, '#f2f8ff');
+  body.addColorStop(0.55, '#e3edfb');
+  body.addColorStop(1, '#c8dbf1');
+  c.fillStyle = body; c.fill();
+  c.restore();
+  /* A sheen across the corner. Flat vector cards read as diagrams; one soft
+     diagonal is the cheapest thing that makes them read as objects held at an
+     angle to a light. */
+  c.save();
+  rr(c, 0, 0, w, h, 12 * S);
   c.clip();
-  const gg = c.createLinearGradient(0, ay, 0, ay + ah);
-  const wash = card.tribe ? TRIBES[card.tribe].col2 : '#d6e6f8';
-  gg.addColorStop(0, wash);
-  gg.addColorStop(1, '#8fabcc');
-  c.fillStyle = gg;
-  c.fillRect(ax, ay, aw, ah);
-  // ground shadow inside the frame, so the subject stands on something
+  const sheen = c.createLinearGradient(0, 0, w * 0.85, h * 0.75);
+  sheen.addColorStop(0, 'rgba(255,255,255,.55)');
+  sheen.addColorStop(0.35, 'rgba(255,255,255,.10)');
+  sheen.addColorStop(0.6, 'rgba(120,150,190,.10)');
+  sheen.addColorStop(1, 'rgba(90,120,165,.22)');
+  c.fillStyle = sheen; c.fillRect(0, 0, w, h);
+  c.restore();
+
+  /* ---------------- the name band, part of the frame ----------------
+     It used to be a rounded pill floating inside the card, wider than the
+     shapes around it and overhanging the body at reward size — a sticker rather
+     than a card. Now it is a band that runs the full width under the frame, so
+     the card is TWO shapes (the card, the window) instead of four stacked
+     rectangles that all look alike. */
+  const bh = 26 * S;
   c.save();
-  c.globalAlpha = 0.16; c.fillStyle = '#0d1830';
-  c.beginPath(); c.ellipse(w / 2, ay + ah * 0.9, aw * 0.36, ah * 0.1, 0, 0, TAU); c.fill();
+  rr(c, 0, 0, w, h, 12 * S);
+  c.clip();
+  const bg = c.createLinearGradient(0, 0, 0, bh);
+  bg.addColorStop(0, tribeLit);
+  bg.addColorStop(1, tribeCol);
+  c.fillStyle = bg;
+  c.fillRect(0, 0, w, bh);
+  // gear wears a notch out of its band, so a type is legible without reading
+  if (!isUnit && card.type !== 'charm') {
+    c.beginPath();
+    c.moveTo(0, bh); c.lineTo(10 * S, bh - 6 * S); c.lineTo(20 * S, bh);
+    c.closePath();
+    c.fillStyle = 'rgba(16,26,46,.30)'; c.fill();
+  }
+  /* A LIGHT rule, not a dark one. The first cut put a dark hairline under the
+     band and the contrast check caught it on hand cards: the name is floored to
+     the readable minimum there, so at that size the glyph band reaches the
+     line, and dark ink over a dark rule is 1.0:1. A division on a light body
+     reads just as well as a highlight, and cannot be a hazard. */
+  c.fillStyle = 'rgba(255,255,255,.5)';
+  c.fillRect(0, bh - 1.6 * S, w, 1.6 * S);
   c.restore();
-  if (isUnit) drawCreature(c, card.art, w / 2, ay + ah * 0.70, ah * 0.94, { t: o.t || 0, ph: card.uid, blink: card.uid });
-  else if (card.type === 'charm') drawItemIcon(c, { kind: 'burst', col: edge }, w / 2, ay + ah * 0.5, ah * 0.8, o.t || 0);
-  else drawItemIcon(c, d.art, w / 2, ay + ah * 0.5, ah * 0.86, o.t || 0);
+  const nameSize = fitText(c, card.name.toUpperCase(), w - 18 * S, 15 * S, 8 * S, 't');
+  txt(c, card.name.toUpperCase(), w / 2, bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+
+  /* ---------------- the art window ----------------
+     It was a flat two-stop wash with a grey ellipse floating in it. A window
+     wants somewhere to BE: a sky, a horizon, a light behind the subject and a
+     shadow at the top of the frame. Four cheap gradients and the portrait reads
+     as a place rather than a passport photo. */
+  const ax = 7 * S, ay = bh + 6 * S;
+  const aw = w - 14 * S;
+  /* A unit's window shrank the rules line to one truncated clause at hand
+     size, which is the one place the text has to be readable. Gear can afford
+     a bigger picture because its rules are shorter. */
+  const ah = isUnit ? h * 0.41 : h * 0.44;
+  c.save();
+  rr(c, ax, ay, aw, ah, 8 * S);
+  c.clip();
+  /* A BRIGHT window, not a night one. The first pass painted the sky in the
+     game's night blues and the cards inverted: a dark hole punched in a pale
+     card, with the cast — every one of them drawn in dark outline — swimming in
+     it. A card is a daylight object. Pale sky, snow, and the tribe's colour as
+     the light. */
+  const sky = c.createLinearGradient(0, ay, 0, ay + ah);
+  sky.addColorStop(0, '#bcd8f4');
+  sky.addColorStop(0.55, '#dceaf9');
+  sky.addColorStop(1, '#f2f8ff');
+  c.fillStyle = sky; c.fillRect(ax, ay, aw, ah);
+  // a light behind the subject, in the tribe's colour
+  const halo = c.createRadialGradient(w / 2, ay + ah * 0.58, 2, w / 2, ay + ah * 0.58, aw * 0.66);
+  halo.addColorStop(0, tribeLit);
+  halo.addColorStop(0.5, 'rgba(255,255,255,0)');
+  halo.addColorStop(1, 'rgba(255,255,255,0)');
+  c.save(); c.globalAlpha = 0.6; c.fillStyle = halo; c.fillRect(ax, ay, aw, ah); c.restore();
+  // a far ridge, so the window has a distance in it
+  c.save();
+  c.beginPath();
+  c.moveTo(ax, ay + ah);
+  c.lineTo(ax, ay + ah * 0.70);
+  c.quadraticCurveTo(ax + aw * 0.34, ay + ah * 0.54, ax + aw * 0.62, ay + ah * 0.69);
+  c.quadraticCurveTo(ax + aw * 0.82, ay + ah * 0.78, ax + aw, ay + ah * 0.65);
+  c.lineTo(ax + aw, ay + ah);
+  c.closePath();
+  c.fillStyle = 'rgba(150,182,216,.55)'; c.fill();
   c.restore();
-  rr(c, ax, ay, aw, ah, 9 * S);
+  // the snow it stands on
+  c.save();
+  c.beginPath();
+  c.moveTo(ax, ay + ah);
+  c.lineTo(ax, ay + ah * 0.91);
+  c.quadraticCurveTo(w / 2, ay + ah * 0.81, ax + aw, ay + ah * 0.93);
+  c.lineTo(ax + aw, ay + ah);
+  c.closePath();
+  const bank = c.createLinearGradient(0, ay + ah * 0.81, 0, ay + ah);
+  bank.addColorStop(0, '#ffffff');
+  bank.addColorStop(1, '#cfe1f4');
+  c.fillStyle = bank; c.fill();
+  c.restore();
+  c.save();
+  c.globalAlpha = 0.20; c.fillStyle = '#0d1830';
+  c.beginPath(); c.ellipse(w / 2, ay + ah * 0.945, aw * 0.30, ah * 0.05, 0, 0, TAU); c.fill();
+  c.restore();
+  if (isUnit) drawCreature(c, card.art, w / 2, ay + ah * 0.79, ah * 0.94, { t: o.t || 0, ph: card.uid, blink: card.uid });
+  else if (card.type === 'charm') drawItemIcon(c, { kind: 'burst', col: edge }, w / 2, ay + ah * 0.52, ah * 0.78, o.t || 0);
+  else drawItemIcon(c, d.art, w / 2, ay + ah * 0.52, ah * 0.84, o.t || 0);
+  // the frame casts inward, so the window has a depth rather than a border
+  const inner = c.createLinearGradient(0, ay, 0, ay + ah * 0.3);
+  inner.addColorStop(0, 'rgba(8,14,28,.28)');
+  inner.addColorStop(1, 'rgba(8,14,28,0)');
+  c.fillStyle = inner; c.fillRect(ax, ay, aw, ah * 0.3);
+  c.restore();
+  rr(c, ax, ay, aw, ah, 8 * S);
   c.lineWidth = 2.5 * S; c.strokeStyle = C.ink; c.stroke();
 
   /* ---------------- rarity, as pips on the frame ---------------- */
   for (let i = 0; i < rare; i++) {
     c.beginPath();
-    c.arc(w - 12 * S, ay + ah - 10 * S - i * 11 * S, 3.6 * S, 0, TAU);
+    c.arc(w - 13 * S, ay + ah - 10 * S - i * 11 * S, 3.6 * S, 0, TAU);
     inked(c, edge, 1.6 * S, C.ink);
   }
 
@@ -5153,37 +5271,85 @@ function drawCard(c, card, x, y, w, h, o) {
     txt(c, '+' + card.held, 16 * S, ay + 15 * S, 15 * S, '#241a3a', 'center', 'd', 0);
   }
 
-  /* ---------------- rules text, sized to fit rather than clipped ------ */
-  const ty = ay + ah + 5 * S;
-  const th = h - ty - (isUnit ? 26 * S : 8 * S);
-  c.beginPath(); rr(c, 7 * S, ty, aw, th, 8 * S);
-  inked(c, '#fffaf0', 1.8 * S, 'rgba(30,40,60,.35)');
-  const maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
-  const fit = fitLines(c, card.text || '', aw - 12 * S, maxLines, 11.5 * S, 7.5 * S);
+  /* ---------------- rules text, on the card rather than in a box ------
+     The text used to sit in its own cream well, which made four stacked
+     rectangles of a card that only ever needed two. It sits on the body now,
+     with a hairline over it standing in for the box. */
+  const ty = ay + ah + 6 * S;
+  /* The type tag along the bottom is a line of text like any other, so the
+     rules block has to stop above it. It exists to even up a ROW of reward
+     cards, and a card in hand is not in one — on a phone the rules text is
+     floored to the readable minimum and every gear card was truncating to
+     "Ember 4…" so that a decorative tag could keep its strip. Below reward
+     size the tag goes and the text gets its room. */
+  const tagRoom = 31 * S;
+  let showTag = !isUnit;
+  let th = h - ty - (isUnit ? 27 * S : tagRoom);
+  c.beginPath();
+  c.moveTo(14 * S, ty - 2 * S); c.lineTo(w - 14 * S, ty - 2 * S);
+  c.lineWidth = 1.2 * S; c.strokeStyle = 'rgba(24,40,68,.22)'; c.stroke();
+  let maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
+  let fit = fitLines(c, card.text || '', aw - 10 * S, maxLines, 11.5 * S, 7.5 * S);
+  /* THE TEXT OUTRANKS THE TAG. On a phone the rules are floored to the readable
+     minimum, so a strip kept for "GEAR" was costing gear cards their last line
+     — every one of them truncating to "Ember 4…". If the text does not fit with
+     the tag reserved, the tag goes and the text is laid out again. A card that
+     cannot say what it does is not helped by a label saying what kind of thing
+     it is. */
+  if (showTag && Math.floor((th - 2 * S) / (fit.size * 1.12)) < fit.lines.length) {
+    showTag = false;
+    th += tagRoom - 12 * S;
+    maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
+    fit = fitLines(c, card.text || '', aw - 10 * S, maxLines, 11.5 * S, 7.5 * S);
+  }
   /* The shrink loop cannot go below the text floor, so on a phone the paragraph
      can still be taller than the box. Measure what the box actually holds at
      the size the text will be DRAWN at, and cut to that — the card face is a
      glance, and the full rules are one tap away in the inspect panel. */
-  const lh = fit.size * 1.1;
+  const lh = fit.size * 1.12;
   const lines = fit.cut(Math.max(1, Math.floor((th - 2 * S) / lh)));
   const top = ty + th / 2 - (lines.length - 1) * lh / 2;
-  lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#3a3020', 'center', 't', 0));
+  lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#1d2f4d', 'center', 't', 0));
 
-  /* ---------------- the stat plinth ---------------- */
+  /* ---------------- the frame, drawn last so nothing crosses it ---------- */
+  rr(c, 0, 0, w, h, 12 * S);
+  c.lineWidth = 3 * S; c.strokeStyle = C.ink; c.stroke();
+  rr(c, 3.5 * S, 3.5 * S, w - 7 * S, h - 7 * S, 9 * S);
+  c.lineWidth = rare >= 2 ? 1.6 * S : 1.1 * S;
+  c.strokeStyle = rare >= 2 ? edge : 'rgba(24,40,68,.22)';
+  c.stroke();
+
+  /* ---------------- the stats, hung on the bottom edge ----------------
+     They used to be three identical circles in a grey tray: a traffic light
+     bolted to the card. Three silhouettes on the frame itself instead — and no
+     tray, which was the fourth box. */
   if (isUnit) {
-    c.beginPath(); rr(c, 8 * S, h - 26 * S, w - 16 * S, 20 * S, 7 * S);
-    c.fillStyle = 'rgba(40,32,20,.10)'; c.fill();
     const inj = card.injured;
-    statPip(c, 16 * S, h - 15 * S, 12.5 * S, '#ff8b7a', inj ? Math.max(0, Math.round(card.atk / 2)) : card.atk);
-    statPip(c, w / 2, h - 15 * S, 12.5 * S, '#ffd166', card.cnt);
+    const br = 12 * S, by = h - 13.5 * S;
+    statBadge(c, 'atk', 17 * S, by, br, '#ff8b7a', inj ? Math.max(0, Math.round(card.atk / 2)) : card.atk);
+    statBadge(c, 'cnt', w / 2, by, br * 0.92, '#ffd166', card.cnt);
     const mh = inj ? Math.max(1, Math.round(card.hp / 2)) : card.hp;
-    statPip(c, w - 16 * S, h - 15 * S, 12.5 * S, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
+    statBadge(c, 'hp', w - 17 * S, by, br, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
+  } else {
+    /* Gear had nothing along the bottom, so a row of cards next to units read
+       as a broken line. A small type tag gives every card the same baseline —
+       AND IT IS THE FIRST THING TO GO when there is no room for it. On a phone
+       the rules text is floored to the readable minimum, which can fill a card
+       this size on its own; a decorative tag that lands on a rule is worse than
+       no tag at all. So it is drawn only if the text block actually clears it. */
+    const tag = card.type === 'charm' ? 'CHARM' : 'GEAR';
+    const textBottom = top + (lines.length - 1) * lh + lh * 0.6;
+    if (showTag && h - 17 * S > textBottom + 3 * S) {
+      c.beginPath(); rr(c, w / 2 - 24 * S, h - 17 * S, 48 * S, 13 * S, 6.5 * S);
+      inked(c, 'rgba(24,40,68,.16)', 1.2 * S, 'rgba(24,40,68,.28)');
+      txt(c, tag, w / 2, h - 10.5 * S, 9 * S, '#3a5378', 'center', 't', 0);
+    }
   }
 
   /* ---------------- what it is wearing ---------------- */
   if (card.blessed || card.charms.indexOf('blessed') >= 0) {
     c.save();
-    c.translate(14 * S, h - 40 * S);
+    c.translate(14 * S, ty + 6 * S);
     c.beginPath();
     for (let k = 0; k < 10; k++) {
       const a = (k / 10) * TAU - Math.PI / 2, r = (k % 2 ? 4 : 9) * S;
@@ -5199,23 +5365,23 @@ function drawCard(c, card, x, y, w, h, o) {
     if (id === 'blessed') continue;
     const ch = chOf(id);
     if (!ch) continue;
-    c.beginPath(); c.arc(w - 11 * S, 40 * S + worn * 15 * S, 6 * S, 0, TAU);
+    c.beginPath(); c.arc(w - 11 * S, ay + 8 * S + worn * 15 * S, 6 * S, 0, TAU);
     inked(c, ch.col, 1.8 * S, C.ink);
     worn++;
   }
   if (card.sigil) {
     c.beginPath();
-    c.moveTo(w / 2 - 9 * S, 34 * S); c.lineTo(w / 2 + 9 * S, 34 * S); c.lineTo(w / 2, 44 * S);
+    c.moveTo(w / 2 - 9 * S, ay - 8 * S); c.lineTo(w / 2 + 9 * S, ay - 8 * S); c.lineTo(w / 2, ay + 1 * S);
     c.closePath();
     inked(c, '#c9a6ff', 1.8 * S, C.ink);
   }
   if (card.injured) {
     c.save();
     c.globalAlpha = 0.9;
-    c.beginPath(); rr(c, ax, ay, aw, ah, 9 * S);
-    c.fillStyle = 'rgba(120,20,40,.24)'; c.fill();
+    c.beginPath(); rr(c, ax, ay, aw, ah, 8 * S);
+    c.fillStyle = 'rgba(120,20,40,.30)'; c.fill();
     c.restore();
-    txt(c, 'HURT', w / 2, ay + ah - 11 * S, 14 * S, '#ff9aa5', 'center', 'd');
+    txt(c, 'HURT', w / 2, ay + ah - 11 * S, 14 * S, '#ffb0bb', 'center', 'd');
   }
   c.restore();
 }
@@ -6783,32 +6949,64 @@ function drawChooser(c, t) {
 
 /* A charm is a pendant, not a card: a hanging loop, a cut stone, and the one
    line of text that says what wearing it does. */
+/* A charm wears the same face as every other card — body, band, window, frame.
+   It used to be its own design in parchment cream with a floating pill for a
+   name, so a reward screen showed two different games' cards side by side. */
 function drawCharmCard(c, charmId, x, y, w, h, t) {
   const ch = chOf(charmId) || BELLS[charmId];
   const S = w / 126;
-  panel(c, x, y, w, h, 13 * S, '#f3e9d6', ch.col);
-  rr(c, x + 4 * S, y + 4 * S, w - 8 * S, h - 8 * S, 10 * S);
-  c.lineWidth = 1.5; c.strokeStyle = 'rgba(60,48,32,.28)'; c.stroke();
+  c.save();
+  c.translate(x, y);
 
-  const nameSize = fitText(c, ch.name.toUpperCase(), w - 24 * S, 14 * S, 8 * S, 't');
-  c.beginPath(); rr(c, x + 6 * S, y + 6 * S, w - 12 * S, 24 * S, 12 * S);
-  inked(c, ch.col, 2 * S, C.ink);
-  txt(c, ch.name.toUpperCase(), x + w / 2, y + 18 * S, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.5)');
+  c.save();
+  c.shadowColor = 'rgba(0,0,0,.5)'; c.shadowBlur = 18 * S; c.shadowOffsetY = 7 * S;
+  rr(c, 0, 0, w, h, 12 * S);
+  const body = c.createLinearGradient(0, 0, 0, h);
+  body.addColorStop(0, '#f2f8ff');
+  body.addColorStop(0.55, '#e3edfb');
+  body.addColorStop(1, '#c8dbf1');
+  c.fillStyle = body; c.fill();
+  c.restore();
 
-  const cx = x + w / 2, cy = y + h * 0.46;
-  const r = Math.min(w, h) * 0.19;
-  // the loop it hangs from
+  const bh = 26 * S;
+  c.save();
+  rr(c, 0, 0, w, h, 12 * S);
+  c.clip();
+  const bg = c.createLinearGradient(0, 0, 0, bh);
+  bg.addColorStop(0, '#ffffff');
+  bg.addColorStop(1, ch.col);
+  c.fillStyle = bg; c.fillRect(0, 0, w, bh);
+  c.fillStyle = 'rgba(255,255,255,.5)'; c.fillRect(0, bh - 1.6 * S, w, 1.6 * S);
+  c.restore();
+  const nameSize = fitText(c, ch.name.toUpperCase(), w - 18 * S, 14 * S, 8 * S, 't');
+  txt(c, ch.name.toUpperCase(), w / 2, bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+
+  const ax = 7 * S, ay = bh + 6 * S, aw = w - 14 * S, ah = h * 0.40;
+  c.save();
+  rr(c, ax, ay, aw, ah, 8 * S);
+  c.clip();
+  const sky = c.createLinearGradient(0, ay, 0, ay + ah);
+  sky.addColorStop(0, '#16294c');
+  sky.addColorStop(1, '#3d5f8d');
+  c.fillStyle = sky; c.fillRect(ax, ay, aw, ah);
+  const halo = c.createRadialGradient(w / 2, ay + ah * 0.5, 2, w / 2, ay + ah * 0.5, aw * 0.6);
+  halo.addColorStop(0, ch.col);
+  halo.addColorStop(0.5, 'rgba(255,255,255,0)');
+  halo.addColorStop(1, 'rgba(255,255,255,0)');
+  c.save(); c.globalAlpha = 0.55; c.fillStyle = halo; c.fillRect(ax, ay, aw, ah); c.restore();
+
+  const cx = w / 2, cy = ay + ah * 0.54;
+  const r = Math.min(aw, ah) * 0.30;
   c.beginPath(); c.arc(cx, cy - r * 1.35, r * 0.34, 0, TAU);
-  c.lineWidth = 3 * S; c.strokeStyle = '#c9b28a'; c.stroke();
-  // the stone: a cut octagon with a highlight, breathing gently
+  c.lineWidth = 3 * S; c.strokeStyle = '#e6d3ab'; c.stroke();
   c.save();
   c.translate(cx, cy);
   const pulse = 1 + Math.sin(t * 2.2 + w) * 0.045;
   c.scale(pulse, pulse);
   c.beginPath();
   for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * TAU - Math.PI / 8;
-    const px = Math.cos(a) * r, py = Math.sin(a) * r * 1.12;
+    const a2 = (i / 8) * TAU - Math.PI / 8;
+    const px = Math.cos(a2) * r, py = Math.sin(a2) * r * 1.12;
     i ? c.lineTo(px, py) : c.moveTo(px, py);
   }
   c.closePath();
@@ -6820,10 +7018,34 @@ function drawCharmCard(c, charmId, x, y, w, h, t) {
   c.closePath(); c.fill();
   c.restore();
   c.restore();
+  const inner = c.createLinearGradient(0, ay, 0, ay + ah * 0.3);
+  inner.addColorStop(0, 'rgba(8,14,28,.28)');
+  inner.addColorStop(1, 'rgba(8,14,28,0)');
+  c.fillStyle = inner; c.fillRect(ax, ay, aw, ah * 0.3);
+  c.restore();
+  rr(c, ax, ay, aw, ah, 8 * S);
+  c.lineWidth = 2.5 * S; c.strokeStyle = C.ink; c.stroke();
 
-  const fit = fitLines(c, ch.text, w - 18 * S, 3, 12 * S, 8 * S);
-  fit.cut(3).forEach((ln, i) =>
-    txt(c, ln, x + w / 2, y + h - 34 * S + i * fit.size * 1.2, fit.size, '#3a3020', 'center', 't', 0));
+  const ty = ay + ah + 6 * S;
+  const th = h - ty - 20 * S;
+  c.beginPath();
+  c.moveTo(14 * S, ty - 2 * S); c.lineTo(w - 14 * S, ty - 2 * S);
+  c.lineWidth = 1.2 * S; c.strokeStyle = 'rgba(24,40,68,.22)'; c.stroke();
+  const fit = fitLines(c, ch.text, aw - 10 * S, 3, 11.5 * S, 7.5 * S);
+  const lh = fit.size * 1.12;
+  const lines = fit.cut(Math.max(1, Math.floor(th / lh)));
+  const top = ty + th / 2 - (lines.length - 1) * lh / 2;
+  lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#1d2f4d', 'center', 't', 0));
+
+  rr(c, 0, 0, w, h, 12 * S);
+  c.lineWidth = 3 * S; c.strokeStyle = C.ink; c.stroke();
+  rr(c, 3.5 * S, 3.5 * S, w - 7 * S, h - 7 * S, 9 * S);
+  c.lineWidth = 1.4 * S; c.strokeStyle = ch.col; c.stroke();
+
+  c.beginPath(); rr(c, w / 2 - 26 * S, h - 17 * S, 52 * S, 13 * S, 6.5 * S);
+  inked(c, 'rgba(24,40,68,.16)', 1.2 * S, 'rgba(24,40,68,.28)');
+  txt(c, 'CHARM', w / 2, h - 10.5 * S, 9 * S, '#3a5378', 'center', 't', 0);
+  c.restore();
 }
 
 /* ------------------------------------------------------------- teaching -- */
@@ -7229,7 +7451,12 @@ function drawReward(c, t) {
     });
   }
   if (r.bells && r.bells.length) {
-    txt(c, r.bellTaken ? 'bell rung' : 'and a bell for the road', MID, 404, 16, '#a8c8ea', 'center', 't');
+    /* Anchored to the card row rather than to a constant. With three cards the
+       row is 246 tall and reached y=424, so a caption pinned at 404 sat ON the
+       cards — invisible while gear had nothing along its bottom edge, and a
+       collision the moment it did. */
+    const bcy = (items.length ? y + chh + 16 : 404);
+    txt(c, r.bellTaken ? 'bell rung' : 'and a bell for the road', MID, bcy, 16, '#a8c8ea', 'center', 't');
     const w2 = 210, g3 = 22;
     const tw = r.bells.length * w2 + (r.bells.length - 1) * g3;
     r.bells.forEach((bid, i) => {
@@ -7238,20 +7465,20 @@ function drawReward(c, t) {
       const hovered = UI.hover && UI.hover.id === 'rewardBell' && UI.hover.data === i;
       c.save();
       if (r.bellTaken) c.globalAlpha = 0.3;
-      panel(c, x, 428 - (hovered ? 6 : 0), w2, 132, 14, '#1d2c49', bl.col);
+      panel(c, x, bcy + 24 - (hovered ? 6 : 0), w2, 132, 14, '#1d2c49', bl.col);
       // a little bell, since every one of these is literally one
       c.save();
-      c.translate(x + w2 / 2, 470 - (hovered ? 6 : 0));
+      c.translate(x + w2 / 2, bcy + 66 - (hovered ? 6 : 0));
       c.beginPath();
       c.moveTo(-17, 15); c.quadraticCurveTo(-15, -14, 0, -17);
       c.quadraticCurveTo(15, -14, 17, 15); c.closePath();
       inked(c, bl.col, 2.5, C.ink);
       c.restore();
-      txt(c, bl.name.toUpperCase().replace('BELL OF ', ''), x + w2 / 2, 508 - (hovered ? 6 : 0), 18, bl.col, 'center', 'd');
+      txt(c, bl.name.toUpperCase().replace('BELL OF ', ''), x + w2 / 2, bcy + 104 - (hovered ? 6 : 0), 18, bl.col, 'center', 'd');
       wrapText(c, bl.text, 12.5, w2 - 22).forEach((ln, k) =>
-        txt(c, ln, x + w2 / 2, 528 + k * lineH(12.5, 15) - (hovered ? 6 : 0), 12.5, '#c8dcf4', 'center', 't'));
+        txt(c, ln, x + w2 / 2, bcy + 124 + k * lineH(12.5, 15) - (hovered ? 6 : 0), 12.5, '#c8dcf4', 'center', 't'));
       c.restore();
-      if (!r.bellTaken) hit('rewardBell', x, 428, w2, 132, i);
+      if (!r.bellTaken) hit('rewardBell', x, bcy + 24, w2, 132, i);
     });
   }
   /* A reward is not only "take one of three". The same pick can thin the deck
