@@ -63,8 +63,37 @@ measurement is not a measurement.
 Ten entries were cut two rounds ago and the file was back over 1,500 lines two
 rounds later, because the cut was a one-off and the adding is not. A cut rate
 that does not match the add rate is not a policy, it is a mood — so the steady
-state is stated instead: **~35 entries, ~1,400 lines**, and a round that writes
-three entries owes three retirements.
+state is stated instead: a round that writes three entries owes three
+retirements.
+
+**And this rule used to name TWO numbers — ~35 entries and ~1,400 lines — which
+is one number too many.** The file sat at 33 entries and 1,672 lines: in bounds
+on one control and 270 over on the other, which means the two were never
+measuring the same thing and one of them had to go. The line count goes, and
+the reason is that it is **in direct conflict with rule 2**.
+
+Rule 2 says an entry a later measurement contradicts is rewritten in place, with
+the retracted claim kept *inside* it as the thing that was wrong and why. That
+makes entries GROW, on purpose — the *courses* entry is longer now than when it
+said "the courses are indistinguishable", and every one of those extra lines is
+a correction somebody would otherwise re-derive. A line budget prices exactly
+that growth as a cost and pushes toward the two things rule 2 forbids: dropping
+the retracted claim, or appending a short correction next to the old entry
+instead of folding it in. **A file whose job is to record what turned out to be
+wrong cannot be governed by how long it is.**
+
+This is the same mistake rule 1 already records, one level up: the README was
+held at exactly 999 lines for two rounds and the reference section lost real
+detail to keep the number. A line count is a proxy for readability and it is a
+bad one, because nobody reads this file front to back — they grep it, land on
+one entry, and act on it. **What a reader pays is the length of ONE entry, and
+what they risk is landing on a stale one.** The entry count controls the first
+(more entries, more places to land) and rule 2 controls the second. Neither is
+the total.
+
+So: **~35 entries, no line target.** If entries individually get bloated that is
+a real problem and the fix is rule 1 — cut the sentences that are not
+measurements — not a budget on the sum.
 
 What gets dropped, in order, when the count is over:
 
@@ -336,6 +365,41 @@ point of regen on the single most-hurt warden each upkeep. Hearth goes 38% → 5
 and the course table inverts — Hearth is now the *best* of the five and Cold, at
 45%, is second.
 
+**AND THE METHOD GENERALISES, WHICH IS WORTH MORE THAN THE COURSE.** Two more
+courses sat on the courseless baseline, each with exactly one number in it, and
+both numbers were literals inside a closure — which is why nobody had swept
+them: *a dial nobody can turn reads exactly like no dial*. Named as fields and
+swept at 450 runs an arm against 40% for declaring nothing:
+
+```
+BODIES  Shell 2 (was)  41%   Shell 4  44%   Shell 6  47%   Shell 9  52%
+SCRAP   1 free (ships) 40%   2 free   40%   3 free   39%   ALL free 45%
+                                              family-of-4 bar ±8.9
+```
+
+**Bodies has a dial and Scrap does not.** Bodies spans 11 points and clears;
+Scrap spans 6 and does not, even at the setting where every piece of gear in
+every fight is free — which is the most that rule can possibly be worth. Three
+courses, three different answers, from one arm each. The magnitude sweep is now
+the *first* thing to try on a flat mechanic, not the last.
+
+Two shapes of dial, and they want different decisions. Hearth's saturates: the
+first point buys +14 of +20 and there is an obvious place to stop. **Bodies' does
+not** — every two points of Shell buys about three and a half points of win rate
+straight through the range measured, with no knee. A monotone dial with no knee
+licenses "the amount matters" and picks nothing; the setting is then a design
+decision and calling it a finding would be dressing one as the other. Shell 6
+ships (47%, level with Gear, above Cold) rather than Shell 9 (52%, tying Hearth
+for top) because creating a second favourite is what Cold was cut back twice for.
+
+**Scrap's null is the useful one.** The amount is not what is wrong with it, so
+no further rewrite of the amount will fix it — and there is a reading in the
+fight arm that says why: the pilot's gear-before-body threshold measured FLAT
+end to end. If *when* you spend gear does not matter, a course whose rule is
+"spend gear sooner" cannot matter either, however much of it you are handed.
+Scrap is a tempo rule on an axis this board does not price. Change what it pays
+in; do not sweep it again.
+
 Shipping the +17 version would have been the same mistake Cold made when Frost
 landed on every arrival: 58% against a 40% courseless baseline is not a choice,
 it is the answer. **The dial existed the whole time; five rounds were spent
@@ -539,8 +603,8 @@ whole range is inside its own family band. So the second explanation is dead:
 no setting of the pilot's gear preference buys a point, and the 14 points cannot
 be about how much gear the pilot chooses to play.
 
-**The shallow run said the opposite and that is the reusable half.** At 72 runs a
-bar the same five read `43/46/47/46/39` with the shipped bar on top and a clean
+**The shallow run said the opposite and that is the reusable half.** At 72 runs
+a bar the same five read `43/46/47/46/39` with the shipped bar on top and a clean
 story about a well-tuned pilot; at 450 they read `44/45/40/42/43` with the
 shipped bar at the bottom. **The ranking inverted completely between samples**
 while the spread stayed inside the band both times — which is exactly what a flat
@@ -548,11 +612,53 @@ dial looks like, and exactly what a ranking read off a small sample will hide.
 The arm is gated on the **spread**, not on where the shipped value ranks, because
 a ranking inside its own band is noise no matter how satisfying its shape.
 
-What remains open: the 14 points are about the deck, or about something the pilot
-has no dial for at all. Given that the matchup term is 27% and the deck's own main
-effect is 1.6%, "gear-heavy decks beat particular trails" is the live candidate,
-and it needs a matchup-split rather than another pilot knob.
+**AND THEN THE 14 POINTS TURNED OUT NOT TO BE A NUMBER AT ALL.** Three rounds of
+work chased "gear-heavy hands win by 14 points". That figure is the win-rate gap
+between the top and bottom halves of eight decks — **where the halves were made
+by sorting on win rate.** Sort eight noisy rates, split them down the middle, and
+the halves differ by construction with no deck needing to differ from any other.
+It is not a finding, it is the definition of the split, and it was printed as a
+headline for three rounds because nobody asked what the number would be if
+nothing were true.
 
+The composition gaps are the half worth keeping — they are *not* selected on —
+but they had never carried a band either. There are exactly C(8,4) = **70** ways
+to split eight decks in half, so the null is enumerated rather than assumed: every
+split, every gap, no normality and no RNG. At 2,592 runs:
+
+```
+gear played a run  +16.1  p=0.09     bodies carried  −1.8   p=0.11
+gear per turn      +0.112 p=0.06     free slots      +0.28  p=0.06
+```
+
+**Suggestive, and not one of them clears** — least of all across a family of
+four. The honest statement is that the winning decks *may* carry and spend more
+gear and stand on emptier boards, and this instrument cannot say so yet.
+
+**The obvious next move was tried in the same round and it did not work,** which
+is worth more than the guess was. With eight decks the smallest p a permutation
+test can return is 1/70 = **0.014**, so p=0.06 is the fourth most extreme split of
+seventy and the resolution looked like the problem. Fourteen decks gives
+C(14,7) = **3,432** splits and a floor near 0.0003 — plenty of resolution. It read:
+
+```
+gear played a run  +4.6   p=0.52     bodies carried  −0.6   p=0.53
+gear per turn      +0.038 p=0.33     free slots      +0.16  p=0.23
+```
+
+**Further away, not closer.** The effect sizes roughly quartered. One honest
+confound: the 14-deck pass ran 60 runs a deck against the 8-deck pass's 108, so
+each deck's rate is noisier, the sort is noisier, and the composition gaps
+attenuate — the two are not a controlled comparison of deck count. What they ARE
+is two configurations, and **the gaps failed to clear in both.**
+
+So the standing claim is the weak one: after four rounds, one headline that was
+an artefact of its own split, and four composition gaps that do not clear a null
+at any sample tried. The thing that would settle it is not more of either knob —
+it is decks that differ **by construction** on the axis in question (a gear-heavy
+half and a body-heavy half, dealt that way) rather than decks dealt at random and
+sorted by outcome afterwards. That is a different arm, and it is the one to build
+before this finding is quoted again.
 ### FINDING — the three unsupported nulls, spent and settled
 
 `topic: null-audit`
@@ -1167,9 +1273,34 @@ than its best member is what a set of substitutes looks like.
 
 This does not license deleting them — a substitute is worth something on the
 turns denial is not available, and there is no denial to do on a board with no
-schemes on it. It does license the reverse of what four rounds assumed: the fight
-rung is not "six habits worth +17 together". It is **denial, worth +15, with five
-habits that mostly get in its way.**
+schemes on it.
+
+**AND WHEN THE DELETION WAS ACTUALLY TESTED, IT FAILED, BECAUSE THE +15 AND THE
++17 WERE MEASURED IN A CAGE.** "One habit and five passengers" was the line this
+entry closed on last round, and the obvious next move was to cut the five the way
+the aura cards were cut. So the pilot that ONLY denies was run against the pilot
+that does all six — on the `careful` pilot that also shops and drafts, which is
+the game, rather than the `tactics` pilot that plays the fight and nothing else.
+At 750 runs an arm:
+
+```
+only denying schemes          37%
+all six habits                42%      the other five are worth +5
+                                       2σ = ±3.2   —   CLEARS
+```
+
+**The five carry their weight.** Individually they still price at −2 to +0 in
+the subtractive table and the pair table still says they substitute for denial;
+collectively, on a pilot that has a purse and a draft to steer, they are worth
+five points and that clears the bar. Both things are true and only the second one
+answers "should they come out".
+
+The cage is the lesson, and it is the fourth time on this project: **denial +15
+against a set of +17 is a fact about the `tactics` pilot.** On the real pilot the
+set is +19 and denial is +14 of it. A habit's value depends on what else the
+pilot can do, so pricing habits on a pilot stripped of everything else measures
+the strip, not the habit — the same shape as the locked-deck cage, the
+hand-picked decks, and the courses' convenient baseline.
 
 ### RULE — a band is measured, and it applies to every number here
 
@@ -1238,6 +1369,34 @@ the file's conclusions were not resting on a broken band. It is worth having
 established with numbers rather than assumed in either direction — and worth
 noticing that denial, the one finding this whole project rests on, clears its
 own bar by four tenths of a point.
+
+**AND THE RETROACTIVE PASS, which was queued for three rounds and is done.** The
+rule *a ranking inside its own band is noise* was written down, then applied to
+exactly one new arm, and every older arm went unaudited — which is a rule
+observed once and a habit never. Every ranking read in the probe, swept:
+
+| where | reads a ranking? | verdict |
+|---|---|---|
+| the courses table | best vs worst | already prints σ and CLEARS / does not |
+| the subtractive habit table | six habits ordered | already suppressed under a ±2.0 band |
+| the reward-screen table | five habits ordered | already suppressed the same way |
+| the gear bar, the course dials | best of 4–5 | gated on the **spread**, not the rank |
+| **the additive habit table** | names a top and STAMPS it | **was broken — fixed** |
+| **the deck split-half** | halves made by sorting | **was broken — fixed** |
+| ware, card, killer censuses | counts, not rates | not a ranking of noisy rates |
+
+Two real violations out of seven, and both mattered. The additive table checked
+each row against the FLOOR (`is this habit worth anything`) and then wrote a
+sentence claiming the TOP (`which habit is best`) off that check — two rows five
+points apart at ±3.3 are the same measurement. It now checks the lead over second
+place and says *the top of this table is not resolved* when it cannot name one.
+The split-half is the worse one and has its own entry.
+
+**The transferable half: a check against a floor is not a check against a
+neighbour, and a table that has both is the easiest place in the world to read
+the wrong one.** Four of the seven were already right, which is the only reason
+the audit was cheap — but it took writing the rule a fourth time before anyone
+went and applied it backwards.
 
 ### FINDING — the quiet road
 
@@ -1409,6 +1568,43 @@ one has to justify itself.
 **The generalisable part: when a bug's visibility depends on an incidental
 number, fixing the instance is worth almost nothing** — the next one picks a
 different step. Make the arithmetic unreachable instead.
+
+**And the same trick, applied to the two coverage lists that had drifted apart.**
+The overlap check found a live text collision on the **victory** screen at
+653x280 — a fold's cover display. The render suite swept eight shapes; the shot
+walk photographed whatever the round happened to name, which was three. So there
+were five shapes checked only by assertion and never once looked at, and the
+defect sat there until an assertion tripped over it. That is a strange kind of
+coverage: every failure the stub finds there is real, and every failure it
+**misses** there is invisible twice over — no test and no eye.
+
+Two lists kept in step by discipline drift the first round somebody is busy, so
+there is one list: `tools/frostfell/shapes.mjs`, **9 shapes, 4 of them real
+devices**. The render suite sweeps it (764 → **852** checks, because the Pixel 7
+had been in the shot tool's device list and never in the suite's sweep) and
+`shots.mjs --all` walks it, one child process per shape into its own directory.
+The suite asserts the tool reads that file rather than a copy, so a future round
+cannot quietly hardcode a list again.
+
+One defect found in the doing: the walk wrote every shape into the same output
+directory, so a second walk overwrote the first and a stale phone shot was read
+as a fresh one during this very round. Per-shape directories now.
+
+**And walking the new shape immediately found what the assertion could not.** On
+the fold cover the victory tally read `1 FIGHTS WON 2 FOES FELLED` with the two
+labels touching — one word to the eye. The overlap check does not fire on it, and
+the reason is worth keeping: the headless stub models a glyph's advance as
+`length × size × 0.5`, so by the stub's arithmetic those two 150-unit cells have
+a comfortable gutter and by Chromium's they have none. **An approximate width
+model finds gross collisions and cannot adjudicate a gutter.** That is the
+division of labour between the two instruments, stated in numbers rather than
+assumed: the stub catches overlaps at 9 shapes × 12 screens for free; the walk
+catches the near-misses, and only where somebody looks.
+
+Fixed the same way as the card names — the labels are fitted to their cell less a
+gutter and ellipsised when the floor will not let them shrink that far, so the
+fold shows `FIGHTS W…` where a desktop shows `FIGHTS WON`. Truncation is the
+cost; the alternative was two labels reading as one.
 
 ### FINDING — contrast, the third thing nobody was checking
 

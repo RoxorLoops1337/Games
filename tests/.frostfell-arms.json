@@ -58,5 +58,9 @@
  "FF_GEARBAR=1": {
   "said": "gear worth 4+ first 45% is the best of 5, +5 on the shipped bar of 6 (40%), family bar ±9.2",
   "sample": 450
+ },
+ "FF_DIAL=150": {
+  "said": "bodies spans 11 (41-52%, ships 41%) A DIAL · scrap spans 6 (39-45%, ships 40%) flat against 40% for no course, family bar ±8.9",
+  "sample": 450
  }
 }

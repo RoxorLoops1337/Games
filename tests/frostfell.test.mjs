@@ -2471,6 +2471,20 @@ section('the design record states numbers');
     }
   }
   ok(heads.length >= 20, `the record has ${heads.length} labelled entries`);
+  /* AND RULE 3 IS NOW THE ONLY SIZE CONTROL, SO IT HAS TO BE ONE.
+
+     The rule named two numbers for several rounds — ~35 entries and ~1,400
+     lines — and the file sat at 33 and 1,672: in bounds on one and 270 over on
+     the other, with neither checked by anything. Two unenforced targets that
+     disagree are not a policy. The line target is gone (it fights rule 2, which
+     makes entries grow on purpose when they absorb a correction), and what is
+     left is asserted instead of hoped for: a round that adds an entry without
+     retiring one now fails here rather than being noticed three rounds later.
+
+     38 rather than 35 because the steady state is stated as "about", and a
+     rule that trips on the round you are mid-way through folding two entries
+     together would be enforcing the letter against the intent. */
+  ok(heads.length <= 38, `and it holds at about 35 rather than growing (${heads.length})`);
   const mute = heads.filter((h) => !/\d/.test(h.body)).map((h) => h.head);
   eq(mute.join(' | '), '', 'every labelled entry in DESIGN.md states a number');
   /* AND THE SECOND HALF OF THE RULE, which was written and never enforced: a

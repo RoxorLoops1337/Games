@@ -8,6 +8,8 @@
 //
 // Run: node tests/frostfell_render.test.mjs
 import { loadGame, mkCtx, withRun, place, bareBattle, dummy, ok, eq, done, section } from './frostfell_lib.mjs';
+import { SIZES, SHAPES } from '../tools/frostfell/shapes.mjs';
+import { readFileSync } from 'node:fs';
 
 const log = [];
 const FF = loadGame({}, log);
@@ -405,12 +407,26 @@ section('the shape of a phone');
   // 16:9, 19.5:9 and 20:9 are the three landscape shapes that matter. Every
   // one of them has to place its furniture inside the safe inset, keep every
   // touch target thumb-sized, and never push anything off the stage.
-  /* …and three shapes that are actual phones, held sideways, which is what this
+  /* …and the shapes that are actual phones, held sideways, which is what this
      game was built for and what nothing had ever been tested at. The desktop
      sizes above all sit near 1:1 with the stage; a real handset is about half
-     that, which is exactly why the touch check never caught anything. */
-  const shapes = [[1280, 720], [1560, 720], [1600, 720], [2400, 1080], [1024, 768],
-    [667, 375], [844, 390], [653, 280]];
+     that, which is exactly why the touch check never caught anything.
+
+     THE LIST LIVES IN ONE PLACE NOW, and the reason is the defect this suite
+     found last round: a live text overlap on the VICTORY screen at 653x280, a
+     shape the shot walk had never once photographed. The stub was checking
+     sizes nobody had ever looked at — every failure it finds there is real, and
+     every failure it MISSES there is invisible twice over.
+     `tools/frostfell/shots.mjs --all` walks the same list now, so a shape
+     checked by assertion is also a shape somebody can see. */
+  const shapes = SIZES;
+  {
+    const src = readFileSync(new URL('../tools/frostfell/shots.mjs', import.meta.url), 'utf8');
+    ok(/shapes\.mjs/.test(src), 'the shot walk reads the shared shape list, not a copy of it');
+    ok(/--all/.test(src), 'and can walk every shape in it in one command');
+    const devices = SHAPES.filter((x) => x.phone).length;
+    ok(devices >= 4, `and the list carries real devices rather than small windows (${devices})`);
+  }
   for (const [w, h] of shapes) {
     FF.setStageWidth(w, h);
     const D = FF.dims();

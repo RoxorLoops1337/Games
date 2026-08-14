@@ -414,6 +414,14 @@ const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wa
    not the dial. This is the dial. 2.5 is the carefulItem floor, so GEAR.bar at
    2.5 means gear always jumps the queue and 99 means it never does. */
 const GEAR = { bar: 6 };
+const COURSE0 = {};                      // a course's shipped amounts, to put back
+function restoreCourses() {
+  for (const co of FF.COURSES) {
+    const was = COURSE0[co.id];
+    if (!was) continue;
+    for (const k of Object.keys(was)) if (was[k] !== undefined) co[k] = was[k];
+  }
+}
 const HABITS = [
   ['deny', 'denying schemes'],
   ['reposition', 'repositioning at all (removed)'],
@@ -1351,6 +1359,25 @@ export function applyConfig(cfg) {
   if (!cfg) return;
   if (cfg.skill) Object.assign(SKILL, cfg.skill);
   if (cfg.gear !== undefined) GEAR.bar = cfg.gear;
+  /* A COURSE'S MAGNITUDE, WHICH IS NOT A PROPERTY OF THE RUN.
+
+     `applyTweak` sets fields on the run, and that is the wrong place for this:
+     a course's amount lives on the shared course object, not on any one run.
+     So it travels as config and is applied per worker, the same way a SKILL
+     flag is. Restoring is deliberate — a worker plays many jobs and a mutated
+     constant would leak into every arm after the sweep, which is exactly the
+     unlock bug wearing a different hat. */
+  if (cfg.courseDial) {
+    for (const co of FF.COURSES) {
+      if (COURSE0[co.id] === undefined) COURSE0[co.id] = {};
+      for (const k of Object.keys(cfg.courseDial)) {
+        const [id, field] = k.split('.');
+        if (id !== co.id) continue;
+        if (COURSE0[co.id][field] === undefined) COURSE0[co.id][field] = co[field];
+        co[field] = cfg.courseDial[k];
+      }
+    }
+  } else restoreCourses();
   if (cfg.draft) Object.assign(DRAFT, cfg.draft);
   if (cfg.taught) Object.assign(TAUGHT, cfg.taught);
   if (cfg.flags) {

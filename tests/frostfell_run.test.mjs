@@ -52,6 +52,7 @@ const STANDING = [
   ['FF_CALIBRATE=70', 'what a band actually is on this instrument — measured, not derived'],
   ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
   ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
+  ['FF_DIAL=150', 'the two flat courses swept by magnitude — a dial or decoration'],
   ['FF_GEARBAR=1', 'the pilot\'s gear-before-body bar swept — is the gear finding the deck or the pilot'],
 ];
 /* FF_HABIT, FF_CONTRAST, FF_VDECKS, FF_VSEED and FF_TIME are deliberately NOT
@@ -758,6 +759,103 @@ section('is the gear preference the deck or the pilot');
     `the gear-before-body dial is flat end to end (${spread} points across ${BARS.length} bars)`);
 }
 
+/* --------------------------------- do the flat courses have a dial either? -- */
+/* THREE OF FIVE COURSES SIT AT THE COURSELESS BASELINE, AND ONE METHOD JUST WORKED.
+
+   Hearth read 38% against 40% for declaring nothing for five rounds while four
+   rewrites looked for a different MECHANISM. The thing that fixed it was not a
+   mechanism, it was an AMOUNT: same rule, one point more, 38% -> 52%. That is
+   now a method rather than an anecdote, and there are two courses left sitting
+   on the baseline — Scrap and Bodies, both 40% against 40%.
+
+   Each has exactly one number in it:
+
+     Bodies  every warden deployed arrives with Shell N       (N = 2)
+     Scrap   the first N pieces of gear each fight are free    (N = 1)
+
+   Both were literals inside a closure until this round, which is precisely why
+   nobody had swept them: a dial nobody can turn reads the same as no dial. They
+   are named fields now and this sweeps them. Two outcomes are useful and one is
+   not: a dial that lifts the course (ship the smallest setting that works, as
+   Hearth did), or a flat sweep end to end (the amount is not the problem and
+   the rule is decoration — say so and stop rewriting it). What is not useful is
+   another round of guessing at new rules for them. */
+section('do the two flat courses have a dial');
+{
+  const N = Number(process.env.FF_DIAL || 0);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const each = N || Math.min(20, Number(process.env.FF_RUNS || DEFAULT_N));
+  const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(26);
+  const base = config();
+  /* Bodies at 2 and Scrap at 1 are what ships, so each ladder contains its own
+     control and the sweep is read against the course as it stands as well as
+     against declaring nothing. */
+  const ARMSD = [
+    { k: 'no course at all', course: null, dial: null, ships: false },
+    { k: 'bodies  Shell 2', course: 'line', dial: { 'line.shellN': 2 }, ships: true },
+    { k: 'bodies  Shell 4', course: 'line', dial: { 'line.shellN': 4 } },
+    { k: 'bodies  Shell 6', course: 'line', dial: { 'line.shellN': 6 } },
+    { k: 'bodies  Shell 9', course: 'line', dial: { 'line.shellN': 9 } },
+    { k: 'scrap   1 free', course: 'scrap', dial: { 'scrap.freeN': 1 }, ships: true },
+    { k: 'scrap   2 free', course: 'scrap', dial: { 'scrap.freeN': 2 } },
+    { k: 'scrap   3 free', course: 'scrap', dial: { 'scrap.freeN': 3 } },
+    { k: 'scrap   all free', course: 'scrap', dial: { 'scrap.freeN': 99 } },
+  ];
+  if (N) console.log(`    (dials turned up: ${3 * N} runs an arm)`);
+  const answers = await runJobs(ARMSD.flatMap((a) =>
+    tribes.map((tribe) => ({
+      tribes: [tribe], n: each, base: 1000, step: 37, mode: 'careful',
+      tweak: { set: { course: a.course } },
+      config: a.dial ? Object.assign({}, base, { courseDial: a.dial }) : base,
+    }))));
+  const rows = ARMSD.map((a, k) => {
+    const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
+    const wins = part.reduce((n, x) => n + x.wins, 0);
+    const runs = part.reduce((n, x) => n + x.runs, 0);
+    return Object.assign({}, a, { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) });
+  });
+  console.log('');
+  for (const r of rows) {
+    console.log(`    ${r.k.padEnd(18)}${bar(r.pct)} ${String(r.pct + '%').padStart(4)}` +
+      (r.ships ? '   ← what ships' : ''));
+  }
+  const none = rows[0];
+  const dband = BAND.gap(none.pct / 100, none.runs) * Math.SQRT2;
+  /* FOUR SETTINGS EACH, so the family is four per course rather than nine
+     across both: the two sweeps are separate questions and pooling them would
+     charge each a bar it did not earn. */
+  const zd = familyZ(4);
+  console.log(`    (±${dband.toFixed(1)} on a difference at ${none.runs} runs an arm; ` +
+    `family of 4 is ${zd.toFixed(2)}σ = ±${(zd * dband).toFixed(1)})`);
+  const verdicts = [];
+  for (const co of ['line', 'scrap']) {
+    const mine = rows.filter((r) => r.course === co);
+    const hi = mine.reduce((a, z) => (z.pct > a.pct ? z : a));
+    const lo = mine.reduce((a, z) => (z.pct < a.pct ? z : a));
+    const ship = mine.find((r) => r.ships);
+    const spread = hi.pct - lo.pct;
+    const live = spread >= zd * dband;
+    verdicts.push({ co, hi, lo, ship, spread, live });
+    console.log(`    → ${co === 'line' ? 'BODIES' : 'SCRAP'}: ` +
+      `best ${hi.k.trim()} ${hi.pct}% · worst ${lo.pct}% · spread ${spread} · ` +
+      `${live ? `A DIAL — ${hi.pct - ship.pct} points over what ships, and ${hi.pct - none.pct} over declaring nothing`
+        : 'FLAT end to end — the amount is not what is wrong with this course'}`);
+  }
+  if (N) {
+    ARMS.stamp('FF_DIAL=150', verdicts.map((v) =>
+      `${v.co === 'line' ? 'bodies' : 'scrap'} spans ${v.spread} (${v.lo.pct}-${v.hi.pct}%, ships ${v.ship.pct}%) ` +
+      `${v.live ? 'A DIAL' : 'flat'}`).join(' · ') + ` against ${none.pct}% for no course, family bar ±${(zd * dband).toFixed(1)}`,
+      tribes.length * each);
+  }
+  /* Reported, not gated. A flat sweep is a real answer here and failing the
+     suite over it would be failing it for a finding. What IS gated is the thing
+     that would make the table a lie: a dial cranked past its top setting must
+     not run away with the run, which is the same bar every course carries. */
+  const top = rows.reduce((a, z) => (z.pct > a.pct ? z : a));
+  ok(top.pct - none.pct <= 20 + zd * dband,
+    `no setting of a course dial runs away with the run (${top.k.trim()} ${top.pct}% vs ${none.pct}% for none)`);
+}
+
 /* ------------------------------------------- and what walking past one is -- */
 /* THE ONE THING A TRANSCRIPT FOUND THAT NO RUNG EVER DID.
 
@@ -1298,10 +1396,29 @@ section('which parts of playing well are worth anything');
      number, whatever it looks like. A row that clears it is called a finding
      and nothing else is. */
   const sig = (d) => (Math.abs(d) >= 2 * Number(band) ? '' : '  (noise: under 2σ)');
+  /* AND THIS TABLE HAS BEEN NAMING A WINNER WITHOUT EARNING ONE.
+
+     `sig()` below marks a row that does not clear 2σ against the FLOOR, which
+     is the right check for "is this habit worth anything". It is the wrong
+     check for "which habit is best", and the sentence under this table has been
+     making the second claim off the first check for six rounds — and stamping
+     it. Two rows five points apart at a ±3.3 band are the same measurement, and
+     naming one of them the top is exactly the ranking-inside-its-own-band
+     failure the gear arm was gated on this round. The rule applies retroactively
+     or it is not a rule. So the lead over SECOND place is checked too, and when
+     it does not clear, the table says the top is not resolved rather than
+     picking one. */
   const top = added[0];
+  const runnerUp = added[1] ? added[1][1] : none;
+  const lead = top[1] - runnerUp;
+  const clear = Math.abs(lead) >= 2 * Number(band);
   console.log(`    and one at a time, starting from nothing (${none}% knowing none): ` +
     `${top[0].replace(' (removed)', '')} alone is worth ${top[1] - none} of the ${all - none}` +
     sig(top[1] - none));
+  console.log(`      ${clear
+    ? `and it leads the next by ${lead} at ±${band} — the top of this table is resolved`
+    : `but it leads the next by only ${lead} at ±${band} — WHICH habit is top is NOT resolved` +
+      (added[1] ? `, ${added[1][0].replace(' (removed)', '')} is level with it` : '')}`);
   /* The gate moved 3.2 → 3.5 when the band became measured: the same arm at the
      same sample now reports ±3.3 rather than ±3.0, because a difference of two
      arms is a wider quantity than one arm. Suppressing FF_ABLATE=60's table for
@@ -1310,7 +1427,8 @@ section('which parts of playing well are worth anything');
     console.log(`      (no table: ±${band} a row at this sample. FF_ABLATE=60 or more for one that means something)`);
     added.length = 0;
   } else {
-    ARMS.stamp('FF_ABLATE=60', `${top[0].replace(' (removed)', '')} +${top[1] - none} of the ${all - none}; ` +
+    ARMS.stamp('FF_ABLATE=60', `${top[0].replace(' (removed)', '')} +${top[1] - none} of the ${all - none}` +
+      (clear ? '' : ' (top NOT resolved: leads next by ' + lead + ' at ±' + band + ')') + '; ' +
       `next best ${added[1] ? added[1][0].replace(' (removed)', '') + ' +' + (added[1][1] - none) : 'none'}`,
       tribes.length * N);
   }
@@ -1320,6 +1438,41 @@ section('which parts of playing well are worth anything');
       '█'.repeat(Math.round(pct / 2)).padEnd(14) + ` ${String(pct + '%').padStart(4)}  ` +
       (d > 0 ? '+' + d : String(d)) + ' of the ' + (all - none) + sig(d));
   }
+  /* AND THE ARITHMETIC THE TWO TABLES ABOVE HAVE BEEN AVOIDING.
+
+     Denial alone is worth +15 and all six together are worth +17. The two
+     numbers have been sitting one paragraph apart for a round and the
+     conclusion drawn from them was a paragraph about substitution. The blunter
+     reading is that FIVE HABITS ARE COLLECTIVELY WORTH TWO POINTS, three of
+     them price negative alongside denial in the pair table, and two of them
+     (repositioning, calling waves early) are already dead switches kept only so
+     this arm has a row to print.
+
+     The aura cards were cut on exactly this shape of evidence — content that
+     could not be shown to be worth anything, removed, and the ladder went UP
+     six points. So the same question gets asked of the pilot, from the data
+     already on the table: is the pilot that only denies WORSE than the pilot
+     that does all six, by more than the band? If it is not, four habits are
+     paying rent they cannot cover, and every fight-arm reading gets cheaper and
+     cleaner without them. */
+  {
+    const denyOnly = addedPcts[HABITS.findIndex(([k]) => k === 'deny')];
+    const gap = all - denyOnly;
+    const bar2 = 2 * Number(band);
+    console.log(`    ONLY DENYING ${denyOnly}% against ALL SIX ${all}% — the other five are worth ` +
+      `${gap >= 0 ? '+' : ''}${gap} on top of denial (2σ = ±${bar2.toFixed(1)})`);
+    console.log(`      ${gap >= bar2
+      ? 'the five carry their weight: keep them'
+      : gap <= -bar2
+        ? 'the five make the pilot WORSE — they should come out'
+        : 'inside the band: five habits that cannot be shown to be worth anything'}`);
+    /* Reported rather than gated, and deliberately so. "Cannot be shown to be
+       worth anything" is not "shown to be worth nothing", and at this arm's
+       band those are different claims — the whole point of the ladder-band
+       entry. What licenses deleting a habit is a NEGATIVE reading past the
+       bar, not an inconclusive one, and this prints which it got. */
+  }
+
   /* AND THE QUESTION NEITHER TABLE CAN ANSWER: DO ANY TWO OF THEM COMBINE?
 
      Shipping the wave telegraph took denial from 17-of-17 down to 8-of-17 while
@@ -2145,6 +2298,55 @@ section('where a run is actually decided');
     console.log(`      DO THE WINNERS STAND ON EMPTIER BOARDS?  ` +
       `free slots a turn ${avg(topR, 'free').toFixed(2)} vs ${avg(botR, 'free').toFixed(2)} · ` +
       `warmed on ${(avg(topR, 'warm') * 100).toFixed(0)}% of turns vs ${(avg(botR, 'warm') * 100).toFixed(0)}%`);
+    /* THE BAND THIS WHOLE TABLE HAS NEVER HAD, and the retroactive pass is why
+       it is here.
+
+       Every row above compares the top half of eight decks against the bottom
+       half, where the halves were made BY SORTING ON WIN RATE. Two things
+       follow and only one of them was ever said out loud:
+
+       * The win-rate gap between the halves — the "14 points" three rounds of
+         work have chased — is **selected on itself**. Sort eight noisy rates
+         and split them down the middle and the halves differ by construction,
+         with no decks needing to differ at all. It is not a finding and it
+         never was; it is the definition of the split.
+       * The composition gaps (gear, bodies, hp, free slots) are NOT selected
+         on, so they are informative — but nobody had ever put a band on one,
+         and a difference of two four-deck means has a wide one.
+
+       So the null is built by permutation rather than derived: there are
+       exactly C(8,4) = 70 ways to split eight decks into halves, they are
+       enumerated, and each gap is measured on the same numbers. Where the
+       observed split falls in that distribution IS the p-value, with no
+       normality assumed and no RNG involved — the same 70 splits every run. */
+    {
+      const idx = rows.map((_, i) => i);
+      const combos = [];
+      const walk = (start, pickd) => {
+        if (pickd.length === half) { combos.push(pickd.slice()); return; }
+        for (let i = start; i < idx.length; i++) { pickd.push(i); walk(i + 1, pickd); pickd.pop(); }
+      };
+      walk(0, []);
+      const gapUnder = (src, key, chosen) => {
+        const inHalf = new Set(chosen);
+        let a = 0, b = 0, na = 0, nb = 0;
+        src.forEach((r, i) => { if (inHalf.has(i)) { a += r[key]; na++; } else { b += r[key]; nb++; } });
+        return a / Math.max(1, na) - b / Math.max(1, nb);
+      };
+      const observed = idx.slice(0, half);
+      const test = (label, src, key, dp) => {
+        const obs = gapUnder(src, key, observed);
+        const all2 = combos.map((cm) => Math.abs(gapUnder(src, key, cm)));
+        const beaten = all2.filter((v) => v >= Math.abs(obs) - 1e-9).length;
+        const p = beaten / all2.length;
+        return `${label} ${obs >= 0 ? '+' : ''}${obs.toFixed(dp)} (p=${p.toFixed(2)}${p <= 0.05 ? ' REAL' : ''})`;
+      };
+      console.log(`      and the same gaps against all ${combos.length} ways to split these decks in half:`);
+      console.log(`        ${[test('gear played a run', withGear, 'gear', 1), test('bodies carried', rows, 'bodies', 1),
+        test('gear per turn', withGear, 'gearRate', 3), test('free slots', withRoom, 'free', 2)].join(' · ')}`);
+      console.log(`        (the WIN-RATE gap is not in this list on purpose: the halves were made by ` +
+        `sorting on it, so it is selected on itself and is not a finding)`);
+    }
     console.log(`      top half vs bottom half:  bodies ${avg(top, 'bodies').toFixed(1)} vs ${avg(bot, 'bodies').toFixed(1)} · ` +
       `hp ${avg(top, 'hp').toFixed(1)} vs ${avg(bot, 'hp').toFixed(1)} · ` +
       `atk ${avg(top, 'atk').toFixed(1)} vs ${avg(bot, 'atk').toFixed(1)} · ` +
