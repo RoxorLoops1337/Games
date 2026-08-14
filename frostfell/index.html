@@ -3175,14 +3175,45 @@ const COURSES = [
      Bodies puts armour on every arrival; Cold takes the opening wave's turn.
      Scrap's `patched` is its only rule on that axis and it fires on a death,
      which is late and rare — the same "lands late" shape that took Hearth five
-     rewrites to escape. That is the next thing to move, and it is a rule change
-     rather than a sweep. */
+     rewrites to escape.
+
+     THIRD ATTEMPT, AND IT IS ON THE AXIS THE WORKING COURSES USE. Every course
+     that measures anything does something ON THE BOARD, every fight, from turn
+     one: Hearth mends the most-hurt warden each upkeep, Bodies puts armour on
+     every arrival, Cold freezes the opening wave. So Scrap gets one of the same
+     shape and one nothing else uses — every warden it sets down arrives carrying
+     THORNS, which is scrap-metal made into a rule: a thing patched together out
+     of sharp offcuts costs whatever hits it. It is not damage the player deals
+     (Hearth failed three times on that), not recycling (Gear's), not tempo
+     (measured flat end to end), and it scales with the line the way warmth and
+     armour do.
+
+     AND IT IS THE FIRST OF THE THREE THAT LANDS. At 960 runs an arm against 40%
+     for declaring no course at all:
+
+         +0 (was) 40%   ·   +1 41%   ·   +2 44%   ·   +4 48%
+
+     Spread 8 on a family-of-4 bar of ±6.1 — **clears**, and monotone, which the
+     two failed sweeps never were (they read 40/40/39/45 and 40/40/37/39, which
+     is what noise looks like). Thorns 4 ships: it is the smallest setting
+     measured that clears, and it puts Scrap at 48% in a field running 45 to 52,
+     so the course comes off the floor without becoming the answer.
+
+     THE PATTERN THIS COMPLETES. Three courses were stuck on the courseless
+     baseline and all three came off it the same way — not by finding a cleverer
+     mechanism, but by putting the rule ON THE BOARD, EVERY FIGHT, FROM TURN
+     ONE, and then turning its one number up until it measured. Hearth failed
+     five times paying in damage and timing; Scrap failed twice paying in tempo
+     and cards. What both were missing was the same thing, and it took eight
+     nulls between them to see it. */
   { id: 'scrap', name: 'THE SCRAP TRAIL', short: 'SCRAP', col: '#c9b28a',
     get text() {
-      return 'Scrap cards on every table, the first ' + (this.freeN > 1 ? this.freeN + ' pieces of gear you use each fight do' : 'gear you use each fight does') +
+      return 'Scrap cards on every table, every warden you set down arrives carrying Thorns ' + this.thornN +
+        ', the first ' + (this.freeN > 1 ? this.freeN + ' pieces of gear you use each fight do' : 'gear you use each fight does') +
         ' not cost the turn, and a warden that goes down comes back patched rather than hurt.';
     },
-    match: (c) => c.tribe === 'scrap', freeItem: true, freeN: 1, patched: true },
+    match: (c) => c.tribe === 'scrap', freeItem: true, freeN: 1, thornN: 4, patched: true,
+    deploy: (g, u, co) => { if (co.thornN) addStatus(g, u, 'thorns', co.thornN); } },
   /* THE TWO MAGNITUDES THAT USED TO BE LITERALS.
 
      Hearth's five-round null turned out to be magnitude — the rule was right
@@ -9931,7 +9962,7 @@ window.FF = {
   handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
-  drawCreature, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
+  drawCreature, drawCard, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,
   setCtx: (c) => { ctx = c; initSnow(); },

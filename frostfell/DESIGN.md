@@ -392,8 +392,31 @@ decision and calling it a finding would be dressing one as the other. Shell 6
 ships (47%, level with Gear, above Cold) rather than Shell 9 (52%, tying Hearth
 for top) because creating a second favourite is what Cold was cut back twice for.
 
-**Scrap's null is the useful one.** The amount is not what is wrong with it, so
-no further rewrite of the amount will fix it — and there is a reading in the
+**AND SCRAP LANDS ON THE THIRD ATTEMPT, WHICH COMPLETES A PATTERN.** Two rules
+failed — free gear (tempo) and a larger opening hand (cards) — and the third is
+on the axis every course that works uses: **something on the board, every fight,
+from turn one.** Every warden Scrap sets down arrives carrying Thorns. At 960
+runs an arm against 40% for declaring nothing:
+
+```
++0 (was) 40%   ·   +1 41%   ·   +2 44%   ·   +4 48%      spread 8, bar ±6.1  CLEARS
+```
+
+Monotone, which the two failed sweeps never were — they read `40/40/39/45` and
+`40/40/37/39`, the shape of noise. Thorns 4 ships: the smallest setting measured
+that clears, putting Scrap at 48% in a field running 45 to 52.
+
+**Three stuck courses, three fixes, one shape.** Hearth failed five times paying
+in damage and timing; Scrap failed twice paying in tempo and cards; Bodies was
+never broken, only quiet. All three came off the floor the same way — put the
+rule on the board, every fight, from turn one, then turn its one number up until
+it measures. **It took eight nulls between them to see it**, and the reason it
+took so long is that every failure looked like a question about WHAT the rule
+pays in, and the answer was about WHEN and WHERE it fires.
+
+**The older half of Scrap's diagnosis, which still stands.** The amount was not
+what was wrong with the first two rules, so no rewrite of the amount would have
+fixed them — and there is a reading in the
 fight arm that says why: the pilot's gear-before-body threshold measured FLAT
 end to end. If *when* you spend gear does not matter, a course whose rule is
 "spend gear sooner" cannot matter either, however much of it you are handed.
@@ -710,9 +733,30 @@ terms that is a tripled crossing rate, which sounds enormous and is measured
 against a 1.4% floor — the honest absolute number is small, and both are worth
 saying.
 
-One limit, and it is the file's own rule: this is the LOCKED arm, so it is a
-finding about locked decks. A real caravan drafts, and the whole question of
-whether a starting lean survives twenty cards of drafting is untouched.
+**AND RUN LIVE, THE EFFECT SIZE SURVIVES AND THE RESOLUTION DOES NOT.** The
+locked arm is a caravan that cannot draft, shop or temper, so the limit was
+named in the same breath as the finding. The same twelve built decks as STARTING
+hands in real runs, 3,600 a side:
+
+```
+                    locked          live (the deck grows)
+4 gear + 2 wardens   4.1%                40.6%
+5 wardens + 1 gear   1.4%                37.6%
+                    +2.7  p=0.009       +3.0  p=0.288
+```
+
+**The point estimate is the same — +2.7 against +3.0 — and it stops clearing.**
+That is not the finding washing out, and calling it that would be as wrong as
+calling it confirmed. What changes is the noise: locked decks cross 1–5% of the
+time and live ones 31–49%, so deck-to-deck variance grows by far more than the
+gap does, and the permutation null goes from p=0.009 to p=0.288.
+
+Which is worth more than either number. **The locked arm's clean p came from the
+floor suppressing variance, not from the effect being larger there** — a cage
+can make a finding look sharper as easily as it can hide one, and four rounds of
+this file's cages have all been the hiding kind. The honest statement: a
+gear-heavy start is worth about three points whether or not you draft, and the
+instrument can only prove it where the game is crippled.
 
 **The transferable half is about method, not gear.** Four rounds of observational
 work on a question that a constructed comparison settled in one run, and the
@@ -834,7 +878,34 @@ the gap between two rows is that one thing. `FF_RUNS=70`, 210 runs an arm:
 | + choosing its road | takes every fight rather than an arbitrary fork | 50% (**+9**) |
 
 **33 → 42 points.** The total had read 33 for two rounds and 27 for four before
-that, and the only thing that ever moved it was *deleting* three cards. The
+that, and the only thing that ever moved it was *deleting* three cards.
+
+**AND THE RUNG IS NOT A DECISION, WHICH IS THE MORE USEFUL HALF.** A rung worth
++9 says a pilot that takes every fight beats one that picks arbitrarily. It does
+not say the fork is a CHOICE — that needs a strategy which beats taking
+everything, and nobody had looked for one. Five now have, at 600 runs an arm:
+
+```
+takes every fight                       51%
+spends a full purse before fighting     50%   −1
+banks zone one, coasts zone three       49%   −2
+ducks to a quiet stop when hurt         47%   −4
+skips the packs and beasts              44%   −7
+walks past what it can                  34%  −17
+```
+
+**Nothing beats it.** The best of five is −1 against a family bar of ±8.2, and
+the ordering runs monotonically down with how much fighting each does. **The
+trail screen asks a question with one right answer**, which is furniture with a
+signpost on it — the exact thing this file wrote about the quiet road two rounds
+ago and then fixed, reappearing one level up.
+
+It is a design problem the ladder made visible rather than a pilot bug, and it
+is stated without a fix attached because the fix is a round of its own: the
+quiet nodes were already repriced once (camps pay in rest, rest stops in choice,
+shrines in blessings) and this measurement says it was not enough. What it must
+not become is a fourth reprice guessed at — the courses took eight nulls to
+teach that the axis matters more than the amount. The
 question that finally moved it was not "what else can be tuned" but **what is
 the ladder not asking about at all**.
 
@@ -978,6 +1049,21 @@ but it quotes **card ids**, and those can be. Any lowercase word in a stamp that
 used to be a card id and no longer is now fails the suite, against a register of
 cut ids kept beside the arms list. It cannot know a number went stale; it can
 know the game changed underneath one, which is the case that actually happened.
+
+**And every stamp now carries the BUILD it was taken on**, because the card-id
+guard only works on the one part of a reading that is checkable and every NUMBER
+in every stamp has the same problem. A date would answer "how old", which is the
+wrong question — an arm run before a round that changed nothing it measures is
+not stale, and one run before a round that rewrote a course is, on the same day.
+The stamp carries a fingerprint of the two files an arm actually measures, the
+game and the pilot, and the summary says `ON AN OLDER BUILD — re-run before
+quoting` against every reading that does not match. On the round it went in it
+flagged **15 of 15**, which is correct and not flattering.
+
+It is deliberately coarse: any edit to either file invalidates every reading,
+including a comment or a colour. That over-reports, and that is the right
+direction — **a reading wrongly flagged costs a re-run, and a reading wrongly
+trusted costs a round of building on it.**
 Re-run, `FF_CARDS` reads *no card of 57 clears 3.33σ, widest sleetrunner −10.8;
 giving from a locked floor: 0 clear it, best frostmite +4.2*.
 
@@ -1738,6 +1824,29 @@ bug for forty-nine rounds. It fits now.
 **The generalisable half: an instrument's approximations decide which bugs it can
 have an opinion about.** The width model was accurate enough for paragraphs and
 useless for gutters, and nothing said so until a defect landed exactly there.
+
+**AND THE CHECK NOW SAYS WHAT IT LOOKS AT.** `button()` carried its bug for
+forty-nine rounds and the gutter check found it in one run, which argues the
+check is good and its AIM is narrow: it swept 9 shapes × 12 screens of one
+seeded run, so the strings it examined were whatever that run happened to deal.
+Everything the game can draw is enumerable from its own tables, so the share is
+a number instead of an impression:
+
+```
+names 63/86 (73%)   ·   rules paragraphs 31/62 (50%)   ·   4,184 draws, 729 distinct strings
+```
+
+Widened as well as measured: **every card in the pool is now drawn at both sizes
+it is ever drawn at** — in hand and on the reward row — at 653x280, the tightest
+shape, and put through the same two rules. All of them pass. What is left
+uncovered is foes the seeded run never met, which the figure now names rather
+than hides.
+
+Counting names and rules separately was itself a correction. Lumped together,
+drawing every card in the game moved coverage from 75% to 77% — which reads as
+the widening having failed, when what it did was take card names to everything
+the game has. A name is drawn whole and a paragraph is drawn wrapped; **one
+number over two things measured differently is not a measurement.**
 
 ### FINDING — every surface was flat, and one direction of light fixed the lot
 
