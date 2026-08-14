@@ -40,10 +40,23 @@ faster* projected a speedup that came in at 1.7x when it was actually built. Bot
 now read as what is currently true, with the retracted claim kept **inside** the
 entry as the thing that was wrong and why — which is the part worth keeping.
 
-The mechanical half: the suite checks rule 1 (every entry states a number).
-Rule 2 cannot be checked by a script and is not pretended to be. What enforces it
-is the closing step of every round: **before writing a new entry, grep this file
-for the thing you just measured, and fix what you find.**
+**The mechanical half, which one round ago was written off as impossible.**
+
+"Rule 2 cannot be checked by a script" was wrong, and it was wrong because it
+aimed at the hard question instead of the useful one. No script can know whether
+an entry is still *true*. But rule 2's failure mode is not subtle and it is
+always the same shape: **two entries about the same thing, one of them stale.**
+That is checkable.
+
+So every entry carries a `topic:` key, and the suite requires the 38 keys to be
+**unique**. Writing a second entry about the ladder now fails `npm run check`,
+and the only way through is to fold it into the first — which is precisely what
+rule 2 asks for. It is not a freshness proof; nothing can be. It removes the
+failure mode that actually happened three times in one round, which was a
+correction sitting *next to* the thing it corrected instead of inside it.
+
+Rule 1 is checked the same way: every entry must contain a digit. Prose about a
+measurement is not a measurement.
 
 ---
 
@@ -51,39 +64,63 @@ Everything below came out of the probe or the shot walk and is kept because it
 changes what you would do next. Dead ends are named as such, so nobody drives
 down one twice.
 
-### FINDING — the ladder
+### FINDING — the ladder, and which of its numbers is the one being defended
+
+`topic: ladder`
 
 Four pilots, each the one above it plus one more thing it knows how to do, so
-the gap between two rows is that one thing:
+the gap between two rows is that one thing. `FF_RUNS=70`, 210 runs an arm:
 
 | pilot | | worth |
 |---|---|---|
-| careless | takes the leftmost card, swings at the nearest thing | 7% |
-| + the fight | denies schemes, answers a named wave, places bodies, holds gear | 19% (**+12**) |
-| + the trader | spends well | 38% (**+19**) |
-| + steering the pool | drafts to a course | 37% (−1) |
+| careless | takes the leftmost card, swings at the nearest thing | 10% |
+| + the fight | denies schemes, answers a named wave, places bodies, holds gear | 19% (**+9**) |
+| + the trader | spends well | 37% (**+18**) |
+| + steering the pool | drafts to a course | 38% (+1) |
 
-At `FF_RUNS=70`, 210 runs an arm. **Read the total, not the rungs.** The previous
-reading of this same table was 9 / 26 / 39 / 38 — fight **+17**, trader **+13** —
-and the total was **30** then too. The fight and the trader have swapped five
-points between them across a round in which neither was touched, which is the
-clearest statement available of how much rung-to-rung movement is noise and how
-little the total is.
+**Every reading before this round is on a different footing and is not
+comparable.** Unlocks used to accumulate across runs, so the four arms each
+played a different card pool — see [parallelism](#finding--the-ladder-is-pooled-and-getting-there-found-a-five-round-bug).
+The pilot saturates the meta now, and this is the first ladder in which the four
+arms are actually playing the same game.
+
+**TWO NUMBERS, TWO TARGETS, AND THEY ARE NOT THE SAME PROMISE.** This had been
+fudged: a round reported "the floor is unchanged" while quoting the total, which
+is how a 9% → 7% careless reading survived a round without anyone deciding
+anything.
+
+| | what it promises | target |
+|---|---|---|
+| **the careless floor** | a beginner crosses sometimes | **8–12%** |
+| **the ladder total** | skill is worth something | **≥ 28 points** |
+
+They are different guarantees and they can move in opposite directions, so both
+are quoted every round or neither is. The three aura cards are exactly that case,
+measured on one footing at `FF_RUNS=70`:
+
+| build | careless | + fight | + trader | + steering | total |
+|---|---|---|---|---|---|
+| no new cards | 8% | 26% | 39% | 38% | **30** |
+| the three always-on | **10%** | 19% | 37% | 38% | **28** |
+| + the two conditional | 9% | 22% | 37% | 34% | **25** |
+
+**The three cards raise the beginner's floor by two points and cost the total
+two.** That is a real trade and it is the right side of it: a card that helps a
+weak pilot slightly compresses a ladder by definition, because the ladder is
+measured from the weak pilot upward. Both numbers stay inside their targets, and
+the two conditional cards fail both, which is why they are gone.
+
+**Read the total, not the rungs.** The fight and the trader have swapped nine
+points between them across rounds in which neither was touched. Most of that was
+the unlock bug; some of it is simply that a rung is a difference of two arms and
+carries twice the band.
 
 **The commitment is withdrawn.** For three rounds this file said the fight
-*should* be the rung that matters and the trader was bigger every time. Rather
-than write it a fourth time, the round that had to choose went looking for where
-the money goes and then tried to cut it: the looking worked, the cutting mostly
-did not, and both are under
-[what the purse buys](#finding--what-a-bottomless-purse-is-buying).
-
-What is left is a statement of what this game is rather than what it was meant to
-be: **the fight is the rung that carries the skill and the trader is the rung
-that carries the run.** The fight separates a player from themselves — the only
-place a habit has ever priced above the band. The trader separates a good run
-from a bad one, because money buys a choice of several individually-sufficient
-things. Two different questions, both answered; the one attempt to force them to
-the same size cost ten points across every rung including the beginner's.
+*should* be the rung that matters and the trader was bigger every time. What is
+left is a statement of what this game is rather than what it was meant to be:
+**the fight is the rung that carries the skill and the trader is the rung that
+carries the run.** Two different questions, both answered; the one attempt to
+force them to the same size cost ten points across every rung.
 
 **Steering prices at roughly nothing and that is not the courses' fault** — at
 450 runs an arm all five beat declaring nothing and sit within two standard
@@ -91,6 +128,8 @@ deviations of each other. What prices at zero is the *drafting*: a pilot that
 takes the best card on offer is already doing most of what steering can do.
 
 ### FINDING — what a bottomless purse is buying
+
+`topic: purse`
 
 Give a rich pilot everything except one thing at a time, then give a penniless
 pilot exactly one thing:
@@ -114,6 +153,8 @@ each dearer than the last, and charms won elsewhere are not counted.
 
 ### FINDING — what the instrument cannot see
 
+`topic: instrument-limits`
+
 **It can price a teaching change after all**, and one round said it could not:
 the claim was that the careless pilot is blind rather than slow. That is a claim
 about the instrument and it was testable — a pilot identical to the careless one
@@ -128,6 +169,8 @@ never told 7%   ·   told once 18%   ·   always knew 19%
 limit was real for the pilot as built, not for the instrument.
 
 ### FINDING — the dose of a lesson is irrelevant; the subject is everything
+
+`topic: lesson`
 
 The lesson fired twice, in the first zone, about schemes, because those were the
 first numbers anybody wrote. Swept (`FF_LESSON=1`, 210 an arm):
@@ -147,6 +190,8 @@ the warmth. A denied scheme is a foe's wasted turn whoever you are. **A habit
 worth teaching has to pay on its own, and almost none do.**
 
 ### FINDING — the fight is one decision and some decoration
+
+`topic: fight-habits`
 
 For four rounds, at 180–210 an arm, attacked subtractively, additively and
 through the mending ledger: **denial alone was worth 17–18 of the 20 the whole
@@ -246,6 +291,8 @@ punished specialist — survived into the shipped one.
 
 ### RULE — the scale matters across baselines, not against one
 
+`topic: scale`
+
 The card table turned out to be flat only in points, so every finding in this
 file measured against a low baseline was re-read in odds: the lesson arm at a 9%
 floor, the whole one-at-a-time ablation, the dodge arm, the ladder.
@@ -279,74 +326,68 @@ carried over, or it invents a disagreement.**
 So: **points against a fixed control, odds across different ones.** The careless
 floor's story has been told on the right scale for ten rounds after all.
 
-### RULE — five cards rewrite a rule, and the rest of the pool cannot
+### RULE — three cards rewrite a rule; two more were built, taught and cut
+
+`topic: auras`
 
 Fifty-six of fifty-seven cards measured indistinguishable from the pool median.
-Two rounds read that as a *tiering* problem. It is a **shape** problem, and the
-shape is nameable: every card in the pool was built out of stats, keywords or
-per-unit hooks, and **all three are local**. A card whose whole effect lands on
-one body cannot change how the other five are played, so nothing you pick up
-changes how you play — which is the definition of a flat pool, however carefully
-each card is costed.
+Two rounds read that as a *tiering* problem. It is a **shape** problem: every card
+in the pool was built out of stats, keywords or per-unit hooks, and **all three
+are local**. A card whose whole effect lands on one body cannot change how the
+other five are played.
 
-So five cards now hang a **global** rule off a living body. One per rule the
-engine actually has, each read at exactly one site:
+Three cards now hang a **global** rule off a living body, each read at exactly one
+site, and none carrying bigger numbers than an ordinary card of its tier:
 
-| card | the rule it rewrites | what it charges |
+| card | rewrites | charges |
 |---|---|---|
 | Coldbearer | a packed line warms anyway | takes Frost **2** a turn, forever, while packed |
-| Backdrift | the **back** column burns 2 and the front burns 1 | re-prices all 6 slots, foes' clock unchanged |
-| Dawnpiper | your wardens tick **before** the foes | **4 hp**; the rule leaves with it |
+| Backdrift | back column burns 2, front burns 1 | re-prices all **6** slots |
 | Grudgehorn | keeps its Spice for the rest of the **run** | falling empties the bank |
-| Trailmarshal | a body onto the board **without spending the turn** | does nothing unless a slot is free |
 
-Three constraints made these buildable inside the doctrine that had already cut
-five cards. **They carry no bigger numbers** — every one is at or below the stat
-line of an ordinary card of its tier, so the effect is the rule and nothing else.
-**None deletes a decision**: Coldbearer is the interesting case, because the
-obvious version simply switches the room rule off and takes the game's central
-question with it (doctrine test 4), whereas *pricing* the rule leaves the question
-and adds a way to pay. **No aura may outlive its carrier** — that is asserted for
-all three aura cards in the suite, because an aura that persists is a permanent
-upgrade wearing a card's clothes.
+**Two more were built and are now deleted, and the deleting is the finding.**
+Dawnpiper inverted turn order; Trailmarshal put a body down without spending the
+turn. They were the two most interesting rules of the five. Both were held out of
+the offer for one round on the argument that the probe's pilot could not express
+the habits they need, so the arm was blind to their upside.
 
-**Three shipped into the offer; two are held back, and that was measured rather
-than felt.** At `FF_RUNS=70`:
+That argument was then tested rather than repeated. `SKILL.shelter` was added to
+keep an aura-carrier out of the front column, `SKILL.keepSlot` already held a slot
+back, and at `FF_RUNS=70` with both on:
 
 | build | careless | + fight | + trader | + steering | ladder |
 |---|---|---|---|---|---|
-| 57 cards, before this round | 9% | 26% | 39% | 38% | **30** |
-| + all five new | 7% | 20% | 37% | 34% | **27** |
-| + only the three always-on | 7% | 19% | 38% | 37% | **30** |
+| the three always-on | 10% | 19% | 37% | 38% | **28** |
+| + the two conditional | 9% | 22% | 37% | 34% | **25** |
 
-The three whose rule is **always on** — Coldbearer, Backdrift, Grudgehorn — cost
-the ladder **nothing**. The two whose rule only pays if the player **plans for
-it** — protect a glass body, keep a slot empty — cost **three points**, and
-raising their stat lines first (Dawnpiper 4→7 hp, Trailmarshal 10/2→13/4) moved
-the reading by **nothing**, so it is not that they are weak bodies.
+They were drafted and played — **50 and 156 times across 360 runs**, with the
+shelter firing **95** times — so they are not blind-spotted. They simply cost
+three points. **A card that needs a plan and still does not pay once the plan is
+taught is not an unlucky card, it is a bad one.** Deleted rather than shelved
+again, because a second round of `noPool` is a way of not deciding.
 
-The mechanism is this round's own rarity lesson pointed the other way: **a rare a
-pilot cannot use still occupies a rare slot and displaces one that pays.** The
-probe's pilot never plans, so it cannot see their upside — but *"my instrument
-cannot see the good half"* is not evidence the good half exists, and shipping a
-measured three-point regression on that reasoning is shipping on faith. They are
-`noPool` until the pilot can express the two habits; the cards, the auras, the
-hooks and the suite coverage all stay. That is the flag coming off and the arm
-being re-run, not a rewrite.
-
-The generalisation worth keeping: **an always-on rule is safe to put in a pool
+**The general rule that survives them: an always-on rule is safe to put in a pool
 and a conditional one is not**, because the pool charges every card the same
 frequency cost whether or not the holder knows what to do with it.
 
 One thing found while building them, worth more than the cards: `def()` let a
 second card claim an id and **win silently**. One of the five was named
-`cairnwarden`, which already existed 100 lines further down; the later definition
+`cairnwarden`, which already existed 100 lines down — the later definition
 overwrote it, the new card vanished from the game entirely, and the suite went
-green at 602 checks because every one of them happened to test the survivor. A
-collision that deletes content and passes every test is the worst shape a bug can
-have. `def()` throws on a duplicate id now.
+green at 602 checks because every one happened to test the survivor. It throws now.
+
+**And one habit priced at zero, which is worth keeping as a number.** The FIRST
+version of `shelter` protected *any* body that could not survive the biggest swing
+on the board, and cost **7 points at the fight rung** (12/13/36/36 against
+12/20/40/39). That is the third time "careful placement" has cost this pilot
+points. Narrowed to aura-carriers only it fires 95 times in 360 runs and prices at
+**0**, which is the honest reading: protecting the thing carrying a rule is worth
+something, protecting fragile bodies in general is worth less than the swings you
+give up.
 
 ### FINDING — the cards do differentiate, on the scale that works
+
+`topic: card-worth`
 
 A flat removal table has two readings and only one of them is health. Taking a
 card out of a POOL asks what the pool misses, and a pool substitutes — the offer
@@ -391,6 +432,8 @@ and together they say the thing worth knowing — **a card matters when you cann
 replace it, and the offer can almost always replace it.**
 
 ### FINDING — no card in the game is load-bearing
+
+`topic: card-removal`
 
 Fifty-eight cards had been priced by one table — *every card is played* — which
 is a statement about the POOL and has never said anything about a card.
@@ -439,6 +482,8 @@ sees it least. The pool substitutes for absence. It cannot substitute for scarci
 
 ### FINDING — denial, settled
 
+`topic: denial`
+
 Every conclusion in this file rests on one number and last round it cleared its
 own bar by **four tenths of a point** — +7 against a 2σ of 6.6 at 180 runs an
 arm. That is not a foundation, it is a coincidence waiting to be re-rolled, and
@@ -459,6 +504,8 @@ artefact of the arm, not a property of the finding.
 
 ### RULE — what a beginner should meet, and whether they do
 
+`topic: first-fight`
+
 The careless floor drifted **5% → 9% across three rounds** and nobody decided
 that: it moved while other things were being changed. A floor is a design
 choice, so here is the choice, stated in the numbers that describe an
@@ -478,6 +525,8 @@ simply finishes the last one slightly more often. The four points of win rate
 are the tail of the distribution moving, not the shape of it.
 
 ### FINDING — the telegraph is feedback, not a decision
+
+`topic: telegraph`
 
 `FF_NOWAVE` said the wave telegraph is worth about nothing: floor +1, fight +1,
 trader −1, ladder unchanged. That is not a verdict on its own — a mechanic can
@@ -512,6 +561,8 @@ event* — the fight is still one decision, and the telegraph is the feedback
 around it.
 
 ### RULE — a band is measured, and it applies to every number here
+
+`topic: band`
 
 A round proved the printed band wrong and then left every number in the file
 quoted against it. This is the correction, and it has two halves that point in
@@ -579,6 +630,8 @@ own bar by four tenths of a point.
 
 ### FINDING — what would settle the missing nine points, and what it costs
 
+`topic: missing-nine`
+
 The set of six habits is worth +17.6 and they sum to +8.1 apart. That difference
 is built out of seven arms and its band is **±9.6** at 210 an arm, so +9.5 is
 under 2σ and always was.
@@ -604,6 +657,8 @@ does not beat its parts, and the fight is one decision with a lot of arithmetic
 around it.
 
 ### FINDING — the trader's rung never fell
+
+`topic: trader-rung`
 
 The telegraph was reported as taking the trader from +18 to +13, and the five
 points were explained away in one sentence as floor compression. Both halves
@@ -635,6 +690,8 @@ measurement, and the sentence explaining the gap was explaining an artefact.
 
 ### FINDING — courses do not starve the board
 
+`topic: courses`
+
 The front-slot-only telegraph paid a courseless run +8 and every course nothing.
 The suspicion that raised was structural and older than the telegraph: a course
 narrows what you draw, so perhaps it narrows the pool below what the board's
@@ -662,6 +719,8 @@ code is the move this round spent its time undoing.
 
 ### FINDING — the quiet road
 
+`topic: quiet-road`
+
 Walking past a fight measured **−16**, which does not describe a decision: a fork
 where one side is always wrong is furniture with a signpost on it. The game
 punished ducking and nothing paid for it, so every quiet place now pays in what
@@ -685,6 +744,8 @@ fewer fights. Walking past everything has come in from −16 to −8 and ducking
 when hurt costs 6 — priced wrong rather than unplayable.
 
 ### FINDING — where the mending actually comes from
+
+`topic: mending`
 
 Read the caravan's wound total on every pass of the run loop, attribute each
 change to the transition it happened on. **87% of every point of damage taken
@@ -710,6 +771,8 @@ that this ledger and the ladder measure different things.**
 
 ### FINDING — read state, don't intercept calls
 
+`topic: probe-wrappers`
+
 Six instruments in six rounds measured nothing, and they failed in four ways
 worth knowing before you build a seventh.
 
@@ -733,6 +796,8 @@ independent arms and the arms share seeds; see
 
 ### RULE — what a good card looks like
 
+`topic: card-doctrine`
+
 Written down before the cards were, after 2 rounds of building cards, measuring
 them and cutting **5 of 6**. In full above `const CARDS`; in short, **a good card
 makes the player choose between two things they want, on the board, differently
@@ -746,6 +811,8 @@ made. The rule has a test now, too: from a locked floor the 57-card pool spans
 is a measured claim rather than a hope.
 
 ### FINDING — schemes are most of what the fight is worth
+
+`topic: schemes`
 
 Denying schemes is the only fight habit that has ever cleared the band on its
 own. That is not the board being fake — the locked-deck arm settles that — it is
@@ -768,6 +835,8 @@ whatever the opening rolled — true of `mark` and `chill`, false of `gather`.
 
 ### RULE — the room rule
 
+`topic: room-rule`
+
 Three states, and it is the rule the board is built around:
 
 - **two or more free slots** — the whole line takes Regen 1
@@ -781,6 +850,8 @@ do not meet it equally often: the foes' line runs emptier, so in practice it is 
 rule for one side of the table. That asymmetry is intentional.
 
 ### FINDING — the careless board is emptier, not fuller
+
+`topic: careless-board`
 
 Measured this round, and it corrects five rounds of assumption. Free slots by
 share of turns:
@@ -796,6 +867,8 @@ packed-board failure is aimed at something that happens on 4% of their turns.
 
 ### FINDING — the most lethal thing in the game has four health
 
+`topic: mitewing`
+
 Mitewing — a tier-1 trash mob, **4 health and 2 attack** — was in the top 2 of
 the late-zone death table for 5 rounds running, and it is still there: **16% of
 88 late deaths** at 210 runs an arm, second only to the Frostwyrm's 27%.
@@ -807,6 +880,8 @@ a damage-share table ranks who did the work. Keep both.
 
 ### FINDING — Hearth, and a fact about how damage works
 
+`topic: hearth`
+
 Hearth read bottom of the course table for several rounds through 5 attempts to
 fix it, and at 450 runs an arm it is level now — **39% against a 40% no-course
 baseline**, inside the ±2.2 band. The pool was never the cause: 13 hearth cards
@@ -816,6 +891,8 @@ warden unkillable — there is no middle, so every tuning pass either did nothin
 or broke it. A fact about the game's damage, not about Hearth.
 
 ### FINDING — six screens nobody had opened, and what was wrong with them
+
+`topic: six-screens`
 
 The shot walk takes 35 screens and about 6 of them had ever been looked at. Six
 more, at 2400x1080. Every one had something a person would notice and no suite
@@ -856,6 +933,8 @@ as unfinished.
 
 ### FINDING — the defeat screen, looked at properly, had five defects
 
+`topic: defeat-screen`
+
 It shipped last round with one pass and one glance at one size. Opened at
 1280x720, 2400x1080 and a phone, it had **five** things wrong with it, and the
 severity ordering is the finding: the worst one was invisible at the size it was
@@ -890,7 +969,37 @@ had: **a lower element pinned to a constant while an upper element moved.** Thre
 rounds, three screens, one bug. Everything on this screen is now derived from the
 element above it, and `statTop` from the portrait's actual bottom.
 
+### RULE — a horizontal sweep is never written by hand
+
+`topic: sweeps`
+
+`for (x = 0; x <= VW; x += step)` followed by `lineTo(VW, …)` stops at the last
+multiple of `step` below VW and then runs a straight line to the corner, drawing
+a hard edge **VW % step** units in from the right. Whether it is visible depends
+on a number nobody looks at, so it had been written by hand four times and was
+broken in three of them:
+
+```
+aurora bands  step 64   clean at 1280 and 1600, 28-unit seam at 1180
+far ridges    step 40   clean at 1280 and 1600, 20-unit seam at 1180
+the ground    step 48   BROKEN AT ALL THREE — 28 at 1180, 32 at 1280, 16 at 1600
+dusk ridges   step 60   found by eye at 1600 the round before
+```
+
+**3 of 4 hand-written sweeps were broken at a width the game actually builds.**
+The ground one had been there since the first sky, at every width, and survived
+38 rounds of looking at screenshots — a 16-to-32-unit sliver
+at the extreme edge under the near scenery reads as framing.
+
+All six sweeps go through `sweepX(c, step, fn)`, which spans −step to VW+step and
+leaves the caller no arithmetic to get wrong, and the suite fails if the
+hand-written form comes back. The general form: **when a bug's visibility depends
+on an incidental number, fixing the instance is worth almost nothing — the next
+one will pick a different step.**
+
 ### FINDING — the shot walk is still the only thing that sees
+
+`topic: shot-walk`
 
 Three assertions over eight shapes is 668 checks and none has ever found what a
 person finds by looking — the clipped collection names, the collided trail
@@ -911,6 +1020,8 @@ the screens with something to spread**, which is the right answer rather than a
 gap.
 
 ### FINDING — contrast, the third thing nobody was checking
+
+`topic: contrast`
 
 Touch found seven controls too small; type got a floor and found five
 collisions. Nothing had ever asked whether the text could be **seen**.
@@ -973,6 +1084,8 @@ a line too high on every label in the file. It is symmetric now.
 
 ### FINDING — smaller things, settled
 
+`topic: smaller-things`
+
 - **Nothing is half-tested.** 653x280 is a folding phone's *cover* display and
   the type check used to skip it with a note — at 280 tall the floor is 23 stage
   units and the leader screen could not hold seven winters in a fixed 44-unit
@@ -989,6 +1102,8 @@ a line too high on every label in the file. It is symmetric now.
 ---
 
 ### DEAD ENDS — everything built, measured and thrown away
+
+`topic: dead-ends`
 
 The most valuable half of this file: each was built, run against the probe and
 removed, and the number is why.
@@ -1045,6 +1160,8 @@ second made a wide deck stronger — and both are tabled under
 
 ### FINDING — nobody had played it on a phone
 
+`topic: phone`
+
 Twenty-three rounds of shots were taken in a desktop Chromium — a game built
 landscape-first for a thumb, never photographed on anything shaped like one. Two
 rounds of handset shots turned up two classes of bug no check covered.
@@ -1063,6 +1180,8 @@ a hard five-line slice that cut the rules off mid-sentence, and are measured and
 flowed now. **The supported floor is a phone held sideways**: 375 CSS pixels.
 
 ### FINDING — rarity carries no information, and one card was fixed
+
+`topic: rarity`
 
 The odds table is the first evidence anyone has had about what a card is worth,
 and the rarity tiers were assigned by hand years before it existed. Checked
@@ -1107,6 +1226,8 @@ reason to touch a tier.
 
 ### RULE — a worth measured in a locked deck cannot license a frequency change
 
+`topic: arm-licence`
+
 The general form of the mistake above, because it is the third costume the same
 error has worn in three rounds (after the points-vs-odds scale error and the
 band that was 1.3x too wide).
@@ -1122,17 +1243,14 @@ The check, before any change: **name the arm, then name the thing the change
 alters, then say where in the arm that thing appears.** If the honest answer is
 "it doesn't", the arm is silent on the change however loud the number is.
 
-### FINDING — the probe is parallel now, and it is worth 1.7x rather than 2.6x
+### FINDING — the ladder is pooled, and getting there found a five-round bug
 
-The refactor named last round is **done**, and the projection it was based on was
-too optimistic by half.
+`topic: parallelism`
 
-What shipped: the pilot moved out of the probe into `tests/frostfell_pilot.mjs`
-(a worker cannot import the probe — importing it *runs* every arm), tweaks became
-serialisable descriptors instead of closures at 16 call sites, and
-`tests/frostfell_pool.mjs` runs jobs across a fixed, reusable worker pool.
-
-Measured on the card arm, 63 arms x 18 runs, wall clock including worker startup:
+The pilot lives in `tests/frostfell_pilot.mjs`, tweaks are serialisable
+descriptors at 16 call sites, and `tests/frostfell_pool.mjs` runs a reusable
+worker pool. Measured on the card arm, 63 arms x 18 runs, wall clock including
+worker startup:
 
 ```
 FF_JOBS=1   9.1s   (inline, no worker, no clone)
@@ -1141,25 +1259,51 @@ FF_JOBS=3   5.7s   1.60x
 FF_JOBS=4   7.0s   1.30x
 ```
 
-**It peaks at two threads on a four-core box and gets worse from there.** Last
-round's estimate of 2.6x came from running 3 whole probe *processes* at once and
-reading the wall clock — which measures how well the OS interleaves three
-independent programs, not how well one program splits. The pool has a main thread
-that is also doing work, structured-clone traffic on every job, and four workers
-on four cores leaves nothing to schedule them. `JOBS` defaults to
-`floor(cores/2)`, from this table rather than from `cores - 1`.
+**It peaks at half the cores.** An earlier projection of 2.6x came from timing
+three separate probe *processes*, which measures how well the OS interleaves
+three programs, not how well one program splits. `JOBS` defaults from this table.
 
-**Where it is NOT wired, deliberately.** An arm that reads what the pilot
-accumulated as it played (which card got played, who killed whom, how many forks
-were taken) cannot use a pool at all — that state lives in whichever thread did
-the playing. An arm whose jobs are unequal in size finishes at the pace of its
-longest job either way. Only whole-count arms with equal jobs qualify, and the
-card arm is the one that is 58 of them.
+**The ladder is pooled now too** — twelve jobs, four modes x three tribes, in one
+call so the threads stay fed instead of draining three times.
 
-1.7x on the slowest arm in the file is worth having and is not the 3x that was
-hoped for. The remaining cost is in the pilot itself, not in the scheduling.
+**And it bought 3%, not a halving.** End to end at `FF_RUNS=70`: **76.9s pooled
+against 79.2s inline.** The ladder is 840 of the probe's many thousands of runs,
+so pooling it moves the total barely at all — the habit sweeps, the money sweeps
+and the course sweeps still run inline and are most of the wall clock. Anyone
+expecting the round's slowest measurement to halve should read that number
+first: the slowest measurement was never the ladder.
+
+What the work was actually worth is below, and it is not speed.
+
+**1. `playRun` was not a function of its arguments, and had not been for the
+whole life of this file.** Unlocks accumulate in `G.meta.found` as runs finish
+and `cardPool` filters on it, so a run's offer depended on how many runs that
+thread had already played. Seed 4242 played **100 turns and then 25**. The four
+ladder arms run in sequence, so careless played with 3 things unlocked and
+careful with 12: **part of every rung this file has printed was the unlock state
+rather than the pilot**, and the arms were never paired on identical trails, only
+on identical seeds. It is very likely most of the rung-to-rung volatility this
+file has been documenting for six rounds. The pilot saturates the meta at import
+now. Every number in this file measured before that is on a different footing and
+is marked where it matters.
+
+The `a seed is a promise` check passed throughout — because it is the LAST thing
+in the probe, where the meta has already saturated and two consecutive plays
+necessarily agree. **A determinism check placed exactly where determinism is
+trivially true.** It now replays a seed after every other run in the file.
+
+**2. Merging counters is silent when it is wrong.** The pilot fills thirteen
+module-level counters and a dozen tables read them afterwards. The first merge
+summed `DUCKS.bar` — a **0.22 threshold**, not a count — into 0.66, changing which
+forks the duck arm counted, and concatenated `ROOM.free` — a histogram — into a
+**twelve-slot board on a six-slot game**. Neither failed an assertion. Both were
+caught by diffing the whole probe's output inline against pooled, which is now
+the standing check: `FF_JOBS=1` and the default must produce **byte-identical
+output**, and they do.
 
 ### RULE — the source split is retracted
+
+`topic: source-split`
 
 Three rounds ago this file recommended taking the screen renderer out of
 `index.html` first — "the cost is one more `<script>` block, perhaps 40 lines of
@@ -1182,6 +1326,8 @@ solve a problem nothing has reported is the wrong trade, and saying so is worth
 more than leaving a plan nobody executes at the top of the file.
 
 ### FINDING — what a family-bar sweep of the whole file would cost
+
+`topic: family-sweep`
 
 `FF_CARDS` at 630 an arm took most of a round to answer one question, so: what
 would it cost to run *every* arm at a sample where the family bar means
@@ -1223,6 +1369,8 @@ is a different probe, not a faster one** — running tribes in parallel workers 
 the only thing on the table that could deliver it.
 
 ### FINDING — the probe was half particle effects
+
+`topic: probe-speed`
 
 Forty per cent of the balance probe's samples were `fx.pop` and `fx.burst`,
 building floating text and particle objects — sixty and four hundred at a time —

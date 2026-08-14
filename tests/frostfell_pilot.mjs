@@ -90,7 +90,7 @@ function watchTitan() {
 }
 
 /* ------------------------------------------------------------- the pilot -- */
-function bestSlot() {
+function bestSlot(card) {
   /* READ THE TELEGRAPH FIRST.
 
      A wave names its lane a turn before it arrives, and anyone standing in that
@@ -112,6 +112,49 @@ function bestSlot() {
     }
     return null;
   };
+  /* SHELTER — the second of the two habits the aura cards needed, and the
+     pilot had neither.
+
+     `plain()` walks columns front-first, so every body this pilot deploys goes
+     to the most exposed slot on the board. That is right for a heavy: the front
+     column ticks twice and a fat body wants the extra swings. It is exactly
+     wrong for a fragile one, and the whole point of a card like the Dawnpiper
+     is that it is fragile ON PURPOSE — a 7-health body carrying a rule that
+     leaves with it. Sent to the front it dies before the rule pays once, which
+     is precisely what the standing-start arm measured: 0 wins in 60.
+
+     "Protect the glass body" is therefore a real habit and it is one line: a
+     body that would not survive the biggest swing on the board goes to the BACK
+     column instead of the front. Behind its own switch like every other habit,
+     so it can be priced. */
+  const sheltered = (card) => {
+    if (!SKILL.shelter || !card) return null;
+    /* NARROWED, AFTER THE WIDE VERSION COST SEVEN POINTS.
+
+       The first cut sheltered ANY body that could not survive the biggest swing
+       on the board, and priced at 12/13/36/36 against 12/20/40/39 — the fight
+       rung fell from +8 to +1. That is the same answer this file already has
+       twice over: the front column ticks twice, swings go to the front of a
+       lane, and a pilot that keeps bodies out of the fighting is a pilot doing
+       less fighting. "Careful placement" has now cost points three times.
+
+       What the habit is actually FOR is one body: the one carrying a rule that
+       leaves the board with it. Losing an ordinary 6-health warden costs a
+       warden; losing the Dawnpiper costs the whole side its turn order. So the
+       habit is about auras, not about health, and it fires on maybe one
+       deployment in fifty instead of one in four. */
+    const d = FF.CARDS[card.def];
+    if (!d || !d.aura) return null;
+    const hp = Math.max(1, card.hp || 0);
+    const biggest = FF.enemyUnits(G).reduce((n, f) => Math.max(n, f.atk || 0), 0);
+    if (hp > biggest) return null;                  // it can take a hit; front is fine
+    for (let col = FF.COLS - 1; col >= 1; col--) {
+      for (let lane = 0; lane < FF.LANES; lane++) {
+        if (FF.slotFree(G, 'p', lane, col)) { ROOM.sheltered = (ROOM.sheltered || 0) + 1; return { lane, col }; }
+      }
+    }
+    return null;
+  };
   if (b && b.waveLane !== undefined && !FF.laneHeldBy(G, b.waveLane)) {
     for (let col = 0; col < FF.COLS; col++) {
       if (FF.slotFree(G, 'p', b.waveLane, col)) {
@@ -125,6 +168,11 @@ function bestSlot() {
     }
   }
   if (TELL.on && b && b.waveLane !== undefined) TELL.live++;
+  // A body that cannot survive one swing goes behind the line, not in front of
+  // it. Answering the telegraph still wins — a wave arriving is worse than a
+  // fragile body taking a hit.
+  const safe = sheltered(card);
+  if (safe) return safe;
   // Then hold the front of both lanes, then fill in behind.
   for (let col = 0; col < FF.COLS; col++) {
     for (let lane = 0; lane < FF.LANES; lane++) {
@@ -376,12 +424,13 @@ const CROOM = { turns: 0, free: [] };
 const DUCKS = { forks: 0, taken: 0, wound: 0, bar: 0.22 };
 const LANE = { on: false, by: {} };
 const TELL = { on: false, live: 0, moved: 0, held: 0, fights: 0, turns: 0, allTurns: 0, lastB: null, lastHeld: 0 };
-const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
+const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true, shelter: true };
 const HABITS = [
   ['deny', 'denying schemes'],
   ['reposition', 'repositioning at all (removed)'],
   ['holdGear', 'holding gear until it earns the turn'],
   ['keepSlot', 'keeping a slot in reserve'],
+  ['shelter', 'keeping a fragile body out of the front'],
   ['wave', 'calling waves early (removed)'],
   ['place', 'filling the front of both lanes first'],
 ];
@@ -549,7 +598,7 @@ function carefulTurn() {
          heuristic. The front of both lanes first is not a fallback any more,
          it is the answer: it puts bodies where the swings are and lets the
          geometry do the rest. */
-      const slot = SKILL.place ? bestSlot() : carefulSlot(b.hand[ui]);
+      const slot = SKILL.place ? bestSlot(b.hand[ui]) : carefulSlot(b.hand[ui]);
       if (slot && FF.playCard(G, ui, slot)) return;
     }
   }
@@ -774,6 +823,33 @@ function erf(x) {
    localStorage stub. Muted here and nowhere else: the save/load suites do not
    touch this flag, so they still test the real thing. */
 FF.store.mute = true;
+
+/* EVERY ARM PLAYS THE SAME GAME, WHICH IT HAD NEVER DONE.
+
+   `playRun(tribe, seed, mode)` was not a function of its arguments. Unlocks
+   accumulate in `G.meta.found` as runs finish, and `cardPool` filters on it, so
+   a run's OFFER depended on how many runs that thread had already played. Two
+   consecutive plays of seed 4242 came out at 100 turns and 25.
+
+   That is not a small thing, because the ladder runs its four arms in sequence:
+   careless went first with 3 things unlocked and careful went last with 12, so
+   part of every rung this file has ever printed was the unlock state rather than
+   the pilot. It also explains the round-to-round rung volatility documented for
+   six iterations — the arms were never paired on identical trails, only on
+   identical seeds.
+
+   The existing `a seed is a promise` check passed throughout, because it runs at
+   the very END of the probe where the meta has already saturated and stopped
+   changing. A determinism check placed where determinism is trivially true.
+
+   So the meta is saturated up front. Every card and every tribe is available to
+   every arm from the first run, which is both the honest comparison and what a
+   player who has unlocked the game sees. It also makes a run independent of
+   every other run, which is what lets the ladder be pooled at all. */
+for (const u of FF.UNLOCKS) {
+  G.meta.found[u.id] = true;
+  if (u.kind === 'tribe' && G.meta.unlocked.indexOf(u.id) < 0) G.meta.unlocked.push(u.id);
+}
 const DEFAULT_N = 30;
 const NO_SCARS = !!process.env.FF_NOSCARS;
 function stripScars(run) {
@@ -1174,6 +1250,110 @@ function playRun(tribe, seed, mode, tweak) {
   }
   stat.guard = guard;
   return stat;
+}
+
+/* ---------------------------------------------- carrying counters home --- */
+/* WHY THIS EXISTS, and why it is not a convenience.
+
+   The pilot accumulates thirteen module-level counters as it plays — which card
+   got played, who was swinging, how many forks were ducked, what the mending
+   ledger says. Every table at the bottom of the probe reads them AFTER all the
+   arms have run, on the assumption that they hold everything the probe ever saw.
+
+   The moment an arm runs in a worker that assumption breaks silently: the runs
+   happen in another thread, the counters there fill up, and the ones the probe
+   reads are short by exactly that arm. No assertion would fail. Several tables
+   would simply be wrong, and wrong in the direction of "this card is never
+   played", which is the reading this project has already acted on twice.
+
+   So a worker sends its counters home and the main thread absorbs them. The
+   absorb rule is deliberately narrow, because the same thirteen objects hold
+   BOTH accumulated counts and configuration: `MEND.on`, `TELL.on`, `TAUGHT.room`
+   and `DUCKS.bar` are inputs, not outputs.
+
+     numbers  ADD          (every count, every total)
+     arrays   CONCATENATE  (every sample list)
+     anything else  LEFT ALONE — booleans, strings and null are configuration
+
+   Configuration travels the other way, in the job, via applyConfig. And the
+   whole thing is proved rather than trusted: the run suite plays one arm inline
+   and the same arm pooled and asserts the counters come out identical. */
+const COUNTERS = { PLAYED, OFFERED, CARRIED, TRIGGERS, SOLD, TITAN, ROOM, CROOM, DUCKS, LANE, TELL, MEND, TAUGHT };
+
+function cloneCounts(o) {
+  const out = {};
+  for (const k of Object.keys(o)) {
+    const v = o[k];
+    if (Array.isArray(v)) out[k] = v.slice();
+    else if (v && typeof v === 'object') out[k] = cloneCounts(v);
+    else out[k] = v;
+  }
+  return out;
+}
+/* THE TYPE OF A FIELD DOES NOT TELL YOU WHETHER IT ACCUMULATES, and assuming it
+   did produced two wrong tables on the first run of this.
+
+   `DUCKS.bar` is 0.22 — a numeric THRESHOLD, and summing it across two workers
+   set it to 0.66 and changed which forks the duck arm counted. `ROOM.free` is a
+   histogram indexed by free-slot count, and concatenating two of them produced a
+   twelve-slot board on a six-slot game. Both are named here rather than guessed
+   at, and the run suite asserts inline and pooled agree so anything missed from
+   these lists fails loudly instead of skewing a table by a few percent. */
+const SKIP = {                      // configuration and transient state, never merged
+  DUCKS: new Set(['bar']),
+  TAUGHT: new Set(['on', 'always', 'room']),
+  LANE: new Set(['on']),
+  TELL: new Set(['on', 'lastB', 'lastHeld']),
+  MEND: new Set(['on', 'last', 'where']),
+  ROOM: new Set(['on']),
+};
+const CONCAT = new Set(['heatAtDeath']);   // sample lists; everything else indexed
+
+function addCounts(into, from, skip) {
+  for (const k of Object.keys(from)) {
+    if (skip && skip.has(k)) continue;
+    const v = from[k];
+    if (typeof v === 'number') into[k] = (typeof into[k] === 'number' ? into[k] : 0) + v;
+    else if (Array.isArray(v)) {
+      if (CONCAT.has(k)) into[k] = (Array.isArray(into[k]) ? into[k] : []).concat(v);
+      else {
+        const dst = Array.isArray(into[k]) ? into[k] : (into[k] = []);
+        v.forEach((n, i) => { dst[i] = (dst[i] || 0) + (n || 0); });
+      }
+    } else if (v && typeof v === 'object') addCounts(into[k] || (into[k] = {}), v, null);
+    // booleans, strings, null: configuration, not a count — never merged
+  }
+}
+
+/** Everything this thread has counted since it started. */
+export function snapshot() {
+  const out = {};
+  for (const k of Object.keys(COUNTERS)) out[k] = cloneCounts(COUNTERS[k]);
+  return out;
+}
+/** Fold another thread's counters into this one's. */
+export function absorb(snap) {
+  if (!snap) return;
+  for (const k of Object.keys(snap)) if (COUNTERS[k]) addCounts(COUNTERS[k], snap[k], SKIP[k]);
+}
+/** The switches an arm sets before it plays. Sent in the job, applied here. */
+export function applyConfig(cfg) {
+  if (!cfg) return;
+  if (cfg.skill) Object.assign(SKILL, cfg.skill);
+  if (cfg.draft) Object.assign(DRAFT, cfg.draft);
+  if (cfg.taught) Object.assign(TAUGHT, cfg.taught);
+  if (cfg.flags) {
+    if (cfg.flags.lane !== undefined) LANE.on = cfg.flags.lane;
+    if (cfg.flags.tell !== undefined) TELL.on = cfg.flags.tell;
+    if (cfg.flags.mend !== undefined) MEND.on = cfg.flags.mend;
+    if (cfg.flags.room !== undefined) ROOM.on = cfg.flags.room;
+  }
+}
+/** What this thread's arm was configured with, to send to a worker. */
+export function config() {
+  return { skill: Object.assign({}, SKILL), draft: Object.assign({}, DRAFT),
+    taught: Object.assign({}, TAUGHT),
+    flags: { lane: LANE.on, tell: TELL.on, mend: MEND.on, room: ROOM.on } };
 }
 
 export {

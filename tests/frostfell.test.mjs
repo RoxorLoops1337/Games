@@ -2066,35 +2066,22 @@ section('cards that charge for themselves');
 }
 
 /* ------------------------------------------------------------------------ */
-/* THE FIVE THAT REWRITE A RULE.
+/* THE THREE THAT REWRITE A RULE.
 
    Fifty-six of fifty-seven cards measured indistinguishable from the pool
    median, because every one of them was stats, keywords or a per-unit hook and
-   all three are local. These five hang a global rule off a living body. Each
+   all three are local. These three hang a global rule off a living body. Two
+   more were built, taught to the pilot, measured at a 3-5 point cost and cut. Each
    check below is in two halves on purpose — the rule is ON while the body
    stands, and the rule is GONE the moment it does not. A card that rewrites a
    rule and leaves the rewrite behind is a permanent upgrade wearing a card's
    clothes, and that is not what any of these were built to be. */
-section('five cards that rewrite a rule, and give it back when they fall');
+section('three cards that rewrite a rule, and give it back when they fall');
 {
   const FFa = loadGame({});
   bareBattle(FFa, 'hearth', 909);
   const GA = FFa.G;
   const clear = () => { for (const u of GA.battle.units.filter((x) => !x.leader)) u.alive = false; };
-
-  // DAWNPIPER — turn order itself
-  {
-    clear();
-    const foe = place(FFa, 'e', 'snapfrost', 0, 0, {});
-    const before = FFa.turnOrder(GA);
-    eq(before[0].side, 'e', 'foes tick first, which is the rule the game is built on');
-    const dp = place(FFa, 'p', 'dawnpiper', 1, 2, {});
-    eq(FFa.turnOrder(GA)[0].side, 'p', 'while the Dawnpiper stands, the caravan ticks first');
-    dp.alive = false;
-    eq(FFa.turnOrder(GA)[0].side, 'e', 'and the moment it falls the foes have the morning back');
-    ok(FFa.CARDS.dawnpiper.hp <= 8, 'the body carrying the largest rule in the game is still the flimsiest in the pool');
-    foe.alive = false;
-  }
 
   // BACKDRIFT — the column clock, on BOTH sides
   {
@@ -2155,32 +2142,11 @@ section('five cards that rewrite a rule, and give it back when they fall');
     gh.alive = false; again.alive = false;
   }
 
-  // TRAILMARSHAL — a body onto the board without spending the turn
-  {
-    clear();
-    const tm = place(FFa, 'p', 'trailmarshal', 1, 2, {});
-    GA.battle.draw = [FFa.mkCard('snowpup')];
-    const bodies = () => GA.battle.units.filter((u) => u.side === 'p' && u.alive).length;
-    const had = bodies();
-    FFa.CARDS.trailmarshal.hooks.trigger(GA, tm);
-    eq(bodies(), had + 1, 'it marches the next warden out of the deck');
-    eq(GA.battle.draw.length, 0, 'and that card really left the deck');
-    // and with no room it does nothing at all, which is the whole price
-    for (const s of FFa.freeSlots(GA, 'p').slice()) {
-      place(FFa, 'p', 'snowpup', s.lane, s.col, {});
-    }
-    GA.battle.draw = [FFa.mkCard('snowpup')];
-    const packed = bodies();
-    FFa.CARDS.trailmarshal.hooks.trigger(GA, tm);
-    eq(bodies(), packed, 'on a packed board it marches nobody');
-    eq(GA.battle.draw.length, 1, 'and does not burn the card doing it');
-  }
-
-  /* And the property that makes all five one FAMILY rather than five specials:
+  /* And the property that makes them a FAMILY rather than three specials:
      an aura is read off a living body, so no aura may survive its carrier. */
   {
     clear();
-    for (const id of ['coldbearer', 'backdrift', 'dawnpiper']) {
+    for (const id of ['coldbearer', 'backdrift']) {
       const d = FFa.CARDS[id];
       ok(d && d.aura && Object.keys(d.aura).length === 1, id + ' carries exactly one rule');
       const u = place(FFa, 'p', id, 1, 2, {});
@@ -2522,8 +2488,53 @@ section('the design record states numbers');
      of six" reads as prose where "5 of 6" reads as a count, and the difference
      is the whole point of the file. Prose about a measurement is not a
      measurement. It caught one entry on its first run. */
+  /* AND THE SAME KIND OF CHECK ON THE SOURCE, for the seam that has now been
+     written by hand four times.
+
+     `for (x = 0; x <= VW; x += step)` followed by `lineTo(VW, …)` draws a hard
+     straight edge `VW % step` units in from the right, and whether it is visible
+     depends on whether the step divides a width nobody looks at — the ground
+     sweep was broken at 1180, 1280 AND 1600 and survived 38 rounds. Every sweep
+     goes through `sweepX` now, which cannot get it wrong, and this stops the
+     hand-written form coming back. */
+  {
+    const src = readFileSync(new URL('../frostfell/index.html', import.meta.url), 'utf8');
+    // sweepX's own body is the one place the form is allowed to appear.
+    const hand = (src.match(/for\s*\(\s*let\s+x\s*=[^;]*;\s*x\s*<=?\s*VW\b/g) || [])
+      .filter((m) => !/=\s*-step/.test(m));
+    eq(hand.length, 0, 'no horizontal sweep is written by hand — they all go through sweepX');
+    ok((src.match(/sweepX\(c,/g) || []).length >= 6, 'and the six that exist do use it');
+  }
+
   const doc = readFileSync(new URL('../frostfell/DESIGN.md', import.meta.url), 'utf8');
   const lines = doc.split('\n');
+
+  /* RULE 2, MADE MECHANICAL — the half that was written down as "cannot be
+     checked by a script and is not pretended to be".
+
+     Rule 2 says an entry a later measurement contradicts is rewritten IN PLACE,
+     never appended to. Its failure mode is therefore always the same shape: two
+     entries about the same thing, one of them stale. That IS checkable — give
+     every entry a `topic:` key and require the keys to be unique. Adding a
+     second entry about the ladder now fails the suite and the only way through
+     is to fold it into the first, which is exactly what the rule asks for.
+
+     It is not a proof of freshness — nothing can be — but it removes the failure
+     mode that actually happened three times in one round, which is a correction
+     sitting NEXT TO the thing it corrects rather than inside it. */
+  {
+    const topics = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^###\s+(FINDING|RULE|DEAD ENDS)\b/.test(lines[i])) continue;
+      const stamp = lines.slice(i + 1, i + 4).find((l) => /^`topic:/.test(l.trim()));
+      ok(stamp, 'entry stamps a topic: ' + lines[i].slice(0, 60));
+      if (stamp) topics.push(stamp.trim().replace(/^`topic:\s*/, '').replace(/`$/, ''));
+    }
+    ok(topics.length >= 30, `every entry carries a topic (${topics.length} of them)`);
+    const dupes = topics.filter((t, i) => topics.indexOf(t) !== i);
+    eq(dupes.length, 0, 'no two entries claim the same topic — a correction is folded in, not appended'
+      + (dupes.length ? ': ' + dupes.join(', ') : ''));
+  }
   const heads = [];
   let cur = null;
   for (const ln of lines) {
