@@ -31,7 +31,7 @@ export function mkCtx(log) {
      about WHERE something landed on the stage needs the transform, so the stub
      keeps one — a 2x3 matrix and a save/restore stack, same as the real thing. */
   let m = [1, 0, 0, 1, 0, 0];
-  let bb = null, circ = null, nSeg = 0;
+  let bb = null, circ = null, nSeg = 0, roundRect = 0;
   const stack = [];
   const mul = (n) => [
     n[0] * m[0] + n[1] * m[2], n[0] * m[1] + n[1] * m[3],
@@ -90,8 +90,19 @@ export function mkCtx(log) {
      rectangle or circle was painted there, and a creature never claims a label
      drawn below its feet. The cost is that text drawn ON a blob has no ground
      and falls back to its outline, which is the conservative direction. */
+  /* A WASH IS NOT A GROUND. `globalAlpha` was honoured and the alpha inside an
+     `rgba()` string was not, so a 16%-opacity tint stamped as though it were
+     solid and the text over it was measured against a colour no screen ever
+     shows. Same rule for both: below 0.9 it tints what is under it rather than
+     replacing it. */
+  const solid = (col) => {
+    const m2 = /^rgba?\(([^)]+)\)/.exec(col);
+    if (!m2) return true;
+    const parts = m2[1].split(',');
+    return parts.length < 4 || parseFloat(parts[3]) > 0.9;
+  };
   const stamp = (box, cc, col, alpha, exact) => {
-    if (!exact || !box || alpha <= 0.9 || typeof col !== 'string') return;
+    if (!exact || !box || alpha <= 0.9 || typeof col !== 'string' || !solid(col)) return;
     const x0 = Math.max(0, Math.floor(box[0] / CELL)), x1 = Math.min(GW - 1, Math.ceil(box[2] / CELL));
     const y0 = Math.max(0, Math.floor(box[1] / CELL)), y1 = Math.min(GH - 1, Math.ceil(box[3] / CELL));
     if ((x1 - x0) * (y1 - y0) > 40000) return;          // a full-screen wash, not a ground
@@ -196,7 +207,7 @@ export function mkCtx(log) {
          that is a single arc and nothing else records its centre and radius, and
          the ground lookup tests the circle rather than the box. */
       if (k === 'clearRect') return () => { grid.fill(null); };
-      if (k === 'beginPath') return () => { bb = null; circ = null; nSeg = 0; };
+      if (k === 'beginPath') return () => { bb = null; circ = null; nSeg = 0; roundRect = 0; };
       if (k === 'moveTo' || k === 'lineTo') return (x, y) => { nSeg++; grow(x, y); };
       if (k === 'rect') return (x, y, w, h) => { nSeg++; grow(x, y); grow(x + w, y + h); };
       if (k === 'arc') return (x, y, r) => {
@@ -206,10 +217,28 @@ export function mkCtx(log) {
         grow(x - r, y - r); grow(x + r, y + r);
       };
       if (k === 'ellipse') return (x, y, rx, ry) => { nSeg++; circ = null; grow(x - rx, y - ry); grow(x + rx, y + ry); };
+      /* `arcTo` was untracked, so every rounded rectangle in the game — which is
+         every panel, plate and slab — had a null bounding box and stamped
+         NOTHING into the raster. The contrast check could see fillRects and
+         circles and was blind to the one shape the UI is actually made of. It
+         surfaced the moment a bright backdrop went behind a panel: pale text on
+         a dark plate still read against the sky, at 1.0:1. */
+      if (k === 'arcTo') return (x1, y1, x2, y2) => { nSeg++; roundRect++; circ = null; grow(x1, y1); grow(x2, y2); };
       if (k === 'quadraticCurveTo') return (_a, _b, x, y) => { nSeg++; circ = null; grow(x, y); };
       if (k === 'bezierCurveTo') return (_a, _b, _c, _d, x, y) => { nSeg++; circ = null; grow(x, y); };
       if (log && k === 'fill') {
         return () => {
+          /* ROUNDED RECTS DELIBERATELY DO NOT STAMP, and it was tried.
+
+             `rr` is what every panel, plate and slab is made of, so letting it
+             stamp looks like an obvious widening. It made attribution WORSE:
+             53 failures, nearly all of them wrong. A slab is a rounded rect and
+             the badges drawn ON it are hand-built paths that do not stamp, so
+             the slab won every lookup — a health number on a green shield was
+             reported against the slab body at 1.2:1. The rule holds only while
+             the shapes that do not stamp are also not the ones text sits on,
+             and stamping the big shapes breaks exactly that. Reverted; the
+             experiment is in DESIGN.md under DEAD ENDS. */
           stamp(bb, circ, st.fill, st.alpha, !!circ);
           log.push(['fill', st.fill, st.alpha, bb && bb.slice(), circ && circ.slice()]);
         };

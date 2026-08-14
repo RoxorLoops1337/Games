@@ -19,6 +19,17 @@ const drew = (label) => { ok(log.length > 0, label); log.length = 0; };
 /* How much of the contrast check's resolution is a guess. Accumulated across
    every screen and every device shape, printed once at the end. */
 const CELLS = { total: 0, one: 0, straddle: 0, mixed: 0, anchorBlind: 0 };
+/* A wash is not a ground — the same rule the raster uses. The bbox FALLBACK did
+   not have it, so a 16%-opacity tint behind a label was reported as though it
+   were solid paint. */
+const solidCol = (col) => {
+  if (typeof col !== 'string') return false;
+  const m = /^rgba?\(([^)]+)\)/.exec(col);
+  if (!m) return true;
+  const p = m[1].split(',');
+  return p.length < 4 || parseFloat(p[3]) > 0.9;
+};
+
 
 /* ---------------------------------------------------------- every screen -- */
 section('every screen draws');
@@ -325,7 +336,7 @@ section('the palette holds in the states the shot walk never reaches');
     const grounds = [];
     let stroked = null, lastKey = null, seen = 0, paired = 0;
     for (const e of log) {
-      if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9) grounds.push({ col: e[1], bb: e[3], circ: e[4] });
+      if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9 && solidCol(e[1])) grounds.push({ col: e[1], bb: e[3], circ: e[4] });
       else if (e[0] === 'strokeText') { stroked = String(e[1]) === lastKey ? stroked : e[4]; lastKey = String(e[1]); }
       else if (e[0] === 'fillText' && String(e[1]).trim() && e[7] > 0.9) {
         seen++;
@@ -512,7 +523,7 @@ section('the shape of a phone');
       const cellHist = { total: 0, one: 0, straddle: 0, mixed: 0, anchorBlind: 0 };
       let unpaired = 0, paired = 0, stroked = null, lastStrokeKey = null;
       for (const e of log) {
-        if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9) {
+        if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9 && solidCol(e[1])) {
           grounds.push({ col: e[1], bb: e[3], circ: e[4] });
         } else if (e[0] === 'strokeText') {
           stroked = String(e[1]) === lastStrokeKey ? stroked : e[4];

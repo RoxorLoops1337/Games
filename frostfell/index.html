@@ -1323,9 +1323,22 @@ const laneHeldBy = (g, lane) => units(g).find((u) => u.side === 'p' && u.lane ==
 const WAVE_TELL = { on: true };   // the probe's only way to compare like with like
 const laneOf = (g, side, lane) => units(g).filter((u) => u.side === side && u.lane === lane).sort((a, b) => a.col - b.col);
 const other = (side) => (side === 'p' ? 'e' : 'p');
+/* ONE PASS OVER THE UNITS, NOT SIX. This asked `slotFree` for each of the six
+   slots and each of those built a filtered copy of the unit list and searched
+   it — six list copies and six scans to answer a question one scan answers. It
+   was 2.6% of the balance probe on its own. Same order out, so a caller taking
+   `[0]` gets the same slot it always did. */
 function freeSlots(g, side) {
   const out = [];
-  for (let l = 0; l < LANES; l++) for (let c = 0; c < COLS; c++) if (slotFree(g, side, l, c)) out.push({ lane: l, col: c });
+  const taken = [0, 0, 0, 0, 0, 0];
+  const all = g.battle ? g.battle.units : [];
+  for (let i = 0; i < all.length; i++) {
+    const u = all[i];
+    if (u.alive && u.side === side && u.lane >= 0 && u.lane < LANES && u.col >= 0 && u.col < COLS) {
+      taken[u.lane * COLS + u.col] = 1;
+    }
+  }
+  for (let l = 0; l < LANES; l++) for (let c = 0; c < COLS; c++) if (!taken[l * COLS + c]) out.push({ lane: l, col: c });
   return out;
 }
 
@@ -3537,10 +3550,16 @@ function offerSigil(g) {
 /* --------------------------------------------------------------- saving -- */
 const SAVE_RUN = 'ff_run_v1';
 const SAVE_META = 'ff_meta_v1';
+/* `mute` exists for the probe alone and nothing in the game ever sets it.
+   Profiling the balance probe put `saveRun` at the TOP of the flame graph —
+   7.6% of the whole run, spent serialising a deck, a trail and a log to a
+   stubbed localStorage that no bot ever reads back. The save/load suites do not
+   set this, so they still exercise the real thing. */
 const store = {
+  mute: false,
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
-  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+  set(k, v) { if (store.mute) return; try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { if (store.mute) return; try { localStorage.removeItem(k); } catch (e) {} },
 };
 function serCard(c) { return { u: c.uid, d: c.def, c: c.charms.slice(), g: c.dmg || 0, i: !!c.injured, s: !!c.sigil, b: !!c.blessed,
   ba: c.bonusAtk || 0, bp: c.bonusHp || 0 }; }
@@ -3554,6 +3573,11 @@ function desCard(o) {
   return c;
 }
 function saveRun(run) {
+  /* The mute has to be read HERE and not in `store.set`: the first cut muted
+     the store and the probe got 2% faster, because the expensive half is
+     building this object and stringifying it, which happens before the store is
+     ever asked. */
+  if (store.mute) return;
   if (!run) { store.del(SAVE_RUN); return; }
   store.set(SAVE_RUN, JSON.stringify({
     v: 1, seed: run.seed, tribe: run.tribe, zone: run.zone, step: run.step, gold: run.gold,
@@ -4936,11 +4960,26 @@ function drawStatus(c, u, x, y, sz) {
 }
 
 /* A unit standing on the board: a small slab with the creature on it. */
+/* A BEAST HAS TO LOOK LIKE ONE. The Hollow King carries 82 health next to a
+   Chillfang's 12 and for thirty rounds it was drawn on the identical slab, at
+   the identical size, in the identical frame — nothing on the board said which
+   of the two was the thing the zone is named after. It gets a slab a quarter
+   again as large, a gold double frame, and a pair of horns over the top edge.
+   The scale is about the unit's own centre, so it grows into the 22 units of
+   margin the board already keeps above and below the lanes rather than pushing
+   anything; the render suite checks that at every device shape including the
+   653x280 cover display. */
+const BOSS_SCALE = 1.24;
 function drawUnit(c, u, t) {
   const w = SLOT_W, h = SLOT_H;
   const x = u.px - w / 2, y = u.py - h / 2;
   const dying = !u.alive;
   c.save();
+  if (u.boss) {
+    c.translate(u.px, u.py);
+    c.scale(BOSS_SCALE, BOSS_SCALE);
+    c.translate(-u.px, -u.py);
+  }
   if (dying) {
     const k = clamp(u.dead / 0.55, 0, 1);
     const kind = u.deathKind || deathKind(u.art);
@@ -4958,8 +4997,27 @@ function drawUnit(c, u, t) {
     c.rotate(u.tilt);
     c.translate(-u.px, -u.py);
   }
-  const tribeCol = u.side === 'p' ? (u.leader ? C.gold : '#7fb2e8') : '#d08a8a';
-  panel(c, x, y, w, h, 14, u.side === 'p' ? '#1d2c49' : '#3a2436', tribeCol);
+  const tribeCol = u.boss ? '#ffb347' : u.side === 'p' ? (u.leader ? C.gold : '#7fb2e8') : '#d08a8a';
+  if (u.boss) {
+    // horns, drawn under the slab so they read as coming out from behind it
+    c.save();
+    c.beginPath();
+    c.moveTo(x + 14, y + 10);
+    c.quadraticCurveTo(x - 6, y - 14, x + 4, y - 30);
+    c.quadraticCurveTo(x + 22, y - 16, x + 30, y + 6);
+    c.closePath();
+    c.moveTo(x + w - 14, y + 10);
+    c.quadraticCurveTo(x + w + 6, y - 14, x + w - 4, y - 30);
+    c.quadraticCurveTo(x + w - 22, y - 16, x + w - 30, y + 6);
+    c.closePath();
+    inked(c, '#c9922c', 2.5, C.ink);
+    c.restore();
+  }
+  panel(c, x, y, w, h, 14, u.side === 'p' ? '#1d2c49' : u.boss ? '#4a2338' : '#3a2436', tribeCol);
+  if (u.boss) {
+    rr(c, x + 4, y + 4, w - 8, h - 8, 11);
+    c.lineWidth = 1.6; c.strokeStyle = 'rgba(255,209,102,.55)'; c.stroke();
+  }
 
   // a strip along the top that belongs to the statuses alone, so nothing ever
   // gets written across a creature's face
@@ -8047,23 +8105,91 @@ function drawShrine(c, t) {
   button(c, 'shrineWalk', MID + 20, sy2, 280, 62, 'WALK ON', '#40527a');
 }
 
-function drawEnd(c, t, won) {
-  drawBackdrop(c, won ? 2 : 0, t);
-  if (won) {
-    // a slow wheel of light behind the words
-    c.save();
-    c.globalCompositeOperation = 'lighter';
-    c.translate(MID, 210);
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * TAU + t * 0.18;
-      c.save(); c.rotate(a);
-      c.globalAlpha = 0.09 + 0.05 * Math.sin(t * 1.6 + i);
-      c.fillStyle = '#ffd166';
-      c.beginPath(); c.moveTo(0, 0); c.lineTo(-40, -640); c.lineTo(40, -640); c.closePath(); c.fill();
-      c.restore();
+/* THE ONE SCREEN ALLOWED TO BE WARM.
+
+   A crossing used to be drawn on Hollow Peak's ash-grey backdrop with a wheel
+   of dusty gold wedges turning behind the title — beige starburst over grey
+   polygons, in a game that is blue in every other frame, and the only screen
+   whose whole job is to feel like a reward. This is its own sky: a cold night
+   at the top falling to a lit horizon, three aurora ribbons in the game's own
+   frost and gold, a sun coming up off the far shore, and the snow taking the
+   light. The winter lets go, and the palette says so. */
+function drawDawn(c, t) {
+  const sky = c.createLinearGradient(0, 0, 0, VH);
+  sky.addColorStop(0, '#0a1730');
+  sky.addColorStop(0.42, '#28406e');
+  sky.addColorStop(0.68, '#8a6f8e');
+  sky.addColorStop(0.82, '#e8a765');
+  sky.addColorStop(1, '#ffd9a0');
+  c.fillStyle = sky; c.fillRect(0, 0, VW, VH);
+
+  // the sun, low and huge, sitting on the horizon it is about to clear
+  const hy = VH * 0.79;
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  const glow = c.createRadialGradient(MID, hy, 8, MID, hy, VW * 0.42);
+  glow.addColorStop(0, 'rgba(255,226,168,.85)');
+  glow.addColorStop(0.22, 'rgba(255,170,90,.30)');
+  glow.addColorStop(1, 'rgba(255,150,80,0)');
+  c.fillStyle = glow; c.fillRect(0, 0, VW, VH);
+  c.restore();
+  c.save();
+  c.beginPath(); c.arc(MID, hy + 12, 74, 0, TAU);
+  c.fillStyle = '#fff0cc'; c.fill();
+  c.restore();
+
+  // aurora, three ribbons, in frost and gold rather than dusty pink
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  const ribbons = [['#6fd8ff', 0.20, 118, 1.0], ['#a9f0d0', 0.14, 176, 1.7], ['#ffd166', 0.10, 232, 2.4]];
+  ribbons.forEach(([col, a, baseY, sp], k) => {
+    c.beginPath();
+    c.moveTo(-40, baseY);
+    for (let x = -40; x <= VW + 40; x += 40) {
+      c.lineTo(x, baseY + Math.sin(x * 0.006 + t * 0.22 * sp + k) * 34
+        + Math.sin(x * 0.013 + t * 0.15) * 14);
     }
-    c.restore();
-  } else {
+    c.lineTo(VW + 40, baseY - 150); c.lineTo(-40, baseY - 150); c.closePath();
+    const gg = c.createLinearGradient(0, baseY - 150, 0, baseY + 30);
+    gg.addColorStop(0, 'rgba(255,255,255,0)');
+    gg.addColorStop(1, col);
+    c.globalAlpha = a + Math.sin(t * 0.6 + k) * 0.03;
+    c.fillStyle = gg; c.fill();
+  });
+  c.restore();
+
+  // the far shore, and the snow in front of it taking the light
+  c.save();
+  c.beginPath();
+  c.moveTo(0, VH);
+  c.lineTo(0, hy + 26);
+  c.quadraticCurveTo(VW * 0.26, hy + 4, VW * 0.5, hy + 20);
+  c.quadraticCurveTo(VW * 0.76, hy + 36, VW, hy + 10);
+  c.lineTo(VW, VH); c.closePath();
+  const bank = c.createLinearGradient(0, hy, 0, VH);
+  bank.addColorStop(0, '#ffe9c8');
+  bank.addColorStop(0.5, '#e6d6e8');
+  bank.addColorStop(1, '#bcc6e4');
+  c.fillStyle = bank; c.fill();
+  c.restore();
+
+  // a few motes coming up rather than snow coming down
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 40; i++) {
+    const sx = ((i * 173) % 1000) / 1000 * VW;
+    const sy = VH - ((t * 14 + i * 47) % (VH * 0.8));
+    c.globalAlpha = 0.10 + 0.10 * Math.sin(t + i);
+    c.fillStyle = '#ffe6b8';
+    c.beginPath(); c.arc(sx, sy, 1.6 + (i % 3), 0, TAU); c.fill();
+  }
+  c.restore();
+}
+
+function drawEnd(c, t, won) {
+  if (won) drawDawn(c, t);
+  else drawBackdrop(c, 0, t);
+  if (!won) {
     c.save(); c.fillStyle = 'rgba(6,12,24,.45)'; c.fillRect(0, 0, VW, VH); c.restore();
   }
   const run0 = G.run;
@@ -8098,8 +8224,11 @@ function drawEnd(c, t, won) {
     const drop = shown.length ? 20 + shown.length * 21 : 0;
     txt(c, 'THE CARAVAN THAT MADE IT', MID, 232 + drop, 13, '#7e97b8', 'center', 't');
     const all = [run0.leader].concat(run0.deck);
-    const per = Math.min(all.length, Math.max(6, Math.floor((VW - SAFE * 2) / 84)));
-    const cw3 = 74, chh3 = 104, gap3 = 8;
+    /* Ten cards squeezed to 74 units each is ten cards nobody can read, on the
+       one screen that is supposed to be a lap of honour. Eight to a row at 96
+       and let it wrap: two legible rows beat one illegible one. */
+    const cw3 = 96, chh3 = 134, gap3 = 10;
+    const per = Math.min(all.length, Math.max(5, Math.floor((VW - SAFE * 2) / (cw3 + gap3))));
     const rows = Math.ceil(all.length / per);
     all.forEach((card, i) => {
       const row = Math.floor(i / per), col = i % per;
@@ -8118,20 +8247,49 @@ function drawEnd(c, t, won) {
 
   // what this caravan actually did, before it is forgotten
   const run = G.run;
-  const cells = run ? [
-    ['ZONES', (won ? ZONES.length : run.zone + 1) + ' / ' + ZONES.length],
-    ['FIGHTS WON', run.fights || 0],
-    ['FOES FELLED', run.kills || 0],
-    ['BEST TURN', (run.bestTurn || 0) + ' in one'],
-    ['CLEAN KILLS', run.clean || 0],
-    ['CARAVAN', run.deck.length + ' cards'],
-    ['BELLS RUNG', (run.bells || []).length],
-    ['SCRIP LEFT', run.gold],
-    ['WINTER', run.winterPts || 0],
-  ] : [['RUNS', G.meta.runs], ['CROSSINGS', G.meta.wins], ['FURTHEST', (G.meta.best || 0) + 1]];
+  /* A CROSSING DOES NOT REPORT ZEROES. The stat row printed every cell whatever
+     it held, so a win could end on "0 in one · 0 clean kills · 0 bells rung" —
+     three quarters of a lap of honour spent listing things that did not happen.
+     Zones and the caravan always show, because those describe the crossing
+     rather than a tally; everything else earns its place by being non-zero. */
+  const all9 = run ? [
+    ['ZONES', (won ? ZONES.length : run.zone + 1) + ' / ' + ZONES.length, true],
+    ['FIGHTS WON', run.fights || 0, (run.fights || 0) > 0],
+    ['FOES FELLED', run.kills || 0, (run.kills || 0) > 0],
+    ['BEST TURN', (run.bestTurn || 0) + ' in one', (run.bestTurn || 0) > 0],
+    ['CLEAN KILLS', run.clean || 0, (run.clean || 0) > 0],
+    ['CARAVAN', run.deck.length + ' cards', true],
+    ['BELLS RUNG', (run.bells || []).length, (run.bells || []).length > 0],
+    ['SCRIP LEFT', run.gold, run.gold > 0],
+    ['WINTER', run.winterPts || 0, (run.winterPts || 0) > 0],
+  ] : null;
+  const cells = all9 ? all9.filter((r) => r[2] || !won).map((r) => [r[0], r[1]])
+    : [['RUNS', G.meta.runs], ['CROSSINGS', G.meta.wins], ['FURTHEST', (G.meta.best || 0) + 1]];
 
-  const perRow = 8, cw = Math.min(150, (VW - SAFE * 2) / 8), chh = 56;
+  const perRow = Math.min(8, Math.max(3, cells.length)), cw = Math.min(150, (VW - SAFE * 2) / 8), chh = 56;
   const statTop = won ? VH - 176 : 396;
+  /* THE SKY IS BRIGHT NOW, so the stat row needs a ground. The contrast check
+     caught it the moment the dawn went in: pale numbers over the sun disc read
+     1.0:1, white on cream. A soft dark plate under the row is the fix and it is
+     the better composition anyway — a lap of honour wants its tally on
+     something rather than floating on the light. */
+  if (won) {
+    const rows9 = Math.ceil(cells.length / perRow);
+    const plateW = Math.min(VW - SAFE * 2, perRow * cw + 40);
+    c.save();
+    c.fillStyle = 'rgba(10,18,36,.94)';   // opaque enough to BE a ground, not a tint
+    c.beginPath(); rr(c, MID - plateW / 2, statTop - 34, plateW, rows9 * chh + 26, 18);
+    c.fill();
+    /* And the same paint again as a plain rect, inset by the corner radius.
+       Identical pixels — it is inside the shape already — but the headless
+       raster only represents rectangles and circles exactly, so without this
+       the check measures the tally against the SKY and reports white on cream
+       at 1.0:1. Drawing the middle of a rounded plate as a rectangle is the
+       honest way to be visible to it; stamping rounded rects wholesale was
+       tried and made attribution worse (see DEAD ENDS). */
+    c.fillRect(MID - plateW / 2 + 18, statTop - 34, plateW - 36, rows9 * chh + 26);
+    c.restore();
+  }
   cells.forEach((cell, i) => {
     const col = i % perRow, row = Math.floor(i / perRow);
     const inRow = Math.min(perRow, cells.length - row * perRow);
