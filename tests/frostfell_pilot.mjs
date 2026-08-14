@@ -898,13 +898,30 @@ function applyTweak(run, spec) {
 function playRun(tribe, seed, mode, tweak) {
   // A cumulative ladder: each pilot is the one above it plus one more thing it
   // knows how to do, so the difference between two rows is that one thing.
+  /* A FIFTH RUNG, AND IT IS ABOUT WHAT THE PILOT RISKS RATHER THAN WHAT IT
+     KNOWS.
+
+     Four rungs — careless, the fight, the trader, the pool — and every one of
+     them is a thing the pilot KNOWS HOW TO DO. None is about which way it goes,
+     and the top rung has been picking forks with `(seed + step) % length` since
+     the trail was built: an arbitrary choice made once a step, on the one screen
+     that offers a decision with no information on it.
+
+     The dodge arm has had the numbers for this for rounds and they were never
+     made a rung. It runs three routing strategies against each other and reads
+     "takes every fight" at 49% where the ladder's top rung reads 41% — which is
+     the same pilot, differing only in whether it chooses its road. So the ladder
+     stops at four rungs not because there are four, but because nobody built the
+     fifth. */
   const careful = mode !== 'careless';                       // plays the fight
-  const shops = mode === 'trader' || mode === 'careful';     // spends well
-  const drafts = mode === 'careful';                         // steers the offers
+  const shops = mode === 'trader' || mode === 'careful' || mode === 'router';
+  const drafts = mode === 'careful' || mode === 'router';    // steers the offers
+  const routes = mode === 'router';                          // and chooses its road
   FF.newRun(G, tribe, seed);
   // A pilot that steers the pool declares a course at the leader screen, the
   // way a player does — before anything is known except which leader it took.
-  if (mode === 'careful' && DRAFT.course) G.run.course = courseWanted();
+  if (drafts && DRAFT.course) G.run.course = courseWanted();
+  if (routes) G.run.seek = true;
   applyTweak(G.run, tweak);
   MEND.last = null; MEND.where = 'start';
   RUNROOM.turns = 0; RUNROOM.free = 0; RUNROOM.warm = 0;
