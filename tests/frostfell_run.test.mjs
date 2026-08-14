@@ -1881,11 +1881,33 @@ section('which cards the win rate would miss');
       });
       const big = withOdds.filter((r) => r.sig >= z);
       console.log(`    in ODDS against the ${floor.toFixed(0)}% floor, which is the scale that works this low:`);
-      for (const r of withOdds.slice(0, 3)) {
-        console.log(`      ${r.id.padEnd(14)}${r.or.toFixed(2)}x  (${r.sig.toFixed(1)}σ)`);
+      /* EVERY CARD, not a podium. The first cut printed the top three and the
+         rarity tiers were hand-assigned years before this table existed, so the
+         only way to check one against the other is to have all of it. */
+      const RN = { 1: 'common', 2: 'uncommon', 3: 'rare' };
+      for (const r of withOdds) {
+        const d2 = FF.CARDS[r.id];
+        console.log(`      ${r.id.padEnd(14)}${r.or.toFixed(2).padStart(5)}x  ` +
+          `${r.sig.toFixed(1).padStart(4)}σ  ${(RN[d2 && d2.rare ? d2.rare : 1] || '?').padEnd(9)}` +
+          `${d2 && d2.type === 'unit' ? 'warden' : 'gear'}`);
       }
       console.log(`      best-to-worst spans ${(withOdds[0].or / Math.max(0.01, withOdds[withOdds.length - 1].or)).toFixed(1)}x · ` +
         `${big.length} of ${ids.length} clear ${z.toFixed(2)}σ on this scale`);
+      /* AND THE RARITY CHECK. A tier is a promise about how often a card shows
+         up and how good it is when it does; the odds column is the first
+         evidence anyone has had about the second half. */
+      const byTier = { 1: [], 2: [], 3: [] };
+      for (const r of withOdds) {
+        const d2 = FF.CARDS[r.id];
+        byTier[(d2 && d2.rare) || 1].push(r.or);
+      }
+      const med = (a) => { const b2 = a.slice().sort((x, y) => x - y); return b2.length ? b2[Math.floor(b2.length / 2)] : 0; };
+      console.log('    by the rarity somebody assigned by hand:');
+      for (const k of [1, 2, 3]) {
+        console.log(`      ${RN[k].padEnd(9)}${String(byTier[k].length).padStart(3)} cards · ` +
+          `median ${med(byTier[k]).toFixed(2)}x · ` +
+          `range ${Math.min.apply(null, byTier[k].concat([9])).toFixed(2)}–${Math.max.apply(null, byTier[k].concat([0])).toFixed(2)}x`);
+      }
     }
 
     ARMS.stamp('FF_CARDS=40', missed.length || spare.length

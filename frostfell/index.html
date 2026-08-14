@@ -416,7 +416,14 @@ def({ id: 'snowbeard', name: 'Snowbeard', type: 'unit', tribe: 'frost', hp: 16, 
   art: A('#8fa8c8', '#e8f2ff', { stance:'stand',tail:'none',mark:'tuft', skin:'fur',idle:'sway', shape: 'tall', ears: 'round', mouth: 'beard', acc: 'helm', accCol: '#5f7fa8' }),
   kw: { smack: 1, soak: 1 }, text: 'Soak. Smackback.' });
 
-def({ id: 'frostmite', name: 'Frostmite', type: 'unit', tribe: 'frost', hp: 4, atk: 1, cnt: 1, rare: 1,
+/* RARITY MEASURED RATHER THAN ASSIGNED, once. Handed to a locked six-card deck
+   Frostmite trebles its odds of crossing — 3.02x at 4.3 sigma, the best card in
+   the game and the only one besides Avalanche to clear the family bar over 57
+   tests. It was a COMMON, which means the draft weighting showed it five times
+   as often as the rares it beats. Promoted. Nothing else in the table clears
+   that bar, and re-tiering 57 cards on sub-bar evidence would be fitting noise
+   — see DESIGN.md for what sample would license the rest. */
+def({ id: 'frostmite', name: 'Frostmite', type: 'unit', tribe: 'frost', hp: 4, atk: 1, cnt: 1, rare: 3,
   art: A('#cfeaff', '#ffffff', { stance:'quad',tail:'whip',mark:'none', skin:'ice',idle:'shiver', shape: 'small', ears: 'antenna', mouth: 'flat', eyes: 'big' }),
   kw: {}, text: 'When it falls, Frost 2 on every foe.',
   hooks: { death: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'frost', 2)) } });
@@ -8186,12 +8193,74 @@ function drawDawn(c, t) {
   c.restore();
 }
 
+/* AND ITS OTHER HALF. A defeat was the Whitewood at 45% opacity — a zone you
+   have already walked, dimmed, and possibly not even the one that killed you.
+   The crossing got a dawn; this gets the hour before one. Everything is the
+   same shape as `drawDawn` and every colour is its opposite: the light is under
+   the horizon rather than over it, the aurora has gone out, the snow is coming
+   down instead of the motes going up, and the far shore is a wall rather than a
+   shore. Two halves of the same moment, drawn with the same care. */
+function drawDusk(c, t) {
+  const sky = c.createLinearGradient(0, 0, 0, VH);
+  sky.addColorStop(0, '#03060e');
+  sky.addColorStop(0.38, '#0a1224');
+  sky.addColorStop(0.7, '#16233c');
+  sky.addColorStop(0.88, '#233047');
+  sky.addColorStop(1, '#2c3850');
+  c.fillStyle = sky; c.fillRect(0, 0, VW, VH);
+
+  // the light that did not come up: a cold smear below the horizon line
+  const hy = VH * 0.74;
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  const glow = c.createRadialGradient(MID, hy + 90, 8, MID, hy + 90, VW * 0.34);
+  glow.addColorStop(0, 'rgba(90,130,190,.30)');
+  glow.addColorStop(1, 'rgba(60,90,140,0)');
+  c.fillStyle = glow; c.fillRect(0, 0, VW, VH);
+  c.restore();
+
+  // a wall of weather across the middle distance, three ridges deep
+  const ridges = [[0.62, '#0e1730', 1.0], [0.70, '#131e3c', 0.7], [0.78, '#1a2748', 0.45]];
+  ridges.forEach(([f, col, sp], k) => {
+    c.beginPath();
+    c.moveTo(0, VH);
+    c.lineTo(0, VH * f);
+    for (let x = 0; x <= VW; x += 60) {
+      c.lineTo(x, VH * f + Math.sin(x * 0.004 + k * 2.1 + t * 0.02 * sp) * 26
+        + Math.sin(x * 0.011 + k) * 11);
+    }
+    c.lineTo(VW, VH); c.closePath();
+    c.fillStyle = col; c.fill();
+  });
+
+  // the ground: no light on it, just a long grey drift
+  c.save();
+  c.beginPath();
+  c.moveTo(0, VH);
+  c.lineTo(0, hy + 58);
+  c.quadraticCurveTo(VW * 0.42, hy + 30, VW, hy + 66);
+  c.lineTo(VW, VH); c.closePath();
+  const bank = c.createLinearGradient(0, hy + 30, 0, VH);
+  bank.addColorStop(0, '#4a5878');
+  bank.addColorStop(1, '#2b3450');
+  c.fillStyle = bank; c.fill();
+  c.restore();
+
+  // snow, driving rather than drifting
+  c.save();
+  for (let i = 0; i < 90; i++) {
+    const sx = (((i * 191) % 1000) / 1000 * (VW + 200) + t * (26 + (i % 5) * 9)) % (VW + 200) - 100;
+    const sy = ((i * 271) % 1000) / 1000 * VH + ((t * (40 + (i % 7) * 14)) % VH);
+    c.globalAlpha = 0.10 + 0.16 * ((i % 4) / 4);
+    c.strokeStyle = '#c8d8f0'; c.lineWidth = 1.4;
+    c.beginPath(); c.moveTo(sx, sy % VH); c.lineTo(sx - 7, (sy % VH) + 13); c.stroke();
+  }
+  c.restore();
+}
+
 function drawEnd(c, t, won) {
   if (won) drawDawn(c, t);
-  else drawBackdrop(c, 0, t);
-  if (!won) {
-    c.save(); c.fillStyle = 'rgba(6,12,24,.45)'; c.fillRect(0, 0, VW, VH); c.restore();
-  }
+  else drawDusk(c, t);
   const run0 = G.run;
   const bob = Math.sin(t * 1.2) * 4;
   txt(c, won ? 'THE FELL IS CROSSED' : 'THE COLD TAKES YOU', MID, 150 + bob, 52, won ? '#ffe6a8' : '#c8dcf4', 'center', 'd');
@@ -8199,17 +8268,31 @@ function drawEnd(c, t, won) {
     MID, 196 + bob, 17, '#9fc0e4', 'center', 't');
 
   if (!won && run0) {
-    // who actually did it, drawn, because 'you died' is not an account
+    /* WHO ACTUALLY DID IT, DRAWN, because "you died" is not an account — and
+       drawn BEFORE the words, off a layout rather than a constant. A beast is
+       118 units tall and was pinned at y=300 with a label at 234 and a name at
+       344, so it covered its own caption at the top and its own name at the
+       bottom. Same class of bug as the shrine's snow cap, on the screen nobody
+       had ever photographed. */
     const k = run0.killedBy;
-    txt(c, k ? 'WHAT STOPPED YOU' : 'THE COLD ITSELF', MID, 234, 13, '#7e97b8', 'center', 't');
+    /* `drawCreature`'s y is the FEET, and a creature reaches about a quarter of
+       its own height above its nominal top once ears, horns and antennae are
+       counted — which is why the first fix still put a Frostwyrm's ears through
+       the subtitle. The block is laid out off a stated top edge instead. */
+    const kh = k ? (k.boss ? 104 : 88) : 0;
+    const ky = 254 + kh * 1.25;
     if (k) {
       c.save();
       c.globalAlpha = 0.5; c.fillStyle = '#0d1830';
-      c.beginPath(); c.ellipse(MID, 320, 54, 12, 0, 0, TAU); c.fill();
+      c.beginPath(); c.ellipse(MID, ky + kh * 0.20, 54, 12, 0, 0, TAU); c.fill();
       c.restore();
-      drawCreature(c, k.art, MID, 300, k.boss ? 118 : 96, { t, ph: 2, flip: true });
-      txt(c, k.name.toUpperCase(), MID, 344, 24, '#ffb0b8', 'center', 'd');
+      drawCreature(c, k.art, MID, ky, kh, { t, ph: 2, flip: true });
     }
+    txt(c, k ? 'WHAT STOPPED YOU' : 'THE COLD ITSELF', MID, 232, 13, '#7e97b8', 'center', 't');
+    /* +78 and not +30: `drawCreature`'s anchor sits low in the body rather
+       than at the feet, so a name hung 30 units under it lands on the belly.
+       Measured off a shot rather than guessed a second time. */
+    if (k) txt(c, k.name.toUpperCase(), MID, ky + 78, 24, '#ffb0b8', 'center', 'd');
   } else if (won && run0) {
     /* Anything the crossing earned, named, before the caravan is shown. A
        crossing that earns nothing new says so — that is the hook. */
@@ -8267,7 +8350,7 @@ function drawEnd(c, t, won) {
     : [['RUNS', G.meta.runs], ['CROSSINGS', G.meta.wins], ['FURTHEST', (G.meta.best || 0) + 1]];
 
   const perRow = Math.min(8, Math.max(3, cells.length)), cw = Math.min(150, (VW - SAFE * 2) / 8), chh = 56;
-  const statTop = won ? VH - 176 : 396;
+  const statTop = won ? VH - 176 : 540;   // clear of the portrait AND its name
   /* THE SKY IS BRIGHT NOW, so the stat row needs a ground. The contrast check
      caught it the moment the dawn went in: pale numbers over the sun disc read
      1.0:1, white on cream. A soft dark plate under the row is the fix and it is

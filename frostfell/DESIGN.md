@@ -212,6 +212,41 @@ mechanism rather than a number: it is the second telegraph, it is shaped like th
 first, and neither of the things that sank the earlier cuts — a stronger fell, a
 punished specialist — survived into the shipped one.
 
+### RULE — the scale matters across baselines, not against one
+
+The card table turned out to be flat only in points, so every finding in this
+file measured against a low baseline was re-read in odds: the lesson arm at a 9%
+floor, the whole one-at-a-time ablation, the dodge arm, the ladder.
+
+```
+                        points        odds        both at 210–750 an arm
+lesson, told once       +6            1.78x       1.9σ → 2.5σ paired
+ablation, deny          +7            1.93x       2.0σ → 2.6σ paired
+ablation, keepSlot      −3            0.65x       1.1σ → 1.4σ paired
+deny alone, deep       +10            2.52x       5.6σ → 7.2σ paired
+dodge, walks past       −8            0.71x       1.7σ → 2.2σ paired
+ladder, the fight      +17            3.55x       4.4σ → 5.7σ paired
+ladder, steering        −1            0.96x       0.2σ
+```
+
+**Not one conclusion changes**, and the reason is worth more than the exercise.
+Every one of these compares an arm against **the same control**. With a fixed
+baseline the odds ratio is monotonic in the arm's percentage, so the two scales
+rank identically and test the same null — only the magnitudes read differently.
+The card table was different in exactly the way that matters: it compared a **3%
+locked floor** against a 40% pool baseline, and a fixed point-difference means
+wildly different things at those two ends.
+
+One correction fell out of doing it. A naive odds σ is built from four counts
+with no pairing correction, so it is conservative by the same **1.29x** the
+points band was calibrated by — the third column above. Read raw, the lesson arm
+and the dodge arm both drop under 2σ; read with the same correction the file
+already applies to points, they clear. **A new scale needs the old calibration
+carried over, or it invents a disagreement.**
+
+So: **points against a fixed control, odds across different ones.** The careless
+floor's story has been told on the right scale for ten rounds after all.
+
 ### FINDING — the cards do differentiate, on the scale that works
 
 A flat removal table has two readings and only one of them is health. Taking a
@@ -876,6 +911,81 @@ used to be: `wrapText` and `fitText` go through `textSize()` now and every
 hardcoded step through `lineH(size, step)`. The help pages were a fixed grid with
 a hard five-line slice that cut the rules off mid-sentence, and are measured and
 flowed now. **The supported floor is a phone held sideways**: 375 CSS pixels.
+
+### FINDING — rarity carries no information, and one card was fixed
+
+The odds table is the first evidence anyone has had about what a card is worth,
+and the rarity tiers were assigned by hand years before it existed. Checked
+against each other, 630 runs an arm:
+
+```
+common    18 cards · median 1.05x · range 0.63–3.02x
+uncommon  31 cards · median 1.05x · range 0.54–2.18x
+rare       8 cards · median 1.05x · range 0.72–2.49x
+```
+
+**All three medians are identical.** The best card in the game — Frostmite at
+**3.02x, 4.3σ** — was a common, so the draft weighting showed it 5 times as
+often as the rares it beats; and 4 of the 8 rares sit below the overall median,
+Snowbeard and Bellowsbear at 0.72x.
+
+**One change shipped: Frostmite common → rare.** It and Avalanche are the only
+two cards of 57 that clear the 3.33σ family bar, and Avalanche is already rare.
+Nothing else clears, and re-tiering 57 cards on sub-bar evidence is fitting
+noise — the eight cards sitting between 2σ and the family bar would need about
+**2.8x the sample (1,750 runs an arm, ~100,000 runs, 45 minutes)** to be licensed,
+which is affordable and is the obvious next use of the arm.
+
+The finding underneath is not about one card: **rarity is currently a promise
+the game does not keep.** A tier says how often a card appears and implies how
+good it is; the second half is uncorrelated with the first.
+
+### RULE — the probe can be 2.6x faster and it is a refactor, not a flag
+
+"The next 3x is a different probe" was left as an assertion, so it was measured.
+Three copies of the same workload run concurrently on this machine:
+
+```
+1 process     20.0s
+3 concurrent  22.9s   → 3x the work in 1.14x the time = 2.6x
+4 concurrent  25.0s   → 4x the work in 1.25x the time = 3.2x
+```
+
+**The parallelism is there**, and a worker costs almost nothing to start: loading
+and evaluating the whole game in a fresh context is **12ms**. Every arm in the
+file is a tribe loop, so three tribes is the natural split.
+
+**The blocker is closures.** Arms pass tweaks as functions — `(run) => { run.course = co.id; }` — at about 15 call sites, and a function cannot cross a
+worker boundary. Splitting by tribe means the pilot and its counters (`SKILL`,
+`ROOM`, `DUCKS`, `LANE`, `TELL`, `MEND`, `DRAFT`, `TAUGHT`) move to a shared
+module with a serialisable arm descriptor, and the main thread merges counters
+rather than reading globals.
+
+That is a bounded refactor with a named cost, and it is **committed to rather
+than done here** — it is the whole of a round, not a corner of one. Written down
+so the next round starts from the design instead of the question.
+
+### RULE — the source split is retracted
+
+Three rounds ago this file recommended taking the screen renderer out of
+`index.html` first — "the cost is one more `<script>` block, perhaps 40 lines of
+plumbing". `index.html` is past **8,900 lines** now, 400 more than when that was
+written, and the recommendation is **withdrawn**.
+
+Two reasons, both concrete. The plumbing estimate was right for the wrong
+reason: top-level `const` in a classic script lives in the shared global lexical
+environment, so a second `<script>` would see `txt`, `panel`, `C` and the layout
+constants **for free** — but it also means the split buys no isolation, only a
+second place to look. And the headless loader every suite depends on extracts
+*the* inline script by pattern; two blocks means changing the one file that all
+5 suites and both tools load through, to gain navigability.
+
+The evidence says navigability is not the problem. **36 rounds and the bugs found
+by looking are layout and z-order** — a snow cap over a blurb, a caption pinned
+at a constant y, a portrait drawn after its own label. Not one of them was "the
+code could not be found". A split that costs a change to the shared loader to
+solve a problem nothing has reported is the wrong trade, and saying so is worth
+more than leaving a plan nobody executes at the top of the file.
 
 ### FINDING — what a family-bar sweep of the whole file would cost
 

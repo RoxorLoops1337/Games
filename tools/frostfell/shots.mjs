@@ -338,6 +338,17 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   await settle(page, 40);
   await shot(page, '24-victory', 'what the caravan did');
 
+  /* AND THE OTHER HALF OF THE SAME MOMENT. The walk photographed a crossing and
+     never once a defeat, so the loss screen went unlooked-at for thirty-five
+     rounds while it was a dimmed copy of a zone you may never have reached. */
+  await page.evaluate(() => {
+    const FF = window.FF;
+    FF.G.run.killedBy = { name: 'Frostwyrm', art: FF.FOES.frostwyrm.art, def: 'frostwyrm', boss: true };
+    FF.G.screen = 'gameover';
+  });
+  await settle(page, 40);
+  await shot(page, '25-defeat', 'and what stopped a run that did not');
+
   await browser.close();
   console.log(`\n${shots.length} shots in ${OUT}`);
 })().catch((e) => {
