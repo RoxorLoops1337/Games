@@ -24,7 +24,7 @@ export function mkCtx(log) {
      26px text — which is why nothing ever caught the phone. Width scales with
      the size for the same reason: a wrap computed against a constant 7px a
      character cannot notice that the text floor made every line wider. */
-  const st = { size: 14, face: 't', align: 'center', fill: '#000', alpha: 1 };
+  const st = { size: 14, face: 't', align: 'center', fill: '#000', stroke: '#000', alpha: 1 };
   /* Cards, creatures and half the juice draw inside a translated, scaled
      context, so the coordinates a naive stub records are card-local: four cards
      in a row all report their rules text at the same x. Anything reasoning
@@ -53,8 +53,18 @@ export function mkCtx(log) {
       if (k === 'measureText') return (s) => ({ width: String(s).length * st.size * 0.5 });
       if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       if (k === 'canvas') return { width: 1280, height: 720 };
-      if (k === 'save') return () => { stack.push(m.slice()); };
-      if (k === 'restore') return () => { if (stack.length) m = stack.pop(); };
+      /* save/restore has to carry the STYLE as well as the transform. It did
+         not, and the consequence was invisible and total: one `globalAlpha =
+         0.35` anywhere in a frame stayed 0.35 for every draw after it, so the
+         contrast check — which skips deliberately faded text — skipped almost
+         everything. Thirteen of fifteen strings on the title screen were never
+         looked at. */
+      if (k === 'save') return () => { stack.push([m.slice(), st.fill, st.alpha, st.size, st.align, st.face]); };
+      if (k === 'restore') return () => {
+        if (!stack.length) return;
+        const p = stack.pop();
+        m = p[0]; st.fill = p[1]; st.alpha = p[2]; st.size = p[3]; st.align = p[4]; st.face = p[5];
+      };
       if (k === 'translate') return (x, y) => { m = mul([1, 0, 0, 1, x, y]); };
       if (k === 'scale') return (x, y) => { m = mul([x, 0, 0, y, 0, 0]); };
       if (k === 'rotate') return (a) => { m = mul([Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0]); };
@@ -88,8 +98,11 @@ export function mkCtx(log) {
             [Math.min(p0[0], p1[0]), Math.min(p0[1], p1[1]), Math.max(p0[0], p1[0]), Math.max(p0[1], p1[1])]]);
         };
       }
-      if (log && (k === 'strokeText' || k === 'stroke')) {
-        return (...a) => { log.push([k, ...a]); };
+      if (log && k === 'strokeText') {
+        return (s2, x, y) => { log.push(['strokeText', s2, x, y, st.stroke]); };
+      }
+      if (log && k === 'stroke') {
+        return (...a) => { log.push(['stroke', ...a]); };
       }
       return noop;
     },
@@ -100,6 +113,7 @@ export function mkCtx(log) {
         st.face = /Frostcut/.test(String(v)) ? 'd' : 't';
       } else if (k === 'textAlign') st.align = v;
       else if (k === 'fillStyle') st.fill = typeof v === 'string' ? v : '#888';
+      else if (k === 'strokeStyle') st.stroke = typeof v === 'string' ? v : '#000';
       else if (k === 'globalAlpha') st.alpha = v;
       return true;
     },

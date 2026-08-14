@@ -107,11 +107,16 @@ function itemTarget(card) {
    middle row sits on the bottom one, the limit is real and now proven rather
    than asserted. If it climbs toward the top one, careless has been the wrong
    floor for five rounds and this is the right one. */
-const TAUGHT = { on: false, always: false };
+const TAUGHT = { on: false, always: false, room: false };
 
 function botTurn() {
   const b = G.battle;
   if (TAUGHT.on && b && !b.over && (TAUGHT.always || (G.run && (G.run.taught | 0) > 0))) denySchemes();
+  /* And the same for the OTHER lesson: a pilot that keeps a slot back once the
+     cold has got in and the game has said why. Same shape, different rule —
+     which is the only way to find out whether what is worth eleven points is
+     being taught, or the particular thing being taught. */
+  const heedRoom = TAUGHT.room && (TAUGHT.always || (G.run && (G.run.taughtRoom | 0) > 0));
   /* The room table only ever watched the careful pilot, so the one question
      item 3 asks — what does a beginner's board actually look like — had no
      answer in the output. Same reading, taken on the careless line. */
@@ -121,7 +126,9 @@ function botTurn() {
     CROOM.turns++;
   }
   const ui = b.hand.findIndex((c) => c.type === 'unit');
-  if (ui >= 0) {
+  // told to keep room: do not fill the last slot unless the line is nearly gone
+  const lastOne = FF.freeSlots(G, 'p').length <= FF.ROOM_NEEDED;
+  if (ui >= 0 && !(heedRoom && lastOne && FF.playerUnits(G).length >= 2)) {
     const slot = bestSlot();
     if (slot && FF.playCard(G, ui, slot)) return;
   }
@@ -729,9 +736,31 @@ function playRun(tribe, seed, mode, tweak) {
       /* Two arms that differ in one thing only: what they do at a fork that has
          a fight on one side of it. Everything else about the pilot is the same,
          so the gap between them is the price of walking past a fight. */
-      if (step.length > 1 && (G.run.dodge || G.run.seek)) {
+      if (step.length > 1 && (G.run.dodge || G.run.seek || G.run.duckHurt)) {
         const fighty = (n) => n.kind === 'fight' || n.kind === 'elite' || n.kind === 'boss';
-        const want = step.findIndex((n) => (G.run.dodge ? !fighty(n) : fighty(n)));
+        /* A THIRD ARM, because the first two cannot price a situational choice.
+
+           The quiet road — a camp reached by walking past a fight mends the
+           whole line — shipped unmeasured, and the note said why: a pilot that
+           ducks EVERYTHING never arrives at a fork hurt, so it never gets to
+           want the mend. The fix is the same one that priced the lesson. This
+           pilot takes every fight it is offered until the caravan is actually
+           hurt, and then takes the quiet road if the quiet road leads to a
+           camp. If that is worth nothing, the quiet road is a sentence attached
+           to nothing and should be said so. */
+        let want;
+        if (G.run.duckHurt) {
+          const line = G.run.deck.concat([G.run.leader]).filter((cd) => cd.type === 'unit');
+          const wounded = line.reduce((n, cd) => n + (cd.dmg || 0), 0);
+          const pool = line.reduce((n, cd) => n + (cd.hp || 0), 0) || 1;
+          const sore = wounded / pool > 0.22;
+          want = sore
+            ? step.findIndex((n) => n.kind === 'camp')
+            : step.findIndex(fighty);
+          if (want < 0) want = step.findIndex(fighty);
+        } else {
+          want = step.findIndex((n) => (G.run.dodge ? !fighty(n) : fighty(n)));
+        }
         if (want >= 0) idx = want;
       }
       FF.enterNode(G, idx);
@@ -798,6 +827,23 @@ function playRun(tribe, seed, mode, tweak) {
          be split by what bought them instead of guessed at. It is a property of
          the PILOT, not the game — nothing in index.html knows about it. */
       const can = (w) => !(G.run.noBuy && G.run.noBuy[w]);
+      /* AND THE ARM RUN THE OTHER WAY. Removing one ware from a rich pilot
+         found the charms; it left eighteen points unexplained and the note
+         called them "permanent power compounding", which is a phrase and not a
+         finding. So: give a POOR pilot exactly one ware, free, and see which
+         single thing closes the most of the gap. Free means the scrip for that
+         purchase appears and nothing else does. */
+      const gift = (w, price) => {
+        if (G.run.freeWare === w && G.run.gold < price) G.run.gold = price;
+      };
+      gift('bell', s.bell ? s.bell.price : 0);
+      gift('heal', s.heal.price);
+      gift('temper', s.temper ? s.temper.price : 0);
+      gift('burn', s.burn ? s.burn.price : 0);
+      gift('sigil', s.sigil ? s.sigil.price : 0);
+      gift('charm', s.charms.length ? s.charms[0].price : 0);
+      gift('meal', FF.mealPrice(G.run));
+      gift('card', s.cards.length ? Math.min(...s.cards.map((cc) => cc.price)) : 0);
       /* A careful shopper spends on what does not make the deck bigger. That
          is not a style preference: with money buying only cards, "everything
          free" measured WORSE than penniless, because every purchase was one
@@ -1151,6 +1197,21 @@ section('does money change anything');
       console.log(`      no ${w.padEnd(8)} ${bar(pct)} ${String(pct + '%').padStart(4)}  ` +
         (drop > 0 ? `−${drop} of the ${rich.pct - normal.pct}` : 'no cost'));
     }
+    /* And the same question from the other end: a penniless pilot handed one
+       ware for nothing. If one of them closes most of the gap it is that ware;
+       if they all close a little, the gap is the economy and not a ware, and
+       the word "compounding" can be retired. */
+    const up = [];
+    for (const w of ['meal', 'charm', 'temper', 'bell', 'card', 'heal', 'sigil', 'burn']) {
+      const arm = sweepM((run) => { run.gold = 0; run.prices = 40; run.freeWare = w; });
+      up.push([w, arm.pct, arm.pct - broke.pct]);
+    }
+    up.sort((a2, z) => z[2] - a2[2]);
+    console.log(`    and what closes it from the other end (penniless, plus one free ware, vs ${broke.pct}%):`);
+    for (const [w, pct, gain] of up) {
+      console.log(`      free ${w.padEnd(7)} ${bar(pct)} ${String(pct + '%').padStart(4)}  ` +
+        (gain > 0 ? `+${gain} of the ${normal.pct - broke.pct}` : String(gain)));
+    }
   }
   /* And the course on its own, handed over rather than bought — so the lever
      is measured apart from whether the pilot knows when to pull it. */
@@ -1244,6 +1305,7 @@ section('does walking past a fight pay');
   };
   const seek = arm((run) => { run.seek = true; });
   const dodge = arm((run) => { run.dodge = true; });
+  const sore = arm((run) => { run.duckHurt = true; });
   const bar2 = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
   const band = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, seek.runs))).toFixed(1);
   const row = (label, a) => {
@@ -1254,7 +1316,9 @@ section('does walking past a fight pay');
   };
   row('takes every fight', seek);
   row('walks past what it can', dodge);
-  console.log(`    → walking past a fight is worth ${dodge.pct - seek.pct} points (±${band} is one standard deviation)`);
+  row('ducks to a camp when hurt', sore);
+  console.log(`    → walking past a fight is worth ${dodge.pct - seek.pct} points; ` +
+    `ducking to a camp only when hurt is worth ${sore.pct - seek.pct} (±${band} is one standard deviation)`);
   /* The bar. Dodging may be survivable — a run that ducks two hard packs and
      scrapes home is a story — but it may not be the BETTER line, because a
      trail that pays you to avoid it is a trail nobody has a reason to walk. */
@@ -1386,8 +1450,13 @@ section('what being told is worth');
      is in the first zone, on a run that has never denied a scheme, twice. */
   const tribes = ['hearth', 'frost', 'scrap'];
   const N = Number(process.env.FF_RUNS || DEFAULT_N);
-  const sweepT = (on, always) => {
-    TAUGHT.on = on; TAUGHT.always = always;
+  const sweepT = (o) => {
+    o = o || {};
+    TAUGHT.on = !!o.on; TAUGHT.always = !!o.always; TAUGHT.room = !!o.room;
+    const L = FF.LESSON, keep = { times: L.times, zone: L.zone };
+    if (o.times !== undefined) L.times = o.times;
+    if (o.zone !== undefined) L.zone = o.zone;
+
     let wins = 0, runs = 0, reached = 0;
     for (const tribe of tribes) {
       for (let i = 0; i < N; i++) {
@@ -1397,12 +1466,13 @@ section('what being told is worth');
         if (st.zone >= 1) reached++;
       }
     }
-    TAUGHT.on = false; TAUGHT.always = false;
+    TAUGHT.on = false; TAUGHT.always = false; TAUGHT.room = false;
+    L.times = keep.times; L.zone = keep.zone;
     return { pct: Math.round((wins / Math.max(1, runs)) * 100), reached, runs };
   };
-  const blind = sweepT(false, false);
-  const told = sweepT(true, false);
-  const knowing = sweepT(true, true);
+  const blind = sweepT({});
+  const told = sweepT({ on: true });
+  const knowing = sweepT({ on: true, always: true });
   const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(24);
   const band = (100 * Math.sqrt(0.1 * 0.9 / Math.max(1, blind.runs))).toFixed(1);
   console.log('  · what being told is worth');
@@ -1414,6 +1484,28 @@ section('what being told is worth');
     `${knowing.reached}/${knowing.runs}`);
   console.log(`    → knowing is worth ${knowing.pct - blind.pct} points; being told carries ` +
     `${told.pct - blind.pct} of them (±${band} is one standard deviation)`);
+
+  /* WHAT DOSE, AND IS THERE A SECOND THING WORTH TEACHING.
+
+     Twice, in the first zone, about schemes: three numbers nobody had ever
+     turned. FF_LESSON turns this section up on its own the way FF_ABLATE does
+     the habits — it is eight arms, so it is not run on an ordinary check. */
+  const LN = Number(process.env.FF_LESSON || 0);
+  if (LN) {
+    const rows = [
+      ['told once (ships)',    { on: true, times: 1 }],
+      ['told twice',           { on: true, times: 2 }],
+      ['told four times',      { on: true, times: 4 }],
+      ['told in every zone',   { on: true, times: 2, zone: 9 }],
+    ];
+    console.log('    what the dose is worth (careless, against ' + blind.pct + '% never told):');
+    for (const [name, o] of rows) {
+      const arm = sweepT(o);
+      const d = arm.pct - blind.pct;
+      console.log(`      ${name.padEnd(20)}${bar(arm.pct)} ${String(arm.pct + '%').padStart(4)}  ` +
+        (d > 0 ? '+' + d : String(d)));
+    }
+  }
   ok(knowing.pct >= blind.pct - 5, 'knowing how to deny a scheme is not a handicap');
   ok(true, 'what being told is worth is a report, not a gate');
 }
