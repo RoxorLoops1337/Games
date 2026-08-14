@@ -50,8 +50,12 @@ const WORKER = new URL('./frostfell_worker.mjs', import.meta.url);
  *
  *  Falls back to this thread when the pool is off or there is only one job. */
 export async function runJobs(jobs) {
-  if (JOBS <= 1 || jobs.length <= 1) return jobs.map(inline);
   const cfg = config();
+  if (JOBS <= 1 || jobs.length <= 1) {
+    const out0 = jobs.map((j) => inline(Object.assign({ config: cfg }, j)));
+    applyConfig(cfg);          // a per-job config must not leak into the caller
+    return out0;
+  }
   const out = new Array(jobs.length);
   let next = 0, done = 0;
   const n = Math.min(JOBS, jobs.length);
@@ -66,7 +70,12 @@ export async function runJobs(jobs) {
         return;
       }
       const id = next++;
-      w.postMessage(Object.assign({ id, config: cfg }, jobs[id]));
+      /* A JOB MAY CARRY ITS OWN CONFIG, and the ablation arm is why: it toggles
+         one SKILL flag off, plays an arm, and toggles it back. Batching those
+         into one call is the whole point — otherwise each two-arm comparison
+         spawns and drains its own pool — so the config has to travel per job
+         rather than per call. A job without one inherits the caller's. */
+      w.postMessage(Object.assign({ config: cfg }, jobs[id], { id }));
     };
     for (let i = 0; i < n; i++) {
       const w = new Worker(WORKER);
@@ -90,7 +99,7 @@ export async function runJobs(jobs) {
 }
 
 function inline(job) {
-  applyConfig(job.config);
+  applyConfig(job.config || null);
   let wins = 0, runs = 0;
   const stats = [];
   for (const tribe of job.tribes) {

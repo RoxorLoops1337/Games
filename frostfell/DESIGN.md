@@ -64,6 +64,52 @@ Everything below came out of the probe or the shot walk and is kept because it
 changes what you would do next. Dead ends are named as such, so nobody drives
 down one twice.
 
+### FINDING — which entries the unlock bug actually reached, counted rather than waved at
+
+`topic: unlock-audit`
+
+Last round found that unlocks accumulated across runs, so early arms played a
+smaller card pool than late ones, and one table got "not comparable" written next
+to it. There are **38** entries. The right question is which of them the bug could
+physically reach, and that is not a judgement call — it is a curve.
+
+Reconstructing the pre-fix behaviour (clear `G.meta.found`, then play the
+careless arm and watch it refill):
+
+```
+after   1 careless run  :  3/12 unlocked
+after   4 runs          :  6/12
+after  16 runs          :  8/12
+after  79 runs          :  9/12
+after 128 runs          : 12/12   ← saturated, and it never moves again
+```
+
+**The pool stops changing after 128 runs of one process.** Every section of the
+probe runs in file order, and the ladder is the first: at `FF_RUNS=70` it plays
+840 runs before section two begins, at the default `FF_RUNS=30` it plays 360. So
+**every arm outside the ladder started at run 361 or later and was measured on a
+fully saturated pool.**
+
+**1 of 38 entries was affected, and it is the ladder** — already rewritten, and
+re-measured on the fixed footing. The reach of the bug *inside* the ladder is
+also exact: at `FF_RUNS=70` runs 1–128 of the careless arm's 210 (61% of it) and
+nothing else; at `FF_RUNS=30` the whole careless arm plus the first 38 runs of
+the fight arm. That is why the careless rung moved most when it was fixed (7% →
+10%) and the trader and steering rungs barely moved at all.
+
+Two entries **cite** ladder rungs rather than measuring their own
+([the trader's rung](#finding--the-traders-rung-never-fell) and
+[the fight is one decision](#finding--the-fight-is-one-decision-and-some-decoration)).
+Both survive, for the same reason: each is about a *rung* the fix moved by 1–2
+points, against effects of 13–18 points, and both already say to read the total
+rather than the rungs.
+
+**The generalisable part is the shape of the check, not the answer.** A bug in
+accumulated state has a reach that can be measured — how many runs until it stops
+mattering — and once you have that number, "which findings are affected" is
+arithmetic over the section order rather than a re-run of everything. Re-running
+all 38 would have cost hours and found one.
+
 ### FINDING — the ladder, and which of its numbers is the one being defended
 
 `topic: ladder`
@@ -92,7 +138,14 @@ anything.
 | | what it promises | target |
 |---|---|---|
 | **the careless floor** | a beginner crosses sometimes | **8–12%** |
-| **the ladder total** | skill is worth something | **≥ 28 points** |
+| **the ladder total** | skill is worth something | **26–32 points** |
+
+**The total's target was set from one reading and the very next measurement
+missed it.** It was written as "≥ 28" off a single 28-point ladder; the next three
+measurements of near-identical builds read **30, 28 and 27**. A target derived
+from n=1 is not a target, it is that one number wearing a promise, and it would
+have had the next round "fixing" a one-point move that is pure spread. The range
+above is the observed spread of the same instrument on the same footing.
 
 They are different guarantees and they can move in opposite directions, so both
 are quoted every round or neither is. The three aura cards are exactly that case,
@@ -103,6 +156,9 @@ measured on one footing at `FF_RUNS=70`:
 | no new cards | 8% | 26% | 39% | 38% | **30** |
 | the three always-on | **10%** | 19% | 37% | 38% | **28** |
 | + the two conditional | 9% | 22% | 37% | 34% | **25** |
+
+(Those were taken with `SKILL.shelter` on, since deleted; the shipped build now
+reads **10 / 19 / 38 / 37 = 27**, a one-point move inside the spread.)
 
 **The three cards raise the beginner's floor by two points and cost the total
 two.** That is a real trade and it is the right side of it: a card that helps a
@@ -326,49 +382,54 @@ carried over, or it invents a disagreement.**
 So: **points against a fixed control, odds across different ones.** The careless
 floor's story has been told on the right scale for ten rounds after all.
 
-### RULE — three cards rewrite a rule; two more were built, taught and cut
+### FINDING — the aura idea did not work, measured against a named control group
 
 `topic: auras`
 
 Fifty-six of fifty-seven cards measured indistinguishable from the pool median.
-Two rounds read that as a *tiering* problem. It is a **shape** problem: every card
-in the pool was built out of stats, keywords or per-unit hooks, and **all three
-are local**. A card whose whole effect lands on one body cannot change how the
-other five are played.
+The diagnosis was that every card was stats, keywords or a per-unit hook — **all
+three local** — so nothing you pick up changes how you play the other five bodies.
+The prescription was an **aura**: a global rule hung off a living body, priced by
+the slot it takes and the risk of losing the rule when the body falls.
 
-Three cards now hang a **global** rule off a living body, each read at exactly one
-site, and none carrying bigger numbers than an ordinary card of its tier:
+Three shipped: **Coldbearer** (a packed line warms anyway, and it takes Frost 2 a
+turn for it), **Backdrift** (the back column burns 2 and the front burns 1), and
+**Grudgehorn** (keeps its Spice for the rest of the run; falling empties the bank).
 
-| card | rewrites | charges |
-|---|---|---|
-| Coldbearer | a packed line warms anyway | takes Frost **2** a turn, forever, while packed |
-| Backdrift | back column burns 2, front burns 1 | re-prices all **6** slots |
-| Grudgehorn | keeps its Spice for the rest of the **run** | falling empties the bank |
+**The prescription did not work, and this is the measurement that says so.**
+Pricing all 60 cards demands 3.34σ per test and nothing ever clears — a sentence
+this file has written three times, and it is a statement about the sample, not the
+pool. So the question was asked properly instead: name the three auras and three
+ordinary wardens in advance, giving a **6-test family** with a 2.64σ bar, and run
+it at **360 runs an arm**:
 
-**Two more were built and are now deleted, and the deleting is the finding.**
-Dawnpiper inverted turn order; Trailmarshal put a body down without spending the
-turn. They were the two most interesting rules of the five. Both were held out of
-the offer for one round on the argument that the probe's pilot could not express
-the habits they need, so the arm was blind to their upside.
+```
+backdrift    1.49x  1.1σ   AURA          pikeling   1.16x  0.4σ   control
+coldbearer   0.92x  0.2σ   AURA          snowpup    1.00x  0.0σ   control
+grudgehorn   0.61x  1.1σ   AURA          shoveler   0.76x  0.6σ   control
+0 of 6 clear · best-to-worst spans 2.5x on a 4% floor
+```
 
-That argument was then tested rather than repeated. `SKILL.shelter` was added to
-keep an aura-carrier out of the front column, `SKILL.keepSlot` already held a slot
-back, and at `FF_RUNS=70` with both on:
+**The three auras straddle the three ordinary wardens.** Best of the six is an
+aura and worst of the six is an aura, and neither is distinguishable from a
+Snowpup. A rule that rewrites the room rule, the column clock or run-scoped
+memory buys you no more than an 8-health body with Longshot.
 
-| build | careless | + fight | + trader | + steering | ladder |
-|---|---|---|---|---|---|
-| the three always-on | 10% | 19% | 37% | 38% | **28** |
-| + the two conditional | 9% | 22% | 37% | 34% | **25** |
+**A trap worth recording, because it caught me first.** A shallower pass —
+all 60 cards, 120 runs an arm, against a 2% floor — put Backdrift **3rd of 60 at
+5.95x** and that reads like a triumph. It is the baseline effect this file
+already has a rule about: a lower floor inflates every odds ratio, and a smaller
+sample widens every tail. The honest comparison against a control group at three
+times the depth shrinks 5.95x to **1.49x, 1.1σ**.
 
-They were drafted and played — **50 and 156 times across 360 runs**, with the
-shelter firing **95** times — so they are not blind-spotted. They simply cost
-three points. **A card that needs a plan and still does not pay once the plan is
-taught is not an unlucky card, it is a bad one.** Deleted rather than shelved
-again, because a second round of `noPool` is a way of not deciding.
+**So: stop building auras.** Two of the five were already cut for costing the
+ladder three points; the surviving three are ordinary cards with interesting
+text, which is worth something to a player and nothing to the pool's flatness.
+The flat pool is still flat and the explanation is not "the cards were too local".
 
-**The general rule that survives them: an always-on rule is safe to put in a pool
-and a conditional one is not**, because the pool charges every card the same
-frequency cost whether or not the holder knows what to do with it.
+The three stay in — at `FF_RUNS=70` they read careless **10%** against 8% without
+them and 28 points against 30, so they raise the beginner's floor by two and cost
+the total two — but nothing here licenses five more.
 
 One thing found while building them, worth more than the cards: `def()` let a
 second card claim an id and **win silently**. One of the five was named
@@ -376,14 +437,36 @@ second card claim an id and **win silently**. One of the five was named
 overwrote it, the new card vanished from the game entirely, and the suite went
 green at 602 checks because every one happened to test the survivor. It throws now.
 
-**And one habit priced at zero, which is worth keeping as a number.** The FIRST
-version of `shelter` protected *any* body that could not survive the biggest swing
-on the board, and cost **7 points at the fight rung** (12/13/36/36 against
-12/20/40/39). That is the third time "careful placement" has cost this pilot
-points. Narrowed to aura-carriers only it fires 95 times in 360 runs and prices at
-**0**, which is the honest reading: protecting the thing carrying a rule is worth
-something, protecting fragile bodies in general is worth less than the swings you
-give up.
+### DEAD ENDS — the two cards and the habit built to rescue them
+
+`topic: shelter`
+
+**Dawnpiper** (your wardens tick before the foes) and **Trailmarshal** (a body onto
+the board without spending the turn) were the two most interesting rules of the
+five and both are deleted. They were held out of the offer for one round on the
+argument that the probe's pilot could not express the habits they need. That
+argument was then tested: with the habits on they were drafted and played **50 and
+156 times across 360 runs** and the ladder read **25 points against 28** without
+them. Not blind-spotted — just worse.
+
+**`SKILL.shelter`, the habit built to rescue Dawnpiper, is deleted too, and both
+its numbers are the point:**
+
+```
+shelter any body that cannot survive the biggest swing   −7 at the fight rung
+                                                          (12/13/36/36 vs 12/20/40/39)
+shelter aura-carriers only                                 0, firing 95 times in 360 runs
+```
+
+Neither version earns a row in the ablation table. A habit that prices at zero is
+not free — it is a switch every future pilot change has to reason around, implying
+forever that somebody should care.
+
+The wide number is the one to remember: **that is the third time "careful
+placement" has cost this pilot points.** The front column ticks twice, swings go
+to the front of a lane, and a pilot that keeps bodies out of the fighting is a
+pilot doing less fighting. That is no longer a quirk of one heuristic; it is what
+this board is.
 
 ### FINDING — the cards do differentiate, on the scale that works
 
@@ -969,7 +1052,7 @@ had: **a lower element pinned to a constant while an upper element moved.** Thre
 rounds, three screens, one bug. Everything on this screen is now derived from the
 element above it, and `statTop` from the portrait's actual bottom.
 
-### RULE — a horizontal sweep is never written by hand
+### RULE — a horizontal sweep is never written by hand, and there is no vertical one
 
 `topic: sweeps`
 
@@ -977,7 +1060,7 @@ element above it, and `statTop` from the portrait's actual bottom.
 multiple of `step` below VW and then runs a straight line to the corner, drawing
 a hard edge **VW % step** units in from the right. Whether it is visible depends
 on a number nobody looks at, so it had been written by hand four times and was
-broken in three of them:
+broken in three:
 
 ```
 aurora bands  step 64   clean at 1280 and 1600, 28-unit seam at 1180
@@ -988,14 +1071,25 @@ dusk ridges   step 60   found by eye at 1600 the round before
 
 **3 of 4 hand-written sweeps were broken at a width the game actually builds.**
 The ground one had been there since the first sky, at every width, and survived
-38 rounds of looking at screenshots — a 16-to-32-unit sliver
-at the extreme edge under the near scenery reads as framing.
+38 rounds of looking at screenshots because a 16-to-32-unit sliver at the extreme
+edge under the near scenery reads as framing.
 
-All six sweeps go through `sweepX(c, step, fn)`, which spans −step to VW+step and
-leaves the caller no arithmetic to get wrong, and the suite fails if the
-hand-written form comes back. The general form: **when a bug's visibility depends
-on an incidental number, fixing the instance is worth almost nothing — the next
-one will pick a different step.**
+All six go through `sweepX(c, step, fn)`, which spans −step to VW+step and leaves
+the caller no arithmetic to get wrong.
+
+**And the vertical case, which is the obvious next question: there are ZERO, and
+that is structural rather than lucky.** `VH` is a `const 720`; `VW` is recomputed
+from the window's aspect ratio on every resize. A sweep whose step does not
+divide VW is broken at *some* widths and clean at others — which is exactly how
+the ground seam hid for 38 rounds. A sweep whose step did not divide VH would be
+broken at every size on every device, permanently, and could not survive one
+round. The whole file contains **2** stepped loops: `sweepX` itself and one
+`i += 2` that is exact by construction. The suite asserts that count, so a third
+one has to justify itself.
+
+**The generalisable part: when a bug's visibility depends on an incidental
+number, fixing the instance is worth almost nothing** — the next one picks a
+different step. Make the arithmetic unreachable instead.
 
 ### FINDING — the shot walk is still the only thing that sees
 
@@ -1266,12 +1360,24 @@ three programs, not how well one program splits. `JOBS` defaults from this table
 **The ladder is pooled now too** — twelve jobs, four modes x three tribes, in one
 call so the threads stay fed instead of draining three times.
 
-**And it bought 3%, not a halving.** End to end at `FF_RUNS=70`: **76.9s pooled
-against 79.2s inline.** The ladder is 840 of the probe's many thousands of runs,
-so pooling it moves the total barely at all — the habit sweeps, the money sweeps
-and the course sweeps still run inline and are most of the wall clock. Anyone
-expecting the round's slowest measurement to halve should read that number
-first: the slowest measurement was never the ladder.
+**The ladder alone bought 3%, not a halving** — 76.9s pooled against 79.2s inline
+at `FF_RUNS=70`. The ladder is 840 runs of many thousands.
+
+**And the arms that were blamed for the rest are switched OFF by default.** The
+habit sweep (`FF_ABLATE`), the money sweep (`FF_MONEY`) and the course sweep
+(`FF_COURSE`) are all env-gated: pooling them changes nothing about the 77
+seconds a plain `FF_RUNS=70` costs, because none of them runs. That was a wrong
+diagnosis stated confidently, and the fix was to read the section list instead of
+reasoning about it. What IS inline and on by default is the duck arm (3 arms x N),
+the locked-deck arm (4 x N) and the told arm (3 x N). Those are pooled now — the
+duck arm's seek and dodge share one call while `sore` gets its own, because the
+three `DUCKS` counters are zeroed between them and a batched call would absorb
+all three arms' forks before the reset could run.
+
+**Which is the general rule for whether two arms may share a pool call:** not
+whether they read pilot state — that is solved, the counters come home — but
+whether anything MUTATES that state between them. A reset between two arms is a
+barrier, exactly like a barrier between two workflow stages.
 
 What the work was actually worth is below, and it is not speed.
 

@@ -2504,6 +2504,22 @@ section('the design record states numbers');
       .filter((m) => !/=\s*-step/.test(m));
     eq(hand.length, 0, 'no horizontal sweep is written by hand — they all go through sweepX');
     ok((src.match(/sweepX\(c,/g) || []).length >= 6, 'and the six that exist do use it');
+
+    /* AND THE VERTICAL CASE, which is asked every time this bug is discussed.
+
+       There is none, and the reason is structural rather than luck: `VH` is a
+       `const 720` while `VW` is recomputed from the window's aspect ratio on
+       every resize. A sweep whose step does not divide VW is broken at SOME
+       widths and clean at others, which is exactly how the ground seam hid for
+       38 rounds. A sweep whose step does not divide VH would be broken at every
+       size, on every device, permanently — it could not hide for one round.
+
+       So the check is simply that no OTHER stepped loop exists: two in the whole
+       file, `sweepX` itself and a two-iteration `i += 2` that is exact by
+       construction. Anything new that steps toward a boundary shows up here. */
+    const stepped = [...src.matchAll(/for \(let ([a-z]+) = [^;]*;[^;]*;\s*\1 \+= ([^)]+)\)/g)]
+      .filter((m) => m[2].trim() !== '1');
+    eq(stepped.length, 2, 'only sweepX and one exact two-step loop step toward a boundary');
   }
 
   const doc = readFileSync(new URL('../frostfell/DESIGN.md', import.meta.url), 'utf8');
