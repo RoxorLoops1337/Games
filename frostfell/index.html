@@ -2981,9 +2981,17 @@ const COURSE_PRICE = 55;
 const PASS_PAY = 20;
 const redealPrice = (run) => 18 + 14 * (run.redeals || 0);
 
+/* POOL_BAN exists for the probe alone and nothing in the game ever fills it.
+   Fifty-eight cards had been priced only by "every card is played", which is a
+   table about the POOL rather than about any card; taking one out of the offer
+   and running whole trails without it is the only way to ask what a card is
+   worth. Kept here rather than behind a flag in the probe because the pool is
+   built here, and a copy of this filter in the test would drift. */
+const POOL_BAN = new Set();
 function cardPool(run) {
   return Object.values(CARDS).filter((c) =>
-    !c.leader && !c.noPool && found(c.id) && (!c.tribe || c.tribe === run.tribe || rnd() < 0.5));
+    !c.leader && !c.noPool && !POOL_BAN.has(c.id)
+    && found(c.id) && (!c.tribe || c.tribe === run.tribe || rnd() < 0.5));
 }
 const charmPool = () => Object.keys(CHARMS).filter(found);
 /* What the caravan is already doing, in numbers a weighting can read. */
@@ -4843,6 +4851,78 @@ function statPip(c, x, y, r, col, val, icon) {
 /* Statuses run left to right along the slab's own strip. Four fit; a fifth is
    counted rather than drawn, because a unit you cannot see is worse than a
    status you cannot read. */
+/* THE TEN STATUS MARKS, WHICH WERE SPECIFIED AND NEVER DRAWN.
+
+   Every status has carried an `icon` since the first week and nothing ever read
+   it: the board draws a coloured square with the VALUE in it, which is right
+   mid-fight, and the help page drew a hardcoded letter "N" in every one of the
+   ten pips. So the statuses page — the screen whose whole job is teaching you
+   what these are — showed ten identical N's and had done for thirty rounds. */
+function statusGlyph(c, icon, x, y, s, col) {
+  c.save();
+  c.translate(x, y);
+  c.lineWidth = Math.max(1.6, s * 0.16);
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = col; c.fillStyle = col;
+  const P = (pts, close) => {
+    c.beginPath();
+    pts.forEach(([px, py], i) => (i ? c.lineTo(px * s, py * s) : c.moveTo(px * s, py * s)));
+    if (close) c.closePath();
+  };
+  if (icon === 'frost') {
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI;
+      c.beginPath();
+      c.moveTo(Math.cos(a) * s, Math.sin(a) * s);
+      c.lineTo(-Math.cos(a) * s, -Math.sin(a) * s);
+      c.stroke();
+    }
+  } else if (icon === 'ember') {
+    P([[0, -1], [0.62, -0.05], [0.36, 0.82], [-0.36, 0.82], [-0.62, -0.05]], true);
+    c.fill();
+  } else if (icon === 'shell') {
+    P([[-0.78, -0.72], [0.78, -0.72], [0.78, 0.1], [0, 0.92], [-0.78, 0.1]], true);
+    c.fill();
+  } else if (icon === 'spice') {
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI;
+      c.beginPath();
+      c.moveTo(Math.cos(a) * s * 0.95, Math.sin(a) * s * 0.95);
+      c.lineTo(-Math.cos(a) * s * 0.95, -Math.sin(a) * s * 0.95);
+      c.stroke();
+    }
+  } else if (icon === 'weak') {
+    P([[-0.8, -0.5], [0, 0.35], [0.8, -0.5]]); c.stroke();
+    P([[-0.8, 0.15], [0, 1.0], [0.8, 0.15]]); c.stroke();
+  } else if (icon === 'swift') {
+    P([[-0.8, 0.5], [0, -0.35], [0.8, 0.5]]); c.stroke();
+    P([[-0.8, -0.15], [0, -1.0], [0.8, -0.15]]); c.stroke();
+  } else if (icon === 'slow') {
+    P([[-0.7, -0.85], [0.7, -0.85], [-0.7, 0.85], [0.7, 0.85]], true);
+    c.fill();
+  } else if (icon === 'regen') {
+    P([[-0.28, -0.9], [0.28, -0.9], [0.28, -0.28], [0.9, -0.28],
+       [0.9, 0.28], [0.28, 0.28], [0.28, 0.9], [-0.28, 0.9],
+       [-0.28, 0.28], [-0.9, 0.28], [-0.9, -0.28], [-0.28, -0.28]], true);
+    c.fill();
+  } else if (icon === 'thorns') {
+    c.beginPath();
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU - Math.PI / 2, r = (i % 2 ? 0.42 : 1) * s;
+      const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      i ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    c.closePath(); c.fill();
+  } else if (icon === 'bounty') {
+    c.beginPath(); c.arc(0, 0, s * 0.9, 0, TAU); c.fill();
+    c.beginPath(); c.arc(0, 0, s * 0.48, 0, TAU);
+    c.globalCompositeOperation = 'destination-out'; c.fill();
+  } else {
+    c.beginPath(); c.arc(0, 0, s * 0.7, 0, TAU); c.fill();
+  }
+  c.restore();
+}
+
 function drawStatus(c, u, x, y, sz) {
   const on = STATUS_ORDER.filter((k) => u.st[k]);
   const room = 4;
@@ -7291,13 +7371,15 @@ function helpFlow(c, entries, o) {
 const HELP_ENTRY = {
   0: () => HELP_RULES.map((r) => ({ head: r[0], col: '#ffd166', body: r[1] })),
   1: () => HELP_BOARD.map((r) => ({ head: r[0], col: r[1], body: r[2] })),
-  2: () => STATUS_ORDER.map((k) => ({ head: STATUS[k].name, col: STATUS[k].col, body: STATUS[k].text, pip: 1 })),
+  2: () => STATUS_ORDER.map((k) => ({ head: STATUS[k].name, col: STATUS[k].col, body: STATUS[k].text, pip: 1, icon: STATUS[k].icon })),
   3: () => Object.keys(KEYWORD).map((k) => ({ head: KEYWORD[k].name, col: '#ffd166', body: KEYWORD[k].text })),
 };
 
 function drawHelp(c, t) {
   const page = UI.help | 0;
-  c.save(); c.fillStyle = 'rgba(6,10,20,.92)'; c.fillRect(0, 0, VW, VH); c.restore();
+  /* .92 still let the leader screen read through it — a help page you can see
+     the game behind is two screens at once. */
+  c.save(); c.fillStyle = 'rgba(6,10,20,.97)'; c.fillRect(0, 0, VW, VH); c.restore();
   txt(c, 'FROSTFELL', MID, 52, 34, '#eaf6ff', 'center', 'd');
   HELP_PAGES.forEach((p, i) => {
     const w = 190, x = MID - (HELP_PAGES.length * (w + 12)) / 2 + i * (w + 12) + 6;
@@ -7313,7 +7395,7 @@ function drawHelp(c, t) {
     if (b.e.pip) {
       c.beginPath(); rr(c, b.x, b.y - 16, 30, 30, 7);
       inked(c, b.e.col, 2.5, C.ink);
-      txt(c, 'N', b.x + 15, b.y, 18, '#12203a', 'center', 'd', 0);
+      statusGlyph(c, b.e.icon, b.x + 15, b.y - 1, 9, '#12203a');
     }
     txt(c, b.e.head.toUpperCase(), b.x + ind, b.y - 2, 19, b.e.col, 'left', 'd');
     b.lines.forEach((ln, k) =>
@@ -7793,22 +7875,31 @@ function drawEvent(c, t) {
   if (!ev) return;
   txt(c, ev.title, MID, 92, 36, '#eaf6ff', 'center', 'd');
   const lines = wrapText(c, ev.text, 17, 860);
-  lines.forEach((ln, i) => txt(c, ln, MID, 142 + i * lineH(17, 24), 17, '#bcd4f0', 'center', 't'));
+  /* THE ART GOES DOWN BEFORE THE WORDS GO ON, and it starts below them.
 
+     The shrine's snow cap was painted over the middle of "something in the dark
+     below it is still listening" — the art was pinned at a constant y and drawn
+     AFTER the blurb, so a two-line blurb ran into a stone that reaches 62 units
+     above its own centre. Both halves are fixed: the art is placed off the
+     bottom of the text rather than off a number, and it is drawn first so the
+     words win whatever happens. */
+  const blurbBottom = 142 + (lines.length - 1) * lineH(17, 24) + 12;
+  const artY = Math.max(252, blurbBottom + 86);
   c.save();
   c.globalAlpha = 0.35; c.fillStyle = '#0d1830';
-  c.beginPath(); c.ellipse(MID, 306, 96, 17, 0, 0, TAU); c.fill();
+  c.beginPath(); c.ellipse(MID, artY + 62, 96, 17, 0, 0, TAU); c.fill();
   c.restore();
   c.save();
-  c.translate(MID, 244); c.scale(1.35, 1.35);
+  c.translate(MID, artY); c.scale(1.35, 1.35);
   drawEventArt(c, ev.id, 0, 0, t);
   c.restore();
+  lines.forEach((ln, i) => txt(c, ln, MID, 142 + i * lineH(17, 24), 17, '#bcd4f0', 'center', 't'));
 
   const n = ev.opts.length;
   const w = 320, gap = 24;
   const total = n * w + (n - 1) * gap;
   ev.opts.forEach((o, i) => {
-    const x = MID - total / 2 + i * (w + gap), y = 356;
+    const x = MID - total / 2 + i * (w + gap), y = Math.max(356, artY + 118);
     const able = !o.can || o.can(g);
     const hovered = UI.hover && UI.hover.id === 'eventOpt' && UI.hover.data === i;
     panel(c, x, y - (hovered && able ? 6 : 0), w, 150, 14, able ? '#1d2c49' : '#2a3145', able ? '#7fb2e8' : '#4a5570');
@@ -8897,7 +8988,7 @@ window.FF = {
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
   hasRoom, isPacked, ROOM_NEEDED, LESSON,
-  deployWave, laneHeldBy, WAVE_TELL,
+  deployWave, laneHeldBy, WAVE_TELL, POOL_BAN,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
@@ -8907,7 +8998,7 @@ window.FF = {
   handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
-  drawCreature, drawBackdrop, drawItemIcon, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
+  drawCreature, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,
   setCtx: (c) => { ctx = c; initSnow(); },

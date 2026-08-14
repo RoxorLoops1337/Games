@@ -1,7 +1,7 @@
 {
  "FF_ABLATE=60": {
-  "said": "denying schemes +7 of the 19; next best filling the front of both lanes first +3",
-  "sample": 180
+  "said": "denying schemes +8 of the 17; next best filling the front of both lanes first +1",
+  "sample": 210
  },
  "FF_LESSON=1": {
   "said": "being told once is +6; every larger dose reads the same",
@@ -38,5 +38,9 @@
    "gap": 1.289,
    "inter": 1.286
   }
+ },
+ "FF_CARDS=40": {
+  "said": "no card of 57 clears the 3.33σ family bar either way; widest miss snowbomb -5.7",
+  "sample": 630
  }
 }

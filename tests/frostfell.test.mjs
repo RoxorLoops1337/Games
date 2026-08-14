@@ -5,6 +5,7 @@
 // model of it.
 //
 // Run: node tests/frostfell.test.mjs
+import { readFileSync } from 'node:fs';
 import { loadGame, mkCtx, withRun, place, bareBattle, dummy, ok, eq, done, section } from './frostfell_lib.mjs';
 
 const FF = loadGame();
@@ -2379,6 +2380,43 @@ section('the first fight is a lesson, not a wall');
   run.step = 4;
   const later = FFc.buildEncounter(FFc.G, 'fight');
   ok(later[0][0].scale > openScale, 'and they are weaker than what comes later, not just fewer');
+}
+
+/* ------------------------------------------------- the record's own rule -- */
+section('the design record states numbers');
+{
+  /* DESIGN.md replaced a 1000-line cap on the README with a quality rule —
+     "every entry states a number, and an entry that cannot state one gets cut"
+     — and for exactly one round nothing enforced it. A rule in prose that no
+     check reads is a wish; this is the check.
+
+     Every FINDING, RULE and DEAD ENDS heading must have a DIGIT somewhere in the
+     section under it — a digit and not a spelled-out word, because "cutting five
+     of six" reads as prose where "5 of 6" reads as a count, and the difference
+     is the whole point of the file. Prose about a measurement is not a
+     measurement. It caught one entry on its first run. */
+  const doc = readFileSync(new URL('../frostfell/DESIGN.md', import.meta.url), 'utf8');
+  const lines = doc.split('\n');
+  const heads = [];
+  let cur = null;
+  for (const ln of lines) {
+    if (/^###\s+(FINDING|RULE|DEAD ENDS)\b/.test(ln)) {
+      cur = { head: ln.replace(/^###\s+/, '').slice(0, 60), body: '' };
+      heads.push(cur);
+    } else if (/^##\s/.test(ln)) {
+      cur = null;
+    } else if (cur) {
+      cur.body += ln + '\n';
+    }
+  }
+  ok(heads.length >= 20, `the record has ${heads.length} labelled entries`);
+  const mute = heads.filter((h) => !/\d/.test(h.body)).map((h) => h.head);
+  eq(mute.join(' | '), '', 'every labelled entry in DESIGN.md states a number');
+  /* And the labels themselves: an entry that is none of the three is an essay
+     that slipped in under a heading. */
+  const stray = lines.filter((ln) => /^###\s/.test(ln) && !/^###\s+(FINDING|RULE|DEAD ENDS)\b/.test(ln))
+    .map((ln) => ln.slice(0, 50));
+  eq(stray.join(' | '), '', 'every section of DESIGN.md is labelled FINDING, RULE or DEAD ENDS');
 }
 
 done('frostfell');
