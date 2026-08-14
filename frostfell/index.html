@@ -592,68 +592,25 @@ def({ id: 'grudgehorn', name: 'Grudgehorn', type: 'unit', tribe: 'scrap', hp: 11
     death: (g, u) => { u.card.kept = 0; },
   } });
 
-/* HELD BACK FROM THE OFFER, AND THE NUMBER IS WHY.
+/* CUT. Dawnpiper (turn order) and Trailmarshal (deploy from the deck) were the
+   two most interesting rules of the five and they are gone, because the round
+   that was supposed to rescue them measured them instead.
 
-   Dawnpiper and Trailmarshal are built, tested and correct. They are also the
-   two of the five whose rule only pays if the player PLANS for it — protect a
-   glass body; keep a slot empty — and measured at FF_RUNS=70 that is not free:
+   The case for keeping them was that the probe's pilot could not express the
+   habits they need — protect the glass body, keep a slot open — so the arm was
+   blind to their upside. Both habits were then taught: `SKILL.shelter` keeps an
+   aura-carrier out of the front column and `SKILL.keepSlot` already held a slot
+   back. With those on, at FF_RUNS=70, the cards were drafted and played — 50
+   and 156 times across 360 runs, and the shelter fired 95 times — and the
+   ladder read 9/22/37/34 for 25 points against 30 without them.
 
-     57 cards, before this round      9 / 26 / 39 / 38   ladder 30
-     + all five new cards             7 / 20 / 37 / 34   ladder 27
-     + only the three passive ones    7 / 19 / 38 / 37   ladder 30
-
-   The three always-on rules cost the ladder NOTHING. These two cost three
-   points, and raising their stat lines first (Dawnpiper 4→7 hp, Trailmarshal
-   10/2→13/4) moved the reading by nothing at all, so it is not that they are
-   weak bodies. The mechanism is this round's own lesson about rarity: a rare
-   that a pilot cannot use still occupies a rare slot in a steered offer, and
-   displaces one that pays.
-
-   The probe's pilot never plans, so it cannot see the upside — but "my
-   instrument cannot see the good half" is not evidence the good half exists,
-   and shipping a measured three-point regression on that reasoning would be
-   shipping on faith. They stay out of the offer until the pilot can express the
-   two habits, at which point this flag comes off and the arm is re-run. The
-   card, the aura, the hooks and the suite coverage are all still here. */
-def({ noPool: true, id: 'dawnpiper', name: 'Dawnpiper', type: 'unit', tribe: 'hearth', hp: 7, atk: 1, cnt: 3, rare: 3,
-  art: A('#ffd9a8', '#fff2dc', { stance:'stand',tail:'none',mark:'tuft',arms:'long', idle:'sway', shape: 'small', ears: 'pointy', mouth: 'smile', eyes: 'big', acc: 'staff', accCol: '#c9b28a' }),
-  aura: { firstlight: 1 },
-  kw: {}, text: 'While it stands, your wardens tick before the foes.' });
-/* 7 health and not 4. Glass is the right cost for the largest rule in the game
-   and 4 was not glass, it was paper: 0 wins in 60 locked runs, the body dead
-   before the rule paid for itself once. Still the flimsiest thing in the pool. */
-
-/* The only card in the game that puts a body down without spending the turn,
-   and it charges for it in the currency the room rule already made expensive:
-   it does nothing at all unless you have kept a slot empty for it.
-
-   STATTED UP AFTER THE FIRST MEASUREMENT. At 10/2/4 it won 0 of 60 locked runs,
-   because the probe's pilot fills every slot it can and so the rule never fired
-   once. A rule the player has to plan for is fine; a card that is DEAD to a
-   player who does not plan is not, because the rule is then the only thing it
-   is, and it crowds a rare slot for everyone who has not had the idea yet. It
-   is an ordinary scrap body now, and the rule is the upside. */
-def({ noPool: true, id: 'trailmarshal', name: 'Trailmarshal', type: 'unit', tribe: 'scrap', hp: 13, atk: 4, cnt: 4, rare: 3,
-  art: A('#b8996b', '#e8d9b4', { stance:'stand',tail:'stub',mark:'brand',arms:'long', skin:'metal',idle:'paw', shape: 'tall', ears: 'none', mouth: 'grin', acc: 'satchel', accCol: '#ff9a3c' }),
-  kw: {}, text: 'When it triggers, the next warden in your deck marches out free — if a slot is open for it.',
-  hooks: {
-    trigger: (g, u) => {
-      const b = g.battle;
-      const slot = freeSlots(g, 'p')[0];
-      if (!slot || !b.draw.length) return;
-      const i = b.draw.findIndex((c) => c.type === 'unit');
-      if (i < 0) return;
-      const card = b.draw.splice(i, 1)[0];
-      const nu = mkUnit(card, 'p', slot.lane, slot.col);
-      nu.born = 0.0001;
-      b.units.push(nu);
-      for (const [k, n] of card.bonusDeploy) addStatus(g, nu, k, n);
-      const d2 = CARDS[card.def];
-      if (d2 && d2.hooks && d2.hooks.deploy) d2.hooks.deploy(g, nu);
-      fx.thump(nu);
-      logLine(g, card.name + ' marches out', '#8fffc4');
-    },
-  } });
+   So the excuse was tested and did not hold: they are played, they are not
+   blind-spotted, and they cost three to five points. A card that needs a plan
+   AND does not pay once the plan is taught is not an unlucky card, it is a bad
+   one. The always-on three (Coldbearer, Backdrift, Grudgehorn) stay; these two
+   are deleted rather than shelved, because a second round of `noPool` would be
+   a way of not deciding. The shapes are recorded in DESIGN.md if anyone wants
+   to build them again on a different chassis. */
 
 /* -- gear (one-shot cards) ------------------------------------------------ */
 def({ id: 'emberflask', name: 'Ember Flask', type: 'item', tribe: 'hearth', rare: 1, target: 'enemy',
@@ -1561,13 +1518,8 @@ function neighbours(g, u) {
    ticks before every warden, and inside a side the front of the table goes
    first, top lane before bottom. */
 function turnOrder(g) {
-  /* AURA — Dawnpiper. Foes tick first, always, and that one line is why the
-     front row is a gamble rather than a free double. Standing it on its head is
-     the largest thing a single body can do to this game, so the body is glass:
-     4 hp, and the rule leaves with it. */
-  const first = auraOn(g, 'p', 'firstlight') ? 'p' : 'e';
   return units(g).slice().sort((a, b) => {
-    if (a.side !== b.side) return a.side === first ? -1 : 1;
+    if (a.side !== b.side) return a.side === 'e' ? -1 : 1;
     if (a.col !== b.col) return a.col - b.col;
     return a.lane - b.lane;
   });
@@ -3963,6 +3915,29 @@ function slotPos(side, lane, col) {
 let ctx = null, canvas = null, DPR = 1;
 
 /* ------------------------------------------------------------ primitives -- */
+/* EVERY HORIZONTAL SWEEP GOES THROUGH HERE, because writing one by hand has now
+   produced the same seam four times.
+
+   The shape that fails is `for (x = 0; x <= VW; x += step)` followed by a
+   `lineTo(VW, …)`. The loop stops at the last multiple of `step` below VW and
+   the closing line then runs straight from there to the corner, which draws a
+   hard straight edge `VW % step` units in from the right. It is invisible when
+   the step happens to divide VW and glaring when it does not — so whether a
+   sweep is broken depends on a number nobody looks at:
+
+     aurora bands  step 64   clean at 1280 and 1600, 28-unit seam at 1180
+     far ridges    step 40   clean at 1280 and 1600, 20-unit seam at 1180
+     the ground    step 48   BROKEN AT ALL THREE — 32 at 1280, 16 at 1600
+     dusk ridges   step 60   found by eye at 1600, fixed one round earlier
+
+   The ground one had been there since the first sky and nobody saw it, because
+   a 16-unit sliver at the very edge under the near scenery reads as framing.
+   Sweeping from −step to VW+step costs two extra points and makes the whole
+   class unrepresentable: there is no arithmetic left for a caller to get wrong. */
+function sweepX(c, step, fn) {
+  for (let x = -step; x <= VW + step; x += step) c.lineTo(x, fn(x));
+}
+
 function rr(c, x, y, w, h, r) {
   const k = Math.min(r, w / 2, h / 2);
   c.beginPath();
@@ -4978,9 +4953,9 @@ function drawBackdrop(c, zone, t) {
     gg.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = gg;
     c.beginPath();
-    c.moveTo(0, 120 + i * 46 + Math.sin(t * 0.3 + i) * 22);
-    for (let x = 0; x <= VW; x += 64) c.lineTo(x, 120 + i * 46 + Math.sin(t * 0.3 + i + x * 0.004) * 26);
-    c.lineTo(VW, 0); c.lineTo(0, 0); c.closePath(); c.fill();
+    c.moveTo(-64, 120 + i * 46 + Math.sin(t * 0.3 + i) * 22);
+    sweepX(c, 64, (x) => 120 + i * 46 + Math.sin(t * 0.3 + i + x * 0.004) * 26);
+    c.lineTo(VW + 64, 0); c.lineTo(-64, 0); c.closePath(); c.fill();
   }
   c.restore();
 
@@ -4988,13 +4963,11 @@ function drawBackdrop(c, zone, t) {
   for (let layer = 0; layer < 3; layer++) {
     const base = 300 + layer * 54;
     const amp = 70 - layer * 16;
-    c.beginPath(); c.moveTo(0, VH);
-    c.lineTo(0, base);
-    for (let x = 0; x <= VW; x += 40) {
-      const y = base - Math.abs(Math.sin(x * 0.0037 + layer * 2.1)) * amp - Math.sin(x * 0.011 + layer) * 12;
-      c.lineTo(x, y);
-    }
-    c.lineTo(VW, VH); c.closePath();
+    c.beginPath(); c.moveTo(-40, VH);
+    c.lineTo(-40, base);
+    sweepX(c, 40, (x) =>
+      base - Math.abs(Math.sin(x * 0.0037 + layer * 2.1)) * amp - Math.sin(x * 0.011 + layer) * 12);
+    c.lineTo(VW + 40, VH); c.closePath();
     c.fillStyle = ['rgba(255,255,255,.06)', 'rgba(255,255,255,.10)', 'rgba(255,255,255,.15)'][layer];
     c.fill();
   }
@@ -5007,9 +4980,9 @@ function drawBackdrop(c, zone, t) {
   gg.addColorStop(0, z.ground); gg.addColorStop(1, '#9fb6d6');
   c.fillStyle = gg;
   c.beginPath();
-  c.moveTo(0, 520);
-  for (let x = 0; x <= VW; x += 48) c.lineTo(x, 500 + Math.sin(x * 0.006) * 14);
-  c.lineTo(VW, VH); c.lineTo(0, VH); c.closePath(); c.fill();
+  c.moveTo(-48, 520);
+  sweepX(c, 48, (x) => 500 + Math.sin(x * 0.006) * 14);
+  c.lineTo(VW + 48, VH); c.lineTo(-48, VH); c.closePath(); c.fill();
 
   drawNearScenery(c, z, t);
 
@@ -8334,10 +8307,8 @@ function drawDawn(c, t) {
   ribbons.forEach(([col, a, baseY, sp], k) => {
     c.beginPath();
     c.moveTo(-40, baseY);
-    for (let x = -40; x <= VW + 40; x += 40) {
-      c.lineTo(x, baseY + Math.sin(x * 0.006 + t * 0.22 * sp + k) * 34
-        + Math.sin(x * 0.013 + t * 0.15) * 14);
-    }
+    sweepX(c, 40, (x) => baseY + Math.sin(x * 0.006 + t * 0.22 * sp + k) * 34
+      + Math.sin(x * 0.013 + t * 0.15) * 14);
     c.lineTo(VW + 40, baseY - 150); c.lineTo(-40, baseY - 150); c.closePath();
     const gg = c.createLinearGradient(0, baseY - 150, 0, baseY + 30);
     gg.addColorStop(0, 'rgba(255,255,255,0)');
@@ -8415,10 +8386,8 @@ function drawDusk(c, t) {
     c.beginPath();
     c.moveTo(-60, VH);
     c.lineTo(-60, VH * f);
-    for (let x = -60; x <= VW + 60; x += 60) {
-      c.lineTo(x, VH * f + Math.sin(x * 0.004 + k * 2.1 + t * 0.02 * sp) * 26
-        + Math.sin(x * 0.011 + k) * 11);
-    }
+    sweepX(c, 60, (x) => VH * f + Math.sin(x * 0.004 + k * 2.1 + t * 0.02 * sp) * 26
+      + Math.sin(x * 0.011 + k) * 11);
     c.lineTo(VW + 60, VH); c.closePath();
     c.fillStyle = col; c.fill();
   });

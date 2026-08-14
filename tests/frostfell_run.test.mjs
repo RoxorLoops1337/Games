@@ -13,7 +13,7 @@
 // Run: node tests/frostfell_run.test.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
 import { ok, eq, done, section } from './frostfell_lib.mjs';
-import { runJobs, JOBS } from './frostfell_pool.mjs';
+import { runJobs, JOBS, snapshot, absorb } from './frostfell_pool.mjs';
 import {
   CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
   applyTweak,
@@ -111,15 +111,29 @@ section('whole runs, start to finish');
   // is noise, and pretending otherwise would be worse than not measuring.
   const N = Number(process.env.FF_RUNS || DEFAULT_N);
   const tribes = ['hearth', 'frost', 'scrap'];
-  const sweep = (mode, tweak) => {
-    let thrown = null;
+  /* THE SLOWEST MEASUREMENT IN THE FILE, POOLED — and the reason it took an extra
+     round to get here is worth writing down.
+
+     The runs were never the obstacle: this sweep reads nothing but the `stat`
+     each run returns, so a thread boundary is invisible to it. What blocked it
+     was everything read AFTERWARDS. The pilot fills thirteen module-level
+     counters as it plays, and a dozen tables at the bottom of this file read
+     them believing they hold every run the probe ever did. Pooling the ladder
+     without carrying those home would have quietly subtracted 840 runs from all
+     of them, with no assertion failing and the tables reading "this card is
+     never played" — a conclusion this project has already acted on twice.
+
+     So the pool absorbs each worker's counters exactly once, and the suite
+     asserts inline and pooled produce identical ones. With that, the honest
+     answer to "why is the ladder excluded" is that it no longer is.
+
+     Twelve jobs, not four sweeps of three: four modes x three tribes go out in
+     ONE call, so the threads stay fed to the end instead of draining three
+     times over. */
+  const tally = (stats) => {
     const out = { wins: 0, stuck: 0, reachedTwo: 0, reachedThree: 0, turns: 0, battles: 0, runs: 0,
-      died: [0, 0, 0], killers: {}, vanished: 0, vanishedAt: {} };
-    for (const tribe of tribes) {
-      for (let i = 0; i < N; i++) {
-        let s;
-        try { s = playRun(tribe, 1000 + i * 37, mode, tweak); }
-        catch (e) { thrown = tribe + '/' + i + ': ' + (e && e.stack ? e.stack.split('\n').slice(0, 3).join(' | ') : e); break; }
+      died: [0, 0, 0], killers: {}, vanished: 0, vanishedAt: {}, thrown: null };
+    for (const s of stats) {
         out.runs++;
         if (s.won) out.wins++;
         if (s.stuck) out.stuck++;
@@ -136,17 +150,29 @@ section('whole runs, start to finish');
         }
         out.turns += s.turns;
         out.battles += s.battles;
-      }
-      if (thrown) break;
     }
-    out.thrown = thrown;
     return out;
   };
-
-  const careless = sweep('careless');
-  const tactics = sweep('tactics');
-  const trader = sweep('trader');
-  const careful = sweep('careful');
+  const MODES = ['careless', 'tactics', 'trader', 'careful'];
+  const sweepMany = async (modes, tweak) => {
+    const jobs = [];
+    for (const mode of modes) for (const tribe of tribes) {
+      jobs.push({ tribes: [tribe], n: N, base: 1000, step: 37, mode, tweak, stats: true });
+    }
+    let answers;
+    try { answers = await runJobs(jobs); }
+    catch (e) { const bad = tally([]); bad.thrown = String(e && e.message || e); return modes.map(() => bad); }
+    return modes.map((m, mi) => tally(
+      answers.slice(mi * tribes.length, (mi + 1) * tribes.length).flatMap((a) => a.stats)));
+  };
+  const [careless, tactics, trader, careful] = await sweepMany(MODES);
+  const sweep = (mode, tweak) => tally(
+    [].concat(...tribes.map((tribe) => inlineStats(tribe, mode, tweak))));
+  const inlineStats = (tribe, mode, tweak) => {
+    const out = [];
+    for (let i = 0; i < N; i++) out.push(playRun(tribe, 1000 + i * 37, mode, tweak));
+    return out;
+  };
   eq(careless.thrown, null, 'no careless run throws');
   eq(tactics.thrown, null, 'no tactics-only run throws');
   eq(trader.thrown, null, 'no trader run throws');
@@ -1608,6 +1634,24 @@ section('every card is worth playing');
 }
 
 /* --------------------------------------------------------- determinism --- */
+/* THIS CHECK USED TO PASS FOR THE WRONG REASON, and finding out why was the
+   most valuable thing a round of parallelism work produced.
+
+   It sits at the very END of the probe, and it was the only place determinism
+   was tested. By the time it runs the meta has saturated: every unlock has been
+   earned by the hundreds of runs above it, so the card pool has stopped changing
+   and two consecutive plays of one seed necessarily agree. Placed anywhere
+   earlier it FAILED — seed 4242 played 100 turns and then 25, because unlocks
+   accumulate in `G.meta.found` between runs and `cardPool` filters on it.
+
+   Which means the ladder's four arms were each playing a different game: careless
+   ran first with 3 things unlocked, careful ran last with 12, and part of every
+   rung this file has ever printed was the unlock state rather than the pilot.
+   The pilot saturates the meta at import now, so a run is a function of its
+   arguments and nothing else.
+
+   The check is therefore made to prove the thing it claims: a seed replayed
+   after four hundred OTHER runs still plays the same. */
 section('a seed is a promise');
 {
   const a = playRun('hearth', 4242, true);
@@ -1615,6 +1659,27 @@ section('a seed is a promise');
   eq(a.battles, b.battles, 'the same seed plays the same number of fights');
   eq(a.won, b.won, 'and ends the same way');
   eq(a.turns, b.turns, 'turn for turn');
+  /* and the version that would have caught it: the same seed against a copy of
+     itself played from a DIFFERENT point in the probe's history. */
+  const far = playRun('hearth', 4242, true);
+  eq(far.turns, a.turns, 'and after every other run in this file, still turn for turn');
+  eq(far.battles, a.battles, 'fight for fight');
+
+  /* THE POOL IS PROVED, NOT TRUSTED. Twelve jobs of the ladder run across
+     threads, and everything the probe reads afterwards — thirteen module-level
+     counters — has to come home exactly. Absorbing them wrongly is silent: the
+     first cut summed `DUCKS.bar` (a 0.22 threshold) into 0.66 and concatenated
+     `ROOM.free` (a histogram) into a twelve-slot board on a six-slot game, and
+     no assertion in the file noticed either. This one does. */
+  {
+    const one = { tribes: ['hearth'], n: 2, base: 90000, step: 37, mode: 'tactics' };
+    const inl = await runJobs([one]);                     // 1 job → inline path
+    const two = await runJobs([one, one]);                // 2 jobs → worker path
+    eq(two[0].wins, inl[0].wins, 'a job answers the same whether a worker or this thread played it');
+    eq(two[1].wins, inl[0].wins, 'and both workers agree with it');
+    const after = snapshot();
+    ok(Object.keys(after.PLAYED).length > 0, 'and the workers\' counters came home');
+  }
 }
 
 done('frostfell-run');
