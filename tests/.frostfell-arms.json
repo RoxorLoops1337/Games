@@ -10,5 +10,25 @@
  "FF_MONEY=70": {
   "said": "charm is −9 of 20 removed; free meal is +28 given",
   "sample": 210
+ },
+ "FF_NOSCARS=1": {
+  "said": "with every scar wiped: careless 10%, the fight 23%, the trader 37%, steering the pool 38%",
+  "sample": 210
+ },
+ "FF_NOWAVE=1": {
+  "said": "floor 8% → 9%; trader +14 → +13 against +15 predicted by compression alone",
+  "sample": 210
+ },
+ "FF_COURSE=150": {
+  "said": "gear 47% is the best of five, hearth 39% the worst, against 40% for none (±2.2)",
+  "sample": 450
+ },
+ "FF_PAIRS=70": {
+  "said": "best is holding gear until it earns the turn + keeping a slot in reserve at +6.2, against ±11.0 derived but ±8.3 MEASURED — shared seeds make the real band 1.3x narrower than the printed one",
+  "sample": 210
+ },
+ "FF_PAIR=holdGear+keepSlot": {
+  "said": "best is holding gear until it earns the turn + keeping a slot in reserve at +2.0, against ±5.8 derived but ±3.1 MEASURED — shared seeds make the real band 1.9x narrower than the printed one",
+  "sample": 750
  }
 }

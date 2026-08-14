@@ -85,6 +85,39 @@ export function mkCtx(log) {
     if (gx < 0 || gy < 0 || gx >= GW || gy >= GH) return null;
     return grid[gy * GW + gx];
   };
+  /* WHAT AN EIGHT-UNIT CELL COSTS, AND THE ANSWER TO IT.
+
+     A cell is 8 stage units and a line of body type is about 13 tall and tens
+     wide, so almost every string covers several cells and a great many straddle
+     a boundary. Reading only the cell under the anchor is therefore a guess
+     wherever a glyph crosses two grounds — a caption half on a panel and half
+     off reports whichever half its anchor landed in, and it reports it with the
+     same confidence as a string sitting in the middle of one colour.
+
+     So the lookup returns every ground the string covers WITH HOW MUCH OF IT
+     each one covers, and the check takes the worst of the ones that actually
+     carry the text. A share is needed because the box is approximate in both
+     directions: the stub does not track textBaseline, so the vertical extent is
+     a band around the anchor rather than a true glyph box, and a band that
+     wide clips the pip on the row above. Taking the worst of everything the
+     band touches turned seventeen legible labels into failures on the first
+     run — the ground under a caption is what most of the caption sits on, not
+     whatever grazed one corner of it. */
+  const groundsUnder = (x, y, w, size) => {
+    const x0 = Math.max(0, Math.floor(x / CELL)), x1 = Math.min(GW - 1, Math.floor((x + w) / CELL));
+    const y0 = Math.max(0, Math.floor((y - size * 0.38) / CELL));
+    const y1 = Math.min(GH - 1, Math.floor((y + size * 0.28) / CELL));
+    const seen = new Map();
+    let cells = 0;
+    for (let gy = y0; gy <= y1; gy++) {
+      for (let gx = x0; gx <= x1; gx++) {
+        cells++;
+        const c = grid[gy * GW + gx];
+        if (c) seen.set(c, (seen.get(c) || 0) + 1);
+      }
+    }
+    return { cells, cols: [...seen].map(([col, n]) => ({ col, share: n / Math.max(1, cells) })) };
+  };
   const grow = (x, y) => {
     const p = at(x, y);
     if (!bb) bb = [p[0], p[1], p[0], p[1]];
@@ -119,8 +152,11 @@ export function mkCtx(log) {
       if (log && k === 'fillText') {
         return (s, x, y) => {
           const p = at(x, y);
-          log.push(['fillText', s, p[0], p[1], st.size * zoom(), st.align, st.fill, st.alpha,
-            groundAt(p[0], p[1])]);
+          const size = st.size * zoom();
+          const w = String(s).length * size * 0.5;      // the same advance measureText reports
+          const left = st.align === 'center' ? p[0] - w / 2 : st.align === 'right' ? p[0] - w : p[0];
+          log.push(['fillText', s, p[0], p[1], size, st.align, st.fill, st.alpha,
+            groundAt(p[0], p[1]), groundsUnder(left, p[1], w, size)]);
         };
       }
       /* The colour a shape was painted in AND WHERE, so something can ask

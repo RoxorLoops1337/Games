@@ -1320,6 +1320,7 @@ const slotFree = (g, side, lane, col) => !unitAt(g, side, lane, col);
 /* A named wave is held by anyone standing anywhere in the lane, not only at the
    front — see the note in deployWave for why the front-only version was wrong. */
 const laneHeldBy = (g, lane) => units(g).find((u) => u.side === 'p' && u.lane === lane) || null;
+const WAVE_TELL = { on: true };   // the probe's only way to compare like with like
 const laneOf = (g, side, lane) => units(g).filter((u) => u.side === side && u.lane === lane).sort((a, b) => a.col - b.col);
 const other = (side) => (side === 'p' ? 'e' : 'p');
 function freeSlots(g, side) {
@@ -1967,8 +1968,13 @@ function resolveTurn(g) {
 
          That is the same shape as a scheme: announced, answerable, and free to
          answer if you were already looking. Whether it makes placement a
-         decision is what the additive table is for. */
-      if (b.waveCnt === 1 && b.waves.length) {
+         decision is what the additive table is for.
+
+         WAVE_TELL exists for the probe alone. Comparing the ladder with the
+         telegraph against a reading taken a round earlier compares two
+         different builds; comparing it against the same build with one flag
+         down compares the telegraph. Nothing in the game ever sets it. */
+      if (WAVE_TELL.on && b.waveCnt === 1 && b.waves.length) {
         b.waveLane = Math.floor(rnd() * LANES);
         fx.toast('A WAVE COMES TO THE ' + (b.waveLane === 0 ? 'TOP' : 'LOWER') + ' LANE', '#ff9a3c');
         logLine(g, 'something is coming to the ' + (b.waveLane === 0 ? 'top' : 'lower') + ' lane', '#ff9a3c');
@@ -8664,7 +8670,7 @@ window.FF = {
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
   hasRoom, isPacked, ROOM_NEEDED, LESSON,
-  deployWave, laneHeldBy,
+  deployWave, laneHeldBy, WAVE_TELL,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,
