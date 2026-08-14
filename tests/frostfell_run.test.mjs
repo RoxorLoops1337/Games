@@ -2018,6 +2018,43 @@ section('where a run is actually decided');
     };
     const withRoom = rows.map((r) => Object.assign({}, r, roomOf(r.d)));
     const topR = withRoom.slice(0, half), botR = withRoom.slice(-half);
+    /* AND THE GEAR QUESTION, which is what is left after two dead explanations.
+       Hands are six cards, so "fewer bodies" and "more gear" are the same
+       number — the winning half carries 2.5 pieces of gear against 1.7. If that
+       is the mechanism rather than a coincidence, the winning decks must
+       actually USE it: more gear played, and more turns with something in hand
+       worth doing. If they carry more and play the same, it is not the gear. */
+    const gearOf = (d) => {
+      const st = [];
+      for (let p = 0; p < PERMS; p++) st.push(...answers[d * PERMS + p].stats);
+      const seen = st.filter((x) => x.gearPlayed !== undefined);
+      /* PER TURN, not per run. Gear played per RUN is confounded by run length:
+         a deck that wins more lives longer and therefore plays more of
+         everything, so the raw count cannot tell a cause from a consequence.
+         Dividing by the turns the run actually took removes that, and the two
+         are printed side by side so the confound is visible rather than
+         quietly corrected. */
+      const turns = seen.reduce((n, x) => n + (x.turns || 0), 0);
+      return {
+        gear: seen.reduce((n, x) => n + x.gearPlayed, 0) / Math.max(1, seen.length),
+        units: seen.reduce((n, x) => n + x.unitsPlayed, 0) / Math.max(1, seen.length),
+        held: seen.reduce((n, x) => n + x.gearHeldShare, 0) / Math.max(1, seen.length),
+        gearRate: seen.reduce((n, x) => n + x.gearPlayed, 0) / Math.max(1, turns),
+        unitRate: seen.reduce((n, x) => n + x.unitsPlayed, 0) / Math.max(1, turns),
+        turns: turns / Math.max(1, seen.length),
+      };
+    };
+    const withGear = rows.map((r) => Object.assign({}, r, gearOf(r.d)));
+    const topG = withGear.slice(0, half), botG = withGear.slice(-half);
+    console.log(`      DO THE WINNERS DO MORE WITH A TURN?`);
+    console.log(`        per RUN (confounded — winners live longer):  gear ` +
+      `${avg(topG, 'gear').toFixed(1)} vs ${avg(botG, 'gear').toFixed(1)} · ` +
+      `wardens ${avg(topG, 'units').toFixed(1)} vs ${avg(botG, 'units').toFixed(1)} · ` +
+      `turns ${avg(topG, 'turns').toFixed(0)} vs ${avg(botG, 'turns').toFixed(0)}`);
+    console.log(`        per TURN (the one that answers it):  gear ` +
+      `${avg(topG, 'gearRate').toFixed(3)} vs ${avg(botG, 'gearRate').toFixed(3)} · ` +
+      `wardens ${avg(topG, 'unitRate').toFixed(3)} vs ${avg(botG, 'unitRate').toFixed(3)} · ` +
+      `gear in hand on ${(avg(topG, 'held') * 100).toFixed(0)}% of turns vs ${(avg(botG, 'held') * 100).toFixed(0)}%`);
     console.log(`      DO THE WINNERS STAND ON EMPTIER BOARDS?  ` +
       `free slots a turn ${avg(topR, 'free').toFixed(2)} vs ${avg(botR, 'free').toFixed(2)} · ` +
       `warmed on ${(avg(topR, 'warm') * 100).toFixed(0)}% of turns vs ${(avg(botR, 'warm') * 100).toFixed(0)}%`);
