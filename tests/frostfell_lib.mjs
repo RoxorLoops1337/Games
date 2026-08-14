@@ -24,13 +24,14 @@ export function mkCtx(log) {
      26px text — which is why nothing ever caught the phone. Width scales with
      the size for the same reason: a wrap computed against a constant 7px a
      character cannot notice that the text floor made every line wider. */
-  const st = { size: 14, face: 't', align: 'center' };
+  const st = { size: 14, face: 't', align: 'center', fill: '#000', alpha: 1 };
   /* Cards, creatures and half the juice draw inside a translated, scaled
      context, so the coordinates a naive stub records are card-local: four cards
      in a row all report their rules text at the same x. Anything reasoning
      about WHERE something landed on the stage needs the transform, so the stub
      keeps one — a 2x3 matrix and a save/restore stack, same as the real thing. */
   let m = [1, 0, 0, 1, 0, 0];
+  let bb = null;
   const stack = [];
   const mul = (n) => [
     n[0] * m[0] + n[1] * m[2], n[0] * m[1] + n[1] * m[3],
@@ -38,6 +39,14 @@ export function mkCtx(log) {
     n[4] * m[0] + n[5] * m[2] + m[4], n[4] * m[1] + n[5] * m[3] + m[5]];
   const at = (x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
   const zoom = () => Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
+  const grow = (x, y) => {
+    const p = at(x, y);
+    if (!bb) bb = [p[0], p[1], p[0], p[1]];
+    else {
+      bb[0] = Math.min(bb[0], p[0]); bb[1] = Math.min(bb[1], p[1]);
+      bb[2] = Math.max(bb[2], p[0]); bb[3] = Math.max(bb[3], p[1]);
+    }
+  };
   return new Proxy({}, {
     get(_t, k) {
       if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
@@ -54,10 +63,32 @@ export function mkCtx(log) {
       if (log && k === 'fillText') {
         return (s, x, y) => {
           const p = at(x, y);
-          log.push(['fillText', s, p[0], p[1], st.size * zoom(), st.align]);
+          log.push(['fillText', s, p[0], p[1], st.size * zoom(), st.align, st.fill, st.alpha]);
         };
       }
-      if (log && (k === 'strokeText' || k === 'fill' || k === 'stroke' || k === 'arc' || k === 'fillRect')) {
+      /* The colour a shape was painted in AND WHERE, so something can ask
+         whether the text over it is readable. Pairing ink to ground by draw
+         order alone is wrong — a panel is drawn, then labels somewhere else —
+         so the stub keeps a bounding box for the current path and reports it
+         when the path is filled. */
+      if (k === 'beginPath') return () => { bb = null; };
+      if (k === 'moveTo' || k === 'lineTo') return (x, y) => grow(x, y);
+      if (k === 'rect') return (x, y, w, h) => { grow(x, y); grow(x + w, y + h); };
+      if (k === 'arc') return (x, y, r) => { grow(x - r, y - r); grow(x + r, y + r); };
+      if (k === 'ellipse') return (x, y, rx, ry) => { grow(x - rx, y - ry); grow(x + rx, y + ry); };
+      if (k === 'quadraticCurveTo') return (_a, _b, x, y) => grow(x, y);
+      if (k === 'bezierCurveTo') return (_a, _b, _c, _d, x, y) => grow(x, y);
+      if (log && k === 'fill') {
+        return () => { log.push(['fill', st.fill, st.alpha, bb && bb.slice()]); };
+      }
+      if (log && k === 'fillRect') {
+        return (x, y, w, h) => {
+          const p0 = at(x, y), p1 = at(x + w, y + h);
+          log.push(['fillRect', st.fill, st.alpha,
+            [Math.min(p0[0], p1[0]), Math.min(p0[1], p1[1]), Math.max(p0[0], p1[0]), Math.max(p0[1], p1[1])]]);
+        };
+      }
+      if (log && (k === 'strokeText' || k === 'stroke')) {
         return (...a) => { log.push([k, ...a]); };
       }
       return noop;
@@ -68,6 +99,8 @@ export function mkCtx(log) {
         if (m) st.size = parseFloat(m[1]);
         st.face = /Frostcut/.test(String(v)) ? 'd' : 't';
       } else if (k === 'textAlign') st.align = v;
+      else if (k === 'fillStyle') st.fill = typeof v === 'string' ? v : '#888';
+      else if (k === 'globalAlpha') st.alpha = v;
       return true;
     },
   });

@@ -351,6 +351,59 @@ section('the shape of a phone');
         .map((e) => JSON.stringify(e.s).slice(0, 18) + '@' + Math.round(e.size * cssPerStage));
       eq([...new Set(tiny)].join(','), '', `${w}x${h} ${scr}: no text below the readable floor`);
 
+      /* THE THIRD THING NOBODY WAS CHECKING.
+
+         Touch was rewritten in CSS pixels and found seven controls too small.
+         Type got a floor and a stacking check and found five collisions.
+         Nothing had ever asked whether the text could be SEEN — and a game
+         painted in dim blues on darker blues is exactly where that goes wrong.
+
+         The stub records what colour every shape was filled in and where, so
+         each line of text can be paired with the shape actually under it
+         rather than with whatever was drawn most recently. Contrast is the
+         real WCAG ratio; the bar is 4.5:1 for body text and 3:1 for large
+         text, which is what the guideline says and not a number invented here.
+
+         Deliberately faded things are exempt: a sold-out ware, a locked
+         leader, a hint on its way out. Those are drawn under a globalAlpha and
+         the alpha is recorded with them. */
+      const lum = (hex) => {
+        const m2 = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
+        if (!m2) return null;
+        const n = parseInt(m2[1], 16);
+        const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+          const q = v / 255;
+          return q <= 0.03928 ? q / 12.92 : Math.pow((q + 0.055) / 1.055, 2.4);
+        });
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+      };
+      const ratio = (a2, b2) => {
+        const l1 = lum(a2), l2 = lum(b2);
+        if (l1 === null || l2 === null) return null;
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      };
+      const grounds = [];
+      const dim = [];
+      for (const e of log) {
+        if ((e[0] === 'fill' || e[0] === 'fillRect') && e[3] && e[2] > 0.9) {
+          grounds.push({ col: e[1], bb: e[3] });
+        } else if (e[0] === 'fillText' && String(e[1]).trim() && e[7] > 0.9) {
+          // the last opaque shape drawn under this point is the ground it sits on
+          let g2 = null;
+          for (let i = grounds.length - 1; i >= 0; i--) {
+            const b3 = grounds[i].bb;
+            if (e[2] >= b3[0] && e[2] <= b3[2] && e[3] >= b3[1] && e[3] <= b3[3]) { g2 = grounds[i]; break; }
+          }
+          if (!g2) continue;
+          const r = ratio(e[6], g2.col);
+          const big = e[4] * cssPerStage >= 18;
+          if (r !== null && r < (big ? 3 : 4.5)) {
+            dim.push(`${e[6]} on ${g2.col} ${r.toFixed(1)}:1 ${JSON.stringify(String(e[1])).slice(0, 18)}`);
+          }
+        }
+      }
+      eq([...new Set(dim)].sort().join(' | '), '', `${w}x${h} ${scr}: every line of text can be read off its own background`);
+
       // a run of lines is a column: same alignment, same x, sorted down the page
       const cols = new Map();
       for (const e of texts) {
@@ -375,13 +428,13 @@ section('the shape of a phone');
           }
         }
       }
-      /* The supported floor is a phone held sideways — 375 CSS pixels tall on
-         an iPhone SE, 390 on a 14. The 653x280 shape in this list is a folding
-         phone's COVER display, and at 280 the text floor is 23 stage units:
-         the winter list on the leader screen genuinely cannot hold seven rows
-         of a name and a description at that size. Touch targets are still
-         checked there; type is not, and the README says so. */
-      if (h >= 360) eq([...new Set(stacked)].join(' | '), '', `${w}x${h} ${scr}: no two lines drawn on top of each other`);
+      /* This used to skip 653x280 — a folding phone's cover display — because
+         the leader screen could not hold seven winters at a 23-unit text floor.
+         Excluding a shape with a note is the right move once and a habit
+         twice, so the leader screen was made to measure its own rows instead
+         and the exclusion is gone. Every shape in the list is checked for
+         everything it is in the list for. */
+      eq([...new Set(stacked)].join(' | '), '', `${w}x${h} ${scr}: no two lines drawn on top of each other`);
       log.length = 0;
 
       eq(small.join(','), '', `${w}x${h} ${scr}: every touch target is thumb-sized`);
