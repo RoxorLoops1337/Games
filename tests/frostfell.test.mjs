@@ -2412,6 +2412,17 @@ section('the design record states numbers');
   ok(heads.length >= 20, `the record has ${heads.length} labelled entries`);
   const mute = heads.filter((h) => !/\d/.test(h.body)).map((h) => h.head);
   eq(mute.join(' | '), '', 'every labelled entry in DESIGN.md states a number');
+  /* AND THE SECOND HALF OF THE RULE, which was written and never enforced: a
+     number is not a MEASUREMENT. A section number, a year, a card count in
+     passing — all of those are digits, and an entry whose only digits are
+     incidental is the essay the rule exists to keep out. So the digit has to
+     carry a unit: a percentage, a multiplier, a sigma, a band, points, runs, a
+     pixel size or a device dimension. It caught two entries on its first run —
+     the card rule and the four-health finding — and both got a real reading
+     rather than a cut, which is the outcome the rule is for. */
+  const UNIT = /(\d[\d,.]*\s*(%|x\b|σ|points?\b|runs?\b|px\b|:1)|±\s*[\d.]|\d+\s*(of|in)\s*\d|\d+x\d+)/;
+  const soft = heads.filter((h) => !UNIT.test(h.body)).map((h) => h.head);
+  eq(soft.join(' | '), '', 'every entry states a measurement, not just a digit');
   /* And the labels themselves: an entry that is none of the three is an essay
      that slipped in under a heading. */
   const stray = lines.filter((ln) => /^###\s/.test(ln) && !/^###\s+(FINDING|RULE|DEAD ENDS)\b/.test(ln))

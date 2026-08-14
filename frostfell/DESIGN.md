@@ -212,6 +212,50 @@ mechanism rather than a number: it is the second telegraph, it is shaped like th
 first, and neither of the things that sank the earlier cuts — a stronger fell, a
 punished specialist — survived into the shipped one.
 
+### FINDING — the cards do differentiate, on the scale that works
+
+A flat removal table has two readings and only one of them is health. Taking a
+card out of a POOL asks what the pool misses, and a pool substitutes — the offer
+shows something similar next time, which is exactly the redundancy the purse
+turned out to be made of. "44 of 57 inside a standard deviation" is equally what
+a set of interchangeable cards looks like.
+
+So the same question from the other end: **lock a minimal 6-card deck, hand it
+two copies of one card, and see what that card is worth from a standing start
+where nothing can substitute for it.** 630 runs an arm, all 57.
+
+```
+the locked floor                                   3%
+worth most:  frostmite +6.3 · avalanche +4.8 · blastcap +3.8
+worth least: shoveler −1.6 · pryrod −1.3 · hookline −1.3
+best to worst spans 7.9 points · 0 of 57 clear the 3.33σ family bar
+```
+
+**In points that table is flat too — and points are the wrong scale here**, which
+is a lesson this file learned two rounds ago arguing about compression. The floor
+is 3%. A card "worth +6 points" has more than *trebled* the win rate, and the
+points column calls that noise.
+
+The same table in odds against the floor, with the band taken off the four counts
+rather than a proportion's formula:
+
+```
+frostmite   3% → 10%    3.59x    4.8σ
+avalanche   3% →  8%    2.81x    3.7σ
+blastcap    3% →  7%    2.43x    3.2σ
+shoveler    3% →  2%    0.66x    1.1σ
+best to worst spans 5.4x
+```
+
+**Frostmite and avalanche clear the 3.33σ family bar; the table spans 5.4× in
+odds.** The cards differentiate — a locked deck's chances more than treble on the
+best of them and fall by a third on the worst. What was flat was the *ruler*.
+
+The arm prints both scales now. The removal table below stands as it was: from a
+full pool nothing is load-bearing, because the pool substitutes. Both are true,
+and together they say the thing worth knowing — **a card matters when you cannot
+replace it, and the offer can almost always replace it.**
+
 ### FINDING — no card in the game is load-bearing
 
 Fifty-eight cards had been priced by one table — *every card is played* — which
@@ -548,7 +592,9 @@ turns, the question is asked on the board, it costs something the player wanted,
 and it does not answer a question the board already asks. If you cannot say what
 it costs, it is not finished. The round that wrote it built **3 cards against it
 and shipped 3** — the first content round in 3 that did not cut most of what it
-made.
+made. The rule has a test now, too: from a locked floor the 57-card pool spans
+**5.4x in odds** between its best card and its worst, so "a card is a choice"
+is a measured claim rather than a hope.
 
 ### FINDING — schemes are most of what the fight is worth
 
@@ -601,18 +647,21 @@ packed-board failure is aimed at something that happens on 4% of their turns.
 
 ### FINDING — the most lethal thing in the game has four health
 
-Mitewing — a tier-1 trash mob, four health, two attack — was in the top two of
-the late-zone death table for five rounds. Counting each foe's *share of the
-damage the fell actually swings* (tick rate over counter, times attack) explains
-it: a cheap Aimless body with a one-counter walks past every wall and swings
-every turn. A death table ranks who landed the last blow; a damage-share table
-ranks who did the work. Keep both.
+Mitewing — a tier-1 trash mob, **4 health and 2 attack** — was in the top 2 of
+the late-zone death table for 5 rounds running, and it is still there: **16% of
+88 late deaths** at 210 runs an arm, second only to the Frostwyrm's 27%.
+Counting each foe's *share of the damage the fell actually swings* (tick rate
+over counter, times attack) explains it: a 1-counter Aimless body swings every
+turn and walks past every wall, so its share is 2 damage a turn where a beast on
+a 4-counter lands 20 every fourth. A death table ranks who landed the last blow;
+a damage-share table ranks who did the work. Keep both.
 
 ### FINDING — Hearth, and a fact about how damage works
 
-Hearth read bottom of the course table for several rounds through five attempts
-to fix it. The pool was not leaning — 13 hearth cards against 14 frost and 13
-scrap. The rule was: Regen is a **threshold good**. Healing that does not outrun
+Hearth read bottom of the course table for several rounds through 5 attempts to
+fix it, and at 450 runs an arm it is level now — **39% against a 40% no-course
+baseline**, inside the ±2.2 band. The pool was never the cause: 13 hearth cards
+against 14 frost and 13 scrap. The rule was: Regen is a **threshold good**. Healing that does not outrun
 the incoming does nothing at all, and healing that does outrun it makes the
 warden unkillable — there is no middle, so every tuning pass either did nothing
 or broke it. A fact about the game's damage, not about Hearth.
@@ -795,6 +844,14 @@ second made a wide deck stronger — and both are tabled under
   instrument; it needed the raster first.
 - **An age counter on the stamped arm readings.** Churned the file every check
   for something git already knows.
+- **Letting rounded rectangles stamp into the contrast raster.** `rr` is what
+  every panel, plate and slab is made of, so it looks like an obvious widening.
+  53 failures, nearly all wrong: a slab is a rounded rect and the badges drawn
+  ON it are hand-built paths that do not stamp, so the slab won every lookup and
+  a health number on a green shield read against the slab body at 1.2:1. The
+  rule holds only while the shapes that do not stamp are also not the ones text
+  sits on. What did survive from the attempt: `arcTo` is tracked now, and a
+  translucent fill no longer counts as a ground.
 - **A seed band from three samples.** ±0.7, and ±2.4 from five. Three points do
   not make a standard deviation.
 - **A pair interaction measured on `reposition`.** Its arms are byte-identical,
@@ -819,6 +876,47 @@ used to be: `wrapText` and `fitText` go through `textSize()` now and every
 hardcoded step through `lineH(size, step)`. The help pages were a fixed grid with
 a hard five-line slice that cut the rules off mid-sentence, and are measured and
 flowed now. **The supported floor is a phone held sideways**: 375 CSS pixels.
+
+### FINDING — what a family-bar sweep of the whole file would cost
+
+`FF_CARDS` at 630 an arm took most of a round to answer one question, so: what
+would it cost to run *every* arm at a sample where the family bar means
+something, and can the probe be made fast enough for that to be routine?
+
+**The probe was profiled for the first time since the particle fix, and it is
+21% faster.** Two findings from the flame graph, both fixed:
+
+```
+saveRun          7.6% of the whole probe — serialising a deck, a trail and a
+                 log on every state change to a stub no bot ever reads back.
+                 `store.mute`, read inside saveRun rather than in the store:
+                 muting the store alone was worth 2%, because the expensive
+                 half is building the object and stringifying it.
+freeSlots        2.6% — it asked `slotFree` six times and each of those built a
+                 filtered copy of the unit list and searched it. Six list copies
+                 and six scans to answer what one scan answers.
+26.2s → 20.7s at FF_RUNS=20, and the suite's output is byte-identical.
+```
+
+**Declined, and costed:** `weightedCards` builds its offer by pushing *w* copies
+of every card id into an array and picking one at random — 4.9% of the probe,
+plus a share of the 4.5% in GC. A cumulative-weight search is the textbook fix
+and it would change **which card a given seed draws**, so every absolute number
+in this file would shift. 7% is not worth re-baselining the record. Recorded so
+the next round does not rediscover it.
+
+**And the arithmetic.** A full-file family-bar sweep means about 12 arms at the
+depth the calibration says is honest — call it 750 runs an arm — plus the two
+57-card tables at 630. That is roughly **80,000 runs**. At the probe's current
+rate of about 2,200 runs a minute that is **36 minutes**; before this round's fix
+it was 46.
+
+So it is affordable but not routine — a background job, not something an
+ordinary check pays for. Getting it under 10 minutes needs another 3.5x, and
+after the two fixes above there is no single hot spot left worth that: the
+profile's top entry is now the pilot's own `carefulTurn` at 6.3%. **The next 3x
+is a different probe, not a faster one** — running tribes in parallel workers is
+the only thing on the table that could deliver it.
 
 ### FINDING — the probe was half particle effects
 

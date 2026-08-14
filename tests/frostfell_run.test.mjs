@@ -753,6 +753,12 @@ function erf(x) {
   const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
   return sgn * y;
 }
+/* THE PROBE DOES NOT RELOAD ITS RUNS, so every save it writes is work nobody
+   reads. Profiling put `saveRun` at the top of the flame graph — 7.6% of the
+   whole probe, serialising a deck, a trail and a log on every state change to a
+   localStorage stub. Muted here and nowhere else: the save/load suites do not
+   touch this flag, so they still test the real thing. */
+FF.store.mute = true;
 const DEFAULT_N = 30;
 const NO_SCARS = !!process.env.FF_NOSCARS;
 function stripScars(run) {
@@ -1809,10 +1815,84 @@ section('which cards the win rate would miss');
       `; ${spare.length} clear it as a LIABILITY` + (spare.length ? ': ' + spare.map((r) => r.id).join(', ') : ''));
     const inside = rows.filter((r) => Math.abs(r.pct - base) < band).length;
     console.log(`    ${inside} of ${ids.length} sit inside a single standard deviation of the baseline`);
+    /* AND THE SAME QUESTION FROM THE OTHER END, because a flat removal table has
+       two readings and only one of them is health.
+
+       Taking a card out of a POOL asks what the pool misses, and a pool
+       substitutes: the offer simply shows something similar next time, which is
+       exactly the redundancy the purse turned out to be made of. "44 of 57
+       inside a standard deviation" is equally what a set of interchangeable
+       cards looks like.
+
+       So: lock a minimal deck, hand it TWO copies of one card, and see what
+       that card is worth from a standing start where nothing can substitute for
+       it. If this table is flat too, the cards genuinely do not matter. */
+    const GIVE = ['snowpup', 'cinderpup', 'snowpup', 'wayfarer', 'icepick', 'stew'];
+    const giveArm = (id) => {
+      let wins = 0, runs = 0;
+      for (const tribe of tribes) {
+        for (let i = 0; i < KN; i++) {
+          const st = playRun(tribe, 1000 + i * 37, 'tactics', (run) => {
+            run.lockDeck = true; run.mend = 8;
+            for (const cid of GIVE) if (FF.CARDS[cid]) run.deck.push(FF.mkCard(cid));
+            if (id) for (let k = 0; k < 2; k++) if (FF.CARDS[id]) run.deck.push(FF.mkCard(id));
+          });
+          runs++; if (st.won) wins++;
+        }
+      }
+      return (wins / Math.max(1, runs)) * 100;
+    };
+    const floor = giveArm(null);
+    const gifts = ids.map((id) => ({ id, pct: giveArm(id) })).sort((a2, b2) => b2.pct - a2.pct);
+    console.log('');
+    console.log(`    AND FROM A STANDING START: a locked 6-card deck (${floor.toFixed(0)}%) handed 2 copies of one card`);
+    console.log('    the five worth most from nothing:');
+    for (const r of gifts.slice(0, 5)) {
+      console.log(`      ${r.id.padEnd(14)}${String(r.pct.toFixed(0) + '%').padStart(5)}  ` +
+        `${(r.pct - floor >= 0 ? '+' : '') + (r.pct - floor).toFixed(1)}`);
+    }
+    console.log('    and the five worth least:');
+    for (const r of gifts.slice(-5).reverse()) {
+      console.log(`      ${r.id.padEnd(14)}${String(r.pct.toFixed(0) + '%').padStart(5)}  ` +
+        `${(r.pct - floor >= 0 ? '+' : '') + (r.pct - floor).toFixed(1)}`);
+    }
+    const gBand = BAND.gap(0.35, n);
+    const loud = gifts.filter((r) => Math.abs(r.pct - floor) >= z * gBand);
+    const spread = gifts[0].pct - gifts[gifts.length - 1].pct;
+    console.log(`    → ${loud.length} of ${ids.length} clear the same ${z.toFixed(2)}σ family bar (±${(z * gBand).toFixed(1)}); ` +
+      `best to worst spans ${spread.toFixed(1)} points`);
+    console.log(`    ${gifts.filter((r) => Math.abs(r.pct - floor) < gBand).length} sit inside a single standard deviation`);
+    /* AND THE SAME TABLE IN ODDS, because POINTS ARE THE WRONG SCALE NEAR A
+       FLOOR and this file established that two rounds ago arguing about
+       compression. A locked six-card deck wins about 3% of the time, so a card
+       worth "+6 points" has more than trebled the win rate and the points
+       column calls it flat. The band on a log-odds difference comes off the
+       four counts rather than a proportion's formula, which is what makes it
+       usable at a 3% base where a percentage band is meaningless. */
+    {
+      const oddsOf = (pc) => (pc <= 0 ? 0 : pc >= 100 ? Infinity : (pc / 100) / (1 - pc / 100));
+      const wins = (pc) => Math.max(0.5, Math.round((pc / 100) * n));
+      const fO = oddsOf(floor), fW = wins(floor), fL = Math.max(0.5, n - fW);
+      const withOdds = gifts.map((r) => {
+        const w2 = wins(r.pct), l2 = Math.max(0.5, n - w2);
+        const or = fO > 0 ? oddsOf(r.pct) / fO : 0;
+        const sd = Math.sqrt(1 / fW + 1 / fL + 1 / w2 + 1 / l2);
+        return { id: r.id, pct: r.pct, or, sig: sd > 0 ? Math.abs(Math.log(or || 1e-9)) / sd : 0 };
+      });
+      const big = withOdds.filter((r) => r.sig >= z);
+      console.log(`    in ODDS against the ${floor.toFixed(0)}% floor, which is the scale that works this low:`);
+      for (const r of withOdds.slice(0, 3)) {
+        console.log(`      ${r.id.padEnd(14)}${r.or.toFixed(2)}x  (${r.sig.toFixed(1)}σ)`);
+      }
+      console.log(`      best-to-worst spans ${(withOdds[0].or / Math.max(0.01, withOdds[withOdds.length - 1].or)).toFixed(1)}x · ` +
+        `${big.length} of ${ids.length} clear ${z.toFixed(2)}σ on this scale`);
+    }
+
     ARMS.stamp('FF_CARDS=40', missed.length || spare.length
       ? `${missed.length} load-bearing, ${spare.length} liability at the ${z.toFixed(2)}σ family bar`
-      : `no card of ${ids.length} clears the ${z.toFixed(2)}σ family bar either way; ` +
-        `widest miss ${rows[0].id} ${(rows[0].pct - base).toFixed(1)}`, n);
+      : `removing: no card of ${ids.length} clears ${z.toFixed(2)}σ, widest ${rows[0].id} ${(rows[0].pct - base).toFixed(1)}; ` +
+        `giving from a locked floor: ${loud.length} clear it, best ${gifts[0].id} +${(gifts[0].pct - floor).toFixed(1)}, ` +
+        `span ${spread.toFixed(1)}`, n);
     ok(rows.length === ids.length, 'every card in the pool was priced');
   } else {
     console.log('    (FF_CARDS=40 prices every card by taking it out of the offer)');
