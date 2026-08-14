@@ -42,5 +42,13 @@
  "FF_CARDS=40": {
   "said": "removing: no card of 6 clears 2.64σ, widest coldbearer -6.7; giving from a locked floor: 0 clear it, best backdrift +1.7, span 3.1",
   "sample": 360
+ },
+ "FF_VARIANCE=40": {
+  "said": "trail 21.6%, deck 3.8%, draw 0.2%",
+  "sample": 648
+ },
+ "FF_LADDERBAND=1": {
+  "said": "the total reads 27/27/26/33/28 at five bases — sd ±2.8, so nothing under 6 points is detectable",
+  "sample": 210
  }
 }

@@ -368,10 +368,33 @@ export function ok(cond, label) {
 export const eq = (a, b, label) => ok(a === b, `${label} (got ${JSON.stringify(a)}, want ${JSON.stringify(b)})`);
 export const near = (a, b, tol, label) => ok(Math.abs(a - b) <= tol, `${label} (got ${a}, want ${b}±${tol})`);
 export function done(name) {
+  for (const [nm, ms] of sectionTimes().sort((a, b) => b[1] - a[1])) {
+    if (ms >= 100) console.log(`    ${String((ms / 1000).toFixed(1) + 's').padStart(7)}  ${nm}`);
+  }
   if (fails.length) {
     console.error(`\n${name}: ${fails.length} FAILED, ${pass} passed`);
     process.exit(1);
   }
   console.log(`${name}: ${pass} checks passed`);
 }
-export const section = (s) => console.log('  · ' + s);
+/* SECTIONS TIME THEMSELVES WHEN ASKED. `FF_TIME=1` prints how long each one
+   took, which is the only way to answer "where does the probe's minute go" —
+   guessing at it produced a confidently wrong answer one round ago (three
+   sweeps were blamed and all three are off by default). Silent otherwise, so
+   the normal output is unchanged and diffable. */
+const TIMING = !!process.env.FF_TIME;
+let secT = 0, secName = null;
+const secs = [];
+export const section = (s) => {
+  if (TIMING) {
+    const now = Date.now();
+    if (secName) secs.push([secName, now - secT]);
+    secName = s; secT = now;
+  }
+  console.log('  · ' + s);
+};
+export function sectionTimes() {
+  if (!TIMING) return [];
+  if (secName) { secs.push([secName, Date.now() - secT]); secName = null; }
+  return secs;
+}
