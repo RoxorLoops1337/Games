@@ -2420,7 +2420,7 @@ section('the design record states numbers');
      pixel size or a device dimension. It caught two entries on its first run —
      the card rule and the four-health finding — and both got a real reading
      rather than a cut, which is the outcome the rule is for. */
-  const UNIT = /(\d[\d,.]*\s*(%|x\b|σ|points?\b|runs?\b|px\b|:1)|±\s*[\d.]|\d+\s*(of|in)\s*\d|\d+x\d+)/;
+  const UNIT = /(\d[\d,.]*\s*(%|x\b|σ|points?\b|runs?\b|px\b|lines?\b|ms\b|:1)|±\s*[\d.]|\d+\s*(of|in)\s*\d|\d+x\d+)/;
   const soft = heads.filter((h) => !UNIT.test(h.body)).map((h) => h.head);
   eq(soft.join(' | '), '', 'every entry states a measurement, not just a digit');
   /* And the labels themselves: an entry that is none of the three is an essay
