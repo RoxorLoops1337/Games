@@ -53,12 +53,18 @@ const STANDING = [
   ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
   ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
 ];
-/* FF_HABIT and FF_CONTRAST are deliberately NOT here, and that is the answer to
+/* FF_HABIT, FF_CONTRAST, FF_VDECKS, FF_VSEED and FF_TIME are deliberately NOT
+   here, and that is the answer to
    "six arms exist and three are stamped". Neither is an arm: FF_HABIT narrows
    FF_ABLATE to one habit so a single number can be run deep, and it reports
    through FF_ABLATE's own table; FF_CONTRAST prints how much text the contrast
-   check paired and asserts nothing. An arm produces a reading somebody would
-   quote a round later. A modifier and a print flag do not, and listing them
+   check paired and asserts nothing. FF_VDECKS and FF_VSEED re-deal the variance
+   arm's decks — they change how wide or how differently-seeded that one arm is,
+   the way FF_HABIT narrows FF_ABLATE, and the reading is stamped by FF_VARIANCE.
+   FF_TIME prints a timing table and asserts nothing.
+
+   An arm produces a reading somebody would quote a round later. A modifier and a
+   print flag do not, and listing them
    beside arms is what made "three of six are stamped" look like rot when it was
    a miscount. */
 
@@ -1483,7 +1489,7 @@ section('the arms that are not run by default');
      bumped by hand is a list that goes stale. */
   const inSource = [...readFileSync(new URL(import.meta.url), 'utf8')
     .matchAll(/process\.env\.(FF_[A-Z]+)/g)].map((m2) => m2[1]);
-  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_CONTRAST'];
+  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');
@@ -1801,17 +1807,34 @@ section('where a run is actually decided');
 {
   const M = Number(process.env.FF_VARIANCE || 12);
   const tribes = ['hearth', 'frost', 'scrap'];
-  /* Six decks that differ in CONTENT rather than in size: same eight cards'
-     worth of bodies and gear each, drawn from different corners of the pool, so
-     "deck" means what you are holding and not how much. */
-  const DECKS = [
-    ['snowpup', 'cinderpup', 'snowpup', 'wayfarer', 'icepick', 'stew'],
-    ['bellowsbear', 'cairn', 'avalanche', 'gearshield', 'hush', 'lastlight'],
-    ['frostmite', 'frostmite', 'galewisp', 'snowbomb', 'coldsnap', 'thornoil'],
-    ['clunkbot', 'springjaw', 'bellhammer', 'blastcap', 'patchkit', 'hookline'],
-    ['warmroot', 'emberwick', 'emberward', 'emberflask', 'tinderjar', 'stew'],
-    ['pikeling', 'shoveler', 'snowbeard', 'rimefox', 'chillfin', 'icepick'],
-  ].map((d) => d.filter((id) => FF.CARDS[id]));
+  /* THE DECKS ARE DRAWN BY SEED, NOT CHOSEN, and the first cut of this arm got
+     that wrong in exactly the way this file has a rule about.
+
+     Six hand-picked decks is picking the fish before the trip: I chose one weak
+     starter, one strong mid-run caravan, one frost pile, one scrap pile — a
+     spread I believed in, which is the thing an unbiased estimate cannot be
+     built on. If the deck share is 4.8% only because I picked six decks that
+     happen to differ by 4.8%, the number is my taste and not the game's.
+
+     So they are dealt: `FF_VDECKS` decks of six, sampled without replacement
+     from the draftable pool by a seeded shuffle. The seed is fixed so the arm
+     stays reproducible, and `FF_VSEED` changes it so the whole finding can be
+     re-run against decks nobody chose. */
+  const DECK_N = Number(process.env.FF_VDECKS || 8);
+  const DECKS = (() => {
+    const pool = Object.values(FF.CARDS)
+      .filter((c) => !c.leader && !c.noPool).map((c) => c.id).sort();
+    // a small deterministic PRNG, seeded, so the deal is reproducible and cheap
+    let x = (Number(process.env.FF_VSEED || 20250814) >>> 0) || 1;
+    const rnd = () => { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
+    const out = [];
+    for (let d = 0; d < DECK_N; d++) {
+      const bag = pool.slice();
+      for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+      out.push(bag.slice(0, 6));
+    }
+    return out;
+  })();
   const rot = (a, k) => a.slice(k).concat(a.slice(0, k));
   const PERMS = 3;
 
@@ -1854,7 +1877,33 @@ section('where a run is actually decided');
   const ssDeck = ssOf(deckMeans, PERMS * S);
   const ssDraw = ssOf(permMeans, DECKS.length * S);
   const ssSeed = ssOf(seedMeans, DECKS.length * PERMS);
+  /* THE RESIDUAL WAS THE BIGGEST NUMBER IN THE TABLE AND IT WAS LEFT AS "the
+     rest", which is not an answer. Most of it is separable with the data
+     already in hand.
+
+     Averaging over the three draw orders gives a deck-x-trail cell with three
+     observations in it, so the TWO-way interaction — this deck against this
+     trail, a MATCHUP — comes out on its own, and what is left after that is the
+     genuine three-way term that one run per cell cannot reach. */
+  const cellDT = [];
+  for (let d = 0; d < DECKS.length; d++) {
+    cellDT.push([]);
+    for (let s2 = 0; s2 < S; s2++) {
+      let acc = 0;
+      for (let p = 0; p < PERMS; p++) acc += y[d][p][s2];
+      cellDT[d].push(acc / PERMS);
+    }
+  }
+  let ssDT = 0;
+  for (let d = 0; d < DECKS.length; d++) {
+    for (let s2 = 0; s2 < S; s2++) {
+      const fit = deckMeans[d] + seedMeans[s2] - grand;      // additive prediction
+      const e = cellDT[d][s2] - fit;
+      ssDT += PERMS * e * e;
+    }
+  }
   const ssRest = Math.max(0, ssTotal - ssDeck - ssDraw - ssSeed);
+  const ss3way = Math.max(0, ssRest - ssDT);
   const pct = (x) => ((x / Math.max(1e-9, ssTotal)) * 100).toFixed(1) + '%';
 
   console.log(`    ${DECKS.length} decks x ${PERMS} draw orders x ${S} trails = ${flat.length} runs, ` +
@@ -1862,10 +1911,48 @@ section('where a run is actually decided');
   console.log(`      the TRAIL  (map, foes, rewards)   ${pct(ssSeed).padStart(6)} of the variance`);
   console.log(`      the DECK   (which cards you hold) ${pct(ssDeck).padStart(6)}`);
   console.log(`      the DRAW   (what order they come) ${pct(ssDraw).padStart(6)}`);
-  console.log(`      everything left (interactions)    ${pct(ssRest).padStart(6)}`);
+  console.log(`      the MATCHUP (this deck on this trail) ${pct(ssDT).padStart(6)}  ← most of "the rest"`);
+  console.log(`      the three-way remainder           ${pct(ss3way).padStart(6)}`);
   console.log(`      best deck ${(Math.max(...deckMeans) * 100).toFixed(0)}% vs worst ${(Math.min(...deckMeans) * 100).toFixed(0)}% · ` +
     `best draw order ${(Math.max(...permMeans) * 100).toFixed(0)}% vs worst ${(Math.min(...permMeans) * 100).toFixed(0)}%`);
-  ARMS.stamp('FF_VARIANCE=40', `trail ${pct(ssSeed)}, deck ${pct(ssDeck)}, draw ${pct(ssDraw)}`, flat.length);
+  /* AND THE SAME DECOMPOSITION ON A RESPONSE THAT IS NOT ALMOST ALL ZEROES.
+
+     A locked six-card deck crosses about 3% of the time, so "did it win" is a
+     variable that is 0 in 97 cells out of 100 — nearly all of its variance is
+     the rarity of a 1 rather than anything about decks or trails, which is a
+     large part of why the residual is 85%. HOW FAR IT GOT is the same run
+     measured on four levels instead of two, and it costs nothing extra. */
+  {
+    const z = [];
+    for (let d = 0; d < DECKS.length; d++) {
+      z.push([]);
+      for (let p = 0; p < PERMS; p++) {
+        const st = answers[d * PERMS + p].stats;
+        z[d].push(st.map((x) => (x.won ? 3 : Math.min(2, x.diedZone === undefined ? 0 : x.diedZone))));
+      }
+    }
+    const zf = [];
+    for (let d = 0; d < DECKS.length; d++) for (let p = 0; p < PERMS; p++) for (let s2 = 0; s2 < S; s2++) zf.push(z[d][p][s2]);
+    const g2 = mean(zf);
+    const t2 = zf.reduce((n, v) => n + (v - g2) * (v - g2), 0);
+    const dm = z.map((dp) => mean([].concat(...dp)));
+    const pm = []; for (let p = 0; p < PERMS; p++) pm.push(mean(z.map((dp) => dp[p]).flat()));
+    const sm = [];
+    for (let s2 = 0; s2 < S; s2++) {
+      const col = [];
+      for (let d = 0; d < DECKS.length; d++) for (let p = 0; p < PERMS; p++) col.push(z[d][p][s2]);
+      sm.push(mean(col));
+    }
+    const ss = (ms, each, gg) => ms.reduce((n, m) => n + each * (m - gg) * (m - gg), 0);
+    const p2 = (x) => ((x / Math.max(1e-9, t2)) * 100).toFixed(1) + '%';
+    console.log(`    and on HOW FAR IT GOT (zone 0-3) rather than won/lost, ${g2.toFixed(2)} zones on average:`);
+    console.log(`      the TRAIL ${p2(ss(sm, DECKS.length * PERMS, g2)).padStart(6)} · ` +
+      `the DECK ${p2(ss(dm, PERMS * S, g2)).padStart(6)} · ` +
+      `the DRAW ${p2(ss(pm, DECKS.length * S, g2)).padStart(6)}`);
+    ARMS.stamp('FF_VARIANCE=36', `won/lost: trail ${pct(ssSeed)}, deck ${pct(ssDeck)}, draw ${pct(ssDraw)}, ` +
+      `matchup ${pct(ssDT)} · zones: trail ${p2(ss(sm, DECKS.length * PERMS, g2))}, deck ${p2(ss(dm, PERMS * S, g2))}`,
+      flat.length);
+  }
   ok(ssTotal > 0, 'the runs did not all end the same way');
   ok(true, 'where a run is decided is a report, not a gate');
 }

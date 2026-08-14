@@ -189,6 +189,126 @@ The honest statement is that steering has never been resolved, and settling it
 needs about **4x this sample** — which is now affordable, since the probe is
 pooled.
 
+### FINDING — the trail is the lever, and it is the BOSS, not the fights
+
+`topic: trail`
+
+The trail decides **32.5%** of how far a locked run gets and the deck **4.4%** —
+six times the lever, and untouched in forty rounds. So one concrete change was
+made to what a zone puts in front of you, and it is the wrong one, which is the
+useful part.
+
+**What was built and reverted.** Every foe in an encounter is `pick(src)`, an
+independent uniform draw from the zone's tiers, so a three-foe fight can roll
+three of the heaviest bodies in the pool or three of the lightest and nothing
+notices. Encounters were drawn to a strength BUDGET instead — same mean, variance
+held inside 18%:
+
+```
+budget off    trail 32.6% of the zone-reached variance
+budget on     trail 32.5%
+```
+
+**Nothing. Not a small effect — nothing.** Which rules out the whole class, and
+that is worth more than a change that moved 2 points would have been.
+
+**Where it actually is.** Fixing the boss per zone instead of drawing it:
+
+```
+boss drawn per run   trail 32.5%
+boss fixed per zone  trail 13.9%
+```
+
+**Over half the trail's influence is which beast waits at the end of a zone.**
+One draw per zone, against the hundreds of foe draws inside it — and the reason
+is leverage rather than count: a zone's boss is the gate, so its identity decides
+whether the zone is passed at all, while an ordinary fight is one of seven.
+
+The comparison is honest about its confound: fixing the boss to a single member
+of the list also moved the mean (1.31 zones to 1.05), because that member is not
+the average beast. The *variance* effect is far too large to be that — a mean
+shift cannot halve a factor's share — but the clean version of this experiment
+draws the boss and then scales it toward a common strength, which is the change
+to make and is not made here.
+
+The code is reverted rather than shipped, on this file's own rule: **a mechanic
+that measures zero on the thing it was built for is not free** — it is a rule
+every future change has to reason around. Same verdict as `SKILL.shelter`.
+
+### FINDING — the deck share was mine, not the game's
+
+`topic: variance-decks`
+
+The variance arm's first cut used **six hand-picked decks**, chosen to span what I
+believed the space was: one weak starter, one strong mid-run caravan, a frost
+pile, a scrap pile. That is picking the fish before the trip, and it inflated the
+answer by three times.
+
+Dealt instead — 8 decks of six cards sampled from the draftable pool by a fixed
+seed, `FF_VSEED` to re-deal:
+
+```
+                    hand-picked    dealt
+the DECK               4.8%         1.6%     (won/lost)
+the TRAIL             16.2%        13.9%
+```
+
+**The deck's share of the won/lost variance is 1.6%, not 4.8%** — cards matter
+even less than the round that measured them said. The finding survives its own
+correction and gets stronger; what does not survive is the number I quoted.
+
+**And the response variable was nearly all zeroes.** A locked six-card deck
+crosses about 3% of the time, so "did it win" is 0 in 97 cells of 100 and most of
+its variance is the rarity of a 1. Measured on HOW FAR IT GOT (zone 0–3), the
+same runs read:
+
+```
+the TRAIL 32.5% · the DECK 4.4% · the DRAW 0.0%
+```
+
+Same ordering, six times the resolution. **The 79% "everything else" splits too**:
+averaging over the three draw orders gives a deck-by-trail cell with three
+observations in it, so the two-way term comes out on its own —
+
+```
+the MATCHUP (this deck on this trail)   27.1%
+the three-way remainder                 64.2%
+```
+
+**The matchup term is bigger than the trail's own main effect.** A game whose
+outcome is a quarter "this deck against this trail" is a game of specific
+encounters, not of deck strength — which is a design statement, and the thing to
+change if you want cards to matter is how much a single pairing decides, not how
+good the cards are.
+
+### FINDING — three entries state nulls this instrument cannot support
+
+`topic: null-audit`
+
+The ladder's own spread is **±2.8, so 2σ is ±5.5**. A null result on it therefore
+does not mean "no effect" — it means **"no effect larger than 6 points"**, and the
+difference matters for every entry whose headline is a null.
+
+Audited across what is left after the cut, **3 entries** rest on one:
+
+| entry | claims | what the instrument can actually say |
+|---|---|---|
+| [courses](#finding--courses-do-not-starve-the-board) | no course runs away with the run | none of the five differs by more than 6 points |
+| [the telegraph](#finding--the-telegraph-is-feedback-not-a-decision) | it is feedback, not a decision | it is worth less than 6 points |
+| [the lesson's dose](#finding--the-dose-of-a-lesson-is-irrelevant-the-subject-is-everything) | 18/18/18/18, dose is irrelevant | four doses within 6 points of each other |
+
+None of the three is wrong. All three would read exactly the same if the true
+effect were **five points**, which for a game whose whole skill ladder is 27
+points is not nothing. Settling any of them needs **4x the sample** — about 840
+runs an arm, roughly four minutes each now that the probe is pooled, which is
+affordable and has simply never been spent.
+
+Everything else in the file rests either on an effect above 6 points (denial +10,
+the purse −17/+26, being told +11, the fight set 17–18) or on a different
+instrument entirely — the card tables use a family bar over hundreds of runs and
+the mending and contrast tables are proportions over tens of thousands of turns.
+**The 6-point rule is a rule about the ladder, not about the file.**
+
 ### FINDING — the ladder, and which of its numbers is the one being defended
 
 `topic: ladder`
@@ -1264,6 +1384,24 @@ What made the ablations poolable is **per-job config**: each arm sets a SKILL or
 DRAFT flag before it plays, and the flag travels *with* the job rather than being
 toggled globally. Without that, batching them is impossible and the alternative —
 draining the pool once per arm — is slower than not pooling.
+
+**AND FROSTFELL IS NO LONGER THE OUTLIER, SO THIS STOPS HERE.** `npm run check`
+timed per suite, 39 of them:
+
+```
+247.8s  blacksite     ← 46% of the whole check
+ 89.8s  crashmas
+ 54.0s  frostfell     ← 10%, third
+ 48.9s  ironbridge
+ 33.2s  dungeon
+--------
+531.9s  total
+```
+
+blacksite alone is **4.6x** frostfell. Frostfell was the slowest thing in the
+check when the pooling work started and it is now a tenth of it, so further
+optimisation here is misplaced effort — and the other suites are not this
+project's to touch. **The optimisation is done.**
 
 **The parallelism itself, and its ceiling.** The pilot lives in
 `tests/frostfell_pilot.mjs`, tweaks are serialisable descriptors, and workers are
