@@ -20,9 +20,10 @@ anything hanging off the stage, and anything hiding under a notch.
 
 ## Where things are
 
-Nineteen iterations in, this file is both the reference and the design record.
-The reference comes first; the reasoning is kept below it, because a rule you
-cannot find quickly is a rule nobody reads.
+This file is both the reference and the design record. The reference comes
+first and the reasoning sits under it, because a rule you cannot find quickly is
+a rule nobody reads — everything a player needs is in the two tables below and
+the section they point at.
 
 **The rules, in order of how often you need them**
 
@@ -43,13 +44,10 @@ cannot find quickly is a rule nobody reads.
 | [Tests](#tests) | four suites, and what each one is for |
 | [Looking at it](#looking-at-it) | the Playwright shot walk |
 
-**The instruments, and what they have found.** These are the reasoning, kept
-because every balance decision in the game came out of one of them:
-[the ladder](#the-ladder), [the same deck two pilots](#the-same-deck-two-pilots),
-[which habits are worth anything](#which-parts-of-playing-well-are-worth-anything),
-[does walking past a fight pay](#does-walking-past-a-fight-pay),
-[every ware is worth buying](#every-ware-is-worth-buying),
-[what four transcripts had in common](#what-four-runs-had-in-common).
+**The reasoning.** [What the instruments have settled](#what-the-instruments-have-settled)
+is the design record: what has been measured, what it changed, and which roads
+turned out to be dead ends. Twenty rounds of *how each number got there* has been
+cut from it — what is left is what would change what you do next.
 
 ---
 
@@ -563,27 +561,6 @@ ordinary foe again.
 A defeat draws what actually stopped you — the run remembers the blow that took
 the leader, by name and well enough to draw the thing again. A crossing lays
 out the caravan that made it, every card of it.
-
-## The probe was half particle effects
-
-`npm run check` runs twelve suites and the frostfell probe is most of it. It is
-the tool this project uses every round and it had never been profiled. Forty per
-cent of its samples were `fx.pop` and `fx.burst` — building floating text and
-particle objects, sixty and four hundred at a time, for runs with no screen
-attached — plus the garbage collection all that allocation causes.
-
-They are gated on having a canvas now. Not on a test flag: a browser always has
-one, so this cannot change what a player sees, and the render suite sets one
-before it drives `draw()` so the effects are still exercised where it matters.
-The rules never read those arrays — section 8 of the source says presentation is
-presentation — and there is now a check that proves it, by playing the same seed
-to the same board state with and without something to draw on.
-
-**26.7s → 9.4s at the default sample.** That is what made [a properly sampled
-ablation](#which-parts-of-playing-well-are-worth-anything) affordable in the
-same session, which is the point: the cheaper the instrument, the more often the
-numbers can be settled instead of guessed.
-
 ## Tests
 
 ```
@@ -593,887 +570,262 @@ npm run test:frostfont    # rebuilds both faces and byte-compares the embed
 
 The suites run headless against the real functions through `window.FF` — there
 is no second implementation of the rules to drift from.
-
-### Nobody had played it on a phone
-
-Twenty-three rounds of shots were taken at 1280x720 and 2400x1080 in a desktop
-Chromium — a game built landscape-first for a thumb, never once photographed on
-anything shaped like a phone or driven by anything shaped like a finger.
-`shots.mjs --phone iphone-se|iphone-14|pixel-7|galaxy-fold` uses a real device's
-landscape viewport, its pixel ratio and touch emulation.
-
-**The touch-target check had been measuring the wrong units since iteration 6.**
-It asked `hh.w < 40` in STAGE units — but the stage is up to 1760 across and an
-iPhone SE is 667 CSS pixels, so everything on screen is about half the size the
-check believed. Measured properly, seven controls came in under the 44 pixels
-both platform guidelines ask for:
-
-```
-help  23x23      mute  23x23      order 54x23      menu 55x23
-pass  75x24      deck  33x46      discard 33x46          (iPhone SE, CSS px)
-```
-
-**PASS was twenty-four pixels tall.** It is the button pressed every single
-turn.
-
-Three fixes, none of which makes the art chunkier:
-
-- **Draw small, touch big.** Small controls get a forgiving second pass in
-  `hitAt`: an exact hit always wins, and only when nothing at all was hit does
-  the nearest small control within a thumb's slop take it. It cannot steal a
-  touch, because anything it could steal from would have matched exactly first.
-- **The check is in CSS pixels now**, converted through the same scale the
-  browser uses, and the shape list includes three real handsets. The game also
-  knows its own `CSS_PER_UNIT`, so a layout that needs to know what a thumb will
-  meet can ask.
-- **The collection pages** when a screen is too short for it. A Galaxy Fold
-  cover display is 280 pixels tall; sixty-eight tiles big enough for a thumb do
-  not go on it at any tile size, and the answer to that is fewer of them at
-  once rather than smaller ones.
-
-### The probe was half particle effects
-
-`npm run check` is the tool this project runs every round, and in twenty-two
-rounds nobody had ever profiled it. Forty per cent of its samples were
-`fx.pop` and `fx.burst` — building floating text and particle objects, sixty and
-four hundred at a time, for runs with no screen attached — plus the garbage
-collection all that allocation causes.
-
-They are gated on having a canvas now. The gate is `ctx` rather than a test
-flag, which matters: a browser always has one, so this cannot change what a
-player sees, and the render suite sets one before it drives `draw()` so the
-effects are still exercised where they are real. It is only safe because the
-rules never read those arrays — section 8 says so, and there is now a check that
-proves it by playing the same seed with and without something to draw on and
-comparing the board.
-
-**26.7s → 9.4s at the default sample.** Everything downstream of that got
-cheaper: the habit ablation that used to be unaffordable at a readable sample
-[now runs in about a minute](#which-parts-of-playing-well-are-worth-anything),
-which is the difference between guessing at a ranking and settling one.
-
-### The ladder
-
-`frostfell_run` is the balance instrument, and it plays every run four times,
-by a **cumulative ladder** of pilots — each one is the pilot above it plus one
-more thing it knows how to do, so the difference between two rows is that one
-thing and nothing else:
-
-- **careless** — deploys whatever is leftmost, throws gear at the nearest
-  thing, takes the leftmost card off every reward screen, buys the first thing
-  it can afford.
-- **+ the fight** — repositions, denies every scheme it can read, pulls a
-  wounded warden out of the front line, keeps a slot in reserve, spends gear
-  only when the gear earns the turn, rings for a wave while its own board is
-  set.
-- **+ the trader** — mends, tempers, burns to stay lean, and buys a card only
-  when the caravan is actually short of one.
-- **+ steering the pool** — declares a course, redeals an offer that is not
-  worth its price, and passes on offers a full caravan does not need.
-
-At **210 runs a rung** (`FF_RUNS=70`, about two and a half minutes):
-
-The instrument draws its own results now. Each row is one pilot and the bar is
-**where its runs ended** — how many fell in the first zone, the second, the
-third, and how many crossed:
-
-```
-                    zone 1 ░   zone 2 ▒   zone 3 ▓   crossed █        won
-careless            ░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓███     6%
-+ the fight         ░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓████████    17%
-+ the trader        ░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓██████████████    30%
-+ steering the pool ▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█████████████████     36%
-```
-
-**Thirty points for playing well: eleven from the fight, thirteen from the
-trader, six from steering the pool.**
-
-**And the default sample is 90 runs an arm now, not 24.** Gating the particle
-systems bought the room for it: the whole suite runs in 24 seconds at a band of
-±5.0, against 26.7 seconds at ±9.7 before. Every number an ordinary `npm run
-check` prints — including the two it gates on — is one it can stand behind.
-Settling a single habit still wants `FF_ABLATE`; a gate that fails now means
-something.
-
-A round earlier the same ladder read 22 / 34 / 37 with the fight at +15 — the
-biggest rung for the first time, off the back of [making the room rule a
-decision](#the-rule-the-board-is-built-around-was-not-a-decision). It reads +10
-now. Nothing was done to the fight in between, so **the honest reading is that
-the fight/trader split is not stable at 210 runs a rung** and neither number
-should be quoted to the point. What has been stable for three rounds is the
-shape: the careless floor near 7, the ceiling in the middle thirties, and
-somewhere between twenty-five and thirty points separating them.
-
-**The careless floor, and what it costs.** Last round it read 7%, one under the
-floor, and named scars as the likely cause without testing it. Tested: the same
-210 runs an arm with every scar stripped as it is handed out, and the careless
-pilot reads **8%**. So the guess was right this time — scars compound over a run
-and their three escapes (rest, mend, pay her) are all things a careless pilot
-never does.
-
-**That is a price worth paying, and here is the reasoning rather than the
-verdict.** A point of careless win rate buys a rule that turns a dead button on
-the trader's counter into a service, makes Hurt a warning with something behind
-it, and gives resting a reason to exist. The pilot losing that point is a bot
-that never rests, never mends and never visits the trader — a human who does any
-one of those three does not pay it at all. It stays, and the floor is stated at
-what it actually is rather than rounded up.
-
-### The rule the board is built around was not a decision
-
-Last round, "keeping a slot in reserve" fell from +5 to 0 and the note said it
-was on the edge of readable and would get its own turned-up run. It got one:
-**750 runs an arm, band ±1.5, and the answer was exactly +0.** A measured zero,
-not a noisy one — the room rule, the rule the whole board is built around, was
-worth nothing to the pilot.
-
-The instinct is to reach for the rule's numbers. That would have been wrong,
-because a habit reads zero two ways — doing it is worth nothing, or the moment
-to do it never comes — and nothing on the instrument could tell them apart. So
-two counters went in, and they answered it in one line:
-
-```
-free slots on the player line, by share of turns:  0:3%  1:17%  2:17%  3:22%  4:24%  5:18%
-```
-
-**The line stood on a fully packed board for three per cent of turns.** Warmth
-was on for the other ninety-seven. A rule whose penalty side fires three times
-in a hundred is not a decision; it is a passive heal with a footnote, and the
-habit of avoiding the penalty is worth nothing because there is nothing to
-avoid.
-
-So the bar moved from one gap to two, and the middle became [its own
-state](#the-rules-briefly): cramped, no warmth, no cold. That takes the live
-question from three per cent of turns to twenty *without making the game
-harsher* — the state that was silently free is now merely neutral — and it puts
-a cost on the body you put down on a board of four, which is where most fights
-actually happen.
-
-It worked, and the size of it is worth being plain about:
-
-| | before | after |
-|---|---|---|
-| keeping a slot in reserve | **+0** (±1.5, n=750) | **+2** (±1.5, n=750) |
-| a body held back, per deployment | 19% | 32% |
-| turns spent at two free slots | 17% | 25% |
-| the fight rung | +8 | **+15** |
-
-**The habit is worth +2, and the +8 that the consolidated table once reported is
-not quoted here.** Two readings disagreed — +8 at 210 runs an arm, +2 at 750 —
-and they did not overlap, so the bigger one was measured again on its own
-against the game as it now stands. It came back +2 a second time. A number that
-survives two independent runs at the tighter band beats one that appeared once
-at the looser one, and the small answer is the true one.
-
-Which leaves an honest loose end: **the habit is worth +2 and the rung it sits
-in went up by seven.** Those are not the same quantity — a rung is the whole
-fight played well against the whole fight played badly, and the room change
-alters the shape of every turn, not just the moments when the pilot declines a
-play. But the gap is not explained, and it is written down rather than papered
-over. The second and third rows are what is not in doubt: the pilot changed its
-behaviour sharply, hugging the new threshold, which is what a live question
-looks like from the outside.
-
-### And it is a decision for one side of the table only
-
-The room rule is symmetric — it has always applied to the foes too — but the two
-sides do not meet it equally often:
-
-```
-free slots, player line:  0:4%  1:6%  2:25%  3:22%  4:24%  5:18%     ≤2 on 35% of turns
-free slots, foes' line:   0:2%  1:5%  2: 9%  3:22%  4:36%  5:26%     ≤2 on 16% of turns
-```
-
-**This is intentional, and the reason is worth stating rather than fixing.** A
-rule that prices a decision can only be a decision for the side that makes
-decisions. The caravan is six wardens a player assembles and chooses to commit;
-the fell arrives in waves and chooses nothing. Applied to the foes the same rule
-is not a decision at all — it is weather, and it should be, because it is the
-same winter for everybody and only one side of the table can do anything about
-it.
-
-The foes are not untouched by their own board being full, either: the **gather**
-scheme needs a free slot on their side to put the new body in, so a packed fell
-line already denies itself. That interaction pulls the same rope from the other
-end, and it is the one that gives the player a reason to *stop* clearing the
-enemy back row.
-
-### Which rung should matter, and a note on what this instrument cannot see
-
-Three rungs within four points of each other is the flattest this ladder has
-read, and the question it raises — *should one of them be the thing that
-matters?* — has an answer, so here it is in writing.
-
-**The fight should be the rung that matters most, and it is not.** The reason is
-not that flat is wrong; it is that the three rungs are not three things a player
-*learns*, they are three things a player *does*, and they cost wildly different
-amounts of attention. The fight rung is fifteen or twenty decisions a fight
-across a dozen fights. The trader rung is three shop visits. The steering rung
-is one button at the leader screen and a redeal or two. Pricing all three the
-same means the thing a player spends ninety per cent of the run doing is worth
-the same as a button pressed once. That is the imbalance worth naming, and it is
-a different complaint from "the total is too small" — the total is fine.
-
-**And it was fixed the round after.** The diagnosis above was that the fight's
-habits overlapped and the answer was to find a decision the others did not
-already imply — not to turn the existing ones up. That is what happened, and it
-came from the opposite direction: not by inventing a decision, but by finding
-that [one the game already had was not being
-asked](#the-rule-the-board-is-built-around-was-not-a-decision). The room rule
-was live on three per cent of turns. It is live on twenty now, and **the fight
-rung went from +8 to +15 — the biggest on the ladder for the first time.**
-
-The general lesson is worth more than the fix: before adding a decision, check
-whether the ones already written down are being *reached*. A rule with a
-condition nobody meets is indistinguishable from a rule that is not there, and
-it will not show up as a missing feature — it shows up as a habit worth zero.
-
-**And a limit of the instrument, which came up trying to answer a different
-question.** The careless rung is a bot that ignores the guide completely. So
-when the guide gets better — as it did this round, gaining a hint for the single
-most valuable habit in the game — **the ladder cannot show it**. The careless
-pilot is a floor on *difficulty*, not a proxy for a new player. Any claim that
-better teaching moved that number would be false, and none is made below.
-
-The ceiling came from 42% to 30% and the careless pilot held at 8, which was the
-round's hardest ask because the two pull against each other: **every win a
-careless run has is a last-zone win**, so anything that makes the last zone
-harder for everybody lands on exactly the runs the floor protects. Two attempts
-proved it — a flat term on the deep road took the ceiling 41 → 37 and the floor
-8 → 6; reading the whole caravan answer harder in the deep fell did the same
-thing again more subtly. What separates them is [the
-margin](#the-rules-briefly): only the part of the reading past +0.10 is bitten,
-and it is bitten hard. The careless caravan reads under the margin and never
-feels it — measured at two very different bite settings, it sat at 8% in both.
-
-### Every ware is worth buying
-
-The counter has nine things on it. The probe now buys all nine, and the table of
-what it bought is the instrument — because a ware nobody buys in a whole run is
-furniture, and until this round nobody had asked.
-
-Asking turned up three different answers wearing one face:
-
-- **The pilot was not looking.** It had never once pressed the sigil or a charm
-  in nineteen iterations. That is not evidence about the ware, it is evidence
-  about the pilot — and a sigil is a free deployment every fight for the rest of
-  the run *and* a thinner draw pile, which is not a ware anybody should be
-  passing over. Both are on its list now, and both get bought.
-- **The ware was genuinely dead.** [Tending a hurt](#scars-and-tending-them)
-  could not be bought because nothing in the game had ever handed out a scar.
-- **The counting was wrong.** Half the counter is bought by pressing a button
-  that opens a chooser rather than by calling `buy` directly, so a wrapper round
-  the exported function saw three wares out of nine and called the other six
-  dead. Counted where the pilot decides instead.
-
-```
-a hot meal    ██████████████████████████  2855
-a card        ██████████                  1090
-mend all      ██████                       696
-temper        ████                         409
-burn a card   ██                           202
-a bell        █                            134
-a charm       █                            123
-a sigil       █                             59
-tend a hurt   ·                             23
-```
-
-The meal dominating is by design — it is the sink, and it is the only ware sold
-at two different nodes. What the table is for is the bottom: **a ware at zero is
-now a failing check**, so a dead button cannot sit on that counter for another
-nineteen iterations.
-
-### One habit is worth anything — is the board fake?
-
-The settled table says denying schemes is +7 and every other fight habit is
-inside the band, which reads as *nineteen of twenty decisions in a fight price
-at zero*. That would be a damning thing for a board game to be true of, so it
-was worth asking properly — and ablation could not answer it, because removing
-one habit leaves the pilot every other way of coping.
-
-**Removing them all at once had never been run.** It is one line and it settles
-the question:
+### The suites
 
 | | |
 |---|---|
-| the fight, played well | **18%** |
-| the fight, every habit switched off | **8%** |
+| `frostfell.test.mjs` | the rules — combat, statuses, cards, economy, saves |
+| `frostfell_render.test.mjs` | every screen draws, at eight device shapes, with every touch target and every line of type measured in CSS pixels |
+| `frostfell_tutorial.test.mjs` | the guided run, beat by beat |
+| `frostfell_run.test.mjs` | the balance probe: bots that play whole runs |
 
-**The set is worth ten points, and the individual readings roughly sum to it**
-(+7, +2, +2, +1). So the decisions are not fake and they are not hiding behind
-each other either. They are simply *unequal*: denying schemes is seventy per
-cent of everything the fight is worth, and the other three are real but small —
-each about one standard deviation, which is exactly why they read as zero when
-asked one at a time.
+`FF_RUNS=n` sets the sample. Everything else is an arm you turn up on its own:
+`FF_ABLATE`, `FF_HABIT`, `FF_COURSE`, `FF_MONEY`, `FF_NOSCARS`.
 
-That is a fair description of the game to have in writing: **the fight is one
-big decision with three small ones around it.**
+The shot walk is `tools/frostfell/shots.mjs` (`--size`, `--phone
+iphone-se|iphone-14|pixel-7|galaxy-fold`), and `tools/frostfell/playthrough.mjs`
+writes a whole run down turn by turn (`--tribe --course --careless`).
 
-### Three more things built, and the rule they add up to
+---
 
-The brief said build to what measured *positive*. Vanguard had, so the round
-built a third Vanguard card; schemes had, so it built a fourth scheme and two
-foes to carry it. All of it came out again, and this time the three failures
-line up into something more useful than any of the cards would have been.
+## What the instruments have settled
 
-| built | measured |
-|---|---|
-| **a scheme answered from the hand** — it takes the gear you were saving | careless **6% → 10%**, fight rung **+11 → +1** |
-| **Pikewife** — a Vanguard body that gains attack while it holds the front | careless **6% → 10%**, fight rung **+11 → +7** |
+Everything below came out of the probe or the shot walk. It is kept because it
+changes what you would do next; twenty rounds of *how each number got there* has
+been cut, and where a road turned out to be a dead end it is named as one so
+nobody drives down it twice.
 
-The scheme first. On paper it couples the only two habits that price above
-zero: hold gear, and deny schemes. Measured, it made the game *easier*, and the
-reason is structural rather than a matter of tuning — **the careless pilot's
-hand is always empty.** It dumps every card the turn it draws it, so a foe that
-spends a telegraph reaching into that hand is reaching into an empty pocket,
-while the pilot that *does* hold gear is the one being taxed. (Teaching the
-pilot to spend gear when a theft is telegraphed recovered the rung from +1 to
-+5 — worth knowing, because it means the scheme was also unanswerable as
-shipped, which is the fourth time this project has added a threat whose answer
-nobody could express.)
+### The ladder
 
-Then Pikewife, which pays for *standing* in the front row. A careful pilot moves
-bodies in and out of the front every turn and collects some of it; a careless
-pilot parks a warden there on turn one and never touches it again, and collects
-all of it.
+Four pilots, each the one above it plus one more thing it knows how to do, so
+the gap between two rows is that one thing:
 
-Together with last round's taunt cards, that is three:
-
-> **A mechanic that rewards leaving the board alone, or that targets a resource
-> the weak player does not use, belongs to the weak player.**
-
-The mechanics this game is good at all demand a *response* — a scheme you have
-one turn to answer, a room rule that prices every deployment, a front row that
-trades safety for tempo. The ones that reward a settled board reward the player
-who was going to settle anyway. Both cards are gone; the rule is in
-`index.html` beside the pool so the next round does not write them again.
-
-### Building to a measured gap, and what the gap turned out to be
-
-Four rounds had gone by without a new card, so this one built to the clearest
-number on the board: **Soak is six cards in fifty-three**, it is the only answer
-to Aimless, every card that has it is a *unit*, and A Heavy Pack matches items
-only — so a caravan travelling for gear cannot draft the answer at all.
-
-Three things were built for that gap. All three were measured, and all three
-were cut:
-
-| built | measured |
-|---|---|
-| **Braceboard** — gear that hands out Soak for the fight | ceiling **34 → 29** |
-| **Ward Charm** — a charm that hands out Soak for the run | (same run) |
-| **Boilerplate** — a 15-health scrap unit that natively soaks | careless 7 → 11, **the fight rung +15 → +4** |
-
-The first two are the previous round's finding arriving again: *a taunt does not
-prevent damage, it concentrates it.* Handing Soak out as a card is that mistake
-in a form the player cannot decline.
-
-The third is worse and more interesting. A sturdy self-taunting wall makes the
-game markedly easier for a bad player and *harder* for a good one, because it
-does not reward positioning — **it replaces it**. Every question the board asks
-about where a body stands has one answer while that card is on the table, and
-the fight rung — the whole measure of playing the fight well — fell by eleven
-points.
-
-**So Soak stays scarce on purpose**, and the reasoning is written into
-`index.html` beside the pool so the next round does not read the same table and
-build the same card. A gear caravan's answer to a fast thing is to kill it
-quickly, which is what twenty-one items are for. Content that substitutes for
-the geometry is not content.
-
-What shipped is what rewards the geometry instead:
-
-- **Emberward** — a hearth unit with **Vanguard**, the keyword that pays a
-  player for using the front row, and which sat on exactly one card in the whole
-  pool before this.
-- **A Wall of Old Shields** — the sixth event, and the first new one since the
-  fifth. Twenty boards driven into the ice, none of them facing the road: take
-  one, break the line up for scrip, or add a board of your own and the caravan
-  mends whole. It has its own drawn art like the other five.
-
-### Every card is worth playing — and the table that said otherwise
-
-Three cards sat at the bottom of the usage table for four rounds through two
-rebalances: lanternmoth, patchkit, thornoil. Given the ware table's lesson —
-that "nobody bought it" is three findings wearing one face — the same question
-went to the deck, and **the table was measuring the wrong thing.**
-
-Raw plays is a number about the *pool*, not about the card. The three at the
-bottom were carried into a finished deck about sixty times each; the three at
-the top, nine hundred — because the top three are **starter cards**, in every
-deck from the first step of every run. Divide it out and what is left is a
-number about the card: how often a caravan that *has* one finds a moment for it.
-
-On that measure the bottom was **thornoil 2.75 and patchkit 2.99** against a top
-of eleven — and **lanternmoth was fine all along**, at 4.81, low on the raw
-table only because it is a rare-2 card the pool rarely offers. One of the three
-named cards was never a problem.
-
-The other two were a blind spot in the pilot rather than in the cards. Every
-ally-targeted item was scored as though it were a heal — aimed at whoever was
-most wounded, and worth nothing if nobody was. **Thorns is retaliation**: it
-wants whatever is about to be *hit*, which is a soaker or the front of a lane
-with something swinging into it, and has nothing to do with who is hurt.
-**Shell is damage prevented**, which the scoring counted as zero. Taught both:
-
-| | before | after |
+| pilot | | worth |
 |---|---|---|
-| thornoil | 2.75 | **off the bottom five entirely** |
-| patchkit | 2.99 | 3.63 |
+| careless | takes the leftmost card, swings at the nearest thing | 6% |
+| + the fight | reads the board: denies schemes, places bodies, holds gear | 21% (**+15**) |
+| + the trader | spends well | 41% (**+20**) |
+| + steering the pool | drafts to a course | 40% (−1) |
 
-Thorn Oil was an instrument artefact. Patch Kit moved and is still low. The
-bottom of the fair table is now a different five — galewisp, lastlight,
-snowhare, hookline, patchkit — which is what happens when a measurement stops
-being wrong, and **none of them is chased this round**: a table that has just
-changed shape is not evidence about its own new bottom.
+Thirty-four points from bottom to top, the widest this has read — and a
+correction to something written down three rounds ago. The commitment then was
+that **the fight** should be the rung that matters. It is worth +15, the most it
+has ever been, and it is still not the biggest: the trader is +20, and money
+alone (penniless to bottomless) is worth ten points against four a few rounds
+ago. The fight got better and the economy got wider at the same time. Either
+narrow the economy or withdraw the commitment; do not write it down a third time
+without doing one of them.
+
+**Steering the pool prices at roughly nothing and that is not the courses'
+fault** — measured on its own at 450 runs an arm, all five courses beat
+declaring nothing and sit inside two standard deviations of each other. They are
+level. What prices at zero is the *drafting*, because a pilot that takes the
+best card on offer is already doing most of what steering can do.
+
+### What the instrument cannot see
+
+Two limits, both learned the hard way, both worth knowing before you trust a
+number out of this thing.
+
+**It cannot price a teaching change.** The careless pilot is blind, not slow: it
+does not deny schemes because it never looks, so anything that makes the
+decision *easier to notice* measures exactly zero on it. Five rounds of trying
+to move "careless 6%" by tuning follow from reading that floor as a difficulty
+number when it is a mechanical one. A change aimed at what a beginner *learns*
+has to be argued for, not measured — say so when you ship one.
+
+**It cannot see a choice its pilots do not make.** Every rung fights whatever
+the trail puts in front of it; none of them walks away. A separate arm had to be
+built to find out that walking past fights you can win **costs sixteen points** —
+you arrive at the last zone with the same power and half the cards, and it has
+got worse as the trader's rung has got wider, because the fights are where the
+scrip comes from.
+
+### Read state, don't intercept calls
+
+Four instruments in four rounds measured nothing, and three of them failed the
+same way: `FF.buy`, `FF.takeCard` and `FF.triggerUnit` are *exports*, and the
+game calls the module-scoped versions internally, so a wrapper round the export
+sees none of it. Read the state instead — the deck's contents, the board's
+counters, the price at the pilot's decision point.
+
+The fourth is worse and more useful: a table can be perfectly instrumented and
+still answer a different question than the one you asked.
+
+- **"Nobody buys this ware"** was three findings wearing one face: a ware that is
+  bad, a ware that is good but never affordable, and a ware the *pilot* was
+  never taught to want.
+- **"Nobody plays this card"** was a table about the *pool*, not the cards.
+  Divided by copies actually carried, the three cards at the bottom for four
+  rounds were mid-table, and the real answer — plays per copy carried — has run
+  since.
+- **The habit table** printed a podium drawn from noise for several rounds. It
+  now refuses to print above a ±2.0 band.
+- **The touch check** measured stage units, not CSS pixels, for seventeen
+  rounds. Rewritten, it found seven controls too small to hit.
+
+### What a good card looks like
+
+Written down before the cards were, after two rounds of building cards and then
+measuring them and cutting five of six. The rule is in the source above
+`const CARDS`, in full; in short: **a good card makes the player choose between
+two things they want, on the board, differently each turn.** Four tests — it
+asks a question answered differently on different turns; the question is asked
+on the board; it costs something the player wanted; and it does not answer a
+question the board already asks. If you cannot say what it costs, it is not
+finished.
+
+The round that wrote it first built three cards against it, and all three
+shipped — the first content round in three that did not cut most of what it
+made.
+
+### Schemes are most of what the fight is worth
+
+Denying schemes is the only fight habit that has ever priced above the band
+(+6 to +7); the rest sit inside it. That is not the board being fake — the
+locked-deck arm settles that — it is that the board's other decisions are cheap
+individually and the scheme is not.
+
+Three schemes: `mark` (deny by sliding the named warden, which needs a slot to
+slide into), `gather` (deny by leaving them no free slot — the one moment where
+killing something is the wrong play), `chill` (deny by emptying the lane).
+
+**A scheme must be `solo`.** A non-solo scheme is an effect *on top of* the
+foe's swing, so spreading them across the bestiary is simply a buff to the fell:
+measured, adding one took zone-two arrivals from 156 in 210 down to 127 and the
+careless floor from 6% to 4%. A solo scheme *is* the foe's turn — it whistles
+instead of swinging — which makes denying it worth the whole turn and makes
+carrying more of them safe. `mark` and `gather` are solo.
+
+Denial pays differently by how you did it, which is the answer to "three schemes
+is not enough variety": deny a gather by leaving no slot and the foe has thrown
+its turn at nothing; deny a chill by emptying the lane and you have stopped only
+the extra.
+
+**Dead end:** a fourth scheme that targeted the *hand*. The board is the shared
+surface; a scheme the board cannot answer is not a scheme.
+
+Spreading a scheme onto a new foe breaks any test that assumes *one* way of
+denying. The tutorial suite asserted that emptying the player's side denies
+whatever the opening rolled — true of `mark` and `chill`, false of `gather`,
+which wants a free slot on the fell's side. Deny the thing the scheme actually
+needs, not the thing that happened to work.
+
+### The room rule
+
+Three states, and it is the rule the board is built around:
+
+- **two or more free slots** — the whole line takes Regen 1
+- **exactly one** — cramped; nothing
+- **none** — Frost 1 on somebody, and they lose their next trigger
+
+It took three shapes to get here. As a two-state rule it measured **exactly
++0** at 750 runs an arm — a measured zero, not a noisy one. The third state is
+what made keeping a slot back a decision instead of a habit.
+
+It is symmetric, and the two sides do not meet it equally often: the foes' line
+runs emptier than the player's, so in practice it is a rule for one side of the
+table. That asymmetry is intentional and is why the fell's line is allowed to
+fill up.
+
+### The careless board is emptier, not fuller
+
+Measured this round, and it corrects five rounds of assumption. Free slots by
+share of turns:
+
+```
+careful pilot   0:2%  1:6%  2:32%  3:22%  4:22%  5:16%
+careless pilot  0:4%  1:6%  2:14%  3:24%  4:29%  5:22%
+```
+
+A beginner does not drown by packing the board. Their wardens die, the board
+empties, nothing blocks, and the leader takes the hits. Any change aimed at the
+packed-board failure is aimed at something that happens on 4% of their turns.
 
 ### The most lethal thing in the game has four health
 
-Mitewing has been in the top two of the late-zone death table for five rounds.
-It is a **tier-1 trash mob**: four health, two attack, the weakest foe in the
-bestiary. Counting what each foe contributes to the damage the fell actually
-swings — its tick rate over its counter, times its attack — explains it:
-
-```
-Mitewing     ██████████████████████  9%   counter 1 · aimless — no wall stops it
-Glutton      ██████████████████████  9%   counter 5
-Frostwyrm    █████████████████████   9%   counter 5
-Rime Knight  ██████████████████      8%   counter 4
-```
-
-**Its counter is 1.** It takes five turns for a Frostwyrm's one, and ten in the
-front row, so a trash mob swings as much in total as the biggest monsters in the
-game. That part is fine — it is what makes it frightening rather than trivial.
-
-What was not fine is that **Aimless outranked Soak** in the targeting order. So
-every answer the game spends its first hint teaching — the front of a lane takes
-the hits, put a wall up, move somebody out of the way — was *inert* against the
-foe doing the most damage in the game. Six wardens in the pool carry a taunt and
-none of them could do anything about it. The only answer was to kill it, and its
-mother whistles for more.
-
-So Mitewing's numbers are untouched and **a taunt now beats everything**, Aimless
-included. That is one line of targeting order, and it makes the keyword that was
-"beats Longshot" into the answer to the fastest thing on the table.
-
-**And then the answer turned out to cost more than the problem.** Six cards in
-fifty-three carry Soak and no leader starts with one, so a pilot that does not
-go looking will never hold one — the Kettle Titan's lesson, in a second place.
-So the pilot was told to go looking, and both numbers were measured:
-
-| | Mitewing's share of late deaths | the top rung |
-|---|---|---|
-| pilot chases a taunt | 25% | 30% |
-| pilot does not | 33% | **34%** |
-
-**A taunt does not prevent damage; it concentrates it.** One warden takes
-everything instead of the line spreading it out and the room rule mending all of
-it. Drafting toward a soaker moved Mitewing eight points down the death table
-and cost four points of win rate doing it.
-
-So the targeting order ships and the drafting advice does not. What was fixed is
-**fairness** — the game's first hint teaches you to put a wall up, and now that
-works on everything — not power. Mitewing is still a third of the late-zone
-death table, and the honest verdict is that it is a good fight that most decks
-have no answer to, rather than a tax. Putting a taunt in a starting deck is a
-thing to try; it is not a thing to claim.
-
-### The one leader that started you behind
-
-`--careless` across all four leaders turned up one that is not like the others:
-**Hearth was told it was SHORT OF A HARD HIT on the first step of a first run**,
-and the other three were told they wanted for nothing.
-
-It was not short of one. Its hard hit is Ember Flask — four points of burn, the
-most damage any starting card does to one target — and `hitOf` only counted the
-number in the damage column, so a card whose whole output is a status read as
-zero. **Damage on a delay is still damage**, and it is counted now.
-
-That is worse than a balance problem: it is the game giving one leader in four
-wrong advice on the first screen of somebody's first run. There is a check that
-every leader sets out wanting for nothing.
-
-### Watching the pilot that loses
-
-The careless rung has read 7% for five rounds and nobody had ever watched it
-play. `playthrough.mjs --careless` plays the way that rung plays — leftmost card
-into the leftmost slot, gear at the nearest thing, first option on every screen —
-and writes down every turn of it. The opening of a fight, verbatim:
-
-```
-turn 0: set down Kettlebeak
-turn 1: set down Snowpup
-turn 2: set down Cinderpup
-turn 3: used Ember Flask
-```
-
-**It fills the board by turn three, every fight.** Five bodies and the leader in
-six slots, which under [the room rule](#the-rules-briefly) is cramped: no
-warmth, every turn, for the rest of the fight. It throws gear at whatever is
-nearest whether or not that kills anything. It never reads a scheme.
-
-**Is 7% a fair floor for someone learning?** Yes, and the transcript is what
-settles it: *every mistake it makes is one the guide names out loud.* There is a
-hint for keeping two slots clear, a hint for the red text under a foe, a hint
-for one action a turn, a hint for the front row. The careless pilot is not a
-new player — it is a player who has ignored all nine hints. Seven per cent for
-that is generous.
-
-The one thing worth noting is where the difficulty actually bites. **The room
-rule turned the most natural beginner reflex — play everything you draw — from a
-mild inefficiency into the costliest habit in the game.** That is the rule
-working as designed, and the feedback is not hidden: the line under your own
-side of the board reads `CRAMPED — NO WARMTH` in amber every turn it is true,
-not once in a hint that scrolls away. A player who never reads a word of the
-guide still has that sentence in front of them for the whole fight.
-
-### Does walking past a fight pay
-
-The transcripts found a winning line the ladder could not see: **eight fights in
-twenty-one steps, and the run crossed.** Every rung above fights whatever the
-trail happens to put in front of it — none of them *chooses* to walk away — so
-no amount of turning the ladder up would ever have shown it.
-
-So: two pilots, identical in every respect except what they do at a fork with a
-fight on one side of it.
-
-```
-takes every fight     ██████████████████     35%   fought 75% of steps, arrived at 8.9
-                                             23.0 cards · 0.1 tempered · 5.4 meals · 91 unspent
-walks past what it can███████████████        30%   fought 28% of steps, arrived at 8.5
-                                             13.4 cards · 2.5 tempered · 3.1 meals · 43 unspent
-```
-
-It read **+13 for dodging** three rounds ago. It reads **−5** now, and the
-second line under each bar is why the first fix did not work and the second one
-did.
-
-*First attempt:* tax the difficulty curve — a caravan that had not been fighting
-loses its discount for being thin. It measured as **nothing**, and the reason is
-the whole lesson: **the dodger's caravan was not thin.** It arrived at 8.2
-against the fighter's 7.4. Everything it walks *towards* instead of a fight — a
-camp, a rest, a cache, a shop — builds a caravan too. A rule aimed at weak
-caravans cannot catch a strong one.
-
-*What the second line actually said:* the fighter arrived holding twenty-three
-cards, **no temper at all**, and **527 unspent scrip**. The dodger arrived with
-thirteen cards, three tempers and fifty. The trail was making the player choose
-between fighting and *spending*, and spending is where a caravan concentrates —
-a fight paid in cards, which make a deck bigger rather than a caravan stronger,
-and hid the exchange behind the node you gave up to fight.
-
-So the fix was two things and neither of them was a difficulty knob:
-
-- **A meal is sold on the reward screen too**, out of the scrip the fight just
-  paid. Unspent scrip went 527 → 91 and the fighter now eats 5.4 meals a run.
-- **[What you walk away from walks after you](#the-rules-briefly)** — because
-  once fighting paid properly, ducking still had to cost something.
-
-Fighting is the better line now, and it is better because it *pays* better, not
-because ducking was made painful. The difficulty term is the smaller half.
-
-### The same deck, two pilots
-
-A locked arm: the identical deck for the whole trail, nothing drafted, bought or
-burned, so every point between the rows is the fight and only the fight.
-
-```
-weak deck, played badly   ██                               4%
-weak deck, played well    ███████                         13%
-strong deck, played badly █████                           10%
-strong deck, played well  █████████                       18%
-```
-
-**Skill now closes more than a whole deck gap** — a weak deck played well (13%)
-beats a strong one played badly (10%). The first version of this arm measured
-*zero for every combination* — a caravan that does not grow cannot cross the
-trail at all, whoever is holding it, so there was never a gap for skill to
-close. That is what the fell answering the caravan is for.
-
-### Which parts of playing well are worth anything
-
-A second instrument switches each of the careful pilot's fight habits off one at
-a time and re-runs the sweep. Whatever the pilot can stop doing without losing
-win rate was never a decision:
-
-`FF_ABLATE=150` turns this section up on its own — the habits sit two to seven
-points apart and the suite's usual band is five, which is exactly why the same
-habit read +3 one round and −2 the next. Run at 450 runs an arm, the verdict was
-blunt: **three of the six habits were actively hurting the pilot.**
-
-```
-before, at 450 runs an arm:        after the cull, at 210:
-    +5  denying schemes                +9  denying schemes
-    +2  holding gear                   +2  holding gear
-    +0  keeping a slot                 +2  keeping a slot
-    -3  calling waves early             0  repositioning at all (removed)
-    -4  placing bodies "where hit"     -1  filling the front of both lanes
-    -7  keeping the leader at the back -5  calling waves early (removed)
-```
-
-Cutting the three negatives took the fight pilot from **17% to 26%**.
-
-- **Keeping the leader at the back** — in from the first round, priced at −7. The
-  leader is usually the strongest thing the caravan owns and the front row burns
-  two counters a turn; a leader kept out of reach is a leader that never swings.
-- **Placing bodies "where they will be hit"** — priced at −4 against simply
-  filling the nearest free slot, across two rewrites of the heuristic.
-- **Calling waves early** — priced at −3, then measured again in both directions
-  at 210 runs an arm and cost five points each time.
-- **Repositioning** has now been measured in both directions too — pull the
-  wounded back, walk the healthy forward — and neither is a decision. The pilot
-  does none. Where a body goes down is the question the geometry asks, and it is
-  asked once, at deployment.
-
-The lesson worth keeping is about the instrument, not the game: **for four
-rounds these numbers were read at a sample where the band was wider than the
-effect**, and three habits that were costing the pilot points survived because
-of it.
-
-### One table, one game
-
-Every habit number above had been measured against a game that has since moved —
-tempering flipped +5 to −8 in one round because the temper cap changed
-underneath it. So all of it is run **together, once, against the game as it
-stands**, at 300 runs an arm:
-
-**The suite no longer prints this table unless it can be trusted.** For six
-rounds it was printed every run and read as a podium, and it was never one: at
-the usual sample each row carries ±2.8, so six numbers re-rolled every round
-produce a different order every time — +9 / +8 / +6 / +6 one round, +6 / 0 / 0 /
-−2 / −3 the next, with nothing changed between them. Under a two-point band it
-prints; over one it prints a sentence saying so and how to get the real thing. A
-table the design record says not to trust is worse than no table.
-
-Here is the real thing, at **420 runs an arm, band ±2.0** — affordable now that
-[the probe is three times faster](#the-probe-was-half-particle-effects):
-
-```
-IN THE FIGHT (±2.0)
-    +7  ████                 denying schemes
-    +1  █                    keeping a slot in reserve
-     0                       holding gear until it earns the turn
-     0                       filling the front of both lanes first
-     0                       repositioning (removed)
-     0                       calling waves early (removed)
-```
-
-**One habit in the fight is worth anything, and it is denying schemes.**
-Everything else is inside the band. That is a starker picture than any podium
-the noisy table ever drew, and it is the first version of this table that has
-been asked at a sample it can answer at. Keeping a slot reads +1 here against +2
-on two earlier single-habit runs — consistent, and small.
-
-And the economy: **penniless 30%, as it ships 34%, a bottomless purse 54% —
-money is worth four points.** It had read four when the only things to spend on
-were one-a-visit; a meal gave the purse a bottom and the number went up, which
-is what a working economy looks like.
-
-The bottomless-purse arm is the reason meals have a **cap of twelve**. Handed
-free money and prices at a fiftieth, the pilot ate its way to **93%** — money
-buying a run outright rather than paying for one. The cap sits far above where
-real play lands (5.4 meals an average crossing) and exists purely so the
-degenerate case has a floor to hit; it took that arm from 93% to 56%.
-
-### And the same for the reward screen
-
-`FF_ABLATE` prices that rung's habits too, and it needed to: steering the pool
-had collapsed to a single point, and the reason turned out not to be the
-courses.
-
-```
-before, at 450 runs an arm:        after the cull:
-    +8  declaring a course             +8  declaring a course
-    +5  tempering instead of taking     0  buying a fresh offer
-    +1  buying a fresh offer            0  tempering instead of taking
-    +1  picking what the deck lacks     0  walking on when it wants nothing
-    -4  walking on when it wants none   0  picking what the deck lacks
-```
-
-**Declaring a course is worth eight points and nothing else on that screen is
-worth anything** — the levelling did not make the courses irrelevant, it made
-them equal, which is what levelling is for.
-
-What was dragging the rung down was *walking on*, put in two rounds ago on the
-sound reasoning that a fat deck draws badly. The reasoning was right and the
-trigger was wrong: it passed for scrip rather than for the deck.
-
-**And tempering instead of taking flipped from +5 to −8 inside one round**, which
-is the most useful thing this instrument has shown: the temper cap came down from
-four to three in the same round, and with only three tempers in a whole run,
-spending a reward on one is spending a card to move a number the trader was going
-to move anyway. Habits are not independent, and a number measured before a rule
-changed is not a number about the game as it stands.
-
-Redealing, tempering and the caravan read all stay in the *game* — a redeal is an
-option worth having, tempering off a reward screen is right for a caravan three
-steps from a trader, and telling a player what their deck lacks is worth doing
-whether or not a scoring rule can use it. The pilot no longer pretends any of
-them is a rule it can measure.
-
-### And the courses, settled
-
-`FF_COURSE=150` turns that comparison up on its own, the way `FF_ABLATE` does the
-habits. At **450 runs an arm** (band ±2.2), against a 35% baseline with no course
-at all: Bodies 43%, Hearth 42%, Cold 42%, Gear 41%, Scrap 38%. Four of the five
-sit inside two standard deviations of each other and all five beat declaring
-nothing. **They are genuinely level, not luck** — which the ten-point swings at
-the smaller sample could not have told you either way.
-
-**Scrap, settled.** Last round's table read Scrap at 25% at the ordinary sample
-and it was flagged rather than acted on. Turned up to 600 runs an arm (band
-±1.9) it read **30% against a 34% baseline for declaring no course at all** — so
-the 25% was noise, but a real finding was underneath it, and it was sitting in
-plain text:
-
-> **scrap** — "The first gear you use each fight does not cost the turn."
-> **gear** — "gear you use goes back into the deck, **and the first one each fight is free**."
-
-One course's whole rule was a strict subset of another's. Of course it measured
-worse than nothing. The free gear is now Scrap's alone and recycling is Gear's
-alone — tempo against value, which is an actual choice — and Scrap gets a second
-rule that no other course could have: it is the tribe that patches things back
-together, and the game just grew a thing to be patched, so **on the Scrap Trail
-a warden that goes down comes back patched rather than Hurt**, and never scars.
-
-Re-measured at 600 runs an arm: **none 36%, Cold 43%, Bodies 38%, Gear 38%,
-Scrap 35%, Hearth 33%.** Scrap is fixed — up five points and inside the field.
-(It holds: at 450 an arm a round later, with the room rule and Cold both changed
-underneath it, Scrap reads 36 against a 40 baseline.)
-
-**Cold, settled — and the guess was wrong.** Last round left Cold at 43% with a
-written hypothesis: the new scar rule rewards not taking damage, and Cold is the
-damage-prevention course. That was testable, so it got tested — the same pilots
-on the same seeds with every scar stripped the moment it is handed out, at 450
-runs an arm:
-
-| | none | hearth | cold | scrap | bodies | gear |
-|---|---|---|---|---|---|---|
-| scars on | 40 | 35 | **44** | 36 | 36 | 39 |
-| scars off | 37 | 35 | **42** | 36 | 35 | 39 |
-
-Cold's lead does not move. **Scars are not the mechanism**, and writing the
-guess down is what made it cheap to find that out.
-
-What it actually is, is a rule this round made more valuable somewhere else.
-**Frost skips a trigger, and a foe that does not trigger does not fire the
-scheme it committed to** — so Cold is automatic scheme denial, on the front of
-every wave, for free. Scheme denial is the most valuable habit in the fight, and
-it is worth *more* than it was, because every opening now carries a schemer. A
-course that hands you the best habit in the game without asking is not a choice.
-
-So Cold is cut a second time — iteration 15 took it from wave-wide to the front
-of a wave; this takes it to the front of the **first** wave. The thing walking
-at you when the bell rings arrives cold; the reinforcements do not. Re-measured
-at 450 runs an arm:
-
-```
-none    ████████████████████  40%
-cold    █████████████████████ 41%     (was 44)
-gear    ████████████████████  39%
-scrap   ██████████████████    36%
-bodies  ██████████████████    36%
-hearth  ██████████████████    35%
-```
-
-Cold is now level with declaring nothing, and the whole field spans six points —
-which is the standard this file has been claiming and, at this sample, finally
-meeting.
-
-### Hearth: five attempts, and a finding about the game instead
-
-Hearth read 34 against 40 for declaring no course at all — worse than not
-declaring, and the last course still failing. The brief said to check the pool
-lean before the rule, because Scrap's problem had turned out to be neither of
-the things it looked like. The pool is **13 hearth cards against 14 frost and 13
-scrap**: the lean is level. So it was the rule, and the rule was damage — Spice
-on deploy plus Spice every other turn, about one extra point per trigger, in a
-game whose fight ablation prices denying a scheme and keeping room far above
-hitting harder.
-
-Five versions, each measured at 450 runs an arm against a 36% baseline:
-
-| Hearth's rule | |
-|---|---|
-| Spice on deploy, Spice every other turn (as it was) | 34% |
-| once a fight, the first warden that would fall stays standing | 34% |
-| **warmth 2** — a line with room is warmed twice over | **52%** |
-| warmth 2, every other turn only | 50% |
-| warmth 2, only on a line keeping three slots clear | 53% |
-| warmth 2, only on the leader | 53% |
-
-**There is no setting between +0 and +17**, and that is a finding about the game
-rather than about this course. **Regen is a threshold good.** Any amount of
-warmth-2 tops the line back up, so halving how often it happens costs two
-points; making the player pay a permanent body for it costs *nothing*, because
-sustain outbids bodies; and putting it on the leader alone is worth as much as
-putting it on all six, because the leader is the thing whose death ends the run.
-
-So Hearth ships with the bounded rule — once a fight, the first warden that
-would fall stays standing — and **the gap is reported rather than forced**. It
-reads 34 against 36, two points, inside the ±2.2 band. The reason that gap
-closed is not this course: **the baseline came down from 40 to 36 this round.**
-Shipping a 53% outlier to close a two-point deficit would have been the worst
-trade in the file.
-
-This is the reason the front row runs double. Before that rule the same table
-read `+5 / +1 / 0 / 0 / 0 / −9` — one habit worth anything, four worth nothing,
-and "placing bodies where they will be hit" **nine points worse than filling the
-nearest free slot**. That is what a board with no geometry looks like: swings go
-to the front of a lane and stragglers walk toward the fighting, so six slots
-behave like two. Depth now costs and pays, and five of the six habits price
-above the noise floor.
-
-The suite also prints **what ends a good run in the last zone**, aggregated by
-name across every death — the run always remembered the blow that took the
-leader, it just never counted them. One death is an anecdote; two hundred is a
-design note, and it was: one beast was landing three late deaths in five.
-
-Three things worth saying plainly about that table.
-
-**The fight rung is still small — four points — and that is now an honest
-number rather than a broken one.** In-fight play is made of six real decisions
-instead of one habit plus one active mistake, and the ablation above prices each
-of them; but a run's outcome is still dominated by the deck it is holding, so
-skilled play inside a fight moves fewer points than the reward screen does.
-Saying otherwise would need a different game, not a different bot.
-
-**The gap is no longer concentrated in one node.** For one iteration the trader
-was worth fourteen points on its own, which reads as a working economy and is
-actually a single point of failure: one shop node on a map of nine deciding the
-run. Tempering now lives at a camp and on the reward screen as well, so a broke
-caravan still has roads to strength — and the price of that is that money is
-worth about nothing on its own. Both halves of that are the same fix, and the
-suite is held to the *total* gap rather than to any one rung, because the rungs
-move whenever the doors do.
-
-**Steering the pool measures at nothing**, and that is the honest headline. No
-course at all wins 36%; the five courses land between 35% and 40%, against a
-standard deviation of three. The pool's own leaning was already a good steer,
-and a blunter one laid over the top does not beat it.
-
-Getting there took three shapes, two of which were worse than no course at all:
-weighting the whole pool six-to-one drowned out the safety net that shows a
-body-starved caravan bodies, and guaranteeing one slot in three was the same
-fault, smaller. The shipped shape adds a *fourth* card, so it cannot make an
-offer worse — it buys agency and a rule to travel by, not wins.
-
-The rules attached to the courses are a different story, and the probe earned
-its keep on one of them. **A Full Line** shipped internally paying its warmth
-double on top of never freezing a packed board, and measured **73%**. Gated
-behind a board of five or more it still measured **61%**. A course at those
-numbers is not a choice a player makes — it is the answer, and the other four
-become decoration. The doubling is gone; the course kept the rule that made it
-interesting rather than the one that made it win, and the suite now fails if any
-course runs more than twenty points clear of the field.
-
-**Every number here carries a band**, printed with the results: one standard
-deviation in points at whatever sample was run. At the default eight seeds a
-tribe that band is ±10, which is wider than most of the differences on the
-table — so the suite reports at eight and only holds the game to a bar at fifty
-or more.
-
-It also reports which cards actually get played. A card that is carried around
-a whole run and never found a moment is the card's fault, and the suite fails
-on it; a card that never gets *acquired* is a weighting matter, and it prints
-that separately.
+Mitewing was in the top two of the late-zone death table for five rounds. It is
+a tier-1 trash mob — four health, two attack. Counting each foe's *share of the
+damage the fell actually swings* (tick rate over counter, times attack) explains
+it: a cheap Aimless body with a one-counter walks past every wall and swings
+every single turn. A death table ranks who landed the last blow; a damage-share
+table ranks who did the work. Keep both.
+
+### Hearth, and a finding about the game
+
+Hearth read bottom of the course table for several rounds through five attempts
+to fix it. The pool was not leaning — 13 hearth cards against 14 frost and 13
+scrap. The rule was: Regen is a **threshold good**. Healing that does not
+outrun the incoming does nothing at all, and healing that does outrun it makes
+the warden unkillable — there is no middle, so every tuning pass either did
+nothing or broke it. That is a fact about how the game's damage works, not about
+Hearth, and it applies to anything that mends.
+
+### Smaller things, settled
+
+- **Money is worth ten points**, penniless to bottomless, and rising. This is
+  the number to watch: it was four two rounds ago.
+- **A hot meal** is the ware everyone buys, at every price step. It is doing the
+  trader's job and that is allowed.
+- **Every card is played** in a full sweep, all 58 of them.
+- **Scars** cost the careless pilot about a point and do not explain any of the
+  course table.
+
+---
+
+## Nobody had played it on a phone
+
+Twenty-three rounds of shots were taken at 1280x720 in a desktop Chromium — a
+game built landscape-first for a thumb, never once photographed on anything
+shaped like a phone or driven by anything shaped like a finger. Two rounds of
+walking real handset shots turned up two whole classes of bug that no check
+covered.
+
+**Touch.** The check had been comparing hit boxes to 40 *stage units* for
+seventeen rounds. The stage is up to 1760 wide and the phone it is drawn on is
+667 CSS pixels across, so every target was about half the size the check
+believed. In CSS pixels, seven controls were under the 44px both platforms ask
+for and PASS was twenty-four pixels tall. `TOUCH_MIN`/`TOUCH_SLOP` give small
+controls a forgiving second pass in `hitAt`, so what the check prices is the
+effective target rather than the drawn one.
+
+**Type.** Nothing checked text at all. The informational text of a game built
+for a phone was rendering at six and a half pixels. `TEXT_MIN_CSS = 9` floors
+every size in `txt()` — one line, in the one place every string goes through —
+and on a desktop the floor is inert and nothing changes.
+
+Flooring the size then broke the *layout*, three ways, because every line step
+in the file was a number chosen for the size the text used to be:
+
+- `wrapText` wrapped at the requested size and `txt` drew at the floored one, so
+  card text overflowed its box. Both go through `textSize()` now.
+- `fitText` shrank a label that `txt` floored straight back up.
+- Every hardcoded step — `y + 24 + k * 17` — stacked glyphs on top of each
+  other. They all go through `lineH(size, step)`, which returns the step
+  unchanged when the floor is inert.
+
+And the help pages, which were a fixed grid with a hard slice at five lines, cut
+the rules off mid-sentence on a phone. They are measured and flowed now: two
+columns when the entries fit, one wide column when they do not, a second sheet
+with arrows when even that runs out. Nothing is cut.
+
+The render suite covers both now, in CSS pixels, on every screen at eight
+shapes: **no text below the floor, and no two lines of a paragraph closer
+together than the taller of them.** It found two collisions nothing had ever
+seen — the title's seal note landing on the run counter whenever a saved run
+pushed the block down, and the trader's bell text sitting on its own name.
+
+**The supported floor is a phone held sideways**: 375 CSS pixels tall (iPhone
+SE), 390 on a 14. The `653x280` shape in the suite is a folding phone's *cover*
+display; touch targets are checked there, type is not. At 280 tall the text
+floor is 23 stage units and the leader screen genuinely cannot hold seven
+winters as a name and a description.
+
+## The probe was half particle effects
+
+Forty per cent of the balance probe's samples were `fx.pop` and `fx.burst`,
+building floating text and particle objects — sixty and four hundred at a time —
+for runs with no screen attached. Gating the particle systems on having a canvas
+took the suite from 26.7s to 9.4s. The sample went from eight runs a tribe
+(±9.7, a band too wide to stand behind) to thirty (±5.0) in less wall time than
+the old suite took.

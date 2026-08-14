@@ -19,18 +19,57 @@ const noop = () => {};
  *  where, without a canvas anywhere near it. */
 export function mkCtx(log) {
   const grad = { addColorStop: noop };
+  /* The state a text check needs. `font` and `textAlign` are plain assignments
+     the old stub threw away, so nothing downstream could tell 9px text from
+     26px text — which is why nothing ever caught the phone. Width scales with
+     the size for the same reason: a wrap computed against a constant 7px a
+     character cannot notice that the text floor made every line wider. */
+  const st = { size: 14, face: 't', align: 'center' };
+  /* Cards, creatures and half the juice draw inside a translated, scaled
+     context, so the coordinates a naive stub records are card-local: four cards
+     in a row all report their rules text at the same x. Anything reasoning
+     about WHERE something landed on the stage needs the transform, so the stub
+     keeps one — a 2x3 matrix and a save/restore stack, same as the real thing. */
+  let m = [1, 0, 0, 1, 0, 0];
+  const stack = [];
+  const mul = (n) => [
+    n[0] * m[0] + n[1] * m[2], n[0] * m[1] + n[1] * m[3],
+    n[2] * m[0] + n[3] * m[2], n[2] * m[1] + n[3] * m[3],
+    n[4] * m[0] + n[5] * m[2] + m[4], n[4] * m[1] + n[5] * m[3] + m[5]];
+  const at = (x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+  const zoom = () => Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
   return new Proxy({}, {
     get(_t, k) {
       if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
-      if (k === 'measureText') return (s) => ({ width: String(s).length * 7 });
+      if (k === 'measureText') return (s) => ({ width: String(s).length * st.size * 0.5 });
       if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       if (k === 'canvas') return { width: 1280, height: 720 };
-      if (log && (k === 'fillText' || k === 'strokeText' || k === 'fill' || k === 'stroke' || k === 'arc' || k === 'fillRect')) {
+      if (k === 'save') return () => { stack.push(m.slice()); };
+      if (k === 'restore') return () => { if (stack.length) m = stack.pop(); };
+      if (k === 'translate') return (x, y) => { m = mul([1, 0, 0, 1, x, y]); };
+      if (k === 'scale') return (x, y) => { m = mul([x, 0, 0, y, 0, 0]); };
+      if (k === 'rotate') return (a) => { m = mul([Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0]); };
+      if (k === 'setTransform') return (...a) => { m = a.length === 6 ? a.slice() : [1, 0, 0, 1, 0, 0]; };
+      if (k === 'resetTransform') return () => { m = [1, 0, 0, 1, 0, 0]; };
+      if (log && k === 'fillText') {
+        return (s, x, y) => {
+          const p = at(x, y);
+          log.push(['fillText', s, p[0], p[1], st.size * zoom(), st.align]);
+        };
+      }
+      if (log && (k === 'strokeText' || k === 'fill' || k === 'stroke' || k === 'arc' || k === 'fillRect')) {
         return (...a) => { log.push([k, ...a]); };
       }
       return noop;
     },
-    set() { return true; },
+    set(_t, k, v) {
+      if (k === 'font') {
+        const m = /([\d.]+)px/.exec(String(v));
+        if (m) st.size = parseFloat(m[1]);
+        st.face = /Frostcut/.test(String(v)) ? 'd' : 't';
+      } else if (k === 'textAlign') st.align = v;
+      return true;
+    },
   });
 }
 
