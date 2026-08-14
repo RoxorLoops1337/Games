@@ -245,6 +245,45 @@ branches in the Whitewood, broken plates over black water on the Long Shelf, a
 jagged skyline with one watchfire still burning at Hollow Peak — under drifting
 snow, a scouring wind, and falling ash respectively.
 
+
+### What it would cost to split it, if it ever comes to that
+
+`index.html` is past 8,500 lines. One file is still the right call — no build
+step, no import graph, and the whole game is greppable — but three sections have
+quietly grown a second job, and this is written down so the next round is not
+guessing.
+
+**Rendering (§9, ~2,000 lines) does two things.** It draws the *board* — cards,
+creatures, statuses, the fight — and it draws the *screens* — title, trail,
+shop, camp, reward, collection, help. The board half is coupled to the battle
+state and changes when the rules change. The screen half is coupled to nothing
+except layout, and it is where every phone bug of the last three rounds lived.
+Splitting those two is the cleanest cut in the file and the only one that pays
+for itself: **the cost is one more `<script>` block and the loss of shared
+locals** (`txt`, `panel`, `lineH`, `C`, the layout constants), which would have
+to move to a shared prelude or be passed. Perhaps 40 lines of plumbing.
+
+**The battle engine (§6, ~1,200 lines) carries the beat queue.** `beat()`, the
+animation scheduling and `drainAll` are timing, not rules, and they are the
+reason the engine cannot be reasoned about without also holding the renderer in
+your head. Pulling the queue out is a smaller cut than it looks — it has four
+entry points — but it **cannot be done without a test-visible change**, because
+the suites drive `drainAll` directly. Cost: a day of test churn for a clarity
+win, not a correctness one.
+
+**The run layer (§7) has absorbed the trail, the shop, the camp, the rest stop,
+the shrine, events, and the reward screen** — seven node kinds whose only shared
+code is `advance()`. It reads as one thing and is seven. This is the section
+that grows every round and the one where a split would most reduce the chance of
+a change to the shop breaking the shrine. It is also the **most expensive** to
+cut, because every node reaches into `g.run` and `g.ui` freely, and formalising
+that would touch the save format — which the project rules say not to rename.
+
+**The recommendation, unexecuted:** if a split ever happens, take the screen
+renderer out first and stop. It is the only one of the three where the cost is
+plumbing rather than risk, and it is where the bugs actually are.
+
+
 ## The typefaces
 
 Two families, cut from source in `tools/frostfont/` and embedded as WOFF:
@@ -487,8 +526,9 @@ the gap between two rows is that one thing:
 |---|---|---|
 | careless | takes the leftmost card, swings at the nearest thing | 6% |
 | + the fight | reads the board: denies schemes, places bodies, holds gear | 21% (**+15**) |
-| + the trader | spends well | 41% (**+20**) |
-| + steering the pool | drafts to a course | 40% (−1) |
+| + the trader | spends well | 40% (**+19**) |
+| + steering the pool | drafts to a course | 38% (−2) |
+
 
 **The commitment is withdrawn, and here is what was done first.** For three
 rounds this file said the fight *should* be the rung that matters, and for three
@@ -588,30 +628,49 @@ instrument — careless was the wrong floor because it could not be taught.
 
 ### The dose does not matter, and the subject is everything
 
-That made the lesson the most valuable thing in the game nobody had tuned. It
-fired twice, in the first zone, about schemes, because those were the first
-numbers anybody wrote. Swept (`FF_LESSON=1`, 210 an arm):
+The lesson fired twice, in the first zone, about schemes, because those were the
+first numbers anybody wrote. Swept (`FF_LESSON=1`, 210 an arm):
 
 ```
-told once     18%  +11        told in every zone  18%  +11
-told twice    18%  +11        the room rule only   7%   +0
-told 4 times  18%  +11        both lessons        18%  +11
+told once  18%   told twice  18%   told 4 times  18%   every zone  18%
 ```
 
-**The dose is irrelevant.** Once is the whole effect — a player who has been
-told is told, and saying it again is noise — so once is what ships.
+**The dose is irrelevant** — once is the whole effect, so once ships.
 
-**The subject is everything.** A second lesson built the same way for the room
-rule was worth *exactly nothing*, and both together were still worth eleven. A
-lesson is worth what the thing it teaches is worth: denial is the only fight
-habit that has ever cleared the band, and keeping a slot back has measured +0
-for four rounds. Teaching a habit that pays nothing pays nothing. The room
-lesson was cut — the guide already has a room hint — and what ships is one
-sentence, once, about the one thing that matters.
+**The subject is everything.** A second lesson for the room rule was built,
+measured at zero, blamed on the pilot expressing the habit badly, rebuilt with
+the right expression, and measured at zero again. Both readings together are the
+finding: keeping a slot back is a real habit that is worth nothing *to a
+beginner*, because it only pays if the rest of your play is good enough to use
+the warmth. A denied scheme is a foe's wasted turn whoever you are. **A habit
+worth teaching has to pay on its own, and almost none do.**
 
-**It cannot see a choice its pilots do not make**, and it cannot price a
-situational one with a pilot that always chooses the same way. Both were fixed
-the same way: build the pilot that makes the choice the way a player would.
+### Is one-at-a-time the wrong question? No.
+
+The fight ablation had said the same thing for six rounds — denial clears the
+band, nothing else does — and that reads as "nineteen of twenty decisions are
+fake". But removing one habit leaves the pilot every other way of coping, and
+the *set* is worth twenty points. A set worth twenty made of parts worth zero is
+the signature of things that substitute, which is exactly what the money gap
+turned out to be. So the ablation was run the other way: start from the pilot
+that knows nothing, turn one habit on.
+
+```
+only denying schemes         24%  +18 of the 20
+only keeping a slot back      8%   +2
+only filling the front first  7%   +1
+everything else               6%    0        (±3.0 at 180 runs an arm)
+```
+
+**It is not substitution. The fight really is one decision and some decoration.**
+Denial alone recovers eighteen of the twenty points the whole set is worth.
+
+Worth recording how nearly this went the other way: at the default sample the
+same table read keeping-a-slot at **+5** with a ±2.8 band, and that was written
+down as a finding before it was turned up. At 180 an arm it is +2. A ranking
+inside its own band is noise — this suite says so in four places and it still
+caught me.
+
 
 ### The quiet road
 
@@ -641,13 +700,41 @@ ducks to a camp when hurt  44%    ±0
 fighting.** That is the shape a decision has — worth the same overall, worth
 different amounts on different steps.
 
-**With one honest caveat, which is the next thing to fix.** The hurt-ducker
-arrives with 23.7 cards and 5.8 meals against the fighter's 23.7 and 5.8, and
-fights 73% of steps against 73% — it is *barely exercising the choice*. A fork
-that offers a camp opposite a fight, on a step where the caravan happens to be
-hurt, comes up once or twice in a whole crossing. So the quiet road is a real
-decision that almost never arrives, and "level" here mostly means "played the
-same run". Widening it to the other quiet nodes is the obvious next move.
+That first reading was worthless and the counter that proved it is now in the
+output: the hurt-ducker was taking the quiet road at **2% of the forks that
+offered it**, arriving with the same cards, the same meals and the same power as
+the fighter. It was not exercising the choice; "level" meant "played the same
+run".
+
+**So the rule was widened and the pilot was fixed.** Every quiet place now pays
+in what that place is *for* — the camp in rest (the whole line mends), the rest
+stop in choice (four blessings instead of three), the shrine in the blessing
+costing nothing (a second card comes back blessed too). None of them is scrip or
+a card, which is what a fight gives.
+
+And the pilot ducks for the thing that is actually scarce. **The line is 7-8%
+wounded at the forks that offer the choice** — camps, meals, mend-all and the
+room rule's warmth clear damage faster than it accrues, so mending is not
+scarce and a rule paid in mending cannot be a decision. The blessing is scarce
+(three tempered cards a run and no more), so the pilot ducks for a shrine.
+
+```
+takes every fight                 46%        23.7 cards · 0.1 tempered · fought 73%
+walks past what it can            35%   −11  13.8 cards · 2.9 tempered · fought 28%
+ducks to a quiet stop when hurt   38%    −8  21.9 cards · 2.5 tempered · fought 67%
+```
+
+**Now it is exercised and now it costs something.** The tell is the third
+column: the hurt-ducker used to arrive with *identical* cards, meals and power
+to the fighter, and now arrives with two and a half tempered cards against the
+fighter's nought and more power (9.3 against 8.9) off fewer fights. It takes the
+quiet road at 37% of the forks that offer it and loses eight points doing it —
+a decision priced wrong rather than a rule nobody plays around.
+
+The structural finding underneath is the one to act on next: **damage is not a
+pressure in this game**, so nothing paid in mending will ever matter. And the
+blessings the shrine hands out, which ARE scarce, still do not pay for the cards
+and scrip a fight would have given.
 
 ### Read state, don't intercept calls
 
