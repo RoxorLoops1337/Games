@@ -2549,6 +2549,30 @@ function frontFirstSpots() {
   for (let c = 0; c < COLS; c++) for (let l = 0; l < LANES; l++) spots.push({ lane: l, col: c });
   return spots;
 }
+/* DEAD END, KEPT AS A COMMENT BECAUSE THE NUMBER IS WORTH MORE THAN THE CODE.
+
+   The trail decides 32.5% of how far a locked run gets and the deck 4.4%, so the
+   trail is the biggest lever in the game. The obvious suspect was here: every
+   foe in an encounter is `pick(src)`, an independent uniform draw from the
+   zone's tiers, so a three-foe fight can roll three of the heaviest bodies in
+   the pool or three of the lightest and nothing notices.
+
+   So it was built — encounters drawn to a strength BUDGET, same mean, variance
+   held inside 18% — and measured:
+
+     budget off   trail 32.6% of the zone-reached variance
+     budget on    trail 32.5%
+
+   Nothing. Not a small effect, nothing. Which is the useful part, because it
+   ruled out the whole class and pointed at the one that is NOT here: fixing the
+   BOSS per zone instead of drawing it takes the trail from 32.5% to 13.9%.
+   **Over half the trail's influence is which beast waits at the end of a zone**,
+   one draw per zone rather than the hundreds of foe draws inside it.
+
+   The code is reverted rather than shipped, on this file's own rule: a mechanic
+   that measures zero on the thing it was built for is not free, it is a rule
+   every future change has to reason around. Same verdict as SKILL.shelter, for
+   the same reason. See DESIGN.md for what to do about the boss. */
 function buildEncounter(g, kind) {
   const run = g.run;
   const zone = ZONES[clamp(run.zone, 0, ZONES.length - 1)];

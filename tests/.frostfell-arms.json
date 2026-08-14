@@ -44,11 +44,15 @@
   "sample": 360
  },
  "FF_VARIANCE=40": {
-  "said": "trail 21.6%, deck 3.8%, draw 0.2%",
-  "sample": 648
+  "said": "trail 13.9%, deck 1.6%, draw 0.0%",
+  "sample": 864
  },
  "FF_LADDERBAND=1": {
   "said": "the total reads 27/27/26/33/28 at five bases — sd ±2.8, so nothing under 6 points is detectable",
   "sample": 210
+ },
+ "FF_VARIANCE=36": {
+  "said": "won/lost: trail 13.9%, deck 1.6%, draw 0.0%, matchup 27.9% · zones: trail 27.5%, deck 4.4%",
+  "sample": 864
  }
 }
