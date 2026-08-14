@@ -1462,6 +1462,16 @@ function addStatus(g, u, key, n, quiet) {
    does it without making the game harsher: the state that was silently free is
    now merely neutral. Putting a body down costs something on a board of four,
    which is where most fights actually happen. */
+/* THE DOSE OF A LESSON, WHICH IS NOW A MEASURED NUMBER.
+
+   Being told about a scheme was measured at eleven of the twelve points that
+   knowing is worth — which made the lesson the most valuable thing in the game
+   that had never been tuned. It fired twice, in the first zone, because those
+   were the first numbers anybody wrote. Both are swept in the probe now, and
+   the answer was that the dose does not matter at all: once, twice, four times
+   and every-zone all measured the same +11. So it is once. A player who has
+   been told is told; saying it again is noise. */
+const LESSON = { times: 1, zone: 0 };
 const ROOM_NEEDED = 2;
 function hasRoom(g, side) {
   if (freeSlots(g, side).length >= ROOM_NEEDED) return true;
@@ -1664,8 +1674,8 @@ function triggerUnit(g, u) {
        one test of that rule it has to pass is the fourth, and it does — it
        fires only AFTER the question has been failed, so it never answers a
        question the board is still asking. */
-    if (fired && sc.missed && g.run && g.run.zone === 0 && !(g.run.everDenied) &&
-        (g.run.taught = (g.run.taught || 0) + 1) <= 2) {
+    if (fired && sc.missed && g.run && g.run.zone <= LESSON.zone && !(g.run.everDenied) &&
+        (g.run.taught = (g.run.taught || 0) + 1) <= LESSON.times) {
       fx.toast('YOU COULD HAVE STOPPED THAT', sc.col);
       logLine(g, plot.label.toLowerCase() + ' landed — ' + sc.missed, sc.col);
     }
@@ -1873,6 +1883,20 @@ function resolveTurn(g) {
         const victim = pick(line.filter((u) => !u.leader).concat(line));
         if (victim) {
           addStatus(g, victim, 'frost', 1);
+          /* A SECOND LESSON WAS BUILT HERE AND MEASURED AT ZERO.
+
+             The scheme lesson is worth eleven points, which made "what else
+             should the game teach?" look like the obvious next question. So the
+             room rule got the same treatment — a line told once, early, after
+             the cold had already got into it — and a pilot that heeds it.
+             At 210 runs an arm it was worth EXACTLY NOTHING, and teaching both
+             was worth the same eleven as teaching one.
+
+             A lesson is worth what the thing it teaches is worth. Denial has
+             been the only fight habit above the band for six rounds; keeping a
+             slot back has measured +0 for four. Teaching a habit that pays
+             nothing pays nothing, and the guide already has a room hint. So
+             this is a comment rather than a toast. */
           if (side === 'p') logLine(g, 'no room to fall back — the cold gets into ' + victim.name, '#8fe3ff');
         }
       }
@@ -8441,7 +8465,7 @@ window.FF = {
   caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
-  hasRoom, isPacked, ROOM_NEEDED,
+  hasRoom, isPacked, ROOM_NEEDED, LESSON,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,
   BELLS, EXTRAS, EVENTS, chOf, payCombo, zoneBoss, waveGap, offerCharms, offerSigil,

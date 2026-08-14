@@ -172,78 +172,22 @@ action that clears it has already happened, and the whole sequence goes away
 with one tap. HOW TO PLAY is a three-page rulebook covering the fight, every
 status and every keyword; it is on the title screen and behind `?` in a fight.
 
-### What the guide was not teaching
+### What the guide teaches, and what a lesson is worth
 
-The fight ablation has priced every habit a pilot can have for six rounds. Two
-survive every round: **keeping a slot in reserve** and **denying schemes**. The
-guide taught the first and had **not one word** about the second — nine hints
-about deploying, counters, the front row, the room rule, the bell and the waves,
-and nothing at all about the one line of red text a foe puts on the table a turn
-before it does something to you. A hint list that omits the most valuable thing
-in the game is not a guide, it is a tour.
+The fight ablation has priced every habit for six rounds and **denying schemes**
+is the only one that has ever cleared the band. The guide had not one word about
+it — nine hints about deploying, counters, the front row, the room rule, the bell
+and the waves, and nothing about the one line of red text a foe puts on the table
+a turn before it acts. It has one now, and a second beat behind it: a scheme that
+lands in the first zone, on a run that has never denied one, says once what would
+have taken it away.
 
-Fixing it took three things, and two of them were only visible by walking the
-opening in the shots and reading the hints in order as a new player:
-
-1. **The hint.** It names an action and clears when the action lands, like every
-   other hint that works: kill it, freeze it, or take away what it needs.
-2. **Something to point at.** Sampled across forty openings, only **seventeen**
-   contained a foe with a scheme anywhere in them — so more than half of all new
-   players met the rule for the first time in the second zone, having already
-   lost to it once. The very first fight of a run now always contains something
-   with a plan in it.
-3. **A moment to point at it.** The first version landed on turn five of the
-   opening with the log already reading *"Chillfang lunges at Bramblewick for
-   6"* — the rule explained immediately after the player lost to it, pointing at
-   red text that was no longer on screen. A scheme exists for exactly one turn,
-   between the foe committing and the foe doing, so this hint **holds** rather
-   than skipping: it waits, silently, until there is red text on the table, and
-   speaks the moment there is. It is the only hint in the list that does; every
-   other one describes something permanently true of the fight.
-
-Holding took three more goes than it should have, and each failure is worth
-keeping because each is a different way to get a waiting rule wrong:
-
-- **The clock was in the wrong unit.** Seconds are not shared between a player
-  thinking for thirty of them and a screenshot tool stepping the same fight in
-  four hundred milliseconds — so the thing being photographed was not the thing
-  being played, and the shot walk never once caught the hint firing. The budget
-  is **turns taken** now, counted across fights, which both of them experience
-  the same way.
-- **It deadlocked on its own completion.** `when` wanted red text on the table
-  and `done` wanted that red text resolved, so after the scheme fires both are
-  false at once and the hint held forever. Seven identical screenshots in a row
-  before it was spotted. It remembers having had its moment now.
-- **It waited for the wrong thing.** The first `done` wanted a *denial*
-  specifically, and a player who has not learned the rule yet is not going to
-  deny anything — a hint that teaches denial cannot require denial to go away.
-  It clears when the scheme resolves, landed or denied: either way the player
-  has watched the whole cycle, which is the thing being taught.
-
-**Does it teach denial now, or merely mention it?** Read in order, at 1280x720,
-it teaches: the hint arrives with `LUNGE AT SNOWPUP` in red under Chillfang and
-the target line drawn across the table to Snowpup, Snowpup is standing in the
-front column, and there is a free slot behind it to slide into. The rule, the
-instance, the named victim and the answer are all on the screen at once, and
-moving is free. That is a lesson. It was a sentence.
-
-**The ladder cannot show any of this**, and it would be dishonest to imply
-otherwise — see [which rung should
-matter](#which-rung-should-matter-and-a-note-on-what-this-instrument-cannot-see).
-What it did show is a consequence of point 2: with a schemer guaranteed in every
-opening, **denying schemes went from +4 to +10** on the habit table, because
-there is now more of it to do.
-
-The score is a step sequencer, not a loop: three voices over sixteen steps with
-the root, scale and tempo chosen by where you are — and it runs on its own
-randomness, because a run has to play the same way twice.
-
-Every rule the game grew after the sound did now has a voice of its own: a foe
-drawing breath as it commits to a scheme, the inverted answer when the scheme is
-denied, the long hiss of a boiler venting, four falling notes when the fire goes
-out and the cold takes the room, two hammer blows and a ring at the anvil, a
-bought bell, and a dry handful of snow. A rule you cannot hear is a rule you
-learn twice as slowly.
+Every hint names an ACTION and clears when the action lands. Two that shipped as
+statements — the front row, the room rule — sat on screen for three turns while
+the player waited them out, and clear on a move now. The scheme hint HOLDS: it
+waits for red text to exist rather than being skipped past it, and clears when
+that text resolves either way, because a player who has not learned the rule yet
+is not going to deny anything.
 
 ## Playing it with a thumb
 
@@ -319,79 +263,33 @@ node tools/frostfont/build.mjs --specimen  # write fonts.html
 ## Playing it
 
 ```
-node tools/frostfell/playthrough.mjs                       # → /tmp/ff-play
 node tools/frostfell/playthrough.mjs --tribe scrap --course pack --out DIR
+node tools/frostfell/playthrough.mjs --careless
 ```
 
 One run, start to finish, in a real browser, taking a note at every decision and
-a screenshot at every beat that matters. The probe measures the game across
-hundreds of runs and prints numbers; this is the opposite, and after seventeen
-rounds of tuning against a probe the thing nobody had was a **transcript**.
+a screenshot at every beat that matters. The probe measures across hundreds of
+runs and prints numbers; this is the opposite, and after seventeen rounds of
+tuning against a probe the thing nobody had was a **transcript**.
 
 **It has an opinion.** It used to take option zero everywhere, which made it a
 transcript of a passive player rather than a competent one — and a passive
-player's complaints are not the game's problems. It now plays like somebody who
-has read the rules: it ranks the fork by what the caravan is short of, denies
-schemes and keeps a slot in reserve in the fight (the four habits the ablation
-says pay), buys bell → temper → mend → meals until the purse gives out, and
-scores rewards against the caravan read. The passive pilot fought 38% of its
-steps; this one fights 52–75%.
+player's complaints are not the game's problems. It plays like somebody who has
+read the rules now, and `--careless` plays like somebody who has not.
 
-### What four runs had in common
+### What the transcripts found
 
-Four leaders, four courses, one transcript each. The brief's point stands: one
-run is an anecdote. All four agreed on three things, and all three became work.
+`playthrough.mjs` writes a whole run down turn by turn (`--tribe --course
+--careless`). Four leaders, four courses, one transcript each, and all four
+agreed on three things that became work: the trader was being walked out of with
+a full purse (a meal is what was missing), the first zone was where a careless
+run actually ended, and Hearth was told it was short of a hard hit it was already
+carrying.
 
-| | before | after this round |
-|---|---|---|
-| caravan power over 21 steps | flat, 5.4 → 6.7 | grows, 4.9 → 8.0–9.3 |
-| scrip left at the end | 138–328 | 21–106 |
-| "nothing affordable" at the trader | every visit, 2–3 a run | never — the purse runs out, not the counter |
-
-- **The caravan never grew.** Every run read between 5.4 and 6.7 from the first
-  step to the last while the deck went from eight cards to twenty-one. It was an
-  average over the whole deck, and an average cannot grow: every good card
-  drafted is divided by one more card drafted. So the trail, which scales to
-  what the caravan is carrying, spent every run answering a caravan that had not
-  moved — and quietly discounting itself, because the reading sat *below* the
-  bar for most of every trip.
-- **The purse was never empty.** Every run walked out of two or three shops
-  holding enough to buy anything on the counter. Not a pricing problem and not a
-  payout problem: she had run out of things worth buying.
-- **Fighting was optional.** All four crossed most of the trail without needing
-  to take a fight they were offered a way around.
-
-The three fixes are [the line, not the deck](#the-rules-briefly), [a hot
-meal](#a-hot-meal), and [what follows you](#the-rules-briefly) — each measured
-below.
-
-### And what it feels like to walk it
-
-Numbers do not say whether a rule reads as pressure or as a tax, so here is a
-run played start to finish under all three, written down while playing it.
-
-**The arc is legible now, and it was not before.** The fell's answer opens at
-−33% and closes to +2% by the second beast, and you can watch it move step by
-step: −33, −25, −18, −12, −7, +1, +2. That is the caravan catching up to the
-trail, and it reads as progress rather than as a difficulty knob — which is why
-that number is [now on the trail screen](#the-rules-briefly) instead of only in
-a debug tool. It was the clearest picture of a run's shape in the game and the
-player could not see it.
-
-**The trader is a proper stop.** Zone one: tempered, mended, *walked out with
-seventeen scrip*. Zone two: a bell, a temper, a mend, a meal, walked out with
-fifty-four and the next meal priced at sixty. Both times the **purse** ran out,
-not the counter. That is what a working economy feels like from the inside, and
-it is one round old.
-
-**What follows you reads as pressure, but it arrives late and quietly.** A
-competent player who only ducks the obviously-right forks — the shop when rich,
-the rest when hurt — accumulates about eight against a free six, so the warning
-appears in the second zone at 10% and is small enough to ignore right up until
-the run is nearly over. That is arguably exactly right: the rule is aimed at the
-player who ducks *systematically*, and [the probe says it costs that player ten
-points](#does-walking-past-a-fight-pay). But it is worth being honest that a
-player who is not dodging on purpose will barely meet it.
+The transcripts also found a winning line the ladder could not see, because
+every rung fights whatever the trail puts in front of it and none of them
+chooses to walk away. That became the dodge arm, and then
+[the quiet road](#the-quiet-road).
 
 ## Looking at it
 
@@ -451,23 +349,17 @@ run to find out what was missing.
 
 ### Tempering, and where to find it
 
-**Temper** puts +2 attack and +3 health on a card of your choice and leaves the
-deck exactly the size it was. It lives in **three places at three prices**:
+**Temper** puts +2 attack and +3 health on a card and leaves the deck the size
+it was. It lives in **three places at three prices**: the trader takes scrip for
+it once a visit, a camp will work the fire instead of mending anybody that
+night, and a reward screen will do it in place of the card you were going to
+take. A caravan can carry **three tempered cards** and no more — without the cap
+a competent pilot went straight to 67%.
 
-- **the trader** takes scrip for it, once a visit
-- **a camp** will work the fire instead of mending anybody that night
-- **a reward screen** will do it in place of the card you were going to take
-
-A caravan can carry **three tempered cards** and no more — the fire only does so
-much. The cap is what makes three doors a question of *when* and *what it costs*
-rather than simply three times the power; without it a competent pilot went
-straight to a 67% win rate.
-
-This started as one service at one node, and that was a single point of failure
+It started as one service at one node, which was a single point of failure
 wearing a decision's coat: miss the shop on a map of nine and lose the run. It
-was worth fourteen points of win rate on its own. Spread across three doors it
-is worth two, and being penniless is survivable — which is the fix, and the cost
-of the fix, stated together.
+was worth fourteen points alone; spread across three doors it is worth two and
+being penniless is survivable. That is the fix and the cost of the fix, together.
 
 ### Scars, and tending them
 
@@ -487,36 +379,26 @@ So this is the missing half rather than a new system. Hurt is the warning; a
 scar is what happens if you send it straight back out anyway. It makes resting a
 decision, and it is escapable three ways — rest it, mend it, or pay her.
 
-### A hot meal
+### A hot meal, and why the trader has a bottom
 
 **+1 attack and +2 health** on a card, no card added, **as many as you can pay
-for** — 34 scrip, then 60, then 86, and so on up. Sold at the trader *and* on
-the reward screen, so scrip earned in a fight has somewhere to go without giving
-up a fight to reach a shop. There is a ceiling of twelve for a whole run, set
-far above where real play lands (an average crossing eats five and a half and
-then the purse gives out); it exists so that a caravan handed absurd money
-cannot simply buy the run.
+for** — 34 scrip, then 60, then 86, and so on up, capped at twelve for a run
+(set far above where real play lands; an average crossing eats five and a half).
+Sold at the trader *and* on the reward screen, so scrip earned in a fight has
+somewhere to go without giving up a fight to reach a shop.
 
-This is the answer to *"the trader is a one-purchase stop — is it the prices or
-the payouts?"*, and it was neither. Four transcripts walked out of her stall
-holding between 138 and 328 scrip: she was affordable, and she had run out of
-things worth buying. The bell is one a visit, tempering is capped for the run,
-and everything else on her counter adds a card. The counter needed a bottom, not
-a discount.
+It is the answer to *"the trader is a one-purchase stop — prices or payouts?"*,
+and it was neither. Four transcripts walked out holding 138–328 scrip: she was
+affordable and had run out of things worth buying. The counter needed a bottom,
+not a discount.
 
-**And the trader has one thing nobody else sells: a bell.** The run-wide
-upgrades otherwise only fall out of a dead beast — one more card every fight, a
-slower wave clock, a fatter purse — and she has one, expensively. That exists
-because the moment tempering spread to three doors, money stopped being worth
-anything at all: penniless and well-funded measured identically. A currency that
-changes nothing is a currency to cut or to re-point, and this is the re-pointing.
-It put scrip back to five points of win rate.
-
-Buying a card at the trader also **lets you leave one on the counter**. Without
-that, a purchase was a trap for three iterations running: a penniless caravan
-beat a well-funded one by nine points, because every card bought was one more
-card between the deck and the card it wanted. A sale that trades up instead of
-bulking out is the version that was always intended.
+Two other things on that counter exist for measured reasons. **The bell** is the
+one run-wide upgrade money can buy — when tempering spread to three doors, money
+stopped being worth anything at all and penniless measured level with
+well-funded. **Buying a card lets you leave one behind**, because without that a
+purchase was a trap for three rounds running: a penniless caravan beat a funded
+one by nine points, every card bought being one more between the deck and the
+card it wanted.
 
 ## Beasts
 
@@ -580,7 +462,8 @@ is no second implementation of the rules to drift from.
 | `frostfell_run.test.mjs` | the balance probe: bots that play whole runs |
 
 `FF_RUNS=n` sets the sample. Everything else is an arm you turn up on its own:
-`FF_ABLATE`, `FF_HABIT`, `FF_COURSE`, `FF_MONEY`, `FF_NOSCARS`.
+`FF_ABLATE`, `FF_HABIT`, `FF_COURSE`, `FF_MONEY`, `FF_LESSON`, `FF_NOSCARS`.
+`FF_CONTRAST=1` prints how much text the contrast check actually paired.
 
 The shot walk is `tools/frostfell/shots.mjs` (`--size`, `--phone
 iphone-se|iphone-14|pixel-7|galaxy-fold`), and `tools/frostfell/playthrough.mjs`
@@ -619,8 +502,8 @@ statement of what this game is rather than what it was supposed to be: **the
 fight is the rung that carries the skill and the trader is the rung that carries
 the run.** The fight is what separates a player from themselves — it is the only
 place a habit has ever priced above the band, and it is worth more every round.
-The trader is what separates a good run from a bad one, because money buys
-permanent power and permanent power compounds across three zones. Those are two
+The trader is what separates a good run from a bad one, because money buys a
+choice of several individually-sufficient things (see below). Those are two
 different questions and the game answers both. It does not need them to be the
 same size, and the one attempt to force it cost ten points of win rate across
 every rung including the beginner's.
@@ -650,31 +533,39 @@ pilot buying every one in every shop and hanging them all on whichever warden
 was already biggest. Not the meal, which these notes had been blaming for
 rounds; not tempering; not cards.
 
-Two things were then tried, and the failures are worth more than the fix:
+Two fixes were tried and both failures are worth more than the one that shipped.
+**A cap of two charms a warden** narrowed the economy exactly as designed (the
+trader's rung fell +20 → +10) and took ten points off *every* rung, halving the
+careless floor — charms were never the rich pilot's lever alone, and a cap takes
+a slice out of everybody. Buffing the survivors did not bring it back. **A rising
+price** measured nothing and could not have: the bottomless arm is *defined* as
+"prices do not matter", so it cannot see a price. That arm measures what money
+can BUY. Only quantity moves it.
 
-**A cap of two charms a warden — built, measured, thrown away.** It narrowed
-the economy exactly as designed: the trader's rung fell from +20 to +10. It
-also took **ten points off every rung**, including halving the careless floor,
-because charms were never the rich pilot's lever alone — they were a large
-share of everybody's power, and a cap takes a slice out of all of it. Making
-each remaining charm stronger to compensate did not bring it back. A narrowing
-that is really a nerf is not a narrowing.
+Shipped: the trader carries **three charms in a whole run** and then has none,
+each dearer than the last. The ladder is unchanged; the bottomless arm drops
+five points. Charms won at rewards, caches and camps are not counted.
 
-**A rising price — no effect, and it could not have had one.** The bottomless
-arm is *defined* as "prices do not matter", so it cannot see a price by
-construction. That arm measures what money can BUY, not what it costs. Only a
-limit on quantity moves it.
+**And the rest of the gap is redundancy, not compounding.** The subtractive arm
+left eighteen points unexplained, so the arm was run the other way: a
+*penniless* pilot handed exactly one ware for free.
 
-What shipped is the quantity limit at its narrowest useful point: the trader
-carries **three charms in a whole run** and then has none, and each one costs
-more than the last. The shipped ladder is unchanged to within noise; the
-bottomless arm drops five points. Charms won at rewards, caches and camps are
-not counted — the fell gives away as many as it likes.
+```
+free bell   53%  (+24)      free temper  30%  (+1)
+free meal   52%  (+23)      free heal    29%   (0)
+free charm  45%  (+16)      free card    28%   (−1)
+free sigil  42%  (+13)
+```
 
-Eighteen points of the gap remain. They are not one ware; they are the fact
-that money buys permanent power and permanent power compounds across three
-zones. Cutting further means cutting what a normal purse buys too, which was
-tried and measured and cost the whole game.
+Neither "one ware" nor "all of them a little": **any one of four wares is
+individually sufficient.** A penniless pilot handed a bell, or a meal, or a
+charm alone already beats the pilot paying full price for everything — which is
+exactly why removing one thing from a rich pilot mostly costs nothing. The
+others substitute for it.
+
+So no single cut can close the gap, and cutting further means cutting what a
+normal purse buys too, which was tried and measured and cost ten points. The
+word "compounding" is retired.
 
 ### What the instrument cannot see
 
@@ -686,62 +577,100 @@ that it starts denying schemes once the game has TOLD it about one, against a
 control that is never told and one that always knew.
 
 ```
-never told   6%
-told once   11%
-always knew 12%
+never told   7%   166/210 saw the second zone
+told once   18%   196/210
+always knew 19%   202/210
 ```
 
-**Being told carries five of the six points knowing is worth.** The limit was
-real for the pilot as it was built, not for the instrument — careless was the
-wrong floor because it could not be taught, not because teaching cannot be
-measured. A teachable pilot is the right floor and it exists now.
+At 210 runs an arm, band ±2.1: **being told carries eleven of the twelve points
+that knowing is worth.** The limit was real for the pilot as built, not for the
+instrument — careless was the wrong floor because it could not be taught.
 
-**It cannot see a choice its pilots do not make.** Every rung fights whatever
-the trail puts in front of it; none of them walks away. A separate arm had to be
-built to find out what walking past a fight costs.
+### The dose does not matter, and the subject is everything
+
+That made the lesson the most valuable thing in the game nobody had tuned. It
+fired twice, in the first zone, about schemes, because those were the first
+numbers anybody wrote. Swept (`FF_LESSON=1`, 210 an arm):
+
+```
+told once     18%  +11        told in every zone  18%  +11
+told twice    18%  +11        the room rule only   7%   +0
+told 4 times  18%  +11        both lessons        18%  +11
+```
+
+**The dose is irrelevant.** Once is the whole effect — a player who has been
+told is told, and saying it again is noise — so once is what ships.
+
+**The subject is everything.** A second lesson built the same way for the room
+rule was worth *exactly nothing*, and both together were still worth eleven. A
+lesson is worth what the thing it teaches is worth: denial is the only fight
+habit that has ever cleared the band, and keeping a slot back has measured +0
+for four rounds. Teaching a habit that pays nothing pays nothing. The room
+lesson was cut — the guide already has a room hint — and what ships is one
+sentence, once, about the one thing that matters.
+
+**It cannot see a choice its pilots do not make**, and it cannot price a
+situational one with a pilot that always chooses the same way. Both were fixed
+the same way: build the pilot that makes the choice the way a player would.
 
 ### The quiet road
 
-That arm read **−16 points**, which does not describe a decision. A fork where
-one side is always wrong is furniture with a signpost on it — and the game had
-a rule that *punished* ducking (what you walk away from walks after you, and
-the trail says so before the fork) and nothing at all that paid for it.
+That arm read **−16**, which does not describe a decision — a fork where one
+side is always wrong is furniture with a signpost on it. The game had a rule
+that *punished* ducking (what you walk away from walks after you) and nothing
+that paid for it.
 
-So the quiet road pays in the one thing a fight can never give. **A camp
-reached by walking past a fight mends the whole line instead of six.** It is
-worth everything when the caravan is hurt and nothing at all when it is not,
-which is the shape a decision has, and it is still paid for — in the card, in
-the scrip, and in the pack getting two steps closer. It is spent when used: a
-standing bonus would just be a different constant.
+So the quiet road pays in the one thing a fight can never give: **a camp reached
+by walking past a fight mends the whole line instead of six.** Worth everything
+when the caravan is hurt and nothing when it is not, still paid for in the card,
+the scrip and the pack closing two steps, and spent when used.
 
-**The dodge arm still reads −16, and that is the instrument, not the rule.** A
-pilot that walks past everything it can never arrives at the fork hurt and never
-gets to want the mend. Pricing a situational choice needs a pilot that makes it
-situationally, which this one is not. Ducking everything should still lose;
-ducking the pack that would finish you should not.
+**And now measured, by the pilot that had to be built to measure it.** A pilot
+that ducks *everything* never arrives at a fork hurt, so it can never want the
+mend — the same limitation as the careless pilot's, and the same fix. A third
+arm takes every fight until the caravan is genuinely hurt, then takes the quiet
+road if it leads to a camp:
+
+```
+takes every fight          44%
+walks past what it can     31%   −13
+ducks to a camp when hurt  44%    ±0
+```
+
+**Ducking everything loses sixteen points; ducking only when hurt is level with
+fighting.** That is the shape a decision has — worth the same overall, worth
+different amounts on different steps.
+
+**With one honest caveat, which is the next thing to fix.** The hurt-ducker
+arrives with 23.7 cards and 5.8 meals against the fighter's 23.7 and 5.8, and
+fights 73% of steps against 73% — it is *barely exercising the choice*. A fork
+that offers a camp opposite a fight, on a step where the caravan happens to be
+hurt, comes up once or twice in a whole crossing. So the quiet road is a real
+decision that almost never arrives, and "level" here mostly means "played the
+same run". Widening it to the other quiet nodes is the obvious next move.
 
 ### Read state, don't intercept calls
 
-Four instruments in four rounds measured nothing, and three of them failed the
-same way: `FF.buy`, `FF.takeCard` and `FF.triggerUnit` are *exports*, and the
-game calls the module-scoped versions internally, so a wrapper round the export
-sees none of it. Read the state instead — the deck's contents, the board's
-counters, the price at the pilot's decision point.
+Five instruments in five rounds measured nothing, and they failed in three ways
+worth knowing before you build a sixth.
 
-The fourth is worse and more useful: a table can be perfectly instrumented and
-still answer a different question than the one you asked.
+**Wrapping an export sees nothing.** `FF.buy`, `FF.takeCard` and `FF.triggerUnit`
+are exports; the game calls the module-scoped versions internally. Read the
+state instead — the deck's contents, the board's counters, the price at the
+pilot's decision point.
 
-- **"Nobody buys this ware"** was three findings wearing one face: a ware that is
-  bad, a ware that is good but never affordable, and a ware the *pilot* was
-  never taught to want.
-- **"Nobody plays this card"** was a table about the *pool*, not the cards.
-  Divided by copies actually carried, the three cards at the bottom for four
-  rounds were mid-table, and the real answer — plays per copy carried — has run
-  since.
-- **The habit table** printed a podium drawn from noise for several rounds. It
-  now refuses to print above a ±2.0 band.
-- **The touch check** measured stage units, not CSS pixels, for seventeen
-  rounds. Rewritten, it found seven controls too small to hit.
+**A stub that drops state lies quietly.** The canvas stub's `save`/`restore`
+carried the transform and not the style, so one faded draw silenced the contrast
+check for the rest of the frame — 96% of the text went unexamined and the check
+reported clean.
+
+**A perfectly instrumented table can answer a different question.** "Nobody buys
+this ware" was three findings wearing one face — bad, unaffordable, or never
+taught to want. "Nobody plays this card" was a table about the *pool*: divided
+by copies actually carried, the three cards at the bottom for four rounds were
+mid-table. The habit table printed a podium drawn from noise until it was made
+to refuse above a ±2.0 band. And the touch check measured stage units rather
+than CSS pixels for seventeen rounds.
 
 ### What a good card looks like
 
@@ -760,35 +689,32 @@ made.
 
 ### Schemes are most of what the fight is worth
 
-Denying schemes is the only fight habit that has ever priced above the band
-(+6 to +7); the rest sit inside it. That is not the board being fake — the
-locked-deck arm settles that — it is that the board's other decisions are cheap
+Denying schemes is the only fight habit that has ever cleared the band (+6 to
++7); the rest sit inside it. That is not the board being fake — the locked-deck
+arm settles that — it is that the board's other decisions are cheap
 individually and the scheme is not.
 
 Three schemes: `mark` (deny by sliding the named warden, which needs a slot to
 slide into), `gather` (deny by leaving them no free slot — the one moment where
-killing something is the wrong play), `chill` (deny by emptying the lane).
+killing something is the wrong play), `chill` (deny by emptying the lane). Deny
+a gather and the foe has thrown its whole turn at nothing; deny a chill and you
+have stopped only the extra. That is the variety, and it is in *how* rather than
+in *how many*.
 
-**A scheme must be `solo`.** A non-solo scheme is an effect *on top of* the
-foe's swing, so spreading them across the bestiary is simply a buff to the fell:
-measured, adding one took zone-two arrivals from 156 in 210 down to 127 and the
-careless floor from 6% to 4%. A solo scheme *is* the foe's turn — it whistles
-instead of swinging — which makes denying it worth the whole turn and makes
-carrying more of them safe. `mark` and `gather` are solo.
+**A scheme must be `solo`** — it is the foe's turn rather than an effect on top
+of its swing. A non-solo scheme is simply a buff to the fell: adding one took
+zone-two arrivals from 156 in 210 down to 127 and the careless floor from 6% to
+4%. `mark` and `gather` are solo.
 
-Denial pays differently by how you did it, which is the answer to "three schemes
-is not enough variety": deny a gather by leaving no slot and the foe has thrown
-its turn at nothing; deny a chill by emptying the lane and you have stopped only
-the extra.
+**Dead ends:** a fourth scheme targeting the *hand* (the board is the shared
+surface; a scheme the board cannot answer is not a scheme), and a tier-1 foe
+carrying one (the first zone is where somebody learns what a telegraph is — a
+timer there is not a decision).
 
-**Dead end:** a fourth scheme that targeted the *hand*. The board is the shared
-surface; a scheme the board cannot answer is not a scheme.
-
-Spreading a scheme onto a new foe breaks any test that assumes *one* way of
+Spreading a scheme onto a new foe breaks any test that assumes one way of
 denying. The tutorial suite asserted that emptying the player's side denies
-whatever the opening rolled — true of `mark` and `chill`, false of `gather`,
-which wants a free slot on the fell's side. Deny the thing the scheme actually
-needs, not the thing that happened to work.
+whatever the opening rolled — true of `mark` and `chill`, false of `gather`.
+Deny the thing the scheme actually needs.
 
 ### The room rule
 
@@ -842,27 +768,29 @@ Hearth, and it applies to anything that mends.
 
 ### And a third thing nobody was checking
 
-Touch was rewritten in CSS pixels and found seven controls too small to hit.
-Type got a floor and a stacking rule and found five collisions. Nothing had ever
-asked whether the text could be **seen**, which is a strange gap in a game
-painted in dim blues on darker blues.
+Touch was rewritten in CSS pixels and found seven controls too small. Type got a
+floor and a stacking rule and found five collisions. Nothing had ever asked
+whether the text could be **seen**.
 
-The canvas stub records the colour every shape was filled in *and its bounding
-box*, so each line of text is paired with the shape actually underneath it
-rather than with whatever happened to be drawn most recently. The ratio is real
-WCAG: 4.5:1 for body text, 3:1 for large. Things deliberately faded — a sold-out
-ware, a locked leader — are drawn under a `globalAlpha` and are exempt.
+The first pass found exactly one thing, which was suspiciously few — and it was.
+The stub's `save`/`restore` carried the transform and not the *style*, so one
+`globalAlpha = 0.35` anywhere in a frame stayed 0.35 for every draw after it,
+and the check — which skips deliberately faded text — skipped almost all of it.
+**Thirteen of fifteen strings on the title screen were never looked at.** Fixed,
+coverage went from 18 texts a frame to 457.
 
-It found the collection's undiscovered-tile `?`: a dim grey drawn straight onto
-the creature silhouette behind it, which is whatever colour that beast happens
-to be — **2.1:1 against a Hearth orange**, on every screen shape at once. It has
-its own dark disc now.
+Widening it then needed the right model, because **every glyph in this game is
+outlined**. `txt` strokes a dark rounded outline behind the fill unless told not
+to, so an outlined glyph reads as a shape against its own outline rather than
+against whatever is behind it. A naive check called a white unit name over an
+orange creature 2.2:1 and it is perfectly legible. So: for outlined text the
+ground is the outline; for text drawn with the outline suppressed it is whatever
+was painted underneath. Ratios are real WCAG — 4.5:1 body, 3:1 large.
 
-Walking the same shots turned up the other half by eye: every tile name in the
-collection was clipping into its neighbour, because `fitText` shrank them to fit
-and the text floor pushed them straight back up. The floor wins — that is what
-it is for — so the names are cut to the tile with an ellipsis and the whole
-thing is one tap away.
+With coverage 25× wider and the model right, **the palette holds**: nothing in
+the game fails. The one thing it ever caught — the collection's undiscovered `?`
+at 3.4:1 against its own outline on a phone — is fixed, and re-introducing it
+makes the check fire again, which is how you know it still has teeth.
 
 ### Nothing is half-tested now
 
@@ -870,10 +798,9 @@ The 653x280 shape in the render suite is a folding phone's *cover* display, and
 the type check used to skip it with a note: at 280 tall the floor is 23 stage
 units and the leader screen could not hold seven winters as a name over a
 description in a fixed 44-unit row. Excluding a shape with a documented reason
-is the right move once and a habit twice, so the row measures its own contents
-instead, the list flows from the header, and the WINTER total sits under the
-last row rather than at a fixed offset. **Every shape in the list is now checked
-for everything it is in the list for.**
+is right once and a habit twice, so the row measures its own contents instead
+and the exclusion is gone. **Every shape is checked for everything it is in the
+list for.**
 
 ### Smaller things, settled
 
@@ -891,50 +818,34 @@ for everything it is in the list for.**
 ## Nobody had played it on a phone
 
 Twenty-three rounds of shots were taken at 1280x720 in a desktop Chromium — a
-game built landscape-first for a thumb, never once photographed on anything
-shaped like a phone or driven by anything shaped like a finger. Two rounds of
-walking real handset shots turned up two whole classes of bug that no check
-covered.
+game built landscape-first for a thumb, never photographed on anything shaped
+like a phone. Two rounds of real handset shots turned up two whole classes of
+bug no check covered.
 
-**Touch.** The check had been comparing hit boxes to 40 *stage units* for
-seventeen rounds. The stage is up to 1760 wide and the phone it is drawn on is
-667 CSS pixels across, so every target was about half the size the check
-believed. In CSS pixels, seven controls were under the 44px both platforms ask
-for and PASS was twenty-four pixels tall. `TOUCH_MIN`/`TOUCH_SLOP` give small
-controls a forgiving second pass in `hitAt`, so what the check prices is the
-effective target rather than the drawn one.
+**Touch.** The check compared hit boxes to 40 *stage units* for seventeen
+rounds. The stage is up to 1760 wide and the phone is 667 CSS pixels across, so
+every target was half the size the check believed: seven controls under the 44px
+both platforms ask for, and PASS was twenty-four pixels tall. `TOUCH_MIN`/
+`TOUCH_SLOP` give small controls a forgiving second pass in `hitAt`, so what is
+priced is the effective target rather than the drawn one.
 
-**Type.** Nothing checked text at all. The informational text of a game built
-for a phone was rendering at six and a half pixels. `TEXT_MIN_CSS = 9` floors
-every size in `txt()` — one line, in the one place every string goes through —
-and on a desktop the floor is inert and nothing changes.
+**Type.** Nothing checked it. The informational text was rendering at six and a
+half pixels. `TEXT_MIN_CSS = 9` floors every size in `txt()` — one line, in the
+one place every string goes through, inert on a desktop.
 
-Flooring the size then broke the *layout*, three ways, because every line step
-in the file was a number chosen for the size the text used to be:
+Flooring the size then broke the *layout* three ways, because every line step in
+the file was a number chosen for the size the text used to be. `wrapText` and
+`fitText` go through `textSize()` now; every hardcoded step goes through
+`lineH(size, step)`, which returns the step unchanged when the floor is inert.
+The help pages were a fixed grid with a hard slice at five lines and cut the
+rules off mid-sentence; they are measured and flowed now — two columns, one wide
+column, a second sheet with arrows — and nothing is cut.
 
-- `wrapText` wrapped at the requested size and `txt` drew at the floored one, so
-  card text overflowed its box. Both go through `textSize()` now.
-- `fitText` shrank a label that `txt` floored straight back up.
-- Every hardcoded step — `y + 24 + k * 17` — stacked glyphs on top of each
-  other. They all go through `lineH(size, step)`, which returns the step
-  unchanged when the floor is inert.
+The render suite covers all of it in CSS pixels, on every screen at eight
+shapes: no text below the floor, no two lines of a paragraph closer than the
+taller of them, and no text that cannot be read off its own background.
 
-And the help pages, which were a fixed grid with a hard slice at five lines, cut
-the rules off mid-sentence on a phone. They are measured and flowed now: two
-columns when the entries fit, one wide column when they do not, a second sheet
-with arrows when even that runs out. Nothing is cut.
-
-The render suite covers both now, in CSS pixels, on every screen at eight
-shapes: **no text below the floor, and no two lines of a paragraph closer
-together than the taller of them.** It found two collisions nothing had ever
-seen — the title's seal note landing on the run counter whenever a saved run
-pushed the block down, and the trader's bell text sitting on its own name.
-
-**The supported floor is a phone held sideways**: 375 CSS pixels tall (iPhone
-SE), 390 on a 14. The `653x280` shape in the suite is a folding phone's *cover*
-display; touch targets are checked there, type is not. At 280 tall the text
-floor is 23 stage units and the leader screen genuinely cannot hold seven
-winters as a name and a description.
+**The supported floor is a phone held sideways**: 375 CSS pixels tall.
 
 ## The probe was half particle effects
 
