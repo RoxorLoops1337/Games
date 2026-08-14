@@ -568,7 +568,7 @@ section('the shape of a phone');
              the thing the caption is written on. A ground that carries a
              quarter of the string is genuinely half-on-half-off, which is the
              case the anchor lookup could not see. */
-          const SHARE = 0.25;
+          const SHARE = Number(process.env.FF_SHARE || 0.25);
           const outlined = lastStrokeKey === String(e[1]) && stroked;
           const span = e[9] || { cells: 1, cols: [] };
           const real = span.cols.filter((c) => c.share >= SHARE).map((c) => c.col);

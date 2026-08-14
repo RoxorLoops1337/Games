@@ -84,11 +84,32 @@ function bestSlot() {
      placement might be a decision rather than arithmetic. A pilot that places
      well answers it; one that does not fills the nearest hole. */
   const b = G.battle;
+  /* DOES IT CHANGE THE ANSWER? A mechanic that measures neutral on win rate is
+     defensible only if it changes what a turn looks like, and that is a
+     measurable claim rather than a feeling: count the deployments where a
+     telegraph is live, and of those, the ones where reading it puts the body
+     somewhere the pilot would not otherwise have put it. */
+  const plain = () => {
+    for (let col = 0; col < FF.COLS; col++) {
+      for (let lane = 0; lane < FF.LANES; lane++) {
+        if (FF.slotFree(G, 'p', lane, col)) return { lane, col };
+      }
+    }
+    return null;
+  };
   if (b && b.waveLane !== undefined && !FF.laneHeldBy(G, b.waveLane)) {
     for (let col = 0; col < FF.COLS; col++) {
-      if (FF.slotFree(G, 'p', b.waveLane, col)) return { lane: b.waveLane, col };
+      if (FF.slotFree(G, 'p', b.waveLane, col)) {
+        if (TELL.on) {
+          TELL.live++;
+          const other = plain();
+          if (!other || other.lane !== b.waveLane || other.col !== col) TELL.moved++;
+        }
+        return { lane: b.waveLane, col };
+      }
     }
   }
+  if (TELL.on && b && b.waveLane !== undefined) TELL.live++;
   // Then hold the front of both lanes, then fill in behind.
   for (let col = 0; col < FF.COLS; col++) {
     for (let lane = 0; lane < FF.LANES; lane++) {
@@ -339,6 +360,7 @@ const ROOM = { plays: 0, declined: 0, packed: 0, spare: 0, free: [], efree: [] }
 const CROOM = { turns: 0, free: [] };
 const DUCKS = { forks: 0, taken: 0, wound: 0, bar: 0.22 };
 const LANE = { on: false, by: {} };
+const TELL = { on: false, live: 0, moved: 0, held: 0, fights: 0, turns: 0, allTurns: 0, lastB: null, lastHeld: 0 };
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 const HABITS = [
   ['deny', 'denying schemes'],
@@ -760,6 +782,7 @@ const STANDING = [
   ['FF_PAIR=holdGear+keepSlot', 'and the one pair worth settling, four times as deep'],
   ['FF_NOWAVE=1', 'the ladder with the wave telegraph off, same build, same seeds'],
   ['FF_NOSCARS=1', 'the ladder with the scar rule switched off'],
+  ['FF_CALIBRATE=70', 'what a band actually is on this instrument — measured, not derived'],
 ];
 /* FF_HABIT and FF_CONTRAST are deliberately NOT here, and that is the answer to
    "six arms exist and three are stamped". Neither is an arm: FF_HABIT narrows
@@ -769,6 +792,49 @@ const STANDING = [
    quote a round later. A modifier and a print flag do not, and listing them
    beside arms is what made "three of six are stamped" look like rot when it was
    a miscount. */
+
+/* --------------------------------------------------- the band, everywhere -- */
+/* LAST ROUND PROVED THE PRINTED BAND WRONG AND THEN LEFT EVERY NUMBER QUOTED
+   AGAINST IT. This is the fix, and it has two halves.
+
+   The first half is that the formula was being applied to the wrong quantity.
+   `sqrt(p(1-p)/n)` is the standard deviation of ONE arm. Almost nothing in this
+   file is one arm: a rung is a DIFFERENCE of two, an interaction is built from
+   four. A difference of two independent arms carries √2 times a row's band and
+   an interaction carries 2×, and for six rounds both were compared against a
+   single row's.
+
+   The second half is that the arms are not independent — they play the same
+   seeds, so they differ only by what the pilot did with an identical trail, and
+   the real band on a difference is narrower than any formula says. That is
+   measured, not derived: the same comparison at five seed bases, and the spread
+   of the answers is the band.
+
+   The two errors point opposite ways and roughly cancel, which is why nothing
+   ever looked obviously wrong. `FF_CALIBRATE=n` measures both correction
+   factors and stamps them; every band in this file is then the derived formula
+   for the right SHAPE, divided by the measured factor for that shape. Without a
+   stamp the factors are 1 and the suite says so rather than pretending. */
+const CAL = (() => {
+  const rec = ARMS.read('FF_CALIBRATE=70');
+  const f = (rec && rec.factors) || null;
+  return { gap: (f && f.gap) || 1, inter: (f && f.inter) || 1, measured: !!f, at: rec ? rec.sample : 0 };
+})();
+const BAND = {
+  /* one arm's own spread */
+  row: (p, n) => 100 * Math.sqrt(p * (1 - p) / Math.max(1, n)),
+  /* two arms on the same seeds: √2 for the shape, then the measured narrowing */
+  gap(p, n) { return this.row(p, n) * Math.SQRT2 / CAL.gap; },
+  /* four arms: 2× for the shape, then the measured narrowing */
+  inter(p, n) { return this.row(p, n) * 2 / CAL.inter; },
+  /* a set against the sum of its k parts: p_all + (k−1)·p_0 − Σp_k */
+  set(p, n, k) { return this.row(p, n) * Math.sqrt(1 + (k - 1) * (k - 1) + k) / CAL.gap; },
+  note() {
+    return CAL.measured
+      ? `bands below are MEASURED: a gap is ${CAL.gap.toFixed(2)}x narrower than the formula and an interaction ${CAL.inter.toFixed(2)}x (calibrated at ${CAL.at} an arm)`
+      : 'bands below are DERIVED and known to be too wide — FF_CALIBRATE=70 measures them';
+  },
+};
 
 const MEND = { on: false, by: {}, hurt: 0, last: null, where: 'start' };
 const wounds = () => (G.run ? G.run.deck.concat([G.run.leader])
@@ -926,6 +992,20 @@ function playRun(tribe, seed, mode, tweak) {
       if (G.battle.units.some((u) => u.def === 'kettletitan' && u.alive)) {
         if (!stat.sawTitan) { stat.sawTitan = true; TITAN.fights++; }
         watchTitan();
+      }
+      /* Waves held, counted across battles and across BOTH pilots — the first
+         cut of this sat inside the careful turn, so the careless arm reported
+         0.00 held waves a fight and that read as a finding. It was an
+         instrument that never ran. */
+      if (TELL.on) {
+        const tb = G.battle;
+        if (TELL.lastB !== tb) {
+          TELL.held += (TELL.lastHeld || 0);
+          TELL.lastB = tb; TELL.lastHeld = 0; TELL.fights++;
+        }
+        TELL.lastHeld = tb.laneHeld || 0;
+        if (tb.waveLane !== undefined) TELL.turns++;
+        TELL.allTurns++;
       }
       if (careful) carefulTurn(); else botTurn();
       stat.turns++;
@@ -1412,7 +1492,7 @@ section('does money change anything');
      front and printed below, so nobody reads a four-point difference as a
      finding. Several of this iteration's dead ends were exactly that mistake
      made twice. */
-  const band = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, normal.runs))).toFixed(1);
+  const band = BAND.gap(0.35, normal.runs).toFixed(1);
   const broke = sweepM((run) => { run.gold = 0; run.prices = 40; });
   const rich = sweepM((run) => { run.gold = 400; run.prices = 0.02; });
   const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
@@ -1482,8 +1562,8 @@ section('does money change anything');
   for (const { co, r } of byCourse) {
     console.log(`    ${co.short.toLowerCase().padEnd(19)}${bar(r.pct)} ${String(r.pct + '%').padStart(4)}`);
   }
-  const cband = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, 3 * (CN || N)))).toFixed(1);
-  console.log(`    (±${cband} is one standard deviation on the course rows)`);
+  const cband = BAND.gap(0.35, 3 * (CN || N)).toFixed(1);
+  console.log(`    (±${cband} is one standard deviation on a course against no course — ${BAND.note()})`);
 
   /* DOES A COURSE STARVE THE BOARD OF BODIES?
 
@@ -1541,8 +1621,8 @@ section('does money change anything');
      line; a course that crosses it wants tuning, not shipping. */
   ok(bestCourse.r.pct - worstCourse.r.pct <= 20 + band * 2,
     `no course runs away with the run (${bestCourse.co.short} ${bestCourse.r.pct}% vs ${worstCourse.co.short} ${worstCourse.r.pct}%)`);
-  console.log(`    (±${band} points is one standard deviation at ${normal.runs} runs an arm — ` +
-    `anything inside that band is noise, not a finding)`);
+  console.log(`    (±${band} points is one standard deviation on a difference at ${normal.runs} runs an arm — ` +
+    `anything inside twice that is noise, not a finding)`);
   ok(normal.pct >= broke.pct - band * 2, 'money is never a liability');
   /* This gap USED to be the bar, and it deliberately is not any more.
 
@@ -1598,7 +1678,7 @@ section('does walking past a fight pay');
   DUCKS.forks = 0; DUCKS.taken = 0; DUCKS.wound = 0;
   const sore = arm((run) => { run.duckHurt = true; });
   const bar2 = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
-  const band = (100 * Math.sqrt(0.35 * 0.65 / Math.max(1, seek.runs))).toFixed(1);
+  const band = BAND.gap(0.35, seek.runs).toFixed(1);
   const row = (label, a) => {
     console.log(`    ${label.padEnd(22)}${bar2(a.pct)} ${String(a.pct + '%').padStart(4)}` +
       `   fought ${Math.round(a.share * 100)}% of steps, arrived at ${a.power.toFixed(1)}`);
@@ -1642,6 +1722,133 @@ section('does walking past a fight pay');
 }
 
 /* -------------------------------------------------- what the fight is for -- */
+/* --------------------------------------------- is a neutral mechanic kept -- */
+section('what the wave telegraph actually does to a turn');
+{
+  /* IT MEASURES NEUTRAL ON WIN RATE and that is not, on its own, a verdict.
+     FF_NOWAVE settled the balance question: floor +1, fight +1, trader −1,
+     ladder unchanged. So the case for keeping it cannot be win rate, and
+     "it feels better" is not evidence. What IS evidence: how often it is live,
+     how often answering it changes where a body goes, and how often a wave
+     actually turns around. A mechanic that fires twice a run and changes
+     nothing is decoration; one that is live on a third of turns and moves the
+     answer half the time it fires is a decision that happens to be fairly
+     priced. */
+  const tribes = ['hearth', 'frost', 'scrap'];
+  const N = Number(process.env.FF_RUNS || DEFAULT_N);
+  const watch = (mode) => {
+    TELL.on = true;
+    TELL.live = 0; TELL.moved = 0; TELL.held = 0; TELL.fights = 0;
+    TELL.turns = 0; TELL.allTurns = 0; TELL.lastB = null; TELL.lastHeld = 0;
+    let runs = 0;
+    for (const tribe of tribes) {
+      for (let i = 0; i < N; i++) { playRun(tribe, 5100 + i * 29, mode); runs++; }
+    }
+    TELL.held += (TELL.lastHeld || 0);
+    TELL.on = false;
+    return { runs, live: TELL.live, moved: TELL.moved, held: TELL.held,
+      fights: TELL.fights, turns: TELL.turns, allTurns: TELL.allTurns };
+  };
+  const good = watch('careful');
+  /* AND THE QUESTION THAT SETTLES IT: does a pilot that never reads the
+     telegraph get the same gift? If a careless line has its lane held just as
+     often, the mechanic is not an expression of skill — it is a free delay
+     handed to everybody, and no amount of "it feels good" makes it a decision. */
+  const bad = watch('careless');
+  const pc = (a, b) => Math.round((a / Math.max(1, b)) * 100) + '%';
+  console.log(`    across ${good.runs} runs and ${good.fights} fights:`);
+  console.log(`      a lane is named on ${good.turns} of ${good.allTurns} turns (${pc(good.turns, good.allTurns)})`);
+  console.log(`      of the deployments made while one is live, ${good.moved} of ${good.live} ` +
+    `(${pc(good.moved, good.live)}) go somewhere the pilot would not otherwise have put them`);
+  console.log(`      waves that turned around and waited: ` +
+    `${(good.held / Math.max(1, good.fights)).toFixed(2)} a fight for a pilot that reads it, ` +
+    `${(bad.held / Math.max(1, bad.fights)).toFixed(2)} for one that never does`);
+  const edge = (good.held / Math.max(1, good.fights)) - (bad.held / Math.max(1, bad.fights));
+  console.log(`      → reading it is worth ${edge >= 0 ? '+' : ''}${edge.toFixed(2)} held waves a fight` +
+    (Math.abs(edge) < 0.1 ? ' — the same gift either way, so it is feedback rather than a decision' : ''));
+  ok(good.turns > 0, 'a lane does get named');
+  ok(good.live > 0, 'and the pilot deploys while one is live');
+}
+
+/* ------------------------------------------------- calibrating the bands -- */
+section('what a band actually is on this instrument');
+{
+  /* FF_CALIBRATE measures the two correction factors every other band in this
+     file now divides by. It is its own arm because it costs forty runs of the
+     pilot and answers a question about the INSTRUMENT rather than the game.
+
+     Two shapes are measured, because there is no reason to assume one narrowing
+     applies to both: a GAP (one habit against none — two arms) and an
+     INTERACTION (a pair against the sum of its parts — four arms). Five seed
+     bases each. The spread of the answers is the band, with no formula and no
+     independence assumption in it. */
+  const KN = Number(process.env.FF_CALIBRATE || 0);
+  if (KN) {
+    const tribes = ['hearth', 'frost', 'scrap'];
+    const keep = Object.assign({}, SKILL);
+    const at = (keys, base) => {
+      for (const [k2] of HABITS) SKILL[k2] = false;
+      for (const k of keys) SKILL[k] = true;
+      let wins = 0, runs = 0;
+      for (const tribe of tribes) {
+        for (let i = 0; i < KN; i++) {
+          const st = playRun(tribe, base + i * 37, 'tactics'); runs++; if (st.won) wins++;
+        }
+      }
+      return (wins / Math.max(1, runs)) * 100;
+    };
+    const sd = (xs) => {
+      const mu = xs.reduce((n, v) => n + v, 0) / xs.length;
+      return Math.sqrt(xs.reduce((n, v) => n + (v - mu) * (v - mu), 0) / (xs.length - 1));
+    };
+    /* TWELVE BASES, NOT FIVE. Two independent five-point estimates of the same
+       factor came out 1.63 and 1.13 for a gap and 1.33 and 0.72 for an
+       interaction — a five-point standard deviation carries about a third of
+       itself in error, which is not good enough to correct anything by. Twelve
+       roughly halves that, and the cost is one arm's worth of runs. */
+    const bases = [1000, 4000, 7000, 11000, 15000, 19000, 23000, 27000, 31000, 35000, 39000, 43000];
+    const gaps = [], inters = [];
+    for (const b of bases) {
+      const z = at([], b), a2 = at(['deny'], b), b2 = at(['keepSlot'], b), ab = at(['deny', 'keepSlot'], b);
+      gaps.push(a2 - z);
+      inters.push(ab - z - (a2 - z) - (b2 - z));
+    }
+    Object.assign(SKILL, keep);
+    const n = tribes.length * KN;
+    const raw = 100 * Math.sqrt(0.2 * 0.8 / n);
+    const mGap = sd(gaps), mInter = sd(inters);
+    const fGap = (raw * Math.SQRT2) / Math.max(0.05, mGap);
+    const fInter = (raw * 2) / Math.max(0.05, mInter);
+    console.log(`    ${n} runs an arm, ${bases.length} seed bases`);
+    console.log(`      a GAP (denying schemes against none) over ${bases.length} bases: ` +
+      `${Math.min(...gaps).toFixed(1)} to ${Math.max(...gaps).toFixed(1)}`);
+    console.log(`        measured ±${mGap.toFixed(2)} · derived ±${(raw * Math.SQRT2).toFixed(2)} for two arms ` +
+      `(±${raw.toFixed(2)} for one, which is what the suite used to quote) · factor ${fGap.toFixed(2)}x`);
+    console.log(`      an INTERACTION (deny + keepSlot) over ${bases.length} bases: ` +
+      `${Math.min(...inters).toFixed(1)} to ${Math.max(...inters).toFixed(1)}`);
+    console.log(`        measured ±${mInter.toFixed(2)} · derived ±${(raw * 2).toFixed(2)} for four arms · factor ${fInter.toFixed(2)}x`);
+    /* AND THE THING THAT MAKES THIS WORTH DOING RATHER THAN INTERESTING: the
+       two mistakes point opposite ways. Quoting a one-arm band for a two-arm
+       question makes the band too NARROW by √2; shared seeds make it too WIDE
+       by the measured factor. Whether six rounds of verdicts were generous or
+       strict is the ratio between them, and it is printed rather than argued. */
+    const netGap = mGap / raw;
+    console.log(`      → net: the band the suite used to quote for a gap was ±${raw.toFixed(2)}, ` +
+      `the truth is ±${mGap.toFixed(2)} — ${netGap > 1 ? 'the old gates were ' + ((netGap - 1) * 100).toFixed(0) + '% too GENEROUS'
+        : 'the old gates were ' + ((1 / netGap - 1) * 100).toFixed(0) + '% too STRICT'}`);
+    ARMS.stamp('FF_CALIBRATE=70', `a gap is ${fGap.toFixed(2)}x narrower than the two-arm formula, ` +
+      `an interaction ${fInter.toFixed(2)}x; net against what the suite used to quote, gates were ` +
+      `${netGap > 1 ? ((netGap - 1) * 100).toFixed(0) + '% too generous' : ((1 / netGap - 1) * 100).toFixed(0) + '% too strict'}`, n);
+    const disk = ARMS.all['FF_CALIBRATE=70'];
+    disk.factors = { gap: Number(fGap.toFixed(3)), inter: Number(fInter.toFixed(3)) };
+    ARMS.save();
+    ok(mGap > 0 && mInter > 0, 'both bands are numbers, not five identical runs');
+  } else {
+    console.log('    ' + BAND.note());
+    ok(true, 'the calibration is an arm, not a gate');
+  }
+}
+
 section('which parts of playing well are worth anything');
 {
   /* FF_ABLATE turns this one section up on its own. The habits sit two to seven
@@ -1666,7 +1873,7 @@ section('which parts of playing well are worth anything');
     return Math.round((wins / Math.max(1, runs)) * 100);
   };
   const all = sweep3();
-  const band = (100 * Math.sqrt(0.2 * 0.8 / Math.max(1, tribes.length * N))).toFixed(1);
+  const band = BAND.gap(0.2, tribes.length * N).toFixed(1);
   console.log(`    the fight, played well:  ${all}%`);
   /* ARE THE OTHER DECISIONS FAKE, OR IS ONE-AT-A-TIME THE WRONG QUESTION?
 
@@ -1730,7 +1937,11 @@ section('which parts of playing well are worth anything');
   console.log(`    and one at a time, starting from nothing (${none}% knowing none): ` +
     `${top[0].replace(' (removed)', '')} alone is worth ${top[1] - none} of the ${all - none}` +
     sig(top[1] - none));
-  if (Number(band) > 3.2) {
+  /* The gate moved 3.2 → 3.5 when the band became measured: the same arm at the
+     same sample now reports ±3.3 rather than ±3.0, because a difference of two
+     arms is a wider quantity than one arm. Suppressing FF_ABLATE=60's table for
+     that would be the measurement hiding its own correction. */
+  if (Number(band) > 3.5) {
     console.log(`      (no table: ±${band} a row at this sample. FF_ABLATE=60 or more for one that means something)`);
     added.length = 0;
   } else {
@@ -1805,8 +2016,8 @@ section('which parts of playing well are worth anything');
     const zero = at([]);
     const solo = {};
     for (const k of KEYS) solo[k] = at([k]);
-    const pband = 100 * Math.sqrt(0.2 * 0.8 / Math.max(1, tribes.length * PN));
-    const iband = pband * 2;                       // four rates, so twice the sd
+    const pband = BAND.gap(0.2, tribes.length * PN);
+    const iband = BAND.inter(0.2, tribes.length * PN);
     console.log('');
     console.log(`    IN PAIRS (${tribes.length * PN} runs an arm, ±${pband.toFixed(1)} a row, ` +
       `±${iband.toFixed(1)} on an interaction)`);
@@ -1893,15 +2104,28 @@ section('which parts of playing well are worth anything');
       seedBands.inters.map((v) => v.toFixed(1)).join(', ') +
       ` — sd ±${seedBands.inter.toFixed(1)} against ±${iband.toFixed(1)} derived`);
     const shrink = iband / Math.max(0.05, seedBands.inter);
-    console.log(`        → shared seeds make the real band ${shrink.toFixed(1)}x narrower than the printed one, ` +
-      `so every "under 2σ" in this suite is measured against a band that is too wide`);
+    console.log(`        → the live check says the measured band is ${shrink >= 1 ? shrink.toFixed(2) + 'x NARROWER' : (1 / shrink).toFixed(2) + 'x WIDER'} ` +
+      `than the derived one (five bases here; FF_CALIBRATE runs twelve and is the one the suite uses)`);
     console.log(`        on the MEASURED band (2σ = ±${(2 * seedBands.inter).toFixed(1)}), the pairs that clear are: ` +
       (pairs.filter((p) => Math.abs(p.inter) >= 2 * seedBands.inter)
         .map((p) => `${nameOf(p.a)} + ${nameOf(p.b)} ${signed(p.inter)}`).join(', ') || 'none'));
     console.log(`      and cumulatively, best single first (${order.join(' → ')}):`);
+    const apart = KEYS.reduce((n, k) => n + (solo[k] - zero), 0);
+    const together = ladder[ladder.length - 1].pct - zero;
     console.log('        ' + ladder.map((r) => `${r.n}:${r.pct.toFixed(0)}%`).join('  ') +
-      `   · one at a time they sum to ${signed(KEYS.reduce((n, k) => n + (solo[k] - zero), 0))}, ` +
-      `together they are ${signed(ladder[ladder.length - 1].pct - zero)}`);
+      `   · one at a time they sum to ${signed(apart)}, together they are ${signed(together)}`);
+    /* AND WHAT IT WOULD TAKE TO SETTLE THAT, said out loud rather than left as
+       "not resolvable at this sample". The set-minus-sum statistic is built out
+       of k+1 arms, its band scales as 1/√n like everything else, and the sample
+       that would put twice its band under the observed gap is arithmetic. */
+    {
+      const D = together - apart;
+      const sb = BAND.set(0.2, tribes.length * PN, KEYS.length);
+      const need = Math.ceil(tribes.length * PN * Math.pow((2 * sb) / Math.max(0.1, Math.abs(D)), 2));
+      console.log(`        the difference is ${signed(D)} against a band of ±${sb.toFixed(1)} ` +
+        `(${Math.abs(D) >= 2 * sb ? 'CLEARS 2σ' : 'under 2σ — noise'}); ` +
+        `settling it needs ${need} runs an arm, ${Math.round(need / Math.max(1, tribes.length * PN) * 100) / 100}x this sample`);
+    }
     const bestPair = pairs[0];
     ARMS.stamp(ONE.length === 2 ? 'FF_PAIR=' + ONE.join('+') : 'FF_PAIRS=70', bestPair.inter >= 2 * iband
       ? `${nameOf(bestPair.a)} + ${nameOf(bestPair.b)} is +${bestPair.inter.toFixed(1)} past its halves ` +
@@ -2028,7 +2252,7 @@ section('the arms that are not run by default');
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');
-  ok(STANDING.length >= 8, 'and all eight of them are');
+  ok(STANDING.length >= 9, 'and all nine of them are');
 }
 
 /* ------------------------------------------------- can a lesson be priced -- *//* ------------------------------------------------- can a lesson be priced -- */
@@ -2063,7 +2287,7 @@ section('what being told is worth');
   const told = sweepT({ on: true });
   const knowing = sweepT({ on: true, always: true });
   const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(24);
-  const band = (100 * Math.sqrt(0.1 * 0.9 / Math.max(1, blind.runs))).toFixed(1);
+  const band = BAND.gap(0.1, blind.runs).toFixed(1);
   console.log('  · what being told is worth');
   console.log(`    never told   ${bar(blind.pct)} ${String(blind.pct + '%').padStart(4)}   ` +
     `${blind.reached}/${blind.runs} saw the second zone`);
@@ -2126,7 +2350,7 @@ section('which reward-screen decisions are worth anything');
     return Math.round((wins / Math.max(1, runs)) * 100);
   };
   const all = sweep4();
-  const band = (100 * Math.sqrt(0.3 * 0.7 / Math.max(1, tribes.length * N))).toFixed(1);
+  const band = BAND.gap(0.3, tribes.length * N).toFixed(1);
   console.log(`    the reward screen, played well:  ${all}%`);
   const rows = [];
   for (const [key, label] of DRAFT_HABITS) {
