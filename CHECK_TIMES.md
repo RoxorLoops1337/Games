@@ -1,10 +1,16 @@
 # What `npm run check` costs, and where
 
 > **Run it yourself: `npm run check:times`** — it times every suite and names any
-> that has run away from the rest (over 20x the median suite). `--ci` makes it
-> exit non-zero. The numbers below are one reading from 2026-08-14; the script is
-> the durable half, because a file of timings is stale the day after it is taken
-> and nobody making a suite slow goes looking for it.
+> that is more than **25% of the whole check** on its own. `--ci` makes it exit
+> non-zero. The numbers below are one reading; the script is the durable half,
+> because a file of timings is stale the day after it is taken and nobody making
+> a suite slow goes looking for it.
+>
+> **The bar started as 20x the median and that was wrong.** Run against the real
+> repo it fired on **six** suites, because 27 of the 39 finish in under a second
+> and drag the median to 0.6s. A smoke alarm that flags 15% of the building is
+> the same failure as one that never sounds. Share-of-total fires on exactly one
+> name: **blacksite at 45%**.
 
 
 Measured 2026-08-14 on the CI-sized box (4 cores), each suite timed on its own,
@@ -18,7 +24,7 @@ total, and the person waiting on the total does not know which suite to blame.
 ## The whole table, slowest first
 
 ```
-247.8s  blacksite      ← 46% of the entire check, on its own
+210.9s  blacksite      ← 45% of the entire check, on its own (second reading)
  89.8s  crashmas
  54.0s  frostfell
  48.9s  ironbridge

@@ -58,6 +58,30 @@ correction sitting *next to* the thing it corrected instead of inside it.
 Rule 1 is checked the same way: every entry must contain a digit. Prose about a
 measurement is not a measurement.
 
+*3. The file holds at about 35 entries. Every round that adds one retires one.*
+
+Ten entries were cut two rounds ago and the file was back over 1,500 lines two
+rounds later, because the cut was a one-off and the adding is not. A cut rate
+that does not match the add rate is not a policy, it is a mood — so the steady
+state is stated instead: **~35 entries, ~1,400 lines**, and a round that writes
+three entries owes three retirements.
+
+What gets dropped, in order, when the count is over:
+
+1. **Anything settled tight enough to stop constraining a decision.** The
+   telegraph is the model case: worth exactly 0 at 840 runs an arm, ladder 28
+   with it and 28 without. That is a *better* result than "unresolved", and it
+   is precisely why it can go — nothing downstream will ever turn on it again.
+2. **Anything superseded by a general form.** Five defect write-ups for one
+   screen retire when the rule that prevents the whole class is written down.
+3. **Anything whose numbers now live inside a bigger entry.** A finding is not
+   deleted when it gets folded up; it is deleted when keeping it separate makes
+   somebody read two entries to learn one thing.
+
+What never gets dropped: a DEAD END (the cost of re-walking one is the whole
+reason the label exists), a RULE that still binds, or anything a current
+measurement contradicts — that gets **rewritten**, which is rule 2.
+
 ---
 
 Everything below came out of the probe or the shot walk and is kept because it
@@ -189,47 +213,98 @@ The honest statement is that steering has never been resolved, and settling it
 needs about **4x this sample** — which is now affordable, since the probe is
 pooled.
 
-### FINDING — the winning hands are the weak ones, and that is the rubber band
+### FINDING — the winning hands carry FEWER BODIES, and it is the room rule
 
 `topic: dealt-hands`
 
 Best dealt hand **40%**, worst **26%** — a 14-point spread, the largest effect
-measured in this game, larger than the fight rung and larger than the trader. The
-decks are dealt by seed so nobody chose them, which makes "what do the good ones
-have in common" answerable. Eight hands of six cards, sorted by win rate:
+measured in this game. Eight hands dealt by seed, sorted by win rate:
 
 ```
 top half vs bottom half
   bodies    3.5  vs  4.3      ← the better hands have FEWER
-  hp        8.5  vs  9.4      ← and lower
   atk       1.8  vs  2.9      ← and much lower
+  hp        8.5  vs  9.4
   counter   2.5  vs  2.6        (no difference)
   keywords  2.5  vs  2.5        (no difference)
 ```
 
-**The weak-looking hands win.** Not a card, not a tribe, not a curve, not more
-bodies — the top half is the half with less of everything, and the clearest
-signal is attack: **1.8 against 2.9**, a 60% difference in the wrong direction.
+**The rubber band is not the cause, and one round of this file said it was.** The
+obvious explanation was `fellAnswer` — the trail scales to what the caravan
+carries, and its own comment claims to absorb "about half" of a deck advantage.
+Four coefficients were tested:
 
-**The cause is `fellAnswer`, and it is doing more than it says it does.** The
-trail scales to what the caravan is carrying — `foeScale` reads the deck and
-raises the fell to meet it, and the comment at that site says the coefficient
-"absorbs about half of a deck advantage, not all of it". The measurement says it
-absorbs all of it and then reverses: starting strong is worth **−12 points**.
+```
+answer * 0.5  (shipped)   bodies 3.5 vs 4.3 · atk 1.8 vs 2.9
+answer * 0.30             bodies 3.5 vs 4.3 · atk 1.8 vs 2.9
+answer * 0.20             bodies 3.5 vs 4.3 · atk 1.7 vs 3.0
+DEEP_BITE 2.0 → 1.0       bodies 3.5 vs 4.3 · atk 1.8 vs 2.9
+```
 
-**It is not the deep-fell bite.** `DEEP_BITE = 2.0` is the largest coefficient in
-the difficulty function and applies in zone 3, where 68% of deaths happen, so it
-was the obvious suspect. Halved to 1.0 the composition split is **unchanged** —
-bodies 3.5 vs 4.3, atk 1.8 vs 2.9, identical. The ladder read 31 points against
-27, which is inside the ±5.5 band. So the reversal comes from the always-on
-`answer * 0.5` term, not from the deep bite.
+**Bodies and attack are identical in every one.** The same decks are in the top
+half whatever the scaler does, so the ordering is a property of the decks and not
+of the difficulty curve. The previous entry's diagnosis is withdrawn.
 
-**Nothing is shipped for this**, and that is a decision rather than an omission: a
-game where a stronger deck is worth less is either a bug or a genre — this one
-was built on "the fell answers the caravan" and the answer is working, just
-harder than its own comment claims. Turning it down is a design choice about
-whether building a deck should pay, and it wants to be made deliberately rather
-than as a coefficient nudge at the end of a round.
+**The leading explanation is the room rule, and it is the one thing in the game
+big enough to do this.** `ROOM_NEEDED` is 2: a side with two slots to spare warms
+its whole line every turn, and a packed one takes the cold instead. A hand of 3.5
+units cannot fill six slots; a hand of 4.3 can, and does. This file already
+measured what warmth is worth from the other direction, while trying to tune the
+Hearth course: **doubling it was +17 points**, and the note there says "regen is a
+threshold good — there is no setting between +0 and +17".
+
+A rule worth seventeen points, gated on carrying fewer bodies, against a deck
+advantage worth a handful: that is the right order of magnitude and nothing else
+in the game is close. **It is stated as the leading explanation rather than a
+measurement, because it has not been measured directly** — the test is whether
+the winning decks show more free slots per turn, and that is one arm nobody has
+run yet.
+
+**And the decision, made rather than deferred.** Frostfell is a game where the
+room rule outweighs deck strength, and that is what it is going to be. Not
+because it cannot be changed, but because the alternative is turning down the one
+mechanic every other finding in this file points at — the fight ablation prices
+denying a scheme above hitting harder, the courses table has Cold (the only
+tempo course) 8 points clear of Hearth (a damage course), and every attempt to
+make damage matter has measured zero. **The game is about the board, not the
+bodies on it.** Every card finding in this file is downstream of that, and reads
+correctly once it is stated: cards were being priced on stats, and stats are not
+the axis the game turns on.
+
+### FINDING — Cold wins because it is the only course that takes a turn
+
+`topic: course-why`
+
+Cold beats Hearth by **8 points at 3.1σ**, which is a bigger effect than the
+fight rung. The reason is in the five course definitions, which this file had
+never actually read:
+
+| course | what it gives | what kind of thing that is |
+|---|---|---|
+| **Cold** | the first wave's front arrives carrying **Frost 1** | **a turn** |
+| Hearth | Spice 1 on deploy, one warden saved per fight | damage, then a body |
+| Scrap | first gear each fight is free, the fallen come back patched | a turn's action, then a body |
+| Bodies | a packed board keeps its warmth, Shell 2 on deploy | the room rule, then armour |
+| Gear | gear leans, and it comes back round | resources |
+
+**Frost skips a foe's whole turn. Nothing else on that list does.** Cold has
+already been nerfed once for exactly this — the note above its definition records
+that Frost on EVERY arrival measured 41% against a 22% baseline "while the other
+four sat at 29-32 — not a choice, a favourite". It was cut back to the front of
+the first wave only, and it is *still* 8 points clear.
+
+**This is the fourth independent time this game has said tempo beats resources.**
+Denying a scheme is worth +10 and every damage habit prices at zero, because a
+denied scheme is a foe's wasted turn. Hearth was rewritten three times around
+damage and measured nothing each time, and its own note concludes "every other
+course changes what the fight IS; Hearth changed a number in it". Now the course
+table says it again from the top.
+
+So the leader screen currently offers **one tempo choice and four resource
+choices**, and the tempo one wins. The fix is not to nerf Cold a second time —
+that was tried and it is still ahead. It is that the other four need a rule that
+costs the foes a turn rather than paying the player a resource, and that is a
+design round of its own rather than a coefficient.
 
 ### FINDING — the courses are not indistinguishable; the baseline was
 
@@ -800,52 +875,6 @@ to the front of a lane, and a pilot that keeps bodies out of the fighting is a
 pilot doing less fighting. That is no longer a quirk of one heuristic; it is what
 this board is.
 
-### FINDING — the cards do differentiate, on the scale that works
-
-`topic: card-worth`
-
-A flat removal table has two readings and only one of them is health. Taking a
-card out of a POOL asks what the pool misses, and a pool substitutes — the offer
-shows something similar next time, which is exactly the redundancy the purse
-turned out to be made of. "44 of 57 inside a standard deviation" is equally what
-a set of interchangeable cards looks like.
-
-So the same question from the other end: **lock a minimal 6-card deck, hand it
-two copies of one card, and see what that card is worth from a standing start
-where nothing can substitute for it.** 630 runs an arm, all 57.
-
-```
-the locked floor                                   3%
-worth most:  frostmite +6.3 · avalanche +4.8 · blastcap +3.8
-worth least: shoveler −1.6 · pryrod −1.3 · hookline −1.3
-best to worst spans 7.9 points · 0 of 57 clear the 3.33σ family bar
-```
-
-**In points that table is flat too — and points are the wrong scale here**, which
-is a lesson this file learned two rounds ago arguing about compression. The floor
-is 3%. A card "worth +6 points" has more than *trebled* the win rate, and the
-points column calls that noise.
-
-The same table in odds against the floor, with the band taken off the four counts
-rather than a proportion's formula:
-
-```
-frostmite   3% → 10%    3.59x    4.8σ
-avalanche   3% →  8%    2.81x    3.7σ
-blastcap    3% →  7%    2.43x    3.2σ
-shoveler    3% →  2%    0.66x    1.1σ
-best to worst spans 5.4x
-```
-
-**Frostmite and avalanche clear the 3.33σ family bar; the table spans 5.4× in
-odds.** The cards differentiate — a locked deck's chances more than treble on the
-best of them and fall by a third on the worst. What was flat was the *ruler*.
-
-The arm prints both scales now. The removal table below stands as it was: from a
-full pool nothing is load-bearing, because the pool substitutes. Both are true,
-and together they say the thing worth knowing — **a card matters when you cannot
-replace it, and the offer can almost always replace it.**
-
 ### FINDING — no card in the game is load-bearing
 
 `topic: card-removal`
@@ -916,64 +945,6 @@ band ±1.6 · 2σ = ±3.2 · the reading is 6.3σ
 at the same depth is holding gear at +2, inside the band. Six rounds of building
 on denial were building on something real; the four tenths were a small-sample
 artefact of the arm, not a property of the finding.
-
-### RULE — what a beginner should meet, and whether they do
-
-`topic: first-fight`
-
-The careless floor drifted **5% → 9% across three rounds** and nobody decided
-that: it moved while other things were being changed. A floor is a design
-choice, so here is the choice, stated in the numbers that describe an
-EXPERIENCE rather than an outcome:
-
-| | target | now |
-|---|---|---|
-| sees the second zone | ≥ 75% — the game has to show what it is | **81%** (170/210) |
-| sees the third | 15–35% — often enough to be a place, rare enough to be a prize | **25%** (52/210) |
-| crosses | under 12% — a crossing is earned, not stumbled into | **9%** |
-
-**At target on all three.** And the drift is smaller than the win rate made it
-look: at the 5% floor a careless run saw the second zone 163 times in 210 and
-the third 50 times; at 9% it is 170 and 52. **A beginner's run goes exactly as
-far as it used to** — 3% further into the second zone, 1% into the third — and
-simply finishes the last one slightly more often. The four points of win rate
-are the tail of the distribution moving, not the shape of it.
-
-### FINDING — the telegraph is feedback, not a decision
-
-`topic: telegraph`
-
-`FF_NOWAVE` said the wave telegraph is worth about nothing: floor +1, fight +1,
-trader −1, ladder unchanged. That is not a verdict on its own — a mechanic can
-be worth keeping for what it does to a turn rather than to a win rate — but
-"it feels better" is not evidence. Here is evidence, across 210 runs and 2,348
-fights:
-
-```
-a lane is named on                                    2,837 of 31,967 turns   (9%)
-deployments while one is live that go somewhere
-  the pilot would not otherwise have put them            37 of 728            (5%)
-waves that turned around and waited, per fight
-  a pilot that reads the telegraph                     0.82
-  a pilot that never reads it                          0.63
-```
-
-**Three quarters of the effect is free.** Reading it is worth +0.20 held waves a
-fight; the other 0.63 happens to everybody, because on a two-lane board
-"somebody is standing in this lane" is a condition the board has usually already
-met. The mechanic asks a question the geometry has answered.
-
-That is also the structural reason it cannot be tuned into a decision without
-breaking something else. Loosen the requirement and it is trivially satisfied;
-tighten it to the front slot and it becomes a tax on a narrow pool, which is
-exactly the cut that broke the course invariant. **The decision space is
-squeezed shut between the two.**
-
-**It stays, relabelled.** It fires 0.8 times a fight, it is legible, it costs
-nothing in balance, and it is the most frequent named event on the board after a
-scheme. What it is not, and what this file previously called it, is *the second
-event* — the fight is still one decision, and the telegraph is the feedback
-around it.
 
 ### RULE — a band is measured, and it applies to every number here
 
@@ -1175,44 +1146,6 @@ keeping a slot back a decision instead of a habit. It is symmetric but the sides
 do not meet it equally often: the foes' line runs emptier, so in practice it is a
 rule for one side of the table. That asymmetry is intentional.
 
-### FINDING — the defeat screen, looked at properly, had five defects
-
-`topic: defeat-screen`
-
-It shipped last round with one pass and one glance at one size. Opened at
-1280x720, 2400x1080 and a phone, it had **five** things wrong with it, and the
-severity ordering is the finding: the worst one was invisible at the size it was
-built at.
-
-1. **A hard vertical seam through all three ridges.** The ridge loop stepped
-   `x += 60` from 0 and then closed with `lineTo(VW, VH)`, so it dropped straight
-   down from the last multiple of 60. At **VW=1280** that lands at 1260 — 20 units
-   from the edge, indistinguishable from the frame. At **VW=1600** it lands at
-   1560 and cuts a 40-unit-wide notch out of the weather. *Built at one size,
-   broken at another, and only the three-size walk could see it.*
-2. **The name was drawn across the creature's feet.** `drawCreature(x, y, h)`
-   draws a body about **2.2h** tall anchored near its middle, so an 88-unit
-   Frostwyrm spans ky−110 to ky+88. This is the **third** measurement of that
-   anchor: +30 put the name on the belly, +78 put it on the feet, and both were
-   guesses. It is hung off a computed `feet` now, as is the shadow — which had
-   been drawn at ky+0.2h, *inside* the creature, where nothing could see it.
-3. **The last log line sat on the plate's top border**, four units inside it,
-   with the corner radius cutting its descenders. On **both** end screens.
-4. **The ninth stat wrapped to a row of its own**, centred under the other eight,
-   looking like an accident — because `perRow` was the constant **8** and a loss
-   shows **9** cells. Nine fit at every size the game builds: even at VW=1180 the
-   narrowest stage, nine cells of 122 sit inside the safe area with room over.
-5. **Ninety identical dashes is not snow, it is a scratched lens.** One length,
-   one weight, one of four alphas. Replaced with 120 streaks on a single depth
-   number driving length, alpha, width, drift and fall *together* — the fix that
-   matters is the coupling, not the variation. A streak that is long and dim
-   reads as noise however carefully each property was randomised alone.
-
-The pattern across 2, 3 and 4 is the same one the shrine and the reward captions
-had: **a lower element pinned to a constant while an upper element moved.** Three
-rounds, three screens, one bug. Everything on this screen is now derived from the
-element above it, and `statTop` from the portrait's actual bottom.
-
 ### RULE — a horizontal sweep is never written by hand, and there is no vertical one
 
 `topic: sweeps`
@@ -1251,28 +1184,6 @@ one has to justify itself.
 **The generalisable part: when a bug's visibility depends on an incidental
 number, fixing the instance is worth almost nothing** — the next one picks a
 different step. Make the arithmetic unreachable instead.
-
-### FINDING — the shot walk is still the only thing that sees
-
-`topic: shot-walk`
-
-Three assertions over eight shapes is 668 checks and none has ever found what a
-person finds by looking — the clipped collection names, the collided trail
-labels, the dim question mark all came from opening a PNG. Three screens nobody
-had examined at 2400x1080 were opened and all three were wrong: **the shrine**
-drew both buttons on the stone's foot and its shadow with the explainer
-half-swallowed by the snow bank; **the camp** was a flame hanging in empty air
-with no pit, logs or glow, on the one screen subtitled *one quiet hour before the
-road*; **the rest stop** has no fault to fix and one to record — on a 20:9 stage
-its cards cluster in the middle third and the bottom half is empty snow, because
-it is laid out for 16:9 and merely survives being stretched.
-
-At 2400x1080 **six screens use the width** (battle, trail, collection, leader,
-victory, the ware row) and **five ignore it** (title, camp, rest stop, shrine,
-event, ending). The five are all one shape — a title, one piece of art, a centred
-row of buttons — with three things to say and no fourth. **The width is used by
-the screens with something to spread**, which is the right answer rather than a
-gap.
 
 ### FINDING — contrast, the third thing nobody was checking
 
@@ -1560,26 +1471,3 @@ caught by diffing the whole probe's output inline against pooled, which is now t
 standing check: `FF_JOBS=1` and the default must produce **byte-identical output**,
 and they do at `FF_RUNS=70`.
 
-### RULE — the source split is retracted
-
-`topic: source-split`
-
-Three rounds ago this file recommended taking the screen renderer out of
-`index.html` first — "the cost is one more `<script>` block, perhaps 40 lines of
-plumbing". `index.html` is past **8,900 lines** now, 400 more than when that was
-written, and the recommendation is **withdrawn**.
-
-Two reasons, both concrete. The plumbing estimate was right for the wrong
-reason: top-level `const` in a classic script lives in the shared global lexical
-environment, so a second `<script>` would see `txt`, `panel`, `C` and the layout
-constants **for free** — but it also means the split buys no isolation, only a
-second place to look. And the headless loader every suite depends on extracts
-*the* inline script by pattern; two blocks means changing the one file that all
-5 suites and both tools load through, to gain navigability.
-
-The evidence says navigability is not the problem. **36 rounds and the bugs found
-by looking are layout and z-order** — a snow cap over a blurb, a caption pinned
-at a constant y, a portrait drawn after its own label. Not one of them was "the
-code could not be found". A split that costs a change to the shared loader to
-solve a problem nothing has reported is the wrong trade, and saying so is worth
-more than leaving a plan nobody executes at the top of the file.
