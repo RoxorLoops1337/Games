@@ -54,7 +54,32 @@ export function mkCtx(log) {
      is what a screen would show. Circles stamp as circles; everything else
      stamps as its box, which for panels and bands is exact. It is about forty
      lines and it makes every attribution right rather than most of them. */
-  const CELL = 8, GW = 240, GH = 100;
+  /* THREE TUNABLE CONSTANTS, ALL THREE NOW SWEPT — AND FROZEN HERE.
+
+     The cell size, the share a ground must cover to count (in the render
+     suite), and the vertical extent of the measurement band are numbers
+     somebody picked, and for a round only one of them had been swept. A clean
+     bill of health from three unswept numbers is a coincidence until it is
+     shown not to be. All three take an override so the sweep can be repeated:
+
+       FF_CELL       clean 6–16, shipped 8   · 16 failures at 2 and 4, 2 at 24
+       FF_SHARE      clean 0.15–0.60+, 0.25  · 16 at 0.05, 7 at 0.10
+       FF_BAND_UP/DN clean ±0.15–±0.55, 0.35 · no failure anywhere in range
+
+     The band does not matter at all, the share has a floor, and the cell has a
+     WINDOW with the shipped value in the middle of it. Outside that window the
+     same three strings surface every time — warden and leader names whose band
+     overlaps the creature drawn above them — and which colour wins is decided by
+     resolution, which is the honest limit of a raster this coarse. */
+  const CELL = Number(process.env.FF_CELL || 8);
+  /* The band is SYMMETRIC because `txt` sets textBaseline = 'middle' for every
+     string in the game — a fact that was worth checking and had not been. The
+     first version used −0.38/+0.28, guessing at an alphabetic baseline, so it
+     looked a tenth of a line too high on every label in the file. Cap height is
+     about 0.7em, so ±0.35 is the glyph box. */
+  const BAND_UP = Number(process.env.FF_BAND_UP || 0.35);
+  const BAND_DN = Number(process.env.FF_BAND_DN || 0.35);
+  const GW = Math.ceil(1920 / CELL), GH = Math.ceil(800 / CELL);
   const grid = new Array(GW * GH).fill(null);
   /* ONLY WHAT THE GRID CAN REPRESENT EXACTLY.
 
@@ -105,8 +130,8 @@ export function mkCtx(log) {
      whatever grazed one corner of it. */
   const groundsUnder = (x, y, w, size) => {
     const x0 = Math.max(0, Math.floor(x / CELL)), x1 = Math.min(GW - 1, Math.floor((x + w) / CELL));
-    const y0 = Math.max(0, Math.floor((y - size * 0.38) / CELL));
-    const y1 = Math.min(GH - 1, Math.floor((y + size * 0.28) / CELL));
+    const y0 = Math.max(0, Math.floor((y - size * BAND_UP) / CELL));
+    const y1 = Math.min(GH - 1, Math.floor((y + size * BAND_DN) / CELL));
     const seen = new Map();
     let cells = 0;
     for (let gy = y0; gy <= y1; gy++) {
