@@ -50,6 +50,8 @@ const STANDING = [
   ['FF_CARDS=40', 'every card priced by taking it out of the offer'],
   ['FF_GIVE=a,b,c', 'a NAMED handful of cards priced deep, so the family bar is 3 tests and not 60'],
   ['FF_CALIBRATE=70', 'what a band actually is on this instrument — measured, not derived'],
+  ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
+  ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
 ];
 /* FF_HABIT and FF_CONTRAST are deliberately NOT here, and that is the answer to
    "six arms exist and three are stamped". Neither is an arm: FF_HABIT narrows
@@ -87,6 +89,24 @@ const CAL = (() => {
   const f = (rec && rec.factors) || null;
   return { gap: (f && f.gap) || 1, inter: (f && f.inter) || 1, measured: !!f, at: rec ? rec.sample : 0 };
 })();
+/* THE FAMILY BAR, HOISTED — it existed once, buried in the card arm, and that is
+   why the wares and the courses have been printed for a dozen rounds with no bar
+   at all and read by eye.
+
+   Asking k questions at once and taking the best answer inflates the error rate
+   k-fold. Bonferroni holds the FAMILY error at 5% by demanding more of each test:
+   at 60 cards that is 3.34σ and almost nothing ever clears, which is the honest
+   price of a fishing trip. At 8 wares it is 2.50σ and at 6 courses 2.39σ — bars a
+   real effect can actually clear. A small named family is not a weaker standard,
+   it is the same standard applied to a question somebody actually asked. */
+function familyZ(k) {
+  const pf = 0.05 / (2 * Math.max(1, k));
+  let lo = 0, hi = 6;
+  const tail = (x) => 0.5 * (1 - erf(x / Math.SQRT2));
+  for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (tail(mid) > pf) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
+}
+
 const BAND = {
   /* one arm's own spread */
   row: (p, n) => 100 * Math.sqrt(p * (1 - p) / Math.max(1, n)),
@@ -155,10 +175,10 @@ section('whole runs, start to finish');
     return out;
   };
   const MODES = ['careless', 'tactics', 'trader', 'careful'];
-  const sweepMany = async (modes, tweak) => {
+  const sweepMany = async (modes, tweak, base = 1000) => {
     const jobs = [];
     for (const mode of modes) for (const tribe of tribes) {
-      jobs.push({ tribes: [tribe], n: N, base: 1000, step: 37, mode, tweak, stats: true });
+      jobs.push({ tribes: [tribe], n: N, base, step: 37, mode, tweak, stats: true });
     }
     let answers;
     try { answers = await runJobs(jobs); }
@@ -167,6 +187,40 @@ section('whole runs, start to finish');
       answers.slice(mi * tribes.length, (mi + 1) * tribes.length).flatMap((a) => a.stats)));
   };
   const [careless, tactics, trader, careful] = await sweepMany(MODES);
+
+  /* CAN THIS INSTRUMENT RESOLVE ITS OWN HEADLINE NUMBER? It had never been asked.
+
+     The ladder total has read 30, 28 and 27 across three near-identical builds,
+     and the response was to widen the target to 26-32 — a six-point window on
+     the one number that is supposed to say whether the game rewards skill. That
+     is either a real spread or an admission that the number cannot be read, and
+     the difference is measurable the same way the gap and interaction bands
+     were: run the whole ladder at five different seed bases and take the spread
+     of the answers. No formula, no independence assumption. */
+  if (process.env.FF_LADDERBAND) {
+    const bases = [1000, 4000, 7000, 11000, 15000];
+    const totals = [], rungs = [[], [], []];
+    for (const bse of bases) {
+      const arms = await sweepMany(MODES, undefined, bse);
+      const p = arms.map((o) => Math.round((o.wins / Math.max(1, o.runs)) * 100));
+      totals.push(p[3] - p[0]);
+      rungs[0].push(p[1] - p[0]); rungs[1].push(p[2] - p[1]); rungs[2].push(p[3] - p[2]);
+    }
+    const sd = (xs) => {
+      const mu = xs.reduce((n, v) => n + v, 0) / xs.length;
+      return Math.sqrt(xs.reduce((n, v) => n + (v - mu) * (v - mu), 0) / (xs.length - 1));
+    };
+    const sdT = sd(totals);
+    console.log(`    THE TOTAL'S OWN SPREAD, at five seed bases, ${tribes.length * N} runs an arm:`);
+    console.log(`      totals: ${totals.join(', ')} — sd ±${sdT.toFixed(1)}, so 2σ is ±${(2 * sdT).toFixed(1)}`);
+    ['the fight', 'the trader', 'steering'].forEach((nm, k) => {
+      console.log(`      ${nm.padEnd(12)} ${rungs[k].join(', ')} — sd ±${sd(rungs[k]).toFixed(1)}`);
+    });
+    console.log(`      → the ladder cannot detect a change smaller than ${(2 * sdT).toFixed(0)} points, ` +
+      `and no single-point move anywhere in this file means anything`);
+    ARMS.stamp('FF_LADDERBAND=1', `the total reads ${totals.join('/')} at five bases — sd ±${sdT.toFixed(1)}, ` +
+      `so nothing under ${(2 * sdT).toFixed(0)} points is detectable`, tribes.length * N);
+  }
   const sweep = (mode, tweak) => tally(
     [].concat(...tribes.map((tribe) => inlineStats(tribe, mode, tweak))));
   const inlineStats = (tribe, mode, tweak) => {
@@ -379,43 +433,50 @@ section('does money change anything');
 {
   const N = Number(process.env.FF_RUNS || DEFAULT_N);
   const tribes = ['hearth', 'frost', 'scrap'];
-  const sweep2 = (tweak) => {
-    let wins = 0, runs = 0;
-    for (const tribe of tribes) {
-      for (let i = 0; i < N; i++) {
-        const st = playRun(tribe, 1000 + i * 37, 'careful', tweak);
-        runs++;
-        if (st.won) wins++;
-      }
-    }
-    return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
+  /* THIS SECTION WAS 21 SECONDS OF THE PROBE'S 82 AND NOBODY KNEW, because for
+     two rounds running the answer to "where does the time go" was reasoned about
+     rather than measured — and was wrong both times, once blaming three arms
+     that are switched off. `FF_TIME=1` prints the per-section table now.
+
+     Three arms of N here, all plain win rates, none reading a counter back.
+     `armsOf` turns a list of tweaks into one pooled call. */
+  const armsOf = async (tweaks, mode = 'careful') => {
+    const answers = await runJobs(tweaks.flatMap((tweak) =>
+      tribes.map((tribe) => ({ tribes: [tribe], n: N, base: 1000, step: 37, mode, tweak }))));
+    return tweaks.map((_, k) => {
+      const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
+      const wins = part.reduce((a2, x) => a2 + x.wins, 0);
+      const runs = part.reduce((a2, x) => a2 + x.runs, 0);
+      return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
+    });
   };
   /* FF_MONEY turns the economy arm up on its own, the way FF_ABLATE does the
      habits and FF_COURSE does the courses. It read eight points in one run and
      one in the next at 210 runs an arm, which is the same "band wider than the
      effect" mistake in a third place. */
   const MN = Number(process.env.FF_MONEY || 0);
-  const sweepM = MN ? (tweak) => {
-    let wins = 0, runs = 0;
-    for (const tribe of tribes) {
-      for (let i = 0; i < MN; i++) {
-        const st = playRun(tribe, 1000 + i * 37, 'careful', tweak);
-        runs++;
-        if (st.won) wins++;
-      }
-    }
-    return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
-  } : sweep2;
+  const armsM = async (tweaks) => {
+    if (!MN) return armsOf(tweaks);
+    const answers = await runJobs(tweaks.flatMap((tweak) =>
+      tribes.map((tribe) => ({ tribes: [tribe], n: MN, base: 1000, step: 37, mode: 'careful', tweak }))));
+    return tweaks.map((_, k) => {
+      const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
+      const wins = part.reduce((a2, x) => a2 + x.wins, 0);
+      const runs = part.reduce((a2, x) => a2 + x.runs, 0);
+      return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
+    });
+  };
   if (MN) console.log(`    (money turned up: ${3 * MN} runs an arm)`);
-  const normal = sweepM(null);
+  const [normal, broke, rich] = await armsM([null,
+    { set: { gold: 0, prices: 40 } },
+    { set: { gold: 400, prices: 0.02 } }]);
   /* Every number in this section is a proportion out of the same handful of
      runs, so it carries a band: one standard deviation, in points, computed up
      front and printed below, so nobody reads a four-point difference as a
      finding. Several of this iteration's dead ends were exactly that mistake
      made twice. */
   const band = BAND.gap(0.35, normal.runs).toFixed(1);
-  const broke = sweepM({ set: { gold: 0, prices: 40 } });
-  const rich = sweepM({ set: { gold: 400, prices: 0.02 } });
+
   const bar = (n) => '█'.repeat(Math.round(n / 2)).padEnd(30);
   console.log(`    ${'penniless'.padEnd(19)}${bar(broke.pct)} ${String(broke.pct + '%').padStart(4)}`);
   console.log(`    ${'as it ships'.padEnd(19)}${bar(normal.pct)} ${String(normal.pct + '%').padStart(4)}`);
@@ -426,11 +487,9 @@ section('does money change anything');
      rich pilot everything except one thing at a time: whatever it cannot do
      without is where the money goes. */
   if (MN) {
-    const rows = [];
-    for (const w of ['meal', 'bell', 'temper', 'charm', 'card', 'heal', 'sigil', 'burn']) {
-      const arm = sweepM({ set: { gold: 400, prices: 0.02, noBuy: { [w]: 1 } } });
-      rows.push([w, arm.pct, rich.pct - arm.pct]);
-    }
+    const WARES = ['meal', 'bell', 'temper', 'charm', 'card', 'heal', 'sigil', 'burn'];
+    const noBuyArms = await armsM(WARES.map((w) => ({ set: { gold: 400, prices: 0.02, noBuy: { [w]: 1 } } })));
+    const rows = WARES.map((w, k) => [w, noBuyArms[k].pct, rich.pct - noBuyArms[k].pct]);
     rows.sort((a2, z) => z[2] - a2[2]);
     console.log('    what a bottomless purse is actually buying (rich, minus one ware):');
     for (const [w, pct, drop] of rows) {
@@ -441,14 +500,23 @@ section('does money change anything');
        ware for nothing. If one of them closes most of the gap it is that ware;
        if they all close a little, the gap is the economy and not a ware, and
        the word "compounding" can be retired. */
-    const up = [];
-    for (const w of ['meal', 'charm', 'temper', 'bell', 'card', 'heal', 'sigil', 'burn']) {
-      const arm = sweepM({ set: { gold: 0, prices: 40, freeWare: w } });
-      up.push([w, arm.pct, arm.pct - broke.pct]);
-    }
+    const FREE = ['meal', 'charm', 'temper', 'bell', 'card', 'heal', 'sigil', 'burn'];
+    const freeArms = await armsM(FREE.map((w) => ({ set: { gold: 0, prices: 40, freeWare: w } })));
+    const up = FREE.map((w, k) => [w, freeArms[k].pct, freeArms[k].pct - broke.pct]);
     up.sort((a2, z) => z[2] - a2[2]);
     ARMS.stamp('FF_MONEY=70', `${rows[0][0]} is −${rows[0][2]} of ${rich.pct - normal.pct} removed; ` +
       `free ${up[0][0]} is +${up[0][2]} given`, 3 * MN);
+    /* AND THE BAR, WHICH THIS TABLE HAS NEVER HAD. Eight wares is a family of
+       eight: 2.50σ, not 2.0. Printed against the same measured band the rest of
+       the file uses, so "meal is the biggest" and "meal is real" stop being the
+       same sentence. */
+    {
+      const zw = familyZ(WARES.length);
+      const bw = BAND.gap(rich.pct / 100, rich.runs);
+      const clears = rows.filter((r) => Math.abs(r[2]) >= zw * bw);
+      console.log(`      (family of ${WARES.length}: the bar is ${zw.toFixed(2)}σ = ±${(zw * bw).toFixed(1)}; ` +
+        `${clears.length} clear it${clears.length ? ': ' + clears.map((r) => r[0]).join(', ') : ''})`);
+    }
     console.log(`    and what closes it from the other end (penniless, plus one free ware, vs ${broke.pct}%):`);
     for (const [w, pct, gain] of up) {
       console.log(`      free ${w.padEnd(7)} ${bar(pct)} ${String(pct + '%').padStart(4)}  ` +
@@ -462,21 +530,26 @@ section('does money change anything');
      at a band of three means the levelling was as likely luck as design — the
      same mistake the fight ablation was making for four rounds. */
   const CN = Number(process.env.FF_COURSE || 0);
-  const sweepC = CN ? (tweak) => {
-    let wins = 0, runs = 0;
-    for (const tribe of tribes) {
-      for (let i = 0; i < CN; i++) {
-        const st = playRun(tribe, 1000 + i * 37, 'careful', tweak);
-        runs++;
-        if (st.won) wins++;
-      }
-    }
-    return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
-  } : sweep2;
+  const armsC = async (tweaks) => {
+    const each = CN || N;
+    const answers = await runJobs(tweaks.flatMap((tweak) =>
+      tribes.map((tribe) => ({ tribes: [tribe], n: each, base: 1000, step: 37, mode: 'careful', tweak }))));
+    return tweaks.map((_, k) => {
+      const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
+      const wins = part.reduce((a2, x) => a2 + x.wins, 0);
+      const runs = part.reduce((a2, x) => a2 + x.runs, 0);
+      return { wins, runs, pct: Math.round((wins / Math.max(1, runs)) * 100) };
+    });
+  };
   if (CN) console.log(`    (courses turned up: ${3 * CN} runs an arm)`);
+  /* LANE.on is a config flag, so it travels with the job — the pool sends the
+     caller's config and each worker applies it before playing. Six arms, one
+     call: no course, then each of the five. */
   LANE.on = true; LANE.by = {};
-  const noCourse = sweepC({ set: { course: null } });
-  const byCourse = FF.COURSES.map((co) => ({ co, r: sweepC({ set: { course: co.id } }) }));
+  const courseArms = await armsC([{ set: { course: null } }]
+    .concat(FF.COURSES.map((co) => ({ set: { course: co.id } }))));
+  const noCourse = courseArms[0];
+  const byCourse = FF.COURSES.map((co, k) => ({ co, r: courseArms[k + 1] }));
   LANE.on = false;
   console.log('');
   console.log(`    ${'no course'.padEnd(19)}${bar(noCourse.pct)} ${String(noCourse.pct + '%').padStart(4)}`);
@@ -542,6 +615,17 @@ section('does money change anything');
      line; a course that crosses it wants tuning, not shipping. */
   ok(bestCourse.r.pct - worstCourse.r.pct <= 20 + band * 2,
     `no course runs away with the run (${bestCourse.co.short} ${bestCourse.r.pct}% vs ${worstCourse.co.short} ${worstCourse.r.pct}%)`);
+  /* THE SAME BAR FOR THE COURSES, for the same reason: six arms is a family of
+     six (2.39σ), and "which course is best" has been read off this table by eye
+     since it was written. */
+  {
+    const zc = familyZ(byCourse.length + 1);
+    const bc = BAND.gap(noCourse.pct / 100, noCourse.runs);
+    const loud = byCourse.filter((x) => Math.abs(x.r.pct - noCourse.pct) >= zc * bc);
+    console.log(`    (family of ${byCourse.length + 1}: the bar is ${zc.toFixed(2)}σ = ±${(zc * bc).toFixed(1)} ` +
+      `against declaring nothing at ${noCourse.pct}%; ${loud.length} clear it` +
+      `${loud.length ? ': ' + loud.map((x) => x.co.short).join(', ') : ''})`);
+  }
   console.log(`    (±${band} points is one standard deviation on a difference at ${normal.runs} runs an arm — ` +
     `anything inside twice that is noise, not a finding)`);
   ok(normal.pct >= broke.pct - band * 2, 'money is never a liability');
@@ -1011,7 +1095,30 @@ section('which parts of playing well are worth anything');
     }
     return Math.round((wins / Math.max(1, runs)) * 100);
   };
-  const all = sweep3();
+  /* THE SLOWEST SECTION IN THE PROBE — 23.8 of 82 seconds, measured rather than
+     guessed — and it is fourteen arms of N: six habits removed one at a time,
+     six added one at a time, and two controls. All fourteen are plain win rates
+     over the same seeds, and the only reason they were sequential is that each
+     sets SKILL before it plays.
+
+     A job carries its own config, so the SKILL state travels WITH the arm and
+     all fourteen go out in one call. That is what per-job config was built for:
+     the alternative is toggling a global fourteen times and draining the pool
+     after each, which is slower than not pooling at all. */
+  const sweep3Many = async (skillSets) => {
+    const answers = await runJobs(skillSets.flatMap((skill) =>
+      tribes.map((tribe) => ({ tribes: [tribe], n: N, base: 1000, step: 37, mode: 'tactics',
+        config: { skill: Object.assign({}, SKILL, skill), draft: Object.assign({}, DRAFT) } }))));
+    return skillSets.map((_, k) => {
+      const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
+      const wins = part.reduce((a2, x) => a2 + x.wins, 0);
+      const runs = part.reduce((a2, x) => a2 + x.runs, 0);
+      return Math.round((wins / Math.max(1, runs)) * 100);
+    });
+  };
+  const OFF_ALL = {};
+  for (const [k] of HABITS) OFF_ALL[k] = false;
+  const [all] = await sweep3Many([{}]);
   const band = BAND.gap(0.2, tribes.length * N).toFixed(1);
   console.log(`    the fight, played well:  ${all}%`);
   /* ARE THE OTHER DECISIONS FAKE, OR IS ONE-AT-A-TIME THE WRONG QUESTION?
@@ -1028,9 +1135,7 @@ section('which parts of playing well are worth anything');
      SET of them is worth a great deal. Removing them all at once is the only
      way to tell those two stories apart, and it had never been run. */
   const before = Object.assign({}, SKILL);
-  for (const [key] of HABITS) SKILL[key] = false;
-  const none = sweep3();
-  Object.assign(SKILL, before);
+  const [none] = await sweep3Many([OFF_ALL]);
   console.log(`    the fight, with every habit switched off:  ${none}%  (${all - none} points for the set)`);
 
   /* AND THE SAME QUESTION FROM THE OTHER END, which is the thing that finally
@@ -1047,13 +1152,9 @@ section('which parts of playing well are worth anything');
      So: start from the pilot that knows nothing and turn ONE habit on. If each
      alone recovers a real share of the nineteen, they are all real and the
      subtractive table was blunt rather than right. */
-  const added = [];
-  for (const [key, label] of HABITS) {
-    for (const [k2] of HABITS) SKILL[k2] = false;
-    SKILL[key] = true;
-    added.push([label, sweep3()]);
-  }
-  Object.assign(SKILL, before);
+  const addedPcts = await sweep3Many(HABITS.map(([key]) =>
+    Object.assign({}, OFF_ALL, { [key]: true })));
+  const added = HABITS.map(([, label], k) => [label, addedPcts[k]]);
   added.sort((a2, z) => z[1] - a2[1]);
   /* And this table refuses to print inside its own band, the same as the one
      above it. It nearly cost a round: at the default sample it read "keeping a
@@ -1277,14 +1378,9 @@ section('which parts of playing well are worth anything');
     ok(seedBands.inter > 0, 'the measured band is a number, not a coincidence of five identical runs');
   }
 
-  const rows = [];
-  for (const [key, label] of HABITS) {
-    if (ONLY && key !== ONLY) continue;
-    SKILL[key] = false;
-    const without = sweep3();
-    SKILL[key] = true;
-    rows.push({ label, cost: all - without });
-  }
+  const subKeys = HABITS.filter(([key]) => !ONLY || key === ONLY);
+  const withoutPcts = await sweep3Many(subKeys.map(([key]) => ({ [key]: false })));
+  const rows = subKeys.map(([, label], k) => ({ label, cost: all - withoutPcts[k] }));
   rows.sort((a, z) => z.cost - a.cost);
   /* A TABLE NOBODY MAY READ IS WORSE THAN NO TABLE.
 
@@ -1481,23 +1577,24 @@ section('which reward-screen decisions are worth anything');
   const N = Number(process.env.FF_ABLATE || process.env.FF_RUNS || DEFAULT_N);
   if (process.env.FF_ABLATE) console.log(`    (turned up: ${3 * N} runs an arm)`);
   const tribes = ['hearth', 'frost', 'scrap'];
-  const sweep4 = () => {
-    let wins = 0, runs = 0;
-    for (const tribe of tribes) {
-      for (let i = 0; i < N; i++) { const st = playRun(tribe, 1000 + i * 37, 'careful'); runs++; if (st.won) wins++; }
-    }
-    return Math.round((wins / Math.max(1, runs)) * 100);
+  /* Same shape as the fight ablation and pooled the same way: the DRAFT flag
+     each arm needs travels in the job rather than being toggled globally. */
+  const sweep4Many = async (draftSets) => {
+    const answers = await runJobs(draftSets.flatMap((draft) =>
+      tribes.map((tribe) => ({ tribes: [tribe], n: N, base: 1000, step: 37, mode: 'careful',
+        config: { skill: Object.assign({}, SKILL), draft: Object.assign({}, DRAFT, draft) } }))));
+    return draftSets.map((_, k) => {
+      const part = answers.slice(k * tribes.length, (k + 1) * tribes.length);
+      const wins = part.reduce((a2, x) => a2 + x.wins, 0);
+      const runs = part.reduce((a2, x) => a2 + x.runs, 0);
+      return Math.round((wins / Math.max(1, runs)) * 100);
+    });
   };
-  const all = sweep4();
+  const rewardPcts = await sweep4Many([{}].concat(DRAFT_HABITS.map(([key]) => ({ [key]: false }))));
+  const all = rewardPcts[0];
   const band = BAND.gap(0.3, tribes.length * N).toFixed(1);
   console.log(`    the reward screen, played well:  ${all}%`);
-  const rows = [];
-  for (const [key, label] of DRAFT_HABITS) {
-    DRAFT[key] = false;
-    const without = sweep4();
-    DRAFT[key] = true;
-    rows.push({ label, cost: all - without });
-  }
+  const rows = DRAFT_HABITS.map(([, label], k) => ({ label, cost: all - rewardPcts[k + 1] }));
   rows.sort((a, z) => z.cost - a.cost);
   // The same rule as the fight table above: it prints when it can be trusted
   // and says so plainly when it cannot.
@@ -1676,6 +1773,103 @@ section('every card is worth playing');
 
    The check is therefore made to prove the thing it claims: a seed replayed
    after four hundred OTHER runs still plays the same. */
+/* ------------------------------------------ where a run is decided ------- */
+/* TWO ROUNDS OF CARD WORK ENDED IN "NOT SUPPORTED", SO STOP ASKING ABOUT CARDS.
+
+   Fifty-six of fifty-seven cards are indistinguishable from the pool median;
+   three cards built specifically to break that pattern straddle three ordinary
+   wardens. The conclusion drawn twice was "the cards do not matter", which is a
+   finding about cards. The question underneath is where a run's outcome is
+   decided AT ALL, and that has never been measured.
+
+   Three things can decide it and they can be separated exactly:
+
+     THE DECK    what cards you are holding
+     THE TRAIL   what the seed lays out — map, nodes, foes, rewards
+     THE DRAW    which order those cards come to hand
+
+   The trick that makes the third one separable is that `give` pushes cards onto
+   the deck in list order, so the SAME cards in a DIFFERENT order is the same
+   deck with a different shuffle, on the same seed, against the same trail. No
+   engine change and no extra RNG: one permutation of a list.
+
+   The arithmetic is a three-way decomposition of the win/lose variance. Each
+   cell is one deterministic run, so there is no within-cell noise to confuse
+   with an effect — every point of variance belongs to one of the three factors
+   or to their interaction. */
+section('where a run is actually decided');
+{
+  const M = Number(process.env.FF_VARIANCE || 12);
+  const tribes = ['hearth', 'frost', 'scrap'];
+  /* Six decks that differ in CONTENT rather than in size: same eight cards'
+     worth of bodies and gear each, drawn from different corners of the pool, so
+     "deck" means what you are holding and not how much. */
+  const DECKS = [
+    ['snowpup', 'cinderpup', 'snowpup', 'wayfarer', 'icepick', 'stew'],
+    ['bellowsbear', 'cairn', 'avalanche', 'gearshield', 'hush', 'lastlight'],
+    ['frostmite', 'frostmite', 'galewisp', 'snowbomb', 'coldsnap', 'thornoil'],
+    ['clunkbot', 'springjaw', 'bellhammer', 'blastcap', 'patchkit', 'hookline'],
+    ['warmroot', 'emberwick', 'emberward', 'emberflask', 'tinderjar', 'stew'],
+    ['pikeling', 'shoveler', 'snowbeard', 'rimefox', 'chillfin', 'icepick'],
+  ].map((d) => d.filter((id) => FF.CARDS[id]));
+  const rot = (a, k) => a.slice(k).concat(a.slice(0, k));
+  const PERMS = 3;
+
+  const jobs = [];
+  for (let d = 0; d < DECKS.length; d++) {
+    for (let p = 0; p < PERMS; p++) {
+      jobs.push({ tribes, n: M, base: 1000, step: 37, mode: 'tactics', stats: true,
+        tweak: { set: { lockDeck: true, mend: 8 }, give: rot(DECKS[d], p * 2) } });
+    }
+  }
+  const answers = await runJobs(jobs);
+  /* y[d][p][s] — one run, 1 for a crossing and 0 for a death. The seed index
+     runs across tribes too, so a "seed" here is one (tribe, seed) trail. */
+  const S = tribes.length * M;
+  const y = [];
+  for (let d = 0; d < DECKS.length; d++) {
+    y.push([]);
+    for (let p = 0; p < PERMS; p++) {
+      const st = answers[d * PERMS + p].stats;
+      y[d].push(st.map((x) => (x.won ? 1 : 0)));
+    }
+  }
+  const flat = [];
+  for (let d = 0; d < DECKS.length; d++) for (let p = 0; p < PERMS; p++) for (let s = 0; s < S; s++) flat.push(y[d][p][s]);
+  const mean = (a) => a.reduce((n, v) => n + v, 0) / Math.max(1, a.length);
+  const grand = mean(flat);
+  const ssTotal = flat.reduce((n, v) => n + (v - grand) * (v - grand), 0);
+
+  const deckMeans = y.map((dp) => mean([].concat(...dp)));
+  const permMeans = [];
+  for (let p = 0; p < PERMS; p++) permMeans.push(mean(y.map((dp) => dp[p]).flat()));
+  const seedMeans = [];
+  for (let s = 0; s < S; s++) {
+    const col = [];
+    for (let d = 0; d < DECKS.length; d++) for (let p = 0; p < PERMS; p++) col.push(y[d][p][s]);
+    seedMeans.push(mean(col));
+  }
+  const ssOf = (means, cellsEach) =>
+    means.reduce((n, m) => n + cellsEach * (m - grand) * (m - grand), 0);
+  const ssDeck = ssOf(deckMeans, PERMS * S);
+  const ssDraw = ssOf(permMeans, DECKS.length * S);
+  const ssSeed = ssOf(seedMeans, DECKS.length * PERMS);
+  const ssRest = Math.max(0, ssTotal - ssDeck - ssDraw - ssSeed);
+  const pct = (x) => ((x / Math.max(1e-9, ssTotal)) * 100).toFixed(1) + '%';
+
+  console.log(`    ${DECKS.length} decks x ${PERMS} draw orders x ${S} trails = ${flat.length} runs, ` +
+    `${(grand * 100).toFixed(0)}% crossed`);
+  console.log(`      the TRAIL  (map, foes, rewards)   ${pct(ssSeed).padStart(6)} of the variance`);
+  console.log(`      the DECK   (which cards you hold) ${pct(ssDeck).padStart(6)}`);
+  console.log(`      the DRAW   (what order they come) ${pct(ssDraw).padStart(6)}`);
+  console.log(`      everything left (interactions)    ${pct(ssRest).padStart(6)}`);
+  console.log(`      best deck ${(Math.max(...deckMeans) * 100).toFixed(0)}% vs worst ${(Math.min(...deckMeans) * 100).toFixed(0)}% · ` +
+    `best draw order ${(Math.max(...permMeans) * 100).toFixed(0)}% vs worst ${(Math.min(...permMeans) * 100).toFixed(0)}%`);
+  ARMS.stamp('FF_VARIANCE=40', `trail ${pct(ssSeed)}, deck ${pct(ssDeck)}, draw ${pct(ssDraw)}`, flat.length);
+  ok(ssTotal > 0, 'the runs did not all end the same way');
+  ok(true, 'where a run is decided is a report, not a gate');
+}
+
 section('a seed is a promise');
 {
   const a = playRun('hearth', 4242, true);
