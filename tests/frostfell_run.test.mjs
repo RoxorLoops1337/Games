@@ -76,7 +76,20 @@ function watchTitan() {
 
 /* ------------------------------------------------------------- the pilot -- */
 function bestSlot() {
-  // Hold the front of both lanes first, then fill in behind.
+  /* READ THE TELEGRAPH FIRST.
+
+     A wave names its lane a turn before it arrives, and anyone standing in that
+     lane turns it away — it waits instead of arriving. That is the second EVENT
+     on this board — the first being a scheme — and it is the whole reason
+     placement might be a decision rather than arithmetic. A pilot that places
+     well answers it; one that does not fills the nearest hole. */
+  const b = G.battle;
+  if (b && b.waveLane !== undefined && !FF.laneHeldBy(G, b.waveLane)) {
+    for (let col = 0; col < FF.COLS; col++) {
+      if (FF.slotFree(G, 'p', b.waveLane, col)) return { lane: b.waveLane, col };
+    }
+  }
+  // Then hold the front of both lanes, then fill in behind.
   for (let col = 0; col < FF.COLS; col++) {
     for (let lane = 0; lane < FF.LANES; lane++) {
       if (FF.slotFree(G, 'p', lane, col)) return { lane, col };
@@ -1534,9 +1547,22 @@ section('which parts of playing well are worth anything');
      slot in reserve +5" with a ±2.8 band, that got written down as a finding,
      and at 180 runs an arm it is +2. A ranking inside its own band is noise
      wherever it is printed, including here. */
+  /* TWO STANDARD DEVIATIONS, WRITTEN INTO THE SUITE.
+
+     Two rounds running, a three-point reading at ±3.0 was reported as "a
+     direction" and evaporated at the larger sample: keeping a slot back at +5
+     became +2, and the beast's-rest change at +19 became +15. One round is bad
+     luck; two is a habit, and a habit needs a rule rather than a resolution.
+
+     So the suite says it instead of the author remembering to. Anything under
+     TWO standard deviations is printed as noise, in the same breath as the
+     number, whatever it looks like. A row that clears it is called a finding
+     and nothing else is. */
+  const sig = (d) => (Math.abs(d) >= 2 * Number(band) ? '' : '  (noise: under 2σ)');
   const top = added[0];
   console.log(`    and one at a time, starting from nothing (${none}% knowing none): ` +
-    `${top[0].replace(' (removed)', '')} alone is worth ${top[1] - none} of the ${all - none}`);
+    `${top[0].replace(' (removed)', '')} alone is worth ${top[1] - none} of the ${all - none}` +
+    sig(top[1] - none));
   if (Number(band) > 3.2) {
     console.log(`      (no table: ±${band} a row at this sample. FF_ABLATE=60 or more for one that means something)`);
     added.length = 0;
@@ -1549,7 +1575,7 @@ section('which parts of playing well are worth anything');
     const d = pct - none;
     console.log(`      only ${label.replace(' (removed)', '').padEnd(34)}` +
       '█'.repeat(Math.round(pct / 2)).padEnd(14) + ` ${String(pct + '%').padStart(4)}  ` +
-      (d > 0 ? '+' + d : String(d)) + ' of the ' + (all - none));
+      (d > 0 ? '+' + d : String(d)) + ' of the ' + (all - none) + sig(d));
   }
   const rows = [];
   for (const [key, label] of HABITS) {

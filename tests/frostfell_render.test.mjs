@@ -536,28 +536,25 @@ section('the shape of a phone');
              bank has perfect edge definition and still reads badly, because
              edge definition is not figure-ground. Both are now measured and the
              worse one is the answer. */
-          /* TAKING THE WORSE OF OUTLINE AND GROUND WAS TRIED AND THE
-             INSTRUMENT CANNOT SUPPORT IT.
+          /* THE WORSE OF THE TWO, now that the ground is real.
 
-             The rule is right: an outline gives a glyph its edge, and edge
-             definition is not figure-ground, so pale blue on a near-white snow
-             bank should fail. Implemented, it flagged three things — a leader's
-             name under its portrait, a warden's name on its card — all of which
-             are perfectly legible, and all of which are the same artefact: the
-             ground is attributed by which filled path's BOUNDING BOX contains
-             the text, and this game draws creatures as multi-segment blobs
-             whose boxes reach well past their ink.
-
-             Single arcs are now tested as circles, which is a real improvement
-             and fixes none of these, because a blob is not an arc. Doing it
-             properly means the stub has to rasterise, which is a much bigger
-             instrument than the bug justifies. So the rule stays outline-first
-             and this note stays with it. */
+             This was tried last round and reverted, because the ground was
+             attributed by bounding box and a creature's box swallows the label
+             under its feet. The stub rasterises now — a colour grid every eight
+             units, stamped by every fill in draw order — so the ground under a
+             glyph is the colour a screen would actually show there. With that
+             fixed the rule can be what it should always have been: an outline
+             gives a glyph its edge, but edge definition is not figure-ground,
+             so BOTH are measured and the worse one is the answer. */
           const outlined = lastStrokeKey === String(e[1]) && stroked;
-          const ground = outlined ? stroked : (g2 && g2.col);
-          if (!ground) { unpaired++; continue; }
+          const g3 = e[8] || (g2 && g2.col);
+          const rOut = outlined ? ratio(e[6], stroked) : null;
+          const rGnd = g3 ? ratio(e[6], g3) : null;
+          if (rOut === null && rGnd === null) { unpaired++; continue; }
           paired++;
-          const r = ratio(e[6], ground);
+          const r = (rOut !== null && rGnd !== null) ? Math.min(rOut, rGnd)
+            : (rOut === null ? rGnd : rOut);
+          const ground = (rGnd !== null && (rOut === null || rGnd < rOut)) ? g3 : stroked;
           const big = e[4] * cssPerStage >= 18;
           if (r !== null && r < (big ? 3 : 4.5)) {
             dim.push(`${e[6]} on ${ground} ${r.toFixed(1)}:1 ${JSON.stringify(String(e[1])).slice(0, 18)}`);

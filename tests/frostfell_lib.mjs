@@ -39,6 +39,52 @@ export function mkCtx(log) {
     n[4] * m[0] + n[5] * m[2] + m[4], n[4] * m[1] + n[5] * m[3] + m[5]];
   const at = (x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
   const zoom = () => Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2])) || 1;
+  /* A COARSE RASTER, WHICH IS WHAT GROUND ATTRIBUTION ACTUALLY NEEDED.
+
+     The contrast check pairs each glyph with the shape under it, and for two
+     rounds it did that by asking which filled path's BOUNDING BOX contained the
+     point. That is wrong for the shapes this game is made of: a creature is a
+     multi-segment blob whose box reaches well past its ink, so a label drawn
+     under its feet was attributed to the creature and read as 1.2:1 against a
+     colour that is not behind it.
+
+     So the stub keeps a grid — one cell every eight stage units — and every
+     fill stamps its own colour into the cells it covers, in draw order. Reading
+     the cell under a glyph gives the last colour actually written there, which
+     is what a screen would show. Circles stamp as circles; everything else
+     stamps as its box, which for panels and bands is exact. It is about forty
+     lines and it makes every attribution right rather than most of them. */
+  const CELL = 8, GW = 240, GH = 100;
+  const grid = new Array(GW * GH).fill(null);
+  /* ONLY WHAT THE GRID CAN REPRESENT EXACTLY.
+
+     A rectangle and a circle stamp truthfully. A multi-segment blob does not —
+     its box reaches well past its ink, and stamping the box is the same lie the
+     bounding-box lookup told, just at cell resolution. So a path that is not a
+     single arc does not stamp at all: the ground under a glyph is then whatever
+     rectangle or circle was painted there, and a creature never claims a label
+     drawn below its feet. The cost is that text drawn ON a blob has no ground
+     and falls back to its outline, which is the conservative direction. */
+  const stamp = (box, cc, col, alpha, exact) => {
+    if (!exact || !box || alpha <= 0.9 || typeof col !== 'string') return;
+    const x0 = Math.max(0, Math.floor(box[0] / CELL)), x1 = Math.min(GW - 1, Math.ceil(box[2] / CELL));
+    const y0 = Math.max(0, Math.floor(box[1] / CELL)), y1 = Math.min(GH - 1, Math.ceil(box[3] / CELL));
+    if ((x1 - x0) * (y1 - y0) > 40000) return;          // a full-screen wash, not a ground
+    for (let gy = y0; gy <= y1; gy++) {
+      for (let gx = x0; gx <= x1; gx++) {
+        if (cc) {
+          const dx = (gx + 0.5) * CELL - cc[0], dy = (gy + 0.5) * CELL - cc[1];
+          if (dx * dx + dy * dy > cc[2] * cc[2]) continue;
+        }
+        grid[gy * GW + gx] = col;
+      }
+    }
+  };
+  const groundAt = (x, y) => {
+    const gx = Math.floor(x / CELL), gy = Math.floor(y / CELL);
+    if (gx < 0 || gy < 0 || gx >= GW || gy >= GH) return null;
+    return grid[gy * GW + gx];
+  };
   const grow = (x, y) => {
     const p = at(x, y);
     if (!bb) bb = [p[0], p[1], p[0], p[1]];
@@ -73,7 +119,8 @@ export function mkCtx(log) {
       if (log && k === 'fillText') {
         return (s, x, y) => {
           const p = at(x, y);
-          log.push(['fillText', s, p[0], p[1], st.size * zoom(), st.align, st.fill, st.alpha]);
+          log.push(['fillText', s, p[0], p[1], st.size * zoom(), st.align, st.fill, st.alpha,
+            groundAt(p[0], p[1])]);
         };
       }
       /* The colour a shape was painted in AND WHERE, so something can ask
@@ -87,6 +134,7 @@ export function mkCtx(log) {
          it. Three "failures" in the contrast check were exactly that. So a path
          that is a single arc and nothing else records its centre and radius, and
          the ground lookup tests the circle rather than the box. */
+      if (k === 'clearRect') return () => { grid.fill(null); };
       if (k === 'beginPath') return () => { bb = null; circ = null; nSeg = 0; };
       if (k === 'moveTo' || k === 'lineTo') return (x, y) => { nSeg++; grow(x, y); };
       if (k === 'rect') return (x, y, w, h) => { nSeg++; grow(x, y); grow(x + w, y + h); };
@@ -100,13 +148,18 @@ export function mkCtx(log) {
       if (k === 'quadraticCurveTo') return (_a, _b, x, y) => { nSeg++; circ = null; grow(x, y); };
       if (k === 'bezierCurveTo') return (_a, _b, _c, _d, x, y) => { nSeg++; circ = null; grow(x, y); };
       if (log && k === 'fill') {
-        return () => { log.push(['fill', st.fill, st.alpha, bb && bb.slice(), circ && circ.slice()]); };
+        return () => {
+          stamp(bb, circ, st.fill, st.alpha, !!circ);
+          log.push(['fill', st.fill, st.alpha, bb && bb.slice(), circ && circ.slice()]);
+        };
       }
       if (log && k === 'fillRect') {
         return (x, y, w, h) => {
           const p0 = at(x, y), p1 = at(x + w, y + h);
-          log.push(['fillRect', st.fill, st.alpha,
-            [Math.min(p0[0], p1[0]), Math.min(p0[1], p1[1]), Math.max(p0[0], p1[0]), Math.max(p0[1], p1[1])]]);
+          const box = [Math.min(p0[0], p1[0]), Math.min(p0[1], p1[1]),
+            Math.max(p0[0], p1[0]), Math.max(p0[1], p1[1])];
+          stamp(box, null, st.fill, st.alpha, true);
+          log.push(['fillRect', st.fill, st.alpha, box]);
         };
       }
       if (log && k === 'strokeText') {
