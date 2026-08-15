@@ -382,15 +382,48 @@ section('whole runs, start to finish');
     console.log(`    ${name.padEnd(20)}${shape(o)}  ${String(pct(o) + '%').padStart(4)}`);
   }
   console.log('');
+  /* A RUNG PRINTS WITH THE BAND IT WAS MEASURED AT, and one that cannot clear
+     its own band says so instead of quoting a number.
+
+     `steering the pool` read +6 one round and +2 the next in this very table,
+     while the five-base measurement underneath it says +7.6 ± 1.2 — so the
+     headline and the finding disagreed, in the same output, with the headline
+     read first. That is worse than either alone. The table is not wrong to
+     print a rung; it is wrong to print it as though 210 runs an arm could
+     support it. A rung is a DIFFERENCE of two arms, so its band is
+     `1.29·√(p₁q₁/n + p₂q₂/n)·100`, and anything inside twice that is a range
+     rather than a value. */
+  const rungBand = (a, z) => {
+    const p1 = a.wins / Math.max(1, a.runs), p2 = z.wins / Math.max(1, z.runs);
+    return 1.29 * Math.sqrt(p1 * (1 - p1) / Math.max(1, a.runs) + p2 * (1 - p2) / Math.max(1, z.runs)) * 100;
+  };
   const rung = (a, z) => {
     const d = pct(z) - pct(a);
-    return `${d >= 0 ? '+' : ''}${d}`.padStart(4);
+    const b = 2 * rungBand(a, z);
+    return `${d >= 0 ? '+' : ''}${d}${Math.abs(d) >= b ? '' : '?'}`.padStart(5);
   };
+  const total = pct(router) - pct(careless);
+  const totalBand = 2 * rungBand(careless, router);
   console.log(`    what each thing is worth:  the fight ${rung(careless, tactics)}   ` +
     `the trader ${rung(tactics, trader)}   steering the pool ${rung(trader, careful)}   ` +
-    `choosing its road ${rung(careful, router)}   = ${pct(router) - pct(careless)} points, all told`);
-  console.log(`    (four rungs and 33 points was the headline for two rounds; ` +
-    `the fifth rung is worth ${pct(router) - pct(careful)} and takes it to ${pct(router) - pct(careless)})`);
+    `choosing its road ${rung(careful, router)}   = ${total} ± ${totalBand.toFixed(0)} points, all told`);
+  {
+    const soft = [['the fight', careless, tactics], ['the trader', tactics, trader],
+      ['steering the pool', trader, careful], ['choosing its road', careful, router]]
+      .filter(([, a, z]) => Math.abs(pct(z) - pct(a)) < 2 * rungBand(a, z));
+    console.log(`    (a rung marked ? is inside its own 2σ band at this sample and is a RANGE, not a value` +
+      `${soft.length ? ': ' + soft.map(([n2, a, z]) => `${n2} is somewhere in 0..${Math.round(2 * rungBand(a, z))}`).join(', ') : ''})`);
+    /* And what it would take, rather than leaving the reader to work it out.
+       The same arithmetic that settled the decks, the courses and this rung
+       three rounds running — see the sample-size rule in DESIGN.md. */
+    for (const [n2, a, z] of soft) {
+      const p1 = a.wins / Math.max(1, a.runs), p2 = z.wins / Math.max(1, z.runs);
+      const want = Math.max(3, Math.abs(pct(z) - pct(a)));
+      const need = Math.pow(1.29 * 100 * 2 / want, 2) * (p1 * (1 - p1) + p2 * (1 - p2));
+      console.log(`      to resolve ${n2} at ${want} points: ${Math.round(need)} runs an arm ` +
+        `(FF_RUNS=${Math.round(need / tribes.length)}), against ${a.runs} here`);
+    }
+  }
   for (const [name, o] of rows) {
     console.log(`    ${name.padEnd(20)}${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns a fight · ` +
       `${o.reachedTwo}/${o.runs} saw the second zone, ${o.reachedThree} the third`);

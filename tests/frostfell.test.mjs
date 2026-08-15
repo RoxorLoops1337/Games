@@ -2429,6 +2429,45 @@ section('the design record states numbers');
     eq(stepped.length, 2, 'only sweepX and one exact two-step loop step toward a boundary');
   }
 
+  /* THE SEAMS THE PROBE HAS OPENED IN THE GAME, counted so a seventh has to be
+     deliberate.
+
+     Six rounds of dial-sweeping put named magnitudes into the game where there
+     used to be literals, and that was the right move — "a dial nobody can turn
+     reads exactly like no dial" is why three courses sat on the floor for
+     twenty rounds. But it is also how a game ends up full of test scaffolding,
+     so the two kinds are separated and the count is asserted:
+
+       GAME CONFIGURATION — a course's magnitude, named rather than buried in a
+       closure. `shellN`, `freeN`, `thornN` and `emberline` are per-course data,
+       the card text is generated from them, and each was a measured improvement
+       over the literal it replaced. These belong here.
+
+       TEST SCAFFOLDING — a mutable module object whose only writer is the
+       probe. `REST.fights` is the one. It stays because the alternative is a
+       test that monkeypatches a function, which is worse — but it is the ONLY
+       one, and that is the thing worth holding.
+
+     `GEAR.bar` and `COURSE0` are the counter-example and live in the pilot,
+     where scaffolding belongs. */
+  {
+    const src = readFileSync(new URL('../frostfell/index.html', import.meta.url), 'utf8');
+    /* Counted from the WRITER's side, which is the only side that can be
+       counted honestly: the game has plenty of module objects, and what makes
+       one a seam is that the probe reaches in and sets it. */
+    const pilotSrc = readFileSync(new URL('./frostfell_pilot.mjs', import.meta.url), 'utf8');
+    const written = [...new Set([...pilotSrc.matchAll(/FF\.([A-Z][A-Z_0-9]*)\.[a-z]\w*\s*=/g)].map((m2) => m2[1]))].sort();
+    /* `UI` is not a seam and is in this list on purpose: the pilot opens
+       choosers and closes inspect panels because that is what a PLAYER does,
+       and driving the interface through the interface is the opposite of a
+       test hook. `REST` is the only thing here the probe reaches in and sets
+       that a player never touches. */
+    eq(written.join(','), 'REST,UI', 'the probe writes one dial into the game, and drives the UI like a player');
+    const dials = ['shellN', 'freeN', 'thornN', 'emberline'].filter((k) => src.indexOf(k + ':') > 0);
+    eq(dials.length, 4, `and four course magnitudes named rather than buried (${dials.join(', ')})`);
+    ok(readFileSync(new URL('./frostfell_pilot.mjs', import.meta.url), 'utf8').indexOf('const GEAR = {') > 0,
+      'while the pilot-only dials stay in the pilot');
+  }
   const doc = readFileSync(new URL('../frostfell/DESIGN.md', import.meta.url), 'utf8');
   const lines = doc.split('\n');
 

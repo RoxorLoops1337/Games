@@ -13,6 +13,48 @@
 > name: **blacksite at 45%**.
 
 
+## The current reading — 2026-08-15
+
+```
+195.3s  43%  blacksite     ← the only suite over the 25% bar
+ 85.0s  19%  crashmas
+ 47.1s  10%  frostfell
+ 43.5s  10%  ironbridge
+ 27.9s   6%  dungeon
+ 11.3s   3%  grimhold
+                              452.2s total · median suite 0.7s · bar 113.0s
+```
+
+**Blacksite is 195 seconds — 43% of the whole check, and the only suite over the
+bar.** That is the number this file exists to put somewhere its owner would find
+it, because nobody running one suite ever sees the total. Nothing here is a
+request to change it; it is the reading, and what to do about it is blacksite's
+call.
+
+**And frostfell is the transferable half, because it used to be the worst one
+here and is now third at 10%.** What moved it, in order of how much each was
+worth:
+
+1. **Stop running the probe at a sample nobody reads.** The deep arms — every
+   card priced, every habit ablated, the variance decomposition — moved behind
+   env knobs (`FF_CARDS`, `FF_ABLATE`, `FF_VARIANCE` and a dozen more). The
+   default check runs them at a depth that proves they still work; the sample
+   that produces a *finding* is a thing you ask for. That was most of it.
+2. **Pool the runs.** A worker per core, jobs batched so a fourteen-arm sweep
+   is one call rather than fourteen. Worth about 3% on its own — far less than
+   it looks like it should be, which is worth knowing before anybody spends a
+   day on it.
+3. **Add coverage anyway.** Since then the render suite gained a per-card
+   sweep, a per-foe sweep, a real glyph-advance table and two more device
+   shapes, and it is *still* 10%. Widening a check is cheap; running it deep by
+   default is not.
+
+The general form: **a suite is slow because of what it runs by default, not
+because of what it can run.** Frostfell can burn 50,000 runs on one question and
+does, several times a round — none of it inside `npm run check`.
+
+---
+
 Measured 2026-08-14 on the CI-sized box (4 cores), each suite timed on its own,
 cold, via `npm run test:<name>`. Total **531.9s — just under nine minutes** across
 39 suites.
