@@ -920,6 +920,61 @@ section('every card in the game, drawn and measured');
     'every card in the pool keeps its text readable and its labels apart');
 }
 
+/* ---------------------------------------------- the light in the window -- */
+/* A CAST SHADOW IS A CLAIM, AND TWO ROUNDS GOT IT WRONG IN OPPOSITE DIRECTIONS.
+   Round 2 gave every unit an ellipse as wide as its bounding box, which put a
+   neat oval under a tail. Round 3 read that as "half the gear does not touch
+   the ground" and withheld the patch from ALL gear — so grounded objects lost
+   their contact while diagonal ones kept hanging in the air, which is the worst
+   of the three answers available.
+   The answer is neither exception: MEASURE the contact. `penBox` records what
+   each drawing paints in the bottom eighth of itself, and the cast is sized off
+   that. These three checks are what stop either mistake growing back. */
+section('the light in the window');
+{
+  const boxes = [];
+  for (const def of Object.values(FF.CARDS)) {
+    if (def.type === 'unit' && def.art) boxes.push([def.id, FF.creatureBox(def.art)]);
+    else if (def.art) boxes.push([def.id, FF.itemBox(def.art)]);
+  }
+  ok(boxes.length > 40, `every art recipe measured (${boxes.length})`);
+  const badFoot = [];
+  for (const [id, b] of boxes) {
+    if (!(b[4] < b[5])) { badFoot.push(id + ': no footprint'); continue; }
+    // the contact can never be wider than the drawing that makes it
+    if (b[4] < b[0] - 1e-6 || b[5] > b[2] + 1e-6) badFoot.push(id + ': footprint outside the box');
+  }
+  eq(badFoot.slice(0, 4).join(' | '), '',
+    'every drawing reports a contact patch, and it lies inside its own outline');
+
+  /* THE ONE THAT MATTERS. Icepick is the object the last round argued from: it
+     is drawn on a diagonal, so the width of its box is nowhere near the width
+     of what is in the snow. If these two ever come back equal, the shadow has
+     gone back to being the bounding box and Icepick is standing on a plinth it
+     does not touch. */
+  const ip = FF.itemBox(FF.CARDS.icepick.art);
+  ok((ip[5] - ip[4]) < (ip[2] - ip[0]) * 0.72,
+    `a diagonal object's contact is narrower than its box (icepick ${((ip[5] - ip[4]) / (ip[2] - ip[0])).toFixed(2)} of it)`);
+
+  /* AND THE CREATURE'S OWN GROUND DISC STAYS OUT OF THE CARD. It is a flat
+     black ellipse drawn BELOW the feet and inside the measured box, so while it
+     was in there the window solved every subject's position against a box whose
+     bottom was a shadow — the cast stood on the snow and the animal stood a
+     fifth of a body above it, under two shadows that did not agree. The board
+     and the collection have no snow of their own and keep it; the card passes
+     `flat`, and so does the measurement, or the feet stop matching the box. */
+  const art0 = FF.CARDS.cinderpup.art;
+  log.length = 0;
+  FF.drawCreature(ctx2, art0, 200, 200, 100, { t: 0 });
+  const withDisc = log.filter((e) => e[0] === 'fill' && e[1] === '#000').length;
+  log.length = 0;
+  FF.drawCreature(ctx2, art0, 200, 200, 100, { t: 0, flat: 1 });
+  const flatDisc = log.filter((e) => e[0] === 'fill' && e[1] === '#000').length;
+  log.length = 0;
+  ok(withDisc >= 1, 'off the card a creature still draws its own ground disc');
+  eq(flatDisc, 0, 'and `flat` takes it away, so the window casts the only shadow');
+}
+
 /* ------------------------------------ every foe, on the board and inspected -- */
 /* THE NAMED GAP, CLOSED. Drawing every card took name coverage as far as cards
    go and left 73% overall, and the missing quarter was named honestly: foes the

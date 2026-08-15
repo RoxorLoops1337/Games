@@ -5274,14 +5274,25 @@ function drawCreature(c, art, x, y, s, o) {
   c.scale(sx, sy);
   c.lineJoin = 'round'; c.lineCap = 'round';
 
-  // ground shadow — smaller and softer for anything that does not touch down
-  c.save();
-  c.globalAlpha = floaty ? 0.16 : 0.28;
-  c.fillStyle = '#000';
-  c.beginPath();
-  c.ellipse(0, footY + s * 0.1, bw * (floaty ? 0.3 : 0.42), bh * 0.08, 0, 0, TAU);
-  c.fill();
-  c.restore();
+  /* ground shadow — smaller and softer for anything that does not touch down.
+     NOT IN THE CARD WINDOW. Two shadows were being drawn under every unit on a
+     card: this flat black disc, and the window's own patch on the snow. They
+     did not even agree — this one hangs BELOW the feet and is part of the
+     measured box, so the window solved the subject's position against a box
+     whose bottom was a shadow and stood every creature in the game a fifth of a
+     body clear of the ground it was supposed to be on. The window draws the
+     one that knows what the snow is; the board and the collection, which have
+     no snow, keep this. `o.flat` is set by both the card and its measurement,
+     so the feet land exactly where the box says they do. */
+  if (!o.flat) {
+    c.save();
+    c.globalAlpha = floaty ? 0.16 : 0.28;
+    c.fillStyle = '#000';
+    c.beginPath();
+    c.ellipse(0, footY + s * 0.1, bw * (floaty ? 0.3 : 0.42), bh * 0.08, 0, 0, TAU);
+    c.fill();
+    c.restore();
+  }
 
   const dark = art.patCol || 'rgba(20,30,50,.35)';
 
@@ -7356,10 +7367,23 @@ function frameCorner(c, x0, y0, sx, sy, L, m, lit, S) {
    it — intersected with whatever clip is in force — and `clip` folds it into
    that clip instead of into the box. The stroke width is added at commit time
    by `stroke` alone, because a fill does not hang outside its own path. */
-function penBox() {
+/* AND IT HAS TO KNOW WHERE THE DRAWING TOUCHES DOWN, not just how wide it is.
+   A cast shadow is a claim about a FOOTPRINT, and the bounding box is the wrong
+   number for it in both directions: Kettlebeak's box includes a tail that is
+   nowhere near the snow, and Icepick's box is a diagonal whose lowest point is
+   one tip. Round 3 read that mismatch correctly and drew the wrong conclusion —
+   it withheld the shadow from gear entirely rather than measuring the contact.
+
+   `band` is how deep the contact zone is, in the same local units the drawing
+   is replayed at. Anything painting inside it counts toward the footprint;
+   anything above it does not. So the tail is excluded, the four paws are not,
+   and Icepick gets a patch the width of the tip that is actually in the snow. */
+function penBox(band) {
   let m = [1, 0, 0, 1, 0, 0];            // canvas order: a b c d e f
   let pen = 0;                           // half a stroke, in local units
   const st = [];
+  const bd = band || 0;
+  let f0 = Infinity, f1 = -Infinity, fb = -Infinity;   // the contact zone
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   let clip = [-Infinity, -Infinity, Infinity, Infinity];
   let p0 = Infinity, q0 = Infinity, p1 = -Infinity, q1 = -Infinity;   // pending path
@@ -7381,6 +7405,9 @@ function penBox() {
     if (hi > x1) x1 = hi;
     if (to < y0) y0 = to;
     if (bo > y1) y1 = bo;
+    // the contact zone travels down with the deepest thing painted so far
+    if (bo > fb + bd) { f0 = lo; f1 = hi; fb = bo; }
+    else if (bo > fb - bd) { if (lo < f0) f0 = lo; if (hi > f1) f1 = hi; if (bo > fb) fb = bo; }
   };
   const pend = () => [p0, q0, p1, q1];
   // a stroke is centred on its path, so half of it hangs outside the box
@@ -7422,7 +7449,7 @@ function penBox() {
     ellipse(cx, cy, rx, ry) { put(cx - rx, cy - ry); put(cx + rx, cy + ry); },
     createLinearGradient: () => noGrad, createRadialGradient: () => noGrad,
     measureText: () => ({ width: 0 }), fillText() {}, strokeText() {},
-    read: () => [x0, y0, x1, y1],
+    read: () => [x0, y0, x1, y1, f0, f1],
   };
   // lineWidth is the one property that changes the box, so it needs a setter
   Object.defineProperty(c, 'lineWidth', { get() { return pen * 2; }, set(v) { pen = (+v || 0) / 2; } });
@@ -7444,8 +7471,9 @@ function artBox(key, draw) {
      radians a second and a box measured only at t = 0 clips a hovering wisp
      every other second — which is the same bug as the one being fixed here,
      just on a timer. */
+  let f0 = Infinity, f1 = -Infinity;
   for (let i = 0; i < 14; i++) {
-    const rec = penBox();
+    const rec = penBox(ART_REF * 0.085);
     draw(rec, i * 0.57);
     const q = rec.read();
     if (!(q[2] > q[0])) continue;
@@ -7453,9 +7481,15 @@ function artBox(key, draw) {
     if (q[1] < b[1]) b[1] = q[1];
     if (q[2] > b[2]) b[2] = q[2];
     if (q[3] > b[3]) b[3] = q[3];
+    if (q[4] < f0) f0 = q[4];
+    if (q[5] > f1) f1 = q[5];
   }
   // a drawing that recorded nothing still gets a sane box rather than an NaN
   b = (b[2] > b[0] && b[3] > b[1]) ? b.map((v) => v / ART_REF) : [-0.55, -1.15, 0.55, 1.05];
+  // the footprint, in the same units; a drawing with no measurable contact
+  // falls back to the middle half of its own width rather than to nothing
+  b[4] = f1 > f0 ? f0 / ART_REF : b[0] + (b[2] - b[0]) * 0.25;
+  b[5] = f1 > f0 ? f1 / ART_REF : b[0] + (b[2] - b[0]) * 0.75;
   ART_BOX.set(key, b);
   return b;
 }
@@ -7465,7 +7499,7 @@ function artBox(key, draw) {
    the next one added would silently reuse some other creature's box. There are
    58 of these and they are small. */
 const creatureBox = (art) => artBox('c' + JSON.stringify(art),
-  (rec, t) => drawCreature(rec, art, 0, 0, ART_REF, { t, ph: 0 }));
+  (rec, t) => drawCreature(rec, art, 0, 0, ART_REF, { t, ph: 0, flat: 1 }));
 const itemBox = (art) => artBox('i' + JSON.stringify(art || null),
   (rec, t) => drawItemIcon(rec, art, 0, 0, ART_REF, t));
 /* A charm is drawn by neither of the above. It used to borrow gear's generic
@@ -8243,12 +8277,26 @@ function drawCard(c, card, x, y, w, h, o) {
   c.quadraticCurveTo(w / 2, ay + ah * gC, ax + aw, ay + ah * gR);
   c.lineTo(ax + aw, ay + ah);
   c.closePath();
-  const bank = c.createLinearGradient(0, ay + ah * gC, 0, ay + ah);
+  /* AND THE BANK IS LIT FROM THE KEY, NOT FROM ABOVE. This gradient ran
+     straight down — bright at the crest, dark at the card's bottom edge — which
+     is a light directly overhead, on a card whose sixty drawings are every one
+     of them keyed from the upper left. A snowfield under a raking key is
+     brighter on the side the key is on; running the same two stops corner to
+     corner instead of top to bottom costs nothing, adds no object, and is the
+     first thing in the window that says where the light is. */
+  const bank = c.createLinearGradient(ax + aw * 0.12, ay + ah * gC, ax + aw * 0.92, ay + ah);
   bank.addColorStop(0, gHi);
   bank.addColorStop(1, gLo);
   c.fillStyle = bank; c.fill();
   c.save(); c.clip();
-  c.globalAlpha = 0.85; c.fillStyle = wth.horiz;
+  /* AND THE LIT LIP IS LIT FROM SOMEWHERE. It was one flat alpha laid the whole
+     way along the crest, which is a line that is equally bright at both ends —
+     the one thing a lit edge cannot be. It runs out along the crest away from
+     the key now, same colour, same object, two stops in place of one. */
+  const lip = c.createLinearGradient(ax + aw * 0.04, 0, ax + aw * 0.96, 0);
+  lip.addColorStop(0, mixA(wth.horiz, 0.95));
+  lip.addColorStop(1, mixA(wth.horiz, 0.34));
+  c.fillStyle = lip;
   c.beginPath();
   c.moveTo(ax, ay + ah * gL);
   c.quadraticCurveTo(w / 2, ay + ah * gC, ax + aw, ay + ah * gR);
@@ -8266,10 +8314,20 @@ function drawCard(c, card, x, y, w, h, o) {
      is where the snow is — and once the snow came down two stops for frost's
      sake the vignette buried it and every window grew a mud-brown stripe along
      its bottom edge. The dark is wanted at the top, behind the subject's head;
-     down at the ground it is just eating the one thing the game is named after. */
-  const vig = c.createRadialGradient(w / 2, ay + ah * 0.70, ah * 0.42, w / 2, ay + ah * 0.66, ah * 1.30);
+     down at the ground it is just eating the one thing the game is named after.
+
+     AND WEIGHTED AWAY FROM THE KEY. It was centred left-to-right, which is a
+     lamp hung directly in front of the window — the one thing a window with a
+     single upper-left key cannot have. Sliding the open end of the falloff up
+     and to the left leaves the key's corner clear and gathers the dark in the
+     opposite one, so the subject's shadow side has a value behind it. This is
+     the same object it always was at the same strength; what moved is two
+     numbers. It is also where the second half of the frost fix lives: on
+     Snowhare and Icewright the body sits above the crest against a pale
+     horizon, which no shadow on the ground can help. */
+  const vig = c.createRadialGradient(ax + aw * 0.36, ay + ah * 0.62, ah * 0.40, ax + aw * 0.40, ay + ah * 0.58, ah * 1.24);
   vig.addColorStop(0, 'rgba(10,18,34,0)');
-  vig.addColorStop(1, 'rgba(10,18,34,.26)');
+  vig.addColorStop(1, 'rgba(10,18,34,.30)');
   c.fillStyle = vig; c.fillRect(ax, ay, aw, ah);
 
   /* ---------------- and the subject, WHOLE ----------------
@@ -8293,7 +8351,16 @@ function drawCard(c, card, x, y, w, h, o) {
      and its own ground, and the subject was drawn over all of it. There is
      nothing to tune here — the picture needs the subject to stop at about three
      quarters of the window and leave the rest to the weather. */
-  const topY = ay + ah * 0.04, feetY = ay + ah * 0.945;
+  /* THE STANDING LINE CAME UP OFF THE BOTTOM EDGE. At 0.945 the subject stood
+     on the window's rim, not in the snow: there was no ground in FRONT of it at
+     all, which is why the field the last round built was only ever visible
+     behind and why a cast shadow had nowhere to fall — the half of it that was
+     not under the animal was outside the window. A twentieth of the window's
+     height of foreground is the difference between an animal standing in a
+     place and an animal pasted onto the bottom of a picture. It costs that same
+     twentieth off the tallest a subject can be drawn, and the subject was
+     already capped well under the room it had. */
+  const topY = ay + ah * 0.04, feetY = ay + ah * 0.895;
   /* TWO DIFFERENT NORMALISATIONS, because the two `s` arguments mean different
      things. `drawCreature`'s `s` is a BODY height, so capping the scale is the
      right cap for the cast: a sootling is a small animal and a kettlebeak is a
@@ -8307,6 +8374,16 @@ function drawCard(c, card, x, y, w, h, o) {
      window and Thorn Oil's vial spanned a third and floated in the middle of an
      empty sky. In a mixed hand the gear read as the important cards. Gear is
      solved for a drawn HEIGHT and stood on the same line as everything else. */
+  /* WHAT DOES NOT TOUCH DOWN STAYS OFF THE GROUND. A wisp, a moth and anything
+     with a hover idle used to be lifted by an accident: `drawCreature` drew
+     itself a smaller ground disc BELOW its own body, that disc was inside the
+     measured box, and the box bottom is what lands on the snow — so the float
+     hovered because its shadow was propping it up. Deleting the disc from the
+     card would have planted Galewisp in the drift. The lift is explicit now,
+     and it is the same fact the cast is told about below: what floats gets air
+     under it and a smaller, fainter patch on the snow. */
+  const airy = isUnit && (card.art.idle === 'hover' || card.art.stance === 'float' || card.art.shape === 'wisp');
+  const lift = airy ? ah * 0.055 : 0;
   const fitArt = (bx, cap, mode) => {
     const bxw = Math.max(0.02, bx[2] - bx[0]), bxh = Math.max(0.02, bx[3] - bx[1]);
     /* The stroke floor. Both drawing functions clamp their outline at 2.5 units
@@ -8314,69 +8391,108 @@ function drawCard(c, card, x, y, w, h, o) {
        fatter than the box measured at the reference size says — up to 2.5 units
        of it, top and bottom together. Give that back before solving, or on a
        fold-size card the one thing that clips is the outline. */
-    const room = (feetY - topY) - 2.6;
+    const room = (feetY - lift - topY) - 2.6;
     const sz = mode === 'body'
       ? Math.min(ah * cap, room / bxh)
       : Math.min(room, ah * cap) / bxh;
     const wide = aw * (mode === 'body' ? 0.74 : 0.80) / bxw;
     const s2 = Math.min(sz, wide);
-    const yy = feetY - bx[3] * s2;
+    const yy = feetY - lift - bx[3] * s2;
+    const xx = w / 2 - (bx[0] + bx[2]) / 2 * s2;
     // wd/ht/mid describe the box as DRAWN, which is what the light and the
-    // shadow have to be sized off rather than off `ah`
-    return { s: s2, x: w / 2 - (bx[0] + bx[2]) / 2 * s2, y: yy,
-      wd: bxw * s2, ht: bxh * s2, mid: yy + (bx[1] + bx[3]) / 2 * s2 };
+    // shadow have to be sized off rather than off `ah`; fl/fr are the measured
+    // contact, which is what the CAST has to be sized off — see `penBox`
+    return { s: s2, x: xx, y: yy,
+      wd: bxw * s2, ht: bxh * s2, mid: yy + (bx[1] + bx[3]) / 2 * s2,
+      fl: xx + bx[4] * s2, fr: xx + bx[5] * s2 };
   };
   const isCharm = card.type === 'charm';
   const charmCol = (isCharm && (chOf(card.def) || 0) && chOf(card.def).col) || edge;
   const sub = isUnit ? fitArt(creatureBox(card.art), 0.75, 'body')
     : fitArt(isCharm ? charmBox(card.def, charmCol) : itemBox(d.art), 0.80, 'tall');
-  /* CONTACT, not a floating disc. The old shadow was one flat grey ellipse at a
-     fixed 30% of the window's width, drawn at the same place whatever was
-     standing there — so a Junkpile hovered over a shadow narrower than itself
-     and a Glacierling stood beside one twice its width. It is sized off the
-     subject now.
+  /* ---------------- THE CAST. The one addition this round is allowed. --------
 
-     ONE ellipse, not two. The wide soft pool under the tight core was a second
-     grey smudge on a card that has too many already, and at hand size the two
-     of them just read as one blurrier ellipse — the pool was paying for nothing.
-     The core is the part the eye reads as weight; keep that, in a colour taken
-     off the ground it is cast on so it darkens the snow instead of greying it.
+     What was here was a CONTACT PATCH: one flat ellipse, symmetric, sitting
+     square under the feet, sized off the bounding box and given only to units.
+     It said the subject has weight. It did not say where the light is, and the
+     art director's finding is that nothing on the card did: every window was a
+     gradient backdrop with a flat-lit sticker standing on it.
 
-     WHERE THE LIGHT IS, SETTLED. Three blocks disagreed: the window put a low
-     sun somewhere on the left, this ellipse slid sideways by `scn.sun`, and all
-     sixty drawings were keyed flat from the upper left and ignored both. The
-     offset is DELETED rather than propagated. The rule for the whole card is now
-     the one the cast has always obeyed — the key is up and to the left, fixed,
-     the same on every card — and a contact patch sitting square under the feet
-     is what that key gives you. `scn.sun` is the SKY's business only, and it
-     stays left of centre so the two do not fight; nothing downstream has to be
-     told about it.
+     A cast shadow is the cheapest thing in illustration that fixes that, and it
+     is the same object doing three jobs at once, which is why it is worth its
+     place in a delete-first round:
 
-     AND GEAR DOES NOT GET ONE. A contact shadow asserts that the object touches
-     the ground, and half the gear does not — the icons are drawn on their own
-     diagonals inside `drawItemIcon`, which the measured box knows nothing about,
-     so Icepick hung in the air with its handle across the snow crest and a neat
-     ellipse underneath it. Claiming contact that isn't there is worse than
-     claiming none. Units are measured feet-down and keep it. */
-  if (isUnit) {
-    c.save();
-    c.fillStyle = mix(wth.snowLo, '#0b1526', 0.62);
-    c.globalAlpha = 0.34;
-    c.beginPath();
-    c.ellipse(w / 2, feetY, sub.wd * 0.48, ah * 0.034, 0, 0, TAU);
-    c.fill();
-    c.restore();
-  }
-  /* THE HALO IS GONE. It was a white-cored radial thrown up behind every
-     subject, and it was three defects in one object: on hearth cards it was the
-     brightest thing on the card and a big part of why a hand of them read as
-     light leaks against a night game; it was identical on all 58, so it flattened
-     exactly the variety the seed is now being spent on; and it was doing the job
-     of value structure that the sky and the snow should have been doing all
-     along. They do it now — frost's ground came down two stops for it — and the
-     card's own cloud gives the silhouette something to be read against that is
-     different on every card. Nothing replaces it. */
-  if (isUnit) drawCreature(c, card.art, sub.x, sub.y, sub.s, { t: o.t || 0, ph: card.uid, blink: card.uid });
+       · it has a DIRECTION, so the window finally has a light in it. The key is
+         up and to the left — the rule settled in round 3 and not reopened here
+         — so the cast falls down and to the right, on every card, always. There
+         is no per-card light direction and `scn.sun` still belongs to the sky
+         alone.
+       · it STAGES THE GROUND behind the figure. Frost's whole failure was a
+         pale animal on pale snow: the tribe tints the cast one way and the
+         window tints the ground the same way, and figure/ground was what paid
+         for it. A patch of ground two stops down, in the snow's own hue, put
+         exactly where the figure stands, buys the separation back without
+         touching either tint — Glacierling stops living on its outline.
+       · it EXTENDS THE WINDOW'S RANGE DOWNWARD, which is half of why the frame
+         was out-valuing the picture it is there to serve.
+
+     WHAT IT COST, so the trade is on the record:
+       · `drawCreature`'s own flat black ground disc is gone from the card (see
+         `o.flat`). Two shadows under every unit became one, and because that
+         disc was part of the measured box the cast now stands ON the snow
+         instead of a fifth of a body above it.
+       · the bounding box stopped being the shadow's width. `penBox` measures
+         the FOOTPRINT — what the drawing paints in the bottom eighth of itself
+         — so the patch is the width of what touches down, not of the widest
+         thing in the picture.
+
+     AND EVERY CARD GETS ONE, WHICH IS THE OTHER THING SETTLED HERE. Round 3
+     withheld the patch from all gear because half the gear is drawn on a
+     diagonal and a box-wide ellipse under Icepick claimed a contact that was
+     not there. The result was the worst of the three available answers: Ember
+     Flask, Bone Stew and Kindling stand in the snow with nothing under them
+     while Coldsnap hangs over undisturbed drift. The objection was never to the
+     shadow, it was to the MEASUREMENT — and the measurement is fixed above, so
+     the exception goes. Icepick gets a patch the width of the tip that is
+     actually in the snow, which is narrow, and that is the true picture. */
+  const fw = Math.max(sub.fr - sub.fl, sub.wd * 0.18);
+  const fc = (sub.fl + sub.fr) / 2;
+  // a taller subject throws a longer cast; a wide-footed one throws a broader
+  // one. Capped against the window so a leader's cast never reaches the rim.
+  const shX = Math.min(fw * 0.66 + sub.ht * 0.22, aw * 0.44) * (airy ? 0.78 : 1);
+  /* DEEP ENOUGH TO BE A PATCH OF GROUND. The falloff is radial in the space the
+     ellipse is a circle in, so the shadow's vertical reach and its softness are
+     the same number: squash it to a ground-plane sliver and the only part with
+     any density left is four pixels tall and entirely underneath the animal. It
+     has to read as a patch of snow in shade — that is the staging half of this
+     object's job — so it takes a real fraction of the window's depth. */
+  const shY = Math.max(2.6 * S, ah * 0.095);
+  const shCol = shadeHex(wth.snowLo, 0.50);
+  c.save();
+  // a hair above the contact line, because a cast that starts below the feet is
+  // a disc the subject is standing in front of rather than one it stands on
+  c.translate(fc, feetY - shY * 0.10);
+  c.scale(1, shY / shX);
+  // dense at the foot, falling away down-light: the inner circle sits on the
+  // contact and the outer one is thrown to the right, which is what makes this
+  // a cast rather than a puddle
+  const shg = c.createRadialGradient(0, 0, 0, shX * 0.40, 0, shX * 1.06);
+  const shA = airy ? 0.6 : 1;
+  shg.addColorStop(0, mixA(shCol, 0.58 * shA));
+  shg.addColorStop(0.46, mixA(shCol, 0.32 * shA));
+  shg.addColorStop(1, mixA(shCol, 0));
+  c.fillStyle = shg;
+  c.beginPath(); c.ellipse(shX * 0.30, 0, shX * 1.06, shX, 0, 0, TAU); c.fill();
+  c.restore();
+  /* THE HALO IS GONE, AND THE CAST IS NOT IT COMING BACK. The halo was a
+     white-cored radial thrown up BEHIND every subject: the brightest thing on a
+     hearth card, identical on all 58, and doing the job of value structure that
+     the sky and the snow should have been doing. What replaces it works from
+     the other end of the range and from one fixed direction — it is dark, it is
+     on the ground rather than in the air, it is the shape of this card's
+     subject rather than of a circle, and it makes the window's darkest value
+     rather than its brightest. */
+  if (isUnit) drawCreature(c, card.art, sub.x, sub.y, sub.s, { t: o.t || 0, ph: card.uid, blink: card.uid, flat: 1 });
   else if (isCharm) drawCharmIcon(c, card.def, charmCol, sub.x, sub.y, sub.s, o.t || 0);
   else drawItemIcon(c, d.art, sub.x, sub.y, sub.s, o.t || 0);
   c.restore();
@@ -14036,6 +14152,9 @@ window.FF = {
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
   drawCreature, drawCard, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
+  // the measured box AND the measured footprint — what the window solves the
+  // subject's size against and what the cast shadow is allowed to claim
+  creatureBox, itemBox,
   nameSplit,
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,
