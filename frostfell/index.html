@@ -4283,8 +4283,25 @@ function rr(c, x, y, w, h, r) {
 /** Blend two hex colours. A plate's bottom stop is its own colour walked
  *  toward the night, so every tribe gets the same fall of light without nine
  *  hand-picked shadow colours drifting apart. */
+/* IT NOW PARSES WHAT IT EMITS, and that is a bug class rather than a bug.
+   `mix` returns `rgb(r,g,b)` and its parser was `parseInt(h.slice(1), 16)`,
+   which reads `#rrggbb` and nothing else — so the instant a `mix` result was
+   handed back to `mix`, the parse came out NaN, the stop came out
+   `rgb(NaN,NaN,NaN)`, and the canvas silently painted it PURE BLACK. Two rounds
+   running, somebody has found one of these, blamed the palette and patched
+   their own call site: the card ground's middle stop (the whole of "hearth's
+   foreground is the darkest thing in the picture" — not an art decision at
+   all), and the creature leg gradient's bottom stop, which is a real part of
+   "creatures' legs merge into the dark foreground". Fixing the parse kills both
+   and any future one. Every existing `#rrggbb` call gets the identical result it
+   got before; `hexTo` handles `#abc` shorthand as a bonus. */
 function mix(a, b, t) {
-  const p = (h) => { const n = parseInt(String(h).slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const p = (h) => {
+    const s = String(h);
+    if (s.charAt(0) === '#') return hexTo(s);
+    const n = s.match(/-?\d+(?:\.\d+)?/g);
+    return n && n.length >= 3 ? [+n[0], +n[1], +n[2]] : [136, 136, 136];
+  };
   const [r1, g1, b1] = p(a), [r2, g2, b2] = p(b);
   const q = (u, v) => Math.round(u + (v - u) * t);
   return 'rgb(' + q(r1, r2) + ',' + q(g1, g2) + ',' + q(b1, b2) + ')';
@@ -4715,6 +4732,23 @@ function artKey(art) {
   return h;
 }
 
+/** ONE KEY, INDEPENDENT DIALS — 0..1 for a given recipe and salt.
+ *
+ *  `artKey` is an FNV walk over a short string, and two recipes that differ
+ *  only in their two colour fields keep most of their bits in common. Reading
+ *  dials straight off bit slices of it therefore hands near-identical recipes
+ *  near-identical numbers: Hearthmoth and Lanternmoth are the same eight fields
+ *  and came out with the SAME wing rake and a taper 0.016 apart, which is why
+ *  they were still one drawing after the crest that used to separate them was
+ *  cut. A murmur finalizer per salt avalanches the whole word, so the dials are
+ *  independent of each other and of how alike two recipes happened to be. */
+function dial(key, salt) {
+  let h = Math.imul(key ^ salt, 0x9e3779b1) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
 /** The dark that gathers where one form tucks under another. Drawn as an
  *  ellipse rather than an arc so it never claims to be a ground for text. */
 function occlude(c, x, y, rx, ry, a) {
@@ -4931,8 +4965,22 @@ const CREST_BAGS = {
   fur:   ['ruff', 'hump', 'drum', 'jowls'],
   any:   ['drum', 'crest', 'frill', 'hump'],
 };
-function crestOf(shape, stance, skin, floaty, key) {
+function crestOf(shape, stance, skin, floaty, key, already) {
   if (shape === 'wisp') return 'none';           // already the best outline here
+  /* AND NOT ON ANYTHING THAT ALREADY HAS A SECOND SHAPE. Last round gave one of
+     these to every animal in the cast. It passed the 40–72px silhouette test
+     and failed everywhere above it: drawn behind the body in the outline colour
+     it read as a detached black mass with a step in it where its edge met the
+     body's, and a faceted grey highlight that on a furry animal read as a torn
+     edge. Cinderpup, Tindercub, Sootling, Flarehound, Rimefox, Emberwick and
+     Bramblewick all carried the artefact, and at fold size the three it was
+     bought to separate were still one shape in three hues — "same failure, more
+     ink". So a creature with a separate head, ears, a tail, wings or anything
+     carried already has the second shape this was for and does not get a third
+     — Kettlebeak grew a blade out from behind its own kettle before the
+     accessory went into the test — and the handful with none of those keep
+     theirs, lit in the body's own hue. */
+  if (already) return 'none';
   const bag = CREST_BAGS[
     stance === 'root' ? 'root'
       : floaty ? 'float'
@@ -4958,12 +5006,13 @@ function crestOf(shape, stance, skin, floaty, key) {
  *  tellable from across a table. */
 function drawCrest(c, kind, col, lw, bw, bh, bodyY, bodyW, bodyH, faceY, faceW, faceH, footY, s, t, ph) {
   if (kind === 'none') return;
-  /* A LIGHTER LINE AND A DARKER FILL, because all of this is BEHIND the animal.
-     Drawn in the body's own colour at the body's own line weight it came out as
-     a second sprite parked beside the first — Cinderpup's haunch read as an egg
-     it was standing next to. A step toward the night and a thinner line and the
-     same shape reads as the back of the same animal. */
-  col = shadeHex(col, 0.2);
+  /* THE BODY'S OWN HUE, AND ONLY A THINNER LINE. The step toward the night that
+     used to be here (`shadeHex(col, 0.2)`) is what made this a detached mass:
+     against a body two stops lighter, the shared edge is a visible seam and the
+     lit end of the gradient lands on a grey that reads as bare rock on a furry
+     animal. It is not a thing standing behind the animal, it is the back of the
+     animal, so it takes the animal's colour and the light on it falls the same
+     way. The thinner line still puts it behind. */
   /* And below about a board unit the fall across it is under a pixel, so it is
      a flat fill and one fewer gradient object per body per frame. Twelve of
      these on a board of twenty-four paid for themselves immediately. */
@@ -5143,9 +5192,18 @@ function drawCreature(c, art, x, y, s, o) {
      and the table has no lever left to tell them apart. So each recipe takes a
      stable ±11% off its own key, and takes it OPPOSITE ways on the two axes:
      independent jitter mostly made one animal a bigger copy of another, where
-     wide-and-short against narrow-and-tall is two animals at the same weight. */
-  const j = (((key >> 5) & 7) / 7) - 0.5;
-  const bw = s * dim[0] * ST[0] * (1 + j * 0.17), bh = s * dim[1] * ST[1] * (1 - j * 0.17);
+     wide-and-short against narrow-and-tall is two animals at the same weight.
+
+     THE AMPLITUDE IS WHERE THE CREST'S JOB WENT. ±11% on each axis is a 22%
+     spread of aspect between the two extremes, which is less than the wobble on
+     a furry outline — so the crest was bought to do the separating and it cost
+     a black mass on every card above hand size to do it. Proportion costs
+     nothing and is invisible as a device: nobody looks at a card and says "that
+     one has been stretched". At ±19% the same two recipes are a long low animal
+     and a tall narrow one, and the blacked-out overlap between Cinderpup and
+     Rimefox falls further than the crest ever took it. */
+  const j = dial(key, 8) - 0.5;
+  const bw = s * dim[0] * ST[0] * (1 + j * 0.38), bh = s * dim[1] * ST[1] * (1 - j * 0.38);
   /* INK IS A MATERIAL TOO. One line weight over the whole cast is a third of
      why forty animals read as one drawing, and it is the cheapest channel in
      here: stone and metal take a heavy press line, ice takes a crisp thin one.
@@ -5153,7 +5211,14 @@ function drawCreature(c, art, x, y, s, o) {
      was the lowest-contrast card in the set. */
   const lw = Math.max(2.5, s * 0.055) *
     (skin === 'stone' ? 1.22 : skin === 'metal' ? 1.14 : skin === 'ice' ? 0.88 : 1);
-  const taper = SHAPE_TAPER[shape] || 0;
+  /* AND WHERE THE WEIGHT SITS TAKES A STABLE NUDGE TOO, off a different slice of
+     the same key. Taper is the one thing that changes an outline's shape rather
+     than its box: at +0.3 an animal is pear-shaped and at -0.3 it is
+     shoulder-heavy, and two recipes on the same row now differ in both box and
+     balance. Hearthmoth and Lanternmoth are literally the same eight fields and
+     were separated only by which crest their hash drew; this and the box are
+     what separate them instead. */
+  const taper = (SHAPE_TAPER[shape] || 0) + (dial(key, 17) - 0.5) * 0.30;
   /* The frost cast goes down a stop here rather than in the card data, so the
      same animal is the same colour on the board, in the collection and on the
      leader screen. See `deepen`. */
@@ -5199,8 +5264,19 @@ function drawCreature(c, art, x, y, s, o) {
      reached about a third of a body from the hip, which is inside the wobble on
      the body's own edge at hand size — so five different tails came out as one
      small bump behind five animals. A fox's brush is as long as the fox. */
-  const tail = art.tail || 'none';
-  // behind the body, so it takes the same step toward the night the crest does
+  /* ==== DELETED: the `plume` tail ========================================
+     Three strokes fanning up and back off the near hip, in a bright hue, at
+     shoulder height. Six recipes ask for one and five of those six also have
+     WINGS — so on Kettlebeak, Hearthmoth, Vesper Kaal, Lanternmoth, Scrapcrow
+     and Frostmite the loudest thing in the picture was an identical three-blade
+     fan, always on the left, on an animal that plainly ought to have a matching
+     one on the right. It did not read as a pose. It read as a primitive that
+     failed to mirror, which is exactly what all three critics called it.
+     The fix is not a second fan. Those five have real wings already — see the
+     wing block below, which was drawing them tucked so far inside the body that
+     nothing of either one showed. Kettlebeak, the sixth, keeps its kettle. */
+  const tail = art.tail === 'plume' ? 'none' : (art.tail || 'none');
+  // behind the body, so it takes the same step toward the night the wings do
   const backCol = shadeHex(body, 0.2), backBelly = shadeHex(belly, 0.2);
   if (tail !== 'none') {
     const wag = Math.sin(t * 2.4 + ph) * 0.24 + (paw ? paw * 0.3 : 0);
@@ -5238,15 +5314,6 @@ function drawCreature(c, art, x, y, s, o) {
     } else if (tail === 'stub') {
       c.beginPath(); c.ellipse(-bw * 0.08, 0, bw * 0.14, bh * 0.15, 0, 0, TAU);
       inked(c, litG(c, backBelly, -bw * 0.2, -bh * 0.15, 0, bh * 0.15), lw * 0.8, C.ink);
-    } else if (tail === 'plume') {
-      for (let i = 0; i < 3; i++) {
-        c.beginPath();
-        c.moveTo(0, 0);
-        c.quadraticCurveTo(-bw * 0.24, -bh * (0.05 + i * 0.09), -bw * 0.36, -bh * (0.12 + i * 0.13));
-        c.strokeStyle = C.ink; c.lineWidth = lw * 1.6; c.stroke();
-        c.strokeStyle = i % 2 ? backBelly : backCol;
-        c.lineWidth = lw * 0.9; c.stroke();
-      }
     } else if (tail === 'fin') {
       c.beginPath();
       c.moveTo(0, 0);
@@ -5258,20 +5325,41 @@ function drawCreature(c, art, x, y, s, o) {
     c.restore();
   }
 
-  /* ---------------------------------------------------------------- wings -- */
+  /* ---------------------------------------------------------------- wings --
+
+     A PAIR HAS ALWAYS BEEN DRAWN HERE, AND NEITHER OF THEM SHOWED. Anchored at
+     0.34 of a half-body out with a span of 0.30, a wing reached 0.64 where the
+     body's own edge is at 0.50 — a tenth of a body's worth of tip on each side,
+     and the rotation ate most of that. So every winged animal in the game had a
+     hidden pair and a `plume` tail, and the tail is what the eye found: one
+     three-blade fan on the left, on six cards, reported as a mirror that
+     failed. The tail is deleted; the wings are anchored and spanned so that
+     both of them clear the silhouette, which is what they were for. */
   if (art.wings) {
+    /* And the rake and the span come off the recipe's own key, the same way the
+       body's proportion does. Hearthmoth and Lanternmoth are the same eight
+       fields — the only thing that ever told them apart was which crest their
+       hash drew, and the crest is gone — so a long swept pair against a short
+       held-out pair is what tells them apart now. Same primitive, same cost. */
+    const wk = dial(key, 41) - 0.5;
+    /* The rake stays inside a quarter-turn of horizontal at both ends of the
+       range: past that the blade lies down the flank and goes back to being a
+       bulge on the body, which is the state it was found in. */
+    const rake = 0.44 + wk * 0.52, span = 0.90 + wk * 0.44;
     for (const d of [-1, 1]) {
       c.save();
-      c.translate(d * bw * 0.34, bodyY - bodyH * 0.1);
-      c.rotate(d * (0.5 + Math.sin(t * 6 + ph) * 0.24));
-      blob(c, 0, 0, bw * 0.6, bh * 0.42, 0.06, 1.2);
-      inked(c, art.wings, lw, C.ink);
+      c.translate(d * bw * 0.42, bodyY - bodyH * 0.18);
+      c.rotate(d * (rake + Math.sin(t * 6 + ph) * 0.24));
+      blob(c, 0, 0, bw * span, bh * (0.40 - wk * 0.16), 0.06, 1.2);
+      inked(c, shadeHex(art.wings, 0.2), lw, C.ink);
       c.restore();
     }
   }
 
   /* ------------------------------------------------------------- the shape - */
-  const crest = crestOf(shape, stance, skin, floaty, key);
+  const crest = crestOf(shape, stance, skin, floaty, key,
+    headed || (art.ears || 'round') !== 'none' || tail !== 'none' || !!art.wings
+    || (art.acc && art.acc !== 'none'));
   drawCrest(c, crest, body, lw, bw, bh, bodyY, bodyW, bodyH, faceY, faceW, faceH, footY, s, t, ph);
 
   /* ---------------------------------------------------------------- legs --- */
@@ -5347,14 +5435,27 @@ function drawCreature(c, art, x, y, s, o) {
 
   /* ---------------------------------------------------------------- arms --- */
   const arms = art.arms || (headed ? 'stub' : 'none');
+  let handX = null, handY = null;
   if (arms !== 'none') {
     const swing2 = Math.sin(t * 1.6 + ph + 1) * 0.14;
+    /* AN ARM STARTS AT A SHOULDER. This hung both of them off `bodyY - bodyH *
+       0.06` — the widest point of the barrel, halfway down the torso — so on
+       Bramblewick, the leader every run starts with, two limbs began in the
+       middle of the belly attached to nothing, and their hands landed level
+       with the feet: four identical cream stubs in a row along the bottom of
+       the card, which is what the critique saw before it saw an animal.
+       Up at the shoulder the same two arms are attached and their hands sit at
+       the waist, well clear of the feet. Nothing was added to fix this. */
+    const armY = bodyY - bodyH * 0.30;
     for (const d of [-1, 1]) {
+      const ang = d * (0.35 + swing2);
       c.save();
-      c.translate(d * bodyW * 0.44, bodyY - bodyH * 0.06);
-      c.rotate(d * (0.35 + swing2));
+      c.translate(d * bodyW * 0.42, armY);
+      c.rotate(ang);
       const aL = bh * (arms === 'long' ? 0.3 : 0.17);
       const aw = bw * 0.11;
+      // where the near hand actually ends up, for anything held in it
+      if (d > 0) { handX = d * bodyW * 0.42 - Math.sin(ang) * aL; handY = armY + Math.cos(ang) * aL; }
       c.beginPath(); rr(c, -aw / 2, 0, aw, aL, aw * 0.45);
       const ag = c.createLinearGradient(-aw * 0.6, 0, aw * 0.6, aL);
       ag.addColorStop(0, mix(body, '#ffffff', 0.22));
@@ -5369,7 +5470,7 @@ function drawCreature(c, art, x, y, s, o) {
     // was the single most expensive thing in here
     c.save();
     bodyPath(); c.clip();
-    for (const d of [-1, 1]) occlude(c, d * bodyW * 0.42, bodyY - bodyH * 0.06, bw * 0.14, bw * 0.12, 0.4);
+    for (const d of [-1, 1]) occlude(c, d * bodyW * 0.42, armY, bw * 0.14, bw * 0.12, 0.4);
     c.restore();
   }
 
@@ -5561,7 +5662,7 @@ function drawCreature(c, art, x, y, s, o) {
      their own — scaled about the point where they meet the head, so a big pair
      grows outward and upward rather than sliding off the skull. */
   c.save();
-  const earK = 0.88 + (((key >> 13) & 7) / 7) * 0.3;
+  const earK = 0.84 + dial(key, 23) * 0.46;
   /* AND MEASURED IN THE SMALLER OF THE TWO. An ear's height came off `faceH`,
      which on a bean is the whole animal, so lengthening the ear lengthened it
      by a fraction of the BODY and the first long pair came out television
@@ -5598,7 +5699,12 @@ function drawCreature(c, art, x, y, s, o) {
   } else if (ears === 'round') {
     for (const d of [-1, 1]) {
       c.beginPath(); c.ellipse(d * faceW * 0.31, earTop - faceH * 0.02, faceW * 0.16, faceH * 0.17, 0, 0, TAU);
-      inked(c, litG(c, body, d * faceW * 0.18, earTop - faceH * 0.2, d * faceW * 0.44, earTop + faceH * 0.16), lw, C.ink);
+      /* THE FALL ACROSS AN EAR IS AN EAR HIGH. It was measured in `faceH`,
+         which on a bean is the whole animal, so a round ear took the two
+         extreme ends of a body-length gradient and came out near-black: on
+         Tindercub the pair read as two dark donuts stuck on the head rather
+         than as ears. Same `earU` bound the rest of the head furniture uses. */
+      inked(c, litG(c, body, d * faceW * 0.18, earTop - earU * 0.2, d * faceW * 0.44, earTop + earU * 0.16), lw, C.ink);
       c.save();
       c.globalAlpha = 0.5;
       c.beginPath(); c.ellipse(d * faceW * 0.31, earTop + faceH * 0.005, faceW * 0.08, faceH * 0.09, 0, 0, TAU);
@@ -5858,11 +5964,14 @@ function drawCreature(c, art, x, y, s, o) {
   }
 
   /* ---------------------------------------------------------------- props -- */
-  /* Where a collar goes: round the bottom of the head on anything that has
-     one, round the top of the body on the beans that do not. */
-  const neckR = headed ? headR * 0.92 : Math.min(bodyW, bodyH) * 0.42;
-  const neckCY = headed ? faceY + headR * 0.42 : bodyY;
-  drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, neckR, neckCY, footY, body);
+  /* THE NEAR HAND, so a carried thing can be carried BY it. `neckR`/`neckCY`
+     used to be computed here and handed down for the collar arc; the collar is
+     deleted (see `drawProp`) and the hand replaces it, because the one carried
+     prop that anybody has ever complained about — Bramblewick's lantern — was
+     floating beside a paw painted specially for it while the animal's real paw
+     hung somewhere else. `null` when the recipe has no arms, and every prop
+     that wants a hand falls back to where it used to draw one. */
+  drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, handX, handY, footY, body);
 
   /* --------------------------------------------------------------- the mark */
   const mark = art.mark || 'none';
@@ -5874,7 +5983,13 @@ function drawCreature(c, art, x, y, s, o) {
          it landed off the side of the head as a small pink X floating in the
          air beside it with nothing underneath. It is bounded to the eye it runs
          through now, and it is one cut with one stitch rather than a saltire. */
-      const sx3 = Math.min(faceW * 0.24, s * 0.2) + eyeDx * 0.4;
+      /* ON the eye, not beside it. The bound above put it at 0.24 of a face
+         plus a fraction of the gap, which on Tindercub and Springjaw landed a
+         finger's width OUTSIDE the eye it is meant to cross: a short red dash
+         hanging in the air off the side of the head, reported as a stray mark
+         both rounds. It is measured from the eye itself now, and runs down
+         its outer edge rather than across the open eyeball. */
+      const sx3 = eyeDx + er * 0.95;
       c.strokeStyle = '#c96a72'; c.lineWidth = lw * 0.65; c.lineCap = 'round';
       c.beginPath();
       c.moveTo(sx3, eyeY - er * 1.9); c.lineTo(sx3 + s * 0.02, eyeY + er * 1.5);
@@ -5905,8 +6020,16 @@ function drawCreature(c, art, x, y, s, o) {
       c.closePath();
       inked(c, belly, lw * 0.8, C.ink);
     } else if (mark === 'ember') {
-      // a small lit coal carried on the chest, licking upward
-      const ey2 = bodyY + bodyH * 0.06;
+      /* A small lit coal carried on the chest, licking upward — and ON THE
+         CHEST, not in the middle of the belly plate. It sat at `bodyH * 0.06`,
+         which is exactly where the belly plate's own ellipse is centred on a
+         headed animal, so on Bramblewick the two stacked up into a pale disc
+         with a vertical almond cut out of the middle of it and the leader every
+         run starts with had a keyhole for a stomach. Up at the sternum it is a
+         coal on a chest and the plate is a plate. On a bean there is no chest
+         above the belly — the sternum is between the eyes — so only the animals
+         with a separate head move. */
+      const ey2 = bodyY + bodyH * (headed ? -0.26 : 0.06);
       const pulse = 0.5 + Math.sin(t * 3 + ph) * 0.3;
       c.save();
       c.globalAlpha = pulse * 0.45; c.fillStyle = '#ff9a3c';
@@ -5942,11 +6065,15 @@ function drawCreature(c, art, x, y, s, o) {
       inked(c, litG(c, '#f0ead8', 0, -s * 0.03, 0, s * 0.03), lw * 0.6, C.ink);
       c.restore();
     } else if (mark === 'monocle') {
+      /* THE CORD IS DELETED. A gold ring round an eye is held by the eye and
+         needs nothing else; the two-unit line that used to fall away from it
+         was fixed to nothing at its far end, so on Hoarfrog and Ratchet it read
+         as a monocle floating loose, and on Kettlebeak — which is a bean, so
+         the ring is huge relative to the face — it read as an unexplained
+         yellow blob dropped on the right cheek. All three were reported
+         separately; all three were this one stroke. */
       c.beginPath(); c.arc(eyeDx, eyeY, er * 1.5, 0, TAU);
       c.strokeStyle = C.gold; c.lineWidth = lw * 0.7; c.stroke();
-      c.beginPath();
-      c.moveTo(eyeDx + er * 1.4, eyeY + er); c.lineTo(eyeDx + er * 2, eyeY + er * 2.4);
-      c.stroke();
     } else if (mark === 'leaf') {
       c.save();
       c.translate(s * 0.06, faceY - faceH * (headed ? 0.46 : 0.32));
@@ -5972,7 +6099,7 @@ function drawCreature(c, art, x, y, s, o) {
 }
 
 /* Props are drawn last of all and hang off the finished body. */
-function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, neckR, neckCY, footY, body) {
+function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, handX, handY, footY, body) {
   const acc = art.acc || 'none';
   if (acc === 'none') return;
   /* A CARRIED THING IS HELD, AND IT REACHES THE GROUND. Bellhammer's haft was a
@@ -6003,35 +6130,36 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
      Once the window started drawing subjects whole and large, that stopped
      looking like a scarf and started looking like a rendering fault. Anything
      hung on a face is bounded by `s` here for the same reason. */
-  /* A COLLAR IS A THING THAT GOES ROUND SOMETHING, and both of these were
-     drawn as a horizontal rectangle placed a fraction of `faceH` below the
-     face. On a creature with a separate head that reads as a scarf; on a bean,
-     where `faceH` is the whole body, it reads as a red slab painted across the
-     belly — which is exactly what Tindercub had, and once the window started
-     drawing subjects whole and large it was the most broken thing on the sheet.
-     An ARC round the neck line works for both, because both have one. */
-  const band = (col, thick) => {
-    c.save();
-    c.lineCap = 'round';
-    c.strokeStyle = C.ink; c.lineWidth = thick + lw * 1.1;
-    c.beginPath(); c.arc(0, neckCY, neckR, 0.24, Math.PI - 0.24); c.stroke();
-    c.strokeStyle = litG(c, col, 0, neckCY, 0, neckCY + neckR);
-    c.lineWidth = thick;
-    c.beginPath(); c.arc(0, neckCY, neckR, 0.28, Math.PI - 0.28); c.stroke();
-    c.restore();
-  };
-  if (acc === 'scarf') {
-    const sc = art.accCol || '#ff5566';
-    band(sc, s * 0.08);
-    // the loose end, thrown over the shoulder the wind is not on
-    const ex2 = Math.cos(0.5) * neckR, ey2 = neckCY + Math.sin(0.5) * neckR;
-    c.save();
-    c.translate(ex2, ey2);
-    c.rotate(0.3 + Math.sin(t * 1.4 + ph) * 0.12);
-    c.beginPath(); rr(c, -s * 0.05, -s * 0.02, s * 0.1, s * 0.22, s * 0.035);
-    inked(c, litG(c, sc, -s * 0.05, 0, s * 0.05, s * 0.2), lw * 0.9, C.ink);
-    c.restore();
-  } else if (acc === 'helm') {
+  /* ==== DELETED: `band`, `scarf`, `bellcollar` ============================
+     Reported three rounds running and moved twice, which is a process failure
+     rather than an art note, so this round the primitive goes instead of its
+     numbers.
+
+     What it drew: a thick stroke on an arc round `neckCY`, plus a rounded-rect
+     "loose end" hung off the arc at 0.5rad. Neither is a garment. On Tindercub
+     — a bean, no separate head, so the arc's centre is the middle of the animal
+     — the stroke left the mouth, crossed the muzzle, turned through the eye and
+     the ear ring and stopped in mid-air in a blunt stub: a lolling pink tongue
+     on the game's tutorial card, at every size. On Bellowsbear — a boss, so the
+     arc's centre is the chin — the same stroke's top ran straight across the
+     muzzle and read as a bar held in front of the face. Both were reported as
+     separate defects; they were one primitive.
+
+     Round 1 drew it as a rectangle and moved it. Round 2 drew it as an arc and
+     re-shaped it. Neither could work, because the thing being drawn is a stroke
+     laid ON TOP of a finished head from a centre that has no relationship to a
+     neck — nothing on this cast has a neck the drawing knows about, so there is
+     nothing for a collar to go round. Anything worn has to be built the way the
+     body is built: closed, occluded by what is in front of it, part of the
+     outline. That is not a tune, so the trait comes off the card instead.
+
+     Tindercub keeps its ears, brush of a face, scar and stub tail; Bellowsbear
+     keeps its bandage. Neither card lost an identity — both got one back.
+     `bellcollar` went with it: only Bellowsbear ever asked for one and its
+     recipe overrides itself with `acc:'scarf'` two keys later, so the branch had
+     been unreachable art for the whole of the game's life.
+     ====================================================================== */
+  if (acc === 'helm') {
     /* A HAT SITS ON A HEAD, ABOVE THE EYES. The dome was `faceW * 0.38` and the
        brim `faceY - faceH * 0.13` — both measured against the whole animal on a
        bean — so on Gundy Bolt, who is wide and shallow and wears one, the brim
@@ -6067,10 +6195,18 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.closePath();
     inked(c, litG(c, art.accCol || C.gold, -hu * 0.36, ty - hu * 0.34, hu * 0.36, ty), lw, C.ink);
   } else if (acc === 'lantern') {
-    const lx = bw * 0.46, ly = bodyY + Math.sin(t * 2.2) * bh * 0.03;
+    /* HUNG OFF THE HAND THAT IS ACTUALLY DRAWN. The wire used to start at a
+       fixed `bw * 0.30` with a `grip` ellipse painted under it — a third paw,
+       invented for the prop, floating a body-width away from the animal's real
+       one, holding a lantern that touched nothing. Reported in round 1 and
+       round 2 on the card that fronts every campaign. The arm block now hands
+       down where the near paw ended up, so the wire starts IN it and the grip
+       ellipse is deleted rather than moved. */
+    const gx2 = handX == null ? bw * 0.30 : handX;
+    const gy2 = handY == null ? bodyY - bodyH * 0.14 : handY;
+    const lx = gx2 + bw * 0.16, ly = gy2 + bh * 0.20 + Math.sin(t * 2.2) * bh * 0.02;
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.7;
-    c.beginPath(); c.moveTo(bw * 0.30, bodyY - bodyH * 0.14); c.lineTo(lx, ly - s * 0.1); c.stroke();
-    grip(bw * 0.30, bodyY - bodyH * 0.14);       // a paw on the wire, not a wire in the air
+    c.beginPath(); c.moveTo(gx2, gy2); c.lineTo(lx, ly - s * 0.1); c.stroke();
     c.save();
     c.globalAlpha = 0.45; c.fillStyle = art.accCol || C.gold;
     c.beginPath(); c.arc(lx, ly, s * 0.2, 0, TAU); c.fill();
@@ -6088,16 +6224,13 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     inked(c, litG(c, art.accCol || '#9aa7bd', -hu * 0.26, ky, hu * 0.26, ky + hu * 0.3), lw * 0.9, C.ink);
     c.beginPath(); c.moveTo(hu * 0.23, ky + hu * 0.1); c.lineTo(hu * 0.44, ky);
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.9; c.stroke();
-    c.save(); c.globalAlpha = 0.5; c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.7;
-    for (let i = 0; i < 2; i++) {
-      const ph2 = t * 1.6 + i;
-      const sx2 = -hu * 0.05 + i * hu * 0.13;
-      c.beginPath();
-      c.moveTo(sx2, ky - hu * 0.03);
-      c.quadraticCurveTo(sx2 + Math.sin(ph2) * s * 0.06, ky - hu * 0.24, sx2, ky - hu * 0.42);
-      c.stroke();
-    }
-    c.restore();
+    /* ==== DELETED: the steam ============================================
+       Two half-alpha white quadratics rising off the lid. Steam needs volume
+       and this had none: at every size the card is played at, two lines a
+       half-pixel wide in 50% white over a warm sky are not vapour, they are two
+       thin grey scratches standing above Kettlebeak's head, and that is what
+       all three critics wrote down. A kettle on an animal's head already says
+       kettle. Nothing replaces them. */
   } else if (acc === 'gear') {
     const gx = -bw * 0.42, gy = bodyY - bodyH * 0.1;
     c.save(); c.translate(gx, gy); c.rotate(t * 0.9);
@@ -6147,19 +6280,6 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.moveTo(-bw * 0.24, bodyY - bodyH * 0.36); c.lineTo(bw * 0.2, bodyY + bodyH * 0.12); c.stroke();
     c.beginPath(); rr(c, bw * 0.12, bodyY + bodyH * 0.06, bw * 0.28, bh * 0.2, 4);
     inked(c, art.accCol || '#8a6a3f', lw * 0.9, C.ink);
-    c.restore();
-  } else if (acc === 'bellcollar') {
-    band(art.accCol || '#8a4a3f', s * 0.055);
-    const swing = Math.sin(t * 3.1 + ph) * 0.5;
-    c.save();
-    c.translate(0, neckCY + neckR);
-    c.rotate(swing * 0.3);
-    c.beginPath();
-    c.moveTo(-s * 0.05, 0);
-    c.quadraticCurveTo(-s * 0.045, s * 0.07, 0, s * 0.085);
-    c.quadraticCurveTo(s * 0.045, s * 0.07, s * 0.05, 0);
-    c.closePath();
-    inked(c, C.gold, lw * 0.8, C.ink);
     c.restore();
   } else if (acc === 'plating') {
     for (const d of [-1, 1]) {
