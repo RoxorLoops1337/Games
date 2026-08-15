@@ -332,7 +332,7 @@ def({ id: 'kettlebeak', name: 'Kettlebeak', type: 'unit', tribe: 'hearth', hp: 9
   hooks: { deploy: (g, u) => allies(g, u).forEach((a) => heal(g, a, 2)) } });
 
 def({ id: 'tindercub', name: 'Tindercub', type: 'unit', tribe: 'hearth', hp: 11, atk: 4, cnt: 3, rare: 2,
-  art: A('#d9702e', '#ffcf9a', { stance:'quad',tail:'stub',mark:'scar', skin:'fur',idle:'paw', shape: 'squat', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ff5566' }),
+  art: A('#d9702e', '#ffcf9a', { stance:'quad',tail:'stub',mark:'none', skin:'fur',idle:'paw', shape: 'squat', ears: 'round', mouth: 'grin' }),
   kw: { frenzy: 1 }, text: 'Frenzy 1.' });
 
 def({ id: 'sootling', name: 'Sootling', type: 'unit', tribe: 'hearth', hp: 5, atk: 2, cnt: 1, rare: 1,
@@ -467,7 +467,7 @@ def({ id: 'clunkbot', name: 'Clunkbot', type: 'unit', tribe: 'scrap', hp: 8, atk
   kw: { explode: 5 }, text: 'Blast 5. Never swings.' });
 
 def({ id: 'springjaw', name: 'Springjaw', type: 'unit', tribe: 'scrap', hp: 9, atk: 4, cnt: 3, rare: 2,
-  art: A('#b8a071', '#e8d9b4', { stance:'quad',tail:'whip',mark:'scar', skin:'metal',idle:'paw', shape: 'blob', ears: 'none', mouth: 'trap', acc: 'gear', accCol: '#8fa2bd' }),
+  art: A('#b8a071', '#e8d9b4', { stance:'quad',tail:'whip',mark:'none', skin:'metal',idle:'paw', shape: 'blob', ears: 'none', mouth: 'trap', acc: 'gear', accCol: '#8fa2bd' }),
   kw: { smack: 1 }, text: 'Smackback.' });
 
 def({ id: 'bellhammer', name: 'Bellhammer', type: 'unit', tribe: 'scrap', hp: 13, atk: 5, cnt: 4, rare: 3,
@@ -491,13 +491,13 @@ def({ id: 'emberwick', name: 'Emberwick', type: 'unit', tribe: 'hearth', hp: 6, 
   hooks: { trigger: (g, u) => foes(g, u).forEach((f) => addStatus(g, f, 'ember', 1)) } });
 
 def({ id: 'bellowsbear', name: 'Bellowsbear', type: 'unit', tribe: 'hearth', hp: 15, atk: 4, cnt: 4, rare: 3,
-  art: A('#c4702e', '#ffcf9a', { stance:'stand',tail:'stub',mark:'bandage',arms:'long', skin:'fur',idle:'breathe',acc:'bellcollar',accCol:'#8a4a3f', shape: 'boss', ears: 'round', mouth: 'grin', acc: 'scarf', accCol: '#ffd166' }),
+  art: A('#c4702e', '#ffcf9a', { stance:'stand',tail:'stub',mark:'bandage',arms:'long', skin:'fur',idle:'breathe', shape: 'boss', ears: 'round', mouth: 'grin' }),
   kw: { soak: 1 }, text: 'Soak. When it triggers, it mends itself 3.',
   hooks: { trigger: (g, u) => heal(g, u, 3) } });
 
 /* frostborn, later ------------------------------------------------------- */
 def({ id: 'icewright', name: 'Icewright', type: 'unit', tribe: 'frost', hp: 8, atk: 2, cnt: 3, rare: 2,
-  art: A('#8fc8e8', '#e8f7ff', { stance:'stand',tail:'stub',mark:'brand', skin:'ice',idle:'twitch',acc:'goggles',accCol:'#5f7fa8', shape: 'tall', ears: 'shard', mouth: 'flat', acc: 'gear', accCol: '#cfe4ff' }),
+  art: A('#8fc8e8', '#e8f7ff', { stance:'stand',tail:'stub',mark:'brand', skin:'ice',idle:'twitch', shape: 'tall', ears: 'shard', mouth: 'flat', acc: 'gear', accCol: '#cfe4ff' }),
   kw: {}, text: 'When it triggers, Shell 3 on the warden in front of it.',
   hooks: { trigger: (g, u) => { const l = laneOf(g, u.side, u.lane).filter((x) => x !== u && x.col < u.col); const t = l[0] || allies(g, u).find((x) => x !== u); if (t) addStatus(g, t, 'shell', 3); } } });
 
@@ -519,7 +519,15 @@ def({ id: 'junkpile', name: 'Junkpile', type: 'unit', tribe: 'scrap', hp: 13, at
 /* neutral ---------------------------------------------------------------- */
 def({ id: 'snowpup', name: 'Snowpup', type: 'unit', tribe: null, hp: 6, atk: 2, cnt: 2, rare: 1,
   art: A('#e8f2ff', '#ffffff', { stance:'quad',tail:'brush',mark:'freckles', skin:'fur',idle:'paw', shape: 'blob', ears: 'round', mouth: 'smile' }),
-  kw: {}, text: 'Plain and willing.' });
+  /* MOOD IS NOT A RULE, AND IT WAS DRAWN AS ONE. `Plain and willing.` sat in the
+     rules well in the same ink at the same size as Springjaw's `Smackback.`,
+     which is a real keyword — so the one card in the game with no effect was the
+     one that looked like it had one you had not learnt yet. `flav` already
+     exists for exactly this (A Handful of Snow, round 3): the inspect panel
+     reads it quietly and the card face does not. Nothing reworded, nothing
+     written — the sentence moved one field across, and Snowpup's well now drops
+     out the way every other rule-less card's does. */
+  kw: {}, text: '', flav: 'Plain and willing.' });
 
 /* A five-health two-attack Longshot was a worse Hoarcrow and nothing else, and
    the usage table said so for four rounds running. It is a lamp now: it hits
@@ -532,7 +540,7 @@ def({ id: 'lanternmoth', name: 'Lanternmoth', type: 'unit', tribe: null, hp: 5, 
 /* A counter of three meant it grew twice in a fight and then the fight was
    over. At two it is a body that is worth protecting. */
 def({ id: 'wayfarer', name: 'Wayfarer', type: 'unit', tribe: null, hp: 9, atk: 3, cnt: 2, rare: 2,
-  art: A('#a89c86', '#e4dccc', { stance:'stand',tail:'none',mark:'leaf',arms:'long', idle:'sway',acc:'satchel',accCol:'#8a6a3f', shape: 'tall', ears: 'round', mouth: 'flat', acc: 'cloak', accCol: '#6f7f9f' }),
+  art: A('#a89c86', '#e4dccc', { stance:'stand',tail:'none',mark:'leaf',arms:'long', idle:'sway', shape: 'tall', ears: 'round', mouth: 'flat', acc: 'cloak', accCol: '#6f7f9f' }),
   kw: {}, text: 'Every time it triggers, it gains 1 attack.',
   hooks: { trigger: (g, u) => { u.atk += 1; } } });
 
@@ -552,7 +560,7 @@ def({ id: 'cairn', name: 'Cairn', type: 'unit', tribe: null, hp: 11, atk: 3, cnt
    What replaces it is a body with a reason to exist, and the reason is the rule
    the game most needed a card to teach: the front column. */
 def({ id: 'bulwark', name: 'Bulwark', type: 'unit', tribe: null, hp: 13, atk: 3, cnt: 3, rare: 2,
-  art: A('#9fb8d8', '#e4ecf8', { stance:'stand',tail:'stub',mark:'brand',arms:'stub', skin:'metal',idle:'sway',acc:'plating',accCol:'#cfe0f0', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'shield', accCol: '#7f96b8' }),
+  art: A('#9fb8d8', '#e4ecf8', { stance:'stand',tail:'stub',mark:'brand',arms:'stub', skin:'metal',idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'shield', accCol: '#7f96b8' }),
   kw: { vanguard: 1 }, text: 'Vanguard. It swings twice while it stands in the front column.' });
 
 def({ id: 'shoveler', name: 'Shoveler', type: 'unit', tribe: 'scrap', hp: 10, atk: 3, cnt: 3, rare: 2,
@@ -560,7 +568,7 @@ def({ id: 'shoveler', name: 'Shoveler', type: 'unit', tribe: 'scrap', hp: 10, at
   kw: { shove: 1 }, text: 'Shove. What it hits ends up a slot further back.' });
 
 def({ id: 'pikeling', name: 'Pikeling', type: 'unit', tribe: null, hp: 8, atk: 3, cnt: 3, rare: 2,
-  art: A('#8fb08f', '#d8ebd6', { stance:'stand',tail:'none',mark:'scar',arms:'long', idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
+  art: A('#8fb08f', '#d8ebd6', { stance:'stand',tail:'none',mark:'none',arms:'long', idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#a9b6c9' }),
   kw: { longshot: 1, soak: 1 }, text: 'Longshot. Soak.' });
 
 /* CUT — THE THREE AURA CARDS, AND THIS IS WHAT THEY COST.
@@ -1124,7 +1132,7 @@ foe({ id: 'glutton', name: 'Glutton', hp: 20, atk: 5, cnt: 5, tier: 3,
   art: A('#7f7f9f', '#c8c8e0', { stance:'squat',tail:'stub',mark:'freckles', skin:'fur',idle:'breathe', shape: 'squat', ears: 'none', mouth: 'trap', eyes: 'big', evil: 1 }),
   kw: { barrage: 1 }, scheme: 'mark', text: 'Barrage. It picks its warden a turn ahead.' });
 foe({ id: 'rimeknight', name: 'Rime Knight', hp: 18, atk: 5, cnt: 4, tier: 3,
-  art: A('#8fa8c8', '#dfeaff', { stance:'stand',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'sway',acc:'plating',accCol:'#bcdcf4', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'helm', accCol: '#5f7fa8', evil: 1 }),
+  art: A('#8fa8c8', '#dfeaff', { stance:'stand',tail:'none',mark:'brand',arms:'long', skin:'metal',idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'helm', accCol: '#5f7fa8', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. Deploys with Shell 5.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'shell', 5) } });
 foe({ id: 'stormcaller', name: 'Stormcaller', hp: 14, atk: 3, cnt: 3, tier: 3,
@@ -1168,7 +1176,7 @@ foe({ id: 'frostwyrm', name: 'Frostwyrm', hp: 22, atk: 6, cnt: 5, tier: 3,
   art: A('#7fb0d8', '#dff0ff', { stance:'quad',tail:'whip',mark:'icicles', skin:'ice',idle:'breathe', shape: 'boss', ears: 'shard', mouth: 'trap', eyes: 'slit', evil: 1 }),
   kw: { barrage: 1 }, text: 'Barrage.' });
 foe({ id: 'icewarden', name: 'Icewarden', hp: 16, atk: 4, cnt: 3, tier: 3,
-  art: A('#9fb0c8', '#e0eaf8', { stance:'stand',tail:'none',mark:'bandage',arms:'long', skin:'metal',idle:'sway',acc:'plating',accCol:'#cfe4ff', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#cfe4ff', evil: 1 }),
+  art: A('#9fb0c8', '#e0eaf8', { stance:'stand',tail:'none',mark:'bandage',arms:'long', skin:'metal',idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', acc: 'pike', accCol: '#cfe4ff', evil: 1 }),
   kw: { soak: 1 }, text: 'Soak. Deploys with Thorns 3.',
   hooks: { deploy: (g, u) => addStatus(g, u, 'thorns', 3) } });
 
@@ -4619,6 +4627,24 @@ function wrapText(c, s, size, maxW) {
     else line = test;
   }
   if (line) lines.push(line);
+  /* NO CENTRED LINE HOLDING ONE WORD. A greedy wrap in a narrow well produces
+     `Deal 6 to a / foe and 3 to / its / neighbours.` — a whole line of the card
+     spent on three letters, centred, which reads as a fault rather than as a
+     break. One backward pass fixes the class: where a line has come out a lone
+     word, pull the last word off the line above if the pair still fits. Two
+     bounds, both learnt on CINDERPUP — a hard space still reads as two words
+     (`Ember 2.` is one token, bound so a rule never ends on a line holding its
+     own number, and feeding it gave `Its bite / leaves Ember 2.` for nothing),
+     and the line above has to stay a line, because taking from a two-word line
+     only moves the widow up and at fold size that orphaned the FIRST line. */
+  for (let i = lines.length - 1; i > 0; i--) {
+    const prev = lines[i - 1].split(' ');
+    if (/[ \u00a0]/.test(lines[i]) || prev.length < 3) continue;
+    const moved = prev[prev.length - 1] + ' ' + lines[i];
+    if (c.measureText(moved).width > maxW) continue;
+    lines[i - 1] = prev.slice(0, -1).join(' ');
+    lines[i] = moved;
+  }
   return lines;
 }
 
@@ -4893,11 +4919,18 @@ function litG(c, col, x0, y0, x1, y1, k) {
  *
  *  `fur`, `ice`, `metal` and `stone` were four flat fills in four hues. The
  *  only thing telling them apart was colour, and colour is the first thing the
- *  eye gives up at hand size — so the four of them read as one substance with
- *  a tint. Now the EDGE carries it: fur breaks its own silhouette into tufts,
- *  ice is cut into straight facets, stone is chipped, metal is a smooth
- *  superellipse that reads as pressed rather than grown. Black out the shape
- *  and you can still say what it is made of.
+ *  eye gives up at hand size — so the EDGE carries it: ice is cut into straight
+ *  facets, stone is chipped, metal is a smooth superellipse that reads as
+ *  pressed rather than grown. Black out the shape and you can still say what it
+ *  is made of.
+ *
+ *  FUR IS NOT ONE OF THEM ANY MORE. It pushed every third of fifty-four points
+ *  out by up to 4% of the radius, and what came back was not a coat: Cinderpup
+ *  and Sootling had irregular bites taken out of their outlines at every size,
+ *  and read as damage or a clipping fault beside Kettlebeak's clean edge —
+ *  reported as such three rounds running. Fur keeps the channels that were
+ *  doing the work anyway (the undercoat, the guard hairs, its own crest bag)
+ *  and gives back the silhouette, which is all a card at 64 units has.
  */
 function bodyForm(c, x, y, w, h, skin, taper, key, ph) {
   const rx = w * 0.5, ry = h * 0.5;
@@ -4923,19 +4956,6 @@ function bodyForm(c, x, y, w, h, skin, taper, key, ph) {
   } else if (skin === 'stone') {
     for (let i = 0; i < 13; i++) {
       const p = at((i / 13) * TAU - 0.9, 1 + (bit(i, 7) - 3.5) * 0.026);
-      i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
-    }
-  } else if (skin === 'fur') {
-    /* Hair, not spines. The first version put a 5%-radius spike every fourth
-       point of forty and every fur creature came out a sea urchin — an edge
-       that is BROKEN is the goal, not an edge that is armed. So: shorter, three
-       lengths in rotation so no two neighbours match, and each one leaning a
-       little the way a coat lies. */
-    const n = 54, len = [0.018, 0.034, 0.024];
-    for (let i = 0; i <= n; i++) {
-      const a = (i / n) * TAU - 1.6;
-      const t2 = (i % 3) === 1 ? len[((i / 3) | 0) % 3] + bit(i, 1) * 0.008 : 0;
-      const p = at(a + t2 * 1.2, 1 + t2);
       i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
     }
   } else {
@@ -6005,17 +6025,14 @@ function drawCreature(c, art, x, y, s, o) {
   if (mark !== 'none') {
     c.save();
     if (mark === 'scar') {
-      /* A SCAR IS ON SOMETHING. This was placed at faceW * 0.2 to 0.3 with two
-         cross-strokes, and on a wide bean — where `faceW` is the whole animal —
-         it landed off the side of the head as a small pink X floating in the
-         air beside it with nothing underneath. It is bounded to the eye it runs
-         through now, and it is one cut with one stitch rather than a saltire. */
-      /* ON the eye, not beside it. The bound above put it at 0.24 of a face
-         plus a fraction of the gap, which on Tindercub and Springjaw landed a
-         finger's width OUTSIDE the eye it is meant to cross: a short red dash
-         hanging in the air off the side of the head, reported as a stray mark
-         both rounds. It is measured from the eye itself now, and runs down
-         its outer edge rather than across the open eyeball. */
+      /* A SCAR IS ON SOMETHING — one cut with one stitch, measured off the eye
+         it runs down rather than off the face, because `faceW` on a bean is the
+         whole animal and the old bound put it in the air beside the head.
+         AND IT IS THE ENEMY'S MARK. `#c96a72` is the only pink in the picture
+         area of any card, every `evil:1` recipe wears it, and three of the
+         player's own — Tindercub, Springjaw, Pikeling — wore it too, so the
+         tutorial card carried the foes' tell for four rounds. Cut from the
+         friendly three; the render suite now fails if one grows it back. */
       const sx3 = eyeDx + er * 0.95;
       c.strokeStyle = '#c96a72'; c.lineWidth = lw * 0.65; c.lineCap = 'round';
       c.beginPath();
@@ -6150,41 +6167,18 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.beginPath(); c.ellipse(gx, footY + s * 0.09, s * 0.07, s * 0.022, 0, 0, TAU); c.fill();
     c.restore();
   };
-  /* EVERY PROP'S THICKNESS IS MEASURED IN `s` NOW, and its POSITION off the
-     face. It used to be both off the face, and `faceH` on a creature with no
-     separate head is the whole body — so Tindercub's scarf came out as a red
-     slab a fifth of a squat body deep, painted straight across its belly.
-     Once the window started drawing subjects whole and large, that stopped
-     looking like a scarf and started looking like a rendering fault. Anything
-     hung on a face is bounded by `s` here for the same reason. */
+  /* EVERY PROP'S THICKNESS IS MEASURED IN `s`, and its POSITION off the face.
+     Both used to come off the face, and `faceH` on a creature with no separate
+     head is the whole body, so anything worn came out a slab a fifth deep. */
   /* ==== DELETED: `band`, `scarf`, `bellcollar` ============================
-     Reported three rounds running and moved twice, which is a process failure
-     rather than an art note, so this round the primitive goes instead of its
-     numbers.
-
-     What it drew: a thick stroke on an arc round `neckCY`, plus a rounded-rect
-     "loose end" hung off the arc at 0.5rad. Neither is a garment. On Tindercub
-     — a bean, no separate head, so the arc's centre is the middle of the animal
-     — the stroke left the mouth, crossed the muzzle, turned through the eye and
-     the ear ring and stopped in mid-air in a blunt stub: a lolling pink tongue
-     on the game's tutorial card, at every size. On Bellowsbear — a boss, so the
-     arc's centre is the chin — the same stroke's top ran straight across the
-     muzzle and read as a bar held in front of the face. Both were reported as
-     separate defects; they were one primitive.
-
-     Round 1 drew it as a rectangle and moved it. Round 2 drew it as an arc and
-     re-shaped it. Neither could work, because the thing being drawn is a stroke
-     laid ON TOP of a finished head from a centre that has no relationship to a
-     neck — nothing on this cast has a neck the drawing knows about, so there is
-     nothing for a collar to go round. Anything worn has to be built the way the
-     body is built: closed, occluded by what is in front of it, part of the
-     outline. That is not a tune, so the trait comes off the card instead.
-
-     Tindercub keeps its ears, brush of a face, scar and stub tail; Bellowsbear
-     keeps its bandage. Neither card lost an identity — both got one back.
-     `bellcollar` went with it: only Bellowsbear ever asked for one and its
-     recipe overrides itself with `acc:'scarf'` two keys later, so the branch had
-     been unreachable art for the whole of the game's life.
+     A thick stroke on an arc round a neck the drawing does not have, plus a
+     rounded-rect "loose end" hung off it. On Tindercub — a bean, so the arc's
+     centre is the middle of the animal — it left the mouth, crossed the muzzle,
+     turned through the eye and stopped in mid-air: a pink tongue on the game's
+     tutorial card, at every size. Moved twice, redrawn twice; the primitive
+     went instead of its numbers in round 3, and this round the four recipes
+     that still named it lost the dead keys too. Nothing draws `scarf` now, so
+     nothing may declare it — see the recipe assertion in the render suite.
      ====================================================================== */
   if (acc === 'helm') {
     /* A HAT SITS ON A HEAD, ABOVE THE EYES. The dome was `faceW * 0.38` and the
@@ -8667,35 +8661,24 @@ function drawCard(c, card, x, y, w, h, o) {
      one line. And `footX` follows the plaque instead of leading it, so a wide
      two-digit pill on a handset moves inboard rather than into the moulding. */
   const footX = Math.max(19.5 * S, pq.hw + 8 * S), footY = by, footR = pq.hw, footH = pq.hh;
+  /* A CARD WITH NO STATS PUTS NOTHING ON ITS RAIL.
+
+     The word went last round — engraved dark into a near-black rail, it read as
+     `CEAR` — and two rivets were kept "where a warden's plaques are", which is
+     precisely the problem: two round objects at the exact x of the outer two
+     plaques, on the same centre line, unlit and holding no number, so a sixth of
+     every gear card read as a stat row that had failed to populate. The defence
+     was that the rail plus the absence of plaques already says "not a warden".
+     True, and it is the argument for the rivets going too: an absence cannot say
+     anything while there is something standing in the gap.
+
+     The rail itself stays, at the same depth on every card of every kind. It is
+     furniture, and a row where a quarter of the cards have a different bottom
+     edge is the exact defect the rail was built to fix. */
   if (isUnit) {
     statBadge(c, footX, footY, footR, footH, '#ff8b7a', statVals[0], pq.sz);
     statBadge(c, w / 2, footY, footR, footH, '#ffd166', statVals[1], pq.sz);
     statBadge(c, w - footX, footY, footR, footH, '#7de08f', statVals[2], pq.sz);
-  } else {
-    /* THE WORD ON THE RAIL IS CUT, and nothing replaces it.
-
-       It was engraved last round — dark ink into a near-black navy rail with a
-       .52 lit lip a pixel below — and what a player read on every gear card at
-       every size was `CEAR`: the bottom sliver of each glyph, with the G's bowl
-       closed by its own lip. Round one had it legible in white, so this was a
-       regression, and `CHARM` beside it was still a light pill: one slot,
-       rendered two ways.
-
-       It does not come back in another colour. The rail plus the ABSENCE of
-       three stat plaques already says "not a warden" — that is what the comment
-       under this block claimed the rivets were for, and it is true, so the word
-       was saying a second time what the silhouette says first. Deleting it is
-       also what pays for the rail growing to fit the plaques above. */
-    // rivets where a warden's plaques are — the same line, kept
-    for (const rx of [footX, w - footX]) {
-      c.beginPath(); c.arc(rx, footY, 3.6 * S, 0, TAU);
-      const rg = c.createLinearGradient(0, footY - 3.6 * S, 0, footY + 3.6 * S);
-      rg.addColorStop(0, '#8fa8cc');
-      rg.addColorStop(1, '#25344f');
-      c.fillStyle = rg; c.fill();
-      c.lineWidth = 1.1 * S; c.strokeStyle = 'rgba(6,11,22,.7)'; c.stroke();
-      spec(c, rx - 1.1 * S, footY - 1.3 * S, 1.8 * S, 0.7);
-    }
   }
 
   /* ---------------- what it is wearing ----------------
@@ -9953,43 +9936,41 @@ function drawItemIcon(c, art, x, y, s, t) {
       c.restore();
     }
   } else if (kind === 'snowball') {
-    /* A HANDFUL OF SNOW WAS AN UNRENDERED PLACEHOLDER. Six shading channels on
-       a circle — a radial body, a soft lit plane, a soft terminator, four
-       grains, a bounce off the drift and a specular — and every one of them
-       lived between white and a pale grey-blue, on a white-blue sky. Six ways
-       of saying nothing. Read at hand size it was a grey-white disc.
-
-       A ball of snow is white, it has one shadow side, and it has a line round
-       it. That is the whole drawing and it is the same drawing the animals get:
-       two flat tones and one thick navy outline. The keyline is a shade heavier
-       here than anywhere else on the shelf because this is the palest object in
-       the set standing on the palest ground in the set, and the line is the
-       only thing separating them. */
-    const ball = () => { c.beginPath(); c.arc(0, s * 0.06, s * 0.34, 0, TAU); };
-    /* The shadow side as a CRESCENT, which is the shape a sphere's terminator
-       actually is. Drawn as a chord — an arc closed straight across — it cut the
-       ball in half on a hard diagonal and what came out was a moon, or worse a
-       pie chart. Fill the whole ball dark, then drop the lit disc back on top of
-       it offset toward the key, and what is left round the far edge is the
-       crescent. Two flat tones, no gradient, one line. */
-    ball();
+    /* A HANDFUL OF SNOW WAS A CIRCLE, and a circle is what a renderer draws
+       when nobody turned up. Cutting its six pale shading channels down to the
+       shelf's dialect — two flat tones and one thick navy line — was right, and
+       it was not enough: two tones on a PRIMITIVE still reads as a missing
+       asset, and this was the only icon in the set anybody called unfinished
+       rather than stylised. So the disc goes and a silhouette arrives. Snow
+       squeezed in a fist is heaped where the palm packed it and pinched where
+       the fingers closed. One closed path, and the same two tones as before. */
+    const lump = () => {
+      c.beginPath();
+      c.moveTo(-s * 0.36, s * 0.09);
+      c.bezierCurveTo(-s * 0.42, -s * 0.14, -s * 0.23, -s * 0.31, -s * 0.04, -s * 0.27);
+      c.bezierCurveTo(s * 0.06, -s * 0.33, s * 0.25, -s * 0.29, s * 0.28, -s * 0.12);
+      c.bezierCurveTo(s * 0.42, -s * 0.05, s * 0.35, s * 0.05, s * 0.26, s * 0.08);
+      c.bezierCurveTo(s * 0.37, s * 0.13, s * 0.31, s * 0.22, s * 0.17, s * 0.22);
+      c.bezierCurveTo(s * 0.04, s * 0.31, -s * 0.21, s * 0.29, -s * 0.36, s * 0.09);
+      c.closePath();
+    };
+    /* The shadow side as a CRESCENT, which is the shape a terminator actually
+       is. Fill the whole lump dark, drop the lit body back on top of it offset
+       toward the key, and what is left round the far edge is the crescent —
+       drawn as a chord it came out a moon, or worse a pie chart. */
+    lump();
     c.fillStyle = igHex(col, '#41618c', 0.52); c.fill();
     c.save();
-    ball(); c.clip();
-    c.beginPath(); c.arc(-s * 0.085, -s * 0.025, s * 0.295, 0, TAU);
+    lump(); c.clip();
+    c.beginPath(); c.arc(-s * 0.10, -s * 0.06, s * 0.36, 0, TAU);
     c.fillStyle = '#f4f9ff'; c.fill();
     c.restore();
-    /* A LITTLE UNDER THE SHELF'S WEIGHT, and this is the one place it is worth
-       naming: every other icon on the shelf is a tall narrow thing whose `s`
-       covers more than it does, so the keyline lands at a sane fraction of it.
-       A ball is the whole box in both directions, so the same line came back a
-       fifth of the radius — a black doughnut with a white hole in it. */
-    ball();
+    /* A LITTLE UNDER THE SHELF'S WEIGHT: every other icon here is a tall narrow
+       thing whose `s` covers more than it does, so the keyline lands at a sane
+       fraction of it. This one fills its box in both directions, and the same
+       line came back a fifth of the radius — a black doughnut. */
+    lump();
     c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
-    /* Three twinkling crosses used to float above it. They were the widest
-       thing the icon painted, so the snowball itself was measured small and
-       drawn small — and a hand of eight cards does not need eight things
-       blinking in it. */
   } else if (kind === 'lantern') {
     // the last light: a cage, four panes, and a flame that is not going out
     igGlow(c, 0, 0, s * 0.52, col, 0.34, t);
@@ -10176,7 +10157,25 @@ function drawCharmIcon(c, id, col, x, y, s, t) {
   c.closePath(); c.fill();
   c.restore();
 
-  // and the mark
+  /* AND THE MARK, WHICH IS STILL THE LAST FLAT THING ON THE SHELF — one dark
+     tint of the stone's own colour, no key on it, where every other object on
+     this card is lit. It wants the lip a cut into stone has, down and right of
+     the ink, and it must NOT be bought with `shadowOffsetX/Y`: canvas shadow
+     offsets are in canvas space and the spec says outright that the transform
+     does not touch them, so a lip set here — inside `scale(r / 40)` — is a fixed
+     number of device pixels and comes out invisible at 300 units and a third of
+     the glyph at 64. That was tried this round and photographed at four sizes
+     before it was thrown away. The honest version draws the chain below twice
+     with a `translate` between the passes, which means lifting it out into a
+     function of its own; that is a move, not a deletion, so it is left named
+     here for whoever opens this block next rather than smuggled in.
+     THE OTHER HALF OF THAT REPORT IS NOT IN THIS FUNCTION. A charm was said to
+     render as a speck on a fold and to fill its window on a desktop; measured,
+     the same 152x212 card gives a 57x62-unit stone at 1280x720 and 19x22 at
+     653x280. Nothing here reads the stage — `charmBox` is cached per id and
+     `drawCharmIcon` is written against `s`. What moved is `ah`, the window,
+     which the layout hands to whatever the rules well did not take. That is the
+     aperture, and it is being made a fixed die elsewhere this round. */
   c.save();
   c.scale(r / 40, r / 40);
   const dk = mix(col, '#0d1830', 0.62);
@@ -14036,7 +14035,7 @@ window.FF = {
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
   drawCreature, drawCard, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
-  nameSplit,
+  nameSplit, wrapText,
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,
   setCtx: (c) => { ctx = c; initSnow(); },
