@@ -607,7 +607,7 @@ def({ id: 'stew', name: 'Bone Stew', type: 'item', tribe: 'hearth', rare: 1, tar
   effect: (g, t) => { heal(g, t, 6); addStatus(g, t, 'regen', 1); } });
 
 def({ id: 'coldsnap', name: 'Coldsnap', type: 'item', tribe: 'frost', rare: 2, target: 'none',
-  art: { kind: 'burst', col: '#6fd8ff' }, text: 'Frost 1 on every foe.',
+  art: { kind: 'flake', col: '#6fd8ff' }, text: 'Frost 1 on every foe.',
   effect: (g) => enemyUnits(g).forEach((u) => addStatus(g, u, 'frost', 1)) });
 
 /* THE HOLE A GEAR CARAVAN COULD NOT DRAFT OUT OF, AND WHY IT STAYS OPEN.
@@ -663,7 +663,7 @@ def({ id: 'sleetrunner', name: 'Sleetrunner', type: 'unit', tribe: 'frost', hp: 
    4 · it makes an existing decision pay differently, which is what item two of
        the brief asked for, rather than adding a new one to compete with it. */
 def({ id: 'bankedembers', name: 'Banked Embers', type: 'item', tribe: 'hearth', rare: 2, target: 'none',
-  art: { kind: 'flask', col: '#ff9a5c' },
+  art: { kind: 'brazier', col: '#ff9a5c' },
   text: 'Until your next turn, denying a scheme mends the whole line 4.',
   effect: (g) => { g.battle.banked = (g.battle.banked || 0) + 1; } });
 
@@ -684,7 +684,7 @@ def({ id: 'blastcap', name: 'Blastcap', type: 'item', tribe: 'scrap', rare: 2, t
   effect: (g, t) => { hurt(g, t, 6, null); neighbours(g, t).forEach((n) => hurt(g, n, 3, null)); } });
 
 def({ id: 'thornoil', name: 'Thorn Oil', type: 'item', tribe: null, rare: 2, target: 'ally',
-  art: { kind: 'flask', col: '#d6a6ff' }, text: 'Thorns 3.',
+  art: { kind: 'vial', col: '#d6a6ff' }, text: 'Thorns 3.',
   effect: (g, t) => addStatus(g, t, 'thorns', 3) });
 
 /* Spice 1 across the line was a whole turn spent on about three damage, and
@@ -692,25 +692,25 @@ def({ id: 'thornoil', name: 'Thorn Oil', type: 'item', tribe: null, rare: 2, tar
    worth taking when there is a line to spend it on, and nothing when there is
    not — which is the shape a board-wide card should have. */
 def({ id: 'kindling', name: 'Kindling', type: 'item', tribe: 'hearth', rare: 2, target: 'none',
-  art: { kind: 'burst', col: '#ff9a3c' }, text: 'Spice 2 on every warden.',
+  art: { kind: 'kindle', col: '#ff9a3c' }, text: 'Spice 2 on every warden.',
   effect: (g) => playerUnits(g).forEach((u) => addStatus(g, u, 'spice', 2)) });
 
 def({ id: 'hush', name: 'Hush', type: 'item', tribe: 'frost', rare: 3, target: 'enemy',
-  art: { kind: 'burst', col: '#a98cff' }, text: 'Frost 3 and Weak 2 on a foe.',
+  art: { kind: 'rune', col: '#a98cff' }, text: 'Frost 3 and Weak 2 on a foe.',
   effect: (g, t) => { addStatus(g, t, 'frost', 3); addStatus(g, t, 'weak', 2); } });
 
 def({ id: 'pryrod', name: 'Pry Rod', type: 'item', tribe: null, rare: 1, target: 'ally',
-  art: { kind: 'pick', col: '#ffd166' }, text: 'Tick a warden\'s counter down 2. At zero it triggers on the spot.',
+  art: { kind: 'rod', col: '#ffd166' }, text: 'Tick a warden\'s counter down 2. At zero it triggers on the spot.',
   effect: (g, t) => tickCounter(g, t, 2, false) });
 
 def({ id: 'patchkit', name: 'Patch Kit', type: 'item', tribe: 'scrap', rare: 1, target: 'ally',
-  art: { kind: 'shield', col: '#8fe0a0' }, text: 'Heal 3 and Shell 3.',
+  art: { kind: 'kit', col: '#8fe0a0' }, text: 'Heal 3 and Shell 3.',
   effect: (g, t) => { heal(g, t, 3); addStatus(g, t, 'shell', 3); } });
 
 /* And this one now has a moment rather than a number: it burns everything,
    and it burns whatever has committed to a scheme twice as badly. */
 def({ id: 'tinderjar', name: 'Tinder Jar', type: 'item', tribe: 'hearth', rare: 2, target: 'none',
-  art: { kind: 'flask', col: '#ff6a2c' }, text: 'Ember 3 on every foe, and 3 more on anything that is scheming.',
+  art: { kind: 'jar', col: '#ff6a2c' }, text: 'Ember 3 on every foe, and 3 more on anything that is scheming.',
   effect: (g) => enemyUnits(g).forEach((u) => addStatus(g, u, 'ember', u.plot ? 6 : 3)) });
 
 /* Two cards for a whole turn is a losing trade and always was — the pilot
@@ -718,7 +718,7 @@ def({ id: 'tinderjar', name: 'Tinder Jar', type: 'item', tribe: 'hearth', rare: 
    the only free action in the deck, and it makes a hand that has nothing in it
    into a hand that might. */
 def({ id: 'oldmap', name: 'Old Map', type: 'item', tribe: null, rare: 2, target: 'none', freeAction: true,
-  art: { kind: 'stone', col: '#e8d9b4' }, text: 'Draw two cards. This does not cost the turn — once a turn.',
+  art: { kind: 'map', col: '#e8d9b4' }, text: 'Draw two cards. This does not cost the turn — once a turn.',
   effect: (g) => { drawToHand(g); drawToHand(g); } });
 
 def({ id: 'snowbomb', name: 'Snowbomb', type: 'item', tribe: 'frost', rare: 2, target: 'enemy',
@@ -726,7 +726,7 @@ def({ id: 'snowbomb', name: 'Snowbomb', type: 'item', tribe: 'frost', rare: 2, t
   effect: (g, t) => { for (const f of laneOf(g, 'e', t.lane).slice()) { hurt(g, f, 3, null); addStatus(g, f, 'frost', 1); } } });
 
 def({ id: 'hookline', name: 'Hook Line', type: 'item', tribe: 'scrap', rare: 2, target: 'enemy',
-  art: { kind: 'rope', col: '#c9b28a' }, text: 'Haul the back-most foe in that lane to the front of it.',
+  art: { kind: 'hook', col: '#c9b28a' }, text: 'Haul the back-most foe in that lane to the front of it.',
   effect: (g, t) => {
     const line = laneOf(g, 'e', t.lane);
     const back = line[line.length - 1];
@@ -751,7 +751,7 @@ def({ id: 'coldread', name: 'Cold Read', type: 'item', tribe: null, rare: 2, tar
   } });
 
 def({ id: 'avalanche', name: 'Avalanche', type: 'item', tribe: 'frost', rare: 3, target: 'enemy',
-  art: { kind: 'burst', col: '#cfe4ff' }, text: 'Deal 3 to every foe in that lane, and 2 more for each of them past the first.',
+  art: { kind: 'slide', col: '#cfe4ff' }, text: 'Deal 3 to every foe in that lane, and 2 more for each of them past the first.',
   effect: (g, t) => {
     const line = laneOf(g, 'e', t.lane).slice();
     const dmg = 3 + Math.max(0, line.length - 1) * 2;
@@ -759,7 +759,7 @@ def({ id: 'avalanche', name: 'Avalanche', type: 'item', tribe: 'frost', rare: 3,
   } });
 
 def({ id: 'grudge', name: 'Old Grudge', type: 'item', tribe: null, rare: 2, target: 'enemy',
-  art: { kind: 'pick', col: '#c9a6ff' }, kw: { hoard: 1 },
+  art: { kind: 'tally', col: '#c9a6ff' }, kw: { hoard: 1 },
   text: 'Hoard. Deal 3, and one more for every turn it sat in your hand.',
   effect: (g, t, card) => hurt(g, t, 3 + hoardOf(card), null) });
 
@@ -781,7 +781,7 @@ def({ id: 'lastlight', name: 'Last Light', type: 'item', tribe: null, rare: 3, t
    turn cooling the boiler, or spend it swinging and let the heat climb. */
 def({ id: 'snowhandful', name: 'A Handful of Snow', type: 'item', tribe: null, rare: 1, target: 'enemy',
   noPool: true, recycles: true,
-  art: { kind: 'burst', col: '#dff0ff' },
+  art: { kind: 'snowball', col: '#dff0ff' },
   text: 'Frost 2 on a foe. Scooped off the floor of this room — it comes straight back to your hand.',
   effect: (g, t) => { sfx('snow'); addStatus(g, t, 'frost', 2); } });
 
@@ -6155,6 +6155,12 @@ const creatureBox = (art) => artBox('c' + JSON.stringify(art),
   (rec, t) => drawCreature(rec, art, 0, 0, ART_REF, { t, ph: 0 }));
 const itemBox = (art) => artBox('i' + JSON.stringify(art || null),
   (rec, t) => drawItemIcon(rec, art, 0, 0, ART_REF, t));
+/* A charm is drawn by neither of the above. It used to borrow gear's generic
+   burst, so gear's box measured it correctly by accident; now that every charm
+   has its own mark it needs its own measurement, or the ten of them go back to
+   being sized by a guess — which is the bug this whole block exists to kill. */
+const charmBox = (id, col) => artBox('h' + id,
+  (rec, t) => drawCharmIcon(rec, id, col, 0, 0, ART_REF, t));
 
 /* ---------------- the weather in the window ------------------------------
    Every one of the 58 cards stood in the same picture: one ridge, one snow
@@ -6704,9 +6710,10 @@ function drawCard(c, card, x, y, w, h, o) {
     return { s: sz, x: w / 2 - (bx[0] + bx[2]) / 2 * sz, y: yy,
       wd: bxw * sz, ht: bxh * sz, mid: yy + (bx[1] + bx[3]) / 2 * sz };
   };
-  const charmArt = { kind: 'burst', col: edge };
+  const isCharm = card.type === 'charm';
+  const charmCol = (isCharm && (chOf(card.def) || 0) && chOf(card.def).col) || edge;
   const sub = isUnit ? fitArt(creatureBox(card.art), 0.95, true)
-    : fitArt(itemBox(card.type === 'charm' ? charmArt : d.art), 0.82, false);
+    : fitArt(isCharm ? charmBox(card.def, charmCol) : itemBox(d.art), 0.82, false);
   /* CONTACT, not a floating disc. The old shadow was one flat grey ellipse at a
      fixed 30% of the window's width, drawn at the same place whatever was
      standing there — so a Junkpile hovered over a shadow narrower than itself
@@ -6738,7 +6745,8 @@ function drawCard(c, card, x, y, w, h, o) {
   rim.addColorStop(1, mixA(tribeLit, 0));
   c.fillStyle = rim; c.fillRect(ax, ay, aw, ah);
   if (isUnit) drawCreature(c, card.art, sub.x, sub.y, sub.s, { t: o.t || 0, ph: card.uid, blink: card.uid });
-  else drawItemIcon(c, card.type === 'charm' ? charmArt : d.art, sub.x, sub.y, sub.s, o.t || 0);
+  else if (isCharm) drawCharmIcon(c, card.def, charmCol, sub.x, sub.y, sub.s, o.t || 0);
+  else drawItemIcon(c, d.art, sub.x, sub.y, sub.s, o.t || 0);
   c.restore();
   /* THE WINDOW IS A HOLE, AND IT USED TO BE A BOX. One dark stroke around a
      pale wash puts the picture on the same plane as everything else. A hole has
@@ -6812,11 +6820,25 @@ function drawCard(c, card, x, y, w, h, o) {
     }
   }
 
-  // what a hoarded card has put on since it was drawn
+  /* What a hoarded card has put on since it was drawn — a token struck into the
+     window rather than the flat violet dot it was, which at hand size read as a
+     smudge on the picture instead of a number worth reading. */
   if (card.kw && card.kw.hoard && card.held) {
-    c.beginPath(); c.arc(16 * S, ay + 14 * S, 12 * S, 0, TAU);
-    inked(c, '#c9a6ff', 2.5 * S, C.ink);
-    txt(c, '+' + card.held, 16 * S, ay + 15 * S, 15 * S, '#241a3a', 'center', 'd', 0);
+    const hx = 16 * S, hy = ay + 14 * S, hr = 12 * S;
+    c.save();
+    c.beginPath(); c.arc(hx, hy + 1.2 * S, hr, 0, TAU);
+    c.fillStyle = 'rgba(12,20,38,.32)'; c.fill();
+    c.beginPath(); c.arc(hx, hy, hr, 0, TAU);
+    const hg = c.createRadialGradient(hx - hr * 0.4, hy - hr * 0.45, hr * 0.05, hx, hy, hr * 1.25);
+    hg.addColorStop(0, mix('#c9a6ff', '#ffffff', 0.7));
+    hg.addColorStop(0.55, '#c9a6ff');
+    hg.addColorStop(1, mix('#c9a6ff', '#0d1830', 0.45));
+    c.fillStyle = hg; c.fill();
+    c.lineWidth = 2.5 * S; c.strokeStyle = C.ink; c.stroke();
+    c.beginPath(); c.arc(hx, hy, hr * 0.76, 0, TAU);
+    c.lineWidth = 1 * S; c.strokeStyle = 'rgba(255,255,255,.5)'; c.stroke();
+    c.restore();
+    txt(c, '+' + card.held, hx, hy + 1 * S, 15 * S, '#241a3a', 'center', 'd', 0);
   }
 
   /* ---------------- rules text, on the card rather than in a box ------
@@ -7020,10 +7042,22 @@ function drawCard(c, card, x, y, w, h, o) {
     if (showTag) txt(c, tag, w / 2, by, TAG_SIZE, '#cfe0f6', 'center', 't', 'rgba(7,13,26,.9)');
   }
 
-  /* ---------------- what it is wearing ---------------- */
+  /* ---------------- what it is wearing ----------------
+     Three flat shapes in three flat colours: a gold star, a coloured dot per
+     charm, a violet triangle. On a card whose every other surface had been
+     given a light they were the only stickers left on it, and a sticker beside
+     a struck thing reads as a rendering fault. Same shapes, same places, same
+     sizes — made of metal and stone instead. */
+  const tt = o.t || 0;
   if (card.blessed || card.charms.indexOf('blessed') >= 0) {
     c.save();
     c.translate(14 * S, ty + 6 * S);
+    const twk = 0.86 + 0.14 * Math.sin(tt * 1.8);
+    const hal = c.createRadialGradient(0, 0, 0, 0, 0, 12 * S);
+    hal.addColorStop(0, mixA(C.gold, 0.26 * twk));
+    hal.addColorStop(1, mixA(C.gold, 0));
+    c.fillStyle = hal;
+    c.beginPath(); c.arc(0, 0, 12 * S, 0, TAU); c.fill();
     c.beginPath();
     for (let k = 0; k < 10; k++) {
       const a = (k / 10) * TAU - Math.PI / 2, r = (k % 2 ? 4 : 9) * S;
@@ -7031,7 +7065,13 @@ function drawCard(c, card, x, y, w, h, o) {
       k ? c.lineTo(px, py) : c.moveTo(px, py);
     }
     c.closePath();
-    inked(c, C.gold, 2 * S, C.ink);
+    const stg = c.createLinearGradient(0, -9 * S, 0, 9 * S);
+    stg.addColorStop(0, '#fff4cf');
+    stg.addColorStop(0.5, C.gold);
+    stg.addColorStop(1, C.goldDk);
+    c.fillStyle = stg; c.fill();
+    c.lineWidth = 2 * S; c.strokeStyle = C.ink; c.lineJoin = 'round'; c.stroke();
+    spec(c, -2.5 * S, -3.5 * S, 4 * S, 0.95 * twk);
     c.restore();
   }
   let worn = 0;
@@ -7039,15 +7079,35 @@ function drawCard(c, card, x, y, w, h, o) {
     if (id === 'blessed') continue;
     const ch = chOf(id);
     if (!ch) continue;
-    c.beginPath(); c.arc(w - 11 * S, ay + 8 * S + worn * 15 * S, 6 * S, 0, TAU);
-    inked(c, ch.col, 1.8 * S, C.ink);
+    const px = w - 11 * S, py = ay + 8 * S + worn * 15 * S, pr = 6 * S;
+    c.save();
+    c.beginPath(); c.arc(px, py, pr, 0, TAU);
+    const pg = c.createRadialGradient(px - pr * 0.4, py - pr * 0.45, pr * 0.05, px, py, pr * 1.3);
+    pg.addColorStop(0, mix(ch.col, '#ffffff', 0.75));
+    pg.addColorStop(0.55, ch.col);
+    pg.addColorStop(1, mix(ch.col, '#0d1830', 0.5));
+    c.fillStyle = pg; c.fill();
+    c.lineWidth = 1.8 * S; c.strokeStyle = C.ink; c.stroke();
+    spec(c, px - pr * 0.35, py - pr * 0.4, pr * 0.5, 0.85);
+    c.restore();
     worn++;
   }
   if (card.sigil) {
+    c.save();
     c.beginPath();
     c.moveTo(w / 2 - 9 * S, ay - 8 * S); c.lineTo(w / 2 + 9 * S, ay - 8 * S); c.lineTo(w / 2, ay + 1 * S);
     c.closePath();
-    inked(c, '#c9a6ff', 1.8 * S, C.ink);
+    const sgg = c.createLinearGradient(0, ay - 8 * S, 0, ay + 1 * S);
+    sgg.addColorStop(0, mix('#c9a6ff', '#ffffff', 0.6));
+    sgg.addColorStop(0.55, '#c9a6ff');
+    sgg.addColorStop(1, mix('#c9a6ff', '#0d1830', 0.45));
+    c.fillStyle = sgg; c.fill();
+    c.lineWidth = 1.8 * S; c.strokeStyle = C.ink; c.lineJoin = 'round'; c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 1 * S;
+    c.beginPath();
+    c.moveTo(w / 2 - 6 * S, ay - 6 * S); c.lineTo(w / 2 + 6 * S, ay - 6 * S);
+    c.stroke();
+    c.restore();
   }
   if (card.injured) {
     c.save();
@@ -7060,94 +7120,1140 @@ function drawCard(c, card, x, y, w, h, o) {
   c.restore();
 }
 
+/* ==================================================== gear, as objects =====
+   Every icon here was a silhouette: one flat fill of the card's colour inside
+   one dark outline, with no highlight, no thickness and nothing inside it. The
+   consequence was that the TINT carried all the meaning — a flask, a jar and a
+   vial were the same bottle in three hues — so with the name covered you could
+   not tell one gear card from another, which is the one thing an icon is for.
+
+   An icon is an object made of something now, lit by the light the rest of the
+   card already agrees on: above, and slightly left. The helpers below hand out
+   the four materials the whole shelf is built from, and every kind asks them
+   for its surface rather than picking a shade by hand — that is the only reason
+   twenty-three of them still look like they came out of the same world.
+
+   Paths and gradients only. This runs once per card per frame, and once per
+   tile on a collection screen with forty of them on it. */
+
+/** A body's own colour lit from the top: a touch of the sun at the crown, the
+ *  colour itself through the middle, the night at its foot. */
+function igFall(c, col, y0, y1, up, dn) {
+  const g = c.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, mix(col, '#ffffff', up === undefined ? 0.34 : up));
+  g.addColorStop(0.5, col);
+  g.addColorStop(1, mix(col, '#0d1830', dn === undefined ? 0.38 : dn));
+  return g;
+}
+
+/** Steel, which is not grey. It is a hard band of sky across the top third and
+ *  a cold bounce off the snow along the bottom edge — draw a blade in one flat
+ *  grey and it reads as a wedge of cardboard. */
+function igSteel(c, y0, y1) {
+  const g = c.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, '#dbe8f7');
+  g.addColorStop(0.18, '#ffffff');
+  g.addColorStop(0.34, '#bccde2');
+  g.addColorStop(0.7, '#6e8299');
+  g.addColorStop(0.88, '#485970');
+  g.addColorStop(1, '#8fb2d2');
+  return g;
+}
+
+/** The shadow the thing casts on the snow. It stays on the ground while the
+ *  object above it breathes: bobbing the shadow too was the first version, and
+ *  a shadow that rises with its object reads as the card shaking. */
+function igShadow(c, s, rx) {
+  const y = s * 0.50;
+  const g = c.createRadialGradient(s * 0.05, y, 0, s * 0.05, y, Math.max(1, rx));
+  g.addColorStop(0, 'rgba(22,38,64,.38)');
+  g.addColorStop(0.55, 'rgba(22,38,64,.16)');
+  g.addColorStop(1, 'rgba(22,38,64,0)');
+  c.save();
+  c.fillStyle = g;
+  c.beginPath(); c.ellipse(s * 0.05, y, rx, rx * 0.32, 0, 0, TAU); c.fill();
+  c.restore();
+}
+
+/** A light in the object's own colour, breathing. Held under a fifth of an
+ *  alpha on purpose — a hand is eight of these at once, and the first pass at a
+ *  half turned a hand of cards into a fairground. */
+function igGlow(c, x, y, r, col, a, t) {
+  const k = a * (0.8 + Math.sin(t * 1.6) * 0.2);
+  const g = c.createRadialGradient(x, y, 0, x, y, Math.max(1, r));
+  g.addColorStop(0, mixA(col, k));
+  g.addColorStop(0.5, mixA(col, k * 0.34));
+  g.addColorStop(1, mixA(col, 0));
+  c.save();
+  c.fillStyle = g;
+  c.beginPath(); c.arc(x, y, Math.max(1, r), 0, TAU); c.fill();
+  c.restore();
+}
+
+/** The one soft highlight that makes a curved surface curve. */
+function igStreak(c, x, y, rx, ry, a) {
+  const g = c.createLinearGradient(x - rx, 0, x + rx, 0);
+  g.addColorStop(0, LIGHT + '0)');
+  g.addColorStop(0.5, LIGHT + (a === undefined ? 0.8 : a) + ')');
+  g.addColorStop(1, LIGHT + '0)');
+  c.save();
+  c.fillStyle = g;
+  c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, TAU); c.fill();
+  c.restore();
+}
+
+/** Glass with something in it. `mk` re-issues the outline, because the shape
+ *  has to be filled, clipped into and then stroked and there is no reusable
+ *  path here. The contents are the whole point: a container tells you what it
+ *  does by what is sitting in the bottom of it. */
+function igGlass(c, mk, col, s, lvl, lw, t) {
+  c.save();
+  mk();
+  c.globalAlpha = 0.5; c.fillStyle = mix(col, '#eaf4ff', 0.7); c.fill();
+  c.globalAlpha = 1;
+  mk(); c.clip();
+  c.fillStyle = igFall(c, col, lvl, s * 0.48, 0.26, 0.44);
+  c.fillRect(-s, lvl, s * 2, s);
+  c.fillStyle = mix(col, '#ffffff', 0.6);
+  c.beginPath(); c.ellipse(0, lvl, s * 0.26, s * 0.04, 0, 0, TAU); c.fill();
+  for (let i = 0; i < 3; i++) {
+    const ph = (t * 0.45 + i * 0.37) % 1;
+    c.globalAlpha = 0.6 * Math.min(1, ph * 4) * (1 - ph);
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.arc((i - 1) * s * 0.085, lvl + s * 0.38 * (1 - ph), s * 0.028, 0, TAU);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+  const sh = c.createLinearGradient(s * 0.02, 0, s * 0.36, 0);
+  sh.addColorStop(0, 'rgba(18,32,56,0)');
+  sh.addColorStop(1, 'rgba(18,32,56,.32)');
+  c.fillStyle = sh; c.fillRect(-s, -s, s * 2, s * 2);
+  c.restore();
+  mk(); c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+}
+
+/** Wood: the fall of light round a haft, and two lines of grain. Grain is the
+ *  entire difference between a handle and a brown rectangle. */
+function igWood(c, x, y, w, h, r, col, lw) {
+  const k = r === undefined ? Math.min(w, h) * 0.4 : r;
+  c.save();
+  rr(c, x, y, w, h, k);
+  const g = c.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, mix(col, '#0d1830', 0.30));
+  g.addColorStop(0.3, mix(col, '#ffffff', 0.34));
+  g.addColorStop(0.6, col);
+  g.addColorStop(1, mix(col, '#0d1830', 0.44));
+  c.fillStyle = g; c.fill();
+  rr(c, x, y, w, h, k); c.clip();
+  c.globalAlpha = 0.4;
+  c.strokeStyle = mix(col, '#0d1830', 0.55);
+  c.lineWidth = Math.max(0.5, Math.min(w, h) * 0.10);
+  for (let i = 0; i < 2; i++) {
+    c.beginPath();
+    if (w >= h) { c.moveTo(x + w * 0.1, y + h * (0.34 + i * 0.3)); c.lineTo(x + w * 0.9, y + h * (0.42 + i * 0.28)); }
+    else { c.moveTo(x + w * (0.34 + i * 0.3), y + h * 0.1); c.lineTo(x + w * (0.42 + i * 0.28), y + h * 0.9); }
+    c.stroke();
+  }
+  c.restore();
+  if (lw) { rr(c, x, y, w, h, k); c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke(); }
+}
+
+/** Smoke, steam, vapour — three puffs on one rising loop. */
+function igSmoke(c, s, x0, y0, col, a, t) {
+  c.save();
+  for (let i = 0; i < 3; i++) {
+    const ph = (t * 0.32 + i * 0.34) % 1;
+    c.globalAlpha = a * Math.min(1, ph * 5) * (1 - ph);
+    c.fillStyle = col;
+    c.beginPath();
+    c.arc(x0 + Math.sin(ph * 4 + i) * s * 0.06, y0 - ph * s * 0.34,
+      s * (0.045 + ph * 0.05), 0, TAU);
+    c.fill();
+  }
+  c.restore();
+}
+
+/* How wide a thing's footprint is. A rope and a shield cannot share a shadow. */
+const IG_FOOT = {
+  flask: 0.30, vial: 0.22, jar: 0.34, brazier: 0.34, bowl: 0.38, pick: 0.30,
+  rod: 0.26, tally: 0.20, stone: 0.38, map: 0.34, shield: 0.30, kit: 0.32,
+  rope: 0.18, hook: 0.24, bomb: 0.34, flake: 0.30, kindle: 0.30, rune: 0.26,
+  slide: 0.38, snowball: 0.28, lantern: 0.26, eye: 0.34, burst: 0.26,
+};
+
 function drawItemIcon(c, art, x, y, s, t) {
   const kind = (art && art.kind) || 'flask';
   const col = (art && art.col) || C.frost;
+  const lw = Math.max(2.4, s * 0.085);
   c.save();
-  c.translate(x, y + Math.sin(t * 2 + s) * 2);
-  c.lineJoin = 'round';
-  const lw = Math.max(2.5, s * 0.09);
+  c.translate(x, y);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  igShadow(c, s, s * (IG_FOOT[kind] || 0.30));
+  c.translate(0, Math.sin(t * 1.5 + s) * s * 0.022);
+
   if (kind === 'flask') {
-    c.beginPath();
-    c.moveTo(-s * 0.16, -s * 0.42); c.lineTo(-s * 0.16, -s * 0.16);
-    c.quadraticCurveTo(-s * 0.42, s * 0.16, -s * 0.24, s * 0.40);
-    c.lineTo(s * 0.24, s * 0.40);
-    c.quadraticCurveTo(s * 0.42, s * 0.16, s * 0.16, -s * 0.16);
-    c.lineTo(s * 0.16, -s * 0.42);
-    c.closePath();
-    inked(c, col, lw, C.ink);
-    c.beginPath(); rr(c, -s * 0.22, -s * 0.52, s * 0.44, s * 0.14, 4);
-    inked(c, '#c9b28a', lw * 0.8, C.ink);
-  } else if (kind === 'pick') {
-    c.rotate(-0.5);
-    c.beginPath(); rr(c, -s * 0.06, -s * 0.5, s * 0.12, s * 0.8, 4);
-    inked(c, '#8a6a3f', lw * 0.8, C.ink);
-    c.beginPath();
-    c.moveTo(-s * 0.34, -s * 0.42); c.lineTo(s * 0.34, -s * 0.42); c.lineTo(0, -s * 0.10);
-    c.closePath();
-    inked(c, col, lw, C.ink);
-  } else if (kind === 'bowl') {
-    c.beginPath(); c.arc(0, 0, s * 0.42, 0, Math.PI);
-    c.closePath();
-    inked(c, '#c9b28a', lw, C.ink);
-    c.beginPath(); c.ellipse(0, 0, s * 0.42, s * 0.12, 0, 0, TAU);
-    inked(c, col, lw * 0.8, C.ink);
-  } else if (kind === 'burst') {
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * TAU + t * 0.6;
+    // a round-shouldered bottle of something that is still working
+    igGlow(c, 0, s * 0.10, s * 0.60, col, 0.20, t);
+    const mk = () => {
       c.beginPath();
-      c.moveTo(Math.cos(a) * s * 0.16, Math.sin(a) * s * 0.16);
-      c.lineTo(Math.cos(a) * s * 0.5, Math.sin(a) * s * 0.5);
-      c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.stroke();
+      c.moveTo(-s * 0.12, -s * 0.36); c.lineTo(-s * 0.12, -s * 0.20);
+      c.bezierCurveTo(-s * 0.40, -s * 0.02, -s * 0.38, s * 0.28, -s * 0.19, s * 0.42);
+      c.lineTo(s * 0.19, s * 0.42);
+      c.bezierCurveTo(s * 0.38, s * 0.28, s * 0.40, -s * 0.02, s * 0.12, -s * 0.20);
+      c.lineTo(s * 0.12, -s * 0.36);
+      c.closePath();
+    };
+    igGlass(c, mk, col, s, -s * 0.04, lw, t);
+    igStreak(c, -s * 0.21, s * 0.12, s * 0.05, s * 0.17, 0.85);
+    rr(c, -s * 0.16, -s * 0.40, s * 0.32, s * 0.08, s * 0.03);
+    c.fillStyle = igFall(c, mix(col, '#eaf4ff', 0.6), -s * 0.40, -s * 0.32, 0.3, 0.3);
+    c.fill(); c.lineWidth = lw * 0.7; c.strokeStyle = C.ink; c.stroke();
+    igWood(c, -s * 0.13, -s * 0.54, s * 0.26, s * 0.16, s * 0.045, '#b9863f', lw * 0.75);
+  } else if (kind === 'vial') {
+    // a narrow tube, and a sprig of what was pressed to fill it
+    igGlow(c, 0, s * 0.12, s * 0.48, col, 0.18, t);
+    const mk = () => { c.beginPath(); rr(c, -s * 0.15, -s * 0.32, s * 0.30, s * 0.74, s * 0.12); };
+    igGlass(c, mk, col, s, -s * 0.10, lw, t);
+    igStreak(c, -s * 0.09, s * 0.08, s * 0.035, s * 0.20, 0.8);
+    c.strokeStyle = '#4f6f4a'; c.lineWidth = lw * 0.7;
+    c.beginPath(); c.moveTo(s * 0.14, -s * 0.26);
+    c.quadraticCurveTo(s * 0.36, -s * 0.34, s * 0.36, -s * 0.54); c.stroke();
+    c.fillStyle = mix(col, '#0d1830', 0.10);
+    for (let i = 0; i < 3; i++) {
+      c.beginPath();
+      c.moveTo(s * (0.27 + i * 0.03), -s * (0.34 + i * 0.08));
+      c.lineTo(s * (0.46 + i * 0.01), -s * (0.30 + i * 0.09));
+      c.lineTo(s * (0.30 + i * 0.03), -s * (0.28 + i * 0.08));
+      c.closePath(); c.fill();
     }
-    c.beginPath(); c.arc(0, 0, s * 0.2, 0, TAU);
-    inked(c, col, lw, C.ink);
-  } else if (kind === 'shield') {
+    rr(c, -s * 0.19, -s * 0.38, s * 0.38, s * 0.09, s * 0.035);
+    c.fillStyle = igFall(c, '#cfd8e8', -s * 0.38, -s * 0.29, 0.42, 0.34);
+    c.fill(); c.lineWidth = lw * 0.7; c.strokeStyle = C.ink; c.stroke();
+    igWood(c, -s * 0.11, -s * 0.52, s * 0.22, s * 0.15, s * 0.04, '#8a6a3f', lw * 0.7);
+  } else if (kind === 'jar') {
+    // fired clay, a cloth lid tied down, and it is getting out anyway
+    igGlow(c, 0, s * 0.04, s * 0.62, col, 0.26, t);
     c.beginPath();
-    c.moveTo(0, -s * 0.46); c.lineTo(s * 0.36, -s * 0.28);
-    c.quadraticCurveTo(s * 0.34, s * 0.34, 0, s * 0.48);
-    c.quadraticCurveTo(-s * 0.34, s * 0.34, -s * 0.36, -s * 0.28);
+    c.moveTo(-s * 0.22, -s * 0.22);
+    c.bezierCurveTo(-s * 0.44, -s * 0.02, -s * 0.42, s * 0.28, -s * 0.22, s * 0.42);
+    c.lineTo(s * 0.22, s * 0.42);
+    c.bezierCurveTo(s * 0.42, s * 0.28, s * 0.44, -s * 0.02, s * 0.22, -s * 0.22);
     c.closePath();
-    inked(c, col, lw, C.ink);
-  } else if (kind === 'stone') {
-    c.beginPath(); rr(c, -s * 0.4, -s * 0.2, s * 0.8, s * 0.4, s * 0.16);
-    inked(c, col, lw, C.ink);
-  } else if (kind === 'rope') {
-    c.strokeStyle = col; c.lineWidth = lw * 1.2; c.lineCap = 'round';
-    c.beginPath();
-    for (let i = 0; i <= 12; i++) {
-      const yy = -s * 0.45 + (i / 12) * s * 0.9;
-      const xx = Math.sin(i * 0.9 + t) * s * 0.16;
-      i ? c.lineTo(xx, yy) : c.moveTo(xx, yy);
-    }
-    c.stroke();
-  } else if (kind === 'bomb') {
-    c.beginPath(); c.arc(0, s * 0.08, s * 0.36, 0, TAU);
-    inked(c, '#3a4257', lw, C.ink);
-    c.strokeStyle = col; c.lineWidth = lw;
-    c.beginPath(); c.moveTo(s * 0.14, -s * 0.24);
-    c.quadraticCurveTo(s * 0.4, -s * 0.46, s * 0.26, -s * 0.56); c.stroke();
-    c.beginPath(); c.arc(s * 0.26, -s * 0.6, s * 0.09 + Math.sin(t * 12) * s * 0.02, 0, TAU);
-    c.fillStyle = '#ffd166'; c.fill();
-  } else if (kind === 'lantern') {
-    c.save(); c.globalAlpha = 0.45; c.fillStyle = col;
-    c.beginPath(); c.arc(0, 0, s * 0.5, 0, TAU); c.fill();
+    c.fillStyle = igFall(c, '#c8a377', -s * 0.24, s * 0.44, 0.34, 0.46); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    igStreak(c, -s * 0.22, s * 0.08, s * 0.06, s * 0.16, 0.55);
+    // the mouth, with the light of what is in it coming up out of it
+    c.beginPath(); c.ellipse(0, -s * 0.22, s * 0.23, s * 0.075, 0, 0, TAU);
+    c.fillStyle = mix(col, '#3a1a06', 0.45); c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
+    c.save();
+    c.globalAlpha = 0.5 + 0.3 * Math.sin(t * 2.1);
+    c.fillStyle = mix(col, '#fff2c0', 0.5);
+    c.beginPath(); c.ellipse(0, -s * 0.21, s * 0.15, s * 0.045, 0, 0, TAU); c.fill();
     c.restore();
-    c.beginPath(); rr(c, -s * 0.2, -s * 0.28, s * 0.4, s * 0.56, s * 0.1);
-    inked(c, col, lw, C.ink);
+    /* A cloth stuffed into the mouth, not a lid ON it — drawn wide enough to
+       cover the rim the whole thing read as a rice cooker, and the point of the
+       card is that the jar is barely holding it. */
+    c.beginPath();
+    c.moveTo(-s * 0.15, -s * 0.23);
+    c.bezierCurveTo(-s * 0.20, -s * 0.42, s * 0.16, -s * 0.44, s * 0.15, -s * 0.23);
+    c.closePath();
+    c.fillStyle = igFall(c, '#efe6d0', -s * 0.44, -s * 0.20, 0.24, 0.34); c.fill();
+    c.lineWidth = lw * 0.85; c.strokeStyle = C.ink; c.stroke();
+    igStreak(c, -s * 0.07, -s * 0.34, s * 0.04, s * 0.06, 0.8);
+    // three clay bands, so the body is thrown and not moulded
+    c.save();
+    c.globalAlpha = 0.30; c.strokeStyle = '#7d5c39'; c.lineWidth = lw * 0.45;
+    for (let i = 0; i < 3; i++) {
+      c.beginPath();
+      c.ellipse(0, -s * 0.02 + i * s * 0.13, s * (0.40 - i * 0.04), s * 0.09, 0, 0.15, Math.PI - 0.15);
+      c.stroke();
+    }
+    c.restore();
+    for (let i = 0; i < 3; i++) {
+      const ph = (t * 0.7 + i * 0.33) % 1;
+      c.save();
+      c.globalAlpha = (1 - ph) * 0.9;
+      c.fillStyle = i % 2 ? '#ffe9a8' : col;
+      c.beginPath();
+      c.arc((i - 1) * s * 0.13, -s * 0.40 - ph * s * 0.20, s * 0.035 * (1 - ph * 0.5), 0, TAU);
+      c.fill();
+      c.restore();
+    }
+  } else if (kind === 'brazier') {
+    /* An iron pan of coals with ash raked over them, which is what banking a
+       fire is. The first version put a lid on it and stood it on three legs and
+       the whole thing read as a barbecue — the ash is the card. */
+    igGlow(c, 0, -s * 0.06, s * 0.64, col, 0.30, t);
+    // three stubby legs, because long thin ones made it a barbecue
+    c.strokeStyle = '#3b4a63'; c.lineWidth = lw * 1.6;
+    for (let k = 0; k < 2; k++) {
+      const i = k ? 1 : -1;
+      c.beginPath(); c.moveTo(i * s * 0.26, s * 0.10);
+      c.lineTo(i * s * 0.32, s * 0.40); c.stroke();
+    }
+    c.beginPath(); c.moveTo(0, s * 0.14); c.lineTo(0, s * 0.42); c.stroke();
+    c.beginPath();
+    c.moveTo(-s * 0.40, -s * 0.16);
+    c.bezierCurveTo(-s * 0.36, s * 0.24, s * 0.36, s * 0.24, s * 0.40, -s * 0.16);
+    c.closePath();
+    c.fillStyle = igFall(c, '#4d5a72', -s * 0.20, s * 0.26, 0.36, 0.48); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    igStreak(c, -s * 0.22, -s * 0.02, s * 0.08, s * 0.09, 0.5);
+    // the coal bed, and the ash raked over the near half of it
+    c.save();
+    c.beginPath(); c.ellipse(0, -s * 0.17, s * 0.39, s * 0.13, 0, 0, TAU); c.clip();
+    c.fillStyle = mix(col, '#4a1606', 0.42);
+    c.fillRect(-s * 0.5, -s * 0.34, s, s * 0.4);
+    for (let i = 0; i < 5; i++) {
+      c.globalAlpha = 0.45 + 0.55 * Math.abs(Math.sin(t * 1.1 + i * 1.7));
+      c.fillStyle = mix(col, '#fff2c0', 0.45);
+      c.beginPath();
+      c.arc((i - 2) * s * 0.13, -s * 0.19 + (i % 2) * s * 0.05, s * 0.055, 0, TAU);
+      c.fill();
+    }
+    c.globalAlpha = 1;
+    c.fillStyle = '#c3ccdb';
+    c.beginPath();
+    c.moveTo(-s * 0.5, s * 0.0);
+    c.quadraticCurveTo(-s * 0.1, -s * 0.20, s * 0.5, -s * 0.06);
+    c.lineTo(s * 0.5, s * 0.1); c.lineTo(-s * 0.5, s * 0.1);
+    c.closePath(); c.fill();
+    c.globalAlpha = 0.5; c.fillStyle = '#8e9bb0';
+    c.beginPath();
+    c.moveTo(-s * 0.5, s * 0.02);
+    c.quadraticCurveTo(-s * 0.1, -s * 0.16, s * 0.5, -s * 0.02);
+    c.lineTo(s * 0.5, s * 0.1); c.lineTo(-s * 0.5, s * 0.1);
+    c.closePath(); c.fill();
+    c.restore();
+    c.beginPath(); c.ellipse(0, -s * 0.17, s * 0.39, s * 0.13, 0, 0, TAU);
+    c.lineWidth = lw * 0.85; c.strokeStyle = C.ink; c.stroke();
+    igSmoke(c, s, -s * 0.10, -s * 0.24, '#d9e6f5', 0.34, t);
+    igSmoke(c, s, s * 0.16, -s * 0.22, '#d9e6f5', 0.24, t + 1.7);
+  } else if (kind === 'bowl') {
+    // bone, broth, and the steam coming off it
+    igGlow(c, 0, s * 0.04, s * 0.52, col, 0.16, t);
+    igSmoke(c, s, -s * 0.10, -s * 0.14, '#eef6ff', 0.42, t);
+    igSmoke(c, s, s * 0.14, -s * 0.10, '#eef6ff', 0.30, t + 1.4);
+    c.beginPath();
+    c.moveTo(-s * 0.42, -s * 0.08);
+    c.bezierCurveTo(-s * 0.38, s * 0.34, s * 0.38, s * 0.34, s * 0.42, -s * 0.08);
+    c.closePath();
+    c.fillStyle = igFall(c, '#e6dcc2', -s * 0.10, s * 0.36, 0.32, 0.44); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    igStreak(c, -s * 0.24, s * 0.06, s * 0.09, s * 0.11, 0.6);
+    c.beginPath(); c.ellipse(0, -s * 0.09, s * 0.41, s * 0.12, 0, 0, TAU);
+    // the broth is deepest at the far rim, which is what gives the bowl a depth
+    const brg = c.createLinearGradient(0, -s * 0.21, 0, s * 0.03);
+    brg.addColorStop(0, mix(col, '#5a3c10', 0.45));
+    brg.addColorStop(0.4, col);
+    brg.addColorStop(1, mix(col, '#ffffff', 0.14));
+    c.fillStyle = brg; c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
+    c.save();
+    c.globalAlpha = 0.6; c.fillStyle = '#ffffff';
+    c.beginPath(); c.ellipse(-s * 0.14, -s * 0.12, s * 0.10, s * 0.030, -0.2, 0, TAU); c.fill();
+    c.restore();
+    /* A bone leaning out of it, because it is a bone stew. Drawn as one shaft
+       with a knob on the end it was a pin standing in porridge; a bone is
+       knuckled at BOTH ends and that is the whole shape. */
+    c.save();
+    c.translate(s * 0.17, -s * 0.20); c.rotate(0.62);
+    const kb = s * 0.048;
+    c.fillStyle = '#f6efdd'; c.lineWidth = lw * 0.6; c.strokeStyle = C.ink;
+    for (let i = 0; i < 4; i++) {
+      c.beginPath();
+      c.arc((i % 2 ? kb : -kb) * 0.85, (i < 2 ? -1 : 1) * s * 0.16, kb, 0, TAU);
+      c.fill(); c.stroke();
+    }
+    rr(c, -s * 0.033, -s * 0.17, s * 0.066, s * 0.34, s * 0.02);
+    c.fillStyle = igFall(c, '#efe6d0', -s * 0.18, s * 0.18, 0.3, 0.30); c.fill();
+    c.lineWidth = lw * 0.6; c.strokeStyle = C.ink; c.stroke();
+    c.restore();
+  } else if (kind === 'pick') {
+    /* A head that is a LONG SPIKE one side and a short adze the other. The
+       first version made it symmetrical and every reading of it was "hammer" —
+       a pick is told from a hammer by how far the point reaches. */
+    c.save();
+    c.rotate(-0.40);
+    igWood(c, -s * 0.055, -s * 0.30, s * 0.11, s * 0.80, s * 0.05, '#9a6f3c', lw * 0.75);
+    rr(c, -s * 0.085, -s * 0.32, s * 0.17, s * 0.12, s * 0.03);
+    c.fillStyle = igFall(c, '#7d8ea6', -s * 0.32, -s * 0.20, 0.4, 0.4); c.fill();
+    c.lineWidth = lw * 0.7; c.strokeStyle = C.ink; c.stroke();
+    c.beginPath();
+    c.moveTo(-s * 0.66, -s * 0.16);
+    c.lineTo(-s * 0.14, -s * 0.42);
+    c.lineTo(s * 0.10, -s * 0.42);
+    c.lineTo(s * 0.28, -s * 0.33);
+    c.lineTo(s * 0.22, -s * 0.19);
+    c.lineTo(s * 0.02, -s * 0.21);
+    c.lineTo(-s * 0.14, -s * 0.26);
+    c.closePath();
+    c.fillStyle = igSteel(c, -s * 0.46, -s * 0.12); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    // the edge takes the card's colour, so an icepick is cold steel
+    c.save();
+    c.globalAlpha = 0.9; c.strokeStyle = mix(col, '#ffffff', 0.4); c.lineWidth = lw * 0.65;
+    c.beginPath(); c.moveTo(-s * 0.63, -s * 0.17); c.lineTo(-s * 0.15, -s * 0.26); c.stroke();
+    c.beginPath(); c.moveTo(s * 0.27, -s * 0.33); c.lineTo(s * 0.22, -s * 0.20); c.stroke();
+    c.restore();
+    igStreak(c, -s * 0.14, -s * 0.37, s * 0.26, s * 0.026, 0.9);
+    c.restore();
+  } else if (kind === 'rod') {
+    /* A crowbar: a gooseneck with a split claw at one end and a flat wedge at
+       the other. Drawn thin it read as a shoehorn, so it is a bar you could
+       actually lean on. */
+    c.save();
+    c.rotate(0.26);
+    /* A round bar is a HORIZONTAL fall of light, not a vertical one — that is
+       what stops a rod reading as a flat strip of dark grey. */
+    const bar = (x0, x1) => {
+      const g = c.createLinearGradient(x0, 0, x1, 0);
+      g.addColorStop(0, mix('#4e5d75', col, 0.18));
+      g.addColorStop(0.28, mix('#f2f8ff', col, 0.10));
+      g.addColorStop(0.55, mix('#9db0c8', col, 0.18));
+      g.addColorStop(1, mix('#3b4760', col, 0.14));
+      return g;
+    };
+    rr(c, -s * 0.10, -s * 0.24, s * 0.20, s * 0.68, s * 0.06);
+    c.fillStyle = bar(-s * 0.10, s * 0.10); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    // the gooseneck, and the split in it that hooks a nail
+    c.beginPath();
+    c.moveTo(-s * 0.10, -s * 0.18);
+    c.quadraticCurveTo(-s * 0.48, -s * 0.36, -s * 0.38, -s * 0.58);
+    c.lineTo(-s * 0.13, -s * 0.50);
+    c.quadraticCurveTo(-s * 0.18, -s * 0.36, s * 0.02, -s * 0.30);
+    c.lineTo(s * 0.10, -s * 0.20);
+    c.closePath();
+    /* The claw's light runs ACROSS its bend, not across the icon, and the bend
+       is drawn WIDE. Thin, the ink outline met itself in the middle and the
+       whole hook came out as a black comma with no metal left in it. */
+    const cg2 = c.createLinearGradient(-s * 0.44, -s * 0.58, -s * 0.02, -s * 0.20);
+    cg2.addColorStop(0, mix('#f6faff', col, 0.08));
+    cg2.addColorStop(0.45, mix('#b4c5da', col, 0.14));
+    cg2.addColorStop(1, mix('#485770', col, 0.14));
+    c.fillStyle = cg2; c.fill();
+    c.lineWidth = lw * 0.9; c.strokeStyle = C.ink; c.stroke();
+    c.strokeStyle = C.ink; c.lineWidth = lw * 0.8;
+    c.beginPath();
+    c.moveTo(-s * 0.33, -s * 0.56); c.lineTo(-s * 0.21, -s * 0.45); c.stroke();
+    c.beginPath();
+    c.moveTo(-s * 0.13, s * 0.36); c.lineTo(-s * 0.19, s * 0.52);
+    c.lineTo(s * 0.19, s * 0.52); c.lineTo(s * 0.13, s * 0.36);
+    c.closePath();
+    c.fillStyle = bar(-s * 0.19, s * 0.19); c.fill();
+    c.lineWidth = lw * 0.9; c.strokeStyle = C.ink; c.stroke();
+    c.strokeStyle = mix(col, '#ffffff', 0.45); c.lineWidth = lw * 0.6;
+    c.beginPath(); c.moveTo(-s * 0.17, s * 0.51); c.lineTo(s * 0.17, s * 0.51); c.stroke();
+    c.restore();
+  } else if (kind === 'tally') {
+    // a stave with one notch cut for every time somebody was owed something
+    igGlow(c, 0, 0, s * 0.44, col, 0.16, t);
+    igWood(c, -s * 0.15, -s * 0.48, s * 0.30, s * 0.94, s * 0.06, '#6b4c2c', lw);
+    c.save();
+    rr(c, -s * 0.15, -s * 0.48, s * 0.30, s * 0.94, s * 0.06); c.clip();
+    /* A notch is a CUT — a groove with a lit lip under it, stopping short of
+       the far edge. Struck across the whole width they read as painted bands. */
+    for (let i = 0; i < 5; i++) {
+      const ny = -s * 0.32 + i * s * 0.17;
+      c.strokeStyle = 'rgba(255,240,214,.35)'; c.lineWidth = lw * 0.3;
+      c.beginPath(); c.moveTo(-s * 0.17, ny - lw * 0.4); c.lineTo(s * 0.02, ny + s * 0.03); c.stroke();
+      c.strokeStyle = 'rgba(10,16,30,.75)'; c.lineWidth = lw * 0.7;
+      c.beginPath(); c.moveTo(-s * 0.17, ny); c.lineTo(s * 0.02, ny + s * 0.035); c.stroke();
+      c.strokeStyle = mixA(col, 0.35 + 0.3 * Math.sin(t * 1.4 + i));
+      c.lineWidth = lw * 0.3;
+      c.beginPath(); c.moveTo(-s * 0.17, ny + lw * 0.25); c.lineTo(s * 0.02, ny + s * 0.035 + lw * 0.25); c.stroke();
+    }
+    c.restore();
+    igStreak(c, -s * 0.09, -s * 0.02, s * 0.028, s * 0.36, 0.5);
+  } else if (kind === 'stone') {
+    // a block with a top face, so it is a block and not a lozenge
+    c.beginPath();
+    c.moveTo(-s * 0.42, -s * 0.02); c.lineTo(-s * 0.26, -s * 0.20);
+    c.lineTo(s * 0.42, -s * 0.20); c.lineTo(s * 0.26, -s * 0.02);
+    c.closePath();
+    c.fillStyle = igFall(c, mix(col, '#ffffff', 0.30), -s * 0.22, s * 0.0, 0.3, 0.14); c.fill();
+    c.lineWidth = lw * 0.85; c.strokeStyle = C.ink; c.stroke();
+    c.beginPath();
+    c.moveTo(-s * 0.42, -s * 0.02); c.lineTo(s * 0.26, -s * 0.02);
+    c.lineTo(s * 0.26, s * 0.24); c.lineTo(-s * 0.42, s * 0.24);
+    c.closePath();
+    c.fillStyle = igFall(c, col, -s * 0.04, s * 0.26, 0.14, 0.44); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.beginPath();
+    c.moveTo(s * 0.26, -s * 0.02); c.lineTo(s * 0.42, -s * 0.20);
+    c.lineTo(s * 0.42, s * 0.06); c.lineTo(s * 0.26, s * 0.24);
+    c.closePath();
+    c.fillStyle = mix(col, '#0d1830', 0.42); c.fill();
+    c.lineWidth = lw * 0.85; c.strokeStyle = C.ink; c.stroke();
+    // the dish worn into the top by years of blades, and grit in the surface
+    c.save();
+    c.globalAlpha = 0.45; c.fillStyle = mix(col, '#0d1830', 0.35);
+    c.beginPath(); c.ellipse(0, -s * 0.11, s * 0.22, s * 0.045, 0, 0, TAU); c.fill();
+    c.globalAlpha = 0.35; c.fillStyle = '#0d1830';
+    for (let i = 0; i < 5; i++) {
+      c.beginPath();
+      c.arc(-s * 0.30 + i * s * 0.13, s * 0.06 + (i % 2) * s * 0.09, s * 0.018, 0, TAU);
+      c.fill();
+    }
+    c.restore();
+    igStreak(c, -s * 0.08, -s * 0.14, s * 0.14, s * 0.020, 0.7);
+    /* Sparks coming off the far corner where a blade last went over it. They
+       started detached and a bright mark with nothing under it reads as a
+       rendering fault, so they leave from the stone's own edge. */
+    c.save();
+    for (let i = 0; i < 2; i++) {
+      const sp = (t * 0.7 + i * 0.5) % 1;
+      c.globalAlpha = (1 - sp) * 0.85; c.strokeStyle = '#ffe9a8'; c.lineWidth = lw * 0.45;
+      c.beginPath();
+      c.moveTo(s * 0.34 + sp * s * 0.05, -s * 0.21 - sp * s * 0.09);
+      c.lineTo(s * 0.38 + sp * s * 0.06, -s * 0.25 - sp * s * 0.12);
+      c.stroke();
+    }
+    c.restore();
+  } else if (kind === 'map') {
+    // parchment, curled at both ends, with a road drawn on it
+    c.save();
+    c.rotate(-0.06);
+    c.beginPath();
+    c.moveTo(-s * 0.34, -s * 0.30);
+    c.quadraticCurveTo(0, -s * 0.38, s * 0.34, -s * 0.30);
+    c.lineTo(s * 0.34, s * 0.30);
+    c.quadraticCurveTo(0, s * 0.38, -s * 0.34, s * 0.30);
+    c.closePath();
+    c.fillStyle = igFall(c, col, -s * 0.34, s * 0.34, 0.24, 0.30); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.save();
+    c.beginPath();
+    c.moveTo(-s * 0.34, -s * 0.30);
+    c.quadraticCurveTo(0, -s * 0.38, s * 0.34, -s * 0.30);
+    c.lineTo(s * 0.34, s * 0.30);
+    c.quadraticCurveTo(0, s * 0.38, -s * 0.34, s * 0.30);
+    c.closePath();
+    c.clip();
+    c.strokeStyle = 'rgba(90,66,38,.75)'; c.lineWidth = lw * 0.55;
+    c.setLineDash && c.setLineDash([s * 0.05, s * 0.045]);
+    c.beginPath();
+    c.moveTo(-s * 0.24, s * 0.18);
+    c.quadraticCurveTo(s * 0.02, s * 0.04, -s * 0.06, -s * 0.10);
+    c.quadraticCurveTo(-s * 0.14, -s * 0.22, s * 0.20, -s * 0.20);
+    c.stroke();
+    c.setLineDash && c.setLineDash([]);
+    c.strokeStyle = mix(col, '#7a1f1f', 0.7); c.lineWidth = lw * 0.7;
+    c.beginPath();
+    c.moveTo(s * 0.13, -s * 0.27); c.lineTo(s * 0.27, -s * 0.13);
+    c.moveTo(s * 0.27, -s * 0.27); c.lineTo(s * 0.13, -s * 0.13);
+    c.stroke();
+    c.restore();
+    // the two rolls, which is what says parchment rather than page
+    for (let k = 0; k < 2; k++) {
+      const i = k ? 1 : -1;
+      rr(c, -s * 0.40, i * s * 0.30 - s * 0.07, s * 0.80, s * 0.14, s * 0.07);
+      c.fillStyle = igFall(c, mix(col, '#a8916a', 0.35), i * s * 0.30 - s * 0.08, i * s * 0.30 + s * 0.08, 0.34, 0.36);
+      c.fill(); c.lineWidth = lw * 0.85; c.strokeStyle = C.ink; c.stroke();
+    }
+    c.restore();
+  } else if (kind === 'shield') {
+    // beaten plates, riveted, with a boss in the middle of them
+    const mk = () => {
+      c.beginPath();
+      c.moveTo(0, -s * 0.46);
+      c.lineTo(s * 0.35, -s * 0.30);
+      c.quadraticCurveTo(s * 0.33, s * 0.24, 0, s * 0.46);
+      c.quadraticCurveTo(-s * 0.33, s * 0.24, -s * 0.35, -s * 0.30);
+      c.closePath();
+    };
+    mk();
+    c.fillStyle = igFall(c, col, -s * 0.48, s * 0.48, 0.34, 0.46); c.fill();
+    c.save();
+    mk(); c.clip();
+    c.strokeStyle = 'rgba(16,26,46,.35)'; c.lineWidth = lw * 0.6;
+    c.beginPath(); c.moveTo(0, -s * 0.48); c.lineTo(0, s * 0.48); c.stroke();
+    c.beginPath(); c.moveTo(-s * 0.4, -s * 0.06); c.lineTo(s * 0.4, -s * 0.06); c.stroke();
+    const gl = c.createLinearGradient(-s * 0.35, -s * 0.46, s * 0.20, s * 0.30);
+    gl.addColorStop(0, LIGHT + '0.45)');
+    gl.addColorStop(0.45, LIGHT + '0)');
+    c.fillStyle = gl; c.fillRect(-s, -s, s * 2, s * 2);
+    c.restore();
+    mk(); c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.fillStyle = mix(col, '#0d1830', 0.30);
+    for (let i = 0; i < 4; i++) {
+      const a = -Math.PI * 0.75 + i * Math.PI * 0.5;
+      c.beginPath();
+      c.arc(Math.cos(a) * s * 0.22, Math.sin(a) * s * 0.26 - s * 0.03, s * 0.035, 0, TAU);
+      c.fill();
+    }
+    c.beginPath(); c.arc(0, -s * 0.02, s * 0.13, 0, TAU);
+    c.fillStyle = igSteel(c, -s * 0.16, s * 0.12); c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
+    spec(c, -s * 0.05, -s * 0.07, s * 0.07, 0.9);
+  } else if (kind === 'kit') {
+    // a tin, strapped shut, with a scrap of bandage under the lid
+    c.beginPath();
+    c.moveTo(-s * 0.30, -s * 0.20); c.lineTo(s * 0.30, -s * 0.20);
+    c.lineTo(s * 0.34, s * 0.34); c.lineTo(-s * 0.34, s * 0.34);
+    c.closePath();
+    c.fillStyle = igFall(c, mix(col, '#0d1830', 0.18), -s * 0.20, s * 0.36, 0.26, 0.36); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.save();
+    c.globalAlpha = 0.7; c.fillStyle = '#f3ecd9';
+    c.beginPath();
+    c.moveTo(s * 0.06, -s * 0.20); c.lineTo(s * 0.24, -s * 0.20);
+    c.lineTo(s * 0.20, -s * 0.06); c.lineTo(s * 0.08, -s * 0.08);
+    c.closePath(); c.fill();
+    c.restore();
+    rr(c, -s * 0.36, -s * 0.34, s * 0.72, s * 0.16, s * 0.05);
+    c.fillStyle = igFall(c, col, -s * 0.36, -s * 0.16, 0.36, 0.28); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    igStreak(c, -s * 0.10, -s * 0.29, s * 0.18, s * 0.028, 0.85);
+    rr(c, -s * 0.07, -s * 0.38, s * 0.14, s * 0.62, s * 0.03);
+    c.fillStyle = igFall(c, '#8a6a3f', -s * 0.38, s * 0.24, 0.32, 0.38); c.fill();
+    c.lineWidth = lw * 0.7; c.strokeStyle = C.ink; c.stroke();
+    c.beginPath(); c.arc(0, s * 0.06, s * 0.055, 0, TAU);
+    c.fillStyle = igSteel(c, -s * 0.01, s * 0.12); c.fill();
+    c.lineWidth = lw * 0.55; c.strokeStyle = C.ink; c.stroke();
+  } else if (kind === 'rope') {
+    // three strands laid up into a cord, with the bell on the end of it
+    const wob = Math.sin(t * 1.3) * 0.10;
+    c.save();
+    c.rotate(wob * 0.35);
+    for (let k = 0; k < 2; k++) {
+      c.strokeStyle = k ? mix(col, '#ffffff', 0.42) : mix(col, '#0d1830', 0.30);
+      c.lineWidth = lw * (k ? 0.9 : 1.9);
+      c.beginPath();
+      for (let i = 0; i <= 14; i++) {
+        const yy = -s * 0.50 + (i / 14) * s * 0.66;
+        const xx = Math.sin(i * 0.95) * s * 0.11 + (k ? -lw * 0.35 : 0);
+        i ? c.lineTo(xx, yy) : c.moveTo(xx, yy);
+      }
+      c.stroke();
+    }
+    const bx = Math.sin(14 * 0.95) * s * 0.11;
+    /* The bell. Drawn as one bezier skirt it came out as a lampshade — what
+       makes a bell a bell is the WAIST above the flare and the lip below it. */
+    c.beginPath();
+    c.moveTo(bx - s * 0.07, s * 0.14);
+    c.bezierCurveTo(bx - s * 0.09, s * 0.24, bx - s * 0.22, s * 0.26, bx - s * 0.24, s * 0.38);
+    c.lineTo(bx + s * 0.24, s * 0.38);
+    c.bezierCurveTo(bx + s * 0.22, s * 0.26, bx + s * 0.09, s * 0.24, bx + s * 0.07, s * 0.14);
+    c.closePath();
+    c.fillStyle = igFall(c, '#d8a63e', s * 0.10, s * 0.42, 0.44, 0.44); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    igStreak(c, bx - s * 0.12, s * 0.28, s * 0.04, s * 0.08, 0.9);
+    rr(c, bx - s * 0.27, s * 0.36, s * 0.54, s * 0.09, s * 0.04);
+    c.fillStyle = igFall(c, '#e8bb56', s * 0.35, s * 0.46, 0.4, 0.42); c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
+    c.beginPath(); c.arc(bx + wob * s * 0.5, s * 0.50, s * 0.055, 0, TAU);
+    c.fillStyle = '#8a6a3f'; c.fill();
+    c.lineWidth = lw * 0.6; c.strokeStyle = C.ink; c.stroke();
+    c.restore();
+  } else if (kind === 'hook') {
+    // a grapple on a taut line, mid-haul
+    c.strokeStyle = mix(col, '#0d1830', 0.24); c.lineWidth = lw * 0.9;
+    c.beginPath();
+    c.moveTo(-s * 0.44, -s * 0.46);
+    c.quadraticCurveTo(-s * 0.10, -s * 0.28, s * 0.04, -s * 0.06);
+    c.stroke();
+    c.strokeStyle = mix(col, '#ffffff', 0.45); c.lineWidth = lw * 0.35;
+    c.beginPath();
+    c.moveTo(-s * 0.44, -s * 0.48);
+    c.quadraticCurveTo(-s * 0.10, -s * 0.30, s * 0.04, -s * 0.08);
+    c.stroke();
+    c.save();
+    c.translate(s * 0.06, s * 0.04);
+    c.rotate(0.5 + Math.sin(t * 1.2) * 0.05);
+    rr(c, -s * 0.045, -s * 0.22, s * 0.09, s * 0.44, s * 0.04);
+    c.fillStyle = igSteel(c, -s * 0.24, s * 0.24); c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
+    for (let k = 0; k < 2; k++) {
+      const i = k ? 1 : -1;
+      c.beginPath();
+      c.moveTo(i * s * 0.03, s * 0.16);
+      c.quadraticCurveTo(i * s * 0.34, s * 0.22, i * s * 0.26, -s * 0.10);
+      c.lineWidth = lw * 1.5; c.strokeStyle = C.ink; c.stroke();
+      c.lineWidth = lw * 0.75; c.strokeStyle = '#c6d6e8'; c.stroke();
+    }
+    c.beginPath(); c.arc(0, -s * 0.24, s * 0.07, 0, TAU);
+    c.lineWidth = lw * 0.9; c.strokeStyle = C.ink; c.stroke();
+    c.lineWidth = lw * 0.45; c.strokeStyle = '#c6d6e8'; c.stroke();
+    c.restore();
+  } else if (kind === 'bomb') {
+    // cast iron, one hard specular, and a fuse that is already going
+    const sk = 0.85 + 0.3 * Math.abs(Math.sin(t * 9));
+    igGlow(c, s * 0.28, -s * 0.50, s * 0.28 * sk, col, 0.5, t * 3);
+    c.beginPath(); c.arc(0, s * 0.08, s * 0.34, 0, TAU);
+    /* The iron takes a breath of the card's colour, or a snowbomb and a
+       blastcap are the same black ball with a different spark on it. */
+    const bg = c.createRadialGradient(-s * 0.14, -s * 0.06, s * 0.02, 0, s * 0.08, s * 0.42);
+    bg.addColorStop(0, mix('#6b7890', col, 0.30));
+    bg.addColorStop(0.45, mix('#3b4761', col, 0.16));
+    bg.addColorStop(1, mix('#161f33', col, 0.08));
+    c.fillStyle = bg; c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.save();
+    c.beginPath(); c.arc(0, s * 0.08, s * 0.34, 0, TAU); c.clip();
+    const bounce = c.createLinearGradient(0, s * 0.26, 0, s * 0.44);
+    bounce.addColorStop(0, 'rgba(150,190,230,0)');
+    bounce.addColorStop(1, 'rgba(150,190,230,.5)');
+    c.fillStyle = bounce; c.fillRect(-s * 0.4, s * 0.2, s * 0.8, s * 0.3);
+    c.restore();
+    spec(c, -s * 0.13, -s * 0.06, s * 0.13, 0.9);
+    rr(c, -s * 0.10, -s * 0.34, s * 0.20, s * 0.14, s * 0.04);
+    c.fillStyle = igFall(c, '#7d8ea6', -s * 0.34, -s * 0.20, 0.4, 0.4); c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
+    c.strokeStyle = '#c9a06a'; c.lineWidth = lw * 0.8; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(s * 0.02, -s * 0.34);
+    c.quadraticCurveTo(s * 0.30, -s * 0.42, s * 0.26, -s * 0.52); c.stroke();
+    igGlow(c, s * 0.26, -s * 0.54, s * 0.16 * sk, mix(col, '#ffd166', 0.5), 0.8, t * 3);
+    c.beginPath(); c.arc(s * 0.26, -s * 0.55, s * 0.055 * sk, 0, TAU);
+    c.fillStyle = mix(col, '#ffffff', 0.7); c.fill();
+    for (let i = 0; i < 3; i++) {
+      const ph = (t * 1.6 + i * 0.33) % 1;
+      c.save();
+      c.globalAlpha = (1 - ph) * 0.85; c.fillStyle = col;
+      c.beginPath();
+      c.arc(s * (0.26 + (i - 1) * 0.06), -s * 0.58 - ph * s * 0.14, s * 0.022, 0, TAU);
+      c.fill();
+      c.restore();
+    }
+  } else if (kind === 'flake') {
+    // a crystal, cut hard, turning slowly
+    igGlow(c, 0, 0, s * 0.55, col, 0.24, t);
+    c.save();
+    c.rotate(t * 0.16);
+    /* Every arm is split down its spine — lit face, shaded face — rather than
+       whole arms alternating light and dark, which made three black spikes and
+       three pale ones and read as a cog rather than as ice. */
+    const hi = mix(col, '#ffffff', 0.80), lo = mix(col, '#2b4a70', 0.55);
+    for (let i = 0; i < 6; i++) {
+      c.save();
+      c.rotate((i / 6) * TAU);
+      c.beginPath();
+      c.moveTo(-s * 0.065, 0); c.lineTo(0, -s * 0.46); c.lineTo(0, 0);
+      c.closePath();
+      c.fillStyle = hi; c.fill();
+      c.beginPath();
+      c.moveTo(0, 0); c.lineTo(0, -s * 0.46); c.lineTo(s * 0.065, 0);
+      c.closePath();
+      c.fillStyle = lo; c.fill();
+      c.beginPath();
+      c.moveTo(-s * 0.065, 0); c.lineTo(0, -s * 0.46); c.lineTo(s * 0.065, 0);
+      c.closePath();
+      c.lineWidth = lw * 0.6; c.strokeStyle = C.ink; c.stroke();
+      c.strokeStyle = mix(col, '#ffffff', 0.35); c.lineWidth = lw * 0.6;
+      c.beginPath();
+      c.moveTo(-s * 0.14, -s * 0.18); c.lineTo(0, -s * 0.30); c.lineTo(s * 0.14, -s * 0.18);
+      c.stroke();
+      c.lineWidth = lw * 0.25; c.strokeStyle = C.ink; c.stroke();
+      c.restore();
+    }
+    c.beginPath(); c.arc(0, 0, s * 0.12, 0, TAU);
+    c.fillStyle = mix(col, '#ffffff', 0.55); c.fill();
+    c.lineWidth = lw * 0.7; c.strokeStyle = C.ink; c.stroke();
+    c.restore();
+    spec(c, -s * 0.05, -s * 0.05, s * 0.09, 0.95);
+  } else if (kind === 'kindle') {
+    // split sticks, tied, with one end just caught
+    igGlow(c, 0, -s * 0.22, s * 0.52, col, 0.30, t);
+    for (let i = -1; i <= 1; i++) {
+      c.save();
+      c.rotate(i * 0.30);
+      igWood(c, -s * 0.075, -s * 0.34, s * 0.15, s * 0.80, s * 0.05,
+        i ? '#8a6237' : '#a37743', lw * 0.8);
+      c.restore();
+    }
+    c.strokeStyle = '#5f4527'; c.lineWidth = lw * 0.9;
+    c.beginPath(); c.moveTo(-s * 0.26, s * 0.12);
+    c.quadraticCurveTo(0, s * 0.20, s * 0.26, s * 0.12); c.stroke();
+    const fl = 0.9 + Math.sin(t * 5.2) * 0.10;
+    c.save();
+    c.translate(0, -s * 0.36); c.scale(1, fl);
+    c.beginPath();
+    c.moveTo(0, -s * 0.30);
+    c.bezierCurveTo(s * 0.20, -s * 0.10, s * 0.16, s * 0.10, 0, s * 0.12);
+    c.bezierCurveTo(-s * 0.16, s * 0.10, -s * 0.20, -s * 0.10, 0, -s * 0.30);
+    c.closePath();
+    c.fillStyle = igFall(c, col, -s * 0.32, s * 0.14, 0.55, 0.10); c.fill();
+    c.beginPath();
+    c.moveTo(0, -s * 0.16);
+    c.bezierCurveTo(s * 0.10, -s * 0.04, s * 0.08, s * 0.06, 0, s * 0.08);
+    c.bezierCurveTo(-s * 0.08, s * 0.06, -s * 0.10, -s * 0.04, 0, -s * 0.16);
+    c.closePath();
+    c.fillStyle = '#fff2c0'; c.fill();
+    c.restore();
+  } else if (kind === 'rune') {
+    // a stone with a mark cut into it, and the mark is what is doing the work
+    igGlow(c, 0, 0, s * 0.52, col, 0.26, t);
+    c.beginPath();
+    c.moveTo(-s * 0.26, -s * 0.30); c.lineTo(0, -s * 0.46); c.lineTo(s * 0.26, -s * 0.30);
+    c.lineTo(s * 0.24, s * 0.36); c.lineTo(-s * 0.24, s * 0.36);
+    c.closePath();
+    c.fillStyle = igFall(c, '#5a6480', -s * 0.46, s * 0.38, 0.34, 0.42); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    igStreak(c, -s * 0.15, -s * 0.02, s * 0.06, s * 0.30, 0.4);
+    /* The mark is cut, then lit from inside the cut. One dark groove alone was
+       invisible at hand size and one bright line alone floated off the stone. */
+    const pu = 0.55 + 0.45 * Math.abs(Math.sin(t * 1.5));
+    const mark = () => {
+      c.beginPath();
+      c.moveTo(0, -s * 0.26); c.lineTo(0, s * 0.26);
+      c.moveTo(0, -s * 0.10); c.lineTo(s * 0.16, -s * 0.26);
+      c.moveTo(0, s * 0.06); c.lineTo(-s * 0.16, -s * 0.10);
+      c.stroke();
+    };
+    c.save();
+    c.lineCap = 'round';
+    c.strokeStyle = 'rgba(10,16,30,.8)'; c.lineWidth = lw * 1.7; mark();
+    c.strokeStyle = mixA(mix(col, '#ffffff', 0.35), 0.5 * pu); c.lineWidth = lw * 1.5; mark();
+    c.strokeStyle = mixA(mix(col, '#ffffff', 0.85), pu); c.lineWidth = lw * 0.6; mark();
+    c.restore();
+  } else if (kind === 'slide') {
+    // the drift, and the three lumps of it already on their way down
+    c.beginPath();
+    c.moveTo(-s * 0.48, s * 0.40);
+    c.lineTo(-s * 0.06, -s * 0.40);
+    c.quadraticCurveTo(s * 0.10, -s * 0.10, s * 0.46, s * 0.40);
+    c.closePath();
+    c.fillStyle = igFall(c, mix(col, '#ffffff', 0.35), -s * 0.42, s * 0.42, 0.30, 0.34); c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.save();
+    c.beginPath();
+    c.moveTo(-s * 0.48, s * 0.40);
+    c.lineTo(-s * 0.06, -s * 0.40);
+    c.quadraticCurveTo(s * 0.10, -s * 0.10, s * 0.46, s * 0.40);
+    c.closePath();
+    c.clip();
+    c.fillStyle = 'rgba(126,163,204,.26)';
+    c.beginPath();
+    c.moveTo(-s * 0.06, -s * 0.42); c.lineTo(s * 0.5, s * 0.44); c.lineTo(s * 0.5, -s * 0.42);
+    c.closePath(); c.fill();
+    // the cornice at the top, which is the part that is about to go
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.moveTo(-s * 0.24, -s * 0.06);
+    c.quadraticCurveTo(-s * 0.06, -s * 0.30, s * 0.10, -s * 0.04);
+    c.lineTo(s * 0.10, -s * 0.44); c.lineTo(-s * 0.24, -s * 0.44);
+    c.closePath(); c.fill();
+    c.restore();
+    for (let i = 0; i < 3; i++) {
+      const ph = (t * 0.55 + i * 0.34) % 1;
+      const bx = -s * 0.16 + ph * s * 0.50, by = -s * 0.18 + ph * ph * s * 0.58;
+      c.save();
+      c.globalAlpha = Math.min(1, (1 - ph) * 3);
+      c.beginPath(); c.arc(bx, by, s * (0.10 - i * 0.018), 0, TAU);
+      c.fillStyle = '#ffffff'; c.fill();
+      c.lineWidth = lw * 0.6; c.strokeStyle = C.ink; c.stroke();
+      c.restore();
+    }
+  } else if (kind === 'snowball') {
+    // packed snow: a crust that has taken a print, and it is cold enough to spark
+    c.beginPath(); c.arc(0, s * 0.06, s * 0.34, 0, TAU);
+    const sg = c.createRadialGradient(-s * 0.14, -s * 0.10, s * 0.02, 0, s * 0.06, s * 0.44);
+    sg.addColorStop(0, '#ffffff');
+    sg.addColorStop(0.5, mix(col, '#ffffff', 0.45));
+    sg.addColorStop(1, mix(col, '#5b7ea6', 0.55));
+    c.fillStyle = sg; c.fill();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.save();
+    c.beginPath(); c.arc(0, s * 0.06, s * 0.34, 0, TAU); c.clip();
+    c.globalAlpha = 0.4; c.strokeStyle = '#8fb0d4'; c.lineWidth = lw * 0.5;
+    for (let i = 0; i < 3; i++) {
+      c.beginPath();
+      c.arc(s * 0.10, s * 0.14, s * (0.10 + i * 0.09), -2.4, -0.4);
+      c.stroke();
+    }
+    c.restore();
+    spec(c, -s * 0.13, -s * 0.08, s * 0.14, 0.95);
+    for (let i = 0; i < 3; i++) {
+      const ph = (t * 0.5 + i * 0.34) % 1;
+      c.save();
+      c.globalAlpha = Math.sin(ph * Math.PI) * 0.9;
+      c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.4;
+      const px = (i - 1) * s * 0.26, py = -s * 0.30 - i * s * 0.06;
+      const r2 = s * 0.05;
+      c.beginPath();
+      c.moveTo(px - r2, py); c.lineTo(px + r2, py);
+      c.moveTo(px, py - r2); c.lineTo(px, py + r2);
+      c.stroke();
+      c.restore();
+    }
+  } else if (kind === 'lantern') {
+    // the last light: a cage, four panes, and a flame that is not going out
+    igGlow(c, 0, 0, s * 0.66, col, 0.34, t);
+    c.strokeStyle = '#8695ad'; c.lineWidth = lw * 0.8;
+    c.beginPath(); c.arc(0, -s * 0.42, s * 0.09, Math.PI * 0.1, Math.PI * 0.9, true); c.stroke();
+    rr(c, -s * 0.24, -s * 0.36, s * 0.48, s * 0.11, s * 0.04);
+    c.fillStyle = igFall(c, '#7d8ea6', -s * 0.36, -s * 0.25, 0.42, 0.40); c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
+    // the glass box
+    c.beginPath();
+    c.moveTo(-s * 0.21, -s * 0.26); c.lineTo(s * 0.21, -s * 0.26);
+    c.lineTo(s * 0.24, s * 0.26); c.lineTo(-s * 0.24, s * 0.26);
+    c.closePath();
+    c.save();
+    c.globalAlpha = 0.55; c.fillStyle = mix(col, '#eaf4ff', 0.55); c.fill();
+    c.restore();
+    c.save();
+    c.beginPath();
+    c.moveTo(-s * 0.21, -s * 0.26); c.lineTo(s * 0.21, -s * 0.26);
+    c.lineTo(s * 0.24, s * 0.26); c.lineTo(-s * 0.24, s * 0.26);
+    c.closePath();
+    c.clip();
+    const lf = 0.9 + Math.sin(t * 4.4) * 0.10;
+    c.save();
+    c.translate(0, s * 0.10); c.scale(1, lf);
+    c.beginPath();
+    c.moveTo(0, -s * 0.26);
+    c.bezierCurveTo(s * 0.15, -s * 0.08, s * 0.12, s * 0.08, 0, s * 0.10);
+    c.bezierCurveTo(-s * 0.12, s * 0.08, -s * 0.15, -s * 0.08, 0, -s * 0.26);
+    c.closePath();
+    c.fillStyle = igFall(c, col, -s * 0.28, s * 0.12, 0.55, 0.05); c.fill();
+    c.beginPath(); c.ellipse(0, s * 0.02, s * 0.045, s * 0.07, 0, 0, TAU);
+    c.fillStyle = '#fff6d6'; c.fill();
+    c.restore();
+    c.fillStyle = 'rgba(255,255,255,.30)';
+    c.beginPath();
+    c.moveTo(-s * 0.19, -s * 0.24); c.lineTo(-s * 0.07, -s * 0.24);
+    c.lineTo(-s * 0.14, s * 0.24); c.lineTo(-s * 0.22, s * 0.24);
+    c.closePath(); c.fill();
+    c.restore();
+    c.beginPath();
+    c.moveTo(-s * 0.21, -s * 0.26); c.lineTo(s * 0.21, -s * 0.26);
+    c.lineTo(s * 0.24, s * 0.26); c.lineTo(-s * 0.24, s * 0.26);
+    c.closePath();
+    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.strokeStyle = 'rgba(16,26,46,.6)'; c.lineWidth = lw * 0.5;
+    c.beginPath(); c.moveTo(0, -s * 0.26); c.lineTo(0, s * 0.26); c.stroke();
+    rr(c, -s * 0.28, s * 0.24, s * 0.56, s * 0.13, s * 0.045);
+    c.fillStyle = igFall(c, '#65758e', s * 0.24, s * 0.37, 0.36, 0.40); c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
   } else if (kind === 'eye') {
     // an open eye, because the card is about seeing it coming
+    const mk = () => {
+      c.beginPath();
+      c.moveTo(-s * 0.46, 0);
+      c.quadraticCurveTo(0, -s * 0.40, s * 0.46, 0);
+      c.quadraticCurveTo(0, s * 0.40, -s * 0.46, 0);
+      c.closePath();
+    };
+    igGlow(c, 0, 0, s * 0.52, col, 0.20, t);
+    mk();
+    const eg = c.createRadialGradient(-s * 0.10, -s * 0.10, s * 0.02, 0, 0, s * 0.46);
+    eg.addColorStop(0, '#ffffff');
+    eg.addColorStop(1, '#c3d6ea');
+    c.fillStyle = eg; c.fill();
+    c.save();
+    mk(); c.clip();
+    // the lid's shadow, which is what stops an eye reading as a lens
+    const lid = c.createLinearGradient(0, -s * 0.34, 0, s * 0.06);
+    lid.addColorStop(0, 'rgba(24,40,66,.42)');
+    lid.addColorStop(1, 'rgba(24,40,66,0)');
+    c.fillStyle = lid; c.fillRect(-s * 0.5, -s * 0.4, s, s * 0.5);
+    const gaze = Math.sin(t * 0.7) * s * 0.07;
+    c.beginPath(); c.arc(gaze, 0, s * 0.19, 0, TAU);
+    const ig = c.createRadialGradient(gaze - s * 0.05, -s * 0.05, s * 0.01, gaze, 0, s * 0.22);
+    ig.addColorStop(0, mix(col, '#ffffff', 0.5));
+    ig.addColorStop(0.6, col);
+    ig.addColorStop(1, mix(col, '#0d1830', 0.5));
+    c.fillStyle = ig; c.fill();
+    c.strokeStyle = mixA(col, 0.55); c.lineWidth = lw * 0.5;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU + t * 0.2;
+      c.beginPath();
+      c.moveTo(gaze + Math.cos(a) * s * 0.08, Math.sin(a) * s * 0.08);
+      c.lineTo(gaze + Math.cos(a) * s * 0.17, Math.sin(a) * s * 0.17);
+      c.stroke();
+    }
+    c.beginPath(); c.arc(gaze, 0, s * 0.08, 0, TAU);
+    c.fillStyle = '#141d31'; c.fill();
+    spec(c, gaze - s * 0.07, -s * 0.08, s * 0.09, 0.95);
+    c.restore();
+    mk(); c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    c.strokeStyle = C.ink; c.lineWidth = lw * 0.7;
     c.beginPath();
-    c.moveTo(-s * 0.46, 0);
-    c.quadraticCurveTo(0, -s * 0.4, s * 0.46, 0);
-    c.quadraticCurveTo(0, s * 0.4, -s * 0.46, 0);
-    c.closePath();
-    inked(c, '#f4fbff', lw, C.ink);
+    c.moveTo(-s * 0.42, -s * 0.07); c.quadraticCurveTo(0, -s * 0.44, s * 0.42, -s * 0.07);
+    c.stroke();
+  } else {
+    // the fallback, and it still has to look like something was cast
+    igGlow(c, 0, 0, s * 0.55, col, 0.26, t);
+    const hi = mix(col, '#ffffff', 0.6), lo = mix(col, '#0d1830', 0.25);
+    c.save();
+    c.rotate(t * 0.25);
+    for (let i = 0; i < 8; i++) {
+      c.save();
+      c.rotate((i / 8) * TAU);
+      c.beginPath();
+      c.moveTo(-s * 0.05, 0); c.lineTo(0, -s * (i % 2 ? 0.34 : 0.48)); c.lineTo(s * 0.05, 0);
+      c.closePath();
+      c.fillStyle = i % 2 ? lo : hi; c.fill();
+      c.restore();
+    }
+    c.restore();
     c.beginPath(); c.arc(0, 0, s * 0.17, 0, TAU);
-    inked(c, col, lw * 0.8, C.ink);
-    c.beginPath(); c.arc(-s * 0.05, -s * 0.05, s * 0.05, 0, TAU);
-    c.fillStyle = '#ffffff'; c.fill();
+    const cg = c.createRadialGradient(-s * 0.06, -s * 0.06, s * 0.01, 0, 0, s * 0.20);
+    cg.addColorStop(0, '#ffffff');
+    cg.addColorStop(0.55, mix(col, '#ffffff', 0.35));
+    cg.addColorStop(1, mix(col, '#0d1830', 0.35));
+    c.fillStyle = cg; c.fill();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
   }
+  c.restore();
+}
+
+/* ------------------------------------------------------------- charms -----
+   A charm was drawn as the generic burst in the charm's colour, on the card, in
+   the collection AND on the reward shelf — ten trinkets, one picture, three
+   places. They are cut stones set in a bezel now, and what is cut INTO the
+   stone is what the charm does, so a Keen and a Swift are told apart by their
+   shape rather than by remembering which one is green. */
+const CHARM_MARK = {
+  stoutcharm:   'heart',
+  keencharm:    'fang',
+  swiftcharm:   'wing',
+  frenzycharm:  'claw',
+  leechcharm:   'drop',
+  shellcharm:   'plate',
+  thornscharm:  'thorn',
+  longcharm:    'point',
+  barragecharm: 'darts',
+  bountycharm:  'coin',
+};
+
+function drawCharmIcon(c, id, col, x, y, s, t) {
+  const mark = CHARM_MARK[id] || 'star';
+  const r = s * 0.42;
+  c.save();
+  c.translate(x, y);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  const lw = Math.max(2.2, s * 0.075);
+  igShadow(c, s, s * 0.30);
+  c.translate(0, Math.sin(t * 1.4 + s) * s * 0.020);
+  igGlow(c, 0, 0, r * 1.7, col, 0.24, t);
+  // the loop it hangs from
+  c.beginPath(); c.arc(0, -r * 1.24, r * 0.28, 0, TAU);
+  c.lineWidth = lw * 1.1; c.strokeStyle = C.ink; c.stroke();
+  c.lineWidth = lw * 0.55; c.strokeStyle = '#e0c48a'; c.stroke();
+  // the bezel, then the stone set into it
+  const oct = (k) => {
+    c.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU - Math.PI / 8;
+      const px = Math.cos(a) * r * k, py = Math.sin(a) * r * 1.1 * k;
+      i ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    c.closePath();
+  };
+  oct(1.16);
+  c.fillStyle = igFall(c, '#c8a460', -r * 1.3, r * 1.3, 0.42, 0.44); c.fill();
+  c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+  oct(1);
+  const sg = c.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.05, 0, 0, r * 1.3);
+  sg.addColorStop(0, mix(col, '#ffffff', 0.72));
+  sg.addColorStop(0.55, col);
+  sg.addColorStop(1, mix(col, '#0d1830', 0.45));
+  c.fillStyle = sg; c.fill();
+  c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
+  // one facet catching the light, which is what says cut rather than moulded
+  c.save();
+  oct(1); c.clip();
+  c.globalAlpha = 0.55; c.fillStyle = '#ffffff';
+  c.beginPath();
+  c.moveTo(-r * 0.85, -r * 0.5); c.lineTo(r * 0.1, -r * 1.1); c.lineTo(-r * 0.15, -r * 0.1);
+  c.closePath(); c.fill();
+  c.restore();
+
+  // and the mark
+  c.save();
+  c.scale(r / 40, r / 40);
+  const dk = mix(col, '#0d1830', 0.62);
+  c.fillStyle = dk; c.strokeStyle = dk; c.lineWidth = 6; c.lineJoin = 'round';
+  if (mark === 'heart') {
+    c.beginPath();
+    c.moveTo(0, 20);
+    c.bezierCurveTo(-26, 2, -20, -20, -8, -14);
+    c.bezierCurveTo(-3, -11, 0, -6, 0, -6);
+    c.bezierCurveTo(0, -6, 3, -11, 8, -14);
+    c.bezierCurveTo(20, -20, 26, 2, 0, 20);
+    c.closePath(); c.fill();
+  } else if (mark === 'fang') {
+    c.beginPath();
+    c.moveTo(-16, -20); c.lineTo(16, -20); c.lineTo(4, 22);
+    c.quadraticCurveTo(0, 28, -4, 22);
+    c.closePath(); c.fill();
+  } else if (mark === 'wing') {
+    c.beginPath();
+    c.moveTo(-20, 20);
+    c.quadraticCurveTo(4, 12, 18, -22);
+    c.quadraticCurveTo(20, 6, -20, 20);
+    c.closePath(); c.fill();
+    c.lineWidth = 4;
+    c.beginPath();
+    c.moveTo(-12, 16); c.lineTo(10, -6);
+    c.moveTo(-2, 14); c.lineTo(14, -4);
+    c.strokeStyle = mix(col, '#ffffff', 0.5); c.stroke();
+  } else if (mark === 'claw') {
+    for (let i = -1; i <= 1; i++) {
+      c.beginPath();
+      c.moveTo(i * 13 - 5, -22); c.lineTo(i * 13 + 5, -22);
+      c.lineTo(i * 13 + 3 + i * 5, 20);
+      c.quadraticCurveTo(i * 13 + i * 6, 26, i * 13 - 3 + i * 5, 20);
+      c.closePath(); c.fill();
+    }
+  } else if (mark === 'drop') {
+    c.beginPath();
+    c.moveTo(0, -24);
+    c.bezierCurveTo(18, -2, 20, 8, 10, 16);
+    c.bezierCurveTo(0, 24, -20, 16, -14, 0);
+    c.closePath(); c.fill();
+  } else if (mark === 'plate') {
+    c.beginPath();
+    c.moveTo(0, -22); c.lineTo(20, -12);
+    c.quadraticCurveTo(19, 12, 0, 22);
+    c.quadraticCurveTo(-19, 12, -20, -12);
+    c.closePath(); c.fill();
+    c.lineWidth = 4; c.strokeStyle = mix(col, '#ffffff', 0.5);
+    c.beginPath(); c.moveTo(0, -14); c.lineTo(0, 14); c.stroke();
+  } else if (mark === 'thorn') {
+    c.beginPath();
+    c.moveTo(-4, 24);
+    c.quadraticCurveTo(-6, -4, 14, -24);
+    c.quadraticCurveTo(-2, -4, 6, 24);
+    c.closePath(); c.fill();
+    c.beginPath();
+    c.moveTo(-6, 6); c.lineTo(-22, -4); c.lineTo(-6, 14);
+    c.closePath(); c.fill();
+  } else if (mark === 'point') {
+    c.beginPath();
+    c.moveTo(0, -24); c.lineTo(16, 6); c.lineTo(6, 2); c.lineTo(6, 24);
+    c.lineTo(-6, 24); c.lineTo(-6, 2); c.lineTo(-16, 6);
+    c.closePath(); c.fill();
+  } else if (mark === 'darts') {
+    for (let i = -1; i <= 1; i++) {
+      c.beginPath();
+      c.moveTo(i * 15, -22); c.lineTo(i * 15 + 7, -6);
+      c.lineTo(i * 15, 22); c.lineTo(i * 15 - 7, -6);
+      c.closePath(); c.fill();
+    }
+  } else if (mark === 'coin') {
+    c.beginPath(); c.arc(0, 0, 20, 0, TAU);
+    c.lineWidth = 7; c.stroke();
+    c.beginPath();
+    c.moveTo(-7, -8); c.lineTo(7, -8);
+    c.moveTo(-4, 0); c.lineTo(4, 0);
+    c.moveTo(-7, 8); c.lineTo(7, 8);
+    c.lineWidth = 6; c.stroke();
+  } else {
+    c.beginPath();
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * TAU - Math.PI / 2, rr2 = k % 2 ? 10 : 23;
+      const px = Math.cos(a) * rr2, py = Math.sin(a) * rr2;
+      k ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    c.closePath(); c.fill();
+  }
+  c.restore();
   c.restore();
 }
 
@@ -7785,24 +8891,7 @@ function drawCollection(c, t) {
     const def = CARDS[it.id];
     if (it.kind === 'charm') {
       // the same cut stone the charm card wears, so the two read as one thing
-      const ch = CHARMS[it.id];
-      c.save(); c.translate(x + tw / 2, y + th * 0.44);
-      const r = th * 0.2;
-      c.beginPath();
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * TAU - Math.PI / 8;
-        const px = Math.cos(a) * r, py = Math.sin(a) * r * 1.12;
-        k ? c.lineTo(px, py) : c.moveTo(px, py);
-      }
-      c.closePath();
-      inked(c, ch.col, 2.5, C.ink);
-      c.save();
-      c.globalAlpha = 0.5; c.fillStyle = '#fff';
-      c.beginPath();
-      c.moveTo(-r * 0.45, -r * 0.5); c.lineTo(r * 0.1, -r * 0.72); c.lineTo(-r * 0.1, -r * 0.1);
-      c.closePath(); c.fill();
-      c.restore();
-      c.restore();
+      drawCharmIcon(c, it.id, CHARMS[it.id].col, x + tw / 2, y + th * 0.44, th * 0.42, t);
     } else if (it.kind === 'item') {
       drawItemIcon(c, def.art, x + tw / 2, y + th * 0.44, th * 0.46, t);
     } else {
@@ -8798,29 +9887,11 @@ function drawCharmCard(c, charmId, x, y, w, h, t) {
   halo.addColorStop(1, 'rgba(255,255,255,0)');
   c.save(); c.globalAlpha = 0.55; c.fillStyle = halo; c.fillRect(ax, ay, aw, ah); c.restore();
 
-  const cx = w / 2, cy = ay + ah * 0.54;
-  const r = Math.min(aw, ah) * 0.30;
-  c.beginPath(); c.arc(cx, cy - r * 1.35, r * 0.34, 0, TAU);
-  c.lineWidth = 3 * S; c.strokeStyle = '#e6d3ab'; c.stroke();
-  c.save();
-  c.translate(cx, cy);
-  const pulse = 1 + Math.sin(t * 2.2 + w) * 0.045;
-  c.scale(pulse, pulse);
-  c.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const a2 = (i / 8) * TAU - Math.PI / 8;
-    const px = Math.cos(a2) * r, py = Math.sin(a2) * r * 1.12;
-    i ? c.lineTo(px, py) : c.moveTo(px, py);
-  }
-  c.closePath();
-  inked(c, ch.col, 3 * S, C.ink);
-  c.save();
-  c.globalAlpha = 0.55; c.fillStyle = '#ffffff';
-  c.beginPath();
-  c.moveTo(-r * 0.45, -r * 0.5); c.lineTo(r * 0.1, -r * 0.72); c.lineTo(-r * 0.1, -r * 0.1);
-  c.closePath(); c.fill();
-  c.restore();
-  c.restore();
+  /* The gem was built here by hand, and again on the collection tile, and a
+     third time on the card face as a generic burst — three drawings of one
+     trinket that had already drifted apart. One call, and the mark cut into the
+     stone is the charm's own. */
+  drawCharmIcon(c, charmId, ch.col, w / 2, ay + ah * 0.52, Math.min(aw, ah) * 0.66, t);
   const inner = c.createLinearGradient(0, ay, 0, ay + ah * 0.3);
   inner.addColorStop(0, 'rgba(8,14,28,.28)');
   inner.addColorStop(1, 'rgba(8,14,28,0)');
