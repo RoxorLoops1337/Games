@@ -815,12 +815,17 @@ section('the loop stays upright');
 section('every card in the game, drawn and measured');
 {
   const bad2 = [];
+  /* AT BOTH SHAPES, and the second one is why the coverage figure was wrong.
+     653x280 is where the layout is under pressure; 1280x720 is where the game
+     actually draws everything it has. Sweeping only the tight one meant the
+     rules lines the card DELIBERATELY drops on a fold were counted as text the
+     check had failed to look at. */
   const SIZE = [[92, 150, 'in hand'], [126, 196, 'on the reward row']];
   let drawn = 0;
-  for (const [w2, h2, where] of SIZE) {
-    FF.setStageWidth(653, 280);                 // the tightest shape, where the floor bites hardest
+  for (const [w2, h2, where, stage] of SIZE.flatMap((z) => [z.concat([[653, 280]]), z.concat([[1280, 720]])])) {
+    FF.setStageWidth(stage[0], stage[1]);                 // the tightest shape, where the floor bites hardest
     const D = FF.dims();
-    const cps = Math.min(653 / D.VW, 280 / D.VH);
+    const cps = Math.min(stage[0] / D.VW, stage[1] / D.VH);
     for (const def of Object.values(FF.CARDS)) {
       if (def.leader) continue;
       log.length = 0;
@@ -994,7 +999,21 @@ section('every foe in the game, on the board and inspected');
     `${STRINGS.seen.size} distinct strings`);
   console.log(`    names ${hitN}/${names.size} (${(shareN * 100).toFixed(0)}%) · ` +
     `rules paragraphs ${hitT}/${texts.length} (${((hitT / Math.max(1, texts.length)) * 100).toFixed(0)}%) ` +
-    `— every card at both sizes and every foe on a board and inspected; what is left is text no state in the game reaches`);
+    `— every card at both sizes on both a desktop and a fold, every foe on a board and inspected`);
+  /* TWO DIFFERENT NUMBERS THAT WERE BEING REPORTED AS ONE.
+
+     This read 68% for a round and was filed as a coverage gap. It was not: the
+     card DELIBERATELY drops its rules line on a fold, where the type cannot be
+     read at any size, so a third of the paragraphs were never drawn there — and
+     a check that only swept the tight shape counted the game's own decision as
+     its own failure. Sweeping the desktop too takes it to 98%.
+
+     So the two are separated, because only one of them is ever a bug: what the
+     check LOOKS AT should be everything the game draws, and what the game
+     CHOOSES NOT TO DRAW is a design decision that belongs in the record rather
+     than in a coverage figure. */
+  console.log(`    (and separately: on a fold the card drops its rules line on purpose — ` +
+    `${texts.length} paragraphs the game chooses not to draw there, which is a decision, not a gap)`);
   ok(names.size > 60, `the catalogue is the game's own tables (${names.size} names)`);
   ok(shareN > 0.55, `and the sweep sees a stated share of it (${(shareN * 100).toFixed(0)}% of names)`);
 }

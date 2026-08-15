@@ -164,71 +164,6 @@ outcome is three quarters matchup is not a deck-strength game and was never goin
 to behave like one. That is a design statement rather than a bug, and it is the
 first time this file has been able to make it.
 
-### FINDING — the ladder cannot read anything smaller than six points
-
-`topic: ladder-band`
-
-Every band in this file has been measured rather than derived — for a gap, for an
-interaction, for a set. The one number nobody had done it for is **the headline**:
-the ladder total, which is supposed to say whether the game rewards skill.
-
-The whole ladder, run at five seed bases, 210 runs an arm:
-
-```
-totals      27, 27, 26, 33, 28    sd ±2.8   → 2σ = ±5.5
-the fight    9, 12,  9, 13, 11    sd ±1.8
-the trader  19, 17, 13, 15, 13    sd ±2.6
-steering    -1, -2,  4,  5,  4    sd ±3.2
-```
-
-**The instrument cannot detect a change smaller than 6 points in the total.** The
-26–32 target set last round was chosen to accommodate three readings and turns
-out to be almost exactly 2σ — right by luck, not by measurement, and now right by
-measurement.
-
-Two consequences, and they bind everything above:
-
-**No single-point move anywhere in this file means anything.** Not a rung, not a
-total, not a floor. Several rounds have reported one and reasoned about it.
-
-**"Steering prices at zero" is not a finding.** Its five readings ran −2 to +5
-with sd ±3.2, so "worth nothing" and "worth five points" were the same
-measurement.
-
-**AND IT IS RESOLVED NOW, AT THE SAMPLE THE ARITHMETIC ASKED FOR.** The rung had
-read +6 and then +2 on consecutive rounds and was filed under "unresolved round
-to round" — which is a thing to fix, not a thing to report. A rung is a
-DIFFERENCE of two arms, so `n = (1.29·100·z/Δ)²·(p₁q₁ + p₂q₂)`: **920 runs an
-arm** to resolve 6 points at 2σ. Run at 510 an arm across five seed bases:
-
-```
-steering the pool   3, 8, 10, 9, 8      mean +7.6, sd ±2.7 → SE ±1.2
-```
-
-**Steering is worth about +8 points**, and the +2 was a single base at a quarter
-of the depth. Third time running that a number which would not resolve resolved
-as soon as somebody worked out the sample rather than deepening by feel — and
-the pattern is now reliable enough to be a rule: *when a reading moves between
-rounds, compute the sample before running another one.*
-
-**And the same run answers what the quiet-road rest costs in skill expression**,
-which had been filed as a footnote. The four-rung ladder with the rest and
-without, five bases each:
-
-```
-with the rest      37, 40, 42, 43, 37    mean 39.8, sd ±2.8
-without            34, 40, 37, 38, 37    mean 37.2, sd ±2.2
-                                          difference +2.6, 2σ = ±3.2
-```
-
-**It does not clear — but the sign is positive, and the earlier claim was that
-the rest COST the ladder two points.** That came from one seed base at 210 an
-arm. On five bases at 510 the point estimate is that a lasting rest makes the
-game slightly *more* sensitive to how well it is played, not less, and the
-honest statement is that its effect on skill expression is not distinguishable
-from zero in either direction. A design win that was thought to be paid for in
-skill expression turns out not to have been paid for at all.
-
 ### FINDING — the winning hands carry fewer bodies and more gear; two explanations are dead
 
 `topic: dealt-hands`
@@ -1661,6 +1596,51 @@ set is +19 and denial is +14 of it. A habit's value depends on what else the
 pilot can do, so pricing habits on a pilot stripped of everything else measures
 the strip, not the habit — the same shape as the locked-deck cage, the
 hand-picked decks, and the courses' convenient baseline.
+
+### RULE — compute the sample before running another one
+
+`topic: sample-size`
+
+Three findings sat unresolved for a total of nine rounds and all three were
+settled the same way, in one run each, as soon as somebody stopped deepening by
+feel and worked out what the question actually needed. It is the same arithmetic
+every time and it was living in three separate entries, which is how a method
+gets rediscovered instead of used.
+
+**The formula depends on what kind of thing the arm measures**, and getting that
+wrong is most of the difficulty:
+
+```
+a plain rate against a baseline    n = (1.29·√(2p(1−p))·100·z / Δ)²
+a DIFFERENCE of two arms (a rung)  n = (1.29·100·z / Δ)²·(p₁q₁ + p₂q₂)
+a CLUSTERED comparison (decks)     n = 2(z·SD_between / Δ)²   decks a side
+```
+
+The 1.29 is the measured calibration — this instrument's bands are narrower than
+the formula's because arms share seeds. `z` is the family bar: 2.0 for one
+question, 2.24 for two, 2.58 for five.
+
+**The three worked examples, and what each cost before and after:**
+
+| question | stuck at | the arithmetic said | ran at | answer |
+|---|---|---|---|---|
+| do gear-heavy decks win | 4 rounds, p=0.29 | 84 decks, 50,400 runs | 84 | **+1.9, p=0.042** |
+| best course against worst | 3 rounds, 1.7–3.2σ | 683 runs an arm | 720 | **8 points, 2.8σ** |
+| what steering the pool is worth | 2 rounds, +6 then +2 | 920 runs an arm | 510 × 5 bases | **+7.6 ± 1.2** |
+
+**The one that teaches the most is the deck arm**, because it is the only one
+where more of the obvious thing would never have worked: the true deck-to-deck
+SD is 4.23 and binomial sampling was 2.00, so more runs *per deck* shrink the
+smaller term and leave the larger one alone. **Four rounds of deepening bought
+nothing because the binding constraint was decks, and nobody had asked which
+term was binding.**
+
+**The rule, then:** *when a reading moves between rounds, compute the sample
+before running another one* — and when an arm reports something unresolved, it
+prints the sample it would need rather than leaving the reader to work it out.
+The ladder table does this per rung now, which is where the habit came from: it
+was printing `steering +2` above a five-base measurement of `+7.6` in the same
+output, with the headline read first.
 
 ### RULE — a band is measured, and it applies to every number here
 
