@@ -5941,6 +5941,102 @@ function statBadge(c, kind, x, y, r, col, val) {
   txt(c, n, x, y + r * 0.06, sz, '#12203a', 'center', 'd', 0);
 }
 
+/* ====================== THE FRAME, AND WHAT IT IS MADE OF ==================
+   The frame was a pale blue-grey gradient a shade or two off the backdrop, so
+   a hand of cards had no silhouette — you could not see where one card stopped
+   and the ground behind it started. It was also the only part of the face
+   allowed to carry ornament, and it carried none: no corner, no rime, no wear,
+   on a game named after a frozen road.
+
+   Two things changed. The frame is now the DARKEST thing on the card, which is
+   what gives every other block something to sit against. And it is made of a
+   stated MATERIAL — which is also what rarity means here, because rarity used
+   to be a faint wash and a soft bloom, two strengths of one idea, and in a hand
+   you genuinely could not tell which card was which.
+
+     common     cold iron     the road's own metal. blue-black, matte.
+     uncommon   rimed iron    the same bar with the frost got into it: pale
+                              crust at the corners, an ice-blue line in the
+                              moulding.
+     rare       gilt bronze   warm and dark, gold braces, a foil sweep, and
+                              the only card that carries its own light.
+
+   Different metals, not different volumes of the same one. */
+const FRAME_MAT = {
+  1: { top: '#1f2b40', mid: '#101a2c', bot: '#05090f',
+    cap: '#3a4e6d', capLit: '#8298b8', rim: 'rgba(168,196,232,',
+    inlay: 'rgba(126,160,205,.38)', glow: null },
+  2: { top: '#173347', mid: '#0b2033', bot: '#040e18',
+    cap: '#4f88ae', capLit: '#dbf3ff', rim: 'rgba(198,238,255,',
+    inlay: 'rgba(111,216,255,.85)', glow: null },
+  3: { top: '#42331a', mid: '#241a0b', bot: '#0e0903',
+    cap: '#9c7220', capLit: '#ffe3a0', rim: 'rgba(255,220,145,',
+    inlay: 'rgba(255,209,102,.88)', glow: '#ffd166' },
+};
+
+/* ONE CORNER BRACE. A band of metal folded over the corner and stepped where
+   it faces the middle of the card. Almost all of the step is covered by the
+   face — what you see is the L along the two edges, thickening at the corner,
+   which is exactly what a brace on a real card looks like. `lit` is this
+   corner's share of the light: top-left is the one the light is on, and all
+   four agree with every bevel elsewhere on the face. */
+function frameCorner(c, x0, y0, sx, sy, L, m, lit, S) {
+  c.beginPath();
+  c.moveTo(x0, y0 + sy * L);
+  c.lineTo(x0, y0);
+  c.lineTo(x0 + sx * L, y0);
+  c.lineTo(x0 + sx * L * 0.60, y0 + sy * L * 0.24);
+  c.lineTo(x0 + sx * L * 0.40, y0 + sy * L * 0.40);
+  c.lineTo(x0 + sx * L * 0.24, y0 + sy * L * 0.60);
+  c.closePath();
+  const g = c.createLinearGradient(x0, y0, x0 + sx * L, y0 + sy * L);
+  g.addColorStop(0, mix(m.cap, m.capLit, 0.08 + 0.52 * lit));
+  g.addColorStop(0.55, mix(m.cap, '#050a14', 0.18));
+  g.addColorStop(1, mix(m.cap, '#050a14', 0.70));
+  c.fillStyle = g; c.fill();
+  // the fold catches the light along its inside step
+  c.beginPath();
+  c.moveTo(x0, y0 + sy * L);
+  c.lineTo(x0 + sx * L * 0.24, y0 + sy * L * 0.60);
+  c.lineTo(x0 + sx * L * 0.40, y0 + sy * L * 0.40);
+  c.lineTo(x0 + sx * L * 0.60, y0 + sy * L * 0.24);
+  c.lineTo(x0 + sx * L, y0);
+  c.lineWidth = 1.05 * S; c.lineJoin = 'round';
+  c.strokeStyle = m.rim + (0.12 + 0.46 * lit) + ')';
+  c.stroke();
+  // two rivets, one per run, sitting out on the rail where they are visible
+  const rv = 1.5 * S;
+  [[x0 + sx * L * 0.66, y0 + sy * 2.9 * S], [x0 + sx * 2.9 * S, y0 + sy * L * 0.66]].forEach((p) => {
+    c.beginPath(); c.arc(p[0], p[1], rv, 0, TAU);
+    c.fillStyle = 'rgba(6,11,22,.60)'; c.fill();
+    c.beginPath(); c.arc(p[0] - rv * 0.28, p[1] - rv * 0.30, rv * 0.62, 0, TAU);
+    c.fillStyle = m.rim + (0.20 + 0.45 * lit) + ')'; c.fill();
+  });
+}
+
+/* Rime creeping in from a corner. Uncommon's whole tell is that the frost has
+   got into the metal, and a wash alone reads as a smudge at hand size — the
+   needles are what say "crystal" when the card is 126 units wide. */
+function frameRime(c, x0, y0, sx, sy, R, S) {
+  const g = c.createRadialGradient(x0, y0, 0, x0, y0, R);
+  g.addColorStop(0, 'rgba(226,246,255,.62)');
+  g.addColorStop(0.55, 'rgba(160,220,255,.22)');
+  g.addColorStop(1, 'rgba(160,220,255,0)');
+  c.fillStyle = g;
+  c.beginPath(); c.arc(x0, y0, R, 0, TAU); c.fill();
+  c.strokeStyle = 'rgba(232,250,255,.55)';
+  c.lineWidth = 0.9 * S; c.lineCap = 'round';
+  for (let i = 0; i < 5; i++) {
+    const a = (0.18 + i * 0.28) * (Math.PI / 2);
+    const len = R * (0.52 + (i % 2) * 0.30);
+    c.beginPath();
+    c.moveTo(x0 + sx * Math.cos(a) * R * 0.18, y0 + sy * Math.sin(a) * R * 0.18);
+    c.lineTo(x0 + sx * Math.cos(a) * len, y0 + sy * Math.sin(a) * len);
+    c.stroke();
+  }
+  c.lineCap = 'butt';
+}
+
 function drawCard(c, card, x, y, w, h, o) {
   o = o || {};
   const d = CARDS[card.def];
@@ -5961,12 +6057,18 @@ function drawCard(c, card, x, y, w, h, o) {
   if (o.scale) c.scale(o.scale, o.scale);
   c.translate(-w / 2, -h / 2);
 
-  // a rare card carries its own light
-  if (rare >= 3) {
+  const mat = FRAME_MAT[rare] || FRAME_MAT[1];
+  /* A rare card carries its own light, and ONLY a rare one. Uncommon used to
+     get a fainter copy of the same bloom, which is how you end up with two
+     rarities nobody can tell apart — the difference was a number. Uncommon is
+     a different metal now; the bloom stays the thing that means rare.
+     It is also card-relative, where it used to be 18 raw pixels: on a fold's
+     cover that halo was wider than the card's own corner. */
+  if (mat.glow) {
     c.save();
-    c.shadowColor = edge; c.shadowBlur = 18;
-    rr(c, 3, 3, w - 6, h - 6, 13 * S);
-    c.fillStyle = edge; c.globalAlpha = 0.5; c.fill();
+    c.shadowColor = mat.glow; c.shadowBlur = 20 * S;
+    rr(c, 2.5 * S, 2.5 * S, w - 5 * S, h - 5 * S, 12 * S);
+    c.fillStyle = mat.glow; c.globalAlpha = 0.55; c.fill();
     c.restore();
   }
 
@@ -5982,38 +6084,76 @@ function drawCard(c, card, x, y, w, h, o) {
      the frame. Nothing here is a new colour — it is the same palette lit from
      one direction instead of drawn flat. */
   c.save();
-  c.shadowColor = 'rgba(4,9,20,.55)'; c.shadowBlur = 20 * S; c.shadowOffsetY = 9 * S;
+  c.shadowColor = 'rgba(3,7,16,.70)'; c.shadowBlur = 22 * S; c.shadowOffsetY = 10 * S;
   rr(c, 0, 0, w, h, 12 * S);
   const frameG = c.createLinearGradient(0, 0, 0, h);
-  frameG.addColorStop(0, '#3d5176');
-  frameG.addColorStop(0.5, '#26405f');
-  frameG.addColorStop(1, '#16263e');
+  frameG.addColorStop(0, mat.top);
+  frameG.addColorStop(0.46, mat.mid);
+  frameG.addColorStop(1, mat.bot);
   c.fillStyle = frameG; c.fill();
   c.restore();
   // the frame's own thickness catches the light on its top edge
-  bevel(c, 0, 0, w, h, 12 * S, 3.2 * S, 1.1);
-  /* AND A RARE CARD'S FRAME IS MADE OF SOMETHING ELSE. Rarity was two dots and
-     a slightly different hairline — which is to say it was invisible, and the
-     one thing a card game has to communicate before you have read a word is
-     "this one is worth stopping for". A foil sweep across the frame does it
-     without a single new shape: the same frame, in a material that catches the
-     light along a diagonal. */
-  if (rare >= 2) {
-    c.save();
-    rr(c, 0, 0, w, h, 12 * S);
-    c.clip();
-    const foil = c.createLinearGradient(0, h * 0.15, w, h * 0.85);
-    foil.addColorStop(0, 'rgba(255,255,255,0)');
-    foil.addColorStop(0.35, mixA(edge, rare >= 3 ? 0.55 : 0.32));
-    foil.addColorStop(0.52, 'rgba(255,255,255,' + (rare >= 3 ? 0.42 : 0.24) + ')');
-    foil.addColorStop(0.7, mixA(edge, rare >= 3 ? 0.40 : 0.22));
-    foil.addColorStop(1, 'rgba(255,255,255,0)');
+  bevel(c, 0, 0, w, h, 12 * S, 3.2 * S, 0.7);
+
+  /* Everything from here to the face is ornament, and all of it is clipped to
+     the card so nothing crawls out over the table. */
+  c.save();
+  rr(c, 0, 0, w, h, 12 * S);
+  c.clip();
+  /* A RARE FRAME IS FOIL. It was a wash over the whole card before the face was
+     drawn on top of it, so what actually survived was a five-unit band nobody
+     could see. Same idea, made for the band it lives in: two lobes across the
+     diagonal instead of one, and warm enough to tell gilt from iron in the
+     corner of your eye. */
+  if (rare >= 3) {
+    const foil = c.createLinearGradient(0, h * 0.05, w, h * 0.95);
+    foil.addColorStop(0, mixA(edge, 0.14));
+    foil.addColorStop(0.22, mixA(edge, 0.58));
+    foil.addColorStop(0.33, 'rgba(255,244,210,.46)');
+    foil.addColorStop(0.46, mixA(edge, 0.24));
+    foil.addColorStop(0.63, mixA(edge, 0.52));
+    foil.addColorStop(0.74, 'rgba(255,244,210,.32)');
+    foil.addColorStop(1, mixA(edge, 0.10));
     c.fillStyle = foil; c.fillRect(0, 0, w, h);
-    c.restore();
   }
 
+  /* THE MOULDING. A frame four and a half units wide is a border, not a frame,
+     unless it has a PROFILE: a channel cut round the perimeter with a line of
+     the card's own metal lying in it. It is also where rarity is easiest to
+     read, because it runs the whole way round — ice-blue on an uncommon, gold
+     on a rare, a dim steel line on everything else. */
+  const gI = 3.3 * S;
+  rr(c, gI, gI, w - gI * 2, h - gI * 2, 12 * S - gI);
+  c.lineWidth = 2.0 * S; c.strokeStyle = 'rgba(3,7,18,.62)'; c.stroke();
+  rr(c, gI, gI, w - gI * 2, h - gI * 2, 12 * S - gI);
+  c.lineWidth = (rare >= 2 ? 1.2 : 0.85) * S; c.strokeStyle = mat.inlay; c.stroke();
+
+  /* AND THE BRACES INTERRUPT IT. The first version put them under the moulding,
+     which was the same as not drawing them: at hand size the whole band is
+     moulding and there is no bare metal for a corner piece to show on. Drawn
+     over it, the channel stops short of each corner and a solid piece of metal
+     wraps it — which is what a corner brace is for, and it is legible at 126
+     because it is a change in the SHAPE of the border, not a detail inside it. */
+  const bL = Math.min(19 * S, w * 0.22);
+  frameCorner(c, 0, 0, 1, 1, bL, mat, 1.00, S);
+  frameCorner(c, w, 0, -1, 1, bL, mat, 0.60, S);
+  frameCorner(c, 0, h, 1, -1, bL, mat, 0.44, S);
+  frameCorner(c, w, h, -1, -1, bL, mat, 0.22, S);
+  spec(c, 5 * S, 5 * S, 9 * S, 0.26);
+  // and on an uncommon the frost has got into the two corners the weather hits
+  if (rare === 2) {
+    frameRime(c, 1.5 * S, 1.5 * S, 1, 1, 20 * S, S);
+    frameRime(c, w - 1.5 * S, h - 1.5 * S, -1, -1, 15 * S, S);
+  }
+  c.restore();
+
   /* THE FACE, sunk into the frame. The inset is what sells it — without the
-     shadow along the top edge the face is a sticker laid on a dark rectangle. */
+     shadow along the top edge the face is a sticker laid on a dark rectangle.
+     The frame does NOT get wider to hold the brace and the moulding, and it was
+     tried: one extra unit here pushes the band down a unit and takes one off
+     the rules well, and CINDERPUP's two-line rule came back as one line and an
+     ellipsis. The frame reads as thicker anyway — the moulding gives it a
+     profile, which is what "thick" actually means to the eye. */
   const fi = 4.5 * S;
   c.save();
   rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
@@ -6023,7 +6163,7 @@ function drawCard(c, card, x, y, w, h, o) {
   body.addColorStop(1, '#c4d8f2');
   c.fillStyle = body; c.fill();
   c.restore();
-  inset(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S, 2.6 * S, 0.85);
+  inset(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S, 3.4 * S, 1.25);
   /* A sheen across the corner. Flat vector cards read as diagrams; one soft
      diagonal is the cheapest thing that makes them read as objects held at an
      angle to a light. */
@@ -6365,13 +6505,24 @@ function drawCard(c, card, x, y, w, h, o) {
   c.lineWidth = 1.1 * S; c.strokeStyle = 'rgba(28,48,80,.28)'; c.stroke();
   lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#1d2f4d', 'center', 't', 0));
 
-  /* ---------------- the frame, drawn last so nothing crosses it ---------- */
+  /* ---------------- the frame's edges, drawn last so nothing crosses them --
+     The card is now darker than the table it is played on, which is the right
+     way round — but it means the silhouette cannot come from value, because a
+     dark edge on a dark ground is no edge at all. It comes from a rime line
+     just inside the ink: bright where the light is, nearly gone by the
+     bottom-right corner, the way a cold metal edge actually behaves. That one
+     hairline is what makes a hand of cards read as separate objects. */
   rr(c, 0, 0, w, h, 12 * S);
-  c.lineWidth = 3 * S; c.strokeStyle = C.ink; c.stroke();
-  rr(c, 3.5 * S, 3.5 * S, w - 7 * S, h - 7 * S, 9 * S);
-  c.lineWidth = rare >= 2 ? 1.6 * S : 1.1 * S;
-  c.strokeStyle = rare >= 2 ? edge : 'rgba(24,40,68,.22)';
-  c.stroke();
+  c.lineWidth = 2.6 * S; c.strokeStyle = C.night; c.stroke();
+  const rimG = c.createLinearGradient(0, 0, w * 0.85, h);
+  rimG.addColorStop(0, mat.rim + '0.88)');
+  rimG.addColorStop(0.40, mat.rim + '0.38)');
+  rimG.addColorStop(1, mat.rim + '0.12)');
+  rr(c, 1.4 * S, 1.4 * S, w - 2.8 * S, h - 2.8 * S, 10.8 * S);
+  c.lineWidth = 1.15 * S; c.strokeStyle = rimG; c.stroke();
+  // and the seam where the face is let into the frame
+  rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
+  c.lineWidth = 1 * S; c.strokeStyle = 'rgba(5,10,22,.50)'; c.stroke();
 
   /* ---------------- the stats, hung on the bottom edge ----------------
      They used to be three identical circles in a grey tray: a traffic light
