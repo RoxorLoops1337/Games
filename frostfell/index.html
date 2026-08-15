@@ -8491,36 +8491,47 @@ function igFall(c, col, y0, y1, up, dn) {
 
 /** Steel, which is not grey. It is a hard band of sky across the top third and
  *  a cold bounce off the snow along the bottom edge — draw a blade in one flat
- *  grey and it reads as a wedge of cardboard. Diagonal, for the reason above. */
+ *  grey and it reads as a wedge of cardboard. Diagonal, for the reason above.
+ *
+ *  IT USED TO BE SIX STOPS AND THAT IS WHERE THE FOURTH DIALECT LIVED. White
+ *  through pale blue through two greys to a near-navy and back up to a bounce,
+ *  all of it smooth — photographed metal, on a shelf standing next to animals
+ *  drawn in flat cel with a line round them. The icepick and the shield were
+ *  the two cards the critics named for it.
+ *
+ *  Same three facts, drawn the way the rest of the game draws: a lit plane, a
+ *  hard STEP, a shadow plane, a hard step, the bounce. Every stop is doubled at
+ *  its boundary so nothing between them ramps — that step is what says the
+ *  metal has facets, and it is the same edge a creature's belly has. */
 function igSteel(c, y0, y1) {
   const d = (y1 - y0) * 0.40;
   const g = c.createLinearGradient(-d, y0, d, y1);
-  g.addColorStop(0, '#dbe8f7');
-  g.addColorStop(0.18, '#ffffff');
-  g.addColorStop(0.34, '#bccde2');
-  g.addColorStop(0.7, '#6e8299');
-  g.addColorStop(0.88, '#485970');
-  g.addColorStop(1, '#8fb2d2');
+  g.addColorStop(0, '#eef5ff');
+  g.addColorStop(0.34, '#eef5ff');
+  g.addColorStop(0.34, '#9db1c8');
+  g.addColorStop(0.82, '#9db1c8');
+  g.addColorStop(0.82, '#5a6d87');
+  g.addColorStop(1, '#5a6d87');
   return g;
 }
 
-/** The shadow the thing casts on the snow. It stays on the ground while the
- *  object above it breathes: bobbing the shadow too was the first version, and
- *  a shadow that rises with its object reads as the card shaking. */
-function igShadow(c, s, rx) {
-  /* Thrown to the RIGHT, because the key is on the left. It used to sit almost
-     dead under the object, which is the one place a shadow cannot be if the
-     highlight is off to one side. */
-  const y = s * 0.50, cx = s * 0.09;
-  const g = c.createRadialGradient(cx, y, 0, cx, y, Math.max(1, rx));
-  g.addColorStop(0, 'rgba(22,38,64,.38)');
-  g.addColorStop(0.55, 'rgba(22,38,64,.16)');
-  g.addColorStop(1, 'rgba(22,38,64,0)');
-  c.save();
-  c.fillStyle = g;
-  c.beginPath(); c.ellipse(cx, y, rx, rx * 0.32, 0, 0, TAU); c.fill();
-  c.restore();
-}
+/* `igShadow` LIVED HERE AND IT WAS THE REASON GEAR FLOATED.
+   Every icon opened by painting its own soft ellipse at `s * 0.50` — below the
+   bottom of almost every object it was drawn under. `itemBox` replays these
+   drawings through a pen recorder to find out how tall they are, and the
+   recorder cannot tell a shadow from a shovel: it measured the ellipse, so the
+   box came back a fifth taller than the object, the window solved `room / bxh`
+   against that fifth of nothing and drew everything smaller to fit it, and then
+   stood the box's bottom — the phantom ellipse — on the snow. The pick hung in
+   the air with its handle across the crest for exactly that reason.
+
+   It was also the WRONG shadow. The window already lays a contact ellipse under
+   every subject at `feetY`, sized off what was actually drawn and coloured off
+   the ground it falls on; gear was the one block carrying a second, softer,
+   right-thrown one of its own on top of it. Two ellipses disagreeing about one
+   ground plane. Deleted with nothing in its place — the window's is the shadow,
+   the same one the cast stands on, and now that the box ends where the object
+   ends it lands where the object touches. `IG_FOOT` went with it. */
 
 /** A light in the object's own colour, breathing. Held under a fifth of an
  *  alpha on purpose — a hand is eight of these at once, and the first pass at a
@@ -8655,29 +8666,26 @@ function igSmoke(c, s, x0, y0, col, a, t) {
   c.restore();
 }
 
-/* How wide a thing's footprint is. A rope and a shield cannot share a shadow. */
-const IG_FOOT = {
-  flask: 0.30, vial: 0.22, jar: 0.34, brazier: 0.34, bowl: 0.38, pick: 0.30,
-  rod: 0.26, tally: 0.20, stone: 0.38, map: 0.34, shield: 0.30, kit: 0.32,
-  rope: 0.30, hook: 0.24, bomb: 0.34, flake: 0.30, kindle: 0.30, rune: 0.28,
-  slide: 0.38, snowball: 0.28, lantern: 0.26, eye: 0.34, burst: 0.26,
-};
-
 function drawItemIcon(c, art, x, y, s, t) {
   const kind = (art && art.kind) || 'flask';
   const col = (art && art.col) || C.frost;
-  /* 8.5% of the icon was a keyline thick enough to eat the object behind it.
-     On Hush — a stone half the icon wide, with a groove struck at 1.7 times
-     this on top of it — there was no stone left between the two black lines,
-     which is how a carved standing stone came out as a black slab. It is still
-     an ink line, because the whole cast wears one and a gear card that dropped
-     it would be the odd one out; it is just no longer the picture. */
-  const lw = Math.max(2.2, s * 0.062);
+  /* THE INK CAME BACK UP. It was cut to 6.2% because Hush's groove was struck
+     at 1.7 times it and the two black lines met in the middle of the stone —
+     but the groove is two thin strokes now, and the cut took the outline off
+     every OTHER object at the same time. A handful of snow is a white ball on a
+     white-blue morning and the only thing holding it there is the line round
+     it; at 6.2% there was not enough line. This is the creature block's weight,
+     which is the one illustration language in the set with more than one user. */
+  const lw = Math.max(2.5, s * 0.080);
   c.save();
   c.translate(x, y);
   c.lineJoin = 'round'; c.lineCap = 'round';
-  igShadow(c, s, s * (IG_FOOT[kind] || 0.30));
-  c.translate(0, Math.sin(t * 1.5 + s) * s * 0.022);
+  /* AND THE IDLE BOB IS GONE. A quarter of a unit of vertical sine on an object
+     lying in the snow is the card shaking, not the object breathing — and since
+     `artBox` samples the whole cycle, the bob's top and bottom were both inside
+     the measured box, so every icon was drawn small enough to leave room for a
+     wobble and then spent half of each cycle out of contact with the ground.
+     Gear is an object on the ground. It does not move. */
 
   if (kind === 'flask') {
     // a round-shouldered bottle of something that is still working
@@ -8697,29 +8705,29 @@ function drawItemIcon(c, art, x, y, s, t) {
     c.fillStyle = igFall(c, '#b9cfe4', -s * 0.40, -s * 0.32, 0.55, 0.34);
     c.fill(); c.lineWidth = lw * 0.7; c.strokeStyle = C.ink; c.stroke();
     igWood(c, -s * 0.13, -s * 0.54, s * 0.26, s * 0.16, s * 0.045, '#b9863f', lw * 0.75);
-    spec(c, -s * 0.07, -s * 0.51, s * 0.07, 0.75);
+    /* THE HARD SPECULARS ARE CUT. Six of the twelve gear cards carried a white
+       blown disc — the shield's boss, the icepick's cork, the bomb's iron, the
+       lantern's pane — and nothing else in the game has one: an animal is flat
+       cel with a line round it, no highlight anywhere. A blown disc on an
+       object a fingernail wide is not gloss, it is a hole in the paint, and it
+       was half of why the shelf spoke four dialects. Nothing replaces them. */
   } else if (kind === 'vial') {
     // a narrow tube, and a sprig of what was pressed to fill it
     const mk = () => { c.beginPath(); rr(c, -s * 0.15, -s * 0.32, s * 0.30, s * 0.74, s * 0.12); };
     // filled nearly to the neck, because a third full is a card you cannot see
     igGlass(c, mk, col, s, -s * 0.22, lw, t);
     igStreak(c, -s * 0.09, s * 0.08, s * 0.035, s * 0.22, 0.95);
-    c.strokeStyle = '#4f6f4a'; c.lineWidth = lw * 0.7;
-    c.beginPath(); c.moveTo(s * 0.14, -s * 0.26);
-    c.quadraticCurveTo(s * 0.36, -s * 0.34, s * 0.36, -s * 0.54); c.stroke();
-    c.fillStyle = mix(col, '#0d1830', 0.10);
-    for (let i = 0; i < 3; i++) {
-      c.beginPath();
-      c.moveTo(s * (0.27 + i * 0.03), -s * (0.34 + i * 0.08));
-      c.lineTo(s * (0.46 + i * 0.01), -s * (0.30 + i * 0.09));
-      c.lineTo(s * (0.30 + i * 0.03), -s * (0.28 + i * 0.08));
-      c.closePath(); c.fill();
-    }
+    /* THE SPRIG IS CUT. A stem left the shoulder of the bottle and three
+       triangles were filled beside it in the CARD'S colour rather than in
+       anything a leaf is — so on Thorn Oil what was drawn was three magenta
+       darts flying off the vial's right side, touching neither the stem nor the
+       glass. Reported as an artefact, and it was one: a leaf that misses its
+       own stem is a stroke that missed. Nothing replaces it — a stoppered vial
+       of something purple is already the card. */
     rr(c, -s * 0.19, -s * 0.38, s * 0.38, s * 0.09, s * 0.035);
     c.fillStyle = igFall(c, '#b9cfe4', -s * 0.38, -s * 0.29, 0.52, 0.36);
     c.fill(); c.lineWidth = lw * 0.7; c.strokeStyle = C.ink; c.stroke();
     igWood(c, -s * 0.11, -s * 0.52, s * 0.22, s * 0.15, s * 0.04, '#8a6a3f', lw * 0.7);
-    spec(c, -s * 0.06, -s * 0.49, s * 0.06, 0.7);
   } else if (kind === 'jar') {
     // fired clay, a cloth lid tied down, and it is getting out anyway
     igGlow(c, 0, -s * 0.02, s * 0.50, col, 0.26, t);
@@ -8828,22 +8836,16 @@ function drawItemIcon(c, art, x, y, s, t) {
     c.moveTo(-s * 0.42, -s * 0.08);
     c.bezierCurveTo(-s * 0.38, s * 0.34, s * 0.38, s * 0.34, s * 0.42, -s * 0.08);
     c.closePath();
-    /* Glazed earthenware, not cartridge paper. Drawn in one cream with a dark
-       line round it, the bowl was the plainest thing on the shelf — a shape,
-       not a material — and it is the card next to a modelled icepick. The clay
-       goes down to a real dark under the belly so the vessel has a bottom. */
-    c.fillStyle = igFall(c, '#cdbf9d', -s * 0.10, s * 0.36, 0.52, 0.54); c.fill();
+    /* THE CREAM CARTOON. Three shading channels went onto this bowl to answer
+       "flat" — a fall of light, a glaze band under the belly and a soft streak
+       on the near lip — and none of them changed the reading, because the
+       problem was never the modelling. It was the VALUE: a bowl mixed from
+       `#cdbf9d` is within a stop of a hearth dusk and within two of a frost
+       morning, so whatever you paint on it, it sits on the sky. Fired clay is
+       a dark warm thing. The band and the streak are gone with the change —
+       two soft greys on a shape a fingernail wide were paying for nothing. */
+    c.fillStyle = igFall(c, '#8e7550', -s * 0.10, s * 0.36, 0.40, 0.44); c.fill();
     c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
-    // the glaze band round the belly, and the light along the near lip
-    c.save();
-    c.beginPath();
-    c.moveTo(-s * 0.42, -s * 0.08);
-    c.bezierCurveTo(-s * 0.38, s * 0.34, s * 0.38, s * 0.34, s * 0.42, -s * 0.08);
-    c.closePath(); c.clip();
-    c.globalAlpha = 0.32; c.fillStyle = '#6d5f42';
-    c.beginPath(); c.ellipse(0, s * 0.30, s * 0.42, s * 0.16, 0, 0, TAU); c.fill();
-    c.restore();
-    igStreak(c, -s * 0.25, s * 0.05, s * 0.075, s * 0.13, 0.9);
     c.beginPath(); c.ellipse(0, -s * 0.09, s * 0.41, s * 0.12, 0, 0, TAU);
     // the broth is deepest at the far rim, which is what gives the bowl a depth
     const brg = c.createLinearGradient(0, -s * 0.21, 0, s * 0.03);
@@ -9032,19 +9034,16 @@ function drawItemIcon(c, art, x, y, s, t) {
     c.moveTo(s * 0.29, -s * 0.07); c.lineTo(s * 0.44, -s * 0.28);
     c.lineTo(s * 0.45, s * 0.03); c.lineTo(s * 0.28, s * 0.26);
     c.closePath();
-    c.fillStyle = igHex(body, '#0d1830', 0.52); c.fill();
+    /* HALF A STOP OFF NAVY, not a whole one. At 0.52 the turned end was within
+       a hair of the keyline that surrounds it, so the outline and the face
+       merged and what you read on the card was a hole punched through the
+       corner of the stone. A plane turned away from the light is still lit by
+       the sky; it is dark, not absent. */
+    c.fillStyle = igHex(body, '#0d1830', 0.30); c.fill();
     c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
-    /* Grit — LIT specks on a dark face. They used to be dark specks on a pale
-       one, which is not what a rough surface does under a light above it. */
-    c.save();
-    front(); c.clip();
-    c.globalAlpha = 0.42; c.fillStyle = igHex(body, '#ffffff', 0.70);
-    for (let i = 0; i < 6; i++) {
-      c.beginPath();
-      c.arc(-s * 0.32 + i * s * 0.12, s * (0.02 + (i % 3) * 0.07), s * 0.017, 0, TAU);
-      c.fill();
-    }
-    c.restore();
+    /* Six lit grit specks used to sit on the front face. At the size a card is
+       held they are six single pixels at 42% alpha — noise, not tooth — and
+       "untextured box" was still the note two rounds after they went in. Cut. */
     // the lit chamfer along the front top edge — the one line that says solid
     c.strokeStyle = igHex(worn, '#ffffff', 0.62); c.lineWidth = lw * 0.5;
     c.beginPath(); c.moveTo(-s * 0.37, -s * 0.052); c.lineTo(s * 0.26, -s * 0.062); c.stroke();
@@ -9159,7 +9158,6 @@ function drawItemIcon(c, art, x, y, s, t) {
       c.beginPath(); c.arc(rx, ry, s * 0.042, 0, TAU);
       c.fillStyle = igFall(c, '#93a3ba', ry - s * 0.05, ry + s * 0.05, 0.55, 0.5); c.fill();
       c.lineWidth = lw * 0.4; c.strokeStyle = 'rgba(10,18,34,.8)'; c.stroke();
-      spec(c, rx - s * 0.014, ry - s * 0.016, s * 0.026, 0.9);
     }
     // a pan-lid boss, domed, with the one hard specular on the icon
     c.beginPath(); c.arc(0, -s * 0.01, s * 0.145, 0, TAU);
@@ -9170,7 +9168,6 @@ function drawItemIcon(c, art, x, y, s, t) {
     bs.addColorStop(1, '#33405a');
     c.fillStyle = bs; c.fill();
     c.lineWidth = lw * 0.75; c.strokeStyle = C.ink; c.stroke();
-    spec(c, -s * 0.055, -s * 0.07, s * 0.06, 0.95);
   } else if (kind === 'kit') {
     /* A FLAT GREEN BOX WITH A FLAT GREEN LID. The critics only had twelve gear
        cards in front of them; this one was on the next page and it is the same
@@ -9220,7 +9217,6 @@ function drawItemIcon(c, art, x, y, s, t) {
     rr(c, -s * 0.085, s * 0.0, s * 0.17, s * 0.11, s * 0.025);
     c.fillStyle = igFall(c, '#c8a95e', s * 0.0, s * 0.11, 0.55, 0.44); c.fill();
     c.lineWidth = lw * 0.55; c.strokeStyle = C.ink; c.stroke();
-    spec(c, -s * 0.05, s * 0.02, s * 0.035, 0.9);
   } else if (kind === 'rope') {
     /* THE ROPE READ AS SMOKE. Two thin strokes down the middle of the icon, the
        lower one pale, is exactly how the brazier's vapour is drawn six kinds
@@ -9295,11 +9291,10 @@ function drawItemIcon(c, art, x, y, s, t) {
     c.moveTo(-s * 0.44, -s * 0.46);
     c.quadraticCurveTo(-s * 0.10, -s * 0.28, s * 0.04, -s * 0.06);
     c.stroke();
-    c.strokeStyle = mix(col, '#ffffff', 0.45); c.lineWidth = lw * 0.35;
-    c.beginPath();
-    c.moveTo(-s * 0.44, -s * 0.48);
-    c.quadraticCurveTo(-s * 0.10, -s * 0.30, s * 0.04, -s * 0.08);
-    c.stroke();
+    /* A pale highlight used to run beside the line, a third of a keyline wide
+       and offset two hundredths from it — which at the size a card is held is
+       not a lit rope, it is a white diagonal scored across the picture. It was
+       read as a scratch on the card, twice. One line for one rope. */
     c.save();
     c.translate(s * 0.06, s * 0.04);
     c.rotate(0.5 + Math.sin(t * 1.2) * 0.05);
@@ -9338,96 +9333,93 @@ function drawItemIcon(c, art, x, y, s, t) {
     bounce.addColorStop(1, 'rgba(150,190,230,.5)');
     c.fillStyle = bounce; c.fillRect(-s * 0.4, s * 0.2, s * 0.8, s * 0.3);
     c.restore();
-    spec(c, -s * 0.13, -s * 0.06, s * 0.13, 0.9);
     rr(c, -s * 0.10, -s * 0.34, s * 0.20, s * 0.14, s * 0.04);
     c.fillStyle = igFall(c, '#7d8ea6', -s * 0.34, -s * 0.20, 0.4, 0.4); c.fill();
     c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
     c.strokeStyle = '#c9a06a'; c.lineWidth = lw * 0.8; c.lineCap = 'round';
     c.beginPath(); c.moveTo(s * 0.02, -s * 0.34);
     c.quadraticCurveTo(s * 0.30, -s * 0.42, s * 0.26, -s * 0.52); c.stroke();
-    igGlow(c, s * 0.26, -s * 0.54, s * 0.16 * sk, igHex(col, '#ffd166', 0.5), 0.8, t * 3);
-    c.beginPath(); c.arc(s * 0.26, -s * 0.55, s * 0.055 * sk, 0, TAU);
-    c.fillStyle = mix(col, '#ffffff', 0.7); c.fill();
-    for (let i = 0; i < 3; i++) {
-      const ph = (t * 1.6 + i * 0.33) % 1;
-      c.save();
-      c.globalAlpha = (1 - ph) * 0.85; c.fillStyle = col;
-      c.beginPath();
-      c.arc(s * (0.26 + (i - 1) * 0.06), -s * 0.58 - ph * s * 0.14, s * 0.022, 0, TAU);
-      c.fill();
-      c.restore();
-    }
+    /* THE FUSE TIP READ AS A HOT PIXEL. It was a 0.055 disc with three 0.022
+       sparks rising off it — at hand size a single saturated dot and three
+       specks of dust, which is what a stuck subpixel looks like. The sparks are
+       cut and the flame the fuse is actually carrying is drawn at a size a
+       flame can be seen at: one lit teardrop with a navy line round it, which
+       is how every other flame on the shelf is drawn. */
+    igGlow(c, s * 0.27, -s * 0.58, s * 0.24 * sk, igHex(col, '#ffd166', 0.5), 0.8, t * 3);
+    // the same flame Kindling burns, at the end of the cord: a body and a core,
+    // no keyline. Fire is light — an ink line round it makes it an object.
+    c.save();
+    c.translate(s * 0.27, -s * 0.56); c.scale(sk, sk);
+    c.beginPath();
+    c.moveTo(0, -s * 0.20);
+    c.bezierCurveTo(s * 0.13, -s * 0.06, s * 0.11, s * 0.06, 0, s * 0.09);
+    c.bezierCurveTo(-s * 0.11, s * 0.06, -s * 0.13, -s * 0.06, 0, -s * 0.20);
+    c.closePath();
+    c.fillStyle = igFall(c, igHex(col, '#ff9d3a', 0.5), -s * 0.21, s * 0.10, 0.55, 0.10); c.fill();
+    c.beginPath();
+    c.moveTo(0, -s * 0.10);
+    c.bezierCurveTo(s * 0.06, -s * 0.02, s * 0.05, s * 0.03, 0, s * 0.05);
+    c.bezierCurveTo(-s * 0.05, s * 0.03, -s * 0.06, -s * 0.02, 0, -s * 0.10);
+    c.closePath();
+    c.fillStyle = '#fff2c0'; c.fill();
+    c.restore();
   } else if (kind === 'flake') {
-    /* COLDSNAP WAS A NAVY GLYPH. Six arms, each split down the middle into a
-       light half and a dark half — and the whole thing turning, which meant the
-       lit half of every arm swung round with it. A key light that rotates is no
-       key light, and half the arms bottoming out at 55% toward navy on a pale
-       morning sky made a dark star with a hole in it, which is a printer's mark
-       rather than a thing lying on the snow.
+    /* COLDSNAP WAS A STATUS ICON. Six arms each split down their spine into a
+       lit half and a shadow half, dendrites drawn in two more tones on top of
+       that, a hexagonal hub with a thickness plate under it, a radial gradient
+       inside the hub and a specular on top — nine tones on an object a
+       fingernail wide, outlined at four tenths of the keyline in a translucent
+       navy. What survived at hand size was a thin vector snowflake dissolving
+       into a pale blue sky, which is the one thing on the shelf that did not
+       look like it was drawn by the same hand as the animals.
 
-       IT DOES NOT TURN ANY MORE, and that is the point: the sun is up and to
-       the left, so the arms that face that way are bright, the arms that face
-       away are in shadow, and the crystal has a top and a bottom like every
-       other object on the shelf. The shadowed side stays in ice — a cold mid
-       blue — and the whole range from the specular to the deepest facet lives
-       inside the crystal, so it does not matter what colour the sky is. */
-    const arm = s * 0.46, wdt = s * 0.055;
+       Flat cel and one thick navy line, which is the creature block's language
+       and now the whole shelf's. ONE tone per arm — how much of the key it
+       catches, as a single flat fill — one navy outline at the creature's
+       weight, and a flat hub. The spine split, the two-tone dendrites, the hub
+       plate, the hub gradient and the specular are all gone. */
+    /* THE ARMS ARE WIDE ENOUGH TO HOLD THEIR OWN OUTLINE. At 0.055 of the icon
+       with a keyline round them there was more ink than ice in each arm and the
+       crystal came back black — the printer's mark the last pass was trying to
+       get away from, wearing a heavier line. An arm has to be about three
+       keylines wide before the fill inside it is visible at hand size, and the
+       shadow side has to start well above black or six of them read as one. */
+    const arm = s * 0.46, wdt = s * 0.088;
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * TAU - Math.PI / 2;
-      /* How much of the key this arm gets: 1 pointing up-left, 0 down-right.
-         One dot product, six arms, and the crystal is lit. */
+      // how much of the key this arm gets: 1 pointing up-left, 0 down-right
       const k = 0.5 + 0.5 * (Math.cos(a) * -0.62 + Math.sin(a) * -0.78);
-      const face = igHex(igHex(col, '#4f83ad', 0.40), '#ffffff', 0.26 + 0.62 * k);
-      const back = igHex(igHex(col, '#3d648e', 0.52), '#ffffff', 0.06 + 0.32 * k);
+      const face = igHex(igHex(col, '#4a7ba8', 0.46), '#ffffff', 0.34 + 0.50 * k);
       c.save();
       c.rotate(a + Math.PI / 2);
-      /* Dendrites, sloping back toward the hub at the angle frost actually
-         grows at. The first pass hung one fat barb off each side at the same
-         height, which turned a snowflake into a twelve-point compass star. */
+      /* The barbs are struck in ink first and then in the arm's own colour on
+         top, which is how you outline a stroke — same trick, same result as a
+         filled shape with a line round it. */
       c.lineCap = 'round';
       for (let b = 0; b < 2; b++) {
-        const by = -arm * (0.42 + b * 0.30), bl = s * (0.15 - b * 0.045);
-        c.lineWidth = lw * 0.55;
-        c.strokeStyle = face;
-        c.beginPath(); c.moveTo(-wdt * 0.3, by); c.lineTo(-bl, by - bl * 0.75); c.stroke();
-        c.strokeStyle = back;
-        c.beginPath(); c.moveTo(wdt * 0.3, by); c.lineTo(bl, by - bl * 0.75); c.stroke();
+        const by = -arm * (0.42 + b * 0.30), bl = s * (0.16 - b * 0.05);
+        for (const d of [-1, 1]) {
+          c.beginPath(); c.moveTo(0, by); c.lineTo(d * bl, by - bl * 0.75);
+          c.lineWidth = lw * 1.5; c.strokeStyle = C.ink; c.stroke();
+          c.lineWidth = lw * 0.6; c.strokeStyle = face; c.stroke();
+        }
       }
-      // the arm, split along its spine into a lit face and a turned-away one
       c.beginPath();
-      c.moveTo(-wdt, s * 0.02); c.lineTo(0, -arm); c.lineTo(0, s * 0.02);
+      c.moveTo(-wdt, s * 0.04); c.lineTo(0, -arm); c.lineTo(wdt, s * 0.04);
       c.closePath();
       c.fillStyle = face; c.fill();
-      c.beginPath();
-      c.moveTo(0, s * 0.02); c.lineTo(0, -arm); c.lineTo(wdt, s * 0.02);
-      c.closePath();
-      c.fillStyle = back; c.fill();
-      c.beginPath();
-      c.moveTo(-wdt, s * 0.02); c.lineTo(0, -arm); c.lineTo(wdt, s * 0.02);
-      c.closePath();
-      c.lineWidth = lw * 0.4; c.strokeStyle = 'rgba(16,30,54,.85)'; c.stroke();
+      c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
       c.restore();
     }
-    // the hub, a hexagonal plate with real thickness under the arms
-    const hub = (r, y) => {
-      c.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * TAU - Math.PI / 2;
-        const px = Math.cos(a) * r, py = Math.sin(a) * r + y;
-        i ? c.lineTo(px, py) : c.moveTo(px, py);
-      }
-      c.closePath();
-    };
-    hub(s * 0.13, s * 0.032);
-    c.fillStyle = mix(col, '#1e3c5e', 0.42); c.fill();
-    hub(s * 0.13, 0);
-    const hg = c.createRadialGradient(-s * 0.05, -s * 0.06, s * 0.01, 0, 0, s * 0.19);
-    hg.addColorStop(0, '#ffffff');
-    hg.addColorStop(0.4, mix(col, '#ffffff', 0.66));
-    hg.addColorStop(1, mix(col, '#2f5680', 0.42));
-    c.fillStyle = hg; c.fill();
-    c.lineWidth = lw * 0.55; c.strokeStyle = C.ink; c.stroke();
-    spec(c, -s * 0.055, -s * 0.06, s * 0.075, 0.95);
+    c.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU - Math.PI / 2, r = s * 0.15;
+      const px = Math.cos(a) * r, py = Math.sin(a) * r;
+      i ? c.lineTo(px, py) : c.moveTo(px, py);
+    }
+    c.closePath();
+    c.fillStyle = igHex(col, '#ffffff', 0.62); c.fill();
+    c.lineWidth = lw * 0.9; c.strokeStyle = C.ink; c.stroke();
   } else if (kind === 'kindle') {
     // split sticks, tied, with one end just caught
     igGlow(c, 0, -s * 0.14, s * 0.48, col, 0.30, t);
@@ -9441,19 +9433,25 @@ function drawItemIcon(c, art, x, y, s, t) {
     c.strokeStyle = '#5f4527'; c.lineWidth = lw * 0.9;
     c.beginPath(); c.moveTo(-s * 0.26, s * 0.12);
     c.quadraticCurveTo(0, s * 0.20, s * 0.26, s * 0.12); c.stroke();
-    const fl = 0.9 + Math.sin(t * 5.2) * 0.10;
+    /* THE FLAME WAS FLOATING. Its body was anchored at -0.36 and tapered to a
+       point at +0.12 of its own height, so the only part of it near the sticks
+       was the tip — and with a scale on top of that the gap opened and closed
+       once a second. Fire sits IN the fuel. It is dropped onto the stick tops
+       and its base is a flat that overlaps them, so there is nothing to see
+       between the two, and the vertical wobble is smaller than the overlap. */
+    const fl = 0.94 + Math.sin(t * 5.2) * 0.06;
     c.save();
-    c.translate(0, -s * 0.36); c.scale(1, fl);
+    c.translate(0, -s * 0.30); c.scale(1, fl);
     c.beginPath();
-    c.moveTo(0, -s * 0.30);
-    c.bezierCurveTo(s * 0.20, -s * 0.10, s * 0.16, s * 0.10, 0, s * 0.12);
-    c.bezierCurveTo(-s * 0.16, s * 0.10, -s * 0.20, -s * 0.10, 0, -s * 0.30);
+    c.moveTo(0, -s * 0.32);
+    c.bezierCurveTo(s * 0.21, -s * 0.10, s * 0.17, s * 0.10, 0, s * 0.14);
+    c.bezierCurveTo(-s * 0.17, s * 0.10, -s * 0.21, -s * 0.10, 0, -s * 0.32);
     c.closePath();
     c.fillStyle = igFall(c, col, -s * 0.32, s * 0.14, 0.55, 0.10); c.fill();
     c.beginPath();
-    c.moveTo(0, -s * 0.16);
-    c.bezierCurveTo(s * 0.10, -s * 0.04, s * 0.08, s * 0.06, 0, s * 0.08);
-    c.bezierCurveTo(-s * 0.08, s * 0.06, -s * 0.10, -s * 0.04, 0, -s * 0.16);
+    c.moveTo(0, -s * 0.17);
+    c.bezierCurveTo(s * 0.10, -s * 0.04, s * 0.08, s * 0.07, 0, s * 0.09);
+    c.bezierCurveTo(-s * 0.08, s * 0.07, -s * 0.10, -s * 0.04, 0, -s * 0.17);
     c.closePath();
     c.fillStyle = '#fff2c0'; c.fill();
     c.restore();
@@ -9469,8 +9467,17 @@ function drawItemIcon(c, art, x, y, s, t) {
        flat pentagon, and the mark is a real groove: a dark cut with a lit lip
        along its upper side, which is what a chisel leaves under a sun that is
        up and to the left. The card's violet is the light IN the cut, not a wash
-       over the whole object — a rune stone that glows all over is a lamp. */
-    const gran = '#8e9bb2';
+       over the whole object — a rune stone that glows all over is a lamp.
+
+       AND THEN IT WENT TOO FAR THE OTHER WAY. Two stops up from a black slab is
+       `#8e9bb2`, which is a pale grey standing on a pale blue frost morning:
+       the slab became a placeholder. A stone is DARKER than the sky behind it —
+       that is what makes it a stone and not a hole in the weather — so the
+       granite sits a stop below the sky and carries the outline the animals
+       wear. The five weathering flecks and the dark seam went with the move:
+       specks a fifth of a keyline wide on an object a fingernail tall are dirt
+       on the lens at every size the game is actually played at. */
+    const gran = '#66738d';
     const face = () => {
       c.beginPath();
       c.moveTo(-s * 0.25, -s * 0.28); c.lineTo(-s * 0.02, -s * 0.45);
@@ -9488,20 +9495,6 @@ function drawItemIcon(c, art, x, y, s, t) {
     face();
     c.fillStyle = igFall(c, gran, -s * 0.46, s * 0.36, 0.42, 0.34); c.fill();
     c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
-    c.save();
-    face(); c.clip();
-    // weathering: a few pale flecks and one dark seam, so it is stone not card
-    c.globalAlpha = 0.30; c.fillStyle = '#ffffff';
-    for (let i = 0; i < 5; i++) {
-      c.beginPath();
-      c.arc(-s * 0.16 + (i % 3) * s * 0.15, -s * 0.16 + (i % 2) * s * 0.34, s * 0.019, 0, TAU);
-      c.fill();
-    }
-    c.globalAlpha = 0.34; c.strokeStyle = '#2a3550'; c.lineWidth = lw * 0.4;
-    c.beginPath();
-    c.moveTo(-s * 0.24, s * 0.12); c.quadraticCurveTo(-s * 0.06, s * 0.05, s * 0.22, s * 0.16);
-    c.stroke();
-    c.restore();
     // the lit chamfer along the top-left, the edge the key actually strikes
     c.strokeStyle = mix(gran, '#ffffff', 0.65); c.lineWidth = lw * 0.45;
     c.beginPath();
@@ -9511,7 +9504,6 @@ function drawItemIcon(c, art, x, y, s, t) {
        card's own colour alive at the bottom of the groove. Three overlaid
        strokes at 1.7 / 1.5 / 0.6 of the keyline is not a carving, it is a pile
        of lines — this is two thin ones and it reads as chiselled. */
-    const pu = 0.6 + 0.4 * Math.abs(Math.sin(t * 1.5));
     const mark = () => {
       c.beginPath();
       c.moveTo(-s * 0.02, -s * 0.22); c.lineTo(-s * 0.02, s * 0.22);
@@ -9519,13 +9511,15 @@ function drawItemIcon(c, art, x, y, s, t) {
       c.moveTo(-s * 0.02, s * 0.04); c.lineTo(-s * 0.15, -s * 0.08);
       c.stroke();
     };
+    /* Two strokes, and neither of them pulses. The lit lip was a third stroke
+       offset a quarter of a keyline up-left, which at the size a card is held
+       at is a second copy of the mark half a pixel off the first — and the
+       violet breathed at 1.5 rad/s for no reason a stone would. A cut is dark,
+       and what is alive at the bottom of it is the card's colour. */
     c.save();
     c.lineCap = 'round';
-    c.translate(-lw * 0.28, -lw * 0.28);
-    c.strokeStyle = mix(gran, '#ffffff', 0.75); c.lineWidth = lw * 0.55; mark();
-    c.translate(lw * 0.28, lw * 0.28);
-    c.strokeStyle = 'rgba(10,16,30,.88)'; c.lineWidth = lw * 0.85; mark();
-    c.strokeStyle = mixA(igHex(col, '#ffffff', 0.55), 0.85 * pu); c.lineWidth = lw * 0.34; mark();
+    c.strokeStyle = C.ink; c.lineWidth = lw * 0.95; mark();
+    c.strokeStyle = igHex(col, '#ffffff', 0.5); c.lineWidth = lw * 0.34; mark();
     c.restore();
   } else if (kind === 'slide') {
     /* A WHITE TRIANGLE WITH THREE WHITE CIRCLES ON IT. Avalanche was not on the
@@ -9592,46 +9586,39 @@ function drawItemIcon(c, art, x, y, s, t) {
       c.restore();
     }
   } else if (kind === 'snowball') {
-    // packed snow: a crust that has taken a print, and it is cold enough to spark
-    c.beginPath(); c.arc(0, s * 0.06, s * 0.34, 0, TAU);
-    const sg = c.createRadialGradient(-s * 0.14, -s * 0.10, s * 0.02, 0, s * 0.06, s * 0.44);
-    sg.addColorStop(0, '#ffffff');
-    sg.addColorStop(0.5, mix(col, '#ffffff', 0.45));
-    sg.addColorStop(1, mix(col, '#5b7ea6', 0.55));
-    c.fillStyle = sg; c.fill();
-    c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
+    /* A HANDFUL OF SNOW WAS AN UNRENDERED PLACEHOLDER. Six shading channels on
+       a circle — a radial body, a soft lit plane, a soft terminator, four
+       grains, a bounce off the drift and a specular — and every one of them
+       lived between white and a pale grey-blue, on a white-blue sky. Six ways
+       of saying nothing. Read at hand size it was a grey-white disc.
+
+       A ball of snow is white, it has one shadow side, and it has a line round
+       it. That is the whole drawing and it is the same drawing the animals get:
+       two flat tones and one thick navy outline. The keyline is a shade heavier
+       here than anywhere else on the shelf because this is the palest object in
+       the set standing on the palest ground in the set, and the line is the
+       only thing separating them. */
+    const ball = () => { c.beginPath(); c.arc(0, s * 0.06, s * 0.34, 0, TAU); };
+    /* The shadow side as a CRESCENT, which is the shape a sphere's terminator
+       actually is. Drawn as a chord — an arc closed straight across — it cut the
+       ball in half on a hard diagonal and what came out was a moon, or worse a
+       pie chart. Fill the whole ball dark, then drop the lit disc back on top of
+       it offset toward the key, and what is left round the far edge is the
+       crescent. Two flat tones, no gradient, one line. */
+    ball();
+    c.fillStyle = igHex(col, '#41618c', 0.52); c.fill();
     c.save();
-    c.beginPath(); c.arc(0, s * 0.06, s * 0.34, 0, TAU); c.clip();
-    /* PRESSED, not moulded. Three concentric arcs on a smooth ball read as a
-       fingerprint diagram. Packed snow takes one flat where a palm went, and a
-       terminator that is soft rather than ruled — drawn as hard-edged facets it
-       came out as a paper shape stuck on a sphere, which is worse than the
-       arcs were. Two soft planes and a cold bounce off the drift it came from. */
-    const pl = c.createLinearGradient(-s * 0.24, -s * 0.24, s * 0.06, s * 0.06);
-    pl.addColorStop(0, 'rgba(255,255,255,.7)');
-    pl.addColorStop(1, 'rgba(255,255,255,0)');
-    c.fillStyle = pl;
-    c.beginPath(); c.ellipse(-s * 0.10, -s * 0.08, s * 0.22, s * 0.15, -0.6, 0, TAU); c.fill();
-    const tm = c.createLinearGradient(0, -s * 0.06, s * 0.22, s * 0.26);
-    tm.addColorStop(0, 'rgba(120,152,192,0)');
-    tm.addColorStop(1, 'rgba(120,152,192,.38)');
-    c.fillStyle = tm;
-    c.beginPath(); c.arc(0, s * 0.06, s * 0.34, 0, TAU); c.fill();
-    // grains catching the light along the turn of the ball
-    c.globalAlpha = 0.55; c.fillStyle = '#ffffff';
-    for (let i = 0; i < 4; i++) {
-      c.beginPath();
-      c.arc(-s * 0.16 + i * s * 0.11, s * (0.16 - (i % 2) * 0.10), s * 0.017, 0, TAU);
-      c.fill();
-    }
-    c.globalAlpha = 1;
-    const bnc = c.createLinearGradient(0, s * 0.18, 0, s * 0.40);
-    bnc.addColorStop(0, 'rgba(150,190,230,0)');
-    bnc.addColorStop(1, 'rgba(180,214,246,.55)');
-    c.fillStyle = bnc;
-    c.beginPath(); c.arc(0, s * 0.06, s * 0.34, 0, TAU); c.fill();
+    ball(); c.clip();
+    c.beginPath(); c.arc(-s * 0.085, -s * 0.025, s * 0.295, 0, TAU);
+    c.fillStyle = '#f4f9ff'; c.fill();
     c.restore();
-    spec(c, -s * 0.13, -s * 0.08, s * 0.13, 0.95);
+    /* A LITTLE UNDER THE SHELF'S WEIGHT, and this is the one place it is worth
+       naming: every other icon on the shelf is a tall narrow thing whose `s`
+       covers more than it does, so the keyline lands at a sane fraction of it.
+       A ball is the whole box in both directions, so the same line came back a
+       fifth of the radius — a black doughnut with a white hole in it. */
+    ball();
+    c.lineWidth = lw * 0.8; c.strokeStyle = C.ink; c.stroke();
     /* Three twinkling crosses used to float above it. They were the widest
        thing the icon painted, so the snowball itself was measured small and
        drawn small — and a hand of eight cards does not need eight things
@@ -9695,52 +9682,30 @@ function drawItemIcon(c, art, x, y, s, t) {
       c.quadraticCurveTo(0, s * 0.40, -s * 0.46, 0);
       c.closePath();
     };
-    /* THE SCLERA WAS WHITE, and a white almond with a coloured disc in it is a
-       logo. The white of an eye is a SPHERE sitting in a socket — it is white
-       only where the key strikes it, and it turns to a cool grey at both
-       corners where the lids wrap round the curve. That, and the shadow the top
-       lid drops across it, is the whole difference between an eye and a badge. */
+    /* FIVE GRADIENTS AND A SPECULAR, and the note that came back was "a flat
+       green eye" — because at the size a card is held none of them is more than
+       a pixel wide. A radial sclera, a lid wash, a corner wash, a radial iris,
+       six iris fibres and a highlight, all of them inside two stops of each
+       other, all of them gone. What is left is what the animals are drawn with:
+       a flat white ball, one flat plane of lid shadow across the top of it, a
+       flat iris, a black pupil, and a navy line round the whole thing. */
     mk();
-    const eg = c.createRadialGradient(-s * 0.12, -s * 0.11, s * 0.02, -s * 0.04, 0, s * 0.50);
-    eg.addColorStop(0, '#ffffff');
-    eg.addColorStop(0.45, '#e2ecf6');
-    eg.addColorStop(1, '#8fa5bd');
-    c.fillStyle = eg; c.fill();
+    c.fillStyle = '#eef5fd'; c.fill();
     c.save();
     mk(); c.clip();
-    // the lid's shadow, which is what stops an eye reading as a lens
-    const lid = c.createLinearGradient(0, -s * 0.34, 0, s * 0.10);
-    lid.addColorStop(0, 'rgba(24,40,66,.55)');
-    lid.addColorStop(1, 'rgba(24,40,66,0)');
-    c.fillStyle = lid; c.fillRect(-s * 0.5, -s * 0.4, s, s * 0.52);
-    // and the corners, where the ball turns away into the lids
-    const cnr = c.createLinearGradient(-s * 0.46, 0, s * 0.46, 0);
-    cnr.addColorStop(0, 'rgba(46,70,102,.45)');
-    cnr.addColorStop(0.28, 'rgba(46,70,102,0)');
-    cnr.addColorStop(0.72, 'rgba(46,70,102,0)');
-    cnr.addColorStop(1, 'rgba(46,70,102,.55)');
-    c.fillStyle = cnr; c.fillRect(-s * 0.5, -s * 0.4, s, s * 0.8);
+    // the shadow the top lid drops — one flat plane, the same trick as the ball
+    c.fillStyle = 'rgba(38,60,96,.42)';
+    c.beginPath();
+    c.moveTo(-s * 0.5, -s * 0.4); c.lineTo(s * 0.5, -s * 0.4);
+    c.lineTo(s * 0.5, -s * 0.10);
+    c.quadraticCurveTo(0, -s * 0.02, -s * 0.5, -s * 0.10);
+    c.closePath(); c.fill();
     const gaze = Math.sin(t * 0.7) * s * 0.07;
     c.beginPath(); c.arc(gaze, 0, s * 0.19, 0, TAU);
-    const ig = c.createRadialGradient(gaze - s * 0.05, -s * 0.05, s * 0.01, gaze, 0, s * 0.22);
-    ig.addColorStop(0, mix(col, '#ffffff', 0.5));
-    ig.addColorStop(0.6, col);
-    ig.addColorStop(1, mix(col, '#0d1830', 0.5));
-    c.fillStyle = ig; c.fill();
-    c.strokeStyle = mixA(col, 0.55); c.lineWidth = lw * 0.5;
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * TAU;
-      c.beginPath();
-      c.moveTo(gaze + Math.cos(a) * s * 0.08, Math.sin(a) * s * 0.08);
-      c.lineTo(gaze + Math.cos(a) * s * 0.17, Math.sin(a) * s * 0.17);
-      c.stroke();
-    }
-    c.beginPath(); c.arc(gaze, 0, s * 0.08, 0, TAU);
-    c.fillStyle = '#141d31'; c.fill();
-    // the limbal ring, which is what stops an iris reading as a printed dot
-    c.beginPath(); c.arc(gaze, 0, s * 0.185, 0, TAU);
-    c.lineWidth = lw * 0.5; c.strokeStyle = 'rgba(12,22,42,.6)'; c.stroke();
-    spec(c, gaze - s * 0.07, -s * 0.08, s * 0.09, 0.95);
+    c.fillStyle = col; c.fill();
+    c.lineWidth = lw * 0.7; c.strokeStyle = C.ink; c.stroke();
+    c.beginPath(); c.arc(gaze, 0, s * 0.085, 0, TAU);
+    c.fillStyle = C.ink; c.fill();
     c.restore();
     mk(); c.lineWidth = lw; c.strokeStyle = C.ink; c.stroke();
     // the top lid, thicker than the lower one, with a lit edge on its own fold
@@ -9804,9 +9769,8 @@ function drawCharmIcon(c, id, col, x, y, s, t) {
   c.save();
   c.translate(x, y);
   c.lineJoin = 'round'; c.lineCap = 'round';
-  const lw = Math.max(2.2, s * 0.075);
-  igShadow(c, s, s * 0.30);
-  c.translate(0, Math.sin(t * 1.4 + s) * s * 0.020);
+  const lw = Math.max(2.5, s * 0.080);
+  // no shadow of its own and no bob, for the reasons written over `drawItemIcon`
   /* A CUT STONE IS NOT A LAMP, and its halo was the widest thing this function
      painted — seven tenths of the icon, against a bezel four tenths of it — so
      `charmBox` measured the glow and every charm was drawn at little more than
@@ -11460,7 +11424,7 @@ function drawChooser(c, t) {
     const y = 150 + r * (chh + 24) - (rows - 1) * 20;
     const hovered = UI.hover && UI.hover.id === 'choose' && UI.hover.data === i;
     if (it.card) drawCard(c, it.card, x, y - (hovered ? 8 : 0), cw, chh, { t, scale: hovered ? 1.04 : 1 });
-    else if (it.charm) drawCharmCard(c, it.charm, x, y - (hovered ? 8 : 0), cw, chh, t);
+    else if (it.charm) drawCard(c, charmCard(it.charm), x, y - (hovered ? 8 : 0), cw, chh, { t, scale: hovered ? 1.04 : 1 });
     else if (it.label && it.label.indexOf('\n') >= 0) {
       // a heading and its small print — a choice that needs explaining
       const [head, body] = it.label.split('\n');
@@ -11493,114 +11457,31 @@ function drawChooser(c, t) {
   if (ch.cancel) button(c, 'chooseCancel', MID - 90, VH - 74, 180, 48, ch.cancel, '#40527a');
 }
 
-/* A charm is a pendant, not a card: a hanging loop, a cut stone, and the one
-   line of text that says what wearing it does. */
-/* A charm wears the same face as every other card — body, band, window, frame.
-   It used to be its own design in parchment cream with a floating pill for a
-   name, so a reward screen showed two different games' cards side by side. */
-function drawCharmCard(c, charmId, x, y, w, h, t) {
-  const ch = chOf(charmId) || BELLS[charmId];
-  const S = w / 126;
-  c.save();
-  c.translate(x, y);
+/* `drawCharmCard` LIVED HERE, AND IT WAS ANOTHER GAME'S CARD.
 
-  c.save();
-  c.shadowColor = 'rgba(0,0,0,.5)'; c.shadowBlur = 18 * S; c.shadowOffsetY = 7 * S;
-  rr(c, 0, 0, w, h, 12 * S);
-  const body = c.createLinearGradient(0, 0, 0, h);
-  body.addColorStop(0, '#f2f8ff');
-  body.addColorStop(0.55, '#e3edfb');
-  body.addColorStop(1, '#c8dbf1');
-  c.fillStyle = body; c.fill();
-  c.restore();
+   A hundred lines that drew a charm as a pale mint slab: a white-to-mint body,
+   DARK ink on a LIGHT ground when every other card in the set is near-white on
+   near-black, no tribe metal, no frame profile, no rarity, a picture area with
+   a hand-built sky in it instead of the weather the window block spends a whole
+   seed on — and a grey rounded `CHARM` pill floating at the bottom that read as
+   a tappable button sitting on a card you cannot tap. Stood next to GEAR SHIELD
+   in the shop it did not look like the same class of object, because it was not
+   drawn by the same function.
 
-  /* A CHARM'S NAME WRAPS, for the same reason a card's does — and this one had
-     no way to fail gracefully at all.
+   The comment above it had already claimed, for a round, that a charm wears the
+   same face as every other card. It does now. `drawCard` has had a charm branch
+   the whole time — `isCharm` picks `charmBox`/`drawCharmIcon` for the subject
+   and the footer rail says CHARM instead of GEAR — so a charm only ever needed
+   to be handed to it in the shape it expects. Deleted, replaced by nothing but
+   the six fields that shape is: this is a description of a card, not a drawing.
 
-     `fitText` shrinks until it fits OR until it hits the readable floor, and at
-     the floor it just returns the floor: nothing here truncated and nothing
-     wrapped, so on a 653x280 fold `BOUNTY CHARM` and `SWIFT CHARM` were drawn
-     straight through their own card edges and through each other. Two names,
-     one collision, and the only reason it was ever seen is that somebody opened
-     the shop screen at the tightest shape in the list.
-
-     Same machinery as `drawCard`: wrap to two lines and let the band grow, with
-     the growth coming out of the picture so nothing below it moves. */
-  const chNm = ch.name.toUpperCase();
-  const chW = w - 18 * S;
-  const chSize = fitText(c, chNm, chW, 14 * S, 8 * S, 't');
-  const chWrap = ellipsize(c, chNm, chSize, chW) !== chNm;
-  const chFit = chWrap ? nameFit(c, chNm, chSize, chW, 2) : null;
-  const chStep = chFit ? lineH(chFit.size, chSize * 0.9) : 0;
-  const bh = chFit
-    ? Math.max(26 * S, chFit.lines.length * chStep + 7 * S)
-    : 26 * S;
-  const chGrew = bh - 26 * S;
-  c.save();
-  rr(c, 0, 0, w, h, 12 * S);
-  c.clip();
-  const bg = c.createLinearGradient(0, 0, 0, bh);
-  bg.addColorStop(0, '#ffffff');
-  bg.addColorStop(1, ch.col);
-  c.fillStyle = bg; c.fillRect(0, 0, w, bh);
-  c.fillStyle = 'rgba(255,255,255,.5)'; c.fillRect(0, bh - 1.6 * S, w, 1.6 * S);
-  c.restore();
-  if (chFit) {
-    chFit.lines.forEach((ln, i) => txt(c, ellipsize(c, ln, chFit.size, chW), w / 2,
-      bh / 2 + (i - (chFit.lines.length - 1) / 2) * chStep,
-      chFit.size, '#22160c', 'center', 't', 'rgba(255,255,255,.45)'));
-  } else {
-    txt(c, chNm, w / 2, bh / 2, chSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
-  }
-
-  const ax = 7 * S, ay = bh + 6 * S, aw = w - 14 * S,
-    ah = Math.max(h * 0.16, h * 0.40 - chGrew);
-  c.save();
-  rr(c, ax, ay, aw, ah, 8 * S);
-  c.clip();
-  const sky = c.createLinearGradient(0, ay, 0, ay + ah);
-  sky.addColorStop(0, '#16294c');
-  sky.addColorStop(1, '#3d5f8d');
-  c.fillStyle = sky; c.fillRect(ax, ay, aw, ah);
-  const halo = c.createRadialGradient(w / 2, ay + ah * 0.5, 2, w / 2, ay + ah * 0.5, aw * 0.6);
-  halo.addColorStop(0, ch.col);
-  halo.addColorStop(0.5, 'rgba(255,255,255,0)');
-  halo.addColorStop(1, 'rgba(255,255,255,0)');
-  c.save(); c.globalAlpha = 0.55; c.fillStyle = halo; c.fillRect(ax, ay, aw, ah); c.restore();
-
-  /* The gem was built here by hand, and again on the collection tile, and a
-     third time on the card face as a generic burst — three drawings of one
-     trinket that had already drifted apart. One call, and the mark cut into the
-     stone is the charm's own. */
-  drawCharmIcon(c, charmId, ch.col, w / 2, ay + ah * 0.52, Math.min(aw, ah) * 0.66, t);
-  const inner = c.createLinearGradient(0, ay, 0, ay + ah * 0.3);
-  inner.addColorStop(0, 'rgba(8,14,28,.28)');
-  inner.addColorStop(1, 'rgba(8,14,28,0)');
-  c.fillStyle = inner; c.fillRect(ax, ay, aw, ah * 0.3);
-  c.restore();
-  rr(c, ax, ay, aw, ah, 8 * S);
-  c.lineWidth = 2.5 * S; c.strokeStyle = C.ink; c.stroke();
-
-  const ty = ay + ah + 6 * S;
-  const th = h - ty - 20 * S;
-  c.beginPath();
-  c.moveTo(14 * S, ty - 2 * S); c.lineTo(w - 14 * S, ty - 2 * S);
-  c.lineWidth = 1.2 * S; c.strokeStyle = 'rgba(24,40,68,.22)'; c.stroke();
-  const fit = fitLines(c, ch.text, aw - 10 * S, 3, 11.5 * S, 7.5 * S);
-  const lh = fit.size * 1.12;
-  const lines = fit.cut(Math.max(1, Math.floor(th / lh)));
-  const top = ty + th / 2 - (lines.length - 1) * lh / 2;
-  lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#1d2f4d', 'center', 't', 0));
-
-  rr(c, 0, 0, w, h, 12 * S);
-  c.lineWidth = 3 * S; c.strokeStyle = C.ink; c.stroke();
-  rr(c, 3.5 * S, 3.5 * S, w - 7 * S, h - 7 * S, 9 * S);
-  c.lineWidth = 1.4 * S; c.strokeStyle = ch.col; c.stroke();
-
-  c.beginPath(); rr(c, w / 2 - 26 * S, h - 17 * S, 52 * S, 13 * S, 6.5 * S);
-  inked(c, 'rgba(24,40,68,.16)', 1.2 * S, 'rgba(24,40,68,.28)');
-  txt(c, 'CHARM', w / 2, h - 10.5 * S, 9 * S, '#3a5378', 'center', 't', 0);
-  c.restore();
+   `card.charms` is an empty array on purpose — the field is what `drawCard`
+   reads to hang worn pendants along the card's edge, and a charm does not wear
+   charms. */
+function charmCard(id) {
+  const ch = chOf(id) || BELLS[id] || { name: id, text: '', rare: 1 };
+  return { def: id, type: 'charm', name: ch.name, text: ch.text || '',
+    tribe: null, rare: ch.rare || 1, leader: false, charms: [], kw: {} };
 }
 
 /* ------------------------------------------------------------- teaching -- */
@@ -12009,7 +11890,7 @@ function drawReward(c, t) {
       const x = MID - tw / 2 + i * (w2 + g3);
       c.save();
       if (r.charmTaken) c.globalAlpha = 0.3;
-      drawCharmCard(c, cid, x, 452, w2, 160, t);
+      drawCard(c, charmCard(cid), x, 452, w2, 160, { t });
       c.restore();
       if (!r.charmTaken) hit('rewardCharm', x, 452, w2, 160, i);
     });
@@ -12144,10 +12025,8 @@ function drawShop(c, t) {
   });
   s.charms.forEach((it, i) => {
     const x = rx + i * (cw + gap);
-    c.save();
-    if (it.sold) c.globalAlpha = 0.35;
-    drawCharmCard(c, it.id, x, cy, cw, chh, t);
-    c.restore();
+    // same call the gear stall makes, so the two shelves hold one kind of object
+    drawCard(c, charmCard(it.id), x, cy, cw, chh, { t, alpha: it.sold ? 0.35 : 1 });
     tag(x + cw / 2, it.price, it.sold);
     if (!it.sold) hit('buyCharm', x, cy, cw, chh + 44, i);
   });
