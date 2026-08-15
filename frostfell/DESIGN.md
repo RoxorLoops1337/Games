@@ -12,6 +12,27 @@ is in [README.md](README.md).
 | **RULE** | settled, and it constrains what comes next |
 | **DEAD ENDS** | built, measured, thrown away — the most valuable half |
 
+**Names not in the code, declared — and in which of the two ways.** Two guards
+already stop an entry being *dropped* while something still points at it. Neither
+could see the reverse — an entry describing code that no longer exists — because
+a design record is *supposed* to name absent things, and no check could tell a
+legitimate dead-end reference from a stale FINDING. It can now. Every code-shaped
+name this file uses must exist in the game, the probe or the tools, **or be
+declared below**, and the two reasons are kept apart because they rot differently:
+
+<!-- gone: auraOn — the aura cards were cut and took the primitive with them
+     (see FINDING — the aura idea did not work); its four readers went too -->
+<!-- external: letterSpacing — a canvas/CSS property this game does not use;
+     named to state a known error in the text stub, not code that was removed -->
+
+`gone` is something this project built and deleted; `external` is something it
+never had. Both are checked in both directions — a declared name that turns up in
+the code fails here, because the entry describing its absence is then the stale
+one. A name in backticks that is *prose* (a retired topic, a fragment of a card
+name) is not a declaration's problem: the check only looks at camelCase, dotted
+and UPPER_SNAKE tokens, because those are the only shapes a lost function or
+constant comes in.
+
 **Two rules, and neither of them is a line count.**
 
 *1. Every entry states a number, and an entry that cannot state one gets cut.*
@@ -924,12 +945,26 @@ seen twice, one steering the CARD POOL toward what the deck wants and the other
 steering the TRAIL toward the fights the deck can take. Apart, ±8 swallows both.
 Together they read **+11** and clear.
 
-| the fight | the trader | steering the run | |
-|---|---|---|---|
-| **+17** | **+17** | **+11** | = 45 ± 7 |
-
 The five pilot modes are untouched and the shape chart still draws all five rows.
 This changed what the ladder claims to have measured, not what it ran.
+
+**AND THEN IT WAS RUN AT THE SAMPLE THAT SETTLES IT — 1,317 AN ARM, 3,951 RUNS.**
+Not "it now asks for less": the corrected forecast was paid, and every rung
+clears. No `?` anywhere in the row for the first time in the ladder's history:
+
+| the fight | the trader | steering the run | |
+|---|---|---|---|
+| **+15** | **+18** | **+12** | **= 45 ± 4** |
+
+**The fold is vindicated by the same run.** Apart at that sample the halves read
+`steering the pool +7` and `choosing its road +5?` — so the trail half *still*
+does not clear at four times the sample that was supposed to settle it, while the
+two together read +12 and clear comfortably. One rung of +12 says something; two
+rungs of "+7 and a range" say less than that, at three times the price.
+
+45 points, ±4, three resolved rungs. The total has read 27, 33 and 42 across the
+project's history and every one of those was quoted against a band it could not
+support; this is the first one that can be.
 
 **AND THE RUNG IS NOT A DECISION, WHICH IS THE MORE USEFUL HALF.** A rung worth
 +9 says a pilot that takes every fight beats one that picks arbitrarily. It does
@@ -1615,6 +1650,32 @@ passengers: it is one habit worth 8 and three habits worth 7 together, and the
 three clear their bar. What stays true is that each of the three is individually
 inside the band — they are substitutes, not additions.
 
+**AND THEN THE DENOMINATOR NOBODY HAD MEASURED, WHICH REVERSES THE DIAGNOSIS.**
+A substitute only has work to do on turns the thing it substitutes for is
+unavailable, so the question that sizes every "make the other habits stronger"
+idea is *how many turns is that*. Read off the board across **622,306 player
+turns**:
+
+```
+a scheme is on the board            39% of player turns
+one this pilot can ACT on           15%
+the board is BARE                   61%
+```
+
+**Denial is worth +8 on the 15% of turns it exists, and the other three are worth
++7 across the 61% where it does not.** Per turn available that is roughly a
+four-to-one density, and it turns six rounds of "denial is strong, the others are
+weak" into something else: *the others are weak because a bare board has nothing
+on it to decide.* They are not failing at their job; they are being asked to fill
+three fifths of the fight with a decision the fight does not contain.
+
+It also explains the schemer dead end in one line. Giving four foes a scheme
+converted bare turns into denial turns — it took the 61% down and handed the
+share to the habit that was already winning, which is exactly what the arm
+measured (denial +11 → +16 of the same set, the others +5 → +2). **The lever is
+not the frequency of schemes. It is that 61% of turns are empty**, and the next
+attempt belongs there rather than in another habit tweak.
+
 **So the pairs were run against denial specifically** (`FF_PAIRS=45`), each as
 `pair - none - (a - none) - (b - none)`, band on an interaction ±5.4:
 
@@ -1723,6 +1784,30 @@ Sized properly (`B = 4`) it wants 2,064 an arm, and `steering the pool` wants
 14,700. That is the reading that took the ladder from four rungs to three: an
 arm nobody will ever pay for is not a measurement, and the two halves fold into
 one rung that clears.
+
+**AND THEN THE OBVIOUS WORRY: IS ANYTHING IN THIS FILE SETTLED AT A COIN-FLIP
+SAMPLE? Audited, and the answer is no — for a reason worth keeping.** Every
+"settled" finding above was sized with the broken form, so the fear is real; what
+retires it is that **none of them is settled BY the forecast.** A forecast
+decides how much you spend. The verdict is computed afterwards from the sample
+actually run:
+
+| finding | how it is judged | sized at | ran at | touched? |
+|---|---|---|---|---|
+| gear-heavy decks | permutation `p=0.042` over all labellings | 84 a side | 84 | **no** — a p is not a band comparison, and 84 is past even the corrected 64 |
+| best course vs worst | `8 points at 2.8σ on a measured band` | 683 an arm | 720 | **no** — the σ is measured, not predicted |
+| a ware's worth | against `familyZ(8) = 2.50σ`, measured band | — | — | **no** |
+| the ladder rungs | `\|d\| ≥ 2σ` at this sample | 517 an arm | 516 | this is the one that failed, and it is fixed |
+
+*A sample computed wrong makes a measurement expensive or lucky. It cannot make
+one false.* What the broken form corrupted is only the promise "run N and it will
+resolve" — and there, the damage is exactly what it looks like: **three
+forecasts landed and the fourth did not, which at roughly even odds each is what
+four coin flips look like.** The method's track record was itself inside its own
+band, and nobody had noticed because nobody reports the forecasts that missed.
+
+Two forecasts still used the old form and both now use `4·band`: the pair arm's
+set-minus-sum, and the decks comment (`B = 1.5`, 64 decks at 2σ rather than 16).
 
 **The rule, then:** *when a reading moves between rounds, compute the sample
 before running another one, and size for the band rather than the effect* — and
@@ -2135,16 +2220,33 @@ Two changes, and the first attempt at the second one made things worse:
   hyphenating. The band now takes the largest size (down to the 9px floor) that
   holds the whole name, and only breaks if none does.
 * **The cut goes where the SECOND piece can start a word** — consonant then
-  vowel, taking the latest such place that fits. Nearly every long name here is
-  a compound (`CINDERPUP`, `SNOWPUP`, `WHETSTONE`, `KETTLEBEAK`), so this puts
-  the whole first element on the first line. The first attempt cut *after a
-  vowel* instead, which is true of `KETTLE|BEAK` by accident and turned
-  `SNOW|PUP` into `SNO|WPUP` and `WHETS|TONE` into `WHE|TSTONE` — **two of four
-  regressed, with 86 of 86 still green.** The second shot walk caught it.
+  vowel. Nearly every long name here is a compound (`CINDERPUP`, `SNOWPUP`,
+  `WHETSTONE`, `KETTLEBEAK`, `BELLROPE`, `COLDSNAP`), so this puts the whole
+  first element on the first line.
 
-Pinned now by four named cases rather than a property, because a property here
-would restate the implementation: `CINDER|PUP KETTLE|BEAK SNOW|PUP WHETS|TONE`,
-and 2 of the 4 fail if the seam preference is removed.
+**Choosing AMONG the seams took three tries and each wrong one shipped green:**
+
+| rule | what it drew |
+|---|---|
+| cut after a vowel | `SNO\|WPUP`, `WHE\|TSTONE` — right for `KETTLE\|BEAK` by accident only |
+| the latest seam that fits | `BELLRO\|PE` — right for `CINDER\|PUP`, wrong the moment a name's seam is early |
+| **nearest to balanced, ties to the later cut** | all six right |
+
+The third is not a third guess: a compound's seam is near the middle *because
+both halves are words*, and "latest" only looked right because the four names it
+was tested on happened to have late seams. `BELL|ROPE` and `CINDER|PUP` fall out
+of one rule. **Two of the three wrong versions were caught by opening a PNG and
+the third by adding a sixth name to the pin** — six named cases now, because a
+property here would restate the implementation.
+
+**And the band has to HOLD what it lays out**, which is a separate bug the fold
+found: `44 * S` for three lines is a prediction about type that has a 9px floor
+under it, so at 653x280 `CIN` was drawn above the plate into the frame and `PUP`
+below it across the picture. Growing the band pushed a stat pip onto a red ground
+at 1.2:1 (the contrast check); closing up the leading put the lines on each other
+(the overlap check). **The growth has to come from somewhere, and it comes out of
+the picture** — the one element on a fold-size card carrying no information — so
+nothing below the window moves and both checks stay green.
 
 Two more things had to be right before it landed at **0 of 58 cut**:
 
@@ -2185,6 +2287,47 @@ was excluded, which is the general shape: **the one text a coverage sweep skips
 is the one nobody has ever looked at, so it is exactly where the defect is.** The
 fix was the text (12 words → 10), because the alternative was making every card
 in the game shorter to suit one leader.
+
+**AND THE WALK PHOTOGRAPHS THREE SHAPES OF NINE, WHICH IS RIGHT — BUT THEY WERE
+THE WRONG THREE.** Three rounds running, the only thing that saw a real defect
+was a person opening a PNG, so the obvious question is whether the walk should
+cover everything the render sweep does. Timed rather than argued about: **918s
+for all nine, ~102s a shape**, so the six extra cost about ten minutes. That is
+affordable — and it is still the wrong trade, because the binding cost is not
+wall-clock. Nine shapes is 342 images and a person opens perhaps five. Walking
+more shapes makes more pictures nobody looks at.
+
+What the ten minutes bought instead is the answer: run the nine once, look at the
+**tightest** shape, and make that one of the standing three. At 653x280, five
+live defects that the 1280x720 / 2400x1080 / iPhone-14 walk had never shown:
+
+| | |
+|---|---|
+| three-line card names drawn **outside** the name band | `CIN` clipped by the frame, `PUP` across the picture |
+| `A KIND WINTER` drawn **through** the KEEN BEASTS row | a clamp to `VH - 104` that lands inside the list |
+| `SEALS EARNED` drawn **through** `THE FIRST CROSSING` | a fixed 20-unit gap under a 23-unit line |
+| `BOUNTY CHARM` / `SWIFT CHARM` overlapping each other | `drawCharmCard` had no wrap and no ellipsis — at the floor it just overflows |
+| the bell's rules line drawn **through** the stall panel, and its price badge **through** the rules line | a fixed 50-unit shelf holding a 23-unit line; text drawn to full width past a 58-unit plate |
+| `BELLRO` / `PE` | the seam rule's third correction — see the name-break entry |
+
+**Every one was green in all 876 render checks while it was broken, and five of
+the six are the same bug.** `textSize` clamps type up to a 9px readable floor, so
+below a certain size a "13-unit line" is 23 units tall while every gap around it
+is still scaled by `S` — and the game is full of literals (`+ 21`, `by0 + 17`,
+`50`, `44 * S`) that were measured on a desktop. The floor is right; the literals
+were predictions about type that has a floor under it. **Anywhere a fixed offset
+sits under a `txt()` call, the fold is where it fails**, and that is a grep, not
+a walk — the next round can do it exhaustively.
+
+Fixed, each by making the container read its contents: the name band grows and
+takes it out of the picture, the winter total moves into the header, the seals
+step by `lineH`, the charm name wraps, the bell's shelf sizes itself and the
+stalls move down.
+
+So the walk stays at three shapes and the third one changes: **reference desktop,
+largest, and the FOLD.** The phone that held that slot is the one that showed the
+least, and the other five shapes are the automated sweep's job — it already
+covers them, and covering them with pictures nobody opens is not coverage.
 
 ### FINDING — every surface was flat, and one direction of light fixed the lot
 

@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { ok, eq, done, section } from './frostfell_lib.mjs';
 import { runJobs, JOBS, snapshot, absorb } from './frostfell_pool.mjs';
 import {
-  CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, HABITS, LIVE_HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
+  CARRIED, CROOM, DEFAULT_N, DENY, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, HABITS, LIVE_HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
   applyTweak, config,
 } from './frostfell_pilot.mjs';
 
@@ -990,11 +990,18 @@ section('gear against bodies, dealt on purpose');
      is binomial sampling noise at 600 runs a deck, leaving a TRUE deck-to-deck
      SD of 4.23. Resolving a 3.0-point difference of means then needs
 
-         n = 2 (z · 4.23 / 3.0)²  decks a side  —  16 at 2σ, 20 at 2.24σ, 26 at 2.58σ
+         n = 2 (z · 4.23 / B)²  decks a side,  B = 1.5   —  64 at 2σ, 80 at 2.24σ
 
-     which is a bigger sample and not a hopeless one. More runs a deck cannot
-     help: they shrink the 2.00 and leave the 4.23 alone, which is why four
-     rounds of deepening this family bought nothing. */
+     where B is the BAND you want and not the effect you expect. Solving for
+     B = 3.0 — the effect itself — gives 16 at 2σ and is the coin-flip form the
+     ladder table caught: it is by construction the sample where the reading sits
+     exactly on its band. Halving B is 4x the decks.
+
+     More runs a deck cannot help either way: they shrink the 2.00 and leave the
+     4.23 alone, which is why four rounds of deepening this family bought
+     nothing. THE SAMPLE ACTUALLY RUN WAS 84 A SIDE, past even the corrected
+     bar — and the verdict here is a permutation p rather than a band comparison,
+     which is why the correction does not touch it. See below. */
   const SIDE = Number(process.env.FF_SIDES || 6);
   const pool = Object.values(FF.CARDS).filter((c) => !c.leader && !c.noPool);
   const gearPool = pool.filter((c) => c.type === 'item').map((c) => c.id).sort();
@@ -1940,6 +1947,21 @@ section('which parts of playing well are worth anything');
     const dormant = HABITS.filter((h) => h[2]);
     console.log(`      (${dormant.length} switches kept but not priced — ` +
       `${dormant.map((h) => `${h[1]}: ${h[2]}`).join('; ')})`);
+    /* AND THE NUMBER THAT SIZES THE NEXT DESIGN, measured before designing.
+
+       The three live habits substitute for denial, and a substitute only earns
+       its keep on turns denial is unavailable. So: how many turns is that? This
+       is the denominator of every idea that starts "make one of the others pay
+       when there is nothing to deny" — if the board is almost never bare, the
+       ceiling on that whole family is small and the honest move is a different
+       family. */
+    if (DENY.turns) {
+      const pc2 = (n2) => (n2 / DENY.turns * 100).toFixed(0) + '%';
+      console.log(`      a scheme is on the board on ${pc2(DENY.any)} of player turns, ` +
+        `one this pilot can act on ${pc2(DENY.act)}, and the board is BARE on ${pc2(DENY.bare)} ` +
+        `(${DENY.turns} turns) — the bare share is the ceiling on any habit built to ` +
+        `pay when denial cannot`);
+    }
     /* Reported rather than gated, and deliberately so. "Cannot be shown to be
        worth anything" is not "shown to be worth nothing", and at this arm's
        band those are different claims — the whole point of the ladder-band
@@ -2108,12 +2130,16 @@ section('which parts of playing well are worth anything');
       `   · one at a time they sum to ${signed(apart)}, together they are ${signed(together)}`);
     /* AND WHAT IT WOULD TAKE TO SETTLE THAT, said out loud rather than left as
        "not resolvable at this sample". The set-minus-sum statistic is built out
-       of k+1 arms, its band scales as 1/√n like everything else, and the sample
-       that would put twice its band under the observed gap is arithmetic. */
+       of k+1 arms and its band scales as 1/√n like everything else.
+
+       It used to solve for `2σ = D`, which the ladder table proved is the sample
+       where the reading sits exactly on its own band and clearing is a coin
+       flip. Sized for `2σ ≤ D/2` instead, which is 4x the runs — the `4 * sb`
+       below, and the same correction the rung forecast got. */
     {
       const D = together - apart;
       const sb = BAND.set(0.2, tribes.length * PN, KEYS.length);
-      const need = Math.ceil(tribes.length * PN * Math.pow((2 * sb) / Math.max(0.1, Math.abs(D)), 2));
+      const need = Math.ceil(tribes.length * PN * Math.pow((4 * sb) / Math.max(0.1, Math.abs(D)), 2));
       console.log(`        the difference is ${signed(D)} against a band of ±${sb.toFixed(1)} ` +
         `(${Math.abs(D) >= 2 * sb ? 'CLEARS 2σ' : 'under 2σ — noise'}); ` +
         `settling it needs ${need} runs an arm, ${Math.round(need / Math.max(1, tribes.length * PN) * 100) / 100}x this sample`);

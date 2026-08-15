@@ -1053,8 +1053,12 @@ if (CELLS.total) {
      not what the typeface measures, and a monospace stub makes the expected
      answers readable instead of font-dependent. */
   const cc = { font: '', measureText: (s) => ({ width: s.length * 7 }) };
+  /* BELLROPE and COLDSNAP joined the list after the fold walk: `BELLRO` / `PE`
+     is what "take the latest seam that fits" does to a name whose seam is early,
+     and it is the case that retired that rule for "nearest to balanced". */
   const CASES = [['CINDERPUP', 'CINDER'], ['KETTLEBEAK', 'KETTLE'],
-    ['SNOWPUP', 'SNOW'], ['WHETSTONE', 'WHETS']];
+    ['SNOWPUP', 'SNOW'], ['WHETSTONE', 'WHETS'],
+    ['BELLROPE', 'BELL'], ['COLDSNAP', 'COLDS']];
   for (const [nm, head] of CASES) {
     const p = FF.nameSplit(cc, nm, 14, head.length * 7 + 3, 2);
     eq(p.length, 2, `${nm} breaks in two`);
