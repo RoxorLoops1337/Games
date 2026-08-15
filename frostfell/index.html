@@ -7246,15 +7246,27 @@ const WEATHER = {
   scrap: { top: '#242737', mid: '#7b7157', horiz: '#c7b489', sun: '#c8a15e', sunY: 0.70, sunR: 0.38,
     far: '#8d8670', near: '#4b483d', snowHi: '#e6ddc7', snowLo: '#b5ab8e', jag: 0.62, built: 1,
     mote: 'rgba(255,176,92,.9)', rise: 1.4 },
-  wyrd: { top: '#271853', mid: '#7a5cbb', horiz: '#d6c2ee', sun: '#b18eee', sunY: 0.70, sunR: 0.40,
-    far: '#9a7fca', near: '#5a4490', snowHi: '#e7dcf7', snowLo: '#b2a0d8', jag: 0.55, mote: 'rgba(236,220,255,.85)', rise: 0.6 },
-  /* Untribed is the one that has to be a WEATHER and not an absence of one. The
+  /* THERE IS NO `wyrd` WEATHER ANY MORE, and there never should have been. A
+     fifth sky, a fifth pair of ridges, a fifth snow and a fifth mote colour —
+     eleven numbers of violet — existed for exactly one card in the set, THE
+     STRANGER, and a palette that appears once is not a palette, it is a
+     one-off. The Stranger falls through to `none` and stands in the same
+     overcast as the gear, which is the truer story about her anyway: she is the
+     one who belongs to no tribe. The violet she is known by is still on her —
+     the frame metal and the tribe colour are untouched. DELETED, not moved.
+
+     Untribed is the one that has to be a WEATHER and not an absence of one. The
      first pass gave it the palest sky of the five and A HANDFUL OF SNOW came out
-     a white icon on a white window — the same defect as everything else on this
-     card, arrived at from the other direction. It gets an overcast late
-     afternoon: no colour of its own, but the same range as the rest. */
-  none: { top: '#142b47', mid: '#4d739b', horiz: '#c6d9ea', sun: '#9cbad3', sunY: 0.71, sunR: 0.36,
-    far: '#87a3c0', near: '#4c6a8e', snowHi: '#dbe7f2', snowLo: '#a3bad3', jag: 0.5, mote: 'rgba(236,245,255,.8)', rise: -0.8 },
+     a white icon on a white window. The second pass fixed the value and left it
+     in the BLUE FAMILY, which was worse in the way that matters: sampled side by
+     side, untribed Whetstone was 46,66,97 and frost Icepick was 39,77,97, so on
+     the gear sheet Thorn Oil and Whetstone sat two cards from Coldsnap and
+     Icepick and nothing sorted them. Untribed leaves the blue entirely. It is a
+     flat grey overcast with the warmth of nothing in it: the light is diffuse
+     and everywhere, which is why its sun is the widest and weakest of the set,
+     and why it is the one horizon in the game with no colour to name. */
+  none: { top: '#3b3d41', mid: '#8b877f', horiz: '#d8d2c7', sun: '#c2bbad', sunY: 0.70, sunR: 0.46,
+    far: '#a9a49a', near: '#6b665e', snowHi: '#e7e3da', snowLo: '#aeaaa1', jag: 0.45, mote: 'rgba(232,229,222,.75)', rise: -0.5 },
 };
 /* One number per card, so the ridge behind Cinderpup is not the ridge behind
    Sootling. Cards are identified by their def id and it never changes, so the
@@ -7293,14 +7305,23 @@ function cardScene(id) {
      creature in the game is rim-lit against, all of them being keyed from the
      upper left with a bright belly. Moving the light to where the cast is
      already lit from costs one number and fixes the contradiction from this
-     side; asking sixty drawings for a rim would not have. */
+     side; asking sixty drawings for a rim would not have.
+
+     AND THE HORIZON SITS WHERE THE HOUR PUTS IT. Every card's ridges were built
+     between the same two heights — far 0.40–0.63, near 0.70–0.82 — so forty
+     cards were the same composition with different bumps on it, and a hand of
+     six ember cards read as six brown rectangles with the horizon in the same
+     place across all six. The band moves with `hour`, which is a number this
+     card already had: a late card's hills sit low and heavy, an early one's ride
+     high and leave the sky under them. No new seed was drawn for it. */
+  const sun = 0.10 + r() * 0.30;
+  const hour = r();                  // how high the light is and how deep the top of the sky goes
+  const ground = r();                // this card's ground is not the next card's ground
   s = {
-    sun: 0.10 + r() * 0.30,
-    hour: r(),                       // how high the light is and how deep the top of the sky goes
-    ground: r(),                     // this card's ground is not the next card's ground
+    sun, hour, ground,
     cloud: [0.16 + r() * 0.30, 0.30 + r() * 0.44, 0.5 + r() * 0.9, r() * 0.7],
-    far: peaks(7, 0.40, 0.63),
-    near: peaks(5, 0.70, 0.82),
+    far: peaks(7, 0.30 + hour * 0.16, 0.50 + hour * 0.18),
+    near: peaks(5, 0.62 + hour * 0.12, 0.73 + hour * 0.09),
     motes: [0, 0, 0, 0, 0, 0, 0, 0].map(() => [r(), r(), 0.5 + r() * 0.9]),
   };
   SCENE.set(id, s);
@@ -7872,28 +7893,50 @@ function drawCard(c, card, x, y, w, h, o) {
      two colours as well as under the same sky, and a ground that never varies
      is the single loudest thing telling you these are ten photographs of one
      afternoon. It shifts toward the near ridge — a card whose snow has more of
-     the hill's colour in it, and one whose snow has almost none. */
+     the hill's colour in it, and one whose snow has almost none.
+
+     THE MIDDLE STOP WAS PURE BLACK ON ALL 58 CARDS. `mix` parses `#rrggbb` and
+     nothing else, so `mix(gHi, gLo, .5)` — both of them already `rgb(...)`
+     strings handed back by `mix` — parsed to NaN and painted `rgb(0,0,0)`. What
+     it looked like: a hard black band a few pixels under the lit crest, on
+     every card in the game, brightening downward into a grey. It was read as
+     "hearth's foreground is the darkest thing in the picture" and it was not an
+     art decision at all, it was a type error in a colour. The stop is DELETED
+     rather than repaired: two stops describe a snow bank perfectly well, and a
+     third one that has to be computed from two computed colours is exactly the
+     thing that went wrong. Same trap in the contact shadow below — it takes its
+     colour from the hex `snowLo` now, not from `gLo`.
+
+     THE CREST IS THIS CARD'S CREST. It was one hard-coded quadratic —
+     .845 / .795 / .865 — on all 58, so the sky, the cloud, the ridge and the
+     ground colour were all seeded and the one line that draws the LANDSCAPE was
+     the same line every time. It comes off `scn.ground`, which is already in
+     hand: the bank is high on the left for one card and high on the right for
+     the next, and the pile in the middle rises and falls with the hour. No new
+     seed, no new channel — the number was already being drawn. */
   c.save();
   const gHi = mix(wth.snowHi, wth.near, scn.ground * 0.16);
   const gLo = mix(wth.snowLo, wth.near, 0.02 + scn.ground * 0.16);
+  const gL = 0.800 + scn.ground * 0.075;                     // where the bank meets the left edge
+  const gR = 0.875 - scn.ground * 0.075;                     // and the right
+  const gC = Math.min(gL, gR) - 0.020 - scn.hour * 0.045;    // the crest between them
   c.beginPath();
   c.moveTo(ax, ay + ah);
-  c.lineTo(ax, ay + ah * 0.845);
-  c.quadraticCurveTo(w / 2, ay + ah * 0.795, ax + aw, ay + ah * 0.865);
+  c.lineTo(ax, ay + ah * gL);
+  c.quadraticCurveTo(w / 2, ay + ah * gC, ax + aw, ay + ah * gR);
   c.lineTo(ax + aw, ay + ah);
   c.closePath();
-  const bank = c.createLinearGradient(0, ay + ah * 0.795, 0, ay + ah);
+  const bank = c.createLinearGradient(0, ay + ah * gC, 0, ay + ah);
   bank.addColorStop(0, gHi);
-  bank.addColorStop(0.45, mix(gHi, gLo, 0.5));
   bank.addColorStop(1, gLo);
   c.fillStyle = bank; c.fill();
   c.save(); c.clip();
   c.globalAlpha = 0.85; c.fillStyle = wth.horiz;
   c.beginPath();
-  c.moveTo(ax, ay + ah * 0.845);
-  c.quadraticCurveTo(w / 2, ay + ah * 0.795, ax + aw, ay + ah * 0.865);
-  c.lineTo(ax + aw, ay + ah * 0.885);
-  c.quadraticCurveTo(w / 2, ay + ah * 0.815, ax, ay + ah * 0.865);
+  c.moveTo(ax, ay + ah * gL);
+  c.quadraticCurveTo(w / 2, ay + ah * gC, ax + aw, ay + ah * gR);
+  c.lineTo(ax + aw, ay + ah * (gR + 0.020));
+  c.quadraticCurveTo(w / 2, ay + ah * (gC + 0.020), ax, ay + ah * (gL + 0.020));
   c.closePath(); c.fill();
   c.restore();
   c.restore();
@@ -7923,8 +7966,16 @@ function drawCard(c, card, x, y, w, h, o) {
      antlers and props on them. `creatureBox` measures what the drawing actually
      covers, so the window can solve for the size that fits: the base lands on
      the snow, the top clears the rim with air above it, and the subject is as
-     big as those two facts allow — which is a good deal bigger than the piece
-     of it you could see before. */
+     big as those two facts allow.
+
+     AND THEN IT WAS TOO BIG. "As big as fits" solved to `room / bxh`, which is
+     nine tenths of the window's height, and the width allowance was 0.86: what
+     that looked like is Cinderpup's ear tips tangent to the top edge and its
+     body tangent to both sides, with no air anywhere. A whole round had just
+     been spent giving every card its own cloud, its own hour, its own skyline
+     and its own ground, and the subject was drawn over all of it. There is
+     nothing to tune here — the picture needs the subject to stop at about three
+     quarters of the window and leave the rest to the weather. */
   const topY = ay + ah * 0.04, feetY = ay + ah * 0.945;
   /* TWO DIFFERENT NORMALISATIONS, because the two `s` arguments mean different
      things. `drawCreature`'s `s` is a BODY height, so capping the scale is the
@@ -7948,9 +7999,9 @@ function drawCard(c, card, x, y, w, h, o) {
        fold-size card the one thing that clips is the outline. */
     const room = (feetY - topY) - 2.6;
     const sz = mode === 'body'
-      ? Math.min(ah * cap, room / bxh, aw * 0.86 / bxw)
+      ? Math.min(ah * cap, room / bxh)
       : Math.min(room, ah * cap) / bxh;
-    const wide = aw * (mode === 'body' ? 0.86 : 0.80) / bxw;
+    const wide = aw * (mode === 'body' ? 0.74 : 0.80) / bxw;
     const s2 = Math.min(sz, wide);
     const yy = feetY - bx[3] * s2;
     // wd/ht/mid describe the box as DRAWN, which is what the light and the
@@ -7960,7 +8011,7 @@ function drawCard(c, card, x, y, w, h, o) {
   };
   const isCharm = card.type === 'charm';
   const charmCol = (isCharm && (chOf(card.def) || 0) && chOf(card.def).col) || edge;
-  const sub = isUnit ? fitArt(creatureBox(card.art), 0.95, 'body')
+  const sub = isUnit ? fitArt(creatureBox(card.art), 0.75, 'body')
     : fitArt(isCharm ? charmBox(card.def, charmCol) : itemBox(d.art), 0.80, 'tall');
   /* CONTACT, not a floating disc. The old shadow was one flat grey ellipse at a
      fixed 30% of the window's width, drawn at the same place whatever was
@@ -7973,14 +8024,32 @@ function drawCard(c, card, x, y, w, h, o) {
      of them just read as one blurrier ellipse — the pool was paying for nothing.
      The core is the part the eye reads as weight; keep that, in a colour taken
      off the ground it is cast on so it darkens the snow instead of greying it.
-     The sun is off to one side now, so the shadow goes to the other. */
-  c.save();
-  c.fillStyle = mix(gLo, '#0b1526', 0.62);
-  c.globalAlpha = isUnit ? 0.34 : 0.26;
-  c.beginPath();
-  c.ellipse(w / 2 + sub.wd * (scn.sun - 0.5) * -0.20, feetY, sub.wd * 0.48, ah * 0.034, 0, 0, TAU);
-  c.fill();
-  c.restore();
+
+     WHERE THE LIGHT IS, SETTLED. Three blocks disagreed: the window put a low
+     sun somewhere on the left, this ellipse slid sideways by `scn.sun`, and all
+     sixty drawings were keyed flat from the upper left and ignored both. The
+     offset is DELETED rather than propagated. The rule for the whole card is now
+     the one the cast has always obeyed — the key is up and to the left, fixed,
+     the same on every card — and a contact patch sitting square under the feet
+     is what that key gives you. `scn.sun` is the SKY's business only, and it
+     stays left of centre so the two do not fight; nothing downstream has to be
+     told about it.
+
+     AND GEAR DOES NOT GET ONE. A contact shadow asserts that the object touches
+     the ground, and half the gear does not — the icons are drawn on their own
+     diagonals inside `drawItemIcon`, which the measured box knows nothing about,
+     so Icepick hung in the air with its handle across the snow crest and a neat
+     ellipse underneath it. Claiming contact that isn't there is worse than
+     claiming none. Units are measured feet-down and keep it. */
+  if (isUnit) {
+    c.save();
+    c.fillStyle = mix(wth.snowLo, '#0b1526', 0.62);
+    c.globalAlpha = 0.34;
+    c.beginPath();
+    c.ellipse(w / 2, feetY, sub.wd * 0.48, ah * 0.034, 0, 0, TAU);
+    c.fill();
+    c.restore();
+  }
   /* THE HALO IS GONE. It was a white-cored radial thrown up behind every
      subject, and it was three defects in one object: on hearth cards it was the
      brightest thing on the card and a big part of why a hand of them read as
