@@ -4259,7 +4259,17 @@ function sweepX(c, step, fn) {
 }
 
 function rr(c, x, y, w, h, r) {
-  const k = Math.min(r, w / 2, h / 2);
+  /* A CORNER CANNOT BE NEGATIVE, AND CHROMIUM THROWS WHEN IT IS — which kills
+     the whole frame from that call onward, not just the shape. `drawCard` can
+     hand this a window of negative height on a small enough card (see the floor
+     under `ah`), and on a fold's cover display the victory and defeat screens
+     did exactly that: `arcTo … radius (-11.221) is negative` every frame, with
+     the rest of the screen simply never drawn. It went unseen for as long as it
+     did because the headless stub does not validate its arguments and the shot
+     walk had not reached those screens with a real deck on it. The floor under
+     `ah` is the actual fix; this is the guard that stops one bad number from
+     taking a screen down with it. */
+  const k = Math.max(0, Math.min(r, w / 2, h / 2));
   c.beginPath();
   c.moveTo(x + k, y);
   c.arcTo(x + w, y, x + w, y + h, k);
@@ -4597,6 +4607,16 @@ function nameFit(c, nm, size, maxW, lines) {
    could pick a hard line budget, and a budget is exactly what truncated the
    piece that did not fit it. `nameSplit` reports how many lines the name needs
    and every piece it returns fits, so there is nothing left to ask. */
+/* HOW WIDE A STRING COMES OUT, in the face and at the size it will actually be
+   DRAWN at — the readable floor included. `ellipsize` and `fitText` both do this
+   privately and then answer a different question; a panel that has to be as wide
+   as its own sentence needs the measurement itself. */
+function advanceOf(c, s, size, face) {
+  const sz = textSize(size);
+  c.font = (face === 'd' ? '' : '600 ') + sz + 'px ' +
+    (face === 'd' ? "'Frostcut','Trebuchet MS',sans-serif" : "'Frostwork','Trebuchet MS',sans-serif");
+  return c.measureText(String(s)).width;
+}
 function ellipsize(c, s, size, maxW, force, face) {
   size = textSize(size);
   c.font = (face === 'd' ? '' : '600 ') + size + 'px ' +
@@ -8097,9 +8117,28 @@ function drawCard(c, card, x, y, w, h, o) {
      invariant itself — the paragraph fits the well, or the well goes and the
      picture takes the room — and it is asserted in the render suite so no third
      heuristic can grow back here. The cost is real and it is the right cost: a
-     long rule at hand size is now a bigger portrait and a whole name, and the
-     card is one tap from saying everything. */
+     long rule at hand size is now a bigger portrait and a whole name.
+
+     AND THE CARD HAS TO SAY THAT IT HAS BEEN CUT SHORT.
+
+     "One tap from saying everything" was true of a card in hand and false of the
+     two screens where the tap is PERMANENT. At a reward pick, EMBER-WICK on a
+     fold drew `3 2 6` over a blank face — pixel for pixel how a card with no
+     rules at all draws — and the next tap put it in the deck. The rule was not
+     omitted, it was CONCEALED: nothing on the face distinguished a card holding
+     three lines of text from a vanilla one, so the player was not choosing
+     between what they could see, they were choosing between one thing they
+     could see and three things they could not.
+
+     So silence gets a state. `held` is the card knowing it has a paragraph it is
+     not showing, and it is drawn as a shut well: the same recess in the same
+     place, holding two ruled lines of ink instead of words. It cannot be
+     misread as a fragment because it contains no glyphs, and it cannot be
+     mistaken for a vanilla card because a vanilla card has no well at all. Every
+     surface that can spend a card on one tap wires `holdCard` to it, so the mark
+     names a gesture that exists rather than a disappointment. */
   const dropRules = !rules || fit0.lines.length > roomMax;
+  const held = dropRules && !!rules;
   /* The paragraph, plus the same three units of reserve `cap` counts, plus four
      more of lip when the card can spare them. The two have to be measured off
      one number: sizing the recess with a lip `cap` had not counted put the well
@@ -8108,9 +8147,23 @@ function drawCard(c, card, x, y, w, h, o) {
      bottom. Where the card cannot spare the lip the PICTURE goes below its floor
      rather than the text going outside its hole. */
   const wellNeed = (fit0.lines.length - 1) * fit0.size * 1.12 + fit0.size + 3 * S;
-  const ah = dropRules ? ahMax
-    : clamp(wellBot - wellNeed - 5 * S - ay,
-      Math.min(ahMin, wellBot - wellNeed - 1 * S - ay), ahMax);
+  /* The shut well is 13 units deep at every size and on every card — two ruled
+     lines and the air round them. It does not scale with the paragraph it is
+     hiding, because the player cannot read the paragraph and a taller mark
+     would only be telling them the rule is long. */
+  const HELD_H = 13 * S;
+  /* AND THE PICTURE MAY GO TO NOTHING, BUT IT MAY NOT GO PAST IT. The floor
+     under the window is `ahMin` normally and the paragraph's own demand when the
+     card cannot spare the lip — and on a 96x134 card, which is the size the
+     victory screen lays the whole caravan out at, that demand came out NEGATIVE.
+     A negative window is not a small window: `rr` hands the corner radius
+     straight to `arcTo`, Chromium throws on a negative one, and the frame dies
+     where it stands. The lap-of-honour screen was doing it every frame on a
+     fold. Zero is the bottom. */
+  const ah = held ? clamp(wellBot - HELD_H - 1.2 * S - ay, Math.min(ahMin, ahMax), ahMax)
+    : dropRules ? ahMax
+      : clamp(wellBot - wellNeed - 5 * S - ay,
+        Math.max(0, Math.min(ahMin, wellBot - wellNeed - 1 * S - ay)), ahMax);
   /* WHAT WEATHER THIS CARD STANDS IN. Every one of the 58 cards used to get the
      same ridge under the same pale halo, so the picture told you nothing until
      you had read the name — and a wall of Frostborn cards was one shape. The
@@ -8314,12 +8367,20 @@ function drawCard(c, card, x, y, w, h, o) {
        fatter than the box measured at the reference size says — up to 2.5 units
        of it, top and bottom together. Give that back before solving, or on a
        fold-size card the one thing that clips is the outline. */
-    const room = (feetY - topY) - 2.6;
+    /* AND `room` HAS A FLOOR OF NOTHING. Give back 2.6 units of outline from a
+       window that is already shorter than that and the subject is solved at a
+       NEGATIVE size — which every shape here then multiplies through, and
+       `c.arc` with a negative radius throws and takes the rest of the frame with
+       it. A charm at the reward pick on a fold's cover display did exactly that:
+       `radius (-0.251132) is negative`, and the screen below the charm row
+       simply stopped drawing. A subject can be too small to see. It cannot be
+       smaller than nothing. */
+    const room = Math.max(0, (feetY - topY) - 2.6);
     const sz = mode === 'body'
       ? Math.min(ah * cap, room / bxh)
       : Math.min(room, ah * cap) / bxh;
     const wide = aw * (mode === 'body' ? 0.74 : 0.80) / bxw;
-    const s2 = Math.min(sz, wide);
+    const s2 = Math.max(0, Math.min(sz, wide));
     const yy = feetY - bx[3] * s2;
     // wd/ht/mid describe the box as DRAWN, which is what the light and the
     // shadow have to be sized off rather than off `ah`
@@ -8560,7 +8621,7 @@ function drawCard(c, card, x, y, w, h, o) {
      to a lip of its own. Its rim, its corner radius and its outer lip are all
      gone — nothing replaces them. */
   const wx = fi, ww = w - fi * 2, whP = fy - wy;
-  if (!dropRules) {
+  if (!dropRules || held) {
     c.save();
     c.beginPath(); c.rect(wx, wy, ww, whP);
     c.clip();
@@ -8596,7 +8657,26 @@ function drawCard(c, card, x, y, w, h, o) {
     wg.addColorStop(0, DARK + '0.45)'); wg.addColorStop(1, DARK + '0)');
     c.fillStyle = wg; c.fillRect(wx, wy, ww, wd * 2.2);
     c.restore();
-    lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit0.size, RULE_INK, 'center', 't', 0));
+    if (held) {
+      /* TWO RULED LINES WHERE THE WORDS WOULD BE. Not an ellipsis — an ellipsis
+         is a glyph and a glyph on a card face is a fragment, which is the thing
+         the gate above exists to prevent. Two bars, centred on the well's line,
+         the second shorter than the first the way the last line of a paragraph
+         is: the shape of writing, at the size where writing cannot be read.
+         Drawn in the rules' own ink at half strength, so it sits a stop under
+         the text it stands in for and never competes with the picture. */
+      const bh = Math.max(1.2, 1.7 * S), bg = Math.max(1.6, 2.6 * S);
+      const b1 = ww * 0.56, b2 = ww * 0.34;
+      const cyB = wy + whP / 2;
+      c.save();
+      c.globalAlpha = 0.5;
+      c.fillStyle = RULE_INK;
+      c.fillRect(w / 2 - b1 / 2, cyB - bg / 2 - bh, b1, bh);
+      c.fillRect(w / 2 - b2 / 2, cyB + bg / 2, b2, bh);
+      c.restore();
+    } else {
+      lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit0.size, RULE_INK, 'center', 't', 0));
+    }
   }
 
   /* ---------------- the rail the bottom of the card stands on ---------- */
@@ -8772,6 +8852,17 @@ function drawCard(c, card, x, y, w, h, o) {
     txt(c, 'HURT', w / 2, ay + ah - 11 * S, 14 * S, '#ffb0bb', 'center', 'd');
   }
   c.restore();
+  /* WHAT THIS DRAW ACTUALLY PUT ON THE CARD, for anything that has to check it.
+
+     "A card that is hiding a rule shows that it is" cannot be asserted from
+     outside this function: the gate is four measurements deep inside it, and
+     re-deriving them in a test would be a second implementation that agrees
+     with the first until the day it does not — which is exactly how the
+     whole-or-nothing rule shipped correct in hand and blind at a reward pick.
+     So the draw reports itself, and the render suite reads this list against
+     the hit list: every card drawn inside a region whose tap is permanent must
+     be inspectable, and every card drawn holding its rule must wear the mark. */
+  CARD_DRAWS.push({ def: card.def, x, y, w, h, art: ah, text: !!rules, shown: !dropRules, mark: held });
 }
 
 /* ==================================================== gear, as objects =====
@@ -10520,6 +10611,10 @@ function setMute(m) {
    touch is always exactly what they can see. */
 let hits = [];
 const hit = (id, x, y, w, h, data) => { hits.push({ id, x, y, w, h, data }); };
+/* Every card face this frame put on the stage, and what it chose to say — see
+   the note at the end of `drawCard`. Cleared with the hit list, because the two
+   are only meaningful read against each other. */
+let CARD_DRAWS = [];
 /* WHAT A THUMB NEEDS, IN THE UNITS A THUMB WORKS IN.
 
    The render suite has checked touch targets since iteration 6 and it checked
@@ -10565,7 +10660,35 @@ const UI = {
   refuse: null,      // the note that says why a drop would not work
   help: null,        // page index of the rulebook, or null
   holdT: 0,          // how long the finger has been down in one place
+  hold: null,        // {card, id, data,…} — a card about to be spent, resting under the finger
 };
+
+/* THE CARD YOUR FINGER IS ON, WHEREVER THAT CARD IS DRAWN.
+
+   Hold-to-inspect was a property of `UI.drag`, and `UI.drag` is only ever set by
+   a card in hand or a warden on the board — the two places where a tap is free
+   and reversible. On the two screens where a tap is PERMANENT it did not exist:
+   a reward card and a ware are `hit()` regions, `takeCard` and `buy` fired on
+   the way DOWN, and there is no confirm and no undo. That is exactly the wrong
+   way round. Reading has to be cheapest where choosing is dearest.
+
+   So every region that draws a card and then spends it names its card here.
+   `onDown` treats one the way it treats a card in hand: hold and it opens, tap
+   and it commits on the way UP, so sliding off is a cancel. Adding a new way to
+   spend a card means adding a line here, and the render suite fails the build if
+   a card is drawn inside a permanent region this function does not know. */
+function holdCard(h) {
+  if (!h || !G.ui) return null;
+  const r = G.ui.reward, s = G.ui.shop;
+  if (h.id === 'reward' && r && r.cards[h.data]) return mkCard(r.cards[h.data]);
+  if (h.id === 'rewardCharm' && r && r.charms[h.data]) return charmCard(r.charms[h.data]);
+  if (h.id === 'buyCard' && s && s.cards[h.data]) return mkCard(s.cards[h.data].id);
+  if (h.id === 'buyCharm' && s && s.charms[h.data]) return charmCard(s.charms[h.data].id);
+  return null;
+}
+/* The hit ids whose tap SPENDS a card — the set the check above is about. A
+   region in here that draws a card must be readable before it is taken. */
+const SPEND_HITS = ['reward', 'rewardCharm', 'buyCard', 'buyCharm'];
 
 /* A BUTTON IS A KEY YOU PRESS, and this one was a flat rectangle with a white
    band across the top half — the shape a web page used in 2005, and the reason
@@ -10578,6 +10701,24 @@ const UI = {
    and all five are the same one-directional light the cards use, so the whole
    screen is lit from one place. Hover raises it and warms the rim; the pressed
    state inverts the bevel, which is the only cue that reads instantly. */
+/* A ROW OF KEYS THAT FILLS THE STAGE IT IS STANDING ON.
+
+   Six buttons at a literal 170 units make a row 1070 wide: 84% of a 1280-unit
+   desktop stage and 64% of the 1680 a fold's cover display gets. The row was
+   sized once, for the roomiest screen, and the tightest screen is the one that
+   then ran out of label — because the readable floor lifts a button's type to 23
+   units at 653x280, `TEND A HURT — 18` needs 214 of them, and a 170-unit key has
+   152 to give. Five of six ellipsised THROUGH THEIR OWN PRICE: on a fold you
+   could not see what anything cost, which is the one thing a shop has to say.
+
+   Nothing is added and nothing moves. The row is measured off the stage and
+   capped so it does not get silly on a wide one; the keys take the width that
+   was already lying there unused. */
+function keyRow(n, gap, max) {
+  const room = VW - SAFE * 2 - gap * (n - 1);
+  const w = Math.min(max, Math.floor(room / n));
+  return { w, x: MID - (w * n + gap * (n - 1)) / 2, step: w + gap };
+}
 function button(c, id, x, y, w, h, label, col, dis, small) {
   const hv = UI.hover && UI.hover.id === id;
   const down = !dis && UI.down && UI.down.id === id;
@@ -10625,7 +10766,17 @@ function button(c, id, x, y, w, h, label, col, dis, small) {
      The label is fitted to the button and ellipsised if the floor will not let
      it shrink far enough, the same rule as a card's name band and the victory
      tally. On a desktop the floor is inert and every label renders exactly as
-     it always did. */
+     it always did.
+
+     AND WHERE IT WAS STILL TRUNCATING, THE FIX IS THE ROW AND NOT THE LABEL.
+     Below the readable floor `fitText` has nothing left to give and `ellipsize`
+     ate the PRICE off the end of five of six keys — the one word on a shop
+     button that has to survive. A two-line break was tried here and deleted: a
+     44-unit key cannot hold two floored lines at the shape where the problem
+     exists, so it was a fallback that could never fire, which is worse than none
+     because it reads as though the case is handled. `keyRow` above gives the
+     keys the width the stage already had, and the render suite asserts that
+     nothing on the reward pick or in the shop is ever cut short again. */
   const cap = w - 18;
   const ls2 = fitText(c, label, cap, small ? 15 : 19, 9, 'd');
   txt(c, ellipsize(c, label, ls2, cap, false, 'd'), x + w / 2, y + h / 2 + 1, ls2,
@@ -11442,17 +11593,33 @@ function drawHand(c, t) {
   }
   if (UI.drag && UI.drag.card) {
     const d = UI.drag;
+    /* THE HELD CARD STANDS BESIDE WHAT IT IS AIMED AT, not on top of it.
+
+       It rode straight up the pointer, which solved the thumb and created the
+       worse half of the same problem: you aim at a WARDEN, your finger lands on
+       its middle, and a card one and a half warden-heights tall sitting directly
+       above that point covers the foe's head, its badge and its counter — the
+       three things you are reading to decide whether to throw the card. The
+       EMBER FLASK ghost sat squarely over FROSTWOLF, the only legal target on
+       the board. And the clamp that kept it on the stage was measured against
+       the card's unscaled height while the card is drawn at 1.12, so at SE and
+       1280 it was clipped by the viewport top as well.
+
+       It goes up and to one SIDE now — the side with more room, so a target near
+       the right edge pushes the ghost left — and both axes are clamped against
+       the size the card is actually drawn at. The pointer is then at the ghost's
+       lower inside corner: the finger is clear, the target under it is clear,
+       and the card is whole. */
+    const gw = CARD_W * 1.12, gh = CARD_H * 1.12;
+    const side = d.x > MID ? -1 : 1;
+    const gx = clamp(d.x + side * CARD_W * 1.2, gw / 2 + 6, VW - gw / 2 - 6);
+    const gy = clamp(d.y - CARD_H * 0.46, gh / 2 + 6, VH - gh / 2 - 6);
     // a shadow on the table under the held card, so it reads as lifted
     c.save();
     c.globalAlpha = 0.3; c.fillStyle = '#000';
-    c.beginPath(); c.ellipse(d.x, d.y + CARD_H * 0.34, CARD_W * 0.42, 14, 0, 0, TAU); c.fill();
+    c.beginPath(); c.ellipse(gx, gy + gh * 0.5 - 4, CARD_W * 0.42, 14, 0, 0, TAU); c.fill();
     c.restore();
-    /* The held card rides ABOVE the pointer, clear of it, not centred on it:
-       on a phone the pointer is a thumb, and a card centred under the thumb
-       covers both the thumb and the thing being aimed at. Clamped so it never
-       climbs off the top of the stage. */
-    const cy = Math.max(CARD_H * 0.58 + 8, d.y - CARD_H * 0.62);
-    drawCard(c, d.card, d.x - CARD_W / 2, cy - CARD_H / 2, CARD_W, CARD_H,
+    drawCard(c, d.card, gx - CARD_W / 2, gy - CARD_H / 2, CARD_W, CARD_H,
       { t, scale: 1.12, rot: Math.sin(t * 5) * 0.025 });
   }
 }
@@ -12248,7 +12415,13 @@ function drawReward(c, t) {
   const boss = r.kind === 'boss';
   txt(c, boss ? 'THE BEAST FALLS' : r.kind === 'cache' ? 'A CACHE IN THE SNOW' : 'THE ROAD IS CLEAR', MID, 84, 40, '#eaf6ff', 'center', 'd');
   const crs = courseOf(g.run);
-  txt(c, r.cards.length ? 'take one card for the caravan' : 'take one charm', MID, 126, 16, '#a8c8ea', 'center', 't');
+  /* AND HOW TO READ ONE BEFORE YOU SPEND IT. This line used to say `take one
+     card for the caravan`, which the four cards below it say already. It says
+     the thing they cannot instead — the gesture that opens a card whose rule the
+     face is too small to hold. A hidden gesture on a screen with an undo is a
+     nicety; on a screen with none it is the interface. */
+  txt(c, r.cards.length ? 'take one — hold a card to read it first' : 'take one charm — hold it to read it first',
+    MID, 126, 16, '#a8c8ea', 'center', 't');
   if (crs && r.cards.length) txt(c, 'holding to ' + crs.name.toLowerCase(), MID, 146, 13, crs.col, 'center', 't');
 
   const items = r.cards.map((id) => ({ card: mkCard(id), id }));
@@ -12271,16 +12444,32 @@ function drawReward(c, t) {
     if (!r.taken) hit('reward', x, y, cw, chh, i);
   });
   if (r.charms.length) {
-    txt(c, r.charmTaken ? 'charm taken' : 'and a charm', MID, 434, 16, '#a8c8ea', 'center', 't');
-    const w2 = 120, g3 = 18;
-    const tw = r.charms.length * w2 + (r.charms.length - 1) * g3;
+    /* THE CHARM ROW STANDS ON THE BUTTON ROW, not on a literal 452. An elite's
+       reward puts two charms under the cards and the six keys under those, and
+       both were pinned to constants chosen on a 1280 stage — so the keys were
+       drawn straight through the charms' rules well, on the same screen where a
+       tap on that charm is permanent. It is the last card on the screen and the
+       one thing covering it is a control. Measured off the keys now: the row
+       sits as low as it can without touching them and no lower. */
+    const g3 = 18;
+    const trayBot = y + chh + 24, bot = VH - 128 - 14;
+    const chH = clamp(bot - (trayBot + 14), 133, 160), chW = Math.round(chH * 0.75);
+    const chY = Math.min(trayBot + 14, bot - chH);
+    const tw = r.charms.length * chW + (r.charms.length - 1) * g3;
+    /* AND THE CAPTION MOVED SIDEWAYS, because there was no room left above the
+       charms once they stopped standing on the buttons. There is a stage's worth
+       of it beside them: `and a charm` sits on the row's own centre line, to its
+       left, which is where a label belongs anyway when the thing it labels is
+       two cards wide and the screen is a letterbox. */
+    txt(c, r.charmTaken ? 'charm taken' : 'and a charm', MID - tw / 2 - 20, chY + chH / 2,
+      16, '#a8c8ea', 'right', 't');
     r.charms.forEach((cid, i) => {
-      const x = MID - tw / 2 + i * (w2 + g3);
+      const x = MID - tw / 2 + i * (chW + g3);
       c.save();
       if (r.charmTaken) c.globalAlpha = 0.3;
-      drawCard(c, charmCard(cid), x, 452, w2, 160, { t });
+      drawCard(c, charmCard(cid), x, chY, chW, chH, { t });
       c.restore();
-      if (!r.charmTaken) hit('rewardCharm', x, 452, w2, 160, i);
+      if (!r.charmTaken) hit('rewardCharm', x, chY, chW, chH, i);
     });
   }
   if (r.bells && r.bells.length) {
@@ -12324,9 +12513,8 @@ function drawReward(c, t) {
      from. */
   if (!r.taken && r.cards.length) {
     const run = G.run;
-    const bw4 = 134, gap4 = 9;
-    const total4 = bw4 * 6 + gap4 * 5;
-    const bx = MID - total4 / 2;
+    const gap4 = 9, kr = keyRow(6, gap4, 260);
+    const bw4 = kr.w, bx = kr.x;
     const rd = redealPrice(run);
     button(c, 'rewardCopy', bx, VH - 128, bw4, 44, 'COPY A CARD', '#5f4a8f', run.deck.length < 1, true);
     button(c, 'rewardTemper', bx + bw4 + gap4, VH - 128, bw4, 44, 'TEMPER A CARD', '#8f7a3f', !temperable(run).length, true);
@@ -12367,7 +12555,10 @@ function drawShop(c, t) {
   drawBackdrop(c, g.run.zone, t);
   drawHud(c, t);
   txt(c, 'THE TRADER', MID, 80, 38, '#eaf6ff', 'center', 'd');
-  txt(c, 'she takes scrip, and she does not haggle', MID, 112, 15, '#a8c8ea', 'center', 't');
+  /* The trader's flavour line is spent on the gesture, for the reason above:
+     `buy()` is one tap, there is no undo, and PRY ROD on a Pixel 7 shows a price
+     and no rules at all. `she does not haggle` was charm; this is the shop. */
+  txt(c, 'she takes scrip — hold a ware to read it first', MID, 112, 15, '#a8c8ea', 'center', 't');
 
   /* THE BELL'S SHELF IS AS TALL AS WHAT IS ON IT, and the stalls move down by
      the difference. Its panel was a fixed 50 units holding a name over a line of
@@ -12384,6 +12575,20 @@ function drawShop(c, t) {
   const bellPad = 17, bellLine = lineH(15, 13);
   const bellH = (s.bell && BELLS[s.bell.id])
     ? Math.max(50, bellPad + bellLine + textSize(12) * 0.5 + 12) : 50;
+  /* AND AS WIDE AS ITS SENTENCE.
+
+     `Waves take one more tur…`. `Every fight starts with the redraw be…`. On all
+     three handsets the one line describing a 96-scrip, one-tap, rest-of-the-run
+     upgrade was cut off mid-word, because the shelf was a literal 420 units on a
+     stage that is 1680 wide at a fold's cover display — the room was there and
+     the panel had been told not to use it. A relic that cannot say what it does
+     is a coin flip with a price on it.
+
+     The type does not shrink and the sentence does not get shorter. The SHELF
+     takes the width its own line needs, up to what the stage will give, which is
+     comfortably more than the longest of the six wants at any shape. */
+  const bellText = (s.bell && BELLS[s.bell.id]) ? BELLS[s.bell.id].text : '';
+  const bwid = clamp(Math.ceil(advanceOf(c, bellText, 12, 't')) + 108, 420, VW - SAFE * 2 - 40);
   const cw = 152, chh = 212, gap = 18, cy = 200 + Math.max(0, bellH - 50);
   const priceY = cy + chh + 10;
   const leftW = s.cards.length * cw + (s.cards.length - 1) * gap;
@@ -12422,7 +12627,7 @@ function drawShop(c, t) {
   // the bell she has, on a shelf of its own above the stalls
   if (s.bell && BELLS[s.bell.id]) {
     const bl = BELLS[s.bell.id];
-    const bwid = 420, bx0 = MID - bwid / 2, by0 = 128;
+    const bx0 = MID - bwid / 2, by0 = 128;
     const bph = bellH;
     const afford = g.run.gold >= s.bell.price && !s.bell.sold;
     c.save();
@@ -12442,8 +12647,8 @@ function drawShop(c, t) {
     if (!s.bell.sold) hit('buyBell', bx0, by0, bwid, bph);
   }
 
-  const by = 484, sw = 170, sg = 10, srow = sw * 6 + sg * 5, sx = MID - srow / 2;
-  const btn = (i, id, label, col, dis) => button(c, id, sx + i * (sw + sg), by, sw, 54, label, col, dis);
+  const by = 484, sg = 10, row = keyRow(6, sg, 260);
+  const btn = (i, id, label, col, dis) => button(c, id, row.x + i * row.step, by, row.w, 54, label, col, dis);
   btn(0, 'buyHeal', s.heal.sold ? 'MENDED' : 'MEND ALL — ' + s.heal.price, '#3f8f5f', s.heal.sold);
   btn(1, 'buyTemper', s.temper && s.temper.sold ? 'TEMPERED' : 'TEMPER — ' + (s.temper ? s.temper.price : 32),
     '#8f7a3f', !s.temper || s.temper.sold || !temperable(g.run).length);
@@ -12468,7 +12673,7 @@ function drawShop(c, t) {
   txt(c, need ? 'the caravan is short of ' + need.name.toLowerCase() + ' — ' + need.why
     : 'the caravan wants for nothing', MID, by + 66 + shopHelp.length * shopStep, 13,
     need ? '#ffd166' : '#7de08f', 'center', 't');
-  button(c, 'leaveShop', MID - 100, VH - 76, 200, 52, 'BACK TO THE ROAD', '#40527a');
+  button(c, 'leaveShop', MID - 140, VH - 76, 280, 52, 'BACK TO THE ROAD', '#40527a');
 }
 
 function drawCamp(c, t) {
@@ -13600,6 +13805,9 @@ function onDown(x, y) {
     return;
   }
   if (h.id === 'unit') { UI.inspect = h.data; return; }   // a foe answers questions too
+  /* A CARD YOU ARE ABOUT TO SPEND IS READ THE SAME WAY A CARD IN HAND IS. */
+  const readable = holdCard(h);
+  if (readable) { UI.hold = { card: readable, id: h.id, data: h.data, x, y, sx: x, sy: y }; return; }
   press(h.id, h.data);
 }
 
@@ -13609,6 +13817,8 @@ function onMove(x, y) {
     UI.drag.x = x; UI.drag.y = y;
     if (Math.hypot(x - UI.drag.sx, y - UI.drag.sy) > 12) UI.drag.moved = true;
   }
+  // sliding off a card you were about to buy is how you change your mind
+  if (UI.hold && Math.hypot(x - UI.hold.sx, y - UI.hold.sy) > 12) UI.hold = null;
   UI.hover = hitAt(x, y);
 }
 
@@ -13616,6 +13826,17 @@ function onUp(x, y) {
   const g = G, d = UI.drag;
   UI.drag = null;
   UI.down = null;                       // nothing is held once the finger lifts
+  /* AND THE PERMANENT TAP COMMITS ON THE WAY UP, not on the way down. It fired
+     on `onDown` for as long as these screens have existed, which is why holding
+     a reward card to read it was not merely missing — it was impossible, since
+     the card was already in the deck before the finger had stopped moving. */
+  if (UI.hold) {
+    const hd = UI.hold;
+    UI.hold = null;
+    const up = hitAt(x, y);
+    if (up && up.id === hd.id && up.data === hd.data) press(hd.id, hd.data);
+    return;
+  }
   if (!d) return;
   const h = hitAt(x, y);
   if (!d.moved) {
@@ -13685,6 +13906,7 @@ function update(dt) {
   // fight were still drifting over the reward cards.
   if (G.screen !== lastScreen) {
     if (lastScreen !== null) { parts.length = 0; floats.length = 0; flyers.length = 0; rings.length = 0; }
+    UI.hold = null;              // and no finger is resting on a card that is gone
     lastScreen = G.screen;
   }
   // Hit-stop: a big hit freezes the whole board for a breath. Everything
@@ -13709,11 +13931,12 @@ function update(dt) {
   tutStep(G, dt);
   // Hold a card still for a moment and it opens, so reading one never costs
   // you the drag you were halfway through.
-  if (UI.drag && !UI.drag.moved) {
+  if ((UI.drag && !UI.drag.moved) || UI.hold) {
     UI.holdT += dt;
     if (UI.holdT > 0.42) {
-      UI.inspect = UI.drag.card || UI.drag.unit || null;
+      UI.inspect = (UI.drag && (UI.drag.card || UI.drag.unit)) || (UI.hold && UI.hold.card) || null;
       UI.drag = null;
+      UI.hold = null;
       UI.holdT = 0;
       sfx('page');
     }
@@ -13767,6 +13990,7 @@ function render() {
   const c = ctx;
   if (!c) return;
   hits = [];
+  CARD_DRAWS = [];
   const t = G.t;
   c.setTransform(DPR, 0, 0, DPR, 0, 0);
   c.clearRect(0, 0, VW, VH);
@@ -14009,7 +14233,7 @@ window.FF = {
   G, C, CARDS, CHARMS, SCARS, FOES, ZONES, TRIBES, STATUS, STATUS_ORDER, KEYWORD, STARTERS,
   LANES, COLS, HAND, BELL_CHARGE, VW, VH, UI, SAFE,
   dims: () => ({ VW, VH, MID, SAFE }), setStageWidth,
-  mkCard, mkUnit, mkFoeCard, rebuildCard, attachCharm,
+  mkCard, mkUnit, mkFoeCard, rebuildCard, attachCharm, charmCard,
   units, playerUnits, enemyUnits, unitAt, slotFree, freeSlots, laneOf, turnOrder,
   targetFor, frontTarget, laneTargets, neighbours,
   addStatus, stat, spend, hurt, heal, die, triggerUnit, attackOnce, tickCounter, shoveUnit, HOARD_CAP,
@@ -14035,6 +14259,7 @@ window.FF = {
   handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
+  holdCard, SPEND_HITS, RULE_INK, cardDraws: () => CARD_DRAWS, clearCardDraws: () => { CARD_DRAWS = []; },
   drawCreature, drawCard, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
   nameSplit,
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
