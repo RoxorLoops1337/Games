@@ -6037,6 +6037,195 @@ function frameRime(c, x0, y0, sx, sy, R, S) {
   c.lineCap = 'butt';
 }
 
+/* ================= what the art window has to fit inside it ================
+   The window drew every subject at a guessed size — `ah * 0.94`, anchored 79%
+   of the way down a window it was then clipped to — and the guess was wrong
+   for all 58 cards in the same direction. Cinderpup's forelegs, Kettlebeak's
+   tail and Tindercub's whole belly were cut off by the window's bottom edge:
+   the entire cast read as busts sitting in a bathtub.
+
+   A constant was never going to work here. `drawCreature`'s `s` is a BODY
+   height, and what a drawing actually occupies on top of that depends on its
+   shape, its ears, its antlers, its prop and its idle bob — Warmroot's antlers
+   reach a third of a body above the number it is drawn at, and a hovering wisp
+   is a fifth of a body higher at the top of its bounce than at the bottom.
+
+   So stop guessing and ask the drawing. Run it through a context that records
+   where the pen goes instead of painting with it, and take the box. It is path
+   arithmetic, not a pixel read — nothing here touches `getImageData` — and the
+   answer is cached per shape, because the cast does not change shape between
+   frames. It also means this keeps working when somebody redraws a creature:
+   the window re-measures instead of needing its constants retuned. */
+function penBox() {
+  let m = [1, 0, 0, 1, 0, 0];            // canvas order: a b c d e f
+  let pen = 0;                           // half a stroke, in local units
+  const st = [];
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const put = (px, py) => {
+    const gx = m[0] * px + m[2] * py + m[4];
+    const gy = m[1] * px + m[3] * py + m[5];
+    // a stroke is centred on its path, so half of it hangs outside the box
+    const e = pen * Math.max(Math.hypot(m[0], m[1]), Math.hypot(m[2], m[3]));
+    if (gx - e < x0) x0 = gx - e;
+    if (gx + e > x1) x1 = gx + e;
+    if (gy - e < y0) y0 = gy - e;
+    if (gy + e > y1) y1 = gy + e;
+  };
+  const noGrad = { addColorStop() {} };
+  const c = {
+    save() { st.push([m.slice(), pen]); },
+    restore() { const p = st.pop(); if (p) { m = p[0]; pen = p[1]; } },
+    translate(dx, dy) { m = [m[0], m[1], m[2], m[3], m[0] * dx + m[2] * dy + m[4], m[1] * dx + m[3] * dy + m[5]]; },
+    scale(sx, sy) { m = [m[0] * sx, m[1] * sx, m[2] * sy, m[3] * sy, m[4], m[5]]; },
+    rotate(a) {
+      const s = Math.sin(a), k = Math.cos(a);
+      m = [m[0] * k + m[2] * s, m[1] * k + m[3] * s, m[2] * k - m[0] * s, m[3] * k - m[1] * s, m[4], m[5]];
+    },
+    beginPath() {}, closePath() {}, fill() {}, stroke() {}, clip() {},
+    moveTo: put, lineTo: put,
+    quadraticCurveTo(qx, qy, px, py) { put(qx, qy); put(px, py); },
+    bezierCurveTo(a1, b1, a2, b2, px, py) { put(a1, b1); put(a2, b2); put(px, py); },
+    arcTo(a1, b1, a2, b2) { put(a1, b1); put(a2, b2); },
+    rect(rx, ry, rw, rh) { put(rx, ry); put(rx + rw, ry + rh); },
+    fillRect(rx, ry, rw, rh) { put(rx, ry); put(rx + rw, ry + rh); },
+    arc(cx, cy, r) { put(cx - r, cy - r); put(cx + r, cy + r); },
+    ellipse(cx, cy, rx, ry) { put(cx - rx, cy - ry); put(cx + rx, cy + ry); },
+    createLinearGradient: () => noGrad, createRadialGradient: () => noGrad,
+    measureText: () => ({ width: 0 }), fillText() {}, strokeText() {},
+    read: () => [x0, y0, x1, y1],
+  };
+  // lineWidth is the one property that changes the box, so it needs a setter
+  Object.defineProperty(c, 'lineWidth', { get() { return pen * 2; }, set(v) { pen = (+v || 0) / 2; } });
+  return c;
+}
+
+/* Measured at a REFERENCE SIZE and divided down, not at s = 1. Both drawing
+   functions floor their stroke at 2.5 device units, so at s = 1 the outline
+   alone is two and a half times the creature and the box comes back nonsense.
+   100 is comfortably above the floor everywhere, so the box that comes out is
+   the true proportion of the art. */
+const ART_REF = 100;
+const ART_BOX = new Map();
+function artBox(key, draw) {
+  let b = ART_BOX.get(key);
+  if (b) return b;
+  b = [Infinity, Infinity, -Infinity, -Infinity];
+  /* Over a whole idle cycle rather than one frame. The bobs run at 0.6 to 2.3
+     radians a second and a box measured only at t = 0 clips a hovering wisp
+     every other second — which is the same bug as the one being fixed here,
+     just on a timer. */
+  for (let i = 0; i < 14; i++) {
+    const rec = penBox();
+    draw(rec, i * 0.57);
+    const q = rec.read();
+    if (!(q[2] > q[0])) continue;
+    if (q[0] < b[0]) b[0] = q[0];
+    if (q[1] < b[1]) b[1] = q[1];
+    if (q[2] > b[2]) b[2] = q[2];
+    if (q[3] > b[3]) b[3] = q[3];
+  }
+  // a drawing that recorded nothing still gets a sane box rather than an NaN
+  b = (b[2] > b[0] && b[3] > b[1]) ? b.map((v) => v / ART_REF) : [-0.55, -1.15, 0.55, 1.05];
+  ART_BOX.set(key, b);
+  return b;
+}
+/* Keyed on the whole art description rather than on the fields that look like
+   they matter. Picking a few of them by hand is the same guess that put the
+   cast in a bathtub: `acc`, `arms` and `mark` all reach outside a body too, and
+   the next one added would silently reuse some other creature's box. There are
+   58 of these and they are small. */
+const creatureBox = (art) => artBox('c' + JSON.stringify(art),
+  (rec, t) => drawCreature(rec, art, 0, 0, ART_REF, { t, ph: 0 }));
+const itemBox = (art) => artBox('i' + JSON.stringify(art || null),
+  (rec, t) => drawItemIcon(rec, art, 0, 0, ART_REF, t));
+
+/* ---------------- the weather in the window ------------------------------
+   Every one of the 58 cards stood in the same picture: one ridge, one snow
+   bank, one pale halo. A sheet of them was 58 photographs of the same
+   afternoon, so nothing about the art told you which card you were holding, or
+   even which tribe, until you had read the name.
+
+   Tribe belongs in the LIGHT — what time of day it is behind the subject and
+   what is falling out of the sky — not in a flat wash laid over the top. A
+   Hearthkin card is a warm dusk with embers going up; a Frostborn card is a
+   cold blue morning with snow coming down; a Scrapjaw card is an overcast
+   afternoon over slag with soot in the air. Same three gradients and same two
+   silhouettes in each — it is the palette and the horizon that carry it. */
+/* A RIDGE GETS PALER WITH DISTANCE, not darker. The first cut painted both
+   skylines in deep tribe shadow at high alpha and every window came out a brown
+   or navy slab — darker than the frame around it, which is exactly backwards
+   for the one area of the card that has to win the eye. Air between you and a
+   hill washes it toward the sky behind it; that is the whole trick, and it is
+   also what leaves the window bright. The dark on this card lives in the top of
+   the sky and the corners, and nowhere else. */
+const WEATHER = {
+  hearth: { top: '#4a2757', mid: '#d9603f', horiz: '#ffd48a', sun: '#ffb03f', sunY: 0.70, sunR: 0.46,
+    far: '#d98a72', near: '#a3524f', snowHi: '#fff0d8', snowLo: '#e9b193', jag: 0.30, mote: 'rgba(255,198,110,.95)', rise: -1 },
+  frost: { top: '#123f74', mid: '#4f9ad8', horiz: '#dbf4ff', sun: '#93e4ff', sunY: 0.74, sunR: 0.42,
+    far: '#9cc8ec', near: '#4d7fb4', snowHi: '#ffffff', snowLo: '#b0d3f4', jag: 0.95, mote: 'rgba(255,255,255,.95)', rise: 1 },
+  scrap: { top: '#2f3243', mid: '#a08f6c', horiz: '#f7e5b8', sun: '#e6c374', sunY: 0.72, sunR: 0.44,
+    far: '#b7a986', near: '#6f6a55', snowHi: '#f8f2e2', snowLo: '#c9c0a4', jag: 0.62, mote: 'rgba(64,58,48,.75)', rise: -0.4 },
+  wyrd: { top: '#2c1c5c', mid: '#8f6ad4', horiz: '#eddcff', sun: '#c79cff', sunY: 0.72, sunR: 0.44,
+    far: '#ae90e0', near: '#6d54a8', snowHi: '#fcf7ff', snowLo: '#c9b6ea', jag: 0.55, mote: 'rgba(236,220,255,.9)', rise: 0.6 },
+  /* Untribed is the one that has to be a WEATHER and not an absence of one. The
+     first pass gave it the palest sky of the five and A HANDFUL OF SNOW came out
+     a white icon on a white window — the same defect as everything else on this
+     card, arrived at from the other direction. It gets an overcast late
+     afternoon: no colour of its own, but the same range as the rest. */
+  none: { top: '#16304f', mid: '#5b86b8', horiz: '#e4f0ff', sun: '#b0d4f4', sunY: 0.73, sunR: 0.40,
+    far: '#98b8d8', near: '#5b7ea8', snowHi: '#ffffff', snowLo: '#bed3ee', jag: 0.5, mote: 'rgba(236,245,255,.8)', rise: 0.8 },
+};
+/* One number per card, so the ridge behind Cinderpup is not the ridge behind
+   Sootling. Cards are identified by their def id and it never changes, so the
+   horizon a card gets is stable — a player who has seen a card twice has seen
+   the same picture twice. */
+function artSeed(id) {
+  let n = 2166136261;
+  const s = String(id || '');
+  for (let i = 0; i < s.length; i++) { n ^= s.charCodeAt(i); n = Math.imul(n, 16777619); }
+  return mulberry(n >>> 0);
+}
+/* The horizon a card stands in front of, worked out once and kept. Everything
+   in here is a FRACTION of the window, never a pixel, because the same card is
+   drawn at 64 units wide on a fold's cover and 300 in an inspect panel and the
+   skyline has to be the same skyline. */
+const SCENE = new Map();
+function cardScene(id) {
+  let s = SCENE.get(id);
+  if (s) return s;
+  const r = artSeed(id);
+  const peaks = (n, lo, hi) => {
+    const p = [];
+    for (let i = 0; i < n; i++) p.push([(i - 0.5) / (n - 2), lo + r() * (hi - lo)]);
+    return p;
+  };
+  s = {
+    sun: 0.32 + r() * 0.36,
+    far: peaks(7, 0.40, 0.63),
+    near: peaks(5, 0.70, 0.82),
+    motes: [0, 0, 0, 0, 0, 0, 0, 0].map(() => [r(), r(), 0.5 + r() * 0.9]),
+  };
+  SCENE.set(id, s);
+  return s;
+}
+/* A skyline from a list of peaks. Soft weather rounds it off, hard weather
+   breaks it into facets — which is most of what makes a Frostborn card's
+   window read as ice and a Hearthkin's read as hills at dusk, off the same
+   seven numbers. */
+function skyline(c, pts, jag, x0, wd, top, ht, base) {
+  c.beginPath();
+  c.moveTo(x0, base);
+  c.lineTo(x0 + pts[0][0] * wd, top + pts[0][1] * ht);
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i - 1], q = pts[i];
+    if (jag > 0.55) c.lineTo(x0 + q[0] * wd, top + q[1] * ht);
+    else c.quadraticCurveTo(x0 + (p[0] + q[0]) / 2 * wd, top + Math.min(p[1], q[1]) * ht,
+      x0 + q[0] * wd, top + q[1] * ht);
+  }
+  c.lineTo(x0 + wd, base);
+  c.closePath();
+}
+
 function drawCard(c, card, x, y, w, h, o) {
   o = o || {};
   const d = CARDS[card.def];
@@ -6322,7 +6511,22 @@ function drawCard(c, card, x, y, w, h, o) {
   /* A unit's window shrank the rules line to one truncated clause at hand
      size, which is the one place the text has to be readable. Gear can afford
      a bigger picture because its rules are shorter. */
+  /* AND THE PICTURE DOES NOT GET MORE OF THE CARD — it gets more out of what it
+     already had. Growing this to 0.435 was the obvious first move and it cost
+     the rules a line on every card: `Its bite leaves…` at 300 units wide, which
+     is the size where nothing has any excuse to truncate. The window was never
+     short of room; it was spending its top third on empty sky and drawing the
+     subject at a third of its height. Fit the subject properly and the same
+     window holds twice the picture. */
   const ah = Math.max(h * 0.16, (isUnit ? h * 0.41 : h * 0.44) - bhGrew);
+  /* WHAT WEATHER THIS CARD STANDS IN. Every one of the 58 cards used to get the
+     same ridge under the same pale halo, so the picture told you nothing until
+     you had read the name — and a wall of Frostborn cards was one shape. The
+     tribe picks the hour and what is falling out of the sky; the card's own id
+     picks the skyline, so two Hearthkin are the same dusk over different
+     hills. */
+  const wth = WEATHER[card.tribe] || WEATHER.none;
+  const scn = cardScene(card.def);
   c.save();
   rr(c, ax, ay, aw, ah, 8 * S);
   c.clip();
@@ -6331,54 +6535,150 @@ function drawCard(c, card, x, y, w, h, o) {
      card, with the cast — every one of them drawn in dark outline — swimming in
      it. A card is a daylight object. Pale sky, snow, and the tribe's colour as
      the light. */
-  /* A DEEPER SKY AT THE TOP. Three stops that ran pale-to-paler gave the window
-     no vertical order, so the subject had nothing to sit against and the whole
-     card read as one value. Starting the sky a good deal darker puts the light
-     where the light is — low, behind the ridge — which is also where the game's
-     backdrop puts it, so a card in hand belongs to the scene behind it. */
+  /* A DEEPER SKY AT THE TOP, AND THE LIGHT DOWN AT THE HORIZON. Stops that ran
+     pale-to-paler gave the window no vertical order at all: it came out the
+     same value as the face around it and the well below it, so the card had no
+     focal point and the eye went to the name band by default. The window is the
+     one place on a card allowed a full range — dark at the top for the subject
+     to sit against, the brightest and most saturated thing on the whole card
+     low down behind it. */
   const sky = c.createLinearGradient(0, ay, 0, ay + ah);
-  sky.addColorStop(0, '#8fb4dc');
-  sky.addColorStop(0.42, '#c3daf3');
-  sky.addColorStop(0.75, '#e4eefb');
-  sky.addColorStop(1, '#f6fbff');
+  sky.addColorStop(0, wth.top);
+  sky.addColorStop(0.15, mix(wth.top, wth.mid, 0.20));
+  sky.addColorStop(0.36, wth.mid);
+  sky.addColorStop(0.68, mix(wth.mid, wth.horiz, 0.70));
+  sky.addColorStop(0.88, wth.horiz);
+  sky.addColorStop(1, wth.horiz);
   c.fillStyle = sky; c.fillRect(ax, ay, aw, ah);
-  // a light behind the subject, in the tribe's colour
-  const halo = c.createRadialGradient(w / 2, ay + ah * 0.58, 2, w / 2, ay + ah * 0.58, aw * 0.66);
-  halo.addColorStop(0, tribeLit);
-  halo.addColorStop(0.5, 'rgba(255,255,255,0)');
-  halo.addColorStop(1, 'rgba(255,255,255,0)');
-  c.save(); c.globalAlpha = 0.6; c.fillStyle = halo; c.fillRect(ax, ay, aw, ah); c.restore();
-  // a far ridge, so the window has a distance in it
+  // the low sun this weather is lit by — the brightest patch on the card
+  const sunX = ax + aw * scn.sun, sunY = ay + ah * wth.sunY;
+  const sun = c.createRadialGradient(sunX, sunY, 1, sunX, sunY, aw * wth.sunR * 1.7);
+  sun.addColorStop(0, wth.sun);
+  sun.addColorStop(0.28, mixA(wth.sun, 0.62));
+  sun.addColorStop(1, mixA(wth.sun, 0));
+  c.fillStyle = sun; c.fillRect(ax, ay, aw, ah);
+  // the far skyline, hazed by the distance between it and the sun behind it
   c.save();
-  c.beginPath();
-  c.moveTo(ax, ay + ah);
-  c.lineTo(ax, ay + ah * 0.70);
-  c.quadraticCurveTo(ax + aw * 0.34, ay + ah * 0.54, ax + aw * 0.62, ay + ah * 0.69);
-  c.quadraticCurveTo(ax + aw * 0.82, ay + ah * 0.78, ax + aw, ay + ah * 0.65);
-  c.lineTo(ax + aw, ay + ah);
-  c.closePath();
-  c.fillStyle = 'rgba(150,182,216,.55)'; c.fill();
+  skyline(c, scn.far, wth.jag, ax, aw, ay, ah, ay + ah);
+  c.globalAlpha = 0.62; c.fillStyle = wth.far; c.fill();
   c.restore();
-  // the snow it stands on
+  // and a nearer one, with less air in front of it to wash it out
+  c.save();
+  skyline(c, scn.near, wth.jag, ax, aw, ay, ah, ay + ah);
+  c.globalAlpha = 0.82; c.fillStyle = wth.near; c.fill();
+  c.restore();
+  /* Weather. Eight specks, drifting up out of a hearth and down out of a frost
+     sky — the cheapest thing on the card that says which tribe you are looking
+     at from across a table. */
+  c.save();
+  c.fillStyle = wth.mote;
+  const drift = ((o.t || 0) * 0.035 * wth.rise) % 1;
+  for (let i = 0; i < scn.motes.length; i++) {
+    const m = scn.motes[i];
+    const my = ay + ah * (((m[1] - drift) % 1 + 1) % 1) * 0.86;
+    c.beginPath(); c.arc(ax + aw * m[0], my, m[2] * S * 0.9, 0, TAU); c.fill();
+  }
+  c.restore();
+  /* The snow it stands on, catching the same low light. It used to be a sliver
+     along the bottom edge that you could not see was snow — in a game called
+     FROSTFELL. It comes up far enough now to be a field the subject stands in
+     the middle of, and it has a lit lip along its crest, which is the line that
+     tells you the light is low and behind. */
   c.save();
   c.beginPath();
   c.moveTo(ax, ay + ah);
-  c.lineTo(ax, ay + ah * 0.91);
-  c.quadraticCurveTo(w / 2, ay + ah * 0.81, ax + aw, ay + ah * 0.93);
+  c.lineTo(ax, ay + ah * 0.845);
+  c.quadraticCurveTo(w / 2, ay + ah * 0.795, ax + aw, ay + ah * 0.865);
   c.lineTo(ax + aw, ay + ah);
   c.closePath();
-  const bank = c.createLinearGradient(0, ay + ah * 0.81, 0, ay + ah);
-  bank.addColorStop(0, '#ffffff');
-  bank.addColorStop(1, '#cfe1f4');
+  const bank = c.createLinearGradient(0, ay + ah * 0.795, 0, ay + ah);
+  bank.addColorStop(0, wth.snowHi);
+  bank.addColorStop(0.45, mix(wth.snowHi, wth.snowLo, 0.5));
+  bank.addColorStop(1, wth.snowLo);
   c.fillStyle = bank; c.fill();
+  c.save(); c.clip();
+  c.globalAlpha = 0.85; c.fillStyle = wth.horiz;
+  c.beginPath();
+  c.moveTo(ax, ay + ah * 0.845);
+  c.quadraticCurveTo(w / 2, ay + ah * 0.795, ax + aw, ay + ah * 0.865);
+  c.lineTo(ax + aw, ay + ah * 0.885);
+  c.quadraticCurveTo(w / 2, ay + ah * 0.815, ax, ay + ah * 0.865);
+  c.closePath(); c.fill();
   c.restore();
+  c.restore();
+  /* A VIGNETTE, because a window with light in the middle of it and nothing in
+     the corners is what makes a photograph read as a photograph. It also does
+     the job the flat wash never could: it gives a pale-outlined creature a dark
+     to be seen against at the top of the frame. */
+  const vig = c.createRadialGradient(w / 2, ay + ah * 0.66, ah * 0.42, w / 2, ay + ah * 0.52, ah * 1.25);
+  vig.addColorStop(0, 'rgba(10,18,34,0)');
+  vig.addColorStop(1, 'rgba(10,18,34,.30)');
+  c.fillStyle = vig; c.fillRect(ax, ay, aw, ah);
+
+  /* ---------------- and the subject, WHOLE ----------------
+     This is the line that was wrong: `drawCreature(w/2, ay + ah*0.79, ah*0.94)`
+     — a subject as tall as the window, hung four fifths of the way down it,
+     inside a clip. It could not have fitted, and it did not: every creature in
+     the game was sliced through the chest by the window's bottom edge, so a
+     hand of cards was a row of busts sitting in bathtubs.
+
+     A size and an anchor cannot be guessed for seven body shapes with ears,
+     antlers and props on them. `creatureBox` measures what the drawing actually
+     covers, so the window can solve for the size that fits: the base lands on
+     the snow, the top clears the rim with air above it, and the subject is as
+     big as those two facts allow — which is a good deal bigger than the piece
+     of it you could see before. */
+  const topY = ay + ah * 0.04, feetY = ay + ah * 0.945;
+  const fitArt = (bx, cap, stand) => {
+    const bxw = Math.max(0.02, bx[2] - bx[0]), bxh = Math.max(0.02, bx[3] - bx[1]);
+    /* The stroke floor. Both drawing functions clamp their outline at 2.5 units
+       however small the subject gets, so below about a 45-unit body the ink is
+       fatter than the box measured at the reference size says — up to 2.5 units
+       of it, top and bottom together. Give that back before solving, or on a
+       fold-size card the one thing that clips is the outline. */
+    const room = (feetY - topY) - 2.6;
+    const sz = Math.min(ah * cap, room / bxh, aw * 0.86 / bxw);
+    const yy = stand ? feetY - bx[3] * sz : (topY + feetY) / 2 - (bx[1] + bx[3]) / 2 * sz;
+    // wd/ht/mid describe the box as DRAWN, which is what the light and the
+    // shadow have to be sized off rather than off `ah`
+    return { s: sz, x: w / 2 - (bx[0] + bx[2]) / 2 * sz, y: yy,
+      wd: bxw * sz, ht: bxh * sz, mid: yy + (bx[1] + bx[3]) / 2 * sz };
+  };
+  const charmArt = { kind: 'burst', col: edge };
+  const sub = isUnit ? fitArt(creatureBox(card.art), 0.95, true)
+    : fitArt(itemBox(card.type === 'charm' ? charmArt : d.art), 0.82, false);
+  /* CONTACT, not a floating disc. The old shadow was one flat grey ellipse at a
+     fixed 30% of the window's width, drawn at the same place whatever was
+     standing there — so a Junkpile hovered over a shadow narrower than itself
+     and a Glacierling stood beside one twice its width. It is sized off the
+     subject now, and it is two ellipses: a wide soft pool for the light being
+     scattered by snow, and a tight dark core at the point of contact, which is
+     the part the eye reads as weight. */
   c.save();
-  c.globalAlpha = 0.20; c.fillStyle = '#0d1830';
-  c.beginPath(); c.ellipse(w / 2, ay + ah * 0.945, aw * 0.30, ah * 0.05, 0, 0, TAU); c.fill();
+  c.fillStyle = mix(wth.snowLo, '#0b1526', 0.66);
+  c.globalAlpha = 0.24;
+  c.beginPath(); c.ellipse(w / 2, feetY, sub.wd * 0.60, ah * 0.055, 0, 0, TAU); c.fill();
+  c.globalAlpha = isUnit ? 0.40 : 0.22;
+  c.beginPath(); c.ellipse(w / 2, feetY, sub.wd * 0.30, ah * 0.024, 0, 0, TAU); c.fill();
   c.restore();
-  if (isUnit) drawCreature(c, card.art, w / 2, ay + ah * 0.79, ah * 0.94, { t: o.t || 0, ph: card.uid, blink: card.uid });
-  else if (card.type === 'charm') drawItemIcon(c, { kind: 'burst', col: edge }, w / 2, ay + ah * 0.52, ah * 0.78, o.t || 0);
-  else drawItemIcon(c, d.art, w / 2, ay + ah * 0.52, ah * 0.84, o.t || 0);
+  /* The tribe's light thrown up behind the subject, with a white core in it.
+     Frost cards were the test: a pale creature drawn in front of a pale halo on
+     a pale sky is the defect the whole card was suffering from in miniature.
+     The core has to be brighter than the sky it sits in or the silhouette has
+     nothing to be a silhouette against.
+
+     TIGHT, though. The first one was a window-wide wash a bit over half white,
+     and on A HANDFUL OF SNOW it lifted the whole sky including the dark at the
+     top — a white icon on a white window, which is the same defect arrived at
+     from the other side. It is sized off the subject as drawn, so it stays a
+     light BEHIND something rather than a fog over everything. */
+  const rim = c.createRadialGradient(w / 2, sub.mid, 1, w / 2, sub.mid, Math.max(sub.wd, sub.ht) * 0.62);
+  rim.addColorStop(0, 'rgba(255,255,255,.38)');
+  rim.addColorStop(0.42, mixA(tribeLit, 0.30));
+  rim.addColorStop(1, mixA(tribeLit, 0));
+  c.fillStyle = rim; c.fillRect(ax, ay, aw, ah);
+  if (isUnit) drawCreature(c, card.art, sub.x, sub.y, sub.s, { t: o.t || 0, ph: card.uid, blink: card.uid });
+  else drawItemIcon(c, card.type === 'charm' ? charmArt : d.art, sub.x, sub.y, sub.s, o.t || 0);
   c.restore();
   /* THE WINDOW IS A HOLE, AND IT USED TO BE A BOX. One dark stroke around a
      pale wash puts the picture on the same plane as everything else. A hole has
