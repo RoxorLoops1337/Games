@@ -1166,4 +1166,166 @@ if (CELLS.total) {
     `(${CASES.map(([n2, h]) => h + '-|' + n2.slice(h.length)).join(' ')})`);
 }
 
+/* ------------------------------------- the tribe channel, off the card --- */
+/* WHAT THIS SECTION EXISTS TO STOP COMING BACK.
+
+   Five metals and five skies were built over three rounds inside `drawCard`,
+   and the three surfaces that are NOT `drawCard` — the collection grid, the
+   board slab, the leader panel — each hard-coded one navy and knew nothing
+   about any of it. Sixty-one identical slate tiles, every friendly slab the
+   same blue, every foe slab the same red. Nothing failed, because nothing
+   asked. So this asks.
+
+   A paint spy rather than the raster: `panel`, `skyGrad` and `snowGrad` put
+   their colours into GRADIENT STOPS, which the recording ctx throws away, and
+   the strokes it logs do not carry their style. Recording every string that
+   reaches `fillStyle`, `strokeStyle` or `addColorStop` is the only place all
+   three surfaces' materials are visible at once. */
+section('the tribe channel reaches past the card face');
+{
+  const paintSpy = () => {
+    const seen = new Set();
+    const base = mkCtx(null);
+    const note = (v) => { if (typeof v === 'string') seen.add(v.toLowerCase()); };
+    const grad = { addColorStop: (_p, col) => note(col) };
+    const c = new Proxy({}, {
+      get(_t, k) {
+        if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
+        return base[k];
+      },
+      set(_t, k, v) { if (k === 'fillStyle' || k === 'strokeStyle') note(v); base[k] = v; return true; },
+    });
+    return { c, seen, has: (col) => seen.has(String(col).toLowerCase()) };
+  };
+  const MAT = FF.FRAME_MAT, WTH = FF.WEATHER;
+  const TRIBED = ['hearth', 'frost', 'scrap', 'none'];
+
+  // THE COLLECTION. 61 tiles, and every metal in the game has to be among them.
+  {
+    const sp = paintSpy();
+    FF.G.screen = 'collection';
+    FF.UI.collectPage = 0;
+    FF.drawCollection(sp.c, 0);
+    for (const k of TRIBED) {
+      ok(sp.has(MAT[k].cap), `the collection tile wears ${k} metal`);
+      ok(sp.has(WTH[k].horiz), `and ${k}'s own horizon behind the creature`);
+    }
+    const caps = new Set(TRIBED.map((k) => MAT[k].cap.toLowerCase()));
+    ok([...caps].filter((cp) => sp.has(cp)).length >= 4,
+      'the grid is not one slate — at least four metals on one page');
+  }
+
+  // THE BOARD SLAB. A warden carries its tribe onto the board; a foe does not
+  // carry the caravan's.
+  {
+    const b = bareBattle(FF, 'hearth', 41);
+    b.units.length = 0;
+    const cases = [['cinderpup', 'p', 'hearth'], ['rimefox', 'p', 'frost'],
+      ['clunkbot', 'p', 'scrap'], ['snowpup', 'p', 'none'], ['frostwolf', 'e', 'foe']];
+    cases.forEach(([id, side, key], i) => {
+      const u = place(FF, side, id, i % 2, 0);
+      u.px = 300; u.py = 200;
+      const sp = paintSpy();
+      FF.drawUnit(sp.c, u, 0);
+      ok(sp.has(MAT[key].cap), `a ${key} slab is edged in ${key} metal`);
+      ok(sp.has(WTH[key].near), `and stands on ${key} ground`);
+      for (const other of TRIBED.concat('foe')) {
+        if (other === key) continue;
+        ok(!sp.has(MAT[other].cap), `and wears no ${other} metal`);
+      }
+      b.units.length = 0;
+    });
+  }
+
+  /* THE COUNTER IS THE CARD'S PLAQUE. It was a grey disc pinned to the slab's
+     corner while the same number was the middle of three pills on the card an
+     inch below — one value, two shapes, two colours. `#cfe0f5` was that disc's
+     idle ink and it is the thing to watch for: if it comes back on a slab, so
+     has the re-encode. */
+  {
+    const b = bareBattle(FF, 'hearth', 42);
+    b.units.length = 0;
+    const u = place(FF, 'p', 'cinderpup', 0, 0, { unit: { cnt: 1 } });
+    u.px = 300; u.py = 200;
+    const slab = paintSpy();
+    FF.drawUnit(slab.c, u, 0);
+    const card = paintSpy();
+    FF.drawCard(card.c, FF.mkCard('cinderpup'), 0, 0, 126, 168, { t: 0 });
+    for (const pill of ['#ff8b7a', '#ffd166', '#7de08f']) {
+      ok(slab.has(pill), `the slab sets the same ${pill} plaque the card does`);
+      ok(card.has(pill), `and the card still sets ${pill}`);
+    }
+    ok(!slab.has('#cfe0f5'), 'and no grey disc is left holding the counter');
+  }
+
+  // THE LEADER PANEL. The one screen you pick a whole run on, and the creature
+  // stood on flat navy with no window at all.
+  for (const tb of ['hearth', 'frost', 'scrap', 'wyrd']) {
+    const sp = paintSpy();
+    FF.G.ui.pick = { tribe: tb, winters: [], course: tb };
+    FF.drawLeaderPick(sp.c, 0);
+    const key = tb;
+    ok(sp.has(MAT[key].mid), `the ${tb} leader panel is cut from ${tb} metal`);
+    const wk = WTH[key] ? key : 'none';
+    ok(sp.has(WTH[wk].horiz), `and the leader stands in a window, not on a slab (${tb})`);
+  }
+}
+
+/* ---------------------- untribed is not frost, and foes are not untribed -- */
+section('untribed, the enemy, and the two worlds they used to share');
+{
+  const MAT = FF.FRAME_MAT, WTH = FF.WEATHER;
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const dist = (a, b) => {
+    const p = rgb(a), q = rgb(b);
+    return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+  };
+
+  /* UNTRIBED WORE FROST'S FRAME OVER ITS OWN GREY SKY for a whole round: the
+     window left the blue family and the metal did not, so on the gear sheet
+     THORN OIL and HUSH were the same object. Blue cast is the tell — a neutral
+     grey has no more blue in it than red. */
+  for (const part of ['top', 'mid', 'cap']) {
+    const [r, , b2] = rgb(MAT.none[part]);
+    ok(b2 <= r + 6, `untribed ${part} has no blue cast (${MAT.none[part]})`);
+  }
+  ok(dist(MAT.none.cap, MAT.frost.cap) > 60, 'untribed metal is nowhere near frost metal');
+  ok(dist(MAT.none.face[0], MAT.frost.face[0]) > 20, 'and neither is its card stock');
+
+  /* AND THE FOES USED TO RENDER IN THAT SAME UNTRIBED METAL UNDER THAT SAME
+     UNTRIBED OVERCAST, because a foe card is built with `tribe: null`. Cards
+     you want and cards that kill you were the same object. */
+  eq(FF.tribeKey(FF.mkFoeCard('frostwolf', 1)), 'foe', 'a beast belongs to the fell');
+  eq(FF.tribeKey(FF.mkCard('snowpup')), 'none', 'and an unaligned warden does not');
+  eq(FF.tribeKey(FF.mkCard('cinderpup')), 'hearth', 'and a Hearthkin is Hearthkin');
+  /* Told apart by CHROMA rather than by value, because that is the difference
+     that is actually there: grey iron and bruised rose sit at the same weight
+     on the bar — which is the point, they are the same dark metal — and what
+     separates them is that one of them is a colour and the other is the absence
+     of one. A straight RGB distance would pass this pair at 48 and read as a
+     weak margin; the spread between a metal's channels is unambiguous. */
+  const chroma = (h) => { const p = rgb(h); return Math.max(...p) - Math.min(...p); };
+  ok(chroma(MAT.foe.cap) > 40, 'the enemy metal is a colour');
+  ok(chroma(MAT.none.cap) < 20, 'and the neutral metal is not one');
+  ok(dist(MAT.foe.cap, MAT.none.cap) > 40, 'so the two are not the same bar');
+  ok(dist(WTH.foe.mid, WTH.none.mid) > 60, 'nor standing in their weather');
+
+  // and no two worlds in the game collide with each other
+  const keys = Object.keys(MAT);
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      ok(dist(MAT[keys[i]].cap, MAT[keys[j]].cap) > 40,
+        `${keys[i]} and ${keys[j]} are told apart by their metal`);
+    }
+  }
+  const wk = Object.keys(WTH);
+  for (let i = 0; i < wk.length; i++) {
+    for (let j = i + 1; j < wk.length; j++) {
+      ok(dist(WTH[wk[i]].mid, WTH[wk[j]].mid) > 40,
+        `${wk[i]} and ${wk[j]} are told apart by their sky`);
+    }
+  }
+  console.log(`  · ${keys.length} metals and ${wk.length} skies, none of them each other`);
+}
+
 done('frostfell-render');
