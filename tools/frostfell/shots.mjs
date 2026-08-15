@@ -89,7 +89,42 @@ function findChromium() {
 }
 
 const shots = [];
-async function shot(page, name, note) {
+/* A SHOT SAYS WHICH SCREEN IT IS OF, AND IS CHECKED AGAINST IT.
+
+   Every screenshot in this walk is filed under a name a person later reads as a
+   promise — `15-reward` is the reward pick, `14-inspect` is a foe explained. For
+   at least a round none of them were: the guide loop below plays whole fights to
+   reach the last hint, it lost one, and from that point `13-battle-drag`,
+   `14-inspect` and `15-reward` were three PNGs of the DEFEAT screen filed under
+   three other names. Nothing was red. Three rounds of briefs asked for those
+   three views to be verified in situ and three rounds of agents looked at a
+   photograph of something else.
+
+   So a shot declares what it expects — the screen the game must be on, and
+   optionally the overlay that must be open — and a walk that photographs
+   something else says so loudly and exits non-zero. A screenshot tool whose
+   output cannot be trusted is worse than no screenshot tool, because it is
+   believed. */
+async function shot(page, name, note, want) {
+  if (want) {
+    const w = typeof want === 'string' ? { screen: want } : want;
+    const got = await page.evaluate((need) => {
+      const FF = window.FF, G = FF.G;
+      return {
+        screen: G.screen,
+        over: !!(G.battle && G.battle.over),
+        ui: need.ui ? !!FF.UI[need.ui] : true,
+      };
+    }, w);
+    const wrong = [];
+    if (got.screen !== w.screen) wrong.push(`on '${got.screen}', not '${w.screen}'`);
+    if (w.screen === 'battle' && got.over && !w.over) wrong.push('the fight is already over');
+    if (w.ui && !got.ui) wrong.push(`UI.${w.ui} is not open`);
+    if (wrong.length) {
+      console.error(`  ! ${name}: ${wrong.join('; ')} — the shot is of something else`);
+      process.exitCode = 1;
+    }
+  }
   mkdirSync(OUT, { recursive: true });
   const file = join(OUT, name + '.png');
   await page.screenshot({ path: file });
@@ -125,7 +160,7 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   await shot(page, '00-boot', 'the first-touch gate');
   await page.click('#bootgo');
   await settle(page, 40);
-  await shot(page, '01-title', 'title and leader choices');
+  await shot(page, '01-title', 'title and leader choices', 'title');
 
   // the rulebook, all three pages
   await page.evaluate(() => window.FF.press('help'));
@@ -145,27 +180,27 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   // the collection
   await page.evaluate(() => window.FF.press('collection'));
   await settle(page, 8);
-  await shot(page, '05-collection', 'everything found and unfound');
+  await shot(page, '05-collection', 'everything found and unfound', 'collection');
   await page.evaluate(() => window.FF.press('collectClose'));
 
   // choosing a leader, with a winter turned on
   await page.evaluate(() => window.FF.press('tribe', 'hearth'));
   await settle(page, 20);
-  await shot(page, '06-leader', 'leader, starting deck, winters');
+  await shot(page, '06-leader', 'leader, starting deck, winters', 'leader');
   await page.evaluate(() => window.FF.press('winterToggle', 'keen'));
   await page.evaluate(() => window.FF.press('courseToggle', 'pack'));
   await settle(page, 6);
-  await shot(page, '07-leader-winter', 'a winter and a course chosen');
+  await shot(page, '07-leader-winter', 'a winter and a course chosen', 'leader');
 
   // out on the trail
   await page.evaluate(() => window.FF.press('startRun'));
   await settle(page, 30);
-  await shot(page, '08-trail', 'the road, first step');
+  await shot(page, '08-trail', 'the road, first step', 'trail');
 
   // into the first fight
   await page.evaluate(() => window.FF.press('node', 0));
   await settle(page, 45);
-  await shot(page, '09-battle-open', 'the opening hand, dealt');
+  await shot(page, '09-battle-open', 'the opening hand, dealt', 'battle');
 
   /* THE GUIDE, IN ORDER, as a first-time player meets it. Each hint is cleared
      by doing the thing it names, so this walks the opening the way a new player
@@ -247,6 +282,44 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
   }
   await page.evaluate(() => { window.FF.UI.order = false; window.FF.UI.inspect = null; });
 
+  /* THE GUIDE GETS A RUN OF ITS OWN, AND EVERYTHING AFTER IT GETS A FRESH ONE.
+
+     The loop above is not a screenshot of the opening any more — to reach the
+     scheme hint it plays whole fights, skips rewards, walks the trail and enters
+     the next node, and it plays them badly, because it is a `while` loop and not
+     a pilot. Whatever it leaves behind is what the next twelve shots photograph:
+     a caravan six steps along with three cards in hand, or, when the loop lost,
+     the DEFEAT screen filed under `13-battle-drag`, `14-inspect` and `15-reward`.
+
+     Reaching the last hint and photographing a clean fight are two jobs and they
+     were sharing one run. They do not share one now: the guide finishes on its
+     own run, and the walk then deals a NEW one — same tribe, a fixed seed, the
+     guide switched off — and opens the first fight on it. Every shot from here
+     is of a first fight in a caravan that is whole, at every shape, every time.
+     `shot()`'s expectation is what keeps it that way. */
+  await page.evaluate(() => {
+    const FF = window.FF, G = FF.G;
+    G.meta.taught = true;                  // the hints have had their turn
+    FF.newRun(G, 'hearth', 20260415, ['keen'], 'pack');
+  });
+  /* AND A FIGHT THAT IS STILL GOING WHEN THE CAMERA COMES UP.
+
+     The first node of a first trail is over in three turns — which put the
+     reward screen under `11-battle-mid`, `12-battle-order`, `13-battle-drag` and
+     `14-inspect` the moment the walk stopped inheriting a mid-run board. A
+     pack with some weight in it is what those four shots are of, so that is what
+     they get, and any shot that finds the fight finished asks for another. */
+  const ensureFight = async () => {
+    await page.evaluate(() => {
+      const FF = window.FF, G = FF.G;
+      if (G.screen === 'battle' && G.battle && !G.battle.over) return;
+      G.run.zone = Math.max(1, G.run.zone);
+      FF.startBattle(G, 'elite');
+      FF.drainAll();
+    });
+    await settle(page, 45);
+  };
+  await ensureFight();
 
   // play a warden, then let the turn resolve
   await page.evaluate(() => {
@@ -255,7 +328,7 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
     if (i >= 0) FF.playCard(G, i, { lane: 0, col: 0 });
   });
   await settle(page, 40);
-  await shot(page, '10-battle-deployed', 'a warden on the board, mid-resolution');
+  await shot(page, '10-battle-deployed', 'a warden on the board, mid-resolution', 'battle');
 
 
   // a few turns in: telegraphs, counters, a log
@@ -268,16 +341,18 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
       FF.drainAll();
     }
   });
+  await ensureFight();
   await settle(page, 30);
-  await shot(page, '11-battle-mid', 'a fight underway');
+  await shot(page, '11-battle-mid', 'a fight underway', 'battle');
 
   // the order overlay
   await page.evaluate(() => window.FF.press('order'));
   await settle(page, 8);
-  await shot(page, '12-battle-order', 'resolution order, numbered');
+  await shot(page, '12-battle-order', 'resolution order, numbered', { screen: 'battle', ui: 'order' });
   await page.evaluate(() => window.FF.press('order'));
 
   // a card held over a target, showing what it would do
+  await ensureFight();
   await page.evaluate(() => {
     const FF = window.FF, G = FF.G;
     const i = G.battle.hand.findIndex((c) => c.type === 'item');
@@ -289,7 +364,7 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
     FF.onMove(foe.x + 40, foe.y + 40);
   });
   await settle(page, 8);
-  await shot(page, '13-battle-drag', 'gear held over a foe, with its promise');
+  await shot(page, '13-battle-drag', 'gear held over a foe, with its promise', { screen: 'battle', ui: 'drag' });
   await page.evaluate(() => window.FF.onUp(-999, -999));
 
   // inspecting something
@@ -299,7 +374,7 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
     if (u) FF.UI.inspect = u;
   });
   await settle(page, 6);
-  await shot(page, '14-inspect', 'a foe, explained');
+  await shot(page, '14-inspect', 'a foe, explained', { screen: 'battle', ui: 'inspect' });
   await page.evaluate(() => { window.FF.UI.inspect = null; });
 
   // win it, and take the reward
@@ -310,18 +385,28 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
     FF.drainAll();
   });
   await settle(page, 40);
-  await shot(page, '15-reward', 'the pick after a fight');
+  await shot(page, '15-reward', 'the pick after a fight', 'reward');
 
   // the course chooser, opened off the reward screen
   await page.evaluate(() => { window.FF.G.run.gold = 400; window.FF.press('rewardCourse'); });
   await settle(page, 8);
-  await shot(page, '15b-course', 'changing the course mid-trek');
+  await shot(page, '15b-course', 'changing the course mid-trek', { screen: 'reward', ui: 'choose' });
   await page.evaluate(() => { window.FF.UI.choose = null; });
 
-  // and back to the road, one step on
-  await page.evaluate(() => window.FF.press('reward', 0));
+  /* and back to the road, one step on. Taking the card only leaves the reward
+     screen when there is no charm on offer as well — with one there, the pick is
+     not finished until the charm is taken or the screen is passed, and the walk
+     was photographing the reward screen a second time under the road's name. */
+  await page.evaluate(() => {
+    const FF = window.FF;
+    FF.press('reward', 0);
+    for (let n = 0; n < 6 && FF.UI.choose; n++) FF.UI.choose.onPick(0);
+    FF.UI.choose = null;
+    if (FF.G.screen === 'reward') FF.press('rewardSkip');
+    FF.drainAll();
+  });
   await settle(page, 30);
-  await shot(page, '16-trail-again', 'the road, further along');
+  await shot(page, '16-trail-again', 'the road, further along', 'trail');
 
   // the other screens, driven straight through state
   const screens = [
@@ -339,7 +424,7 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
       G.screen = scr2;
     }, [scr, setup]);
     await settle(page, 24);
-    await shot(page, name, note);
+    await shot(page, name, note, scr);
   }
 
   // a boss, banner and all
@@ -349,9 +434,9 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
     FF.startBattle(G, 'boss');
   });
   await settle(page, 20);
-  await shot(page, '22-boss', 'a beast, announced');
+  await shot(page, '22-boss', 'a beast, announced', 'battle');
   await settle(page, 90);
-  await shot(page, '23-boss-settled', 'the same fight once the banner clears');
+  await shot(page, '23-boss-settled', 'the same fight once the banner clears', 'battle');
 
   // and the end of a run, with a couple of seals struck on the way in
   await page.evaluate(() => {
@@ -360,7 +445,7 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
     FF.G.screen = 'victory';
   });
   await settle(page, 40);
-  await shot(page, '24-victory', 'what the caravan did');
+  await shot(page, '24-victory', 'what the caravan did', 'victory');
 
   /* AND THE OTHER HALF OF THE SAME MOMENT. The walk photographed a crossing and
      never once a defeat, so the loss screen went unlooked-at for thirty-five
@@ -371,7 +456,7 @@ const settle = (page, frames = 30) => page.evaluate((n) => new Promise((res) => 
     FF.G.screen = 'gameover';
   });
   await settle(page, 40);
-  await shot(page, '25-defeat', 'and what stopped a run that did not');
+  await shot(page, '25-defeat', 'and what stopped a run that did not', 'gameover');
 
   await browser.close();
   console.log(`\n${shots.length} shots in ${OUT}`);

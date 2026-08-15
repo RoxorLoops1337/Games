@@ -39,7 +39,36 @@ let SHOTS = 0;
    sweep drew against the strings the game CAN draw turns "probably most of it"
    into a number, and the number is printed whether or not it is flattering. */
 const STRINGS = { seen: new Set(), draws: 0 };
-const ctx2 = mkCtx(log);
+/* WHAT A REAL CANVAS REFUSES AND THE STUB ACCEPTS.
+
+   The stub records arguments; it does not validate them, and Chromium does. A
+   negative radius handed to `arc`, `arcTo` or `createRadialGradient` is a thrown
+   exception in a browser, and a thrown exception inside `render` does not lose
+   one shape — it abandons the frame, so everything after that call is simply not
+   drawn. Two of them were live and neither suite had ever been able to see them:
+   the victory screen at 653x280 drew a card whose window came out 17 units of
+   NEGATIVE height, and the reward pick drew a charm whose subject solved to a
+   negative size. Both were found by the shot walk in a real browser, which is a
+   slow and lucky way to find a defect that arithmetic can catch here.
+
+   So the stub the card sweep draws into is wrapped in the browser's own rules.
+   Nothing is asserted about how the drawing looks; only that every number handed
+   to a canvas is one a canvas will take. */
+const NEGRAD = [];
+const guardCanvas = (c) => new Proxy(c, {
+  get(t, k) {
+    const v = t[k];
+    if (k === 'arc') return (...a) => { if (a[2] < 0) NEGRAD.push(`arc r=${a[2].toFixed(2)}`); return v(...a); };
+    if (k === 'arcTo') return (...a) => { if (a[4] < 0) NEGRAD.push(`arcTo r=${a[4].toFixed(2)}`); return v(...a); };
+    if (k === 'ellipse') return (...a) => { if (a[2] < 0 || a[3] < 0) NEGRAD.push('ellipse'); return v(...a); };
+    if (k === 'createRadialGradient') return (...a) => {
+      if (a[2] < 0 || a[5] < 0) NEGRAD.push('radial gradient');
+      return v(...a);
+    };
+    return v;
+  },
+});
+const ctx2 = guardCanvas(mkCtx(log));
 /* A wash is not a ground — the same rule the raster uses. The bbox FALLBACK did
    not have it, so a 16%-opacity tint behind a label was reported as though it
    were solid paint. */
@@ -898,7 +927,13 @@ section('every card in the game, drawn and measured');
      actually draws everything it has. Sweeping only the tight one meant the
      rules lines the card DELIBERATELY drops on a fold were counted as text the
      check had failed to look at. */
-  const SIZE = [[92, 150, 'in hand'], [126, 196, 'on the reward row']];
+  /* AND THE SIZE THE LAP OF HONOUR USES, which was the one nobody swept. A
+     crossing lays the whole caravan out at 96x134 and a card that small drove
+     its own window NEGATIVE — which Chromium throws on, killing the rest of the
+     frame. Two sizes were checked here because two were the sizes anyone had
+     thought about; the third is where the card is smallest and therefore where
+     every measurement in `drawCard` is closest to running out. */
+  const SIZE = [[92, 150, 'in hand'], [126, 196, 'on the reward row'], [96, 134, 'in the tally']];
   let drawn = 0;
   for (const [w2, h2, where, stage] of SIZE.flatMap((z) => [z.concat([[653, 280]]), z.concat([[1280, 720]])])) {
     FF.setStageWidth(stage[0], stage[1]);                 // the tightest shape, where the floor bites hardest
@@ -911,10 +946,55 @@ section('every card in the game, drawn and measured');
        as a card, in the deck view, so `drawCard` is a real path for it and
        excluding it was the sweep being narrow rather than the game being
        unable to show it. */
-    for (const def of Object.values(FF.CARDS)) {
+    /* AND CHARMS, which are cards and were not in this list. A charm goes
+       through `drawCard` on the reward pick, in the shop, in the deck view and
+       in the inspector, and the one sweep that draws every card face in the game
+       enumerated `CARDS` — where charms do not live. So the one card kind nobody
+       checked was the kind that then solved its subject to a NEGATIVE size at a
+       fold's reward pick and threw the frame away. A pool that leaves a kind out
+       is a pool the bug will find. */
+    const faces = Object.values(FF.CARDS).map((def) => FF.mkCard(def.id))
+      .concat(Object.keys(FF.CHARMS).map((id) => FF.charmCard(id)));
+    for (const card of faces) {
+      const def = { id: card.def };
       log.length = 0;
-      FF.drawCard(ctx2, FF.mkCard(def.id), 40, 40, w2, h2, { t: 0.4 });
+      FF.clearCardDraws();
+      FF.drawCard(ctx2, card, 40, 40, w2, h2, { t: 0.4 });
       drawn++;
+      /* A CARD THAT IS HOLDING ITS RULE BACK HAS TO SAY SO ON ITS FACE.
+
+         The whole-or-nothing gate above is right and it shipped with no state
+         for the half it creates. A card whose paragraph does not fit drew a
+         picture, a name and three numbers — pixel for pixel how a card with NO
+         rules draws — so at a fold's reward pick four cards showed nothing and
+         nothing on any of them said whether that was the card being simple or
+         the card being cut short. It is the difference between choosing among
+         four things you can read and choosing among one you can and three you
+         cannot, and the tap is permanent.
+
+         Two ends of the same fact, checked separately so neither can be quietly
+         satisfied by the other: the DRAW reports which it did, and the RASTER is
+         searched for the two ruled bars that stand in for the words. A mark that
+         stops being painted — because it was clipped, or drawn at zero alpha, or
+         squeezed out of a well with no room left — fails here rather than in
+         front of a player who is about to spend a card on it. */
+      const rep = FF.cardDraws()[0];
+      /* A WINDOW WITH NEGATIVE HEIGHT IS NOT A SMALL WINDOW. `rr` hands its
+         corner radius to `arcTo`, Chromium refuses a negative one, and the
+         exception takes the rest of the frame with it — so a card too small for
+         its own paragraph did not draw a squashed picture, it blanked the
+         screen it was on. The stub does not validate, which is why this is
+         asserted on the number rather than left to the draw. */
+      if (rep && rep.art < 0) bad2.push(`${def.id} ${where}: window ${rep.art.toFixed(1)} units tall`);
+      if (NEGRAD.length) { bad2.push(`${def.id} ${where}: ${NEGRAD[0]} — a browser throws and loses the frame`); NEGRAD.length = 0; }
+      const bars = log.filter((e) => e[0] === 'fillRect' && e[1] === FF.RULE_INK
+        && Math.abs((e[2] === undefined ? 1 : e[2]) - 0.5) < 0.02).length;
+      if (rep && rep.text && !rep.shown && bars !== 2) {
+        bad2.push(`${def.id} ${where}: rule withheld, ${bars} of 2 marks drawn`);
+      }
+      if (rep && (rep.shown || !rep.text) && bars) {
+        bad2.push(`${def.id} ${where}: ${bars} withheld-marks on a card that is not withholding`);
+      }
       const ts = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim())
         .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
       for (const t of ts) STRINGS.seen.add(t.s);
@@ -1149,6 +1229,77 @@ section('the light in the window');
   log.length = 0;
   ok(withDisc >= 1, 'off the card a creature still draws its own ground disc');
   eq(flatDisc, 0, 'and `flat` takes it away, so the window casts the only shadow');
+}
+
+/* ------------------------------------------- nothing permanent is picked blind */
+/* THE TWO SCREENS WHERE A TAP CANNOT BE TAKEN BACK.
+
+   Everywhere else in this game a tap is a question: a card in hand goes back
+   down, a warden slides back, a foe you poked closes again. On the reward pick
+   and at the trader it is a purchase — `takeCard` and `buy` — and there is no
+   confirm, no undo and, until this round, no way to read the card first, because
+   hold-to-inspect hung off `UI.drag` and a reward card is a `hit()` region.
+
+   That combination shipped a genuinely player-harming defect: a card whose rule
+   the face was too small to print looked EXACTLY like a card with no rule, and
+   the next tap put it in the deck. Not a polish item — a run lost to a card
+   nobody was shown.
+
+   Three invariants, checked on both screens at every shape the game supports:
+
+     1. every region whose tap spends a card can be held open first,
+     2. every card drawn inside one of those regions either shows its whole rule
+        or wears the mark that says it is holding one back,
+     3. and nothing on either screen is a fragment — not a card, not a price, not
+        a button, not the relic's one line. A truncation on a screen with an undo
+        is a nuisance; on these two it is the same bug in a different widget, and
+        `TEMPER…`, `MEND ALL — …` and `Waves take one more tur…` were all live.
+
+   The first is what makes the second worth drawing: a mark that names a gesture
+   the screen does not have would be an apology rather than an affordance. */
+section('nothing permanent is chosen blind');
+{
+  const bad3 = [];
+  let regions = 0, faces = 0;
+  for (const [w, h] of SIZES) {
+    FF.setStageWidth(w, h);
+    for (const scr of ['reward', 'shop']) {
+      /* AT THEIR FULLEST. A boss reward carries bells and charms as well as
+         cards; a shop that has rolled no relic cannot truncate its strapline. */
+      withRun(FF, 'hearth', 3);
+      if (scr === 'reward') G.ui.reward = FF.rollReward(G, 'elite');
+      else G.ui.shop = FF.rollShop(G);
+      G.run.gold = 400;
+      G.screen = scr;
+      log.length = 0;
+      FF.render();
+      const drawsHere = FF.cardDraws().slice();
+      const spendable = FF.hits().filter((hh) => FF.SPEND_HITS.indexOf(hh.id) >= 0);
+      for (const hh of spendable) {
+        regions++;
+        if (!FF.holdCard(hh)) bad3.push(`${w}x${h} ${scr}: ${hh.id}#${hh.data} cannot be read before it is spent`);
+        /* the card drawn inside this region — the one the tap actually buys */
+        for (const d of drawsHere) {
+          const inside = d.x >= hh.x - 2 && d.y >= hh.y - 2
+            && d.x + d.w <= hh.x + hh.w + 2 && d.y + d.h <= hh.y + hh.h + 2;
+          if (!inside) continue;
+          faces++;
+          if (d.text && !d.shown && !d.mark) {
+            bad3.push(`${w}x${h} ${scr}: ${d.def} withholds its rule with nothing on its face saying so`);
+          }
+        }
+      }
+      const cut = log.filter((e) => e[0] === 'fillText' && String(e[1]).indexOf('…') >= 0)
+        .map((e) => JSON.stringify(String(e[1])).slice(0, 34));
+      for (const s of new Set(cut)) bad3.push(`${w}x${h} ${scr}: fragment ${s}`);
+    }
+  }
+  FF.setStageWidth(1280, 720);
+  log.length = 0;
+  ok(regions >= 40, `every way to spend a card, at every shape (${regions} regions)`);
+  ok(faces >= 40, `and the card drawn inside each one (${faces} faces)`);
+  eq([...new Set(bad3)].slice(0, 6).join(' | '), '',
+    'a permanent tap can always be read first, and nothing on those screens is cut short');
 }
 
 /* ------------------------------------ every foe, on the board and inspected -- */
