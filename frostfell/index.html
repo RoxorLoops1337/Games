@@ -4581,11 +4581,220 @@ function wrapText(c, s, size, maxW) {
    what the cast is built on.
    ------------------------------------------------------------------------- */
 
+/* SILHOUETTE IS THE ONLY THING THAT SURVIVES HAND SIZE, and for a long while
+   this table did not have one. `tall` was 0.74 wide and `squat` 1.14 — half a
+   card apart on paper, indistinguishable once the card is 126 units and the
+   creature is drawn inside a window a third of that. Blacked out, Cinderpup,
+   Rimefox and Flarehound were the same shape.
+
+   So the spread is pushed until the black shapes are tellable: 0.62 wide to
+   1.34, 0.56 tall to 1.04. Nothing here grows the OVERALL reach much, because
+   three screens hang their layout off "a creature is about 2.2h tall"; what
+   changes is the proportion between one recipe and the next. */
 const SHAPE_DIM = {
-  blob:  [1.02, 0.80], round: [0.94, 0.88], tall: [0.74, 0.96], squat: [1.14, 0.70],
-  small: [0.72, 0.62], wisp:  [0.78, 0.94], boss:  [1.20, 1.02],
+  blob:  [1.06, 0.80], round: [0.92, 0.92], tall: [0.86, 0.86], squat: [1.14, 0.74],
+  small: [0.62, 0.56], wisp:  [0.74, 0.98], boss:  [1.32, 1.04],
 };
+/* HOW FAR THE HEAD SITS ABOVE THE BODY, and it used to be one pair of numbers
+   for both headed shapes: 0.34 up for the head and 0.24 down for the body, on a
+   `tall` whose head is only 0.29 across. Those two circles barely touched, so a
+   `tall` painted a box 1.6 times as high as it was wide with a third of it
+   air — and the art window, which fits the subject's real box, answered by
+   scaling every leader and every Frostborn DOWN until they were smaller on the
+   card than a squat frog. Pulling the head down onto the shoulders is what
+   makes them bigger; nothing about the window had to change. */
+const HEAD_SEP = { tall: [0.30, 0.20], boss: [0.34, 0.24] };
+/* Where the weight is thrown. Positive puts it in the hips, negative in the
+   shoulders — one number, and it is most of why a boss reads as a threat and a
+   blob reads as a dumpling stood on its own feet. */
+const SHAPE_TAPER = { blob: 0.13, round: 0.02, tall: -0.10, squat: 0.16, small: 0.06, wisp: -0.02, boss: -0.20 };
 const HEADED = { tall: 1, boss: 1 };
+/* A HEAD NARROWER THAN THE SHOULDERS UNDER IT, which the one constant here
+   (0.44 of the body width, for both headed shapes) could not give either of
+   them: it made the head WIDER than the torso, and a wide circle on a narrow
+   circle is a snowman. Every leader on the pick screen was a snowman.
+   A boss's is smaller again — big head on a big body is a mascot; the same
+   body under a small head is something that could eat you. */
+const HEAD_R = { tall: 0.34, boss: 0.28 };
+
+/* ------------------------------------------------------------------ light --
+
+   ONE LIGHT, THE SAME ONE THE CARD HAS. The face of a card is lit from
+   above-left by four gradients and the creature standing in the middle of it
+   was lit by nothing: a flat fill with an even dark line round it, which is
+   what a sticker is. Everything below is three cheap passes and no pixel work.
+
+   The cool colour is not a stylistic choice — the ground behind these animals
+   is snow, and snow throws a great deal of light back up at whatever stands on
+   it. That bounce is the rim on the shadow side. */
+const SKYBOUNCE = 'rgba(190,228,255,';
+
+/** A stable number per art recipe, so the derived face of a Rimefox is the
+ *  same Rimefox face every time without any of it being written down. */
+function artKey(art) {
+  const s = (art.body || '') + (art.belly || '') + (art.shape || '') + (art.skin || '') +
+    (art.mouth || '') + (art.ears || '') + (art.mark || '') + (art.tail || '') + (art.acc || '');
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h;
+}
+
+/** The dark that gathers where one form tucks under another. Drawn as an
+ *  ellipse rather than an arc so it never claims to be a ground for text. */
+function occlude(c, x, y, rx, ry, a) {
+  c.save();
+  c.translate(x, y); c.scale(1, ry / rx);
+  const g = c.createRadialGradient(0, 0, 0, 0, 0, rx);
+  g.addColorStop(0, 'rgba(10,18,36,' + a + ')');
+  g.addColorStop(0.55, 'rgba(10,18,36,' + (a * 0.45) + ')');
+  g.addColorStop(1, 'rgba(10,18,36,0)');
+  c.fillStyle = g;
+  c.beginPath(); c.ellipse(0, 0, rx, rx, 0, 0, TAU); c.fill();
+  c.restore();
+}
+
+/** A LIT SHELL — the whole difference between a character and a sticker.
+ *
+ *  Four passes over the same outline, which is why `path` is a closure:
+ *    · the line, redrawn heavy and nudged DOWN, so it is fat under the chin and
+ *      thin over the head the way a drawn line is. It doubles as the contact
+ *      shadow the flat version never had.
+ *    · the fill, falling from the key at the top-left to the turn away from it.
+ *    · the core shadow, pooled bottom-right inside the shape.
+ *    · the rim: the same outline stroked once more, shifted up and left, so the
+ *      only part of it that survives the clip is the lower-right arc.
+ */
+function shell(c, path, col, lw, cx, cy, w, h, k) {
+  k = k === undefined ? 1 : k;
+  // gear icons and a couple of foes reach this with no colour of their own;
+  // the drawing is never allowed to be the thing that breaks
+  if (typeof col !== 'string' || col.charAt(0) !== '#') col = '#9aa7bd';
+  c.save();
+  c.translate(0, lw * 0.6);
+  path();
+  c.lineWidth = lw * 1.4; c.strokeStyle = C.ink; c.lineJoin = 'round'; c.stroke();
+  c.restore();
+
+  path();
+  const g = c.createLinearGradient(cx - w * 0.34, cy - h * 0.5, cx + w * 0.3, cy + h * 0.5);
+  g.addColorStop(0, mix(col, '#ffffff', 0.36 * k));
+  g.addColorStop(0.44, col);
+  g.addColorStop(1, mix(col, '#0d1730', 0.34 * k));
+  c.fillStyle = g; c.fill();
+  // the light line, over the heavy one: what is left showing at the top and
+  // sides is thin, what is left showing underneath is not
+  c.lineWidth = lw * 0.85; c.strokeStyle = C.ink; c.stroke();
+
+  /* The two soft passes below are sub-pixel on a board unit and cost a clip and
+     two radial gradients each time. Under about thirty units they are skipped:
+     the fall down the fill and the rim still carry the form at that size, and
+     `drawCreature` runs for every body on the board every frame. */
+  const fine = w > 30;
+  c.save();
+  path(); c.clip();
+  if (fine) {
+  // the core shadow
+  c.save();
+  c.translate(cx + w * 0.24, cy + h * 0.28); c.scale(1, h / w);
+  const rg = c.createRadialGradient(0, 0, 0, 0, 0, w * 0.6);
+  rg.addColorStop(0, 'rgba(11,20,42,' + (0.30 * k) + ')');
+  rg.addColorStop(1, 'rgba(11,20,42,0)');
+  c.fillStyle = rg;
+  c.beginPath(); c.ellipse(0, 0, w * 0.6, w * 0.6, 0, 0, TAU); c.fill();
+  c.restore();
+  // the snow bounce on the shadow side
+  c.save();
+  c.translate(-lw * 0.8, -lw * 1.0);
+  path();
+  c.lineWidth = lw * 1.4; c.strokeStyle = SKYBOUNCE + (0.55 * k) + ')'; c.stroke();
+  c.restore();
+  // and the key smear on the shoulder, which is what sells a round form
+  c.save();
+  c.translate(cx - w * 0.19, cy - h * 0.27); c.scale(1, 0.66);
+  const kg = c.createRadialGradient(0, 0, 0, 0, 0, w * 0.32);
+  kg.addColorStop(0, 'rgba(255,255,255,' + (0.4 * k) + ')');
+  kg.addColorStop(1, 'rgba(255,255,255,0)');
+  c.fillStyle = kg;
+  c.beginPath(); c.ellipse(0, 0, w * 0.32, w * 0.32, 0, 0, TAU); c.fill();
+  c.restore();
+  }
+  c.restore();
+}
+
+/** A flat fill, lit. Ears, horns, helms and scarves are too small to earn the
+ *  full shell, but a lit body wearing flat trimmings looks like a photograph
+ *  with stickers on it — so they take the same key from the same corner, for
+ *  the cost of one gradient. Anything that is not a hex colour passes through
+ *  untouched, because a few callers hand this an accent that is already one. */
+function litG(c, col, x0, y0, x1, y1, k) {
+  if (typeof col !== 'string' || col.charAt(0) !== '#') return col;
+  const g = c.createLinearGradient(x0, y0, x1, y1);
+  g.addColorStop(0, mix(col, '#ffffff', 0.3 * (k === undefined ? 1 : k)));
+  g.addColorStop(1, mix(col, '#0d1730', 0.3 * (k === undefined ? 1 : k)));
+  return g;
+}
+
+/** THE OUTLINE IS THE MATERIAL.
+ *
+ *  `fur`, `ice`, `metal` and `stone` were four flat fills in four hues. The
+ *  only thing telling them apart was colour, and colour is the first thing the
+ *  eye gives up at hand size — so the four of them read as one substance with
+ *  a tint. Now the EDGE carries it: fur breaks its own silhouette into tufts,
+ *  ice is cut into straight facets, stone is chipped, metal is a smooth
+ *  superellipse that reads as pressed rather than grown. Black out the shape
+ *  and you can still say what it is made of.
+ */
+function bodyForm(c, x, y, w, h, skin, taper, key, ph) {
+  const rx = w * 0.5, ry = h * 0.5;
+  const e = skin === 'metal' ? 0.74 : 0;
+  const at = (a, r) => {
+    let cs = Math.cos(a), sn = Math.sin(a);
+    if (e) {
+      cs = (cs < 0 ? -1 : 1) * Math.pow(Math.abs(cs), e);
+      sn = (sn < 0 ? -1 : 1) * Math.pow(Math.abs(sn), e);
+    }
+    return [x + cs * rx * r * (1 + taper * sn), y + sn * ry * r];
+  };
+  const bit = (i, m) => (key >> (i % 24)) & m;
+  c.beginPath();
+  if (skin === 'ice') {
+    // thirteen facets, not nine: nine came out a stop sign and a fox made of
+    // road furniture is not a fox. Enough cuts to still read round, each one
+    // straight enough to catch its own plane of light.
+    for (let i = 0; i < 13; i++) {
+      const p = at((i / 13) * TAU - 1.35, 1 + (bit(i, 3) - 1.5) * 0.03);
+      i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
+    }
+  } else if (skin === 'stone') {
+    for (let i = 0; i < 13; i++) {
+      const p = at((i / 13) * TAU - 0.9, 1 + (bit(i, 7) - 3.5) * 0.026);
+      i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
+    }
+  } else if (skin === 'fur') {
+    /* Hair, not spines. The first version put a 5%-radius spike every fourth
+       point of forty and every fur creature came out a sea urchin — an edge
+       that is BROKEN is the goal, not an edge that is armed. So: shorter, three
+       lengths in rotation so no two neighbours match, and each one leaning a
+       little the way a coat lies. */
+    const n = 54, len = [0.018, 0.034, 0.024];
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * TAU - 1.6;
+      const t2 = (i % 3) === 1 ? len[((i / 3) | 0) % 3] + bit(i, 1) * 0.008 : 0;
+      const p = at(a + t2 * 1.2, 1 + t2);
+      i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
+    }
+  } else {
+    const n = 26, wob = ph === undefined ? 0 : 0.014;
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * TAU;
+      // `ph` undefined is a still shape, and multiplying a zero amplitude by
+      // sin(NaN) is still NaN — which drew every smooth head as nothing at all
+      const p = at(a, wob ? 1 + wob * Math.sin(a * 3 + ph) : 1);
+      i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]);
+    }
+  }
+  c.closePath();
+}
 
 function drawCreature(c, art, x, y, s, o) {
   o = o || {};
@@ -4609,20 +4818,36 @@ function drawCreature(c, art, x, y, s, o) {
   const sx = (1 + breathe + sq * 0.22) * (o.flip ? -1 : 1);
   const sy = 1 - breathe - sq * 0.26;
   const dim = SHAPE_DIM[shape] || [1, 0.86];
-  const bw = s * dim[0], bh = s * dim[1];
+  const key = artKey(art);
+  /* AND NO TWO RECIPES GET THE SAME NUMBERS EVEN WHEN THEY GET THE SAME ROW.
+     Cinderpup and Flarehound are both blob/pointy/fur/quad — the table has no
+     lever left to tell them apart, and blacked out they were one shape. So each
+     recipe takes a stable ±7% on its width and height from its own key. It is
+     not a disguise for a missing idea; it is the difference between two dogs
+     and two copies of a dog. */
+  const jw = 1 + ((((key >> 5) & 7) / 7) - 0.5) * 0.14;
+  const jh = 1 + ((((key >> 9) & 7) / 7) - 0.5) * 0.14;
+  const bw = s * dim[0] * jw, bh = s * dim[1] * jh;
   const lw = Math.max(2.5, s * 0.055);
   const headed = !!HEADED[shape];
   const stance = art.stance || (headed ? 'stand' : 'quad');
   const floaty = stance === 'float' || shape === 'wisp' || idle === 'hover';
+  const skin = art.skin || 'smooth';
+  const taper = SHAPE_TAPER[shape] || 0;
 
   // where the body sits, and where the face goes
+  const sep = HEAD_SEP[shape] || [0.34, 0.24];
   const cy = headed ? -bh * 0.02 : -bh * 0.06;
-  const bodyY = headed ? cy + bh * 0.24 : cy;
-  const bodyW = headed ? bw * 0.86 : bw;
-  const bodyH = headed ? bh * 0.62 : bh;
-  const headR = bw * 0.44;
-  const faceY = headed ? cy - bh * 0.34 : cy - bh * 0.02;
-  const faceW = headed ? headR * 2 : bw;
+  const bodyY = headed ? cy + bh * sep[1] : cy;
+  const bodyW = headed ? bw * (shape === 'boss' ? 1.0 : 0.98) : bw;
+  const bodyH = headed ? bh * (shape === 'boss' ? 0.70 : 0.64) : bh;
+  const headR = bw * (HEAD_R[shape] || 0.44);
+  const faceY = headed ? cy - bh * sep[0] : cy - bh * 0.02;
+  /* A FACE IS NOT AS WIDE AS A LOAF. Everything hung off the face — ears, eye
+     spacing, scarf, goggles, kettle — was measured against the body width, so
+     the wider a creature got the more its head furniture grew with it, and a
+     `squat` ended up wearing ears the size of dinner plates. */
+  const faceW = headed ? headR * 2 : Math.min(bw, s);
   const faceH = headed ? headR * 2 : bh;
   const footY = bodyY + bodyH * 0.46;
 
@@ -4716,9 +4941,13 @@ function drawCreature(c, art, x, y, s, o) {
   /* ---------------------------------------------------------------- legs --- */
   if (!floaty && stance !== 'root') {
     const gait = Math.sin(t * 1.9 + ph) * 0.1;
-    const legL = bh * (stance === 'squat' ? 0.1 : 0.2);
-    const legW = bw * (stance === 'squat' ? 0.15 : 0.11);
+    // a `tall` stands on its legs and a `squat` sits on its own belly — the
+    // length was one number for both, so everything in the cast stood the same
+    const legL = bh * (stance === 'squat' ? 0.1 : shape === 'tall' ? 0.16 : shape === 'boss' ? 0.15 : 0.2);
+    const legW = bw * (stance === 'squat' ? 0.15 : shape === 'boss' ? 0.14 : 0.11);
     const pairs = stance === 'quad' ? [[-0.3, -1], [0.3, -1], [-0.22, 1], [0.34, 1]] : [[-0.22, 1], [0.22, 1]];
+    const legCol = mix(art.body, '#0d1730', 0.14);
+    const footCol = mix(art.belly, '#5d7396', 0.2);
     for (let i = 0; i < pairs.length; i++) {
       const [ox, front] = pairs[i];
       const swing = gait * (i % 2 ? -1 : 1) + (paw && i === pairs.length - 1 ? paw * 0.5 : 0);
@@ -4727,30 +4956,53 @@ function drawCreature(c, art, x, y, s, o) {
       c.translate(ox * bw, footY - legL * 0.3);
       c.rotate(swing);
       c.beginPath(); rr(c, -legW / 2, 0, legW, legL, legW * 0.45);
-      inked(c, front < 0 ? dark : art.body, lw * 0.9, C.ink);
+      if (front < 0) inked(c, dark, lw * 0.9, C.ink);
+      else {
+        const lg = c.createLinearGradient(-legW * 0.6, 0, legW * 0.6, legL);
+        lg.addColorStop(0, mix(art.body, '#ffffff', 0.16));
+        lg.addColorStop(1, mix(legCol, '#0d1730', 0.22));
+        inked(c, lg, lw * 0.9, C.ink);
+      }
       // a foot, so it stands on something rather than tapering away
-      c.beginPath(); c.ellipse(0, legL, legW * 0.72, legL * 0.3 + lw, 0, 0, TAU);
-      inked(c, front < 0 ? dark : art.belly, lw * 0.8, C.ink);
+      c.beginPath(); c.ellipse(0, legL, legW * 0.7, legL * 0.22 + lw * 0.8, 0, 0, TAU);
+      inked(c, front < 0 ? dark : footCol, lw * 0.8, C.ink);
+      // the top of the foot catches the key; the ground under it does not
+      if (front > 0) {
+        c.save();
+        c.globalAlpha = 0.5;
+        c.beginPath();
+        c.ellipse(-legW * 0.12, legL - lw * 0.3, legW * 0.38, legL * 0.12 + lw * 0.24, 0, 0, TAU);
+        c.fillStyle = mix(art.belly, '#ffffff', 0.5); c.fill();
+        c.restore();
+      }
       c.restore();
     }
   }
 
   /* ---------------------------------------------------------------- body --- */
-  if (shape === 'wisp') {
-    c.beginPath();
-    c.moveTo(-bw * 0.42, bodyY + bh * 0.10);
-    c.quadraticCurveTo(-bw * 0.5, bodyY - bh * 0.55, 0, bodyY - bh * 0.52);
-    c.quadraticCurveTo(bw * 0.5, bodyY - bh * 0.55, bw * 0.42, bodyY + bh * 0.10);
-    for (let i = 0; i <= 4; i++) {
-      const px = bw * 0.42 - (i / 4) * bw * 0.84;
-      const py = bodyY + bh * 0.10 + Math.sin(t * 3 + i * 1.6) * bh * 0.06 + (i % 2 ? bh * 0.14 : 0);
-      c.lineTo(px, py);
+  const bodyPath = shape === 'wisp'
+    ? () => {
+      c.beginPath();
+      c.moveTo(-bw * 0.42, bodyY + bh * 0.10);
+      c.quadraticCurveTo(-bw * 0.5, bodyY - bh * 0.55, 0, bodyY - bh * 0.52);
+      c.quadraticCurveTo(bw * 0.5, bodyY - bh * 0.55, bw * 0.42, bodyY + bh * 0.10);
+      for (let i = 0; i <= 4; i++) {
+        const px = bw * 0.42 - (i / 4) * bw * 0.84;
+        const py = bodyY + bh * 0.10 + Math.sin(t * 3 + i * 1.6) * bh * 0.06 + (i % 2 ? bh * 0.14 : 0);
+        c.lineTo(px, py);
+      }
+      c.closePath();
     }
-    c.closePath();
-  } else {
-    blob(c, 0, bodyY, bodyW, bodyH, 0.03, t * 0.6 + ph);
+    : () => bodyForm(c, 0, bodyY, bodyW, bodyH, skin, taper, key, t * 0.6 + ph);
+  shell(c, bodyPath, art.body, lw, 0, bodyY, bodyW, bodyH);
+  // the legs pass behind the body, so the body owes them a shadow
+  if (!floaty && stance !== 'root') {
+    c.save(); bodyPath(); c.clip();
+    for (const ox of stance === 'quad' ? [-0.3, 0.3, -0.22, 0.34] : [-0.22, 0.22]) {
+      occlude(c, ox * bw, footY, bw * 0.16, bh * 0.14, 0.34);
+    }
+    c.restore();
   }
-  inked(c, art.body, lw, C.ink);
 
   /* ---------------------------------------------------------------- arms --- */
   const arms = art.arms || (headed ? 'stub' : 'none');
@@ -4761,65 +5013,140 @@ function drawCreature(c, art, x, y, s, o) {
       c.translate(d * bodyW * 0.44, bodyY - bodyH * 0.06);
       c.rotate(d * (0.35 + swing2));
       const aL = bh * (arms === 'long' ? 0.3 : 0.17);
-      c.beginPath(); rr(c, -bw * 0.055, 0, bw * 0.11, aL, bw * 0.05);
-      inked(c, art.body, lw * 0.85, C.ink);
-      c.beginPath(); c.arc(0, aL, bw * 0.075, 0, TAU);
-      inked(c, art.belly, lw * 0.8, C.ink);
+      const aw = bw * 0.11;
+      c.beginPath(); rr(c, -aw / 2, 0, aw, aL, aw * 0.45);
+      const ag = c.createLinearGradient(-aw * 0.6, 0, aw * 0.6, aL);
+      ag.addColorStop(0, mix(art.body, '#ffffff', 0.22));
+      ag.addColorStop(1, mix(art.body, '#0d1730', 0.28));
+      inked(c, ag, lw * 0.85, C.ink);
+      c.beginPath(); c.ellipse(0, aL, bw * 0.075, bw * 0.075, 0, 0, TAU);
+      inked(c, mix(art.belly, '#ffffff', 0.1), lw * 0.8, C.ink);
+      c.restore();
+    }
+    // where an arm meets the shoulder there is no light at all — both of them
+    // under one clip, because re-issuing a fifty-segment body outline per arm
+    // was the single most expensive thing in here
+    c.save();
+    bodyPath(); c.clip();
+    for (const d of [-1, 1]) occlude(c, d * bodyW * 0.42, bodyY - bodyH * 0.06, bw * 0.14, bw * 0.12, 0.4);
+    c.restore();
+  }
+
+  /* ------------------------------------------------------------- surface ---
+
+     The edge already said what this is made of. What happens INSIDE the shape
+     is the second half of it, and it is the half that has to hold at 40 units
+     on the board: fur wants an undercoat and a couple of guard hairs catching
+     the key, ice wants light coming out of the bottom of it, metal wants one
+     hard specular and a seam, stone wants chips where the light has broken
+     through to fresh rock. */
+  c.save();
+  bodyPath(); c.clip();
+  if (skin === 'fur') {
+    // the undercoat: darker toward the belly, so the coat has a direction
+    c.save();
+    c.globalAlpha = 0.5;
+    const fg = c.createLinearGradient(0, bodyY - bodyH * 0.1, 0, bodyY + bodyH * 0.5);
+    fg.addColorStop(0, mixA(C.night, 0));
+    fg.addColorStop(1, mixA(C.night, 0.34));
+    c.fillStyle = fg;
+    c.beginPath(); c.ellipse(0, bodyY, bodyW * 0.55, bodyH * 0.55, 0, 0, TAU); c.fill();
+    c.restore();
+    // a few guard hairs on the lit side, drawn light on light
+    c.save();
+    c.globalAlpha = 0.45; c.lineCap = 'round';
+    c.strokeStyle = mix(art.body, '#ffffff', 0.55); c.lineWidth = lw * 0.4;
+    for (let i = 0; i < 5; i++) {
+      const a = -2.5 + i * 0.34;
+      const px = Math.cos(a) * bodyW * 0.34, py = bodyY + Math.sin(a) * bodyH * 0.34;
+      c.beginPath();
+      c.moveTo(px, py);
+      c.lineTo(px + Math.cos(a - 0.3) * s * 0.09, py + Math.sin(a - 0.3) * s * 0.09);
+      c.stroke();
+    }
+    c.restore();
+  } else if (skin === 'ice') {
+    // light coming THROUGH it, which is the only thing that says ice and not
+    // white paint — brightest where the body is thinnest, at the bottom
+    c.save();
+    const tg = c.createLinearGradient(0, bodyY + bodyH * 0.1, 0, bodyY + bodyH * 0.52);
+    tg.addColorStop(0, SKYBOUNCE + '0)');
+    tg.addColorStop(1, SKYBOUNCE + '0.75)');
+    c.fillStyle = tg;
+    c.beginPath(); c.ellipse(0, bodyY + bodyH * 0.2, bodyW * 0.5, bodyH * 0.42, 0, 0, TAU); c.fill();
+    c.restore();
+    // facets: a pale plane and the bright seam where two of them meet
+    for (let i = 0; i < 3; i++) {
+      const px = -bodyW * (0.3 - i * 0.26), py = bodyY - bodyH * (0.26 - (i % 2) * 0.3);
+      c.beginPath();
+      c.moveTo(px, py);
+      c.lineTo(px + s * 0.16, py - s * 0.07);
+      c.lineTo(px + s * 0.1, py + s * 0.2);
+      c.closePath();
+      c.save();
+      c.globalAlpha = 0.35; c.fillStyle = '#ffffff'; c.fill();
+      c.globalAlpha = 0.55; c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.35; c.stroke();
+      c.restore();
+    }
+  } else if (skin === 'metal') {
+    // one hard specular, not a wash — a narrow band with an edge to it
+    c.save();
+    c.globalAlpha = 0.8;
+    c.beginPath();
+    c.moveTo(-bodyW * 0.34, bodyY - bodyH * 0.44);
+    c.lineTo(-bodyW * 0.1, bodyY - bodyH * 0.5);
+    c.lineTo(-bodyW * 0.24, bodyY + bodyH * 0.5);
+    c.lineTo(-bodyW * 0.42, bodyY + bodyH * 0.44);
+    c.closePath();
+    const sg = c.createLinearGradient(-bodyW * 0.4, 0, -bodyW * 0.08, 0);
+    sg.addColorStop(0, 'rgba(255,255,255,.1)');
+    sg.addColorStop(0.5, 'rgba(255,255,255,.9)');
+    sg.addColorStop(1, 'rgba(255,255,255,.1)');
+    c.fillStyle = sg; c.fill();
+    c.restore();
+    // the seam, and the rivets that hold the two halves together
+    c.save();
+    c.strokeStyle = 'rgba(16,26,46,.5)'; c.lineWidth = lw * 0.5;
+    c.beginPath();
+    c.moveTo(bodyW * 0.1, bodyY - bodyH * 0.5); c.lineTo(bodyW * 0.16, bodyY + bodyH * 0.5);
+    c.stroke();
+    c.fillStyle = 'rgba(16,26,46,.55)';
+    for (let i = 0; i < 4; i++) {
+      c.beginPath();
+      c.ellipse(-bodyW * 0.28 + i * bodyW * 0.19, bodyY + bodyH * 0.3, s * 0.02, s * 0.02, 0, 0, TAU);
+      c.fill();
+    }
+    c.restore();
+  } else if (skin === 'stone') {
+    // chips: pale where the rock has broken, dark in the pit behind
+    for (let i = 0; i < 4; i++) {
+      const a = -2.3 + i * 0.9, r = 0.42;
+      const px = Math.cos(a) * bodyW * r, py = bodyY + Math.sin(a) * bodyH * r;
+      c.beginPath();
+      c.moveTo(px, py);
+      c.lineTo(px + s * 0.09, py + s * 0.03);
+      c.lineTo(px + s * 0.03, py + s * 0.1);
+      c.closePath();
+      c.save();
+      c.globalAlpha = 0.55;
+      c.fillStyle = i % 2 ? mix(art.body, '#ffffff', 0.45) : mix(art.body, '#0d1730', 0.4);
+      c.fill();
       c.restore();
     }
   }
 
-  /* ------------------------------------------------------------- surface --- */
-  const skin = art.skin || 'smooth';
-  if (skin === 'fur') {
-    c.save();
-    c.fillStyle = art.body;
-    c.strokeStyle = C.ink; c.lineWidth = lw * 0.55;
-    for (let i = 0; i < 11; i++) {
-      const a = Math.PI * (0.08 + (i / 10) * 0.84);
-      const px = Math.cos(a) * bodyW * 0.5, py = bodyY + Math.sin(a) * bodyH * 0.5;
-      const l = s * (0.05 + ((i * 7) % 4) * 0.012);
-      c.beginPath();
-      c.moveTo(px, py);
-      c.lineTo(px + Math.cos(a - 0.22) * l, py + Math.sin(a - 0.22) * l);
-      c.lineTo(px + Math.cos(a + 0.2) * l * 0.7, py + Math.sin(a + 0.2) * l * 0.7);
-      c.closePath(); c.fill(); c.stroke();
-    }
-    c.restore();
-  } else if (skin === 'ice') {
-    c.save();
-    rr(c, -bodyW * 0.5, bodyY - bodyH * 0.5, bodyW, bodyH, bodyW * 0.4);
-    c.clip();
-    c.globalAlpha = 0.5; c.fillStyle = '#ffffff';
-    for (let i = 0; i < 4; i++) {
-      const px = -bodyW * 0.36 + i * bodyW * 0.24, py = bodyY - bodyH * 0.3 + (i % 2) * bodyH * 0.3;
-      c.beginPath();
-      c.moveTo(px, py); c.lineTo(px + s * 0.11, py - s * 0.05); c.lineTo(px + s * 0.07, py + s * 0.13);
-      c.closePath(); c.fill();
-    }
-    c.restore();
-  } else if (skin === 'metal') {
-    c.save();
-    rr(c, -bodyW * 0.5, bodyY - bodyH * 0.5, bodyW, bodyH, bodyW * 0.4);
-    c.clip();
-    const gm = c.createLinearGradient(-bodyW * 0.4, bodyY - bodyH * 0.4, bodyW * 0.3, bodyY + bodyH * 0.4);
-    gm.addColorStop(0, 'rgba(255,255,255,.42)');
-    gm.addColorStop(0.4, 'rgba(255,255,255,.06)');
-    gm.addColorStop(1, 'rgba(0,0,0,.22)');
-    c.fillStyle = gm;
-    c.fillRect(-bodyW * 0.5, bodyY - bodyH * 0.5, bodyW, bodyH);
-    c.fillStyle = 'rgba(20,30,50,.55)';
-    for (let i = 0; i < 4; i++) {
-      c.beginPath(); c.arc(-bodyW * 0.3 + i * bodyW * 0.2, bodyY + bodyH * 0.3, s * 0.022, 0, TAU); c.fill();
-    }
-    c.restore();
-  }
-
-  // belly plate, on the body rather than over the face
-  c.save();
+  /* Belly plate — a plane facing up and out, so it takes more of the key than
+     the body around it and the body owes it a shadow along its top edge. It
+     shares the surface's clip: the body outline is up to fifty segments and
+     issuing it twice in a row for two things inside the same shape is waste. */
+  const byy = bodyY + bodyH * (headed ? 0.06 : 0.12);
+  occlude(c, 0, byy - bodyH * 0.26, bodyW * 0.34, bodyH * 0.16, 0.3);
   c.beginPath();
-  c.ellipse(0, bodyY + bodyH * (headed ? 0.06 : 0.12), bodyW * 0.32, bodyH * 0.3, 0, 0, TAU);
-  c.fillStyle = art.belly; c.globalAlpha = 0.95; c.fill();
+  c.ellipse(0, byy, bodyW * 0.32, bodyH * 0.3, 0, 0, TAU);
+  const bg2 = c.createLinearGradient(0, byy - bodyH * 0.3, 0, byy + bodyH * 0.3);
+  bg2.addColorStop(0, mix(art.belly, '#ffffff', 0.24));
+  bg2.addColorStop(1, mix(art.belly, '#4a5f84', 0.24));
+  c.fillStyle = bg2; c.globalAlpha = 0.95; c.fill();
   c.restore();
 
   /* -------------------------------------------------------------- markings -- */
@@ -4851,18 +5178,32 @@ function drawCreature(c, art, x, y, s, o) {
   if (headed) {
     // a neck, so the head is joined rather than balanced
     c.beginPath(); rr(c, -bw * 0.12, cy - bh * 0.22, bw * 0.24, bh * 0.2, bw * 0.08);
-    inked(c, art.body, lw * 0.9, C.ink);
-    c.beginPath(); c.arc(0, faceY, headR, 0, TAU);
-    inked(c, art.body, lw, C.ink);
+    inked(c, mix(art.body, '#0d1730', 0.2), lw * 0.9, C.ink);
+    // the head is the deepest overhang on the whole drawing and it cast nothing
+    c.save(); bodyPath(); c.clip();
+    occlude(c, 0, faceY + headR * 0.9, headR * 1.1, headR * 0.5, 0.45);
+    c.restore();
+    const headPath = () => bodyForm(c, 0, faceY, headR * 2, headR * 2, skin, 0, key ^ 0x5f3a, undefined);
+    shell(c, headPath, art.body, lw, 0, faceY, headR * 2, headR * 2);
     c.save();
+    headPath(); c.clip();
     c.beginPath(); c.ellipse(0, faceY + headR * 0.22, headR * 0.66, headR * 0.6, 0, 0, TAU);
-    c.fillStyle = art.belly; c.globalAlpha = 0.9; c.fill();
+    const mg = c.createLinearGradient(0, faceY - headR * 0.4, 0, faceY + headR * 0.8);
+    mg.addColorStop(0, mix(art.belly, '#ffffff', 0.2));
+    mg.addColorStop(1, mix(art.belly, '#4a5f84', 0.2));
+    c.fillStyle = mg; c.globalAlpha = 0.9; c.fill();
     c.restore();
   }
 
   /* ---------------------------------------------------------------- ears --- */
   const ears = art.ears || 'round';
   const earTop = faceY - faceH * (headed ? 0.42 : 0.28);
+  /* Ears are the loudest thing in a silhouette, so they get a stable size of
+     their own — scaled about the point where they meet the head, so a big pair
+     grows outward and upward rather than sliding off the skull. */
+  c.save();
+  const earK = 0.88 + (((key >> 13) & 7) / 7) * 0.28;
+  c.translate(0, earTop); c.scale(earK, earK); c.translate(0, -earTop);
   if (ears === 'pointy' || ears === 'shard') {
     for (const d of [-1, 1]) {
       c.beginPath();
@@ -4870,12 +5211,28 @@ function drawCreature(c, art, x, y, s, o) {
       c.lineTo(d * faceW * (ears === 'shard' ? 0.30 : 0.40), earTop - faceH * (ears === 'shard' ? 0.42 : 0.3));
       c.lineTo(d * faceW * 0.06, earTop - faceH * 0.02);
       c.closePath();
-      inked(c, art.patCol && art.pat === 'tips' ? art.patCol : art.body, lw, C.ink);
+      inked(c, litG(c, art.patCol && art.pat === 'tips' ? art.patCol : art.body,
+        d * faceW * 0.06, earTop - faceH * 0.4, d * faceW * 0.4, earTop + faceH * 0.1), lw, C.ink);
+      // the inner ear, which is the whole reason an ear reads as an ear
+      c.save();
+      c.globalAlpha = 0.55;
+      c.beginPath();
+      c.moveTo(d * faceW * 0.26, earTop + faceH * 0.06);
+      c.lineTo(d * faceW * (ears === 'shard' ? 0.27 : 0.34), earTop - faceH * (ears === 'shard' ? 0.3 : 0.2));
+      c.lineTo(d * faceW * 0.12, earTop - faceH * 0.01);
+      c.closePath();
+      c.fillStyle = mix(art.belly, '#8a5a6a', 0.3); c.fill();
+      c.restore();
     }
   } else if (ears === 'round') {
     for (const d of [-1, 1]) {
       c.beginPath(); c.ellipse(d * faceW * 0.31, earTop - faceH * 0.02, faceW * 0.16, faceH * 0.17, 0, 0, TAU);
-      inked(c, art.body, lw, C.ink);
+      inked(c, litG(c, art.body, d * faceW * 0.18, earTop - faceH * 0.2, d * faceW * 0.44, earTop + faceH * 0.16), lw, C.ink);
+      c.save();
+      c.globalAlpha = 0.5;
+      c.beginPath(); c.ellipse(d * faceW * 0.31, earTop + faceH * 0.005, faceW * 0.08, faceH * 0.09, 0, 0, TAU);
+      c.fillStyle = mix(art.belly, '#8a5a6a', 0.3); c.fill();
+      c.restore();
     }
   } else if (ears === 'horns') {
     for (const d of [-1, 1]) {
@@ -4884,7 +5241,7 @@ function drawCreature(c, art, x, y, s, o) {
       c.quadraticCurveTo(d * faceW * 0.52, earTop - faceH * 0.14, d * faceW * 0.40, earTop - faceH * 0.40);
       c.quadraticCurveTo(d * faceW * 0.30, earTop - faceH * 0.14, d * faceW * 0.10, earTop + faceH * 0.04);
       c.closePath();
-      inked(c, '#e7dfd0', lw, C.ink);
+      inked(c, litG(c, '#e7dfd0', d * faceW * 0.1, earTop - faceH * 0.4, d * faceW * 0.5, earTop + faceH * 0.06), lw, C.ink);
     }
   } else if (ears === 'antler') {
     for (const d of [-1, 1]) {
@@ -4913,62 +5270,125 @@ function drawCreature(c, art, x, y, s, o) {
     c.closePath();
     inked(c, art.belly, lw, C.ink);
   }
+  c.restore();
 
   /* ---------------------------------------------------------------- face ---
 
      Two eyes the same size in the same place on sixty-six animals is what made
-     the cast read as one drawing. Size, spacing and lids all move — some of it
-     chosen per creature, the rest derived from a stable hash of the recipe so
-     that no two faces land on the same numbers by accident. */
-  const fh = ((art.body || '').charCodeAt(1) || 3) * 7 + ((art.mouth || 'x').charCodeAt(0) || 5) * 13
-    + ((art.mark || 'n').charCodeAt(0) || 2) * 3;
-  const gapMul = art.eyeGap || (0.86 + ((fh % 5) * 0.09));
-  const sizeMul = art.eyeSize || (0.88 + ((fh >> 2) % 5) * 0.07);
-  const eyeY = faceY - faceH * (headed ? 0.04 : 0.06);
+     the cast read as one drawing — and a boss wearing a puppy's face is not
+     frightening at any size. Almost the whole read of a character is brow
+     shape, pupil size and eye spacing, so all three are DERIVED rather than
+     hand-set: the silhouette and the mouth already say what kind of thing this
+     is, and they choose the face before the hash is allowed to jitter it.
+
+     A boss ends up with small pupils set wide under a heavy brow. A `small`
+     ends up with huge ones set close. They are no longer the same face at two
+     sizes, and none of it needed a line of new card data. */
+  const fh = key;
+  const jit = (bit) => ((fh >> (bit % 26)) & 7) / 7;
+  const eyeStyle = art.eyes || 'dot';
+  const wee = shape === 'small' || eyeStyle === 'big';
+  const mean = !!art.evil || shape === 'boss';
+  const gapMul = art.eyeGap || ((mean ? 1.22 : wee ? 0.78 : 0.94) + jit(3) * 0.24);
+  const sizeMul = art.eyeSize || ((wee ? 1.24 : mean ? 0.84 : 0.98) + jit(7) * 0.2);
+  const pup = art.pupil || ((mean ? 0.3 : wee ? 0.58 : 0.44) + jit(11) * 0.1);
+  const eyeY = faceY - faceH * (headed ? 0.04 : 0.06) + faceH * (wee ? 0.05 : mean ? 0.02 : 0);
   const eyeDx = faceW * 0.15 * gapMul;
   const blinkPhase = ((t * 0.6 + (o.blink || 0)) % 4.4);
   const blink = blinkPhase < 0.12 ? 1 - Math.abs(blinkPhase - 0.06) / 0.06 : 0;
-  const eyeStyle = art.eyes || 'dot';
   const er = s * (eyeStyle === 'big' ? 0.12 : eyeStyle === 'slit' ? 0.095 : 0.08) * sizeMul;
   for (const d of [-1, 1]) {
     const ex = d * eyeDx;
     if (art.mark === 'patch' && d < 0) continue;                 // one eye is covered
     if (eyeStyle === 'slit') {
+      /* A SLIT IS A GAP, NOT A STRIPE. It was one coloured line, and at foe
+         size a pale line on a pale face reads as a sticking plaster — half the
+         Frostborn looked bandaged. So it is cut the way a real one is: a dark
+         socket with something burning at the back of it, and the glow only
+         where the lid is open widest. */
       c.save();
-      c.strokeStyle = art.evil ? '#ff8a8a' : C.ink;
-      c.lineWidth = lw * 1.1;
+      c.translate(ex, eyeY);
+      c.rotate(-d * 0.26);                          // both slope down toward the nose
+      const hx2 = er * 1.0, hy2 = er * 0.44;
       c.beginPath();
-      c.moveTo(ex - er * 0.8, eyeY - er * 0.4); c.lineTo(ex + er * 0.8, eyeY + er * 0.2);
-      c.stroke();
+      c.moveTo(-hx2, 0);
+      c.quadraticCurveTo(0, -hy2, hx2, 0);
+      c.quadraticCurveTo(0, hy2, -hx2, 0);
+      c.closePath();
+      c.fillStyle = C.ink; c.fill();
+      c.lineWidth = lw * 0.5; c.strokeStyle = C.ink; c.lineJoin = 'round'; c.stroke();
+      // whatever is burning at the back of it, and only in the middle where the
+      // lid is open widest
+      c.beginPath();
+      c.ellipse(0, 0, hx2 * 0.42, hy2 * 0.44, 0, 0, TAU);
+      c.fillStyle = art.evil ? '#e8402e' : '#7fd8ff'; c.fill();
+      c.save();
+      c.globalAlpha = 0.85;
+      c.beginPath(); c.ellipse(-hx2 * 0.1, -hy2 * 0.12, hx2 * 0.15, hy2 * 0.18, 0, 0, TAU);
+      c.fillStyle = art.evil ? '#ffd0a0' : '#ffffff'; c.fill();
+      c.restore();
       c.restore();
       continue;
     }
+    // the eyeball is a sphere: darker where the lid overhangs it, and it sits
+    // in a socket, so there is a little occlusion round the outside of it
+    c.save();
+    c.globalAlpha = 0.35;
+    occlude(c, ex, eyeY + er * 0.15, er * 1.5, er * 1.4, 0.5);
+    c.restore();
     c.beginPath(); c.ellipse(ex, eyeY, er, er * (1 - blink * 0.92), 0, 0, TAU);
-    inked(c, '#ffffff', lw * 0.8, C.ink);
+    const eg = c.createLinearGradient(0, eyeY - er, 0, eyeY + er);
+    eg.addColorStop(0, '#c9dcef');
+    eg.addColorStop(0.45, '#ffffff');
+    eg.addColorStop(1, '#e6eef8');
+    inked(c, eg, lw * 0.8, C.ink);
     if (blink < 0.6) {
       c.beginPath();
-      c.ellipse(ex + d * er * 0.16, eyeY + er * 0.1, er * 0.46, er * 0.5 * (1 - blink), 0, 0, TAU);
+      c.ellipse(ex + d * er * 0.16, eyeY + er * 0.1, er * pup * (mean ? 0.8 : 1),
+        er * pup * (1 - blink) * (mean ? 1.25 : 1), 0, 0, TAU);
       c.fillStyle = art.evil ? '#7a1030' : C.ink; c.fill();
+      // two speculars, not one — the key and the snow coming back off the ground
       c.beginPath();
-      c.arc(ex + d * er * 0.32, eyeY - er * 0.28, er * 0.18, 0, TAU);
+      c.ellipse(ex + d * er * 0.3, eyeY - er * 0.3, er * 0.2, er * 0.2, 0, 0, TAU);
       c.fillStyle = '#ffffff'; c.fill();
+      c.save();
+      c.globalAlpha = 0.6;
+      c.beginPath();
+      c.ellipse(ex - d * er * 0.18, eyeY + er * 0.34, er * 0.1, er * 0.1, 0, 0, TAU);
+      c.fillStyle = SKYBOUNCE + '1)'; c.fill();
+      c.restore();
     }
   }
 
-  /* brows and lids: the whole difference between cute and cute-and-hungry */
-  const brow = art.brow || (art.evil ? 'angry' : (art.mouth === 'flat' ? 'flat' : (shape === 'wisp' ? 'worried' : 'none')));
+  /* brows and lids: the whole difference between cute and cute-and-hungry.
+     A flat brow is the DEFAULT for about a third of the cast now — a face with
+     no brow at all has no opinion about anything, and sixty of those in a row
+     is what made the roster feel like clip art. */
+  const brow = art.brow || (mean ? 'angry'
+    : art.mouth === 'flat' ? 'flat'
+      : shape === 'wisp' ? 'worried'
+        : jit(17) > 0.7 ? 'worried' : jit(19) > 0.42 ? 'flat' : 'none');
   if (brow !== 'none' && eyeStyle !== 'slit') {
     c.save();
     c.strokeStyle = art.evil ? '#5a1020' : C.ink;
-    c.lineWidth = lw * (art.evil ? 1.2 : 0.95);
+    c.lineWidth = lw * (mean ? 1.15 : 0.9);
     c.lineCap = 'round';
     for (const d of [-1, 1]) {
       if (art.mark === 'patch' && d < 0) continue;
-      const bx4 = d * eyeDx, by4 = eyeY - er * 1.5;
+      const bx4 = d * eyeDx;
+      /* IN, then OUT — and the two of them were the wrong way round.
+         `angry` drove the brow DOWN at the temple and up at the nose, which is
+         the face you make when something is sad, and `worried` did the reverse.
+         Nobody had noticed because almost nothing used a brow. Now a third of
+         the cast does, and the difference is the whole expression: angry is
+         low at the nose, worried is high at it. */
+      const inX = bx4 - d * er * (brow === 'angry' ? 1.0 : 0.9);
+      const outX = bx4 + d * er * (brow === 'angry' ? 1.0 : 0.9);
+      const by4b = eyeY - er * (mean ? 1.2 : 1.45);
       c.beginPath();
-      if (brow === 'angry') { c.moveTo(bx4 - d * er * 0.9, by4 - er * 0.35); c.lineTo(bx4 + d * er * 0.9, by4 + er * 0.42); }
-      else if (brow === 'worried') { c.moveTo(bx4 - d * er * 0.9, by4 + er * 0.4); c.lineTo(bx4 + d * er * 0.9, by4 - er * 0.3); }
-      else { c.moveTo(bx4 - d * er * 0.85, by4); c.lineTo(bx4 + d * er * 0.85, by4); }
+      if (brow === 'angry') { c.moveTo(inX, by4b + er * 0.5); c.lineTo(outX, by4b - er * 0.45); }
+      else if (brow === 'worried') { c.moveTo(inX, by4b - er * 0.35); c.lineTo(outX, by4b + er * 0.35); }
+      else { c.moveTo(inX, by4b); c.lineTo(outX, by4b); }
       c.stroke();
     }
     c.restore();
@@ -4992,63 +5412,85 @@ function drawCreature(c, art, x, y, s, o) {
 
   const my = faceY + faceH * (headed ? 0.2 : 0.16);
   const mouth = art.mouth || 'smile';
+  /* A MOUTH MEASURED IN `s` AND SET ON A HEAD MEASURED IN `bw`. Every mouth in
+     here was sized off the creature's overall scale, which was fine while every
+     head was 0.44 of the body. Now that a boss's head is a third of its body
+     and a `tall`'s is a third of its height, the same 0.15s maw covers a small
+     head corner to corner. It scales with the face it is drawn on instead. */
+  const ms = s * (headed ? Math.min(1.05, faceW / (s * 0.66)) : 1);
+  /* The inside of a mouth is a hole, so it is darkest at the back — flat maroon
+     read as a sticker of a mouth stuck on a face. */
+  const maw = (y0, y1) => {
+    const g2 = c.createLinearGradient(0, y0, 0, y1);
+    g2.addColorStop(0, '#2a0c16');
+    g2.addColorStop(1, '#7a2438');
+    return g2;
+  };
   c.strokeStyle = C.ink; c.lineWidth = lw * 0.9;
   if (mouth === 'smile') {
-    c.beginPath(); c.arc(0, my - s * 0.03, s * 0.09, 0.3, Math.PI - 0.3); c.stroke();
+    c.beginPath(); c.arc(0, my - ms * 0.03, ms * 0.09, 0.3, Math.PI - 0.3); c.stroke();
   } else if (mouth === 'grin') {
-    c.beginPath(); c.arc(0, my - s * 0.05, s * 0.11, 0.15, Math.PI - 0.15);
-    c.fillStyle = '#4a1c2a'; c.fill(); c.stroke();
+    c.beginPath(); c.arc(0, my - ms * 0.05, ms * 0.11, 0.15, Math.PI - 0.15);
+    c.fillStyle = maw(my - ms * 0.05, my + ms * 0.07); c.fill(); c.stroke();
   } else if (mouth === 'flat') {
-    c.beginPath(); c.moveTo(-s * 0.07, my); c.lineTo(s * 0.07, my); c.stroke();
+    c.beginPath(); c.moveTo(-ms * 0.07, my); c.lineTo(ms * 0.07, my); c.stroke();
     if (art.evil) {
       // a tooth showing over a closed mouth: menacing without being a snarl
       c.fillStyle = '#ffffff';
       c.beginPath();
-      c.moveTo(s * 0.03, my); c.lineTo(s * 0.055, my); c.lineTo(s * 0.042, my + s * 0.045);
+      c.moveTo(ms * 0.03, my); c.lineTo(ms * 0.055, my); c.lineTo(ms * 0.042, my + ms * 0.045);
       c.closePath(); c.fill();
     }
   } else if (mouth === 'fang') {
-    c.beginPath(); c.arc(0, my - s * 0.04, s * 0.10, 0.2, Math.PI - 0.2);
-    c.fillStyle = '#4a1c2a'; c.fill(); c.stroke();
+    c.beginPath(); c.arc(0, my - ms * 0.04, ms * 0.10, 0.2, Math.PI - 0.2);
+    c.fillStyle = maw(my - ms * 0.04, my + ms * 0.06); c.fill(); c.stroke();
     c.fillStyle = '#ffffff';
     for (const d of [-1, 1]) {
       c.beginPath();
-      c.moveTo(d * s * 0.06, my - s * 0.01); c.lineTo(d * s * 0.02, my + s * 0.06); c.lineTo(d * s * 0.005, my - s * 0.01);
+      c.moveTo(d * ms * 0.06, my - ms * 0.01); c.lineTo(d * ms * 0.02, my + ms * 0.06); c.lineTo(d * ms * 0.005, my - ms * 0.01);
       c.closePath(); c.fill();
     }
   } else if (mouth === 'wide' || mouth === 'trap') {
-    c.beginPath(); c.ellipse(0, my + s * 0.01, s * 0.15, s * 0.1, 0, 0, TAU);
-    inked(c, '#3a1020', lw * 0.9, C.ink);
+    c.beginPath(); c.ellipse(0, my + ms * 0.01, ms * 0.15, ms * 0.1, 0, 0, TAU);
+    inked(c, maw(my - ms * 0.09, my + ms * 0.11), lw * 0.9, C.ink);
     if (mouth === 'trap') {
       c.fillStyle = '#fff';
       for (let i = -2; i <= 2; i++) {
         c.beginPath();
-        c.moveTo(i * s * 0.055 - s * 0.02, my - s * 0.09);
-        c.lineTo(i * s * 0.055 + s * 0.02, my - s * 0.09);
-        c.lineTo(i * s * 0.055, my - s * 0.02);
+        c.moveTo(i * ms * 0.055 - ms * 0.02, my - ms * 0.09);
+        c.lineTo(i * ms * 0.055 + ms * 0.02, my - ms * 0.09);
+        c.lineTo(i * ms * 0.055, my - ms * 0.02);
         c.closePath(); c.fill();
       }
     }
   } else if (mouth === 'beak') {
     c.beginPath();
-    c.moveTo(-s * 0.09, my - s * 0.02); c.lineTo(s * 0.09, my - s * 0.02); c.lineTo(0, my + s * 0.11);
+    c.moveTo(-ms * 0.09, my - ms * 0.02); c.lineTo(ms * 0.09, my - ms * 0.02); c.lineTo(0, my + ms * 0.11);
     c.closePath();
-    inked(c, '#f0b45c', lw * 0.8, C.ink);
+    const kg2 = c.createLinearGradient(-ms * 0.09, my, ms * 0.06, my + ms * 0.1);
+    kg2.addColorStop(0, '#ffd08a'); kg2.addColorStop(1, '#d1892f');
+    inked(c, kg2, lw * 0.8, C.ink);
   } else if (mouth === 'bolt') {
     c.beginPath();
-    c.moveTo(-s * 0.10, my); c.lineTo(-s * 0.02, my); c.lineTo(-s * 0.05, my + s * 0.07);
-    c.lineTo(s * 0.10, my - s * 0.03);
+    c.moveTo(-ms * 0.10, my); c.lineTo(-ms * 0.02, my); c.lineTo(-ms * 0.05, my + ms * 0.07);
+    c.lineTo(ms * 0.10, my - ms * 0.03);
     c.stroke();
   } else if (mouth === 'beard') {
     c.beginPath();
-    c.moveTo(-faceW * 0.2, my - s * 0.04);
-    c.quadraticCurveTo(0, my + faceH * 0.34, faceW * 0.2, my - s * 0.04);
+    c.moveTo(-faceW * 0.2, my - ms * 0.04);
+    c.quadraticCurveTo(0, my + faceH * 0.34, faceW * 0.2, my - ms * 0.04);
     c.closePath();
-    inked(c, '#eef5ff', lw * 0.9, C.ink);
+    const bd = c.createLinearGradient(0, my, 0, my + faceH * 0.3);
+    bd.addColorStop(0, '#ffffff'); bd.addColorStop(1, '#c3d6ec');
+    inked(c, bd, lw * 0.9, C.ink);
   }
 
   /* ---------------------------------------------------------------- props -- */
-  drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed);
+  /* Where a collar goes: round the bottom of the head on anything that has
+     one, round the top of the body on the beans that do not. */
+  const neckR = headed ? headR * 0.92 : Math.min(bodyW, bodyH) * 0.42;
+  const neckCY = headed ? faceY + headR * 0.42 : bodyY;
+  drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, neckR, neckCY);
 
   /* --------------------------------------------------------------- the mark */
   const mark = art.mark || 'none';
@@ -5067,8 +5509,9 @@ function drawCreature(c, art, x, y, s, o) {
       }
     } else if (mark === 'patch') {
       c.strokeStyle = C.ink; c.lineWidth = lw * 0.8;
+      const px2 = Math.min(faceW * 0.34, s * 0.36);
       c.beginPath();
-      c.moveTo(-faceW * 0.34, eyeY - faceH * 0.14); c.lineTo(faceW * 0.28, eyeY - faceH * 0.2);
+      c.moveTo(-px2, eyeY - faceH * 0.14); c.lineTo(px2 * 0.82, eyeY - faceH * 0.2);
       c.stroke();
       c.beginPath(); c.ellipse(-eyeDx, eyeY, er * 1.25, er * 1.1, 0, 0, TAU);
       inked(c, '#2a3346', lw * 0.8, C.ink);
@@ -5119,8 +5562,9 @@ function drawCreature(c, art, x, y, s, o) {
       c.save();
       c.translate(0, faceY + faceH * 0.02);
       c.rotate(-0.2);
-      c.beginPath(); rr(c, -faceW * 0.4, -s * 0.03, faceW * 0.8, s * 0.06, s * 0.02);
-      inked(c, '#f0ead8', lw * 0.6, C.ink);
+      const bw2 = Math.min(faceW * 0.8, s * 0.8);
+      c.beginPath(); rr(c, -bw2 / 2, -s * 0.03, bw2, s * 0.06, s * 0.02);
+      inked(c, litG(c, '#f0ead8', 0, -s * 0.03, 0, s * 0.03), lw * 0.6, C.ink);
       c.restore();
     } else if (mark === 'monocle') {
       c.beginPath(); c.arc(eyeDx, eyeY, er * 1.5, 0, TAU);
@@ -5153,22 +5597,59 @@ function drawCreature(c, art, x, y, s, o) {
 }
 
 /* Props are drawn last of all and hang off the finished body. */
-function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed) {
+function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, neckR, neckCY) {
   const acc = art.acc || 'none';
   if (acc === 'none') return;
+  /* EVERY PROP'S THICKNESS IS MEASURED IN `s` NOW, and its POSITION off the
+     face. It used to be both off the face, and `faceH` on a creature with no
+     separate head is the whole body — so Tindercub's scarf came out as a red
+     slab a fifth of a squat body deep, painted straight across its belly.
+     Once the window started drawing subjects whole and large, that stopped
+     looking like a scarf and started looking like a rendering fault. Anything
+     hung on a face is bounded by `s` here for the same reason. */
+  /* A COLLAR IS A THING THAT GOES ROUND SOMETHING, and both of these were
+     drawn as a horizontal rectangle placed a fraction of `faceH` below the
+     face. On a creature with a separate head that reads as a scarf; on a bean,
+     where `faceH` is the whole body, it reads as a red slab painted across the
+     belly — which is exactly what Tindercub had, and once the window started
+     drawing subjects whole and large it was the most broken thing on the sheet.
+     An ARC round the neck line works for both, because both have one. */
+  const band = (col, thick) => {
+    c.save();
+    c.lineCap = 'round';
+    c.strokeStyle = C.ink; c.lineWidth = thick + lw * 1.1;
+    c.beginPath(); c.arc(0, neckCY, neckR, 0.24, Math.PI - 0.24); c.stroke();
+    c.strokeStyle = litG(c, col, 0, neckCY, 0, neckCY + neckR);
+    c.lineWidth = thick;
+    c.beginPath(); c.arc(0, neckCY, neckR, 0.28, Math.PI - 0.28); c.stroke();
+    c.restore();
+  };
   if (acc === 'scarf') {
-    c.beginPath();
-    rr(c, -faceW * 0.32, faceY + faceH * 0.34, faceW * 0.64, faceH * 0.14, faceH * 0.07);
-    inked(c, art.accCol || '#ff5566', lw * 0.9, C.ink);
-    c.beginPath();
-    rr(c, faceW * 0.16, faceY + faceH * 0.4, faceW * 0.14, faceH * 0.34, faceH * 0.05);
-    inked(c, art.accCol || '#ff5566', lw * 0.9, C.ink);
+    const sc = art.accCol || '#ff5566';
+    band(sc, s * 0.08);
+    // the loose end, thrown over the shoulder the wind is not on
+    const ex2 = Math.cos(0.5) * neckR, ey2 = neckCY + Math.sin(0.5) * neckR;
+    c.save();
+    c.translate(ex2, ey2);
+    c.rotate(0.3 + Math.sin(t * 1.4 + ph) * 0.12);
+    c.beginPath(); rr(c, -s * 0.05, -s * 0.02, s * 0.1, s * 0.22, s * 0.035);
+    inked(c, litG(c, sc, -s * 0.05, 0, s * 0.05, s * 0.2), lw * 0.9, C.ink);
+    c.restore();
   } else if (acc === 'helm') {
+    const hc = art.accCol || '#8fa2bd';
     c.beginPath(); c.arc(0, faceY - faceH * 0.1, faceW * 0.38, Math.PI, TAU);
     c.closePath();
-    inked(c, art.accCol || '#8fa2bd', lw, C.ink);
-    c.beginPath(); rr(c, -faceW * 0.4, faceY - faceH * 0.13, faceW * 0.8, faceH * 0.09, 4);
-    inked(c, art.accCol || '#8fa2bd', lw * 0.8, C.ink);
+    inked(c, litG(c, hc, -faceW * 0.3, faceY - faceH * 0.46, faceW * 0.3, faceY - faceH * 0.08), lw, C.ink);
+    // a struck-metal highlight along the dome, so a helm is not a grey arc
+    c.save();
+    c.globalAlpha = 0.55;
+    c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.5;
+    c.beginPath(); c.arc(0, faceY - faceH * 0.1, faceW * 0.28, Math.PI + 0.35, Math.PI + 1.0);
+    c.stroke();
+    c.restore();
+    const brimW = Math.min(faceW * 0.8, s * 0.82), brimH = Math.min(faceH * 0.09, s * 0.075);
+    c.beginPath(); rr(c, -brimW / 2, faceY - faceH * 0.13, brimW, brimH, 4);
+    inked(c, litG(c, hc, 0, faceY - faceH * 0.13, 0, faceY - faceH * 0.13 + brimH), lw * 0.8, C.ink);
   } else if (acc === 'crown') {
     const ty = faceY - faceH * 0.4;
     c.beginPath();
@@ -5177,7 +5658,7 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.lineTo(0, ty - faceH * 0.26); c.lineTo(faceW * 0.11, ty - faceH * 0.08);
     c.lineTo(faceW * 0.28, ty - faceH * 0.2); c.lineTo(faceW * 0.28, ty);
     c.closePath();
-    inked(c, art.accCol || C.gold, lw, C.ink);
+    inked(c, litG(c, art.accCol || C.gold, -faceW * 0.28, ty - faceH * 0.26, faceW * 0.28, ty), lw, C.ink);
   } else if (acc === 'lantern') {
     const lx = bw * 0.46, ly = bodyY + Math.sin(t * 2.2) * bh * 0.03;
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.7;
@@ -5195,7 +5676,7 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.8; c.stroke();
   } else if (acc === 'kettle') {
     c.beginPath(); rr(c, -faceW * 0.2, faceY - faceH * 0.68, faceW * 0.4, faceH * 0.24, faceH * 0.05);
-    inked(c, art.accCol || '#9aa7bd', lw * 0.9, C.ink);
+    inked(c, litG(c, art.accCol || '#9aa7bd', -faceW * 0.2, faceY - faceH * 0.68, faceW * 0.2, faceY - faceH * 0.44), lw * 0.9, C.ink);
     c.beginPath(); c.moveTo(faceW * 0.18, faceY - faceH * 0.6); c.lineTo(faceW * 0.34, faceY - faceH * 0.68);
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.9; c.stroke();
     c.save(); c.globalAlpha = 0.5; c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.7;
@@ -5227,7 +5708,7 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.beginPath(); c.moveTo(hx, bodyY + bodyH * 0.5); c.lineTo(hx - bw * 0.04, faceY - faceH * 0.4); c.stroke();
     if (acc === 'hammer') {
       c.beginPath(); rr(c, hx - bw * 0.2, faceY - faceH * 0.6, bw * 0.34, bh * 0.16, 4);
-      inked(c, art.accCol || '#9aa7bd', lw * 0.9, C.ink);
+      inked(c, litG(c, art.accCol || '#9aa7bd', hx - bw * 0.2, faceY - faceH * 0.6, hx + bw * 0.14, faceY - faceH * 0.6 + bh * 0.16), lw * 0.9, C.ink);
     } else if (acc === 'pike') {
       c.beginPath();
       c.moveTo(hx - bw * 0.1, faceY - faceH * 0.4); c.lineTo(hx - bw * 0.04, faceY - faceH * 0.76);
@@ -5243,7 +5724,7 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.quadraticCurveTo(-bw * 0.58, bodyY + bodyH * 0.6, -bw * 0.08, bodyY + bodyH * 0.56);
     c.lineTo(-bw * 0.16, bodyY - bodyH * 0.4);
     c.closePath();
-    inked(c, art.accCol || '#2b5f96', lw * 0.9, C.ink);
+    inked(c, litG(c, art.accCol || '#2b5f96', -bw * 0.5, bodyY - bodyH * 0.4, -bw * 0.08, bodyY + bodyH * 0.56), lw * 0.9, C.ink);
   } else if (acc === 'satchel') {
     c.save();
     c.strokeStyle = art.accCol || '#8a6a3f'; c.lineWidth = lw * 1.1;
@@ -5253,12 +5734,10 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     inked(c, art.accCol || '#8a6a3f', lw * 0.9, C.ink);
     c.restore();
   } else if (acc === 'bellcollar') {
-    c.beginPath();
-    rr(c, -faceW * 0.3, faceY + faceH * 0.36, faceW * 0.6, faceH * 0.1, faceH * 0.05);
-    inked(c, art.accCol || '#8a4a3f', lw * 0.9, C.ink);
+    band(art.accCol || '#8a4a3f', s * 0.055);
     const swing = Math.sin(t * 3.1 + ph) * 0.5;
     c.save();
-    c.translate(0, faceY + faceH * 0.46);
+    c.translate(0, neckCY + neckR);
     c.rotate(swing * 0.3);
     c.beginPath();
     c.moveTo(-s * 0.05, 0);
@@ -5275,7 +5754,7 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
       c.lineTo(d * bw * 0.4, bodyY + bodyH * 0.18);
       c.lineTo(d * bw * 0.12, bodyY + bodyH * 0.02);
       c.closePath();
-      inked(c, art.accCol || '#bcdcf4', lw * 0.9, C.ink);
+      inked(c, litG(c, art.accCol || '#bcdcf4', d * bw * 0.12, bodyY - bodyH * 0.42, d * bw * 0.46, bodyY + bodyH * 0.18), lw * 0.9, C.ink);
       c.strokeStyle = 'rgba(20,30,50,.5)'; c.lineWidth = lw * 0.5;
       c.beginPath();
       c.moveTo(d * bw * 0.2, bodyY - bodyH * 0.3); c.lineTo(d * bw * 0.34, bodyY - bodyH * 0.02);
@@ -5283,11 +5762,20 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     }
   } else if (acc === 'goggles') {
     c.save();
-    c.beginPath(); rr(c, -faceW * 0.36, faceY - faceH * 0.34, faceW * 0.72, faceH * 0.12, 4);
-    inked(c, art.accCol || '#8a6a3f', lw * 0.8, C.ink);
+    const gw = Math.min(faceW * 0.72, s * 0.78), gh = s * 0.07;
+    const gy = faceY - faceH * (headed ? 0.34 : 0.2);
+    c.beginPath(); rr(c, -gw / 2, gy, gw, gh, 4);
+    inked(c, litG(c, art.accCol || '#8a6a3f', 0, gy, 0, gy + gh), lw * 0.8, C.ink);
     for (const d of [-1, 1]) {
-      c.beginPath(); c.arc(d * faceW * 0.17, faceY - faceH * 0.28, s * 0.07, 0, TAU);
+      c.beginPath(); c.ellipse(d * gw * 0.24, gy + gh * 0.5, s * 0.07, s * 0.07, 0, 0, TAU);
       inked(c, '#8fe3ff', lw * 0.8, C.ink);
+      // glass, so a goggle is not a blue disc
+      c.save();
+      c.globalAlpha = 0.7;
+      c.beginPath();
+      c.ellipse(d * gw * 0.24 - s * 0.022, gy + gh * 0.5 - s * 0.022, s * 0.026, s * 0.018, -0.6, 0, TAU);
+      c.fillStyle = '#ffffff'; c.fill();
+      c.restore();
     }
     c.restore();
   }
