@@ -422,14 +422,30 @@ function restoreCourses() {
     for (const k of Object.keys(was)) if (was[k] !== undefined) co[k] = was[k];
   }
 }
+/* SIX SWITCHES, FOUR OF THEM QUESTIONS — and the third flag is what makes the
+   difference visible to the arm that prices them.
+
+   `reposition` and `wave` were both measured to cost points and both had their
+   bodies emptied, and both were KEPT as switches so a later round could re-check
+   the sign. That was right. What was not right is that the ablation went on
+   pricing them: their on and off arms are byte-identical, so each contributes a
+   guaranteed 0.0 and, worse, a slot in the Bonferroni family — the four real
+   habits were being judged against a bar sized for six questions. The pair arm
+   learned this about `reposition` a while ago and wrote it into DEAD ENDS; the
+   ablation next door never did.
+
+   So the third element is `dormant`: kept, never priced, and named in the output
+   with the number that retired it, so nobody reads a four-row table as a claim
+   that repositioning was never tried. */
 const HABITS = [
   ['deny', 'denying schemes'],
-  ['reposition', 'repositioning at all (removed)'],
+  ['reposition', 'repositioning at all', 'both directions measured, −3 and worse'],
   ['holdGear', 'holding gear until it earns the turn'],
   ['keepSlot', 'keeping a slot in reserve'],
-  ['wave', 'calling waves early (removed)'],
+  ['wave', 'calling waves early', '−5 at 210 an arm, in both directions'],
   ['place', 'filling the front of both lanes first'],
 ];
+const LIVE_HABITS = HABITS.filter((h) => !h[2]);
 
 /* Taking away what a foe has committed to, with free moves only. Lifted out of
    the careful pilot so a pilot that has been TAUGHT can do this one thing and
@@ -1446,6 +1462,6 @@ export function config() {
 }
 
 export {
-  CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, GEAR, HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
+  CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, GEAR, HABITS, LIVE_HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
   applyTweak,
 };

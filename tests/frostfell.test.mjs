@@ -2497,6 +2497,41 @@ section('the design record states numbers');
     eq(dupes.length, 0, 'no two entries claim the same topic — a correction is folded in, not appended'
       + (dupes.length ? ': ' + dupes.join(', ') : ''));
   }
+  /* WERE THE RETIREMENTS HONEST? Audited by hand once, then made mechanical.
+     Twelve topics have been retired over the last eight rounds while the count
+     held at 33. Eleven were folded into a surviving entry — `probe-wrappers`
+     became a row of the instrument table, `shelter` became a clause about the
+     two deleted cards, `ladder-band` was absorbed by `sample-size`. One was not:
+     `boss-norm` vanished outright, and `index.html` was left saying "see
+     DESIGN.md for what to do about the boss" about an entry that had not existed
+     for four rounds — while the DEAD ENDS entry went on calling itself
+     "everything built, measured and thrown away". A completeness claim that
+     survives its own falsification is the exact failure rule 2 is about, and the
+     hand audit that found it does not repeat itself.
+
+     So a dead end that lives as a code comment tags itself `dead-ends: <slug>`,
+     and the slug has to be in the entry. Retiring one now fails here. */
+  {
+    const entry = doc.slice(doc.indexOf('### DEAD ENDS'));
+    const body = entry.slice(0, entry.indexOf('\n### ') + 1 || undefined);
+    const game = readFileSync(new URL('../frostfell/index.html', import.meta.url), 'utf8');
+    const tags = [...game.matchAll(/dead-ends:\s*([a-z, ]+)/g)]
+      .flatMap((m) => m[1].split(',').map((s) => s.trim()).filter(Boolean));
+    ok(tags.length >= 3, `dead ends kept as code comments tag themselves (${tags.length})`);
+    const orphan = tags.filter((t) => body.indexOf('`dead-ends: ' + t + '`') < 0);
+    eq(orphan.join(', '), '', 'every dead end in the source is in the record — a retirement folds, never drops');
+  }
+  /* And the other half of a dishonest retirement: a link into a heading that is
+     no longer there. README points at seven anchors and nothing checked them. */
+  {
+    const slug = (h) => h.replace(/^###\s+/, '').toLowerCase()
+      .replace(/[^a-z0-9 -]/g, '').replace(/ /g, '-');
+    const have = new Set(lines.filter((l) => /^###\s/.test(l)).map(slug));
+    const readme = readFileSync(new URL('../frostfell/README.md', import.meta.url), 'utf8');
+    const dead = [...readme.matchAll(/DESIGN\.md#([a-z0-9-]+)/g)].map((m) => m[1])
+      .filter((a) => !have.has(a));
+    eq(dead.join(', '), '', 'every DESIGN.md anchor the README links to still exists');
+  }
   const heads = [];
   let cur = null;
   for (const ln of lines) {

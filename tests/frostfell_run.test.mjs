@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { ok, eq, done, section } from './frostfell_lib.mjs';
 import { runJobs, JOBS, snapshot, absorb } from './frostfell_pool.mjs';
 import {
-  CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
+  CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, HABITS, LIVE_HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
   applyTweak, config,
 } from './frostfell_pilot.mjs';
 
@@ -214,6 +214,26 @@ function familyZ(k) {
   return (lo + hi) / 2;
 }
 
+/* A VALUE INSIDE ITS OWN BAND IS A RANGE, AND IT PRINTS AS ONE — everywhere,
+   not just on the ladder.
+
+   The ladder started marking unresolved rungs with a `?` because it was
+   printing `steering +2` as a headline above a five-base measurement of +7.6,
+   in the same output. That was a local fix to a general problem: every table in
+   this file prints differences, every one of them has a band, and every one of
+   them has at some point had a number read off it that its sample could not
+   support. The courses table did it for three rounds; the habit tables did it
+   for six.
+
+   So the convention is one function. `gap(d, band)` renders a difference with a
+   `?` when it is inside twice its band, and nothing else in the file is allowed
+   to render one by hand — which is the only way a convention stays a convention
+   rather than becoming a thing one table does. */
+const RANGE = (d, band, dp) => {
+  const n = dp === undefined ? (Math.abs(d) < 10 ? 1 : 0) : dp;
+  const txt2 = `${d >= 0 ? '+' : ''}${d.toFixed(n)}`;
+  return Math.abs(d) >= 2 * band ? txt2 : txt2 + '?';
+};
 const BAND = {
   /* one arm's own spread */
   row: (p, n) => 100 * Math.sqrt(p * (1 - p) / Math.max(1, n)),
@@ -402,26 +422,60 @@ section('whole runs, start to finish');
     const b = 2 * rungBand(a, z);
     return `${d >= 0 ? '+' : ''}${d}${Math.abs(d) >= b ? '' : '?'}`.padStart(5);
   };
+  /* THREE RUNGS, NOT FOUR — decided by running the fourth at twenty times the
+     sample rather than by taste.
+
+     Two of the four printed `?` last round, so the sizing table was taken at its
+     word and `choosing its road` was run at the 517 an arm it asked for. It came
+     back **+8 against a 2σ band of 8.0** — on the boundary, still a range — and
+     `steering the pool` came back +3 and wanted 3,667 an arm. So at 516 runs, 20x
+     what the check can afford, the two small rungs are STILL not values, and at
+     the sample the check actually runs (210 an arm, band ±12.5) they never will
+     be. A rung that cannot be read at any sample this project will pay for is not
+     a measurement, it is a decoration with a number on it.
+
+     `careful` and `router` are folded because they are the same habit seen twice:
+     one steers the CARD POOL toward what the deck wants, the other steers the
+     TRAIL toward the fights the deck can take. Separately they read +3 and +8
+     against ±8; together they read +11 and clear. The five pilot modes are
+     untouched and the shape chart below still draws all five rows — this changes
+     what the ladder claims to have measured, not what it ran. */
+  const RUNGS = [['the fight', careless, tactics], ['the trader', tactics, trader],
+    ['steering the run', trader, router]];
   const total = pct(router) - pct(careless);
   const totalBand = 2 * rungBand(careless, router);
-  console.log(`    what each thing is worth:  the fight ${rung(careless, tactics)}   ` +
-    `the trader ${rung(tactics, trader)}   steering the pool ${rung(trader, careful)}   ` +
-    `choosing its road ${rung(careful, router)}   = ${total} ± ${totalBand.toFixed(0)} points, all told`);
+  console.log('    what each thing is worth:  ' +
+    RUNGS.map(([n2, a, z]) => `${n2} ${rung(a, z)}`).join('   ') +
+    `   = ${total} ± ${totalBand.toFixed(0)} points, all told`);
+  console.log(`    (steering the run is the trader's pool and the trail together — apart, here, ` +
+    `${rung(trader, careful).trim()} and ${rung(careful, router).trim()}; at 516 runs an arm ` +
+    `they read +3 and +8 against a ±8 band, which is why they are one rung)`);
   {
-    const soft = [['the fight', careless, tactics], ['the trader', tactics, trader],
-      ['steering the pool', trader, careful], ['choosing its road', careful, router]]
+    const soft = RUNGS
       .filter(([, a, z]) => Math.abs(pct(z) - pct(a)) < 2 * rungBand(a, z));
     console.log(`    (a rung marked ? is inside its own 2σ band at this sample and is a RANGE, not a value` +
       `${soft.length ? ': ' + soft.map(([n2, a, z]) => `${n2} is somewhere in 0..${Math.round(2 * rungBand(a, z))}`).join(', ') : ''})`);
-    /* And what it would take, rather than leaving the reader to work it out.
-       The same arithmetic that settled the decks, the courses and this rung
-       three rounds running — see the sample-size rule in DESIGN.md. */
+    /* WHAT IT WOULD TAKE — and the factor of four that was missing, found by
+       following this table's own advice and watching it fail.
+
+       It said `choosing its road` would resolve at 517 runs an arm. Run at 516
+       it read +8 with a 2σ band of 8.0: on the line, still a `?`. Not bad luck —
+       the formula solved `2σ = Δ`, which is by construction the sample where the
+       effect sits EXACTLY on its band and clearing is a coin flip. The three
+       earlier successes (the decks, the courses, the five-base rung) cleared
+       because their effects came in bigger than the Δ they were sized for, which
+       is luck wearing the costume of a method.
+
+       Resolving means being comfortably inside, so size for the BAND you want
+       rather than the effect you expect: 2σ ≤ Δ/2, which is 4x the runs. The
+       rule in DESIGN.md now says this for all three of its forms. */
     for (const [n2, a, z] of soft) {
       const p1 = a.wins / Math.max(1, a.runs), p2 = z.wins / Math.max(1, z.runs);
       const want = Math.max(3, Math.abs(pct(z) - pct(a)));
-      const need = Math.pow(1.29 * 100 * 2 / want, 2) * (p1 * (1 - p1) + p2 * (1 - p2));
-      console.log(`      to resolve ${n2} at ${want} points: ${Math.round(need)} runs an arm ` +
-        `(FF_RUNS=${Math.round(need / tribes.length)}), against ${a.runs} here`);
+      const need = Math.pow(1.29 * 100 * 4 / want, 2) * (p1 * (1 - p1) + p2 * (1 - p2));
+      console.log(`      to resolve ${n2} at ${want} points (band ≤ ${(want / 2).toFixed(1)}): ` +
+        `${Math.round(need)} runs an arm (FF_RUNS=${Math.round(need / tribes.length)}), ` +
+        `against ${a.runs} here`);
     }
   }
   for (const [name, o] of rows) {
@@ -780,7 +834,7 @@ section('does money change anything');
     const sig = Math.abs(hi.r.pct - lo.r.pct) / Math.max(0.1, bdiff);
     console.log(`    and BEST AGAINST WORST, which is the choice on the leader screen: ` +
       `${hi.co.short} ${hi.r.pct}% vs ${lo.co.short} ${lo.r.pct}% — ` +
-      `${hi.r.pct - lo.r.pct} points at ${sig.toFixed(1)}σ on a ±${bdiff.toFixed(1)} band ` +
+      `${RANGE(hi.r.pct - lo.r.pct, bdiff, 0)} points at ${sig.toFixed(1)}σ on a ±${bdiff.toFixed(1)} band ` +
       `(bar for 2 is ${familyZ(2).toFixed(2)}σ: ${sig >= familyZ(2) ? 'CLEARS' : 'does not clear'})`);
   }
   {
@@ -805,7 +859,7 @@ section('does money change anything');
      still has to beat one who does not, and that is checked up in the sweep.
      A bottomless purse is still not the best row, and should not be — spending
      badly has to cost you, or the shop is a tax on patience. */
-  ok(true, `money is worth ${normal.pct - broke.pct} points, band ±${band} — reported, not gated`);
+  ok(true, `money is worth ${RANGE(normal.pct - broke.pct, Number(band), 0)} points, band ±${band} — reported, not gated`);
 }
 
 /* ------------------------------------------ is the gear finding the PILOT? -- */
@@ -874,7 +928,7 @@ section('is the gear preference the deck or the pilot');
      re-tuning the pilot's gear preference buys a point, and the 14 points
      cannot be about how much gear the pilot chooses to play. */
   console.log(`    → best ${label(best.v)} ${best.pct}% · worst ${label(worst.v)} ${worst.pct}% · ` +
-    `spread ${spread} on a family bar of ±${(zb * gband).toFixed(1)}`);
+    `spread ${RANGE(spread, zb * gband / 2, 0)} on a family bar of ±${(zb * gband).toFixed(1)}`);
   console.log(`      ${spread >= zb * gband
     ? `the dial is REAL and the shipped bar is ${lift} off it — the 14 points are PLAY SKILL`
     : 'the dial is FLAT end to end, so gear-before-body is not a decision — ' +
@@ -1171,7 +1225,7 @@ section('the course dials, and where each one sits on its own');
     const live = spread >= zd * dband;
     verdicts.push({ co, hi, lo, ship, spread, live });
     console.log(`    → ${co === 'line' ? 'BODIES' : co.toUpperCase()}: ` +
-      `best ${hi.k.trim()} ${hi.pct}% · worst ${lo.pct}% · spread ${spread} · ` +
+      `best ${hi.k.trim()} ${hi.pct}% · worst ${lo.pct}% · spread ${RANGE(spread, zd * dband / 2, 0)} · ` +
       `${live ? `A DIAL — ${hi.pct - ship.pct} points between its ends, ${hi.pct - none.pct} at the top over declaring nothing`
         : 'FLAT end to end — this setting is not what decides this course'}`);
   }
@@ -1315,7 +1369,7 @@ section('does walking past a fight pay');
     const lead = bestAlt.r.pct - seek.pct;
     console.log(`    → AND IS THE FORK A DECISION? best of ${all5.length} alternatives is ` +
       `"${bestAlt.label}" at ${bestAlt.r.pct}% against ${seek.pct}% for taking everything ` +
-      `(${lead >= 0 ? '+' : ''}${lead}, family bar ${zf.toFixed(2)}σ = ±${(zf * bf).toFixed(1)})`);
+      `(${RANGE(lead, zf * bf / 2, 0)}, family bar ${zf.toFixed(2)}σ = ±${(zf * bf).toFixed(1)})`);
     console.log(`      ${lead >= zf * bf
       ? 'something beats taking every fight — the fork IS a decision'
       : 'nothing beats taking every fight: the trail screen asks a question with one right answer'}`);
@@ -1782,9 +1836,9 @@ section('which parts of playing well are worth anything');
      So: start from the pilot that knows nothing and turn ONE habit on. If each
      alone recovers a real share of the nineteen, they are all real and the
      subtractive table was blunt rather than right. */
-  const addedPcts = await sweep3Many(HABITS.map(([key]) =>
+  const addedPcts = await sweep3Many(LIVE_HABITS.map(([key]) =>
     Object.assign({}, OFF_ALL, { [key]: true })));
-  const added = HABITS.map(([, label], k) => [label, addedPcts[k]]);
+  const added = LIVE_HABITS.map(([, label], k) => [label, addedPcts[k]]);
   added.sort((a2, z) => z[1] - a2[1]);
   /* And this table refuses to print inside its own band, the same as the one
      above it. It nearly cost a round: at the default sample it read "keeping a
@@ -1847,13 +1901,21 @@ section('which parts of playing well are worth anything');
   }
   /* AND THE ARITHMETIC THE TWO TABLES ABOVE HAVE BEEN AVOIDING.
 
-     Denial alone is worth +15 and all six together are worth +17. The two
-     numbers have been sitting one paragraph apart for a round and the
-     conclusion drawn from them was a paragraph about substitution. The blunter
-     reading is that FIVE HABITS ARE COLLECTIVELY WORTH TWO POINTS, three of
-     them price negative alongside denial in the pair table, and two of them
-     (repositioning, calling waves early) are already dead switches kept only so
-     this arm has a row to print.
+     Denial alone is worth +15 and the whole set is worth +17. The two numbers
+     sat one paragraph apart for a round and the conclusion drawn from them was
+     a paragraph about substitution. The blunter reading is that THE OTHER
+     HABITS ARE COLLECTIVELY WORTH TWO POINTS, and several price negative
+     alongside denial in the pair table.
+
+     AND THE COUNT WAS WRONG FOR SIX ROUNDS, WHICH MADE IT SOUND WORSE THAN IT
+     IS. This paragraph used to say "five habits worth two points" while noting,
+     in its own next sentence, that two of the five were dead switches with
+     empty bodies. Both facts were written down; the subtraction was not done.
+     There are THREE other habits, not five — and three sharing two points is a
+     different game from five sharing two. The dead pair also held two slots in
+     the Bonferroni family, so every real habit was judged against a bar sized
+     for six questions when the arm only ever asked four. They are dormant now:
+     kept as switches, never priced, named below with what retired them.
 
      The aura cards were cut on exactly this shape of evidence — content that
      could not be shown to be worth anything, removed, and the ladder went UP
@@ -1863,16 +1925,21 @@ section('which parts of playing well are worth anything');
      paying rent they cannot cover, and every fight-arm reading gets cheaper and
      cleaner without them. */
   {
-    const denyOnly = addedPcts[HABITS.findIndex(([k]) => k === 'deny')];
+    const denyOnly = addedPcts[LIVE_HABITS.findIndex(([k]) => k === 'deny')];
     const gap = all - denyOnly;
     const bar2 = 2 * Number(band);
-    console.log(`    ONLY DENYING ${denyOnly}% against ALL SIX ${all}% — the other five are worth ` +
-      `${gap >= 0 ? '+' : ''}${gap} on top of denial (2σ = ±${bar2.toFixed(1)})`);
+    const rest = LIVE_HABITS.length - 1;
+    console.log(`    ONLY DENYING ${denyOnly}% against ALL ${LIVE_HABITS.length} ${all}% — ` +
+      `the other ${rest} are worth ${gap >= 0 ? '+' : ''}${gap} on top of denial ` +
+      `(2σ = ±${bar2.toFixed(1)})`);
     console.log(`      ${gap >= bar2
-      ? 'the five carry their weight: keep them'
+      ? `the ${rest} carry their weight: keep them`
       : gap <= -bar2
-        ? 'the five make the pilot WORSE — they should come out'
-        : 'inside the band: five habits that cannot be shown to be worth anything'}`);
+        ? `the ${rest} make the pilot WORSE — they should come out`
+        : `inside the band: ${rest} habits that cannot be shown to be worth anything`}`);
+    const dormant = HABITS.filter((h) => h[2]);
+    console.log(`      (${dormant.length} switches kept but not priced — ` +
+      `${dormant.map((h) => `${h[1]}: ${h[2]}`).join('; ')})`);
     /* Reported rather than gated, and deliberately so. "Cannot be shown to be
        worth anything" is not "shown to be worth nothing", and at this arm's
        band those are different claims — the whole point of the ladder-band
@@ -1924,9 +1991,9 @@ section('which parts of playing well are worth anything');
        therefore costs four times the sample. Fifteen pairs at that depth
        answers fourteen questions nobody asked. */
     const ONE = (process.env.FF_PAIR || '').split('+').filter(Boolean);
-    const KEYS = ONE.length === 2 ? ONE : HABITS.map(([k]) => k);
+    const KEYS = ONE.length === 2 ? ONE : LIVE_HABITS.map(([k]) => k);
     if (ONE.length === 2) console.log(`    (one pair only: ${ONE.join(' + ')})`);
-    const nameOf = (k) => HABITS.find((h) => h[0] === k)[1].replace(' (removed)', '');
+    const nameOf = (k) => HABITS.find((h) => h[0] === k)[1];
     const at = (keys, base = 1000) => {
       for (const [k2] of HABITS) SKILL[k2] = false;
       for (const k of keys) SKILL[k] = true;
@@ -2063,7 +2130,7 @@ section('which parts of playing well are worth anything');
     ok(seedBands.inter > 0, 'the measured band is a number, not a coincidence of five identical runs');
   }
 
-  const subKeys = HABITS.filter(([key]) => !ONLY || key === ONLY);
+  const subKeys = LIVE_HABITS.filter(([key]) => !ONLY || key === ONLY);
   const withoutPcts = await sweep3Many(subKeys.map(([key]) => ({ [key]: false })));
   const rows = subKeys.map(([, label], k) => ({ label, cost: all - withoutPcts[k] }));
   rows.sort((a, z) => z.cost - a.cost);

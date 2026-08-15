@@ -826,8 +826,14 @@ section('every card in the game, drawn and measured');
     FF.setStageWidth(stage[0], stage[1]);                 // the tightest shape, where the floor bites hardest
     const D = FF.dims();
     const cps = Math.min(stage[0] / D.VW, stage[1] / D.VH);
+    /* LEADERS INCLUDED, which is why the count was 98% and not 100%. The one
+       paragraph nothing ever drew was a leader's — skipped here because a
+       leader is not dealt into a hand, and reaching the screen sweep only for
+       whichever tribe that seeded run happened to pick. But a leader IS drawn
+       as a card, in the deck view, so `drawCard` is a real path for it and
+       excluding it was the sweep being narrow rather than the game being
+       unable to show it. */
     for (const def of Object.values(FF.CARDS)) {
-      if (def.leader) continue;
       log.length = 0;
       FF.drawCard(ctx2, FF.mkCard(def.id), 40, 40, w2, h2, { t: 0.4 });
       drawn++;
@@ -1026,6 +1032,37 @@ if (CELLS.total) {
   console.log(`    the check takes the WORST ground a string covers, not the anchor's — ` +
     `on ${CELLS.anchorBlind} of them the anchor's cell is not even one of the grounds under the text`);
   ok(CELLS.mixed <= CELLS.straddle, 'a mixed string is a straddling string');
+}
+
+/* WHERE A LONG NAME BREAKS, PINNED — because the fold check cannot see it.
+
+   The coverage sweep asks whether a name is DRAWN WHOLE, and by that measure
+   `SNO` / `WPUP` and `SNOW` / `PUP` are identical: nothing is cut, both fit, 86
+   of 86. Only a person opening the PNG can tell that one of them is a word. So
+   a round shipped `CINDE` / `RPUP`, `KETTL` / `EBEAK` and `WHETS` / `TONE` with
+   every check green, and the first attempt to fix it made two of the four worse
+   in a way the same green checks did not notice.
+
+   The rule is mechanical even though "reads well" is not: the second piece has
+   to be able to START a word, which in English means consonant-then-vowel. That
+   is worth an example table rather than a property — a property restating the
+   implementation proves only that the code is the code, whereas these four
+   names are the actual cases, and any of them regressing is the defect. */
+{
+  /* A flat metric on purpose: the question is WHERE the cut lands given a width,
+     not what the typeface measures, and a monospace stub makes the expected
+     answers readable instead of font-dependent. */
+  const cc = { font: '', measureText: (s) => ({ width: s.length * 7 }) };
+  const CASES = [['CINDERPUP', 'CINDER'], ['KETTLEBEAK', 'KETTLE'],
+    ['SNOWPUP', 'SNOW'], ['WHETSTONE', 'WHETS']];
+  for (const [nm, head] of CASES) {
+    const p = FF.nameSplit(cc, nm, 14, head.length * 7 + 3, 2);
+    eq(p.length, 2, `${nm} breaks in two`);
+    eq(p[0], head, `${nm} breaks at the compound seam, not wherever the width ran out`);
+    eq(p.join(''), nm, `${nm} loses nothing to the break`);
+  }
+  console.log(`  · ${CASES.length} compound names break where a word can start ` +
+    `(${CASES.map(([n2, h]) => h + '|' + n2.slice(h.length)).join(' ')})`);
 }
 
 done('frostfell-render');
