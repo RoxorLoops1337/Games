@@ -2,22 +2,22 @@
  "FF_ABLATE=60": {
   "said": "denying schemes +9 of the 17; next best keeping a slot in reserve +2",
   "sample": 180,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_LESSON=1": {
   "said": "being told once is +6; every larger dose reads the same",
   "sample": 90,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_MONEY=70": {
   "said": "charm is −19 of 23 removed; free meal is +21 given",
   "sample": 210,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_NOSCARS=1": {
   "said": "with every scar wiped: careless 8%, the fight 30%, the trader 41%, steering the pool 48%, choosing its road 52%",
   "sample": 90,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_NOWAVE=1": {
   "said": "floor 11% → 11%; trader +18 → +16 against +18 predicted by compression alone",
@@ -26,12 +26,12 @@
  "FF_COURSE=150": {
   "said": "hearth 56% is the best of five, bodies 48% the worst, against 47% for none (±2.2)",
   "sample": 450,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_PAIRS=70": {
   "said": "best is denying schemes + filling the front of both lanes first at +2.9, against ±7.9 derived but ±12.1 MEASURED — shared seeds make the real band 0.6x narrower than the printed one",
   "sample": 210,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_PAIR=holdGear+keepSlot": {
   "said": "best is holding gear until it earns the turn + keeping a slot in reserve at +2.0, against ±5.8 derived but ±3.1 MEASURED — shared seeds make the real band 1.9x narrower than the printed one",
@@ -40,7 +40,7 @@
  "FF_CALIBRATE=70": {
   "said": "a gap is 1.44x narrower than the two-arm formula, an interaction 1.40x; net against what the suite used to quote, gates were 2% too strict",
   "sample": 210,
-  "build": "cl5bri",
+  "build": "nz21i1",
   "factors": {
    "gap": 1.439,
    "inter": 1.401
@@ -49,7 +49,7 @@
  "FF_CARDS=40": {
   "said": "removing: no card of 57 clears 3.33σ, widest lastlight -7.5; giving from a locked floor: 0 clear it, best avalanche +9.2, span 15.0",
   "sample": 120,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_VARIANCE=40": {
   "said": "trail 13.9%, deck 1.6%, draw 0.0%",
@@ -58,12 +58,12 @@
  "FF_LADDERBAND=1": {
   "said": "the total reads 40/39/36/55/38 at five bases — sd ±7.6, so nothing under 15 points is detectable",
   "sample": 90,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_VARIANCE=36": {
   "said": "won/lost: trail 10.7%, deck 1.8%, draw 0.5%, matchup 23.5% · zones: trail 29.2%, deck 3.4%",
   "sample": 864,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_GEARBAR=1": {
   "said": "gear worth 4+ first 45% is the best of 5, +5 on the shipped bar of 6 (40%), family bar ±9.2",
@@ -72,7 +72,7 @@
  "FF_DIAL=150": {
   "said": "bodies spans 13 (46-59%, ships 46%) A DIAL · scrap spans 10 (44-54%, ships 44%) A DIAL against 47% for no course, family bar ±8.2",
   "sample": 450,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_BUILT=200": {
   "said": "gear-heavy 4.1% vs body-heavy 1.4% (+2.7 points, p=0.009); on depth 1.36 vs 1.24 zones (+0.13, p=0.009) over 924 relabellings",
@@ -91,7 +91,7 @@
  "FF_REST=1": {
   "said": "a lasting rest on the quiet road, swept 0/1/2/4 fights: best is 2 at +15 for ducking against taking everything (bar ±18.2)",
   "sample": 90,
-  "build": "cl5bri"
+  "build": "nz21i1"
  },
  "FF_ROUTE=150": {
   "said": "taking everything 55%; best of 5 alternatives \"banks zone one, coasts zone three\" 61% (+6, bar ±8.4) — the fork has one right answer",
