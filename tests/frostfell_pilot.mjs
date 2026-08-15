@@ -400,6 +400,7 @@ const ROOM = { plays: 0, declined: 0, packed: 0, spare: 0, free: [], efree: [] }
 const CROOM = { turns: 0, free: [] };
 const DUCKS = { forks: 0, taken: 0, wound: 0, bar: 0.22 };
 const LANE = { on: false, by: {} };
+const DENY = { turns: 0, any: 0, act: 0, bare: 0 };
 const TELL = { on: false, live: 0, moved: 0, held: 0, fights: 0, turns: 0, allTurns: 0, lastB: null, lastHeld: 0 };
 const SKILL = { deny: true, reposition: true, holdGear: true, keepSlot: true, wave: true, place: true };
 /* HOW GOOD A PIECE OF GEAR HAS TO BE TO BEAT PUTTING A BODY DOWN.
@@ -1130,6 +1131,40 @@ function playRun(tribe, seed, mode, tweak) {
         if (tb.waveLane !== undefined) TELL.turns++;
         TELL.allTurns++;
       }
+      /* HOW OFTEN IS THE ONE REAL DECISION EVEN ON THE TABLE?
+
+         Six rounds of ablation say denying a scheme is most of what the fight is
+         worth, and the corrected count says the other three habits are worth +7
+         together while each is inside its band alone — the signature of things
+         that SUBSTITUTE. A substitute only has work to do on turns the thing it
+         substitutes for is unavailable, and nobody had ever measured how many of
+         those there are. Designing a stronger habit before knowing that number
+         is guessing at the size of the gap you are filling.
+
+         Read off the board, not hooked into `denySchemes`: same predicate, no
+         mutation. Three tiers, because they are different questions — is there a
+         scheme at all, is it one this pilot can act on, and (the one that
+         matters for design) is the board free of any scheme whatsoever. */
+      {
+        const foes = FF.enemyUnits(G), mine = FF.playerUnits(G);
+        const free = FF.freeSlots(G, 'p');
+        let any = 0, act = 0;
+        for (const f of foes) {
+          const p = f.plot;
+          if (!p) continue;
+          any++;
+          if (p.id === 'mark') {
+            const t = mine.find((x) => x.uid === p.uid);
+            if (t && t.lane === p.lane && t.col === p.col && free.length) act++;
+          } else if (p.id === 'chill') {
+            const caught = mine.filter((x) => x.lane === p.lane);
+            if (caught.length && caught.length <= free.filter((s) => s.lane !== p.lane).length) act++;
+          }
+        }
+        DENY.turns++;
+        if (any) DENY.any++; else DENY.bare++;
+        if (act) DENY.act++;
+      }
       if (careful) carefulTurn(); else botTurn();
       stat.turns++;
       if (G.battle.turn > 160) return Object.assign(stat, { stuck: true });
@@ -1362,7 +1397,7 @@ function playRun(tribe, seed, mode, tweak) {
    Configuration travels the other way, in the job, via applyConfig. And the
    whole thing is proved rather than trusted: the run suite plays one arm inline
    and the same arm pooled and asserts the counters come out identical. */
-const COUNTERS = { PLAYED, OFFERED, CARRIED, TRIGGERS, SOLD, TITAN, ROOM, CROOM, DUCKS, LANE, TELL, MEND, TAUGHT };
+const COUNTERS = { PLAYED, OFFERED, CARRIED, TRIGGERS, SOLD, TITAN, ROOM, CROOM, DUCKS, LANE, TELL, MEND, TAUGHT, DENY };
 
 function cloneCounts(o) {
   const out = {};
@@ -1462,6 +1497,6 @@ export function config() {
 }
 
 export {
-  CARRIED, CROOM, DEFAULT_N, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, GEAR, HABITS, LIVE_HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
+  CARRIED, CROOM, DEFAULT_N, DENY, DRAFT, DRAFT_HABITS, DUCKS, FF, FROSTERS, G, GEAR, HABITS, LIVE_HABITS, LANE, MEND, NO_SCARS, OFFERED, PLAYED, ROOM, SKILL, SOLD, TAUGHT, TELL, TITAN, TRIGGERS, bestSlot, botTurn, cardWorth, carefulItem, carefulSlot, carefulTurn, courseWanted, denySchemes, doomed, draftPick, draftTurn, erf, itemTarget, pickBiggest, playRun, sale, settleChoosers, soakerFirst, stripScars, threatOf, watchTitan, wounds,
   applyTweak,
 };

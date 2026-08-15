@@ -4418,25 +4418,39 @@ function nameSplit(c, nm, size, maxW, lines) {
      Nearly every long name in this game is a compound: CINDERPUP, SNOWPUP,
      WHETSTONE, KETTLEBEAK. The seam is therefore not a phonetic rule, it is
      "the next piece begins consonant-then-vowel", which is the shape of every
-     English word onset. Taking the LATEST fitting one rather than the most
-     balanced is what puts the whole first element on the first line.
+     English word onset.
 
-     The first version of this got it backwards — it cut AFTER a vowel, which
-     is true of KETTLE|BEAK by accident and gave SNO|WPUP and WHE|TSTONE, both
-     worse than the balanced cut they replaced. The shot walk caught it. */
+     It took three tries to get the CHOICE among seams right, and each wrong one
+     shipped green:
+
+       cut AFTER a vowel        SNO|WPUP, WHE|TSTONE   — right for KETTLE|BEAK
+                                                         by accident only
+       the LATEST seam that fits  BELLRO|PE            — right for CINDER|PUP,
+                                                         wrong the moment a name
+                                                         has a seam near the end
+       nearest to BALANCED, ties to the later cut      — all six right
+
+     The last one is not a third guess. A compound's seam is near the middle
+     because both halves are words; "latest" only looked right because the names
+     it was tested on happened to have their seam late. BELL|ROPE and
+     CINDER|PUP both fall out of the same rule. */
   const VOW = 'AEIOUYaeiouy';
   const seam = (s, p2) => p2 > 1 && p2 < s.length - 1 &&
     VOW.indexOf(s[p2]) < 0 && VOW.indexOf(s[p2 + 1]) >= 0;
   const out = [];
   let rest = nm;
   for (let k = lines; k > 1; k--) {
-    const want = Math.round(rest.length / k);
+    const want = rest.length / k;
     let cut = 0;
     let top = 0;
     while (top + 1 < rest.length && fits(rest.slice(0, top + 1))) top++;
-    for (let p2 = top; p2 > 1 && !cut; p2--) if (seam(rest, p2)) cut = p2;
+    for (let p2 = 2; p2 <= top; p2++) {
+      if (!seam(rest, p2)) continue;
+      if (!cut || Math.abs(p2 - want) <= Math.abs(cut - want)) cut = p2;
+    }
+    const mid = Math.round(want);
     for (let d = 0; d <= rest.length && !cut; d++) {
-      for (const p2 of [want - d, want + d]) {
+      for (const p2 of [mid - d, mid + d]) {
         if (p2 > 0 && p2 < rest.length && fits(rest.slice(0, p2))) { cut = p2; break; }
       }
     }
@@ -6007,7 +6021,31 @@ function drawCard(c, card, x, y, w, h, o) {
      hold them costs a few units of picture on the one device where the picture
      was never the thing carrying the information anyway. */
   const nmLines = tiny ? (nameFits(c, nm, nameSize * 0.82, nameW, 2) ? 2 : 3) : 1;
-  const bh = (tiny ? (nmLines === 3 ? 44 : 36) : 27) * S;
+  /* THE BAND IS SIZED FROM THE TEXT, not from a table of guesses — and the fold
+     is why. `44 * S` for three lines held everywhere the walk photographed and
+     failed at 653x280, where the type is clamped up to the 9px readable floor
+     while `S` keeps shrinking: three lines no longer fit in a band scaled by
+     `S`, so `CIN` was drawn above the band into the frame and `PUP` below it
+     across the picture. Both were legible, both were outside the plate, and
+     every check was green because nothing was truncated.
+
+     Two wrong fixes first, each caught by a different check in the same run:
+
+       grow the band            the art window went down with it and a stat pip
+                                landed on a red ground at 1.2:1 — the CONTRAST
+                                check
+       close up the leading     at the floor the type cannot shrink, so the lines
+                                simply sat on each other — the OVERLAP check
+
+     The band does have to grow; what was missing is that the growth has to come
+     from somewhere. It comes out of the PICTURE, which is the one element on a
+     fold-size card carrying no information — so everything below the window
+     stays exactly where it was and the checks that guard it stay green. */
+  const bhMin = (tiny ? (nmLines === 3 ? 44 : 36) : 27) * S;
+  const nmFit = tiny ? nameFit(c, nm, nameSize * 0.82, nameW, nmLines) : null;
+  const nmStep = nmFit ? lineH(nmFit.size, nameSize * 0.9) : 0;
+  const bh = nmFit ? Math.max(bhMin, nmFit.lines.length * nmStep + 7 * S) : bhMin;
+  const bhGrew = bh - bhMin;
   const by0 = fi;
   c.save();
   rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
@@ -6084,9 +6122,7 @@ function drawCard(c, card, x, y, w, h, o) {
        book does when a long word meets a narrow column, and KETTLE over BEAK is
        read as one word by anybody looking at a picture of a kettle-beaked bird.
        An ellipsis throws the second half away; a break keeps it. */
-    const fit = nameFit(c, nm, nameSize * 0.82, nameW, nmLines);
-    const ns2 = fit.size, two = fit.lines;
-    const step2 = lineH(ns2, nameSize * 0.9);
+    const ns2 = nmFit.size, two = nmFit.lines, step2 = nmStep;
     two.forEach((ln, i) => txt(c, ellipsize(c, ln, ns2, nameW),
       nameX, by0 + bh / 2 + (i - (two.length - 1) / 2) * step2,
       ns2, '#22160c', 'center', 't', 'rgba(255,255,255,.45)'));
@@ -6105,7 +6141,7 @@ function drawCard(c, card, x, y, w, h, o) {
   /* A unit's window shrank the rules line to one truncated clause at hand
      size, which is the one place the text has to be readable. Gear can afford
      a bigger picture because its rules are shorter. */
-  const ah = isUnit ? h * 0.41 : h * 0.44;
+  const ah = Math.max(h * 0.16, (isUnit ? h * 0.41 : h * 0.44) - bhGrew);
   c.save();
   rr(c, ax, ay, aw, ah, 8 * S);
   c.clip();
@@ -6975,7 +7011,19 @@ function drawLeaderPick(c, t) {
 
   // the winter you choose to walk into
   const wx = Math.max(840, VW - 480), ww = VW - wx - SAFE;
-  txt(c, 'HOW HARD A WINTER', wx + ww / 2, 138, 15, '#9fc0e4', 'center', 't');
+  /* THE TOTAL MOVES INTO THE HEADER WHEN THE LIST LEAVES IT NOWHERE TO GO.
+     It used to sit under the last row at `min(VH - 104, listEnd)`, and that
+     clamp is the bug: on a 280-unit fold the seven rows run past VH - 104, so
+     "A KIND WINTER" was drawn straight through the KEEN BEASTS row. A clamp
+     that keeps something on screen by putting it on top of something else has
+     not solved the problem, it has hidden it in the one place no check was
+     looking. The header line always has room, so that is where it goes. */
+  const wRowH = Math.max(44, lineH(15, 17) + textSize(12) + 14);
+  const wListEnd = 158 + WINTERS.length * (wRowH + 6) + 22;
+  const wTight = wListEnd > VH - 104;
+  const wPts = winterPts(pick2.winters);
+  txt(c, 'HOW HARD A WINTER' + (wTight && wPts ? ' \u2014 ' + wPts : ''),
+    wx + ww / 2, 138, 15, '#9fc0e4', 'center', 't');
   /* THE ROW HEIGHT FOLLOWS THE TEXT.
 
      A winter is a name over a line of what it does, and both were placed with
@@ -7002,8 +7050,10 @@ function drawLeaderPick(c, t) {
     hit('winterToggle', wx, y, ww, rowH, w.id);
   });
   const pts = winterPts(pick2.winters);
-  const ptsY = Math.min(VH - 104, wtop + WINTERS.length * (rowH + 6) + 22);
-  txt(c, pts ? 'WINTER ' + pts : 'A KIND WINTER', wx + ww / 2, ptsY, 20, pts ? '#ffd166' : '#9fc0e4', 'center', 'd');
+  if (!wTight) {
+    txt(c, pts ? 'WINTER ' + pts : 'A KIND WINTER', wx + ww / 2,
+      wtop + WINTERS.length * (rowH + 6) + 22, 20, pts ? '#ffd166' : '#9fc0e4', 'center', 'd');
+  }
 
   button(c, 'backTitle', SAFE, VH - 78, 200, 52, 'BACK', '#40527a');
   button(c, 'startRun', MID - 130, VH - 82, 260, 60, 'SET OUT', '#3f8f5f');
@@ -8042,7 +8092,28 @@ function drawCharmCard(c, charmId, x, y, w, h, t) {
   c.fillStyle = body; c.fill();
   c.restore();
 
-  const bh = 26 * S;
+  /* A CHARM'S NAME WRAPS, for the same reason a card's does — and this one had
+     no way to fail gracefully at all.
+
+     `fitText` shrinks until it fits OR until it hits the readable floor, and at
+     the floor it just returns the floor: nothing here truncated and nothing
+     wrapped, so on a 653x280 fold `BOUNTY CHARM` and `SWIFT CHARM` were drawn
+     straight through their own card edges and through each other. Two names,
+     one collision, and the only reason it was ever seen is that somebody opened
+     the shop screen at the tightest shape in the list.
+
+     Same machinery as `drawCard`: wrap to two lines and let the band grow, with
+     the growth coming out of the picture so nothing below it moves. */
+  const chNm = ch.name.toUpperCase();
+  const chW = w - 18 * S;
+  const chSize = fitText(c, chNm, chW, 14 * S, 8 * S, 't');
+  const chWrap = ellipsize(c, chNm, chSize, chW) !== chNm;
+  const chFit = chWrap ? nameFit(c, chNm, chSize, chW, 2) : null;
+  const chStep = chFit ? lineH(chFit.size, chSize * 0.9) : 0;
+  const bh = chFit
+    ? Math.max(26 * S, chFit.lines.length * chStep + 7 * S)
+    : 26 * S;
+  const chGrew = bh - 26 * S;
   c.save();
   rr(c, 0, 0, w, h, 12 * S);
   c.clip();
@@ -8052,10 +8123,16 @@ function drawCharmCard(c, charmId, x, y, w, h, t) {
   c.fillStyle = bg; c.fillRect(0, 0, w, bh);
   c.fillStyle = 'rgba(255,255,255,.5)'; c.fillRect(0, bh - 1.6 * S, w, 1.6 * S);
   c.restore();
-  const nameSize = fitText(c, ch.name.toUpperCase(), w - 18 * S, 14 * S, 8 * S, 't');
-  txt(c, ch.name.toUpperCase(), w / 2, bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+  if (chFit) {
+    chFit.lines.forEach((ln, i) => txt(c, ellipsize(c, ln, chFit.size, chW), w / 2,
+      bh / 2 + (i - (chFit.lines.length - 1) / 2) * chStep,
+      chFit.size, '#22160c', 'center', 't', 'rgba(255,255,255,.45)'));
+  } else {
+    txt(c, chNm, w / 2, bh / 2, chSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+  }
 
-  const ax = 7 * S, ay = bh + 6 * S, aw = w - 14 * S, ah = h * 0.40;
+  const ax = 7 * S, ay = bh + 6 * S, aw = w - 14 * S,
+    ah = Math.max(h * 0.16, h * 0.40 - chGrew);
   c.save();
   rr(c, ax, ay, aw, ah, 8 * S);
   c.clip();
@@ -8607,8 +8684,22 @@ function drawShop(c, t) {
   txt(c, 'THE TRADER', MID, 80, 38, '#eaf6ff', 'center', 'd');
   txt(c, 'she takes scrip, and she does not haggle', MID, 112, 15, '#a8c8ea', 'center', 't');
 
-  // the stall: cards on the left of the counter, charms on the right
-  const cw = 152, chh = 212, gap = 18, cy = 200;
+  /* THE BELL'S SHELF IS AS TALL AS WHAT IS ON IT, and the stalls move down by
+     the difference. Its panel was a fixed 50 units holding a name over a line of
+     rules, and its bottom edge sat flush against the stalls at 178 — so on a
+     653x280 fold, where the text floor makes a line 23 units high, the rules
+     line was drawn straight through the top of the stall panel behind it.
+
+     Neither direction had slack: the subtitle is one unit above and the stalls
+     are flush below. Squeezing the leading was tried on the card name band and
+     the lines landed on each other; putting both on one line ellipsizes the
+     rules down to nothing at this size. So the shelf takes the height it needs
+     and everything under it moves, which the row of buttons at 484 has room to
+     absorb. */
+  const bellPad = 17, bellLine = lineH(15, 13);
+  const bellH = (s.bell && BELLS[s.bell.id])
+    ? Math.max(50, bellPad + bellLine + textSize(12) * 0.5 + 12) : 50;
+  const cw = 152, chh = 212, gap = 18, cy = 200 + Math.max(0, bellH - 50);
   const priceY = cy + chh + 10;
   const leftW = s.cards.length * cw + (s.cards.length - 1) * gap;
   const rightW = s.charms.length * cw + (s.charms.length - 1) * gap;
@@ -8649,16 +8740,23 @@ function drawShop(c, t) {
   if (s.bell && BELLS[s.bell.id]) {
     const bl = BELLS[s.bell.id];
     const bwid = 420, bx0 = MID - bwid / 2, by0 = 128;
+    const bph = bellH;
     const afford = g.run.gold >= s.bell.price && !s.bell.sold;
     c.save();
     if (s.bell.sold) c.globalAlpha = 0.35;
-    panel(c, bx0, by0, bwid, 50, 12, '#1d2c49', bl.col);
-    txt(c, bl.name.toUpperCase().replace('BELL OF ', 'A BELL OF '), bx0 + 14, by0 + 17, 15, bl.col, 'left', 'd');
-    txt(c, bl.text, bx0 + 14, by0 + 17 + lineH(15, 13), 12, '#c8dcf4', 'left', 't');
-    panel(c, bx0 + bwid - 72, by0 + 10, 58, 30, 9, afford ? '#3f8f5f' : '#5a3a3a', C.ink);
-    txt(c, s.bell.sold ? '—' : String(s.bell.price), bx0 + bwid - 43, by0 + 26, 16, '#ffe6a8', 'center', 'd');
+    panel(c, bx0, by0, bwid, bph, 12, '#1d2c49', bl.col);
+    txt(c, ellipsize(c, bl.name.toUpperCase().replace('BELL OF ', 'A BELL OF '), 15, bwid - 14 - 80, false, 'd'),
+      bx0 + 14, by0 + 17, 15, bl.col, 'left', 'd');
+    /* Stops short of the price badge instead of running under it. The rules
+       line was drawn to the panel's full width while a 58-unit price plate sits
+       at its right end, so `96` was painted over the middle of a sentence at
+       every size — visible on the fold and present everywhere. */
+    txt(c, ellipsize(c, bl.text, 12, bwid - 14 - 80), bx0 + 14,
+      by0 + 17 + lineH(15, 13), 12, '#c8dcf4', 'left', 't');
+    panel(c, bx0 + bwid - 72, by0 + bph / 2 - 15, 58, 30, 9, afford ? '#3f8f5f' : '#5a3a3a', C.ink);
+    txt(c, s.bell.sold ? '—' : String(s.bell.price), bx0 + bwid - 43, by0 + bph / 2 + 1, 16, '#ffe6a8', 'center', 'd');
     c.restore();
-    if (!s.bell.sold) hit('buyBell', bx0, by0, bwid, 50);
+    if (!s.bell.sold) hit('buyBell', bx0, by0, bwid, bph);
   }
 
   const by = 484, sw = 170, sg = 10, srow = sw * 6 + sg * 5, sx = MID - srow / 2;
@@ -9261,14 +9359,20 @@ function drawEnd(c, t, won) {
        crossing that earns nothing new says so — that is the hook. */
     const fresh = (run0.freshFeats || []).map((id) => FEATS.find((f) => f.id === id)).filter(Boolean);
     const shown = fresh.slice(0, 3);
+    const sealHead = lineH(13, 18) + 3, sealStep = lineH(18, 18);
     if (shown.length) {
+      /* Fixed 20-unit and 21-unit offsets, and the same fold bug as everywhere
+         else: a 13-unit label is inflated to 23 by the readable floor, so
+         `SEALS EARNED` was drawn through `THE FIRST CROSSING`. Stepped by the
+         line heights actually in use instead. */
       txt(c, shown.length > 1 ? 'SEALS EARNED' : 'A SEAL EARNED', MID, 222, 13, '#7e97b8', 'center', 't');
-      shown.forEach((f, i) => txt(c, f.name, MID, 242 + i * 21, 18, f.col, 'center', 'd'));
+      shown.forEach((f, i) => txt(c, f.name, MID, 222 + sealHead + i * sealStep, 18, f.col, 'center', 'd'));
     }
     // the caravan that made it, every card of it — pushed down by whatever the
     // crossing earned, so the seals never land on the cards
-    const drop = shown.length ? 20 + shown.length * 21 : 0;
-    txt(c, 'THE CARAVAN THAT MADE IT', MID, 232 + drop, 13, '#7e97b8', 'center', 't');
+    const drop = shown.length ? sealHead + shown.length * sealStep : 0;
+    txt(c, 'THE CARAVAN THAT MADE IT', MID, 232 + drop, 13,
+      '#7e97b8', 'center', 't');
     const all = [run0.leader].concat(run0.deck);
     /* Ten cards squeezed to 74 units each is ten cards nobody can read, on the
        one screen that is supposed to be a lap of honour. Eight to a row at 96

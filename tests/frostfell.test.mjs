@@ -5,7 +5,7 @@
 // model of it.
 //
 // Run: node tests/frostfell.test.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { loadGame, mkCtx, withRun, place, bareBattle, dummy, ok, eq, done, section } from './frostfell_lib.mjs';
 
 const FF = loadGame();
@@ -2520,6 +2520,66 @@ section('the design record states numbers');
     ok(tags.length >= 3, `dead ends kept as code comments tag themselves (${tags.length})`);
     const orphan = tags.filter((t) => body.indexOf('`dead-ends: ' + t + '`') < 0);
     eq(orphan.join(', '), '', 'every dead end in the source is in the record — a retirement folds, never drops');
+  }
+  /* AND THE DIRECTION NEITHER GUARD COULD SEE: an entry describing code that no
+     longer exists.
+
+     Both retirement guards run from the code towards the record — a dead end in
+     a comment must be in the entry, a README anchor must resolve. Nothing ran
+     the other way, and the reason it looked unfixable is that a design record is
+     SUPPOSED to name removed things: `auraOn` came up in the hand audit as an
+     identifier with no home and got waved through, correctly, because the entry
+     around it is about deleting the aura cards. But "dead ends may name dead
+     things" is not a rule a script can apply — it makes every stale FINDING
+     indistinguishable from a legitimate one.
+
+     A declaration fixes that. A name that is gone is DECLARED gone, with what
+     removed it; anything else must exist in the game, the probe or the tools.
+     The list is checked in both directions, so it cannot rot either: a declared
+     name that comes BACK fails here, because the entry describing its removal is
+     then the stale one. */
+  {
+    const hay = [readFileSync(new URL('../frostfell/index.html', import.meta.url), 'utf8'),
+      readFileSync(new URL('../frostfell/README.md', import.meta.url), 'utf8')]
+      .concat(readdirSync(new URL('.', import.meta.url))
+        .filter((f) => /^frostfell.*\.mjs$/.test(f))
+        .map((f) => readFileSync(new URL('./' + f, import.meta.url), 'utf8')))
+      .concat(readdirSync(new URL('../tools/frostfell', import.meta.url))
+        .map((f) => readFileSync(new URL('../tools/frostfell/' + f, import.meta.url), 'utf8')))
+      .join('\n')
+      /* CODE, NOT PROSE — and this file is the reason. The first run failed on
+         `auraOn` "coming back", because the paragraph above names it while
+         explaining why it is gone. A name that appears only inside a comment is
+         not a live identifier anywhere, so the haystack is stripped the same way
+         the build fingerprint is stripped. */
+      .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ');
+    /* TWO REASONS A NAME IS NOT IN THE CODE, kept apart. `gone` is something
+       this project built and deleted; `external` is something it never had —
+       `letterSpacing` is a canvas property named to state a known error in the
+       text stub, and calling that "gone" would be a small lie in the one file
+       that exists to not tell them. Both get the same two-way check. */
+    const declared = [...doc.matchAll(/<!--\s*(?:gone|external):\s*([A-Za-z_][A-Za-z0-9_]*)/g)]
+      .map((m) => m[1]);
+    ok(declared.length >= 2, `names declared absent: ${declared.join(', ') || 'none'}`);
+    /* WHAT COUNTS AS A NAME, narrowed after the first run flagged six things and
+       five of them were not identifiers: `shelter` and `parallelism` are retired
+       TOPICS quoted in the audit table, and `BANKE` / `DEMBERS` / `BANKED` are
+       the fragments a card name breaks into. Backticks in prose mean "this is a
+       term", not "this is code".
+
+       So a name has to LOOK like code: camelCase, dotted, or UPPER_SNAKE. That
+       is a narrower net than "anything in backticks" and it is the right net —
+       the failure this guard exists for is an entry describing a function or a
+       constant that is gone, and every one of those is code-shaped. */
+    const CODEY = /[a-z][A-Z]|\.|_/;
+    const root = (s) => s.split('(')[0].split('.')[0];
+    const named = [...new Set([...doc.matchAll(/`([A-Za-z_][A-Za-z0-9_.]{3,})`/g)]
+      .filter((m) => CODEY.test(m[1])).map((m) => root(m[1])))];
+    const stale = named.filter((n2) => hay.indexOf(n2) < 0 && declared.indexOf(n2) < 0);
+    eq(stale.join(', '), '', 'every code-shaped name DESIGN.md uses either exists or is declared absent');
+    const risen = declared.filter((n2) => hay.indexOf(n2) >= 0);
+    eq(risen.join(', '), '', 'a name declared absent has not come back — the declaration would be the stale thing');
   }
   /* And the other half of a dishonest retirement: a link into a heading that is
      no longer there. README points at seven anchors and nothing checked them. */
