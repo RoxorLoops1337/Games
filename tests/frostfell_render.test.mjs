@@ -197,6 +197,47 @@ section('overlays');
   eq(laid.size, Object.keys(FF.SCHEMES).length, 'and every scheme in the game was on it');
 }
 
+/* ----------------------------------------------- the recipes themselves --- */
+/* TINDERCUB WAS REPORTED IN FOUR CONSECUTIVE CRITIQUES, and three of those
+   rounds fixed the wrong half of it. Round 3 deleted the `scarf` primitive and
+   the pink thing on the tutorial card's face stayed, because it was never the
+   scarf — `mark:'scar'` draws `#c96a72` down the outer edge of the eye, it is
+   the only pink chroma in the picture area of any card, and every single
+   `evil:1` recipe in the bestiary carries it. Three of the player's own wardens
+   were wearing the enemies' tell.
+   Two things are asserted here rather than looked at, because looking at it is
+   exactly what failed four times: the mark belongs to foes and to nothing else,
+   and it is still on foes (a fix that removed it everywhere would pass the
+   first half on its own). The recipes are also checked for the dead keys the
+   last deletion left behind — a shadowed duplicate draws nothing and reads as
+   intent, which is how `acc:'scarf'` survived a round that deleted `scarf`. */
+section("the enemies' mark stays the enemies'");
+{
+  const wearing = (t) => Object.values(t).filter((d) => d.art && d.art.mark === 'scar').map((d) => d.id);
+  eq(wearing(FF.CARDS).join(','), '', 'no card the player can own wears the foes’ scar');
+  ok(wearing(FF.FOES).length >= 3, `and it is still a foe signature (${wearing(FF.FOES).length} foes wear it)`);
+  const evilless = Object.values(FF.FOES).filter((d) => d.art && !d.art.evil).map((d) => d.id);
+  eq(evilless.join(','), '', 'every foe recipe is marked evil, so the split above is real');
+
+  /* Nothing may declare a trimming the drawing has no branch for, and nothing
+     may declare the same key twice — the second silently wins and the first is
+     a corpse that reads like a decision. Both are source-text checks because
+     both are invisible once the object literal has been evaluated. */
+  const src = readFileSync(new URL('../frostfell/index.html', import.meta.url), 'utf8');
+  const dupes = [];
+  for (const line of src.split('\n')) {
+    if (!/^\s*art: A\(/.test(line)) continue;
+    const seen = new Set();
+    for (const m of line.matchAll(/([a-zA-Z]+)\s*:/g)) {
+      if (seen.has(m[1])) dupes.push(m[1]);
+      seen.add(m[1]);
+    }
+  }
+  eq([...new Set(dupes)].join(','), '', 'no art recipe declares the same key twice');
+  eq((src.match(/acc: ?'(scarf|band|bellcollar)'/g) || []).join(','), '',
+    'and none of them asks for a prop the drawing deleted');
+}
+
 /* ------------------------------------------------------------ the whole cast */
 section('every art recipe survives being drawn');
 {
@@ -214,7 +255,13 @@ section('every art recipe survives being drawn');
   const shapes = ['blob', 'round', 'tall', 'squat', 'small', 'wisp', 'boss'];
   const ears = ['round', 'pointy', 'horns', 'antler', 'antenna', 'shard', 'fin', 'none'];
   const mouths = ['smile', 'grin', 'flat', 'fang', 'wide', 'trap', 'beak', 'bolt', 'beard', 'none'];
-  const accs = ['none', 'scarf', 'helm', 'crown', 'lantern', 'kettle', 'gear', 'hammer', 'pike', 'staff', 'cloak'];
+  /* Every branch `drawProp` actually has, and only those. `scarf` sat in this
+     list for two rounds after the primitive was deleted, so the sweep was
+     spending a slot on a prop that draws nothing while `goggles`, `satchel`,
+     `plating` and `shield` — all four of them live — were never combined with
+     anything. */
+  const accs = ['none', 'helm', 'crown', 'lantern', 'kettle', 'gear', 'hammer', 'pike', 'staff',
+    'cloak', 'satchel', 'plating', 'shield', 'goggles'];
   const pats = ['none', 'spots', 'stripes', 'tips', 'shards'];
   const eyes = ['dot', 'big', 'slit'];
   let combos = 0;
@@ -871,6 +918,23 @@ section('every card in the game, drawn and measured');
       const ts = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim())
         .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
       for (const t of ts) STRINGS.seen.add(t.s);
+      /* A MOOD LINE NEVER GOES ON THE FACE. Snowpup's "Plain and willing." was
+         drawn in the rules well in the same ink at the same size as Springjaw's
+         "Smackback.", which is a real keyword, so the one card in the game with
+         no effect looked like the one card whose effect you had not learnt yet.
+         `flav` exists for this and only the inspect panel reads it; asserting it
+         here is what stops the next mood line being typed into `text`. */
+      if (def.flav) for (const t of ts) {
+        if (t.s.indexOf(def.flav.slice(0, 14)) >= 0) bad2.push(`${def.id} ${where}: flavour drawn on the face`);
+      }
+      /* The other half of the same rule, and the half with teeth: the well only
+         opens for a card that DOES something. A card with no keyword, no hook,
+         no effect and no scheme has no rule to print, so anything in its `text`
+         is mood by definition — which is how "Plain and willing." came to be set
+         in the same ink at the same size as "Smackback." */
+      if (def.text && !Object.keys(def.kw || {}).length && !def.hooks && !def.effect && !def.scheme) {
+        bad2.push(`${def.id}: "${def.text}" is mood, not a rule — it belongs in flav`);
+      }
       for (const t of ts) {
         if (t.size * cps < FF.TEXT_MIN_CSS - 0.5) {
           bad2.push(`${def.id} ${where}: ${JSON.stringify(t.s).slice(0, 14)} at ${Math.round(t.size * cps)}css`);
@@ -918,6 +982,31 @@ section('every card in the game, drawn and measured');
   ok(drawn >= 100, `every card drawn at both sizes (${drawn} draws)`);
   eq([...new Set(bad2)].slice(0, 5).join(' | '), '',
     'every card in the pool keeps its text readable and its labels apart');
+
+  /* AND NO CENTRED LINE HOLDS ONE WORD IT DID NOT HAVE TO. A greedy wrap in a
+     narrow well gave BLASTCAP `Deal 6 to a / foe and 3 to / its / neighbours.` —
+     a whole line of the card spent on three letters, centred, which reads as a
+     fault rather than as a break. `wrapText` now makes one backward pass, and
+     the invariant it establishes is checkable without re-implementing it: no
+     line may be a lone word while the line above it has a word to SPARE — three
+     or more, so feeding one does not just move the widow up a line — and the
+     pair would still fit. Swept over every rules string in the game at every
+     width a well is ever set to, so a rewrite of the wrap cannot lose it. */
+  const widows = [];
+  for (const def of Object.values(FF.CARDS)) {
+    const s2 = String(def.text || '');
+    if (!s2) continue;
+    for (let mw = 40; mw <= 170; mw += 6) {
+      const lines2 = FF.wrapText(ctx2, s2, 9, mw);
+      for (let i = 1; i < lines2.length; i++) {
+        const prev = lines2[i - 1].split(' ');
+        if (/[ \u00a0]/.test(lines2[i]) || prev.length < 3) continue;
+        const merged = prev[prev.length - 1] + ' ' + lines2[i];
+        if (ctx2.measureText(merged).width <= mw) widows.push(`${def.id}@${mw}: "${lines2[i]}"`);
+      }
+    }
+  }
+  eq([...new Set(widows)].slice(0, 4).join(' | '), '', 'no rules line is a widow that could have been fed');
 }
 
 <<<<<<< HEAD
