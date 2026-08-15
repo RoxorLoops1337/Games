@@ -191,11 +191,43 @@ Two consequences, and they bind everything above:
 **No single-point move anywhere in this file means anything.** Not a rung, not a
 total, not a floor. Several rounds have reported one and reasoned about it.
 
-**"Steering prices at zero" is not a finding.** Its five readings run −2 to +5
-with sd ±3.2, so "worth nothing" and "worth five points" are the same measurement.
-The honest statement is that steering has never been resolved, and settling it
-needs about **4x this sample** — which is now affordable, since the probe is
-pooled.
+**"Steering prices at zero" is not a finding.** Its five readings ran −2 to +5
+with sd ±3.2, so "worth nothing" and "worth five points" were the same
+measurement.
+
+**AND IT IS RESOLVED NOW, AT THE SAMPLE THE ARITHMETIC ASKED FOR.** The rung had
+read +6 and then +2 on consecutive rounds and was filed under "unresolved round
+to round" — which is a thing to fix, not a thing to report. A rung is a
+DIFFERENCE of two arms, so `n = (1.29·100·z/Δ)²·(p₁q₁ + p₂q₂)`: **920 runs an
+arm** to resolve 6 points at 2σ. Run at 510 an arm across five seed bases:
+
+```
+steering the pool   3, 8, 10, 9, 8      mean +7.6, sd ±2.7 → SE ±1.2
+```
+
+**Steering is worth about +8 points**, and the +2 was a single base at a quarter
+of the depth. Third time running that a number which would not resolve resolved
+as soon as somebody worked out the sample rather than deepening by feel — and
+the pattern is now reliable enough to be a rule: *when a reading moves between
+rounds, compute the sample before running another one.*
+
+**And the same run answers what the quiet-road rest costs in skill expression**,
+which had been filed as a footnote. The four-rung ladder with the rest and
+without, five bases each:
+
+```
+with the rest      37, 40, 42, 43, 37    mean 39.8, sd ±2.8
+without            34, 40, 37, 38, 37    mean 37.2, sd ±2.2
+                                          difference +2.6, 2σ = ±3.2
+```
+
+**It does not clear — but the sign is positive, and the earlier claim was that
+the rest COST the ladder two points.** That came from one seed base at 210 an
+arm. On five bases at 510 the point estimate is that a lasting rest makes the
+game slightly *more* sensitive to how well it is played, not less, and the
+honest statement is that its effect on skill expression is not distinguishable
+from zero in either direction. A design win that was thought to be paid for in
+skill expression turns out not to have been paid for at all.
 
 ### FINDING — the winning hands carry fewer bodies and more gear; two explanations are dead
 
@@ -1161,11 +1193,31 @@ place if somebody would pay to re-run it.** Five would not — `FF_PAIR` and
 and `FF_NOWAVE` are settled nulls nothing depends on, `FF_LIVEBUILT` folded into
 `FF_BUILT` as a setting, and `FF_BUILT` retired on the size of its own answer.
 
-**The refresh went from ~35,800 runs across 18 arms to ~5,200 across 13.** That
+**The refresh went from ~35,800 runs across 18 arms to ~3,500 across 13.** That
 is rule 3 applied to the instrument rather than the record, and the number is
 what made the decision obvious: at 35,800 the honest answer was "a release step
-nobody will take", and at 5,200 it is a thing you run before a round you intend
-to build on.
+nobody will take", and at 3,500 it is a thing you run before a round you intend
+to build on. Run, it read **13 of 13 current, 0 stale.**
+
+**And that banked set lasted zero rounds, which was the fingerprint's fault.**
+The same commit that recorded it also wrote a page of comments into the game and
+the pilot, so the hash moved before the merge landed. *A marker that invalidates
+itself faster than it can be cleared is not a marker, it is noise with a red
+light attached.*
+
+Two ways out — run the refresh as the genuinely last step after every edit, or
+stop counting edits that cannot affect a measurement. **The second is the only
+one that survives contact**: the first is discipline, and discipline fails on
+the round somebody fixes a typo after running the arms. A comment cannot change
+a win rate, so block comments, whole-line comments and runs of whitespace come
+out before the hash. What is left is the code an arm actually exercises, and a
+round spent writing prose about measurements leaves every measurement standing.
+
+The property is asserted rather than asserted *about*: the same hash taken over
+a copy of the game with a block comment, a line comment and extra whitespace
+spliced in has to come out identical, and a changed constant has to move it. It
+is one regex away from silently not being true, which is exactly the kind of
+claim that needs a test rather than a paragraph.
 
 Re-run, `FF_CARDS` reads *no card of 57 clears 3.33σ, widest sleetrunner −10.8;
 giving from a locked floor: 0 clear it, best frostmite +4.2*.
@@ -1848,6 +1900,24 @@ round. The whole file contains **2** stepped loops: `sweepX` itself and one
 `i += 2` that is exact by construction. The suite asserts that count, so a third
 one has to justify itself.
 
+**AND THE COST OF ALL THIS INSTRUMENT WORK, TIMED RATHER THAN ASSUMED.** A
+per-card sweep, a per-foe sweep, a real advance table and two more device shapes
+went into the render suite inside a month, and the rule this repo runs on says
+the person who makes a suite slow never sees the total. Measured:
+
+```
+195.3s  43%  blacksite   ← the only suite over the 25% bar
+ 85.0s  19%  crashmas
+ 47.1s  10%  frostfell
+ 43.5s  10%  ironbridge
+                            452.2s total · median suite 0.7s
+```
+
+**Frostfell is third at 10%, well under the bar** — the widening was affordable,
+and saying so is only worth anything because the number was taken rather than
+guessed. Blacksite is 43% and is not this game's to fix; the rule about not
+patching another game's suite cuts both ways, so it is reported and left.
+
 **The generalisable part: when a bug's visibility depends on an incidental
 number, fixing the instance is worth almost nothing** — the next one picks a
 different step. Make the arithmetic unreachable instead.
@@ -1958,11 +2028,29 @@ that the rules are truncated — they are one tap away in the inspect panel — 
 is that **you cannot tell two cards in your own hand apart.**
 
 Shrinking further is not available; the floor is the floor. So below the width
-where a name fits on one line the card changes what it shows: the name WRAPS to
-two lines and takes the band's full height, and the rules line — unreadable at
-that size — is dropped to pay for it. `EMBER` over `FLASK` beats `EMBER…` beside
-another `EMBER…`, and telling cards apart is the only thing on that face that
+where a name fits on one line the card changes what it shows: the name WRAPS and
+takes the band's full height, and the rules line — unreadable at that size — is
+dropped to pay for it. Telling cards apart is the only thing on that face that
 has to survive.
+
+**Wrapping at SPACES got 6 of 58 and that was the wrong half of the problem.**
+Most cards in this game are one word, so `BONE STEW` and `EMBER FLASK` came out
+whole while `KETTLE…`, `WHETS…` and `CINDER…` stayed truncated — *a name that
+cannot wrap is the common case, not the exception.* Breaking mid-word is what a
+book does when a long word meets a narrow column, and `KETTLE` over `BEAK` reads
+as one word beside a picture of the thing.
+
+Two more things had to be right before it landed at **0 of 58 cut**:
+
+* **The split is balanced, not greedy.** Filling the first line and spilling the
+  rest gives `BANKE` / `DEMBERS`, where it is the *second* line that overflows.
+  Starting at the middle and walking outward finds `BANKED` / `EMBERS`.
+* **Five names need three lines**, not two — `A HANDFUL OF SNOW`, `BELLOWS BEAR`,
+  `BANKED EMBERS` — so the band grows when they do. That costs a few units of
+  picture on the one device where the picture was never carrying the
+  information anyway.
+
+Name coverage on a fold: **52 of 58 cut → 0.**
 
 **And the named gap is closed.** Every foe is now placed on a real board, given
 a scheme to telegraph, drawn as a slab and drawn again in the inspect panel, at

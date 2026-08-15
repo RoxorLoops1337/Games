@@ -50,11 +50,33 @@ const ARMS_FILE = new URL('./.frostfell-arms.json', import.meta.url);
    run makes the question answerable: play the same ladder with the rest off and
    with it on, and read where the eight points landed. */
 if (process.env.FF_RESTN !== undefined) FF.REST.fights = Number(process.env.FF_RESTN);
+/* AND IT IGNORES WHAT CANNOT CHANGE A NUMBER, because the first cut did not and
+   the consequence was immediate: the round that banked 13 of 13 current
+   readings also wrote a page of comments into the game and the pilot, so the
+   fingerprint moved before the commit landed and the banked set lasted zero
+   rounds. A marker that invalidates itself faster than it can be cleared is not
+   a marker, it is noise with a red light attached.
+
+   There were two ways out — run the refresh as the genuinely last step after
+   every edit, or stop counting edits that cannot affect a measurement — and the
+   second is the only one that survives contact. The first is discipline, and
+   discipline fails on the round somebody fixes a typo after running the arms.
+   A COMMENT CANNOT CHANGE A WIN RATE. So block comments, whole-line comments
+   and runs of whitespace come out before the hash: what is left is the code an
+   arm actually exercises, and a round spent writing prose about measurements
+   leaves every measurement standing.
+
+   `//` is only stripped at the start of a line, because a bare one mid-line is
+   as likely to be inside a URL or a string as it is to be a comment, and the
+   cost of getting that wrong is a fingerprint that ignores real code. */
 const BUILD = (() => {
   let h = 0x811c9dc5;
   for (const f of ['../frostfell/index.html', './frostfell_pilot.mjs']) {
     let src = '';
     try { src = readFileSync(new URL(f, import.meta.url), 'utf8'); } catch { src = f; }
+    src = src.replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/^[ \t]*\/\/.*$/gm, ' ')
+      .replace(/\s+/g, ' ');
     for (let i = 0; i < src.length; i++) { h ^= src.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   }
   return h.toString(36);
@@ -2118,7 +2140,7 @@ section('the arms that are not run by default');
     const runs = rows.reduce((n, [, , rec]) => n + (rec && rec.sample ? rec.sample : 0), 0);
     const knobs = rows.map(([k]) => k).join(' ');
     console.log(`    to make every reading current: ~${runs.toLocaleString()} runs across ${rows.length} arms ` +
-      `(a release step, not a working one — the fingerprint moves on any edit)`);
+      `(the fingerprint ignores comments, so a round spent writing prose leaves these standing)`);
     console.log(`      ${knobs}`);
   }
   for (const [knob, what, rec] of rows) {
@@ -2153,6 +2175,27 @@ section('the arms that are not run by default');
      card id and no longer is fails here. It cannot know a number went stale; it
      can know the game changed underneath one, which is the case that actually
      happened. */
+  /* AND THE PROPERTY THE FINGERPRINT NOW CLAIMS, asserted rather than asserted
+     ABOUT. "Comments do not invalidate readings" is the whole reason the banked
+     set can survive a round, and it is one regex away from silently not being
+     true — so the same hash is taken over a copy of the game with a block
+     comment, a line comment and some extra whitespace spliced in, and it has to
+     come out identical. */
+  {
+    const fp = (src) => {
+      let h = 0x811c9dc5;
+      const t = src.replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/^[ \t]*\/\/.*$/gm, ' ').replace(/\s+/g, ' ');
+      for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+      return h.toString(36);
+    };
+    const src0 = readFileSync(new URL('../frostfell/index.html', import.meta.url), 'utf8');
+    const noisy = src0 + '\n/* a note somebody wrote */\n  // and another\n\n';
+    eq(fp(noisy), fp(src0), 'a comment does not move the build fingerprint');
+    eq(fp(src0 + '\n'), fp(src0), 'and neither does trailing whitespace');
+    ok(fp(src0.replace('const HAND = 6;', 'const HAND = 7;')) !== fp(src0),
+      'but a changed constant does');
+  }
   {
     const ghosts = [];
     for (const [knob] of STANDING) {
