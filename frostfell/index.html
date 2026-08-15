@@ -1550,6 +1550,10 @@ function addStatus(g, u, key, n, quiet) {
    been told is told; saying it again is noise. */
 const LESSON = { times: 1, zone: 0 };
 const ROOM_NEEDED = 2;
+/* How many fights a rest lasts. Mutable rather than a `const` so the probe can
+   sweep it the way a course's magnitude is swept — the dial is the point, and a
+   number nobody can turn reads exactly like no dial. */
+const REST = { fights: 1 };
 function hasRoom(g, side) {
   if (freeSlots(g, side).length >= ROOM_NEEDED) return true;
   const co = side === 'p' ? courseOf(g.run) : null;
@@ -2000,9 +2004,39 @@ function resolveTurn(g) {
            So Hearth gets the smallest setting that works. One warden, the one
            that needs it, every turn: unbounded like Cold's rule and small enough
            that it lands at 52% against Cold's 48 rather than running away. */
+        /* A RESTED LINE MENDS, for the few fights the rest lasts. Same shape as
+           Hearth's rule and deliberately so: it is the one payout on this board
+           that has been measured to be worth anything, and the quiet road needed
+           a lasting one rather than a bigger one-shot. */
+        if (side === 'p' && g.run && g.run.rested > 0) {
+          const tired = line.filter((u) => u.hp < u.maxHp)
+            .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
+          if (tired) addStatus(g, tired, 'regen', 1, true);
+        }
+        /* THE SETTING BELOW ONE WAS BUILT, MEASURED AND REVERTED.
+
+           "The first regen point buys +14 of the +20" was measured from +1, +2
+           and the whole line — three points all at or above one point a turn.
+           Underneath +1 there is no smaller amount (regen is an integer) but
+           there is a smaller RATE: the same point, fired every other upkeep.
+           Worth reaching for, because Hearth was nine points clear of four
+           courses nobody could tell apart, and a favourite plus a shrug is not
+           a field.
+
+           At 600 runs an arm: every turn 53%, every 2nd 47%, every 3rd 47%.
+           Six points at ±3.1 is 1.9σ against a two-question bar of 2.24 — it
+           does NOT clear, and shipping a course change on a reading that does
+           not clear is the mistake this file has corrected four times. So the
+           rate dial is gone rather than left in at a default that changes
+           nothing: a mechanic measuring zero is not free.
+
+           What actually fixed the field was the other half — the PACK CAME UP.
+           Scrap's thorns took it from 40% to 47% and Bodies' Shell 6 sits at
+           46%, so the gap from Hearth to the next course is about three points
+           rather than nine, without touching Hearth at all. */
         if (co2 && co2.emberline) {
           const hurt = line.filter((u) => u.hp < u.maxHp)
-            .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
+            .sort((a, b2) => (a.hp / a.maxHp) - (b2.hp / b2.maxHp))[0];
           if (hurt) addStatus(g, hurt, 'regen', 1, true);
         }
         if (side === 'p' && g.run) g.run.everRoom = 1;   // it has felt the warmth; the lesson is done
@@ -2946,6 +2980,43 @@ function enterNode(g, choiceIdx) {
        is not, which is the shape a decision has — and it is still paid for,
        in the card, the scrip, and the pack getting two steps closer. */
     run.quiet = 1;
+    /* AND SOMETHING THAT LASTS, WHICH IS THE LESSON THE COURSES JUST COST EIGHT
+       NULLS TO LEARN.
+
+       Every quiet-road payout so far fires ONCE, at the moment you step on the
+       node: the camp mends the line, the rest stop offers a fourth blessing,
+       the shrine asks for nothing. That is the "lands late and rare" shape, and
+       it is exactly what failed five times on Hearth and twice on Scrap before
+       all three courses came off the floor the same way — a thing that fires ON
+       THE BOARD, EVERY FIGHT, FROM TURN ONE.
+
+       And the measurement says the one-shot version is not enough: five routing
+       strategies were run against taking every fight and the best of them came
+       in at MINUS ONE, so the fork has one right answer and the quiet nodes are
+       underpaying however generous each single visit is.
+
+       So the quiet road leaves the caravan RESTED for the next few fights, and
+       a rested line mends its most-hurt warden every upkeep — the same shape as
+       Hearth's `emberline`, which is the one payout on this board measured to be
+       worth +14. Earned by walking rather than declared at the leader screen,
+       and it decays, so it is a reason to duck NOW rather than a permanent
+       upgrade.
+
+       AND IT TURNS THE FORK INTO A DECISION, which one-shot payouts never did.
+       Six pilots, 450 runs an arm, ducking-when-hurt against taking everything:
+
+           rest lasts 0 fights (as it was)   ducking −3
+           rest lasts 1 fight                ducking +3     ← ships
+           rest lasts 2 fights               ducking +2
+           rest lasts 4 fights               ducking +1
+
+       The sign flips. Level is the target rather than better: a fork where one
+       side always wins is furniture with a signpost, and a fork where the two
+       sides are within a band is a question worth being asked. One fight is
+       both the smallest setting and the best, so there is no runaway to guard
+       against — longer rests are WORSE, because a rest that outlasts the
+       trouble it was taken for stops being a reason to walk. */
+    run.rested = REST.fights;
     if (following(run) > 0) {
       fx.toast('SOMETHING IS FOLLOWING', '#ff9aa5');
       run.log.push('A pack was left behind, and did not stay behind.');
@@ -2998,6 +3069,10 @@ function enterNode(g, choiceIdx) {
 /* Called when whatever the node was is finished with. */
 function advance(g) {
   const run = g.run;
+  /* The rest wears off one fight at a time — a reason to duck NOW rather than a
+     permanent upgrade. Decremented when the fight FINISHES rather than when it
+     starts, or a rest of one would be spent before the fight it paid for. */
+  if (run.rested > 0 && (run.node === 'fight' || run.node === 'elite' || run.node === 'boss')) run.rested--;
   for (const f of breakSeals(run)) {
     fx.toast(f.name + ' — LOST', '#8fa2bd');
     run.log.push(f.name.toLowerCase() + ' is out of reach now.');
@@ -9951,7 +10026,7 @@ window.FF = {
   caravanPower, fellAnswer, POWER_BASE,
   COURSES, courseOf, COURSE_PRICE, PASS_PAY, redealPrice, READS, caravanRead, caravanNeeds, hitOf,
   temperable, temperCard, openTemper, tempered, TEMPER_CAP, SCAR_CAP,
-  hasRoom, isPacked, ROOM_NEEDED, LESSON,
+  hasRoom, isPacked, ROOM_NEEDED, REST, LESSON,
   deployWave, laneHeldBy, WAVE_TELL, POOL_BAN,
   mealPrice, feedable, MEAL_BASE, MEAL_STEP, TRAIL_STEPS, DEEP_BASE,
   following, FOLLOW_FREE, FOLLOW_STEP, FOLLOW_NEAR, MEAL_CAP, DEEP_MARGIN, DEEP_BITE,

@@ -1417,6 +1417,7 @@ export function applyConfig(cfg) {
      flag is. Restoring is deliberate — a worker plays many jobs and a mutated
      constant would leak into every arm after the sweep, which is exactly the
      unlock bug wearing a different hat. */
+  if (cfg.rest !== undefined) FF.REST.fights = cfg.rest;
   if (cfg.courseDial) {
     for (const co of FF.COURSES) {
       if (COURSE0[co.id] === undefined) COURSE0[co.id] = {};
@@ -1440,7 +1441,7 @@ export function applyConfig(cfg) {
 /** What this thread's arm was configured with, to send to a worker. */
 export function config() {
   return { skill: Object.assign({}, SKILL), draft: Object.assign({}, DRAFT),
-    taught: Object.assign({}, TAUGHT), gear: GEAR.bar,
+    taught: Object.assign({}, TAUGHT), gear: GEAR.bar, rest: FF.REST.fights,
     flags: { lane: LANE.on, tell: TELL.on, mend: MEND.on, room: ROOM.on } };
 }
 
