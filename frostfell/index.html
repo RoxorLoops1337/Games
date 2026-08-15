@@ -8403,14 +8403,21 @@ function drawCard(c, card, x, y, w, h, o) {
      that looked like is Cinderpup's ear tips tangent to the top edge and its
      body tangent to both sides, with no air anywhere. A whole round had just
      been spent giving every card its own cloud, its own hour, its own skyline
-<<<<<<< HEAD
      and its own ground, and the subject was drawn over all of it. The picture
      needs the subject to leave the rest of the window to the weather — which is
      now said as a share of the window's AREA rather than of its height, because
      a height allowance is not the same restraint on a wide animal as on a tall
      one, and treating it as though it were is what scaled the set by aspect
      ratio for three rounds. See below. */
-  const topY = ay + ah * 0.04, feetY = ay + ah * 0.945;
+  /* THE STANDING LINE CAME UP OFF THE BOTTOM EDGE. At 0.945 the subject stood
+     on the window's rim, not in the snow: there was no ground in FRONT of it at
+     all, which is why the field an earlier round built was only ever visible
+     behind and why a cast shadow had nowhere to fall — the half of it that was
+     not under the animal was outside the window. A twentieth of the window's
+     height of foreground is the difference between an animal standing in a
+     place and an animal pasted onto the bottom of a picture. It costs that same
+     twentieth off `room`, which only a thin upright object ever reaches. */
+  const topY = ay + ah * 0.04, feetY = ay + ah * 0.895;
   /* ONE APPARENT SIZE, NOT ONE BOUNDING BOX.
 
      Both branches of this used to solve against a `min(height, width)`, and a
@@ -8440,34 +8447,6 @@ function drawCard(c, card, x, y, w, h, o) {
      (GRUDGE, PRY ROD) cannot cover a third of a landscape window without being
      taller than it. Those hit `room` and stop, which is the right answer. */
   const AREA = 0.42;
-  const fitArt = (bx, wideK) => {
-=======
-     and its own ground, and the subject was drawn over all of it. There is
-     nothing to tune here — the picture needs the subject to stop at about three
-     quarters of the window and leave the rest to the weather. */
-  /* THE STANDING LINE CAME UP OFF THE BOTTOM EDGE. At 0.945 the subject stood
-     on the window's rim, not in the snow: there was no ground in FRONT of it at
-     all, which is why the field the last round built was only ever visible
-     behind and why a cast shadow had nowhere to fall — the half of it that was
-     not under the animal was outside the window. A twentieth of the window's
-     height of foreground is the difference between an animal standing in a
-     place and an animal pasted onto the bottom of a picture. It costs that same
-     twentieth off the tallest a subject can be drawn, and the subject was
-     already capped well under the room it had. */
-  const topY = ay + ah * 0.04, feetY = ay + ah * 0.895;
-  /* TWO DIFFERENT NORMALISATIONS, because the two `s` arguments mean different
-     things. `drawCreature`'s `s` is a BODY height, so capping the scale is the
-     right cap for the cast: a sootling is a small animal and a kettlebeak is a
-     tall one, and that difference is the point. `drawItemIcon`'s `s` is just a
-     number the shapes are written against, so capping ITS scale caps nothing —
-     it hands each object whatever height its own box happens to have.
-
-     That is the bug the last pass shipped. Every unit landed on `room / bxh`
-     and filled the window; gear landed on the scale cap and came out at the
-     mercy of its silhouette, so Coldsnap's snowflake spanned four fifths of the
-     window and Thorn Oil's vial spanned a third and floated in the middle of an
-     empty sky. In a mixed hand the gear read as the important cards. Gear is
-     solved for a drawn HEIGHT and stood on the same line as everything else. */
   /* WHAT DOES NOT TOUCH DOWN STAYS OFF THE GROUND. A wisp, a moth and anything
      with a hover idle used to be lifted by an accident: `drawCreature` drew
      itself a smaller ground disc BELOW its own body, that disc was inside the
@@ -8478,29 +8457,18 @@ function drawCard(c, card, x, y, w, h, o) {
      under it and a smaller, fainter patch on the snow. */
   const airy = isUnit && (card.art.idle === 'hover' || card.art.stance === 'float' || card.art.shape === 'wisp');
   const lift = airy ? ah * 0.055 : 0;
-  const fitArt = (bx, cap, mode) => {
->>>>>>> cardwork/job3-light-r4
+  const fitArt = (bx, wideK) => {
     const bxw = Math.max(0.02, bx[2] - bx[0]), bxh = Math.max(0.02, bx[3] - bx[1]);
     /* The stroke floor. Both drawing functions clamp their outline at 2.5 units
        however small the subject gets, so below about a 45-unit body the ink is
        fatter than the box measured at the reference size says — up to 2.5 units
        of it, top and bottom together. Give that back before solving, or on a
        fold-size card the one thing that clips is the outline. */
-<<<<<<< HEAD
-    const room = (feetY - topY) - 2.6;
+    const room = (feetY - lift - topY) - 2.6;
     const s2 = Math.min(Math.sqrt(AREA * aw * ah / (bxw * bxh)),
       room / bxh, aw * wideK / bxw);
-    const yy = feetY - bx[3] * s2;
-=======
-    const room = (feetY - lift - topY) - 2.6;
-    const sz = mode === 'body'
-      ? Math.min(ah * cap, room / bxh)
-      : Math.min(room, ah * cap) / bxh;
-    const wide = aw * (mode === 'body' ? 0.74 : 0.80) / bxw;
-    const s2 = Math.min(sz, wide);
     const yy = feetY - lift - bx[3] * s2;
     const xx = w / 2 - (bx[0] + bx[2]) / 2 * s2;
->>>>>>> cardwork/job3-light-r4
     // wd/ht/mid describe the box as DRAWN, which is what the light and the
     // shadow have to be sized off rather than off `ah`; fl/fr are the measured
     // contact, which is what the CAST has to be sized off — see `penBox`
@@ -8510,19 +8478,9 @@ function drawCard(c, card, x, y, w, h, o) {
   };
   const isCharm = card.type === 'charm';
   const charmCol = (isCharm && (chOf(card.def) || 0) && chOf(card.def).col) || edge;
-<<<<<<< HEAD
   const sub = isUnit ? fitArt(creatureBox(card.art), 0.80)
     : fitArt(isCharm ? charmBox(card.def, charmCol) : itemBox(d.art), 0.84);
-  /* CONTACT, not a floating disc. The old shadow was one flat grey ellipse at a
-     fixed 30% of the window's width, drawn at the same place whatever was
-     standing there — so a Junkpile hovered over a shadow narrower than itself
-     and a Glacierling stood beside one twice its width. It is sized off the
-     subject now.
-=======
-  const sub = isUnit ? fitArt(creatureBox(card.art), 0.75, 'body')
-    : fitArt(isCharm ? charmBox(card.def, charmCol) : itemBox(d.art), 0.80, 'tall');
   /* ---------------- THE CAST. The one addition this round is allowed. --------
->>>>>>> cardwork/job3-light-r4
 
      What was here was a CONTACT PATCH: one flat ellipse, symmetric, sitting
      square under the feet, sized off the bounding box and given only to units.
@@ -8533,46 +8491,6 @@ function drawCard(c, card, x, y, w, h, o) {
      A cast shadow is the cheapest thing in illustration that fixes that, and it
      is the same object doing three jobs at once, which is why it is worth its
      place in a delete-first round:
-
-<<<<<<< HEAD
-     AND GEAR DOES NOT GET ONE. A contact shadow asserts that the object touches
-     the ground, and half the gear does not — the icons are drawn on their own
-     diagonals inside `drawItemIcon`, which the measured box knows nothing about,
-     so Icepick hung in the air with its handle across the snow crest and a neat
-     ellipse underneath it. Claiming contact that isn't there is worse than
-     claiming none. Units are measured feet-down and keep it. */
-  if (isUnit) {
-    c.save();
-    c.fillStyle = mix(wth.snowLo, '#0b1526', 0.62);
-    c.globalAlpha = 0.34;
-    c.beginPath();
-    c.ellipse(w / 2, feetY, sub.wd * 0.48, ah * 0.034, 0, 0, TAU);
-    c.fill();
-    c.restore();
-  }
-  /* THE HALO IS GONE. It was a white-cored radial thrown up behind every
-     subject, and it was three defects in one object: on hearth cards it was the
-     brightest thing on the card and a big part of why a hand of them read as
-     light leaks against a night game; it was identical on all 58, so it flattened
-     exactly the variety the seed is now being spent on; and it was doing the job
-     of value structure that the sky and the snow should have been doing all
-     along. They do it now — frost's ground came down two stops for it — and the
-     card's own cloud gives the silhouette something to be read against that is
-     different on every card. Nothing replaces it. */
-  /* WHAT THIS CARD WAS ACTUALLY CUT TO, written down where a check can read it.
-     The die is only a die if it is the same on every card, and that is a
-     property of a ROW rather than of any one card, so it cannot be seen by
-     looking at one — which is exactly how the aperture drifted into being the
-     flex element over three rounds without anybody noticing. One object, filled
-     on every draw, and the render suite compares it card against card. */
-  CARD_DIE.id = card.def; CARD_DIE.w = w; CARD_DIE.h = h;
-  CARD_DIE.ax = ax; CARD_DIE.ay = ay; CARD_DIE.aw = aw; CARD_DIE.ah = ah;
-  CARD_DIE.band = bh; CARD_DIE.rail = FH; CARD_DIE.well = wellRoom;
-  CARD_DIE.rules = !dropRules;
-  CARD_DIE.subW = sub.wd; CARD_DIE.subH = sub.ht;
-  CARD_DIE.area = (sub.wd * sub.ht) / Math.max(1e-6, aw * ah);
-  if (isUnit) drawCreature(c, card.art, sub.x, sub.y, sub.s, { t: o.t || 0, ph: card.uid, blink: card.uid });
-=======
        · it has a DIRECTION, so the window finally has a light in it. The key is
          up and to the left — the rule settled in round 3 and not reopened here
          — so the cast falls down and to the right, on every card, always. There
@@ -8643,8 +8561,19 @@ function drawCard(c, card, x, y, w, h, o) {
      on the ground rather than in the air, it is the shape of this card's
      subject rather than of a circle, and it makes the window's darkest value
      rather than its brightest. */
+  /* WHAT THIS CARD WAS ACTUALLY CUT TO, written down where a check can read it.
+     The die is only a die if it is the same on every card, and that is a
+     property of a ROW rather than of any one card, so it cannot be seen by
+     looking at one — which is exactly how the aperture drifted into being the
+     flex element over three rounds without anybody noticing. One object, filled
+     on every draw, and the render suite compares it card against card. */
+  CARD_DIE.id = card.def; CARD_DIE.w = w; CARD_DIE.h = h;
+  CARD_DIE.ax = ax; CARD_DIE.ay = ay; CARD_DIE.aw = aw; CARD_DIE.ah = ah;
+  CARD_DIE.band = bh; CARD_DIE.rail = FH; CARD_DIE.well = wellRoom;
+  CARD_DIE.rules = !dropRules;
+  CARD_DIE.subW = sub.wd; CARD_DIE.subH = sub.ht;
+  CARD_DIE.area = (sub.wd * sub.ht) / Math.max(1e-6, aw * ah);
   if (isUnit) drawCreature(c, card.art, sub.x, sub.y, sub.s, { t: o.t || 0, ph: card.uid, blink: card.uid, flat: 1 });
->>>>>>> cardwork/job3-light-r4
   else if (isCharm) drawCharmIcon(c, card.def, charmCol, sub.x, sub.y, sub.s, o.t || 0);
   else drawItemIcon(c, d.art, sub.x, sub.y, sub.s, o.t || 0);
   c.restore();
@@ -14320,19 +14249,11 @@ window.FF = {
   handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
-<<<<<<< HEAD
   drawCreature, drawCard, CARD_DIE, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
-=======
-  drawCreature, drawCard, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
-<<<<<<< HEAD
   // the measured box AND the measured footprint — what the window solves the
   // subject's size against and what the cast shadow is allowed to claim
   creatureBox, itemBox,
->>>>>>> cardwork/job3-light-r4
-  nameSplit,
-=======
   nameSplit, wrapText,
->>>>>>> cardwork/job5-polish-r4
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,
   setCtx: (c) => { ctx = c; initSnow(); },

@@ -1009,7 +1009,6 @@ section('every card in the game, drawn and measured');
   eq([...new Set(widows)].slice(0, 4).join(' | '), '', 'no rules line is a widow that could have been fed');
 }
 
-<<<<<<< HEAD
 /* --------------------------------------------------- the aperture is a die -- */
 /* WHAT THIS CATCHES, AND WHY NOTHING ELSE COULD.
 
@@ -1095,7 +1094,8 @@ section('the aperture is a die');
   eq(one.size, 1, 'one aperture for the whole set at the reference desktop');
   eq([...new Set(badD)].slice(0, 4).join(' | '), '',
     'the window is the same die on every card, and no paragraph moves it');
-=======
+}
+
 /* ---------------------------------------------- the light in the window -- */
 /* A CAST SHADOW IS A CLAIM, AND TWO ROUNDS GOT IT WRONG IN OPPOSITE DIRECTIONS.
    Round 2 gave every unit an ellipse as wide as its bounding box, which put a
@@ -1149,7 +1149,6 @@ section('the light in the window');
   log.length = 0;
   ok(withDisc >= 1, 'off the card a creature still draws its own ground disc');
   eq(flatDisc, 0, 'and `flat` takes it away, so the window casts the only shadow');
->>>>>>> cardwork/job3-light-r4
 }
 
 /* ------------------------------------ every foe, on the board and inspected -- */
