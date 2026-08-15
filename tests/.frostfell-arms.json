@@ -1,8 +1,8 @@
 {
  "FF_ABLATE=60": {
-  "said": "denying schemes +8 of the 17; next best filling the front of both lanes first +1",
+  "said": "denying schemes +7 of the 15; next best repositioning at all +0",
   "sample": 210,
-  "build": "15hhvew"
+  "build": "sxegl3"
  },
  "FF_LESSON=1": {
   "said": "being told once is +8; every larger dose reads the same",
@@ -53,31 +53,36 @@
   "sample": 210
  },
  "FF_VARIANCE=36": {
-  "said": "won/lost: trail 16.1%, deck 1.3%, draw 0.0%, matchup 23.8% · zones: trail 36.0%, deck 4.1%",
+  "said": "won/lost: trail 12.8%, deck 1.7%, draw 0.0%, matchup 24.8% · zones: trail 33.8%, deck 3.6%",
   "sample": 864,
-  "build": "15hhvew"
+  "build": "sxegl3"
  },
  "FF_GEARBAR=1": {
   "said": "gear worth 4+ first 45% is the best of 5, +5 on the shipped bar of 6 (40%), family bar ±9.2",
   "sample": 450
  },
  "FF_DIAL=150": {
-  "said": "bodies spans 9 (41-50%, ships 41%) A DIAL · scrap spans 8 (40-48%, ships 40%) A DIAL against 40% for no course, family bar ±6.1",
-  "sample": 960,
-  "build": "pq6nd7"
+  "said": "scrap spans 6 (47-53%, ships 53%) flat · bodies spans 11 (40-51%, ships 40%) A DIAL · scrap spans 7 (40-47%, ships 40%) flat against 41% for no course, family bar ±7.8",
+  "sample": 600,
+  "build": "1l8zmpe"
  },
  "FF_BUILT=200": {
   "said": "gear-heavy 4.1% vs body-heavy 1.4% (+2.7 points, p=0.009); on depth 1.36 vs 1.24 zones (+0.13, p=0.009) over 924 relabellings",
   "sample": 3600
  },
  "FF_LIVEBUILT=1": {
-  "said": "LIVE gear-heavy 40.6% vs body-heavy 37.6% (+3.0 points, p=0.288); on depth 2.27 vs 2.21 zones (+0.06, p=0.175) over 924 relabellings",
-  "sample": 3600,
-  "build": "1r82zpk"
+  "said": "LIVE gear-heavy 44.9% vs body-heavy 43.0% (+1.9 points, p=0.051); on depth 2.38 vs 2.35 zones (+0.03, p=0.042) over 20000 relabellings",
+  "sample": 25200,
+  "build": "19uh8ae"
  },
  "FF_ROUTE=1": {
-  "said": "taking everything 51%; best of 5 alternatives \"spends a full purse before fighting\" 50% (-1, bar ±8.2) — the fork has one right answer",
-  "sample": 600,
-  "build": "1pfwt7t"
+  "said": "taking everything 55%; best of 5 alternatives \"spends a full purse before fighting\" 55% (+0, bar ±9.4) — the fork has one right answer",
+  "sample": 450,
+  "build": "1l8zmpe"
+ },
+ "FF_REST=1": {
+  "said": "a lasting rest on the quiet road, swept 0/1/2/4 fights: best is 1 at +3 for ducking against taking everything (bar ±9.1)",
+  "sample": 450,
+  "build": "1l8zmpe"
  }
 }

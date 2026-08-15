@@ -864,6 +864,99 @@ section('every card in the game, drawn and measured');
     'every card in the pool keeps its text readable and its labels apart');
 }
 
+/* ------------------------------------ every foe, on the board and inspected -- */
+/* THE NAMED GAP, CLOSED. Drawing every card took name coverage as far as cards
+   go and left 73% overall, and the missing quarter was named honestly: foes the
+   seeded run never met. A run meets maybe a dozen of them; the game has dozens,
+   and the ones a lucky run never turns up are exactly the ones nothing has
+   looked at since they were written.
+
+   Every foe is placed on a real board, given a scheme to telegraph, drawn as a
+   slab and drawn again in the inspect panel, at the tightest shape — the three
+   places a foe's name and rules are ever put on screen. Same two rules as
+   everywhere else: nothing below the readable floor, no two labels on a line
+   without a gutter. */
+section('every foe in the game, on the board and inspected');
+{
+  const bad3 = [];
+  let seen3 = 0;
+  FF.setStageWidth(653, 280);
+  const D3 = FF.dims();
+  const cps3 = Math.min(653 / D3.VW, 280 / D3.VH);
+  /* ON THE STAGE ONLY, and the count of what that skips is printed rather than
+     quietly dropped. Driving foes onto synthetic boards leaves overlay state
+     from earlier sections behind, and one of those overlays lists several unit
+     names at a single off-stage anchor — three names at x=-16 reported as three
+     collisions, which is an artefact of the harness rather than anything a
+     player could see. A legibility rule is about what is readable ON SCREEN;
+     text outside the stage is a different defect and the hit checks already
+     cover things that hang off it.
+
+     The HAND is out of scope here for the same reason and it is worth saying
+     which: this section exists to check FOES, and the hand is drawn in every
+     one of these renders while already carrying two checks of its own — the
+     screen sweep looks at it on 9 shapes from a real run, and the per-card
+     section draws every card in the pool at both sizes. A third look at it from
+     a synthetic board adds no coverage and reports the harness's own state. */
+  let skipped3 = 0;
+  const check3 = (label) => {
+    const all3 = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim());
+    const ts = all3.filter((e) => e[2] > 0 && e[2] < D3.VW && e[3] > 0 && e[3] < D3.VH * 0.74)
+      .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
+    skipped3 += all3.length - ts.length;
+    for (const t of ts) STRINGS.seen.add(t.s);
+    for (const t of ts) {
+      if (t.size * cps3 < FF.TEXT_MIN_CSS - 0.5) {
+        bad3.push(`${label}: ${JSON.stringify(t.s).slice(0, 14)} at ${Math.round(t.size * cps3)}css`);
+      }
+    }
+    const rows3 = new Map();
+    for (const t of ts) {
+      if (t.s.trim().length < 3) continue;
+      const k3 = Math.round(t.y);
+      if (!rows3.has(k3)) rows3.set(k3, []);
+      rows3.get(k3).push(t);
+    }
+    for (const row of rows3.values()) {
+      const sp = row.map((t) => {
+        const ww = t.s.length * t.size * 0.5;
+        const left = t.align === 'center' ? t.x - ww / 2 : t.align === 'right' ? t.x - ww : t.x;
+        return { t, s: [left, left + ww] };
+      }).sort((a, b) => a.s[0] - b.s[0]);
+      for (let i = 1; i < sp.length; i++) {
+        const a = sp[i - 1], b = sp[i];
+        if (Math.abs(a.t.size - b.t.size) > 0.6) continue;
+        if (b.s[0] - a.s[1] < a.t.size * 0.25) {
+          bad3.push(`${label}: ${JSON.stringify(a.t.s).slice(0, 12)}/${JSON.stringify(b.t.s).slice(0, 12)}`);
+        }
+      }
+    }
+    log.length = 0;
+  };
+  for (const id of Object.keys(FF.FOES)) {
+    bareBattle(FF, 'hearth', 5);
+    G.battle.units = G.battle.units.filter((u) => u.leader);
+    place(FF, 'p', 'snowpup', 0, 0, { unit: { hp: 20 } });
+    let foe = null;
+    try { foe = place(FF, 'e', id, 0, 1, { unit: { cnt: 2, cntMax: 2 } }); } catch { foe = null; }
+    if (!foe) continue;
+    seen3++;
+    try { FF.layPlot(G, foe); } catch { /* not every foe schemes */ }
+    G.screen = 'battle';
+    frame(2); log.length = 0; FF.render();
+    check3(id + ' on the board');
+    FF.UI.inspect = foe;
+    frame(1); log.length = 0; FF.render();
+    check3(id + ' inspected');
+    FF.UI.inspect = null;
+  }
+  FF.setStageWidth(1280, 720);
+  log.length = 0;
+  ok(seen3 >= 20, `every foe drawn on a board and inspected (${seen3}, ${skipped3} off-stage strings skipped)`);
+  eq([...new Set(bad3)].slice(0, 5).join(' | '), '',
+    'every foe in the game keeps its text readable and its labels apart');
+}
+
 /* AND THE COVERAGE NUMBER, printed whether or not it is flattering.
 
    The sweep looks at 9 shapes x 12 screens of ONE seeded run, so the strings it
@@ -901,7 +994,7 @@ section('every card in the game, drawn and measured');
     `${STRINGS.seen.size} distinct strings`);
   console.log(`    names ${hitN}/${names.size} (${(shareN * 100).toFixed(0)}%) · ` +
     `rules paragraphs ${hitT}/${texts.length} (${((hitT / Math.max(1, texts.length)) * 100).toFixed(0)}%) ` +
-    `— every card is now drawn at both sizes, so what is left uncovered is FOES the seeded run never met`);
+    `— every card at both sizes and every foe on a board and inspected; what is left is text no state in the game reaches`);
   ok(names.size > 60, `the catalogue is the game's own tables (${names.size} names)`);
   ok(shareN > 0.55, `and the sweep sees a stated share of it (${(shareN * 100).toFixed(0)}% of names)`);
 }

@@ -87,6 +87,7 @@ const STANDING = [
   ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
   ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
   ['FF_BUILT=200', 'gear-heavy against body-heavy decks, built on purpose rather than sorted on outcome'],
+  ['FF_REST=1', 'a lasting rest on the quiet road — does it make the fork a decision'],
   ['FF_ROUTE=1', 'five routing strategies against taking every fight — is the fork a decision at all'],
   ['FF_LIVEBUILT=1', 'and the same twelve decks as starting hands in real runs — does the lean survive the draft'],
   ['FF_DIAL=150', 'the two flat courses swept by magnitude — a dial or decoration'],
@@ -842,7 +843,20 @@ section('gear against bodies, dealt on purpose');
   const N = Number(process.env.FF_BUILT || 0);
   const tribes = ['hearth', 'frost', 'scrap'];
   const each = N || Math.min(14, Number(process.env.FF_RUNS || DEFAULT_N));
-  const SIDE = 6;
+  /* HOW MANY DECKS IT TAKES, worked out rather than guessed at. The live arm
+     read +3.0 points at p=0.288 on six a side, and "the instrument can only
+     prove it where the game is crippled" was where it sat for two rounds. The
+     deck-to-deck spread is measurable, so the sample it would take is
+     arithmetic: the twelve live decks read a pooled SD of 4.68, of which 2.00
+     is binomial sampling noise at 600 runs a deck, leaving a TRUE deck-to-deck
+     SD of 4.23. Resolving a 3.0-point difference of means then needs
+
+         n = 2 (z · 4.23 / 3.0)²  decks a side  —  16 at 2σ, 20 at 2.24σ, 26 at 2.58σ
+
+     which is a bigger sample and not a hopeless one. More runs a deck cannot
+     help: they shrink the 2.00 and leave the 4.23 alone, which is why four
+     rounds of deepening this family bought nothing. */
+  const SIDE = Number(process.env.FF_SIDES || 6);
   const pool = Object.values(FF.CARDS).filter((c) => !c.leader && !c.noPool);
   const gearPool = pool.filter((c) => c.type === 'item').map((c) => c.id).sort();
   const bodyPool = pool.filter((c) => c.type === 'unit').map((c) => c.id).sort();
@@ -909,12 +923,36 @@ section('gear against bodies, dealt on purpose');
   /* THE NULL THAT DOES NOT ASSUME INDEPENDENCE. Twelve decks, every way of
      calling six of them one thing — the same enumeration the split-half arm
      uses, applied to a split that was made on purpose instead of on outcome. */
+  /* ENUMERATED WHILE THAT IS POSSIBLE, SAMPLED WHEN IT IS NOT. Twelve decks is
+     C(12,6) = 924 labellings and an exact test; thirty-two is C(32,16) = 601
+     MILLION, which is not a test anybody runs. Above a cap the null is drawn
+     instead — deterministically, from a fixed seed, so the arm stays
+     reproducible and the p-value does not wander between runs. The resolution
+     floor moves from 1/924 to 1/DRAWS, which is stated rather than assumed. */
   const combos = [];
-  const walk = (start, pickd) => {
-    if (pickd.length === SIDE) { combos.push(pickd.slice()); return; }
-    for (let i = start; i < rows.length; i++) { pickd.push(i); walk(i + 1, pickd); pickd.pop(); }
-  };
-  walk(0, []);
+  const exact = (() => {
+    let n = 1;
+    for (let i = 0; i < SIDE; i++) n = n * (rows.length - i) / (i + 1);
+    return n;
+  })();
+  const DRAWS = 20000;
+  if (exact <= 60000) {
+    const walk = (start, pickd) => {
+      if (pickd.length === SIDE) { combos.push(pickd.slice()); return; }
+      for (let i = start; i < rows.length; i++) { pickd.push(i); walk(i + 1, pickd); pickd.pop(); }
+    };
+    walk(0, []);
+  } else {
+    let z = 0x9e3779b9;
+    const rnd2 = () => { z ^= z << 13; z >>>= 0; z ^= z >> 17; z ^= z << 5; z >>>= 0; return z / 4294967296; };
+    const idx2 = rows.map((_, i) => i);
+    for (let d = 0; d < DRAWS; d++) {
+      const bag = idx2.slice();
+      for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rnd2() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+      combos.push(bag.slice(0, SIDE));
+    }
+  }
+  const HOW = exact <= 60000 ? `all ${combos.length}` : `${combos.length} sampled of ${exact.toExponential(1)}`;
   const gapOf = (chosen) => {
     const inA = new Set(chosen);
     let aw = 0, ar = 0, bw = 0, br = 0;
@@ -926,7 +964,7 @@ section('gear against bodies, dealt on purpose');
     return all2.filter((v) => v >= Math.abs(obs) - 1e-9).length / all2.length;
   };
   const pv = pOf(gapOf, gap);
-  console.log(`    → against all ${combos.length} ways to label six of the twelve: p=${pv.toFixed(3)}` +
+  console.log(`    → against ${HOW} ways to label ${SIDE} of the ${rows.length}: p=${pv.toFixed(3)}` +
     ` — ${pv <= 0.05 ? 'COMPOSITION IS REAL' : 'not distinguishable from an arbitrary relabelling'}`);
 
   // and the same again on depth, which has resolution where won/lost has none
@@ -975,7 +1013,7 @@ section('gear against bodies, dealt on purpose');
    Hearth did), or a flat sweep end to end (the amount is not the problem and
    the rule is decoration — say so and stop rewriting it). What is not useful is
    another round of guessing at new rules for them. */
-section('do the two flat courses have a dial');
+section('the course dials, and where each one sits on its own');
 {
   const N = Number(process.env.FF_DIAL || 0);
   const tribes = ['hearth', 'frost', 'scrap'];
@@ -987,6 +1025,10 @@ section('do the two flat courses have a dial');
      against declaring nothing. */
   const ARMSD = [
     { k: 'no course at all', course: null, dial: null, ships: false },
+    /* HEARTH'S RATE DIAL WAS SWEPT HERE AND IS GONE: every turn 53%, every 2nd
+       47%, every 3rd 47% at 600 an arm — 1.9σ, which does not clear, so the
+       dial was reverted rather than shipped and is not re-swept. The reading
+       lives in the course's own definition. */
     { k: 'bodies  Shell 2', course: 'line', dial: { 'line.shellN': 2 }, ships: true },
     { k: 'bodies  Shell 4', course: 'line', dial: { 'line.shellN': 4 } },
     { k: 'bodies  Shell 6', course: 'line', dial: { 'line.shellN': 6 } },
@@ -1043,10 +1085,10 @@ section('do the two flat courses have a dial');
     const spread = hi.pct - lo.pct;
     const live = spread >= zd * dband;
     verdicts.push({ co, hi, lo, ship, spread, live });
-    console.log(`    → ${co === 'line' ? 'BODIES' : 'SCRAP'}: ` +
+    console.log(`    → ${co === 'line' ? 'BODIES' : co.toUpperCase()}: ` +
       `best ${hi.k.trim()} ${hi.pct}% · worst ${lo.pct}% · spread ${spread} · ` +
-      `${live ? `A DIAL — ${hi.pct - ship.pct} points over what ships, and ${hi.pct - none.pct} over declaring nothing`
-        : 'FLAT end to end — the amount is not what is wrong with this course'}`);
+      `${live ? `A DIAL — ${hi.pct - ship.pct} points between its ends, ${hi.pct - none.pct} at the top over declaring nothing`
+        : 'FLAT end to end — this setting is not what decides this course'}`);
   }
   if (N) {
     ARMS.stamp('FF_DIAL=150', verdicts.map((v) =>
@@ -1130,6 +1172,44 @@ section('does walking past a fight pay');
     const r = tally((await runJobs(duckJobs({ set: { route: key } }))).flatMap((x) => x.stats));
     routed.push({ label, r });
     row(label, r);
+  }
+  /* AND THE SAME SIX PILOTS AGAIN WITH A LASTING REST ON THE QUIET ROAD.
+
+     The verdict below — nothing beats taking every fight — is a verdict on the
+     quiet road AS IT PAYS TODAY, which is once, at the moment you step on the
+     node. That is the shape that failed five times on Hearth and twice on
+     Scrap. `REST.fights` gives the quiet road something that lasts instead: a
+     rested line mends its most-hurt warden every upkeep for the next few
+     fights, which is the one payout on this board measured to be worth
+     anything. Swept here rather than in the course arm because the question is
+     not "is rest good" — it obviously is — but "does it make the FORK a
+     decision", and only a routing comparison can answer that. */
+  const RESTS = process.env.FF_REST ? [0, 1, 2, 4] : [];
+  const rested = [];
+  for (const rf of RESTS) {
+    const cfg = Object.assign(config(), { rest: rf });
+    const jobsR = tribes.map((tribe) => ({ tribes: [tribe], n: N, base: 1000, step: 37,
+      mode: 'careful', tweak: { set: { duckHurt: true } }, config: cfg, stats: true }));
+    const jobsS = tribes.map((tribe) => ({ tribes: [tribe], n: N, base: 1000, step: 37,
+      mode: 'careful', tweak: { set: { seek: true } }, config: cfg, stats: true }));
+    const out = await runJobs(jobsR.concat(jobsS));
+    const duck = tally(out.slice(0, tribes.length).flatMap((x) => x.stats));
+    const take = tally(out.slice(tribes.length).flatMap((x) => x.stats));
+    rested.push({ rf, duck, take });
+    console.log(`    rest lasts ${rf} fights:  ducks-when-hurt ${duck.pct}%  vs  takes-everything ${take.pct}%` +
+      `   (${duck.pct - take.pct >= 0 ? '+' : ''}${duck.pct - take.pct})`);
+  }
+  if (RESTS.length) {
+    const bestR = rested.reduce((a, z) => ((z.duck.pct - z.take.pct) > (a.duck.pct - a.take.pct) ? z : a));
+    const bR = BAND.gap(0.45, rested[0].take.runs) * Math.SQRT2;
+    const zR = familyZ(RESTS.length);
+    const lift = bestR.duck.pct - bestR.take.pct;
+    console.log(`    → the quiet road at its best setting (${bestR.rf} fights) is ` +
+      `${lift >= 0 ? '+' : ''}${lift} against taking everything, family bar ±${(zR * bR).toFixed(1)} — ` +
+      `${lift >= 0 ? 'ducking is now at least level: the fork is a decision' : 'still behind: a lasting rest is not enough either'}`);
+    ARMS.stamp('FF_REST=1', `a lasting rest on the quiet road, swept 0/1/2/4 fights: best is ${bestR.rf} at ` +
+      `${lift >= 0 ? '+' : ''}${lift} for ducking against taking everything (bar ±${(zR * bR).toFixed(1)})`,
+      rested[0].take.runs);
   }
   console.log(`    ${''.padEnd(22)}${''.padEnd(30)}      ` +
     `took the quiet road at ${DUCKS.taken} of ${DUCKS.forks} forks that offered it ` +
@@ -1994,6 +2074,23 @@ section('the arms that are not run by default');
   const never = rows.filter(([, , rec]) => !rec).length;
   console.log(`  · arms that do not run by default — build ${BUILD}: ` +
     `${rows.length - stale - never} current, ${stale} taken on an older build, ${never} never run`);
+  /* WHAT CLEARING THE RED LIGHT COSTS, because a staleness marker nobody can
+     clear is a red light taped over.
+
+     The fingerprint changes on any edit to the game or the pilot, so a full set
+     of current readings is only ever true for the build it was taken on — which
+     makes "re-run everything" a RELEASE step rather than a thing you do while
+     working. That is fine, and it needs a price on it: each arm's stamp records
+     the sample it ran at, so the total is the sum of what it would take to say
+     every reading describes the build in the tree. Printed rather than left to
+     somebody's memory, next to the command that does it. */
+  {
+    const runs = rows.reduce((n, [, , rec]) => n + (rec && rec.sample ? rec.sample : 0), 0);
+    const knobs = rows.map(([k]) => k).join(' ');
+    console.log(`    to make every reading current: ~${runs.toLocaleString()} runs across ${rows.length} arms ` +
+      `(a release step, not a working one — the fingerprint moves on any edit)`);
+    console.log(`      ${knobs}`);
+  }
   for (const [knob, what, rec] of rows) {
     console.log(`    ${knob.padEnd(26)} ${what}`);
     console.log(`    ${''.padEnd(26)} → ` + (rec
@@ -2006,7 +2103,7 @@ section('the arms that are not run by default');
      bumped by hand is a list that goes stale. */
   const inSource = [...readFileSync(new URL(import.meta.url), 'utf8')
     .matchAll(/process\.env\.(FF_[A-Z]+)/g)].map((m2) => m2[1]);
-  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_GIVE', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
+  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_GIVE', 'FF_SIDES', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');

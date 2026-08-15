@@ -431,9 +431,31 @@ caravan holds decides runs. At 450 an arm against 40% for declaring nothing:
 +0 (ships) 40%   ·   +1 40%   ·   +2 37%   ·   +3 39%      spread 3, bar ±8.9
 ```
 
-**Reverted**, on the standing rule that a mechanic measuring zero is not free.
-Two rules tried, two nulls, and the pair rules out the whole "hand" half of the
-game for this course — how much you hold and when you spend it — at every
+**AND HEARTH'S RATE DIAL IS A THIRD NULL, IN THE OTHER DIRECTION.** With Scrap
+fixed the course table read Hearth 53% against a pack of four at 44/44/44/42 —
+one favourite and four courses nobody can tell apart, which is not a field. This
+entry's own note said the first regen point buys +14 of +20, measured from +1,
++2 and the whole line: three points all at or above one point a turn. Below +1
+there is no smaller amount, because regen is an integer — but there is a smaller
+RATE. At 600 runs an arm:
+
+```
+every turn 53%   ·   every 2nd 47%   ·   every 3rd 47%      6 points, 1.9σ
+```
+
+**It does not clear**, so it is reverted rather than shipped, and the dial is
+removed rather than left in at a default that changes nothing.
+
+**What fixed the field was the pack coming up, not the favourite coming down.**
+Scrap's thorns took it 40% → 47% and Bodies' Shell 6 sits at 46%, so the gap
+from Hearth to the next course is about three points rather than nine —
+without touching Hearth at all. Worth remembering the next time a table has one
+tall bar: *there are two ways to close a gap, and the one that does not touch
+the thing that works is usually safer.*
+
+**The older Scrap nulls, which still stand.** Reverted on the standing rule that
+a mechanic measuring zero is not free — two rules tried, two nulls, and the pair
+ruled out the whole "hand" half of the game for that course — how much you hold and when you spend it — at every
 magnitude either was tried at.
 
 What is left untried is the axis every course that WORKS uses: **something that
@@ -900,12 +922,33 @@ trail screen asks a question with one right answer**, which is furniture with a
 signpost on it — the exact thing this file wrote about the quiet road two rounds
 ago and then fixed, reappearing one level up.
 
-It is a design problem the ladder made visible rather than a pilot bug, and it
-is stated without a fix attached because the fix is a round of its own: the
-quiet nodes were already repriced once (camps pay in rest, rest stops in choice,
-shrines in blessings) and this measurement says it was not enough. What it must
-not become is a fourth reprice guessed at — the courses took eight nulls to
-teach that the axis matters more than the amount. The
+**AND THE FIX WAS THE LESSON THE COURSES HAD JUST FINISHED TEACHING.** Every
+quiet-road payout fired ONCE, at the moment you stepped on the node — the camp
+mends, the rest stop offers a fourth blessing, the shrine asks for nothing. That
+is the "lands late and rare" shape that failed five times on Hearth and twice on
+Scrap, and all three courses came off the floor the same way: something on the
+board, every fight, from turn one. The quiet road needed the same thing, and the
+right move was not a fourth guessed reprice but the axis already paid for.
+
+So the quiet road leaves the caravan RESTED, and a rested line mends its
+most-hurt warden every upkeep for the next few fights — Hearth's own shape,
+which is the one payout on this board measured to be worth anything. Earned by
+walking rather than declared, and it decays. At 450 runs an arm, ducking-when-
+hurt against taking everything:
+
+```
+rest lasts 0 fights (as it was)   ducking −3
+rest lasts 1 fight                ducking +3      ← ships
+rest lasts 2 fights               ducking +2
+rest lasts 4 fights               ducking +1
+```
+
+**The sign flips.** *Level* is the target rather than better — a fork where one
+side always wins is furniture with a signpost, and a fork where the two sides
+sit inside a band is a question worth asking. One fight is both the smallest
+setting and the best, so there is nothing to guard against: **longer rests are
+worse**, because a rest that outlasts the trouble it was taken for stops being a
+reason to walk now. The
 question that finally moved it was not "what else can be tuned" but **what is
 the ladder not asking about at all**.
 
@@ -1841,6 +1884,16 @@ it is ever drawn at** — in hand and on the reward row — at 653x280, the tigh
 shape, and put through the same two rules. All of them pass. What is left
 uncovered is foes the seeded run never met, which the figure now names rather
 than hides.
+
+**And the named gap is closed.** Every foe is now placed on a real board, given
+a scheme to telegraph, drawn as a slab and drawn again in the inspect panel, at
+653x280. **Names went 73% → 99%** and rules paragraphs 50% → 68%. Two exclusions
+are stated rather than quietly applied: text drawn outside the stage (synthetic
+boards inherit overlay state from earlier sections, and one overlay stacks
+several unit names at a single off-stage anchor — three names at one point
+reported as three collisions, which is the harness rather than the game), and
+the hand, which is not what this section is for and already carries two checks
+of its own.
 
 Counting names and rules separately was itself a correction. Lumped together,
 drawing every card in the game moved coverage from 75% to 77% — which reads as
