@@ -782,7 +782,14 @@ def({ id: 'lastlight', name: 'Last Light', type: 'item', tribe: null, rare: 3, t
 def({ id: 'snowhandful', name: 'A Handful of Snow', type: 'item', tribe: null, rare: 1, target: 'enemy',
   noPool: true, recycles: true,
   art: { kind: 'snowball', col: '#dff0ff' },
-  text: 'Frost 2 on a foe. Scooped off the floor of this room — it comes straight back to your hand.',
+  /* THE RULE AND THE STORY ARE TWO STRINGS. This card carried both in `text`,
+     and the card face has one well: the flavour clause ran the paragraph past
+     what the well holds at every size the game draws, including the 300-unit
+     sheet, so the sentence died as `…it comes…` and nothing anywhere showed
+     what the card does. Flavour goes in `flav`, which only the inspect panel
+     reads and reads quietly. No card's rule wording moved to make this fit. */
+  text: 'Frost 2 on a foe. It comes straight back to your hand.',
+  flav: 'Scooped off the floor of this room.',
   effect: (g, t) => { sfx('snow'); addStatus(g, t, 'frost', 2); } });
 
 /* What a piece of gear would do to what you are pointing it at. This is the
@@ -1356,7 +1363,7 @@ function mkCard(id) {
   if (!d) throw new Error('no card ' + id);
   const c = {
     uid: nextUid(), def: id, name: d.name, type: d.type, tribe: d.tribe || null,
-    rare: d.rare || 1, text: d.text || '', art: d.art, leader: !!d.leader,
+    rare: d.rare || 1, text: d.text || '', flav: d.flav || '', art: d.art, leader: !!d.leader,
     kw: Object.assign({}, d.kw || {}), charms: [], bonusDeploy: [], dmg: 0,
   };
   if (d.type === 'unit') { c.hp = d.hp; c.atk = d.atk; c.cnt = d.cnt; }
@@ -4474,17 +4481,27 @@ function nameSplit(c, nm, size, maxW, lines) {
      The last one is not a third guess. A compound's seam is near the middle
      because both halves are words; "latest" only looked right because the names
      it was tested on happened to have their seam late. BELL|ROPE and
-     CINDER|PUP both fall out of the same rule. */
+     CINDER|PUP both fall out of the same rule.
+
+     AND THE BREAK CARRIES A HYPHEN, which is the half of "a book does this"
+     that never shipped. Without one the card prints `WHETS` over `TONE` —
+     two English words that mean nothing together — and a player reads two
+     words where there is one. `WHETS-` over `TONE` is read as one word by
+     anybody who has opened a book. The mark costs a glyph of width, so it is
+     measured INTO every fit below rather than added after the cut is chosen;
+     the first version hyphenated a head that had been fitted without it and
+     the hyphen hung off the band. */
   const VOW = 'AEIOUYaeiouy';
   const seam = (s, p2) => p2 > 1 && p2 < s.length - 1 &&
     VOW.indexOf(s[p2]) < 0 && VOW.indexOf(s[p2 + 1]) >= 0;
   const out = [];
+  const hyph = (s) => fits(s + '-');       // the head has to hold its own mark
   let rest = nm;
   for (let k = lines; k > 1; k--) {
     const want = rest.length / k;
     let cut = 0;
     let top = 0;
-    while (top + 1 < rest.length && fits(rest.slice(0, top + 1))) top++;
+    while (top + 1 < rest.length && hyph(rest.slice(0, top + 1))) top++;
     for (let p2 = 2; p2 <= top; p2++) {
       if (!seam(rest, p2)) continue;
       if (!cut || Math.abs(p2 - want) <= Math.abs(cut - want)) cut = p2;
@@ -4492,11 +4509,11 @@ function nameSplit(c, nm, size, maxW, lines) {
     const mid = Math.round(want);
     for (let d = 0; d <= rest.length && !cut; d++) {
       for (const p2 of [mid - d, mid + d]) {
-        if (p2 > 0 && p2 < rest.length && fits(rest.slice(0, p2))) { cut = p2; break; }
+        if (p2 > 0 && p2 < rest.length && hyph(rest.slice(0, p2))) { cut = p2; break; }
       }
     }
     if (!cut) break;
-    out.push(rest.slice(0, cut));
+    out.push(rest.slice(0, cut) + '-');
     rest = rest.slice(cut);
   }
   out.push(rest);
@@ -6696,15 +6713,47 @@ function drawUnit(c, u, t) {
     c.restore();
   }
 
-  // name strip — shrunk to fit rather than run off the slab
-  const nSize = fitText(c, u.name.toUpperCase(), w - 26, 12.5, 7.5, 't');
-  txt(c, u.name.toUpperCase(), u.px, y + h - 30, nSize, u.side === 'p' ? '#dbeaff' : '#ffd8d8', 'center', 't');
+  /* NAME STRIP — AND IT HAS TO CLEAR ITS OWN BADGES.
+
+     It was fitted to `w - 26` while the badges stood in the outer 26 units each
+     side and on the SAME LINE, so the two shared thirteen units a side and
+     BRAMBLEWICK's terminal K sat on top of the green `31`.
+
+     The obvious fix is to fit the name to `w - 56`, the width left between the
+     badges — and it costs more than it looks. The readable floor is nine units
+     on a desktop, and at nine units BRAMBLEWICK needs 65 of the 62 that leaves,
+     so every eleven-letter warden and every boss with a definite article in its
+     name starts truncating on a board where nothing was truncating before.
+
+     The name and the badges were never fighting over WIDTH. They were on one
+     line. So the badges drop below it instead: a shorter plaque, sat lower,
+     which clears the name by three units at every size the board is drawn at
+     and — the other half of the same defect — stops the slab's own 14-unit
+     corner slicing through the numerals, which it did when the badge ran to
+     within half a unit of the bottom edge. The strip does NOT move up to buy
+     room either way: two units higher puts it over a pale creature's belly and
+     the contrast check reads 1.1:1.
+
+     `fitText` RETURNING A SIZE IS STILL NOT A PROMISE THAT THE SIZE FITS — the
+     same lesson the card band learned. On a fold the floor is larger than
+     anything the shrink loop can reach, so every slab drew its name at the
+     floor and straight over its neighbour: BRAMBLEWICK and SNOWPUP in adjacent
+     slots came out as the single word `BRAMBLEWICKNOWPUP`. When the box cannot
+     carry the string at a size a person can read, the string gives. */
+  const nUp = u.name.toUpperCase();
+  const nSize = fitText(c, nUp, w - 26, 12.5, 7.5, 't');
+  txt(c, ellipsize(c, nUp, nSize, w - 26), u.px, y + h - 30, nSize,
+    u.side === 'p' ? '#dbeaff' : '#ffd8d8', 'center', 't');
 
   // stats
-  /* The same three silhouettes the card face uses. A slab and a card showing
-     the same warden were reading its attack off two different shapes. */
-  if (u.atk > 0 || u.leader) statBadge(c, 'atk', x + 14, y + h - 13, 12, '#ff8b7a', u.atk + stat(u, 'spice'));
-  statBadge(c, 'hp', x + w - 14, y + h - 13, 12, '#7de08f', u.hp);
+  /* The same plaque the card face uses, so a slab and a card show the same
+     warden's attack in the same object. It also sits a little higher and a
+     little smaller than the badge it replaces: the old one ran to within half a
+     unit of the slab's bottom edge, where the panel's 14-unit corner sliced
+     straight through it. */
+  const bhw = 12, bhh = 8, bby = y + h - 12.5;
+  if (u.atk > 0 || u.leader) statBadge(c, x + 16, bby, bhw, bhh, '#ff8b7a', u.atk + stat(u, 'spice'));
+  statBadge(c, x + w - 16, bby, bhw, bhh, '#7de08f', u.hp);
   // the counter: it drops with a physical knock rather than swapping numbers
   const ready = u.cnt <= 1;
   const kick = u.tick || 0;
@@ -6810,63 +6859,70 @@ const WELL_COL = '#20334f';
 /* A card in hand: the full face. Three frames — warden, gear, charm — each
    with its own shape, so a glance at the silhouette tells you what kind of
    thing you are holding before you have read a word of it. */
-/* A stat badge with a SHAPE of its own, because three coloured circles in a row
-   is a traffic light: the eye has to read the colour before it knows which
-   number it is looking at. Attack is a shard, the counter is a disc, health is
-   a shield — the silhouettes are distinguishable at hand size and in the corner
-   of your eye, which is where a card is actually read. */
-function statBadge(c, kind, x, y, r, col, val) {
+/* ONE PLAQUE, ONE SIZE, ONE CENTRE LINE — and this is a retreat from three
+   shapes, made because the three shapes were costing the two most-read numbers
+   on the card.
+
+   Round one gave attack a shard, the counter a disc and health a shield, on the
+   argument that a silhouette is read faster than a colour. The argument is
+   sound and the execution collided with the frame: three shapes meant three
+   widths and three vertical centres, the shard and the shield were the two
+   widest, and their outer shoulders reached past the face into the moulding
+   and the corner brace — so the dark corner arc was drawn THROUGH the numeral.
+   At fold size CINDERPUP's `3` and TINDERCUB's `11` were half-swallowed, and
+   the one badge that stayed clean was the centred counter disc: the two numbers
+   you actually compare when picking a card were exactly the two that broke.
+
+   A plaque instead. One rounded rectangle, wider than tall — which is the shape
+   a two-digit number wants, and `14`, `28`, `32` and `34` all sit inside it —
+   at one size on one centre line, so a row of wardens and a row of gear share a
+   baseline and nothing on the rail reaches the frame. Colour and position still
+   say which number is which; they always did most of that work anyway, because
+   at hand size a shard and a shield are two dark-outlined blobs.
+
+   `hw` and `hh` are HALF width and half height. They are passed rather than
+   derived because the board slab and the card face have different room, and
+   deriving one from the other is how the slab's badges ended up sliced by its
+   own bottom edge. */
+function statBadge(c, x, y, hw, hh, col, val) {
+  const rr2 = Math.min(hh * 0.72, hw * 0.5);
   c.beginPath();
-  if (kind === 'atk') {                       // a shard, point down
-    c.moveTo(x - r, y - r * 0.72);
-    c.lineTo(x + r, y - r * 0.72);
-    c.lineTo(x + r * 0.62, y + r * 0.5);
-    c.lineTo(x, y + r * 1.05);
-    c.lineTo(x - r * 0.62, y + r * 0.5);
-    c.closePath();
-  } else if (kind === 'hp') {                 // a shield, flat top, round foot
-    c.moveTo(x - r, y - r * 0.8);
-    c.lineTo(x + r, y - r * 0.8);
-    c.lineTo(x + r, y + r * 0.15);
-    c.quadraticCurveTo(x + r, y + r, x, y + r * 1.05);
-    c.quadraticCurveTo(x - r, y + r, x - r, y + r * 0.15);
-    c.closePath();
-  } else {                                    // the clock
-    c.arc(x, y, r, 0, TAU);
-  }
-  /* A BADGE IS A CAST PIECE, not a coloured silhouette. The shapes were right —
-     a shard, a disc, a shield are distinguishable in the corner of your eye —
-     and they were filled flat, so three of them in a row read as printed icons.
-     A gradient down the face, a rim light along the top of the path, a specular
-     pin where the light hits, and a shadow under the whole thing: the same four
-     things every other surface on the card got, at badge scale. */
+  rr(c, x - hw, y - hh, hw * 2, hh * 2, rr2);
+  /* A BADGE IS A CAST PIECE, not a coloured silhouette: a gradient down the
+     face, a rim light along the top of the path, a specular pin where the light
+     hits, and a shadow under the whole thing — the same four things every other
+     surface on the card got, at badge scale. */
   c.save();
-  c.shadowColor = 'rgba(4,9,20,.55)'; c.shadowBlur = r * 0.5; c.shadowOffsetY = r * 0.22;
-  const g = c.createLinearGradient(0, y - r, 0, y + r);
+  c.shadowColor = 'rgba(4,9,20,.55)'; c.shadowBlur = hh * 0.5; c.shadowOffsetY = hh * 0.22;
+  const g = c.createLinearGradient(0, y - hh, 0, y + hh);
   g.addColorStop(0, mix(col, '#ffffff', 0.45));
   g.addColorStop(0.5, col);
   g.addColorStop(1, mix(col, '#221a10', 0.30));
   c.fillStyle = g; c.fill();
   c.restore();
-  c.lineWidth = Math.max(2, r * 0.24); c.strokeStyle = C.ink; c.lineJoin = 'round'; c.stroke();
+  c.lineWidth = Math.max(2, hh * 0.24); c.strokeStyle = C.ink; c.lineJoin = 'round'; c.stroke();
   c.save();
   c.clip();
-  const lip = c.createLinearGradient(0, y - r, 0, y - r * 0.25);
+  const lip = c.createLinearGradient(0, y - hh, 0, y - hh * 0.25);
   lip.addColorStop(0, LIGHT + '0.62)');
   lip.addColorStop(1, LIGHT + '0)');
-  c.fillStyle = lip; c.fillRect(x - r, y - r, r * 2, r * 0.8);
-  spec(c, x - r * 0.34, y - r * 0.40, r * 0.42, 0.75);
+  c.fillStyle = lip; c.fillRect(x - hw, y - hh, hw * 2, hh * 0.8);
+  spec(c, x - hw * 0.5, y - hh * 0.42, hh * 0.5, 0.7);
   /* THE DIE MARK. A cast piece shows where the die met it: a darker rim just
      inside the edge, all the way round. The clip is what makes it cheap — the
      same path stroked heavy only paints its inner half — and it is the one
      thing that separated "a coloured shape with a highlight" from "a struck
      token" when these were photographed at hand size. */
   c.globalAlpha = 0.5;
-  c.lineWidth = Math.max(1, r * 0.30); c.strokeStyle = mix(col, '#2a1c10', 0.5); c.stroke();
+  c.lineWidth = Math.max(1, hh * 0.30); c.strokeStyle = mix(col, '#2a1c10', 0.5); c.stroke();
   c.restore();
   const n = String(val);
-  const sz = r * (n.length >= 3 ? 0.92 : n.length === 2 ? 1.12 : 1.42);
-  txt(c, n, x, y + r * 0.06, sz, '#12203a', 'center', 'd', 0);
+  /* Height sets the numeral and width caps it, in that order. A three-digit
+     health is rare enough that it may be smaller; a two-digit one is the case
+     the plaque was shaped for and must not be. */
+  const sz = Math.min(hh * (n.length >= 3 ? 1.16 : n.length === 2 ? 1.45 : 1.62),
+    (hw * 2 - hh * 0.7) / Math.max(1, n.length * 0.62));
+  txt(c, n, x, y + hh * 0.06, sz, '#12203a', 'center', 'd', 0);
 }
 
 /* ====================== THE FRAME, AND WHAT IT IS MADE OF ==================
@@ -7479,7 +7535,13 @@ function drawCard(c, card, x, y, w, h, o) {
      from somewhere. It comes out of the PICTURE, which is the one element on a
      fold-size card carrying no information — so everything below the window
      stays exactly where it was and the checks that guard it stay green. */
-  const bhMin = (tiny ? (nmLines === 3 ? 44 : 36) : 27) * S;
+  /* 27 units became 26. One unit of band is one unit of rules well, and the
+     well is where the whole set's body size is decided — see the rules block.
+     A single line of name at 15 units needs about eleven of glyph and the
+     enamel channel below it is 4.2, so 26 still clears both by a unit and a
+     half; 24 does not, and the contrast check catches it the moment a light
+     glyph reaches the tribe's enamel. */
+  const bhMin = (tiny ? (nmLines === 3 ? 44 : 36) : 26) * S;
   const nmFit = tiny ? nameFit(c, nm, nameSize * 0.82, nameW, nmLines) : null;
   const nmStep = nmFit ? lineH(nmFit.size, nameSize * 0.9) : 0;
   const bh = nmFit ? Math.max(bhMin, nmFit.lines.length * nmStep + 7 * S) : bhMin;
@@ -7511,11 +7573,22 @@ function drawCard(c, card, x, y, w, h, o) {
      tribeless one at a glance. So tribe is not just WHICH colour, it is HOW
      MUCH: a Frostborn plate is tinted and lit in cyan, a tribeless one is bare
      slate with a steel line under it. */
-  const bTint = card.tribe ? 0.30 : 0.09;
+  /* AND A MIX IS NOT A SHADE. The plate was the tribe's colour mixed INTO a
+     blue slate, and that works for exactly one tribe: blue plus slate is still
+     blue, so Frostborn came out right, while Hearthkin's orange averaged with
+     navy and landed on milk chocolate — a hue neither the tribe nor the frame
+     has anywhere else on the card. Nothing should be allowed to land there by
+     accident. So the plate is the tribe's OWN colour taken down in value, which
+     keeps the hue and most of the chroma and only removes light; a tribeless
+     card keeps the slate, because it has no hue to take down. */
+  const shade = (col, k) => mix(col, '#050a14', k);
+  const plate = card.tribe
+    ? [shade(tribeCol, 0.62), shade(tribeCol, 0.76), shade(tribeCol, 0.87)]
+    : [mix('#3a5075', tribeCol, 0.09), mix('#1b2c49', tribeCol, 0.08), mix('#0f1c31', tribeCol, 0.11)];
   const bg = c.createLinearGradient(0, by0, 0, bandBot);
-  bg.addColorStop(0, mix('#3a5075', tribeCol, bTint));
-  bg.addColorStop(0.5, mix('#1b2c49', tribeCol, bTint * 0.85));
-  bg.addColorStop(1, mix('#0f1c31', tribeCol, bTint * 1.25));
+  bg.addColorStop(0, plate[0]);
+  bg.addColorStop(0.5, plate[1]);
+  bg.addColorStop(1, plate[2]);
   c.fillStyle = bg;
   c.fillRect(fi, by0, w - fi * 2, bh);
   // the tribe's light, raked in from the top left where the card's light is
@@ -7543,15 +7616,13 @@ function drawCard(c, card, x, y, w, h, o) {
   en.addColorStop(0.5, tribeCol);
   en.addColorStop(1, mix(tribeCol, '#0c1727', 0.45));
   c.fillStyle = en; c.fillRect(fi, bandBot - enh, w - fi * 2, enh);
-  /* gear wears a notch out of its band, so a type is legible without reading.
-     It used to be a dark triangle, which on a dark plate is nothing at all — it
-     is a chip knocked out of the enamel now, in the face's own colour. */
-  if (!isUnit && card.type !== 'charm') {
-    c.beginPath();
-    c.moveTo(fi + 4 * S, bandBot); c.lineTo(fi + 11 * S, bandBot - 5 * S); c.lineTo(fi + 18 * S, bandBot);
-    c.closePath();
-    c.fillStyle = 'rgba(226,238,252,.62)'; c.fill();
-  }
+  /* THE GEAR CHIP IS CUT, with nothing put back. A pale triangle sitting point
+     up, half in the enamel and half below it, is the same shape and very nearly
+     the same colour as the skyline peaks in the window six units under it — so
+     on a hearth card it read as a mountain leaking through the frame, and on
+     GEAR SHIELD the face edge sliced it flat. It also disappeared entirely at
+     hand size, so it was not doing the job it was added for either. The word on
+     the footer rail already says what kind of thing this is. */
   /* A LIGHT rule, not a dark one. The first cut put a dark hairline under the
      band and the contrast check caught it on hand cards: the name is floored to
      the readable minimum there, so at that size the glyph band reaches the
@@ -7580,29 +7651,21 @@ function drawCard(c, card, x, y, w, h, o) {
      and the name centres in what is left, which is why the rail is measured
      here rather than guessed at. */
   const nameX = fi + gemRail + (w - fi * 2 - gemRail) / 2;
-  /* WHEN THE CARD IS TOO SMALL FOR TEXT, THE NAME WINS AND THE RULES GO.
-
-     On a fold's cover a hand card is about 36 CSS pixels wide and the legibility
-     floor is 9, so nothing on it can be read: 57 of 58 rules texts ellipsise —
-     including two-word ones, which is the tell that this is not a long-text
-     problem — and 58 of 58 names. The board that produced this had TWO cards
-     both reading `EMBER…`, which is the actual failure: not that the rules are
-     cut, but that you cannot tell two cards in your own hand apart.
-
-     Shrinking further is not available; the floor is the floor. So below the
-     width where a name fits on one line the card changes what it shows. The
-     name WRAPS to two lines and gets the band's full height, and the rules line
-     — unreadable at this size and one tap away in the inspect panel — is
-     dropped to pay for it. `EMBER` over `FLASK` beats `EMBER…` next to another
-     `EMBER…`, and it is the only thing on the face that has to survive. */
+  /* WHEN THE CARD IS TOO SMALL FOR TEXT, THE NAME WINS — and this block only
+     handles the winning half. `tiny` wraps the name across the band's full
+     height; whether the rules line is dropped to pay for it is decided down in
+     the rules block, off the rules themselves. Deciding both here off the NAME
+     is what shipped the drop-out that never dropped anything: the flag was
+     read by this block and by nothing else, so the rules ran underneath and
+     ellipsised, and on a fold KETTLEBEAK's rule came out as `On…`. */
   if (tiny) {
     /* AND A NAME WITH NO SPACE IN IT BREAKS MID-WORD, which is the common case
        rather than the exception: most cards in this game are one word, so
        wrapping only at spaces left KETTLE…, WHETS… and CINDER… truncated while
-       BONE STEW and EMBER FLASK came out whole. A hyphenless break is what a
-       book does when a long word meets a narrow column, and KETTLE over BEAK is
-       read as one word by anybody looking at a picture of a kettle-beaked bird.
-       An ellipsis throws the second half away; a break keeps it. */
+       BONE STEW and EMBER FLASK came out whole. A hyphenated break is what a
+       book does when a long word meets a narrow column, and KETTLE- over BEAK
+       is read as one word by anybody looking at a picture of a kettle-beaked
+       bird. An ellipsis throws the second half away; a break keeps it. */
     const ns2 = nmFit.size, two = nmFit.lines, step2 = nmStep;
     two.forEach((ln, i) => txt(c, ellipsize(c, ln, ns2, nameW),
       nameX, by0 + bh / 2 + (i - (two.length - 1) / 2) * step2,
@@ -7619,9 +7682,6 @@ function drawCard(c, card, x, y, w, h, o) {
      as a place rather than a passport photo. */
   const ax = fi + 4 * S, ay = by0 + bh + 6 * S;
   const aw = w - (fi + 4 * S) * 2;
-  /* A unit's window shrank the rules line to one truncated clause at hand
-     size, which is the one place the text has to be readable. Gear can afford
-     a bigger picture because its rules are shorter. */
   /* AND THE PICTURE DOES NOT GET MORE OF THE CARD — it gets more out of what it
      already had. Growing this to 0.435 was the obvious first move and it cost
      the rules a line on every card: `Its bite leaves…` at 300 units wide, which
@@ -7629,7 +7689,90 @@ function drawCard(c, card, x, y, w, h, o) {
      short of room; it was spending its top third on empty sky and drawing the
      subject at a third of its height. Fit the subject properly and the same
      window holds twice the picture. */
-  const ah = Math.max(h * 0.16, (isUnit ? h * 0.41 : h * 0.44) - bhGrew);
+  /* GEAR'S WINDOW WAS 0.44 AND IT IS 0.41 NOW, THE SAME AS A UNIT'S, because
+     the reason given for the difference is not true. The comment said "gear can
+     afford a bigger picture because its rules are shorter"; measured across the
+     whole pool at one body size, the four longest paragraphs in the game are
+     BANKED EMBERS, AVALANCHE, PRY ROD and A HANDFUL OF SNOW — all four of them
+     gear. So the cards with the most to say had the shallowest well, and they
+     were the ones truncating. One window, one well, one body size. */
+  const ahBase = Math.max(h * 0.16, h * 0.41 - bhGrew);
+  /* ------- THE RULES WELL IS MEASURED BEFORE THE PICTURE IS PAINTED -------
+     because on a handset the text may not be drawable at all, and if it is not
+     then the picture takes the room the well was holding. Everything below is
+     geometry off `h` and `S`; nothing here draws. */
+  const FH = 16 * S;                       // the footer rail
+  const fy = h - fi - FH;                  // its top edge
+  const by = fy + FH * 0.5;                // and the line everything on it sits on
+  const wellBot = fy - 0.8 * S;            // the well stops just above the rail
+  const wellW = aw - 10 * S;
+  /* ONE BODY SIZE AND ONE LEADING, ACROSS THE SET.
+
+     `maxLines` used to be worked out from a FIXED line height of 12.2 units and
+     the paragraph was then shrunk to fit that count — two computations that
+     never agreed. A well deep enough for three lines of the size the text ended
+     up at would report room for two, the paragraph would be shrunk until it fit
+     two, and the card shipped with 40% of its well empty at a smaller size than
+     three lines would have needed. A hand of eight had four different body
+     sizes in it, which does not read as emphasis, it reads as a rendering
+     fault: the eye lands on the rules on the short cards and on the picture on
+     the long ones, at random.
+
+     So the size is a CONSTANT and the capacity is derived from it — the other
+     way round from before. 8.4 is not a taste call either; it is the largest
+     size at which the deepest paragraph in the pool still fits this well, and
+     the well is as deep as the band and the rail can afford to make it. */
+  const BODY = 8.4 * S;
+  /* AND A RULE DOES NOT END ON A LINE OF ITS OWN NUMBER. Every rule in this
+     game ends in a value — `leave Ember 2.`, `mends the whole line 4.` — and at
+     one fixed size the wrap drops that value onto a line by itself often
+     enough to look like a fault rather than a break. The number is bound to the
+     word it belongs to with a hard space, which is what a typesetter does with
+     a unit and its quantity; the pair then moves down together or not at all. */
+  const rules = String(card.text || '').replace(/ (\S{1,3})$/, '\u00a0$1');
+  /* What the well would hold if the picture stayed the size it is. */
+  const ty0 = ay + ahBase + 4 * S;
+  const cap = (wh) => {
+    const lh2 = textSize(BODY) * 1.12;
+    return Math.max(1, Math.floor((wh - 3 * S - textSize(BODY)) / lh2) + 1);
+  };
+  const room0 = cap(wellBot - (ty0 - 3 * S));
+  const fit0 = fitLines(c, rules, wellW, room0, BODY, BODY);
+  /* AND THE DROP-OUT GATES ON THE RULES, NOT ON THE NAME.
+
+     The card has always documented this: below the size where text can be read,
+     drop the unreadable rules line and give the name the band. The flag was
+     computed off the NAME's fit and then only ever consumed by the name block —
+     the rules ran unconditionally underneath and ellipsised. So an iPhone SE
+     hand said `Its bite…` and `On deplo…`, and on a fold KETTLEBEAK's rule
+     rendered as the literal string `On…`. No card in hand said what it did.
+
+     The gate is HOW MUCH OF THE RULE SURVIVES, which is the only form of the
+     question that holds across shapes. Two conditions, both required.
+
+       NARROW    of everything the paragraph says, under half of it is still
+                 on the card once the well has taken what it can hold. That is
+                 not a shortened rule, it is a fragment: `Ember…`, `Its bit…`,
+                 `Heal 6…`. Half is where the two shapes separate cleanly: on a
+                 fold the survivors run 25% to 41%, and on an iPhone SE reward
+                 pick — where you are choosing and want every word you can get
+                 — the same cards keep 55% to 95%.
+       OVERRUN   and there was more to say than the well could hold.
+
+     Overrun alone is not enough on purpose — a desktop hand with a long rule
+     keeps its cut last line, because three quarters of a rule is worth reading
+     and the ellipsis honestly says there is more. It is the card that keeps
+     almost none of it that should show the picture instead: a bigger portrait
+     and a whole name beat two cards in the same hand both reading `EMBER…`.
+
+     The first cut of this asked whether a LINE could carry two ordinary words,
+     and it under-fired on exactly the shapes it was written for: on a fold
+     `Its bite` fits a line perfectly well, and the card still had room for only
+     one of the three lines that sentence needs. What is broken is not the line,
+     it is the paragraph. */
+  const kept = fit0.lines.slice(0, room0).join(' ').length;
+  const dropRules = fit0.lines.length > room0 && kept < rules.length * 0.5;
+  const ah = dropRules ? Math.max(h * 0.16, wellBot - 1.2 * S - ay) : ahBase;
   /* WHAT WEATHER THIS CARD STANDS IN. Every one of the 58 cards used to get the
      same ridge under the same pale halo, so the picture told you nothing until
      you had read the name — and a wall of Frostborn cards was one shape. The
@@ -7948,7 +8091,11 @@ function drawCard(c, card, x, y, w, h, o) {
      The text used to sit in its own cream well, which made four stacked
      rectangles of a card that only ever needed two. It sits on the body now,
      with a hairline over it standing in for the box. */
-  const ty = ay + ah + 6 * S;
+  /* Four units of gutter under the picture, not six. Two units bought nothing
+     visible — the window has a rim and the well has a lip, so the two edges
+     never touched — and they are two units of the well, which is where the
+     body size of the whole set is decided. */
+  const ty = ay + ah + 4 * S;
   /* ONE FOOTER, ON EVERY CARD, WHATEVER IS STANDING ON IT.
 
      The type tag used to be reserved space that the rules text could take back
@@ -7971,11 +8118,9 @@ function drawCard(c, card, x, y, w, h, o) {
      set into a plinth does anyway, so the rail only has to be deep enough to
      be a plinth. At sixteen it is, and the rules block ends up with more room
      than it had before the rail existed. */
-  const FH = 16 * S;                       // the rail
-  const fy = h - fi - FH;                  // its top edge
-  const by = fy + FH * 0.5;                // and the line everything on it sits on
-  const wellBot = fy - 1.2 * S;            // the well stops just above the rail
-  const th = wellBot - ty;
+  /* `FH`, `fy`, `by` and `wellBot` are measured up at the window, because the
+     picture's height depends on whether this card's rules can be drawn at all
+     and that question cannot be asked without the well's geometry. */
   /* THE RULES SIT IN A WELL, and it used to be a light one.
 
      A shallow recess in the same pale blue as the face is a disabled form
@@ -7988,14 +8133,6 @@ function drawCard(c, card, x, y, w, h, o) {
      dark rail — the one bright saturated area on the face is the window, which
      is where a card game wants your eye. */
 
-  const maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
-  const fit = fitLines(c, card.text || '', aw - 10 * S, maxLines, 11.5 * S, 7.5 * S);
-  /* The shrink loop cannot go below the text floor, so on a phone the paragraph
-     can still be taller than the box. Measure what the box actually holds at
-     the size the text will be DRAWN at, and cut to that — the card face is a
-     glance, and the full rules are one tap away in the inspect panel. */
-  const lh = fit.size * 1.12;
-  const lines = fit.cut(Math.max(1, Math.floor((th - 2 * S) / lh)));
   /* THE WELL IS A FIXED PANEL AND THE TEXT IS CENTRED IN IT.
 
      Sizing the recess to its paragraph was the second attempt and it was worse
@@ -8010,6 +8147,13 @@ function drawCard(c, card, x, y, w, h, o) {
      card of every kind, and the text is centred inside it. */
   const wy = ty - 3 * S;
   const wh2 = wellBot - wy;
+  /* The capacity is worked out at the size the text is actually DRAWN at —
+     which on a phone is the floor rather than `BODY` — and it counts the last
+     line as a line of glyphs rather than as a full line step, because the leading
+     under the final line is not room the paragraph needs. Getting that wrong by
+     one step is what cost the set its fourth line. */
+  const lh = fit0.size * 1.12;
+  const lines = fit0.cut(cap(wh2));
   const top = wy + wh2 / 2 - (lines.length - 1) * lh / 2;
   /* AND THE WORD ON THE RAIL IS STILL ALLOWED TO GO — the word, not the rail.
 
@@ -8025,54 +8169,56 @@ function drawCard(c, card, x, y, w, h, o) {
      stays a row. The old drop-out took the whole plate, which is why it read as
      a rendering fault when it fired on nine cards of twelve. */
   const TAG_SIZE = 9.4 * S;
-  const showTag = by - (top + (lines.length - 1) * lh) >=
-    (fit.size + textSize(TAG_SIZE)) / 2 * 0.95;
-  c.save();
-  rr(c, ax, wy, aw, wh2, 6 * S);
-  c.clip();
-  /* A FLAT BASE COAT, THEN THE LIGHT OVER IT UNDER A WASH — and that is not a
-     stylistic choice, it is what makes the rules text CHECKABLE.
+  const showTag = dropRules || by - (top + (lines.length - 1) * lh) >=
+    (fit0.size + textSize(TAG_SIZE)) / 2 * 0.95;
+  if (!dropRules) {
+    c.save();
+    rr(c, ax, wy, aw, wh2, 6 * S);
+    c.clip();
+    /* A FLAT BASE COAT, THEN THE LIGHT OVER IT UNDER A WASH — and that is not a
+       stylistic choice, it is what makes the rules text CHECKABLE.
 
-     The contrast check reads the colour under a glyph off a raster that only
-     records solid fills; a gradient records a placeholder it cannot parse, and
-     a wash below 0.9 alpha records nothing at all because it tints what is
-     under it rather than replacing it. So a well painted as one gradient — the
-     way this file paints everything — hands its paragraph NO ground, and the
-     one block of body copy on the card was quietly exempt from the only check
-     that asks whether text can be read.
+       The contrast check reads the colour under a glyph off a raster that only
+       records solid fills; a gradient records a placeholder it cannot parse, and
+       a wash below 0.9 alpha records nothing at all because it tints what is
+       under it rather than replacing it. So a well painted as one gradient — the
+       way this file paints everything — hands its paragraph NO ground, and the
+       one block of body copy on the card was quietly exempt from the only check
+       that asks whether text can be read.
 
-     Solid first, lit second, and the lighting laid down under a wash so it
-     tints rather than replaces. The eye sees what it saw; the raster now sees
-     the colour the ink is actually sitting on. */
-  c.fillStyle = WELL_COL;
-  c.fillRect(ax, wy, aw, wh2);
-  c.globalAlpha = 0.85;
-  const wellG = c.createLinearGradient(0, wy, 0, wy + wh2);
-  wellG.addColorStop(0, 'rgba(8,15,28,.62)');
-  wellG.addColorStop(0.45, 'rgba(8,15,28,.07)');
-  wellG.addColorStop(1, 'rgba(150,192,240,.16)');
-  c.fillStyle = wellG; c.fillRect(ax, wy, aw, wh2);
-  /* The recess is cut here rather than by `inset`, for the same reason and by
-     the same rule: `inset` lays its shadow along the top edge as a gradient,
-     which lands on the first line of the paragraph and takes its ground back
-     out. Identical geometry, drawn under the wash. */
-  const wd = 2.4 * S;
-  let wg = c.createLinearGradient(0, wy, 0, wy + wd * 2.2);
-  wg.addColorStop(0, DARK + '0.45)'); wg.addColorStop(1, DARK + '0)');
-  c.fillStyle = wg; c.fillRect(ax, wy, aw, wd * 2.2);
-  wg = c.createLinearGradient(ax, 0, ax + wd * 1.6, 0);
-  wg.addColorStop(0, DARK + '0.28)'); wg.addColorStop(1, DARK + '0)');
-  c.fillStyle = wg; c.fillRect(ax, wy, wd * 1.6, wh2);
-  wg = c.createLinearGradient(0, wy + wh2 - wd * 1.4, 0, wy + wh2);
-  wg.addColorStop(0, LIGHT + '0)'); wg.addColorStop(1, LIGHT + '0.45)');
-  c.fillStyle = wg; c.fillRect(ax, wy + wh2 - wd * 1.4, aw, wd * 1.4);
-  c.restore();
-  rr(c, ax, wy, aw, wh2, 6 * S);
-  c.lineWidth = 1.6 * S; c.strokeStyle = 'rgba(7,13,26,.72)'; c.stroke();
-  // the lip of light where the face's edge catches the light above the hole
-  rr(c, ax - 1.2 * S, wy - 1.2 * S, aw + 2.4 * S, wh2 + 2.4 * S, 7.2 * S);
-  c.lineWidth = 1.1 * S; c.strokeStyle = LIGHT + '0.40)'; c.stroke();
-  lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, RULE_INK, 'center', 't', 0));
+       Solid first, lit second, and the lighting laid down under a wash so it
+       tints rather than replaces. The eye sees what it saw; the raster now sees
+       the colour the ink is actually sitting on. */
+    c.fillStyle = WELL_COL;
+    c.fillRect(ax, wy, aw, wh2);
+    c.globalAlpha = 0.85;
+    const wellG = c.createLinearGradient(0, wy, 0, wy + wh2);
+    wellG.addColorStop(0, 'rgba(8,15,28,.62)');
+    wellG.addColorStop(0.45, 'rgba(8,15,28,.07)');
+    wellG.addColorStop(1, 'rgba(150,192,240,.16)');
+    c.fillStyle = wellG; c.fillRect(ax, wy, aw, wh2);
+    /* The recess is cut here rather than by `inset`, for the same reason and by
+       the same rule: `inset` lays its shadow along the top edge as a gradient,
+       which lands on the first line of the paragraph and takes its ground back
+       out. Identical geometry, drawn under the wash. */
+    const wd = 2.4 * S;
+    let wg = c.createLinearGradient(0, wy, 0, wy + wd * 2.2);
+    wg.addColorStop(0, DARK + '0.45)'); wg.addColorStop(1, DARK + '0)');
+    c.fillStyle = wg; c.fillRect(ax, wy, aw, wd * 2.2);
+    wg = c.createLinearGradient(ax, 0, ax + wd * 1.6, 0);
+    wg.addColorStop(0, DARK + '0.28)'); wg.addColorStop(1, DARK + '0)');
+    c.fillStyle = wg; c.fillRect(ax, wy, wd * 1.6, wh2);
+    wg = c.createLinearGradient(0, wy + wh2 - wd * 1.4, 0, wy + wh2);
+    wg.addColorStop(0, LIGHT + '0)'); wg.addColorStop(1, LIGHT + '0.45)');
+    c.fillStyle = wg; c.fillRect(ax, wy + wh2 - wd * 1.4, aw, wd * 1.4);
+    c.restore();
+    rr(c, ax, wy, aw, wh2, 6 * S);
+    c.lineWidth = 1.6 * S; c.strokeStyle = 'rgba(7,13,26,.72)'; c.stroke();
+    // the lip of light where the face's edge catches the light above the hole
+    rr(c, ax - 1.2 * S, wy - 1.2 * S, aw + 2.4 * S, wh2 + 2.4 * S, 7.2 * S);
+    c.lineWidth = 1.1 * S; c.strokeStyle = LIGHT + '0.40)'; c.stroke();
+    lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit0.size, RULE_INK, 'center', 't', 0));
+  }
 
   /* ---------------- the rail the bottom of the card stands on ---------- */
   c.save();
@@ -8111,40 +8257,78 @@ function drawCard(c, card, x, y, w, h, o) {
   rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
   c.lineWidth = 1 * S; c.strokeStyle = 'rgba(5,10,22,.50)'; c.stroke();
 
-  /* ---------------- the stats, standing on the rail ----------------
-     They used to be three identical circles in a grey tray: a traffic light
-     bolted to the card. Three silhouettes instead — and then, for a while, no
-     tray at all, which swapped one problem for another: a struck badge floating
-     on bare grey face had nothing to be struck INTO, and the bottom third of
-     the card carried no weight. They stand on the rail now, at the same height
-     and the same two x positions a gear card puts its rivets, so a row of
-     wardens and a row of gear share one baseline. */
+  /* ---------------- the stats, set into the rail ----------------
+     THE NUMBERS WERE BEING DRAWN THROUGH THE CARD'S OWN FRAME.
+
+     They stood at 17 units in from each edge with a half-width of 10.5, which
+     puts the outer shoulder at 6.5 — inside the 4.5-unit face inset by two
+     units on the straight, and OUTSIDE it wherever the face's 8.5-unit corner
+     radius has started curving away, which is exactly the height the widest
+     part of the shard and the shield sat at. So the frame's dark corner arc ran
+     through the numeral. Vertically it was the same story: the shard's point
+     landed within a unit and a half of the card's outer edge, on the moulding
+     and the bottom braces. At fold size CINDERPUP's `3` and TINDERCUB's `11`
+     came out half-swallowed, and the only badge that stayed clean was the
+     centred counter — so the two numbers you compare when you pick a card were
+     precisely the two that broke.
+
+     `footX` and `footR` are solved against that corner rather than guessed:
+     the plaque's own rounded corners are the outermost thing on the rail and
+     they clear the face's radius with a unit to spare at every size, mitred
+     card or not, because the mitre only cuts metal OUTSIDE the face.
+
+     The `spec()` haze under each badge is cut. Three soft grey discs with no
+     source, on a rail that is already a lit plate — they read as smudges on the
+     print, and the plaque's own shadow does the job of seating it. */
+  const footX = 19.5 * S, footY = h - 13 * S, footR = 11.5 * S, footH = 7.2 * S;
   if (isUnit) {
     const inj = card.injured;
-    const br = 10.5 * S;                   // proud of a 16-unit rail, by design
-    // a haze of light under each badge: dark metal on a dark rail needs it
-    for (const bx of [17 * S, w / 2, w - 17 * S]) spec(c, bx, by, br * 1.9, 0.18);
-    statBadge(c, 'atk', 17 * S, by, br, '#ff8b7a', inj ? Math.max(0, Math.round(card.atk / 2)) : card.atk);
-    statBadge(c, 'cnt', w / 2, by, br * 0.92, '#ffd166', card.cnt);
+    statBadge(c, footX, footY, footR, footH, '#ff8b7a', inj ? Math.max(0, Math.round(card.atk / 2)) : card.atk);
+    statBadge(c, w / 2, footY, footR, footH, '#ffd166', card.cnt);
     const mh = inj ? Math.max(1, Math.round(card.hp / 2)) : card.hp;
-    statBadge(c, 'hp', w - 17 * S, by, br, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
+    statBadge(c, w - footX, footY, footR, footH, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
   } else {
     /* Gear had nothing along the bottom, so a row of cards next to units read
        as a broken line, and the tag that fixed it took the whole plate with it
        whenever the rules wanted the strip. The rail is unconditional now, so
        what a crowded card loses is one word — the rivets hold the line. */
     const tag = card.type === 'charm' ? 'CHARM' : 'GEAR';
-    // rivets where a warden's shard and shield are — the same line, kept
-    for (const rx of [17 * S, w - 17 * S]) {
-      c.beginPath(); c.arc(rx, by, 3.6 * S, 0, TAU);
-      const rg = c.createLinearGradient(0, by - 3.6 * S, 0, by + 3.6 * S);
+    // rivets where a warden's plaques are — the same line, kept
+    for (const rx of [footX, w - footX]) {
+      c.beginPath(); c.arc(rx, footY, 3.6 * S, 0, TAU);
+      const rg = c.createLinearGradient(0, footY - 3.6 * S, 0, footY + 3.6 * S);
       rg.addColorStop(0, '#8fa8cc');
       rg.addColorStop(1, '#25344f');
       c.fillStyle = rg; c.fill();
       c.lineWidth = 1.1 * S; c.strokeStyle = 'rgba(6,11,22,.7)'; c.stroke();
-      spec(c, rx - 1.1 * S, by - 1.3 * S, 1.8 * S, 0.7);
+      spec(c, rx - 1.1 * S, footY - 1.3 * S, 1.8 * S, 0.7);
     }
-    if (showTag) txt(c, tag, w / 2, by, TAG_SIZE, '#cfe0f6', 'center', 't', 'rgba(7,13,26,.9)');
+    /* AND THE WORD IS CUT INTO THE RAIL, NOT PRINTED ON IT.
+       Every unit in the game teaches the eye that the bottom rail holds three
+       values, and gear answered with a light word in the middle slot at the
+       same weight and nearly the same size as a number — so GEAR read as a
+       stat until you had focused on it. An engraved label is not a value: dark
+       ink with a lit lower lip, letterspaced wide the way a stamped word on a
+       metal rail actually is, so it reads as part of the furniture. Nothing is
+       added to pay for it — the plinth and the bevel it used to sit on are what
+       the rail replaced. */
+    if (showTag) {
+      const gap = TAG_SIZE * 0.34;
+      c.save();
+      c.font = '600 ' + textSize(TAG_SIZE) + "px 'Frostwork','Trebuchet MS',sans-serif";
+      let tw = -gap;
+      for (const ch2 of tag) tw += c.measureText(ch2).width + gap;
+      let gx2 = w / 2 - tw / 2;
+      c.textAlign = 'left'; c.textBaseline = 'middle';
+      for (const ch2 of tag) {
+        c.fillStyle = 'rgba(206,226,250,.52)';       // the lit lip below the cut
+        c.fillText(ch2, gx2, footY + Math.max(0.8, 1.0 * S));
+        c.fillStyle = 'rgba(9,16,29,.95)';           // and the cut itself
+        c.fillText(ch2, gx2, footY);
+        gx2 += c.measureText(ch2).width + gap;
+      }
+      c.restore();
+    }
   }
 
   /* ---------------- what it is wearing ----------------
@@ -11732,6 +11916,13 @@ function drawInspect(c, t) {
   }
   if (card.text) {
     wrapText(c, card.text, 15, 420).forEach((ln) => { txt(c, ln, x, y, 15, '#dcebff', 'left', 't'); y += lineH(15, 20); });
+    y += 12;
+  }
+  /* Flavour, if the card has any, under the rule and a stop quieter — this is
+     the only place it is ever drawn. It used to be glued onto the front of the
+     rules string, where it pushed the rule off the card face. */
+  if (card.flav) {
+    wrapText(c, card.flav, 13.5, 420).forEach((ln) => { txt(c, ln, x, y, 13.5, '#8ba6c6', 'left', 't'); y += lineH(13.5, 18); });
     y += 12;
   }
   const keys = Object.keys((unit ? unit.kw : card.kw) || {}).filter((k) => KEYWORD[k] && (unit ? unit.kw[k] : card.kw[k]));
