@@ -7042,6 +7042,65 @@ const RARE_NAME = { 1: 'common', 2: 'uncommon', 3: 'rare' };
    goes back to meaning health and nothing else. The unaffordable and sold
    plates keep their own colours — those say something the hue does not. */
 const PRICE_PLATE = '#6d5320';
+/* The last card's die — see the note where it is filled, down in `drawCard`. */
+const CARD_DIE = {};
+/* ------------------------------------------------- THE DIE, CUT TO THE SET --
+   The aperture is a die: the same rectangle on every card of a given size (see
+   the block in `drawCard`). This decides how deep that rectangle is, and it does
+   it ONCE PER SIZE for the whole pool rather than once per card — which is the
+   difference between a die and a flex element, and the whole of this round's
+   finding.
+
+   A flat fraction was the first cut and it was wrong in one direction at each
+   end. A fraction big enough to be a picture on a desktop is too greedy the
+   moment the readable floor lifts the body copy — at `h * 0.39` a squat tablet
+   lost seventeen paragraphs to a window that had room to spare, and the same
+   fraction is not big enough where the floor is inert. So the die is cut to the
+   DEEPEST PARAGRAPH IN THE SET at this size — exactly what a printer does when
+   the die and the copy have to share a card — and bounded at both ends:
+
+     DIE_MAX  a ceiling, and it is inert on every shape this game supports.
+              Swept: at 0.42 the set's own deepest paragraph becomes the binding
+              constraint on every card size at every desktop shape, and raising
+              it to 0.48 changes not one number. It is here so the aperture
+              cannot run away if the copy is ever cut back, not as a taste call.
+     DIE_MIN  the floor below which the card stops being a picture of anything;
+              past here the set's paragraphs do not fit at any die and the well
+              drops them, which is the invariant doing its job. A 2.5:1 letterbox
+              with a smudge in it was the round-3 failure and this is the line
+              under it.
+
+   Everything it measures is NOMINAL and shared: one line of name, a two-digit
+   rail. A card whose name wraps to three lines does not get a different window
+   for it — it gets a shallower well, which is where the flex was always
+   supposed to live. */
+const DIE_MAX = 0.42, DIE_MIN = 0.26;
+const DIE_CACHE = new Map();
+function apertureDie(c, w, h) {
+  const key = w + '|' + h + '|' + CSS_PER_UNIT;
+  const hit = DIE_CACHE.get(key);
+  if (hit !== undefined) return hit;
+  const S = w / 126, fi = 4.5 * S;
+  const body = textSize(8.4 * S), lh = body * 1.12;
+  const wellW = (w - (fi + 4 * S) * 2) - 10 * S;
+  const ay0 = fi + 26 * S + 6 * S;                    // the band at one line
+  const rail = Math.max(16 * S, plaqueFit(11.5 * S, 7.2 * S, [88, 88, 88], 17.5 * S).hh * 2 + 1.6 * S);
+  const wellBot = h - fi - rail - 0.8 * S;
+  let deep = 1;
+  for (const t of RULE_TEXTS()) deep = Math.max(deep, wrapText(c, t, body, wellW).length);
+  const need = (deep - 1) * lh + body + 5 * S;        // the paragraph, its reserve and its lip
+  const die = clamp(Math.min(h * DIE_MAX, wellBot - ay0 - 1 * S - need), h * DIE_MIN, h * DIE_MAX);
+  DIE_CACHE.set(key, die);
+  return die;
+}
+/* Every string this game can set in a rules well, gathered once. The die has to
+   be cut to the deepest of them and there are three tables they come out of —
+   cutting it to `CARDS` alone would leave a charm's paragraph out of the
+   measurement and then drop it at draw time. */
+let RULE_POOL = null;
+const RULE_TEXTS = () => RULE_POOL || (RULE_POOL = [CARDS, CHARMS, BELLS]
+  .flatMap((tbl) => Object.values(tbl || {}).map((d) => String((d && d.text) || '')))
+  .filter((t) => t));
 const NAME_INK = '#f4f9ff';
 const NAME_EDGE = 'rgba(8,14,26,.92)';
 const RULE_INK = '#dfeaf9';
@@ -8054,35 +8113,42 @@ function drawCard(c, card, x, y, w, h, o) {
   const rules = String(card.text || '').replace(/ (\S{1,3})$/, '\u00a0$1');
   const cap = (wh) => {
     const lh2 = textSize(BODY) * 1.12;
-    return Math.max(1, Math.floor((wh - 3 * S - textSize(BODY)) / lh2) + 1);
+    return Math.max(0, Math.floor((wh - 3 * S - textSize(BODY)) / lh2) + 1);
   };
-  /* THE WELL IS AS DEEP AS ITS PARAGRAPH AND NO DEEPER, and the picture is
-     whatever is left. This replaces a fixed-depth box, and the box was costing
-     the card at both ends.
+  /* ---------------- THE APERTURE IS A DIE ----------------
+     The picture used to be the flex element. The well took exactly its own
+     paragraph's depth, bottom-anchored on the rail, and the edge that moved was
+     the one against the picture — so the window was a different height on every
+     card and no two cards in a hand shared proportions. Measured: a 3.6x range
+     across the pool at reward size, 6x in one row on a handset, and at the
+     reward pick the inversion was complete, because the card with the LEAST to
+     say got the biggest picture. A card whose art window grows when it has
+     nothing to tell you is a card that rewards the wrong reading.
 
-       TOO DEEP  TINDERCUB's "Frenzy 1." is one short line centred in a recess
-                 built for three, so a fifth of the card face is empty navy on
-                 every short-ruled card in the set.
-       TOO SHALLOW  and at the same time, on a handset where the floor lifts the
-                 body copy, a three-line rule did not fit a box sized against a
-                 picture that was holding a nominal 41% of the card whether it
-                 needed it or not — so the rule went and the player got a
-                 portrait instead of the thing the card does.
+     On a manufactured card the aperture is a die and the type sets to fit it.
+     So the aperture is now a constant share of the card, the same rectangle on
+     every card of a given size, and the WELL is the variable: it is whatever is
+     left between the picture and the rail, and what varies is how much of it the
+     paragraph fills.
 
-     One measurement answers both. `roomMax` is what the well could hold if the
-     picture went down to its floor; if the paragraph fits that, it is kept and
-     the well takes exactly its own depth back off the picture. If it does not
-     fit even then, it goes and the picture takes the lot.
+     `ahMin`, `ahMax`, `roomMax`, `wellNeed` and the three-way clamp that used
+     them are all DELETED — five derived quantities replaced by one. How deep the
+     die is cut is decided once per size by `apertureDie`, off the set's own
+     deepest paragraph; see the note there.
 
-     The well stays BOTTOM-ANCHORED on the rail, which is the half of "a row of
-     cards wants the same thing in the same place" that actually matters — every
-     card in a row still has its rules block ending on the same line, and the
-     edge that moves is the one against the picture, which is different on every
-     card anyway. */
-  const ahMin = h * 0.16;
-  const ahMax = Math.max(ahMin, wellBot - 1.2 * S - ay);
-  const roomMax = cap(wellBot - (ay + ahMin + 1 * S));
-  const fit0 = fitLines(c, rules, wellW, roomMax, BODY, BODY);
+     The `min` is a SPILL GUARD, not a second degree of freedom. A fold-size hand
+     card can want a five-line name band — the readable floor is 23 units there
+     and the card is 91 wide — and a band that tall leaves the die hanging off
+     the bottom edge onto the table. It bites on exactly that case and on nothing
+     else; the band eating the card at thumbnail sizes is an older defect than
+     this one and it is not the aperture's to solve. */
+  const ah = Math.max(0, Math.min(apertureDie(c, w, h), h - fi - ay));
+  /* AND THE WELL TAKES WHAT IS LEFT. It is the same panel on every card — see
+     the draw block below, which has said so for two rounds while the geometry
+     above it said otherwise. */
+  const wellRoom = wellBot - (ay + ah + 1 * S);
+  const wellLines = cap(wellRoom);
+  const fit0 = fitLines(c, rules, wellW, Math.max(1, wellLines), BODY, BODY);
   /* A RULE IS SHOWN WHOLE OR NOT AT ALL. No fragments, ever, at any size.
 
      This gate has now been written twice as a heuristic and has under-fired and
@@ -8094,23 +8160,18 @@ function drawCard(c, card, x, y, w, h, o) {
      "on every foe" and you will play it wrong.
 
      There is no percentage of a rule that is safe to show. The condition is the
-     invariant itself — the paragraph fits the well, or the well goes and the
-     picture takes the room — and it is asserted in the render suite so no third
-     heuristic can grow back here. The cost is real and it is the right cost: a
-     long rule at hand size is now a bigger portrait and a whole name, and the
-     card is one tap from saying everything. */
-  const dropRules = !rules || fit0.lines.length > roomMax;
-  /* The paragraph, plus the same three units of reserve `cap` counts, plus four
-     more of lip when the card can spare them. The two have to be measured off
-     one number: sizing the recess with a lip `cap` had not counted put the well
-     four units short of its own text on the cards where the picture was already
-     at its floor, and a centred paragraph then hung out of the recess top and
-     bottom. Where the card cannot spare the lip the PICTURE goes below its floor
-     rather than the text going outside its hole. */
-  const wellNeed = (fit0.lines.length - 1) * fit0.size * 1.12 + fit0.size + 3 * S;
-  const ah = dropRules ? ahMax
-    : clamp(wellBot - wellNeed - 5 * S - ay,
-      Math.min(ahMin, wellBot - wellNeed - 1 * S - ay), ahMax);
+     invariant itself — the paragraph fits the well, or it is not drawn — and it
+     is asserted in the render suite so no third heuristic can grow back here.
+
+     WHAT THE WELL DOES NOW WHEN THE PARAGRAPH WILL NOT FIT: it stays. The recess
+     is furniture, like the band and the rail, and it is cut on every card
+     whether or not there is a line to put in it — which is what the draw block
+     below has argued since the day it was written, and what the picture growing
+     into the gap quietly contradicted. A row of fold-size cards is now one card
+     design: same band, same window, same recess, same rail. The empty recess is
+     also the place the "there is more to read here" mark belongs — see the note
+     on it in the draw block. */
+  const dropRules = !rules || wellLines < 1 || fit0.lines.length > wellLines;
   /* WHAT WEATHER THIS CARD STANDS IN. Every one of the 58 cards used to get the
      same ridge under the same pale halo, so the picture told you nothing until
      you had read the name — and a wall of Frostborn cards was one shape. The
@@ -8290,24 +8351,43 @@ function drawCard(c, card, x, y, w, h, o) {
      that looked like is Cinderpup's ear tips tangent to the top edge and its
      body tangent to both sides, with no air anywhere. A whole round had just
      been spent giving every card its own cloud, its own hour, its own skyline
-     and its own ground, and the subject was drawn over all of it. There is
-     nothing to tune here — the picture needs the subject to stop at about three
-     quarters of the window and leave the rest to the weather. */
+     and its own ground, and the subject was drawn over all of it. The picture
+     needs the subject to leave the rest of the window to the weather — which is
+     now said as a share of the window's AREA rather than of its height, because
+     a height allowance is not the same restraint on a wide animal as on a tall
+     one, and treating it as though it were is what scaled the set by aspect
+     ratio for three rounds. See below. */
   const topY = ay + ah * 0.04, feetY = ay + ah * 0.945;
-  /* TWO DIFFERENT NORMALISATIONS, because the two `s` arguments mean different
-     things. `drawCreature`'s `s` is a BODY height, so capping the scale is the
-     right cap for the cast: a sootling is a small animal and a kettlebeak is a
-     tall one, and that difference is the point. `drawItemIcon`'s `s` is just a
-     number the shapes are written against, so capping ITS scale caps nothing —
-     it hands each object whatever height its own box happens to have.
+  /* ONE APPARENT SIZE, NOT ONE BOUNDING BOX.
 
-     That is the bug the last pass shipped. Every unit landed on `room / bxh`
-     and filled the window; gear landed on the scale cap and came out at the
-     mercy of its silhouette, so Coldsnap's snowflake spanned four fifths of the
-     window and Thorn Oil's vial spanned a third and floated in the middle of an
-     empty sky. In a mixed hand the gear read as the important cards. Gear is
-     solved for a drawn HEIGHT and stood on the same line as everything else. */
-  const fitArt = (bx, cap, mode) => {
+     Both branches of this used to solve against a `min(height, width)`, and a
+     min of two limits is not a size — it is whichever limit the drawing's
+     PROPORTIONS happened to hit first. So the set was scaled by aspect ratio:
+     a wide animal was pinned by the width allowance and came out short, with a
+     big empty sky above a flattened subject, while a tall one filled the window
+     top to bottom. Measured across the pool at reward size the drawn area ran
+     14% to 60% of the window — a 4.2x spread, 2.9x among the creatures alone —
+     and TINDERCUB, HOARFROG, SNOWPUP, CLUNKBOT and SNOWHARE were all at the
+     bottom of it for the same reason: they are wide.
+
+     Apparent size is AREA, not height and not width. Solve for the scale at
+     which the drawing covers a fixed share of the window, then let the two
+     limits do what limits are for — stopping it leaving the hole. A wide animal
+     and a tall one now read as the same size, which is what "the same subject
+     mass on every card" actually means.
+
+     The two `s` arguments still mean different things — `drawCreature`'s is a
+     body height, `drawItemIcon`'s is a number its shapes are written against —
+     and that no longer needs two code paths, because an area solve does not care
+     what the number means. `mode` is DELETED with the branch it selected; what
+     is left is one width allowance per kind, which is all the difference there
+     ever was.
+
+     The spread that survives is honest and unremovable: a thin upright object
+     (GRUDGE, PRY ROD) cannot cover a third of a landscape window without being
+     taller than it. Those hit `room` and stop, which is the right answer. */
+  const AREA = 0.42;
+  const fitArt = (bx, wideK) => {
     const bxw = Math.max(0.02, bx[2] - bx[0]), bxh = Math.max(0.02, bx[3] - bx[1]);
     /* The stroke floor. Both drawing functions clamp their outline at 2.5 units
        however small the subject gets, so below about a 45-unit body the ink is
@@ -8315,11 +8395,8 @@ function drawCard(c, card, x, y, w, h, o) {
        of it, top and bottom together. Give that back before solving, or on a
        fold-size card the one thing that clips is the outline. */
     const room = (feetY - topY) - 2.6;
-    const sz = mode === 'body'
-      ? Math.min(ah * cap, room / bxh)
-      : Math.min(room, ah * cap) / bxh;
-    const wide = aw * (mode === 'body' ? 0.74 : 0.80) / bxw;
-    const s2 = Math.min(sz, wide);
+    const s2 = Math.min(Math.sqrt(AREA * aw * ah / (bxw * bxh)),
+      room / bxh, aw * wideK / bxw);
     const yy = feetY - bx[3] * s2;
     // wd/ht/mid describe the box as DRAWN, which is what the light and the
     // shadow have to be sized off rather than off `ah`
@@ -8328,8 +8405,8 @@ function drawCard(c, card, x, y, w, h, o) {
   };
   const isCharm = card.type === 'charm';
   const charmCol = (isCharm && (chOf(card.def) || 0) && chOf(card.def).col) || edge;
-  const sub = isUnit ? fitArt(creatureBox(card.art), 0.75, 'body')
-    : fitArt(isCharm ? charmBox(card.def, charmCol) : itemBox(d.art), 0.80, 'tall');
+  const sub = isUnit ? fitArt(creatureBox(card.art), 0.80)
+    : fitArt(isCharm ? charmBox(card.def, charmCol) : itemBox(d.art), 0.84);
   /* CONTACT, not a floating disc. The old shadow was one flat grey ellipse at a
      fixed 30% of the window's width, drawn at the same place whatever was
      standing there — so a Junkpile hovered over a shadow narrower than itself
@@ -8376,6 +8453,18 @@ function drawCard(c, card, x, y, w, h, o) {
      along. They do it now — frost's ground came down two stops for it — and the
      card's own cloud gives the silhouette something to be read against that is
      different on every card. Nothing replaces it. */
+  /* WHAT THIS CARD WAS ACTUALLY CUT TO, written down where a check can read it.
+     The die is only a die if it is the same on every card, and that is a
+     property of a ROW rather than of any one card, so it cannot be seen by
+     looking at one — which is exactly how the aperture drifted into being the
+     flex element over three rounds without anybody noticing. One object, filled
+     on every draw, and the render suite compares it card against card. */
+  CARD_DIE.id = card.def; CARD_DIE.w = w; CARD_DIE.h = h;
+  CARD_DIE.ax = ax; CARD_DIE.ay = ay; CARD_DIE.aw = aw; CARD_DIE.ah = ah;
+  CARD_DIE.band = bh; CARD_DIE.rail = FH; CARD_DIE.well = wellRoom;
+  CARD_DIE.rules = !dropRules;
+  CARD_DIE.subW = sub.wd; CARD_DIE.subH = sub.ht;
+  CARD_DIE.area = (sub.wd * sub.ht) / Math.max(1e-6, aw * ah);
   if (isUnit) drawCreature(c, card.art, sub.x, sub.y, sub.s, { t: o.t || 0, ph: card.uid, blink: card.uid });
   else if (isCharm) drawCharmIcon(c, card.def, charmCol, sub.x, sub.y, sub.s, o.t || 0);
   else drawItemIcon(c, d.art, sub.x, sub.y, sub.s, o.t || 0);
@@ -8559,8 +8648,18 @@ function drawCard(c, card, x, y, w, h, o) {
      edges, and it hands off to the rail's enamel line at the bottom instead of
      to a lip of its own. Its rim, its corner radius and its outer lip are all
      gone — nothing replaces them. */
+  /* AND IT IS CUT ON EVERY CARD, WITH OR WITHOUT A PARAGRAPH IN IT.
+
+     It used to be drawn only when the rules were drawn, and the picture grew
+     into the gap — so a fold-size row was two different card designs: three
+     cards with a letterbox window over a full recess, four with a tall window
+     over bare face. The recess is furniture. A vanilla card in a real set still
+     has an empty text box, and an empty one here is the honest face of "this
+     card has something to say that will not fit at this size" — which is where
+     the inspect affordance belongs, in a rectangle that is now the same on every
+     card whether or not the paragraph made it. */
   const wx = fi, ww = w - fi * 2, whP = fy - wy;
-  if (!dropRules) {
+  {
     c.save();
     c.beginPath(); c.rect(wx, wy, ww, whP);
     c.clip();
@@ -8596,7 +8695,9 @@ function drawCard(c, card, x, y, w, h, o) {
     wg.addColorStop(0, DARK + '0.45)'); wg.addColorStop(1, DARK + '0)');
     c.fillStyle = wg; c.fillRect(wx, wy, ww, wd * 2.2);
     c.restore();
-    lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit0.size, RULE_INK, 'center', 't', 0));
+    if (!dropRules) {
+      lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit0.size, RULE_INK, 'center', 't', 0));
+    }
   }
 
   /* ---------------- the rail the bottom of the card stands on ---------- */
@@ -14035,7 +14136,7 @@ window.FF = {
   handSize, pilePos, flyers, DEEP_FREEZE, hoardOf, seed: (n) => { RNG = mulberry(n >>> 0); }, rnd: () => rnd(),
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
-  drawCreature, drawCard, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
+  drawCreature, drawCard, CARD_DIE, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
   nameSplit,
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,

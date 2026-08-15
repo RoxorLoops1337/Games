@@ -920,6 +920,93 @@ section('every card in the game, drawn and measured');
     'every card in the pool keeps its text readable and its labels apart');
 }
 
+/* --------------------------------------------------- the aperture is a die -- */
+/* WHAT THIS CATCHES, AND WHY NOTHING ELSE COULD.
+
+   For three rounds the art window took whatever the rules well left over, so it
+   was a different height on every card and no two cards in a hand shared
+   proportions — a 3.6x range across the pool at reward size, 6x in one row on a
+   handset, and at a reward pick the card with the LEAST to say ended up with the
+   biggest picture. Every check in this file passed the whole time, because the
+   defect is a property of a ROW: each card on its own is fine and it is only
+   putting four of them side by side that shows it. So it is asserted as a row
+   property here.
+
+   Two statements, and the second is the one with teeth:
+
+     ONE DIE PER SIZE   two cards drawn at the same size whose names set to the
+                        same number of lines get the identical window. The band
+                        is the only thing allowed to move it, and the band moves
+                        it by pushing the whole stack down, not by resizing it.
+     THE RULES DO NOT   the same card drawn with a one-word rule and with the
+     TOUCH IT           deepest paragraph in the game gets the identical window.
+                        This is the invariant that was actually broken; it holds
+                        no matter what else moves.
+
+   Plus the SUBJECT: `fitArt` solved against `min(height, width)`, which is not a
+   size at all — it is whichever limit the drawing's proportions hit first — so a
+   wide animal came out small in a big empty sky. Measured drawn area ran 14% to
+   60% of the window, 4.2x. It is normalised on area now and the spread is held
+   here so it cannot drift back. */
+section('the aperture is a die');
+{
+  const badD = [];
+  /* Longer than anything in the pool, so if the well ever starts buying room
+     off the picture again this is the card that shows it. */
+  const LOUD = 'Whenever a foe is Frosted it gains one attack, and until your next turn '
+    + 'denying a scheme mends the whole line four on the spot.';
+  const r2 = (n) => Math.round(n * 100) / 100;
+  let sizes = 0;
+  for (const [sw, sh] of SIZES) {
+    FF.setStageWidth(sw, sh);
+    for (const [w2, h2] of [[92, 150], [126, 196], [132, 176]]) {
+      const byBand = new Map();
+      const areas = [];
+      sizes++;
+      for (const def of Object.values(FF.CARDS)) {
+        FF.drawCard(ctx2, FF.mkCard(def.id), 40, 40, w2, h2, { t: 0.4 });
+        const quiet = { ...FF.CARD_DIE };
+        areas.push(quiet.area);
+        const loud = FF.mkCard(def.id);
+        loud.text = LOUD;
+        FF.drawCard(ctx2, loud, 40, 40, w2, h2, { t: 0.4 });
+        const said = FF.CARD_DIE;
+        if (r2(quiet.ay) !== r2(said.ay) || r2(quiet.ah) !== r2(said.ah)) {
+          badD.push(`${def.id} ${w2}x${h2}@${sw}: rules move the window `
+            + `${r2(quiet.ay)}+${r2(quiet.ah)} -> ${r2(said.ay)}+${r2(said.ah)}`);
+        }
+        const key = r2(quiet.band);
+        const die = `${r2(quiet.ax)},${r2(quiet.ay)},${r2(quiet.aw)},${r2(quiet.ah)}`;
+        if (!byBand.has(key)) byBand.set(key, [die, def.id]);
+        else if (byBand.get(key)[0] !== die) {
+          badD.push(`${def.id} ${w2}x${h2}@${sw}: ${die} but ${byBand.get(key)[1]} got ${byBand.get(key)[0]}`);
+        }
+      }
+      /* And the spread of drawn subject area, at the shapes where the window is
+         not a letterbox. A wide animal and a tall one have to read as the same
+         size; past a fold the window is 2.5:1 and a tall subject cannot fill it
+         however it is solved, which is geometry rather than a defect. */
+      if (sw >= 1024) {
+        const lo = Math.min(...areas), hi = Math.max(...areas);
+        if (hi / lo > 4) badD.push(`${w2}x${h2}@${sw}: subject area spread x${(hi / lo).toFixed(2)}`);
+      }
+    }
+  }
+  /* The headline, stated where it is unconditional: at the reference desktop
+     every card in the game gets the same rectangle, full stop. */
+  FF.setStageWidth(1280, 720);
+  const one = new Set();
+  for (const def of Object.values(FF.CARDS)) {
+    FF.drawCard(ctx2, FF.mkCard(def.id), 40, 40, 126, 168, { t: 0.4 });
+    one.add(`${r2(FF.CARD_DIE.ax)},${r2(FF.CARD_DIE.ay)},${r2(FF.CARD_DIE.aw)},${r2(FF.CARD_DIE.ah)}`);
+  }
+  log.length = 0;
+  ok(sizes >= 27, `the die checked at every shape and card size (${sizes})`);
+  eq(one.size, 1, 'one aperture for the whole set at the reference desktop');
+  eq([...new Set(badD)].slice(0, 4).join(' | '), '',
+    'the window is the same die on every card, and no paragraph moves it');
+}
+
 /* ------------------------------------ every foe, on the board and inspected -- */
 /* THE NAMED GAP, CLOSED. Drawing every card took name coverage as far as cards
    go and left 73% overall, and the missing quarter was named honestly: foes the
