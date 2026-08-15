@@ -6761,7 +6761,20 @@ function drawUnit(c, u, t) {
     c.rotate(u.tilt);
     c.translate(-u.px, -u.py);
   }
-  const tribeCol = u.boss ? '#ffb347' : u.side === 'p' ? (u.leader ? C.gold : '#7fb2e8') : '#d08a8a';
+  /* THE SLAB IS CUT FROM THE SAME BAR AS THE CARD, AND THAT IS ALL IT TAKES.
+     A warden on the board wore one navy and a foe one maroon, so five metals
+     and five skies stopped existing the moment a card was played — the same
+     Hearthkin was bronze in your hand and navy two inches above it.
+
+     It takes the METAL and the GROUND and nothing else. Not the braces, not the
+     moulding, not the motes, not the skyline: a slab is a small object seen six
+     at a time with a name, three numbers, up to four status pills and a charm
+     rail already on it, and every ornament the card face carries would be noise
+     at this size. Two fills change colour. Nothing is added. */
+  const tk = tribeKey(u.card, u.side);
+  const mat = FRAME_MAT[tk] || FRAME_MAT.none;
+  const wth = WEATHER[tk] || WEATHER.none;
+  const tribeCol = u.boss ? '#ffb347' : u.leader ? C.gold : mat.cap;
   if (u.boss) {
     // horns, drawn under the slab so they read as coming out from behind it
     c.save();
@@ -6777,7 +6790,9 @@ function drawUnit(c, u, t) {
     inked(c, '#c9922c', 2.5, C.ink);
     c.restore();
   }
-  panel(c, x, y, w, h, 14, u.side === 'p' ? '#1d2c49' : u.boss ? '#4a2338' : '#3a2436', tribeCol);
+  // a beast stands on the lit stop of its own bar, which is where its extra
+  // quarter of slab and its gold double frame were already going
+  panel(c, x, y, w, h, 14, u.boss ? mat.top : mat.mid, tribeCol);
   if (u.boss) {
     rr(c, x + 4, y + 4, w - 8, h - 8, 11);
     c.lineWidth = 1.6; c.strokeStyle = 'rgba(255,209,102,.55)'; c.stroke();
@@ -6814,9 +6829,22 @@ function drawUnit(c, u, t) {
      And the plaques are solved with it, because they are the other half of the
      same squeeze: at the floor the numerals were taller than their pills and
      the slab's own 14-unit corner arc was cutting through BRAMBLEWICK's `32`. */
+  /* AND THE THIRD NUMBER COMES DOWN OFF THE CORNER TO JOIN THEM.
+
+     The counter was a grey disc pinned to the top-right of the slab while the
+     same number, on the same warden's card an inch below, was the middle of
+     three pills on a rail. One value, two shapes, two places, two colours —
+     and a player comparing the card in their hand with the board had to read
+     the same stat twice in two different languages. It is the card's plaque
+     now, in the card's gold, in the card's position: the middle of the rail,
+     between attack and health, cut to the same `plaqueFit` geometry off the
+     slab's own width. What it keeps that the card does not need is READY, and
+     that is said in VALUE rather than in hue — the same gold, unlit until the
+     counter is one off firing — plus the knock and the ring it always had. */
   const nUp = u.name.toUpperCase();
   const nmW = w - 14;
-  const pq = plaqueFit(12, 8, [u.atk + stat(u, 'spice'), u.hp], 24);
+  const Sb = w / 126;                        // the slab measured in card units
+  const pq = plaqueFit(11.5 * Sb, 7.2 * Sb, [u.atk + stat(u, 'spice'), u.cnt, u.hp], 17.5 * Sb);
   const nFit = nameFit(c, nUp, 12.5, nmW, 2);
   const nSz = textSize(nFit.size);
   const nStep = lineH(nFit.size, nFit.size * 1.12);
@@ -6830,9 +6858,14 @@ function drawUnit(c, u, t) {
   c.save();
   rr(c, x + 7, iy, iw, ih, 10);
   c.clip();
+  /* The ground inside the window is the near ridge of this card's own weather,
+     which is the one colour of a sky that survives being 100 units wide with a
+     creature standing in front of it. `#5c3450` — what a foe's window has been
+     since the first build — is literally `WEATHER.foe.near`, so the enemy side
+     is unmoved and the four tribes stop sharing one navy. */
   const gg = c.createLinearGradient(0, iy, 0, iy + ih);
-  gg.addColorStop(0, u.side === 'p' ? '#31507f' : '#5c3450');
-  gg.addColorStop(1, u.side === 'p' ? '#16233c' : '#2a1524');
+  gg.addColorStop(0, wth.near);
+  gg.addColorStop(1, mix(wth.near, mat.bot, 0.62));
   c.fillStyle = gg; c.fillRect(x + 7, iy, iw, ih);
   c.save();
   c.globalAlpha = 0.2; c.fillStyle = '#000';
@@ -6942,19 +6975,22 @@ function drawUnit(c, u, t) {
   const ready = u.cnt <= 1;
   const kick = u.tick || 0;
   c.save();
-  c.translate(x + w - 13, y + 13 + kick * 5);
+  c.translate(u.px, bby);
   const cs = 1 + kick * 0.35;
   c.scale(cs, cs * (1 - kick * 0.15));
-  if (ready) { c.shadowColor = '#ffd166'; c.shadowBlur = 14 + (ready ? Math.sin(t * 6) * 4 : 0); }
-  c.beginPath(); c.arc(0, 0, 15, 0, TAU);
-  inked(c, kick > 0.4 ? '#ffffff' : ready ? '#ffd166' : '#cfe0f5', 3, C.ink);
-  txt(c, String(u.cnt), 0, 1, 20, '#12203a', 'center', 'd', 0);
+  c.translate(-u.px, -bby);
+  statBadge(c, u.px, bby + kick * 5, pq.hw, pq.hh,
+    kick > 0.4 ? '#ffffff' : ready ? '#ffd166' : mix('#ffd166', '#4c4638', 0.42), u.cnt, pq.sz);
   c.restore();
-  if (kick > 0.05) {
+  // and the one about to fire keeps its pulse — the halo it used to throw is
+  // what pays for this line, not an addition on top of it
+  if (ready || kick > 0.05) {
     c.save();
-    c.globalAlpha = kick * 0.8;
+    c.globalAlpha = kick > 0.05 ? kick * 0.8 : 0.34 + Math.sin(t * 6) * 0.16;
+    const sp = kick > 0.05 ? (1 - kick) * 10 : 3;
     c.strokeStyle = '#ffd166'; c.lineWidth = 2.5;
-    c.beginPath(); c.arc(x + w - 13, y + 13, 15 + (1 - kick) * 16, 0, TAU); c.stroke();
+    rr(c, u.px - pq.hw - sp, bby - pq.hh - sp, (pq.hw + sp) * 2, (pq.hh + sp) * 2, pq.hh * 0.7 + sp);
+    c.stroke();
     c.restore();
   }
 
@@ -7276,10 +7312,47 @@ function statBadge(c, x, y, hw, hh, col, val, sz) {
    spending five colours to say four things. Tarnished brass goes to verdigris
    in the world, so scrap does here — hearth keeps the brown, which is the one
    that has to stay warm because the tribe is a fire. */
+/* WHICH OF THE WORLDS A THING BELONGS TO, ASKED IN ONE PLACE.
+
+   `FRAME_MAT[card.tribe] || FRAME_MAT.none` was written inside `drawCard` and
+   copied nowhere, which is how the tribe channel came to stop at the card face:
+   the collection, the board slab and the leader panel each hard-coded one navy
+   and knew nothing about metals. They all ask this now, and so does drawCard.
+
+   IT ALSO ANSWERS FOR THE ENEMY, which is the other half of the same defect. A
+   foe card is built with `tribe: null`, so every beast in the game rendered in
+   the UNTRIBED metal under the UNTRIBED overcast — the identical world as
+   Snowpup, Thorn Oil, Cairn and the other eleven neutrals. Cards you want and
+   cards that kill you were the same object. One of the two had to move and it
+   is the foes: grey belongs to the caravan's unaligned kit (round 3 argued that
+   at length and it is right), and the enemy already has a colour — the board
+   has painted their half maroon since the first build. This is that colour,
+   lifted onto the card face rather than invented for it. */
+function tribeKey(o, side) {
+  if (side === 'e' || (o && o.foe)) return 'foe';
+  return (o && o.tribe) || 'none';
+}
 const FRAME_MAT = {
-  none:   { top: '#1f2b40', mid: '#101a2c', bot: '#05090f',
-    cap: '#3a4e6d', capLit: '#8298b8', rim: 'rgba(168,196,232,',
-    face: ['#d9e2ef', '#c3d0e2', '#9fb2cc'] },
+  /* UNTRIBED LEAVES THE BLUE FAMILY, a round after its weather did. The window
+     went to a flat grey overcast and the frame stayed slate-blue, so THORN OIL
+     and WHETSTONE wore blued steel two cards from HUSH and ICEPICK and nothing
+     on the gear sheet sorted them: `#1f2b40` against frost's `#183246` is four
+     points of hue. It is grey iron now, cut off the same bar as its own sky —
+     warm-neutral, the way that overcast is warm-neutral — which is also what
+     stops it reading as GREYED-OUT in a warm hand: a disabled control is low
+     value AND low contrast, and this is a dark bar with a bone stock and a lit
+     rim on it. Untribed is unaligned, not switched off. */
+  none:   { top: '#3c3b37', mid: '#232220', bot: '#0a0a09',
+    cap: '#77736a', capLit: '#d8d2c4', rim: 'rgba(224,220,208,',
+    face: ['#e8e4da', '#d2cec3', '#aaa69b'] },
+  /* AND THE ENEMY IS THE SIXTH BAR. Every number in it is already on the board
+     — `#4a2a3c`/`#251522` is the table their half is painted on, `#a05a72` the
+     line round it, `#e8b0c0` the cracks in their ice — so this is the tribe
+     channel reaching a surface it never reached, not a sixth palette. The face
+     is the same three stops off its own hue the other five take. */
+  foe:    { top: '#4a2a3c', mid: '#251522', bot: '#0b0509',
+    cap: '#a05a72', capLit: '#e8b0c0', rim: 'rgba(232,176,192,',
+    face: ['#ecd6dc', '#d4b6c0', '#ab8b96'] },
   hearth: { top: '#44291a', mid: '#26140a', bot: '#0c0503',
     cap: '#7d5530', capLit: '#f2c894', rim: 'rgba(255,212,164,',
     face: ['#ecdcc6', '#d7c2a4', '#b1957a'] },
@@ -7630,7 +7703,37 @@ const WEATHER = {
      and why it is the one horizon in the game with no colour to name. */
   none: { top: '#3b3d41', mid: '#8b877f', horiz: '#d8d2c7', sun: '#c2bbad', sunY: 0.70, sunR: 0.46,
     far: '#a9a49a', near: '#6b665e', snowHi: '#e7e3da', snowLo: '#aeaaa1', jag: 0.45, mote: 'rgba(232,229,222,.75)', rise: -0.5 },
+  /* AND THE FELL THE BEASTS COME OUT OF. It is not a sixth invention: `#251522`
+     is the enemy table, `#5c3450` the ground inside an enemy slab, `#e8b0c0`
+     the cracks in their ice — the board has been telling the player what colour
+     a foe is since the first build and the card face was the one surface that
+     did not listen. The sun is the lowest and smallest in the set and there is
+     no warmth left in it, which is the difference between a bruised dusk and
+     hearth's fire; the motes fall, because it is still a blizzard. */
+  foe: { top: '#251522', mid: '#7a3a50', horiz: '#d09a94', sun: '#c07a80', sunY: 0.70, sunR: 0.34,
+    far: '#9c5f74', near: '#5c3450', snowHi: '#ded0cf', snowLo: '#a3838c', jag: 0.85,
+    mote: 'rgba(232,176,192,.85)', rise: -1 },
 };
+/* THE SKY, AS A THING THREE SURFACES CAN ASK FOR. It was four `addColorStop`
+   calls inside `drawCard` and nowhere else, so the collection tile and the
+   leader panel — the two places you see a creature OUTSIDE a card — stood it on
+   flat navy. Same four stops, same hour, one function. */
+function skyGrad(c, wth, y0, y1, hr) {
+  hr = hr || 0;
+  const g = c.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, mix(wth.top, wth.mid, 0.10 + hr * 0.22));
+  g.addColorStop(0.34 + hr * 0.10, wth.mid);
+  g.addColorStop(0.72 + hr * 0.08, mix(wth.mid, wth.horiz, 0.72));
+  g.addColorStop(1, wth.horiz);
+  return g;
+}
+/* And the field it stands in, which is the other half of a window. */
+function snowGrad(c, wth, y0, y1) {
+  const g = c.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, wth.snowHi);
+  g.addColorStop(1, wth.snowLo);
+  return g;
+}
 /* One number per card, so the ridge behind Cinderpup is not the ridge behind
    Sootling. Cards are identified by their def id and it never changes, so the
    horizon a card gets is stable — a player who has seen a card twice has seen
@@ -7739,8 +7842,13 @@ function drawCard(c, card, x, y, w, h, o) {
      body, so half a row of cards had no band at all. Slate instead: every card
      carries the same shape, and the colour says WHICH tribe rather than
      whether there is one. */
-  const tribeCol = card.tribe ? TRIBES[card.tribe].col : '#8ea7c6';
-  const tribeLit = card.tribe ? TRIBES[card.tribe].col2 : '#c3d5ea';
+  /* The band follows the metal, including out of the blue: an untribed card
+     wearing a slate-blue band over grey iron over a grey overcast was the frost
+     collision surviving in the one channel the frame fix did not reach. And a
+     foe's band is the line the board draws round its own half. */
+  const tk = tribeKey(card);
+  const tribeCol = TRIBES[card.tribe] ? TRIBES[card.tribe].col : tk === 'foe' ? '#d08a8a' : '#b3aa9c';
+  const tribeLit = TRIBES[card.tribe] ? TRIBES[card.tribe].col2 : tk === 'foe' ? '#e8b0c0' : '#ded7c9';
   const S = w / 126;                       // every measurement is card-relative
   c.save();
   if (o.alpha !== undefined) c.globalAlpha = o.alpha;
@@ -7752,7 +7860,7 @@ function drawCard(c, card, x, y, w, h, o) {
   /* The metal is the tribe's; the profile is the rank. A leader sits above
      rare on the profile ladder — it is the one card in a run you build the
      whole run around, and it was wearing SOOTLING's frame. */
-  const mat = FRAME_MAT[card.tribe] || FRAME_MAT.none;
+  const mat = FRAME_MAT[tk] || FRAME_MAT.none;
   const tier = FRAME_TIER[card.leader ? 4 : rare] || FRAME_TIER[1];
   const cut = tier.cut * S;
   /* The rare bloom is CUT. A halo round the card was the third thing saying
@@ -8206,7 +8314,7 @@ function drawCard(c, card, x, y, w, h, o) {
      tribe picks the hour and what is falling out of the sky; the card's own id
      picks the skyline, so two Hearthkin are the same dusk over different
      hills. */
-  const wth = WEATHER[card.tribe] || WEATHER.none;
+  const wth = WEATHER[tk] || WEATHER.none;
   const scn = cardScene(card.def);
   c.save();
   rr(c, ax, ay, aw, ah, 8 * S);
@@ -8228,12 +8336,7 @@ function drawCard(c, card, x, y, w, h, o) {
      horizon narrow, an early one opens up. It is the same three colours — what
      moves is where they meet. */
   const hr = scn.hour;
-  const sky = c.createLinearGradient(0, ay, 0, ay + ah);
-  sky.addColorStop(0, mix(wth.top, wth.mid, 0.10 + hr * 0.22));
-  sky.addColorStop(0.34 + hr * 0.10, wth.mid);
-  sky.addColorStop(0.72 + hr * 0.08, mix(wth.mid, wth.horiz, 0.72));
-  sky.addColorStop(1, wth.horiz);
-  c.fillStyle = sky; c.fillRect(ax, ay, aw, ah);
+  c.fillStyle = skyGrad(c, wth, ay, ay + ah, hr); c.fillRect(ax, ay, aw, ah);
   // the low sun this weather is lit by — the brightest patch on the card
   const sunX = ax + aw * scn.sun, sunY = ay + ah * (wth.sunY - 0.08 + hr * 0.10);
   const sun = c.createRadialGradient(sunX, sunY, 1, sunX, sunY, aw * wth.sunR * 1.7);
@@ -10933,10 +11036,42 @@ function drawLeaderPick(c, t) {
   txt(c, T.name.toUpperCase(), MID, 54, 38, T.col, 'center', 'd');
   txt(c, T.blurb, MID, 92, 15, '#a8c8ea', 'center', 't');
 
-  // the leader, life size
-  panel(c, SAFE + 6, 120, 350, 440, 16, '#1d2c49', T.col);
+  /* THE LEADER, LIFE SIZE — AND STANDING SOMEWHERE.
+
+     A card has three faces in this game: the one in your hand, the slab it
+     becomes on the board, and this. Two of them put the creature in a window
+     with a sky and a field in it; this one stood it on flat navy with no
+     ground under its feet, on the screen where you decide who you are going
+     to spend a whole run being. It is the same metal and the same weather as
+     the leader's own card, drawn through the same two functions — the panel
+     is the frame and the inset is the window it has always been missing. */
+  const lmat = FRAME_MAT[tribeKey(ld)] || FRAME_MAT.none;
+  const lwth = WEATHER[tribeKey(ld)] || WEATHER.none;
+  panel(c, SAFE + 6, 120, 350, 440, 16, lmat.mid, T.col);
   const lx = SAFE + 181;
+  const lwX = SAFE + 18, lwY = 132, lwW = 326, lwH = 244;
+  c.save();
+  rr(c, lwX, lwY, lwW, lwH, 10);
+  c.clip();
+  const lscn = cardScene(ld.id);
+  c.fillStyle = skyGrad(c, lwth, lwY, lwY + lwH, lscn.hour);
+  c.fillRect(lwX, lwY, lwW, lwH);
+  // its own two ridges, off its own seed — a horizon needs a shape or the
+  // window is two bands of colour with an animal standing on the join
+  c.save();
+  skyline(c, lscn.far, lwth.jag, lwX, lwW, lwY, lwH, lwY + lwH, lwth.built);
+  c.globalAlpha = 0.62; c.fillStyle = lwth.far; c.fill();
+  skyline(c, lscn.near, lwth.jag, lwX, lwW, lwY, lwH, lwY + lwH, lwth.built);
+  c.globalAlpha = 0.82; c.fillStyle = lwth.near; c.fill();
+  c.restore();
+  const lgy = lwY + lwH * 0.70;
+  c.fillStyle = snowGrad(c, lwth, lgy, lwY + lwH);
+  c.fillRect(lwX, lgy, lwW, lwY + lwH - lgy);
   drawCreature(c, ld.art, lx, 286, 164, { t, ph: 1.4 });
+  c.restore();
+  // the seam where the window is let into the panel, the same line the card cuts
+  rr(c, lwX, lwY, lwW, lwH, 10);
+  c.lineWidth = 1.6; c.strokeStyle = 'rgba(5,10,22,.55)'; c.stroke();
   txt(c, ld.name.toUpperCase(), lx, 396, 26, '#eaf6ff', 'center', 'd');
   txt(c, 'health ' + ld.hp + '    attack ' + ld.atk + '    counter ' + ld.cnt, lx, 428, 14, '#9fc0e4', 'center', 't');
   wrapText(c, ld.text, 14, 300).forEach((ln, i) => txt(c, ln, lx, 456 + i * lineH(14, 19), 14, '#c8dcf4', 'center', 't'));
@@ -11110,11 +11245,42 @@ function drawCollection(c, t) {
     const x = MID - totalW / 2 + col * (tw + gap), y = 112 + row * (th + 30);
     const have = found(it.id);
     const hovered = UI.hover && UI.hover.id === 'collect' && UI.hover.data === i;
-    panel(c, x, y - (hovered ? 4 : 0), tw, th, 10, have ? '#22304d' : '#161d2e', have ? '#3f5a86' : '#2a3346');
+    /* SIXTY-ONE IDENTICAL SLATE TILES, on the one screen in the game where you
+       see the whole set at once — three rounds built five metals and five skies
+       and the browse screen showed none of them, because the tribe channel was
+       written inside `drawCard` and this is not `drawCard`.
+
+       A found tile is the card's own bar with the card's own window cut into
+       it: `FRAME_MAT[tribe]` for the metal and the same `skyGrad`/`snowGrad`
+       the face uses, off the same per-card seed, so the hour behind Cinderpup
+       here is the hour behind Cinderpup there. Nothing else comes across — no
+       braces, no moulding, no motes, no skyline — because a tile is 112 units
+       wide with a name under it.
+
+       AN UNFOUND TILE KEEPS THE SLATE, and that is the point rather than an
+       omission: found and unfound used to be told apart by a shade of navy and
+       a dimmed silhouette, and now one has a world in it and the other has
+       none. The grid sorts itself by tribe AND by discovery at a glance. */
+    const def = CARDS[it.id];
+    const cmat = FRAME_MAT[tribeKey(def)] || FRAME_MAT.none;
+    const cwth = WEATHER[tribeKey(def)] || WEATHER.none;
+    const ty = y - (hovered ? 4 : 0);
+    panel(c, x, ty, tw, th, 10, have ? cmat.mid : '#161d2e', have ? cmat.cap : '#2a3346');
+    if (have) {
+      const wx0 = x + 8, wy0 = ty + 8, wW = tw - 16, wH = th - 16;
+      c.save();
+      rr(c, wx0, wy0, wW, wH, 7);
+      c.clip();
+      c.fillStyle = skyGrad(c, cwth, wy0, wy0 + wH, cardScene(it.id).hour);
+      c.fillRect(wx0, wy0, wW, wH);
+      const gy0 = wy0 + wH * 0.72;
+      c.fillStyle = snowGrad(c, cwth, gy0, wy0 + wH);
+      c.fillRect(wx0, gy0, wW, wy0 + wH - gy0);
+      c.restore();
+    }
     c.save();
     c.translate(0, hovered ? -4 : 0);
     if (!have) c.globalAlpha = 0.22;
-    const def = CARDS[it.id];
     if (it.kind === 'charm') {
       // the same cut stone the charm card wears, so the two read as one thing
       drawCharmIcon(c, it.id, CHARMS[it.id].col, x + tw / 2, y + th * 0.44, th * 0.42, t);
@@ -14250,6 +14416,7 @@ window.FF = {
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
   drawCreature, drawCard, CARD_DIE, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
+  FRAME_MAT, WEATHER, FRAME_TIER, tribeKey, drawUnit,
   // the measured box AND the measured footprint — what the window solves the
   // subject's size against and what the cast shadow is allowed to claim
   creatureBox, itemBox,
