@@ -4474,10 +4474,25 @@ function nameSplit(c, nm, size, maxW, lines) {
   c.font = '600 ' + textSize(size) + "px 'Frostwork','Trebuchet MS',sans-serif";
   const fits = (x) => c.measureText(x).width <= maxW;
   if (lines <= 1 || fits(nm)) return [nm];
-  const byWord = wrapText(c, nm, size, maxW);
-  if (byWord.length <= lines && byWord.every(fits)) return byWord;
-  // no usable space break: cut the string into `lines` balanced pieces
-  /* A cut lands where the SECOND piece can start a syllable, and takes the
+  /* SPACES FIRST, AND ONLY THEN THE HYPHEN — and this was the whole of the
+     remaining truncation.
+
+     The old shape asked whether a space-wrap fitted in `lines`, and if it did
+     not it threw the spaces away and cut the WHOLE STRING into balanced pieces.
+     So `THE STRANGER` in a narrow band came out `THE -` / `ST-` / `RANGER`: a
+     hyphen after a space, a two-letter line, and a last piece still too wide,
+     which the caller then ellipsised to `RAN…`. Same for `SWIFT CHARM` at 1280,
+     `ICICLE BAT` and `MOTHER GLACIER` on a slab — every one of them a name with
+     a perfectly good space in it that the splitter had discarded.
+
+     It wraps like a paragraph now: pack words while they fit, and hyphenate only
+     the word that will not go on a line of its own. `lines` stops being a budget
+     the string is squeezed into and becomes what it always should have been — an
+     answer. Every piece that comes back fits `maxW`, and the caller grows its
+     band to however many there are, which is the rule this file already states
+     everywhere else: when the box cannot hold the name, the box gives.
+
+     A cut lands where the SECOND piece can start a syllable, and takes the
      latest such place that fits — which is what makes these names read.
 
      Nearly every long name in this game is a compound: CINDERPUP, SNOWPUP,
@@ -4511,30 +4526,44 @@ function nameSplit(c, nm, size, maxW, lines) {
   const VOW = 'AEIOUYaeiouy';
   const seam = (s, p2) => p2 > 1 && p2 < s.length - 1 &&
     VOW.indexOf(s[p2]) < 0 && VOW.indexOf(s[p2 + 1]) >= 0;
-  const out = [];
   const hyph = (s) => fits(s + '-');       // the head has to hold its own mark
-  let rest = nm;
-  for (let k = lines; k > 1; k--) {
-    const want = rest.length / k;
-    let cut = 0;
+  /* Where a single word breaks: the longest head that can still carry its own
+     mark, then the syllable seam nearest the middle of the word at or before it,
+     ties to the later. "The latest seam that fits" is the rule this file already
+     tried and retired, and the reward pick showed why again the moment the
+     splitter started running on wider boxes — `AVALANC-` over `HE`, where the
+     balanced seam gives `AVA-` over `LANCHE`. No seam and the head is taken as
+     it stands — a break with no good place is still better than a
+     name with its end cut off. */
+  const cutWord = (word) => {
     let top = 0;
-    while (top + 1 < rest.length && hyph(rest.slice(0, top + 1))) top++;
+    while (top + 1 < word.length && hyph(word.slice(0, top + 1))) top++;
+    if (top < 2) return 0;
+    const want = word.length / 2;
+    let cut = 0;
     for (let p2 = 2; p2 <= top; p2++) {
-      if (!seam(rest, p2)) continue;
+      if (!seam(word, p2)) continue;
       if (!cut || Math.abs(p2 - want) <= Math.abs(cut - want)) cut = p2;
     }
-    const mid = Math.round(want);
-    for (let d = 0; d <= rest.length && !cut; d++) {
-      for (const p2 of [mid - d, mid + d]) {
-        if (p2 > 0 && p2 < rest.length && hyph(rest.slice(0, p2))) { cut = p2; break; }
-      }
+    return cut || top;
+  };
+  const out = [];
+  let line = '';
+  for (let word of String(nm).split(' ')) {
+    const test = line ? line + ' ' + word : word;
+    if (fits(test)) { line = test; continue; }
+    if (line) { out.push(line); line = ''; }
+    let guard = 0;
+    while (!fits(word) && guard++ < 12) {
+      const k = cutWord(word);
+      if (!k) break;
+      out.push(word.slice(0, k) + '-');
+      word = word.slice(k);
     }
-    if (!cut) break;
-    out.push(rest.slice(0, cut) + '-');
-    rest = rest.slice(cut);
+    line = word;
   }
-  out.push(rest);
-  return out;
+  if (line) out.push(line);
+  return out.length ? out : [nm];
 }
 /* SHRINK BEFORE YOU BREAK — the half that was missing, and the shot walk found
    it on the leader screen at phone size.
@@ -4564,12 +4593,10 @@ function nameFit(c, nm, size, maxW, lines) {
   }
   return { lines: nameSplit(c, nm, size, maxW, lines), size };
 }
-/** Whether `nm` can be shown in `lines` lines without anything being cut. */
-function nameFits(c, nm, size, maxW, lines) {
-  const p2 = nameSplit(c, nm, size, maxW, lines);
-  c.font = '600 ' + textSize(size) + "px 'Frostwork','Trebuchet MS',sans-serif";
-  return p2.length <= lines && p2.every((x) => c.measureText(x).width <= maxW);
-}
+/* `nameFits` is CUT. Its one caller asked "will this go in two lines?" so it
+   could pick a hard line budget, and a budget is exactly what truncated the
+   piece that did not fit it. `nameSplit` reports how many lines the name needs
+   and every piece it returns fits, so there is nothing left to ask. */
 function ellipsize(c, s, size, maxW, force, face) {
   size = textSize(size);
   c.font = (face === 'd' ? '' : '600 ') + size + 'px ' +
@@ -6758,8 +6785,42 @@ function drawUnit(c, u, t) {
   c.fillStyle = u.side === 'p' ? 'rgba(10,18,34,.55)' : 'rgba(32,10,20,.55)';
   c.fill();
 
+  /* ---- WHAT THE BOTTOM OF THE SLAB OWES, SOLVED BEFORE THE PICTURE ----
+
+     Every slab on the board truncated its name on every handset — `SNOWLU…`,
+     `SHARDLI…`, `BRAM…`, `AR…`. Two characters of identity gone off the thing
+     you are about to attack, and the code below noted that the readable floor
+     exceeds anything the shrink loop can reach and accepted it. It is not
+     acceptable: on a slab the name is the LAST thing that may be sacrificed.
+
+     Three things were wrong and all three are answered here.
+
+       the BOX     the name was fitted to `w - 26`, a width reserved for badges
+                   that stopped sharing its line a round ago. Dead reservation.
+                   It gets the slab.
+       the BREAK   at the floor `fitText` cannot shrink, so the string was cut.
+                   It wraps now, through the same hyphenating splitter the card
+                   band uses: BRAMBLE- over WICK, not BRAM….
+       the ROOM    a second line has to come from somewhere, and it comes from
+                   the PICTURE — the one thing on a slab carrying nothing the
+                   numbers and the colour do not already carry. On a desktop
+                   nothing wraps and the window is exactly the size it was.
+
+     And the plaques are solved with it, because they are the other half of the
+     same squeeze: at the floor the numerals were taller than their pills and
+     the slab's own 14-unit corner arc was cutting through BRAMBLEWICK's `32`. */
+  const nUp = u.name.toUpperCase();
+  const nmW = w - 14;
+  const pq = plaqueFit(12, 8, [u.atk + stat(u, 'spice'), u.hp], 24);
+  const nFit = nameFit(c, nUp, 12.5, nmW, 2);
+  const nSz = textSize(nFit.size);
+  const nStep = lineH(nFit.size, nFit.size * 1.12);
+  const bby = y + h - 4 - pq.hh;             // the plaque line, clear of the arc
+  const nBot = bby - pq.hh - 3;              // and the name clears the plaques
+  const nTop = nBot - ((nFit.lines.length - 1) * nStep + nSz);
+
   // inner art window
-  const iw = w - 14, ih = h - 48 - stripH;
+  const iw = w - 14, ih = Math.max(26, nTop - 3 - (y + 5 + stripH + 3));
   const iy = y + 5 + stripH + 3;
   c.save();
   rr(c, x + 7, iy, iw, ih, 10);
@@ -6860,20 +6921,18 @@ function drawUnit(c, u, t) {
      floor and straight over its neighbour: BRAMBLEWICK and SNOWPUP in adjacent
      slots came out as the single word `BRAMBLEWICKNOWPUP`. When the box cannot
      carry the string at a size a person can read, the string gives. */
-  const nUp = u.name.toUpperCase();
-  const nSize = fitText(c, nUp, w - 26, 12.5, 7.5, 't');
-  txt(c, ellipsize(c, nUp, nSize, w - 26), u.px, y + h - 30, nSize,
-    u.side === 'p' ? '#dbeaff' : '#ffd8d8', 'center', 't');
+  /* The wrap, the box and the room it costs are all solved up at the window —
+     the picture cannot be drawn until the bottom of the slab is settled. */
+  nFit.lines.forEach((ln, i) => txt(c, ln, u.px, nTop + nSz * 0.5 + i * nStep,
+    nFit.size, u.side === 'p' ? '#dbeaff' : '#ffd8d8', 'center', 't'));
 
   // stats
   /* The same plaque the card face uses, so a slab and a card show the same
-     warden's attack in the same object. It also sits a little higher and a
-     little smaller than the badge it replaces: the old one ran to within half a
-     unit of the slab's bottom edge, where the panel's 14-unit corner sliced
-     straight through it. */
-  const bhw = 12, bhh = 8, bby = y + h - 12.5;
-  if (u.atk > 0 || u.leader) statBadge(c, x + 16, bby, bhw, bhh, '#ff8b7a', u.atk + stat(u, 'spice'));
-  statBadge(c, x + w - 16, bby, bhw, bhh, '#7de08f', u.hp);
+     warden's attack in the same object — including the fit against the FLOORED
+     numeral, which is why `bby` and the half-sizes come from `plaqueFit` and not
+     from constants that only held on a desktop. */
+  if (u.atk > 0 || u.leader) statBadge(c, x + 4 + pq.hw, bby, pq.hw, pq.hh, '#ff8b7a', u.atk + stat(u, 'spice'), pq.sz);
+  statBadge(c, x + w - 4 - pq.hw, bby, pq.hw, pq.hh, '#7de08f', u.hp, pq.sz);
   // the counter: it drops with a physical knock rather than swapping numbers
   const ready = u.cnt <= 1;
   const kick = u.tick || 0;
@@ -6971,6 +7030,18 @@ const RARE_NAME = { 1: 'common', 2: 'uncommon', 3: 'rare' };
    and the rules are read out of a dark recess — both are light on dark, so both
    want the same dark edge behind the glyphs rather than the pale one a name on
    a bright band used to want. */
+/* A PRICE IS NOT A STAT, AND IT USED TO BE THE SAME OBJECT AS ONE.
+
+   The plate under a price was `#3f8f5f` — the green a health plaque is struck
+   in — so a warden in the shop showed `9` in green on its rail and `22` in green
+   four units under it, and the second one read as a fourth stat. Two different
+   things in one costume on the screen where you are doing arithmetic.
+
+   Nothing is added: the plate changes hue to the brass the scrip coin in the
+   HUD is already drawn in, which is what a price is denominated in, and green
+   goes back to meaning health and nothing else. The unaffordable and sold
+   plates keep their own colours — those say something the hue does not. */
+const PRICE_PLATE = '#6d5320';
 const NAME_INK = '#f4f9ff';
 const NAME_EDGE = 'rgba(8,14,26,.92)';
 const RULE_INK = '#dfeaf9';
@@ -7004,7 +7075,43 @@ const WELL_COL = '#20334f';
    derived because the board slab and the card face have different room, and
    deriving one from the other is how the slab's badges ended up sliced by its
    own bottom edge. */
-function statBadge(c, x, y, hw, hh, col, val) {
+/* AND THE PLAQUE IS SOLVED AGAINST THE NUMERAL THAT WILL ACTUALLY BE DRAWN.
+
+   The plaque above was moved off the frame and the TYPE FLOOR was left alone,
+   so the collision came straight back through a different door. `statBadge`
+   sized its numeral from the half-height it was handed, and `txt` then floored
+   that size to what the device can render: below about a hundred stage units
+   the floored glyph is taller than the pill holding it, spills past the rail
+   and is sliced by the card's own bottom edge. Confirmed on an iPhone SE hand
+   (CINDERPUP `3 2 7`), a Pixel 7 hand (KETTLEBEAK `2 3 9`), the fold shop, and
+   on the board slab, where BRAMBLEWICK's `32` was cut by the slab's corner arc.
+   One defect, four places, and both rounds of "fix" passed on a 300-wide sheet
+   where the floor is inert.
+
+   The floor is not negotiable and neither is "the numeral is inside its pill",
+   so the PILL is what gives. This returns the half-size a plaque must be to
+   hold `vals` at the size they will really be set — height first, then width
+   off that height — and every caller lays its rail out from the answer instead
+   of from a constant that was only ever true on a desktop.
+
+   `hwMax` is the last word: where the card physically cannot widen the plaque
+   any further (three of them across 126 units on a fold's cover display), the
+   NUMERAL gives instead and is set to the pill. A number a shade under the
+   floor and whole beats one at the floor with its bottom third missing. */
+function plaqueFit(hw, hh, vals, hwMax) {
+  const dig = Math.max(1, ...vals.map((v) => String(v).length));
+  const mul = dig >= 3 ? 1.16 : dig === 2 ? 1.45 : 1.62;
+  let sz = textSize(hh * mul);
+  let h2 = Math.max(hh, sz / mul);
+  let w2 = Math.max(hw, (sz * dig * 0.62 + h2 * 0.7) / 2);
+  if (hwMax && w2 > hwMax) {
+    w2 = hwMax;
+    sz = Math.min(sz, (w2 * 2 - h2 * 0.7) / (dig * 0.62));
+    h2 = Math.max(hh, sz / mul);
+  }
+  return { hw: w2, hh: h2, sz };
+}
+function statBadge(c, x, y, hw, hh, col, val, sz) {
   const rr2 = Math.min(hh * 0.72, hw * 0.5);
   c.beginPath();
   rr(c, x - hw, y - hh, hw * 2, hh * 2, rr2);
@@ -7037,12 +7144,21 @@ function statBadge(c, x, y, hw, hh, col, val) {
   c.lineWidth = Math.max(1, hh * 0.30); c.strokeStyle = mix(col, '#2a1c10', 0.5); c.stroke();
   c.restore();
   const n = String(val);
-  /* Height sets the numeral and width caps it, in that order. A three-digit
-     health is rare enough that it may be smaller; a two-digit one is the case
-     the plaque was shaped for and must not be. */
-  const sz = Math.min(hh * (n.length >= 3 ? 1.16 : n.length === 2 ? 1.45 : 1.62),
-    (hw * 2 - hh * 0.7) / Math.max(1, n.length * 0.62));
-  txt(c, n, x, y + hh * 0.06, sz, '#12203a', 'center', 'd', 0);
+  /* NOT THROUGH `txt`, and that is the whole point of the fix.
+
+     `txt` floors every size it is given to what the device can render, which is
+     right for prose sitting on a card and wrong for a numeral struck into a
+     pill: the pill is the thing that has to be legible, and it was sized above
+     to carry this glyph. Passing the size back through the floor is exactly how
+     the numeral grew taller than its plaque again. Same font, same baseline, no
+     outline — identical to `txt(…, 'd', 0)` in every respect except the floor,
+     which `plaqueFit` has already applied. */
+  const s2 = sz === undefined ? plaqueFit(hw, hh, [val]).sz : sz;
+  c.font = s2 + "px 'Frostcut','Trebuchet MS',sans-serif";
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillStyle = '#12203a';
+  c.fillText(n, x, y + hh * 0.06);
 }
 
 /* ====================== THE FRAME, AND WHAT IT IS MADE OF ==================
@@ -7689,7 +7805,11 @@ function drawCard(c, card, x, y, w, h, o) {
      SNOW, BELLOWS BEAR, BANKED EMBERS — need three, and a band that grows to
      hold them costs a few units of picture on the one device where the picture
      was never the thing carrying the information anyway. */
-  const nmLines = tiny ? (nameFits(c, nm, nameSize * 0.82, nameW, 2) ? 2 : 3) : 1;
+  /* AND THE LINE COUNT IS AN ANSWER, NOT A GUESS. It used to ask "does this fit
+     in two?" and fall back to a hard three — which is a budget, and a budget is
+     what ellipsised the third line of THE STRANGER and EMBERWARD at hand size on
+     a fold. The splitter reports how many pieces the name actually needs and the
+     band takes them; below, the growth still comes out of the picture. */
   /* THE BAND IS SIZED FROM THE TEXT, not from a table of guesses — and the fold
      is why. `44 * S` for three lines held everywhere the walk photographed and
      failed at 653x280, where the type is clamped up to the 9px readable floor
@@ -7716,11 +7836,11 @@ function drawCard(c, card, x, y, w, h, o) {
      enamel channel below it is 4.2, so 26 still clears both by a unit and a
      half; 24 does not, and the contrast check catches it the moment a light
      glyph reaches the tribe's enamel. */
-  const bhMin = (tiny ? (nmLines === 3 ? 44 : 36) : 26) * S;
-  const nmFit = tiny ? nameFit(c, nm, nameSize * 0.82, nameW, nmLines) : null;
+  const nmFit = tiny ? nameFit(c, nm, nameSize * 0.82, nameW, 3) : null;
+  const nmLines = nmFit ? nmFit.lines.length : 1;
+  const bhMin = (tiny ? (nmLines >= 3 ? 44 : 36) : 26) * S;
   const nmStep = nmFit ? lineH(nmFit.size, nameSize * 0.9) : 0;
-  const bh = nmFit ? Math.max(bhMin, nmFit.lines.length * nmStep + 7 * S) : bhMin;
-  const bhGrew = bh - bhMin;
+  const bh = nmFit ? Math.max(bhMin, nmLines * nmStep + 7 * S) : bhMin;
   const by0 = fi;
   const bandBot = by0 + bh;
   /* THE BAND IS SLATE, AND THE TRIBE IS THE LIGHT ON IT.
@@ -7841,13 +7961,18 @@ function drawCard(c, card, x, y, w, h, o) {
        book does when a long word meets a narrow column, and KETTLE- over BEAK
        is read as one word by anybody looking at a picture of a kettle-beaked
        bird. An ellipsis throws the second half away; a break keeps it. */
+    /* AND NO ELLIPSIS ON EITHER BRANCH. Both of these wrapped the splitter's
+       output in `ellipsize`, which is a truncation waiting for the day the
+       splitter cannot fit a piece — and that day was every fold-size hand:
+       `RAN…`, `WA…`, `HO…`, `MM…`. The splitter's pieces fit `nameW` by
+       construction now, so the call was doing nothing except hiding whether
+       that was true. Gone, and asserted in the render suite instead. */
     const ns2 = nmFit.size, two = nmFit.lines, step2 = nmStep;
-    two.forEach((ln, i) => txt(c, ellipsize(c, ln, ns2, nameW),
+    two.forEach((ln, i) => txt(c, ln,
       nameX, by0 + bh / 2 + (i - (two.length - 1) / 2) * step2,
       ns2, NAME_INK, 'center', 't', NAME_EDGE));
   } else {
-    txt(c, ellipsize(c, nm, nameSize, nameW), nameX,
-      by0 + bh / 2, nameSize, NAME_INK, 'center', 't', NAME_EDGE);
+    txt(c, nm, nameX, by0 + bh / 2, nameSize, NAME_INK, 'center', 't', NAME_EDGE);
   }
 
   /* ---------------- the art window ----------------
@@ -7871,12 +7996,34 @@ function drawCard(c, card, x, y, w, h, o) {
      BANKED EMBERS, AVALANCHE, PRY ROD and A HANDFUL OF SNOW — all four of them
      gear. So the cards with the most to say had the shallowest well, and they
      were the ones truncating. One window, one well, one body size. */
-  const ahBase = Math.max(h * 0.16, h * 0.41 - bhGrew);
+  /* AND `h * 0.41` IS CUT AS A NUMBER. The picture no longer has a nominal
+     height at all: the well takes exactly what its paragraph needs, bottom-
+     anchored to the rail, and the picture is everything left between the band
+     and the top of the well. `bhGrew` is gone with it — a taller band pushes
+     `ay` down and the picture gives that room up by arithmetic instead of by a
+     second subtraction that had to be remembered. See the well block below. */
   /* ------- THE RULES WELL IS MEASURED BEFORE THE PICTURE IS PAINTED -------
      because on a handset the text may not be drawable at all, and if it is not
      then the picture takes the room the well was holding. Everything below is
      geometry off `h` and `S`; nothing here draws. */
-  const FH = 16 * S;                       // the footer rail
+  /* THE RAIL IS AS DEEP AS THE PLAQUES IT HOLDS, and it is measured before
+     anything below it is placed.
+
+     Sixteen units was the depth the plaques needed on a desktop, where the type
+     floor is inert. On a handset the floor lifts the numeral and a rail built to
+     a constant cannot hold it — which is how three sliced numbers got onto every
+     phone in the list. The rail now grows to whatever `plaqueFit` says the row
+     needs, and the growth comes OUT OF THE WELL, which is the one element down
+     here that already knows how to give room back (see the drop-out below). */
+  const statVals = isUnit
+    ? [card.injured ? Math.max(0, Math.round(card.atk / 2)) : card.atk, card.cnt,
+      Math.max(0, (card.injured ? Math.max(1, Math.round(card.hp / 2)) : card.hp) - (card.dmg || 0))]
+    : [0];
+  /* Three plaques and two gutters across 126 units, with the outer pair clear of
+     the face inset: seventeen and a half is the widest half-plaque that leaves
+     the middle one its own air. Past that the numeral shrinks instead. */
+  const pq = plaqueFit(11.5 * S, 7.2 * S, statVals, 17.5 * S);
+  const FH = Math.max(16 * S, pq.hh * 2 + 1.6 * S);   // the footer rail
   const fy = h - fi - FH;                  // its top edge
   const by = fy + FH * 0.5;                // and the line everything on it sits on
   const wellBot = fy - 0.8 * S;            // the well stops just above the rail
@@ -7905,49 +8052,65 @@ function drawCard(c, card, x, y, w, h, o) {
      word it belongs to with a hard space, which is what a typesetter does with
      a unit and its quantity; the pair then moves down together or not at all. */
   const rules = String(card.text || '').replace(/ (\S{1,3})$/, '\u00a0$1');
-  /* What the well would hold if the picture stayed the size it is. */
-  const ty0 = ay + ahBase + 4 * S;
   const cap = (wh) => {
     const lh2 = textSize(BODY) * 1.12;
     return Math.max(1, Math.floor((wh - 3 * S - textSize(BODY)) / lh2) + 1);
   };
-  const room0 = cap(wellBot - (ty0 - 3 * S));
-  const fit0 = fitLines(c, rules, wellW, room0, BODY, BODY);
-  /* AND THE DROP-OUT GATES ON THE RULES, NOT ON THE NAME.
+  /* THE WELL IS AS DEEP AS ITS PARAGRAPH AND NO DEEPER, and the picture is
+     whatever is left. This replaces a fixed-depth box, and the box was costing
+     the card at both ends.
 
-     The card has always documented this: below the size where text can be read,
-     drop the unreadable rules line and give the name the band. The flag was
-     computed off the NAME's fit and then only ever consumed by the name block —
-     the rules ran unconditionally underneath and ellipsised. So an iPhone SE
-     hand said `Its bite…` and `On deplo…`, and on a fold KETTLEBEAK's rule
-     rendered as the literal string `On…`. No card in hand said what it did.
+       TOO DEEP  TINDERCUB's "Frenzy 1." is one short line centred in a recess
+                 built for three, so a fifth of the card face is empty navy on
+                 every short-ruled card in the set.
+       TOO SHALLOW  and at the same time, on a handset where the floor lifts the
+                 body copy, a three-line rule did not fit a box sized against a
+                 picture that was holding a nominal 41% of the card whether it
+                 needed it or not — so the rule went and the player got a
+                 portrait instead of the thing the card does.
 
-     The gate is HOW MUCH OF THE RULE SURVIVES, which is the only form of the
-     question that holds across shapes. Two conditions, both required.
+     One measurement answers both. `roomMax` is what the well could hold if the
+     picture went down to its floor; if the paragraph fits that, it is kept and
+     the well takes exactly its own depth back off the picture. If it does not
+     fit even then, it goes and the picture takes the lot.
 
-       NARROW    of everything the paragraph says, under half of it is still
-                 on the card once the well has taken what it can hold. That is
-                 not a shortened rule, it is a fragment: `Ember…`, `Its bit…`,
-                 `Heal 6…`. Half is where the two shapes separate cleanly: on a
-                 fold the survivors run 25% to 41%, and on an iPhone SE reward
-                 pick — where you are choosing and want every word you can get
-                 — the same cards keep 55% to 95%.
-       OVERRUN   and there was more to say than the well could hold.
+     The well stays BOTTOM-ANCHORED on the rail, which is the half of "a row of
+     cards wants the same thing in the same place" that actually matters — every
+     card in a row still has its rules block ending on the same line, and the
+     edge that moves is the one against the picture, which is different on every
+     card anyway. */
+  const ahMin = h * 0.16;
+  const ahMax = Math.max(ahMin, wellBot - 1.2 * S - ay);
+  const roomMax = cap(wellBot - (ay + ahMin + 1 * S));
+  const fit0 = fitLines(c, rules, wellW, roomMax, BODY, BODY);
+  /* A RULE IS SHOWN WHOLE OR NOT AT ALL. No fragments, ever, at any size.
 
-     Overrun alone is not enough on purpose — a desktop hand with a long rule
-     keeps its cut last line, because three quarters of a rule is worth reading
-     and the ellipsis honestly says there is more. It is the card that keeps
-     almost none of it that should show the picture instead: a bigger portrait
-     and a whole name beat two cards in the same hand both reading `EMBER…`.
+     This gate has now been written twice as a heuristic and has under-fired and
+     over-fired both times. The last cut kept the card whose paragraph survived
+     "at least half" — which on a Pixel 7 meant six cards in hand, zero complete
+     rules and five ellipsised stumps, and on a fold meant CINDERPUP truncating
+     beside KETTLEBEAK dropping out entirely: two failure modes in one hand. And
+     `Ember 4 o…` is worse than silence, because you cannot tell "on a foe" from
+     "on every foe" and you will play it wrong.
 
-     The first cut of this asked whether a LINE could carry two ordinary words,
-     and it under-fired on exactly the shapes it was written for: on a fold
-     `Its bite` fits a line perfectly well, and the card still had room for only
-     one of the three lines that sentence needs. What is broken is not the line,
-     it is the paragraph. */
-  const kept = fit0.lines.slice(0, room0).join(' ').length;
-  const dropRules = fit0.lines.length > room0 && kept < rules.length * 0.5;
-  const ah = dropRules ? Math.max(h * 0.16, wellBot - 1.2 * S - ay) : ahBase;
+     There is no percentage of a rule that is safe to show. The condition is the
+     invariant itself — the paragraph fits the well, or the well goes and the
+     picture takes the room — and it is asserted in the render suite so no third
+     heuristic can grow back here. The cost is real and it is the right cost: a
+     long rule at hand size is now a bigger portrait and a whole name, and the
+     card is one tap from saying everything. */
+  const dropRules = !rules || fit0.lines.length > roomMax;
+  /* The paragraph, plus the same three units of reserve `cap` counts, plus four
+     more of lip when the card can spare them. The two have to be measured off
+     one number: sizing the recess with a lip `cap` had not counted put the well
+     four units short of its own text on the cards where the picture was already
+     at its floor, and a centred paragraph then hung out of the recess top and
+     bottom. Where the card cannot spare the lip the PICTURE goes below its floor
+     rather than the text going outside its hole. */
+  const wellNeed = (fit0.lines.length - 1) * fit0.size * 1.12 + fit0.size + 3 * S;
+  const ah = dropRules ? ahMax
+    : clamp(wellBot - wellNeed - 5 * S - ay,
+      Math.min(ahMin, wellBot - wellNeed - 1 * S - ay), ahMax);
   /* WHAT WEATHER THIS CARD STANDS IN. Every one of the 58 cards used to get the
      same ridge under the same pale halo, so the picture told you nothing until
      you had read the name — and a wall of Frostborn cards was one shape. The
@@ -8381,24 +8544,11 @@ function drawCard(c, card, x, y, w, h, o) {
      under the final line is not room the paragraph needs. Getting that wrong by
      one step is what cost the set its fourth line. */
   const lh = fit0.size * 1.12;
-  const lines = fit0.cut(cap(wh2));
+  /* No `cut`. The gate above already guarantees the paragraph fits, so cutting
+     the tail off it here is dead code that can only ever produce the fragment
+     the gate exists to prevent. */
+  const lines = fit0.lines;
   const top = wy + wh2 / 2 - (lines.length - 1) * lh / 2;
-  /* AND THE WORD ON THE RAIL IS STILL ALLOWED TO GO — the word, not the rail.
-
-     This is the same drop-out the tag always had, and it is here for the same
-     reason: on a fold's cover the rules are floored to the readable minimum, so
-     a single line can be taller than the whole well and it reaches into the
-     rail. "GEAR" printed through the last line of a rule is worse than no label
-     at all — the stacking check caught it at 653x280 the moment the tag became
-     unconditional.
-
-     What changed is what leaves with it. The rail is furniture now, so the
-     card's bottom edge, its baseline and its rivets all stay and a row of gear
-     stays a row. The old drop-out took the whole plate, which is why it read as
-     a rendering fault when it fired on nine cards of twelve. */
-  const TAG_SIZE = 9.4 * S;
-  const showTag = dropRules || by - (top + (lines.length - 1) * lh) >=
-    (fit0.size + textSize(TAG_SIZE)) / 2 * 0.95;
   /* THE WELL RUNS RAIL TO RAIL, AND THE FACE IS NOT AROUND IT ANY MORE.
      It used to sit at the window's own x and width with a rounded corner, a
      dark stroke and a light lip — so the card carried TWO bright rectangles
@@ -8508,20 +8658,34 @@ function drawCard(c, card, x, y, w, h, o) {
 
      The `spec()` haze under each badge is cut. Three soft grey discs with no
      source, on a rail that is already a lit plate — they read as smudges on the
-     print, and the plaque's own shadow does the job of seating it. */
-  const footX = 19.5 * S, footY = h - 13 * S, footR = 11.5 * S, footH = 7.2 * S;
+     print, and the plaque's own shadow does the job of seating it.
+
+     `footY` IS THE RAIL'S OWN CENTRE LINE NOW rather than a constant measured up
+     from the card's bottom edge. They agreed to within half a unit while the rail
+     was 16 deep and stopped agreeing the moment it had to grow for the plaques,
+     which is the whole class of bug this block keeps producing: two numbers for
+     one line. And `footX` follows the plaque instead of leading it, so a wide
+     two-digit pill on a handset moves inboard rather than into the moulding. */
+  const footX = Math.max(19.5 * S, pq.hw + 8 * S), footY = by, footR = pq.hw, footH = pq.hh;
   if (isUnit) {
-    const inj = card.injured;
-    statBadge(c, footX, footY, footR, footH, '#ff8b7a', inj ? Math.max(0, Math.round(card.atk / 2)) : card.atk);
-    statBadge(c, w / 2, footY, footR, footH, '#ffd166', card.cnt);
-    const mh = inj ? Math.max(1, Math.round(card.hp / 2)) : card.hp;
-    statBadge(c, w - footX, footY, footR, footH, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
+    statBadge(c, footX, footY, footR, footH, '#ff8b7a', statVals[0], pq.sz);
+    statBadge(c, w / 2, footY, footR, footH, '#ffd166', statVals[1], pq.sz);
+    statBadge(c, w - footX, footY, footR, footH, '#7de08f', statVals[2], pq.sz);
   } else {
-    /* Gear had nothing along the bottom, so a row of cards next to units read
-       as a broken line, and the tag that fixed it took the whole plate with it
-       whenever the rules wanted the strip. The rail is unconditional now, so
-       what a crowded card loses is one word — the rivets hold the line. */
-    const tag = card.type === 'charm' ? 'CHARM' : 'GEAR';
+    /* THE WORD ON THE RAIL IS CUT, and nothing replaces it.
+
+       It was engraved last round — dark ink into a near-black navy rail with a
+       .52 lit lip a pixel below — and what a player read on every gear card at
+       every size was `CEAR`: the bottom sliver of each glyph, with the G's bowl
+       closed by its own lip. Round one had it legible in white, so this was a
+       regression, and `CHARM` beside it was still a light pill: one slot,
+       rendered two ways.
+
+       It does not come back in another colour. The rail plus the ABSENCE of
+       three stat plaques already says "not a warden" — that is what the comment
+       under this block claimed the rivets were for, and it is true, so the word
+       was saying a second time what the silhouette says first. Deleting it is
+       also what pays for the rail growing to fit the plaques above. */
     // rivets where a warden's plaques are — the same line, kept
     for (const rx of [footX, w - footX]) {
       c.beginPath(); c.arc(rx, footY, 3.6 * S, 0, TAU);
@@ -8531,32 +8695,6 @@ function drawCard(c, card, x, y, w, h, o) {
       c.fillStyle = rg; c.fill();
       c.lineWidth = 1.1 * S; c.strokeStyle = 'rgba(6,11,22,.7)'; c.stroke();
       spec(c, rx - 1.1 * S, footY - 1.3 * S, 1.8 * S, 0.7);
-    }
-    /* AND THE WORD IS CUT INTO THE RAIL, NOT PRINTED ON IT.
-       Every unit in the game teaches the eye that the bottom rail holds three
-       values, and gear answered with a light word in the middle slot at the
-       same weight and nearly the same size as a number — so GEAR read as a
-       stat until you had focused on it. An engraved label is not a value: dark
-       ink with a lit lower lip, letterspaced wide the way a stamped word on a
-       metal rail actually is, so it reads as part of the furniture. Nothing is
-       added to pay for it — the plinth and the bevel it used to sit on are what
-       the rail replaced. */
-    if (showTag) {
-      const gap = TAG_SIZE * 0.34;
-      c.save();
-      c.font = '600 ' + textSize(TAG_SIZE) + "px 'Frostwork','Trebuchet MS',sans-serif";
-      let tw = -gap;
-      for (const ch2 of tag) tw += c.measureText(ch2).width + gap;
-      let gx2 = w / 2 - tw / 2;
-      c.textAlign = 'left'; c.textBaseline = 'middle';
-      for (const ch2 of tag) {
-        c.fillStyle = 'rgba(206,226,250,.52)';       // the lit lip below the cut
-        c.fillText(ch2, gx2, footY + Math.max(0.8, 1.0 * S));
-        c.fillStyle = 'rgba(9,16,29,.95)';           // and the cut itself
-        c.fillText(ch2, gx2, footY);
-        gx2 += c.measureText(ch2).width + gap;
-      }
-      c.restore();
     }
   }
 
@@ -11105,16 +11243,30 @@ function drawBattle(c, t) {
     }
   }
 
-  // what just happened, on the band between the table and your hand
+  /* What just happened, on the band between the table and your hand — AND ON
+     ITS OWN ROW.
+
+     The log sat at 472 and the two lane captions sit at `boardB + 15`, which is
+     472. They are stage coordinates, so they have shared a line at every shape
+     the game has ever run at; it only became a defect when the readable floor
+     started widening both of them, and on an iPhone SE `ROOM TO FALL BACK` and
+     `Bramblewick hits Snowlump for 4` were drawn through each other with neither
+     legible. Two blocks writing to one y and no reservation between them.
+
+     The captions keep the line — they belong to the boards either side of it —
+     and the log steps below by whatever the caption's own floored glyph and
+     leading come to, so the gap opens on the devices that need it and is
+     unchanged on the ones that do not. */
   if (b.log && b.log.length) {
     const show = b.log.slice(-2);
+    const logY = boardB + 15 + lineH(11.5, 17);
     for (const L of b.log) L.t += 1 / 60;
     show.forEach((L, i) => {
       const age = clamp(1 - (L.t - 2.2) / 1.2, 0, 1);
       if (age <= 0) return;
       c.save();
       c.globalAlpha = age * (i === show.length - 1 ? 1 : 0.5);
-      txt(c, L.text, MID, 472 + i * 19, 13.5, L.col, 'center', 't');
+      txt(c, L.text, MID, logY + i * lineH(13.5, 19), 13.5, L.col, 'center', 't');
       c.restore();
     });
     while (b.log.length && b.log[0].t > 3.6) b.log.shift();
@@ -11256,7 +11408,14 @@ function drawHand(c, t) {
     const hovered = picked || (UI.hover && UI.hover.id === 'hand' && UI.hover.data === i);
     const lift = picked ? 52 : hovered ? 34 : 0;
     const arc = n > 1 ? Math.min(14, Math.abs(off) * Math.abs(off) * 2.2) : 0;
-    const y = HAND_Y + (CARD_H - chh2) / 2 - chh2 / 2 - lift + arc + Math.sin(t * 1.6 + i) * 2;
+    /* AND THE BOTTOM OF THE CARD STAYS ON THE TABLE. The fan is shrunk against
+       horizontal room and nothing ever checked the other axis: the ends of the
+       fan lean DOWN by up to fourteen units on top of a breathing wobble, and on
+       a fold the outermost cards were within a unit of the stage edge with their
+       rails and plaques the first thing to go over it. One clamp; the fan is
+       never anywhere near it on a shape that has the room. */
+    const y = Math.min(HAND_Y + (CARD_H - chh2) / 2 - chh2 / 2 - lift + arc + Math.sin(t * 1.6 + i) * 2,
+      VH - chh2 - 2);
     card.handT = Math.min(1, (card.handT || 0) + 0.06);
     // deal: the card travels out of the deck pile and settles into the fan
     card.dealT = Math.min(1, (card.dealT === undefined ? 1 : card.dealT) + 0.075);
@@ -11674,7 +11833,7 @@ function drawChooser(c, t) {
     }
     if (it.price !== undefined) {
       const afford = G.run && G.run.gold >= it.price;
-      panel(c, x + cw / 2 - 34, y + chh + 4, 68, 30, 9, afford ? '#3f8f5f' : '#5a3a3a', C.ink);
+      panel(c, x + cw / 2 - 34, y + chh + 4, 68, 30, 9, afford ? PRICE_PLATE : '#5a3a3a', C.ink);
       txt(c, String(it.price), x + cw / 2, y + chh + 19, 17, '#ffe6a8', 'center', 'd');
     }
     if (it.sold) {
@@ -12243,7 +12402,7 @@ function drawShop(c, t) {
 
   const tag = (x, price, sold) => {
     const afford = g.run.gold >= price;
-    panel(c, x - 34, priceY, 68, 32, 9, sold ? '#3b4560' : afford ? '#3f8f5f' : '#5a3a3a', C.ink);
+    panel(c, x - 34, priceY, 68, 32, 9, sold ? '#3b4560' : afford ? PRICE_PLATE : '#5a3a3a', C.ink);
     txt(c, sold ? '—' : String(price), x, priceY + 16, 18, sold ? '#8fa2bd' : '#ffe6a8', 'center', 'd');
   };
   s.cards.forEach((it, i) => {
@@ -12277,7 +12436,7 @@ function drawShop(c, t) {
        every size — visible on the fold and present everywhere. */
     txt(c, ellipsize(c, bl.text, 12, bwid - 14 - 80), bx0 + 14,
       by0 + 17 + lineH(15, 13), 12, '#c8dcf4', 'left', 't');
-    panel(c, bx0 + bwid - 72, by0 + bph / 2 - 15, 58, 30, 9, afford ? '#3f8f5f' : '#5a3a3a', C.ink);
+    panel(c, bx0 + bwid - 72, by0 + bph / 2 - 15, 58, 30, 9, afford ? PRICE_PLATE : '#5a3a3a', C.ink);
     txt(c, s.bell.sold ? '—' : String(s.bell.price), bx0 + bwid - 43, by0 + bph / 2 + 1, 16, '#ffe6a8', 'center', 'd');
     c.restore();
     if (!s.bell.sold) hit('buyBell', bx0, by0, bwid, bph);

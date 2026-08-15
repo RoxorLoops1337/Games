@@ -875,6 +875,20 @@ section('every card in the game, drawn and measured');
         if (t.size * cps < FF.TEXT_MIN_CSS - 0.5) {
           bad2.push(`${def.id} ${where}: ${JSON.stringify(t.s).slice(0, 14)} at ${Math.round(t.size * cps)}css`);
         }
+        /* AND NOTHING ON A CARD FACE IS EVER A FRAGMENT.
+
+           A rule is shown WHOLE or NOT AT ALL, and a name shrinks or wraps but
+           never truncates. That invariant has now been approximated twice by a
+           heuristic — "does a line hold two words", then "does half the
+           paragraph survive" — and both shipped green while putting `Ember 4
+           o…`, `On deploy, heals eve…` and `SWIFT CHAR…` in front of a player,
+           because a sheet at 300 units wide never floors any type and the
+           heuristics only misfire once the floor bites. So it is asserted here
+           rather than aimed at: an ellipsis drawn by `drawCard` at any shape
+           this game supports is a failure, full stop. */
+        if (t.s.indexOf('…') >= 0) {
+          bad2.push(`${def.id} ${where}: fragment ${JSON.stringify(t.s).slice(0, 24)}`);
+        }
       }
       const rows2 = new Map();
       for (const t of ts) {
@@ -941,11 +955,31 @@ section('every foe in the game, on the board and inspected');
      section draws every card in the pool at both sizes. A third look at it from
      a synthetic board adds no coverage and reports the harness's own state. */
   let skipped3 = 0;
-  const check3 = (label) => {
+  const check3 = (label, want) => {
     const all3 = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim());
     const ts = all3.filter((e) => e[2] > 0 && e[2] < D3.VW && e[3] > 0 && e[3] < D3.VH * 0.74)
       .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
     skipped3 += all3.length - ts.length;
+    /* AND THE SLAB SAYS THE WHOLE NAME.
+
+       Every slab on the board truncated on every handset — `SNOWLU…`, `BRAM…`,
+       `AR…` — and the code carried a comment explaining that the readable floor
+       exceeds what the shrink loop can reach, which is true and is not a reason
+       to cut the one thing on a slab you cannot get anywhere else. The name
+       wraps now, hyphenated the way the card band wraps, so this joins the drawn
+       lines back up (dropping the break marks) and asks whether the name is
+       still in there. Checked at 653x280, the shape where the floor bites hardest
+       and where all four of those truncations were photographed.
+
+       Measured on EVERY string the frame drew rather than the on-stage subset
+       the gutter check uses: this asks WHAT was written, not where it landed,
+       and a synthetic board can leave a unit mid-tween at the origin. */
+    if (want) {
+      const joined = all3.map((e) => String(e[1])).join('').replace(/[-\s]+/g, '');
+      if (joined.indexOf(want.toUpperCase().replace(/\s+/g, '')) < 0) {
+        bad3.push(`${label}: name cut — no ${JSON.stringify(want.toUpperCase())}`);
+      }
+    }
     for (const t of ts) STRINGS.seen.add(t.s);
     for (const t of ts) {
       if (t.size * cps3 < FF.TEXT_MIN_CSS - 0.5) {
@@ -986,7 +1020,7 @@ section('every foe in the game, on the board and inspected');
     try { FF.layPlot(G, foe); } catch { /* not every foe schemes */ }
     G.screen = 'battle';
     frame(2); log.length = 0; FF.render();
-    check3(id + ' on the board');
+    check3(id + ' on the board', foe.name);
     FF.UI.inspect = foe;
     frame(1); log.length = 0; FF.render();
     check3(id + ' inspected');
