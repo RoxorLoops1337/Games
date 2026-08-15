@@ -5886,6 +5886,16 @@ function fitLines(c, str, maxW, maxLines, start, min) {
 
 const RARE_NAME = { 1: 'common', 2: 'uncommon', 3: 'rare' };
 
+/* The card's own two inks, in one place because three blocks of the face set
+   type and they have to agree. The name is cut in near-white on a dark plate
+   and the rules are read out of a dark recess — both are light on dark, so both
+   want the same dark edge behind the glyphs rather than the pale one a name on
+   a bright band used to want. */
+const NAME_INK = '#f4f9ff';
+const NAME_EDGE = 'rgba(8,14,26,.92)';
+const RULE_INK = '#dfeaf9';
+const WELL_COL = '#20334f';
+
 /* A card in hand: the full face. Three frames — warden, gear, charm — each
    with its own shape, so a glance at the silhouette tells you what kind of
    thing you are holding before you have read a word of it. */
@@ -5935,6 +5945,13 @@ function statBadge(c, kind, x, y, r, col, val) {
   lip.addColorStop(1, LIGHT + '0)');
   c.fillStyle = lip; c.fillRect(x - r, y - r, r * 2, r * 0.8);
   spec(c, x - r * 0.34, y - r * 0.40, r * 0.42, 0.75);
+  /* THE DIE MARK. A cast piece shows where the die met it: a darker rim just
+     inside the edge, all the way round. The clip is what makes it cheap — the
+     same path stroked heavy only paints its inner half — and it is the one
+     thing that separated "a coloured shape with a highlight" from "a struck
+     token" when these were photographed at hand size. */
+  c.globalAlpha = 0.5;
+  c.lineWidth = Math.max(1, r * 0.30); c.strokeStyle = mix(col, '#2a1c10', 0.5); c.stroke();
   c.restore();
   const n = String(val);
   const sz = r * (n.length >= 3 ? 0.92 : n.length === 2 ? 1.12 : 1.42);
@@ -6417,38 +6434,81 @@ function drawCard(c, card, x, y, w, h, o) {
   const bh = nmFit ? Math.max(bhMin, nmFit.lines.length * nmStep + 7 * S) : bhMin;
   const bhGrew = bh - bhMin;
   const by0 = fi;
+  const bandBot = by0 + bh;
+  /* THE BAND IS SLATE, AND THE TRIBE IS THE LIGHT ON IT.
+
+     It was a flat saturated slab running the full width — a sixth of the card
+     painted in one high-chroma colour, which made it the loudest thing on a
+     card whose PICTURE is supposed to be the loudest thing. Worse, it only
+     worked for one tribe: pale blue over a pale blue window over a pale body is
+     one shape, so RIMEFOX, CHILLFIN and GLACIERLING had no band at all in a
+     row of hand cards.
+
+     So the plate is made of the same near-black slate the frame is, and the
+     tribe arrives as a LIGHT raked across it plus an enamel channel along its
+     bottom edge. A colour reads far harder against dark than against the pale
+     body it used to sit on: frost's cyan on slate is unmistakable at hand size,
+     where frost's cyan on a pale face was invisible. And every card now has the
+     same dark top bar, so the eye goes to the window instead. */
   c.save();
   rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
   c.clip();
-  const bg = c.createLinearGradient(0, by0, 0, by0 + bh);
-  bg.addColorStop(0, tribeLit);
-  bg.addColorStop(0.45, tribeCol);
-  bg.addColorStop(1, mix(tribeCol, '#14203a', 0.28));
+  /* AND AN UNTRIBED CARD GETS THE PLATE WITHOUT THE LIGHT. The neutral colour
+     the file gives a tribeless card is a steel blue, which is a stone's throw
+     from the frost tribe's cyan — mixed into slate at the same strength the two
+     came out as the same band, and a frost card has to be tellable from a
+     tribeless one at a glance. So tribe is not just WHICH colour, it is HOW
+     MUCH: a Frostborn plate is tinted and lit in cyan, a tribeless one is bare
+     slate with a steel line under it. */
+  const bTint = card.tribe ? 0.30 : 0.09;
+  const bg = c.createLinearGradient(0, by0, 0, bandBot);
+  bg.addColorStop(0, mix('#3a5075', tribeCol, bTint));
+  bg.addColorStop(0.5, mix('#1b2c49', tribeCol, bTint * 0.85));
+  bg.addColorStop(1, mix('#0f1c31', tribeCol, bTint * 1.25));
   c.fillStyle = bg;
   c.fillRect(fi, by0, w - fi * 2, bh);
+  // the tribe's light, raked in from the top left where the card's light is
+  const rTint = card.tribe ? 1 : 0.3;
+  const rake = c.createLinearGradient(fi, by0, w - fi, bandBot);
+  rake.addColorStop(0, mixA(tribeLit, 0.40 * rTint));
+  rake.addColorStop(0.45, mixA(tribeCol, 0.16 * rTint));
+  rake.addColorStop(1, mixA(tribeCol, 0.05 * rTint));
+  c.fillStyle = rake; c.fillRect(fi, by0, w - fi * 2, bh);
   // the band's own light and the shadow it throws down the face
   let bandG = c.createLinearGradient(0, by0, 0, by0 + 3 * S);
-  bandG.addColorStop(0, LIGHT + '0.55)');
+  bandG.addColorStop(0, LIGHT + '0.34)');
   bandG.addColorStop(1, LIGHT + '0)');
   c.fillStyle = bandG; c.fillRect(fi, by0, w - fi * 2, 3 * S);
-  bandG = c.createLinearGradient(0, by0 + bh, 0, by0 + bh + 7 * S);
-  bandG.addColorStop(0, DARK + '0.30)');
+  bandG = c.createLinearGradient(0, bandBot, 0, bandBot + 7 * S);
+  bandG.addColorStop(0, DARK + '0.34)');
   bandG.addColorStop(1, DARK + '0)');
-  c.fillStyle = bandG; c.fillRect(fi, by0 + bh, w - fi * 2, 7 * S);
-  // gear wears a notch out of its band, so a type is legible without reading
+  c.fillStyle = bandG; c.fillRect(fi, bandBot, w - fi * 2, 7 * S);
+  /* THE ENAMEL CHANNEL: the one place on the band where the tribe's colour runs
+     at full chroma. A thin bright line carries a hue better than a big flat
+     field of it does, and it costs the card no value structure at all. */
+  const enh = 4.2 * S;
+  const en = c.createLinearGradient(0, bandBot - enh, 0, bandBot);
+  en.addColorStop(0, mix(tribeLit, '#ffffff', 0.35));
+  en.addColorStop(0.5, tribeCol);
+  en.addColorStop(1, mix(tribeCol, '#0c1727', 0.45));
+  c.fillStyle = en; c.fillRect(fi, bandBot - enh, w - fi * 2, enh);
+  /* gear wears a notch out of its band, so a type is legible without reading.
+     It used to be a dark triangle, which on a dark plate is nothing at all — it
+     is a chip knocked out of the enamel now, in the face's own colour. */
   if (!isUnit && card.type !== 'charm') {
     c.beginPath();
-    c.moveTo(fi, by0 + bh); c.lineTo(fi + 10 * S, by0 + bh - 6 * S); c.lineTo(fi + 20 * S, by0 + bh);
+    c.moveTo(fi + 4 * S, bandBot); c.lineTo(fi + 11 * S, bandBot - 5 * S); c.lineTo(fi + 18 * S, bandBot);
     c.closePath();
-    c.fillStyle = 'rgba(16,26,46,.34)'; c.fill();
+    c.fillStyle = 'rgba(226,238,252,.62)'; c.fill();
   }
   /* A LIGHT rule, not a dark one. The first cut put a dark hairline under the
      band and the contrast check caught it on hand cards: the name is floored to
      the readable minimum there, so at that size the glyph band reaches the
-     line, and dark ink over a dark rule is 1.0:1. A division on a light body
-     reads just as well as a highlight, and cannot be a hazard. */
-  c.fillStyle = 'rgba(255,255,255,.55)';
-  c.fillRect(fi, by0 + bh - 1.6 * S, w - fi * 2, 1.6 * S);
+     line, and dark ink over a dark rule is 1.0:1. The name is light on slate
+     now and the rule sits under the enamel rather than through it, but the
+     principle stands: nothing dark goes where a glyph can reach. */
+  c.fillStyle = 'rgba(255,255,255,.45)';
+  c.fillRect(fi, bandBot, w - fi * 2, 1.2 * S);
   c.restore();
   /* THE FLOOR BEATS THE FIT, AND SOMETHING HAS TO GIVE.
 
@@ -6495,10 +6555,10 @@ function drawCard(c, card, x, y, w, h, o) {
     const ns2 = nmFit.size, two = nmFit.lines, step2 = nmStep;
     two.forEach((ln, i) => txt(c, ellipsize(c, ln, ns2, nameW),
       nameX, by0 + bh / 2 + (i - (two.length - 1) / 2) * step2,
-      ns2, '#22160c', 'center', 't', 'rgba(255,255,255,.45)'));
+      ns2, NAME_INK, 'center', 't', NAME_EDGE));
   } else {
     txt(c, ellipsize(c, nm, nameSize, nameW), nameX,
-      by0 + bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+      by0 + bh / 2, nameSize, NAME_INK, 'center', 't', NAME_EDGE);
   }
 
   /* ---------------- the art window ----------------
@@ -6704,23 +6764,50 @@ function drawCard(c, card, x, y, w, h, o) {
      a centred name never reaches, and a gem cut against the tribe's colour is
      legible at hand size — which two flat dots on the window's edge never
      were. */
+  /* AND A GEM IS A SET STONE, not a coloured lozenge. A flat diamond four units
+     wide is a speck: at hand size the eye cannot tell it from a bit of noise on
+     the band, which is how rarity stayed invisible through three passes. What
+     makes a stone read at that size is not size, it is the SOCKET — a dark
+     bezel, a hard bright facet on the light side, and a specular pin. Those
+     three things are legible at four units where a fill is not, and they cost
+     the rail no extra width, so the name keeps the room it was measured for. */
   if (rare >= 2) {
     for (let i = 0; i < rare - 1; i++) {
-      const gy = by0 + bh / 2, gr = 4 * S;
+      const gy = by0 + bh / 2, gr = 4.2 * S;
       const gx = fi + 8 * S + i * 9.5 * S;
       c.save();
+      // the bezel it is set into, with the frame's own light on its top edge
+      c.beginPath(); c.arc(gx, gy, gr * 1.34, 0, TAU);
+      const sock = c.createLinearGradient(0, gy - gr * 1.34, 0, gy + gr * 1.34);
+      sock.addColorStop(0, 'rgba(3,7,15,.95)');
+      sock.addColorStop(1, 'rgba(70,92,126,.95)');
+      c.fillStyle = sock; c.fill();
+      if (rare >= 3) { c.shadowColor = edge; c.shadowBlur = 7 * S; }
       c.beginPath();
       c.moveTo(gx, gy - gr);
-      c.lineTo(gx + gr * 0.85, gy);
+      c.lineTo(gx + gr * 0.86, gy);
       c.lineTo(gx, gy + gr);
-      c.lineTo(gx - gr * 0.85, gy);
+      c.lineTo(gx - gr * 0.86, gy);
       c.closePath();
       const gg = c.createLinearGradient(0, gy - gr, 0, gy + gr);
-      gg.addColorStop(0, mix(edge, '#ffffff', 0.65));
-      gg.addColorStop(0.5, edge);
-      gg.addColorStop(1, mix(edge, '#0d1830', 0.45));
+      gg.addColorStop(0, mix(edge, '#ffffff', 0.72));
+      gg.addColorStop(0.45, edge);
+      gg.addColorStop(1, mix(edge, '#0d1830', 0.52));
       c.fillStyle = gg; c.fill();
-      c.lineWidth = 1.2 * S; c.strokeStyle = 'rgba(8,14,28,.8)'; c.stroke();
+      c.shadowBlur = 0;
+      // the crown facet, on the side the light comes from
+      c.beginPath();
+      c.moveTo(gx, gy - gr); c.lineTo(gx, gy); c.lineTo(gx - gr * 0.86, gy);
+      c.closePath();
+      c.fillStyle = LIGHT + '0.55)'; c.fill();
+      c.beginPath();
+      c.moveTo(gx, gy - gr);
+      c.lineTo(gx + gr * 0.86, gy);
+      c.lineTo(gx, gy + gr);
+      c.lineTo(gx - gr * 0.86, gy);
+      c.closePath();
+      c.lineWidth = 1.1 * S; c.strokeStyle = 'rgba(6,11,22,.85)'; c.stroke();
+      spec(c, gx - gr * 0.26, gy - gr * 0.40, gr * 0.5, 0.9);
       c.restore();
     }
   }
@@ -6737,39 +6824,47 @@ function drawCard(c, card, x, y, w, h, o) {
      rectangles of a card that only ever needed two. It sits on the body now,
      with a hairline over it standing in for the box. */
   const ty = ay + ah + 6 * S;
-  /* The type tag along the bottom is a line of text like any other, so the
-     rules block has to stop above it. It exists to even up a ROW of reward
-     cards, and a card in hand is not in one — on a phone the rules text is
-     floored to the readable minimum and every gear card was truncating to
-     "Ember 4…" so that a decorative tag could keep its strip. Below reward
-     size the tag goes and the text gets its room. */
-  const tagRoom = 31 * S;
-  let showTag = !isUnit;
-  let th = h - ty - (isUnit ? 27 * S : tagRoom);
-  /* THE RULES SIT IN A WELL, and they used to sit on nothing.
+  /* ONE FOOTER, ON EVERY CARD, WHATEVER IS STANDING ON IT.
 
-     A hairline over a paragraph is a diagram's way of saying "section". The
-     bottom third of the card was bare face, so the text floated and the card
-     had no weight below its picture — which is why a hand of them looked
-     top-heavy. A shallow recess, cut the same way the window is, gives the
-     rules somewhere to live and gives the card its third plane. Shallower than
-     the window on purpose: the picture has to stay the deepest thing on the
-     face or the eye goes to the text first. */
+     The type tag used to be reserved space that the rules text could take back
+     when it needed the room, and the drop-out worked exactly as designed: on a
+     sheet of twelve gear cards, three kept a footer plate and nine had a bare
+     gutter. Which is worse than either answer on its own, because a row where a
+     quarter of the cards have a different bottom edge reads as a rendering
+     fault — the precise thing the tag was added to prevent.
 
-  let maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
-  let fit = fitLines(c, card.text || '', aw - 10 * S, maxLines, 11.5 * S, 7.5 * S);
-  /* THE TEXT OUTRANKS THE TAG. On a phone the rules are floored to the readable
-     minimum, so a strip kept for "GEAR" was costing gear cards their last line
-     — every one of them truncating to "Ember 4…". If the text does not fit with
-     the tag reserved, the tag goes and the text is laid out again. A card that
-     cannot say what it does is not helped by a label saying what kind of thing
-     it is. */
-  if (showTag && Math.floor((th - 2 * S) / (fit.size * 1.12)) < fit.lines.length) {
-    showTag = false;
-    th += tagRoom - 12 * S;
-    maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
-    fit = fitLines(c, card.text || '', aw - 10 * S, maxLines, 11.5 * S, 7.5 * S);
-  }
+     So the footer is a RAIL now, the same height on every card of every kind,
+     and it is furniture rather than a label's backing: the badges stand on it,
+     the type word is written on it, and the card that has neither still has the
+     rail. The tag can come and go without the silhouette moving. It also gives
+     the card the weight it was missing — the bottom third used to be bare grey
+     face with three badges bolted to it, so a hand of cards was top-heavy. */
+  /* AND THE RAIL IS THIN, because the rules text pays for every unit of it.
+     The first cut was 22 units and it read fine and cost CINDERPUP its second
+     line — "Its bite leaves…" on a card three hundred pixels wide. The badges
+     stand PROUD of the rail rather than inside it, which is what a struck token
+     set into a plinth does anyway, so the rail only has to be deep enough to
+     be a plinth. At sixteen it is, and the rules block ends up with more room
+     than it had before the rail existed. */
+  const FH = 16 * S;                       // the rail
+  const fy = h - fi - FH;                  // its top edge
+  const by = fy + FH * 0.5;                // and the line everything on it sits on
+  const wellBot = fy - 1.2 * S;            // the well stops just above the rail
+  const th = wellBot - ty;
+  /* THE RULES SIT IN A WELL, and it used to be a light one.
+
+     A shallow recess in the same pale blue as the face is a disabled form
+     input: same value as the body, same value as the window, a hairline round
+     it, and no reason for the eye to rank the three. The card had no value
+     structure at all, so the picture never won.
+
+     The well is MID-DARK now and the rules are read out of it in near-white.
+     That is the whole point — dark frame, dark band, bright picture, dark well,
+     dark rail — the one bright saturated area on the face is the window, which
+     is where a card game wants your eye. */
+
+  const maxLines = Math.max(2, Math.floor((th - 4 * S) / (12.2 * S)));
+  const fit = fitLines(c, card.text || '', aw - 10 * S, maxLines, 11.5 * S, 7.5 * S);
   /* The shrink loop cannot go below the text floor, so on a phone the paragraph
      can still be taller than the box. Measure what the box actually holds at
      the size the text will be DRAWN at, and cut to that — the card face is a
@@ -6786,24 +6881,89 @@ function drawCard(c, card, x, y, w, h, o) {
      same box on every card, for exactly this reason — a row of cards is read as
      a row, and the eye wants the same thing in the same place.
 
-     So the panel runs from under the picture to just above the footer, the same
-     on every card of a kind, and the text is centred inside it. The footer is
-     the badges on a warden and the type plate on gear, which is what makes the
-     two kinds line up at the bottom instead of only at the top. */
+     So the panel runs from under the picture to the rail, the same on every
+     card of every kind, and the text is centred inside it. */
   const wy = ty - 3 * S;
-  const wh2 = (isUnit ? h - 27 * S : h - 19 * S) - wy;
+  const wh2 = wellBot - wy;
   const top = wy + wh2 / 2 - (lines.length - 1) * lh / 2;
+  /* AND THE WORD ON THE RAIL IS STILL ALLOWED TO GO — the word, not the rail.
+
+     This is the same drop-out the tag always had, and it is here for the same
+     reason: on a fold's cover the rules are floored to the readable minimum, so
+     a single line can be taller than the whole well and it reaches into the
+     rail. "GEAR" printed through the last line of a rule is worse than no label
+     at all — the stacking check caught it at 653x280 the moment the tag became
+     unconditional.
+
+     What changed is what leaves with it. The rail is furniture now, so the
+     card's bottom edge, its baseline and its rivets all stay and a row of gear
+     stays a row. The old drop-out took the whole plate, which is why it read as
+     a rendering fault when it fired on nine cards of twelve. */
+  const TAG_SIZE = 9.4 * S;
+  const showTag = by - (top + (lines.length - 1) * lh) >=
+    (fit.size + textSize(TAG_SIZE)) / 2 * 0.95;
   c.save();
   rr(c, ax, wy, aw, wh2, 6 * S);
+  c.clip();
+  /* A FLAT BASE COAT, THEN THE LIGHT OVER IT UNDER A WASH — and that is not a
+     stylistic choice, it is what makes the rules text CHECKABLE.
+
+     The contrast check reads the colour under a glyph off a raster that only
+     records solid fills; a gradient records a placeholder it cannot parse, and
+     a wash below 0.9 alpha records nothing at all because it tints what is
+     under it rather than replacing it. So a well painted as one gradient — the
+     way this file paints everything — hands its paragraph NO ground, and the
+     one block of body copy on the card was quietly exempt from the only check
+     that asks whether text can be read.
+
+     Solid first, lit second, and the lighting laid down under a wash so it
+     tints rather than replaces. The eye sees what it saw; the raster now sees
+     the colour the ink is actually sitting on. */
+  c.fillStyle = WELL_COL;
+  c.fillRect(ax, wy, aw, wh2);
+  c.globalAlpha = 0.85;
   const wellG = c.createLinearGradient(0, wy, 0, wy + wh2);
-  wellG.addColorStop(0, '#d1e0f5');
-  wellG.addColorStop(1, '#eaf3fd');
-  c.fillStyle = wellG; c.fill();
+  wellG.addColorStop(0, 'rgba(8,15,28,.62)');
+  wellG.addColorStop(0.45, 'rgba(8,15,28,.07)');
+  wellG.addColorStop(1, 'rgba(150,192,240,.16)');
+  c.fillStyle = wellG; c.fillRect(ax, wy, aw, wh2);
+  /* The recess is cut here rather than by `inset`, for the same reason and by
+     the same rule: `inset` lays its shadow along the top edge as a gradient,
+     which lands on the first line of the paragraph and takes its ground back
+     out. Identical geometry, drawn under the wash. */
+  const wd = 2.4 * S;
+  let wg = c.createLinearGradient(0, wy, 0, wy + wd * 2.2);
+  wg.addColorStop(0, DARK + '0.45)'); wg.addColorStop(1, DARK + '0)');
+  c.fillStyle = wg; c.fillRect(ax, wy, aw, wd * 2.2);
+  wg = c.createLinearGradient(ax, 0, ax + wd * 1.6, 0);
+  wg.addColorStop(0, DARK + '0.28)'); wg.addColorStop(1, DARK + '0)');
+  c.fillStyle = wg; c.fillRect(ax, wy, wd * 1.6, wh2);
+  wg = c.createLinearGradient(0, wy + wh2 - wd * 1.4, 0, wy + wh2);
+  wg.addColorStop(0, LIGHT + '0)'); wg.addColorStop(1, LIGHT + '0.45)');
+  c.fillStyle = wg; c.fillRect(ax, wy + wh2 - wd * 1.4, aw, wd * 1.4);
   c.restore();
-  inset(c, ax, wy, aw, wh2, 6 * S, 2.4 * S, 0.8);
   rr(c, ax, wy, aw, wh2, 6 * S);
-  c.lineWidth = 1.1 * S; c.strokeStyle = 'rgba(28,48,80,.28)'; c.stroke();
-  lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, '#1d2f4d', 'center', 't', 0));
+  c.lineWidth = 1.6 * S; c.strokeStyle = 'rgba(7,13,26,.72)'; c.stroke();
+  // the lip of light where the face's edge catches the light above the hole
+  rr(c, ax - 1.2 * S, wy - 1.2 * S, aw + 2.4 * S, wh2 + 2.4 * S, 7.2 * S);
+  c.lineWidth = 1.1 * S; c.strokeStyle = LIGHT + '0.40)'; c.stroke();
+  lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit.size, RULE_INK, 'center', 't', 0));
+
+  /* ---------------- the rail the bottom of the card stands on ---------- */
+  c.save();
+  rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
+  c.clip();
+  const railG = c.createLinearGradient(0, fy, 0, h - fi);
+  railG.addColorStop(0, '#31456a');
+  railG.addColorStop(0.45, '#1d2e4b');
+  railG.addColorStop(1, '#101c30');
+  c.fillStyle = railG; c.fillRect(fi, fy, w - fi * 2, h - fi - fy);
+  // the same enamel that runs under the band, so the card is bracketed by it
+  const rEn = c.createLinearGradient(0, fy, 0, fy + 2.2 * S);
+  rEn.addColorStop(0, mix(tribeLit, '#ffffff', 0.30));
+  rEn.addColorStop(1, mix(tribeCol, '#101c30', 0.35));
+  c.fillStyle = rEn; c.fillRect(fi, fy, w - fi * 2, 2.2 * S);
+  c.restore();
 
   /* ---------------- the frame's edges, drawn last so nothing crosses them --
      The card is now darker than the table it is played on, which is the right
@@ -6824,47 +6984,40 @@ function drawCard(c, card, x, y, w, h, o) {
   rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
   c.lineWidth = 1 * S; c.strokeStyle = 'rgba(5,10,22,.50)'; c.stroke();
 
-  /* ---------------- the stats, hung on the bottom edge ----------------
+  /* ---------------- the stats, standing on the rail ----------------
      They used to be three identical circles in a grey tray: a traffic light
-     bolted to the card. Three silhouettes on the frame itself instead — and no
-     tray, which was the fourth box. */
+     bolted to the card. Three silhouettes instead — and then, for a while, no
+     tray at all, which swapped one problem for another: a struck badge floating
+     on bare grey face had nothing to be struck INTO, and the bottom third of
+     the card carried no weight. They stand on the rail now, at the same height
+     and the same two x positions a gear card puts its rivets, so a row of
+     wardens and a row of gear share one baseline. */
   if (isUnit) {
     const inj = card.injured;
-    const br = 12 * S, by = h - 13.5 * S;
+    const br = 10.5 * S;                   // proud of a 16-unit rail, by design
+    // a haze of light under each badge: dark metal on a dark rail needs it
+    for (const bx of [17 * S, w / 2, w - 17 * S]) spec(c, bx, by, br * 1.9, 0.18);
     statBadge(c, 'atk', 17 * S, by, br, '#ff8b7a', inj ? Math.max(0, Math.round(card.atk / 2)) : card.atk);
     statBadge(c, 'cnt', w / 2, by, br * 0.92, '#ffd166', card.cnt);
     const mh = inj ? Math.max(1, Math.round(card.hp / 2)) : card.hp;
     statBadge(c, 'hp', w - 17 * S, by, br, '#7de08f', Math.max(0, mh - (card.dmg || 0)));
   } else {
     /* Gear had nothing along the bottom, so a row of cards next to units read
-       as a broken line. A small type tag gives every card the same baseline —
-       AND IT IS THE FIRST THING TO GO when there is no room for it. On a phone
-       the rules text is floored to the readable minimum, which can fill a card
-       this size on its own; a decorative tag that lands on a rule is worse than
-       no tag at all. So it is drawn only if the text block actually clears it. */
-    /* AND THE TAG IS A PLATE SET INTO THE FRAME, not a grey pill on the face.
-       It was the deadest thing on the card — a translucent wash with a
-       translucent outline, floating in the pale area under the rules, saying a
-       word the notch in the name band already says. On the bottom rail it costs
-       the face nothing and gives the card a footer, which is the thing that
-       made a row of gear next to a row of wardens read as a broken line. */
-    /* Measured against the WELL, not the last line of text. The well is drawn
-       round the paragraph with its own padding, so a tag cleared by the text
-       could still land on the well's bottom edge — which is what made the plate
-       appear on two cards of four and vanish on the others. */
+       as a broken line, and the tag that fixed it took the whole plate with it
+       whenever the rules wanted the strip. The rail is unconditional now, so
+       what a crowded card loses is one word — the rivets hold the line. */
     const tag = card.type === 'charm' ? 'CHARM' : 'GEAR';
-    if (showTag) {
-      const tw = 52 * S, tx0 = w / 2 - tw / 2, ty0 = h - fi - 11 * S;
-      c.save();
-      rr(c, tx0, ty0, tw, 12 * S, 5 * S);
-      const tg = c.createLinearGradient(0, ty0, 0, ty0 + 12 * S);
-      tg.addColorStop(0, '#38507a');
-      tg.addColorStop(1, '#1c2c48');
-      c.fillStyle = tg; c.fill();
-      c.restore();
-      bevel(c, tx0, ty0, tw, 12 * S, 5 * S, 1.6 * S, 0.9);
-      txt(c, tag, w / 2, ty0 + 6.2 * S, 8.6 * S, '#cfe0f6', 'center', 't', 0);
+    // rivets where a warden's shard and shield are — the same line, kept
+    for (const rx of [17 * S, w - 17 * S]) {
+      c.beginPath(); c.arc(rx, by, 3.6 * S, 0, TAU);
+      const rg = c.createLinearGradient(0, by - 3.6 * S, 0, by + 3.6 * S);
+      rg.addColorStop(0, '#8fa8cc');
+      rg.addColorStop(1, '#25344f');
+      c.fillStyle = rg; c.fill();
+      c.lineWidth = 1.1 * S; c.strokeStyle = 'rgba(6,11,22,.7)'; c.stroke();
+      spec(c, rx - 1.1 * S, by - 1.3 * S, 1.8 * S, 0.7);
     }
+    if (showTag) txt(c, tag, w / 2, by, TAG_SIZE, '#cfe0f6', 'center', 't', 'rgba(7,13,26,.9)');
   }
 
   /* ---------------- what it is wearing ---------------- */
