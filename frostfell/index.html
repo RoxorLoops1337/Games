@@ -2029,6 +2029,47 @@ function resolveTurn(g) {
            measured 52% against a 36% baseline, and at nothing it measured 34.
            The dial between them is how often the fire burns high. */
         const warm = (co2 && co2.warmth) || 1;
+        /* DEAD END — A QUIET BOARD THAT ARMS THE LINE INSTEAD OF MENDING IT.
+           dead-ends: quietboard
+
+           The best number the probe has produced says denial is worth +9 of a
+           16-point fight and exists on 17% of player turns, while the board is
+           BARE on 60%. So the fight's one decision is absent for three fifths of
+           it. Adding more schemes was already dead (it spent the bare turns), so
+           this went the other way: give the bare turns their own currency. When
+           no foe was scheming, the warmth a spare slot buys came as Spice rather
+           than Regen — the line arming up on quiet turns and mending on
+           dangerous ones, off the same rule and the same slot.
+
+           At 600 runs an arm, against the same arm without it:
+
+             the set                      16        16      unchanged
+             denial alone            +9 of 16  +11 of 16
+             the other three               +7        +5     (2σ = ±3.2)
+             the fight, played well       26%       23%
+             the board is bare            60%       59%
+
+           It fired where it was meant to — the bare share barely moved — and it
+           did the opposite of its purpose. The set did not grow, denial took
+           MORE of it, and `keepSlot`, the habit this was built to give something
+           to do, sat at 0 both times. Taking healing off three fifths of the
+           turns simply made the fight harder.
+
+           AND THAT IS THE THIRD ATTEMPT TO FAIL THE SAME WAY, which is the part
+           worth keeping. A second kind of event (the wave telegraph) measured 0;
+           more of the first kind (four extra schemers) took denial +11 → +16 and
+           the others +5 → +2; a different currency on the bare turns takes
+           denial +9 → +11 and the others +7 → +5. Three unrelated interventions,
+           one direction.
+
+           The reading that fits: **in a fight made of substitutes, anything that
+           raises difficulty concentrates value in the best habit.** The
+           substitutes only ever mattered as insurance, and a harder fight raises
+           the price of the thing that actually works. So the next attempt is not
+           another addition — every addition makes the fight harder somewhere.
+           It is to WEAKEN DENIAL (a cap of one a turn is the cheapest version)
+           and see whether the other three come up to meet it. That is the one
+           direction three rounds of this have not tried. */
         for (const u of line) addStatus(g, u, 'regen', warm, true);
         /* THE HEARTH ROAD, SIXTH ATTEMPT AND THE FIRST THAT LANDS — and it lands
            because the file's own oldest unfinished claim turned out to be wrong.
@@ -7856,13 +7897,20 @@ function drawTrail(c, t) {
   const live = liveFeats(run);
   const left = run.trail.length - run.step + (ZONES.length - 1 - run.zone) * run.trail.length;
   if (live.length) {
+    /* Stepped by `lineH`, not by 20. The margin report put this list at the top
+       of the tightest pairs in the game — 86% of the room its own lines need at
+       653x280 — because an 11.5-unit name is floored to 23 while the step
+       stayed a literal. The helper for this has existed all along; the sites
+       that needed it were never enumerated until the sweep started ranking
+       stacked pairs by slack instead of only failing on collisions. */
     const lw = 232, lx2 = VW - SAFE - lw - 6, ly = py;
-    const lh = 54 + live.length * 20;
+    const lStep = lineH(11.5, 20), lHead = lineH(15, 36) + 18;
+    const lh = lHead + live.length * lStep;
     panel(c, lx2, ly, lw, lh, 14, 'rgba(12,20,38,.78)', '#3a4b6b');
     txt(c, 'STILL IN REACH', lx2 + 14, ly + 18, 15, '#a8c8ea', 'left', 'd');
     txt(c, left + ' steps', lx2 + lw - 14, ly + 34, 11, '#7e97b8', 'right', 'd');
     live.slice(0, 8).forEach((f, i) => {
-      const yy = ly + 54 + i * 20;
+      const yy = ly + lHead + i * lStep;
       c.save();
       c.beginPath(); c.arc(lx2 + 20, yy, 5, 0, TAU);
       inked(c, f.col, 1.8, C.ink);
@@ -8628,8 +8676,13 @@ function drawReward(c, t) {
       inked(c, bl.col, 2.5, C.ink);
       c.restore();
       txt(c, bl.name.toUpperCase().replace('BELL OF ', ''), x + w2 / 2, bcy + 104 - (hovered ? 6 : 0), 18, bl.col, 'center', 'd');
+      /* The gap between a bell's name and its rules was a literal 20 under an
+         18-unit line — 86% of what it needs once the floor lifts both. The
+         steps INSIDE the wrap were already going through `lineH`; only the one
+         between the two blocks was not, which is the shape of most of these. */
       wrapText(c, bl.text, 12.5, w2 - 22).forEach((ln, k) =>
-        txt(c, ln, x + w2 / 2, bcy + 124 + k * lineH(12.5, 15) - (hovered ? 6 : 0), 12.5, '#c8dcf4', 'center', 't'));
+        txt(c, ln, x + w2 / 2, bcy + 104 + lineH(18, 20) + k * lineH(12.5, 15) - (hovered ? 6 : 0),
+          12.5, '#c8dcf4', 'center', 't'));
       c.restore();
       if (!r.bellTaken) hit('rewardBell', x, bcy + 24, w2, 132, i);
     });
@@ -8770,12 +8823,21 @@ function drawShop(c, t) {
     !s.burn || s.burn.sold || g.run.deck.length < 3);
   btn(5, 'buyMeal', 'A HOT MEAL — ' + mealPrice(g.run), '#8f6a3f',
     g.run.gold < mealPrice(g.run) || !feedable(g.run).length);
-  txt(c, 'temper: +2 attack, +3 health, and the deck stays the size it was · ' +
-    'a meal: +1 and +2, as many as you can pay for, dearer every time',
-    MID, by + 66, 13, '#7e97b8', 'center', 't');
+  /* WRAPPED TO THE STAGE, and the line under it steps by what was drawn.
+     One 120-character string centred at 13 units is one line on a desktop and
+     wider than the whole stage at 653x280, where the floor lifts it to 23 — so
+     the counter's only explanation of what temper and a meal do ran off both
+     edges, and the caravan's status line 22 units under it was inside the
+     floored line height as well. Both are the same literal-offset bug; both are
+     fixed by measuring instead of assuming. */
+  const shopStep = lineH(13, 22);
+  const shopHelp = wrapText(c, 'temper: +2 attack, +3 health, and the deck stays the size it was · ' +
+    'a meal: +1 and +2, as many as you can pay for, dearer every time', 13, VW - SAFE * 2 - 40);
+  shopHelp.forEach((ln, i) => txt(c, ln, MID, by + 66 + i * shopStep, 13, '#7e97b8', 'center', 't'));
   const need = caravanNeeds(g.run);
   txt(c, need ? 'the caravan is short of ' + need.name.toLowerCase() + ' — ' + need.why
-    : 'the caravan wants for nothing', MID, by + 88, 13, need ? '#ffd166' : '#7de08f', 'center', 't');
+    : 'the caravan wants for nothing', MID, by + 66 + shopHelp.length * shopStep, 13,
+    need ? '#ffd166' : '#7de08f', 'center', 't');
   button(c, 'leaveShop', MID - 100, VH - 76, 200, 52, 'BACK TO THE ROAD', '#40527a');
 }
 

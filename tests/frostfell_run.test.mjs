@@ -114,7 +114,6 @@ const STANDING = [
   ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
   ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
   ['FF_REST=1', 'a lasting rest on the quiet road — does it make the fork a decision'],
-  ['FF_ROUTE=150', 'five routing strategies against taking every fight — is the fork a decision at all'],
   ['FF_DIAL=150', 'the two flat courses swept by magnitude — a dial or decoration'],
 ];
 /* FOUR MORE CAME OFF THIS LIST, and the argument is what it costs to keep a
@@ -479,7 +478,8 @@ section('whole runs, start to finish');
     }
   }
   for (const [name, o] of rows) {
-    console.log(`    ${name.padEnd(20)}${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns a fight · ` +
+    console.log(`    ${name.padEnd(20)}${(o.battles / Math.max(1, o.runs)).toFixed(1)} fights a run · ` +
+      `${(o.turns / Math.max(1, o.battles)).toFixed(1)} turns a fight · ` +
       `${o.reachedTwo}/${o.runs} saw the second zone, ${o.reachedThree} the third`);
   }
 
@@ -1380,10 +1380,32 @@ section('does walking past a fight pay');
     console.log(`      ${lead >= zf * bf
       ? 'something beats taking every fight — the fork IS a decision'
       : 'nothing beats taking every fight: the trail screen asks a question with one right answer'}`);
+    /* FF_ROUTE IS RETIRED FROM THE STANDING ARMS, and this is the argument.
+
+       An arm earns its place if somebody would re-run it to answer something.
+       This one has answered the same way four rounds running — best of five
+       alternatives −1 against a family bar of ±8.2, and the ordering runs
+       monotonically down with how much fighting each strategy does — and the
+       ladder rung beside it never resolved at any of four samples totalling
+       over 20,000 runs.
+
+       What finally settled it was not another sample but a number nobody had
+       printed: **the routing pilot plays 17.7 fights a run against 12.5 for the
+       one that picks a fork arbitrarily — 42% more of the game — and wins the
+       same amount.** That is not "unresolved at this sample". A lever that moves
+       42% of the content and lands inside the band is a lever that does nothing,
+       and four more samples would only have priced the nothing more precisely.
+
+       So the verdict is stated rather than re-measured: **the trail's fights are
+       close to free.** Skipping one costs its reward, taking one costs its risk,
+       and the two cancel — which is why nothing beats taking everything AND why
+       taking everything is barely better. The design consequence is that the
+       fork needs a COST on one side, and that is a change to make and measure,
+       not a sample to buy. The arm still runs under `FF_ROUTE` for whoever makes
+       it; it just no longer claims a standing reading that never moves. */
     if (process.env.FF_ROUTE) {
-      ARMS.stamp('FF_ROUTE=150', `taking everything ${seek.pct}%; best of ${all5.length} alternatives ` +
-        `"${bestAlt.label}" ${bestAlt.r.pct}% (${lead >= 0 ? '+' : ''}${lead}, bar ±${(zf * bf).toFixed(1)}) — ` +
-        `${lead >= zf * bf ? 'the fork is a decision' : 'the fork has one right answer'}`, seek.runs);
+      console.log(`      (FF_ROUTE is not a standing arm any more: four rounds of the same answer, ` +
+        `and the routing pilot plays 42% more fights for it)`);
     }
   }
   /* The bar. Dodging may be survivable — a run that ducks two hard packs and
@@ -2281,7 +2303,11 @@ section('the arms that are not run by default');
      bumped by hand is a list that goes stale. */
   const inSource = [...readFileSync(new URL(import.meta.url), 'utf8')
     .matchAll(/process\.env\.(FF_[A-Z]+)/g)].map((m2) => m2[1]);
-  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_GIVE', 'FF_SIDES', 'FF_RESTN', 'FF_PAIR', 'FF_NOWAVE', 'FF_GEARBAR', 'FF_LIVEBUILT', 'FF_BUILT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
+  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_GIVE', 'FF_SIDES', 'FF_RESTN', 'FF_PAIR', 'FF_NOWAVE', 'FF_GEARBAR', 'FF_LIVEBUILT', 'FF_BUILT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME',
+    /* FF_ROUTE deepens the routing section, which no longer claims a standing
+       reading — see the retirement note there. It is a depth knob now, like
+       FF_HABIT on the ablation. */
+    'FF_ROUTE'];
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');

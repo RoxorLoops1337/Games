@@ -2559,9 +2559,9 @@ section('the design record states numbers');
        `letterSpacing` is a canvas property named to state a known error in the
        text stub, and calling that "gone" would be a small lie in the one file
        that exists to not tell them. Both get the same two-way check. */
-    const declared = [...doc.matchAll(/<!--\s*(?:gone|external):\s*([A-Za-z_][A-Za-z0-9_]*)/g)]
+    const declared = [...doc.matchAll(/<!--\s*(?:gone|external|term):\s*([A-Za-z_][A-Za-z0-9_]*)/g)]
       .map((m) => m[1]);
-    ok(declared.length >= 2, `names declared absent: ${declared.join(', ') || 'none'}`);
+    ok(declared.length >= 5, `names declared absent: ${declared.join(', ') || 'none'}`);
     /* WHAT COUNTS AS A NAME, narrowed after the first run flagged six things and
        five of them were not identifiers: `shelter` and `parallelism` are retired
        TOPICS quoted in the audit table, and `BANKE` / `DEMBERS` / `BANKED` are
@@ -2572,12 +2572,18 @@ section('the design record states numbers');
        is a narrower net than "anything in backticks" and it is the right net —
        the failure this guard exists for is an entry describing a function or a
        constant that is gone, and every one of those is code-shaped. */
-    const CODEY = /[a-z][A-Z]|\.|_/;
+    /* EVERY BACKTICKED NAME, not the code-shaped ones. The narrow net went in
+       with the guard itself, which meant the guard had never been tested against
+       a case its author had not hand-picked for it — and it let a whole category
+       through: a claim about a retired topic, or about a fragment of a card
+       name, was invisible. Declaring those once as `term` is cheaper than a
+       check with a hole in it, and it is the difference between "the names I
+       thought to look at are fine" and "every name is accounted for". */
     const root = (s) => s.split('(')[0].split('.')[0];
     const named = [...new Set([...doc.matchAll(/`([A-Za-z_][A-Za-z0-9_.]{3,})`/g)]
-      .filter((m) => CODEY.test(m[1])).map((m) => root(m[1])))];
+      .map((m) => root(m[1])))];
     const stale = named.filter((n2) => hay.indexOf(n2) < 0 && declared.indexOf(n2) < 0);
-    eq(stale.join(', '), '', 'every code-shaped name DESIGN.md uses either exists or is declared absent');
+    eq(stale.join(', '), '', 'every name DESIGN.md uses either exists or is declared absent');
     const risen = declared.filter((n2) => hay.indexOf(n2) >= 0);
     eq(risen.join(', '), '', 'a name declared absent has not come back — the declaration would be the stale thing');
   }

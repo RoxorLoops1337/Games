@@ -21,6 +21,10 @@ const drew = (label) => { ok(log.length > 0, label); log.length = 0; };
 /* How much of the contrast check's resolution is a guess. Accumulated across
    every screen and every device shape, printed once at the end. */
 const CELLS = { total: 0, one: 0, straddle: 0, mixed: 0, anchorBlind: 0 };
+/* Stacked pairs with little room left between them — see the margin note in
+   the sweep. Collected across every shape and screen, reported at the end. */
+const TIGHT = [];
+let SHOTS = 0;
 /* WHAT FRACTION OF THE GAME'S TEXT THIS CHECK HAS EVER LOOKED AT.
 
    `button()` drew its label at a fixed size and never fitted it to its own
@@ -455,6 +459,15 @@ section('the shape of a phone');
       else if (scr === 'reward') G.ui.reward = FF.rollReward(G, 'boss');
       else if (scr === 'leader') G.ui.pick = { tribe: 'frost', winters: ['keen'] };
       else if (scr === 'rest') G.ui.rest = { offer: FF.BLESSINGS.slice(0, 3).map((x) => x.id) };
+      /* EVERY SCREEN AT ITS FULLEST, because empty is the easy case.
+         The seals block on the victory screen draws only when a crossing earned
+         something, and this sweep never gave it anything — so `SEALS EARNED`
+         drawn through `THE FIRST CROSSING` at 653x280 was invisible to nine
+         shapes of checks and visible in the first PNG a person opened. The
+         geometry of the overlap check was too narrow AND its state was
+         narrower; widening one without the other fixes nothing.
+         Whatever a screen draws only sometimes, it draws here. */
+      if (scr === 'victory') G.run.freshFeats = FF.FEATS.slice(0, 3).map((f) => f.id);
       G.screen = scr;
       frame(scr === 'battle' ? 22 : 2);
       log.length = 0; FF.render();   // exactly one frame's draws, not twenty-two overlaid
@@ -656,17 +669,35 @@ section('the shape of a phone');
         if (!cols.has(key)) cols.set(key, []);
         cols.get(key).push(e);
       }
+      SHOTS++;
       const stacked = [];
       for (const run of cols.values()) {
         run.sort((a, b) => a.y - b.y);
         for (let i = 1; i < run.length; i++) {
-          const a = run[i - 1], b = run[i], gap = b.y - a.y, need = Math.max(a.size, b.size);
+          const a = run[i - 1], b = run[i], gap = b.y - a.y, need = (a.size + b.size) / 2;
+          /* MARGIN, NOT JUST COLLISION — because the bug this is chasing arrives
+             as a near miss and leaves as an overlap.
+
+             `SEALS EARNED` over `THE FIRST CROSSING` read as a collision in the
+             PNG and measured 20 against a 23-unit line: 87%, comfortably past
+             the 78% bar below. A binary test cannot catch that class, and
+             tightening the bar to catch it would fire on layouts that are fine.
+             What separates them is SLACK: a pair at 87% is one longer word or
+             one more device from being a defect, and a pair at 130% is not.
+
+             So the tight ones are counted and named at the end rather than
+             failed here. 102 of the 160 `txt()` calls in the game carry a
+             literal vertical offset, so the question was never "which one is
+             broken" — it is "which ones have no room left". */
+          if (gap > 0.5 && a.s.length >= 3 && b.s.length >= 3 && gap < need * 1.15) {
+            TIGHT.push({ shape: `${w}x${h}`, scr, a: a.s, b: b.s, gap, need });
+          }
           /* Only consecutive lines of the SAME size and real length: that is a
              wrapped paragraph, where the step is a number in the source and can
              fall behind the text it is stepping. A heading over a caption, or a
              stat pip under a card, is a different size or a single glyph — those
              are laid out deliberately and are not what this is looking for. */
-          if (Math.abs(a.size - b.size) > 0.6 || a.s.length < 3 || b.s.length < 3) continue;
+          if (a.s.length < 3 || b.s.length < 3) continue;
           if (gap > 0.5 && gap < need * 0.78) {
             stacked.push(JSON.stringify(a.s).slice(0, 16) + '/' + JSON.stringify(b.s).slice(0, 16) +
               ' ' + Math.round(gap) + '<' + Math.round(need));
@@ -1032,6 +1063,31 @@ if (CELLS.total) {
   console.log(`    the check takes the WORST ground a string covers, not the anchor's — ` +
     `on ${CELLS.anchorBlind} of them the anchor's cell is not even one of the grounds under the text`);
   ok(CELLS.mixed <= CELLS.straddle, 'a mixed string is a straddling string');
+}
+
+/* WHAT IS LEFT OF THE MARGINS, reported rather than asserted.
+
+   The five text defects the fold turned up were one bug wearing five hats:
+   `textSize` clamps type up to a 9px floor while the gaps around it keep
+   scaling by `S`, so a literal offset measured on a desktop runs out at 653x280.
+   The grep says 102 of the game's 160 `txt()` calls carry a literal vertical
+   offset — far too many to audit one at a time, and most of them are single
+   lines with nothing under them and no way to fail.
+
+   This is the audit that scales: every stacked pair the sweep draws, on every
+   shape, ranked by how much room is left. Anything under 1.0 is already
+   touching its neighbour's em box; anything under 1.15 survives on the current
+   strings and would not survive a longer one. */
+{
+  TIGHT.sort((a, b) => a.gap / a.need - b.gap / b.need);
+  const worst = TIGHT.filter((x) => x.gap / x.need < 1.0);
+  console.log(`  · ${TIGHT.length} stacked pairs with under 15% of slack, ` +
+    `${worst.length} with none — of ${SHOTS} shape-screens swept`);
+  for (const x of (process.env.FF_TIGHT ? TIGHT : TIGHT.slice(0, 6))) {
+    console.log(`      ${(x.gap / x.need * 100).toFixed(0)}%  ${x.shape} ${x.scr}  ` +
+      `${JSON.stringify(x.a).slice(0, 22)} / ${JSON.stringify(x.b).slice(0, 22)}`);
+  }
+  ok(TIGHT.every((x) => x.gap >= x.need * 0.78), 'and none of them is an actual collision');
 }
 
 /* WHERE A LONG NAME BREAKS, PINNED — because the fold check cannot see it.

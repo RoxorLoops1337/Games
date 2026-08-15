@@ -26,12 +26,23 @@ declared below**, and the two reasons are kept apart because they rot differentl
      named to state a known error in the text stub, not code that was removed -->
 
 `gone` is something this project built and deleted; `external` is something it
-never had. Both are checked in both directions — a declared name that turns up in
-the code fails here, because the entry describing its absence is then the stale
-one. A name in backticks that is *prose* (a retired topic, a fragment of a card
-name) is not a declaration's problem: the check only looks at camelCase, dotted
-and UPPER_SNAKE tokens, because those are the only shapes a lost function or
-constant comes in.
+never had; `term` is prose in backticks that was never code at all — a retired
+topic, a fragment of a card name. All three are checked in both directions: a
+declared name that turns up in the code fails here, because the entry describing
+its absence is then the stale one.
+
+<!-- term: shelter — a retired topic, folded into the fight entry -->
+<!-- term: parallelism — a retired topic, folded into the file-shape entry -->
+<!-- term: BANKED — half of BANKED EMBERS, quoted as a name-break example -->
+<!-- term: BANKE — the wrong half of it, quoted as what greedy filling produced -->
+<!-- term: DEMBERS — the other wrong half -->
+
+**The net is every backticked name, not the code-shaped ones.** It was narrowed
+to camelCase/dotted/UPPER_SNAKE when the guard went in, on the argument that a
+lost function is always code-shaped. True, and it still let a whole category
+through: the guard could not see a claim about `shelter` or a card fragment, so
+it had never been tested against anything its author had not hand-picked for it.
+Declaring five prose terms once is cheaper than a check with a hole in it.
 
 **Two rules, and neither of them is a line count.**
 
@@ -966,6 +977,34 @@ rungs of "+7 and a range" say less than that, at three times the price.
 project's history and every one of those was quoted against a band it could not
 support; this is the first one that can be.
 
+**AND THE FORK IS SETTLED AT ZERO, WHICH TOOK ONE NUMBER RATHER THAN A FIFTH
+SAMPLE.** `choosing its road` failed to resolve at four samples totalling over
+20,000 runs, and the temptation each time was to buy more. What ended it was a
+column nobody had printed — **fights a run**:
+
+| pilot | fights a run |
+|---|---|
+| careless | 8.4 |
+| + the fight | 10.3 |
+| + the trader | 10.9 |
+| + steering the pool | 12.5 |
+| **+ choosing its road** | **17.7** |
+
+**The routing pilot plays 42% more of the game and wins the same amount.** That
+is not "unresolved at this sample" — a lever that moves 42% of the content and
+lands inside the band is a lever that does nothing, and four more samples would
+have priced the nothing more precisely. Together with `FF_ROUTE`'s four rounds of
+the same answer (best of five alternatives −1 against a family bar of ±8.2,
+ordering monotone in how much each fights), the verdict is: **the trail's fights
+are close to free.** Skipping one costs its reward, taking one costs its risk,
+and the two cancel — which is why nothing beats taking everything *and* why
+taking everything is barely better.
+
+`FF_ROUTE` is off the standing arms as of this round; an arm earns its place if
+somebody would re-run it to answer something, and this one has answered. **The
+design consequence is that the fork needs a cost on one side, which is a change
+to make and measure rather than a sample to buy.**
+
 **AND THE RUNG IS NOT A DECISION, WHICH IS THE MORE USEFUL HALF.** A rung worth
 +9 says a pilot that takes every fight beats one that picks arbitrarily. It does
 not say the fork is a CHOICE — that needs a strategy which beats taking
@@ -1533,8 +1572,12 @@ the line's warmth unconditionally, which quietly deleted the room rule — the
 single decision the fight set is mostly made of. **A card that removes a decision
 does not read as weak, it reads as flat, and it takes the ladder down with it.**
 
-The `auraOn` primitive went with them, and with it the four sites that read it
-(`hasRoom`, `isPacked`, `tickRate`, the upkeep coldsink). The rule stands:
+The `auraOn` primitive went with them, and so did the aura branch inside each of
+its four readers — `hasRoom`, `isPacked`, `tickRate` and the upkeep coldsink are
+all still here doing the rest of their jobs; it is the aura arm of each that is
+gone. (The first version of this sentence read as though the four functions had
+been deleted, which the name audit caught by looking for names DESIGN.md claims
+are absent and finding all four alive.) The rule stands:
 **a mechanic that measures zero is not free** — and neither is one that was never
 measured at all.
 
@@ -1643,6 +1686,26 @@ only keeping a slot     11%    0             inside the band
 only filling the front   9%   −2             inside the band
 ONLY DENYING 19% against ALL FOUR 26% — the other three are worth +7, 2σ = ±2.8
 ```
+
+**AND THREE ATTEMPTS TO FIX THE THINNESS HAVE NOW FAILED THE SAME WAY, which is
+a law rather than three anecdotes:**
+
+| attempt | denial's share | the others |
+|---|---|---|
+| a second kind of event (the wave telegraph) | — | 0, whole arm |
+| more of the first kind (four extra schemers) | +11 → +16 of 18 | +5 → +2 |
+| a different currency on the bare turns | +9 → +11 of 16 | +7 → +5 |
+
+Three unrelated interventions, one direction. The reading that fits: **in a fight
+made of substitutes, anything that raises difficulty concentrates value in the
+best habit.** The substitutes only ever mattered as insurance, and a harder fight
+raises the price of the thing that actually works — so every *addition* makes
+this worse, because every addition makes the fight harder somewhere.
+
+That leaves exactly one direction untried in three rounds: **weaken denial** — a
+cap of one a turn is the cheapest version — and see whether the other three come
+up to meet it. Named here so the next round does not spend itself on a fourth
+addition.
 
 **That is a healthier game than the file has been describing.** "One habit and
 five passengers" was partly an artefact of counting two empty switches as
@@ -2310,8 +2373,41 @@ live defects that the 1280x720 / 2400x1080 / iPhone-14 walk had never shown:
 | the bell's rules line drawn **through** the stall panel, and its price badge **through** the rules line | a fixed 50-unit shelf holding a 23-unit line; text drawn to full width past a 58-unit plate |
 | `BELLRO` / `PE` | the seam rule's third correction — see the name-break entry |
 
-**Every one was green in all 876 render checks while it was broken, and five of
-the six are the same bug.** `textSize` clamps type up to a 9px readable floor, so
+**AND THEN THE GREP, which this entry called for and the next round ran.** 131 of
+the game's 160 `txt()` calls have a y that does not respond to the type floor,
+and **102 carry a literal vertical offset** — far past the point where fixing
+them one at a time is the answer. But 102 is not 102 defects: most are single
+lines with nothing under them and no way to fail. The question is never "which
+offset is wrong", it is **which ones have no room left**, and that is a
+measurement the sweep can make.
+
+So the overlap check grew a margin report. Every stacked pair on every shape,
+ranked by `gap / need`: **339 pairs with under 15% of slack, 25 with none**, all
+25 at 653x280. Two sites accounted for the worst nine at 86% — the STILL IN REACH
+seal list and the reward screen's bell — and both were a literal step where
+`lineH` already existed. Fixing those and the shop's help line took 25 to 16, and
+the rest are named in the output rather than hunted.
+
+Two things the same round proved about the check itself:
+
+* **Its geometry was too narrow.** It compared same-size pairs only (`need =
+  max(a, b)`, skipping anything differing by more than 0.6), which excludes
+  heading-over-caption by construction — and that is precisely the shape of
+  every defect the fold found. `need = (a + b) / 2` generalises it and is
+  identical for equal sizes, so the existing calibration is untouched.
+* **Its STATE was narrower.** The sweep set each screen up minimally, so the
+  victory screen had no earned seals and the seals block never drew. Widening
+  the geometry alone would have found nothing. **A check draws what you hand it,
+  and handing it the empty case is how a screen goes nine shapes unexamined.**
+  Every screen is now set up at its fullest.
+
+And the thing neither fix catches, which is why the report exists: `SEALS EARNED`
+over `THE FIRST CROSSING` measured **20 against a 23-unit line — 87%**, which
+reads as a collision in a PNG and passes any honest overlap bar. **A binary test
+cannot catch a near miss, and tightening it until it can would fire on layouts
+that are fine.** Slack is the quantity; collision is just slack at zero.
+
+**Five of the six original defects are the same bug.** `textSize` clamps type up to a 9px readable floor, so
 below a certain size a "13-unit line" is 23 units tall while every gap around it
 is still scaled by `S` — and the game is full of literals (`+ 21`, `by0 + 17`,
 `50`, `44 * S`) that were measured on a desktop. The floor is right; the literals
@@ -2542,6 +2638,15 @@ second made a wide deck stronger — and both are tabled under
   remember. Kept because that 32.5% → 13.9% is the largest single lever anyone
   has found here, and the next person who wants one should start by re-reading
   it rather than by re-measuring it.
+- **A quiet board that arms the line, not mends it** *(`dead-ends: quietboard`)*.
+  Denial is worth +9 of a 16-point fight and exists on 17% of
+  player turns; the board is bare on 60%. Adding schemes was already dead, so
+  this went the other way — when no foe was scheming, the warmth a spare slot
+  buys came as Spice rather than Regen. At 600 runs an arm it fired exactly where
+  intended (bare share 60% → 59%) and did the opposite of its purpose: **the set
+  stayed at 16, denial went +9 → +11 of it, the other three went +7 → +5, and the
+  fight got harder (26% → 23%)**. `keepSlot`, the habit it was built to give
+  something to do, read 0 both times.
 - **Giving four schemeless foes a scheme** *(`dead-ends: schemers`)*. Six rounds
   of ablation say denying a scheme is worth +11 of a set worth +18, and only 11
   of 24 foes carry one — so the fight's one real decision is available in 46% of
