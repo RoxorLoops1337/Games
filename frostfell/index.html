@@ -4337,6 +4337,48 @@ const lineH = (size, step) => Math.max(step, textSize(size) * 1.12);
    button label was measured against a font 12% too wide and cut to fit a box it
    was already inside. A truncation is a lie about the string; measuring in the
    wrong font is a lie about the box. */
+/* A NAME BROKEN OVER N LINES, at spaces where there are any and mid-word where
+   there are not.
+
+   Most cards in this game are one word, so wrapping only at spaces left
+   KETTLE…, WHETS… and CINDER… truncated on a fold while BONE STEW came out
+   whole — a name that cannot wrap is the common case, not the exception. A
+   hyphenless break is what a book does when a long word meets a narrow column,
+   and KETTLE over BEAK reads as one word beside a picture of the thing.
+
+   The split is BALANCED rather than greedy. Filling the first line and spilling
+   the rest gives BANKE / DEMBERS, where it is the second line that overflows;
+   starting at the middle and walking outward finds BANKED / EMBERS. */
+function nameSplit(c, nm, size, maxW, lines) {
+  c.font = '600 ' + textSize(size) + "px 'Frostwork','Trebuchet MS',sans-serif";
+  const fits = (x) => c.measureText(x).width <= maxW;
+  if (lines <= 1 || fits(nm)) return [nm];
+  const byWord = wrapText(c, nm, size, maxW);
+  if (byWord.length <= lines && byWord.every(fits)) return byWord;
+  // no usable space break: cut the string into `lines` balanced pieces
+  const out = [];
+  let rest = nm;
+  for (let k = lines; k > 1; k--) {
+    const want = Math.round(rest.length / k);
+    let cut = 0;
+    for (let d = 0; d <= rest.length && !cut; d++) {
+      for (const p2 of [want - d, want + d]) {
+        if (p2 > 0 && p2 < rest.length && fits(rest.slice(0, p2))) { cut = p2; break; }
+      }
+    }
+    if (!cut) break;
+    out.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  out.push(rest);
+  return out;
+}
+/** Whether `nm` can be shown in `lines` lines without anything being cut. */
+function nameFits(c, nm, size, maxW, lines) {
+  const p2 = nameSplit(c, nm, size, maxW, lines);
+  c.font = '600 ' + textSize(size) + "px 'Frostwork','Trebuchet MS',sans-serif";
+  return p2.length <= lines && p2.every((x) => c.measureText(x).width <= maxW);
+}
 function ellipsize(c, s, size, maxW, force, face) {
   size = textSize(size);
   c.font = (face === 'd' ? '' : '600 ') + size + 'px ' +
@@ -5856,8 +5898,14 @@ function drawCard(c, card, x, y, w, h, o) {
   const nm = card.name.toUpperCase();
   const nameW = w - 18 * S - gemRail;
   const nameSize = fitText(c, nm, nameW, 15 * S, 8 * S, 't');
-  const tiny = ellipsize(c, nm, nameSize, nameW) !== nm && nm.indexOf(' ') > 0;
-  const bh = (tiny ? 36 : 27) * S;
+  const tiny = ellipsize(c, nm, nameSize, nameW) !== nm;
+  /* HOW MANY LINES THE NAME NEEDS, worked out before the band is painted.
+     Two lines carry 53 of 58 names on a fold; the five longest — A HANDFUL OF
+     SNOW, BELLOWS BEAR, BANKED EMBERS — need three, and a band that grows to
+     hold them costs a few units of picture on the one device where the picture
+     was never the thing carrying the information anyway. */
+  const nmLines = tiny ? (nameFits(c, nm, nameSize * 0.82, nameW, 2) ? 2 : 3) : 1;
+  const bh = (tiny ? (nmLines === 3 ? 44 : 36) : 27) * S;
   const by0 = fi;
   c.save();
   rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
@@ -5927,11 +5975,19 @@ function drawCard(c, card, x, y, w, h, o) {
      dropped to pay for it. `EMBER` over `FLASK` beats `EMBER…` next to another
      `EMBER…`, and it is the only thing on the face that has to survive. */
   if (tiny) {
-    const two = wrapText(c, nm, nameSize * 0.82, nameW).slice(0, 2);
-    const step2 = lineH(nameSize * 0.82, nameSize * 0.9);
-    two.forEach((ln, i) => txt(c, ellipsize(c, ln, nameSize * 0.82, nameW),
+    /* AND A NAME WITH NO SPACE IN IT BREAKS MID-WORD, which is the common case
+       rather than the exception: most cards in this game are one word, so
+       wrapping only at spaces left KETTLE…, WHETS… and CINDER… truncated while
+       BONE STEW and EMBER FLASK came out whole. A hyphenless break is what a
+       book does when a long word meets a narrow column, and KETTLE over BEAK is
+       read as one word by anybody looking at a picture of a kettle-beaked bird.
+       An ellipsis throws the second half away; a break keeps it. */
+    const ns2 = nameSize * 0.82;
+    let two = nameSplit(c, nm, ns2, nameW, nmLines);
+    const step2 = lineH(ns2, nameSize * 0.9);
+    two.forEach((ln, i) => txt(c, ellipsize(c, ln, ns2, nameW),
       nameX, by0 + bh / 2 + (i - (two.length - 1) / 2) * step2,
-      nameSize * 0.82, '#22160c', 'center', 't', 'rgba(255,255,255,.45)'));
+      ns2, '#22160c', 'center', 't', 'rgba(255,255,255,.45)'));
   } else {
     txt(c, ellipsize(c, nm, nameSize, nameW), nameX,
       by0 + bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
