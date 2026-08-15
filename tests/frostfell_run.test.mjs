@@ -43,6 +43,13 @@ const ARMS_FILE = new URL('./.frostfell-arms.json', import.meta.url);
    including edits that could not possibly matter — a comment, a colour. That
    over-reports and it is the right direction: a reading wrongly flagged costs a
    re-run, and a reading wrongly trusted costs a round of building on it. */
+/* THE REST DIAL, FORCED FROM THE OUTSIDE. Shipping a one-fight rest lifted the
+   COURSELESS BASELINE by eight points and pulled the ladder down 46 → 42, which
+   is a strange result for a rule meant to make one fork a decision — a pilot
+   that never chooses to walk should not be paid. Setting the dial for a whole
+   run makes the question answerable: play the same ladder with the rest off and
+   with it on, and read where the eight points landed. */
+if (process.env.FF_RESTN !== undefined) FF.REST.fights = Number(process.env.FF_RESTN);
 const BUILD = (() => {
   let h = 0x811c9dc5;
   for (const f of ['../frostfell/index.html', './frostfell_pilot.mjs']) {
@@ -79,21 +86,44 @@ const STANDING = [
   ['FF_MONEY=70', 'what a purse buys, one ware removed and one ware given'],
   ['FF_COURSE=150', 'the five courses against declaring nothing'],
   ['FF_PAIRS=70', 'fight habits two at a time — does any pair beat its halves'],
-  ['FF_PAIR=holdGear+keepSlot', 'and the one pair worth settling, four times as deep'],
-  ['FF_NOWAVE=1', 'the ladder with the wave telegraph off, same build, same seeds'],
   ['FF_NOSCARS=1', 'the ladder with the scar rule switched off'],
   ['FF_CARDS=40', 'every card priced by taking it out of the offer'],
   ['FF_CALIBRATE=70', 'what a band actually is on this instrument — measured, not derived'],
   ['FF_LADDERBAND=1', 'the ladder total run at five seed bases — can this instrument read its own headline'],
   ['FF_VARIANCE=36', 'deck vs trail vs draw order — where a run is actually decided'],
-  ['FF_BUILT=200', 'gear-heavy against body-heavy decks, built on purpose rather than sorted on outcome'],
   ['FF_REST=1', 'a lasting rest on the quiet road — does it make the fork a decision'],
-  ['FF_ROUTE=1', 'five routing strategies against taking every fight — is the fork a decision at all'],
-  ['FF_LIVEBUILT=1', 'and the same twelve decks as starting hands in real runs — does the lean survive the draft'],
+  ['FF_ROUTE=150', 'five routing strategies against taking every fight — is the fork a decision at all'],
   ['FF_DIAL=150', 'the two flat courses swept by magnitude — a dial or decoration'],
-  ['FF_GEARBAR=1', 'the pilot\'s gear-before-body bar swept — is the gear finding the deck or the pilot'],
 ];
-/* FF_GIVE CAME OFF THIS LIST RATHER THAN BEING RUN, and the argument is the
+/* FOUR MORE CAME OFF THIS LIST, and the argument is what it costs to keep a
+   reading current rather than what the arm once found.
+
+   Every stamp now carries the build it was taken on and the summary prices a
+   full refresh, which turned an abstract tidiness question into an arithmetic
+   one: an arm earns its place if somebody would re-run it to answer something.
+   Four would not.
+
+     FF_PAIR      one pair of FF_PAIRS run deeper — a narrowing, like FF_HABIT
+                  and FF_GIVE, so it cannot write a reading of its own
+     FF_GEARBAR   the pilot's gear-timing dial, measured FLAT end to end at 450
+                  a bar. A settled null on a knob nothing now depends on
+     FF_NOWAVE    the ladder with the telegraph off: worth exactly 0 at 840 an
+                  arm, and nothing downstream will turn on it again
+     FF_LIVEBUILT folded into FF_BUILT, which takes FF_SIDES and runs live or
+                  locked — one arm with two settings, not two arms
+     FF_BUILT     SETTLED, and settled at a size nothing acts on. Five rounds
+                  and 50,400 runs to land on +1.9 points for a gear-heavy
+                  start — smaller than every rung on the ladder and inside the
+                  ladder's own ±2.8 band. It does not justify a card, a charm,
+                  a ware or a leader, and saying that plainly is the finding.
+                  An arm whose answer is "this is too small to act on" has
+                  finished its job
+
+   That is rule 3 applied to the instrument rather than the record: **an arm
+   whose reading nobody would pay to refresh is an arm nobody is reading.** The
+   list is 14, and a full refresh is a number somebody might actually spend.
+
+   FF_GIVE CAME OFF FOR A DIFFERENT REASON, and the argument is the
    file's own: it narrows FF_CARDS to a named handful the way FF_HABIT narrows
    FF_ABLATE to one habit, and it reports through FF_CARDS' table rather than
    writing a reading of its own. It read "no reading recorded — run it" for
@@ -1235,7 +1265,7 @@ section('does walking past a fight pay');
       ? 'something beats taking every fight — the fork IS a decision'
       : 'nothing beats taking every fight: the trail screen asks a question with one right answer'}`);
     if (process.env.FF_ROUTE) {
-      ARMS.stamp('FF_ROUTE=1', `taking everything ${seek.pct}%; best of ${all5.length} alternatives ` +
+      ARMS.stamp('FF_ROUTE=150', `taking everything ${seek.pct}%; best of ${all5.length} alternatives ` +
         `"${bestAlt.label}" ${bestAlt.r.pct}% (${lead >= 0 ? '+' : ''}${lead}, bar ±${(zf * bf).toFixed(1)}) — ` +
         `${lead >= zf * bf ? 'the fork is a decision' : 'the fork has one right answer'}`, seek.runs);
     }
@@ -2103,7 +2133,7 @@ section('the arms that are not run by default');
      bumped by hand is a list that goes stale. */
   const inSource = [...readFileSync(new URL(import.meta.url), 'utf8')
     .matchAll(/process\.env\.(FF_[A-Z]+)/g)].map((m2) => m2[1]);
-  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_GIVE', 'FF_SIDES', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
+  const MODIFIERS = ['FF_RUNS', 'FF_HABIT', 'FF_GIVE', 'FF_SIDES', 'FF_RESTN', 'FF_PAIR', 'FF_NOWAVE', 'FF_GEARBAR', 'FF_LIVEBUILT', 'FF_BUILT', 'FF_CONTRAST', 'FF_VDECKS', 'FF_VSEED', 'FF_VLIVE', 'FF_REAL', 'FF_TIME', 'FF_JOBS', 'FF_GAME'];
   const listed = STANDING.map(([k]) => k.split('=')[0]);
   const missing = [...new Set(inSource)].filter((k) => MODIFIERS.indexOf(k) < 0 && listed.indexOf(k) < 0);
   eq(missing.join(','), '', 'every knob that gates a section is listed as an arm');
@@ -2347,7 +2377,17 @@ section('every ware is worth buying');
      worth nothing to a caravan carrying no scars) without being furniture. What
      it may not be is unreachable — bought zero times across hundreds of runs by
      a pilot that is looking for it. */
-  ok(!dead.length, `every ware on the counter gets bought (${dead.map((r) => r.name).join(', ') || 'none dead'})`);
+  /* AND THE ONE ARM THIS ASSERTION CANNOT SURVIVE, which only showed up once
+     every arm was re-run on one build. `FF_NOSCARS` strips every scar the
+     moment it is handed out — so "tend a hurt", the ware whose whole job is
+     removing one, has no customer by construction and the counter reads a dead
+     ware. That is the arm being consistent, not the shop being broken, and the
+     honest guard names the ware rather than switching the check off. */
+  const noScarWare = process.env.FF_NOSCARS ? 'tend a hurt' : null;
+  const reallyDead = dead.filter((r) => r.name !== noScarWare);
+  ok(!reallyDead.length, `every ware on the counter gets bought ` +
+    `(${reallyDead.map((r) => r.name).join(', ') || 'none dead'}` +
+    `${noScarWare && dead.length ? '; tend-a-hurt excluded: FF_NOSCARS leaves nothing to tend' : ''})`);
 }
 
 section('every card is worth playing');

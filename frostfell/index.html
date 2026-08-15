@@ -3016,7 +3016,24 @@ function enterNode(g, choiceIdx) {
        both the smallest setting and the best, so there is no runaway to guard
        against — longer rests are WORSE, because a rest that outlasts the
        trouble it was taken for stops being a reason to walk. */
-    run.rested = REST.fights;
+    /* AND ONLY WHERE REST IS ACTUALLY TO BE HAD, which the first cut got wrong
+       in a way the ladder made obvious.
+
+       Granting the rest for any non-fight node opposite a fight paid the
+       CARELESS pilot, which picks an arbitrary fork and therefore lands on
+       quiet nodes about half the time without ever choosing one. Measured: with
+       the rest off the ladder reads 8/26/39/42/54, with it on 12/29/45/51/54 —
+       every rung lifted except the one that always fights and never banks it.
+       That is a rule paying people who did not make the choice, which is the
+       defect the quiet road had in reverse.
+
+       A shop is not rest and neither is a cache. The rest comes from the places
+       rest comes from, which is also the set the probe's ducking pilot steers
+       for, so the thing being paid for and the thing being measured are finally
+       the same thing. */
+    if (node.kind === 'camp' || node.kind === 'rest' || node.kind === 'shrine') {
+      run.rested = REST.fights;
+    }
     if (following(run) > 0) {
       fx.toast('SOMETHING IS FOLLOWING', '#ff9aa5');
       run.log.push('A pack was left behind, and did not stay behind.');
@@ -5833,7 +5850,14 @@ function drawCard(c, card, x, y, w, h, o) {
      thickness, and a shadow cast onto the face below it — which is the thing
      that stops it reading as a printed label and starts it reading as a piece
      of the frame. */
-  const bh = 27 * S;
+  /* Measured BEFORE the band is drawn, because a two-line name needs a taller
+     band and the band is painted first. */
+  const gemRail = rare >= 2 ? (rare - 1) * 9.5 * S + 6 * S : 0;
+  const nm = card.name.toUpperCase();
+  const nameW = w - 18 * S - gemRail;
+  const nameSize = fitText(c, nm, nameW, 15 * S, 8 * S, 't');
+  const tiny = ellipsize(c, nm, nameSize, nameW) !== nm && nm.indexOf(' ') > 0;
+  const bh = (tiny ? 36 : 27) * S;
   const by0 = fi;
   c.save();
   rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
@@ -5886,12 +5910,32 @@ function drawCard(c, card, x, y, w, h, o) {
      the two ran through each other — `◇ANKED EMBERS`. The gems take their strip
      and the name centres in what is left, which is why the rail is measured
      here rather than guessed at. */
-  const gemRail = rare >= 2 ? (rare - 1) * 9.5 * S + 6 * S : 0;
-  const nm = card.name.toUpperCase();
-  const nameW = w - 18 * S - gemRail;
-  const nameSize = fitText(c, nm, nameW, 15 * S, 8 * S, 't');
-  txt(c, ellipsize(c, nm, nameSize, nameW), fi + gemRail + (w - fi * 2 - gemRail) / 2,
-    by0 + bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+  const nameX = fi + gemRail + (w - fi * 2 - gemRail) / 2;
+  /* WHEN THE CARD IS TOO SMALL FOR TEXT, THE NAME WINS AND THE RULES GO.
+
+     On a fold's cover a hand card is about 36 CSS pixels wide and the legibility
+     floor is 9, so nothing on it can be read: 57 of 58 rules texts ellipsise —
+     including two-word ones, which is the tell that this is not a long-text
+     problem — and 58 of 58 names. The board that produced this had TWO cards
+     both reading `EMBER…`, which is the actual failure: not that the rules are
+     cut, but that you cannot tell two cards in your own hand apart.
+
+     Shrinking further is not available; the floor is the floor. So below the
+     width where a name fits on one line the card changes what it shows. The
+     name WRAPS to two lines and gets the band's full height, and the rules line
+     — unreadable at this size and one tap away in the inspect panel — is
+     dropped to pay for it. `EMBER` over `FLASK` beats `EMBER…` next to another
+     `EMBER…`, and it is the only thing on the face that has to survive. */
+  if (tiny) {
+    const two = wrapText(c, nm, nameSize * 0.82, nameW).slice(0, 2);
+    const step2 = lineH(nameSize * 0.82, nameSize * 0.9);
+    two.forEach((ln, i) => txt(c, ellipsize(c, ln, nameSize * 0.82, nameW),
+      nameX, by0 + bh / 2 + (i - (two.length - 1) / 2) * step2,
+      nameSize * 0.82, '#22160c', 'center', 't', 'rgba(255,255,255,.45)'));
+  } else {
+    txt(c, ellipsize(c, nm, nameSize, nameW), nameX,
+      by0 + bh / 2, nameSize, '#22160c', 'center', 't', 'rgba(255,255,255,.45)');
+  }
 
   /* ---------------- the art window ----------------
      It was a flat two-stop wash with a grey ellipse floating in it. A window

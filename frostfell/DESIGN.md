@@ -501,6 +501,28 @@ family of two bar   2.24σ     CLEARS
 **The spread is real and it clears the bar.** The null was an artefact of what
 the courses were compared against, and the arm prints both comparisons now.
 
+**AND IT IS SETTLED, at the sample the arithmetic asked for.** Best-against-worst
+failed to clear three rounds running — 3.2σ, then 2.1σ, then 1.7σ — and was
+reported as news each time, which is a claim being re-announced rather than
+resolved. The same method the deck arm used answers it: a course arm is a plain
+win rate, so the band is binomial and the requirement is
+`n = (1.29·√(2p(1−p))·100·z / Δ)²`. To resolve a 9-point spread at the
+family-of-five bar: **683 runs an arm**, against the 210 it had been run at.
+
+At 720 an arm:
+
+```
+none 47  ·  hearth 57  ·  scrap 55  ·  cold 54  ·  gear 51  ·  bodies 49
+HEARTH 57 vs BODIES 49 — 8 points at 2.8σ on a ±2.9 band      CLEARS
+```
+
+**The courses genuinely differ and the instrument could not see it at 210.**
+Two rounds running now, a number that would not resolve has resolved as soon as
+somebody worked out the sample instead of deepening by feel — and both times the
+prediction was right first try. *An unresolved claim is a sample-size question
+until somebody does the arithmetic, and re-reporting it is not the same as
+answering it.*
+
 **And the RANKING inside it has moved once, which matters more than the spread.**
 For a dozen rounds this table read `cold 46% · hearth 38%` and one entry up drew
 a whole theory of tempo from it. Hearth's magnitude fix (see *course-why*) put
@@ -948,7 +970,29 @@ side always wins is furniture with a signpost, and a fork where the two sides
 sit inside a band is a question worth asking. One fight is both the smallest
 setting and the best, so there is nothing to guard against: **longer rests are
 worse**, because a rest that outlasts the trouble it was taken for stops being a
-reason to walk now. The
+reason to walk now.
+
+**AND THE FIRST CUT PAID PEOPLE WHO DID NOT MAKE THE CHOICE.** Shipping it
+lifted the COURSELESS baseline by eight points and pulled the ladder from 46 to
+42 — a strange result for a rule meant to make one fork a decision. Run with the
+dial forced off and on, the same ladder reads:
+
+```
+rest off   8 / 26 / 39 / 42 / 54      = 46, fifth rung +12
+rest on   12 / 29 / 45 / 51 / 54      = 42, fifth rung  +3
+```
+
+**Every rung lifted except the one that always fights**, which is the tell. The
+rest was granted for any non-fight node opposite a fight, and the CARELESS pilot
+picks an arbitrary fork — so it landed on quiet nodes about half the time and
+banked a rest it never chose. A rule paying for the outcome rather than the
+choice is the quiet road's own original defect, inverted.
+
+Fixed by granting it only where rest is actually to be had — camp, rest stop,
+shrine — because **a shop is not rest and neither is a cache**. The sweep is
+unchanged afterwards (−3 / +3 / +2 / +1), which is exactly right: the ducking
+pilot steers for those three nodes anyway, so the decision keeps its value and
+only the accident stops paying. The
 question that finally moved it was not "what else can be tuned" but **what is
 the ladder not asking about at all**.
 
@@ -1107,6 +1151,22 @@ It is deliberately coarse: any edit to either file invalidates every reading,
 including a comment or a colour. That over-reports, and that is the right
 direction — **a reading wrongly flagged costs a re-run, and a reading wrongly
 trusted costs a round of building on it.**
+
+**And a red light nobody can clear is a red light taped over**, so the cost of
+clearing it is printed beside it — and then the list was cut until that cost was
+something somebody would pay. Every stamp carries its build and the summary sums
+each arm's own sample, which turns tidiness into arithmetic: **an arm earns its
+place if somebody would pay to re-run it.** Five would not — `FF_PAIR` and
+`FF_GIVE` are narrowings that cannot write a reading of their own, `FF_GEARBAR`
+and `FF_NOWAVE` are settled nulls nothing depends on, `FF_LIVEBUILT` folded into
+`FF_BUILT` as a setting, and `FF_BUILT` retired on the size of its own answer.
+
+**The refresh went from ~35,800 runs across 18 arms to ~5,200 across 13.** That
+is rule 3 applied to the instrument rather than the record, and the number is
+what made the decision obvious: at 35,800 the honest answer was "a release step
+nobody will take", and at 5,200 it is a thing you run before a round you intend
+to build on.
+
 Re-run, `FF_CARDS` reads *no card of 57 clears 3.33σ, widest sleetrunner −10.8;
 giving from a locked floor: 0 clear it, best frostmite +4.2*.
 
@@ -1884,6 +1944,25 @@ it is ever drawn at** — in hand and on the reward row — at 653x280, the tigh
 shape, and put through the same two rules. All of them pass. What is left
 uncovered is foes the seeded run never met, which the figure now names rather
 than hides.
+
+**AND THE MISSING THIRD OF THE PARAGRAPHS IS NOT A GAP IN THE CHECK.** Rules text
+is drawn wrapped, so a paragraph only counts as looked-at when every word of it
+appeared somewhere — and at 653x280 it never does. Drawn card by card: **57 of
+58 rules texts ellipsise on a fold, and 58 of 58 names.** Including two-word
+texts, which is the tell that this is not a long-text problem: a hand card there
+is about 36 CSS pixels wide against a 9-pixel legibility floor.
+
+**Not acceptable, and the reason is sharper than "text is cut".** The fold shot
+shows two different cards in one hand both reading `EMBER…`. The failure is not
+that the rules are truncated — they are one tap away in the inspect panel — it
+is that **you cannot tell two cards in your own hand apart.**
+
+Shrinking further is not available; the floor is the floor. So below the width
+where a name fits on one line the card changes what it shows: the name WRAPS to
+two lines and takes the band's full height, and the rules line — unreadable at
+that size — is dropped to pay for it. `EMBER` over `FLASK` beats `EMBER…` beside
+another `EMBER…`, and telling cards apart is the only thing on that face that
+has to survive.
 
 **And the named gap is closed.** Every foe is now placed on a real board, given
 a scheme to telegraph, drawn as a slab and drawn again in the inspect panel, at
