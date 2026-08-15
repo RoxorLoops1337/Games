@@ -1115,14 +1115,21 @@ if (CELLS.total) {
   const CASES = [['CINDERPUP', 'CINDER'], ['KETTLEBEAK', 'KETTLE'],
     ['SNOWPUP', 'SNOW'], ['WHETSTONE', 'WHETS'],
     ['BELLROPE', 'BELL'], ['COLDSNAP', 'COLDS']];
+  /* THE HEAD NOW ENDS IN A HYPHEN, and this expectation was updated rather
+     than worked around because the OLD expectation encoded the defect: the
+     comment beside the split has always claimed "a book does this", and a book
+     hyphenates. `WHETS` over `TONE` is the proof — two English words that mean
+     nothing together. The head has to carry the mark inside its own width, so
+     the box each case is measured against grew by exactly one glyph; none of
+     the six seams moved when it did. */
   for (const [nm, head] of CASES) {
-    const p = FF.nameSplit(cc, nm, 14, head.length * 7 + 3, 2);
+    const p = FF.nameSplit(cc, nm, 14, (head.length + 1) * 7 + 3, 2);
     eq(p.length, 2, `${nm} breaks in two`);
-    eq(p[0], head, `${nm} breaks at the compound seam, not wherever the width ran out`);
-    eq(p.join(''), nm, `${nm} loses nothing to the break`);
+    eq(p[0], head + '-', `${nm} breaks at the compound seam, hyphenated`);
+    eq(p[0].slice(0, -1) + p[1], nm, `${nm} loses nothing to the break`);
   }
   console.log(`  · ${CASES.length} compound names break where a word can start ` +
-    `(${CASES.map(([n2, h]) => h + '|' + n2.slice(h.length)).join(' ')})`);
+    `(${CASES.map(([n2, h]) => h + '-|' + n2.slice(h.length)).join(' ')})`);
 }
 
 done('frostfell-render');
