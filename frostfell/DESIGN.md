@@ -868,28 +868,68 @@ That is a better ratio than the flow suggested — the method work has mostly be
 worth it. What the flow says instead is that **five rounds of it in a row is too
 many**, whatever each one was worth on its own.
 
+**AND THE RETIREMENTS, AUDITED — because the count has been held at 33 for eight
+rounds by one-in-one-out, and a habit that keeps a number steady is exactly the
+kind that hides a drop.** Every topic set from the last fourteen commits to this
+file, diffed: **12 retired, 32 → 33 across the span.**
+
+| retired | where it went |
+|---|---|
+| `probe-wrappers` | a row of the instrument table — *read state, don't intercept calls* |
+| `shelter` | a clause in the fight entry, with the 25 points kept |
+| `ladder-band` | absorbed whole by `sample-size` |
+| `card-worth`, `first-fight`, `telegraph`, `defeat-screen`, `shot-walk`, `source-split`, `unlock-audit`, `parallelism` | folded into a surviving entry, number intact |
+| **`boss-norm`** | **dropped** |
+
+**Eleven of twelve were honest and the twelfth was not, in the way that costs
+most.** `boss-norm` held the largest single lever anyone has measured here —
+fixing the boss per zone takes the trail's share from 32.5% to 13.9% — and when
+it went, `index.html` was left saying *"see DESIGN.md for what to do about the
+boss"* about an entry that had not existed for four rounds, while the DEAD ENDS
+entry went on calling itself *everything built, measured and thrown away*. A
+completeness claim that outlives its own falsification is precisely what rule 2
+is for, and one-in-one-out is what put the pressure on.
+
+Both halves are fixed and both are now checked: a dead end kept as a code comment
+tags itself `dead-ends: <slug>` and the slug must appear in the entry, and every
+`DESIGN.md#anchor` the README links to must resolve. **The count target is
+retired too** — rule 3 says *about 35* and asserts ≤38, and squeezing to hold 33
+against a rule that never asked for it is how the one drop happened.
+
 ### FINDING — the ladder, and which of its numbers is the one being defended
 
 `topic: ladder`
 
-Four pilots, each the one above it plus one more thing it knows how to do, so
-the gap between two rows is that one thing. `FF_RUNS=70`, 210 runs an arm:
+Five pilots, each the one above it plus one more thing it knows how to do, so
+the gap between two rows is that one thing. **At 516 runs an arm**, which is
+where the rungs were finally settled rather than guessed at:
 
 | pilot | | worth |
 |---|---|---|
-| careless | takes the leftmost card, swings at the nearest thing | 8% |
-| + the fight | denies schemes, answers a named wave, places bodies, holds gear | 26% (**+18**) |
-| + the trader | spends well | 39% (**+13**) |
-| + steering the pool | drafts to a course | 41% (+2) |
+| careless | takes the leftmost card, swings at the nearest thing | 10% |
+| + the fight | denies schemes, answers a named wave, places bodies, holds gear | 27% (**+17**) |
+| + the trader | spends well | 44% (**+17**) |
+| + steering the pool | drafts to a course | 47% (+3) |
+| + choosing its road | takes every fight rather than an arbitrary fork | 55% (+8) |
 
-**AND A FIFTH RUNG, WHICH IS THE LARGEST MOVE THIS NUMBER HAS EVER MADE.**
-
-| pilot | | worth |
-|---|---|---|
-| + choosing its road | takes every fight rather than an arbitrary fork | 50% (**+9**) |
-
-**33 → 42 points.** The total had read 33 for two rounds and 27 for four before
+**45 points, ± 7.** The total had read 33 for two rounds and 27 for four before
 that, and the only thing that ever moved it was *deleting* three cards.
+
+**BUT IT IS THREE RUNGS, NOT FOUR, AND THAT IS THE READING.** The bottom two
+print as ranges — +3 and +8 against a 2σ band of ±8.0 — and this is at *twenty
+times* what the default check can afford. Sized properly they want 14,700 and
+2,064 runs an arm. A rung nobody will ever pay to read is not a measurement, so
+`steering the pool` and `choosing its road` are one rung: they are the same habit
+seen twice, one steering the CARD POOL toward what the deck wants and the other
+steering the TRAIL toward the fights the deck can take. Apart, ±8 swallows both.
+Together they read **+11** and clear.
+
+| the fight | the trader | steering the run | |
+|---|---|---|---|
+| **+17** | **+17** | **+11** | = 45 ± 7 |
+
+The five pilot modes are untouched and the shape chart still draws all five rows.
+This changed what the ladder claims to have measured, not what it ran.
 
 **AND THE RUNG IS NOT A DECISION, WHICH IS THE MORE USEFUL HALF.** A rung worth
 +9 says a pilot that takes every fight beats one that picks arbitrarily. It does
@@ -1541,13 +1581,39 @@ on denial were building on something real; the four tenths were a small-sample
 artefact of the arm, not a property of the finding.
 
 **AND IT IS NOW WORTH MORE THAN THE WHOLE SET, which is an arithmetic problem
-nobody had done.** Denial alone reads **+15** and the set of six reads **+17**.
-Since the six are not additive that is not literally "the other five sum to +2",
-but it does bound them: whatever the other five contribute on top of denial, it
-is about two points, and three of them price negative on their own. The habit
-table is not five small positives and one large one. It is **one habit and five
-passengers**, and two of the passengers (repositioning, calling waves early) are
-already dead switches kept only so the ablation has a row.
+nobody had done.** Denial alone reads **+15** and the set reads **+17**. They are
+not additive, so that is not literally "the rest sum to +2", but it does bound
+them: whatever the others contribute on top of denial is about two points, and
+several price negative on their own. The habit table is not a row of small
+positives and one large one. It is **one habit and some passengers**.
+
+**AND THE PASSENGERS WERE MISCOUNTED FOR SIX ROUNDS — there are three, not
+five.** `reposition` and `wave` were measured, emptied, and kept as switches so a
+later round could re-check the sign, which was right; what was wrong is that the
+ablation went on *pricing* them. Their on and off arms are byte-identical, so each
+contributed a guaranteed 0.0 **and a slot in the Bonferroni family** — the real
+habits were being judged against a bar sized for six questions when the arm only
+ever asked four. Both halves of that were already written down, in this entry and
+in the arm's own comment, one sentence apart; the subtraction was never done. The
+pair arm had learned exactly this about `reposition` and filed it under DEAD ENDS.
+
+They are dormant now — kept as switches, never priced, printed with what retired
+each. Re-read on four live habits at 750 runs an arm:
+
+```
+the set                                    15 points
+only denying schemes    19%   +8 of the 15   (leads the next by 6 at ±1.4 — resolved)
+only holding gear       13%   +2             inside the band
+only keeping a slot     11%    0             inside the band
+only filling the front   9%   −2             inside the band
+ONLY DENYING 19% against ALL FOUR 26% — the other three are worth +7, 2σ = ±2.8
+```
+
+**That is a healthier game than the file has been describing.** "One habit and
+five passengers" was partly an artefact of counting two empty switches as
+passengers: it is one habit worth 8 and three habits worth 7 together, and the
+three clear their bar. What stays true is that each of the three is individually
+inside the band — they are substitutes, not additions.
 
 **So the pairs were run against denial specifically** (`FF_PAIRS=45`), each as
 `pair - none - (a - none) - (b - none)`, band on an interaction ±5.4:
@@ -1572,19 +1638,19 @@ schemes on it.
 
 **AND WHEN THE DELETION WAS ACTUALLY TESTED, IT FAILED, BECAUSE THE +15 AND THE
 +17 WERE MEASURED IN A CAGE.** "One habit and five passengers" was the line this
-entry closed on last round, and the obvious next move was to cut the five the way
+entry closed on last round, and the obvious next move was to cut them the way
 the aura cards were cut. So the pilot that ONLY denies was run against the pilot
-that does all six — on the `careful` pilot that also shops and drafts, which is
+that does all of them — on the `careful` pilot that also shops and drafts, which is
 the game, rather than the `tactics` pilot that plays the fight and nothing else.
 At 750 runs an arm:
 
 ```
 only denying schemes          37%
-all six habits                42%      the other five are worth +5
+all the habits                42%      the others are worth +5
                                        2σ = ±3.2   —   CLEARS
 ```
 
-**The five carry their weight.** Individually they still price at −2 to +0 in
+**They carry their weight.** Individually they still price at −2 to +0 in
 the subtractive table and the pair table still says they substitute for denial;
 collectively, on a pilot that has a purse and a draft to steer, they are worth
 five points and that clears the bar. Both things are true and only the second one
@@ -1611,14 +1677,25 @@ gets rediscovered instead of used.
 wrong is most of the difficulty:
 
 ```
-a plain rate against a baseline    n = (1.29·√(2p(1−p))·100·z / Δ)²
-a DIFFERENCE of two arms (a rung)  n = (1.29·100·z / Δ)²·(p₁q₁ + p₂q₂)
-a CLUSTERED comparison (decks)     n = 2(z·SD_between / Δ)²   decks a side
+a plain rate against a baseline    n = (1.29·√(2p(1−p))·100·z / B)²
+a DIFFERENCE of two arms (a rung)  n = (1.29·100·z / B)²·(p₁q₁ + p₂q₂)
+a CLUSTERED comparison (decks)     n = 2(z·SD_between / B)²   decks a side
 ```
 
 The 1.29 is the measured calibration — this instrument's bands are narrower than
 the formula's because arms share seeds. `z` is the family bar: 2.0 for one
 question, 2.24 for two, 2.58 for five.
+
+**`B` is the BAND you want, and it is not the effect you expect. Use `B = Δ/2`,
+which is four times the runs.** This is the correction, and it was found by
+following the table's own advice and watching it fail. It said `choosing its
+road` would resolve at 517 runs an arm; run at 516 it read **+8 against a 2σ band
+of 8.0** — sitting exactly on the line, still printed as a range. Not bad luck:
+substituting `B = Δ` solves for *the sample at which the effect equals its own
+band*, so clearing is a coin flip by construction. All three successes below
+cleared because their effects came in bigger than the Δ they were sized for,
+which is luck wearing the costume of a method — the fourth attempt was the first
+one where the effect came in at its estimate, and it is the one that failed.
 
 **The three worked examples, and what each cost before and after:**
 
@@ -1635,12 +1712,24 @@ smaller term and leave the larger one alone. **Four rounds of deepening bought
 nothing because the binding constraint was decks, and nobody had asked which
 term was binding.**
 
+**And the fourth example is the one that pays for the other three**, because it
+is the first time the method was used on a question whose answer was *no*:
+
+| question | the arithmetic said | ran at | answer |
+|---|---|---|---|
+| what choosing its road is worth | 517 runs an arm | 516 | **+8 against a ±8 band — still a range** |
+
+Sized properly (`B = 4`) it wants 2,064 an arm, and `steering the pool` wants
+14,700. That is the reading that took the ladder from four rungs to three: an
+arm nobody will ever pay for is not a measurement, and the two halves fold into
+one rung that clears.
+
 **The rule, then:** *when a reading moves between rounds, compute the sample
-before running another one* — and when an arm reports something unresolved, it
-prints the sample it would need rather than leaving the reader to work it out.
-The ladder table does this per rung now, which is where the habit came from: it
-was printing `steering +2` above a five-base measurement of `+7.6` in the same
-output, with the headline read first.
+before running another one, and size for the band rather than the effect* — and
+when an arm reports something unresolved, it prints the sample it would need
+rather than leaving the reader to work it out. The ladder table does this per
+rung, which is where the habit came from: it was printing `steering +2` above a
+five-base measurement of `+7.6` in the same output, with the headline read first.
 
 ### RULE — a band is measured, and it applies to every number here
 
@@ -1737,6 +1826,17 @@ neighbour, and a table that has both is the easiest place in the world to read
 the wrong one.** Four of the seven were already right, which is the only reason
 the audit was cheap — but it took writing the rule a fourth time before anyone
 went and applied it backwards.
+
+**AND THE BAND HAS A NOTATION NOW, USED EVERYWHERE RATHER THAN ONCE.** A rung
+that cannot clear its own band prints `+3?` instead of `+3`, and for one round
+that convention existed in exactly one table while five others went on printing
+bare differences that the reader had to check by hand against a sentence
+underneath. One shared renderer — `RANGE(d, band)` — now marks the gear-bar
+spread, both course-dial spreads, the routing verdict, best-against-worst on the
+courses, and the money arm. **Six sites, one rule: a number without a `?` cleared
+2× its band, a number with one is a range.** The point is not the character; it
+is that a reader can no longer land on any single line of probe output and be
+unable to tell whether it means anything.
 
 ### FINDING — the quiet road
 
@@ -2020,6 +2120,32 @@ cannot wrap is the common case, not the exception.* Breaking mid-word is what a
 book does when a long word meets a narrow column, and `KETTLE` over `BEAK` reads
 as one word beside a picture of the thing.
 
+**EXCEPT THAT IS NOT WHAT IT DREW, AND EVERY CHECK WAS GREEN WHILE IT DIDN'T.**
+The shot walk opened the leader screen on a phone and found `CINDE` / `RPUP`,
+`KETTL` / `EBEAK`, `WHETS` / `TONE` — the cut is chosen by pixel fit alone, so it
+lands wherever the width runs out, which is mid-syllable most of the time. Two
+nonsense tokens are worse than the truncation they replaced. The coverage sweep
+could not see it and never could: it asks whether a name is drawn WHOLE, and by
+that measure `SNO`/`WPUP` and `SNOW`/`PUP` are the same answer — **86 of 86, both
+ways.** *A check that counts what is drawn cannot see what is legible.*
+
+Two changes, and the first attempt at the second one made things worse:
+
+* **Shrink before you break.** A typesetter sets the line smaller before
+  hyphenating. The band now takes the largest size (down to the 9px floor) that
+  holds the whole name, and only breaks if none does.
+* **The cut goes where the SECOND piece can start a word** — consonant then
+  vowel, taking the latest such place that fits. Nearly every long name here is
+  a compound (`CINDERPUP`, `SNOWPUP`, `WHETSTONE`, `KETTLEBEAK`), so this puts
+  the whole first element on the first line. The first attempt cut *after a
+  vowel* instead, which is true of `KETTLE|BEAK` by accident and turned
+  `SNOW|PUP` into `SNO|WPUP` and `WHETS|TONE` into `WHE|TSTONE` — **two of four
+  regressed, with 86 of 86 still green.** The second shot walk caught it.
+
+Pinned now by four named cases rather than a property, because a property here
+would restate the implementation: `CINDER|PUP KETTLE|BEAK SNOW|PUP WHETS|TONE`,
+and 2 of the 4 fail if the seam preference is removed.
+
 Two more things had to be right before it landed at **0 of 58 cut**:
 
 * **The split is balanced, not greedy.** Filling the first line and spilling the
@@ -2047,6 +2173,18 @@ drawing every card in the game moved coverage from 75% to 77% — which reads as
 the widening having failed, when what it did was take card names to everything
 the game has. A name is drawn whole and a paragraph is drawn wrapped; **one
 number over two things measured differently is not a measurement.**
+
+**Both now read 100%, and the last gap was a design fault rather than a coverage
+one.** The sweep skipped leaders (`if (def.leader) continue`) because leaders are
+not offered as cards, which held rules at 62 of 63 — and the one paragraph nobody
+had ever drawn belonged to the Stranger. Drawn, it did not fit: **twelve words,
+and the last one never appeared on a card face at any of the four device sizes.**
+Not a wrapping bug — a card face is 4 lines at that size and 12 words of that
+shape is 5. Nothing in the check could have found it while the entry it needed
+was excluded, which is the general shape: **the one text a coverage sweep skips
+is the one nobody has ever looked at, so it is exactly where the defect is.** The
+fix was the text (12 words → 10), because the alternative was making every card
+in the game shorter to suit one leader.
 
 ### FINDING — every surface was flat, and one direction of light fixed the lot
 
@@ -2247,6 +2385,30 @@ second made a wide deck stronger — and both are tabled under
 - **A pair interaction measured on `reposition`.** Its arms are byte-identical,
   so the interaction is 0.0 by construction and the "band" came out 110×
   narrower than derived.
+- **Encounters drawn to a strength budget** *(`dead-ends: budget`)*. Every foe is
+  an independent uniform draw, so a fight can roll three of the heaviest bodies
+  in the pool. Drawn to a budget instead — same mean, variance held inside 18% —
+  the trail's share of how far a run gets went 32.6% → 32.5%. Not a small effect,
+  nothing, which ruled out the whole class.
+- **Fixing the boss per zone instead of drawing it** *(`dead-ends: bossnorm`)*.
+  The same arm says this one *works*: it takes the trail from 32.5% to 13.9%, so
+  **over half the trail's influence is which beast waits at the end of a zone** —
+  one draw a zone against the hundreds of foe draws inside it. Built, and
+  reverted anyway: the strengths were already close enough that normalising them
+  mostly flattened flavour, and a run you lose to the Frostwyrm is a run you
+  remember. Kept because that 32.5% → 13.9% is the largest single lever anyone
+  has found here, and the next person who wants one should start by re-reading
+  it rather than by re-measuring it.
+- **Giving four schemeless foes a scheme** *(`dead-ends: schemers`)*. Six rounds
+  of ablation say denying a scheme is worth +11 of a set worth +18, and only 11
+  of 24 foes carry one — so the fight's one real decision is available in 46% of
+  it. Taking that to 58% (snapfrost, hailhorn, wailer, rimeknight), at 750 runs
+  an arm: the set stayed at +18, **denial went +11 → +16 of it, and the other
+  habits went +5 (clears, 2σ ±3.2) → +2 (does not)**. Asking the one
+  decision more often made the fight *more* one-dimensional. Two of the three
+  explanations for a thin fight are now dead — a second kind of event (the wave
+  telegraph, 0) and more of the first kind (this, −3 to everything else). What
+  is left is that the other three habits are weak, and the next attempt is there.
 
 ### FINDING — rarity carries no information, and one card was fixed
 

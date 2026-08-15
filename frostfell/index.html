@@ -311,7 +311,13 @@ def({ id: 'gundy', name: 'Gundy Bolt', type: 'unit', leader: true, tribe: 'scrap
 def({ id: 'stranger', name: 'The Stranger', type: 'unit', leader: true, tribe: 'wyrd',
   hp: 28, atk: 4, cnt: 3, rare: 0,
   art: A('#8f7fb0', '#ddd0f0', { stance:'stand',tail:'whip',mark:'patch',arms:'long', idle:'sway', shape: 'tall', ears: 'none', mouth: 'flat', eyes: 'slit', acc: 'cloak', accCol: '#4a3f6a' }),
-  kw: {}, text: 'When she triggers, she takes the counter off whichever warden is slowest.',
+  /* TWELVE WORDS, AND THE LAST ONE NEVER APPEARED ON A CARD FACE. This was the
+     one rules paragraph in the game that no screen could fully show — the text
+     check found it at 61 of 62 and the missing word was `slowest`, cut by the
+     ellipsis at every size the card is ever drawn at. A card whose text cannot
+     be read is a card that needs shorter text, not a card face that needs
+     re-tuning for one outlier. Same rule, three words fewer. */
+  kw: {}, text: 'When she triggers, she takes the counter off the slowest warden.',
   hooks: { trigger: (g, u) => { const t = allies(g, u).filter((a) => a !== u).sort((a, b) => b.cnt - a.cnt)[0]; if (t) tickCounter(g, t, 1, false); } } });
 
 /* hearthkin -------------------------------------------------------------- */
@@ -1037,8 +1043,56 @@ const foe = (o) => { o.foe = true; o.type = 'unit'; FOES[o.id] = o; return o; };
    4%. The first zone is where somebody learns what a telegraph even is, and it
    already has two foes carrying one. The spread belongs in the tiers that were
    short of it, not in the one that teaches. */
+/* THE FIGHT HAD ONE DECISION AND IT WAS ONLY ASKED HALF THE TIME.
+
+   Six rounds of ablation say the same thing: denying a scheme is worth +11 to
+   +15 of a set worth +17 to +19, and every other habit prices inside its band.
+   The file's own explanation is that a scheme is the ONLY thing on the table
+   whose outcome depends on what you do between announcement and execution —
+   everything else is arithmetic the pilot compensates for on the same turn.
+
+   Two things follow and only one had been tried. The tried one is "add a second
+   kind of event", which is what the wave telegraph was, and it measured zero.
+   The untried one is far simpler: **11 of 24 foes carry a scheme, so the one
+   decision the fight has is available in about half of it.** If the fight is
+   thin because its only real question is asked half the time, ask it more
+   often — which is a content change rather than a mechanic, and it is the
+   cheapest thing that could possibly work.
+
+   Four of the nine schemeless ordinary foes got one, chosen to fit what they
+   already are: the biter picks its warden, the wailing thing at the back picks
+   its warden, the charger gathers, the armoured knight chills. That took the
+   share carrying a scheme from 46% to 58%.
+
+   IT MADE THE FIGHT WORSE, AND REVERTED (dead-ends: schemers). At 750 runs an
+   arm:
+
+       schemers   set   denial alone   the other five
+       46%        +18   +11 of 18      +5   (clears, 2σ = ±3.2)
+       58%        +18   +16 of 18      +2   (does not clear, 2σ = ±2.8)
+
+   **The set did not grow. Denial just took a bigger share of it**, and the
+   other five habits went from worth-something to inside their band. Asking the
+   one decision more often makes the fight MORE one-dimensional, not less —
+   which is the opposite of what "the fight is thin" wanted, and it is obvious
+   in hindsight: a habit that substitutes for denial has less to do when denial
+   is always available.
+
+   So the fight's thinness is NOT a frequency problem, and that is the useful
+   half. Two of the three explanations are now dead — a second kind of event
+   (the wave telegraph, worth 0) and more of the first kind (this, worth −3 to
+   the other habits). What is left is that the OTHER habits are weak, not that
+   denial is strong, and the next attempt belongs there.
+
+   And there are THREE of them, not five: two of the six switches the ablation
+   was pricing had empty bodies, so they contributed a guaranteed zero and two
+   slots in the family bar. Re-read on the four live ones, denial is +8 of 15
+   and the other three are +7 together, clearing ±2.8 — weaker than denial,
+   but not the passengers this comment was written to describe. See DESIGN.md,
+   `topic: denial`. */
 foe({ id: 'snapfrost', name: 'Snapfrost', hp: 8, atk: 3, cnt: 2, tier: 1,
-  art: A('#8fc6e8', '#dff0ff', { stance:'quad',tail:'whip',mark:'icicles', skin:'ice',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', evil: 1 }), kw: {}, text: '' });
+  art: A('#8fc6e8', '#dff0ff', { stance:'quad',tail:'whip',mark:'icicles', skin:'ice',idle:'twitch', shape: 'blob', ears: 'pointy', mouth: 'fang', evil: 1 }),
+  kw: {}, text: '' });
 foe({ id: 'iciclebat', name: 'Icicle Bat', hp: 5, atk: 2, cnt: 1, tier: 1,
   art: A('#9f9fd8', '#dcdcff', { stance:'float',tail:'none',mark:'patch', idle:'hover', shape: 'small', ears: 'pointy', mouth: 'fang', wings: '#6f6fa8', evil: 1 }),
   kw: { aimless: 1 }, text: 'Aimless.' });
@@ -2577,6 +2631,7 @@ function frontFirstSpots() {
   return spots;
 }
 /* DEAD END, KEPT AS A COMMENT BECAUSE THE NUMBER IS WORTH MORE THAN THE CODE.
+   dead-ends: budget, bossnorm
 
    The trail decides 32.5% of how far a locked run gets and the deck 4.4%, so the
    trail is the biggest lever in the game. The obvious suspect was here: every
@@ -2599,7 +2654,8 @@ function frontFirstSpots() {
    The code is reverted rather than shipped, on this file's own rule: a mechanic
    that measures zero on the thing it was built for is not free, it is a rule
    every future change has to reason around. Same verdict as SKILL.shelter, for
-   the same reason. See DESIGN.md for what to do about the boss. */
+   the same reason. The boss half was built too, and reverted for a different
+   one — see DEAD ENDS in DESIGN.md, `bossnorm`. */
 function buildEncounter(g, kind) {
   const run = g.run;
   const zone = ZONES[clamp(run.zone, 0, ZONES.length - 1)];
@@ -4356,11 +4412,29 @@ function nameSplit(c, nm, size, maxW, lines) {
   const byWord = wrapText(c, nm, size, maxW);
   if (byWord.length <= lines && byWord.every(fits)) return byWord;
   // no usable space break: cut the string into `lines` balanced pieces
+  /* A cut lands where the SECOND piece can start a syllable, and takes the
+     latest such place that fits — which is what makes these names read.
+
+     Nearly every long name in this game is a compound: CINDERPUP, SNOWPUP,
+     WHETSTONE, KETTLEBEAK. The seam is therefore not a phonetic rule, it is
+     "the next piece begins consonant-then-vowel", which is the shape of every
+     English word onset. Taking the LATEST fitting one rather than the most
+     balanced is what puts the whole first element on the first line.
+
+     The first version of this got it backwards — it cut AFTER a vowel, which
+     is true of KETTLE|BEAK by accident and gave SNO|WPUP and WHE|TSTONE, both
+     worse than the balanced cut they replaced. The shot walk caught it. */
+  const VOW = 'AEIOUYaeiouy';
+  const seam = (s, p2) => p2 > 1 && p2 < s.length - 1 &&
+    VOW.indexOf(s[p2]) < 0 && VOW.indexOf(s[p2 + 1]) >= 0;
   const out = [];
   let rest = nm;
   for (let k = lines; k > 1; k--) {
     const want = Math.round(rest.length / k);
     let cut = 0;
+    let top = 0;
+    while (top + 1 < rest.length && fits(rest.slice(0, top + 1))) top++;
+    for (let p2 = top; p2 > 1 && !cut; p2--) if (seam(rest, p2)) cut = p2;
     for (let d = 0; d <= rest.length && !cut; d++) {
       for (const p2 of [want - d, want + d]) {
         if (p2 > 0 && p2 < rest.length && fits(rest.slice(0, p2))) { cut = p2; break; }
@@ -4372,6 +4446,34 @@ function nameSplit(c, nm, size, maxW, lines) {
   }
   out.push(rest);
   return out;
+}
+/* SHRINK BEFORE YOU BREAK — the half that was missing, and the shot walk found
+   it on the leader screen at phone size.
+
+   The mid-word break shipped last round on the argument that "a hyphenless break
+   is what a book does when a long word meets a narrow column", and its own
+   comment gave `KETTLE` over `BEAK` as the example. What it actually drew was
+   `KETTL` / `EBEAK`, `CINDE` / `RPUP` and `WHETS` / `TONE`, because the cut is
+   chosen by pixel fit alone and lands wherever the width runs out — which is
+   mid-syllable most of the time. Two nonsense tokens are worse than the
+   truncation they replaced, and a book does not do this: it hyphenates, and
+   before that a typesetter sets the line smaller.
+
+   So: shrink first, down to the readable floor, and take the largest size that
+   holds the whole name. Only if nothing fits does it break — and then the cut
+   prefers a syllable edge (after a vowel, before a consonant) near the balanced
+   point, so `KETTLEBEAK` breaks where the comment always claimed it did. */
+function nameFit(c, nm, size, maxW, lines) {
+  const at = (s) => {
+    c.font = '600 ' + textSize(s) + "px 'Frostwork','Trebuchet MS',sans-serif";
+    return c.measureText(nm).width <= maxW;
+  };
+  for (let k = 0; k <= 8; k++) {
+    const s = size * (1 - k * 0.05);
+    if (textSize(s) > textSize(size) * 0.99 && k) break; // already clamped at the floor
+    if (at(s)) return { lines: [nm], size: s };
+  }
+  return { lines: nameSplit(c, nm, size, maxW, lines), size };
 }
 /** Whether `nm` can be shown in `lines` lines without anything being cut. */
 function nameFits(c, nm, size, maxW, lines) {
@@ -5982,8 +6084,8 @@ function drawCard(c, card, x, y, w, h, o) {
        book does when a long word meets a narrow column, and KETTLE over BEAK is
        read as one word by anybody looking at a picture of a kettle-beaked bird.
        An ellipsis throws the second half away; a break keeps it. */
-    const ns2 = nameSize * 0.82;
-    let two = nameSplit(c, nm, ns2, nameW, nmLines);
+    const fit = nameFit(c, nm, nameSize * 0.82, nameW, nmLines);
+    const ns2 = fit.size, two = fit.lines;
     const step2 = lineH(ns2, nameSize * 0.9);
     two.forEach((ln, i) => txt(c, ellipsize(c, ln, ns2, nameW),
       nameX, by0 + bh / 2 + (i - (two.length - 1) / 2) * step2,
@@ -10138,6 +10240,7 @@ window.FF = {
   render: () => render(), update: (dt) => update(dt), drainAll,
   press, onDown, onMove, onUp, hitAt, hits: () => hits, refusal, TOUCH_MIN, TOUCH_SLOP,
   drawCreature, drawCard, drawBackdrop, drawItemIcon, statusGlyph, collectionItems, drawLeaderPick, drawCollection, deathKind, fx,
+  nameSplit,
   MUSIC, musicTick, setMute, moodFor, AUD, sfx,
   TUTORIAL, TUT_DWELL, tutStep, finishTutorial, HELP_PAGES, HELP_RULES, HELP_BOARD,
   setCtx: (c) => { ctx = c; initSnow(); },
