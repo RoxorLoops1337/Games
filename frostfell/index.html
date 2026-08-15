@@ -4626,8 +4626,67 @@ const HEAD_R = { tall: 0.34, boss: 0.28 };
 
    The cool colour is not a stylistic choice — the ground behind these animals
    is snow, and snow throws a great deal of light back up at whatever stands on
-   it. That bounce is the rim on the shadow side. */
+   it. That bounce is what the eyes catch and what shines through ice.
+
+   AND THE SUN IS ON THE LEFT, WHICH IS WHERE THIS ALREADY POINTED. Round one
+   was written against a window whose sun sat at 0.32–0.68 across — directly
+   behind the subject — so a flat upper-left key with a bright belly read as
+   backwards, and the fix drafted here was a rim along the top. The window has
+   since moved its sun to 0.10–0.40, off-axis and on the same side the whole
+   cast is keyed from, which settles it the other way: the key stays where it
+   is, and the one rim in here is a LEFT rim, warm, from a low sun. A rim on
+   the right would now be the thing disagreeing with the picture.
+
+   What is gone is the bright BELLY. A plane facing the viewer is not the
+   brightest thing on an animal under a raking side light, and on Bellowsbear
+   it was brighter than the sky. */
 const SKYBOUNCE = 'rgba(190,228,255,';
+/* Warm, because the thing lighting them is a low sun and not a studio. Kept at
+   one string so the rim on a body, a head and a hump is the same light. */
+const SUNRIM = 'rgba(255,226,176,';
+
+/* A COLOUR AS THREE NUMBERS, and back. `mix` returns `rgb(...)`, which the
+   shell's own guard rejects and `litG` passes through flat — so anything that
+   wants to hand a DERIVED colour back into the drawing has to stay in hex. */
+function hexTo(h) {
+  h = String(h || '#888888');
+  if (h.length === 4) h = '#' + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
+  const n = parseInt(h.slice(1), 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function toHex(r, g, b) {
+  const q = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  return '#' + q(r) + q(g) + q(b);
+}
+/* THE FROST CAST HAD NO VALUE STRUCTURE. Chillfin, Glacierling, Snowhare,
+   Icewright, Rimefox, Snowbeard and Galewisp were pale animals on white snow
+   under a pale sky: black out the outline and there is no picture left. Hoarfrog
+   was the one frost card that read, and it read because it broke the palette.
+
+   So the top of the range is compressed — and only for the COOL end of it, by
+   the amount a colour is already too light. A hearth orange is untouched
+   (Cinderpup moves by nothing); a white hare drops most of a stop into a
+   blue-grey it can still be called snowy at. The bellies keep their value, so
+   the animals gain internal contrast rather than just going grey. */
+/** A colour walked toward the night, IN HEX, so it can be handed back to `shell`
+ *  and `litG` — both of which reject `mix`'s `rgb(...)`. Everything drawn behind
+ *  the body goes through here: a tail and a shoulder hump lit exactly as bright
+ *  as the chest in front of them have no depth, and the first version of the
+ *  crests read as separate objects parked beside the animal for that reason. */
+function shadeHex(col, t) {
+  if (typeof col !== 'string' || col.charAt(0) !== '#') return col;
+  const [r, g, b] = hexTo(col);
+  return toHex(r + (13 - r) * t, g + (23 - g) * t, b + (48 - b) * t);
+}
+function deepen(col, k) {
+  if (typeof col !== 'string' || col.charAt(0) !== '#') return col;
+  const [r, g, b] = hexTo(col);
+  if (b < r) return col;                         // warm: the hearth cast is fine
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  const t = Math.max(0, Math.min(1, (lum - 0.56) / 0.42)) * (k === undefined ? 0.34 : k);
+  if (t <= 0.005) return col;
+  return toHex(r + (77 - r) * t, g + (111 - g) * t, b + (150 - b) * t);
+}
 
 /** A stable number per art recipe, so the derived face of a Rimefox is the
  *  same Rimefox face every time without any of it being written down. */
@@ -4655,14 +4714,28 @@ function occlude(c, x, y, rx, ry, a) {
 
 /** A LIT SHELL — the whole difference between a character and a sticker.
  *
- *  Four passes over the same outline, which is why `path` is a closure:
+ *  Three passes over the same outline, which is why `path` is a closure:
  *    · the line, redrawn heavy and nudged DOWN, so it is fat under the chin and
  *      thin over the head the way a drawn line is. It doubles as the contact
  *      shadow the flat version never had.
- *    · the fill, falling from the key at the top-left to the turn away from it.
- *    · the core shadow, pooled bottom-right inside the shape.
- *    · the rim: the same outline stroked once more, shifted up and left, so the
- *      only part of it that survives the clip is the lower-right arc.
+ *    · the fill, falling from the key at the upper left to the turn away.
+ *    · the rim down the left edge, where the low sun grazes it.
+ *
+ *  TWO THINGS CAME OUT OF HERE THIS ROUND, and the rim is what they paid for.
+ *
+ *  The first was the "snow bounce": the whole outline re-stroked at lw*1.4 in
+ *  cold blue at 0.55 alpha and clipped inside itself. On an orange body that is
+ *  a near-complementary grey band, and because the outline is a wobbled polygon
+ *  the band's inner boundary is FACETED — Cinderpup and Flarehound both carried
+ *  a hard-edged grey crescent with visible corners down the right flank that
+ *  read as a clipping error, and on Tindercub the shard behind the head read as
+ *  a separate object. An offset stroke can never do this job: what survives the
+ *  clip is a slab with two ends. The rim below follows the outline exactly and
+ *  fades along it with a gradient, so it has no boundary to facet.
+ *
+ *  The second was a white radial smear on the near shoulder — a second key,
+ *  from a light that is not in the picture, and the reason every belly on the
+ *  sheet was brighter than the sun behind it.
  */
 function shell(c, path, col, lw, cx, cy, w, h, k) {
   k = k === undefined ? 1 : k;
@@ -4676,48 +4749,52 @@ function shell(c, path, col, lw, cx, cy, w, h, k) {
   c.restore();
 
   path();
+  // upper-left to lower-right, and warm at the lit end because the sun is low
   const g = c.createLinearGradient(cx - w * 0.34, cy - h * 0.5, cx + w * 0.3, cy + h * 0.5);
-  g.addColorStop(0, mix(col, '#ffffff', 0.36 * k));
+  g.addColorStop(0, mix(col, '#ffe6c0', 0.34 * k));
   g.addColorStop(0.44, col);
-  g.addColorStop(1, mix(col, '#0d1730', 0.34 * k));
+  g.addColorStop(1, mix(col, '#0d1730', 0.36 * k));
   c.fillStyle = g; c.fill();
   // the light line, over the heavy one: what is left showing at the top and
   // sides is thin, what is left showing underneath is not
   c.lineWidth = lw * 0.85; c.strokeStyle = C.ink; c.stroke();
 
-  /* The two soft passes below are sub-pixel on a board unit and cost a clip and
-     two radial gradients each time. Under about thirty units they are skipped:
-     the fall down the fill and the rim still carry the form at that size, and
-     `drawCreature` runs for every body on the board every frame. */
-  const fine = w > 30;
+  /* One clip and two cheap passes. Under about thirty units the core shadow is
+     sub-pixel and goes; the rim is a single stroke and stays, because at board
+     size it is the only thing separating a body from the slab behind it. */
   c.save();
   path(); c.clip();
-  if (fine) {
-  // the core shadow
-  c.save();
-  c.translate(cx + w * 0.24, cy + h * 0.28); c.scale(1, h / w);
-  const rg = c.createRadialGradient(0, 0, 0, 0, 0, w * 0.6);
-  rg.addColorStop(0, 'rgba(11,20,42,' + (0.30 * k) + ')');
-  rg.addColorStop(1, 'rgba(11,20,42,0)');
-  c.fillStyle = rg;
-  c.beginPath(); c.ellipse(0, 0, w * 0.6, w * 0.6, 0, 0, TAU); c.fill();
-  c.restore();
-  // the snow bounce on the shadow side
-  c.save();
-  c.translate(-lw * 0.8, -lw * 1.0);
-  path();
-  c.lineWidth = lw * 1.4; c.strokeStyle = SKYBOUNCE + (0.55 * k) + ')'; c.stroke();
-  c.restore();
-  // and the key smear on the shoulder, which is what sells a round form
-  c.save();
-  c.translate(cx - w * 0.19, cy - h * 0.27); c.scale(1, 0.66);
-  const kg = c.createRadialGradient(0, 0, 0, 0, 0, w * 0.32);
-  kg.addColorStop(0, 'rgba(255,255,255,' + (0.4 * k) + ')');
-  kg.addColorStop(1, 'rgba(255,255,255,0)');
-  c.fillStyle = kg;
-  c.beginPath(); c.ellipse(0, 0, w * 0.32, w * 0.32, 0, 0, TAU); c.fill();
-  c.restore();
+  if (w > 30) {
+    // the core shadow, pooled where the form turns away from the key
+    c.save();
+    c.translate(cx + w * 0.22, cy + h * 0.28); c.scale(1, h / w);
+    const rg = c.createRadialGradient(0, 0, 0, 0, 0, w * 0.62);
+    rg.addColorStop(0, 'rgba(11,20,42,' + (0.28 * k) + ')');
+    rg.addColorStop(1, 'rgba(11,20,42,0)');
+    c.fillStyle = rg;
+    c.beginPath(); c.ellipse(0, 0, w * 0.62, w * 0.62, 0, 0, TAU); c.fill();
+    c.restore();
   }
+  /* THE RIM. The outline itself, stroked once, in a gradient that is the sun
+     down the left edge and nothing by the middle. Clipped inside, so only the
+     inner half of the stroke shows and it hugs the edge instead of sitting
+     beside it — which is the whole difference from the version this replaced.
+     It matters more than it did: the window has cut the bright halo that used
+     to sit behind every subject, so a pale animal on pale snow now has only
+     its own edge to be separated by. */
+  path();
+  if (w > 30) {
+    const rmg = c.createLinearGradient(cx - w * 0.54, cy - h * 0.3, cx + w * 0.12, cy + h * 0.2);
+    rmg.addColorStop(0, SUNRIM + (0.85 * k) + ')');
+    rmg.addColorStop(0.44, SUNRIM + (0.3 * k) + ')');
+    rmg.addColorStop(1, SUNRIM + '0)');
+    c.strokeStyle = rmg;
+  } else {
+    // a gradient two pixels across is a colour; on the board that is 40 fewer
+    // gradient objects a frame and the rim looks identical
+    c.strokeStyle = SUNRIM + (0.5 * k) + ')';
+  }
+  c.lineWidth = lw * 1.1; c.stroke();
   c.restore();
 }
 
@@ -4796,6 +4873,221 @@ function bodyForm(c, x, y, w, h, skin, taper, key, ph) {
   c.closePath();
 }
 
+/* ------------------------------------------------------- ONE BIG SHAPE ----
+
+   THERE WAS ONE CREATURE IN THIS GAME, PAINTED FORTY TIMES.
+
+   Cover the names on a sheet of cards and Cinderpup, Tindercub, Sootling,
+   Flarehound, Rimefox, Glacierling, Icewright, Snowhare, Warmroot, Bellowsbear,
+   Emberwick and Hearthmoth are the same circle with the same two eyes and the
+   same two stubs under it. Only an ear and a hue moved. Blacked out at 40 units
+   they are one texture, which is exactly what the collection screen looked
+   like. Galewisp and Clunkbot were the only two that passed, and they passed on
+   OUTLINE alone — which is the whole lesson, because round one had spent its
+   variation budget on faces (three separate eye grammars) and a face is the
+   first thing to disappear.
+
+   So every creature gets one large protruding shape. Large enough to survive a
+   fold-size thumbnail, drawn BEHIND the body so it is pure silhouette and costs
+   nothing but its own outline, and chosen from what the recipe already says it
+   is: a stone thing grows a boulder, a metal thing grows a stack, a rooted
+   thing grows a flared base, a floater trails. Cinderpup, Flarehound and
+   Rimefox share every field in the table — they are one row — so within a bag
+   the pick comes off the recipe's own stable key, and the three of them come
+   out a ruff, a haunch and a pair of jowls and never swap.
+
+   The bag is deliberately short. Twelve shapes over forty animals means some
+   are shared, and that is fine: a shared big shape plus a different proportion,
+   ear and hue is a different animal, whereas forty circles are not. */
+const CREST_BAGS = {
+  root:  ['flare', 'boulder', 'spines', 'drum'],
+  boss:  ['hump', 'spines', 'ruff', 'jowls'],
+  stone: ['boulder', 'spines', 'flare', 'hump'],
+  // five, not four: metal and ice are the two crowded bags — nine Scrap and
+  // seven Frostborn — and at four a fifth of the roster came out chimneys
+  metal: ['stack', 'hump', 'drum', 'spines', 'boulder'],
+  ice:   ['crest', 'spines', 'jowls', 'frill', 'ruff'],
+  // no ruff for a floater: on a bean the body IS the head, and a mane round it
+  // reads as a black cowl rather than as shoulders — Emberwick wore one
+  float: ['trail', 'frill', 'crest', 'drum'],
+  quad:  ['ruff', 'haunch', 'jowls', 'drum'],
+  fur:   ['ruff', 'hump', 'drum', 'jowls'],
+  any:   ['drum', 'crest', 'frill', 'hump'],
+};
+function crestOf(shape, stance, skin, floaty, key) {
+  if (shape === 'wisp') return 'none';           // already the best outline here
+  const bag = CREST_BAGS[
+    stance === 'root' ? 'root'
+      : floaty ? 'float'
+        : shape === 'boss' ? 'boss'
+          : skin === 'stone' ? 'stone'
+            : skin === 'metal' ? 'metal'
+              : skin === 'ice' ? 'ice'
+                : stance === 'quad' ? 'quad'
+                  : skin === 'fur' ? 'fur' : 'any'];
+  /* THREE SLICES OF THE KEY, ADDED, and the shifts are not arbitrary — every
+     single-slice pick that was tried put two of the animals this whole block
+     exists to separate on the same shape. Cinderpup, Flarehound and Rimefox are
+     one row of the table and have to come out three different silhouettes; so
+     do Glacierling and Icewright, Clunkbot and Ratchet, Hearthmoth and
+     Lanternmoth. Fifteen such pairs were written down and every candidate mix
+     scored against them; this is the one that clears all fifteen AND keeps the
+     commonest shape down to five of thirty-nine. */
+  return bag[(((key >>> 15) + (key >>> 21) + (key >>> 22)) >>> 0) % bag.length];
+}
+
+/** The big shape, drawn under the body. One path, one lit fill, one line —
+ *  the same cost as a tail, for the thing that decides whether a card is
+ *  tellable from across a table. */
+function drawCrest(c, kind, col, lw, bw, bh, bodyY, bodyW, bodyH, faceY, faceW, faceH, footY, s, t, ph) {
+  if (kind === 'none') return;
+  /* A LIGHTER LINE AND A DARKER FILL, because all of this is BEHIND the animal.
+     Drawn in the body's own colour at the body's own line weight it came out as
+     a second sprite parked beside the first — Cinderpup's haunch read as an egg
+     it was standing next to. A step toward the night and a thinner line and the
+     same shape reads as the back of the same animal. */
+  col = shadeHex(col, 0.2);
+  /* And below about a board unit the fall across it is under a pixel, so it is
+     a flat fill and one fewer gradient object per body per frame. Twelve of
+     these on a board of twenty-four paid for themselves immediately. */
+  const fine = bw > 46;
+  const ink = (x0, y0, x1, y1) => inked(c, fine ? litG(c, col, x0, y0, x1, y1) : col, lw * 0.85, C.ink);
+  /* HOW BIG A HEAD IS, on a cast where half the animals do not have one. On a
+     bean `faceH` is the WHOLE BODY, so the first version of the jowls below —
+     written against `faceW` and `faceH` like everything else hung on a face —
+     came out a flat disc twice the width of the animal, and five cards on the
+     hand sheet grew a flying saucer. Anything head-mounted is measured against
+     the smaller of the two instead. */
+  const hu = Math.min(faceW, faceH) * 0.72;
+  if (kind === 'hump') {
+    // shoulders carried high and back, the way a bison or a bear carries them
+    c.beginPath();
+    c.moveTo(-bodyW * 0.46, bodyY + bodyH * 0.12);
+    c.quadraticCurveTo(-bodyW * 0.58, bodyY - bodyH * 0.46, -bodyW * 0.04, bodyY - bodyH * 0.58);
+    c.quadraticCurveTo(bodyW * 0.30, bodyY - bodyH * 0.50, bodyW * 0.22, bodyY);
+    c.closePath();
+    ink(-bodyW * 0.3, bodyY - bodyH * 0.58, bodyW * 0.1, bodyY);
+  } else if (kind === 'ruff') {
+    // a mane: six round lobes over the shoulders. Eleven small ones with a
+    // sharp lobe amplitude came out a spiked crown, which is a different animal
+    const r = Math.max(bodyW, bodyH) * 0.50, cyr = bodyY + bodyH * 0.02;
+    c.beginPath();
+    c.moveTo(-r, cyr);
+    for (let i = 0; i < 6; i++) {
+      const a0 = -Math.PI + (i / 6) * Math.PI, a1 = -Math.PI + ((i + 1) / 6) * Math.PI;
+      const am = (a0 + a1) / 2;
+      c.quadraticCurveTo(Math.cos(am) * r * 1.28, cyr + Math.sin(am) * r * 1.28 * 0.72,
+        Math.cos(a1) * r, cyr + Math.sin(a1) * r * 0.72);
+    }
+    c.closePath();
+    ink(0, cyr - r, 0, cyr + r);
+  } else if (kind === 'jowls') {
+    /* Cheek fluff, wider than the animal — an owl, a lynx, a very smug cat.
+       One ellipse a side just made the body an oval; it has to be scalloped and
+       it has to sit at the CHEEK, above the widest part of the body, or there
+       is no notch between the two and no shape to see. */
+    for (const d of [-1, 1]) {
+      const jx = d * (bodyW * 0.40 + hu * 0.10), jy = faceY + hu * 0.06;
+      c.beginPath();
+      c.moveTo(d * bodyW * 0.16, jy - hu * 0.5);
+      for (let i = 0; i < 3; i++) {
+        const a0 = -1.5 + i * 1.4, a1 = -1.5 + (i + 1) * 1.4, am = (a0 + a1) / 2;
+        c.quadraticCurveTo(jx + d * Math.cos(am) * hu * 0.62, jy + Math.sin(am) * hu * 0.72,
+          jx + d * Math.cos(a1) * hu * 0.42, jy + Math.sin(a1) * hu * 0.52);
+      }
+      c.closePath();
+      ink(d * bodyW * 0.2, jy - hu * 0.5, d * bodyW * 0.8, jy + hu * 0.5);
+    }
+  } else if (kind === 'spines') {
+    // a dorsal ridge: four plates, biggest over the shoulder
+    for (let i = 0; i < 4; i++) {
+      const a = -2.62 + i * 0.42;
+      const px = Math.cos(a) * bodyW * 0.46, py = bodyY + Math.sin(a) * bodyH * 0.46;
+      const l = bh * (0.25 - i * 0.038);
+      c.beginPath();
+      c.moveTo(px - Math.sin(a) * bw * 0.09, py + Math.cos(a) * bh * 0.09);
+      c.lineTo(px + Math.cos(a - 0.12) * l, py + Math.sin(a - 0.12) * l);
+      c.lineTo(px + Math.sin(a) * bw * 0.09, py - Math.cos(a) * bh * 0.09);
+      c.closePath();
+      ink(px, py - l, px + l, py);
+    }
+  } else if (kind === 'crest') {
+    // one blade off the crown, swept back — the tallest thing on the card
+    const cy2 = faceY - Math.min(faceH, hu * 1.4) * 0.34;
+    c.beginPath();
+    c.moveTo(-hu * 0.34, cy2);
+    c.quadraticCurveTo(-hu * 0.54, cy2 - hu * 0.88, hu * 0.08, cy2 - hu * 1.02);
+    c.quadraticCurveTo(hu * 0.22, cy2 - hu * 0.56, hu * 0.34, cy2);
+    c.closePath();
+    ink(0, cy2 - hu * 1.02, 0, cy2);
+  } else if (kind === 'haunch') {
+    // a hare's back leg, folded: the widest thing at the back and low down
+    c.beginPath();
+    c.ellipse(-bodyW * 0.38, bodyY + bodyH * 0.24, bodyW * 0.32, bodyH * 0.40, -0.34, 0, TAU);
+    ink(-bodyW * 0.7, bodyY - bodyH * 0.1, -bodyW * 0.1, bodyY + bodyH * 0.6);
+  } else if (kind === 'drum') {
+    // a belly that arrived before the rest of it did
+    c.beginPath();
+    c.ellipse(0, bodyY + bodyH * 0.28, bodyW * 0.54, bodyH * 0.38, 0, 0, TAU);
+    ink(0, bodyY - bodyH * 0.1, 0, bodyY + bodyH * 0.66);
+  } else if (kind === 'frill') {
+    /* Fluff all the way round, so the outline is a flower and not a circle.
+       Twenty-four points alternating twenty per cent out is not a flower, it is
+       a gear — Kettlebeak came out a cog. Seven round lobes, drawn as curves. */
+    const r = Math.max(bodyW, bodyH) * 0.46, ry = r * (bodyH / bodyW);
+    c.beginPath();
+    c.moveTo(r, bodyY);
+    for (let i = 0; i < 7; i++) {
+      const a0 = (i / 7) * TAU, a1 = ((i + 1) / 7) * TAU, am = (a0 + a1) / 2;
+      const k = 1.36 + Math.sin(t * 1.4 + ph + i) * 0.04;
+      c.quadraticCurveTo(Math.cos(am) * r * k, bodyY + Math.sin(am) * ry * k,
+        Math.cos(a1) * r, bodyY + Math.sin(a1) * ry);
+    }
+    c.closePath();
+    ink(0, bodyY - ry, 0, bodyY + ry);
+  } else if (kind === 'stack') {
+    // a chimney, and something coming out of it
+    const sx2 = -bodyW * 0.26, sy2 = bodyY - bodyH * 0.42;
+    c.beginPath();
+    c.moveTo(sx2 - bw * 0.10, sy2);
+    c.lineTo(sx2 - bw * 0.075, sy2 - bh * 0.32);
+    c.lineTo(sx2 + bw * 0.075, sy2 - bh * 0.32);
+    c.lineTo(sx2 + bw * 0.10, sy2);
+    c.closePath();
+    ink(sx2 - bw * 0.1, sy2 - bh * 0.32, sx2 + bw * 0.1, sy2);
+    c.beginPath(); rr(c, sx2 - bw * 0.12, sy2 - bh * 0.39, bw * 0.24, bh * 0.09, bh * 0.03);
+    ink(sx2, sy2 - bh * 0.39, sx2, sy2 - bh * 0.30);
+  } else if (kind === 'flare') {
+    // a base, not legs: the thing is planted and the bottom of it is the widest
+    c.beginPath();
+    c.moveTo(-bodyW * 0.30, bodyY + bodyH * 0.1);
+    c.quadraticCurveTo(-bodyW * 0.60, footY - bh * 0.02, -bodyW * 0.62, footY + bh * 0.06);
+    c.lineTo(bodyW * 0.62, footY + bh * 0.06);
+    c.quadraticCurveTo(bodyW * 0.60, footY - bh * 0.02, bodyW * 0.30, bodyY + bodyH * 0.1);
+    c.closePath();
+    ink(0, bodyY, 0, footY + bh * 0.06);
+  } else if (kind === 'boulder') {
+    // two lumps riding on the back, because one lump is a hump
+    for (const [ox, oy, r] of [[-0.30, -0.34, 0.30], [0.22, -0.40, 0.22]]) {
+      c.beginPath();
+      c.ellipse(bodyW * ox, bodyY + bodyH * oy, bodyW * r, bodyH * r * 0.94, ox * 0.6, 0, TAU);
+      ink(bodyW * ox - bodyW * r, bodyY + bodyH * oy - bodyH * r, bodyW * ox, bodyY + bodyH * oy + bodyH * r);
+    }
+  } else if (kind === 'trail') {
+    // what a thing that never lands leaves behind it
+    for (let i = -1; i <= 1; i++) {
+      const sw = Math.sin(t * 1.8 + ph + i) * bw * 0.06;
+      c.beginPath();
+      c.moveTo(i * bw * 0.22 - bw * 0.09, bodyY + bodyH * 0.2);
+      c.quadraticCurveTo(i * bw * 0.24 + sw, bodyY + bodyH * 0.6,
+        i * bw * 0.20 + sw * 1.6, bodyY + bodyH * (0.86 + Math.abs(i) * -0.22));
+      c.quadraticCurveTo(i * bw * 0.24 + sw, bodyY + bodyH * 0.6, i * bw * 0.22 + bw * 0.09, bodyY + bodyH * 0.2);
+      c.closePath();
+      ink(0, bodyY, 0, bodyY + bodyH);
+    }
+  }
+}
+
 function drawCreature(c, art, x, y, s, o) {
   o = o || {};
   const t = o.t || 0;
@@ -4819,21 +5111,37 @@ function drawCreature(c, art, x, y, s, o) {
   const sy = 1 - breathe - sq * 0.26;
   const dim = SHAPE_DIM[shape] || [1, 0.86];
   const key = artKey(art);
-  /* AND NO TWO RECIPES GET THE SAME NUMBERS EVEN WHEN THEY GET THE SAME ROW.
-     Cinderpup and Flarehound are both blob/pointy/fur/quad — the table has no
-     lever left to tell them apart, and blacked out they were one shape. So each
-     recipe takes a stable ±7% on its width and height from its own key. It is
-     not a disguise for a missing idea; it is the difference between two dogs
-     and two copies of a dog. */
-  const jw = 1 + ((((key >> 5) & 7) / 7) - 0.5) * 0.14;
-  const jh = 1 + ((((key >> 9) & 7) / 7) - 0.5) * 0.14;
-  const bw = s * dim[0] * jw, bh = s * dim[1] * jh;
-  const lw = Math.max(2.5, s * 0.055);
   const headed = !!HEADED[shape];
   const stance = art.stance || (headed ? 'stand' : 'quad');
   const floaty = stance === 'float' || shape === 'wisp' || idle === 'hover';
   const skin = art.skin || 'smooth';
+  /* HOW IT STANDS IS PART OF HOW WIDE IT IS. `stance` was spending itself on
+     four leg positions and nothing else, so a creature that walks on four legs
+     and one that stands on two came out the same box. A quadruped is long and
+     low; something upright is narrow and tall; a rooted thing spreads. */
+  const ST = stance === 'quad' ? [1.07, 0.94] : stance === 'squat' ? [1.03, 0.95]
+    : stance === 'root' ? [1.04, 1.00] : stance === 'float' ? [0.96, 0.99] : [0.93, 1.06];
+  /* AND NO TWO RECIPES GET THE SAME NUMBERS EVEN WHEN THEY GET THE SAME ROW.
+     Cinderpup, Flarehound and Rimefox are one row — blob/pointy/fur/quad/fang —
+     and the table has no lever left to tell them apart. So each recipe takes a
+     stable ±11% off its own key, and takes it OPPOSITE ways on the two axes:
+     independent jitter mostly made one animal a bigger copy of another, where
+     wide-and-short against narrow-and-tall is two animals at the same weight. */
+  const j = (((key >> 5) & 7) / 7) - 0.5;
+  const bw = s * dim[0] * ST[0] * (1 + j * 0.17), bh = s * dim[1] * ST[1] * (1 - j * 0.17);
+  /* INK IS A MATERIAL TOO. One line weight over the whole cast is a third of
+     why forty animals read as one drawing, and it is the cheapest channel in
+     here: stone and metal take a heavy press line, ice takes a crisp thin one.
+     It is also what carries Gundy Bolt, whose mid-grey dome on a mid-khaki dune
+     was the lowest-contrast card in the set. */
+  const lw = Math.max(2.5, s * 0.055) *
+    (skin === 'stone' ? 1.22 : skin === 'metal' ? 1.14 : skin === 'ice' ? 0.88 : 1);
   const taper = SHAPE_TAPER[shape] || 0;
+  /* The frost cast goes down a stop here rather than in the card data, so the
+     same animal is the same colour on the board, in the collection and on the
+     leader screen. See `deepen`. */
+  const body = deepen(art.body);
+  const belly = deepen(art.belly, 0.2);
 
   // where the body sits, and where the face goes
   const sep = HEAD_SEP[shape] || [0.34, 0.24];
@@ -4868,60 +5176,67 @@ function drawCreature(c, art, x, y, s, o) {
 
   const dark = art.patCol || 'rgba(20,30,50,.35)';
 
-  /* ---------------------------------------------------------------- tail -- */
+  /* ---------------------------------------------------------------- tail --
+
+     BIG ENOUGH TO BE PART OF THE OUTLINE. Five tails and every one of them
+     reached about a third of a body from the hip, which is inside the wobble on
+     the body's own edge at hand size — so five different tails came out as one
+     small bump behind five animals. A fox's brush is as long as the fox. */
   const tail = art.tail || 'none';
+  // behind the body, so it takes the same step toward the night the crest does
+  const backCol = shadeHex(body, 0.2), backBelly = shadeHex(belly, 0.2);
   if (tail !== 'none') {
     const wag = Math.sin(t * 2.4 + ph) * 0.24 + (paw ? paw * 0.3 : 0);
     c.save();
     c.translate(-bw * 0.36, bodyY + bodyH * 0.24);
     c.rotate(-0.35 + wag);
     if (tail === 'brush') {
-      c.beginPath();
-      c.moveTo(0, 0);
-      c.quadraticCurveTo(-bw * 0.24, -bh * 0.04, -bw * 0.3, -bh * 0.2);
-      c.quadraticCurveTo(-bw * 0.1, -bh * 0.12, 0, bh * 0.09);
-      c.closePath();
-      inked(c, art.body, lw * 0.9, C.ink);
+      /* A THICK STROKE WITH A ROUND CAP, not a closed outline. Two quadratics
+         meeting at a point draw a dart, and every fox in the game had a dart
+         behind it; a brush is fat the whole way and blunt at the end. */
+      const th = bh * 0.24;
+      const sweep = () => {
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.quadraticCurveTo(-bw * 0.30, bh * 0.02, -bw * 0.36, -bh * 0.24);
+      };
+      c.lineCap = 'round';
+      sweep(); c.strokeStyle = C.ink; c.lineWidth = th + lw * 1.3; c.stroke();
+      sweep(); c.strokeStyle = litG(c, backCol, -bw * 0.36, -bh * 0.24, 0, bh * 0.1);
+      c.lineWidth = th; c.stroke();
       // a paler flash at the tip, the way a brush tail actually reads
       c.save();
-      c.globalAlpha = 0.8;
-      c.beginPath();
-      c.moveTo(-bw * 0.19, -bh * 0.11);
-      c.quadraticCurveTo(-bw * 0.3, -bh * 0.14, -bw * 0.3, -bh * 0.2);
-      c.quadraticCurveTo(-bw * 0.22, -bh * 0.16, -bw * 0.15, -bh * 0.06);
-      c.closePath();
-      c.fillStyle = art.belly; c.fill();
+      c.globalAlpha = 0.85;
+      c.beginPath(); c.ellipse(-bw * 0.36, -bh * 0.24, th * 0.42, th * 0.42, 0, 0, TAU);
+      c.fillStyle = backBelly; c.fill();
       c.restore();
     } else if (tail === 'whip') {
-      c.strokeStyle = C.ink; c.lineWidth = lw * 1.5;
-      c.beginPath();
-      c.moveTo(0, 0);
-      c.quadraticCurveTo(-bw * 0.34, bh * 0.06, -bw * 0.44, -bh * 0.22);
-      c.stroke();
-      c.strokeStyle = art.body; c.lineWidth = lw * 0.7;
-      c.beginPath();
-      c.moveTo(0, 0);
-      c.quadraticCurveTo(-bw * 0.34, bh * 0.06, -bw * 0.44, -bh * 0.22);
-      c.stroke();
+      const lash = () => {
+        c.beginPath();
+        c.moveTo(0, 0);
+        c.quadraticCurveTo(-bw * 0.42, bh * 0.10, -bw * 0.52, -bh * 0.32);
+      };
+      lash(); c.strokeStyle = C.ink; c.lineWidth = lw * 1.7; c.stroke();
+      lash(); c.strokeStyle = backCol; c.lineWidth = lw * 0.85; c.stroke();
     } else if (tail === 'stub') {
-      c.beginPath(); c.ellipse(-bw * 0.05, 0, bw * 0.09, bh * 0.1, 0, 0, TAU);
-      inked(c, art.belly, lw * 0.8, C.ink);
+      c.beginPath(); c.ellipse(-bw * 0.08, 0, bw * 0.14, bh * 0.15, 0, 0, TAU);
+      inked(c, litG(c, backBelly, -bw * 0.2, -bh * 0.15, 0, bh * 0.15), lw * 0.8, C.ink);
     } else if (tail === 'plume') {
       for (let i = 0; i < 3; i++) {
         c.beginPath();
         c.moveTo(0, 0);
-        c.quadraticCurveTo(-bw * 0.18, -bh * (0.05 + i * 0.07), -bw * 0.28, -bh * (0.1 + i * 0.1));
-        c.strokeStyle = C.ink; c.lineWidth = lw * 1.5; c.stroke();
-        c.strokeStyle = i % 2 ? art.belly : art.body;
-        c.lineWidth = lw * 0.8; c.stroke();
+        c.quadraticCurveTo(-bw * 0.24, -bh * (0.05 + i * 0.09), -bw * 0.36, -bh * (0.12 + i * 0.13));
+        c.strokeStyle = C.ink; c.lineWidth = lw * 1.6; c.stroke();
+        c.strokeStyle = i % 2 ? backBelly : backCol;
+        c.lineWidth = lw * 0.9; c.stroke();
       }
     } else if (tail === 'fin') {
       c.beginPath();
       c.moveTo(0, 0);
-      c.lineTo(-bw * 0.26, -bh * 0.2);
-      c.lineTo(-bw * 0.22, bh * 0.12);
+      c.lineTo(-bw * 0.38, -bh * 0.28);
+      c.lineTo(-bw * 0.30, bh * 0.14);
       c.closePath();
-      inked(c, art.belly, lw * 0.9, C.ink);
+      inked(c, litG(c, backBelly, -bw * 0.38, -bh * 0.28, 0, bh * 0.14), lw * 0.85, C.ink);
     }
     c.restore();
   }
@@ -4938,6 +5253,10 @@ function drawCreature(c, art, x, y, s, o) {
     }
   }
 
+  /* ------------------------------------------------------------- the shape - */
+  const crest = crestOf(shape, stance, skin, floaty, key);
+  drawCrest(c, crest, body, lw, bw, bh, bodyY, bodyW, bodyH, faceY, faceW, faceH, footY, s, t, ph);
+
   /* ---------------------------------------------------------------- legs --- */
   if (!floaty && stance !== 'root') {
     const gait = Math.sin(t * 1.9 + ph) * 0.1;
@@ -4945,9 +5264,13 @@ function drawCreature(c, art, x, y, s, o) {
     // length was one number for both, so everything in the cast stood the same
     const legL = bh * (stance === 'squat' ? 0.1 : shape === 'tall' ? 0.16 : shape === 'boss' ? 0.15 : 0.2);
     const legW = bw * (stance === 'squat' ? 0.15 : shape === 'boss' ? 0.14 : 0.11);
-    const pairs = stance === 'quad' ? [[-0.3, -1], [0.3, -1], [-0.22, 1], [0.34, 1]] : [[-0.22, 1], [0.22, 1]];
-    const legCol = mix(art.body, '#0d1730', 0.14);
-    const footCol = mix(art.belly, '#5d7396', 0.2);
+    /* A quadruped's legs go at the ENDS of it. They were 0.3 apart on a body
+       0.5 wide, which put all four under the middle and read as a stool. */
+    const pairs = stance === 'quad'
+      ? [[-0.38, -1], [0.32, -1], [-0.30, 1], [0.40, 1]]
+      : [[-0.24, 1], [0.24, 1]];
+    const legCol = mix(body, '#0d1730', 0.14);
+    const footCol = mix(belly, '#5d7396', 0.2);
     for (let i = 0; i < pairs.length; i++) {
       const [ox, front] = pairs[i];
       const swing = gait * (i % 2 ? -1 : 1) + (paw && i === pairs.length - 1 ? paw * 0.5 : 0);
@@ -4959,7 +5282,7 @@ function drawCreature(c, art, x, y, s, o) {
       if (front < 0) inked(c, dark, lw * 0.9, C.ink);
       else {
         const lg = c.createLinearGradient(-legW * 0.6, 0, legW * 0.6, legL);
-        lg.addColorStop(0, mix(art.body, '#ffffff', 0.16));
+        lg.addColorStop(0, mix(body, '#ffffff', 0.16));
         lg.addColorStop(1, mix(legCol, '#0d1730', 0.22));
         inked(c, lg, lw * 0.9, C.ink);
       }
@@ -4972,7 +5295,7 @@ function drawCreature(c, art, x, y, s, o) {
         c.globalAlpha = 0.5;
         c.beginPath();
         c.ellipse(-legW * 0.12, legL - lw * 0.3, legW * 0.38, legL * 0.12 + lw * 0.24, 0, 0, TAU);
-        c.fillStyle = mix(art.belly, '#ffffff', 0.5); c.fill();
+        c.fillStyle = mix(belly, '#ffffff', 0.5); c.fill();
         c.restore();
       }
       c.restore();
@@ -4994,13 +5317,14 @@ function drawCreature(c, art, x, y, s, o) {
       c.closePath();
     }
     : () => bodyForm(c, 0, bodyY, bodyW, bodyH, skin, taper, key, t * 0.6 + ph);
-  shell(c, bodyPath, art.body, lw, 0, bodyY, bodyW, bodyH);
+  shell(c, bodyPath, body, lw, 0, bodyY, bodyW, bodyH);
   // the legs pass behind the body, so the body owes them a shadow
   if (!floaty && stance !== 'root') {
+    /* ONE tuck, not four. Four radial gradients along a line that is two units
+       tall on a board slab is the single most expensive thing this function did
+       for the least visible result; one wide one does the same job. */
     c.save(); bodyPath(); c.clip();
-    for (const ox of stance === 'quad' ? [-0.3, 0.3, -0.22, 0.34] : [-0.22, 0.22]) {
-      occlude(c, ox * bw, footY, bw * 0.16, bh * 0.14, 0.34);
-    }
+    occlude(c, 0, footY, bw * 0.5, bh * 0.16, 0.3);
     c.restore();
   }
 
@@ -5016,11 +5340,11 @@ function drawCreature(c, art, x, y, s, o) {
       const aw = bw * 0.11;
       c.beginPath(); rr(c, -aw / 2, 0, aw, aL, aw * 0.45);
       const ag = c.createLinearGradient(-aw * 0.6, 0, aw * 0.6, aL);
-      ag.addColorStop(0, mix(art.body, '#ffffff', 0.22));
-      ag.addColorStop(1, mix(art.body, '#0d1730', 0.28));
+      ag.addColorStop(0, mix(body, '#ffffff', 0.22));
+      ag.addColorStop(1, mix(body, '#0d1730', 0.28));
       inked(c, ag, lw * 0.85, C.ink);
       c.beginPath(); c.ellipse(0, aL, bw * 0.075, bw * 0.075, 0, 0, TAU);
-      inked(c, mix(art.belly, '#ffffff', 0.1), lw * 0.8, C.ink);
+      inked(c, mix(belly, '#ffffff', 0.1), lw * 0.8, C.ink);
       c.restore();
     }
     // where an arm meets the shoulder there is no light at all — both of them
@@ -5035,14 +5359,22 @@ function drawCreature(c, art, x, y, s, o) {
   /* ------------------------------------------------------------- surface ---
 
      The edge already said what this is made of. What happens INSIDE the shape
-     is the second half of it, and it is the half that has to hold at 40 units
-     on the board: fur wants an undercoat and a couple of guard hairs catching
-     the key, ice wants light coming out of the bottom of it, metal wants one
-     hard specular and a seam, stone wants chips where the light has broken
-     through to fresh rock. */
+     is the second half of it: fur wants an undercoat and a couple of guard
+     hairs catching the key, ice wants light coming out of the bottom of it,
+     metal wants one hard specular and a seam, stone wants chips where the
+     light has broken through to fresh rock.
+
+     ALL OF IT NOW STOPS AT ABOUT FORTY-SIX UNITS, and that is what paid for the
+     crest. The comment above used to claim this half "has to hold at 40 units
+     on the board"; it does not, and it never did. Four rivets at two per cent
+     of a fifty-unit body are a fifth of a pixel each, and the eleven passes in
+     here cost more than everything else in the function put together. What
+     holds at forty units is the OUTLINE, which is where the round went. */
+  const fineS = s > 46;
   c.save();
   bodyPath(); c.clip();
-  if (skin === 'fur') {
+  if (!fineS) { /* nothing: at this size the edge is the whole drawing */ }
+  else if (skin === 'fur') {
     // the undercoat: darker toward the belly, so the coat has a direction
     c.save();
     c.globalAlpha = 0.5;
@@ -5055,7 +5387,7 @@ function drawCreature(c, art, x, y, s, o) {
     // a few guard hairs on the lit side, drawn light on light
     c.save();
     c.globalAlpha = 0.45; c.lineCap = 'round';
-    c.strokeStyle = mix(art.body, '#ffffff', 0.55); c.lineWidth = lw * 0.4;
+    c.strokeStyle = mix(body, '#ffffff', 0.55); c.lineWidth = lw * 0.4;
     for (let i = 0; i < 5; i++) {
       const a = -2.5 + i * 0.34;
       const px = Math.cos(a) * bodyW * 0.34, py = bodyY + Math.sin(a) * bodyH * 0.34;
@@ -5089,31 +5421,37 @@ function drawCreature(c, art, x, y, s, o) {
       c.restore();
     }
   } else if (skin === 'metal') {
-    // one hard specular, not a wash — a narrow band with an edge to it
+    /* A SEAM ON A ROUND THING IS NOT A RULED LINE. Springjaw carried two
+       dead-straight verticals right across a round head and a lit rectangle
+       that ended in a hard right angle where the clip cut it — a panel pasted
+       onto a ball, which is what any straight edge does inside a curved
+       silhouette once the clip decides where it stops. Both bend with the form
+       now, and both fade out before they reach the edge that would square them
+       off. */
     c.save();
-    c.globalAlpha = 0.8;
+    c.globalAlpha = 0.7;
     c.beginPath();
-    c.moveTo(-bodyW * 0.34, bodyY - bodyH * 0.44);
-    c.lineTo(-bodyW * 0.1, bodyY - bodyH * 0.5);
-    c.lineTo(-bodyW * 0.24, bodyY + bodyH * 0.5);
-    c.lineTo(-bodyW * 0.42, bodyY + bodyH * 0.44);
+    c.moveTo(-bodyW * 0.30, bodyY - bodyH * 0.36);
+    c.quadraticCurveTo(-bodyW * 0.12, bodyY, -bodyW * 0.22, bodyY + bodyH * 0.36);
+    c.quadraticCurveTo(-bodyW * 0.36, bodyY, -bodyW * 0.30, bodyY - bodyH * 0.36);
     c.closePath();
-    const sg = c.createLinearGradient(-bodyW * 0.4, 0, -bodyW * 0.08, 0);
-    sg.addColorStop(0, 'rgba(255,255,255,.1)');
-    sg.addColorStop(0.5, 'rgba(255,255,255,.9)');
-    sg.addColorStop(1, 'rgba(255,255,255,.1)');
+    const sg = c.createLinearGradient(0, bodyY - bodyH * 0.5, 0, bodyY + bodyH * 0.5);
+    sg.addColorStop(0, 'rgba(255,236,208,0)');
+    sg.addColorStop(0.32, 'rgba(255,240,214,.8)');
+    sg.addColorStop(1, 'rgba(255,236,208,0)');
     c.fillStyle = sg; c.fill();
     c.restore();
     // the seam, and the rivets that hold the two halves together
     c.save();
-    c.strokeStyle = 'rgba(16,26,46,.5)'; c.lineWidth = lw * 0.5;
+    c.strokeStyle = 'rgba(16,26,46,.42)'; c.lineWidth = lw * 0.5;
     c.beginPath();
-    c.moveTo(bodyW * 0.1, bodyY - bodyH * 0.5); c.lineTo(bodyW * 0.16, bodyY + bodyH * 0.5);
+    c.moveTo(bodyW * 0.06, bodyY - bodyH * 0.38);
+    c.quadraticCurveTo(bodyW * 0.20, bodyY, bodyW * 0.12, bodyY + bodyH * 0.38);
     c.stroke();
-    c.fillStyle = 'rgba(16,26,46,.55)';
-    for (let i = 0; i < 4; i++) {
+    c.fillStyle = 'rgba(16,26,46,.5)';
+    for (let i = 0; i < 3; i++) {
       c.beginPath();
-      c.ellipse(-bodyW * 0.28 + i * bodyW * 0.19, bodyY + bodyH * 0.3, s * 0.02, s * 0.02, 0, 0, TAU);
+      c.ellipse(-bodyW * 0.2 + i * bodyW * 0.19, bodyY + bodyH * 0.26, s * 0.02, s * 0.02, 0, 0, TAU);
       c.fill();
     }
     c.restore();
@@ -5129,24 +5467,28 @@ function drawCreature(c, art, x, y, s, o) {
       c.closePath();
       c.save();
       c.globalAlpha = 0.55;
-      c.fillStyle = i % 2 ? mix(art.body, '#ffffff', 0.45) : mix(art.body, '#0d1730', 0.4);
+      c.fillStyle = i % 2 ? mix(body, '#ffffff', 0.45) : mix(body, '#0d1730', 0.4);
       c.fill();
       c.restore();
     }
   }
 
-  /* Belly plate — a plane facing up and out, so it takes more of the key than
-     the body around it and the body owes it a shadow along its top edge. It
-     shares the surface's clip: the body outline is up to fifty segments and
-     issuing it twice in a row for two things inside the same shape is waste. */
+  /* Belly plate — a plane facing FORWARD, and under a raking side light that
+     makes it a mid tone, not a highlight. Round one lit it +24% white at the
+     top and it came out the brightest thing on the card: on Bellowsbear the
+     sky behind was darker than the animal's stomach. It marks a change of
+     material now and takes its light from the same left key as everything
+     else. It shares the surface's clip — the body outline is up to fifty
+     segments and issuing it twice in a row for two things inside the same
+     shape is waste. */
   const byy = bodyY + bodyH * (headed ? 0.06 : 0.12);
-  occlude(c, 0, byy - bodyH * 0.26, bodyW * 0.34, bodyH * 0.16, 0.3);
+  if (fineS) occlude(c, 0, byy - bodyH * 0.26, bodyW * 0.34, bodyH * 0.16, 0.34);
   c.beginPath();
   c.ellipse(0, byy, bodyW * 0.32, bodyH * 0.3, 0, 0, TAU);
-  const bg2 = c.createLinearGradient(0, byy - bodyH * 0.3, 0, byy + bodyH * 0.3);
-  bg2.addColorStop(0, mix(art.belly, '#ffffff', 0.24));
-  bg2.addColorStop(1, mix(art.belly, '#4a5f84', 0.24));
-  c.fillStyle = bg2; c.globalAlpha = 0.95; c.fill();
+  const bg2 = c.createLinearGradient(-bodyW * 0.3, byy - bodyH * 0.3, bodyW * 0.3, byy + bodyH * 0.3);
+  bg2.addColorStop(0, mix(belly, '#ffe6c0', 0.1));
+  bg2.addColorStop(1, mix(belly, '#3b4f74', 0.3));
+  c.fillStyle = bg2; c.globalAlpha = 0.92; c.fill();
   c.restore();
 
   /* -------------------------------------------------------------- markings -- */
@@ -5178,19 +5520,19 @@ function drawCreature(c, art, x, y, s, o) {
   if (headed) {
     // a neck, so the head is joined rather than balanced
     c.beginPath(); rr(c, -bw * 0.12, cy - bh * 0.22, bw * 0.24, bh * 0.2, bw * 0.08);
-    inked(c, mix(art.body, '#0d1730', 0.2), lw * 0.9, C.ink);
+    inked(c, mix(body, '#0d1730', 0.2), lw * 0.9, C.ink);
     // the head is the deepest overhang on the whole drawing and it cast nothing
     c.save(); bodyPath(); c.clip();
     occlude(c, 0, faceY + headR * 0.9, headR * 1.1, headR * 0.5, 0.45);
     c.restore();
     const headPath = () => bodyForm(c, 0, faceY, headR * 2, headR * 2, skin, 0, key ^ 0x5f3a, undefined);
-    shell(c, headPath, art.body, lw, 0, faceY, headR * 2, headR * 2);
+    shell(c, headPath, body, lw, 0, faceY, headR * 2, headR * 2);
     c.save();
     headPath(); c.clip();
     c.beginPath(); c.ellipse(0, faceY + headR * 0.22, headR * 0.66, headR * 0.6, 0, 0, TAU);
-    const mg = c.createLinearGradient(0, faceY - headR * 0.4, 0, faceY + headR * 0.8);
-    mg.addColorStop(0, mix(art.belly, '#ffffff', 0.2));
-    mg.addColorStop(1, mix(art.belly, '#4a5f84', 0.2));
+    const mg = c.createLinearGradient(-headR * 0.5, faceY - headR * 0.4, headR * 0.5, faceY + headR * 0.8);
+    mg.addColorStop(0, mix(belly, '#ffe6c0', 0.08));
+    mg.addColorStop(1, mix(belly, '#3b4f74', 0.26));
     c.fillStyle = mg; c.globalAlpha = 0.9; c.fill();
     c.restore();
   }
@@ -5202,36 +5544,48 @@ function drawCreature(c, art, x, y, s, o) {
      their own — scaled about the point where they meet the head, so a big pair
      grows outward and upward rather than sliding off the skull. */
   c.save();
-  const earK = 0.88 + (((key >> 13) & 7) / 7) * 0.28;
+  const earK = 0.88 + (((key >> 13) & 7) / 7) * 0.3;
+  /* AND MEASURED IN THE SMALLER OF THE TWO. An ear's height came off `faceH`,
+     which on a bean is the whole animal, so lengthening the ear lengthened it
+     by a fraction of the BODY and the first long pair came out television
+     aerials. Bounded, a long ear is long relative to a head either way. */
+  const earU = Math.min(faceW, faceH);
   c.translate(0, earTop); c.scale(earK, earK); c.translate(0, -earTop);
   if (ears === 'pointy' || ears === 'shard') {
+    /* THREE EARS, NOT ONE SCALED THREE WAYS. `pointy` is on nine animals and it
+       drew one triangle for all of them, so Cinderpup, Flarehound, Rimefox,
+       Sootling and Snowhare wore the same pair at slightly different sizes.
+       A pup's are short and set wide, a fox's are longer blades raked outward,
+       a hare's stand up taller than its own head — [reach, height, base]. */
+    const cut = ears === 'shard' ? 3 : (key >>> 24) % 3;
+    const EAR = [[0.44, 0.28, 0.36], [0.50, 0.37, 0.26], [0.26, 0.54, 0.34], [0.30, 0.46, 0.30]][cut];
     for (const d of [-1, 1]) {
       c.beginPath();
-      c.moveTo(d * faceW * 0.30, earTop + faceH * 0.10);
-      c.lineTo(d * faceW * (ears === 'shard' ? 0.30 : 0.40), earTop - faceH * (ears === 'shard' ? 0.42 : 0.3));
-      c.lineTo(d * faceW * 0.06, earTop - faceH * 0.02);
+      c.moveTo(d * faceW * (0.10 + EAR[2] * 0.5), earTop + earU * 0.12);
+      c.lineTo(d * faceW * EAR[0], earTop - earU * EAR[1]);
+      c.lineTo(d * faceW * 0.04, earTop - earU * 0.02);
       c.closePath();
-      inked(c, litG(c, art.patCol && art.pat === 'tips' ? art.patCol : art.body,
-        d * faceW * 0.06, earTop - faceH * 0.4, d * faceW * 0.4, earTop + faceH * 0.1), lw, C.ink);
+      inked(c, litG(c, art.patCol && art.pat === 'tips' ? art.patCol : body,
+        0, earTop - earU * EAR[1], 0, earTop + earU * 0.1), lw, C.ink);
       // the inner ear, which is the whole reason an ear reads as an ear
       c.save();
       c.globalAlpha = 0.55;
       c.beginPath();
-      c.moveTo(d * faceW * 0.26, earTop + faceH * 0.06);
-      c.lineTo(d * faceW * (ears === 'shard' ? 0.27 : 0.34), earTop - faceH * (ears === 'shard' ? 0.3 : 0.2));
-      c.lineTo(d * faceW * 0.12, earTop - faceH * 0.01);
+      c.moveTo(d * faceW * (0.09 + EAR[2] * 0.44), earTop + earU * 0.07);
+      c.lineTo(d * faceW * EAR[0] * 0.84, earTop - earU * EAR[1] * 0.68);
+      c.lineTo(d * faceW * 0.09, earTop - earU * 0.01);
       c.closePath();
-      c.fillStyle = mix(art.belly, '#8a5a6a', 0.3); c.fill();
+      c.fillStyle = mix(belly, '#8a5a6a', 0.3); c.fill();
       c.restore();
     }
   } else if (ears === 'round') {
     for (const d of [-1, 1]) {
       c.beginPath(); c.ellipse(d * faceW * 0.31, earTop - faceH * 0.02, faceW * 0.16, faceH * 0.17, 0, 0, TAU);
-      inked(c, litG(c, art.body, d * faceW * 0.18, earTop - faceH * 0.2, d * faceW * 0.44, earTop + faceH * 0.16), lw, C.ink);
+      inked(c, litG(c, body, d * faceW * 0.18, earTop - faceH * 0.2, d * faceW * 0.44, earTop + faceH * 0.16), lw, C.ink);
       c.save();
       c.globalAlpha = 0.5;
       c.beginPath(); c.ellipse(d * faceW * 0.31, earTop + faceH * 0.005, faceW * 0.08, faceH * 0.09, 0, 0, TAU);
-      c.fillStyle = mix(art.belly, '#8a5a6a', 0.3); c.fill();
+      c.fillStyle = mix(belly, '#8a5a6a', 0.3); c.fill();
       c.restore();
     }
   } else if (ears === 'horns') {
@@ -5261,14 +5615,14 @@ function drawCreature(c, art, x, y, s, o) {
       c.quadraticCurveTo(d * faceW * 0.30, earTop - faceH * 0.30, d * faceW * 0.36, earTop - faceH * 0.40);
       c.stroke();
       c.beginPath(); c.arc(d * faceW * 0.36, earTop - faceH * 0.42, s * 0.05, 0, TAU);
-      inked(c, art.belly, lw * 0.8, C.ink);
+      inked(c, belly, lw * 0.8, C.ink);
     }
   } else if (ears === 'fin') {
     c.beginPath();
     c.moveTo(-faceW * 0.06, earTop - faceH * 0.02);
     c.quadraticCurveTo(0, earTop - faceH * 0.44, faceW * 0.16, earTop - faceH * 0.04);
     c.closePath();
-    inked(c, art.belly, lw, C.ink);
+    inked(c, belly, lw, C.ink);
   }
   c.restore();
 
@@ -5330,12 +5684,11 @@ function drawCreature(c, art, x, y, s, o) {
       c.restore();
       continue;
     }
-    // the eyeball is a sphere: darker where the lid overhangs it, and it sits
-    // in a socket, so there is a little occlusion round the outside of it
-    c.save();
-    c.globalAlpha = 0.35;
-    occlude(c, ex, eyeY + er * 0.15, er * 1.5, er * 1.4, 0.5);
-    c.restore();
+    /* THE SOCKET IS GONE. A 0.35-alpha radial gradient behind a white ellipse
+       that already has a dark ink line all the way round it is two gradient
+       objects per creature per frame for something you cannot point to on a
+       card. It, the belly's own socket at board size and eleven passes of
+       surface detail below forty-six units are what the crest was paid for. */
     c.beginPath(); c.ellipse(ex, eyeY, er, er * (1 - blink * 0.92), 0, 0, TAU);
     const eg = c.createLinearGradient(0, eyeY - er, 0, eyeY + er);
     eg.addColorStop(0, '#c9dcef');
@@ -5351,12 +5704,14 @@ function drawCreature(c, art, x, y, s, o) {
       c.beginPath();
       c.ellipse(ex + d * er * 0.3, eyeY - er * 0.3, er * 0.2, er * 0.2, 0, 0, TAU);
       c.fillStyle = '#ffffff'; c.fill();
-      c.save();
-      c.globalAlpha = 0.6;
-      c.beginPath();
-      c.ellipse(ex - d * er * 0.18, eyeY + er * 0.34, er * 0.1, er * 0.1, 0, 0, TAU);
-      c.fillStyle = SKYBOUNCE + '1)'; c.fill();
-      c.restore();
+      if (fineS) {                       // the snow coming back off the ground
+        c.save();
+        c.globalAlpha = 0.6;
+        c.beginPath();
+        c.ellipse(ex - d * er * 0.18, eyeY + er * 0.34, er * 0.1, er * 0.1, 0, 0, TAU);
+        c.fillStyle = SKYBOUNCE + '1)'; c.fill();
+        c.restore();
+      }
     }
   }
 
@@ -5397,7 +5752,7 @@ function drawCreature(c, art, x, y, s, o) {
   const lid = art.lid || (art.evil && eyeStyle !== 'slit' ? (fh % 2 ? 'heavy' : 'none') : 'none');
   if (lid !== 'none') {
     c.save();
-    c.fillStyle = art.body;
+    c.fillStyle = body;
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.7;
     for (const d of [-1, 1]) {
       if (art.mark === 'patch' && d < 0) continue;
@@ -5490,23 +5845,26 @@ function drawCreature(c, art, x, y, s, o) {
      one, round the top of the body on the beans that do not. */
   const neckR = headed ? headR * 0.92 : Math.min(bodyW, bodyH) * 0.42;
   const neckCY = headed ? faceY + headR * 0.42 : bodyY;
-  drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, neckR, neckCY);
+  drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, neckR, neckCY, footY, body);
 
   /* --------------------------------------------------------------- the mark */
   const mark = art.mark || 'none';
   if (mark !== 'none') {
     c.save();
     if (mark === 'scar') {
-      c.strokeStyle = '#c96a72'; c.lineWidth = lw * 0.7;
+      /* A SCAR IS ON SOMETHING. This was placed at faceW * 0.2 to 0.3 with two
+         cross-strokes, and on a wide bean — where `faceW` is the whole animal —
+         it landed off the side of the head as a small pink X floating in the
+         air beside it with nothing underneath. It is bounded to the eye it runs
+         through now, and it is one cut with one stitch rather than a saltire. */
+      const sx3 = Math.min(faceW * 0.24, s * 0.2) + eyeDx * 0.4;
+      c.strokeStyle = '#c96a72'; c.lineWidth = lw * 0.65; c.lineCap = 'round';
       c.beginPath();
-      c.moveTo(faceW * 0.2, eyeY - faceH * 0.16); c.lineTo(faceW * 0.3, eyeY + faceH * 0.1);
+      c.moveTo(sx3, eyeY - er * 1.9); c.lineTo(sx3 + s * 0.02, eyeY + er * 1.5);
       c.stroke();
-      for (let i = -1; i <= 1; i += 2) {
-        c.beginPath();
-        c.moveTo(faceW * 0.2 + i * s * 0.03, eyeY - faceH * 0.06 + i * s * 0.02);
-        c.lineTo(faceW * 0.28 + i * s * 0.03, eyeY - faceH * 0.02 + i * s * 0.02);
-        c.stroke();
-      }
+      c.beginPath();
+      c.moveTo(sx3 - s * 0.026, eyeY - er * 0.5); c.lineTo(sx3 + s * 0.03, eyeY - er * 0.2);
+      c.stroke();
     } else if (mark === 'patch') {
       c.strokeStyle = C.ink; c.lineWidth = lw * 0.8;
       const px2 = Math.min(faceW * 0.34, s * 0.36);
@@ -5528,7 +5886,7 @@ function drawCreature(c, art, x, y, s, o) {
       c.moveTo(-s * 0.05, faceY - faceH * (headed ? 0.44 : 0.3));
       c.quadraticCurveTo(s * 0.02, faceY - faceH * (headed ? 0.72 : 0.52), s * 0.09, faceY - faceH * (headed ? 0.42 : 0.28));
       c.closePath();
-      inked(c, art.belly, lw * 0.8, C.ink);
+      inked(c, belly, lw * 0.8, C.ink);
     } else if (mark === 'ember') {
       // a small lit coal carried on the chest, licking upward
       const ey2 = bodyY + bodyH * 0.06;
@@ -5597,9 +5955,30 @@ function drawCreature(c, art, x, y, s, o) {
 }
 
 /* Props are drawn last of all and hang off the finished body. */
-function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, neckR, neckCY) {
+function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, faceW, faceH, headed, neckR, neckCY, footY, body) {
   const acc = art.acc || 'none';
   if (acc === 'none') return;
+  /* A CARRIED THING IS HELD, AND IT REACHES THE GROUND. Bellhammer's haft was a
+     plain tan rectangle that started in mid-air behind the body and stopped in
+     mid-air under a rounded head that read as a spatula; nothing gripped it and
+     nothing stood it on anything. Emberward's bar and Bramblewick's lantern
+     were the same. An accessory with neither a hand on it nor a foot under it
+     is not an accessory, it is a second sprite pasted behind the first — so
+     everything held goes through these two. */
+  /* The same bound the crests use: on a creature with no separate head `faceH`
+     is the whole body, so anything worn on the head has to be measured against
+     the smaller of the two or it swallows the animal. */
+  const hu = Math.min(faceW, faceH);
+  const grip = (gx, gy) => {
+    c.beginPath(); c.ellipse(gx, gy, s * 0.075, s * 0.065, 0.2, 0, TAU);
+    inked(c, litG(c, body || '#9aa7bd', gx - s * 0.07, gy - s * 0.06, gx + s * 0.07, gy + s * 0.06), lw * 0.8, C.ink);
+  };
+  const planted = (gx) => {                     // the dark where a shaft meets snow
+    c.save();
+    c.globalAlpha = 0.3; c.fillStyle = '#0a1426';
+    c.beginPath(); c.ellipse(gx, footY + s * 0.09, s * 0.07, s * 0.022, 0, 0, TAU); c.fill();
+    c.restore();
+  };
   /* EVERY PROP'S THICKNESS IS MEASURED IN `s` NOW, and its POSITION off the
      face. It used to be both off the face, and `faceH` on a creature with no
      separate head is the whole body — so Tindercub's scarf came out as a red
@@ -5636,33 +6015,45 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     inked(c, litG(c, sc, -s * 0.05, 0, s * 0.05, s * 0.2), lw * 0.9, C.ink);
     c.restore();
   } else if (acc === 'helm') {
+    /* A HAT SITS ON A HEAD, ABOVE THE EYES. The dome was `faceW * 0.38` and the
+       brim `faceY - faceH * 0.13` — both measured against the whole animal on a
+       bean — so on Gundy Bolt, who is wide and shallow and wears one, the brim
+       landed across the top half of both eyes and the dome covered the rest.
+       The lowest-contrast card in the set was a grey mound with no face on it,
+       and this is most of the reason. Everything worn on the head is measured
+       against `hu` now and set clear of the eye line. */
     const hc = art.accCol || '#8fa2bd';
-    c.beginPath(); c.arc(0, faceY - faceH * 0.1, faceW * 0.38, Math.PI, TAU);
+    const hy = faceY - hu * 0.30;
+    c.beginPath(); c.arc(0, hy, hu * 0.46, Math.PI, TAU);
     c.closePath();
-    inked(c, litG(c, hc, -faceW * 0.3, faceY - faceH * 0.46, faceW * 0.3, faceY - faceH * 0.08), lw, C.ink);
+    inked(c, litG(c, hc, -hu * 0.4, hy - hu * 0.46, hu * 0.4, hy), lw, C.ink);
     // a struck-metal highlight along the dome, so a helm is not a grey arc
     c.save();
     c.globalAlpha = 0.55;
     c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.5;
-    c.beginPath(); c.arc(0, faceY - faceH * 0.1, faceW * 0.28, Math.PI + 0.35, Math.PI + 1.0);
+    c.beginPath(); c.arc(0, hy, hu * 0.34, Math.PI + 0.35, Math.PI + 1.0);
     c.stroke();
     c.restore();
-    const brimW = Math.min(faceW * 0.8, s * 0.82), brimH = Math.min(faceH * 0.09, s * 0.075);
-    c.beginPath(); rr(c, -brimW / 2, faceY - faceH * 0.13, brimW, brimH, 4);
-    inked(c, litG(c, hc, 0, faceY - faceH * 0.13, 0, faceY - faceH * 0.13 + brimH), lw * 0.8, C.ink);
+    // and WIDE, so the helm is a shape and not a bump: a brim narrower than the
+    // shoulders under it disappears into the body and Gundy Bolt went back to
+    // being a featureless mound the moment it was measured against the head
+    const brimW = Math.min(hu * 1.5, s * 1.0), brimH = Math.min(hu * 0.13, s * 0.085);
+    c.beginPath(); rr(c, -brimW / 2, hy - brimH * 0.5, brimW, brimH, 4);
+    inked(c, litG(c, hc, 0, hy - brimH * 0.5, 0, hy + brimH * 0.5), lw * 0.8, C.ink);
   } else if (acc === 'crown') {
-    const ty = faceY - faceH * 0.4;
+    const ty = faceY - hu * 0.5;
     c.beginPath();
-    c.moveTo(-faceW * 0.28, ty);
-    c.lineTo(-faceW * 0.28, ty - faceH * 0.2); c.lineTo(-faceW * 0.11, ty - faceH * 0.08);
-    c.lineTo(0, ty - faceH * 0.26); c.lineTo(faceW * 0.11, ty - faceH * 0.08);
-    c.lineTo(faceW * 0.28, ty - faceH * 0.2); c.lineTo(faceW * 0.28, ty);
+    c.moveTo(-hu * 0.36, ty);
+    c.lineTo(-hu * 0.36, ty - hu * 0.26); c.lineTo(-hu * 0.14, ty - hu * 0.1);
+    c.lineTo(0, ty - hu * 0.34); c.lineTo(hu * 0.14, ty - hu * 0.1);
+    c.lineTo(hu * 0.36, ty - hu * 0.26); c.lineTo(hu * 0.36, ty);
     c.closePath();
-    inked(c, litG(c, art.accCol || C.gold, -faceW * 0.28, ty - faceH * 0.26, faceW * 0.28, ty), lw, C.ink);
+    inked(c, litG(c, art.accCol || C.gold, -hu * 0.36, ty - hu * 0.34, hu * 0.36, ty), lw, C.ink);
   } else if (acc === 'lantern') {
     const lx = bw * 0.46, ly = bodyY + Math.sin(t * 2.2) * bh * 0.03;
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.7;
-    c.beginPath(); c.moveTo(bw * 0.26, bodyY - bodyH * 0.16); c.lineTo(lx, ly - s * 0.1); c.stroke();
+    c.beginPath(); c.moveTo(bw * 0.30, bodyY - bodyH * 0.14); c.lineTo(lx, ly - s * 0.1); c.stroke();
+    grip(bw * 0.30, bodyY - bodyH * 0.14);       // a paw on the wire, not a wire in the air
     c.save();
     c.globalAlpha = 0.45; c.fillStyle = art.accCol || C.gold;
     c.beginPath(); c.arc(lx, ly, s * 0.2, 0, TAU); c.fill();
@@ -5675,17 +6066,18 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.beginPath(); c.moveTo(lx - s * 0.07, ly - s * 0.09); c.lineTo(lx + s * 0.07, ly - s * 0.09);
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.8; c.stroke();
   } else if (acc === 'kettle') {
-    c.beginPath(); rr(c, -faceW * 0.2, faceY - faceH * 0.68, faceW * 0.4, faceH * 0.24, faceH * 0.05);
-    inked(c, litG(c, art.accCol || '#9aa7bd', -faceW * 0.2, faceY - faceH * 0.68, faceW * 0.2, faceY - faceH * 0.44), lw * 0.9, C.ink);
-    c.beginPath(); c.moveTo(faceW * 0.18, faceY - faceH * 0.6); c.lineTo(faceW * 0.34, faceY - faceH * 0.68);
+    const ky = faceY - hu * 0.78;
+    c.beginPath(); rr(c, -hu * 0.26, ky, hu * 0.52, hu * 0.3, hu * 0.06);
+    inked(c, litG(c, art.accCol || '#9aa7bd', -hu * 0.26, ky, hu * 0.26, ky + hu * 0.3), lw * 0.9, C.ink);
+    c.beginPath(); c.moveTo(hu * 0.23, ky + hu * 0.1); c.lineTo(hu * 0.44, ky);
     c.strokeStyle = C.ink; c.lineWidth = lw * 0.9; c.stroke();
     c.save(); c.globalAlpha = 0.5; c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.7;
     for (let i = 0; i < 2; i++) {
       const ph2 = t * 1.6 + i;
-      const sx2 = -faceW * 0.04 + i * faceW * 0.1;
+      const sx2 = -hu * 0.05 + i * hu * 0.13;
       c.beginPath();
-      c.moveTo(sx2, faceY - faceH * 0.7);
-      c.quadraticCurveTo(sx2 + Math.sin(ph2) * s * 0.06, faceY - faceH * 0.86, sx2, faceY - faceH * 1.0);
+      c.moveTo(sx2, ky - hu * 0.03);
+      c.quadraticCurveTo(sx2 + Math.sin(ph2) * s * 0.06, ky - hu * 0.24, sx2, ky - hu * 0.42);
       c.stroke();
     }
     c.restore();
@@ -5704,8 +6096,14 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
     c.restore();
   } else if (acc === 'hammer' || acc === 'pike' || acc === 'staff') {
     const hx = bw * 0.42;
-    c.strokeStyle = '#8a6a3f'; c.lineWidth = lw * 1.4;
-    c.beginPath(); c.moveTo(hx, bodyY + bodyH * 0.5); c.lineTo(hx - bw * 0.04, faceY - faceH * 0.4); c.stroke();
+    planted(hx + bw * 0.02);
+    // dark under, wood over: a shaft with an edge instead of a tan rectangle
+    c.lineCap = 'round';
+    c.strokeStyle = C.ink; c.lineWidth = lw * 2.0;
+    c.beginPath(); c.moveTo(hx + bw * 0.02, footY + s * 0.07); c.lineTo(hx - bw * 0.04, faceY - faceH * 0.4); c.stroke();
+    c.strokeStyle = '#8a6a3f'; c.lineWidth = lw * 1.1;
+    c.beginPath(); c.moveTo(hx + bw * 0.02, footY + s * 0.07); c.lineTo(hx - bw * 0.04, faceY - faceH * 0.4); c.stroke();
+    grip(hx - bw * 0.005, bodyY + bodyH * 0.06);
     if (acc === 'hammer') {
       c.beginPath(); rr(c, hx - bw * 0.2, faceY - faceH * 0.6, bw * 0.34, bh * 0.16, 4);
       inked(c, litG(c, art.accCol || '#9aa7bd', hx - bw * 0.2, faceY - faceH * 0.6, hx + bw * 0.14, faceY - faceH * 0.6 + bh * 0.16), lw * 0.9, C.ink);
@@ -5760,6 +6158,31 @@ function drawProp(c, art, t, ph, bw, bh, cy, lw, s, paw, bodyY, bodyH, faceY, fa
       c.moveTo(d * bw * 0.2, bodyY - bodyH * 0.3); c.lineTo(d * bw * 0.34, bodyY - bodyH * 0.02);
       c.lineTo(d * bw * 0.26, bodyY + bodyH * 0.08); c.stroke();
     }
+  } else if (acc === 'shield') {
+    /* BULWARK ASKED FOR A SHIELD AND GOT NOTHING. `acc: 'shield'` had no branch
+       here at all, so the one card in the game whose whole rule is standing in
+       front of things was drawn holding air. It hangs off the near side and
+       overlaps the body, because a shield that fits inside the silhouette is a
+       badge. */
+    const sc2 = art.accCol || '#7f96b8';
+    const sx4 = bw * 0.40, sy4 = bodyY + bodyH * 0.02, sr = Math.min(bw * 0.34, bh * 0.34);
+    c.beginPath();
+    c.moveTo(sx4 - sr * 0.9, sy4 - sr * 0.86);
+    c.lineTo(sx4 + sr * 0.9, sy4 - sr * 0.86);
+    c.quadraticCurveTo(sx4 + sr * 0.98, sy4 + sr * 0.36, sx4, sy4 + sr * 1.1);
+    c.quadraticCurveTo(sx4 - sr * 0.98, sy4 + sr * 0.36, sx4 - sr * 0.9, sy4 - sr * 0.86);
+    c.closePath();
+    inked(c, litG(c, sc2, sx4, sy4 - sr, sx4, sy4 + sr), lw * 1.1, C.ink);
+    c.save();
+    c.globalAlpha = 0.5;
+    c.strokeStyle = '#ffffff'; c.lineWidth = lw * 0.5;
+    c.beginPath();
+    c.moveTo(sx4 - sr * 0.62, sy4 - sr * 0.6); c.lineTo(sx4 + sr * 0.62, sy4 - sr * 0.6);
+    c.stroke();
+    c.restore();
+    c.beginPath(); c.arc(sx4, sy4 - sr * 0.04, sr * 0.24, 0, TAU);
+    inked(c, litG(c, mix(sc2, '#ffffff', 0.3), sx4 - sr * 0.2, sy4 - sr * 0.26, sx4 + sr * 0.2, sy4 + sr * 0.2), lw * 0.7, C.ink);
+    grip(sx4 - sr * 0.5, sy4 + sr * 0.34);
   } else if (acc === 'goggles') {
     c.save();
     const gw = Math.min(faceW * 0.72, s * 0.78), gh = s * 0.07;
