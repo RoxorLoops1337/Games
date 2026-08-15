@@ -6951,41 +6951,81 @@ function statBadge(c, x, y, hw, hh, col, val) {
      the MATERIAL says the TRIBE   cold iron, sooted bronze, blued steel,
                                    tarnished brass, violet iron — five metals
                                    off the same dark bar, differing in hue
-     the PROFILE says the RANK     how many grooves the moulding is cut with,
-                                   how many corners carry a brace, how long
-                                   those braces run, and whether the card's
+     the PROFILE says the RANK     whether the corners carry a brace, how far
+                                   it runs and how hard it is lit — and, at the
+                                   top of the ladder only, whether the card's
                                    own outline is rounded or MITRED
 
    Colour cannot separate rarity any more, and it should not: shape can, and a
    shape survives at 64 units wide where the hue of a hairline does not. */
+/* AND THE FACE IS CUT FROM THE SAME BAR. `face` is new here and it is not a new
+   channel — it is the one that was already being drawn, unconditionally, in a
+   cool white (`#f6fbff → #e6effc → #c4d8f2`) on all 58 cards. That single
+   constant is why five metals bought nothing: a chrome mat glued into a bronze
+   surround, and the brightest AND coolest thing on a warm object. Every card in
+   the set read as a UI panel with a photo slot because its largest flat area
+   belonged to the UI and not to the card.
+
+   So the stock is the metal's own, three stops off the same hue as `top`, and
+   the top stop comes down from 0.98 luminance to about 0.90 — the face is card
+   stock lying in a frame, not the light source.
+
+   SCRAP WENT GREEN. `scrap.mid` was `#1e1a0d` against `hearth.mid` `#26140a`:
+   two browns four points apart, so at reward size BANKED EMBERS, CLUNKBOT,
+   BELLOWSBEAR and KETTLEBEAK were one material and the tribe channel was
+   spending five colours to say four things. Tarnished brass goes to verdigris
+   in the world, so scrap does here — hearth keeps the brown, which is the one
+   that has to stay warm because the tribe is a fire. */
 const FRAME_MAT = {
   none:   { top: '#1f2b40', mid: '#101a2c', bot: '#05090f',
-    cap: '#3a4e6d', capLit: '#8298b8', rim: 'rgba(168,196,232,' },
+    cap: '#3a4e6d', capLit: '#8298b8', rim: 'rgba(168,196,232,',
+    face: ['#d9e2ef', '#c3d0e2', '#9fb2cc'] },
   hearth: { top: '#44291a', mid: '#26140a', bot: '#0c0503',
-    cap: '#7d5530', capLit: '#f2c894', rim: 'rgba(255,212,164,' },
+    cap: '#7d5530', capLit: '#f2c894', rim: 'rgba(255,212,164,',
+    face: ['#ecdcc6', '#d7c2a4', '#b1957a'] },
   frost:  { top: '#183246', mid: '#0a1d2f', bot: '#030c15',
-    cap: '#3c6d8f', capLit: '#cbe9ff', rim: 'rgba(190,230,255,' },
-  scrap:  { top: '#39331d', mid: '#1e1a0d', bot: '#0a0804',
-    cap: '#7d7140', capLit: '#ebdfa8', rim: 'rgba(240,228,178,' },
+    cap: '#3c6d8f', capLit: '#cbe9ff', rim: 'rgba(190,230,255,',
+    face: ['#dfecf8', '#c9dcee', '#a3c0dc'] },
+  scrap:  { top: '#2f3a24', mid: '#181f11', bot: '#060a05',
+    cap: '#6b7a41', capLit: '#d9e2a4', rim: 'rgba(217,226,164,',
+    face: ['#dfe4c8', '#c9d0aa', '#a3ab80'] },
   wyrd:   { top: '#312444', mid: '#191028', bot: '#080512',
-    cap: '#6c559e', capLit: '#e0d2ff', rim: 'rgba(226,210,255,' },
+    cap: '#6c559e', capLit: '#e0d2ff', rim: 'rgba(226,210,255,',
+    face: ['#e2d9ee', '#cbbfe0', '#a596c0'] },
 };
 
-/* THE PROFILE LADDER. Everything here is a count or a length — nothing in it
-   is a colour except the one channel rarity keeps, the line lying in the
-   moulding. `cut` is the mitre: from rare up the card's four corners are a
-   straight cut instead of an arc, which is the only rarity tell that still
-   works on a fold, because it is the SILHOUETTE.
+/* THE PROFILE LADDER, AND IT IS NOW ONE PROPERTY DEEP: HOW MUCH METAL IS ON
+   THE CORNERS. Everything else that used to be in this table is gone.
 
-   A leader is not a rarity, it is a tier above one, and it was drawing the
-   same steel common frame as SOOTLING — the most important object in a run
-   was furniture. It gets the mitre and braces so long they nearly meet, so
-   the border reads as solid plate where a common's reads as a thin channel. */
+   THE INLAY COLOUR IS CUT. Rarity's last colour channel was a line lying in
+   the moulding — cream for uncommon, gold for rare — and gold is a channel
+   TRIBE already owns: FLAREHOUND and BELLOWSBEAR (hearth rares) wore a brass
+   hairline and read as scrap, and BELLHAMMER (a scrap rare) was gold on brass
+   and had no tell at all. The channel cost a hue and returned nothing.
+
+   THE SECOND GROOVE IS CUT with it. A stepped moulding is a difference you
+   can feel at 300 units and cannot see at 64, and it was the ninth ornament
+   channel on a frame holding a picture that has one.
+
+   WHAT IS LEFT IS THE CORNER BRACE, AND IT IS FOUR OR NONE. Two braces on one
+   diagonal — brass on the top-left and bottom-right, bare rail on the other
+   two — is not a lighting decision, it is what a draw that failed looks like;
+   no manufactured card has furniture on one diagonal. So a common has NO
+   corner metal, and the ladder above it is how far the brace runs and how hard
+   it is lit. Both of those are MASS at the card's edge, which is the one thing
+   still legible on a fold where a 5px gem and a one-step profile are not.
+
+   THE MITRE MOVED UP TO THE LEADER. It was rare's, alongside four braces and
+   two gold gems, while the leader got longer braces and a cream line and no
+   gem — so on the table the rare out-dressed the card the whole run is built
+   around. The leader now owns the silhouette outright: it is the only card in
+   a hand whose corners are a straight cut, which is a shape you read before
+   you read anything printed on it. */
 const FRAME_TIER = {
-  1: { inlay: null, grooves: 1, braces: 2, bL: 17, cut: 0 },
-  2: { inlay: 'rgba(208,216,230,.72)', grooves: 2, braces: 2, bL: 17, cut: 0 },
-  3: { inlay: 'rgba(255,209,102,.90)', grooves: 2, braces: 4, bL: 17, cut: 8 },
-  4: { inlay: 'rgba(255,238,206,.92)', grooves: 2, braces: 4, bL: 40, cut: 8 },
+  1: { braces: 0, bL: 0,  litK: 0,    cut: 0 },
+  2: { braces: 4, bL: 15, litK: 0.62, cut: 0 },
+  3: { braces: 4, bL: 26, litK: 0.82, cut: 0 },
+  4: { braces: 4, bL: 42, litK: 1.00, cut: 9 },
 };
 /* The card's own outline, and every stroke and clip that has to agree with it.
    A mitred corner offset inward keeps its flat the same length, so the same
@@ -7395,7 +7435,7 @@ function drawCard(c, card, x, y, w, h, o) {
   /* The rare bloom is CUT. A halo round the card was the third thing saying
      "rare" and the loudest of them, and at a reward pick the eye went to it
      before it went to the creature — which is backwards, because the creature
-     is the reason to take the card. The mitred corner says it instead, in the
+     is the reason to take the card. The corner metal says it instead, in the
      silhouette, where it costs no light. */
 
   /* ---------------- the card is a FRAME with a face set into it ----------
@@ -7431,15 +7471,15 @@ function drawCard(c, card, x, y, w, h, o) {
      before the face was drawn over it, so what survived was a four-unit band
      of gradient in a border already carrying a moulding, a brace and two
      hairlines: it read as noise on the metal rather than as a material. Rare
-     spends its budget on the mitre and the fourth brace instead. */
+     spends its whole budget on the length of its corner metal instead. */
 
-  /* THE MOULDING. A frame four and a half units wide is a border, not a frame,
-     unless it has a PROFILE: a channel cut round the perimeter with a line of
-     the card's own metal lying in it. This is the ONE channel rarity keeps in
-     colour, and the profile of the channel is the other half of the ladder —
-     a common is cut with one groove, everything above it with a stepped one,
-     which is a difference you can feel at the outer edge without a bright
-     line hugging it. Bright cyan there was the whole S2 defect. */
+  /* THE MOULDING, AND THERE IS ONE OF IT. A frame four and a half units wide
+     is a border, not a frame, unless it has a PROFILE: a channel cut round the
+     perimeter with a line of the card's own metal lying in it. That is all it
+     is now. The second, stepped groove and the coloured line lying in it both
+     belonged to rarity, and rarity has been evicted from colour entirely — see
+     FRAME_TIER. Every card in the set is cut with the same single channel, in
+     the metal it was cut into, so the moulding says MATERIAL and nothing else. */
   const gI = 3.3 * S;
   /* A mitre offset inward by d loses only 0.59d off its flat, where an arc
      loses the whole d off its radius — get that wrong and the groove crosses
@@ -7448,23 +7488,8 @@ function drawCard(c, card, x, y, w, h, o) {
     framePath(c, gI + o, gI + o, w - (gI + o) * 2, h - (gI + o) * 2, 12 * S - gI - o, cut ? cut - 0.59 * (gI + o) : 0);
     c.lineWidth = lw; c.strokeStyle = style; c.stroke();
   };
-  groove(0, (tier.grooves > 1 ? 3.0 : 2.0) * S, 'rgba(3,7,18,.62)');
-  if (tier.grooves > 1) {
-    /* Only the INNER shoulder takes the rarity colour. Both of them in gold
-       was the first cut and it put the tribe straight back in the bin it was
-       just fished out of: two gold lines fill most of a two-and-a-half unit
-       rail, so a Frostborn rare came out gold-framed exactly the way an
-       uncommon used to come out ice-blue. The outer shoulder is the metal's
-       own rim, so the step reads as a step and one thin line says the rank. */
-    groove(-1.0 * S, 0.9 * S, mat.rim + '0.34)');
-    groove(1.0 * S, 0.9 * S, tier.inlay);
-  } else {
-    /* A common has NOTHING lying in its channel — the line is the bar's own
-       metal. A cool steel hairline on a sooted-bronze Hearthkin frame was the
-       giveaway that this line still belonged to rarity: nothing is inlaid in
-       a common, so the channel should show the metal it was cut into. */
-    groove(0, 0.85 * S, tier.inlay || mat.rim + '0.30)');
-  }
+  groove(0, 2.0 * S, 'rgba(3,7,18,.62)');
+  groove(0, 0.85 * S, mat.rim + '0.30)');
 
   /* AND THE BRACES INTERRUPT IT. The first version put them under the moulding,
      which was the same as not drawing them: at hand size the whole band is
@@ -7473,17 +7498,19 @@ function drawCard(c, card, x, y, w, h, o) {
      wraps it — which is what a corner brace is for, and it is legible at 126
      because it is a change in the SHAPE of the border, not a detail inside it.
 
-     FOUR OR TWO, NEVER FOUR FADING OUT. They used to run 1.00 / 0.60 / 0.44 /
-     0.22, and at hand size the bottom pair were faint enough that every card
-     in the game looked braced at the top and unfinished at the bottom — which
-     reads as a fade-out bug, not as light. Below rare the card is braced at
-     two corners on purpose, on the diagonal; from rare up all four are there
-     and all four are visible. */
+     FOUR OR NONE, AND THE LADDER IS THEIR LENGTH. They ran 1.00 / 0.60 / 0.44 /
+     0.22 once, which read as a fade-out bug; then two on a diagonal, which read
+     as two braces that failed to draw. Both were attempts to spend this
+     ornament on rarity by REMOVING corners, and a card with hardware on one
+     diagonal is not a card anyone has ever held. So a common wears no corner
+     metal at all and every card above it wears four, differing in how far the
+     brace runs down the rail and how hard it is lit — mass and value, the two
+     things that survive being 40 pixels tall. */
   const bL = tier.bL * S;                  // S is w/126, so this never needs a clamp
-  const lit = tier.braces > 2 ? [1.00, 0.74, 0.68, 0.50] : [1.00, 0, 0, 0.56];
+  const lit = [1.00, 0.74, 0.68, 0.50].map((v) => v * tier.litK);
   const at = [[0, 0, 1, 1], [w, 0, -1, 1], [0, h, 1, -1], [w, h, -1, -1]];
-  at.forEach((p, i) => {
-    if (lit[i]) frameCorner(c, p[0], p[1], p[2], p[3], bL, mat, lit[i], S);
+  if (tier.braces) at.forEach((p, i) => {
+    frameCorner(c, p[0], p[1], p[2], p[3], bL, mat, lit[i], S);
   });
   c.restore();
 
@@ -7494,13 +7521,20 @@ function drawCard(c, card, x, y, w, h, o) {
      the rules well, and CINDERPUP's two-line rule came back as one line and an
      ellipsis. The frame reads as thicker anyway — the moulding gives it a
      profile, which is what "thick" actually means to the eye. */
+  /* AND THE FACE IS THE TRIBE'S STOCK, NOT A CONSTANT. It was `#f6fbff →
+     #e6effc → #c4d8f2` on every card in the game, which meant the largest flat
+     area on a Hearthkin card was cool white — brighter and colder than the
+     bronze holding it — and the five metals the frame block spent a round
+     cutting were contradicted by the surface they framed. The stock is off the
+     same bar as the frame now, and about a tenth of a stop darker at the top,
+     so the brightest thing on the card can go back to being the picture. */
   const fi = 4.5 * S;
   c.save();
   rr(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S);
   const body = c.createLinearGradient(0, fi, 0, h - fi);
-  body.addColorStop(0, '#f6fbff');
-  body.addColorStop(0.5, '#e6effc');
-  body.addColorStop(1, '#c4d8f2');
+  body.addColorStop(0, mat.face[0]);
+  body.addColorStop(0.5, mat.face[1]);
+  body.addColorStop(1, mat.face[2]);
   c.fillStyle = body; c.fill();
   c.restore();
   inset(c, fi, fi, w - fi * 2, h - fi * 2, 8.5 * S, 3.4 * S, 1.25);
@@ -8071,8 +8105,13 @@ function drawCard(c, card, x, y, w, h, o) {
   inset(c, ax, ay, aw, ah, 8 * S, 3.2 * S, 1.15);
   rr(c, ax, ay, aw, ah, 8 * S);
   c.lineWidth = 2.6 * S; c.strokeStyle = 'rgba(20,34,58,.92)'; c.stroke();
-  rr(c, ax - 1.4 * S, ay - 1.4 * S, aw + 2.8 * S, ah + 2.8 * S, 9.4 * S);
-  c.lineWidth = 1.2 * S; c.strokeStyle = LIGHT + '0.42)'; c.stroke();
+  /* THE BEZEL IS A HAIRLINE. At 1.2 units of `LIGHT 0.42` it was one of the two
+     brightest values on the card, and on EMBER FLASK the eye landed on a bright
+     rectangle of window bezel before it landed on the bottle. It is here to say
+     the cut has a thickness, which one thin line does; the other bright
+     rectangle, the one round the rules well, is gone entirely. */
+  rr(c, ax - 1.0 * S, ay - 1.0 * S, aw + 2.0 * S, ah + 2.0 * S, 9.0 * S);
+  c.lineWidth = 0.8 * S; c.strokeStyle = LIGHT + '0.18)'; c.stroke();
 
   /* ---------------- rarity, as gems set into the frame ----------------
      It was two small flat circles floating on the window's right edge, at the
@@ -8240,9 +8279,20 @@ function drawCard(c, card, x, y, w, h, o) {
   const TAG_SIZE = 9.4 * S;
   const showTag = dropRules || by - (top + (lines.length - 1) * lh) >=
     (fit0.size + textSize(TAG_SIZE)) / 2 * 0.95;
+  /* THE WELL RUNS RAIL TO RAIL, AND THE FACE IS NOT AROUND IT ANY MORE.
+     It used to sit at the window's own x and width with a rounded corner, a
+     dark stroke and a light lip — so the card carried TWO bright rectangles
+     with a strip of face between them, and on EMBER FLASK you read the window
+     bezel, then the well's rim, and the bottle third. A card has one picture
+     and should have one picture frame. The well is furniture now, like the
+     band and the rail: it spans the whole face, it is flush against both
+     edges, and it hands off to the rail's enamel line at the bottom instead of
+     to a lip of its own. Its rim, its corner radius and its outer lip are all
+     gone — nothing replaces them. */
+  const wx = fi, ww = w - fi * 2, whP = fy - wy;
   if (!dropRules) {
     c.save();
-    rr(c, ax, wy, aw, wh2, 6 * S);
+    c.beginPath(); c.rect(wx, wy, ww, whP);
     c.clip();
     /* A FLAT BASE COAT, THEN THE LIGHT OVER IT UNDER A WASH — and that is not a
        stylistic choice, it is what makes the rules text CHECKABLE.
@@ -8259,33 +8309,23 @@ function drawCard(c, card, x, y, w, h, o) {
        tints rather than replaces. The eye sees what it saw; the raster now sees
        the colour the ink is actually sitting on. */
     c.fillStyle = WELL_COL;
-    c.fillRect(ax, wy, aw, wh2);
+    c.fillRect(wx, wy, ww, whP);
     c.globalAlpha = 0.85;
-    const wellG = c.createLinearGradient(0, wy, 0, wy + wh2);
+    const wellG = c.createLinearGradient(0, wy, 0, wy + whP);
     wellG.addColorStop(0, 'rgba(8,15,28,.62)');
     wellG.addColorStop(0.45, 'rgba(8,15,28,.07)');
-    wellG.addColorStop(1, 'rgba(150,192,240,.16)');
-    c.fillStyle = wellG; c.fillRect(ax, wy, aw, wh2);
+    wellG.addColorStop(1, 'rgba(8,15,28,.30)');
+    c.fillStyle = wellG; c.fillRect(wx, wy, ww, whP);
     /* The recess is cut here rather than by `inset`, for the same reason and by
        the same rule: `inset` lays its shadow along the top edge as a gradient,
        which lands on the first line of the paragraph and takes its ground back
-       out. Identical geometry, drawn under the wash. */
+       out. Identical geometry, drawn under the wash — and only along the TOP
+       now, because the sides no longer meet a face for the light to come off. */
     const wd = 2.4 * S;
-    let wg = c.createLinearGradient(0, wy, 0, wy + wd * 2.2);
+    const wg = c.createLinearGradient(0, wy, 0, wy + wd * 2.2);
     wg.addColorStop(0, DARK + '0.45)'); wg.addColorStop(1, DARK + '0)');
-    c.fillStyle = wg; c.fillRect(ax, wy, aw, wd * 2.2);
-    wg = c.createLinearGradient(ax, 0, ax + wd * 1.6, 0);
-    wg.addColorStop(0, DARK + '0.28)'); wg.addColorStop(1, DARK + '0)');
-    c.fillStyle = wg; c.fillRect(ax, wy, wd * 1.6, wh2);
-    wg = c.createLinearGradient(0, wy + wh2 - wd * 1.4, 0, wy + wh2);
-    wg.addColorStop(0, LIGHT + '0)'); wg.addColorStop(1, LIGHT + '0.45)');
-    c.fillStyle = wg; c.fillRect(ax, wy + wh2 - wd * 1.4, aw, wd * 1.4);
+    c.fillStyle = wg; c.fillRect(wx, wy, ww, wd * 2.2);
     c.restore();
-    rr(c, ax, wy, aw, wh2, 6 * S);
-    c.lineWidth = 1.6 * S; c.strokeStyle = 'rgba(7,13,26,.72)'; c.stroke();
-    // the lip of light where the face's edge catches the light above the hole
-    rr(c, ax - 1.2 * S, wy - 1.2 * S, aw + 2.4 * S, wh2 + 2.4 * S, 7.2 * S);
-    c.lineWidth = 1.1 * S; c.strokeStyle = LIGHT + '0.40)'; c.stroke();
     lines.forEach((ln, i) => txt(c, ln, w / 2, top + i * lh, fit0.size, RULE_INK, 'center', 't', 0));
   }
 
