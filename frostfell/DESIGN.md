@@ -2369,7 +2369,7 @@ live defects that the 1280x720 / 2400x1080 / iPhone-14 walk had never shown:
 | three-line card names drawn **outside** the name band | `CIN` clipped by the frame, `PUP` across the picture |
 | `A KIND WINTER` drawn **through** the KEEN BEASTS row | a clamp to `VH - 104` that lands inside the list |
 | `SEALS EARNED` drawn **through** `THE FIRST CROSSING` | a fixed 20-unit gap under a 23-unit line |
-| `BOUNTY CHARM` / `SWIFT CHARM` overlapping each other | `drawCharmCard` had no wrap and no ellipsis — at the floor it just overflows |
+| `BOUNTY CHARM` / `SWIFT CHARM` overlapping each other | the charm card had no wrap and no ellipsis — at the floor it just overflows. Since fixed at the root: charms are drawn by `drawCard` like every other card, and that name band already wraps |
 | the bell's rules line drawn **through** the stall panel, and its price badge **through** the rules line | a fixed 50-unit shelf holding a 23-unit line; text drawn to full width past a 58-unit plate |
 | `BELLRO` / `PE` | the seam rule's third correction — see the name-break entry |
 
