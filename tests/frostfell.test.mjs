@@ -2421,12 +2421,16 @@ section('the design record states numbers');
        38 rounds. A sweep whose step does not divide VH would be broken at every
        size, on every device, permanently — it could not hide for one round.
 
-       So the check is simply that no OTHER stepped loop exists: two in the whole
-       file, `sweepX` itself and a two-iteration `i += 2` that is exact by
-       construction. Anything new that steps toward a boundary shows up here. */
+       So the check is simply that no OTHER stepped loop exists: ONE in the whole
+       file, `sweepX` itself. It was two until the creature block rewrote the
+       scar mark, whose `i += 2` drew the two cross-strokes of a saltire nobody
+       wanted; the count came down with it rather than being relaxed, because a
+       bound that only says "no more than before" stops catching a new one the
+       moment an old one goes. Anything that steps toward a boundary shows up
+       here. */
     const stepped = [...src.matchAll(/for \(let ([a-z]+) = [^;]*;[^;]*;\s*\1 \+= ([^)]+)\)/g)]
       .filter((m) => m[2].trim() !== '1');
-    eq(stepped.length, 2, 'only sweepX and one exact two-step loop step toward a boundary');
+    eq(stepped.length, 1, 'only sweepX steps toward a boundary');
   }
 
   /* THE SEAMS THE PROBE HAS OPENED IN THE GAME, counted so a seventh has to be

@@ -39,7 +39,36 @@ let SHOTS = 0;
    sweep drew against the strings the game CAN draw turns "probably most of it"
    into a number, and the number is printed whether or not it is flattering. */
 const STRINGS = { seen: new Set(), draws: 0 };
-const ctx2 = mkCtx(log);
+/* WHAT A REAL CANVAS REFUSES AND THE STUB ACCEPTS.
+
+   The stub records arguments; it does not validate them, and Chromium does. A
+   negative radius handed to `arc`, `arcTo` or `createRadialGradient` is a thrown
+   exception in a browser, and a thrown exception inside `render` does not lose
+   one shape — it abandons the frame, so everything after that call is simply not
+   drawn. Two of them were live and neither suite had ever been able to see them:
+   the victory screen at 653x280 drew a card whose window came out 17 units of
+   NEGATIVE height, and the reward pick drew a charm whose subject solved to a
+   negative size. Both were found by the shot walk in a real browser, which is a
+   slow and lucky way to find a defect that arithmetic can catch here.
+
+   So the stub the card sweep draws into is wrapped in the browser's own rules.
+   Nothing is asserted about how the drawing looks; only that every number handed
+   to a canvas is one a canvas will take. */
+const NEGRAD = [];
+const guardCanvas = (c) => new Proxy(c, {
+  get(t, k) {
+    const v = t[k];
+    if (k === 'arc') return (...a) => { if (a[2] < 0) NEGRAD.push(`arc r=${a[2].toFixed(2)}`); return v(...a); };
+    if (k === 'arcTo') return (...a) => { if (a[4] < 0) NEGRAD.push(`arcTo r=${a[4].toFixed(2)}`); return v(...a); };
+    if (k === 'ellipse') return (...a) => { if (a[2] < 0 || a[3] < 0) NEGRAD.push('ellipse'); return v(...a); };
+    if (k === 'createRadialGradient') return (...a) => {
+      if (a[2] < 0 || a[5] < 0) NEGRAD.push('radial gradient');
+      return v(...a);
+    };
+    return v;
+  },
+});
+const ctx2 = guardCanvas(mkCtx(log));
 /* A wash is not a ground — the same rule the raster uses. The bbox FALLBACK did
    not have it, so a 16%-opacity tint behind a label was reported as though it
    were solid paint. */
@@ -197,6 +226,47 @@ section('overlays');
   eq(laid.size, Object.keys(FF.SCHEMES).length, 'and every scheme in the game was on it');
 }
 
+/* ----------------------------------------------- the recipes themselves --- */
+/* TINDERCUB WAS REPORTED IN FOUR CONSECUTIVE CRITIQUES, and three of those
+   rounds fixed the wrong half of it. Round 3 deleted the `scarf` primitive and
+   the pink thing on the tutorial card's face stayed, because it was never the
+   scarf — `mark:'scar'` draws `#c96a72` down the outer edge of the eye, it is
+   the only pink chroma in the picture area of any card, and every single
+   `evil:1` recipe in the bestiary carries it. Three of the player's own wardens
+   were wearing the enemies' tell.
+   Two things are asserted here rather than looked at, because looking at it is
+   exactly what failed four times: the mark belongs to foes and to nothing else,
+   and it is still on foes (a fix that removed it everywhere would pass the
+   first half on its own). The recipes are also checked for the dead keys the
+   last deletion left behind — a shadowed duplicate draws nothing and reads as
+   intent, which is how `acc:'scarf'` survived a round that deleted `scarf`. */
+section("the enemies' mark stays the enemies'");
+{
+  const wearing = (t) => Object.values(t).filter((d) => d.art && d.art.mark === 'scar').map((d) => d.id);
+  eq(wearing(FF.CARDS).join(','), '', 'no card the player can own wears the foes’ scar');
+  ok(wearing(FF.FOES).length >= 3, `and it is still a foe signature (${wearing(FF.FOES).length} foes wear it)`);
+  const evilless = Object.values(FF.FOES).filter((d) => d.art && !d.art.evil).map((d) => d.id);
+  eq(evilless.join(','), '', 'every foe recipe is marked evil, so the split above is real');
+
+  /* Nothing may declare a trimming the drawing has no branch for, and nothing
+     may declare the same key twice — the second silently wins and the first is
+     a corpse that reads like a decision. Both are source-text checks because
+     both are invisible once the object literal has been evaluated. */
+  const src = readFileSync(new URL('../frostfell/index.html', import.meta.url), 'utf8');
+  const dupes = [];
+  for (const line of src.split('\n')) {
+    if (!/^\s*art: A\(/.test(line)) continue;
+    const seen = new Set();
+    for (const m of line.matchAll(/([a-zA-Z]+)\s*:/g)) {
+      if (seen.has(m[1])) dupes.push(m[1]);
+      seen.add(m[1]);
+    }
+  }
+  eq([...new Set(dupes)].join(','), '', 'no art recipe declares the same key twice');
+  eq((src.match(/acc: ?'(scarf|band|bellcollar)'/g) || []).join(','), '',
+    'and none of them asks for a prop the drawing deleted');
+}
+
 /* ------------------------------------------------------------ the whole cast */
 section('every art recipe survives being drawn');
 {
@@ -214,7 +284,13 @@ section('every art recipe survives being drawn');
   const shapes = ['blob', 'round', 'tall', 'squat', 'small', 'wisp', 'boss'];
   const ears = ['round', 'pointy', 'horns', 'antler', 'antenna', 'shard', 'fin', 'none'];
   const mouths = ['smile', 'grin', 'flat', 'fang', 'wide', 'trap', 'beak', 'bolt', 'beard', 'none'];
-  const accs = ['none', 'scarf', 'helm', 'crown', 'lantern', 'kettle', 'gear', 'hammer', 'pike', 'staff', 'cloak'];
+  /* Every branch `drawProp` actually has, and only those. `scarf` sat in this
+     list for two rounds after the primitive was deleted, so the sweep was
+     spending a slot on a prop that draws nothing while `goggles`, `satchel`,
+     `plating` and `shield` — all four of them live — were never combined with
+     anything. */
+  const accs = ['none', 'helm', 'crown', 'lantern', 'kettle', 'gear', 'hammer', 'pike', 'staff',
+    'cloak', 'satchel', 'plating', 'shield', 'goggles'];
   const pats = ['none', 'spots', 'stripes', 'tips', 'shards'];
   const eyes = ['dot', 'big', 'slit'];
   let combos = 0;
@@ -851,7 +927,13 @@ section('every card in the game, drawn and measured');
      actually draws everything it has. Sweeping only the tight one meant the
      rules lines the card DELIBERATELY drops on a fold were counted as text the
      check had failed to look at. */
-  const SIZE = [[92, 150, 'in hand'], [126, 196, 'on the reward row']];
+  /* AND THE SIZE THE LAP OF HONOUR USES, which was the one nobody swept. A
+     crossing lays the whole caravan out at 96x134 and a card that small drove
+     its own window NEGATIVE — which Chromium throws on, killing the rest of the
+     frame. Two sizes were checked here because two were the sizes anyone had
+     thought about; the third is where the card is smallest and therefore where
+     every measurement in `drawCard` is closest to running out. */
+  const SIZE = [[92, 150, 'in hand'], [126, 196, 'on the reward row'], [96, 134, 'in the tally']];
   let drawn = 0;
   for (const [w2, h2, where, stage] of SIZE.flatMap((z) => [z.concat([[653, 280]]), z.concat([[1280, 720]])])) {
     FF.setStageWidth(stage[0], stage[1]);                 // the tightest shape, where the floor bites hardest
@@ -864,16 +946,92 @@ section('every card in the game, drawn and measured');
        as a card, in the deck view, so `drawCard` is a real path for it and
        excluding it was the sweep being narrow rather than the game being
        unable to show it. */
-    for (const def of Object.values(FF.CARDS)) {
+    /* AND CHARMS, which are cards and were not in this list. A charm goes
+       through `drawCard` on the reward pick, in the shop, in the deck view and
+       in the inspector, and the one sweep that draws every card face in the game
+       enumerated `CARDS` — where charms do not live. So the one card kind nobody
+       checked was the kind that then solved its subject to a NEGATIVE size at a
+       fold's reward pick and threw the frame away. A pool that leaves a kind out
+       is a pool the bug will find. */
+    const faces = Object.values(FF.CARDS).map((def) => FF.mkCard(def.id))
+      .concat(Object.keys(FF.CHARMS).map((id) => FF.charmCard(id)));
+    for (const card of faces) {
+      const def = { id: card.def };
       log.length = 0;
-      FF.drawCard(ctx2, FF.mkCard(def.id), 40, 40, w2, h2, { t: 0.4 });
+      FF.clearCardDraws();
+      FF.drawCard(ctx2, card, 40, 40, w2, h2, { t: 0.4 });
       drawn++;
+      /* A CARD THAT IS HOLDING ITS RULE BACK HAS TO SAY SO ON ITS FACE.
+
+         The whole-or-nothing gate above is right and it shipped with no state
+         for the half it creates. A card whose paragraph does not fit drew a
+         picture, a name and three numbers — pixel for pixel how a card with NO
+         rules draws — so at a fold's reward pick four cards showed nothing and
+         nothing on any of them said whether that was the card being simple or
+         the card being cut short. It is the difference between choosing among
+         four things you can read and choosing among one you can and three you
+         cannot, and the tap is permanent.
+
+         Two ends of the same fact, checked separately so neither can be quietly
+         satisfied by the other: the DRAW reports which it did, and the RASTER is
+         searched for the two ruled bars that stand in for the words. A mark that
+         stops being painted — because it was clipped, or drawn at zero alpha, or
+         squeezed out of a well with no room left — fails here rather than in
+         front of a player who is about to spend a card on it. */
+      const rep = FF.cardDraws()[0];
+      /* A WINDOW WITH NEGATIVE HEIGHT IS NOT A SMALL WINDOW. `rr` hands its
+         corner radius to `arcTo`, Chromium refuses a negative one, and the
+         exception takes the rest of the frame with it — so a card too small for
+         its own paragraph did not draw a squashed picture, it blanked the
+         screen it was on. The stub does not validate, which is why this is
+         asserted on the number rather than left to the draw. */
+      if (rep && rep.art < 0) bad2.push(`${def.id} ${where}: window ${rep.art.toFixed(1)} units tall`);
+      if (NEGRAD.length) { bad2.push(`${def.id} ${where}: ${NEGRAD[0]} — a browser throws and loses the frame`); NEGRAD.length = 0; }
+      const bars = log.filter((e) => e[0] === 'fillRect' && e[1] === FF.RULE_INK
+        && Math.abs((e[2] === undefined ? 1 : e[2]) - 0.5) < 0.02).length;
+      if (rep && rep.text && !rep.shown && bars !== 2) {
+        bad2.push(`${def.id} ${where}: rule withheld, ${bars} of 2 marks drawn`);
+      }
+      if (rep && (rep.shown || !rep.text) && bars) {
+        bad2.push(`${def.id} ${where}: ${bars} withheld-marks on a card that is not withholding`);
+      }
       const ts = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim())
         .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
       for (const t of ts) STRINGS.seen.add(t.s);
+      /* A MOOD LINE NEVER GOES ON THE FACE. Snowpup's "Plain and willing." was
+         drawn in the rules well in the same ink at the same size as Springjaw's
+         "Smackback.", which is a real keyword, so the one card in the game with
+         no effect looked like the one card whose effect you had not learnt yet.
+         `flav` exists for this and only the inspect panel reads it; asserting it
+         here is what stops the next mood line being typed into `text`. */
+      if (def.flav) for (const t of ts) {
+        if (t.s.indexOf(def.flav.slice(0, 14)) >= 0) bad2.push(`${def.id} ${where}: flavour drawn on the face`);
+      }
+      /* The other half of the same rule, and the half with teeth: the well only
+         opens for a card that DOES something. A card with no keyword, no hook,
+         no effect and no scheme has no rule to print, so anything in its `text`
+         is mood by definition — which is how "Plain and willing." came to be set
+         in the same ink at the same size as "Smackback." */
+      if (def.text && !Object.keys(def.kw || {}).length && !def.hooks && !def.effect && !def.scheme) {
+        bad2.push(`${def.id}: "${def.text}" is mood, not a rule — it belongs in flav`);
+      }
       for (const t of ts) {
         if (t.size * cps < FF.TEXT_MIN_CSS - 0.5) {
           bad2.push(`${def.id} ${where}: ${JSON.stringify(t.s).slice(0, 14)} at ${Math.round(t.size * cps)}css`);
+        }
+        /* AND NOTHING ON A CARD FACE IS EVER A FRAGMENT.
+
+           A rule is shown WHOLE or NOT AT ALL, and a name shrinks or wraps but
+           never truncates. That invariant has now been approximated twice by a
+           heuristic — "does a line hold two words", then "does half the
+           paragraph survive" — and both shipped green while putting `Ember 4
+           o…`, `On deploy, heals eve…` and `SWIFT CHAR…` in front of a player,
+           because a sheet at 300 units wide never floors any type and the
+           heuristics only misfire once the floor bites. So it is asserted here
+           rather than aimed at: an ellipsis drawn by `drawCard` at any shape
+           this game supports is a failure, full stop. */
+        if (t.s.indexOf('…') >= 0) {
+          bad2.push(`${def.id} ${where}: fragment ${JSON.stringify(t.s).slice(0, 24)}`);
         }
       }
       const rows2 = new Map();
@@ -904,6 +1062,244 @@ section('every card in the game, drawn and measured');
   ok(drawn >= 100, `every card drawn at both sizes (${drawn} draws)`);
   eq([...new Set(bad2)].slice(0, 5).join(' | '), '',
     'every card in the pool keeps its text readable and its labels apart');
+
+  /* AND NO CENTRED LINE HOLDS ONE WORD IT DID NOT HAVE TO. A greedy wrap in a
+     narrow well gave BLASTCAP `Deal 6 to a / foe and 3 to / its / neighbours.` —
+     a whole line of the card spent on three letters, centred, which reads as a
+     fault rather than as a break. `wrapText` now makes one backward pass, and
+     the invariant it establishes is checkable without re-implementing it: no
+     line may be a lone word while the line above it has a word to SPARE — three
+     or more, so feeding one does not just move the widow up a line — and the
+     pair would still fit. Swept over every rules string in the game at every
+     width a well is ever set to, so a rewrite of the wrap cannot lose it. */
+  const widows = [];
+  for (const def of Object.values(FF.CARDS)) {
+    const s2 = String(def.text || '');
+    if (!s2) continue;
+    for (let mw = 40; mw <= 170; mw += 6) {
+      const lines2 = FF.wrapText(ctx2, s2, 9, mw);
+      for (let i = 1; i < lines2.length; i++) {
+        const prev = lines2[i - 1].split(' ');
+        if (/[ \u00a0]/.test(lines2[i]) || prev.length < 3) continue;
+        const merged = prev[prev.length - 1] + ' ' + lines2[i];
+        if (ctx2.measureText(merged).width <= mw) widows.push(`${def.id}@${mw}: "${lines2[i]}"`);
+      }
+    }
+  }
+  eq([...new Set(widows)].slice(0, 4).join(' | '), '', 'no rules line is a widow that could have been fed');
+}
+
+/* --------------------------------------------------- the aperture is a die -- */
+/* WHAT THIS CATCHES, AND WHY NOTHING ELSE COULD.
+
+   For three rounds the art window took whatever the rules well left over, so it
+   was a different height on every card and no two cards in a hand shared
+   proportions — a 3.6x range across the pool at reward size, 6x in one row on a
+   handset, and at a reward pick the card with the LEAST to say ended up with the
+   biggest picture. Every check in this file passed the whole time, because the
+   defect is a property of a ROW: each card on its own is fine and it is only
+   putting four of them side by side that shows it. So it is asserted as a row
+   property here.
+
+   Two statements, and the second is the one with teeth:
+
+     ONE DIE PER SIZE   two cards drawn at the same size whose names set to the
+                        same number of lines get the identical window. The band
+                        is the only thing allowed to move it, and the band moves
+                        it by pushing the whole stack down, not by resizing it.
+     THE RULES DO NOT   the same card drawn with a one-word rule and with the
+     TOUCH IT           deepest paragraph in the game gets the identical window.
+                        This is the invariant that was actually broken; it holds
+                        no matter what else moves.
+
+   Plus the SUBJECT: `fitArt` solved against `min(height, width)`, which is not a
+   size at all — it is whichever limit the drawing's proportions hit first — so a
+   wide animal came out small in a big empty sky. Measured drawn area ran 14% to
+   60% of the window, 4.2x. It is normalised on area now and the spread is held
+   here so it cannot drift back. */
+section('the aperture is a die');
+{
+  const badD = [];
+  /* Longer than anything in the pool, so if the well ever starts buying room
+     off the picture again this is the card that shows it. */
+  const LOUD = 'Whenever a foe is Frosted it gains one attack, and until your next turn '
+    + 'denying a scheme mends the whole line four on the spot.';
+  const r2 = (n) => Math.round(n * 100) / 100;
+  let sizes = 0;
+  for (const [sw, sh] of SIZES) {
+    FF.setStageWidth(sw, sh);
+    for (const [w2, h2] of [[92, 150], [126, 196], [132, 176]]) {
+      const byBand = new Map();
+      const areas = [];
+      sizes++;
+      for (const def of Object.values(FF.CARDS)) {
+        FF.drawCard(ctx2, FF.mkCard(def.id), 40, 40, w2, h2, { t: 0.4 });
+        const quiet = { ...FF.CARD_DIE };
+        areas.push(quiet.area);
+        const loud = FF.mkCard(def.id);
+        loud.text = LOUD;
+        FF.drawCard(ctx2, loud, 40, 40, w2, h2, { t: 0.4 });
+        const said = FF.CARD_DIE;
+        if (r2(quiet.ay) !== r2(said.ay) || r2(quiet.ah) !== r2(said.ah)) {
+          badD.push(`${def.id} ${w2}x${h2}@${sw}: rules move the window `
+            + `${r2(quiet.ay)}+${r2(quiet.ah)} -> ${r2(said.ay)}+${r2(said.ah)}`);
+        }
+        const key = r2(quiet.band);
+        const die = `${r2(quiet.ax)},${r2(quiet.ay)},${r2(quiet.aw)},${r2(quiet.ah)}`;
+        if (!byBand.has(key)) byBand.set(key, [die, def.id]);
+        else if (byBand.get(key)[0] !== die) {
+          badD.push(`${def.id} ${w2}x${h2}@${sw}: ${die} but ${byBand.get(key)[1]} got ${byBand.get(key)[0]}`);
+        }
+      }
+      /* And the spread of drawn subject area, at the shapes where the window is
+         not a letterbox. A wide animal and a tall one have to read as the same
+         size; past a fold the window is 2.5:1 and a tall subject cannot fill it
+         however it is solved, which is geometry rather than a defect. */
+      if (sw >= 1024) {
+        const lo = Math.min(...areas), hi = Math.max(...areas);
+        if (hi / lo > 4) badD.push(`${w2}x${h2}@${sw}: subject area spread x${(hi / lo).toFixed(2)}`);
+      }
+    }
+  }
+  /* The headline, stated where it is unconditional: at the reference desktop
+     every card in the game gets the same rectangle, full stop. */
+  FF.setStageWidth(1280, 720);
+  const one = new Set();
+  for (const def of Object.values(FF.CARDS)) {
+    FF.drawCard(ctx2, FF.mkCard(def.id), 40, 40, 126, 168, { t: 0.4 });
+    one.add(`${r2(FF.CARD_DIE.ax)},${r2(FF.CARD_DIE.ay)},${r2(FF.CARD_DIE.aw)},${r2(FF.CARD_DIE.ah)}`);
+  }
+  log.length = 0;
+  ok(sizes >= 27, `the die checked at every shape and card size (${sizes})`);
+  eq(one.size, 1, 'one aperture for the whole set at the reference desktop');
+  eq([...new Set(badD)].slice(0, 4).join(' | '), '',
+    'the window is the same die on every card, and no paragraph moves it');
+}
+
+/* ---------------------------------------------- the light in the window -- */
+/* A CAST SHADOW IS A CLAIM, AND TWO ROUNDS GOT IT WRONG IN OPPOSITE DIRECTIONS.
+   Round 2 gave every unit an ellipse as wide as its bounding box, which put a
+   neat oval under a tail. Round 3 read that as "half the gear does not touch
+   the ground" and withheld the patch from ALL gear — so grounded objects lost
+   their contact while diagonal ones kept hanging in the air, which is the worst
+   of the three answers available.
+   The answer is neither exception: MEASURE the contact. `penBox` records what
+   each drawing paints in the bottom eighth of itself, and the cast is sized off
+   that. These three checks are what stop either mistake growing back. */
+section('the light in the window');
+{
+  const boxes = [];
+  for (const def of Object.values(FF.CARDS)) {
+    if (def.type === 'unit' && def.art) boxes.push([def.id, FF.creatureBox(def.art)]);
+    else if (def.art) boxes.push([def.id, FF.itemBox(def.art)]);
+  }
+  ok(boxes.length > 40, `every art recipe measured (${boxes.length})`);
+  const badFoot = [];
+  for (const [id, b] of boxes) {
+    if (!(b[4] < b[5])) { badFoot.push(id + ': no footprint'); continue; }
+    // the contact can never be wider than the drawing that makes it
+    if (b[4] < b[0] - 1e-6 || b[5] > b[2] + 1e-6) badFoot.push(id + ': footprint outside the box');
+  }
+  eq(badFoot.slice(0, 4).join(' | '), '',
+    'every drawing reports a contact patch, and it lies inside its own outline');
+
+  /* THE ONE THAT MATTERS. Icepick is the object the last round argued from: it
+     is drawn on a diagonal, so the width of its box is nowhere near the width
+     of what is in the snow. If these two ever come back equal, the shadow has
+     gone back to being the bounding box and Icepick is standing on a plinth it
+     does not touch. */
+  const ip = FF.itemBox(FF.CARDS.icepick.art);
+  ok((ip[5] - ip[4]) < (ip[2] - ip[0]) * 0.72,
+    `a diagonal object's contact is narrower than its box (icepick ${((ip[5] - ip[4]) / (ip[2] - ip[0])).toFixed(2)} of it)`);
+
+  /* AND THE CREATURE'S OWN GROUND DISC STAYS OUT OF THE CARD. It is a flat
+     black ellipse drawn BELOW the feet and inside the measured box, so while it
+     was in there the window solved every subject's position against a box whose
+     bottom was a shadow — the cast stood on the snow and the animal stood a
+     fifth of a body above it, under two shadows that did not agree. The board
+     and the collection have no snow of their own and keep it; the card passes
+     `flat`, and so does the measurement, or the feet stop matching the box. */
+  const art0 = FF.CARDS.cinderpup.art;
+  log.length = 0;
+  FF.drawCreature(ctx2, art0, 200, 200, 100, { t: 0 });
+  const withDisc = log.filter((e) => e[0] === 'fill' && e[1] === '#000').length;
+  log.length = 0;
+  FF.drawCreature(ctx2, art0, 200, 200, 100, { t: 0, flat: 1 });
+  const flatDisc = log.filter((e) => e[0] === 'fill' && e[1] === '#000').length;
+  log.length = 0;
+  ok(withDisc >= 1, 'off the card a creature still draws its own ground disc');
+  eq(flatDisc, 0, 'and `flat` takes it away, so the window casts the only shadow');
+}
+
+/* ------------------------------------------- nothing permanent is picked blind */
+/* THE TWO SCREENS WHERE A TAP CANNOT BE TAKEN BACK.
+
+   Everywhere else in this game a tap is a question: a card in hand goes back
+   down, a warden slides back, a foe you poked closes again. On the reward pick
+   and at the trader it is a purchase — `takeCard` and `buy` — and there is no
+   confirm, no undo and, until this round, no way to read the card first, because
+   hold-to-inspect hung off `UI.drag` and a reward card is a `hit()` region.
+
+   That combination shipped a genuinely player-harming defect: a card whose rule
+   the face was too small to print looked EXACTLY like a card with no rule, and
+   the next tap put it in the deck. Not a polish item — a run lost to a card
+   nobody was shown.
+
+   Three invariants, checked on both screens at every shape the game supports:
+
+     1. every region whose tap spends a card can be held open first,
+     2. every card drawn inside one of those regions either shows its whole rule
+        or wears the mark that says it is holding one back,
+     3. and nothing on either screen is a fragment — not a card, not a price, not
+        a button, not the relic's one line. A truncation on a screen with an undo
+        is a nuisance; on these two it is the same bug in a different widget, and
+        `TEMPER…`, `MEND ALL — …` and `Waves take one more tur…` were all live.
+
+   The first is what makes the second worth drawing: a mark that names a gesture
+   the screen does not have would be an apology rather than an affordance. */
+section('nothing permanent is chosen blind');
+{
+  const bad3 = [];
+  let regions = 0, faces = 0;
+  for (const [w, h] of SIZES) {
+    FF.setStageWidth(w, h);
+    for (const scr of ['reward', 'shop']) {
+      /* AT THEIR FULLEST. A boss reward carries bells and charms as well as
+         cards; a shop that has rolled no relic cannot truncate its strapline. */
+      withRun(FF, 'hearth', 3);
+      if (scr === 'reward') G.ui.reward = FF.rollReward(G, 'elite');
+      else G.ui.shop = FF.rollShop(G);
+      G.run.gold = 400;
+      G.screen = scr;
+      log.length = 0;
+      FF.render();
+      const drawsHere = FF.cardDraws().slice();
+      const spendable = FF.hits().filter((hh) => FF.SPEND_HITS.indexOf(hh.id) >= 0);
+      for (const hh of spendable) {
+        regions++;
+        if (!FF.holdCard(hh)) bad3.push(`${w}x${h} ${scr}: ${hh.id}#${hh.data} cannot be read before it is spent`);
+        /* the card drawn inside this region — the one the tap actually buys */
+        for (const d of drawsHere) {
+          const inside = d.x >= hh.x - 2 && d.y >= hh.y - 2
+            && d.x + d.w <= hh.x + hh.w + 2 && d.y + d.h <= hh.y + hh.h + 2;
+          if (!inside) continue;
+          faces++;
+          if (d.text && !d.shown && !d.mark) {
+            bad3.push(`${w}x${h} ${scr}: ${d.def} withholds its rule with nothing on its face saying so`);
+          }
+        }
+      }
+      const cut = log.filter((e) => e[0] === 'fillText' && String(e[1]).indexOf('…') >= 0)
+        .map((e) => JSON.stringify(String(e[1])).slice(0, 34));
+      for (const s of new Set(cut)) bad3.push(`${w}x${h} ${scr}: fragment ${s}`);
+    }
+  }
+  FF.setStageWidth(1280, 720);
+  log.length = 0;
+  ok(regions >= 40, `every way to spend a card, at every shape (${regions} regions)`);
+  ok(faces >= 40, `and the card drawn inside each one (${faces} faces)`);
+  eq([...new Set(bad3)].slice(0, 6).join(' | '), '',
+    'a permanent tap can always be read first, and nothing on those screens is cut short');
 }
 
 /* ------------------------------------ every foe, on the board and inspected -- */
@@ -941,11 +1337,31 @@ section('every foe in the game, on the board and inspected');
      section draws every card in the pool at both sizes. A third look at it from
      a synthetic board adds no coverage and reports the harness's own state. */
   let skipped3 = 0;
-  const check3 = (label) => {
+  const check3 = (label, want) => {
     const all3 = log.filter((e) => e[0] === 'fillText' && String(e[1]).trim());
     const ts = all3.filter((e) => e[2] > 0 && e[2] < D3.VW && e[3] > 0 && e[3] < D3.VH * 0.74)
       .map((e) => ({ s: String(e[1]), x: e[2], y: e[3], size: e[4], align: e[5] }));
     skipped3 += all3.length - ts.length;
+    /* AND THE SLAB SAYS THE WHOLE NAME.
+
+       Every slab on the board truncated on every handset — `SNOWLU…`, `BRAM…`,
+       `AR…` — and the code carried a comment explaining that the readable floor
+       exceeds what the shrink loop can reach, which is true and is not a reason
+       to cut the one thing on a slab you cannot get anywhere else. The name
+       wraps now, hyphenated the way the card band wraps, so this joins the drawn
+       lines back up (dropping the break marks) and asks whether the name is
+       still in there. Checked at 653x280, the shape where the floor bites hardest
+       and where all four of those truncations were photographed.
+
+       Measured on EVERY string the frame drew rather than the on-stage subset
+       the gutter check uses: this asks WHAT was written, not where it landed,
+       and a synthetic board can leave a unit mid-tween at the origin. */
+    if (want) {
+      const joined = all3.map((e) => String(e[1])).join('').replace(/[-\s]+/g, '');
+      if (joined.indexOf(want.toUpperCase().replace(/\s+/g, '')) < 0) {
+        bad3.push(`${label}: name cut — no ${JSON.stringify(want.toUpperCase())}`);
+      }
+    }
     for (const t of ts) STRINGS.seen.add(t.s);
     for (const t of ts) {
       if (t.size * cps3 < FF.TEXT_MIN_CSS - 0.5) {
@@ -986,7 +1402,7 @@ section('every foe in the game, on the board and inspected');
     try { FF.layPlot(G, foe); } catch { /* not every foe schemes */ }
     G.screen = 'battle';
     frame(2); log.length = 0; FF.render();
-    check3(id + ' on the board');
+    check3(id + ' on the board', foe.name);
     FF.UI.inspect = foe;
     frame(1); log.length = 0; FF.render();
     check3(id + ' inspected');
@@ -1115,14 +1531,183 @@ if (CELLS.total) {
   const CASES = [['CINDERPUP', 'CINDER'], ['KETTLEBEAK', 'KETTLE'],
     ['SNOWPUP', 'SNOW'], ['WHETSTONE', 'WHETS'],
     ['BELLROPE', 'BELL'], ['COLDSNAP', 'COLDS']];
+  /* THE HEAD NOW ENDS IN A HYPHEN, and this expectation was updated rather
+     than worked around because the OLD expectation encoded the defect: the
+     comment beside the split has always claimed "a book does this", and a book
+     hyphenates. `WHETS` over `TONE` is the proof — two English words that mean
+     nothing together. The head has to carry the mark inside its own width, so
+     the box each case is measured against grew by exactly one glyph; none of
+     the six seams moved when it did. */
   for (const [nm, head] of CASES) {
-    const p = FF.nameSplit(cc, nm, 14, head.length * 7 + 3, 2);
+    const p = FF.nameSplit(cc, nm, 14, (head.length + 1) * 7 + 3, 2);
     eq(p.length, 2, `${nm} breaks in two`);
-    eq(p[0], head, `${nm} breaks at the compound seam, not wherever the width ran out`);
-    eq(p.join(''), nm, `${nm} loses nothing to the break`);
+    eq(p[0], head + '-', `${nm} breaks at the compound seam, hyphenated`);
+    eq(p[0].slice(0, -1) + p[1], nm, `${nm} loses nothing to the break`);
   }
   console.log(`  · ${CASES.length} compound names break where a word can start ` +
-    `(${CASES.map(([n2, h]) => h + '|' + n2.slice(h.length)).join(' ')})`);
+    `(${CASES.map(([n2, h]) => h + '-|' + n2.slice(h.length)).join(' ')})`);
+}
+
+/* ------------------------------------- the tribe channel, off the card --- */
+/* WHAT THIS SECTION EXISTS TO STOP COMING BACK.
+
+   Five metals and five skies were built over three rounds inside `drawCard`,
+   and the three surfaces that are NOT `drawCard` — the collection grid, the
+   board slab, the leader panel — each hard-coded one navy and knew nothing
+   about any of it. Sixty-one identical slate tiles, every friendly slab the
+   same blue, every foe slab the same red. Nothing failed, because nothing
+   asked. So this asks.
+
+   A paint spy rather than the raster: `panel`, `skyGrad` and `snowGrad` put
+   their colours into GRADIENT STOPS, which the recording ctx throws away, and
+   the strokes it logs do not carry their style. Recording every string that
+   reaches `fillStyle`, `strokeStyle` or `addColorStop` is the only place all
+   three surfaces' materials are visible at once. */
+section('the tribe channel reaches past the card face');
+{
+  const paintSpy = () => {
+    const seen = new Set();
+    const base = mkCtx(null);
+    const note = (v) => { if (typeof v === 'string') seen.add(v.toLowerCase()); };
+    const grad = { addColorStop: (_p, col) => note(col) };
+    const c = new Proxy({}, {
+      get(_t, k) {
+        if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
+        return base[k];
+      },
+      set(_t, k, v) { if (k === 'fillStyle' || k === 'strokeStyle') note(v); base[k] = v; return true; },
+    });
+    return { c, seen, has: (col) => seen.has(String(col).toLowerCase()) };
+  };
+  const MAT = FF.FRAME_MAT, WTH = FF.WEATHER;
+  const TRIBED = ['hearth', 'frost', 'scrap', 'none'];
+
+  // THE COLLECTION. 61 tiles, and every metal in the game has to be among them.
+  {
+    const sp = paintSpy();
+    FF.G.screen = 'collection';
+    FF.UI.collectPage = 0;
+    FF.drawCollection(sp.c, 0);
+    for (const k of TRIBED) {
+      ok(sp.has(MAT[k].cap), `the collection tile wears ${k} metal`);
+      ok(sp.has(WTH[k].horiz), `and ${k}'s own horizon behind the creature`);
+    }
+    const caps = new Set(TRIBED.map((k) => MAT[k].cap.toLowerCase()));
+    ok([...caps].filter((cp) => sp.has(cp)).length >= 4,
+      'the grid is not one slate — at least four metals on one page');
+  }
+
+  // THE BOARD SLAB. A warden carries its tribe onto the board; a foe does not
+  // carry the caravan's.
+  {
+    const b = bareBattle(FF, 'hearth', 41);
+    b.units.length = 0;
+    const cases = [['cinderpup', 'p', 'hearth'], ['rimefox', 'p', 'frost'],
+      ['clunkbot', 'p', 'scrap'], ['snowpup', 'p', 'none'], ['frostwolf', 'e', 'foe']];
+    cases.forEach(([id, side, key], i) => {
+      const u = place(FF, side, id, i % 2, 0);
+      u.px = 300; u.py = 200;
+      const sp = paintSpy();
+      FF.drawUnit(sp.c, u, 0);
+      ok(sp.has(MAT[key].cap), `a ${key} slab is edged in ${key} metal`);
+      ok(sp.has(WTH[key].near), `and stands on ${key} ground`);
+      for (const other of TRIBED.concat('foe')) {
+        if (other === key) continue;
+        ok(!sp.has(MAT[other].cap), `and wears no ${other} metal`);
+      }
+      b.units.length = 0;
+    });
+  }
+
+  /* THE COUNTER IS THE CARD'S PLAQUE. It was a grey disc pinned to the slab's
+     corner while the same number was the middle of three pills on the card an
+     inch below — one value, two shapes, two colours. `#cfe0f5` was that disc's
+     idle ink and it is the thing to watch for: if it comes back on a slab, so
+     has the re-encode. */
+  {
+    const b = bareBattle(FF, 'hearth', 42);
+    b.units.length = 0;
+    const u = place(FF, 'p', 'cinderpup', 0, 0, { unit: { cnt: 1 } });
+    u.px = 300; u.py = 200;
+    const slab = paintSpy();
+    FF.drawUnit(slab.c, u, 0);
+    const card = paintSpy();
+    FF.drawCard(card.c, FF.mkCard('cinderpup'), 0, 0, 126, 168, { t: 0 });
+    for (const pill of ['#ff8b7a', '#ffd166', '#7de08f']) {
+      ok(slab.has(pill), `the slab sets the same ${pill} plaque the card does`);
+      ok(card.has(pill), `and the card still sets ${pill}`);
+    }
+    ok(!slab.has('#cfe0f5'), 'and no grey disc is left holding the counter');
+  }
+
+  // THE LEADER PANEL. The one screen you pick a whole run on, and the creature
+  // stood on flat navy with no window at all.
+  for (const tb of ['hearth', 'frost', 'scrap', 'wyrd']) {
+    const sp = paintSpy();
+    FF.G.ui.pick = { tribe: tb, winters: [], course: tb };
+    FF.drawLeaderPick(sp.c, 0);
+    const key = tb;
+    ok(sp.has(MAT[key].mid), `the ${tb} leader panel is cut from ${tb} metal`);
+    const wk = WTH[key] ? key : 'none';
+    ok(sp.has(WTH[wk].horiz), `and the leader stands in a window, not on a slab (${tb})`);
+  }
+}
+
+/* ---------------------- untribed is not frost, and foes are not untribed -- */
+section('untribed, the enemy, and the two worlds they used to share');
+{
+  const MAT = FF.FRAME_MAT, WTH = FF.WEATHER;
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const dist = (a, b) => {
+    const p = rgb(a), q = rgb(b);
+    return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+  };
+
+  /* UNTRIBED WORE FROST'S FRAME OVER ITS OWN GREY SKY for a whole round: the
+     window left the blue family and the metal did not, so on the gear sheet
+     THORN OIL and HUSH were the same object. Blue cast is the tell — a neutral
+     grey has no more blue in it than red. */
+  for (const part of ['top', 'mid', 'cap']) {
+    const [r, , b2] = rgb(MAT.none[part]);
+    ok(b2 <= r + 6, `untribed ${part} has no blue cast (${MAT.none[part]})`);
+  }
+  ok(dist(MAT.none.cap, MAT.frost.cap) > 60, 'untribed metal is nowhere near frost metal');
+  ok(dist(MAT.none.face[0], MAT.frost.face[0]) > 20, 'and neither is its card stock');
+
+  /* AND THE FOES USED TO RENDER IN THAT SAME UNTRIBED METAL UNDER THAT SAME
+     UNTRIBED OVERCAST, because a foe card is built with `tribe: null`. Cards
+     you want and cards that kill you were the same object. */
+  eq(FF.tribeKey(FF.mkFoeCard('frostwolf', 1)), 'foe', 'a beast belongs to the fell');
+  eq(FF.tribeKey(FF.mkCard('snowpup')), 'none', 'and an unaligned warden does not');
+  eq(FF.tribeKey(FF.mkCard('cinderpup')), 'hearth', 'and a Hearthkin is Hearthkin');
+  /* Told apart by CHROMA rather than by value, because that is the difference
+     that is actually there: grey iron and bruised rose sit at the same weight
+     on the bar — which is the point, they are the same dark metal — and what
+     separates them is that one of them is a colour and the other is the absence
+     of one. A straight RGB distance would pass this pair at 48 and read as a
+     weak margin; the spread between a metal's channels is unambiguous. */
+  const chroma = (h) => { const p = rgb(h); return Math.max(...p) - Math.min(...p); };
+  ok(chroma(MAT.foe.cap) > 40, 'the enemy metal is a colour');
+  ok(chroma(MAT.none.cap) < 20, 'and the neutral metal is not one');
+  ok(dist(MAT.foe.cap, MAT.none.cap) > 40, 'so the two are not the same bar');
+  ok(dist(WTH.foe.mid, WTH.none.mid) > 60, 'nor standing in their weather');
+
+  // and no two worlds in the game collide with each other
+  const keys = Object.keys(MAT);
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      ok(dist(MAT[keys[i]].cap, MAT[keys[j]].cap) > 40,
+        `${keys[i]} and ${keys[j]} are told apart by their metal`);
+    }
+  }
+  const wk = Object.keys(WTH);
+  for (let i = 0; i < wk.length; i++) {
+    for (let j = i + 1; j < wk.length; j++) {
+      ok(dist(WTH[wk[i]].mid, WTH[wk[j]].mid) > 40,
+        `${wk[i]} and ${wk[j]} are told apart by their sky`);
+    }
+  }
+  console.log(`  · ${keys.length} metals and ${wk.length} skies, none of them each other`);
 }
 
 done('frostfell-render');
