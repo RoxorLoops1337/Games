@@ -24,6 +24,7 @@ const DIST = path.join(REPO, 'dist');
 // stays out of the deploy.
 const STATIC_PATHS = [
   'index.html',
+  'beatborne',
   'README.md',
   '_redirects',
   'beatbox_story',
