@@ -39,7 +39,7 @@ const EXPOSE = `__out.api = {
   killPerson, stepPeople, wreckProp, stepProps, stepSpills, stepFx,
   carSpeed, inCar, doBoost, hitProp, stepCarCollisions, stepCarKills, stepPickups,
   bounceBounds, onIce, stepCar, stepCam, camSnap, camTarget, update, stepSnow,
-  takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, blast, rollKind, KINDS,
+  takeOff, land, stepAir, addGore, bleed, splatLens, stepLens, LENS_MAX, LENS_CLEAR, LENS_ALPHA, blast, rollKind, KINDS,
   gib, pixels, rec, clip, rp, recStep, recReset, recSnap, replayReady, startReplay,
   GOALS, THEMES, rollGoals, checkGoals, goalTest, goalProgress,
   drawBalloons, balloonAt, BALLOONS, BALLOON_PX, replayGore, drawStains,
@@ -3809,10 +3809,116 @@ test('blood hits the camera and then dries off it', () => {
   api.killPerson(api.addPerson(2000, 1100), 1500, 0, 'car');
   assert(api.lens.length > 0, 'the lens catches some');
   api.splatLens(60);
-  assert(api.lens.length <= 27, 'the lens buffer is bounded, got ' + api.lens.length);
+  // the bound reads the constant, not a copy of it
+  assert(api.lens.length <= api.LENS_MAX, 'the lens buffer is bounded, got ' + api.lens.length);
   api.drawLens();
-  step(api, 7);
+  step(api, 4);
   assert(api.lens.length === 0, 'and it clears, got ' + api.lens.length);
+});
+
+/* Twenty-seven droplets up to 17px across, at half opacity, for up to five and
+   a half seconds, scattered uniformly over the frame — including over the car,
+   which is a small red shape of about the same size. The owner's report: too
+   many blood splatters on the screen, and the car is hard to find in them. */
+test('the lens never splatters over the car', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  let worst = 1e9, moved = 0, total = 0;
+  for (const lv of [0, 8, 20]){
+    api.startLevel(lv); api.beginLevel();
+    api.G.phase = 'drive';
+    for (const [dx, dy] of [[0, 0], [900, 400], [-700, -500], [1800, 900]]){
+      api.car.x = 2000 + dx; api.car.y = 1100 + dy;
+      api.car.vx = 900; api.car.vy = 0;
+      api.camSnap();
+      api.lens.length = 0;
+      api.splatLens(40);
+      const cx = (api.car.x - api.cam.x) * api.cam.s + 1280 / 2;
+      const cy = (api.car.y - api.cam.y) * api.cam.s + 720 / 2;
+      const dims = api.getDims();
+      const clear = Math.max(dims.l, dims.w) * api.cam.s * 0.5 + api.LENS_CLEAR;
+      for (const d of api.lens){
+        const gap = Math.hypot(d.x * 1280 - cx, d.y * 720 - cy);
+        worst = Math.min(worst, gap - clear);
+        total++;
+      }
+      // …and the ones that were first thrown at the car were moved, not lost:
+      // the buffer is full whatever the car is doing
+      if (api.lens.length === api.LENS_MAX) moved++;
+    }
+  }
+  assert(total > 100, 'the sweep should actually see droplets, got ' + total);
+  assert(moved === 12, 'a droplet aimed at the car is moved, not dropped: ' +
+    moved + ' of 12 bursts filled the buffer');
+  assert(worst >= -0.5, 'a droplet lands ' + (-worst).toFixed(1) +
+    'px inside the clear zone around the car');
+
+  /* And how much of the market the glass is allowed to hide at once. The
+     count, the sizes and the opacity all feed this one number, so it holds
+     whichever of them someone puts back: it was 27 droplets of up to 17px at
+     half opacity, which is 0.57% of the frame in ink and reads as a great deal
+     more than that, because it is spread evenly over all of it. */
+  api.lens.length = 0;
+  api.splatLens(40);
+  let ink = 0;
+  for (const d of api.lens){
+    const ry = d.r * (0.6 + d.seed * 0.5);
+    ink += (Math.PI * d.r * ry + 3 * Math.PI * (d.r * 0.3) ** 2) * api.LENS_ALPHA;
+  }
+  const pct = ink / (1280 * 720) * 100;
+  /* A budget with about 40% of headroom over what it costs today (0.05%), so
+     putting any one of the three back over the line blows it: 27 droplets
+     instead of 10 → 0.16%, the old 4-17px radius → 0.13%, half opacity instead
+     of a third → 0.08%. It was all three at once, at 0.57%. */
+  assert(pct < 0.07, 'a full lens hides ' + pct.toFixed(3) + '% of the frame');
+  console.log('    (lens: ' + total + ' droplets, closest ' + worst.toFixed(0) +
+    'px outside the hole, cap ' + api.LENS_MAX + ', ' + pct.toFixed(2) +
+    '% of the frame in ink)');
+});
+
+/* splatLens runs inside the simulation during a run — COSMETIC is only true in
+   the replay — so how many draws it makes is part of what every later shot
+   hits. The clear zone therefore had to *move* a droplet rather than reroll or
+   skip it.
+
+   Asserted as the exact draw count rather than by comparing two placements:
+   the hole is a tenth of the frame, so a random droplet lands in it about one
+   time in fifty and a comparison of "car centred" against "car off camera"
+   agreed with itself while a rerolling version sat right underneath it. */
+const LENS_DRAWS = 5;              // x, y, r, ttl, seed
+test('keeping the lens off the car does not move the simulation stream', () => {
+  const N = 30;
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.G.phase = 'drive';
+  api.car.x = 2000; api.car.y = 1100;
+  // close enough that the clear zone is a real fraction of the frame, so the
+  // push path is the one being measured
+  api.camSnap(); api.cam.tz = 200; api.cam.s = api.camScale(200);
+  api.cam.x = api.car.x; api.cam.y = api.car.y;
+
+  api.reseed(12345);
+  api.lens.length = 0;
+  api.splatLens(N);
+  const after = Array.from({ length: 12 }, () => api.rr(0, 1000).toFixed(6)).join(',');
+
+  api.reseed(12345);
+  for (let i = 0; i < N * LENS_DRAWS; i++) api.rr(0, 1);
+  const want = Array.from({ length: 12 }, () => api.rr(0, 1000).toFixed(6)).join(',');
+  assert(after === want, 'splatLens should take exactly ' + LENS_DRAWS +
+    ' draws a droplet and take them whatever the car is doing');
+
+  // …and the push path really was exercised: droplets sitting exactly on the
+  // rim of the hole are ones that were thrown at the car and moved off it
+  const dims = api.getDims();
+  const clear = Math.max(dims.l, dims.w) * api.cam.s * 0.5 + api.LENS_CLEAR;
+  const cx = (api.car.x - api.cam.x) * api.cam.s + 1280 / 2;
+  const cy = (api.car.y - api.cam.y) * api.cam.s + 720 / 2;
+  const onRim = api.lens.filter(d =>
+    Math.abs(Math.hypot(d.x * 1280 - cx, d.y * 720 - cy) - clear) < 0.5).length;
+  assert(onRim > 0, 'no droplet was moved off the car, so nothing was measured');
+  console.log('    (lens: ' + LENS_DRAWS + ' draws a droplet, ' + onRim +
+    ' of ' + api.lens.length + ' pushed off the car)');
 });
 
 test('driving back over a body drags it and paints the snow', () => {

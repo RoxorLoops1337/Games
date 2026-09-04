@@ -1358,6 +1358,37 @@ edit this block to name the next one.
       headroom. The test says which camera it is talking about instead of
       leaning on whatever the drive phase happened to give it.
 
+- [x] **"Too many blood splatters, we can't see the car."** It was the lens
+      splatter, and the numbers were the whole story: **27 droplets**, up to
+      17px across, at **half opacity**, for up to **5.5 seconds**, scattered
+      uniformly over the frame — *including over the car*, which is a small red
+      shape of about the same size. Nothing had ever kept them off it. Measured
+      at **0.57% of the frame in ink**, which reads as far more than that
+      because it is spread evenly over all of it.
+  - Now **10 droplets, 3-10px, a third opacity, 1.4-2.8s → 0.05%**, and a hole
+      kept clear around the car (half the car's longest side plus 46 screen px).
+      The screenshot before and after is the whole argument: a dozen pale red
+      discs across the lower two-thirds of the picture, gone.
+  - **The constraint that shaped the fix**: `splatLens` runs *inside the
+      simulation* during a run — `COSMETIC` is only true in the replay — so the
+      number of draws it makes is part of what every later shot hits. The clear
+      zone therefore **moves** a droplet along its own bearing to the rim of the
+      hole; it never rerolls one and never skips one. Every droplet takes the
+      same five draws it always did, so not one market's play changed.
+  - The **first version of that test was vacuous** in two ways and a
+      revert-variant caught both. It compared "car centred" against "car off
+      camera" — but it called `camSnap()` *after* moving the camera, which put
+      the car straight back on screen; and even fixed, the hole is a tenth of
+      the frame, so a droplet lands in it about one time in fifty and the two
+      placements agreed with each other while a rerolling implementation sat
+      right underneath. It asserts the **exact draw count** now: 30 droplets
+      against a stream advanced 150 times by hand.
+  - The other trap: a bound on the covered area at 0.15% passed the old cap of
+      27 *and* an opacity revert. One number covering count, size and opacity
+      only works if it is a **budget** rather than a reading — 0.07% against
+      today's 0.05%, so 27 droplets (0.157%), the old radii (0.134%) and half
+      opacity (0.079%) each blow it on their own. Five revert-variants in total.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,
