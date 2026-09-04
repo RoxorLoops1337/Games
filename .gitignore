@@ -13,3 +13,6 @@ beatbox_story/beatbox-story.bundle.js.map
 
 # beastfont: generated woff + specimen, rebuilt by tools/beastfont/build.mjs
 tools/beastfont/out/
+
+# shot walk output -- regenerate with tools/beatborne/shots.mjs
+tools/beatborne/shots/
