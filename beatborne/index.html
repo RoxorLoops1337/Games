@@ -1,0 +1,2760 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>BEATBORNE -- a rhythm roguelike</title>
+<meta name="description" content="Your board is the band. Counter-based lane combat on a four-beat loop -- every unit is an instrument, its counter is its rhythm. Play on the beat, fill the crowd, drop.">
+<meta name="theme-color" content="#07060d">
+<style>
+:root{
+  --ink:#07060d; --ink2:#0e0c1a; --panel:#141127; --panel2:#1c1832;
+  --line:#2e2750; --line2:#453a76;
+  --text:#efeaff; --dim:#a79ccb; --dimmer:#6d6394;
+  --hot:#ff2e88; --hot2:#ff6bb0;
+  --cool:#2ee6d6; --cool2:#7bfff2;
+  --gold:#ffc94d; --lime:#a6ff5e; --violet:#a06bff; --blood:#ff5a4a;
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px); --safe-r:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--ink);color:var(--text);
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  -webkit-user-select:none;user-select:none;touch-action:manipulation}
+#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--ink)}
+#stage{position:relative;background:var(--ink2);overflow:hidden}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated}
+.layer{position:absolute;inset:0;pointer-events:none}
+.layer.on{pointer-events:auto}
+
+/* ---- rotate nag ---- */
+#rotate{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--ink);z-index:99;gap:14px;text-align:center;padding:24px}
+#rotate.show{display:flex}
+#rotate .ph{width:64px;height:104px;border:3px solid var(--cool);border-radius:10px;animation:tip 1.6s ease-in-out infinite}
+@keyframes tip{0%,40%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+
+/* ---- generic panel ---- */
+.panel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:2px solid var(--line);
+  border-radius:12px;box-shadow:0 10px 34px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 18px;
+  border-radius:10px;border:2px solid var(--line2);background:linear-gradient(180deg,#2a2450,#191533);
+  color:var(--text);font:inherit;font-size:14px;font-weight:700;letter-spacing:.06em;cursor:pointer;
+  text-transform:uppercase;transition:transform .06s,filter .12s}
+.btn:active{transform:translateY(2px)}
+.btn.pri{border-color:var(--hot);background:linear-gradient(180deg,#54194a,#33102e);color:#fff;
+  box-shadow:0 0 22px rgba(255,46,136,.35)}
+.btn.go{border-color:var(--cool);background:linear-gradient(180deg,#0f4a4c,#0a2f34);
+  box-shadow:0 0 22px rgba(46,230,214,.28)}
+.btn:disabled{opacity:.38;cursor:default;box-shadow:none}
+
+/* ---- screens ---- */
+.screen{position:absolute;inset:0;display:none;flex-direction:column;background:rgba(7,6,13,.93);
+  padding:calc(18px + var(--safe-t)) calc(18px + var(--safe-r)) calc(18px + var(--safe-b)) calc(18px + var(--safe-l));
+  overflow:auto;overscroll-behavior:contain}
+.screen.show{display:flex}
+h1{margin:0;font-size:34px;letter-spacing:.22em;font-weight:900}
+h2{margin:0 0 4px;font-size:17px;letter-spacing:.16em;color:var(--cool2);text-transform:uppercase}
+.sub{color:var(--dim);font-size:12px;line-height:1.65;letter-spacing:.04em}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1}
+
+/* ---- screens: title, map, reward, shop, collection ---- */
+.doc{width:100%;max-width:720px;margin:auto;display:flex;flex-direction:column;gap:10px}
+.doc.wide{max-width:1080px}
+.hr{height:2px;background:linear-gradient(90deg,var(--hot),transparent);margin:2px 0 6px}
+p.sub{margin:0 0 8px}
+.ttl{background:linear-gradient(180deg,rgba(7,6,13,.94) 0%,rgba(7,6,13,.9) 50%,rgba(7,6,13,.42) 74%,rgba(7,6,13,.06) 100%),radial-gradient(130% 62% at 50% 0%,rgba(255,46,136,.26),rgba(7,6,13,0) 72%)}
+.ttl .tt-mid{margin:auto auto 0;padding-bottom:clamp(90px,22vh,180px)}
+.tt-mid{margin:auto;text-align:center}
+.tt-logo{font-size:clamp(38px,8vw,74px);font-weight:900;letter-spacing:.16em;line-height:1;
+  background:linear-gradient(180deg,#fff,var(--hot) 55%,var(--gold));-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;filter:drop-shadow(0 0 26px rgba(255,46,136,.4))}
+.tt-sub{margin-top:10px;color:var(--cool2);font-size:13px;letter-spacing:.34em;text-transform:uppercase}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:10px}
+.grid.three{grid-template-columns:repeat(auto-fit,minmax(0,1fr));max-width:900px;margin:0 auto}
+.grid.compact{gap:8px}
+.grid.compact .cardv{min-height:0;padding:6px;gap:3px}
+.grid.compact .cv-art{height:60px}
+.grid.compact .cv-text{font-size:8.5px;line-height:1.4}
+.grid.compact .cv-stat{font-size:8.5px}
+.grid.compact .charmv{min-width:0}
+.grid.compact .btn.tiny{min-height:34px}
+.doc.tight{gap:6px}
+.doc.tight h1{font-size:19px}
+.cardv{position:relative;background:linear-gradient(180deg,#191533,#0d0b1c);border:2px solid var(--line2);
+  border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:4px;min-height:210px}
+.cardv.locked{align-items:center;justify-content:center;opacity:.4;border-style:dashed}
+.cv-lock{font-size:34px;color:var(--dimmer)}
+.cv-top{display:flex;justify-content:space-between}
+.pill{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;
+  background:#07060d;border:1.5px solid var(--gold);color:var(--gold);font-size:12px;font-weight:900}
+.pill.ctr{border-color:var(--tint,#2ee6d6);color:var(--tint,#2ee6d6)}
+.cv-art{width:100%;height:74px;background:rgba(0,0,0,.35);border-radius:6px}
+.cv-name{font-size:11px;font-weight:900;letter-spacing:.1em;text-align:center;color:#fff}
+.cv-stat{font-size:9px;color:var(--dim);text-align:center;letter-spacing:.04em}
+.cv-text{font-size:9px;color:var(--dim);line-height:1.45;text-align:center;flex:1}
+.cv-seen{font-size:9px;color:var(--dimmer);text-align:center}
+.sold{font-size:10px;font-weight:900;color:var(--dimmer);text-align:center;letter-spacing:.16em}
+.btn.tiny{min-height:30px;padding:4px 10px;font-size:11px;width:100%}
+
+.charmrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.charmv{flex:1 1 190px;min-width:170px;background:linear-gradient(180deg,#1b1734,#100e21);
+  border:2px solid var(--line2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:5px}
+.ch-name{font-size:11px;font-weight:900;letter-spacing:.1em}
+.ch-text{font-size:10px;color:var(--dim);line-height:1.5;flex:1}
+
+.nodes{display:flex;align-items:center;gap:0;margin:12px 0}
+.node{width:42px;height:42px;border-radius:50%;border:2px solid var(--line2);display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:900;color:var(--dimmer);background:#100d20;flex:0 0 auto}
+.node.done{border-color:var(--lime);color:var(--lime)}
+.node.now{border-color:var(--hot);color:#fff;background:#3a1030;box-shadow:0 0 18px rgba(255,46,136,.5);transform:scale(1.12)}
+.link{flex:1;height:2px;background:var(--line)}
+.tag{display:inline-flex;align-items:center;padding:5px 10px;border-radius:6px;background:#141127;
+  border:1px solid var(--line);font-size:11px;letter-spacing:.08em;color:var(--dim)}
+.tag.big{font-size:13px;color:var(--gold);border-color:var(--gold)}
+.foegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.foev{background:#100d20;border:1px solid var(--line);border-radius:8px;padding:8px;display:flex;
+  flex-direction:column;gap:3px;font-size:11px}
+.foev.locked{opacity:.42}
+.foev span{font-size:9px;color:var(--dimmer)}
+.score{font-size:44px;font-weight:900;letter-spacing:.1em;color:var(--gold);margin:6px 0 2px;
+  text-shadow:0 0 26px rgba(255,201,77,.4)}
+.nb{font-size:13px;letter-spacing:.2em;color:var(--hot);vertical-align:middle;
+  border:2px solid var(--hot);border-radius:6px;padding:3px 8px;margin-left:10px}
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="ui" class="layer on"></div>
+</div></div>
+<div id="rotate"><div class="ph"></div><div class="sub">BEATBORNE is played sideways.<br>Turn your phone.</div></div>
+<script>
+/* ==========================================================================
+   BEATBORNE
+   a rhythm roguelike where your board is the band
+
+   The whole game is this one file: markup, CSS, art, synth, sim, screens.
+   No assets, no framework, no build step. It draws itself and it plays itself.
+
+   THE ONE IDEA, stated once so every section below can be read against it:
+   a unit's COUNTER is its RHYTHM. Counters tick on the beat, and a unit that
+   reaches zero fires -- ability, swing, and its VOICE. So the board is not
+   accompanied by music, the board IS the music. A rank of counter-1 kicks is
+   four-on-the-floor. A counter-3 lead over a counter-4 pad is a groove. The
+   enemy plays the counter-rhythm in a darker register. Nothing is sequenced
+   ahead of time; the fight composes itself, and a fight going well sounds
+   like it.
+
+   LAYOUT OF THE SOURCE -- twelve sections, each a real boundary.
+     S1  constants, helpers, RNG, the G state object, save/load
+     S2  the synth: voices, the transport, the beat clock
+     S3  content: voices table, crew, foes, charms, acts
+     S4  the deck: draw, hand, discard, energy
+     S5  art: palettes, the crew recipes, silhouette-first drawing
+     S6  the board: slots, lanes, placement, targeting
+     S7  the sim: one beat, counters, firing, damage, death
+     S8  the run: stages, waves, rewards, the map
+     S9  render: stage, board, hand, HUD, the crowd meter
+     S10 input: taps, timing windows, drag-to-place
+     S11 screens: title, run, reward, shop, collection, game over
+     S12 boot, the frame loop, and the window.BB test export
+   ========================================================================== */
+
+/* ============================================================ S1 -- base == */
+
+const HEADLESS = typeof window === 'undefined' || !window.document || !!(typeof process !== 'undefined' && process.versions && process.versions.node);
+
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const inv = (v, a, b) => b === a ? 0 : clamp((v - a) / (b - a), 0, 1);
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const sum = a => a.reduce((x, y) => x + y, 0);
+const uid = (() => { let n = 0; return p => (p || 'x') + (++n); })();
+
+// One seeded stream so a run is reproducible from its seed -- the probe in
+// tests/beatborne.test.mjs leans on this to replay a fight exactly.
+function mulberry(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+let RND = mulberry(Date.now() & 0x7fffffff);
+const rnd = () => RND();
+const rint = (a, b) => a + Math.floor(RND() * (b - a + 1));
+const pick = arr => arr[Math.floor(RND() * arr.length)];
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(RND() * (i + 1)); const t = arr[i]; arr[i] = arr[j]; arr[j] = t; }
+  return arr;
+}
+function pickN(arr, n) { return shuffle(arr.slice()).slice(0, n); }
+function weighted(entries) {                 // [[item, weight], ...]
+  const total = sum(entries.map(e => e[1]));
+  let r = RND() * total;
+  for (const [item, w] of entries) { r -= w; if (r <= 0) return item; }
+  return entries[entries.length - 1][0];
+}
+
+/* ---- the state object -------------------------------------------------- */
+// G is everything. One object, so a save is JSON.stringify(G.run) and a test
+// can reach in and set a board up by hand.
+const G = {
+  scr: 'title',           // title | run | reward | shop | map | over | win | collection | how
+  t: 0,                   // ms since boot, from the frame loop
+  dt: 0,
+  run: null,              // the active run, or null
+  meta: null,             // persistent: collection, records, unlocks
+  fx: [],                 // floating numbers, rings, sparks
+  shake: 0,
+  flash: 0,
+  toast: null,
+  drag: null,             // { card, x, y, from }
+  hover: -1,              // slot index under the pointer
+  sel: -1,                // selected hand index (tap-tap placement)
+  muted: false,
+  W: 960, H: 540,         // logical stage size, H is fixed, W follows the device
+};
+
+const SAVE_KEY = 'beatborne_meta_v1';
+const RUN_KEY  = 'beatborne_run_v1';
+
+function runScore(R) {
+  if (!R) return 0;
+  const base = R.stagesCleared * 120 + R.act * 260 + R.perfects * 5 + R.drops * 30 + Math.max(0, R.hp);
+  return Math.round(base * (R.act >= ACTS.length ? 2 : 1));
+}
+
+function freshMeta() {
+  return {
+    seen: {},             // crew id -> times fielded
+    beaten: {},           // foe id -> times killed
+    best: 0,              // best act reached
+    bestScore: 0,
+    runs: 0, wins: 0,
+    unlocked: ['rox', 'jas', 'thump', 'tick', 'hum', 'clap'],
+    perfects: 0, drops: 0,
+  };
+}
+function loadMeta() {
+  G.meta = freshMeta();
+  if (HEADLESS) return G.meta;
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) Object.assign(G.meta, JSON.parse(raw));
+  } catch (e) { /* a corrupt save is a fresh save, never a crash */ }
+  return G.meta;
+}
+function saveMeta() {
+  if (HEADLESS) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(G.meta)); } catch (e) {}
+}
+function saveRun() {
+  if (HEADLESS || !G.run) return;
+  try { localStorage.setItem(RUN_KEY, JSON.stringify(G.run)); } catch (e) {}
+}
+function clearRun() {
+  if (HEADLESS) return;
+  try { localStorage.removeItem(RUN_KEY); } catch (e) {}
+}
+function loadRun() {
+  if (HEADLESS) return null;
+  try { const raw = localStorage.getItem(RUN_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+
+/* ==================================================== S2 -- the synth ===== */
+/* Everything you hear is made here, at the moment it happens. Nothing is
+   sequenced ahead: a unit fires and its voice speaks. That is the whole
+   architecture, and it is why the music tracks the fight for free.
+
+   The clock is derived from AudioContext.currentTime rather than from
+   performance.now, because the two drift and the player's taps are judged
+   against the same beat the sounds land on. One clock, or the game lies. */
+
+const A = {
+  ac: null, master: null, mus: null, sfx: null, comp: null,
+  noise: null,
+  ok: false,
+  bpm: 120,
+  t0: 0,                 // ac time of beat 0
+  beat: -1,              // last beat index the sim has run
+  running: false,
+  vol: 0.85,
+};
+
+const SPB = () => 60 / A.bpm;                     // seconds per beat
+const BEATS_PER_BAR = 4;
+
+function ac() {
+  if (HEADLESS || G.muted) return null;
+  if (!A.ac) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    try { A.ac = new C(); } catch (e) { return null; }
+    const ctx = A.ac;
+    A.comp = ctx.createDynamicsCompressor();
+    A.comp.threshold.value = -14; A.comp.knee.value = 24; A.comp.ratio.value = 5;
+    A.comp.attack.value = 0.004; A.comp.release.value = 0.18;
+    A.master = ctx.createGain(); A.master.gain.value = A.vol;
+    A.mus = ctx.createGain(); A.mus.gain.value = 0.82;
+    A.sfx = ctx.createGain(); A.sfx.gain.value = 0.9;
+    A.mus.connect(A.comp); A.sfx.connect(A.comp);
+    A.comp.connect(A.master); A.master.connect(ctx.destination);
+    // one second of noise, reused by every percussive voice
+    const n = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = n.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    A.noise = n;
+    A.ok = true;
+  }
+  if (A.ac.state === 'suspended') A.ac.resume().catch(() => {});
+  return A.ac;
+}
+
+const A4 = 440;
+const hz = semi => A4 * Math.pow(2, (semi - 9) / 12);   // semi 0 = C4
+
+function env(g, t, a, d, peak, sus, rel) {
+  g.gain.cancelScheduledValues(t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + a);
+  if (sus > 0) {
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak * sus), t + a + d);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + a + d + rel);
+  } else {
+    g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  }
+}
+function osc(ctx, type, f, t, dur, dest, gain, detune) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (detune) o.detune.setValueAtTime(detune, t);
+  o.connect(g); g.connect(dest);
+  o.start(t); o.stop(t + dur + 0.06);
+  return { o, g };
+}
+function noiseSrc(ctx, t, dur, dest) {
+  const s = ctx.createBufferSource();
+  s.buffer = A.noise; s.loop = true;
+  s.playbackRate.value = 0.8 + Math.random() * 0.5;
+  s.connect(dest); s.start(t); s.stop(t + dur + 0.05);
+  return s;
+}
+function filt(ctx, type, f, q) {
+  const b = ctx.createBiquadFilter(); b.type = type;
+  b.frequency.value = f; if (q != null) b.Q.value = q;
+  return b;
+}
+
+/* ---- the voices --------------------------------------------------------
+   One function per voice family. Each takes (t, note, vel, bus) and makes a
+   sound of a fixed character -- the note moves it around, the velocity is how
+   hard the unit hit. A voice never reads game state; the sim decides what to
+   play and the voice only knows how to speak. */
+const VOICE = {
+  kick(ctx, t, note, vel, bus) {
+    const { o, g } = osc(ctx, 'sine', 140 * Math.pow(2, note / 24), t, 0.4, bus, 1);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.11);
+    env(g, t, 0.004, 0.30, 0.9 * vel, 0, 0);
+    const c = ctx.createGain(); c.connect(bus);
+    const n = noiseSrc(ctx, t, 0.03, c);
+    env(c, t, 0.001, 0.03, 0.25 * vel, 0, 0);
+  },
+  snare(ctx, t, note, vel, bus) {
+    const hp = filt(ctx, 'highpass', 1400, 0.7);
+    const g = ctx.createGain(); hp.connect(g); g.connect(bus);
+    noiseSrc(ctx, t, 0.2, hp);
+    env(g, t, 0.002, 0.16, 0.55 * vel, 0, 0);
+    const { o, g: g2 } = osc(ctx, 'triangle', 210 * Math.pow(2, note / 24), t, 0.12, bus, 1);
+    o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+    env(g2, t, 0.002, 0.09, 0.32 * vel, 0, 0);
+  },
+  hat(ctx, t, note, vel, bus) {
+    const hp = filt(ctx, 'highpass', 7200 + note * 90, 0.9);
+    const g = ctx.createGain(); hp.connect(g); g.connect(bus);
+    noiseSrc(ctx, t, 0.08, hp);
+    env(g, t, 0.001, 0.055, 0.30 * vel, 0, 0);
+  },
+  bass(ctx, t, note, vel, bus) {
+    const lp = filt(ctx, 'lowpass', 420, 6);
+    const g = ctx.createGain(); lp.connect(g); g.connect(bus);
+    const f = hz(note - 24);
+    const o = ctx.createOscillator(); o.type = 'square';
+    o.frequency.setValueAtTime(f, t); o.connect(lp);
+    o.start(t); o.stop(t + 0.42);
+    const o2 = ctx.createOscillator(); o2.type = 'triangle';
+    o2.frequency.setValueAtTime(f / 2, t); o2.connect(lp);
+    o2.start(t); o2.stop(t + 0.42);
+    lp.frequency.setValueAtTime(1100, t);
+    lp.frequency.exponentialRampToValueAtTime(300, t + 0.20);
+    env(g, t, 0.006, 0.24, 0.42 * vel, 0.3, 0.12);
+  },
+  lead(ctx, t, note, vel, bus) {
+    const lp = filt(ctx, 'lowpass', 3400, 2);
+    const g = ctx.createGain(); lp.connect(g); g.connect(bus);
+    const f = hz(note);
+    for (const [type, det, lvl] of [['square', 0, 1], ['square', 9, 0.6]]) {
+      const o = ctx.createOscillator(); o.type = type;
+      o.frequency.setValueAtTime(f, t); o.detune.setValueAtTime(det, t);
+      const gg = ctx.createGain(); gg.gain.value = lvl;
+      o.connect(gg); gg.connect(lp); o.start(t); o.stop(t + 0.32);
+    }
+    env(g, t, 0.008, 0.16, 0.26 * vel, 0.25, 0.13);
+  },
+  pad(ctx, t, note, vel, bus) {
+    const lp = filt(ctx, 'lowpass', 1700, 1);
+    const g = ctx.createGain(); lp.connect(g); g.connect(bus);
+    for (const d of [-7, 0, 5]) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(hz(note + d), t);
+      o.detune.setValueAtTime((d === 0 ? 0 : 6), t);
+      const gg = ctx.createGain(); gg.gain.value = 0.34;
+      o.connect(gg); gg.connect(lp); o.start(t); o.stop(t + 1.0);
+    }
+    env(g, t, 0.12, 0.34, 0.20 * vel, 0.5, 0.5);
+  },
+  // Rox: a beatboxer. Percussive, pitched, throat rather than drum machine.
+  vox_rox(ctx, t, note, vel, bus) {
+    const bp = filt(ctx, 'bandpass', 620 + note * 26, 3.2);
+    const g = ctx.createGain(); bp.connect(g); g.connect(bus);
+    noiseSrc(ctx, t, 0.14, bp);
+    bp.frequency.setValueAtTime(1500 + note * 30, t);
+    bp.frequency.exponentialRampToValueAtTime(380, t + 0.10);
+    env(g, t, 0.003, 0.11, 0.5 * vel, 0, 0);
+    const { o, g: g2 } = osc(ctx, 'sine', hz(note - 12), t, 0.16, bus, 1);
+    o.frequency.exponentialRampToValueAtTime(hz(note - 19), t + 0.09);
+    env(g2, t, 0.003, 0.12, 0.34 * vel, 0, 0);
+  },
+  // Jas: sung. Two formants over a triangle, with a vibrato that arrives late
+  // the way a held note does.
+  vox_jas(ctx, t, note, vel, bus) {
+    const out = ctx.createGain(); out.connect(bus);
+    const f = hz(note);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(f, t);
+    const vib = ctx.createOscillator(); vib.type = 'sine'; vib.frequency.value = 5.4;
+    const vg = ctx.createGain(); vg.gain.setValueAtTime(0, t);
+    vg.gain.linearRampToValueAtTime(5.5, t + 0.22);
+    vib.connect(vg); vg.connect(o.detune); vib.start(t); vib.stop(t + 0.7);
+    for (const [ff, q, lvl] of [[720, 7, 1], [1180, 9, 0.55]]) {
+      const b = filt(ctx, 'bandpass', ff, q);
+      const gg = ctx.createGain(); gg.gain.value = lvl;
+      o.connect(b); b.connect(gg); gg.connect(out);
+    }
+    const dry = ctx.createGain(); dry.gain.value = 0.28;
+    o.connect(dry); dry.connect(out);
+    o.start(t); o.stop(t + 0.66);
+    env(out, t, 0.05, 0.22, 0.30 * vel, 0.55, 0.30);
+  },
+  // The other side. Same slots, wrong register: a sub that sits under
+  // everything, a saw with teeth, a bell a semitone out of the key.
+  sub(ctx, t, note, vel, bus) {
+    const { o, g } = osc(ctx, 'sine', hz(note - 31), t, 0.5, bus, 1);
+    o.frequency.exponentialRampToValueAtTime(hz(note - 36), t + 0.3);
+    env(g, t, 0.01, 0.36, 0.55 * vel, 0, 0);
+  },
+  grit(ctx, t, note, vel, bus) {
+    const lp = filt(ctx, 'lowpass', 2200, 7);
+    const g = ctx.createGain(); lp.connect(g); g.connect(bus);
+    const o = ctx.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(hz(note - 12), t);
+    o.connect(lp); o.start(t); o.stop(t + 0.3);
+    const o2 = ctx.createOscillator(); o2.type = 'sawtooth';
+    o2.frequency.setValueAtTime(hz(note - 12) * 1.013, t);
+    o2.connect(lp); o2.start(t); o2.stop(t + 0.3);
+    lp.frequency.setValueAtTime(2600, t);
+    lp.frequency.exponentialRampToValueAtTime(420, t + 0.22);
+    env(g, t, 0.005, 0.20, 0.24 * vel, 0, 0);
+  },
+  bell(ctx, t, note, vel, bus) {
+    const g = ctx.createGain(); g.connect(bus);
+    for (const [m, lvl] of [[1, 1], [2.76, 0.4], [5.4, 0.18]]) {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(hz(note + 1) * m, t);
+      const gg = ctx.createGain(); gg.gain.value = lvl;
+      o.connect(gg); gg.connect(g); o.start(t); o.stop(t + 0.9);
+    }
+    env(g, t, 0.004, 0.55, 0.15 * vel, 0.15, 0.35);
+  },
+};
+
+/* ---- playing a voice ---------------------------------------------------- */
+// Six units firing on the same beat at the same instant is a wall, not a chord.
+// A few milliseconds between the layers is standard mixing practice and is the
+// difference between hearing a band and hearing a hit.
+const VOICE_LAG = { kick: 0, bass: 0.004, vox_rox: 0.007, snare: 0.009, sub: 0.003,
+                    grit: 0.006, lead: 0.012, vox_jas: 0.014, hat: 0.010, bell: 0.011, pad: 0.018 };
+
+function play(voice, note, vel, when) {
+  // The tap runs before the audio guard, so the probe can read the score the
+  // board is playing even with no AudioContext. This is the only way to check
+  // the game's central claim -- that a board IS a rhythm -- without ears.
+  if (A.tap) { try { A.tap(voice, note, vel, when); } catch (e) {} }
+  const ctx = ac();
+  if (!ctx) return;
+  const fn = VOICE[voice];
+  if (!fn) return;
+  const t = Math.max(ctx.currentTime, (when || ctx.currentTime) + (VOICE_LAG[voice] || 0));
+  try { fn(ctx, t, note || 0, clamp(vel == null ? 1 : vel, 0.05, 1.6), A.mus); } catch (e) {}
+}
+
+/* ---- interface cues, deliberately not on the musical bus ---------------- */
+function sfx(kind) {
+  const ctx = ac();
+  if (!ctx) return;
+  const t = ctx.currentTime, bus = A.sfx;
+  try {
+    if (kind === 'tap') { const { o, g } = osc(ctx, 'square', 880, t, 0.05, bus, 1); env(g, t, .002, .04, .10, 0, 0); }
+    else if (kind === 'perfect') {
+      for (let i = 0; i < 3; i++) { const { o, g } = osc(ctx, 'square', hz(12 + i * 7), t + i * 0.035, 0.09, bus, 1); env(g, t + i * 0.035, .002, .07, .13, 0, 0); }
+    }
+    else if (kind === 'good') { const { o, g } = osc(ctx, 'triangle', hz(12), t, 0.09, bus, 1); env(g, t, .002, .07, .11, 0, 0); }
+    else if (kind === 'late') { const { o, g } = osc(ctx, 'sine', 200, t, 0.1, bus, 1); o.frequency.exponentialRampToValueAtTime(120, t + .09); env(g, t, .003, .09, .12, 0, 0); }
+    else if (kind === 'deny') { const { o, g } = osc(ctx, 'square', 150, t, 0.11, bus, 1); env(g, t, .003, .1, .12, 0, 0); }
+    else if (kind === 'hit') { const hp = filt(ctx, 'highpass', 900, 1); const g = ctx.createGain(); hp.connect(g); g.connect(bus); noiseSrc(ctx, t, .09, hp); env(g, t, .002, .07, .22, 0, 0); }
+    else if (kind === 'die') { const lp = filt(ctx, 'lowpass', 1400, 2); const g = ctx.createGain(); lp.connect(g); g.connect(bus); noiseSrc(ctx, t, .3, lp); lp.frequency.exponentialRampToValueAtTime(160, t + .28); env(g, t, .003, .26, .3, 0, 0); }
+    else if (kind === 'drop') {
+      const lp = filt(ctx, 'lowpass', 300, 9); const g = ctx.createGain(); lp.connect(g); g.connect(bus);
+      noiseSrc(ctx, t, .7, lp); lp.frequency.setValueAtTime(200, t); lp.frequency.exponentialRampToValueAtTime(9000, t + .55);
+      env(g, t, .01, .6, .34, 0, 0);
+      const { o, g: g2 } = osc(ctx, 'sine', 55, t + .5, .6, bus, 1); env(g2, t + .5, .006, .5, .6, 0, 0);
+    }
+    else if (kind === 'coin') { for (let i = 0; i < 2; i++) { const { o, g } = osc(ctx, 'square', hz(19 + i * 5), t + i * .05, .1, bus, 1); env(g, t + i * .05, .002, .08, .12, 0, 0); } }
+    else if (kind === 'win') { [0, 4, 7, 12, 16].forEach((n, i) => { const { o, g } = osc(ctx, 'square', hz(12 + n), t + i * .09, .3, bus, 1); env(g, t + i * .09, .004, .26, .14, 0, 0); }); }
+    else if (kind === 'lose') { [0, -3, -7, -12].forEach((n, i) => { const { o, g } = osc(ctx, 'sawtooth', hz(7 + n), t + i * .16, .5, bus, 1); env(g, t + i * .16, .01, .44, .13, 0, 0); }); }
+  } catch (e) {}
+}
+
+/* ---- the transport ------------------------------------------------------
+   beatNow() is the single source of musical time. Everything -- the sim, the
+   tap judge, the pulse on screen -- reads it, so nothing can disagree about
+   where the beat is. In headless the clock is a plain counter the tests drive
+   by hand, which is why the sim never calls ac() itself. */
+let VCLOCK = 0;                       // headless / muted virtual clock, seconds
+
+function now() {
+  if (A.ac && !G.muted) return A.ac.currentTime;
+  return VCLOCK;
+}
+function startTransport(bpm) {
+  A.bpm = bpm || 120;
+  A.t0 = now();
+  A.beat = -1;
+  A.running = true;
+}
+function stopTransport() { A.running = false; }
+function beatNow() { return (now() - A.t0) / SPB(); }          // fractional beats
+function beatPhase() { const b = beatNow(); return b - Math.floor(b); }
+function timeOfBeat(i) { return A.t0 + i * SPB(); }
+
+/* ================================================== S3 -- the content ==== */
+/* A crew card is a unit and an instrument in the same object, and that is not
+   a convenience -- it is the design. `ctr` is how many beats it waits, which
+   is both its attack speed and its note value. `voice` and `note` are what it
+   sounds like. You cannot tune one without hearing the other, which keeps the
+   balance honest: a card that is too fast is also too busy. */
+
+const RARITY = { common: 0, uncommon: 1, rare: 2, legend: 3 };
+const RCOL = ['#8f86b8', '#5ad2ff', '#c07bff', '#ffc94d'];
+
+// ability API is handed in, so content never reaches into the sim directly
+const CREW = [
+  { id: 'rox', name: 'ROX', voice: 'vox_rox', note: 12, ctr: 2, hp: 12, atk: 3, cost: 1, r: 0,
+    art: 'boxer', tint: '#ff2e88',
+    text: 'On fire: +3 CROWD.',
+    fire: (u, S, X) => { X.crowd(3); } },
+
+  { id: 'jas', name: 'JAS', voice: 'vox_jas', note: 19, ctr: 3, hp: 10, atk: 2, cost: 1, r: 0,
+    art: 'singer', tint: '#2ee6d6',
+    text: 'On fire: heal every ally 2.',
+    fire: (u, S, X) => { for (const a of X.allies()) X.heal(a, 2); } },
+
+  { id: 'thump', name: 'THUMP', voice: 'kick', note: 0, ctr: 1, hp: 18, atk: 1, cost: 1, r: 0,
+    art: 'drum', tint: '#ffc94d',
+    text: 'Steady. Nothing else.' },
+
+  { id: 'tick', name: 'TICK', voice: 'hat', note: 24, ctr: 1, hp: 7, atk: 1, cost: 1, r: 0,
+    art: 'wire', tint: '#a6ff5e',
+    text: 'On fire: the ally behind it ticks 1.',
+    fire: (u, S, X) => { const b = X.behind(u); if (b) X.tick(b, 1); } },
+
+  { id: 'hum', name: 'HUM', voice: 'pad', note: 7, ctr: 4, hp: 24, atk: 0, cost: 2, r: 0,
+    art: 'monolith', tint: '#a06bff',
+    text: 'On fire: every ally gains 2 SHIELD.',
+    fire: (u, S, X) => { for (const a of X.allies()) a.sh += 2; } },
+
+  { id: 'clap', name: 'CLAP', voice: 'snare', note: 4, ctr: 2, hp: 11, atk: 4, cost: 2, r: 0,
+    art: 'hands', tint: '#ff6bb0',
+    text: 'Hits, and hits on time.' },
+
+  { id: 'subwoof', name: 'SUBWOOF', voice: 'bass', note: 0, ctr: 3, hp: 20, atk: 5, cost: 2, r: 1,
+    art: 'cabinet', tint: '#5aa9ff',
+    text: 'On fire: also swings into the other lane.',
+    fire: (u, S, X) => { const t = X.targetIn(1 - u.row); if (t) X.hurt(t, u.atk, u); } },
+
+  { id: 'riff', name: 'RIFF', voice: 'lead', note: 16, ctr: 2, hp: 9, atk: 3, cost: 2, r: 1,
+    art: 'axe', tint: '#ff5a4a',
+    text: 'On fire: +1 ATK, permanently.',
+    fire: (u, S, X) => { u.atk += 1; X.pop(u, '+1 ATK', '#ffc94d'); } },
+
+  { id: 'stutter', name: 'STUTTER', voice: 'hat', note: 27, ctr: 1, hp: 9, atk: 2, cost: 2, r: 1,
+    art: 'wire', tint: '#7bfff2',
+    text: 'On fire: the ally in front ticks 1.',
+    fire: (u, S, X) => { const f = X.infront(u); if (f) X.tick(f, 1); } },
+
+  { id: 'dropkick', name: 'DROPKICK', voice: 'kick', note: -5, ctr: 4, hp: 16, atk: 10, cost: 3, r: 1,
+    art: 'drum', tint: '#ff2e88',
+    text: 'Slow. Enormous.' },
+
+  { id: 'echo', name: 'ECHO', voice: 'lead', note: 12, ctr: 3, hp: 11, atk: 3, cost: 2, r: 1,
+    art: 'horn', tint: '#a06bff',
+    text: 'On fire: also hits the foe behind its target.',
+    fire: (u, S, X) => { const t = X.behindTarget(u); if (t) X.hurt(t, u.atk, u); } },
+
+  { id: 'looper', name: 'LOOPER', voice: 'pad', note: 12, ctr: 3, hp: 14, atk: 1, cost: 2, r: 1,
+    art: 'ring', tint: '#2ee6d6',
+    text: 'On fire: +6 CROWD.',
+    fire: (u, S, X) => { X.crowd(6); } },
+
+  { id: 'rimshot', name: 'RIMSHOT', voice: 'snare', note: 9, ctr: 2, hp: 9, atk: 3, cost: 2, r: 1,
+    art: 'hands', tint: '#ffc94d',
+    text: 'On fire: +4 damage while the CROWD is over half.',
+    fire: (u, S, X) => { if (S.crowd >= 50) { const t = X.target(u); if (t) X.hurt(t, 4, u); } } },
+
+  { id: 'toll', name: 'TOLL', voice: 'bell', note: 12, ctr: 4, hp: 14, atk: 4, cost: 3, r: 2,
+    art: 'bell', tint: '#5ad2ff',
+    text: 'On fire: every foe ticks BACK 1.',
+    fire: (u, S, X) => { for (const f of X.foes()) f.c = Math.min(f.ctr, f.c + 1); } },
+
+  { id: 'growl', name: 'GROWL', voice: 'bass', note: 3, ctr: 2, hp: 17, atk: 4, cost: 3, r: 1,
+    art: 'cabinet', tint: '#ff5a4a',
+    text: 'Takes the front and keeps it.' },
+
+  { id: 'harmony', name: 'HARMONY', voice: 'vox_jas', note: 24, ctr: 4, hp: 13, atk: 3, cost: 3, r: 2,
+    art: 'singer', tint: '#7bfff2',
+    text: 'On fire: every ally heals 3 and gains 2 SHIELD.',
+    fire: (u, S, X) => { for (const a of X.allies()) { X.heal(a, 3); a.sh += 2; } } },
+
+  { id: 'scratch', name: 'SCRATCH', voice: 'vox_rox', note: 16, ctr: 1, hp: 11, atk: 2, cost: 2, r: 1,
+    art: 'boxer', tint: '#a6ff5e',
+    text: 'On fire: +2 CROWD.',
+    fire: (u, S, X) => { X.crowd(2); } },
+
+  { id: 'metronome', name: 'METRONOME', voice: 'hat', note: 31, ctr: 1, hp: 14, atk: 0, cost: 3, r: 2,
+    art: 'ring', tint: '#efeaff',
+    text: 'On fire: the allies in front and behind both tick 1.',
+    fire: (u, S, X) => { const f = X.infront(u), b = X.behind(u); if (f) X.tick(f, 1); if (b) X.tick(b, 1); } },
+
+  { id: 'anthem', name: 'ANTHEM', voice: 'vox_jas', note: 28, ctr: 4, hp: 18, atk: 6, cost: 4, r: 2,
+    art: 'monolith', tint: '#ffc94d',
+    text: 'On fire: every other ally ticks 2.',
+    fire: (u, S, X) => { for (const a of X.allies()) if (a !== u) X.tick(a, 2); } },
+
+  { id: 'theduo', name: 'THE DUO', voice: 'vox_rox', note: 19, ctr: 3, hp: 22, atk: 6, cost: 4, r: 3,
+    art: 'duo', tint: '#ff2e88', voice2: 'vox_jas', note2: 26,
+    text: 'On fire: swings into both lanes, and +8 CROWD.',
+    fire: (u, S, X) => { const t = X.targetIn(1 - u.row); if (t) X.hurt(t, u.atk, u); X.crowd(8); } },
+];
+const CREW_BY = {}; for (const c of CREW) CREW_BY[c.id] = c;
+
+/* ---- the other side ----------------------------------------------------
+   THE HUSH does not want to win the fight, it wants the room quiet, and its
+   voices say so: a sub under everything, a saw with teeth, a bell one
+   semitone out of the key. You can hear a board going wrong. */
+const FOES = [
+  { id: 'hush',    name: 'HUSH',    voice: 'grit', note: 5,  ctr: 2, hp: 13, atk: 3, art: 'shade',  tint: '#6d6394' },
+  { id: 'drone',   name: 'DRONE',   voice: 'sub',  note: 0,  ctr: 3, hp: 30, atk: 4, art: 'hulk',   tint: '#4a4270' },
+  { id: 'screech', name: 'SCREECH', voice: 'bell', note: 19, ctr: 1, hp: 8, atk: 3, art: 'spike',  tint: '#8f5aff',
+    text: 'Shoots OVER the front rank at the back one.', back: true },
+  { id: 'damp',    name: 'DAMP',    voice: 'sub',  note: 3,  ctr: 4, hp: 40, atk: 3, art: 'hulk',   tint: '#39355c',
+    text: 'On fire: every ally of ITS loses 1 tick.', fire: (u, S, X) => { for (const f of X.allies()) X.tick(f, 1); } },
+  { id: 'stomp',   name: 'STOMP',   voice: 'grit', note: -2, ctr: 4, hp: 28, atk: 9, art: 'hulk',   tint: '#5c3050' },
+  { id: 'warden',  name: 'WARDEN',  voice: 'grit', note: 8,  ctr: 2, hp: 24, atk: 6, art: 'shade',  tint: '#7a3a6a',
+    text: 'On fire: swings into both lanes.', fire: (u, S, X) => { const t = X.targetIn(1 - u.row); if (t) X.hurt(t, u.atk, u); } },
+  { id: 'mute',    name: 'MUTE',    voice: 'bell', note: 13, ctr: 3, hp: 16, atk: 4, art: 'spike',  tint: '#5a4a8f',
+    text: 'On fire: drains 8 CROWD.', fire: (u, S, X) => { X.crowd(-8); } },
+];
+const BOSSES = [
+  { id: 'thehush', name: 'THE HUSH', voice: 'sub', note: 0, ctr: 3, hp: 100, atk: 7, art: 'boss1', tint: '#8f5aff', boss: 1,
+    text: 'On fire: swings into both lanes and drains 6 CROWD.',
+    fire: (u, S, X) => { const t = X.targetIn(1 - u.row); if (t) X.hurt(t, u.atk, u); X.crowd(-6); } },
+  { id: 'thecritic', name: 'THE CRITIC', voice: 'grit', note: 6, ctr: 2, hp: 165, atk: 9, art: 'boss2', tint: '#ff5a4a', boss: 2,
+    text: 'On fire: the loudest ally loses 2 ticks of progress.',
+    fire: (u, S, X) => { const a = X.allies().slice().sort((p, q) => q.atk - p.atk)[0]; if (a) a.c = Math.min(a.ctr, a.c + 2); } },
+  { id: 'thesilence', name: 'THE SILENCE', voice: 'bell', note: 1, ctr: 2, hp: 250, atk: 11, art: 'boss3', tint: '#efeaff', boss: 3,
+    text: 'On fire: swings into both lanes, and every 4th time it silences a voice for a bar.',
+    fire: (u, S, X) => {
+      const t = X.targetIn(1 - u.row); if (t) X.hurt(t, u.atk, u);
+      u.n = (u.n || 0) + 1;
+      if (u.n % 4 === 0) { const a = X.allies()[0]; if (a) { a.mute = 4; X.pop(a, 'SILENCED', '#efeaff'); } }
+    } },
+];
+const ALL_UNITS = {}; for (const u of CREW.concat(FOES, BOSSES)) ALL_UNITS[u.id] = u;
+
+/* ---- charms ------------------------------------------------------------
+   Every charm changes a number the player can already see, because a charm
+   whose effect you cannot watch land is a charm you never think about again. */
+const CHARMS = [
+  { id: 'metrognome', name: 'METROGNOME', text: '+1 ENERGY every bar.',              tint: '#ffc94d' },
+  { id: 'goldmic',    name: 'GOLD MIC',   text: 'PERFECT is worth double CROWD.',    tint: '#ffc94d' },
+  { id: 'monitor',    name: 'STAGE MONITOR', text: 'The PERFECT window is wider.',   tint: '#2ee6d6' },
+  { id: 'foldback',   name: 'FOLDBACK',   text: 'Front column allies take 25% less.',tint: '#5aa9ff' },
+  { id: 'sidechain',  name: 'SIDECHAIN',  text: 'The DROP lasts one bar longer.',    tint: '#ff2e88' },
+  { id: 'preamp',     name: 'PRE-AMP',    text: 'Every ally +1 ATK.',                tint: '#ff5a4a' },
+  { id: 'roadcase',   name: 'ROAD CASE',  text: 'Every ally +3 HP.',                 tint: '#a6ff5e' },
+  { id: 'clickTrack', name: 'CLICK TRACK', text: 'Your first card each stage is free and PERFECT.', tint: '#7bfff2' },
+  { id: 'reverb',     name: 'REVERB TANK', text: 'On DROP, every ally heals 4.',     tint: '#a06bff' },
+  { id: 'crowdsurf',  name: 'CROWD SURF', text: 'CROWD never falls below 20.',       tint: '#ff6bb0' },
+  { id: 'encore',     name: 'ENCORE',     text: 'Start each stage with 2 extra cards.', tint: '#5ad2ff' },
+  { id: 'compressor', name: 'COMPRESSOR', text: 'Damage you take is capped at 8.',   tint: '#efeaff' },
+  { id: 'talkbox',    name: 'TALK BOX',   text: 'Allies in the back column also tick double.', tint: '#a6ff5e' },
+  { id: 'merchtable', name: 'MERCH TABLE', text: '+8 COIN after every stage.',       tint: '#ffc94d' },
+  { id: 'sub_drop',   name: 'SUB DROP',   text: 'The DROP also deals 12 to every foe.', tint: '#ff2e88' },
+];
+const CHARM_BY = {}; for (const c of CHARMS) CHARM_BY[c.id] = c;
+const hasCharm = id => !!(G.run && G.run.charms.indexOf(id) >= 0);
+
+/* ---- the acts ----------------------------------------------------------
+   BPM is difficulty. Act three is not harder because the numbers are bigger,
+   it is harder because it is at 138 and you have less time to read the board
+   between beats. The numbers go up too. */
+const ACTS = [
+  { n: 1, name: 'THE BACK ROOM',  bpm: 100, pool: ['hush', 'screech', 'drone'],                    boss: 'thehush',    key: 0,  bg: '#160f2a' },
+  { n: 2, name: 'THE MAIN FLOOR', bpm: 118, pool: ['hush', 'screech', 'drone', 'damp', 'mute'],     boss: 'thecritic',  key: 3,  bg: '#231029' },
+  { n: 3, name: 'THE BIG ROOM',   bpm: 138, pool: ['hush', 'drone', 'damp', 'mute', 'stomp', 'warden'],     boss: 'thesilence', key: -2, bg: '#2a0f1c' },
+];
+const STAGES_PER_ACT = 4;   // then the boss
+
+/* =============================================== S4 -- deck and hand ===== */
+/* The deck is a list of crew ids. A card in hand is an instance, because
+   PERFECT can buff the copy you are holding and the deck must not remember
+   that. */
+function mkCard(id) {
+  const b = CREW_BY[id];
+  if (!b) return null;
+  return { k: uid('c'), id, cost: b.cost, plus: 0 };
+}
+function startingDeck() {
+  return ['rox', 'jas', 'thump', 'thump', 'tick', 'clap', 'hum', 'tick', 'clap', 'rox'];
+}
+function drawOne(S) {
+  if (!S.draw.length) {
+    if (!S.disc.length) return null;
+    S.draw = shuffle(S.disc.slice()); S.disc = [];
+  }
+  const c = S.draw.pop();
+  if (S.hand.length >= S.handMax) { S.disc.push(c); return null; }
+  S.hand.push(c);
+  return c;
+}
+function drawN(S, n) { let got = 0; for (let i = 0; i < n; i++) if (drawOne(S)) got++; return got; }
+
+/* ================================================ S6 -- the board ======== */
+/* Two rows, three columns a side. Column 0 is the FRONT -- nearest the middle,
+   nearest the trouble, and running double. Everything about position in this
+   game is that one trade. */
+const COLS = 3, ROWS = 2;
+const slotIndex = (col, row) => row * COLS + col;
+
+function unitAt(S, side, col, row) {
+  for (const u of S.units) if (u.side === side && u.col === col && u.row === row && u.hp > 0) return u;
+  return null;
+}
+function sideUnits(S, side) {
+  return S.units.filter(u => u.side === side && u.hp > 0);
+}
+function emptySlots(S, side) {
+  const out = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (!unitAt(S, side, c, r)) out.push({ col: c, row: r });
+  return out;
+}
+// front-most living unit of `side` in `row`, else the front-most in the other row
+function frontOf(S, side, row) {
+  for (let c = 0; c < COLS; c++) { const u = unitAt(S, side, c, row); if (u) return u; }
+  for (let c = 0; c < COLS; c++) { const u = unitAt(S, side, c, 1 - row); if (u) return u; }
+  return null;
+}
+function frontOfRowOnly(S, side, row) {
+  for (let c = 0; c < COLS; c++) { const u = unitAt(S, side, c, row); if (u) return u; }
+  return null;
+}
+// the back-most living unit of a row -- what a shooter goes over the wall for
+function backOfRowOnly(S, side, row) {
+  for (let c = COLS - 1; c >= 0; c--) { const u = unitAt(S, side, c, row); if (u) return u; }
+  return null;
+}
+
+function mkUnit(S, def, side, col, row) {
+  const bonus = side === 'us' ? (hasCharm('preamp') ? 1 : 0) : 0;
+  const hpb = side === 'us' ? (hasCharm('roadcase') ? 3 : 0) : 0;
+  const u = {
+    uid: uid('u'), side, col, row, id: def.id, name: def.name,
+    voice: def.voice, note: def.note, voice2: def.voice2, note2: def.note2,
+    ctr: def.ctr, c: def.ctr,
+    hp: def.hp + hpb, max: def.hp + hpb,
+    atk: def.atk + bonus, sh: 0, art: def.art, tint: def.tint,
+    fire: def.fire || null, text: def.text || '', boss: def.boss || 0, back: !!def.back,
+    mute: 0, n: 0, flash: 0, fired: 0, kills: 0,
+  };
+  return u;
+}
+
+/* ================================================== S7 -- the sim ======== */
+/* One function does the whole beat, in a fixed and visible order:
+   1  drop bookkeeping   2  allies fire, front to back, top row to bottom
+   3  foes fire, same order              4  foes with a gap in front advance
+   5  a new bar: energy, a card, the next wave
+   Order is printed on the board as ORDER numbers, because a fight you cannot
+   predict is a fight you cannot play well, only survive. */
+
+function fightAPI(S, u) {
+  const mine = u.side, theirs = u.side === 'us' ? 'them' : 'us';
+  return {
+    allies: () => sideUnits(S, mine).sort((a, b) => a.row - b.row || a.col - b.col),
+    foes: () => sideUnits(S, theirs).sort((a, b) => a.row - b.row || a.col - b.col),
+    // yours reach across lanes; theirs do not, and swing at the set instead
+    target: () => u.side === 'us' ? frontOf(S, theirs, u.row) : frontOfRowOnly(S, theirs, u.row),
+    targetIn: row => frontOfRowOnly(S, theirs, row),
+    behindTarget: () => {
+      const t = frontOf(S, theirs, u.row); if (!t) return null;
+      for (let c = t.col + 1; c < COLS; c++) { const x = unitAt(S, theirs, c, t.row); if (x) return x; }
+      return null;
+    },
+    infront: () => { for (let c = u.col - 1; c >= 0; c--) { const x = unitAt(S, mine, c, u.row); if (x) return x; } return null; },
+    behind: () => { for (let c = u.col + 1; c < COLS; c++) { const x = unitAt(S, mine, c, u.row); if (x) return x; } return null; },
+    tick: (t, n) => { t.c = Math.max(0, t.c - n); t.flash = 1; },
+    heal: (t, n) => { const b = t.hp; t.hp = Math.min(t.max, t.hp + n); if (t.hp > b) popAt(t, '+' + (t.hp - b), '#a6ff5e'); },
+    hurt: (t, n, src) => hurt(S, t, n, src),
+    crowd: n => addCrowd(S, n),
+    pop: (t, txt, col) => popAt(t, txt, col),
+  };
+}
+// bound with the unit's own perspective; content calls X.infront(u) style too,
+// so both arities work and the content reads naturally either way
+function apiFor(S, u) {
+  const raw = fightAPI(S, u);
+  return {
+    allies: raw.allies, foes: raw.foes, crowd: raw.crowd, pop: raw.pop,
+    heal: raw.heal, hurt: raw.hurt, tick: raw.tick,
+    target: x => raw.target(x), targetIn: row => raw.targetIn(row),
+    behindTarget: () => raw.behindTarget(), infront: () => raw.infront(), behind: () => raw.behind(),
+  };
+}
+
+function addCrowd(S, n) {
+  const floor = hasCharm('crowdsurf') ? 20 : 0;
+  S.crowd = clamp(S.crowd + n, floor, 100);
+  if (S.crowd >= 100 && S.drop <= 0) triggerDrop(S);
+}
+function triggerDrop(S) {
+  S.drop = hasCharm('sidechain') ? 8 : 4;
+  S.crowd = 0;
+  S.drops++;
+  G.meta.drops++;
+  sfx('drop');
+  G.flash = Math.max(G.flash, 1);
+  G.shake = Math.max(G.shake, 12);
+  fxRing(0.5, 0.5, '#ff2e88', 1.4);
+  toast('DROP', '#ff2e88');
+  if (hasCharm('reverb')) for (const a of sideUnits(S, 'us')) { a.hp = Math.min(a.max, a.hp + 4); }
+  if (hasCharm('sub_drop')) for (const f of sideUnits(S, 'them')) hurt(S, f, 12, null);
+}
+
+function hurt(S, t, n, src) {
+  if (!t || t.hp <= 0 || n <= 0) return 0;
+  let amt = Math.round(n * (S.drop > 0 && src && src.side === 'us' ? 1.5 : 1));
+  if (t.side === 'us' && hasCharm('foldback') && t.col === 0) amt = Math.max(1, Math.round(amt * 0.75));
+  if (t.side === 'us' && hasCharm('compressor')) amt = Math.min(amt, 8);
+  if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; if (a) popAt(t, '-' + a, '#5aa9ff'); }
+  if (amt > 0) { t.hp -= amt; popAt(t, '-' + amt, t.side === 'us' ? '#ff5a4a' : '#ffe6f2'); }
+  t.flash = 1;
+  G.shake = Math.max(G.shake, Math.min(7, 2 + amt * 0.25));
+  sfx('hit');
+  if (t.hp <= 0) {
+    t.hp = 0; t.dead = G.t;
+    if (src) src.kills++;
+    sfx('die');
+    fxBurst(t, t.tint);
+    if (t.side === 'them') {
+      S.killed++;
+      G.meta.beaten[t.id] = (G.meta.beaten[t.id] || 0) + 1;
+      addCrowd(S, t.boss ? 30 : 5);
+      S.coin += t.boss ? 20 : 2;
+    }
+  }
+  return amt;
+}
+
+function hitPlayer(S, n) {
+  let amt = n;
+  if (hasCharm('compressor')) amt = Math.min(amt, 8);
+  S.hp = Math.max(0, S.hp - amt);
+  G.shake = Math.max(G.shake, 10);
+  G.flash = Math.max(G.flash, 0.5);
+  toast('-' + amt + ' SET', '#ff5a4a');
+  addCrowd(S, -6);
+  if (S.hp <= 0) endFight(S, 'lose');
+}
+
+// A unit speaks. Voice, then ability, then swing -- ability before swing so a
+// card that moves a target can move it before the blow lands.
+function fireUnit(S, u, when) {
+  if (u.hp <= 0) return;
+  if (u.mute > 0) { u.mute--; u.c = u.ctr; popAt(u, 'muted', '#8f86b8'); return; }
+  u.fired++;
+  u.flash = 1;
+  const vel = u.side === 'us' ? (S.drop > 0 ? 1.25 : 1) : 0.8;
+  const key = S.key || 0;
+  play(u.voice, (u.note || 0) + key, vel, when);
+  if (u.voice2) play(u.voice2, (u.note2 || 0) + key, vel * 0.8, (when || now()) + 0.02);
+  const X = apiFor(S, u);
+  if (u.fire) { try { u.fire(u, S, X); } catch (e) {} }
+  if (u.hp <= 0) return;
+  if (u.atk > 0) {
+    const t = u.back ? (backOfRowOnly(S, u.side === 'us' ? 'them' : 'us', u.row) || X.target()) : X.target();
+    if (t) { hurt(S, t, u.atk, u); fxBeam(u, t); }
+    else if (u.side === 'them' && u.col === 0) hitPlayer(S, u.atk);   // only from the front
+  }
+  u.c = u.ctr;
+}
+
+function orderedSide(S, side) {
+  return sideUnits(S, side).sort((a, b) => a.col - b.col || a.row - b.row);
+}
+
+// THE BEAT. Everything in the game happens because this ran.
+function beatStep(S, when) {
+  if (!S || S.over) return;
+  S.beatN++;
+  const beatInBar = S.beatN % BEATS_PER_BAR;
+  S.beatInBar = beatInBar;
+
+  if (S.drop > 0) { S.drop--; if (S.drop === 0) toast('...', '#a79ccb'); }
+
+  const doTicks = (u) => {
+    if (u.hp <= 0) return;
+    let ticks = 1;
+    if (u.col === 0) ticks = 2;
+    else if (u.side === 'us' && hasCharm('talkbox') && u.col === COLS - 1) ticks = 2;
+    if (u.side === 'us' && S.drop > 0) ticks += 2;
+    let fires = 0;
+    for (let i = 0; i < ticks; i++) {
+      if (u.hp <= 0) break;
+      u.c--;
+      if (u.c <= 0) {
+        if (fires >= 2) { u.c = u.ctr; break; }
+        // a unit that ticks twice in a beat plays the beat and the AND of it,
+        // not a 60ms flam -- the subdivision is the whole point of the front
+        // column, and at 100 BPM a 0.06s offset was a grace note nobody heard
+        fireUnit(S, u, when != null ? when + (i / ticks) * SPB() : undefined);
+        fires++;
+      }
+    }
+  };
+
+  for (const u of orderedSide(S, 'us')) doTicks(u);
+  if (S.over) return;
+  for (const u of orderedSide(S, 'them')) doTicks(u);
+  if (S.over) return;
+
+  // gaps close: a foe with nothing in front walks into the fight
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 1; c < COLS; c++) {
+      const u = unitAt(S, 'them', c, r);
+      if (u && !unitAt(S, 'them', c - 1, r)) { u.col = c - 1; u.moved = G.t; }
+    }
+  }
+
+  // the economy pays out on the beat, because the beat is the pacing device
+  S.energy = Math.min(S.maxEnergy, S.energy + 1);
+  if (S.beatN % 2 === 0) drawN(S, 1);
+  if (beatInBar === 0 && S.beatN > 0) {
+    S.bar++;
+    if (hasCharm('metrognome')) S.energy = Math.min(S.maxEnergy, S.energy + 1);
+    addCrowd(S, -3);                       // the room cools when nothing lands
+    nextWaveMaybe(S, when);
+  }
+
+  const pend = (S.pending && S.pending.length) || 0;
+  if (!sideUnits(S, 'them').length && (S.waveI < S.waves.length || pend)) nextWaveMaybe(S, when);
+  if (!sideUnits(S, 'them').length && S.waveI >= S.waves.length && !(S.pending && S.pending.length)) endFight(S, 'win');
+}
+
+function fillFromPending(S) {
+  if (!S.pending) S.pending = [];
+  while (S.pending.length) {
+    const slots = emptySlots(S, 'them');
+    if (!slots.length) break;
+    // back column first: a foe should walk in, not appear in your face
+    slots.sort((a, b) => b.col - a.col || (rnd() < .5 ? -1 : 1));
+    const sl = slots[0];
+    const def = ALL_UNITS[S.pending.shift()];
+    if (!def) continue;
+    const u = mkUnit(S, def, 'them', sl.col, sl.row);
+    u.c = u.ctr + 1;            // a foe walking on gets no free swing
+    if (!u.boss) {
+      const scale = S.scale || 1;
+      u.hp = u.max = Math.round(u.max * scale);
+      u.atk = Math.max(1, Math.round(u.atk * (1 + (scale - 1) * 0.6)));
+    }
+    u.spawn = G.t;
+    S.units.push(u);
+  }
+}
+function nextWaveMaybe(S, when) {
+  if (!S.pending) S.pending = [];
+  fillFromPending(S);
+  if (S.waveI >= S.waves.length) return;
+  const living = sideUnits(S, 'them').length;
+  const w = S.waves[S.waveI];
+  // a wave lands when the last one is gone, or when its bar comes round anyway
+  if (living > 0 && S.bar < w.bar) return;
+  S.waveI++;
+  for (const id of w.units) S.pending.push(id);
+  fillFromPending(S);
+  if (S.waveI > 1) toast('WAVE ' + S.waveI + ' / ' + S.waves.length, '#ff6bb0');
+}
+
+function endFight(S, how) {
+  if (S.over) return;
+  S.over = how;
+  stopTransport();
+  if (how === 'win') { sfx('win'); }
+  else { sfx('lose'); }
+}
+
+/* ================================================ S8 -- the run ========== */
+
+/* ---- effects: everything the screen does that the sim does not need ---- */
+function popAt(u, txt, col) {
+  if (!u) return;
+  // stagger, or two hits on one unit in one beat print through each other
+  const stack = G.fx.filter(f => f.k === 'pop' && f.u === u && f.t < 260).length;
+  G.fx.push({ k: 'pop', u, txt, col: col || '#fff', t: 0, life: 700,
+    dx: (rnd() - .5) * 26 + (stack % 3) * 15, dy: (stack % 3) * 12 });
+}
+function fxBurst(u, col) {
+  for (let i = 0; i < 12; i++) {
+    const a = rnd() * TAU, s = 40 + rnd() * 130;
+    G.fx.push({ k: 'spark', u, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 40, col: col || '#fff', t: 0, life: 520 });
+  }
+}
+function fxBeam(a, b) { G.fx.push({ k: 'beam', a, b, t: 0, life: 190 }); }
+function fxRing(nx, ny, col, scale) { G.fx.push({ k: 'ring', nx, ny, col, scale: scale || 1, t: 0, life: 620 }); }
+function toast(txt, col) { G.toast = { txt, col: col || '#fff', t: 0 }; }
+
+function stepFX(dt) {
+  for (const f of G.fx) f.t += dt;
+  G.fx = G.fx.filter(f => f.t < f.life);
+  if (G.toast) { G.toast.t += dt; if (G.toast.t > 1200) G.toast = null; }
+  G.shake = Math.max(0, G.shake - dt * 0.045);
+  G.flash = Math.max(0, G.flash - dt * 0.004);
+}
+
+/* ---- building a run ---------------------------------------------------- */
+function newRun(seed) {
+  const s = seed == null ? (Date.now() & 0x7fffffff) : seed;
+  RND = mulberry(s);
+  G.run = {
+    seed: s,
+    act: 0, stage: 0,
+    deck: startingDeck(),
+    charms: [],
+    coin: 30,
+    hp: 55, maxHp: 55,
+    fight: null,
+    beatenBosses: [],
+    perfects: 0, drops: 0, stagesCleared: 0,
+    offer: null, shop: null,
+  };
+  G.meta.runs++;
+  saveMeta();
+  return G.run;
+}
+
+// The waves for one stage. Difficulty is the act, the stage inside it, and a
+// scale that multiplies foe HP -- three dials, and the third is the only one
+// that is not visible to the player, so it stays gentle.
+function buildStage(actI, stageI) {
+  const act = ACTS[actI];
+  const boss = stageI >= STAGES_PER_ACT;
+  const waves = [];
+  if (boss) {
+    waves.push({ bar: 0, units: [act.boss] });
+    waves.push({ bar: 3, units: pickN(act.pool, 2) });
+    waves.push({ bar: 7, units: pickN(act.pool, 3) });
+    waves.push({ bar: 12, units: pickN(act.pool, 3) });
+    waves.push({ bar: 17, units: pickN(act.pool, 3) });
+  } else {
+    const n = [3, 4, 4, 5][Math.min(3, stageI)];
+    // the first fight of a run is the only one nobody has warmed up for
+    const count = (actI === 0 && stageI === 0) ? 2 : 3;
+    for (let w = 0; w < n; w++) {
+      const units = [];
+      for (let i = 0; i < count; i++) units.push(pick(act.pool));
+      waves.push({ bar: w * 4, units });
+    }
+  }
+  const scale = 1 + actI * 0.62 + stageI * 0.15;
+  return { waves, scale, boss, act };
+}
+
+function startFight() {
+  const R = G.run;
+  const { waves, scale, boss, act } = buildStage(R.act, R.stage);
+  const S = {
+    bpm: act.bpm, key: act.key, actI: R.act, stageI: R.stage, boss,
+    units: [], crowd: hasCharm('crowdsurf') ? 20 : 0, drop: 0, drops: 0,
+    energy: 5, maxEnergy: 9,
+    hp: R.hp, maxHp: R.maxHp,
+    beatN: -1, beatInBar: 0, bar: 0,
+    waves, waveI: 0, pending: [], scale, killed: 0, coin: 0,
+    draw: shuffle(R.deck.map(mkCard)), hand: [], disc: [], handMax: 8,
+    over: null, freeCard: hasCharm('clickTrack'), armed: false,
+    judged: null, started: G.t,
+  };
+  R.fight = S;
+  drawN(S, 5 + (hasCharm('encore') ? 2 : 0));
+  nextWaveMaybe(S, null);
+  startTransport(act.bpm);
+  G.scr = 'run';
+  return S;
+}
+
+/* ---- playing a card ----------------------------------------------------
+   The judge is the only place the player's own timing matters, and it reads
+   the same clock the beat runs on. PERFECT does not do more damage -- it puts
+   the unit on the board READY, one beat from firing, which is worth far more
+   and is legible: you see it come down already lit. */
+const WIN_PERFECT = 95, WIN_GOOD = 195;   // ms either side of the beat
+
+function judgeNow() {
+  if (!A.running) return { grade: 'good', off: 0 };
+  const b = beatNow();
+  const off = Math.abs(b - Math.round(b)) * SPB() * 1000;
+  const pw = WIN_PERFECT * (hasCharm('monitor') ? 1.55 : 1);
+  const gw = WIN_GOOD * (hasCharm('monitor') ? 1.35 : 1);
+  return { grade: off <= pw ? 'perfect' : off <= gw ? 'good' : 'late', off };
+}
+
+function canPlay(S, i) {
+  const c = S.hand[i];
+  if (!c) return false;
+  if (S.freeCard) return true;
+  return S.energy >= c.cost;
+}
+
+function playCard(S, i, col, row) {
+  if (!S || S.over) return null;
+  const card = S.hand[i];
+  if (!card) return null;
+  if (unitAt(S, 'us', col, row)) { sfx('deny'); return null; }
+  const free = S.freeCard;
+  if (!free && S.energy < card.cost) { sfx('deny'); toast('NO ENERGY', '#ff5a4a'); return null; }
+
+  const j = free ? { grade: 'perfect', off: 0 } : judgeNow();
+  if (!free) S.energy -= card.cost;
+  S.freeCard = false;
+  S.hand.splice(i, 1);
+  S.disc.push(card);
+
+  const def = CREW_BY[card.id];
+  const u = mkUnit(S, def, 'us', col, row);
+  u.atk += card.plus;
+  u.spawn = G.t;
+
+  if (j.grade === 'perfect') {
+    u.c = 1; u.perfect = true;
+    addCrowd(S, hasCharm('goldmic') ? 24 : 12);
+    G.run.perfects++; G.meta.perfects++;
+    sfx('perfect'); toast('PERFECT', '#ffc94d');
+    fxRing(0.5, 0.5, '#ffc94d', 0.9);
+  } else if (j.grade === 'good') {
+    u.c = Math.max(1, u.ctr - 1);
+    addCrowd(S, 6);
+    sfx('good'); toast('GOOD', '#2ee6d6');
+  } else {
+    u.c = u.ctr + 1;
+    addCrowd(S, -10);
+    sfx('late'); toast('LATE', '#8f86b8');
+  }
+  S.units.push(u);
+  S.armed = true;                       // the count-in ends the moment you play
+  G.meta.seen[u.id] = (G.meta.seen[u.id] || 0) + 1;
+  S.judged = { grade: j.grade, t: G.t };
+  return u;
+}
+
+// Moving a placed ally is free, on purpose: the front-row trade should be a
+// question you answer every beat, not once when you played the card.
+function moveUnit(S, u, col, row) {
+  if (!u || u.side !== 'us' || u.hp <= 0) return false;
+  if (unitAt(S, 'us', col, row)) return false;
+  u.col = col; u.row = row; u.moved = G.t;
+  sfx('tap');
+  return true;
+}
+
+/* ---- after the fight --------------------------------------------------- */
+function rollOffer() {
+  const R = G.run;
+  const owned = {}; for (const id of R.deck) owned[id] = true;
+  const pool = CREW.filter(c => R.act > 0 || c.r <= 1);
+  const tier = () => weighted([[0, 60 - R.act * 12], [1, 30 + R.act * 4], [2, 9 + R.act * 6], [3, 1 + R.act * 2]]);
+  const cards = [];
+  const tries = 40;
+  for (let n = 0; n < 3; n++) {
+    for (let k = 0; k < tries; k++) {
+      const want = tier();
+      const cand = pool.filter(c => c.r === want && !cards.find(x => x.id === c.id));
+      if (cand.length) { cards.push(pick(cand)); break; }
+      if (k === tries - 1) { const any = pool.filter(c => !cards.find(x => x.id === c.id)); if (any.length) cards.push(pick(any)); }
+    }
+  }
+  const haveCharms = R.charms.slice();
+  const charmPool = CHARMS.filter(c => haveCharms.indexOf(c.id) < 0);
+  const charm = charmPool.length && (R.stage === STAGES_PER_ACT || rnd() < 0.34) ? pick(charmPool) : null;
+  R.offer = { cards, charm, taken: false };
+  return R.offer;
+}
+function takeCard(id) {
+  const R = G.run;
+  if (!R.offer || R.offer.taken) return;
+  R.deck.push(id);
+  R.offer.taken = true;
+  if (G.meta.unlocked.indexOf(id) < 0) { G.meta.unlocked.push(id); saveMeta(); }
+  sfx('coin');
+}
+function takeCharm(id) {
+  const R = G.run;
+  if (!R.offer || R.offer.taken) return;
+  R.charms.push(id);
+  R.offer.taken = true;
+  sfx('coin');
+  applyCharmOnce(id);
+}
+function applyCharmOnce(id) {
+  const R = G.run;
+  if (id === 'roadcase') { R.maxHp += 6; R.hp += 6; }
+}
+function skipOffer() { if (G.run.offer) G.run.offer.taken = true; sfx('tap'); }
+
+function rollShop() {
+  const R = G.run;
+  const pool = CREW.filter(c => R.act > 0 || c.r <= 1);
+  const cards = pickN(pool, 3).map(c => ({ id: c.id, price: 12 + c.r * 9 + c.cost * 3 }));
+  const charmPool = CHARMS.filter(c => R.charms.indexOf(c.id) < 0);
+  const charms = pickN(charmPool, 2).map(c => ({ id: c.id, price: 34 + Math.floor(rnd() * 14) }));
+  R.shop = { cards, charms, heal: { price: 22, taken: false }, purge: { price: 26, taken: false } };
+  return R.shop;
+}
+
+function afterFight(S) {
+  const R = G.run;
+  R.hp = S.hp;
+  R.coin += 12 + S.coin + (hasCharm('merchtable') ? 8 : 0) + (S.boss ? 25 : 0);
+  R.stagesCleared++;
+  R.drops += S.drops;
+  if (S.boss) R.beatenBosses.push(ACTS[R.act].boss);
+  G.meta.best = Math.max(G.meta.best, R.act * 10 + R.stage + 1);
+  saveMeta(); saveRun();
+}
+
+function bankScore() {
+  const R = G.run;
+  if (!R) return 0;
+  R.score = runScore(R);
+  R.newBest = R.score > (G.meta.bestScore || 0);
+  if (R.newBest) G.meta.bestScore = R.score;
+  G.meta.best = Math.max(G.meta.best, R.act * 10 + R.stage);
+  saveMeta();
+  return R.score;
+}
+
+function advance() {
+  const R = G.run;
+  R.offer = null; R.shop = null;
+  if (R.stage >= STAGES_PER_ACT) {
+    R.act++; R.stage = 0;
+    if (R.act >= ACTS.length) { G.scr = 'win'; G.meta.wins++; bankScore(); clearRun(); return; }
+    // backstage between acts: the set does not otherwise heal, and without
+    // this the whole run was decided by whatever act two left you holding
+    R.hp = Math.min(R.maxHp, R.hp + 15);
+    G.scr = 'map';
+  } else {
+    R.stage++;
+    G.scr = 'map';
+  }
+  saveRun();
+}
+
+/* ================================================== S5 -- the art ======== */
+/* No files. Every crew member, foe and card face is drawn here from a recipe.
+   The rule the roster is built against: a recipe must be tellable apart from
+   every other one BLACKED OUT at 44 units, because on a phone that is how big
+   a unit on the board actually is. So each recipe owns one large protruding
+   shape and no two share it, and colour is the last thing that distinguishes
+   anything, never the first. */
+
+function hex2rgb(h) {
+  h = h.replace('#', '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function shade(h, amt) {
+  const [r, g, b] = hex2rgb(h);
+  const f = v => Math.round(clamp(amt < 0 ? v * (1 + amt) : v + (255 - v) * amt, 0, 255));
+  return 'rgb(' + f(r) + ',' + f(g) + ',' + f(b) + ')';
+}
+function rgba(h, a) { const [r, g, b] = hex2rgb(h); return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')'; }
+
+function rr(c, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+function circ(c, x, y, r) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.closePath(); }
+function poly(c, pts) {
+  c.beginPath();
+  c.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+  c.closePath();
+}
+// every shape gets the same light: from above and slightly left, dark rim below
+function lit(c, tint, y0, y1) {
+  const g = c.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, shade(tint, .34));
+  g.addColorStop(.55, tint);
+  g.addColorStop(1, shade(tint, -.45));
+  return g;
+}
+
+
+// Eyes, and a mouth if the recipe wants one. Two dots at 44 units is the whole
+// difference between a shape and somebody; anything more detailed disappears at
+// that size, so this is deliberately the least face that still reads.
+function face(c, x, y, r, tint, opts) {
+  opts = opts || {};
+  const ex = r * .40, ey = -r * .08, er = Math.max(1.2, r * .17);
+  c.fillStyle = opts.dark ? '#07060d' : shade(tint, -.72);
+  if (opts.shut) {
+    c.strokeStyle = opts.dark ? '#07060d' : shade(tint, -.72);
+    c.lineWidth = Math.max(1.2, r * .13); c.lineCap = 'round';
+    for (const sx of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(x + sx * ex - er, y + ey);
+      c.quadraticCurveTo(x + sx * ex, y + ey + er * .9, x + sx * ex + er, y + ey);
+      c.stroke();
+    }
+  } else {
+    circ(c, x - ex, y + ey, er); c.fill();
+    circ(c, x + ex, y + ey, er); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.85)';
+    circ(c, x - ex + er * .3, y + ey - er * .3, er * .38); c.fill();
+    circ(c, x + ex + er * .3, y + ey - er * .3, er * .38); c.fill();
+  }
+  if (opts.mouth) {
+    c.fillStyle = opts.dark ? '#07060d' : shade(tint, -.75);
+    const mw = r * (opts.mouth === 'wide' ? .40 : .24), mh = r * (opts.mouth === 'wide' ? .42 : .26);
+    c.beginPath(); c.ellipse(x, y + r * .46, mw, mh, 0, 0, TAU); c.fill();
+    c.fillStyle = shade(tint, -.4);
+    c.beginPath(); c.ellipse(x, y + r * .46 + mh * .45, mw * .6, mh * .3, 0, 0, TAU); c.fill();
+  }
+}
+
+/* ---- the recipes -------------------------------------------------------
+   Each takes a canvas whose origin is the unit's feet, and a size s that is
+   the unit's height. Draw upward: -y. */
+const ART = {
+  // ROX and SCRATCH: a beatboxer with the mic AT the mouth. Signature: the
+  // cupped fist and mic held across the jaw, which no other recipe has.
+  boxer(c, s, tint, t) {
+    const bob = Math.sin(t * 3) * s * .022;
+    const hy = -s * .74 + bob;
+    c.fillStyle = lit(c, tint, -s * .66, 0);
+    rr(c, -s * .24, -s * .58 + bob, s * .48, s * .58, s * .11); c.fill();        // torso
+    c.fillStyle = shade(tint, -.35);
+    rr(c, -s * .32, -s * .48 + bob, s * .09, s * .30, s * .045); c.fill();       // far arm
+    c.fillStyle = shade(tint, .14);
+    circ(c, 0, hy, s * .195); c.fill();                                          // head
+    c.fillStyle = shade(tint, -.5);
+    rr(c, -s * .26, -s * .34 + bob, s * .52, s * .08, s * .035); c.fill();       // chest bar
+    face(c, 0, hy, s * .195, tint, { mouth: 'wide' });
+    // SIGNATURE: the mic, GRILLE FIRST at the mouth and the handle falling away
+    // from it. The first cut had the handle pointing up and out of frame, so
+    // the only part you could see was the far cap, floating beside his head
+    // like a speech bubble.
+    c.save(); c.translate(s * .20, hy + s * .09); c.rotate(.55);
+    c.fillStyle = shade('#c8ccd4', -.52);
+    rr(c, 0, -s * .036, s * .27, s * .072, s * .03); c.fill();                   // handle
+    c.fillStyle = shade('#c8ccd4', -.72);
+    rr(c, s * .10, -s * .040, s * .03, s * .080, s * .012); c.fill();            // its collar
+    c.fillStyle = shade('#c8ccd4', .30);
+    circ(c, 0, 0, s * .088); c.fill();                                           // the grille
+    c.fillStyle = shade('#c8ccd4', -.30);
+    circ(c, s * .012, s * .012, s * .056); c.fill();
+    c.restore();
+    c.fillStyle = shade(tint, .42);
+    circ(c, s * .32, hy + s * .19, s * .10); c.fill();                           // the fist on it
+    c.fillStyle = shade(tint, -.3);
+    rr(c, s * .26, hy + s * .13, s * .12, s * .035, s * .016); c.fill();
+  },
+
+  // JAS and HARMONY: a singer mid-phrase, eyes shut, arms open.
+  // Signature: the plume of held sound coming off the crown.
+  singer(c, s, tint, t) {
+    const sw = Math.sin(t * 1.8) * s * .03;
+    const hy = -s * .74;
+    c.fillStyle = lit(c, tint, -s, 0);
+    poly(c, [[-s * .28, 0], [s * .28, 0], [s * .16, -s * .60], [-s * .16, -s * .60]]); c.fill();
+    c.strokeStyle = shade(tint, -.2); c.lineWidth = s * .07; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-s * .14, -s * .50); c.lineTo(-s * .34, -s * .30 + sw); c.stroke();
+    c.beginPath(); c.moveTo(s * .14, -s * .50); c.lineTo(s * .34, -s * .30 - sw); c.stroke();
+    c.fillStyle = shade(tint, .18);
+    circ(c, sw * .4, hy, s * .185); c.fill();
+    face(c, sw * .4, hy, s * .185, tint, { shut: true, mouth: 'wide' });
+    // SIGNATURE: the plume
+    c.strokeStyle = shade(tint, .55); c.lineWidth = s * .05; c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(sw * .4, hy - s * .18);
+    c.quadraticCurveTo(sw * 3 + s * .17, -s * 1.06, sw * 2, -s * 1.26);
+    c.stroke();
+    c.fillStyle = shade(tint, .72);
+    circ(c, sw * 2, -s * 1.28, s * .055); c.fill();
+    c.fillStyle = shade(tint, -.42);
+    rr(c, -s * .20, -s * .46, s * .40, s * .07, s * .03); c.fill();
+  },
+
+  // THUMP and DROPKICK: a bass drum on legs. Signature: the round head-on drum.
+  drum(c, s, tint, t) {
+    const hit = Math.max(0, Math.sin(t * 4)) * s * .03;
+    c.fillStyle = shade(tint, -.55);
+    rr(c, -s * .10, -s * .22, s * .07, s * .22, s * .03); c.fill();
+    rr(c, s * .04, -s * .22, s * .07, s * .22, s * .03); c.fill();
+    c.fillStyle = lit(c, tint, -s * .86, -s * .16);
+    circ(c, 0, -s * .50 - hit, s * .34); c.fill();                              // SIGNATURE: the drum
+    c.fillStyle = shade(tint, -.62);
+    circ(c, 0, -s * .50 - hit, s * .21); c.fill();
+    c.fillStyle = shade(tint, .5);
+    circ(c, -s * .10, -s * .60 - hit, s * .06); c.fill();
+    c.strokeStyle = shade(tint, .3); c.lineWidth = s * .035;
+    circ(c, 0, -s * .50 - hit, s * .29); c.stroke();
+  },
+  // TICK, STUTTER: thin, fast, all wire. Signature: the antenna and the tiny body.
+  wire(c, s, tint, t) {
+    const j = Math.sin(t * 9) * s * .02;
+    c.strokeStyle = shade(tint, -.3); c.lineWidth = s * .05; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-s * .10, 0); c.lineTo(-s * .04, -s * .30); c.stroke();
+    c.beginPath(); c.moveTo(s * .10, 0); c.lineTo(s * .04, -s * .30); c.stroke();
+    c.fillStyle = lit(c, tint, -s * .62, -s * .26);
+    rr(c, -s * .13, -s * .60, s * .26, s * .32, s * .08); c.fill();
+    c.fillStyle = shade(tint, .2);
+    circ(c, j, -s * .70, s * .135); c.fill();
+    face(c, j, -s * .70, s * .135, tint, {});
+    // SIGNATURE: two antennae, longer than the body
+    c.strokeStyle = shade(tint, .55); c.lineWidth = s * .035;
+    c.beginPath(); c.moveTo(j - s * .05, -s * .78); c.lineTo(j - s * .16, -s * 1.16); c.stroke();
+    c.beginPath(); c.moveTo(j + s * .05, -s * .78); c.lineTo(j + s * .16, -s * 1.10); c.stroke();
+    c.fillStyle = shade(tint, .75);
+    circ(c, j - s * .16, -s * 1.18, s * .04); c.fill();
+    circ(c, j + s * .16, -s * 1.12, s * .04); c.fill();
+  },
+  // HUM, ANTHEM: a standing slab that does not move. Signature: the monolith.
+  monolith(c, s, tint, t) {
+    const glow = .5 + Math.sin(t * 1.4) * .5;
+    c.fillStyle = lit(c, tint, -s * .96, 0);
+    rr(c, -s * .27, -s * .96, s * .54, s * .96, s * .07); c.fill();             // SIGNATURE
+    c.fillStyle = shade(tint, -.55);
+    rr(c, -s * .16, -s * .82, s * .32, s * .52, s * .05); c.fill();
+    c.globalAlpha = .35 + glow * .45;
+    c.fillStyle = shade(tint, .6);
+    rr(c, -s * .11, -s * .76, s * .22, s * .40, s * .04); c.fill();
+    c.globalAlpha = 1;
+    c.fillStyle = shade(tint, .35);
+    rr(c, -s * .27, -s * 1.02, s * .54, s * .09, s * .04); c.fill();
+  },
+  // CLAP, RIMSHOT: two hands caught a frame before they meet.
+  // Signature: the splayed fingers, which nothing else in the set has.
+  hands(c, s, tint, t) {
+    const gap = (1 - Math.abs(Math.sin(t * 3.2))) * s * .13 + s * .035;
+    c.fillStyle = shade(tint, -.5);
+    rr(c, -s * .09, -s * .32, s * .18, s * .32, s * .05); c.fill();               // the arm stub
+    for (const dir of [-1, 1]) {
+      c.save(); c.scale(dir, 1);
+      c.translate(gap, 0);
+      c.fillStyle = lit(c, tint, -s * .80, -s * .26);
+      rr(c, 0, -s * .58, s * .21, s * .32, s * .07); c.fill();                    // palm
+      for (let f = 0; f < 4; f++) {                                               // SIGNATURE: fingers
+        const fx = s * .015 + f * s * .049;
+        const fl = s * (.20 + Math.sin(f * 1.1) * .045);
+        c.fillStyle = shade(tint, .10 + f * .07);
+        rr(c, fx, -s * .58 - fl, s * .042, fl + s * .04, s * .021); c.fill();
+      }
+      c.fillStyle = shade(tint, -.3);
+      rr(c, s * .16, -s * .50, s * .07, s * .18, s * .03); c.fill();              // thumb
+      c.restore();
+    }
+    // the clap itself: a flash in the gap when they are closest
+    const close = 1 - inv(gap, s * .035, s * .16);
+    if (close > .55) {
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = rgba(tint, (close - .55) * .9);
+      circ(c, 0, -s * .44, s * .17 * close); c.fill();
+      c.restore();
+    }
+  },
+
+  // SUBWOOF, GROWL: a speaker cabinet with a face. Signature: the twin cones.
+  cabinet(c, s, tint, t) {
+    const p = Math.max(0, Math.sin(t * 2.4)) * s * .03;
+    c.fillStyle = lit(c, tint, -s * .90, 0);
+    rr(c, -s * .32, -s * .90, s * .64, s * .90, s * .06); c.fill();
+    c.fillStyle = shade(tint, -.62);
+    circ(c, -s * .14, -s * .62, s * .15 + p); c.fill();                          // SIGNATURE
+    circ(c, s * .14, -s * .62, s * .15 + p); c.fill();
+    circ(c, 0, -s * .26, s * .11 + p * .6); c.fill();
+    c.fillStyle = shade(tint, .42);
+    circ(c, -s * .14, -s * .62, s * .06); c.fill();
+    circ(c, s * .14, -s * .62, s * .06); c.fill();
+    c.strokeStyle = shade(tint, .2); c.lineWidth = s * .028;
+    rr(c, -s * .28, -s * .86, s * .56, s * .82, s * .05); c.stroke();
+  },
+  // RIFF: a guitar carried like a weapon. Signature: the neck across the body.
+  axe(c, s, tint, t) {
+    const sw = Math.sin(t * 2.6) * .12;
+    c.fillStyle = lit(c, tint, -s * .70, 0);
+    rr(c, -s * .19, -s * .62, s * .38, s * .62, s * .08); c.fill();
+    c.fillStyle = shade(tint, .14);
+    circ(c, 0, -s * .76, s * .15); c.fill();
+    c.save(); c.translate(0, -s * .42); c.rotate(-0.6 + sw);
+    c.fillStyle = shade(tint, -.5);
+    rr(c, -s * .06, -s * .05, s * .70, s * .10, s * .04); c.fill();              // SIGNATURE: the neck
+    c.fillStyle = shade(tint, .5);
+    rr(c, -s * .30, -s * .16, s * .26, s * .32, s * .10); c.fill();
+    c.fillStyle = shade(tint, .8);
+    rr(c, s * .60, -s * .09, s * .12, s * .18, s * .04); c.fill();
+    c.restore();
+  },
+  // ECHO: a horn, and the same horn again behind it, smaller. Signature: the bell mouth.
+  horn(c, s, tint, t) {
+    const w = Math.sin(t * 2) * s * .02;
+    c.globalAlpha = .38;
+    c.fillStyle = shade(tint, -.2);
+    poly(c, [[-s * .04, -s * .18], [s * .30, -s * .18], [s * .46, -s * .58], [s * .02, -s * .46]]); c.fill();
+    c.globalAlpha = 1;
+    c.fillStyle = lit(c, tint, -s * .72, 0);
+    rr(c, -s * .20, -s * .56, s * .38, s * .56, s * .08); c.fill();
+    c.fillStyle = shade(tint, .12);
+    circ(c, -s * .02, -s * .70, s * .15); c.fill();
+    c.fillStyle = shade(tint, .45);                                             // SIGNATURE: the flared bell
+    poly(c, [[-s * .02, -s * .40 + w], [s * .24, -s * .46 + w], [s * .48, -s * .82 + w], [s * .10, -s * .66 + w]]); c.fill();
+    c.fillStyle = shade(tint, -.5);
+    poly(c, [[s * .26, -s * .52 + w], [s * .44, -s * .78 + w], [s * .30, -s * .82 + w], [s * .18, -s * .58 + w]]); c.fill();
+  },
+  // LOOPER, METRONOME: a ring that never stops turning. Signature: the open hoop.
+  ring(c, s, tint, t) {
+    c.fillStyle = shade(tint, -.5);
+    rr(c, -s * .09, -s * .30, s * .18, s * .30, s * .05); c.fill();
+    c.save(); c.translate(0, -s * .62);
+    c.rotate(t * 1.6);
+    c.strokeStyle = shade(tint, .1); c.lineWidth = s * .10; c.lineCap = 'round';
+    c.beginPath(); c.arc(0, 0, s * .28, .5, TAU - .5); c.stroke();               // SIGNATURE
+    c.strokeStyle = shade(tint, .6); c.lineWidth = s * .045;
+    c.beginPath(); c.arc(0, 0, s * .28, .5, 1.9); c.stroke();
+    c.fillStyle = shade(tint, .8);
+    circ(c, Math.cos(.5) * s * .28, Math.sin(.5) * s * .28, s * .06); c.fill();
+    c.restore();
+    c.fillStyle = shade(tint, .3);
+    circ(c, 0, -s * .62, s * .09); c.fill();
+  },
+  // TOLL: the bell itself. Signature: the swinging skirt.
+  bell(c, s, tint, t) {
+    const sw = Math.sin(t * 1.7) * .16;
+    c.save(); c.translate(0, -s * .94); c.rotate(sw);
+    c.fillStyle = lit(c, tint, -s * .1, s * .70);
+    poly(c, [[-s * .10, 0], [s * .10, 0], [s * .34, s * .60], [-s * .34, s * .60]]); c.fill();  // SIGNATURE
+    c.fillStyle = shade(tint, -.5);
+    rr(c, -s * .36, s * .56, s * .72, s * .10, s * .04); c.fill();
+    c.fillStyle = shade(tint, .55);
+    circ(c, 0, s * .70, s * .08); c.fill();
+    c.fillStyle = shade(tint, .3);
+    rr(c, -s * .05, -s * .10, s * .10, s * .12, s * .04); c.fill();
+    c.restore();
+  },
+  // THE DUO: both of them, shoulder to shoulder. Signature: two heads, one shadow.
+  duo(c, s, tint, t) {
+    const b = Math.sin(t * 3) * s * .02, b2 = Math.sin(t * 3 + 1.3) * s * .02;
+    c.fillStyle = lit(c, '#2ee6d6', -s * .8, 0);
+    poly(c, [[s * .02, 0], [s * .34, 0], [s * .26, -s * .58 + b2], [s * .04, -s * .58 + b2]]); c.fill();
+    c.fillStyle = shade('#2ee6d6', .16);
+    circ(c, s * .16, -s * .72 + b2, s * .145); c.fill();
+    face(c, s * .16, -s * .72 + b2, s * .145, '#2ee6d6', { shut: true, mouth: 1 });
+    c.fillStyle = lit(c, tint, -s * .8, 0);
+    rr(c, -s * .34, -s * .60 + b, s * .34, s * .60, s * .09); c.fill();
+    c.fillStyle = shade(tint, .14);
+    circ(c, -s * .17, -s * .74 + b, s * .155); c.fill();
+    face(c, -s * .17, -s * .74 + b, s * .155, tint, { mouth: 'wide' });
+    c.fillStyle = '#1a1730';                                                     // SIGNATURE: the shared mic between them
+    rr(c, -s * .04, -s * .96, s * .09, s * .30, s * .04); c.fill();
+    c.fillStyle = shade('#ffc94d', .3);
+    circ(c, 0, -s * .96, s * .07); c.fill();
+  },
+
+  /* ---- the other side: no faces, and nothing that reads as a person ---- */
+  shade(c, s, tint, t) {
+    const d = Math.sin(t * 2.2) * s * .02;
+    c.fillStyle = lit(c, tint, -s * .86, 0);
+    poly(c, [[-s * .26, 0], [s * .26, 0], [s * .19, -s * .60 + d], [s * .09, -s * .86 + d], [-s * .09, -s * .86 + d], [-s * .19, -s * .60 + d]]); c.fill();
+    c.fillStyle = '#07060d';                                                     // SIGNATURE: the empty hood
+    poly(c, [[-s * .12, -s * .58 + d], [s * .12, -s * .58 + d], [s * .08, -s * .82 + d], [-s * .08, -s * .82 + d]]); c.fill();
+    c.fillStyle = shade(tint, .6);
+    circ(c, -s * .05, -s * .70 + d, s * .022); c.fill();
+    circ(c, s * .05, -s * .70 + d, s * .022); c.fill();
+  },
+  hulk(c, s, tint, t) {
+    const h = Math.sin(t * 1.4) * s * .015;
+    c.fillStyle = shade(tint, -.62);
+    rr(c, -s * .46, -s * .50 + h, s * .12, s * .38, s * .05); c.fill();           // arms, hanging
+    rr(c, s * .34, -s * .50 + h, s * .12, s * .38, s * .05); c.fill();
+    c.fillStyle = lit(c, tint, -s * .84, 0);
+    poly(c, [[-s * .40, 0], [s * .40, 0], [s * .34, -s * .60 + h],
+             [s * .22, -s * .80 + h], [-s * .22, -s * .80 + h], [-s * .34, -s * .60 + h]]);
+    c.fill();                                                                     // SIGNATURE: the slab
+    c.fillStyle = '#07060d';                                                      // the recess
+    rr(c, -s * .21, -s * .74 + h, s * .42, s * .19, s * .04); c.fill();
+    c.fillStyle = shade(tint, .55);                                               // two hostile lights
+    rr(c, -s * .15, -s * .68 + h, s * .10, s * .045, s * .02); c.fill();
+    rr(c, s * .05, -s * .68 + h, s * .10, s * .045, s * .02); c.fill();
+    c.fillStyle = shade(tint, -.55);
+    for (let i = 0; i < 3; i++) rr(c, -s * .28 + i * s * .19, -s * .44 + h, s * .12, s * .05, s * .02); c.fill();
+  },
+  spike(c, s, tint, t) {
+    const r = t * 2.2;
+    c.save(); c.translate(0, -s * .50);
+    c.fillStyle = shade(tint, -.35);
+    for (let i = 0; i < 7; i++) {                                                // SIGNATURE: the star of thorns
+      const a = r + i * TAU / 7;
+      poly(c, [[Math.cos(a) * s * .46, Math.sin(a) * s * .46],
+               [Math.cos(a + .38) * s * .17, Math.sin(a + .38) * s * .17],
+               [Math.cos(a - .38) * s * .17, Math.sin(a - .38) * s * .17]]); c.fill();
+    }
+    c.fillStyle = lit(c, tint, -s * .22, s * .22);
+    circ(c, 0, 0, s * .21); c.fill();
+    c.fillStyle = '#07060d';
+    circ(c, 0, 0, s * .10); c.fill();
+    c.restore();
+  },
+  boss1(c, s, tint, t) {
+    ART.shade(c, s * 1.15, tint, t);
+    c.fillStyle = shade(tint, .5);
+    c.globalAlpha = .5 + Math.sin(t * 2) * .3;
+    circ(c, 0, -s * .82, s * .40); c.fill();
+    c.globalAlpha = 1;
+    c.fillStyle = shade(tint, -.2);
+    for (let i = 0; i < 5; i++) { const a = -1.9 + i * .48; poly(c, [[0, -s * .78], [Math.cos(a) * s * .72, -s * .78 + Math.sin(a) * s * .72], [Math.cos(a + .12) * s * .70, -s * .78 + Math.sin(a + .12) * s * .70]]); c.fill(); }
+  },
+  boss2(c, s, tint, t) {
+    ART.hulk(c, s * 1.1, tint, t);
+    c.fillStyle = '#07060d';
+    rr(c, -s * .30, -s * .62, s * .60, s * .14, s * .06); c.fill();
+    c.fillStyle = shade(tint, .7);
+    for (let i = 0; i < 4; i++) { rr(c, -s * .24 + i * s * .14, -s * .59, s * .06, s * .08, s * .02); c.fill(); }
+    c.fillStyle = shade(tint, .4);
+    poly(c, [[-s * .5, -s * .78], [s * .5, -s * .78], [0, -s * 1.06]]); c.fill();
+  },
+  boss3(c, s, tint, t) {
+    c.save(); c.translate(0, -s * .56);
+    c.strokeStyle = rgba(tint, .5); c.lineWidth = s * .03;
+    for (let i = 0; i < 3; i++) { circ(c, 0, 0, s * (.32 + i * .16) + Math.sin(t * 1.5 + i) * s * .02); c.stroke(); }
+    c.fillStyle = lit(c, tint, -s * .34, s * .34);
+    circ(c, 0, 0, s * .30); c.fill();
+    c.fillStyle = '#07060d';
+    circ(c, 0, 0, s * .17); c.fill();
+    c.restore();
+  },
+};
+
+function drawUnit(c, art, tint, s, t) {
+  const fn = ART[art] || ART.shade;
+  c.save();
+  // the ground shadow says where the light is, and every recipe gets the same one
+  c.fillStyle = 'rgba(0,0,0,.45)';
+  c.beginPath(); c.ellipse(0, 0, s * .34, s * .09, 0, 0, TAU); c.fill();
+  try { fn(c, s, tint, t); } catch (e) {}
+  c.restore();
+}
+
+/* ================================================== S9 -- render ========= */
+/* One layout function, read by both the renderer and the hit tests. Nothing
+   in this game computes a position twice -- when the board moved during the
+   build it moved once, and the taps followed it for free. */
+
+let CV = null, CX = null, DPR = 1;
+
+function layout() {
+  const W = G.W, H = G.H;
+  const cx = W / 2;
+  const L = {
+    W, H, cx,
+    hud: { y: 0, h: 54 },
+    crowd: { x: 16, y: 58, w: W - 32, h: 14 },
+    board: { y0: 92, y1: 352 },
+    rowY: [168, 296],           // feet baseline of each row
+    gap: 74,                    // half-width of the empty middle
+    colW: 88,
+    unitS: 78,
+    hand: { y: 382, h: 146, cw: 100, ch: 142, gap: 8 },
+    beat: { y: 366, r: 11 },
+  };
+  // wider devices get a wider board rather than wider margins
+  const spread = clamp((W - 880) / 620, 0, 1);
+  L.colW = 88 + spread * 30;
+  L.gap = 74 + spread * 34;
+  L.unitS = 78 + spread * 12;
+  L.slot = (side, col, row) => {
+    const dir = side === 'us' ? -1 : 1;
+    const x = cx + dir * (L.gap + L.colW * col + L.colW / 2);
+    return { x, y: L.rowY[row], w: L.colW - 6, h: 104 };
+  };
+  L.handRect = (i, n) => {
+    const tw = n * L.hand.cw + (n - 1) * L.hand.gap;
+    const x0 = cx - tw / 2;
+    return { x: x0 + i * (L.hand.cw + L.hand.gap), y: L.hand.y, w: L.hand.cw, h: L.hand.ch };
+  };
+  return L;
+}
+
+function fitCanvas() {
+  if (HEADLESS || !CV) return;
+  const wrap = document.getElementById('stage');
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const H = 540;
+  let W = Math.round(H * (vw / Math.max(1, vh)));
+  W = clamp(W, 880, 1500);
+  G.W = W; G.H = H;
+  DPR = Math.min(2.5, window.devicePixelRatio || 1);
+  CV.width = Math.round(W * DPR); CV.height = Math.round(H * DPR);
+  const scale = Math.min(vw / W, vh / H);
+  wrap.style.width = Math.round(W * scale) + 'px';
+  wrap.style.height = Math.round(H * scale) + 'px';
+  const nag = document.getElementById('rotate');
+  if (nag) nag.classList.toggle('show', vh > vw && vw < 620);
+}
+
+function txt(c, s, x, y, size, col, align, weight, track) {
+  c.save();
+  c.font = (weight || 700) + ' ' + size + 'px ui-monospace,Menlo,Consolas,monospace';
+  c.fillStyle = col; c.textAlign = align || 'left'; c.textBaseline = 'middle';
+  if (track) {
+    const str = String(s);
+    let total = 0;
+    for (const ch of str) total += c.measureText(ch).width + track;
+    total -= track;
+    let px = align === 'center' ? x - total / 2 : align === 'right' ? x - total : x;
+    c.textAlign = 'left';
+    for (const ch of str) { c.fillText(ch, px, y); px += c.measureText(ch).width + track; }
+  } else c.fillText(String(s), x, y);
+  c.restore();
+}
+function bar(c, x, y, w, h, frac, col, bg) {
+  c.fillStyle = bg || '#0b0917'; rr(c, x, y, w, h, h / 2); c.fill();
+  if (frac > 0) { c.fillStyle = col; rr(c, x, y, Math.max(h, w * clamp(frac, 0, 1)), h, h / 2); c.fill(); }
+  c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 1; rr(c, x, y, w, h, h / 2); c.stroke();
+}
+
+/* ---- the room ----------------------------------------------------------- */
+function drawRoom(c, L, S) {
+  const act = ACTS[S ? S.actI : 0];
+  const g = c.createLinearGradient(0, 0, 0, L.H);
+  g.addColorStop(0, act.bg); g.addColorStop(.55, '#0d0a1a'); g.addColorStop(1, '#07060d');
+  c.fillStyle = g; c.fillRect(0, 0, L.W, L.H);
+
+  // the crowd: a dark mass at the back that lifts on the beat and on CROWD
+  const ph = A.running ? beatPhase() : 0;
+  const pulse = Math.pow(1 - ph, 3);
+  const heat = S ? S.crowd / 100 : 0;
+  c.save();
+  for (let i = 0; i < 46; i++) {
+    const x = (i * 137.5) % (L.W + 60) - 30;
+    const seed = (i * 2654435761 % 1000) / 1000;
+    const bob = Math.sin(G.t * 0.003 + seed * 6) * 3 + pulse * (4 + heat * 12) * (0.5 + seed);
+    const hgt = 26 + seed * 22;
+    c.fillStyle = 'rgba(10,8,22,' + (0.55 + seed * 0.3) + ')';
+    circ(c, x, L.board.y0 - 16 - bob, hgt * .3); c.fill();
+    c.fillRect(x - hgt * .26, L.board.y0 - 16 - bob, hgt * .52, hgt);
+  }
+  c.restore();
+
+  // stage lights: two cones that swing, brighter as the crowd fills
+  c.save();
+  c.globalCompositeOperation = 'lighter';
+  for (const [i, col] of [[0, '#ff2e88'], [1, '#2ee6d6']]) {
+    const sw = Math.sin(G.t * 0.0008 + i * 2.2) * 90;
+    const bx = i === 0 ? L.W * .22 : L.W * .78;
+    const gg = c.createLinearGradient(bx + sw, 0, bx, L.board.y1);
+    gg.addColorStop(0, rgba(col, .10 + heat * .12 + pulse * .05));
+    gg.addColorStop(1, rgba(col, 0));
+    c.fillStyle = gg;
+    poly(c, [[bx + sw - 26, 0], [bx + sw + 26, 0], [bx + 190, L.board.y1], [bx - 190, L.board.y1]]);
+    c.fill();
+  }
+  c.restore();
+
+  // the boards under their feet
+  for (let r = 0; r < ROWS; r++) {
+    const y = L.rowY[r];
+    const gg = c.createLinearGradient(0, y - 40, 0, y + 14);
+    gg.addColorStop(0, 'rgba(255,255,255,.035)');
+    gg.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = gg; c.fillRect(0, y - 40, L.W, 54);
+    c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(24, y + 10); c.lineTo(L.W - 24, y + 10); c.stroke();
+  }
+  // the centre line: where the two sides meet
+  c.fillStyle = 'rgba(255,255,255,.05)';
+  c.fillRect(L.cx - 1, L.board.y0, 2, L.board.y1 - L.board.y0);
+}
+
+/* ---- a slot and the unit standing in it -------------------------------- */
+function drawSlots(c, L, S) {
+  for (const side of ['us', 'them']) {
+    for (let r = 0; r < ROWS; r++) for (let col = 0; col < COLS; col++) {
+      const p = L.slot(side, col, r);
+      const occupied = !!unitAt(S, side, col, r);
+      const isTarget = side === 'us' && G.drag && !occupied;
+      const hot = isTarget && G.hover === slotIndex(col, r);
+      if (occupied && !hot) continue;
+      c.save();
+      c.globalAlpha = hot ? .95 : isTarget ? .5 : .17;
+      c.strokeStyle = hot ? '#ffc94d' : side === 'us' ? '#2ee6d6' : '#6d6394';
+      c.lineWidth = hot ? 3 : 1.5;
+      c.setLineDash(hot ? [] : [5, 6]);
+      rr(c, p.x - p.w / 2, p.y - p.h + 12, p.w, p.h, 9); c.stroke();
+      c.restore();
+      if (col === 0 && !occupied) {
+        txt(c, 'x2', p.x, p.y - p.h + 24, 11, side === 'us' ? 'rgba(46,230,214,.5)' : 'rgba(109,99,148,.5)', 'center', 800, 1);
+      }
+    }
+  }
+}
+
+function drawUnitCard(c, L, S, u, order) {
+  const p = L.slot(u.side, u.col, u.row);
+  const t = G.t / 1000;
+  const dead = u.hp <= 0;
+  if (dead && (!u.dead || G.t - u.dead > 420)) return;
+
+  c.save();
+  let ax = p.x, ay = p.y;
+  if (u.spawn && G.t - u.spawn < 260) {
+    const k = 1 - easeOut(inv(G.t - u.spawn, 0, 260));
+    ay -= k * 70; c.globalAlpha = 1 - k * .3;
+  }
+  if (u.moved && G.t - u.moved < 200) {
+    const k = 1 - easeOut(inv(G.t - u.moved, 0, 200));
+    ax += (u.side === 'us' ? 1 : -1) * k * 26;
+  }
+  if (dead) {
+    const k = inv(G.t - u.dead, 0, 420);
+    c.globalAlpha = 1 - k; ay += k * 22;
+    c.translate(ax, ay); c.rotate(k * (u.side === 'us' ? -.5 : .5)); c.translate(-ax, -ay);
+  }
+  // the fire flash: a unit that just spoke is briefly brighter and bigger
+  const fl = u.flash || 0;
+  c.translate(ax, ay);
+  const sc = 1 + fl * .10;
+  c.scale(sc, sc);
+
+  // ready glow -- one beat out from firing, so you can read the board's rhythm
+  const ready = u.c <= (u.col === 0 ? 2 : 1);
+  if (ready && !dead) {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const g = c.createRadialGradient(0, -L.unitS * .4, 4, 0, -L.unitS * .4, L.unitS * .8);
+    g.addColorStop(0, rgba(u.tint, .30 + fl * .4)); g.addColorStop(1, rgba(u.tint, 0));
+    c.fillStyle = g; circ(c, 0, -L.unitS * .4, L.unitS * .8); c.fill();
+    c.restore();
+  }
+  drawUnit(c, u.art, fl > .2 ? shade(u.tint, .35) : u.tint, L.unitS * (u.boss ? 1.22 : 1), t + (u.uid.length % 7));
+  c.restore();
+
+  if (dead) return;
+
+  // the plate: counter, hp, atk. The counter is the big number because the
+  // counter is the game.
+  const pw = 70, px = p.x - pw / 2, py = p.y + 12;
+  c.save();
+  c.fillStyle = 'rgba(7,6,13,.78)';
+  rr(c, px, py, pw, 26, 7); c.fill();
+  c.strokeStyle = rgba(u.tint, .55); c.lineWidth = 1.5; rr(c, px, py, pw, 26, 7); c.stroke();
+
+  // counter pip
+  const cfrac = 1 - u.c / Math.max(1, u.ctr);
+  c.fillStyle = u.c <= 1 ? '#ffc94d' : rgba(u.tint, .9);
+  circ(c, px + 13, py + 13, 10); c.fill();
+  txt(c, u.c, px + 13, py + 13.5, 13, '#07060d', 'center', 900);
+
+  txt(c, u.hp + (u.sh ? '+' + u.sh : ''), px + 34, py + 13, 12, u.hp <= u.max * .34 ? '#ff5a4a' : '#efeaff', 'center', 800);
+  txt(c, u.atk, px + 58, py + 13, 12, '#ffc94d', 'center', 800);
+  c.restore();
+
+  // hp bar hugging the plate
+  bar(c, px + 4, py - 6, pw - 8, 4, u.hp / u.max, u.side === 'us' ? '#a6ff5e' : '#ff5a4a', 'rgba(0,0,0,.6)');
+
+  if (order != null) txt(c, order, px + 6, py - 5.5, 9.5, 'rgba(255,255,255,.55)', 'left', 800);
+  if (u.mute > 0) txt(c, 'MUTED', p.x, p.y - 112, 11, '#efeaff', 'center', 800, 1);
+}
+
+function drawBoard(c, L, S) {
+  drawSlots(c, L, S);
+  let n = 0;
+  const order = new Map();
+  for (const u of orderedSide(S, 'us')) order.set(u.uid, ++n);
+  for (const u of orderedSide(S, 'them')) order.set(u.uid, ++n);
+  const all = S.units.slice().sort((a, b) => a.row - b.row || a.col - b.col);
+  for (const u of all) drawUnitCard(c, L, S, u, order.get(u.uid));
+}
+
+/* ---- the hand ----------------------------------------------------------- */
+function drawCard(c, x, y, w, h, card, state) {
+  const def = CREW_BY[card.id];
+  if (!def) return;
+  const t = G.t / 1000;
+  const dim = state === 'poor';
+
+  // Bands, measured off the card's own height rather than off its bottom edge.
+  // The first draft laid the rule out at h-14 with three 9px lines and the
+  // third line fell off the card, which on a 96px hand card is a rule the
+  // player never reads and cannot price the unit without.
+  const pad = 6;
+  const B = {
+    pill: y + 13,
+    win: { x: x + pad + 2, y: y + 26, w: w - (pad + 2) * 2, h: Math.round(h * 0.40) },
+  };
+  B.name = B.win.y + B.win.h + 4;
+  B.stat = B.name + 21;
+  B.rule = B.stat + 13;
+  const ruleRoom = (y + h - 6) - B.rule;
+
+  c.save();
+  c.globalAlpha = dim ? .46 : 1;
+
+  // frame: the darkest thing on the card, so the art reads out of it
+  c.fillStyle = '#0a0816';
+  rr(c, x, y, w, h, 10); c.fill();
+  const g = c.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, shade(def.tint, -.5)); g.addColorStop(1, '#100d20');
+  c.fillStyle = g; rr(c, x + 2, y + 2, w - 4, h - 4, 9); c.fill();
+  c.strokeStyle = state === 'sel' ? '#ffc94d' : RCOL[def.r];
+  c.lineWidth = state === 'sel' ? 3 : 2;
+  rr(c, x + 2, y + 2, w - 4, h - 4, 9); c.stroke();
+
+  // the window the art stands in -- one rectangle for every card in the set,
+  // so a hand of four is one card design and not four
+  c.fillStyle = 'rgba(0,0,0,.44)';
+  rr(c, B.win.x, B.win.y, B.win.w, B.win.h, 6); c.fill();
+  c.save();
+  rr(c, B.win.x, B.win.y, B.win.w, B.win.h, 6); c.clip();
+  c.translate(B.win.x + B.win.w / 2, B.win.y + B.win.h - 5);
+  drawUnit(c, def.art, def.tint, B.win.h * 0.86, t + def.id.length);
+  c.restore();
+
+  // cost left, counter right, both on the frame and never in the window
+  c.fillStyle = '#07060d'; circ(c, x + 14, B.pill, 11); c.fill();
+  c.strokeStyle = '#ffc94d'; c.lineWidth = 1.5; circ(c, x + 14, B.pill, 11); c.stroke();
+  txt(c, def.cost, x + 14, B.pill + .5, 13, '#ffc94d', 'center', 900);
+  c.fillStyle = '#07060d'; circ(c, x + w - 14, B.pill, 11); c.fill();
+  c.strokeStyle = rgba(def.tint, .85); c.lineWidth = 1.5; circ(c, x + w - 14, B.pill, 11); c.stroke();
+  txt(c, def.ctr, x + w - 14, B.pill + .5, 13, def.tint, 'center', 900);
+
+  // name band
+  c.fillStyle = 'rgba(0,0,0,.55)';
+  rr(c, x + pad, B.name, w - pad * 2, 16, 4); c.fill();
+  txt(c, def.name, x + w / 2, B.name + 8.5, 9.5, '#efeaff', 'center', 800, .5);
+
+  // the three numbers that decide a fight, and the voice that decides the tune
+  txt(c, def.hp, x + 15, B.stat, 12, '#a6ff5e', 'center', 800);
+  txt(c, def.atk + card.plus, x + w - 15, B.stat, 12, '#ffc94d', 'center', 800);
+  txt(c, VOICE_LABEL[def.voice] || '', x + w / 2, B.stat, 8.5, rgba(def.tint, .95), 'center', 800, .5);
+
+  // the rule, shown whole or not at all -- a rule cut off mid-sentence prices
+  // the card wrong, and on a hand card there is no way to read the rest
+  const rule = def.text || '';
+  if (rule) {
+    c.save();
+    const lh = 9;
+    const maxLines = Math.max(1, Math.floor(ruleRoom / lh));
+    let size = 8;
+    let lines = wrapText(c, rule, w - 12, size);
+    while (lines.length > maxLines && size > 6.2) { size -= 0.5; lines = wrapText(c, rule, w - 12, size); }
+    c.font = '600 ' + size + 'px ui-monospace,Menlo,monospace';
+    c.fillStyle = '#a79ccb'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const shown = lines.slice(0, maxLines);
+    const y0 = B.rule + ruleRoom / 2 - ((shown.length - 1) * lh) / 2;
+    for (let i = 0; i < shown.length; i++) c.fillText(shown[i], x + w / 2, y0 + i * lh);
+    c.restore();
+  }
+  c.restore();
+}
+// wrap on words, and break a word that is wider than the line rather than
+// letting it run off the card
+function wrapText(c, str, maxW, size) {
+  c.save();
+  c.font = '600 ' + size + 'px ui-monospace,Menlo,monospace';
+  const out = [];
+  let line = '';
+  for (const word of String(str).split(' ')) {
+    const test = line ? line + ' ' + word : word;
+    if (c.measureText(test).width <= maxW || !line) {
+      if (c.measureText(test).width > maxW && !line) {
+        let part = '';
+        for (const ch of word) {
+          if (c.measureText(part + ch).width > maxW && part) { out.push(part); part = ch; }
+          else part += ch;
+        }
+        line = part;
+      } else line = test;
+    } else { out.push(line); line = word; }
+  }
+  if (line) out.push(line);
+  c.restore();
+  return out;
+}
+
+const VOICE_LABEL = { kick: 'KICK', snare: 'SNARE', hat: 'HAT', bass: 'BASS', lead: 'LEAD', pad: 'PAD', vox_rox: 'ROX', vox_jas: 'JAS', bell: 'BELL', grit: 'GRIT', sub: 'SUB' };
+
+function drawHand(c, L, S) {
+  const n = S.hand.length;
+  for (let i = 0; i < n; i++) {
+    if (G.drag && G.drag.i === i) continue;
+    const r = L.handRect(i, n);
+    const sel = G.sel === i;
+    const state = sel ? 'sel' : canPlay(S, i) ? '' : 'poor';
+    const lift = sel ? 14 : 0;
+    drawCard(c, r.x, r.y - lift, r.w, r.h, S.hand[i], state);
+  }
+  if (G.drag) {
+    const r = L.handRect(0, 1);
+    drawCard(c, G.drag.x - r.w / 2, G.drag.y - r.h / 2, r.w, r.h, G.drag.card, 'sel');
+  }
+}
+
+/* ---- HUD ---------------------------------------------------------------- */
+function drawHUD(c, L, S) {
+  const R = G.run;
+  c.fillStyle = 'rgba(7,6,13,.72)';
+  c.fillRect(0, 0, L.W, L.hud.h);
+  c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(0, L.hud.h); c.lineTo(L.W, L.hud.h); c.stroke();
+
+  // the set: your health, named for what it is
+  txt(c, 'SET', 18, 18, 10, '#6d6394', 'left', 800, 1.4);
+  bar(c, 18, 28, 132, 12, S.hp / S.maxHp, S.hp / S.maxHp < .3 ? '#ff5a4a' : '#a6ff5e');
+  txt(c, S.hp + '/' + S.maxHp, 84, 34, 10, '#07060d', 'center', 900);
+
+  // energy as pips, because you count energy and you read a bar
+  txt(c, 'ENERGY', 172, 18, 10, '#6d6394', 'left', 800, 1.4);
+  for (let i = 0; i < S.maxEnergy; i++) {
+    const on = i < S.energy;
+    c.fillStyle = on ? '#ffc94d' : 'rgba(255,255,255,.10)';
+    circ(c, 178 + i * 19, 34, on ? 7.5 : 6); c.fill();
+  }
+
+  // where you are
+  const act = ACTS[S.actI];
+  txt(c, act.name, L.cx, 18, 11, '#a79ccb', 'center', 800, 1.6);
+  txt(c, S.boss ? 'BOSS' : 'STAGE ' + (S.stageI + 1) + ' / ' + STAGES_PER_ACT, L.cx, 36, 12, S.boss ? '#ff2e88' : '#efeaff', 'center', 900, 1.2);
+
+  txt(c, act.bpm + ' BPM', L.W - 18, 18, 10, '#6d6394', 'right', 800, 1.2);
+  txt(c, 'FOES ' + sideUnits(S, 'them').length, L.W - 18, 36, 11, '#ff6bb0', 'right', 800, 1);
+
+  // ---- the crowd meter. The loudest thing on the screen, on purpose.
+  const cw = L.crowd;
+  const frac = S.crowd / 100;
+  c.fillStyle = '#0b0917'; rr(c, cw.x, cw.y, cw.w, cw.h, 7); c.fill();
+  if (frac > 0) {
+    const g = c.createLinearGradient(cw.x, 0, cw.x + cw.w, 0);
+    g.addColorStop(0, '#7a1d55'); g.addColorStop(.6, '#ff2e88'); g.addColorStop(1, '#ffc94d');
+    c.fillStyle = g; rr(c, cw.x, cw.y, Math.max(cw.h, cw.w * frac), cw.h, 7); c.fill();
+  }
+  if (S.drop > 0) {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    c.fillStyle = rgba('#ff2e88', .25 + Math.sin(G.t * .02) * .2);
+    rr(c, cw.x, cw.y, cw.w, cw.h, 7); c.fill(); c.restore();
+  }
+  c.strokeStyle = 'rgba(255,255,255,.14)'; c.lineWidth = 1; rr(c, cw.x, cw.y, cw.w, cw.h, 7); c.stroke();
+  txt(c, S.drop > 0 ? 'DROP  x' + S.drop : 'CROWD', cw.x + 10, cw.y + cw.h / 2 + .5, 9, S.drop > 0 ? '#fff' : 'rgba(255,255,255,.7)', 'left', 900, 1.4);
+  txt(c, Math.round(S.crowd) + '%', cw.x + cw.w - 10, cw.y + cw.h / 2 + .5, 9, 'rgba(255,255,255,.8)', 'right', 900, 1);
+}
+
+/* ---- the beat rail: the only timing cue, so it has to be unmissable ---- */
+function drawBeatRail(c, L, S) {
+  const b = A.running ? beatNow() : 0;
+  const ph = b - Math.floor(b);
+  const cur = ((Math.floor(b) % BEATS_PER_BAR) + BEATS_PER_BAR) % BEATS_PER_BAR;
+  const y = L.beat.y, spacing = 46, x0 = L.cx - spacing * 1.5;
+  for (let i = 0; i < BEATS_PER_BAR; i++) {
+    const x = x0 + i * spacing;
+    const isCur = i === cur;
+    const hit = isCur ? Math.pow(1 - ph, 4) : 0;
+    c.fillStyle = i === 0 ? 'rgba(255,201,77,.24)' : 'rgba(255,255,255,.12)';
+    circ(c, x, y, L.beat.r); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.14)'; c.lineWidth = 1;
+    circ(c, x, y, L.beat.r); c.stroke();
+    if (isCur) {
+      c.save(); c.globalCompositeOperation = 'lighter';
+      c.fillStyle = i === 0 ? '#ffc94d' : '#2ee6d6';
+      circ(c, x, y, L.beat.r * (0.62 + hit * 1.05)); c.fill();
+      c.restore();
+    }
+  }
+  // the approach ring: shrinks onto the NEXT beat, which is what you tap to
+  const nx = x0 + (((cur + 1) % BEATS_PER_BAR)) * spacing;
+  c.save();
+  c.strokeStyle = rgba('#ffc94d', .18 + ph * .55);
+  c.lineWidth = 2;
+  circ(c, nx, y, L.beat.r + (1 - ph) * 26); c.stroke();
+  c.restore();
+
+  if (S && !S.armed) {
+    const p = 0.5 + Math.sin(G.t * 0.005) * 0.5;
+    c.save(); c.globalAlpha = .55 + p * .45;
+    txt(c, 'DRAG A CARD ONTO A SLOT', L.cx, y - 46, 13, '#efeaff', 'center', 900, 2.2);
+    txt(c, 'ON THE BEAT', L.cx, y - 27, 11, '#ffc94d', 'center', 900, 2.2);
+    c.restore();
+  }
+  if (S && S.judged && G.t - S.judged.t < 620) {
+    const k = inv(G.t - S.judged.t, 0, 620);
+    const col = S.judged.grade === 'perfect' ? '#ffc94d' : S.judged.grade === 'good' ? '#2ee6d6' : '#8f86b8';
+    c.save(); c.globalAlpha = 1 - k;
+    txt(c, S.judged.grade.toUpperCase(), L.cx, y - 26 - k * 14, 15, col, 'center', 900, 2.4);
+    c.restore();
+  }
+}
+
+/* ---- effects on top ----------------------------------------------------- */
+function drawFX(c, L, S) {
+  for (const f of G.fx) {
+    const k = f.t / f.life;
+    if (f.k === 'pop' && f.u) {
+      const p = L.slot(f.u.side, f.u.col, f.u.row);
+      c.save(); c.globalAlpha = 1 - k * k;
+      const py = Math.max(L.crowd.y + L.crowd.h + 14, p.y - 58 - (f.dy || 0) - k * 32);
+      txt(c, f.txt, p.x + f.dx, py, 14, f.col, 'center', 900, .5);
+      c.restore();
+    } else if (f.k === 'spark' && f.u) {
+      const p = L.slot(f.u.side, f.u.col, f.u.row);
+      c.save(); c.globalAlpha = 1 - k;
+      c.fillStyle = f.col;
+      const s = f.t / 1000;
+      circ(c, p.x + f.vx * s, p.y - 48 + f.vy * s + 180 * s * s, 3 * (1 - k)); c.fill();
+      c.restore();
+    } else if (f.k === 'beam' && f.a && f.b) {
+      const a = L.slot(f.a.side, f.a.col, f.a.row), b = L.slot(f.b.side, f.b.col, f.b.row);
+      c.save(); c.globalAlpha = (1 - k) * .8; c.globalCompositeOperation = 'lighter';
+      c.strokeStyle = f.a.tint; c.lineWidth = 3 * (1 - k) + 1; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(a.x, a.y - 44); c.lineTo(b.x, b.y - 44); c.stroke();
+      c.restore();
+    } else if (f.k === 'ring') {
+      c.save(); c.globalAlpha = (1 - k) * .5; c.globalCompositeOperation = 'lighter';
+      c.strokeStyle = f.col; c.lineWidth = 5 * (1 - k) + 1;
+      circ(c, L.W * f.nx, L.H * f.ny, k * 340 * f.scale); c.stroke();
+      c.restore();
+    }
+  }
+  if (G.toast) {
+    const k = inv(G.toast.t, 0, 1200);
+    c.save(); c.globalAlpha = (1 - Math.pow(k, 3)) * .88;
+    txt(c, G.toast.txt, L.cx, 118 - k * 16, 21, G.toast.col, 'center', 900, 2.6);
+    c.restore();
+  }
+  if (G.flash > 0) { c.fillStyle = 'rgba(255,255,255,' + (G.flash * .22) + ')'; c.fillRect(0, 0, L.W, L.H); }
+}
+
+function render() {
+  if (!CX) return;
+  const L = layout();
+  const c = CX;
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  c.clearRect(0, 0, L.W, L.H);
+  const S = G.run && G.run.fight;
+  if (G.shake > .1) {
+    c.translate((rnd() - .5) * G.shake, (rnd() - .5) * G.shake);
+  }
+  drawRoom(c, L, S);
+  if (S && (G.scr === 'run' || G.scr === 'reward' || G.scr === 'over')) {
+    drawBoard(c, L, S);
+    drawHUD(c, L, S);
+    drawBeatRail(c, L, S);
+    if (G.scr === 'run') drawHand(c, L, S);
+    drawFX(c, L, S);
+  } else {
+    drawTitleArt(c, L);
+  }
+}
+
+/* ================================================== S10 -- input ========= */
+/* Two ways to place a card, because on a phone one of them is always wrong:
+   drag it onto a slot, or tap the card and then tap the slot. Both end in the
+   same playCard, so both are judged by the same clock. */
+
+function toLogical(ev) {
+  const r = CV.getBoundingClientRect();
+  return { x: (ev.clientX - r.left) / r.width * G.W, y: (ev.clientY - r.top) / r.height * G.H };
+}
+function hitHand(L, S, p) {
+  const n = S.hand.length;
+  for (let i = n - 1; i >= 0; i--) {
+    const r = L.handRect(i, n);
+    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y - 18 && p.y <= r.y + r.h) return i;
+  }
+  return -1;
+}
+function hitSlot(L, p, side) {
+  for (let r = 0; r < ROWS; r++) for (let col = 0; col < COLS; col++) {
+    const s = L.slot(side, col, r);
+    if (p.x >= s.x - s.w / 2 && p.x <= s.x + s.w / 2 && p.y >= s.y - s.h + 8 && p.y <= s.y + 40) return { col, row: r };
+  }
+  return null;
+}
+
+function onDown(ev) {
+  ac();
+  const S = G.run && G.run.fight;
+  if (!S || S.over || G.scr !== 'run') return;
+  const L = layout(), p = toLogical(ev);
+
+  const hi = hitHand(L, S, p);
+  if (hi >= 0) {
+    if (!canPlay(S, hi)) { sfx('deny'); G.sel = -1; return; }
+    G.drag = { i: hi, card: S.hand[hi], x: p.x, y: p.y };
+    G.sel = hi;
+    return;
+  }
+  // picking up a placed ally moves it
+  const sl = hitSlot(L, p, 'us');
+  if (sl) {
+    const u = unitAt(S, 'us', sl.col, sl.row);
+    if (u) { G.moving = u; G.sel = -1; return; }
+    if (G.sel >= 0) { playCard(S, G.sel, sl.col, sl.row); G.sel = -1; return; }
+  }
+  G.sel = -1;
+}
+function onMove(ev) {
+  const S = G.run && G.run.fight;
+  if (!S) return;
+  const L = layout(), p = toLogical(ev);
+  if (G.drag) {
+    G.drag.x = p.x; G.drag.y = p.y;
+    const sl = hitSlot(L, p, 'us');
+    G.hover = sl && !unitAt(S, 'us', sl.col, sl.row) ? slotIndex(sl.col, sl.row) : -1;
+  } else if (G.moving) {
+    const sl = hitSlot(L, p, 'us');
+    G.hover = sl && !unitAt(S, 'us', sl.col, sl.row) ? slotIndex(sl.col, sl.row) : -1;
+  }
+}
+function onUp(ev) {
+  const S = G.run && G.run.fight;
+  if (!S) { G.drag = null; G.moving = null; G.hover = -1; return; }
+  const L = layout(), p = toLogical(ev);
+  if (G.drag) {
+    const sl = hitSlot(L, p, 'us');
+    if (sl && !unitAt(S, 'us', sl.col, sl.row)) { playCard(S, G.drag.i, sl.col, sl.row); G.sel = -1; }
+    G.drag = null; G.hover = -1;
+    return;
+  }
+  if (G.moving) {
+    const sl = hitSlot(L, p, 'us');
+    if (sl && !unitAt(S, 'us', sl.col, sl.row)) moveUnit(S, G.moving, sl.col, sl.row);
+    G.moving = null; G.hover = -1;
+  }
+}
+function bindInput() {
+  if (HEADLESS || !CV) return;
+  CV.addEventListener('pointerdown', e => { e.preventDefault(); try { CV.setPointerCapture(e.pointerId); } catch (x) {} onDown(e); });
+  CV.addEventListener('pointermove', e => { e.preventDefault(); onMove(e); });
+  CV.addEventListener('pointerup', e => { e.preventDefault(); onUp(e); });
+  CV.addEventListener('pointercancel', () => { G.drag = null; G.moving = null; G.hover = -1; });
+  window.addEventListener('keydown', e => {
+    const S = G.run && G.run.fight;
+    if (e.key === 'm') { G.muted = !G.muted; toast(G.muted ? 'MUTED' : 'SOUND ON', '#a79ccb'); }
+    if (!S || G.scr !== 'run') return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 8) { G.sel = n - 1 < S.hand.length ? n - 1 : -1; }
+  });
+}
+
+/* ================================================= S11 -- screens ======== */
+/* Every screen is DOM, so the text stays crisp and selectable and the canvas
+   below keeps playing. The canvas never draws a button. */
+
+const UI = () => document.getElementById('ui');
+function esc(s) { return String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])); }
+
+function cardHTML(id, extra) {
+  const d = CREW_BY[id]; if (!d) return '';
+  return '<div class="cardv" data-id="' + id + '" style="--tint:' + d.tint + ';border-color:' + RCOL[d.r] + '">' +
+    '<div class="cv-top"><span class="pill">' + d.cost + '</span><span class="pill ctr">' + d.ctr + '</span></div>' +
+    '<canvas class="cv-art" width="200" height="130" data-art="' + d.art + '" data-tint="' + d.tint + '"></canvas>' +
+    '<div class="cv-name">' + esc(d.name) + '</div>' +
+    '<div class="cv-stat"><b style="color:#a6ff5e">' + d.hp + '</b> HP · <b style="color:#ffc94d">' + d.atk + '</b> ATK · ' + (VOICE_LABEL[d.voice] || '') + '</div>' +
+    '<div class="cv-text">' + esc(d.text || '') + '</div>' + (extra || '') + '</div>';
+}
+function charmHTML(id, extra) {
+  const d = CHARM_BY[id]; if (!d) return '';
+  return '<div class="charmv" data-id="' + id + '" style="border-color:' + d.tint + '">' +
+    '<div class="ch-name" style="color:' + d.tint + '">' + esc(d.name) + '</div>' +
+    '<div class="ch-text">' + esc(d.text) + '</div>' + (extra || '') + '</div>';
+}
+
+function paintCardArt() {
+  if (HEADLESS) return;
+  for (const cv of UI().querySelectorAll('canvas.cv-art')) {
+    const c = cv.getContext('2d'); if (!c) continue;
+    c.clearRect(0, 0, cv.width, cv.height);
+    c.save(); c.translate(cv.width / 2, cv.height - 8);
+    drawUnit(c, cv.dataset.art, cv.dataset.tint, 110, G.t / 1000);
+    c.restore();
+  }
+}
+
+function screenHTML() {
+  const R = G.run;
+  if (G.scr === 'title') {
+    const m = G.meta;
+    return '<div class="screen show ttl">' +
+      '<div class="tt-mid">' +
+      '<div class="tt-logo">BEATBORNE</div>' +
+      '<div class="tt-sub">your board is the band</div>' +
+      '<div class="row" style="justify-content:center;margin-top:24px;gap:12px">' +
+      '<button class="btn pri" data-a="new">' + (loadRun() ? 'NEW SET' : 'START THE SET') + '</button>' +
+      (loadRun() ? '<button class="btn go" data-a="resume">RESUME</button>' : '') +
+      '<button class="btn" data-a="how">HOW IT WORKS</button>' +
+      '<button class="btn" data-a="collection">THE CREW</button>' +
+      '</div>' +
+      '<div class="sub" style="margin-top:22px;text-align:center">' +
+      (m.bestScore ? 'best score ' + m.bestScore + '<br>' : '') +
+      'runs ' + m.runs + ' · encores ' + m.wins + ' · perfects ' + m.perfects + ' · drops ' + m.drops +
+      '</div></div></div>';
+  }
+  if (G.scr === 'how') {
+    return '<div class="screen show"><div class="doc">' +
+      '<div class="row"><h1>HOW IT WORKS</h1><div class="grow"></div>' +
+      '<button class="btn" data-a="title">BACK</button></div>' +
+      '<div class="hr"></div>' +
+      '<h2>the counter is the rhythm</h2><p class="sub">Every unit has a COUNTER. It drops by one on every beat, and at zero the unit fires: its ability, its swing, and its VOICE. A counter of 1 is a hi-hat. A counter of 4 is a bass drum. The music you hear is your board, playing itself. Nothing is pre-recorded.</p>' +
+      '<h2>the front column runs double</h2><p class="sub">Column 0, nearest the middle, ticks TWICE a beat. Forward is faster and louder and gets hit first. Moving a unit already on the board is free, so this is a question you answer every beat, not once.</p>' +
+      '<h2>play on the beat</h2><p class="sub">Drag a card onto a slot, or tap the card then tap the slot. Land it on the beat for <b style="color:#ffc94d">PERFECT</b>: the unit arrives one beat from firing, and the crowd jumps. <b style="color:#2ee6d6">GOOD</b> is close. <b>LATE</b> costs you crowd.</p>' +
+      '<h2>fill the crowd, take the drop</h2><p class="sub">PERFECTs, kills and some units fill the CROWD bar. At 100% the room goes off: for four beats every ally ticks three times as fast and hits for half again as much. That is where sets are won.</p>' +
+      '<h2>the set</h2><p class="sub">SET is your health. A foe that reaches the middle with nothing in front of it hits the set instead. Three acts, four stages and a boss each. Between stages you take a card or a charm.</p>' +
+      '<div class="row" style="margin-top:14px"><button class="btn pri" data-a="new">START THE SET</button>' +
+      '<button class="btn" data-a="title">BACK</button></div>' +
+      '</div></div>';
+  }
+  if (G.scr === 'collection') {
+    const seen = G.meta.seen || {};
+    const rows = CREW.map(c => {
+      const known = G.meta.unlocked.indexOf(c.id) >= 0 || seen[c.id];
+      return known ? cardHTML(c.id, '<div class="cv-seen">fielded ' + (seen[c.id] || 0) + '</div>')
+                   : '<div class="cardv locked"><div class="cv-lock">?</div><div class="cv-name">UNKNOWN</div></div>';
+    }).join('');
+    const foes = FOES.concat(BOSSES).map(f => {
+      const n = (G.meta.beaten || {})[f.id] || 0;
+      return '<div class="foev' + (n ? '' : ' locked') + '"><b>' + (n ? esc(f.name) : '???') + '</b><span>' + (n ? n + ' downed' : 'not yet met') + '</span></div>';
+    }).join('');
+    return '<div class="screen show"><div class="doc wide">' +
+      '<div class="row"><h1 style="font-size:22px">THE CREW</h1><div class="grow"></div><button class="btn" data-a="title">BACK</button></div>' +
+      '<div class="grid">' + rows + '</div>' +
+      '<h2 style="margin-top:20px">THE HUSH</h2><div class="foegrid">' + foes + '</div>' +
+      '</div></div>';
+  }
+  if (G.scr === 'map') {
+    const act = ACTS[R.act];
+    const nodes = [];
+    for (let i = 0; i <= STAGES_PER_ACT; i++) {
+      const st = i === STAGES_PER_ACT ? 'BOSS' : String(i + 1);
+      const cls = i < R.stage ? 'done' : i === R.stage ? 'now' : '';
+      nodes.push('<div class="node ' + cls + '">' + st + '</div>');
+    }
+    return '<div class="screen show"><div class="doc">' +
+      '<div class="sub">ACT ' + act.n + ' · ' + act.bpm + ' BPM</div>' +
+      '<h1 style="font-size:26px">' + esc(act.name) + '</h1>' +
+      '<div class="nodes">' + nodes.join('<div class="link"></div>') + '</div>' +
+      '<div class="row" style="margin-top:6px"><span class="tag">SET ' + R.hp + '/' + R.maxHp + '</span><span class="tag">' + R.coin + ' COIN</span><span class="tag">' + R.deck.length + ' CARDS</span></div>' +
+      (R.charms.length ? '<div class="charmrow">' + R.charms.map(c => charmHTML(c)).join('') + '</div>' : '') +
+      '<div class="row" style="margin-top:16px">' +
+      '<button class="btn pri" data-a="fight">' + (R.stage >= STAGES_PER_ACT ? 'FACE ' + esc(ALL_UNITS[act.boss].name) : 'PLAY STAGE ' + (R.stage + 1)) + '</button>' +
+      '<button class="btn" data-a="shop">MERCH TABLE</button>' +
+      '<button class="btn" data-a="deck">DECK (' + R.deck.length + ')</button>' +
+      '</div></div></div>';
+  }
+  if (G.scr === 'deck') {
+    const counts = {}; for (const id of R.deck) counts[id] = (counts[id] || 0) + 1;
+    const list = Object.keys(counts).map(id => cardHTML(id, '<div class="cv-seen">x' + counts[id] + '</div>')).join('');
+    return '<div class="screen show"><div class="doc wide">' +
+      '<div class="row"><h1 style="font-size:22px">YOUR DECK</h1><div class="grow"></div><button class="btn" data-a="map">BACK</button></div>' +
+      '<div class="grid">' + list + '</div></div></div>';
+  }
+  if (G.scr === 'reward') {
+    const o = R.offer || rollOffer();
+    if (o.taken) return '<div class="screen show"><div class="doc"><h1 style="font-size:22px">ONWARD</h1><div class="row" style="margin-top:16px"><button class="btn pri" data-a="next">CONTINUE</button></div></div></div>';
+    // one row: three cards and the charm alongside them, because this is the
+    // screen where you compare things against each other and the charm used to
+    // sit below the fold on a 420px-high phone
+    const items = o.cards.map(c => cardHTML(c.id, '<button class="btn go tiny" data-a="take" data-id="' + c.id + '">TAKE</button>'));
+    if (o.charm) items.push(charmHTML(o.charm.id, '<button class="btn go tiny" data-a="takecharm" data-id="' + o.charm.id + '">TAKE</button>'));
+    return '<div class="screen show"><div class="doc wide tight">' +
+      '<div class="row"><h1>TAKE ONE</h1><div class="grow"></div>' +
+      '<span class="sub">stage cleared · +' + (12 + (R.fight ? R.fight.coin : 0)) + ' coin</span>' +
+      '<button class="btn" data-a="skip">SKIP · HEAL 8</button></div>' +
+      '<div class="grid three compact">' + items.join('') + '</div>' +
+      '</div></div>';
+  }
+  if (G.scr === 'shop') {
+    const s = R.shop || rollShop();
+    return '<div class="screen show"><div class="doc wide tight">' +
+      '<div class="row"><h1>MERCH TABLE</h1><div class="grow"></div><span class="tag big">' + R.coin + ' COIN</span><button class="btn" data-a="map">LEAVE</button></div>' +
+      '<div class="grid three compact">' +
+      s.cards.map(c => cardHTML(c.id, c.sold ? '<div class="sold">SOLD</div>' : '<button class="btn go tiny" data-a="buy" data-id="' + c.id + '" ' + (R.coin < c.price ? 'disabled' : '') + '>' + c.price + '</button>')).join('') +
+      s.charms.map(c => charmHTML(c.id, c.sold ? '<div class="sold">SOLD</div>' : '<button class="btn go tiny" data-a="buycharm" data-id="' + c.id + '" ' + (R.coin < c.price ? 'disabled' : '') + '>' + c.price + '</button>')).join('') + '</div>' +
+      '<div class="row" style="margin-top:12px">' +
+      '<button class="btn" data-a="heal" ' + (R.coin < s.heal.price || s.heal.taken ? 'disabled' : '') + '>PATCH THE SET · +12 · ' + s.heal.price + '</button>' +
+      '<button class="btn" data-a="purge" ' + (R.coin < s.purge.price || s.purge.taken || R.deck.length <= 5 ? 'disabled' : '') + '>CUT A CARD · ' + s.purge.price + '</button>' +
+      '</div></div></div>';
+  }
+  if (G.scr === 'purge') {
+    const counts = {}; for (const id of R.deck) counts[id] = (counts[id] || 0) + 1;
+    const list = Object.keys(counts).map(id => cardHTML(id, '<button class="btn tiny" data-a="cut" data-id="' + id + '">CUT</button>')).join('');
+    return '<div class="screen show"><div class="doc wide"><div class="row"><h1 style="font-size:22px">CUT A CARD</h1><div class="grow"></div><button class="btn" data-a="shop">BACK</button></div><div class="grid">' + list + '</div></div></div>';
+  }
+  if (G.scr === 'over') {
+    return '<div class="screen show"><div class="doc" style="text-align:center">' +
+      '<h1 style="font-size:30px;color:#ff5a4a">THE ROOM WENT QUIET</h1>' +
+      '<div class="score">' + (R.score || 0) + (R.newBest ? ' <span class="nb">NEW BEST</span>' : '') + '</div>' +
+      '<div class="sub">Act ' + (R.act + 1) + ' · stage ' + (R.stage + 1) + ' · ' + R.stagesCleared + ' cleared · ' + R.perfects + ' perfects · ' + R.drops + ' drops' +
+      (R.newBest ? '' : ' · best ' + (G.meta.bestScore || 0)) + '</div>' +
+      '<div class="row" style="justify-content:center;margin-top:20px"><button class="btn pri" data-a="new">GO AGAIN</button><button class="btn" data-a="title">TITLE</button></div>' +
+      '</div></div>';
+  }
+  if (G.scr === 'win') {
+    return '<div class="screen show"><div class="doc" style="text-align:center">' +
+      '<h1 style="font-size:30px;color:#ffc94d">ENCORE</h1>' +
+      '<div class="score">' + (R.score || 0) + (R.newBest ? ' <span class="nb">NEW BEST</span>' : '') + '</div>' +
+      '<div class="sub">You played the whole set and the room never dropped below a roar.<br>' +
+      R.perfects + ' perfects · ' + R.drops + ' drops · ' + R.deck.length + ' cards' +
+      (R.newBest ? '' : ' · best ' + (G.meta.bestScore || 0)) + '</div>' +
+      '<div class="row" style="justify-content:center;margin-top:20px"><button class="btn pri" data-a="new">AGAIN</button><button class="btn" data-a="title">TITLE</button></div>' +
+      '</div></div>';
+  }
+  return '';
+}
+
+function refreshUI() {
+  if (HEADLESS) return;
+  const html = G.scr === 'run' ? '' : screenHTML();
+  const ui = UI();
+  if (ui.dataset.scr !== G.scr || ui.dataset.stamp !== String(G.uiStamp || 0)) {
+    ui.innerHTML = html;
+    ui.dataset.scr = G.scr;
+    ui.dataset.stamp = String(G.uiStamp || 0);
+    ui.classList.toggle('on', G.scr !== 'run');
+  }
+}
+function bump() { G.uiStamp = (G.uiStamp || 0) + 1; }
+
+function act(a, id) {
+  const R = G.run;
+  if (a === 'new') { newRun(); G.scr = 'map'; bump(); sfx('coin'); return; }
+  if (a === 'resume') { const r = loadRun(); if (r) { G.run = r; G.run.fight = null; G.scr = 'map'; } bump(); return; }
+  if (a === 'title') { G.scr = 'title'; bump(); return; }
+  if (a === 'how') { G.scr = 'how'; bump(); return; }
+  if (a === 'collection') { G.scr = 'collection'; bump(); return; }
+  if (a === 'map') { G.scr = 'map'; bump(); return; }
+  if (a === 'deck') { G.scr = 'deck'; bump(); return; }
+  if (a === 'fight') { startFight(); bump(); return; }
+  if (a === 'shop') { if (!R.shop) rollShop(); G.scr = 'shop'; bump(); return; }
+  if (a === 'take') { takeCard(id); bump(); return; }
+  if (a === 'takecharm') { takeCharm(id); bump(); return; }
+  if (a === 'skip') { skipOffer(); R.hp = Math.min(R.maxHp, R.hp + 8); bump(); return; }
+  if (a === 'next') { advance(); bump(); return; }
+  if (a === 'buy') {
+    const it = R.shop.cards.find(c => c.id === id && !c.sold);
+    if (it && R.coin >= it.price) { R.coin -= it.price; R.deck.push(id); it.sold = true; sfx('coin'); if (G.meta.unlocked.indexOf(id) < 0) { G.meta.unlocked.push(id); saveMeta(); } }
+    bump(); return;
+  }
+  if (a === 'buycharm') {
+    const it = R.shop.charms.find(c => c.id === id && !c.sold);
+    if (it && R.coin >= it.price) { R.coin -= it.price; R.charms.push(id); it.sold = true; applyCharmOnce(id); sfx('coin'); }
+    bump(); return;
+  }
+  if (a === 'heal') { const s = R.shop; if (R.coin >= s.heal.price && !s.heal.taken) { R.coin -= s.heal.price; R.hp = Math.min(R.maxHp, R.hp + 12); s.heal.taken = true; sfx('coin'); } bump(); return; }
+  if (a === 'purge') { const s = R.shop; if (R.coin >= s.purge.price && !s.purge.taken) { G.scr = 'purge'; } bump(); return; }
+  if (a === 'cut') {
+    const i = R.deck.indexOf(id);
+    if (i >= 0 && R.deck.length > 5) { R.deck.splice(i, 1); R.coin -= R.shop.purge.price; R.shop.purge.taken = true; sfx('coin'); G.scr = 'shop'; }
+    bump(); return;
+  }
+}
+function bindUI() {
+  if (HEADLESS) return;
+  UI().addEventListener('click', e => {
+    ac();
+    const b = e.target.closest('[data-a]');
+    if (!b || b.disabled) return;
+    act(b.dataset.a, b.dataset.id);
+    saveRun();
+  });
+}
+
+/* ---- the title screen draws on the canvas behind the DOM ---------------- */
+function drawTitleArt(c, L) {
+  const t = G.t / 1000;
+  // the whole band, lined up along the front of the stage, bobbing at 100 BPM
+  // whether or not the audio has been unlocked yet -- the title should look
+  // like the game sounds
+  const cast = [
+    ['drum', '#ffc94d'], ['cabinet', '#5aa9ff'], ['boxer', '#ff2e88'],
+    ['duo', '#ff2e88'], ['singer', '#2ee6d6'], ['ring', '#a06bff'], ['wire', '#a6ff5e'],
+  ];
+  const bpm = 100, beat = (t * bpm / 60);
+  const step = L.W / (cast.length + 1);
+  for (let i = 0; i < cast.length; i++) {
+    const [art, tint] = cast[i];
+    const ph = (beat + i * 0.5) % 1;
+    const hop = Math.pow(1 - ph, 3) * 9;
+    const x = step * (i + 1);
+    const y = L.H - 26 - hop;
+    c.save();
+    c.globalAlpha = .92;
+    c.translate(x, y);
+    drawUnit(c, art, tint, 118, t + i * 1.7);
+    c.restore();
+    // a wash of the unit's own colour on the floor beneath it
+    c.save(); c.globalCompositeOperation = 'lighter';
+    const g = c.createRadialGradient(x, y, 2, x, y, 120);
+    g.addColorStop(0, rgba(tint, .16)); g.addColorStop(1, rgba(tint, 0));
+    c.fillStyle = g; circ(c, x, y, 120); c.fill();
+    c.restore();
+  }
+}
+
+/* =============================================== S12 -- boot and loop ==== */
+/* The loop does three things: advance the transport to the next whole beat,
+   run the sim for each beat that has passed, and draw. Beats are consumed in
+   a while loop rather than one per frame so a dropped frame does not drop a
+   beat -- and if the tab was backgrounded long enough to owe us fifty beats,
+   the clock resyncs instead of fast-forwarding the fight. */
+
+let lastTs = 0;
+
+function stepFight(S) {
+  if (!S || S.over) return;
+  if (!A.running) return;
+  if (beatNow() - A.beat > 8) A.beat = Math.floor(beatNow()) - 1;   // resync after a stall
+  let guard = 0;
+  while (Math.floor(beatNow()) > A.beat && guard++ < 16) {
+    A.beat++;
+    if (!S.armed) continue;             // count-in: the clock runs, the board does not
+    beatStep(S, timeOfBeat(A.beat));
+    if (S.over) break;
+  }
+}
+
+function settleFight(S) {
+  if (!S || !S.over || S.settled) return;
+  S.settled = true;
+  if (S.over === 'win') {
+    afterFight(S);
+    rollOffer();
+    G.scr = 'reward';
+  } else {
+    G.run.hp = S.hp;
+    bankScore();
+    clearRun();
+    G.scr = 'over';
+  }
+  bump();
+}
+
+function frame(ts) {
+  const dt = Math.min(60, ts - lastTs || 16);
+  lastTs = ts;
+  G.t = ts; G.dt = dt;
+  if (!A.ac || G.muted) VCLOCK += dt / 1000;
+
+  const S = G.run && G.run.fight;
+  if (G.scr === 'run' && S) {
+    stepFight(S);
+    settleFight(S);
+    for (const u of S.units) if (u.flash > 0) u.flash = Math.max(0, u.flash - dt * 0.005);
+  }
+  stepFX(dt);
+  render();
+  refreshUI();
+  if (G.scr !== 'run') paintCardArt();
+  requestAnimationFrame(frame);
+}
+
+function boot() {
+  loadMeta();
+  if (HEADLESS) return;
+  CV = document.getElementById('cv');
+  CX = CV.getContext('2d');
+  fitCanvas();
+  window.addEventListener('resize', fitCanvas);
+  window.addEventListener('orientationchange', () => setTimeout(fitCanvas, 220));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) A.beat = Math.floor(beatNow()) - 1; });
+  bindInput();
+  bindUI();
+  G.scr = 'title';
+  bump();
+  requestAnimationFrame(frame);
+}
+
+/* ---- the test export ----------------------------------------------------
+   tests/beatborne*.test.mjs drive the game entirely through this. Nothing in
+   here exists for the game itself, and nothing the game needs is missing from
+   it -- if a test cannot reach something, that is a reason to widen this
+   object, never to reach into the file another way. */
+const BB = {
+  G, A, CREW, CREW_BY, FOES, BOSSES, CHARMS, CHARM_BY, ACTS, ALL_UNITS, ART, VOICE, RCOL, VOICE_LABEL,
+  COLS, ROWS, STAGES_PER_ACT, WIN_PERFECT, WIN_GOOD,
+  mulberry, shade, hex2rgb, rgba, clamp, weighted, pickN,
+  newRun, startFight, buildStage, beatStep, playCard, moveUnit, canPlay, drawN, drawOne, mkCard, mkUnit,
+  unitAt, sideUnits, emptySlots, frontOf, frontOfRowOnly, backOfRowOnly, orderedSide, slotIndex,
+  hurt, hitPlayer, addCrowd, triggerDrop, fireUnit, endFight, nextWaveMaybe,
+  afterFight, advance, runScore, bankScore, rollOffer, rollShop, takeCard, takeCharm, skipOffer, act, startingDeck,
+  layout, render, drawUnit, drawCard, drawHUD, drawBoard, drawRoom, drawBeatRail, drawHand, drawFX,
+  screenHTML, hasCharm, judgeNow, startTransport, stopTransport, beatNow, hz,
+  setRnd(seed) { RND = mulberry(seed); },
+  setClock(t) { VCLOCK = t; },
+  clock() { return VCLOCK; },
+  headless() { return HEADLESS; },
+  mountTest(cv, cx) { CV = cv; CX = cx; DPR = 1; },
+  setScreen(w, h) { G.W = w; G.H = h; },
+  // run one whole fight with a simple pilot, and report what happened
+  sim(opts) { return pilot(opts || {}); },
+  simRun(opts) { return pilotRun(opts || {}); },
+};
+if (typeof window !== 'undefined') window.BB = BB;
+if (typeof globalThis !== 'undefined') globalThis.BB = BB;
+
+// the pilot's beat loop, shared by the single-stage probe and the full run
+function runFight(S, grade, maxBeats, cheap, opts) {
+  opts = opts || {};
+  VCLOCK = 0; A.t0 = 0; A.beat = -1; A.running = true; A.bpm = S.bpm;
+  S.armed = true;                       // no count-in for the probe
+  const spb = 60 / S.bpm;
+  let beats = 0;
+  while (!S.over && beats < maxBeats) {
+    // place what we can, timed to whatever grade the caller asked for
+    for (let guard = 0; guard < 6; guard++) {
+      // Spend down, not up. Cheapest-first looked like a conservative floor and
+      // was actually a broken player: it dumped five cost-1 cards a bar and
+      // never once played a rare it had drafted, so a deck that grew to 18
+      // cards fought with the same ten it started with. `cheap` keeps the old
+      // behaviour for comparison; it is a floor, not a player.
+      if (opts.idle) break;
+      const playable = S.hand.map((c, i) => i).filter(i => canPlay(S, i));
+      if (!playable.length) break;
+      playable.sort((a, b) => cheap ? S.hand[a].cost - S.hand[b].cost : S.hand[b].cost - S.hand[a].cost);
+      const idx = playable[0];
+      if (idx == null) break;
+      const slots = emptySlots(S, 'us');
+      if (!slots.length) break;
+      slots.sort((a, b) => a.col - b.col || a.row - b.row);
+      const offMs = grade === 'perfect' ? 0 : grade === 'good' ? 120 : 300;
+      VCLOCK = beats * spb + offMs / 1000;
+      if (!playCard(S, idx, slots[0].col, slots[0].row)) break;
+    }
+    VCLOCK = (beats + 1) * spb;
+    A.beat = beats;
+    beatStep(S, null);
+    beats++;
+  }
+  return beats;
+}
+
+/* ---- a whole run ---------------------------------------------------------
+   The single-stage probe cannot see the thing that actually kills a run: the
+   set does not heal between stages, so act two is not five easy fights, it is
+   one long one with the damage kept. This plays all fifteen, drafts on the way
+   the way a player would, and reports where it stopped. */
+function pilotRun(opts) {
+  opts = opts || {};
+  const seed = opts.seed == null ? 1 : opts.seed;
+  const grade = opts.grade || 'perfect';
+  newRun(seed);
+  const R = G.run;
+  let cleared = 0, drops = 0, perfects = 0, beats = 0;
+  for (let guard = 0; guard < 40; guard++) {
+    const S = startFight();
+    beats += runFight(S, grade, opts.maxBeats || 900, opts.play === 'cheap', opts);
+    drops += S.drops;
+    if (S.over !== 'win') {
+      return { won: false, cleared, act: R.act + 1, stage: R.stage + 1, hp: S.hp,
+               deck: R.deck.length, charms: R.charms.length, drops, beats };
+    }
+    afterFight(S);
+    cleared++;
+    // draft like a player: take the charm about half the time, else the rarest
+    rollOffer();
+    const o = R.offer;
+    if (o.charm && rnd() < 0.5) takeCharm(o.charm.id);
+    else if (o.cards.length) takeCard(o.cards.slice().sort((a, b) => b.r - a.r)[0].id);
+    else skipOffer();
+    advance();
+    if (G.scr === 'win') {
+      return { won: true, cleared, act: 3, stage: 5, hp: R.hp,
+               deck: R.deck.length, charms: R.charms.length, drops, beats };
+    }
+  }
+  return { won: false, cleared, act: R.act + 1, stage: R.stage + 1, hp: R.hp,
+           deck: R.deck.length, charms: R.charms.length, drops, beats };
+}
+
+/* ---- the pilot ----------------------------------------------------------
+   A deliberately simple player: it plays the cheapest card it can afford into
+   the front-most empty slot, on the beat. It is not good, and that is the
+   point -- if the pilot can clear act one the fight is too easy, and if it
+   cannot survive stage one the fight is too hard. Every balance claim in the
+   tests is a number this produced. */
+function pilot(opts) {
+  const seed = opts.seed == null ? 7 : opts.seed;
+  const maxBeats = opts.maxBeats || 400;
+  const grade = opts.grade || 'perfect';
+  RND = mulberry(seed);
+  newRun(seed);
+  if (opts.act != null) G.run.act = opts.act;
+  if (opts.stage != null) G.run.stage = opts.stage;
+  if (opts.deck) G.run.deck = opts.deck.slice();
+  if (opts.charms) G.run.charms = opts.charms.slice();
+  const S = startFight();
+  const beats = runFight(S, grade, maxBeats, opts.play === 'cheap', opts);
+  return {
+    over: S.over || 'timeout', beats, hp: S.hp, maxHp: S.maxHp,
+    killed: S.killed, drops: S.drops, crowd: S.crowd, coin: S.coin,
+    foesLeft: sideUnits(S, 'them').length, alliesLeft: sideUnits(S, 'us').length,
+    waves: S.waveI + '/' + S.waves.length, S,
+  };
+}
+
+if (!HEADLESS) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+} else {
+  loadMeta();
+}
+</script>
+</body>
+</html>

@@ -2335,12 +2335,46 @@ function pixels(x, y, n, a, sp, coat, skin){
   }
 }
 
-/* Blood on the camera. Screen space, so it stays put while the world moves. */
+/* Blood on the camera. Screen space, so it stays put while the world moves.
+
+   Twenty-seven of these, up to 17px across, at half opacity, for up to five
+   and a half seconds, scattered uniformly over the whole frame — including
+   over the car, which is a small red shape of about the same size. The owner
+   could not find their own car in the mess. Fewer, smaller, shorter, fainter,
+   and never on the car.
+
+   Every droplet draws the same five values from the stream whether it ends up
+   where it was first put or not: splatLens runs inside the simulation during a
+   run (COSMETIC is only true in the replay), so changing how many draws it
+   makes would change what every subsequent shot hits. The clear zone moves a
+   droplet, it never rerolls or skips one. */
+const LENS_MAX = 10;          // droplets on the glass at once
+const LENS_ALPHA = 0.32;      // …and how much of the market each one hides
+const LENS_CLEAR = 46;        // screen px of clear glass kept around the car
 function splatLens(n){
+  const cx = (car.x - cam.x) * cam.s + VW / 2, cy = (car.y - cam.y) * cam.s + VH / 2;
+  const clear = Math.max(CARL, CARW) * cam.s * 0.5 + LENS_CLEAR;
   for (let i = 0; i < n; i++){
-    if (lens.length > 26) lens.shift();
-    lens.push({ x: crr(0.06, 0.94), y: crr(0.06, 0.94), r: crr(4, 17), t: 0,
-      ttl: crr(2.4, 5.5), seed: crnd() });
+    let x = crr(0.06, 0.94), y = crr(0.06, 0.94);
+    const r = crr(3, 10), ttl = crr(1.4, 2.8), seed = crnd();
+    const dx = x * VW - cx, dy = y * VH - cy, d = Math.hypot(dx, dy);
+    if (d < clear){
+      // straight out to the rim of the hole, along a fixed bearing if it
+      // landed exactly on the car
+      const ux = d > 0.01 ? dx / d : Math.cos(i * 2.4);
+      const uy = d > 0.01 ? dy / d : Math.sin(i * 2.4);
+      x = clamp((cx + ux * clear) / VW, 0.04, 0.96);
+      y = clamp((cy + uy * clear) / VH, 0.04, 0.96);
+      // clamping can shove it back over the car when the car is against an
+      // edge; going the other way always has room, because the hole is a
+      // tenth of the frame and the frame is not
+      if (Math.hypot(x * VW - cx, y * VH - cy) < clear){
+        x = clamp((cx - ux * clear) / VW, 0.04, 0.96);
+        y = clamp((cy - uy * clear) / VH, 0.04, 0.96);
+      }
+    }
+    if (lens.length >= LENS_MAX) lens.shift();
+    lens.push({ x, y, r, t: 0, ttl, seed });
   }
 }
 
@@ -8273,14 +8307,17 @@ function drawLens(){
   for (const d of lens){
     const k = clamp(1 - d.t / d.ttl, 0, 1);
     const x = d.x * VW, y = d.y * VH, r = d.r * (0.85 + 0.15 * k);
-    ctx.globalAlpha = 0.5 * k;
-    ctx.fillStyle = '#8e1210';
+    /* Half opacity put a dark red disc on pale snow that read as a bright
+       pink one — a thing in the world, competing with the car, rather than
+       something on the glass in front of it. */
+    ctx.globalAlpha = LENS_ALPHA * k;
+    ctx.fillStyle = '#7a1210';
     ctx.beginPath(); ctx.ellipse(x, y, r, r * (0.6 + d.seed * 0.5), d.seed * 6.283, 0, 6.283); ctx.fill();
     for (let i = 0; i < 3; i++){
       const a = d.seed * 6.283 + i * 2.1;
       circle(x + Math.cos(a) * r * 1.7, y + Math.sin(a) * r * 1.4, r * 0.3); ctx.fill();
     }
-    ctx.globalAlpha = 0.25 * k;
+    ctx.globalAlpha = 0.12 * k;
     ctx.fillStyle = '#d8483a';
     circle(x - r * 0.2, y - r * 0.25, r * 0.45); ctx.fill();
   }
