@@ -72,6 +72,7 @@ const STATIC_PATHS = [
   'donut_patrol',
   'merry_crashmas',
   'world_choir_games',
+  'grudge_draft',
   'tools',
 ];
 
