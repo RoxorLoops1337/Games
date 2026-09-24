@@ -85,6 +85,8 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0b0814;color:var(--in
 .tool.sel{background:linear-gradient(180deg,#ffe58a,#ffb84d);color:#1b1330;box-shadow:inset 0 0 0 2px #fff,0 4px 0 #8a5a10}
 .tool.sel .ct{color:#6a2a00}
 .tool[disabled]{opacity:.35;pointer-events:none}
+.tool.coach{animation:coach 1s ease-in-out infinite}
+@keyframes coach{0%,100%{box-shadow:inset 0 0 0 2px #ffd24d,0 0 0 0 rgba(255,210,77,.9)}50%{box-shadow:inset 0 0 0 2px #fff,0 0 0 10px rgba(255,210,77,0)}}
 .fb{position:absolute;bottom:12px;border:0;border-radius:14px;padding:14px 16px;font:900 14px inherit;font-family:inherit;
   color:#fff;background:rgba(40,28,70,.9);box-shadow:inset 0 0 0 2px #5d4c93;display:none;cursor:pointer}
 .fb.on{display:block}
@@ -160,29 +162,39 @@ function shuffle(a){ for (let i = a.length - 1; i > 0; i--){ const j = ri(i + 1)
 // ball = one circle [radius].  rot = how the emoji glyph is turned to lie along the body.
 const D45 = Math.PI / 4;
 const ITEMS = {
-  sword:  { n:'Sword',        e:'🗡️', rar:0, sh:['cap',46,8],  dens:1.0, rot:D45, col:'#a9c1dc', fx:{ dmg:[5,7,9] } },
-  dagger: { n:'Dagger',       e:'🔪', rar:0, sh:['cap',32,6],  dens:0.9, rot:D45, col:'#c9d3de', fx:{ dmg:[3,5,7] } },
+  sword:  { n:'Sword',        e:'🗡️', tg:['blade','metal'], rar:0, sh:['cap',46,8],  dens:1.0, rot:D45, col:'#a9c1dc', fx:{ dmg:[5,7,9] } },
+  dagger: { n:'Dagger',       e:'🔪', tg:['blade','metal'], rar:0, sh:['cap',32,6],  dens:0.9, rot:D45, col:'#c9d3de', fx:{ dmg:[3,5,7] } },
   bow:    { n:'Bow',          e:'🏹', rar:0, sh:['cap',42,9],  dens:0.7, rot:D45, col:'#c79a5b', fx:{ dmg:[3,4,5], hits:[2,2,3] } },
-  axe:    { n:'Battle Axe',   e:'🪓', rar:1, sh:['cap',44,11], dens:1.9, rot:D45, col:'#b98a5a', fx:{ dmg:[10,13,17] } },
-  hammer: { n:'War Hammer',   e:'🔨', rar:1, sh:['cap',40,10], dens:1.6, rot:D45, col:'#9d8f86', fx:{ dmg:[5,7,9], vuln:[2,2,3] } },
+  axe:    { n:'Battle Axe',   e:'🪓', tg:['blade','metal'], rar:1, sh:['cap',44,11], dens:1.9, rot:D45, col:'#b98a5a', fx:{ dmg:[10,13,17] } },
+  hammer: { n:'War Hammer',   e:'🔨', tg:['metal'], rar:1, sh:['cap',40,10], dens:1.6, rot:D45, col:'#9d8f86', fx:{ dmg:[5,7,9], vuln:[2,2,3] } },
   bomb:   { n:'Bomb',         e:'💣', rar:1, sh:['ball',16],   dens:1.3, rot:0,   col:'#6b6b88', fx:{ dmgAll:[7,9,12] } },
-  bolt:   { n:'Storm Jar',    e:'⚡', rar:1, sh:['blob',15],   dens:0.8, rot:0,   col:'#ffe066', fx:{ dmgAll:[3,4,5], hits:[2,2,3] } },
+  bolt:   { n:'Storm Jar',    e:'⚡', tg:['potion'], rar:1, sh:['blob',15],   dens:0.8, rot:0,   col:'#ffe066', fx:{ dmgAll:[3,4,5], hits:[2,2,3] } },
   shield: { n:'Shield',       e:'🛡️', rar:0, sh:['blob',18],   dens:1.0, rot:0,   col:'#6fa8ff', fx:{ block:[5,7,10] } },
-  ice:    { n:'Frost Shard',  e:'❄️', rar:0, sh:['blob',14],   dens:0.7, rot:0,   col:'#a8f0ff', fx:{ chill:[2,3,4], block:[2,3,4] } },
-  fire:   { n:'Fire Flask',   e:'🔥', rar:0, sh:['blob',14],   dens:0.8, rot:0,   col:'#ff8a3d', fx:{ burn:[4,6,8] } },
-  poison: { n:'Venom Vial',   e:'🧪', rar:0, sh:['cap',34,8],  dens:0.8, rot:D45, col:'#7dff6a', fx:{ poison:[4,6,8] } },
-  mush:   { n:'Toadstool',    e:'🍄', rar:1, sh:['blob',14],   dens:0.6, rot:0,   col:'#ff6a6a', fx:{ weak:[2,3,3], poison:[2,3,5] } },
-  apple:  { n:'Apple',        e:'🍎', rar:0, sh:['blob',13],   dens:0.9, rot:0,   col:'#ff5a5a', fx:{ heal:[3,5,7] } },
-  banana: { n:'Banana',       e:'🍌', rar:0, sh:['cap',38,8],  dens:0.7, rot:D45, col:'#ffe066', fx:{ heal:[2,3,4], block:[3,4,6] } },
-  brocc:  { n:'Broccoli',     e:'🥦', rar:1, sh:['blob',15],   dens:0.7, rot:0,   col:'#62d26f', fx:{ heal:[4,6,8], regen:[1,2,2] } },
-  ring:   { n:'Troll Ring',   e:'💍', rar:1, sh:['ball',11],   dens:1.2, rot:0,   col:'#ffd24d', fx:{ regen:[2,3,4] } },
-  tonic:  { n:'Rage Tonic',   e:'💪', rar:1, sh:['blob',14],   dens:0.9, rot:0,   col:'#ffb36b', fx:{ str:[1,2,3] } },
+  ice:    { n:'Frost Shard',  e:'❄️', tg:['potion'], rar:0, sh:['blob',14],   dens:0.7, rot:0,   col:'#a8f0ff', fx:{ chill:[2,3,4], block:[2,3,4] } },
+  fire:   { n:'Fire Flask',   e:'🔥', tg:['potion'], rar:0, sh:['blob',14],   dens:0.8, rot:0,   col:'#ff8a3d', fx:{ burn:[4,6,8] } },
+  poison: { n:'Venom Vial',   e:'🧪', tg:['potion'], rar:0, sh:['cap',34,8],  dens:0.8, rot:D45, col:'#7dff6a', fx:{ poison:[4,6,8] } },
+  mush:   { n:'Toadstool',    e:'🍄', tg:['produce'], rar:1, sh:['blob',14],   dens:0.6, rot:0,   col:'#ff6a6a', fx:{ weak:[2,3,3], poison:[2,3,5] } },
+  apple:  { n:'Apple',        e:'🍎', tg:['produce'], rar:0, sh:['blob',13],   dens:0.9, rot:0,   col:'#ff5a5a', fx:{ heal:[3,5,7] } },
+  banana: { n:'Banana',       e:'🍌', tg:['produce'], rar:0, sh:['cap',38,8],  dens:0.7, rot:D45, col:'#ffe066', fx:{ heal:[2,3,4], block:[3,4,6] } },
+  brocc:  { n:'Broccoli',     e:'🥦', tg:['produce'], rar:1, sh:['blob',15],   dens:0.7, rot:0,   col:'#62d26f', fx:{ heal:[4,6,8], regen:[1,2,2] } },
+  ring:   { n:'Troll Ring',   e:'💍', tg:['metal'], rar:1, sh:['ball',11],   dens:1.2, rot:0,   col:'#ffd24d', fx:{ regen:[2,3,4] } },
+  tonic:  { n:'Rage Tonic',   e:'💪', tg:['potion'], rar:1, sh:['blob',14],   dens:0.9, rot:0,   col:'#ffb36b', fx:{ str:[1,2,3] } },
   cactus: { n:'Spike Plant',  e:'🌵', rar:1, sh:['cap',34,10], dens:0.9, rot:Math.PI/2, col:'#6fd46f', fx:{ thorns:[3,4,6] } },
-  coin:   { n:'Gold Coin',    e:'🪙', rar:0, sh:['ball',10],   dens:1.5, rot:0,   col:'#ffd24d', fx:{ gold:[3,5,7] } },
-  gem:    { n:'Power Gem',    e:'💎', rar:2, sh:['blob',12],   dens:1.1, rot:0,   col:'#6ff0ff', fx:{ grab:[1,1,1], block:[0,3,6] } },
-  clover: { n:'Four-Leaf',    e:'🍀', rar:2, sh:['blob',12],   dens:0.5, rot:0,   col:'#6fe07a', fx:{ echo:[1,2,3] } },
-  heart:  { n:'Heart Gem',    e:'💖', rar:2, sh:['blob',14],   dens:0.9, rot:0,   col:'#ff7ad9', fx:{ maxhp:[1,2,3], heal:[3,4,5] } },
-  crown:  { n:'Crown',        e:'👑', rar:2, sh:['blob',15],   dens:1.4, rot:0,   col:'#ffd24d', fx:{ gold:[8,12,16], str:[1,1,2] } },
+  coin:   { n:'Gold Coin',    e:'🪙', tg:['metal'], rar:0, sh:['ball',10],   dens:1.5, rot:0,   col:'#ffd24d', fx:{ gold:[3,5,7] } },
+  gem:    { n:'Power Gem',    e:'💎', tg:['gem'], rar:2, sh:['blob',12],   dens:1.1, rot:0,   col:'#6ff0ff', fx:{ grab:[1,1,1], block:[0,3,6] } },
+  clover: { n:'Four-Leaf',    e:'🍀', tg:['gem'], rar:2, sh:['blob',12],   dens:0.5, rot:0,   col:'#6fe07a', fx:{ echo:[1,2,3] } },
+  heart:  { n:'Heart Gem',    e:'💖', tg:['gem'], rar:2, sh:['blob',14],   dens:0.9, rot:0,   col:'#ff7ad9', fx:{ maxhp:[1,2,3], heal:[3,4,5] } },
+  crown:  { n:'Crown',        e:'👑', tg:['metal'], rar:2, sh:['blob',15],   dens:1.4, rot:0,   col:'#ffd24d', fx:{ gold:[8,12,16], str:[1,1,2] } },
+  balloon:{ n:'Balloon',      e:'🎈', rar:1, tg:[], tr:'float', sh:['blob',14], dens:0.3, rot:0, col:'#ff6b8a', fx:{ block:[6,8,11] } },
+  jam:    { n:'Berry Jam',    e:'🫙', rar:1, tg:['produce'], tr:'sticky', sh:['blob',14], dens:1.0, rot:0, col:'#b04a8a', fx:{ heal:[2,3,4], block:[2,3,4] } },
+  coconut:{ n:'Coconut',      e:'🥥', rar:1, tg:['produce'], tr:'bouncy', sh:['ball',15], dens:1.8, rot:0, col:'#8a6a4a', fx:{ dmg:[9,12,15] } },
+  chili:  { n:'Chili',        e:'🌶️', rar:1, tg:['produce'], sh:['cap',32,8], dens:0.6, rot:D45, col:'#ff4d3d', fx:{ burnAll:[3,4,6] } },
+  garlic: { n:'Garlic',       e:'🧄', rar:0, tg:['produce'], sh:['blob',13], dens:0.8, rot:0, col:'#efe6d0', fx:{ heal:[3,4,6], cleanse:[1,1,1] } },
+  lemon:  { n:'Lemon',        e:'🍋', rar:0, tg:['produce'], sh:['blob',13], dens:0.8, rot:0, col:'#ffe066', fx:{ dmg:[2,3,4], vuln:[2,2,3] } },
+  pea:    { n:'Pea Pod',      e:'🫛', rar:0, tg:['produce'], sh:['cap',34,7], dens:0.6, rot:D45, col:'#7dd46f', fx:{ dmg:[1,1,2], hits:[5,6,5] } },
+  die:    { n:'Lucky Die',    e:'🎲', rar:1, tg:[], sh:['blob',12], dens:1.1, rot:0, col:'#f2f2f2', fx:{ dice:[12,16,20] } },
+  boomer: { n:'Boomerang',    e:'🪃', rar:1, tg:[], sh:['cap',38,8], dens:0.8, rot:D45, col:'#c98a4a', fx:{ dmg:[5,7,9], back:[1,1,1] } },
+  magnet: { n:'Magnet',       e:'🧲', rar:2, tg:['metal'], tr:'magnet', sh:['blob',14], dens:1.6, rot:0, col:'#ff5a6a', fx:{ perMetal:[3,4,6] } },
   // junk (enemies stuff these into your machine; they vanish when grabbed)
   slime:  { n:'Slime',        e:'🟢', junk:1, sh:['blob',15],  dens:0.8, rot:0,   col:'#7dff6a', fx:{} },
   web:    { n:'Cobweb',       e:'🕸️', junk:1, sh:['blob',17],  dens:0.4, rot:0,   col:'#d0d0e8', fx:{} },
@@ -201,6 +213,7 @@ const STATUS = {
   str:   { e:'💪', c:'#ffb36b', d:'Adds to every hit.' },
   thorns:{ e:'🌵', c:'#9dff8a', d:'Attackers take this much damage back.' },
   regen: { e:'💚', c:'#7dffb0', d:'Heals this much at the start of each turn.' },
+  armor: { e:'🪖', c:'#c9c3e0', d:'Every hit against it deals this much less.' },
 };
 
 // Enemy moves: atk (x = hits), block, str, poison/burn/weak/vuln on you, junk (stuffs your
@@ -209,33 +222,37 @@ const ENEMIES = {
   // act 1
   rat:    { n:'Sewer Rat',   e:'🐀', hp:13, mv:[{atk:5},{atk:3,x:2}] },
   bat:    { n:'Cave Bat',    e:'🦇', hp:10, mv:[{atk:2,x:3},{atk:4,weak:1}] },
-  slime:  { n:'Gloop',       e:'🦠', hp:18, cycle:1, mv:[{atk:4},{junk:'slime',n:2,block:3},{atk:6}] },
+  slime:  { n:'Gloop',       e:'🦠', hp:18, cycle:1, split:'glooplet', mv:[{atk:4},{junk:'slime',n:2,block:3},{atk:6}] },
+  glooplet:{ n:'Glooplet',  e:'🦠', hp:5, mv:[{atk:2},{junk:'slime',n:1}] },
   snake:  { n:'Pit Viper',   e:'🐍', hp:16, mv:[{atk:3,poison:3},{atk:6}] },
   goblin: { n:'Goblin',      e:'👺', hp:22, mv:[{atk:7},{block:6,atk:3},{str:2}] },
   ogre:   { n:'Ogre',        e:'👹', hp:58, elite:1, mv:[{atk:12},{block:10,str:2},{atk:6,x:2}] },
   bandit: { n:'Claw Thief',  e:'🥷', hp:48, elite:1, mv:[{steal:1,atk:5},{atk:10},{block:8,atk:4}] },
   crab:   { n:'The Pinch King', e:'🦀', hp:120, boss:1, cycle:1,
-            mv:[{atk:7,x:2},{block:14,junk:'rock',n:2},{steal:2,atk:6},{atk:17}] },
+            mv:[{atk:7,x:2},{block:14,junk:'rock',n:2},{steal:2,atk:6},{raise:1,atk:12}],
+            mv2:[{atk:9,x:2},{raise:1,block:12,junk:'rock',n:2},{atk:22}] },
   // act 2
   spider: { n:'Weaver',      e:'🕷️', hp:30, mv:[{atk:5,poison:4},{atk:9},{junk:'web',n:2,atk:3}] },
   wolf:   { n:'Dire Wolf',   e:'🐺', hp:36, mv:[{atk:8},{atk:5,x:2},{str:3,block:5}] },
   mage:   { n:'Ember Mage',  e:'🧙', hp:28, mv:[{burn:6,atk:3},{atk:10},{block:10,weak:2}] },
-  ghost:  { n:'Wisp',        e:'👻', hp:32, mv:[{atk:9,vuln:1},{block:14},{weak:2,atk:5}] },
+  ghost:  { n:'Wisp',        e:'👻', hp:32, mv:[{atk:9,vuln:1},{block:14},{weak:2,atk:5},{grease:1,atk:4}] },
   skel:   { n:'Skeleton',    e:'💀', hp:28, mv:[{atk:7,x:2},{block:9},{junk:'bone',n:2,atk:4}] },
-  troll:  { n:'Frost Troll', e:'🧌', hp:105, elite:1, mv:[{atk:13,freeze:1},{block:15,str:2},{atk:6,x:3}] },
-  knight: { n:'Black Knight',e:'🤺', hp:95, elite:1, mv:[{block:16,atk:6},{atk:20},{str:3,vuln:2}] },
+  troll:  { n:'Frost Troll', e:'🧌', hp:100, regen:3, elite:1, mv:[{atk:13,freeze:1},{block:15,str:2},{atk:6,x:3}] },
+  knight: { n:'Black Knight',e:'🤺', hp:88, armor:2, elite:1, mv:[{block:16,atk:6},{atk:20},{str:3,vuln:2}] },
   dragon: { n:'Cinder Dragon', e:'🐉', hp:220, boss:1, cycle:1,
-            mv:[{burn:7,atk:8},{atk:11,x:2},{block:20,str:3},{junk:'rock',n:3,atk:6},{atk:30}] },
+            mv:[{burn:7,atk:8},{atk:11,x:2},{block:20,str:3},{junk:'rock',n:3,atk:6},{atk:30}],
+            mv2:[{burn:10,atk:10},{tilt:1,atk:12,x:2},{grease:1,block:18},{atk:34}] },
   // act 3
-  golem:  { n:'Stone Golem', e:'🗿', hp:68, mv:[{block:20,atk:5},{atk:17},{atk:9,x:2}] },
+  golem:  { n:'Stone Golem', e:'🗿', hp:60, armor:2, mv:[{block:20,atk:5},{atk:17},{atk:9,x:2}] },
   vamp:   { n:'Vampire',     e:'🧛', hp:58, mv:[{atk:11,drain:1},{weak:2,vuln:2,atk:4},{atk:5,x:3}] },
   demon:  { n:'Demon',       e:'😈', hp:62, mv:[{burn:8,atk:6},{atk:14},{str:4,block:8}] },
   zombie: { n:'Rotter',      e:'🧟', hp:74, mv:[{atk:10,poison:5},{junk:'bone',n:3,atk:5},{atk:16}] },
-  imp:    { n:'Imp',         e:'👿', hp:38, mv:[{atk:5,x:3},{burn:5,atk:3}] },
-  kraken: { n:'Kraken',      e:'🐙', hp:175, elite:1, mv:[{atk:8,x:4},{steal:2,block:15},{atk:26}] },
+  imp:    { n:'Imp',         e:'👿', hp:38, mv:[{atk:5,x:3},{burn:5,atk:3},{grease:1,atk:4}] },
+  kraken: { n:'Kraken',      e:'🐙', hp:175, elite:1, mv:[{atk:8,x:4},{steal:2,block:15},{tilt:1,atk:14},{atk:26}] },
   hexer:  { n:'Hex Witch',   e:'🧙‍♀️', hp:150, elite:1, mv:[{weak:3,vuln:3,atk:6},{atk:21},{junk:'bone',n:2,atk:9}] },
   house:  { n:'The House',   e:'🤖', hp:340, boss:1, cycle:1,
-            mv:[{atk:11,x:3},{junk:'rock',n:3,block:22},{steal:3,atk:10},{str:4,freeze:1,atk:6},{atk:44}] },
+            mv:[{atk:11,x:3},{junk:'rock',n:3,block:22},{steal:3,atk:10},{str:4,freeze:1,atk:6},{tilt:1,atk:20}],
+            mv2:[{tilt:1,atk:12,x:3},{steal:3,grease:1,atk:10},{junk:'rock',n:3,block:25},{atk:48}] },
 };
 const ENC = {
   1:{ easy:[['rat'],['bat'],['slime'],['snake']],
@@ -266,6 +283,14 @@ const RELICS = {
   quill:  { n:'Ink Quill',     e:'🪶', d:'Every fight also gives 2 Precision Ink.' },
   spikes: { n:'Spiked Frame',  e:'📌', d:'Start every fight with 3 thorns.' },
   battery:{ n:'Spare Battery', e:'🔋', d:'+1 grab every turn, but you lose 2 HP each turn.' },
+  compost:{ n:'Compost Bin',   e:'♻️', d:'Junk you grab gives 4 block.' },
+  salad:  { n:'Salad Bowl',    e:'🥗', d:'Produce heals 2 more.' },
+  grind:  { n:'Grindstone',    e:'⚙️', d:'Blades deal 2 more damage.' },
+  alembic:{ n:'Alembic',       e:'⚗️', d:'Potions apply 2 more poison, burn and chill.' },
+  perma:  { n:'Permafrost',    e:'🧊', d:'Frozen enemies take 50% more damage.' },
+  sniper: { n:'Sharpshooter',  e:'🎯', d:'A drop that grabs exactly one item also deals 5 damage.' },
+  pinata: { n:'Piñata',        e:'🪅', d:'Every kill drops 2 gold coins into the machine for this fight.' },
+  leaf:   { n:'Catalyst Leaf', e:'🍃', d:'Poison on enemies no longer wears off.' },
 };
 const INKS = {
   dot:   { n:'Precision', e:'💧', d:'Reveal one hex next to the painted area.' },
@@ -409,7 +434,8 @@ function prepContacts(h){
     const cap = c.seg && c.seg.own !== 9 ? PH.clawBias : PH.maxBias;
     c.bias = Math.min(cap, PH.beta / h * Math.max(0, c.pen - PH.slop));
     const v = relVel(c), vn = v[0] * nx + v[1] * ny;
-    if (vn < -90) c.bias = Math.max(c.bias, -PH.e * vn);
+    const e = Math.max(ITEMS[a.it.id].tr === 'bouncy' ? 0.55 : PH.e, b && ITEMS[b.it.id].tr === 'bouncy' ? 0.55 : PH.e);
+    if (vn < -90) c.bias = Math.max(c.bias, -e * vn);
     c.jn = 0; c.jt = 0;
   }
 }
@@ -450,11 +476,14 @@ function solveContacts(){
 function physStep(h, clawBusy){
   for (const b of W.bodies){
     if (b.sl) continue;
-    b.vy += PH.g * h;
-    const ld = 1 - 0.15 * h, ad = 1 - 1.6 * h;
+    const tr = ITEMS[b.it.id].tr;
+    // balloons drift up and hover in the middle of the glass
+    b.vy += PH.g * h * (tr === 'float' ? (b.y > 150 ? -0.3 : 0.12) : 1);
+    const ld = 1 - (tr === 'float' ? 1.2 : 0.15) * h, ad = 1 - 1.6 * h;
     b.vx *= ld; b.vy *= ld; b.w *= ad;
   }
   collide();
+  traits(h);
   prepContacts(h);
   solveContacts();
   for (const b of W.bodies){
@@ -463,10 +492,34 @@ function physStep(h, clawBusy){
     if (sp > 1600 * 1600){ const k = 1600 / Math.sqrt(sp); b.vx *= k; b.vy *= k; }
     b.x += b.vx * h; b.y += b.vy * h; b.a += b.w * h;
     if (b.held > 0) b.held -= h * 8;
-    if (!clawBusy && sp < 14 * 14 && Math.abs(b.w) < 0.35 && b.held <= 0){
+    if (!clawBusy && sp < 14 * 14 && Math.abs(b.w) < 0.35 && b.held <= 0 && ITEMS[b.it.id].tr !== 'float'){
       b.slT += h;
       if (b.slT > 0.45){ b.sl = true; b.vx = b.vy = b.w = 0; }
     } else b.slT = 0;
+  }
+}
+// sticky things drag what they touch along; magnets pull metal toward themselves
+function traits(h){
+  for (const c of W.contacts){
+    if (!c.b) continue;
+    const sa = ITEMS[c.a.it.id].tr === 'sticky', sb = ITEMS[c.b.it.id].tr === 'sticky';
+    if (!sa && !sb) continue;
+    c.mu = 1.6;
+    const s = sa ? c.a : c.b, o = sa ? c.b : c.a;
+    if (s.sl && o.sl) continue;
+    const k = 0.12;
+    o.vx += (s.vx - o.vx) * k; o.vy += (s.vy - o.vy) * k;
+  }
+  for (const m of W.bodies){
+    if (ITEMS[m.it.id].tr !== 'magnet') continue;
+    for (const b of W.bodies){
+      if (b === m || (ITEMS[b.it.id].tg || []).indexOf('metal') < 0) continue;
+      const dx = m.x - b.x, dy = m.y - b.y, d = Math.hypot(dx, dy);
+      if (d > 110 || d < m.br + b.br - 2) continue;
+      const f = 420 * h / Math.max(1, d / 40);
+      if (b.sl && f < 2) continue;
+      b.sl = false; b.slT = 0; b.vx += dx / d * f; b.vy += dy / d * f;
+    }
   }
 }
 function wakeAll(){ for (const b of W.bodies){ b.sl = false; b.slT = 0; } }
@@ -476,7 +529,7 @@ function kinetic(){ let e = 0; for (const b of W.bodies) e += b.vx * b.vx + b.vy
 const PRONG = [[0, 0], [14, 28], [9, 48], [1, 57]];
 const PHI_OPEN = 0.62, PHI_CLOSED = -0.1;
 function clawSize(){ const r = G.run; return ITEM_SCALE * r.claw.size * (hasRelic('magnet') ? 1.12 : 1); }
-function clawGrip(){ const r = G.run; return Math.min(1, r.claw.grip + (hasRelic('gloves') ? 0.15 : 0)); }
+function clawGrip(){ const r = G.run; return clamp(r.claw.grip + (hasRelic('gloves') ? 0.15 : 0) - (F && F.greaseOn ? 0.3 : 0), 0.05, 1); }
 function initClaw(){
   const s = clawSize();
   F.claw = { x: CHW / 2 + 4, y: RAIL, tx: 200, vx: 0, vy: 0, pL: PHI_OPEN, pR: PHI_OPEN, wL: 0, wR: 0,
@@ -520,8 +573,8 @@ function clawPlan(h){
       if (Math.abs(d) > 0.6) C.vx = Math.sign(d) * Math.min(330, Math.abs(d) / h);
       else if (C.pending && F.phase === 'player' && F.grabs > 0){
         C.pending = false; C.st = 'drop'; C.t = 0; C.touch = false;
-        F.grabs--; F.dropGot = 0; F.jackpotDone = false; G.run.stats.grabs++;
-        wakeAll(); sfx('drop');
+        F.grabs--; F.dropGot = 0; F.jackpotDone = false; G.run.stats.grabs++; F.dropItems = []; F.sets = {}; F.sniperDone = false;
+        wakeAll(); sfx('drop'); tutStep(2, 3);
       } else C.pending = false;
       break;
     }
@@ -592,6 +645,11 @@ function newRun(seed){
   for (const id of ['sword','sword','sword','dagger','dagger','shield','shield','shield','apple','apple','coin','coin','fire'])
     G.run.deck.push(newEntry(id));
   G.run.map = genMap(1);
+  if (G.meta.tut < 5){
+    // first run: a lone rat waits right next to the start
+    const m = G.run.map, up = neighbors(m.cells, m.pos).find(i => m.cells[i].r < m.cells[m.pos].r);
+    if (up != null){ const c = m.cells[up]; c.v = false; c.k = 'fight'; c.tut = 1; c.done = false; }
+  }
   G.meta.runs++; saveMeta();
 }
 function goldGain(n){ const r = G.run; n = Math.round(n * (hasRelic('purse') ? 1.5 : 1)); r.gold += n; r.stats.gold += n; return n; }
@@ -600,8 +658,13 @@ function goldGain(n){ const r = G.run; n = Math.round(n * (hasRelic('purse') ? 1
 function mkEnemy(id, depth){
   const d = ENEMIES[id];
   const hpMul = 1 + 0.4 * depth, hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
-  return { id, d, hp, max: hp, block: 0, st: {}, chill: 0, frozen: false, turn: 0, intent: null, last: -1,
-    x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: 1 + 0.3 * depth };
+  return withPassives({ id, d, hp, max: hp, block: 0, st: {}, chill: 0, frozen: false, turn: 0, intent: null, last: -1,
+    x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: 1 + 0.3 * depth, phase2: false });
+}
+function withPassives(e){
+  if (e.d.armor) e.st.armor = e.d.armor;
+  if (e.d.regen) e.st.regen = e.d.regen;
+  return e;
 }
 function layoutEnemies(){
   const al = F.enemies, n = al.length;
@@ -609,7 +672,7 @@ function layoutEnemies(){
   al.forEach((e, i) => { e.x = xs[i]; e.y = e.d.boss ? 124 : 132; });
 }
 function rollIntent(e){
-  const mv = e.d.mv;
+  const mv = e.phase2 && e.d.mv2 ? e.d.mv2 : e.d.mv;
   let i;
   if (e.d.cycle) i = e.turn % mv.length;
   else { do { i = ri(mv.length); } while (mv.length > 1 && i === e.last && R() < 0.8); }
@@ -633,6 +696,9 @@ function intentBits(e){
   if (m.steal) out.push(['🫳', m.steal + '']);
   if (m.freeze) out.push(['🥶', '-' + m.freeze]);
   if (m.drain) out.push(['🩸', '']);
+  if (m.grease) out.push(['🧈', '']);
+  if (m.raise) out.push(['🧱', '']);
+  if (m.tilt) out.push(['🌀', '']);
   return out;
 }
 function attackPreview(e, base){
@@ -646,7 +712,7 @@ function startFight(kind, ids, depth){
   F = { kind, depth, enemies: ids.map(id => mkEnemy(id, depth)), P: { block: 0, st: {}, frozen: 0, hitT: 0 },
     grabs: 0, turn: 0, phase: 'player', seq: [], seqT: 0, used: [], spawnQ: [], spawnT: 0, echo: 0, target: 0,
     texts: [], parts: [], flies: [], shake: 0, dropGot: 0, jackpotDone: false, quiet: 0, endT: 0, firstUse: true,
-    acc: 0, once: new Set(), stop: 0, chuteT: 0, cargo: [], enraged: 0, aiming: false, keyDir: 0, got: [], banner: null, junkN: 0, t: 0 };
+    acc: 0, once: new Set(), dropItems: [], sets: {}, grease: 0, raised: 0, stop: 0, chuteT: 0, cargo: [], enraged: 0, aiming: false, keyDir: 0, got: [], banner: null, junkN: 0, t: 0 };
   layoutEnemies();
   F.enemies.forEach(rollIntent);
   W.bodies = []; buildWalls(); initClaw(); clawSegs();
@@ -659,7 +725,8 @@ function startFight(kind, ids, depth){
   if (hasRelic('plate')) F.P.block = 8;
   if (hasRelic('spikes')) F.P.st.thorns = 3;
   run.stats.fights++;
-  G.scr = 'fight'; closeOv(); syncBars();
+  G.scr = 'fight'; closeOv(); tutStep(1, 2); syncBars();
+  F.coachT = 0;
   playerTurnStart(true);
   F.banner = { t: 1.8, txt: kind === 'boss' ? 'BOSS!' : kind === 'elite' ? 'ELITE!' : 'FIGHT!', sub: F.enemies.map(e => e.d.e + ' ' + e.d.n).join('  ') };
   sfx(kind === 'boss' ? 'boss' : 'start');
@@ -699,6 +766,10 @@ function hurtEnemy(e, d, col, isHit){
   if (e.dead) return 0;
   const b = Math.min(e.block, d); e.block -= b; d -= b;
   e.hp -= d; e.hitT = 0.28;
+  if (e.d.mv2 && !e.phase2 && e.hp > 0 && e.hp <= e.max / 2){
+    e.phase2 = true; addSt(e, 'str', 2); e.turn = 0; e.last = -1; rollIntent(e);
+    F.banner = { t: 1.6, txt: 'PHASE 2', sub: e.d.n + ' gets serious' }; F.shake = 12; sfx('boss');
+  }
   if (d > 0) popup(e.x, e.y - 34, '-' + d, col || '#fff', d >= 10);
   else if (b > 0) popup(e.x, e.y - 34, 'blocked', '#9fc4ff');
   if (isHit){ burst(e.x, e.y, col || '#fff', 8 + Math.min(14, d)); F.shake = Math.min(10, 2 + d * 0.4); if (d >= 8) F.stop = Math.max(F.stop, 0.05); buzz(d >= 8 ? 20 : 10); }
@@ -711,6 +782,8 @@ function hitEnemy(e, base, col){
   let d = base + (F.P.st.str || 0) + (hasRelic('whet') ? 1 : 0);
   if (F.P.st.weak > 0) d = Math.floor(d * 0.75);
   if (e.st.vuln > 0) d = Math.floor(d * 1.5);
+  if (e.frozen && hasRelic('perma')) d = Math.floor(d * 1.5);
+  if (e.st.armor) d = Math.max(0, d - e.st.armor);
   sfx('hit');
   hurtEnemy(e, Math.max(0, d), col, true);
 }
@@ -719,6 +792,13 @@ function killEnemy(e){
   e.hp = 0; e.dead = true; e.deadT = 0; G.run.stats.kills++;
   burst(e.x, e.y, '#ffd24d', 26, 300); sfx('kill');
   if (e.pouch.length){ for (const it of e.pouch) F.spawnQ.push(it); e.pouch = []; popup(e.x, e.y - 60, 'items returned!', '#ffd24d'); }
+  if (hasRelic('pinata')) for (let i = 0; i < 2; i++) F.spawnQ.push({ id: 'coin', lvl: 1, uid: 't' + (++F.junkN), temp: true });
+  if (e.d.split && F.enemies.length < 3){
+    for (let i = 0; i < 2 && F.enemies.length < 4; i++){
+      const k = mkEnemy(e.d.split, F.depth); k.x = e.x + (i ? 36 : -36); k.y = e.y + 10; rollIntent(k); F.enemies.push(k);
+    }
+    popup(e.x, e.y - 40, 'it splits!', '#7dff6a', true);
+  }
   if (!alive().length && F.phase !== 'won' && F.phase !== 'lost'){ F.phase = 'won'; F.endT = 1.1; F.claw.pending = false; }
 }
 function hurtPlayer(d, col, src){
@@ -741,17 +821,25 @@ function addChill(e, n){
   if (e.chill >= cap){ e.chill -= cap; e.frozen = true; popup(e.x, e.y - 60, 'FROZEN!', '#a8f0ff', true); sfx('freeze'); burst(e.x, e.y, '#a8f0ff', 16); }
 }
 function fxVal(f, k, L){ const a = f[k]; return a ? a[Math.min(L, a.length - 1)] : 0; }
-function useItem(it){
+function useItem(it, combo){
   const d = ITEMS[it.id];
+  F.mult = 1 + 0.15 * Math.max(0, (combo || 1) - 1);
   let times = 1;
   if (F.echo > 0 && !d.junk && !d.fx.echo){ F.echo--; times++; }
   if (F.firstUse && hasRelic('bell') && !d.junk){ times++; }
   if (!d.junk) F.firstUse = false;
   for (let t = 0; t < times; t++) applyFx(d, it.lvl - 1, t > 0, it);
   if (times > 1) popup(MX + CHW / 2 + 40, MY + MH - 40, 'ECHO ×' + times, '#6fe07a');
+  F.mult = 1;
 }
 function applyFx(d, L, echo, it){
-  const f = d.fx, v = k => fxVal(f, k, L), P = F.P, run = G.run;
+  const f = d.fx, P = F.P, run = G.run, tg = d.tg || [];
+  const mul = F.mult || 1, SCALED = { dmg: 1, dmgAll: 1, block: 1, heal: 1 };
+  const v = k => { let x = fxVal(f, k, L); if (SCALED[k] && mul > 1) x = Math.round(x * mul);
+    if (k === 'dmg' && tg.indexOf('blade') >= 0 && hasRelic('grind')) x += 2;
+    if (k === 'heal' && tg.indexOf('produce') >= 0 && hasRelic('salad')) x += 2;
+    if ((k === 'poison' || k === 'burn' || k === 'chill') && tg.indexOf('potion') >= 0 && hasRelic('alembic')) x += 2;
+    return x; };
   const hits = v('hits') || 1;
   if (f.dmg) for (let h = 0; h < hits; h++) hitEnemy(target(), v('dmg'), d.col);
   if (f.dmgAll) for (let h = 0; h < hits; h++) for (const e of alive()) hitEnemy(e, v('dmgAll'), d.col);
@@ -769,6 +857,10 @@ function applyFx(d, L, echo, it){
   if (f.str){ addSt(P, 'str', v('str')); popup(PX + 30, PY - 20, '+' + v('str') + ' 💪', '#ffb36b'); }
   if (f.thorns) addSt(P, 'thorns', v('thorns'));
   if (f.regen) addSt(P, 'regen', v('regen'));
+  if (f.burnAll) for (const e of alive()) addSt(e, 'burn', v('burnAll') + (hasRelic('ember') ? 2 : 0));
+  if (f.cleanse){ P.st.poison = 0; P.st.burn = 0; P.st.weak = 0; popup(PX + 30, PY - 34, 'cleansed', '#efe6d0'); }
+  if (f.dice){ const r = 1 + Math.floor(Math.random() * v('dice')); popup(MX + CHW / 2 + 40, MY + MH - 90, '🎲 ' + r, '#fff', true); hitEnemy(target(), r, d.col); }
+  if (f.perMetal){ const n = F.dropItems.filter(x => (ITEMS[x.id].tg || []).indexOf('metal') >= 0).length; for (let i = 0; i < Math.max(1, n); i++) hitEnemy(target(), v('perMetal'), d.col); }
   if (f.gold){ const g = goldGain(v('gold')); popup(PX + 30, PY - 20, '+' + g + ' 💰', '#ffd24d'); sfx('coin'); }
   if (f.grab){ F.grabs += v('grab'); popup(MX + MW / 2, MY + 40, '+' + v('grab') + ' GRAB!', '#6ff0ff', true); sfx('gem'); }
   if (f.echo && !echo) F.echo += v('echo');
@@ -779,20 +871,41 @@ function collect(b){
   const i = W.bodies.indexOf(b); if (i >= 0) W.bodies.splice(i, 1);
   const it = b.it, d = ITEMS[it.id];
   F.dropGot++; F.got.push(it); G.run.stats.items++; F.chuteT = 0.3;
+  if (G.meta.tut === 3 && !F.coached){ F.coached = 1; F.coachT = 4; }
   const ci = F.cargo.indexOf(b); if (ci >= 0) F.cargo.splice(ci, 1);
-  if (!d.junk) F.used.push(it);
+  if (!d.junk && !it.temp && !(d.fx.back)) F.used.push(it);
+  if (d.fx.back) F.spawnQ.push(it);
   // the icon flies from the chute to whoever it affects
   const sx = MX + CHW / 2, sy = MY + MH - 10;
   const f = d.fx, t = target();
   let tx = PX, ty = PY;
   if ((f.dmg || f.poison || f.burn || f.chill || f.weak || f.vuln) && t){ tx = t.x; ty = t.y; }
   if (f.dmgAll){ tx = 220; ty = 130; }
-  F.flies.push({ e: d.e, x0: sx, y0: sy, x1: tx, y1: ty, t: 0, dur: 0.32, it, fired: false });
+  F.flies.push({ e: d.e, x0: sx, y0: sy, x1: tx, y1: ty, t: 0, dur: 0.32, it, fired: false, combo: F.dropGot });
+  if (!d.junk){ F.dropItems.push(it); setBonus(); }
+  if (d.junk && hasRelic('compost')){ F.P.block += 4; popup(PX + 30, PY - 20, '+4 🛡️ ♻️', '#9fc4ff'); }
   sfx('grab', F.dropGot);
   if (F.dropGot >= 2) popup(MX + CHW / 2 + 36, MY + MH - 70, F.dropGot >= 3 ? 'JACKPOT ×' + F.dropGot : 'DOUBLE!', '#ffd24d', true);
   if (F.dropGot >= 3 && hasRelic('jackpot') && !F.jackpotDone){ F.jackpotDone = true; F.grabs++; popup(MX + MW / 2, MY + 40, '+1 GRAB', '#6ff0ff', true); }
 }
-function onDropDone(){ /* the turn-end check in stepFight watches for the claw to settle */ }
+function onDropDone(){
+  if (hasRelic('sniper') && F.dropGot === 1 && !F.sniperDone){ F.sniperDone = true; const t = target(); if (t){ hitEnemy(t, 5, '#ffd24d'); popup(t.x, t.y - 80, '🎯 BULLSEYE', '#ffd24d', true); } }
+}
+const SETS = [
+  { tag:'produce', n:2, name:'SALAD!',    fn:() => healPlayer(4) },
+  { tag:'blade',   n:2, name:'FLURRY!',   fn:() => hitEnemy(target(), 4, '#c9d3de') },
+  { tag:'potion',  n:2, name:'COCKTAIL!', fn:() => { const t = target(); if (t){ addSt(t, 'poison', 2); addSt(t, 'burn', 2); } } },
+  { tag:'metal',   n:3, name:'SCRAP HEAP!', fn:() => { F.P.block += 6; popup(PX + 30, PY - 20, '+6 🛡️', '#9fc4ff'); } },
+  { tag:'gem',     n:2, name:'SPARKLE!',  fn:() => { F.grabs++; popup(MX + MW / 2, MY + 40, '+1 GRAB', '#6ff0ff', true); } },
+];
+// Grabbing matching items in one drop sets off a bonus.
+function setBonus(){
+  for (const st of SETS){
+    if (F.sets[st.tag]) continue;
+    const n = F.dropItems.filter(it => (ITEMS[it.id].tg || []).indexOf(st.tag) >= 0).length;
+    if (n >= st.n){ F.sets[st.tag] = 1; popup(MX + MW / 2 + 20, MY + 70, st.name, '#6fe07a', true); sfx('gem'); st.fn(); }
+  }
+}
 function playerTurnStart(first){
   const P = F.P, run = G.run;
   F.turn++;
@@ -812,6 +925,7 @@ function playerTurnStart(first){
   P.frozen = 0;
   F.grabs = Math.max(1, g);
   F.firstUse = true; F.echo = 0;
+  F.greaseOn = F.grease > 0; F.grease = 0;
   // stalling does not pay: from turn 10 every enemy gets angrier each turn
   if (F.turn >= 10){
     for (const e of alive()) addSt(e, 'str', 3);
@@ -823,6 +937,8 @@ function playerTurnStart(first){
 function endPlayerTurn(){
   if (F.phase !== 'player') return;
   F.phase = 'enemy'; F.claw.pending = false; F.aiming = false;
+  F.greaseOn = false;
+  if (F.raised){ F.raised = 0; W.segs[3].ay = MH - DIVH; }
   const P = F.P;
   if (P.st.weak) P.st.weak--;
   const q = [];
@@ -837,7 +953,8 @@ function endPlayerTurn(){
 function enemyStart(e){
   if (e.dead) return;
   e.block = 0;
-  if (e.st.poison){ hurtEnemy(e, e.st.poison, '#8cff6a'); e.st.poison--; sfx('status'); }
+  if (e.st.poison){ hurtEnemy(e, e.st.poison, '#8cff6a'); if (!hasRelic('leaf')) e.st.poison--; sfx('status'); }
+  if (!e.dead && e.st.regen && e.hp < e.max){ const r = Math.min(e.st.regen, e.max - e.hp); e.hp += r; popup(e.x, e.y - 50, '+' + r, '#7dffb0'); }
   if (!e.dead && e.st.burn){ hurtEnemy(e, e.st.burn, '#ff8a3d'); e.st.burn = Math.floor(e.st.burn / 2); sfx('burn'); }
 }
 function enemyAct(e){
@@ -869,6 +986,13 @@ function doMove(e, m){
   if (m.weak) addSt(P, 'weak', m.weak);
   if (m.vuln) addSt(P, 'vuln', m.vuln);
   if (m.freeze){ P.frozen += m.freeze; }
+  if (m.grease){ F.grease = 1; popup(PX + 60, PY - 30, 'greasy prongs!', '#ffe066'); }
+  if (m.raise){ F.raised = 1; W.segs[3].ay = MH - DIVH - 44; popup(MX + CHW, MY + MH - DIVH - 60, 'wall raised!', '#ff8a9c'); }
+  if (m.tilt){
+    wakeAll(); F.shake = 14; sfx('boss');
+    for (const b of W.bodies){ b.vx += rnd(-260, 260); b.vy -= rnd(150, 380); b.w += rnd(-6, 6); }
+    popup(MX + MW / 2, MY + 60, 'TILT!', '#ff5fa2', true);
+  }
   if (m.junk){
     for (let i = 0; i < m.n; i++){
       const it = { id: m.junk, lvl: 1, uid: 'j' + (++F.junkN) };
@@ -915,6 +1039,8 @@ function stepFight(dt){
   if (C.st === 'open' && C.t < 1 / 60 + 1e-9 && F.dropGot === 0 && !F.flies.length) F.whiffT = 0.6;
   if (F.whiffT > 0){ F.whiffT -= dt; if (F.whiffT <= 0 && F.dropGot === 0 && C.st !== 'drop'){ popup(MX + C.x, MY + 90, pick2(['whiff...', 'empty claw', 'nothing!']), '#b0a8c8'); } }
   F.chuteT = Math.max(0, F.chuteT - dt);
+  if (F.coachT > 0){ F.coachT -= dt; if (F.coachT <= 0){ if (G.meta.tut === 3){ tutStep(3, 4); } else if (G.meta.tut === 4 && F.turn >= 2) tutStep(4, 5); } }
+  if (G.meta.tut === 4 && F.phase === 'player' && F.turn >= 2 && F.coachT <= 0 && !F.coached2){ F.coached2 = 1; F.coachT = 5; }
   // prizes that fell through the chute
   for (let i = W.bodies.length - 1; i >= 0; i--){
     const b = W.bodies[i];
@@ -924,7 +1050,7 @@ function stepFight(dt){
   // flying icons land and fire their effect
   for (const f of F.flies){
     f.t += dt;
-    if (!f.fired && f.t >= f.dur){ f.fired = true; if (F.phase === 'player' || F.phase === 'enemy') useItem(f.it); }
+    if (!f.fired && f.t >= f.dur){ f.fired = true; if (F.phase === 'player' || F.phase === 'enemy') useItem(f.it, f.combo); }
   }
   F.flies = F.flies.filter(f => f.t < f.dur + 0.05);
   // enemy turn sequence
@@ -1044,6 +1170,11 @@ function itemCard(id, lvl, act, v, price, dis){
 function stars(l){ return l > 1 ? ' <span style="color:#ffd24d">' + '★'.repeat(l - 1) + '</span>' : ''; }
 function physText(id){
   const d = ITEMS[id], t = [];
+  if (d.tr === 'float') t.push('floats up');
+  if (d.tr === 'sticky') t.push('sticky: drags neighbours along');
+  if (d.tr === 'bouncy') t.push('bouncy');
+  if (d.tr === 'magnet') t.push('pulls metal items to itself');
+  if (d.tg && d.tg.length) t.push(d.tg.join('/'));
   if (d.dens >= 1.5) t.push('heavy'); else if (d.dens <= 0.6) t.push('light');
   if (d.sh[0] === 'cap') t.push('long'); else if (d.sh[0] === 'ball') t.push(d.sh[1] < 12 ? 'small, rolls' : 'rolls');
   else if (d.sh[1] >= 17) t.push('bulky'); else t.push('round');
@@ -1065,6 +1196,11 @@ function fxText(id, lvl){
   if (f.thorns) out.push('<b>' + v('thorns') + '</b> thorns');
   if (f.regen) out.push('<b>' + v('regen') + '</b> regen');
   if (f.gold) out.push('+<b>' + v('gold') + '</b> gold');
+  if (f.burnAll) out.push('<b>' + v('burnAll') + '</b> burn to ALL');
+  if (f.cleanse) out.push('Remove your poison, burn and weak');
+  if (f.dice) out.push('Deal <b>1-' + v('dice') + '</b> damage');
+  if (f.back) out.push('Flies straight back into the machine');
+  if (f.perMetal) out.push('<b>' + v('perMetal') + '</b> damage per metal item in the same drop');
   if (f.grab) out.push('+<b>' + v('grab') + '</b> grab now');
   if (f.echo) out.push('Next <b>' + v('echo') + '</b> item' + (v('echo') > 1 ? 's' : '') + ' fire twice');
   if (f.maxhp) out.push('+<b>' + v('maxhp') + '</b> max HP');
@@ -1202,12 +1338,48 @@ function useTool(tool, hi){
   if (!list.length) return false;
   if (!list.some(i => !m.cells[i].rev)){ toast('Nothing new to paint there.'); return true; }
   reveal(m, list);
-  if (tool === 'brush') run.brushes--;
+  if (tool === 'brush'){ run.brushes--; tutStep(0, 1); }
   else run.inks[tool]--;
   G.tool = null; G.aimAt = -1; syncBars();
   checkStuck();
   saveRun();
   return true;
+}
+function tutStep(from, to){ if (G.meta.tut === from){ G.meta.tut = to; saveMeta(); syncBars(); } }
+function coachText(){
+  const t = G.meta.tut;
+  if (G.scr === 'map'){
+    if (t === 0) return ['Paint the fog!', 'Tap the 🖌️ Brush below to reveal the hexes around you.'];
+    if (t === 1) return ['Walk into a fight', 'Tap the ⚔️ hex to walk there.'];
+  }
+  if (G.scr === 'fight' && F){
+    if (t === 2 && F.phase === 'player' && F.claw.st === 'idle') return ['Drag to aim, let go to drop', 'Put the claw over an item and release.'];
+    if (t === 3 && F.coachT > 0) return ['Into the PRIZE chute!', 'Everything that lands in the chute fires: swords hit, shields block, apples heal.'];
+    if (t === 4 && F.coachT > 0) return ['Read their next move', 'The bubble shows what an enemy will do. ⚔️ is damage: grab 🛡️ shields to block it.'];
+  }
+  return null;
+}
+function drawCoach(){
+  const c = coachText(); if (!c) return;
+  const y = G.scr === 'map' ? 552 : MY + 96;
+  ctx.globalAlpha = 0.95;
+  rrect(24, y, VW - 48, 58, 14); ctx.fillStyle = 'rgba(20,12,36,.94)'; ctx.fill();
+  ctx.strokeStyle = '#ffd24d'; ctx.lineWidth = 2.5; ctx.stroke();
+  txt(c[0], VW / 2, y + 18, 17, '#ffd24d');
+  ctx.font = '600 12px "Trebuchet MS",system-ui,sans-serif';
+  txt(c[1], VW / 2, y + 40, 12, '#fff', 'center', 600);
+  ctx.globalAlpha = 1;
+  const k = (Math.sin(G.time * 5) + 1) / 2;
+  if (G.scr === 'fight' && G.meta.tut === 2){
+    // a ghost finger shows the drag
+    const hx = MX + 150 + Math.sin(G.time * 1.6) * 80;
+    emoji('👆', hx, MY + MH - 60 - k * 8, 34);
+  }
+  if (G.scr === 'map' && G.meta.tut === 1){
+    const m = G.run.map, i = m.cells.findIndex(x => x.tut && !x.done);
+    if (i >= 0){ const [x, y2] = hexXY(m.cells[i]); hexPath(x, y2, HS + 2 + k * 4); ctx.strokeStyle = '#ffd24d'; ctx.lineWidth = 3; ctx.stroke(); emoji('👆', x + 10, y2 + 30 + k * 6, 30); }
+  }
+  if (G.scr === 'fight' && G.meta.tut === 4 && F){ const e = alive()[0]; if (e) emoji('👇', e.x - 50, e.y - 70 - k * 6, 28); }
 }
 function checkStuck(){
   const run = G.run, m = run.map;
@@ -1254,7 +1426,7 @@ function enterCell(){
   if (c.done && c.k !== 'shop') return;
   const act = run.act, d = depthOf(c);
   switch (c.k){
-    case 'fight': startFight('normal', pick(d < 0.3 ? ENC[act].easy : ENC[act].hard), d); break;
+    case 'fight': startFight('normal', c.tut ? ['rat'] : pick(d < 0.3 ? ENC[act].easy : ENC[act].hard), c.tut ? 0 : d); break;
     case 'elite': startFight('elite', pick(ENC[act].elite), d); break;
     case 'boss':  startFight('boss', ENC[act].boss, 0); break;
     case 'gold': { const g = goldGain(14 + ri(14) + act * 4); c.done = true; toast('💰 +' + g + ' gold'); sfx('coin'); saveRun(); break; }
@@ -1450,7 +1622,7 @@ function syncBars(){
   const r = G.run, t = G.tool;
   // a brush or grand ink that would paint nothing new stays greyed out
   const fresh = k => toolCells(k, -1).some(i => !r.map.cells[i].rev);
-  const b = (k, e, nm, ct, off) => '<button class="tool' + (t === k ? ' sel' : '') + '" data-a="tool" data-v="' + k + '"' + (ct <= 0 || off ? ' disabled' : '') + '><span class="ie">' + e + '</span><span class="ct">' + ct + '</span><span class="nm">' + nm + '</span></button>';
+  const b = (k, e, nm, ct, off) => '<button class="tool' + (t === k ? ' sel' : '') + (k === 'brush' && G.meta.tut === 0 ? ' coach' : '') + '" data-a="tool" data-v="' + k + '"' + (ct <= 0 || off ? ' disabled' : '') + '><span class="ie">' + e + '</span><span class="ct">' + ct + '</span><span class="nm">' + nm + '</span></button>';
   mb.innerHTML = b('brush', '🖌️', 'Brush', r.brushes, !fresh('brush')) + b('dot', INKS.dot.e, 'Dot', r.inks.dot) + b('line', INKS.line.e, 'Royal', r.inks.line) +
     (r.inks.twin ? b('twin', INKS.twin.e, 'Twin', r.inks.twin) : '') + (r.inks.grand ? b('grand', INKS.grand.e, 'Grand', r.inks.grand, !fresh('grand')) : '') +
     '<button class="tool" data-a="tool" data-v="bag"><span class="ie">🎒</span><span class="ct">' + r.deck.length + '</span><span class="nm">Bag</span></button>';
@@ -1461,7 +1633,7 @@ const RUN_KEY = 'clawcrawl_run_v1', META_KEY = 'clawcrawl_meta_v1';
 function loadMeta(){
   let m = null;
   try { m = JSON.parse(localStorage.getItem(META_KEY) || 'null'); } catch (e){ m = null; }
-  G.meta = Object.assign({ runs: 0, wins: 0, best: 0, muted: false }, m || {});
+  G.meta = Object.assign({ runs: 0, wins: 0, best: 0, muted: false, tut: 0 }, m || {});
 }
 function saveMeta(){ try { localStorage.setItem(META_KEY, JSON.stringify(G.meta)); } catch (e){} }
 function saveRun(){ if (!G.run) return; try { localStorage.setItem(RUN_KEY, JSON.stringify(G.run)); } catch (e){} }
@@ -1719,6 +1891,7 @@ function drawFight(){
   ctx.globalAlpha = 1;
   ctx.restore();
   drawBottom();
+  drawCoach();
   drawTip();
   if (F.banner){
     const b = F.banner, k = clamp(1.6 - b.t, 0, 1.6);
@@ -1957,6 +2130,7 @@ function drawMap(){
   txt('Act ' + run.act + ': ' + ACT_NAME[run.act], VW - 10, 22, 12, '#cfc2ee', 'right');
   const hint = G.tool ? (G.tool === 'dot' ? 'Tap a foggy hex beside the paint' : 'Tap a hex to aim the ink') : 'Tap a painted hex to walk. Paint the fog below.';
   txt(hint, VW / 2, VH - 84, 13, '#cfc2ee');
+  drawCoach();
 }
 function fogCol(c){ const v = 0.5 + c.n * 0.5; return 'rgb(' + Math.round(58 * v + 20) + ',' + Math.round(46 * v + 16) + ',' + Math.round(78 * v + 24) + ')'; }
 function cellEmoji(c){
