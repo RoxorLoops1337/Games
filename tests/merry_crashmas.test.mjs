@@ -51,7 +51,7 @@ const EXPOSE = `__out.api = {
   drawCar, drawPerson, drawLens, drawCrowdBatch,
   lodQ, lodAlways, LOD_MID, LOD_FINE, LOD_REF,
   draw, drawHUD, drawAim, drawSling, previewPath, drawShout, nitroRect, popText, screenToWorld, pointerDown, pointerMove, pointerUp, fit,
-  SHOUTS, SHOUT_TIME, SLING_RECOIL, aimZoom, CAR_MIN_PX, MIN_FILL, CAM_OVERSHOOT,
+  SHOUTS, SHOUT_TIME, SLING_RECOIL, aimZoom, CAR_MIN_PX, MIN_FILL, MIN_WORLD_FILL, CAM_OVERSHOOT,
   C: { WORLD_W, WORLD_H, ANCHOR, MARKET_X, FENCE_PAD, CAR_L, CAR_W, CAR_R,
        MAX_PULL, MIN_POWER, MAX_LAUNCH, FRICTION, DRAG, ICE_FRICTION, STOP_SPD,
        RUN_TIMEOUT, REST, REST_HARD, KILL_SPD, DMG_PER_SPD, COMBO_WIN, MAX_MULT,
@@ -71,12 +71,12 @@ const EXPOSE = `__out.api = {
   somethingAhead, rollOut, IDLE_END, IDLE_SPD, AHEAD_R, AHEAD_WIDE,
   EDGE_PILL, TRACK_ICE, TRACK_MAX, SURE_LOSS, BANNER_PITCH_CAP, RAMP_SHOULDER,
   addFx, onCamera, FX_MAX, FX_EVICT, FLAME_SMOKE, doBoost, BOOST_KICK,
-  reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, drawFx, drawCarRim, drawVignette,
+  reachableRamps, ROLL_SPD, carCost, levelEnd, shakeEnv, addShake, SHAKE_SCALE, SHAKE_HZ, shakeOffset, drawFx, drawCarRim, drawVignette,
   drawLights, shadow, SHADOW_FINE, PROP_FINE, propQ, propFine, LOD_REF, snowPattern, lightBuf, MAX_LIGHTS, DARK_SCALE, SUN_DX, SUN_DY,
   lightGain, LIT_REF,
   lightSprites, mistInfo: () => mistSprite, maskInfo: () => maskSprite,
   foot, FOOT_MAX, FOOT_STRIDE, FOOT_TTL, drawFootprints, beamSpots, HAIR,
-  PROPS, TRADES, tradeOf, drawGoods, drawHut, hudPlate, hudScoreRect, hudCarsRect, comboRect, topStackBottom, shoutRect, goalRowY, goalTextW, drawProp,
+  PROPS, TRADES, tradeOf, drawGoods, drawHut, drawCounter, hudPlate, hudScoreRect, hudCarsRect, comboRect, topStackBottom, shoutRect, goalRowY, goalTextW, drawProp,
   EDGE_FADE, EDGE_TREES, EDGE_BANDS, drawGround,
   drawTreeTop, spikeRing, TREE_TIER, TREE_SPIKE, TREE_SNOW, TREE_SNOW_C, drawGround, recentPops, POP_MIN_D, POP_MIN_T,
   captionScrim, REPLAY_SPEED, crateOf, launchFireworks, wreckProp, drawFireworks, FW_COLS, FW_TRAIL,
@@ -1070,8 +1070,16 @@ test('the launch zooms in, it does not cut', () => {
   }
   assert(worst < 1.20, 'the world jumps ' + ((worst - 1) * 100).toFixed(0) +
     '% bigger in one frame at frame ' + atFrame + ' — that is a cut, not a zoom');
-  // it does still arrive: the drive view is meaningfully tighter than the aim
-  assert(api.cam.s > aimS * 1.25, 'the camera should end up closer in than the aim view');
+  /* It used to assert the camera ends up 25% closer than the aim view. That
+     stopped being a property of the game on purpose: the drive view is now the
+     aim view, capped only by how small the car may get and how much sky the
+     frame may hold. What still has to be true is that it settles — one value,
+     reached and held, rather than drifting for the rest of the run. */
+  const settled = api.cam.tz;
+  step(api, 1.0);
+  assert(Math.abs(api.cam.tz - settled) < 1,
+    'the camera was still moving a second later: ' + settled.toFixed(0) +
+    ' -> ' + api.cam.tz.toFixed(0));
   console.log('    (launch zoom: aim s ' + aimS.toFixed(3) + ' -> drive s ' +
     api.cam.s.toFixed(3) + ', worst single frame +' +
     ((worst - 1) * 100).toFixed(1) + '%)');
@@ -1105,7 +1113,9 @@ test('the drive view is not a different market from the one you aimed at', () =>
   api.startLevel(20); api.beginLevel(); api.launch(-api.C.MAX_PULL, 0);
   api.G.punchT = 0; step(api, 2.0);
   const px = api.getDims().l * api.cam.s;
-  assert(px >= api.CAR_MIN_PX, 'the car is only ' + px.toFixed(0) + 'px long');
+  // the floor is now what actually stops the view widening, so the car sits
+  // exactly on it rather than comfortably above it
+  assert(px >= api.CAR_MIN_PX - 0.01, 'the car is only ' + px.toFixed(1) + 'px long');
   console.log('    (aim vs drive: worst ' + worst.toFixed(2) + 'x at ' + where +
     ', car ' + px.toFixed(0) + 'px)');
 });
@@ -1118,7 +1128,12 @@ test('the sling stops snapping, and the camera has arrived at the drive view', (
   api.launch(-api.C.MAX_PULL, 0);
   step(api, 0.4);
   assert(!api.G.sling, 'the band is still by 0.4s');
-  assert(api.cam.tz < aimed - 200, 'and the camera has come in: ' + aimed + ' -> ' + api.cam.tz);
+  // it arrives at the drive framing; how far that is from the aim framing is a
+  // matter for the caps, and on most markets it is now nearly nothing
+  const want = api.camTarget().z;
+  assert(Math.abs(api.cam.tz - want) < want * 0.01,
+    'the camera has not arrived by 0.4s: ' + aimed.toFixed(0) + ' -> ' +
+    api.cam.tz.toFixed(0) + ', target ' + want.toFixed(0));
   api.drawSling();                       // must be a no-op, not a throw
 });
 
@@ -1305,15 +1320,95 @@ test('a shake decays, and a second hit re-punches it', () => {
   api._clearFeel();
   api.addShake(0.4, 12);
   const start = api.shake.a * api.shakeEnv();
-  near(start, 12, 0.01, 'full amplitude at the start');
+  // the call sites' numbers go through SHAKE_SCALE at the door rather than
+  // being edited thirteen times over
+  near(start, 12 * api.SHAKE_SCALE, 0.01, 'full amplitude at the start');
   step(api, 0.32);                                  // 80% of the way through
   const late = api.shake.a * api.shakeEnv();
   assert(late < start * 0.5,
     'it should be under half by 80% through, got ' + late.toFixed(2) + ' of ' + start);
   api.addShake(0.4, 12);
-  near(api.shake.a * api.shakeEnv(), 12, 0.5, 'a second hit restores the punch');
+  assert(api.shake.a * api.shakeEnv() >= start * 0.95,
+    'a second hit restores the punch, got ' + (api.shake.a * api.shakeEnv()).toFixed(2));
   step(api, 0.5);
   assert(api.shake.a * api.shakeEnv() === 0, 'and it ends');
+});
+
+/* The complaint was about the offset the camera actually applies, and nothing
+   had ever measured that — only the envelope, which is the ceiling the offset
+   swings inside. It was `vrr(-1, 1) * amp` on both axes, redrawn every frame:
+   a fresh random position at 60Hz, which is the harshest shake there is. */
+test('the shake is a kick that rings out, not a scribble', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api._clearFeel();
+  api.addShake(0.4, 16);
+  const path = [];
+  for (let i = 0; i < 40; i++){ api.update(1 / 60); path.push(api.shakeOffset()); }
+
+  // it travels along one bearing: a kick has a direction, noise does not
+  const live = path.filter(p => Math.hypot(p.x, p.y) > 0.05);
+  assert(live.length > 8, 'the shake should last long enough to look at, got ' + live.length);
+  const bearings = live.map(p => Math.atan2(p.y, p.x));
+  const axis = bearings.map(b => ((b % Math.PI) + Math.PI) % Math.PI);
+  const spread = Math.max(...axis) - Math.min(...axis);
+  assert(spread < 0.02, 'the offset wanders over ' + spread.toFixed(2) +
+    ' radians of axis — that is noise, not a kick');
+
+  // …and it crosses zero on the way out rather than jumping about
+  let crossings = 0;
+  for (let i = 1; i < live.length; i++){
+    const a = live[i - 1].x * Math.cos(bearings[0]) + live[i - 1].y * Math.sin(bearings[0]);
+    const b = live[i].x * Math.cos(bearings[0]) + live[i].y * Math.sin(bearings[0]);
+    if (a * b < 0) crossings++;
+  }
+  assert(crossings >= 2 && crossings <= 12,
+    'it should ring a few times, counted ' + crossings + ' zero crossings');
+
+  // successive kicks do not land along the same axis
+  api._clearFeel(); api.addShake(0.4, 16);
+  api.update(1 / 120);
+  const a1 = Math.atan2(api.shakeOffset().y, api.shakeOffset().x);
+  api.addShake(0.4, 16);
+  api.update(1 / 120);
+  const a2 = Math.atan2(api.shakeOffset().y, api.shakeOffset().x);
+  const turn = Math.abs(((a2 - a1 + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+  assert(turn > 0.4, 'two kicks in a row came from the same direction');
+  console.log('    (shake: one axis, ' + crossings + ' crossings, ' +
+    turn.toFixed(2) + ' rad between kicks)');
+});
+
+/* Three full runs, every drive frame, measuring the offset the camera applies
+   rather than the envelope: mean 5.2-6.0px with 60-76% of frames over 2px, and
+   a fresh direction on every one of them. */
+test('the market is not shaking for most of the run', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.G.unlocked = 21;
+  const rows = [];
+  for (const lv of [0, 6, 14]){
+    api.startLevel(lv); api.beginLevel();
+    api.aim.active = true; api.launch(-api.C.MAX_PULL, -40);
+    const amps = [];
+    for (let i = 0; i < 260 && api.G.phase === 'drive'; i++){
+      api.update(1 / 60);
+      const o = api.shakeOffset();
+      amps.push(Math.hypot(o.x, o.y));
+    }
+    assert(amps.length > 60, 'market ' + (lv + 1) + ' should give a real run, got ' + amps.length);
+    const mean = amps.reduce((a, b) => a + b, 0) / amps.length;
+    const busy = amps.filter(a => a > 2).length / amps.length;
+    const peak = Math.max(...amps);
+    rows.push({ lv: lv + 1, mean, busy, peak });
+    // a budget, not a reading: the loudest single call site is 16, so this is
+    // what SHAKE_SCALE lets the worst frame of a run be worth
+    assert(peak <= 7, 'market ' + (lv + 1) + ' peaked at ' + peak.toFixed(1) + 'px');
+    assert(mean < 2.2, 'market ' + (lv + 1) + ' averages ' + mean.toFixed(2) +
+      'px of shake across the whole run');
+    assert(busy < 0.45, 'market ' + (lv + 1) + ' is shaking for ' +
+      (busy * 100).toFixed(0) + '% of its frames');
+  }
+  console.log('    (shake: ' + rows.map(r => 'm' + r.lv + ' mean ' +
+    r.mean.toFixed(2) + 'px, ' + (r.busy * 100).toFixed(0) + '% busy').join(', ') + ')');
 });
 
 test('six kills read as six punches, not one long rumble', () => {
@@ -4172,11 +4267,19 @@ test('the view does not move while you are driving it', () => {
   api.startLevel(0); api.beginLevel(); api.camSnap();
   const aim = api.aimZoom();
   drive(api, 900, 0, 2000, 1100);
-  assert(Math.abs(api.camTarget().z - Math.min(aim, api.C.DRIVE_MAX)) < 0.001,
-    'the drive view should be the aim view capped at DRIVE_MAX, got ' +
-    api.camTarget().z.toFixed(0) + ' against ' + aim.toFixed(0));
-  console.log('    (drive zoom: fixed, aim ' + aim.toFixed(0) + ' -> drive ' +
-    api.camTarget().z.toFixed(0) + ')');
+  /* Three caps, and the drive view is the tightest of them: DRIVE_MAX (the
+     draw budget), the car-size floor, and how much sky the frame may hold. */
+  const v = api.getView(), dims = api.getDims();
+  const camK = Math.max(v.h * api.MIN_FILL, Math.min(v.h, v.w / 1.6));
+  const zCap = dims.l * camK / api.CAR_MIN_PX;
+  const zFill = (api.bounds.y1 - api.bounds.y0) * camK / (api.MIN_WORLD_FILL * v.h);
+  const want = Math.min(aim, api.C.DRIVE_MAX, zCap, zFill);
+  assert(Math.abs(api.camTarget().z - want) < 0.001,
+    'the drive view should be the aim view under its caps, got ' +
+    api.camTarget().z.toFixed(0) + ' against ' + want.toFixed(0));
+  console.log('    (drive zoom: fixed at ' + api.camTarget().z.toFixed(0) +
+    ' — aim ' + aim.toFixed(0) + ', budget ' + api.C.DRIVE_MAX +
+    ', car floor ' + zCap.toFixed(0) + ', sky floor ' + zFill.toFixed(0) + ')');
 });
 
 /* --------------------------------------------------------------- draw --- */
@@ -4795,8 +4898,12 @@ test('the frames the budget never looked at are inside it too', () => {
   const near = runs.find(r => r.sh.vx === 800);
   const wide = runs.find(r => r.sh.aim);
   const fast = runs.find(r => r.sh.vx === 2200);
-  assert(wide.tz > near.tz * 1.5,
-    'the aim camera should be much the wider: ' + wide.tz + ' vs ' + near.tz);
+  /* It used to want the aim camera 1.5x the driving one. That gap was the
+     thing the owner was complaining about; the drive view is the aim view
+     under its caps now, so what is left to check is that pulling the camera
+     back never costs more than driving does — which is the claim below. */
+  assert(wide.tz >= near.tz,
+    'the aim camera should be the wider: ' + wide.tz + ' vs ' + near.tz);
 
   /* The whole market in shot must not cost more than a corner of it. This is
      the claim the flat 3,400 could never make: the aim frame holds 40% more
@@ -5325,32 +5432,118 @@ test('drawing the stalls does not touch the simulation RNG', () => {
   assert(first === second, 'the same market laid out two different sets of trades');
 });
 
-test('the six counters are six different drawings, not one with a palette', () => {
-  const api = boot({ count: true, w: 1280, h: 720 });
+/* The drive view is 22% wider than it was, and stalls pay for it: at that zoom
+   a hut's counter stock is about six screen pixels tall, so the fine tier now
+   switches off while you are driving and comes back in the replay. What must
+   survive is the silhouette — the first version of this dropped the counter
+   plank with the stock it carries and left sixty-five brown boxes wearing
+   snow. */
+/* Sixty-five stalls are 58% of a driving frame's fills, and every bun, pot,
+   bauble and folded hat used to carry its own beginPath and its own fill. One
+   path a colour instead: the same shapes in the same order, batched. This is
+   what paid for the wider view. */
+test('a counter costs the same however much is on it', () => {
+  const api = boot({ w: 1280, h: 720 });
   api.startCampaign(); api.beginLevel();
   api.setT(2.5);
+  const fills = (o, wear) => {
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawGoods(o, 158, 112, 13, wear));
+    return rec.fills;
+  };
+  const rows = [];
+  for (const [i, t] of api.TRADES.entries()){
+    const o = { seed: (i + 0.5) / api.TRADES.length, w: 158, h: 112 };
+    const full = fills(o, 0), half = fills(o, 0.9);
+    rows.push(t.id + ' ' + full);
+    assert(full <= 10, t.id + ' costs ' + full + ' fills for one counter');
+    /* Selling half the stock must not halve the fill count — that is what a
+       per-item fill looks like. The one exception is the candle stall, whose
+       flames each carry their own alpha and so cannot share a path; even that
+       is under one fill an item. */
+    const cap = t.id === 'candle' ? 2 : 0;
+    assert(full - half <= cap, t.id + ': ' + full + ' fills full and ' + half +
+      ' half empty — the stock is being filled one item at a time');
+  }
+  console.log('    (counter fills per trade: ' + rows.join(', ') + ')');
+});
+
+test('a stall at the drive zoom still reads as a stall', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startLevel(20); api.beginLevel();
+  api.G.phase = 'drive'; api.car.x = 2600; api.car.y = 1100;
+  api.car.vx = 0; api.car.vy = 0; api.camSnap();
+
+  const hut = api.props.find(o => o.kind === 'hut' && !o.dead);
+  assert(hut, 'the market should have a stall in it');
+  assert(!api.propFine(hut), 'a stall should be past its fine tier at the drive zoom, q ' +
+    api.propQ(hut).toFixed(1) + ' vs ' + api.PROP_FINE.hut);
+
+  const shot = () => { const r = carRec(); api.withCtx(r, () => api.drawHut(hut)); return r; };
+  const drive = shot();
+  const th = api.getTheme();
+  const has = (r, style) => r.polys.some(q => q.style === style) ||
+    r.rects.some(q => q.style === style) || r.all.some(e => String(e[e.length - 1]) === style);
+  // body, awning, the snow that has settled on the roof, and the counter plank
+  assert(has(drive, th.wood), 'a stall keeps its frame');
+  /* The panelling and the counter plank are both TH.wood2, so asking whether
+     the colour appears at all cannot tell them apart — dropping the plank back
+     below the LOD cut passed that. Two shapes, and the lower one is the plank:
+     it is the edge that says market stall rather than crate. */
+  const wood2 = drive.polys.filter(q => q.style === th.wood2).sort((a, b) => a.y0 - b.y0);
+  assert(wood2.length === 2, 'panelling and a counter plank, got ' +
+    wood2.length + ' shapes in the panel colour');
+  assert(wood2[1].y1 - wood2[1].y0 < wood2[0].y1 - wood2[0].y0 * 0.5,
+    'the second shape should be a plank, not a second panel');
+  assert(has(drive, api.tradeOf(hut).stripe || th.awning), 'and the stripe it is flying');
+  assert(has(drive, '#eef4ff'), 'and the drift on its roof');
+  assert(has(drive, 'rgba(255,255,255,.34)'), 'including the banks blown up against it');
+
+  // the replay camera gets the stock back
+  api.cam.tz = 470; api.cam.s = api.camScale(470);
+  assert(api.propFine(hut), 'the replay camera should reach the fine tier');
+  const close = shot();
+  assert(close.fills > drive.fills,
+    'the replay tier should draw more, got ' + close.fills + ' against ' + drive.fills);
+  console.log('    (stall: ' + drive.fills + ' fills driving, ' + close.fills +
+    ' in the replay)');
+});
+
+test('the six counters are six different drawings, not one with a palette', () => {
+  const api = boot({ w: 1280, h: 720 });
+  api.startCampaign(); api.beginLevel();
+  api.setT(2.5);
+  /* Counted as shapes on the counter, not as fill() calls. The stock is batched
+     — one path a colour rather than one a item — so a fill count no longer
+     tracks how much is on display, and the assertion that a wrecked stall has
+     lost stock was reading a proxy that batching quietly flattened. */
+  const stock = (o, wear) => {
+    const rec = carRec();
+    api.withCtx(rec, () => api.drawGoods(o, 158, 112, 13, wear));
+    return rec.all.filter(e => e[0] === 'arc' || e[0] === 'el' ||
+      e[0] === 'rect' || e[0] === 'fr' || e[0] === 'm').length;
+  };
   const costs = api.TRADES.map((t, i) => {
     const o = { seed: (i + 0.5) / api.TRADES.length, w: 158, h: 112 };
     assert(api.tradeOf(o).id === t.id, 'seed ' + o.seed + ' should pick ' + t.id);
-    api._resetCounts();
-    api.drawGoods(o, 158, 112, 13, 0);
-    return { id: t.id, fills: api._counts.fill || 0,
-      rects: api._counts.fillRect || 0, strokes: api._counts.stroke || 0 };
+    return { id: t.id, shapes: stock(o, 0) };
   });
-  console.log('    (counter cost per trade: ' +
-    costs.map(c => c.id + ' ' + (c.fills + c.rects + c.strokes)).join(', ') + ')');
-  for (const c of costs) assert(c.fills + c.rects + c.strokes > 0, c.id + ' drew nothing');
-  const shapes = new Set(costs.map(c => c.fills + ':' + c.rects + ':' + c.strokes));
-  assert(shapes.size >= 4,
-    'the trades should not collapse onto one drawing, got ' + shapes.size + ' distinct');
-  // and a wrecked stall has sold or lost half its stock
-  const o = { seed: 0.4, w: 158, h: 112 };
-  api._resetCounts(); api.drawGoods(o, 158, 112, 13, 0);
-  const full = (api._counts.fill || 0) + (api._counts.fillRect || 0);
-  api._resetCounts(); api.drawGoods(o, 158, 112, 13, 0.9);
-  const half = (api._counts.fill || 0) + (api._counts.fillRect || 0);
-  assert(half < full, 'a half-wrecked stall should have lost stock: ' + half + ' vs ' + full);
+  console.log('    (counter shapes per trade: ' +
+    costs.map(c => c.id + ' ' + c.shapes).join(', ') + ')');
+  for (const c of costs) assert(c.shapes > 0, c.id + ' drew nothing');
+  assert(new Set(costs.map(c => c.shapes)).size >= 4,
+    'the trades should not collapse onto one drawing, got ' +
+    new Set(costs.map(c => c.shapes)).size + ' distinct');
+
+  // and every trade loses stock as its stall comes apart
+  for (const [i, t] of api.TRADES.entries()){
+    const o = { seed: (i + 0.5) / api.TRADES.length, w: 158, h: 112 };
+    assert(stock(o, 0.9) < stock(o, 0),
+      t.id + ' keeps its full stock on a half-wrecked stall: ' +
+      stock(o, 0.9) + ' vs ' + stock(o, 0));
+  }
 });
+
 
 /* Eight trades laid their stock out "on the counter" and there was no counter:
    goods floating on a flat wooden face, touching nothing. */
@@ -5363,7 +5556,9 @@ test('the stock stands on a counter instead of floating on the stall face', () =
     const o = { x: 0, y: 0, w, h: 112, seed: (i + 0.5) / api.TRADES.length };
     const id = api.tradeOf(o).id;
     const rec = carRec();
-    api.withCtx(rec, () => api.drawCounter(o, w, gy, 0, 1));
+    // the fine tier: the plank is drawn at every zoom now, but the shadows the
+    // stock casts on it are detail and go with the stock
+    api.withCtx(rec, () => api.drawCounter(o, w, gy, 0, 1, true));
 
     // a plank, wide enough to carry the whole row and sitting under it
     const plank = rec.polys.filter(q => q.style === th.wood2);
@@ -5397,8 +5592,8 @@ test('the stock stands on a counter instead of floating on the stall face', () =
   /* The stock has always halved at wear > 0.5 with nothing to show for it.
      The plank snaps at the middle now, and the splintered stub is why. */
   const o = { x: 0, y: 0, w, h: 112, seed: 0.4 };
-  const whole = carRec(); api.withCtx(whole, () => api.drawCounter(o, w, gy, 0, 1));
-  const half  = carRec(); api.withCtx(half,  () => api.drawCounter(o, w, gy, 0.9, 1));
+  const whole = carRec(); api.withCtx(whole, () => api.drawCounter(o, w, gy, 0, 1, true));
+  const half  = carRec(); api.withCtx(half,  () => api.drawCounter(o, w, gy, 0.9, 1, true));
   const span = (r) => { const q = r.polys.filter(x => x.style === th.wood2)[0]; return q.x1 - q.x0; };
   assert(span(half) < span(whole) * 0.7,
     'a half-wrecked counter should be a stub: ' + span(half).toFixed(0) +
@@ -5409,8 +5604,8 @@ test('the stock stands on a counter instead of floating on the stall face', () =
     'and carry only the stock that is left');
 
   // legs, two of them, and only on the side you can see
-  const front = carRec(); api.withCtx(front, () => api.drawCounter(o, w, gy, 0, 1));
-  const back  = carRec(); api.withCtx(back,  () => api.drawCounter(o, w, gy, 0, -1));
+  const front = carRec(); api.withCtx(front, () => api.drawCounter(o, w, gy, 0, 1, true));
+  const back  = carRec(); api.withCtx(back,  () => api.drawCounter(o, w, gy, 0, -1, true));
   const legs = (r) => r.all.filter(e => e[0] === 'rect');
   assert(legs(front).length === 2, 'a counter stands on two legs, got ' + legs(front).length);
   for (const l of legs(front)) assert(l[2] > gy + 16, 'a leg should hang below the plank');
