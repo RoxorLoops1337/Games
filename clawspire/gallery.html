@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clawspire art gallery</title>
+<style>
+  body { margin: 0; background: #0b0616; color: #e9dcc4; font: 14px system-ui, sans-serif; }
+  h2 { margin: 18px 12px 6px; font-size: 16px; color: #2ee6d6; }
+  canvas { display: block; margin: 0 12px 8px; background: #12091f; border: 1px solid #2a2340; }
+  .note { margin: 0 12px 12px; opacity: .7; }
+</style>
+</head>
+<body>
+<div class="note">Every drawable in js/render.js, at gallery scale. Labels are the art keys. Screens are 1040px wide.</div>
+<h2>Items (scale 2; then +, frozen, glow, and at 24px)</h2>
+<canvas id="items" width="1040" height="1500"></canvas>
+<h2>Enemies (idle, hurt, attack, frozen, poisoned, burning, dead)</h2>
+<canvas id="enemies" width="1040" height="2300"></canvas>
+<h2>Cabinet + claw (fog / grease / tilt states)</h2>
+<canvas id="cabinet" width="1040" height="1000"></canvas>
+<h2>Hex tiles (hidden, revealed, visited, reachable, current, hover)</h2>
+<canvas id="hexes" width="1040" height="520"></canvas>
+<h2>UI: hp bars, status pips, intents, portraits, relic icons</h2>
+<canvas id="ui" width="1040" height="420"></canvas>
+<h2>Backdrops per act</h2>
+<canvas id="bgs" width="1040" height="760"></canvas>
+<h2>Title</h2>
+<canvas id="title" width="1040" height="960"></canvas>
+<script src="js/util.js"></script>
+<script>
+  // data.js is optional: the gallery falls back to sample defs.
+  document.write('<script src="js/data.js"><\/script>');
+</script>
+<script src="js/render.js"></script>
+<script>
+(() => {
+  const T = 1.3;
+  const SHAPES = {
+    sword: { kind: 'box', w: 44, h: 10 }, dagger: { kind: 'box', w: 30, h: 8 }, axe: { kind: 'box', w: 40, h: 26 }, hammer: { kind: 'box', w: 40, h: 24 },
+    anvil: { kind: 'box', w: 40, h: 28 }, shield: { kind: 'box', w: 32, h: 38 }, buckler: { kind: 'circle', r: 16 }, potion: { kind: 'box', w: 22, h: 32 },
+    flask: { kind: 'box', w: 24, h: 32 }, bomb: { kind: 'circle', r: 15 }, torch: { kind: 'box', w: 14, h: 40 },
+    iceshard: { kind: 'poly', verts: [{ x: -18, y: 0 }, { x: -6, y: -10 }, { x: 18, y: 2 }, { x: 4, y: 10 }] }, snowball: { kind: 'circle', r: 14 },
+    coin: { kind: 'circle', r: 12 }, gem: { kind: 'box', w: 22, h: 24 }, rock: { kind: 'poly', verts: [{ x: -16, y: 4 }, { x: -10, y: -12 }, { x: 10, y: -14 }, { x: 18, y: 0 }, { x: 12, y: 14 }, { x: -8, y: 14 }] },
+    slag: { kind: 'box', w: 30, h: 22 }, iceblock: { kind: 'box', w: 30, h: 30 }, apple: { kind: 'circle', r: 14 }, bread: { kind: 'box', w: 34, h: 20 },
+    book: { kind: 'box', w: 26, h: 32 }, scroll: { kind: 'box', w: 36, h: 16 }, orb: { kind: 'circle', r: 15 }, ring: { kind: 'box', w: 22, h: 24 },
+    key: { kind: 'box', w: 36, h: 16 }, chain: { kind: 'box', w: 44, h: 12 }, horn: { kind: 'box', w: 36, h: 26 }, whetstone: { kind: 'box', w: 34, h: 12 },
+    feather: { kind: 'box', w: 36, h: 24 }, skull: { kind: 'box', w: 24, h: 28 }, star: { kind: 'box', w: 28, h: 28 }, boot: { kind: 'box', w: 30, h: 30 },
+    bone: { kind: 'box', w: 40, h: 14 }, bottle: { kind: 'box', w: 18, h: 38 }, heart: { kind: 'box', w: 28, h: 26 }, lantern: { kind: 'box', w: 22, h: 36 },
+    wand: { kind: 'box', w: 40, h: 14 }, mask: { kind: 'box', w: 26, h: 30 }, egg: { kind: 'box', w: 22, h: 28 }, dice: { kind: 'box', w: 22, h: 22 },
+  };
+  const hasData = typeof DATA !== 'undefined' && DATA && DATA.ITEMS;
+  // one def per art key: the first data item with that art, else a sample
+  const itemDefs = RENDER.ITEM_KEYS.map(k => {
+    if (hasData) { for (const id in DATA.ITEMS) if (DATA.ITEMS[id].art === k) return DATA.ITEMS[id]; }
+    return { id: k, art: k, shape: SHAPES[k] };
+  });
+  itemDefs.push({ id: 'mystery', art: 'unknownkey', shape: { kind: 'box', w: 30, h: 30 } });
+  const enemyDefs = hasData && DATA.ENEMIES ? Object.keys(DATA.ENEMIES).map(id => DATA.ENEMIES[id]) : RENDER.ENEMY_KEYS.map(k => ({ id: k, name: k, art: k, size: 1, tier: (k === 'hoard' || k === 'ironjaw' || k === 'prizemaster') ? 'boss' : 'normal' }));
+  RENDER.ENEMY_KEYS.forEach(k => { if (!enemyDefs.some(d => d.art === k)) enemyDefs.push({ id: k, name: k, art: k, size: 1 }); });
+  enemyDefs.push({ id: 'zzz', name: 'unknown', art: 'nope', size: 1 });
+
+  const label = (ctx, s, x, y) => { ctx.save(); ctx.font = '11px system-ui'; ctx.fillStyle = '#e9dcc4'; ctx.textAlign = 'center'; ctx.fillText(s, x, y); ctx.restore(); };
+
+  // ---- items
+  {
+    const ctx = document.getElementById('items').getContext('2d');
+    const cols = 10, cw = 104, rh = 100;
+    itemDefs.forEach((d, i) => {
+      const x = 52 + (i % cols) * cw, y = 60 + Math.floor(i / cols) * rh;
+      RENDER.item(ctx, d, x, y, 0, 2, {});
+      label(ctx, d.art, x, y + 42);
+    });
+    // variants + 24px row
+    const y0 = 60 + Math.ceil(itemDefs.length / cols) * rh + 10;
+    label(ctx, 'plus / frozen / glow / alpha .4 / rotated', 200, y0 - 4);
+    const v = [{ plus: true }, { frozen: true }, { glow: true }, { alpha: 0.4 }, null];
+    ['sword', 'potion', 'shield', 'bomb', 'gem', 'coin', 'book', 'lantern'].forEach((k, i) => {
+      const d = itemDefs[RENDER.ITEM_KEYS.indexOf(k)];
+      v.forEach((o, j) => RENDER.item(ctx, d, 52 + i * 110 + j * 20 * 0, y0 + 40 + j * 70, j === 4 ? 0.8 : 0, 1.6, o || {}));
+    });
+    const y1 = y0 + 40 + 5 * 70 + 10;
+    label(ctx, 'at 24px (scale 0.55, the in-game bin size)', 200, y1);
+    itemDefs.forEach((d, i) => RENDER.item(ctx, d, 30 + i * 24, y1 + 24, i * 0.3, 0.55, {}));
+    if (hasData) {
+      const y2 = y1 + 70;
+      label(ctx, 'every DATA.ITEMS def (scale 1.4), labelled by id', 200, y2);
+      const ids = Object.keys(DATA.ITEMS);
+      ids.forEach((id, i) => {
+        const x = 46 + (i % 12) * 84, y = y2 + 50 + Math.floor(i / 12) * 80;
+        RENDER.item(ctx, DATA.ITEMS[id], x, y, 0, 1.4, {});
+        label(ctx, id.slice(0, 13), x, y + 36);
+      });
+    }
+  }
+  // ---- enemies
+  {
+    const ctx = document.getElementById('enemies').getContext('2d');
+    const states = [{}, { hurt: 0.8 }, { attack: 0.5 }, { frozen: true }, { poisoned: true }, { burning: true }, { dead: 0.6 }];
+    const cols = 7, cw = 148;
+    let y = 0;
+    enemyDefs.forEach((d, i) => {
+      const boss = d.tier === 'boss';
+      const rowH = boss ? 300 : 170;
+      y += rowH;
+      const sc = boss ? 0.6 : 1;
+      states.forEach((st, j) => {
+        const x = 74 + j * cw;
+        ctx.save(); ctx.strokeStyle = '#2a2340'; ctx.beginPath(); ctx.moveTo(x - 60, y); ctx.lineTo(x + 60, y); ctx.stroke(); ctx.restore();
+        RENDER.enemy(ctx, d, x, y, sc, T + j, st);
+      });
+      label(ctx, d.id + ' [' + d.art + (d.tier && d.tier !== 'normal' ? ' ' + d.tier : '') + ']', 74, y + 14);
+    });
+    document.getElementById('enemies').height = Math.max(400, y + 40);
+    // canvas resize clears; draw again
+    y = 0;
+    enemyDefs.forEach((d, i) => {
+      const boss = d.tier === 'boss';
+      y += boss ? 300 : 170;
+      const sc = boss ? 0.6 : 1;
+      states.forEach((st, j) => {
+        const x = 74 + j * cw;
+        ctx.save(); ctx.strokeStyle = '#2a2340'; ctx.beginPath(); ctx.moveTo(x - 60, y); ctx.lineTo(x + 60, y); ctx.stroke(); ctx.restore();
+        RENDER.enemy(ctx, d, x, y, sc, T + j, st);
+      });
+      label(ctx, d.id + ' [' + d.art + (d.tier && d.tier !== 'normal' ? ' ' + d.tier : '') + ']', 74, y + 14);
+    });
+  }
+  // ---- cabinet + claw
+  {
+    const ctx = document.getElementById('cabinet').getContext('2d');
+    const cfg = { w: 480, h: 390, frame: 30, chuteW: 64, dividerH: 0.6 };
+    const tri = (w, h) => [{ x: -w / 2, y: -h / 2 }, { x: w / 2, y: -h / 2 }, { x: w / 2, y: h / 2 }, { x: -w / 2, y: h / 2 }];
+    const prong = (d) => ({ x: 240 + d * 22, y: 190, a: d * 0.5, shape: { kind: 'poly', verts: [{ x: -4, y: -4 }, { x: 4, y: -4 }, { x: 3, y: 30 }, { x: -1, y: 34 }, { x: -6, y: 20 }] } });
+    const rig = { bodies: { carriage: { x: 240, y: 26, a: 0, shape: { kind: 'poly', verts: tri(40, 16) } }, palm: { x: 240, y: 170, a: 0.05, shape: { kind: 'poly', verts: tri(40, 18) } }, prongs: [prong(-1), prong(1), { x: 240, y: 198, a: 0, shape: { kind: 'poly', verts: [{ x: -3, y: -4 }, { x: 3, y: -4 }, { x: 2, y: 26 }, { x: -2, y: 26 }] } }] }, cableTop: { x: 240, y: 26 }, sway: 0.05, phase: 'dropping' };
+    const draw = (x, y, st, cfgClaw) => {
+      RENDER.cabinetBack(ctx, x, y, cfg, st);
+      const sample = ['sword', 'bomb', 'shield', 'potion', 'coin', 'gem', 'rock', 'book', 'skull', 'orb', 'axe', 'apple'];
+      sample.forEach((k, i) => RENDER.item(ctx, itemDefs[RENDER.ITEM_KEYS.indexOf(k)], x + 40 + (i % 6) * 60, y + 330 - Math.floor(i / 6) * 34, i * 0.5, 1, { glow: i === 4, plus: i === 2, frozen: i === 7 }));
+      RENDER.claw(ctx, rig, x, y, cfgClaw);
+      RENDER.cabinetFront(ctx, x, y, cfg, st);
+    };
+    draw(40, 40, { t: T, act: 1 }, { rubber: 0, magnet: 0, prongs: 3 });
+    draw(550, 40, { t: T, act: 2, fog: 0.7 }, { rubber: 1, magnet: 1, prongs: 3 });
+    draw(40, 520, { t: T, act: 3, grease: 0.9, tilt: 1 }, { rubber: 1, magnet: 0, prongs: 3 });
+    // debug bodies
+    const W = { bodies: [rig.bodies.carriage, rig.bodies.palm, ...rig.bodies.prongs, { x: 100, y: 300, a: 0, shape: { kind: 'circle', r: 15 }, type: 'dynamic' }], contactsOf: () => [{ px: 100, py: 315, nx: 0, ny: -1 }] };
+    ctx.save(); ctx.translate(550, 520); RENDER.bodyDebug(ctx, W); ctx.restore();
+    label(ctx, 'bodyDebug', 700, 900);
+  }
+  // ---- hexes
+  {
+    const ctx = document.getElementById('hexes').getContext('2d');
+    RENDER.mapBg(ctx, 1040, 520, 1, T);
+    const types = ['empty', 'fight', 'elite', 'treasure', 'gem', 'ink', 'brush', 'event', 'shop', 'rest', 'forge', 'boss', 'start'];
+    const size = 36;
+    types.forEach((ty, i) => {
+      const x = 50 + i * 76;
+      RENDER.hex(ctx, x, 50, size, { type: ty, revealed: false, q: i, r: 1 }, { t: T });
+      RENDER.hex(ctx, x, 130, size, { type: ty, revealed: true, q: i, r: 2 }, { t: T });
+      RENDER.hex(ctx, x, 210, size, { type: ty, revealed: true, visited: true, q: i, r: 3 }, { t: T });
+      RENDER.hex(ctx, x, 290, size, { type: ty, revealed: true, q: i, r: 4 }, { t: T, reachable: true });
+      RENDER.hex(ctx, x, 370, size, { type: ty, revealed: true, q: i, r: 5 }, { t: T, hover: true });
+      label(ctx, ty, x, 420);
+    });
+    RENDER.hex(ctx, 50, 470, size, { type: 'start', revealed: true, visited: true }, { t: T, current: true });
+    label(ctx, 'current', 50, 510);
+    // a little map cluster at small size
+    for (let q = 0; q < 8; q++) for (let r = 0; r < 4; r++) {
+      const px = 200 + q * 40 + (r % 2) * 20, py = 445 + r * 34;
+      RENDER.hex(ctx, px, py, 22, { type: types[(q + r * 3) % types.length], revealed: (q + r) % 3 !== 0, q, r }, { t: T, reachable: q === 2 && r === 1 });
+    }
+  }
+  // ---- ui
+  {
+    const ctx = document.getElementById('ui').getContext('2d');
+    RENDER.hpBar(ctx, 40, 20, 120, 14, 33, 50, 6);
+    RENDER.hpBar(ctx, 200, 20, 120, 14, 8, 50, 0);
+    RENDER.hpBar(ctx, 360, 20, 200, 18, 280, 280, 12);
+    RENDER.statusPips(ctx, 40, 50, { str: 3, weak: 2, vuln: 1, poison: 4, burn: 2, chill: 1, freeze: 1, regen: 2, thorns: 3 }, 18);
+    RENDER.statusPips(ctx, 40, 78, { dodge: 1, bleed: 3, stun: 1, grease: 1, fog: 2, shield_up: 1, enrage: 2, armor: 3 }, 18);
+    const kinds = ['attack', 'attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'tilt', 'steal', 'freezeItem', 'summon', 'charge', 'escape'];
+    kinds.forEach((k, i) => {
+      const e = { intent: { k, v: 7, n: i === 1 ? 3 : 1 }, charged: i === 1 };
+      RENDER.intent(ctx, 50 + i * 64, 150, e, T);
+      label(ctx, k, 50 + i * 64, 168);
+    });
+    ['knight', 'alchemist', 'rogue', 'unknown'].forEach((c, i) => { RENDER.portrait(ctx, c, 70 + i * 90, 240, 72, T); label(ctx, c, 70 + i * 90, 290); });
+    ['c', 'u', 'r', 'l', 'boss', 'event'].forEach((r, i) => { RENDER.relicIcon(ctx, { icon: ['A', 'B', '#', '!', 'Z', 'E'][i], rarity: r }, 480 + i * 60, 240, 40); label(ctx, r, 480 + i * 60, 275); });
+    // fx sample
+    RENDER.fx.burst(200, 360, '#ffc94d', 30, { speed: 120 }); RENDER.fx.text(400, 360, '12', '#ff5a4a'); RENDER.fx.text(520, 360, 'MISS', '#fff', { size: 24 });
+    RENDER.fx.trail(600, 360, '#2ee6d6', { vy: 200 });
+    RENDER.fx.update(0.15); RENDER.fx.draw(ctx);
+    label(ctx, 'fx burst / text / trail after 0.15s', 400, 400);
+  }
+  // ---- bgs
+  {
+    const ctx = document.getElementById('bgs').getContext('2d');
+    for (let a = 1; a <= 3; a++) { ctx.save(); ctx.translate((a - 1) * 350, 0); ctx.beginPath(); ctx.rect(0, 0, 340, 270); ctx.clip(); RENDER.bg(ctx, 340, 270, a, T); ctx.restore(); label(ctx, 'act ' + a, (a - 1) * 350 + 170, 290); }
+    for (let a = 1; a <= 3; a++) { ctx.save(); ctx.translate((a - 1) * 350, 300); ctx.beginPath(); ctx.rect(0, 0, 340, 70); ctx.clip(); RENDER.mapBg(ctx, 340, 70, a, T); ctx.restore(); }
+    label(ctx, 'full-stage bg (540x960 scaled 0.35) with the arena band 70..340 marked', 520, 390);
+    for (let a = 1; a <= 3; a++) { ctx.save(); ctx.translate((a - 1) * 350, 400); ctx.scale(0.35, 0.35); RENDER.bg(ctx, 540, 960, a, T); ctx.strokeStyle = '#a6ff5e'; ctx.lineWidth = 3; ctx.strokeRect(0, 70, 540, 270); ctx.restore(); }
+  }
+  // ---- title
+  {
+    const ctx = document.getElementById('title').getContext('2d');
+    ctx.save(); ctx.translate(250, 0); RENDER.title(ctx, 540, 960, T); ctx.restore();
+  }
+  window.__galleryDone = true;
+})();
+</script>
+</body>
+</html>
