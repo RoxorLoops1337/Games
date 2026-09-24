@@ -164,6 +164,30 @@ function uniqueRatio(map) {
   h.ok(fingerprint(sPlain) !== fingerprint(sRub), 'rubber tips change the claw');
   h.ok(fingerprint(sPlain) !== fingerprint(sMag), 'magnet changes the claw');
   drawCheck('claw 2 prongs', c => { const r2 = fakeRig(); r2.bodies.prongs.length = 2; R.claw(c, r2, 0, 0, {}); });
+  // hooked tips: each side prong continues into rig.bodies.tips[i]; the ghost
+  // third prong (prongs[2].ghost) is drawn even though it is not in a world
+  const tipped = () => {
+    const r2 = fakeRig(); r2.bodies.prongs.length = 2;
+    const tip = (d) => ({ x: 240 + d * 30, y: 220, a: d * 0.2, shape: { kind: 'poly', verts: [{ x: -4, y: 0 }, { x: 4, y: 0 }, { x: 2, y: 16 }, { x: -2, y: 16 }] } });
+    r2.bodies.tips = [tip(-1), tip(1)];
+    return r2;
+  };
+  const sNoTip = drawCheck('claw no tips', c => { const r2 = fakeRig(); r2.bodies.prongs.length = 2; R.claw(c, r2, 0, 0, {}); });
+  const sTip = drawCheck('claw tips', c => R.claw(c, tipped(), 0, 0, {}));
+  const lines = (st) => st.seq.filter(k => k === 'lineTo').length;
+  h.ok(lines(sTip) > lines(sNoTip) + 8, 'hooked tips add their polygon paths (' + lines(sTip) + ' vs ' + lines(sNoTip) + ' lineTo)');
+  h.ok(sTip.seq.filter(k => k === 'arc').length > sNoTip.seq.filter(k => k === 'arc').length, 'knee rivets drawn as arcs');
+  const sTipRub = drawCheck('claw tips rubber', c => R.claw(c, tipped(), 0, 0, { rubber: 1 }));
+  h.ok(fingerprint(sTipRub) !== fingerprint(sTip), 'rubber pads change the tip drawing');
+  const sGhost = drawCheck('claw ghost prong', c => { const r2 = tipped(); r2.bodies.prongs.push(Object.assign({ ghost: true }, fakeRig().bodies.prongs[2])); R.claw(c, r2, 0, 0, { prongs: 3 }); });
+  h.ok(lines(sGhost) > lines(sTip) + 4, 'the ghost third prong is drawn (' + lines(sGhost) + ' vs ' + lines(sTip) + ' lineTo)');
+  h.ok(sGhost.seq.indexOf('lineTo') < sTip.seq.indexOf('lineTo') + 40, 'ghost prong drawn early (behind the pair)');
+  // floor wedges: cfg.slopeW/slopeH add the two bowl slopes to the back
+  const sFlat = drawCheck('cabinetBack flat', c => R.cabinetBack(c, 30, 410, cfg, { t: 1, act: 1 }));
+  const sBowl = drawCheck('cabinetBack bowl', c => R.cabinetBack(c, 30, 410, Object.assign({ slopeW: 130, slopeH: 90 }, cfg), { t: 1, act: 1 }));
+  h.ok(sBowl.paints > sFlat.paints + 4, 'floor wedges add paints (' + sBowl.paints + ' vs ' + sFlat.paints + ')');
+  h.ok(sBowl.seq.filter(k => k === 'clip').length >= sFlat.seq.filter(k => k === 'clip').length + 2, 'each wedge clips its tread');
+  h.eq(fingerprint(drawCheck('cabinetBack zero slopes', c => R.cabinetBack(c, 30, 410, Object.assign({ slopeW: 0, slopeH: 0 }, cfg), { t: 1, act: 1 }))), fingerprint(sFlat), 'zero slopes draw nothing extra');
   drawCheck('claw phases', c => { for (const ph of ['idle', 'moving', 'dropping', 'closing', 'lifting', 'carrying', 'releasing', 'returning']) { const r2 = fakeRig(); r2.phase = ph; R.claw(c, r2, 0, 0, { magnet: 1 }); } });
   drawCheck('claw empty rig', c => { R.claw(c, {}, 0, 0, {}); c.fillRect(0, 0, 1, 1); });
   balanced('claw', c => R.claw(c, rig, 0, 0, { rubber: 1, magnet: 1 }));

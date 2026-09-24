@@ -1228,14 +1228,16 @@ const RENDER = (() => {
 
   /* ========================================================= CABINET */
   // (x, y) is the interior's top-left (the physics origin); the frame is
-  // drawn around it. cfg: {w, h, frame, chuteW, dividerH, railY}.
+  // drawn around it. cfg: {w, h, frame, chuteW, dividerH, railY, slopeW, slopeH}
+  // (slopeW/slopeH: the floor wedges PHYS.cabinet builds, drawn as part of the floor).
   const ACT_NEON = { 1: PAL.pink, 2: '#ff8a2b', 3: PAL.cyan };
-  const cabTmp = { w: 480, h: 390, frame: 30, chuteW: 64, dividerH: 0.6, railY: 26 };
+  const cabTmp = { w: 480, h: 390, frame: 30, chuteW: 64, dividerH: 0.6, railY: 26, slopeW: 0, slopeH: 0 };
   function cabCfg(cfg) {
     cfg = cfg || {};
     cabTmp.w = cfg.w || 480; cabTmp.h = cfg.h || 390; cabTmp.frame = cfg.frame == null ? 30 : cfg.frame;
     cabTmp.chuteW = cfg.chuteW == null ? 64 : cfg.chuteW; cabTmp.dividerH = cfg.dividerH == null ? 0.6 : cfg.dividerH;
     cabTmp.railY = cfg.railY == null ? 26 : cfg.railY;
+    cabTmp.slopeW = cfg.slopeW > 0 ? cfg.slopeW : 0; cabTmp.slopeH = cfg.slopeH > 0 ? cfg.slopeH : 0;
     return cabTmp;
   }
   function cabinetBack(ctx, x, y, cfg, st) {
@@ -1287,8 +1289,30 @@ const RENDER = (() => {
       F(ctx, rgba('#ffffff', 0.05));
       ctx.beginPath(); for (let yy = 16; yy < fy; yy += 24) for (let xx = 16; xx < w; xx += 24) circ(ctx, xx, yy, 1.5); ctx.fill();
       ctx.restore();
-      // chute column
       const cx = w - c.chuteW, dy = h - h * c.dividerH;
+      // floor wedges: the bowl the pile heaps into (same tread as the floor, lit top edge)
+      if (c.slopeW > 0 && c.slopeH > 0) {
+        const sw = c.slopeW, sh = c.slopeH, r = cx - 8;
+        const wedge = (x0, x1, dir) => {
+          // dir 1: high at x0, low at x1 (left wedge); dir -1: low at x0, high at x1
+          const hiX = dir > 0 ? x0 : x1, loX = dir > 0 ? x1 : x0;
+          ctx.save();
+          ctx.beginPath(); ctx.moveTo(hiX, h - sh); ctx.lineTo(loX, h); ctx.lineTo(hiX, h); ctx.closePath();
+          F(ctx, '#1a1030'); ctx.fill();
+          ctx.clip();
+          ctx.beginPath();
+          for (let i = -1; i * 40 < sw + 40; i++) { const kx = Math.min(x0, x1) + i * 40; ctx.moveTo(kx, h - sh); ctx.lineTo(kx + 20, h + 6); ctx.lineTo(kx + 40, h - sh); }
+          S(ctx, rgba(neon, 0.22), 4); ctx.stroke();
+          ctx.restore();
+          ctx.beginPath(); ctx.moveTo(hiX, h - sh); ctx.lineTo(loX, h);
+          S(ctx, INK, 5); ctx.stroke(); S(ctx, rgba(neon, 0.7), 2.5); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(hiX, h - sh); ctx.lineTo(loX, h);
+          S(ctx, rgba('#ffffff', 0.45), 1); ctx.stroke();
+        };
+        wedge(0, sw, 1);
+        wedge(r - sw, r, -1);
+      }
+      // chute column
       F(ctx, rgba(INK, 0.55)); ctx.fillRect(cx, 0, c.chuteW, h);
       ctx.beginPath(); rrect(ctx, cx + 8, h - 40, c.chuteW - 16, 34, 5); F(ctx, '#05030a'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
       ctx.save(); ctx.beginPath(); ctx.rect(cx + 8, h - 42, c.chuteW - 16, 6); ctx.clip();
@@ -1374,18 +1398,6 @@ const RENDER = (() => {
     ctx.closePath();
     return true;
   }
-  // Furthest vertex of a body from a world point (for the prong tips).
-  function farVert(b, ox, oy, fx, fy, out) {
-    const vs = b.shape && b.shape.verts; if (!vs) return null;
-    const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0);
-    let best = -1;
-    for (const v of vs) {
-      const px = ox + b.x + v.x * ca - v.y * sa, py = oy + b.y + v.x * sa + v.y * ca;
-      const d = (px - fx) * (px - fx) + (py - fy) * (py - fy);
-      if (d > best) { best = d; out.x = px; out.y = py; }
-    }
-    return out;
-  }
   const tipTmp = { x: 0, y: 0 };
   function chromeBody(ctx, b, ox, oy, r) {
     tone(ctx, q => bodyPath(q, b, ox, oy), CHROME, ox + b.x, oy + b.y, r, { dark: -0.45 });
@@ -1403,13 +1415,52 @@ const RENDER = (() => {
     else { const dh = bw * imH(img) / imW(img); blit(ctx, img, x0, (y0 + y1) / 2 - dh / 2, bw, dh); }
     ctx.restore();
   }
+  // Local point of a body in world space (for tips, knees and pads).
+  const ptTmp = { x: 0, y: 0 };
+  function localPt(b, ox, oy, lx, ly, out) {
+    const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0);
+    out.x = ox + b.x + lx * ca - ly * sa; out.y = oy + b.y + lx * sa + ly * ca;
+    return out;
+  }
+  // Far end of a rod body along its local +y (the prong tip).
+  function rodLen(b) {
+    const vs = b.shape && b.shape.verts; if (!vs) return 0;
+    let m = 0; for (const v of vs) if (v.y > m) m = v.y;
+    return m;
+  }
+  /* One finger: the upper rod plus its hooked tip segment, outlined as a
+     single shape, with a rivet at the knee and a pad (rubber or chrome) at
+     the very end. tip may be null (a ghost or a plain prong). */
+  function finger(ctx, upper, tip, ox, oy, cfg, prongImg, ghost) {
+    if (prongImg && !ghost) { clawPart(ctx, upper, ox, oy, 22, prongImg); if (tip) clawPart(ctx, tip, ox, oy, 12, prongImg); return; }
+    const col = ghost ? '#8e98a8' : CHROME;
+    // ink outline around both segments so the knee does not show a seam
+    ctx.beginPath(); bodyPath(ctx, upper, ox, oy); if (tip) bodyPath(ctx, tip, ox, oy);
+    S(ctx, INK, OL * 2.2); ctx.lineJoin = 'round'; ctx.stroke();
+    tone(ctx, q => bodyPath(q, upper, ox, oy), col, ox + upper.x, oy + upper.y, 22, ghost ? { dark: -0.5, spec: false, ol: 0 } : { dark: -0.45, ol: 0 });
+    if (tip) {
+      tone(ctx, q => bodyPath(q, tip, ox, oy), col, ox + tip.x, oy + tip.y, 12, { dark: -0.45, ol: 0, spec: false });
+      // knee rivet
+      tone(ctx, q => circ(q, ox + tip.x, oy + tip.y, 3.2), '#8e98a8', ox + tip.x, oy + tip.y, 3.2, { dark: -0.4, ol: 1.5 });
+    }
+    // the tip pad
+    const end = tip || upper, L = rodLen(end);
+    if (L > 0) {
+      const e = localPt(end, ox, oy, 0, L - 2, ptTmp);
+      if (cfg.rubber && !ghost) {
+        const k = localPt(end, ox, oy, 0, L - 7, tipTmp);
+        ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(e.x, e.y);
+        S(ctx, INK, 9); ctx.lineCap = 'round'; ctx.stroke(); S(ctx, '#ff5a4a', 5.5); ctx.stroke();
+      } else if (!ghost) { F(ctx, '#ffffff'); ctx.beginPath(); ctx.arc(e.x, e.y, 1.6, 0, TAU); ctx.fill(); }
+    }
+  }
   function claw(ctx, rig, x, y, cfg) {
     ctx.save();
     try {
       rig = rig || {}; cfg = cfg || {};
       const B = rig.bodies || {}, ox = x || 0, oy = y || 0;
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      const palm = B.palm, car = B.carriage, prongs = B.prongs || [];
+      const palm = B.palm, car = B.carriage, prongs = B.prongs || [], tips = B.tips || [];
       const top = rig.cableTop || (car ? car : { x: palm ? palm.x : 0, y: 0 });
       // cable
       if (palm) {
@@ -1429,18 +1480,12 @@ const RENDER = (() => {
         const active = ph === 'dropping' || ph === 'closing' || ph === 'lifting';
         glow(ctx, ox + palm.x, oy + palm.y + 8, active ? 60 : 34, PAL.cyan, active ? 0.9 : 0.4);
       }
-      // prongs: middle prong (index 2) first so it sits behind the pair
-      const order = prongs.length > 2 ? [2, 0, 1] : [0, 1];
-      for (const i of order) {
-        const pr = prongs[i]; if (!pr) continue;
-        clawPart(ctx, pr, ox, oy, 22, prongImg);
-        if (palm) {
-          const tip = farVert(pr, ox, oy, ox + palm.x, oy + palm.y, tipTmp);
-          if (tip) {
-            if (cfg.rubber) tone(ctx, q => circ(q, tip.x, tip.y, 5), '#ff5a4a', tip.x, tip.y, 5, { dark: -0.3, ol: 2 });
-            else { F(ctx, '#ffffff'); ctx.beginPath(); ctx.arc(tip.x, tip.y, 1.5, 0, TAU); ctx.fill(); }
-          }
-        }
+      // Ghost prongs first (the drawn-only third finger sits behind the pair),
+      // then each side prong with its hooked tip (tips[i] pairs with prongs[i]).
+      for (let i = 0; i < prongs.length; i++) { const pr = prongs[i]; if (pr && pr.ghost) finger(ctx, pr, null, ox, oy, cfg, prongImg, true); }
+      for (let i = 0; i < prongs.length; i++) {
+        const pr = prongs[i]; if (!pr || pr.ghost) continue;
+        finger(ctx, pr, tips[i] || null, ox, oy, cfg, prongImg, false);
       }
       if (palm && palmImg) clawPart(ctx, palm, ox, oy, 20, palmImg);
       else if (palm) {
@@ -1650,7 +1695,8 @@ const RENDER = (() => {
     ctx.save();
     try {
       w = w || 540; h = h || 340; t = t || 0; act = act || 1;
-      const fy = h > 420 ? 332 : h * 0.82;
+      // The fight arena's floor line: enemies stand with their feet on it (game.js ARENA.floor).
+      const fy = h > 420 ? 302 : h * 0.82;
       ctx.lineJoin = 'round';
       const bimg = artImg('bg', act);
       if (bimg) {
@@ -2001,7 +2047,7 @@ const RENDER = (() => {
     api.text = (x, y, str, col, o) => {
       o = o || 0;
       const p = tn < MAXT ? texts[tn++] : texts[0];
-      p.x = x; p.y = y; p.str = String(str); p.col = col || '#fff'; p.life = p.max = o.life || 1; p.size = o.size || 20; p.dy = o.dy == null ? -46 : o.dy;
+      p.x = x; p.y = y; p.str = String(str); p.col = col || '#fff'; p.life = p.max = o.life || 1; p.size = o.size || (o.big ? 28 : 20); p.dy = o.dy == null ? -46 : o.dy;
     };
     api.shake = (amt) => { shakeAmt = Math.min(24, shakeAmt + (amt || 6)); };
     api.flash = (col, a) => { flashCol = col || '#fff'; flashA = Math.max(flashA, a == null ? 0.5 : a); };

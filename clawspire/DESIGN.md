@@ -1,4 +1,4 @@
-# CLAWSPIRE — design bible & module contracts
+# CLAWSPIRE -- design bible & module contracts
 
 > A claw machine roguelike. Every fight is a grab. Read this whole file before
 > writing a line: every module is built by a different person in parallel, and
@@ -70,11 +70,19 @@ hot pink `#ff2e88`, arcade cyan `#2ee6d6`, prize gold `#ffc94d`, slime lime
 
 ```
 y   0.. 70   top bar: HP / block / gold / act·floor, relic strip      (DOM)
-y  70..340   arena: up to 3 enemies, intents above, hp bar + statuses (canvas)
-y 340..380   player row: statuses, "grabs left" pips, turn banner     (DOM)
+y  70..340   arena: up to 3 enemies spread over x 90..450, feet on the
+             floor line y 300, intents above heads (clamped under the top
+             bar), hp bar + statuses under the feet. Enemies are scaled to
+             fit: act 1 normals ~120px tall, elites ~150, bosses ~170
+             (game.js ENEMY_FIT / enemyPos)                             (canvas)
+y 338..382   player row: statuses, "grabs left" pips, turn banner
+             (the banner is centred on y ~360, between arena and cabinet) (DOM)
 y 380..830   the RIG: cabinet frame 30px, interior 480 × 390 at (30,410)
              chute = right-most 64px column of the interior, divider wall
-             from the floor up to 60% of interior height                (canvas)
+             from the floor up to 60% of interior height; floor wedges
+             130 wide x 90 tall on both sides make a bowl (CAB.slopeW/H)  (canvas)
+             coach marks (tutorial) sit over the cabinet at y 540, never
+             over the arena
 y 830..960   control bar: END TURN, play-tray (items being played), hint (DOM)
 ```
 
@@ -83,13 +91,13 @@ overlays (`.screen`), the map itself is drawn on the canvas under a DOM header.
 
 ## Module contracts
 
-### `js/util.js` — `U` (already written, do not edit)
+### `js/util.js` -- `U` (already written, do not edit)
 
 `U.rng(seed)` → function returning [0,1); `.int(a,b)`, `.pick(arr)`,
 `.shuffle(arr)`, `.chance(p)`. `U.clamp`, `U.lerp`, `U.ease.*`, `U.uid()`,
 `U.hashStr(s)`, `U.deepCopy`.
 
-### `js/physics.js` — `PHYS`
+### `js/physics.js` -- `PHYS`
 
 A small 2D rigid body engine (circles + convex polygons, sequential impulses,
 friction, restitution, revolute joints with limits + motor) plus the claw rig
@@ -113,10 +121,14 @@ PHYS.world({gravity, w, h}) -> W
 PHYS.revolute(bodyA, bodyB, {x, y} /*world anchor*/, {lower, upper, enableLimit, motorSpeed, maxTorque, enableMotor}) -> J
   J.setMotor(speed, maxTorque) J.setLimits(lower, upper) J.angle()
 
-PHYS.cabinet(W, {w: 480, h: 390, chuteW: 64, dividerH: 0.6, wallThick: 40}) -> C
+PHYS.cabinet(W, {w: 480, h: 390, chuteW: 64, dividerH: 0.6, wallThick: 40, slopeW: 0, slopeH: 0}) -> C
   // builds static floor/walls/ceiling, chute divider (right side), returns
+  // slopeW/slopeH > 0 adds two static floor wedges (a bowl so the pile heaps
+  // in the middle): left from (0, h-slopeH) down to (slopeW, h); right from
+  // (chuteX-8-slopeW, h) up to (chuteX-8, h-slopeH). The renderer draws them
+  // from the same cfg (RENDER.cabinetBack cfg.slopeW/slopeH).
   C.inChute(body) -> bool         // body's centre is inside the chute column below the divider top
-  C.bounds = {w, h, chuteX /* left edge of the chute column */}
+  C.bounds = {w, h, chuteX /* left edge of the chute column */, chuteW, dividerTop, floorY, slopeW, slopeH}
   C.bodies
 
 PHYS.clawRig(W, {
@@ -138,14 +150,58 @@ PHYS.clawRig(W, {
   R.setTarget(x)    // only honoured in 'idle'/'moving'
   R.drop()          // only honoured in 'idle'/'moving'; returns false otherwise
   R.update(dt) -> events[]   // drive kinematics + motors; call BEFORE W.step(dt) each frame
-                             // events: 'drop' 'touch' 'close' 'lift' 'carry' 'release' 'home'
-  R.held() -> bodies currently pinched between prongs (contact with >=2 prongs, or 1 prong + palm)
+                             // events: 'drop' 'touch' 'close' 'lift' 'carry' 'release' 'home' 'slip'
+                             // 'slip' = a grip lock broke while lifting/carrying (the item falls back)
+  R.held() -> bodies currently pinched between prongs (contact with >=2 prongs, or 1 prong + palm), plus locked ones
+  R.locked() -> bodies the grip lock is carrying right now (use this for the "holding" hint and the item glow)
   R.open()          // force prongs open (also used at 'releasing')
   R.setConfig({width, grip, speed, prongs, rubber, magnet})  // rebuilds prongs if needed
-  R.bodies          // {carriage, palm, prongs:[...]} for the renderer
+  R.bodies          // {carriage, palm, prongs:[...], tips:[...]} for the renderer (see below)
+  R.geo             // {piv, len, lenU, lenT, beta, len3, open, closed, reach, palmW} for the current width
   R.cableTop        // {x, y} where the cable leaves the rail (for drawing)
   R.sway            // current pendulum angle (rad) for drawing the cable
 ```
+
+Rig anatomy (what `R.bodies` holds and how the renderer reads it):
+- Each side prong is TWO bodies: an upper rod `prongs[0..1]` (hinge at the
+  palm, tip at local +y) and a hooked tip segment `tips[0..1]` welded at
+  the knee and bent inward by `RIG.hookAngle`. `tips[i]` pairs with
+  `prongs[i]`. RENDER.claw draws both from `shape.verts` rotated by `b.a`
+  at `(b.x, b.y)` as one finger: a shared ink outline, a rivet at the knee,
+  a rubber pad (cfg.rubber) or a chrome highlight at the very tip.
+- With `prongs: 3`, `prongs[2]` is a GHOST body (`b.ghost === true`, never
+  added to the world, `mask: []`): the rig poses it every update from the
+  side prongs' mean closedness. It is drawn first (behind) as a shorter
+  straight prong with no hook. Its share of the pinch is modelled by the
+  torque bonus (`RIG.pinch3`) and the lock capacity (`RIG.lock3`), because
+  a physical off-axis third finger shoved items out in every geometry tried.
+- The dig: while dropping, the first prong or tip contact does not stop the
+  drop. The claw keeps sinking `RIG.dig` (30) px past that first touch so the
+  hooks slide down around the target instead of closing in mid-air above a
+  neighbour; the drop ends early only when the palm itself lands or the
+  closed tips would reach the floor (`RIG.floorClear`). The palm can end
+  below the pile top.
+- The grip lock: when 'closing' ends, every pinched body (>= 2 prongs, or 1
+  prong + palm) is tied to the palm with a stiff, force-capped spring
+  (`engageLocks`); bodies pinched during the first `RIG.lockWindow` (0.6 s)
+  of the lift lock too. The prongs stop colliding with what they hold and
+  freeze at their closed pose; the motor drops to `RIG.lockHoldMul` (0.12) of
+  its torque so it cannot squeeze the item out. The lock's capacity is the
+  grip: `RIG.lockForce` (6e6) x grip, x `RIG.lockRubber` (1.45) with rubber
+  tips, x `RIG.lock3` (1.3) with a third prong, x `RIG.lockPalmOnly` (0.8)
+  for a one-prong-plus-palm pinch. A filtered load (`RIG.lockTau` 0.06 s)
+  above the capacity (with the +-12% jitter), or a sag past
+  `RIG.lockBreakDist` (16 px), breaks the lock: the rig emits 'slip' and the
+  item falls. `RIG.lockGrace` (0.12 s) after engaging nothing breaks.
+  Item-mass ladder: base grip 1 holds items up to about mass 1800 through a
+  lift and carry; rubber x1.45 -> ~2600, third prong x1.3 -> ~2340, both
+  ~3400; each grip upgrade is +0.35. The tower shield (mass 4320) needs
+  grip ~2.3, or grip 1.6 + rubber.
+- Item-centred release: while carrying, the carriage target is the chute
+  centre minus the mean lock offset of the held items (`carryX`), so an item
+  gripped off-centre still drops inside the chute column. Release opens the
+  prongs slowly (`RIG.releaseSpeed`, `RIG.releaseTorque`) so the load falls
+  straight down.
 
 Feel requirements (these are the game):
 - Prongs close with a torque *limit*, not a fixed angle: a fat item stops
@@ -171,7 +227,7 @@ floor 9/10 drops; weak grip drops a heavy 50px box most of the time; sword
 (44×10 box) is harder to lift than a ball; a 3-prong rig lifts more often
 than 2-prong on the same seed; determinism (same inputs => same positions).
 
-### `js/data.js` — `DATA`
+### `js/data.js` -- `DATA`
 
 Pure content. Objects and small pure functions only, no DOM, no state.
 
@@ -274,7 +330,7 @@ DATA.rollRarity(rng, weights?) -> 'c'|'u'|'r'|'l'
 DATA.rewardItems(rng, act, char, n=3) -> [ids]   // no duplicates, rarity weighted by act
 ```
 
-### `js/combat.js` — `COMBAT`
+### `js/combat.js` -- `COMBAT`
 
 Turn engine. Pure state + events; no DOM, no physics. The game applies bin
 events to the cabinet.
@@ -324,7 +380,7 @@ exhaust, win/lose detection, intents cycle, every `DATA.ENEMIES` move kind and e
 `DATA.ITEMS` fx kind resolves without throwing, a 200-turn fuzz with random plays never
 NaNs hp.
 
-### `js/map.js` — `MAP`
+### `js/map.js` -- `MAP`
 
 Roguebook style hex map. Axial coordinates `(q, r)`, pointy-top hexes, `cols × rows`
 rectangle (offset rows). Start at the left middle, boss at the right middle. All
@@ -352,7 +408,7 @@ Tests (`tests/clawspire_map.test.mjs`, yours): generation counts/minimums for 20
 (there is always a hidden-or-revealed path), start neighbours revealed, reveal spends ink and
 respects adjacency, brushes reveal the right cells, move rules, pixel<->hex round trip, serialize round trip.
 
-### `js/audio.js` — `AUDIO`
+### `js/audio.js` -- `AUDIO`
 
 WebAudio, lazy. `AUDIO.init()` on first user gesture (safe to call repeatedly),
 `AUDIO.sfx(name, opts)` names: `clawMove, clawDrop, clawTouch, clawClose, clawLift, clawRelease, itemLand,
@@ -362,7 +418,7 @@ fight, elite, boss, win`, a tiny generative chiptune sequencer (bass + lead + ha
 `AUDIO.setVolume(sfx, music)`, `AUDIO.muted` toggle with localStorage key `clawspire_audio`.
 Must load headless (no AudioContext at top level) and every function must no-op safely before init.
 
-### `js/render.js` — `RENDER`
+### `js/render.js` -- `RENDER`
 
 All canvas art. Each function draws at (x, y) with the given scale/angle and
 restores ctx state. Nothing here mutates game state. Time `t` in seconds for idle
@@ -391,7 +447,7 @@ distinctly (a test iterates all defs through `RENDER.item` / `RENDER.enemy` with
 Items must read at 24px. Enemies: idle bob/breathe from `t`, a lunge on `attack`, a white flash +
 squash on `hurt`, a fall/fade on `dead`. Bosses are 1.6× and have an aura.
 
-### `js/game.js` — `GAME` (+ `index.html`)
+### `js/game.js` -- `GAME` (+ `index.html`)
 
 Glue: screens, run state, save/load, main loop, input, physics sync, rewards,
 shop, events, rest, map flow, meta unlocks. Exposes `window.CS = { U, PHYS, DATA, COMBAT, MAP, AUDIO, RENDER, GAME }`.

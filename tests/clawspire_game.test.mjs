@@ -136,6 +136,27 @@ h.test('steer + drop runs a full grab cycle and spends a grab', () => {
   h.ok(settle(G, 5), 'ready again after the grab');
 });
 
+h.test("a rig 'slip' event plays the sfx, floats SLIP at the palm and shakes", () => {
+  const calls = [];
+  const sfx0 = CS.AUDIO.sfx;
+  CS.AUDIO.sfx = (n) => calls.push(n);
+  const R = CS.RENDER;
+  const t0 = R.fx.textCount();
+  G.rigEvent('lift');
+  h.ok(/holding|empty claw/.test(G.S.hint), 'lift hint reports the hold (' + G.S.hint + ')');
+  G.rigEvent('slip');
+  h.ok(calls.includes('itemSlip'), 'itemSlip sfx on slip');
+  h.eq(R.fx.textCount(), t0 + 1, 'one floating text spawned');
+  h.ok(/slip/.test(G.S.hint), 'hint mentions the slip (' + G.S.hint + ')');
+  h.eq(G.fs.slips, 1, 'slip counted on the fight session');
+  const off = R.fx.offset();
+  h.ok(Math.abs(off.x) + Math.abs(off.y) > 0, 'a small shake');
+  G.rigEvent('close');
+  h.ok(calls.includes('clawClose') && R.fx.count() > 0, 'close sparks + sfx');
+  CS.AUDIO.sfx = sfx0;
+  R.fx.clear();
+});
+
 let deliveries = 0, drops = 0;
 h.test('over 30 drops at least 8 deliver; fights end; the game never sticks', () => {
   const rng = U.rng(99);

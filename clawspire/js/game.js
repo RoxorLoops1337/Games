@@ -11,7 +11,10 @@ const GAME = (() => {
   const RUN_KEY = 'clawspire_run', META_KEY = 'clawspire_meta';
   // Cabinet interior in stage coordinates (see the stage layout in the bible).
   const CAB = { x: 30, y: 410, w: 480, h: 390, chuteW: 64, frame: 30, dividerH: 0.6, wallThick: 40, slopeW: 130, slopeH: 90 };
-  const ARENA = { y0: 70, y1: 340 };
+  // Arena band: enemies spread across x0..x1 with their feet on the floor
+  // line (RENDER.bg draws the backdrop floor at the same y).
+  const ARENA = { y0: 70, y1: 340, x0: 90, x1: 450, floor: 300 };
+  const HIT_STOP = 0.06;        // seconds of frozen physics on a big hit
   const BEAT = 0.45;            // seconds between enemy-turn events
   const PLAY_BEAT = 0.16;       // seconds between player-side events
   const DELIVER_HOLD = 0.25;    // a body must sit in the chute this long to count
@@ -152,6 +155,8 @@ const GAME = (() => {
     const el = $('banner'), tx = $('bannerTxt');
     if (tx) tx.textContent = str;
     if (el) { el.className = 'show ' + (kind || ''); }
+    // the pips and statuses share the row: fade them while the banner is up
+    const pr = $('playerRow'); if (pr && pr.classList) pr.classList.add('bannerOn');
     S.bannerT = secs || 1.1;
     S.bannerStr = str;
   }
@@ -541,7 +546,7 @@ const GAME = (() => {
   function mapLayout() {
     const M = S.run && S.run.map;
     if (!M || !X.MAP) return null;
-    const area = { x: 0, y: 160, w: W, h: 780 };
+    const area = { x: 0, y: 172, w: W, h: 768 };
     let L;
     if (X.MAP.size) L = X.MAP.size(M, area.w, area.h);
     else {
@@ -715,6 +720,7 @@ const GAME = (() => {
       start: { enemyIds, tier, seed, then: opts.then || null }, tier, seed, rng: U.rng(seed ^ 0x5bd1e995),
       world: null, cabinet: null, rig: null, items: [], spawnQ: [], spawnT: 0,
       grabInFlight: false, pendingDrop: false, dropAt: 0, releaseAt: -1, watch: false, delivered: 0, steering: false, wasHeld: 0,
+      hitStop: 0, chuteFlash: 0, landSnd: 0, slips: 0, frameN: 0,
       playQ: [], playT: 0, queue: [], beatT: 0, onDrain: null, enemyTurn: false, actor: -1, actors: [],
       autoEndT: 0, anim: {}, fog: 0, grease: 0, tilt: 0, done: false, killer: null, keyDir: 0, then: opts.then || null,
       turnsTaken: 0, dirty: true, shown: { p: { hp: 0, block: 0 }, e: {} },
@@ -895,22 +901,34 @@ const GAME = (() => {
     F.events.length = 0;
     for (const ev of evs || []) FS.queue.push({ ev, beat });
   }
-  // Enemy anchor: RENDER.enemy draws feet-on-origin and applies def.size and
-  // the boss 1.6x itself, so scale stays 1 here. y is the feet line.
+  // Enemy anchor: feet on the arena floor line, scaled so an act 1 normal
+  // stands about 120px tall (elites 150, bosses 185) and n of them fit across
+  // ARENA.x0..x1 without their intent bubbles colliding. RENDER.enemy applies
+  // def.size and the boss 1.6x itself; the scale here comes on top of those.
+  const ENEMY_FIT = { normal: { h: 120, w: 150 }, elite: { h: 150, w: 190 }, boss: { h: 170, w: 250 } };
   function enemyPos(i) {
     const n = Math.max(1, F ? F.enemies.length : 1);
     const e = F && F.enemies[i];
     const def = e ? e.def : null;
-    let bw = 80, bh = 80;
-    if (def && X.RENDER && X.RENDER.enemyBox) { const b = X.RENDER.enemyBox(def, 1); bw = b.w; bh = b.h; }
-    const boss = def && def.tier === 'boss';
-    return { x: W * (i + 0.5) / n, y: boss ? 306 : 288, scale: 1, w: bw, h: bh };
+    const fit = ENEMY_FIT[def && def.tier] || ENEMY_FIT.normal;
+    const slotW = (ARENA.x1 - ARENA.x0) / n;
+    let bw = 80, bh = 80, scale = 1;
+    if (def && X.RENDER && X.RENDER.enemyBox) {
+      const b = X.RENDER.enemyBox(def, 1);
+      const mul = def.minion ? 0.7 : 1;
+      scale = U.clamp(Math.min(fit.h * mul / Math.max(1, b.h), Math.min(fit.w * mul, slotW - 6) / Math.max(1, b.w)), 0.6, 4);
+      bw = b.w * scale; bh = b.h * scale;
+    }
+    return { x: ARENA.x0 + slotW * (i + 0.5), y: ARENA.floor, scale, w: bw, h: bh };
   }
+  // Intent bubble anchor (its tip): just above the head, clamped under the top bar.
+  function intentY(p) { return Math.max(ARENA.y0 + 40, p.y - p.h - 12); }
   function anim(idx) {
     const a = FS.anim[idx] || (FS.anim[idx] = { hurt: 0, attack: 0, dead: 0 });
     return a;
   }
-  const PLAYER_FX = { x: 270, y: 372 };
+  // Player-side floating text: left of the turn banner, above the cabinet.
+  const PLAYER_FX = { x: 110, y: 386 };
   function nextActor() {
     const list = FS.actors;
     let i = list.indexOf(FS.actor);
@@ -920,25 +938,31 @@ const GAME = (() => {
     if (!F || !ev) return;
     bumpShown(ev);
     if (ev.t === 'turn') { FS.shown.p.block = F.player.block; }
-    const enemy = ev.who === 'e';
+    // die/summon/intent carry only an enemy index, no who.
+    const enemy = ev.who === 'e' || (ev.who !== 'p' && (ev.t === 'die' || ev.t === 'summon' || ev.t === 'intent'));
     // Consecutive numbers on the same unit fan out sideways so they can be read.
     FS.fxN = (FS.fxN || 0) + 1;
     const fan = ((FS.fxN % 3) - 1) * 46;
+    // Enemy numbers pop from the chest (below the intent bubble); player
+    // numbers from the player row, clear of the turn banner.
     const base = enemy ? enemyPos(ev.idx) : PLAYER_FX;
-    const pos = { x: base.x + fan, y: base.y - (enemy ? base.h * 0.5 : 0) };
+    const pos = enemy ? { x: base.x + fan, y: base.y - base.h * 0.6 } : { x: base.x + fan * 0.6, y: base.y };
+    const reduced = !!fx().reduced;
     switch (ev.t) {
       case 'dmg': {
         const big = ev.amt >= 10;
         if (enemy) {
-          if (ev.amt > 0) { fx().text(pos.x, pos.y - 40, '-' + ev.amt, ev.crit ? '#ffc94d' : '#ffffff', { big: ev.crit || big }); anim(ev.idx).hurt = 1; }
-          else fx().text(pos.x, pos.y - 40, ev.blocked ? 'BLOCKED' : '0', '#b3a4d6');
-          if (ev.amt > 0) { fx().burst(pos.x, pos.y - 10, '#ff5a4a', big ? 16 : 8); snd(big ? 'hitBig' : 'hit', { amt: ev.amt }); }
-          if (big) fx().shake(4);
+          if (ev.amt > 0) { fx().text(pos.x, pos.y, '-' + ev.amt, ev.crit ? '#ffc94d' : '#ffffff', { big: ev.crit || big }); anim(ev.idx).hurt = 1; }
+          else fx().text(pos.x, pos.y, ev.blocked ? 'BLOCKED' : '0', '#b3a4d6');
+          if (ev.amt > 0) { fx().burst(pos.x, pos.y + 10, '#ff5a4a', reduced ? 4 : (big ? 18 : 8)); snd(big ? 'hitBig' : 'hit', { amt: ev.amt }); }
+          if (ev.amt > 0) fx().shake(Math.min(10, 1 + ev.amt * 0.35));
+          if (big) FS.hitStop = HIT_STOP;
         } else {
           if (FS.enemyTurn && FS.actor >= 0) { anim(FS.actor).attack = 1; FS.killer = (F.enemies[FS.actor] && F.enemies[FS.actor].def.name) || FS.killer; }
           if (ev.amt > 0) {
             fx().text(pos.x, pos.y, '-' + ev.amt, '#ff5a4a', { big });
-            fx().shake(big ? 12 : 6); fx().flash('#ff5a4a');
+            fx().shake(U.clamp(3 + ev.amt * 0.7, 3, 16)); if (!reduced) fx().flash('#ff5a4a');
+            if (big) FS.hitStop = HIT_STOP;
             snd('playerHurt'); haptic('hurt');
           } else {
             fx().text(pos.x, pos.y, ev.blocked ? 'BLOCKED' : 'MISS', '#2ee6d6');
@@ -947,28 +971,28 @@ const GAME = (() => {
         }
         break;
       }
-      case 'block': fx().text(pos.x, pos.y - (enemy ? 40 : 0), '+' + ev.amt + ' block', '#2ee6d6'); snd('block'); break;
-      case 'heal': fx().text(pos.x, pos.y - (enemy ? 40 : 0), '+' + ev.amt, '#a6ff5e'); snd('heal'); break;
+      case 'block': fx().text(pos.x, pos.y, '+' + ev.amt + ' block', '#2ee6d6'); snd('block'); break;
+      case 'heal': fx().text(pos.x, pos.y, '+' + ev.amt, '#a6ff5e'); snd('heal'); break;
       case 'status': {
         const sd = tbl('STATUS')[ev.s] || { name: ev.s, icon: '', color: '#fff' };
-        fx().text(pos.x, pos.y - (enemy ? 50 : 0), (ev.v > 0 ? '+' : '') + ev.v + ' ' + (sd.icon || '') + sd.name, sd.color || '#fff');
+        fx().text(pos.x, pos.y, (ev.v > 0 ? '+' : '') + ev.v + ' ' + (sd.icon || '') + sd.name, sd.color || '#fff');
         if (ev.s === 'poison') snd('poison'); else if (ev.s === 'burn') snd('burn'); else if (ev.s === 'freeze' || ev.s === 'chill') snd('freeze');
         else snd('click');
         break;
       }
       case 'die': {
         anim(ev.idx).dead = 0.001;
-        fx().burst(pos.x, pos.y - 10, ev.escaped ? '#b3a4d6' : '#ff2e88', 24);
-        fx().text(pos.x, pos.y - 50, ev.escaped ? 'ESCAPED' : 'DOWN', '#ff2e88', { big: true });
+        fx().burst(pos.x, pos.y + 10, ev.escaped ? '#b3a4d6' : '#ff2e88', reduced ? 8 : 24);
+        fx().text(pos.x, pos.y, ev.escaped ? 'ESCAPED' : 'DOWN', '#ff2e88', { big: true });
         snd('enemyDie'); fx().shake(6);
         if (!ev.escaped) { S.run.kills++; S.meta.stats.kills++; }
         if (FS.enemyTurn && FS.actor === ev.idx) nextActor();
         break;
       }
-      case 'summon': { FS.anim[ev.idx] = { hurt: 0, attack: 0, dead: 0 }; fx().burst(pos.x, pos.y, '#a6ff5e', 18); fx().text(pos.x, pos.y - 50, 'SUMMONED', '#a6ff5e'); snd('boss'); break; }
+      case 'summon': { FS.anim[ev.idx] = { hurt: 0, attack: 0, dead: 0 }; fx().burst(pos.x, pos.y, '#a6ff5e', reduced ? 6 : 18); fx().text(pos.x, pos.y, 'SUMMONED', '#a6ff5e'); snd('boss'); break; }
       case 'intent': if (FS.enemyTurn && FS.actor === ev.idx) nextActor(); break;
       case 'text': {
-        fx().text(pos.x, pos.y - (enemy ? 50 : 0), ev.str, '#ffc94d');
+        fx().text(pos.x, pos.y, ev.str, '#ffc94d');
         if (FS.enemyTurn && enemy && FS.actor === ev.idx && (ev.str === 'FROZEN' || ev.str === 'STUNNED')) nextActor();
         break;
       }
@@ -1045,19 +1069,42 @@ const GAME = (() => {
     if (S.coachStep === 1) coachNext();
     return true;
   }
+  // Items the grip lock is carrying right now (falls back to the pinch test).
+  function carried() {
+    const rig = FS && FS.rig;
+    if (!rig) return [];
+    return rig.locked ? rig.locked() : rig.held();
+  }
+  // "holding <item>" while lifting/carrying, or the empty-claw shrug.
+  function holdHint() {
+    const list = carried();
+    if (!list.length) { hint('empty claw...'); return; }
+    const names = list.map((b) => itemName(itemDef(b.data.inst.id), b.data.inst.plus));
+    hint('holding ' + names.join(' + '));
+  }
   function onRigEvent(ev) {
+    const rig = FS.rig;
     switch (ev) {
       case 'drop': break;
       case 'touch': snd('clawTouch'); break;
-      case 'close': snd('clawClose'); break;
-      case 'lift': {
-        snd('clawLift');
-        const n = FS.rig.held().length;
-        FS.wasHeld = n;
-        if (!n) hint('empty claw...');
+      case 'close': {
+        snd('clawClose');
+        // sparks where the prongs meet
+        const reach = rig.geo ? rig.geo.reach * 0.85 : 40;
+        fx().burst(CAB.x + rig.x, CAB.y + rig.y + reach, '#fff6c0', fx().reduced ? 4 : 10, { speed: 130, size: 2.5, life: 0.3, gravity: 300 });
         break;
       }
-      case 'carry': snd('clawMove'); break;
+      case 'lift': { snd('clawLift'); FS.wasHeld = carried().length; holdHint(); break; }
+      case 'carry': snd('clawMove'); holdHint(); break;
+      case 'slip': {
+        // the rig's grip lock broke: the item is falling back into the pile
+        snd('itemSlip');
+        fx().text(CAB.x + rig.x, CAB.y + rig.y + 30, 'SLIP', '#b3a4d6', { size: 16 });
+        fx().shake(2);
+        FS.slips++;
+        hint(carried().length ? 'slipped one...' : 'slipped...');
+        break;
+      }
       case 'release': snd('clawRelease'); FS.watch = true; FS.releaseAt = S.t; break;
       case 'home': break;
       default: break;
@@ -1070,14 +1117,18 @@ const GAME = (() => {
     FS.playQ.push(inst);
     FS.delivered++;
     S.run.delivered++;
-    fx().burst(pos.x, pos.y, '#ffc94d', 14);
+    fx().burst(pos.x, pos.y, '#ffc94d', fx().reduced ? 6 : 14);
     fx().trail(pos.x, pos.y, '#ffc94d');
+    FS.chuteFlash = 0.35;
+    const chuteMid = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW * 0.5;
+    // the chip rises just left of the divider so it never sits on the PRIZE lettering
+    fx().text(chuteMid - 66, CAB.y + CAB.h - 40, '+PLAYED', '#ffc94d', { size: 15, dy: -80, life: 0.9 });
     snd('chute');
     haptic('tap');
     if (FS.delivered === 2) {
       banner('JACKPOT', 'jackpot', 1.4);
       snd('jackpot'); haptic('jackpot');
-      fx().burst(270, 600, '#ffc94d', 40); fx().flash('#ffc94d');
+      fx().burst(270, 600, '#ffc94d', fx().reduced ? 12 : 40); if (!fx().reduced) fx().flash('#ffc94d');
       S.run.jackpots++; S.meta.stats.jackpots++;
     }
     if (S.coachStep === 2) coachNext();
@@ -1089,7 +1140,7 @@ const GAME = (() => {
     S.run.played++; S.meta.stats.played++;
     showTrayChip(def, inst);
     enqueue(evs, PLAY_BEAT);
-    fx().text(CAB.x + CAB.w - 32, CAB.y + CAB.h * 0.5, itemName(def, inst.plus), '#ffc94d');
+    fx().text(CAB.x + CAB.w - CAB.chuteW - 70, CAB.y + CAB.h * 0.3, itemName(def, inst.plus), '#ffc94d');
   }
   function showTrayChip(def, inst) {
     const tray = $('tray');
@@ -1110,7 +1161,6 @@ const GAME = (() => {
     FS.watch = false;
     const evs = X.COMBAT.grabDone ? X.COMBAT.grabDone(F, FS.delivered) : [];
     enqueue(evs, PLAY_BEAT);
-    if (!FS.delivered && FS.wasHeld) snd('itemSlip');
     afterAction();
   }
   // After a grab (or any player-side queue) settles: win/lose, hints, auto end.
@@ -1218,18 +1268,38 @@ const GAME = (() => {
     if (FS.keyDir && canSteer()) rig.setTarget(clampBinX(rig.targetX + FS.keyDir * 260 * dt));
     // A committed drop fires once the carriage has arrived.
     if (FS.pendingDrop && rigArrived()) { FS.pendingDrop = false; if (!rig.drop()) { FS.grabInFlight = false; afterAction(); if (!FS) return; } }
+    // Hit-stop: a big hit freezes the physics for a frame or two, but never
+    // while the claw is carrying (the lock would read the pause as a jolt).
+    FS.frameN++;
+    if (FS.chuteFlash > 0) FS.chuteFlash = Math.max(0, FS.chuteFlash - dt);
+    let stop = false;
+    if (FS.hitStop > 0) {
+      const carrying = rig && (rig.phase === 'lifting' || rig.phase === 'carrying');
+      if (carrying || fx().reduced) FS.hitStop = 0;
+      else { FS.hitStop -= dt; stop = true; }
+    }
     // Physics.
-    if (rig && Wd) {
+    if (rig && Wd && !stop) {
       const evs = rig.update(dt);
       Wd.step(dt);
       for (const ev of evs) onRigEvent(ev);
       if (!FS) return;
-      // Slip feedback while lifting/carrying.
-      if (FS.grabInFlight && (rig.phase === 'lifting' || rig.phase === 'carrying')) {
-        const n = rig.held().length;
-        if (n < FS.wasHeld) { snd('itemSlip'); fx().text(CAB.x + rig.x, CAB.y + rig.y + 40, 'SLIP', '#b3a4d6'); }
-        FS.wasHeld = n;
+      // Landing squash (by impact) and a trail behind carried items.
+      const reduced = !!fx().reduced;
+      const carrying = rig.phase === 'lifting' || rig.phase === 'carrying';
+      const held = carrying && !reduced && (FS.frameN & 1) ? carried() : null;
+      for (const b of FS.items) {
+        const d = b.data;
+        const pv = d.pvy == null ? b.vy : d.pvy;
+        if (pv > 260 && b.vy < pv * 0.35) {
+          const imp = U.clamp((pv - 200) / 900, 0.15, 1);
+          d.sq = Math.max(d.sq || 0, imp);
+          if (S.t - FS.landSnd > 0.07 && imp > 0.3) { FS.landSnd = S.t; snd('itemLand', { mass: b.m, vel: pv }); }
+        }
+        d.pvy = b.vy;
+        if (d.sq > 0) d.sq = Math.max(0, d.sq - dt * 5);
       }
+      if (held) for (const b of held) fx().trail(CAB.x + b.x, CAB.y + b.y, '#2ee6d6', { vx: b.vx, vy: b.vy + 40, life: 0.3, w: 4 });
       // Deliveries: bodies parked in the chute after a release.
       if (FS.watch) {
         for (const b of FS.items.slice()) {
@@ -1822,7 +1892,7 @@ const GAME = (() => {
     if (X.AUDIO && X.AUDIO.init && type === 'down') { try { X.AUDIO.init(); } catch (e) { /* optional */ } }
     if (type === 'down' && S.popover) { popover(null); }
     if (S.screen === 'map') {
-      if (type === 'up' && S.ptr && Math.hypot(S.ptr.x - x, S.ptr.y - y) < 18 && y >= 152) mapTap(x, y);
+      if (type === 'up' && S.ptr && Math.hypot(S.ptr.x - x, S.ptr.y - y) < 18 && y >= 172) mapTap(x, y);
       if (type === 'down') S.ptr = { x, y };
       return;
     }
@@ -1853,12 +1923,17 @@ const GAME = (() => {
   function tap(x, y) { pointer('down', x, y); pointer('up', x, y); }
   function tapEnemy(x, y) {
     if (!F) return false;
+    // Hit box: the drawn body plus its intent bubble above and hp bar below,
+    // nearest centre wins when two overlap.
     let best = -1, bd = 1e9;
     F.enemies.forEach((e, i) => {
       if (!e.alive) return;
       const p = enemyPos(i);
-      const d = Math.hypot(p.x - x, (p.y - p.h * 0.5) - y);
-      if (d < Math.max(70, p.h * 0.7) && d < bd) { bd = d; best = i; }
+      const hw = Math.max(50, p.w * 0.6);
+      const top = intentY(p) - 34, bot = p.y + 44;
+      if (x < p.x - hw || x > p.x + hw || y < top || y > bot) return;
+      const d = Math.abs(p.x - x);
+      if (d < bd) { bd = d; best = i; }
     });
     if (best < 0) return false;
     if (X.COMBAT.setTarget) X.COMBAT.setTarget(F, best); else F.target = best;
@@ -1945,18 +2020,20 @@ const GAME = (() => {
       const st = { hurt: a.hurt, attack: a.attack, dead: e.alive ? 0 : a.dead, frozen: !!(e.status.freeze), poisoned: !!(e.status.poison), burning: !!(e.status.burn) };
       if (i === F.target && e.alive) {
         ctx.save(); ctx.strokeStyle = '#ff2e88'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.lineDashOffset = -t * 30;
-        ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, Math.max(40, p.w * 0.55), 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, Math.max(40, p.w * 0.5), 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
       }
-      if (R && R.enemy) R.enemy(ctx, e.def, p.x, p.y, 1, t, st);
+      if (R && R.enemy) R.enemy(ctx, e.def, p.x, p.y, p.scale, t, st);
       if (!e.alive) return;
-      const bw = U.clamp(p.w * 1.1, 84, 150);
+      // hp bar under the feet, status pips under that, intent above the head
+      // (never under the top bar)
+      const bw = U.clamp(p.w * 0.9, 84, 150);
       const sh = (FS.queue.length || FS.enemyTurn) && FS.shown.e[i] ? FS.shown.e[i] : e;
-      if (R && R.hpBar) R.hpBar(ctx, p.x - bw / 2, p.y + 12, bw, 10, sh.hp, e.maxHp, sh.block);
-      if (R && R.statusPips) R.statusPips(ctx, p.x - bw / 2, p.y + 26, e.status, 16);
-      if (R && R.intent) R.intent(ctx, p.x, p.y - p.h - 14, e, t);
+      if (R && R.hpBar) R.hpBar(ctx, p.x - bw / 2, p.y + 10, bw, 12, sh.hp, e.maxHp, sh.block);
+      if (R && R.statusPips) R.statusPips(ctx, p.x - bw / 2, p.y + 26, e.status, 14);
+      if (R && R.intent) R.intent(ctx, p.x, intentY(p), e, t);
     });
     // The rig.
-    const cfg = { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, chuteX: FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW, claw: clawFor() };
+    const cfg = { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW, claw: clawFor() };
     const cabSt = { fog: FS.fog > 0 ? 1 : 0, grease: FS.grease > 0 ? 1 : 0, tilt: FS.tilt, act: run.act, t };
     const split = R && R.cabinetBack && R.cabinetFront;
     if (split) R.cabinetBack(ctx, CAB.x, CAB.y, cfg, cabSt);
@@ -1964,11 +2041,23 @@ const GAME = (() => {
     else { ctx.fillStyle = '#0d0718'; ctx.fillRect(CAB.x - CAB.frame, CAB.y - CAB.frame, CAB.w + CAB.frame * 2, CAB.h + CAB.frame * 2); ctx.fillStyle = '#1b1030'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
     ctx.save();
     ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
+    const rigPh = FS.rig ? FS.rig.phase : 'idle';
+    const inHand = (rigPh === 'lifting' || rigPh === 'carrying') ? carried() : null;
     for (const b of FS.items) {
       const inst = b.data.inst;
       const inChute = FS.cabinet && FS.cabinet.inChute(b);
-      if (R && R.item) R.item(ctx, b.data.def, CAB.x + b.x, CAB.y + b.y, b.a, 1, { plus: inst.plus, frozen: inst.frozen, glow: inChute ? 1 : 0 });
-      else { ctx.fillStyle = b.data.def.color || '#888'; ctx.beginPath(); ctx.arc(CAB.x + b.x, CAB.y + b.y, 12, 0, Math.PI * 2); ctx.fill(); }
+      const held = inHand && inHand.indexOf(b) >= 0;
+      const sq = b.data.sq > 0.02 ? b.data.sq : 0;
+      const x = CAB.x + b.x, y = CAB.y + b.y;
+      if (sq) { ctx.save(); ctx.translate(x, y); ctx.scale(1 + sq * 0.22, 1 - sq * 0.22); ctx.translate(-x, -y); }
+      if (R && R.item) R.item(ctx, b.data.def, x, y, b.a, 1, { plus: inst.plus, frozen: inst.frozen, glow: inChute ? 1 : (held ? '#2ee6d6' : 0) });
+      else { ctx.fillStyle = b.data.def.color || '#888'; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill(); }
+      if (sq) ctx.restore();
+    }
+    if (FS.chuteFlash > 0) {
+      const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
+      ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
+      ctx.fillRect(cx, CAB.y, CAB.chuteW, CAB.h);
     }
     if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
     if (FS.fog > 0 && !split) { ctx.fillStyle = 'rgba(180,190,210,0.55)'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
@@ -1983,7 +2072,7 @@ const GAME = (() => {
     S.t += dt;
     fx().update(dt);
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
-    if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) { const el = $('banner'); if (el) el.classList.remove('show'); } }
+    if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) { const el = $('banner'); if (el) el.classList.remove('show'); const pr = $('playerRow'); if (pr && pr.classList) pr.classList.remove('bannerOn'); } }
     if (S.screen === 'fight') {
       updateFight(dt);
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
@@ -2079,6 +2168,7 @@ const GAME = (() => {
     playDelivered: (bodies) => { for (const b of bodies || []) if (FS && FS.items.indexOf(b) >= 0) deliver(b); },
     tap, pointer, choose, state, hexToStage, stageToHex, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
     showTreasure, showGameOver, showWin, showHelp, showCollection, openBin, resolveFx, gainRelic, applyClawUpgrade, rollShop,
+    rigEvent: (ev) => { if (FS && FS.rig) onRigEvent(ev); },   // test hook: feed one rig event
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },
