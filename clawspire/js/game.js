@@ -19,7 +19,8 @@ const GAME = (() => {
   const PLAY_BEAT = 0.16;       // seconds between player-side events
   const DELIVER_HOLD = 0.25;    // a body must sit in the chute this long to count
   const AUTO_END = 0.6;         // pause before the turn auto-ends at 0 grabs
-  const WATCHDOG = 15;          // seconds after a drop before the rig is force-reset
+  const BIN_FLOOR = 3;          // selling or removing never empties the bin below this
+  const WATCHDOG = 20;          // seconds after a drop before the rig is force-reset (phase caps sum to ~17)
   const SPAWN_GAP = 0.05;       // shower spacing when bodies are (re)spawned
   const START_INK = 5;
   const REMOVE_PRICE = 60;
@@ -216,7 +217,11 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- save / load
   function save() {
-    if (!S.run) { try { localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ } return; }
+    // A finished run (dead or won) is never a CONTINUE; a bin picker saves
+    // nothing because the last save on the shop/rest/event screen is the
+    // state to come back to.
+    if (!S.run || S.screen === 'gameover' || S.screen === 'win') { try { localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ } return; }
+    if (S.screen === 'bin') return;
     const o = { ver: SAVE_VER, screen: S.screen, run: S.run, sd: S.sd, pendingFight: S.pendingFight, after: S.after };
     // A fight in progress restarts from its opening bell on load.
     if (S.screen === 'fight' && FS) o.pendingFight = FS.start;
@@ -242,8 +247,13 @@ const GAME = (() => {
       S.sd = o.sd || null;
       S.after = o.after || null;
       F = null; FS = null;
+      // Fresh page, fresh uid counter: move it past every saved uid so new
+      // items never collide with the ones already in the bin.
+      let top = 0;
+      for (const inst of run.bin || []) { const n = parseInt(String(inst.uid || '').slice(1), 36); if (n > top) top = n; }
+      U.resetUid(top + 1);
       if (o.pendingFight && o.pendingFight.enemyIds) {
-        setScreen('map');
+        S.screen = 'map';
         startFight(o.pendingFight.enemyIds, o.pendingFight.tier, { seed: o.pendingFight.seed, then: o.pendingFight.then });
         return true;
       }
@@ -303,6 +313,21 @@ const GAME = (() => {
     S.lastRelics = '';
   }
   function addInk(n) { const run = S.run; run.ink = Math.max(0, run.ink + n); if (run.map) run.map.ink = run.ink; }
+  // The map must never dead-end: no ink, no brush, no lit path to the boss
+  // and nothing lit that could still hand out ink means a drop seeps in.
+  function inkRescue() {
+    const run = S.run, M = run && run.map;
+    if (!M || !X.MAP || M.ink >= 1 || (M.brushes && M.brushes.length)) return false;
+    if (X.MAP.pathExists(M, M.pos, M.boss)) return false;
+    const GIVES = ['ink', 'elite', 'event', 'shop', 'brush', 'treasure'];
+    for (const k in M.tiles) {
+      const t = M.tiles[k];
+      if (t.revealed && !t.done && GIVES.indexOf(t.type) >= 0 && X.MAP.pathExists(M, M.pos, t)) return false;
+    }
+    addInk(1);
+    toast('A drop of ink seeps from a cracked cabinet. +1 ink.');
+    return true;
+  }
   function addGold(n) { const run = S.run; run.gold = Math.max(0, run.gold + n); }
   function addBrush(id) { const run = S.run; run.brushes.push(id); if (run.map) run.map.brushes = run.brushes.slice(); }
   function healRun(n) { const run = S.run; run.hp = U.clamp(run.hp + Math.round(n), 0, run.maxHp); }
@@ -314,6 +339,7 @@ const GAME = (() => {
     for (const id in tbl('RELICS')) {
       const r = tbl('RELICS')[id];
       if (own.indexOf(id) >= 0) continue;
+      if (r.starter) continue;
       if (rarities && rarities.indexOf(r.rarity || 'c') < 0) continue;
       out.push(id);
     }
@@ -509,6 +535,7 @@ const GAME = (() => {
     run.map.ink = run.ink;
     run.map.brushes = run.brushes.slice();
     S.brushSel = null;
+    inkRescue();
     S.sd = null;
     setScreen('map');
     buildMapHead();
@@ -591,6 +618,7 @@ const GAME = (() => {
         snd('reveal');
         fx().burst(x, y, '#2ee6d6', 12);
         toast(`Revealed: ${TILE_NAMES[t.type] || t.type}.`);
+        inkRescue();
         buildMapHead();
         save();
         return true;
@@ -730,8 +758,7 @@ const GAME = (() => {
     buildWorld();
     spawnAll();
     setScreen('fight');
-    S.meta.stats.fights++;
-    run.fights++;
+    if (opts.seed == null) { S.meta.stats.fights++; run.fights++; }
     music(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight');
     if (tier === 'boss') { snd('boss'); haptic('boss'); }
     banner(tier === 'boss' ? 'BOSS' : tier === 'elite' ? 'ELITE' : 'FIGHT', tier === 'boss' ? 'enemy' : 'turn', 1.2);
@@ -763,14 +790,15 @@ const GAME = (() => {
   }
   function shapeFor(def, inst) {
     const sh = def.shape || { kind: 'circle', r: 16 };
-    if (inst && inst.frozen) return { kind: 'circle', r: shapeLong(sh) / 2 + 4 };
+    if (inst && inst.frozen) return { kind: 'circle', r: Math.min(28, shapeLong(sh) / 2 + 4) };
     if (sh.kind === 'circle') return { kind: 'circle', r: sh.r };
     if (sh.kind === 'box') return { kind: 'poly', verts: X.PHYS.box(sh.w, sh.h) };
     if (sh.verts) return { kind: 'poly', verts: sh.verts };
     return { kind: 'circle', r: 16 };
   }
   function bodyOf(inst) {
-    for (const b of FS.items) if (b.data.inst === inst || b.data.inst.uid === inst.uid) return b;
+    for (const b of FS.items) if (b.data.inst === inst) return b;
+    for (const b of FS.items) if (b.data.inst.uid === inst.uid) return b;
     return null;
   }
   // Spawn one body for a bin instance. Positions come from the fight's rng
@@ -898,8 +926,12 @@ const GAME = (() => {
   }
   function enqueue(evs, beat) {
     if (!F) return;
+    const list = (evs || []).slice();
+    // Anything a relic pushed straight onto F.events (outside the returned
+    // list) still deserves its beat.
+    for (const ev of F.events) if (list.indexOf(ev) < 0) list.push(ev);
     F.events.length = 0;
-    for (const ev of evs || []) FS.queue.push({ ev, beat });
+    for (const ev of list) FS.queue.push({ ev, beat });
   }
   // Enemy anchor: feet on the arena floor line, scaled so an act 1 normal
   // stands about 120px tall (elites 150, bosses 185) and n of them fit across
@@ -1210,6 +1242,7 @@ const GAME = (() => {
     enqueue(evs, BEAT);
     FS.onDrain = finishEnemyTurn;
     FS.dirty = true;
+    if (!FS.queue.length) finishEnemyTurn();
     return true;
   }
   function finishEnemyTurn() {
@@ -1466,7 +1499,15 @@ const GAME = (() => {
     const claws = rng.shuffle(ups).slice(0, 2).map((id) => ({ id, price: tbl('CLAW_UPGRADES')[id].cost || 100, sold: false }));
     return { items, relic, claws, removeUsed: false };
   }
-  function upgradeCount(id) { const run = S.run; return (run.claw.ups && run.claw.ups[id]) || 0; }
+  function upgradeCount(id) {
+    const run = S.run;
+    let n = (run.claw.ups && run.claw.ups[id]) || 0;
+    // A relic that already supplies the part makes the upgrade pointless.
+    if ((id === 'prongs' || id === 'rubber' || id === 'magnet') && X.COMBAT && X.COMBAT.relicMods) {
+      try { const m = X.COMBAT.relicMods(run.relics || []); if (m && m[id]) n = Math.max(n, 1); } catch (e) { /* optional */ }
+    }
+    return n;
+  }
   function applyClawUpgrade(id) {
     const run = S.run;
     const def = tbl('CLAW_UPGRADES')[id];
@@ -1543,13 +1584,14 @@ const GAME = (() => {
     const rm = btn(shop.removeUsed ? 'Removed' : `Remove an item (${REMOVE_PRICE})`, () => {
       if (shop.removeUsed) return;
       if (run.gold < REMOVE_PRICE) { toast('Not enough gold.'); return; }
+      if (run.bin.length <= BIN_FLOOR) { toast('The bin is as light as it gets.'); return; }
       openBin({ mode: 'remove', title: 'Remove which item?', back: () => showShop(shop), onPick: (inst) => {
         addGold(-REMOVE_PRICE); shop.removeUsed = true; removeInst(inst); snd('buy'); toast('Removed.'); showShop(shop);
       } });
     }, 'sm');
     if (shop.removeUsed) rm.disabled = true;
     row.appendChild(rm);
-    row.appendChild(btn('Sell an item', () => openBin({ mode: 'sell', title: 'Sell which item?', back: () => showShop(shop), onPick: (inst) => {
+    row.appendChild(btn('Sell an item', () => run.bin.length <= BIN_FLOOR ? toast('The bin is as light as it gets.') : openBin({ mode: 'sell', title: 'Sell which item?', back: () => showShop(shop), onPick: (inst) => {
       const p = Math.max(5, Math.round((itemDef(inst.id).cost || 30) / 3));
       removeInst(inst); addGold(p); snd('coin'); toast(`Sold for ${p} gold.`); showShop(shop);
     } }), 'sm'));
@@ -1559,7 +1601,8 @@ const GAME = (() => {
   }
   function removeInst(inst) {
     const bin = S.run.bin;
-    const i = bin.findIndex((x) => x === inst || x.uid === inst.uid);
+    let i = bin.indexOf(inst);
+    if (i < 0) i = bin.findIndex((x) => x.uid === inst.uid);
     if (i >= 0) bin.splice(i, 1);
   }
 
@@ -1662,7 +1705,8 @@ const GAME = (() => {
         }
         case 'relic': {
           let id = f.id;
-          if (!id || id === 'random') id = rollRelic(rngFor('eventrelic'), ['c', 'u', 'r', 'event']);
+          if (!id || id === 'random') id = rollRelic(rngFor('eventrelic'), ['c', 'u', 'r']);
+          if (id && run.relics.indexOf(id) >= 0) { addGold(40); toast('You already have one. Pawned it for 40 gold.'); snd('coin'); break; }
           if (id) { gainRelic(id); toast(`Relic: ${relicDef(id).name}.`); snd('upgrade'); }
           break;
         }
@@ -1694,7 +1738,8 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- rest / forge
   function showRest() {
-    S.sd = { rest: true };
+    // Coming back from the claw pick keeps its roll (no free rerolls).
+    S.sd = Object.assign({ rest: true }, S.sd && S.sd.rest && S.sd.clawPick ? { clawPick: S.sd.clawPick } : {});
     setScreen('rest');
     const b = $('restBody');
     clear(b);
@@ -1717,9 +1762,11 @@ const GAME = (() => {
   }
   function showClawPick() {
     const run = S.run;
-    const rng = rngFor('clawpick');
     const ups = Object.keys(tbl('CLAW_UPGRADES')).filter((id) => { const d = tbl('CLAW_UPGRADES')[id]; return !d.max || upgradeCount(id) < d.max; });
-    const pick = rng.shuffle(ups).slice(0, 3);
+    // Rolled once per rest stop: Back and Tinker again shows the same three.
+    S.sd = S.sd || { rest: true };
+    if (!S.sd.clawPick) S.sd.clawPick = rngFor('clawpick').shuffle(ups).slice(0, 3);
+    const pick = S.sd.clawPick.filter((id) => ups.indexOf(id) >= 0);
     S.ui.buttons = [];
     const b = $('restBody');
     clear(b);
@@ -1898,7 +1945,11 @@ const GAME = (() => {
     }
     if (S.screen === 'title') return;
     if (S.screen !== 'fight' || !F || !FS) return;
+    // One finger steers. A second finger is ignored until the first lifts.
+    const pid = ev && ev.pointerId != null ? ev.pointerId : null;
     if (type === 'down') {
+      if (FS.steering && S.ptrId != null && pid !== null && pid !== S.ptrId) return;
+      S.ptrId = pid;
       S.ptr = { x, y };
       if (y >= ARENA.y0 && y < ARENA.y1) { tapEnemy(x, y); return; }
       if (inCabinet(x, y) && canSteer()) {
@@ -1909,11 +1960,13 @@ const GAME = (() => {
       }
       return;
     }
+    if (pid !== null && S.ptrId != null && pid !== S.ptrId) return;
     if (type === 'move') {
       if (FS.steering && canSteer()) steer(stageToCab(x, y).x);
       return;
     }
     if (type === 'up' || type === 'cancel') {
+      S.ptrId = null;
       if (FS.steering) {
         FS.steering = false;
         if (type === 'up') { steer(stageToCab(x, y).x); dropClaw(); }
@@ -1957,7 +2010,7 @@ const GAME = (() => {
     if (S.screen !== 'fight' || !FS) return;
     if (k === 'ArrowLeft') FS.keyDir = down ? -1 : (FS.keyDir === -1 ? 0 : FS.keyDir);
     else if (k === 'ArrowRight') FS.keyDir = down ? 1 : (FS.keyDir === 1 ? 0 : FS.keyDir);
-    else if (down && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); dropClaw(); }
+    else if (down && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); if (!ev.repeat) dropClaw(); }
     else if (down && (k === 'e' || k === 'E')) endTurn();
   }
 
@@ -2137,7 +2190,8 @@ const GAME = (() => {
       document.addEventListener('keyup', (ev) => onKey(ev, false));
       document.addEventListener('pointerdown', () => { if (X.AUDIO && X.AUDIO.init) { try { X.AUDIO.init(); } catch (e) { /* optional */ } } });
       window.addEventListener('resize', resize);
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) { S.last = performance.now(); S.acc = 0; } if (document.hidden) save(); });
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) { S.last = performance.now(); S.acc = 0; } if (FS) FS.keyDir = 0; if (document.hidden) save(); });
+      window.addEventListener('blur', () => { if (FS) FS.keyDir = 0; });
     } catch (e) { /* headless */ }
     const e = $('endTurn');
     if (e) e.onclick = () => endTurn();
