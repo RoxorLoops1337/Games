@@ -1389,6 +1389,53 @@ edit this block to name the next one.
       today's 0.05%, so 27 droplets (0.157%), the old radii (0.134%) and half
       opacity (0.079%) each blow it on their own. Five revert-variants in total.
 
+- [x] **"Too much screen shaking, and a bit too zoomed in when you release."**
+  - **The shake was white noise.** `vrr(-1, 1) * amp` on both axes, redrawn
+      every frame, so a 13px amplitude was a 26px-wide scribble at 60Hz rather
+      than a punch. Measured over three full runs: **60-76% of drive frames
+      shaking above 2px, mean 5-6px**, because a chain of kills refreshed the
+      envelope faster than it could fall. Now an impulse sets a bearing and the
+      camera rings out along it (damped, 45 rad/s, golden-angle apart so no two
+      kicks share an axis), at half the amplitude: **mean 1.1-1.5px, 22-33% of
+      frames**. Nothing had ever measured the offset the camera actually
+      applies — only the envelope, which is the ceiling it swings inside — so
+      `shakeOffset()` is its own function now and the suite reads that.
+  - A hard `SHAKE_MAX` went in and came straight back out: `max` means
+      simultaneous hits do not stack, so the ceiling was already the largest
+      call site times `SHAKE_SCALE`. It clipped one number by 12% and otherwise
+      never bound. A constant that does nothing is worse than no constant.
+  - **The zoom needed the LOD work I flagged last pass, not another constant.**
+      Profiling first: **live props are 86% of a driving frame** (3120 of 3638
+      fills), and **65 huts are 58% of that** at 28 fills each. Everything else
+      — the 550-strong batched crowd, the ground, the fx — is 25 fills.
+  - **Batching the counters** paid for part of it: every bun, pot, bauble and
+      folded hat had its own `beginPath` and its own `fill`, so a counter cost
+      five to ten fills that draw in the same colour one after another. One
+      path a colour, same shapes, same order: **266 fills, free, no visual
+      change.** That alone bought 1320 → 1400.
+  - The rest was the owner's call and they took it: **stalls go coarse while
+      driving**, keeping frame, panelling, awning, roof drift, the banks blown
+      against it, smoke and — after the screenshot caught it — **the counter
+      plank**, which the first attempt dropped along with the stock and left
+      sixty-five brown boxes wearing snow. Drive view **1320 → 1609, 22% more
+      market**, and the frame got *cheaper*: 3638 → 3157.
+  - **The wall was never the draw budget.** Past ~1600 the limit is
+      `CAR_MIN_PX`: the car cannot get smaller without becoming the thing they
+      complained about two passes ago. A third cap fell out of it —
+      `MIN_WORLD_FILL`, so the camera never pulls back so far that it is mostly
+      showing sky. The suite used to *assert* that held on an 820x1180 window;
+      the camera guarantees it now, and that window is the one frame where it
+      is the tightest of the three caps.
+  - Five tests asserted the old framing rather than a property and had to be
+      rewritten: *faster means wider* (the thing being removed), *the camera
+      should end up closer in than the aim view*, *the aim camera should be
+      much the wider*, a 200-unit travel on the sling, and a fill count used as
+      a proxy for how much stock is on a counter — which batching flattened.
+  - Five revert-variants, two of which only fired after being sharpened: the
+      plank hid behind the panelling (same colour, so "is the colour present"
+      passed), and nothing asserted the batching until the assertion became
+      *a counter costs the same however much is on it*.
+
 ## Next
 
 - [ ] **Upgrades between markets.** A currency (presents?) earned per market,

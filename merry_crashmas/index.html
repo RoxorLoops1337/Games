@@ -1021,7 +1021,7 @@ const debris = [];      // planks and panels left where a stall used to be
    either RNG — the same market always strings the same wires. */
 const wires = [];
 const lens = [];        // droplets thrown at the camera itself
-const shake = { t: 0, t0: 1, a: 0 };
+const shake = { t: 0, t0: 1, a: 0, dir: 0 };
 let hitstop = 0;
 let flash = 0;
 let T = 0;
@@ -2160,10 +2160,33 @@ function finale(){
    to 13.6 with no dip at all, then dropped to zero in a single frame. Kills
    two through six added nothing you could see. Now each call restarts the
    envelope, and the amplitude falls off across it, so six punches read as six. */
+/* One kick, then a settle. The offset used to be `vrr(-1, 1) * amp` on both
+   axes, redrawn every single frame — so a 13px amplitude was a 26px-wide
+   scribble at 60Hz rather than a punch. Measured over three full runs,
+   **60-76% of drive frames were shaking above 2px**, mean 5-6px, because a
+   chain of kills refreshed the envelope faster than it could fall. That is not
+   impact, it is a permanent tremor you stop being able to see past.
+
+   An impulse now sets a bearing and an amplitude and the camera rings out
+   along it. A hit landing inside a live shake adds to what is left rather than
+   replacing it, and the sum is capped: however many things go off at once, the
+   market never moves more than SHAKE_MAX. */
+/* One dial at the door, so the thirteen call sites keep their relative weights
+   without thirteen edits. There was a hard ceiling here too for a while, but
+   `max` means simultaneous hits do not stack, so the ceiling was already the
+   largest call site times this — the extra constant clipped one number by 12%
+   and otherwise never bound. */
+const SHAKE_SCALE = 0.5;
+const SHAKE_HZ = 45;          // how fast the kick rings out
 function addShake(t, a){
-  shake.a = Math.max(shake.a * shakeEnv(), a);
+  // the envelope keeps its old shape — a hit restarts it, and the amplitude is
+  // the louder of what is ringing and what just landed — under a hard ceiling
+  shake.a = Math.max(shake.a * shakeEnv(), a * SHAKE_SCALE);
   shake.t = Math.max(shake.t, t);
   shake.t0 = shake.t;
+  // successive kicks never land along the same axis, and no random draw: a
+  // shake that rolled would move the cosmetic stream every kill
+  shake.dir = (shake.dir || 0) + 2.399963;
 }
 function shakeEnv(){
   return shake.t > 0 ? Math.pow(clamp(shake.t / Math.max(0.0001, shake.t0), 0, 1), 0.7) : 0;
@@ -3827,8 +3850,15 @@ function camTarget(){
      on camera for 4,226 fills against a hard ceiling of 3,700. So on the
      biggest markets there is still one settling pull-in at launch — bounded,
      eased, and then still for the rest of the run. */
+  /* …and never so far out that you are mostly looking at sky. The market is
+     2020 world units deep whatever else changes, so this is the zoom at which
+     it stops filling the frame. It does not bind on a landscape desktop; on an
+     820x1180 window it is the tightest of the three, which is how it should
+     be — that frame is nearly square and the market is not. The suite used to
+     assert this held; the camera guarantees it now. */
+  const zFill = (bounds.y1 - bounds.y0) * camK() / (MIN_WORLD_FILL * VH);
   return { x: car.x + car.vx * lead, y: car.y + car.vy * lead,
-    z: Math.min(aimZoom(), DRIVE_MAX, Math.max(600, zCap)) };
+    z: Math.min(aimZoom(), DRIVE_MAX, zFill, Math.max(600, zCap)) };
 }
 
 /* How far past the fence the camera may look. Hard-clamping to the fence meant
@@ -3840,11 +3870,14 @@ const CAM_OVERSHOOT = 0.55;
 /* How small the car is allowed to get, in CSS pixels, and how far the width
    term may shrink the picture below what the frame's height would give. */
 const CAR_MIN_PX = 34, MIN_FILL = 0.6;
+/* How much of the frame's height the market itself has to occupy. Past this
+   the drive camera is showing you sky rather than more market. */
+const MIN_WORLD_FILL = 0.8;
 /* The widest the drive camera may sit, whatever the market would like. Set by
    the draw budget rather than by taste: at the full aim zoom of 2300 a driving
    frame put 258 props on camera for 4,226 fills against a hard ceiling of
    3,700, and 1609 came in at 3,772 — still over. */
-const DRIVE_MAX = 1320;
+const DRIVE_MAX = 1700;
 
 /* One place for "how many screen pixels is a world unit at this z". camTarget
    frames the aim view by placing the sling a fixed distance in from the left
@@ -4051,10 +4084,17 @@ const BAG_COLS = ['#cfc6b4', '#8f7355', '#4a4038', '#8a94a4'];
 const SKIN = ['#f0c9a4', '#d9a273', '#a9714a', '#7a4c30'];
 const HAIR = ['#3a2a20', '#6b4a2c', '#1d1a1c', '#8d6a3f', '#a8632c', '#c9b48a', '#4a3a34'];
 
-function worldTransform(){
+/* Where the camera actually is this frame, which is what the player sees —
+   the envelope above is only the ceiling this swings inside. Its own function
+   so the suite can measure the thing that was complained about. */
+function shakeOffset(){
   const amp = shake.a * shakeEnv();
-  const sx = amp > 0 ? vrr(-1, 1) * amp : 0;
-  const sy = amp > 0 ? vrr(-1, 1) * amp : 0;
+  if (!(amp > 0)) return { x: 0, y: 0 };
+  const osc = Math.sin((shake.t0 - shake.t) * SHAKE_HZ) * amp;
+  return { x: osc * Math.cos(shake.dir || 0), y: osc * Math.sin(shake.dir || 0) };
+}
+function worldTransform(){
+  const { x: sx, y: sy } = shakeOffset();
   const s = cam.s * DPR;
   ctx.setTransform(s, 0, 0, s, (VW / 2 - cam.x * cam.s + sx) * DPR, (VH / 2 - cam.y * cam.s + sy) * DPR);
 }
@@ -4544,7 +4584,7 @@ function tradeOf(o){
    half is a splintered stub with nothing left on it. */
 const goodsN = (wear) => wear > 0.5 ? 2 : 4;       // half wrecked, half the stock
 const goodsX = (w, i) => -w * 0.28 + i * (w * 0.19);
-function drawCounter(o, w, gy, wear, fs){
+function drawCounter(o, w, gy, wear, fs, fine){
   const broke = wear > 0.5;
   const x0 = -w * 0.4, x1 = broke ? -w * 0.005 : w * 0.4;
   const top = gy + fs * 9 - (fs > 0 ? 0 : 13);     // the plank reads the same
@@ -4552,27 +4592,35 @@ function drawCounter(o, w, gy, wear, fs){
   // stock resting on it, before the plank so the shadow lies on the top surface.
   // Always below the stock whichever way the stall faces — the light is
   // overhead, and a shadow that flips with `face` is a shadow you notice.
-  ctx.fillStyle = 'rgba(10,18,34,.30)';
-  ctx.beginPath();
-  for (let i = 0, n = goodsN(wear); i < n; i++){
-    const gx = goodsX(w, i) + 2.6;                 // pushed with the light
-    ctx.moveTo(gx + 11, gy + 8);
-    ctx.ellipse(gx, gy + 8, 11, 3.2, 0, 0, 6.283);
-  }
-  ctx.fill();
-  if (fs > 0){                                     // legs, only where you'd see them
-    ctx.fillStyle = 'rgba(14,22,38,.42)';
+  if (fine){
+    ctx.fillStyle = 'rgba(10,18,34,.30)';
     ctx.beginPath();
-    ctx.rect(x0 + 7, top + H, 7, 12);
-    ctx.rect(x1 - 14, top + H, 7, 12);
+    for (let i = 0, n = goodsN(wear); i < n; i++){
+      const gx = goodsX(w, i) + 2.6;               // pushed with the light
+      ctx.moveTo(gx + 11, gy + 8);
+      ctx.ellipse(gx, gy + 8, 11, 3.2, 0, 0, 6.283);
+    }
     ctx.fill();
+    if (fs > 0){                                   // legs, only where you'd see them
+      ctx.fillStyle = 'rgba(14,22,38,.42)';
+      ctx.beginPath();
+      ctx.rect(x0 + 7, top + H, 7, 12);
+      ctx.rect(x1 - 14, top + H, 7, 12);
+      ctx.fill();
+    }
   }
+  /* The plank itself is drawn at every tier. It is the edge that says market
+     stall rather than crate, and it is one fill: dropping it with the stock it
+     carries left sixty-five brown boxes wearing snow. The lit lip, the apron,
+     the legs and the shadows the stock casts are the detail, and those go. */
   ctx.fillStyle = TH.wood2;
   roundRect(x0, top, x1 - x0, H, 3); ctx.fill();
-  ctx.fillStyle = 'rgba(255,240,212,.22)';         // lit lip along the top
-  ctx.fillRect(x0 + 2, top + 1, x1 - x0 - 4, 3.5);
-  ctx.fillStyle = 'rgba(12,20,38,.30)';            // apron falling into shade
-  ctx.fillRect(x0 + 1, top + H - 5.5, x1 - x0 - 2, 5);
+  if (fine){
+    ctx.fillStyle = 'rgba(255,240,212,.22)';       // lit lip along the top
+    ctx.fillRect(x0 + 2, top + 1, x1 - x0 - 4, 3.5);
+    ctx.fillStyle = 'rgba(12,20,38,.30)';          // apron falling into shade
+    ctx.fillRect(x0 + 1, top + H - 5.5, x1 - x0 - 2, 5);
+  }
   if (broke){                                      // the snapped end, splintered
     ctx.fillStyle = TH.wood;
     ctx.beginPath();
@@ -4586,10 +4634,41 @@ function drawCounter(o, w, gy, wear, fs){
 /* What is actually laid out on the counter. Each of these is a handful of
    fills — the old version was one path of four circles, so the whole market
    sold the same anonymous gold thing. */
+/* One path a colour, not one a item.
+
+   Sixty-five stalls hold 58% of a driving frame's fills, and this is where a
+   stall's go: every bun, pot, bauble and folded hat had its own beginPath and
+   its own fill, so a counter with five things on it cost five to ten fills
+   that draw in exactly the same colour, one after the other. Canvas does not
+   care how many subpaths a fill has.
+
+   Nothing about the picture changes — same shapes, same colours, same order of
+   colours. It is the same drawing, batched. */
 function drawGoods(o, w, h, gy, wear){
   const t = tradeOf(o);
   const n = goodsN(wear);
   const gx = (i) => goodsX(w, i);
+  // a run of same-coloured items in one path and one fill
+  const batch = (col, shape) => {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) shape(gx(i), i);
+    ctx.fill();
+  };
+  // roundRect and circle each open their own path, so inside a batch they have
+  // to be laid down by hand
+  const box = (x, y, bw, bh, r) => {
+    const rr2 = Math.min(r, bw / 2, bh / 2);
+    ctx.moveTo(x + rr2, y);
+    ctx.lineTo(x + bw - rr2, y); ctx.quadraticCurveTo(x + bw, y, x + bw, y + rr2);
+    ctx.lineTo(x + bw, y + bh - rr2); ctx.quadraticCurveTo(x + bw, y + bh, x + bw - rr2, y + bh);
+    ctx.lineTo(x + rr2, y + bh); ctx.quadraticCurveTo(x, y + bh, x, y + bh - rr2);
+    ctx.lineTo(x, y + rr2); ctx.quadraticCurveTo(x, y, x + rr2, y);
+    ctx.closePath();
+  };
+  const disc = (x, y, r) => { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, 6.283); };
+  const rect = (x, y, rw, rh) => { ctx.moveTo(x, y); ctx.lineTo(x + rw, y);
+    ctx.lineTo(x + rw, y + rh); ctx.lineTo(x, y + rh); ctx.closePath(); };
   switch (t.goods){
     case 'grill': {
       ctx.fillStyle = '#241c18';
@@ -4597,38 +4676,31 @@ function drawGoods(o, w, h, gy, wear){
       const glow = 0.55 + 0.25 * Math.sin(T * 2.4 + o.seed * 6.28);
       ctx.fillStyle = 'rgba(255,116,40,' + glow.toFixed(2) + ')';
       ctx.fillRect(-w * 0.32, gy - 8, w * 0.64, 16);
-      ctx.fillStyle = '#c98f52';
-      for (let i = 0; i < n; i++) roundRect(gx(i) - 9, gy - 5, 18, 10, 5), ctx.fill();
+      batch('#c98f52', (x) => box(x - 9, gy - 5, 18, 10, 5));
       break;
     }
     case 'pots': {
-      for (let i = 0; i < n; i++){
-        ctx.fillStyle = '#3a2c22'; circle(gx(i), gy, 9); ctx.fill();
-        ctx.fillStyle = '#8b2f22'; circle(gx(i), gy, 6); ctx.fill();
-      }
+      batch('#3a2c22', (x) => disc(x, gy, 9));
+      batch('#8b2f22', (x) => disc(x, gy, 6));
       break;
     }
     case 'blocks': {
       const cols = ['#e0483c', '#3f86c4', '#41a066', '#ffd34d'];
-      for (let i = 0; i < n; i++){
-        ctx.fillStyle = cols[i % 4];
-        ctx.fillRect(gx(i) - 7, gy - 7, 14, 14);
-      }
+      cols.forEach((c, k) => batch(c, (x, i) => { if (i % 4 === k) rect(x - 7, gy - 7, 14, 14); }));
       break;
     }
     case 'brazier': {
       ctx.fillStyle = '#3a2c22'; circle(0, gy, 17); ctx.fill();
       ctx.fillStyle = 'rgba(255,140,60,' + (0.5 + 0.3 * Math.sin(T * 3 + o.seed * 6)).toFixed(2) + ')';
       circle(0, gy, 12); ctx.fill();
-      ctx.fillStyle = '#c98f52';
-      for (let i = 0; i < n; i++) circle(gx(i) * 1.3, gy + 4, 5), ctx.fill();
+      batch('#c98f52', (x) => disc(x * 1.3, gy + 4, 5));
       break;
     }
     case 'flames': {
+      batch('#f6f2ea', (x) => rect(x - 3, gy - 2, 6, 11));
+      // each flame is its own alpha, so those cannot share a fill
       for (let i = 0; i < n; i++){
         const f = 0.7 + 0.3 * Math.sin(T * 6 + i * 1.7 + o.seed * 6.28);
-        ctx.fillStyle = '#f6f2ea';
-        ctx.fillRect(gx(i) - 3, gy - 2, 6, 11);
         ctx.fillStyle = 'rgba(255,214,110,' + f.toFixed(2) + ')';
         ctx.beginPath();
         ctx.ellipse(gx(i), gy - 7, 4, 6 * f, 0, 0, 6.283); ctx.fill();
@@ -4640,41 +4712,33 @@ function drawGoods(o, w, h, gy, wear){
       ctx.beginPath();
       ctx.moveTo(-w * 0.34, gy - 9); ctx.lineTo(w * 0.34, gy - 9); ctx.stroke();
       const cols = ['#e0483c', '#3f86c4', '#41a066', '#c9a24a'];
-      for (let i = 0; i < n; i++){
-        ctx.fillStyle = cols[i % 4];
-        circle(gx(i), gy + 1, 8); ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,.45)';   // the glint that says glass
-        circle(gx(i) - 3, gy - 2, 3); ctx.fill();
-        ctx.fillStyle = '#c9a24a';                 // the cap it hangs from
-        ctx.fillRect(gx(i) - 2.5, gy - 11, 5, 4);
-      }
+      cols.forEach((c, k) => batch(c, (x, i) => { if (i % 4 === k) disc(x, gy + 1, 8); }));
+      batch('rgba(255,255,255,.45)', (x) => disc(x - 3, gy - 2, 3));  // glass glints
+      batch('#c9a24a', (x) => rect(x - 2.5, gy - 11, 5, 4));   // the caps they hang from
       break;
     }
     case 'wool': {                                 // folded hats and scarves
       const cols = ['#e0483c', '#3f86c4', '#41a066', '#f6f2ea'];
-      for (let i = 0; i < n; i++){
-        ctx.fillStyle = cols[i % 4];
-        roundRect(gx(i) - 9, gy - 7, 18, 8, 3); ctx.fill();
-        ctx.fillStyle = cols[(i + 2) % 4];
-        roundRect(gx(i) - 8, gy + 1, 16, 7, 3); ctx.fill();
-        ctx.fillStyle = 'rgba(12,20,38,.16)';      // the shade between folds
-        ctx.fillRect(gx(i) - 9, gy - 1, 18, 2);
-      }
+      cols.forEach((c, k) => batch(c, (x, i) => { if (i % 4 === k) box(x - 9, gy - 7, 18, 8, 3); }));
+      cols.forEach((c, k) => batch(c, (x, i) => { if ((i + 2) % 4 === k) box(x - 8, gy + 1, 16, 7, 3); }));
+      batch('rgba(12,20,38,.16)', (x) => rect(x - 9, gy - 1, 18, 2));   // the fold shade
       break;
     }
     default: {                                     // lebkuchen hearts on ribbons
+      // both lobes and the point are the same gingerbread, so they are one path
+      batch('#a8452c', (x) => {
+        disc(x - 5, gy - 4, 6.5); disc(x + 5, gy - 4, 6.5);
+        ctx.moveTo(x - 11, gy - 2); ctx.lineTo(x + 11, gy - 2);
+        ctx.lineTo(x, gy + 11); ctx.closePath();
+      });
+      // the icing loop each hangs from, one stroke for the row
+      ctx.strokeStyle = '#f2ece0'; ctx.lineWidth = 2;
+      ctx.beginPath();
       for (let i = 0; i < n; i++){
-        ctx.fillStyle = '#a8452c';
-        circle(gx(i) - 5, gy - 4, 6.5); ctx.fill();
-        circle(gx(i) + 5, gy - 4, 6.5); ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(gx(i) - 11, gy - 2); ctx.lineTo(gx(i) + 11, gy - 2);
-        ctx.lineTo(gx(i), gy + 11); ctx.closePath(); ctx.fill();
-        // the icing loop the heart hangs from, not a ring drawn over the top
-        ctx.strokeStyle = '#f2ece0'; ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(gx(i), gy - 10, 4, Math.PI * 0.15, Math.PI * 0.85, true); ctx.stroke();
+        ctx.moveTo(gx(i) + 4, gy - 10);
+        ctx.arc(gx(i), gy - 10, 4, Math.PI * 0.15, Math.PI * 0.85, true);
       }
+      ctx.stroke();
     }
   }
 }
@@ -4883,11 +4947,12 @@ function drawHut(o){
   snowCapPath(cx0, cy0, cw, ch, o.seed, 0); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,.55)';       // the crown, catching the light
   ctx.fillRect(cx0 + 4, cy0 + 2, cw - 8, h * 0.07);
-  if (!fine){                                    // far off, the rest is a pixel
-    if (tr.smoke > 0) drawSmoke(o, w, h, tr);
-    ctx.restore(); return;
-  }
-  ctx.fillStyle = 'rgba(255,255,255,.34)';       // banks blown up against it
+  /* The banks blown up against the drift. One fill for the pair, and above the
+     LOD cut rather than below it: the roof is the biggest thing on a stall
+     from above, and a roof that goes from drifted to flat as you pull back is
+     the change you notice. What the coarse tier drops is the counter and what
+     is on it, which is 8 fills and about six screen pixels tall. */
+  ctx.fillStyle = 'rgba(255,255,255,.34)';
   ctx.beginPath();
   for (let i = 0; i < 2; i++){
     const bx = cx0 + cw * (0.28 + i * 0.4 + mkRand(o.seed * 5171 + i * 61) * 0.12);
@@ -4897,7 +4962,11 @@ function drawHut(o){
   }
   ctx.fill();
   const gy = fs > 0 ? h * 0.12 : -h * 0.12;
-  drawCounter(o, w, gy, wear, fs);
+  drawCounter(o, w, gy, wear, fs, fine);
+  if (!fine){                                    // far off, the stock is a pixel
+    if (tr.smoke > 0) drawSmoke(o, w, h, tr);
+    ctx.restore(); return;
+  }
   drawGoods(o, w, h, gy, wear);
   // splits in the panelling once it has taken a hit
   if (wear > 0.28){
@@ -5122,7 +5191,7 @@ const propQ = (o) => (o.r || (o.w || 0) / 2) * LOD_REF / cam.tz;
    the prop measures on the drive camera and what it measures on the aim
    camera — fine while you are in the market, coarse when the whole market is
    in the frame. The suite pins exactly that. */
-const PROP_FINE = { hut: 34, gluh: 20, barrel: 16, tree: 22 };
+const PROP_FINE = { hut: 48, gluh: 20, barrel: 16, tree: 22 };
 const propFine = (o) => propQ(o) >= (PROP_FINE[o.kind] || 0);
 
 function drawProp(o){

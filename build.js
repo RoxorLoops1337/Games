@@ -74,6 +74,7 @@ const STATIC_PATHS = [
   'world_choir_games',
   'grudge_draft',
   'clawspire',
+  'claw_crawl',
   'tools',
 ];
 
