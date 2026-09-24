@@ -65,7 +65,7 @@ function checkMap(M, label, D) {
   h.ok(MAP.neighbors(M, M.start.q, M.start.r).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), label + ' start neighbours revealed');
   h.ok(MAP.tileAt(M, M.boss.q, M.boss.r).revealed, label + ' boss revealed');
   h.eq(M.revealedCount, 2 + MAP.neighbors(M, M.start.q, M.start.r).length, label + ' only start, neighbours and boss revealed');
-  h.eq(M.ink, 5, label + ' ink starts at 5');
+  h.eq(M.ink, MAP.START_INK, label + ' ink starts at START_INK');
   h.ok(M.pos.q === M.start.q && M.pos.r === M.start.r, label + ' pos = start');
   h.ok(Array.isArray(M.brushes) && M.brushes.length === 0, label + ' no brushes yet');
   h.ok(MAP.pathExists(M, M.start, M.boss, { any: true }), label + ' boss reachable through the fog');
@@ -136,15 +136,15 @@ h.test('reveal spends ink and respects adjacency', () => {
   const before = M.revealedCount;
   const got = MAP.reveal(M, t.q, t.r);
   h.ok(got === M.tiles[MAP.key(t.q, t.r)] && got.revealed, 'reveal returns the tile, now revealed');
-  h.eq(M.ink, 4, 'reveal spends exactly 1 ink');
+  h.eq(M.ink, MAP.START_INK - 1, 'reveal spends exactly 1 ink');
   h.eq(M.revealedCount, before + 1, 'revealedCount +1');
   h.eq(MAP.reveal(M, t.q, t.r), null, 'refuses an already revealed tile');
   h.eq(MAP.reveal(M, M.start.q, M.start.r), null, 'refuses the start');
-  h.eq(M.ink, 4, 'refusals cost nothing');
+  h.eq(M.ink, MAP.START_INK - 1, 'refusals cost nothing');
   const far = tilesOf(M).find(x => !x.revealed && !MAP.neighbors(M, x.q, x.r).some(([q, r]) => M.tiles[MAP.key(q, r)].revealed));
   h.ok(far && !MAP.canReveal(M, far.q, far.r) && MAP.reveal(M, far.q, far.r) === null, 'refuses a tile not touching the revealed area');
   h.ok(!MAP.canReveal(M, -5, 3) && MAP.reveal(M, 20, 20) === null, 'refuses out of bounds');
-  h.eq(M.ink, 4, 'still 4 ink');
+  h.eq(M.ink, MAP.START_INK - 1, 'still one ink down');
   // Chain reveals outward: each new tile opens its own neighbours.
   const outward = MAP.revealable(M).find(x => adj(x, got) && !adj(x, M.start));
   if (outward) h.ok(MAP.reveal(M, outward.q, outward.r) !== null, 'newly revealed tiles extend the frontier');

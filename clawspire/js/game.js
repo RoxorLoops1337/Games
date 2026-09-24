@@ -22,7 +22,9 @@ const GAME = (() => {
   const BIN_FLOOR = 3;          // selling or removing never empties the bin below this
   const WATCHDOG = 20;          // seconds after a drop before the rig is force-reset (phase caps sum to ~17)
   const SPAWN_GAP = 0.05;       // shower spacing when bodies are (re)spawned
-  const START_INK = 5;
+  // Ink economy lives in DATA.ECONOMY (the balance pass tunes it there).
+  const ECON = () => (typeof DATA !== 'undefined' && DATA && DATA.ECONOMY) || {};
+  const START_INK = ECON().startInk || 10;
   const REMOVE_PRICE = 60;
   const RELIC_PRICE = { c: 120, u: 160, r: 220, boss: 220, event: 160 };
   const RARITY_NAME = { c: 'common', u: 'uncommon', r: 'rare', l: 'legendary', junk: 'junk' };
@@ -676,7 +678,7 @@ const GAME = (() => {
       }
       case 'ink': {
         finish();
-        const n = c.ink || 1;
+        const n = Math.max(c.ink || 1, ECON().inkTile || 1);
         addInk(n);
         snd('reveal');
         toast(`A pot of ink. +${n} ink.`);
@@ -1284,7 +1286,9 @@ const GAME = (() => {
     let gold = rng.int(10, 25) + 4 * (run.act - 1);
     if (tier === 'elite') gold = Math.round(gold * 1.6);
     if (tier === 'boss') gold = Math.round(gold * 2.5);
-    const reward = { items: rollItems(rng, 3), gold, ink: tier === 'elite' ? 1 : 0, tier, then };
+    const econ = ECON();
+    const ink = tier === 'elite' ? (econ.eliteInk || 1) : (tier === 'normal' && rng() < (econ.fightInkChance || 0) ? 1 : 0);
+    const reward = { items: rollItems(rng, 3), gold, ink, tier, then };
     showReward(reward);
   }
 

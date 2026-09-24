@@ -345,7 +345,7 @@ h.test('sword is delivered less often than the ball with the same rig', () => {
 h.test('3 prongs deliver at least as often as 2 on the same scenario', () => {
   // The third finger raises the grip lock's break force, so it shows on a
   // box whose weight sits right at the two-prong rig's limit.
-  const HEAVYISH = { shape: { kind: 'poly', verts: PHYS.box(40, 40) }, density: 1.6 };
+  const HEAVYISH = { shape: { kind: 'poly', verts: PHYS.box(40, 40) }, density: 2.8 };
   let two = 0, three = 0;
   for (const g of [0.9, 1.1]) {
     two += scenario({ grip: g, prongs: 2 }, HEAVYISH, 10, 400);

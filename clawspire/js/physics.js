@@ -22,6 +22,13 @@ const PHYS = (() => {
   const POS_MAX = 6;             // max correction per pass (px)
   const JOINT_BETA = 0.3;        // Baumgarte factor for joint drift
   const MAX_V = 2400;            // linear speed cap (px/s), anti-tunnelling
+  // Claw parts push items with a finite force. The palm is kinematic and the
+  // prongs hang off it through rigid joints, so an item pinned between the
+  // claw and the floor would otherwise take an infinite impulse and fly (or
+  // sink through the floor). Capped at SOFT_G times the item's weight per
+  // substep, the claw just overlaps a jammed item a little instead.
+  const SOFT_G = 8;
+  const SOFT_POS = 0.6;          // px of position correction per pass for a claw-item pair
   const MAX_AV = 60;             // angular speed cap (rad/s)
   const REST_VEL = 80;           // bounce only above this approach speed
   const LIN_DAMP = 0.08;         // per second, keeps piles from creeping
@@ -364,6 +371,12 @@ const PHYS = (() => {
     m.n = SC.n; m.nx = SC.nx; m.ny = SC.ny;
     m.tx = -SC.ny; m.ty = SC.nx;
     m.friction = Math.sqrt(m.a.friction * m.b.friction);
+    const ac = m.a.group === 'claw', bc = m.b.group === 'claw';
+    m.cap = 0;
+    if (ac !== bc) {
+      const item = ac ? m.b : m.a;
+      if (item.type === 'dynamic' && item.group !== 'wall') m.cap = SOFT_G * item.m * 1400 * H;
+    }
     m.restitution = Math.max(m.a.restitution, m.b.restitution);
     m.solve = !(m.a.sensor || m.b.sensor);
     m.stamp = stamp;
@@ -457,6 +470,7 @@ const PHYS = (() => {
         let dPn = p.mN * (p.bias + p.velBias - vn);
         const Pn0 = p.Pn;
         p.Pn = Math.max(Pn0 + dPn, 0);
+        if (m.cap && p.Pn > m.cap) p.Pn = m.cap;
         dPn = p.Pn - Pn0;
         const Px = dPn * nx, Py = dPn * ny;
         a.vx -= a.invM * Px; a.vy -= a.invM * Py; a.av -= a.invI * (p.rax * Py - p.ray * Px);
@@ -486,6 +500,7 @@ const PHYS = (() => {
         }
       }
     }
+    if (m.cap) { if (x1 > m.cap) x1 = m.cap; if (x2 > m.cap) x2 = m.cap; }
     applyPair(m, x1 - a1, x2 - a2);
     p1.Pn = x1; p2.Pn = x2;
   }
@@ -502,7 +517,7 @@ const PHYS = (() => {
       // Walls get corrected harder: a light body crushed against a static
       // wall by a heavy one must not sink into it.
       const beta = (a.invM === 0 || b.invM === 0) ? POS_BETA * 1.6 : POS_BETA;
-      const C = clamp(beta * (sep + SLOP), -POS_MAX, 0);
+      const C = clamp(beta * (sep + SLOP), m.cap ? -SOFT_POS : -POS_MAX, 0);
       if (C >= 0) continue;
       const rnA = rax * ny - ray * nx, rnB = rbx * ny - rby * nx;
       const K = a.invM + b.invM + a.invI * rnA * rnA + b.invI * rnB * rnB;
@@ -891,7 +906,7 @@ const PHYS = (() => {
     magnetR: 80, magnetAcc: 6000,
     // Grip lock: a well-pinched item is welded to the palm with a breaking
     // force, so a solid pinch rides the lift and a heavy or badly held one slips.
-    lockForce: 6e6,            // break force at grip 1 (about the weight of mass 4200)
+    lockForce: 3.5e6,          // break force at grip 1 (about the weight of mass 2500)
     lockRubber: 1.45,          // rubber tips multiply the break force
     lock3: 1.3,                // third prong multiplies the break force
     lockPalmOnly: 0.8,         // one prong + palm pinch is this fraction as strong
@@ -901,7 +916,7 @@ const PHYS = (() => {
     lockOmega: 60,             // spring stiffness (rad/s): weight sags the hold g/omega^2 px
     lockBreakDist: 16,         // px of sag that breaks the hold outright
     lockPeakMul: 8,            // instant force clamp, as a multiple of the grip
-    lockTau: 0.06,             // s, time constant of the filtered load
+    lockTau: 0.25,             // s, time constant of the filtered load (rides out lift and carry jerks)
     lockSpin: 30,              // per-second pull of the item's spin toward the palm's
     slowZone: 34,              // px above the pile where the drop slows down
     dig: 30,                   // px the claw keeps sinking after a prong first touches something

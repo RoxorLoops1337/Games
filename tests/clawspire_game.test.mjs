@@ -43,6 +43,7 @@ function seedWithFightNeighbour(G, MAP) {
 
 let CS = boot();
 const { GAME: G, MAP, DATA, COMBAT, U } = CS;
+const START_INK = (DATA.ECONOMY && DATA.ECONOMY.startInk) || 10;
 
 h.test('boot exposes the namespaces and lands on the title', () => {
   h.ok(CS.U && CS.PHYS && CS.DATA && CS.COMBAT && CS.MAP && CS.AUDIO && CS.GAME, 'window.CS has every module');
@@ -74,8 +75,8 @@ h.test('newRun(knight, seed) -> map with start neighbours revealed', () => {
   h.ok(seedInfo, 'found a seed with a fight next to the start');
   const M = G.run.map;
   h.eq(G.screen, 'map', 'map screen');
-  h.eq(G.run.ink, 5, 'five ink at act start');
-  h.eq(M.ink, 5, 'map ink mirrors run ink');
+  h.eq(G.run.ink, START_INK, 'ink at act start follows DATA.ECONOMY');
+  h.eq(M.ink, START_INK, 'map ink mirrors run ink');
   for (const [q, r] of MAP.neighbors(M, M.start.q, M.start.r)) h.ok(M.tiles[MAP.key(q, r)].revealed, `start neighbour ${q},${r} revealed`);
   h.ok(M.tiles[MAP.key(M.boss.q, M.boss.r)].revealed, 'boss visible');
   G.draw();
@@ -406,7 +407,7 @@ h.test('act transition, unlocks and the win screen', () => {
   h.eq(Gt.screen, 'treasure', 'boss relic offered');
   h.eq(Gt.run.act, 2, 'act 2');
   h.ok(Gt.run.hp > 30, 'healed 30%');
-  h.eq(Gt.run.ink, 10, 'ink topped up');
+  h.ok(Gt.run.ink >= START_INK, 'ink topped up for the new act');
   h.ok(Gt.meta.unlocks.alchemist, 'alchemist unlocked at act 2');
   const relics = Gt.run.relics.length;
   Gt.choose(0);

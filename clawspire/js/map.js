@@ -23,12 +23,12 @@ const MAP = (() => {
     fight: 0.30, empty: 0.22, gem: 0.10, ink: 0.08, event: 0.08, treasure: 0.04,
     brush: 0.04, shop: 0.03, rest: 0.05, forge: 0.03, elite: 0.03,
   };
-  const MINS = { shop: 2, rest: 3, forge: 2, elite: 2, treasure: 2, brush: 2, ink: 4 };
+  const MINS = { shop: 3, rest: 3, forge: 2, elite: 2, treasure: 2, brush: 2, ink: 4 };
   // Placement order: constrained types first so they always find a spot.
   const SPECIALS = ['elite', 'shop', 'rest', 'forge', 'treasure', 'brush', 'ink', 'event', 'gem'];
   // Types that read better spread out: avoid putting two side by side.
   const SPREAD = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1 };
-  const START_INK = 5;
+  const START_INK = 10;   // per act; game.js reads DATA.ECONOMY.startInk and passes it in
 
   // Built-in brush shapes, used when DATA.BRUSHES is missing or lacks an id.
   // "Vertical" for comb means the same offset column (c = q + floor(r/2)),
@@ -207,7 +207,7 @@ const MAP = (() => {
         content.gold = crng.int(8, 16) + 4 * (act - 1);
         break;
       case 'ink':
-        content.ink = crng() < 0.35 ? 2 : 1;
+        content.ink = (typeof DATA !== 'undefined' && DATA && DATA.ECONOMY && DATA.ECONOMY.inkTile) || (crng() < 0.35 ? 2 : 1);
         break;
       case 'brush':
         content.brush = crng.pick(brushIds());
