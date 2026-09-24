@@ -29,7 +29,7 @@ export function harness(name) {
 /* List the script files index.html loads, in order. Falls back to the
    canonical order when index.html does not exist yet (module work in flight). */
 export function scriptFiles() {
-  const canon = ['util', 'physics', 'data', 'combat', 'map', 'audio', 'render', 'game'].map(n => `js/${n}.js`);
+  const canon = ['util', 'art', 'physics', 'data', 'combat', 'map', 'audio', 'render', 'game'].map(n => `js/${n}.js`);
   if (!fs.existsSync(HTML)) return canon;
   const html = fs.readFileSync(HTML, 'utf8');
   const found = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
@@ -150,8 +150,8 @@ export function boot(opts) {
   const sb = makeSandbox(opts);
   const { sandbox } = sb;
   const only = opts.only;
-  const names = ['U', 'PHYS', 'DATA', 'COMBAT', 'MAP', 'AUDIO', 'RENDER', 'GAME'];
-  const files = ['util', 'physics', 'data', 'combat', 'map', 'audio', 'render', 'game'];
+  const names = ['U', 'ART', 'PHYS', 'DATA', 'COMBAT', 'MAP', 'AUDIO', 'RENDER', 'GAME'];
+  const files = ['util', 'art', 'physics', 'data', 'combat', 'map', 'audio', 'render', 'game'];
   const wanted = only ? files.filter(f => only.includes(f)) : files;
   const expose = '\n;__out.mods = {' + wanted.map((f, i) => `${names[files.indexOf(f)]}: (typeof ${names[files.indexOf(f)]} !== 'undefined' ? ${names[files.indexOf(f)]} : undefined)`).join(', ') + '};\n';
   const src = source(only ? wanted : null) + expose;

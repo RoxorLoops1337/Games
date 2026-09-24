@@ -10,7 +10,7 @@ const GAME = (() => {
   const SAVE_VER = 1;
   const RUN_KEY = 'clawspire_run', META_KEY = 'clawspire_meta';
   // Cabinet interior in stage coordinates (see the stage layout in the bible).
-  const CAB = { x: 30, y: 410, w: 480, h: 390, chuteW: 64, frame: 30, dividerH: 0.6, wallThick: 40 };
+  const CAB = { x: 30, y: 410, w: 480, h: 390, chuteW: 64, frame: 30, dividerH: 0.6, wallThick: 40, slopeW: 130, slopeH: 90 };
   const ARENA = { y0: 70, y1: 340 };
   const BEAT = 0.45;            // seconds between enemy-turn events
   const PLAY_BEAT = 0.16;       // seconds between player-side events
@@ -741,7 +741,7 @@ const GAME = (() => {
     const P = X.PHYS;
     if (FS.rig && FS.rig.destroy) { try { FS.rig.destroy(); } catch (e) { /* ignore */ } }
     FS.world = P.world({ gravity: { x: 0, y: 1400 }, w: CAB.w, h: CAB.h });
-    FS.cabinet = P.cabinet(FS.world, { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, wallThick: CAB.wallThick });
+    FS.cabinet = P.cabinet(FS.world, { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, wallThick: CAB.wallThick, slopeW: CAB.slopeW, slopeH: CAB.slopeH });
     buildRig();
     FS.items = [];
   }
@@ -1535,7 +1535,13 @@ const GAME = (() => {
     clear(b);
     const run = S.run;
     b.appendChild(h('h1', null, def.title || 'Event'));
-    if (X.RENDER && X.RENDER.enemy && def.art && tbl('ENEMIES')[def.art]) {
+    const evPic = typeof ART !== 'undefined' && ART && ART.get ? ART.get('event', ed.id) : null;
+    if (evPic) {
+      // an illustration dropped at art/events/<id>.png replaces the creature
+      const pic = document.createElement('img');
+      pic.src = evPic.src; pic.alt = ''; pic.className = 'eventArt eventPic';
+      b.appendChild(pic);
+    } else if (X.RENDER && X.RENDER.enemy && def.art && tbl('ENEMIES')[def.art]) {
       const art = canvasEl(110, (ctx, p) => X.RENDER.enemy(ctx, tbl('ENEMIES')[def.art], p / 2, p * 0.75, 0.8, S.t, {}));
       art.className = 'eventArt';
       b.appendChild(art);
@@ -2053,6 +2059,9 @@ const GAME = (() => {
   function boot() {
     if (S.booted) return;
     S.booted = true;
+    // Illustrated art is optional: ART.load() is a no-op headless and every
+    // missing PNG leaves the drawn art in place.
+    try { if (typeof ART !== 'undefined' && ART && ART.load) ART.load(); } catch (e) { /* art is optional */ }
     loadMeta();
     bindDom();
     resize();
@@ -2081,6 +2090,7 @@ const GAME = (() => {
 
 window.CS = {
   U: typeof U !== 'undefined' ? U : undefined,
+  ART: typeof ART !== 'undefined' ? ART : undefined,
   PHYS: typeof PHYS !== 'undefined' ? PHYS : undefined,
   DATA: typeof DATA !== 'undefined' ? DATA : undefined,
   COMBAT: typeof COMBAT !== 'undefined' ? COMBAT : undefined,

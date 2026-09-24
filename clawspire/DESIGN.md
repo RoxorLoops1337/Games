@@ -34,10 +34,12 @@ hot pink `#ff2e88`, arcade cyan `#2ee6d6`, prize gold `#ffc94d`, slime lime
   no libraries, no fetch.** All art is drawn on canvas with code, all audio is
   WebAudio synthesis. Nothing from the network.
 - **Classic scripts, shared global scope.** `index.html` loads, in this exact
-  order: `js/util.js`, `js/physics.js`, `js/data.js`, `js/combat.js`,
+  order: `js/util.js`, `js/art.js`, `js/physics.js`, `js/data.js`, `js/combat.js`,
   `js/map.js`, `js/audio.js`, `js/render.js`, `js/game.js`. Each file declares
-  ONE top-level `const` namespace (`U`, `PHYS`, `DATA`, `COMBAT`, `MAP`,
+  ONE top-level `const` namespace (`U`, `ART`, `PHYS`, `DATA`, `COMBAT`, `MAP`,
   `AUDIO`, `RENDER`, `GAME`) and may use every namespace loaded before it.
+  `ART` (optional PNG overrides from `art/`, see `ART_PROMPTS.md`) reads the
+  later namespaces lazily; the drawn art is always the fallback.
   Nothing else at top level (no stray top-level `let x` that could collide;
   keep helpers inside the namespace or an IIFE).
 - **Headless first.** Every module except `render.js` and `audio.js` must run

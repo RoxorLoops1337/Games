@@ -47,7 +47,7 @@
     "test:beatborne": "node tests/beatborne.test.mjs && node tests/beatborne_render.test.mjs",
     "test:frostfell": "node tests/frostfell.test.mjs && node tests/frostfell_render.test.mjs && node tests/frostfell_tutorial.test.mjs && node tests/frostfell_run.test.mjs",
     "test:grudge": "node tests/grudge_draft.test.mjs",
-    "test:clawspire": "node tests/clawspire_physics.test.mjs && node tests/clawspire_data.test.mjs && node tests/clawspire_combat.test.mjs && node tests/clawspire_map.test.mjs && node tests/clawspire_audio.test.mjs && node tests/clawspire_render.test.mjs && node tests/clawspire_game.test.mjs",
+    "test:clawspire": "node tests/clawspire_physics.test.mjs && node tests/clawspire_data.test.mjs && node tests/clawspire_combat.test.mjs && node tests/clawspire_map.test.mjs && node tests/clawspire_audio.test.mjs && node tests/clawspire_render.test.mjs && node tests/clawspire_art.test.mjs && node tests/clawspire_game.test.mjs",
     "test:choir": "node tests/world_choir_games.test.mjs",
     "test:choirimport": "node tests/choir_import.test.mjs",
     "check:times": "node tools/check-times.mjs"

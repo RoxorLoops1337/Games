@@ -209,6 +209,13 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .statusList{display:flex;flex-direction:column;gap:4px}
 .statusList .kv{font-size:13px}
 .eventArt{height:110px;border-radius:12px;border:2px solid var(--line);background:#0d0718;display:block;width:100%}
+.eventPic{height:auto;aspect-ratio:3/2;max-height:220px;object-fit:cover}
+/* optional PNG icons: js/art.js adds .art-ui-<key> to <html> once art/ui/<key>.png has loaded */
+.art-ui-coin .stat.gold .k::before,.art-ui-ink .stat.ink .k::before,.art-ui-brush .brush::before{content:'';display:inline-block;
+  width:14px;height:14px;margin-right:3px;vertical-align:-2px;background:center/contain no-repeat}
+.art-ui-coin .stat.gold .k::before{background-image:url(art/ui/coin.png)}
+.art-ui-ink .stat.ink .k::before{background-image:url(art/ui/ink.png)}
+.art-ui-brush .brush::before{width:20px;height:20px;margin-right:0;background-image:url(art/ui/brush.png)}
 .shopSec{display:flex;flex-direction:column;gap:8px}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .grid4 .card canvas{width:56px;height:56px}
@@ -272,6 +279,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 </div></div>
 
 <script src="js/util.js"></script>
+<script src="js/art.js"></script>
 <script src="js/physics.js"></script>
 <script src="js/data.js"></script>
 <script src="js/combat.js"></script>

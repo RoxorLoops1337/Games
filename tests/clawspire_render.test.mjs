@@ -289,4 +289,104 @@ if (HAS_DATA) {
   if (D.CHARACTERS) for (const id in D.CHARACTERS) drawCheck('DATA portrait ' + id, c => R.portrait(c, id, 0, 0, 64, 1));
 }
 
+/* ------------------------------------------------- ART overrides */
+// js/art.js hands render.js loaded PNGs. With a stub ART that returns a fake
+// image, every hooked entry point must draw it (drawImage) and stay balanced;
+// with ART returning null the drawing must be exactly the vector one.
+if (HAS_DATA) {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, A = api.ART, D = api.DATA;
+  const plain = boot({ only: ['util', 'render'] }).RENDER;   // no ART at all
+  h.ok(A && typeof A.get === 'function', 'ART loads ahead of RENDER');
+  const fake = { width: 64, height: 64, complete: true, naturalWidth: 64 };
+  const wide = { width: 128, height: 32, complete: true, naturalWidth: 128, naturalHeight: 32 };
+  let pick = () => null;
+  A.get = (kind, key) => pick(kind, key);
+  const ctx = api._ctx;
+  // counting ctx: the image is drawn and save/restore still balance
+  const withImage = (label, fn) => {
+    api._resetCounts();
+    let threw = null;
+    try { fn(ctx); } catch (e) { threw = e; }
+    h.ok(!threw, label + ' with art does not throw' + (threw ? ' :: ' + (threw.stack || threw) : ''));
+    h.ok((api._counts.drawImage || 0) > 0, label + ' with art calls drawImage');
+    h.eq(api._counts.save || 0, api._counts.restore || 0, label + ' with art save == restore');
+  };
+  // records the drawImage calls whose source is one of the fakes
+  const imgCtx = () => {
+    const draws = [];
+    const grad = { addColorStop() {} };
+    const c = new Proxy({ canvas: { width: 540, height: 960 } }, {
+      get(t, k) {
+        if (k === 'measureText') return () => ({ width: 40 });
+        if (k === 'createLinearGradient' || k === 'createRadialGradient' || k === 'createPattern') return () => grad;
+        if (typeof k !== 'string' || k === 'then' || k in t) return t[k];
+        return (...a) => { if (k === 'drawImage' && (a[0] === fake || a[0] === wide)) draws.push(a); };
+      },
+      set(t, k, v) { t[k] = v; return true; },
+    });
+    return { c, draws };
+  };
+  const item = D.ITEMS.rusty_sword, enemyDef = D.ENEMIES.rat, bossDef = D.ENEMIES.hoard;
+  const cases = [
+    ['item', (c) => R.item(c, item, 100, 100, 0.3, 1, {}), (c) => plain.item(c, item, 100, 100, 0.3, 1, {}), true],
+    ['item plus/frozen/glow/alpha', (c) => R.item(c, item, 100, 100, 0.3, 1, { plus: true, frozen: true, glow: true, alpha: 0.5 }), (c) => plain.item(c, item, 100, 100, 0.3, 1, { plus: true, frozen: true, glow: true, alpha: 0.5 }), false],
+    ['enemy', (c) => R.enemy(c, enemyDef, 200, 250, 1, 1, {}), (c) => plain.enemy(c, enemyDef, 200, 250, 1, 1, {}), true],
+    ['enemy all states', (c) => R.enemy(c, enemyDef, 200, 250, 1, 1, { hurt: 0.6, attack: 0.4, dead: 0.3, frozen: true, poisoned: true, burning: true }), (c) => plain.enemy(c, enemyDef, 200, 250, 1, 1, { hurt: 0.6, attack: 0.4, dead: 0.3, frozen: true, poisoned: true, burning: true }), false],
+    ['boss enemy', (c) => R.enemy(c, bossDef, 270, 330, 1, 2, { hurt: 0.3 }), (c) => plain.enemy(c, bossDef, 270, 330, 1, 2, { hurt: 0.3 }), false],
+    ['portrait', (c) => R.portrait(c, 'knight', 50, 50, 96, 1), (c) => plain.portrait(c, 'knight', 50, 50, 96, 1), true],
+    ['hex', (c) => R.hex(c, 50, 50, 30, { type: 'shop', revealed: true, q: 1, r: 1 }, { t: 1 }), (c) => plain.hex(c, 50, 50, 30, { type: 'shop', revealed: true, q: 1, r: 1 }, { t: 1 }), true],
+    ['relicIcon', (c) => R.relicIcon(c, D.RELICS.grip_tape, 0, 0, 32), (c) => plain.relicIcon(c, D.RELICS.grip_tape, 0, 0, 32), true],
+    ['statusPips', (c) => R.statusPips(c, 0, 0, { poison: 2, str: 1 }, 16), (c) => plain.statusPips(c, 0, 0, { poison: 2, str: 1 }, 16), true],
+    ['intent debuff', (c) => R.intent(c, 100, 100, { intent: { k: 'debuff', s: 'weak', v: 1 } }, 1), (c) => plain.intent(c, 100, 100, { intent: { k: 'debuff', s: 'weak', v: 1 } }, 1), true],
+    ['bg', (c) => R.bg(c, 540, 960, 2, 1), (c) => plain.bg(c, 540, 960, 2, 1), false],
+    ['mapBg', (c) => R.mapBg(c, 540, 960, 3, 1), (c) => plain.mapBg(c, 540, 960, 3, 1), true],
+    ['title', (c) => R.title(c, 540, 960, 1), (c) => plain.title(c, 540, 960, 1), false],
+    ['cabinetFront', (c) => R.cabinetFront(c, 30, 410, { w: 480, h: 390, frame: 30 }, { t: 1, act: 1 }), (c) => plain.cabinetFront(c, 30, 410, { w: 480, h: 390, frame: 30 }, { t: 1, act: 1 }), false],
+    ['claw', (c) => R.claw(c, fakeRig(), 30, 410, { rubber: 1, magnet: 1 }), (c) => plain.claw(c, fakeRig(), 30, 410, { rubber: 1, magnet: 1 }), false],
+  ];
+  // ART returns null: the drawing is the plain vector one, and never an image
+  pick = () => null;
+  for (const [label, fn, vec, noImage] of cases) {
+    const a = drawCheck('null art ' + label, fn), b = drawCheck('no ART ' + label, vec);
+    h.eq(fingerprint(a), fingerprint(b), label + ': ART.get null draws the vector art');
+    if (noImage) h.ok(!a.seq.includes('drawImage'), label + ': ART.get null calls no drawImage');
+  }
+  // ART returns the fake for every key: every entry point draws it
+  pick = () => fake;
+  for (const [label, fn] of cases) {
+    withImage(label, fn);
+    const st = drawCheck('art ' + label, fn);
+    const { c, draws } = imgCtx();
+    fn(c);
+    h.ok(draws.length > 0, label + ': the stub image itself is drawn');
+    h.ok(st.seq.includes('drawImage'), label + ': drawImage in the sequence');
+  }
+  // lookups: per-id overrides are asked for first, then the shared key
+  const asked = [];
+  pick = (kind, key) => { asked.push(kind + ':' + key); return null; };
+  R.item(ctx, item, 0, 0, 0, 1, {});
+  R.enemy(ctx, D.ENEMIES.slimeling, 0, 0, 1, 0, {});
+  h.eq(asked.slice(0, 2).join(','), 'itemId:rusty_sword,item:sword', 'item asks itemId then the art key');
+  h.eq(asked.slice(2, 4).join(','), 'enemy:slimeling,enemy:slime', 'enemy asks the id then the art key');
+  pick = (kind, key) => (kind === 'item' && key === 'sword' ? fake : null);
+  const swordOnly = imgCtx(); R.item(swordOnly.c, item, 0, 0, 0, 1, {});
+  h.eq(swordOnly.draws.length, 1, 'shared art key image drawn once for an item');
+  h.near(swordOnly.draws[0][3], 48, 1e-6, 'item image stretched to the physics width');
+  h.near(swordOnly.draws[0][4], 10, 1e-6, 'item image stretched to the physics height');
+  pick = () => wide;
+  const tall = seqCtx(); R.item(tall.ctx, { id: 'x', art: 'sword', shape: { kind: 'box', w: 10, h: 44 } }, 0, 0, 0, 1, {});
+  h.ok(tall.stat.seq.includes('rotate(-1.57)'), 'a landscape image stands up in a tall box');
+  pick = () => fake;
+  const en = imgCtx(); R.enemy(en.c, enemyDef, 0, 0, 1, 0, {});
+  const ebox = R.enemyBox(enemyDef, 1), sz = enemyDef.size || 1;
+  h.near(en.draws[0][4] * sz, ebox.h, 1e-6, 'enemy image height matches enemyBox');
+  h.near(en.draws[0][2] + en.draws[0][4], 0, 1e-6, 'enemy image feet sit on the origin');
+  A.get = () => { throw new Error('boom'); };
+  drawCheck('ART.get throwing falls back', c => R.item(c, item, 0, 0, 0, 1, {}));
+  A.get = () => ({ width: 0, height: 0, complete: true, naturalWidth: 0 });
+  const zero = drawCheck('zero-size image falls back', c => R.enemy(c, enemyDef, 0, 0, 1, 0, {}));
+  h.ok(!zero.seq.includes('drawImage'), 'a zero-size image is ignored');
+}
+
 h.done();

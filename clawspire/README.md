@@ -36,6 +36,7 @@ unlocks and a collection.
 
 - `index.html` markup + CSS + boot
 - `js/util.js` rng and helpers
+- `js/art.js` optional PNG overrides from `art/` (see `ART_PROMPTS.md`)
 - `js/physics.js` rigid bodies, joints, the cabinet and the claw rig
 - `js/data.js` items, enemies, statuses, relics, events, characters, upgrades
 - `js/combat.js` the turn engine (pure state + events)
@@ -45,5 +46,6 @@ unlocks and a collection.
 - `js/game.js` screens, run state, saves, the glue
 - `DESIGN.md` the design bible and module contracts
 - `gallery.html` every piece of art on one page
+- `ART_PROMPTS.md` the image generator prompt book, `art/` where the PNGs go
 
-Tests: `npm run test:clawspire` (seven headless suites in `tests/clawspire_*`).
+Tests: `npm run test:clawspire` (eight headless suites in `tests/clawspire_*`).
