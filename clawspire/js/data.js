@@ -32,6 +32,15 @@ const DATA = (() => {
   };
   // Chance that a reward slot is drawn from the character's own pool.
   const CHAR_BIAS = 0.4;
+  // Map economy the game and map read (balance bot, 40 runs per setting):
+  // the bible's ~35% reveal share needs ~20 ink per act. 5 start ink left
+  // the map 22% revealed and a rushing player stuck on most maps.
+  const ECONOMY = {
+    startInk: 10,          // ink at the start of every act (was 5)
+    inkTile: 2,            // an ink tile always gives 2 (was 1, sometimes 2)
+    fightInkChance: 0.5,   // a won normal fight drops 1 ink this often
+    eliteInk: 2,           // ink for beating an elite (was 1)
+  };
 
   // ------------------------------------------------------------ shape kit
   const box = (w, h) => ({ kind: 'box', w, h });
@@ -399,8 +408,8 @@ const DATA = (() => {
     { id: 'spare_heart', name: 'Spare Heart', rarity: 'r', cost: 100,
       tags: ['food', 'magic'], shape: SHAPES.heart, density: 1.0, friction: 0.5,
       color: '#ff2e88', color2: '#8a1a4a', art: 'heart', target: 'self', exhaust: true,
-      fx: [maxhp(3), heal(3)], plus: { fx: [maxhp(5), heal(5)] },
-      text: 'Gain {v} Max HP and heal {v2}. Best not to ask where it came from.' },
+      fx: [maxhp(3)], plus: { fx: [maxhp(5)] },
+      text: 'Gain {v} Max HP and heal {v}. Best not to ask where it came from.' },
     { id: 'dragon_egg', name: 'Dragon Egg', rarity: 'l', cost: 130,
       tags: ['magic', 'heavy'], shape: SHAPES.bigEgg, density: 1.8, friction: 0.4,
       color: '#ff5a4a', color2: '#ffc94d', art: 'egg', target: 'all',
@@ -437,7 +446,7 @@ const DATA = (() => {
     ['weak', 'Weak', '🥀', '#b08cff', 'debuff', 'turns', 'Deals 25% less damage.'],
     ['vuln', 'Vulnerable', '💔', '#ff8a2e', 'debuff', 'turns', 'Takes 50% more damage.'],
     ['poison', 'Poison', '☠', '#a6ff5e', 'debuff', 'count', 'Loses HP equal to Poison at turn start, then Poison drops by 1.'],
-    ['burn', 'Burn', '🔥', '#ff8a2e', 'debuff', 'count', 'Loses HP equal to Burn at turn end, then Burn drops by 1.'],
+    ['burn', 'Burn', '🔥', '#ff8a2e', 'debuff', 'count', 'Loses HP equal to Burn, then Burn drops by 1. You burn at the end of your turn, enemies when they act.'],
     ['chill', 'Chill', '❄', '#9fd8ff', 'debuff', 'count', 'At 3 Chill, freeze solid and reset.'],
     ['freeze', 'Frozen', '🧊', '#2ee6d6', 'debuff', 'turns', 'Enemies skip their action. You lose a grab.'],
     ['regen', 'Regen', '💚', '#6bd35e', 'buff', 'count', 'Heals Regen HP at turn start, then Regen drops by 1.'],
@@ -709,7 +718,10 @@ const DATA = (() => {
   const moreGrabs = (F, v) => {
     if (!CB() || !F.player) return;
     F.player.grabs += v;
-    if (Array.isArray(F.events)) F.events.push({ t: 'grab', v });
+    // Through COMBAT.emit so the event also reaches the open collectors
+    // (the play/endTurn/grabDone return values the game renders).
+    if (CB().emit) CB().emit(F, { t: 'grab', v });
+    else if (Array.isArray(F.events)) F.events.push({ t: 'grab', v });
   };
   // Per-fight relic memory lives on the fight itself.
   const mem = (F) => F.rs || (F.rs = {});
@@ -1172,7 +1184,7 @@ const DATA = (() => {
 
   return {
     ITEMS, STATUS, ENEMIES, ENCOUNTERS, RELICS, EVENTS, CLAW_UPGRADES, BRUSHES, CHARACTERS, ACTS,
-    ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RARITY_WEIGHTS, CHAR_BIAS,
+    ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RARITY_WEIGHTS, CHAR_BIAS, ECONOMY,
     itemText, pool, rollRarity, rewardItems, relicPool,
   };
 })();

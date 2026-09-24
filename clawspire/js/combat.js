@@ -611,7 +611,7 @@ const COMBAT = (() => {
         e.escaped = true;
         e.block = 0;
         F.escaped.push(e.id);
-        text(F, e, 'ESCAPED');
+        // The die event carries escaped:true; the game shows ESCAPED from it.
         emit(F, { t: 'die', idx: F.enemies.indexOf(e), escaped: true });
         retarget(F);
         checkOver(F);
@@ -988,6 +988,9 @@ const COMBAT = (() => {
     return Math.max(0, Math.round(total));
   };
 
+  // Relic hooks and other content emit through here so the event reaches
+  // F.events and every open collector (play/endTurn return values).
+  api.emit = function (F, ev) { return F && ev ? emit(F, ev) : ev; };
   api.isJunk = isJunk;
   api.calcHit = calcHit;
   api.MAX_ALIVE = MAX_ALIVE;

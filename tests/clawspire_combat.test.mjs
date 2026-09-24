@@ -365,7 +365,8 @@ h.test('summon cap, onDeath effects, escape', () => {
   F = fight(['snack'], { hp: 50 }); COMBAT.damage(F, F.player, E0(F), 10); h.eq(F.player.hp, 54, 'onDeath heal feeds the player when alone');
   F = fight(['snack', 'dummy']); F.enemies[1].hp = 90; COMBAT.damage(F, F.player, E0(F), 10); h.eq(F.enemies[1].hp, 94, 'onDeath heal heals allies');
   F = fight(['runner', 'dummy']); const ev = COMBAT.endTurn(F);
-  h.ok(!E0(F).alive && E0(F).escaped, 'escaped'); h.eq(F.kills, 0, 'escape is not a kill'); h.ok(find(ev, 'text').some(t => t.str === 'ESCAPED'), 'ESCAPED text');
+  h.ok(!E0(F).alive && E0(F).escaped, 'escaped'); h.eq(F.kills, 0, 'escape is not a kill'); h.ok(find(ev, 'die').some(d => d.escaped), 'die event flagged escaped');
+  h.ok(!find(ev, 'text').some(t => t.str === 'ESCAPED'), 'no duplicate ESCAPED text (the game shows it from the die event)');
   h.eq(F.target, 1, 'retargets to the survivor'); h.eq(F.phase, 'player', 'fight continues');
   F = fight(['runner']); COMBAT.endTurn(F); h.eq(F.result, 'win', 'last enemy escaping ends the fight'); h.eq(F.escaped.length, 1, 'escaped list');
 });
