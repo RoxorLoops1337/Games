@@ -1,0 +1,450 @@
+// Clawspire map suite: generation rules over many seeds, fog / ink / brush /
+// movement rules, pixel <-> hex round trips, fitting, paths, save round trip.
+// Runs util+map alone, then util+data+map when data.js exists, plus a stub
+// DATA eval to prove the DATA.BRUSHES / ENCOUNTERS / EVENTS paths.
+import fs from 'fs';
+import path from 'path';
+import { harness, boot, source, DIR } from './clawspire_lib.mjs';
+
+const h = harness('clawspire map');
+const { U, MAP } = boot({ only: ['util', 'map'] });
+const SQRT3 = Math.sqrt(3);
+const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+const colOf = (q, r) => q + Math.floor(r / 2);
+const adj = (a, b) => DIRS.some(([dq, dr]) => a.q + dq === b.q && a.r + dr === b.r);
+const tilesOf = (M) => Object.values(M.tiles);
+const gen = (seed, extra) => MAP.generate(Object.assign({ act: 1, rng: U.rng(seed), cols: 12, rows: 7 }, extra || {}));
+const inB = (M, q, r) => r >= 0 && r < M.rows && colOf(q, r) >= 0 && colOf(q, r) < M.cols;
+const snapshot = (M) => JSON.stringify(M);
+const revealedSet = (M) => new Set(tilesOf(M).filter(t => t.revealed).map(t => MAP.key(t.q, t.r)));
+
+/* Checks every structural rule the bible and the brief put on a fresh map. */
+function checkMap(M, label, D) {
+  const tiles = tilesOf(M);
+  h.eq(tiles.length, M.cols * M.rows, label + ' tile count = cols*rows');
+  let bad = 0;
+  for (let r = 0; r < M.rows; r++) {
+    for (let c = 0; c < M.cols; c++) {
+      const q = c - Math.floor(r / 2);
+      const t = M.tiles[MAP.key(q, r)];
+      if (!t || t.q !== q || t.r !== r) bad++;
+    }
+  }
+  h.eq(bad, 0, label + ' rectangle holds q = -floor(r/2) .. cols-1-floor(r/2) per row');
+  const mid = Math.floor(M.rows / 2);
+  h.ok(M.start.r === mid && colOf(M.start.q, M.start.r) === 0, label + ' start at left middle');
+  h.ok(M.boss.r === mid && colOf(M.boss.q, M.boss.r) === M.cols - 1, label + ' boss at right middle');
+  const n = {};
+  for (const t of tiles) n[t.type] = (n[t.type] || 0) + 1;
+  h.ok(tiles.every(t => MAP.TYPES.includes(t.type)), label + ' only known tile types');
+  h.eq(n.start, 1, label + ' one start');
+  h.eq(n.boss, 1, label + ' one boss');
+  h.eq(MAP.tileAt(M, M.start.q, M.start.r).type, 'start', label + ' start tile typed');
+  h.eq(MAP.tileAt(M, M.boss.q, M.boss.r).type, 'boss', label + ' boss tile typed');
+  for (const [t, min] of Object.entries({ shop: 2, rest: 3, forge: 2, elite: 2, treasure: 2, brush: 2, ink: 4 })) {
+    h.ok((n[t] || 0) >= min, `${label} ${t} >= ${min} (got ${n[t] || 0})`);
+  }
+  // Tiny clamped maps are mostly minimums; real sizes must stay fight heavy.
+  if (tiles.length >= 45) h.ok((n.fight || 0) >= Math.floor(0.2 * tiles.length), label + ' plenty of fights');
+  const elites = tiles.filter(t => t.type === 'elite');
+  h.ok(elites.every(e => !adj(e, M.start)), label + ' no elite next to start');
+  h.ok(MAP.neighbors(M, M.boss.q, M.boss.r).every(([q, r]) => M.tiles[MAP.key(q, r)].type !== 'elite'),
+    label + ' boss neighbours hold no elite');
+  const fights = tiles.filter(t => t.type === 'fight' || t.type === 'elite');
+  h.ok(fights.every(t => typeof t.content.diff === 'number' && t.content.diff >= 0 && t.content.diff <= 1),
+    label + ' fight diff in 0..1');
+  h.ok(fights.every(t => Math.abs(t.content.diff - colOf(t.q, t.r) / (M.cols - 1)) < 0.006),
+    label + ' fight diff follows column distance');
+  h.ok(tiles.filter(t => t.type === 'ink').every(t => t.content.ink >= 1 && t.content.ink <= 2), label + ' ink tiles give 1-2');
+  const brushIds = D && D.BRUSHES ? Object.keys(D.BRUSHES) : Object.keys(MAP.FALLBACK_BRUSHES);
+  h.ok(tiles.filter(t => t.type === 'brush').every(t => brushIds.includes(t.content.brush)), label + ' brush tiles carry a known brush');
+  h.ok(tiles.filter(t => t.type === 'gem' || t.type === 'treasure').every(t => t.content.gold > 0), label + ' gem/treasure carry gold');
+  // Fog.
+  const st = MAP.tileAt(M, M.start.q, M.start.r);
+  h.ok(st.revealed && st.visited, label + ' start revealed + visited');
+  h.ok(MAP.neighbors(M, M.start.q, M.start.r).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), label + ' start neighbours revealed');
+  h.ok(MAP.tileAt(M, M.boss.q, M.boss.r).revealed, label + ' boss revealed');
+  h.eq(M.revealedCount, 2 + MAP.neighbors(M, M.start.q, M.start.r).length, label + ' only start, neighbours and boss revealed');
+  h.eq(M.ink, 5, label + ' ink starts at 5');
+  h.ok(M.pos.q === M.start.q && M.pos.r === M.start.r, label + ' pos = start');
+  h.ok(Array.isArray(M.brushes) && M.brushes.length === 0, label + ' no brushes yet');
+  h.ok(MAP.pathExists(M, M.start, M.boss, { any: true }), label + ' boss reachable through the fog');
+  h.ok(!MAP.pathExists(M, M.start, M.boss), label + ' boss not reachable through revealed tiles on a fresh map');
+}
+
+h.test('shape and module hygiene', () => {
+  const src = fs.readFileSync(path.join(DIR, 'js', 'map.js'), 'utf8');
+  h.ok(!/Math\.random/.test(src), 'map.js never uses Math.random');
+  h.ok(!/\b(document|window)\./.test(src), 'map.js never touches the DOM');
+  const top = src.split('\n').filter(l => /^(const|let|var|function|class)\b/.test(l));
+  h.eq(top.length, 1, 'exactly one top-level declaration');
+  h.ok(/^const MAP = \(\(\) => \{/.test(top[0] || ''), 'it is const MAP = (() => {');
+  const mine = [src, fs.readFileSync(new URL(import.meta.url), 'utf8')];
+  h.ok(mine.every(s => !s.includes(String.fromCharCode(0x2014))), 'no em dashes in map.js or this suite');
+  for (const fn of ['generate', 'key', 'neighbors', 'canReveal', 'reveal', 'brush', 'canMove', 'move', 'toPixel',
+    'fromPixel', 'pathExists', 'progress', 'serialize', 'deserialize', 'tileAt', 'reachable', 'revealable', 'hexCorners', 'size']) {
+    h.eq(typeof MAP[fn], 'function', 'MAP.' + fn + ' exists');
+  }
+  h.eq(MAP.key(-2, 5), '-2,5', 'key format');
+});
+
+h.test('200 seeds satisfy every generation rule', () => {
+  for (let s = 1; s <= 200; s++) checkMap(gen(s * 7919, { act: 1 + (s % 3) }), 'seed ' + s);
+});
+
+h.test('determinism and variety', () => {
+  h.eq(snapshot(gen(42)), snapshot(gen(42)), 'same seed, same map');
+  h.ok(snapshot(gen(42)) !== snapshot(gen(43)), 'different seeds differ');
+  const layouts = new Set();
+  for (let s = 1; s <= 20; s++) layouts.add(tilesOf(gen(s)).map(t => t.type).join());
+  h.eq(layouts.size, 20, '20 seeds give 20 layouts');
+});
+
+h.test('other sizes and clamping', () => {
+  checkMap(gen(5, { cols: 16, rows: 9 }), '16x9');
+  checkMap(gen(6, { cols: 9, rows: 5 }), '9x5');
+  const tiny = gen(7, { cols: 2, rows: 1 });
+  h.ok(tiny.cols >= 7 && tiny.rows >= 3, 'tiny request clamps up');
+  checkMap(tiny, 'clamped');
+  const d = MAP.generate({ rng: U.rng(9) });
+  h.ok(d.cols === 12 && d.rows === 7 && d.act === 1, 'defaults 12x7 act 1');
+});
+
+h.test('neighbours', () => {
+  const M = gen(1);
+  const mid = MAP.neighbors(M, 3, 3);
+  h.eq(mid.length, 6, 'interior hex has 6 neighbours');
+  const tl = MAP.neighbors(M, 0, 0);
+  h.ok(tl.length === 2 && tl.every(([q, r]) => inB(M, q, r)), 'top-left corner has 2 in-bound neighbours');
+  for (const t of tilesOf(M)) {
+    const ns = MAP.neighbors(M, t.q, t.r);
+    if (!ns.every(([q, r]) => inB(M, q, r) && adj(t, { q, r }))) { h.ok(false, 'neighbour out of bounds at ' + t.q + ',' + t.r); break; }
+    const exp = DIRS.filter(([dq, dr]) => inB(M, t.q + dq, t.r + dr)).length;
+    if (ns.length !== exp) { h.ok(false, 'neighbour count wrong at ' + t.q + ',' + t.r); break; }
+  }
+  h.ok(MAP.tileAt(M, 99, 99) === null, 'tileAt off the map is null');
+});
+
+h.test('reveal spends ink and respects adjacency', () => {
+  const M = gen(11);
+  const cand = MAP.revealable(M);
+  h.ok(cand.length > 0, 'something is revealable at the start');
+  h.ok(cand.every(t => !t.revealed && MAP.canReveal(M, t.q, t.r)), 'revealable() agrees with canReveal()');
+  const all = tilesOf(M).filter(t => MAP.canReveal(M, t.q, t.r));
+  h.eq(all.length, cand.length, 'revealable() lists every revealable tile');
+  const t = cand[0];
+  const before = M.revealedCount;
+  const got = MAP.reveal(M, t.q, t.r);
+  h.ok(got === M.tiles[MAP.key(t.q, t.r)] && got.revealed, 'reveal returns the tile, now revealed');
+  h.eq(M.ink, 4, 'reveal spends exactly 1 ink');
+  h.eq(M.revealedCount, before + 1, 'revealedCount +1');
+  h.eq(MAP.reveal(M, t.q, t.r), null, 'refuses an already revealed tile');
+  h.eq(MAP.reveal(M, M.start.q, M.start.r), null, 'refuses the start');
+  h.eq(M.ink, 4, 'refusals cost nothing');
+  const far = tilesOf(M).find(x => !x.revealed && !MAP.neighbors(M, x.q, x.r).some(([q, r]) => M.tiles[MAP.key(q, r)].revealed));
+  h.ok(far && !MAP.canReveal(M, far.q, far.r) && MAP.reveal(M, far.q, far.r) === null, 'refuses a tile not touching the revealed area');
+  h.ok(!MAP.canReveal(M, -5, 3) && MAP.reveal(M, 20, 20) === null, 'refuses out of bounds');
+  h.eq(M.ink, 4, 'still 4 ink');
+  // Chain reveals outward: each new tile opens its own neighbours.
+  const outward = MAP.revealable(M).find(x => adj(x, got) && !adj(x, M.start));
+  if (outward) h.ok(MAP.reveal(M, outward.q, outward.r) !== null, 'newly revealed tiles extend the frontier');
+  while (M.ink > 0) { const c = MAP.revealable(M)[0]; MAP.reveal(M, c.q, c.r); }
+  h.eq(M.ink, 0, 'ink runs out');
+  const c = tilesOf(M).find(x => !x.revealed && MAP.neighbors(M, x.q, x.r).some(([q, r]) => M.tiles[MAP.key(q, r)].revealed));
+  h.ok(!MAP.canReveal(M, c.q, c.r) && MAP.reveal(M, c.q, c.r) === null, 'refuses with 0 ink');
+  h.eq(MAP.revealable(M).length, 0, 'revealable() is empty with 0 ink');
+  h.ok(MAP.revealable(M, { brush: true }).length > 0, 'revealable({brush}) ignores ink');
+  h.eq(M.ink, 0, 'ink never goes negative');
+  h.eq(M.revealedCount, tilesOf(M).filter(x => x.revealed).length, 'revealedCount stays in sync');
+});
+
+// Expected footprints, written independently of map.js.
+const EXPECT = {
+  line3: (q, r) => [[q, r], [q + 1, r], [q + 2, r]],
+  splash: (q, r) => [[q, r], ...DIRS.map(([a, b]) => [q + a, r + b])],
+  comb: (q, r) => [-2, -1, 0, 1, 2].map(d => [colOf(q, r) - Math.floor((r + d) / 2), r + d]),
+};
+
+/* Applies brush `id` at `target` (with MAP or the given module) and checks
+   the result against the expected footprint. */
+function brushCase(M, id, target, expectCells, label, mod) {
+  const X = mod || MAP;
+  M.brushes = [id, 'zzz', id];
+  const before = revealedSet(M);
+  const ink = M.ink;
+  const inb = expectCells.filter(([q, r]) => inB(M, q, r)).map(([q, r]) => MAP.key(q, r));
+  const fresh = inb.filter(k => !before.has(k));
+  const got = X.brush(M, id, target.q, target.r);
+  h.ok(Array.isArray(got), label + ' brush applied');
+  if (!got) return;
+  const after = revealedSet(M);
+  h.ok(inb.every(k => after.has(k)), label + ' every in-bounds cell revealed');
+  const added = [...after].filter(k => !before.has(k)).sort();
+  h.eq(added.join(' '), fresh.slice().sort().join(' '), label + ' nothing else revealed');
+  h.eq(got.map(t => MAP.key(t.q, t.r)).sort().join(' '), fresh.slice().sort().join(' '), label + ' returns the newly revealed tiles');
+  h.eq(M.ink, ink, label + ' costs no ink');
+  h.eq(M.brushes.join(), 'zzz,' + id, label + ' consumes exactly one copy');
+  h.eq(M.revealedCount, after.size, label + ' revealedCount in sync');
+}
+
+h.test('fallback brushes reveal exactly their in-bounds cells', () => {
+  for (const id of ['line3', 'splash', 'comb']) {
+    const M = gen(21);
+    const tgt = MAP.revealable(M).find(t => colOf(t.q, t.r) === 2) || MAP.revealable(M)[0];
+    brushCase(M, id, tgt, EXPECT[id](tgt.q, tgt.r), id + ' mid');
+  }
+  // Clipping: reveal the right and top edges by hand, then brush on the edge.
+  for (const id of ['line3', 'splash', 'comb']) {
+    const M = gen(22);
+    const tgt = { q: M.cols - 2 - 0, r: 0 }; // row 0, column cols-2
+    M.tiles[MAP.key(tgt.q - 1, 0)].revealed = true;
+    M.revealedCount = tilesOf(M).filter(t => t.revealed).length;
+    const cells = EXPECT[id](tgt.q, tgt.r);
+    h.ok(cells.some(([q, r]) => !inB(M, q, r)), id + ' edge case really clips');
+    brushCase(M, id, tgt, cells, id + ' edge');
+  }
+  // drip: target + 2 distinct neighbours, same pick every time for (q, r).
+  const M = gen(23);
+  const tgt = MAP.revealable(M)[0];
+  const cells = MAP.brushCells('drip', tgt.q, tgt.r);
+  h.eq(cells.length, 3, 'drip is 3 cells');
+  h.ok(cells[0][0] === tgt.q && cells[0][1] === tgt.r, 'drip includes the target');
+  h.ok(adj(tgt, { q: cells[1][0], r: cells[1][1] }) && adj(tgt, { q: cells[2][0], r: cells[2][1] }), 'drip extras are neighbours');
+  h.ok(MAP.key(...cells[1]) !== MAP.key(...cells[2]), 'drip extras differ');
+  h.eq(JSON.stringify(MAP.brushCells('drip', tgt.q, tgt.r)), JSON.stringify(cells), 'drip is deterministic');
+  const spread = new Set();
+  for (let q = 0; q < 6; q++) for (let r = 0; r < 6; r++) spread.add(JSON.stringify(MAP.brushCells('drip', q, r).slice(1).map(([a, b]) => [a - q, b - r])));
+  h.ok(spread.size >= 6, 'drip varies with (q, r)');
+  brushCase(M, 'drip', tgt, cells, 'drip');
+  // comb reads as a vertical column on screen.
+  const comb = MAP.brushCells('comb', 3, 3).map(([q, r]) => MAP.toPixel(q, r, 20).x);
+  h.ok(Math.max(...comb) - Math.min(...comb) <= SQRT3 * 10 + 1e-9, 'comb stays within half a hex of vertical');
+});
+
+h.test('brush refusals', () => {
+  const M = gen(31);
+  const tgt = MAP.revealable(M)[0];
+  h.eq(MAP.brush(M, 'splash', tgt.q, tgt.r), null, 'refuses a brush you do not own');
+  M.brushes = ['splash', 'mystery'];
+  h.eq(MAP.brush(M, 'mystery', tgt.q, tgt.r), null, 'refuses an unknown brush id');
+  h.eq(MAP.brush(M, 'splash', M.start.q, M.start.r), null, 'refuses a revealed target');
+  const far = tilesOf(M).find(x => !x.revealed && !MAP.neighbors(M, x.q, x.r).some(([q, r]) => M.tiles[MAP.key(q, r)].revealed));
+  h.eq(MAP.brush(M, 'splash', far.q, far.r), null, 'refuses a target away from the revealed area');
+  h.eq(MAP.brush(M, 'splash', 50, 50), null, 'refuses out of bounds');
+  h.eq(M.brushes.join(), 'splash,mystery', 'refusals keep the brush');
+  M.ink = 0;
+  h.ok(Array.isArray(MAP.brush(M, 'splash', tgt.q, tgt.r)), 'brushes work with 0 ink');
+});
+
+h.test('movement', () => {
+  const M = gen(41);
+  const reach = MAP.reachable(M);
+  h.eq(reach.length, MAP.neighbors(M, M.start.q, M.start.r).length, 'all start neighbours reachable');
+  h.ok(!MAP.canMove(M, M.start.q, M.start.r), 'cannot move onto the current tile');
+  h.eq(MAP.move(M, M.boss.q, M.boss.r), null, 'cannot jump to the (revealed) boss');
+  const hiddenAdj = () => MAP.neighbors(M, M.pos.q, M.pos.r).map(([q, r]) => M.tiles[MAP.key(q, r)]).find(t => !t.revealed);
+  const step = reach.find(t => colOf(t.q, t.r) === 1) || reach[0];
+  const got = MAP.move(M, step.q, step.r);
+  h.ok(got === M.tiles[MAP.key(step.q, step.r)], 'move returns the tile');
+  h.ok(M.pos.q === step.q && M.pos.r === step.r, 'move sets pos');
+  h.ok(got.visited, 'move marks visited');
+  const hid = hiddenAdj();
+  h.ok(hid && !MAP.canMove(M, hid.q, hid.r) && MAP.move(M, hid.q, hid.r) === null, 'refuses an adjacent hidden tile');
+  h.ok(M.pos.q === step.q && M.pos.r === step.r, 'refusal keeps pos');
+  const tgt = MAP.reveal(M, hid.q, hid.r);
+  h.ok(MAP.canMove(M, tgt.q, tgt.r), 'revealing it makes it walkable');
+  h.ok(MAP.reachable(M).includes(tgt), 'reachable() lists it');
+  h.ok(MAP.reachable(M).every(t => MAP.canMove(M, t.q, t.r)), 'reachable() agrees with canMove()');
+  h.eq(tilesOf(M).filter(t => MAP.canMove(M, t.q, t.r)).length, MAP.reachable(M).length, 'reachable() is complete');
+  const farRevealed = tilesOf(M).find(t => t.revealed && !adj(t, M.pos) && !(t.q === M.pos.q && t.r === M.pos.r));
+  h.ok(!MAP.canMove(M, farRevealed.q, farRevealed.r), 'refuses a non-adjacent revealed tile');
+  h.ok(!MAP.canMove(M, 99, 0), 'refuses out of bounds');
+  h.ok(MAP.move(M, M.start.q, M.start.r) !== null, 'can walk back to start');
+});
+
+h.test('toPixel / fromPixel round trip', () => {
+  const M = gen(51);
+  h.ok(MAP.toPixel(0, 0, 30).x === 30 && MAP.toPixel(0, 0, 30).y === 30, 'hex (0,0) centred at (size, size)');
+  for (const size of [9, 23.5, 48]) {
+    let bad = 0, badEdge = 0, badDist = 0;
+    const inr = SQRT3 / 2 * size;
+    for (const t of tilesOf(M)) {
+      const p = MAP.toPixel(t.q, t.r, size);
+      const b = MAP.fromPixel(p.x, p.y, size);
+      if (b.q !== t.q || b.r !== t.r) bad++;
+      for (let i = 0; i < 6; i++) {
+        // Toward each edge midpoint (pointy-top: edges face 0, 60, ... deg) and each corner.
+        const ae = (Math.PI / 3) * i, ac = ae - Math.PI / 6;
+        const e = MAP.fromPixel(p.x + Math.cos(ae) * inr * 0.97, p.y + Math.sin(ae) * inr * 0.97, size);
+        const c = MAP.fromPixel(p.x + Math.cos(ac) * size * 0.95, p.y + Math.sin(ac) * size * 0.95, size);
+        if (e.q !== t.q || e.r !== t.r || c.q !== t.q || c.r !== t.r) badEdge++;
+        // Just past the edge lands in the neighbour across it.
+        const o = MAP.fromPixel(p.x + Math.cos(ae) * inr * 1.03, p.y + Math.sin(ae) * inr * 1.03, size);
+        if (!adj(t, o)) badEdge++;
+      }
+      for (const [q, r] of MAP.neighbors(M, t.q, t.r)) {
+        const n = MAP.toPixel(q, r, size);
+        if (Math.abs(Math.hypot(n.x - p.x, n.y - p.y) - SQRT3 * size) > 1e-9) badDist++;
+      }
+    }
+    h.eq(bad, 0, `centres round trip at size ${size}`);
+    h.eq(badEdge, 0, `points near edges and corners stay inside (size ${size})`);
+    h.eq(badDist, 0, `neighbour centres sqrt3*size apart (size ${size})`);
+  }
+  // The offset rectangle really is a rectangle: column 0 centres line up per row parity.
+  const xs0 = [], xs1 = [];
+  for (let r = 0; r < M.rows; r++) (r % 2 ? xs1 : xs0).push(MAP.toPixel(-Math.floor(r / 2), r, 20).x);
+  h.ok(new Set(xs0).size === 1 && new Set(xs1).size === 1 && xs1[0] - xs0[0] === SQRT3 * 10, 'odd rows shoved half a hex right');
+});
+
+h.test('hexCorners and size()', () => {
+  const pts = MAP.hexCorners(100, 50, 20);
+  h.eq(pts.length, 6, '6 corners');
+  h.ok(pts.every(p => Math.abs(Math.hypot(p.x - 100, p.y - 50) - 20) < 1e-9), 'corners at radius size');
+  h.ok(pts.some(p => Math.abs(p.y - 30) < 1e-9 && Math.abs(p.x - 100) < 1e-9), 'pointy top');
+  for (const [cols, rows] of [[12, 7], [9, 5], [16, 9]]) {
+    const M = gen(61, { cols, rows });
+    for (const [w, hh] of [[540, 600], [540, 960], [1200, 400], [320, 320]]) {
+      const f = MAP.size(M, w, hh);
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (const t of tilesOf(M)) {
+        const p = MAP.toPixel(t.q, t.r, f.size);
+        for (const c of MAP.hexCorners(p.x + f.ox, p.y + f.oy, f.size)) {
+          x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); y0 = Math.min(y0, c.y); y1 = Math.max(y1, c.y);
+        }
+      }
+      const tag = `${cols}x${rows} in ${w}x${hh}`;
+      h.ok(x0 >= 8 - 1e-6 && x1 <= w - 8 + 1e-6 && y0 >= 8 - 1e-6 && y1 <= hh - 8 + 1e-6, tag + ' fits with 8px margin');
+      h.ok(Math.abs(x0 - 8) < 1e-6 || Math.abs(y0 - 8) < 1e-6, tag + ' is as large as it can be');
+      h.ok(Math.abs(x0 - (w - x1)) < 1e-6 && Math.abs(y0 - (hh - y1)) < 1e-6, tag + ' is centred');
+    }
+  }
+});
+
+h.test('pathExists', () => {
+  const M = gen(71);
+  h.ok(MAP.pathExists(M, M.start, M.pos), 'trivial path to self');
+  h.ok(MAP.pathExists(M, M.start, { q: MAP.neighbors(M, M.start.q, M.start.r)[0][0], r: MAP.neighbors(M, M.start.q, M.start.r)[0][1] }), 'start to a neighbour');
+  h.ok(!MAP.pathExists(M, M.start, M.boss), 'no revealed path yet');
+  h.ok(MAP.pathExists(M, M.start, M.boss, { any: true }), 'a fogged path exists');
+  // Reveal the middle row: now the boss is reachable on foot.
+  for (let c = 0; c < M.cols; c++) M.tiles[MAP.key(c - Math.floor(M.start.r / 2), M.start.r)].revealed = true;
+  h.ok(MAP.pathExists(M, M.start, M.boss), 'revealed corridor reaches the boss');
+  h.ok(!MAP.pathExists(M, M.start, { q: 0, r: 0 }), 'hidden target is not reachable');
+  h.ok(!MAP.pathExists(M, M.start, { q: 40, r: 0 }), 'out of bounds target is not reachable');
+  // The boss is never walked through: two boss neighbours that only meet at the boss.
+  const B = gen(72);
+  for (const t of tilesOf(B)) t.revealed = false;
+  const bn = MAP.neighbors(B, B.boss.q, B.boss.r).map(([q, r]) => ({ q, r }));
+  let pair = null;
+  for (const a of bn) for (const b of bn) if (!pair && a !== b && !adj(a, b)) pair = [a, b];
+  h.ok(!!pair, 'found two boss neighbours that do not touch');
+  for (const p of [...pair, B.boss]) B.tiles[MAP.key(p.q, p.r)].revealed = true;
+  h.ok(!MAP.pathExists(B, pair[0], pair[1]), 'paths do not pass through the boss');
+  h.ok(MAP.pathExists(B, pair[0], B.boss), 'but may end on it');
+  // Control: the same shape around an ordinary tile does connect.
+  const C = gen(73);
+  for (const t of tilesOf(C)) t.revealed = false;
+  const mid = { q: 3, r: 3 };
+  const cn = MAP.neighbors(C, mid.q, mid.r).map(([q, r]) => ({ q, r }));
+  const cp = [cn[0], cn.find(x => !adj(x, cn[0]) && x !== cn[0])];
+  for (const p of [...cp, mid]) C.tiles[MAP.key(p.q, p.r)].revealed = true;
+  h.ok(C.tiles[MAP.key(3, 3)].type !== 'boss' && MAP.pathExists(C, cp[0], cp[1]), 'an ordinary tile is walked through');
+});
+
+h.test('progress', () => {
+  const M = gen(81);
+  const p = MAP.progress(M);
+  h.eq(p.total, 84, 'total = cols*rows');
+  h.eq(p.revealed, M.revealedCount, 'revealed = revealedCount');
+  h.eq(p.pct, Math.round(100 * p.revealed / 84), 'pct is a rounded percentage');
+  const t = MAP.revealable(M)[0];
+  MAP.reveal(M, t.q, t.r);
+  h.eq(MAP.progress(M).revealed, p.revealed + 1, 'progress follows reveals');
+  for (const x of tilesOf(M)) x.revealed = true;
+  h.eq(MAP.progress(M).pct, 100, '100% when all revealed');
+});
+
+h.test('serialize / deserialize', () => {
+  const M = gen(91, { act: 2 });
+  const t = MAP.revealable(M)[0];
+  MAP.reveal(M, t.q, t.r);
+  MAP.move(M, t.q, t.r) || MAP.move(M, MAP.reachable(M)[0].q, MAP.reachable(M)[0].r);
+  M.brushes.push('splash', 'line3');
+  const o = MAP.serialize(M);
+  const json = JSON.stringify(o);
+  h.eq(json, JSON.stringify(M), 'serialize is deep-equal to M');
+  const D = MAP.deserialize(JSON.parse(json));
+  h.eq(JSON.stringify(D), JSON.stringify(M), 'deserialize round trip is deep-equal');
+  o.tiles[MAP.key(0, 0)].type = 'shop';
+  h.ok(M.tiles[MAP.key(0, 0)].type !== 'shop' || D.tiles[MAP.key(0, 0)].type !== 'shop', 'copies are detached');
+  // Same ops on the original and the loaded copy give the same state.
+  const ops = (X) => {
+    const r1 = MAP.revealable(X)[2];
+    MAP.reveal(X, r1.q, r1.r);
+    const bt = MAP.revealable(X, { brush: true }).slice(-1)[0];
+    MAP.brush(X, 'splash', bt.q, bt.r);
+    const step = MAP.reachable(X).slice(-1)[0];
+    MAP.move(X, step.q, step.r);
+    return X;
+  };
+  const A = ops(MAP.deserialize(MAP.serialize(M)));
+  const Bm = ops(D);
+  h.eq(JSON.stringify(A), JSON.stringify(Bm), 'loaded map behaves identically');
+  h.eq(Bm.revealedCount, tilesOf(Bm).filter(x => x.revealed).length, 'loaded map keeps revealedCount in sync');
+  h.eq(Bm.brushes.join(), 'line3', 'loaded map consumed its brush');
+  const broken = JSON.parse(json);
+  broken.revealedCount = 3;
+  h.eq(MAP.deserialize(broken).revealedCount, M.revealedCount, 'deserialize recomputes a stale revealedCount');
+  h.eq(MAP.deserialize(null), null, 'deserialize(null) is null');
+});
+
+/* Stub DATA: proves map.js reads DATA.BRUSHES lazily (and overrides the
+   fallback), and fills enc/event/brush content from DATA. */
+h.test('stub DATA path', () => {
+  const stub = `const DATA = {
+    BRUSHES: {
+      line3: { id: 'line3', cells: (q, r) => [[q, r], [q, r + 1]] },
+      dot: { id: 'dot', cells: (q, r) => [[q, r]] },
+    },
+    ENCOUNTERS: { 1: { normal: [['rat'], ['slime'], ['bat', 'bat']], elite: [['mimic']], boss: [['hoard']] } },
+    EVENTS: { a: {}, b: {}, c: {} },
+  };`;
+  const src = source(['util', 'map']).replace('const MAP =', stub + '\nconst MAP =') + '\n;return { U, MAP };';
+  const S = new Function(src)();
+  const M = S.MAP.generate({ act: 1, rng: S.U.rng(123) });
+  const P = gen(123);
+  h.eq(tilesOf(M).map(t => t.type).join(), tilesOf(P).map(t => t.type).join(), 'layout identical with and without DATA');
+  const tiles = tilesOf(M);
+  h.ok(tiles.filter(t => t.type === 'fight').every(t => ['rat', 'slime', 'bat'].includes(t.content.enc[0])), 'fights get normal encounters');
+  h.ok(tiles.filter(t => t.type === 'elite').every(t => t.content.enc[0] === 'mimic' && t.content.elite), 'elites get elite encounters');
+  h.eq(S.MAP.tileAt(M, M.boss.q, M.boss.r).content.enc.join(), 'hoard', 'boss gets the boss encounter');
+  h.ok(tiles.filter(t => t.type === 'event').every(t => ['a', 'b', 'c'].includes(t.content.event)), 'events get event ids');
+  h.ok(tiles.filter(t => t.type === 'brush').every(t => ['line3', 'dot'].includes(t.content.brush)), 'brush tiles use DATA brush ids');
+  const tgt = S.MAP.revealable(M).find(t => t.r < M.rows - 1);
+  M.brushes = ['line3', 'dot'];
+  const got = S.MAP.brush(M, 'line3', tgt.q, tgt.r);
+  const exp = [[tgt.q, tgt.r], [tgt.q, tgt.r + 1]].filter(([q, r]) => !P.tiles[MAP.key(q, r)].revealed);
+  h.eq(got.map(t => S.MAP.key(t.q, t.r)).sort().join(' '), exp.map(([q, r]) => MAP.key(q, r)).sort().join(' '), 'DATA.BRUSHES shape wins over the fallback');
+  h.ok(M.brushes.join() === 'dot', 'DATA brush consumed');
+  const other = S.MAP.revealable(M, { brush: true })[0];
+  h.eq(S.MAP.brush(M, 'line3', other.q, other.r), null, 'a spent DATA brush is refused');
+});
+
+/* Real data.js, when the data module has landed. */
+const dataPath = path.join(DIR, 'js', 'data.js');
+if (fs.existsSync(dataPath)) {
+  h.test('real DATA.BRUSHES path', () => {
+    const R = boot({ only: ['util', 'data', 'map'] });
+    const D = R.DATA;
+    h.ok(D && D.BRUSHES, 'DATA.BRUSHES present');
+    for (let s = 1; s <= 30; s++) checkMap(R.MAP.generate({ act: 1 + (s % 3), rng: R.U.rng(s * 31) }), 'data seed ' + s, D);
+    for (const id of Object.keys(D.BRUSHES)) {
+      const M = R.MAP.generate({ act: 1, rng: R.U.rng(500) });
+      const tgt = R.MAP.revealable(M)[0];
+      brushCase(M, id, tgt, D.BRUSHES[id].cells(tgt.q, tgt.r), 'DATA ' + id, R.MAP);
+    }
+  });
+}
+
+h.done();
