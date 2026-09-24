@@ -249,39 +249,39 @@ const STATUS = {
 // machine), steal (takes items out of the machine until it dies), freeze (-1 grab), drain.
 const ENEMIES = {
   // act 1
-  rat:    { n:'Sewer Rat',   e:'🐀', hp:13, mv:[{atk:5},{atk:3,x:2}] },
-  bat:    { n:'Cave Bat',    e:'🦇', hp:10, mv:[{atk:2,x:3},{atk:4,weak:1}] },
-  slime:  { n:'Gloop',       e:'🦠', hp:18, cycle:1, split:'glooplet', mv:[{atk:4},{junk:'slime',n:2,block:3},{atk:6}] },
+  rat:    { n:'Sewer Rat',   e:'🐀', hp:20, mv:[{atk:7},{atk:4,x:2}] },
+  bat:    { n:'Cave Bat',    e:'🦇', hp:16, mv:[{atk:3,x:3},{atk:5,weak:1}] },
+  slime:  { n:'Gloop',       e:'🦠', hp:30, cycle:1, split:'glooplet', mv:[{atk:6},{junk:'slime',n:2,block:3},{atk:9}] },
   glooplet:{ n:'Glooplet',  e:'🦠', hp:5, mv:[{atk:2},{junk:'slime',n:1}] },
-  snake:  { n:'Pit Viper',   e:'🐍', hp:16, mv:[{atk:3,poison:3},{atk:6}] },
-  goblin: { n:'Goblin',      e:'👺', hp:22, mv:[{atk:7},{block:6,atk:3},{str:2}] },
-  ogre:   { n:'Ogre',        e:'👹', hp:58, elite:1, mv:[{atk:12},{block:10,str:2},{atk:6,x:2}] },
+  snake:  { n:'Pit Viper',   e:'🐍', hp:24, mv:[{atk:4,poison:3},{atk:8}] },
+  goblin: { n:'Goblin',      e:'👺', hp:24, mv:[{atk:7},{block:6,atk:3},{str:2}] },
+  ogre:   { n:'Ogre',        e:'👹', hp:48, elite:1, mv:[{atk:10},{block:10,str:2},{atk:6,x:2}] },
   bandit: { n:'Claw Thief',  e:'🥷', hp:48, elite:1, mv:[{steal:1,atk:5},{atk:10},{block:8,atk:4}] },
-  crab:   { n:'The Pinch King', e:'🦞', hp:120, boss:1, cycle:1,
+  crab:   { n:'The Pinch King', e:'🦞', hp:88, boss:1, cycle:1,
             mv:[{atk:7,x:2},{block:14,junk:'rock',n:2},{steal:2,atk:6},{raise:1,atk:12}],
-            mv2:[{atk:9,x:2},{raise:1,block:12,junk:'rock',n:2},{atk:22}] },
+            mv2:[{atk:9,x:2},{raise:1,block:12,junk:'rock',n:2},{atk:18}] },
   // act 2
-  spider: { n:'Weaver',      e:'🕷️', hp:30, mv:[{atk:5,poison:4},{atk:9},{junk:'web',n:2,atk:3}] },
-  wolf:   { n:'Dire Wolf',   e:'🐺', hp:36, mv:[{atk:8},{atk:5,x:2},{str:3,block:5}] },
-  mage:   { n:'Ember Mage',  e:'🧙', hp:28, mv:[{burn:6,atk:3},{atk:10},{block:10,weak:2}] },
+  spider: { n:'Weaver',      e:'🕷️', hp:40, mv:[{atk:5,poison:4},{atk:9},{junk:'web',n:2,atk:3}] },
+  wolf:   { n:'Dire Wolf',   e:'🐺', hp:48, mv:[{atk:8},{atk:5,x:2},{str:3,block:5}] },
+  mage:   { n:'Ember Mage',  e:'🧙', hp:38, mv:[{burn:6,atk:3},{atk:10},{block:10,weak:2}] },
   ghost:  { n:'Wisp',        e:'👻', hp:32, mv:[{atk:9,vuln:1},{block:14},{weak:2,atk:5},{grease:1,atk:4}] },
-  skel:   { n:'Skeleton',    e:'💀', hp:28, mv:[{atk:7,x:2},{block:9},{junk:'bone',n:2,atk:4}] },
-  troll:  { n:'Frost Troll', e:'🧌', hp:100, regen:3, elite:1, mv:[{atk:13,freeze:1},{block:15,str:2},{atk:6,x:3}] },
-  knight: { n:'Black Knight',e:'🤺', hp:88, armor:2, elite:1, mv:[{block:16,atk:6},{atk:20},{str:3,vuln:2}] },
-  dragon: { n:'Cinder Dragon', e:'🐉', hp:220, boss:1, cycle:1,
-            mv:[{burn:7,atk:8},{atk:11,x:2},{block:20,str:3},{junk:'rock',n:3,atk:6},{atk:30}],
-            mv2:[{burn:10,atk:10},{tilt:1,atk:12,x:2},{grease:1,block:18},{atk:34}] },
+  skel:   { n:'Skeleton',    e:'💀', hp:36, mv:[{atk:7,x:2},{block:9},{junk:'bone',n:2,atk:4}] },
+  troll:  { n:'Frost Troll', e:'🧌', hp:80, regen:3, elite:1, mv:[{atk:13,freeze:1},{block:15,str:2},{atk:6,x:3}] },
+  knight: { n:'Black Knight',e:'🤺', hp:78, armor:2, elite:1, mv:[{block:16,atk:6},{atk:20},{str:3,vuln:2}] },
+  dragon: { n:'Cinder Dragon', e:'🐉', hp:140, boss:1, cycle:1,
+            mv:[{burn:6,atk:8},{atk:11,x:2},{block:20,str:3},{junk:'rock',n:3,atk:6},{atk:22}],
+            mv2:[{burn:8,atk:10},{tilt:1,atk:12,x:2},{grease:1,block:18},{atk:26}] },
   // act 3
-  golem:  { n:'Stone Golem', e:'🗿', hp:60, armor:2, mv:[{block:20,atk:5},{atk:17},{atk:9,x:2}] },
-  vamp:   { n:'Vampire',     e:'🧛', hp:58, mv:[{atk:11,drain:1},{weak:2,vuln:2,atk:4},{atk:5,x:3}] },
-  demon:  { n:'Demon',       e:'😈', hp:62, mv:[{burn:8,atk:6},{atk:14},{str:4,block:8}] },
-  zombie: { n:'Rotter',      e:'🧟', hp:74, mv:[{atk:10,poison:5},{junk:'bone',n:3,atk:5},{atk:16}] },
-  imp:    { n:'Imp',         e:'👿', hp:38, mv:[{atk:5,x:3},{burn:5,atk:3},{grease:1,atk:4}] },
+  golem:  { n:'Stone Golem', e:'🗿', hp:75, armor:2, mv:[{block:20,atk:5},{atk:17},{atk:9,x:2}] },
+  vamp:   { n:'Vampire',     e:'🧛', hp:64, mv:[{atk:11,drain:1},{weak:2,vuln:2,atk:4},{atk:5,x:3}] },
+  demon:  { n:'Demon',       e:'😈', hp:68, mv:[{burn:8,atk:6},{atk:14},{str:4,block:8}] },
+  zombie: { n:'Rotter',      e:'🧟', hp:80, mv:[{atk:10,poison:5},{junk:'bone',n:3,atk:5},{atk:16}] },
+  imp:    { n:'Imp',         e:'👿', hp:42, mv:[{atk:5,x:3},{burn:5,atk:3},{grease:1,atk:4}] },
   kraken: { n:'Kraken',      e:'🐙', hp:175, elite:1, mv:[{atk:8,x:4},{steal:2,block:15},{tilt:1,atk:14},{atk:26}] },
   hexer:  { n:'Hex Witch',   e:'🧙‍♀️', hp:150, elite:1, mv:[{weak:3,vuln:3,atk:6},{atk:21},{junk:'bone',n:2,atk:9}] },
   house:  { n:'The House',   e:'🤖', hp:340, boss:1, cycle:1,
-            mv:[{atk:11,x:3},{junk:'rock',n:3,block:22},{steal:3,atk:10},{str:4,freeze:1,atk:6},{tilt:1,atk:20}],
-            mv2:[{tilt:1,atk:12,x:3},{steal:3,grease:1,atk:10},{junk:'rock',n:3,block:25},{atk:48}] },
+            mv:[{atk:9,x:3},{junk:'rock',n:3,block:20},{steal:3,atk:10},{str:3,freeze:1,atk:6},{tilt:1,atk:18}],
+            mv2:[{tilt:1,atk:10,x:3},{steal:3,grease:1,atk:10},{junk:'rock',n:3,block:22},{atk:36}] },
 };
 const ENC = {
   1:{ easy:[['rat'],['bat'],['slime'],['snake']],
@@ -520,6 +520,8 @@ function physStep(h, clawBusy){
     const sp = b.vx * b.vx + b.vy * b.vy;
     if (sp > 1600 * 1600){ const k = 1600 / Math.sqrt(sp); b.vx *= k; b.vy *= k; }
     b.x += b.vx * h; b.y += b.vy * h; b.a += b.w * h;
+    // the claw can shove things into the floor; never let them through it
+    if (b.x > CHW + 4 && b.y > MH - 6){ b.y = MH - 6; if (b.vy > 0) b.vy = 0; }
     if (b.held > 0) b.held -= h * 8;
     if (!clawBusy && sp < 14 * 14 && Math.abs(b.w) < 0.35 && b.held <= 0 && ITEMS[b.it.id].tr !== 'float'){
       b.slT += h;
@@ -690,9 +692,9 @@ function goldGain(n){ const r = G.run; n = Math.round(n * (hasRelic('purse') ? 1
 function mkEnemy(id, depth){
   const d = ENEMIES[id];
   const tm = (d.elite && tilt(1) ? 1.15 : 1) * (d.boss && tilt(5) ? 1.2 : 1) * (!d.elite && !d.boss && tilt(6) ? 1.15 : 1);
-  const hpMul = (1 + 0.4 * depth) * tm, hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
+  const hpMul = (1 + 0.25 * depth) * tm, hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
   return withPassives({ id, d, hp, max: hp, block: 0, st: {}, chill: 0, frozen: false, turn: 0, intent: null, last: -1,
-    x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: 1 + 0.3 * depth, phase2: false });
+    x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: 1 + 0.2 * depth, phase2: false });
 }
 function withPassives(e){
   if (e.d.armor) e.st.armor = e.d.armor;
@@ -773,7 +775,7 @@ function spawnBody(it, instant){
     let ok = true;
     for (const b of W.bodies){ if (Math.hypot(b.x - x, b.y - y) < b.br + 24){ ok = false; break; } }
     if (ok) break;
-    x = rnd(CHW + 28, MW - 28); y -= instant ? 26 : 18;
+    x = rnd(CHW + 28, MW - 28); y = Math.max(-104, y - (instant ? 26 : 18));
   }
   const b = mkBody(it, x, y, rnd(0, TAU));
   b.vx = rnd(-40, 40); b.w = rnd(-2, 2);
