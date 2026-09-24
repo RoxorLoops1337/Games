@@ -134,7 +134,7 @@ test('a full fight can be won by the bot and pays out', () => {
   A.startFight('normal', ['rat'], 0);
   let guard = 0;
   while (A.F && A.G.scr === 'fight' && guard++ < 40000){
-    if (A.F.phase === 'player' && A.F.claw.st === 'idle' && A.F.grabs > 0){
+    if (A.F.phase === 'player' && A.F.claw.st === 'idle' && A.F.grabs > 0 && !A.F.claw.pending){
       const xs = A.W.bodies.filter(b => b.x > A.CHW + 20).map(b => b.x);
       A.F.claw.tx = xs.length ? xs[guard % xs.length] : 200; A.F.claw.pending = true;
     }
@@ -161,7 +161,11 @@ test('map: boss reachable, brush and inks reveal, walking stops at encounters', 
   eq(A2.G.run.brushes, 2);
   const nb = A2.neighbors(m2.cells, m2.pos)[0];
   A2.ACT.tool('line'); A2.tapMap(nb);
-  eq(A2.G.run.inks.line, 0, 'royal ink spent');
+  eq(A2.G.run.inks.line, 1, 'first tap only aims');
+  A2.tapMap(nb);
+  eq(A2.G.run.inks.line, 0, 'second tap paints');
+  A2.ACT.tool('brush');
+  eq(A2.G.run.brushes, 2, 'a brush with nothing new to paint is not spent');
   // walk somewhere painted
   const tgt = m2.cells.findIndex((c, i) => c.rev && !c.v && i !== m2.pos && A2.pathTo(m2, i));
   assert(tgt >= 0);
@@ -234,6 +238,50 @@ test('draw() runs on every screen and every enemy', () => {
     A.useItem({ id: 'bomb', lvl: 2 }); steps(A, 30); A.draw();
   }
   A.showBag(); A.showHelp(); A.draw();
+});
+
+test('fixes: vulnerable lasts through the enemy turn, thorns stop multi-hits, heart gem once per fight', () => {
+  const A = fresh(41);
+  A.startFight('normal', ['rat'], 0);
+  const F = A.F, e = F.enemies[0];
+  F.P.st.vuln = 1; e.intent = { atk: 10 }; F.phase = 'player';
+  eq(A.intentBits(e)[0][1], '15', 'preview includes vulnerable');
+  A.endPlayerTurn(); const hp = A.G.run.hp;
+  let g = 0; while (A.F.phase === 'enemy' && g++ < 400) A.stepFight(1 / 60);
+  eq(hp - A.G.run.hp, 15, 'vulnerable applied to the real hit');
+  const B = fresh(42); B.startFight('normal', ['rat'], 0);
+  const e2 = B.F.enemies[0]; e2.hp = 1; B.F.P.st.thorns = 5; B.F.phase = 'enemy';
+  const hp2 = B.G.run.hp; B.doMove(e2, { atk: 3, x: 3 });
+  eq(hp2 - B.G.run.hp, 3, 'dead attacker stops hitting');
+  const C = fresh(43); C.startFight('normal', ['rat'], 0);
+  const mx = C.G.run.max, it = { id: 'heart', lvl: 1, uid: 999 };
+  C.useItem(it); C.useItem(it);
+  eq(C.G.run.max, mx + 1, 'max HP from one heart once per fight');
+});
+
+test('reload mid-fight puts you back in the fight; reload on rewards keeps them', () => {
+  const A = fresh(44), r = A.G.run;
+  const c = r.map.cells[r.map.pos]; c.k = 'fight'; c.done = false;
+  A.saveRun();
+  const B = boot({ store: A._store }); B.ACT.continue();
+  eq(B.G.scr, 'fight', 'fight resumes');
+  B.F.enemies.forEach(e => B.killEnemy(e));
+  for (let i = 0; i < 120; i++) B.stepFight(1 / 60);
+  assert(B.G.rq, 'reward pending');
+  const C = boot({ store: B._store }); C.ACT.continue();
+  assert(C.G.rq && C.G.rq.stages.length, 'reward restored after reload');
+});
+
+test('input: long press inspects instead of dropping; release over the chute cancels', () => {
+  const A = fresh(45);
+  A.startFight('normal', ['rat'], 0); for (let i = 0; i < 200; i++) A.stepFight(1 / 60);
+  const b = A.W.bodies[0];
+  A.onDown(A.MX + b.x, A.MY + b.y);
+  A.update(0.3); A.update(0.3);
+  assert(A.G.tip, 'tooltip shows'); A.draw();
+  A.onUp(); assert(!A.F.claw.pending, 'no drop after inspect');
+  A.onDown(250, 450); A.onMove(40, 450); A.onUp();
+  assert(!A.F.claw.pending, 'release over chute cancels');
 });
 
 test('input: drag aims, release drops', () => {
