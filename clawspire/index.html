@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#12091f">
+<title>CLAWSPIRE -- a claw machine roguelike</title>
+<meta name="description" content="Strap a cursed arcade claw to your back and climb the Clawspire. Your deck is a bin of real objects, your turn is a handful of claw drops.">
+<style>
+:root{
+  --ink:#12091f; --ink2:#1b1030; --panel:#22163a; --panel2:#2c1d4a;
+  --line:#3d2a63; --line2:#5a3f8f;
+  --text:#f3ecff; --dim:#b3a4d6; --dimmer:#8d7fb3;
+  --pink:#ff2e88; --pink2:#ff6bb0;
+  --cyan:#2ee6d6; --cyan2:#8dfff5;
+  --gold:#ffc94d; --lime:#a6ff5e; --blood:#ff5a4a;
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px); --safe-r:env(safe-area-inset-right,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--ink);color:var(--text);
+  font-family:"Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none;touch-action:none}
+button{font-family:inherit}
+#wrap{position:fixed;inset:0;background:var(--ink);overflow:hidden;
+  padding:var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l)}
+#stage{position:absolute;width:540px;height:960px;left:0;top:0;transform-origin:0 0;
+  background:var(--ink2);overflow:hidden;touch-action:none}
+#cv{position:absolute;left:0;top:0;width:540px;height:960px;display:block;touch-action:none}
+
+/* ---------- shared chrome ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;min-width:44px;
+  padding:8px 18px;border-radius:12px;border:2px solid var(--line2);
+  background:linear-gradient(180deg,#3a2a60,#241a40);color:var(--text);font-size:15px;font-weight:900;
+  letter-spacing:.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 0 #120a22,0 6px 14px rgba(0,0,0,.4);
+  transition:transform .06s,filter .12s}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #120a22}
+.btn.pri{border-color:var(--pink);background:linear-gradient(180deg,#7a1a4c,#4a1030);color:#fff;
+  box-shadow:0 4px 0 #3a0a22,0 0 22px rgba(255,46,136,.35)}
+.btn.go{border-color:var(--cyan);background:linear-gradient(180deg,#0f5a58,#0a3538);
+  box-shadow:0 4px 0 #062224,0 0 22px rgba(46,230,214,.28)}
+.btn.gold{border-color:var(--gold);background:linear-gradient(180deg,#8a6210,#4d3608);color:#fff8e0;
+  box-shadow:0 4px 0 #2a1d04,0 0 18px rgba(255,201,77,.3)}
+.btn.ghost{background:transparent;box-shadow:none;border-color:var(--line)}
+.btn.sm{min-height:44px;padding:6px 12px;font-size:13px}
+.btn:disabled,.btn.off{opacity:.38;cursor:default;box-shadow:none;transform:none}
+.btn.toggle.on{border-color:var(--lime);color:var(--lime)}
+.panel{background:linear-gradient(180deg,var(--panel2),var(--panel));border:2px solid var(--line);
+  border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.06)}
+h1{margin:0;font-size:30px;letter-spacing:.14em;font-weight:900;color:#fff;text-transform:uppercase;
+  text-shadow:0 0 18px rgba(255,46,136,.45)}
+h2{margin:0;font-size:16px;letter-spacing:.14em;color:var(--cyan2);text-transform:uppercase;font-weight:900}
+h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;font-weight:900}
+.sub{color:var(--dim);font-size:13px;line-height:1.5}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row.center{justify-content:center}
+.grow{flex:1}
+.col{display:flex;flex-direction:column;gap:10px}
+.hr{height:2px;background:linear-gradient(90deg,var(--pink),transparent);margin:4px 0}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:8px;background:#17102a;
+  border:1px solid var(--line);font-size:12px;color:var(--dim);letter-spacing:.04em}
+.tag.gold{color:var(--gold);border-color:#7a5a1a}
+.tag.cyan{color:var(--cyan);border-color:#1a6a64}
+.tag.pink{color:var(--pink2);border-color:#7a1a4c}
+.tag.lime{color:var(--lime);border-color:#4a7a1a}
+.big{font-size:22px;font-weight:900;color:#fff}
+.mono{font-variant-numeric:tabular-nums}
+
+/* ---------- fight HUD layers (stage coordinates) ---------- */
+.hud{position:absolute;left:0;right:0;pointer-events:none;display:none}
+.hud.show{display:flex}
+.hud button,.hud .tap{pointer-events:auto}
+#top{top:0;height:70px;align-items:center;gap:6px;padding:6px 8px;
+  background:linear-gradient(180deg,rgba(18,9,31,.96),rgba(18,9,31,.72));border-bottom:2px solid var(--line)}
+#portrait{width:54px;height:54px;border-radius:12px;border:2px solid var(--line2);background:#0d0718;flex:0 0 auto}
+.stat{display:flex;flex-direction:column;justify-content:center;min-width:52px;height:54px;padding:0 6px;
+  border-radius:10px;background:rgba(0,0,0,.28);border:1px solid var(--line);font-weight:900;line-height:1.05}
+.stat .k{font-size:12px;letter-spacing:.14em;color:var(--dimmer);text-transform:uppercase}
+.stat .v{font-size:17px;color:#fff}
+.stat.hp .v{color:var(--blood)}
+.stat.hp .blk{color:var(--cyan);font-size:12px}
+.stat.gold .v{color:var(--gold)}
+.stat.ink .v{color:var(--cyan)}
+.stat.act .v{font-size:13px;color:var(--pink2)}
+#relics{display:flex;gap:4px;flex:1;min-width:0;height:54px;align-items:center;overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;pointer-events:auto}
+#relics::-webkit-scrollbar{display:none}
+.relic{width:44px;height:44px;flex:0 0 auto;border-radius:10px;border:2px solid var(--line2);background:#150c26;
+  display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;padding:0}
+.relic canvas{width:36px;height:36px;display:block}
+#playerRow{top:338px;height:44px;align-items:center;gap:8px;padding:0 10px}
+#pstatus{display:flex;gap:4px;flex:1;min-width:0;overflow:hidden}
+.pip{display:inline-flex;align-items:center;gap:3px;height:44px;padding:0 9px;border-radius:9px;
+  background:#1a1030;border:1.5px solid var(--line2);font-size:13px;font-weight:900;color:#fff;cursor:pointer;
+  pointer-events:auto}
+.pip.debuff{border-color:var(--blood)}
+.pip.buff{border-color:var(--lime)}
+#grabs{display:flex;gap:7px;align-items:center;justify-content:center;min-width:120px;height:40px;padding:0 12px;
+  border-radius:20px;background:rgba(18,9,31,.85);border:2px solid var(--line2)}
+#grabs .g{width:20px;height:20px;border-radius:50%;border:2.5px solid var(--cyan);background:var(--cyan);
+  box-shadow:0 0 10px rgba(46,230,214,.8)}
+#grabs .g.used{background:transparent;box-shadow:none;border-color:var(--dimmer)}
+#grabs .lbl{font-size:12px;letter-spacing:.14em;color:var(--cyan2);text-transform:uppercase;font-weight:900;margin-right:2px}
+#grabs,#pstatus{transition:opacity .2s}
+#playerRow.bannerOn #grabs,#playerRow.bannerOn #pstatus{opacity:.1}
+#banner{position:absolute;left:0;right:0;top:-30px;height:100px;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;opacity:0;transition:opacity .2s}
+#banner.show{opacity:1}
+#banner span{font-size:34px;font-weight:900;letter-spacing:.12em;color:#fff;text-transform:uppercase;
+  text-shadow:0 0 22px var(--pink),0 4px 0 #3a0a22;transform:rotate(-3deg)}
+#banner.jackpot span{color:var(--gold);text-shadow:0 0 26px var(--gold),0 4px 0 #4d3608;animation:pop .5s ease}
+#banner.enemy span{color:var(--blood);text-shadow:0 0 22px var(--blood),0 4px 0 #3a0a0a}
+#banner.turn span{color:var(--cyan2);text-shadow:0 0 22px var(--cyan),0 4px 0 #062224}
+@keyframes pop{0%{transform:scale(.4) rotate(-8deg)}60%{transform:scale(1.15) rotate(-3deg)}100%{transform:scale(1) rotate(-3deg)}}
+#ctrl{top:830px;height:130px;flex-direction:column;gap:6px;padding:6px 10px;
+  background:linear-gradient(0deg,rgba(18,9,31,.98),rgba(18,9,31,.8));border-top:2px solid var(--line)}
+#tray{display:flex;gap:6px;height:60px;align-items:center;overflow:hidden}
+.chip{display:flex;align-items:center;gap:6px;height:56px;padding:4px 10px 4px 4px;border-radius:12px;
+  background:linear-gradient(180deg,#2c1d4a,#1b1030);border:2px solid var(--gold);min-width:0;flex:0 1 250px;
+  animation:chipIn .35s cubic-bezier(.2,1.4,.4,1);box-shadow:0 0 14px rgba(255,201,77,.25)}
+.chip.fade{opacity:0;transition:opacity .5s}
+.chip canvas{width:46px;height:46px;flex:0 0 auto}
+.chip .n{font-size:13px;font-weight:900;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .t{font-size:12px;color:var(--dim);line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+@keyframes chipIn{0%{transform:translateY(40px) scale(.6);opacity:0}100%{transform:none;opacity:1}}
+.ctrlRow{display:flex;align-items:center;gap:10px;height:52px}
+#hint{flex:1;font-size:14px;color:var(--cyan2);letter-spacing:.04em;line-height:1.3;min-width:0}
+#endTurn{min-width:150px;height:52px}
+#endTurn:disabled{opacity:.45;filter:grayscale(1);border-style:dashed;color:var(--dim)}
+
+/* ---------- popovers, toasts, coach marks ---------- */
+#pop{position:absolute;display:none;max-width:300px;padding:10px 12px;font-size:13px;line-height:1.45;
+  color:var(--text);z-index:40;pointer-events:none}
+#pop.show{display:block}
+#pop b{color:var(--gold)}
+#toast{position:absolute;left:50%;top:400px;transform:translateX(-50%);padding:10px 16px;border-radius:12px;
+  background:rgba(18,9,31,.95);border:2px solid var(--cyan);color:#fff;font-size:15px;font-weight:900;
+  letter-spacing:.04em;opacity:0;transition:opacity .25s;pointer-events:none;z-index:45;max-width:500px;text-align:center;line-height:1.35}
+#toast.show{opacity:1}
+#coach{position:absolute;display:none;left:40px;right:40px;top:540px;padding:14px;z-index:42;gap:10px;
+  flex-direction:column;border-color:var(--cyan);pointer-events:auto}
+#coach.show{display:flex}
+#coach .t{font-size:15px;line-height:1.45}
+#coach .t b{color:var(--cyan2)}
+#coach .arrow{position:absolute;left:50%;bottom:-14px;width:0;height:0;border-left:12px solid transparent;
+  border-right:12px solid transparent;border-top:14px solid var(--cyan);transform:translateX(-50%)}
+
+/* ---------- full screen overlays ---------- */
+.screen{position:absolute;inset:0;display:none;flex-direction:column;gap:10px;z-index:20;
+  background:rgba(18,9,31,.94);padding:16px;overflow:auto;overscroll-behavior:contain;
+  scrollbar-width:none;pointer-events:auto}
+.screen::-webkit-scrollbar{display:none}
+.screen.show{display:flex}
+.screen.clear{background:transparent;pointer-events:none;justify-content:flex-end}
+.screen.clear .menu{pointer-events:auto}
+.screen.mapHead{background:transparent;pointer-events:none;justify-content:flex-start;padding:0;top:70px;bottom:auto;
+  height:100px;gap:0}
+.screen.mapHead .mh{pointer-events:auto;background:linear-gradient(180deg,rgba(18,9,31,.92),rgba(18,9,31,.7));
+  border-bottom:2px solid var(--line);padding:5px 10px;display:flex;flex-direction:column;gap:4px;height:100px}
+.mh .l1{display:flex;align-items:center;gap:8px}
+.mh .l1 h2{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
+.mh .l2{display:flex;align-items:center;gap:6px;min-height:44px}
+.mh .l2 .hint{flex:1;min-width:0;font-size:12px;color:var(--dim);line-height:1.25}
+.brush{display:inline-flex;align-items:center;gap:4px;height:44px;padding:0 12px;border-radius:10px;
+  border:2px solid var(--line2);background:#1a1030;color:#fff;font-size:13px;font-weight:900;cursor:pointer}
+.brush.sel{border-color:var(--lime);color:var(--lime);box-shadow:0 0 12px rgba(166,255,94,.4)}
+.menu{display:flex;flex-direction:column;gap:10px;align-items:center;padding:60px 0 24px;
+  background:linear-gradient(180deg,rgba(18,9,31,0),rgba(18,9,31,.88) 26%,rgba(18,9,31,.96))}
+.menu .btn{width:280px}
+.menu .row{justify-content:center}
+.menu .row .btn{width:auto;min-width:88px}
+.tt-sub{color:var(--cyan2);font-size:13px;letter-spacing:.3em;text-transform:uppercase;text-align:center;font-weight:900}
+.footer{color:var(--dimmer);font-size:12px;text-align:center}
+
+/* cards */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cards.two{grid-template-columns:repeat(2,1fr)}
+.cards.one{grid-template-columns:1fr}
+.card{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 8px;min-height:44px;
+  border-radius:14px;border:2px solid var(--line2);background:linear-gradient(180deg,#2c1d4a,#180f2c);
+  cursor:pointer;color:var(--text);text-align:center;box-shadow:0 4px 0 #120a22;transition:transform .08s}
+.card:active{transform:translateY(3px);box-shadow:none}
+.card.sel{border-color:var(--lime);box-shadow:0 0 16px rgba(166,255,94,.45)}
+.card.locked{opacity:.5;border-style:dashed;cursor:default}
+.card.sold{opacity:.4;cursor:default}
+.card canvas{width:84px;height:84px;display:block}
+.card .name{font-size:14px;font-weight:900;color:#fff;line-height:1.15}
+.card .text{font-size:12px;color:var(--dim);line-height:1.35}
+.card .price{font-size:14px;font-weight:900;color:var(--gold)}
+.card .rar{position:absolute;top:6px;right:8px;font-size:12px;font-weight:900;letter-spacing:.1em;color:var(--dimmer)}
+.card .rar.u{color:var(--cyan)} .card .rar.r{color:var(--pink2)} .card .rar.l{color:var(--gold)} .card .rar.junk{color:var(--blood)}
+.card .cnt{position:absolute;top:6px;left:8px;min-width:22px;height:22px;border-radius:11px;background:var(--gold);color:#2a1d04;
+  font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.card .plus{position:absolute;bottom:6px;right:8px;font-size:12px;font-weight:900;color:var(--lime)}
+.charcard{align-items:stretch;text-align:left;gap:8px;padding:12px}
+.charcard .head{display:flex;gap:10px;align-items:center}
+.charcard canvas{width:72px;height:72px}
+.charcard .name{font-size:18px}
+.charcard .title{font-size:12px;color:var(--pink2);letter-spacing:.1em;text-transform:uppercase;font-weight:900}
+.charcard .stats{display:flex;gap:6px;flex-wrap:wrap}
+.charcard .lock{font-size:12px;color:var(--gold);font-weight:900}
+.choice{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px 14px;min-height:56px;text-align:left;
+  text-transform:none;letter-spacing:0;width:100%}
+.choice .c1{font-size:15px}
+.choice .c2{font-size:12px;color:var(--dim);font-weight:700}
+.list{display:flex;flex-direction:column;gap:8px}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.25)}
+.kv b{color:var(--gold)}
+.help p{margin:0 0 6px;font-size:14px;line-height:1.5;color:var(--dim)}
+.help b{color:#fff}
+.help h3{margin-top:8px}
+.statusList{display:flex;flex-direction:column;gap:4px}
+.statusList .kv{font-size:13px}
+.eventArt{height:110px;border-radius:12px;border:2px solid var(--line);background:#0d0718;display:block;width:100%}
+.eventPic{height:auto;aspect-ratio:3/2;max-height:220px;object-fit:cover}
+/* optional PNG icons: js/art.js adds .art-ui-<key> to <html> once art/ui/<key>.png has loaded */
+.art-ui-coin .stat.gold .k::before,.art-ui-ink .stat.ink .k::before,.art-ui-brush .brush::before{content:'';display:inline-block;
+  width:14px;height:14px;margin-right:3px;vertical-align:-2px;background:center/contain no-repeat}
+.art-ui-coin .stat.gold .k::before{background-image:url(art/ui/coin.png)}
+.art-ui-ink .stat.ink .k::before{background-image:url(art/ui/ink.png)}
+.art-ui-brush .brush::before{width:20px;height:20px;margin-right:0;background-image:url(art/ui/brush.png)}
+.shopSec{display:flex;flex-direction:column;gap:8px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.grid4 .card canvas{width:56px;height:56px}
+.grid4 .card .name{font-size:12px}
+.grid4 .card .text{display:none}
+.center{text-align:center}
+.spacer{flex:1}
+
+@media (max-width:400px){ .cards{gap:6px} }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+  <canvas id="cv" width="540" height="960"></canvas>
+
+  <!-- top bar: portrait, hp/block, gold, ink, act, relics -->
+  <div id="top" class="hud">
+    <canvas id="portrait" width="108" height="108" class="tap"></canvas>
+    <div class="stat hp tap" id="hpStat"><span class="k">HP</span><span class="v mono" id="hpTxt">0/0</span><span class="blk mono" id="blockTxt"></span></div>
+    <div class="stat gold"><span class="k">Gold</span><span class="v mono" id="goldTxt">0</span></div>
+    <div class="stat ink"><span class="k">Ink</span><span class="v mono" id="inkTxt">0</span></div>
+    <div class="stat act"><span class="k">Act</span><span class="v" id="actTxt">1</span></div>
+    <div id="relics"></div>
+  </div>
+
+  <!-- player row: statuses, grabs pips, turn banner -->
+  <div id="playerRow" class="hud">
+    <div id="pstatus"></div>
+    <div id="grabs"></div>
+    <div id="banner"><span id="bannerTxt"></span></div>
+  </div>
+
+  <!-- control bar -->
+  <div id="ctrl" class="hud">
+    <div id="tray"></div>
+    <div class="ctrlRow">
+      <div id="hint">steer and release</div>
+      <button id="endTurn" class="btn pri">End turn</button>
+    </div>
+  </div>
+
+  <div id="coach" class="panel"><div class="t" id="coachTxt"></div><div class="row"><button id="coachBtn" class="btn go sm">Got it</button></div><div class="arrow"></div></div>
+  <div id="pop" class="panel"></div>
+  <div id="toast"></div>
+
+  <!-- overlays -->
+  <div id="scr-title" class="screen clear"><div class="menu" id="titleMenu"></div></div>
+  <div id="scr-chars" class="screen"><div id="charsBody" class="col"></div></div>
+  <div id="scr-map" class="screen mapHead"><div class="mh" id="mapHead"></div></div>
+  <div id="scr-reward" class="screen"><div id="rewardBody" class="col"></div></div>
+  <div id="scr-shop" class="screen"><div id="shopBody" class="col"></div></div>
+  <div id="scr-event" class="screen"><div id="eventBody" class="col"></div></div>
+  <div id="scr-rest" class="screen"><div id="restBody" class="col"></div></div>
+  <div id="scr-forge" class="screen"><div id="forgeBody" class="col"></div></div>
+  <div id="scr-treasure" class="screen"><div id="treasureBody" class="col"></div></div>
+  <div id="scr-bin" class="screen"><div id="binBody" class="col"></div></div>
+  <div id="scr-gameover" class="screen"><div id="gameoverBody" class="col"></div></div>
+  <div id="scr-win" class="screen"><div id="winBody" class="col"></div></div>
+  <div id="scr-help" class="screen"><div id="helpBody" class="col help"></div></div>
+  <div id="scr-collection" class="screen"><div id="collectionBody" class="col"></div></div>
+</div></div>
+
+<script src="js/util.js"></script>
+<script src="js/art.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/data.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/map.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/render.js"></script>
+<script src="js/game.js"></script>
+<script>GAME.boot();</script>
+</body>
+</html>

@@ -73,6 +73,7 @@ const STATIC_PATHS = [
   'merry_crashmas',
   'world_choir_games',
   'grudge_draft',
+  'clawspire',
   'claw_crawl',
   'tools',
 ];
@@ -119,6 +120,27 @@ const copyStatic = () => {
   console.log(`copied ${STATIC_PATHS.length} static paths → dist/`);
 };
 
+// Clawspire's optional illustrations live under clawspire/art/. The game's
+// loader reads art/manifest.json (every PNG present, relative to art/) so a
+// deployed page only requests files that exist; without the manifest it
+// probes every path. Written into dist/ only, never into the source tree.
+const writeArtManifest = () => {
+  const root = path.join(DIST, 'clawspire', 'art');
+  if (!fs.existsSync(root)) return;
+  const out = [];
+  const walk = (dir, rel) => {
+    for (const name of fs.readdirSync(dir)) {
+      const p = path.join(dir, name), r = rel ? rel + '/' + name : name;
+      if (fs.statSync(p).isDirectory()) walk(p, r);
+      else if (/\.png$/i.test(name)) out.push(r);
+    }
+  };
+  walk(root, '');
+  out.sort();
+  fs.writeFileSync(path.join(root, 'manifest.json'), JSON.stringify(out));
+  console.log(`clawspire art manifest: ${out.length} file(s)`);
+};
+
 (async () => {
   if (watch) {
     // In watch mode we just rebuild bundles in place (no dist copy) so the
@@ -137,6 +159,7 @@ const copyStatic = () => {
 
   wipeDist();
   copyStatic();
+  writeArtManifest();
 
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));
