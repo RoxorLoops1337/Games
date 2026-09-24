@@ -204,6 +204,35 @@ const ITEMS = {
 const RAR_NAME = ['Common', 'Uncommon', 'Rare'];
 const POOL = Object.keys(ITEMS).filter(k => !ITEMS[k].junk);
 
+/* ----------------------------- meta progression ----------------------------- */
+// Characters play with different claws and bags.  Tickets from every run unlock
+// them, extra item packs and charms on the Prize Wall.  Tilt is the ascension ladder.
+const CHARS = {
+  raccoon:{ n:'Rico the Raccoon', e:'🦝', cost:0,  d:'All-rounder. 3 drops, normal claw.', claw:{ grabs:3, size:1, grip:0.5 }, hp:60, gold:45,
+            deck:['sword','sword','sword','dagger','dagger','shield','shield','shield','apple','apple','coin','coin','fire'] },
+  frog:   { n:'Fifi the Frog',    e:'🐸', cost:60, d:'4 drops with a small, slippery claw. Starts with Berry Jam.', claw:{ grabs:4, size:0.86, grip:0.42 }, hp:55, gold:40,
+            deck:['dagger','dagger','dagger','pea','shield','shield','banana','banana','jam','poison','coin'] },
+  crab:   { n:'Crusty the Crab',  e:'🦀', cost:90, d:'Only 2 drops, but a huge claw with an iron grip.', claw:{ grabs:2, size:1.3, grip:0.8 }, hp:70, gold:40,
+            deck:['axe','sword','sword','shield','shield','shield','coconut','apple','apple','ice','coin','coin'] },
+  squirrel:{ n:'Hazel the Squirrel', e:'🐿️', cost:60, d:'Hoards coins, shops a lot. Weak grip, +50% gold.', claw:{ grabs:3, size:1, grip:0.4 }, hp:58, gold:90, relic:'purse',
+            deck:['sword','sword','dagger','shield','shield','apple','brocc','coin','coin','coin','coin','fire'] },
+};
+const UNLOCKS = [
+  { id:'toys',   n:'Toy Box',      e:'🧸', cost:30, d:'Adds 🎈 Balloon, 🪃 Boomerang and 🎲 Lucky Die to the prize pool.', items:['balloon','boomer','die'] },
+  { id:'kitchen',n:'Kitchen Pack', e:'🍳', cost:30, d:'Adds 🫙 Berry Jam, 🥥 Coconut and 🌶️ Chili to the prize pool.', items:['jam','coconut','chili'] },
+  { id:'magnet', n:'Magnetism',    e:'🧲', cost:40, d:'Adds the 🧲 Magnet to the prize pool.', items:['magnet'] },
+  { id:'charms', n:'Charm Case',   e:'🪅', cost:45, d:'Adds Piñata, Sharpshooter, Permafrost and Catalyst Leaf to the charm pool.', relics:['pinata','sniper','perma','leaf'] },
+];
+const TILTS = [
+  '', 'Elites have 15% more HP', 'Enemy attacks deal 1 more', 'Start with 8 less max HP', 'One brush fewer per act',
+  'Bosses have 20% more HP', 'Normal enemies have 15% more HP', 'Shops cost 20% more', 'Campfires heal less',
+  'Start with a Cursed Bone', 'Bosses start with 2 strength',
+];
+function tilt(n){ return !!(G.run && (G.run.tilt || 0) >= n); }
+function lockedItems(){ const u = (G.meta && G.meta.unlocked) || []; return UNLOCKS.filter(x => x.items && u.indexOf(x.id) < 0).flatMap(x => x.items); }
+function lockedRelics(){ const u = (G.meta && G.meta.unlocked) || []; return UNLOCKS.filter(x => x.relics && u.indexOf(x.id) < 0).flatMap(x => x.relics); }
+function itemPool(){ const l = lockedItems(); return POOL.filter(k => l.indexOf(k) < 0); }
+
 const STATUS = {
   poison:{ e:'☠️', c:'#8cff6a', d:'Loses HP equal to poison at the start of its turn, then poison drops by 1.' },
   burn:  { e:'🔥', c:'#ff8a3d', d:'Takes damage equal to burn at the start of its turn, then burn halves.' },
@@ -228,7 +257,7 @@ const ENEMIES = {
   goblin: { n:'Goblin',      e:'👺', hp:22, mv:[{atk:7},{block:6,atk:3},{str:2}] },
   ogre:   { n:'Ogre',        e:'👹', hp:58, elite:1, mv:[{atk:12},{block:10,str:2},{atk:6,x:2}] },
   bandit: { n:'Claw Thief',  e:'🥷', hp:48, elite:1, mv:[{steal:1,atk:5},{atk:10},{block:8,atk:4}] },
-  crab:   { n:'The Pinch King', e:'🦀', hp:120, boss:1, cycle:1,
+  crab:   { n:'The Pinch King', e:'🦞', hp:120, boss:1, cycle:1,
             mv:[{atk:7,x:2},{block:14,junk:'rock',n:2},{steal:2,atk:6},{raise:1,atk:12}],
             mv2:[{atk:9,x:2},{raise:1,block:12,junk:'rock',n:2},{atk:22}] },
   // act 2
@@ -632,18 +661,21 @@ function clawMove(h){
 }
 
 /* =============================== RUN ===================================== */
+function charE(){ return (CHARS[G.run && G.run.char] || CHARS.raccoon).e; }
 function hasRelic(id){ return !!(G.run && G.run.relics.indexOf(id) >= 0); }
 function newEntry(id, lvl){ const r = G.run; return { id, lvl: lvl || 1, uid: ++r.uid }; }
-function newRun(seed){
+function newRun(seed, char, tiltLv){
+  const ch = CHARS[char] || CHARS.raccoon, tl = clamp(tiltLv || 0, 0, 10);
   G.run = {
     seed: seed == null ? (Math.random() * 2 ** 31) | 0 : seed,
-    hp: 60, max: 60, gold: 45, deck: [], relics: [], uid: 0,
-    claw: { grabs: 3, size: 1, grip: 0.5 },
-    act: 1, brushes: 3, inks: { dot: 3, line: 1, twin: 0, grand: 0 }, map: null,
-    stats: { kills: 0, fights: 0, grabs: 0, items: 0, gold: 0 }, buys: { claw: 0, remove: 0 },
+    char: CHARS[char] ? char : 'raccoon', tilt: tl,
+    hp: ch.hp - (tl >= 3 ? 8 : 0), max: ch.hp - (tl >= 3 ? 8 : 0), gold: ch.gold, deck: [], relics: ch.relic ? [ch.relic] : [], uid: 0,
+    claw: Object.assign({}, ch.claw),
+    act: 1, brushes: tl >= 4 ? 2 : 3, inks: { dot: 3, line: 1, twin: 0, grand: 0 }, map: null,
+    stats: { kills: 0, fights: 0, grabs: 0, items: 0, gold: 0, slips: 0 }, buys: { claw: 0, remove: 0 },
   };
-  for (const id of ['sword','sword','sword','dagger','dagger','shield','shield','shield','apple','apple','coin','coin','fire'])
-    G.run.deck.push(newEntry(id));
+  for (const id of ch.deck) G.run.deck.push(newEntry(id));
+  if (tl >= 9) G.run.deck.push(newEntry('bone'));
   G.run.map = genMap(1);
   if (G.meta.tut < 5){
     // first run: a lone rat waits right next to the start
@@ -657,7 +689,8 @@ function goldGain(n){ const r = G.run; n = Math.round(n * (hasRelic('purse') ? 1
 /* =============================== COMBAT ================================== */
 function mkEnemy(id, depth){
   const d = ENEMIES[id];
-  const hpMul = 1 + 0.4 * depth, hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
+  const tm = (d.elite && tilt(1) ? 1.15 : 1) * (d.boss && tilt(5) ? 1.2 : 1) * (!d.elite && !d.boss && tilt(6) ? 1.15 : 1);
+  const hpMul = (1 + 0.4 * depth) * tm, hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
   return withPassives({ id, d, hp, max: hp, block: 0, st: {}, chill: 0, frozen: false, turn: 0, intent: null, last: -1,
     x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: 1 + 0.3 * depth, phase2: false });
 }
@@ -679,6 +712,7 @@ function rollIntent(e){
   e.last = i;
   const m = Object.assign({}, mv[i]);
   for (const k of ['atk', 'block', 'poison', 'burn']) if (m[k]) m[k] = Math.max(1, Math.round(m[k] * e.mul));
+  if (m.atk && tilt(2)) m.atk += 1;
   e.intent = m;
 }
 function intentBits(e){
@@ -715,6 +749,7 @@ function startFight(kind, ids, depth){
     acc: 0, once: new Set(), dropItems: [], sets: {}, grease: 0, raised: 0, stop: 0, chuteT: 0, cargo: [], enraged: 0, aiming: false, keyDir: 0, got: [], banner: null, junkN: 0, t: 0 };
   layoutEnemies();
   F.enemies.forEach(rollIntent);
+  if (tilt(10)) F.enemies.forEach(e => { if (e.d.boss) addSt(e, 'str', 2); });
   W.bodies = []; buildWalls(); initClaw(); clawSegs();
   // the whole bag rains into the machine
   const items = run.deck.map(d => d).sort(() => Math.random() - 0.5);
@@ -1085,14 +1120,14 @@ function rollItems(n, weights){
   let guard = 0;
   while (out.length < n && guard++ < 200){
     const r = R(); let rar = r < weights[0] ? 0 : r < weights[0] + weights[1] ? 1 : 2;
-    const pool = POOL.filter(k => ITEMS[k].rar === rar && !seen.has(k));
+    const pool = itemPool().filter(k => ITEMS[k].rar === rar && !seen.has(k));
     if (!pool.length) continue;
     const id = pick(pool); seen.add(id); out.push(id);
   }
   return out;
 }
 function rollRelic(){
-  const own = G.run.relics, pool = Object.keys(RELICS).filter(k => own.indexOf(k) < 0);
+  const own = G.run.relics, lk = lockedRelics(), pool = Object.keys(RELICS).filter(k => own.indexOf(k) < 0 && lk.indexOf(k) < 0);
   return pool.length ? pick(pool) : null;
 }
 function randomInk(big){
@@ -1155,7 +1190,7 @@ function nextAct(){
   const run = G.run;
   run.act++;
   run.hp = Math.min(run.max, run.hp + Math.ceil((run.max - run.hp) * 0.6));
-  run.brushes += 2;
+  run.brushes += tilt(4) ? 1 : 2;
   run.map = genMap(run.act);
   toMap();
   toast('Act ' + run.act + ': ' + ACT_NAME[run.act]);
@@ -1452,8 +1487,41 @@ function toTitle(){
     '<p>A claw-machine roguelike. <b>Grab</b> weapons, shields and snacks out of a real-physics claw machine, then paint your way across a foggy hex map to the boss.</p>' +
     (has ? '<button class="btn cy" data-a="continue">Continue run</button><br>' : '') +
     '<button class="btn alt" data-a="newRun">New run</button><br>' +
+    '<button class="btn" data-a="wall">🎟️ Prize Wall (' + m.tickets + ')</button><br>' +
     '<button class="btn ghost sm" data-a="help">How to play</button> <button class="btn ghost sm" data-a="mute">' + (m.muted ? '🔇 Sound off' : '🔊 Sound on') + '</button>' +
-    '<div class="stat"><span><b>' + m.runs + '</b>runs</span><span><b>' + m.wins + '</b>wins</span><span><b>' + (m.best || 0) + '</b>best act</span></div></div>');
+    '<div class="stat"><span><b>' + m.runs + '</b>runs</span><span><b>' + m.wins + '</b>wins</span><span><b>' + (m.best || 0) + '</b>best act</span>' + (m.tiltMax ? '<span><b>' + m.tiltMax + '</b>tilt</span>' : '') + '</div></div>');
+}
+function showSetup(){
+  const m = G.meta;
+  let h = '<div class="pn"><h2>New run</h2><div class="sec">Choose your grabber</div><div class="list">';
+  for (const k of Object.keys(CHARS)){
+    const c = CHARS[k], own = m.chars.indexOf(k) >= 0, sel = m.pickChar === k && own;
+    h += '<button class="li" data-a="pickChar" data-v="' + k + '"' + (own ? '' : ' disabled') + ' style="' + (sel ? 'box-shadow:inset 0 0 0 2px #ffd24d;background:rgba(255,210,77,.12)' : '') + '"><span class="ie">' + c.e + '</span><span class="tx"><b>' + c.n + (own ? '' : ' 🔒') + '</b><small>' + c.d + (own ? '' : ' Unlock on the Prize Wall.') + '</small></span></button>';
+  }
+  h += '</div>';
+  if (m.tiltMax > 0){
+    const t = Math.min(m.pickTilt, m.tiltMax);
+    h += '<div class="sec">Tilt (difficulty)</div><div style="display:flex;align-items:center;justify-content:center;gap:10px"><button class="btn ghost sm" data-a="tiltDn">−</button><b style="font-size:22px">' + t + '</b><button class="btn ghost sm" data-a="tiltUp">+</button></div>' +
+      '<p style="font-size:12px">' + (t ? TILTS.slice(1, t + 1).map((x, i) => (i + 1) + '. ' + x).join('<br>') : 'Normal difficulty. Win to unlock the next Tilt.') + '</p>';
+  }
+  h += '<button class="btn alt" data-a="begin">Start</button><br><button class="btn ghost sm" data-a="title">Back</button></div>';
+  openOv(h);
+}
+function showWall(){
+  const m = G.meta;
+  let h = '<div class="pn"><h2>🎟️ Prize Wall</h2><p>You have <b>' + m.tickets + '</b> tickets. Earn more on every run: 1 per kill, 15 per act cleared, 40 for a win.</p><div class="sec">Grabbers</div><div class="list">';
+  for (const k of Object.keys(CHARS)){
+    const c = CHARS[k]; if (!c.cost) continue;
+    const own = m.chars.indexOf(k) >= 0;
+    h += '<button class="li" data-a="buyUnlock" data-v="' + k + '"' + (own || m.tickets < c.cost ? ' disabled' : '') + '><span class="ie">' + c.e + '</span><span class="tx"><b>' + c.n + '</b><small>' + c.d + '</small></span><span class="pr">' + (own ? '✔' : '🎟️ ' + c.cost) + '</span></button>';
+  }
+  h += '</div><div class="sec">Prize packs</div><div class="list">';
+  for (const u of UNLOCKS){
+    const own = m.unlocked.indexOf(u.id) >= 0;
+    h += '<button class="li" data-a="buyUnlock" data-v="' + u.id + '"' + (own || m.tickets < u.cost ? ' disabled' : '') + '><span class="ie">' + u.e + '</span><span class="tx"><b>' + u.n + '</b><small>' + u.d + '</small></span><span class="pr">' + (own ? '✔' : '🎟️ ' + u.cost) + '</span></button>';
+  }
+  h += '</div><button class="btn" data-a="title">Back</button></div>';
+  openOv(h);
 }
 function toMap(){
   G.scr = 'map'; F = null; G.tool = null; closeOv(); syncBars(); saveRun(); checkStuck();
@@ -1485,7 +1553,7 @@ function showBag(){
 }
 function showCamp(){
   openOv('<div class="pn"><div class="big">🔥</div><h2>Campfire</h2><p>Warm up, eat something green, or tinker with your gear.</p><div class="list">' +
-    '<button class="li" data-a="campRest"><span class="ie">🛌</span><span class="tx"><b>Rest</b><small>Heal ' + Math.round(G.run.max * 0.3) + ' HP</small></span></button>' +
+    '<button class="li" data-a="campRest"><span class="ie">🛌</span><span class="tx"><b>Rest</b><small>Heal ' + campHeal() + ' HP</small></span></button>' +
     '<button class="li" data-a="campUp"><span class="ie">⭐</span><span class="tx"><b>Upgrade an item</b><small>Level one item up (max ★★)</small></span></button>' +
     '</div><button class="btn ghost sm" data-a="leave">Leave</button></div>');
 }
@@ -1499,12 +1567,13 @@ function deckPicker(title, act, filter){
 function shopStock(c){
   if (c.stock) return c.stock;
   const ids = rollItems(4, [0.5, 0.36, 0.14]);
-  const price = id => Math.round([42, 66, 104][ITEMS[id].rar] * (0.9 + R() * 0.2));
+  const price = id => Math.round([42, 66, 104][ITEMS[id].rar] * (0.9 + R() * 0.2) * (tilt(7) ? 1.2 : 1));
   c.stock = { items: ids.map(id => ({ id, p: price(id), sold: false })), relic: rollRelic(), relicP: 130 + ri(30), relicSold: false, ink: 'line', inkP: 28 };
   return c.stock;
 }
-function clawPrice(){ return 85 + G.run.buys.claw * 45; }
-function removePrice(){ return 50 + G.run.buys.remove * 25; }
+function clawPrice(){ return Math.round((85 + G.run.buys.claw * 45) * (tilt(7) ? 1.2 : 1)); }
+function removePrice(){ return Math.round((50 + G.run.buys.remove * 25) * (tilt(7) ? 1.2 : 1)); }
+function campHeal(){ return Math.round(G.run.max * (tilt(8) ? 0.2 : 0.3)); }
 function showShop(){
   const run = G.run, c = run.map.cells[run.map.pos], s = shopStock(c);
   let h = '<div class="pn"><h2>🛒 The Prize Counter</h2><p>You have <b>💰 ' + run.gold + '</b></p><div class="cards">' +
@@ -1519,13 +1588,13 @@ function showShop(){
 }
 const EVENTS = [
   { id:'slot', e:'🪙', t:'The Coin Slot', d:'A rusty coin slot in the dungeon wall hums hopefully.',
-    ch:[ { l:'Insert 25 gold', s:'Get a random uncommon item', ok:r => r.gold >= 25, go:r => { r.gold -= 25; const id = pick(POOL.filter(k => ITEMS[k].rar === 1)); r.deck.push(newEntry(id)); return 'Clunk. Out rolls a ' + ITEMS[id].e + ' ' + ITEMS[id].n + '.'; } },
+    ch:[ { l:'Insert 25 gold', s:'Get a random uncommon item', ok:r => r.gold >= 25, go:r => { r.gold -= 25; const id = pick(itemPool().filter(k => ITEMS[k].rar === 1)); r.deck.push(newEntry(id)); return 'Clunk. Out rolls a ' + ITEMS[id].e + ' ' + ITEMS[id].n + '.'; } },
          { l:'Walk on', s:'', go:() => 'You keep your coins.' } ] },
   { id:'fount', e:'⛲', t:'Mossy Fountain', d:'Clear water trickles over green stone.',
     ch:[ { l:'Drink', s:'Heal 14 HP', go:r => { r.hp = Math.min(r.max, r.hp + 14); return 'Cold and sweet. You feel better.'; } },
          { l:'Bottle it', s:'Gain 3 Precision Ink', go:r => { r.inks.dot += 3; return 'The water turns to ink in the bottle. Handy.'; } } ] },
   { id:'stuck', e:'🎰', t:'The Stuck Prize', d:'A golden prize is jammed in a broken claw machine.',
-    ch:[ { l:'Shake it', s:'60%: rare item. 40%: take 9 damage', go:r => { if (R() < 0.6){ const id = pick(POOL.filter(k => ITEMS[k].rar === 2)); r.deck.push(newEntry(id)); return 'It drops! ' + ITEMS[id].e + ' ' + ITEMS[id].n + ' is yours.'; } r.hp = Math.max(1, r.hp - 9); return 'The machine falls on you. Ouch.'; } },
+    ch:[ { l:'Shake it', s:'60%: rare item. 40%: take 9 damage', go:r => { if (R() < 0.6){ const id = pick(itemPool().filter(k => ITEMS[k].rar === 2)); r.deck.push(newEntry(id)); return 'It drops! ' + ITEMS[id].e + ' ' + ITEMS[id].n + ' is yours.'; } r.hp = Math.max(1, r.hp - 9); return 'The machine falls on you. Ouch.'; } },
          { l:'Leave it', s:'', go:() => 'Some prizes are not meant to be won.' } ] },
   { id:'gnome', e:'🧰', t:'Tinker Gnome', d:'"Nice claw. Shame about the grip. I can fix that, for a price."',
     ch:[ { l:'Pay 45 gold', s:'+15% grip', ok:r => r.gold >= 45 && r.claw.grip < 0.95, go:r => { r.gold -= 45; CLAWUP.grip.ap(r.claw); return 'The prongs click tighter.'; } },
@@ -1554,28 +1623,45 @@ function showEvent(){
     ev.ch.map((x, i) => '<button class="li" data-a="evPick" data-v="' + i + '"' + (x.ok && !x.ok(run) ? ' disabled' : '') + '><span class="tx"><b>' + x.l + '</b>' + (x.s ? '<small>' + x.s + '</small>' : '') + '</span></button>').join('') +
     '</div></div>');
 }
+function runTickets(run, won){ return run.stats.kills + 15 * (run.act - 1) + (won ? 40 + 10 * (run.tilt || 0) : 0); }
 function gameOver(){
-  const run = G.run;
+  const run = G.run, tk = runTickets(run, false);
+  G.meta.tickets += tk;
   G.meta.best = Math.max(G.meta.best || 0, run.act); saveMeta(); clearRun();
   G.scr = 'over'; syncBars();
   openOv('<div class="pn"><div class="big">💀</div><h2>Game over</h2><p>The dungeon keeps your prizes. Act ' + run.act + ', ' + run.stats.kills + ' enemies beaten.</p>' +
-    '<div class="stat"><span><b>' + run.stats.grabs + '</b>drops</span><span><b>' + run.stats.items + '</b>prizes</span><span><b>' + run.stats.gold + '</b>gold</span></div>' +
+    '<div class="stat"><span><b>' + run.stats.grabs + '</b>drops</span><span><b>' + run.stats.items + '</b>prizes</span><span><b>' + (run.stats.slips || 0) + '</b>slips</span></div>' +
+    '<div class="gains"><span class="gain">🎟️ +' + tk + ' Prize Tickets</span></div>' +
     '<button class="btn alt" data-a="newRun">Try again</button><br><button class="btn ghost sm" data-a="title">Title</button></div>');
   sfx('lose');
 }
 function victory(){
-  const run = G.run;
+  const run = G.run, tk = runTickets(run, true);
+  G.meta.tickets += tk;
+  const newTilt = (run.tilt || 0) >= G.meta.tiltMax && G.meta.tiltMax < 10;
+  if (newTilt) G.meta.tiltMax++;
+  G.meta.bestTilt = Math.max(G.meta.bestTilt, run.tilt || 0);
   G.meta.wins++; G.meta.best = 4; saveMeta(); clearRun();
   G.scr = 'over'; F = null; syncBars();
   openOv('<div class="pn"><div class="big">🏆</div><h1>JACK<em>POT!</em></h1><p>You beat <b>The House</b>. The arcade is free, and every prize is yours.</p>' +
     '<div class="stat"><span><b>' + run.stats.kills + '</b>kills</span><span><b>' + run.stats.items + '</b>prizes</span><span><b>' + run.deck.length + '</b>items</span></div>' +
+    '<div class="gains"><span class="gain">🎟️ +' + tk + ' Prize Tickets</span>' + (newTilt ? '<span class="gain">🎰 Tilt ' + G.meta.tiltMax + ' unlocked!</span>' : '') + '</div>' +
     '<button class="btn alt" data-a="newRun">New run</button><br><button class="btn ghost sm" data-a="title">Title</button></div>');
   sfx('win');
 }
 
 /* ============================== ACTIONS ================================== */
 const ACT = {
-  newRun(){ newRun(); toMap(); toast('Act 1: ' + ACT_NAME[1]); },
+  newRun(){ if (G.meta.tut < 5 || (G.meta.chars.length < 2 && !G.meta.tiltMax)){ ACT.begin(); return; } showSetup(); },
+  begin(){ const m = G.meta; newRun(null, m.chars.indexOf(m.pickChar) >= 0 ? m.pickChar : 'raccoon', Math.min(m.pickTilt, m.tiltMax)); toMap(); toast('Act 1: ' + ACT_NAME[1]); },
+  pickChar(v){ if (G.meta.chars.indexOf(v) < 0) return; G.meta.pickChar = v; saveMeta(); showSetup(); },
+  tiltDn(){ G.meta.pickTilt = Math.max(0, G.meta.pickTilt - 1); saveMeta(); showSetup(); },
+  tiltUp(){ G.meta.pickTilt = Math.min(G.meta.tiltMax, G.meta.pickTilt + 1); saveMeta(); showSetup(); },
+  wall(){ showWall(); },
+  buyUnlock(v){ const m = G.meta; let cost = 0;
+    if (CHARS[v]){ if (m.chars.indexOf(v) >= 0) return; cost = CHARS[v].cost; if (m.tickets < cost) return; m.tickets -= cost; m.chars.push(v); }
+    else { const u = UNLOCKS.find(x => x.id === v); if (!u || m.unlocked.indexOf(v) >= 0 || m.tickets < u.cost) return; m.tickets -= u.cost; m.unlocked.push(v); }
+    saveMeta(); sfx('gem'); showWall(); },
   continue(){ const d = loadRunData(); if (!d){ toTitle(); return; } G.run = d; toMap();
     if (d.rq){ G.rq = d.rq; showReward(); return; }
     const c = d.map.cells[d.map.pos];
@@ -1588,7 +1674,7 @@ const ACT = {
   pickItem(v){ if (!G.rq) return; const st = G.rq.stages.shift(); const id = st.ids[+v]; G.run.deck.push(newEntry(id)); sfx('coin'); showReward(); },
   skipStage(){ if (!G.rq) return; G.rq.stages.shift(); showReward(); },
   pickClaw(v){ if (!G.rq) return; G.rq.stages.shift(); CLAWUP[v].ap(G.run.claw); sfx('gem'); showReward(); },
-  campRest(){ const r = G.run; r.hp = Math.min(r.max, r.hp + Math.round(r.max * 0.3)); r.map.cells[r.map.pos].done = true; sfx('heal'); toMap(); },
+  campRest(){ const r = G.run; r.hp = Math.min(r.max, r.hp + campHeal()); r.map.cells[r.map.pos].done = true; sfx('heal'); toMap(); },
   campUp(){ deckPicker('Upgrade which item?', 'campUpPick', d => d.lvl < 3 && !ITEMS[d.id].junk); },
   campUpPick(v){ const r = G.run; r.deck[+v].lvl++; r.map.cells[r.map.pos].done = true; sfx('gem'); toast(ITEMS[r.deck[+v].id].n + ' upgraded!'); toMap(); },
   back(){ const c = G.run.map.cells[G.run.map.pos]; c.k === 'shop' ? showShop() : showCamp(); },
@@ -1633,7 +1719,7 @@ const RUN_KEY = 'clawcrawl_run_v1', META_KEY = 'clawcrawl_meta_v1';
 function loadMeta(){
   let m = null;
   try { m = JSON.parse(localStorage.getItem(META_KEY) || 'null'); } catch (e){ m = null; }
-  G.meta = Object.assign({ runs: 0, wins: 0, best: 0, muted: false, tut: 0 }, m || {});
+  G.meta = Object.assign({ runs: 0, wins: 0, best: 0, muted: false, tut: 0, tickets: 0, unlocked: [], chars: ['raccoon'], tiltMax: 0, pickChar: 'raccoon', pickTilt: 0, bestTilt: -1 }, m || {});
 }
 function saveMeta(){ try { localStorage.setItem(META_KEY, JSON.stringify(G.meta)); } catch (e){} }
 function saveRun(){ if (!G.run) return; try { localStorage.setItem(RUN_KEY, JSON.stringify(G.run)); } catch (e){} }
@@ -1975,7 +2061,7 @@ function drawPlayerRow(){
   const run = G.run, P = F.P;
   ctx.fillStyle = 'rgba(0,0,0,.35)'; rrect(8, 200, VW - 16, 54, 14); ctx.fill();
   const hx = P.hitT > 0 ? Math.sin(P.hitT * 60) * 4 : 0;
-  emoji('🦝', PX - 20 + hx, PY + 1, 34);
+  emoji(charE(), PX - 20 + hx, PY + 1, 34);
   bar(PX + 4, PY - 9, 128, 14, run.hp / run.max, '#6cff9a');
   txt(run.hp + '/' + run.max, PX + 68, PY - 2, 12, '#fff');
   if (P.block > 0){ emoji('🛡️', PX + 146, PY - 2, 20); txt('' + P.block, PX + 146, PY - 1, 11, '#fff'); }
@@ -2122,12 +2208,12 @@ function drawMap(){
   // the player
   const [px, py] = hexXY(cells[m.pos]);
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(px, py + 14, 14, 5, 0, 0, TAU); ctx.fill();
-  emoji('🦝', px, py - 4 + Math.sin(G.time * 5) * 2, 32);
+  emoji(charE(), px, py - 4 + Math.sin(G.time * 5) * 2, 32);
   // top bar
   ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(0, 0, VW, 44);
   txt('❤️ ' + run.hp + '/' + run.max, 10, 22, 15, '#ff8a9c', 'left');
   txt('💰 ' + run.gold, 112, 22, 15, '#ffd24d', 'left');
-  txt('Act ' + run.act + ': ' + ACT_NAME[run.act], VW - 10, 22, 12, '#cfc2ee', 'right');
+  txt('Act ' + run.act + ': ' + ACT_NAME[run.act] + (run.tilt ? '  🎰' + run.tilt : ''), VW - 10, 22, 12, '#cfc2ee', 'right');
   const hint = G.tool ? (G.tool === 'dot' ? 'Tap a foggy hex beside the paint' : 'Tap a hex to aim the ink') : 'Tap a painted hex to walk. Paint the fog below.';
   txt(hint, VW / 2, VH - 84, 13, '#cfc2ee');
   drawCoach();

@@ -20,7 +20,7 @@ toTitle();
 requestAnimationFrame(loop);`;
 
 const EXPOSE = `__out.api = {
-  G, W, PH, ITEMS, ENEMIES, ENC, RELICS, INKS, CLAWUP, EVENTS, STATUS, POOL, MX, MY, MW, MH, CHW, DIVH, RAIL,
+  G, W, PH, CHARS, UNLOCKS, TILTS, ITEMS, ENEMIES, ENC, RELICS, INKS, CLAWUP, EVENTS, STATUS, POOL, MX, MY, MW, MH, CHW, DIVH, RAIL,
   ROWS, COLS, XMIN, XMAX,
   get F(){ return F; }, setF(v){ F = v; },
   newRun, genMap, toMap, toTitle, startFight, stepFight, physStep, collide, mkBody, spawnBody, kinetic, wakeAll,

@@ -352,6 +352,28 @@ test('guided first run: brush, walk, drop, chute, intents', () => {
   assert(!B.G.run.map.cells.some(c => c.tut), 'no tutorial fight once finished');
 });
 
+test('meta: tickets, prize wall, characters and tilt', () => {
+  const A = fresh(71);
+  A.G.meta.tut = 5;
+  A.startFight('normal', ['rat'], 0); A.F.phase = 'enemy'; A.hurtPlayer(999);
+  for (let i = 0; i < 120; i++) A.stepFight(1 / 60);
+  assert(A.G.meta.tickets >= 0 && A.G.scr === 'over', 'run over, tickets banked');
+  A.G.meta.tickets = 500;
+  A.ACT.wall(); A.ACT.buyUnlock('crab'); A.ACT.buyUnlock('toys');
+  assert(A.G.meta.chars.indexOf('crab') >= 0 && A.G.meta.unlocked.indexOf('toys') >= 0, 'unlocks bought');
+  eq(A.G.meta.tickets, 500 - 90 - 30, 'tickets spent');
+  A.G.meta.tiltMax = 10; A.ACT.newRun(); A.ACT.pickChar('crab');
+  for (let i = 0; i < 12; i++) A.ACT.tiltUp();
+  A.ACT.begin();
+  const r = A.G.run;
+  eq(r.char, 'crab'); eq(r.tilt, 10); eq(r.claw.grabs, 2); eq(r.max, 62, 'crab 70 HP minus tilt 3');
+  eq(r.brushes, 2, 'tilt 4 costs a brush'); assert(r.deck.some(d => d.id === 'bone'), 'tilt 9 adds a bone');
+  A.startFight('boss', ['crab'], 0);
+  eq(A.F.enemies[0].st.str, 2, 'tilt 10 boss strength'); A.draw();
+  const B = fresh(72); B.G.meta.unlocked = [];
+  for (let i = 0; i < 40; i++) for (const id of B.rollItems(3, [0.34, 0.33, 0.33])) assert(['magnet', 'balloon', 'boomer', 'die', 'jam', 'coconut', 'chili'].indexOf(id) < 0, 'locked item rolled: ' + id);
+});
+
 test('input: drag aims, release drops', () => {
   const A = fresh(37);
   A.startFight('normal', ['rat'], 0); steps(A, 100);
