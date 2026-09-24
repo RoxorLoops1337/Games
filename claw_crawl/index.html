@@ -1646,10 +1646,13 @@ function drawEnemy(e){
   // intent bubble
   const bits = intentBits(e);
   if (bits.length){
-    const w = bits.length * 44 + 8, ix = e.x - w / 2, iy = e.y - sz * 0.5 - 38;
+    ctx.font = '900 13px "Trebuchet MS",system-ui,sans-serif';
+    const ws = bits.map(b => 24 + (b[1] ? ctx.measureText(b[1]).width + 4 : 0));
+    const w = ws.reduce((a, b) => a + b, 0) + 8, ix = e.x - w / 2, iy = e.y - sz * 0.5 - 38;
     rrect(ix, iy, w, 28, 12); ctx.fillStyle = 'rgba(20,12,36,.9)'; ctx.fill();
     ctx.strokeStyle = bits.some(b => b[0] === '⚔️') ? '#ff5a6a' : '#7d6bb8'; ctx.lineWidth = 2; ctx.stroke();
-    bits.forEach((b, i) => { emoji(b[0], ix + 16 + i * 44, iy + 14, 15); txt(b[1], ix + 36 + i * 44, iy + 15, 13, '#fff'); });
+    let bx = ix + 4;
+    bits.forEach((b, i) => { emoji(b[0], bx + 12, iy + 14, 15); if (b[1]) txt(b[1], bx + 24, iy + 15, 13, '#fff', 'left'); bx += ws[i]; });
   }
   // hp bar
   const bw = e.d.boss ? 120 : 86, by = e.y + sz * 0.5 + 6;
