@@ -1700,7 +1700,7 @@ const GAME = (() => {
           if (!id || id === 'random' || id === 'rare') {
             const rng = rngFor('eventitem');
             let pool = [];
-            if (D().pool) { try { pool = D().pool(id === 'rare' ? 'r' : D().rollRarity ? D().rollRarity(rng) : 'c', run.char) || []; } catch (e) { pool = []; } }
+            if (D().pool) { try { pool = D().pool(id === 'rare' ? 'r' : D().rollRarity ? D().rollRarity(rng, run.act) : 'c', run.char) || []; } catch (e) { pool = []; } }
             if (!pool.length) pool = Object.keys(tbl('ITEMS')).filter((x) => itemDef(x).rarity !== 'junk');
             id = pool.length ? rng.pick(pool) : null;
           }
