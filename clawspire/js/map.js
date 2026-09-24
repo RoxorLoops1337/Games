@@ -82,8 +82,14 @@ const MAP = (() => {
     return false;
   }
 
+  // The boss tile is lit from the start but it is not a foothold: the ink
+  // must grow out from where the player has actually been, or the far side
+  // of the map could be painted open from the boss's doorstep.
   function touchesRevealed(M, q, r) {
-    return neighbors(M, q, r).some(([nq, nr]) => M.tiles[key(nq, nr)].revealed);
+    return neighbors(M, q, r).some(([nq, nr]) => {
+      const t = M.tiles[key(nq, nr)];
+      return t.revealed && (t.type !== 'boss' || t.visited);
+    });
   }
 
   // Available brush ids: the data module's list when present, else the fallback set.

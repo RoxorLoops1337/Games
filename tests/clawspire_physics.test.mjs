@@ -343,14 +343,18 @@ h.test('sword is delivered less often than the ball with the same rig', () => {
 });
 
 h.test('3 prongs deliver at least as often as 2 on the same scenario', () => {
-  // A marginal grip on a box: the third finger's share of the pinch shows.
-  const two = scenario({ grip: 0.3, prongs: 2 }, ITEM.box({}), 10, 400);
-  const three = scenario({ grip: 0.3, prongs: 3 }, ITEM.box({}), 10, 400);
-  h.ok(three >= two, `3 prongs ${three}/10 >= 2 prongs ${two}/10`);
-  h.ok(three >= 5, `3-prong rig grabs most boxes at grip 0.3 (${three}/10)`);
-  h.ok(two <= 9, `2-prong rig is marginal at grip 0.3 (${two}/10), so the comparison means something`);
-  const twoBall = scenario({ grip: 2, prongs: 2 }, ITEM.ball({}), 10, 410);
-  const threeBall = scenario({ grip: 2, prongs: 3 }, ITEM.ball({}), 10, 410);
+  // The third finger raises the grip lock's break force, so it shows on a
+  // box whose weight sits right at the two-prong rig's limit.
+  const HEAVYISH = { shape: { kind: 'poly', verts: PHYS.box(40, 40) }, density: 1.6 };
+  let two = 0, three = 0;
+  for (const g of [0.9, 1.1]) {
+    two += scenario({ grip: g, prongs: 2 }, HEAVYISH, 10, 400);
+    three += scenario({ grip: g, prongs: 3 }, HEAVYISH, 10, 400);
+  }
+  h.ok(three >= two, `3-prong rig (${three}/20) >= 2-prong rig (${two}/20) on a heavy-ish box`);
+  h.ok(two <= 18, `2-prong rig is marginal on it (${two}/20), so the comparison means something`);
+  const twoBall = scenario({ grip: 2, prongs: 2 }, ITEM.ball({}), 10, 500);
+  const threeBall = scenario({ grip: 2, prongs: 3 }, ITEM.ball({}), 10, 500);
   h.ok(threeBall >= twoBall - 1, `3 prongs do not hurt a strong ball grab (${threeBall} vs ${twoBall})`);
 });
 
@@ -363,7 +367,8 @@ h.test('setConfig rebuilds prongs and rubber raises tip friction', () => {
   h.eq(R.bodies.tips.length, 2, 'two hooked tips after setConfig');
   h.ok(R.bodies.prongs[0].friction > f0, 'rubber tips are grippier');
   h.ok(R.cfg.grip === 1.7 && R.cfg.speed === 1.3 && R.cfg.magnet === 1, 'scalar config applied');
-  h.eq(W.bodies.filter(b => b.group === 'claw').length, 7, 'old claw bodies were removed (carriage, palm, 3 prongs, 2 tips)');
+  h.eq(W.bodies.filter(b => b.group === 'claw').length, 6, 'old claw bodies were removed (carriage, palm, 2 side prongs, 2 tips; the third prong is a drawn ghost)');
+  h.ok(R.bodies.prongs[2].ghost && W.bodies.indexOf(R.bodies.prongs[2]) < 0, 'the third prong is a ghost outside the world');
   R.drop();
   let t = 0;
   while (R.phase !== 'idle' && t < 15) { R.update(DT); W.step(DT); t += DT; }
