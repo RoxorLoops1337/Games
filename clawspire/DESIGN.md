@@ -227,6 +227,20 @@ floor 9/10 drops; weak grip drops a heavy 50px box most of the time; sword
 (44×10 box) is harder to lift than a ball; a 3-prong rig lifts more often
 than 2-prong on the same seed; determinism (same inputs => same positions).
 
+#### Slippery items (grip lock hazard)
+
+Beyond weight, an item's shape and surface decide how well it rides the lift:
+`grippiness` is 1 for balls, 0.55 for long thin things (local aspect >= 3:
+swords, chains, wands), 0.75 for small flat discs (coins), 0.65 for glass or
+ice or very low friction. It scales the lock's break force AND gives the item a
+per-second slip hazard (`RIG.slipRate * (1 - grippiness)`) during the jerky
+part of the ride (the lift and the first half second of carriage travel; a
+quarter of that once cruising). Grip upgrades, rubber tips (x1.45) and the
+third prong (x1.3) all divide the hazard. A slip twitches the prongs open for
+0.3 s so the item really falls, emits `'slip'`, and the item cannot re-lock
+during that grab. At grip 1 a lone sword is delivered about two times in
+three; with rubber and two grip upgrades about nine times in ten.
+
 ### `js/data.js` -- `DATA`
 
 Pure content. Objects and small pure functions only, no DOM, no state.

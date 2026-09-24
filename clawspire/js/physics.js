@@ -910,6 +910,13 @@ const PHYS = (() => {
     lockRubber: 1.45,          // rubber tips multiply the break force
     lock3: 1.3,                // third prong multiplies the break force
     lockPalmOnly: 0.8,         // one prong + palm pinch is this fraction as strong
+    gripThin: 0.55,            // lock capacity for long thin items (aspect >= gripThinAspect)
+    gripThinAspect: 3,
+    gripDisc: 0.75,            // small flat discs (coins)
+    gripSlick: 0.65,           // glass / ice / very low friction
+    slipOpen: 0.3,             // s the prongs twitch open after a slip
+    slipRate: 0.5,             // per-second slip hazard at grippiness 0 and grip 1 during the jerky part of the ride (a sword slips about a third of the time at grip 1)
+    slipLate: 0.25,            // hazard multiplier once the carriage cruises
     lockHoldMul: 0.12,         // prong torque while a lock carries the item
     lockGrace: 0.12,           // s after engaging before a lock can break
     lockWindow: 0.6,           // s into the lift during which newly pinched items still lock
@@ -978,6 +985,7 @@ const PHYS = (() => {
     // Internal motion state.
     let carX = homeX, carV = 0, carTarget = homeX;
     let phaseT = 0, quietT = 0, liftV = 0, forceOpen = false, carryCalm = 0, arrivedT = 0, digStart = -1;
+    let slipOpenT = 0, grabNo = 0;   // the claw twitches open for a moment when an item slips; grabNo tags slipped items
     let closeState = 'open';   // what the motors are driving toward
     const heldScratch = new Map();
 
@@ -1077,7 +1085,7 @@ const PHYS = (() => {
     /* Point the motors at open or closed.  jitter: true draws a fresh +-12%
        torque factor per prong (called per substep while holding). */
     function applyMotors(jitter) {
-      const opening = closeState === 'open' || forceOpen;
+      const opening = closeState === 'open' || forceOpen || slipOpenT > 0;
       const toward = opening ? 1 : -1;
       // Closing torque barely depends on grip: it only has to close the prongs
       // around the item (more squeeze just pops it out like a seed). Grip is
@@ -1161,7 +1169,7 @@ const PHYS = (() => {
     }
     function drop() {
       if (R.phase !== 'idle' && R.phase !== 'moving') return false;
-      forceOpen = false;
+      forceOpen = false; slipOpenT = 0; grabNo++;
       setPhase('dropping');
       return true;
     }
@@ -1219,12 +1227,34 @@ const PHYS = (() => {
     const locks = [];
     const dbg = { engaged: 0, broke: 0, lastF: 0, lastCap: 0, lastPhase: '', lastT: 0, peakF: 0, trace: false, breaks: [] };
     R.dbg = dbg;
-    function lockCapacity(rec) {
-      let f = RIG.lockForce * cfg.grip;
+    function lockCapacity(rec, b) {
+      let f = RIG.lockForce * cfg.grip * grippiness(b);
       if (cfg.rubber) f *= RIG.lockRubber;
       if (cfg.prongs === 3) f *= RIG.lock3;
       if (!(rec.prongs >= 2)) f *= RIG.lockPalmOnly;
       return f;
+    }
+    /* How well a body sits in a pinch: long thin things and flat discs slip,
+       glass and ice are slick, balls are easy. data.grip overrides; rubber
+       tips and grip upgrades buy the difference back. */
+    function grippiness(b) {
+      if (b.data && b.data.grip != null) return b.data.grip;
+      let g = 1;
+      const sh = b.shape;
+      if (sh.kind === 'circle') { if (sh.r < 13) g *= RIG.gripDisc; }
+      else if (sh.verts && sh.verts.length) {
+        // Local extents (the world box of a tilted sword looks square).
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const v of sh.verts) { if (v.x < x0) x0 = v.x; if (v.x > x1) x1 = v.x; if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y; }
+        const w = x1 - x0, h = y1 - y0;
+        const aspect = Math.max(w, h) / Math.max(1, Math.min(w, h));
+        if (aspect >= RIG.gripThinAspect) g *= RIG.gripThin;
+        else if (aspect >= RIG.gripThinAspect * 0.6) g *= 1 - (1 - RIG.gripThin) * 0.5;
+      }
+      const tags = b.data && b.data.tags;
+      if (tags && (tags.indexOf('glass') >= 0 || tags.indexOf('ice') >= 0)) g *= RIG.gripSlick;
+      if (b.friction != null && b.friction < 0.2) g *= RIG.gripSlick;
+      return g;
     }
     /* Freeze the prongs in the pose they closed with (the motor holds), so a
        prong cannot drift into an item it no longer collides with. */
@@ -1247,11 +1277,16 @@ const PHYS = (() => {
       for (const [b, rec] of heldScratch) {
         if (!(rec.prongs >= 2 || (rec.prongs >= 1 && rec.palm))) continue;
         if (b.type !== 'dynamic') continue;
+        if (b.data && b.data.slippedGrab === grabNo) continue;
         if (more && locks.some(l => l.b === b)) continue;
         // Offset of the item in the palm frame.
         const dx = b.x - palm.x, dy = b.y - palm.y;
         const lx = dx * palm.c + dy * palm.s, ly = -dx * palm.s + dy * palm.c;
-        locks.push({ b, lx, ly, cap: lockCapacity(rec), load: 0 });
+        // Slippery items (thin, flat, slick) also have a hazard of sliding
+        // out on their own during the ride; grip, rubber and a third prong cut it.
+        const g = grippiness(b);
+        const hazard = RIG.slipRate * (1 - g) / (cfg.grip * (cfg.rubber ? RIG.lockRubber : 1) * (cfg.prongs === 3 ? RIG.lock3 : 1));
+        locks.push({ b, lx, ly, cap: lockCapacity(rec, b), load: 0, hazard });
         // The prongs stop colliding with the item they hold: they keep the
         // pose they closed with, and a wedged item can no longer jam the
         // kinematic palm against the floor through a prong.
@@ -1275,6 +1310,17 @@ const PHYS = (() => {
       for (let i = locks.length - 1; i >= 0; i--) {
         const l = locks[i], b = l.b;
         if (b.type !== 'dynamic' || W.bodies.indexOf(b) < 0) { unlockBody(b); locks.splice(i, 1); if (!locks.length) thawProngs(); continue; }
+        // Slips cluster where the ride jerks: the lift and the first half
+        // second of carriage travel, over the bin. Over the chute they hardly matter.
+        const jerk = R.phase === 'lifting' || (R.phase === 'carrying' && phaseT < 0.5) ? 1 : RIG.slipLate;
+        if (l.hazard > 0 && !(R.phase === 'lifting' && phaseT < RIG.lockGrace) && rand() < l.hazard * jerk * h) {
+          dbg.broke++; dbg.lastPhase = R.phase; dbg.lastT = phaseT;
+          // The item slides out: the claw twitches open so it really falls,
+          // and it cannot be re-locked during this grab.
+          if (b.data) b.data.slippedGrab = grabNo;
+          slipOpenT = RIG.slipOpen; applyMotors();
+          unlockBody(b); locks.splice(i, 1); pending.push('slip'); if (!locks.length) thawProngs(); continue;
+        }
         const tx = palm.x + (l.lx * palm.c - l.ly * palm.s), ty = palm.y + (l.lx * palm.s + l.ly * palm.c);
         const ex = tx - b.x, ey = ty - b.y;
         const dist = Math.hypot(ex, ey);
@@ -1330,6 +1376,7 @@ const PHYS = (() => {
       if (!(dt > 0)) dt = 1 / 60;
       const sp = cfg.speed;
       phaseT += dt;
+      if (slipOpenT > 0) { slipOpenT -= dt; if (slipOpenT <= 0) { slipOpenT = 0; applyMotors(); } }
       // Phase logic first (uses last step's contacts).
       switch (R.phase) {
         case 'idle':
