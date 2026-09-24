@@ -276,7 +276,7 @@ const ENEMIES = {
   vamp:   { n:'Vampire',     e:'🧛', hp:64, mv:[{atk:11,drain:1},{weak:2,vuln:2,atk:4},{atk:5,x:3}] },
   demon:  { n:'Demon',       e:'😈', hp:68, mv:[{burn:8,atk:6},{atk:14},{str:4,block:8}] },
   zombie: { n:'Rotter',      e:'🧟', hp:80, mv:[{atk:10,poison:5},{junk:'bone',n:3,atk:5},{atk:16}] },
-  imp:    { n:'Imp',         e:'👿', hp:42, mv:[{atk:5,x:3},{burn:5,atk:3},{grease:1,atk:4}] },
+  imp:    { n:'Imp',         e:'👿', hp:42, mv:[{atk:3,x:3},{burn:5,atk:3},{grease:1,atk:4}] },
   kraken: { n:'Kraken',      e:'🐙', hp:175, elite:1, mv:[{atk:8,x:4},{steal:2,block:15},{tilt:1,atk:14},{atk:26}] },
   hexer:  { n:'Hex Witch',   e:'🧙‍♀️', hp:150, elite:1, mv:[{weak:3,vuln:3,atk:6},{atk:21},{junk:'bone',n:2,atk:9}] },
   house:  { n:'The House',   e:'🤖', hp:340, boss:1, cycle:1,
@@ -294,6 +294,9 @@ const ENC = {
       hard:[['demon','imp'],['zombie'],['golem','imp'],['vamp','zombie'],['demon']],
       elite:[['kraken'],['hexer']], boss:['house'] },
 };
+// Difficulty per act (enemy HP and attack multipliers), tuned against a bot that plays
+// hundreds of fights with a decent deck for each stage of a run.
+const DIFF = { hp:[1.6, 1.8, 2.25], atk:[1.35, 1.45, 1.65], bossHp:[1.15, 0.95, 1.1], bossAtk:[1, 0.9, 1.55] };
 const ACT_NAME = { 1:'The Mossy Arcade', 2:'The Ember Galleries', 3:'The House Always Wins' };
 
 const RELICS = {
@@ -404,8 +407,13 @@ function bodyVsSeg(b, s, claw){
       const C = F.claw;
       if (s.own === 0 && pen > 1.2 && ny < -0.2) C.touch = true;
       if (s.own !== 0 && pen > 3 && ny < -0.3) C.touch = true;
-      if (s.own === -1 && pen > C.halt) C.hitL = true;
-      if (s.own === 1 && pen > C.halt) C.hitR = true;
+      // a prong only stalls on something in the way of its closing sweep,
+      // not on the pile leaning against its outside
+      const open = ((s.own < 0 ? C.pL : C.pR) - PHI_CLOSED) / (PHI_OPEN - PHI_CLOSED);
+      if (s.own !== 0 && pen > C.halt + 7 * open * open){
+        const omc = s.own * 2.6, cvx = -omc * (py - s.hy), cvy = omc * (px - s.hx);
+        if (cvx * nx + cvy * ny < 0){ if (s.own < 0) C.hitL = true; else C.hitR = true; }
+      }
     }
   }
 }
@@ -522,6 +530,10 @@ function physStep(h, clawBusy){
     b.x += b.vx * h; b.y += b.vy * h; b.a += b.w * h;
     // the claw can shove things into the floor; never let them through it
     if (b.x > CHW + 4 && b.y > MH - 6){ b.y = MH - 6; if (b.vy > 0) b.vy = 0; }
+    // ...or through the side walls and the lid, however hard the claw shoves
+    if (b.x < 5){ b.x = 5; if (b.vx < 0) b.vx = 0; }
+    else if (b.x > MW - 5){ b.x = MW - 5; if (b.vx > 0) b.vx = 0; }
+    if (b.y < -112){ b.y = -112; if (b.vy < 0) b.vy = 0; }
     if (b.held > 0) b.held -= h * 8;
     if (!clawBusy && sp < 14 * 14 && Math.abs(b.w) < 0.35 && b.held <= 0 && ITEMS[b.it.id].tr !== 'float'){
       b.slT += h;
@@ -611,18 +623,20 @@ function clawPlan(h){
     }
     case 'drop':
       C.vy = 250;
-      if (C.touch || C.y >= maxY){ C.st = 'close'; C.t = 0; C.haltL = C.haltR = false; sfx('clamp'); }
+      if (C.touch || C.y >= maxY){ C.st = 'close'; C.t = 0; C.haltL = C.haltR = false; C.blkL = C.blkR = 0; C.halt = 1.5 + 3 * clawGrip(); sfx('clamp'); }
       break;
     case 'close': {
-      if (C.hitL) C.haltL = true;
-      if (C.hitR) C.haltR = true;
-      if (!C.haltL && C.pL > PHI_CLOSED) C.wL = -2.6;
-      if (!C.haltR && C.pR > PHI_CLOSED) C.wR = -2.6;
-      const doneL = C.haltL || C.pL <= PHI_CLOSED, doneR = C.haltR || C.pR <= PHI_CLOSED;
-      if ((doneL && doneR && C.t > 0.18) || C.t > 0.75){
-        C.st = 'lift'; C.t = 0; C.loosen = (1 - clawGrip()) * 0.2 * (0.7 + Math.random() * 0.6);
+      // keep squeezing; a prong that has been blocked for a moment has closed on something
+      C.blkL = C.hitL ? (C.blkL || 0) + h : 0;
+      C.blkR = C.hitR ? (C.blkR || 0) + h : 0;
+      if (!C.hitL && C.pL > PHI_CLOSED) C.wL = -2.6;
+      if (!C.hitR && C.pR > PHI_CLOSED) C.wR = -2.6;
+      if (C.hitL && !C.haltL){ C.haltL = true; sfx('clamp2'); }
+      if (C.hitR && !C.haltR){ C.haltR = true; sfx('clamp2'); }
+      const doneL = C.blkL > 0.08 || C.pL <= PHI_CLOSED, doneR = C.blkR > 0.08 || C.pR <= PHI_CLOSED;
+      if ((doneL && doneR && C.t > 0.18) || C.t > 0.8){
+        C.st = 'lift'; C.t = 0; C.loosen = (1 - clawGrip()) * 0.4 * (0.7 + Math.random() * 0.6);
         F.cargo = W.bodies.filter(b => b.held > 0 && b.y < C.y + 70 * C.s);
-        if (F.cargo.length) sfx('clamp2');
       }
       break;
     }
@@ -692,9 +706,10 @@ function goldGain(n){ const r = G.run; n = Math.round(n * (hasRelic('purse') ? 1
 function mkEnemy(id, depth){
   const d = ENEMIES[id];
   const tm = (d.elite && tilt(1) ? 1.15 : 1) * (d.boss && tilt(5) ? 1.2 : 1) * (!d.elite && !d.boss && tilt(6) ? 1.15 : 1);
-  const hpMul = (1 + 0.25 * depth) * tm, hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
+  const act = (G.run && G.run.act) || 1;
+  const hpMul = (1 + 0.25 * depth) * tm * DIFF.hp[act - 1] * (d.boss ? DIFF.bossHp[act - 1] : 1), hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
   return withPassives({ id, d, hp, max: hp, block: 0, st: {}, chill: 0, frozen: false, turn: 0, intent: null, last: -1,
-    x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: 1 + 0.2 * depth, phase2: false });
+    x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: (1 + 0.2 * depth) * DIFF.atk[act - 1] * (d.boss ? DIFF.bossAtk[act - 1] : 1), phase2: false });
 }
 function withPassives(e){
   if (e.d.armor) e.st.armor = e.d.armor;
