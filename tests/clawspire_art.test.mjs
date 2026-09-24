@@ -114,11 +114,15 @@ const FOLDERS = {
     set src(v) { this._src = v; }
     get src() { return this._src; }
   };
+  // No manifest on this fake server: the loader must fall back to probing.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = () => Promise.resolve({ ok: false, json: () => Promise.resolve(null) });
   try {
     const api = boot({ only: ['util', 'art', 'data', 'map', 'render'] });
     const { ART } = api;
     h.eq(ART.load(), true, 'ART.load runs when Image exists');
     h.eq(ART.load(), false, 'ART.load runs once');
+    await new Promise(r => setTimeout(r, 5));   // the manifest fetch settles, then the probes are issued
     const M = ART.paths();
     h.eq(made.length, M.length, 'one request per manifest path (' + made.length + ')');
     h.eq(new Set(made.map(i => i._src)).size, made.length, 'no path requested twice');
@@ -146,6 +150,33 @@ const FOLDERS = {
     h.eq(st.found, exist.size, 'only the existing files were found');
   } finally {
     delete globalThis.Image;
+    globalThis.fetch = realFetch;
+  }
+}
+
+/* ------------------------------------------------- manifest-driven loading */
+{
+  const made = [];
+  globalThis.Image = class {
+    constructor() { made.push(this); }
+    set src(v) { this._src = v; }
+    get src() { return this._src; }
+  };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(['items/sword.png', 'title.png']) });
+  try {
+    const { ART } = boot({ only: ['util', 'art', 'data', 'map', 'render'] });
+    ART.load();
+    await new Promise(r => setTimeout(r, 5));
+    h.eq(made.length, 2, 'with a manifest only the listed files are requested (' + made.length + ')');
+    h.ok(made.some(i => i._src === 'art/items/sword.png') && made.some(i => i._src === 'art/title.png'), 'the listed files are the ones requested');
+    const st = ART.status();
+    h.eq(st.total, ART.paths().length, 'unlisted paths are recorded as missing');
+    h.eq(st.done, ART.paths().length - 2, 'unlisted paths settle at once, the two real requests are pending');
+    h.eq(ART.get('item', 'dagger'), null, 'an unlisted file is null without a request');
+  } finally {
+    delete globalThis.Image;
+    globalThis.fetch = realFetch;
   }
 }
 

@@ -141,7 +141,25 @@ const ART = (() => {
     if (started || typeof Image === 'undefined') return false;
     started = true;
     manifest = null;
+    // The build writes art/manifest.json (the list of PNGs that exist), so a
+    // deployed page requests only real files. Without it (a file:// preview,
+    // a dev server) every path is probed and the 404s are harmless.
+    if (typeof fetch === 'function') {
+      fetch(ROOT + 'manifest.json', { cache: 'no-cache' })
+        .then(r => (r.ok ? r.json() : null))
+        .then(list => request(Array.isArray(list) ? new Set(list) : null))
+        .catch(() => request(null));
+    } else request(null);
+    return true;
+  }
+  /* Request the manifest paths, or only those the given set lists. */
+  function request(present) {
     for (const m of paths()) {
+      if (present && !present.has(m.path.slice(ROOT.length))) {
+        const bucket = recs[m.kind] || (recs[m.kind] = Object.create(null));
+        bucket[m.key] = { path: m.path, img: null, ok: false, done: true };
+        continue;
+      }
       const bucket = recs[m.kind] || (recs[m.kind] = Object.create(null));
       const rec = { path: m.path, img: null, ok: false, done: false };
       bucket[m.key] = rec;
@@ -158,7 +176,6 @@ const ART = (() => {
         img.src = m.path;
       } catch (e) { rec.done = true; }
     }
-    return true;
   }
 
   /* ART.get(kind, key) -> a fully loaded, non-broken HTMLImageElement, else null. */
@@ -178,5 +195,5 @@ const ART = (() => {
     return { total, done, found };
   }
 
-  return { load, get, has, paths, pathOf, status, ROOT };
+  return { load, get, has, paths, pathOf, status, ROOT, _request: request };
 })();
