@@ -85,6 +85,35 @@ test('the claw completes a full cycle and grabs things over many drops', () => {
   assert(rate > 0.3 && rate < 3, 'grab rate out of range: ' + rate.toFixed(2));
 });
 
+test('the claw really closes, and nothing escapes through the walls', () => {
+  const A = fresh(81);
+  for (let i = 0; i < 10; i++) A.G.run.deck.push({ id: ['shield', 'sword', 'apple', 'axe', 'balloon'][i % 5], lvl: 1, uid: 8000 + i });
+  A.startFight('normal', ['rat'], 0);
+  A.F.enemies[0].hp = A.F.enemies[0].max = 99999;
+  const widest = []; let escapes = 0, drops = 0;
+  for (let t = 0; t < 4; t++){
+    let g = 0; while (A.F.phase !== 'player' && g++ < 3000) A.stepFight(1 / 60);
+    while (A.F.grabs > 0 && A.F.phase === 'player'){
+      const xs = A.W.bodies.filter(b => b.x > A.CHW + 20).map(b => b.x);
+      A.F.claw.tx = xs.length ? xs[(drops * 5) % xs.length] : 200; A.F.claw.pending = true;
+      let n = 0, seen = false;
+      while (A.F.claw.st === 'idle' && n < 400){ A.stepFight(1 / 60); n++; }
+      while (A.F.claw.st !== 'idle' && n < 1500){
+        const q = A.F.spawnQ.length;
+        A.stepFight(1 / 60); n++;
+        if (A.F.spawnQ.length > q) escapes++;
+        if (!seen && A.F.claw.st === 'lift'){ seen = true; widest.push(Math.max(A.F.claw.pL, A.F.claw.pR)); }
+      }
+      drops++;
+    }
+    let g2 = 0; while (A.F.phase === 'player' && g2++ < 600) A.stepFight(1 / 60);
+  }
+  widest.sort((a, b) => a - b);
+  const med = widest[widest.length >> 1];
+  assert(med < 0.35, 'prongs should close; median widest prong at lift ' + med.toFixed(2));
+  eq(escapes, 0, 'items escaped the machine and respawned');
+});
+
 test('items come back into the machine every turn', () => {
   const A = fresh(5);
   A.startFight('normal', ['rat'], 0);
