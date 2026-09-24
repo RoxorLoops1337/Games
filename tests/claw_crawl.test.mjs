@@ -33,10 +33,10 @@ test('item data is complete', () => {
 
 test('every enemy move is well formed and every encounter exists', () => {
   const A = A0();
-  const KEYS = new Set(['atk', 'x', 'block', 'str', 'poison', 'burn', 'weak', 'vuln', 'junk', 'n', 'steal', 'freeze', 'drain']);
+  const KEYS = new Set(['atk', 'x', 'block', 'str', 'poison', 'burn', 'weak', 'vuln', 'junk', 'n', 'steal', 'freeze', 'drain', 'grease', 'raise', 'tilt']);
   for (const [id, e] of Object.entries(A.ENEMIES)){
     assert(e.hp > 0 && e.mv.length, 'bad enemy ' + id);
-    for (const m of e.mv) for (const k of Object.keys(m)){ assert(KEYS.has(k), `unknown move key ${k} on ${id}`); if (k === 'junk') assert(A.ITEMS[m.junk] && A.ITEMS[m.junk].junk, 'junk must be a junk item on ' + id); }
+    for (const m of e.mv.concat(e.mv2 || [])) for (const k of Object.keys(m)){ assert(KEYS.has(k), `unknown move key ${k} on ${id}`); if (k === 'junk') assert(A.ITEMS[m.junk] && A.ITEMS[m.junk].junk, 'junk must be a junk item on ' + id); }
   }
   for (const act of [1, 2, 3]) for (const tier of ['easy', 'hard', 'elite']) for (const enc of A.ENC[act][tier]) for (const id of enc) assert(A.ENEMIES[id], 'missing enemy ' + id);
 });
@@ -282,6 +282,74 @@ test('input: long press inspects instead of dropping; release over the chute can
   A.onUp(); assert(!A.F.claw.pending, 'no drop after inspect');
   A.onDown(250, 450); A.onMove(40, 450); A.onUp();
   assert(!A.F.claw.pending, 'release over chute cancels');
+});
+
+test('traits: balloons float, magnets pull metal, coconuts bounce', () => {
+  const A = fresh(51);
+  A.startFight('normal', ['rat'], 0);
+  A.F.enemies[0].hp = A.F.enemies[0].max = 9999;
+  A.W.bodies.length = 0;
+  const bal = A.spawnBody({ id: 'balloon', lvl: 1, uid: 900 }, true); bal.x = 200; bal.y = 280;
+  const mag = A.spawnBody({ id: 'magnet', lvl: 1, uid: 901 }, true); mag.x = 150; mag.y = 290;
+  const coin = A.spawnBody({ id: 'coin', lvl: 1, uid: 902 }, true); coin.x = 240; coin.y = 290;
+  A.F.spawnQ.length = 0;
+  for (let i = 0; i < 240; i++) A.stepFight(1 / 60);
+  assert(bal.y < 200, 'balloon should rise, y=' + bal.y.toFixed(0));
+  assert(Math.hypot(coin.x - mag.x, coin.y - mag.y) < 50, 'coin should be pulled to the magnet');
+});
+
+test('set bonuses, combo multiplier and new items', () => {
+  const A = fresh(52);
+  A.startFight('normal', ['goblin'], 0);
+  const F = A.F, e = F.enemies[0]; e.hp = e.max = 500; A.G.run.hp = 30;
+  F.dropItems = [{ id: 'apple' }, { id: 'banana' }]; F.sets = {};
+  const hp = A.G.run.hp; A.collect({ it: { id: 'apple', lvl: 1, uid: 1 }, x: 10, y: 10 });
+  assert(A.G.run.hp > hp, 'salad heals');
+  A.useItem({ id: 'sword', lvl: 1 }, 3); eq(e.hp, 500 - 7, 'third item in a drop: sword x1.3 = 7');
+  A.useItem({ id: 'chili', lvl: 1 }); eq(e.st.burn, 3, 'chili burns all');
+  A.G.run.hp = 20; F.P.st.poison = 5; A.useItem({ id: 'garlic', lvl: 1 }); eq(F.P.st.poison, 0, 'garlic cleanses');
+  const h = e.hp; A.useItem({ id: 'pea', lvl: 1 }); eq(h - e.hp, 5, 'pea pod hits five times');
+  const q = F.spawnQ.length; A.collect({ it: { id: 'boomer', lvl: 1, uid: 77 }, x: 10, y: 10 }); eq(F.spawnQ.length, q + 1, 'boomerang flies back');
+});
+
+test('enemies: gloop splits, bosses reach phase 2, tilt, grease and raise work', () => {
+  const A = fresh(53);
+  A.startFight('normal', ['slime'], 0);
+  A.killEnemy(A.F.enemies[0]);
+  eq(A.F.enemies.filter(e => !e.dead).length, 2, 'two glooplets'); eq(A.F.phase, 'player', 'fight goes on');
+  const B = fresh(54); B.startFight('boss', ['crab'], 0);
+  const c = B.F.enemies[0]; B.hitEnemy(c, Math.ceil(c.max / 2) + 5);
+  assert(c.phase2, 'phase 2 at half HP');
+  B.F.phase = 'enemy';
+  B.doMove(c, { raise: 1 }); assert(B.W.segs[3].ay < B.MH - B.DIVH, 'wall raised');
+  B.doMove(c, { grease: 1 }); B.doMove(c, { tilt: 1 });
+  const g0 = B.clawGrip(); B.endPlayerTurn(); B.F.phase = 'player'; B.playerTurnStart(false);
+  assert(B.clawGrip() < g0, 'greased prongs grip worse');
+  B.F.phase = 'player'; B.endPlayerTurn(); eq(B.W.segs[3].ay, B.MH - B.DIVH, 'wall back down');
+  B.draw();
+});
+
+test('guided first run: brush, walk, drop, chute, intents', () => {
+  const A = boot(); A.newRun(61); A.toMap();
+  eq(A.G.meta.tut, 0);
+  const m = A.G.run.map, fightI = m.cells.findIndex(c => c.tut);
+  assert(fightI >= 0 && A.neighbors(m.cells, m.pos).indexOf(fightI) >= 0, 'a tutorial fight sits next to the start');
+  A.ACT.tool('brush'); eq(A.G.meta.tut, 1, 'brush beat');
+  A.tapMap(fightI); for (let i = 0; i < 40 && A.G.walk; i++) A.stepWalk(0.2);
+  eq(A.G.scr, 'fight'); eq(A.G.meta.tut, 2, 'fight beat'); eq(A.F.enemies[0].id, 'rat');
+  A.draw();
+  let g = 0;
+  while (A.G.meta.tut < 5 && g++ < 20000){
+    if (A.F.phase === 'player' && A.F.claw.st === 'idle' && A.F.grabs > 0 && !A.F.claw.pending){
+      const xs = A.W.bodies.filter(b => b.x > A.CHW + 20).map(b => b.x); A.F.claw.tx = xs.length ? xs[g % xs.length] : 200; A.F.claw.pending = true;
+    }
+    A.F.enemies[0].hp = A.F.enemies[0].max = 999;
+    A.stepFight(1 / 60);
+    if (g % 500 === 0) A.draw();
+  }
+  eq(A.G.meta.tut, 5, 'tutorial completes');
+  const B = boot({ store: A._store }); B.newRun(62);
+  assert(!B.G.run.map.cells.some(c => c.tut), 'no tutorial fight once finished');
 });
 
 test('input: drag aims, release drops', () => {
