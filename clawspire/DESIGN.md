@@ -581,8 +581,9 @@ rewards → shop → boss → act 2 → save/load round trip → game over path.
 
 `DATA.DIFFICULTY = { hp, dmg }` multiplies every enemy's hit points and every
 attack/charge value on top of the bands below (combat.js makeEnemy). It is the
-one dial to turn when the claw's yield changes; the basket claw ships at
-hp 1.6, dmg 1.35.
+one dial to turn when the claw's yield changes. It ships at hp 3.0, dmg 1.7,
+where the perfect-aim bot loses about 6 runs in 10 (knight 38%, alchemist 75%,
+rogue 13% wins over 8 runs each); the owner tunes it by hand from there.
 
 
 - Character HP 70 (knight 80, alchemist 60, rogue 65). Act 1 normal enemies 12-30 hp,
