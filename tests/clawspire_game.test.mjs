@@ -84,8 +84,9 @@ h.test('newRun(knight, seed) -> map with start neighbours revealed', () => {
 
 h.test('tapping a hidden hex reveals it for 1 ink', () => {
   const M = G.run.map;
-  const cand = MAP.revealable(M)[0];
-  h.ok(cand, 'a revealable tile exists');
+  const cand = MAP.revealable(M).find(t => t.terrain === 'land');
+  h.ok(cand, 'a revealable land tile exists');
+  G.lookAt(cand.q, cand.r);
   const p = G.hexToStage(cand.q, cand.r);
   const back = G.stageToHex(p.x, p.y);
   h.ok(back.q === cand.q && back.r === cand.r, 'hex <-> stage round trip');
@@ -96,58 +97,172 @@ h.test('tapping a hidden hex reveals it for 1 ink', () => {
   h.eq(M.ink, G.run.ink, 'map ink in sync');
   // A far hidden tile cannot be revealed.
   const far = Object.values(M.tiles).find(t => !t.revealed && !MAP.canReveal(M, t.q, t.r));
-  if (far) { const fp = G.hexToStage(far.q, far.r); const ink2 = G.run.ink; G.tap(fp.x, fp.y); h.eq(G.run.ink, ink2, 'far tile costs nothing'); h.ok(!far.revealed, 'far tile stays hidden'); }
+  if (far) { G.lookAt(far.q, far.r); const fp = G.hexToStage(far.q, far.r); const ink2 = G.run.ink; G.tap(fp.x, fp.y); h.eq(G.run.ink, ink2, 'far tile costs nothing'); h.ok(!far.revealed, 'far tile stays hidden'); G.S.preview = null; }
+  G.lookAt(M.pos.q, M.pos.r);
 });
 
-h.test('map: 10x7 grid drawn as a portrait climb with hexes big enough to tap', () => {
+h.test('map camera: 16x22 world at 46 px hexes, centred on the player, boss arrow off screen', () => {
   const M = G.run.map;
-  h.ok(M.cols === 10 && M.rows === 7, 'game builds a 10x7 map');
-  const a = G.hexToStage(M.start.q, M.start.r), b = G.hexToStage(M.start.q + 1, M.start.r);
+  h.ok(M.cols === 16 && M.rows === 22, 'game builds a 16x22 world');
+  h.ok(M.water >= 0.2 && M.water <= 0.4 && M.islands >= 2 && M.islands <= 4, `water ${M.water}, islands ${M.islands}`);
+  G.lookAt(M.pos.q, M.pos.r);
+  const a = G.hexToStage(M.pos.q, M.pos.r), b = G.hexToStage(M.start.q + 1, M.start.r);
+  h.ok(Math.abs(a.x - 270) < 1 && Math.abs(a.y - 556) < 1, 'the player hex sits at the centre of the map area (' + a.x.toFixed(0) + ',' + a.y.toFixed(0) + ')');
   const size = Math.hypot(b.x - a.x, b.y - a.y) / Math.sqrt(3);
-  h.ok(size >= 40 && size <= 44, 'hex size on the stage in 40..44 px (got ' + size.toFixed(2) + ')');
+  h.ok(Math.abs(size - 46) < 0.01 && G.cam.zoom === 1, 'hex size on the stage is 46 px at zoom 1 (got ' + size.toFixed(2) + ')');
   const bs = G.hexToStage(M.boss.q, M.boss.r);
-  h.ok(Math.abs(a.x - 270) < 1 && Math.abs(bs.x - 270) < 1, 'start and boss on the stage centre line');
-  h.ok(bs.y < a.y && bs.y >= 172 && a.y <= 960, 'boss above the start, both inside the map area');
+  h.ok(Math.abs(bs.x - a.x) < 1 && bs.y < 172, 'the boss is straight up and off the screen');
+  const arrow = G.bossArrow();
+  h.ok(arrow && Math.abs(arrow.y - 208) < 1 && arrow.x > 0 && arrow.x < 540 && Math.abs(arrow.a + Math.PI / 2) < 0.01, 'boss arrow at the top edge pointing up');
+  G.draw();
+  G.lookAt(M.boss.q, M.boss.r);
+  h.ok(G.bossArrow() === null, 'no arrow while the boss is in view');
   let bad = 0;
-  for (const t of Object.values(M.tiles)) { const p = G.hexToStage(t.q, t.r); const back = G.stageToHex(p.x, p.y); if (back.q !== t.q || back.r !== t.r || p.y < 172 || p.y > 960 || p.x < 0 || p.x > 540) bad++; }
-  h.eq(bad, 0, 'every hex round-trips through hexToStage/stageToHex inside the map area');
+  for (const t of Object.values(M.tiles)) { const p = G.hexToStage(t.q, t.r); const back = G.stageToHex(p.x, p.y); if (back.q !== t.q || back.r !== t.r) bad++; }
+  h.eq(bad, 0, 'every hex round-trips through hexToStage/stageToHex');
   h.ok(Object.values(M.tiles).every(t => t.known === MAP.isLandmark(t)), 'landmarks known from the start');
   h.ok(Object.values(M.tiles).filter(t => t.type === 'tower').length >= 2, 'towers on the map');
+  G.draw();
+  G.lookAt(M.pos.q, M.pos.r);
+});
+
+h.test('map camera: drag pans without tapping, a still tap reveals, clamp, wheel and pinch zoom, locate recentres', () => {
+  const M = G.run.map;
+  G.lookAt(M.pos.q, M.pos.r);
+  const c0 = Object.assign({}, G.cam);
+  const ink = G.run.ink, rev = MAP.progress(M).revealed;
+  G.pointer('down', 270, 400, { pointerId: 1 });
+  G.pointer('move', 270, 420, { pointerId: 1 });
+  G.pointer('move', 270, 500, { pointerId: 1 });
+  G.pointer('up', 270, 500, { pointerId: 1 });
+  h.ok(Math.abs(G.cam.y - (c0.y - 100)) < 1e-6 && G.cam.x === c0.x, 'a 100 px drag down slides the view 100 world px toward the boss (' + (c0.y - G.cam.y).toFixed(1) + ')');
+  h.ok(G.run.ink === ink && MAP.progress(M).revealed === rev && !G.S.preview, 'a drag never taps');
+  const pAfter = G.hexToStage(M.pos.q, M.pos.r);
+  h.ok(Math.abs(pAfter.y - (556 + 100)) < 1e-6, 'the player hex moved with the drag');
+  // A finger that wobbles under 8 px is still a tap.
+  const cand = MAP.revealable(M).find(t => t.terrain === 'land');
+  G.lookAt(cand.q, cand.r);
+  const p = G.hexToStage(cand.q, cand.r);
+  G.pointer('down', p.x, p.y, { pointerId: 1 });
+  G.pointer('move', p.x + 3, p.y - 2, { pointerId: 1 });
+  G.pointer('up', p.x + 3, p.y - 2, { pointerId: 1 });
+  h.ok(cand.revealed && G.run.ink === ink - 1, 'a tap without a drag reveals the hex');
+  // Clamp: no amount of dragging leaves the map plus its margin.
+  for (let i = 0; i < 40; i++) { G.pointer('down', 270, 800, { pointerId: 1 }); G.pointer('move', 270, 200, { pointerId: 1 }); G.pointer('up', 270, 200, { pointerId: 1 }); }
+  const bounds = MAP.bounds(M, 46, 'v');
+  h.ok(Math.abs(G.cam.y - bounds.h) < 1e-6, 'camera clamps with its centre on the bottom edge (' + G.cam.y.toFixed(0) + ' of ' + bounds.h.toFixed(0) + ')');
+  for (let i = 0; i < 40; i++) { G.pointer('down', 100, 500, { pointerId: 1 }); G.pointer('move', 500, 500, { pointerId: 1 }); G.pointer('up', 500, 500, { pointerId: 1 }); }
+  h.ok(Math.abs(G.cam.x) < 1e-6, 'camera clamps with its centre on the left edge (' + G.cam.x.toFixed(0) + ')');
+  // Wheel zoom, both ways, within 0.6..1.4.
+  for (let i = 0; i < 30; i++) G.wheel(270, 556, -300);
+  h.ok(Math.abs(G.cam.zoom - 1.4) < 1e-9, 'wheel up zooms in to the 1.4 cap');
+  for (let i = 0; i < 60; i++) G.wheel(270, 556, 300);
+  h.ok(Math.abs(G.cam.zoom - 0.6) < 1e-9, 'wheel down zooms out to the 0.6 floor');
+  const q = G.hexToStage(M.start.q + 1, M.start.r), q0 = G.hexToStage(M.start.q, M.start.r);
+  h.ok(Math.abs(Math.hypot(q.x - q0.x, q.y - q0.y) / Math.sqrt(3) - 46 * 0.6) < 0.01, 'hex size on the stage follows the zoom');
+  let bad = 0;
+  for (const t of Object.values(M.tiles)) { const pp = G.hexToStage(t.q, t.r); const back = G.stageToHex(pp.x, pp.y); if (back.q !== t.q || back.r !== t.r) bad++; }
+  h.eq(bad, 0, 'round trip holds at zoom 0.6');
+  // Pinch: two fingers spreading zoom in about their midpoint, and never tap.
+  const ink2 = G.run.ink, rev2 = MAP.progress(M).revealed;
+  G.pointer('down', 200, 500, { pointerId: 1 });
+  G.pointer('down', 340, 500, { pointerId: 2 });
+  G.pointer('move', 150, 500, { pointerId: 1 });
+  G.pointer('move', 390, 500, { pointerId: 2 });
+  h.ok(Math.abs(G.cam.zoom - 0.6 * 240 / 140) < 1e-6, 'pinch zoom = spread ratio (' + G.cam.zoom.toFixed(3) + ')');
+  G.pointer('up', 150, 500, { pointerId: 1 });
+  G.pointer('up', 390, 500, { pointerId: 2 });
+  h.ok(G.run.ink === ink2 && MAP.progress(M).revealed === rev2 && !G.S.preview, 'a pinch never taps');
+  // Locate eases back onto the player.
+  G.S.cam.zoom = 1;
+  G.locate();
+  for (let i = 0; i < 120; i++) G.update(1 / 60);
+  const me = G.hexToStage(M.pos.q, M.pos.r);
+  h.ok(Math.abs(me.x - 270) < 1 && Math.abs(me.y - 556) < 1, 'locate recentres on the player (' + me.x.toFixed(0) + ',' + me.y.toFixed(0) + ')');
   G.draw();
 });
 
 h.test('map: tap a far hex to preview the ink path, tap again to paint it', () => {
   const M = G.run.map;
-  const far = Object.values(M.tiles).find(t => !t.revealed && t.type !== 'boss' && MAP.pathToReveal(M, t.q, t.r).length >= 3);
+  const far = Object.values(M.tiles).find(t => !t.revealed && t.type !== 'boss' && t.terrain === 'land' && MAP.pathToReveal(M, t.q, t.r).length >= 3);
   h.ok(far, 'a far hidden tile exists');
   const path = MAP.pathToReveal(M, far.q, far.r);
+  const cost = MAP.pathCost(M, path);
+  G.lookAt(far.q, far.r);
   const p = G.hexToStage(far.q, far.r);
   const ink = G.run.ink;
   G.tap(p.x, p.y);
   h.ok(G.S.preview && G.S.preview.q === far.q && G.S.preview.r === far.r, 'first tap sets the preview on that hex');
-  h.eq(G.S.preview.cost, path.length, 'preview cost = path length');
+  h.eq(G.S.preview.cost, cost, 'preview cost = pathCost');
   h.eq(G.run.ink, ink, 'preview costs nothing');
   h.ok(!far.revealed, 'still hidden after the preview');
   G.draw();
   // Tapping elsewhere clears it.
-  const other = G.hexToStage(M.start.q, M.start.r);
+  G.lookAt(M.pos.q, M.pos.r);
+  const other = G.hexToStage(M.pos.q, M.pos.r);
   G.tap(other.x, other.y);
   h.ok(!G.S.preview, 'tapping elsewhere clears the preview');
   // Short on ink: the paint is refused and the preview stays.
+  G.lookAt(far.q, far.r);
   G.tap(p.x, p.y);
-  G.run.ink = path.length - 1; M.ink = G.run.ink;
+  G.run.ink = cost - 1; M.ink = G.run.ink;
   G.tap(p.x, p.y);
-  h.ok(!far.revealed && G.run.ink === path.length - 1, 'short on ink: nothing painted, nothing spent');
+  h.ok(!far.revealed && G.run.ink === cost - 1, 'short on ink: nothing painted, nothing spent');
   h.ok(G.S.preview && G.S.preview.q === far.q, 'preview kept when short');
-  G.run.ink = path.length + 1; M.ink = G.run.ink;
+  G.run.ink = cost + 1; M.ink = G.run.ink;
   G.tap(p.x, p.y);
   h.ok(far.revealed && path.every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'second tap paints the whole path');
-  h.eq(G.run.ink, 1, 'spends exactly path.length ink');
+  h.eq(G.run.ink, 1, 'spends exactly pathCost ink');
   h.eq(M.ink, G.run.ink, 'map ink in sync');
   h.ok(!G.S.preview, 'preview cleared after painting');
   h.eq(G.screen, 'map', 'still on the map');
   G.draw();
   G.run.ink = ink; M.ink = ink;
+  G.lookAt(M.pos.q, M.pos.r);
+});
+
+h.test('map: sea cannot be tapped, a ford costs 2 to chart and 2 to wade, the rescue covers a stranded crossing', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 91);
+  const M = Gt.run.map;
+  const sea = Object.values(M.tiles).find(t => t.terrain === 'sea');
+  Gt.lookAt(sea.q, sea.r);
+  const sp = Gt.hexToStage(sea.q, sea.r);
+  const ink0 = Gt.run.ink;
+  Gt.tap(sp.x, sp.y);
+  h.ok(!sea.revealed && Gt.run.ink === ink0 && !Gt.S.preview, 'tapping the sea does nothing');
+  const ford = Object.values(M.tiles).find(t => t.terrain === 'shallow');
+  const shore = MAP.neighbors(M, ford.q, ford.r).map(([q, r]) => M.tiles[MAP.key(q, r)]).find(t => t.terrain === 'land');
+  h.ok(ford && shore, 'a ford with a shore');
+  shore.revealed = true; M.pos = { q: shore.q, r: shore.r }; Gt.run.tile = null;
+  Gt.run.ink = 1; M.ink = 1;
+  Gt.lookAt(ford.q, ford.r);
+  const fp = Gt.hexToStage(ford.q, ford.r);
+  Gt.tap(fp.x, fp.y);
+  h.ok(!ford.revealed && Gt.run.ink === 1, '1 ink cannot chart a ford');
+  Gt.run.ink = 5; M.ink = 5;
+  Gt.tap(fp.x, fp.y);
+  h.ok(ford.revealed && Gt.run.ink === 3, 'charting the ford spends 2 ink');
+  Gt.tap(fp.x, fp.y);
+  h.ok(M.pos.q === ford.q && M.pos.r === ford.r && Gt.run.ink === 1 && Gt.screen === 'map', 'wading the ford spends 2 ink and stays on the map');
+  const sp2 = Gt.hexToStage(shore.q, shore.r);
+  Gt.tap(sp2.x, sp2.y);
+  h.ok(M.pos.q === shore.q && Gt.run.ink === 1, 'stepping back onto land is free');
+  Gt.tap(fp.x, fp.y);
+  h.ok(M.pos.q === shore.q && Gt.run.ink === 1, 'with 1 ink the ford is refused');
+  Gt.draw();
+  // Stranded on a fully cleared island with a hidden ford: the rescue seeps
+  // in the 2 the ford needs, not just 1.
+  const isle = MAP.islandsOf(M)[0];
+  for (const t of Object.values(M.tiles)) { t.revealed = false; t.visited = false; }
+  for (const k of isle) { M.tiles[k].revealed = true; M.tiles[k].visited = true; M.tiles[k].done = true; }
+  M.pos = { q: M.tiles[isle[0]].q, r: M.tiles[isle[0]].r };
+  Gt.run.ink = 0; M.ink = 0; Gt.run.brushes = []; M.brushes = [];
+  Gt.toMap();
+  h.eq(Gt.run.ink, 2, 'ink rescue pays the 2 a ford needs');
+  h.ok(MAP.revealable(M).some(t => t.terrain === 'shallow'), 'and the ford is now revealable');
+  Gt.draw();
 });
 
 h.test('map: a tower is an elite fight that pays a relic and its bonus', () => {
@@ -433,17 +548,18 @@ h.test('bin events from COMBAT reach the cabinet', () => {
   Gt.fs.queue.push({ ev: { t: 'binGrease', turns: 1 }, beat: 0.01 });
   stepFor(Gt, 0.1);
   h.ok(Gt.world.gravity.x > 0, 'gravity tilted');
-  h.ok(Gt.fs.items.every(b => b.friction < 0.1), 'bodies greased');
+  h.eq(Gt.rig.cfg.grease, 1, 'grease makes the claw slippery (grip -0.3), not the items');
+  h.ok(Gt.rig.geo.grip < 0.3, 'greased grip_cc is low (' + Gt.rig.geo.grip.toFixed(2) + ')');
   const e0 = Gt.world.energy();
   Gt.fs.queue.push({ ev: { t: 'binShake' }, beat: 0.01 });
   stepFor(Gt, 0.05);
   h.ok(Gt.world.energy() > e0, 'shake adds energy');
   stepFor(Gt, 3);
-  for (const b of Gt.world.bodies) if (b.type === 'dynamic') h.ok(b.x > -5 && b.x < 485 && b.y > -5 && b.y < 395, 'no escape after shake/tilt');
+  for (const b of Gt.world.bodies) if (b.type === 'dynamic') h.ok(b.x > -5 && b.x < 485 && b.y > -5 && (b.y < 395 || Gt.cabinet.inChute(b)), 'no escape after shake/tilt');
   h.ok(settle(Gt, 10), 'ready');
   Gt.endTurn();
   h.eq(Gt.world.gravity.x, 0, 'tilt cleared at end of turn');
-  h.ok(Gt.fs.items.every(b => b.friction >= 0.1), 'grease cleared at end of turn');
+  h.eq(Gt.rig.cfg.grease, 0, 'grease cleared at end of turn');
 });
 
 h.test('the watchdog frees a jammed rig', () => {
@@ -455,10 +571,10 @@ h.test('the watchdog frees a jammed rig', () => {
   settle(Gt, 10);
   Gt.steer(150);
   Gt.dropClaw();
-  // Freeze the rig's phase machine by replacing update with a no-op.
+  // Jam the rig: the world's substeps drive the state machine, so pin it in
+  // the lift from update() (the game's own entry point) every frame.
   const rig = Gt.rig;
-  rig.update = () => [];
-  rig.phase = 'lifting';
+  rig.update = () => { rig.ctl.st = 'lift'; rig.ctl.t = 0; rig.ctl.y = 200; rig.phase = 'lifting'; return []; };
   stepFor(Gt, Gt.WATCHDOG + 0.5);
   h.ok(!Gt.state().grabInFlight, 'grab released by the watchdog');
   h.ok(Gt.rig !== rig, 'rig rebuilt');

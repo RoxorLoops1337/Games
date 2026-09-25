@@ -79,8 +79,9 @@ y 338..382   player row: statuses, "grabs left" pips, turn banner
              (the banner is centred on y ~360, between arena and cabinet) (DOM)
 y 380..830   the RIG: cabinet frame 30px, interior 480 × 390 at (30,410)
              chute = right-most 64px column of the interior, divider wall
-             from the floor up to 60% of interior height; floor wedges
-             130 wide x 90 tall on both sides make a bowl (CAB.slopeW/H)  (canvas)
+             from the floor up to 45% of interior height (a carried item
+             clears it); flat floor, no wedges (CAB.slopeW/H are 0); the
+             chute has no floor, prizes fall through onto a hidden tray  (canvas)
              coach marks (tutorial) sit over the cabinet at y 540, never
              over the arena
 y 830..960   control bar: END TURN, play-tray (items being played), hint (DOM)
@@ -99,190 +100,151 @@ overlays (`.screen`), the map itself is drawn on the canvas under a DOM header.
 
 ### `js/physics.js` -- `PHYS`
 
-A small 2D rigid body engine (circles + convex polygons, sequential impulses,
-friction, restitution, revolute joints with limits + motor) plus the claw rig
-and cabinet built on it. Units: pixels, seconds. Gravity default `{x:0,y:1400}`.
+Claw Crawl's engine, ported (the sibling game in `claw_crawl/index.html`;
+the feel is the spec). Bodies are compounds of circles: a ball, a capsule
+chain or a rounded blob. They collide with each other, with static capsule
+walls and with the kinematic claw (a hub circle plus two prongs of three
+capsule segments). Sequential impulses (`PH.it` 10 per substep) with Coulomb
+friction, restitution only on hard hits (approach > `PH.bounceV` 90 px/s),
+bias-limited penetration recovery (`PH.beta` 0.24, capped at `PH.maxBias`
+200 px/s and at `PH.clawBias` 110 px/s against the claw, so the claw can
+never fling anything), sleeping bodies (`PH.sleepV` 14 px/s, `PH.sleepW`
+0.35 rad/s for `PH.sleepT` 0.45 s, never while the claw is busy) that wake on
+a hit (`PH.wakeV` 70 px/s or `PH.wakePen` 2.5 px), when a body under them is
+removed, on a gravity change and when the claw touches them, and hard
+floor / wall / lid clamps after every substep so nothing ever leaves the
+cabinet. Fixed 1/240 s substeps (4 per 60 Hz frame, at most 12 per
+`W.step`). Units: pixels, seconds. Gravity is Claw Crawl's 1150 px/s^2
+(`game.js` GRAVITY; a tilt is +-510 sideways). No `Math.random`: the rig
+takes a seeded `rand`.
 
 ```js
-PHYS.box(w, h)                      // -> convex CCW verts centred on origin
+PHYS.box(w, h)                      // -> {kind:'box', w, h} shape descriptor (maps to a capsule)
+PHYS.partSpec(shape)                // -> {kind:'ball'|'cap'|'blob', r, len, ax} the parts a shape becomes
 PHYS.body({
-  type: 'dynamic'|'static'|'kinematic',
-  shape: {kind:'circle', r} | {kind:'poly', verts:[{x,y},...]},  // local, convex, CCW
-  x, y, angle, density=1, friction=0.5, restitution=0.1,
-  group='item'|'wall'|'claw'|'sensor'|string, mask?: string[] (groups it collides with; default all),
-  sensor=false, data={}
-}) -> b   // b.x b.y b.a b.vx b.vy b.av b.m b.invM b.I b.invI b.shape b.type b.data b.aabb()
+  type: 'dynamic'|'static',
+  shape: {kind:'circle', r} | {kind:'box', w, h} | {kind:'poly', verts} | {kind:'ball'|'cap'|'blob', ...},
+  x, y, angle, density=1, friction=0.5, restitution=0.12, group='item', data={}
+}) -> b   // b.x b.y b.a b.vx b.vy b.av b.m b.invM b.I b.invI b.parts b.px b.py b.br b.sl (asleep)
+          // b.held (touched by the claw a moment ago) b.shape (the descriptor, kept) b.aabb()
 PHYS.world({gravity, w, h}) -> W
-  W.add(bodyOrJoint) W.remove(bodyOrJoint) W.bodies W.joints
-  W.step(dt)              // fixed internal step 1/240 s, up to 12 substeps per call; clamps dt
-  W.contactsOf(b) -> [{other, nx, ny, px, py, depth}]   // contacts from the last step
-  W.queryAABB(x0,y0,x1,y1) -> bodies
-  W.setGravity(x, y)
-PHYS.revolute(bodyA, bodyB, {x, y} /*world anchor*/, {lower, upper, enableLimit, motorSpeed, maxTorque, enableMotor}) -> J
-  J.setMotor(speed, maxTorque) J.setLimits(lower, upper) J.angle()
+  W.add(b) W.remove(b) W.bodies W.segs (walls) W.csegs (claw) W.contacts
+  W.step(dt)              // fixed 1/240 substeps, at most 12 per call; pre hooks (the rig plans), physics, post hooks (the rig moves)
+  W.setGravity(x, y)      // wakes everything
+  W.wakeAll() W.energy() W.queryAABB(x0,y0,x1,y1)
+  W.contactsOf(b) -> [{other, nx, ny, px, py, depth, claw}]   // other is a body or a segment ({wall} / {own})
+  W.addHook(fn) W.removeHook(fn) W.addPost(fn) W.removePost(fn)   // fn(h, W) per substep
 
-PHYS.cabinet(W, {w: 480, h: 390, chuteW: 64, dividerH: 0.6, wallThick: 40, slopeW: 0, slopeH: 0}) -> C
-  // builds static floor/walls/ceiling, chute divider (right side), returns
-  // slopeW/slopeH > 0 adds two static floor wedges (a bowl so the pile heaps
-  // in the middle): left from (0, h-slopeH) down to (slopeW, h); right from
-  // (chuteX-8-slopeW, h) up to (chuteX-8, h-slopeH). The renderer draws them
-  // from the same cfg (RENDER.cabinetBack cfg.slopeW/slopeH).
-  C.inChute(body) -> bool         // body's centre is inside the chute column below the divider top
-  C.bounds = {w, h, chuteX /* left edge of the chute column */, chuteW, dividerTop, floorY, slopeW, slopeH}
-  C.bodies
+PHYS.cabinet(W, {w: 480, h: 390, chuteW: 64, dividerH: 0.45}) -> C
+  // capsule walls: left, right, floor (none under the chute: prizes fall
+  // through it onto a hidden tray RIG.tray 44 px below the floor), the chute
+  // divider on the RIGHT (down to the tray, so there is no pocket under the
+  // floor), the lid (RIG.lid, -64). Also sets W.clampBox (x 5..w-5, the
+  // floor RIG.floorSink 3 px above the surface so the thinnest items still
+  // touch it, the tray, the lid RIG.clampTop -50).
+  C.inChute(body) -> bool         // centre inside the chute column below the divider top
+  C.bounds = {w, h, chuteX, chuteW, dividerTop, floorY, trayY, slopeW: 0, slopeH: 0}
+  C.segs
 
 PHYS.clawRig(W, {
   cabinet: C,
-  homeX,            // where the claw parks (interior px), default cabinet.w*0.5
-  chuteX,           // x above the chute column centre; the carry target
-  railY: 26,        // carriage height in interior px
-  prongs: 2|3,      // 3 = extra middle prong (draws & grabs better)
-  width: 1,         // palm scale (1 = 96px between open prong tips, 64px palm)
-  grip: 1,          // motor torque scale (0.6 weak .. 2 crushing)
-  speed: 1,         // carriage travel scale (1 = 260 px/s), drop 520 px/s, lift 300 px/s
-  rubber: 0,        // 0/1: prong tip friction 0.55 -> 1.1
-  magnet: 0,        // 0/1: attraction force toward the palm for bodies with data.tags 'metal' within 80px while dropping/closing
-  rand: U.rng(1),   // used only for cable sway jitter
+  homeX,            // where the claw parks, default half the bin width
+  chuteX,           // carry target: the chute column centre
+  railY: 26,        // the rail; the hub parks RIG.hubDrop (14) below it
+  prongs: 2|3,      // 3 = +0.1 grip_cc, x1.08 size, and a drawn-only ghost finger
+  width: 1,         // size = RIG.base (0.74) * width
+  grip: 1,          // Clawspire grip (0.75 .. 2+); see the mapping below
+  speed: 1,         // carriage and carry travel scale (330 px/s at 1)
+  rubber: 0,        // +0.15 grip_cc (Claw Crawl's gloves)
+  magnet: 0,        // pulls 'metal' items within 110 px of the hub while dropping / closing
+  grease: 0,        // -0.3 grip_cc (Claw Crawl's greaseOn), set by the game for the grease status
+  rand: U.rng(1),   // loosen and jolt
 }) -> R
   R.phase  // 'idle'|'moving'|'dropping'|'closing'|'lifting'|'carrying'|'releasing'|'returning'
-  R.x, R.y          // palm centre (interior px)
-  R.targetX         // where the carriage is heading while idle/moving
-  R.setTarget(x)    // only honoured in 'idle'/'moving'
-  R.drop()          // only honoured in 'idle'/'moving'; returns false otherwise
-  R.update(dt) -> events[]   // drive kinematics + motors; call BEFORE W.step(dt) each frame
-                             // events: 'drop' 'touch' 'close' 'lift' 'carry' 'release' 'home' 'slip' 'shed'
-                             // 'slip' = a grip lock broke while lifting/carrying (the item falls back)
-                             // 'shed' = the cradle was full at the lift; the extras stayed in the pile (once per lift)
-  R.held() -> bodies currently pinched between prongs (contact with >=2 prongs, or 1 prong + palm), plus locked ones
-  R.locked() -> bodies the grip lock is carrying right now (use this for the "holding" hint and the item glow)
-  R.open()          // force prongs open (also used at 'releasing')
-  R.setConfig({width, grip, speed, prongs, rubber, magnet})  // rebuilds prongs if needed
-  R.bodies          // {carriage, palm, prongs:[...], tips:[...]} for the renderer (see below)
-  R.geo             // {piv, len, lenU, lenT, beta, len3, open, closed, reach, palmW} for the current width
-  R.cradle(b?)      // with a body: true when its centre is inside the cradle; without: the 4-corner polygon (debug drawing)
-  R.cradleCap()     // items the cradle carries: 2, +1 with prongs 3, +1 at width >= 1.36
-  R.cableTop        // {x, y} where the cable leaves the rail (for drawing)
-  R.sway            // current pendulum angle (rad) for drawing the cable
+  R.x, R.y          // hub centre (interior px)
+  R.targetX         // the aim point; 'returning' is the travel back to it after a release
+  R.setTarget(x)    // only honoured while idle / moving (clamped to the bin)
+  R.drop()          // only honoured while idle / moving; the drop starts once the carriage has arrived
+  R.update(dt) -> events[]   // call BEFORE W.step(dt); returns the events of the substeps run so far
+                             // 'drop' 'touch' 'close' 'lift' 'carry' 'release' 'home' 'slip' ('shed' is never emitted)
+  R.held() -> bodies the claw is touching (b.held > 0) while busy, [] when idle
+  R.locked() -> the cargo (what was held above the hub when the lift started and has not slipped); for the glow and the hint
+  R.cradle(b?)      // legacy alias: cradle(b) -> b is cargo; cradle() -> the cargo
+  R.open()          // force the prongs open: a busy claw goes to 'releasing' then 'returning'
+  R.setConfig({width, grip, speed, prongs, rubber, magnet, grease})
+  R.bodies          // {hub: {x, y, r}, prongs: [[p0..p3], [p0..p3]], ghost: [p0..p3] | null} cabinet points for RENDER.claw
+  R.geo             // {s, grip, hubR, reach, span, halt, mu} for the current config
+  R.cfg R.ctl       // ctl is the raw claw state (tests and the watchdog test pin it)
+  R.cableTop        // {x, y} where the cable leaves the rail (the top end sways, the hub does not)
+  R.sway            // visual cable sway (rad)
+  R.calm()          // idle and parked on the target
+  R.destroy()       // removes the claw segments and hooks
 ```
 
-Rig anatomy (what `R.bodies` holds and how the renderer reads it):
-- Each side prong is TWO bodies: an upper rod `prongs[0..1]` (hinge at the
-  palm, tip at local +y) and a hooked tip segment `tips[0..1]` welded at
-  the knee and bent inward by `RIG.hookAngle` (0.55 rad). `tips[i]` pairs with
-  `prongs[i]`. RENDER.claw draws both from `shape.verts` rotated by `b.a`
-  at `(b.x, b.y)` as one finger: a shared ink outline, a rivet at the knee,
-  a rubber pad (cfg.rubber) or a chrome highlight at the very tip.
-- Geometry at width 1 (`RIG`): hinges `pivot` 26 px either side of the palm
-  centre, palm 64 wide, prong `prongLen` 53 (42% of it the bent tip,
-  `hookFrac`), `openSpan` 96 px between the open tips, `closedGap` 2 px
-  between the closed inner corners. The two hooks meet under the load, so a
-  closed claw is a basket (the cradle), not a pinch; a closed empty claw
-  never self-intersects.
-- With `prongs: 3`, `prongs[2]` is a GHOST body (`b.ghost === true`, never
-  added to the world, `mask: []`): the rig poses it every update from the
-  side prongs' mean closedness. It is drawn first (behind) as a shorter
-  straight prong with no hook. Its share of the hold is modelled by the
-  torque bonus (`RIG.pinch3`), the lock capacity (`RIG.lock3`) and one extra
-  cradle slot, because a physical off-axis third finger shoved items out in
-  every geometry tried.
-- The dig: while dropping, the first prong or tip contact does not stop the
-  drop. The claw keeps sinking `RIG.dig` (30) px past that first touch so the
-  hooks slide down around the target instead of closing in mid-air above a
-  neighbour; the drop ends early only when the palm itself lands or the
-  closed tips would reach the floor (`RIG.floorClear`). The palm can end
-  below the pile top.
-- The settle: 'closing' ends `RIG.settleT` (0.15 s) after the prongs have
-  been quiet for `RIG.quietT` (0.15 s), or after `RIG.closeMax` (0.7 s) plus
-  the settle when wedged. The claw visibly clenches before it lifts.
-- The cradle lock: when 'closing' ends, every dynamic non-claw body whose
-  centre lies inside the cradle (the polygon left hinge -> left tip -> right
-  tip -> right hinge, expanded outward by `RIG.cradleMargin` 8 px), plus any
-  body pinched by two prongs or a prong and the palm, is tied to the palm
-  with a stiff, force-capped spring (`engageLocks`). Bodies merely touched
-  from outside are not. Bodies that arrive during the first `RIG.lockWindow`
-  (0.6 s) of the lift lock too, while there is room. The prongs stop
-  colliding with what they hold and freeze at their closed pose; the motor
-  drops to `RIG.lockHoldMul` (0.12) of its torque so it cannot squeeze the
-  load out. The lock's capacity is the grip: `RIG.lockForce` (5.5e6) x grip
-  x grippiness, x `RIG.lockRubber` (1.45) with rubber tips, x `RIG.lock3`
-  (1.3) with a third prong (x `RIG.lockPalmOnly` 0.8 only for a one-prong
-  pinch outside the cradle). A filtered load (`RIG.lockTau` 0.25 s) above
-  the capacity (with the +-12% jitter), or a sag past `RIG.lockBreakDist`
-  (16 px), breaks the lock: the rig emits 'slip' and the item falls through
-  the claw (it keeps passing through the prongs until the grab ends, so the
-  frozen prongs need not open). `RIG.lockGrace` (0.12 s) after engaging
-  nothing breaks. The lift eases out at the top (a dead stop was a 13 g jerk
-  that shook heavy items loose).
-  Item-mass ladder: base grip 1 holds items up to about mass 2800 through a
-  lift and carry (the anvil, 2720, rides; the tower shield, 4320, does not);
-  rubber x1.45 -> ~4000, third prong x1.3 -> ~3600, both ~5200; each grip
-  upgrade is +0.35. The tower shield needs grip ~1.55, or grip 1.1 + rubber.
-- Capacity N: the cradle carries at most `R.cradleCap()` items: 2 at base,
-  +1 with the third prong, +1 at width >= 1.36 (Wider Palm x2). Members ride
-  in order of how central they sit under the palm (the aimed item is
-  central); the extras beyond N stay in the pile as the claw rises and the
-  rig emits one 'shed' (not a slip). The prongs ignore the walls while the
-  claw is up (carrying, releasing, returning) so a wide claw can open over
-  the chute without wedging against the cabinet side.
-- Item-centred release: while carrying, the carriage target is the chute
-  centre minus the mean lock offset of the held items (`carryX`), so items
-  gripped off-centre still drop inside the 64 px column; the carriage may
-  tuck `RIG.carryTuck` (6 px) past the wall clearance and never presses a
-  held item into the wall. Release opens the prongs slowly
-  (`RIG.releaseSpeed`, `RIG.releaseTorque`) so the load falls straight down;
-  two items side by side both land in the column, and the divider's sloped
-  lip tips a straggler in.
+The claw (Claw Crawl's numbers, `RIG`):
+- Anatomy: hub circle r 13 x size; two prongs hinged at (+-7, 7) x size,
+  each the polyline `PRONG` [0,0] [14,28] [9,48] [1,57] x size as three
+  capsule segments of radius 4.5 x size, rotated outward by phi (`PHI_OPEN`
+  0.62 .. `PHI_CLOSED` -0.1). The tips curl inward, so a closed claw is a
+  basket. The claw is kinematic: items feel its velocity through the
+  contacts, the bias cap keeps its shove gentle.
+- Mapping from Clawspire's claw config: size = 0.74 x width (x1.08 with the
+  third prong); grip_cc = clamp(0.35 + 0.3 x (grip - 0.75), 0.15, 1) + 0.15
+  rubber + 0.1 third prong - 0.3 grease, clamped 0.05..1. So the alchemist
+  (0.75) is 0.35 like Claw Crawl's frog, the rogue (1.0) 0.425, the knight
+  (1.3) 0.515 like the raccoon, and each Stronger Motor (+0.35) adds 0.105.
+  Claw-item friction is `0.6 + 0.8 x grip_cc` (times a slickness factor from
+  the item's own friction: ice is still slippery); `halt` = 1.5 + 3 x grip_cc.
+- State machine (per substep, `plan` then `move`): idle (travel to the
+  target at 330 x speed px/s) -> drop (250 px/s, until the hub or a prong
+  lands on something (`touch`) or the hub reaches the floor limit) -> close
+  (prongs sweep at 2.6 rad/s; a prong that has been blocked for 0.08 s has
+  closed on something, per-prong halt detection: penetration beyond
+  `halt + 7 x open^2` against the closing sweep; done when both are blocked
+  or closed after 0.18 s, or at 0.8 s) -> lift (175 px/s; the loosen
+  `(1 - grip_cc) x 0.12 x (0.7 + rand x 0.6)` rad spread over the first 0.4 s;
+  the cargo is every body touched a moment ago above hub y + 70 x size) ->
+  carry (a jolt of 0.05 rad with probability `(1 - grip_cc) x 0.25` at the
+  top, then travel to the chute at 330 x speed px/s, 0.2 s pause) -> open
+  (3.2 rad/s for 0.35 s, then hold until nothing touches the prongs, at most
+  1.2 s more) -> return (travel back to the aim point) -> idle ('home').
+- Slips: a cargo item below hub y + 95 x size, falling faster than 60 px/s
+  and not over the chute has slipped ('slip'). Claw Crawl scoops: a dense
+  pile gives multi-item cargo and about one slip per grab for the knight,
+  exactly like Claw Crawl's own piles (raccoon: 2.4 items/drop, 1.8
+  slips/drop, 95 % of drops deliver).
+- Grease is a slippery claw (grip_cc - 0.3), not slippery items. The magnet
+  pulls metal toward the hub (420 x h / max(1, d/40) px/s per substep within
+  110 px) while dropping and closing.
 
-Feel requirements (these are the game):
-- Prongs close with a torque *limit*, not a fixed angle: a fat item stops
-  them early and is held by pinch + friction; a thin one they close past.
-- Held items can slip: during 'lifting' and 'carrying' the carriage
-  acceleration shakes the palm (pendulum sway) and the motor torque jitters
-  +-12% (rand); marginal holds fail, good holds don't. With `grip:2` almost
-  nothing slips; with `grip:0.6` heavy items usually slip. Ordinary items
-  at grip 1 almost never slip; junk does.
-- Items must never tunnel out of the cabinet (cap speeds at 2400 px/s, thick
-  walls, substeps).
-- A pile of 30 items settles to rest (max speed < 2 px/s) within 3 seconds
-  and does not jitter or explode. Provide `W.energy()` (sum ½mv²) for tests.
-- `closing` ends 0.15 s (the settle) after prong angular velocity has been ~0
-  for 0.15 s, or 0.15 s after the 0.7 s cap.
-- After 'release' over the chute, the rig returns home and opens; the game
-  decides delivery with `C.inChute()`.
-- Kinematic palm follows the carriage with a pendulum: `sway` is a damped
-  spring driven by carriage acceleration. Drawing uses it; physics uses the
-  resulting palm position too (so items feel the swing).
+Items (`game.js` shapeFor -> `partSpec`): circle r -> ball r; box w x h ->
+capsule of length max(w,h) and radius min(w,h)/2 (capped at `SHAPE.capRMax`
+18, along the long side); polygon -> a capsule of radius <= 12 when it is at
+least 1.8 x longer than wide (axe, shard, bottle), else a blob of radius
+0.46 x the long axis (four circles). A frozen item is a ball of its long
+radius. Mass = sum of pi r^2 x density x 0.01 over the parts (capsule parts
+overlap; that is Claw Crawl's mass too). Density, friction and restitution
+come from the item def (restitution default 0.12).
 
-Tests (`tests/clawspire_physics.test.mjs`, yours): stacking settles; no
-escapes over 60s of shaking; strong grip lifts a 30px circle from a flat
-floor 9/10 drops; weak grip drops a heavy 50px box most of the time; sword
-(44x10 box) delivers >= 17/20 at grip 1 and slick junk slips; two r=12 balls
-side by side both lock and deliver >= 7/10; three balls -> 2 carried at
-base, 3 with the third prong; a 3-prong rig lifts more often than 2-prong on
-the same seed; the closed claw does not self-intersect; determinism (same
-inputs => same positions).
+Bench (scratchpad bench.sh, 150 fights per row, fresh pile, one random aimed
+drop each, base rigs): knight 92 % of grabs deliver (2.2 items/grab, 0.8
+slips/grab), alchemist 87 % (1.6 items, 0.1 slips), rogue 83 % (2.1 items,
+0.4 slips); at grip x1.7 + rubber: 91 / 83 / 78 %; third prong knight 95 %.
+A lone item on the bare floor: ball, shield, flask, tower shield, two
+marbles all deliver; a sword lying flat is the knife-edge case (it must be
+scissored up between the closed prong and the hub, which works when the
+sword is longer than the prong: the rogue's claw yes, a Wider Palm knight
+not always), exactly as in Claw Crawl, whose small frog claw never gets it.
 
-#### Slippery items (grip lock hazard)
-
-Slips are rare for ordinary items. `grippiness` scales the lock's break
-force and gives a locked item a per-second slip hazard
-`RIG.slipRate` (0.25) x (1 - grippiness) during the jerky part of the ride
-(the lift and the first half second of carriage travel; a quarter of that
-once cruising). Grip upgrades, rubber tips (x1.45) and the third prong
-(x1.3) all divide the hazard. `data.grip` on a body overrides the table.
-
-| item | grippiness | hazard at grip 1 |
-| --- | --- | --- |
-| balls, boxes, most shapes | 1 | none |
-| long thin (local aspect >= 4: sword, wand, chain) | 0.85 (`gripThin`) | 0.04/s, about 1 in 20 |
-| tiny discs / marbles (circle r < 10, `gripDiscR`) | 0.75 (`gripDisc`) | 0.06/s |
-| glass, ice, or friction < 0.2 | x0.8 (`gripSlick`) | 0.05/s |
-| junk (tags 'junk': rock, slag, ice block) | hazard grippiness x0.6 (`gripJunk`), capacity unchanged | rock 0.10/s, ice block 0.15/s, about 1 in 4 |
-
-A slip emits `'slip'`; the item falls through the claw and cannot re-lock
-during that grab; if nothing is left held the prongs twitch open for 0.3 s
-so the fall reads. A lone sword at grip 1 is delivered about 19 times in 20;
-a rock about 3 in 4; the anvil rides at grip 1.
+Tests (`tests/clawspire_physics.test.mjs`): parts and mass; settle and
+sleep (34 items asleep in under 5 s); wake on a hit, a removal, a gravity
+change; 60 s of shaking and tilting with nothing outside the glass; the
+floor / wall / lid clamps and the chute tray; the phase cycle with its
+events; halt detection; deliveries of a ball, shield, sword, flask, tower
+shield and two marbles from the floor; strong vs weak grip on a heavy item;
+loosen and jolt driven by grip with a seeded rand (never Math.random);
+determinism; setConfig; the magnet; grease; no flinging through a pile;
+visual-only sway.
 
 ### `js/data.js` -- `DATA`
 
@@ -439,65 +401,104 @@ NaNs hp.
 
 ### `js/map.js` -- `MAP`
 
-Roguebook style hex map. Axial coordinates `(q, r)`, pointy-top hexes, `cols × rows`
-rectangle (offset rows), 10 × 7 by default (70 tiles). The generator is landscape: start at
-the left middle, boss at the right middle, difficulty by column. The game draws it as a
+Roguebook style hex world. Axial coordinates `(q, r)`, pointy-top hexes, `cols × rows`
+rectangle (offset rows), **16 × 22 by default (352 tiles)**. The generator is landscape: start
+at the left middle, boss at the right middle, difficulty by column. The game draws it as a
 **portrait climb** with `orient: 'v'`: a pure display transform `(x, y) -> (y, -x)` that
-puts the start at the bottom middle and the boss at the top middle, rows across the screen
-(so the side towers sit on the left and right edges) and turns every hex flat-top. Icons,
-labels, the ink pill and the axis chevrons stay upright; only positions transform. In the
-540 × 788 map area this gives 41.8 px hexes (`GAME` caps at 44). All tiles hidden except the
-start's neighbours; the boss tile is always visible.
+puts the start at the bottom middle and the boss at the top middle and turns every hex
+flat-top. Icons, labels, the ink pill and the axis chevrons stay upright; only positions
+transform. Hexes are a fixed `MAP.HEX = 46` px, so the world is about 1540 × 1310 stage px
+(`MAP.bounds`) and never fits the 540 × 768 map area: the map screen is a camera (see GAME).
+All tiles hidden except the start's neighbours; the boss tile is always visible.
+
+**Terrain.** Every tile carries `terrain` (`'land' | 'shallow' | 'sea'`), `elev` (0..1: height
+on land, depth on water), `coast` (land touching water) and `biome` (per act: 1 `cellar`
+damp stone, 2 `foundry` ash with lava pools in place of sea, 3 `vault` ice and open water;
+same rules, different look). Generation is seeded from the layout rng: two octaves of value
+noise, sea level at the water percentile (`MAP.WATER = 0.28`, the finished map lands at
+20-40% water, ~30% on average), two majority-smoothing passes, the start and boss with their
+neighbours forced to land, a guaranteed land route start -> boss (cheapest walk that hugs
+land, raised where it crosses water), then islands trimmed or carved to the wanted count
+(2-4 on the 16 × 22 world, 1 on 10 × 7, none under 60 tiles, which stay dry) and one ford
+per island: the shortest sea crossing to the mainland becomes `shallow`. `M.islands` and
+`M.water` record the result; `MAP.islandsOf(M)` lists the island tile keys, largest first.
+`generate({water: 0})` gives an all-land map (the legacy geometry tests use it).
+
+- Sea holds no content, is never `known`, cannot be revealed, brushed or walked; paths never
+  cross it (`pathToReveal`, `walkCost`, brushes skip sea cells).
+- A ford (`shallow`) costs `MAP.SHALLOW_COST = 2` ink to reveal and 2 ink to wade
+  (`revealCost` / `moveCost`); `canReveal`, `canMove`, `reachable`, `revealable` all check the
+  ink. Land is 1 to reveal, free to walk. `pathToReveal` is a bucket Dijkstra over those
+  costs; `pathCost(M, path)` is what a painted path spends and what `revealPath` charges.
+- Islands get the best content first: all towers but one (one always stays on the mainland),
+  a treasure, an elite, half the time a shop. Spread rules are relaxed there. Every land hex
+  is reachable from the start through land and fords.
 
 **Landmarks.** Hidden tiles of type shop, rest, forge, elite, treasure, boss and tower are
 `known` from the start: the fog shows their icon as a dim ink sketch with a dashed rim, so
 the player can see what is worth spending ink on. Fights, gems, ink pots, events, brushes
-and empties stay a plain `?`. Known tiles are still not walkable until revealed.
+and empties stay a faint `?`. Hidden fords show a `2`. Known tiles are still not walkable
+until revealed.
 
-**Side towers.** 2 per act (3 on some maps), on the top or bottom row, offset columns
-3..cols-3, never next to another special tile or another tower. Off the start-boss axis,
-so reaching one costs extra ink: that is the strategic choice. Entering a tower starts an
-elite-tier fight (the act's `tower` encounter pool when DATA has one, else its `elite`
-pool); winning pays a relic through the treasure screen plus a bonus rolled at generate
-(`content.tower.bonus`): `{k:'ink', n:2}`, `{k:'brush', id}`, `{k:'claw', u: upgradeId}`
+**Towers.** 2 per act (3 on most world maps), never next to each other. Island towers first;
+the mainland tower sits off the start-boss axis on the top or bottom row (offset columns
+3..cols-3) when the land allows it, else anywhere at least two rows off the axis. Entering a
+tower starts an elite-tier fight (the act's `tower` encounter pool when DATA has one, else its
+`elite` pool); winning pays a relic through the treasure screen plus a bonus rolled at
+generate (`content.tower.bonus`): `{k:'ink', n:2}`, `{k:'brush', id}`, `{k:'claw', u: upgradeId}`
 or `{k:'gold', n:60}`.
 
-**Path paint.** Tapping a hidden hex that does not touch the lit area previews the shortest
-hidden path to it (BFS from every lit tile, never through the boss) with its ink cost on the
-tile; tapping it again paints the whole path for one ink per tile, or a toast says how much
-ink is missing. Tapping anywhere else clears the preview. Hidden hexes next to the light
-keep the one-tap reveal. The start-to-boss axis is drawn as a faint dotted line with
-chevrons that shows through the fog; the current hex has a breathing gold rim, walkable
-hexes a thick pulsing cyan rim.
+**Path paint.** Tapping a hidden hex that does not touch the lit area previews the cheapest
+hidden path to it (Dijkstra from every lit tile, never through the boss or the sea, fords
+count double) with its ink cost on the tile; tapping it again paints the whole path for that
+cost, or a toast says how much ink is missing. Tapping anywhere else clears the preview.
+Hidden hexes next to the light keep the one-tap reveal. The start-to-boss axis is drawn as a
+faint dotted line with chevrons that shows through the fog; the current hex has a breathing
+gold rim, walkable hexes a thick pulsing cyan rim.
+
+**Ink economy (world size).** `DATA.ECONOMY` stays the source: startInk 10 per act, ink tiles
+give 2 and sit at 10% of the land (`DIST.ink`), a won normal fight drops 1 ink half the time,
+elites 2, towers 2 (`TOWER_INK`). `MAP.INK_PER_ACT_HINT = 24` is the ink a sensible route
+through one act should find; the balance pass reasons from it. The ink rescue (GAME) pays the
+shortfall for the cheapest useful step, so a player stranded on an island with a lit or
+hidden ford gets the 2 it needs, never just 1.
 
 ```js
-MAP.generate({act, rng, cols: 10, rows: 7}) -> M    // cols clamps to >= 9, rows to >= 3
-M = { act, cols, rows, tiles: { 'q,r': { q, r, type, revealed, visited, known, content } }, start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [ids], revealedCount }
+MAP.generate({act, rng, cols: 16, rows: 22, ink, brushes, water: 0.28, islands}) -> M    // cols clamps to >= 9, rows to >= 3
+M = { act, biome, cols, rows, tiles: { 'q,r': { q, r, type, terrain, elev, coast, biome, revealed, visited, known, content } },
+      start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [ids], revealedCount, islands, water }
 tile.type: 'empty'|'fight'|'elite'|'treasure'|'gem'|'ink'|'brush'|'event'|'shop'|'rest'|'boss'|'start'|'forge' (item upgrade)|'tower'
-tile.content: { enc?: [ids], gold?, ink?, brush?, event?, tower?: { bonus }, ... } rolled at generate
-Distribution per act (approx over 68 placeable tiles): fight 28%, empty 18%, gem 10%, ink 8% (min 4), event 8%, treasure 4% (min 2), brush 4% (min 2), shop 4% (min 3), rest 5% (min 3), forge 3% (min 2), elite 3% (min 2, never adjacent to start or boss), tower 3.5% (min 2, max 3). Elites/fights get harder with distance from start (content.diff = 0..1 by column).
-MAP.key(q, r) MAP.neighbors(q, r) -> [[q,r]] (in-bounds only, needs M) -> MAP.neighbors(M, q, r)
+tile.content: { enc?: [ids], gold?, ink?, brush?, event?, tower?: { bonus }, ... } rolled at generate ({} on water)
+Distribution per act (share of the placeable land): fight 28%, empty 16%, gem 10%, ink 10% (min 4), event 8%, treasure 4% (min 2), brush 4% (min 2), shop 4% (min 3), rest 5% (min 3), forge 3% (min 2), elite 3% (min 2, never adjacent to start or boss), tower 3.5% (min 2, max 3). Elites/fights get harder with distance from start (content.diff = 0..1 by column).
+MAP.HEX = 46  MAP.WATER = 0.28  MAP.SHALLOW_COST = 2  MAP.INK_PER_ACT_HINT = 24  MAP.TERRAINS  MAP.BIOMES {1:'cellar',2:'foundry',3:'vault'}  MAP.DIRS
+MAP.key(q, r) MAP.neighbors(M, q, r) -> [[q,r]] (in-bounds only)
 MAP.isLandmark(tile) -> bool     // shop, rest, forge, elite, treasure, boss, tower
-MAP.canReveal(M, q, r) -> bool   // hidden, in bounds, adjacent to a revealed tile, ink >= 1
-MAP.reveal(M, q, r) -> tile|null // spends 1 ink
-MAP.pathToReveal(M, q, r) -> [[q,r], ...]  // shortest hidden path from the lit area to (q,r), in reveal order, ending on it; never through the boss; [] when revealed, adjacent to the light, the boss or unreachable
-MAP.revealPath(M, path) -> tiles[]|null    // reveals the whole path for path.length ink; null (nothing spent) when short on ink or the chain is broken
+MAP.biomeOf(act) -> biome        MAP.islandsOf(M) -> [[tileKeys], ...] largest first
+MAP.revealCost(tile) -> 1 | 2 | Infinity   MAP.moveCost(tile) -> 0 | 2 | Infinity   MAP.pathCost(M, path) -> ink
+MAP.canReveal(M, q, r) -> bool   // hidden, in bounds, not sea, adjacent to a revealed tile, ink >= revealCost
+MAP.reveal(M, q, r) -> tile|null // spends revealCost
+MAP.pathToReveal(M, q, r) -> [[q,r], ...]  // cheapest hidden path from the lit area to (q,r), in reveal order, ending on it; never through the boss or sea; [] when revealed, adjacent to the light, sea, the boss or unreachable
+MAP.revealPath(M, path) -> tiles[]|null    // reveals the whole path for pathCost ink; null (nothing spent) when short on ink or the chain is broken
 MAP.size(M, w, h, orient='h', max?) -> {size, ox, oy}  // fit with a MAP.FIT_MARGIN px margin; 'v' fits the transposed extents; max caps the hex size
-MAP.brush(M, brushId, q, r) -> tiles[]  // reveals the brush cells (no ink cost, consumes the brush), target must be a hidden tile adjacent to revealed area
-MAP.canMove(M, q, r) -> bool     // revealed and adjacent to pos
-MAP.move(M, q, r) -> tile        // sets pos, marks visited
+MAP.bounds(M, size, orient) -> {w, h, ox, oy}          // the world box at a fixed hex size: hex (q,r) at toPixel + (ox, oy) lies in 0..w x 0..h
+MAP.brush(M, brushId, q, r) -> tiles[]  // reveals the brush cells (no ink cost, consumes the brush, skips sea), target must be a hidden non-sea tile adjacent to revealed area
+MAP.canMove(M, q, r) -> bool     // revealed, not sea, adjacent to pos, ink >= moveCost
+MAP.move(M, q, r) -> tile        // sets pos, marks visited, spends moveCost
+MAP.walkCost(M, from, to, {any, land, ink}) -> ink | -1   // least ink to walk there (fords 2 each); any ignores the fog, land allows land only
+MAP.pathExists(M, from, to, opts) -> bool   // walkCost >= 0, and <= opts.ink when given
 MAP.toPixel(q, r, size, orient='h') -> {x, y}   // pointy-top axial to pixel, (0,0) at (size, size); 'v' transposes to (y, -x)
 MAP.fromPixel(x, y, size, orient='h') -> {q, r}  // with cube rounding; inverse for either orientation
 MAP.hexCorners(x, y, size, orient='h') -> [{x,y} x6]  // pointy-top, or flat-top (turned 30 degrees) for 'v'
-MAP.pathExists(M, from, to) through revealed tiles -> bool
-MAP.progress(M) -> {revealed, total, pct}
-MAP.serialize(M) / MAP.deserialize(o)
+MAP.progress(M) -> {revealed, total, pct}   // total leaves out the sea
+MAP.serialize(M) / MAP.deserialize(o)       // old saves without terrain load as dry land
 ```
-Tests (`tests/clawspire_map.test.mjs`, yours): generation counts/minimums for 200 seeds (10 × 7), boss reachable
-(there is always a hidden-or-revealed path), start neighbours revealed, landmarks known exactly on their types,
-towers 2-3 off-axis and not adjacent to specials, reveal spends ink and respects adjacency, pathToReveal shortest
-and boss-avoiding, revealPath spends exactly path.length ink and refuses when short, brushes reveal the right
-cells, move rules, pixel<->hex round trip, serialize round trip with known/tower.
+Tests (`tests/clawspire_map.test.mjs`): generation counts/minimums for 200 seeds (10 × 7 with terrain)
+and 100 seeds of the 16 × 22 world (water 20-40%, 2-4 islands with a tower and a treasure, a mainland
+tower, fords, ink at 10% of the land), land route start -> boss, start neighbourhood land, water empty
+and unknown, coast flags, every land hex reachable through fords, landmarks known exactly on their
+types, reveal/wade costs on fords, pathToReveal cheapest by ink (checked against an independent
+Dijkstra) and never over the sea, revealPath spends exactly pathCost, brushes skip the sea, bounds(),
+move rules, pixel<->hex round trip, serialize round trip with terrain and old-save defaults.
 
 ### `js/audio.js` -- `AUDIO`
 
@@ -555,7 +556,19 @@ GAME.dropClaw() GAME.steer(x) GAME.endTurn() GAME.playDelivered(bodies)
 GAME.save() GAME.load() GAME.meta (unlocks, bests, stats; key 'clawspire_meta'), run key 'clawspire_run'
 GAME.update(dt) GAME.draw() GAME.loop()
 GAME.headless   // true when no canvas ctx; update() then skips drawing but still steps physics
+GAME.cam        // map camera {x, y, zoom}: world point under the centre of the 540 x 768 map area (y 172..940), zoom 0.6..1.4; not saved
+GAME.hexToStage(q, r) / GAME.stageToHex(x, y)   // through the camera
+GAME.lookAt(q, r, ease) GAME.locate() GAME.wheel(x, y, deltaY) GAME.bossArrow() -> {x, y, a, dist} | null
 ```
+Map screen: `S.cam` is a camera over `MAP.bounds`. Pointer down + move past 8 px drags
+(pans; the view centre is clamped to the map, so the start on the bottom edge still centres); a lift without a drag taps (reveal adjacent,
+preview + paint far, walk to lit, fords at 2 ink); two fingers pinch-zoom about their midpoint;
+the mouse wheel zooms about the cursor. Entering the map snaps the camera to the player
+(`toMap` on a new or loaded map), a move eases it there, the head's locate button (`◎`)
+recentres, and when the boss hex is off screen a pink chevron on the edge of the map area
+points at it. Drawing is culled to the hexes in view in two passes (ground, then coast /
+fog / icons / states) from a per-map paint cache (`mapPaint`: world position, ground colour,
+coast edge mask, hash seed per tile), so a frame allocates nothing per tile.
 Physics sync: each `inst` in `F.bin` has one body (`body.data.inst`). On `refill`, bodies are
 respawned above the pile in a shower. Delivered = bodies for which `cabinet.inChute()` holds
 for 0.25 s after a `release`; they are removed, `COMBAT.play` runs for each (jackpot if ≥2:

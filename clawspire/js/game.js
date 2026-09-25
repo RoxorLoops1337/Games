@@ -10,7 +10,11 @@ const GAME = (() => {
   const SAVE_VER = 1;
   const RUN_KEY = 'clawspire_run', META_KEY = 'clawspire_meta';
   // Cabinet interior in stage coordinates (see the stage layout in the bible).
-  const CAB = { x: 30, y: 410, w: 480, h: 390, chuteW: 64, frame: 30, dividerH: 0.6, wallThick: 40, slopeW: 130, slopeH: 90 };
+  // Flat floor (no wedges) and a divider at 45% so a long item hanging from
+  // the carried claw clears it on the way to the chute.
+  const CAB = { x: 30, y: 410, w: 480, h: 390, chuteW: 64, frame: 30, dividerH: 0.45, wallThick: 40, slopeW: 0, slopeH: 0 };
+  const GRAVITY = 1150;         // Claw Crawl's gravity (px/s^2)
+  const TILT_G = 510;           // sideways gravity while the bin is tilted
   // Arena band: enemies spread across x0..x1 with their feet on the floor
   // line (RENDER.bg draws the backdrop floor at the same y).
   const ARENA = { y0: 70, y1: 340, x0: 90, x1: 450, floor: 300 };
@@ -307,6 +311,7 @@ const GAME = (() => {
     run.floor = 0;
     S.brushSel = null;
     S.preview = null;
+    S.mapLayout = null; S.mapPaint = null; S.camMap = null; S.camTo = null;
     return run.map;
   }
   function gainRelic(id) {
@@ -318,19 +323,33 @@ const GAME = (() => {
     S.lastRelics = '';
   }
   function addInk(n) { const run = S.run; run.ink = Math.max(0, run.ink + n); if (run.map) run.map.ink = run.ink; }
-  // The map must never dead-end: no ink, no brush, no lit path to the boss
-  // and nothing lit that could still hand out ink means a drop seeps in.
+  // The map must never dead-end. The cheapest thing that still leads
+  // somewhere is a lit walk to the boss or to a tile that hands out ink
+  // (free on land, 2 per ford to wade), else the cheapest reveal on the
+  // frontier (1, or 2 for a ford). When the ink is short of that, the
+  // shortfall seeps in. No brush in hand, or it would be the brush's job.
   function inkRescue() {
     const run = S.run, M = run && run.map;
-    if (!M || !X.MAP || M.ink >= 1 || (M.brushes && M.brushes.length)) return false;
-    if (X.MAP.pathExists(M, M.pos, M.boss)) return false;
+    if (!M || !X.MAP || (M.brushes && M.brushes.length)) return false;
     const GIVES = ['ink', 'elite', 'tower', 'event', 'shop', 'brush', 'treasure'];
+    const cost = (t) => (X.MAP.walkCost ? X.MAP.walkCost(M, M.pos, t) : (X.MAP.pathExists(M, M.pos, t) ? 0 : -1));
+    let need = Infinity;
+    const bc = cost(M.boss);
+    if (bc >= 0) need = bc;
     for (const k in M.tiles) {
       const t = M.tiles[k];
-      if (t.revealed && !t.done && GIVES.indexOf(t.type) >= 0 && X.MAP.pathExists(M, M.pos, t)) return false;
+      if (!t.revealed || t.done || GIVES.indexOf(t.type) < 0) continue;
+      const c = cost(t);
+      if (c >= 0 && c < need) need = c;
     }
-    addInk(1);
-    toast('A drop of ink seeps from a cracked cabinet. +1 ink.');
+    if (need === Infinity) {
+      for (const t of X.MAP.revealable(M, { brush: true })) { const c = X.MAP.revealCost ? X.MAP.revealCost(t) : 1; if (c < need) need = c; }
+      if (need === Infinity) need = 1;
+    }
+    if (M.ink >= need) return false;
+    const n = need - M.ink;
+    addInk(n);
+    toast(`A drop of ink seeps from a cracked cabinet. +${n} ink.`);
     return true;
   }
   function addGold(n) { const run = S.run; run.gold = Math.max(0, run.gold + n); }
@@ -555,6 +574,10 @@ const GAME = (() => {
     inkRescue();
     S.sd = null;
     setScreen('map');
+    // A fresh (or freshly loaded) map snaps the camera to the player; coming
+    // back from a tile eases there.
+    if (S.camMap !== run.map) { S.camMap = run.map; lookAt(run.map.pos.q, run.map.pos.r, false); }
+    else lookAt(run.map.pos.q, run.map.pos.r, true);
     buildMapHead();
   }
   function buildMapHead() {
@@ -567,6 +590,9 @@ const GAME = (() => {
     l1.appendChild(h('h2', null, `Act ${run.act}: ${a.name}`));
     l1.appendChild(h('span', 'mhInk', `${M ? M.ink : run.ink} ink`));
     l1.appendChild(btn('Bin', () => openBin({ mode: 'view', back: () => toMap() }), 'sm ghost'));
+    const loc = btn('\u25CE', () => locate(), 'sm ghost');
+    loc.title = 'Recentre on you';
+    l1.appendChild(loc);
     l1.appendChild(btn('?', () => showHelp('map'), 'sm ghost'));
     l1.appendChild(btn('Quit', () => { save(); showTitle(); }, 'sm ghost'));
     head.appendChild(l1);
@@ -584,38 +610,186 @@ const GAME = (() => {
     const pv = S.preview;
     const hintTxt = S.brushSel ? `Brush ready: tap a hidden hex next to the light to paint it.`
       : pv ? (M.ink >= pv.cost ? `Path: ${pv.cost} ink. Tap that hex again to paint it.` : `Path: ${pv.cost} ink, you have ${M.ink}. Elites, towers and ink pots give more.`)
-      : 'Tap a hidden hex to preview the ink path. Tap again to paint it. Walk on lit hexes.';
+      : 'Drag to pan. Tap a hidden hex to preview the ink path, tap again to paint it. Walk on lit hexes. Fords cost 2.';
     l2.appendChild(h('div', 'hint', hintTxt));
     head.appendChild(l2);
     refreshHud(true);
   }
   // The map is drawn as a portrait climb: MAP orient 'v' transposes the
   // generator's left-to-right layout so the start sits at the bottom middle
-  // and the boss at the top. Hexes are capped at MAP_HEX_MAX px.
-  const MAP_ORIENT = 'v', MAP_HEX_MAX = 44;
-  // Where the map sits on the stage, and the hex size that fits it.
+  // and the boss at the top. The world is bigger than the screen (16x22
+  // hexes of MAP_HEX px, about 1540 x 1310), so the map screen is a camera:
+  // S.cam = {x, y, zoom} is the world point under the centre of the map area
+  // plus the zoom. A drag pans it, a pinch or the wheel zooms it, it eases to
+  // the player after a move, the head's locate button recentres, and its
+  // centre is clamped to the map. Not saved: toMap() recentres.
+  const MAP_ORIENT = 'v', MAP_HEX = 46;
+  const MAP_AREA = { x: 0, y: 172, w: W, h: 768 };
+  const CAM_MIN = 0.6, CAM_MAX = 1.4, CAM_MARGIN = 80, CAM_EASE = 8, DRAG_PX = 8, ARROW_INSET = 36;
+  // World geometry of the current map (cached per map object).
   function mapLayout() {
     const M = S.run && S.run.map;
     if (!M || !X.MAP) return null;
-    const area = { x: 0, y: 172, w: W, h: 768 };
-    let L;
-    if (X.MAP.size) L = X.MAP.size(M, area.w, area.h, MAP_ORIENT, MAP_HEX_MAX);
+    if (S.mapLayout && S.mapLayout.M === M) return S.mapLayout;
+    const size = X.MAP.HEX || MAP_HEX;
+    let b;
+    if (X.MAP.bounds) b = X.MAP.bounds(M, size, MAP_ORIENT);
     else {
-      const s = Math.min((area.w - 16) / (Math.sqrt(3) * (M.cols + 0.5)), (area.h - 16) / (1.5 * (M.rows - 1) + 2));
-      L = { size: s, ox: 0, oy: 0 };
+      const sx = Math.sqrt(3) * size * (M.cols + 0.5), sy = size * (1.5 * (M.rows - 1) + 2);
+      b = { w: sy, h: sx, ox: 0, oy: size - (Math.sqrt(3) / 2) * size + sx };
     }
-    return { area, size: L.size, ox: area.x + L.ox, oy: area.y + L.oy, orient: MAP_ORIENT };
+    S.mapLayout = { M, area: MAP_AREA, size, ox: b.ox, oy: b.oy, w: b.w, h: b.h, orient: MAP_ORIENT };
+    return S.mapLayout;
   }
-  function hexToStage(q, r) {
+  function cam() {
+    if (!S.cam) S.cam = { x: 0, y: 0, zoom: 1 };
+    return S.cam;
+  }
+  function worldOf(q, r) {
     const L = mapLayout();
     if (!L) return { x: 0, y: 0 };
     const p = X.MAP.toPixel(q, r, L.size, L.orient);
     return { x: L.ox + p.x, y: L.oy + p.y };
   }
+  // The view centre stays on the map, so any hex (the start on the bottom
+  // edge included) can be centred; past that the view keeps CAM_MARGIN of
+  // map in sight. A map smaller than the view is centred.
+  function clampCam(c) {
+    const L = mapLayout();
+    if (!L) return c;
+    c.zoom = U.clamp(c.zoom || 1, CAM_MIN, CAM_MAX);
+    const hw = L.area.w / 2 / c.zoom, hh = L.area.h / 2 / c.zoom;
+    const x0 = Math.min(hw - CAM_MARGIN, 0), x1 = Math.max(L.w + CAM_MARGIN - hw, L.w);
+    const y0 = Math.min(hh - CAM_MARGIN, 0), y1 = Math.max(L.h + CAM_MARGIN - hh, L.h);
+    c.x = x0 > x1 ? L.w / 2 : U.clamp(c.x, x0, x1);
+    c.y = y0 > y1 ? L.h / 2 : U.clamp(c.y, y0, y1);
+    return c;
+  }
+  function worldToStage(wx, wy) {
+    const L = mapLayout(), c = cam();
+    return { x: L.area.x + L.area.w / 2 + (wx - c.x) * c.zoom, y: L.area.y + L.area.h / 2 + (wy - c.y) * c.zoom };
+  }
+  function stageToWorld(x, y) {
+    const L = mapLayout(), c = cam();
+    return { x: c.x + (x - L.area.x - L.area.w / 2) / c.zoom, y: c.y + (y - L.area.y - L.area.h / 2) / c.zoom };
+  }
+  function hexToStage(q, r) {
+    if (!mapLayout()) return { x: 0, y: 0 };
+    const w = worldOf(q, r);
+    return worldToStage(w.x, w.y);
+  }
   function stageToHex(x, y) {
     const L = mapLayout();
     if (!L) return null;
-    return X.MAP.fromPixel(x - L.ox, y - L.oy, L.size, L.orient);
+    const w = stageToWorld(x, y);
+    return X.MAP.fromPixel(w.x - L.ox, w.y - L.oy, L.size, L.orient);
+  }
+  // Point the camera at a hex: snapped, or eased over the next frames.
+  function lookAt(q, r, ease) {
+    if (!mapLayout()) return;
+    const w = worldOf(q, r);
+    const to = clampCam({ x: w.x, y: w.y, zoom: cam().zoom });
+    if (ease) { S.camTo = { x: to.x, y: to.y }; return; }
+    const c = cam();
+    c.x = to.x; c.y = to.y;
+    S.camTo = null;
+  }
+  function locate() { const M = S.run && S.run.map; if (M) lookAt(M.pos.q, M.pos.r, true); }
+  function camStep(dt) {
+    if (!S.camTo || !mapLayout()) return;
+    const c = cam();
+    const k = 1 - Math.exp(-CAM_EASE * dt);
+    c.x += (S.camTo.x - c.x) * k; c.y += (S.camTo.y - c.y) * k;
+    if (Math.abs(S.camTo.x - c.x) < 0.5 && Math.abs(S.camTo.y - c.y) < 0.5) { c.x = S.camTo.x; c.y = S.camTo.y; S.camTo = null; }
+    clampCam(c);
+  }
+  // Zoom by a factor keeping the world point under (x, y) where it is.
+  function zoomAt(x, y, factor) {
+    const L = mapLayout();
+    if (!L) return;
+    const c = cam();
+    const w = stageToWorld(x, y);
+    c.zoom = U.clamp(c.zoom * factor, CAM_MIN, CAM_MAX);
+    c.x = w.x - (x - L.area.x - L.area.w / 2) / c.zoom;
+    c.y = w.y - (y - L.area.y - L.area.h / 2) / c.zoom;
+    clampCam(c);
+    S.camTo = null;
+  }
+  function wheel(x, y, deltaY) {
+    if (S.screen !== 'map') return;
+    zoomAt(x, y, Math.exp(-(deltaY || 0) * 0.0012));
+  }
+  // The boss when it is off screen: where to draw an arrow on the edge of
+  // the map area and which way it points. Null while the boss hex is in view.
+  function bossArrow() {
+    const M = S.run && S.run.map, L = mapLayout();
+    if (!M || !L) return null;
+    const p = hexToStage(M.boss.q, M.boss.r);
+    const A = L.area;
+    if (p.x >= A.x && p.x <= A.x + A.w && p.y >= A.y && p.y <= A.y + A.h) return null;
+    const cx = A.x + A.w / 2, cy = A.y + A.h / 2;
+    const dx = p.x - cx, dy = p.y - cy;
+    const hw = A.w / 2 - ARROW_INSET, hh = A.h / 2 - ARROW_INSET;
+    const k = Math.min(hw / Math.max(1e-6, Math.abs(dx)), hh / Math.max(1e-6, Math.abs(dy)));
+    return { x: cx + dx * k, y: cy + dy * k, a: Math.atan2(dy, dx), dist: Math.hypot(dx, dy) };
+  }
+  // Map input: one finger drags the camera once it moves DRAG_PX, a finger
+  // that never moved taps on lift, two fingers pinch-zoom about their midpoint.
+  function mapPointer(type, x, y, ev) {
+    const pid = 'p' + (ev && ev.pointerId != null ? ev.pointerId : 0);
+    const P = S.mapPtrs || (S.mapPtrs = {});
+    const c = cam();
+    if (type === 'down') {
+      P[pid] = { x, y };
+      const ids = Object.keys(P);
+      if (ids.length === 1) S.mapDrag = { moved: false, x0: x, y0: y, cx: c.x, cy: c.y };
+      else if (ids.length === 2 && mapLayout()) {
+        const a = P[ids[0]], b = P[ids[1]];
+        const w = stageToWorld((a.x + b.x) / 2, (a.y + b.y) / 2);
+        S.mapPinch = { d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom0: c.zoom, wx: w.x, wy: w.y };
+        if (S.mapDrag) S.mapDrag.moved = true;
+      }
+      return;
+    }
+    const p = P[pid];
+    if (!p) return;
+    if (type === 'move') {
+      p.x = x; p.y = y;
+      const ids = Object.keys(P);
+      const L = mapLayout();
+      if (ids.length >= 2 && S.mapPinch && L) {
+        const a = P[ids[0]], b = P[ids[1]];
+        const d = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        c.zoom = U.clamp(S.mapPinch.zoom0 * d / S.mapPinch.d0, CAM_MIN, CAM_MAX);
+        c.x = S.mapPinch.wx - (mx - L.area.x - L.area.w / 2) / c.zoom;
+        c.y = S.mapPinch.wy - (my - L.area.y - L.area.h / 2) / c.zoom;
+        clampCam(c); S.camTo = null;
+        return;
+      }
+      const d = S.mapDrag;
+      if (!d || !L) return;
+      const dx = x - d.x0, dy = y - d.y0;
+      if (!d.moved && Math.hypot(dx, dy) < DRAG_PX) return;
+      d.moved = true; S.camTo = null;
+      c.x = d.cx - dx / c.zoom; c.y = d.cy - dy / c.zoom;
+      clampCam(c);
+      return;
+    }
+    if (type === 'up' || type === 'cancel') {
+      delete P[pid];
+      const ids = Object.keys(P);
+      const d = S.mapDrag;
+      if (!ids.length) {
+        S.mapDrag = null; S.mapPinch = null;
+        if (type === 'up' && d && !d.moved && y >= MAP_AREA.y) mapTap(x, y);
+      } else {
+        // a pinch finger lifted: the other finger carries on as a drag
+        const rest = P[ids[0]];
+        S.mapPinch = null;
+        S.mapDrag = { moved: true, x0: rest.x, y0: rest.y, cx: c.x, cy: c.y };
+      }
+    }
   }
   function mapTap(x, y) {
     const run = S.run, M = run && run.map;
@@ -639,13 +813,16 @@ const GAME = (() => {
       save();
       return true;
     }
+    if (t.terrain === 'sea') { toast('Open water. Nothing to chart out there.'); return false; }
+    const ford = t.terrain === 'shallow';
+    const tileCost = X.MAP.revealCost ? X.MAP.revealCost(t) : 1;
     if (!t.revealed) {
       if (X.MAP.canReveal(M, t.q, t.r)) {
         X.MAP.reveal(M, t.q, t.r);
         run.ink = M.ink;
         snd('reveal');
         fx().burst(x, y, '#2ee6d6', 12);
-        toast(`Revealed: ${TILE_NAMES[t.type] || t.type}.`);
+        toast(ford ? `Charted a ford. ${tileCost} ink.` : `Revealed: ${TILE_NAMES[t.type] || t.type}.`);
         inkRescue();
         buildMapHead();
         save();
@@ -654,36 +831,46 @@ const GAME = (() => {
       // Not next to the light: preview the ink path, paint it on a second tap.
       const path = X.MAP.pathToReveal ? X.MAP.pathToReveal(M, t.q, t.r) : [];
       if (!path.length) {
-        if (M.ink < 1) toast('No ink. Elites, towers and ink pots give more.');
+        if (M.ink < tileCost) toast(ford ? `A ford takes ${tileCost} ink to chart. You have ${M.ink}.` : 'No ink. Elites, towers and ink pots give more.');
         else toast('No way through the fog to that hex.');
+        if (inkRescue()) buildMapHead();
         return false;
       }
+      const cost = X.MAP.pathCost ? X.MAP.pathCost(M, path) : path.length;
       if (samePv) {
-        if (M.ink < path.length) { toast(`That path needs ${path.length} ink. ${path.length - M.ink} short.`); return false; }
+        if (M.ink < cost) { toast(`That path needs ${cost} ink. ${cost - M.ink} short.`); return false; }
         const tiles = X.MAP.revealPath(M, path) || [];
         run.ink = M.ink;
         S.preview = null;
         snd('reveal');
         fx().burst(x, y, '#2ee6d6', 18);
-        toast(`Painted ${tiles.length} hexes to ${TILE_NAMES[t.type] || t.type}.`);
+        toast(`Painted ${tiles.length} hexes to ${ford ? 'a ford' : (TILE_NAMES[t.type] || t.type)}.`);
         inkRescue();
         buildMapHead();
         save();
         return true;
       }
-      S.preview = { q: t.q, r: t.r, path, cost: path.length, label: t.known ? (LANDMARK_LABELS[t.type] || t.type) : null };
+      S.preview = { q: t.q, r: t.r, path, cost, label: t.known ? (LANDMARK_LABELS[t.type] || t.type) : (ford ? 'Ford' : null) };
       snd('click');
       buildMapHead();
       return true;
     }
     if (X.MAP.canMove(M, t.q, t.r)) {
       X.MAP.move(M, t.q, t.r);
+      run.ink = M.ink;
       run.floor++;
       snd('step');
+      lookAt(t.q, t.r, true);
       enterTile(t);
       return true;
     }
     if (t.q === M.pos.q && t.r === M.pos.r) { toast('You are here.'); return false; }
+    if (ford && X.MAP.isAdjacent(M.pos.q, M.pos.r, t.q, t.r)) {
+      const wade = X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
+      toast(`Wading that ford takes ${wade} ink. You have ${M.ink}.`);
+      if (inkRescue()) buildMapHead();
+      return false;
+    }
     toast('Walk one lit hex at a time.');
     return false;
   }
@@ -760,6 +947,13 @@ const GAME = (() => {
       case 'rest': finish(); showRest(); return;
       case 'forge': finish(); showForge(); return;
       case 'empty': {
+        if (t.terrain === 'shallow') {
+          const wade = X.MAP && X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
+          toast(`You wade the ford. ${wade} ink, and cold to the knees.`);
+          inkRescue();
+          buildMapHead();
+          break;
+        }
         if (!t.seenToast) { t.seenToast = true; toast(EMPTY_TOASTS[(t.q * 7 + t.r * 13 + run.act) % EMPTY_TOASTS.length]); }
         break;
       }
@@ -829,7 +1023,7 @@ const GAME = (() => {
     if (!X.PHYS) return;
     const P = X.PHYS;
     if (FS.rig && FS.rig.destroy) { try { FS.rig.destroy(); } catch (e) { /* ignore */ } }
-    FS.world = P.world({ gravity: { x: 0, y: 1400 }, w: CAB.w, h: CAB.h });
+    FS.world = P.world({ gravity: { x: 0, y: GRAVITY }, w: CAB.w, h: CAB.h });
     FS.cabinet = P.cabinet(FS.world, { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, wallThick: CAB.wallThick, slopeW: CAB.slopeW, slopeH: CAB.slopeH });
     buildRig();
     FS.items = [];
@@ -840,15 +1034,18 @@ const GAME = (() => {
     const b = FS.cabinet.bounds;
     FS.rig = P.clawRig(FS.world, {
       cabinet: FS.cabinet, homeX: (b.chuteX || CAB.w - CAB.chuteW) * 0.5, chuteX: (b.chuteX || CAB.w - CAB.chuteW) + CAB.chuteW * 0.5,
-      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip, speed: c.speed, rubber: c.rubber, magnet: c.magnet,
+      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip, speed: c.speed, rubber: c.rubber, magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
       rand: U.rng(FS.seed ^ 0x1234567),
     });
   }
+  // The physics shape: PHYS turns a circle into a ball, a box into a capsule
+  // and a polygon into a blob (or a thin capsule when it is long); a frozen
+  // item is a ball of its long radius (a lump of ice).
   function shapeFor(def, inst) {
     const sh = def.shape || { kind: 'circle', r: 16 };
-    if (inst && inst.frozen) return { kind: 'circle', r: Math.min(28, shapeLong(sh) / 2 + 4) };
+    if (inst && inst.frozen) return { kind: 'circle', r: Math.max(8, shapeLong(sh) / 2) };
     if (sh.kind === 'circle') return { kind: 'circle', r: sh.r };
-    if (sh.kind === 'box') return { kind: 'poly', verts: X.PHYS.box(sh.w, sh.h) };
+    if (sh.kind === 'box') return { kind: 'box', w: sh.w, h: sh.h };
     if (sh.verts) return { kind: 'poly', verts: sh.verts };
     return { kind: 'circle', r: 16 };
   }
@@ -879,10 +1076,9 @@ const GAME = (() => {
       type: 'dynamic', shape, x, y, angle: a,
       density: inst.frozen ? 1.2 : (def.density == null ? 1 : def.density),
       friction: def.friction == null ? 0.5 : def.friction,
-      restitution: inst.frozen ? 0.05 : (def.restitution == null ? 0.1 : def.restitution),
-      group: 'item', data: { inst, tags: def.tags || [], def, chuteT: 0, friction0: def.friction == null ? 0.5 : def.friction },
+      restitution: inst.frozen ? 0.05 : (def.restitution == null ? 0.12 : def.restitution),
+      group: 'item', data: { inst, tags: def.tags || [], def, chuteT: 0 },
     });
-    if (FS.grease > 0) b.friction = 0.04;
     b.vx = (r() - 0.5) * 60; b.av = (r() - 0.5) * 2;
     FS.world.add(b);
     FS.items.push(b);
@@ -922,6 +1118,7 @@ const GAME = (() => {
   }
   function shakeBin() {
     const r = FS.rng;
+    if (FS.world) FS.world.wakeAll();
     for (const b of FS.items) {
       b.vx += (r() - 0.5) * 700;
       b.vy -= 250 + r() * 500;
@@ -931,23 +1128,23 @@ const GAME = (() => {
     snd('shake');
     haptic('hit');
   }
+  // Grease is a slippery claw (Claw Crawl's greaseOn: grip -0.3), not slippery items.
   function setGrease(turns) {
     FS.grease = Math.max(FS.grease, turns || 1);
-    for (const b of FS.items) b.friction = 0.04;
-    if (FS.rig && FS.rig.bodies) for (const p of FS.rig.bodies.prongs) p.data.friction0 = p.data.friction0 == null ? p.friction : p.data.friction0;
+    if (FS.rig) FS.rig.setConfig({ grease: 1 });
   }
   function clearGrease() {
     FS.grease = 0;
-    for (const b of FS.items) b.friction = b.data.friction0;
+    if (FS.rig) FS.rig.setConfig({ grease: 0 });
   }
   function setTilt(dir) {
     FS.tilt = dir;
-    if (FS.world) FS.world.setGravity(dir * 620, 1250);
+    if (FS.world) FS.world.setGravity(dir * TILT_G, GRAVITY - 120);
     fx().shake(5);
   }
   function clearTilt() {
     FS.tilt = 0;
-    if (FS.world) FS.world.setGravity(0, 1400);
+    if (FS.world) FS.world.setGravity(0, GRAVITY);
   }
 
   // Displayed hp/block lag the engine: COMBAT resolves a whole turn at once,
@@ -1132,8 +1329,7 @@ const GAME = (() => {
   function rigArrived() {
     const r = FS && FS.rig;
     if (!r) return false;
-    const cx = r.cableTop ? r.cableTop.x : r.x;
-    return r.phase === 'idle' && Math.abs(cx - r.targetX) <= 2;
+    return r.phase === 'idle' && Math.abs(r.x - r.targetX) <= 2;
   }
   function dropClaw() {
     if (!canDrop()) return false;
@@ -1157,7 +1353,7 @@ const GAME = (() => {
     if (S.coachStep === 1) coachNext();
     return true;
   }
-  // Items the grip lock is carrying right now (falls back to the pinch test).
+  // The cargo: what the claw closed on and is carrying (falls back to the touch test).
   function carried() {
     const rig = FS && FS.rig;
     if (!rig) return [];
@@ -1168,7 +1364,8 @@ const GAME = (() => {
     const list = carried();
     if (!list.length) { hint('empty claw...'); return; }
     const names = list.map((b) => itemName(itemDef(b.data.inst.id), b.data.inst.plus));
-    hint('holding ' + names.join(' + '));
+    // Claw Crawl scoops: a big cargo reads as "A + B + 3 more"
+    hint('holding ' + (names.length > 3 ? names.slice(0, 2).join(' + ') + ' + ' + (names.length - 2) + ' more' : names.join(' + ')));
   }
   function onRigEvent(ev) {
     const rig = FS.rig;
@@ -1185,7 +1382,7 @@ const GAME = (() => {
       case 'lift': { snd('clawLift'); FS.wasHeld = carried().length; holdHint(); break; }
       case 'carry': snd('clawMove'); holdHint(); break;
       case 'slip': {
-        // the rig's grip lock broke: the item is falling back into the pile
+        // a cargo item fell out of the prongs on the way up or across
         snd('itemSlip');
         fx().text(CAB.x + rig.x, CAB.y + rig.y + 30, 'SLIP', '#b3a4d6', { size: 16 });
         fx().shake(2);
@@ -1194,8 +1391,7 @@ const GAME = (() => {
         break;
       }
       case 'shed': {
-        // the cradle was full at the lift: the extras stayed in the pile
-        // (not a failure; Wider Palm x2 and Third Prong raise the capacity)
+        // legacy event (the Claw Crawl rig never emits it): extras left in the pile
         snd('clawTouch');
         fx().text(CAB.x + rig.x, CAB.y + rig.y + 30, 'FULL', '#8e98a8', { size: 14, life: 0.7 });
         break;
@@ -1401,12 +1597,15 @@ const GAME = (() => {
         if (d.sq > 0) d.sq = Math.max(0, d.sq - dt * 5);
       }
       if (held) for (const b of held) fx().trail(CAB.x + b.x, CAB.y + b.y, '#2ee6d6', { vx: b.vx, vy: b.vy + 40, life: 0.3, w: 4 });
-      // Deliveries: bodies parked in the chute after a release.
-      if (FS.watch) {
-        for (const b of FS.items.slice()) {
-          if (FS.cabinet.inChute(b)) { b.data.chuteT += dt; if (b.data.chuteT >= DELIVER_HOLD) deliver(b); }
-          else b.data.chuteT = 0;
-        }
+      // Deliveries: bodies in the chute after a release. The chute has no
+      // floor, so anything that fell through it onto the hidden tray outside
+      // a grab (a shake or tilt tossed it in) is played once it is the
+      // player's turn again.
+      const playerIdle = F.phase === 'player' && !FS.enemyTurn && !FS.queue.length && !FS.done;
+      for (const b of FS.items.slice()) {
+        if (FS.watch && FS.cabinet.inChute(b)) { b.data.chuteT += dt; if (b.data.chuteT >= DELIVER_HOLD) deliver(b); }
+        else if (!FS.watch && playerIdle && b.y > CAB.h + 10 && FS.cabinet.inChute(b)) deliver(b);
+        else b.data.chuteT = 0;
       }
     }
     // Played items resolve on a short beat so the numbers can be read.
@@ -2031,11 +2230,7 @@ const GAME = (() => {
   function pointer(type, x, y, ev) {
     if (X.AUDIO && X.AUDIO.init && type === 'down') { try { X.AUDIO.init(); } catch (e) { /* optional */ } }
     if (type === 'down' && S.popover) { popover(null); }
-    if (S.screen === 'map') {
-      if (type === 'up' && S.ptr && Math.hypot(S.ptr.x - x, S.ptr.y - y) < 18 && y >= 172) mapTap(x, y);
-      if (type === 'down') S.ptr = { x, y };
-      return;
-    }
+    if (S.screen === 'map') { mapPointer(type, x, y, ev); return; }
     if (S.screen === 'title') return;
     if (S.screen !== 'fight' || !F || !FS) return;
     // One finger steers. A second finger is ignored until the first lifts.
@@ -2131,46 +2326,114 @@ const GAME = (() => {
     fx().draw(ctx);
     ctx.restore();
   }
+  const DIRS6 = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+  // Per-map paint cache: world position, ground colour, coast edge mask and
+  // a hash seed per tile, so drawing allocates nothing per frame.
+  function mapPaint() {
+    const M = S.run && S.run.map, L = mapLayout();
+    if (!M || !L) return null;
+    if (S.mapPaint && S.mapPaint.M === M) return S.mapPaint;
+    const R = X.RENDER;
+    const biome = M.biome || (X.MAP.biomeOf ? X.MAP.biomeOf(M.act) : 'cellar');
+    const dirs = X.MAP.DIRS || DIRS6;
+    // Which drawn edge faces each axial direction (edge i runs corner i -> i+1
+    // in RENDER's hexPath order: flat-top corners at 0, 60, ... degrees).
+    const off = L.orient === 'v' ? 0 : -Math.PI / 2;
+    const o = X.MAP.toPixel(0, 0, 10, L.orient);
+    const edgeOf = dirs.map(([dq, dr]) => {
+      const a = X.MAP.toPixel(dq, dr, 10, L.orient);
+      const vx = a.x - o.x, vy = a.y - o.y;
+      let best = 0, bd = -Infinity;
+      for (let i = 0; i < 6; i++) { const m = off + (i + 0.5) * Math.PI / 3; const d = vx * Math.cos(m) + vy * Math.sin(m); if (d > bd) { bd = d; best = i; } }
+      return best;
+    });
+    const items = [];
+    for (const k in M.tiles) {
+      const t = M.tiles[k];
+      const w = worldOf(t.q, t.r);
+      let mask = 0;
+      if (t.coast) dirs.forEach(([dq, dr], i) => { const n = X.MAP.tileAt(M, t.q + dq, t.r + dr); if (n && n.terrain && n.terrain !== 'land') mask |= 1 << edgeOf[i]; });
+      const terr = t.terrain || 'land';
+      const fill = R && R.terrainFill ? R.terrainFill(biome, terr, t.elev || 0) : (terr === 'sea' ? '#173142' : terr === 'shallow' ? '#3b7d86' : '#8a8570');
+      items.push({ t, k, wx: w.x, wy: w.y, fill, mask, seed: U.hashStr(k) });
+    }
+    S.mapPaint = { M, biome, items, hidden: [], pool: [], st: {}, cur: { x: 0, y: 0 } };
+    return S.mapPaint;
+  }
   function drawMap(ctx, t) {
     const R = X.RENDER, run = S.run, M = run && run.map;
     if (R && R.mapBg) R.mapBg(ctx, W, H, run ? run.act : 1, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
     if (!M || !X.MAP) return;
-    const L = mapLayout();
+    const L = mapLayout(), P = mapPaint(), c = cam();
+    if (!L || !P) return;
+    const A = L.area, z = c.zoom, size = L.size * z;
+    const ox = A.x + A.w / 2 - c.x * z, oy = A.y + A.h / 2 - c.y * z;
+    const x0 = A.x - size, x1 = A.x + A.w + size, y0 = A.y - size, y1 = A.y + A.h + size;
     const reach = new Set(X.MAP.reachable ? X.MAP.reachable(M).map((x) => X.MAP.key(x.q, x.r)) : []);
     const brushable = new Set();
     if (S.brushSel && X.MAP.revealable) for (const x of X.MAP.revealable(M, { brush: true })) brushable.add(X.MAP.key(x.q, x.r));
     const pv = S.preview && S.preview.path && S.preview.path.length ? S.preview : null;
     const onPath = {};
     if (pv) pv.path.forEach(([q, r], i) => { onPath[X.MAP.key(q, r)] = i + 1; });
-    const at = (q, r) => { const p = X.MAP.toPixel(q, r, L.size, L.orient); return { x: L.ox + p.x, y: L.oy + p.y }; };
     const flat = L.orient === 'v';
-    const hidden = [];
-    let curXY = null;
-    for (const k in M.tiles) {
-      const tile = M.tiles[k];
-      const { x, y } = at(tile.q, tile.r);
-      const cur = tile.q === M.pos.q && tile.r === M.pos.r;
-      if (cur) curXY = { x, y };
-      if (!tile.revealed && tile.type !== 'boss') hidden.push({ x, y });
-      const st = { reachable: reach.has(k), current: cur, hover: brushable.has(k), t, ink: M.ink, canReveal: !tile.revealed && M.ink >= 1 && X.MAP.canReveal(M, tile.q, tile.r),
-        path: onPath[k] || 0, target: !!(pv && pv.q === tile.q && pv.r === tile.r), known: !!tile.known, orient: L.orient };
-      if (R && R.hex) R.hex(ctx, x, y, L.size, tile, st);
+    const st = P.st;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(A.x, A.y, A.w, A.h); ctx.clip();
+    // Pass 1: the ground (water, fords, land) under every hex in view.
+    st.t = t; st.orient = L.orient; st.biome = P.biome; st.ink = M.ink;
+    for (const it of P.items) {
+      const x = it.wx * z + ox, y = it.wy * z + oy;
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      st.fill = it.fill; st.seed = it.seed;
+      if (R && R.terrainHex) R.terrainHex(ctx, x, y, size, it.t, st);
       else {
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i + (flat ? 0 : -30)); ctx.lineTo(x + L.size * Math.cos(a), y + L.size * Math.sin(a)); }
+        for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i + (flat ? 0 : -30)); ctx.lineTo(x + size * Math.cos(a), y + size * Math.sin(a)); }
+        ctx.closePath(); ctx.fillStyle = it.fill; ctx.fill();
+      }
+    }
+    // Pass 2: coast, fog, icons and states on everything but the sea.
+    const hidden = P.hidden;
+    hidden.length = 0;
+    let curXY = null, np = 0;
+    for (const it of P.items) {
+      const tile = it.t;
+      if (tile.terrain === 'sea') continue;
+      const x = it.wx * z + ox, y = it.wy * z + oy;
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const cur = tile.q === M.pos.q && tile.r === M.pos.r;
+      if (cur) { P.cur.x = x; P.cur.y = y; curXY = P.cur; }
+      if (!tile.revealed && tile.type !== 'boss' && tile.terrain !== 'shallow') { const pt = P.pool[np] || (P.pool[np] = { x: 0, y: 0 }); pt.x = x; pt.y = y; hidden.push(pt); np++; }
+      st.reachable = reach.has(it.k); st.current = cur; st.hover = brushable.has(it.k);
+      st.canReveal = !tile.revealed && X.MAP.canReveal(M, tile.q, tile.r);
+      st.path = onPath[it.k] || 0; st.target = !!(pv && pv.q === tile.q && pv.r === tile.r); st.known = !!tile.known;
+      st.fill = it.fill; st.mask = it.mask; st.seed = it.seed;
+      if (R && R.hex) R.hex(ctx, x, y, size, tile, st);
+      else {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i + (flat ? 0 : -30)); ctx.lineTo(x + size * Math.cos(a), y + size * Math.sin(a)); }
         ctx.closePath(); ctx.fillStyle = tile.revealed ? '#2c1d4a' : '#150c26'; ctx.fill(); ctx.strokeStyle = '#3d2a63'; ctx.stroke();
       }
     }
     // The start-boss axis shows through the fog so the direction is obvious.
-    if (R && R.mapAxis && hidden.length) { const a = at(M.start.q, M.start.r), b = at(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, L.size, hidden, t, flat); }
-    if (curXY && R && R.portrait) R.portrait(ctx, run.char, curXY.x, curXY.y, L.size * 1.2, t);
+    if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
+    if (curXY && R && R.portrait) R.portrait(ctx, run.char, curXY.x, curXY.y, size * 1.2, t);
     if (pv && R && R.mapPath) {
       // Draw the path from the lit hex it grows out of.
-      const pts = pv.path.map(([q, r]) => at(q, r));
+      const pts = pv.path.map(([q, r]) => hexToStage(q, r));
       const [fq, fr] = pv.path[0];
       const from = X.MAP.neighbors(M, fq, fr).map(([q, r]) => M.tiles[X.MAP.key(q, r)]).find((n) => n.revealed && (n.type !== 'boss' || n.visited));
-      if (from) pts.unshift(at(from.q, from.r));
-      R.mapPath(ctx, pts, L.size, { cost: pv.cost, ink: M.ink, label: pv.label, t });
+      if (from) pts.unshift(hexToStage(from.q, from.r));
+      R.mapPath(ctx, pts, size, { cost: pv.cost, ink: M.ink, label: pv.label, t });
+    }
+    ctx.restore();
+    // Off-screen boss: an arrow on the edge of the map area pointing at it.
+    const ba = bossArrow();
+    if (ba && R && R.mapArrow) R.mapArrow(ctx, ba.x, ba.y, ba.a, 16, t, 'Boss');
+    if (R && R.mapCompass) R.mapCompass(ctx, A.x + A.w - 42, A.y + A.h - 42, 28, t);
+    if (R && R.mapHeader) {
+      const pr = X.MAP.progress ? X.MAP.progress(M) : null;
+      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, actDef(run.act).name, pr ? `${pr.revealed} of ${pr.total} hexes charted` : '', t);
     }
   }
   function drawFight(ctx, t) {
@@ -2238,6 +2501,7 @@ const GAME = (() => {
     fx().update(dt);
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) { const el = $('banner'); if (el) el.classList.remove('show'); const pr = $('playerRow'); if (pr && pr.classList) pr.classList.remove('bannerOn'); } }
+    if (S.screen === 'map') camStep(dt);
     if (S.screen === 'fight') {
       updateFight(dt);
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
@@ -2296,6 +2560,7 @@ const GAME = (() => {
       cv.addEventListener('pointerup', (ev) => { const p = stagePoint(ev); pointer('up', p.x, p.y, ev); });
       cv.addEventListener('pointercancel', (ev) => { const p = stagePoint(ev); pointer('cancel', p.x, p.y, ev); });
       cv.addEventListener('contextmenu', (ev) => { if (ev.preventDefault) ev.preventDefault(); });
+      cv.addEventListener('wheel', (ev) => { if (S.screen !== 'map') return; const p = stagePoint(ev); wheel(p.x, p.y, ev.deltaY); if (ev.preventDefault) ev.preventDefault(); }, { passive: false });
     }
     try {
       document.addEventListener('keydown', (ev) => onKey(ev, true));
@@ -2332,14 +2597,14 @@ const GAME = (() => {
     boot, update, draw, loop, resize,
     newRun, toMap, enterTile, addItem, startFight, endFight, dropClaw, steer, endTurn, save, load, mapTap,
     playDelivered: (bodies) => { for (const b of bodies || []) if (FS && FS.items.indexOf(b) >= 0) deliver(b); },
-    tap, pointer, choose, state, hexToStage, stageToHex, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
+    tap, pointer, choose, state, hexToStage, stageToHex, lookAt, locate, wheel, bossArrow, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
     showTreasure, showGameOver, showWin, showHelp, showCollection, openBin, resolveFx, gainRelic, applyClawUpgrade, rollShop,
     rigEvent: (ev) => { if (FS && FS.rig) onRigEvent(ev); },   // test hook: feed one rig event
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },
     get screen() { return S.screen; }, get meta() { return S.meta; }, get headless() { return S.headless; },
-    get fs() { return FS; }, get S() { return S; },
+    get fs() { return FS; }, get S() { return S; }, get cam() { return S.cam; },
     CAB, BEAT, DELIVER_HOLD, AUTO_END, WATCHDOG, RUN_KEY, META_KEY,
   };
 })();

@@ -1,811 +1,406 @@
-// Clawspire -- PHYS: a small 2D rigid body engine (circles + convex polygons,
-// sequential impulses with warm starting, Coulomb friction, restitution,
-// revolute joints with limits and a motor) plus the cabinet and the claw rig
-// built on it.  Units: pixels and seconds, y grows downward.  Headless: no DOM,
-// no Math.random (the rig takes a cfg.rand stream for its jitter).
+// Clawspire -- PHYS: the claw and item physics, ported from Claw Crawl.
 //
-// The hot loops (substep, narrowphase, solver) do not allocate per body or per
-// contact: manifolds live in a Map keyed by body pair and are reused across
-// substeps, and collision results go through module-level scratch structs.
+// Bodies are compounds of circles (a ball, a capsule chain or a rounded blob)
+// that collide with each other, with static capsule walls and with the
+// kinematic claw (a hub circle plus two prongs of three capsule segments).
+// Sequential impulses with Coulomb friction, restitution only on hard hits,
+// bias-limited penetration recovery (with a lower cap against the claw so it
+// can never fling anything), sleeping bodies that wake on hits, and hard
+// floor / wall / lid clamps so nothing ever leaves the cabinet.  Fixed 1/240 s
+// substeps.  Units: pixels and seconds, y grows downward.  Headless: no DOM,
+// no Math.random (the rig takes a cfg.rand stream for loosen and jolt).
 const PHYS = (() => {
   'use strict';
 
   // ---- constants ---------------------------------------------------------
   const H = 1 / 240;             // fixed substep, seconds
   const MAX_SUB = 12;            // max substeps per W.step call
-  const ITER = 16;               // velocity iterations per substep
-  const BETA = 0.0;              // velocity-level Baumgarte for contacts (0: positions fix penetration)
-  const SLOP = 0.5;              // allowed penetration (px)
-  const SKIN = 0.6;              // contacts persist while this far apart (stable stacks)
-  const POS_ITER = 4;            // position correction passes per substep
-  const POS_BETA = 0.3;          // fraction of the penetration removed per pass
-  const POS_MAX = 6;             // max correction per pass (px)
-  const JOINT_BETA = 0.3;        // Baumgarte factor for joint drift
-  const MAX_V = 2400;            // linear speed cap (px/s), anti-tunnelling
-  // Claw parts push items with a finite force. The palm is kinematic and the
-  // prongs hang off it through rigid joints, so an item pinned between the
-  // claw and the floor would otherwise take an infinite impulse and fly (or
-  // sink through the floor). Capped at SOFT_G times the item's weight per
-  // substep, the claw just overlaps a jammed item a little instead.
-  const SOFT_G = 8;
-  const SOFT_POS = 0.6;          // px of position correction per pass for a claw-item pair
-  const MAX_AV = 60;             // angular speed cap (rad/s)
-  const REST_VEL = 80;           // bounce only above this approach speed
-  const LIN_DAMP = 0.08;         // per second, keeps piles from creeping
-  const ANG_DAMP = 0.6;
-  const SLOW_V = 40;             // below this speed extra damping settles piles
-  const SLOW_DAMP = 5.0;         // (rolling resistance stand-in; invisible on flying items)
-  const ROLL_V = 12;             // circles creeping slower than this get strong rolling resistance
-  const ROLL_DAMP = 30;          // (a ball on a 0.6 degree box top must stop, not creep forever)
-  const PI = Math.PI;
-
+  const TAU = Math.PI * 2;
+  // Claw Crawl's solver dials.
+  const PH = {
+    it: 10,            // solver iterations per substep
+    slop: 0.5,         // allowed penetration (px)
+    beta: 0.24,        // fraction of the penetration removed per second-ish (bias = beta/h * pen)
+    maxBias: 200,      // px/s cap on penetration recovery
+    clawBias: 110,     // ...and a lower cap against the claw, so it never flings
+    e: 0.12,           // default restitution
+    bounceV: 90,       // restitution only above this approach speed (px/s)
+    maxV: 1600,        // linear speed cap (px/s)
+    linDamp: 0.15, angDamp: 1.6,
+    sleepV: 14, sleepW: 0.35, sleepT: 0.45,   // rest this long below these speeds and sleep
+    wakePen: 2.5, wakeV: 70,                   // a sleeper pushed this deep, or hit this fast, wakes
+    wallMu: 0.4,
+    heldDecay: 8,      // b.held counts down this fast per second (2 -> 0 in a quarter second)
+  };
+  // Item part shapes derived from Clawspire's shape descriptors.
+  const SHAPE = {
+    capRMax: 18,       // fat boxes stay pills no wider than this radius
+    capThin: 12,       // long polygons (axe, shard, bottle) become thin pills
+    capAspect: 1.8,    // polygons at least this elongated become capsules, rounder ones blobs
+    blobK: 0.92,       // blob radius = half the long axis times this
+  };
+  // The claw (Claw Crawl's numbers; the base scale is tuned for Clawspire's
+  // bigger prizes, see DESIGN.md).
+  const PRONG = [[0, 0], [14, 28], [9, 48], [1, 57]];   // one prong, local (x out, y down), times size
+  const PHI_OPEN = 0.62, PHI_CLOSED = -0.1;               // prong angles (rad)
+  const RIG = {
+    base: 0.74,            // claw size = base * cfg.width (* prong3Size with a third prong)
+    prong3Size: 1.08,
+    gripBase: 0.35, gripSlope: 0.3, gripMin: 0.15,   // grip_cc = clamp(gripBase + gripSlope * (grip - 0.75), gripMin, 1)
+    rubberGrip: 0.15, prong3Grip: 0.1, greaseGrip: 0.3,
+    hubR: 13, segR: 4.5, hingeX: 7, hingeY: 7,      // times size
+    hubDrop: 14,           // hub centre below the rail when parked
+    dropSpeed: 250, liftSpeed: 175, carSpeed: 330,
+    closeRate: 2.6, openRate: 3.2, openT: 0.35, openHold: 1.2,
+    closeMin: 0.18, closeMax: 0.8, blockT: 0.08,    // closing ends when both prongs have been blocked blockT (after closeMin), or at closeMax
+    haltBase: 1.5, haltGrip: 3,                     // a prong stalls past halt = haltBase + haltGrip * grip px of penetration
+    haltOpen: 7,                                    // ...plus haltOpen * open^2 while still wide open
+    loosen: 0.12, loosenT: 0.4,                     // the lift loosens (1 - grip) * loosen rad over loosenT s
+    joltP: 0.25, jolt: 0.05, joltT: 0.1,            // a twitch open at the top with probability (1 - grip) * joltP
+    swayKick: 2.2,
+    floorClear: 60,        // hub stops floorClear * size + 2 above the floor
+    cargoY: 70,            // held items above hub y + cargoY * size are the cargo at the lift
+    slipY: 95,             // cargo below hub y + slipY * size, falling, has slipped
+    slipV: 60,
+    carryWait: 0.2,        // s over the chute before opening
+    magnetR: 110, magnetF: 420,
+    tray: 44,              // the chute has no floor: a hidden tray this far below the cabinet floor catches prizes
+    lid: -64,              // the lid segment's y (items may fly a little above the glass)
+    clampTop: -50,
+    floorSink: 3,          // an item's centre may sink to this far above the floor surface (the thinnest items, r 4, still touch it)
+    touchHub: 1.2, touchProng: 3,   // penetration that counts as landing on something
+  };
+  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   let nextId = 1;
 
-  // ---- small helpers -----------------------------------------------------
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  // ---- shapes ------------------------------------------------------------
+  /* Box shape descriptor (maps to a capsule). */
+  function box(w, h) { return { kind: 'box', w, h }; }
 
-  /* Convex CCW (positive shoelace area) box verts centred on the origin. */
-  function box(w, h) {
-    const hw = w / 2, hh = h / 2;
-    return [{ x: -hw, y: -hh }, { x: hw, y: -hh }, { x: hw, y: hh }, { x: -hw, y: hh }];
-  }
-
-  /* Signed shoelace area; positive means the winding we store internally. */
-  function signedArea(v) {
-    let a = 0;
-    for (let i = 0, n = v.length; i < n; i++) {
-      const p = v[i], q = v[(i + 1) % n];
-      a += p.x * q.y - q.x * p.y;
+  /* Reduce any shape descriptor to ball / cap / blob with its dimensions.
+     Capsules run along local x (ax 0) or y (ax pi/2) to match the art. */
+  function partSpec(shape) {
+    let sh = shape || { kind: 'circle', r: 16 };
+    if (sh.kind === 'poly' && sh.verts && sh.verts.kind === 'box') sh = sh.verts;
+    switch (sh.kind) {
+      case 'ball': case 'circle': return { kind: 'ball', r: sh.r || 16, len: (sh.r || 16) * 2 };
+      case 'cap': return { kind: 'cap', len: sh.len, r: sh.r, ax: sh.ax || 0 };
+      case 'blob': return { kind: 'blob', r: sh.r, len: sh.r * 2 };
+      case 'box': {
+        const L = Math.max(sh.w, sh.h), S = Math.min(sh.w, sh.h);
+        return { kind: 'cap', len: L, r: Math.min(S / 2, SHAPE.capRMax), ax: sh.w >= sh.h ? 0 : Math.PI / 2 };
+      }
+      default: {
+        const v = sh.verts || [];
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const p of v) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; }
+        if (!v.length || !isFinite(x0)) return { kind: 'ball', r: 16, len: 32 };
+        const w = x1 - x0, h = y1 - y0, L = Math.max(w, h), S = Math.min(w, h);
+        if (S > 0 && L / S >= SHAPE.capAspect) return { kind: 'cap', len: L, r: Math.min(S / 2, SHAPE.capThin), ax: w >= h ? 0 : Math.PI / 2 };
+        return { kind: 'blob', r: 0.5 * L * SHAPE.blobK, len: L };
+      }
     }
-    return a / 2;
   }
 
-  /* Copies verts, fixes winding, drops duplicate points, builds outward normals. */
-  function prepPoly(verts) {
-    let v = verts.map(p => ({ x: p.x, y: p.y }));
-    if (signedArea(v) < 0) v.reverse();
+  /* Circle parts (local coordinates, not yet centred on the mass centre). */
+  function mkParts(spec) {
     const out = [];
-    for (let i = 0; i < v.length; i++) {
-      const p = v[i], q = v[(i + 1) % v.length];
-      if (Math.hypot(q.x - p.x, q.y - p.y) > 1e-6) out.push(p);
-    }
-    const normals = [];
-    for (let i = 0; i < out.length; i++) {
-      const p = out[i], q = out[(i + 1) % out.length];
-      const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
-      normals.push({ x: dy / len, y: -dx / len });
-    }
-    return { verts: out, normals };
-  }
-
-  /* Area centroid of a convex polygon (positive winding). */
-  function centroid(v) {
-    let a = 0, cx = 0, cy = 0;
-    for (let i = 0, n = v.length; i < n; i++) {
-      const p = v[i], q = v[(i + 1) % n], cr = p.x * q.y - q.x * p.y;
-      a += cr; cx += (p.x + q.x) * cr; cy += (p.y + q.y) * cr;
-    }
-    if (Math.abs(a) < 1e-12) return { x: 0, y: 0 };
-    return { x: cx / (3 * a), y: cy / (3 * a) };
-  }
-
-  /* Mass and inertia about the local origin (which body() makes the centre of mass). */
-  function massProps(shape, density) {
-    if (shape.kind === 'circle') {
-      const m = density * PI * shape.r * shape.r;
-      return { m, I: 0.5 * m * shape.r * shape.r };
-    }
-    const v = shape.verts;
-    let area = 0, inertia = 0;
-    for (let i = 0, n = v.length; i < n; i++) {
-      const p = v[i], q = v[(i + 1) % n];
-      const cr = p.x * q.y - q.x * p.y;
-      area += cr / 2;
-      inertia += (cr / 12) * (p.x * p.x + p.x * q.x + q.x * q.x + p.y * p.y + p.y * q.y + q.y * q.y);
-    }
-    return { m: density * area, I: density * inertia };
+    if (spec.kind === 'cap') {
+      const len = spec.len, r = spec.r, ax = spec.ax || 0, cx = Math.cos(ax), sy = Math.sin(ax);
+      if (len - 2 * r < 1) { out.push({ x: 0, y: 0, r }); return out; }
+      const n = Math.max(2, Math.round((len - 2 * r) / (r * 0.9)) + 1);
+      for (let i = 0; i < n; i++) { const t = -len / 2 + r + (len - 2 * r) * i / (n - 1); out.push({ x: t * cx, y: t * sy, r }); }
+    } else if (spec.kind === 'blob') {
+      const r = spec.r;
+      out.push({ x: 0, y: 0, r: r * 0.62 });
+      for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TAU / 3; out.push({ x: Math.cos(a) * r * 0.42, y: Math.sin(a) * r * 0.42, r: r * 0.58 }); }
+    } else out.push({ x: 0, y: 0, r: spec.r });
+    return out;
   }
 
   // ---- bodies ------------------------------------------------------------
-  /* See DESIGN.md for the option list.  Returns the body; add it with W.add. */
+  /* body({type, shape, x, y, angle, density, friction, restitution, group, data}).
+     Mass and inertia come from the parts (pi r^2 * density * 0.01 each). */
   function body(o) {
     o = o || {};
-    const kind = o.shape && o.shape.kind === 'circle' ? 'circle' : 'poly';
-    let shape, lc = { x: 0, y: 0 };
-    if (kind === 'circle') shape = { kind: 'circle', r: o.shape.r };
-    else {
-      const verts = o.shape && o.shape.verts ? o.shape.verts : box(20, 20);
-      const pp = prepPoly(verts);
-      // Simulate about the centre of mass: shift the verts so the local origin
-      // is the centroid and remember where the shape's own origin went (lc).
-      lc = centroid(pp.verts);
-      for (const v of pp.verts) { v.x -= lc.x; v.y -= lc.y; }
-      shape = { kind: 'poly', verts: pp.verts, normals: pp.normals };
-    }
-    const type = o.type || 'dynamic';
-    const density = o.density == null ? 1 : o.density;
-    const mp = massProps(shape, density);
-    const dyn = type === 'dynamic';
-    const a0 = o.angle || 0, c0 = Math.cos(a0), s0 = Math.sin(a0);
+    const spec = partSpec(o.shape);
+    const dens = o.density == null ? 1 : o.density;
+    const parts = mkParts(spec);
+    let m = 0, cx = 0, cy = 0;
+    for (const p of parts) { const pm = Math.PI * p.r * p.r * dens * 0.01; m += pm; cx += p.x * pm; cy += p.y * pm; }
+    cx /= m; cy /= m;
+    let I = 0, br = 0;
+    for (const p of parts) { p.x -= cx; p.y -= cy; const pm = Math.PI * p.r * p.r * dens * 0.01; I += pm * (0.5 * p.r * p.r + p.x * p.x + p.y * p.y); br = Math.max(br, Math.hypot(p.x, p.y) + p.r); }
+    const type = o.type || 'dynamic', dyn = type === 'dynamic';
     const b = {
-      id: nextId++,
-      type, shape, density, lc,
+      id: nextId++, type, shape: o.shape || { kind: 'circle', r: 16 }, spec, density: dens,
       friction: o.friction == null ? 0.5 : o.friction,
-      restitution: o.restitution == null ? 0.1 : o.restitution,
-      group: o.group || 'item',
-      mask: o.mask ? o.mask.slice() : null,
-      sensor: !!o.sensor,
-      data: o.data || {},
-      // x/y is the centre of mass; the given x/y placed the shape's origin.
-      x: (o.x || 0) + lc.x * c0 - lc.y * s0, y: (o.y || 0) + lc.x * s0 + lc.y * c0, a: a0,
-      vx: 0, vy: 0, av: 0,
-      m: mp.m, I: mp.I,
-      invM: dyn && mp.m > 0 ? 1 / mp.m : 0,
-      invI: dyn && mp.I > 0 ? 1 / mp.I : 0,
-      c: 1, s: 0,                    // cached cos/sin of a
-      wv: [], wn: [],                // world-space verts / normals (poly)
+      restitution: o.restitution == null ? PH.e : o.restitution,
+      group: o.group || 'item', data: o.data || {},
+      x: o.x || 0, y: o.y || 0, a: o.angle || 0, vx: 0, vy: 0, av: 0,
+      m, I, invM: dyn ? 1 / m : 0, invI: dyn ? 1 / I : 0,
+      parts, br, px: new Float64Array(parts.length), py: new Float64Array(parts.length),
+      sl: !dyn, slT: 0, held: 0, world: null,
       box: { x0: 0, y0: 0, x1: 0, y1: 0 },
-      noCollide: [],                 // bodies joined to this one
-      world: null,
       aabb() { return this.box; },
-      /* World position of the shape's original local origin (e.g. a prong hinge). */
-      origin() { return { x: this.x - (this.lc.x * this.c - this.lc.y * this.s), y: this.y - (this.lc.x * this.s + this.lc.y * this.c) }; },
     };
-    if (kind === 'poly') {
-      for (let i = 0; i < shape.verts.length; i++) { b.wv.push({ x: 0, y: 0 }); b.wn.push({ x: 0, y: 0 }); }
-    }
-    syncBody(b);
+    sync(b);
     return b;
   }
 
-  /* Refresh cached transform, world verts and AABB from x/y/a. */
-  function syncBody(b) {
-    b.c = Math.cos(b.a); b.s = Math.sin(b.a);
-    const bx = b.box;
-    if (b.shape.kind === 'circle') {
-      bx.x0 = b.x - b.shape.r; bx.x1 = b.x + b.shape.r;
-      bx.y0 = b.y - b.shape.r; bx.y1 = b.y + b.shape.r;
-      return;
-    }
-    const v = b.shape.verts, n = b.shape.normals, c = b.c, s = b.s;
+  /* Refresh the world positions of the parts and the AABB from x/y/a. */
+  function sync(b) {
+    const c = Math.cos(b.a), s = Math.sin(b.a);
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (let i = 0; i < v.length; i++) {
-      const p = v[i], w = b.wv[i], q = n[i], wn = b.wn[i];
-      w.x = b.x + p.x * c - p.y * s; w.y = b.y + p.x * s + p.y * c;
-      wn.x = q.x * c - q.y * s; wn.y = q.x * s + q.y * c;
-      if (w.x < x0) x0 = w.x; if (w.x > x1) x1 = w.x;
-      if (w.y < y0) y0 = w.y; if (w.y > y1) y1 = w.y;
+    for (let i = 0; i < b.parts.length; i++) {
+      const p = b.parts[i];
+      const px = b.x + p.x * c - p.y * s, py = b.y + p.x * s + p.y * c;
+      b.px[i] = px; b.py[i] = py;
+      if (px - p.r < x0) x0 = px - p.r; if (px + p.r > x1) x1 = px + p.r;
+      if (py - p.r < y0) y0 = py - p.r; if (py + p.r > y1) y1 = py + p.r;
     }
-    bx.x0 = x0; bx.y0 = y0; bx.x1 = x1; bx.y1 = y1;
+    b.box.x0 = x0; b.box.y0 = y0; b.box.x1 = x1; b.box.y1 = y1;
   }
 
-  /* Teleport a body (also used by the rig for kinematic placement). */
-  function setPose(b, x, y, a) {
-    b.x = x; b.y = y; if (a != null) b.a = a;
-    syncBody(b);
+  /* Teleport a body. */
+  function setPose(b, x, y, a) { b.x = x; b.y = y; if (a != null) b.a = a; sync(b); }
+
+  function wake(b) { if (b.type === 'dynamic') { b.sl = false; b.slT = 0; } }
+
+  // ---- segments (walls and claw parts) -------------------------------------
+  function mkSeg(ax, ay, bx, by, r, name) { return { ax, ay, bx, by, r, own: 9, vx: 0, vy: 0, om: 0, hx: 0, hy: 0, wall: name || null }; }
+  const segTmp = { x: 0, y: 0 };
+  function segClosest(s, px, py, out) {
+    const dx = s.bx - s.ax, dy = s.by - s.ay, l2 = dx * dx + dy * dy;
+    let t = l2 > 1e-6 ? ((px - s.ax) * dx + (py - s.ay) * dy) / l2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    out.x = s.ax + dx * t; out.y = s.ay + dy * t;
+    return out;
   }
 
-  // ---- narrowphase scratch -----------------------------------------------
-  // One result struct reused for every pair: normal from A to B, up to 2 points.
-  const SC = { n: 0, nx: 0, ny: 0, pts: [{ x: 0, y: 0, d: 0, id: 0 }, { x: 0, y: 0, d: 0, id: 0 }] };
-  let sepBest = 0, sepIdx = 0;
-
-  /* Max separation of B's verts along A's face normals (SAT half). */
-  function maxSeparation(A, B) {
-    const an = A.wn, av = A.wv, bv = B.wv;
-    let best = -Infinity, bi = 0;
-    for (let i = 0; i < an.length; i++) {
-      const n = an[i], v = av[i];
-      let mn = Infinity;
-      for (let j = 0; j < bv.length; j++) {
-        const d = (bv[j].x - v.x) * n.x + (bv[j].y - v.y) * n.y;
-        if (d < mn) mn = d;
-      }
-      if (mn > best) { best = mn; bi = i; }
-    }
-    sepBest = best; sepIdx = bi;
+  // ---- contacts ------------------------------------------------------------
+  function addContact(W, a, b, px, py, nx, ny, pen, mu, seg) {
+    W.contacts.push({ a, b, px, py, nx, ny, pen, mu, seg, jn: 0, jt: 0, kn: 0, kt: 0, bias: 0,
+      rax: 0, ray: 0, rbx: 0, rby: 0, kvx: 0, kvy: 0, ima: 0, iIa: 0, imb: 0, iIb: 0 });
   }
-
-  const CLIP_IN = [{ x: 0, y: 0, id: 0 }, { x: 0, y: 0, id: 0 }];
-  const CLIP_MID = [{ x: 0, y: 0, id: 0 }, { x: 0, y: 0, id: 0 }];
-  const CLIP_OUT = [{ x: 0, y: 0, id: 0 }, { x: 0, y: 0, id: 0 }];
-
-  /* Sutherland-Hodgman clip of a 2-point segment against the half plane
-     dot(n, p) <= off.  Returns the number of points written to out. */
-  function clipSegment(inp, out, nx, ny, off, clipId) {
-    let n = 0;
-    const d0 = nx * inp[0].x + ny * inp[0].y - off;
-    const d1 = nx * inp[1].x + ny * inp[1].y - off;
-    if (d0 <= 0) { out[n].x = inp[0].x; out[n].y = inp[0].y; out[n].id = inp[0].id; n++; }
-    if (d1 <= 0) { out[n].x = inp[1].x; out[n].y = inp[1].y; out[n].id = inp[1].id; n++; }
-    if (d0 * d1 < 0 && n < 2) {
-      const t = d0 / (d0 - d1);
-      out[n].x = inp[0].x + t * (inp[1].x - inp[0].x);
-      out[n].y = inp[0].y + t * (inp[1].y - inp[0].y);
-      out[n].id = clipId;
-      n++;
-    }
-    return n;
-  }
-
-  /* Polygon vs polygon: SAT + reference face clipping, up to 2 contact points. */
-  function collidePolyPoly(A, B) {
-    maxSeparation(A, B);
-    if (sepBest > SKIN) return 0;
-    const sA = sepBest, iA = sepIdx;
-    maxSeparation(B, A);
-    if (sepBest > SKIN) return 0;
-    const sB = sepBest, iB = sepIdx;
-    let ref, inc, refIdx, flip;
-    if (sB > sA * 0.98 + 0.002) { ref = B; inc = A; refIdx = iB; flip = true; }
-    else { ref = A; inc = B; refIdx = iA; flip = false; }
-    const rn = ref.wn[refIdx], v1 = ref.wv[refIdx], v2 = ref.wv[(refIdx + 1) % ref.wv.length];
-    // Incident face: the one on inc most anti-parallel to the reference normal.
-    let incIdx = 0, mn = Infinity;
-    for (let j = 0; j < inc.wn.length; j++) {
-      const d = inc.wn[j].x * rn.x + inc.wn[j].y * rn.y;
-      if (d < mn) { mn = d; incIdx = j; }
-    }
-    const i1 = inc.wv[incIdx], i2 = inc.wv[(incIdx + 1) % inc.wv.length];
-    CLIP_IN[0].x = i1.x; CLIP_IN[0].y = i1.y; CLIP_IN[0].id = incIdx;
-    CLIP_IN[1].x = i2.x; CLIP_IN[1].y = i2.y; CLIP_IN[1].id = (incIdx + 1) % inc.wv.length;
-    let tx = v2.x - v1.x, ty = v2.y - v1.y;
-    const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-    const side1 = -(tx * v1.x + ty * v1.y);
-    const side2 = tx * v2.x + ty * v2.y;
-    if (clipSegment(CLIP_IN, CLIP_MID, -tx, -ty, side1, 8 + refIdx) < 2) return 0;
-    if (clipSegment(CLIP_MID, CLIP_OUT, tx, ty, side2, 16 + refIdx) < 2) return 0;
-    const front = rn.x * v1.x + rn.y * v1.y;
-    let n = 0;
-    for (let k = 0; k < 2; k++) {
-      const p = CLIP_OUT[k];
-      const sep = rn.x * p.x + rn.y * p.y - front;
-      if (sep <= SKIN) {
-        const out = SC.pts[n];
-        // Contact point halfway between the incident vertex and the reference face.
-        out.x = p.x - rn.x * sep * 0.5; out.y = p.y - rn.y * sep * 0.5;
-        out.d = -sep; out.id = p.id + (flip ? 64 : 0) + refIdx * 128;
-        n++;
-      }
-    }
-    if (!n) return 0;
-    SC.n = n;
-    if (flip) { SC.nx = -rn.x; SC.ny = -rn.y; } else { SC.nx = rn.x; SC.ny = rn.y; }
-    return n;
-  }
-
-  /* Circle vs polygon.  Normal written as poly -> circle; caller flips if needed. */
-  function collideCirclePoly(C, P) {
-    const cx = C.x, cy = C.y, r = C.shape.r;
-    const pv = P.wv, pn = P.wn;
-    let best = -Infinity, bi = 0;
-    for (let i = 0; i < pv.length; i++) {
-      const s = (cx - pv[i].x) * pn[i].x + (cy - pv[i].y) * pn[i].y;
-      if (s > r + SKIN) return 0;
-      if (s > best) { best = s; bi = i; }
-    }
-    const v1 = pv[bi], v2 = pv[(bi + 1) % pv.length];
-    const out = SC.pts[0];
-    if (best < 1e-6) {          // centre inside the polygon
-      SC.nx = pn[bi].x; SC.ny = pn[bi].y;
-      out.x = cx - SC.nx * r; out.y = cy - SC.ny * r; out.d = r - best; out.id = 0;
-      SC.n = 1; return 1;
-    }
-    const ex = v2.x - v1.x, ey = v2.y - v1.y;
-    const d1 = (cx - v1.x) * ex + (cy - v1.y) * ey;
-    const d2 = (cx - v2.x) * -ex + (cy - v2.y) * -ey;
-    let vx, vy;
-    if (d1 <= 0) { vx = v1.x; vy = v1.y; }
-    else if (d2 <= 0) { vx = v2.x; vy = v2.y; }
-    else {
-      SC.nx = pn[bi].x; SC.ny = pn[bi].y;
-      out.x = cx - SC.nx * (r + best) * 0.5; out.y = cy - SC.ny * (r + best) * 0.5;
-      out.d = r - best; out.id = 0;
-      SC.n = 1; return 1;
-    }
-    const dx = cx - vx, dy = cy - vy, dist = Math.hypot(dx, dy);
-    if (dist > r + SKIN) return 0;
-    if (dist < 1e-9) { SC.nx = pn[bi].x; SC.ny = pn[bi].y; }
-    else { SC.nx = dx / dist; SC.ny = dy / dist; }
-    out.x = vx; out.y = vy; out.d = r - dist; out.id = d1 <= 0 ? 1 : 2;
-    SC.n = 1; return 1;
-  }
-
-  function collideCircleCircle(A, B) {
-    const dx = B.x - A.x, dy = B.y - A.y, ra = A.shape.r, rb = B.shape.r;
-    const dist = Math.hypot(dx, dy);
-    if (dist >= ra + rb + SKIN) return 0;
-    if (dist < 1e-9) { SC.nx = 0; SC.ny = 1; } else { SC.nx = dx / dist; SC.ny = dy / dist; }
-    const out = SC.pts[0];
-    out.d = ra + rb - dist;
-    out.x = A.x + SC.nx * (ra - out.d * 0.5); out.y = A.y + SC.ny * (ra - out.d * 0.5);
-    out.id = 0; SC.n = 1;
-    return 1;
-  }
-
-  /* Dispatch; on success SC holds the manifold with the normal from A to B. */
-  function collide(A, B) {
-    const ca = A.shape.kind === 'circle', cb = B.shape.kind === 'circle';
-    if (ca && cb) return collideCircleCircle(A, B);
-    if (!ca && !cb) return collidePolyPoly(A, B);
-    if (ca) {
-      if (!collideCirclePoly(A, B)) return 0;
-      SC.nx = -SC.nx; SC.ny = -SC.ny;   // was poly(B) -> circle(A); want A -> B
-      return SC.n;
-    }
-    return collideCirclePoly(B, A);     // poly(A) -> circle(B): already A -> B
-  }
-
-  // ---- contact manifolds -------------------------------------------------
-  function newPoint() {
-    return { x: 0, y: 0, d: 0, id: -1, rax: 0, ray: 0, rbx: 0, rby: 0,
-      lax: 0, lay: 0, lbx: 0, lby: 0,
-      Pn: 0, Pt: 0, mN: 0, mT: 0, bias: 0, velBias: 0 };
-  }
-  function newManifold(a, b) {
-    return { a, b, n: 0, nx: 0, ny: 0, tx: 0, ty: 0, friction: 0, restitution: 0,
-      pts: [newPoint(), newPoint()], stamp: 0, solve: true,
-      block: false, k11: 0, k12: 0, k22: 0, nm11: 0, nm12: 0, nm22: 0 };
-  }
-
-  /* Merge the scratch result into the persistent manifold, keeping the
-     accumulated impulses of points whose feature id survived (warm start). */
-  function updateManifold(m, stamp) {
-    const old0 = m.pts[0], old1 = m.pts[1];
-    const oldN = m.n;
-    // Save old impulses by id (at most two, so a couple of locals suffice).
-    const id0 = oldN > 0 ? old0.id : -1, Pn0 = old0.Pn, Pt0 = old0.Pt, x0 = old0.x, y0 = old0.y;
-    const id1 = oldN > 1 ? old1.id : -1, Pn1 = old1.Pn, Pt1 = old1.Pt, x1 = old1.x, y1 = old1.y;
-    for (let k = 0; k < SC.n; k++) {
-      const src = SC.pts[k], dst = m.pts[k];
-      // Match by feature id, else by proximity: a clipped point and the vertex
-      // it was clipped from swap ids on aligned faces, and losing the impulse
-      // there makes stacks breathe.
-      const near0 = id0 >= 0 && Math.abs(src.x - x0) + Math.abs(src.y - y0) < 1.5;
-      const near1 = id1 >= 0 && Math.abs(src.x - x1) + Math.abs(src.y - y1) < 1.5;
-      if (src.id === id0 || (near0 && src.id !== id1)) { dst.Pn = Pn0; dst.Pt = Pt0; }
-      else if (src.id === id1 || near1) { dst.Pn = Pn1; dst.Pt = Pt1; }
-      else { dst.Pn = 0; dst.Pt = 0; }
-      dst.x = src.x; dst.y = src.y; dst.d = src.d; dst.id = src.id;
-    }
-    m.n = SC.n; m.nx = SC.nx; m.ny = SC.ny;
-    m.tx = -SC.ny; m.ty = SC.nx;
-    m.friction = Math.sqrt(m.a.friction * m.b.friction);
-    const ac = m.a.group === 'claw', bc = m.b.group === 'claw';
-    m.cap = 0;
-    if (ac !== bc) {
-      const item = ac ? m.b : m.a;
-      if (item.type === 'dynamic' && item.group !== 'wall') m.cap = SOFT_G * item.m * 1400 * H;
-    }
-    m.restitution = Math.max(m.a.restitution, m.b.restitution);
-    m.solve = !(m.a.sensor || m.b.sensor);
-    m.stamp = stamp;
-  }
-
-  /* Precompute effective masses, position bias and the restitution target.
-     Restitution reads the incoming velocity, so this must run for every
-     manifold before any warm-start impulse is applied. */
-  function prestepManifold(m) {
-    const a = m.a, b = m.b, nx = m.nx, ny = m.ny, tx = m.tx, ty = m.ty;
-    for (let k = 0; k < m.n; k++) {
-      const p = m.pts[k];
-      p.rax = p.x - a.x; p.ray = p.y - a.y; p.rbx = p.x - b.x; p.rby = p.y - b.y;
-      // Body-local anchors so the position pass can re-evaluate the gap after moves.
-      p.lax = p.rax * a.c + p.ray * a.s; p.lay = -p.rax * a.s + p.ray * a.c;
-      p.lbx = p.rbx * b.c + p.rby * b.s; p.lby = -p.rbx * b.s + p.rby * b.c;
-      const rnA = p.rax * ny - p.ray * nx, rnB = p.rbx * ny - p.rby * nx;
-      const kN = a.invM + b.invM + a.invI * rnA * rnA + b.invI * rnB * rnB;
-      p.mN = kN > 0 ? 1 / kN : 0;
-      const rtA = p.rax * ty - p.ray * tx, rtB = p.rbx * ty - p.rby * tx;
-      const kT = a.invM + b.invM + a.invI * rtA * rtA + b.invI * rtB * rtB;
-      p.mT = kT > 0 ? 1 / kT : 0;
-      p.bias = (BETA / H) * Math.max(0, p.d - SLOP);
-      // Restitution: remember the approach speed before the solve.
-      const dvx = (b.vx - b.av * p.rby) - (a.vx - a.av * p.ray);
-      const dvy = (b.vy + b.av * p.rbx) - (a.vy + a.av * p.rax);
-      const vn = dvx * nx + dvy * ny;
-      p.velBias = vn < -REST_VEL ? -m.restitution * vn : 0;
-    }
-    // Two points on one manifold are solved together (Box2D's block solver):
-    // solving them one after the other converges poorly and makes boxes rock.
-    m.block = false;
-    if (m.n === 2) {
-      const p1 = m.pts[0], p2 = m.pts[1];
-      const rn1A = p1.rax * ny - p1.ray * nx, rn1B = p1.rbx * ny - p1.rby * nx;
-      const rn2A = p2.rax * ny - p2.ray * nx, rn2B = p2.rbx * ny - p2.rby * nx;
-      const k11 = a.invM + b.invM + a.invI * rn1A * rn1A + b.invI * rn1B * rn1B;
-      const k22 = a.invM + b.invM + a.invI * rn2A * rn2A + b.invI * rn2B * rn2B;
-      const k12 = a.invM + b.invM + a.invI * rn1A * rn2A + b.invI * rn1B * rn2B;
-      const det = k11 * k22 - k12 * k12;
-      if (k11 * k22 < 1000 * det && det > 0) {
-        m.block = true; m.k11 = k11; m.k12 = k12; m.k22 = k22;
-        m.nm11 = k22 / det; m.nm12 = -k12 / det; m.nm22 = k11 / det;
-      }
-    }
-  }
-
-  /* Re-applies last substep's accumulated impulses (warm start). */
-  function warmStartManifold(m) {
-    const a = m.a, b = m.b, nx = m.nx, ny = m.ny, tx = m.tx, ty = m.ty;
-    for (let k = 0; k < m.n; k++) {
-      const p = m.pts[k];
-      const Px = p.Pn * nx + p.Pt * tx, Py = p.Pn * ny + p.Pt * ty;
-      a.vx -= a.invM * Px; a.vy -= a.invM * Py; a.av -= a.invI * (p.rax * Py - p.ray * Px);
-      b.vx += b.invM * Px; b.vy += b.invM * Py; b.av += b.invI * (p.rbx * Py - p.rby * Px);
-    }
-  }
-
-  /* Applies normal impulses d1/d2 (already deltas) at the two manifold points. */
-  function applyPair(m, d1, d2) {
-    const a = m.a, b = m.b, nx = m.nx, ny = m.ny, p1 = m.pts[0], p2 = m.pts[1];
-    const P1x = d1 * nx, P1y = d1 * ny, P2x = d2 * nx, P2y = d2 * ny;
-    a.vx -= a.invM * (P1x + P2x); a.vy -= a.invM * (P1y + P2y);
-    a.av -= a.invI * (p1.rax * P1y - p1.ray * P1x + p2.rax * P2y - p2.ray * P2x);
-    b.vx += b.invM * (P1x + P2x); b.vy += b.invM * (P1y + P2y);
-    b.av += b.invI * (p1.rbx * P1y - p1.rby * P1x + p2.rbx * P2y - p2.rby * P2x);
-  }
-
-  function solveManifold(m) {
-    const a = m.a, b = m.b, nx = m.nx, ny = m.ny, tx = m.tx, ty = m.ty, mu = m.friction;
-    // Friction first (Box2D order), clamped to the Coulomb cone of the last normal impulse.
-    for (let k = 0; k < m.n; k++) {
-      const p = m.pts[k];
-      const dvx = (b.vx - b.av * p.rby) - (a.vx - a.av * p.ray);
-      const dvy = (b.vy + b.av * p.rbx) - (a.vy + a.av * p.rax);
-      const vt = dvx * tx + dvy * ty;
-      let dPt = p.mT * -vt;
-      const maxPt = mu * p.Pn, Pt0 = p.Pt;
-      p.Pt = clamp(Pt0 + dPt, -maxPt, maxPt);
-      dPt = p.Pt - Pt0;
-      const Px = dPt * tx, Py = dPt * ty;
-      a.vx -= a.invM * Px; a.vy -= a.invM * Py; a.av -= a.invI * (p.rax * Py - p.ray * Px);
-      b.vx += b.invM * Px; b.vy += b.invM * Py; b.av += b.invI * (p.rbx * Py - p.rby * Px);
-    }
-    if (!m.block) {
-      for (let k = 0; k < m.n; k++) {
-        const p = m.pts[k];
-        const dvx = (b.vx - b.av * p.rby) - (a.vx - a.av * p.ray);
-        const dvy = (b.vy + b.av * p.rbx) - (a.vy + a.av * p.rax);
-        const vn = dvx * nx + dvy * ny;
-        let dPn = p.mN * (p.bias + p.velBias - vn);
-        const Pn0 = p.Pn;
-        p.Pn = Math.max(Pn0 + dPn, 0);
-        if (m.cap && p.Pn > m.cap) p.Pn = m.cap;
-        dPn = p.Pn - Pn0;
-        const Px = dPn * nx, Py = dPn * ny;
-        a.vx -= a.invM * Px; a.vy -= a.invM * Py; a.av -= a.invI * (p.rax * Py - p.ray * Px);
-        b.vx += b.invM * Px; b.vy += b.invM * Py; b.av += b.invI * (p.rbx * Py - p.rby * Px);
-      }
-      return;
-    }
-    // Block solve: find x >= 0 with vn = K x + b >= 0 and x_i * vn_i = 0.
-    const p1 = m.pts[0], p2 = m.pts[1];
-    const a1 = p1.Pn, a2 = p2.Pn;
-    const dv1x = (b.vx - b.av * p1.rby) - (a.vx - a.av * p1.ray);
-    const dv1y = (b.vy + b.av * p1.rbx) - (a.vy + a.av * p1.rax);
-    const dv2x = (b.vx - b.av * p2.rby) - (a.vx - a.av * p2.ray);
-    const dv2y = (b.vy + b.av * p2.rbx) - (a.vy + a.av * p2.rax);
-    const vn1 = dv1x * nx + dv1y * ny, vn2 = dv2x * nx + dv2y * ny;
-    const b1 = vn1 - p1.velBias - p1.bias - (m.k11 * a1 + m.k12 * a2);
-    const b2 = vn2 - p2.velBias - p2.bias - (m.k12 * a1 + m.k22 * a2);
-    let x1 = -(m.nm11 * b1 + m.nm12 * b2), x2 = -(m.nm12 * b1 + m.nm22 * b2);
-    if (x1 >= 0 && x2 >= 0) { /* both active */ }
-    else {
-      x1 = -b1 / m.k11; x2 = 0;
-      if (!(x1 >= 0 && m.k12 * x1 + b2 >= 0)) {
-        x1 = 0; x2 = -b2 / m.k22;
-        if (!(x2 >= 0 && m.k12 * x2 + b1 >= 0)) {
-          x1 = 0; x2 = 0;
-          if (!(b1 >= 0 && b2 >= 0)) return;   // no consistent solution this pass; keep going
+  /* Parts of b against one capsule segment (a wall or a claw part).  Claw
+     contacts also feed the rig: touch (the claw landed on something) and
+     per-prong halt (something is in the way of the closing sweep). */
+  function bodyVsSeg(W, b, s, claw) {
+    const q = segClosest(s, b.x, b.y, segTmp);
+    const R0 = b.br + s.r, qx0 = b.x - q.x, qy0 = b.y - q.y;
+    if (qx0 * qx0 + qy0 * qy0 > R0 * R0) return;
+    const K = claw ? W.ctl : null;
+    for (let i = 0; i < b.parts.length; i++) {
+      const r = b.parts[i].r, px = b.px[i], py = b.py[i];
+      const c = segClosest(s, px, py, segTmp);
+      const ex = c.x - px, ey = c.y - py, d2 = ex * ex + ey * ey, rr = r + s.r;
+      if (d2 >= rr * rr) continue;
+      const d = Math.sqrt(d2);
+      const nx = d > 1e-6 ? ex / d : 0, ny = d > 1e-6 ? ey / d : -1;
+      const pen = rr - d;
+      let mu;
+      if (claw) mu = K.mu * clamp(Math.sqrt(b.friction / 0.45), 0.35, 1.15);
+      else mu = Math.sqrt(PH.wallMu * b.friction);
+      addContact(W, b, null, px + nx * r, py + ny * r, nx, ny, pen, mu, s);
+      if (claw) {
+        wake(b);
+        b.held = 2;
+        if (s.own === 0 && pen > RIG.touchHub && ny < -0.2) K.touch = true;
+        if (s.own !== 0 && pen > RIG.touchProng && ny < -0.3) K.touch = true;
+        // a prong only stalls on something in the way of its closing sweep,
+        // not on the pile leaning against its outside
+        if (s.own !== 0) {
+          const open = ((s.own < 0 ? K.pL : K.pR) - PHI_CLOSED) / (PHI_OPEN - PHI_CLOSED);
+          if (pen > K.halt + RIG.haltOpen * open * open) {
+            const omc = s.own * RIG.closeRate, cvx = -omc * (py - s.hy), cvy = omc * (px - s.hx);
+            if (cvx * nx + cvy * ny < 0) { if (s.own < 0) K.hitL = true; else K.hitR = true; }
+          }
         }
       }
     }
-    if (m.cap) { if (x1 > m.cap) x1 = m.cap; if (x2 > m.cap) x2 = m.cap; }
-    applyPair(m, x1 - a1, x2 - a2);
-    p1.Pn = x1; p2.Pn = x2;
   }
-
-  /* Split-impulse position pass: pushes bodies apart along the manifold
-     normal without touching velocities, so resting stacks do not jitter. */
-  function solvePositions(m) {
-    const a = m.a, b = m.b, nx = m.nx, ny = m.ny;
-    for (let k = 0; k < m.n; k++) {
-      const p = m.pts[k];
-      const rax = p.lax * a.c - p.lay * a.s, ray = p.lax * a.s + p.lay * a.c;
-      const rbx = p.lbx * b.c - p.lby * b.s, rby = p.lbx * b.s + p.lby * b.c;
-      const sep = -p.d + ((b.x + rbx) - (a.x + rax)) * nx + ((b.y + rby) - (a.y + ray)) * ny;
-      // Walls get corrected harder: a light body crushed against a static
-      // wall by a heavy one must not sink into it.
-      const beta = (a.invM === 0 || b.invM === 0) ? POS_BETA * 1.6 : POS_BETA;
-      const C = clamp(beta * (sep + SLOP), m.cap ? -SOFT_POS : -POS_MAX, 0);
-      if (C >= 0) continue;
-      const rnA = rax * ny - ray * nx, rnB = rbx * ny - rby * nx;
-      const K = a.invM + b.invM + a.invI * rnA * rnA + b.invI * rnB * rnB;
-      if (K <= 0) continue;
-      const imp = -C / K, Px = imp * nx, Py = imp * ny;
-      if (a.invM > 0) {
-        a.x -= a.invM * Px; a.y -= a.invM * Py; a.a -= a.invI * (rax * Py - ray * Px);
-        a.c = Math.cos(a.a); a.s = Math.sin(a.a);
-      }
-      if (b.invM > 0) {
-        b.x += b.invM * Px; b.y += b.invM * Py; b.a += b.invI * (rbx * Py - rby * Px);
-        b.c = Math.cos(b.a); b.s = Math.sin(b.a);
+  function collide(W) {
+    const B = W.bodies; W.contacts.length = 0;
+    for (const b of B) sync(b);
+    for (let i = 0; i < B.length; i++) {
+      const a = B[i];
+      for (let j = i + 1; j < B.length; j++) {
+        const b = B[j];
+        if (a.sl && b.sl) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, RR = a.br + b.br;
+        if (dx * dx + dy * dy > RR * RR) continue;
+        const mu = Math.sqrt(a.friction * b.friction);
+        for (let m = 0; m < a.parts.length; m++) {
+          const ra = a.parts[m].r;
+          for (let n = 0; n < b.parts.length; n++) {
+            const rb = b.parts[n].r;
+            const ex = b.px[n] - a.px[m], ey = b.py[n] - a.py[m], d2 = ex * ex + ey * ey, rr = ra + rb;
+            if (d2 >= rr * rr) continue;
+            const d = Math.sqrt(d2);
+            const nx = d > 1e-6 ? ex / d : 0, ny = d > 1e-6 ? ey / d : 1;
+            const pen = rr - d;
+            addContact(W, a, b, a.px[m] + nx * (ra - pen * 0.5), a.py[m] + ny * (ra - pen * 0.5), nx, ny, pen, mu, null);
+          }
+        }
       }
     }
-  }
-
-  // ---- revolute joint ----------------------------------------------------
-  /* Pins bodyB to bodyA at a world anchor.  Limits and motor act on the
-     relative angle bodyB.a - bodyA.a - (initial difference). */
-  function revolute(bodyA, bodyB, anchor, o) {
-    o = o || {};
-    const J = {
-      kind: 'revolute', a: bodyA, b: bodyB,
-      la: { x: 0, y: 0 }, lb: { x: 0, y: 0 },  // local anchors
-      ref: bodyB.a - bodyA.a,
-      lower: o.lower == null ? -PI : o.lower, upper: o.upper == null ? PI : o.upper,
-      enableLimit: !!o.enableLimit,
-      motorSpeed: o.motorSpeed || 0, maxTorque: o.maxTorque || 0, enableMotor: !!o.enableMotor,
-      // solver state
-      rax: 0, ray: 0, rbx: 0, rby: 0, m11: 0, m12: 0, m22: 0, biasX: 0, biasY: 0, mA: 0,
-      Px: 0, Py: 0, Pm: 0, Plo: 0, Phi: 0, world: null,
-      setMotor(speed, maxTorque) { J.motorSpeed = speed; J.maxTorque = maxTorque; J.enableMotor = maxTorque > 0; },
-      setLimits(lower, upper) { J.lower = lower; J.upper = upper; J.enableLimit = true; },
-      angle() { return J.b.a - J.a.a - J.ref; },
-    };
-    // World anchor -> local frames.
-    const ax = anchor.x - bodyA.x, ay = anchor.y - bodyA.y;
-    J.la.x = ax * bodyA.c + ay * bodyA.s; J.la.y = -ax * bodyA.s + ay * bodyA.c;
-    const bx = anchor.x - bodyB.x, by = anchor.y - bodyB.y;
-    J.lb.x = bx * bodyB.c + by * bodyB.s; J.lb.y = -bx * bodyB.s + by * bodyB.c;
-    return J;
-  }
-
-  function prestepJoint(J) {
-    const a = J.a, b = J.b;
-    J.rax = J.la.x * a.c - J.la.y * a.s; J.ray = J.la.x * a.s + J.la.y * a.c;
-    J.rbx = J.lb.x * b.c - J.lb.y * b.s; J.rby = J.lb.x * b.s + J.lb.y * b.c;
-    const k11 = a.invM + b.invM + a.invI * J.ray * J.ray + b.invI * J.rby * J.rby;
-    const k12 = -a.invI * J.rax * J.ray - b.invI * J.rbx * J.rby;
-    const k22 = a.invM + b.invM + a.invI * J.rax * J.rax + b.invI * J.rbx * J.rbx;
-    const det = k11 * k22 - k12 * k12;
-    if (Math.abs(det) > 1e-18) { J.m11 = k22 / det; J.m12 = -k12 / det; J.m22 = k11 / det; }
-    else { J.m11 = J.m12 = J.m22 = 0; }
-    const ex = (b.x + J.rbx) - (a.x + J.rax), ey = (b.y + J.rby) - (a.y + J.ray);
-    J.biasX = -(JOINT_BETA / H) * ex; J.biasY = -(JOINT_BETA / H) * ey;
-    const kA = a.invI + b.invI;
-    J.mA = kA > 0 ? 1 / kA : 0;
-    // Warm start.
-    const Px = J.Px, Py = J.Py, ang = J.Pm + J.Plo - J.Phi;
-    a.vx -= a.invM * Px; a.vy -= a.invM * Py; a.av -= a.invI * (J.rax * Py - J.ray * Px + ang);
-    b.vx += b.invM * Px; b.vy += b.invM * Py; b.av += b.invI * (J.rbx * Py - J.rby * Px + ang);
-  }
-
-  function solveJoint(J) {
-    const a = J.a, b = J.b;
-    // Motor: drive the relative angular velocity, torque-limited.
-    if (J.enableMotor) {
-      const cdot = b.av - a.av - J.motorSpeed;
-      let imp = -J.mA * cdot;
-      const old = J.Pm, cap = J.maxTorque * H;
-      J.Pm = clamp(old + imp, -cap, cap);
-      imp = J.Pm - old;
-      a.av -= a.invI * imp; b.av += b.invI * imp;
+    for (const b of B) {
+      if (b.type !== 'dynamic') continue;
+      if (!b.sl) for (const s of W.segs) bodyVsSeg(W, b, s, false);
+      for (const s of W.csegs) bodyVsSeg(W, b, s, true);
     }
-    // Limits: one-sided angular constraints with a little position correction.
-    // A zero-range limit (lower == upper) is a weld: solved as an equality.
-    if (J.enableLimit && J.lower === J.upper) {
-      const C = J.angle() - J.lower;
-      const cdot = b.av - a.av;
-      const imp = -J.mA * (cdot + (JOINT_BETA / H) * C);
-      J.Plo += imp;
-      a.av -= a.invI * imp; b.av += b.invI * imp;
-    } else if (J.enableLimit) {
-      const ang = J.angle();
-      if (ang <= J.lower) {
-        const C = ang - J.lower;
-        const cdot = b.av - a.av;
-        let imp = -J.mA * (cdot + (JOINT_BETA / H) * Math.min(C + 0.005, 0));
-        const old = J.Plo;
-        J.Plo = Math.max(old + imp, 0);
-        imp = J.Plo - old;
-        a.av -= a.invI * imp; b.av += b.invI * imp;
-      } else J.Plo = 0;
-      if (ang >= J.upper) {
-        const C = J.upper - ang;
-        const cdot = -(b.av - a.av);
-        let imp = -J.mA * (cdot + (JOINT_BETA / H) * Math.min(C + 0.005, 0));
-        const old = J.Phi;
-        J.Phi = Math.max(old + imp, 0);
-        imp = J.Phi - old;
-        a.av += a.invI * imp; b.av -= b.invI * imp;
-      } else J.Phi = 0;
+  }
+  function relVel(c, out) {
+    const a = c.a;
+    const vax = a.vx - a.av * c.ray, vay = a.vy + a.av * c.rax;
+    let vbx = 0, vby = 0;
+    if (c.b) { const b = c.b; vbx = b.vx - b.av * c.rby; vby = b.vy + b.av * c.rbx; }
+    else if (c.seg) { vbx = c.kvx; vby = c.kvy; }
+    out.x = vbx - vax; out.y = vby - vay;
+    return out;
+  }
+  const rv = { x: 0, y: 0 };
+  function prepContacts(W, h) {
+    for (const c of W.contacts) {
+      const a = c.a, b = c.b;
+      // a sleeper hit hard or pushed deep wakes up
+      if (b && a.sl !== b.sl) {
+        const s = a.sl ? a : b, o = a.sl ? b : a;
+        if (c.pen > PH.wakePen || Math.hypot(o.vx, o.vy) > PH.wakeV) wake(s);
+      }
+      const ima = a.sl ? 0 : a.invM, iIa = a.sl ? 0 : a.invI;
+      const imb = b && !b.sl ? b.invM : 0, iIb = b && !b.sl ? b.invI : 0;
+      c.ima = ima; c.iIa = iIa; c.imb = imb; c.iIb = iIb;
+      c.rax = c.px - a.x; c.ray = c.py - a.y;
+      if (b) { c.rbx = c.px - b.x; c.rby = c.py - b.y; }
+      else if (c.seg) { const s = c.seg; c.kvx = s.vx - s.om * (c.py - s.hy); c.kvy = s.vy + s.om * (c.px - s.hx); }
+      const nx = c.nx, ny = c.ny, tx = -ny, ty = nx;
+      const rna = c.rax * ny - c.ray * nx, rta = c.rax * ty - c.ray * tx;
+      let kn = ima + iIa * rna * rna, kt = ima + iIa * rta * rta;
+      if (b) { const rnb = c.rbx * ny - c.rby * nx, rtb = c.rbx * ty - c.rby * tx; kn += imb + iIb * rnb * rnb; kt += imb + iIb * rtb * rtb; }
+      c.kn = kn > 0 ? 1 / kn : 0; c.kt = kt > 0 ? 1 / kt : 0;
+      const cap = c.seg && c.seg.own !== 9 ? PH.clawBias : PH.maxBias;
+      c.bias = Math.min(cap, PH.beta / h * Math.max(0, c.pen - PH.slop));
+      const v = relVel(c, rv), vn = v.x * nx + v.y * ny;
+      const e = Math.max(a.restitution, b ? b.restitution : 0);
+      if (vn < -PH.bounceV) c.bias = Math.max(c.bias, -e * vn);
+      c.jn = 0; c.jt = 0;
     }
-    // Point constraint.
-    const dvx = (b.vx - b.av * J.rby) - (a.vx - a.av * J.ray) - J.biasX;
-    const dvy = (b.vy + b.av * J.rbx) - (a.vy + a.av * J.rax) - J.biasY;
-    const Px = -(J.m11 * dvx + J.m12 * dvy), Py = -(J.m12 * dvx + J.m22 * dvy);
-    J.Px += Px; J.Py += Py;
-    a.vx -= a.invM * Px; a.vy -= a.invM * Py; a.av -= a.invI * (J.rax * Py - J.ray * Px);
-    b.vx += b.invM * Px; b.vy += b.invM * Py; b.av += b.invI * (J.rbx * Py - J.rby * Px);
+  }
+  function applyImp(c, Px, Py) {
+    const a = c.a;
+    a.vx -= Px * c.ima; a.vy -= Py * c.ima; a.av -= c.iIa * (c.rax * Py - c.ray * Px);
+    if (c.b) { const b = c.b; b.vx += Px * c.imb; b.vy += Py * c.imb; b.av += c.iIb * (c.rbx * Py - c.rby * Px); }
+  }
+  function solveContacts(W) {
+    const C = W.contacts;
+    for (let k = 0; k < PH.it; k++) {
+      for (let i = 0; i < C.length; i++) {
+        const c = C[i];
+        if (!c.kn) continue;
+        let v = relVel(c, rv);
+        const vn = v.x * c.nx + v.y * c.ny;
+        let j = (c.bias - vn) * c.kn;
+        const o = c.jn; c.jn = Math.max(0, o + j); j = c.jn - o;
+        applyImp(c, j * c.nx, j * c.ny);
+        const tx = -c.ny, ty = c.nx;
+        v = relVel(c, rv);
+        const vt = v.x * tx + v.y * ty;
+        let jt = -vt * c.kt;
+        const mx = c.mu * c.jn, ot = c.jt;
+        c.jt = clamp(ot + jt, -mx, mx); jt = c.jt - ot;
+        applyImp(c, jt * tx, jt * ty);
+      }
+    }
+  }
+  /* One substep: gravity and damping, contacts, integration, the hard
+     clamps, held decay and sleeping. */
+  function physStep(W, h) {
+    const g = W.gravity, B = W.bodies, cb = W.clampBox;
+    for (const b of B) {
+      if (b.sl || b.type !== 'dynamic') continue;
+      b.vx += g.x * h; b.vy += g.y * h;
+      const ld = 1 - PH.linDamp * h, ad = 1 - PH.angDamp * h;
+      b.vx *= ld; b.vy *= ld; b.av *= ad;
+    }
+    collide(W);
+    prepContacts(W, h);
+    solveContacts(W);
+    for (const b of B) {
+      if (b.sl || b.type !== 'dynamic') continue;
+      const sp = b.vx * b.vx + b.vy * b.vy;
+      if (sp > PH.maxV * PH.maxV) { const k = PH.maxV / Math.sqrt(sp); b.vx *= k; b.vy *= k; }
+      b.x += b.vx * h; b.y += b.vy * h; b.a += b.av * h;
+      // the claw can shove things into the floor; never let them through it
+      if (b.x < cb.chuteX - 4) { if (b.y > cb.floorY) { b.y = cb.floorY; if (b.vy > 0) b.vy = 0; } }
+      else if (b.y > cb.trayY) { b.y = cb.trayY; if (b.vy > 0) b.vy = 0; }
+      // ...or through the side walls and the lid, however hard the claw shoves
+      if (b.x < cb.xMin) { b.x = cb.xMin; if (b.vx < 0) b.vx = 0; }
+      else if (b.x > cb.xMax) { b.x = cb.xMax; if (b.vx > 0) b.vx = 0; }
+      if (b.y < cb.yMin) { b.y = cb.yMin; if (b.vy < 0) b.vy = 0; }
+      if (b.held > 0) b.held -= h * PH.heldDecay;
+      if (!W.busy && sp < PH.sleepV * PH.sleepV && Math.abs(b.av) < PH.sleepW && b.held <= 0) {
+        b.slT += h;
+        if (b.slT > PH.sleepT) { b.sl = true; b.vx = b.vy = b.av = 0; }
+      } else b.slT = 0;
+    }
   }
 
-  // ---- world -------------------------------------------------------------
+  // ---- world ---------------------------------------------------------------
+  /* world({w, h, gravity}) -> W.  Pre hooks run before each substep (the rig
+     plans its velocities there), post hooks after (the rig moves). */
   function world(o) {
     o = o || {};
+    const w = o.w || 480, h = o.h || 390;
     const W = {
       gravity: { x: o.gravity ? o.gravity.x : 0, y: o.gravity ? o.gravity.y : 1400 },
-      w: o.w || 480, h: o.h || 390,
-      bodies: [], joints: [], hooks: [],
-      time: 0, acc: 0, stamp: 0, steps: 0,
-      manifolds: new Map(), mlist: [],
-      order: [],
-      add, remove, step, contactsOf, queryAABB, setGravity, energy, addHook, removeHook, sync: syncBody,
+      w, h, bodies: [], segs: [], csegs: [], contacts: [], ctl: null, busy: false,
+      pre: [], post: [], time: 0, acc: 0, steps: 0,
+      clampBox: { xMin: 5, xMax: w - 5, yMin: RIG.clampTop, floorY: h - RIG.floorSink, chuteX: w + 100, trayY: h - RIG.floorSink },
+      add, remove, step, setGravity, energy, contactsOf, queryAABB, wakeAll, addHook, removeHook, addPost, removePost, sync,
     };
-
-    function pairKey(a, b) { return a.id < b.id ? a.id * 1048576 + b.id : b.id * 1048576 + a.id; }
-
-    function add(x) {
-      if (x.kind === 'revolute') {
-        if (W.joints.indexOf(x) < 0) W.joints.push(x);
-        x.world = W;
-        x.a.noCollide.push(x.b); x.b.noCollide.push(x.a);
-      } else {
-        if (W.bodies.indexOf(x) < 0) { W.bodies.push(x); W.order.push(x); }
-        x.world = W;
-        syncBody(x);
-      }
-      return x;
+    function add(b) { if (W.bodies.indexOf(b) < 0) W.bodies.push(b); b.world = W; sync(b); return b; }
+    function remove(b) {
+      const i = W.bodies.indexOf(b); if (i >= 0) W.bodies.splice(i, 1);
+      b.world = null;
+      wakeAll();   // whatever rested on it must fall
     }
-
-    function remove(x) {
-      if (x.kind === 'revolute') {
-        const i = W.joints.indexOf(x); if (i >= 0) W.joints.splice(i, 1);
-        const ia = x.a.noCollide.indexOf(x.b); if (ia >= 0) x.a.noCollide.splice(ia, 1);
-        const ib = x.b.noCollide.indexOf(x.a); if (ib >= 0) x.b.noCollide.splice(ib, 1);
-        x.world = null;
-        return;
-      }
-      const i = W.bodies.indexOf(x); if (i >= 0) W.bodies.splice(i, 1);
-      const j = W.order.indexOf(x); if (j >= 0) W.order.splice(j, 1);
-      for (let k = W.joints.length - 1; k >= 0; k--) {
-        if (W.joints[k].a === x || W.joints[k].b === x) remove(W.joints[k]);
-      }
-      for (const [key, m] of W.manifolds) if (m.a === x || m.b === x) W.manifolds.delete(key);
-      x.world = null;
-    }
-
-    function setGravity(x, y) { W.gravity.x = x; W.gravity.y = y; }
-
-    function addHook(fn) { if (W.hooks.indexOf(fn) < 0) W.hooks.push(fn); }
-    function removeHook(fn) { const i = W.hooks.indexOf(fn); if (i >= 0) W.hooks.splice(i, 1); }
-
+    function setGravity(x, y) { W.gravity.x = x; W.gravity.y = y; wakeAll(); }
+    function wakeAll() { for (const b of W.bodies) wake(b); }
+    function addHook(fn) { if (W.pre.indexOf(fn) < 0) W.pre.push(fn); }
+    function removeHook(fn) { const i = W.pre.indexOf(fn); if (i >= 0) W.pre.splice(i, 1); }
+    function addPost(fn) { if (W.post.indexOf(fn) < 0) W.post.push(fn); }
+    function removePost(fn) { const i = W.post.indexOf(fn); if (i >= 0) W.post.splice(i, 1); }
     /* Sum of kinetic energy (linear + angular) of the dynamic bodies. */
     function energy() {
       let e = 0;
       for (const b of W.bodies) if (b.type === 'dynamic') e += 0.5 * b.m * (b.vx * b.vx + b.vy * b.vy) + 0.5 * b.I * b.av * b.av;
       return e;
     }
-
     function queryAABB(x0, y0, x1, y1) {
       const out = [];
-      for (const b of W.bodies) {
-        const bx = b.box;
-        if (bx.x1 >= x0 && bx.x0 <= x1 && bx.y1 >= y0 && bx.y0 <= y1) out.push(b);
-      }
+      for (const b of W.bodies) { const bx = b.box; if (bx.x1 >= x0 && bx.x0 <= x1 && bx.y1 >= y0 && bx.y0 <= y1) out.push(b); }
       return out;
     }
-
-    /* Contacts touching b from the last substep; normal points from b to other. */
+    /* Contacts touching b from the last substep; the normal points from b to
+       other.  other is a body, or a segment ({wall} for cabinet walls, {own}
+       -1/0/1 for claw parts). */
     function contactsOf(b) {
       const out = [];
-      for (const m of W.manifolds.values()) {
-        if (m.stamp !== W.stamp || m.n === 0) continue;
-        if (m.a !== b && m.b !== b) continue;
-        const flip = m.b === b;
-        const other = flip ? m.a : m.b;
-        const nx = flip ? -m.nx : m.nx, ny = flip ? -m.ny : m.ny;
-        for (let k = 0; k < m.n; k++) {
-          const p = m.pts[k];
-          out.push({ other, nx, ny, px: p.x, py: p.y, depth: p.d });
-        }
+      for (const c of W.contacts) {
+        if (c.a === b) out.push({ other: c.b || c.seg, nx: c.nx, ny: c.ny, px: c.px, py: c.py, depth: c.pen, claw: !!(c.seg && c.seg.own !== 9) });
+        else if (c.b === b) out.push({ other: c.a, nx: -c.nx, ny: -c.ny, px: c.px, py: c.py, depth: c.pen, claw: false });
       }
       return out;
     }
-
-    /* Group/mask filter plus the "never both immovable" and joint rules. */
-    function shouldCollide(a, b) {
-      if (a.invM === 0 && b.invM === 0 && !(a.sensor || b.sensor)) {
-        // Kinematic vs dynamic goes through invM; two immovables never collide.
-        return false;
-      }
-      if (a.type !== 'dynamic' && b.type !== 'dynamic') return false;
-      if (a.mask && a.mask.indexOf(b.group) < 0) return false;
-      if (b.mask && b.mask.indexOf(a.group) < 0) return false;
-      if (a.noCollide.length && a.noCollide.indexOf(b) >= 0) return false;
-      return true;
-    }
-
-    /* Sort-and-sweep on AABB x, then narrowphase into persistent manifolds. */
-    function collideAll() {
-      const ord = W.order;
-      // Insertion sort by x0: near-sorted from the previous substep.
-      for (let i = 1; i < ord.length; i++) {
-        const bi = ord[i]; const x = bi.box.x0; let j = i - 1;
-        while (j >= 0 && ord[j].box.x0 > x) { ord[j + 1] = ord[j]; j--; }
-        ord[j + 1] = bi;
-      }
-      W.stamp++;
-      const stamp = W.stamp;
-      for (let i = 0; i < ord.length; i++) {
-        const A = ord[i], ab = A.box;
-        for (let j = i + 1; j < ord.length; j++) {
-          const B = ord[j], bb = B.box;
-          if (bb.x0 > ab.x1) break;
-          if (bb.y0 > ab.y1 || bb.y1 < ab.y0) continue;
-          if (!shouldCollide(A, B)) continue;
-          // Canonical order (lower id first) keeps manifold ids stable across sort swaps.
-          const P = A.id < B.id ? A : B, Q = A.id < B.id ? B : A;
-          if (!collide(P, Q)) continue;
-          const key = pairKey(P, Q);
-          let m = W.manifolds.get(key);
-          if (!m) { m = newManifold(P, Q); W.manifolds.set(key, m); }
-          updateManifold(m, stamp);
-        }
-      }
-      // Drop manifolds that did not survive this substep.
-      const ml = W.mlist; ml.length = 0;
-      for (const [key, m] of W.manifolds) {
-        if (m.stamp !== stamp) W.manifolds.delete(key);
-        else if (m.solve) ml.push(m);
-      }
-    }
-
     function substep() {
-      const g = W.gravity, bodies = W.bodies;
-      for (let i = 0; i < W.hooks.length; i++) W.hooks[i](H, W);
-      // Integrate velocities.
-      for (let i = 0; i < bodies.length; i++) {
-        const b = bodies[i];
-        if (b.type === 'dynamic') {
-          b.vx += g.x * H; b.vy += g.y * H;
-          const spd = Math.hypot(b.vx, b.vy);
-          let slow = spd < SLOW_V ? SLOW_DAMP * (1 - spd / SLOW_V) : 0;
-          if (spd < ROLL_V && b.shape.kind === 'circle') slow += ROLL_DAMP * (1 - spd / ROLL_V);
-          const ld = 1 / (1 + (LIN_DAMP + slow) * H), ad = 1 / (1 + (ANG_DAMP + slow) * H);
-          b.vx *= ld; b.vy *= ld; b.av *= ad;
-        }
-        if (b.type !== 'static') {
-          const sp = Math.hypot(b.vx, b.vy);
-          if (sp > MAX_V) { b.vx *= MAX_V / sp; b.vy *= MAX_V / sp; }
-          if (b.av > MAX_AV) b.av = MAX_AV; else if (b.av < -MAX_AV) b.av = -MAX_AV;
-          syncBody(b);
-        }
-      }
-      collideAll();
-      const ml = W.mlist, joints = W.joints;
-      for (let i = 0; i < ml.length; i++) prestepManifold(ml[i]);
-      for (let i = 0; i < joints.length; i++) prestepJoint(joints[i]);
-      for (let i = 0; i < ml.length; i++) warmStartManifold(ml[i]);
-      // Alternate the sweep direction so impulses propagate both ways through
-      // a stack instead of one contact per iteration.
-      for (let it = 0; it < ITER; it++) {
-        for (let i = 0; i < joints.length; i++) solveJoint(joints[i]);
-        if (it & 1) for (let i = ml.length - 1; i >= 0; i--) solveManifold(ml[i]);
-        else for (let i = 0; i < ml.length; i++) solveManifold(ml[i]);
-      }
-      // Integrate positions, then resolve leftover penetration positionally.
-      for (let i = 0; i < bodies.length; i++) {
-        const b = bodies[i];
-        if (b.type === 'static') continue;
-        b.x += b.vx * H; b.y += b.vy * H; b.a += b.av * H;
-        b.c = Math.cos(b.a); b.s = Math.sin(b.a);
-      }
-      for (let it = 0; it < POS_ITER; it++) for (let i = 0; i < ml.length; i++) solvePositions(ml[i]);
+      for (let i = 0; i < W.pre.length; i++) W.pre[i](H, W);
+      physStep(W, H);
+      for (let i = 0; i < W.post.length; i++) W.post[i](H, W);
       W.time += H; W.steps++;
     }
-
-    /* Fixed-step accumulator: runs whole substeps, at most MAX_SUB per call. */
+    /* Fixed-step accumulator: whole substeps, at most MAX_SUB per call. */
     function step(dt) {
       if (!(dt > 0)) return;
       W.acc += Math.min(dt, MAX_SUB * H);
@@ -813,849 +408,305 @@ const PHYS = (() => {
       while (W.acc >= H - 1e-9 && n < MAX_SUB) { substep(); W.acc -= H; n++; }
       if (W.acc < 1e-9) W.acc = 0;
       if (W.acc > H) W.acc = H;
-      // Leave transforms fresh for queries and rendering.
-      for (let i = 0; i < W.bodies.length; i++) if (W.bodies[i].type !== 'static') syncBody(W.bodies[i]);
+      for (const b of W.bodies) sync(b);
     }
-
     return W;
   }
 
   // ---- cabinet -----------------------------------------------------------
-  /* Static walls around the interior [0,w]x[0,h] plus the chute divider. */
+  /* Static capsule walls around the interior [0,w]x[0,h]: left, right, floor
+     (none under the chute: prizes fall through it onto a hidden tray), the
+     chute divider on the RIGHT, and the lid.  Also sets the world's hard
+     clamps.  Returns {inChute(b), bounds, segs}. */
   function cabinet(W, o) {
     o = o || {};
     const w = o.w || 480, h = o.h || 390, chuteW = o.chuteW || 64;
-    const dividerH = o.dividerH == null ? 0.6 : o.dividerH, T = o.wallThick || 40;
-    const chuteX = w - chuteW, divT = 8, dividerTop = h - dividerH * h;
-    const mk = (bw, bh, x, y, name) => W.add(body({
-      type: 'static', shape: { kind: 'poly', verts: box(bw, bh) }, x, y,
-      friction: 0.6, restitution: 0.05, group: 'wall', data: { wall: name },
-    }));
-    const bodies = [
-      mk(w + 2 * T, T, w / 2, h + T / 2, 'floor'),
-      mk(w + 2 * T, T, w / 2, -T / 2, 'ceiling'),
-      mk(T, h + 2 * T, -T / 2, h / 2, 'left'),
-      mk(T, h + 2 * T, w + T / 2, h / 2, 'right'),
+    const dividerH = o.dividerH == null ? 0.6 : o.dividerH;
+    const chuteX = w - chuteW, dividerTop = h - dividerH * h, trayY = h + RIG.tray;
+    const segs = [
+      mkSeg(-4, -120, -4, h + 4, 4, 'left'),
+      mkSeg(w + 4, -120, w + 4, trayY + 40, 4, 'right'),
+      mkSeg(-8, h + 4, chuteX, h + 4, 4, 'floor'),
+      mkSeg(chuteX, dividerTop, chuteX, trayY + 4, 5, 'divider'),   // runs down to the tray: no pocket under the floor
+      mkSeg(-8, RIG.lid, w + 8, RIG.lid, 4, 'lid'),
+      mkSeg(chuteX - 2, trayY + 4, w + 8, trayY + 4, 4, 'tray'),
     ];
-    // Divider: a thin wall whose top slopes down into the chute, so an item
-    // clipping it slides into the chute rather than balancing on it.
-    const dh = dividerH * h, hw = divT / 2, lip = 6;
-    bodies.push(W.add(body({
-      type: 'static', group: 'wall', friction: 0.3, restitution: 0.05, data: { wall: 'divider' },
-      x: chuteX - hw, y: dividerTop,
-      shape: { kind: 'poly', verts: [{ x: -hw, y: 0 }, { x: hw, y: lip }, { x: hw, y: dh }, { x: -hw, y: dh }] },
-    })));
-    // Optional bowl: two sloped wedges on the floor so the pile heaps up in the
-    // middle instead of spreading into one jammed row the claw cannot dig into.
-    const slopeW = o.slopeW || 0, slopeH = o.slopeH || 0;
-    if (slopeW > 0 && slopeH > 0) {
-      const wedge = (verts, name) => W.add(body({
-        type: 'static', group: 'wall', friction: 0.35, restitution: 0.05, data: { wall: name },
-        x: 0, y: 0, shape: { kind: 'poly', verts },
-      }));
-      bodies.push(wedge([{ x: 0, y: h - slopeH }, { x: slopeW, y: h }, { x: 0, y: h }], 'slopeL'));
-      const r = chuteX - divT;
-      bodies.push(wedge([{ x: r - slopeW, y: h }, { x: r, y: h - slopeH }, { x: r, y: h }], 'slopeR'));
-    }
-    const C = {
-      bodies,
-      bounds: { w, h, chuteX, chuteW, dividerTop, floorY: h, slopeW, slopeH },
+    W.segs = segs;
+    W.clampBox = { xMin: 5, xMax: w - 5, yMin: RIG.clampTop, floorY: h - RIG.floorSink, chuteX, trayY: trayY - RIG.floorSink };
+    return {
+      segs, bodies: [],
+      bounds: { w, h, chuteX, chuteW, dividerTop, floorY: h, trayY, slopeW: 0, slopeH: 0 },
       inChute(b) { return b.x > chuteX && b.x < w && b.y > dividerTop; },
     };
-    return C;
   }
 
   // ---- claw rig ----------------------------------------------------------
-  const RIG = {
-    carSpeed: 260, dropSpeed: 520, liftSpeed: 300,
-    liftAccel: 700,            // px/s^2: a 1 g jerk would double an item's weight at the lift start
-    carAccel: 520,             // px/s^2 (0.37 g), also what shakes the palm
-    brake: 1.15,               // >1: the carriage overshoots its target a touch
-    swayZeta: 0.45,            // pendulum damping ratio
-    swayShortDamp: 0.6,        // extra damping ratio when the cable is short (guided head)
-    swayMax: 0.4,              // cap on the cable angle (rad)
-    tiltMul: 0.6,              // palm tilt = sway * tiltMul
-    minCable: 24,              // palm centre below the rail when fully lifted
-    palmH: 14,
-    pivot: 26,                 // hinge offset from the palm centre (x width)
-    prongLen: 53,              // at width 1; grows sublinearly (see geometry()) so wide claws keep leverage
-    prongLenWidth: 0.45,       // fraction of the length that scales with width
-    prongLen3: 30,             // the keeper prong is short: it pins the item into the V from above
-    tipHalf: 2,                // prong tip half width
-    hookFrac: 0.42,            // fraction of the prong length that is the bent tip segment
-    hookAngle: 0.55,           // rad: the tip segment bends inward by this much, so the two hooks
-                               // meet under the load as a basket (the cradle) rather than a pinch
-    openSpan: 96,              // tip to tip when open, times width
-    closedGap: 2,              // inner corner to inner corner when closed
-    // The cradle: every item whose centre sits inside the basket (palm, two
-    // prongs, hooked tips; expanded outward by cradleMargin px) when the
-    // closing ends is locked, not only the ones pinched by two prongs.
-    cradleMargin: 8,
-    cradleCap: 2,              // items the cradle carries at base
-    cradleCap3: 1,             // +1 with the third prong
-    cradleCapWide: 1,          // +1 at width >= cradleWide (Wider Palm x2)
-    cradleWide: 1.36,
-    carryTuck: 6,              // px the palm may tuck past the wall clearance while carrying, so a wide claw still centres over the chute
-    settleT: 0.15,             // s the claw holds its clench after the prongs stop, before the lift
-    jitter: 0.12,              // shared torque jitter while holding (fraction)
-    jitterProng: 0.03,         // extra per-prong jitter
-    open3: 0.85, closed3: 0.0,
-    motorSpeed: 7,             // rad/s
-    releaseSpeed: 3.5,         // rad/s while releasing: a slow open drops items straight down
-    baseTorque: 2.4e8,         // times grip, closing
-    openTorque: 4e7,           // opening torque, grip independent: enough to hold the prongs open, too weak to flip items
-    releaseTorque: 1.2e7,      // while releasing: barely more than the prongs' own weight, so a held item's weight opens the loaded prong and it drops straight
-    torque3: 0.04,             // keeper prong torque fraction (it rests on the item, it does not squeeze)
-    pinch3: 1.0,               // side prong torque bonus with 3 prongs (the third finger is in the lock capacity)
-    gripTorque0: 0.8, gripTorque1: 0.2,   // closing torque = base * (t0 + t1 * grip)
-    prongFriction: 0.55, rubberFriction: 1.1,
-    prongDensity: 1.2,
-    quietAV: 0.3, quietT: 0.15, closeMax: 0.7, closeMin: 0.12,   // closing ends settleT after the prongs go quiet, or after closeMax + settleT
-    releaseT: 0.5,
-    maxDrop: 2.5, maxLift: 3.5, maxCarry: 4, maxReturn: 4,
-    magnetR: 80, magnetAcc: 6000,
-    // Grip lock: a well-pinched item is welded to the palm with a breaking
-    // force, so a solid pinch rides the lift and a heavy or badly held one slips.
-    lockForce: 5.5e6,          // break force at grip 1: holds an anvil (mass ~2700) through the lift, not a tower shield (4320)
-    lockRubber: 1.45,          // rubber tips multiply the break force
-    lock3: 1.3,                // third prong multiplies the break force
-    lockPalmOnly: 0.8,         // a one prong + palm pinch outside the cradle is this fraction as strong
-    gripThin: 0.85,            // grippiness of long thin items (local aspect >= gripThinAspect)
-    gripThinAspect: 4,
-    gripDisc: 0.75,            // tiny discs / marbles (circles with r < gripDiscR)
-    gripDiscR: 10,
-    gripSlick: 0.8,            // glass / ice / very low friction
-    gripJunk: 0.6,             // junk (rock, slag, ice block) slips more: hazard grippiness multiplier (capacity unaffected)
-    slipOpen: 0.3,             // s the prongs twitch open after a slip
-    slipRate: 0.25,            // per-second slip hazard at grippiness 0 and grip 1 during the jerky part of the ride
-    slipLate: 0.25,            // hazard multiplier once the carriage cruises
-    lockHoldMul: 0.12,         // prong torque while a lock carries the item
-    lockGrace: 0.12,           // s after engaging before a lock can break
-    lockWindow: 0.6,           // s into the lift during which newly pinched items still lock
-    lockOmega: 60,             // spring stiffness (rad/s): weight sags the hold g/omega^2 px
-    lockBreakDist: 16,         // px of sag that breaks the hold outright
-    lockPeakMul: 8,            // instant force clamp, as a multiple of the grip
-    lockTau: 0.25,             // s, time constant of the filtered load (rides out lift and carry jerks)
-    lockSpin: 30,              // per-second pull of the item's spin toward the palm's
-    slowZone: 34,              // px above the pile where the drop slows down
-    dig: 30,                   // px the claw keeps sinking after a prong first touches something
-    floorClear: 2,             // closed prong tips stop this far above the floor
-    edgeClear: 4,              // palm edge to wall clearance for the carriage travel
-    slowMul: 0.45,
-  };
-
+  /* clawRig(W, {cabinet, homeX, chuteX, railY, prongs, width, grip, speed,
+     rubber, magnet, rand}).  Kinematic hub + two prongs driven by Claw
+     Crawl's state machine: idle -> drop -> close -> lift -> carry -> open ->
+     return.  See DESIGN.md for the public surface. */
   function clawRig(W, o) {
     o = o || {};
     const C = o.cabinet;
     const cw = C ? C.bounds.w : W.w, ch = C ? C.bounds.h : W.h;
+    const binX = C ? C.bounds.chuteX : cw - 64;              // right edge of the bin (the divider)
     const cfg = {
       prongs: o.prongs === 3 ? 3 : 2, width: o.width == null ? 1 : o.width,
       grip: o.grip == null ? 1 : o.grip, speed: o.speed == null ? 1 : o.speed,
-      rubber: o.rubber ? 1 : 0, magnet: o.magnet ? 1 : 0,
+      rubber: o.rubber ? 1 : 0, magnet: o.magnet ? 1 : 0, grease: o.grease ? 1 : 0,
     };
     const rand = o.rand || (() => 0.5);
-    /* Prong geometry for the current width: hinge offset, length and the
-       open/closed outward angles that give the tip span and closed gap. */
-    function geometry() {
-      const wd = cfg.width;
-      const piv = RIG.pivot * wd;
-      const len = RIG.prongLen * (1 - RIG.prongLenWidth + RIG.prongLenWidth * wd);
-      const lenT = len * RIG.hookFrac, lenU = len - lenT, beta = RIG.hookAngle;
-      // Tip x offset from the hinge (outward positive) and tip depth at outward
-      // angle th, measured at the tip's inner corner (the one that meets the
-      // other hook when closed).
-      const tipX = (th) => lenU * Math.sin(th) + lenT * Math.sin(th - beta) - RIG.tipHalf * Math.cos(th - beta);
-      const tipY = (th) => lenU * Math.cos(th) + lenT * Math.cos(th - beta);
-      // Bisection: outward angle whose tip x equals target (tipX is monotonic here).
-      const solve = (target) => {
-        let lo = -1.2, hi = 1.2;
-        for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (tipX(mid) < target) lo = mid; else hi = mid; }
-        return (lo + hi) / 2;
-      };
-      const open = solve(RIG.openSpan * wd / 2 - piv);
-      const closed = solve(RIG.closedGap / 2 - piv);
-      let reach = 0;
-      for (let th = closed; th <= open; th += 0.02) reach = Math.max(reach, tipY(th));
-      return { piv, len, lenU, lenT, beta, len3: RIG.prongLen3 * wd, open, closed, reach, palmW: piv * 2 + 12 };
-    }
-    let geo = geometry();
     const railY = o.railY == null ? 26 : o.railY;
-    const homeX = o.homeX == null ? cw * 0.5 : o.homeX;
-    // Travel limit: the palm must clear the side walls (an open prong may
-    // press against a wall; its motor is torque limited so that is harmless).
-    const carLim = () => geo.palmW / 2 + RIG.edgeClear;
-    // While carrying the palm may tuck a little past that clearance so a wide
-    // claw still centres its load over the chute: the palm is kinematic and
-    // never collides with the walls, and an open prong against a wall just stalls.
-    const carryBase = () => Math.max(geo.palmW / 2 - RIG.carryTuck, 4);
-    const carryLim = () => Math.max(carryBase(), loadReach());   // also keeps the held load off the walls
-    const chuteX = clamp(o.chuteX == null ? (C ? C.bounds.chuteX + C.bounds.chuteW * 0.5 : cw - 32) : o.chuteX, carryBase(), cw - carryBase());
-
-    const R = {
-      phase: 'idle', x: homeX, y: railY + RIG.minCable, targetX: homeX,
-      sway: 0, swayVel: 0, swayX: 0, cableLen: RIG.minCable,
-      bodies: { carriage: null, palm: null, prongs: [], tips: [] },
-      joints: [],
-      cableTop: { x: homeX, y: railY },
-      cfg, homeX, chuteX, railY,
-      geo: null,   // {piv, len, lenU, lenT, beta, len3, open, closed, reach, palmW} for the current width (renderer + tests)
-      setTarget, drop, update, held, open, setConfig, destroy, calm, locked, dbg: null,
+    const RAIL = railY + RIG.hubDrop;
+    const homeX = o.homeX == null ? binX * 0.5 : o.homeX;
+    const chuteX = o.chuteX == null ? binX + (C ? C.bounds.chuteW : 64) * 0.5 : o.chuteX;
+    // Internal claw state (Claw Crawl's F.claw), shared with bodyVsSeg through W.ctl.
+    const K = {
+      x: homeX, y: RAIL, tx: homeX, vx: 0, vy: 0, pL: PHI_OPEN, pR: PHI_OPEN, wL: 0, wR: 0,
+      st: 'idle', t: 0, s: 1, grip: 0.5, mu: 1, halt: 2.2, pending: false, moving: false,
+      touch: false, hitL: false, hitR: false, haltL: false, haltR: false, blkL: 0, blkR: 0,
+      loosen: 0, jolt: 0, sway: 0, swayV: 0, cargo: [], returning: false,
     };
-    // Internal motion state.
-    let carX = homeX, carV = 0, carTarget = homeX;
-    let phaseT = 0, quietT = 0, liftV = 0, forceOpen = false, carryCalm = 0, arrivedT = 0, digStart = -1;
-    let clenchT = -1;                // phaseT at which the closing prongs went quiet (the settle counts from here)
-    let slipOpenT = 0, grabNo = 0;   // the claw twitches open for a moment when an item slips; grabNo tags slipped items
-    let closeState = 'open';   // what the motors are driving toward
-    const heldScratch = new Map();
-
-    // -- bodies --
-    const carriage = W.add(body({
-      type: 'kinematic', shape: { kind: 'poly', verts: box(46, 14) }, x: homeX, y: railY,
-      friction: 0.3, restitution: 0, group: 'claw', mask: ['item'], data: { claw: 'carriage' },
-    }));
-    R.bodies.carriage = carriage;
-    let palm = null;
-
-    function prongVerts(len, w0, w1) {
-      // Symmetric rod tapering from half width w0 to w1, hinge at the origin, tip at +y.
-      return [{ x: -w0, y: 0 }, { x: w0, y: 0 }, { x: w0, y: 6 }, { x: w1, y: len }, { x: -w1, y: len }, { x: -w0, y: 6 }];
+    const R = {
+      phase: 'idle', x: homeX, y: RAIL, targetX: homeX, sway: 0,
+      cableTop: { x: homeX, y: railY },
+      bodies: { hub: { x: homeX, y: RAIL, r: RIG.hubR }, prongs: [[], []], ghost: null },
+      cfg, homeX, chuteX, railY, geo: null, ctl: K, events: [],
+      setTarget, drop, update, held, locked, cradle, open, setConfig, destroy, calm, size, gripCC,
+    };
+    function size() { return RIG.base * cfg.width * (cfg.prongs === 3 ? RIG.prong3Size : 1); }
+    /* Clawspire's grip (0.75..2+) mapped onto Claw Crawl's 0..1 grip. */
+    function gripCC() {
+      let g = clamp(RIG.gripBase + RIG.gripSlope * (cfg.grip - 0.75), RIG.gripMin, 1);
+      g += cfg.rubber ? RIG.rubberGrip : 0;
+      g += cfg.prongs === 3 ? RIG.prong3Grip : 0;
+      g -= cfg.grease ? RIG.greaseGrip : 0;
+      return clamp(g, 0.05, 1);
     }
-
-    /* (Re)build the palm and prongs from cfg.  Keeps the palm position. */
-    function build() {
-      const px = palm ? palm.x : R.x, py = palm ? palm.y : R.y;
-      if (palm) W.remove(palm);
-      for (const j of R.joints) W.remove(j);
-      for (const p of R.bodies.prongs) if (!p.ghost) W.remove(p);
-      for (const p of R.bodies.tips) W.remove(p);
-      R.joints.length = 0; R.bodies.prongs.length = 0;
-      geo = geometry(); R.geo = geo;
-      const wd = cfg.width, piv = geo.piv;
-      palm = W.add(body({
-        type: 'kinematic', shape: { kind: 'poly', verts: box(geo.palmW, RIG.palmH) }, x: px, y: py,
-        friction: 0.4, restitution: 0, group: 'claw', mask: ['item', 'wall'], data: { claw: 'palm' },
-      }));
-      R.bodies.palm = palm;
-      const fr = cfg.rubber ? RIG.rubberFriction : RIG.prongFriction;
-      const specs = [
-        { ox: -piv, dir: 1, len: geo.len, open: geo.open, closed: geo.closed, tq: 1, name: 'left' },
-        { ox: piv, dir: -1, len: geo.len, open: geo.open, closed: geo.closed, tq: 1, name: 'right' },
-      ];
-      if (cfg.prongs === 3) {
-        // Keeper prong: hinged at the palm centre, swings down to vertical and
-        // presses a held item into the V of the side prongs (a 2D stand-in for
-        // the third finger of a real claw).
-        specs.push({ ox: 0, dir: -1, len: geo.len3, open: RIG.open3, closed: RIG.closed3, tq: RIG.torque3, name: 'mid', isMid: true });
-      }
-      R.bodies.tips.length = 0;
-      R.mid = null;
-      for (const s of specs) {
-        const upperLen = s.isMid ? s.len : geo.lenU;
-        if (s.isMid) {
-          // The third prong is a ghost: drawn behind the others, following the
-          // side prongs' closedness, never simulated. Its share of the pinch is
-          // modelled by the torque bonus and the lock capacity instead, because
-          // an off-axis physical third finger shoved items out in every geometry tried.
-          const gb = body({
-            type: 'kinematic', shape: { kind: 'poly', verts: prongVerts(upperLen, 5, 2) },
-            x: px + s.ox, y: py, angle: s.dir * s.open, group: 'claw', mask: [],
-            data: { claw: 'prong', prong: s.name, dir: s.dir, seg: 'upper', ghost: true },
-          });
-          gb.ghost = true;
-          R.bodies.prongs.push(gb);
-          R.mid = { b: gb, open: s.open, closed: s.closed, dir: s.dir };
-          continue;
-        }
-        const b = W.add(body({
-          type: 'dynamic', shape: { kind: 'poly', verts: prongVerts(upperLen, 5, s.isMid ? 2 : 4) },
-          x: px + s.ox, y: py, angle: s.dir * s.open,
-          density: RIG.prongDensity, friction: fr, restitution: 0,
-          group: 'claw', mask: ['item', 'wall'], data: { claw: 'prong', prong: s.name, dir: s.dir, seg: 'upper' },
-        }));
-        // Positive body angle swings the tip toward -x, so the outward angle
-        // of a prong is dir * bodyAngle and the limit order flips with dir.
-        const lo = Math.min(s.dir * s.open, s.dir * s.closed), hi = Math.max(s.dir * s.open, s.dir * s.closed);
-        const j = revolute(palm, b, { x: px + s.ox, y: py }, { lower: lo, upper: hi, enableLimit: true, enableMotor: true, maxTorque: 1 });
-        j.ref = 0;                     // angle() == body angle (palm angle is subtracted live)
-        j.dir = s.dir; j.tq = s.tq; j.isMid = s.isMid;
-        W.add(j);
-        R.joints.push(j);
-        R.bodies.prongs.push(b);
-        if (s.isMid) continue;
-        // Bent tip segment, welded at the knee (a revolute with a zero range).
-        const ka = s.dir * s.open;                       // upper body angle
-        const kx = px + s.ox - upperLen * Math.sin(ka), ky = py + upperLen * Math.cos(ka);
-        const ta = ka - s.dir * geo.beta;                // bends inward (positive angle swings a tip toward -x)
-        const tb = W.add(body({
-          type: 'dynamic', shape: { kind: 'poly', verts: prongVerts(geo.lenT, 4, RIG.tipHalf) },
-          x: kx, y: ky, angle: ta,
-          density: RIG.prongDensity, friction: fr, restitution: 0,
-          group: 'claw', mask: ['item', 'wall'], data: { claw: 'prong', prong: s.name, dir: s.dir, seg: 'tip' },
-        }));
-        const weld = revolute(b, tb, { x: kx, y: ky }, { lower: 0, upper: 0, enableLimit: true });
-        weld.isWeld = true;
-        W.add(weld);
-        R.joints.push(weld);
-        R.bodies.tips.push(tb);
-      }
-      prongWalls(R.phase);
-      applyMotors();
+    function refresh() {
+      K.s = size(); K.grip = gripCC(); K.mu = 0.6 + K.grip * 0.8;
+      const s = K.s;
+      R.geo = { s, grip: K.grip, hubR: RIG.hubR * s, reach: (RIG.hingeY + PRONG[3][1]) * s, span: openSpan() * 2, halt: RIG.haltBase + RIG.haltGrip * K.grip, mu: K.mu };
     }
-
-    /* Point the motors at open or closed.  jitter: true draws a fresh +-12%
-       torque factor per prong (called per substep while holding). */
-    function applyMotors(jitter) {
-      const opening = closeState === 'open' || forceOpen || slipOpenT > 0;
-      const toward = opening ? 1 : -1;
-      // Closing torque barely depends on grip: it only has to close the prongs
-      // around the item (more squeeze just pops it out like a seed). Grip is
-      // the lock's break force, where it belongs.
-      let tq = opening ? (R.phase === 'releasing' ? RIG.releaseTorque : RIG.openTorque) : RIG.baseTorque * (RIG.gripTorque0 + RIG.gripTorque1 * cfg.grip) * (cfg.prongs === 3 ? RIG.pinch3 : 1);
-      // While a grip lock carries the item the prongs only need to stay
-      // closed on it: full closing torque would squeeze it out like a seed.
-      if (!opening && typeof locks !== 'undefined' && locks.length) tq *= RIG.lockHoldMul;
-      const holding = !opening && typeof locks !== 'undefined' && locks.length > 0;
-      // A holding prong brakes at its current angle instead of driving closed.
-      const speed = holding ? 0 : (R.phase === 'releasing' ? RIG.releaseSpeed : RIG.motorSpeed);
-      // Jitter: +-12% shared by all prongs (the motor), plus +-3% per prong.
-      const common = jitter ? 1 + (rand() * 2 - 1) * RIG.jitter : 1;
-      for (const j of R.joints) {
-        if (j.isWeld) continue;
-        const jit = jitter ? common + (rand() * 2 - 1) * RIG.jitterProng : 1;
-        // Opening rotates the body toward dir * openAngle.
-        j.setMotor(j.dir * toward * speed, tq * (opening ? 1 : j.tq) * jit);
-      }
+    /* Horizontal reach of an open prong tip from the hub centre. */
+    function openSpan() {
+      const P = prongPts(1);
+      let m = 0; for (const p of P) m = Math.max(m, p.x - K.x);
+      return m;
     }
-
-    /* Per-substep: torque jitter while holding, magnet pull while grabbing. */
-    function hook(h) {
-      if (closeState === 'closed' && (R.phase === 'lifting' || R.phase === 'carrying')) {
-        applyMotors(true);
-        // The prongs keep settling into the pinch during the first part of the
-        // lift, so items that become held then are locked too.
-        if (R.phase === 'lifting' && phaseT < RIG.lockWindow) engageLocks(true);
-        // Grace: the pinch impulses need a few substeps to relax after the torque drops.
-        if (locks.length) checkLocks(h, 1 + (rand() * 2 - 1) * RIG.jitter);
-      }
-      if (cfg.magnet && (R.phase === 'dropping' || R.phase === 'closing')) {
-        const r = RIG.magnetR * cfg.width, r2 = r * r;
-        for (const b of W.bodies) {
-          if (b.type !== 'dynamic' || b.group === 'claw' || !b.data || !b.data.tags || b.data.tags.indexOf('metal') < 0) continue;
-          const dx = palm.x - b.x, dy = palm.y + 20 - b.y, d2 = dx * dx + dy * dy;
-          if (d2 > r2 || d2 < 1) continue;
-          const d = Math.sqrt(d2), f = RIG.magnetAcc * (1 - d / r) * h;
-          b.vx += dx / d * f; b.vy += dy / d * f;
+    function lim() { return 34 * K.s + 6; }
+    function clampX(x) { return clamp(x, lim(), binX - lim()); }
+    function prongPts(side) {
+      const s = K.s, phi = side < 0 ? K.pL : K.pR;
+      const hx = K.x + side * RIG.hingeX * s, hy = K.y + RIG.hingeY * s;
+      const al = -side * phi, ca = Math.cos(al), sa = Math.sin(al);
+      return PRONG.map(([lx, ly]) => { const x = side * lx * s, y = ly * s; return { x: hx + x * ca - y * sa, y: hy + x * sa + y * ca }; });
+    }
+    /* The drawn-only third finger: a shorter straight prong down the middle. */
+    function ghostPts() {
+      const s = K.s, phi = (K.pL + K.pR) * 0.5;
+      const hy = K.y + RIG.hingeY * s, k = 0.86;
+      return PRONG.map(([lx, ly]) => ({ x: K.x + lx * 0.25 * s * (1 - phi), y: hy + ly * k * s }));
+    }
+    function buildSegs() {
+      const s = K.s, out = W.csegs; out.length = 0;
+      const hub = mkSeg(K.x, K.y, K.x, K.y, RIG.hubR * s); hub.own = 0; hub.vx = K.vx; hub.vy = K.vy; hub.hx = K.x; hub.hy = K.y;
+      out.push(hub);
+      for (const side of [-1, 1]) {
+        const dphi = side < 0 ? K.wL : K.wR;
+        const hx = K.x + side * RIG.hingeX * s, hy = K.y + RIG.hingeY * s;
+        const P = prongPts(side);
+        for (let k = 0; k < P.length - 1; k++) {
+          const g = mkSeg(P[k].x, P[k].y, P[k + 1].x, P[k + 1].y, RIG.segR * s);
+          g.own = side; g.vx = K.vx; g.vy = K.vy; g.om = -side * dphi; g.hx = hx; g.hy = hy;
+          out.push(g);
         }
       }
     }
-    W.addHook(hook);
-
-    /* True when b touches any body that passes pred. */
-    function touching(b, pred) {
-      for (const m of W.manifolds.values()) {
-        if (m.stamp !== W.stamp || m.n === 0) continue;
-        if (m.a === b) { if (pred(m.b)) return true; }
-        else if (m.b === b) { if (pred(m.a)) return true; }
+    function emit(ev) { R.events.push(ev); }
+    function phaseName() {
+      switch (K.st) {
+        case 'idle': return K.moving ? 'moving' : 'idle';
+        case 'drop': return 'dropping';
+        case 'close': return 'closing';
+        case 'lift': return 'lifting';
+        case 'carry': return 'carrying';
+        case 'open': return 'releasing';
+        default: return 'returning';
       }
-      return false;
     }
-    const notClaw = (b) => b.group !== 'claw';
-    // A prong brushing a side wall on the way down is not a landing.
-    const landing = (b) => b.group !== 'claw' && !(b.group === 'wall' && b.data && (b.data.wall === 'left' || b.data.wall === 'right' || b.data.wall === 'ceiling'));
-
-    /* Highest item top under the palm footprint, for the soft-landing slowdown. */
-    function pileTopBelow() {
-      const half = geo.palmW / 2 + 40;
-      let top = ch;
+    function mirror() {
+      R.x = K.x; R.y = K.y; R.phase = phaseName(); R.sway = K.sway; R.targetX = K.tx;
+      R.cableTop.x = K.x - K.sway * 12; R.cableTop.y = railY;
+      const hb = R.bodies.hub; hb.x = K.x; hb.y = K.y; hb.r = RIG.hubR * K.s;
+      R.bodies.prongs[0] = prongPts(-1); R.bodies.prongs[1] = prongPts(1);
+      R.bodies.ghost = cfg.prongs === 3 ? ghostPts() : null;
+    }
+    /* Travel toward tx at the carriage speed; true when arrived. */
+    function travel(tx, h) {
+      const d = tx - K.x;
+      if (Math.abs(d) > 0.6) { K.vx = Math.sign(d) * Math.min(RIG.carSpeed * cfg.speed, Math.abs(d) / h); return false; }
+      return true;
+    }
+    /* Decide this substep's claw velocities (pre hook). */
+    function plan(h) {
+      K.vx = 0; K.vy = 0; K.wL = 0; K.wR = 0; K.t += h;
+      const maxY = ch - RIG.floorClear * K.s - 2;
+      switch (K.st) {
+        case 'idle': {
+          const arrived = travel(clampX(K.tx), h);
+          K.moving = !arrived;
+          if (arrived && K.pending) {
+            K.pending = false; K.st = 'drop'; K.t = 0; K.touch = false; K.cargo = [];
+            W.wakeAll(); emit('drop');
+          }
+          break;
+        }
+        case 'return': {
+          if (travel(clampX(K.tx), h)) { K.st = 'idle'; K.t = 0; K.moving = false; emit('home'); }
+          break;
+        }
+        case 'drop':
+          K.vy = RIG.dropSpeed;
+          if (K.touch || K.y >= maxY) {
+            if (K.touch) emit('touch');
+            K.st = 'close'; K.t = 0; K.haltL = K.haltR = false; K.blkL = K.blkR = 0;
+            K.halt = RIG.haltBase + RIG.haltGrip * K.grip;
+            emit('close');
+          }
+          break;
+        case 'close': {
+          // keep squeezing; a prong that has been blocked for a moment has closed on something
+          K.blkL = K.hitL ? K.blkL + h : 0;
+          K.blkR = K.hitR ? K.blkR + h : 0;
+          if (!K.hitL && K.pL > PHI_CLOSED) K.wL = -RIG.closeRate;
+          if (!K.hitR && K.pR > PHI_CLOSED) K.wR = -RIG.closeRate;
+          if (K.hitL && !K.haltL) K.haltL = true;
+          if (K.hitR && !K.haltR) K.haltR = true;
+          const doneL = K.blkL > RIG.blockT || K.pL <= PHI_CLOSED, doneR = K.blkR > RIG.blockT || K.pR <= PHI_CLOSED;
+          if ((doneL && doneR && K.t > RIG.closeMin) || K.t > RIG.closeMax) {
+            K.st = 'lift'; K.t = 0;
+            K.loosen = (1 - K.grip) * RIG.loosen * (0.7 + rand() * 0.6);
+            K.cargo = W.bodies.filter(b => b.type === 'dynamic' && b.held > 0 && b.y < K.y + RIG.cargoY * K.s);
+            emit('lift');
+          }
+          break;
+        }
+        case 'lift':
+          K.vy = -RIG.liftSpeed;
+          if (K.t < RIG.loosenT) { K.wL = K.wR = K.loosen / RIG.loosenT; }
+          if (K.y <= RAIL) {
+            K.st = 'carry'; K.t = 0; K.swayV += RIG.swayKick;
+            // the jolt at the top: a weak claw twitches open a touch
+            K.jolt = rand() < (1 - K.grip) * RIG.joltP ? RIG.jolt : 0;
+            emit('carry');
+          }
+          break;
+        case 'carry': {
+          if (K.jolt > 0 && K.t < RIG.joltT) { K.wL = K.wR = K.jolt / RIG.joltT; }
+          if (travel(chuteX, h) && K.t > RIG.carryWait) { K.st = 'open'; K.t = 0; K.jolt = 0; emit('release'); }
+          break;
+        }
+        case 'open':
+          if (K.pL < PHI_OPEN) K.wL = RIG.openRate;
+          if (K.pR < PHI_OPEN) K.wR = RIG.openRate;
+          // hold still until the load has let go of the prongs (it can hang on a
+          // tip for a moment), then travel back to the aim point
+          if (K.t > RIG.openT && (K.t > RIG.openT + RIG.openHold || !W.bodies.some(b => b.held > 0))) { K.st = 'return'; K.t = 0; K.cargo = []; }
+          break;
+      }
+      if (K.st === 'drop' && K.y + K.vy * h > maxY) K.vy = (maxY - K.y) / h;
+      if (K.st === 'lift' && K.y + K.vy * h < RAIL) K.vy = (RAIL - K.y) / h;
+      K.touch = false; K.hitL = false; K.hitR = false;
+      W.busy = K.st === 'drop' || K.st === 'close' || K.st === 'lift';
+      W.ctl = K;
+      buildSegs();
+      magnet(h);
+    }
+    /* The electromagnet: metal within magnetR of the hub drifts in while the
+       claw drops and closes. */
+    function magnet(h) {
+      if (!cfg.magnet || (K.st !== 'drop' && K.st !== 'close')) return;
+      const s = K.s, hx = K.x, hy = K.y + RIG.hingeY * s;
       for (const b of W.bodies) {
-        if (b.type !== 'dynamic' || b.group === 'claw') continue;
-        const bx = b.box;
-        if (bx.x1 < palm.x - half || bx.x0 > palm.x + half) continue;
-        if (bx.y0 > palm.y && bx.y0 < top) top = bx.y0;
+        if (b.type !== 'dynamic' || !b.data || !b.data.tags || b.data.tags.indexOf('metal') < 0) continue;
+        const dx = hx - b.x, dy = hy - b.y, d = Math.hypot(dx, dy);
+        if (d > RIG.magnetR || d < RIG.hubR * s + b.br - 2) continue;
+        const f = RIG.magnetF * h / Math.max(1, d / 40);
+        if (b.sl && f < 2) continue;
+        wake(b); b.vx += dx / d * f; b.vy += dy / d * f;
       }
-      return top;
     }
-
-    // -- public API --
-    /* True while idle with the carriage stopped and the cable hanging still. */
-    function calm() {
-      return R.phase === 'idle' && Math.abs(carX - R.targetX) < 1 && Math.abs(carV) < 1 && Math.abs(R.swayX) < 1.5 && Math.abs(R.swayVel) < 6;
+    /* Move the claw by this substep's velocities (post hook) and watch the cargo. */
+    function move(h) {
+      K.x += K.vx * h; K.y += K.vy * h;
+      K.pL = clamp(K.pL + K.wL * h, PHI_CLOSED - 0.02, PHI_OPEN);
+      K.pR = clamp(K.pR + K.wR * h, PHI_CLOSED - 0.02, PHI_OPEN);
+      // purely visual cable sway
+      K.swayV += (-K.sway * 40 - K.swayV * 3 - K.vx * 0.02) * h; K.sway += K.swayV * h;
+      // cargo that slipped out of the prongs on the way
+      if (K.st === 'lift' || K.st === 'carry') {
+        for (let i = K.cargo.length - 1; i >= 0; i--) {
+          const b = K.cargo[i];
+          if (b.world !== W) { K.cargo.splice(i, 1); continue; }
+          if (b.y > K.y + RIG.slipY * K.s && b.vy > RIG.slipV && b.x < binX) { K.cargo.splice(i, 1); emit('slip'); }
+        }
+      }
+      mirror();
     }
+    // ---- public
     function setTarget(x) {
-      if (R.phase !== 'idle' && R.phase !== 'moving') return false;
-      const lim = carLim();
-      R.targetX = clamp(x, lim, cw - lim);
+      if (K.st !== 'idle') return false;
+      K.tx = clampX(x); R.targetX = K.tx;
       return true;
     }
     function drop() {
-      if (R.phase !== 'idle' && R.phase !== 'moving') return false;
-      forceOpen = false; slipOpenT = 0; grabNo++;
-      setPhase('dropping');
+      if (K.st !== 'idle') return false;
+      K.pending = true;
       return true;
     }
-    function open() { forceOpen = true; closeState = 'open'; releaseLocks(); applyMotors(); }
+    /* Drive events out; the world's substeps do the moving. */
+    function update() {
+      const ev = R.events; R.events = [];
+      mirror();
+      return ev;
+    }
+    function busy() { return K.st === 'drop' || K.st === 'close' || K.st === 'lift' || K.st === 'carry' || K.st === 'open'; }
+    /* Bodies the claw is touching right now (only meaningful while busy). */
+    function held() { return busy() ? W.bodies.filter(b => b.type === 'dynamic' && b.held > 0) : []; }
+    /* The cargo: what was held above the hub when the lift started and has not slipped. */
+    function locked() { return K.st === 'lift' || K.st === 'carry' ? K.cargo.slice() : []; }
+    function cradle(b) { return b ? K.cargo.indexOf(b) >= 0 : K.cargo.slice(); }
+    /* Force the prongs open: a busy claw goes straight to 'releasing' and then returns. */
+    function open() {
+      if (K.st === 'idle' || K.st === 'return') { K.pL = K.pR = PHI_OPEN; return; }
+      K.st = 'open'; K.t = 0; K.cargo = []; K.pending = false; K.jolt = 0;
+      mirror();
+    }
     function setConfig(c) {
       c = c || {};
-      let rebuild = false;
-      for (const k of ['width', 'prongs', 'rubber']) {
-        if (c[k] != null) {
-          const v = k === 'prongs' ? (c[k] === 3 ? 3 : 2) : (k === 'rubber' ? (c[k] ? 1 : 0) : c[k]);
-          if (v !== cfg[k]) { cfg[k] = v; rebuild = true; }
-        }
-      }
+      if (c.width != null) cfg.width = c.width;
+      if (c.prongs != null) cfg.prongs = c.prongs === 3 ? 3 : 2;
+      if (c.rubber != null) cfg.rubber = c.rubber ? 1 : 0;
       if (c.grip != null) cfg.grip = c.grip;
       if (c.speed != null) cfg.speed = c.speed;
       if (c.magnet != null) cfg.magnet = c.magnet ? 1 : 0;
-      if (rebuild) build(); else applyMotors();
+      if (c.grease != null) cfg.grease = c.grease ? 1 : 0;
+      refresh(); mirror();
     }
     function destroy() {
-      releaseLocks();
-      W.removeHook(hook);
-      for (const j of R.joints) W.remove(j);
-      for (const p of R.bodies.prongs) if (!p.ghost) W.remove(p);
-      for (const p of R.bodies.tips) W.remove(p);
-      if (palm) W.remove(palm);
-      W.remove(carriage);
+      W.removeHook(plan); W.removePost(move);
+      W.csegs.length = 0; W.ctl = null; W.busy = false;
+      for (const b of W.bodies) b.held = 0;
     }
+    function calm() { return K.st === 'idle' && !K.moving && Math.abs(K.x - K.tx) < 1; }
 
-    /* Bodies pinched by >= 2 prongs, or by 1 prong + the palm. */
-    function held() {
-      heldScratch.clear();
-      for (const m of W.manifolds.values()) {
-        if (m.stamp !== W.stamp || m.n === 0) continue;
-        let claw = null, other = null;
-        if (m.a.group === 'claw' && m.b.group !== 'claw') { claw = m.a; other = m.b; }
-        else if (m.b.group === 'claw' && m.a.group !== 'claw') { claw = m.b; other = m.a; }
-        else continue;
-        if (claw === carriage) continue;
-        const rec = heldScratch.get(other) || { prongs: 0, palm: 0, names: '' };
-        if (claw === palm) rec.palm = 1;
-        else if (rec.names.indexOf(claw.data.prong) < 0) { rec.prongs++; rec.names += claw.data.prong + ','; }
-        heldScratch.set(other, rec);
-      }
-      const out = [];
-      for (const [b, rec] of heldScratch) if (rec.prongs >= 2 || (rec.prongs >= 1 && rec.palm)) out.push(b);
-      if (typeof locks !== 'undefined') for (const l of locks) if (out.indexOf(l.b) < 0) out.push(l.b);
-      return out;
-    }
-
-    /* Grip locks. engageLocks() ties every pinched body to the palm with a
-       stiff, force-capped spring when the closing phase ends. The spring can
-       never jam (unlike a weld against the prongs), the cap is the grip: a
-       load beyond it (weight, sway, a neighbour dragging on the item) lets
-       the item sag, and past lockBreakDist the hold is lost ('slip'). */
-    const locks = [];
-    const dbg = { engaged: 0, broke: 0, dropped: 0, cradled: 0, lastF: 0, lastCap: 0, lastPhase: '', lastT: 0, peakF: 0, trace: false, breaks: [] };
-    R.dbg = dbg;
-    function lockCapacity(rec, b, cradled) {
-      let f = RIG.lockForce * cfg.grip * grippiness(b);
-      if (cfg.rubber) f *= RIG.lockRubber;
-      if (cfg.prongs === 3) f *= RIG.lock3;
-      if (!cradled && !(rec && rec.prongs >= 2)) f *= RIG.lockPalmOnly;
-      return f;
-    }
-    /* Items the cradle carries: 2, +1 with the third prong, +1 at Wider Palm x2. */
-    function cradleCap() {
-      return RIG.cradleCap + (cfg.prongs === 3 ? RIG.cradleCap3 : 0) + (cfg.width >= RIG.cradleWide ? RIG.cradleCapWide : 0);
-    }
-    /* How well a body sits in the cradle: 1 for most things; long thin
-       things (aspect >= 4: swords, wands), tiny marbles, glass and ice a
-       little less. data.grip overrides; rubber tips, a third prong and grip
-       upgrades buy the difference back. */
-    function grippiness(b) {
-      if (b.data && b.data.grip != null) return b.data.grip;
-      let g = 1;
-      const sh = b.shape;
-      if (sh.kind === 'circle') { if (sh.r < RIG.gripDiscR) g *= RIG.gripDisc; }
-      else if (sh.verts && sh.verts.length) {
-        // Local extents (the world box of a tilted sword looks square).
-        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-        for (const v of sh.verts) { if (v.x < x0) x0 = v.x; if (v.x > x1) x1 = v.x; if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y; }
-        const w = x1 - x0, h = y1 - y0;
-        const aspect = Math.max(w, h) / Math.max(1, Math.min(w, h));
-        if (aspect >= RIG.gripThinAspect) g *= RIG.gripThin;
-      }
-      const tags = b.data && b.data.tags;
-      if (tags && (tags.indexOf('glass') >= 0 || tags.indexOf('ice') >= 0)) g *= RIG.gripSlick;
-      if (b.friction != null && b.friction < 0.2) g *= RIG.gripSlick;
-      return g;
-    }
-    const isJunk = (b) => !!(b.data && b.data.tags && b.data.tags.indexOf('junk') >= 0);
-    /* Per-second slip hazard of a locked body during the jerky part of the ride. */
-    function slipHazard(b) {
-      let g = grippiness(b);
-      if (isJunk(b)) g *= RIG.gripJunk;
-      return RIG.slipRate * Math.max(0, 1 - g) / (cfg.grip * (cfg.rubber ? RIG.lockRubber : 1) * (cfg.prongs === 3 ? RIG.lock3 : 1));
-    }
-
-    /* The cradle: the basket bounded by the palm underside and the two
-       hooked prongs, as the polygon left hinge -> left tip -> right tip ->
-       right hinge in world space. cradlePoly() refreshes it; cradleHas(b)
-       is true when b's centre lies inside it expanded by RIG.cradleMargin. */
-    const cradle = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
-    let cradleSign = 0;
-    function cradlePoly() {
-      cradleSign = 0;
-      const pr = R.bodies.prongs, tp = R.bodies.tips;
-      let iL = -1, iR = -1;
-      for (let i = 0; i < pr.length; i++) {
-        if (pr[i].ghost || !tp[i]) continue;
-        if (pr[i].data.dir === 1) iL = i; else iR = i;
-      }
-      if (iL < 0 || iR < 0) return false;
-      const hL = pr[iL].origin(), hR = pr[iR].origin();
-      const tL = tp[iL], tR = tp[iR], oL = tL.origin(), oR = tR.origin();
-      cradle[0].x = hL.x; cradle[0].y = hL.y;
-      cradle[1].x = oL.x - geo.lenT * tL.s; cradle[1].y = oL.y + geo.lenT * tL.c;
-      cradle[2].x = oR.x - geo.lenT * tR.s; cradle[2].y = oR.y + geo.lenT * tR.c;
-      cradle[3].x = hR.x; cradle[3].y = hR.y;
-      const a = signedArea(cradle);
-      if (Math.abs(a) < 40) return false;   // tips crossed or the claw is closed on nothing
-      cradleSign = a > 0 ? 1 : -1;
-      return true;
-    }
-    function cradleHas(b) {
-      if (!cradleSign) return false;
-      const m = RIG.cradleMargin;
-      for (let i = 0; i < 4; i++) {
-        const p = cradle[i], q = cradle[(i + 1) % 4];
-        const ex = q.x - p.x, ey = q.y - p.y, len = Math.hypot(ex, ey) || 1;
-        const cr = (ex * (b.y - p.y) - ey * (b.x - p.x)) * cradleSign;
-        if (cr < -m * len) return false;
-      }
-      return true;
-    }
-    R.cradle = (b) => { cradlePoly(); return b ? cradleHas(b) : cradle.map(p => ({ x: p.x, y: p.y })); };
-    R.cradleCap = cradleCap;
-    /* Freeze the prongs in the pose they closed with (the motor holds), so a
-       prong cannot drift into an item it no longer collides with. */
-    function freezeProngs() {
-      for (const j of R.joints) {
-        if (j.isWeld || j.frozen) continue;
-        j.lower0 = j.lower; j.upper0 = j.upper; j.limit0 = j.enableLimit;
-        const a = j.angle(); j.setLimits(a, a); j.frozen = true;
-      }
-    }
-    function thawProngs() {
-      for (const j of R.joints) {
-        if (!j.frozen) continue;
-        j.lower = j.lower0; j.upper = j.upper0; j.enableLimit = j.limit0; j.frozen = false;
-      }
-    }
-    /* Lock every cradled or pinched body to the palm. Called when the closing
-       ends, and with more=true during the lift window for late arrivals.
-       The cradle carries at most cradleCap() items: the ones sitting most
-       central under the palm ride, the extras are dropped ('slip' each). */
-    const candScratch = [];
-    function engageLocks(more) {
-      if (!more) releaseLocks();
-      const N = cradleCap();
-      if (more && locks.length >= N) return;
-      held();
-      const hasCradle = cradlePoly();
-      const cand = candScratch; cand.length = 0;
-      for (const b of W.bodies) {
-        if (b.type !== 'dynamic' || b.group === 'claw' || b.sensor) continue;
-        if (b.data && b.data.slippedGrab === grabNo) continue;
-        if (more && locks.some(l => l.b === b)) continue;
-        const rec = heldScratch.get(b);
-        const pinched = !!rec && (rec.prongs >= 2 || (rec.prongs >= 1 && rec.palm));
-        const cradled = hasCradle && cradleHas(b);
-        if (!pinched && !cradled) continue;
-        // Offset of the item in the palm frame.
-        const dx = b.x - palm.x, dy = b.y - palm.y;
-        const lx = dx * palm.c + dy * palm.s, ly = -dx * palm.s + dy * palm.c;
-        cand.push({ b, rec, cradled, lx, ly });
-        if (cradled) dbg.cradled++;
-      }
-      cand.sort((p, q) => Math.abs(p.lx) - Math.abs(q.lx));
-      let shed = 0;
-      for (let i = 0; i < cand.length; i++) {
-        const c = cand[i], b = c.b;
-        if (locks.length >= N) {
-          // Over capacity: the extra stays behind as the claw rises. One
-          // 'shed' event per lift however many stay (a slip is a failure,
-          // this is the basket being full).
-          dropBody(b); shed++; dbg.dropped++;
-          continue;
-        }
-        locks.push({ b, lx: c.lx, ly: c.ly, cap: lockCapacity(c.rec, b, c.cradled), load: 0, hazard: slipHazard(b) });
-        // The prongs stop colliding with the item they hold: they keep the
-        // pose they closed with, and a wedged item can no longer jam the
-        // kinematic palm against the floor through a prong.
-        noClaw(b);
-        freezeProngs();
-        dbg.engaged++;
-      }
-      if (shed) pending.push('shed');
-      cand.length = 0;
-    }
-    function clawParts() { return R.bodies.prongs.filter(p => !p.ghost).concat(R.bodies.tips); }
-    /* Prongs collide with the walls in the bin (dropping, closing, lifting)
-       and ignore them while the claw is up: opening over the chute, the
-       outer prong would otherwise wedge between the kinematic palm and the
-       static wall, and the position solver spins it right round. */
-    const UP = { carrying: 1, releasing: 1, returning: 1 };
-    function prongWalls(phase) {
-      const m = UP[phase] ? ['item'] : ['item', 'wall'];
-      for (const p of clawParts()) p.mask = m.slice();
-    }
-    /* b passes through the prongs and tips (idempotent). */
-    function noClaw(b) {
-      for (const p of clawParts()) {
-        if (p.noCollide.indexOf(b) < 0) p.noCollide.push(b);
-        if (b.noCollide.indexOf(p) < 0) b.noCollide.push(p);
-      }
-    }
-    function unlockBody(b) {
-      for (const p of clawParts()) {
-        let i = p.noCollide.indexOf(b); if (i >= 0) p.noCollide.splice(i, 1);
-        i = b.noCollide.indexOf(p); if (i >= 0) b.noCollide.splice(i, 1);
-      }
-    }
-    /* A body that left the hold this grab: it keeps passing through the claw
-       (the frozen prongs cannot open around it) until the grab ends, and it
-       cannot be locked again during this grab. */
-    const dropped = [];
-    function dropBody(b) {
-      if (b.data) b.data.slippedGrab = grabNo;
-      noClaw(b);
-      if (dropped.indexOf(b) < 0) dropped.push(b);
-    }
-    function releaseLocks() {
-      for (const l of locks) unlockBody(l.b);
-      for (const b of dropped) unlockBody(b);
-      locks.length = 0; dropped.length = 0;
-      thawProngs();
-    }
-    /* A lock broke: the item falls through the claw. With nothing left held
-       the prongs thaw and twitch open so the fall reads. */
-    function breakLock(i) {
-      const b = locks[i].b;
-      locks.splice(i, 1);
-      dropBody(b);
-      pending.push('slip');
-      if (!locks.length) { thawProngs(); slipOpenT = RIG.slipOpen; applyMotors(); }
-    }
-    /* Per substep while lifting/carrying: pull each locked item toward its
-       spot under the palm with a capped force; drop the lock when it sags. */
-    function checkLocks(h, jit) {
-      const w = RIG.lockOmega, w2 = w * w, c = 2 * w;
-      for (let i = locks.length - 1; i >= 0; i--) {
-        const l = locks[i], b = l.b;
-        if (b.type !== 'dynamic' || W.bodies.indexOf(b) < 0) { unlockBody(b); locks.splice(i, 1); if (!locks.length) thawProngs(); continue; }
-        // Slips cluster where the ride jerks: the lift and the first half
-        // second of carriage travel, over the bin. Over the chute they hardly matter.
-        const jerk = R.phase === 'lifting' || (R.phase === 'carrying' && phaseT < 0.5) ? 1 : RIG.slipLate;
-        if (l.hazard > 0 && !(R.phase === 'lifting' && phaseT < RIG.lockGrace) && rand() < l.hazard * jerk * h) {
-          dbg.broke++; dbg.lastPhase = R.phase; dbg.lastT = phaseT;
-          breakLock(i); continue;
-        }
-        const tx = palm.x + (l.lx * palm.c - l.ly * palm.s), ty = palm.y + (l.lx * palm.s + l.ly * palm.c);
-        const ex = tx - b.x, ey = ty - b.y;
-        const dist = Math.hypot(ex, ey);
-        if (dist > RIG.lockBreakDist && !(R.phase === 'lifting' && phaseT < RIG.lockGrace)) {
-          dbg.broke++; dbg.lastF = dist; dbg.lastCap = l.cap; dbg.lastPhase = R.phase; dbg.lastT = phaseT;
-          if (dbg.trace) {
-            const cts = [];
-            for (const m of W.manifolds.values()) {
-              if (m.stamp !== W.stamp || m.n === 0 || (m.a !== b && m.b !== b)) continue;
-              const o = m.a === b ? m.b : m.a;
-              cts.push((o.data && o.data.inst) ? 'item' : (o.data && (o.data.wall || o.data.claw)) || o.group);
-            }
-            dbg.breaks.push({ phase: R.phase, t: +phaseT.toFixed(2), dist: +dist.toFixed(1), ex: +ex.toFixed(1), ey: +ey.toFixed(1), palmVy: Math.round(palm.vy), palmVx: Math.round(palm.vx), sway: +R.sway.toFixed(2), cts, m: Math.round(b.m), id: b.data && b.data.inst ? b.data.inst.id : '?' });
-          }
-          breakLock(i); continue;
-        }
-        let ax = w2 * ex + c * (palm.vx - b.vx), ay = w2 * ey + c * (palm.vy - b.vy);
-        let f = Math.hypot(ax, ay) * b.m;
-        if (f > dbg.peakF) dbg.peakF = f;
-        // A pop from the pile is absorbed (the instant clamp is generous); a
-        // sustained pull beyond the grip (weight, sway, a wedged neighbour)
-        // shows up in the filtered load and breaks the hold.
-        l.load += (f - l.load) * Math.min(1, h / RIG.lockTau);
-        if (l.load > l.cap * jit && !(R.phase === 'lifting' && phaseT < RIG.lockGrace)) {
-          dbg.broke++; dbg.lastF = l.load; dbg.lastCap = l.cap; dbg.lastPhase = R.phase; dbg.lastT = phaseT;
-          breakLock(i); continue;
-        }
-        const capI = l.cap * RIG.lockPeakMul;
-        if (f > capI) { const k = capI / f; ax *= k; ay *= k; }
-        b.vx += ax * h; b.vy += ay * h;
-        b.av += RIG.lockSpin * (palm.av - b.av) * h;
-      }
-    }
-    function locked() { return locks.map(l => l.b); }
-
-    const EVENT_ON_ENTER = { dropping: 'drop', closing: 'touch', lifting: 'lift', carrying: 'carry', releasing: 'release', idle: 'home' };
-    let pending = [];
-    function setPhase(p) {
-      R.phase = p; phaseT = 0;
-      if (p === 'dropping') digStart = -1;
-      if (p === 'closing') { closeState = 'closed'; quietT = 0; clenchT = -1; pending.push('touch', 'close'); }
-      else if (EVENT_ON_ENTER[p]) pending.push(EVENT_ON_ENTER[p]);
-      if (p === 'lifting') engageLocks();
-      if (p === 'releasing' || p === 'idle' || p === 'dropping') releaseLocks();
-      if (p === 'releasing') { closeState = 'open'; }
-      if (p === 'lifting') liftV = 0;
-      if (p === 'carrying') { carryCalm = 0; arrivedT = 0; }
-      prongWalls(p);
-      applyMotors();
-    }
-
-    /* Advance the phase machine and set the kinematic velocities for this frame. */
-    function update(dt) {
-      if (!(dt > 0)) dt = 1 / 60;
-      const sp = cfg.speed;
-      phaseT += dt;
-      if (slipOpenT > 0) { slipOpenT -= dt; if (slipOpenT <= 0) { slipOpenT = 0; applyMotors(); } }
-      // Phase logic first (uses last step's contacts).
-      switch (R.phase) {
-        case 'idle':
-          if (Math.abs(carX - R.targetX) > 1.5) R.phase = 'moving';
-          break;
-        case 'moving':
-          if (Math.abs(carX - R.targetX) <= 1.5 && Math.abs(carV) < 6) R.phase = 'idle';
-          break;
-        case 'dropping': {
-          const floorLimit = ch - (geo.reach + RIG.floorClear);
-          let v = RIG.dropSpeed * sp;
-          const top = pileTopBelow();
-          const tipY = palm.y + geo.reach;
-          if (top - tipY < RIG.slowZone) v *= RIG.slowMul;
-          R.cableLen += v * dt;
-          // A prong brushing an item is not a landing yet: keep digging so the
-          // hooks slide down around the target instead of closing in mid-air
-          // above a neighbour. The dig ends when the palm itself lands, when
-          // the prongs have sunk RIG.dig px past the first touch, or at the floor.
-          let touched = false, stop = false;
-          if (phaseT > 0.05) {
-            for (const p of R.bodies.prongs) if (touching(p, landing)) { touched = true; break; }
-            if (!touched) for (const p of R.bodies.tips) if (touching(p, landing)) { touched = true; break; }
-            if (touching(palm, notClaw)) stop = true;
-          }
-          if (touched && digStart < 0) digStart = R.cableLen;
-          if (digStart >= 0 && R.cableLen - digStart >= RIG.dig) stop = true;
-          if (R.cableLen >= floorLimit - railY) { R.cableLen = floorLimit - railY; stop = true; }
-          if (stop || phaseT > RIG.maxDrop) setPhase('closing');
-          break;
-        }
-        case 'closing': {
-          let quiet = true;
-          for (const p of R.bodies.prongs) if (Math.abs(p.av - palm.av) > RIG.quietAV) quiet = false;
-          quietT = quiet ? quietT + dt : 0;
-          // The clench: once the prongs have stopped (or closeMax is up) the
-          // claw visibly holds its squeeze for settleT before the lift.
-          if (clenchT < 0 && ((phaseT >= RIG.closeMin && quietT >= RIG.quietT) || phaseT >= RIG.closeMax)) clenchT = phaseT;
-          if (clenchT >= 0 && phaseT >= clenchT + RIG.settleT) setPhase('lifting');
-          break;
-        }
-        case 'lifting': {
-          // Ease out at the top: a dead stop from full speed is a 13 g jerk
-          // on the lock, which is what used to shake heavy items loose.
-          const remain = Math.max(0, R.cableLen - RIG.minCable);
-          const brake = Math.sqrt(2 * RIG.liftAccel * remain) + 20;
-          liftV = Math.min(liftV + RIG.liftAccel * dt, RIG.liftSpeed * sp, brake);
-          R.cableLen -= liftV * dt;
-          if (R.cableLen <= RIG.minCable + 0.5 || phaseT > RIG.maxLift) { R.cableLen = Math.max(R.cableLen, RIG.minCable); setPhase('carrying'); }
-          break;
-        }
-        case 'carrying': {
-          carTarget = carryX();
-          const arrived = Math.abs(carX - carTarget) < 2 && Math.abs(carV) < 8;
-          arrivedT = arrived ? arrivedT + dt : 0;
-          carryCalm = arrived && Math.abs(R.swayX) < 4 && Math.abs(R.swayVel) < 30 ? carryCalm + dt : 0;
-          if (carryCalm >= 0.1 || arrivedT > 1.0 || phaseT > RIG.maxCarry) setPhase('releasing');
-          break;
-        }
-        case 'releasing':
-          carTarget = carryX();
-          if (phaseT >= RIG.releaseT) setPhase('returning');
-          break;
-        case 'returning': {
-          carTarget = homeX;
-          if ((Math.abs(carX - homeX) < 2 && Math.abs(carV) < 8) || phaseT > RIG.maxReturn) {
-            R.targetX = homeX; forceOpen = false; closeState = 'open';
-            setPhase('idle');
-          }
-          break;
-        }
-      }
-      if (R.phase === 'idle' || R.phase === 'moving' || R.phase === 'dropping' || R.phase === 'closing' || R.phase === 'lifting') carTarget = R.targetX;
-      // Carriage: accelerate toward the target, brake late so it overshoots a touch.
-      const vmax = RIG.carSpeed * sp, acc = RIG.carAccel * sp;
-      const d = carTarget - carX;
-      const lockCar = R.phase === 'dropping' || R.phase === 'closing';
-      let want = lockCar ? 0 : Math.sign(d) * Math.min(vmax, Math.sqrt(2 * acc * RIG.brake * Math.abs(d)));
-      if (Math.abs(d) < 0.5 && !lockCar) want = 0;
-      const prevV = carV;
-      if (carV < want) carV = Math.min(carV + acc * dt, want);
-      else if (carV > want) carV = Math.max(carV - acc * dt, want);
-      carX += carV * dt;
-      if (!lockCar && Math.abs(carTarget - carX) < 0.6 && Math.abs(carV) < 20) { carX = carTarget; carV = 0; }
-      const lim = (R.phase === 'carrying' || R.phase === 'releasing' || R.phase === 'returning') ? carryLim() : carLim();
-      if (carX < lim) { carX = lim; carV = 0; } else if (carX > cw - lim) { carX = cw - lim; carV = 0; }
-      const carAcc = (carV - prevV) / dt;
-      // Pendulum sway, tracked as the palm's horizontal offset (px) so a
-      // lengthening cable keeps the swing's displacement rather than its angle.
-      const Lc = Math.max(R.cableLen, 40), w2 = Math.abs(W.gravity.y) / Lc;
-      const zeta = RIG.swayZeta + RIG.swayShortDamp * Math.max(0, 1 - R.cableLen / 80);
-      const swayAcc = -w2 * R.swayX - 2 * zeta * Math.sqrt(w2) * R.swayVel - carAcc;
-      R.swayVel += swayAcc * dt;
-      R.swayX += R.swayVel * dt;
-      const maxX = Math.sin(RIG.swayMax) * Lc;
-      if (R.swayX > maxX) { R.swayX = maxX; if (R.swayVel > 0) R.swayVel = 0; }
-      else if (R.swayX < -maxX) { R.swayX = -maxX; if (R.swayVel < 0) R.swayVel = 0; }
-      R.sway = Math.asin(R.swayX / Lc);
-      // Kinematic targets for this frame.
-      const px = carX + Math.sin(R.sway) * R.cableLen;
-      const py = railY + Math.cos(R.sway) * R.cableLen;
-      R.x = px; R.y = py; R.cableTop.x = carX; R.cableTop.y = railY;
-      carriage.vx = (carX - carriage.x) / dt; carriage.vy = (railY - carriage.y) / dt; carriage.av = 0;
-      palm.vx = (px - palm.x) / dt; palm.vy = (py - palm.y) / dt;
-      palm.av = (R.sway * RIG.tiltMul - palm.a) / dt;
-      if (R.mid) updateGhost();
-      const ev = pending; pending = [];
-      return ev;
-    }
-
-    /* How far the locked load sticks out sideways from the palm centre (px),
-       so the carriage never presses a held item into a wall. */
-    function loadReach() {
-      if (!locks.length) return 0;
-      let r = 0;
-      for (const l of locks) {
-        const hw = (l.b.box.x1 - l.b.box.x0) / 2;
-        r = Math.max(r, Math.abs(l.lx) + hw + 2);
-      }
-      return r;
-    }
-    /* Carriage target over the chute: centres the held item, not the palm,
-       so an item gripped off-centre still drops inside the column. */
-    function carryX() {
-      if (!locks.length) return chuteX;
-      let off = 0;
-      for (const l of locks) off += l.lx;
-      off /= locks.length;
-      return clamp(chuteX - off, carryLim(), cw - carryLim());
-    }
-
-    /* Pose the ghost third prong from the side prongs' mean closedness. */
-    function updateGhost() {
-      let frac = 0, n = 0;
-      for (const j of R.joints) {
-        if (j.isWeld || j.isMid) continue;
-        const outward = j.dir * j.angle();
-        frac += (outward - geo.open) / (geo.closed - geo.open); n++;
-      }
-      frac = n ? Math.max(0, Math.min(1, frac / n)) : 0;
-      const m = R.mid, a = palm.a + m.dir * (m.open + (m.closed - m.open) * frac);
-      setPose(m.b, palm.x, palm.y, a);
-    }
-
-    build();
+    refresh();
+    K.tx = clampX(homeX); K.x = K.tx;
+    W.addHook(plan); W.addPost(move);
+    buildSegs(); mirror();
     return R;
   }
 
-  return { box, body, world, revolute, cabinet, clawRig, setPose, sync: syncBody, RIG, H };
+  return { box, body, world, cabinet, clawRig, setPose, sync, partSpec, RIG, PH, SHAPE, PRONG, PHI_OPEN, PHI_CLOSED, H };
 })();

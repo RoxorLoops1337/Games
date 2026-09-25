@@ -1399,117 +1399,104 @@ const RENDER = (() => {
     ctx.closePath();
     return true;
   }
-  const tipTmp = { x: 0, y: 0 };
-  function chromeBody(ctx, b, ox, oy, r) {
-    tone(ctx, q => bodyPath(q, b, ox, oy), CHROME, ox + b.x, oy + b.y, r, { dark: -0.45 });
-  }
-  // A claw body from its PNG: palm/carriage fit the body width, a prong fits
-  // its length from the hinge (tip down); each keeps the picture's aspect.
-  function clawPart(ctx, b, ox, oy, r, img) {
-    const vs = b.shape && b.shape.verts;
-    if (!img || !vs || !vs.length) { chromeBody(ctx, b, ox, oy, r); return; }
-    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    for (const v of vs) { if (v.x < x0) x0 = v.x; if (v.x > x1) x1 = v.x; if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y; }
-    const bw = x1 - x0, bh = y1 - y0, mx = (x0 + x1) / 2;
-    ctx.save(); ctx.translate(ox + b.x, oy + b.y); ctx.rotate(b.a || 0);
-    if (bh > bw) { const dw = bh * imW(img) / imH(img); blit(ctx, img, mx - dw / 2, y0, dw, bh); }
-    else { const dh = bw * imH(img) / imW(img); blit(ctx, img, x0, (y0 + y1) / 2 - dh / 2, bw, dh); }
-    ctx.restore();
-  }
-  // Local point of a body in world space (for tips, knees and pads).
-  const ptTmp = { x: 0, y: 0 };
-  function localPt(b, ox, oy, lx, ly, out) {
-    const ca = Math.cos(b.a || 0), sa = Math.sin(b.a || 0);
-    out.x = ox + b.x + lx * ca - ly * sa; out.y = oy + b.y + lx * sa + ly * ca;
-    return out;
-  }
-  // Far end of a rod body along its local +y (the prong tip).
-  function rodLen(b) {
-    const vs = b.shape && b.shape.verts; if (!vs) return 0;
-    let m = 0; for (const v of vs) if (v.y > m) m = v.y;
-    return m;
-  }
-  /* One finger: the upper rod plus its hooked tip segment, outlined as a
-     single shape, with a rivet at the knee and a pad (rubber or chrome) at
-     the very end. tip may be null (a ghost or a plain prong). */
-  function finger(ctx, upper, tip, ox, oy, cfg, prongImg, ghost) {
-    if (prongImg && !ghost) { clawPart(ctx, upper, ox, oy, 22, prongImg); if (tip) clawPart(ctx, tip, ox, oy, 12, prongImg); return; }
-    const col = ghost ? '#8e98a8' : CHROME;
-    // ink outline around both segments so the knee does not show a seam
-    ctx.beginPath(); bodyPath(ctx, upper, ox, oy); if (tip) bodyPath(ctx, tip, ox, oy);
-    S(ctx, INK, OL * 2.2); ctx.lineJoin = 'round'; ctx.stroke();
-    tone(ctx, q => bodyPath(q, upper, ox, oy), col, ox + upper.x, oy + upper.y, 22, ghost ? { dark: -0.5, spec: false, ol: 0 } : { dark: -0.45, ol: 0 });
-    if (tip) {
-      tone(ctx, q => bodyPath(q, tip, ox, oy), col, ox + tip.x, oy + tip.y, 12, { dark: -0.45, ol: 0, spec: false });
-      // knee rivet
-      tone(ctx, q => circ(q, ox + tip.x, oy + tip.y, 3.2), '#8e98a8', ox + tip.x, oy + tip.y, 3.2, { dark: -0.4, ol: 1.5 });
+  /* One prong of the Claw Crawl rig: a chrome capsule chain (ink outline
+     under a chrome stroke) with rivets at the knuckles and a pad at the tip:
+     rubber (cfg.rubber) or a chrome glint. A ghost prong (the drawn-only
+     third finger) is flat grey with no pad. pts are cabinet points. */
+  function prongChain(ctx, pts, s, ox, oy, o) {
+    if (!pts || pts.length < 2) return;
+    const w = Math.max(3, 9 * s);
+    const path = () => { ctx.moveTo(ox + pts[0].x, oy + pts[0].y); for (let i = 1; i < pts.length; i++) ctx.lineTo(ox + pts[i].x, oy + pts[i].y); };
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); path(); S(ctx, INK, w + OL * 1.6); ctx.stroke();
+    ctx.beginPath(); path(); S(ctx, o.ghost ? '#8e98a8' : CHROME, w); ctx.stroke();
+    if (o.ghost) return;
+    // a darker seam down the middle reads as the bevel of a bent steel rod
+    ctx.beginPath(); path(); S(ctx, shade(CHROME, -0.35), Math.max(1, w * 0.28)); ctx.stroke();
+    for (let i = 1; i < pts.length - 1; i++) {
+      const px = ox + pts[i].x, py = oy + pts[i].y, rr = Math.max(1.6, w * 0.26);
+      tone(ctx, q => circ(q, px, py, rr), '#8e98a8', px, py, rr, { dark: -0.4, ol: 1.2, spec: false });
     }
-    // the tip pad
-    const end = tip || upper, L = rodLen(end);
-    if (L > 0) {
-      const e = localPt(end, ox, oy, 0, L - 2, ptTmp);
-      if (cfg.rubber && !ghost) {
-        const k = localPt(end, ox, oy, 0, L - 7, tipTmp);
-        ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(e.x, e.y);
-        S(ctx, INK, 9); ctx.lineCap = 'round'; ctx.stroke(); S(ctx, '#ff5a4a', 5.5); ctx.stroke();
-      } else if (!ghost) { F(ctx, '#ffffff'); ctx.beginPath(); ctx.arc(e.x, e.y, 1.6, 0, TAU); ctx.fill(); }
+    const a = pts[pts.length - 2], b = pts[pts.length - 1];
+    if (o.rubber) {
+      const kx = ox + a.x + (b.x - a.x) * 0.3, ky = oy + a.y + (b.y - a.y) * 0.3;
+      ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(ox + b.x, oy + b.y);
+      S(ctx, INK, w + 1.5); ctx.stroke(); S(ctx, '#ff5a4a', Math.max(1.5, w - 2)); ctx.stroke();
+    } else {
+      F(ctx, '#ffffff'); ctx.beginPath(); ctx.arc(ox + b.x - w * 0.15, oy + b.y - w * 0.15, Math.max(1, w * 0.18), 0, TAU); ctx.fill();
     }
   }
+  /* The claw. rig.bodies = {hub:{x,y,r}, prongs:[[pts],[pts]], ghost:[pts]|null}
+     in cabinet coordinates; rig.cableTop, rig.sway, rig.phase and rig.cfg
+     (rubber / magnet / prongs) come from PHYS.clawRig. cfg may carry the same
+     flags (cfg.claw or cfg itself) for a rig without a cfg. */
   function claw(ctx, rig, x, y, cfg) {
     ctx.save();
     try {
       rig = rig || {}; cfg = cfg || {};
       const B = rig.bodies || {}, ox = x || 0, oy = y || 0;
+      const flags = rig.cfg || cfg.claw || cfg;
+      const hub = B.hub, prongs = B.prongs || [], ghost = B.ghost;
+      const s = rig.geo && rig.geo.s ? rig.geo.s : (hub && hub.r ? hub.r / 13 : 0.8);
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      const palm = B.palm, car = B.carriage, prongs = B.prongs || [], tips = B.tips || [];
-      const top = rig.cableTop || (car ? car : { x: palm ? palm.x : 0, y: 0 });
-      // cable
-      if (palm) {
-        ctx.beginPath(); ctx.moveTo(ox + top.x, oy + top.y); ctx.lineTo(ox + palm.x, oy + palm.y);
+      const top = rig.cableTop || { x: hub ? hub.x : 0, y: 0 };
+      // cable (the top end sways, the hub does not)
+      if (hub) {
+        ctx.beginPath(); ctx.moveTo(ox + top.x, oy + top.y); ctx.lineTo(ox + hub.x, oy + hub.y - hub.r * 0.6);
         S(ctx, INK, 5); ctx.stroke(); S(ctx, '#8e98a8', 2.2); ctx.stroke();
       }
       // carriage on the rail
-      const carImg = artImg('claw', 'carriage'), palmImg = artImg('claw', 'palm'), prongImg = artImg('claw', 'prong');
-      if (car && carImg) clawPart(ctx, car, ox, oy, 18, carImg);
-      else if (car) {
-        chromeBody(ctx, car, ox, oy, 18);
-        F(ctx, INK); ctx.beginPath(); circ(ctx, ox + car.x - 12, oy + car.y + 6, 4.5); circ(ctx, ox + car.x + 12, oy + car.y + 6, 4.5); ctx.fill();
-        F(ctx, '#ff5a4a'); ctx.beginPath(); ctx.arc(ox + car.x, oy + car.y - 2, 3, 0, TAU); ctx.fill();
+      const carImg = artImg('claw', 'carriage');
+      const cw = 30 + 6 * s, chh = 12;
+      if (carImg) blit(ctx, carImg, ox + top.x - cw / 2, oy + top.y - chh / 2, cw, chh);
+      else {
+        ctx.beginPath(); rrect(ctx, ox + top.x - cw / 2, oy + top.y - chh / 2, cw, chh, 4);
+        F(ctx, CHROME); ctx.fill(); S(ctx, INK, OL); ctx.stroke();
+        F(ctx, INK); ctx.beginPath(); circ(ctx, ox + top.x - cw * 0.3, oy + top.y + 2, 3); circ(ctx, ox + top.x + cw * 0.3, oy + top.y + 2, 3); ctx.fill();
+        F(ctx, '#ff5a4a'); ctx.beginPath(); ctx.arc(ox + top.x, oy + top.y - 1, 2.4, 0, TAU); ctx.fill();
       }
       const ph = rig.phase;
-      if (cfg.magnet && palm) {
+      if (flags.magnet && hub) {
         const active = ph === 'dropping' || ph === 'closing' || ph === 'lifting';
-        glow(ctx, ox + palm.x, oy + palm.y + 8, active ? 60 : 34, PAL.cyan, active ? 0.9 : 0.4);
+        glow(ctx, ox + hub.x, oy + hub.y + 6 * s, active ? 60 : 34, PAL.cyan, active ? 0.9 : 0.4);
       }
-      // Ghost prongs first (the drawn-only third finger sits behind the pair),
-      // then each side prong with its hooked tip (tips[i] pairs with prongs[i]).
-      for (let i = 0; i < prongs.length; i++) { const pr = prongs[i]; if (pr && pr.ghost) finger(ctx, pr, null, ox, oy, cfg, prongImg, true); }
-      for (let i = 0; i < prongs.length; i++) {
-        const pr = prongs[i]; if (!pr || pr.ghost) continue;
-        finger(ctx, pr, tips[i] || null, ox, oy, cfg, prongImg, false);
-      }
-      if (palm && palmImg) clawPart(ctx, palm, ox, oy, 20, palmImg);
-      else if (palm) {
-        chromeBody(ctx, palm, ox, oy, 20);
-        tone(ctx, q => circ(q, ox + palm.x, oy + palm.y, 5), '#8e98a8', ox + palm.x, oy + palm.y, 5, { dark: -0.4, ol: 2 });
-        ctx.beginPath(); ctx.moveTo(ox + palm.x - 2.5, oy + palm.y); ctx.lineTo(ox + palm.x + 2.5, oy + palm.y); S(ctx, INK, 1.5); ctx.stroke();
-      }
-      if (palm) {
-        if (cfg.magnet) { F(ctx, PAL.cyan); ctx.beginPath(); ctx.arc(ox + palm.x, oy + palm.y + 9, 3, 0, TAU); ctx.fill(); }
+      // the ghost third finger sits behind the pair
+      if (ghost) prongChain(ctx, ghost, s, ox, oy, { ghost: true });
+      for (const p of prongs) prongChain(ctx, p, s, ox, oy, { rubber: !!flags.rubber });
+      // the hub
+      if (hub) {
+        const hx = ox + hub.x, hy = oy + hub.y, r = Math.max(4, hub.r);
+        tone(ctx, q => circ(q, hx, hy, r), CHROME, hx, hy, r, { dark: -0.45 });
+        tone(ctx, q => circ(q, hx, hy, r * 0.36), flags.magnet ? PAL.cyan : '#8e98a8', hx, hy, r * 0.36, { dark: -0.4, ol: 1.5, spec: false });
+        ctx.beginPath(); ctx.moveTo(hx - r * 0.18, hy); ctx.lineTo(hx + r * 0.18, hy); S(ctx, INK, 1.2); ctx.stroke();
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
+  /* Debug overlay: item parts as circles, wall and claw segments as capsules,
+     sleeping bodies dimmed, contact normals in red. Bodies with a plain shape
+     (no parts) fall back to bodyPath. */
   function bodyDebug(ctx, W) {
     ctx.save();
     try {
       const bodies = (W && W.bodies) || [];
       ctx.lineWidth = 1;
+      const capsule = (sg, col) => {
+        ctx.beginPath(); ctx.moveTo(sg.ax, sg.ay); ctx.lineTo(sg.bx, sg.by);
+        ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, sg.r * 2); ctx.strokeStyle = col; ctx.stroke(); ctx.lineWidth = 1;
+      };
+      for (const sg of (W && W.segs) || []) capsule(sg, 'rgba(46,230,214,0.35)');
+      for (const sg of (W && W.csegs) || []) capsule(sg, 'rgba(255,201,77,0.5)');
       for (const b of bodies) {
-        ctx.beginPath();
-        if (!bodyPath(ctx, b, 0, 0)) continue;
-        ctx.strokeStyle = b.type === 'static' ? '#2ee6d6' : b.type === 'kinematic' ? '#ffc94d' : b.sensor ? '#a6ff5e' : '#ff2e88';
-        ctx.stroke();
+        ctx.strokeStyle = b.type === 'static' ? '#2ee6d6' : b.type === 'kinematic' ? '#ffc94d' : b.sl ? '#7a6f9a' : '#ff2e88';
+        if (b.parts && b.px && b.py) {
+          for (let i = 0; i < b.parts.length; i++) { ctx.beginPath(); ctx.arc(b.px[i], b.py[i], b.parts[i].r, 0, TAU); ctx.stroke(); }
+          ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + Math.cos(b.a || 0) * 8, b.y + Math.sin(b.a || 0) * 8); ctx.stroke();
+        } else {
+          ctx.beginPath();
+          if (!bodyPath(ctx, b, 0, 0)) continue;
+          ctx.stroke();
+        }
         if (W.contactsOf) {
           const cs = W.contactsOf(b) || [];
           for (const c of cs) {
@@ -1615,13 +1602,23 @@ const RENDER = (() => {
       const flat = st.orient === 'v';   // portrait map: flat-top hexes, upright icons
       ctx.translate(x || 0, y || 0);
       ctx.lineJoin = 'round';
+      // Terrain mode (st.fill set): the ground was painted by terrainHex, so
+      // the fog is a translucent ink wash and lit tiles get a tinted plate
+      // instead of a solid type colour. Without it the old solid look stands.
+      const terr = st.fill ? (tile.terrain || 'land') : null;
+      const ford = terr === 'shallow';
+      if (terr && st.mask) coastEdges(ctx, r, st.mask, flat, biomePal(st.biome));
       const hidden = !tile.revealed && type !== 'boss';
       if (hidden) {
-        ctx.beginPath(); brushedHex(ctx, r * 0.96, tile.q, tile.r, flat);
-        F(ctx, FOG); ctx.fill(); S(ctx, rgba(INK, 0.9), 3); ctx.stroke();
+        ctx.beginPath(); brushedHex(ctx, r * (terr ? 0.99 : 0.96), tile.q, tile.r, flat);
+        if (terr) { F(ctx, rgba(FOG, ford ? 0.3 : 0.5)); ctx.fill(); S(ctx, rgba(INK, 0.6), 2); ctx.stroke(); }
+        else { F(ctx, FOG); ctx.fill(); S(ctx, rgba(INK, 0.9), 3); ctx.stroke(); }
         ctx.beginPath(); brushedHex(ctx, r * 0.8, tile.r, tile.q, flat);
         S(ctx, rgba('#6a5a8a', 0.18), 5); ctx.stroke();
-        if (tile.known && type !== 'empty') {
+        if (ford) {
+          // a hidden ford still shows its price
+          txt(ctx, '2', 0, 1, r * 0.6, rgba('#f4ecd6', 0.5), true);
+        } else if (tile.known && type !== 'empty') {
           // Landmark: the icon as a dim ink sketch under a fog wash, with a
           // dashed rim, so it can be planned for before it is lit.
           ctx.save();
@@ -1634,19 +1631,29 @@ const RENDER = (() => {
           ctx.restore();
           ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.86, flat);
           ctx.setLineDash([3, 4]); S(ctx, rgba('#f4ecd6', 0.4), 1.5); ctx.stroke(); ctx.setLineDash([]);
-        } else txt(ctx, '?', 0, 1, r * 0.8, rgba('#f4ecd6', 0.16), true);
+        } else txt(ctx, '?', 0, 1, r * (terr ? 0.55 : 0.8), rgba(terr ? INK : '#f4ecd6', terr ? 0.22 : 0.16), true);
       } else {
-        const base = tile.visited ? '#3a3648' : (TILE_COL[type] || TILE_COL.empty);
-        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
-        F(ctx, base); ctx.fill();
-        ctx.save(); ctx.clip();
-        F(ctx, rgba('#ffffff', 0.08)); ctx.fillRect(-r, -r, r * 2, r * 0.9);
-        ctx.restore();
-        S(ctx, INK, 3); ctx.stroke();
+        if (terr) {
+          ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.97, flat);
+          if (tile.visited) { F(ctx, rgba(FOG, 0.3)); ctx.fill(); }
+          S(ctx, rgba(INK, 0.8), 2); ctx.stroke();
+          if (type !== 'empty' && !ford) {
+            ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.74, flat);
+            F(ctx, rgba(TILE_COL[type] || TILE_COL.empty, tile.visited ? 0.4 : 0.75)); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+          }
+        } else {
+          const base = tile.visited ? '#3a3648' : (TILE_COL[type] || TILE_COL.empty);
+          ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
+          F(ctx, base); ctx.fill();
+          ctx.save(); ctx.clip();
+          F(ctx, rgba('#ffffff', 0.08)); ctx.fillRect(-r, -r, r * 2, r * 0.9);
+          ctx.restore();
+          S(ctx, INK, 3); ctx.stroke();
+        }
         if (tile.visited) ctx.globalAlpha = 0.55;
-        const himg = artImg('hex', type);
+        const himg = ford ? null : artImg('hex', type);
         if (himg) blitContain(ctx, himg, 0, 0, r * 1.3, r * 1.3);
-        else hexIcon(ctx, type, r, t);
+        else if (!ford && !(terr && type === 'empty')) hexIcon(ctx, type, r, t);
         ctx.globalAlpha = 1;
         if (tile.visited && !st.current) {
           ctx.beginPath(); ctx.moveTo(r * 0.25, r * 0.35); ctx.lineTo(r * 0.45, r * 0.55); ctx.lineTo(r * 0.8, r * 0.15);
@@ -1766,6 +1773,149 @@ const RENDER = (() => {
       // brushed border
       ctx.beginPath(); ctx.rect(6, 6, w - 12, h - 12); S(ctx, rgba('#f4ecd6', 0.08), 4); ctx.stroke();
     } catch (e) { /* */ }
+    ctx.restore();
+  }
+
+  /* ========================================================= TERRAIN */
+  // One palette per biome (act): land runs low -> high with elevation, water
+  // sea -> deep with depth. The foundry's "water" is lava: same rules, hot look.
+  const BIOME_PAL = {
+    cellar: { low: '#75775f', high: '#cdbb8e', sea: '#173142', deep: '#0b1824', shallow: '#3b7d86', foam: '#9fd8d8', coast: '#15111f', hatch: '#3f3a2e', ripple: '#2e5b70', name: 'damp stone' },
+    foundry: { low: '#635349', high: '#b09a7a', sea: '#a02a0c', deep: '#4e0e05', shallow: '#4a2318', foam: '#ffa03a', coast: '#1c0d08', hatch: '#2b2220', ripple: '#ff6a2a', lava: true, name: 'ash and slag' },
+    vault: { low: '#9bb0c7', high: '#f1f5fa', sea: '#163a68', deep: '#08192f', shallow: '#5fa8cf', foam: '#d8f1fb', coast: '#22334f', hatch: '#6c8098', ripple: '#3c6f9c', name: 'ice and open water' },
+  };
+  function biomePal(biome) { return BIOME_PAL[biome] || BIOME_PAL.cellar; }
+  const mixCache = new Map();
+  // Colour lerp a -> b by t, quantised to 24 steps and cached (never allocates in steady state).
+  function mix(a, b, t) {
+    const k = Math.round(U.clamp(t == null ? 0.5 : t, 0, 1) * 24);
+    const ck = a + '|' + b + '|' + k;
+    let s = mixCache.get(ck);
+    if (s) return s;
+    const A = rgb(a), B = rgb(b), f = k / 24;
+    s = 'rgb(' + ((A[0] + (B[0] - A[0]) * f) | 0) + ',' + ((A[1] + (B[1] - A[1]) * f) | 0) + ',' + ((A[2] + (B[2] - A[2]) * f) | 0) + ')';
+    mixCache.set(ck, s);
+    return s;
+  }
+  // The ground colour of a tile: precompute it once per tile, it is cached anyway.
+  function terrainFill(biome, terrain, elev) {
+    const p = biomePal(biome);
+    if (terrain === 'sea') return mix(p.sea, p.deep, elev);
+    if (terrain === 'shallow') return p.shallow;
+    return mix(p.low, p.high, Math.pow(elev == null ? 0.5 : elev, 1.15));
+  }
+  // The ground under a hex: water with drifting ripples (lava with a hot
+  // core), a ford with stepping stones, or land with hill hatching on the
+  // high ground and a faint grid line. st: { fill, seed, biome, orient, t }.
+  function terrainHex(ctx, x, y, size, tile, st) {
+    ctx.save();
+    try {
+      tile = tile || {}; st = st || {};
+      const r = size || 30, t = st.t || 0, flat = st.orient === 'v', p = biomePal(st.biome), seed = st.seed || 0;
+      const terrain = tile.terrain || 'land';
+      ctx.translate(x || 0, y || 0);
+      ctx.lineCap = 'round';
+      ctx.beginPath(); hexPath(ctx, 0, 0, r * 1.02, flat);
+      F(ctx, st.fill || terrainFill(st.biome, terrain, tile.elev)); ctx.fill();
+      if (terrain === 'sea') {
+        // ripples on two tiles in five, a lone wave or a pair, drifting slowly
+        if ((seed % 5) < 2) {
+          const ox = (((seed >> 2) & 15) / 15 - 0.5) * r * 0.7, oy = (((seed >> 6) & 15) / 15 - 0.5) * r * 0.6;
+          const drift = Math.sin(t * 0.6 + (seed & 31)) * r * 0.05;
+          const a0 = Math.PI * (1.1 + ((seed >> 10) & 3) * 0.03);
+          S(ctx, rgba(p.ripple, p.lava ? 0.8 : 0.55), Math.max(1, r * 0.04));
+          ctx.beginPath(); ctx.arc(ox + drift, oy, r * 0.22, a0, a0 + Math.PI * 0.72); ctx.stroke();
+          if (seed & 64) { ctx.beginPath(); ctx.arc(ox - r * 0.24 + drift, oy + r * 0.3, r * 0.15, a0, a0 + Math.PI * 0.72); ctx.stroke(); }
+        }
+        if (p.lava && (seed & 3) !== 0) {
+          F(ctx, rgba(p.foam, 0.07 + 0.05 * Math.sin(t * 1.4 + (seed & 7))));
+          ctx.beginPath(); circ(ctx, 0, 0, r * (0.3 + ((seed >> 4) & 3) * 0.08)); ctx.fill();
+        }
+        S(ctx, rgba(p.deep, 0.45), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
+      } else if (terrain === 'shallow') {
+        // a ford: a pale wave and three stepping stones
+        S(ctx, rgba(p.foam, 0.55), Math.max(1, r * 0.045));
+        ctx.beginPath(); ctx.moveTo(-r * 0.5, r * 0.4); ctx.quadraticCurveTo(-r * 0.25, r * 0.25, 0, r * 0.4); ctx.quadraticCurveTo(r * 0.25, r * 0.55, r * 0.5, r * 0.4); ctx.stroke();
+        F(ctx, p.high); S(ctx, p.coast, Math.max(1, r * 0.04));
+        ctx.beginPath(); ell(ctx, -r * 0.3, -r * 0.12, r * 0.15, r * 0.1, 0.2); ell(ctx, r * 0.05, 0.02 * r, r * 0.13, r * 0.09, -0.3); ell(ctx, r * 0.36, -r * 0.2, r * 0.12, r * 0.08, 0.1);
+        ctx.fill(); ctx.stroke();
+        S(ctx, rgba(p.coast, 0.35), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
+      } else {
+        const e = tile.elev || 0;
+        if (e > 0.62) {
+          // hills: hatch strokes, a peak on the highest ground
+          S(ctx, rgba(p.hatch, 0.55), Math.max(1, r * 0.05));
+          ctx.beginPath();
+          for (let i = -1; i <= 1; i++) { ctx.moveTo(i * r * 0.28 - r * 0.22, r * 0.3); ctx.lineTo(i * r * 0.28 + r * 0.1, -r * 0.2); }
+          ctx.stroke();
+          if (e > 0.82) { ctx.beginPath(); ctx.moveTo(-r * 0.3, r * 0.05); ctx.lineTo(0, -r * 0.45); ctx.lineTo(r * 0.3, r * 0.05); S(ctx, rgba(p.hatch, 0.8), Math.max(1.5, r * 0.06)); ctx.stroke(); }
+        }
+        S(ctx, rgba(p.coast, 0.3), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The coastline: thick ink on every edge (bit i = edge from corner i to
+  // corner i+1, hexPath order) that faces water, plus a thin pale foam line
+  // just outside it.
+  function coastEdges(ctx, r, mask, flat, p) {
+    const off = flat ? 0 : -Math.PI / 2;
+    for (let pass = 0; pass < 2; pass++) {
+      const rr = pass ? r * 1.08 : r;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        if (!(mask & (1 << i))) continue;
+        const a0 = off + i * Math.PI / 3, a1 = off + (i + 1) * Math.PI / 3;
+        ctx.moveTo(Math.cos(a0) * rr, Math.sin(a0) * rr); ctx.lineTo(Math.cos(a1) * rr, Math.sin(a1) * rr);
+      }
+      ctx.lineCap = 'round';
+      if (pass) S(ctx, rgba(p.foam, 0.5), Math.max(1, r * 0.045)); else S(ctx, p.coast, Math.max(2.5, r * 0.095));
+      ctx.stroke();
+    }
+  }
+  // Compass rose: parchment disc, eight points, N at the top (the boss is north).
+  function mapCompass(ctx, x, y, r, t) {
+    ctx.save();
+    try {
+      r = r || 30; t = t || 0;
+      ctx.translate(x || 0, y || 0);
+      ctx.beginPath(); circ(ctx, 0, 0, r); F(ctx, rgba(PAL.paper, 0.9)); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke();
+      ctx.beginPath(); circ(ctx, 0, 0, r * 0.82); S(ctx, rgba(INK, 0.5), 1); ctx.stroke();
+      ctx.beginPath(); star(ctx, 0, 0, r * 0.5, 4, 0.3); ctx.save(); ctx.rotate(Math.PI / 4); F(ctx, rgba(INK, 0.35)); ctx.fill(); ctx.restore();
+      ctx.beginPath(); star(ctx, 0, 0, r * 0.74, 4, 0.22); F(ctx, INK); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(0, -r * 0.74); ctx.lineTo(-r * 0.16, 0); ctx.lineTo(0, r * 0.05); ctx.closePath(); F(ctx, PAL.pink); ctx.fill();
+      txt(ctx, 'N', 0, -r * 0.45, r * 0.42, PAL.paper, true);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A small parchment strip with a title and a sub line.
+  function mapHeader(ctx, x, y, w, h, title, sub, t) {
+    ctx.save();
+    try {
+      w = w || 200; h = h || 30;
+      ctx.translate(x || 0, y || 0);
+      ctx.rotate(-0.012);
+      ctx.beginPath(); rrect(ctx, 0, 0, w, h, 4); F(ctx, rgba(PAL.paper, 0.92)); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(6, h - 5); ctx.lineTo(w - 6, h - 5); S(ctx, rgba(INK, 0.25), 1); ctx.stroke();
+      txt(ctx, String(title || ''), 10, h * 0.42, Math.max(11, h * 0.42), INK, true, 'left');
+      if (sub) txt(ctx, String(sub), 10, h * 0.78, Math.max(9, h * 0.3), rgba(INK, 0.7), false, 'left');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Edge arrow toward something off screen: a pulsing pink chevron with a label.
+  function mapArrow(ctx, x, y, angle, size, t, label) {
+    ctx.save();
+    try {
+      size = size || 18; t = t || 0;
+      const k = 1 + Math.sin(t * 5) * 0.08;
+      ctx.translate(x || 0, y || 0);
+      ctx.beginPath(); circ(ctx, 0, 0, size * 1.25); F(ctx, rgba(INK, 0.75)); ctx.fill();
+      ctx.save(); ctx.rotate(angle || 0); ctx.scale(k, k);
+      ctx.beginPath(); ctx.moveTo(size, 0); ctx.lineTo(-size * 0.55, -size * 0.7); ctx.lineTo(-size * 0.2, 0); ctx.lineTo(-size * 0.55, size * 0.7); ctx.closePath();
+      F(ctx, PAL.pink); ctx.fill(); S(ctx, INK, 2.5); ctx.lineJoin = 'round'; ctx.stroke();
+      ctx.restore();
+      if (label) txt(ctx, String(label), 0, size * 2.1, Math.max(10, size * 0.7), PAL.paper, true, 'center', true);
+    } catch (e) { /* never throws */ }
     ctx.restore();
   }
 
@@ -2212,6 +2362,7 @@ const RENDER = (() => {
 
   return {
     item, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, bodyDebug, hex, mapBg, mapAxis, mapPath, bg, hpBar, statusPips, intent,
+    terrainHex, terrainFill, biomePal, mapCompass, mapHeader, mapArrow, BIOME_PAL,
     portrait, relicIcon, title, fx, flames,
     ITEM_KEYS, ENEMY_KEYS, ITEM_DEFAULT, PAL, shade, rgba, glowSprite,
   };
