@@ -13,7 +13,9 @@ const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const colOf = (q, r) => q + Math.floor(r / 2);
 const adj = (a, b) => DIRS.some(([dq, dr]) => a.q + dq === b.q && a.r + dr === b.r);
 const tilesOf = (M) => Object.values(M.tiles);
-const gen = (seed, extra) => MAP.generate(Object.assign({ act: 1, rng: U.rng(seed), cols: 12, rows: 7 }, extra || {}));
+const gen = (seed, extra) => MAP.generate(Object.assign({ act: 1, rng: U.rng(seed), cols: 10, rows: 7 }, extra || {}));
+const SPECIAL = ['shop', 'rest', 'forge', 'elite', 'treasure', 'tower'];
+const LANDMARK = ['shop', 'rest', 'forge', 'elite', 'treasure', 'boss', 'tower'];
 const inB = (M, q, r) => r >= 0 && r < M.rows && colOf(q, r) >= 0 && colOf(q, r) < M.cols;
 const snapshot = (M) => JSON.stringify(M);
 const revealedSet = (M) => new Set(tilesOf(M).filter(t => t.revealed).map(t => MAP.key(t.q, t.r)));
@@ -41,11 +43,25 @@ function checkMap(M, label, D) {
   h.eq(n.boss, 1, label + ' one boss');
   h.eq(MAP.tileAt(M, M.start.q, M.start.r).type, 'start', label + ' start tile typed');
   h.eq(MAP.tileAt(M, M.boss.q, M.boss.r).type, 'boss', label + ' boss tile typed');
-  for (const [t, min] of Object.entries({ shop: 2, rest: 3, forge: 2, elite: 2, treasure: 2, brush: 2, ink: 4 })) {
+  for (const [t, min] of Object.entries({ shop: 3, rest: 3, forge: 2, elite: 2, treasure: 2, brush: 2, ink: 4, tower: 2 })) {
     h.ok((n[t] || 0) >= min, `${label} ${t} >= ${min} (got ${n[t] || 0})`);
   }
+  h.ok((n.tower || 0) <= 3, label + ' at most 3 towers');
   // Tiny clamped maps are mostly minimums; real sizes must stay fight heavy.
   if (tiles.length >= 45) h.ok((n.fight || 0) >= Math.floor(0.2 * tiles.length), label + ' plenty of fights');
+  // Landmarks: known exactly on the landmark types, from the start.
+  h.ok(tiles.every(t => t.known === LANDMARK.includes(t.type)), label + ' known flag exactly on landmark types');
+  h.ok(tiles.every(t => MAP.isLandmark(t) === LANDMARK.includes(t.type)), label + ' isLandmark agrees');
+  // Towers: top or bottom row, columns 3..cols-3, off the axis, never next to a special.
+  const towers = tiles.filter(t => t.type === 'tower');
+  h.ok(towers.every(t => t.r === 0 || t.r === M.rows - 1), label + ' towers on the top or bottom row');
+  h.ok(towers.every(t => colOf(t.q, t.r) >= 3 && colOf(t.q, t.r) <= M.cols - 3), label + ' towers in columns 3..cols-3');
+  h.ok(towers.every(t => t.r !== M.start.r), label + ' towers off the start-boss axis');
+  if (tiles.length >= 60) {
+    h.ok(towers.every(t => MAP.neighbors(M, t.q, t.r).every(([q, r]) => !SPECIAL.includes(M.tiles[MAP.key(q, r)].type))),
+      label + ' towers not adjacent to another special');
+  }
+  h.ok(towers.every(t => t.content.elite && t.content.tower && ['ink', 'brush', 'claw', 'gold'].includes(t.content.tower.bonus.k)), label + ' towers carry an elite flag and a bonus');
   const elites = tiles.filter(t => t.type === 'elite');
   h.ok(elites.every(e => !adj(e, M.start)), label + ' no elite next to start');
   h.ok(MAP.neighbors(M, M.boss.q, M.boss.r).every(([q, r]) => M.tiles[MAP.key(q, r)].type !== 'elite'),
@@ -82,7 +98,8 @@ h.test('shape and module hygiene', () => {
   const mine = [src, fs.readFileSync(new URL(import.meta.url), 'utf8')];
   h.ok(mine.every(s => !s.includes(String.fromCharCode(0x2014))), 'no em dashes in map.js or this suite');
   for (const fn of ['generate', 'key', 'neighbors', 'canReveal', 'reveal', 'brush', 'canMove', 'move', 'toPixel',
-    'fromPixel', 'pathExists', 'progress', 'serialize', 'deserialize', 'tileAt', 'reachable', 'revealable', 'hexCorners', 'size']) {
+    'fromPixel', 'pathExists', 'progress', 'serialize', 'deserialize', 'tileAt', 'reachable', 'revealable', 'hexCorners', 'size',
+    'isLandmark', 'pathToReveal', 'revealPath']) {
     h.eq(typeof MAP[fn], 'function', 'MAP.' + fn + ' exists');
   }
   h.eq(MAP.key(-2, 5), '-2,5', 'key format');
@@ -104,10 +121,12 @@ h.test('other sizes and clamping', () => {
   checkMap(gen(5, { cols: 16, rows: 9 }), '16x9');
   checkMap(gen(6, { cols: 9, rows: 5 }), '9x5');
   const tiny = gen(7, { cols: 2, rows: 1 });
-  h.ok(tiny.cols >= 7 && tiny.rows >= 3, 'tiny request clamps up');
+  h.ok(tiny.cols >= 9 && tiny.rows >= 3, 'tiny request clamps up');
   checkMap(tiny, 'clamped');
   const d = MAP.generate({ rng: U.rng(9) });
-  h.ok(d.cols === 12 && d.rows === 7 && d.act === 1, 'defaults 12x7 act 1');
+  h.ok(d.cols === 10 && d.rows === 7 && d.act === 1, 'defaults 10x7 act 1');
+  h.ok(MAP.DEFAULT_COLS === 10 && MAP.DEFAULT_ROWS === 7, 'DEFAULT_COLS/ROWS exported as 10x7');
+  h.eq(Object.keys(d.tiles).length, 70, 'default map has 70 tiles');
 });
 
 h.test('neighbours', () => {
@@ -302,7 +321,9 @@ h.test('hexCorners and size()', () => {
   h.eq(pts.length, 6, '6 corners');
   h.ok(pts.every(p => Math.abs(Math.hypot(p.x - 100, p.y - 50) - 20) < 1e-9), 'corners at radius size');
   h.ok(pts.some(p => Math.abs(p.y - 30) < 1e-9 && Math.abs(p.x - 100) < 1e-9), 'pointy top');
-  for (const [cols, rows] of [[12, 7], [9, 5], [16, 9]]) {
+  const mg = MAP.FIT_MARGIN;
+  h.ok(mg >= 2 && mg <= 8, 'FIT_MARGIN is a small px margin');
+  for (const [cols, rows] of [[10, 7], [9, 5], [16, 9]]) {
     const M = gen(61, { cols, rows });
     for (const [w, hh] of [[540, 600], [540, 960], [1200, 400], [320, 320]]) {
       const f = MAP.size(M, w, hh);
@@ -314,8 +335,8 @@ h.test('hexCorners and size()', () => {
         }
       }
       const tag = `${cols}x${rows} in ${w}x${hh}`;
-      h.ok(x0 >= 8 - 1e-6 && x1 <= w - 8 + 1e-6 && y0 >= 8 - 1e-6 && y1 <= hh - 8 + 1e-6, tag + ' fits with 8px margin');
-      h.ok(Math.abs(x0 - 8) < 1e-6 || Math.abs(y0 - 8) < 1e-6, tag + ' is as large as it can be');
+      h.ok(x0 >= mg - 1e-6 && x1 <= w - mg + 1e-6 && y0 >= mg - 1e-6 && y1 <= hh - mg + 1e-6, tag + ` fits with ${mg}px margin`);
+      h.ok(Math.abs(x0 - mg) < 1e-6 || Math.abs(y0 - mg) < 1e-6, tag + ' is as large as it can be');
       h.ok(Math.abs(x0 - (w - x1)) < 1e-6 && Math.abs(y0 - (hh - y1)) < 1e-6, tag + ' is centred');
     }
   }
@@ -355,9 +376,9 @@ h.test('pathExists', () => {
 h.test('progress', () => {
   const M = gen(81);
   const p = MAP.progress(M);
-  h.eq(p.total, 84, 'total = cols*rows');
+  h.eq(p.total, 70, 'total = cols*rows');
   h.eq(p.revealed, M.revealedCount, 'revealed = revealedCount');
-  h.eq(p.pct, Math.round(100 * p.revealed / 84), 'pct is a rounded percentage');
+  h.eq(p.pct, Math.round(100 * p.revealed / 70), 'pct is a rounded percentage');
   const t = MAP.revealable(M)[0];
   MAP.reveal(M, t.q, t.r);
   h.eq(MAP.progress(M).revealed, p.revealed + 1, 'progress follows reveals');
@@ -397,6 +418,184 @@ h.test('serialize / deserialize', () => {
   broken.revealedCount = 3;
   h.eq(MAP.deserialize(broken).revealedCount, M.revealedCount, 'deserialize recomputes a stale revealedCount');
   h.eq(MAP.deserialize(null), null, 'deserialize(null) is null');
+  // known flags and tower content survive the trip.
+  const tw = tilesOf(D).filter(t => t.type === 'tower');
+  h.ok(tw.length >= 2 && tw.every(t => t.known && t.content.tower && t.content.tower.bonus), 'loaded towers keep known + bonus');
+  h.ok(tilesOf(D).every(t => t.known === LANDMARK.includes(t.type)), 'loaded known flags match the landmark types');
+  // An old save (no known, tower without content) gets defaults.
+  const old = JSON.parse(json);
+  for (const k in old.tiles) { delete old.tiles[k].known; if (old.tiles[k].type === 'tower') old.tiles[k].content = {}; }
+  const O = MAP.deserialize(old);
+  h.ok(tilesOf(O).every(t => t.known === LANDMARK.includes(t.type)), 'old save: known derived from the type');
+  h.ok(tilesOf(O).filter(t => t.type === 'tower').every(t => t.content.tower && t.content.tower.bonus.k === 'ink'), 'old save: towers get a default bonus');
+});
+
+h.test('landmarks stay hidden until revealed', () => {
+  const M = gen(101);
+  const lm = tilesOf(M).filter(t => t.known && !t.revealed && t.type !== 'boss');
+  h.ok(lm.length >= 10, 'plenty of hidden landmarks (' + lm.length + ')');
+  h.ok(lm.every(t => !MAP.canMove(M, t.q, t.r)), 'known tiles are not walkable while hidden');
+  h.ok(tilesOf(M).filter(t => ['fight', 'gem', 'ink', 'event', 'brush', 'empty', 'start'].includes(t.type)).every(t => !t.known), 'fights, gems, ink, events, brushes, empties, start are unknown');
+  h.ok(MAP.isLandmark({ type: 'tower' }) && MAP.isLandmark({ type: 'boss' }) && !MAP.isLandmark({ type: 'fight' }) && !MAP.isLandmark(null), 'isLandmark by type');
+});
+
+// Hex distance in axial coordinates.
+const hexDist = (a, b) => Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.q + a.r - b.q - b.r));
+const litSet = (M) => tilesOf(M).filter(t => t.revealed && (t.type !== 'boss' || t.visited));
+
+h.test('pathToReveal: shortest, never through the boss, excludes revealed', () => {
+  for (let s = 1; s <= 40; s++) {
+    const M = gen(s * 97);
+    const lit = litSet(M);
+    let bad = 0;
+    for (const t of tilesOf(M)) {
+      const path = MAP.pathToReveal(M, t.q, t.r);
+      const adjacent = MAP.neighbors(M, t.q, t.r).some(([q, r]) => lit.some(l => l.q === q && l.r === r));
+      if (t.revealed || t.type === 'boss' || adjacent) { if (path.length) bad++; continue; }
+      if (!path.length) { bad++; continue; }
+      const last = path[path.length - 1];
+      if (last[0] !== t.q || last[1] !== t.r) bad++;
+      if (path.some(([q, r]) => M.tiles[MAP.key(q, r)].revealed || M.tiles[MAP.key(q, r)].type === 'boss')) bad++;
+      // chained: first touches the lit area, each next touches the previous
+      if (!MAP.neighbors(M, path[0][0], path[0][1]).some(([q, r]) => lit.some(l => l.q === q && l.r === r))) bad++;
+      for (let i = 1; i < path.length; i++) if (!adj({ q: path[i - 1][0], r: path[i - 1][1] }, { q: path[i][0], r: path[i][1] })) bad++;
+      // shortest: no more tiles than the hex distance to the nearest lit tile
+      const best = Math.min(...lit.map(l => hexDist(l, t)));
+      if (path.length !== best) bad++;
+    }
+    h.eq(bad, 0, 'seed ' + s + ': every hidden tile has a correct shortest path (bad=' + bad + ')');
+  }
+  const M = gen(5);
+  h.eq(MAP.pathToReveal(M, 40, 40).length, 0, 'out of bounds is empty');
+  h.eq(MAP.pathToReveal(M, M.start.q, M.start.r).length, 0, 'revealed start is empty');
+  h.eq(MAP.pathToReveal(M, M.boss.q, M.boss.r).length, 0, 'the boss is empty');
+  const near = MAP.revealable(M)[0];
+  h.eq(MAP.pathToReveal(M, near.q, near.r).length, 0, 'an adjacent hidden tile is empty (one-tap reveal)');
+  // The boss's far neighbour must go around, never through the boss.
+  const bn = MAP.neighbors(M, M.boss.q, M.boss.r).map(([q, r]) => M.tiles[MAP.key(q, r)]);
+  for (const t of bn) {
+    const path = MAP.pathToReveal(M, t.q, t.r);
+    h.ok(path.length > 0 && !path.some(([q, r]) => q === M.boss.q && r === M.boss.r), 'boss neighbour path avoids the boss');
+  }
+  // Once the boss is visited it is a foothold like any lit tile.
+  const V = gen(5);
+  V.tiles[MAP.key(V.boss.q, V.boss.r)].visited = true;
+  const far = bn[0];
+  h.eq(MAP.pathToReveal(V, far.q, far.r).length, 0, 'next to a visited boss counts as adjacent');
+  // Paths grow from the whole lit area, not just pos.
+  const G = gen(6);
+  const tgt = tilesOf(G).find(t => !t.revealed && colOf(t.q, t.r) === 3 && t.r === 3);
+  const before = MAP.pathToReveal(G, tgt.q, tgt.r).length;
+  for (const t of MAP.revealable(G)) t.revealed = true;
+  const after = MAP.pathToReveal(G, tgt.q, tgt.r).length;
+  h.ok(after < before, 'a wider lit area shortens the path (' + before + ' -> ' + after + ')');
+});
+
+h.test('revealPath spends exactly path.length ink and refuses when short', () => {
+  const M = gen(111);
+  const far = tilesOf(M).find(t => !t.revealed && colOf(t.q, t.r) === 4 && t.r === 1);
+  const path = MAP.pathToReveal(M, far.q, far.r);
+  h.ok(path.length >= 3, 'a multi-tile path (' + path.length + ')');
+  M.ink = path.length - 1;
+  h.eq(MAP.revealPath(M, path), null, 'refuses with one ink short');
+  h.eq(M.ink, path.length - 1, 'refusal spends nothing');
+  h.ok(path.every(([q, r]) => !M.tiles[MAP.key(q, r)].revealed), 'refusal reveals nothing');
+  M.ink = path.length + 2;
+  const before = M.revealedCount;
+  const got = MAP.revealPath(M, path);
+  h.ok(Array.isArray(got) && got.length === path.length, 'reveals every tile on the path');
+  h.eq(M.ink, 2, 'spends exactly path.length ink');
+  h.eq(M.revealedCount, before + path.length, 'revealedCount in sync');
+  h.ok(far.revealed && path.every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'target and path lit');
+  h.eq(MAP.pathToReveal(M, far.q, far.r).length, 0, 'the target is revealed now');
+  h.eq(MAP.revealPath(M, path), null, 'a second paint of the same path is refused');
+  h.eq(MAP.revealPath(M, []), null, 'empty path refused');
+  h.eq(MAP.revealPath(M, null), null, 'null path refused');
+  // A broken chain (a gap) is refused whole.
+  const N = gen(112);
+  const t2 = tilesOf(N).find(t => !t.revealed && colOf(t.q, t.r) === 4 && t.r === 5);
+  const p2 = MAP.pathToReveal(N, t2.q, t2.r);
+  const gap = p2.slice(0, 1).concat(p2.slice(2));
+  const ink0 = N.ink;
+  h.eq(MAP.revealPath(N, gap), null, 'a path with a gap is refused');
+  h.eq(N.ink, ink0, 'and costs nothing');
+  h.ok(MAP.revealPath(N, p2) !== null, 'the intact path paints');
+  // Painting through the boss is refused.
+  const B = gen(113);
+  h.eq(MAP.revealPath(B, [[B.boss.q, B.boss.r]]), null, 'boss tile refused');
+});
+
+h.test("orient 'v': transposed positions, flat-top corners, fit", () => {
+  const M = gen(121);
+  // Every tile round-trips, neighbours keep their spacing, the transform is (x, y) -> (y, -x).
+  for (const size of [9, 23.5, 41.8]) {
+    let bad = 0, badT = 0, badDist = 0, badEdge = 0;
+    for (const t of tilesOf(M)) {
+      const ph = MAP.toPixel(t.q, t.r, size), pv = MAP.toPixel(t.q, t.r, size, 'v');
+      if (Math.abs(pv.x - ph.y) > 1e-9 || Math.abs(pv.y + ph.x) > 1e-9) badT++;
+      const b = MAP.fromPixel(pv.x, pv.y, size, 'v');
+      if (b.q !== t.q || b.r !== t.r) bad++;
+      for (const [q, r] of MAP.neighbors(M, t.q, t.r)) {
+        const n = MAP.toPixel(q, r, size, 'v');
+        if (Math.abs(Math.hypot(n.x - pv.x, n.y - pv.y) - SQRT3 * size) > 1e-9) badDist++;
+      }
+      // Flat-top: edges face 30, 90, ... degrees; just inside stays, just past lands on a neighbour.
+      const inr = SQRT3 / 2 * size;
+      for (let i = 0; i < 6; i++) {
+        const ae = Math.PI / 6 + (Math.PI / 3) * i;
+        const e = MAP.fromPixel(pv.x + Math.cos(ae) * inr * 0.97, pv.y + Math.sin(ae) * inr * 0.97, size, 'v');
+        if (e.q !== t.q || e.r !== t.r) badEdge++;
+        const o = MAP.fromPixel(pv.x + Math.cos(ae) * inr * 1.03, pv.y + Math.sin(ae) * inr * 1.03, size, 'v');
+        if (!adj(t, o)) badEdge++;
+      }
+    }
+    h.eq(badT, 0, `v is the transposed h layout at size ${size}`);
+    h.eq(bad, 0, `v centres round trip at size ${size}`);
+    h.eq(badDist, 0, `v neighbour centres sqrt3*size apart (size ${size})`);
+    h.eq(badEdge, 0, `v edge points stay inside / cross to the neighbour (size ${size})`);
+  }
+  // Start at the bottom middle, boss at the top middle, same x.
+  const ps = MAP.toPixel(M.start.q, M.start.r, 20, 'v'), pb = MAP.toPixel(M.boss.q, M.boss.r, 20, 'v');
+  h.ok(Math.abs(ps.x - pb.x) < 1e-9 && pb.y < ps.y, 'start below the boss on the same column of pixels');
+  h.ok(tilesOf(M).every(t => MAP.toPixel(t.q, t.r, 20, 'v').y <= ps.y + 1e-9 + SQRT3 * 20 / 2), 'nothing far below the start');
+  // Corners: v is the pointy-top hex turned 30 degrees (flat-top).
+  const ch = MAP.hexCorners(0, 0, 10), cv = MAP.hexCorners(0, 0, 10, 'v');
+  h.eq(cv.length, 6, '6 corners');
+  h.ok(cv.every(p => Math.abs(Math.hypot(p.x, p.y) - 10) < 1e-9), 'corners at radius size');
+  h.ok(cv.some(p => Math.abs(p.x - 10) < 1e-9 && Math.abs(p.y) < 1e-9), 'flat top: a corner points right');
+  h.ok(!cv.some(p => Math.abs(p.y + 10) < 1e-9 && Math.abs(p.x) < 1e-9), 'no corner points straight up');
+  const rot = ch.map(p => ({ x: p.x * Math.cos(Math.PI / 6) - p.y * Math.sin(Math.PI / 6), y: p.x * Math.sin(Math.PI / 6) + p.y * Math.cos(Math.PI / 6) }));
+  h.ok(rot.every(r => cv.some(c => Math.hypot(c.x - r.x, c.y - r.y) < 1e-9)), 'v corners = h corners rotated by 30 degrees');
+  // Fit: transposed extents inside the box with the margin, centred, as large as allowed.
+  const mg = MAP.FIT_MARGIN;
+  for (const [cols, rows] of [[10, 7], [9, 5], [16, 9]]) {
+    const Mx = gen(122, { cols, rows });
+    for (const [w, hh, max] of [[540, 768, 0], [540, 768, 44], [540, 960, 30], [320, 320, 0]]) {
+      const f = MAP.size(Mx, w, hh, 'v', max);
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (const t of tilesOf(Mx)) {
+        const p = MAP.toPixel(t.q, t.r, f.size, 'v');
+        for (const c of MAP.hexCorners(p.x + f.ox, p.y + f.oy, f.size, 'v')) {
+          x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); y0 = Math.min(y0, c.y); y1 = Math.max(y1, c.y);
+        }
+      }
+      const tag = `v ${cols}x${rows} in ${w}x${hh} max ${max}`;
+      h.ok(x0 >= mg - 1e-6 && x1 <= w - mg + 1e-6 && y0 >= mg - 1e-6 && y1 <= hh - mg + 1e-6, tag + ' fits with the margin');
+      h.ok(Math.abs(x0 - (w - x1)) < 1e-6 && Math.abs(y0 - (hh - y1)) < 1e-6, tag + ' is centred');
+      if (max) h.ok(f.size <= max + 1e-9, tag + ' respects the cap');
+      if (!max || f.size < max - 1e-9) h.ok(Math.abs(x0 - mg) < 1e-6 || Math.abs(y0 - mg) < 1e-6, tag + ' is as large as it can be');
+    }
+  }
+  const f = MAP.size(gen(123), 540, 768, 'v', 44);
+  h.ok(f.size >= 40 && f.size <= 44, 'default map on the stage map area gives 40..44 px hexes (got ' + f.size.toFixed(2) + ')');
+  h.ok(f.size > MAP.size(gen(123), 540, 768).size * 1.3, 'the climb is much bigger than the landscape fit');
+});
+
+h.test('default grid fits 30-ish px hexes on the stage map area', () => {
+  const M = gen(7);
+  const f = MAP.size(M, 540, 768);
+  h.ok(f.size >= 29, 'hexes at least 29 px in 540x768 (got ' + f.size.toFixed(2) + ')');
+  h.ok(f.size > MAP.size(gen(7, { cols: 12 }), 540, 768).size, 'bigger than the old 12-column grid');
 });
 
 /* Stub DATA: proves map.js reads DATA.BRUSHES lazily (and overrides the

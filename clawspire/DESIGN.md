@@ -397,30 +397,64 @@ NaNs hp.
 ### `js/map.js` -- `MAP`
 
 Roguebook style hex map. Axial coordinates `(q, r)`, pointy-top hexes, `cols × rows`
-rectangle (offset rows). Start at the left middle, boss at the right middle. All
-tiles hidden except the start's neighbours; the boss tile is always visible.
+rectangle (offset rows), 10 × 7 by default (70 tiles). The generator is landscape: start at
+the left middle, boss at the right middle, difficulty by column. The game draws it as a
+**portrait climb** with `orient: 'v'`: a pure display transform `(x, y) -> (y, -x)` that
+puts the start at the bottom middle and the boss at the top middle, rows across the screen
+(so the side towers sit on the left and right edges) and turns every hex flat-top. Icons,
+labels, the ink pill and the axis chevrons stay upright; only positions transform. In the
+540 × 788 map area this gives 41.8 px hexes (`GAME` caps at 44). All tiles hidden except the
+start's neighbours; the boss tile is always visible.
+
+**Landmarks.** Hidden tiles of type shop, rest, forge, elite, treasure, boss and tower are
+`known` from the start: the fog shows their icon as a dim ink sketch with a dashed rim, so
+the player can see what is worth spending ink on. Fights, gems, ink pots, events, brushes
+and empties stay a plain `?`. Known tiles are still not walkable until revealed.
+
+**Side towers.** 2 per act (3 on some maps), on the top or bottom row, offset columns
+3..cols-3, never next to another special tile or another tower. Off the start-boss axis,
+so reaching one costs extra ink: that is the strategic choice. Entering a tower starts an
+elite-tier fight (the act's `tower` encounter pool when DATA has one, else its `elite`
+pool); winning pays a relic through the treasure screen plus a bonus rolled at generate
+(`content.tower.bonus`): `{k:'ink', n:2}`, `{k:'brush', id}`, `{k:'claw', u: upgradeId}`
+or `{k:'gold', n:60}`.
+
+**Path paint.** Tapping a hidden hex that does not touch the lit area previews the shortest
+hidden path to it (BFS from every lit tile, never through the boss) with its ink cost on the
+tile; tapping it again paints the whole path for one ink per tile, or a toast says how much
+ink is missing. Tapping anywhere else clears the preview. Hidden hexes next to the light
+keep the one-tap reveal. The start-to-boss axis is drawn as a faint dotted line with
+chevrons that shows through the fog; the current hex has a breathing gold rim, walkable
+hexes a thick pulsing cyan rim.
 
 ```js
-MAP.generate({act, rng, cols: 12, rows: 7}) -> M
-M = { act, cols, rows, tiles: { 'q,r': { q, r, type, revealed, visited, content } }, start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [ids], revealedCount }
-tile.type: 'empty'|'fight'|'elite'|'treasure'|'gem'|'ink'|'brush'|'event'|'shop'|'rest'|'boss'|'start'|'forge' (item upgrade)
-tile.content: { enc?: [ids], gold?, ink?, brush?, event?, ... } rolled at generate
-Distribution per act (approx over ~84 tiles): fight 30%, empty 22%, gem 10%, ink 8%, event 8%, treasure 4%, brush 4%, shop 3% (min 2), rest 5% (min 3), forge 3% (min 2), elite 3% (min 2, never adjacent to start). Elites/fights get harder with distance from start (content.diff = 0..1 by column).
+MAP.generate({act, rng, cols: 10, rows: 7}) -> M    // cols clamps to >= 9, rows to >= 3
+M = { act, cols, rows, tiles: { 'q,r': { q, r, type, revealed, visited, known, content } }, start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [ids], revealedCount }
+tile.type: 'empty'|'fight'|'elite'|'treasure'|'gem'|'ink'|'brush'|'event'|'shop'|'rest'|'boss'|'start'|'forge' (item upgrade)|'tower'
+tile.content: { enc?: [ids], gold?, ink?, brush?, event?, tower?: { bonus }, ... } rolled at generate
+Distribution per act (approx over 68 placeable tiles): fight 28%, empty 18%, gem 10%, ink 8% (min 4), event 8%, treasure 4% (min 2), brush 4% (min 2), shop 4% (min 3), rest 5% (min 3), forge 3% (min 2), elite 3% (min 2, never adjacent to start or boss), tower 3.5% (min 2, max 3). Elites/fights get harder with distance from start (content.diff = 0..1 by column).
 MAP.key(q, r) MAP.neighbors(q, r) -> [[q,r]] (in-bounds only, needs M) -> MAP.neighbors(M, q, r)
+MAP.isLandmark(tile) -> bool     // shop, rest, forge, elite, treasure, boss, tower
 MAP.canReveal(M, q, r) -> bool   // hidden, in bounds, adjacent to a revealed tile, ink >= 1
 MAP.reveal(M, q, r) -> tile|null // spends 1 ink
+MAP.pathToReveal(M, q, r) -> [[q,r], ...]  // shortest hidden path from the lit area to (q,r), in reveal order, ending on it; never through the boss; [] when revealed, adjacent to the light, the boss or unreachable
+MAP.revealPath(M, path) -> tiles[]|null    // reveals the whole path for path.length ink; null (nothing spent) when short on ink or the chain is broken
+MAP.size(M, w, h, orient='h', max?) -> {size, ox, oy}  // fit with a MAP.FIT_MARGIN px margin; 'v' fits the transposed extents; max caps the hex size
 MAP.brush(M, brushId, q, r) -> tiles[]  // reveals the brush cells (no ink cost, consumes the brush), target must be a hidden tile adjacent to revealed area
 MAP.canMove(M, q, r) -> bool     // revealed and adjacent to pos
 MAP.move(M, q, r) -> tile        // sets pos, marks visited
-MAP.toPixel(q, r, size) -> {x, y}   // pointy-top axial to pixel, offset so (0,0) is at (size, size)
-MAP.fromPixel(x, y, size) -> {q, r}  // with cube rounding
+MAP.toPixel(q, r, size, orient='h') -> {x, y}   // pointy-top axial to pixel, (0,0) at (size, size); 'v' transposes to (y, -x)
+MAP.fromPixel(x, y, size, orient='h') -> {q, r}  // with cube rounding; inverse for either orientation
+MAP.hexCorners(x, y, size, orient='h') -> [{x,y} x6]  // pointy-top, or flat-top (turned 30 degrees) for 'v'
 MAP.pathExists(M, from, to) through revealed tiles -> bool
 MAP.progress(M) -> {revealed, total, pct}
 MAP.serialize(M) / MAP.deserialize(o)
 ```
-Tests (`tests/clawspire_map.test.mjs`, yours): generation counts/minimums for 200 seeds, boss reachable
-(there is always a hidden-or-revealed path), start neighbours revealed, reveal spends ink and
-respects adjacency, brushes reveal the right cells, move rules, pixel<->hex round trip, serialize round trip.
+Tests (`tests/clawspire_map.test.mjs`, yours): generation counts/minimums for 200 seeds (10 × 7), boss reachable
+(there is always a hidden-or-revealed path), start neighbours revealed, landmarks known exactly on their types,
+towers 2-3 off-axis and not adjacent to specials, reveal spends ink and respects adjacency, pathToReveal shortest
+and boss-avoiding, revealPath spends exactly path.length ink and refuses when short, brushes reveal the right
+cells, move rules, pixel<->hex round trip, serialize round trip with known/tower.
 
 ### `js/audio.js` -- `AUDIO`
 
@@ -444,8 +478,10 @@ RENDER.enemy(ctx, def, x, y, scale, t, st={hurt:0..1, attack:0..1, dead:0..1, fr
 RENDER.cabinet(ctx, x, y, cfg, st={fog:0..1, grease:0..1, tilt, act, t})      // frame, glass, floor, chute column, divider, neon sign
 RENDER.claw(ctx, rig, x, y, cfg)   // draws carriage on the rail, cable with sway, palm, prongs from rig.bodies
 RENDER.bodyDebug(ctx, W)           // outlines, only for the debug flag
-RENDER.hex(ctx, x, y, size, tile, st={reachable, current, hover, t})  // map tiles incl. icons for each type
+RENDER.hex(ctx, x, y, size, tile, st={reachable, current, hover, path, target, orient, t})  // map tiles incl. icons for each type; tile.known draws the landmark sketch in the fog; orient 'v' = flat-top hex
 RENDER.mapBg(ctx, w, h, act, t)
+RENDER.mapAxis(ctx, x0, y0, x1, y1, size, hiddenCentres, t, flat)  // dotted start-boss axis with chevrons toward (x1, y1), clipped to the hidden hexes
+RENDER.mapPath(ctx, pts, size, {cost, ink, label, t})        // ink path preview line, cost pill, landmark label
 RENDER.hpBar(ctx, x, y, w, h, hp, max, block)
 RENDER.statusPips(ctx, x, y, status /*{id:n}*/, size)  // uses DATA.STATUS icon+color
 RENDER.intent(ctx, x, y, enemy, t)   // icon bubble above an enemy: sword+number, shield, skull, etc.
