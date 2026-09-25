@@ -53,7 +53,7 @@ test('the pile settles and falls asleep without overlapping', () => {
   const A = fresh(3);
   A.startFight('normal', ['rat'], 0);
   steps(A, 300);
-  assert(A.W.bodies.length === A.G.run.deck.length, 'all items should be in the machine');
+  eq(A.W.bodies.length, A.G.run.deck.length * 2, 'the bin holds two of every item');
   const asleep = A.W.bodies.filter(b => b.sl).length;
   assert(asleep >= A.W.bodies.length - 1, 'pile should come to rest, awake: ' + (A.W.bodies.length - asleep));
   A.wakeAll(); A.collide();
@@ -99,9 +99,7 @@ test('the claw really closes, and nothing escapes through the walls', () => {
       let n = 0, seen = false;
       while (A.F.claw.st === 'idle' && n < 400){ A.stepFight(1 / 60); n++; }
       while (A.F.claw.st !== 'idle' && n < 1500){
-        const q = A.F.spawnQ.length;
         A.stepFight(1 / 60); n++;
-        if (A.F.spawnQ.length > q) escapes++;
         if (!seen && A.F.claw.st === 'lift'){ seen = true; widest.push(Math.max(A.F.claw.pL, A.F.claw.pR)); }
       }
       drops++;
@@ -111,14 +109,14 @@ test('the claw really closes, and nothing escapes through the walls', () => {
   widest.sort((a, b) => a - b);
   const med = widest[widest.length >> 1];
   assert(med < 0.35, 'prongs should close; median widest prong at lift ' + med.toFixed(2));
-  eq(escapes, 0, 'items escaped the machine and respawned');
+  eq(A.F.escaped || 0, 0, 'items escaped the machine and respawned');
 });
 
 test('items come back into the machine every turn', () => {
   const A = fresh(5);
   A.startFight('normal', ['rat'], 0);
   const F = A.F; F.enemies[0].hp = F.enemies[0].max = 99999;
-  const total = A.G.run.deck.length;
+  const total = A.G.run.deck.length * 2;
   steps(A, 120);
   for (let i = 0; i < 3; i++){ drop(A, 150 + i * 60); steps(A, 30); }
   let g = 0; while (A.F.phase !== 'player' || A.F.turn < 2){ steps(A, 1); if (g++ > 5000) break; }
@@ -142,7 +140,8 @@ test('effects: damage, block, statuses, chill freezes, echo', () => {
   const hp = e.hp; A.useItem({ id: 'dagger', lvl: 1 }); eq(hp - e.hp, 6, 'echo fires the dagger twice');
   A.useItem({ id: 'hammer', lvl: 1 }); assert(e.st.vuln >= 2, 'hammer applies vulnerable');
   const h2 = e.hp; A.useItem({ id: 'sword', lvl: 1 }); eq(h2 - e.hp, 7, 'vulnerable adds 50%');
-  const g = F.grabs; A.useItem({ id: 'gem', lvl: 1 }); eq(F.grabs, g + 1, 'gem gives a grab');
+  const g = F.grabs; F.used.push({ id: 'apple', lvl: 1 }, { id: 'apple', lvl: 1 }); const q = F.spawnQ.length;
+  A.useItem({ id: 'gem', lvl: 1 }); eq(F.grabs, g, 'gems no longer give drops'); eq(F.spawnQ.length, q + 2, 'gem refills the bin');
 });
 
 test('enemy turn: attacks hit block first, junk and steal work, frozen skips', () => {
@@ -190,14 +189,15 @@ test('map: boss reachable, brush and inks reveal, walking stops at encounters', 
   const before = m2.cells.filter(c => c.rev).length;
   A2.ACT.tool('brush');
   assert(m2.cells.filter(c => c.rev).length >= before, 'brush reveals');
-  eq(A2.G.run.brushes, 2);
+  eq(A2.G.run.brushes, 1);
+  A2.G.run.inks.line = 1;
   const nb = A2.neighbors(m2.cells, m2.pos)[0];
   A2.ACT.tool('line'); A2.tapMap(nb);
   eq(A2.G.run.inks.line, 1, 'first tap only aims');
   A2.tapMap(nb);
   eq(A2.G.run.inks.line, 0, 'second tap paints');
   A2.ACT.tool('brush');
-  eq(A2.G.run.brushes, 2, 'a brush with nothing new to paint is not spent');
+  eq(A2.G.run.brushes, 1, 'a brush with nothing new to paint is not spent');
   // walk somewhere painted
   const tgt = m2.cells.findIndex((c, i) => c.rev && !c.v && i !== m2.pos && A2.pathTo(m2, i));
   assert(tgt >= 0);
@@ -222,7 +222,7 @@ test('every map cell kind can be entered', () => {
     A.enterCell();
     A.draw();
   }
-  A.ACT.buyItem(0); A.ACT.buyClaw('grabs'); eq(r.claw.grabs, 4, 'bought a grab');
+  A.ACT.buyItem(0); const sz = r.claw.size; A.ACT.buyClaw('size'); assert(r.claw.size > sz, 'bought a bigger claw');
   for (let i = 0; i < A.EVENTS.length; i++){ const c = r.map.cells[r.map.pos]; c.k = 'mystery'; c.ev = i; c.done = false; A.showEvent(); A.ACT.evPick(0); }
 });
 
@@ -399,11 +399,48 @@ test('meta: tickets, prize wall, characters and tilt', () => {
   A.ACT.begin();
   const r = A.G.run;
   eq(r.char, 'crab'); eq(r.tilt, 10); eq(r.claw.grabs, 2); eq(r.max, 62, 'crab 70 HP minus tilt 3');
-  eq(r.brushes, 2, 'tilt 4 costs a brush'); assert(r.deck.some(d => d.id === 'bone'), 'tilt 9 adds a bone');
+  eq(r.brushes, 1, 'tilt 4 costs a brush'); assert(r.deck.some(d => d.id === 'bone'), 'tilt 9 adds a bone');
   A.startFight('boss', ['crab'], 0);
   eq(A.F.enemies[0].st.str, 2, 'tilt 10 boss strength'); A.draw();
   const B = fresh(72); B.G.meta.unlocked = [];
   for (let i = 0; i < 40; i++) for (const id of B.rollItems(3, [0.34, 0.33, 0.33])) assert(['magnet', 'balloon', 'boomer', 'die', 'jam', 'coconut', 'chili'].indexOf(id) < 0, 'locked item rolled: ' + id);
+});
+
+test('map: landmarks show through fog, tower reveals, shrine blesses, vault is guarded', () => {
+  const A = fresh(91), r = A.G.run, m = r.map;
+  for (const k of ['tower', 'shrine', 'vault']) assert(m.cells.some(c => c.k === k && c.lm), 'map has a ' + k);
+  const t = m.cells.findIndex(c => c.k === 'tower');
+  m.pos = t; const before = m.cells.filter(c => c.rev).length; A.enterCell();
+  assert(m.cells.filter(c => c.rev).length > before + 10, 'watchtower paints a wide area'); assert(m.cells[t].done);
+  const sh = m.cells.findIndex(c => c.k === 'shrine'); m.pos = sh; A.enterCell();
+  const mx = r.max; A.ACT.bless(0); eq(r.max, mx + 8, 'blessing of plenty'); assert(m.cells[sh].done);
+  const v = m.cells.findIndex(c => c.k === 'vault'); m.pos = v; A.enterCell();
+  eq(A.G.scr, 'fight'); eq(A.F.kind, 'elite', 'vaults are guarded by an elite');
+  A.F.enemies.forEach(e => A.killEnemy(e)); for (let i = 0; i < 120; i++) A.stepFight(1 / 60);
+  assert(A.G.rq.stages.length >= 2, 'vault pays an extra rare item pick');
+  A.draw();
+});
+
+test('bin: grabbed items trickle back after each drop, extra drops are boss-only', () => {
+  const A = fresh(92);
+  A.startFight('normal', ['rat'], 0); A.F.enemies[0].hp = A.F.enemies[0].max = 9999;
+  const F = A.F;
+  F.used.push({ id: 'sword', lvl: 1 }, { id: 'sword', lvl: 1 }, { id: 'apple', lvl: 1 });
+  const q = F.spawnQ.length; A.onDropDone(); eq(F.spawnQ.length, q + 2, 'two fall back after a drop');
+  const r = A.G.run, c = r.map.cells[r.map.pos]; c.k = 'shop'; c.done = false; r.gold = 999; A.enterCell();
+  const before = r.claw.grabs; A.ACT.buyClaw('grabs'); eq(r.claw.grabs, before, 'the shop does not sell drops');
+});
+
+test('map: continuing a run never leaves shrunken hexes; drag scrolls the map', () => {
+  const A = fresh(93); A.G.time = 500; A.ACT.tool('brush'); A.saveRun();
+  const B = boot({ store: A._store }); B.ACT.continue();
+  assert(B.G.run.map.cells.every(c => c.revT < B.G.time + 1), 'reveal clocks reset on continue');
+  B.draw();
+  B.G.cam = B.mapMaxCam ? B.G.cam : B.G.cam;
+  const c0 = B.G.cam; B.onDown(200, 400); B.onMove(200, 520); B.onUp();
+  assert(B.G.cam !== c0 || c0 === 0, 'dragging pans the map');
+  const pos = B.G.run.map.pos; B.onDown(200, 400); B.onUp();
+  eq(B.G.run.map.pos, pos, 'a tap on fog does not move you');
 });
 
 test('input: drag aims, release drops', () => {

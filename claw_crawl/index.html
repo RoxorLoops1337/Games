@@ -181,7 +181,7 @@ const ITEMS = {
   tonic:  { n:'Rage Tonic',   e:'💪', tg:['potion'], rar:1, sh:['blob',14],   dens:0.9, rot:0,   col:'#ffb36b', fx:{ str:[1,2,3] } },
   cactus: { n:'Spike Plant',  e:'🌵', rar:1, sh:['cap',34,10], dens:0.9, rot:Math.PI/2, col:'#6fd46f', fx:{ thorns:[3,4,6] } },
   coin:   { n:'Gold Coin',    e:'🪙', tg:['metal'], rar:0, sh:['ball',10],   dens:1.5, rot:0,   col:'#ffd24d', fx:{ gold:[3,5,7] } },
-  gem:    { n:'Power Gem',    e:'💎', tg:['gem'], rar:2, sh:['blob',12],   dens:1.1, rot:0,   col:'#6ff0ff', fx:{ grab:[1,1,1], block:[0,3,6] } },
+  gem:    { n:'Power Gem',    e:'💎', tg:['gem'], rar:2, sh:['blob',12],   dens:1.1, rot:0,   col:'#6ff0ff', fx:{ refill:[3,4,5], block:[3,5,7] } },
   clover: { n:'Four-Leaf',    e:'🍀', tg:['gem'], rar:2, sh:['blob',12],   dens:0.5, rot:0,   col:'#6fe07a', fx:{ echo:[1,2,3] } },
   heart:  { n:'Heart Gem',    e:'💖', tg:['gem'], rar:2, sh:['blob',14],   dens:0.9, rot:0,   col:'#ff7ad9', fx:{ maxhp:[1,2,3], heal:[3,4,5] } },
   crown:  { n:'Crown',        e:'👑', tg:['metal'], rar:2, sh:['blob',15],   dens:1.4, rot:0,   col:'#ffd24d', fx:{ gold:[8,12,16], str:[1,1,2] } },
@@ -296,7 +296,7 @@ const ENC = {
 };
 // Difficulty per act (enemy HP and attack multipliers), tuned against a bot that plays
 // hundreds of fights with a decent deck for each stage of a run.
-const DIFF = { hp:[1.6, 1.8, 2.25], atk:[1.35, 1.45, 1.65], bossHp:[1.15, 0.95, 1.1], bossAtk:[1, 0.9, 1.55] };
+const DIFF = { hp:[1.6, 1.8, 2.25], atk:[1.35, 1.45, 1.65], bossHp:[1.15, 1.05, 1.1], bossAtk:[1, 1.0, 1.55], normHp:[1, 1.25, 1.35], normAtk:[1, 1.2, 1.35] };
 const ACT_NAME = { 1:'The Mossy Arcade', 2:'The Ember Galleries', 3:'The House Always Wins' };
 
 const RELICS = {
@@ -310,7 +310,7 @@ const RELICS = {
   ember:  { n:'Ember Heart',   e:'❤️‍🔥', d:'Burn you apply +2.' },
   whet:   { n:'Whetstone',     e:'⚒️', d:'Every hit deals +1 damage.' },
   bell:   { n:'Echo Bell',     e:'🔔', d:'The first item you grab each turn triggers twice.' },
-  jackpot:{ n:'Jackpot Lever', e:'🎰', d:'Grab 3+ items in one drop: +1 grab.' },
+  jackpot:{ n:'Jackpot Lever', e:'🎰', d:'Grab 3+ items in one drop: 3 of them fall back in and you gain 5 block.' },
   herbs:  { n:'Healing Herbs', e:'🌿', d:'Heal 5 after every fight.' },
   quill:  { n:'Ink Quill',     e:'🪶', d:'Every fight also gives 2 Precision Ink.' },
   spikes: { n:'Spiked Frame',  e:'📌', d:'Start every fight with 3 thorns.' },
@@ -331,15 +331,15 @@ const INKS = {
   grand: { n:'Grand',     e:'🌊', d:'Reveal everything within 3 of you.' },
 };
 const CLAWUP = {
-  grabs: { n:'+1 Grab',       e:'✋', d:'One more drop every turn.',            ok:c => c.grabs < 6,    ap:c => { c.grabs++; } },
-  size:  { n:'Bigger Claw',   e:'🦾', d:'Prongs 12% longer and wider.',        ok:c => c.size < 1.45,  ap:c => { c.size = Math.round((c.size + 0.12) * 100) / 100; } },
+  grabs: { n:'+1 Drop',       e:'✋', d:'One more drop every turn. Only bosses give these.', ok:c => c.grabs < 5,    ap:c => { c.grabs++; } },
+  size:  { n:'Bigger Claw',   e:'🦾', d:'Prongs 12% longer and wider.',        ok:c => c.size < 1.7,  ap:c => { c.size = Math.round((c.size + 0.12) * 100) / 100; } },
   grip:  { n:'Stronger Grip', e:'🤜', d:'Prongs squeeze harder, loosen less.', ok:c => c.grip < 0.95,  ap:c => { c.grip = Math.min(0.95, Math.round((c.grip + 0.15) * 100) / 100); } },
 };
 
 /* ============================ PHYSICS ==================================== */
 // Rigid bodies built from circles, colliding with each other, static walls and the
 // kinematic claw (capsules).  Sequential impulses with Coulomb friction, sub-stepped.
-const ITEM_SCALE = 1.28;   // items and claw are both drawn at this scale
+const ITEM_SCALE = 1.0;    // items and claw are both drawn at this scale
 const PH = { g:1150, sub:4, it:10, slop:0.5, beta:0.24, maxBias:200, clawBias:110, e:0.12 };
 
 function shapeParts(sh, sc){
@@ -571,7 +571,8 @@ function kinetic(){ let e = 0; for (const b of W.bodies) e += b.vx * b.vx + b.vy
 /* =============================== CLAW ==================================== */
 const PRONG = [[0, 0], [14, 28], [9, 48], [1, 57]];
 const PHI_OPEN = 0.62, PHI_CLOSED = -0.1;
-function clawSize(){ const r = G.run; return ITEM_SCALE * r.claw.size * (hasRelic('magnet') ? 1.12 : 1); }
+const CLAW_BASE = 0.78;   // the claw starts small next to the prizes and grows with upgrades
+function clawSize(){ const r = G.run; return CLAW_BASE * r.claw.size * (hasRelic('magnet') ? 1.12 : 1); }
 function clawGrip(){ const r = G.run; return clamp(r.claw.grip + (hasRelic('gloves') ? 0.15 : 0) - (F && F.greaseOn ? 0.3 : 0), 0.05, 1); }
 function initClaw(){
   const s = clawSize();
@@ -687,12 +688,12 @@ function newRun(seed, char, tiltLv){
     char: CHARS[char] ? char : 'raccoon', tilt: tl,
     hp: ch.hp - (tl >= 3 ? 8 : 0), max: ch.hp - (tl >= 3 ? 8 : 0), gold: ch.gold, deck: [], relics: ch.relic ? [ch.relic] : [], uid: 0,
     claw: Object.assign({}, ch.claw),
-    act: 1, brushes: tl >= 4 ? 2 : 3, inks: { dot: 3, line: 1, twin: 0, grand: 0 }, map: null,
+    act: 1, brushes: tl >= 4 ? 1 : 2, inks: { dot: 2, line: 0, twin: 0, grand: 0 }, map: null,
     stats: { kills: 0, fights: 0, grabs: 0, items: 0, gold: 0, slips: 0 }, buys: { claw: 0, remove: 0 },
   };
   for (const id of ch.deck) G.run.deck.push(newEntry(id));
   if (tl >= 9) G.run.deck.push(newEntry('bone'));
-  G.run.map = genMap(1);
+  G.run.map = genMap(1); G.cam = null;
   if (G.meta.tut < 5){
     // first run: a lone rat waits right next to the start
     const m = G.run.map, up = neighbors(m.cells, m.pos).find(i => m.cells[i].r < m.cells[m.pos].r);
@@ -707,9 +708,9 @@ function mkEnemy(id, depth){
   const d = ENEMIES[id];
   const tm = (d.elite && tilt(1) ? 1.15 : 1) * (d.boss && tilt(5) ? 1.2 : 1) * (!d.elite && !d.boss && tilt(6) ? 1.15 : 1);
   const act = (G.run && G.run.act) || 1;
-  const hpMul = (1 + 0.25 * depth) * tm * DIFF.hp[act - 1] * (d.boss ? DIFF.bossHp[act - 1] : 1), hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
+  const hpMul = (1 + 0.25 * depth) * tm * DIFF.hp[act - 1] * (d.boss ? DIFF.bossHp[act - 1] : d.elite ? 1 : DIFF.normHp[act - 1]), hp = Math.round(d.hp * hpMul * (0.93 + R() * 0.14));
   return withPassives({ id, d, hp, max: hp, block: 0, st: {}, chill: 0, frozen: false, turn: 0, intent: null, last: -1,
-    x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: (1 + 0.2 * depth) * DIFF.atk[act - 1] * (d.boss ? DIFF.bossAtk[act - 1] : 1), phase2: false });
+    x: 200, y: 140, hitT: 0, atkT: 0, deadT: 0, dead: false, pouch: [], mul: (1 + 0.2 * depth) * DIFF.atk[act - 1] * (d.boss ? DIFF.bossAtk[act - 1] : d.elite ? 1 : DIFF.normAtk[act - 1]), phase2: false });
 }
 function withPassives(e){
   if (e.d.armor) e.st.armor = e.d.armor;
@@ -769,11 +770,12 @@ function startFight(kind, ids, depth){
   if (tilt(10)) F.enemies.forEach(e => { if (e.d.boss) addSt(e, 'str', 2); });
   W.bodies = []; buildWalls(); initClaw(); clawSegs();
   // the whole bag rains into the machine
-  const items = run.deck.map(d => d).sort(() => Math.random() - 0.5);
+  // the bin holds two of everything in your bag
+  const items = run.deck.flatMap(d => ITEMS[d.id].junk ? [d] : [d, d]).sort(() => Math.random() - 0.5);
   F.spawnQ = items.slice();
   // pre-drop most of it so the pile is there when the fight opens
   for (const it of items.slice(0, Math.max(0, items.length - 6))){ spawnBody(it, true); F.spawnQ.shift(); }
-  for (let i = 0; i < 150; i++) physStep(1 / 240, false);
+  for (let i = 0; i < 220; i++) physStep(1 / 240, false);
   if (hasRelic('plate')) F.P.block = 8;
   if (hasRelic('spikes')) F.P.st.thorns = 3;
   run.stats.fights++;
@@ -914,6 +916,7 @@ function applyFx(d, L, echo, it){
   if (f.dice){ const r = 1 + Math.floor(Math.random() * v('dice')); popup(MX + CHW / 2 + 40, MY + MH - 90, '🎲 ' + r, '#fff', true); hitEnemy(target(), r, d.col); }
   if (f.perMetal){ const n = F.dropItems.filter(x => (ITEMS[x.id].tg || []).indexOf('metal') >= 0).length; for (let i = 0; i < Math.max(1, n); i++) hitEnemy(target(), v('perMetal'), d.col); }
   if (f.gold){ const g = goldGain(v('gold')); popup(PX + 30, PY - 20, '+' + g + ' 💰', '#ffd24d'); sfx('coin'); }
+  if (f.refill){ refill(v('refill'), true); }
   if (f.grab){ F.grabs += v('grab'); popup(MX + MW / 2, MY + 40, '+' + v('grab') + ' GRAB!', '#6ff0ff', true); sfx('gem'); }
   if (f.echo && !echo) F.echo += v('echo');
   if (f.maxhp && !(it && F.once.has(it.uid))){ if (it) F.once.add(it.uid); run.max += v('maxhp'); run.hp += v('maxhp'); popup(PX + 30, PY - 34, '+' + v('maxhp') + ' max HP', '#ff7ad9'); }
@@ -938,9 +941,17 @@ function collect(b){
   if (d.junk && hasRelic('compost')){ F.P.block += 4; popup(PX + 30, PY - 20, '+4 🛡️ ♻️', '#9fc4ff'); }
   sfx('grab', F.dropGot);
   if (F.dropGot >= 2) popup(MX + CHW / 2 + 36, MY + MH - 70, F.dropGot >= 3 ? 'JACKPOT ×' + F.dropGot : 'DOUBLE!', '#ffd24d', true);
-  if (F.dropGot >= 3 && hasRelic('jackpot') && !F.jackpotDone){ F.jackpotDone = true; F.grabs++; popup(MX + MW / 2, MY + 40, '+1 GRAB', '#6ff0ff', true); }
+  if (F.dropGot >= 3 && hasRelic('jackpot') && !F.jackpotDone){ F.jackpotDone = true; refill(3, true); F.P.block += 5; popup(MX + MW / 2, MY + 40, '🎰 JACKPOT', '#6ff0ff', true); }
+}
+// Grabbed items trickle back into the bin: a couple after every drop, more when it runs low.
+function refill(n, loud){
+  let k = 0;
+  while (k < n && F.used.length){ F.spawnQ.push(F.used.splice(Math.floor(Math.random() * F.used.length), 1)[0]); k++; }
+  if (k && loud) popup(MX + MW / 2, MY + 40, '+' + k + ' refill', '#6ff0ff', true);
+  return k;
 }
 function onDropDone(){
+  refill(W.bodies.length + F.spawnQ.length < 10 ? 4 : 2);
   if (hasRelic('sniper') && F.dropGot === 1 && !F.sniperDone){ F.sniperDone = true; const t = target(); if (t){ hitEnemy(t, 5, '#ffd24d'); popup(t.x, t.y - 80, '🎯 BULLSEYE', '#ffd24d', true); } }
 }
 const SETS = [
@@ -948,7 +959,7 @@ const SETS = [
   { tag:'blade',   n:2, name:'FLURRY!',   fn:() => hitEnemy(target(), 4, '#c9d3de') },
   { tag:'potion',  n:2, name:'COCKTAIL!', fn:() => { const t = target(); if (t){ addSt(t, 'poison', 2); addSt(t, 'burn', 2); } } },
   { tag:'metal',   n:3, name:'SCRAP HEAP!', fn:() => { F.P.block += 6; popup(PX + 30, PY - 20, '+6 🛡️', '#9fc4ff'); } },
-  { tag:'gem',     n:2, name:'SPARKLE!',  fn:() => { F.grabs++; popup(MX + MW / 2, MY + 40, '+1 GRAB', '#6ff0ff', true); } },
+  { tag:'gem',     n:2, name:'SPARKLE!',  fn:() => { refill(3, true); F.P.block += 4; } },
 ];
 // Grabbing matching items in one drop sets off a bonus.
 function setBonus(){
@@ -962,8 +973,6 @@ function playerTurnStart(first){
   const P = F.P, run = G.run;
   F.turn++;
   if (!first){
-    for (const it of F.used) F.spawnQ.push(it);
-    F.used = [];
     P.block = 0;
     if (P.st.vuln) P.st.vuln--;
   }
@@ -1097,7 +1106,7 @@ function stepFight(dt){
   for (let i = W.bodies.length - 1; i >= 0; i--){
     const b = W.bodies[i];
     if (b.y > MH + 26 && b.x < CHW + 6){ if (F.phase === 'player' || F.phase === 'enemy') collect(b); else { W.bodies.splice(i, 1); F.used.push(b.it); } }
-    else if (b.y > MH + 60 || b.x < -60 || b.x > MW + 60 || b.y < -200){ W.bodies.splice(i, 1); F.spawnQ.push(b.it); }
+    else if (b.y > MH + 60 || b.x < -60 || b.x > MW + 60 || b.y < -200){ W.bodies.splice(i, 1); F.spawnQ.push(b.it); F.escaped = (F.escaped || 0) + 1; }
   }
   // flying icons land and fire their effect
   for (const f of F.flies){
@@ -1152,13 +1161,14 @@ function randomInk(big){
   if (big) return r < 0.5 ? 'line' : r < 0.8 ? 'twin' : 'grand';
   return r < 0.45 ? 'dot' : r < 0.8 ? 'line' : r < 0.95 ? 'twin' : 'grand';
 }
-function addInk(k){ const r = G.run; r.inks[k] += k === 'dot' ? 3 : 1; }
+function addInk(k){ const r = G.run; r.inks[k] += k === 'dot' ? 2 : 1; }
 function winFight(){
   const run = G.run, kind = F.kind;
   const gains = [];
   const g = goldGain(kind === 'boss' ? 70 : kind === 'elite' ? 32 + ri(10) : 13 + ri(8));
   gains.push('💰 +' + g);
-  const ink = randomInk(kind !== 'normal'); addInk(ink); gains.push(INKS[ink].e + ' ' + INKS[ink].n + ' Ink');
+  // ink is scarce: normal fights only sometimes pay it
+  if (kind !== 'normal' || R() < 0.45){ const ink = randomInk(kind !== 'normal'); addInk(ink); gains.push(INKS[ink].e + ' ' + INKS[ink].n + ' Ink'); }
   if (kind !== 'normal'){ run.brushes++; gains.push('🖌️ +1 Brush'); }
   if (hasRelic('quill')){ run.inks.dot += 2; gains.push('🪶 +2 Precision'); }
   if (hasRelic('herbs')){ const h = Math.min(5, run.max - run.hp); run.hp += h; gains.push('🌿 +' + h + ' HP'); }
@@ -1167,6 +1177,7 @@ function winFight(){
   stages.push({ t: 'items', ids: rollItems(3, kind === 'boss' ? [0, 0.5, 0.5] : kind === 'elite' ? [0.4, 0.45, 0.15] : [0.62, 0.32, 0.06]) });
   let relicGot = null;
   if (kind === 'elite'){ const r = rollRelic(); if (r){ run.relics.push(r); relicGot = r; } }
+  if (cell.k === 'vault'){ gains.push('🏛️ Vault: +' + goldGain(40) + ' gold'); stages.push({ t: 'items', ids: rollItems(3, [0, 0.4, 0.6]) }); }
   if (kind === 'boss'){
     stages.push({ t: 'claw' });
     const r = rollRelic(); if (r){ run.relics.push(r); relicGot = r; }
@@ -1208,7 +1219,7 @@ function nextAct(){
   run.act++;
   run.hp = Math.min(run.max, run.hp + Math.ceil((run.max - run.hp) * 0.6));
   run.brushes += tilt(4) ? 1 : 2;
-  run.map = genMap(run.act);
+  run.map = genMap(run.act); G.cam = null;
   toMap();
   toast('Act ' + run.act + ': ' + ACT_NAME[run.act]);
 }
@@ -1254,6 +1265,7 @@ function fxText(id, lvl){
   if (f.back) out.push('Flies straight back into the machine');
   if (f.perMetal) out.push('<b>' + v('perMetal') + '</b> damage per metal item in the same drop');
   if (f.grab) out.push('+<b>' + v('grab') + '</b> grab now');
+  if (f.refill) out.push('<b>' + v('refill') + '</b> grabbed items fall back in');
   if (f.echo) out.push('Next <b>' + v('echo') + '</b> item' + (v('echo') > 1 ? 's' : '') + ' fire twice');
   if (f.maxhp) out.push('+<b>' + v('maxhp') + '</b> max HP');
   if (f.self) out.push('You take <b>' + v('self') + '</b>');
@@ -1264,7 +1276,7 @@ function fxText(id, lvl){
 /* ================================ MAP ==================================== */
 // Hex map (pointy-top, odd rows shoved right).  Everything starts under fog; the
 // boss is always visible.  Brushes paint around you, inks paint lines and dots.
-const ROWS = 11, COLS = 7;
+const ROWS = 17, COLS = 7;
 const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const idx = (r, c) => r * COLS + c;
 const toCube = (r, c) => [c - (r - (r & 1)) / 2, r];
@@ -1301,23 +1313,28 @@ function genMap(act){
     const cand = open.filter(i => !cells[i].k && cells[i].r >= rows[0] && cells[i].r <= rows[1]);
     if (cand.length) cells[pick(cand)].k = k;
   };
-  put('shop', [3, 7]); put('camp', [1, 2]); put('elite', [2, 5]); put('chest', [4, 8]);
-  if (act > 1) put('elite', [3, 6]);
+  put('shop', [5, 11]); put('camp', [1, 2]); put('elite', [3, 9]); put('chest', [6, 13]);
+  if (act > 1) put('elite', [4, 10]);
+  // landmarks you can see through the fog
+  put('tower', [9, 13]); put('tower', [3, 8]); put('shrine', [4, 12]); put('vault', [2, 7]);
+  for (const c of cells) if (c.k === 'tower' || c.k === 'shrine' || c.k === 'vault') c.lm = 1;
   for (const i of open){
     const c = cells[i];
     if (c.k) continue;
     if (hexDist(c, cells[start]) <= 1){ c.k = R() < 0.35 ? 'gold' : ''; continue; }
     const r = R();
-    c.k = r < 0.27 ? 'fight' : r < 0.36 ? 'gold' : r < 0.45 ? 'mystery' : r < 0.51 ? 'ink' : r < 0.55 ? 'chest'
-        : r < 0.58 && c.r <= 6 ? 'elite' : r < 0.60 ? 'camp' : '';
+    c.k = r < 0.25 ? 'fight' : r < 0.33 ? 'gold' : r < 0.41 ? 'mystery' : r < 0.45 ? 'ink' : r < 0.49 ? 'chest'
+        : r < 0.51 && c.r <= 10 ? 'elite' : r < 0.53 ? 'camp' : '';
+    if (!c.k) c.deco = R() < 0.55 ? 1 + ri(5) : 0;
   }
-  cells[boss].k = 'boss'; cells[start].k = 'start'; cells[start].done = true;
+  cells[boss].k = 'boss'; cells[start].k = 'start'; cells[start].done = true; cells[start].seen = 1;
   const m = { cells, pos: start, act };
   reveal(m, cells.map((c, i) => i).filter(i => hexDist(cells[i], cells[start]) <= 1), true);
   cells[boss].rev = true;
   for (const i of neighbors(cells, boss)) cells[i].rev = true;
   return m;
 }
+const COMBAT = { fight: 1, elite: 1, boss: 1, vault: 1 };
 function bfs(cells, from, ok){
   const seen = new Set([from]), q = [from];
   while (q.length){ const i = q.shift(); for (const n of neighbors(cells, i)) if (!seen.has(n) && ok(n)){ seen.add(n); q.push(n); } }
@@ -1332,7 +1349,7 @@ function pathTo(m, to){
       if (prev.has(n) || cells[n].v || !cells[n].rev) continue;
       prev.set(n, i);
       // don't route through unfinished encounters
-      if (n !== to && !cells[n].done && (cells[n].k === 'fight' || cells[n].k === 'elite' || cells[n].k === 'boss')) continue;
+      if (n !== to && !cells[n].done && COMBAT[cells[n].k]) continue;
       q.push(n);
     }
   }
@@ -1379,7 +1396,17 @@ function dirTo(i){
 const HS = 29, HW = Math.sqrt(3) * HS;
 const HOX = (VW - HW * (COLS + 0.5)) / 2 + HW / 2, HOY = 92;
 function hexXY(c){ return [HOX + HW * (c.c + 0.5 * (c.r & 1)), HOY + HS * 1.5 * c.r]; }
+const MAP_TOP = 50, MAP_BOT = 630;
+function mapMaxCam(){ return Math.max(0, HOY + HS * 1.5 * (ROWS - 1) + HS + 14 - MAP_BOT); }
+function camFollow(dt, snap){
+  const m = G.run.map, [, py] = hexXY(m.cells[m.pos]);
+  const want = clamp(py - 420, 0, mapMaxCam());
+  if (snap || G.cam == null) G.cam = want;
+  else if (G.camHold > 0) G.camHold -= dt;
+  else G.cam += (want - G.cam) * Math.min(1, dt * 4);
+}
 function hexAt(x, y){
+  y += G.cam || 0;
   const cells = G.run.map.cells; let best = -1, bd = 1e9;
   cells.forEach((c, i) => { const [hx, hy] = hexXY(c); const d = (hx - x) ** 2 + (hy - y) ** 2; if (d < bd){ bd = d; best = i; } });
   return bd < HS * HS ? best : -1;
@@ -1413,7 +1440,7 @@ function coachText(){
 }
 function drawCoach(){
   const c = coachText(); if (!c) return;
-  const y = G.scr === 'map' ? 552 : MY + 96;
+  const y = G.scr === 'map' ? 64 : MY + 96;
   ctx.globalAlpha = 0.95;
   rrect(24, y, VW - 48, 58, 14); ctx.fillStyle = 'rgba(20,12,36,.94)'; ctx.fill();
   ctx.strokeStyle = '#ffd24d'; ctx.lineWidth = 2.5; ctx.stroke();
@@ -1427,11 +1454,13 @@ function drawCoach(){
     const hx = MX + 150 + Math.sin(G.time * 1.6) * 80;
     emoji('👆', hx, MY + MH - 60 - k * 8, 34);
   }
-  if (G.scr === 'map' && G.meta.tut === 1){
-    const m = G.run.map, i = m.cells.findIndex(x => x.tut && !x.done);
-    if (i >= 0){ const [x, y2] = hexXY(m.cells[i]); hexPath(x, y2, HS + 2 + k * 4); ctx.strokeStyle = '#ffd24d'; ctx.lineWidth = 3; ctx.stroke(); emoji('👆', x + 10, y2 + 30 + k * 6, 30); }
-  }
+
   if (G.scr === 'fight' && G.meta.tut === 4 && F){ const e = alive()[0]; if (e) emoji('👇', e.x - 50, e.y - 70 - k * 6, 28); }
+}
+function drawCoachMap(){
+  if (G.meta.tut !== 1) return;
+  const k = (Math.sin(G.time * 5) + 1) / 2, m = G.run.map, i = m.cells.findIndex(x => x.tut && !x.done);
+  if (i >= 0){ const [x, y2] = hexXY(m.cells[i]); hexPath(x, y2, HS + 2 + k * 4); ctx.strokeStyle = '#ffd24d'; ctx.lineWidth = 3; ctx.stroke(); emoji('👆', x + 10, y2 + 30 + k * 6, 30); }
 }
 function checkStuck(){
   const run = G.run, m = run.map;
@@ -1463,12 +1492,19 @@ function tapMap(i){
   G.walk = p; G.walkT = 0;
 }
 function stepWalk(dt){
+  if (G.hop) { G.hop.t += dt; if (G.hop.t > 0.24) G.hop = null; }
+  for (const p of G.fx) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+  G.fx = G.fx.filter(p => p.t < p.life);
+  if (G.run && G.run.map) camFollow(dt);
   if (!G.walk) return;
   G.walkT += dt;
-  if (G.walkT < 0.16) return;
+  if (G.walkT < 0.24) return;
   G.walkT = 0;
   const m = G.run.map, i = G.walk.shift();
-  m.pos = i; sfx('step'); syncBars();
+  G.hop = { from: m.pos, to: i, t: 0 };
+  m.pos = i; m.cells[i].seen = 1; sfx('step'); syncBars();
+  const [hx, hy] = hexXY(m.cells[i]);
+  for (let k = 0; k < 6; k++) G.fx.push({ x: hx + rnd(-8, 8), y: hy + 12, vx: rnd(-30, 30), vy: rnd(-30, -5), t: 0, life: 0.45 });
   const c = m.cells[i];
   if ((c.k && !c.done) || !G.walk.length){ G.walk = null; saveRun(); enterCell(); }
 }
@@ -1488,6 +1524,13 @@ function enterCell(){
     case 'camp': showCamp(); break;
     case 'shop': showShop(); break;
     case 'mystery': showEvent(); break;
+    case 'vault': startFight('elite', pick(ENC[act].elite), Math.min(1, d + 0.2)); break;
+    case 'tower': {
+      c.done = true;
+      const n = reveal(m, m.cells.map((x, i) => i).filter(i => hexDist(m.cells[i], c) <= 3));
+      toast(n ? '🗼 From the watchtower you can see far!' : '🗼 The view is already painted.'); syncBars(); saveRun(); break;
+    }
+    case 'shrine': showShrine(); break;
   }
 }
 
@@ -1545,9 +1588,10 @@ function toMap(){
 }
 function showHelp(){
   openOv('<div class="pn"><button class="btn sm" data-a="closeHelp" style="float:right;margin:-4px -2px 0 0">✕</button><h2>How to play</h2><div class="help">' +
-    '<p><b>🗺️ The map.</b> Everything is hidden under fog. Use <b>🖌️ brushes</b> to paint the hexes around you and <b>inks</b> to paint lines and single hexes. Win fights to earn more ink. Tap a painted hex to walk there. The boss waits at the top.</p>' +
+    '<p><b>🗺️ The map.</b> Everything is hidden under fog. Use <b>🖌️ brushes</b> to paint the hexes around you and <b>inks</b> to paint lines and single hexes. Ink is scarce: some fights pay it. Tap a painted hex to walk there, drag to look around. The boss waits at the top.</p>' +
+    '<p><b>Landmarks</b> show through the fog: 🗼 watchtowers reveal everything around them, ⛩️ shrines bless you, 🏛️ vaults hold treasure behind an elite.</p>' +
     '<p><b>🕹️ The claw.</b> Drag left and right to aim, let go to drop. The claw sinks, closes and carries whatever it holds to the prize chute on the left. Anything that lands in the chute fires its effect. Things can slip out, so aim for items the prongs can wrap around.</p>' +
-    '<p><b>⚔️ Fights.</b> You get a few drops per turn. Enemies show what they will do next above their heads. Tap an enemy to target it. Everything you grabbed goes back in the machine next turn.</p>' +
+    '<p><b>⚔️ Fights.</b> The bin holds two of everything in your bag. You get a few drops per turn, and after every drop two grabbed items fall back in. Enemies show what they will do next above their heads. Tap an enemy to target it.</p>' +
     '<p><b>Statuses</b><br>' + Object.keys(STATUS).map(k => '<span class="k">' + STATUS[k].e + '</span> <b>' + k + '</b>: ' + STATUS[k].d).join('<br>') +
     '<br><span class="k">🗑️</span> <b>junk</b>: enemies stuff useless things into your machine.<br><span class="k">🫳</span> <b>steal</b>: takes items out until that enemy dies.<br><span class="k">🥶</span> <b>freeze</b>: one less drop next turn.</p>' +
     '<p><b>🔎 Long-press</b> an item, enemy, status or charm to see what it does. Let go over the PRIZE chute to cancel an aim.</p>' +
@@ -1596,7 +1640,7 @@ function showShop(){
   let h = '<div class="pn"><h2>🛒 The Prize Counter</h2><p>You have <b>💰 ' + run.gold + '</b></p><div class="cards">' +
     s.items.map((x, i) => x.sold ? '' : itemCard(x.id, 1, 'buyItem', i, x.p, run.gold < x.p)).join('') + '</div><div class="list">';
   if (s.relic && !s.relicSold){ const r = RELICS[s.relic]; h += '<button class="li" data-a="buyRelic"' + (run.gold < s.relicP ? ' disabled' : '') + '><span class="ie">' + r.e + '</span><span class="tx"><b>' + r.n + '</b><small>' + r.d + '</small></span><span class="pr">💰 ' + s.relicP + '</span></button>'; }
-  for (const k of Object.keys(CLAWUP)){ const u = CLAWUP[k], ok = u.ok(run.claw);
+  for (const k of ['size', 'grip']){ const u = CLAWUP[k], ok = u.ok(run.claw);
     h += '<button class="li" data-a="buyClaw" data-v="' + k + '"' + (!ok || run.gold < clawPrice() ? ' disabled' : '') + '><span class="ie">' + u.e + '</span><span class="tx"><b>' + u.n + '</b><small>' + u.d + '</small></span><span class="pr">💰 ' + clawPrice() + '</span></button>'; }
   h += '<button class="li" data-a="buyInk"' + (run.gold < s.inkP ? ' disabled' : '') + '><span class="ie">🖋️</span><span class="tx"><b>Royal Ink</b><small>' + INKS.line.d + '</small></span><span class="pr">💰 ' + s.inkP + '</span></button>';
   h += '<button class="li" data-a="shopRemove"' + (run.gold < removePrice() || run.deck.length <= 5 ? ' disabled' : '') + '><span class="ie">🗑️</span><span class="tx"><b>Remove an item</b><small>Take something out of your machine for good.</small></span><span class="pr">💰 ' + removePrice() + '</span></button>';
@@ -1627,6 +1671,19 @@ const EVENTS = [
     ch:[ { l:'Temper an item', s:'Upgrade a random item', go:r => { const c = r.deck.filter(d => d.lvl < 3 && !ITEMS[d.id].junk); if (!c.length) return 'Nothing to temper.'; const d = pick(c); d.lvl++; return ITEMS[d.id].e + ' ' + ITEMS[d.id].n + ' is now ' + '★'.repeat(d.lvl - 1) + '.'; } },
          { l:'Smelt junk', s:'Remove all Cursed Bones', ok:r => r.deck.some(d => d.id === 'bone'), go:r => { r.deck = r.deck.filter(d => d.id !== 'bone'); return 'The bones melt away.'; } } ] },
 ];
+const BLESSINGS = [
+  { e:'💖', n:'Blessing of Plenty', d:'+8 max HP and heal 8.', go:r => { r.max += 8; r.hp = Math.min(r.max, r.hp + 8); } },
+  { e:'⚒️', n:'Blessing of the Forge', d:'Upgrade 2 random items.', go:r => { for (let i = 0; i < 2; i++){ const c = r.deck.filter(d => d.lvl < 3 && !ITEMS[d.id].junk); if (c.length) pick(c).lvl++; } } },
+  { e:'🖋️', n:'Blessing of Ink', d:'+1 Brush and 1 Royal Ink.', go:r => { r.brushes++; r.inks.line++; } },
+  { e:'💰', n:'Blessing of Coin', d:'+60 gold.', go:r => { goldGain(60); } },
+  { e:'🧼', n:'Blessing of Purity', d:'Remove all junk from your bag and heal 10.', go:r => { r.deck = r.deck.filter(d => !ITEMS[d.id].junk); r.hp = Math.min(r.max, r.hp + 10); } },
+];
+function showShrine(){
+  const run = G.run, c = run.map.cells[run.map.pos];
+  if (!c.bl) c.bl = shuffle(BLESSINGS.map((b, i) => i)).slice(0, 3);
+  openOv('<div class="pn"><div class="big">⛩️</div><h2>Old Shrine</h2><p>Moss-covered stones hum quietly. Choose one blessing.</p><div class="list">' +
+    c.bl.map(i => { const b = BLESSINGS[i]; return '<button class="li" data-a="bless" data-v="' + i + '"><span class="ie">' + b.e + '</span><span class="tx"><b>' + b.n + '</b><small>' + b.d + '</small></span></button>'; }).join('') + '</div></div>');
+}
 function showEvent(){
   const run = G.run, c = run.map.cells[run.map.pos];
   if (c.ev == null){
@@ -1679,7 +1736,7 @@ const ACT = {
     if (CHARS[v]){ if (m.chars.indexOf(v) >= 0) return; cost = CHARS[v].cost; if (m.tickets < cost) return; m.tickets -= cost; m.chars.push(v); }
     else { const u = UNLOCKS.find(x => x.id === v); if (!u || m.unlocked.indexOf(v) >= 0 || m.tickets < u.cost) return; m.tickets -= u.cost; m.unlocked.push(v); }
     saveMeta(); sfx('gem'); showWall(); },
-  continue(){ const d = loadRunData(); if (!d){ toTitle(); return; } G.run = d; toMap();
+  continue(){ const d = loadRunData(); if (!d){ toTitle(); return; } for (const c of d.map.cells) c.revT = -9; G.run = d; G.cam = null; toMap();
     if (d.rq){ G.rq = d.rq; showReward(); return; }
     const c = d.map.cells[d.map.pos];
     if (!c.done && (c.k === 'fight' || c.k === 'elite' || c.k === 'boss')) enterCell(); },
@@ -1698,7 +1755,7 @@ const ACT = {
   leave(){ toMap(); },
   buyItem(v){ const r = G.run, s = shopStock(r.map.cells[r.map.pos]), x = s.items[+v]; if (x.sold || r.gold < x.p) return; r.gold -= x.p; x.sold = true; r.deck.push(newEntry(x.id)); sfx('coin'); showShop(); },
   buyRelic(){ const r = G.run, s = shopStock(r.map.cells[r.map.pos]); if (s.relicSold || r.gold < s.relicP) return; r.gold -= s.relicP; s.relicSold = true; r.relics.push(s.relic); sfx('gem'); showShop(); },
-  buyClaw(v){ const r = G.run, p = clawPrice(); if (r.gold < p || !CLAWUP[v].ok(r.claw)) return; r.gold -= p; r.buys.claw++; CLAWUP[v].ap(r.claw); sfx('gem'); showShop(); },
+  buyClaw(v){ const r = G.run, p = clawPrice(); if (v !== 'size' && v !== 'grip') return; if (r.gold < p || !CLAWUP[v].ok(r.claw)) return; r.gold -= p; r.buys.claw++; CLAWUP[v].ap(r.claw); sfx('gem'); showShop(); },
   buyInk(){ const r = G.run, s = shopStock(r.map.cells[r.map.pos]); if (r.gold < s.inkP) return; r.gold -= s.inkP; r.inks.line++; sfx('coin'); syncBars(); showShop(); },
   shopRemove(){ deckPicker('Remove which item?', 'removePick'); },
   removePick(v){ const r = G.run, p = removePrice(); if (r.gold < p) return; r.gold -= p; r.buys.remove++; r.deck.splice(+v, 1); sfx('junk'); showShop(); },
@@ -1706,6 +1763,7 @@ const ACT = {
     if (ch.ok && !ch.ok(r)) return;
     const msg = ch.go(r); c.done = true; saveRun();
     openOv('<div class="pn"><div class="big">' + ev.e + '</div><h2>' + ev.t + '</h2><p>' + msg + '</p><button class="btn" data-a="leave">Continue</button></div>'); },
+  bless(v){ const r = G.run, c = r.map.cells[r.map.pos]; if (c.done) return; BLESSINGS[+v].go(r); c.done = true; sfx('gem'); toast(BLESSINGS[+v].e + ' ' + BLESSINGS[+v].n); toMap(); },
   tool(v){ const run = G.run;
     if (G.walk) return;
     if (v === 'bag'){ showBag(); return; }
@@ -1808,17 +1866,23 @@ function onDown(x, y){
       F.aiming = true; F.claw.tx = x - MX;
     }
   } else if (G.scr === 'map' && G.run){
-    if (y > VH - 80) return;
-    tapMap(hexAt(x, y));
+    if (y > VH - 80 || y < MAP_TOP) return;
+    G.mapPress = { x, y, cam: G.cam || 0, moved: false };
   }
 }
 function onMove(x, y){
   if (G.press && Math.hypot(x - G.press.x, y - G.press.y) > 9) G.press.moved = true;
   if (G.press) { G.press.lx = x; G.press.ly = y; }
   if (G.scr === 'fight' && F && F.aiming) F.claw.tx = x - MX;
-  if (G.scr === 'map' && G.run) G.hover = hexAt(x, y);
+  if (G.scr === 'map' && G.run){
+    const mp = G.mapPress;
+    if (mp && (mp.moved || Math.abs(y - mp.y) > 8)){ mp.moved = true; G.cam = clamp(mp.cam - (y - mp.y), 0, mapMaxCam()); G.camHold = 2.5; }
+    else G.hover = hexAt(x, y);
+  }
 }
 function onUp(){
+  const mp = G.mapPress; G.mapPress = null;
+  if (mp && !mp.moved && G.scr === 'map' && G.run) tapMap(hexAt(mp.x, mp.y));
   const pr = G.press; G.press = null;
   if (G.tip){ G.tip = null; if (F) F.aiming = false; return; }
   if (G.scr === 'fight' && F && F.aiming){
@@ -2190,54 +2254,90 @@ function drawBottom(){
   let x = VW / 2 - (F.got.length * 26) / 2 + 13;
   for (const it of F.got.slice(-12)){ emoji(ITEMS[it.id].e, x, y + 40, 20); x += 26; }
 }
+const DECO = { 1:['🌲','🌳','🌿','🍄','🌼'], 2:['🌵','🪨','🍂','🌾','🦴'], 3:['🕯️','🦴','🍄','💎','🌑'] };
+const LAND = { 1:['#7fb069', '#8cbf73', '#6fa35e'], 2:['#d7a86e', '#c9975c', '#e0b57c'], 3:['#9d86c9', '#8a74b8', '#ab96d6'] };
+const VOIDC = { 1:'#3a6ea5', 2:'#a8431d', 3:'#1a1030' };
 function drawMap(){
-  const run = G.run, m = run.map, cells = m.cells, [c1, c2, acc] = ACT_COL[run.act] || ACT_COL[1];
+  const run = G.run, m = run.map, cells = m.cells;
+  if (G.cam == null) camFollow(0, true);
+  const cam = G.cam;
   const g = ctx.createLinearGradient(0, 0, 0, VH); g.addColorStop(0, '#1b1330'); g.addColorStop(1, '#0b0814');
   ctx.fillStyle = g; ctx.fillRect(0, 0, VW, VH);
   // parchment
-  rrect(8, 50, VW - 16, VH - 140, 18); ctx.fillStyle = '#e9dcc0'; ctx.fill();
+  rrect(8, MAP_TOP, VW - 16, MAP_BOT - MAP_TOP, 18); ctx.fillStyle = '#e9dcc0'; ctx.fill();
+  ctx.save();
+  rrect(8, MAP_TOP, VW - 16, MAP_BOT - MAP_TOP, 18); ctx.clip();
+  ctx.translate(0, -cam);
   ctx.fillStyle = 'rgba(120,90,50,.08)';
-  for (let i = 0; i < 40; i++){ ctx.beginPath(); ctx.arc((i * 97) % VW, 60 + (i * 53) % (VH - 160), 20 + (i % 5) * 8, 0, TAU); ctx.fill(); }
+  for (let i = 0; i < 60; i++){ ctx.beginPath(); ctx.arc((i * 97) % VW, 60 + (i * 53) % 900, 20 + (i % 5) * 8, 0, TAU); ctx.fill(); }
   const preview = G.tool ? new Set(toolCells(G.tool, G.hover)) : null;
   const reach = new Set(neighbors(cells, m.pos));
+  const pal = LAND[run.act] || LAND[1];
   cells.forEach((c, i) => {
     const [x, y] = hexXY(c);
+    if (y - cam < MAP_TOP - HS * 2 || y - cam > MAP_BOT + HS * 2) return;
+    if (c.revT > G.time + 1) c.revT = -9;   // a clock from another session
     const k = c.rev ? clamp((G.time - c.revT) / 0.35, 0, 1) : 0;
-    if (!c.rev || k < 1) hexPath(x, y, HS - 1), ctx.fillStyle = fogCol(c), ctx.fill();
+    if (!c.rev || k < 1){
+      hexPath(x, y, HS - 1); ctx.fillStyle = fogCol(c); ctx.fill();
+      // drifting cloud puffs on the fog
+      ctx.fillStyle = 'rgba(255,255,255,.05)';
+      const dx = Math.sin(G.time * 0.4 + c.n * 9) * 4;
+      ctx.beginPath(); ctx.arc(x - 8 + dx, y - 4, 9, 0, TAU); ctx.arc(x + 6 + dx, y + 3, 11, 0, TAU); ctx.fill();
+      // landmarks and the boss show through the fog
+      if (!c.rev && c.lm){ ctx.globalAlpha = 0.55; emoji(cellEmoji(c), x, y, 24); ctx.globalAlpha = 1; }
+    }
     if (c.rev){
-      const s = (HS - 1.5) * (k < 1 ? 0.3 + 0.7 * k : 1);
-      hexPath(x, y, s);
-      if (c.v){ ctx.fillStyle = '#2a2240'; ctx.fill(); }
-      else {
-        const pal = run.act === 1 ? ['#7fb069', '#8cbf73', '#6fa35e'] : run.act === 2 ? ['#d7a86e', '#c9975c', '#e0b57c'] : ['#9d86c9', '#8a74b8', '#ab96d6'];
+      const sz = (HS - 1.5) * (k < 1 ? 0.3 + 0.7 * k : 1);
+      hexPath(x, y, sz);
+      if (c.v){
+        ctx.fillStyle = VOIDC[run.act] || VOIDC[1]; ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1.5;
+        const w = Math.sin(G.time * 2 + c.n * 7) * 3;
+        ctx.beginPath(); ctx.moveTo(x - 12, y - 4 + w); ctx.quadraticCurveTo(x - 4, y - 9 + w, x + 4, y - 4 + w); ctx.moveTo(x - 6, y + 6 - w); ctx.quadraticCurveTo(x + 2, y + 1 - w, x + 12, y + 6 - w); ctx.stroke();
+      } else {
         ctx.fillStyle = pal[Math.floor(c.n * 3)]; ctx.fill();
         ctx.strokeStyle = 'rgba(60,40,20,.35)'; ctx.lineWidth = 1.5; ctx.stroke();
         if (c.done && c.k && c.k !== 'start' && c.k !== 'shop'){ ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fill(); }
+        if (k >= 1 && c.deco && !(c.k && !c.done)){ ctx.globalAlpha = 0.85; emoji((DECO[run.act] || DECO[1])[c.deco - 1], x + (c.n - 0.5) * 16, y + 4, 17); ctx.globalAlpha = 1; }
+        if (c.seen && i !== m.pos){ ctx.globalAlpha = 0.35; emoji('🐾', x - 9, y + 11, 11); ctx.globalAlpha = 1; }
       }
       if (k >= 1 && c.k && !c.v){
         const e = cellEmoji(c);
-        if (e){ ctx.globalAlpha = c.done && c.k !== 'shop' ? 0.3 : 1; emoji(e, x, y + (c.done ? 0 : Math.sin(G.time * 3 + i) * 1.5), c.k === 'boss' ? 34 : 24); ctx.globalAlpha = 1; }
+        if (e){ ctx.globalAlpha = c.done && c.k !== 'shop' ? 0.3 : 1; emoji(e, x, y + (c.done ? 0 : Math.sin(G.time * 3 + i) * 1.5), c.k === 'boss' ? 34 : c.lm ? 28 : 24); ctx.globalAlpha = 1; }
       }
     }
     if (preview && preview.has(i)){ hexPath(x, y, HS - 3); ctx.strokeStyle = '#ff5fa2'; ctx.lineWidth = 3; ctx.stroke(); }
-    else if (!G.tool && reach.has(i) && c.rev && !c.v){ hexPath(x, y, HS - 3); ctx.strokeStyle = 'rgba(255,255,255,' + (0.5 + Math.sin(G.time * 4) * 0.3) + ')'; ctx.lineWidth = 2.5; ctx.stroke(); }
+    else if (!G.tool && !G.walk && reach.has(i) && c.rev && !c.v){ hexPath(x, y, HS - 3); ctx.strokeStyle = 'rgba(255,255,255,' + (0.5 + Math.sin(G.time * 4) * 0.3) + ')'; ctx.lineWidth = 2.5; ctx.stroke(); }
   });
-  // the player
-  const [px, py] = hexXY(cells[m.pos]);
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(px, py + 14, 14, 5, 0, 0, TAU); ctx.fill();
-  emoji(charE(), px, py - 4 + Math.sin(G.time * 5) * 2, 32);
+  // dust from footsteps
+  for (const p of G.fx){ ctx.globalAlpha = 0.5 * (1 - p.t / p.life); ctx.fillStyle = '#b89a6a'; ctx.beginPath(); ctx.arc(p.x, p.y, 3 + p.t * 6, 0, TAU); ctx.fill(); }
+  ctx.globalAlpha = 1;
+  // the player hops from hex to hex
+  let [px, py] = hexXY(cells[m.pos]), lift = 0;
+  if (G.hop){
+    const [ax, ay] = hexXY(cells[G.hop.from]), t = clamp(G.hop.t / 0.22, 0, 1), e = t * t * (3 - 2 * t);
+    px = lerp(ax, px, e); py = lerp(ay, py, e); lift = Math.sin(t * Math.PI) * 12;
+  }
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(px, py + 14, 14 - lift * 0.4, 5, 0, 0, TAU); ctx.fill();
+  emoji(charE(), px, py - 4 - lift + (G.hop ? 0 : Math.sin(G.time * 5) * 2), 32);
+  drawCoachMap();
+  ctx.restore();
   // top bar
   ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(0, 0, VW, 44);
   txt('❤️ ' + run.hp + '/' + run.max, 10, 22, 15, '#ff8a9c', 'left');
   txt('💰 ' + run.gold, 112, 22, 15, '#ffd24d', 'left');
   txt('Act ' + run.act + ': ' + ACT_NAME[run.act] + (run.tilt ? '  🎰' + run.tilt : ''), VW - 10, 22, 12, '#cfc2ee', 'right');
-  const hint = G.tool ? (G.tool === 'dot' ? 'Tap a foggy hex beside the paint' : 'Tap a hex to aim the ink') : 'Tap a painted hex to walk. Paint the fog below.';
+  if (cam < mapMaxCam() - 4){ txt('▼', VW / 2, MAP_BOT - 10, 12, 'rgba(90,60,30,.5)'); }
+  if (cam > 4){ txt('▲', VW / 2, MAP_TOP + 10, 12, 'rgba(90,60,30,.5)'); }
+  const hint = G.tool ? (G.tool === 'dot' ? 'Tap a foggy hex beside the paint' : 'Tap a hex to aim the ink') : 'Tap a painted hex to walk. Drag to look around.';
   txt(hint, VW / 2, VH - 84, 13, '#cfc2ee');
   drawCoach();
 }
 function fogCol(c){ const v = 0.5 + c.n * 0.5; return 'rgb(' + Math.round(58 * v + 20) + ',' + Math.round(46 * v + 16) + ',' + Math.round(78 * v + 24) + ')'; }
 function cellEmoji(c){
   switch (c.k){
+    case 'tower': return '🗼'; case 'shrine': return '⛩️'; case 'vault': return '🏛️';
     case 'fight': return '⚔️'; case 'elite': return '☠️'; case 'boss': return ENEMIES[ENC[G.run.act].boss[0]].e;
     case 'gold': return '💰'; case 'chest': return '🎁'; case 'mystery': return '❓'; case 'ink': return '🖋️';
     case 'camp': return '🔥'; case 'shop': return '🛒'; default: return '';

@@ -24,7 +24,7 @@ const EXPOSE = `__out.api = {
   ROWS, COLS, XMIN, XMAX,
   get F(){ return F; }, setF(v){ F = v; },
   newRun, genMap, toMap, toTitle, startFight, stepFight, physStep, collide, mkBody, spawnBody, kinetic, wakeAll,
-  clawPlan, clawMove, clawSegs, initClaw, clawSize, clawGrip, useItem, applyFx, collect, setBonus, playerTurnStart, endPlayerTurn,
+  clawPlan, clawMove, clawSegs, initClaw, clawSize, clawGrip, useItem, applyFx, collect, setBonus, onDropDone, refill, mapMaxCam, camFollow, playerTurnStart, endPlayerTurn,
   enemyAct, doMove, rollIntent, intentBits, hitEnemy, hurtPlayer, killEnemy, winFight, showReward, afterReward, nextAct,
   tapMap, stepWalk, enterCell, useTool, toolCells, pathTo, reveal, neighbors, hexDist, hexXY, hexAt, checkStuck,
   showShop, showCamp, showEvent, showBag, showHelp, gameOver, victory, fxText, rollItems, rollRelic,
