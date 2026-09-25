@@ -9,8 +9,16 @@ const COMBAT = (() => {
   const MAX_ALIVE = 3;       // enemies alive at once (summon cap)
   const MAX_STACK = 99;      // status stacks clamp to [0, 99]
   const MAX_ITEMS = 40;      // bin + used cap for junk/copies (physics budget)
-  const REFILL_AT = 3;       // bin below this at turn start -> used pours back in
-  const ACT_HP = [1, 1, 1.7, 2.6];   // hp multiplier per act (balance targets)
+  const MAX_CABINET = 30;    // bodies in the cabinet at once; the rest of a big bin waits in the used pile
+  // Bin below REFILL_AT at turn start -> the used pile pours back in. A turn
+  // that played nothing does the same: the shower stirs a pile the claw
+  // cannot bite (flat blades and coins on the floor), which otherwise stalls
+  // a fight for dozens of turns.
+  const REFILL_AT = 3;
+  // hp multiplier for an earlier act's normal pulled into a later act (event
+  // fights, summons). Tracks the tuned normals: act 2 ~x2.0, act 3 ~x3.2 of
+  // act 1 (the bible's x1.7 / x2.6 before the balance pass).
+  const ACT_HP = [1, 1, 2.0, 3.2];
   // Player debuffs removed by `cleanse` when DATA.STATUS has no `kind` info.
   const DEBUFFS = ['weak', 'vuln', 'poison', 'burn', 'chill', 'freeze', 'bleed', 'stun', 'grease', 'fog'];
   // Statuses that lose 1 stack at the end of their owner's turn.
@@ -225,6 +233,13 @@ const COMBAT = (() => {
       stats: { played: 0, dmgDealt: 0, dmgTaken: 0, grabs: 0, blocked: 0 },
       playedThisTurn: 0,
     };
+    // A late-run bin can outgrow the cabinet: the overflow waits in the used
+    // pile and cycles in through refills, so the physics budget holds.
+    if (F.bin.length > MAX_CABINET) {
+      const all = F.rng.shuffle(F.bin);
+      F.bin = all.slice(0, MAX_CABINET);
+      F.used = all.slice(MAX_CABINET);
+    }
     for (const id of (enemyIds || []).slice(0, MAX_ALIVE)) F.enemies.push(makeEnemy(F, id));
     if (!F.enemies.length) F.enemies.push(makeEnemy(F, 'dummy'));
     for (const e of F.enemies) api.pickIntent(F, e);
@@ -657,7 +672,8 @@ const COMBAT = (() => {
   // ---------- turn flow ----------
   function refill(F) {
     if (!F.used.length) return null;
-    const items = F.used.splice(0, F.used.length);
+    const room = Math.max(1, MAX_CABINET - F.bin.length);
+    const items = F.used.splice(0, Math.min(F.used.length, room));
     F.bin.push(...items);
     emit(F, { t: 'refill', items });
     return items;
@@ -689,7 +705,8 @@ const COMBAT = (() => {
         text(F, p, s === 'freeze' ? 'FROZEN' : 'STUNNED');
       }
     }
-    if (F.bin.length < REFILL_AT) refill(F);
+    if (F.bin.length < REFILL_AT || (F.dry && F.used.length)) refill(F);
+    F.dry = false;
     hook(F, 'onTurnStart');
     sanitize(F);
     checkOver(F);
@@ -872,6 +889,7 @@ const COMBAT = (() => {
     if (checkOver(F)) return end(F, c);
     F.tilt = 0;
     F.fresh = {};
+    F.dry = !F.playedThisTurn;
     F.phase = 'enemy';
     for (const e of F.enemies.slice()) {
       if (!e.alive || F.enemies.indexOf(e) < 0) continue;
