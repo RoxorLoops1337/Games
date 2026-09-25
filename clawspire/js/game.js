@@ -31,8 +31,10 @@ const GAME = (() => {
   const TILE_NAMES = {
     empty: 'nothing here', fight: 'a fight', elite: 'an elite', treasure: 'treasure', gem: 'a gem',
     ink: 'ink', brush: 'a brush', event: 'something odd', shop: 'a shop', rest: 'a rest stop',
-    boss: 'the boss', start: 'the start', forge: 'a forge',
+    boss: 'the boss', start: 'the start', forge: 'a forge', tower: 'a tower',
   };
+  // Short labels for landmarks the fog shows before they are lit.
+  const LANDMARK_LABELS = { shop: 'Shop', rest: 'Rest', forge: 'Forge', elite: 'Elite', treasure: 'Treasure', boss: 'Boss', tower: 'Tower' };
   const EMPTY_TOASTS = ['An empty arcade. Dust and a flickering sign.', 'Nothing here but old ticket stubs.',
     'A broken cabinet. Someone got there first.', 'Quiet. Too quiet, then a distant jingle.',
     'A vending machine that only sells regret.', 'Footprints in the dust, heading up.'];
@@ -301,9 +303,10 @@ const GAME = (() => {
   function newMap(run) {
     if (!X.MAP) return null;
     const rng = U.rng(U.hashStr(run.seed + ':map:' + run.act));
-    run.map = X.MAP.generate({ act: run.act, rng, cols: 12, rows: 7, ink: run.ink, brushes: run.brushes });
+    run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes });
     run.floor = 0;
     S.brushSel = null;
+    S.preview = null;
     return run.map;
   }
   function gainRelic(id) {
@@ -321,7 +324,7 @@ const GAME = (() => {
     const run = S.run, M = run && run.map;
     if (!M || !X.MAP || M.ink >= 1 || (M.brushes && M.brushes.length)) return false;
     if (X.MAP.pathExists(M, M.pos, M.boss)) return false;
-    const GIVES = ['ink', 'elite', 'event', 'shop', 'brush', 'treasure'];
+    const GIVES = ['ink', 'elite', 'tower', 'event', 'shop', 'brush', 'treasure'];
     for (const k in M.tiles) {
       const t = M.tiles[k];
       if (t.revealed && !t.done && GIVES.indexOf(t.type) >= 0 && X.MAP.pathExists(M, M.pos, t)) return false;
@@ -333,7 +336,18 @@ const GAME = (() => {
   function addGold(n) { const run = S.run; run.gold = Math.max(0, run.gold + n); }
   function addBrush(id) { const run = S.run; run.brushes.push(id); if (run.map) run.map.brushes = run.brushes.slice(); }
   function healRun(n) { const run = S.run; run.hp = U.clamp(run.hp + Math.round(n), 0, run.maxHp); }
-  function addItem(id, plus) { const inst = { uid: U.uid(), id, plus: !!plus }; S.run.bin.push(inst); seeItem(id); return inst; }
+  // A bag item (def.bag = [ids]) pours its contents into the bin instead of
+  // itself; the last one added is returned so callers keep a handle.
+  function addItem(id, plus) {
+    const def = itemDef(id);
+    if (def && Array.isArray(def.bag) && def.bag.length) {
+      let last = null;
+      for (const sub of def.bag) last = addItem(sub, plus);
+      seeItem(id);
+      return last;
+    }
+    const inst = { uid: U.uid(), id, plus: !!plus }; S.run.bin.push(inst); seeItem(id); return inst;
+  }
   // Relic ids not yet owned, filtered by rarity list.
   function relicPool(rarities) {
     const own = S.run ? S.run.relics : [];
@@ -537,6 +551,7 @@ const GAME = (() => {
     run.map.ink = run.ink;
     run.map.brushes = run.brushes.slice();
     S.brushSel = null;
+    S.preview = null;
     inkRescue();
     S.sd = null;
     setScreen('map');
@@ -550,6 +565,7 @@ const GAME = (() => {
     const a = actDef(run.act);
     const l1 = h('div', 'l1');
     l1.appendChild(h('h2', null, `Act ${run.act}: ${a.name}`));
+    l1.appendChild(h('span', 'mhInk', `${M ? M.ink : run.ink} ink`));
     l1.appendChild(btn('Bin', () => openBin({ mode: 'view', back: () => toMap() }), 'sm ghost'));
     l1.appendChild(btn('?', () => showHelp('map'), 'sm ghost'));
     l1.appendChild(btn('Quit', () => { save(); showTitle(); }, 'sm ghost'));
@@ -565,35 +581,41 @@ const GAME = (() => {
       S.ui.buttons.push({ el: chip, fn, label: bd.name });
       l2.appendChild(chip);
     }
+    const pv = S.preview;
     const hintTxt = S.brushSel ? `Brush ready: tap a hidden hex next to the light to paint it.`
-      : (M && M.ink > 0 ? 'Tap a hidden hex to reveal it (1 ink). Tap a lit hex to walk.' : 'No ink left. Tap a lit hex to walk. Elites and ink tiles give ink.');
+      : pv ? (M.ink >= pv.cost ? `Path: ${pv.cost} ink. Tap that hex again to paint it.` : `Path: ${pv.cost} ink, you have ${M.ink}. Elites, towers and ink pots give more.`)
+      : 'Tap a hidden hex to preview the ink path. Tap again to paint it. Walk on lit hexes.';
     l2.appendChild(h('div', 'hint', hintTxt));
     head.appendChild(l2);
     refreshHud(true);
   }
+  // The map is drawn as a portrait climb: MAP orient 'v' transposes the
+  // generator's left-to-right layout so the start sits at the bottom middle
+  // and the boss at the top. Hexes are capped at MAP_HEX_MAX px.
+  const MAP_ORIENT = 'v', MAP_HEX_MAX = 44;
   // Where the map sits on the stage, and the hex size that fits it.
   function mapLayout() {
     const M = S.run && S.run.map;
     if (!M || !X.MAP) return null;
     const area = { x: 0, y: 172, w: W, h: 768 };
     let L;
-    if (X.MAP.size) L = X.MAP.size(M, area.w, area.h);
+    if (X.MAP.size) L = X.MAP.size(M, area.w, area.h, MAP_ORIENT, MAP_HEX_MAX);
     else {
       const s = Math.min((area.w - 16) / (Math.sqrt(3) * (M.cols + 0.5)), (area.h - 16) / (1.5 * (M.rows - 1) + 2));
       L = { size: s, ox: 0, oy: 0 };
     }
-    return { area, size: L.size, ox: area.x + L.ox, oy: area.y + L.oy };
+    return { area, size: L.size, ox: area.x + L.ox, oy: area.y + L.oy, orient: MAP_ORIENT };
   }
   function hexToStage(q, r) {
     const L = mapLayout();
     if (!L) return { x: 0, y: 0 };
-    const p = X.MAP.toPixel(q, r, L.size);
+    const p = X.MAP.toPixel(q, r, L.size, L.orient);
     return { x: L.ox + p.x, y: L.oy + p.y };
   }
   function stageToHex(x, y) {
     const L = mapLayout();
     if (!L) return null;
-    return X.MAP.fromPixel(x - L.ox, y - L.oy, L.size);
+    return X.MAP.fromPixel(x - L.ox, y - L.oy, L.size, L.orient);
   }
   function mapTap(x, y) {
     const run = S.run, M = run && run.map;
@@ -601,6 +623,10 @@ const GAME = (() => {
     const hx = stageToHex(x, y);
     if (!hx) return false;
     const t = X.MAP.tileAt(M, hx.q, hx.r);
+    // A tap anywhere but the previewed hex clears the preview.
+    const pv = S.preview;
+    const samePv = !!(pv && t && pv.q === t.q && pv.r === t.r);
+    if (pv && !samePv) { S.preview = null; buildMapHead(); }
     if (!t) return false;
     if (S.brushSel && X.MAP.canBrush && X.MAP.canBrush(M, S.brushSel, t.q, t.r)) {
       const tiles = X.MAP.brush(M, S.brushSel, t.q, t.r) || [];
@@ -625,9 +651,30 @@ const GAME = (() => {
         save();
         return true;
       }
-      if (M.ink < 1) toast('No ink. Elites and ink tiles give more.');
-      else toast('Reveal hexes next to the light.');
-      return false;
+      // Not next to the light: preview the ink path, paint it on a second tap.
+      const path = X.MAP.pathToReveal ? X.MAP.pathToReveal(M, t.q, t.r) : [];
+      if (!path.length) {
+        if (M.ink < 1) toast('No ink. Elites, towers and ink pots give more.');
+        else toast('No way through the fog to that hex.');
+        return false;
+      }
+      if (samePv) {
+        if (M.ink < path.length) { toast(`That path needs ${path.length} ink. ${path.length - M.ink} short.`); return false; }
+        const tiles = X.MAP.revealPath(M, path) || [];
+        run.ink = M.ink;
+        S.preview = null;
+        snd('reveal');
+        fx().burst(x, y, '#2ee6d6', 18);
+        toast(`Painted ${tiles.length} hexes to ${TILE_NAMES[t.type] || t.type}.`);
+        inkRescue();
+        buildMapHead();
+        save();
+        return true;
+      }
+      S.preview = { q: t.q, r: t.r, path, cost: path.length, label: t.known ? (LANDMARK_LABELS[t.type] || t.type) : null };
+      snd('click');
+      buildMapHead();
+      return true;
     }
     if (X.MAP.canMove(M, t.q, t.r)) {
       X.MAP.move(M, t.q, t.r);
@@ -659,6 +706,13 @@ const GAME = (() => {
         finish();
         const enc = c.enc || encounterFor('boss');
         startFight(enc, 'boss');
+        return;
+      }
+      case 'tower': {
+        // An elite-tier fight; the win pays a relic plus the bonus rolled at generate.
+        finish();
+        const enc = c.enc || encounterFor('elite');
+        startFight(enc, 'elite', { then: { tower: { bonus: (c.tower && c.tower.bonus) || { k: 'ink', n: 2 }, q: t.q, r: t.r } } });
         return;
       }
       case 'treasure': {
@@ -1139,6 +1193,13 @@ const GAME = (() => {
         hint(carried().length ? 'slipped one...' : 'slipped...');
         break;
       }
+      case 'shed': {
+        // the cradle was full at the lift: the extras stayed in the pile
+        // (not a failure; Wider Palm x2 and Third Prong raise the capacity)
+        snd('clawTouch');
+        fx().text(CAB.x + rig.x, CAB.y + rig.y + 30, 'FULL', '#8e98a8', { size: 14, life: 0.7 });
+        break;
+      }
       case 'release': snd('clawRelease'); FS.watch = true; FS.releaseAt = S.t; break;
       case 'home': break;
       default: break;
@@ -1159,7 +1220,9 @@ const GAME = (() => {
     fx().text(chuteMid - 66, CAB.y + CAB.h - 40, '+PLAYED', '#ffc94d', { size: 15, dy: -80, life: 0.9 });
     snd('chute');
     haptic('tap');
-    if (FS.delivered === 2) {
+    // Doubles are the norm with the basket claw: a triple is the jackpot.
+    if (FS.delivered === 2) { fx().text(chuteMid - 66, CAB.y + CAB.h - 70, 'DOUBLE', '#2ee6d6', { size: 16, dy: -60, life: 0.8 }); }
+    if (FS.delivered === 3) {
       banner('JACKPOT', 'jackpot', 1.4);
       snd('jackpot'); haptic('jackpot');
       fx().burst(270, 600, '#ffc94d', fx().reduced ? 12 : 40); if (!fx().reduced) fx().flash('#ffc94d');
@@ -1453,8 +1516,33 @@ const GAME = (() => {
   function afterReward(rw) {
     S.sd = null;
     if (rw.tier === 'boss') { nextAct(); return; }
+    if (rw.then && rw.then.tower) { towerPrize(rw.then.tower); return; }
     if (rw.then) { const then = rw.then; resolveFx(then.fx || [], then.i || 0, () => toMap()); return; }
     toMap();
+  }
+  // A tower taken: the bonus rolled at generate is applied here, then the
+  // treasure screen offers a relic on top (the usual treasure flow).
+  function towerPrize(tw) {
+    const b = (tw && tw.bonus) || { k: 'ink', n: 2 };
+    let line = '';
+    switch (b.k) {
+      case 'gold': { const n = b.n || 60; addGold(n); snd('coin'); line = `+${n} gold`; break; }
+      case 'brush': {
+        const id = b.id || (X.MAP && X.MAP.brushIds ? rngFor('tower').pick(X.MAP.brushIds()) : 'splash');
+        addBrush(id);
+        line = `a brush (${(tbl('BRUSHES')[id] || { name: id }).name})`;
+        break;
+      }
+      case 'claw': {
+        const def = tbl('CLAW_UPGRADES')[b.u];
+        if (def && applyClawUpgrade(b.u)) line = `a claw upgrade (${def.name})`;
+        else { addGold(60); snd('coin'); line = '+60 gold (the claw part did not fit)'; }
+        break;
+      }
+      default: { const n = b.n || 2; addInk(n); line = `+${n} ink`; break; }
+    }
+    const id = rollRelic(rngFor('tower'), ['u', 'r']);
+    showTreasure({ relic: id, gold: b.k === 'gold' ? (b.n || 60) : 0, title: 'Tower taken', sub: `The keeper leaves ${line} and a relic.` });
   }
   function nextAct() {
     const run = S.run;
@@ -2051,19 +2139,38 @@ const GAME = (() => {
     const reach = new Set(X.MAP.reachable ? X.MAP.reachable(M).map((x) => X.MAP.key(x.q, x.r)) : []);
     const brushable = new Set();
     if (S.brushSel && X.MAP.revealable) for (const x of X.MAP.revealable(M, { brush: true })) brushable.add(X.MAP.key(x.q, x.r));
+    const pv = S.preview && S.preview.path && S.preview.path.length ? S.preview : null;
+    const onPath = {};
+    if (pv) pv.path.forEach(([q, r], i) => { onPath[X.MAP.key(q, r)] = i + 1; });
+    const at = (q, r) => { const p = X.MAP.toPixel(q, r, L.size, L.orient); return { x: L.ox + p.x, y: L.oy + p.y }; };
+    const flat = L.orient === 'v';
+    const hidden = [];
+    let curXY = null;
     for (const k in M.tiles) {
       const tile = M.tiles[k];
-      const p = X.MAP.toPixel(tile.q, tile.r, L.size);
-      const x = L.ox + p.x, y = L.oy + p.y;
+      const { x, y } = at(tile.q, tile.r);
       const cur = tile.q === M.pos.q && tile.r === M.pos.r;
-      const st = { reachable: reach.has(k), current: cur, hover: brushable.has(k), t, ink: M.ink, canReveal: !tile.revealed && M.ink >= 1 && X.MAP.canReveal(M, tile.q, tile.r) };
+      if (cur) curXY = { x, y };
+      if (!tile.revealed && tile.type !== 'boss') hidden.push({ x, y });
+      const st = { reachable: reach.has(k), current: cur, hover: brushable.has(k), t, ink: M.ink, canReveal: !tile.revealed && M.ink >= 1 && X.MAP.canReveal(M, tile.q, tile.r),
+        path: onPath[k] || 0, target: !!(pv && pv.q === tile.q && pv.r === tile.r), known: !!tile.known, orient: L.orient };
       if (R && R.hex) R.hex(ctx, x, y, L.size, tile, st);
       else {
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i - 30); ctx.lineTo(x + L.size * Math.cos(a), y + L.size * Math.sin(a)); }
+        for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i + (flat ? 0 : -30)); ctx.lineTo(x + L.size * Math.cos(a), y + L.size * Math.sin(a)); }
         ctx.closePath(); ctx.fillStyle = tile.revealed ? '#2c1d4a' : '#150c26'; ctx.fill(); ctx.strokeStyle = '#3d2a63'; ctx.stroke();
       }
-      if (cur && R && R.portrait) R.portrait(ctx, run.char, x, y, L.size * 1.2, t);
+    }
+    // The start-boss axis shows through the fog so the direction is obvious.
+    if (R && R.mapAxis && hidden.length) { const a = at(M.start.q, M.start.r), b = at(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, L.size, hidden, t, flat); }
+    if (curXY && R && R.portrait) R.portrait(ctx, run.char, curXY.x, curXY.y, L.size * 1.2, t);
+    if (pv && R && R.mapPath) {
+      // Draw the path from the lit hex it grows out of.
+      const pts = pv.path.map(([q, r]) => at(q, r));
+      const [fq, fr] = pv.path[0];
+      const from = X.MAP.neighbors(M, fq, fr).map(([q, r]) => M.tiles[X.MAP.key(q, r)]).find((n) => n.revealed && (n.type !== 'boss' || n.visited));
+      if (from) pts.unshift(at(from.q, from.r));
+      R.mapPath(ctx, pts, L.size, { cost: pv.cost, ink: M.ink, label: pv.label, t });
     }
   }
   function drawFight(ctx, t) {
@@ -2223,7 +2330,7 @@ const GAME = (() => {
 
   return {
     boot, update, draw, loop, resize,
-    newRun, toMap, enterTile, startFight, endFight, dropClaw, steer, endTurn, save, load, mapTap,
+    newRun, toMap, enterTile, addItem, startFight, endFight, dropClaw, steer, endTurn, save, load, mapTap,
     playDelivered: (bodies) => { for (const b of bodies || []) if (FS && FS.items.indexOf(b) >= 0) deliver(b); },
     tap, pointer, choose, state, hexToStage, stageToHex, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
     showTreasure, showGameOver, showWin, showHelp, showCollection, openBin, resolveFx, gainRelic, applyClawUpgrade, rollShop,

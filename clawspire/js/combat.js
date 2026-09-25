@@ -8,8 +8,10 @@
 const COMBAT = (() => {
   const MAX_ALIVE = 3;       // enemies alive at once (summon cap)
   const MAX_STACK = 99;      // status stacks clamp to [0, 99]
-  const MAX_ITEMS = 40;      // bin + used cap for junk/copies (physics budget)
-  const MAX_CABINET = 30;    // bodies in the cabinet at once; the rest of a big bin waits in the used pile
+  // Starting bins are 19 items now (6 of them r 9-11 fillers, cheap circles
+  // for the physics budget), so both caps grew: 40 -> 48 and 30 -> 34.
+  const MAX_ITEMS = 48;      // bin + used cap for junk/copies (physics budget)
+  const MAX_CABINET = 34;    // bodies in the cabinet at once; the rest of a big bin waits in the used pile
   // Bin below REFILL_AT at turn start -> the used pile pours back in. A turn
   // that played nothing does the same: the shower stirs a pile the claw
   // cannot bite (flat blades and coins on the floor), which otherwise stalls
@@ -190,8 +192,17 @@ const COMBAT = (() => {
     const dAct = clamp(num(def.act, 1) | 0, 1, 3);
     const tier = def.tier || 'normal';
     if (tier === 'normal' && dAct < F.act) hp = Math.round(hp * ACT_HP[F.act] / ACT_HP[dAct]);
+    // Global difficulty (DATA.DIFFICULTY): hp and attack values scale together
+    // so the content bands stay readable while the claw's yield changes.
+    const diff = (api.defs() || {}).DIFFICULTY || {};
+    const hpMul = num(diff.hp, 1), dmgMul = num(diff.dmg, 1);
+    let edef = def;
+    if (hpMul !== 1) hp = Math.max(1, Math.round(hp * hpMul));
+    if (dmgMul !== 1 && Array.isArray(def.moves)) {
+      edef = Object.assign({}, def, { moves: def.moves.map(m => (m && (m.k === 'attack' || m.k === 'charge') && m.v != null) ? Object.assign({}, m, { v: Math.max(1, Math.round(m.v * dmgMul)) }) : m) });
+    }
     const e = {
-      uid: newUid(), id, def, hp, maxHp: hp, block: 0, status: {}, intent: null, moveIdx: -1,
+      uid: newUid(), id, def: edef, hp, maxHp: hp, block: 0, status: {}, intent: null, moveIdx: -1,
       alive: true, charged: 0, escaped: false, cyc: 0,
     };
     // Optional starting statuses (e.g. a golem's armor): def.status {s: v}.
@@ -1012,5 +1023,7 @@ const COMBAT = (() => {
   api.isJunk = isJunk;
   api.calcHit = calcHit;
   api.MAX_ALIVE = MAX_ALIVE;
+  api.MAX_ITEMS = MAX_ITEMS;
+  api.MAX_CABINET = MAX_CABINET;
   return api;
 })();

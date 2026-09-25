@@ -278,7 +278,14 @@ h.test('refill, exhaust, junk, purge, copy, steal, freezeItem', () => {
   h.eq(F.bin[0].uid, 'z1', 'fight instances keep run uids');
   // junk cap
   F = fight(['dummy']); for (let i = 0; i < 10; i++) COMBAT.addJunk(F, 'rock', 20);
-  h.ok(F.bin.length + F.used.length <= 40, 'junk capped at 40 items');
+  h.eq(COMBAT.MAX_ITEMS, 48, 'item cap is 48 (19-item starting bins of cheap small circles)');
+  h.eq(F.bin.length + F.used.length, 48, 'junk fills up to the 48 item cap and no further');
+  // cabinet cap: a big bin keeps 34 bodies in the cabinet, the rest waits in used
+  h.eq(COMBAT.MAX_CABINET, 34, 'cabinet cap is 34');
+  F = fight(['dummy'], { bin: Array.from({ length: 40 }, (_, i) => (i % 2 ? 'sword' : 'shield')) });
+  h.eq(F.bin.length, 34, 'a 40-item bin puts 34 in the cabinet'); h.eq(F.used.length, 6, 'and 6 in the used pile');
+  F = fight(['dummy'], { bin: Array.from({ length: 34 }, () => 'sword') });
+  h.eq(F.bin.length, 34, 'a 34-item bin fits whole'); h.eq(F.used.length, 0, 'nothing waits');
 });
 
 h.test('grab fx, gold/ink/maxhp gains, shake, useGrab, grabDone', () => {
@@ -475,6 +482,15 @@ else {
     }
     const known = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'shake', 'junk', 'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll'];
     for (const k of kinds) h.ok(known.includes(k), `item fx kind ${k} is one the engine implements`);
+  });
+
+  h.test('data: starting bins fit the cabinet with room for junk', () => {
+    for (const [ch, c] of Object.entries(DATA.CHARACTERS || {})) {
+      const F = C.newFight(mkRun(c.bin, [c.relic], 1), firstEnc, U.rng(11));
+      h.eq(F.bin.length, c.bin.length, `${ch}: all ${c.bin.length} starting items start in the cabinet`);
+      h.ok(C.MAX_CABINET - c.bin.length >= 10, `${ch}: room for 10+ junk or copies (${C.MAX_CABINET - c.bin.length})`);
+      h.ok(!invariants(F, ch), `${ch}: starting fight is clean`);
+    }
   });
 
   h.test('data: every enemy move kind resolves', () => {

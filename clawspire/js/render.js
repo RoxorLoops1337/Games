@@ -102,9 +102,10 @@ const RENDER = (() => {
     }
     c.closePath();
   }
-  function hexPath(c, x, y, r) {
+  // Pointy-top by default; flat (the map's portrait orientation) turns it 30 degrees.
+  function hexPath(c, x, y, r, flat) {
     for (let i = 0; i < 6; i++) {
-      const a = -Math.PI / 2 + i * Math.PI / 3;
+      const a = (flat ? 0 : -Math.PI / 2) + i * Math.PI / 3;
       if (i) c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); else c.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
     }
     c.closePath();
@@ -1522,7 +1523,8 @@ const RENDER = (() => {
   }
 
   /* ============================================================= HEX */
-  const TILE_COL = { fight: '#5a2440', elite: '#6a1f3a', treasure: '#5a4a1a', gem: '#1f5a5a', ink: '#2a2a6a', brush: '#4a3a6a', event: '#3a3a5a', shop: '#4a4a1f', rest: '#5a3a1a', forge: '#3a3a3a', boss: '#3a0a24', start: '#1f4a3a', empty: '#2a2340' };
+  const TILE_COL = { fight: '#5a2440', elite: '#6a1f3a', treasure: '#5a4a1a', gem: '#1f5a5a', ink: '#2a2a6a', brush: '#4a3a6a', event: '#3a3a5a', shop: '#4a4a1f', rest: '#5a3a1a', forge: '#3a3a3a', boss: '#3a0a24', start: '#1f4a3a', tower: '#2a3a6a', empty: '#2a2340' };
+  const FOG = '#1a1230';
   function hexIcon(ctx, type, r, t) {
     const s = r * 0.62;
     switch (type) {
@@ -1568,6 +1570,18 @@ const RENDER = (() => {
         flames(ctx, 0, s * 0.7, s * 1.5, s * 1.6, t || 0, 0);
         break;
       case 'forge': IA.anvil(ctx, s * 2, s * 1.5, '#5a6373', '#c9d3e0'); break;
+      case 'tower': {
+        // a squat keep: battlements, two windows, an arched door, a pennant
+        tone(ctx, c => rrect(c, -s * 0.72, -s * 0.5, s * 1.44, s * 1.6, 2), '#6a6f8a', 0, s * 0.3, s, { dark: -0.35 });
+        ctx.beginPath(); for (let i = -1; i <= 1; i++) rrect(ctx, i * s * 0.5 - s * 0.17, -s * 0.88, s * 0.34, s * 0.45, 1);
+        F(ctx, '#7a7f9a'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        ctx.beginPath(); rrect(ctx, -s * 0.24, s * 0.3, s * 0.48, s * 0.8, s * 0.24); F(ctx, INK); ctx.fill();
+        ctx.beginPath(); circ(ctx, -s * 0.32, -s * 0.1, s * 0.11); circ(ctx, s * 0.32, -s * 0.1, s * 0.11); F(ctx, PAL.gold); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(0, -s * 0.88); ctx.lineTo(0, -s * 1.55); S(ctx, INK, 2.5); ctx.stroke();
+        const wave = Math.sin((t || 0) * 6) * s * 0.08;
+        tone(ctx, c => { c.moveTo(0, -s * 1.55); c.lineTo(s * 0.75, -s * 1.32 + wave); c.lineTo(0, -s * 1.08); c.closePath(); }, PAL.pink, s * 0.3, -s * 1.32, s * 0.3, { ol: 1.5, spec: false, dark: -0.2 });
+        break;
+      }
       case 'boss':
         glow(ctx, 0, 0, r * 0.9, PAL.pink, 0.5 + Math.sin((t || 0) * 3) * 0.2);
         IA.skull(ctx, s * 1.8, s * 2, '#f1e9d6', PAL.pink);
@@ -1583,10 +1597,10 @@ const RENDER = (() => {
     }
   }
   // Brushed edge: a hex whose vertices are nudged by a hash of (q, r).
-  function brushedHex(ctx, r, q, rr) {
+  function brushedHex(ctx, r, q, rr, flat) {
     const seed = ((q || 0) * 73856093) ^ ((rr || 0) * 19349663);
     for (let i = 0; i < 6; i++) {
-      const a = -Math.PI / 2 + i * Math.PI / 3, j = ((seed >> (i * 3)) & 7) / 7 - 0.5;
+      const a = (flat ? 0 : -Math.PI / 2) + i * Math.PI / 3, j = ((seed >> (i * 3)) & 7) / 7 - 0.5;
       const rad = r * (0.97 + j * 0.1);
       const px = Math.cos(a) * rad, py = Math.sin(a) * rad;
       if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
@@ -1598,18 +1612,32 @@ const RENDER = (() => {
     try {
       tile = tile || {}; st = st || {};
       const r = size || 30, t = st.t || 0, type = tile.type || 'empty';
+      const flat = st.orient === 'v';   // portrait map: flat-top hexes, upright icons
       ctx.translate(x || 0, y || 0);
       ctx.lineJoin = 'round';
       const hidden = !tile.revealed && type !== 'boss';
       if (hidden) {
-        ctx.beginPath(); brushedHex(ctx, r * 0.96, tile.q, tile.r);
-        F(ctx, '#1a1230'); ctx.fill(); S(ctx, rgba(INK, 0.9), 3); ctx.stroke();
-        ctx.beginPath(); brushedHex(ctx, r * 0.8, tile.r, tile.q);
+        ctx.beginPath(); brushedHex(ctx, r * 0.96, tile.q, tile.r, flat);
+        F(ctx, FOG); ctx.fill(); S(ctx, rgba(INK, 0.9), 3); ctx.stroke();
+        ctx.beginPath(); brushedHex(ctx, r * 0.8, tile.r, tile.q, flat);
         S(ctx, rgba('#6a5a8a', 0.18), 5); ctx.stroke();
-        txt(ctx, '?', 0, 1, r * 0.8, rgba('#f4ecd6', 0.16), true);
+        if (tile.known && type !== 'empty') {
+          // Landmark: the icon as a dim ink sketch under a fog wash, with a
+          // dashed rim, so it can be planned for before it is lit.
+          ctx.save();
+          ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.9, flat); ctx.clip();
+          ctx.globalAlpha = 0.95;
+          const limg = artImg('hex', type);
+          if (limg) blitContain(ctx, limg, 0, 0, r * 1.2, r * 1.2); else hexIcon(ctx, type, r * 0.95, t);
+          ctx.globalAlpha = 0.42;
+          F(ctx, FOG); ctx.fillRect(-r, -r, r * 2, r * 2);
+          ctx.restore();
+          ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.86, flat);
+          ctx.setLineDash([3, 4]); S(ctx, rgba('#f4ecd6', 0.4), 1.5); ctx.stroke(); ctx.setLineDash([]);
+        } else txt(ctx, '?', 0, 1, r * 0.8, rgba('#f4ecd6', 0.16), true);
       } else {
         const base = tile.visited ? '#3a3648' : (TILE_COL[type] || TILE_COL.empty);
-        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96);
+        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
         F(ctx, base); ctx.fill();
         ctx.save(); ctx.clip();
         F(ctx, rgba('#ffffff', 0.08)); ctx.fillRect(-r, -r, r * 2, r * 0.9);
@@ -1625,16 +1653,31 @@ const RENDER = (() => {
           S(ctx, INK, 5); ctx.stroke(); S(ctx, PAL.lime, 2.5); ctx.stroke();
         }
       }
+      if (st.path) {
+        // ink path preview: a cyan wash, stronger on the target
+        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
+        F(ctx, rgba(PAL.cyan, st.target ? 0.32 : 0.18)); ctx.fill();
+        ctx.setLineDash([4, 4]); ctx.lineDashOffset = -t * 20;
+        S(ctx, rgba(PAL.cyan, 0.95), 2.5); ctx.stroke(); ctx.setLineDash([]);
+      }
       if (st.reachable) {
-        const pul = 0.55 + Math.sin(t * 4) * 0.35;
-        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.9);
-        S(ctx, rgba(PAL.cyan, pul), 3); ctx.stroke();
+        // walkable now: a thick pulsing cyan rim plus a steady inner line
+        const pul = 0.6 + Math.sin(t * 4) * 0.3;
+        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.84, flat);
+        S(ctx, rgba(PAL.cyan, pul), 5); ctx.stroke();
+        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
+        S(ctx, rgba(PAL.cyan, 0.9), 2); ctx.stroke();
       }
       if (st.hover) {
-        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96);
+        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
         F(ctx, rgba('#ffffff', 0.14)); ctx.fill(); S(ctx, PAL.gold, 3); ctx.stroke();
       }
       if (st.current) {
+        // you are here: a gold rim that breathes, over a soft glow
+        const pr = r * (1.02 + Math.sin(t * 3) * 0.04);
+        glow(ctx, 0, 0, r * 1.3, PAL.gold, 0.35);
+        ctx.beginPath(); hexPath(ctx, 0, 0, pr, flat); S(ctx, PAL.gold, 4); ctx.stroke();
+        ctx.beginPath(); hexPath(ctx, 0, 0, pr * 0.86, flat); S(ctx, rgba(PAL.gold, 0.55 + Math.sin(t * 3) * 0.3), 2); ctx.stroke();
         // the crawler: a small figure with a claw-cabinet backpack
         const bob = Math.sin(t * 4) * 1.5, k = r / 30;
         ctx.save(); ctx.translate(0, r * 0.25 + bob); ctx.scale(k, k);
@@ -1647,6 +1690,60 @@ const RENDER = (() => {
         F(ctx, INK); ctx.beginPath(); circ(ctx, -5, -31, 1.4); circ(ctx, 0, -31, 1.4); ctx.fill();
         tone(ctx, c => { c.moveTo(-10, -32); c.quadraticCurveTo(-2, -44, 8, -32); c.closePath(); }, '#4a3a6a', -1, -36, 8, { dark: -0.3, spec: false });
         ctx.restore();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The start-to-boss axis: a faint dotted line with chevrons toward the
+  // boss, clipped to the given hidden hex centres so it shows through the
+  // fog only (lit tiles stay clean).
+  function mapAxis(ctx, x0, y0, x1, y1, size, hidden, t, flat) {
+    ctx.save();
+    try {
+      size = size || 30; t = t || 0;
+      if (hidden && hidden.length) { ctx.beginPath(); for (const p of hidden) hexPath(ctx, p.x, p.y, size * 0.96, flat); ctx.clip(); }
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
+      ctx.setLineDash([2, 9]); ctx.lineDashOffset = -((t * 12) % 11);
+      S(ctx, rgba('#f4ecd6', 0.4), 3); ctx.stroke(); ctx.setLineDash([]);
+      const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+      const step = size * 2.6, a = size * 0.3;
+      for (let d = step; d < len - size; d += step) {
+        const cx = x0 + ux * d, cy = y0 + uy * d;
+        ctx.beginPath();
+        ctx.moveTo(cx - ux * a - uy * a, cy - uy * a + ux * a);
+        ctx.lineTo(cx + ux * a * 0.5, cy + uy * a * 0.5);
+        ctx.lineTo(cx - ux * a + uy * a, cy - uy * a - ux * a);
+        S(ctx, rgba('#f4ecd6', 0.35), 2.5); ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Ink path preview: a dashed cyan line through pts (lit origin first,
+  // target last), the ink cost in a pill under the target (pink when the
+  // player is short) and an optional landmark label above it.
+  function mapPath(ctx, pts, size, o) {
+    ctx.save();
+    try {
+      o = o || {}; size = size || 30; const t = o.t || 0;
+      pts = pts || [];
+      if (pts.length > 1) {
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        S(ctx, rgba(INK, 0.8), 7); ctx.stroke();
+        ctx.setLineDash([size * 0.3, size * 0.3]); ctx.lineDashOffset = -t * 40;
+        S(ctx, PAL.cyan, 3.5); ctx.stroke(); ctx.setLineDash([]);
+        for (const p of pts) { ctx.beginPath(); circ(ctx, p.x, p.y, 2.5); F(ctx, PAL.cyan); ctx.fill(); }
+      }
+      const end = pts.length ? pts[pts.length - 1] : null;
+      if (end && o.cost != null) {
+        const enough = o.ink == null || o.ink >= o.cost;
+        const s = o.cost + ' ink';
+        const fs = Math.max(12, size * 0.5), w = s.length * fs * 0.62 + 14, hh = fs + 8;
+        const by = end.y + size * 0.92 + hh / 2;
+        tone(ctx, c => rrect(c, end.x - w / 2, by - hh / 2, w, hh, hh / 2), enough ? PAL.cyan : PAL.pink, end.x, by, w / 2, { spec: false, dark: -0.2, ol: 2 });
+        txt(ctx, s, end.x, by + 1, fs, INK, true);
+        if (o.label) txt(ctx, o.label, end.x, end.y - size * 1.05, Math.max(12, size * 0.5), '#f4ecd6', true, 'center', true);
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -2114,7 +2211,7 @@ const RENDER = (() => {
   })();
 
   return {
-    item, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, bodyDebug, hex, mapBg, bg, hpBar, statusPips, intent,
+    item, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, bodyDebug, hex, mapBg, mapAxis, mapPath, bg, hpBar, statusPips, intent,
     portrait, relicIcon, title, fx, flames,
     ITEM_KEYS, ENEMY_KEYS, ITEM_DEFAULT, PAL, shade, rgba, glowSprite,
   };

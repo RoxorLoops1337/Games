@@ -877,16 +877,26 @@ const PHYS = (() => {
     tiltMul: 0.6,              // palm tilt = sway * tiltMul
     minCable: 24,              // palm centre below the rail when fully lifted
     palmH: 14,
-    pivot: 22,                 // hinge offset from the palm centre (x width)
-    prongLen: 46,              // at width 1; grows sublinearly (see geometry()) so wide claws keep leverage
+    pivot: 26,                 // hinge offset from the palm centre (x width)
+    prongLen: 53,              // at width 1; grows sublinearly (see geometry()) so wide claws keep leverage
     prongLenWidth: 0.45,       // fraction of the length that scales with width
-    prongLen3: 26,             // the keeper prong is short: it pins the item into the V from above
+    prongLen3: 30,             // the keeper prong is short: it pins the item into the V from above
     tipHalf: 2,                // prong tip half width
-    hookFrac: 0.36,            // fraction of the prong length that is the bent tip segment
-    hookAngle: 0.37,           // rad: the tip segment bends inward by this much; equal to the closed
-                               // angle at width 1 so the tip is vertical when closed and the sweep stays level
-    openSpan: 74,              // tip to tip when open, times width
-    closedGap: 1.5,            // tip to tip when closed
+    hookFrac: 0.42,            // fraction of the prong length that is the bent tip segment
+    hookAngle: 0.55,           // rad: the tip segment bends inward by this much, so the two hooks
+                               // meet under the load as a basket (the cradle) rather than a pinch
+    openSpan: 96,              // tip to tip when open, times width
+    closedGap: 2,              // inner corner to inner corner when closed
+    // The cradle: every item whose centre sits inside the basket (palm, two
+    // prongs, hooked tips; expanded outward by cradleMargin px) when the
+    // closing ends is locked, not only the ones pinched by two prongs.
+    cradleMargin: 8,
+    cradleCap: 2,              // items the cradle carries at base
+    cradleCap3: 1,             // +1 with the third prong
+    cradleCapWide: 1,          // +1 at width >= cradleWide (Wider Palm x2)
+    cradleWide: 1.36,
+    carryTuck: 6,              // px the palm may tuck past the wall clearance while carrying, so a wide claw still centres over the chute
+    settleT: 0.15,             // s the claw holds its clench after the prongs stop, before the lift
     jitter: 0.12,              // shared torque jitter while holding (fraction)
     jitterProng: 0.03,         // extra per-prong jitter
     open3: 0.85, closed3: 0.0,
@@ -900,22 +910,24 @@ const PHYS = (() => {
     gripTorque0: 0.8, gripTorque1: 0.2,   // closing torque = base * (t0 + t1 * grip)
     prongFriction: 0.55, rubberFriction: 1.1,
     prongDensity: 1.2,
-    quietAV: 0.3, quietT: 0.15, closeMax: 0.7, closeMin: 0.12,
+    quietAV: 0.3, quietT: 0.15, closeMax: 0.7, closeMin: 0.12,   // closing ends settleT after the prongs go quiet, or after closeMax + settleT
     releaseT: 0.5,
     maxDrop: 2.5, maxLift: 3.5, maxCarry: 4, maxReturn: 4,
     magnetR: 80, magnetAcc: 6000,
     // Grip lock: a well-pinched item is welded to the palm with a breaking
     // force, so a solid pinch rides the lift and a heavy or badly held one slips.
-    lockForce: 3.5e6,          // break force at grip 1 (about the weight of mass 2500)
+    lockForce: 5.5e6,          // break force at grip 1: holds an anvil (mass ~2700) through the lift, not a tower shield (4320)
     lockRubber: 1.45,          // rubber tips multiply the break force
     lock3: 1.3,                // third prong multiplies the break force
-    lockPalmOnly: 0.8,         // one prong + palm pinch is this fraction as strong
-    gripThin: 0.55,            // lock capacity for long thin items (aspect >= gripThinAspect)
-    gripThinAspect: 3,
-    gripDisc: 0.75,            // small flat discs (coins)
-    gripSlick: 0.65,           // glass / ice / very low friction
+    lockPalmOnly: 0.8,         // a one prong + palm pinch outside the cradle is this fraction as strong
+    gripThin: 0.85,            // grippiness of long thin items (local aspect >= gripThinAspect)
+    gripThinAspect: 4,
+    gripDisc: 0.75,            // tiny discs / marbles (circles with r < gripDiscR)
+    gripDiscR: 10,
+    gripSlick: 0.8,            // glass / ice / very low friction
+    gripJunk: 0.6,             // junk (rock, slag, ice block) slips more: hazard grippiness multiplier (capacity unaffected)
     slipOpen: 0.3,             // s the prongs twitch open after a slip
-    slipRate: 0.5,             // per-second slip hazard at grippiness 0 and grip 1 during the jerky part of the ride (a sword slips about a third of the time at grip 1)
+    slipRate: 0.25,            // per-second slip hazard at grippiness 0 and grip 1 during the jerky part of the ride
     slipLate: 0.25,            // hazard multiplier once the carriage cruises
     lockHoldMul: 0.12,         // prong torque while a lock carries the item
     lockGrace: 0.12,           // s after engaging before a lock can break
@@ -949,8 +961,10 @@ const PHYS = (() => {
       const piv = RIG.pivot * wd;
       const len = RIG.prongLen * (1 - RIG.prongLenWidth + RIG.prongLenWidth * wd);
       const lenT = len * RIG.hookFrac, lenU = len - lenT, beta = RIG.hookAngle;
-      // Tip x offset from the hinge (outward positive) and tip depth at outward angle th.
-      const tipX = (th) => lenU * Math.sin(th) + lenT * Math.sin(th - beta) + RIG.tipHalf * Math.cos(th - beta);
+      // Tip x offset from the hinge (outward positive) and tip depth at outward
+      // angle th, measured at the tip's inner corner (the one that meets the
+      // other hook when closed).
+      const tipX = (th) => lenU * Math.sin(th) + lenT * Math.sin(th - beta) - RIG.tipHalf * Math.cos(th - beta);
       const tipY = (th) => lenU * Math.cos(th) + lenT * Math.cos(th - beta);
       // Bisection: outward angle whose tip x equals target (tipX is monotonic here).
       const solve = (target) => {
@@ -970,7 +984,12 @@ const PHYS = (() => {
     // Travel limit: the palm must clear the side walls (an open prong may
     // press against a wall; its motor is torque limited so that is harmless).
     const carLim = () => geo.palmW / 2 + RIG.edgeClear;
-    const chuteX = clamp(o.chuteX == null ? (C ? C.bounds.chuteX + C.bounds.chuteW * 0.5 : cw - 32) : o.chuteX, carLim(), cw - carLim());
+    // While carrying the palm may tuck a little past that clearance so a wide
+    // claw still centres its load over the chute: the palm is kinematic and
+    // never collides with the walls, and an open prong against a wall just stalls.
+    const carryBase = () => Math.max(geo.palmW / 2 - RIG.carryTuck, 4);
+    const carryLim = () => Math.max(carryBase(), loadReach());   // also keeps the held load off the walls
+    const chuteX = clamp(o.chuteX == null ? (C ? C.bounds.chuteX + C.bounds.chuteW * 0.5 : cw - 32) : o.chuteX, carryBase(), cw - carryBase());
 
     const R = {
       phase: 'idle', x: homeX, y: railY + RIG.minCable, targetX: homeX,
@@ -985,6 +1004,7 @@ const PHYS = (() => {
     // Internal motion state.
     let carX = homeX, carV = 0, carTarget = homeX;
     let phaseT = 0, quietT = 0, liftV = 0, forceOpen = false, carryCalm = 0, arrivedT = 0, digStart = -1;
+    let clenchT = -1;                // phaseT at which the closing prongs went quiet (the settle counts from here)
     let slipOpenT = 0, grabNo = 0;   // the claw twitches open for a moment when an item slips; grabNo tags slipped items
     let closeState = 'open';   // what the motors are driving toward
     const heldScratch = new Map();
@@ -1079,6 +1099,7 @@ const PHYS = (() => {
         R.joints.push(weld);
         R.bodies.tips.push(tb);
       }
+      prongWalls(R.phase);
       applyMotors();
     }
 
@@ -1225,23 +1246,28 @@ const PHYS = (() => {
        load beyond it (weight, sway, a neighbour dragging on the item) lets
        the item sag, and past lockBreakDist the hold is lost ('slip'). */
     const locks = [];
-    const dbg = { engaged: 0, broke: 0, lastF: 0, lastCap: 0, lastPhase: '', lastT: 0, peakF: 0, trace: false, breaks: [] };
+    const dbg = { engaged: 0, broke: 0, dropped: 0, cradled: 0, lastF: 0, lastCap: 0, lastPhase: '', lastT: 0, peakF: 0, trace: false, breaks: [] };
     R.dbg = dbg;
-    function lockCapacity(rec, b) {
+    function lockCapacity(rec, b, cradled) {
       let f = RIG.lockForce * cfg.grip * grippiness(b);
       if (cfg.rubber) f *= RIG.lockRubber;
       if (cfg.prongs === 3) f *= RIG.lock3;
-      if (!(rec.prongs >= 2)) f *= RIG.lockPalmOnly;
+      if (!cradled && !(rec && rec.prongs >= 2)) f *= RIG.lockPalmOnly;
       return f;
     }
-    /* How well a body sits in a pinch: long thin things and flat discs slip,
-       glass and ice are slick, balls are easy. data.grip overrides; rubber
-       tips and grip upgrades buy the difference back. */
+    /* Items the cradle carries: 2, +1 with the third prong, +1 at Wider Palm x2. */
+    function cradleCap() {
+      return RIG.cradleCap + (cfg.prongs === 3 ? RIG.cradleCap3 : 0) + (cfg.width >= RIG.cradleWide ? RIG.cradleCapWide : 0);
+    }
+    /* How well a body sits in the cradle: 1 for most things; long thin
+       things (aspect >= 4: swords, wands), tiny marbles, glass and ice a
+       little less. data.grip overrides; rubber tips, a third prong and grip
+       upgrades buy the difference back. */
     function grippiness(b) {
       if (b.data && b.data.grip != null) return b.data.grip;
       let g = 1;
       const sh = b.shape;
-      if (sh.kind === 'circle') { if (sh.r < 13) g *= RIG.gripDisc; }
+      if (sh.kind === 'circle') { if (sh.r < RIG.gripDiscR) g *= RIG.gripDisc; }
       else if (sh.verts && sh.verts.length) {
         // Local extents (the world box of a tilted sword looks square).
         let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -1249,13 +1275,59 @@ const PHYS = (() => {
         const w = x1 - x0, h = y1 - y0;
         const aspect = Math.max(w, h) / Math.max(1, Math.min(w, h));
         if (aspect >= RIG.gripThinAspect) g *= RIG.gripThin;
-        else if (aspect >= RIG.gripThinAspect * 0.6) g *= 1 - (1 - RIG.gripThin) * 0.5;
       }
       const tags = b.data && b.data.tags;
       if (tags && (tags.indexOf('glass') >= 0 || tags.indexOf('ice') >= 0)) g *= RIG.gripSlick;
       if (b.friction != null && b.friction < 0.2) g *= RIG.gripSlick;
       return g;
     }
+    const isJunk = (b) => !!(b.data && b.data.tags && b.data.tags.indexOf('junk') >= 0);
+    /* Per-second slip hazard of a locked body during the jerky part of the ride. */
+    function slipHazard(b) {
+      let g = grippiness(b);
+      if (isJunk(b)) g *= RIG.gripJunk;
+      return RIG.slipRate * Math.max(0, 1 - g) / (cfg.grip * (cfg.rubber ? RIG.lockRubber : 1) * (cfg.prongs === 3 ? RIG.lock3 : 1));
+    }
+
+    /* The cradle: the basket bounded by the palm underside and the two
+       hooked prongs, as the polygon left hinge -> left tip -> right tip ->
+       right hinge in world space. cradlePoly() refreshes it; cradleHas(b)
+       is true when b's centre lies inside it expanded by RIG.cradleMargin. */
+    const cradle = [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }];
+    let cradleSign = 0;
+    function cradlePoly() {
+      cradleSign = 0;
+      const pr = R.bodies.prongs, tp = R.bodies.tips;
+      let iL = -1, iR = -1;
+      for (let i = 0; i < pr.length; i++) {
+        if (pr[i].ghost || !tp[i]) continue;
+        if (pr[i].data.dir === 1) iL = i; else iR = i;
+      }
+      if (iL < 0 || iR < 0) return false;
+      const hL = pr[iL].origin(), hR = pr[iR].origin();
+      const tL = tp[iL], tR = tp[iR], oL = tL.origin(), oR = tR.origin();
+      cradle[0].x = hL.x; cradle[0].y = hL.y;
+      cradle[1].x = oL.x - geo.lenT * tL.s; cradle[1].y = oL.y + geo.lenT * tL.c;
+      cradle[2].x = oR.x - geo.lenT * tR.s; cradle[2].y = oR.y + geo.lenT * tR.c;
+      cradle[3].x = hR.x; cradle[3].y = hR.y;
+      const a = signedArea(cradle);
+      if (Math.abs(a) < 40) return false;   // tips crossed or the claw is closed on nothing
+      cradleSign = a > 0 ? 1 : -1;
+      return true;
+    }
+    function cradleHas(b) {
+      if (!cradleSign) return false;
+      const m = RIG.cradleMargin;
+      for (let i = 0; i < 4; i++) {
+        const p = cradle[i], q = cradle[(i + 1) % 4];
+        const ex = q.x - p.x, ey = q.y - p.y, len = Math.hypot(ex, ey) || 1;
+        const cr = (ex * (b.y - p.y) - ey * (b.x - p.x)) * cradleSign;
+        if (cr < -m * len) return false;
+      }
+      return true;
+    }
+    R.cradle = (b) => { cradlePoly(); return b ? cradleHas(b) : cradle.map(p => ({ x: p.x, y: p.y })); };
+    R.cradleCap = cradleCap;
     /* Freeze the prongs in the pose they closed with (the motor holds), so a
        prong cannot drift into an item it no longer collides with. */
     function freezeProngs() {
@@ -1271,38 +1343,101 @@ const PHYS = (() => {
         j.lower = j.lower0; j.upper = j.upper0; j.enableLimit = j.limit0; j.frozen = false;
       }
     }
+    /* Lock every cradled or pinched body to the palm. Called when the closing
+       ends, and with more=true during the lift window for late arrivals.
+       The cradle carries at most cradleCap() items: the ones sitting most
+       central under the palm ride, the extras are dropped ('slip' each). */
+    const candScratch = [];
     function engageLocks(more) {
       if (!more) releaseLocks();
+      const N = cradleCap();
+      if (more && locks.length >= N) return;
       held();
-      for (const [b, rec] of heldScratch) {
-        if (!(rec.prongs >= 2 || (rec.prongs >= 1 && rec.palm))) continue;
-        if (b.type !== 'dynamic') continue;
+      const hasCradle = cradlePoly();
+      const cand = candScratch; cand.length = 0;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || b.group === 'claw' || b.sensor) continue;
         if (b.data && b.data.slippedGrab === grabNo) continue;
         if (more && locks.some(l => l.b === b)) continue;
+        const rec = heldScratch.get(b);
+        const pinched = !!rec && (rec.prongs >= 2 || (rec.prongs >= 1 && rec.palm));
+        const cradled = hasCradle && cradleHas(b);
+        if (!pinched && !cradled) continue;
         // Offset of the item in the palm frame.
         const dx = b.x - palm.x, dy = b.y - palm.y;
         const lx = dx * palm.c + dy * palm.s, ly = -dx * palm.s + dy * palm.c;
-        // Slippery items (thin, flat, slick) also have a hazard of sliding
-        // out on their own during the ride; grip, rubber and a third prong cut it.
-        const g = grippiness(b);
-        const hazard = RIG.slipRate * (1 - g) / (cfg.grip * (cfg.rubber ? RIG.lockRubber : 1) * (cfg.prongs === 3 ? RIG.lock3 : 1));
-        locks.push({ b, lx, ly, cap: lockCapacity(rec, b), load: 0, hazard });
+        cand.push({ b, rec, cradled, lx, ly });
+        if (cradled) dbg.cradled++;
+      }
+      cand.sort((p, q) => Math.abs(p.lx) - Math.abs(q.lx));
+      let shed = 0;
+      for (let i = 0; i < cand.length; i++) {
+        const c = cand[i], b = c.b;
+        if (locks.length >= N) {
+          // Over capacity: the extra stays behind as the claw rises. One
+          // 'shed' event per lift however many stay (a slip is a failure,
+          // this is the basket being full).
+          dropBody(b); shed++; dbg.dropped++;
+          continue;
+        }
+        locks.push({ b, lx: c.lx, ly: c.ly, cap: lockCapacity(c.rec, b, c.cradled), load: 0, hazard: slipHazard(b) });
         // The prongs stop colliding with the item they hold: they keep the
         // pose they closed with, and a wedged item can no longer jam the
         // kinematic palm against the floor through a prong.
-        for (const p of clawParts()) { p.noCollide.push(b); b.noCollide.push(p); }
+        noClaw(b);
         freezeProngs();
         dbg.engaged++;
       }
+      if (shed) pending.push('shed');
+      cand.length = 0;
     }
     function clawParts() { return R.bodies.prongs.filter(p => !p.ghost).concat(R.bodies.tips); }
+    /* Prongs collide with the walls in the bin (dropping, closing, lifting)
+       and ignore them while the claw is up: opening over the chute, the
+       outer prong would otherwise wedge between the kinematic palm and the
+       static wall, and the position solver spins it right round. */
+    const UP = { carrying: 1, releasing: 1, returning: 1 };
+    function prongWalls(phase) {
+      const m = UP[phase] ? ['item'] : ['item', 'wall'];
+      for (const p of clawParts()) p.mask = m.slice();
+    }
+    /* b passes through the prongs and tips (idempotent). */
+    function noClaw(b) {
+      for (const p of clawParts()) {
+        if (p.noCollide.indexOf(b) < 0) p.noCollide.push(b);
+        if (b.noCollide.indexOf(p) < 0) b.noCollide.push(p);
+      }
+    }
     function unlockBody(b) {
       for (const p of clawParts()) {
         let i = p.noCollide.indexOf(b); if (i >= 0) p.noCollide.splice(i, 1);
         i = b.noCollide.indexOf(p); if (i >= 0) b.noCollide.splice(i, 1);
       }
     }
-    function releaseLocks() { for (const l of locks) unlockBody(l.b); locks.length = 0; thawProngs(); }
+    /* A body that left the hold this grab: it keeps passing through the claw
+       (the frozen prongs cannot open around it) until the grab ends, and it
+       cannot be locked again during this grab. */
+    const dropped = [];
+    function dropBody(b) {
+      if (b.data) b.data.slippedGrab = grabNo;
+      noClaw(b);
+      if (dropped.indexOf(b) < 0) dropped.push(b);
+    }
+    function releaseLocks() {
+      for (const l of locks) unlockBody(l.b);
+      for (const b of dropped) unlockBody(b);
+      locks.length = 0; dropped.length = 0;
+      thawProngs();
+    }
+    /* A lock broke: the item falls through the claw. With nothing left held
+       the prongs thaw and twitch open so the fall reads. */
+    function breakLock(i) {
+      const b = locks[i].b;
+      locks.splice(i, 1);
+      dropBody(b);
+      pending.push('slip');
+      if (!locks.length) { thawProngs(); slipOpenT = RIG.slipOpen; applyMotors(); }
+    }
     /* Per substep while lifting/carrying: pull each locked item toward its
        spot under the palm with a capped force; drop the lock when it sags. */
     function checkLocks(h, jit) {
@@ -1315,11 +1450,7 @@ const PHYS = (() => {
         const jerk = R.phase === 'lifting' || (R.phase === 'carrying' && phaseT < 0.5) ? 1 : RIG.slipLate;
         if (l.hazard > 0 && !(R.phase === 'lifting' && phaseT < RIG.lockGrace) && rand() < l.hazard * jerk * h) {
           dbg.broke++; dbg.lastPhase = R.phase; dbg.lastT = phaseT;
-          // The item slides out: the claw twitches open so it really falls,
-          // and it cannot be re-locked during this grab.
-          if (b.data) b.data.slippedGrab = grabNo;
-          slipOpenT = RIG.slipOpen; applyMotors();
-          unlockBody(b); locks.splice(i, 1); pending.push('slip'); if (!locks.length) thawProngs(); continue;
+          breakLock(i); continue;
         }
         const tx = palm.x + (l.lx * palm.c - l.ly * palm.s), ty = palm.y + (l.lx * palm.s + l.ly * palm.c);
         const ex = tx - b.x, ey = ty - b.y;
@@ -1335,7 +1466,7 @@ const PHYS = (() => {
             }
             dbg.breaks.push({ phase: R.phase, t: +phaseT.toFixed(2), dist: +dist.toFixed(1), ex: +ex.toFixed(1), ey: +ey.toFixed(1), palmVy: Math.round(palm.vy), palmVx: Math.round(palm.vx), sway: +R.sway.toFixed(2), cts, m: Math.round(b.m), id: b.data && b.data.inst ? b.data.inst.id : '?' });
           }
-          unlockBody(b); locks.splice(i, 1); pending.push('slip'); if (!locks.length) thawProngs(); continue;
+          breakLock(i); continue;
         }
         let ax = w2 * ex + c * (palm.vx - b.vx), ay = w2 * ey + c * (palm.vy - b.vy);
         let f = Math.hypot(ax, ay) * b.m;
@@ -1346,7 +1477,7 @@ const PHYS = (() => {
         l.load += (f - l.load) * Math.min(1, h / RIG.lockTau);
         if (l.load > l.cap * jit && !(R.phase === 'lifting' && phaseT < RIG.lockGrace)) {
           dbg.broke++; dbg.lastF = l.load; dbg.lastCap = l.cap; dbg.lastPhase = R.phase; dbg.lastT = phaseT;
-          unlockBody(b); locks.splice(i, 1); pending.push('slip'); if (!locks.length) thawProngs(); continue;
+          breakLock(i); continue;
         }
         const capI = l.cap * RIG.lockPeakMul;
         if (f > capI) { const k = capI / f; ax *= k; ay *= k; }
@@ -1361,13 +1492,14 @@ const PHYS = (() => {
     function setPhase(p) {
       R.phase = p; phaseT = 0;
       if (p === 'dropping') digStart = -1;
-      if (p === 'closing') { closeState = 'closed'; quietT = 0; pending.push('touch', 'close'); }
+      if (p === 'closing') { closeState = 'closed'; quietT = 0; clenchT = -1; pending.push('touch', 'close'); }
       else if (EVENT_ON_ENTER[p]) pending.push(EVENT_ON_ENTER[p]);
       if (p === 'lifting') engageLocks();
       if (p === 'releasing' || p === 'idle' || p === 'dropping') releaseLocks();
       if (p === 'releasing') { closeState = 'open'; }
       if (p === 'lifting') liftV = 0;
       if (p === 'carrying') { carryCalm = 0; arrivedT = 0; }
+      prongWalls(p);
       applyMotors();
     }
 
@@ -1412,13 +1544,20 @@ const PHYS = (() => {
           let quiet = true;
           for (const p of R.bodies.prongs) if (Math.abs(p.av - palm.av) > RIG.quietAV) quiet = false;
           quietT = quiet ? quietT + dt : 0;
-          if ((phaseT >= RIG.closeMin && quietT >= RIG.quietT) || phaseT >= RIG.closeMax) setPhase('lifting');
+          // The clench: once the prongs have stopped (or closeMax is up) the
+          // claw visibly holds its squeeze for settleT before the lift.
+          if (clenchT < 0 && ((phaseT >= RIG.closeMin && quietT >= RIG.quietT) || phaseT >= RIG.closeMax)) clenchT = phaseT;
+          if (clenchT >= 0 && phaseT >= clenchT + RIG.settleT) setPhase('lifting');
           break;
         }
         case 'lifting': {
-          liftV = Math.min(liftV + RIG.liftAccel * dt, RIG.liftSpeed * sp);
+          // Ease out at the top: a dead stop from full speed is a 13 g jerk
+          // on the lock, which is what used to shake heavy items loose.
+          const remain = Math.max(0, R.cableLen - RIG.minCable);
+          const brake = Math.sqrt(2 * RIG.liftAccel * remain) + 20;
+          liftV = Math.min(liftV + RIG.liftAccel * dt, RIG.liftSpeed * sp, brake);
           R.cableLen -= liftV * dt;
-          if (R.cableLen <= RIG.minCable || phaseT > RIG.maxLift) { R.cableLen = Math.max(R.cableLen, RIG.minCable); setPhase('carrying'); }
+          if (R.cableLen <= RIG.minCable + 0.5 || phaseT > RIG.maxLift) { R.cableLen = Math.max(R.cableLen, RIG.minCable); setPhase('carrying'); }
           break;
         }
         case 'carrying': {
@@ -1454,7 +1593,7 @@ const PHYS = (() => {
       else if (carV > want) carV = Math.max(carV - acc * dt, want);
       carX += carV * dt;
       if (!lockCar && Math.abs(carTarget - carX) < 0.6 && Math.abs(carV) < 20) { carX = carTarget; carV = 0; }
-      const lim = carLim();
+      const lim = (R.phase === 'carrying' || R.phase === 'releasing' || R.phase === 'returning') ? carryLim() : carLim();
       if (carX < lim) { carX = lim; carV = 0; } else if (carX > cw - lim) { carX = cw - lim; carV = 0; }
       const carAcc = (carV - prevV) / dt;
       // Pendulum sway, tracked as the palm's horizontal offset (px) so a
@@ -1480,6 +1619,17 @@ const PHYS = (() => {
       return ev;
     }
 
+    /* How far the locked load sticks out sideways from the palm centre (px),
+       so the carriage never presses a held item into a wall. */
+    function loadReach() {
+      if (!locks.length) return 0;
+      let r = 0;
+      for (const l of locks) {
+        const hw = (l.b.box.x1 - l.b.box.x0) / 2;
+        r = Math.max(r, Math.abs(l.lx) + hw + 2);
+      }
+      return r;
+    }
     /* Carriage target over the chute: centres the held item, not the palm,
        so an item gripped off-centre still drops inside the column. */
     function carryX() {
@@ -1487,7 +1637,7 @@ const PHYS = (() => {
       let off = 0;
       for (const l of locks) off += l.lx;
       off /= locks.length;
-      return clamp(chuteX - off, carLim(), cw - carLim());
+      return clamp(chuteX - off, carryLim(), cw - carryLim());
     }
 
     /* Pose the ghost third prong from the side prongs' mean closedness. */

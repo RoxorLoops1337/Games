@@ -22,7 +22,9 @@ const ITEM = {
 };
 
 function spawn(W, def, x, y, extra) {
-  const b = PHYS.body(Object.assign({ type: 'dynamic', x, y, group: 'item', friction: 0.5, restitution: 0.1, data: {} }, def, extra || {}));
+  const o = Object.assign({ type: 'dynamic', x, y, group: 'item', friction: 0.5, restitution: 0.1, data: {} }, def, extra || {});
+  o.data = Object.assign({}, o.data);   // every body gets its own data (the rig stamps slips on it)
+  const b = PHYS.body(o);
   W.add(b);
   return b;
 }
@@ -45,7 +47,8 @@ function pile(W, rng) {
 
 function settle(W, seconds) { for (let i = 0; i < Math.round(seconds / DT); i++) W.step(DT); }
 
-/* Drive one full grab at x; returns {delivered, events, phases, seconds}. */
+/* Drive one full grab at x; returns {delivered, events, phases, seconds,
+   lockedMax (most items the lock carried at once), closingT (s spent closing)}. */
 function grab(W, C, R, x, cap) {
   const events = [], phases = [R.phase];
   R.setTarget(x);
@@ -55,24 +58,27 @@ function grab(W, C, R, x, cap) {
     if (t > 4) break;
   }
   h.ok(R.drop(), 'drop accepted while idle');
-  let started = false;
+  let started = false, lockedMax = 0, closingT = 0;
   while (t < (cap || 15)) {
     const ev = R.update(DT);
     events.push(...ev);
     W.step(DT); t += DT;
     if (phases[phases.length - 1] !== R.phase) phases.push(R.phase);
+    if (R.phase === 'closing') closingT += DT;
+    if (R.phase === 'lifting' || R.phase === 'carrying') lockedMax = Math.max(lockedMax, R.locked().length);
     if (R.phase !== 'idle' && R.phase !== 'moving') started = true;
     if (started && R.phase === 'idle') break;
   }
   const delivered = items(W).filter(b => C.inChute(b));
   for (const b of delivered) W.remove(b);
-  return { delivered: delivered.length, events, phases, seconds: t };
+  return { delivered: delivered.length, events, phases, seconds: t, lockedMax, closingT };
 }
 
 /* n single-item grabs at varied x, fresh world each time; returns the delivered
    count.  aimErr (px, cycled per drop) offsets the claw from the item so long
-   thin items, whose tips must land outside their ends, show their aim tolerance. */
-function scenario(rigCfg, def, n, seed, aimErr) {
+   thin items, whose tips must land outside their ends, show their aim tolerance.
+   stats (optional object) accumulates .slips. */
+function scenario(rigCfg, def, n, seed, aimErr, stats) {
   let ok = 0;
   const xs = [90, 130, 170, 210, 250, 290, 330, 110, 190, 270];
   const errs = aimErr || [0];
@@ -84,9 +90,29 @@ function scenario(rigCfg, def, n, seed, aimErr) {
     const R = PHYS.clawRig(W, Object.assign({ cabinet: C, rand: U.rng(seed + i) }, rigCfg));
     const g = grab(W, C, R, b.x + errs[i % errs.length]);
     ok += g.delivered;
+    if (stats) stats.slips = (stats.slips || 0) + g.events.filter(e => e === 'slip').length;
     h.ok(g.phases[g.phases.length - 1] === 'idle', `grab returned to idle (${JSON.stringify(rigCfg)} #${i}: ${g.phases.join('>')})`);
   }
   return ok;
+}
+
+/* n grabs at a row of balls (offsets from the aim point), fresh world each
+   time; returns {delivered (items), twoPlus (drops with >= 2), lockedMax[], slips, shed}. */
+function rowScenario(rigCfg, radii, offsets, n, seed) {
+  const out = { delivered: 0, twoPlus: 0, lockedMax: [], slips: 0, shed: 0 };
+  for (let i = 0; i < n; i++) {
+    const { W, C } = mkWorld();
+    const x = 120 + (i % 5) * 40;
+    for (let k = 0; k < radii.length; k++) spawn(W, { shape: { kind: 'circle', r: radii[k] } }, x + offsets[k], 360, {});
+    settle(W, 1.0);
+    const R = PHYS.clawRig(W, Object.assign({ cabinet: C, rand: U.rng(seed + i) }, rigCfg));
+    const g = grab(W, C, R, x);
+    out.delivered += g.delivered; if (g.delivered >= 2) out.twoPlus++;
+    out.lockedMax.push(g.lockedMax);
+    out.slips += g.events.filter(e => e === 'slip').length;
+    out.shed += g.events.filter(e => e === 'shed').length;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- engine
@@ -267,6 +293,8 @@ h.test('rig phase machine: full cycle with events in order, never stalls', () =>
   h.eq(ev.join(','), 'drop,touch,close,lift,carry,release,home', 'events in order');
   h.ok(g.seconds < 12, `cycle finished in ${g.seconds.toFixed(1)} s`);
   h.eq(g.delivered, 1, 'the ball landed in the chute');
+  h.ok(g.closingT >= PHYS.RIG.quietT + PHYS.RIG.settleT - 0.02, `the claw clenches for the settle before lifting (closing ${g.closingT.toFixed(2)} s)`);
+  h.ok(g.closingT <= PHYS.RIG.closeMax + PHYS.RIG.settleT + 0.05, 'closing is bounded');
 });
 
 h.test('setTarget and drop are ignored while busy', () => {
@@ -331,21 +359,84 @@ h.test('weak grip drops a heavy 50px box more often than not', () => {
   h.ok(n < 5, `weak rig delivered only ${n}/10 heavy boxes`);
 });
 
-h.test('sword is delivered less often than the ball with the same rig', () => {
-  // Same rigs, same aim errors (up to 18 px): the prong tips straddle a 30 px
-  // ball with room to spare but must land outside the ends of a 44 px sword.
+h.test('slips are rare for ordinary items: ball and sword both deliver at grip 1, junk slips', () => {
+  // Same rig, same aim errors (up to 18 px). The cradle scoops a 44 px sword
+  // as readily as a ball; its thin-item hazard (grippiness 0.85) is small.
   const AIM = [-18, -9, 0, 9, 18];
-  const ball = scenario({ grip: 1 }, ITEM.ball({}), 10, 300, AIM) + scenario({ grip: 0.8 }, ITEM.ball({}), 10, 300, AIM);
-  const sword = scenario({ grip: 1 }, ITEM.sword({}), 10, 300, AIM) + scenario({ grip: 0.8 }, ITEM.sword({}), 10, 300, AIM);
-  h.ok(sword < ball, `sword ${sword}/20 < ball ${ball}/20`);
-  h.ok(ball >= 17, `ball is an easy grab even with sloppy aim (${ball}/20)`);
-  h.ok(sword >= 6, `sword is still grabbable with good aim (${sword}/20)`);
+  const bs = {}, ss = {}, js = {};
+  const ball = scenario({ grip: 1 }, ITEM.ball({}), 20, 300, AIM, bs);
+  const sword = scenario({ grip: 1 }, ITEM.sword({}), 20, 300, AIM, ss);
+  h.ok(ball >= 18, `ball is an easy grab even with sloppy aim (${ball}/20)`);
+  h.eq(bs.slips, 0, 'a ball never slips at grip 1');
+  h.ok(sword >= 17, `sword delivers at least 17/20 at grip 1 (${sword}/20, ${ss.slips} slips)`);
+  // Junk is the exception: a slick junk block (ice block) has a real hazard.
+  const ice = { shape: { kind: 'poly', verts: PHYS.box(36, 34) }, density: 1.2, friction: 0.05, data: { tags: ['junk', 'glass'] } };
+  const iceN = scenario({ grip: 1 }, ice, 20, 300, [0], js);
+  h.ok(js.slips >= 2, `slick junk slips more than a ball (${js.slips} slips over 20 grabs, ${iceN} delivered)`);
+  h.ok(iceN >= 10, `but is still worth digging for (${iceN}/20)`);
+});
+
+h.test('cradle: two r=12 balls side by side are both locked and delivered', () => {
+  const r = rowScenario({}, [12, 12], [-12.5, 12.5], 10, 600);
+  const both = r.lockedMax.filter(n => n >= 2).length;
+  h.ok(both >= 7, `both balls locked in ${both}/10 grabs`);
+  h.ok(r.twoPlus >= 7, `both delivered in ${r.twoPlus}/10 grabs (${r.delivered} items)`);
+  h.ok(r.lockedMax.every(n => n <= 2), 'never more than the base capacity of 2');
+});
+
+h.test('cradle capacity: three balls -> 2 carried at base, 3 with the third prong, 3 at Wider Palm x2', () => {
+  const two = rowScenario({ prongs: 2 }, [12, 12, 12], [-25, 0, 25], 10, 620);
+  h.ok(two.lockedMax.every(n => n <= 2), `base rig never carries more than 2 (${two.lockedMax.join(',')})`);
+  h.ok(two.lockedMax.filter(n => n === 2).length >= 8, `base rig usually carries 2 of the 3 (${two.lockedMax.join(',')})`);
+  h.ok(two.shed >= 8, `the extra is shed at the lift with one 'shed' event (${two.shed} sheds)`);
+  h.ok(two.slips === 0, `shedding is not a slip (${two.slips} slips)`);
+  const three = rowScenario({ prongs: 3 }, [12, 12, 12], [-25, 0, 25], 10, 620);
+  h.ok(three.lockedMax.filter(n => n === 3).length >= 8, `third prong carries all 3 (${three.lockedMax.join(',')})`);
+  h.ok(three.delivered >= 24, `and delivers them (${three.delivered}/30 items)`);
+  const wide = rowScenario({ width: 1.36 }, [12, 12, 12], [-25, 0, 25], 5, 640);
+  h.ok(wide.lockedMax.some(n => n === 3), `Wider Palm x2 carries 3 (${wide.lockedMax.join(',')})`);
+  const { W, C } = mkWorld();
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(1) });
+  h.eq(R.cradleCap(), 2, 'base capacity 2');
+  R.setConfig({ prongs: 3 }); h.eq(R.cradleCap(), 3, 'third prong +1');
+  R.setConfig({ width: 1.36 }); h.eq(R.cradleCap(), 4, 'Wider Palm x2 +1');
+});
+
+h.test('geometry: 96 px open span, hooked basket, closed claw does not self-intersect', () => {
+  const { W, C } = mkWorld();
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(2) });
+  const g = R.geo;
+  h.near(g.beta, 0.55, 1e-9, 'tip segment bends inward 0.55 rad');
+  h.near(g.len, 53, 1e-9, 'prong length 53 at width 1');
+  h.eq(g.palmW, 64, 'palm 64 wide');
+  const tips = R.bodies.tips;
+  const span = Math.max(...tips.map(t => t.box.x1)) - Math.min(...tips.map(t => t.box.x0));
+  h.ok(span >= 92 && span <= 106, `open tips span about 96 px (${span.toFixed(1)})`);
+  // Close on nothing: no part of the left finger may overlap the right one.
+  R.drop();
+  let t = 0;
+  while (R.phase !== 'lifting' && t < 5) { R.update(DT); W.step(DT); t += DT; }
+  const parts = R.bodies.prongs.filter(p => !p.ghost).concat(tips);
+  const L = parts.filter(p => p.data.dir === 1), Rt = parts.filter(p => p.data.dir === -1);
+  let minSep = Infinity;
+  for (const a of L) for (const b of Rt) for (const v of a.wv) {
+    let best = -Infinity;
+    for (let i = 0; i < b.wv.length; i++) { const s = (v.x - b.wv[i].x) * b.wn[i].x + (v.y - b.wv[i].y) * b.wn[i].y; if (s > best) best = s; }
+    minSep = Math.min(minSep, best);
+  }
+  h.ok(minSep >= 0, `closed fingers do not overlap (min separation ${minSep.toFixed(2)} px)`);
+  const tipY = Math.max(...tips.map(t => t.box.y1));
+  h.ok(tipY > R.bodies.palm.y + 40, 'closed hooks hang well below the palm (a basket, not a pinch)');
+  // The cradle polygon is exposed for tests and debug drawing.
+  const poly = R.cradle();
+  h.eq(poly.length, 4, 'cradle polygon has 4 corners');
+  h.ok(poly[0].x < poly[3].x && poly[1].y > poly[0].y, 'hinges on top, tips below');
 });
 
 h.test('3 prongs deliver at least as often as 2 on the same scenario', () => {
   // The third finger raises the grip lock's break force, so it shows on a
   // box whose weight sits right at the two-prong rig's limit.
-  const HEAVYISH = { shape: { kind: 'poly', verts: PHYS.box(40, 40) }, density: 2.8 };
+  const HEAVYISH = { shape: { kind: 'poly', verts: PHYS.box(40, 40) }, density: 1.85 };   // mass 2960: right at the two-prong rig's limit
   let two = 0, three = 0;
   for (const g of [0.9, 1.1]) {
     two += scenario({ grip: g, prongs: 2 }, HEAVYISH, 10, 400);

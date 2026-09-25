@@ -16,7 +16,7 @@ const {
 // drifted list in data.js is caught too.
 const ITEM_ART = 'sword dagger axe hammer anvil shield buckler potion flask bomb torch iceshard snowball coin gem rock slag iceblock apple bread book scroll orb ring key chain horn whetstone feather skull star boot bone bottle heart lantern wand mask egg dice'.split(' ');
 const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork golem furnace magnet ironjaw wraith yeti frostmage icemimic prizemaster mushroom knight wisp crab drone tinker cultist'.split(' ');
-const TAGS = 'metal weapon glass potion heavy light junk magic food tool'.split(' ');
+const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
 const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll'.split(' ');
 const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
@@ -27,6 +27,9 @@ const BIN_KINDS = ['shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'til
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isHex = (c) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
 const junkIds = () => Object.keys(ITEMS).filter(id => ITEMS[id].rarity === 'junk');
+const isSmall = (d) => !!d && Array.isArray(d.tags) && d.tags.includes('small');
+const smallIds = () => Object.keys(ITEMS).filter(id => isSmall(ITEMS[id]));
+const bagIds = () => Object.keys(ITEMS).filter(id => ITEMS[id].bag);
 
 t.test('module shape', () => {
   t.ok(DATA && typeof DATA === 'object', 'DATA exists');
@@ -66,10 +69,12 @@ function checkFx(list, where) {
   }
 }
 
-function checkShape(s, where) {
+function checkShape(s, where, small) {
   t.ok(s && ['circle', 'box', 'poly'].includes(s.kind), `${where}: shape kind`);
   if (!s) return;
-  if (s.kind === 'circle') t.ok(isNum(s.r) && s.r >= 10 && s.r <= 30, `${where}: circle r 10..30 [${s.r}]`);
+  // Small fillers are r 9-11 so the claw's cradle carries two or three.
+  if (s.kind === 'circle' && small) t.ok(isNum(s.r) && s.r >= 9 && s.r <= 11, `${where}: small circle r 9..11 [${s.r}]`);
+  else if (s.kind === 'circle') t.ok(isNum(s.r) && s.r >= 10 && s.r <= 30, `${where}: circle r 10..30 [${s.r}]`);
   if (s.kind === 'box') {
     const L = Math.max(s.w, s.h), S = Math.min(s.w, s.h);
     t.ok(L >= 20 && L <= 60, `${where}: box long axis 20..60 [${L}]`);
@@ -99,6 +104,7 @@ function checkShape(s, where) {
 t.test('items', () => {
   const ids = Object.keys(ITEMS);
   t.ok(ids.length >= 48, `>= 48 items [${ids.length}]`);
+  t.ok(ids.length >= 67, `>= 67 items with the small fillers and bags [${ids.length}]`);
   const by = (r) => ids.filter(id => ITEMS[id].rarity === r).length;
   t.ok(by('c') >= 16, `commons [${by('c')}]`);
   t.ok(by('u') >= 12, `uncommons [${by('u')}]`);
@@ -118,10 +124,12 @@ t.test('items', () => {
     t.ok(typeof d.name === 'string' && d.name.length > 1, `${W}: name`);
     t.ok(['c', 'u', 'r', 'l', 'junk'].includes(d.rarity), `${W}: rarity`);
     t.ok(isNum(d.cost) && d.cost >= 0, `${W}: cost`);
-    if (d.rarity !== 'junk') t.ok(d.cost >= 30 && d.cost <= 160, `${W}: cost in shop range`);
+    if (isSmall(d)) t.ok(d.cost >= 10 && d.cost <= 25, `${W}: small filler cost 10..25`);
+    else if (d.bag) t.ok(d.cost >= 25 && d.cost <= 35, `${W}: bag cost 25..35`);
+    else if (d.rarity !== 'junk') t.ok(d.cost >= 30 && d.cost <= 160, `${W}: cost in shop range`);
     t.ok(Array.isArray(d.tags) && d.tags.every(x => TAGS.includes(x)), `${W}: tags allowed`);
     t.eq(d.rarity === 'junk', d.tags.includes('junk'), `${W}: junk tag iff junk rarity`);
-    checkShape(d.shape, W);
+    checkShape(d.shape, W, isSmall(d));
     t.ok(isNum(d.density) && d.density >= 0.3 && d.density <= 3, `${W}: density`);
     t.ok(isNum(d.friction) && d.friction >= 0 && d.friction <= 1.2, `${W}: friction`);
     t.ok(isNum(d.restitution) && d.restitution >= 0 && d.restitution <= 1, `${W}: restitution`);
@@ -130,7 +138,11 @@ t.test('items', () => {
     used.add(d.art);
     t.ok(['enemy', 'all', 'self', 'random', 'none'].includes(d.target), `${W}: target`);
     checkFx(d.fx, W);
-    if (d.rarity !== 'junk') {
+    if (d.bag) {
+      // A bag never reaches a cabinet: the game adds its contents instead.
+      t.eq(d.fx.length, 0, `${W}: a bag has no effects of its own`);
+      t.ok(!d.plus, `${W}: a bag has no plus`);
+    } else if (d.rarity !== 'junk') {
       t.ok(d.fx.length >= 1, `${W}: has effects`);
       t.ok(d.plus && typeof d.plus.name === 'string' && Array.isArray(d.plus.fx) && d.plus.fx.length, `${W}: has a plus`);
       checkFx(d.plus.fx, `${W}+`);
@@ -145,6 +157,58 @@ t.test('items', () => {
     }
   }
   for (const a of ITEM_ART) t.ok(used.has(a), `item art ${a} used`);
+});
+
+t.test('small fillers', () => {
+  const ids = smallIds();
+  t.ok(ids.length >= 8, `>= 8 small fillers [${ids.length}]`);
+  const looks = new Set();
+  for (const id of ids) {
+    const d = ITEMS[id], W = `small ${id}`;
+    t.eq(d.rarity, 'c', `${W}: common`);
+    t.ok(d.shape && d.shape.kind === 'circle' && d.shape.r >= 9 && d.shape.r <= 11, `${W}: circle r 9..11`);
+    t.ok(d.cost >= 10 && d.cost <= 25, `${W}: cost 10..25 [${d.cost}]`);
+    t.ok(!d.char && !d.starter && !d.bag, `${W}: shared, not a starter, not a bag`);
+    t.ok(!d.exhaust, `${W}: stays in the bin`);
+    t.ok(d.plus && d.plus.fx.length >= 1, `${W}: has a plus`);
+    // Fillers are a little bit of something, never a real card's worth.
+    const fx = d.plus.fx;
+    const hit = fx.reduce((a, f) => a + (f.k === 'dmg' ? f.v * (f.n || 1) : f.k === 'random' ? f.max : 0), 0);
+    t.ok(hit <= 5, `${W}+: at most 5 damage [${hit}]`);
+    t.ok(fx.every(f => ['dmg', 'block', 'heal', 'status', 'gold', 'random'].includes(f.k)), `${W}: simple effects only`);
+    t.ok(fx.every(f => f.k !== 'status' || f.v <= 3), `${W}+: at most 3 stacks of a status`);
+    looks.add(d.art + d.color + d.color2);
+  }
+  t.eq(looks.size, ids.length, 'every filler has its own art and colours');
+  const bigLooks = new Set(Object.keys(ITEMS).filter(id => !isSmall(ITEMS[id]) && !ITEMS[id].bag).map(id => ITEMS[id].art + ITEMS[id].color));
+  t.ok(ids.every(id => !bigLooks.has(ITEMS[id].art + ITEMS[id].color)), 'fillers do not copy a big item look');
+  t.ok(ids.some(id => ITEMS[id].fx.some(f => f.k === 'dmg')), 'some fillers deal damage');
+  t.ok(ids.some(id => ITEMS[id].fx.some(f => f.k === 'block')), 'some fillers block');
+  t.ok(ids.some(id => ITEMS[id].fx.some(f => f.k === 'heal')), 'some fillers heal');
+  t.ok(ids.some(id => ITEMS[id].restitution >= 0.8), 'a bouncy one');
+  t.ok(ids.some(id => ITEMS[id].density >= 2), 'a heavy one');
+  // Kept out of single-item pools; asked for by tag they are all there.
+  t.ok(DATA.pool().every(id => !isSmall(ITEMS[id]) && !ITEMS[id].bag), 'pool() skips fillers and bags');
+  t.eq(DATA.pool('c', null, ['small']).sort().join(), ids.slice().sort().join(), "pool('c', null, ['small']) lists the fillers");
+});
+
+t.test('bags', () => {
+  const ids = bagIds();
+  t.ok(ids.length >= 3, `>= 3 bags [${ids.length}]`);
+  for (const k of ['bag_marbles', 'bag_beads', 'bag_sweets']) t.ok(!!ITEMS[k] && Array.isArray(ITEMS[k].bag), `${k} is a bag`);
+  for (const id of ids) {
+    const d = ITEMS[id], W = `bag ${id}`;
+    t.ok(id.startsWith('bag_'), `${W}: id starts with bag_`);
+    t.eq(d.rarity, 'c', `${W}: common`);
+    t.ok(!d.char && !d.starter, `${W}: shared, not a starter`);
+    t.ok(Array.isArray(d.bag) && d.bag.length >= 2 && d.bag.length <= 4, `${W}: 2..4 items [${d.bag && d.bag.length}]`);
+    for (const x of d.bag || []) {
+      t.ok(!!ITEMS[x], `${W}: ${x} exists`);
+      t.ok(isSmall(ITEMS[x]) && !ITEMS[x].bag && ITEMS[x].rarity !== 'junk', `${W}: ${x} is a small filler`);
+    }
+    const worth = (d.bag || []).reduce((a, x) => a + (ITEMS[x] ? ITEMS[x].cost : 0), 0);
+    t.ok(d.cost <= worth, `${W}: costs no more than its contents (${d.cost} <= ${worth})`);
+  }
 });
 
 t.test('itemText', () => {
@@ -491,8 +555,13 @@ t.test('characters', () => {
     for (const k of ['name', 'title', 'blurb']) t.ok(typeof c[k] === 'string' && c[k], `${W}: ${k}`);
     t.eq(c.hp, hp[id], `${W}: hp`);
     t.ok(isNum(c.gold) && c.gold >= 0, `${W}: gold`);
-    t.ok(Array.isArray(c.bin) && c.bin.length >= 12 && c.bin.length <= 14, `${W}: bin 12..14 [${c.bin.length}]`);
-    t.ok(c.bin.every(i => ITEMS[i] && ITEMS[i].rarity !== 'junk'), `${W}: bin items exist, no junk`);
+    t.ok(Array.isArray(c.bin) && c.bin.length >= 16 && c.bin.length <= 22, `${W}: bin 16..22 [${c.bin.length}]`);
+    t.ok(c.bin.every(i => ITEMS[i] && ITEMS[i].rarity !== 'junk' && !ITEMS[i].bag), `${W}: bin items exist, no junk, no bags`);
+    // 5-6 small fillers on top; the big items keep the character identity.
+    const small = c.bin.filter(i => isSmall(ITEMS[i])), big = c.bin.filter(i => !isSmall(ITEMS[i]));
+    t.ok(small.length >= 5 && small.length <= 6, `${W}: 5..6 small fillers [${small.length}]`);
+    t.ok(big.length >= 12 && big.length <= 14, `${W}: 12..14 big items [${big.length}]`);
+    t.ok(big.filter(i => ITEMS[i].char === id).length >= 10, `${W}: big items are mostly its own`);
     t.ok(c.bin.every(i => !ITEMS[i].char || ITEMS[i].char === id), `${W}: no other character's items`);
     t.ok(!!RELICS[c.relic], `${W}: starting relic exists`);
     t.ok(['start', 'act2', 'win'].includes(c.unlock), `${W}: unlock rule`);
@@ -510,6 +579,11 @@ t.test('characters', () => {
   t.ok(CHARACTERS.rogue.claw.speed > CHARACTERS.knight.claw.speed, 'rogue claw is fast');
   t.ok(CHARACTERS.rogue.gold > CHARACTERS.knight.gold, 'rogue starts richer');
   t.eq(Object.values(CHARACTERS).filter(c => c.unlock === 'start').length, 1, 'one starter character');
+  // Filler flavour per character.
+  const has = (ch, ids) => ids.every(x => CHARACTERS[ch].bin.includes(x));
+  t.ok(has('knight', ['prize_marble', 'glass_bead']), 'knight: marbles and beads');
+  t.ok(has('alchemist', ['sour_drop', 'peppermint', 'frost_pearl']), 'alchemist: sour drops, peppermints, frost pearls');
+  t.ok(has('rogue', ['lucky_penny', 'lead_shot']), 'rogue: lucky pennies and lead shot');
 });
 
 t.test('acts', () => {
@@ -563,6 +637,27 @@ t.test('rewardItems', () => {
     t.ok(true, `${ch}: 200 seeds of rewards are unique, valid, deterministic`);
   }
   t.eq(DATA.rewardItems(U.rng(9), 2, 'rogue', 5).length, 5, 'n=5');
+  // Bags: about 30% of 3-slot screens, at most one, never on a 1-slot draw,
+  // and no single small filler is ever offered on its own.
+  for (const act of [1, 2, 3]) {
+    let bags = 0, loose = 0, multi = 0;
+    const rng = U.rng(500 + act);
+    for (let i = 0; i < 3000; i++) {
+      const r = DATA.rewardItems(rng, act, ['knight', 'alchemist', 'rogue'][i % 3], 3);
+      const b = r.filter(id => ITEMS[id].bag).length;
+      if (b) bags++;
+      if (b > 1) multi++;
+      if (r.some(id => isSmall(ITEMS[id]))) loose++;
+    }
+    const share = bags / 3000;
+    t.ok(share >= 0.2 && share <= 0.38, `act ${act}: a bag on ${Math.round(100 * share)}% of reward screens (20..38%)`);
+    t.eq(multi, 0, `act ${act}: never two bags on one screen`);
+    t.eq(loose, 0, `act ${act}: no loose small filler offered`);
+  }
+  const one = U.rng(77);
+  t.ok(Array.from({ length: 500 }, () => DATA.rewardItems(one, 1, 'knight', 1)[0]).every(id => !ITEMS[id].bag), 'a 1-slot draw is never a bag');
+  const shop = U.rng(78);
+  t.ok(Array.from({ length: 300 }, () => DATA.rewardItems(shop, 1, 'rogue', 5)).some(r => r.some(id => ITEMS[id].bag)), 'shops (5 slots) can stock a bag');
   t.eq(new Set(DATA.rewardItems(U.rng(9), 2, 'rogue', 12)).size, 12, 'n=12 still unique');
   t.ok(DATA.rewardItems(U.rng(1), 1, undefined).length === 3, 'no character works');
   const seen = new Set();

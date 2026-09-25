@@ -99,6 +99,98 @@ h.test('tapping a hidden hex reveals it for 1 ink', () => {
   if (far) { const fp = G.hexToStage(far.q, far.r); const ink2 = G.run.ink; G.tap(fp.x, fp.y); h.eq(G.run.ink, ink2, 'far tile costs nothing'); h.ok(!far.revealed, 'far tile stays hidden'); }
 });
 
+h.test('map: 10x7 grid drawn as a portrait climb with hexes big enough to tap', () => {
+  const M = G.run.map;
+  h.ok(M.cols === 10 && M.rows === 7, 'game builds a 10x7 map');
+  const a = G.hexToStage(M.start.q, M.start.r), b = G.hexToStage(M.start.q + 1, M.start.r);
+  const size = Math.hypot(b.x - a.x, b.y - a.y) / Math.sqrt(3);
+  h.ok(size >= 40 && size <= 44, 'hex size on the stage in 40..44 px (got ' + size.toFixed(2) + ')');
+  const bs = G.hexToStage(M.boss.q, M.boss.r);
+  h.ok(Math.abs(a.x - 270) < 1 && Math.abs(bs.x - 270) < 1, 'start and boss on the stage centre line');
+  h.ok(bs.y < a.y && bs.y >= 172 && a.y <= 960, 'boss above the start, both inside the map area');
+  let bad = 0;
+  for (const t of Object.values(M.tiles)) { const p = G.hexToStage(t.q, t.r); const back = G.stageToHex(p.x, p.y); if (back.q !== t.q || back.r !== t.r || p.y < 172 || p.y > 960 || p.x < 0 || p.x > 540) bad++; }
+  h.eq(bad, 0, 'every hex round-trips through hexToStage/stageToHex inside the map area');
+  h.ok(Object.values(M.tiles).every(t => t.known === MAP.isLandmark(t)), 'landmarks known from the start');
+  h.ok(Object.values(M.tiles).filter(t => t.type === 'tower').length >= 2, 'towers on the map');
+  G.draw();
+});
+
+h.test('map: tap a far hex to preview the ink path, tap again to paint it', () => {
+  const M = G.run.map;
+  const far = Object.values(M.tiles).find(t => !t.revealed && t.type !== 'boss' && MAP.pathToReveal(M, t.q, t.r).length >= 3);
+  h.ok(far, 'a far hidden tile exists');
+  const path = MAP.pathToReveal(M, far.q, far.r);
+  const p = G.hexToStage(far.q, far.r);
+  const ink = G.run.ink;
+  G.tap(p.x, p.y);
+  h.ok(G.S.preview && G.S.preview.q === far.q && G.S.preview.r === far.r, 'first tap sets the preview on that hex');
+  h.eq(G.S.preview.cost, path.length, 'preview cost = path length');
+  h.eq(G.run.ink, ink, 'preview costs nothing');
+  h.ok(!far.revealed, 'still hidden after the preview');
+  G.draw();
+  // Tapping elsewhere clears it.
+  const other = G.hexToStage(M.start.q, M.start.r);
+  G.tap(other.x, other.y);
+  h.ok(!G.S.preview, 'tapping elsewhere clears the preview');
+  // Short on ink: the paint is refused and the preview stays.
+  G.tap(p.x, p.y);
+  G.run.ink = path.length - 1; M.ink = G.run.ink;
+  G.tap(p.x, p.y);
+  h.ok(!far.revealed && G.run.ink === path.length - 1, 'short on ink: nothing painted, nothing spent');
+  h.ok(G.S.preview && G.S.preview.q === far.q, 'preview kept when short');
+  G.run.ink = path.length + 1; M.ink = G.run.ink;
+  G.tap(p.x, p.y);
+  h.ok(far.revealed && path.every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'second tap paints the whole path');
+  h.eq(G.run.ink, 1, 'spends exactly path.length ink');
+  h.eq(M.ink, G.run.ink, 'map ink in sync');
+  h.ok(!G.S.preview, 'preview cleared after painting');
+  h.eq(G.screen, 'map', 'still on the map');
+  G.draw();
+  G.run.ink = ink; M.ink = ink;
+});
+
+h.test('map: a tower is an elite fight that pays a relic and its bonus', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 77);
+  const M = Gt.run.map;
+  const tower = Object.values(M.tiles).find(t => t.type === 'tower');
+  h.ok(tower && tower.known && tower.content.tower && tower.content.tower.bonus, 'tower tile with a bonus');
+  tower.content.tower.bonus = { k: 'ink', n: 2 };
+  const ink = Gt.run.ink, relics = Gt.run.relics.length;
+  Gt.enterTile(tower);
+  h.eq(Gt.screen, 'fight', 'entering a tower starts a fight');
+  h.eq(Gt.fs.tier, 'elite', 'at elite tier');
+  h.ok(Gt.fight.enemies.every(e => DATA.ENCOUNTERS[1].elite.some(enc => enc.includes(e.id))), 'enemies come from the elite pool');
+  stepFor(Gt, 0.2);
+  Gt.endFight('win');
+  h.eq(Gt.screen, 'reward', 'reward screen after the win');
+  Gt.choose(3);
+  h.eq(Gt.screen, 'treasure', 'then the treasure screen');
+  h.ok(Gt.S.sd && Gt.S.sd.treasure && Gt.S.sd.treasure.relic, 'a relic is offered');
+  const eliteInk = (DATA.ECONOMY && DATA.ECONOMY.eliteInk) || 1;
+  h.eq(Gt.run.ink, ink + eliteInk + 2, 'elite ink plus the +2 ink bonus');
+  Gt.choose(0);
+  h.eq(Gt.run.relics.length, relics + 1, 'relic taken');
+  h.eq(Gt.screen, 'map', 'back on the map');
+  h.ok(tower.done, 'tower cleared');
+  // The other bonus kinds apply without throwing.
+  for (const bonus of [{ k: 'gold', n: 60 }, { k: 'brush', id: 'splash' }, { k: 'claw', u: 'width' }]) {
+    const T2 = boot(); const G2 = T2.GAME; G2.newRun('knight', 77);
+    const tw = Object.values(G2.run.map.tiles).find(t => t.type === 'tower');
+    tw.content.tower.bonus = bonus;
+    const gold = G2.run.gold, brushes = G2.run.brushes.length, width = G2.run.claw.width;
+    G2.enterTile(tw); stepFor(G2, 0.2); G2.endFight('win'); G2.choose(3);
+    h.eq(G2.screen, 'treasure', bonus.k + ' bonus reaches the treasure screen');
+    if (bonus.k === 'gold') h.ok(G2.run.gold >= gold + 60, 'gold bonus paid');
+    if (bonus.k === 'brush') h.eq(G2.run.brushes.length, brushes + 1, 'brush bonus paid');
+    if (bonus.k === 'claw') h.ok(G2.run.claw.width > width, 'claw bonus applied');
+    G2.choose(0);
+    h.eq(G2.screen, 'map', bonus.k + ': back on the map');
+  }
+});
+
 h.test('walking onto a fight tile starts a fight with a body per bin item', () => {
   const t = seedInfo.tile;
   const p = G.hexToStage(t.q, t.r);
@@ -145,11 +237,15 @@ h.test("a rig 'slip' event plays the sfx, floats SLIP at the palm and shakes", (
   const t0 = R.fx.textCount();
   G.rigEvent('lift');
   h.ok(/holding|empty claw/.test(G.S.hint), 'lift hint reports the hold (' + G.S.hint + ')');
+  const slips0 = G.fs.slips;
   G.rigEvent('slip');
   h.ok(calls.includes('itemSlip'), 'itemSlip sfx on slip');
   h.eq(R.fx.textCount(), t0 + 1, 'one floating text spawned');
   h.ok(/slip/.test(G.S.hint), 'hint mentions the slip (' + G.S.hint + ')');
-  h.eq(G.fs.slips, 1, 'slip counted on the fight session');
+  h.eq(G.fs.slips, slips0 + 1, 'slip counted on the fight session');
+  G.rigEvent('shed');
+  h.eq(G.fs.slips, slips0 + 1, 'a shed (cradle full at the lift) is not a slip');
+  h.eq(R.fx.textCount(), t0 + 2, 'shed floats its own text');
   const off = R.fx.offset();
   h.ok(Math.abs(off.x) + Math.abs(off.y) > 0, 'a small shake');
   G.rigEvent('close');
@@ -159,7 +255,7 @@ h.test("a rig 'slip' event plays the sfx, floats SLIP at the palm and shakes", (
 });
 
 let deliveries = 0, drops = 0;
-h.test('over 30 drops at least 8 deliver; fights end; the game never sticks', () => {
+h.test('over 30 drops at least 18 deliver; fights end; the game never sticks', () => {
   const rng = U.rng(99);
   let turnsSeen = 0, fights = 0, lastTurn = -1, wins = 0;
   const startDelivered = G.run.delivered;
@@ -187,7 +283,7 @@ h.test('over 30 drops at least 8 deliver; fights end; the game never sticks', ()
     if (G.run.delivered > before) deliveries += G.run.delivered - before;
   }
   h.eq(drops, 30, 'made 30 drops');
-  h.ok(deliveries >= 8, `at least 8 of 30 drops delivered (got ${deliveries})`);
+  h.ok(deliveries >= 18, `at least 18 of 30 drops delivered (got ${deliveries})`);
   h.ok(turnsSeen >= 5, `turns advanced (${turnsSeen})`);
   h.ok(G.run.grabs >= 30, 'run grab counter tracks drops');
   console.log(`  deliveries ${deliveries}/${drops}, turns ${turnsSeen}, extra fights ${fights}`);
@@ -503,7 +599,7 @@ h.test('every map tile type resolves', () => {
   const T = boot();
   const Gt = T.GAME;
   Gt.newRun('knight', 55);
-  const types = ['empty', 'gem', 'ink', 'brush', 'treasure', 'shop', 'rest', 'forge', 'event', 'fight', 'elite'];
+  const types = ['empty', 'gem', 'ink', 'brush', 'treasure', 'shop', 'rest', 'forge', 'event', 'fight', 'elite', 'tower'];
   for (const ty of types) {
     Gt.toMap();
     const M = Gt.run.map;
