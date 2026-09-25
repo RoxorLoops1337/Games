@@ -1,5 +1,8 @@
-// Clawspire map suite: generation rules over many seeds, fog / ink / brush /
-// movement rules, pixel <-> hex round trips, fitting, paths, save round trip.
+// Clawspire map suite: generation rules over many seeds, terrain (water,
+// islands, fords, coast), fog / ink / brush / movement rules with ford
+// costs, pixel <-> hex round trips, fitting, bounds, paths, save round trip.
+// gen() makes a 10x7 map with terrain, genL() a dry one (the legacy
+// geometry checks want land everywhere), world() the game's 16x22.
 // Runs util+map alone, then util+data+map when data.js exists, plus a stub
 // DATA eval to prove the DATA.BRUSHES / ENCOUNTERS / EVENTS paths.
 import fs from 'fs';
@@ -14,6 +17,32 @@ const colOf = (q, r) => q + Math.floor(r / 2);
 const adj = (a, b) => DIRS.some(([dq, dr]) => a.q + dq === b.q && a.r + dr === b.r);
 const tilesOf = (M) => Object.values(M.tiles);
 const gen = (seed, extra) => MAP.generate(Object.assign({ act: 1, rng: U.rng(seed), cols: 10, rows: 7 }, extra || {}));
+const genL = (seed, extra) => gen(seed, Object.assign({ water: 0 }, extra || {}));
+const world = (seed, extra) => MAP.generate(Object.assign({ act: 1, rng: U.rng(seed) }, extra || {}));
+const isLand = (t) => t.terrain === 'land';
+const landOf = (M) => tilesOf(M).filter(isLand);
+// Independent Dijkstra over hidden, non-boss, non-sea tiles from the lit area: the ink a path to `t` must cost.
+function inkTo(M, t) {
+  const lit = tilesOf(M).filter(x => x.revealed && (x.type !== 'boss' || x.visited));
+  const dist = {};
+  const cost = (x) => x.terrain === 'shallow' ? 2 : 1;
+  const open = [];
+  for (const l of lit) { dist[MAP.key(l.q, l.r)] = 0; open.push(l); }
+  while (open.length) {
+    open.sort((a, b) => dist[MAP.key(a.q, a.r)] - dist[MAP.key(b.q, b.r)]);
+    const c = open.shift();
+    const ck = MAP.key(c.q, c.r);
+    if (c === t) return dist[ck];
+    for (const [q, r] of MAP.neighbors(M, c.q, c.r)) {
+      const n = M.tiles[MAP.key(q, r)];
+      if (n.revealed || n.type === 'boss' || n.terrain === 'sea') continue;
+      const nd = dist[ck] + cost(n);
+      const nk = MAP.key(q, r);
+      if (dist[nk] == null || nd < dist[nk]) { dist[nk] = nd; if (!open.includes(n)) open.push(n); }
+    }
+  }
+  return Infinity;
+}
 const SPECIAL = ['shop', 'rest', 'forge', 'elite', 'treasure', 'tower'];
 const LANDMARK = ['shop', 'rest', 'forge', 'elite', 'treasure', 'boss', 'tower'];
 const inB = (M, q, r) => r >= 0 && r < M.rows && colOf(q, r) >= 0 && colOf(q, r) < M.cols;
@@ -48,19 +77,50 @@ function checkMap(M, label, D) {
   }
   h.ok((n.tower || 0) <= 3, label + ' at most 3 towers');
   // Tiny clamped maps are mostly minimums; real sizes must stay fight heavy.
-  if (tiles.length >= 45) h.ok((n.fight || 0) >= Math.floor(0.2 * tiles.length), label + ' plenty of fights');
+  const land = landOf(M);
+  if (tiles.length >= 45) h.ok((n.fight || 0) >= Math.floor(0.2 * land.length), label + ' plenty of fights');
   // Landmarks: known exactly on the landmark types, from the start.
   h.ok(tiles.every(t => t.known === LANDMARK.includes(t.type)), label + ' known flag exactly on landmark types');
   h.ok(tiles.every(t => MAP.isLandmark(t) === LANDMARK.includes(t.type)), label + ' isLandmark agrees');
-  // Towers: top or bottom row, columns 3..cols-3, off the axis, never next to a special.
+  // Towers: islands first (one each while towers remain), at least one on
+  // the mainland, never next to each other. Mainland towers sit off the
+  // axis; on a dry map they keep the old edge rule (top or bottom row,
+  // columns 3..cols-3, no special beside them).
   const towers = tiles.filter(t => t.type === 'tower');
-  h.ok(towers.every(t => t.r === 0 || t.r === M.rows - 1), label + ' towers on the top or bottom row');
-  h.ok(towers.every(t => colOf(t.q, t.r) >= 3 && colOf(t.q, t.r) <= M.cols - 3), label + ' towers in columns 3..cols-3');
-  h.ok(towers.every(t => t.r !== M.start.r), label + ' towers off the start-boss axis');
-  if (tiles.length >= 60) {
-    h.ok(towers.every(t => MAP.neighbors(M, t.q, t.r).every(([q, r]) => !SPECIAL.includes(M.tiles[MAP.key(q, r)].type))),
-      label + ' towers not adjacent to another special');
+  const islands = MAP.islandsOf(M);
+  const onIsland = new Set([].concat(...islands));
+  const mainTowers = towers.filter(t => !onIsland.has(MAP.key(t.q, t.r)));
+  const isleTowers = towers.filter(t => onIsland.has(MAP.key(t.q, t.r)));
+  h.ok(mainTowers.length >= 1, label + ' at least one tower on the mainland');
+  h.ok(mainTowers.every(t => t.r !== M.start.r), label + ' mainland towers off the start-boss axis');
+  h.ok(towers.every(a => towers.every(b => a === b || !adj(a, b))), label + ' towers never adjacent to each other');
+  if (islands.length && towers.length >= 2) h.ok(isleTowers.length >= 1, label + ' an island holds a tower');
+  h.ok(isleTowers.length <= islands.length && islands.every(isle => isle.filter(k => M.tiles[k].type === 'tower').length <= 1), label + ' at most one tower per island');
+  if (!(M.water > 0)) {
+    h.ok(towers.every(t => t.r === 0 || t.r === M.rows - 1), label + ' dry map: towers on the top or bottom row');
+    h.ok(towers.every(t => colOf(t.q, t.r) >= 3 && colOf(t.q, t.r) <= M.cols - 3), label + ' dry map: towers in columns 3..cols-3');
+    if (tiles.length >= 60) {
+      h.ok(towers.every(t => MAP.neighbors(M, t.q, t.r).every(([q, r]) => !SPECIAL.includes(M.tiles[MAP.key(q, r)].type))),
+        label + ' dry map: towers not adjacent to another special');
+    }
   }
+  // Terrain: three kinds, sea empty and unknown, coast flags right, elevation
+  // in range, biome per act, every island reachable through a ford.
+  h.ok(tiles.every(t => ['land', 'shallow', 'sea'].includes(t.terrain)), label + ' terrain is land, shallow or sea');
+  h.ok(tiles.filter(t => t.terrain !== 'land').every(t => t.type === 'empty' && !t.known && Object.keys(t.content).length === 0), label + ' water holds no content');
+  h.ok(tiles.every(t => t.coast === (isLand(t) && MAP.neighbors(M, t.q, t.r).some(([q, r]) => !isLand(M.tiles[MAP.key(q, r)])))), label + ' coast flag on land touching water');
+  h.ok(tiles.every(t => typeof t.elev === 'number' && t.elev >= 0 && t.elev <= 1), label + ' elev in 0..1');
+  h.ok(tiles.every(t => t.biome === MAP.BIOMES[M.act]) && M.biome === MAP.BIOMES[M.act], label + ' biome follows the act');
+  h.ok(isLand(MAP.tileAt(M, M.start.q, M.start.r)) && isLand(MAP.tileAt(M, M.boss.q, M.boss.r)), label + ' start and boss on land');
+  h.ok(MAP.neighbors(M, M.start.q, M.start.r).every(([q, r]) => isLand(M.tiles[MAP.key(q, r)])), label + ' start neighbourhood is land');
+  h.ok(MAP.pathExists(M, M.start, M.boss, { any: true, land: true }), label + ' a land route joins start and boss');
+  h.eq(M.islands, islands.length, label + ' M.islands counts the islands');
+  h.ok(islands.every(isle => isle.length >= 3), label + ' islands have at least 3 hexes');
+  h.ok(islands.every(isle => isle.every(k => !MAP.neighbors(M, M.tiles[k].q, M.tiles[k].r).some(([q, r]) => isLand(M.tiles[MAP.key(q, r)]) && !isle.includes(MAP.key(q, r))))), label + ' islands touch no other land');
+  h.ok(land.every(t => MAP.pathExists(M, M.start, t, { any: true })), label + ' every land hex reachable through fords');
+  if (islands.length) h.ok(tiles.some(t => t.terrain === 'shallow'), label + ' islands come with fords');
+  const wet = tiles.filter(t => !isLand(t)).length;
+  h.ok(Math.abs(M.water - wet / tiles.length) < 0.011, label + ' M.water is the water share');
   h.ok(towers.every(t => t.content.elite && t.content.tower && ['ink', 'brush', 'claw', 'gold'].includes(t.content.tower.bonus.k)), label + ' towers carry an elite flag and a bonus');
   const elites = tiles.filter(t => t.type === 'elite');
   h.ok(elites.every(e => !adj(e, M.start)), label + ' no elite next to start');
@@ -85,6 +145,7 @@ function checkMap(M, label, D) {
   h.ok(M.pos.q === M.start.q && M.pos.r === M.start.r, label + ' pos = start');
   h.ok(Array.isArray(M.brushes) && M.brushes.length === 0, label + ' no brushes yet');
   h.ok(MAP.pathExists(M, M.start, M.boss, { any: true }), label + ' boss reachable through the fog');
+  h.ok(MAP.walkCost(M, M.start, M.boss, { any: true, land: true }) === 0, label + ' the land route costs no ink to walk');
   h.ok(!MAP.pathExists(M, M.start, M.boss), label + ' boss not reachable through revealed tiles on a fresh map');
 }
 
@@ -99,7 +160,7 @@ h.test('shape and module hygiene', () => {
   h.ok(mine.every(s => !s.includes(String.fromCharCode(0x2014))), 'no em dashes in map.js or this suite');
   for (const fn of ['generate', 'key', 'neighbors', 'canReveal', 'reveal', 'brush', 'canMove', 'move', 'toPixel',
     'fromPixel', 'pathExists', 'progress', 'serialize', 'deserialize', 'tileAt', 'reachable', 'revealable', 'hexCorners', 'size',
-    'isLandmark', 'pathToReveal', 'revealPath']) {
+    'isLandmark', 'pathToReveal', 'revealPath', 'bounds', 'islandsOf', 'revealCost', 'moveCost', 'pathCost', 'walkCost', 'biomeOf']) {
     h.eq(typeof MAP[fn], 'function', 'MAP.' + fn + ' exists');
   }
   h.eq(MAP.key(-2, 5), '-2,5', 'key format');
@@ -107,6 +168,37 @@ h.test('shape and module hygiene', () => {
 
 h.test('200 seeds satisfy every generation rule', () => {
   for (let s = 1; s <= 200; s++) checkMap(gen(s * 7919, { act: 1 + (s % 3) }), 'seed ' + s);
+});
+
+h.test('16x22 world: 100 seeds keep every rule, water 20-40%, 2-4 islands, best content on them', () => {
+  let minW = 1, maxW = 0, isles = new Set(), islandLoot = 0, shops = 0, fords = 0, inkShare = 0;
+  for (let s = 1; s <= 100; s++) {
+    const M = world(s * 131, { act: 1 + (s % 3) });
+    checkMap(M, 'world ' + s);
+    const tiles = tilesOf(M), land = landOf(M);
+    h.ok(M.cols === 16 && M.rows === 22 && tiles.length === 352, 'world ' + s + ' is 16x22');
+    minW = Math.min(minW, M.water); maxW = Math.max(maxW, M.water);
+    isles.add(M.islands);
+    h.ok(M.islands >= 2 && M.islands <= 4, 'world ' + s + ' has 2-4 islands (' + M.islands + ')');
+    h.ok(M.water >= 0.2 && M.water <= 0.4, 'world ' + s + ' water share 20-40% (' + M.water + ')');
+    const islands = MAP.islandsOf(M);
+    const isleTiles = [].concat(...islands).map(k => M.tiles[k]);
+    h.ok(isleTiles.some(t => t.type === 'tower') && isleTiles.some(t => t.type === 'treasure'), 'world ' + s + ' islands hold a tower and a treasure');
+    islandLoot += isleTiles.filter(t => ['tower', 'treasure', 'elite'].includes(t.type)).length;
+    shops += isleTiles.filter(t => t.type === 'shop').length;
+    fords += tiles.filter(t => t.terrain === 'shallow').length;
+    inkShare += tiles.filter(t => t.type === 'ink').length / land.length;
+    h.ok(tiles.filter(t => t.type === 'tower').some(t => !isleTiles.includes(t)), 'world ' + s + ' keeps a tower on the mainland');
+    h.eq(M.ink, MAP.START_INK, 'world ' + s + ' starts with START_INK');
+  }
+  h.ok(minW >= 0.2 && maxW <= 0.4, `water share over 100 seeds within 20-40% (${minW}..${maxW})`);
+  h.ok(isles.size >= 2, 'island count varies');
+  h.ok(islandLoot >= 300, 'islands average 3+ prizes (' + islandLoot + ')');
+  h.ok(shops > 10 && shops < 250, 'islands sometimes carry a shop (' + shops + ')');
+  h.ok(fords >= 200, 'a few fords per map (' + fords + ' over 100 maps)');
+  h.ok(inkShare / 100 >= 0.085 && inkShare / 100 <= 0.12, 'ink pots about 10% of the land (' + (inkShare / 100).toFixed(3) + ')');
+  h.ok(MAP.INK_PER_ACT_HINT >= 15 && MAP.INK_PER_ACT_HINT <= 40, 'INK_PER_ACT_HINT is a sane number');
+  h.eq(MAP.SHALLOW_COST, 2, 'fords cost 2');
 });
 
 h.test('determinism and variety', () => {
@@ -124,9 +216,13 @@ h.test('other sizes and clamping', () => {
   h.ok(tiny.cols >= 9 && tiny.rows >= 3, 'tiny request clamps up');
   checkMap(tiny, 'clamped');
   const d = MAP.generate({ rng: U.rng(9) });
-  h.ok(d.cols === 10 && d.rows === 7 && d.act === 1, 'defaults 10x7 act 1');
-  h.ok(MAP.DEFAULT_COLS === 10 && MAP.DEFAULT_ROWS === 7, 'DEFAULT_COLS/ROWS exported as 10x7');
-  h.eq(Object.keys(d.tiles).length, 70, 'default map has 70 tiles');
+  h.ok(d.cols === 16 && d.rows === 22 && d.act === 1, 'defaults 16x22 act 1');
+  h.ok(MAP.DEFAULT_COLS === 16 && MAP.DEFAULT_ROWS === 22, 'DEFAULT_COLS/ROWS exported as 16x22');
+  h.eq(Object.keys(d.tiles).length, 352, 'default map has 352 tiles');
+  h.eq(MAP.HEX, 46, 'HEX is the 46 px hex the game draws');
+  h.ok(tilesOf(tiny).every(t => t.terrain === 'land') && tiny.water === 0, 'tiny maps stay dry');
+  h.ok(tilesOf(genL(8)).every(t => t.terrain === 'land' && !t.coast), 'water: 0 gives an all-land map without coast');
+  checkMap(genL(8), 'dry 10x7');
 });
 
 h.test('neighbours', () => {
@@ -145,7 +241,7 @@ h.test('neighbours', () => {
 });
 
 h.test('reveal spends ink and respects adjacency', () => {
-  const M = gen(11);
+  const M = genL(11);
   const cand = MAP.revealable(M);
   h.ok(cand.length > 0, 'something is revealable at the start');
   h.ok(cand.every(t => !t.revealed && MAP.canReveal(M, t.q, t.r)), 'revealable() agrees with canReveal()');
@@ -208,13 +304,13 @@ function brushCase(M, id, target, expectCells, label, mod) {
 
 h.test('fallback brushes reveal exactly their in-bounds cells', () => {
   for (const id of ['line3', 'splash', 'comb']) {
-    const M = gen(21);
+    const M = genL(21);
     const tgt = MAP.revealable(M).find(t => colOf(t.q, t.r) === 2) || MAP.revealable(M)[0];
     brushCase(M, id, tgt, EXPECT[id](tgt.q, tgt.r), id + ' mid');
   }
   // Clipping: reveal the right and top edges by hand, then brush on the edge.
   for (const id of ['line3', 'splash', 'comb']) {
-    const M = gen(22);
+    const M = genL(22);
     const tgt = { q: M.cols - 2 - 0, r: 0 }; // row 0, column cols-2
     M.tiles[MAP.key(tgt.q - 1, 0)].revealed = true;
     M.revealedCount = tilesOf(M).filter(t => t.revealed).length;
@@ -223,7 +319,7 @@ h.test('fallback brushes reveal exactly their in-bounds cells', () => {
     brushCase(M, id, tgt, cells, id + ' edge');
   }
   // drip: target + 2 distinct neighbours, same pick every time for (q, r).
-  const M = gen(23);
+  const M = genL(23);
   const tgt = MAP.revealable(M)[0];
   const cells = MAP.brushCells('drip', tgt.q, tgt.r);
   h.eq(cells.length, 3, 'drip is 3 cells');
@@ -241,7 +337,7 @@ h.test('fallback brushes reveal exactly their in-bounds cells', () => {
 });
 
 h.test('brush refusals', () => {
-  const M = gen(31);
+  const M = genL(31);
   const tgt = MAP.revealable(M)[0];
   h.eq(MAP.brush(M, 'splash', tgt.q, tgt.r), null, 'refuses a brush you do not own');
   M.brushes = ['splash', 'mystery'];
@@ -256,7 +352,7 @@ h.test('brush refusals', () => {
 });
 
 h.test('movement', () => {
-  const M = gen(41);
+  const M = genL(41);
   const reach = MAP.reachable(M);
   h.eq(reach.length, MAP.neighbors(M, M.start.q, M.start.r).length, 'all start neighbours reachable');
   h.ok(!MAP.canMove(M, M.start.q, M.start.r), 'cannot move onto the current tile');
@@ -343,7 +439,7 @@ h.test('hexCorners and size()', () => {
 });
 
 h.test('pathExists', () => {
-  const M = gen(71);
+  const M = genL(71);
   h.ok(MAP.pathExists(M, M.start, M.pos), 'trivial path to self');
   h.ok(MAP.pathExists(M, M.start, { q: MAP.neighbors(M, M.start.q, M.start.r)[0][0], r: MAP.neighbors(M, M.start.q, M.start.r)[0][1] }), 'start to a neighbour');
   h.ok(!MAP.pathExists(M, M.start, M.boss), 'no revealed path yet');
@@ -354,7 +450,7 @@ h.test('pathExists', () => {
   h.ok(!MAP.pathExists(M, M.start, { q: 0, r: 0 }), 'hidden target is not reachable');
   h.ok(!MAP.pathExists(M, M.start, { q: 40, r: 0 }), 'out of bounds target is not reachable');
   // The boss is never walked through: two boss neighbours that only meet at the boss.
-  const B = gen(72);
+  const B = genL(72);
   for (const t of tilesOf(B)) t.revealed = false;
   const bn = MAP.neighbors(B, B.boss.q, B.boss.r).map(([q, r]) => ({ q, r }));
   let pair = null;
@@ -364,7 +460,7 @@ h.test('pathExists', () => {
   h.ok(!MAP.pathExists(B, pair[0], pair[1]), 'paths do not pass through the boss');
   h.ok(MAP.pathExists(B, pair[0], B.boss), 'but may end on it');
   // Control: the same shape around an ordinary tile does connect.
-  const C = gen(73);
+  const C = genL(73);
   for (const t of tilesOf(C)) t.revealed = false;
   const mid = { q: 3, r: 3 };
   const cn = MAP.neighbors(C, mid.q, mid.r).map(([q, r]) => ({ q, r }));
@@ -374,9 +470,11 @@ h.test('pathExists', () => {
 });
 
 h.test('progress', () => {
-  const M = gen(81);
+  const M = genL(81);
   const p = MAP.progress(M);
-  h.eq(p.total, 70, 'total = cols*rows');
+  h.eq(p.total, 70, 'dry map: total = cols*rows');
+  const Wt = gen(82);
+  h.eq(MAP.progress(Wt).total, tilesOf(Wt).filter(t => t.terrain !== 'sea').length, 'wet map: total leaves out the sea');
   h.eq(p.revealed, M.revealedCount, 'revealed = revealedCount');
   h.eq(p.pct, Math.round(100 * p.revealed / 70), 'pct is a rounded percentage');
   const t = MAP.revealable(M)[0];
@@ -422,6 +520,16 @@ h.test('serialize / deserialize', () => {
   const tw = tilesOf(D).filter(t => t.type === 'tower');
   h.ok(tw.length >= 2 && tw.every(t => t.known && t.content.tower && t.content.tower.bonus), 'loaded towers keep known + bonus');
   h.ok(tilesOf(D).every(t => t.known === LANDMARK.includes(t.type)), 'loaded known flags match the landmark types');
+  h.ok(tilesOf(D).every((t, i) => { const o = tilesOf(M)[i]; return t.terrain === o.terrain && t.elev === o.elev && t.coast === o.coast && t.biome === o.biome; }), 'terrain, elev, coast and biome survive the trip');
+  h.ok(D.biome === M.biome && D.islands === M.islands && D.water === M.water, 'map biome, islands and water survive');
+  // A save from before the terrain gets a dry map back.
+  const flat = JSON.parse(json);
+  delete flat.biome; delete flat.islands; delete flat.water;
+  for (const k in flat.tiles) { const t = flat.tiles[k]; delete t.terrain; delete t.elev; delete t.coast; delete t.biome; }
+  const Fm = MAP.deserialize(flat);
+  h.ok(tilesOf(Fm).every(t => t.terrain === 'land' && typeof t.elev === 'number' && t.coast === false && t.biome === MAP.BIOMES[2]), 'old save: all land, act biome');
+  h.ok(Fm.biome === MAP.BIOMES[2] && Fm.islands === 0 && Fm.water === 0, 'old save: dry map fields');
+  h.ok(MAP.reveal(Fm, MAP.revealable(Fm)[0].q, MAP.revealable(Fm)[0].r) !== null, 'old save still plays');
   // An old save (no known, tower without content) gets defaults.
   const old = JSON.parse(json);
   for (const k in old.tiles) { delete old.tiles[k].known; if (old.tiles[k].type === 'tower') old.tiles[k].content = {}; }
@@ -445,7 +553,7 @@ const litSet = (M) => tilesOf(M).filter(t => t.revealed && (t.type !== 'boss' ||
 
 h.test('pathToReveal: shortest, never through the boss, excludes revealed', () => {
   for (let s = 1; s <= 40; s++) {
-    const M = gen(s * 97);
+    const M = genL(s * 97);
     const lit = litSet(M);
     let bad = 0;
     for (const t of tilesOf(M)) {
@@ -465,7 +573,7 @@ h.test('pathToReveal: shortest, never through the boss, excludes revealed', () =
     }
     h.eq(bad, 0, 'seed ' + s + ': every hidden tile has a correct shortest path (bad=' + bad + ')');
   }
-  const M = gen(5);
+  const M = genL(5);
   h.eq(MAP.pathToReveal(M, 40, 40).length, 0, 'out of bounds is empty');
   h.eq(MAP.pathToReveal(M, M.start.q, M.start.r).length, 0, 'revealed start is empty');
   h.eq(MAP.pathToReveal(M, M.boss.q, M.boss.r).length, 0, 'the boss is empty');
@@ -478,12 +586,12 @@ h.test('pathToReveal: shortest, never through the boss, excludes revealed', () =
     h.ok(path.length > 0 && !path.some(([q, r]) => q === M.boss.q && r === M.boss.r), 'boss neighbour path avoids the boss');
   }
   // Once the boss is visited it is a foothold like any lit tile.
-  const V = gen(5);
+  const V = genL(5);
   V.tiles[MAP.key(V.boss.q, V.boss.r)].visited = true;
   const far = bn[0];
   h.eq(MAP.pathToReveal(V, far.q, far.r).length, 0, 'next to a visited boss counts as adjacent');
   // Paths grow from the whole lit area, not just pos.
-  const G = gen(6);
+  const G = genL(6);
   const tgt = tilesOf(G).find(t => !t.revealed && colOf(t.q, t.r) === 3 && t.r === 3);
   const before = MAP.pathToReveal(G, tgt.q, tgt.r).length;
   for (const t of MAP.revealable(G)) t.revealed = true;
@@ -491,8 +599,88 @@ h.test('pathToReveal: shortest, never through the boss, excludes revealed', () =
   h.ok(after < before, 'a wider lit area shortens the path (' + before + ' -> ' + after + ')');
 });
 
+h.test('terrain paths: sea impassable, fords cost 2, cheapest by ink', () => {
+  let checked = 0, fordPaths = 0;
+  for (let s = 1; s <= 12; s++) {
+    const M = world(s * 211);
+    let bad = 0;
+    for (const t of tilesOf(M)) {
+      const path = MAP.pathToReveal(M, t.q, t.r);
+      if (t.terrain === 'sea') { if (path.length || MAP.canReveal(M, t.q, t.r) || MAP.revealCost(t) !== Infinity) bad++; continue; }
+      const lit = MAP.neighbors(M, t.q, t.r).some(([q, r]) => { const n = M.tiles[MAP.key(q, r)]; return n.revealed && (n.type !== 'boss' || n.visited); });
+      if (t.revealed || t.type === 'boss' || lit) { if (path.length) bad++; continue; }
+      const want = inkTo(M, t);
+      if (want === Infinity) { if (path.length) bad++; continue; }
+      if (!path.length) { bad++; continue; }
+      if (path.some(([q, r]) => M.tiles[MAP.key(q, r)].terrain === 'sea')) bad++;
+      if (MAP.pathCost(M, path) !== want) bad++;
+      if (path.some(([q, r]) => M.tiles[MAP.key(q, r)].terrain === 'shallow')) fordPaths++;
+      checked++;
+    }
+    h.eq(bad, 0, 'world ' + s + ': every path is the cheapest by ink, never over the sea (bad=' + bad + ')');
+  }
+  h.ok(checked > 2000 && fordPaths > 50, `checked ${checked} paths, ${fordPaths} cross a ford`);
+  h.eq(MAP.revealCost({ terrain: 'shallow' }), 2, 'revealCost of a ford is 2');
+  h.eq(MAP.revealCost({ terrain: 'land' }), 1, 'revealCost of land is 1');
+  h.eq(MAP.moveCost({ terrain: 'shallow' }), 2, 'moveCost of a ford is 2');
+  h.eq(MAP.moveCost({ terrain: 'land' }), 0, 'walking land is free');
+  h.eq(MAP.moveCost({ terrain: 'sea' }), Infinity, 'sea is never walked');
+});
+
+h.test('fords: reveal and wade at 2 ink, revealPath spends pathCost', () => {
+  // A world where a ford is next to the light: put the light there ourselves.
+  const M = world(77);
+  const ford = tilesOf(M).find(t => t.terrain === 'shallow');
+  const shore = MAP.neighbors(M, ford.q, ford.r).map(([q, r]) => M.tiles[MAP.key(q, r)]).find(t => isLand(t));
+  h.ok(ford && shore, 'a ford with a land shore');
+  shore.revealed = true; M.revealedCount++;
+  M.ink = 1;
+  h.ok(!MAP.canReveal(M, ford.q, ford.r) && MAP.reveal(M, ford.q, ford.r) === null, '1 ink cannot reveal a ford');
+  h.ok(!MAP.revealable(M).includes(ford) && MAP.revealable(M, { brush: true }).includes(ford), 'revealable() lists it only when the ink or a brush allows');
+  M.ink = 2;
+  h.ok(MAP.reveal(M, ford.q, ford.r) === ford && ford.revealed && M.ink === 0, 'revealing a ford spends 2 ink');
+  // Wading: adjacent + revealed is not enough, the ink must be there too.
+  M.pos = { q: shore.q, r: shore.r };
+  M.ink = 1;
+  h.ok(!MAP.canMove(M, ford.q, ford.r) && MAP.move(M, ford.q, ford.r) === null && !MAP.reachable(M).includes(ford), '1 ink cannot wade');
+  M.ink = 3;
+  h.ok(MAP.reachable(M).includes(ford), 'with 2+ ink the ford is reachable');
+  h.ok(MAP.move(M, ford.q, ford.r) === ford && M.pos.q === ford.q && M.ink === 1 && ford.visited, 'wading spends 2 ink');
+  const back = MAP.move(M, shore.q, shore.r);
+  h.ok(back === shore && M.ink === 1, 'stepping back onto land is free');
+  h.eq(MAP.walkCost(M, shore, ford), 2, 'walkCost counts the ford');
+  h.ok(MAP.pathExists(M, shore, ford, { ink: 2 }) && !MAP.pathExists(M, shore, ford, { ink: 1 }), 'pathExists honours an ink budget');
+  // A painted path over a ford costs len + 1 (the ford counts double).
+  const N = world(78);
+  const isle = MAP.islandsOf(N)[0].map(k => N.tiles[k]);
+  const tgt = isle.find(t => MAP.pathToReveal(N, t.q, t.r).length > 0);
+  const path = MAP.pathToReveal(N, tgt.q, tgt.r);
+  const fords = path.filter(([q, r]) => N.tiles[MAP.key(q, r)].terrain === 'shallow').length;
+  h.ok(fords >= 1, 'the island path crosses a ford');
+  const cost = MAP.pathCost(N, path);
+  h.eq(cost, path.length + fords, 'pathCost = tiles + fords');
+  N.ink = cost - 1;
+  h.eq(MAP.revealPath(N, path), null, 'one ink short refuses');
+  h.ok(path.every(([q, r]) => !N.tiles[MAP.key(q, r)].revealed) && N.ink === cost - 1, 'refusal reveals and spends nothing');
+  N.ink = cost + 3;
+  const got = MAP.revealPath(N, path);
+  h.ok(got && got.length === path.length && N.ink === 3, 'revealPath spends exactly pathCost');
+  h.eq(MAP.revealPath(N, [[N.tiles[Object.keys(N.tiles).find(k => N.tiles[k].terrain === 'sea')].q, N.tiles[Object.keys(N.tiles).find(k => N.tiles[k].terrain === 'sea')].r]]), null, 'a sea step is refused');
+  // Brushes skip the sea.
+  const Bm = world(79);
+  const seaEdge = tilesOf(Bm).find(t => !t.revealed && t.terrain !== 'sea' && MAP.neighbors(Bm, t.q, t.r).some(([q, r]) => Bm.tiles[MAP.key(q, r)].terrain === 'sea'));
+  for (const [q, r] of MAP.neighbors(Bm, seaEdge.q, seaEdge.r)) if (isLand(Bm.tiles[MAP.key(q, r)])) { Bm.tiles[MAP.key(q, r)].revealed = true; break; }
+  Bm.brushes = ['splash'];
+  const painted = MAP.brush(Bm, 'splash', seaEdge.q, seaEdge.r);
+  h.ok(painted && painted.length >= 1 && painted.every(t => t.terrain !== 'sea'), 'a splash over the shore never reveals sea');
+  h.ok(tilesOf(Bm).every(t => t.terrain !== 'sea' || !t.revealed), 'sea stays hidden');
+  const seaT = tilesOf(Bm).find(t => t.terrain === 'sea' && MAP.neighbors(Bm, t.q, t.r).some(([q, r]) => Bm.tiles[MAP.key(q, r)].revealed));
+  Bm.brushes = ['splash'];
+  h.ok(seaT && !MAP.canBrush(Bm, 'splash', seaT.q, seaT.r), 'a brush cannot target the sea');
+});
+
 h.test('revealPath spends exactly path.length ink and refuses when short', () => {
-  const M = gen(111);
+  const M = genL(111);
   const far = tilesOf(M).find(t => !t.revealed && colOf(t.q, t.r) === 4 && t.r === 1);
   const path = MAP.pathToReveal(M, far.q, far.r);
   h.ok(path.length >= 3, 'a multi-tile path (' + path.length + ')');
@@ -512,7 +700,7 @@ h.test('revealPath spends exactly path.length ink and refuses when short', () =>
   h.eq(MAP.revealPath(M, []), null, 'empty path refused');
   h.eq(MAP.revealPath(M, null), null, 'null path refused');
   // A broken chain (a gap) is refused whole.
-  const N = gen(112);
+  const N = genL(112);
   const t2 = tilesOf(N).find(t => !t.revealed && colOf(t.q, t.r) === 4 && t.r === 5);
   const p2 = MAP.pathToReveal(N, t2.q, t2.r);
   const gap = p2.slice(0, 1).concat(p2.slice(2));
@@ -521,7 +709,7 @@ h.test('revealPath spends exactly path.length ink and refuses when short', () =>
   h.eq(N.ink, ink0, 'and costs nothing');
   h.ok(MAP.revealPath(N, p2) !== null, 'the intact path paints');
   // Painting through the boss is refused.
-  const B = gen(113);
+  const B = genL(113);
   h.eq(MAP.revealPath(B, [[B.boss.q, B.boss.r]]), null, 'boss tile refused');
 });
 
@@ -591,11 +779,22 @@ h.test("orient 'v': transposed positions, flat-top corners, fit", () => {
   h.ok(f.size > MAP.size(gen(123), 540, 768).size * 1.3, 'the climb is much bigger than the landscape fit');
 });
 
-h.test('default grid fits 30-ish px hexes on the stage map area', () => {
-  const M = gen(7);
-  const f = MAP.size(M, 540, 768);
-  h.ok(f.size >= 29, 'hexes at least 29 px in 540x768 (got ' + f.size.toFixed(2) + ')');
-  h.ok(f.size > MAP.size(gen(7, { cols: 12 }), 540, 768).size, 'bigger than the old 12-column grid');
+h.test('bounds(): the world box the camera pans over', () => {
+  const M = world(7);
+  for (const orient of ['v', 'h']) {
+    const b = MAP.bounds(M, 46, orient);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const t of tilesOf(M)) {
+      const p = MAP.toPixel(t.q, t.r, 46, orient);
+      for (const c of MAP.hexCorners(p.x + b.ox, p.y + b.oy, 46, orient)) { x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); y0 = Math.min(y0, c.y); y1 = Math.max(y1, c.y); }
+    }
+    h.ok(Math.abs(x0) < 1e-6 && Math.abs(y0) < 1e-6, orient + ': the box starts at the origin');
+    h.ok(Math.abs(x1 - b.w) < 1e-6 && Math.abs(y1 - b.h) < 1e-6, orient + ': w x h is the exact extent');
+  }
+  const v = MAP.bounds(M, 46, 'v');
+  h.ok(v.w > 1500 && v.w < 1580 && v.h > 1280 && v.h < 1340, `16x22 at 46 px is about 1540 x 1310 (${v.w.toFixed(0)} x ${v.h.toFixed(0)}), far bigger than the 540 x 768 map area`);
+  const ps = MAP.toPixel(M.start.q, M.start.r, 46, 'v'), pb = MAP.toPixel(M.boss.q, M.boss.r, 46, 'v');
+  h.ok(Math.abs(ps.x - pb.x) < 1e-9 && pb.y < ps.y && pb.y + v.oy > 0 && ps.y + v.oy < v.h, 'start at the bottom, boss at the top, same column of pixels');
 });
 
 /* Stub DATA: proves map.js reads DATA.BRUSHES lazily (and overrides the
@@ -611,9 +810,9 @@ h.test('stub DATA path', () => {
   };`;
   const src = source(['util', 'map']).replace('const MAP =', stub + '\nconst MAP =') + '\n;return { U, MAP };';
   const S = new Function(src)();
-  const M = S.MAP.generate({ act: 1, rng: S.U.rng(123) });
+  const M = S.MAP.generate({ act: 1, rng: S.U.rng(123), cols: 10, rows: 7 });
   const P = gen(123);
-  h.eq(tilesOf(M).map(t => t.type).join(), tilesOf(P).map(t => t.type).join(), 'layout identical with and without DATA');
+  h.eq(tilesOf(M).map(t => t.type + t.terrain).join(), tilesOf(P).map(t => t.type + t.terrain).join(), 'layout and terrain identical with and without DATA');
   const tiles = tilesOf(M);
   h.ok(tiles.filter(t => t.type === 'fight').every(t => ['rat', 'slime', 'bat'].includes(t.content.enc[0])), 'fights get normal encounters');
   h.ok(tiles.filter(t => t.type === 'elite').every(t => t.content.enc[0] === 'mimic' && t.content.elite), 'elites get elite encounters');

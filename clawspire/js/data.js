@@ -43,7 +43,7 @@ const DATA = (() => {
   // nearly every drop, so the enemy bands are multiplied here rather than
   // rewritten. hp scales every enemy's hit points, dmg every attack and
   // charge value. Tuned with the whole-run bot.
-  const DIFFICULTY = { hp: 1.6, dmg: 1.35 };
+  const DIFFICULTY = { hp: 2.0, dmg: 1.4 };   // starting point; the owner tunes by hand
 
   const ECONOMY = {
     startInk: 10,          // ink at the start of every act (was 5)

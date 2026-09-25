@@ -1,85 +1,86 @@
-// Clawspire physics suite: engine sanity, cabinet containment, and the claw
-// rig's grab feel (strong grip lifts, weak grip slips, swords are awkward).
+// Clawspire physics suite: the Claw Crawl engine port. Parts and mass,
+// settling and sleeping, containment, the claw's phase machine and halt
+// detection, delivery statistics from a flat floor, grip-driven loosen and
+// jolt, determinism, setConfig, the magnet and grease.
 // Run: node tests/clawspire_physics.test.mjs
 import { boot, harness } from './clawspire_lib.mjs';
 
 const h = harness('clawspire physics');
 const { U, PHYS } = boot({ only: ['util', 'physics'] });
 const DT = 1 / 60;
+const G = 1150;
 
-/* Fresh world + cabinet at the bible's sizes. */
+/* Fresh world + cabinet at the game's sizes (chute on the right, divider at 45%). */
 function mkWorld() {
-  const W = PHYS.world({ gravity: { x: 0, y: 1400 }, w: 480, h: 390 });
-  const C = PHYS.cabinet(W, { w: 480, h: 390, chuteW: 64, dividerH: 0.6, wallThick: 40 });
+  const W = PHYS.world({ gravity: { x: 0, y: G }, w: 480, h: 390 });
+  const C = PHYS.cabinet(W, { w: 480, h: 390, chuteW: 64, dividerH: 0.45 });
   return { W, C };
 }
 
+const SHIELD = [{ x: -14, y: -15 }, { x: 14, y: -15 }, { x: 14, y: 3 }, { x: 0, y: 16 }, { x: -14, y: 3 }];
+const FLASK = [{ x: -4, y: -15 }, { x: 4, y: -15 }, { x: 14, y: 15 }, { x: -14, y: 15 }];
+const AXE = [{ x: -4, y: -28 }, { x: 6, y: -28 }, { x: 18, y: -20 }, { x: 20, y: -6 }, { x: 3, y: 28 }, { x: -3, y: 28 }];
 const ITEM = {
   ball: (o) => ({ shape: { kind: 'circle', r: 15 }, ...o }),
-  box: (o) => ({ shape: { kind: 'poly', verts: PHYS.box(28, 28) }, ...o }),
-  sword: (o) => ({ shape: { kind: 'poly', verts: PHYS.box(44, 10) }, ...o }),
-  heavy: (o) => ({ shape: { kind: 'poly', verts: PHYS.box(50, 50) }, density: 2.4, ...o }),
+  marble: (o) => ({ shape: { kind: 'circle', r: 9 }, ...o }),
+  shield: (o) => ({ shape: { kind: 'poly', verts: SHIELD }, density: 2, ...o }),
+  flask: (o) => ({ shape: { kind: 'poly', verts: FLASK }, density: 0.8, friction: 0.4, ...o }),
+  sword: (o) => ({ shape: { kind: 'box', w: 48, h: 10 }, density: 1.3, friction: 0.45, ...o }),
+  tower: (o) => ({ shape: { kind: 'box', w: 36, h: 50 }, density: 2.4, friction: 0.6, ...o }),
+  axe: (o) => ({ shape: { kind: 'poly', verts: AXE }, density: 1.8, ...o }),
 };
 
 function spawn(W, def, x, y, extra) {
-  const o = Object.assign({ type: 'dynamic', x, y, group: 'item', friction: 0.5, restitution: 0.1, data: {} }, def, extra || {});
-  o.data = Object.assign({}, o.data);   // every body gets its own data (the rig stamps slips on it)
+  const o = Object.assign({ type: 'dynamic', x, y, group: 'item', friction: 0.5, restitution: 0.12, data: {} }, def, extra || {});
+  o.data = Object.assign({}, o.data);
   const b = PHYS.body(o);
   W.add(b);
   return b;
 }
-
 const items = (W) => W.bodies.filter(b => b.type === 'dynamic' && b.group === 'item');
 const maxSpeed = (W) => items(W).reduce((m, b) => Math.max(m, Math.hypot(b.vx, b.vy)), 0);
 const anyNaN = (W) => W.bodies.some(b => !Number.isFinite(b.x) || !Number.isFinite(b.y) || !Number.isFinite(b.a) || !Number.isFinite(b.vx) || !Number.isFinite(b.vy) || !Number.isFinite(b.av));
-const inside = (W, C, tol) => { tol = tol || 1; return items(W).every(b => b.x > -tol && b.x < C.bounds.w + tol && b.y > -tol && b.y < C.bounds.h + tol); };
+/* Inside the glass: the bin floor at h, the hidden chute tray below it, the lid a little above 0. */
+const inside = (W, C, tol) => { tol = tol || 1; return items(W).every(b => b.x > -tol && b.x < C.bounds.w + tol && b.y > -60 - tol && b.y < C.bounds.trayY + tol); };
+function settle(W, seconds) { for (let i = 0; i < Math.round(seconds / DT); i++) W.step(DT); }
 
-/* A pile of 30 mixed items dropped in a grid above the floor. */
-function pile(W, rng) {
+/* A pile of 34 mixed items dropped in a grid above the floor. */
+function pile(W, rng, n) {
   const out = [];
-  for (let i = 0; i < 30; i++) {
-    const kind = i === 0 ? 'sword' : i === 1 ? 'heavy' : ['ball', 'box', 'ball', 'box', 'sword'][i % 5];
-    const x = 40 + (i % 8) * 46 + rng() * 6, y = 40 + Math.floor(i / 8) * 60 + rng() * 10;
-    out.push(spawn(W, ITEM[kind]({}), x, y, { angle: rng() * 6.28 }));
+  const kinds = ['ball', 'sword', 'shield', 'marble', 'flask', 'tower', 'axe', 'ball'];
+  for (let i = 0; i < (n || 34); i++) {
+    const x = 30 + (i % 8) * 47 + rng() * 6, y = 20 + Math.floor(i / 8) * 55 + rng() * 10;
+    out.push(spawn(W, ITEM[kinds[i % kinds.length]]({}), x, y, { angle: rng() * 6.28 }));
   }
   return out;
 }
 
-function settle(W, seconds) { for (let i = 0; i < Math.round(seconds / DT); i++) W.step(DT); }
-
-/* Drive one full grab at x; returns {delivered, events, phases, seconds,
-   lockedMax (most items the lock carried at once), closingT (s spent closing)}. */
+/* Drive one full grab at x. Returns {delivered, events, phases, seconds, cargoMax}. */
 function grab(W, C, R, x, cap) {
   const events = [], phases = [R.phase];
   R.setTarget(x);
   let t = 0;
-  while (!R.calm()) {   // let the carriage arrive and the cable settle first
-    events.push(...R.update(DT)); W.step(DT); t += DT;
-    if (t > 4) break;
-  }
+  while (!R.calm() && t < 4) { events.push(...R.update(DT)); W.step(DT); t += DT; }
   h.ok(R.drop(), 'drop accepted while idle');
-  let started = false, lockedMax = 0, closingT = 0;
+  let started = false, cargoMax = 0;
   while (t < (cap || 15)) {
     const ev = R.update(DT);
     events.push(...ev);
     W.step(DT); t += DT;
     if (phases[phases.length - 1] !== R.phase) phases.push(R.phase);
-    if (R.phase === 'closing') closingT += DT;
-    if (R.phase === 'lifting' || R.phase === 'carrying') lockedMax = Math.max(lockedMax, R.locked().length);
+    if (R.phase === 'lifting' || R.phase === 'carrying') cargoMax = Math.max(cargoMax, R.locked().length);
     if (R.phase !== 'idle' && R.phase !== 'moving') started = true;
     if (started && R.phase === 'idle') break;
   }
+  events.push(...R.update(DT));   // the events of the last substeps (home)
   const delivered = items(W).filter(b => C.inChute(b));
   for (const b of delivered) W.remove(b);
-  return { delivered: delivered.length, events, phases, seconds: t, lockedMax, closingT };
+  return { delivered: delivered.length, events, phases, seconds: t, cargoMax };
 }
 
-/* n single-item grabs at varied x, fresh world each time; returns the delivered
-   count.  aimErr (px, cycled per drop) offsets the claw from the item so long
-   thin items, whose tips must land outside their ends, show their aim tolerance.
-   stats (optional object) accumulates .slips. */
-function scenario(rigCfg, def, n, seed, aimErr, stats) {
-  let ok = 0;
+/* n lone-item grabs at varied x, fresh world each time. Returns {delivered, slips}. */
+function scenario(rigCfg, def, n, seed, aimErr) {
+  let ok = 0, slips = 0;
   const xs = [90, 130, 170, 210, 250, 290, 330, 110, 190, 270];
   const errs = aimErr || [0];
   for (let i = 0; i < n; i++) {
@@ -90,429 +91,465 @@ function scenario(rigCfg, def, n, seed, aimErr, stats) {
     const R = PHYS.clawRig(W, Object.assign({ cabinet: C, rand: U.rng(seed + i) }, rigCfg));
     const g = grab(W, C, R, b.x + errs[i % errs.length]);
     ok += g.delivered;
-    if (stats) stats.slips = (stats.slips || 0) + g.events.filter(e => e === 'slip').length;
+    slips += g.events.filter(e => e === 'slip').length;
     h.ok(g.phases[g.phases.length - 1] === 'idle', `grab returned to idle (${JSON.stringify(rigCfg)} #${i}: ${g.phases.join('>')})`);
+    h.ok(g.seconds < 12, `grab took ${g.seconds.toFixed(1)} s`);
   }
-  return ok;
+  return { delivered: ok, slips };
 }
 
-/* n grabs at a row of balls (offsets from the aim point), fresh world each
-   time; returns {delivered (items), twoPlus (drops with >= 2), lockedMax[], slips, shed}. */
-function rowScenario(rigCfg, radii, offsets, n, seed) {
-  const out = { delivered: 0, twoPlus: 0, lockedMax: [], slips: 0, shed: 0 };
-  for (let i = 0; i < n; i++) {
-    const { W, C } = mkWorld();
-    const x = 120 + (i % 5) * 40;
-    for (let k = 0; k < radii.length; k++) spawn(W, { shape: { kind: 'circle', r: radii[k] } }, x + offsets[k], 360, {});
-    settle(W, 1.0);
-    const R = PHYS.clawRig(W, Object.assign({ cabinet: C, rand: U.rng(seed + i) }, rigCfg));
-    const g = grab(W, C, R, x);
-    out.delivered += g.delivered; if (g.delivered >= 2) out.twoPlus++;
-    out.lockedMax.push(g.lockedMax);
-    out.slips += g.events.filter(e => e === 'slip').length;
-    out.shed += g.events.filter(e => e === 'shed').length;
-  }
-  return out;
-}
+// ---------------------------------------------------------------- parts and mass
+h.test('shapes become balls, capsules and blobs', () => {
+  h.eq(PHYS.box(10, 20).kind, 'box', 'box() is a descriptor');
+  const ball = PHYS.partSpec({ kind: 'circle', r: 15 });
+  h.eq(ball.kind, 'ball', 'circle -> ball'); h.eq(ball.r, 15, 'ball radius');
+  const sword = PHYS.partSpec({ kind: 'box', w: 48, h: 10 });
+  h.eq(sword.kind, 'cap', 'box -> capsule'); h.eq(sword.len, 48, 'capsule length is the long side'); h.eq(sword.r, 5, 'capsule radius is half the short side');
+  const tall = PHYS.partSpec({ kind: 'box', w: 10, h: 48 });
+  h.near(tall.ax, Math.PI / 2, 1e-9, 'a tall box runs along local y');
+  const tower = PHYS.partSpec({ kind: 'box', w: 36, h: 50 });
+  h.eq(tower.r, 18, 'a fat box is a pill no wider than 36');
+  const legacy = PHYS.partSpec({ kind: 'poly', verts: PHYS.box(44, 10) });
+  h.eq(legacy.kind, 'cap', 'poly with box verts maps to a capsule'); h.eq(legacy.len, 44, 'legacy box length');
+  const shield = PHYS.partSpec({ kind: 'poly', verts: SHIELD });
+  h.eq(shield.kind, 'blob', 'a round polygon is a blob'); h.near(shield.r, 0.5 * 31 * 0.92, 1e-9, 'blob radius = 0.46 x long axis');
+  const axe = PHYS.partSpec({ kind: 'poly', verts: AXE });
+  h.eq(axe.kind, 'cap', 'a long polygon is a thin capsule'); h.eq(axe.len, 56, 'axe length'); h.eq(axe.r, 12, 'thin capsule radius capped at 12');
+  h.eq(PHYS.partSpec(null).kind, 'ball', 'no shape -> default ball');
+});
+
+h.test('body parts, mass, inertia and aabb', () => {
+  const b = PHYS.body({ shape: { kind: 'circle', r: 10 }, density: 2, x: 50, y: 60 });
+  h.eq(b.parts.length, 1, 'a ball is one part');
+  h.near(b.m, Math.PI * 100 * 2 * 0.01, 1e-9, 'mass = pi r^2 density 0.01');
+  h.ok(b.I > 0 && b.invM > 0 && b.invI > 0, 'inertia and inverses');
+  const box = b.aabb();
+  h.ok(box.x0 === 40 && box.x1 === 60 && box.y0 === 50 && box.y1 === 70, 'aabb around the ball');
+  const s = PHYS.body({ shape: { kind: 'box', w: 48, h: 10 }, x: 0, y: 0 });
+  h.ok(s.parts.length >= 8, 'a sword is a chain of parts (' + s.parts.length + ')');
+  h.near(s.aabb().x1 - s.aabb().x0, 48, 1e-6, 'sword aabb spans its length');
+  h.near(s.aabb().y1 - s.aabb().y0, 10, 1e-6, 'sword aabb spans its thickness');
+  s.a = Math.PI / 2; PHYS.sync(s);
+  h.near(s.aabb().y1 - s.aabb().y0, 48, 1e-6, 'rotated sword stands up');
+  const bl = PHYS.body({ shape: { kind: 'poly', verts: SHIELD } });
+  h.eq(bl.parts.length, 4, 'a blob is four parts');
+  h.near(bl.parts.reduce((a, p) => a + p.x * Math.PI * p.r * p.r, 0), 0, 1e-6, 'parts are centred on the mass centre');
+  const st = PHYS.body({ type: 'static', shape: { kind: 'circle', r: 5 } });
+  h.eq(st.invM, 0, 'static bodies have no inverse mass'); h.ok(st.sl, 'static bodies sleep');
+  h.eq(b.shape.kind, 'circle', 'the shape descriptor is kept for the game');
+});
 
 // ---------------------------------------------------------------- engine
-h.test('box verts and body mass', () => {
-  const v = PHYS.box(10, 20);
-  h.eq(v.length, 4, 'box has 4 verts');
-  const b = PHYS.body({ shape: { kind: 'poly', verts: v }, density: 2 });
-  h.near(b.m, 400, 1e-6, 'box mass = density * area');
-  h.ok(b.I > 0 && b.invI > 0, 'box inertia positive');
-  const c = PHYS.body({ shape: { kind: 'circle', r: 10 } });
-  h.near(c.m, Math.PI * 100, 1e-6, 'circle mass');
-  const s = PHYS.body({ type: 'static', shape: { kind: 'circle', r: 10 } });
-  h.eq(s.invM, 0, 'static has no inverse mass');
-  const cw = PHYS.body({ shape: { kind: 'poly', verts: v.slice().reverse() } });
-  h.near(cw.m, 200, 1e-6, 'clockwise input is fixed up');
-  const ab = b.aabb();
-  h.ok(ab.x0 === -5 && ab.x1 === 5 && ab.y0 === -10 && ab.y1 === 10, 'aabb of a box');
-});
-
-h.test('ball falls and rests on the floor', () => {
+h.test('ball falls, rests on the floor and sleeps', () => {
   const { W, C } = mkWorld();
   const b = spawn(W, ITEM.ball({}), 200, 100, {});
-  settle(W, 2);
-  h.near(b.y, 390 - 15, 1.2, 'ball rests on the floor surface');
-  h.ok(Math.abs(b.vy) < 2, 'ball at rest');
-  const cs = W.contactsOf(b);
-  h.ok(cs.length >= 1 && cs.some(c => c.other.data.wall === 'floor'), 'contactsOf finds the floor');
-  h.ok(cs[0].ny > 0.99, 'contact normal points from the ball into the floor');
-  h.ok(Math.abs(cs[0].py - 390) < 1.5, 'contact point near the floor surface');
-  h.ok(W.queryAABB(190, 360, 210, 400).includes(b), 'queryAABB finds the ball');
-  h.ok(!W.queryAABB(0, 0, 50, 50).includes(b), 'queryAABB excludes far bodies');
+  settle(W, 3);
+  h.near(b.y, C.bounds.floorY - 15, 1.5, 'ball rests on the floor (y ' + b.y.toFixed(1) + ')');
+  h.ok(b.sl, 'ball fell asleep');
+  h.eq(maxSpeed(W), 0, 'a sleeper has no velocity');
+  h.ok(W.energy() === 0, 'W.energy is zero at rest');
 });
 
-h.test('friction: a box on a slope holds, a box on ice slides', () => {
-  const W = PHYS.world({ gravity: { x: 0, y: 1400 }, w: 480, h: 390 });
-  const ang = 0.25;
-  const slope = W.add(PHYS.body({ type: 'static', shape: { kind: 'poly', verts: PHYS.box(600, 40) }, x: 240, y: 300, angle: ang, friction: 0.8 }));
-  const a = spawn(W, ITEM.box({ friction: 0.8 }), 240, 300 - 20 - 16, { angle: ang });
-  settle(W, 1.5);
-  const ax = a.x;
-  settle(W, 1.5);
-  h.ok(Math.abs(a.x - ax) < 2, 'rough box stays put on a 14 degree slope');
-  slope.friction = 0.0;
-  const c = spawn(W, ITEM.box({ friction: 0.0 }), 240, 300 - 20 - 16, { angle: ang });
-  settle(W, 1.5);
-  h.ok(c.x > 260, 'frictionless box slides down the slope');
-});
-
-h.test('restitution: bouncy ball bounces, dead ball does not', () => {
+h.test('friction and restitution: ice slides, a bouncy ball bounces, a dead one does not', () => {
   const { W } = mkWorld();
-  const live = spawn(W, ITEM.ball({ restitution: 0.8 }), 100, 200, {});
-  const dead = spawn(W, ITEM.ball({ restitution: 0.0 }), 300, 200, {});
-  let liveMin = 999, deadMin = 999, hitLive = false, hitDead = false;
-  for (let i = 0; i < 180; i++) {
-    W.step(DT);
-    if (live.vy < 0) hitLive = true; if (dead.vy < 0) hitDead = true;
-    if (hitLive) liveMin = Math.min(liveMin, live.y);
-    if (hitDead) deadMin = Math.min(deadMin, dead.y);
-  }
-  h.ok(hitLive && liveMin < 330, 'bouncy ball rebounds well above the floor');
-  h.ok(!hitDead || deadMin > 360, 'dead ball barely rebounds');
+  W.setGravity(180, G);
+  const rock = spawn(W, ITEM.sword({ friction: 0.7 }), 100, 300, {});
+  const ice = spawn(W, ITEM.sword({ friction: 0.03 }), 250, 300, {});
+  settle(W, 1.2);
+  h.ok(ice.x - 250 > (rock.x - 100) + 20, `ice slid further (${(ice.x - 250).toFixed(0)} vs ${(rock.x - 100).toFixed(0)})`);
+  const w2 = mkWorld();
+  const bouncy = spawn(w2.W, ITEM.ball({ restitution: 0.8 }), 120, 150, {});
+  const dead = spawn(w2.W, ITEM.ball({ restitution: 0.02 }), 300, 150, {});
+  let bounceUp = 0, deadUp = 0;
+  for (let i = 0; i < 120; i++) { w2.W.step(DT); bounceUp = Math.min(bounceUp, bouncy.vy); deadUp = Math.min(deadUp, dead.vy); }
+  h.ok(bounceUp < -150, 'bouncy ball came back up (' + bounceUp.toFixed(0) + ')');
+  h.ok(deadUp > bounceUp + 120 && deadUp > -220, 'dead ball bounced much less (' + deadUp.toFixed(0) + ' vs ' + bounceUp.toFixed(0) + ')');
 });
 
-h.test('pile of 30 mixed items settles without NaN or escapes', () => {
+h.test('a pile of 34 mixed items settles, sleeps and stays inside', () => {
   const { W, C } = mkWorld();
   const rng = U.rng(7);
-  pile(W, rng);
+  pile(W, rng, 34);
+  let t = 0;
+  while (t < 8 && !W.bodies.every(b => b.sl)) { W.step(DT); t += DT; }
+  h.ok(!anyNaN(W), 'no NaN');
+  h.ok(inside(W, C), 'nothing escaped');
+  h.ok(W.bodies.every(b => b.sl), 'every item asleep within ' + t.toFixed(1) + ' s');
+  h.ok(t < 5, 'the pile settles in under 5 s (' + t.toFixed(2) + ')');
+  const top = Math.min(...items(W).map(b => b.y));
+  h.ok(top > 60, 'the pile top is below the parked claw (' + top.toFixed(0) + ')');
+  // a sleeper does not move at all
+  const ys = items(W).map(b => b.y);
+  settle(W, 1);
+  h.ok(items(W).every((b, i) => b.y === ys[i]), 'sleepers are frozen in place');
+});
+
+h.test('sleepers wake on a hit, on a removal under them and on a gravity change', () => {
+  const { W } = mkWorld();
+  const a = spawn(W, ITEM.ball({}), 200, 360, {});
+  settle(W, 2);
+  h.ok(a.sl, 'ball asleep');
+  const b = spawn(W, ITEM.ball({}), 205, 100, {});
+  settle(W, 1.0);
+  h.ok(Math.abs(a.x - 200) > 0.5 || a.vx !== 0, 'the sleeper was shoved awake by the dropped ball');
+  settle(W, 8);   // a rolling ball takes a while to stop (Claw Crawl's balls roll)
+  h.ok(a.sl && b.sl, 'both asleep again');
+  W.remove(a);
+  h.ok(!b.sl, 'removing a body wakes the rest');
   settle(W, 3);
-  h.ok(!anyNaN(W), 'no NaN after settling');
-  h.ok(inside(W, C), 'nothing outside the cabinet');
-  h.ok(maxSpeed(W) < 2, `max speed after 3 s < 2 px/s (${maxSpeed(W).toFixed(2)})`);
-  h.ok(W.energy() < 5000, `energy small (${W.energy().toFixed(0)})`);
-  h.ok(items(W).every(b => b.y < 390), 'every item above the floor');
-  settle(W, 2);
-  h.ok(maxSpeed(W) < 2, `still at rest after 5 s (${maxSpeed(W).toFixed(2)})`);
+  h.ok(b.sl, 'asleep again');
+  W.setGravity(300, G);
+  h.ok(!b.sl, 'a gravity change wakes everything');
 });
 
-h.test('60 s of random shaking: nothing escapes the cabinet', () => {
+h.test('60 s of shaking and tilting: nothing leaves the cabinet, nothing tunnels', () => {
   const { W, C } = mkWorld();
-  const rng = U.rng(11);
-  pile(W, rng);
+  const rng = U.rng(99);
+  pile(W, rng, 34);
   settle(W, 2);
-  let escaped = false, nan = false;
-  for (let s = 0; s < 60; s++) {
-    for (const b of items(W)) {
-      b.vx += (rng() - 0.5) * 2400; b.vy += (rng() - 0.9) * 1800; b.av += (rng() - 0.5) * 30;
+  let t = 0, bad = 0, maxV = 0;
+  while (t < 60) {
+    if (Math.round(t * 60) % 30 === 0) {
+      W.wakeAll();
+      for (const b of items(W)) { b.vx += (rng() - 0.5) * 700; b.vy -= 250 + rng() * 500; b.av += (rng() - 0.5) * 10; }
+      W.setGravity((rng() - 0.5) * 1000, G - 120);
     }
-    if (s % 7 === 3) W.setGravity((rng() - 0.5) * 800, 1400); else W.setGravity(0, 1400);
-    for (let i = 0; i < 60; i++) {
-      W.step(DT);
-      // A light item crushed against a wall by a heavy one may sink a few px
-      // into the 40 px wall for a frame; it must never get through it.
-      if (!inside(W, C, 12)) escaped = true;
-      if (anyNaN(W)) nan = true;
-    }
+    W.step(DT); t += DT;
+    maxV = Math.max(maxV, maxSpeed(W));
+    if (!inside(W, C, 2)) bad++;
   }
-  h.ok(!escaped, 'no item left the cabinet during shaking');
-  h.ok(!nan, 'no NaN during shaking');
-  W.setGravity(0, 1400);
-  settle(W, 4);
-  h.ok(inside(W, C, 1), 'everything back inside the interior after the shaking');
-  h.ok(maxSpeed(W) < 3, `pile settles again after shaking (${maxSpeed(W).toFixed(2)})`);
+  h.eq(bad, 0, 'frames with an item outside the glass: ' + bad);
+  h.ok(!anyNaN(W), 'no NaN after 60 s of abuse');
+  h.ok(maxV <= PHYS.PH.maxV + 1, 'speed capped (' + maxV.toFixed(0) + ')');
+  W.setGravity(0, G);
+  settle(W, 5);
+  h.ok(items(W).every(b => b.y <= C.bounds.floorY - 4 || C.inChute(b)), 'everything came to rest on the floor (or in the chute)');
 });
 
-h.test('W.step clamps dt and runs at most 12 substeps', () => {
+h.test('hard clamps: items shoved through the floor, walls or lid are put back', () => {
+  const { W, C } = mkWorld();
+  const a = spawn(W, ITEM.ball({}), 200, 300, {});
+  const b = spawn(W, ITEM.ball({}), 100, 300, {});
+  const c = spawn(W, ITEM.ball({}), 300, 300, {});
+  settle(W, 0.2);
+  a.y = C.bounds.h + 30; a.vy = 900;          // through the bin floor
+  b.x = -40; b.vx = -500;                      // through the left wall
+  c.y = -200; c.vy = -900;                     // through the lid
+  W.step(DT);
+  h.ok(a.y <= C.bounds.floorY - PHYS.RIG.floorSink + 0.01 && a.vy <= 0, 'floor clamp (y ' + a.y.toFixed(1) + ')');
+  h.ok(b.x >= 5 && b.vx >= 0, 'left wall clamp (x ' + b.x.toFixed(1) + ')');
+  h.ok(c.y >= PHYS.RIG.clampTop && c.vy >= 0, 'lid clamp (y ' + c.y.toFixed(1) + ')');
+  const d = spawn(W, ITEM.ball({}), 450, 100, {});   // in the chute column: no floor, a hidden tray
+  settle(W, 2);
+  h.ok(C.inChute(d), 'a ball dropped in the chute is inChute');
+  h.ok(d.y > C.bounds.h && d.y <= C.bounds.trayY, 'it fell through the chute onto the tray (y ' + d.y.toFixed(0) + ')');
+  h.ok(!C.inChute(a), 'the bin ball is not in the chute');
+});
+
+h.test('W.step clamps dt and runs at most 12 substeps; queryAABB and contactsOf', () => {
   const { W } = mkWorld();
   const b = spawn(W, ITEM.ball({}), 200, 100, {});
-  W.step(10);
-  h.ok(b.y < 100 + 0.5 * 1400 * 0.06 * 0.06 + 1, 'a huge dt only advances 12 substeps');
-  W.step(-1); W.step(NaN);
-  h.ok(!anyNaN(W), 'bad dt ignored');
+  const s0 = W.steps;
+  W.step(1);
+  h.eq(W.steps - s0, 12, 'one second of dt runs 12 substeps');
+  W.step(DT);
+  h.eq(W.steps - s0, 16, 'a 60 Hz frame runs 4 substeps');
+  settle(W, 2);
+  h.ok(W.queryAABB(150, 300, 250, 400).indexOf(b) >= 0, 'queryAABB finds the resting ball');
+  h.eq(W.queryAABB(0, 0, 50, 50).length, 0, 'queryAABB misses an empty corner');
+  W.wakeAll(); W.step(DT);
+  const cs = W.contactsOf(b);
+  h.ok(cs.length >= 1 && cs[0].other && cs[0].other.wall === 'floor', 'contactsOf reports the floor contact');
+  h.ok(cs[0].ny > 0.9, 'floor contact normal points down from the ball to the floor');
 });
 
-h.test('revolute limits and motor hold', () => {
-  const W = PHYS.world({ gravity: { x: 0, y: 1400 }, w: 480, h: 390 });
-  const base = W.add(PHYS.body({ type: 'static', shape: { kind: 'circle', r: 4 }, x: 200, y: 100 }));
-  const arm = W.add(PHYS.body({ shape: { kind: 'poly', verts: [{ x: -4, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 60 }, { x: -4, y: 60 }] }, x: 200, y: 100, group: 'item' }));
-  const J = W.add(PHYS.revolute(base, arm, { x: 200, y: 100 }, { lower: -0.5, upper: 0.5, enableLimit: true }));
-  arm.av = 30;
-  settle(W, 1);
-  h.ok(J.angle() <= 0.5 + 0.03 && J.angle() >= -0.5 - 0.03, `limit holds the arm (${J.angle().toFixed(3)})`);
-  h.near(arm.origin().x, 200, 0.5, 'anchor stays pinned x');
-  h.near(arm.origin().y, 100, 0.5, 'anchor stays pinned y');
-  h.ok(arm.y > 100, 'body position is the centre of mass, below the hinge');
-  J.setLimits(-3, 3);
-  J.setMotor(4, 1e9);
-  settle(W, 0.5);
-  h.ok(Math.abs(arm.av - 4) < 0.3, `motor drives the arm at its speed (${arm.av.toFixed(2)})`);
-  J.setMotor(0, 1e9);
-  settle(W, 0.5);
-  h.ok(Math.abs(arm.av) < 0.05, 'motor at speed 0 holds the arm against gravity');
-  const before = J.angle();
-  settle(W, 1);
-  h.ok(Math.abs(J.angle() - before) < 0.02, 'strong motor holds position');
-  J.setMotor(0, 10);
-  settle(W, 1);
-  h.ok(Math.abs(arm.av) > 0.5 || Math.abs(J.angle() - before) > 0.2, 'weak motor cannot hold the arm up');
-  h.ok(W.joints.includes(J), 'joint listed');
-  W.remove(arm);
-  h.ok(!W.joints.includes(J), 'removing a body removes its joints');
+// ---------------------------------------------------------------- the claw
+h.test('rig geometry and the Clawspire -> Claw Crawl mapping', () => {
+  const { W, C } = mkWorld();
+  const R = PHYS.clawRig(W, { cabinet: C, width: 1, grip: 1, rand: U.rng(1) });
+  h.near(R.geo.s, PHYS.RIG.base, 1e-9, 'size = base x width');
+  h.near(R.geo.grip, 0.35 + 0.3 * 0.25, 1e-9, 'grip 1 -> grip_cc 0.425');
+  const R2 = PHYS.clawRig(W, { cabinet: C, width: 1.1, grip: 1.3, rand: U.rng(1) });
+  h.near(R2.geo.s, PHYS.RIG.base * 1.1, 1e-9, 'knight width 1.1');
+  h.near(R2.geo.grip, 0.35 + 0.3 * 0.55, 1e-9, 'knight grip 1.3 -> 0.515');
+  const R3 = PHYS.clawRig(W, { cabinet: C, width: 0.75, grip: 0.75, rand: U.rng(1) });
+  h.near(R3.geo.grip, 0.35, 1e-9, 'alchemist grip 0.75 -> 0.35');
+  const R4 = PHYS.clawRig(W, { cabinet: C, width: 1, grip: 5, rand: U.rng(1) });
+  h.eq(R4.geo.grip, 1, 'grip_cc caps at 1');
+  h.ok(R.bodies.hub && R.bodies.prongs.length === 2 && R.bodies.prongs[0].length === 4 && !R.bodies.ghost, 'hub + two 4-point prongs, no ghost');
+  h.near(R.bodies.hub.r, 13 * R.geo.s, 1e-9, 'hub radius 13 x size');
+  h.ok(R.geo.span > 40 && R.geo.span < 80, 'open span ' + R.geo.span.toFixed(1));
+  h.eq(R.phase, 'idle', 'starts idle');
+  h.eq(R.y, 26 + PHYS.RIG.hubDrop, 'hub parked just under the rail');
+  h.ok(W.csegs.length === 7, 'hub + 2 x 3 capsule segments in the world');
+  h.eq(R.cableTop.y, 26, 'cable leaves the rail');
+  for (const k of ['setTarget', 'drop', 'update', 'held', 'locked', 'cradle', 'open', 'setConfig', 'destroy', 'calm']) h.eq(typeof R[k], 'function', 'rig has ' + k);
 });
 
-h.test('kinematic body pushes dynamic items', () => {
-  const { W } = mkWorld();
-  const ball = spawn(W, ITEM.ball({}), 200, 375, {});
-  const pusher = W.add(PHYS.body({ type: 'kinematic', shape: { kind: 'poly', verts: PHYS.box(20, 60) }, x: 150, y: 360, group: 'claw', mask: ['item'] }));
-  pusher.vx = 120;
-  settle(W, 1);
-  h.ok(ball.x > 290, `ball was shoved along (${ball.x.toFixed(0)})`);
-  h.near(pusher.x, 270, 1, 'kinematic body kept its velocity');
-});
-
-h.test('groups and masks filter collisions', () => {
-  const { W } = mkWorld();
-  const ghost = spawn(W, ITEM.ball({}), 200, 300, { group: 'ghost', mask: ['nothing'] });
-  settle(W, 1.5);
-  h.ok(ghost.y > 500, 'a body whose mask excludes walls falls through the floor');
-  const s = spawn(W, ITEM.ball({}), 300, 300, { sensor: true, data: { s: 1 } });
-  const t = spawn(W, ITEM.ball({}), 300, 340, {});
-  settle(W, 0.5);
-  h.ok(W.contactsOf(t).some(c => c.other === s) || s.y > 380, 'sensors report contacts without pushing');
-});
-
-// ---------------------------------------------------------------- rig
-h.test('rig phase machine: full cycle with events in order, never stalls', () => {
+h.test('phase machine: full cycle with events in order, delivers a ball', () => {
   const { W, C } = mkWorld();
   const b = spawn(W, ITEM.ball({}), 200, 300, {});
   settle(W, 1);
-  const R = PHYS.clawRig(W, { cabinet: C, grip: 2, rand: U.rng(3) });
-  h.eq(R.phase, 'idle', 'starts idle');
-  h.ok(R.bodies.carriage && R.bodies.palm && R.bodies.prongs.length === 2, 'bodies exposed');
-  h.ok(typeof R.cableTop.x === 'number' && typeof R.sway === 'number', 'cableTop and sway exposed');
-  const g = grab(W, C, R, 200, 15);
-  const want = ['idle', 'moving', 'dropping', 'closing', 'lifting', 'carrying', 'releasing', 'returning', 'idle'];
-  const ph = g.phases.filter((p, i) => i === 0 || p !== g.phases[i - 1]);
-  h.eq(ph.slice(ph.indexOf('dropping') - 0).join('>'), want.slice(2).join('>'), 'phases in order');
-  const ev = g.events.filter(e => e !== 'move');
-  h.eq(ev.join(','), 'drop,touch,close,lift,carry,release,home', 'events in order');
-  h.ok(g.seconds < 12, `cycle finished in ${g.seconds.toFixed(1)} s`);
-  h.eq(g.delivered, 1, 'the ball landed in the chute');
-  h.ok(g.closingT >= PHYS.RIG.quietT + PHYS.RIG.settleT - 0.02, `the claw clenches for the settle before lifting (closing ${g.closingT.toFixed(2)} s)`);
-  h.ok(g.closingT <= PHYS.RIG.closeMax + PHYS.RIG.settleT + 0.05, 'closing is bounded');
-});
-
-h.test('setTarget and drop are ignored while busy', () => {
-  const { W, C } = mkWorld();
-  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(4) });
-  h.ok(R.setTarget(150), 'setTarget honoured while idle');
-  h.near(R.targetX, 150, 1e-9, 'targetX set');
-  h.ok(R.setTarget(-500) && R.targetX > 30, 'target clamped inside the cabinet');
-  R.setTarget(150);
-  h.ok(R.drop(), 'drop honoured while moving');
-  h.eq(R.phase, 'dropping', 'now dropping');
-  h.ok(!R.drop(), 'second drop refused');
-  h.ok(!R.setTarget(300), 'setTarget refused while dropping');
-  h.near(R.targetX, 150, 1e-9, 'targetX unchanged');
-  let t = 0;
-  while (R.phase !== 'idle' && t < 15) { R.update(DT); W.step(DT); t += DT; }
-  h.ok(R.phase === 'idle', 'empty grab still completes');
-  h.ok(!R.drop() === false, 'drop honoured again when idle');
-});
-
-h.test('every phase has a max duration (rig never stalls even when wedged)', () => {
-  const { W, C } = mkWorld();
-  // A huge immovable block right under the home position wedges the prongs.
-  W.add(PHYS.body({ type: 'static', shape: { kind: 'poly', verts: PHYS.box(200, 200) }, x: 240, y: 290, group: 'item' }));
-  const R = PHYS.clawRig(W, { cabinet: C, grip: 2, rand: U.rng(5) });
-  R.drop();
-  let t = 0;
-  const seen = new Set();
-  while (R.phase !== 'idle' && t < 20) { R.update(DT); W.step(DT); t += DT; seen.add(R.phase); }
-  h.ok(R.phase === 'idle', `returns to idle even when blocked (${[...seen].join('>')}, ${t.toFixed(1)} s)`);
-});
-
-h.test('prongs are torque limited: a fat item stops them early, they close past a thin one', () => {
-  const { W, C } = mkWorld();
-  const R = PHYS.clawRig(W, { cabinet: C, grip: 1, rand: U.rng(6) });
-  const fat = spawn(W, ITEM.box({}), 240, 320, {});
-  settle(W, 1);
-  R.drop();
-  let t = 0;
-  while (R.phase !== 'carrying' && t < 10) { R.update(DT); W.step(DT); t += DT; }
-  const angFat = R.joints.filter(j => !j.isWeld).map(j => j.dir * j.angle());
-  h.ok(angFat.every(a => a > R.geo.closed + 0.1), `fat box stops the prongs early (${angFat.map(a => a.toFixed(2)).join(',')})`);
-  h.ok(R.held().includes(fat), 'held() reports the pinched box');
-  while (R.phase !== 'idle' && t < 20) { R.update(DT); W.step(DT); t += DT; }
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(3) });
+  h.ok(R.setTarget(200), 'setTarget accepted while idle');
+  const g = grab(W, C, R, 200);
+  const want = ['idle', 'dropping', 'closing', 'lifting', 'carrying', 'releasing', 'returning', 'idle'];
+  h.eq(g.phases.join('>'), want.join('>'), 'phases in order');
+  const ev = g.events.filter(e => e !== 'touch');
+  h.eq(ev.join(','), 'drop,close,lift,carry,release,home', 'events in order (' + g.events.join(',') + ')');
+  // a lone ball sits between the open tips, so the drop ends at the floor
+  // limit without a touch; a tall box under the hub is touched first
   const { W: W2, C: C2 } = mkWorld();
-  const R2 = PHYS.clawRig(W2, { cabinet: C2, grip: 1, rand: U.rng(6) });
+  spawn(W2, ITEM.tower({}), 200, 300, {}); settle(W2, 2);   // standing 50 tall: the hub lands on it
+  const R2 = PHYS.clawRig(W2, { cabinet: C2, rand: U.rng(3) });
+  const g2 = grab(W2, C2, R2, 200);
+  h.ok(g2.events.indexOf('touch') >= 0 && g2.events.indexOf('touch') < g2.events.indexOf('close'), 'touch fires before close on a tall item (' + g2.events.join(',') + ')');
+  h.eq(g.delivered, 1, 'the ball reached the chute');
+  h.eq(g.cargoMax, 1, 'the ball was the cargo');
+  h.ok(g.seconds > 4 && g.seconds < 9, 'a grab takes a few seconds (' + g.seconds.toFixed(1) + ')');
+  h.eq(R.locked().length, 0, 'nothing locked once home');
+  h.eq(R.held().length, 0, 'nothing held once home');
+});
+
+h.test('setTarget and drop are ignored while busy; open() forces a release; destroy() clears the claw', () => {
+  const { W, C } = mkWorld();
+  spawn(W, ITEM.ball({}), 200, 300, {});
+  settle(W, 1);
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(4) });
+  R.setTarget(200);
+  let t = 0; while (!R.calm() && t < 4) { R.update(DT); W.step(DT); t += DT; }
+  h.ok(R.drop(), 'drop accepted');
+  while (R.phase !== 'closing' && t < 6) { R.update(DT); W.step(DT); t += DT; }
+  h.eq(R.phase, 'closing', 'reached closing');
+  for (let i = 0; i < 14; i++) { R.update(DT); W.step(DT); t += DT; }
+  h.ok(!R.setTarget(100), 'setTarget refused while closing');
+  h.ok(!R.drop(), 'drop refused while closing');
+  h.ok(R.held().length >= 1, 'the claw is touching the ball');
+  R.open();
+  h.eq(R.phase, 'releasing', 'open() forces releasing');
+  let evs = [];
+  while (R.phase !== 'idle' && t < 12) { evs.push(...R.update(DT)); W.step(DT); t += DT; }
+  evs.push(...R.update(DT));
+  h.eq(R.phase, 'idle', 'back to idle after a forced open');
+  h.ok(evs.indexOf('home') >= 0, 'home event after the forced open');
+  R.destroy();
+  h.eq(W.csegs.length, 0, 'destroy removes the claw segments');
+  const steps0 = W.steps; W.step(DT);
+  h.eq(W.steps - steps0, 4, 'the world still steps without the rig');
+});
+
+h.test('every phase is bounded: the rig never stalls even on a wedged pile', () => {
+  const { W, C } = mkWorld();
+  const rng = U.rng(11);
+  pile(W, rng, 34);
+  settle(W, 2);
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(5) });
+  for (let k = 0; k < 4; k++) {
+    const g = grab(W, C, R, 90 + k * 90, 14);
+    h.ok(g.phases[g.phases.length - 1] === 'idle', 'grab ' + k + ' returned to idle in ' + g.seconds.toFixed(1) + ' s (' + g.phases.join('>') + ')');
+    h.ok(g.seconds < 12, 'grab ' + k + ' under 12 s');
+  }
+  h.ok(inside(W, C), 'pile still inside after four grabs');
+  h.ok(!anyNaN(W), 'no NaN');
+});
+
+h.test('halt detection: a fat item stops the prongs early, an empty claw closes fully', () => {
+  const { W, C } = mkWorld();
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(6) });
+  const g = grab(W, C, R, 200);
+  h.eq(g.delivered, 0, 'nothing to deliver from an empty floor');
+  // capture the prong angles at the lift on a second, loaded run
+  const w2 = mkWorld();
+  spawn(w2.W, ITEM.tower({}), 200, 300, {});
+  settle(w2.W, 1);
+  const R2 = PHYS.clawRig(w2.W, { cabinet: w2.C, rand: U.rng(6) });
+  R2.setTarget(200); let t = 0; while (!R2.calm() && t < 4) { R2.update(DT); w2.W.step(DT); t += DT; }
   R2.drop();
-  t = 0;
-  while (R2.phase !== 'carrying' && t < 10) { R2.update(DT); W2.step(DT); t += DT; }
-  const angEmpty = R2.joints.filter(j => !j.isWeld).map(j => j.dir * j.angle());
-  h.ok(angEmpty.every(a => a < R2.geo.closed + 0.08), `prongs close fully on nothing (${angEmpty.map(a => a.toFixed(2)).join(',')})`);
-  h.eq(R2.held().length, 0, 'held() empty when nothing is pinched');
+  let angEmpty = null, angFull = null, closingT = 0;
+  const R1 = PHYS.clawRig(W, { cabinet: C, rand: U.rng(6) });
+  R1.setTarget(200); let t1 = 0; while (!R1.calm() && t1 < 4) { R1.update(DT); W.step(DT); t1 += DT; }
+  R1.drop();
+  for (let i = 0; i < 60 * 8; i++) {
+    const e2 = R2.update(DT); w2.W.step(DT);
+    const e1 = R1.update(DT); W.step(DT);
+    if (R2.phase === 'closing') closingT += DT;
+    if (e2.indexOf('lift') >= 0) angFull = [R2.ctl.pL, R2.ctl.pR];
+    if (e1.indexOf('lift') >= 0) angEmpty = [R1.ctl.pL, R1.ctl.pR];
+    if (angFull && angEmpty) break;
+  }
+  h.ok(angEmpty && angEmpty[0] <= PHYS.PHI_CLOSED + 0.02 && angEmpty[1] <= PHYS.PHI_CLOSED + 0.02, 'empty claw closes to PHI_CLOSED (' + (angEmpty || []).map(a => a.toFixed(2)) + ')');
+  h.ok(angFull && Math.max(angFull[0], angFull[1]) > PHYS.PHI_CLOSED + 0.15, 'a tower shield halts at least one prong early (' + (angFull || []).map(a => a.toFixed(2)) + ')');
+  h.ok(closingT >= PHYS.RIG.closeMin - 0.02 && closingT <= PHYS.RIG.closeMax + 0.05, 'closing lasted ' + closingT.toFixed(2) + ' s');
+  h.ok(R2.ctl.haltL || R2.ctl.haltR, 'a halt was registered');
 });
 
-h.test('strong grip delivers a 30px ball from the floor at least 9/10', () => {
-  const n = scenario({ grip: 2 }, ITEM.ball({}), 10, 100);
-  h.ok(n >= 9, `strong rig delivered ${n}/10 balls`);
+h.test('delivery from the floor: ball, shield, sword, flask, two marbles', () => {
+  const ball = scenario({}, ITEM.ball({}), 10, 100, [0, 6, -6, 12]);
+  h.ok(ball.delivered >= 9, 'ball delivered ' + ball.delivered + '/10');
+  const shield = scenario({}, ITEM.shield({}), 10, 200, [0, 8, -8]);
+  h.ok(shield.delivered >= 8, 'shield delivered ' + shield.delivered + '/10');
+  // a sword lying flat on the bare floor is the knife-edge case (Claw Crawl's
+  // frog claw never gets it): the rogue's claw, a hair smaller than the sword
+  // is long, scissors it up
+  const sword = scenario({ width: 0.95 }, ITEM.sword({}), 10, 300, [0, 4, -4]);
+  h.ok(sword.delivered >= 6, 'rogue claw delivers a flat sword ' + sword.delivered + '/10 (slips ' + sword.slips + ')');
+  const flask = scenario({ width: 0.75, grip: 0.75 }, ITEM.flask({}), 10, 400, [0, 6, -6]);
+  h.ok(flask.delivered >= 7, 'alchemist claw delivers the flask ' + flask.delivered + '/10');
+  const tower = scenario({ width: 1.1, grip: 1.3 }, ITEM.tower({}), 8, 500);
+  h.ok(tower.delivered >= 6, 'knight claw delivers the tower shield ' + tower.delivered + '/8');
+  // two marbles side by side: often both
+  let both = 0, one = 0;
+  for (let i = 0; i < 10; i++) {
+    const { W, C } = mkWorld();
+    const x = 120 + (i % 5) * 40;
+    spawn(W, ITEM.marble({}), x - 9.5, 360, {}); spawn(W, ITEM.marble({}), x + 9.5, 360, {});
+    settle(W, 1);
+    const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(600 + i) });
+    const g = grab(W, C, R, x);
+    if (g.delivered >= 2) both++; else if (g.delivered === 1) one++;
+  }
+  h.ok(both + one >= 8, 'marbles delivered in ' + (both + one) + '/10 grabs');
+  h.ok(both >= 5, 'both marbles in ' + both + '/10 grabs');
 });
 
-h.test('weak grip drops a heavy 50px box more often than not', () => {
-  const n = scenario({ grip: 0.6 }, ITEM.heavy({}), 10, 200);
-  h.ok(n < 5, `weak rig delivered only ${n}/10 heavy boxes`);
+h.test('slips: a weak greased claw loses a heavy item more often than a strong one', () => {
+  const strong = scenario({ grip: 3, rubber: 1 }, ITEM.tower({}), 8, 700, [0, 8, -8]);
+  const weak = scenario({ grip: 0.75, grease: 1 }, ITEM.tower({}), 8, 700, [0, 8, -8]);
+  h.ok(strong.delivered >= weak.delivered, 'strong ' + strong.delivered + '/8 >= weak ' + weak.delivered + '/8');
+  h.ok(strong.slips <= weak.slips + 1, 'strong slips ' + strong.slips + ' <= weak slips ' + weak.slips);
+  h.ok(strong.delivered >= 7, 'a strong rubber claw carries the tower shield (' + strong.delivered + '/8)');
 });
 
-h.test('slips are rare for ordinary items: ball and sword both deliver at grip 1, junk slips', () => {
-  // Same rig, same aim errors (up to 18 px). The cradle scoops a 44 px sword
-  // as readily as a ball; its thin-item hazard (grippiness 0.85) is small.
-  const AIM = [-18, -9, 0, 9, 18];
-  const bs = {}, ss = {}, js = {};
-  const ball = scenario({ grip: 1 }, ITEM.ball({}), 20, 300, AIM, bs);
-  const sword = scenario({ grip: 1 }, ITEM.sword({}), 20, 300, AIM, ss);
-  h.ok(ball >= 18, `ball is an easy grab even with sloppy aim (${ball}/20)`);
-  h.eq(bs.slips, 0, 'a ball never slips at grip 1');
-  h.ok(sword >= 17, `sword delivers at least 17/20 at grip 1 (${sword}/20, ${ss.slips} slips)`);
-  // Junk is the exception: a slick junk block (ice block) has a real hazard.
-  const ice = { shape: { kind: 'poly', verts: PHYS.box(36, 34) }, density: 1.2, friction: 0.05, data: { tags: ['junk', 'glass'] } };
-  const iceN = scenario({ grip: 1 }, ice, 20, 300, [0], js);
-  h.ok(js.slips >= 2, `slick junk slips more than a ball (${js.slips} slips over 20 grabs, ${iceN} delivered)`);
-  h.ok(iceN >= 10, `but is still worth digging for (${iceN}/20)`);
+h.test('loosen and jolt are driven by the grip (seeded rand, never Math.random)', () => {
+  const run = (grip, seed) => {
+    const { W, C } = mkWorld();
+    spawn(W, ITEM.ball({}), 200, 300, {});
+    settle(W, 1);
+    const R = PHYS.clawRig(W, { cabinet: C, grip, rand: U.rng(seed) });
+    let loosen = 0, jolt = 0, cycles = 0;
+    for (let k = 0; k < 6; k++) {
+      R.setTarget(200);
+      let t = 0; while (!R.calm() && t < 4) { R.update(DT); W.step(DT); t += DT; }
+      if (!R.drop()) break;
+      let started = false;
+      while (t < 15) {
+        const ev = R.update(DT); W.step(DT); t += DT;
+        if (ev.indexOf('lift') >= 0) loosen += R.ctl.loosen;
+        if (ev.indexOf('carry') >= 0) { if (R.ctl.jolt > 0) jolt++; cycles++; }
+        if (R.phase !== 'idle' && R.phase !== 'moving') started = true;
+        if (started && R.phase === 'idle') break;
+      }
+      for (const b of items(W)) if (C.inChute(b)) { b.x = 200; b.y = 300; b.vx = b.vy = 0; W.wakeAll(); }
+      settle(W, 1);
+    }
+    return { loosen: loosen / Math.max(1, cycles), jolt, cycles };
+  };
+  const weak = run(0.75, 21), strong = run(5, 21);
+  h.eq(strong.loosen, 0, 'grip_cc 1 never loosens');
+  h.eq(strong.jolt, 0, 'grip_cc 1 never jolts');
+  h.ok(weak.loosen > 0.04 && weak.loosen < 0.12, 'weak claw loosens ' + weak.loosen.toFixed(3) + ' rad per lift');
+  h.ok(weak.cycles >= 5, 'weak run cycled ' + weak.cycles + ' times');
+  const orig = Math.random; let called = 0; Math.random = () => { called++; return 0.5; };
+  try { run(0.75, 22); } finally { Math.random = orig; }
+  h.eq(called, 0, 'the rig never calls Math.random');
 });
 
-h.test('cradle: two r=12 balls side by side are both locked and delivered', () => {
-  const r = rowScenario({}, [12, 12], [-12.5, 12.5], 10, 600);
-  const both = r.lockedMax.filter(n => n >= 2).length;
-  h.ok(both >= 7, `both balls locked in ${both}/10 grabs`);
-  h.ok(r.twoPlus >= 7, `both delivered in ${r.twoPlus}/10 grabs (${r.delivered} items)`);
-  h.ok(r.lockedMax.every(n => n <= 2), 'never more than the base capacity of 2');
+h.test('determinism: two worlds with the same inputs match after a grab', () => {
+  const build = () => {
+    const { W, C } = mkWorld();
+    const rng = U.rng(31);
+    pile(W, rng, 20);
+    settle(W, 1.5);
+    const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(32) });
+    return { W, C, R };
+  };
+  const A = build(), B = build();
+  grab(A.W, A.C, A.R, 200); grab(B.W, B.C, B.R, 200);
+  settle(A.W, 1); settle(B.W, 1);
+  let same = true;
+  for (let i = 0; i < A.W.bodies.length; i++) {
+    const a = A.W.bodies[i], b = B.W.bodies[i];
+    if (a.x !== b.x || a.y !== b.y || a.a !== b.a) same = false;
+  }
+  h.ok(same, 'identical body poses');
+  h.eq(A.R.x, B.R.x, 'identical claw position');
 });
 
-h.test('cradle capacity: three balls -> 2 carried at base, 3 with the third prong, 3 at Wider Palm x2', () => {
-  const two = rowScenario({ prongs: 2 }, [12, 12, 12], [-25, 0, 25], 10, 620);
-  h.ok(two.lockedMax.every(n => n <= 2), `base rig never carries more than 2 (${two.lockedMax.join(',')})`);
-  h.ok(two.lockedMax.filter(n => n === 2).length >= 8, `base rig usually carries 2 of the 3 (${two.lockedMax.join(',')})`);
-  h.ok(two.shed >= 8, `the extra is shed at the lift with one 'shed' event (${two.shed} sheds)`);
-  h.ok(two.slips === 0, `shedding is not a slip (${two.slips} slips)`);
-  const three = rowScenario({ prongs: 3 }, [12, 12, 12], [-25, 0, 25], 10, 620);
-  h.ok(three.lockedMax.filter(n => n === 3).length >= 8, `third prong carries all 3 (${three.lockedMax.join(',')})`);
-  h.ok(three.delivered >= 24, `and delivers them (${three.delivered}/30 items)`);
-  const wide = rowScenario({ width: 1.36 }, [12, 12, 12], [-25, 0, 25], 5, 640);
-  h.ok(wide.lockedMax.some(n => n === 3), `Wider Palm x2 carries 3 (${wide.lockedMax.join(',')})`);
+h.test('setConfig: width, grip, rubber, prongs, magnet, grease', () => {
   const { W, C } = mkWorld();
   const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(1) });
-  h.eq(R.cradleCap(), 2, 'base capacity 2');
-  R.setConfig({ prongs: 3 }); h.eq(R.cradleCap(), 3, 'third prong +1');
-  R.setConfig({ width: 1.36 }); h.eq(R.cradleCap(), 4, 'Wider Palm x2 +1');
+  const s0 = R.geo.s, g0 = R.geo.grip, mu0 = R.geo.mu;
+  R.setConfig({ width: 1.36 });
+  h.near(R.geo.s, s0 * 1.36, 1e-9, 'width rescales the claw');
+  h.near(R.bodies.hub.r, 13 * R.geo.s, 1e-9, 'hub grows with it');
+  R.setConfig({ width: 1, rubber: 1 });
+  h.near(R.geo.grip, g0 + 0.15, 1e-9, 'rubber adds 0.15 grip_cc');
+  h.ok(R.geo.mu > mu0, 'rubber raises the claw friction');
+  R.setConfig({ rubber: 0, prongs: 3 });
+  h.near(R.geo.s, s0 * 1.08, 1e-9, 'third prong scales the claw 1.08');
+  h.near(R.geo.grip, g0 + 0.1, 1e-9, 'third prong adds 0.1 grip_cc');
+  h.ok(Array.isArray(R.bodies.ghost) && R.bodies.ghost.length === 4, 'third prong is drawn as a ghost');
+  h.eq(R.bodies.prongs.length, 2, 'still two physical prongs');
+  R.setConfig({ prongs: 2, grease: 1 });
+  h.near(R.geo.grip, g0 - 0.3, 1e-9, 'grease takes 0.3 grip_cc');
+  h.eq(R.bodies.ghost, null, 'ghost gone');
+  R.setConfig({ grease: 0, grip: 2.05 });
+  h.near(R.geo.grip, 0.35 + 0.3 * 1.3, 1e-9, 'grip upgrades map linearly');
+  R.setConfig({ magnet: 1, speed: 1.4 });
+  h.eq(R.cfg.magnet, 1, 'magnet on'); h.eq(R.cfg.speed, 1.4, 'speed set');
 });
 
-h.test('geometry: 96 px open span, hooked basket, closed claw does not self-intersect', () => {
-  const { W, C } = mkWorld();
-  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(2) });
-  const g = R.geo;
-  h.near(g.beta, 0.55, 1e-9, 'tip segment bends inward 0.55 rad');
-  h.near(g.len, 53, 1e-9, 'prong length 53 at width 1');
-  h.eq(g.palmW, 64, 'palm 64 wide');
-  const tips = R.bodies.tips;
-  const span = Math.max(...tips.map(t => t.box.x1)) - Math.min(...tips.map(t => t.box.x0));
-  h.ok(span >= 92 && span <= 106, `open tips span about 96 px (${span.toFixed(1)})`);
-  // Close on nothing: no part of the left finger may overlap the right one.
-  R.drop();
-  let t = 0;
-  while (R.phase !== 'lifting' && t < 5) { R.update(DT); W.step(DT); t += DT; }
-  const parts = R.bodies.prongs.filter(p => !p.ghost).concat(tips);
-  const L = parts.filter(p => p.data.dir === 1), Rt = parts.filter(p => p.data.dir === -1);
-  let minSep = Infinity;
-  for (const a of L) for (const b of Rt) for (const v of a.wv) {
-    let best = -Infinity;
-    for (let i = 0; i < b.wv.length; i++) { const s = (v.x - b.wv[i].x) * b.wn[i].x + (v.y - b.wv[i].y) * b.wn[i].y; if (s > best) best = s; }
-    minSep = Math.min(minSep, best);
-  }
-  h.ok(minSep >= 0, `closed fingers do not overlap (min separation ${minSep.toFixed(2)} px)`);
-  const tipY = Math.max(...tips.map(t => t.box.y1));
-  h.ok(tipY > R.bodies.palm.y + 40, 'closed hooks hang well below the palm (a basket, not a pinch)');
-  // The cradle polygon is exposed for tests and debug drawing.
-  const poly = R.cradle();
-  h.eq(poly.length, 4, 'cradle polygon has 4 corners');
-  h.ok(poly[0].x < poly[3].x && poly[1].y > poly[0].y, 'hinges on top, tips below');
-});
-
-h.test('3 prongs deliver at least as often as 2 on the same scenario', () => {
-  // The third finger raises the grip lock's break force, so it shows on a
-  // box whose weight sits right at the two-prong rig's limit.
-  const HEAVYISH = { shape: { kind: 'poly', verts: PHYS.box(40, 40) }, density: 1.85 };   // mass 2960: right at the two-prong rig's limit
-  let two = 0, three = 0;
-  for (const g of [0.9, 1.1]) {
-    two += scenario({ grip: g, prongs: 2 }, HEAVYISH, 10, 400);
-    three += scenario({ grip: g, prongs: 3 }, HEAVYISH, 10, 400);
-  }
-  h.ok(three >= two, `3-prong rig (${three}/20) >= 2-prong rig (${two}/20) on a heavy-ish box`);
-  h.ok(two <= 18, `2-prong rig is marginal on it (${two}/20), so the comparison means something`);
-  const twoBall = scenario({ grip: 2, prongs: 2 }, ITEM.ball({}), 10, 500);
-  const threeBall = scenario({ grip: 2, prongs: 3 }, ITEM.ball({}), 10, 500);
-  h.ok(threeBall >= twoBall - 1, `3 prongs do not hurt a strong ball grab (${threeBall} vs ${twoBall})`);
-});
-
-h.test('setConfig rebuilds prongs and rubber raises tip friction', () => {
-  const { W, C } = mkWorld();
-  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(8) });
-  const f0 = R.bodies.prongs[0].friction;
-  R.setConfig({ prongs: 3, rubber: 1, width: 1.36, grip: 1.7, speed: 1.3, magnet: 1 });
-  h.eq(R.bodies.prongs.length, 3, 'three prongs after setConfig');
-  h.eq(R.bodies.tips.length, 2, 'two hooked tips after setConfig');
-  h.ok(R.bodies.prongs[0].friction > f0, 'rubber tips are grippier');
-  h.ok(R.cfg.grip === 1.7 && R.cfg.speed === 1.3 && R.cfg.magnet === 1, 'scalar config applied');
-  h.eq(W.bodies.filter(b => b.group === 'claw').length, 6, 'old claw bodies were removed (carriage, palm, 2 side prongs, 2 tips; the third prong is a drawn ghost)');
-  h.ok(R.bodies.prongs[2].ghost && W.bodies.indexOf(R.bodies.prongs[2]) < 0, 'the third prong is a ghost outside the world');
-  R.drop();
-  let t = 0;
-  while (R.phase !== 'idle' && t < 15) { R.update(DT); W.step(DT); t += DT; }
-  h.eq(R.phase, 'idle', 'rebuilt rig completes a cycle');
-  R.destroy();
-  h.eq(W.bodies.filter(b => b.group === 'claw').length, 0, 'destroy removes the rig');
-});
-
-h.test('magnet pulls metal toward the palm while dropping', () => {
+h.test('magnet pulls metal toward the hub while dropping', () => {
   const run = (magnet) => {
     const { W, C } = mkWorld();
-    const b = spawn(W, ITEM.ball({}), 266, 370, { data: { tags: ['metal'] } });
-    settle(W, 0.5);
-    const R = PHYS.clawRig(W, { cabinet: C, magnet, rand: U.rng(9) });
+    const m = spawn(W, ITEM.ball({}), 260, 300, { data: { tags: ['metal'] } });
+    settle(W, 1);
+    const R = PHYS.clawRig(W, { cabinet: C, magnet, rand: U.rng(8) });
     R.setTarget(200);
-    let t = 0;
-    while (!R.calm() && t < 4) { R.update(DT); W.step(DT); t += DT; }
+    let t = 0; while (!R.calm() && t < 4) { R.update(DT); W.step(DT); t += DT; }
     R.drop();
-    while (R.phase !== 'lifting' && t < 10) { R.update(DT); W.step(DT); t += DT; }
-    return b.x;
+    while (R.phase !== 'lifting' && t < 8) { R.update(DT); W.step(DT); t += DT; }
+    return m.x;
   };
   const off = run(0), on = run(1);
-  h.ok(on < off - 3, `magnet moved the ball toward the palm (${on.toFixed(1)} vs ${off.toFixed(1)})`);
-});
-
-h.test('determinism: two worlds with the same inputs match after 5 s', () => {
-  const run = () => {
-    const { W, C } = mkWorld();
-    pile(W, U.rng(21));
-    const R = PHYS.clawRig(W, { cabinet: C, grip: 1.3, rand: U.rng(22) });
-    settle(W, 1);
-    R.setTarget(180);
-    for (let i = 0; i < 300; i++) {
-      if (i === 40) R.drop();
-      R.update(DT); W.step(DT);
-    }
-    return items(W).map(b => [b.x, b.y, b.a]).flat().concat([R.x, R.y, R.sway]);
-  };
-  const a = run(), b = run();
-  h.eq(a.length, b.length, 'same body count');
-  h.ok(a.every((v, i) => v === b[i]), 'identical positions and angles');
-});
-
-h.test('carriage sways the palm and settles', () => {
+  h.ok(off > 250, 'without a magnet the ball stays put (' + off.toFixed(1) + ')');
+  h.ok(on < off - 15, 'with a magnet the ball drifted toward the claw (' + on.toFixed(1) + ' vs ' + off.toFixed(1) + ')');
   const { W, C } = mkWorld();
-  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(10) });
+  const wood = spawn(W, ITEM.ball({}), 260, 300, { data: { tags: ['food'] } });
+  settle(W, 1);
+  const R = PHYS.clawRig(W, { cabinet: C, magnet: 1, rand: U.rng(8) });
+  R.setTarget(200); let t = 0; while (!R.calm() && t < 4) { R.update(DT); W.step(DT); t += DT; }
+  R.drop(); while (R.phase !== 'lifting' && t < 8) { R.update(DT); W.step(DT); t += DT; }
+  h.ok(wood.x > 250, 'non-metal is not pulled (' + wood.x.toFixed(1) + ')');
+});
+
+h.test('the claw never flings: an item pinned under the hub stays slow', () => {
+  const { W, C } = mkWorld();
+  const rng = U.rng(77);
+  pile(W, rng, 34);
+  settle(W, 2);
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(9) });
+  let peak = 0;
+  for (let k = 0; k < 3; k++) {
+    R.setTarget(120 + k * 100);
+    let t = 0; while (!R.calm() && t < 4) { R.update(DT); W.step(DT); t += DT; }
+    R.drop(); let started = false;
+    while (t < 14) { R.update(DT); W.step(DT); t += DT; peak = Math.max(peak, maxSpeed(W)); if (R.phase !== 'idle' && R.phase !== 'moving') started = true; if (started && R.phase === 'idle') break; }
+  }
+  h.ok(peak < 900, 'peak item speed while the claw digs through a pile: ' + peak.toFixed(0) + ' px/s');
+  h.ok(inside(W, C), 'nothing escaped');
+});
+
+h.test('cable sway is visual only: the hub does not swing, the cable top does', () => {
+  const { W, C } = mkWorld();
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(1) });
   R.setTarget(400);
   let maxSway = 0, t = 0;
   while (t < 3) { R.update(DT); W.step(DT); t += DT; maxSway = Math.max(maxSway, Math.abs(R.sway)); }
-  h.ok(maxSway > 0.02, `carriage acceleration swings the cable (${maxSway.toFixed(3)})`);
-  h.ok(Math.abs(R.sway) < 0.02, `sway damps out (${R.sway.toFixed(3)})`);
-  h.near(R.bodies.carriage.x, R.targetX, 3, 'carriage reached its target');
-  h.eq(R.phase, 'idle', 'idle after arriving');
+  h.ok(maxSway > 0.01, 'the cable swung during travel (' + maxSway.toFixed(3) + ')');
+  h.ok(Math.abs(R.cableTop.x - R.x) <= 12 * maxSway + 1e-9, 'the cable top offset follows the sway');
+  h.ok(R.calm(), 'calm once parked');
+  h.near(R.y, 26 + PHYS.RIG.hubDrop, 1e-9, 'the hub stayed on the rail');
 });
 
 h.done();

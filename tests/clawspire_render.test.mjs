@@ -56,10 +56,14 @@ const TILE_TYPES = ['empty', 'fight', 'elite', 'treasure', 'gem', 'ink', 'brush'
 const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape'];
 
 const SHAPES = { circle: { kind: 'circle', r: 14 }, box: { kind: 'box', w: 44, h: 10 }, poly: { kind: 'poly', verts: [{ x: -16, y: 4 }, { x: -10, y: -12 }, { x: 10, y: -14 }, { x: 18, y: 0 }, { x: 12, y: 14 }] } };
-const fakeRig = () => {
-  const quad = (w, hh) => [{ x: -w / 2, y: -hh / 2 }, { x: w / 2, y: -hh / 2 }, { x: w / 2, y: hh / 2 }, { x: -w / 2, y: hh / 2 }];
-  const prong = (d) => ({ x: 240 + d * 22, y: 190, a: d * 0.5, shape: { kind: 'poly', verts: [{ x: -4, y: -4 }, { x: 4, y: -4 }, { x: 3, y: 30 }, { x: -1, y: 34 }, { x: -6, y: 20 }] } });
-  return { bodies: { carriage: { x: 240, y: 26, a: 0, shape: { kind: 'poly', verts: quad(40, 16) } }, palm: { x: 240, y: 170, a: 0.05, shape: { kind: 'poly', verts: quad(40, 18) } }, prongs: [prong(-1), prong(1), prong(0)] }, cableTop: { x: 240, y: 26 }, sway: 0.05, phase: 'dropping' };
+// A rig the way PHYS.clawRig describes itself: a hub circle, two prongs as
+// point chains (three capsule segments each) and an optional ghost prong.
+const fakeRig = (opts) => {
+  opts = opts || {};
+  const s = 0.8, hx = 240, hy = 170;
+  const prong = (d) => [[0, 0], [14, 28], [9, 48], [1, 57]].map(([lx, ly]) => ({ x: hx + d * (7 + lx) * s, y: hy + (7 + ly) * s }));
+  return { bodies: { hub: { x: hx, y: hy, r: 13 * s }, prongs: [prong(-1), prong(1)], ghost: opts.ghost ? prong(0).map(p => ({ x: hx, y: p.y - 4 })) : null },
+    cableTop: { x: 240, y: 26 }, sway: 0.05, phase: 'dropping', geo: { s }, cfg: opts.cfg || null };
 };
 
 /* Runs fn against a fresh sequence ctx; asserts no throw, balanced
@@ -87,7 +91,8 @@ function uniqueRatio(map) {
   const api = boot({ only: ['util', 'render'] });
   const R = api.RENDER;
   h.ok(R && typeof R.item === 'function', 'RENDER namespace loads with util only');
-  for (const name of ['item', 'enemy', 'cabinet', 'cabinetBack', 'cabinetFront', 'claw', 'bodyDebug', 'hex', 'mapBg', 'bg', 'hpBar', 'statusPips', 'intent', 'portrait', 'relicIcon', 'title', 'enemyBox'])
+  for (const name of ['item', 'enemy', 'cabinet', 'cabinetBack', 'cabinetFront', 'claw', 'bodyDebug', 'hex', 'mapBg', 'bg', 'hpBar', 'statusPips', 'intent', 'portrait', 'relicIcon', 'title', 'enemyBox',
+    'terrainHex', 'terrainFill', 'biomePal', 'mapCompass', 'mapHeader', 'mapArrow'])
     h.eq(typeof R[name], 'function', 'RENDER.' + name + ' exists');
   for (const name of ['burst', 'text', 'shake', 'flash', 'trail', 'update', 'draw', 'offset'])
     h.eq(typeof R.fx[name], 'function', 'RENDER.fx.' + name + ' exists');
@@ -163,25 +168,18 @@ function uniqueRatio(map) {
   const sMag = drawCheck('claw magnet', c => R.claw(c, rig, 0, 0, { magnet: 1 }));
   h.ok(fingerprint(sPlain) !== fingerprint(sRub), 'rubber tips change the claw');
   h.ok(fingerprint(sPlain) !== fingerprint(sMag), 'magnet changes the claw');
-  drawCheck('claw 2 prongs', c => { const r2 = fakeRig(); r2.bodies.prongs.length = 2; R.claw(c, r2, 0, 0, {}); });
-  // hooked tips: each side prong continues into rig.bodies.tips[i]; the ghost
-  // third prong (prongs[2].ghost) is drawn even though it is not in a world
-  const tipped = () => {
-    const r2 = fakeRig(); r2.bodies.prongs.length = 2;
-    const tip = (d) => ({ x: 240 + d * 30, y: 220, a: d * 0.2, shape: { kind: 'poly', verts: [{ x: -4, y: 0 }, { x: 4, y: 0 }, { x: 2, y: 16 }, { x: -2, y: 16 }] } });
-    r2.bodies.tips = [tip(-1), tip(1)];
-    return r2;
-  };
-  const sNoTip = drawCheck('claw no tips', c => { const r2 = fakeRig(); r2.bodies.prongs.length = 2; R.claw(c, r2, 0, 0, {}); });
-  const sTip = drawCheck('claw tips', c => R.claw(c, tipped(), 0, 0, {}));
+  // the flags also come from the rig's own cfg (the game passes the rig)
+  const sRigRub = drawCheck('claw rig cfg rubber', c => R.claw(c, fakeRig({ cfg: { rubber: 1 } }), 0, 0, {}));
+  h.eq(fingerprint(sRigRub), fingerprint(sRub), 'rig.cfg.rubber draws the rubber pads');
   const lines = (st) => st.seq.filter(k => k === 'lineTo').length;
-  h.ok(lines(sTip) > lines(sNoTip) + 8, 'hooked tips add their polygon paths (' + lines(sTip) + ' vs ' + lines(sNoTip) + ' lineTo)');
-  h.ok(sTip.seq.filter(k => k === 'arc').length > sNoTip.seq.filter(k => k === 'arc').length, 'knee rivets drawn as arcs');
-  const sTipRub = drawCheck('claw tips rubber', c => R.claw(c, tipped(), 0, 0, { rubber: 1 }));
-  h.ok(fingerprint(sTipRub) !== fingerprint(sTip), 'rubber pads change the tip drawing');
-  const sGhost = drawCheck('claw ghost prong', c => { const r2 = tipped(); r2.bodies.prongs.push(Object.assign({ ghost: true }, fakeRig().bodies.prongs[2])); R.claw(c, r2, 0, 0, { prongs: 3 }); });
-  h.ok(lines(sGhost) > lines(sTip) + 4, 'the ghost third prong is drawn (' + lines(sGhost) + ' vs ' + lines(sTip) + ' lineTo)');
-  h.ok(sGhost.seq.indexOf('lineTo') < sTip.seq.indexOf('lineTo') + 40, 'ghost prong drawn early (behind the pair)');
+  // each prong is a chain of three segments: at least 3 lineTo per prong per stroke pass
+  h.ok(lines(sPlain) >= 2 * 3 * 2, 'prong chains are drawn as polylines (' + lines(sPlain) + ' lineTo)');
+  h.ok(sPlain.seq.filter(k => k === 'arc').length >= 4, 'knuckle rivets and the hub are arcs');
+  const sGhost = drawCheck('claw ghost prong', c => R.claw(c, fakeRig({ ghost: true }), 0, 0, { prongs: 3 }));
+  h.ok(lines(sGhost) > lines(sPlain) + 2, 'the ghost third prong is drawn (' + lines(sGhost) + ' vs ' + lines(sPlain) + ' lineTo)');
+  h.ok(sGhost.seq.indexOf('lineTo') < sPlain.seq.indexOf('lineTo') + 40, 'ghost prong drawn early (behind the pair)');
+  const sOneProng = drawCheck('claw one prong', c => { const r2 = fakeRig(); r2.bodies.prongs.length = 1; R.claw(c, r2, 0, 0, {}); });
+  h.ok(lines(sOneProng) < lines(sPlain), 'fewer prongs, fewer paths');
   // floor wedges: cfg.slopeW/slopeH add the two bowl slopes to the back
   const sFlat = drawCheck('cabinetBack flat', c => R.cabinetBack(c, 30, 410, cfg, { t: 1, act: 1 }));
   const sBowl = drawCheck('cabinetBack bowl', c => R.cabinetBack(c, 30, 410, Object.assign({ slopeW: 130, slopeH: 90 }, cfg), { t: 1, act: 1 }));
@@ -191,7 +189,11 @@ function uniqueRatio(map) {
   drawCheck('claw phases', c => { for (const ph of ['idle', 'moving', 'dropping', 'closing', 'lifting', 'carrying', 'releasing', 'returning']) { const r2 = fakeRig(); r2.phase = ph; R.claw(c, r2, 0, 0, { magnet: 1 }); } });
   drawCheck('claw empty rig', c => { R.claw(c, {}, 0, 0, {}); c.fillRect(0, 0, 1, 1); });
   balanced('claw', c => R.claw(c, rig, 0, 0, { rubber: 1, magnet: 1 }));
-  const W = { bodies: [rig.bodies.palm, ...rig.bodies.prongs, { x: 10, y: 10, a: 0, shape: { kind: 'circle', r: 5 }, type: 'static' }], contactsOf: () => [{ px: 1, py: 1, nx: 0, ny: -1 }] };
+  // bodyDebug: part-based bodies (circle parts), a plain-shape body, wall and claw segments
+  const partBody = { x: 100, y: 100, a: 0.3, type: 'dynamic', sl: false, parts: [{ r: 8 }, { r: 6 }], px: [100, 110], py: [100, 100] };
+  const sleeper = Object.assign({}, partBody, { sl: true, x: 200 });
+  const seg = { ax: 0, ay: 390, bx: 400, by: 390, r: 4 };
+  const W = { bodies: [partBody, sleeper, { x: 10, y: 10, a: 0, shape: { kind: 'circle', r: 5 }, type: 'static' }, { x: 20, y: 20, a: 0, shape: { kind: 'poly', verts: [{ x: -3, y: -3 }, { x: 3, y: -3 }, { x: 0, y: 3 }] }, type: 'dynamic' }], segs: [seg], csegs: [seg], contactsOf: () => [{ px: 1, py: 1, nx: 0, ny: -1 }] };
   drawCheck('bodyDebug', c => R.bodyDebug(c, W));
   drawCheck('bodyDebug no contacts', c => R.bodyDebug(c, { bodies: W.bodies }));
   drawCheck('bodyDebug empty', c => { R.bodyDebug(c, null); c.fillRect(0, 0, 1, 1); });
@@ -216,6 +218,38 @@ function uniqueRatio(map) {
     drawCheck('bg act ' + act, c => R.bg(c, 540, 340, act, 1));
     balanced('bg act ' + act, c => R.bg(c, 540, 340, act, 2));
   }
+  // map terrain: every biome x terrain paints, land fill follows elevation and biome
+  const tfp = new Map();
+  for (const biome of ['cellar', 'foundry', 'vault']) {
+    for (const terr of ['land', 'shallow', 'sea']) {
+      const st = drawCheck(`terrainHex ${biome} ${terr}`, c => R.terrainHex(c, 50, 50, 30, { terrain: terr, elev: 0.9 }, { biome, seed: 12345, t: 1, orient: 'v' }));
+      tfp.set(biome + terr, fingerprint(st));
+    }
+    drawCheck(`terrainHex ${biome} lowland`, c => R.terrainHex(c, 50, 50, 30, { terrain: 'land', elev: 0.1 }, { biome, seed: 6, t: 2, orient: 'v' }));
+  }
+  h.ok(uniqueRatio(new Map([['l', tfp.get('cellarland')], ['s', tfp.get('cellarshallow')], ['w', tfp.get('cellarsea')]])).ratio === 1, 'land, ford and sea draw differently');
+  h.ok(tfp.get('cellarsea') !== tfp.get('foundrysea'), 'lava pools differ from water');
+  drawCheck('terrainHex defaults', c => R.terrainHex(c, 0, 0, 30, null, null));
+  h.ok(R.terrainFill('cellar', 'land', 0.1) !== R.terrainFill('cellar', 'land', 0.9), 'terrainFill shades by elevation');
+  h.ok(R.terrainFill('vault', 'sea', 0.5) !== R.terrainFill('cellar', 'sea', 0.5), 'terrainFill differs per biome');
+  h.eq(R.terrainFill('cellar', 'land', 0.5), R.terrainFill('cellar', 'land', 0.5), 'terrainFill is stable');
+  h.ok(/^rgb\(/.test(R.terrainFill('foundry', 'sea', 0.3)) && R.biomePal('nope') === R.biomePal('cellar'), 'fills are rgb strings, unknown biomes fall back');
+  // hex in terrain mode: coast edges, translucent fog, plate under the icon
+  const tst = { t: 1, fill: 'rgb(120,110,90)', mask: 0b101010, biome: 'cellar', orient: 'v' };
+  const th = drawCheck('hex terrain hidden coast', c => R.hex(c, 50, 50, 30, { type: 'fight', revealed: false, q: 1, r: 2, terrain: 'land', coast: true }, tst));
+  const ph = drawCheck('hex plain hidden', c => R.hex(c, 50, 50, 30, { type: 'fight', revealed: false, q: 1, r: 2 }, { t: 1, orient: 'v' }));
+  h.ok(fingerprint(th) !== fingerprint(ph), 'terrain fog differs from the solid fog');
+  drawCheck('hex terrain revealed shop', c => R.hex(c, 50, 50, 30, { type: 'shop', revealed: true, q: 1, r: 2, terrain: 'land' }, tst));
+  drawCheck('hex terrain visited empty', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: true, visited: true, q: 1, r: 2, terrain: 'land' }, tst));
+  drawCheck('hex terrain ford hidden', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: false, q: 1, r: 2, terrain: 'shallow' }, tst));
+  drawCheck('hex terrain ford revealed reachable', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: true, q: 1, r: 2, terrain: 'shallow' }, Object.assign({ reachable: true, path: 2, target: true }, tst)));
+  drawCheck('hex terrain known landmark', c => R.hex(c, 50, 50, 30, { type: 'tower', revealed: false, known: true, q: 3, r: 4, terrain: 'land' }, tst));
+  drawCheck('mapCompass', c => R.mapCompass(c, 100, 100, 28, 1));
+  drawCheck('mapCompass defaults', c => R.mapCompass(c, 0, 0, 0, 0));
+  drawCheck('mapHeader', c => R.mapHeader(c, 10, 10, 190, 32, 'The Damp Arcade', '7 of 246 hexes charted', 1));
+  drawCheck('mapHeader no sub', c => R.mapHeader(c, 10, 10, 190, 32, 'Title', '', 1));
+  drawCheck('mapArrow', c => R.mapArrow(c, 100, 100, -1.2, 16, 1, 'Boss'));
+  drawCheck('mapArrow defaults', c => R.mapArrow(c, 0, 0, 0, 0, 0, ''));
   const b1 = drawCheck('bg act 1 fp', c => R.bg(c, 540, 340, 1, 1)), b2 = drawCheck('bg act 2 fp', c => R.bg(c, 540, 340, 2, 1)), b3 = drawCheck('bg act 3 fp', c => R.bg(c, 540, 340, 3, 1));
   h.ok(fingerprint(b1) !== fingerprint(b2) && fingerprint(b2) !== fingerprint(b3) && fingerprint(b1) !== fingerprint(b3), 'bg differs per act');
   drawCheck('bg defaults', c => R.bg(c));
