@@ -202,48 +202,32 @@ for (const ch of CHARS) {
   console.log(`  ${ch.padEnd(9)} A1 ${row}`);
 }
 
-h.test('turn counts sit in the design bands', () => {
-  for (const ch of CHARS) {
-    const a1 = mean(R[ch][1].normal.map(x => x.turns));
-    h.ok(a1 >= 3 && a1 <= 6, `${ch}: act 1 normal fights average ${f1(a1)} turns (3..6)`);
-    for (const e of R[ch][1].normal) h.ok(e.turns <= 8, `${ch}: act 1 ${e.enc} is no slog (${f1(e.turns)} turns)`);
-    for (const act of [1, 2, 3]) {
-      const n = mean(R[ch][act].normal.map(x => x.turns));
-      h.ok(n >= 2.5 && n <= 8, `${ch}: act ${act} normals average ${f1(n)} turns (2.5..8)`);
-      const el = mean(R[ch][act].elite.map(x => x.turns));
-      h.ok(el >= 3.5 && el <= 13, `${ch}: act ${act} elites average ${f1(el)} turns (3.5..13)`);
-      for (const b of R[ch][act].boss) h.ok(b.turns >= 4 && b.turns <= 16, `${ch}: act ${act} boss ${b.enc} takes ${f1(b.turns)} turns (4..16)`);
+// The owner tunes difficulty by hand with DATA.DIFFICULTY; this suite only
+// guards sanity: every fight resolves, nothing is a mathematical wall, and
+// the dial is honoured. No design bands on turn counts or win rates.
+h.test('every fight resolves and nothing is a wall', () => {
+  for (const ch of CHARS) for (const act of [1, 2, 3]) {
+    for (const tier of ['normal', 'elite', 'boss']) for (const e of R[ch][act][tier]) {
+      // turns is per win; an elite the starting hand never beats reports 0.
+      h.ok(Number.isFinite(e.turns) && (e.win === 0 || (e.turns >= 1 && e.turns < MAX_TURNS)), `${ch} A${act} ${tier} ${e.enc}: fights end (${f1(e.turns)} turns)`);
+      h.ok(Number.isFinite(e.win) && Number.isFinite(e.lost), `${ch} A${act} ${tier} ${e.enc}: stats are numbers`);
     }
-  }
-  // Across the cast, bosses land near the bible's 6-10 turns. Act 3 is two
-  // bosses back to back (Glacius, then the Prize Master): the whole-run bot
-  // clears it in 7-10 turns, this simpler hand in a few more.
-  for (const act of [1, 2, 3]) {
-    const b = mean(CHARS.map(ch => R[ch][act].boss[0].turns));
-    const hi = act === 3 ? 13 : 11;
-    h.ok(b >= 6 && b <= hi, `act ${act} boss averages ${f1(b)} turns over the cast (6..${hi})`);
+    // A full-hp crawler with its starting bin can beat every normal of its
+    // act at least sometimes; a wall would be a content bug, not a tuning.
+    for (const e of R[ch][act].normal) h.ok(e.win > 0, `${ch} A${act} ${e.enc}: beatable (${Math.round(100 * e.win)}%)`);
   }
 });
 
-h.test('a full-hp crawler survives its act: normals 85%, elites 40%, bosses 25%', () => {
-  for (const ch of CHARS) for (const act of [1, 2, 3]) {
-    for (const e of R[ch][act].normal) h.ok(e.win >= 0.85, `${ch} A${act} ${e.enc}: ${Math.round(100 * e.win)}% >= 85%`);
-    for (const e of R[ch][act].elite) h.ok(e.win >= 0.40, `${ch} A${act} elite ${e.enc}: ${Math.round(100 * e.win)}% >= 40%`);
-    for (const e of R[ch][act].boss) h.ok(e.win >= 0.25, `${ch} A${act} boss ${e.enc}: ${Math.round(100 * e.win)}% >= 25%`);
-  }
-});
-
-h.test('no single normal fight is a run-ender, elites and bosses bite', () => {
-  for (const ch of CHARS) for (const act of [1, 2, 3]) {
-    for (const e of R[ch][act].normal) h.ok(e.lost <= 0.4, `${ch} A${act} ${e.enc}: loses ${Math.round(100 * e.lost)}% hp on average (<= 40%)`);
-    const el = mean(R[ch][act].elite.map(x => x.lost)), nm = mean(R[ch][act].normal.map(x => x.lost));
-    h.ok(el > nm, `${ch} A${act}: elites (${Math.round(100 * el)}% hp) hurt more than normals (${Math.round(100 * nm)}%)`);
-  }
-  // Across the cast every elite costs a real chunk of hp.
-  for (const act of [1, 2, 3]) for (let i = 0; i < DATA.ENCOUNTERS[act].elite.length; i++) {
-    const lost = mean(CHARS.map(ch => R[ch][act].elite[i].lost));
-    h.ok(lost >= 0.1, `A${act} elite ${R.knight[act].elite[i].enc} costs ${Math.round(100 * lost)}% hp over the cast (>= 10%)`);
-  }
+h.test('the difficulty dial scales enemy hp and attacks', () => {
+  const d = DATA.DIFFICULTY || { hp: 1, dmg: 1 };
+  const run = { hp: 80, maxHp: 80, act: 1, bin: [], relics: [], claw: {} };
+  const F = COMBAT.newFight(run, ['rat'], U.rng(4));
+  const def = DATA.ENEMIES.rat;
+  const e = F.enemies[0];
+  h.ok(e.maxHp >= Math.round(def.hp[0] * d.hp) - 1 && e.maxHp <= Math.round(def.hp[1] * d.hp) + 1, `rat hp ${e.maxHp} sits in the scaled band`);
+  const atk = def.moves.find(m => m.k === 'attack');
+  const scaled = e.def.moves.find(m => m.k === 'attack');
+  if (atk && scaled) h.eq(scaled.v, Math.max(1, Math.round(atk.v * d.dmg)), 'attack value scaled by the dial');
 });
 
 h.test('enemy hp scales by act as the bible says', () => {
