@@ -8,8 +8,10 @@
 const COMBAT = (() => {
   const MAX_ALIVE = 3;       // enemies alive at once (summon cap)
   const MAX_STACK = 99;      // status stacks clamp to [0, 99]
-  const MAX_ITEMS = 40;      // bin + used cap for junk/copies (physics budget)
-  const MAX_CABINET = 30;    // bodies in the cabinet at once; the rest of a big bin waits in the used pile
+  // Starting bins are 19 items now (6 of them r 9-11 fillers, cheap circles
+  // for the physics budget), so both caps grew: 40 -> 48 and 30 -> 34.
+  const MAX_ITEMS = 48;      // bin + used cap for junk/copies (physics budget)
+  const MAX_CABINET = 34;    // bodies in the cabinet at once; the rest of a big bin waits in the used pile
   // Bin below REFILL_AT at turn start -> the used pile pours back in. A turn
   // that played nothing does the same: the shower stirs a pile the claw
   // cannot bite (flat blades and coins on the floor), which otherwise stalls
@@ -1012,5 +1014,7 @@ const COMBAT = (() => {
   api.isJunk = isJunk;
   api.calcHit = calcHit;
   api.MAX_ALIVE = MAX_ALIVE;
+  api.MAX_ITEMS = MAX_ITEMS;
+  api.MAX_CABINET = MAX_CABINET;
   return api;
 })();

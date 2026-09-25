@@ -17,12 +17,14 @@ const CS = boot({ only: ['util', 'data', 'combat'] });
 const { DATA, COMBAT, U } = CS;
 const CHARS = ['knight', 'alchemist', 'rogue'];
 const FIGHTS = 200;
-// Items per drop by character for a human hand: 0.65 knight (long swords
-// slip), 0.7 alchemist (glass), 0.9 rogue (small things come up in pairs).
-// The aim-perfect physics bot measures 0.1-0.25 more on the current rig;
+// Items per drop by character for a human hand: 0.85 knight (long swords
+// slip), 0.88 alchemist (glass), 1.12 rogue (small things come up in pairs).
+// About 25% over the pre-cradle rig (0.65 / 0.7 / 0.9): the claw now scoops
+// r 9-11 fillers in twos and threes, so a landed grab brings a second item
+// about 30% of the time (p2 / (1 - p0): 0.31 / 0.29 / 0.37).
 // MODEL='{"knight":{"p0":..,"p2":..},..}' overrides for what-if runs.
 const MODELS = JSON.parse(process.env.MODEL || 'null') || {
-  knight: { p0: 0.4, p2: 0.05 }, alchemist: { p0: 0.35, p2: 0.05 }, rogue: { p0: 0.25, p2: 0.15 },
+  knight: { p0: 0.35, p2: 0.2 }, alchemist: { p0: 0.32, p2: 0.2 }, rogue: { p0: 0.18, p2: 0.3 },
 };
 const SAMPLE = 3, MAX_TURNS = 40;
 let MODEL = MODELS.knight;
@@ -148,7 +150,8 @@ function deckFor(char, act, seed, picks) {
     for (let k = 0; k < PER_ACT && made < picks; k++, made++) {
       const ids = DATA.rewardItems(rng, a, char, 3);
       ids.sort((x, y) => RAR[DATA.ITEMS[y].rarity] - RAR[DATA.ITEMS[x].rarity]);
-      if (ids.length) bin.push({ id: ids[0], plus: false });
+      // A bag adds its contents, as the game does.
+      if (ids.length) for (const id of (DATA.ITEMS[ids[0]].bag || [ids[0]])) bin.push({ id, plus: false });
     }
     if (made % PER_ACT === 0) {
       acts++;
@@ -292,11 +295,14 @@ h.test('reward rarity follows the act weights', () => {
 });
 
 h.test('prices: items, claw upgrades and shop stock are affordable', () => {
-  const band = { c: [40, 50], u: [55, 75], r: [90, 110], l: [120, 140] };
+  // Small fillers 10-25 and bags 25-35: a bag costs less than a common and
+  // no more than its contents bought one by one.
+  const band = { c: [40, 50], u: [55, 75], r: [90, 110], l: [120, 140], small: [10, 25], bag: [25, 35] };
   for (const id in DATA.ITEMS) {
     const d = DATA.ITEMS[id];
     if (d.rarity === 'junk') continue;
-    h.ok(d.cost >= band[d.rarity][0] && d.cost <= band[d.rarity][1], `${id} costs ${d.cost} (${d.rarity} ${band[d.rarity].join('-')})`);
+    const k = d.bag ? 'bag' : d.tags.includes('small') ? 'small' : d.rarity;
+    h.ok(d.cost >= band[k][0] && d.cost <= band[k][1], `${id} costs ${d.cost} (${k} ${band[k].join('-')})`);
   }
   for (const id in DATA.CLAW_UPGRADES) {
     const c = DATA.CLAW_UPGRADES[id];

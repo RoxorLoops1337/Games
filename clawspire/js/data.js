@@ -14,7 +14,7 @@ const DATA = (() => {
   const ENEMY_ART = ['rat', 'slime', 'bat', 'gremlin', 'mimic', 'spider', 'goblin', 'hoard', 'imp',
     'clockwork', 'golem', 'furnace', 'magnet', 'ironjaw', 'wraith', 'yeti', 'frostmage', 'icemimic',
     'prizemaster', 'mushroom', 'knight', 'wisp', 'crab', 'drone', 'tinker', 'cultist'];
-  const TAGS = ['metal', 'weapon', 'glass', 'potion', 'heavy', 'light', 'junk', 'magic', 'food', 'tool'];
+  const TAGS = ['metal', 'weapon', 'glass', 'potion', 'heavy', 'light', 'junk', 'magic', 'food', 'tool', 'small'];
   const FX_KINDS = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'shake', 'junk',
     'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll'];
   const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk',
@@ -32,6 +32,10 @@ const DATA = (() => {
   };
   // Chance that a reward slot is drawn from the character's own pool.
   const CHAR_BIAS = 0.4;
+  // Chance that a reward or shop screen (3+ slots) turns one of its common
+  // slots into a bag of small fillers. Screens without a common slot get no
+  // bag, so about 30% of act 1 screens and 26% of act 3 screens show one.
+  const BAG_CHANCE = 0.33;
   // Map economy the game and map read (balance bot, 40 runs per setting):
   // the bible's ~35% reveal share needs ~20 ink per act. 5 start ink left
   // the map 22% revealed and a rushing player stuck on most maps.
@@ -415,6 +419,75 @@ const DATA = (() => {
       color: '#ff5a4a', color2: '#ffc94d', art: 'egg', target: 'all',
       fx: [dmg(6), status('burn', 5, 'all')], plus: { fx: [dmg(9), status('burn', 7, 'all')] },
       text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. It hatched angry.' },
+
+    // ---- Small fillers: marbles, beads and sweets. Circles r 9-11 so the
+    // claw's cradle scoops two or three at once; each does a little. Tagged
+    // 'small', they stay out of the single-item reward and shop pools and
+    // arrive in starting bins and bags instead. ----
+    { id: 'prize_marble', name: 'Prize Marble', rarity: 'c', cost: 12,
+      tags: ['small'], shape: circle(9), density: 1.3, friction: 0.2, restitution: 0.35,
+      color: '#2ee6d6', color2: '#ff2e88', art: 'orb',
+      fx: [dmg(2)], plus: { fx: [dmg(3)] }, text: 'Deal {v} damage. Someone lost their marbles. Finders keepers.' },
+    { id: 'glass_bead', name: 'Glass Bead', rarity: 'c', cost: 12,
+      tags: ['small'], shape: circle(9), density: 1.0, friction: 0.3, restitution: 0.2,
+      color: '#9fd8ff', color2: '#3b6fd6', art: 'gem', target: 'self',
+      fx: [block(2)], plus: { fx: [block(3)] }, text: 'Gain {v} Block. Tiny, shiny, weirdly stubborn.' },
+    { id: 'peppermint', name: 'Peppermint', rarity: 'c', cost: 15,
+      tags: ['small', 'food'], shape: circle(10), density: 0.8, friction: 0.35, restitution: 0.15,
+      color: '#fff4f4', color2: '#ff2e4a', art: 'orb', target: 'self',
+      fx: [heal(2)], plus: { fx: [heal(3)] }, text: 'Heal {v} HP. Minty fresh courage.' },
+    { id: 'ember_pebble', name: 'Ember Pebble', rarity: 'c', cost: 15,
+      tags: ['small'], shape: circle(9), density: 1.6, friction: 0.5, restitution: 0.1,
+      color: '#ff8a2e', color2: '#ffe066', art: 'gem',
+      fx: [status('burn', 2)], plus: { fx: [status('burn', 3)] }, text: 'Apply {v} Burn. A pebble with a temper.' },
+    { id: 'frost_pearl', name: 'Frost Pearl', rarity: 'c', cost: 18,
+      tags: ['small'], shape: circle(9), density: 1.1, friction: 0.15, restitution: 0.2,
+      color: '#eaf6ff', color2: '#7fb2ff', art: 'snowball',
+      fx: [dmg(1), status('chill', 1)], plus: { fx: [dmg(2), status('chill', 1)] },
+      text: 'Deal {v} damage and apply {v2} Chill. Cultured, and very cold about it.' },
+    { id: 'lead_shot', name: 'Lead Shot', rarity: 'c', cost: 18,
+      tags: ['small', 'metal', 'weapon', 'heavy'], shape: circle(9), density: 2.2, friction: 0.4, restitution: 0.05,
+      color: '#5a6068', color2: '#aab3bd', art: 'orb',
+      fx: [dmg(3)], plus: { fx: [dmg(4)] }, text: 'Deal {v} damage. Heavier than it looks. Everything is.' },
+    { id: 'lucky_penny', name: 'Lucky Penny', rarity: 'c', cost: 10,
+      tags: ['small', 'metal'], shape: circle(10), density: 2.0, friction: 0.3, restitution: 0.3,
+      color: '#d9824a', color2: '#8a4a1a', art: 'coin',
+      fx: [dmg(1), gold(1)], plus: { fx: [dmg(2), gold(2)] }, text: 'Deal {v} damage and gain {v2} gold. Found it face up, obviously.' },
+    { id: 'sour_drop', name: 'Sour Drop', rarity: 'c', cost: 15,
+      tags: ['small', 'food'], shape: circle(9), density: 0.9, friction: 0.35, restitution: 0.15,
+      color: '#b8ff4a', color2: '#3a8a1a', art: 'apple',
+      fx: [status('poison', 2)], plus: { fx: [status('poison', 3)] }, text: 'Apply {v} Poison. So sour it hurts. Them, not you.' },
+    { id: 'bouncy_ball', name: 'Bouncy Ball', rarity: 'c', cost: 10,
+      tags: ['small', 'light'], shape: circle(10), density: 0.5, friction: 0.6, restitution: 0.9,
+      color: '#ff5a4a', color2: '#ffe066', art: 'orb',
+      fx: [dmg(1, 2)], plus: { fx: [dmg(2, 2)] }, text: 'Deal {v} damage {n} times. Hits them, bounces, hits them again.' },
+    { id: 'pocket_die', name: 'Pocket Die', rarity: 'c', cost: 14,
+      tags: ['small'], shape: circle(10), density: 1.1, friction: 0.4, restitution: 0.3,
+      color: '#ffe066', color2: '#12091f', art: 'dice',
+      fx: [random(1, 4)], plus: { fx: [random(2, 5)] }, text: 'Deal {min} to {max} damage. Worn round from years of cheating.' },
+    { id: 'quail_egg', name: 'Quail Egg', rarity: 'c', cost: 12,
+      tags: ['small', 'food'], shape: circle(9), density: 0.9, friction: 0.35, restitution: 0.1,
+      color: '#f4e6c8', color2: '#8a6a4a', art: 'egg', target: 'self',
+      fx: [block(1), heal(1)], plus: { fx: [block(2), heal(2)] }, text: 'Gain {v} Block and heal {v2} HP. Tiny breakfast, tiny armor.' },
+
+    // ---- Bags: reward and shop entries only. The game adds every id in
+    // `bag` to the bin instead of the bag itself, so a bag never sits in a
+    // cabinet (fx stay empty; exhaust is a safety net). ----
+    { id: 'bag_marbles', name: 'Bag of Marbles', rarity: 'c', cost: 30,
+      tags: [], shape: circle(14), density: 1.0, friction: 0.5,
+      color: '#2ee6d6', color2: '#ff2e88', art: 'orb', target: 'none', exhaust: true,
+      bag: ['prize_marble', 'prize_marble', 'prize_marble'], fx: [],
+      text: 'Adds 3 Prize Marbles to your bin. Try not to lose them.' },
+    { id: 'bag_beads', name: 'Bead Pouch', rarity: 'c', cost: 30,
+      tags: [], shape: circle(14), density: 1.0, friction: 0.5,
+      color: '#9fd8ff', color2: '#3b6fd6', art: 'gem', target: 'none', exhaust: true,
+      bag: ['glass_bead', 'glass_bead', 'glass_bead'], fx: [],
+      text: 'Adds 3 Glass Beads to your bin. Some assembly required.' },
+    { id: 'bag_sweets', name: 'Sack of Sweets', rarity: 'c', cost: 30,
+      tags: [], shape: circle(14), density: 1.0, friction: 0.5,
+      color: '#fff4f4', color2: '#ff2e4a', art: 'orb', target: 'none', exhaust: true,
+      bag: ['peppermint', 'peppermint', 'sour_drop'], fx: [],
+      text: 'Adds 2 Peppermints and a Sour Drop to your bin. Dentists hate it.' },
 
     // ---- Junk: clogs the bin, does nothing useful, clears when grabbed ----
     { id: 'rock', name: 'Rock', rarity: 'junk', cost: 0,
@@ -1059,7 +1132,8 @@ const DATA = (() => {
       relic: 'squire_gauntlet',
       bin: ['rusty_sword', 'rusty_sword', 'rusty_sword', 'rusty_sword', 'rusty_sword',
         'dented_shield', 'dented_shield', 'dented_shield', 'dented_shield', 'dented_shield',
-        'spiked_buckler', 'iron_chain', 'crisp_apple'] },
+        'spiked_buckler', 'iron_chain', 'crisp_apple',
+        'prize_marble', 'prize_marble', 'prize_marble', 'glass_bead', 'glass_bead', 'glass_bead'] },
     alchemist: { id: 'alchemist', name: 'Mira Fizzwick', title: 'The Alchemist', color: '#a6ff5e',
       blurb: 'Potions, bombs and poison. Four grabs a turn with a tiny claw. Things tend to fizz.',
       hp: 60, gold: 99, unlock: 'act2', unlockText: 'Reach Act 2 with any Crawler.',
@@ -1067,7 +1141,8 @@ const DATA = (() => {
       relic: 'bubbling_satchel',
       bin: ['toxic_vial', 'toxic_vial', 'toxic_vial', 'toxic_vial',
         'bubble_flask', 'bubble_flask', 'bubble_flask', 'bubble_flask', 'bubble_flask',
-        'cherry_bomb', 'cherry_bomb', 'stink_potion', 'crisp_apple'] },
+        'cherry_bomb', 'cherry_bomb', 'stink_potion', 'crisp_apple',
+        'sour_drop', 'sour_drop', 'peppermint', 'peppermint', 'frost_pearl', 'frost_pearl'] },
     rogue: { id: 'rogue', name: 'Pip Quickclaw', title: 'The Rogue', color: '#ff2e88',
       blurb: 'Daggers, coins and not being there when the hit lands. The fastest rails in the Spire.',
       hp: 65, gold: 100, unlock: 'win', unlockText: 'Win a run with any Crawler.',
@@ -1075,7 +1150,8 @@ const DATA = (() => {
       relic: 'pickpocket_glove',
       bin: ['shiv', 'shiv', 'shiv', 'shiv', 'shiv',
         'old_boot', 'old_boot', 'old_boot', 'old_boot', 'old_boot',
-        'lucky_coin', 'lucky_coin', 'skeleton_key'] },
+        'lucky_coin', 'lucky_coin', 'skeleton_key',
+        'lucky_penny', 'lucky_penny', 'lucky_penny', 'lead_shot', 'lead_shot', 'lead_shot'] },
   };
 
   // ------------------------------------------------------------------- acts
@@ -1115,12 +1191,16 @@ const DATA = (() => {
   // Item ids for a rarity ('c','u','r','l', 'junk', or falsy for any),
   // limited to shared items plus the given character's (all when no char),
   // optionally to items carrying any of the given tags. Starters and junk
-  // are left out unless junk is asked for by name.
+  // are left out unless junk is asked for by name. Small fillers and bags
+  // are left out too (they come in bags, not as single picks) unless the
+  // tags ask for 'small', which lists the fillers themselves.
   function pool(rarity, char, tags) {
+    const wantSmall = !!(tags && tags.indexOf('small') >= 0);
     return ITEM_IDS.filter(id => {
       const d = ITEMS[id];
       if (rarity === 'junk') return d.rarity === 'junk';
-      if (d.rarity === 'junk' || d.starter) return false;
+      if (d.rarity === 'junk' || d.starter || d.bag) return false;
+      if (!wantSmall && d.tags.indexOf('small') >= 0) return false;
       if (rarity && d.rarity !== rarity) return false;
       if (char && d.char && d.char !== char) return false;
       if (tags && tags.length && !tags.some(t => d.tags.indexOf(t) >= 0)) return false;
@@ -1144,9 +1224,13 @@ const DATA = (() => {
     return 'c';
   }
 
+  const BAG_IDS = ITEM_IDS.filter(id => ITEMS[id].bag);
+
   // n distinct item ids for a reward screen. Each slot rolls a rarity by act,
   // then draws from the character's own pool (CHAR_BIAS of the time) or the
   // shared pool, falling back to anything left if that pool is exhausted.
+  // A screen of 3 or more slots then turns its last common slot into a bag
+  // BAG_CHANCE of the time (a bag is common, so rarity shares hold).
   // Deterministic: the same rng state always gives the same ids.
   function rewardItems(rng, act, char, n) {
     n = n == null ? 3 : n;
@@ -1164,6 +1248,11 @@ const DATA = (() => {
       for (const r of ['c', 'u', 'r', 'l']) { if (cand.length) break; cand = fresh(pool(r, char)); }
       if (!cand.length) break;
       out.push(pickFrom(cand));
+    }
+    if (n >= 3 && BAG_IDS.length && rng() < BAG_CHANCE) {
+      let at = -1;
+      for (let i = 0; i < out.length; i++) if (ITEMS[out[i]].rarity === 'c') at = i;
+      if (at >= 0) out[at] = pickFrom(BAG_IDS);
     }
     return out;
   }
@@ -1183,7 +1272,7 @@ const DATA = (() => {
 
   return {
     ITEMS, STATUS, ENEMIES, ENCOUNTERS, RELICS, EVENTS, CLAW_UPGRADES, BRUSHES, CHARACTERS, ACTS,
-    ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RARITY_WEIGHTS, CHAR_BIAS, ECONOMY,
+    ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RARITY_WEIGHTS, CHAR_BIAS, BAG_CHANCE, ECONOMY,
     itemText, pool, rollRarity, rewardItems, relicPool,
   };
 })();
