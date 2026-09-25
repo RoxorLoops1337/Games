@@ -12,7 +12,7 @@ const GAME = (() => {
   // Cabinet interior in stage coordinates (see the stage layout in the bible).
   // Flat floor (no wedges) and a divider at 45% so a long item hanging from
   // the carried claw clears it on the way to the chute.
-  const CAB = { x: 30, y: 410, w: 480, h: 390, chuteW: 64, frame: 30, dividerH: 0.45, wallThick: 40, slopeW: 90, slopeH: 45 };
+  const CAB = { x: 30, y: 410, w: 480, h: 390, chuteW: 64, frame: 30, dividerH: 0.45, wallThick: 40, slopeW: 110, slopeH: 55 };
   const GRAVITY = 1150;         // Claw Crawl's gravity (px/s^2)
   const TILT_G = 510;           // sideways gravity while the bin is tilted
   // Arena band: enemies spread across x0..x1 with their feet on the floor
