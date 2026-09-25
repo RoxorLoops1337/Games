@@ -431,11 +431,18 @@ const PHYS = (() => {
       mkSeg(-8, RIG.lid, w + 8, RIG.lid, 4, 'lid'),
       mkSeg(chuteX - 2, trayY + 4, w + 8, trayY + 4, 4, 'tray'),
     ];
+    // Optional floor slopes: two ramps that push the pile toward the middle so
+    // it heaps up instead of spreading into one thin row across the glass.
+    const slopeW = o.slopeW || 0, slopeH = o.slopeH || 0;
+    if (slopeW > 0 && slopeH > 0) {
+      segs.push(mkSeg(-4, h - slopeH, slopeW, h + 2, 5, 'slopeL'));
+      segs.push(mkSeg(chuteX - slopeW, h + 2, chuteX - 6, h - slopeH, 5, 'slopeR'));
+    }
     W.segs = segs;
     W.clampBox = { xMin: 5, xMax: w - 5, yMin: RIG.clampTop, floorY: h - RIG.floorSink, chuteX, trayY: trayY - RIG.floorSink };
     return {
       segs, bodies: [],
-      bounds: { w, h, chuteX, chuteW, dividerTop, floorY: h, trayY, slopeW: 0, slopeH: 0 },
+      bounds: { w, h, chuteX, chuteW, dividerTop, floorY: h, trayY, slopeW, slopeH },
       inChute(b) { return b.x > chuteX && b.x < w && b.y > dividerTop; },
     };
   }
