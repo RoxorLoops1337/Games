@@ -1222,7 +1222,8 @@ const GAME = (() => {
     FS.watch = false;
     FS.pendingDrop = false;
     if (FS.grabInFlight) grabFinished();
-    FS.dirty = true;
+    // grabFinished can end the fight (win or loss), which clears FS.
+    if (FS) FS.dirty = true;
     if (reason) toast(reason);
   }
   function endTurn() {
