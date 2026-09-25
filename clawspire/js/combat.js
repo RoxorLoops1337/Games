@@ -192,8 +192,17 @@ const COMBAT = (() => {
     const dAct = clamp(num(def.act, 1) | 0, 1, 3);
     const tier = def.tier || 'normal';
     if (tier === 'normal' && dAct < F.act) hp = Math.round(hp * ACT_HP[F.act] / ACT_HP[dAct]);
+    // Global difficulty (DATA.DIFFICULTY): hp and attack values scale together
+    // so the content bands stay readable while the claw's yield changes.
+    const diff = (api.defs() || {}).DIFFICULTY || {};
+    const hpMul = num(diff.hp, 1), dmgMul = num(diff.dmg, 1);
+    let edef = def;
+    if (hpMul !== 1) hp = Math.max(1, Math.round(hp * hpMul));
+    if (dmgMul !== 1 && Array.isArray(def.moves)) {
+      edef = Object.assign({}, def, { moves: def.moves.map(m => (m && (m.k === 'attack' || m.k === 'charge') && m.v != null) ? Object.assign({}, m, { v: Math.max(1, Math.round(m.v * dmgMul)) }) : m) });
+    }
     const e = {
-      uid: newUid(), id, def, hp, maxHp: hp, block: 0, status: {}, intent: null, moveIdx: -1,
+      uid: newUid(), id, def: edef, hp, maxHp: hp, block: 0, status: {}, intent: null, moveIdx: -1,
       alive: true, charged: 0, escaped: false, cyc: 0,
     };
     // Optional starting statuses (e.g. a golem's armor): def.status {s: v}.

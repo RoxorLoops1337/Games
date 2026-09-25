@@ -39,6 +39,12 @@ const DATA = (() => {
   // Map economy the game and map read (balance bot, 40 runs per setting):
   // the bible's ~35% reveal share needs ~20 ink per act. 5 start ink left
   // the map 22% revealed and a rushing player stuck on most maps.
+  // Global difficulty step: the basket claw brings up one or two items on
+  // nearly every drop, so the enemy bands are multiplied here rather than
+  // rewritten. hp scales every enemy's hit points, dmg every attack and
+  // charge value. Tuned with the whole-run bot.
+  const DIFFICULTY = { hp: 1.6, dmg: 1.35 };
+
   const ECONOMY = {
     startInk: 10,          // ink at the start of every act (was 5)
     inkTile: 2,            // an ink tile always gives 2 (was 1, sometimes 2)
@@ -1272,7 +1278,7 @@ const DATA = (() => {
 
   return {
     ITEMS, STATUS, ENEMIES, ENCOUNTERS, RELICS, EVENTS, CLAW_UPGRADES, BRUSHES, CHARACTERS, ACTS,
-    ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RARITY_WEIGHTS, CHAR_BIAS, BAG_CHANCE, ECONOMY,
+    ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RARITY_WEIGHTS, CHAR_BIAS, BAG_CHANCE, ECONOMY, DIFFICULTY,
     itemText, pool, rollRarity, rewardItems, relicPool,
   };
 })();

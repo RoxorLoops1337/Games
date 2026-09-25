@@ -137,7 +137,7 @@ PHYS.clawRig(W, {
   chuteX,           // x above the chute column centre; the carry target
   railY: 26,        // carriage height in interior px
   prongs: 2|3,      // 3 = extra middle prong (draws & grabs better)
-  width: 1,         // palm scale (1 = 74px between open prong tips)
+  width: 1,         // palm scale (1 = 96px between open prong tips, 64px palm)
   grip: 1,          // motor torque scale (0.6 weak .. 2 crushing)
   speed: 1,         // carriage travel scale (1 = 260 px/s), drop 520 px/s, lift 300 px/s
   rubber: 0,        // 0/1: prong tip friction 0.55 -> 1.1
@@ -150,14 +150,17 @@ PHYS.clawRig(W, {
   R.setTarget(x)    // only honoured in 'idle'/'moving'
   R.drop()          // only honoured in 'idle'/'moving'; returns false otherwise
   R.update(dt) -> events[]   // drive kinematics + motors; call BEFORE W.step(dt) each frame
-                             // events: 'drop' 'touch' 'close' 'lift' 'carry' 'release' 'home' 'slip'
+                             // events: 'drop' 'touch' 'close' 'lift' 'carry' 'release' 'home' 'slip' 'shed'
                              // 'slip' = a grip lock broke while lifting/carrying (the item falls back)
+                             // 'shed' = the cradle was full at the lift; the extras stayed in the pile (once per lift)
   R.held() -> bodies currently pinched between prongs (contact with >=2 prongs, or 1 prong + palm), plus locked ones
   R.locked() -> bodies the grip lock is carrying right now (use this for the "holding" hint and the item glow)
   R.open()          // force prongs open (also used at 'releasing')
   R.setConfig({width, grip, speed, prongs, rubber, magnet})  // rebuilds prongs if needed
   R.bodies          // {carriage, palm, prongs:[...], tips:[...]} for the renderer (see below)
   R.geo             // {piv, len, lenU, lenT, beta, len3, open, closed, reach, palmW} for the current width
+  R.cradle(b?)      // with a body: true when its centre is inside the cradle; without: the 4-corner polygon (debug drawing)
+  R.cradleCap()     // items the cradle carries: 2, +1 with prongs 3, +1 at width >= 1.36
   R.cableTop        // {x, y} where the cable leaves the rail (for drawing)
   R.sway            // current pendulum angle (rad) for drawing the cable
 ```
@@ -165,56 +168,85 @@ PHYS.clawRig(W, {
 Rig anatomy (what `R.bodies` holds and how the renderer reads it):
 - Each side prong is TWO bodies: an upper rod `prongs[0..1]` (hinge at the
   palm, tip at local +y) and a hooked tip segment `tips[0..1]` welded at
-  the knee and bent inward by `RIG.hookAngle`. `tips[i]` pairs with
+  the knee and bent inward by `RIG.hookAngle` (0.55 rad). `tips[i]` pairs with
   `prongs[i]`. RENDER.claw draws both from `shape.verts` rotated by `b.a`
   at `(b.x, b.y)` as one finger: a shared ink outline, a rivet at the knee,
   a rubber pad (cfg.rubber) or a chrome highlight at the very tip.
+- Geometry at width 1 (`RIG`): hinges `pivot` 26 px either side of the palm
+  centre, palm 64 wide, prong `prongLen` 53 (42% of it the bent tip,
+  `hookFrac`), `openSpan` 96 px between the open tips, `closedGap` 2 px
+  between the closed inner corners. The two hooks meet under the load, so a
+  closed claw is a basket (the cradle), not a pinch; a closed empty claw
+  never self-intersects.
 - With `prongs: 3`, `prongs[2]` is a GHOST body (`b.ghost === true`, never
   added to the world, `mask: []`): the rig poses it every update from the
   side prongs' mean closedness. It is drawn first (behind) as a shorter
-  straight prong with no hook. Its share of the pinch is modelled by the
-  torque bonus (`RIG.pinch3`) and the lock capacity (`RIG.lock3`), because
-  a physical off-axis third finger shoved items out in every geometry tried.
+  straight prong with no hook. Its share of the hold is modelled by the
+  torque bonus (`RIG.pinch3`), the lock capacity (`RIG.lock3`) and one extra
+  cradle slot, because a physical off-axis third finger shoved items out in
+  every geometry tried.
 - The dig: while dropping, the first prong or tip contact does not stop the
   drop. The claw keeps sinking `RIG.dig` (30) px past that first touch so the
   hooks slide down around the target instead of closing in mid-air above a
   neighbour; the drop ends early only when the palm itself lands or the
   closed tips would reach the floor (`RIG.floorClear`). The palm can end
   below the pile top.
-- The grip lock: when 'closing' ends, every pinched body (>= 2 prongs, or 1
-  prong + palm) is tied to the palm with a stiff, force-capped spring
-  (`engageLocks`); bodies pinched during the first `RIG.lockWindow` (0.6 s)
-  of the lift lock too. The prongs stop colliding with what they hold and
-  freeze at their closed pose; the motor drops to `RIG.lockHoldMul` (0.12) of
-  its torque so it cannot squeeze the item out. The lock's capacity is the
-  grip: `RIG.lockForce` (6e6) x grip, x `RIG.lockRubber` (1.45) with rubber
-  tips, x `RIG.lock3` (1.3) with a third prong, x `RIG.lockPalmOnly` (0.8)
-  for a one-prong-plus-palm pinch. A filtered load (`RIG.lockTau` 0.06 s)
-  above the capacity (with the +-12% jitter), or a sag past
-  `RIG.lockBreakDist` (16 px), breaks the lock: the rig emits 'slip' and the
-  item falls. `RIG.lockGrace` (0.12 s) after engaging nothing breaks.
-  Item-mass ladder: base grip 1 holds items up to about mass 1800 through a
-  lift and carry; rubber x1.45 -> ~2600, third prong x1.3 -> ~2340, both
-  ~3400; each grip upgrade is +0.35. The tower shield (mass 4320) needs
-  grip ~2.3, or grip 1.6 + rubber.
+- The settle: 'closing' ends `RIG.settleT` (0.15 s) after the prongs have
+  been quiet for `RIG.quietT` (0.15 s), or after `RIG.closeMax` (0.7 s) plus
+  the settle when wedged. The claw visibly clenches before it lifts.
+- The cradle lock: when 'closing' ends, every dynamic non-claw body whose
+  centre lies inside the cradle (the polygon left hinge -> left tip -> right
+  tip -> right hinge, expanded outward by `RIG.cradleMargin` 8 px), plus any
+  body pinched by two prongs or a prong and the palm, is tied to the palm
+  with a stiff, force-capped spring (`engageLocks`). Bodies merely touched
+  from outside are not. Bodies that arrive during the first `RIG.lockWindow`
+  (0.6 s) of the lift lock too, while there is room. The prongs stop
+  colliding with what they hold and freeze at their closed pose; the motor
+  drops to `RIG.lockHoldMul` (0.12) of its torque so it cannot squeeze the
+  load out. The lock's capacity is the grip: `RIG.lockForce` (5.5e6) x grip
+  x grippiness, x `RIG.lockRubber` (1.45) with rubber tips, x `RIG.lock3`
+  (1.3) with a third prong (x `RIG.lockPalmOnly` 0.8 only for a one-prong
+  pinch outside the cradle). A filtered load (`RIG.lockTau` 0.25 s) above
+  the capacity (with the +-12% jitter), or a sag past `RIG.lockBreakDist`
+  (16 px), breaks the lock: the rig emits 'slip' and the item falls through
+  the claw (it keeps passing through the prongs until the grab ends, so the
+  frozen prongs need not open). `RIG.lockGrace` (0.12 s) after engaging
+  nothing breaks. The lift eases out at the top (a dead stop was a 13 g jerk
+  that shook heavy items loose).
+  Item-mass ladder: base grip 1 holds items up to about mass 2800 through a
+  lift and carry (the anvil, 2720, rides; the tower shield, 4320, does not);
+  rubber x1.45 -> ~4000, third prong x1.3 -> ~3600, both ~5200; each grip
+  upgrade is +0.35. The tower shield needs grip ~1.55, or grip 1.1 + rubber.
+- Capacity N: the cradle carries at most `R.cradleCap()` items: 2 at base,
+  +1 with the third prong, +1 at width >= 1.36 (Wider Palm x2). Members ride
+  in order of how central they sit under the palm (the aimed item is
+  central); the extras beyond N stay in the pile as the claw rises and the
+  rig emits one 'shed' (not a slip). The prongs ignore the walls while the
+  claw is up (carrying, releasing, returning) so a wide claw can open over
+  the chute without wedging against the cabinet side.
 - Item-centred release: while carrying, the carriage target is the chute
-  centre minus the mean lock offset of the held items (`carryX`), so an item
-  gripped off-centre still drops inside the chute column. Release opens the
-  prongs slowly (`RIG.releaseSpeed`, `RIG.releaseTorque`) so the load falls
-  straight down.
+  centre minus the mean lock offset of the held items (`carryX`), so items
+  gripped off-centre still drop inside the 64 px column; the carriage may
+  tuck `RIG.carryTuck` (6 px) past the wall clearance and never presses a
+  held item into the wall. Release opens the prongs slowly
+  (`RIG.releaseSpeed`, `RIG.releaseTorque`) so the load falls straight down;
+  two items side by side both land in the column, and the divider's sloped
+  lip tips a straggler in.
 
 Feel requirements (these are the game):
 - Prongs close with a torque *limit*, not a fixed angle: a fat item stops
   them early and is held by pinch + friction; a thin one they close past.
 - Held items can slip: during 'lifting' and 'carrying' the carriage
   acceleration shakes the palm (pendulum sway) and the motor torque jitters
-  ±12% (rand); marginal holds fail, good holds don't. With `grip:2` almost
-  nothing slips; with `grip:0.6` heavy items usually slip.
+  +-12% (rand); marginal holds fail, good holds don't. With `grip:2` almost
+  nothing slips; with `grip:0.6` heavy items usually slip. Ordinary items
+  at grip 1 almost never slip; junk does.
 - Items must never tunnel out of the cabinet (cap speeds at 2400 px/s, thick
   walls, substeps).
 - A pile of 30 items settles to rest (max speed < 2 px/s) within 3 seconds
   and does not jitter or explode. Provide `W.energy()` (sum ½mv²) for tests.
-- `closing` ends when prong angular velocity ~0 for 0.15s or after 0.7s.
+- `closing` ends 0.15 s (the settle) after prong angular velocity has been ~0
+  for 0.15 s, or 0.15 s after the 0.7 s cap.
 - After 'release' over the chute, the rig returns home and opens; the game
   decides delivery with `C.inChute()`.
 - Kinematic palm follows the carriage with a pendulum: `sway` is a damped
@@ -224,22 +256,33 @@ Feel requirements (these are the game):
 Tests (`tests/clawspire_physics.test.mjs`, yours): stacking settles; no
 escapes over 60s of shaking; strong grip lifts a 30px circle from a flat
 floor 9/10 drops; weak grip drops a heavy 50px box most of the time; sword
-(44×10 box) is harder to lift than a ball; a 3-prong rig lifts more often
-than 2-prong on the same seed; determinism (same inputs => same positions).
+(44x10 box) delivers >= 17/20 at grip 1 and slick junk slips; two r=12 balls
+side by side both lock and deliver >= 7/10; three balls -> 2 carried at
+base, 3 with the third prong; a 3-prong rig lifts more often than 2-prong on
+the same seed; the closed claw does not self-intersect; determinism (same
+inputs => same positions).
 
 #### Slippery items (grip lock hazard)
 
-Beyond weight, an item's shape and surface decide how well it rides the lift:
-`grippiness` is 1 for balls, 0.55 for long thin things (local aspect >= 3:
-swords, chains, wands), 0.75 for small flat discs (coins), 0.65 for glass or
-ice or very low friction. It scales the lock's break force AND gives the item a
-per-second slip hazard (`RIG.slipRate * (1 - grippiness)`) during the jerky
-part of the ride (the lift and the first half second of carriage travel; a
-quarter of that once cruising). Grip upgrades, rubber tips (x1.45) and the
-third prong (x1.3) all divide the hazard. A slip twitches the prongs open for
-0.3 s so the item really falls, emits `'slip'`, and the item cannot re-lock
-during that grab. At grip 1 a lone sword is delivered about two times in
-three; with rubber and two grip upgrades about nine times in ten.
+Slips are rare for ordinary items. `grippiness` scales the lock's break
+force and gives a locked item a per-second slip hazard
+`RIG.slipRate` (0.25) x (1 - grippiness) during the jerky part of the ride
+(the lift and the first half second of carriage travel; a quarter of that
+once cruising). Grip upgrades, rubber tips (x1.45) and the third prong
+(x1.3) all divide the hazard. `data.grip` on a body overrides the table.
+
+| item | grippiness | hazard at grip 1 |
+| --- | --- | --- |
+| balls, boxes, most shapes | 1 | none |
+| long thin (local aspect >= 4: sword, wand, chain) | 0.85 (`gripThin`) | 0.04/s, about 1 in 20 |
+| tiny discs / marbles (circle r < 10, `gripDiscR`) | 0.75 (`gripDisc`) | 0.06/s |
+| glass, ice, or friction < 0.2 | x0.8 (`gripSlick`) | 0.05/s |
+| junk (tags 'junk': rock, slag, ice block) | hazard grippiness x0.6 (`gripJunk`), capacity unchanged | rock 0.10/s, ice block 0.15/s, about 1 in 4 |
+
+A slip emits `'slip'`; the item falls through the claw and cannot re-lock
+during that grab; if nothing is left held the prongs twitch open for 0.3 s
+so the fall reads. A lone sword at grip 1 is delivered about 19 times in 20;
+a rock about 3 in 4; the anvil rides at grip 1.
 
 ### `js/data.js` -- `DATA`
 
@@ -535,6 +578,12 @@ and stepping `GAME.update(1/60)` until the grab finishes → items played → en
 rewards → shop → boss → act 2 → save/load round trip → game over path.
 
 ## Balance targets (v1)
+
+`DATA.DIFFICULTY = { hp, dmg }` multiplies every enemy's hit points and every
+attack/charge value on top of the bands below (combat.js makeEnemy). It is the
+one dial to turn when the claw's yield changes; the basket claw ships at
+hp 1.6, dmg 1.35.
+
 
 - Character HP 70 (knight 80, alchemist 60, rogue 65). Act 1 normal enemies 12-30 hp,
   hit for 4-8. Act 2 ×1.7, act 3 ×2.6. Elites ×2.2 hp of a normal; bosses 90/170/280 hp.
