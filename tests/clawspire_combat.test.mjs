@@ -375,8 +375,8 @@ h.test('enemy hp roll and act scaling', () => {
   const hs = new Set(); for (let s = 1; s < 40; s++) { const F = fight(['ranged'], { seed: s }); hs.add(E0(F).hp); h.ok(E0(F).hp >= 10 && E0(F).hp <= 20 && E0(F).maxHp === E0(F).hp, 'hp rolled in range'); }
   h.ok(hs.size > 3, 'hp varies by seed');
   h.eq(fight(['hitter'], { act: 1 }).enemies[0].hp, 60, 'same act x1.0');
-  h.eq(fight(['hitter'], { act: 2 }).enemies[0].hp, 102, 'act1 def in act2 x1.7');
-  h.eq(fight(['hitter'], { act: 3 }).enemies[0].hp, 156, 'act1 def in act3 x2.6');
+  h.eq(fight(['hitter'], { act: 2 }).enemies[0].hp, 120, 'act1 def in act2 x2.0');
+  h.eq(fight(['hitter'], { act: 3 }).enemies[0].hp, 192, 'act1 def in act3 x3.2');
   h.eq(fight(['elite1'], { act: 3 }).enemies[0].hp, 50, 'elites never scale');
   h.eq(fight([], {}).enemies.length, 1, 'empty encounter still builds a fight');
 });
@@ -550,5 +550,17 @@ else {
     h.ok(turns >= 300, `ran ${turns} turns over ${fights} fights (${over} finished)`);
   });
 }
+
+h.test('a dry turn (nothing played) pours the used pile back in', () => {
+  const run = { hp: 70, maxHp: 70, act: 1, bin: ['sword', 'sword', 'sword', 'sword', 'sword', 'sword'].map(id => ({ id })), relics: [], claw: {} };
+  const F = COMBAT.newFight(run, ['dummy'], U.rng(3));
+  COMBAT.play(F, F.bin[0]); COMBAT.play(F, F.bin[0]);
+  h.eq(F.used.length, 2, 'two played');
+  COMBAT.endTurn(F);
+  h.eq(F.bin.length, 4, 'a turn that played something does not refill a 4-item bin');
+  const ev = COMBAT.endTurn(F);
+  h.eq(F.bin.length, 6, 'a dry turn refills');
+  h.ok(ev.some(e => e.t === 'refill'), 'with a refill event');
+});
 
 h.done();

@@ -504,7 +504,7 @@ rewards → shop → boss → act 2 → save/load round trip → game over path.
   hit for 4-8. Act 2 ×1.7, act 3 ×2.6. Elites ×2.2 hp of a normal; bosses 90/170/280 hp.
 - A turn is 3 grabs; a good grab lands 1 item, a great one 2. Average item ≈ 6 dmg or 5 block.
   A typical act 1 fight lasts 4-6 turns. Whole run ≈ 25-35 minutes.
-- Gold: 10-25 per fight, items 40-120, relics 120-220, claw upgrades 80-160, remove 60.
+- Gold: 10-25 per fight, items 40-120, relics 120-220, claw upgrades 50-160 (Extra Token 160, the rest 50-110), remove 60.
 - Ink: 5 per act start, +1-2 from ink tiles, +1 from elites. ~35% of the map is revealed in a
   normal run; revealing more = more fights = more loot but more risk.
 
