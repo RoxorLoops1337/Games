@@ -298,9 +298,9 @@ h.test('prices: items, claw upgrades and shop stock are affordable', () => {
     const c = DATA.CLAW_UPGRADES[id];
     h.ok(c.cost >= 50 && c.cost <= 180, `claw ${id} costs ${c.cost} (50..180)`);
   }
-  // A fresh crawler at an act 1 shop: at least two of the five items plus
-  // one claw upgrade fit in the gold a first act brings (start gold plus
-  // three fights of 10-25).
+  // A fresh crawler at an act 1 shop: at least two of the five items fit in
+  // the gold a first act brings (start gold plus three fights of 10-25).
+  // Claw upgrades are not sold (bosses and towers only); their costs stay.
   const G = boot().GAME;
   let ok = 0, n = 0;
   for (let s = 1; s <= 40; s++) {
@@ -312,6 +312,7 @@ h.test('prices: items, claw upgrades and shop stock are affordable', () => {
       n++;
       if (prices[0] + prices[1] <= budget) ok++;
       h.ok(shop.items.every(i => i.price <= 150), `seed ${s} ${ch}: no item above 150 gold`);
+      h.ok(!shop.claws, `seed ${s} ${ch}: no claw upgrades for sale`);
     }
   }
   h.ok(ok / n >= 0.95, `two items affordable at the first shop in ${Math.round(100 * ok / n)}% of shops`);
