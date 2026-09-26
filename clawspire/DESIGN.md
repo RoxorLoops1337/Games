@@ -21,7 +21,8 @@ arcades run by the **Prize Master**, who turns adventurers into prizes.
   Train style upgrades on items, relics that bend the rules, three acts, three
   characters, meta unlocks.
 - **Upgrade the claw itself:** more grabs per turn, a wider claw, stronger
-  grip, a third prong, rubber tips, a magnet.
+  grip, a third prong, rubber tips, a magnet. Claw upgrades are rare: only a
+  boss (the spare parts screen after acts 1 and 2) or a tower bonus grants one.
 
 Tone: chunky cartoon vector art (thick outlines, big shapes, readable at phone
 size), neon arcade meets damp dungeon. Palette: deep purple ink `#12091f`,
@@ -319,7 +320,7 @@ DATA.RELICS[id] = { id, name, icon, rarity:'c'|'u'|'r'|'boss'|'event', text,
 At least **28 relics**. Hooks are functions in data.js (this is fine).
 
 ```js
-DATA.EVENTS[id] = { id, title, text, art?: string, choices: [ { txt, sub?: 'cost/benefit line', fx: [ {k:'hp', v}, {k:'maxhp', v}, {k:'gold', v}, {k:'ink', v}, {k:'brush', id}, {k:'item', id|'random'|'rare'}, {k:'relic', id|'random'}, {k:'remove'} /*player picks an item to remove*/, {k:'upgrade'} /*player picks an item to upgrade*/, {k:'claw', u: upgradeId}, {k:'fight', enc: [ids], elite?: true}, {k:'junk', id, n} ], cond?: (run) => bool } ] }
+DATA.EVENTS[id] = { id, title, text, art?: string, choices: [ { txt, sub?: 'cost/benefit line', fx: [ {k:'hp', v}, {k:'maxhp', v}, {k:'gold', v}, {k:'ink', v}, {k:'brush', id}, {k:'item', id|'random'|'rare'}, {k:'relic', id|'random'}, {k:'remove'} /*player picks an item to remove*/, {k:'upgrade'} /*player picks an item to upgrade*/, {k:'claw', u: upgradeId} /*resolver only: no event uses it, claw upgrades come from bosses and towers*/, {k:'fight', enc: [ids], elite?: true}, {k:'junk', id, n} ], cond?: (run) => bool } ] }
 ```
 At least **14 events**. All choices must resolve in `game.js` with the kinds above.
 
@@ -365,7 +366,7 @@ F = {
   events: [],          // append-only log of this turn for the renderer (game drains it)
   relics: [ids], claw: {...run.claw}, log: []
 }
-COMBAT.startTurn(F)               // block reset (unless shield_up), grabs = grabsMax (+relic mods), regen/poison ticks, refill bin from used if bin.length < 3 (emit {t:'refill', items}), freeze costs a grab
+COMBAT.startTurn(F)               // block reset (unless shield_up), grabs = grabsMax (+relic mods), regen/poison ticks, bin trickle: top the bin up from used (random picks) to DATA.ECONOMY.binFloor (6) plus DATA.ECONOMY.trickle (2) more, never above MAX_CABINET (emit {t:'refill', items}); a dry turn (nothing played) pours the whole used pile back instead; an empty bin mid-turn refills at once; freeze costs a grab
 COMBAT.useGrab(F)                 // a drop was made: grabs -= 1, grabsUsed += 1 (returns false if none left)
 COMBAT.play(F, inst, targetIdx?) -> events   // resolve an item's fx; moves inst bin->used (or exhausted)
 COMBAT.endTurn(F) -> events       // player burn ticks; enemies act in order (intents), statuses tick; then startTurn for next turn unless over
@@ -394,7 +395,7 @@ Enemy `charge` sets `charged` and next turn's attack does v.
 
 Tests (`tests/clawspire_combat.test.mjs`, yours, use tiny inline item/enemy fixtures via
 `DATA` if present or a stub): damage math (str/weak/vuln/block/armor/thorns/dodge), every status
-ticks and decays as specified, freeze skips, chill→freeze, refill when the bin runs low,
+ticks and decays as specified, freeze skips, chill→freeze, the turn-start trickle (floor, cap, empty used pile) and the mid-turn refill,
 exhaust, win/lose detection, intents cycle, every `DATA.ENEMIES` move kind and every
 `DATA.ITEMS` fx kind resolves without throwing, a 200-turn fuzz with random plays never
 NaNs hp.
@@ -409,7 +410,7 @@ puts the start at the bottom middle and the boss at the top middle and turns eve
 flat-top. Icons, labels, the ink pill and the axis chevrons stay upright; only positions
 transform. Hexes are a fixed `MAP.HEX = 46` px, so the world is about 1540 × 1310 stage px
 (`MAP.bounds`) and never fits the 540 × 768 map area: the map screen is a camera (see GAME).
-All tiles hidden except the start's neighbours; the boss tile is always visible.
+All tiles hidden except the road (below), the start's neighbours and the boss tile.
 
 **Terrain.** Every tile carries `terrain` (`'land' | 'shallow' | 'sea'`), `elev` (0..1: height
 on land, depth on water), `coast` (land touching water) and `biome` (per act: 1 `cellar`
@@ -434,6 +435,38 @@ per island: the shortest sea crossing to the mainland becomes `shallow`. `M.isla
   a treasure, an elite, half the time a shop. Spread rules are relaxed there. Every land hex
   is reachable from the start through land and fords.
 
+**The road.** The player can always reach the boss without spending a drop of ink: at
+generate the guaranteed land route from the start to the boss becomes a lit road (`tile.road`,
+`tile.revealed`, `M.road = [[q, r], ...]` in walking order from the start to the boss,
+`MAP.isRoad(tile)`). It is carved after the content is placed (`carveRoad`): a land-only
+Dijkstra over the mainland with a seeded wobble per tile and a toll on elites and towers, routed
+start -> rest -> shop -> boss where the rest and the shop are the mainland ones with the least
+detour that the road really passes within one hex of (a stop walled into a corner is skipped for
+the next candidate). Bends are then added into the widest column gap, first one side of the axis
+then the other, reaching further each round, until the road runs `MAP.ROAD_MEANDER = [1.15, 1.6]`
+times the straight hex distance; a bend that changes nothing or makes it too long is dropped, and a
+stop is dropped when the stops alone push it past the range. The road never repeats a tile, never
+crosses water and never passes through the boss. Its tiles keep whatever content they rolled
+(fights, events, a shop...): walking the road is still a run, and ink is for everything off it
+(islands, towers, the rests and forges the road does not touch). The road is drawn as a worn
+ochre track between its hexes over a lighter plate (`RENDER.mapRoad`, `st.road` in `RENDER.hex`),
+`progress()` counts it as charted, and it survives the save round trip; a save from before the
+road loads with `M.road = []` and plays as before (the ink rescue is the last resort there).
+
+**Click to travel.** Tapping any lit hex the player can reach through lit hexes starts an
+auto-walk (`GAME.startWalk`, `S.walk = { path, i, t, from, done }`): the first step is taken at
+once (a tap on a neighbour is the old one-step move), the rest every `GAME.WALK_STEP = 0.28` s,
+the crawler easing between hex centres (`GAME.walkXY`, drawn by `RENDER.crawler`, the portrait
+riding along), the camera following, a step sfx per hex. Each step calls `MAP.move` then
+`enterTile`; a step onto anything that resolves (any type but empty/start that is not `done`, or
+a ford) ends the walk there and drops the rest of the path; a ford on the way is paid when stepped
+on (2 ink) and one the player cannot pay stops the walk in front of it with a toast; a tap during
+the walk stops it at the current hex. The path comes from `MAP.walkPath(M, q, r)`: Dijkstra over
+lit non-sea tiles, never through the boss, cheapest by ink first (a ford is `SHALLOW_COST`), then
+by steps, then skirting content that still resolves (a walk to a far rest does not blunder into
+a fight), then keeping to the road. Painting a hidden path (second tap) also walks it, stopping
+at the first thing that resolves. The walk is never saved; `toMap()` clears it.
+
 **Landmarks.** Hidden tiles of type shop, rest, forge, elite, treasure, boss and tower are
 `known` from the start: the fog shows their icon as a dim ink sketch with a dashed rim, so
 the player can see what is worth spending ink on. Fights, gems, ink pots, events, brushes
@@ -449,30 +482,32 @@ generate (`content.tower.bonus`): `{k:'ink', n:2}`, `{k:'brush', id}`, `{k:'claw
 or `{k:'gold', n:60}`.
 
 **Path paint.** Tapping a hidden hex that does not touch the lit area previews the cheapest
-hidden path to it (Dijkstra from every lit tile, never through the boss or the sea, fords
-count double) with its ink cost on the tile; tapping it again paints the whole path for that
-cost, or a toast says how much ink is missing. Tapping anywhere else clears the preview.
-Hidden hexes next to the light keep the one-tap reveal. The start-to-boss axis is drawn as a
-faint dotted line with chevrons that shows through the fog; the current hex has a breathing
-gold rim, walkable hexes a thick pulsing cyan rim.
+hidden path to it (Dijkstra from every lit tile, the road included, never through the boss or
+the sea, fords count double) with its ink cost on the tile; tapping it again paints the whole
+path for that cost and the crawler walks it, or a toast says how much ink is missing. Tapping
+anywhere else clears the preview. Hidden hexes next to the light keep the one-tap reveal. The
+start-to-boss axis is drawn as a faint dotted line with chevrons that shows through the fog; the
+current hex has a breathing gold rim, walkable hexes a thick pulsing cyan rim.
 
 **Ink economy (world size).** `DATA.ECONOMY` stays the source: startInk 10 per act, ink tiles
 give 2 and sit at 10% of the land (`DIST.ink`), a won normal fight drops 1 ink half the time,
 elites 2, towers 2 (`TOWER_INK`). `MAP.INK_PER_ACT_HINT = 24` is the ink a sensible route
-through one act should find; the balance pass reasons from it. The ink rescue (GAME) pays the
-shortfall for the cheapest useful step, so a player stranded on an island with a lit or
-hidden ford gets the 2 it needs, never just 1.
+through one act should find; the balance pass reasons from it. The ink rescue (GAME) is the
+last resort: with the road lit it never fires for a player who can walk to the boss without
+wading; otherwise (an island with a spent ford, an old save) it pays the shortfall for the
+cheapest useful step, so a player stranded with a lit or hidden ford gets the 2 it needs.
 
 ```js
 MAP.generate({act, rng, cols: 16, rows: 22, ink, brushes, water: 0.28, islands}) -> M    // cols clamps to >= 9, rows to >= 3
-M = { act, biome, cols, rows, tiles: { 'q,r': { q, r, type, terrain, elev, coast, biome, revealed, visited, known, content } },
-      start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [ids], revealedCount, islands, water }
+M = { act, biome, cols, rows, tiles: { 'q,r': { q, r, type, terrain, elev, coast, biome, revealed, visited, known, road, content } },
+      start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [ids], revealedCount, islands, water, road: [[q,r], ...] }
 tile.type: 'empty'|'fight'|'elite'|'treasure'|'gem'|'ink'|'brush'|'event'|'shop'|'rest'|'boss'|'start'|'forge' (item upgrade)|'tower'
 tile.content: { enc?: [ids], gold?, ink?, brush?, event?, tower?: { bonus }, ... } rolled at generate ({} on water)
 Distribution per act (share of the placeable land): fight 28%, empty 16%, gem 10%, ink 10% (min 4), event 8%, treasure 4% (min 2), brush 4% (min 2), shop 4% (min 3), rest 5% (min 3), forge 3% (min 2), elite 3% (min 2, never adjacent to start or boss), tower 3.5% (min 2, max 3). Elites/fights get harder with distance from start (content.diff = 0..1 by column).
 MAP.HEX = 46  MAP.WATER = 0.28  MAP.SHALLOW_COST = 2  MAP.INK_PER_ACT_HINT = 24  MAP.TERRAINS  MAP.BIOMES {1:'cellar',2:'foundry',3:'vault'}  MAP.DIRS
 MAP.key(q, r) MAP.neighbors(M, q, r) -> [[q,r]] (in-bounds only)
 MAP.isLandmark(tile) -> bool     // shop, rest, forge, elite, treasure, boss, tower
+MAP.isRoad(tile) -> bool         // on the lit start-to-boss road   MAP.ROAD_MEANDER = [1.15, 1.6]  MAP.ROAD_TOLL {elite, tower}
 MAP.biomeOf(act) -> biome        MAP.islandsOf(M) -> [[tileKeys], ...] largest first
 MAP.revealCost(tile) -> 1 | 2 | Infinity   MAP.moveCost(tile) -> 0 | 2 | Infinity   MAP.pathCost(M, path) -> ink
 MAP.canReveal(M, q, r) -> bool   // hidden, in bounds, not sea, adjacent to a revealed tile, ink >= revealCost
@@ -485,16 +520,20 @@ MAP.brush(M, brushId, q, r) -> tiles[]  // reveals the brush cells (no ink cost,
 MAP.canMove(M, q, r) -> bool     // revealed, not sea, adjacent to pos, ink >= moveCost
 MAP.move(M, q, r) -> tile        // sets pos, marks visited, spends moveCost
 MAP.walkCost(M, from, to, {any, land, ink}) -> ink | -1   // least ink to walk there (fords 2 each); any ignores the fog, land allows land only
+MAP.walkPath(M, q, r) -> [[q,r], ...] | null   // click-to-travel steps after pos, ending on (q, r): lit tiles only, never through the boss, cheapest by ink, then steps, then skirting unvisited content, then the road; null for pos, hidden, sea, cut off
 MAP.pathExists(M, from, to, opts) -> bool   // walkCost >= 0, and <= opts.ink when given
 MAP.toPixel(q, r, size, orient='h') -> {x, y}   // pointy-top axial to pixel, (0,0) at (size, size); 'v' transposes to (y, -x)
 MAP.fromPixel(x, y, size, orient='h') -> {q, r}  // with cube rounding; inverse for either orientation
 MAP.hexCorners(x, y, size, orient='h') -> [{x,y} x6]  // pointy-top, or flat-top (turned 30 degrees) for 'v'
-MAP.progress(M) -> {revealed, total, pct}   // total leaves out the sea
-MAP.serialize(M) / MAP.deserialize(o)       // old saves without terrain load as dry land
+MAP.progress(M) -> {revealed, total, pct}   // total leaves out the sea; the road counts as charted
+MAP.serialize(M) / MAP.deserialize(o)       // old saves without terrain load as dry land, without a road as M.road = []
 ```
 Tests (`tests/clawspire_map.test.mjs`): generation counts/minimums for 200 seeds (10 × 7 with terrain)
 and 100 seeds of the 16 × 22 world (water 20-40%, 2-4 islands with a tower and a treasure, a mainland
-tower, fords, ink at 10% of the land), land route start -> boss, start neighbourhood land, water empty
+tower, fords, ink at 10% of the land), the road (lit, all land, start to boss, no tile twice, meander
+1.15..1.6 on the world, past a rest and a shop, boss walkable for 0 ink at generate, save round trip,
+old saves without one), walkPath (lit only, cheapest by ink, exact hex distance when all is lit,
+skirting unvisited content, road preferred), land route start -> boss, start neighbourhood land, water empty
 and unknown, coast flags, every land hex reachable through fords, landmarks known exactly on their
 types, reveal/wade costs on fords, pathToReveal cheapest by ink (checked against an independent
 Dijkstra) and never over the sea, revealPath spends exactly pathCost, brushes skip the sea, bounds(),
@@ -550,7 +589,7 @@ shop, events, rest, map flow, meta unlocks. Exposes `window.CS = { U, PHYS, DATA
 GAME.run    // current run R: { seed, char, act, hp, maxHp, gold, ink, brushes, bin:[inst], relics:[ids], claw:{...}, map: M, floor, kills, turns, grabs, jackpots, history }
 GAME.fight  // current F or null
 GAME.rig, GAME.world, GAME.cabinet   // live physics while fighting
-GAME.screen // 'title'|'chars'|'map'|'fight'|'reward'|'shop'|'event'|'rest'|'forge'|'treasure'|'gameover'|'win'|'help'|'collection'
+GAME.screen // 'title'|'chars'|'map'|'fight'|'reward'|'shop'|'event'|'rest'|'forge'|'treasure'|'parts'|'gameover'|'win'|'help'|'collection'
 GAME.newRun(charId, seed?) GAME.toMap() GAME.enterTile(tile) GAME.startFight(enemyIds, tier) GAME.endFight(result)
 GAME.dropClaw() GAME.steer(x) GAME.endTurn() GAME.playDelivered(bodies)
 GAME.save() GAME.load() GAME.meta (unlocks, bests, stats; key 'clawspire_meta'), run key 'clawspire_run'
@@ -603,7 +642,7 @@ rogue 13% wins over 8 runs each); the owner tunes it by hand from there.
   hit for 4-8. Act 2 ×1.7, act 3 ×2.6. Elites ×2.2 hp of a normal; bosses 90/170/280 hp.
 - A turn is 3 grabs; a good grab lands 1 item, a great one 2. Average item ≈ 6 dmg or 5 block.
   A typical act 1 fight lasts 4-6 turns. Whole run ≈ 25-35 minutes.
-- Gold: 10-25 per fight, items 40-120, relics 120-220, claw upgrades 50-160 (Extra Token 160, the rest 50-110), remove 60.
+- Gold: 10-25 per fight, items 40-120, relics 120-220, remove 60. Claw upgrade costs (50-160) are kept in data but nothing sells them: shops stock items, a relic, remove and sell; rest stops heal 30% or upgrade an item; the act transition after a boss (acts 1 and 2) shows "The Prize Master's spare parts" (1 of 3 unmaxed claw upgrades) before the boss relic; towers keep their claw bonus.
 - Ink: 5 per act start, +1-2 from ink tiles, +1 from elites. ~35% of the map is revealed in a
   normal run; revealing more = more fights = more loot but more risk.
 

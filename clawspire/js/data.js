@@ -50,6 +50,8 @@ const DATA = (() => {
     inkTile: 2,            // an ink tile always gives 2 (was 1, sometimes 2)
     fightInkChance: 0.5,   // a won normal fight drops 1 ink this often
     eliteInk: 2,           // ink for beating an elite (was 1)
+    trickle: 2,            // used items that rain back into the bin at every turn start
+    binFloor: 6,           // a bin below this at turn start is topped up from the used pile first (then the trickle)
   };
 
   // ------------------------------------------------------------ shape kit
@@ -934,6 +936,8 @@ const DATA = (() => {
 
   // -------------------------------------------------------- claw upgrades
   // Each upgrade counts itself on claw.ups so apply() can refuse past max.
+  // Granted only by the boss spare-parts screen (acts 1 and 2) and tower
+  // bonuses; no shop, rest stop or event sells them. cost stays for later use.
   // Returns true when applied, false when already maxed.
   function upgrade(id, max, fn) {
     return (claw) => {
@@ -965,7 +969,6 @@ const DATA = (() => {
 
   // ----------------------------------------------------------------- events
   const hasGold = (n) => (run) => (run && run.gold || 0) >= n;
-  const canUp = (id) => (run) => !((run && run.claw && run.claw.ups && run.claw.ups[id] || 0) >= CLAW_UPGRADES[id].max);
   const LEAVE = { txt: 'Walk away.', sub: 'Nothing happens.', fx: [] };
   const EVENT_LIST = [
     { id: 'out_of_order', title: 'Out of Order', art: 'mimic',
@@ -985,9 +988,9 @@ const DATA = (() => {
     { id: 'goblin_mechanic', title: 'Goblin Mechanic', art: 'goblin',
       text: 'A goblin in greasy overalls offers to "tune" your Rig. He is holding the wrench upside down.',
       choices: [
-        { txt: 'Pay 70 gold.', sub: 'Lose 70 gold. Stronger claw motor.', fx: [{ k: 'gold', v: -70 }, { k: 'claw', u: 'grip' }],
-          cond: (run) => hasGold(70)(run) && canUp('grip')(run) },
-        { txt: 'Let him experiment.', sub: 'Lose 8 HP. Faster claw rails.', fx: [{ k: 'hp', v: -8 }, { k: 'claw', u: 'speed' }], cond: canUp('speed') },
+        { txt: 'Pay 70 gold.', sub: 'Lose 70 gold. He sells you a part he "found": a random relic.', fx: [{ k: 'gold', v: -70 }, { k: 'relic', id: 'random' }],
+          cond: hasGold(70) },
+        { txt: 'Let him experiment.', sub: 'Lose 8 HP. Upgrade two items.', fx: [{ k: 'hp', v: -8 }, { k: 'upgrade' }, { k: 'upgrade' }] },
         { txt: 'No thanks.', sub: 'Nothing happens.', fx: [] },
       ] },
     { id: 'ink_squid', title: 'The Ink Squid', art: 'scroll',
@@ -1030,7 +1033,7 @@ const DATA = (() => {
       text: 'A tiny claw machine full of paper fortunes. One of them just says "LEFT".',
       choices: [
         { txt: 'Take a fortune.', sub: 'Gain 1 Ink and a Drip brush.', fx: [{ k: 'ink', v: 1 }, { k: 'brush', id: 'drip' }] },
-        { txt: 'Steal its rubber tips.', sub: 'Lose 6 HP. Your claw gets Rubber Tips.', fx: [{ k: 'hp', v: -6 }, { k: 'claw', u: 'rubber' }], cond: canUp('rubber') },
+        { txt: 'Shake it upside down.', sub: 'Lose 6 HP. Gain 3 Ink.', fx: [{ k: 'hp', v: -6 }, { k: 'ink', v: 3 }] },
         LEAVE,
       ] },
     { id: 'stuffed_adventurer', title: 'Stuffed Adventurer', art: 'knight',
@@ -1057,10 +1060,10 @@ const DATA = (() => {
     { id: 'ghost_smith', title: 'Ghost Blacksmith', art: 'hammer',
       text: 'A ghost with a hammer, looking for work. It accepts HP or gold. Mostly HP.',
       choices: [
-        { txt: 'Magnetize the claw.', sub: 'Lose 8 Max HP. Your claw gets an Electromagnet.', fx: [{ k: 'maxhp', v: -8 }, { k: 'claw', u: 'magnet' }],
-          cond: (run) => canUp('magnet')(run) && (run && run.maxHp || 0) > 30 },
-        { txt: 'Widen the claw.', sub: 'Lose 60 gold. Wider claw.', fx: [{ k: 'gold', v: -60 }, { k: 'claw', u: 'width' }],
-          cond: (run) => hasGold(60)(run) && canUp('width')(run) },
+        { txt: 'Forge a charm.', sub: 'Lose 8 Max HP. Gain a random relic.', fx: [{ k: 'maxhp', v: -8 }, { k: 'relic', id: 'random' }],
+          cond: (run) => (run && run.maxHp || 0) > 30 },
+        { txt: 'Commission a blade.', sub: 'Lose 60 gold. Gain a rare item.', fx: [{ k: 'gold', v: -60 }, { k: 'item', id: 'rare' }],
+          cond: hasGold(60) },
         LEAVE,
       ] },
     { id: 'frozen_crane', title: 'Frozen Crane', art: 'iceblock',

@@ -490,6 +490,9 @@ t.test('events', () => {
     }
   }
   t.ok(conds >= 5, `several conditional choices [${conds}]`);
+  // Claw upgrades come from bosses and towers only, never from events.
+  for (const id of ids) for (const c of EVENTS[id].choices) t.ok(!c.fx.some(f => f && f.k === 'claw'), `event ${id}: "${c.txt}" grants no claw upgrade`);
+  t.ok(DATA.ECONOMY.trickle === 2 && DATA.ECONOMY.binFloor === 6, 'bin trickle 2, floor 6');
   // gold costs are gated by a gold condition
   for (const id of ids) for (const c of EVENTS[id].choices) {
     const cost = c.fx.find(f => f.k === 'gold' && f.v < 0);

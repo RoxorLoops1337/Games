@@ -272,6 +272,7 @@ const GAME = (() => {
       else if (sc === 'rest') showRest();
       else if (sc === 'forge') showForge();
       else if (sc === 'treasure' && S.sd && S.sd.treasure) showTreasure(S.sd.treasure);
+      else if (sc === 'parts' && S.sd && S.sd.parts) showSpareParts(S.sd.parts);
       else toMap();
       return true;
     } catch (e) {
@@ -331,6 +332,10 @@ const GAME = (() => {
   function inkRescue() {
     const run = S.run, M = run && run.map;
     if (!M || !X.MAP || (M.brushes && M.brushes.length)) return false;
+    // The lit road leads to the boss for free: a player who can walk to
+    // the boss without wading needs nothing. This is the last resort for
+    // an island with a spent ford, or a save from before the road.
+    if (M.road && M.road.length && X.MAP.walkCost && X.MAP.walkCost(M, M.pos, M.boss) === 0) return false;
     const GIVES = ['ink', 'elite', 'tower', 'event', 'shop', 'brush', 'treasure'];
     const cost = (t) => (X.MAP.walkCost ? X.MAP.walkCost(M, M.pos, t) : (X.MAP.pathExists(M, M.pos, t) ? 0 : -1));
     let need = Infinity;
@@ -399,7 +404,7 @@ const GAME = (() => {
   }
 
   // ---------------------------------------------------------------- screens
-  const SCREENS = ['title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'bin', 'gameover', 'win', 'help', 'collection'];
+  const SCREENS = ['title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection'];
   function setScreen(name) {
     S.screen = name;
     S.ui.buttons = [];
@@ -422,7 +427,7 @@ const GAME = (() => {
     }
     refreshHud(true);
     if (name === 'title') music('title');
-    else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'reward') music('map');
+    else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
     if (['fight', 'bin', 'help', 'collection', 'title', 'chars', 'gameover', 'win'].indexOf(name) < 0) save();
@@ -497,7 +502,7 @@ const GAME = (() => {
     b.appendChild(h('h1', null, 'How it works'));
     b.appendChild(h('h3', null, 'The rig'));
     let p = h('p'); p.innerHTML = 'Your deck is a <b>bin of objects</b> in a glass cabinet. Drag on the glass to steer the claw, let go to drop it. The prongs close on whatever is under them, lift, swing to the chute on the right and open. <b>Whatever lands in the chute is played.</b> What slips out lands back in the pile. A turn is a handful of grabs; two items in one grab is a <b>jackpot</b>.'; b.appendChild(p);
-    p = h('p'); p.innerHTML = 'Long thin things are hard to hold, balls are easy, flat discs slip, heavy things need grip. Upgrade the claw at shops and rest stops: more grabs, a wider palm, stronger grip, a third prong, rubber tips, a magnet.'; b.appendChild(p);
+    p = h('p'); p.innerHTML = 'Long thin things are hard to hold, balls are easy, flat discs slip, heavy things need grip. The claw only gets better at the top of the tower: every boss you beat leaves spare parts (pick 1 of 3), and a tower keeper can hand you one too. More grabs, a wider palm, stronger grip, a third prong, rubber tips, a magnet.'; b.appendChild(p);
     b.appendChild(h('h3', null, 'Fights'));
     p = h('p'); p.innerHTML = 'Enemies show their <b>intent</b> above their heads. Tap an enemy to target it. Block soaks damage until your next turn. <b>End turn</b> when you are out of grabs (it happens by itself too).'; b.appendChild(p);
     b.appendChild(h('h3', null, 'Statuses'));
@@ -571,6 +576,7 @@ const GAME = (() => {
     run.map.brushes = run.brushes.slice();
     S.brushSel = null;
     S.preview = null;
+    S.walk = null;
     inkRescue();
     S.sd = null;
     setScreen('map');
@@ -608,9 +614,11 @@ const GAME = (() => {
       l2.appendChild(chip);
     }
     const pv = S.preview;
+    const walking = S.walk && !S.walk.done;
     const hintTxt = S.brushSel ? `Brush ready: tap a hidden hex next to the light to paint it.`
-      : pv ? (M.ink >= pv.cost ? `Path: ${pv.cost} ink. Tap that hex again to paint it.` : `Path: ${pv.cost} ink, you have ${M.ink}. Elites, towers and ink pots give more.`)
-      : 'Drag to pan. Tap a hidden hex to preview the ink path, tap again to paint it. Walk on lit hexes. Fords cost 2.';
+      : walking ? 'Walking. Tap the map to stop.'
+      : pv ? (M.ink >= pv.cost ? `Path: ${pv.cost} ink. Tap that hex again to paint it and walk there.` : `Path: ${pv.cost} ink, you have ${M.ink}. Elites, towers and ink pots give more.`)
+      : 'Tap a lit hex to walk there; the road leads to the boss for free. Tap a hidden hex to preview the ink path, tap again to paint and walk it. Fords cost 2.';
     l2.appendChild(h('div', 'hint', hintTxt));
     head.appendChild(l2);
     refreshHud(true);
@@ -796,6 +804,8 @@ const GAME = (() => {
     if (!M) return false;
     const hx = stageToHex(x, y);
     if (!hx) return false;
+    // A tap during a walk stops it where the crawler stands.
+    if (S.walk && !S.walk.done) { stopWalk(); toast('Stopped.'); buildMapHead(); return false; }
     const t = X.MAP.tileAt(M, hx.q, hx.r);
     // A tap anywhere but the previewed hex clears the preview.
     const pv = S.preview;
@@ -848,6 +858,9 @@ const GAME = (() => {
         inkRescue();
         buildMapHead();
         save();
+        // ...and walk it (the walk stops at the first thing that resolves).
+        const walk = X.MAP.walkPath ? X.MAP.walkPath(M, t.q, t.r) : null;
+        if (walk) startWalk(walk);
         return true;
       }
       S.preview = { q: t.q, r: t.r, path, cost, label: t.known ? (LANDMARK_LABELS[t.type] || t.type) : (ford ? 'Ford' : null) };
@@ -855,24 +868,79 @@ const GAME = (() => {
       buildMapHead();
       return true;
     }
-    if (X.MAP.canMove(M, t.q, t.r)) {
-      X.MAP.move(M, t.q, t.r);
-      run.ink = M.ink;
-      run.floor++;
-      snd('step');
-      lookAt(t.q, t.r, true);
-      enterTile(t);
-      return true;
-    }
     if (t.q === M.pos.q && t.r === M.pos.r) { toast('You are here.'); return false; }
-    if (ford && X.MAP.isAdjacent(M.pos.q, M.pos.r, t.q, t.r)) {
-      const wade = X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
-      toast(`Wading that ford takes ${wade} ink. You have ${M.ink}.`);
-      if (inkRescue()) buildMapHead();
+    // Click to travel: any lit hex reachable through lit hexes. A neighbour
+    // is a one-step walk (the old tap); a ford the ink cannot pay stops the
+    // walk in front of it with its price.
+    const path = X.MAP.walkPath ? X.MAP.walkPath(M, t.q, t.r) : (X.MAP.canMove(M, t.q, t.r) ? [[t.q, t.r]] : null);
+    if (path) return startWalk(path);
+    toast('No lit way there yet. Chart the fog between.');
+    return false;
+  }
+  // Click to travel. S.walk = { path: [[q, r], ...], i: next step, t: time
+  // since the last step, from: the hex the crawler is easing out of, done }.
+  // The first step is taken at once (a tap on a neighbour is the old
+  // one-step move), the rest every WALK_STEP seconds, the crawler easing
+  // between hex centres and the camera following. A step onto anything
+  // that resolves (content that is not done, a ford) ends the walk there
+  // and drops the rest of the path; a ford the ink cannot pay stops the
+  // walk in front of it with a toast; a tap during the walk stops it at
+  // the current hex. Never saved: toMap() clears it.
+  const WALK_STEP = 0.28;
+  function startWalk(path) {
+    if (!path || !path.length) return false;
+    S.walk = { path: path.map(([q, r]) => [q, r]), i: 0, t: 0, from: null, done: false };
+    const ok = walkStep();
+    if (S.screen === 'map') buildMapHead();   // the step may have opened a fight or a shop
+    return ok;
+  }
+  function stopWalk() { if (S.walk) S.walk.done = true; }
+  // One step of the walk; true when the step was taken.
+  function walkStep() {
+    const w = S.walk, run = S.run, M = run && run.map;
+    if (!w || w.done || !M) return false;
+    if (w.i >= w.path.length) { w.done = true; return false; }
+    const [q, r] = w.path[w.i];
+    const t = X.MAP.tileAt(M, q, r);
+    if (!t || !X.MAP.canMove(M, q, r)) {
+      if (t && t.terrain === 'shallow' && X.MAP.isAdjacent(M.pos.q, M.pos.r, q, r)) {
+        const wade = X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
+        toast(`Wading that ford takes ${wade} ink. You have ${M.ink}.`);
+        if (inkRescue()) buildMapHead();
+      } else toast('The way is blocked.');
+      w.done = true;
       return false;
     }
-    toast('Walk one lit hex at a time.');
-    return false;
+    const resolves = (t.type !== 'empty' && t.type !== 'start' && !t.done) || t.terrain === 'shallow';
+    w.from = { q: M.pos.q, r: M.pos.r };
+    w.t = 0; w.i++;
+    X.MAP.move(M, q, r);
+    run.ink = M.ink;
+    run.floor++;
+    snd('step');
+    lookAt(q, r, true);
+    enterTile(t);
+    if (resolves || S.screen !== 'map' || w.i >= w.path.length) w.done = true;
+    return true;
+  }
+  // Advances the walk: the next step when WALK_STEP has passed, and drops
+  // a finished walk once its last ease has played.
+  function walkTick(dt) {
+    const w = S.walk;
+    if (!w) return;
+    w.t += dt;
+    if (w.done) { if (w.t >= WALK_STEP) S.walk = null; return; }
+    if (w.t >= WALK_STEP) { if (!walkStep() && S.screen === 'map') buildMapHead(); }
+  }
+  // Where the crawler is drawn: easing from the hex it left to pos while a
+  // walk plays, else null (it stands on pos).
+  function walkXY() {
+    const w = S.walk, M = S.run && S.run.map;
+    if (!w || !w.from || !M) return null;
+    const e = Math.min(1, w.t / WALK_STEP), k = e * e * (3 - 2 * e);
+    if (k >= 1) return null;
+    const a = hexToStage(w.from.q, w.from.r), b = hexToStage(M.pos.q, M.pos.r);
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
   }
   // Resolve a tile the player just stepped on.
   function enterTile(t) {
@@ -880,7 +948,8 @@ const GAME = (() => {
     if (!t) return;
     run.tile = { q: t.q, r: t.r };
     const c = t.content || {};
-    if (t.done) { toast('Already cleared.'); save(); return; }
+    // A cleared tile: nothing to do (no toast for one merely crossed mid-walk).
+    if (t.done) { if (!(S.walk && !S.walk.done && S.walk.i < S.walk.path.length)) toast('Already cleared.'); save(); return; }
     const finish = () => { t.done = true; };
     switch (t.type) {
       case 'fight': case 'elite': {
@@ -1755,7 +1824,50 @@ const GAME = (() => {
     addInk(START_INK);
     newMap(run);
     const id = rollRelic(rngFor('bossrelic'), ['boss', 'r']);
-    showTreasure({ relic: id, gold: 0, title: `Act ${run.act}: ${actDef(run.act).name}`, sub: `Healed 30%. +${START_INK} ink. The Prize Master left you something.` + (unl.length ? ` Unlocked: ${unl.map((c) => (charDef(c) || {}).name || c).join(', ')}.` : '') });
+    const td = { relic: id, gold: 0, title: `Act ${run.act}: ${actDef(run.act).name}`, sub: `Healed 30%. +${START_INK} ink. The Prize Master left you something.` + (unl.length ? ` Unlocked: ${unl.map((c) => (charDef(c) || {}).name || c).join(', ')}.` : '') };
+    // Claw upgrades come from bosses (and tower bonuses) only: the spare
+    // parts screen first, then the relic. Everything maxed skips straight on.
+    const pick = rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3);
+    if (pick.length) showSpareParts({ pick, then: td });
+    else showTreasure(td);
+  }
+  // Claw upgrades not yet maxed (a relic that supplies the part counts).
+  function openClawUpgrades() {
+    return Object.keys(tbl('CLAW_UPGRADES')).filter((id) => { const d = tbl('CLAW_UPGRADES')[id]; return !d.max || upgradeCount(id) < d.max; });
+  }
+  // A row of claw upgrade cards; onPick(id, def) after a successful apply.
+  function clawCards(ids, onPick) {
+    const cards = h('div', 'cards');
+    for (const id of ids) {
+      const def = tbl('CLAW_UPGRADES')[id];
+      if (!def) continue;
+      const card = h('div', 'card');
+      card.appendChild(h('div', 'big', def.icon || ''));
+      card.appendChild(h('div', 'name', def.name));
+      card.appendChild(h('div', 'text', def.text || ''));
+      const fn = () => { if (applyClawUpgrade(id)) { snd('upgrade'); toast(`Claw upgraded: ${def.name}.`); onPick(id, def); } else toast('Cannot apply that.'); };
+      card.onclick = fn;
+      S.ui.buttons.push({ el: card, fn, label: def.name });
+      cards.appendChild(card);
+    }
+    return cards;
+  }
+  // After a boss (acts 1 and 2): pick 1 of 3 claw upgrades, then sp.then
+  // (the act's treasure screen). The roll is saved, so a reload keeps it.
+  function showSpareParts(sp) {
+    S.sd = { parts: sp };
+    setScreen('parts');
+    const b = $('partsBody');
+    clear(b);
+    b.appendChild(h('h1', null, "The Prize Master's spare parts"));
+    b.appendChild(h('div', 'sub', 'The boss dropped a box of claw parts. Bolt one on.'));
+    const pick = (sp.pick || []).filter((id) => openClawUpgrades().indexOf(id) >= 0);
+    const next = () => { S.sd = null; if (sp.then) showTreasure(sp.then); else toMap(); };
+    if (!pick.length) {
+      b.appendChild(h('div', 'sub', 'The claw is as good as it gets.'));
+      b.appendChild(btn('Continue', next, 'pri'));
+    } else b.appendChild(clawCards(pick, next));
+    save();
   }
   function showTreasure(td) {
     S.sd = { treasure: td };
@@ -1787,9 +1899,8 @@ const GAME = (() => {
     const items = rollItems(rng, 5).map((id) => ({ id, price: Math.max(20, Math.round((itemDef(id).cost || 60) * (0.9 + rng() * 0.3))), sold: false }));
     const relicId = rollRelic(rng, ['c', 'u', 'r']);
     const relic = relicId ? { id: relicId, price: RELIC_PRICE[relicDef(relicId).rarity] || 160, sold: false } : null;
-    const ups = Object.keys(tbl('CLAW_UPGRADES'));
-    const claws = rng.shuffle(ups).slice(0, 2).map((id) => ({ id, price: tbl('CLAW_UPGRADES')[id].cost || 100, sold: false }));
-    return { items, relic, claws, removeUsed: false };
+    // No claw upgrades for sale: those come from bosses and towers only.
+    return { items, relic, removeUsed: false };
   }
   function upgradeCount(id) {
     const run = S.run;
@@ -1852,25 +1963,6 @@ const GAME = (() => {
       S.ui.buttons.push({ el: card, fn, label: def.name, disabled: shop.relic.sold });
       sec.appendChild(card);
     }
-    shop.claws.forEach((cu) => {
-      const def = tbl('CLAW_UPGRADES')[cu.id];
-      if (!def) return;
-      const maxed = def.max && upgradeCount(cu.id) >= def.max;
-      const card = h('div', 'card' + (cu.sold || maxed ? ' sold' : ''));
-      card.appendChild(h('div', 'big', def.icon || ''));
-      card.appendChild(h('div', 'name', def.name));
-      card.appendChild(h('div', 'text', def.text || ''));
-      card.appendChild(h('div', 'price', cu.sold ? 'SOLD' : maxed ? 'MAXED' : cu.price + ' gold'));
-      const fn = () => {
-        if (cu.sold || maxed) return;
-        if (run.gold < cu.price) { toast('Not enough gold.'); return; }
-        if (!applyClawUpgrade(cu.id)) { toast('Cannot apply that.'); return; }
-        addGold(-cu.price); cu.sold = true; snd('upgrade'); toast(`Claw upgraded: ${def.name}.`); showShop(shop);
-      };
-      card.onclick = fn;
-      S.ui.buttons.push({ el: card, fn, label: def.name, disabled: cu.sold || maxed });
-      sec.appendChild(card);
-    });
     b.appendChild(sec);
     const row = h('div', 'row');
     const rm = btn(shop.removeUsed ? 'Removed' : `Remove an item (${REMOVE_PRICE})`, () => {
@@ -2003,6 +2095,7 @@ const GAME = (() => {
           break;
         }
         case 'junk': for (let n = 0; n < (f.n || 1); n++) addItem(f.id || 'rock'); toast('Junk added to the bin.'); break;
+        // No event grants this any more (bosses and towers do); kept for the fx contract.
         case 'claw': if (f.u && applyClawUpgrade(f.u)) { toast(`Claw upgraded: ${(tbl('CLAW_UPGRADES')[f.u] || {}).name || f.u}.`); snd('upgrade'); } break;
         case 'remove': {
           const rest = i + 1;
@@ -2030,8 +2123,7 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- rest / forge
   function showRest() {
-    // Coming back from the claw pick keeps its roll (no free rerolls).
-    S.sd = Object.assign({ rest: true }, S.sd && S.sd.rest && S.sd.clawPick ? { clawPick: S.sd.clawPick } : {});
+    S.sd = { rest: true };
     setScreen('rest');
     const b = $('restBody');
     clear(b);
@@ -2043,41 +2135,11 @@ const GAME = (() => {
     const c1 = btn('', () => { healRun(heal); snd('heal'); toast(`+${heal} hp`); toMap(); }, 'choice go');
     c1.textContent = ''; c1.appendChild(h('div', 'c1', 'Rest')); c1.appendChild(h('div', 'c2', `Heal ${heal} hp (30%). Now ${run.hp}/${run.maxHp}.`));
     list.appendChild(c1);
-    const c2 = btn('', () => showClawPick(), 'choice');
-    c2.textContent = ''; c2.appendChild(h('div', 'c1', 'Tinker with the claw')); c2.appendChild(h('div', 'c2', 'Pick 1 of 3 claw upgrades.'));
-    list.appendChild(c2);
     const c3 = btn('', () => openBin({ mode: 'upgrade', title: 'Upgrade which item?', back: () => showRest(), onPick: (inst) => { inst.plus = true; snd('upgrade'); toast(`${itemName(itemDef(inst.id), true)}!`); toMap(); } }), 'choice');
     c3.textContent = ''; c3.appendChild(h('div', 'c1', 'Sharpen an item')); c3.appendChild(h('div', 'c2', 'Upgrade one item to its plus version.'));
     list.appendChild(c3);
     b.appendChild(list);
     save();
-  }
-  function showClawPick() {
-    const run = S.run;
-    const ups = Object.keys(tbl('CLAW_UPGRADES')).filter((id) => { const d = tbl('CLAW_UPGRADES')[id]; return !d.max || upgradeCount(id) < d.max; });
-    // Rolled once per rest stop: Back and Tinker again shows the same three.
-    S.sd = S.sd || { rest: true };
-    if (!S.sd.clawPick) S.sd.clawPick = rngFor('clawpick').shuffle(ups).slice(0, 3);
-    const pick = S.sd.clawPick.filter((id) => ups.indexOf(id) >= 0);
-    S.ui.buttons = [];
-    const b = $('restBody');
-    clear(b);
-    b.appendChild(h('h1', null, 'Claw upgrades'));
-    const cards = h('div', 'cards');
-    for (const id of pick) {
-      const def = tbl('CLAW_UPGRADES')[id];
-      const card = h('div', 'card');
-      card.appendChild(h('div', 'big', def.icon || ''));
-      card.appendChild(h('div', 'name', def.name));
-      card.appendChild(h('div', 'text', def.text || ''));
-      const fn = () => { if (applyClawUpgrade(id)) { snd('upgrade'); toast(`Claw upgraded: ${def.name}.`); toMap(); } else toast('Cannot apply that.'); };
-      card.onclick = fn;
-      S.ui.buttons.push({ el: card, fn, label: def.name });
-      cards.appendChild(card);
-    }
-    if (!pick.length) b.appendChild(h('div', 'sub', 'The claw is as good as it gets.'));
-    b.appendChild(cards);
-    b.appendChild(btn('Back', () => showRest(), 'ghost'));
   }
   function showForge() {
     S.sd = { forge: true };
@@ -2357,7 +2419,8 @@ const GAME = (() => {
       const fill = R && R.terrainFill ? R.terrainFill(biome, terr, t.elev || 0) : (terr === 'sea' ? '#173142' : terr === 'shallow' ? '#3b7d86' : '#8a8570');
       items.push({ t, k, wx: w.x, wy: w.y, fill, mask, seed: U.hashStr(k) });
     }
-    S.mapPaint = { M, biome, items, hidden: [], pool: [], st: {}, cur: { x: 0, y: 0 } };
+    const road = (M.road || []).map(([q, r]) => worldOf(q, r));
+    S.mapPaint = { M, biome, items, road, hidden: [], pool: [], st: {}, cur: { x: 0, y: 0 } };
     return S.mapPaint;
   }
   function drawMap(ctx, t) {
@@ -2392,9 +2455,12 @@ const GAME = (() => {
         ctx.closePath(); ctx.fillStyle = it.fill; ctx.fill();
       }
     }
+    // The road: a worn track between its hexes, over the ground, under the icons.
+    if (P.road.length > 1 && R && R.mapRoad) R.mapRoad(ctx, P.road.map((w) => ({ x: w.x * z + ox, y: w.y * z + oy })), size, t);
     // Pass 2: coast, fog, icons and states on everything but the sea.
     const hidden = P.hidden;
     hidden.length = 0;
+    const wxy = walkXY();
     let curXY = null, np = 0;
     for (const it of P.items) {
       const tile = it.t;
@@ -2407,6 +2473,7 @@ const GAME = (() => {
       st.reachable = reach.has(it.k); st.current = cur; st.hover = brushable.has(it.k);
       st.canReveal = !tile.revealed && X.MAP.canReveal(M, tile.q, tile.r);
       st.path = onPath[it.k] || 0; st.target = !!(pv && pv.q === tile.q && pv.r === tile.r); st.known = !!tile.known;
+      st.road = !!tile.road; st.walking = !!wxy;
       st.fill = it.fill; st.mask = it.mask; st.seed = it.seed;
       if (R && R.hex) R.hex(ctx, x, y, size, tile, st);
       else {
@@ -2417,7 +2484,11 @@ const GAME = (() => {
     }
     // The start-boss axis shows through the fog so the direction is obvious.
     if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
-    if (curXY && R && R.portrait) R.portrait(ctx, run.char, curXY.x, curXY.y, size * 1.2, t);
+    // The crawler and the portrait: on the current hex, or easing between
+    // hexes while a walk plays (hex() left the crawler out then).
+    const meXY = wxy || curXY;
+    if (wxy && R && R.crawler) R.crawler(ctx, wxy.x, wxy.y, size, t);
+    if (meXY && R && R.portrait) R.portrait(ctx, run.char, meXY.x, meXY.y, size * 1.2, t);
     if (pv && R && R.mapPath) {
       // Draw the path from the lit hex it grows out of.
       const pts = pv.path.map(([q, r]) => hexToStage(q, r));
@@ -2443,15 +2514,18 @@ const GAME = (() => {
     F.enemies.forEach((e, i) => {
       const p = enemyPos(i);
       const a = anim(i);
+      // Combat resolves in one go, so an enemy can be dead in the state while
+      // its 'die' event is still queued for its beat: keep drawing it alive
+      // until the event plays, then the fall animation runs once.
+      const pendingDeath = !e.alive && !a.dead;
       if (!e.alive && a.dead >= 1) return;
-      if (!e.alive && !a.dead) a.dead = 1;
-      const st = { hurt: a.hurt, attack: a.attack, dead: e.alive ? 0 : a.dead, frozen: !!(e.status.freeze), poisoned: !!(e.status.poison), burning: !!(e.status.burn) };
+      const st = { hurt: a.hurt, attack: a.attack, dead: (e.alive || pendingDeath) ? 0 : a.dead, frozen: !!(e.status.freeze), poisoned: !!(e.status.poison), burning: !!(e.status.burn) };
       if (i === F.target && e.alive) {
         ctx.save(); ctx.strokeStyle = '#ff2e88'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.lineDashOffset = -t * 30;
         ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, Math.max(40, p.w * 0.5), 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
       }
       if (R && R.enemy) R.enemy(ctx, e.def, p.x, p.y, p.scale, t, st);
-      if (!e.alive) return;
+      if (!e.alive && !pendingDeath) return;
       // hp bar under the feet, status pips under that, intent above the head
       // (never under the top bar)
       const bw = U.clamp(p.w * 0.9, 84, 150);
@@ -2501,7 +2575,7 @@ const GAME = (() => {
     fx().update(dt);
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) { const el = $('banner'); if (el) el.classList.remove('show'); const pr = $('playerRow'); if (pr && pr.classList) pr.classList.remove('bannerOn'); } }
-    if (S.screen === 'map') camStep(dt);
+    if (S.screen === 'map') { walkTick(dt); camStep(dt); }
     if (S.screen === 'fight') {
       updateFight(dt);
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
@@ -2597,15 +2671,15 @@ const GAME = (() => {
     boot, update, draw, loop, resize,
     newRun, toMap, enterTile, addItem, startFight, endFight, dropClaw, steer, endTurn, save, load, mapTap,
     playDelivered: (bodies) => { for (const b of bodies || []) if (FS && FS.items.indexOf(b) >= 0) deliver(b); },
-    tap, pointer, choose, state, hexToStage, stageToHex, lookAt, locate, wheel, bossArrow, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
-    showTreasure, showGameOver, showWin, showHelp, showCollection, openBin, resolveFx, gainRelic, applyClawUpgrade, rollShop,
+    tap, pointer, choose, state, hexToStage, stageToHex, lookAt, locate, wheel, bossArrow, startWalk, stopWalk, walkXY, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
+    showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, resolveFx, gainRelic, applyClawUpgrade, rollShop,
     rigEvent: (ev) => { if (FS && FS.rig) onRigEvent(ev); },   // test hook: feed one rig event
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },
     get screen() { return S.screen; }, get meta() { return S.meta; }, get headless() { return S.headless; },
     get fs() { return FS; }, get S() { return S; }, get cam() { return S.cam; },
-    CAB, BEAT, DELIVER_HOLD, AUTO_END, WATCHDOG, RUN_KEY, META_KEY,
+    CAB, BEAT, DELIVER_HOLD, AUTO_END, WATCHDOG, RUN_KEY, META_KEY, WALK_STEP,
   };
 })();
 

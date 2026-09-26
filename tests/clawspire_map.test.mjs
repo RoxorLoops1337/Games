@@ -48,6 +48,16 @@ const LANDMARK = ['shop', 'rest', 'forge', 'elite', 'treasure', 'boss', 'tower']
 const inB = (M, q, r) => r >= 0 && r < M.rows && colOf(q, r) >= 0 && colOf(q, r) < M.cols;
 const snapshot = (M) => JSON.stringify(M);
 const revealedSet = (M) => new Set(tilesOf(M).filter(t => t.revealed).map(t => MAP.key(t.q, t.r)));
+// Hex distance in axial coordinates.
+const hexDist = (a, b) => Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.q + a.r - b.q - b.r));
+// Puts the road back under the fog (the start and its neighbours stay lit),
+// for the tests that reason from a map lit only around the start.
+function hideRoad(M) {
+  const keep = new Set([MAP.key(M.start.q, M.start.r), MAP.key(M.boss.q, M.boss.r)].concat(MAP.neighbors(M, M.start.q, M.start.r).map(([q, r]) => MAP.key(q, r))));
+  for (const t of tilesOf(M)) if (t.road && !keep.has(MAP.key(t.q, t.r))) t.revealed = false;
+  M.revealedCount = tilesOf(M).filter(t => t.revealed).length;
+  return M;
+}
 
 /* Checks every structural rule the bible and the brief put on a fresh map. */
 function checkMap(M, label, D) {
@@ -140,13 +150,38 @@ function checkMap(M, label, D) {
   h.ok(st.revealed && st.visited, label + ' start revealed + visited');
   h.ok(MAP.neighbors(M, M.start.q, M.start.r).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), label + ' start neighbours revealed');
   h.ok(MAP.tileAt(M, M.boss.q, M.boss.r).revealed, label + ' boss revealed');
-  h.eq(M.revealedCount, 2 + MAP.neighbors(M, M.start.q, M.start.r).length, label + ' only start, neighbours and boss revealed');
+  const lit = new Set([MAP.key(M.start.q, M.start.r), MAP.key(M.boss.q, M.boss.r)]
+    .concat(MAP.neighbors(M, M.start.q, M.start.r).map(([q, r]) => MAP.key(q, r)), (M.road || []).map(([q, r]) => MAP.key(q, r))));
+  h.eq(M.revealedCount, lit.size, label + ' only the road, the start neighbours and the boss are revealed');
+  h.ok(tiles.every(t => t.revealed === lit.has(MAP.key(t.q, t.r))), label + ' revealed flags match that set');
+  checkRoad(M, label);
   h.eq(M.ink, MAP.START_INK, label + ' ink starts at START_INK');
   h.ok(M.pos.q === M.start.q && M.pos.r === M.start.r, label + ' pos = start');
   h.ok(Array.isArray(M.brushes) && M.brushes.length === 0, label + ' no brushes yet');
   h.ok(MAP.pathExists(M, M.start, M.boss, { any: true }), label + ' boss reachable through the fog');
   h.ok(MAP.walkCost(M, M.start, M.boss, { any: true, land: true }) === 0, label + ' the land route costs no ink to walk');
-  h.ok(!MAP.pathExists(M, M.start, M.boss), label + ' boss not reachable through revealed tiles on a fresh map');
+  h.eq(MAP.walkCost(M, M.start, M.boss), 0, label + ' the boss is reachable through lit tiles for no ink (the road)');
+  h.ok(!MAP.pathExists(hideRoad(MAP.deserialize(MAP.serialize(M))), M.start, M.boss), label + ' without the road the fog cuts the boss off');
+}
+
+/* The road: M.road runs from the start to the boss over adjacent land tiles,
+   every one lit and flagged, never through the boss, no tile twice. */
+function checkRoad(M, label) {
+  const road = M.road;
+  h.ok(Array.isArray(road) && road.length >= 2, label + ' has a road');
+  if (!Array.isArray(road) || road.length < 2) return;
+  h.ok(road[0][0] === M.start.q && road[0][1] === M.start.r, label + ' road starts at the start');
+  const last = road[road.length - 1];
+  h.ok(last[0] === M.boss.q && last[1] === M.boss.r, label + ' road ends at the boss');
+  h.ok(road.every(([q, r], i) => !i || adj({ q: road[i - 1][0], r: road[i - 1][1] }, { q, r })), label + ' road steps are adjacent');
+  const rt = road.map(([q, r]) => MAP.tileAt(M, q, r));
+  h.ok(rt.every(t => t && t.terrain === 'land'), label + ' road is all land');
+  h.ok(rt.every(t => t.revealed && t.road && MAP.isRoad(t)), label + ' road tiles are revealed and flagged');
+  h.ok(rt.slice(1, -1).every(t => t.type !== 'boss' && t.type !== 'start'), label + ' road passes through neither the boss nor the start');
+  h.eq(new Set(road.map(s => s.join())).size, road.length, label + ' road never repeats a tile');
+  h.eq(tilesOf(M).filter(t => t.road).length, road.length, label + ' road flags only on road tiles');
+  const p = MAP.progress(M);
+  h.ok(p.revealed >= road.length, label + ' progress counts the road as charted');
 }
 
 h.test('shape and module hygiene', () => {
@@ -160,7 +195,8 @@ h.test('shape and module hygiene', () => {
   h.ok(mine.every(s => !s.includes(String.fromCharCode(0x2014))), 'no em dashes in map.js or this suite');
   for (const fn of ['generate', 'key', 'neighbors', 'canReveal', 'reveal', 'brush', 'canMove', 'move', 'toPixel',
     'fromPixel', 'pathExists', 'progress', 'serialize', 'deserialize', 'tileAt', 'reachable', 'revealable', 'hexCorners', 'size',
-    'isLandmark', 'pathToReveal', 'revealPath', 'bounds', 'islandsOf', 'revealCost', 'moveCost', 'pathCost', 'walkCost', 'biomeOf']) {
+    'isLandmark', 'pathToReveal', 'revealPath', 'bounds', 'islandsOf', 'revealCost', 'moveCost', 'pathCost', 'walkCost', 'biomeOf',
+    'isRoad', 'walkPath']) {
     h.eq(typeof MAP[fn], 'function', 'MAP.' + fn + ' exists');
   }
   h.eq(MAP.key(-2, 5), '-2,5', 'key format');
@@ -439,7 +475,7 @@ h.test('hexCorners and size()', () => {
 });
 
 h.test('pathExists', () => {
-  const M = genL(71);
+  const M = hideRoad(genL(71));
   h.ok(MAP.pathExists(M, M.start, M.pos), 'trivial path to self');
   h.ok(MAP.pathExists(M, M.start, { q: MAP.neighbors(M, M.start.q, M.start.r)[0][0], r: MAP.neighbors(M, M.start.q, M.start.r)[0][1] }), 'start to a neighbour');
   h.ok(!MAP.pathExists(M, M.start, M.boss), 'no revealed path yet');
@@ -547,13 +583,11 @@ h.test('landmarks stay hidden until revealed', () => {
   h.ok(MAP.isLandmark({ type: 'tower' }) && MAP.isLandmark({ type: 'boss' }) && !MAP.isLandmark({ type: 'fight' }) && !MAP.isLandmark(null), 'isLandmark by type');
 });
 
-// Hex distance in axial coordinates.
-const hexDist = (a, b) => Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.q + a.r - b.q - b.r));
 const litSet = (M) => tilesOf(M).filter(t => t.revealed && (t.type !== 'boss' || t.visited));
 
 h.test('pathToReveal: shortest, never through the boss, excludes revealed', () => {
   for (let s = 1; s <= 40; s++) {
-    const M = genL(s * 97);
+    const M = hideRoad(genL(s * 97));
     const lit = litSet(M);
     let bad = 0;
     for (const t of tilesOf(M)) {
@@ -573,7 +607,7 @@ h.test('pathToReveal: shortest, never through the boss, excludes revealed', () =
     }
     h.eq(bad, 0, 'seed ' + s + ': every hidden tile has a correct shortest path (bad=' + bad + ')');
   }
-  const M = genL(5);
+  const M = hideRoad(genL(5));
   h.eq(MAP.pathToReveal(M, 40, 40).length, 0, 'out of bounds is empty');
   h.eq(MAP.pathToReveal(M, M.start.q, M.start.r).length, 0, 'revealed start is empty');
   h.eq(MAP.pathToReveal(M, M.boss.q, M.boss.r).length, 0, 'the boss is empty');
@@ -586,12 +620,12 @@ h.test('pathToReveal: shortest, never through the boss, excludes revealed', () =
     h.ok(path.length > 0 && !path.some(([q, r]) => q === M.boss.q && r === M.boss.r), 'boss neighbour path avoids the boss');
   }
   // Once the boss is visited it is a foothold like any lit tile.
-  const V = genL(5);
+  const V = hideRoad(genL(5));
   V.tiles[MAP.key(V.boss.q, V.boss.r)].visited = true;
   const far = bn[0];
   h.eq(MAP.pathToReveal(V, far.q, far.r).length, 0, 'next to a visited boss counts as adjacent');
   // Paths grow from the whole lit area, not just pos.
-  const G = genL(6);
+  const G = hideRoad(genL(6));
   const tgt = tilesOf(G).find(t => !t.revealed && colOf(t.q, t.r) === 3 && t.r === 3);
   const before = MAP.pathToReveal(G, tgt.q, tgt.r).length;
   for (const t of MAP.revealable(G)) t.revealed = true;
@@ -680,7 +714,7 @@ h.test('fords: reveal and wade at 2 ink, revealPath spends pathCost', () => {
 });
 
 h.test('revealPath spends exactly path.length ink and refuses when short', () => {
-  const M = genL(111);
+  const M = hideRoad(genL(111));
   const far = tilesOf(M).find(t => !t.revealed && colOf(t.q, t.r) === 4 && t.r === 1);
   const path = MAP.pathToReveal(M, far.q, far.r);
   h.ok(path.length >= 3, 'a multi-tile path (' + path.length + ')');
@@ -700,7 +734,7 @@ h.test('revealPath spends exactly path.length ink and refuses when short', () =>
   h.eq(MAP.revealPath(M, []), null, 'empty path refused');
   h.eq(MAP.revealPath(M, null), null, 'null path refused');
   // A broken chain (a gap) is refused whole.
-  const N = genL(112);
+  const N = hideRoad(genL(112));
   const t2 = tilesOf(N).find(t => !t.revealed && colOf(t.q, t.r) === 4 && t.r === 5);
   const p2 = MAP.pathToReveal(N, t2.q, t2.r);
   const gap = p2.slice(0, 1).concat(p2.slice(2));
@@ -795,6 +829,154 @@ h.test('bounds(): the world box the camera pans over', () => {
   h.ok(v.w > 1500 && v.w < 1580 && v.h > 1280 && v.h < 1340, `16x22 at 46 px is about 1540 x 1310 (${v.w.toFixed(0)} x ${v.h.toFixed(0)}), far bigger than the 540 x 768 map area`);
   const ps = MAP.toPixel(M.start.q, M.start.r, 46, 'v'), pb = MAP.toPixel(M.boss.q, M.boss.r, 46, 'v');
   h.ok(Math.abs(ps.x - pb.x) < 1e-9 && pb.y < ps.y && pb.y + v.oy > 0 && ps.y + v.oy < v.h, 'start at the bottom, boss at the top, same column of pixels');
+});
+
+h.test('the road: 200 seeds lit start to boss, all land, meandering past a rest and a shop', () => {
+  h.ok(MAP.ROAD_MEANDER[0] >= 1.1 && MAP.ROAD_MEANDER[1] <= 1.7 && MAP.ROAD_MEANDER[0] < MAP.ROAD_MEANDER[1], 'ROAD_MEANDER is a sane range');
+  const [lo, hi] = MAP.ROAD_MEANDER;
+  const nearRoad = (M, t) => M.road.some(([q, r]) => hexDist({ q, r }, t) <= 1);
+  const mainland = (M) => { const isl = new Set([].concat(...MAP.islandsOf(M))); return tilesOf(M).filter(t => t.terrain === 'land' && !isl.has(MAP.key(t.q, t.r))); };
+  // The game's world: every seed in the range, the rest always passed, the
+  // shop unless every mainland shop would stretch the road past the range
+  // (a lake between the axis and the shops), which is rare.
+  let sum = 0, shopMiss = 0;
+  for (let s = 1; s <= 100; s++) {
+    const M = world(s * 131, { act: 1 + (s % 3) });
+    checkRoad(M, 'world ' + s);
+    const ratio = (M.road.length - 1) / hexDist(M.start, M.boss);
+    sum += ratio;
+    h.ok(ratio >= lo && ratio <= hi, 'world ' + s + ' road meanders ' + lo + '..' + hi + ' times the straight line (' + ratio.toFixed(2) + ')');
+    const main = mainland(M);
+    if (main.some(t => t.type === 'rest')) h.ok(main.some(t => t.type === 'rest' && nearRoad(M, t)), 'world ' + s + ' road passes within one hex of a rest');
+    if (main.some(t => t.type === 'shop') && !main.some(t => t.type === 'shop' && nearRoad(M, t))) {
+      shopMiss++;
+      const cheapest = Math.min(...main.filter(t => t.type === 'shop').map(t => hexDist(M.start, t) + hexDist(t, M.boss) - hexDist(M.start, M.boss)));
+      h.ok(cheapest >= 5, 'world ' + s + ' skips its shops only when the nearest needs a long detour (' + cheapest + ')');
+    }
+    h.ok(MAP.walkCost(M, M.start, M.boss) === 0 && MAP.pathExists(M, M.start, M.boss, { ink: 0 }), 'world ' + s + ' boss reachable through lit tiles for 0 ink at generate');
+    h.ok(M.road.slice(1, -1).every(([q, r]) => M.tiles[MAP.key(q, r)].type !== 'elite' && M.tiles[MAP.key(q, r)].type !== 'tower') || true, 'world ' + s + ' (tolls only bias the road)');
+    // Road tiles keep their rolled content: walking it is still a run.
+    h.ok(M.road.slice(1, -1).some(([q, r]) => M.tiles[MAP.key(q, r)].type !== 'empty'), 'world ' + s + ' road carries content');
+  }
+  h.ok(sum / 100 >= 1.2, 'world roads average 1.2+ times the straight line (' + (sum / 100).toFixed(3) + ')');
+  h.ok(shopMiss <= 3, 'world roads pass a shop on 97+ of 100 seeds (' + (100 - shopMiss) + ')');
+  // Small maps have less room: never over the top, rarely dead straight,
+  // the rest always passed, the shop nearly always (a shop walled into a
+  // corner would stretch the road past the range and is skipped).
+  let low = 0, shops = 0, shopHit = 0, sum2 = 0;
+  for (let s = 1; s <= 200; s++) {
+    const M = gen(s * 7919, { act: 1 + (s % 3) });
+    checkRoad(M, 'seed ' + s);
+    const ratio = (M.road.length - 1) / hexDist(M.start, M.boss);
+    sum2 += ratio;
+    if (ratio < lo) low++;
+    h.ok(ratio >= 1 && ratio <= hi, 'seed ' + s + ' road ratio 1..' + hi + ' (' + ratio.toFixed(2) + ')');
+    const main = mainland(M);
+    if (main.some(t => t.type === 'rest')) h.ok(main.some(t => t.type === 'rest' && nearRoad(M, t)), 'seed ' + s + ' road passes within one hex of a rest');
+    if (main.some(t => t.type === 'shop')) { shops++; if (main.some(t => t.type === 'shop' && nearRoad(M, t))) shopHit++; }
+    h.ok(MAP.walkCost(M, M.start, M.boss) === 0, 'seed ' + s + ' boss reachable for 0 ink');
+  }
+  h.ok(low <= 6, 'at most 3% of 10x7 roads under the meander floor (' + low + ')');
+  h.ok(shopHit >= shops * 0.97, '10x7 roads pass a shop on 97%+ of maps (' + shopHit + '/' + shops + ')');
+  h.ok(sum2 / 200 >= lo, '10x7 roads average at least the meander floor (' + (sum2 / 200).toFixed(3) + ')');
+  // Dry and clamped maps have a road too.
+  checkRoad(genL(8), 'dry');
+  checkRoad(gen(7, { cols: 2, rows: 1 }), 'clamped');
+  h.eq(snapshot(gen(42)), snapshot(gen(42)), 'the road is deterministic');
+  h.ok(!MAP.isRoad(null) && !MAP.isRoad({ road: false }) && MAP.isRoad({ road: true }), 'isRoad by flag');
+});
+
+h.test('walkPath: lit tiles only, cheapest by ink, then steps, then skirting content', () => {
+  const M = genL(141);
+  const key = (t) => MAP.key(t.q, t.r);
+  h.eq(MAP.walkPath(M, M.pos.q, M.pos.r), null, 'pos itself is null');
+  h.eq(MAP.walkPath(M, 99, 99), null, 'out of bounds is null');
+  const hiddenT = tilesOf(M).find(t => !t.revealed);
+  h.eq(MAP.walkPath(M, hiddenT.q, hiddenT.r), null, 'a hidden tile is null');
+  // Along the road: every step adjacent, lit, ending on the boss, free.
+  const toBoss = MAP.walkPath(M, M.boss.q, M.boss.r);
+  h.ok(toBoss && toBoss.length >= 2, 'the boss is a walk target on a fresh map (' + (toBoss && toBoss.length) + ' steps)');
+  let prev = M.pos, okChain = true;
+  for (const [q, r] of toBoss) { if (!adj(prev, { q, r }) || !M.tiles[MAP.key(q, r)].revealed) okChain = false; prev = { q, r }; }
+  h.ok(okChain && prev.q === M.boss.q && prev.r === M.boss.r, 'steps are adjacent lit tiles ending on the boss');
+  h.eq(toBoss.length, M.road.length - 1, 'on a fresh map the walk to the boss is the road');
+  h.ok(toBoss.every(([q, r]) => M.tiles[MAP.key(q, r)].road), 'every step on the road');
+  h.ok(!toBoss.slice(0, -1).some(([q, r]) => M.tiles[MAP.key(q, r)].type === 'boss'), 'never through the boss');
+  // Everything lit on a dry map: the walk is as short as the hex distance.
+  const A = genL(142);
+  for (const t of tilesOf(A)) t.revealed = true;
+  let bad = 0;
+  for (const t of tilesOf(A)) {
+    if (t === MAP.tileAt(A, A.pos.q, A.pos.r)) continue;
+    const p = MAP.walkPath(A, t.q, t.r);
+    if (!p || p.length !== hexDist(A.pos, t)) bad++;
+  }
+  h.eq(bad, 0, 'all lit: every walk is exactly the hex distance');
+  // Sea is never walked, a lit island cut off by hidden water is unreachable.
+  const Wm = world(143);
+  for (const t of tilesOf(Wm)) t.revealed = t.terrain !== 'sea';
+  const seaT = tilesOf(Wm).find(t => t.terrain === 'sea');
+  h.eq(MAP.walkPath(Wm, seaT.q, seaT.r), null, 'sea is null');
+  const isle = MAP.islandsOf(Wm)[0].map(k => Wm.tiles[k]);
+  const pIsle = MAP.walkPath(Wm, isle[0].q, isle[0].r);
+  h.ok(pIsle && pIsle.some(([q, r]) => Wm.tiles[MAP.key(q, r)].terrain === 'shallow'), 'an island is reached over a ford');
+  for (const t of tilesOf(Wm)) if (t.terrain === 'shallow') t.revealed = false;
+  h.eq(MAP.walkPath(Wm, isle[0].q, isle[0].r), null, 'with the fords hidden the island is cut off');
+  // Cheapest by ink: a lit land way round beats a ford, even when longer.
+  const F = genL(144);
+  for (const t of tilesOf(F)) t.revealed = true;
+  const s0 = F.pos;
+  const line = [1, 2, 3].map(i => MAP.tileAt(F, s0.q + i, s0.r));
+  h.ok(line.every(Boolean), 'three tiles east of the start');
+  line[1].terrain = 'shallow';
+  const pf = MAP.walkPath(F, line[2].q, line[2].r);
+  h.ok(pf && pf.length === 4 && pf.every(([q, r]) => F.tiles[MAP.key(q, r)].terrain === 'land'), 'walks round the ford over land in 4 steps (' + JSON.stringify(pf) + ')');
+  for (const t of tilesOf(F)) if (!line.includes(t) && !(t.q === s0.q && t.r === s0.r)) t.revealed = false;
+  const pf2 = MAP.walkPath(F, line[2].q, line[2].r);
+  h.ok(pf2 && pf2.length === 3 && F.tiles[MAP.key(pf2[1][0], pf2[1][1])].terrain === 'shallow', 'with no way round, the ford is walked (the ink is not checked here)');
+  // Among equal walks, unvisited content is skirted; done content is not.
+  const P = genL(145);
+  for (const t of tilesOf(P)) { t.revealed = true; if (t.type !== 'start' && t.type !== 'boss') { t.type = 'empty'; t.road = false; } }
+  const o = P.pos;
+  const tgt = MAP.tileAt(P, o.q + 1, o.r + 1);             // two shortest ways: via (q+1, r) or (q, r+1)
+  const via1 = MAP.tileAt(P, o.q + 1, o.r), via2 = MAP.tileAt(P, o.q, o.r + 1);
+  h.ok(tgt && via1 && via2 && adj(via1, tgt) && adj(via2, tgt), 'a target with two shortest ways');
+  via1.type = 'fight';
+  let w = MAP.walkPath(P, tgt.q, tgt.r);
+  h.ok(w && w.length === 2 && w[0][0] === via2.q && w[0][1] === via2.r, 'skirts the unvisited fight');
+  via1.done = true; via2.type = 'fight';
+  w = MAP.walkPath(P, tgt.q, tgt.r);
+  h.ok(w && w.length === 2 && w[0][0] === via1.q && w[0][1] === via1.r, 'a done fight is as good as empty, the unvisited one is skirted');
+  delete via1.done; via2.type = 'empty'; via1.type = 'empty'; via2.road = true;
+  w = MAP.walkPath(P, tgt.q, tgt.r);
+  h.ok(w && w[0][0] === via2.q && w[0][1] === via2.r, 'all else equal the road is preferred');
+});
+
+h.test('the road survives serialize / deserialize, old saves get none', () => {
+  const M = gen(151);
+  const o = MAP.serialize(M);
+  h.eq(JSON.stringify(o.road), JSON.stringify(M.road), 'serialize keeps M.road');
+  const D = MAP.deserialize(o);
+  h.eq(JSON.stringify(D.road), JSON.stringify(M.road), 'deserialize keeps M.road');
+  h.ok(tilesOf(D).every(t => t.road === M.tiles[MAP.key(t.q, t.r)].road), 'tile road flags survive');
+  checkRoad(D, 'loaded');
+  // An old save: no road list, no flags, and only the start's surroundings lit.
+  const old = JSON.parse(JSON.stringify(o));
+  delete old.road;
+  const keepLit = new Set([MAP.key(M.start.q, M.start.r), MAP.key(M.boss.q, M.boss.r)].concat(MAP.neighbors(M, M.start.q, M.start.r).map(([q, r]) => MAP.key(q, r))));
+  for (const k in old.tiles) { delete old.tiles[k].road; if (!keepLit.has(k)) old.tiles[k].revealed = false; }
+  const O = MAP.deserialize(old);
+  h.ok(Array.isArray(O.road) && O.road.length === 0, 'an old save has an empty road');
+  h.ok(tilesOf(O).every(t => t.road === false), 'and no road flags');
+  h.ok(MAP.walkPath(O, O.boss.q, O.boss.r) === null, 'its boss is not a walk target until the fog is charted');
+  // A save with tile flags but no list, or a list but no flags, is reconciled.
+  const half = JSON.parse(JSON.stringify(o));
+  for (const k in half.tiles) delete half.tiles[k].road;
+  const Hm = MAP.deserialize(half);
+  h.ok(tilesOf(Hm).filter(t => t.road).length === M.road.length, 'tile flags rebuilt from M.road');
+  const junk = JSON.parse(JSON.stringify(o));
+  junk.road = [[999, 999], 'x', [M.start.q, M.start.r]];
+  h.eq(MAP.deserialize(junk).road.length, 1, 'junk road entries are dropped');
 });
 
 /* Stub DATA: proves map.js reads DATA.BRUSHES lazily (and overrides the

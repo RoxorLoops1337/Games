@@ -243,10 +243,10 @@ h.test('refill, exhaust, junk, purge, copy, steal, freezeItem', () => {
   playId(F, 'sword'); playId(F, 'shield'); playId(F, 'bomb');
   h.eq(F.bin.length, 2, 'bin 2 after three plays'); h.eq(F.used.length, 2, 'two in used'); h.eq(F.exhausted.length, 1, 'bomb exhausted');
   let ev = COMBAT.endTurn(F);
-  const rf = find(ev, 'refill'); h.eq(rf.length, 1, 'refill emitted at turn start when bin < 3');
+  const rf = find(ev, 'refill'); h.eq(rf.length, 1, 'refill emitted at turn start (floor + trickle)');
   h.eq(rf[0].items.length, 2, 'refill carries the moved items'); h.eq(F.used.length, 0, 'used emptied'); h.eq(F.bin.length, 4, 'bin refilled');
   h.ok(!F.bin.some(i => i.id === 'bomb'), 'exhausted item stays out');
-  F = fight(['dummy'], { bin: ['sword', 'shield', 'potion'] }); ev = COMBAT.endTurn(F); h.eq(find(ev, 'refill').length, 0, 'no refill at 3');
+  F = fight(['dummy'], { bin: ['sword', 'shield', 'potion'] }); ev = COMBAT.endTurn(F); h.eq(find(ev, 'refill').length, 0, 'no refill with an empty used pile');
   F = fight(['dummy'], { bin: ['sword', 'shield'] });
   playId(F, 'sword'); ev = playId(F, 'shield'); h.eq(find(ev, 'refill').length, 1, 'empty bin refills immediately'); h.eq(F.bin.length, 2, 'both back');
   // junk
@@ -568,15 +568,93 @@ else {
 }
 
 h.test('a dry turn (nothing played) pours the used pile back in', () => {
-  const run = { hp: 70, maxHp: 70, act: 1, bin: ['sword', 'sword', 'sword', 'sword', 'sword', 'sword'].map(id => ({ id })), relics: [], claw: {} };
+  const run = { hp: 70, maxHp: 70, act: 1, bin: Array.from({ length: 14 }, () => ({ id: 'sword' })), relics: [], claw: { grabs: 9 } };
   const F = COMBAT.newFight(run, ['dummy'], U.rng(3));
-  COMBAT.play(F, F.bin[0]); COMBAT.play(F, F.bin[0]);
-  h.eq(F.used.length, 2, 'two played');
+  for (let i = 0; i < 6; i++) COMBAT.play(F, F.bin[0]);
+  h.eq(F.used.length, 6, 'six played');
   COMBAT.endTurn(F);
-  h.eq(F.bin.length, 4, 'a turn that played something does not refill a 4-item bin');
+  h.eq(F.bin.length, 10, 'a turn that played something only trickles 2 into an 8-item bin');
+  h.eq(F.used.length, 4, 'four still wait');
   const ev = COMBAT.endTurn(F);
-  h.eq(F.bin.length, 6, 'a dry turn refills');
+  h.eq(F.bin.length, 14, 'a dry turn pours everything back');
+  h.eq(F.used.length, 0, 'used emptied');
   h.ok(ev.some(e => e.t === 'refill'), 'with a refill event');
+});
+
+// Turn start: the bin is topped up to binFloor from the used pile, then
+// `trickle` more items rain in (random picks), never past MAX_CABINET.
+h.test('bin trickle: 2 a turn, floor of 6, cabinet cap, immediate refill mid-turn', () => {
+  const swords = (n) => Array.from({ length: n }, () => 'sword');
+  // Park n bin items in the used pile and mark the turn as played (not dry).
+  const park = (F, n) => { F.used.push(...F.bin.splice(0, n)); F.playedThisTurn = 1; };
+  let F = fight(['dummy'], { bin: swords(20) });
+  park(F, 10);
+  let ev = COMBAT.endTurn(F);
+  let rf = find(ev, 'refill');
+  h.eq(rf.length, 1, 'one refill event at turn start');
+  h.eq(rf[0].items.length, 2, 'the trickle is 2 items');
+  h.eq(F.bin.length, 12, 'bin 10 -> 12'); h.eq(F.used.length, 8, 'used 10 -> 8');
+  h.ok(rf[0].items.every(i => F.bin.includes(i) && !F.used.includes(i)), 'the trickled items moved from used to the bin');
+  F.playedThisTurn = 1; ev = COMBAT.endTurn(F);
+  h.eq(find(ev, 'refill')[0].items.length, 2, 'another 2 the next turn');
+  h.eq(F.bin.length, 14, 'bin 12 -> 14');
+  // random picks: over a few seeds the trickle does not always take the oldest used items
+  let varied = false;
+  for (let seed = 1; seed <= 8 && !varied; seed++) {
+    const G = fight(['dummy'], { bin: swords(20), seed });
+    const order = G.bin.slice(0, 10);
+    park(G, 10);
+    const got = find(COMBAT.endTurn(G), 'refill')[0].items;
+    if (got[0] !== order[0] || got[1] !== order[1]) varied = true;
+  }
+  h.ok(varied, 'the trickle picks at random from the used pile');
+  // floor: a 2-item bin is topped up to 6, then 2 more
+  F = fight(['dummy'], { bin: swords(20) });
+  park(F, 18);
+  ev = COMBAT.endTurn(F);
+  h.eq(find(ev, 'refill')[0].items.length, 6, 'floor top-up 4 plus trickle 2');
+  h.eq(F.bin.length, 8, 'bin 2 -> 8'); h.eq(F.used.length, 12, 'used 18 -> 12');
+  // floor with a short used pile: whatever there is comes back
+  F = fight(['dummy'], { bin: swords(5) });
+  park(F, 4);
+  COMBAT.endTurn(F);
+  h.eq(F.bin.length, 5, 'a short used pile comes back whole'); h.eq(F.used.length, 0, 'nothing left in used');
+  // cap: a full cabinet takes nothing, one free slot takes one
+  F = fight(['dummy'], { bin: swords(40) });
+  h.eq(F.bin.length, COMBAT.MAX_CABINET, 'a 40-item bin fills the cabinet'); h.eq(F.used.length, 6, 'six wait');
+  F.playedThisTurn = 1; ev = COMBAT.endTurn(F);
+  h.eq(find(ev, 'refill').length, 0, 'no trickle into a full cabinet'); h.eq(F.bin.length, COMBAT.MAX_CABINET, 'still at the cap');
+  park(F, 1);
+  ev = COMBAT.endTurn(F);
+  h.eq(find(ev, 'refill')[0].items.length, 1, 'one slot free, one item rains in'); h.eq(F.bin.length, COMBAT.MAX_CABINET, 'never above the cap');
+  // nothing to trickle
+  F = fight(['dummy'], { bin: swords(5) });
+  F.playedThisTurn = 1; ev = COMBAT.endTurn(F);
+  h.eq(find(ev, 'refill').length, 0, 'no refill event with an empty used pile'); h.eq(F.bin.length, 5, 'bin unchanged');
+  // mid-turn: the last item played pours the used pile back at once
+  F = fight(['dummy'], { bin: swords(10), claw: { grabs: 9 } });
+  park(F, 8);
+  playId(F, 'sword'); ev = playId(F, 'sword');
+  h.eq(find(ev, 'refill').length, 1, 'an empty bin refills immediately mid-turn');
+  h.eq(F.bin.length, 10, 'everything back'); h.eq(F.used.length, 0, 'used empty');
+  // never empty at turn start while used holds anything (fuzz over seeds)
+  let bare = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const G = fight(['dummy'], { bin: swords(12), seed });
+    for (let turn = 0; turn < 6; turn++) {
+      park(G, Math.min(G.bin.length, 1 + (seed + turn) % 12));
+      COMBAT.endTurn(G);
+      if (G.used.length && G.bin.length < 6) bare++;
+    }
+  }
+  h.eq(bare, 0, 'a turn never starts below the floor while used has items');
+  // tunable from DATA.ECONOMY
+  STUB.ECONOMY = { trickle: 3, binFloor: 0 };
+  F = fight(['dummy'], { bin: swords(20) });
+  park(F, 10);
+  COMBAT.endTurn(F);
+  h.eq(F.bin.length, 13, 'ECONOMY.trickle 3 moves 3');
+  delete STUB.ECONOMY;
 });
 
 h.done();

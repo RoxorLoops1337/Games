@@ -12,11 +12,15 @@ const COMBAT = (() => {
   // for the physics budget), so both caps grew: 40 -> 48 and 30 -> 34.
   const MAX_ITEMS = 48;      // bin + used cap for junk/copies (physics budget)
   const MAX_CABINET = 34;    // bodies in the cabinet at once; the rest of a big bin waits in the used pile
-  // Bin below REFILL_AT at turn start -> the used pile pours back in. A turn
-  // that played nothing does the same: the shower stirs a pile the claw
-  // cannot bite (flat blades and coins on the floor), which otherwise stalls
-  // a fight for dozens of turns.
-  const REFILL_AT = 3;
+  // Turn-start trickle (DATA.ECONOMY.trickle / binFloor, these are the
+  // fallbacks): a couple of used items rain back in every turn, and a bin
+  // below the floor is topped up to it first, so the cabinet is never bare
+  // while the used pile holds anything. A turn that played nothing pours the
+  // whole used pile back in: the shower stirs a pile the claw cannot bite
+  // (flat blades and coins on the floor), which otherwise stalls a fight for
+  // dozens of turns.
+  const TRICKLE = 2;
+  const BIN_FLOOR = 6;
   // hp multiplier for an earlier act's normal pulled into a later act (event
   // fights, summons). Tracks the tuned normals: act 2 ~x2.0, act 3 ~x3.2 of
   // act 1 (the bible's x1.7 / x2.6 before the balance pass).
@@ -690,6 +694,23 @@ const COMBAT = (() => {
     return items;
   }
   api.refill = function (F) { const c = begin(F); refill(F); return end(F, c); };
+  function econ(k, d) {
+    const e = D().ECONOMY;
+    return Math.max(0, Math.round(num(e && e[k], d)));
+  }
+  // Turn start: top the bin up to binFloor, plus the trickle on top, picked
+  // at random from the used pile, never past the cabinet cap.
+  function trickle(F) {
+    if (!F.used.length) return null;
+    const want = Math.max(0, econ('binFloor', BIN_FLOOR) - F.bin.length) + econ('trickle', TRICKLE);
+    const n = Math.min(F.used.length, MAX_CABINET - F.bin.length, want);
+    if (n <= 0) return null;
+    const items = [];
+    for (let i = 0; i < n; i++) items.push(F.used.splice(Math.floor(F.rng() * F.used.length), 1)[0]);
+    F.bin.push(...items);
+    emit(F, { t: 'refill', items });
+    return items;
+  }
 
   // Player turn start. newFight runs it for turn 1; endTurn runs it for the
   // next turn. The game never needs to call it itself.
@@ -716,7 +737,8 @@ const COMBAT = (() => {
         text(F, p, s === 'freeze' ? 'FROZEN' : 'STUNNED');
       }
     }
-    if (F.bin.length < REFILL_AT || (F.dry && F.used.length)) refill(F);
+    if (F.dry && F.used.length) refill(F);
+    else trickle(F);
     F.dry = false;
     hook(F, 'onTurnStart');
     sanitize(F);
