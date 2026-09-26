@@ -56,6 +56,7 @@ const GAME = (() => {
     MAP: typeof MAP !== 'undefined' ? MAP : null,
     AUDIO: typeof AUDIO !== 'undefined' ? AUDIO : null,
     RENDER: typeof RENDER !== 'undefined' ? RENDER : null,
+    INTRO: typeof INTRO !== 'undefined' ? INTRO : null,
   };
   const FX0 = { burst() {}, text() {}, shake() {}, flash() {}, trail() {}, update() {}, draw() {}, offset() { return { x: 0, y: 0 }; } };
   const fx = () => (X.RENDER && X.RENDER.fx) || FX0;
@@ -176,7 +177,7 @@ const GAME = (() => {
     return {
       ver: SAVE_VER, unlocks: { knight: true },
       stats: { runs: 0, wins: 0, bestAct: 0, jackpots: 0, kills: 0, fights: 0, played: 0 },
-      seen: { items: {}, relics: {} }, tutorialDone: false, settings: { shake: true },
+      seen: { items: {}, relics: {} }, tutorialDone: false, introSeen: false, settings: { shake: true },
     };
   }
   function loadMeta() {
@@ -190,6 +191,7 @@ const GAME = (() => {
           S.meta.stats = Object.assign(S.meta.stats, o.stats || {});
           S.meta.seen = { items: Object.assign({}, (o.seen && o.seen.items) || {}), relics: Object.assign({}, (o.seen && o.seen.relics) || {}) };
           S.meta.tutorialDone = !!o.tutorialDone;
+          S.meta.introSeen = !!o.introSeen;
           S.meta.settings = Object.assign(S.meta.settings, o.settings || {});
         }
       }
@@ -404,7 +406,7 @@ const GAME = (() => {
   }
 
   // ---------------------------------------------------------------- screens
-  const SCREENS = ['title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection'];
+  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection'];
   function setScreen(name) {
     S.screen = name;
     S.ui.buttons = [];
@@ -430,7 +432,7 @@ const GAME = (() => {
     else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
-    if (['fight', 'bin', 'help', 'collection', 'title', 'chars', 'gameover', 'win'].indexOf(name) < 0) save();
+    if (['intro', 'fight', 'bin', 'help', 'collection', 'title', 'chars', 'gameover', 'win'].indexOf(name) < 0) save();
   }
 
   // ---- title
@@ -444,6 +446,7 @@ const GAME = (() => {
     const row = h('div', 'row');
     row.appendChild(btn('Help', () => showHelp('title')));
     row.appendChild(btn('Collection', () => showCollection()));
+    row.appendChild(btn('Intro', () => playIntro(false)));
     m.appendChild(row);
     const row2 = h('div', 'row');
     const A = X.AUDIO;
@@ -454,6 +457,20 @@ const GAME = (() => {
     m.appendChild(row2);
     const st = S.meta.stats;
     m.appendChild(h('div', 'footer', st.runs ? `${st.runs} runs, ${st.wins} wins, best act ${st.bestAct}` : 'The Prize Master is waiting.'));
+  }
+
+  // ---- intro cinematic (js/intro.js). The first launch plays it once;
+  // the title's INTRO button replays it. Headless it is a no-op that lands
+  // on the title at once. Any tap or key skips (GAME.pointer / onKey).
+  function playIntro(first) {
+    const I = X.INTRO;
+    if (!I || !I.play) { if (first) { S.meta.introSeen = true; saveMeta(); } return false; }
+    setScreen('intro');
+    music('off');
+    return I.play({
+      ctx: S.ctx, px: () => S.px || 1, headless: S.headless,
+      onDone: () => { if (first) { S.meta.introSeen = true; saveMeta(); } showTitle(); },
+    });
   }
 
   // ---- character select
@@ -2292,6 +2309,7 @@ const GAME = (() => {
   function pointer(type, x, y, ev) {
     if (X.AUDIO && X.AUDIO.init && type === 'down') { try { X.AUDIO.init(); } catch (e) { /* optional */ } }
     if (type === 'down' && S.popover) { popover(null); }
+    if (S.screen === 'intro') { if (type === 'down' && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'map') { mapPointer(type, x, y, ev); return; }
     if (S.screen === 'title') return;
     if (S.screen !== 'fight' || !F || !FS) return;
@@ -2357,6 +2375,7 @@ const GAME = (() => {
   function onKey(ev, down) {
     const k = ev.key;
     if (down && k === 'Escape') { popover(null); return; }
+    if (S.screen === 'intro') { if (down && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen !== 'fight' || !FS) return;
     if (k === 'ArrowLeft') FS.keyDir = down ? -1 : (FS.keyDir === -1 ? 0 : FS.keyDir);
     else if (k === 'ArrowRight') FS.keyDir = down ? 1 : (FS.keyDir === 1 ? 0 : FS.keyDir);
@@ -2368,6 +2387,7 @@ const GAME = (() => {
   function draw() {
     const ctx = S.ctx;
     if (!ctx) return;
+    if (S.screen === 'intro') return;   // the intro paints the canvas itself
     const t = S.t;
     const R = X.RENDER;
     ctx.save();
@@ -2661,6 +2681,11 @@ const GAME = (() => {
     resize();
     showTitle();
     loop();
+    // First launch: the intro, unless a capture script opened ?intro=render
+    // (it drives INTRO.draw by hand and must not be interrupted).
+    let renderMode = false;
+    try { renderMode = /[?&]intro=render/.test(window.location.search); } catch (e) { renderMode = false; }
+    if (!S.meta.introSeen && !renderMode) playIntro(true);
   }
 
   function state() {
@@ -2672,7 +2697,7 @@ const GAME = (() => {
     newRun, toMap, enterTile, addItem, startFight, endFight, dropClaw, steer, endTurn, save, load, mapTap,
     playDelivered: (bodies) => { for (const b of bodies || []) if (FS && FS.items.indexOf(b) >= 0) deliver(b); },
     tap, pointer, choose, state, hexToStage, stageToHex, lookAt, locate, wheel, bossArrow, startWalk, stopWalk, walkXY, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
-    showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, resolveFx, gainRelic, applyClawUpgrade, rollShop,
+    showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, playIntro, resolveFx, gainRelic, applyClawUpgrade, rollShop,
     rigEvent: (ev) => { if (FS && FS.rig) onRigEvent(ev); },   // test hook: feed one rig event
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
@@ -2692,5 +2717,6 @@ window.CS = {
   MAP: typeof MAP !== 'undefined' ? MAP : undefined,
   AUDIO: typeof AUDIO !== 'undefined' ? AUDIO : undefined,
   RENDER: typeof RENDER !== 'undefined' ? RENDER : undefined,
+  INTRO: typeof INTRO !== 'undefined' ? INTRO : undefined,
   GAME,
 };

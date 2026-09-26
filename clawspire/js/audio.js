@@ -818,8 +818,189 @@ const AUDIO = (() => {
     }
   }
 
+  // ---------------------------------------------------------------- intro stinger
+  // A 10 second timeline for INTRO (js/intro.js), scheduled in one go against
+  // the AudioContext clock so it stays locked to the picture. Built from the
+  // sfx bank and the fight tune, through its own bus so a skip can cut it.
+  const INTRO_LEN = 10;
+  const INTRO_SEED = 0x1A70;
+  function introSchedule(bus, t0) {
+    const ac = S.ac;
+    // One voice of a bank entry at t0 + at, with its own level and pitch.
+    const v = (name, at, o) => {
+      const fn = BANK[name];
+      if (!fn) return;
+      o = o || {};
+      const g = ac.createGain();
+      setP(g.gain, (LEVEL[name] || 1) * (o.vol == null ? 1 : o.vol));
+      g.connect(bus);
+      fn(g, t0 + at, o, U.clamp(o.pitch == null ? 1 : o.pitch, 0.25, 4));
+    };
+    const whip = (at) => {
+      hiss(bus, t0 + at, { type: 'bandpass', f: 500, to: 4200, q: 1.2, dur: 0.1, v: 0.3, a: 0.01 });
+      hiss(bus, t0 + at, { type: 'highpass', f: 6000, dur: 0.02, v: 0.15 });
+    };
+    // 0.0-1.0 the drop: a dying bulb, the marquee chase, the bass hit, the slam.
+    [0.03, 0.09, 0.16, 0.24, 0.31, 0.36].forEach((at, i) => blip(bus, t0, { at, w: 'square', f: 3200 - i * 120, to: 2200, dur: 0.02, v: 0.05 }));
+    blip(bus, t0, { at: 0.0, w: 'sine', f: 60, dur: 0.42, v: 0.05, a: 0.05, vib: [8, 3] });
+    v('hitBig', 0.4, { vol: 1.25, pitch: 0.85 });
+    for (let i = 0; i < 13; i++) blip(bus, t0, { at: 0.4 + i * 0.023, w: 'square', f: 700 + i * 90, dur: 0.045, v: 0.07, lp: 5000 });
+    v('clawDrop', 0.62, { vol: 1.1 });
+    v('clawMove', 0.62, { pitch: 1.1 }); v('clawMove', 0.74, { pitch: 1.25 }); v('clawMove', 0.86, { pitch: 1.4 });
+    hiss(bus, t0, { at: 0.64, type: 'bandpass', f: 300, to: 3200, q: 1.5, dur: 0.36, v: 0.28, a: 0.1 });
+    // 1.0-3.0 the scatter: the impact, a slow-motion clatter, the close, the rise.
+    v('hitBig', 1.0, { vol: 1.35, pitch: 0.7 });
+    v('clawTouch', 1.0, { pitch: 0.8 });
+    v('shake', 1.02, { vol: 0.8 });
+    for (let i = 0; i < 15; i++) v('itemLand', 1.06 + i * 0.066 + (i % 3) * 0.012, { mass: 0.8 + (i % 4) * 0.7, vel: 1 - i * 0.04, pitch: 0.55 + (i % 5) * 0.06, vol: 0.9 });
+    v('clawClose', 2.1, { pitch: 0.95 });
+    v('clawLift', 2.35, { pitch: 1.35, vol: 1.1 });
+    for (let i = 0; i < 6; i++) v('itemLand', 2.45 + i * 0.09, { mass: 0.6 + (i % 3) * 0.5, vel: 0.8, pitch: 1 + (i % 3) * 0.1 });
+    v('itemSlip', 2.6, { vol: 0.6 });
+    // 3.0-5.5 the fight montage: whips, the lunge, the sword hit, the stamps, the freeze.
+    whip(3.0);
+    hiss(bus, t0, { at: 3.05, type: 'lowpass', f: 400, to: 1800, dur: 0.3, v: 0.25, a: 0.05 });
+    v('hitBig', 3.3, { vol: 0.55, pitch: 0.9 });
+    v('step', 3.36, { pitch: 0.7, vol: 1.2 });
+    whip(3.6);
+    hiss(bus, t0, { at: 3.62, type: 'bandpass', f: 700, to: 2600, q: 2, dur: 0.2, v: 0.22, a: 0.02 });
+    v('hit', 3.82, { amt: 12, vol: 1.2 });
+    v('hitBig', 3.82, { vol: 1.1 });
+    v('coin', 3.86, { pitch: 1.2, vol: 0.8 });
+    whip(4.2);
+    v('burn', 4.23, { vol: 1.1 });
+    v('poison', 4.35, { vol: 1.1 });
+    v('freeze', 4.5, { vol: 1.2 });
+    v('hitBig', 4.54, { vol: 0.6, pitch: 1.2 });
+    whip(4.85);
+    v('block', 4.86, { pitch: 1.3 });
+    v('freeze', 5.0, { pitch: 1.4, vol: 0.5 });
+    v('hit', 5.17, { amt: 7 });
+    v('block', 5.17, { pitch: 0.9, vol: 1.1 });
+    // 5.5-7.5 the climb: a riser, ink splashes and steps racing up the road, the boss hit.
+    whip(5.5);
+    blip(bus, t0, { at: 5.5, w: 'sawtooth', f: 55, to: 440, lin: true, dur: 1.85, v: 0.13, a: 0.2, lp: 1100, q: 2 });
+    blip(bus, t0, { at: 5.5, w: 'square', f: 110, to: 880, lin: true, dur: 1.85, v: 0.05, a: 0.4, lp: 1600 });
+    hiss(bus, t0, { at: 5.5, type: 'bandpass', f: 250, to: 5200, q: 0.9, dur: 1.85, v: 0.22, a: 0.6 });
+    for (let i = 0; i < 12; i++) v('reveal', 5.6 + i * 0.14, { pitch: 0.9 + i * 0.07, vol: 0.8 });
+    for (let i = 0; i < 14; i++) v('step', 5.62 + i * 0.12, { pitch: 0.8 + i * 0.06, vol: 0.7 });
+    v('boss', 7.3, { vol: 0.9 });
+    v('hitBig', 7.3, { vol: 1.35, pitch: 0.8 });
+    // 7.5-10 the name: a chord stab, nine metal clacks, the fight lead, the claw opening, typing, the fanfare.
+    whip(7.5);
+    v('hitBig', 7.5, { vol: 0.8 });
+    const sg = song('fight');
+    if (sg) {
+      const c = sg.cfg, scale = SCALES[c.scale];
+      const root = c.root + 12;
+      [0, 2, 4].forEach((d) => blip(bus, t0, { at: 7.5, w: 'square', f: mtof(root + deg2semi(scale, d) + 12), dur: 0.5, v: 0.08, a: 0.004, lp: 2200 }));
+      blip(bus, t0, { at: 7.5, w: 'triangle', f: mtof(root - 12), dur: 0.6, v: 0.2 });
+      // the lead motif and its bass under the logo, from the tune's first bars
+      const layer = ac.createGain(); setP(layer.gain, 0.85); layer.connect(bus);
+      const inst = { song: sg, layer };
+      const steps = 18;
+      for (let i = 0; i < steps; i++) {
+        for (const ev of sg.steps[i]) {
+          try { playEvent(inst, ev, t0 + 7.6 + i * sg.stepDur); } catch (e) { /* one bad note never stops the stinger */ }
+        }
+      }
+    }
+    for (let i = 0; i < 9; i++) {
+      v('clawClose', 7.55 + i * 0.08 + 0.1, { pitch: 0.9 + i * 0.05, vol: 0.75 });
+      v('hit', 7.55 + i * 0.08 + 0.1, { amt: 4, vol: 0.5 });
+    }
+    v('clawRelease', 8.45, { vol: 1.1 });
+    for (let i = 0; i < 22; i++) v('click', 8.65 + i * 0.034, { pitch: 1.4 + (i % 3) * 0.15, vol: 0.6 });
+    v('hitBig', 9.6, { vol: 1.4 });
+    v('jackpot', 9.62, { vol: 0.9 });
+    [60, 64, 67, 72].forEach((n) => blip(bus, t0, { at: 9.6, w: 'square', f: mtof(n), dur: 0.5, v: 0.07, lp: 3500, vib: [6, 4] }));
+    blip(bus, t0, { at: 9.6, w: 'triangle', f: mtof(48), dur: 0.55, v: 0.2 });
+  }
+
+  /* Schedules the whole stinger from t0 (default: now). Returns a handle
+     {t0, end, stop()} or null before init (or with both channels off,
+     unless o.force). Deterministic: the per-call rng is reseeded. */
+  function intro(t0, o) {
+    o = o || {};
+    if (!S.ac) return null;
+    if (!o.force && !prefs().sfx && !prefs().music) return null;
+    const ac = S.ac;
+    const t = t0 == null ? now() + 0.05 : +t0;
+    const bus = ac.createGain();
+    const level = o.level == null ? Math.max(S.vSfx, S.vMus) * 0.9 : o.level;
+    try { bus.gain.setValueAtTime(level, t); bus.gain.setValueAtTime(level, t + INTRO_LEN - 0.1); bus.gain.linearRampToValueAtTime(0.0001, t + INTRO_LEN); } catch (e) { setP(bus.gain, level); }
+    bus.connect(S.comp || S.master || ac.destination);
+    const saved = S.r;
+    S.r = U.rng(INTRO_SEED);
+    try { introSchedule(bus, t); } catch (e) { /* a broken voice never kills the rest */ }
+    S.r = saved;
+    let stopped = false;
+    return {
+      t0: t, end: t + INTRO_LEN,
+      stop() {
+        if (stopped) return;
+        stopped = true;
+        try {
+          const n = now();
+          if (bus.gain.cancelScheduledValues) bus.gain.cancelScheduledValues(n);
+          bus.gain.setValueAtTime(bus.gain.value == null ? level : bus.gain.value, n);
+          bus.gain.linearRampToValueAtTime(0.0001, n + 0.08);
+        } catch (e) { setP(bus.gain, 0); }
+        try { if (typeof setTimeout === 'function') setTimeout(() => { try { bus.disconnect(); } catch (e) { /* ignore */ } }, 200); } catch (e) { /* ignore */ }
+      },
+    };
+  }
+
+  // Runs fn with the graph temporarily built on another context (the
+  // offline renderer), then puts the live graph back.
+  function withContext(ac, fn) {
+    const keys = ['ac', 'comp', 'master', 'sfxBus', 'musBus', 'duckG', 'white', 'crunch'];
+    const saved = {};
+    for (const k of keys) saved[k] = S[k];
+    try { build(ac); return fn(); } finally { for (const k of keys) S[k] = saved[k]; }
+  }
+  // AudioBuffer -> 16-bit PCM WAV (RIFF) ArrayBuffer.
+  function encodeWav(buf) {
+    const ch = Math.max(1, buf.numberOfChannels || 1), n = buf.length | 0, sr = buf.sampleRate || 44100;
+    const data = [];
+    for (let c = 0; c < ch; c++) data.push(buf.getChannelData(c));
+    const out = new ArrayBuffer(44 + n * ch * 2);
+    const dv = new DataView(out);
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, 'RIFF'); dv.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE');
+    str(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, ch, true);
+    dv.setUint32(24, sr, true); dv.setUint32(28, sr * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true);
+    str(36, 'data'); dv.setUint32(40, n * ch * 2, true);
+    let p = 44;
+    for (let i = 0; i < n; i++) {
+      for (let c = 0; c < ch; c++) {
+        const s = U.clamp(data[c][i] || 0, -1, 1);
+        dv.setInt16(p, s < 0 ? s * 32768 : s * 32767, true);
+        p += 2;
+      }
+    }
+    return out;
+  }
+  /* Renders the stinger offline (44.1 kHz stereo) and resolves to a WAV
+     ArrayBuffer. Needs window.OfflineAudioContext; no user gesture required. */
+  function renderIntroWav(seconds) {
+    const sec = U.clamp(+seconds || INTRO_LEN, 1, 60);
+    const Wn = typeof window !== 'undefined' ? window : null;
+    const OC = Wn && (Wn.OfflineAudioContext || Wn.webkitOfflineAudioContext);
+    if (!OC) return Promise.reject(new Error('no OfflineAudioContext'));
+    const sr = 44100;
+    let oc;
+    try { oc = new OC(2, Math.round(sr * sec), sr); } catch (e) { return Promise.reject(e); }
+    try {
+      withContext(oc, () => intro(0.02, { force: true, level: 0.72 }));
+    } catch (e) { return Promise.reject(e); }
+    let p;
+    try { p = oc.startRendering(); } catch (e) { return Promise.reject(e); }
+    return Promise.resolve(p).then((buf) => encodeWav(buf));
+  }
+
   return {
-    init, sfx, music, setVolume, duck, haptic,
+    init, sfx, music, setVolume, duck, haptic, intro, renderIntroWav,
     names: NAMES.slice(), modes: MODES.slice(),
     get ready() { return !!S.ac; },
     get mode() { return S.want; },

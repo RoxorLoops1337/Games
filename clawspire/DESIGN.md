@@ -36,9 +36,10 @@ hot pink `#ff2e88`, arcade cyan `#2ee6d6`, prize gold `#ffc94d`, slime lime
   WebAudio synthesis. Nothing from the network.
 - **Classic scripts, shared global scope.** `index.html` loads, in this exact
   order: `js/util.js`, `js/art.js`, `js/physics.js`, `js/data.js`, `js/combat.js`,
-  `js/map.js`, `js/audio.js`, `js/render.js`, `js/game.js`. Each file declares
-  ONE top-level `const` namespace (`U`, `ART`, `PHYS`, `DATA`, `COMBAT`, `MAP`,
-  `AUDIO`, `RENDER`, `GAME`) and may use every namespace loaded before it.
+  `js/map.js`, `js/audio.js`, `js/render.js`, `js/intro.js`, `js/game.js`. Each
+  file declares ONE top-level `const` namespace (`U`, `ART`, `PHYS`, `DATA`,
+  `COMBAT`, `MAP`, `AUDIO`, `RENDER`, `INTRO`, `GAME`) and may use every
+  namespace loaded before it.
   `ART` (optional PNG overrides from `art/`, see `ART_PROMPTS.md`) reads the
   later namespaces lazily; the drawn art is always the fallback.
   Nothing else at top level (no stray top-level `let x` that could collide;
@@ -579,6 +580,55 @@ Every enemy art key and every item art key listed in the data section must be dr
 distinctly (a test iterates all defs through `RENDER.item` / `RENDER.enemy` with the no-op ctx).
 Items must read at 24px. Enemies: idle bob/breathe from `t`, a lunge on `attack`, a white flash +
 squash on `hurt`, a fall/fade on `dead`. Bosses are 1.6× and have an aura.
+
+### `js/intro.js` -- `INTRO` (the 10 second cinematic)
+
+The intro is drawn with the game's own art on the game canvas and is a pure
+function of time, so the same frame can be played in the browser or captured
+one by one for the video (`clawspire/intro.mp4`, poster `intro_poster.jpg`,
+1080 x 1920, 60 fps, H.264 + AAC, 10.0 s; a `intro.webm` copy when it was cheap).
+
+```js
+INTRO.prepare() -> P            // once: runs the physics scatter (24 items, a real claw drop with an outward burst on the
+                                // touch, recorded per 1/240 s substep), generates the act 1 world map (seed 48) with
+                                // per-tile reveal times along the road, seeds the particles. Cached.
+INTRO.draw(ctx, t, w, h, opts)  // the frame at t seconds on a w x h logical stage (540 x 960 scaled); opts {tap, hint}
+INTRO.play({ctx, px, headless, onDone}) -> bool   // requestAnimationFrame against performance.now, not the game loop;
+                                // starts AUDIO.intro() when the audio is unlocked; holds the hero frame with TAP TO PLAY
+                                // for 4 s; headless (no ctx / no rAF) it calls onDone at once and returns false
+INTRO.skip() -> bool            // ends the run and calls onDone (any tap or key while GAME.screen === 'intro')
+INTRO.active, INTRO.time, INTRO.DUR (10), INTRO.SHOTS, INTRO.CUTS, INTRO.LETTERS, INTRO.TAGLINE
+```
+
+Shots: 0-1 the drop (a dying marquee bulb, the rail chases on with a bass hit,
+the claw slams in with streaks and shake), 1-3 the scatter (the pile bursts at
+x0.32 slow motion behind a glass reflection wipe, the claw closes on the
+shield and the sword and races up), 3-5.5 the fight (four cuts with whip
+transitions: the lunge with speed lines, the sword hit with a "12", the
+BURN / POISON / FREEZE stamps and the goblin freezing solid, pink then cyan
+flashes with a "7"), 5.5-7.5 the climb (the camera racing up the road, ink
+splashes painting hexes open, landing on the boss skull), 7.5-10 the name
+(the letters slam in 0.08 s apart in chrome over a pink under-glow, the claw
+rises behind and opens, the tagline types, a fanfare hit at 9.6 s). Camera
+pushes, whips and shakes are ctx transforms; letterbox bars over the montage;
+light grain and vignette; the hits get a pink / cyan chromatic split through
+an offscreen silhouette. `RENDER.fx` is not used (its rng is stateful): every
+particle is seeded at prepare and positioned from t.
+
+Audio: `AUDIO.intro(t0?, {force, level})` schedules the whole 10 s stinger on
+the AudioContext clock through its own bus (bass hit, motor whir, the
+slow-motion clatter, hit / hitBig, status blips, a riser through the climb, a
+chord stab plus 18 steps of the fight tune under the logo, the fanfare at
+9.6 s) and returns `{t0, end, stop()}`; deterministic (its rng is reseeded).
+`AUDIO.renderIntroWav(seconds) -> Promise<ArrayBuffer>` runs the same schedule
+on an `OfflineAudioContext` (44.1 kHz stereo) and encodes a 16-bit WAV.
+
+Game hooks (`game.js`): the first launch plays it (`S.meta.introSeen`, saved
+after `onDone`), the title has an INTRO button (`GAME.playIntro`), the screen
+`'intro'` hides the overlays, `draw()` leaves the canvas to the intro, a
+pointer down or a key skips, `?intro=render` disables the autoplay for the
+capture script. Tests: `tests/clawspire_intro.test.mjs` (+ blocks in the
+audio and game suites).
 
 ### `js/game.js` -- `GAME` (+ `index.html`)
 

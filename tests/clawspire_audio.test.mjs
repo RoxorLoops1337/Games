@@ -321,4 +321,66 @@ T.test('music requested before init starts on init; music toggle', () => {
   T.eq(muted.AUDIO._live().length, 0, 'stored music off: init does not start music');
 });
 
+/* ---------------------------------------------------------------- part 3: the intro stinger */
+T.test('AUDIO.intro schedules the 10 s stinger against the clock, deterministic, stoppable', () => {
+  const { AUDIO, fake } = bootFake();
+  T.eq(AUDIO.intro(), null, 'intro before init is null');
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  ac.currentTime = 5;
+  const before = fake.count.total;
+  const h = AUDIO.intro();
+  T.ok(h && typeof h.stop === 'function', 'returns a handle with stop()');
+  T.near(h.t0, 5.05, 0.01, 'starts just after now by default');
+  T.near(h.end, h.t0 + 10, 0.001, 'ends 10 s later');
+  const made = fake.count.total - before;
+  T.ok(made > 400, `builds a big graph [${made} nodes]`);
+  T.ok(fake.count.osc > 150 && fake.count.src > 40, `oscillators and noise voices [${fake.count.osc} osc, ${fake.count.src} noise]`);
+  h.stop(); h.stop();
+  // explicit t0 and determinism: the same node counts from a fresh boot
+  const b2 = bootFake(); b2.AUDIO.init();
+  const c0 = b2.fake.count.total;
+  const h2 = b2.AUDIO.intro(12);
+  T.eq(h2.t0, 12, 'explicit t0 honoured');
+  T.eq(b2.fake.count.total - c0, made, 'same schedule size on a fresh boot');
+  // both channels off: nothing unless forced
+  const off = bootFake({ clawspire_audio: JSON.stringify({ sfx: false, music: false }) });
+  off.AUDIO.init();
+  T.eq(off.AUDIO.intro(), null, 'muted profile: no stinger');
+  T.ok(off.AUDIO.intro(0, { force: true }), 'forced anyway for the offline render');
+});
+
+// The harness runs tests synchronously, so the async render is awaited at top level.
+await (async () => { try {
+  const api = boot({ only: ['util', 'audio'] });
+  const { AUDIO } = api;
+  let rejected = false;
+  await AUDIO.renderIntroWav(2).catch(() => { rejected = true; });
+  T.eq(rejected, true, 'rejects without an OfflineAudioContext');
+  const fake = fakeAudio();
+  const made = [];
+  class FakeOffline extends fake.FakeAC {
+    constructor(ch, len, sr) { super(); this.ch = ch; this.length = len; this.sampleRate = sr; this.state = 'running'; made.push(this); }
+    startRendering() {
+      const ch = this.ch, len = this.length;
+      const data = []; for (let c = 0; c < ch; c++) { const d = new Float32Array(len); for (let i = 0; i < len; i++) d[i] = Math.sin(i * 0.05) * 0.5; data.push(d); }
+      return Promise.resolve({ numberOfChannels: ch, length: len, sampleRate: this.sampleRate, getChannelData: (c) => data[c] });
+    }
+  }
+  api._window.OfflineAudioContext = FakeOffline;
+  const buf = await AUDIO.renderIntroWav(2);
+  T.ok(buf instanceof ArrayBuffer, 'resolves to an ArrayBuffer');
+  T.eq(made.length, 1, 'one offline context');
+  T.eq(made[0].ch, 2, 'stereo'); T.eq(made[0].sampleRate, 44100, '44.1 kHz'); T.eq(made[0].length, 88200, '2 s of samples');
+  const dv = new DataView(buf);
+  const tag = (o) => String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3));
+  T.eq(tag(0), 'RIFF', 'RIFF header'); T.eq(tag(8), 'WAVE', 'WAVE tag'); T.eq(tag(12), 'fmt ', 'fmt chunk'); T.eq(tag(36), 'data', 'data chunk');
+  T.eq(dv.getUint16(22, true), 2, '2 channels'); T.eq(dv.getUint32(24, true), 44100, 'sample rate'); T.eq(dv.getUint16(34, true), 16, '16 bit');
+  T.eq(buf.byteLength, 44 + 88200 * 4, 'header + samples');
+  T.eq(dv.getUint32(40, true), 88200 * 4, 'data size');
+  T.ok(Math.abs(dv.getInt16(44 + 20 * 4, true) - Math.round(Math.sin(20 * 0.05) * 0.5 * 32767)) <= 1, 'samples encoded');
+  T.eq(AUDIO.ready, false, 'the live graph is untouched (still not initialised)');
+  T.ok(fake.count.osc > 150, `the schedule ran on the offline context [${fake.count.osc} osc]`);
+} catch (e) { T.ok(false, 'renderIntroWav test threw :: ' + (e && e.stack || e)); } })();
+
 T.done();
