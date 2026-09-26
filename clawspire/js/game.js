@@ -2443,15 +2443,18 @@ const GAME = (() => {
     F.enemies.forEach((e, i) => {
       const p = enemyPos(i);
       const a = anim(i);
+      // Combat resolves in one go, so an enemy can be dead in the state while
+      // its 'die' event is still queued for its beat: keep drawing it alive
+      // until the event plays, then the fall animation runs once.
+      const pendingDeath = !e.alive && !a.dead;
       if (!e.alive && a.dead >= 1) return;
-      if (!e.alive && !a.dead) a.dead = 1;
-      const st = { hurt: a.hurt, attack: a.attack, dead: e.alive ? 0 : a.dead, frozen: !!(e.status.freeze), poisoned: !!(e.status.poison), burning: !!(e.status.burn) };
+      const st = { hurt: a.hurt, attack: a.attack, dead: (e.alive || pendingDeath) ? 0 : a.dead, frozen: !!(e.status.freeze), poisoned: !!(e.status.poison), burning: !!(e.status.burn) };
       if (i === F.target && e.alive) {
         ctx.save(); ctx.strokeStyle = '#ff2e88'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.lineDashOffset = -t * 30;
         ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, Math.max(40, p.w * 0.5), 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
       }
       if (R && R.enemy) R.enemy(ctx, e.def, p.x, p.y, p.scale, t, st);
-      if (!e.alive) return;
+      if (!e.alive && !pendingDeath) return;
       // hp bar under the feet, status pips under that, intent above the head
       // (never under the top bar)
       const bw = U.clamp(p.w * 0.9, 84, 150);
