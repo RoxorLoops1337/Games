@@ -59,6 +59,9 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.22.0', notes: [
+    'THE ATTRACT REEL \u{1F39E}\u{FE0F} — the machine has a film now: twenty seconds of one coin detonating in the dark, a storm of gold, the crawl, the pour, the TILT, the wheel and the lair — cut to its own soundtrack and ending where every arcade story ends, on INSERT COIN. The \u{1F39E}\u{FE0F} INTRO chip on the title screen runs it; tap anywhere to skip. If the reel ever goes missing the chip goes with it — nothing breaks',
+  ] },
   { v: '1.21.0', notes: [
     'THE UNDERLAKE OPENS \u{1F30A} \u2014 the fifth act\u2019s lairs were crashing on their first frame: THE DROWNED BANKER and THE SILT QUEEN ship without painted sheets, and the renderer was handed their bare names anyway. Floors 21\u201325 were unreachable past the lair door. They draw now \u2014 by their marks, like any foe the painter has not reached yet',
     'THE FULL AUDIT \u{1F50D} \u2014 every relic, sigil, trait, mutator and boss hex was checked against what its card claims. Two effects were short: DEAD EYE\u2019s +1 never showed in the bag\u2019s effect sheet, and BLOOD SCENT skipped the Dire Rat. Both paid in full now. Five cards said more than the code does \u2014 the bloom, the gardener, the vault louse, the snatcher and the \u201ceverything you deal\u201d sigils \u2014 and now say exactly what happens',
@@ -11978,6 +11981,44 @@ if (!HEADLESS) (function browser() {
   // ---- the PWA rig: offline worker + the pocket-install prompt ----
   // the worker makes the game survive airplane mode after one visit; the
   // browser's install offer is caught and re-offered as a title chip
+  // ---- the attract reel: a pre-rendered 20s cinematic, shipped as intro.mp4.
+  // Missing file = missing chip, never a broken screen (the art rule applies
+  // to film too). Plays with sound because the chip press IS the gesture.
+  let introOK = false, introEl = null;
+  fetch('intro.mp4', { method: 'HEAD' }).then(r => { introOK = !!r.ok; }).catch(() => {});
+  function playIntro() {
+    if (introEl) return;
+    const v = document.createElement('video');
+    // two prints of the same reel: h264 for the wide world, vp9 for the
+    // chromium builds that ship without the licensed decoders
+    for (const [f, ty] of [['intro.mp4', 'video/mp4'], ['intro.webm', 'video/webm']]) {
+      const s = document.createElement('source');
+      s.src = f; s.type = ty;
+      v.appendChild(s);
+    }
+    v.poster = 'intro_poster.jpg';
+    v.playsInline = true; v.setAttribute('playsinline', '');
+    v.muted = !!S.mute;
+    v.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:contain;'
+                    + 'background:#000;z-index:90;cursor:pointer';
+    const kill = () => {
+      if (introEl !== v) return;
+      introEl = null;
+      try { v.pause(); } catch (e) {}
+      v.remove();
+    };
+    v.onended = kill;
+    // with <source> children a failed print falls through to the next; only
+    // the LAST source failing (or a mid-play decode fault) drops the curtain
+    v.onerror = kill;
+    if (v.lastChild) v.lastChild.addEventListener('error', kill);
+    v.addEventListener('click', kill);          // the whole reel is the skip button
+    document.body.appendChild(v);
+    introEl = v;
+    const p = v.play();
+    if (p && p.catch) p.catch(kill);
+  }
+
   let installEvt = null;
   if (typeof navigator !== 'undefined' && navigator.serviceWorker
       && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
@@ -15863,6 +15904,13 @@ if (!HEADLESS) (function browser() {
     if (S.best.floor >= 5) {
       uiBtn(14, chipY, 108, 28, '\u{1F3B0} MACHINE', () => { THEMES = true; },
             { bg: 'rgba(44,34,50,0.95)', border: '#9a8aa0', col: '#e8d8ec',
+              font: '900 10px Grimcut, Verdana, sans-serif', r: 10 });
+      chipY += 34;
+    }
+    // the attract reel — only offered once the film is known to exist
+    if (introOK) {
+      uiBtn(14, chipY, 108, 28, '\u{1F39E}\u{FE0F} INTRO', playIntro,
+            { grad: ['#3a2a52', '#221636'], border: '#b89ae0', col: '#efe2ff',
               font: '900 10px Grimcut, Verdana, sans-serif', r: 10 });
       chipY += 34;
     }
