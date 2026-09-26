@@ -987,4 +987,27 @@ h.test('keyboard steering and drop', () => {
   Gt.draw();
 });
 
+h.test('intro: first launch marks introSeen and lands on the title, INTRO button replays', () => {
+  const api = boot();
+  const G = api.GAME;
+  {
+    h.ok(api.INTRO && typeof api.INTRO.play === 'function', 'INTRO exposed on window.CS');
+    h.eq(G.meta.introSeen, true, 'first launch: intro seen (headless no-op ran)');
+    h.eq(G.screen, 'title', 'reached the title after onDone');
+    const saved = JSON.parse(api._store[G.META_KEY] || '{}');
+    h.eq(saved.introSeen, true, 'introSeen persisted');
+    const b = G.S.ui.buttons.find(x => x.label === 'Intro');
+    h.ok(!!b, 'the title has an INTRO button');
+    let screens = [];
+    if (b) { b.fn(); screens.push(G.screen); }
+    h.eq(G.screen, 'title', 'replay headless returns to the title at once');
+    h.eq(api.INTRO.active, false, 'nothing left running');
+    // a profile that has seen it does not replay on boot
+    const again = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, unlocks: { knight: true } }) } });
+    h.eq(again.GAME.meta.introSeen, true, 'stored introSeen read back');
+    h.eq(again.GAME.screen, 'title', 'boots to the title');
+    void screens;
+  }
+});
+
 h.done();
