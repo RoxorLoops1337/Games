@@ -51,7 +51,9 @@ const PHYS = (() => {
     hubR: 13, segR: 4.5, hingeX: 7, hingeY: 7,      // times size
     hubDrop: 14,           // hub centre below the rail when parked
     dropSpeed: 250, liftSpeed: 175, carSpeed: 330,
-    closeRate: 2.6, openRate: 3.2, openT: 0.35, openHold: 1.2,
+    closeRate: 2.6, openRate: 3.2, openT: 0.35, openHold: 0.6,
+    passT: 0.7,                // s a wedged item ignores the claw so it can fall out of it
+    idleShed: 0.35,            // s at home before anything still riding the claw is dropped
     closeMin: 0.18, closeMax: 0.8, blockT: 0.08,    // closing ends when both prongs have been blocked blockT (after closeMin), or at closeMax
     haltBase: 1.5, haltGrip: 3,                     // a prong stalls past halt = haltBase + haltGrip * grip px of penetration
     haltOpen: 7,                                    // ...plus haltOpen * open^2 while still wide open
@@ -248,7 +250,7 @@ const PHYS = (() => {
     for (const b of B) {
       if (b.type !== 'dynamic') continue;
       if (!b.sl) for (const s of W.segs) bodyVsSeg(W, b, s, false);
-      for (const s of W.csegs) bodyVsSeg(W, b, s, true);
+      if (!(b.passClaw > 0)) for (const s of W.csegs) bodyVsSeg(W, b, s, true);
     }
   }
   function relVel(c, out) {
@@ -340,6 +342,7 @@ const PHYS = (() => {
       else if (b.x > cb.xMax) { b.x = cb.xMax; if (b.vx > 0) b.vx = 0; }
       if (b.y < cb.yMin) { b.y = cb.yMin; if (b.vy < 0) b.vy = 0; }
       if (b.held > 0) b.held -= h * PH.heldDecay;
+      if (b.passClaw > 0) b.passClaw -= h;
       if (!W.busy && sp < PH.sleepV * PH.sleepV && Math.abs(b.av) < PH.sleepW && b.held <= 0) {
         b.slT += h;
         if (b.slT > PH.sleepT) { b.sl = true; b.vx = b.vy = b.av = 0; }
@@ -479,7 +482,7 @@ const PHYS = (() => {
       cableTop: { x: homeX, y: railY },
       bodies: { hub: { x: homeX, y: RAIL, r: RIG.hubR }, prongs: [[], []], ghost: null },
       cfg, homeX, chuteX, railY, geo: null, ctl: K, events: [],
-      setTarget, drop, update, held, locked, cradle, open, setConfig, destroy, calm, size, gripCC,
+      setTarget, drop, update, held, locked, cradle, open, setConfig, destroy, calm, size, gripCC, shed: () => shedRiders(),
     };
     function size() { return RIG.base * cfg.width * (cfg.prongs === 3 ? RIG.prong3Size : 1); }
     /* Clawspire's grip (0.75..2+) mapped onto Claw Crawl's 0..1 grip. */
@@ -563,6 +566,8 @@ const PHYS = (() => {
         case 'idle': {
           const arrived = travel(clampX(K.tx), h);
           K.moving = !arrived;
+          // Nothing rides the parked claw: a leftover passenger is dropped.
+          if (arrived && K.t > RIG.idleShed && W.bodies.some(b => b.held > 0 && b.type === 'dynamic')) shedRiders();
           if (arrived && K.pending) {
             K.pending = false; K.st = 'drop'; K.t = 0; K.touch = false; K.cargo = [];
             W.wakeAll(); emit('drop');
@@ -619,7 +624,13 @@ const PHYS = (() => {
           if (K.pR < PHI_OPEN) K.wR = RIG.openRate;
           // hold still until the load has let go of the prongs (it can hang on a
           // tip for a moment), then travel back to the aim point
-          if (K.t > RIG.openT && (K.t > RIG.openT + RIG.openHold || !W.bodies.some(b => b.held > 0))) { K.st = 'return'; K.t = 0; K.cargo = []; }
+          if (K.t > RIG.openT && (K.t > RIG.openT + RIG.openHold || !W.bodies.some(b => b.held > 0))) {
+            // Anything still wedged in the open claw (two shields jammed
+            // against the hub, say) is let go for real: it stops colliding
+            // with the claw for a moment and drops straight down the chute.
+            shedRiders();
+            K.st = 'return'; K.t = 0; K.cargo = [];
+          }
           break;
       }
       if (K.st === 'drop' && K.y + K.vy * h > maxY) K.vy = (maxY - K.y) / h;
@@ -629,6 +640,18 @@ const PHYS = (() => {
       W.ctl = K;
       buildSegs();
       magnet(h);
+    }
+    /* Let every body still touching the claw fall through it. */
+    function shedRiders() {
+      let n = 0;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || !(b.held > 0)) continue;
+        b.passClaw = RIG.passT; b.held = 0; wake(b);
+        if (b.vy < 40) b.vy = 40;
+        n++;
+      }
+      if (n) emit('slip');
+      return n;
     }
     /* The electromagnet: metal within magnetR of the hub drifts in while the
        claw drops and closes. */

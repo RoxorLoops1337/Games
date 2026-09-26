@@ -552,4 +552,26 @@ h.test('cable sway is visual only: the hub does not swing, the cable top does', 
   h.near(R.y, 26 + PHYS.RIG.hubDrop, 1e-9, 'the hub stayed on the rail');
 });
 
+h.test('nothing rides the claw home: a wedged item is shed and falls', () => {
+  const { W, C } = mkWorld();
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(21) });
+  for (let k = 0; k < 60; k++) { R.update(1 / 60); W.step(1 / 60); }
+  // Park a ball inside the open claw at home and keep it wedged for a moment.
+  const b = W.add(PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r: 14 }, x: R.x, y: R.y + 22, group: 'item', data: {} }));
+  let fell = false, slipped = false;
+  for (let k = 0; k < 60 * 2; k++) {
+    if (k < 30) { b.held = 2; b.x = R.x; b.y = R.y + 22; b.vx = 0; b.vy = 0; }   // wedged against the hub
+    const ev = R.update(1 / 60); W.step(1 / 60);
+    if (ev.indexOf('slip') >= 0) slipped = true;
+    if (b.y > R.y + 80) { fell = true; break; }
+  }
+  h.ok(slipped, 'the parked claw shed its passenger (slip event)');
+  h.ok(fell, `the wedged ball fell away from the claw (y ${b.y.toFixed(0)} vs claw ${R.y.toFixed(0)})`);
+  h.ok(R.phase === 'idle' || R.phase === 'moving', 'claw stays idle while shedding');
+  // Explicit shed hook for the game's watchdog.
+  b.held = 2; b.x = R.x; b.y = R.y + 22;
+  h.ok(R.shed() >= 1, 'shed() reports what it dropped');
+  h.ok(b.passClaw > 0, 'a shed body ignores the claw for a moment');
+});
+
 h.done();
