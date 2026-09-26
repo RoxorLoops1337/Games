@@ -7478,7 +7478,20 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.21.0', 'the cabinet ships as v1.21.0');
+  t.eq(D.VERSION, '1.22.0', 'the cabinet ships as v1.22.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ATTRACT REEL') >= 0)),
+       'and the notes carry the film');
+  // the reel itself ships in the folder — a squash-merge that drops the
+  // binaries would leave the INTRO chip pointing at a 404 forever
+  {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'dungeon_pusher');
+    t.ok(existsSync(join(dir, 'intro.mp4')) && statSync(join(dir, 'intro.mp4')).size > 5e6,
+         'intro.mp4 is in the cabinet and is a real film, not a stub');
+    t.ok(existsSync(join(dir, 'intro.webm')) && statSync(join(dir, 'intro.webm')).size > 3e6,
+         'the vp9 print rides along for chromium builds without h264');
+    t.ok(existsSync(join(dir, 'intro_poster.jpg')) && statSync(join(dir, 'intro_poster.jpg')).size > 2e4,
+         'and the poster frame ships beside it');
+  }
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
