@@ -6,11 +6,16 @@ after an edit reproduces everything else exactly.
 
 ## Pipeline
 
-1. **Gameplay stills** — `capture.mjs` / `capture2.mjs` drive the real game
-   (served locally, controlled through `window.DP`) with Playwright and screenshot
-   the beats: the crawl, the pour, the TILT, the wheel's power meter, the boss.
-   Shots land next to the scripts as `room.png`, `battle_pour.png`, `tilt.png`,
-   `wheel_meter.png`, `boss.png`.
+1. **Gameplay footage** — `clips.mjs` (and `reclip_room.mjs` for the crawl)
+   capture MOVING gameplay: an init script replaces `requestAnimationFrame`
+   with a queue, so the live game only advances when `__tick(ts)` is called —
+   the loop reads dt off the timestamp, so stepping ts by 1000/30 runs the
+   whole sim at exactly the video's 30fps while Playwright screenshots every
+   step. Five clips × 66 frames land in `clips/<name>_NN.jpg`: the crawl
+   (arrow-key walks, modals auto-closed), the pour (real `drop()` calls), the
+   TILT, the wheel's feed → needle → spin arc (`wheelPress()` at the right
+   frames), and the boss lair. `capture.mjs` / `capture2.mjs` are the older
+   still-shot pass, kept for the poster hunts.
 2. **Choreography** — `intro.html` is the renderer: a 720×1260 canvas exposing
    `renderFrame(t)`. It loads the stills, `marquee.png` (copy from
    `dungeon_pusher/art/cab/`) and `font.js` (GRIMCUT — copy from `dungeon_pusher/`)

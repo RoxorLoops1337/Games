@@ -27,11 +27,24 @@ function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }   // 0..1 insid
 // ---- assets -----------------------------------------------------------------
 const IMG = {};
 const LOAD = ['marquee', 'room', 'battle_pour', 'tilt', 'wheel_meter', 'boss'];
+const CLIP = {};                       // moving gameplay: 66 frames per cut
+const CLIP_N = 66;
 let ready = false;
-Promise.all(LOAD.map(n => new Promise(res => {
+const jobs = LOAD.map(n => new Promise(res => {
   const im = new Image(); im.onload = () => { IMG[n] = im; res(); }; im.onerror = res;
   im.src = n + '.png';
-}))).then(() => { ready = true; });
+}));
+for (const n of ['room', 'battle_pour', 'tilt', 'wheel_meter', 'boss']) {
+  CLIP[n] = [];
+  for (let i = 0; i < CLIP_N; i++) {
+    jobs.push(new Promise(res => {
+      const im = new Image();
+      im.onload = () => { CLIP[n][i] = im; res(); }; im.onerror = res;
+      im.src = 'clips/' + n + '_' + String(i).padStart(2, '0') + '.jpg';
+    }));
+  }
+}
+Promise.all(jobs).then(() => { ready = true; });
 
 // ---- palette (the game's gold) ----------------------------------------------
 const GOLD = ['#fffbe6', '#ffd94c', '#e89a10', '#a85c05', '#713801'];
@@ -152,11 +165,13 @@ function shake(t, t0, amp, freq, decay) {
 // SCENES
 // ============================================================================
 const CUTS = [                                     // the montage table
-  { img: 'room',        w: 'DELVE',  t0: 5.0,  t1: 6.6,  dir: 1 },
-  { img: 'battle_pour', w: 'PUSH',   t0: 6.6,  t1: 8.2,  dir: -1 },
-  { img: 'tilt',        w: 'TILT!',  t0: 8.2,  t1: 9.7,  dir: 1,  rage: 1 },
-  { img: 'wheel_meter', w: 'PRESS YOUR LUCK', t0: 9.7, t1: 11.4, dir: -1, small: 1 },
-  { img: 'boss',        w: 'SLAY',   t0: 11.4, t1: 13.0, dir: 1,  punch: 1 },
+  // f0: which clip frame the cut opens on (the footage runs at 30fps)
+  // the DELVE cut punches into the cabinet's dungeon window (zoom + cy)
+  { img: 'room',        w: 'DELVE',  t0: 5.0,  t1: 6.6,  dir: 1,  f0: 6,  zoom: [1.52, 1.62], cy: 556 },
+  { img: 'battle_pour', w: 'PUSH',   t0: 6.6,  t1: 8.2,  dir: -1, f0: 6 },
+  { img: 'tilt',        w: 'TILT!',  t0: 8.2,  t1: 9.7,  dir: 1,  rage: 1, f0: 8 },
+  { img: 'wheel_meter', w: 'PRESS YOUR LUCK', t0: 9.7, t1: 11.4, dir: -1, small: 1, f0: 12 },
+  { img: 'boss',        w: 'SLAY',   t0: 11.4, t1: 13.0, dir: 1,  punch: 1, f0: 4 },
 ];
 
 function bgStone(t, heat) {
@@ -240,19 +255,23 @@ function sceneB(t) {
 function sceneC(t) {
   const c = CUTS.find(c => t >= c.t0 && t < c.t1) || CUTS[CUTS.length - 1];
   const k = seg(t, c.t0, c.t1);
-  const img = IMG[c.img];
+  // the footage: real captured gameplay, stepped at the video's own 30fps
+  const fi = clamp((c.f0 || 0) + Math.floor((t - c.t0) * 30), 0, CLIP_N - 1);
+  const img = (CLIP[c.img] && CLIP[c.img][fi]) || IMG[c.img];
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
   if (img) {
-    // kinetic move: land hard, then keep drifting; SLAY punches INTO the banner
-    const z0 = c.punch ? 1.0 : 1.16, z1 = c.punch ? 1.28 : 1.04;
+    // the footage moves on its own, so the camera only leans in:
+    // a hard landing, a slow creep, and SLAY still punches INTO the banner
+    const z0 = c.zoom ? c.zoom[0] : (c.punch ? 1.02 : 1.10);
+    const z1 = c.zoom ? c.zoom[1] : (c.punch ? 1.22 : 1.03);
     const z = lerp(z0, z1, c.punch ? inCubic(k) : outQuint(k));
-    const rot = (c.dir * (1 - k) * 0.010) - c.dir * 0.004;
-    const panX = c.dir * lerp(14, -10, outCubic(k));
-    const panY = c.punch ? lerp(0, -140, inCubic(k)) : lerp(-16, 10, outCubic(k));
+    const cy = c.cy || H / 2;
+    const panX = c.dir * lerp(10, -8, outCubic(k));
+    const panY = c.punch ? lerp(0, -110, inCubic(k)) : 0;
     ctx.save();
     ctx.translate(CX + panX, H / 2 + panY);
-    ctx.rotate(rot); ctx.scale(z, z);
-    ctx.drawImage(img, -W / 2, -H / 2, W, H);
+    ctx.scale(z, z);
+    ctx.drawImage(img, -W / 2, -(cy - H / 2) - H / 2, W, H);
     ctx.restore();
   }
   // the label, on a black band that cuts across like a stamp
