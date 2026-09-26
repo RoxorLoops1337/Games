@@ -1512,6 +1512,7 @@ const RENDER = (() => {
   /* ============================================================= HEX */
   const TILE_COL = { fight: '#5a2440', elite: '#6a1f3a', treasure: '#5a4a1a', gem: '#1f5a5a', ink: '#2a2a6a', brush: '#4a3a6a', event: '#3a3a5a', shop: '#4a4a1f', rest: '#5a3a1a', forge: '#3a3a3a', boss: '#3a0a24', start: '#1f4a3a', tower: '#2a3a6a', empty: '#2a2340' };
   const FOG = '#1a1230';
+  const ROAD = '#c9a24a';   // the worn ochre of the start-to-boss road
   function hexIcon(ctx, type, r, t) {
     const s = r * 0.62;
     switch (type) {
@@ -1635,6 +1636,8 @@ const RENDER = (() => {
       } else {
         if (terr) {
           ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.97, flat);
+          // the road: a lighter, sun-worn plate under everything on it
+          if (st.road || tile.road) { F(ctx, rgba(ROAD, 0.2)); ctx.fill(); }
           if (tile.visited) { F(ctx, rgba(FOG, 0.3)); ctx.fill(); }
           S(ctx, rgba(INK, 0.8), 2); ctx.stroke();
           if (type !== 'empty' && !ford) {
@@ -1685,18 +1688,49 @@ const RENDER = (() => {
         glow(ctx, 0, 0, r * 1.3, PAL.gold, 0.35);
         ctx.beginPath(); hexPath(ctx, 0, 0, pr, flat); S(ctx, PAL.gold, 4); ctx.stroke();
         ctx.beginPath(); hexPath(ctx, 0, 0, pr * 0.86, flat); S(ctx, rgba(PAL.gold, 0.55 + Math.sin(t * 3) * 0.3), 2); ctx.stroke();
-        // the crawler: a small figure with a claw-cabinet backpack
-        const bob = Math.sin(t * 4) * 1.5, k = r / 30;
-        ctx.save(); ctx.translate(0, r * 0.25 + bob); ctx.scale(k, k);
-        tone(ctx, c => rrect(c, 2, -26, 14, 18, 3), '#1d1233', 9, -17, 9, { dark: -0.3 });
-        ctx.beginPath(); rrect(ctx, 4, -24, 10, 10, 2); F(ctx, rgba(PAL.cyan, 0.7)); ctx.fill();
-        F(ctx, PAL.pink); ctx.beginPath(); ctx.arc(9, -11, 1.8, 0, TAU); ctx.fill();
-        limb(ctx, -4, -8, -6, 0, 4, '#4a3a6a'); limb(ctx, 4, -8, 6, 0, 4, '#4a3a6a');
-        tone(ctx, c => rrect(c, -8, -24, 16, 18, 5), PAL.pink, 0, -15, 8, { dark: -0.3 });
-        tone(ctx, c => circ(c, -2, -30, 8), '#f1c9a6', -2, -30, 8, { dark: -0.25 });
-        F(ctx, INK); ctx.beginPath(); circ(ctx, -5, -31, 1.4); circ(ctx, 0, -31, 1.4); ctx.fill();
-        tone(ctx, c => { c.moveTo(-10, -32); c.quadraticCurveTo(-2, -44, 8, -32); c.closePath(); }, '#4a3a6a', -1, -36, 8, { dark: -0.3, spec: false });
-        ctx.restore();
+        // the crawler stands here, unless a walk is drawing it between hexes
+        if (!st.walking) crawler(ctx, 0, 0, r, t);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The crawler: a small figure with a claw-cabinet backpack, standing on
+  // the hex centred at (x, y) (size is the hex size; it bobs with t). The
+  // map draws it here on the current hex, or easing between two hexes
+  // while a click-to-travel walk plays.
+  function crawler(ctx, x, y, size, t) {
+    ctx.save();
+    try {
+      const r = size || 30; t = t || 0;
+      const bob = Math.sin(t * 4) * 1.5, k = r / 30;
+      ctx.translate(x || 0, (y || 0) + r * 0.25 + bob); ctx.scale(k, k);
+      ctx.lineJoin = 'round';
+      tone(ctx, c => rrect(c, 2, -26, 14, 18, 3), '#1d1233', 9, -17, 9, { dark: -0.3 });
+      ctx.beginPath(); rrect(ctx, 4, -24, 10, 10, 2); F(ctx, rgba(PAL.cyan, 0.7)); ctx.fill();
+      F(ctx, PAL.pink); ctx.beginPath(); ctx.arc(9, -11, 1.8, 0, TAU); ctx.fill();
+      limb(ctx, -4, -8, -6, 0, 4, '#4a3a6a'); limb(ctx, 4, -8, 6, 0, 4, '#4a3a6a');
+      tone(ctx, c => rrect(c, -8, -24, 16, 18, 5), PAL.pink, 0, -15, 8, { dark: -0.3 });
+      tone(ctx, c => circ(c, -2, -30, 8), '#f1c9a6', -2, -30, 8, { dark: -0.25 });
+      F(ctx, INK); ctx.beginPath(); circ(ctx, -5, -31, 1.4); circ(ctx, 0, -31, 1.4); ctx.fill();
+      tone(ctx, c => { c.moveTo(-10, -32); c.quadraticCurveTo(-2, -44, 8, -32); c.closePath(); }, '#4a3a6a', -1, -36, 8, { dark: -0.3, spec: false });
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The road: a worn ochre track through pts (consecutive road hex centres,
+  // start first): a dark rut under a lighter band with a dashed pale core.
+  // Static, drawn over the ground and under the icons.
+  function mapRoad(ctx, pts, size, t) {
+    ctx.save();
+    try {
+      pts = pts || []; size = size || 30;
+      if (pts.length > 1) {
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+        S(ctx, rgba('#2a1c0c', 0.5), size * 0.36); ctx.stroke();
+        S(ctx, rgba(ROAD, 0.6), size * 0.24); ctx.stroke();
+        ctx.setLineDash([size * 0.2, size * 0.28]);
+        S(ctx, rgba('#f2dc9a', 0.8), size * 0.08); ctx.stroke();
+        ctx.setLineDash([]);
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -2361,7 +2395,7 @@ const RENDER = (() => {
   })();
 
   return {
-    item, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, bodyDebug, hex, mapBg, mapAxis, mapPath, bg, hpBar, statusPips, intent,
+    item, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
     terrainHex, terrainFill, biomePal, mapCompass, mapHeader, mapArrow, BIOME_PAL,
     portrait, relicIcon, title, fx, flames,
     ITEM_KEYS, ENEMY_KEYS, ITEM_DEFAULT, PAL, shade, rgba, glowSprite,

@@ -17,6 +17,13 @@
 // it costs SHALLOW_COST ink to reveal and SHALLOW_COST ink to wade, and it is
 // what joins an island to the mainland. Islands carry the best content.
 //
+// The road: the guaranteed land route from the start to the boss is lit
+// from the first moment (tile.road, M.road in walking order), so the boss
+// can always be reached without spending ink; ink is for what lies off it.
+// It meanders and passes a rest and a shop, and its tiles keep whatever
+// content they rolled. walkPath() plans a click-to-travel walk over lit
+// tiles for the game's auto-walk.
+//
 // Pure data + functions: no DOM, no global randomness (every roll comes from
 // the rng handed to generate), and M is plain JSON so it saves as-is.
 const MAP = (() => {
@@ -57,6 +64,12 @@ const MAP = (() => {
   const HEX = 46;         // the game's fixed hex size in stage px (the camera scales it)
   const WATER = 0.28;     // target share of water (sea + shallow) hexes (lands near 0.30 after the islands)
   const SHALLOW_COST = 2; // ink to reveal a ford, and again to wade it
+  // The road runs ROAD_MEANDER[0]..[1] times the straight hex distance from
+  // the start to the boss (bends are added until it does, on maps with the
+  // rows to bend in). ROAD_TOLL keeps it off the heaviest content when a
+  // route around exists; fights, events and shops on it are the run.
+  const ROAD_MEANDER = [1.15, 1.6];
+  const ROAD_TOLL = { elite: 12, tower: 12 };
   const FIT_MARGIN = 4;   // px kept free around the map by size()
 
   // Built-in brush shapes, used when DATA.BRUSHES is missing or lacks an id.
@@ -114,6 +127,10 @@ const MAP = (() => {
 
   function isLandmark(tile) {
     return !!(tile && LANDMARKS[tile.type]);
+  }
+  // A tile of the lit start-to-boss road.
+  function isRoad(tile) {
+    return !!(tile && tile.road);
   }
 
   const isSea = (t) => !!t && t.terrain === 'sea';
@@ -281,6 +298,51 @@ const MAP = (() => {
     const c = walkCost(M, from, to, opts);
     if (c < 0) return false;
     return !(opts && opts.ink != null) || c <= opts.ink;
+  }
+
+  // The steps of an auto-walk from pos to a lit tile: [[q, r], ...] after
+  // pos, ending on (q, r), or null when (q, r) is pos, hidden, sea, out of
+  // bounds or cut off from pos by fog. Dijkstra over lit non-sea tiles,
+  // never through the boss: cheapest by ink first (a ford is SHALLOW_COST),
+  // then by steps, then skirting content that still resolves (a walk to a
+  // far rest should not blunder into a fight on the way) and, last of all,
+  // keeping to the road. The ink is not checked: a ford the player cannot
+  // pay is where the walk stops.
+  function walkPath(M, q, r) {
+    if (!M || !M.pos || !inBounds(M, q, r)) return null;
+    const goal = key(q, r);
+    const gt = M.tiles[goal];
+    if (!gt.revealed || isSea(gt)) return null;
+    const startK = key(M.pos.q, M.pos.r);
+    if (goal === startK) return null;
+    const stepCost = (t) => 1000 * moveCost(t) + 8 +
+      (t.type !== 'empty' && t.type !== 'start' && !t.visited && !t.done ? 2 : 0) + (t.road ? 0 : 1);
+    const dist = { [startK]: 0 }, parent = { [startK]: null };
+    const open = [startK];
+    const closed = {};
+    while (open.length) {
+      let bi = 0;
+      for (let i = 1; i < open.length; i++) if (dist[open[i]] < dist[open[bi]]) bi = i;
+      const ck = open.splice(bi, 1)[0];
+      if (closed[ck]) continue;
+      closed[ck] = 1;
+      if (ck === goal) {
+        const out = [];
+        for (let at = ck; at && at !== startK; at = parent[at]) out.push([M.tiles[at].q, M.tiles[at].r]);
+        return out.reverse();
+      }
+      const ct = M.tiles[ck];
+      if (ck !== startK && ct.type === 'boss') continue;
+      for (const [nq, nr] of neighbors(M, ct.q, ct.r)) {
+        const k = key(nq, nr);
+        const t = M.tiles[k];
+        if (!t.revealed || isSea(t) || closed[k]) continue;
+        const nd = dist[ck] + stepCost(t);
+        if (dist[k] != null && dist[k] <= nd) continue;
+        dist[k] = nd; parent[k] = ck; open.push(k);
+      }
+    }
+    return null;
   }
 
   // Per-type counts for n placeable tiles: the bible's shares with random
@@ -650,6 +712,167 @@ const MAP = (() => {
     return placed;
   }
 
+  // ------------------------------------------------------------ the road
+  // Cheapest land walk from fromK to any key in `goals` under `weight` (a
+  // per-tile cost), never through the boss unless it is a goal. Returns the
+  // keys after fromK up to the goal ([] when fromK is a goal), or null.
+  function landRoute(M, fromK, goals, weight) {
+    const dist = { [fromK]: 0 }, parent = { [fromK]: null };
+    const open = [fromK];
+    const closed = {};
+    while (open.length) {
+      let bi = 0;
+      for (let i = 1; i < open.length; i++) if (dist[open[i]] < dist[open[bi]]) bi = i;
+      const ck = open.splice(bi, 1)[0];
+      if (closed[ck]) continue;
+      closed[ck] = 1;
+      if (goals[ck]) {
+        const out = [];
+        for (let at = ck; at && at !== fromK; at = parent[at]) out.push(at);
+        return out.reverse();
+      }
+      const ct = M.tiles[ck];
+      if (ct.type === 'boss' && ck !== fromK) continue;
+      for (const [nq, nr] of neighbors(M, ct.q, ct.r)) {
+        const k = key(nq, nr);
+        const t = M.tiles[k];
+        if (!isLand(t) || closed[k]) continue;
+        if (t.type === 'boss' && !goals[k]) continue;
+        const nd = dist[ck] + weight(t);
+        if (!(nd < Infinity) || (dist[k] != null && dist[k] <= nd)) continue;
+        dist[k] = nd; parent[k] = ck; open.push(k);
+      }
+    }
+    return null;
+  }
+
+  // The road: a land-only route from the start to the boss over the
+  // mainland, routed past the rest and the shop with the least detour
+  // (within one hex of each), with bends added off the axis until it runs
+  // ROAD_MEANDER times the straight distance. A seeded wobble per tile
+  // keeps it from running dead straight. Sets tile.road and tile.revealed
+  // on its tiles and M.road = [[q, r], ...] from the start to the boss.
+  // Deterministic in rng. Returns M.road (null only if the boss is cut off
+  // from the mainland, which buildTerrain prevents).
+  function carveRoad(M, rng) {
+    const T = M.tiles;
+    const sk = key(M.start.q, M.start.r), bk = key(M.boss.q, M.boss.r);
+    const main = {};
+    for (const k of landGroups(M)[0]) main[k] = 1;
+    if (!main[bk]) return null;
+    const straight = Math.max(1, hexDist(M.start.q, M.start.r, M.boss.q, M.boss.r));
+    const mid = M.start.r;
+    const colOf = (t) => t.q + Math.floor(t.r / 2);
+    const wob = {};
+    for (const k in T) wob[k] = rng() * 6;
+    const weight = (t) => 10 + wob[key(t.q, t.r)] + (ROAD_TOLL[t.type] || 0);
+    // Mainland tiles of a type by detour (start -> tile -> boss minus the
+    // straight line), a little luck mixed in.
+    const candidates = (type) => {
+      const out = [];
+      for (const k in main) {
+        const t = T[k];
+        if (t.type !== type) continue;
+        out.push({ t, d: hexDist(M.start.q, M.start.r, t.q, t.r) + hexDist(t.q, t.r, M.boss.q, M.boss.r) - straight + rng() * 1.5 });
+      }
+      return out.sort((a, b) => a.d - b.d).map((c) => c.t);
+    };
+    // Goal set "within one hex of t" on the mainland, never the boss itself.
+    const near = (t) => {
+      const g = {};
+      g[key(t.q, t.r)] = 1;
+      for (const [nq, nr] of neighbors(M, t.q, t.r)) { const k = key(nq, nr); if (main[k] && k !== bk) g[k] = 1; }
+      delete g[bk];
+      return g;
+    };
+    // Nearest mainland tile to offset column c, row r (never the start or
+    // boss): the row offset matters most, a bend is there to leave the axis.
+    const bendAt = (c, r) => {
+      let best = null, bd = Infinity;
+      for (const k in main) {
+        if (k === sk || k === bk) continue;
+        const t = T[k];
+        const d = Math.abs(colOf(t) - c) + Math.abs(t.r - r) * 2 + rng() * 0.01;
+        if (d < bd) { bd = d; best = t; }
+      }
+      return best;
+    };
+    const anchors = [];
+    // Route start -> anchors (by column) -> boss. Tiles already on the road
+    // are barred so the road never crosses itself; when that walls a
+    // segment in (a stop in a corner) they are merely dear, and the loop
+    // that leaves is cut out.
+    const route = () => {
+      const wps = anchors.slice().sort((a, b) => a.c - b.c).map((a) => a.goal).concat([{ [bk]: 1 }]);
+      let at = sk;
+      const keys = [sk];
+      const used = { [sk]: 1 };
+      const w = (t) => weight(t) + (used[key(t.q, t.r)] ? 40 : 0);
+      const wBar = (t) => used[key(t.q, t.r)] ? Infinity : weight(t);
+      for (const g of wps) {
+        const seg = landRoute(M, at, g, wBar) || landRoute(M, at, g, w);
+        if (!seg) return null;
+        for (const k of seg) { keys.push(k); used[k] = 1; }
+        if (seg.length) at = seg[seg.length - 1];
+      }
+      const idx = {};
+      const out = [];
+      for (const k of keys) {
+        if (idx[k] != null) { while (out.length > idx[k] + 1) delete idx[out.pop()]; continue; }
+        idx[k] = out.length; out.push(k);
+      }
+      return out[out.length - 1] === bk ? out : null;
+    };
+    const hits = (road, goal) => road.some((k) => goal[k]);
+    // The stops: the rest and the shop with the least detour that the road
+    // really passes (a stop walled into a corner is skipped for the next).
+    for (const type of ['rest', 'shop']) {
+      const cands = candidates(type).slice(0, 4);
+      for (const t of cands) {
+        const a = { c: colOf(t), goal: near(t) };
+        anchors.push(a);
+        const road = route();
+        if (road && hits(road, a.goal)) break;
+        anchors.pop();
+      }
+    }
+    const ratio = (road) => (road.length - 1) / straight;
+    const err = (road) => { const x = ratio(road); return x < ROAD_MEANDER[0] ? ROAD_MEANDER[0] - x : x > ROAD_MEANDER[1] ? x - ROAD_MEANDER[1] : 0; };
+    let best = route();
+    // Too long already (the stops sit far off a route the water bends
+    // anyway): drop a stop, the shop first, while that helps.
+    for (let i = anchors.length - 1; best && i >= 0 && ratio(best) > ROAD_MEANDER[1]; i--) {
+      const a = anchors.splice(i, 1)[0];
+      const road = route();
+      if (road && err(road) < err(best)) best = road; else anchors.splice(i, 0, a);
+    }
+    // Too straight: bend into the widest column gap, first one side of the
+    // axis then the other, reaching further each round. A bend that makes
+    // the road too long, or changes nothing, is dropped.
+    let side = rng() < 0.5 ? 1 : -1;
+    for (let reach = 2; best && ratio(best) < ROAD_MEANDER[0] && reach <= 5; reach++) {
+      for (let flip = 0; flip < 2 && ratio(best) < ROAD_MEANDER[0]; flip++) {
+        const cols = [0].concat(anchors.map((a) => a.c), [M.cols - 1]).sort((a, b) => a - b);
+        let gi = 0;
+        for (let i = 1; i < cols.length; i++) if (cols[i] - cols[i - 1] > cols[gi + 1] - cols[gi]) gi = i - 1;
+        const c = Math.round((cols[gi] + cols[gi + 1]) / 2);
+        const r = Math.max(0, Math.min(M.rows - 1, mid + side * reach));
+        side = -side;
+        const b = bendAt(c, r);
+        if (!b) continue;
+        anchors.push({ c: colOf(b), goal: near(b) });
+        const road = route();
+        if (!road || road.length <= best.length || ratio(road) > ROAD_MEANDER[1]) { anchors.pop(); continue; }
+        best = road;
+      }
+    }
+    if (!best) { anchors.length = 0; best = route(); }
+    if (!best) return null;
+    M.road = best.map((k) => [T[k].q, T[k].r]);
+    for (const k of best) { T[k].road = true; T[k].revealed = true; }
+    return M.road;
+  }
+
   // MAP.generate({act, rng, cols=16, rows=22, ink=10, brushes=[], water=0.30, islands}) -> M.
   // cols is clamped to >= 9 and rows to >= 3 so the minimums always fit.
   // water is the share of water hexes (0 = an all-land map); islands the
@@ -670,13 +893,13 @@ const MAP = (() => {
     const M = {
       act, biome: biomeOf(act), cols, rows, tiles: {}, start, boss, pos: { q: start.q, r: start.r },
       ink: opts.ink != null ? opts.ink : START_INK,
-      brushes: (opts.brushes || []).slice(), revealedCount: 0, islands: 0, water: 0,
+      brushes: (opts.brushes || []).slice(), revealedCount: 0, islands: 0, water: 0, road: [],
     };
     const cells = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const q = c - Math.floor(r / 2);
-        M.tiles[key(q, r)] = { q, r, type: 'empty', terrain: 'land', elev: 0, coast: false, biome: M.biome, revealed: false, visited: false, content: {} };
+        M.tiles[key(q, r)] = { q, r, type: 'empty', terrain: 'land', elev: 0, coast: false, biome: M.biome, revealed: false, visited: false, road: false, content: {} };
         cells.push([q, r]);
       }
     }
@@ -723,7 +946,9 @@ const MAP = (() => {
       t.known = isLandmark(t);
     }
 
-    // Fog: start (visited), its neighbours and the boss are visible.
+    // Fog: the road (start to boss), the start's neighbours and the boss
+    // are lit; the start is visited.
+    if (!carveRoad(M, rng)) throw new Error('MAP.generate: boss unreachable by land');
     const st = M.tiles[key(start.q, start.r)];
     st.revealed = true; st.visited = true;
     for (const [nq, nr] of neighbors(M, start.q, start.r)) M.tiles[key(nq, nr)].revealed = true;
@@ -908,10 +1133,16 @@ const MAP = (() => {
     M.ink = M.ink || 0;
     M.pos = M.pos || { q: M.start.q, r: M.start.r };
     M.biome = M.biome || biomeOf(M.act || 1);
+    // Saves from before the road carry none: they keep playing without one
+    // (the game's ink rescue is the last resort there).
+    M.road = Array.isArray(M.road) ? M.road.filter((s) => Array.isArray(s) && M.tiles[key(s[0], s[1])]) : [];
+    const onRoad = {};
+    for (const s of M.road) onRoad[key(s[0], s[1])] = 1;
     // Saves from before landmarks carry no `known`, saves from before the
     // terrain no terrain: derive both.
     for (const k in M.tiles) {
       const t = M.tiles[k];
+      t.road = !!(t.road || onRoad[k]);
       if (t.known == null) t.known = isLandmark(t);
       if (t.type === 'tower' && !(t.content && t.content.tower)) t.content = Object.assign({}, t.content, { tower: { bonus: { k: 'ink', n: TOWER_INK } } });
       if (TERRAINS.indexOf(t.terrain) < 0) t.terrain = 'land';
@@ -928,9 +1159,9 @@ const MAP = (() => {
 
   return {
     TYPES, TERRAINS, BIOMES, DIRS, DIST, MINS, MAXS, LANDMARKS, TOWER_BONUS, TOWER_INK, TOWER_GOLD, START_INK, INK_PER_ACT_HINT,
-    DEFAULT_COLS, DEFAULT_ROWS, HEX, WATER, SHALLOW_COST, FIT_MARGIN, FALLBACK_BRUSHES,
-    generate, key, tileAt, inBounds, neighbors, isAdjacent, isLandmark, biomeOf, islandsOf,
-    revealCost, moveCost, pathCost, walkCost,
+    DEFAULT_COLS, DEFAULT_ROWS, HEX, WATER, SHALLOW_COST, FIT_MARGIN, FALLBACK_BRUSHES, ROAD_MEANDER, ROAD_TOLL,
+    generate, key, tileAt, inBounds, neighbors, isAdjacent, isLandmark, isRoad, biomeOf, islandsOf,
+    revealCost, moveCost, pathCost, walkCost, walkPath,
     canReveal, reveal, pathToReveal, revealPath,
     brushCells, brushIds, canBrush, brush, canMove, move, reachable, revealable,
     toPixel, fromPixel, hexCorners, size, bounds, pathExists, progress, serialize, deserialize,

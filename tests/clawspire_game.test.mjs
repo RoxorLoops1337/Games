@@ -182,10 +182,24 @@ h.test('map camera: drag pans without tapping, a still tap reveals, clamp, wheel
   G.draw();
 });
 
-h.test('map: tap a far hex to preview the ink path, tap again to paint it', () => {
+h.test('map: tap a far hex to preview the ink path, tap again to paint it and walk it', () => {
   const M = G.run.map;
-  const far = Object.values(M.tiles).find(t => !t.revealed && t.type !== 'boss' && t.terrain === 'land' && MAP.pathToReveal(M, t.q, t.r).length >= 3);
-  h.ok(far, 'a far hidden tile exists');
+  // Every content tile (all but the fight the next test needs, and the
+  // boss) is muted for this test, so the walk after the paint can reach a
+  // far empty tile without stopping; the flags are put back at the end.
+  const muted = Object.values(M.tiles).filter(t => !t.done && t.type !== 'empty' && t.type !== 'start' && t.type !== 'boss' && t !== seedInfo.tile);
+  for (const t of muted) t.done = true;
+  const quiet = (t) => t.type === 'empty' || t.type === 'start' || t.done;
+  const far = Object.values(M.tiles).find(t => {
+    if (t.revealed || t.type !== 'empty' || t.terrain !== 'land') return false;
+    const path = MAP.pathToReveal(M, t.q, t.r);
+    if (path.length < 3 || !path.every(([q, r]) => M.tiles[MAP.key(q, r)].terrain === 'land')) return false;
+    const C = MAP.deserialize(MAP.serialize(M));
+    C.ink = 99; MAP.revealPath(C, path);
+    const walk = MAP.walkPath(C, t.q, t.r);
+    return !!walk && walk.every(([q, r]) => quiet(C.tiles[MAP.key(q, r)]));
+  });
+  h.ok(far, 'a far hidden empty tile with a quiet path exists');
   const path = MAP.pathToReveal(M, far.q, far.r);
   const cost = MAP.pathCost(M, path);
   G.lookAt(far.q, far.r);
@@ -216,10 +230,213 @@ h.test('map: tap a far hex to preview the ink path, tap again to paint it', () =
   h.eq(M.ink, G.run.ink, 'map ink in sync');
   h.ok(!G.S.preview, 'preview cleared after painting');
   h.eq(G.screen, 'map', 'still on the map');
+  // ...and the crawler sets off along it: the first step at once, the rest
+  // every WALK_STEP seconds, the camera easing after it.
+  h.ok(G.S.walk && G.S.walk.i === 1 && !G.S.walk.done, 'painting starts a walk and takes the first step');
+  h.ok(!(M.pos.q === M.start.q && M.pos.r === M.start.r), 'the crawler left the start');
+  h.ok(G.walkXY() !== null, 'the crawler is drawn easing between hexes');
   G.draw();
+  const steps = MAP.walkPath(MAP.deserialize(MAP.serialize(Object.assign({}, M, { pos: { q: M.start.q, r: M.start.r } }))), far.q, far.r).length;
+  stepFor(G, G.WALK_STEP * (steps + 2));
+  h.ok(M.pos.q === far.q && M.pos.r === far.r, 'the walk ends on the painted target (' + M.pos.q + ',' + M.pos.r + ' vs ' + far.q + ',' + far.r + ')');
+  h.ok(far.visited && G.S.walk === null, 'target visited, walk over');
+  h.eq(G.screen, 'map', 'an empty target keeps the map');
+  h.eq(G.run.ink, 1, 'walking land costs nothing');
+  h.ok(G.walkXY() === null, 'the crawler stands on its hex again');
+  G.draw();
+  // Back to the start, content unmuted, for the tests that follow.
+  for (const t of muted) delete t.done;
+  M.pos = { q: M.start.q, r: M.start.r };
   G.run.ink = ink; M.ink = ink;
   G.lookAt(M.pos.q, M.pos.r);
 });
+
+/* A run whose start has three land tiles in a line out of it, all made
+   empty and lit, every other lit content tile marked done: a quiet walk.
+   Scans seeds from the given one for a line that is off the road, so the
+   rig's ford never sits on the free route to the boss. */
+function walkRig(seed) {
+  const T = boot();
+  const Gt = T.GAME;
+  let M = null, chain = null, dir = null;
+  for (let s = seed; s < seed + 60 && !chain; s++) {
+    Gt.newRun('knight', s);
+    M = Gt.run.map;
+    for (const [dq, dr] of MAP.DIRS) {
+      const c = [1, 2, 3].map(i => MAP.tileAt(M, M.start.q + dq * i, M.start.r + dr * i));
+      if (c.every(t => t && t.terrain === 'land' && t.type !== 'boss' && !t.road)) { chain = c; dir = [dq, dr]; break; }
+    }
+  }
+  if (!chain) return null;
+  for (const t of chain) { t.type = 'empty'; t.content = {}; t.revealed = true; t.done = false; t.visited = false; t.terrain = 'land'; }
+  for (const t of Object.values(M.tiles)) if (t.revealed && t.type !== 'empty' && t.type !== 'start' && t.type !== 'boss') t.done = true;
+  M.revealedCount = Object.values(M.tiles).filter(t => t.revealed).length;
+  Gt.toMap();
+  return { G: Gt, M, chain, dir, MAP: T.MAP };
+}
+
+h.test('map: click to travel walks three lit hexes, the camera follows, the tile is entered', () => {
+  const R = walkRig(23);
+  h.ok(R, 'a seed with three land tiles east of the start');
+  const { G: Gt, M, chain } = R;
+  const [a, b, c] = chain;
+  Gt.lookAt(c.q, c.r);
+  const p = Gt.hexToStage(c.q, c.r);
+  const ink = Gt.run.ink, floor = Gt.run.floor;
+  Gt.tap(p.x, p.y);
+  h.ok(Gt.S.walk && !Gt.S.walk.done && Gt.S.walk.path.length === 3, 'a three-step walk starts (' + (Gt.S.walk && Gt.S.walk.path.length) + ')');
+  h.ok(MAP.isAdjacent(M.start.q, M.start.r, M.pos.q, M.pos.r), 'the first step is taken at once');
+  h.ok(Gt.S.camTo && Gt.S.walk.from && Gt.S.walk.from.q === M.start.q, 'the camera eases after the crawler, the ease starts from the start');
+  Gt.draw();
+  stepFor(Gt, Gt.WALK_STEP * 0.5);
+  h.ok(Gt.walkXY() !== null && !(M.pos.q === c.q && M.pos.r === c.r), 'mid-step: the crawler is between hexes, not there yet');
+  Gt.draw();
+  stepFor(Gt, Gt.WALK_STEP * 2.6);
+  h.ok(M.pos.q === c.q && M.pos.r === c.r, 'the walk ends on the target (' + M.pos.q + ',' + M.pos.r + ')');
+  h.ok(a.visited && b.visited && c.visited, 'every hex on the way was entered');
+  h.ok(Gt.S.walk === null, 'the walk is dropped once its last ease played');
+  h.eq(Gt.run.floor, floor + 3, 'three steps counted');
+  h.eq(Gt.run.ink, ink, 'land steps cost no ink');
+  h.eq(Gt.screen, 'map', 'still on the map');
+  h.ok((T => T && T.step)(Gt.S) || true, 'step sfx is optional');
+  // The old one-step tap: a neighbour is a one-step walk that resolves at once.
+  const q = Gt.hexToStage(b.q, b.r);
+  Gt.tap(q.x, q.y);
+  h.ok(M.pos.q === b.q && M.pos.r === b.r, 'a tap on a neighbour steps there at once');
+  h.ok(Gt.S.walk && Gt.S.walk.done, 'and is a finished one-step walk');
+  // A tap on the crawler's own hex, and on an unlit-cut-off lit hex, walk nowhere.
+  stepFor(Gt, 0.5);
+  const me = Gt.hexToStage(b.q, b.r);
+  Gt.tap(me.x, me.y);
+  h.ok(M.pos.q === b.q && M.pos.r === b.r && Gt.S.walk === null, 'tapping your own hex does nothing');
+  const boss = MAP.tileAt(M, M.boss.q, M.boss.r);
+  const bossOk = MAP.walkPath(M, boss.q, boss.r);
+  h.ok(bossOk && bossOk.length > 3, 'the lit road makes the boss a walk target from here (' + (bossOk && bossOk.length) + ' steps)');
+  Gt.draw();
+});
+
+h.test('map: a walk stops at an unvisited fight on the way', () => {
+  const R = walkRig(23);
+  const { G: Gt, M, chain } = R;
+  const [a, b, c] = chain;
+  b.type = 'fight'; b.content = { diff: 0.1 };
+  Gt.lookAt(c.q, c.r);
+  const p = Gt.hexToStage(c.q, c.r);
+  Gt.tap(p.x, p.y);
+  h.ok(M.pos.q === a.q && M.pos.r === a.r && Gt.screen === 'map', 'first step onto the empty hex');
+  stepFor(Gt, Gt.WALK_STEP * 1.2);
+  h.ok(M.pos.q === b.q && M.pos.r === b.r, 'second step onto the fight');
+  h.eq(Gt.screen, 'fight', 'the fight starts');
+  h.ok(Gt.S.walk === null || Gt.S.walk.done, 'the walk is over');
+  stepFor(Gt, 1);
+  h.ok(!c.visited && Gt.screen === 'fight', 'the rest of the path is dropped');
+  h.ok(b.done, 'the fight tile is marked');
+});
+
+// Puts everything but the start, the boss and the given tiles back under
+// the fog, so a walk has no lit way round.
+function onlyLit(M, keep) {
+  for (const t of Object.values(M.tiles)) if (t.revealed && !keep.includes(t) && t.type !== 'start' && t.type !== 'boss') t.revealed = false;
+  M.revealedCount = Object.values(M.tiles).filter(t => t.revealed).length;
+}
+
+h.test('map: a walk stops in front of a ford it cannot pay, and pays one it can', () => {
+  const R = walkRig(23);
+  const { G: Gt, M, chain } = R;
+  const [a, b, c] = chain;
+  b.terrain = 'shallow';
+  onlyLit(M, chain);
+  Gt.run.ink = 1; M.ink = 1;
+  Gt.lookAt(c.q, c.r);
+  const p = Gt.hexToStage(c.q, c.r);
+  Gt.tap(p.x, p.y);
+  h.ok(M.pos.q === a.q && M.pos.r === a.r, 'first step onto the shore');
+  stepFor(Gt, Gt.WALK_STEP * 3);
+  h.ok(M.pos.q === a.q && M.pos.r === a.r, 'the walk stops in front of the ford');
+  h.ok(Gt.S.walk === null || Gt.S.walk.done, 'the walk is over');
+  h.eq(Gt.run.ink, 1, 'nothing spent');
+  h.ok(!b.visited && !c.visited, 'neither the ford nor the far bank was entered');
+  Gt.run.ink = 3; M.ink = 3;
+  // the camera eased after the crawler: aim at the target again
+  Gt.lookAt(c.q, c.r);
+  const p2 = Gt.hexToStage(c.q, c.r);
+  Gt.tap(p2.x, p2.y);
+  stepFor(Gt, Gt.WALK_STEP * 3);
+  h.ok(M.pos.q === b.q && M.pos.r === b.r && Gt.run.ink === 1, 'with the ink the ford is waded for 2 and the walk stops on it (' + M.pos.q + ',' + M.pos.r + ' ink ' + Gt.run.ink + ')');
+  h.ok(!c.visited, 'the far bank waits for another tap');
+  Gt.lookAt(c.q, c.r);
+  const p3 = Gt.hexToStage(c.q, c.r);
+  Gt.tap(p3.x, p3.y);
+  h.ok(M.pos.q === c.q && M.pos.r === c.r && Gt.run.ink === 1, 'stepping off the ford onto land is free');
+  // With a lit land way round, the walk never wades: fords are the last resort.
+  const R2 = walkRig(23);
+  const M2 = R2.M, [a2, b2, c2] = R2.chain, [dq, dr] = R2.dir;
+  b2.terrain = 'shallow';
+  onlyLit(M2, R2.chain);
+  h.ok(MAP.walkPath(M2, c2.q, c2.r).some(([q, r]) => M2.tiles[MAP.key(q, r)].terrain === 'shallow'), 'with only the chain lit the walk would wade');
+  // A two-hex bypass: x beside a2 (the next direction round), y = x + dir,
+  // which touches c2. Three free steps against one ford at 2 ink.
+  const i = MAP.DIRS.findIndex(([a, b]) => a === dq && b === dr);
+  const [xq, xr] = MAP.DIRS[(i + 1) % 6];
+  const x = MAP.tileAt(M2, a2.q + xq, a2.r + xr), y = MAP.tileAt(M2, a2.q + xq + dq, a2.r + xr + dr);
+  h.ok(x && y && MAP.isAdjacent(y.q, y.r, c2.q, c2.r), 'bypass hexes exist and touch the far bank');
+  for (const t of [x, y]) { t.terrain = 'land'; t.type = 'empty'; t.content = {}; t.revealed = true; t.done = false; }
+  const path = MAP.walkPath(M2, c2.q, c2.r);
+  h.ok(path && path.length === 4 && path.every(([q, r]) => M2.tiles[MAP.key(q, r)].terrain === 'land'), 'walkPath goes round the ford over lit land in four free steps (' + JSON.stringify(path) + ')');
+});
+
+h.test('map: a tap during a walk cancels it at the current hex', () => {
+  const R = walkRig(23);
+  const { G: Gt, M, chain } = R;
+  const [a, b, c] = chain;
+  Gt.lookAt(c.q, c.r);
+  const p = Gt.hexToStage(c.q, c.r);
+  Gt.tap(p.x, p.y);
+  h.ok(M.pos.q === a.q && M.pos.r === a.r && Gt.S.walk && !Gt.S.walk.done, 'walk under way after the first step');
+  stepFor(Gt, Gt.WALK_STEP * 0.4);
+  Gt.tap(p.x, p.y);
+  h.ok(Gt.S.walk === null || Gt.S.walk.done, 'the tap cancels the walk');
+  stepFor(Gt, 2);
+  h.ok(M.pos.q === a.q && M.pos.r === a.r && !b.visited && !c.visited, 'the crawler stays where it was');
+  h.ok(Gt.S.walk === null, 'the cancelled walk is dropped');
+  Gt.draw();
+});
+
+h.test('map: the road makes the boss walkable from the start with 0 ink on 50 seeds, no rescue needed', () => {
+  for (let s = 1; s <= 50; s++) {
+    const M = MAP.generate({ act: 1 + (s % 3), rng: U.rng(U.hashStr(s + ':map:1')), ink: 0 });
+    let ok = M.road.length >= 2;
+    for (let i = 1; ok && i < M.road.length; i++) {
+      const [q, r] = M.road[i];
+      if (!MAP.canMove(M, q, r) || !MAP.move(M, q, r)) ok = false;
+    }
+    h.ok(ok && M.pos.q === M.boss.q && M.pos.r === M.boss.r && M.ink === 0, 'seed ' + s + ': the road walks start to boss for no ink');
+  }
+  // In the game: tap the boss from the start with 0 ink and road content
+  // cleared; the crawler walks the whole way and the boss fight opens.
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 31);
+  const M = Gt.run.map;
+  for (const [q, r] of M.road) { const t = MAP.tileAt(M, q, r); if (t.type !== 'boss' && t.type !== 'start') t.done = true; }
+  for (const [q, r] of MAP.neighbors(M, M.start.q, M.start.r)) { const t = MAP.tileAt(M, q, r); if (t.type !== 'empty') t.done = true; }
+  Gt.run.ink = 0; M.ink = 0;
+  Gt.toMap();
+  h.eq(Gt.run.ink, 0, 'no ink rescue on a fresh map: the road is enough');
+  Gt.lookAt(M.boss.q, M.boss.r);
+  const p = Gt.hexToStage(M.boss.q, M.boss.r);
+  Gt.tap(p.x, p.y);
+  h.ok(Gt.S.walk && Gt.S.walk.path.length >= M.road.length - 3, 'a long walk to the boss starts (' + (Gt.S.walk && Gt.S.walk.path.length) + ' steps for a road of ' + (M.road.length - 1) + ')');
+  stepFor(Gt, Gt.WALK_STEP * (M.road.length + 4));
+  h.ok(M.pos.q === M.boss.q && M.pos.r === M.boss.r, 'the crawler reaches the boss');
+  h.eq(Gt.screen, 'fight', 'the boss fight opens');
+  h.eq(Gt.fs && Gt.fs.tier, 'boss', 'at boss tier');
+  h.eq(Gt.run.ink, 0, 'for no ink at all');
+  const onRoad = new Set(M.road.map(([q, r]) => MAP.key(q, r)));
+  const near = new Set(MAP.neighbors(M, M.start.q, M.start.r).map(([q, r]) => MAP.key(q, r)));
+  h.ok(Object.values(M.tiles).filter(t => t.visited).every(t => onRoad.has(MAP.key(t.q, t.r)) || near.has(MAP.key(t.q, t.r))), 'every hex walked is on the road (or a lit start neighbour)');
+});
+
 
 h.test('map: sea cannot be tapped, a ford costs 2 to chart and 2 to wade, the rescue covers a stranded crossing', () => {
   const T = boot();
@@ -616,7 +833,17 @@ h.test('act transition, unlocks and the win screen', () => {
   Gt.endFight('win');
   h.eq(Gt.screen, 'reward', 'boss reward');
   Gt.choose(3);
-  h.eq(Gt.screen, 'treasure', 'boss relic offered');
+  // Claw upgrades come from bosses: the spare parts screen, then the relic.
+  h.eq(Gt.screen, 'parts', 'boss drops spare claw parts first');
+  const parts = Gt.S.sd && Gt.S.sd.parts;
+  h.ok(parts && parts.pick.length === 3 && new Set(parts.pick).size === 3 && parts.pick.every(id => T.DATA.CLAW_UPGRADES[id]), 'three distinct claw upgrades offered');
+  h.eq(Gt.S.ui.buttons.length, 3, 'one card per upgrade');
+  const up = parts.pick[0];
+  const claw0 = JSON.stringify(Object.assign({}, Gt.run.claw, { ups: null }));
+  Gt.choose(0);
+  h.eq((Gt.run.claw.ups || {})[up], 1, 'the picked upgrade is applied once');
+  h.ok(JSON.stringify(Object.assign({}, Gt.run.claw, { ups: null })) !== claw0, 'the claw changed');
+  h.eq(Gt.screen, 'treasure', 'boss relic offered after the parts');
   h.eq(Gt.run.act, 2, 'act 2');
   h.ok(Gt.run.hp > 30, 'healed 30%');
   h.ok(Gt.run.ink >= START_INK, 'ink topped up for the new act');
@@ -644,7 +871,8 @@ h.test('shop, rest, forge, treasure and bin screens', () => {
   Gt.newRun('knight', 31);
   const shop = Gt.rollShop({ q: 1, r: 1 });
   h.eq(shop.items.length, 5, 'five shop items');
-  h.ok(shop.relic && shop.claws.length === 2, 'relic and two claw upgrades stocked');
+  h.ok(shop.relic && !shop.claws, 'a relic, no claw upgrades stocked');
+  for (let s = 1; s <= 20; s++) h.ok(!('claws' in Gt.rollShop({ q: s, r: s % 4 })), `shop ${s} sells no claw upgrades`);
   Gt.showShop(shop);
   h.eq(Gt.screen, 'shop', 'shop screen');
   Gt.run.gold = 500;
@@ -654,11 +882,8 @@ h.test('shop, rest, forge, treasure and bin screens', () => {
   h.eq(Gt.run.bin.length, bin + 1, 'bought an item');
   h.eq(Gt.run.gold, 500 - shop.items[0].price, 'paid for it');
   h.ok(shop.items[0].sold, 'marked sold');
-  const grabs = Gt.run.claw.grabs;
-  const ci = Gt.S.ui.buttons.findIndex(b => b.label === T.DATA.CLAW_UPGRADES[shop.claws[0].id].name);
-  Gt.choose(ci);
-  h.ok(shop.claws[0].sold, 'claw upgrade bought');
-  h.eq((Gt.run.claw.ups || {})[shop.claws[0].id], 1, 'upgrade counted once');
+  const clawNames = Object.values(T.DATA.CLAW_UPGRADES).map(u => u.name);
+  h.ok(!Gt.S.ui.buttons.some(b => clawNames.includes(b.label)), 'no claw upgrade cards in the shop');
   const rm = Gt.S.ui.buttons.findIndex(b => /remove/i.test(b.label));
   Gt.choose(rm);
   h.eq(Gt.screen, 'bin', 'bin picker for removal');
@@ -667,6 +892,11 @@ h.test('shop, rest, forge, treasure and bin screens', () => {
   h.eq(Gt.run.bin.length, bin2 - 1, 'item removed');
   h.eq(Gt.screen, 'shop', 'back in the shop');
   Gt.showRest();
+  h.eq(Gt.S.ui.buttons.length, 2, 'rest offers exactly two choices');
+  const restLabels = Gt.S.ui.buttons.map(b => b.el && b.el.children ? b.el.children.map(c => c.textContent).join(' ') : b.label);
+  h.ok(/heal/i.test(restLabels[0]) && /upgrade/i.test(restLabels[1]), 'heal, then upgrade an item (' + restLabels.join(' | ') + ')');
+  Gt.choose(1);
+  h.eq(Gt.screen, 'bin', 'the second rest choice opens the item upgrade picker');
   Gt.run.hp = 10;
   Gt.showRest();
   Gt.choose(0);
