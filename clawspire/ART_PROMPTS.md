@@ -145,6 +145,36 @@ Use these when an item should look different from the others that share its key 
 | `art/items/id/rock.png` | 512x464 | 1.11:1, horizontal | 30x27 | rock | Rock: a dull grey-brown rock (#7a7068) with darker shading (#4a4440), lumpy blocky silhouette, completely boring on purpose |
 | `art/items/id/slag.png` | 512x384 | 1.32:1, horizontal | 37x28 | slag | Slag: a lump of smelter slag, near black (#3a3230) with glowing orange cracks (#ff8a2e), wisps of heat, still warm |
 | `art/items/id/iceblock.png` | 512x480 | 1.06:1, square | 36x34 | iceblock | Ice Block: a rounded cube of clear pale ice (#cfefff) with blue shading (#7fc8e8), frosty corners and a crack, slippery and useless |
+| `art/items/id/flail.png` | 512x88 | 5.6:1, horizontal | 56x10 | chain | Morning Flail: a spiked iron ball on a short chain with a wooden grip on the left, lying flat, steel grey links (#aab3bd), red-tipped spikes (#ff5a4a), spin to win |
+| `art/items/id/magnetite.png` | 512x440 | 1.15:1, horizontal | 30x26 | gem | Magnetite: a cut gemstone in side view, dark iron-grey crystal (#4a4f58) with hot pink magnetic field lines (#ff2e88) curling around it, a paperclip stuck to one facet |
+| `art/items/id/aegis.png` | 432x512 | 1:1.18, vertical | 34x40 | shield | Aegis of the Rig: a grand kite shield facing the viewer, polished silver face (#e6ebf0), a gold claw crest and gold rim (#ffc94d), faint glowing aura, a wall with a handle |
+| `art/items/id/rot_catalyst.png` | 480x512 | 1:1.07, square | 28x30 | flask | Rot Catalyst: a conical glass flask standing upright, murky moss green liquid (#6b8f2e) with acid yellow bubbles (#d4ff3a), a wisp of rotten vapour, ripe |
+| `art/items/id/bottled_blaze.png` | 232x512 | 1:2.22, vertical | 18x40 | bottle | Bottled Blaze: a tall glass bottle standing upright, mint green glass (#6bd3a0) full of orange fire (#ff9a2e), a burning rag stuffed in the neck |
+| `art/items/id/venom_dart.png` | 512x144 | 3.56:1, horizontal | 32x9 | dagger | Venom Dart: a slim throwing dart lying flat, point to the right, the tip dripping slime lime venom (#a6ff5e), dark green fletching (#2d5a1a) on the left |
+| `art/items/id/bribe.png` | 512x512 | 1:1, square | 22x22 | coin | Bribe: a thick gold coin seen face on (#ffe066), a green banknote (#2a8a3a) folded and tucked behind it, a sly wink stamped in the middle |
+| `art/items/id/firebomb.png` | 512x512 | 1:1, square | 30x30 | bomb | Firebomb: a round cartoon bomb, orange hot shell (#ff8a2e) with dark scorched bands (#5a1a0a), the fuse already a small fireball |
+| `art/items/id/ghost_pepper.png` | 512x512 | 1:1, square | 26x26 | apple | Ghost Pepper: a wrinkly round red chilli pepper (#ff2e4a) with a green stem (#3a8a1a), a tiny ghost face made of steam rising from it, worth it |
+| `art/items/id/inferno_scroll.png` | 512x168 | 3:1, horizontal | 42x14 | scroll | Inferno Scroll: a parchment scroll lying flat, rolled at both ends, orange flame runes (#ff8a2e) with scorched dark red edges (#8a1a0a), no readable letters |
+| `art/items/id/ice_pick.png` | 512x152 | 3.4:1, horizontal | 34x10 | dagger | Ice Pick: a steel ice pick lying flat, frosty pale blue spike pointing right (#bfefff), a blue wrapped grip (#3b6fd6) on the left, ice chips flying |
+| `art/items/id/blizzard_orb.png` | 512x512 | 1:1, square | 32x32 | orb | Blizzard Orb: a glass orb with a tiny swirling blizzard inside, snow white (#eaf6ff) with cyan wind streaks (#2ee6d6), frost creeping on the glass |
+| `art/items/id/frozen_heart.png` | 512x512 | 1:1, square | 30x30 | heart | Frozen Heart: a chunky cartoon heart made of ice, pale blue (#9fd8ff) with deep blue facets (#2e6bd6), frosty sparkles, cold but kind |
+| `art/items/id/thorn_ring.png` | 512x512 | 1:1, square | 20x20 | ring | Thorn Ring: a ring standing upright made of a twisted olive green thorny vine (#8fae3a), dark green thorns (#3a4a1a), a small bud where the gem would be |
+| `art/items/id/glass_shield.png` | 464x512 | 1:1.11, vertical | 28x31 | shield | Glass Shield: a heater shield facing the viewer made of clear pale glass (#d8f0ff), sky blue leading lines (#7fd6ff) like stained glass, one thin crack |
+| `art/items/id/rage_potion.png` | 360x512 | 1:1.42, vertical | 24x34 | potion | Rage Potion: a round potion bottle standing upright, boiling crimson liquid (#ff2e4a), a dark wine cork (#5a0a1a), an angry face in the bubbles |
+| `art/items/id/scrap_shield.png` | 512x512 | 1:1, square | 32x32 | buckler | Scrap Shield: a round buckler seen face on, bolted together from rusty brown scrap plates (#8a6a4a), orange rust patches and glowing weld seams (#ff8a2e), upcycled |
+| `art/items/id/pet_rock.png` | 512x464 | 1.11:1, horizontal | 30x27 | rock | Pet Rock: a plain beige-grey rock (#b8a898) with big googly eyes and a small pink bow on top (#ff2e88), content |
+| `art/items/id/junk_cannon.png` | 512x312 | 1.63:1, horizontal | 39x24 | horn | Junk Cannon: a blunderbuss-shaped horn cannon, grey scrap metal (#7a7068) with gold bands (#ffc94d), wide bell on the left stuffed with rocks and bolts |
+| `art/items/id/arcade_token.png` | 512x512 | 1:1, square | 22x22 | coin | Arcade Token: a thick arcade token seen face on, cyan metal (#2ee6d6) with a dark teal rim (#1a6b66), a tiny claw machine stamped in the middle |
+| `art/items/id/gumball_jar.png` | 232x512 | 1:2.22, vertical | 18x40 | bottle | Gumball Jar: a tall glass jar standing upright packed with pink (#ff9ad0) and cyan (#2ee6d6) gumballs and marbles, a small lid on top |
+| `art/items/id/crystal_shard.png` | 176x512 | 1:2.93, vertical | 15x44 | iceshard | Crystal Shard: a long jagged crystal shard standing upright, pointed at both ends, bubblegum pink (#ff9ad0) with violet facets (#7a5aff), sharp glints |
+| `art/items/id/blood_orange.png` | 512x512 | 1:1, square | 26x26 | apple | Blood Orange: a round orange fruit (#ff8a2e) cut open on one side showing deep red flesh (#8a1a2a), a small leaf on top, juicy |
+| `art/items/id/vampire_fang.png` | 512x136 | 3.67:1, horizontal | 44x12 | bone | Vampire Fang: a big curved fang lying flat, ivory white (#f4f0e6) with a dark red tip (#8a1a2a), a drop of red, bitey |
+| `art/items/id/pay_to_win.png` | 512x488 | 1.05:1, square | 32.4x30.8 | star | Pay to Win: a plump five-pointed star standing upright, shiny gold (#ffc94d) with a hot pink coin slot in the middle (#ff2e88), the arcade way |
+| `art/items/id/golden_idol.png` | 480x512 | 1:1.07, square | 28x30 | skull | Golden Idol: a small golden skull idol facing the viewer (#ffc94d), bronze shading (#8a5a2b), gem eyes that seem to watch your wallet |
+| `art/items/id/deja_vu.png` | 512x168 | 3:1, horizontal | 42x14 | scroll | Deja Vu: a parchment scroll lying flat, rolled at both ends, lilac paper (#b08cff) with a looping gold spiral (#ffe066) drawn twice, no readable letters |
+| `art/items/id/arcane_tome.png` | 408x512 | 1:1.27, vertical | 30x38 | book | Arcane Tome: a thick spellbook standing upright facing the viewer, violet cover (#7a5aff), a cyan glowing sigil (#2ee6d6) on the front, a ribbon bookmark, no text |
+| `art/items/id/iron_nut.png` | 512x512 | 1:1, square | 20x20 | ring | Iron Nut: a chunky hexagonal iron nut seen face on, steel grey (#8a929c) with darker thread shading (#4a5058), tiny and important |
+| `art/items/id/bag_bolts.png` | 512x512 | 1:1, square | 28x28 | ring | Bucket of Bolts: a small tin bucket overflowing with grey iron nuts and bolts (#8a929c), dark shading (#4a5058) |
 
 ## Enemies
 
@@ -276,6 +306,37 @@ Small emblems shown at about 32 px in the relic strip, 256x256, square, transpar
 | `art/relics/cursed_quarter.png` | 256x256 | boss | Cursed Quarter | Cursed Quarter relic emblem: a tarnished quarter coin with a single glowing purple eye in the middle, small icon, square |
 | `art/relics/friendship_bracelet.png` | 256x256 | event | Friendship Bracelet | Friendship Bracelet relic emblem: a woven friendship bracelet in pink, cyan and gold threads with a tiny plush charm, small icon, square |
 | `art/relics/cursed_plush.png` | 256x256 | event | Cursed Plush | Cursed Plush relic emblem: a lumpy plush toy with button eyes and too many stitched eyes, whispering, small icon, square |
+| `art/relics/contagion.png` | 256x256 | u | Contagion | Contagion relic emblem: a cartoon green germ blob with little arms reaching out to two smaller germs, lime glow, small icon, square |
+| `art/relics/festering_jar.png` | 256x256 | r | Festering Jar | Festering Jar relic emblem: a cracked clay jar oozing thick toxic green sludge, bubbles popping at the lip, small icon, square |
+| `art/relics/bellows.png` | 256x256 | u | Bellows | Bellows relic emblem: a pair of leather fireplace bellows puffing a stream of orange sparks, small icon, square |
+| `art/relics/powder_keg.png` | 256x256 | r | Powder Keg | Powder Keg relic emblem: a small wooden gunpowder barrel with a lit fuse and a big orange boom starburst behind it, small icon, square |
+| `art/relics/cold_snap.png` | 256x256 | u | Cold Snap | Cold Snap relic emblem: a pale blue icicle snapping in two with a burst of frost shards, small icon, square |
+| `art/relics/permafrost_core.png` | 256x256 | r | Permafrost Core | Permafrost Core relic emblem: a glowing cyan diamond of ice inside a frosty ring, cracks of light, small icon, square |
+| `art/relics/battering_ram.png` | 256x256 | u | Battering Ram | Battering Ram relic emblem: a log battering ram capped with an iron ram head, motion lines, small icon, square |
+| `art/relics/castle_walls.png` | 256x256 | r | Castle Walls | Castle Walls relic emblem: a stubby stone castle wall with crenellations and a blue banner, rock solid, small icon, square |
+| `art/relics/sweatband.png` | 256x256 | c | Sweatband | Sweatband relic emblem: a red and white terry sweatband with a drop of sweat, sporty, small icon, square |
+| `art/relics/gym_membership.png` | 256x256 | r | Gym Membership | Gym Membership relic emblem: a chunky barbell with red weight plates and a small membership card tucked on it (no text), small icon, square |
+| `art/relics/horseshoe.png` | 256x256 | c | Horseshoe | Horseshoe relic emblem: a silver horseshoe held up like a magnet, two small nails clinging to it, small icon, square |
+| `art/relics/tuning_fork.png` | 256x256 | u | Tuning Fork | Tuning Fork relic emblem: a steel tuning fork ringing with cyan sound waves, small icon, square |
+| `art/relics/dynamo.png` | 256x256 | r | Dynamo | Dynamo relic emblem: a chunky battery with copper coils and a crackling cyan spark, small icon, square |
+| `art/relics/dumpster_lid.png` | 256x256 | c | Dumpster Lid | Dumpster Lid relic emblem: a dented green dumpster lid held up like a shield, a banana peel stuck on it, small icon, square |
+| `art/relics/junkyard_king.png` | 256x256 | r | Junkyard King | Junkyard King relic emblem: a crown made of bent scrap metal, bottle caps and a bolt, proudly shiny, small icon, square |
+| `art/relics/prize_counter.png` | 256x256 | c | Prize Counter | Prize Counter relic emblem: a red raffle ticket stub with a star, curling out of a little counter, small icon, square |
+| `art/relics/winning_streak.png` | 256x256 | u | Winning Streak | Winning Streak relic emblem: a gold upward zigzag arrow with three stars along it, small icon, square |
+| `art/relics/encore_machine.png` | 256x256 | r | Encore Machine | Encore Machine relic emblem: a mini slot machine showing three gold sevens (drawn as shapes, no text), confetti, small icon, square |
+| `art/relics/marble_pouch.png` | 256x256 | c | Marble Pouch | Marble Pouch relic emblem: a small drawstring cloth pouch spilling colourful marbles, small icon, square |
+| `art/relics/beehive.png` | 256x256 | u | Beehive | Beehive relic emblem: a round golden beehive with two cartoon bees buzzing out, small icon, square |
+| `art/relics/pocket_dimension.png` | 256x256 | r | Pocket Dimension | Pocket Dimension relic emblem: a jeans pocket with a swirling purple and cyan portal inside it, tiny marbles orbiting, small icon, square |
+| `art/relics/bottle_deposit.png` | 256x256 | c | Bottle Deposit | Bottle Deposit relic emblem: an empty green glass bottle with a gold coin popping out of its neck, small icon, square |
+| `art/relics/sharp_shards.png` | 256x256 | u | Sharp Shards | Sharp Shards relic emblem: three jagged pale blue glass shards flying outward, bright glints, small icon, square |
+| `art/relics/glass_cannon.png` | 256x256 | r | Glass Cannon | Glass Cannon relic emblem: a tiny cannon made entirely of clear glass, firing a glittering blast, small icon, square |
+| `art/relics/bat_wing.png` | 256x256 | u | Bat Wing | Bat Wing relic emblem: a single dark purple bat wing with a small red droplet, small icon, square |
+| `art/relics/feast_table.png` | 256x256 | r | Feast Table | Feast Table relic emblem: a roast drumstick on a small plate with a fork and knife crossed behind it, small icon, square |
+| `art/relics/piggy_bank.png` | 256x256 | u | Piggy Bank | Piggy Bank relic emblem: a pink ceramic piggy bank with a gold coin dropping into its slot, small icon, square |
+| `art/relics/money_bags.png` | 256x256 | r | Money Bags | Money Bags relic emblem: a bulging burlap money sack tied at the top with gold coins spilling out, small icon, square |
+| `art/relics/crystal_focus.png` | 256x256 | c | Crystal Focus | Crystal Focus relic emblem: a small crystal ball on a brass stand with a lilac glow and a reflected second ball inside, small icon, square |
+| `art/relics/wizard_hat.png` | 256x256 | u | Wizard Hat | Wizard Hat relic emblem: a tall floppy purple wizard hat with gold stars and a spark leaping off the tip, small icon, square |
+| `art/relics/echo_chamber.png` | 256x256 | r | Echo Chamber | Echo Chamber relic emblem: a brass horn with lilac sound rings repeating out of it, each ring smaller, small icon, square |
 
 ## Status icons
 
@@ -301,6 +362,7 @@ Flat glyphs, 128x128, square, transparent background. They are drawn at about 14
 | `art/status/shield_up.png` | 128x128 | Bulwark (buff) | flat game status icon glyph: a blue shield with a padlock on it (#7fb2ff), one bold shape, thick outline, minimal detail, square |
 | `art/status/enrage.png` | 128x128 | Enrage (buff) | flat game status icon glyph: an angry red face with a vein mark (#ff2e4a), one bold shape, thick outline, minimal detail, square |
 | `art/status/armor.png` | 128x128 | Armor (buff) | flat game status icon glyph: a steel bolt and nut (#aab3bd), one bold shape, thick outline, minimal detail, square |
+| `art/status/streak.png` | 128x128 | Streak (buff) | flat game status icon glyph: a gold bullseye target with a small arrow in the centre (#ffc94d), one bold shape, thick outline, minimal detail, square |
 
 ## Map hex tile icons
 

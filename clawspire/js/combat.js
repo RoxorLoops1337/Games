@@ -32,7 +32,7 @@ const COMBAT = (() => {
   // Statuses with their own explicit rules (ticks, consumption, conversion) or
   // that persist for the fight. Anything else falls back to DATA.STATUS.stack.
   const RULED = ['str', 'thorns', 'armor', 'enrage', 'shield_up', 'dodge', 'chill', 'freeze',
-    'stun', 'poison', 'burn', 'regen', 'bleed'];
+    'stun', 'poison', 'burn', 'regen', 'bleed', 'streak'];
   const CLAW0 = { grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 };
 
   let override = null;
@@ -70,6 +70,7 @@ const COMBAT = (() => {
   const whoOf = (F, u) => (isPlayer(F, u) ? 'p' : 'e');
   const idxOf = (F, u) => (isPlayer(F, u) ? -1 : F.enemies.indexOf(u));
   const st = (u, s) => num(u && u.status && u.status[s], 0);
+  const tagHas = (def, t) => !!(def && Array.isArray(def.tags) && def.tags.indexOf(t) >= 0);
   function isJunk(inst) {
     if (!inst) return false;
     if (inst.junk) return true;
@@ -146,6 +147,59 @@ const COMBAT = (() => {
     if (num(m.ink, 0)) run.ink = Math.max(0, num(run.ink, 0) + num(m.ink, 0));
     return run;
   };
+  // Build rules the relics bend (relic.rules, DATA.RELIC_RULES): numbers
+  // add up, `amp` merges per tag. src names the relic behind each rule so
+  // its proc event can credit it.
+  api.rulesOf = function (ids) {
+    const rules = {}, src = {};
+    for (const id of ids || []) {
+      const r = relicDef(id);
+      if (!r || !r.rules || typeof r.rules !== 'object') continue;
+      for (const k in r.rules) {
+        const v = r.rules[k];
+        if (v && typeof v === 'object') {
+          rules[k] = rules[k] || {};
+          for (const t in v) rules[k][t] = num(rules[k][t], 0) + num(v[t], 0);
+        } else rules[k] = num(rules[k], 0) + (v === true ? 1 : num(v, 0));
+        if (!src[k]) src[k] = id;
+      }
+    }
+    return { rules, src };
+  };
+  // A proc event: a relic, item or combo synergy just triggered (the
+  // renderer floats `text` over `who`).
+  function procEv(src, id, name, icon, color, str, u, F) {
+    const enemy = !!(F && u && !isPlayer(F, u));
+    return { t: 'proc', src, id, name: name || id, icon: icon || '', color: color || '#ffc94d', text: str,
+      who: enemy ? 'enemy' : 'player', idx: enemy ? F.enemies.indexOf(u) : -1 };
+  }
+  function relicProc(F, id, str, u) {
+    const r = relicDef(id) || {};
+    const A = D().ARCHETYPES || {};
+    const k = (r.kw || [])[0];
+    return procEv('relic', id, r.name, r.icon, A[k] && A[k].color, str || r.proc || String(r.name || id).toUpperCase(), u, F);
+  }
+  function ruleProc(F, rule, str, u) {
+    const id = (F.ruleSrc && F.ruleSrc[rule]) || rule;
+    return emit(F, relicProc(F, id, str, u));
+  }
+  function itemProc(F, def, str) {
+    const k = D().kwIds ? (D().kwIds(def) || [])[0] : null;
+    const A = D().ARCHETYPES || {};
+    return emit(F, procEv('item', def.id, def.name, A[k] ? A[k].icon : '', def.color, str, F.player, F));
+  }
+  // A relic hook call that produced events gets a proc event in front of
+  // them (unless it emitted its own), in F.events and in every open collector.
+  function autoProc(F, id, mark, cols) {
+    for (let i = mark; i < F.events.length; i++) {
+      const e = F.events[i];
+      if (e && e.t === 'proc' && e.src === 'relic' && e.id === id) return;
+    }
+    const ev = relicProc(F, id);
+    F.events.splice(mark, 0, ev);
+    for (const [c, n] of cols) if (n <= c.length) c.splice(n, 0, ev);
+  }
+
   // Call hooks[name](F, ...args) on every relic. A hook that throws is logged
   // in F.hookErrors instead of breaking the fight; a hook never re-enters itself
   // (onDmgDealt dealing damage would otherwise recurse forever).
@@ -159,9 +213,12 @@ const COMBAT = (() => {
         const r = relicDef(id);
         const fn = r && r.hooks && r.hooks[name];
         if (typeof fn !== 'function') continue;
+        const mark = F.events.length;
+        const cols = (OUT.get(F) || []).map(c => [c, c.length]);
         try { fn(F, ...args); } catch (err) {
           F.hookErrors.push(`${id}.${name}: ${err && err.message || err}`);
         }
+        if (F.events.length > mark) autoProc(F, id, mark, cols);
       }
     } finally { act.delete(name); }
     sanitize(F);
@@ -253,9 +310,16 @@ const COMBAT = (() => {
       target: 0, events: [], relics: (run.relics || []).slice(), claw, log: [],
       gain: { gold: 0, ink: 0, maxhp: 0 },      // run-level effects the game applies after the fight
       kills: 0, killed: [], escaped: [], tilt: 0, rs: {}, hookErrors: [], fresh: {},
-      stats: { played: 0, dmgDealt: 0, dmgTaken: 0, grabs: 0, blocked: 0 },
+      stats: { played: 0, dmgDealt: 0, dmgTaken: 0, grabs: 0, blocked: 0, combos: 0, shattered: 0, spent: 0 },
       playedThisTurn: 0,
+      // Builds: the current grab's deliveries (useGrab opens it, play fills
+      // it, grabDone reads and clears it), the grab streak, the relic rules,
+      // the run's gold at fight start (pay / per gold), combo counts.
+      grab: { insts: [], defs: [] }, streak: 0, rules: {}, ruleSrc: {}, gold0: Math.max(0, num(run.gold, 0)),
+      echoN: 0, lastPlay: null, comboTurn: {}, combos: {},
     };
+    const rs = api.rulesOf(F.relics);
+    F.rules = rs.rules; F.ruleSrc = rs.src;
     // A late-run bin can outgrow the cabinet: the overflow waits in the used
     // pile and cycles in through refills, so the physics budget holds.
     if (F.bin.length > MAX_CABINET) {
@@ -312,6 +376,7 @@ const COMBAT = (() => {
     u.block = clamp(u.block + v, 0, 999);
     const amt = u.block - before;
     if (amt) emit(F, { t: 'block', who: whoOf(F, u), idx: idxOf(F, u), amt });
+    if (amt > 0 && isPlayer(F, u)) hook(F, 'onBlock', amt);
     return amt;
   }
 
@@ -372,6 +437,12 @@ const COMBAT = (() => {
     else {
       amt = calcHit(v, src ? st(src, 'str') : 0, src ? st(src, 'weak') > 0 : false,
         st(tgt, 'vuln') > 0, opts.pierce ? 0 : st(tgt, 'armor'));
+      // Permafrost rule: the player's hits on a Frozen enemy shatter for more.
+      const sh = num(F.rules && F.rules.shatter, 0);
+      if (sh > 0 && isPlayer(F, src) && !isPlayer(F, tgt) && st(tgt, 'freeze') > 0) {
+        amt = Math.floor(amt * (1 + sh));
+        if (F.shatterAt !== F.stats.played) { F.shatterAt = F.stats.played; ruleProc(F, 'shatter', 'SHATTER', tgt); }
+      }
     }
     let blocked = 0;
     if (!opts.pierce) { blocked = Math.min(tgt.block, amt); tgt.block -= blocked; }
@@ -399,6 +470,7 @@ const COMBAT = (() => {
     const amt = Math.max(0, Math.min(v, u.maxHp - u.hp));
     u.hp += amt;
     if (amt) emit(F, { t: 'heal', who: whoOf(F, u), idx: idxOf(F, u), amt });
+    if (amt > 0 && isPlayer(F, u)) hook(F, 'onHeal', amt);
     return amt;
   };
 
@@ -423,6 +495,7 @@ const COMBAT = (() => {
       text(F, u, 'FROZEN');
       api.status(F, u, 'freeze', 1);
     }
+    if (d > 0) hook(F, 'onStatus', u, id, d);
     return d;
   };
 
@@ -436,8 +509,12 @@ const COMBAT = (() => {
   function tickDmg(F, u, id) {
     const v = st(u, id);
     if (v <= 0) return;
-    u.status[id] = v - 1;
-    if (!u.status[id]) delete u.status[id];
+    // Festering rule: enemy Poison ticks but never wears off.
+    if (id === 'poison' && !isPlayer(F, u) && num(F.rules && F.rules.poisonKeep, 0) > 0) ruleProc(F, 'poisonKeep', 'FESTER', u);
+    else {
+      u.status[id] = v - 1;
+      if (!u.status[id]) delete u.status[id];
+    }
     loseHp(F, u, v);
   }
   function tickRegen(F, u) {
@@ -662,15 +739,18 @@ const COMBAT = (() => {
   // One enemy's slot in the enemy phase.
   // Block normally fades when its owner's turn starts; each shield_up stack
   // saves it from one such reset ("block persists v turns").
-  function blockReset(u) {
+  function blockReset(F, u) {
     const su = st(u, 'shield_up');
     if (su > 0) {
       if (su - 1) u.status.shield_up = su - 1; else delete u.status.shield_up;
+    } else if (isPlayer(F, u) && num(F.rules && F.rules.blockKeep, 0) > 0) {
+      // Castle Walls rule: the player's Block stays.
+      if (u.block > 0) ruleProc(F, 'blockKeep', 'WALLS HOLD');
     } else u.block = 0;
   }
 
   function enemyAct(F, e) {
-    blockReset(e);
+    blockReset(F, e);
     tickDmg(F, e, 'poison');
     if (!e.alive || F.phase === 'over') return;
     tickDmg(F, e, 'burn');
@@ -728,7 +808,7 @@ const COMBAT = (() => {
     F.phase = 'player';
     const p = F.player;
     emit(F, { t: 'turn', n: F.turn });
-    blockReset(p);
+    blockReset(F, p);
     p.grabsMax = clamp(Math.round(num(F.claw.grabs, 3)), 0, 99);
     p.grabs = p.grabsMax;
     p.grabsUsed = 0;
@@ -760,14 +840,68 @@ const COMBAT = (() => {
     F.player.grabs--;
     F.player.grabsUsed++;
     F.stats.grabs++;
+    F.grab = { insts: [], defs: [] };   // a new grab: its deliveries start here
     return true;
   };
-  // A grab finished with n items delivered: fires relic onGrab(F, n).
+  // The streak shows as the player's `streak` status: a display counter set
+  // directly (no status events, never decays, cleanse leaves buffs alone).
+  function setStreak(F) {
+    const k = clamp(Math.round(num(F.streak, 0)), 0, MAX_STACK);
+    if (k > 0) F.player.status.streak = k; else delete F.player.status.streak;
+  }
+  // Resolve a combo's effects as if the player played them (Strength counts).
+  function runCombo(F, combo) {
+    retarget(F);
+    const def = { id: combo.id, name: combo.name, tags: [], fx: combo.fx || [], target: combo.target || 'enemy' };
+    const ctx = { inst: null, def, mode: def.target, idx: F.target, combo: true };
+    for (const f of def.fx) {
+      if (!f || ctx.stop || F.phase === 'over') break;
+      runFx(F, f, ctx);
+      ctx.acted = true;
+    }
+    sanitize(F);
+    checkOver(F);
+  }
+  function fireCombo(F, combo, defs) {
+    if (combo.once === 'turn') {
+      if (F.comboTurn[combo.id] === F.turn) return false;
+      F.comboTurn[combo.id] = F.turn;
+    }
+    emit(F, { t: 'combo', id: combo.id, name: combo.name, text: combo.text, color: combo.color || '#ffc94d',
+      n: defs.length, tier: clamp(num(combo.tier, 1) | 0, 1, 3) });
+    F.stats.combos++;
+    F.combos[combo.id] = (F.combos[combo.id] || 0) + 1;
+    log(F, `Combo: ${combo.name}.`);
+    runCombo(F, combo);
+    // Encore rule: every combo resolves twice.
+    if (F.phase === 'player' && num(F.rules.comboTwice, 0) > 0) { ruleProc(F, 'comboTwice', 'ENCORE'); runCombo(F, combo); }
+    if (F.phase === 'player') hook(F, 'onCombo', combo, defs);
+    return true;
+  }
+  // A grab finished with n items delivered: the streak moves, the grab's
+  // combos fire (DATA.combosFor over what it delivered), then onJackpot (3+
+  // items) and onGrab(F, n). The grab buffer is cleared at the end.
   api.grabDone = function (F, n) {
     const c = begin(F);
-    if (F && F.phase === 'player') hook(F, 'onGrab', Math.max(0, num(n, 0) | 0));
+    if (!F || typeof F !== 'object') return end(F, c);
+    const g = F.grab || { insts: [], defs: [] };
+    n = Math.max(0, num(n, 0) | 0);
+    if (F.phase === 'player') {
+      F.streak = n > 0 || g.defs.length ? num(F.streak, 0) + 1 : 0;
+      setStreak(F);
+      const defs = g.defs.slice();
+      const fire = D().combosFor ? (D().combosFor(defs) || []) : [];
+      for (const combo of fire) { if (F.phase !== 'player') break; if (combo && combo.id) fireCombo(F, combo, defs); }
+      const got = Math.max(n, defs.length);
+      if (F.phase === 'player' && got >= 3) hook(F, 'onJackpot', got);
+      if (F.phase === 'player') hook(F, 'onGrab', n);
+      sanitize(F);
+      checkOver(F);
+    }
+    F.grab = { insts: [], defs: [] };
     return end(F, c);
   };
+  api.comboFx = function (F, combo) { const c = begin(F); if (F && combo && F.phase === 'player') runCombo(F, combo); return end(F, c); };
 
   // Enemies hit by one hit of an item, by target mode.
   function hitTargets(F, mode, idx) {
@@ -781,14 +915,61 @@ const COMBAT = (() => {
     return [e];
   }
 
-  function countPer(F, per) {
+  // The enemy a single-target item aims at (no rng: never 'random').
+  function aimOf(F, ctx) { return hitTargets(F, 'enemy', ctx ? ctx.idx : F.target)[0] || null; }
+  function countPer(F, per, ctx) {
     switch (per) {
       case 'block': return F.player.block;
       case 'junk': return F.bin.filter(isJunk).length;
-      case 'metal': return F.bin.filter(i => (itemDef(i.id).tags || []).indexOf('metal') >= 0).length;
+      case 'metal': return F.bin.filter(i => tagHas(itemDef(i.id), 'metal')).length;
       case 'grabsUsed': return F.player.grabsUsed;
+      case 'poison': case 'burn': { const e = aimOf(F, ctx); return e ? st(e, per) : 0; }
+      case 'small': return F.bin.filter(i => tagHas(itemDef(i.id), 'small')).length;
+      case 'streak': return Math.max(0, num(F.streak, 0));
+      case 'gold': return Math.floor(api.gold(F) / 10);
       default: return 0;
     }
+  }
+
+  // An item effect as the relic rules change it: amp {tag: n} adds n to
+  // damage, Block and healing (ceil(n/2) to statuses it applies), glassBreak
+  // doubles a glass item's numbers. Self-harm is never amplified.
+  function scaled(F, def, f) {
+    const R = F.rules || {};
+    if (!f || !def || !(R.amp || R.glassBreak)) return f;
+    let add = 0, mul = 1;
+    if (R.amp && typeof R.amp === 'object') for (const t in R.amp) if (tagHas(def, t)) add += num(R.amp[t], 0);
+    if (num(R.glassBreak, 0) > 0 && tagHas(def, 'glass')) mul = 2;
+    if (!add && mul === 1) return f;
+    const v = num(f.v, 0);
+    switch (f.k) {
+      case 'dmg': case 'block': case 'heal': case 'lifesteal':
+        return v > 0 ? Object.assign({}, f, { v: (v + add) * mul }) : f;
+      case 'status':
+        if (v <= 0 || (f.to === 'self' && isDebuff(f.s))) return f;
+        return Object.assign({}, f, { v: (v + Math.ceil(add / 2)) * mul });
+      case 'random':
+        return Object.assign({}, f, { v: (v + add) * mul, min: (num(f.min, 0) + add) * mul, max: (num(f.max, v) + add) * mul });
+      case 'dmgPer': case 'blockPer': return Object.assign({}, f, { v: v * mul });
+      default: return f;
+    }
+  }
+  // Run an item's effect list in order (a pay that fails stops the rest).
+  function resolveFx(F, ctx, plus) {
+    for (const f0 of fxOf(ctx.def, plus)) {
+      if (!f0 || F.result === 'lose' || ctx.stop) break;
+      runFx(F, scaled(F, ctx.def, f0), ctx);
+      ctx.acted = true;
+    }
+  }
+  const hasAgain = (def, plus) => fxOf(def, plus).some(f => f && f.k === 'again');
+  // The `again` fx: the previous item played this fight resolves once more.
+  function replay(F, ctx) {
+    const last = F.lastPlay;
+    if (!last || !last.def || hasAgain(last.def, last.plus)) { text(F, F.player, 'NOTHING'); return; }
+    if (ctx.def && ctx.def.id) itemProc(F, ctx.def, 'AGAIN: ' + String(last.def.name || last.def.id).toUpperCase());
+    retarget(F);
+    resolveFx(F, { inst: last.inst, def: last.def, mode: last.def.target || 'enemy', idx: F.target, again: true }, last.plus);
   }
 
   // Resolve one item effect.
@@ -819,26 +1000,32 @@ const COMBAT = (() => {
         emit(F, { t: 'grab', v: g });
         break;
       }
-      case 'gold': F.gain.gold += Math.round(v); text(F, p, `${v >= 0 ? '+' : ''}${Math.round(v)} gold`); break;
+      case 'gold': api.gainGold(F, v); break;
       case 'ink': F.gain.ink += Math.round(v); text(F, p, `${v >= 0 ? '+' : ''}${Math.round(v)} bulbs`); break;
-      case 'maxhp': {
-        const g = Math.round(v);
-        const before = p.maxHp;
-        p.maxHp = Math.max(1, p.maxHp + g);
-        F.gain.maxhp += p.maxHp - before;
-        if (g > 0) api.heal(F, p, g); else p.hp = Math.min(p.hp, p.maxHp);
-        break;
-      }
+      case 'maxhp': api.gainMaxHp(F, v); break;
       case 'shake': emit(F, { t: 'binShake' }); break;
       case 'junk': api.addJunk(F, f.id || f.item, f.n == null ? 1 : f.n); break;
       case 'purge': api.removeJunk(F, f.n == null ? 1 : f.n); break;
-      case 'copy': copyItem(F, ctx.inst); break;
+      case 'copy': copyItem(F, ctx.inst, f.tag); break;
       case 'dmgPer': {
-        const total = v * countPer(F, f.per);
+        const total = v * countPer(F, f.per, ctx);
         if (total > 0) hit(total);
-        else text(F, p, 'FIZZLE');
+        else if (!ctx.acted) text(F, p, 'FIZZLE');
         break;
       }
+      case 'blockPer': {
+        const total = Math.floor(v * countPer(F, f.per, ctx));
+        if (total > 0) gainBlock(F, p, total);
+        break;
+      }
+      case 'pay': {
+        // Spend the run's gold (gold at fight start + gains this fight).
+        const cost = Math.max(0, Math.round(v));
+        if (api.gold(F) < cost) { text(F, p, 'BROKE'); ctx.stop = true; break; }
+        if (cost) { F.gain.gold -= cost; F.stats.spent += cost; text(F, p, `-${cost} gold`); }
+        break;
+      }
+      case 'again': if (!ctx.again) replay(F, ctx); break;
       case 'cleanse':
         for (const k of Object.keys(p.status)) if (isDebuff(k)) removeStatus(F, p, k);
         break;
@@ -864,9 +1051,10 @@ const COMBAT = (() => {
     }
   }
 
-  function copyItem(F, self) {
-    let pool = F.bin.filter(i => i !== self && !isJunk(i) && !i.frozen);
-    if (!pool.length) pool = F.used.filter(i => i !== self && !isJunk(i));
+  function copyItem(F, self, tag) {
+    const ok = (i) => i !== self && !isJunk(i) && (!tag || tagHas(itemDef(i.id), tag));
+    let pool = F.bin.filter(i => ok(i) && !i.frozen);
+    if (!pool.length) pool = F.used.filter(ok);
     if (!pool.length || F.bin.length + F.used.length >= MAX_ITEMS) { text(F, F.player, 'NOTHING'); return null; }
     const src = pool[Math.floor(F.rng() * pool.length)];
     const inst = { uid: newUid(), id: src.id, plus: !!src.plus, frozen: false, junk: false, temp: true };
@@ -901,15 +1089,42 @@ const COMBAT = (() => {
       text(F, F.player, 'THAWED');
       F.used.push(inst);
     } else {
+      const plus = !!inst.plus;
       const ctx = { inst, def, mode, idx };
-      for (const f of fxOf(def, !!inst.plus)) {
-        if (!f || F.result === 'lose') break;
-        runFx(F, f, ctx);
+      // Rules that change this item's numbers credit their relic.
+      const real = !isJunk(inst) && fxOf(def, plus).length > 0;
+      if (real && num(F.rules.glassBreak, 0) > 0 && tagHas(def, 'glass')) ruleProc(F, 'glassBreak', 'GLASS CANNON');
+      if (real && F.rules.amp && !F.grab.amped && Object.keys(F.rules.amp).some(t => tagHas(def, t))) {
+        F.grab.amped = true;   // once a grab: a scoop of marbles is one proc
+        ruleProc(F, 'amp');
       }
+      resolveFx(F, ctx, plus);
+      // Echo rule: every nth magic item played resolves twice.
+      const echo = Math.round(num(F.rules.echo, 0));
+      if (echo > 0 && tagHas(def, 'magic') && F.phase === 'player') {
+        F.echoN++;
+        if (F.echoN % echo === 0) {
+          ruleProc(F, 'echo', 'ECHO');
+          retarget(F);
+          resolveFx(F, { inst, def, mode, idx: F.target, again: true }, plus);
+        }
+      }
+      if (!hasAgain(def, plus)) F.lastPlay = { inst, def, plus };
       // Bleed: the player bleeds when acting (playing an item).
       if (F.phase !== 'over') tickDmg(F, F.player, 'bleed');
       if (F.result !== 'lose') hook(F, 'onPlay', inst, def);
-      (exhausts(def, !!inst.plus) ? F.exhausted : F.used).push(inst);
+      // Glass that exhausts shatters (Glass Cannon makes every glass item do so).
+      const glass = tagHas(def, 'glass');
+      const gone = exhausts(def, plus) || (glass && num(F.rules.glassBreak, 0) > 0);
+      (gone ? F.exhausted : F.used).push(inst);
+      if (gone && glass && F.result !== 'lose') {
+        F.stats.shattered++;
+        itemProc(F, def, 'SHATTER');
+        hook(F, 'onShatter', inst, def);
+      }
+      // This grab's deliveries, for the combos at grabDone.
+      F.grab.insts.push(inst);
+      F.grab.defs.push(def);
     }
     sanitize(F);
     checkOver(F);
@@ -960,7 +1175,43 @@ const COMBAT = (() => {
       c.push(inst);
     }
     if (c.length) emit(F, { t: 'binJunk', items: c });
+    if (c.length) hook(F, 'onJunk', c.length, c);
     return c;
+  };
+  // Temporary (this fight only) copies of an item, e.g. a relic's marbles.
+  api.addTemp = function (F, id, n) {
+    const out = [];
+    if (!F || !id) return out;
+    n = clamp(Math.round(num(n, 1)), 0, 20);
+    for (let i = 0; i < n && F.bin.length + F.used.length < MAX_ITEMS; i++) {
+      const inst = { uid: newUid(), id, plus: false, frozen: false, junk: false, temp: true };
+      if (F.bin.length < MAX_CABINET) { F.bin.push(inst); emit(F, { t: 'binCopy', inst }); } else F.used.push(inst);
+      out.push(inst);
+    }
+    return out;
+  };
+  // Copy a random bin item (of a tag, when given) for this fight.
+  api.copy = function (F, tag) { return F ? copyItem(F, null, tag) : null; };
+  // Gold gained in the fight (F.gain.gold, paid out by the game at the end).
+  api.gainGold = function (F, v) {
+    v = Math.round(num(v, 0));
+    if (!F || !v) return 0;
+    F.gain.gold += v;
+    text(F, F.player, `${v >= 0 ? '+' : ''}${v} gold`);
+    if (v > 0) hook(F, 'onGold', v);
+    return v;
+  };
+  // The gold the run holds right now: at fight start plus this fight's gains.
+  api.gold = function (F) { return F ? Math.max(0, num(F.gold0, 0) + num(F.gain && F.gain.gold, 0)) : 0; };
+  // Max HP for good (F.gain.maxhp goes back to the run); a gain heals as much.
+  api.gainMaxHp = function (F, v) {
+    const g = Math.round(num(v, 0));
+    if (!F || !g) return 0;
+    const p = F.player, before = p.maxHp;
+    p.maxHp = Math.max(1, p.maxHp + g);
+    F.gain.maxhp += p.maxHp - before;
+    if (g > 0) api.heal(F, p, g); else p.hp = Math.min(p.hp, p.maxHp);
+    return p.maxHp - before;
   };
   // Remove up to n junk from the fight (bin first, then used).
   api.removeJunk = function (F, n) {
@@ -1013,18 +1264,25 @@ const COMBAT = (() => {
     const armor = t ? st(t, 'armor') : 0;
     let block = p.block;
     let total = 0;
-    const one = (b) => calcHit(b, str, weak, vuln, armor);
-    for (const f of fxOf(def, plus)) {
-      if (!f) continue;
+    const sh = num(F.rules && F.rules.shatter, 0);
+    const frozen = !!(t && sh > 0 && st(t, 'freeze') > 0);
+    const one = (b) => { const h = calcHit(b, str, weak, vuln, armor); return frozen ? Math.floor(h * (1 + sh)) : h; };
+    const ctx = { idx: F.target };
+    const added = {};   // poison / burn this item puts on the target before a dmgPer reads it
+    for (const f0 of fxOf(def, plus)) {
+      if (!f0) continue;
+      const f = scaled(F, def, f0);
       const v = num(f.v, 0);
+      if (f.k === 'pay' && api.gold(F) < Math.round(v)) break;
       switch (f.k) {
         case 'dmg': if (v > 0) total += one(v) * Math.max(1, num(f.n, 1) | 0); break;
         case 'lifesteal': total += one(v); break;
         case 'dmgPer': {
-          const cnt = f.per === 'block' ? block : countPer(F, f.per);
+          const cnt = f.per === 'block' ? block : countPer(F, f.per, ctx) + (added[f.per] || 0);
           if (v * cnt > 0) total += one(v * cnt);
           break;
         }
+        case 'blockPer': block = Math.max(0, block + Math.floor(v * (f.per === 'block' ? block : countPer(F, f.per, ctx)))); break;
         case 'random': {
           const lo = Math.round(num(f.min, f.max == null ? 1 : 0));
           const hi = Math.max(lo, Math.round(num(f.max, v || lo)));
@@ -1038,6 +1296,7 @@ const COMBAT = (() => {
           if (to === 'self' && f.s === 'str') str += sv;
           if (to === 'self' && f.s === 'weak') weak = weak || sv > 0;
           if (to !== 'self' && f.s === 'vuln' && sv > 0) vuln = true;
+          if (to !== 'self' && (f.s === 'poison' || f.s === 'burn')) added[f.s] = (added[f.s] || 0) + sv;
           break;
         }
         case 'cleanse': weak = false; break;

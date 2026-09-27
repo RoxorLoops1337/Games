@@ -261,6 +261,7 @@ DATA.ITEMS[id] = {
   target: 'enemy'|'all'|'self'|'random'|'none',    // default 'enemy'
   fx: [ {k, v, ...} ],                              // in order; see effect kinds
   plus: { name?: 'Rusty Sword+', fx: [...] },       // upgraded version (Monster Train style), same shape
+  kw?: ['poison', ...]                              // extra archetype chips (most are derived, see Builds and synergies)
   text: 'Deal 6 damage.'                            // hand-written, {v} allowed to be substituted by DATA.itemText
   exhaust?: true                                    // removed for the rest of the fight when played
   char?: 'knight'|'alchemist'|'rogue'               // character pool restriction (optional)
@@ -271,7 +272,10 @@ Effect kinds (combat implements exactly these; do not invent others):
 `grab {v}` (+grabs this turn), `gold {v}`, `ink {v}`, `maxhp {v}`, `shake` (shake own bin),
 `junk {id, n, to:'self'}` (add junk items to own bin for this fight), `purge {n}` (remove n junk from own bin for the fight),
 `copy` (duplicate a random non-junk bin item for this fight), `dmgPer {v, per:'block'|'junk'|'metal'|'grabsUsed'}`,
-`cleanse` (remove player debuffs), `lifesteal {v}`, `random {v, min, max}` (dmg between), `poisonAll`
+`cleanse` (remove player debuffs), `lifesteal {v}`, `random {v, min, max}` (dmg between), `poisonAll`,
+`blockPer {v, per}`, `pay {v}` (spend run gold; broke stops the rest), `again` (replay the previous item),
+`copy {tag?}`. `per` (dmgPer / blockPer, `DATA.PER_KINDS`): `block, junk, metal, grabsUsed, poison, burn,
+small, streak, gold` (see Builds and synergies).
 Ordering: `fx` runs in list order. `v` may be negative for self damage.
 
 Item roster: **at least 48 items**: ~18 common, 14 uncommon, 10 rare, 4 legendary, 3 junk
@@ -293,7 +297,8 @@ Required statuses: `block` (handled as a field, not a status), `str` (strength, 
 player loses 1 grab that turn), `regen` (heal v at turn start, -1), `thorns` (attackers take v),
 `dodge` (next v attacks miss), `bleed` (take v when acting, -1), `stun` (skip next action), `grease`
 (player only: bin is slippery this turn), `fog` (player: cabinet glass fogged), `shield_up`
-(enemy: block persists), `enrage` (str +v every turn), `armor` (flat dmg reduction).
+(enemy: block persists), `enrage` (str +v every turn), `armor` (flat dmg reduction), `streak` (player: the
+grab streak, a display counter COMBAT sets, see Builds and synergies).
 
 ```js
 DATA.ENEMIES[id] = {
@@ -315,7 +320,11 @@ mushroom, knight, wisp, crab, drone, tinker, cultist`.
 DATA.ENCOUNTERS[act] = { normal: [[ids...], ...], elite: [[ids]], boss: [[ids]] }   // >=6 normal, 2 elite, 1 boss per act
 DATA.RELICS[id] = { id, name, icon, rarity:'c'|'u'|'r'|'boss'|'event', text,
   mods?: { grabs, width, grip, speed, prongs, rubber, magnet, maxhp, gold, ink, startBlock, startStr },
-  hooks?: { onFightStart(F), onTurnStart(F), onTurnEnd(F), onPlay(F, inst, def), onGrab(F, n /*delivered count*/), onDmgDealt(F, e, amt), onKill(F, e), onHurt(F, amt) } // return nothing; mutate F via COMBAT helpers
+  hooks?: { onFightStart(F), onTurnStart(F), onTurnEnd(F), onPlay(F, inst, def), onGrab(F, n /*delivered count*/), onDmgDealt(F, e, amt), onKill(F, e), onHurt(F, amt),
+            onStatus(F, unit, s, v), onBlock(F, amt), onHeal(F, amt), onJunk(F, n, insts), onCombo(F, combo, defs), onJackpot(F, n), onShatter(F, inst, def), onGold(F, amt) } // return nothing; mutate F via COMBAT helpers
+  rules?: { poisonKeep, blockKeep, shatter, glassBreak, amp: {tag: n}, comboTwice, echo },   // DATA.RELIC_RULES, rare build payoffs
+  kw: ['poison', ...],   // archetype chips (DATA.ARCHETYPES ids, may be empty)
+  proc?: 'SHORT LABEL'   // the text of the automatic proc event
 }
 ```
 At least **28 relics**. Hooks are functions in data.js (this is fine).
@@ -349,7 +358,10 @@ DATA.ACTS[1..3] = { name, sub, palette: {bg, wall, accent}, floors: 1 }
 DATA.itemText(def, plus) -> string   // final rules text ({v} substituted)
 DATA.pool(rarity, char?, tags?) -> [ids]
 DATA.rollRarity(rng, weights?) -> 'c'|'u'|'r'|'l'
-DATA.rewardItems(rng, act, char, n=3) -> [ids]   // no duplicates, rarity weighted by act
+DATA.rewardItems(rng, act, char, n=3, run?) -> [ids]   // no duplicates, rarity weighted by act; run -> build pull
+DATA.pickRelic(rng, pool, run?) -> id    // rng.pick(pool), plus the build pull when a run is given
+DATA.keywords(def, max=3) -> [{id, label, icon, color}]   DATA.kwIds(def)   DATA.ARCHETYPES   DATA.investment(run)
+DATA.COMBOS   DATA.combosFor(defs) -> [combo]   DATA.COMBO_MAX   DATA.BUILD_PULL
 ```
 
 ### `js/combat.js` -- `COMBAT`
@@ -380,6 +392,10 @@ COMBAT.isOver(F) -> null|'win'|'lose'
 COMBAT.addJunk(F, id, n) COMBAT.removeJunk(F, n) COMBAT.stealItem(F) COMBAT.freezeItem(F)
 COMBAT.previewDamage(F, def, plus) -> number   // for tooltips/tray
 COMBAT.intentText(e) -> string                 // "Attacks for 7", "Blocks 5", "Shakes the bin"
+COMBAT.grabDone(F, n) -> events   // streak, grab combos, onJackpot, onGrab; clears F.grab
+COMBAT.rulesOf(relicIds) -> {rules, src}   COMBAT.gold(F)   COMBAT.gainGold(F, v)   COMBAT.gainMaxHp(F, v)
+COMBAT.addTemp(F, id, n)   COMBAT.copy(F, tag?)   COMBAT.comboFx(F, combo)   COMBAT.emit(F, ev)
+// F also carries: grab {insts, defs}, streak, rules, ruleSrc, gold0, combos {id: n}, stats.combos / shattered / spent
 ```
 Event objects (renderer/game consume these; keep this list exact):
 `{t:'dmg', who:'p'|'e', idx, amt, blocked, crit?}`, `{t:'block', who, idx, amt}`, `{t:'heal', who, idx, amt}`,
@@ -387,7 +403,9 @@ Event objects (renderer/game consume these; keep this list exact):
 `{t:'play', inst, def, target}`, `{t:'refill', items}`, `{t:'binShake'}`, `{t:'binGrease', turns}`,
 `{t:'binFog', turns}`, `{t:'binJunk', items:[inst]}`, `{t:'binSteal', inst}`, `{t:'binFreeze', inst}`,
 `{t:'binTilt', dir:-1|1}`, `{t:'binPurge', insts}`, `{t:'binCopy', inst}`, `{t:'turn', n}`, `{t:'over', result}`,
-`{t:'text', who, idx, str}` (floating text like "MISS", "FROZEN"), `{t:'grab', v}`.
+`{t:'text', who, idx, str}` (floating text like "MISS", "FROZEN"), `{t:'grab', v}`,
+`{t:'proc', src, id, name, icon, color, text, who:'player'|'enemy', idx}`, `{t:'combo', id, name, text, color, n, tier}`
+(see Builds and synergies).
 
 Damage formula: `base + str` per hit, ×0.75 if weak, ×1.5 if vuln on target, −armor, then block
 absorbs. Player burn: `v` dmg at end of player turn then −1. Enemy poison/burn tick at the start
@@ -782,6 +800,177 @@ Tests (`tests/clawspire_game.test.mjs`, written by the integrator): full headles
 and stepping `GAME.update(1/60)` until the grab finishes → items played → end turn → win →
 rewards → shop → boss → act 2 → save/load round trip → game over path.
 
+## Builds and synergies
+
+The owners asked for cooler combos: items and relics that click together, and
+many different builds. The design goal is **distinct, discoverable builds that
+snowball and that change what you aim the claw at**, with bridges between them
+so hybrids are strong too.
+
+### Design principles
+
+- **Every archetype changes the aim.** A poison run fishes for flasks, a junk
+  run grabs the rocks it used to avoid, a swarm run scoops marble clusters, a
+  jackpot run takes the safe single grab to keep its streak alive, a greed run
+  keeps its gold instead of spending it.
+- **Commons start a build, rares define it.** A common or uncommon relic nudges
+  (a little Block, a chip of damage); each archetype has at least one rare or
+  legendary payoff that bends a rule (poison stops wearing off, Block stops
+  fading, combos fire twice).
+- **Grab combos are for everyone.** Named recipes fire when one grab delivers
+  the right set, whatever the build. Relics amplify specific combos.
+- **Bridges.** Most new cards carry two archetypes (a food that burns, a glass
+  shield, a metal ring with thorns), and the hooks read each other: Bottle
+  Deposit turns shatters into gold, Money Bags turns gold into damage.
+- **Readable.** Every relic trigger emits a `proc` event with a short label,
+  every combo a `combo` event with its name and one line of text, and every
+  item and relic card can show its archetype chips (`DATA.keywords`).
+
+### Archetypes (`DATA.ARCHETYPES`, `DATA.keywords(def)`)
+
+`DATA.ARCHETYPES[id] = { label, icon, color, blurb }`. `DATA.keywords(def, max = 3)`
+returns up to `max` chips `{ id, label, icon, color }` for an item or relic def
+(pass `Infinity` for all). Items derive them from tags and fx (below), plus an
+optional explicit `def.kw`; relics list theirs in `kw`. `DATA.kwIds(def)` is the
+uncapped id list.
+
+| id | chip | reads from | payoff (rare / legendary) | key pieces |
+| --- | --- | --- | --- | --- |
+| poison | ☠ Poison | poison fx, poisonAll, dmgPer poison | Festering Jar (poison never wears off) | Venom Gland, Contagion, Plague Orb, Rot Catalyst, Venom Dart |
+| burn | 🔥 Pyro | burn fx on foes, dmgPer burn | Powder Keg (10+ Burn explodes) | Flint Striker, Bellows, Firebomb, Inferno Scroll, Ghost Pepper |
+| frost | ❄ Frost | chill / freeze on foes | Permafrost Core (SHATTER: +50% on Frozen) | Snow Globe, Cold Snap, Ice Pick, Blizzard Orb, Frozen Heart |
+| fortress | 🛡 Fortress | Block 4+, blockPer, dmgPer block, Thorns, Bulwark | Castle Walls (Block never fades), Aegis (l) | Battering Ram, Thorn Mail, Thorn Ring, Glass Shield |
+| brawler | 💪 Brawler | Strength, multi-hit | Gym Membership (+1 on every Strength gain) | Protein Bar, Trophy Rack, Sweatband, Flail, Rage Potion |
+| metal | 🧲 Magnet | metal tag, dmgPer metal | Dynamo (metal in the cabinet zaps each turn), Family Anvil (l) | Fridge Magnet, Horseshoe, Tuning Fork, Magnetite, Iron Nut |
+| junk | ♻ Scrap | junk fx, purge, per junk | Junkyard King (grab out junk: +1 Strength), Junk Cannon (r) | Recycling Bin, Dumpster Lid, Scrap Shield, Pet Rock |
+| jackpot | 🎰 Jackpot | extra grabs, per grabsUsed / streak | Encore Machine (combos fire twice) | Jackpot Bell, Prize Counter, Winning Streak, Arcade Token |
+| swarm | 🎱 Swarm | small tag, bags, per small | Pocket Dimension (small items +2 / +1) | Marble Pouch, Beehive, Gumball Jar, Bucket of Bolts |
+| glass | 💎 Glass | glass tag | Glass Cannon (glass doubles, always shatters) | Sharp Shards, Bottle Deposit, Crystal Shard, Glass Shield |
+| feast | 🍗 Feast | food, heal, lifesteal, max HP | Feast Table (food: +1 Max HP, 3 a fight) | Blood Bag, Bat Wing, Vampire Dentures, Blood Orange, Vampire Fang |
+| greed | 🪙 Greed | gold fx, pay, per gold | Money Bags (gold gained hits ALL), Pay to Win (r) | Piggy Bank, Golden Ticket, Bribe, Golden Idol |
+| echo | ✨ Echo | magic tag, copy, again | Echo Chamber (every 3rd magic item resolves twice), Deja Vu (r) | Wizard Hat, Crystal Focus, Arcane Tome |
+
+Every archetype has at least 4 items and 3 relics carrying its keyword (the data
+suite pins it). Bridges worth knowing: Ghost Pepper (burn + feast), Frozen Heart
+(frost + fortress), Glass Shield (glass + fortress), Thorn Ring (fortress +
+metal), Bottle Deposit (glass + greed), Sweatband (brawler + fortress), Junkyard
+King (junk + brawler), Tuning Fork (metal + jackpot), iceblocks (junk that
+shatters, so glass relics love act 3).
+
+### Grab combos (`DATA.COMBOS`, `DATA.combosFor(defs)`)
+
+The game already calls `COMBAT.useGrab` before a drop, `COMBAT.play` for every
+delivered item and `COMBAT.grabDone(F, n)` when the grab settles. COMBAT keeps
+the grab buffer itself: `useGrab` opens `F.grab = { insts, defs }`, `play`
+appends (frozen items that only thawed do not count), `grabDone` evaluates the
+recipes on the buffer, then fires `onJackpot` (3+ items) and `onGrab`, then
+clears it. No game.js change.
+
+A recipe is `{ id, name, text, color, tier: 1..3, family, sup?, once?, target, fx, match(defs), example, miss }`:
+`match` is a pure function over the delivered item defs; `fx` runs like an item
+played by the player (Strength counts, targets `target`); `family` keeps only
+the highest tier of a family; `sup` lists recipes a bigger one replaces;
+`once: 'turn'` fires at most once a turn (the ones that give grabs). At most
+`DATA.COMBO_MAX` (3) recipes fire per grab, biggest tier first. `example` and
+`miss` are item id lists the tests (and the help page) use.
+
+| tier | combo | recipe | effect |
+| --- | --- | --- | --- |
+| 1 | Crossed Blades | 2 different weapons | strike once more for 4 |
+| 1 | Shield Wall | 2 different Block items (4+) | +4 Block |
+| 1 | Heavy Hitters | 2 heavy items | 6 damage |
+| 1 | Steam Burst | a Pyro item + a Frost item | 4 damage to ALL |
+| 1 | Toxic Fumes | a Poison item + a Pyro item | 2 Poison to ALL |
+| 1 | Frostbite | a Poison item + a Frost item | 1 Chill and 1 Poison to ALL |
+| 1 | Molotov | a glass item + a Pyro item | 2 Burn to ALL |
+| 1 | Picnic | 2 food | heal 3 |
+| 1 | Pocket Change | 2 small | 3 damage to a random enemy |
+| 1 | Resonance | 2 magic | copy a random bin item |
+| 1 | Sharp Edges | a glass item + a weapon | 4 damage |
+| 1 | Scrap Shot | junk + a weapon | 8 damage |
+| 1 | Pay Day | 2 Greed items | +6 gold |
+| 2 | Magnetized | 3 metal | 5 damage to ALL, +5 Block |
+| 2 | Handful | 3 small | +1 grab (once a turn) |
+| 2 | Banquet | 3 food | heal 6, 2 Regen |
+| 2 | Chandelier Crash | 3 glass | 8 damage to ALL |
+| 2 | Landslide | 2 junk | 10 damage to ALL |
+| 2 | Hat Trick | any 3 items | 4 damage to ALL |
+| 3 | Armory | 3 weapons | strike 4 more times for 4 |
+| 3 | Iron Curtain | 3 Block items | +12 Block, 2 Thorns |
+| 3 | Elemental Storm | Pyro + Frost + Poison items | 8 to ALL, 3 Poison, 3 Burn, 1 Chill to ALL |
+| 3 | Three of a Kind | 3 of the same item | 10 to ALL, +5 gold |
+| 3 | Mega Jackpot | 4+ items | 12 to ALL, +1 grab (once a turn) |
+
+Two-role recipes need two different delivered items (Liquid Fire alone is not
+a Molotov). Tier 1 is deliberately small: combos are free for every build, so
+they are a reward for a good grab, not a stat line. The two pair recipes a
+starting bin would hit every turn (Sword + Sword, Shield + Shield) ask for
+*different* items instead, which also makes variety something to aim for;
+Three of a Kind is the prize for identical ones. Balance bot (starting bins,
+act 1 normals): knight 4.9 -> 4.5 turns, alchemist 5.2 -> 4.7, rogue
+6.9 -> 6.2; combos fire on about 15% of grabs. With `COMBO_MAX` 0 the bot
+reproduces the pre-combo numbers exactly.
+
+### Streaks
+
+`F.streak` counts consecutive grabs that delivered at least one item (across
+turns, reset by an empty grab). It shows as the player status `streak` (🎯, a
+display counter COMBAT sets directly, it never decays and never emits status
+events), feeds `dmgPer {per:'streak'}` (Arcade Token) and Winning Streak.
+
+### New relic hooks
+
+On top of the eight originals (`DATA.RELIC_HOOKS`):
+`onStatus(F, unit, s, v)` a status gained v stacks (any unit; freeze from chill
+included), `onBlock(F, amt)` the player gained Block, `onHeal(F, amt)` the player
+healed, `onJunk(F, n, insts)` junk was added to the bin, `onCombo(F, combo, defs)`
+a grab combo fired, `onJackpot(F, n)` one grab delivered 3+ items,
+`onShatter(F, inst, def)` a glass item exhausted (iceblocks included),
+`onGold(F, amt)` gold was gained in the fight. A hook never re-enters itself,
+so an onStatus relic adding poison does not trigger itself again.
+
+### Relic rules (`DATA.RELIC_RULES`)
+
+Build-defining rares bend engine rules through a data field `rules` that
+COMBAT merges into `F.rules` at `newFight` (numbers add, `amp` merges per tag):
+`poisonKeep` (enemy Poison does not decay), `blockKeep` (player Block does not
+fade), `shatter` (+x damage on Frozen enemies), `glassBreak` (glass items double
+their numbers and always shatter), `amp {tag: n}` (items with the tag get +n
+damage / Block / healing and +ceil(n/2) status stacks), `comboTwice` (combos
+resolve twice), `echo` (every nth magic item resolves twice). `F.ruleSrc[rule]`
+names the relic so the proc event can credit it.
+
+### New fx and counters
+
+`blockPer {v, per}` (Block per count), `pay {v}` (spend v gold of the run's gold,
+`COMBAT.gold(F)` = run gold at fight start + gains; broke = BROKE and the rest
+of the item fizzles), `again` (resolve the previous item played this fight
+again, never another `again` item), `copy {tag?}` (copy a random bin item,
+optionally of a tag). `dmgPer` / `blockPer` count `block, junk, metal,
+grabsUsed` plus `poison` and `burn` (the target's stacks), `small` (small items in
+the cabinet), `streak` and `gold` (per 10 gold carried).
+
+### Events (the juice agent renders these)
+
+- `{ t: 'proc', src: 'relic'|'item'|'combo', id, name, icon, color, text, who: 'player'|'enemy', idx }`:
+  a relic or item synergy triggered. COMBAT emits one automatically in front of
+  the events of any relic hook call that did something visible, labelled with the
+  relic's `proc` text (or its name); hooks with a dynamic label (`SPREAD 4`,
+  `KABOOM 12`) emit their own. Rules emit them where they bite (`FESTER`,
+  `SHATTER`, `WALLS HOLD`, `ECHO`, `ENCORE`). Items emit `src:'item'` for
+  `SHATTER` and `AGAIN`.
+- `{ t: 'combo', id, name, text, color, n, tier }`: a named grab combo fired
+  (before its effects resolve).
+
+### Build pull (reward bias)
+
+`DATA.investment(run) -> {archetype: score}` counts keywords over the bin
+(starters weigh 0.5) and the relics (3 each). `DATA.rewardItems(rng, act, char, n, run?)`
+and `DATA.pickRelic(rng, pool, run?)`: when `run` is given, `DATA.BUILD_PULL`
+(25%) of the time one slot is redrawn from an archetype the run already invests
+in (score 3+, weighted by score), same rarity. Without `run` both behave exactly
+as before (same rng draws).
+
 ## Balance targets (v1)
 
 `DATA.DIFFICULTY = { hp, dmg, ramp }` multiplies every enemy's hit points and
@@ -809,6 +998,115 @@ blight) and the tinker gnome flicks burn.
 - Gold: 10-25 per fight, items 40-120, relics 120-220, remove 60. Claw upgrade costs (50-160) are kept in data but nothing sells them: shops stock items, a relic, remove and sell; rest stops heal 30% or upgrade an item; the act transition after a boss (acts 1 and 2) shows "The Prize Master's spare parts" (1 of 3 unmaxed claw upgrades) before the boss relic; towers keep their claw bonus.
 - Bulbs: 10 at run start, +2 from bulb boxes, +2 from towers, +2 from elites (fights 50%). Vision lights rings for free, towers light radius 4. ~35% of the map is revealed in a
   normal run; revealing more = more fights = more loot but more risk.
+
+## Juice (game feel layer)
+
+Everything here is presentation: nothing touches COMBAT state, saves or the
+physics outcome, and every piece degrades to a no-op headless. The settings'
+**Shake off** is the reduced-motion switch (`RENDER.fx.reduced`, plus
+`html.calm` for the CSS): shake to a fifth, no camera roll or kick, preset
+bursts at a third, flashes capped at 0.12, slow motion gentler and shorter,
+the heavy CSS loops (card deal, relic rays, low hp pulse, transitions) cut.
+`prefers-reduced-motion` also disables the CSS loops.
+
+**Systems (render.js `RENDER.fx`, fixed pools, no per-frame allocation).**
+- Particles: 400 live max (the oldest recycles), kinds dot, square, spark
+  (velocity streak, additive), star, coin (spinning), confetti, bubble, plus,
+  smoke (glow sprite puff), shard, ember (additive), snow. Additive kinds draw
+  in one composite switch. `fx.emit(preset, x, y, {n, col, power, dir})`
+  presets: hit, crit, sparks, dust, smoke, poof, coins, confetti, poison,
+  burn, frost, shock, blood, heal, block, shatter, death, glint, trailDot.
+- Text (48): the classic rising text, `fx.num` physics damage numbers (pop
+  with an overshoot, fly up, fall with gravity, sized by the number, crits
+  bigger with a pink rim and a wobble), `fx.badge(x, y, icon, text, col)`
+  icon pills. Rings (40, optional delay), slashes (16: a crescent, or
+  `{claw: true}` three straight rakes), flyers (48: an arc to a point with a
+  capped streak and an arrival callback, e.g. coins into the gold counter).
+- Camera: trauma shake (`fx.shake(amt)` adds amt/20 trauma, offset = trauma^2
+  x 16 px of smooth noise plus a small roll, trauma decays 1.4/s), `fx.kick`
+  a directional nudge that springs back, `fx.offset()` -> one reused
+  `{x, y, r}`. `fx.flash`, `fx.vignette` (an edge pulse) and `fx.hold` (a
+  standing edge glow the game sets per frame) draw from one cached sprite.
+- Time (game.js): `slowmo(k, secs)` scales the game dt on real time; toasts,
+  banners, combos and the outro keep real time. Hit stop (`FS.hitStop`)
+  freezes physics only, never while the claw carries.
+- Counters (game.js `rollTo`): HP, gold (in a fight `COMBAT.gold(F)`) and bulbs roll toward their value
+  with a tick; a rise floats "+n" into the stat and bumps it; the change is
+  held while the top bar is hidden so it plays when it shows. Headless snaps.
+
+**Per area.**
+- Claw: cable bows on a spring driven by the carriage's acceleration, hub
+  squash / stretch on drop, touch, close, lift and release, a dust puff and a
+  downward camera kick when the palm meets the pile, metallic sparks + a ring
+  where the prongs clamp, speed lines behind a fast hub, trails on carried
+  items.
+- Items: landing dust by impact x mass (3 a frame max), slip streaks with a
+  whoosh, rarity glow (uncommon faint cyan, rare gold, legendary pulsing
+  pink), a sweeping glint on rare and legendary items.
+- Delivery: each delivered item is thrown from the chute in an arc to its
+  target (the target enemy, the pack for all/random, the player row for
+  self) and COMBAT.play waits for the landing (`state().queue` counts the
+  items in flight); the landing bursts in the item's element. DOUBLE: coin
+  fountain, cabinet party lights, marquee. JACKPOT: confetti from both top
+  corners, a big coin fountain, a gold ring, rainbow slot-machine chase
+  lights and the JACKPOT! marquee (`cabinetBack` st.party / st.marquee).
+- Hits: a crushing hit (>= 20% of max hp, or `crit`) gets a gold number,
+  CRUSH!, a longer hit stop, the crit sting and a white flash; every hit
+  flashes the sprite white, knocks it back, shakes its hp bar, drains a ghost
+  chunk (white then pink) after a hold, rings, shakes by damage; weapons slash.
+  Blocked damage throws shield chips. Status items and statuses burst in
+  their element (poison bubbles, burn embers, frost shards, shock sparks).
+- Enemies: `RENDER.enemyAura` draws the standing looks (strength aura,
+  thorns ring, shield sheen behind; chill motes, freeze glints, poison
+  bubbles, burn embers, bleed drips, stun stars, pulsing V / W marks in front),
+  `st.chilled` tints, the status chip that changed bounces (`statusPips` pop
+  map). Attacks: the beat before a hit on the player the actor winds up (lean
+  back, tremble, red tint, `st.windup`), then snaps forward (`lungeCurve`).
+  Intent bubbles bob; a charged intent pulses. Enemies pop in at fight start.
+- The player: hp stat has a drain bar with a ghost, shakes on a hit, rings
+  on a block, glows on block / heal, shimmers while block holds; a big hit
+  rakes three red claw marks across the arena, every hit pulses a red
+  vignette; under 30% hp the edge glows with a heartbeat and a lub-dub.
+- Death: squash, flash, particles, two rings, coins that fly to the gold
+  counter (more for elites and bosses). The last kill: slow motion, a gold
+  ring, the victory sting, then the outro: the arena holds 1.5 s with the
+  VICTORY sweep and confetti before the reward (a tap skips; a save during it
+  is the reward screen, never the fight again). The public `endFight` stays
+  immediate.
+- Events from the synergy layer: `{t:'proc', src, id, name, icon, color,
+  text, who, idx}` pops the relic in the HUD bar (by id, a gold flash), flies
+  a star from it and raises a badge from the player or the enemy; the same
+  relic firing again within 0.7 s stacks on its badge ("x3") and a proc
+  only holds the queue 0.04 s, so a relic-heavy grab stays quick;
+  `{t:'combo', id, name, text, color, n, tier}` queues a stacked DOM banner
+  (#combo, name fitted to the stage, text under it), tier 2 adds sparks and
+  shake, tier 3 a white flash, pink / cyan / gold chromatic rings, confetti,
+  a longer hit stop and slow motion; several chain one after another.
+  Unknown events are ignored. `DATA.keywords(def)` chips (when it is a
+  function) show on every item card, relic card, the relic reveal, the shop
+  and the tray chip.
+- Screens: an iris opens onto every fight, a diagonal neon wipe between the
+  map and tile screens, a red bleed into game over; banners slide / skew /
+  sweep per kind and replay on every call; buttons squash, glow on hover;
+  reward cards deal in with a flip (a paper flick each), tilt on hover, the
+  pick flies to the Bin; rare cards pulse, legendary cards carry a rainbow
+  sheen; the relic reveal spins rays behind a floating relic that flies to
+  the relic bar; shop buys arc coins into the card and slam a SOLD stamp.
+- Map: light blooms ripple out from their source (a tap, a tool, a tower):
+  each new hex stays dark for 0.075 s per hex of distance, then fades in
+  with a gold ring and a rising chime; a taken tower sweeps a beam; the boss
+  hex breathes red rings; footsteps kick up dust; pickups vanish in a poof
+  with a badge (gem coins fly to the gold counter); ambient motes drift per
+  biome (fireflies, embers, snow; 30 on the map, 16 over the arena).
+- Audio (procedural, `AUDIO.sfx`): proc, combo (opts.tier 1..3), crit,
+  shatter, tick, cardFlip, relic, footstep, bloom, heartbeat, whoosh, stamp,
+  victory, all through the sfx bus with the voice cap, throttles and mute.
+
+Tests: render (presets, caps, numbers, flyers and callbacks, trauma, kick,
+reduced, auras, the new hooks balanced), game (proc, combo queue, keyword
+chips, unknown events, throws, crits and ghosts, low hp, the outro and its
+save, blooms, reduced, tap to skip), audio (the new names, combo tiers,
+throttles).
 
 ## Quality bar (Game of the Year, mobile)
 

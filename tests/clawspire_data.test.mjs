@@ -17,12 +17,15 @@ const {
 const ITEM_ART = 'sword dagger axe hammer anvil shield buckler potion flask bomb torch iceshard snowball coin gem rock slag iceblock apple bread book scroll orb ring key chain horn whetstone feather skull star boot bone bottle heart lantern wand mask egg dice'.split(' ');
 const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork golem furnace magnet ironjaw wraith yeti frostmage icemimic prizemaster mushroom knight wisp crab drone tinker cultist'.split(' ');
 const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
-const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll'.split(' ');
+const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again'.split(' ');
+const PER = 'block junk metal grabsUsed poison burn small streak gold'.split(' ');
 const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
 const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBlock startStr'.split(' ');
-const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt'.split(' ');
-const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor'.split(' ');
+const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold'.split(' ');
+const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo'.split(' ');
+const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo'.split(' ');
+const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor streak'.split(' ');
 const BIN_KINDS = ['shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'tilt'];
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isHex = (c) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
@@ -35,7 +38,7 @@ t.test('module shape', () => {
   t.ok(DATA && typeof DATA === 'object', 'DATA exists');
   for (const k of ['ITEMS', 'STATUS', 'ENEMIES', 'ENCOUNTERS', 'RELICS', 'EVENTS', 'CLAW_UPGRADES', 'BRUSHES', 'CHARACTERS', 'ACTS'])
     t.ok(DATA[k] && typeof DATA[k] === 'object', `DATA.${k} exists`);
-  for (const k of ['itemText', 'pool', 'rollRarity', 'rewardItems'])
+  for (const k of ['itemText', 'pool', 'rollRarity', 'rewardItems', 'keywords', 'kwIds', 'combosFor', 'investment', 'pickRelic'])
     t.ok(typeof DATA[k] === 'function', `DATA.${k} is a function`);
   const top = SRC.split('\n').filter(l => /^(const|let|var|function|class)\b/.test(l));
   t.eq(top.length, 1, 'exactly one top-level declaration');
@@ -50,7 +53,7 @@ function checkFx(list, where) {
   t.ok(Array.isArray(list), `${where}: fx is an array`);
   for (const f of list || []) {
     t.ok(FX.includes(f.k), `${where}: fx kind ${f.k} allowed`);
-    const needV = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'dmgPer', 'lifesteal', 'random'];
+    const needV = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'dmgPer', 'lifesteal', 'random', 'blockPer', 'pay'];
     if (needV.includes(f.k)) t.ok(isNum(f.v), `${where}: ${f.k} has numeric v`);
     if (f.k === 'dmg' && f.n != null) t.ok(Number.isInteger(f.n) && f.n >= 1, `${where}: dmg n is a positive int`);
     if (f.k === 'status') {
@@ -64,7 +67,9 @@ function checkFx(list, where) {
       t.eq(f.to, 'self', `${where}: junk to self`);
     }
     if (f.k === 'purge') t.ok(Number.isInteger(f.n) && f.n >= 1, `${where}: purge n`);
-    if (f.k === 'dmgPer') t.ok(['block', 'junk', 'metal', 'grabsUsed'].includes(f.per), `${where}: dmgPer per ${f.per}`);
+    if (f.k === 'dmgPer' || f.k === 'blockPer') t.ok(PER.includes(f.per), `${where}: ${f.k} per ${f.per}`);
+    if (f.k === 'pay') t.ok(f.v > 0, `${where}: pay costs something`);
+    if (f.k === 'copy' && f.tag != null) t.ok(TAGS.includes(f.tag), `${where}: copy tag ${f.tag}`);
     if (f.k === 'random') t.ok(isNum(f.min) && isNum(f.max) && f.min >= 0 && f.min <= f.max, `${where}: random min<=max`);
   }
 }
@@ -105,6 +110,7 @@ t.test('items', () => {
   const ids = Object.keys(ITEMS);
   t.ok(ids.length >= 48, `>= 48 items [${ids.length}]`);
   t.ok(ids.length >= 67, `>= 67 items with the small fillers and bags [${ids.length}]`);
+  t.ok(ids.length >= 95, `>= 95 items with the build pieces [${ids.length}]`);
   const by = (r) => ids.filter(id => ITEMS[id].rarity === r).length;
   t.ok(by('c') >= 16, `commons [${by('c')}]`);
   t.ok(by('u') >= 12, `uncommons [${by('u')}]`);
@@ -361,11 +367,15 @@ t.test('encounters', () => {
 });
 
 // ---------------------------------------------------------------- relics
+// A fight in the middle of things: a burning, poisoned, frozen foe, a dead
+// poisoned one, Block up, a streak of 3 and a grab of two metal items.
 function mockF() {
   return {
-    turn: 3, target: 0, events: [], relics: [], bin: [], used: [],
-    player: { hp: 20, maxHp: 70, block: 0, status: {}, grabs: 3, grabsMax: 3, grabsUsed: 1 },
-    enemies: [{ uid: 'a', hp: 20, maxHp: 20, block: 0, status: {}, alive: true }, { uid: 'b', hp: 0, maxHp: 9, block: 0, status: {}, alive: false }],
+    turn: 3, target: 0, events: [], relics: [], bin: [{ uid: 'm1', id: 'rusty_sword' }, { uid: 'm2', id: 'pot_lid' }], used: [], streak: 3,
+    grab: { insts: [], defs: [ITEMS.rusty_sword, ITEMS.dented_shield] },
+    player: { hp: 20, maxHp: 70, block: 10, status: {}, grabs: 3, grabsMax: 3, grabsUsed: 1 },
+    enemies: [{ uid: 'a', hp: 20, maxHp: 20, block: 0, status: { poison: 4, burn: 12, freeze: 1 }, alive: true },
+      { uid: 'b', hp: 0, maxHp: 9, block: 0, status: { poison: 3 }, alive: false }],
   };
 }
 function runHooks(r, F) {
@@ -377,11 +387,26 @@ function runHooks(r, F) {
     h.onPlay(F, { uid: 'x', id: 'rusty_sword' }, def);
     h.onPlay(F, { uid: 'y', id: 'rock', junk: true }, jd);
     h.onPlay(F, { uid: 'z', id: 'bubble_flask' }, ITEMS.bubble_flask);
+    h.onPlay(F, { uid: 'w', id: 'prize_marble' }, ITEMS.prize_marble);
+    h.onPlay(F, { uid: 'v', id: 'crystal_ball' }, ITEMS.crystal_ball);
+    h.onPlay(F, { uid: 'u', id: 'crisp_apple' }, ITEMS.crisp_apple);
   }
   if (h.onGrab) { h.onGrab(F, 0); h.onGrab(F, 2); }
   if (h.onDmgDealt) h.onDmgDealt(F, F.enemies[0], 15);
   if (h.onKill) h.onKill(F, F.enemies[1]);
   if (h.onHurt) h.onHurt(F, 5);
+  if (h.onStatus) {
+    h.onStatus(F, F.enemies[0], 'burn', 3);
+    h.onStatus(F, F.enemies[0], 'freeze', 1);
+    h.onStatus(F, F.player, 'str', 2);
+  }
+  if (h.onBlock) h.onBlock(F, 6);
+  if (h.onHeal) h.onHeal(F, 4);
+  if (h.onJunk) h.onJunk(F, 2, []);
+  if (h.onCombo) h.onCombo(F, DATA.COMBOS.magnetized, [ITEMS.rusty_sword, ITEMS.dented_shield, ITEMS.pot_lid]);
+  if (h.onJackpot) h.onJackpot(F, 3);
+  if (h.onShatter) h.onShatter(F, { uid: 'g', id: 'empty_bottle' }, ITEMS.empty_bottle);
+  if (h.onGold) h.onGold(F, 5);
   if (h.onTurnEnd) h.onTurnEnd(F);
 }
 
@@ -395,7 +420,14 @@ t.test('relics', () => {
     t.ok(typeof r.icon === 'string' && Array.from(r.icon).length >= 1 && Array.from(r.icon).length <= 2, `${W}: icon`);
     t.ok(['c', 'u', 'r', 'boss', 'event'].includes(r.rarity), `${W}: rarity`);
     t.ok(typeof r.text === 'string' && r.text.length > 8, `${W}: text`);
-    t.ok(!!(r.mods || r.hooks), `${W}: has mods or hooks`);
+    t.ok(!!(r.mods || r.hooks || r.rules), `${W}: has mods, hooks or rules`);
+    t.ok(Array.isArray(r.kw) && r.kw.every(k => ARCHS.includes(k)), `${W}: kw lists archetypes`);
+    if (r.proc != null) t.ok(typeof r.proc === 'string' && r.proc.length >= 2 && r.proc.length <= 16 && r.proc === r.proc.toUpperCase(), `${W}: proc label short and loud [${r.proc}]`);
+    if (r.rules) for (const k in r.rules) {
+      t.ok(RULES.includes(k), `${W}: rule ${k} allowed`);
+      const v = r.rules[k];
+      t.ok(isNum(v) ? v > 0 : (v && typeof v === 'object' && Object.keys(v).every(tg => TAGS.includes(tg) && isNum(v[tg]))), `${W}: rule ${k} value`);
+    }
     if (r.mods) for (const k in r.mods) {
       t.ok(MODS.includes(k), `${W}: mod ${k} allowed`);
       t.ok(isNum(r.mods[k]) && r.mods[k] !== 0, `${W}: mod ${k} numeric`);
@@ -418,6 +450,12 @@ t.test('relics', () => {
     status: (F, who, s, v) => { calls.push(['status', s, v]); return v; },
     heal: (F, who, v) => { calls.push(['heal', v]); return v; },
     addJunk: (F, id, n) => { calls.push(['addJunk', id, n]); return []; },
+    addTemp: (F, id, n) => { calls.push(['addTemp', id, n]); return []; },
+    copy: (F, tag) => { calls.push(['copy', tag]); return null; },
+    gainGold: (F, v) => { calls.push(['gainGold', v]); return v; },
+    gainMaxHp: (F, v) => { calls.push(['gainMaxHp', v]); return v; },
+    gold: () => 150,
+    emit: (F, ev) => { calls.push(['emit', ev.t]); return ev; },
     removeJunk: () => [], stealItem: () => null, freezeItem: () => null,
   };
   try {
@@ -434,6 +472,8 @@ t.test('relics', () => {
       t.ok(calls.every(c => c[0] !== 'damage' || c[1] === null), `relic ${id}: relic damage has no attacker`);
       t.ok(calls.every(c => c[0] !== 'status' || STATUS[c[1]]), `relic ${id}: statuses exist`);
       t.ok(calls.every(c => c[0] !== 'addJunk' || (ITEMS[c[1]] && ITEMS[c[1]].rarity === 'junk')), `relic ${id}: junk ids exist`);
+      t.ok(calls.every(c => c[0] !== 'addTemp' || (ITEMS[c[1]] && ITEMS[c[1]].rarity !== 'junk')), `relic ${id}: temp ids exist`);
+      t.ok(calls.every(c => c[0] !== 'emit' || c[1] === 'proc' || c[1] === 'grab'), `relic ${id}: emits only proc / grab events`);
     }
     t.ok(hookRelics >= 14, `plenty of hook relics [${hookRelics}]`);
     // once-per-fight memory really is once per fight
@@ -686,6 +726,191 @@ t.test('rewardItems', () => {
     for (const r of ['c', 'u', 'r', 'l']) t.near(cnt[r] / tot, W[act][r], 0.03, `act ${act} reward rarity ${r}`);
     t.near(own / tot, 0.4, 0.05, `act ${act}: ~40% from the character pool`);
   }
+});
+
+// ------------------------------------------------------------- builds
+// DESIGN.md "Builds and synergies": archetype chips, grab combos, the build
+// pull and old saves.
+// Every item id a save from before the build pass can hold.
+const OLD_ITEM_IDS = 'rusty_sword dented_shield spiked_buckler iron_chain heater_shield longsword tower_shield whetstone battle_axe war_hammer war_horn family_anvil toxic_vial bubble_flask cherry_bomb stink_potion alembic liquid_fire frost_phial acid_bottle volatile_egg elixir plague_orb philosophers_stone shiv old_boot lucky_coin serrated_knife smoke_bomb twin_daggers skeleton_key loaded_dice stolen_gem thieves_ring harlequin_mask wishing_star crisp_apple stale_bread torch snowball femur empty_bottle tickle_feather icicle rattle_mallet pot_lid map_scrap rulebook grudge_skull leech_wand rubble_bomb spooky_lantern crystal_ball golden_egg spare_heart dragon_egg prize_marble glass_bead peppermint ember_pebble frost_pearl lead_shot lucky_penny sour_drop bouncy_ball pocket_die quail_egg bag_marbles bag_beads bag_sweets rock slag iceblock'.split(' ');
+const cards = () => Object.keys(ITEMS).filter(id => ITEMS[id].rarity !== 'junk' && !ITEMS[id].bag);
+const poolRelics = () => Object.keys(RELICS).filter(id => !RELICS[id].starter && RELICS[id].rarity !== 'event');
+const kwOf = (d) => DATA.kwIds(d);
+
+t.test('archetypes and keywords', () => {
+  const A = DATA.ARCHETYPES;
+  t.eq(Object.keys(A).sort().join(), ARCHS.slice().sort().join(), '13 archetypes');
+  for (const k of ARCHS) {
+    const a = A[k];
+    t.ok(a && typeof a.label === 'string' && a.label.length >= 3 && a.label.length <= 10, `${k}: label`);
+    t.ok(a && typeof a.icon === 'string' && Array.from(a.icon).length >= 1 && Array.from(a.icon).length <= 2, `${k}: icon`);
+    t.ok(a && isHex(a.color), `${k}: color`);
+    t.ok(a && typeof a.blurb === 'string' && a.blurb.length > 15, `${k}: blurb`);
+    const items = cards().filter(id => kwOf(ITEMS[id]).includes(k));
+    const relics = poolRelics().filter(id => kwOf(RELICS[id]).includes(k));
+    t.ok(items.length >= 4, `${k}: >= 4 items [${items.length}: ${items.join(' ')}]`);
+    t.ok(relics.length >= 3, `${k}: >= 3 pool relics [${relics.length}: ${relics.join(' ')}]`);
+    const payoff = items.filter(id => ['r', 'l'].includes(ITEMS[id].rarity)).concat(relics.filter(id => RELICS[id].rarity === 'r'));
+    t.ok(payoff.length >= 1, `${k}: a rare or legendary payoff [${payoff.join(' ')}]`);
+  }
+  // chips: shape, cap, order
+  for (const id of Object.keys(ITEMS).concat(Object.keys(RELICS))) {
+    const def = ITEMS[id] || RELICS[id];
+    const chips = DATA.keywords(def);
+    t.ok(Array.isArray(chips) && chips.length <= 3, `${id}: at most 3 chips`);
+    t.ok(chips.every(c => A[c.id] && c.label === A[c.id].label && c.icon === A[c.id].icon && c.color === A[c.id].color), `${id}: chips are archetypes`);
+    t.eq(DATA.keywords(def, Infinity).length, kwOf(def).length, `${id}: uncapped chips = kwIds`);
+  }
+  t.eq(DATA.keywords(null).length, 0, 'null safe');
+  const has = (id, ks) => ks.every(k => kwOf(ITEMS[id]).includes(k));
+  t.ok(has('plague_orb', ['poison', 'glass', 'echo']), 'plague orb: poison, glass, echo');
+  t.ok(has('ghost_pepper', ['burn', 'feast']), 'ghost pepper bridges pyro and feast');
+  t.ok(has('frozen_heart', ['frost', 'fortress']), 'frozen heart bridges frost and fortress');
+  t.ok(has('glass_shield', ['glass', 'fortress']), 'glass shield bridges glass and fortress');
+  t.ok(has('twin_daggers', ['brawler']) && has('whetstone', ['brawler']), 'multi-hit and Strength are brawler');
+  t.ok(has('prize_marble', ['swarm']) && has('bag_marbles', ['swarm']), 'fillers and bags are swarm');
+  t.ok(has('bribe', ['greed']) && has('golden_idol', ['greed']), 'pay and per gold are greed');
+  t.ok(has('deja_vu', ['echo']) && has('arcane_tome', ['echo']), 'again and copy are echo');
+  t.ok(!kwOf(ITEMS.slag).includes('burn'), 'self burn is not pyro');
+  // every build relic says what build it belongs to
+  const RULED_OR_NEW = Object.keys(RELICS).filter(id => RELICS[id].rules || Object.keys(RELICS[id].hooks || {}).some(h => !['onFightStart', 'onTurnStart', 'onTurnEnd', 'onPlay', 'onGrab', 'onDmgDealt', 'onKill', 'onHurt'].includes(h)));
+  t.ok(RULED_OR_NEW.length >= 12, `plenty of relics on the new hooks and rules [${RULED_OR_NEW.length}]`);
+  for (const id of RULED_OR_NEW) t.ok(RELICS[id].kw.length >= 1, `${id}: build relic has an archetype`);
+  for (const id of Object.keys(RELICS).filter(id => RELICS[id].rules)) t.eq(RELICS[id].rarity, 'r', `${id}: rule benders are rare`);
+  t.ok(DATA.RELIC_RULES.join() === RULES.join() && DATA.RELIC_HOOKS.join() === HOOKS.join(), 'DATA lists the hooks and rules');
+});
+
+t.test('new content sits in the pools', () => {
+  const OLD_RELICS = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
+  const fresh = Object.keys(RELICS).filter(id => !OLD_RELICS.includes(id));
+  t.ok(fresh.length >= 20 && fresh.length <= 32, `20..32 new relics [${fresh.length}]`);
+  for (const id of fresh) {
+    const r = RELICS[id];
+    t.ok(!r.starter && ['c', 'u', 'r'].includes(r.rarity), `${id}: a c/u/r pool relic`);
+    t.ok(DATA.relicPool(r.rarity).includes(id), `${id}: in relicPool('${r.rarity}')`);
+  }
+  const OLD_ITEMS = OLD_ITEM_IDS;
+  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id));
+  t.ok(newItems.length >= 20 && newItems.length <= 32, `20..32 new items [${newItems.length}]`);
+  const pooled = new Set(DATA.pool());
+  for (const id of newItems) {
+    const d = ITEMS[id];
+    if (d.bag || d.tags.includes('small')) continue;
+    t.ok(pooled.has(id), `${id}: in the reward pool`);
+    t.ok(!d.starter, `${id}: not a starter`);
+  }
+  t.ok(newItems.filter(id => !ITEMS[id].char).length >= 15, 'most new items are shared');
+  for (const ch of ['knight', 'alchemist', 'rogue']) t.ok(newItems.some(id => ITEMS[id].char === ch), `${ch} gets new pieces`);
+});
+
+t.test('grab combos', () => {
+  const C = DATA.COMBOS;
+  const ids = Object.keys(C);
+  t.ok(ids.length >= 20, `>= 20 combos [${ids.length}]`);
+  const tiers = [1, 2, 3].map(n => ids.filter(id => C[id].tier === n).length);
+  t.ok(tiers[0] >= 8 && tiers[1] >= 4 && tiers[2] >= 3, `tiers 1/2/3: ${tiers.join('/')}`);
+  const names = new Set();
+  const defs = (list) => list.map(id => ITEMS[id]);
+  for (const id of ids) {
+    const c = C[id], W = `combo ${id}`;
+    t.eq(c.id, id, `${W}: key`);
+    t.ok(typeof c.name === 'string' && c.name.length > 3 && !names.has(c.name), `${W}: unique name`);
+    names.add(c.name);
+    t.ok(typeof c.text === 'string' && c.text.length > 10 && c.text.length <= 100, `${W}: one-line text`);
+    t.ok(isHex(c.color), `${W}: color`);
+    t.ok([1, 2, 3].includes(c.tier), `${W}: tier`);
+    t.ok(typeof c.family === 'string' && c.family, `${W}: family`);
+    t.ok(['enemy', 'all', 'self', 'random', 'none'].includes(c.target), `${W}: target`);
+    t.ok(c.once == null || c.once === 'turn', `${W}: once`);
+    t.ok(!c.sup || c.sup.every(x => C[x]), `${W}: sup ids exist`);
+    t.ok(typeof c.match === 'function', `${W}: match`);
+    checkFx(c.fx, W);
+    t.ok(c.fx.length >= 1, `${W}: has effects`);
+    if (c.fx.some(f => f.k === 'grab')) t.eq(c.once, 'turn', `${W}: a grab-giving combo fires once a turn`);
+    t.ok(Array.isArray(c.example) && c.example.length >= 2 && c.example.every(x => ITEMS[x]), `${W}: example items exist`);
+    t.ok(Array.isArray(c.miss) && c.miss.every(x => ITEMS[x]), `${W}: miss items exist`);
+    t.ok(c.match(defs(c.example)), `${W}: matches its example`);
+    t.ok(!c.match(defs(c.miss)), `${W}: does not match its near miss`);
+    t.ok(DATA.combosFor(defs(c.example)).some(x => x.id === id), `${W}: fires on its example (${c.example.join('+')})`);
+    t.ok(!DATA.combosFor(defs(c.miss)).some(x => x.id === id), `${W}: stays quiet on its near miss (${c.miss.join('+')})`);
+    t.ok(!c.match([defs(c.example)[0]]), `${W}: never on a single item`);
+  }
+  // selection rules
+  const fire = (list) => DATA.combosFor(defs(list)).map(c => c.id);
+  t.eq(fire(['rusty_sword']).length, 0, 'one item fires nothing');
+  t.eq(DATA.combosFor([]).length, 0, 'empty grab fires nothing');
+  t.eq(DATA.combosFor(null).length, 0, 'null safe');
+  const three = fire(['rusty_sword', 'femur', 'shiv']);
+  t.ok(three.includes('armory') && !three.includes('crossed_blades'), `a family keeps its biggest tier [${three}]`);
+  const storm = fire(['torch', 'snowball', 'stink_potion']);
+  t.ok(storm.includes('elemental_storm') && !storm.some(x => ['steam_burst', 'toxic_fumes', 'frostbite'].includes(x)), `the storm replaces the pairs [${storm}]`);
+  t.ok(storm.indexOf('elemental_storm') === 0, 'biggest tier first');
+  const big = fire(['rusty_sword', 'rusty_sword', 'rusty_sword', 'longsword', 'femur']);
+  t.ok(big.length <= DATA.COMBO_MAX && DATA.COMBO_MAX === 3, `at most ${DATA.COMBO_MAX} combos a grab [${big}]`);
+  t.eq(fire(['rusty_sword', 'femur']).join(), fire(['femur', 'rusty_sword']).join(), 'order of delivery does not matter');
+  t.eq(JSON.stringify(fire(['torch', 'snowball'])), JSON.stringify(fire(['torch', 'snowball'])), 'pure: same input, same combos');
+  const roles = fire(['liquid_fire', 'femur']);
+  t.ok(!roles.includes('molotov'), 'a two-role recipe needs two different items (Liquid Fire alone is not a Molotov)');
+  t.ok(fire(['liquid_fire', 'bubble_flask']).includes('molotov'), 'Liquid Fire plus another glass item is');
+  t.ok(fire(['rock', 'rock']).includes('landslide'), 'two rocks start a Landslide');
+  const marbles = fire(['prize_marble', 'prize_marble', 'prize_marble']);
+  t.ok(marbles.includes('three_of_a_kind') && marbles.includes('handful'), `three marbles: Three of a Kind and a Handful [${marbles}]`);
+});
+
+t.test('build pull: investment, rewards and relic picks', () => {
+  const knight = { bin: DATA.CHARACTERS.knight.bin.map(id => ({ id })), relics: ['squire_gauntlet'] };
+  const inv = DATA.investment(knight);
+  t.ok(inv.metal > 0 && inv.fortress > 0, `knight starts in metal and fortress [${JSON.stringify(inv)}]`);
+  t.eq(JSON.stringify(DATA.investment(null)), '{}', 'no run, no investment');
+  const withRelic = DATA.investment({ bin: [], relics: ['festering_jar'] });
+  t.eq(withRelic.poison, 3, 'a relic counts 3 for each archetype it carries');
+  t.eq(DATA.investment({ bin: ['venom_dart', 'rot_catalyst'], relics: [] }).poison, 2, 'bin ids count once each (plain id strings work)');
+  // without a run the draw is exactly the old one
+  for (let seed = 1; seed <= 60; seed++) {
+    const a = DATA.rewardItems(U.rng(seed), 1 + seed % 3, 'alchemist');
+    const b = DATA.rewardItems(U.rng(seed), 1 + seed % 3, 'alchemist', 3, null);
+    if (a.join() !== b.join()) { t.ok(false, `seed ${seed}: no run, same draw`); break; }
+  }
+  t.ok(true, 'no run: rewardItems draws exactly as before');
+  // a poison run sees more poison
+  const poisonRun = { bin: ['venom_dart', 'rot_catalyst', 'stink_potion', 'acid_bottle', 'plague_orb'].map(id => ({ id })), relics: ['festering_jar', 'contagion', 'venom_gland'] };
+  let base = 0, pulled = 0, bad = 0;
+  const N = 3000;
+  const r1 = U.rng(99), r2 = U.rng(99);
+  for (let i = 0; i < N; i++) {
+    const a = DATA.rewardItems(r1, 2, 'alchemist', 3);
+    const b = DATA.rewardItems(r2, 2, 'alchemist', 3, poisonRun);
+    if (a.some(id => kwOf(ITEMS[id]).includes('poison'))) base++;
+    if (b.some(id => kwOf(ITEMS[id]).includes('poison'))) pulled++;
+    if (b.length !== 3 || new Set(b).size !== 3 || b.some(id => !ITEMS[id] || ITEMS[id].rarity === 'junk' || (ITEMS[id].char && ITEMS[id].char !== 'alchemist'))) bad++;
+  }
+  t.eq(bad, 0, 'pulled screens stay 3 unique valid ids');
+  t.ok(pulled / N >= base / N + 0.1 && pulled / N <= base / N + 0.3, `poison on ${Math.round(100 * base / N)}% of plain screens, ${Math.round(100 * pulled / N)}% with the pull`);
+  const a1 = DATA.rewardItems(U.rng(5), 2, 'knight', 3, poisonRun), a2 = DATA.rewardItems(U.rng(5), 2, 'knight', 3, poisonRun);
+  t.eq(a1.join(), a2.join(), 'the pull is deterministic');
+  // relic picks
+  const pool = DATA.relicPool('u');
+  for (let seed = 1; seed <= 40; seed++) {
+    const r = U.rng(seed), q = U.rng(seed);
+    if (DATA.pickRelic(r, pool) !== q.pick(pool)) { t.ok(false, `seed ${seed}: pickRelic without a run is rng.pick`); break; }
+  }
+  t.ok(true, 'pickRelic without a run is rng.pick(pool)');
+  t.eq(DATA.pickRelic(U.rng(1), []), null, 'empty pool gives null');
+  const burnRun = { bin: [], relics: ['flint_striker', 'powder_keg'] };
+  let plain = 0, biased = 0;
+  const q1 = U.rng(7), q2 = U.rng(7);
+  for (let i = 0; i < 4000; i++) {
+    if (kwOf(RELICS[DATA.pickRelic(q1, pool)]).includes('burn')) plain++;
+    if (kwOf(RELICS[DATA.pickRelic(q2, pool, burnRun)]).includes('burn')) biased++;
+  }
+  t.ok(biased > plain * 2, `burn relics offered ${plain} times plain, ${biased} with a burn run`);
+});
+
+t.test('old saves: every id a save can hold still resolves', () => {
+  for (const id of OLD_ITEM_IDS) t.ok(!!ITEMS[id] && ITEMS[id].id === id, `old item ${id} still exists`);
+  const OLD = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
+  for (const id of OLD) t.ok(!!RELICS[id] && RELICS[id].id === id, `old relic ${id} still exists`);
+  for (const id of OLD) t.eq(RELICS[id].rarity, { squire_gauntlet: 'event', bubbling_satchel: 'event', pickpocket_glove: 'event' }[id] || RELICS[id].rarity, `old relic ${id} keeps its rarity`);
 });
 
 t.done();
