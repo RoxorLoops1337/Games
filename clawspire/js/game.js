@@ -28,6 +28,26 @@ const GAME = (() => {
   const BIN_FLOOR = 3;          // selling or removing never empties the bin below this
   const WATCHDOG = 20;          // seconds after a drop before the rig is force-reset (phase caps sum to ~17)
   const SPAWN_GAP = 0.05;       // shower spacing when bodies are (re)spawned
+  // Cabinet materials and toys (DESIGN.md "Cabinet materials"). Impacts are
+  // the change of a body's velocity in one frame, less gravity's share.
+  const MAT = {
+    armT: 1.2,                // s after a (re)spawn before landings count: a refill shower never cracks glass
+    crackV: 520,              // a glass item cracks on a landing this hard (twice: it shatters)
+    fuseV: 430,               // ...a bomb's fuse lights
+    fuseTurns: 2,             // turns a lit fuse burns (it goes off at the start of your turn)
+    blastR: 150, blastV: 950, // the bomb's reach (px) and push (px/s)
+    blastDmg: 3,              // to every enemy, +2 per act after the first, +2 when upgraded
+    thudV: 300, hopR: 150, hopV: 170,   // a heavy landing makes its neighbours hop
+    sparkV: 240,              // metal throws sparks above this
+    starV: 420,               // two items knocking together this hard: impact stars and a camera kick
+    softV: 150,               // food squish, rubber boing, magic chime, potion slosh
+    meltK: 0.92, meltMin: 0.72, iceMelt: 0.84, iceGone: 0.5,   // frost shrinks each turn; a junk ice block melts away
+    goldenP: 0.4,             // chance a fight has a Golden Prize (an item upgraded for the fight)
+    goldenGold: 15,           // the bonus when that item was upgraded already
+    luckyAfter: 2, luckyGrip: 0.6,   // Lucky Claw: two good grabs in a row, the next one grips harder
+    debrisMax: 12, shardN: 4, // glass shards a shattered item leaves in the bin
+    closeX: 110,              // a slip within this of the divider while carrying is a near miss
+  };
   // The bulb economy lives in DATA.ECONOMY (the balance pass tunes it
   // there); its keys and the run field keep the old 'ink' spelling.
   const ECON = () => (typeof DATA !== 'undefined' && DATA && DATA.ECONOMY) || {};
@@ -369,6 +389,7 @@ const GAME = (() => {
           S.meta.tutorialDone = !!o.tutorialDone;
           S.meta.introSeen = !!o.introSeen;
           S.meta.settings = Object.assign(S.meta.settings, o.settings || {});
+          if (o.loot && typeof o.loot === 'object') S.meta.loot = Object.assign({ caps: 0, payouts: 0 }, o.loot);
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -439,6 +460,7 @@ const GAME = (() => {
       run.brushes = (run.brushes || []).map(toolId);
       if (!run.map) { newMap(run); }
       S.run = run;
+      lootRun(run);   // tickets, pity, banked capsules, highlights: defaults for older saves
       S.rolls = null;
       S.sd = o.sd || null;
       S.after = o.after || null;
@@ -461,6 +483,8 @@ const GAME = (() => {
       else if (sc === 'forge') showForge();
       else if (sc === 'treasure' && S.sd && S.sd.treasure) showTreasure(S.sd.treasure);
       else if (sc === 'parts' && S.sd && S.sd.parts) showSpareParts(S.sd.parts);
+      else if (sc === 'capsule' && S.sd && S.sd.capsule && S.sd.capsule.cap) showCapsule(S.sd.capsule);
+      else if (sc === 'counter' && S.sd && S.sd.counter) showCounter(S.sd.counter);
       else toMap();
       return true;
     } catch (e) {
@@ -484,6 +508,8 @@ const GAME = (() => {
     };
     for (const id of (c.bin || [])) { run.bin.push({ uid: U.uid(), id, plus: false }); seeItem(id); }
     S.run = run;
+    lootRun(run);
+    S.tix = null; S.pay = null; S.cap = null;
     S.rolls = null;
     S.sd = null; S.after = null; S.pendingFight = null;
     F = null; FS = null;
@@ -599,11 +625,11 @@ const GAME = (() => {
   }
 
   // ---------------------------------------------------------------- screens
-  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection'];
+  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection', 'capsule', 'counter'];
   /* Screen transitions: an iris opening onto a fight, a diagonal wipe
      between the map and the tile screens, a quick fade for the rest (DOM
      #wipe, CSS only, never blocks input). */
-  const WIPE_SCREENS = { map: 1, fight: 1, reward: 1, shop: 1, event: 1, rest: 1, forge: 1, treasure: 1, parts: 1, gameover: 1, win: 1 };
+  const WIPE_SCREENS = { map: 1, fight: 1, reward: 1, shop: 1, event: 1, rest: 1, forge: 1, treasure: 1, parts: 1, gameover: 1, win: 1, counter: 1 };
   function transition(from, to) {
     if (S.headless || from === to || from === 'intro') return;
     const el = $('wipe');
@@ -640,7 +666,7 @@ const GAME = (() => {
     }
     refreshHud(true);
     if (name === 'title') music('title');
-    else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward') music('map');
+    else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward' || name === 'capsule' || name === 'counter') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
     if (['intro', 'fight', 'bin', 'help', 'collection', 'title', 'chars', 'gameover', 'win'].indexOf(name) < 0) save();
@@ -855,6 +881,7 @@ const GAME = (() => {
       : walking ? 'Walking. Tap the map to stop.'
       : pv ? (M.ink >= pv.cost ? `Light the way: ${bulbs(pv.cost)}. Tap that hex again to light it and walk there.` : `Light the way: ${bulbs(pv.cost)}, you have ${M.ink}. Elites, towers and boxes of ${TERM('inkPlural')} give more.`)
       : `Tap a lit hex to walk: it lights around you. Tap a dark hex to light the way there (1 ${TERM('ink')} each, fords 2). The road leads to the boss.`;
+    lootMapChip(l2);   // banked capsules, waiting to be cracked
     l2.appendChild(h('div', 'hint', hintTxt));
     head.appendChild(l2);
     refreshHud(true);
@@ -1401,6 +1428,9 @@ const GAME = (() => {
       case 'treasure': {
         finish();
         if (c.gold) addGold(c.gold);
+        // Loot: a treasure is a capsule (a relic whenever one is in stock,
+        // its rarity set by the capsule's tier), cracked open on the spot.
+        if (D().rollCapsule) { showCapsule({ cap: makeCapsule('treasure', { prefer: 'relic' }), gold: c.gold || 0, then: { k: 'map' } }); return; }
         const id = rollRelic(rngFor('treasure'), ['c', 'u', 'r']);
         showTreasure({ relic: id, gold: c.gold || 0, title: 'Treasure' });
         return;
@@ -1502,7 +1532,10 @@ const GAME = (() => {
       turnsTaken: 0, dirty: true, shown: { p: { hp: 0, block: 0 }, e: {} },
       // juice: hp ghosts, status chip pops, item throws, cabinet party lights, claw spring
       ghost: {}, pipPop: {}, throws: [], party: 0, marquee: '', curDef: null, outro: null,
-      claw: { px: 0, py: 0, vx: 0, bend: 0, bendV: 0, sq: 0, glow: 0 }, cargo: [], hbT: 0, dust: 0,
+      claw: { px: 0, py: 0, vx: 0, bend: 0, bendV: 0, sq: 0, glow: 0, mood: '', moodT: 0, chase: 0, blinkT: 2.5 }, cargo: [], hbT: 0, dust: 0,
+      // cabinet materials and toys: per-uid material state (cracks, melt, a lit
+      // fuse), glass debris, the Golden Prize, the Lucky Claw, near misses
+      mst: {}, debris: [], kill: [], golden: null, lucky: 0, luckyOn: false, grabN: 0, relCargo: [], impN: 0, ambI: 0, beepT: 0, freeN: 0,
     };
     syncShown();
     S.procs = {};
@@ -1511,6 +1544,7 @@ const GAME = (() => {
     S.pendingFight = null;
     buildWorld();
     spawnAll();
+    pickGolden();
     setScreen('fight');
     if (opts.seed == null) { S.meta.stats.fights++; run.fights++; }
     music(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight');
@@ -1531,6 +1565,7 @@ const GAME = (() => {
     FS.cabinet = P.cabinet(FS.world, { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, wallThick: CAB.wallThick, slopeW: CAB.slopeW, slopeH: CAB.slopeH });
     buildRig();
     FS.items = [];
+    FS.debris = [];
   }
   function buildRig() {
     const P = X.PHYS;
@@ -1538,7 +1573,7 @@ const GAME = (() => {
     const b = FS.cabinet.bounds;
     FS.rig = P.clawRig(FS.world, {
       cabinet: FS.cabinet, homeX: (b.chuteX || CAB.w - CAB.chuteW) * 0.5, chuteX: (b.chuteX || CAB.w - CAB.chuteW) + CAB.chuteW * 0.5,
-      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip, speed: c.speed, rubber: c.rubber, magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
+      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip + (FS.luckyOn ? MAT.luckyGrip : 0), speed: c.speed, rubber: c.rubber, magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
       rand: U.rng(FS.seed ^ 0x1234567),
     });
   }
@@ -1563,7 +1598,10 @@ const GAME = (() => {
   function spawnBody(inst, at) {
     if (!FS.world || !X.PHYS) return null;
     const def = itemDef(inst.id);
-    const shape = shapeFor(def, inst);
+    let shape = shapeFor(def, inst);
+    // a melting frost item is smaller (see meltTick)
+    const ms = FS.mst[inst.uid];
+    if (ms && ms.melt < 1 && !inst.frozen && X.PHYS.scaleShape) shape = X.PHYS.scaleShape(shape, ms.melt);
     const r = FS.rng;
     const home = FS.rig ? FS.rig.homeX : CAB.w * 0.5;
     const binW = (FS.cabinet.bounds.chuteX || CAB.w - CAB.chuteW);
@@ -1583,6 +1621,10 @@ const GAME = (() => {
       restitution: inst.frozen ? 0.05 : (def.restitution == null ? 0.12 : def.restitution),
       group: 'item', data: { inst, tags: def.tags || [], def, chuteT: 0 },
     });
+    // the material's physics (magic floats, ice slides, rubber bounces) and its look
+    const mat = !inst.frozen && X.PHYS.materialOf ? X.PHYS.materialOf(def) : null;
+    if (mat && X.PHYS.applyMaterial) X.PHYS.applyMaterial(b, mat);
+    matInit(b, mat);
     b.vx = (r() - 0.5) * 60; b.av = (r() - 0.5) * 2;
     FS.world.add(b);
     FS.items.push(b);
@@ -1649,6 +1691,378 @@ const GAME = (() => {
   function clearTilt() {
     FS.tilt = 0;
     if (FS.world) FS.world.setGravity(0, GRAVITY);
+  }
+
+  // ---------------------------------------------------------------- cabinet materials
+  // Every item has a physical personality from its tags (PHYS.materialOf):
+  // metal clanks and sparks, glass cracks (and shatters on a second hard
+  // landing), heavy things thud and make the pile hop, rubber boings, food
+  // squishes and drops crumbs, potions slosh, magic floats and glitters,
+  // bombs light their fuse on a rough landing, ice slides and melts. It is
+  // all driven by each body's impact per frame (matBody) and the start of
+  // the player's turn (matTurn). Fight-only state lives in FS.mst by uid, so
+  // nothing here reaches COMBAT's insts or the save.
+  function mstOf(inst) {
+    const k = inst && inst.uid;
+    if (!k) return { crack: 0, melt: 1, lit: 0 };
+    return FS.mst[k] || (FS.mst[k] = { crack: 0, melt: 1, lit: 0 });
+  }
+  // Per-body material state on body.data (a respawn starts it fresh).
+  function matInit(b, mat) {
+    const d = b.data;
+    d.mat = mat; d.age = 0; d.cd = 0; d.crackCd = 0; d.sl = 0; d.slV = 0; d.wob = 0; d.wobV = 0; d.pvx = null; d.clawG = -1;
+    d.seed = (Math.abs(U.hashStr(String(d.inst.uid))) % 997) / 97;
+  }
+  // A real bomb can light its fuse; a monster's lit junk bomb keeps its own (COMBAT's) fuse.
+  function fuseOk(b) {
+    const d = b.data;
+    return !!(d.mat && d.mat.traits.fuse && d.def.rarity !== 'junk' && !d.inst.junk && !d.inst.frozen);
+  }
+  // Take an instance out of the bin for the fight (used: it comes back with a refill; exhausted: gone).
+  function binMove(inst, to) {
+    if (!F || !inst) return;
+    const i = F.bin.indexOf(inst);
+    if (i >= 0) F.bin.splice(i, 1);
+    (to === 'used' ? F.used : F.exhausted).push(inst);
+    delete FS.mst[inst.uid];
+    if (FS.golden && FS.golden.uid === inst.uid) FS.golden = null;
+    if (F.phase === 'player' && !F.bin.length && X.COMBAT.refill) enqueue(X.COMBAT.refill(F), PLAY_BEAT);
+  }
+  const TIP = { x: 0, y: 0 };
+  // Stage point of a bomb's fuse tip (the bomb art's spark, local (0.4r, 4 - r)).
+  function fuseTip(b) {
+    const sh = b.data.def.shape || {}, r0 = sh.kind === 'circle' ? sh.r : 14;
+    const lx = r0 * 0.4, ly = -r0 + 4, ca = Math.cos(b.a), sa = Math.sin(b.a);
+    TIP.x = CAB.x + b.x + lx * ca - ly * sa; TIP.y = CAB.y + b.y + lx * sa + ly * ca;
+    return TIP;
+  }
+  function setMood(m, secs) { if (!FS) return; FS.claw.mood = m; FS.claw.moodT = secs || 1.2; }
+
+  /* One body's material reactions this frame. Called from updateFight right
+     after the physics step, before d.pvy is overwritten. */
+  function matBody(b, dt) {
+    const d = b.data, m = d.mat;
+    const pvx = d.pvx == null ? b.vx : d.pvx, pvy = d.pvy == null ? b.vy : d.pvy;
+    d.pvx = b.vx;
+    if (b.held > 0) d.clawG = FS.grabN;
+    if (!m) return;
+    d.age += dt;
+    if (d.cd > 0) d.cd -= dt;
+    if (d.crackCd > 0) d.crackCd -= dt;
+    const T = m.traits, br = b.br || 12;
+    const dvx = b.vx - pvx, dvy = b.vy - pvy - GRAVITY * b.gs * dt;
+    // potions: the liquid lags behind a sideways jolt and springs back
+    if (T.liquid) {
+      d.slV -= dvx * 0.012;
+      d.slV += (-d.sl * 70 - d.slV * 5) * dt;
+      d.sl = U.clamp(d.sl + d.slV * dt, -0.8, 0.8);
+    }
+    // food: a squish wobbles out
+    if (d.wob || d.wobV) {
+      d.wobV += (-d.wob * 260 - d.wobV * 8) * dt;
+      d.wob = U.clamp(d.wob + d.wobV * dt, -0.5, 0.5);
+      if (Math.abs(d.wob) < 0.003 && Math.abs(d.wobV) < 0.03) d.wob = d.wobV = 0;
+    }
+    // ice leaves a frosty trail while it slides along the floor
+    if (T.frost && (FS.frameN % 3) === 0 && Math.abs(b.vx) > 70 && b.y > CAB.h - br - 12) {
+      fx().burst(CAB.x + b.x - Math.sign(b.vx) * br * 0.6, CAB.y + b.y + br * 0.7, '#e8f8ff', 1, { kind: 'snow', speed: 12, size: 2.6, life: 0.8, gravity: 0, drag: 0.9 });
+    }
+    const imp = Math.hypot(dvx, dvy);
+    if (imp < MAT.softV || d.cd > 0 || FS.impN >= 4) return;
+    FS.impN++;
+    d.cd = 0.12;
+    const armed = d.age > MAT.armT;
+    const sx = CAB.x + b.x, sy = CAB.y + b.y;
+    const nx = dvx / imp, ny = dvy / imp;                     // the push it got: away from what it hit
+    const px = sx - nx * br * 0.8, py = sy - ny * br * 0.8;   // about where it hit
+    const vel = U.clamp(imp / 700, 0.2, 1.4);
+    // two items knocking together hard: impact stars and a tiny camera kick
+    if (armed && imp > MAT.starV && FS.world.contactsOf) {
+      for (const c of FS.world.contactsOf(b)) {
+        if (!c.other || !c.other.data || !c.other.data.inst) continue;
+        const cx = CAB.x + c.px, cy = CAB.y + c.py;
+        fx().burst(cx, cy, '#fff6c0', fx().reduced ? 2 : 5, { kind: 'star', speed: 150 * vel, size: 4, life: 0.35, gravity: 0, drag: 0.88 });
+        fx().ring(cx, cy, '#fff6c0', { r0: 3, r1: 16 + vel * 12, w: 2.5, life: 0.2 });
+        fx().kick(nx * 2 * vel, ny * 2 * vel);
+        break;
+      }
+    }
+    if (T.metal && imp > MAT.sparkV) {
+      fx().emit('sparks', px, py, { dir: Math.atan2(ny, nx), spread: 1.7, n: 0.3 + vel * 0.5, power: 0.6 + vel * 0.5 });
+      snd('clank', { vel, pitch: T.heavy ? 0.7 : T.small ? 1.45 : 1 });
+    }
+    if (T.heavy && armed && imp > MAT.thudV) {
+      // the floor jumps: neighbours hop, dust, a downward camera kick
+      const k = U.clamp((imp - MAT.thudV) / 500 + 0.55, 0.55, 1.2);
+      const hopped = X.PHYS.hop ? X.PHYS.hop(FS.world, b.x, b.y + br * 0.5, MAT.hopR * k, MAT.hopV * k, b) : [];
+      fx().emit('dust', sx, sy + br * 0.6, { power: 1 + k * 0.6, n: 1.2 });
+      fx().kick(0, 3 * k); fx().shake(1.2 + 2 * k);
+      snd('thud', { vel });
+      haptic('tap');
+      // stacked metal rattles
+      let rattle = 0;
+      for (const o of hopped) {
+        if (rattle >= 3 || !o.data || !o.data.mat || !o.data.mat.traits.metal) continue;
+        rattle++;
+        fx().emit('sparks', CAB.x + o.x, CAB.y + o.y + (o.br || 10) * 0.6, { n: 0.25, power: 0.5 });
+      }
+      if (rattle) snd('clank', { vel: 0.35, pitch: 1.6 });
+    }
+    if (T.glass) {
+      if (armed && imp > MAT.crackV && !(d.crackCd > 0)) crack(b);
+      else snd('tinkle', { vel, pitch: T.small ? 1.3 : 1 });
+    }
+    if (T.fuse && armed && imp > MAT.fuseV && fuseOk(b)) lightFuse(b);
+    if (T.rubber) { d.sq = Math.max(d.sq || 0, U.clamp(imp / 700, 0.25, 0.9)); snd('boing', { vel, pitch: 0.8 + vel * 0.4 }); }
+    if (T.food) {
+      d.wobV -= U.clamp(imp / 90, 1.5, 7);
+      fx().emit('crumbs', px, py, { col: d.def.color, n: 0.35 + vel * 0.6, power: 0.6 + vel * 0.5 });
+      snd('squish', { vel });
+    }
+    if (T.liquid) {
+      d.slV += (nx >= 0 ? -1 : 1) * vel * 3;
+      fx().emit('poison', sx, sy - br * 0.3, { col: d.def.color, n: 0.25 });
+      snd('slosh', { vel });
+    }
+    if (T.magic) {
+      fx().burst(sx, sy, d.def.color || '#ffffff', fx().reduced ? 1 : 3, { kind: 'star', speed: 60, size: 3.5, life: 0.5, gravity: -40, drag: 0.92 });
+      snd('chime', { vel, pitch: 0.9 + (d.seed % 1) * 0.3 });
+    }
+    if (T.frost && imp > 220) { fx().emit('frost', px, py, { n: 0.3 }); snd('tinkle', { vel, pitch: 1.35 }); }
+  }
+
+  /* Once a frame after the bodies: glass debris swept out by the chute, lit
+     fuses fizzing and beeping, and one ambient touch (round robin, so the
+     cost stays flat): embers off fire, bubbles off poison, motes off magic,
+     sparkles off the Golden Prize. */
+  function matFrame(dt) {
+    FS.impN = 0;
+    const red = !!fx().reduced;
+    while (FS.kill.length) { const b = FS.kill.pop(); if (b.world && FS.items.indexOf(b) >= 0) shatterInBin(b); }
+    for (let i = FS.debris.length - 1; i >= 0; i--) {
+      const s = FS.debris[i];
+      if (s.world !== FS.world) { FS.debris.splice(i, 1); continue; }
+      if (FS.cabinet && FS.cabinet.inChute(s) && s.y > FS.cabinet.bounds.dividerTop + 10) {
+        FS.world.remove(s); FS.debris.splice(i, 1);
+        fx().emit('glint', CAB.x + s.x, CAB.y + s.y, { col: '#bfe8ff' });
+        snd('tinkle', { vel: 0.3, pitch: 1.6 });
+      }
+    }
+    FS.beepT -= dt;
+    let lit = 0, urgent = 0;
+    for (const b of FS.items) {
+      const ms = FS.mst[b.data.inst.uid];
+      if (!ms || !(ms.lit > 0)) continue;
+      lit++; if (ms.lit === 1) urgent++;
+      if ((FS.frameN % (red ? 6 : 2)) === 0) {
+        const tip = fuseTip(b);
+        fx().burst(tip.x, tip.y, '#ffe066', 1, { kind: 'spark', speed: 130, size: 2, life: 0.25, gravity: 300, drag: 0.92, dir: -Math.PI / 2, spread: 2.2 });
+      }
+    }
+    if (lit && FS.beepT <= 0) { snd('beep', { pitch: urgent ? 1.3 : 1 }); FS.beepT = urgent ? 0.55 : 1.2; }
+    if (FS.golden && (FS.frameN % (red ? 9 : 3)) === 0) {
+      for (const b of FS.items) {
+        if (b.data.inst.uid !== FS.golden.uid) continue;
+        const r = (b.br || 12), a = FS.frameN * 0.7;
+        fx().burst(CAB.x + b.x + Math.cos(a) * r, CAB.y + b.y + Math.sin(a) * r * 0.8, '#ffc94d', 1, { kind: 'star', speed: 25, size: 3.2, life: 0.55, gravity: -30, drag: 0.9 });
+        break;
+      }
+    }
+    const n = FS.items.length;
+    if (!n || (FS.frameN % (red ? 4 : 1)) !== 0) return;
+    FS.ambI = (FS.ambI + 1) % n;
+    const b = FS.items[FS.ambI], d = b.data, T = d.mat && d.mat.traits;
+    if (!T || b.held > 0) return;
+    const sx = CAB.x + b.x, sy = CAB.y + b.y - (b.br || 12) * 0.5;
+    if (T.fire) fx().burst(sx, sy, '#ff8a2b', 1, { kind: 'ember', cols: ['#ff8a2b', '#ffe066'], speed: 40, size: 2.6, life: 0.8, gravity: -90, drag: 0.95, dir: -Math.PI / 2, spread: 0.8 });
+    else if (T.poison) fx().burst(sx, sy, '#a6ff5e', 1, { kind: 'bubble', speed: 25, size: 3, life: 0.8, gravity: -60, drag: 0.95, dir: -Math.PI / 2, spread: 0.6 });
+    else if (T.magic) fx().burst(sx, sy, d.def.color || '#ffffff', 1, { kind: 'star', speed: 20, size: 2.6, life: 0.7, gravity: -30, drag: 0.95 });
+  }
+
+  // Glass cracks: the first time a crack line, the second it shatters in the bin.
+  function crack(b) {
+    const d = b.data, ms = mstOf(d.inst);
+    ms.crack++;
+    d.crackCd = 0.5;
+    // the second crack shatters it (after the body loop, which must not lose its place)
+    if (ms.crack >= 2) { if (FS.kill.indexOf(b) < 0) FS.kill.push(b); return; }
+    const sx = CAB.x + b.x, sy = CAB.y + b.y;
+    fx().emit('shatter', sx, sy, { col: '#ffffff', n: 0.25 });
+    fx().ring(sx, sy, '#e8f8ff', { r0: 4, r1: 32, w: 2.5, life: 0.25 });
+    fx().text(sx, sy - 24, 'CRACK! +50%', '#bfe8ff', { size: 15, life: 0.9, dy: -36 });
+    snd('crack');
+  }
+  function shatterInBin(b) {
+    const d = b.data, inst = d.inst, def = d.def;
+    const x = b.x, y = b.y, sx = CAB.x + x, sy = CAB.y + y;
+    removeBody(b);
+    binMove(inst, 'exhausted');
+    fx().emit('shatter', sx, sy, { col: def.color || '#bfe8ff' });
+    fx().ring(sx, sy, '#ffffff', { r0: 6, r1: 50, w: 4, life: 0.3 });
+    fx().text(sx, sy - 26, 'SHATTERED', '#ff5a4a', { size: 17, life: 1, dy: -40 });
+    fx().shake(3);
+    snd('shatter');
+    spawnShards(x, y, def.color, MAT.shardN);
+  }
+  // Glass shards: little physical fillers that clutter the bin (the chute sweeps them out).
+  function spawnShards(x, y, col, n) {
+    if (!FS.world || !X.PHYS) return;
+    const r = FS.rng;
+    for (let i = 0; i < n; i++) {
+      while (FS.debris.length >= MAT.debrisMax) { const old = FS.debris.shift(); if (old.world) FS.world.remove(old); }
+      const a = -Math.PI / 2 + (r() - 0.5) * 2.4, v = 180 + r() * 220;
+      const s = X.PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r: 4 + r() * 1.5 }, x: x + (r() - 0.5) * 10, y: Math.min(y, CAB.h - 8), angle: r() * 6.28,
+        density: 0.8, friction: 0.35, restitution: 0.2, group: 'debris', data: { debris: true, col: col || '#bfe8ff' } });
+      s.vx = Math.cos(a) * v; s.vy = Math.sin(a) * v; s.av = (r() - 0.5) * 20;
+      FS.world.add(s);
+      FS.debris.push(s);
+    }
+  }
+  function lightFuse(b) {
+    const ms = mstOf(b.data.inst);
+    if (ms.lit > 0) return;
+    ms.lit = MAT.fuseTurns;
+    const tip = fuseTip(b);
+    fx().emit('sparks', tip.x, tip.y, { n: 1, col: '#ffe066' });
+    fx().ring(tip.x, tip.y, '#ff8a2b', { r0: 3, r1: 26, w: 3, life: 0.3 });
+    fx().text(CAB.x + b.x, CAB.y + b.y - 30, 'FUSE LIT!', '#ff8a2b', { size: 17, life: 1.2, dy: -40 });
+    snd('fuse');
+    toast('A bomb is lit! Grab it within ' + MAT.fuseTurns + ' turns or it goes off in the bin.', 2.4);
+  }
+  // A bomb going off in the bin: everything nearby is thrown about (maybe
+  // over the divider: a free prize), and the blast reaches the arena.
+  function explode(b) {
+    const d = b.data, inst = d.inst;
+    const x = b.x, y = b.y, sx = CAB.x + x, sy = CAB.y + y;
+    removeBody(b);
+    binMove(inst, 'used');
+    if (X.PHYS.blast) X.PHYS.blast(FS.world, x, y, MAT.blastR, MAT.blastV);
+    fx().emit('blast', sx, sy, { power: 1 });
+    fx().ring(sx, sy, '#ffe066', { r0: 10, r1: MAT.blastR + 30, w: 10, life: 0.4 });
+    fx().ring(sx, sy, '#ff5a4a', { r0: 6, r1: MAT.blastR, w: 6, life: 0.5, delay: 0.06 });
+    fx().ring(270, 200, '#ff8a2b', { r0: 20, r1: 260, w: 8, life: 0.5, delay: 0.12 });
+    if (!fx().reduced) fx().flash('#ff8a2b', 0.35);
+    fx().shake(14); fx().kick(0, 6);
+    fx().text(sx, sy - 30, 'KABOOM!', '#ffc94d', { size: 28, life: 1.2, dy: -56 });
+    snd('boom'); haptic('hurt');
+    setMood('wow', 1.4);
+    const dmg = MAT.blastDmg + 2 * Math.max(0, ((S.run && S.run.act) || 1) - 1) + (inst.plus ? 2 : 0);
+    if (F.phase === 'player' && X.COMBAT.damage) for (const e of F.enemies) if (e.alive) X.COMBAT.damage(F, null, e, dmg, { fixed: true });
+    enqueue([], PLAY_BEAT);
+    FS.dirty = true;
+  }
+  // Start of the player's turn: lit fuses burn down (and go off), ice melts.
+  function fuseTick() {
+    for (const b of FS.items.slice()) {
+      const inst = b.data.inst, ms = FS.mst[inst.uid];
+      if (!ms || !(ms.lit > 0)) continue;
+      const sx = CAB.x + b.x, sy = CAB.y + b.y;
+      if (inst.frozen) { ms.lit = 0; fx().text(sx, sy - 26, 'FIZZLE', '#9fd8ff', { size: 15 }); fx().emit('smoke', sx, sy - 10, { n: 0.4 }); continue; }
+      ms.lit--;
+      if (ms.lit <= 0) explode(b);
+      else { fx().text(sx, sy - 30, 'LAST TURN!', '#ff5a4a', { size: 16, life: 1.2, dy: -40 }); snd('beep', { pitch: 1.3 }); }
+    }
+  }
+  function meltTick() {
+    for (const b of FS.items.slice()) {
+      const d = b.data, inst = d.inst;
+      if (!d.mat || !d.mat.traits.frost || inst.frozen) continue;
+      const ms = mstOf(inst), junk = d.def.rarity === 'junk' || !!inst.junk;
+      const was = ms.melt;
+      ms.melt = junk ? ms.melt * MAT.iceMelt : Math.max(MAT.meltMin, ms.melt * MAT.meltK);
+      const sx = CAB.x + b.x, sy = CAB.y + b.y;
+      if (junk && ms.melt < MAT.iceGone) {
+        // a junk ice block melts away to nothing
+        removeBody(b);
+        binMove(inst, 'exhausted');
+        fx().emit('frost', sx, sy, { n: 0.8 });
+        fx().burst(sx, sy + 8, '#9fd8ff', fx().reduced ? 3 : 8, { kind: 'bubble', speed: 90, size: 3, life: 0.5, gravity: 500 });
+        fx().text(sx, sy - 22, 'MELTED', '#9fd8ff', { size: 15 });
+        snd('slosh', { vel: 0.6 });
+        continue;
+      }
+      if (ms.melt < was - 1e-3) {
+        swapBody(inst);
+        fx().burst(sx, sy + 6, '#9fd8ff', fx().reduced ? 1 : 3, { kind: 'bubble', speed: 40, size: 2.5, life: 0.5, gravity: 500 });
+      }
+    }
+  }
+  function matTurn() {
+    if (!F || !FS || FS.done || F.phase !== 'player') return;
+    meltTick();
+    fuseTick();
+  }
+
+  // ---- cabinet toys
+  // The Golden Prize: some fights one bin item shimmers gold and is upgraded
+  // for this fight (F's insts are copies, the run's item is untouched).
+  // Grabbing it plays a fanfare (and pays gold if it was upgraded already).
+  function pickGolden() {
+    if (!F || !FS) return;
+    const r = U.rng((FS.seed ^ 0x9e3779b9) >>> 0);
+    if (r() >= MAT.goldenP) return;
+    const pool = F.bin.filter((i) => !i.junk && !i.frozen && itemDef(i.id).rarity !== 'junk');
+    if (!pool.length) return;
+    const inst = pool[Math.floor(r() * pool.length)];
+    FS.golden = { uid: inst.uid, was: !!inst.plus };
+    inst.plus = true;
+  }
+  function goldenPrize(pos) {
+    const g = FS.golden;
+    FS.golden = null;
+    fx().text(CAB.x + CAB.w * 0.45, CAB.y + CAB.h * 0.42, 'GOLDEN PRIZE!', '#ffc94d', { size: 26, life: 1.5, dy: -60 });
+    fx().emit('coins', pos.x - 10, pos.y - 20, { n: 1, power: 1.1, dir: -Math.PI / 2 - 0.35 });
+    fx().emit('confetti', pos.x - 20, pos.y - 20, { n: 0.6, power: 0.8, dir: -Math.PI / 2 - 0.4 });
+    fx().ring(pos.x, pos.y, '#ffc94d', { r0: 10, r1: 90, w: 7, life: 0.5 });
+    if (!fx().reduced) fx().flash('#ffc94d', 0.22);
+    snd('fanfare');
+    FS.party = Math.max(FS.party, 1.2); FS.marquee = 'GOLDEN!';
+    setMood('wow', 1.6);
+    if (g && g.was && X.COMBAT.gainGold) { X.COMBAT.gainGold(F, MAT.goldenGold); enqueue([], PLAY_BEAT); }
+  }
+  // A prize the claw never touched this grab (shaken, blasted or knocked in).
+  function freePrize(x, y) {
+    FS.freeN++;
+    fx().text(x - 70, y, 'FREE PRIZE!', '#a6ff5e', { size: 19, life: 1.2, dy: -50 });
+    fx().emit('confetti', x - 20, y + 60, { n: 0.4, power: 0.7, dir: -Math.PI / 2 - 0.4 });
+    fx().ring(x, y + 70, '#a6ff5e', { r0: 8, r1: 64, w: 5 });
+    snd('fanfare', { pitch: 1.25, vol: 0.7 });
+    FS.party = Math.max(FS.party, 0.6); FS.marquee = 'FREE PRIZE!';
+  }
+  // So close: a prize that nearly made the chute. Once a grab.
+  function soClose(x, y) {
+    if (FS.closeG === FS.grabN) return;
+    FS.closeG = FS.grabN;
+    fx().text(x, y - 30, 'SO CLOSE!', '#ff9ad0', { size: 20, life: 1.3, dy: -46 });
+    fx().ring(x, y, '#ff9ad0', { r0: 6, r1: 44, w: 4, life: 0.35 });
+    snd('groan');
+    setMood('sad', 1.8);
+  }
+  // Lucky Claw: two grabs in a row that deliver make the next one grip harder.
+  function luckAfterGrab() {
+    if (FS.luckyOn) {
+      FS.luckyOn = false; FS.lucky = 0;
+      if (FS.rig) FS.rig.setConfig({ grip: clawFor().grip });
+      if (FS.claw.mood === 'lucky') FS.claw.moodT = 0.01;
+      return;
+    }
+    if (FS.delivered > 0) FS.lucky++;
+    else FS.lucky = 0;
+    if (FS.lucky < MAT.luckyAfter) return;
+    FS.lucky = 0; FS.luckyOn = true;
+    if (FS.rig) FS.rig.setConfig({ grip: clawFor().grip + MAT.luckyGrip });
+    const rig = FS.rig, x = CAB.x + (rig ? rig.x : 200), y = CAB.y + (rig ? rig.y : 40);
+    fx().text(x, y + 120, 'LUCKY CLAW!', '#ffc94d', { size: 20, life: 1.3, dy: -24 });
+    fx().burst(x, y + 20, '#ffc94d', fx().reduced ? 4 : 12, { kind: 'star', speed: 180, size: 4.5, life: 0.6, gravity: 150 });
+    fx().ring(x, y + 20, '#ffc94d', { r0: 6, r1: 60, w: 5 });
+    snd('lucky');
+    setMood('lucky', 1.6);
+  }
+  // After a grab: a prize the claw let go of over the chute that still ended up in the bin was a near miss.
+  function nearMissAfterGrab() {
+    const lim = FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW;
+    for (const b of FS.relCargo) if (FS.items.indexOf(b) >= 0 && b.x < lim) { soClose(CAB.x + b.x, CAB.y + b.y); break; }
+    FS.relCargo = [];
   }
 
   // Displayed hp/block lag the engine: COMBAT resolves a whole turn at once,
@@ -1907,6 +2321,9 @@ const GAME = (() => {
         break;
       }
       case 'binCopy': queueSpawn([ev.inst]); fx().text(270, 430, 'COPY', '#ffc94d'); fx().emit('glint', 270, 450, { n: 2 }); break;
+      // the monsters pass (monsterEvent below)
+      case 'binEat': case 'binReturn': case 'binDigest': case 'binBomb': case 'binEggs': case 'binBoom': case 'binHatch':
+      case 'binRust': case 'binJam': case 'enrage': monsterEvent(ev); break;
       case 'turn': if (ev.n > 1) banner('TURN ' + ev.n, 'turn', 0.9); break;
       case 'proc': procFx(ev, base, enemy); break;
       case 'combo': queueCombo(ev); break;
@@ -1915,6 +2332,257 @@ const GAME = (() => {
     }
     FS.dirty = true;
   }
+  /* ---- the monsters pass (DESIGN.md "Enemies"): bellies, lit bombs, eggs,
+     rust, jams, phase two. COMBAT already moved the instances; these move
+     the bodies and put on the show. FS.belly[idx] is the belly as shown
+     (event driven while events play, reconciled to e.belly when idle),
+     FS.arcs the items flying between the arena and the cabinet. */
+  const ARC_EAT = 0.42, ARC_SPIT = 0.5;
+  function mouthOf(idx) { const p = enemyPos(idx); return { x: p.x - p.w * 0.08, y: p.y - p.h * 0.5 }; }
+  function bellyList(idx) { const B = FS.belly || (FS.belly = {}); return B[idx] || (B[idx] = []); }
+  function hashOf(inst) { return U.hashStr ? U.hashStr(String(inst && inst.uid)) >>> 0 : 7; }
+  // Where a returned / dropped item lands: spread over the bin by its uid.
+  function landSpot(inst, k) {
+    const binW = FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW;
+    const h = hashOf(inst) + (k || 0) * 97;
+    return { x: 50 + (h % 1000) / 1000 * Math.max(20, binW - 100), y: 60 + (h >> 10) % 40 };
+  }
+  // An item arcing from (x0, y0) to (x1, y1) over dur s; cb on arrival (the
+  // flyer carries the callback, so it also runs headless).
+  function arcItem(inst, x0, y0, x1, y1, dur, cb, delay) {
+    const A = FS.arcs || (FS.arcs = []);
+    const a = { inst, def: itemDef(inst.id), x0, y0, x1, y1, t0: S.t + (delay || 0), dur, lift: 90, spin: ((hashOf(inst) % 13) - 6) };
+    A.push(a);
+    const done = () => { const i = FS && FS.arcs ? FS.arcs.indexOf(a) : -1; if (i >= 0) FS.arcs.splice(i, 1); if (cb && FS && F) cb(); };
+    fx().fly(x0, y0, x1, y1, { kind: 'dot', col: '#ffc94d', dur, delay: delay || 0, arc: a.lift, size: 3, cb: done });
+  }
+  // Put a body back for an instance the bin holds, at a cabinet point.
+  function dropIn(inst, spot) {
+    if (!F || !FS || F.bin.indexOf(inst) < 0 || bodyOf(inst)) return;
+    const q = FS.spawnQ.indexOf(inst);
+    if (q >= 0) FS.spawnQ.splice(q, 1);
+    const b = spawnBody(inst, { x: spot.x, y: spot.y, a: 0 });
+    if (b) { b.vy = 260; b.vx *= 0.3; }
+    fx().emit('dust', CAB.x + spot.x, CAB.y + spot.y, { n: 0.6 });
+    snd('itemLand');
+  }
+  function dropFromBelly(list, inst) {
+    for (let i = 0; i < list.length; i++) if (list[i].inst === inst || list[i].inst.uid === inst.uid) { list.splice(i, 1); return; }
+  }
+  function monsterEvent(ev) {
+    const reduced = !!fx().reduced;
+    const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
+    const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
+    const name = ev.inst ? itemName(itemDef(ev.inst.id), ev.inst.plus) : '';
+    switch (ev.t) {
+      case 'binEat': {
+        if (!ev.inst) break;
+        const b = bodyOf(ev.inst);
+        let x0 = 270, y0 = CAB.y + 150;
+        if (b) {
+          x0 = CAB.x + b.x; y0 = CAB.y + b.y;
+          fx().emit('poof', x0, y0, { n: 0.7 });
+          fx().ring(x0, y0, '#ff2e88', { r0: 6, r1: 46, w: 4, life: 0.3 });
+          removeBody(b);
+        }
+        const q = FS.spawnQ.indexOf(ev.inst);
+        if (q >= 0) FS.spawnQ.splice(q, 1);
+        arcItem(ev.inst, x0, y0, m.x, m.y, ARC_EAT);
+        const kept = ev.kind !== 'boom' && ev.kind !== 'drink' && ev.kind !== 'snack';
+        if (kept && has) bellyList(ev.idx).push({ inst: ev.inst, def: itemDef(ev.inst.id), t0: S.t + ARC_EAT });
+        if (has) anim(ev.idx).chompT = S.t + ARC_EAT;
+        fx().text(270, 430, 'SWALLOWED: ' + name, '#ff2e88');
+        snd('gulp');
+        break;
+      }
+      case 'binReturn': {
+        const list = has ? bellyList(ev.idx) : [];
+        let k = 0;
+        for (const inst of ev.insts || []) {
+          dropFromBelly(list, inst);
+          if (F.bin.indexOf(inst) < 0) continue;   // the cabinet was full: it went to the used pile
+          const spot = landSpot(inst, k);
+          arcItem(inst, m.x, m.y, CAB.x + spot.x, CAB.y + spot.y, ARC_SPIT, () => dropIn(inst, spot), k * 0.09);
+          k++;
+        }
+        const burst = ev.why !== 'hiccup';
+        fx().emit(burst ? 'confetti' : 'poof', m.x, m.y, { n: burst ? 0.8 : 0.6 });
+        fx().ring(m.x, m.y, '#a6ff5e', { r0: 8, r1: burst ? 110 : 70, w: 6, life: 0.45 });
+        fx().text(270, 430, burst ? 'ITEMS BACK!' : 'HICCUP! +' + k, '#a6ff5e');
+        if (has) anim(ev.idx).spitT = S.t;
+        fx().shake(burst ? 6 : 3);
+        snd('burp', { big: burst });
+        break;
+      }
+      case 'binDigest': {
+        if (has && ev.inst) dropFromBelly(bellyList(ev.idx), ev.inst);
+        if (ev.k === 'boom') {
+          // it swallowed a bomb
+          fx().emit('burn', m.x, m.y, { n: 1.6 }); fx().emit('smoke', m.x, m.y, { n: 1.2 });
+          fx().ring(m.x, m.y, '#ff8a2b', { r0: 10, r1: 130, w: 9, life: 0.5, delay: ARC_EAT });
+          fx().shake(12); FS.hitStop = Math.max(FS.hitStop, 0.08);
+          if (!reduced) fx().flash('#ff8a2b', 0.25);
+          snd('hitBig');
+        } else if (ev.k === 'drink' || ev.k === 'snack') {
+          fx().emit(ev.k === 'drink' ? 'heal' : 'dust', m.x, m.y, { n: 0.8 });
+          snd('gulp', { pitch: 1.3 });
+        } else if (ev.k === 'escape') {
+          fx().text(270, 430, 'GONE WITH IT: ' + name, '#ff5a4a');
+        } else {
+          fx().emit('smoke', m.x, m.y, { n: 0.8, col: 'rgba(166,255,94,0.5)' });
+          fx().text(270, 430, 'DIGESTED: ' + name + ' (back after the fight)', '#ffc94d');
+          snd('burp');
+        }
+        break;
+      }
+      case 'binBomb': case 'binEggs': {
+        const items = ev.t === 'binBomb' ? [ev.inst] : (ev.items || []);
+        let k = 0;
+        for (const inst of items) {
+          if (!inst) continue;
+          const q = FS.spawnQ.indexOf(inst);
+          if (q >= 0) FS.spawnQ.splice(q, 1);
+          const spot = landSpot(inst, k);
+          arcItem(inst, m.x, m.y, CAB.x + spot.x, CAB.y + spot.y, ARC_SPIT, () => dropIn(inst, spot), k * 0.12);
+          k++;
+        }
+        if (has) anim(ev.idx).spitT = S.t;
+        fx().text(270, 430, ev.t === 'binBomb' ? 'LIT BOMB! GRAB IT BACK' : 'EGGS! GRAB THEM', '#ff5a4a');
+        snd(ev.t === 'binBomb' ? 'fuse' : 'itemSlip');
+        break;
+      }
+      case 'binBoom': {
+        const b = ev.inst ? bodyOf(ev.inst) : null;
+        const x = b ? CAB.x + b.x : 270, y = b ? CAB.y + b.y : CAB.y + CAB.h - 60;
+        if (b) {
+          // the blast throws the pile around
+          for (const o of FS.items) {
+            if (o === b) continue;
+            const dx = o.x - b.x, dy = o.y - b.y, d = Math.max(20, Math.hypot(dx, dy));
+            if (d > 170) continue;
+            const k = (170 - d) / 170;
+            o.vx += dx / d * 700 * k; o.vy += dy / d * 500 * k - 300 * k; o.av += (dx > 0 ? 1 : -1) * 6 * k;
+          }
+          if (FS.world && FS.world.wakeAll) FS.world.wakeAll();
+          removeBody(b);
+        }
+        fx().emit('burn', x, y, { n: 2 }); fx().emit('smoke', x, y, { n: 1.5 }); fx().emit('sparks', x, y, { n: 1.2 });
+        fx().ring(x, y, '#ff8a2b', { r0: 10, r1: 150, w: 10, life: 0.5 });
+        fx().ring(x, y, '#ffe066', { r0: 10, r1: 90, w: 6, life: 0.35, delay: 0.05 });
+        fx().text(270, 430, 'BOOM!', '#ff8a2b', { big: true });
+        fx().shake(16); FS.hitStop = Math.max(FS.hitStop, 0.1);
+        if (!reduced) fx().flash('#ff8a2b', 0.35);
+        snd(X.AUDIO && X.AUDIO.names && X.AUDIO.names.indexOf('boom') >= 0 ? 'boom' : 'hitBig'); haptic('hurt');
+        break;
+      }
+      case 'binHatch': {
+        const b = ev.inst ? bodyOf(ev.inst) : null;
+        if (b) { fx().emit('shatter', CAB.x + b.x, CAB.y + b.y, { col: '#e8d8f0', n: 0.8 }); fx().emit('poof', CAB.x + b.x, CAB.y + b.y, { n: 0.6 }); removeBody(b); }
+        fx().text(270, 430, 'HATCHED!', '#ff2e88');
+        snd('itemSlip');
+        break;
+      }
+      case 'binRust': {
+        const b = ev.inst ? bodyOf(ev.inst) : null;
+        if (b) { fx().emit('dust', CAB.x + b.x, CAB.y + b.y, { col: '#c86a2e', n: 1 }); fx().ring(CAB.x + b.x, CAB.y + b.y, '#c86a2e', { r0: 6, r1: 40, w: 4 }); }
+        fx().text(270, 430, 'RUSTED: ' + name, '#c86a2e');
+        snd('poison');
+        break;
+      }
+      case 'binJam': {
+        FS.jamT = S.t;
+        fx().emit('sparks', CAB.x + CAB.w * 0.5, CAB.y + 20, { n: 1.2, col: '#ffc94d' });
+        fx().text(270, 430, 'CLAW JAMMED! (one grab fewer)', '#ffc94d');
+        fx().shake(5);
+        snd('clawClose');
+        break;
+      }
+      case 'enrage': {
+        if (!has) break;
+        const p = enemyPos(ev.idx), a = anim(ev.idx);
+        a.rageT = S.t;
+        banner(ev.name || 'ENRAGED', 'enemy', 1.4);
+        const cy = p.y - p.h * 0.5;
+        fx().ring(p.x, cy, '#ff2e30', { r0: 20, r1: 230, w: 12, life: 0.7 });
+        fx().ring(p.x, cy, '#ffffff', { r0: 10, r1: 140, w: 6, life: 0.45, delay: 0.08 });
+        fx().emit('burn', p.x, cy, { n: 1.6 });
+        if (ev.text) fx().text(p.x, cy - 30, ev.text, '#ff5a4a', { size: 14, life: 1.6 });
+        fx().shake(14); FS.hitStop = Math.max(FS.hitStop, 0.12);
+        if (!reduced) { fx().flash('#ff2e30', 0.3); slowmo(0.45, 0.35); }
+        snd('roar'); haptic('boss');
+        break;
+      }
+      default: break;
+    }
+  }
+  // Per enemy, before its sprite: phase two / chomp / spit looks for
+  // RENDER.enemy (EST) and the affix aura.
+  function monsterBack(ctx, e, i, x, p, t, live) {
+    const a = anim(i);
+    const since = (k) => (a[k] != null ? S.t - a[k] : 99);
+    EST.enraged = !!e.enraged && live;
+    const rg = since('rageT');
+    EST.rage = rg < 0.9 ? 1 - rg / 0.9 : 0;
+    const ch = since('chompT');
+    EST.chomp = ch >= 0 && ch < 0.4 ? 1 - ch / 0.4 : 0;
+    const sp = since('spitT');
+    EST.spit = sp >= 0 && sp < 0.4 ? 1 - sp / 0.4 : 0;
+    if (live && e.affix && e.affix.length && X.RENDER && X.RENDER.affixAura) X.RENDER.affixAura(ctx, x, p.y, p.w, p.h, e.affix, t);
+  }
+  // Per living enemy, over its sprite: the belly bubble and the affix badges.
+  const BELLY_T = [];
+  function monsterFront(ctx, e, i, x, p, t) {
+    const R = X.RENDER;
+    if (!R) return;
+    let list = bellyList(i);
+    const idle = !FS.queue.length && !FS.enemyTurn;
+    // Idle: the shown belly settles on the real one.
+    const eb = e.belly || [];
+    if (idle && (list.length !== eb.length || list.some((b, k) => b.inst !== eb[k].inst))) {
+      list.length = 0;
+      for (const b of eb) list.push({ inst: b.inst, def: itemDef(b.inst.id), t0: 0 });
+    }
+    if (list.length && R.belly) {
+      BELLY_T.length = 0;
+      for (const s of list) { let n = 0; for (const b of eb) if (b.inst === s.inst) n = b.turns; BELLY_T.push(n); }
+      const need = X.COMBAT.hiccupAt ? X.COMBAT.hiccupAt(e) : 10;
+      // on the body's back half (enemies face left), clear of the face
+      R.belly(ctx, x + p.w * 0.16, p.y - p.h * 0.34, Math.max(26, Math.min(p.w, p.h) * 0.3), list, t, { turns: BELLY_T, gut: U.clamp((e.gut || 0) / need, 0, 1), now: S.t });
+    }
+    if (e.affix && e.affix.length && R.affixBadges) R.affixBadges(ctx, p.x - U.clamp(p.w * 0.45, 42, 75) - 14, p.y - 8, e.affix, t);
+  }
+  // Over the cabinet: rust, fuses, eggs, the jammed rail, and the items in
+  // flight between the arena and the bin.
+  function drawMonsterFx(ctx, t) {
+    const R = X.RENDER;
+    if (!R || !F || !FS) return;
+    if (R.binMark) {
+      for (const b of FS.items) {
+        const inst = b.data.inst;
+        if (!inst.rust && inst.fuse == null && inst.hatch == null) continue;
+        const r = b.br || 16;
+        if (inst.rust) R.binMark(ctx, 'rust', CAB.x + b.x, CAB.y + b.y, r, t, 0);
+        if (inst.fuse != null) R.binMark(ctx, 'fuse', CAB.x + b.x, CAB.y + b.y, r, t, inst.fuse);
+        if (inst.hatch != null) R.binMark(ctx, 'egg', CAB.x + b.x, CAB.y + b.y, r, t, inst.hatch);
+      }
+    }
+    const jam = F.player.status && F.player.status.jam > 0;
+    if ((jam || (FS.jamT != null && S.t - FS.jamT < 0.6)) && R.wrench) {
+      const k = FS.jamT != null ? U.clamp((S.t - FS.jamT) / 0.3, 0, 1) : 1;
+      R.wrench(ctx, CAB.x + CAB.w * 0.7, CAB.y + 24 - (1 - U.ease.outBack(k)) * 60, 1.1, 0.22 + Math.sin(t * 20) * 0.05 * (1 - k));
+    }
+    const A = FS.arcs;
+    if (A && A.length && R.item) {
+      for (const a of A) {
+        const u = (S.t - a.t0) / a.dur;
+        if (u < 0 || u > 1) continue;
+        const cx = (a.x0 + a.x1) / 2, cy = Math.min(a.y0, a.y1) - a.lift, v = 1 - u;
+        const x = v * v * a.x0 + 2 * v * u * cx + u * u * a.x1, y = v * v * a.y0 + 2 * v * u * cy + u * u * a.y1;
+        R.item(ctx, a.def, x, y, a.spin * u, 0.9, { plus: a.inst.plus, glow: '#ffc94d' });
+      }
+    }
+  }
+
   /* A relic or synergy fired ({t:'proc', src, id, name, icon, color, text,
      who, idx}): the relic in the HUD bar pops with a glow ring, a star flies
      from it to the unit, an icon badge rises from the player or the enemy. */
@@ -1993,6 +2661,7 @@ const GAME = (() => {
     FS.watch = false;
     FS.delivered = 0;
     FS.wasHeld = 0;
+    FS.grabN++;
     S.run.grabs++;
     for (const b of FS.items) b.data.chuteT = 0;
     hint('...');
@@ -2010,7 +2679,7 @@ const GAME = (() => {
   }
   // "holding <item>" while lifting/carrying, or the empty-claw shrug.
   function holdHint() {
-    const list = carried();
+    const list = carried().filter((b) => b.data && b.data.inst);   // glass shards are not prizes
     if (!list.length) { hint('empty claw...'); return; }
     const names = list.map((b) => itemName(itemDef(b.data.inst.id), b.data.inst.plus));
     // Claw Crawl scoops: a big cargo reads as "A + B + 3 more"
@@ -2020,7 +2689,7 @@ const GAME = (() => {
     const rig = FS.rig;
     const cj = FS.claw;
     switch (ev) {
-      case 'drop': cj.bendV += (FS.rng() - 0.5) * 160; cj.sq = -0.5; break;
+      case 'drop': cj.bendV += (FS.rng() - 0.5) * 160; cj.sq = -0.5; setMood('focus', 1.2); break;
       case 'touch': {
         snd('clawTouch');
         // the palm thunks into the pile: squash, a puff and a camera nudge
@@ -2042,7 +2711,12 @@ const GAME = (() => {
         cj.sq = 0.7; cj.glow = 0.8;
         break;
       }
-      case 'lift': { snd('clawLift'); FS.wasHeld = carried().length; FS.cargo = carried().slice(); cj.sq = -0.6; cj.bendV += 40; holdHint(); break; }
+      case 'lift': {
+        snd('clawLift'); FS.wasHeld = carried().length; FS.cargo = carried().slice(); cj.sq = -0.6; cj.bendV += 40; holdHint();
+        // the claw's face: beaming with a prize, glum when it came up empty
+        if (FS.cargo.some((b) => b.data && b.data.inst)) setMood('happy', 8); else setMood('sad', 1.5);
+        break;
+      }
       case 'carry': snd('clawMove'); holdHint(); break;
       case 'slip': {
         // a cargo item fell out of the prongs on the way up or across: it
@@ -2055,6 +2729,9 @@ const GAME = (() => {
         fx().shake(2);
         FS.slips++;
         hint(carried().length ? 'slipped one...' : 'slipped...');
+        // it fell out right next to the chute: so close
+        if ((rig.phase === 'carrying' || rig.phase === 'releasing') && FS.cabinet && rig.x > FS.cabinet.bounds.chuteX - MAT.closeX) soClose(CAB.x + rig.x, CAB.y + rig.y + 50);
+        else if (!carried().length) setMood('sad', 1.5);
         break;
       }
       case 'shed': {
@@ -2066,10 +2743,15 @@ const GAME = (() => {
       case 'release': {
         snd('clawRelease'); FS.watch = true; FS.releaseAt = S.t;
         cj.sq = -0.4; cj.bendV -= 60;
+        FS.relCargo = FS.cargo.slice();
         fx().emit('glint', CAB.x + rig.x, CAB.y + rig.y + 30, { col: '#fff6c0' });
         break;
       }
-      case 'home': break;
+      case 'home':
+        // home with a prize delivered: a happy ding and an LED chase
+        if (FS.delivered > 0) { snd('ding'); cj.chase = 1; setMood('happy', 1.1); }
+        else if (cj.mood === 'happy' || cj.mood === 'focus') cj.moodT = 0.01;
+        break;
       default: break;
     }
   }
@@ -2127,6 +2809,10 @@ const GAME = (() => {
   function deliver(b) {
     const inst = b.data.inst;
     const pos = { x: CAB.x + b.x, y: CAB.y + b.y };
+    // the claw never touched it this grab: shaken, blasted or knocked in
+    const free = b.data.clawG !== FS.grabN;
+    const ms = FS.mst[inst.uid];
+    if (ms) { ms.lit = 0; ms.melt = 1; }   // a delivered bomb is out of the bin, ice refreezes in the used pile
     removeBody(b);
     FS.playQ.push(inst);
     FS.delivered++;
@@ -2162,6 +2848,9 @@ const GAME = (() => {
       FS.party = 2.2; FS.marquee = 'JACKPOT!';
       S.run.jackpots++; S.meta.stats.jackpots++;
     }
+    // the golden prize outranks a free one (one label lane each: golden over the bin, free over DOUBLE)
+    if (FS.golden && FS.golden.uid === inst.uid) goldenPrize(pos);
+    else if (free) freePrize(chuteMid, CAB.y + CAB.h - 105);
     if (S.coachStep === 2) coachNext();
   }
   function playInst(inst) {
@@ -2169,6 +2858,8 @@ const GAME = (() => {
     const def = itemDef(inst.id);
     FS.curDef = def;
     const evs = X.COMBAT.play(F, inst, F.target);
+    const ms = FS.mst[inst.uid];
+    if (ms && ms.crack > 0) crackBonus(inst, def);
     S.run.played++; S.meta.stats.played++;
     showTrayChip(def, inst);
     enqueue(evs, PLAY_BEAT);
@@ -2194,6 +2885,8 @@ const GAME = (() => {
   function grabFinished() {
     FS.grabInFlight = false;
     FS.watch = false;
+    luckAfterGrab();
+    nearMissAfterGrab();
     const evs = X.COMBAT.grabDone ? X.COMBAT.grabDone(F, FS.delivered) : [];
     enqueue(evs, PLAY_BEAT);
     afterAction();
@@ -2219,6 +2912,47 @@ const GAME = (() => {
     cj.bend = U.clamp(cj.bend + cj.bendV * dt, -22, 22);
     cj.sq *= Math.exp(-dt * 8);
     if (cj.glow > 0) cj.glow = Math.max(0, cj.glow - dt * 2.5);
+    // the face: moods wear off, the LED chase fades, a blink every few seconds
+    if (cj.moodT > 0) { cj.moodT -= dt; if (cj.moodT <= 0) { cj.moodT = 0; cj.mood = ''; } }
+    if (cj.chase > 0) cj.chase = Math.max(0, cj.chase - dt * 0.8);
+    cj.blinkT -= dt;
+    if (cj.blinkT < -0.13) cj.blinkT = 2.1 + (FS.frameN % 7) * 0.35;
+    const parked = rig.phase === 'idle' ? 1 : 0;
+    cj.idle = (cj.idle || 0) + (parked - (cj.idle || 0)) * Math.min(1, dt * 3);
+  }
+  /* A cracked glass item plays for +50% (half its numbers again, through
+     COMBAT's own damage / heal / status), then it breaks for the fight. */
+  function crackBonus(inst, def) {
+    const p = F.player, half = (v) => Math.ceil(Math.abs(+v || 0) * 0.5);
+    const list = (inst.plus && def.plus && Array.isArray(def.plus.fx)) ? def.plus.fx : (Array.isArray(def.fx) ? def.fx : []);
+    const mode = def.target || 'enemy';
+    const aim = () => { const e = F.enemies[F.target]; return e && e.alive ? e : F.enemies.find((x) => x.alive); };
+    const foes = (all) => (all ? F.enemies.filter((e) => e.alive) : [aim()].filter(Boolean));
+    const debuff = (s) => ((tbl('STATUS')[s] || {}).kind === 'debuff');
+    if (F.phase === 'player') X.COMBAT.emit(F, { t: 'text', who: 'p', idx: -1, str: 'CRACKED +50%' });
+    for (const f of list) {
+      if (!f || F.phase !== 'player') break;
+      const v = +f.v || 0;
+      if (!(v > 0)) continue;
+      if ((f.k === 'dmg' || f.k === 'random') && mode !== 'self' && mode !== 'none') {
+        const tot = half((f.k === 'random' ? (+f.max || v) : v) * Math.max(1, (f.n | 0) || 1));
+        for (const e of foes(mode === 'all')) X.COMBAT.damage(F, p, e, tot);
+      } else if (f.k === 'block') {
+        const a = half(v);
+        p.block = Math.min(999, p.block + a);
+        X.COMBAT.emit(F, { t: 'block', who: 'p', idx: -1, amt: a });
+      } else if (f.k === 'heal' || f.k === 'lifesteal') X.COMBAT.heal(F, p, half(v));
+      else if (f.k === 'status') {
+        const to = f.to || ((mode === 'self' || mode === 'none' || !debuff(f.s)) ? 'self' : 'enemy');
+        if (to === 'self') { if (!debuff(f.s)) X.COMBAT.status(F, p, f.s, half(v)); }
+        else for (const e of foes(to === 'all')) X.COMBAT.status(F, e, f.s, half(v));
+      }
+    }
+    // ...and then it breaks for good (this fight)
+    const i = F.used.indexOf(inst);
+    if (i >= 0) { F.used.splice(i, 1); F.exhausted.push(inst); }
+    delete FS.mst[inst.uid];
+    snd('shatter');
   }
   /* Per-frame fight juice: enemy hp ghosts drain after their hold, status
      chip pops settle, the cabinet party lights fade, the low hp heartbeat
@@ -2298,6 +3032,8 @@ const GAME = (() => {
     syncBodies();
     banner('YOUR TURN', 'turn', 0.9);
     afterAction();
+    // lit fuses burn down (a bomb may go off), ice melts
+    if (FS && !FS.done) matTurn();
     save();
   }
   /* outro (the natural end of a won fight, not the public call): the
@@ -2339,8 +3075,10 @@ const GAME = (() => {
     // A beaten elite (a tower keeper too) sometimes hands over a tool.
     const brush = tier === 'elite' && rng() < (econ.eliteToolChance || 0) && toolIds().length ? rng.pick(toolIds()) : null;
     const reward = { items: rollItems(rng, 3), gold, ink, brush, tier, then };
+    lootReward(reward);   // payout lines, tickets, the lucky double, capsules, highlights
     if (outro) {
       FS.outro = { t: fx().reduced ? 0.7 : 1.5, reward };
+      lootOutro(reward);  // the rest of the tickets stream out of the cabinet (may hold the outro a beat longer)
       S.sd = { reward };
       const lk = FS.lastKill || { x: 270, y: 200 };
       fx().emit('confetti', lk.x, lk.y + 40, { power: 0.9 });
@@ -2406,9 +3144,12 @@ const GAME = (() => {
           }
         }
         if (d.slipT > 0) { d.slipT -= dt; fx().trail(CAB.x + b.x, CAB.y + b.y, '#d9ccff', { vx: b.vx, vy: b.vy, life: 0.22, w: 6 }); }
+        matBody(b, dt);
         d.pvy = b.vy;
         if (d.sq > 0) d.sq = Math.max(0, d.sq - dt * 5);
       }
+      matFrame(dt);
+      if (!FS) return;
       if (held) for (const b of held) fx().trail(CAB.x + b.x, CAB.y + b.y, '#2ee6d6', { vx: b.vx, vy: b.vy + 40, life: 0.3, w: 4 });
       // Deliveries: bodies in the chute after a release. The chute has no
       // floor, so anything that fell through it onto the hidden tray outside
@@ -2514,31 +3255,48 @@ const GAME = (() => {
   // ---------------------------------------------------------------- reward / treasure / act flow
   function showReward(rw) {
     S.sd = { reward: rw };
+    S.pay = null;
     if (!rw.taken) {
       rw.taken = true;
       if (rw.gold) addGold(rw.gold);
       if (rw.ink) addInk(rw.ink);
       if (rw.brush) addBrush(rw.brush);
+      // loot: the tickets (the stream already showed them landing) and the tally's gold
+      if (rw.tix) addTickets(rw.tix);
+      if (rw.pay) lootRun().loot.payGold += rw.gold || 0;
     }
+    S.tix = null;
     setScreen('reward');
     const b = $('rewardBody');
     clear(b);
     b.appendChild(h('h1', null, rw.tier === 'boss' ? 'Boss down' : 'Victory'));
     const line = h('div', 'row pops');
-    line.appendChild(h('span', 'tag gold', `+${rw.gold} gold`));
+    // the payout receipt carries the gold (older saves show the plain tag)
+    if (!rw.pay) line.appendChild(h('span', 'tag gold', `+${rw.gold} gold`));
     if (rw.ink) line.appendChild(h('span', 'tag cyan', `+${bulbs(rw.ink)}`));
     if (rw.brush) line.appendChild(h('span', 'tag gold', `${toolDef(rw.brush).icon || ''} ${toolDef(rw.brush).name}`.trim()));
     b.appendChild(line);
-    b.appendChild(h('div', 'sub', 'Pick one item for your bin.'));
+    const pay = rw.pay && rw.pay.length ? buildPayout(b, rw) : null;
+    const capBox = h('div', 'col');
+    b.appendChild(capBox);
+    const sub = h('div', 'sub', 'Pick one item for your bin.');
+    b.appendChild(sub);
     const cards = h('div', 'cards');
+    const cardEls = [];
     rw.items.forEach((id, i) => {
       const def = itemDef(id);
       let card = null;
-      card = itemCard(def, false, { deal: i, onPick: () => { flyCard(card, def, false); addItem(id); snd('buy'); toast(`${def.name} added to the bin.`); afterReward(rw); } });
+      card = itemCard(def, false, { deal: pay ? null : i, onPick: () => { flyCard(card, def, false); addItem(id); snd('buy'); toast(`${def.name} added to the bin.`); afterReward(rw); } });
+      cardEls.push(card);
       cards.appendChild(card);
     });
     b.appendChild(cards);
-    b.appendChild(btn('Skip', () => afterReward(rw), 'ghost'));
+    const skip = btn('Skip', () => afterReward(rw), 'ghost');
+    b.appendChild(skip);
+    // capsules sit above the cards (DOM taps, not GAME.choose entries: the
+    // cards and Skip keep their indices)
+    lootCapSlots(capBox, rw);
+    if (pay) startPayout(pay, rw, [capBox, sub, cards, skip], cardEls);
     save();
   }
   function itemCard(def, plus, o) {
@@ -2575,6 +3333,8 @@ const GAME = (() => {
   }
   function afterReward(rw) {
     S.sd = null;
+    lootBank(rw);   // unopened capsules wait on the map
+    if (S.pay) { const scr = $('scr-reward'); if (scr) scr.onpointerdown = null; S.pay = null; }
     if (rw.tier === 'boss') { nextAct(); return; }
     if (rw.then && rw.then.tower) { towerPrize(rw.then.tower); return; }
     if (rw.then) { const then = rw.then; resolveFx(then.fx || [], then.i || 0, () => toMap()); return; }
@@ -2700,6 +3460,834 @@ const GAME = (() => {
     save();
   }
 
+  // ---------------------------------------------------------------- loot
+  /* Prize capsules, arcade tickets, the payout tally, the prize counter and
+     the run's highlights (DESIGN.md "Loot"). The rolls live in DATA
+     (rollCapsule, capsulePrize, prizeShelf, payout); this is the flow and
+     the feel. Run fields, all defaulted for old saves by lootRun: tickets,
+     pity (capsules since the last rare), caps (banked capsules), loot (the
+     highlights). Meta: loot {caps, payouts} opened so far (repeat = faster). */
+  const LOOT0 = { NAME: { c: 'Common', u: 'Uncommon', r: 'Rare', l: 'Legendary' }, COLOR: { c: '#b9b0cc', u: '#2ee6d6', r: '#ff2e88', l: '#ffc94d' },
+    TICKETS: { jackpot: 3, combo: 1 }, TAPS: 3, FAST_TAPS: 2, FAST_AFTER: 12, PITY: 5, DOUBLE: 0.05 };
+  const LT = () => D().LOOT || LOOT0;
+  const TIER_I = { c: 0, u: 1, r: 2, l: 3 };
+  const capCol = (tier) => LT().COLOR[tier] || '#b9b0cc';
+  const capName = (tier) => LT().NAME[tier] || 'Mystery';
+  const CAP_SRC = { normal: 'A fight drop', bonus: 'Jackpot bonus', elite: 'Elite drop', boss: 'Boss drop', treasure: 'Treasure', counter: 'Prize counter' };
+  const TIX_HUD = { x: 318, y: 36 };
+
+  // The run's loot fields with their defaults (old saves have none of them).
+  function lootRun(run) {
+    run = run || S.run;
+    if (!run) return null;
+    if (!(run.tickets >= 0)) run.tickets = 0;
+    if (!(run.pity >= 0)) run.pity = 0;
+    if (!Array.isArray(run.caps)) run.caps = [];
+    const L = run.loot && typeof run.loot === 'object' ? run.loot : (run.loot = {});
+    for (const k of ['bigHit', 'overkill', 'capsOpened', 'tixEarned', 'flawless', 'doubles', 'payGold']) if (!(L[k] >= 0)) L[k] = 0;
+    if (L.bestCombo === undefined) L.bestCombo = null;
+    if (L.bestCap === undefined) L.bestCap = null;
+    return run;
+  }
+  function metaLoot() {
+    if (!S.meta) S.meta = freshMeta();
+    const m = S.meta.loot && typeof S.meta.loot === 'object' ? S.meta.loot : (S.meta.loot = {});
+    if (!(m.caps >= 0)) m.caps = 0;
+    if (!(m.payouts >= 0)) m.payouts = 0;
+    return m;
+  }
+  function addTickets(n) {
+    const run = lootRun();
+    n = Math.round(+n || 0);
+    if (!run || !n) return;
+    run.tickets = Math.max(0, run.tickets + n);
+    if (n > 0) run.loot.tixEarned += n;
+  }
+  const comboTier = (id) => { const c = tbl('COMBOS')[id]; return c ? U.clamp(c.tier | 0, 1, 3) : 1; };
+
+  // ---- capsules
+  // The live pools a capsule may draw from: relics not owned, claw parts
+  // not maxed, the tools.
+  function capCtx(prefer) {
+    const run = S.run;
+    const relics = {};
+    for (const r of ['c', 'u', 'r', 'boss']) relics[r] = relicPool([r]);
+    return { act: run.act, char: run.char, relics, claws: openClawUpgrades(), tools: toolIds(), prefer: prefer || null };
+  }
+  /* A fresh capsule from a source ('normal', 'bonus', 'elite', 'boss',
+     'treasure', 'counter'): its tiers (with the pity lift) and the prize
+     are rolled now and saved, so a reload never rerolls it. */
+  function makeCapsule(src, opts) {
+    opts = opts || {};
+    const run = lootRun();
+    const rng = rngFor('capsule:' + src);
+    let cap = { src, tier0: opts.tier || 'c', ups: [], tier: opts.tier || 'c', pity: false };
+    if (D().rollCapsule) { try { cap = D().rollCapsule(rng, src, { pity: run.pity, tier: opts.tier }); } catch (e) { /* keep the plain one */ } }
+    let prize = { k: 'gold', n: 20 };
+    if (D().capsulePrize) { try { prize = D().capsulePrize(rng, cap.tier, capCtx(opts.prefer)) || prize; } catch (e) { /* gold */ } }
+    run.pity = TIER_I[cap.tier] >= 2 ? 0 : run.pity + 1;
+    return Object.assign(cap, { prize, opened: false });
+  }
+  // Pays a prize into the run. A relic already owned or a claw part that no
+  // longer fits turns into 60 gold (p.fallback says so on the card).
+  function grantPrize(p) {
+    const run = lootRun();
+    if (!run || !p) return;
+    switch (p.k) {
+      case 'item': addItem(p.id, !!p.plus); break;
+      case 'relic':
+        if (!tbl('RELICS')[p.id] || run.relics.indexOf(p.id) >= 0) { addGold(60); p.fallback = 60; } else gainRelic(p.id);
+        break;
+      case 'gold': addGold(p.n || 0); break;
+      case 'ink': addInk(p.n || 0); break;
+      case 'maxhp': run.maxHp += (p.n || 0); healRun(p.n || 0); break;
+      case 'tickets': addTickets(p.n || 0); break;
+      case 'tool': addBrush(p.id); break;
+      case 'claw': if (!applyClawUpgrade(p.u)) { addGold(60); p.fallback = 60; } break;
+      default: addGold(20); break;
+    }
+  }
+  function prizeOf(p) {
+    if (D().prizeInfo) { try { return D().prizeInfo(p); } catch (e) { /* fall through */ } }
+    return { name: 'Prize', text: '', icon: '?', col: '#ffc94d' };
+  }
+  // A DOM canvas with the prize's own art (item, relic, capsule) or null.
+  function prizeCanvas(p, px) {
+    if (!p) return null;
+    if (p.k === 'item' && tbl('ITEMS')[p.id]) return itemCanvas(itemDef(p.id), !!p.plus, px);
+    if (p.k === 'relic' && tbl('RELICS')[p.id]) return relicCanvas(relicDef(p.id), px);
+    if (p.k === 'cap') return capCanvas(p.tier, px);
+    return null;
+  }
+  function capCanvas(tier, px) {
+    return canvasEl(px, (ctx, p) => { if (X.RENDER && X.RENDER.capsule) X.RENDER.capsule(ctx, p / 2, p / 2, p * 0.42, { tier, t: 0.3, seed: 3, glow: 0 }); });
+  }
+
+  /* The capsule ritual: cd = {cap, then, gold?, bank?, rwIdx?}. The capsule
+     drops in and wobbles; each tap cracks it harder (sparks, spreading
+     cracks, a rising snap); a capsule with ups turns rarer mid-open with a
+     flash; the last tap bursts it (confetti, rays, the halves fly) and the
+     prize card pops out. The canvas draws the capsule (drawCapsule), the
+     DOM frames it. then: {k:'map'} | {k:'reward', rw} | {k:'counter', shop}. */
+  function showCapsule(cd) {
+    S.sd = { capsule: cd };
+    const cap = cd.cap;
+    const L = LT();
+    const fast = metaLoot().caps >= (L.FAST_AFTER || 12);
+    const taps = fast ? (L.FAST_TAPS || 2) : (L.TAPS || 3);
+    S.cap = { cd, cap, phase: cap.opened ? 'done' : 'drop', t: 0, taps: 0, burstTap: Math.max(taps, cap.ups.length + 2) - 1, shown: cap.opened ? cap.tier : cap.tier0,
+      stage: cap.opened ? cap.ups.length : 0, crack: 0, rot: 0, rotV: 0, sq: 0, sqV: 0, flash: 0, open: cap.opened ? 1 : 0, dropT: fast ? 0.35 : 0.7,
+      fast, x: 270, y: 440, r: 80, bt: 0, idleT: 0, sparkT: 0 };
+    setScreen('capsule');
+    capDom();
+    const scr = $('scr-capsule');
+    if (scr) scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return; capsuleTap(); };
+    if (!cap.opened) snd('whoosh', { pitch: 0.8 });
+    save();
+  }
+  // Builds the capsule screen's DOM for the current phase.
+  function capDom() {
+    const C = S.cap;
+    const b = $('capsuleBody');
+    if (!C || !b) return;
+    clear(b);
+    S.ui.buttons = [];
+    const cap = C.cap, run = S.run;
+    const top = h('div', 'capTop');
+    try { top.style.setProperty('--cc', capCol(C.shown)); } catch (e) { /* stub */ }
+    const tierEl = h('div', 'capTier' + (C.shown === 'l' ? ' lg' : ''), capName(C.shown));
+    tierEl.id = 'capTier';
+    top.appendChild(tierEl);
+    const tag = h('div', null, '');
+    tag.id = 'capUpTag';
+    top.appendChild(tag);
+    top.appendChild(h('div', 'capSrc', (CAP_SRC[cap.src] || 'A capsule') + (C.cd.gold ? ` · +${C.cd.gold} gold` : '')));
+    const pity = LT().PITY || 5;
+    const left = Math.max(1, pity - (run ? run.pity : 0));
+    if (C.phase !== 'done') {
+      const pl = h('div', 'capPity');
+      pl.textContent = 'Rare or better in ';
+      pl.appendChild(h('b', null, left <= 1 ? 'the next capsule' : `${left} capsules`));
+      pl.appendChild(h('span', null, ' or sooner'));
+      top.appendChild(pl);
+    }
+    b.appendChild(top);
+    if (C.phase === 'done') {
+      const p = cap.prize, info = prizeOf(p);
+      const card = h('div', 'prize');
+      try { card.style.setProperty('--cc', capCol(cap.tier)); } catch (e) { /* stub */ }
+      const pic = h('div', 'pic');
+      const cv = prizeCanvas(p, 76);
+      if (cv) pic.appendChild(cv); else pic.textContent = info.icon || '?';
+      card.appendChild(pic);
+      card.appendChild(h('div', 'pk', `${capName(cap.tier)} prize`));
+      card.appendChild(h('div', 'pn', info.name));
+      card.appendChild(h('div', 'pt', p.fallback ? `You had that already: ${p.fallback} gold instead.` : info.text));
+      if (p.k === 'item' || p.k === 'relic') { const kw = kwChips(p.k === 'item' ? itemDef(p.id) : relicDef(p.id)); if (kw) card.appendChild(kw); }
+      card.appendChild(btn('Collect', () => collectCapsule(), 'gold'));
+      b.appendChild(card);
+    } else {
+      const hint = h('div', 'capHint');
+      hint.id = 'capHint';
+      try { hint.style.setProperty('--cc', capCol(C.shown)); } catch (e) { /* stub */ }
+      b.appendChild(hint);
+      capHint();
+      // the whole screen is the tap target; the entry lets GAME.choose crack it
+      S.ui.buttons.push({ el: $('scr-capsule'), fn: () => capsuleTap(), label: 'Crack' });
+      b.appendChild(btn('Skip', () => skipCapsule(), 'sm ghost capSkip'));
+    }
+  }
+  function capHint() {
+    const C = S.cap, el = $('capHint');
+    if (!C || !el) return;
+    const left = Math.max(0, C.burstTap + 1 - C.taps);
+    clear(el);
+    el.appendChild(h('span', null, C.phase === 'drop' ? '' : left <= 1 ? 'TAP TO OPEN!' : 'TAP TO CRACK'));
+    const dots = '●'.repeat(Math.min(C.taps, C.burstTap + 1)) + '○'.repeat(left);
+    el.appendChild(h('small', null, dots));
+  }
+  // One tap: crack harder, maybe turn rarer, or burst on the last one.
+  function capsuleTap() {
+    const C = S.cap;
+    if (!C || S.screen !== 'capsule') return false;
+    if (C.phase === 'drop') { capLand(); return true; }
+    if (C.phase === 'burst') { capReveal(); return true; }
+    if (C.phase !== 'idle') return false;
+    const i = C.taps++;
+    C.idleT = 0;
+    if (i >= C.burstTap) { capBurst(); return true; }
+    const reduced = !!fx().reduced;
+    C.crack = (i + 1) / (C.burstTap + 1);
+    C.rotV += (i % 2 ? -1 : 1) * (3 + i * 2.5) * (reduced ? 0.4 : 1);
+    C.sqV += 0.9 + i * 0.35;
+    const col = capCol(C.shown);
+    fx().emit('sparks', C.x, C.y, { col, n: 1 + i * 0.6, power: 1 + i * 0.3 });
+    fx().emit('shatter', C.x, C.y, { col: '#ffffff', n: 0.3 + i * 0.2 });
+    fx().ring(C.x, C.y, col, { r0: C.r * 0.8, r1: C.r * (1.8 + i * 0.4), w: 5 + i * 2, life: 0.4 });
+    fx().shake(3 + i * 3);
+    snd('capCrack', { n: i });
+    haptic('hit');
+    if (i >= 1 && C.stage < C.cap.ups.length) capUpgrade();
+    capHint();
+    return true;
+  }
+  // The capsule turns one tier rarer: a flash, chromatic rings, a riser.
+  function capUpgrade() {
+    const C = S.cap;
+    const next = C.cap.ups[C.stage++];
+    if (!next) return;
+    C.shown = next;
+    C.flash = 1;
+    const col = capCol(next);
+    if (!fx().reduced) fx().flash(col, 0.5);
+    fx().ring(C.x, C.y, col, { r0: 20, r1: 260, w: 12, life: 0.6 });
+    fx().ring(C.x - 5, C.y, PAL0.pink, { r0: 10, r1: 320, w: 8, life: 0.7, delay: 0.05 });
+    fx().ring(C.x + 5, C.y, PAL0.cyan, { r0: 10, r1: 320, w: 8, life: 0.7, delay: 0.1 });
+    fx().emit('confetti', C.x, C.y - 20, { power: 0.8, n: 0.6 });
+    fx().emit('glint', C.x - 30, C.y - 30, { n: 2 });
+    fx().shake(9);
+    snd('capUpgrade');
+    haptic('jackpot');
+    const tEl = $('capTier');
+    if (tEl) { tEl.textContent = capName(next); tEl.className = 'capTier' + (next === 'l' ? ' lg' : ''); replay(tEl, 'up'); }
+    const top = tEl && tEl.parentNode;
+    try { if (top && top.style) top.style.setProperty('--cc', col); const hEl = $('capHint'); if (hEl && hEl.style) hEl.style.setProperty('--cc', col); } catch (e) { /* stub */ }
+    const tag = $('capUpTag');
+    if (tag) {
+      const last = C.stage >= C.cap.ups.length;
+      tag.textContent = C.cap.pity && last ? 'LUCKY STREAK: RARE!' : next === 'l' ? 'JACKPOT UPGRADE!' : 'UPGRADE!';
+      tag.className = ''; replay(tag, 'capUpTag');
+    }
+  }
+  // Skip: every upgrade shows at once, then the burst.
+  function skipCapsule() {
+    const C = S.cap;
+    if (!C) return;
+    if (C.phase === 'burst') { capReveal(); return; }
+    if (C.phase === 'drop') capLand(true);
+    if (C.phase === 'idle') {
+      if (C.stage < C.cap.ups.length) { C.stage = C.cap.ups.length; C.shown = C.cap.tier; const tEl = $('capTier'); if (tEl) { tEl.textContent = capName(C.shown); tEl.className = 'capTier' + (C.shown === 'l' ? ' lg' : ''); } }
+      capBurst();
+    }
+  }
+  function capLand(quiet) {
+    const C = S.cap;
+    C.phase = 'idle'; C.t = C.dropT; C.sqV += 1.6;
+    if (quiet) return;
+    fx().emit('dust', C.x, C.y + C.r + 18, { power: 1.2 });
+    fx().shake(4);
+    snd('capDrop');
+    capHint();
+  }
+  /* The last tap: the prize is paid now (and saved), so a reload lands on
+     the reveal, never a second prize. Legendary gets slow motion and a
+     rainbow of rings. */
+  function capBurst() {
+    const C = S.cap, cap = C.cap, run = lootRun();
+    C.phase = 'burst'; C.bt = 0; C.flash = 1; C.shown = cap.tier;
+    if (!cap.opened) {
+      cap.opened = true;
+      grantPrize(cap.prize);
+      run.loot.capsOpened++;
+      if (!run.loot.bestCap || TIER_I[cap.tier] > TIER_I[run.loot.bestCap]) run.loot.bestCap = cap.tier;
+      if (C.cd.bank && run.caps.length) run.caps.shift();
+      const then = C.cd.then;
+      if (then && then.k === 'reward' && then.rw && then.rw.caps && C.cd.rwIdx != null && then.rw.caps[C.cd.rwIdx]) {
+        const rc = then.rw.caps[C.cd.rwIdx];
+        rc.opened = true; rc.prize = cap.prize;
+      }
+      metaLoot().caps++;
+      saveMeta();
+      save();
+    }
+    const tier = TIER_I[cap.tier] || 0, col = capCol(cap.tier), reduced = !!fx().reduced;
+    if (!reduced) fx().flash('#ffffff', 0.5 + tier * 0.1);
+    fx().emit('confetti', C.x, C.y, { power: 1 + tier * 0.15, dir: -Math.PI / 2 - 0.5, spread: 1.4 });
+    fx().emit('confetti', C.x, C.y, { power: 1 + tier * 0.15, dir: -Math.PI / 2 + 0.5, spread: 1.4 });
+    fx().emit('shatter', C.x, C.y, { col, n: 1.2 });
+    fx().emit('poof', C.x, C.y);
+    if (cap.prize && (cap.prize.k === 'gold' || cap.prize.k === 'tickets')) fx().emit('coins', C.x, C.y, { n: 1.5, power: 1.1 });
+    fx().ring(C.x, C.y, col, { r0: C.r, r1: 360, w: 14, life: 0.7 });
+    fx().ring(C.x, C.y, '#ffffff', { r0: 10, r1: 240, w: 8, life: 0.5, delay: 0.06 });
+    if (tier >= 2) { fx().ring(C.x, C.y, PAL0.pink, { r0: 10, r1: 420, w: 10, life: 0.8, delay: 0.1 }); fx().ring(C.x, C.y, PAL0.cyan, { r0: 10, r1: 460, w: 10, life: 0.85, delay: 0.16 }); }
+    if (tier >= 3) { fx().ring(C.x, C.y, PAL0.lime, { r0: 10, r1: 500, w: 10, life: 0.9, delay: 0.22 }); fx().emit('confetti', 270, 120, { power: 1.2, dir: Math.PI / 2, spread: 2.4 }); slowmo(0.35, 0.45); }
+    fx().shake(10 + tier * 3);
+    snd('capBurst', { tier });
+    haptic('jackpot');
+    const hEl = $('capHint'); if (hEl) clear(hEl);
+    const tEl = $('capTier'); if (tEl) { tEl.textContent = capName(cap.tier); tEl.className = 'capTier' + (cap.tier === 'l' ? ' lg' : ''); }
+  }
+  function capReveal() {
+    const C = S.cap;
+    if (!C || C.phase === 'done') return;
+    C.phase = 'done'; C.open = 1;
+    capDom();
+    snd('relic');
+  }
+  // Collect: the prize flies off toward where it lives, then the ritual's then.
+  function collectCapsule() {
+    const C = S.cap;
+    if (!C || C.phase !== 'done') return;
+    const p = C.cap.prize;
+    if (!S.headless) {
+      const cv = prizeCanvas(p, 56);
+      const node = h('div', 'flycard');
+      if (cv) node.appendChild(cv); else node.textContent = prizeOf(p).icon || '?';
+      const to = p.k === 'relic' ? { x: 440, y: 36 } : p.k === 'gold' ? GOLD_HUD : p.k === 'tickets' ? TIX_HUD : p.k === 'maxhp' ? HP_HUD : { x: 336, y: 96 };
+      domFly(node, 270, 600, to.x, to.y, 620);
+    }
+    snd('upgrade');
+    const then = C.cd.then;
+    S.cap = null; S.sd = null;
+    if (then && then.k === 'reward' && then.rw) { showReward(then.rw); return; }
+    if (then && then.k === 'counter' && then.shop) { showCounter(then.shop); return; }
+    toMap();
+  }
+  // Per-frame capsule motion: the drop with a bounce, the wobble spring,
+  // an idle hop that begs for a tap, the burst opening, sparkles.
+  function capTick(dt) {
+    const C = S.cap;
+    if (!C) return;
+    C.t += dt;
+    if (C.phase === 'drop' && C.t >= C.dropT) capLand();
+    const reduced = !!fx().reduced;
+    // wobble and squash springs
+    C.rotV += (-C.rot * 140 - C.rotV * 9) * dt; C.rot += C.rotV * dt;
+    C.sqV += (-C.sq * 220 - C.sqV * 12) * dt; C.sq += C.sqV * dt;
+    C.sq = U.clamp(C.sq, -0.25, 0.25); C.rot = U.clamp(C.rot, -0.6, 0.6);
+    C.flash = Math.max(0, C.flash - dt * 2.5);
+    if (C.phase === 'idle') {
+      C.idleT += dt;
+      // the longer it waits, the more it rattles (anticipation)
+      if (C.idleT > 1.6 && !reduced) { C.idleT = 0.9; C.rotV += (C.taps % 2 ? 1 : -1) * (1.5 + C.taps); C.sqV += 0.4; }
+      C.sparkT -= dt;
+      if (C.sparkT <= 0) { C.sparkT = 0.5 - (TIER_I[C.shown] || 0) * 0.1; fx().emit('glint', C.x + Math.sin(C.t * 7) * C.r * 0.9, C.y - C.r * 0.5 + Math.cos(C.t * 5) * C.r * 0.5, { col: capCol(C.shown) }); }
+    }
+    if (C.phase === 'burst') {
+      C.bt += dt;
+      C.open = Math.min(1, C.open + dt * (C.fast ? 4 : 2.8));
+      if (C.bt >= (C.fast ? 0.3 : 0.55)) capReveal();
+    }
+  }
+  // The capsule scene over the dimmed map: rays, a spotlight, the pedestal,
+  // the capsule itself (RENDER.capsule). Drawn under the fx layer.
+  function drawCapsule(ctx, t) {
+    const C = S.cap, R = X.RENDER;
+    if (!C || !R || !R.capsule) return;
+    const col = capCol(C.shown), tier = TIER_I[C.shown] || 0;
+    const burst = C.phase === 'burst' || C.phase === 'done';
+    const u = C.phase === 'drop' ? U.clamp(C.t / C.dropT, 0, 1) : 1;
+    const y = C.phase === 'drop' ? C.y - (1 - U.ease.outBounce(u)) * 560 : C.y;
+    ctx.save();
+    ctx.fillStyle = 'rgba(10,5,20,0.86)';
+    ctx.fillRect(-40, -40, W + 80, H + 80);
+    // rays spin behind; brighter and longer once it bursts
+    const n = 16, rot = t * (burst ? 0.45 : 0.22) * (fx().reduced ? 0.2 : 1), len = burst ? 640 : 280 + tier * 70;
+    const rg = R.rgba || ((c) => c);
+    try {
+      const g = ctx.createRadialGradient(C.x, y, 10, C.x, y, len);
+      g.addColorStop(0, rg(burst ? '#ffffff' : col, burst ? 0.34 : 0.16 + tier * 0.05));
+      g.addColorStop(0.5, rg(col, burst ? 0.16 : 0.06 + tier * 0.03));
+      g.addColorStop(1, rg(col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const a = rot + i * Math.PI * 2 / n;
+        ctx.moveTo(C.x, y); ctx.arc(C.x, y, len, a, a + Math.PI / n * 0.8); ctx.closePath();
+      }
+      ctx.fill();
+      if (tier >= 3) {
+        // legendary: a second, counter-spinning rainbow set
+        const cols = ['#ff2e88', '#a6ff5e', '#2ee6d6', '#9b7bff'];
+        for (let i = 0; i < 8; i++) {
+          const a = -rot * 1.3 + i * Math.PI / 4;
+          ctx.fillStyle = rg(cols[i % 4], 0.1);
+          ctx.beginPath(); ctx.moveTo(C.x, y); ctx.arc(C.x, y, len * 0.8, a, a + 0.12); ctx.closePath(); ctx.fill();
+        }
+      }
+    } catch (e) { /* stub ctx */ }
+    // the pedestal and the capsule's shadow (it shrinks as the capsule falls in)
+    const py = C.y + C.r + 26;
+    ctx.fillStyle = '#231640';
+    ctx.beginPath(); ctx.ellipse(C.x, py + 10, 118, 26, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#34245c';
+    ctx.beginPath(); ctx.ellipse(C.x, py, 110, 22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = rg(col, 0.8); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(C.x, py, 110, 22, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    const sh = 0.4 + 0.6 * U.clamp(1 - (C.y - y) / 560, 0, 1);
+    ctx.beginPath(); ctx.ellipse(C.x, py - 2, 70 * sh, 12 * sh, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    R.capsule(ctx, C.x, y, C.r, { tier: C.shown, t, rot: C.rot, sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 7, glow: burst ? 0 : 0.55 + tier * 0.15 });
+  }
+
+  // ---- the payout tally (reward screen)
+  /* The receipt: one row per payout line, hidden until its beat. The lucky
+     DOUBLE line comes after a roulette. Returns the step list the tally
+     plays; the totals slam in last, then the cards deal. */
+  function buildPayout(b, rw) {
+    const box = h('div', 'payout');
+    const head = h('div', 'ph');
+    head.appendChild(h('span', null, 'Payout'));
+    head.appendChild(h('span', null, 'gold · tix'));
+    box.appendChild(head);
+    const done = !!rw.payShown;
+    const steps = [];
+    const row = (l) => {
+      const el = h('div', 'pl ' + (l.id || '') + (done ? '' : ' wait'));
+      el.appendChild(h('span', 'lb', l.label));
+      el.appendChild(h('span', 'g', l.gold ? '+' + l.gold : ''));
+      el.appendChild(h('span', 'x', l.tix ? '+' + l.tix : ''));
+      box.appendChild(el);
+      return el;
+    };
+    for (const l of rw.pay) {
+      if (l.id === 'double') {
+        const rl = h('div', 'roul' + (done ? ' won' : ' wait'));
+        const strip = h('div', 'strip');
+        const cells = ['x1', 'x1', 'x2', 'x1', 'x1', 'x2', 'x1', 'x1', 'x2', 'x1', 'x1', 'x1', 'x2', 'x1', 'x1', 'x2', 'x1', 'x1'];
+        for (const c of cells) strip.appendChild(h('div', 'cell ' + c, c === 'x2' ? 'x2' : 'x1'));
+        rl.appendChild(strip);
+        box.appendChild(rl);
+        steps.push({ k: 'roul', el: rl, strip, land: 12 });
+      }
+      steps.push({ k: 'line', el: row(l), l });
+    }
+    const tot = h('div', 'ptot' + (done ? '' : ' wait'));
+    tot.appendChild(h('span', 'lb', 'TOTAL'));
+    tot.appendChild(h('span', 'g', '+' + rw.gold));
+    const tx = h('span', 'x', '+' + (rw.tix || 0));
+    tx.appendChild(h('i', 'tixi'));
+    tot.appendChild(tx);
+    box.appendChild(tot);
+    steps.push({ k: 'total', el: tot });
+    const skipT = done ? null : h('div', 'skipT', 'tap to skip');
+    if (skipT) box.appendChild(skipT);
+    b.appendChild(box);
+    return { box, steps, done, skipT };
+  }
+  // Starts the tally; hides what comes after it until the totals land.
+  function startPayout(pay, rw, after, cards) {
+    const fast = metaLoot().payouts >= 5;
+    S.pay = { rw, box: pay.box, skipT: pay.skipT, steps: pay.steps, i: 0, t: fast ? 0.2 : 0.4, gap: fast ? 0.16 : 0.3, roulT: fast ? 0.9 : 1.5, after, cards, done: false, n: 0 };
+    if (pay.done) { finishPay(true); return; }
+    for (const el of after) if (el && el.classList) el.classList.add('rwWait');
+    const scr = $('scr-reward');
+    if (scr) scr.onpointerdown = () => { if (S.pay && !S.pay.done) finishPay(); };
+  }
+  function payStep(st, quiet) {
+    const P = S.pay;
+    if (!st || !st.el) return 0;
+    if (st.el.classList) st.el.classList.remove('wait');
+    if (st.k === 'line') {
+      if (!quiet) { replay(st.el, 'in'); snd(st.l.id === 'double' ? 'double' : 'tally', { pitch: 1 + P.n * 0.08 }); if (st.l.id === 'double') replay(P.box, 'shake'); }
+      P.n++;
+      return st.l.id === 'double' ? P.gap * 2 : P.gap;
+    }
+    if (st.k === 'roul') {
+      if (quiet) { st.el.classList.add('won'); return 0; }
+      rouletteSpin(st, P.roulT);
+      return P.roulT + 0.25;
+    }
+    if (st.k === 'total') {
+      if (!quiet) {
+        replay(st.el, 'slam'); replay(P.box, 'shake'); snd('slam'); haptic('jackpot');
+        // a little fountain of coins and tickets pops off the total
+        if (!S.headless) {
+          const p = hudPoint(st.el, 400, 300);
+          for (let i = 0; i < 8; i++) domFly(h('div', i % 2 ? 'dtix' : 'dcoin'), p.x + 60 + (i - 4) * 6, p.y, p.x + (i - 4) * 34, p.y - 140 - (i % 3) * 30, 520, i * 30);
+        }
+      }
+      return P.gap;
+    }
+    return 0;
+  }
+  // The roulette strip flicks past the window with slowing ticks and lands on x2.
+  function rouletteSpin(st, secs) {
+    if (S.headless) { st.el.classList.add('won'); return; }
+    const cell = 90, box = st.el.getBoundingClientRect ? st.el.getBoundingClientRect() : { width: 480 };
+    const w = (box.width || 480) / (S.scale || 1);
+    const to = -(st.land * cell - (w / 2 - cell / 2));
+    try {
+      if (st.strip.animate) st.strip.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${to}px)` }], { duration: secs * 1000, easing: 'cubic-bezier(.12,.7,.2,1)', fill: 'forwards' });
+      else st.strip.style.transform = `translateX(${to}px)`;
+    } catch (e) { /* no animation */ }
+    // ticks slow down like the strip
+    let at = 0;
+    for (let i = 0; i < 12; i++) { at += 40 + i * i * 7; if (at > secs * 1000) break; setTimeout(() => snd('roulette', { pitch: 1 + i * 0.02 }), at); }
+    setTimeout(() => { try { st.el.classList.add('won'); } catch (e) { /* gone */ } }, secs * 1000);
+  }
+  function payTick(dt) {
+    const P = S.pay;
+    if (!P || P.done) return;
+    P.t -= dt;
+    let guard = 0;
+    while (P.t <= 0 && !P.done && guard++ < 20) {
+      if (P.i >= P.steps.length) { finishPay(true, true); return; }
+      P.t += payStep(P.steps[P.i++]);
+    }
+  }
+  /* Ends the tally: every row shown, the totals in, the cards dealt. quiet
+     (a reload, or the natural end) skips the extra slam. */
+  function finishPay(quiet, natural) {
+    const P = S.pay;
+    if (!P || P.done) return;
+    while (P.i < P.steps.length) payStep(P.steps[P.i++], true);
+    P.done = true;
+    if (P.skipT && P.skipT.classList) P.skipT.classList.add('gone');
+    const tot = P.steps[P.steps.length - 1];
+    if (!quiet && tot && tot.el) { replay(tot.el, 'slam'); snd('slam'); }
+    for (const el of P.after) if (el && el.classList) { el.classList.remove('rwWait'); if (!P.rw.payShown) replay(el, 'rwShow'); }
+    if (!P.rw.payShown) P.cards.forEach((c, i) => dealIn(c, i));
+    if (!P.rw.payShown) { P.rw.payShown = true; metaLoot().payouts++; saveMeta(); save(); }
+    const scr = $('scr-reward');
+    if (scr) scr.onpointerdown = null;
+    if (natural) { /* the tally ran to the end on its own */ }
+  }
+
+  /* The fight's loot, rolled at the end of a won fight (endFight): the
+     payout lines and totals (the base gold roll plus bonus lines), the
+     lucky DOUBLE, the capsules (elites and bosses drop one; a jackpot or a
+     tier 3 combo adds a bonus one) and the run highlights. */
+  function lootReward(rw) {
+    const run = lootRun();
+    if (!run || !rw || !F) return rw;
+    const st = F.stats || {};
+    const jp = FS && FS.loot ? Math.max(0, run.jackpots - FS.loot.jp0) : 0;
+    const combos = [];
+    for (const id in (F.combos || {})) { const c = tbl('COMBOS')[id]; for (let i = 0; i < F.combos[id]; i++) combos.push({ name: c ? c.name : id, tier: comboTier(id) }); }
+    const double = rngFor('double')() < (LT().DOUBLE || 0.05);
+    if (D().payout) {
+      try {
+        const pay = D().payout({ tier: rw.tier, gold: rw.gold, jackpots: jp, combos, dmgTaken: st.dmgTaken, turns: F.turn, overkill: st.overkill, double });
+        rw.pay = pay.lines; rw.gold = pay.gold; rw.tix = pay.tix; rw.double = double;
+      } catch (e) { /* the plain reward stands */ }
+    }
+    rw.caps = [];
+    if (rw.tier === 'elite' || rw.tier === 'boss') rw.caps.push(makeCapsule(rw.tier));
+    if (jp > 0 || combos.some((c) => c.tier >= 3)) rw.caps.push(makeCapsule('bonus'));
+    const L = run.loot;
+    L.bigHit = Math.max(L.bigHit, st.bigHit || 0);
+    L.overkill = Math.max(L.overkill, st.overkill || 0);
+    for (const c of combos) if (!L.bestCombo || c.tier >= L.bestCombo.tier) L.bestCombo = { name: c.name, tier: c.tier };
+    if (st.dmgTaken === 0) L.flawless++;
+    if (double) L.doubles++;
+    return rw;
+  }
+  // Capsules left unopened when the reward screen closes go to the bank.
+  function lootBank(rw) {
+    const run = lootRun();
+    if (!run || !rw || !rw.caps || rw.banked) return;
+    rw.banked = true;
+    const left = rw.caps.filter((c) => !c.opened);
+    if (!left.length) return;
+    for (const c of left) run.caps.push(c);
+    toast(`${left.length === 1 ? 'Capsule' : left.length + ' capsules'} saved for later. Open ${left.length === 1 ? 'it' : 'them'} from the map.`, 2.4);
+  }
+  // The capsule slots on the reward screen: tap one to crack it right there.
+  function lootCapSlots(box, rw) {
+    (rw.caps || []).forEach((cap, i) => {
+      const done = !!cap.opened;
+      const el = h('button', 'capslot' + (done ? ' done' : ''));
+      try { el.style.setProperty('--cc', capCol(done ? cap.tier : cap.tier0)); } catch (e) { /* stub */ }
+      el.appendChild(capCanvas(done ? cap.tier : cap.tier0, 48));
+      const col = h('div', 'col');
+      col.appendChild(h('div', 'c1', `${capName(done ? cap.tier : cap.tier0)} capsule`));
+      col.appendChild(h('div', 'c2', done ? `Opened: ${prizeOf(cap.prize).name}` : `${CAP_SRC[cap.src] || 'Bonus'}! Tap to crack it open.`));
+      el.appendChild(col);
+      el.onclick = () => { if (!cap.opened) openRewardCap(rw, i); };
+      box.appendChild(el);
+    });
+  }
+  function openRewardCap(rw, i) {
+    const cap = rw && rw.caps && rw.caps[i];
+    if (!cap || cap.opened) return false;
+    showCapsule({ cap, then: { k: 'reward', rw }, rwIdx: i });
+    return true;
+  }
+  // The map head chip for banked capsules (a pulsing capsule and a count).
+  function lootMapChip(row) {
+    const run = lootRun();
+    if (!run || !run.caps.length) return;
+    const cap = run.caps[0];
+    const chip = h('button', 'brush capchip');
+    try { chip.style.setProperty('--cc', capCol(cap.tier0)); } catch (e) { /* stub */ }
+    chip.appendChild(capCanvas(cap.tier0, 34));
+    chip.appendChild(h('span', null, run.caps.length > 1 ? `x${run.caps.length}` : 'Open'));
+    const fn = () => openBankedCap();
+    chip.onclick = fn;
+    S.ui.buttons.push({ el: chip, fn, label: 'Capsule' });
+    row.appendChild(chip);
+  }
+  function openBankedCap() {
+    const run = lootRun();
+    if (!run || !run.caps.length) return false;
+    showCapsule({ cap: run.caps[0], then: { k: 'map' }, bank: true });
+    return true;
+  }
+
+  // ---- tickets streaming out of the cabinet during a fight
+  /* A jackpot or a combo spits tickets from the marquee at once; the rest
+     stream out in the victory outro. Each ticket arcs up, flutters, then
+     zips into the HUD's ticket counter, which ticks up as they land. The
+     payout screen then tallies the same total. Visual only: the tickets are
+     paid by the reward (lootReward), never twice. */
+  const TIX_MAX = 64;
+  const TIX_COLS = ['#ff9ec7', '#ff9ec7', '#ffc94d', '#ff9ec7', '#8dfff5'];
+  function tixShown() { const run = S.run; return (run ? (run.tickets || 0) : 0) + (S.tix ? S.tix.arrived : 0); }
+  function tixWatch() {
+    const run = lootRun();
+    if (!run || !F || !FS) return;
+    if (!FS.loot) FS.loot = { jp0: run.jackpots, jp: run.jackpots, combo: 0, queued: 0 };
+    if (!S.tix || S.tix.fs !== FS) S.tix = { fs: FS, list: [], q: 0, t: 0, arrived: 0, strip: 0, rng: U.rng((FS.seed ^ 0x71c3) >>> 0), last: null };
+    const T = LT().TICKETS || {};
+    if (run.jackpots > FS.loot.jp) { tixSpit((run.jackpots - FS.loot.jp) * (T.jackpot || 3)); FS.loot.jp = run.jackpots; }
+    let sum = 0;
+    for (const id in (F.combos || {})) sum += F.combos[id] * comboTier(id);
+    if (sum > FS.loot.combo) { tixSpit((sum - FS.loot.combo) * (T.combo || 1)); FS.loot.combo = sum; }
+  }
+  function tixSpit(n) {
+    if (!S.tix || !(n > 0)) return;
+    S.tix.q += n; S.tix.strip++; S.tix.last = null;
+    if (FS && FS.loot) FS.loot.queued += n;
+  }
+  // The victory outro streams the rest of the fight's tickets.
+  function lootOutro(rw) {
+    tixWatch();
+    if (!S.tix || !FS || !FS.loot) return;
+    tixSpit(Math.max(0, (rw.tix || 0) - FS.loot.queued));
+    // hold the victory beat until most of the stream has landed (a tap still skips)
+    if (FS.outro && S.tix.q > 0 && !fx().reduced) FS.outro.t = Math.max(FS.outro.t, Math.min(2.4, 0.9 + S.tix.q * 0.03));
+  }
+  function tixEmit(X0) {
+    let k = X0.list.find((o) => !o.on);
+    if (!k) {
+      if (X0.list.length < TIX_MAX) { k = {}; X0.list.push(k); } else { k = X0.list[0]; if (k.on) { X0.arrived++; } X0.list.push(X0.list.shift()); }
+    }
+    const r = X0.rng, side = (X0.strip % 2 ? 1 : -1);
+    const slot = { x: CAB.x + CAB.w * 0.5 + side * 130, y: CAB.y - 16 };
+    k.on = true; k.age = 0; k.x = slot.x; k.y = slot.y;
+    k.vx = side * (60 + r() * 190); k.vy = -540 - r() * 260; k.a = r() * 6; k.va = (r() - 0.5) * 18;
+    k.fly = 0.5 + r() * 0.35; k.home = 0.32 + r() * 0.2; k.col = TIX_COLS[Math.floor(r() * TIX_COLS.length)];
+    k.prev = X0.last && X0.last.on && X0.last.age < 0.25 ? X0.last : null;
+    X0.last = k;
+    X0.hot = 0.3;
+    snd('ticket', { pitch: 0.9 + r() * 0.3 });
+  }
+  function tixTick(dt) {
+    const X0 = S.tix;
+    if (!X0) return;
+    if (X0.q > 0) {
+      X0.t -= dt;
+      const gap = X0.q > 24 ? 0.022 : 0.038;
+      let guard = 0;
+      while (X0.t <= 0 && X0.q > 0 && guard++ < 8) { X0.t += gap; X0.q--; tixEmit(X0); }
+    } else X0.t = 0;
+    X0.hot = Math.max(0, (X0.hot || 0) - dt);
+    let tgt = null;
+    for (const k of X0.list) {
+      if (!k.on) continue;
+      k.age += dt;
+      if (k.age < k.fly) {
+        k.vy += 1100 * dt; k.vx *= 1 - 1.4 * dt; k.vy *= 1 - 0.9 * dt;
+        k.x += k.vx * dt; k.y += k.vy * dt; k.a += k.va * dt;
+        k.hx = k.x; k.hy = k.y;
+      } else {
+        if (!tgt) tgt = S.headless ? TIX_HUD : hudPoint($('tixTxt'), TIX_HUD.x, TIX_HUD.y);
+        const u = Math.min(1, (k.age - k.fly) / k.home), e = u * u;
+        k.x = U.lerp(k.hx, tgt.x, e); k.y = U.lerp(k.hy, tgt.y, e) - Math.sin(u * Math.PI) * 30; k.a += dt * 12;
+        k.prev = null;
+        if (u >= 1) { k.on = false; X0.arrived++; tixArrive(X0); }
+      }
+    }
+  }
+  function tixArrive(X0) {
+    const v = tixShown();
+    S.lastTix = v;
+    rollTo('tixTxt', v, true);
+    replay($('tixStat'), 'bump');
+    if (S.t - (S.tixSndT || 0) > 0.05) { S.tixSndT = S.t; snd('tick', { pitch: 1.2 + (X0.arrived % 12) * 0.04 }); }
+  }
+  function drawTix(ctx) {
+    const X0 = S.tix, R = X.RENDER;
+    if (!X0 || !R || !R.ticket) return;
+    ctx.save();
+    // the ticket slots on the marquee glow while they print
+    if (X0.q > 0 || X0.hot > 0) {
+      for (const side of [-1, 1]) {
+        const sx = CAB.x + CAB.w * 0.5 + side * 130, sy = CAB.y - 16;
+        ctx.fillStyle = 'rgba(255,46,136,0.35)';
+        ctx.beginPath(); ctx.ellipse(sx, sy, 30, 10, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#12091f'; ctx.strokeStyle = '#ff9ec7'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.rect(sx - 18, sy - 3, 36, 6); ctx.fill(); ctx.stroke();
+      }
+    }
+    ctx.strokeStyle = 'rgba(255,158,199,0.55)'; ctx.lineWidth = 3;
+    for (const k of X0.list) {
+      if (!k.on || !k.prev || !k.prev.on) continue;
+      ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(k.prev.x, k.prev.y); ctx.stroke();
+    }
+    ctx.restore();
+    for (const k of X0.list) if (k.on) R.ticket(ctx, k.x, k.y, 28, 15, k.a, k.col);
+  }
+  // The HUD ticket counter (a roll like gold; the fight shows the tickets landed so far).
+  function lootHud(force) {
+    const v = tixShown();
+    if (force || v !== S.lastTix) { S.lastTix = v; rollTo('tixTxt', v, false); }
+  }
+  // Per-frame loot work (called from update with the real dt).
+  function lootTick(dt) {
+    if (S.screen === 'reward') payTick(dt);
+    else if (S.screen === 'capsule') capTick(dt);
+    if (S.screen === 'fight' && F && FS) tixWatch();
+    if (S.tix) { if (S.screen === 'fight') tixTick(dt); else S.tix = null; }
+  }
+  // Drawn just under the fx layer: the ticket stream in a fight, the capsule scene.
+  function drawLoot(ctx, t) {
+    if (S.screen === 'fight') drawTix(ctx);
+    else if (S.screen === 'capsule') drawCapsule(ctx, t);
+  }
+
+  // ---- the prize counter (inside every shop)
+  /* A glass case of six prizes priced in tickets (DATA.prizeShelf, rolled
+     once per shop and saved with it). A buy flies ticket stubs into the
+     slot, stamps it WON and pays the prize; a capsule opens on the spot and
+     comes back here. */
+  function showCounter(shop) {
+    const run = lootRun();
+    if (!shop.counter) {
+      let shelf = [];
+      if (D().prizeShelf) { try { shelf = D().prizeShelf(rngFor('counter'), run.act, capCtx()) || []; } catch (e) { shelf = []; } }
+      shop.counter = shelf;
+    }
+    S.sd = { counter: shop };
+    setScreen('counter');
+    const b = $('counterBody');
+    clear(b);
+    const won = S.justWon; S.justWon = null;
+    const head = h('div', 'counterHead');
+    head.appendChild(h('h1', null, 'Prize counter'));
+    const bal = h('span', 'tixbal', `${run.tickets} `);
+    bal.appendChild(h('i', 'tixi'));
+    bal.id = 'tixBal';
+    if (won != null) bal.classList.add('dip');
+    head.appendChild(bal);
+    b.appendChild(head);
+    b.appendChild(h('div', 'sub', 'Trade arcade tickets for prizes. Jackpots, combos, flawless and speedy wins print more.'));
+    const caseEl = h('div', 'case');
+    const shelf = h('div', 'shelf');
+    shop.counter.forEach((s, i) => {
+      const info = prizeOf(s);
+      const slot = h('div', 'slot' + (s.sold ? ' sold' : '') + (!s.sold && run.tickets < s.price ? ' poor' : ''));
+      const cv = prizeCanvas(s, 64);
+      if (cv) slot.appendChild(cv); else slot.appendChild(h('div', 'big', info.icon || '?'));
+      slot.appendChild(h('div', 'sn', info.name));
+      const tag = h('span', 'ptag', `${s.price} `);
+      tag.appendChild(h('i', 'tixi'));
+      slot.appendChild(tag);
+      if (s.sold) slot.appendChild(h('div', 'stamp' + (won === i ? ' slam' : ''), 'WON'));
+      if (won === i) replay(slot, 'won');
+      const fn = () => counterBuy(shop, i, slot);
+      slot.onclick = fn;
+      S.ui.buttons.push({ el: slot, fn, label: info.name, disabled: !!s.sold });
+      shelf.appendChild(slot);
+    });
+    caseEl.appendChild(shelf);
+    b.appendChild(caseEl);
+    b.appendChild(btn('Back to the shop', () => { S.sd = null; showShop(shop); }, 'pri'));
+    save();
+  }
+  function counterBuy(shop, i, slot) {
+    const run = lootRun(), s = shop.counter && shop.counter[i];
+    if (!s || s.sold) return false;
+    if (run.tickets < s.price) { toast('Not enough tickets. Jackpots, combos and flawless wins print more.'); replay(slot, 'nope'); snd('click'); return false; }
+    // ticket stubs fly from the balance into the slot, then the stamp
+    if (!S.headless && slot) {
+      const bp = hudPoint($('tixBal'), 460, 40), sp = hudPoint(slot, 270, 400);
+      const n = U.clamp(Math.round(s.price / 10), 3, 9);
+      for (let k = 0; k < n; k++) domFly(h('div', 'dtix'), bp.x + (k - n / 2) * 5, bp.y, sp.x, sp.y, 420, k * 40);
+      setTimeout(() => snd('stamp'), 400);
+    }
+    addTickets(-s.price);
+    s.sold = true;
+    snd('buy');
+    haptic('hit');
+    S.justWon = i;
+    if (s.k === 'cap') {
+      const cap = makeCapsule('counter', { tier: s.tier });
+      showCapsule({ cap, then: { k: 'counter', shop } });
+      return true;
+    }
+    const p = s.k === 'item' ? { k: 'item', id: s.id, plus: !!s.plus } : s.k === 'tool' ? { k: 'tool', id: s.id } : { k: s.k, n: s.n };
+    grantPrize(p);
+    if (p.k === 'item' && slot) flyCard(slot, itemDef(p.id), p.plus);
+    toast(`Won: ${prizeOf(p).name}!`);
+    showCounter(shop);
+    return true;
+  }
+
+  // ---- run highlights (game over and win)
+  function lootHighlights(run) {
+    const L = (lootRun(run) || {}).loot || {};
+    const grid = h('div', 'hl');
+    let k = 0;
+    const tile = (label, v, sub, cls) => {
+      const el = h('div', 'hlt ' + (cls || ''));
+      try { el.style.animationDelay = (k++ * 0.08).toFixed(2) + 's'; } catch (e) { /* stub */ }
+      el.appendChild(h('span', 'k', label));
+      el.appendChild(h('span', 'v', String(v)));
+      if (sub) el.appendChild(h('span', 's', sub));
+      grid.appendChild(el);
+    };
+    tile('Biggest hit', L.bigHit || 0, L.overkill ? `best overkill ${L.overkill}` : '', 'pink');
+    tile('Best combo', L.bestCombo ? L.bestCombo.name : 'none yet', L.bestCombo ? '★'.repeat(L.bestCombo.tier) : '', 'gold');
+    tile('Jackpots', run.jackpots || 0, L.flawless ? `${L.flawless} flawless ${L.flawless === 1 ? 'win' : 'wins'}` : '', 'cyan');
+    tile('Capsules', L.capsOpened || 0, L.bestCap ? `best: ${capName(L.bestCap)}` : 'none opened', 'pink');
+    tile('Tickets won', L.tixEarned || 0, L.doubles ? `${L.doubles} double ${L.doubles === 1 ? 'reward' : 'rewards'}` : '', 'lime');
+    tile('Gold paid out', L.payGold || 0, `${run.kills || 0} kills`, 'gold');
+    return grid;
+  }
+
   // ---------------------------------------------------------------- shop
   function rollShop(tile) {
     const run = S.run;
@@ -2748,6 +4336,10 @@ const GAME = (() => {
     top.appendChild(goldTag);
     top.appendChild(h('span', 'sub', 'Tap to buy. Sell from your bin for a third of the price.'));
     b.appendChild(top);
+    // the prize counter's sign sits up top; its button is registered last
+    // (after Leave) so the shop's own buttons keep their indices
+    const counterRow = h('div', 'col');
+    b.appendChild(counterRow);
     b.appendChild(h('h3', null, 'Items'));
     const cards = h('div', 'cards');
     shop.items.forEach((it, i) => {
@@ -2801,6 +4393,17 @@ const GAME = (() => {
     } }), 'sm'));
     b.appendChild(row);
     b.appendChild(btn('Leave', () => toMap(), 'pri'));
+    const pc = h('button', 'capslot');
+    const pcFn = () => showCounter(shop);
+    pc.onclick = pcFn;
+    S.ui.buttons.push({ el: pc, fn: pcFn, label: 'Prize counter' });
+    try { pc.style.setProperty('--cc', '#ff9ec7'); } catch (e) { /* stub */ }
+    pc.appendChild(capCanvas('r', 48));
+    const pcol = h('div', 'col');
+    pcol.appendChild(h('div', 'c1', 'Prize counter'));
+    pcol.appendChild(h('div', 'c2', `${lootRun().tickets} tickets to spend. Capsules, hearts and prizes behind glass.`));
+    pc.appendChild(pcol);
+    counterRow.appendChild(pc);
     save();
   }
   // Coins arc from the gold tag into the card being bought, then the stamp.
@@ -3026,6 +4629,8 @@ const GAME = (() => {
     clear(b);
     b.appendChild(h('h1', null, 'Turned into a prize'));
     b.appendChild(h('div', 'sub', `Killed by ${run.killer || 'the Clawspire'} in act ${run.act}. The Prize Master adds you to the shelf.`));
+    b.appendChild(h('h3', null, 'Highlights'));
+    b.appendChild(lootHighlights(run));
     b.appendChild(statsList(run));
     if (unl.length) b.appendChild(h('div', 'tag lime', 'Unlocked: ' + unl.map((id) => (charDef(id) || {}).name || id).join(', ')));
     b.appendChild(btn('Back to title', () => { S.run = null; save(); showTitle(); }, 'pri'));
@@ -3044,6 +4649,8 @@ const GAME = (() => {
     clear(b);
     b.appendChild(h('h1', null, 'The Prize Master falls'));
     b.appendChild(h('div', 'sub', 'The claw goes quiet. The cabinets flicker off, one by one. You walk out with a bin full of junk and every ticket in the building.'));
+    b.appendChild(h('h3', null, 'Highlights'));
+    b.appendChild(lootHighlights(run));
     b.appendChild(statsList(run));
     if (unl.length) b.appendChild(h('div', 'tag lime', 'Unlocked: ' + unl.map((id) => (charDef(id) || {}).name || id).join(', ')));
     b.appendChild(btn('Back to title', () => { S.run = null; save(); showTitle(); }, 'pri'));
@@ -3083,6 +4690,7 @@ const GAME = (() => {
         if (pc) pc.onclick = () => popover(`<b>${(charDef(run.char) || {}).name || run.char}</b><br>${hp}/${max} hp` + (block ? `, ${block} block` : '') + `<br>Claw: ${clawFor().grabs} grabs, width ${U.fmt(clawFor().width)}, grip ${U.fmt(clawFor().grip)}, ${clawFor().prongs} prongs`, 60, 70);
       }
     }
+    lootHud(force);   // the ticket counter
     const rk = run.relics.join(',');
     if (force || rk !== S.lastRelics) {
       S.lastRelics = rk;
@@ -3202,6 +4810,8 @@ const GAME = (() => {
     const k = ev.key;
     if (down && k === 'Escape') { popover(null); return; }
     if (S.screen === 'intro') { if (down && X.INTRO) X.INTRO.skip(); return; }
+    if (S.screen === 'capsule') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); capsuleTap(); } return; }
+    if (S.screen === 'reward' && S.pay && !S.pay.done) { if (down && (k === ' ' || k === 'Enter')) finishPay(); return; }
     if (S.screen !== 'fight' || !FS) return;
     if (k === 'ArrowLeft') FS.keyDir = down ? -1 : (FS.keyDir === -1 ? 0 : FS.keyDir);
     else if (k === 'ArrowRight') FS.keyDir = down ? 1 : (FS.keyDir === 1 ? 0 : FS.keyDir);
@@ -3232,6 +4842,7 @@ const GAME = (() => {
     } else if (run && R && R.bg) {
       R.bg(ctx, W, H, run.act, t);
     } else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
+    drawLoot(ctx, t);   // the ticket stream / the capsule scene, under the particles
     fx().draw(ctx);
     ctx.restore();
   }
@@ -3382,9 +4993,13 @@ const GAME = (() => {
     }
   }
   // Reused per-frame objects for the fight draw (no allocation per enemy).
-  const EST = { hurt: 0, attack: 0, dead: 0, frozen: false, poisoned: false, burning: false, chilled: false, windup: 0 };
+  const EST = { hurt: 0, attack: 0, dead: 0, frozen: false, poisoned: false, burning: false, chilled: false, windup: 0, enraged: false, rage: 0, chomp: 0, spit: 0 };
   const HPO = { ghost: 0, flash: 0, shield: 0 };
-  const CLAWJ = { bend: 0, squash: 0, speed: 0, glow: 0 };
+  const CLAWJ = { bend: 0, squash: 0, speed: 0, glow: 0, t: 0, idle: 0, mood: '', blink: 0, look: 0, chase: 0, lucky: 0, pull: [], pullN: 0 };
+  for (let i = 0; i < 8; i++) CLAWJ.pull.push({ x: 0, y: 0 });
+  // Reused per-item material look (RENDER.itemFx).
+  const MST = { mat: null, t: 0, seed: 0, crack: 0, slosh: 0, fuse: 0, golden: false, mag: 0, melt: 0 };
+  const MAG_R2 = 110 * 110;
   const RARE_A = { u: 0.22, r: 0.4, l: 0.5 };
   function drawFight(ctx, t) {
     const R = X.RENDER, run = S.run;
@@ -3411,10 +5026,12 @@ const GAME = (() => {
         ctx.save(); ctx.strokeStyle = '#ff2e88'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.lineDashOffset = -t * 30;
         ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, Math.max(40, p.w * 0.5), 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
       }
+      monsterBack(ctx, e, i, ex, p, t, live);
       if (live && R && R.enemyAura) R.enemyAura(ctx, ex, p.y, p.w, p.h, e.status, t, 'back');
       if (R && R.enemy) R.enemy(ctx, e.def, ex, p.y, sc, t, EST);
       if (!live) return;
       if (R && R.enemyAura) R.enemyAura(ctx, ex, p.y, p.w, p.h, e.status, t, 'front');
+      monsterFront(ctx, e, i, ex, p, t);
       // hp bar under the feet (a ghost chunk drains behind a hit, the bar
       // shakes), status pips under that, intent above the head
       const bw = U.clamp(p.w * 0.9, 84, 150);
@@ -3438,6 +5055,9 @@ const GAME = (() => {
     const rigPh = FS.rig ? FS.rig.phase : 'idle';
     const inHand = (rigPh === 'lifting' || rigPh === 'carrying') ? carried() : null;
     const RC = R && R.RARITY_COL;
+    // the magnet tugs at nearby metal while the claw drops and closes
+    const pullOn = !!(FS.rig && FS.rig.cfg && FS.rig.cfg.magnet && (rigPh === 'dropping' || rigPh === 'closing'));
+    CLAWJ.pullN = 0;
     for (const b of FS.items) {
       const inst = b.data.inst;
       const inChute = FS.cabinet && FS.cabinet.inChute(b);
@@ -3448,12 +5068,47 @@ const GAME = (() => {
       // rarity: a soft outline glow for uncommon and up (legendary pulses)
       let glowC = inChute ? 1 : (held ? '#2ee6d6' : 0), glowA = null;
       if (!glowC && RC && RARE_A[rar] && !inst.frozen) { glowC = RC[rar]; glowA = rar === 'l' ? RARE_A.l + Math.sin(t * 4 + b.x * 0.05) * 0.2 : RARE_A[rar]; }
-      if (sq) { ctx.save(); ctx.translate(x, y); ctx.scale(1 + sq * 0.22, 1 - sq * 0.22); ctx.translate(-x, -y); }
-      if (R && R.item) R.item(ctx, b.data.def, x, y, b.a, 1, { plus: inst.plus, frozen: inst.frozen, glow: glowC, glowA });
-      else { ctx.fillStyle = b.data.def.color || '#888'; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill(); }
-      if (sq) ctx.restore();
-      if ((rar === 'r' || rar === 'l') && R && R.glint) R.glint(ctx, x, y, (b.br || 16), t, (inst.uid ? inst.uid.length * 7 : 0) + b.x * 0.01, rar === 'l' ? '#ff9ad0' : '#fff6c0');
+      // material looks: magic hovers, rubber stretches along its flight,
+      // food wobbles, melting ice is drawn at its shrunken size
+      const d = b.data, mat = d.mat, ms = FS.mst[inst.uid];
+      const yy = mat && mat.traits.magic && !held ? y - 2 - Math.sin(t * 2.4 + (d.seed || 0)) * 2.2 : y;
+      const melt = ms && ms.melt < 1 && !inst.frozen ? ms.melt : 1;
+      let mag = 0;
+      if (pullOn && mat && mat.traits.metal) {
+        const dx = b.x - FS.rig.x, dy = b.y - FS.rig.y;
+        if (dx * dx + dy * dy < MAG_R2) { mag = 1; if (CLAWJ.pullN < CLAWJ.pull.length) { const pp = CLAWJ.pull[CLAWJ.pullN++]; pp.x = b.x; pp.y = b.y; } }
+      }
+      const fxOn = !!(R && R.itemFx && mat);
+      if (fxOn) {
+        MST.mat = mat; MST.t = t; MST.seed = d.seed || 0; MST.crack = ms ? ms.crack : 0; MST.slosh = d.sl || 0;
+        MST.fuse = ms && ms.lit > 0 ? ms.lit : 0; MST.golden = !!(FS.golden && FS.golden.uid === inst.uid); MST.mag = mag;
+        MST.melt = mat.traits.frost && !inst.frozen && ms && ms.melt < 1 ? 1 - ms.melt + 0.2 : 0;
+        R.itemFx(ctx, d.def, x, yy, b.a, melt, MST, 'back');
+      }
+      const wob = d.wob || 0, sp2 = mat && mat.traits.rubber && !fx().reduced ? b.vx * b.vx + b.vy * b.vy : 0;
+      const xf = sq || wob || sp2 > 67600;
+      if (xf) {
+        ctx.save(); ctx.translate(x, yy);
+        if (sq) ctx.scale(1 + sq * 0.22, 1 - sq * 0.22);
+        if (wob) ctx.scale(1 - wob * 0.4, 1 + wob * 0.4);
+        if (sp2 > 67600) { const va = Math.atan2(b.vy, b.vx), k = U.clamp((Math.sqrt(sp2) - 260) / 1100, 0, 0.32); ctx.rotate(va); ctx.scale(1 + k, 1 - k * 0.7); ctx.rotate(-va); }
+        ctx.translate(-x, -yy);
+      }
+      if (R && R.item) R.item(ctx, d.def, x, yy, b.a, melt, { plus: inst.plus, frozen: inst.frozen, glow: glowC, glowA });
+      else { ctx.fillStyle = d.def.color || '#888'; ctx.beginPath(); ctx.arc(x, yy, 12, 0, Math.PI * 2); ctx.fill(); }
+      if (fxOn) R.itemFx(ctx, d.def, x, yy, b.a, melt, MST, 'front');
+      if (xf) ctx.restore();
+      if ((rar === 'r' || rar === 'l') && R && R.glint) R.glint(ctx, x, yy, (b.br || 16), t, (inst.uid ? inst.uid.length * 7 : 0) + b.x * 0.01, rar === 'l' ? '#ff9ad0' : '#fff6c0');
     }
+    // lit fuse countdowns sit over the whole pile so they are never hidden
+    if (R && R.itemFx) for (const b of FS.items) {
+      const ms = FS.mst[b.data.inst.uid];
+      if (!ms || !(ms.lit > 0)) continue;
+      MST.mat = b.data.mat; MST.t = t; MST.fuse = ms.lit; MST.seed = b.data.seed || 0;
+      R.itemFx(ctx, b.data.def, CAB.x + b.x, CAB.y + b.y, b.a, 1, MST, 'top');
+    }
+    // glass shards left by a shattered item
+    if (R && R.shard) for (const s2 of FS.debris) R.shard(ctx, CAB.x + s2.x, CAB.y + s2.y, s2.a, (s2.parts && s2.parts[0] ? s2.parts[0].r : 4) + 1.5, s2.data.col);
     if (FS.chuteFlash > 0) {
       const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
       ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
@@ -3461,11 +5116,17 @@ const GAME = (() => {
     }
     const cj = FS.claw;
     CLAWJ.bend = fx().reduced ? 0 : cj.bend; CLAWJ.squash = cj.sq; CLAWJ.speed = cj.vx; CLAWJ.glow = cj.glow;
+    // the claw's character: parked sway, its face (mood, blink, a look where
+    // it travels), the loaded-return LED chase, the Lucky Claw's flames
+    CLAWJ.t = t; CLAWJ.idle = fx().reduced ? 0 : (cj.idle || 0); CLAWJ.blink = cj.blinkT < 0 ? 1 : 0;
+    CLAWJ.look = U.clamp(cj.vx / 330, -1, 1); CLAWJ.chase = cj.chase || 0; CLAWJ.lucky = FS.luckyOn ? 1 : 0;
+    CLAWJ.mood = cj.mood || (FS.luckyOn ? 'lucky' : '');
     cfg.juice = CLAWJ;
     if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
     if (FS.fog > 0 && !split) { ctx.fillStyle = 'rgba(180,190,210,0.55)'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
     ctx.restore();
     if (split) R.cabinetFront(ctx, CAB.x, CAB.y, cfg, cabSt);
+    drawMonsterFx(ctx, t);
     if (S.debug && R && R.bodyDebug && FS.world) { ctx.save(); ctx.translate(CAB.x, CAB.y); R.bodyDebug(ctx, FS.world); ctx.restore(); }
     // Items in flight from the chute to their target, over everything.
     for (const th of FS.throws) {
@@ -3486,6 +5147,7 @@ const GAME = (() => {
     rollStep(real);
     if (S.comboT > 0) { S.comboT -= real; if (S.comboT <= 0) nextCombo(); }
     if (S.screen === 'map' || S.screen === 'fight') ambientTick(real);
+    lootTick(real);   // payout tally, capsule ritual, the ticket stream
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) { const el = $('banner'); if (el) el.classList.remove('show'); const pr = $('playerRow'); if (pr && pr.classList) pr.classList.remove('bannerOn'); } }
     if (S.screen === 'map') {
@@ -3595,7 +5257,17 @@ const GAME = (() => {
     playDelivered: (bodies) => { for (const b of bodies || []) if (FS && FS.items.indexOf(b) >= 0) deliver(b); },
     tap, pointer, choose, state, hexToStage, stageToHex, lookAt, locate, wheel, bossArrow, startWalk, stopWalk, walkXY, selectTool, towerPrize, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
     showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, playIntro, resolveFx, gainRelic, applyClawUpgrade, rollShop,
+    // loot (DESIGN.md "Loot"): capsules, tickets, the payout tally, the prize counter
+    loot: { makeCapsule, showCapsule, capsuleTap, skipCapsule, collectCapsule, grantPrize, openRewardCap, openBankedCap, showCounter, counterBuy,
+      finishPay, lootReward, addTickets, tixShown, get cap() { return S.cap; }, get pay() { return S.pay; }, get tix() { return S.tix; } },
     rigEvent: (ev) => { if (FS && FS.rig) onRigEvent(ev); },   // test hook: feed one rig event
+    // Cabinet materials and toys (tests and the screenshot drivers poke these).
+    toys: {
+      MAT, mstOf: (inst) => (FS ? mstOf(inst) : null), bodyOf: (inst) => (FS ? bodyOf(inst) : null),
+      crack: (b) => { if (FS && b) { crack(b); matFrame(0); } }, lightFuse: (b) => { if (FS && b) lightFuse(b); }, explode: (b) => { if (FS && b) explode(b); },
+      fuseTick: () => { if (FS) fuseTick(); }, meltTick: () => { if (FS) meltTick(); }, matTurn: () => { if (FS) matTurn(); },
+      soClose: (x, y) => { if (FS) soClose(x, y); }, setMood: (m, s) => setMood(m, s), luckAfterGrab: () => { if (FS) luckAfterGrab(); },
+    },
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

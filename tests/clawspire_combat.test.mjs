@@ -743,7 +743,7 @@ else {
         h.ok(!invariants(F, id), `enemy ${id} onDeath resolves`);
       }
     }
-    const known = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape'];
+    const known = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'];
     for (const k of kinds) h.ok(known.includes(k), `enemy move kind ${k} is one the engine implements`);
   });
 
@@ -1111,5 +1111,341 @@ h.test('bin trickle: 2 a turn, floor of 6, cabinet cap, immediate refill mid-tur
   h.eq(F.bin.length, 13, 'ECONOMY.trickle 3 moves 3');
   delete STUB.ECONOMY;
 });
+
+// ---------- part 3: the monsters pass (bellies, bin tricks, affixes, phase two) ----------
+{
+  const M = boot({ only: ['util', 'combat'] });
+  const MC = M.COMBAT, MU = M.U;
+  const MI = {
+    sword: { id: 'sword', name: 'Sword', rarity: 'c', tags: ['metal', 'weapon'], fx: [{ k: 'dmg', v: 6 }] },
+    shield: { id: 'shield', name: 'Shield', rarity: 'c', tags: ['metal'], target: 'self', fx: [{ k: 'block', v: 6 }] },
+    gem: { id: 'gem', name: 'Gem', rarity: 'r', tags: ['magic'], fx: [{ k: 'dmg', v: 4 }] },
+    potion: { id: 'potion', name: 'Potion', rarity: 'c', tags: ['potion', 'glass'], target: 'self', fx: [{ k: 'heal', v: 5 }] },
+    vial: { id: 'vial', name: 'Vial', rarity: 'c', tags: ['potion', 'glass'], fx: [{ k: 'status', s: 'poison', v: 3, to: 'enemy' }] },
+    bomb: { id: 'bomb', name: 'Bomb', rarity: 'u', art: 'bomb', tags: ['weapon'], target: 'all', fx: [{ k: 'dmg', v: 6 }] },
+    pane: { id: 'pane', name: 'Pane', rarity: 'c', tags: ['glass'], target: 'self', fx: [{ k: 'block', v: 3 }] },
+    apple: { id: 'apple', name: 'Apple', rarity: 'c', tags: ['food'], target: 'self', fx: [{ k: 'heal', v: 2 }] },
+    fusebomb: { id: 'fusebomb', name: 'Lit Bomb', rarity: 'junk', tags: ['junk'], target: 'enemy', exhaust: true, fx: [] },
+    broodegg: { id: 'broodegg', name: 'Egg', rarity: 'junk', tags: ['junk'], target: 'none', exhaust: true, fx: [] },
+  };
+  const ME = (id, moves, extra) => Object.assign({ id, name: id, act: 1, tier: 'normal', hp: [60, 60], moves, ai: 'cycle' }, extra || {});
+  const MEN = {
+    dummy: ME('dummy', [{ id: 'w', k: 'block', v: 0 }], { hp: [200, 200] }),
+    metaleater: ME('metaleater', [{ id: 'g', k: 'gulp', n: 1, like: 'metal' }, { id: 'w', k: 'block', v: 0 }]),
+    magpie: ME('magpie', [{ id: 'g', k: 'gulp', n: 2, like: 'shiny' }, { id: 'w', k: 'block', v: 0 }]),
+    glutton: ME('glutton', [{ id: 'g', k: 'gulp', n: 4 }, { id: 'w', k: 'block', v: 0 }], { hp: [300, 300] }),
+    bomber: ME('bomber', [{ id: 'b', k: 'bomb', v: 10, fuse: 2 }, { id: 'w', k: 'block', v: 0 }]),
+    rust: ME('rust', [{ id: 'c', k: 'corrode', n: 2 }]),
+    jammer: ME('jammer', [{ id: 'j', k: 'jam', v: 1 }, { id: 'w', k: 'block', v: 0 }]),
+    layer: ME('layer', [{ id: 'l', k: 'eggs', n: 2, hatch: 'grub', turns: 2 }, { id: 'w', k: 'block', v: 0 }]),
+    grub: ME('grub', [{ id: 'n', k: 'attack', v: 1 }], { hp: [5, 5], minion: true }),
+    runner: ME('runner', [{ id: 'g', k: 'gulp', n: 1 }, { id: 'r', k: 'escape' }]),
+    hitter: ME('hitter', [{ id: 'h', k: 'attack', v: 10 }], { hp: [80, 80] }),
+    boss: ME('boss', [{ id: 'a', k: 'attack', v: 5 }, { id: 'b', k: 'block', v: 5 }, { id: 'c', k: 'buff', s: 'str', v: 1 }], { tier: 'elite', hp: [100, 100], enrage: { name: 'MAD', text: 'grr', str: 4, pattern: [2, 0] } }),
+    plain: ME('plain', [{ id: 'a', k: 'attack', v: 5 }], { tier: 'boss', hp: [100, 100] }),
+  };
+  const MSTAT = {};
+  for (const [s, kind] of Object.entries({ str: 'buff', armor: 'buff', thorns: 'buff', poison: 'debuff', weak: 'debuff', vuln: 'debuff', jam: 'debuff' })) MSTAT[s] = { id: s, name: s, kind, stack: ['weak', 'vuln', 'jam'].includes(s) ? 'turns' : 'count' };
+  const MSTUB = { ITEMS: MI, ENEMIES: MEN, STATUS: MSTAT, RELICS: {}, AFFIXES: { hasty: { hp: 0 }, vampiric: { hp: 0 }, explosive: { hp: 0 }, greedy: { hp: 0 }, armored: { hp: 0.1 }, spiky: { hp: 0 }, regen: { hp: 0 } } };
+  MC.useDefs(MSTUB);
+  const mfight = (enemies, bin, o) => {
+    o = o || {};
+    const run = { hp: o.hp || 70, maxHp: 70, act: o.act || 1, relics: [], claw: { grabs: 3 }, bin: bin.map((id, i) => ({ uid: 'm' + i, id, plus: false })) };
+    return MC.newFight(run, enemies, MU.rng(o.seed || 5));
+  };
+  const evs = (list, t) => list.filter(e => e.t === t);
+  const ids = (list) => list.map(i => i.id).sort().join(',');
+
+  h.test('monsters: gulp swallows by taste, holds items in the belly', () => {
+    let F = mfight(['metaleater'], ['gem', 'potion', 'sword', 'apple']);
+    const e = F.enemies[0];
+    h.ok(/Swallows/.test(MC.intentText(e)), 'gulp telegraph: ' + MC.intentText(e));
+    let ev = MC.endTurn(F);
+    h.eq(e.belly.length, 1, 'one item swallowed');
+    h.eq(e.belly[0].inst.id, 'sword', 'the metal eater takes the metal item');
+    h.ok(!F.bin.some(i => i.id === 'sword'), 'it left the bin');
+    const eat = evs(ev, 'binEat');
+    h.eq(eat.length, 1, 'a binEat event'); h.eq(eat[0].idx, 0, 'with the eater index'); h.eq(eat[0].inst.id, 'sword', 'and the instance');
+    h.ok(evs(ev, 'text').some(x => x.who === 'e' && /NOM|GULP|MINE|CHOMP/.test(x.str)), 'a taunt when it eats');
+    h.eq(e.status.str, 2, 'a swallowed weapon lends +2 Strength');
+    // shiny: the rarest first, two at a time
+    F = mfight(['magpie'], ['sword', 'gem', 'pane', 'shield']);
+    MC.endTurn(F);
+    const took = F.enemies[0].belly.map(b => b.inst.id);
+    h.eq(took[0], 'gem', 'shiny goes for the rare gem first');
+    h.ok(['sword', 'shield'].includes(took[1]), 'then a metal item over glass: ' + took[1]);
+    // junk and iced items are never eaten; the belly caps
+    F = mfight(['glutton'], ['sword', 'shield', 'gem', 'pane', 'sword', 'gem']);
+    F.bin[0].frozen = true;
+    MC.addJunk(F, 'fusebomb', 1);
+    MC.endTurn(F);
+    const g = F.enemies[0];
+    h.eq(g.belly.length, MC.BELLY_MAX, 'the belly holds ' + MC.BELLY_MAX);
+    h.ok(g.belly.every(b => !b.inst.frozen && b.inst.id !== 'fusebomb'), 'never junk or iced items');
+    // an empty bin: nothing to eat
+    F = mfight(['metaleater'], []);
+    ev = MC.endTurn(F);
+    h.ok(evs(ev, 'text').some(x => x.str === 'NOTHING'), 'NOTHING when the bin is empty');
+  });
+
+  h.test('monsters: hiccup, death burst and digestion bring items back (or not)', () => {
+    let F = mfight(['glutton'], ['sword', 'shield', 'gem', 'gem', 'sword', 'gem']);
+    const e = F.enemies[0];
+    MC.endTurn(F);
+    h.eq(e.belly.length, 4, 'four items down');
+    const need = MC.hiccupAt(e);
+    h.eq(need, Math.max(6, Math.ceil(e.maxHp * 0.15)), 'hiccupAt is 15% of max hp (min 6)');
+    const b0 = F.bin.length;
+    MC.damage(F, F.player, e, need - 1, { pierce: true });
+    h.eq(e.belly.length, 4, 'not enough damage yet');
+    let ev = [];
+    const c = MC.damage(F, F.player, e, 1, { pierce: true });
+    ev = F.events.filter(x => x.t === 'binReturn');
+    h.ok(c > 0 && e.belly.length === 3, 'crossing the threshold hiccups one item');
+    h.eq(F.bin.length, b0 + 1, 'it lands back in the bin');
+    h.eq(ev[ev.length - 1].why, 'hiccup', 'binReturn why hiccup'); h.eq(ev[ev.length - 1].insts.length, 1, 'one instance');
+    // the meter empties at the turn start
+    MC.damage(F, F.player, e, need - 1, { pierce: true });
+    MC.endTurn(F);
+    h.eq(e.gut, 0, 'the hiccup meter resets each turn');
+    // damage in the enemy phase (poison, glass, thorns) does not count
+    const held = e.belly.length;
+    F.phase = 'enemy';
+    MC.damage(F, null, e, need + 1, { pierce: true });
+    F.phase = 'player';
+    h.eq(e.belly.length, held, 'enemy-phase damage never hiccups');
+    // death: everything bursts out
+    F.events.length = 0;
+    const left = e.belly.map(b => b.inst);
+    MC.damage(F, F.player, e, 9999, { pierce: true });
+    const burst = F.events.filter(x => x.t === 'binReturn');
+    h.ok(!e.alive, 'dead');
+    h.eq(burst.length, 1, 'one burst event'); h.eq(burst[0].why, 'burst', 'why burst');
+    h.eq(burst[0].insts.length, left.length, 'every swallowed item comes back');
+    h.ok(left.every(i => F.bin.includes(i)), 'all back in the bin');
+    const di = F.events.findIndex(x => x.t === 'die'), bi = F.events.findIndex(x => x.t === 'binReturn');
+    h.ok(di >= 0 && di < bi, 'the die event plays before the burst');
+    // digestion: DIGEST of its turns, then gone for this fight only
+    F = mfight(['metaleater'], ['sword', 'gem', 'gem', 'gem', 'gem', 'gem']);
+    const m = F.enemies[0];
+    MC.endTurn(F);
+    const eaten = m.belly[0].inst;
+    h.eq(m.belly[0].turns, MC.DIGEST, 'digest clock starts at ' + MC.DIGEST);
+    let dig = [];
+    for (let k = 0; k < MC.DIGEST; k++) dig = dig.concat(evs(MC.endTurn(F), 'binDigest'));
+    h.ok(!m.belly.some(b => b.inst === eaten), 'digested after ' + MC.DIGEST + ' of its turns');
+    h.ok(F.digested.includes(eaten) && !F.bin.includes(eaten) && !F.used.includes(eaten), 'gone for the fight (F.digested)');
+    h.ok(dig.some(x => x.k === 'digest' && x.inst === eaten), 'binDigest k digest');
+    h.eq(m.status.str || 0, 0, 'its lent Strength goes with it');
+    // a full cabinet: the burst goes to the used pile instead
+    F = mfight(['glutton'], ['sword', 'shield', 'gem', 'pane']);
+    MC.endTurn(F);
+    while (F.bin.length < MC.MAX_CABINET) F.bin.push({ uid: 'f' + F.bin.length, id: 'gem', plus: false });
+    MC.damage(F, F.player, F.enemies[0], 9999, { pierce: true });
+    h.ok(F.bin.length <= MC.MAX_CABINET && F.used.length >= 4, 'overflow lands in the used pile');
+  });
+
+  h.test('monsters: what it ate matters (bomb, potion, poison, glass, plate)', () => {
+    // a bomb goes off inside it
+    let F = mfight(['metaleater'], ['bomb']);
+    let e = F.enemies[0];
+    let hp0 = e.hp, ev = MC.endTurn(F);
+    h.eq(hp0 - e.hp, 12, 'a swallowed 6-damage bomb blows up for 12 inside it');
+    h.ok(evs(ev, 'binDigest').some(x => x.k === 'boom'), 'binDigest k boom');
+    h.ok(F.used.concat(F.bin).some(i => i.id === 'bomb'), 'the bomb goes to the used pile (and trickles back), not lost');
+    h.eq(e.belly.length, 0, 'nothing held');
+    // a healing potion heals it (double)
+    F = mfight(['glutton'], ['potion']);
+    e = F.enemies[0]; e.hp = 100;
+    MC.endTurn(F);
+    h.eq(e.hp, 110, 'drinks the potion: +10');
+    // a poison vial poisons it
+    F = mfight(['glutton'], ['vial']);
+    e = F.enemies[0];
+    ev = MC.endTurn(F);
+    h.eq(e.status.poison, 3, 'the poison lands on the eater');
+    h.ok(evs(ev, 'text').some(x => x.str === 'BLEGH'), 'BLEGH');
+    // glass cuts it every turn it is held
+    F = mfight(['glutton'], ['pane']);
+    e = F.enemies[0];
+    MC.endTurn(F);
+    hp0 = e.hp; MC.endTurn(F);
+    h.eq(hp0 - e.hp, 4, 'swallowed glass cuts for 4 (act 1)');
+    // plate lends Armor while held, dropped on the hiccup
+    F = mfight(['metaleater'], ['shield']);
+    e = F.enemies[0];
+    MC.endTurn(F);
+    h.eq(e.status.armor, 1, 'plate: +1 Armor');
+    MC.damage(F, F.player, e, MC.hiccupAt(e) + 1, { pierce: true });
+    h.eq(e.status.armor || 0, 0, 'armor gone with the item');
+  });
+
+  h.test('monsters: lit bombs, eggs, rust and a jammed rail', () => {
+    // a bomb left alone goes off after its fuse, through Block
+    let F = mfight(['bomber'], ['sword', 'sword', 'gem']);
+    let ev = MC.endTurn(F);
+    const b = F.bin.find(i => i.id === 'fusebomb');
+    h.ok(!!b && evs(ev, 'binBomb').length === 1, 'binBomb drops a lit bomb in the bin');
+    h.eq(b.fuse, 2, 'fuse 2 (not burnt on the turn it lands)');
+    h.ok(MC.isJunk(b), 'it is junk');
+    ev = MC.endTurn(F);
+    h.eq(b.fuse, 1, 'one turn later: 1');
+    F.player.block = 4;
+    const hp0 = F.player.hp;
+    ev = MC.endTurn(F);
+    h.ok(evs(ev, 'binBoom').length === 1 && !F.bin.includes(b), 'BOOM: it leaves the bin');
+    h.eq(hp0 - F.player.hp, 10 - 4 + 0, 'hits the player for 10 through 4 block');
+    // grabbed: it flies back at the bomber for 1.5x
+    F = mfight(['bomber', 'dummy'], ['sword', 'gem']);
+    MC.endTurn(F);
+    MC.setTarget(F, 1);
+    const e0 = F.enemies[0], h0 = e0.hp;
+    const bomb = F.bin.find(i => i.id === 'fusebomb');
+    MC.play(F, bomb, 1);
+    h.eq(h0 - e0.hp, 15, 'thrown back at the thrower (not the target) for 15');
+    h.ok(F.exhausted.includes(bomb), 'and it is spent');
+    // eggs hatch into minions unless grabbed
+    F = mfight(['layer'], ['sword', 'gem']);
+    ev = MC.endTurn(F);
+    const eggs = F.bin.filter(i => i.id === 'broodegg');
+    h.eq(eggs.length, 2, 'two eggs laid'); h.eq(evs(ev, 'binEggs').length, 1, 'binEggs event');
+    MC.play(F, eggs[0]);
+    h.ok(!F.bin.includes(eggs[0]) && F.exhausted.includes(eggs[0]), 'a grabbed egg is gone');
+    MC.endTurn(F);
+    ev = MC.endTurn(F);
+    h.eq(evs(ev, 'binHatch').length, 1, 'the other one hatches');
+    h.ok(F.enemies.some(e => e.id === 'grub' && e.alive), 'into a grub');
+    // rust halves an item's numbers
+    F = mfight(['rust'], ['sword', 'shield', 'gem']);
+    ev = MC.endTurn(F);
+    h.eq(evs(ev, 'binRust').length, 2, 'two metal items rusted');
+    const sw = F.bin.find(i => i.id === 'sword');
+    h.ok(sw.rust, 'the sword is rusty');
+    const r0 = F.enemies[0].hp;
+    MC.play(F, sw);
+    h.eq(r0 - F.enemies[0].hp, 3, 'a rusty 6-damage sword hits for 3');
+    h.ok(!F.bin.find(i => i.id === 'gem').rust, 'non-metal never rusts');
+    // jam: one grab fewer next turn, never the last one
+    F = mfight(['jammer'], ['sword']);
+    ev = MC.endTurn(F);
+    h.eq(evs(ev, 'binJam').length, 1, 'binJam event');
+    h.eq(F.player.grabs, 2, 'jammed: 3 grabs -> 2');
+    h.ok(F.player.status.jam > 0, 'the jam shows during the turn');
+    MC.endTurn(F);
+    h.eq(F.player.grabs, 3, 'the rail is clear the turn after');
+  });
+
+  h.test('monsters: escape takes the belly; affixes; phase two', () => {
+    let F = mfight(['runner', 'dummy'], ['sword', 'gem']);
+    MC.endTurn(F);
+    const got = F.enemies[0].belly[0].inst;
+    const ev = MC.endTurn(F);
+    h.ok(F.enemies[0].escaped && F.stolen.includes(got), 'a fleeing eater keeps what it ate (for this fight)');
+    h.ok(evs(ev, 'binDigest').some(x => x.k === 'escape'), 'binDigest k escape');
+    // Hasty: every third action twice
+    F = mfight(['hitter'], ['gem'], { hp: 70 });
+    const e = F.enemies[0];
+    MC.giveAffix(F, e, 'hasty');
+    const hits = [];
+    for (let k = 0; k < 3; k++) { const hp0 = F.player.hp; MC.endTurn(F); hits.push(hp0 - F.player.hp); F.player.hp = 70; }
+    h.eq(hits.join(), '10,10,15', 'the third action adds a half-size jab');
+    h.ok(!MC.hasteNext(e), 'then the count restarts');
+    // Vampiric heals half of what gets through
+    F = mfight(['hitter'], ['gem']);
+    MC.giveAffix(F, 0, 'vampiric');
+    F.enemies[0].hp = 50;
+    MC.endTurn(F);
+    h.eq(F.enemies[0].hp, 55, 'vampiric: 10 dealt, 5 drunk');
+    // Explosive: a parting blast that never kills
+    F = mfight(['dummy'], ['gem'], { hp: 5 });
+    MC.giveAffix(F, 0, 'explosive');
+    MC.damage(F, F.player, F.enemies[0], 9999, { pierce: true });
+    h.eq(F.player.hp, 1, 'the blast leaves the player at 1');
+    h.eq(MC.isOver(F), 'win', 'and the fight is still won');
+    // Greedy gulps on its first action
+    F = mfight(['hitter'], ['gem', 'sword']);
+    MC.giveAffix(F, 0, 'greedy');
+    h.ok(/Greedy/.test(MC.intentText(F.enemies[0])), 'the telegraph says Greedy');
+    MC.endTurn(F);
+    h.eq(F.enemies[0].belly.length, 1, 'greedy: one item gulped on top of its move');
+    // Armored adds Armor and hp
+    F = mfight(['dummy'], ['gem']);
+    const hp1 = F.enemies[0].maxHp;
+    MC.giveAffix(F, 0, 'armored');
+    h.ok(F.enemies[0].status.armor >= 1 && F.enemies[0].maxHp > hp1, 'armored: armor and +hp');
+    h.ok(!MC.giveAffix(F, 0, 'armored'), 'an affix never stacks twice');
+    // phase two at half hp, once
+    F = mfight(['boss'], ['gem']);
+    const bo = F.enemies[0];
+    MC.damage(F, F.player, bo, 49, { pierce: true });
+    h.ok(!bo.enraged, 'not yet at 51%');
+    F.events.length = 0;
+    MC.damage(F, F.player, bo, 1, { pierce: true });
+    const er = F.events.filter(x => x.t === 'enrage');
+    h.ok(bo.enraged && er.length === 1, 'enraged at 50%');
+    h.eq(er[0].name, 'MAD', 'with its name'); h.eq(bo.status.str, 4, 'and its Strength');
+    h.eq(bo.def.pattern.join(), '2,0', 'and its new pattern');
+    F.events.length = 0;
+    MC.damage(F, F.player, bo, 10, { pierce: true });
+    h.eq(F.events.filter(x => x.t === 'enrage').length, 0, 'only once');
+    // default phase two for a boss without a spec: +act+1 Strength
+    F = mfight(['plain'], ['gem'], { act: 2 });
+    MC.damage(F, F.player, F.enemies[0], 60, { pierce: true });
+    h.ok(F.enemies[0].enraged && F.enemies[0].status.str === 2, 'default: ENRAGED, +2 Strength in act 2');
+    // normals never enrage
+    F = mfight(['hitter'], ['gem']);
+    MC.damage(F, F.player, F.enemies[0], 60, { pierce: true });
+    h.ok(!F.enemies[0].enraged, 'normals have no phase two');
+  });
+  MC.useDefs(null);
+
+  // real data: affix rolls by act and escalation, every new enemy fights clean
+  if (hasData) {
+    const R = boot({ only: ['util', 'data', 'combat'] });
+    const { DATA } = R;
+    const C = R.COMBAT;
+    h.test('monsters (data): affix rolls climb with the act and the escalation', () => {
+      const avg = (id, act, fights) => {
+        let n = 0;
+        for (let s = 1; s <= 200; s++) n += DATA.affixRoll(R.U.rng(s), DATA.ENEMIES[id], act, fights).length;
+        return n / 200;
+      };
+      h.eq(avg('rat', 1, 0), 0, 'act 1 normals start clean');
+      h.eq(avg('slimeling', 3, 99), 0, 'minions never get one');
+      h.ok(avg('mimic', 1, 0) >= 1, 'act 1 elites always get one');
+      h.ok(avg('frostknight', 3, 0) >= 1.3, 'act 3 elites often get two');
+      h.ok(avg('frostknight', 3, 24) > avg('frostknight', 3, 0), 'escalation adds more to elites');
+      h.ok(avg('ironjaw', 2, 0) > avg('mimic', 1, 0), 'act 2 elites get more than act 1');
+      h.ok(avg('rat', 1, 24) > avg('rat', 1, 0), 'escalation brings affixes to normals');
+      h.ok(avg('wraith', 3, 0) > avg('imp', 2, 0), 'act 3 normals more often than act 2');
+      for (let s = 1; s <= 60; s++) {
+        const a = DATA.affixRoll(R.U.rng(s), DATA.ENEMIES.mimic, 3, 30);
+        h.ok(new Set(a).size === a.length && a.every(x => DATA.AFFIXES[x]), `seed ${s}: distinct known affixes`);
+        h.ok(!a.includes('greedy'), 'a gulper is never Greedy');
+      }
+      const F = C.newFight({ hp: 70, maxHp: 70, act: 3, bin: [], relics: [], claw: {} }, ['frostknight'], R.U.rng(3));
+      h.ok(F.enemies[0].affix.length >= 1, 'newFight applies the roll: ' + F.enemies[0].affix.join('+'));
+      const G = C.newFight({ hp: 70, maxHp: 70, act: 3, bin: [], relics: [], claw: {} }, ['frostknight'], R.U.rng(3));
+      h.eq(G.enemies[0].affix.join(), F.enemies[0].affix.join(), 'deterministic per fight seed');
+    });
+    h.test('monsters (data): every gulper, bomber and layer fights through without breaking', () => {
+      const bin = Object.keys(DATA.ITEMS).filter(id => DATA.ITEMS[id].rarity !== 'junk' && !DATA.ITEMS[id].bag).slice(0, 18);
+      const users = Object.keys(DATA.ENEMIES).filter(id => (DATA.ENEMIES[id].moves || []).some(m => ['gulp', 'bomb', 'eggs', 'corrode', 'jam'].includes(m.k)));
+      h.ok(users.length >= 8, 'eight or more enemies use the new moves: ' + users.join(','));
+      h.ok(users.filter(id => DATA.ENEMIES[id].moves.some(m => m.k === 'gulp')).length >= 5, 'five or more eat items');
+      for (const id of users) {
+        const def = DATA.ENEMIES[id];
+        const F = C.newFight({ hp: 999, maxHp: 999, act: def.act, bin: bin.map((x, i) => ({ uid: 'q' + i, id: x })), relics: [], claw: {} }, [id], R.U.rng(9));
+        let ok = true;
+        for (let t = 0; t < 14 && F.phase !== 'over'; t++) {
+          try { C.endTurn(F); } catch (err) { ok = false; h.ok(false, id + ' threw ' + err.stack); break; }
+          const all = F.bin.length + F.used.length + F.exhausted.length + F.stolen.length + (F.digested || []).length + F.purged.length + F.enemies.reduce((a, e) => a + (e.belly || []).length, 0);
+          if (all < bin.length) { ok = false; h.ok(false, `${id}: an item vanished (${all} < ${bin.length})`); break; }
+        }
+        h.ok(ok && Number.isFinite(F.player.hp), `${id}: 14 turns clean, every item accounted for`);
+      }
+    });
+  }
+}
 
 h.done();

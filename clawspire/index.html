@@ -385,6 +385,136 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .calm .card:hover{transform:none}
 @media (prefers-reduced-motion:reduce){.card.deal,.relicReveal .rays,#wipe::before,#combo .cn,#hpStat.low{animation:none!important}#wipe{display:none!important}}
 
+/* ---------- loot: tickets, payout, capsules, prize counter (DESIGN.md "Loot") ---------- */
+.stat.tix .v{color:#ff9ec7}
+.tixi{display:inline-block;font-style:normal;font-size:.9em;line-height:1;margin-left:3px;vertical-align:0;
+  filter:drop-shadow(0 0 4px rgba(255,158,199,.7))}
+.tixi::before{content:'\1F39F\FE0F'}
+/* the payout receipt: lines tick in, the total slams */
+.payout{position:relative;padding:10px 12px 8px;border-radius:14px;border:2px dashed #5a3f8f;
+  background:linear-gradient(180deg,#1d1236,#140b26);box-shadow:inset 0 0 22px rgba(255,201,77,.08)}
+.payout .ph{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.2em;color:var(--dimmer);font-weight:900;text-transform:uppercase;margin-bottom:4px}
+.pl{display:grid;grid-template-columns:1fr 70px 78px;align-items:center;gap:6px;padding:4px 2px;font-size:15px;font-weight:900;
+  border-bottom:1px solid rgba(90,63,143,.4)}
+.pl .lb{color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl .g{color:var(--gold);text-align:right}
+.pl .x{color:#ff9ec7;text-align:right}
+.pl.wait{visibility:hidden}
+.pl.in{animation:plIn .32s cubic-bezier(.2,1.6,.4,1) both}
+.pl.jackpot .lb,.pl.combo .lb{color:var(--gold)} .pl.flawless .lb{color:var(--lime)} .pl.speedy .lb{color:var(--cyan2)} .pl.overkill .lb{color:var(--blood)}
+.pl.double{border:2px solid var(--gold);border-radius:10px;background:rgba(255,201,77,.12)}
+.pl.double .lb{color:var(--gold);letter-spacing:.06em}
+@keyframes plIn{0%{transform:translateX(-40px) scale(.8);opacity:0}100%{transform:none;opacity:1}}
+.ptot{display:grid;grid-template-columns:1fr 70px 78px;white-space:nowrap;align-items:center;gap:6px;padding:8px 2px 2px;font-size:22px;font-weight:900}
+.ptot .lb{letter-spacing:.2em;color:var(--dim);font-size:14px}
+.ptot .g{color:var(--gold);text-align:right;text-shadow:0 0 14px rgba(255,201,77,.6)} .ptot .x{color:#ff9ec7;text-align:right;text-shadow:0 0 14px rgba(255,158,199,.6)}
+.ptot.wait{visibility:hidden}
+.ptot.slam{animation:totSlam .45s cubic-bezier(.2,1.8,.4,1) both}
+@keyframes totSlam{0%{transform:scale(2.4) rotate(-6deg);opacity:0;filter:brightness(2)}60%{transform:scale(.94) rotate(1deg);opacity:1}100%{transform:none}}
+.payout.shake{animation:nope .25s}
+.payout .skipT{position:absolute;right:10px;bottom:-18px;font-size:12px;color:var(--dimmer);letter-spacing:.1em}
+.rwWait{opacity:0;pointer-events:none}
+.rwShow{animation:tagPop .4s cubic-bezier(.2,1.6,.4,1) both}
+/* the lucky roulette: a strip of multipliers flicks past a window and lands */
+.roul{position:relative;height:44px;border-radius:12px;border:2px solid var(--gold);overflow:hidden;background:#140b26;
+  box-shadow:0 0 18px rgba(255,201,77,.35)}
+.roul .strip{position:absolute;left:0;top:0;display:flex;height:100%;will-change:transform}
+.roul .cell{flex:0 0 90px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:var(--dim)}
+.roul .cell.x2{color:var(--gold);text-shadow:0 0 12px var(--gold)}
+.roul.wait{visibility:hidden}
+.payout .skipT.gone{display:none}
+.roul::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:90px;margin-left:-45px;border-left:2px solid var(--pink);border-right:2px solid var(--pink);
+  background:rgba(255,46,136,.08);pointer-events:none}
+.roul.won{animation:rouWin .5s ease 3}
+@keyframes rouWin{50%{box-shadow:0 0 34px rgba(255,201,77,.9);border-color:#fff}}
+/* capsules waiting on the reward screen / the map */
+.capslot{display:flex;align-items:center;gap:10px;padding:8px 12px;min-height:56px;border-radius:14px;border:2px solid var(--cc,#b9b0cc);
+  background:linear-gradient(90deg,rgba(255,255,255,.06),rgba(18,9,31,.4));cursor:pointer;color:#fff;text-align:left;width:100%;
+  font:inherit;animation:capPulse 1.2s ease-in-out infinite}
+.capslot canvas{width:48px;height:48px;flex:0 0 auto}
+.capslot .c1{font-size:15px;font-weight:900;color:var(--cc,#fff);letter-spacing:.06em;text-transform:uppercase}
+.capslot .c2{font-size:12px;color:var(--dim)}
+.capslot.done{animation:none;opacity:.45;cursor:default}
+@keyframes capPulse{0%,100%{box-shadow:0 0 0 rgba(255,255,255,0)}50%{box-shadow:0 0 18px var(--cc,#b9b0cc)}}
+.brush.capchip{border-color:var(--pink);color:#fff;gap:2px;padding:0 8px 0 2px;animation:capPulse 1.2s ease-in-out infinite;--cc:#ff2e88}
+.brush.capchip canvas{width:34px;height:34px}
+/* the capsule ritual: the canvas draws the capsule, the DOM frames it */
+.screen.capsule{background:transparent;padding:0;cursor:pointer}
+.capBody{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.capBody .btn,.capBody .prize{pointer-events:auto}
+.capTop{margin-top:92px;display:flex;flex-direction:column;align-items:center;gap:4px;--cc:#b9b0cc}
+.capTier{font-size:38px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--cc);
+  text-shadow:0 0 22px var(--cc),0 4px 0 #12091f;transform:rotate(-3deg)}
+.capTier.up{animation:capUp .6s cubic-bezier(.2,1.7,.4,1) both}
+.capTier.lg{background:linear-gradient(90deg,#ff6bb0,#ffe28a,#c8ff8f,#8dfff5,#c3adff,#ff6bb0);background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;
+  filter:drop-shadow(0 0 10px rgba(255,201,77,.85)) drop-shadow(0 3px 0 #12091f);animation:rainbow 1.2s linear infinite}
+.capTier.lg.up{animation:capUp .6s cubic-bezier(.2,1.7,.4,1) both,rainbow 1.2s linear infinite}
+@keyframes capUp{0%{transform:scale(2.6) rotate(8deg);filter:brightness(3) blur(3px);opacity:0}100%{transform:rotate(-3deg);opacity:1}}
+@keyframes rainbow{to{background-position:200% 0}}
+.capUpTag{font-size:16px;font-weight:900;letter-spacing:.3em;color:#fff;padding:3px 12px;border-radius:9px;background:var(--pink);
+  box-shadow:0 0 18px var(--pink);animation:tagPop .45s cubic-bezier(.2,1.8,.4,1) both}
+.capSrc{font-size:13px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase;font-weight:900}
+.capPity{font-size:12px;color:var(--dimmer);letter-spacing:.08em}
+.capPity b{color:var(--pink2)}
+.capHint{position:absolute;top:640px;left:0;right:0;text-align:center;font-size:22px;font-weight:900;letter-spacing:.2em;color:#fff;
+  text-shadow:0 0 16px var(--cc,#fff);animation:hintBlink 1s ease-in-out infinite}
+.capHint small{display:block;font-size:13px;letter-spacing:.1em;color:var(--dim);margin-top:4px}
+@keyframes hintBlink{50%{opacity:.45}}
+.capSkip{position:absolute;right:14px;bottom:22px}
+.prize{position:absolute;top:548px;left:40px;right:40px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px;
+  border-radius:16px;border:3px solid var(--cc,#ffc94d);background:linear-gradient(180deg,#2c1d4a,#150c26);
+  box-shadow:0 0 30px var(--cc,#ffc94d),0 10px 30px rgba(0,0,0,.6);animation:prizeIn .5s cubic-bezier(.2,1.5,.4,1) both;cursor:default}
+.prize .pic{width:84px;height:84px;display:flex;align-items:center;justify-content:center;font-size:52px;line-height:1;margin-top:-58px;
+  border-radius:50%;background:radial-gradient(circle,#3a2a60,#1b1030);border:3px solid var(--cc,#ffc94d);box-shadow:0 0 20px var(--cc,#ffc94d)}
+.prize .pic canvas{width:76px;height:76px}
+.prize .pn{font-size:20px;font-weight:900;color:#fff;text-align:center}
+.prize .pk{font-size:12px;font-weight:900;letter-spacing:.2em;color:var(--cc,#ffc94d);text-transform:uppercase}
+.prize .pt{font-size:13px;color:var(--dim);text-align:center;line-height:1.4}
+@keyframes prizeIn{0%{transform:translateY(-120px) scale(.3);opacity:0}100%{transform:none;opacity:1}}
+/* the prize counter: a glass case of prizes with ticket tags */
+.counterHead{display:flex;align-items:center;gap:10px}
+.counterHead h1{flex:1;font-size:26px;color:#ff9ec7;text-shadow:0 0 18px #ff2e88,0 0 4px #fff;animation:neon 3s linear infinite}
+@keyframes neon{0%,92%,100%{opacity:1}94%{opacity:.4}96%{opacity:1}97%{opacity:.6}}
+.tixbal{font-size:20px;font-weight:900;color:#ff9ec7;padding:6px 12px;border-radius:12px;border:2px solid #7a1a4c;background:#17102a;white-space:nowrap}
+.tixbal.dip{animation:dip .3s ease}
+.case{position:relative;padding:12px 10px 16px;border-radius:16px;border:3px solid #6d5a9a;
+  background:linear-gradient(180deg,#221640,#130a24);box-shadow:inset 0 0 40px rgba(46,230,214,.12),0 8px 24px rgba(0,0,0,.5);overflow:hidden}
+.case::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.08) 36%,transparent 42%,transparent 62%,rgba(255,255,255,.05) 66%,transparent 70%)}
+.shelf{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 8px}
+.slot{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 10px;min-height:44px;cursor:pointer;
+  border-bottom:6px solid #4a3a74;border-radius:10px 10px 4px 4px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.08));
+  transition:transform .1s}
+.slot:active{transform:scale(.95)}
+.slot canvas{width:64px;height:64px;display:block}
+.slot .big{font-size:40px;line-height:64px;height:64px}
+.slot .sn{font-size:12px;font-weight:900;color:#fff;text-align:center;line-height:1.15;min-height:28px}
+.slot .ptag{font-size:14px;font-weight:900;color:#ff9ec7;padding:2px 8px;border-radius:8px;background:#2a0f22;border:1.5px solid #ff2e88;transform:rotate(-4deg)}
+.slot.poor .ptag{opacity:.5;filter:grayscale(.6)}
+.slot.sold{cursor:default}
+.slot.sold canvas,.slot.sold .big{opacity:.25}
+.slot .stamp{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%) rotate(-14deg);padding:2px 8px;border:3px solid var(--lime);border-radius:8px;
+  color:var(--lime);font-size:18px;font-weight:900;letter-spacing:.1em;background:rgba(18,9,31,.7);pointer-events:none}
+.slot .stamp.slam{animation:slam .35s cubic-bezier(.3,1.5,.5,1) both}
+.slot.won{animation:won .7s cubic-bezier(.2,1.6,.4,1)}
+@keyframes won{0%{transform:none}30%{transform:translateY(-18px) scale(1.15);filter:brightness(1.8)}100%{transform:none}}
+.slot.nope{animation:nope .3s}
+.dtix{width:18px;height:11px;border-radius:2px;background:#ff9ec7;box-shadow:0 0 8px rgba(255,158,199,.8);border:1px solid #7a1a4c}
+/* run-end highlights */
+.hl{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hlt{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.3);border:2px solid var(--line2);
+  animation:tagPop .45s cubic-bezier(.2,1.6,.4,1) both}
+.hlt .k{font-size:12px;letter-spacing:.14em;color:var(--dimmer);text-transform:uppercase;font-weight:900}
+.hlt .v{font-size:22px;font-weight:900;color:#fff;line-height:1.1}
+.hlt .s{font-size:12px;color:var(--dim)}
+.hlt.gold{border-color:#7a5a1a}.hlt.gold .v{color:var(--gold)}
+.hlt.pink{border-color:#7a1a4c}.hlt.pink .v{color:var(--pink2)}
+.hlt.cyan{border-color:#1a6a64}.hlt.cyan .v{color:var(--cyan2)}
+.hlt.lime{border-color:#4a7a1a}.hlt.lime .v{color:var(--lime)}
+.calm .capslot,.calm .brush.capchip,.calm .capHint,.calm .counterHead h1,.calm .capTier.lg{animation-duration:.01s!important;animation-iteration-count:1!important}
+@media (prefers-reduced-motion:reduce){.capslot,.brush.capchip,.capHint,.counterHead h1,.roul.won{animation:none!important}}
+
 @media (max-width:400px){ .cards{gap:6px} }
 </style>
 </head>
@@ -398,6 +528,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
     <div class="stat hp tap" id="hpStat"><span class="k">HP</span><span class="v mono" id="hpTxt">0/0</span><span class="blk mono" id="blockTxt"></span><span class="hpbar"><i class="gh" id="hpGhost"></i><i class="fl" id="hpFill"></i></span></div>
     <div class="stat gold"><span class="k">Gold</span><span class="v mono" id="goldTxt">0</span></div>
     <div class="stat ink"><span class="k">Bulbs</span><span class="v mono" id="inkTxt">0</span></div>
+    <div class="stat tix" id="tixStat"><span class="k">Tix</span><span class="v mono" id="tixTxt">0</span></div>
     <div class="stat act"><span class="k">Act</span><span class="v" id="actTxt">1</span></div>
     <div id="relics"></div>
   </div>
@@ -441,6 +572,9 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   <div id="scr-win" class="screen"><div id="winBody" class="col"></div></div>
   <div id="scr-help" class="screen"><div id="helpBody" class="col help"></div></div>
   <div id="scr-collection" class="screen"><div id="collectionBody" class="col"></div></div>
+  <!-- loot: the capsule ritual (the canvas draws the capsule under it) and the prize counter -->
+  <div id="scr-capsule" class="screen capsule"><div id="capsuleBody" class="capBody"></div></div>
+  <div id="scr-counter" class="screen"><div id="counterBody" class="col"></div></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>
 </div></div>

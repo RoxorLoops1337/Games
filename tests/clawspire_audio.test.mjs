@@ -236,6 +236,27 @@ T.test('juice sfx: combo scales with its tier, ticks and heartbeats are throttle
   }
 });
 
+T.test('loot sfx: capsule ritual, tickets, the payout tally', () => {
+  const LOOT = ['capDrop', 'capCrack', 'capUpgrade', 'capBurst', 'ticket', 'tally', 'slam', 'roulette', 'double'];
+  const cold = boot({ only: ['util', 'audio'] }).AUDIO;
+  for (const n of LOOT) { T.ok(cold.names.includes(n), `loot sfx listed: ${n}`); T.eq(cold.sfx(n), false, `${n} no-ops before init`); }
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of LOOT) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    T.eq(AUDIO.sfx(n, { n: 2, tier: 1, pitch: 1.2 }), true, `${n} plays`);
+    T.ok(fake.count.total - before >= 2, `${n} builds voices`);
+  }
+  const burst = [];
+  for (const tier of [0, 3]) { ac.currentTime += 5; const b0 = fake.count.total; AUDIO.sfx('capBurst', { tier }); burst.push(fake.count.total - b0); }
+  T.ok(burst[1] > burst[0], `a legendary burst is bigger than a common one (${burst.join(' < ')})`);
+  ac.currentTime += 3;
+  T.eq(AUDIO.sfx('ticket'), true, 'a ticket feed plays');
+  T.eq(AUDIO.sfx('ticket'), false, 'ticket feeds are throttled');
+});
+
 T.test('sfx throttling, voice cap, and sfx toggle', () => {
   const { AUDIO, fake } = bootFake();
   AUDIO.init();
@@ -411,5 +432,24 @@ await (async () => { try {
   T.eq(AUDIO.ready, false, 'the live graph is untouched (still not initialised)');
   T.ok(fake.count.osc > 150, `the schedule ran on the offline context [${fake.count.osc} osc]`);
 } catch (e) { T.ok(false, 'renderIntroWav test threw :: ' + (e && e.stack || e)); } })();
+
+T.test('cabinet materials: every material voice plays, landings scale with opts.vel, the fuse beep is throttled', () => {
+  const MAT_NAMES = ['clank', 'tinkle', 'crack', 'thud', 'boing', 'squish', 'slosh', 'chime', 'fuse', 'beep', 'boom', 'groan', 'fanfare', 'ding', 'lucky'];
+  const { AUDIO, fake } = bootFake();
+  for (const n of MAT_NAMES) T.ok(AUDIO.names.includes(n), 'sfx name listed: ' + n);
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of MAT_NAMES) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    let r = false;
+    try { r = AUDIO.sfx(n, { vel: 0.8, pitch: 1.2 }); } catch (e) { T.ok(false, n + ' threw ' + e); }
+    T.ok(r && fake.count.total - before >= 2, 'material sfx ' + n + ' plays');
+  }
+  for (const o of [{ vel: -3 }, { vel: 99 }, { vel: 'x' }, null]) { ac.currentTime += 3; try { AUDIO.sfx('clank', o); AUDIO.sfx('thud', o); } catch (e) { T.ok(false, 'odd vel threw'); } }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('beep'), 'a beep plays');
+  T.eq(AUDIO.sfx('beep'), false, 'a second beep right away is throttled');
+});
 
 T.done();
