@@ -89,7 +89,7 @@ function arenaBolt(g, worldRight, a) {
 
 // ground dust puff in world space (for slams / footfalls)
 function dust(g, age, x, y, seed, n = 18, spread = 120, sz = 1, alpha = .8) {
-  burst(g, age, { x, y, n, seed, speed: [30, spread * 2], angle: [Math.PI + .15, Math.PI * 2 - .15], life: [.5, 1.1], size: [4 * sz, 11 * sz], gy: -30, drag: 3.5, cols: ['#6d6154', '#8a7d6c', '#4a4038'], add: false, shape: 'dot', alpha });
+  burst(g, age, { x, y, n, seed, speed: [30, spread * 2], angle: [Math.PI + .15, Math.PI * 2 - .15], life: [.5, 1.1], size: [4 * sz, 11 * sz], gy: -30, drag: 3.5, cols: ['#6d6154', '#8a7d6c', '#4a4038'], add: false, shape: 'puff', alpha: alpha * .8, shrink: false });
 }
 // stone debris (smashDoorway colours)
 function debris(g, age, x, y, seed, n = 22, pw = 1) {

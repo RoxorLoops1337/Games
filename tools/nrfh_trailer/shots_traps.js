@@ -198,84 +198,89 @@ shot({ id: 'spike', t0: 6.5625, t1: 7.5,
   },
 });
 
-// ---- FLAME: the rogue walks into the oil, the pillars cascade ----------------
+// ---- FLAME: the rogue walks into the oil, all four pillars cascade -------------
 shot({ id: 'flame', t0: 7.5, t1: 7.96875,
   draw(g, lt, P, t) {
     const T = FRAME_T - 7.5;
-    // the camera tracks at the cascade's speed (a pillar every 70 ms, 42 px apart)
-    const pan = clamp((lt - .04) / .3);
+    // the camera drifts with the cascade once it is lit (a pillar every 70 ms)
+    const pan = clamp((lt - .1) / .3);
     const K = 5.2;
-    camera(g, 1 * ROOM_W + lerp(40, 150, E.inOutCubic(pan)), FLOOR - 62, K, .015, ...shake(t, 9 * kick(lt, .05, .2), 28).slice(0, 2));
+    camera(g, 1 * ROOM_W + lerp(70, 130, E.inOutCubic(pan)), FLOOR - 88, K, .015, ...shake(t, 9 * kick(lt, .02, .2) * (lt >= .02), 28).slice(0, 2));
     const now = 15000 + T * 1000;
-    const eF = (lt - .03) * 1000;
-    corridor(g, now, [{ types: ['frost', 'spike'] }, { types: ['oil', 'flame'], e: eF < 0 ? null : Math.min(eF, 150 + lt * 80) }, { types: ['tesla'] }], { throne: false });
-    const hx = 1 * ROOM_W + 88 + T * 40;
-    const burn = clamp((lt - .1) / .08);
-    drawHero(g, 'rogue', 'walk', 2 + T, hx, FOOT, { fx: { tint: '#ff7a2e', tintA: .4 * burn, flash: .7 * Math.exp(-Math.max(0, lt - .1) / .05) * (lt > .1) } });
+    // the first column is already at its peak on the cut; the fourth peaks at lt .32
+    const eF = (lt + .11) * 1000;
+    corridor(g, now, [{ types: ['frost', 'spike'] }, { types: ['oil', 'flame'], e: Math.min(eF, 330) }, { types: ['tesla'] }, {}], { throne: false });
+    const hx = 1 * ROOM_W + 112 + T * 20;          // standing in the third pillar
+    const burn = clamp((lt - .02) / .08);
+    drawHero(g, 'rogue', 'walk', 2 + T, hx, FOOT, { fx: { tint: '#ff7a2e', tintA: .4 * burn, flash: .7 * Math.exp(-Math.max(0, lt - .02) / .05) * (lt > .02) } });
     // the oil ignites under him
-    burst(g, lt - .1, { x: 1 * ROOM_W + 127, y: FOOT - 4, n: 70, seed: 21, speed: [80, 420], angle: [-Math.PI * .92, -Math.PI * .08], life: [.3, .8], size: [1.5, 4], gy: -60, drag: 2.5, cols: ['#fff3b0', '#ffb03a', '#ff5a1a', '#ff3b2f'], shape: 'spark', streak: .04 });
-    drawGlowW(g, 1 * ROOM_W + 127, FOOT - 10, 90, 'rgba(255,140,40,1)', 1.2 * kick(lt, .1, .15) * (lt > .1));
+    burst(g, lt - .02, { x: 1 * ROOM_W + 118, y: FOOT - 4, n: 70, seed: 21, speed: [80, 420], angle: [-Math.PI * .92, -Math.PI * .08], life: [.3, .8], size: [1.5, 4], gy: -60, drag: 2.5, cols: ['#fff3b0', '#ffb03a', '#ff5a1a', '#ff3b2f'], shape: 'spark', streak: .04 });
+    drawGlowW(g, 1 * ROOM_W + 118, FOOT - 10, 90, 'rgba(255,140,40,1)', 1.2 * kick(lt, .02, .15) * (lt > .02));
     embers(g, t, { box: [1 * ROOM_W, FLOOR - 170, 200, 170], n: 50, seed: 8, speed: [40, 140], size: [.8, 2], cols: ['#ffd34d', '#ff7a2e'] });
-    floater(g, '-56', hx + 22, FOOT - 50, lt - .13, '#ff7a2e', 11, 8);
+    floater(g, '-56', hx - 26, FOOT - 50, lt - .05, '#ff7a2e', 11, 8);
     g.setTransform(1, 0, 0, 1, 0, 0);
     comboHeader(g, t);
-    // IGNITE: the letters light one after another, in step with the pillars
-    g.save(); g.translate(1330, 470); g.rotate(-.08);
-    const pk = lt - .06, sc = pk < .07 ? lerp(2.2, 1, E.outCubic(clamp(pk / .07))) : 1 + .1 * Math.exp(-(pk - .07) * 9) * Math.cos((pk - .07) * 30);
-    if (pk >= 0) { g.scale(sc, sc); stagger(g, 'IGNITE', 0, 0, pk, { font: F.pix(78), fill: FILL.fire, outline: '#1a0804', outlineW: 26, per: .035, in: .06, dy: 0, from: 1.6 }); }
+    // IGNITE: the letters light one after another, fast, in step with the pillars
+    g.save(); g.translate(1420, 390); g.rotate(-.08);
+    const pk = lt - .03, sc = pk < .06 ? lerp(1.6, 1, E.outCubic(clamp(pk / .06))) : 1 + .1 * Math.exp(-(pk - .06) * 9) * Math.cos((pk - .06) * 30);
+    if (pk >= 0) { g.scale(sc, sc); stagger(g, 'IGNITE', 0, 0, pk, { font: F.pix(78), fill: FILL.fire, outline: '#1a0804', outlineW: 26, per: .018, in: .04, dy: 0, from: 1.6 }); }
     g.restore();
-    // flames sucked out into black: the cut to the tesla room
-    const suck = clamp((lt - .41) / .06);
+    // flames sucked out into black: the cut to the tesla room lands on black
+    const suck = clamp((lt - .38) / .08);
     if (suck > 0) wash(g, '#000', suck);
   },
   post(lt, P) {
-    P.heat = 1; P.bloom = .85; P.bloomThr = .68;
+    P.heat = 1; P.bloom = .8; P.bloomThr = .7;
     P.gain = [1.08, .98, .9];
-    P.ca = .0006 + .006 * kick(lt, .1, .08) * (lt > .1);
-    if (lt > .4) { P.zoomBlur = .08 * clamp((lt - .4) / .07); P.zbCenter = [.5, .55]; P.K = 6; P.shutter = 1; }
+    P.ca = .0006 + .006 * kick(lt, .02, .08) * (lt > .02);
+    if (lt > .08 && lt < .32) { P.K = 8; P.shutter = .6; }
+    if (lt > .38) { P.zoomBlur = .08 * clamp((lt - .38) / .08); P.zbCenter = [.5, .55]; P.K = 6; P.shutter = 1; }
   },
 });
 
-// ---- TESLA: darkness, then the arcs light the party --------------------------
-const ZAPS = [.05, .15, .25];
+// ---- TESLA: from black, the coil fires ON the beat and the arcs light the party ---
+const ZAPS = [0, .1, .2];
 shot({ id: 'tesla', t0: 7.96875, t1: 8.4375,
   draw(g, lt, P, t) {
     const T = FRAME_T - 7.96875;
-    if (lt < 2 / 60) return;                              // two frames of black
     const hop = ZAPS.reduce((a, z, i) => lt >= z ? i : a, 0);
-    const heroesX = [2 * ROOM_W + 40, 2 * ROOM_W + 88, 2 * ROOM_W + 140];
+    const heroesX = [2 * ROOM_W + 30, 2 * ROOM_W + 62, 2 * ROOM_W + 150];   // the coil stands clear, between cleric and warrior
     // snap-zoom along the chain
     const K = 4.6 + .5 * kick(lt, ZAPS[hop], .08);
-    camera(g, lerp(2 * ROOM_W + 70, heroesX[hop], .35), FLOOR - 60, K, -.02, ...shake(t, 7, 40).slice(0, 2));
+    camera(g, lerp(2 * ROOM_W + 80, heroesX[hop], .35), FLOOR - 90, K, -.02, ...shake(t, 7, 40).slice(0, 2));
     const now = 17000 + T * 1000;
-    corridor(g, now, [{}, {}, { types: ['tesla'], e: ((lt - .03) % .24) * 1000 }], { throne: false });
-    g.save(); g.fillStyle = 'rgba(4,2,10,.6)'; g.fillRect(-2000, -1000, 6000, 3000); g.restore();
-    drawTrapPart(g, now, 2 * ROOM_W, 'tesla', LAYOUT.traps.tesla[0], 0, 2, ((lt - .03) % .24) * 1000, {});
+    const eT = ((lt + .02) % .24) * 1000;
+    corridor(g, now, [{}, {}, { types: ['tesla'], e: eT, glow: .5 }, {}], { throne: false });
+    g.save(); g.fillStyle = 'rgba(4,2,10,.45)'; g.fillRect(-2000, -1000, 6000, 3000); g.restore();
     const cls = ['mage', 'cleric', 'warrior'];
     heroesX.forEach((x, i) => {
       const zapped = lt >= ZAPS[i];
       const xr = zapped && (lt - ZAPS[i]) < 2 / 60;          // 2-frame X-ray silhouette
-      drawHero(g, cls[i], zapped ? 'walk' : 'walk', zapped ? 1.1 + i * .2 : 1 + T + i * .2, x, FOOT,
-        { fx: { tint: xr ? '#ffffff' : '#fff34d', tintA: xr ? 1 : zapped ? .22 : 0, flash: 0, rim: { col: '#9adfff', dx: -1.2, dy: -.4, a: .8 } } });
-      if (zapped) floater(g, '-31', x + 3, FOOT - 54, lt - ZAPS[i] - .02, '#fff34d', 10, 6);
+      drawHero(g, cls[i], 'walk', zapped ? 1.1 + i * .2 : 1 + T + i * .2, x, FOOT,
+        { fx: { tint: xr ? '#ffffff' : '#fff34d', tintA: xr ? 1 : zapped ? .08 : 0, flash: 0, rim: { col: '#9adfff', dx: -1.2, dy: -.4, a: .8 } } });
+      if (zapped) floater(g, '-31', x - 10, FOOT - 54, lt - ZAPS[i] - .02, '#fff34d', 10, 6);
     });
-    // the arcs: coil -> hero 1 -> hero 2 -> hero 3, flickering every 2 frames
+    // the coil in front of the party, with its own white pulse on every zap
+    const zapNow = ZAPS.some(z => lt >= z && lt - z < 2 / 60);
+    drawTrapPart(g, now, 2 * ROOM_W, 'tesla', LAYOUT.traps.tesla[0], 0, 2, eT, { glow: .5 });
+    if (zapNow) drawGlowW(g, 2 * ROOM_W + 100, FLOOR - 50, 40, 'rgba(255,255,255,1)', .8);
+    // the arcs: coil -> hero 1 -> hero 2 -> hero 3, strobing (lit, lit, dark)
     const cx = 2 * ROOM_W + 100, cy = FLOOR - 50;
     const fl = Math.floor(t * 30);
-    ZAPS.forEach((z, i) => {
+    if (fl % 3 !== 2) ZAPS.forEach((z, i) => {
       if (lt < z) return;
       const from = i === 0 ? [cx, cy] : [heroesX[i - 1], FOOT - 30];
-      bolt(g, from[0], from[1], heroesX[i], FOOT - 30, 31 + i * 7 + fl, i === 0 ? '#fff34d' : '#9adfff', 2.4, 7, 16);
-      drawGlowW(g, heroesX[i], FOOT - 26, 40, 'rgba(255,240,120,1)', .32 * (.6 + .4 * Math.sin(t * 90 + i)));
+      bolt(g, from[0], from[1], heroesX[i], FOOT - 30, 31 + i * 7 + fl, i === 0 ? '#fff34d' : '#9adfff', 1.6, 7, 16);
+      drawGlowW(g, heroesX[i], FOOT - 26, 36, 'rgba(255,240,120,1)', .12);
     });
-    drawGlowW(g, cx, cy, 60, 'rgba(255,225,77,1)', .7);
+    drawGlowW(g, cx, cy, 60, 'rgba(255,225,77,1)', .35);
     g.setTransform(1, 0, 0, 1, 0, 0);
     comboHeader(g, t);
     const j = [(hash(fl) - .5) * 5, (hash(fl + 9) - .5) * 5];
-    tierB(g, 'OVERLOAD', 1330 + j[0], 480 + j[1], lt - .06, '#fff7b0', { size: 70, dur: .45, fill: FILL.volt, glow: '#4dc3ff', rot: -.06 });
+    tierB(g, 'OVERLOAD', 1420 + j[0], 380 + j[1], lt - .02, '#fff7b0', { size: 70, dur: .42, fill: FILL.volt, glow: '#4dc3ff', rot: -.06 });
   },
   post(lt, P) {
-    P.bloom = .8; P.bloomThr = .72;
+    P.bloom = .6; P.bloomThr = .85;
     P.gain = [1, 1, 1.08];
     P.ca = .0006 + .005 * ZAPS.reduce((a, z) => a + (lt >= z ? kick(lt, z, .06) : 0), 0);
   },

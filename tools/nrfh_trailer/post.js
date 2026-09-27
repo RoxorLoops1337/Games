@@ -157,7 +157,7 @@ function makePost(canvas, W, H) {
         float dist = length(dv);
         float x = (dist - s.z) / s.w;
         if (abs(x) < 1.) {
-          float f = (1. - x*x) * x * a;
+          float f = (1. - x*x) * x * a * (1. - smoothstep(.70, .78, st.y));
           vec2 dir = dv / max(dist, 1e-4); dir.x /= asp;
           st -= dir * f * s.w;
         }

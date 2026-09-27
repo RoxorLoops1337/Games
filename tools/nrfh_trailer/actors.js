@@ -62,7 +62,7 @@ const MON_DEF = {
   slime: { base: 'sprites/slime/slime_', scale: .096, row: 0, clips: {
     idle: { sheet: 'idle', fw: 890, fh: 957, n: 4, fps: 5, ax: 444, ay: 943 },
     walk: { sheet: 'walk', fw: 950, fh: 887, n: 4, fps: 9, ax: 483, ay: 868 },
-    slash: { sheet: 'slash', fw: 986, fh: 871, n: 7, fps: 13, ax: 463, ay: 858 } } },
+    slash: { sheet: 'slash', fw: 986, fh: 871, n: 7, fps: 13, ax: 463, ay: 858, clean: 24 } } },
   dragon: { base: 'sprites/dragon/dragon_', scale: .3, row: 0, clips: {
     idle: { sheet: 'idle', fw: 298, fh: 210, n: 6, fps: 7, ax: 174, ay: 210 },
     slash: { sheet: 'slash', fw: 346, fh: 210, n: 7, fps: 13, ax: 172, ay: 210 } } },
@@ -150,8 +150,18 @@ function drawHero(g, cls, clip, t, x, footY, o = {}) {
   if (o.shadow !== false) shadowW(g, x, footY, 14 * (o.scale || 1));
   drawCell(g, c.im, f * c.fw, c.row * c.fh, c.fw, c.fh, c.ax, c.ay, x, footY, S, o.dir || 1, o.fx);
 }
+// a sheet whose near-transparent haze (alpha < thr) is cut away, baked once
+function cleanSheet(im, thr) {
+  return ok(im) ? baked('clean:' + im.src, im.naturalWidth, im.naturalHeight, x => {
+    x.drawImage(im, 0, 0);
+    const d = x.getImageData(0, 0, im.naturalWidth, im.naturalHeight), a = d.data;
+    for (let i = 3; i < a.length; i += 4) if (a[i] < thr) a[i] = 0;
+    x.putImageData(d, 0, 0);
+  }) : im;
+}
 function drawMon(g, key, clip, t, x, footY, o = {}) {
-  const d = MON_DEF[key], c = d.clips[clip] || d.clips.idle;
+  const d = MON_DEF[key], c0 = d.clips[clip] || d.clips.idle;
+  const c = c0.clean ? Object.assign({}, c0, { im: cleanSheet(c0.im, c0.clean) }) : c0;
   let f = Math.floor(t * c.fps * (o.speed || 1));
   f = o.once ? Math.min(c.n - 1, f) : ((f % c.n) + c.n) % c.n;
   const S = d.scale * (o.scale || 1);

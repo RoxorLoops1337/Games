@@ -39,6 +39,9 @@ function burst(g, age, o) {
       const [px, py] = ballistic(o.x + jx, o.y + jy, Math.cos(ang) * sp, Math.sin(ang) * sp, Math.max(0, a - (o.streak || .035)), o.drag != null ? o.drag : 1.5, o.gy != null ? o.gy : 900);
       g.strokeStyle = col; g.lineWidth = s; g.lineCap = 'round';
       g.beginPath(); g.moveTo(px, py); g.lineTo(x, y); g.stroke();
+    } else if (o.shape === 'puff') {
+      const pc = baked('puff' + col, 64, 64, x => { const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, col); gr.addColorStop(.55, col.length === 7 ? col + '99' : col); gr.addColorStop(1, col.length === 7 ? col + '00' : 'rgba(0,0,0,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); });
+      g.drawImage(pc, x - s * 2, y - s * 2, s * 4, s * 4);
     } else if (o.shape === 'dot') {
       g.beginPath(); g.arc(x, y, s, 0, 7); g.fill();
     } else if (o.shape === 'shard') {
@@ -263,8 +266,8 @@ function tierB(g, txt, x, y, lt, col, o = {}) {
   const size = o.size || 72;
   const inT = .07;
   let s;
-  if (lt < inT) s = lerp(2.6, 1, E.outCubic(lt / inT));
-  else s = 1 + .14 * Math.exp(-(lt - inT) * 9) * Math.cos((lt - inT) * 30);
+  if (lt < inT) s = lerp(1.6, 1, E.outCubic(lt / inT));
+  else s = 1 + .12 * Math.exp(-(lt - inT) * 9) * Math.cos((lt - inT) * 30);
   const out = clamp((lt - (o.dur || .9)) / .1);
   g.save();
   g.translate(x, y); g.rotate(o.rot != null ? o.rot : -.09); g.scale(s * (1 + out * .4), s * (1 + out * .4));

@@ -198,13 +198,13 @@ for k in range(40):                                     # the ice shatters: a sp
     glass[i:i + m] += hp(noise_n(m), 4000) * exp_env(m, .004) * (1 - k / 45)
 at(glass, t_sp + .1, .8, .2, 'hit')
 t_fl = HIT['flame'][0]
-at(fire_burst(1.1, 1.0), t_fl + .08, 1.0, .1, 'hit')
+at(fire_burst(1.1, 1.0), t_fl + .01, 1.0, .1, 'hit')
 at(whoosh(.35, 1.0, 200, 3000, -.8, .8), t_fl, .6, 0, 'sfx')
 at(impact(.8, 1.4, .5), t_fl + .1, .7, 0, 'hit')
 t_te = HIT['tesla'][0]
-for k, z in enumerate((.05, .15, .25)):
+for k, z in enumerate((0, .1, .2)):                   # the coil fires on the beat, then chains
     at(zap(.35, 1.0), t_te + z, .7, -.4 + k * .4, 'hit')
-at(impact(.7, 1.2, .6), t_te + .05, .6, 0, 'hit')
+at(impact(.7, 1.2, .6), t_te, .6, 0, 'hit')
 
 # ================================================================== VI. monsters (8.44 - 10.78)
 t_rm = HIT['word'][1]
@@ -282,8 +282,7 @@ t_rg = HIT['ring'][0]
 for f, a in [(hz(74), .5), (hz(81), .35), (hz(86), .25)]:
     tt = T(1.6); at(np.sin(2 * np.pi * f * tt) * exp_env(len(tt), .45) * a, t_rg, .5, 0, 'late')
 at(sub_drop(.6, 1.4, 60, 30), t_rg, .5, 0, 'late')
-for k, m in enumerate([93, 98, 105]):                  # 14.53: the glint across HEROES
-    at(chip_sq(hz(m), .1, 1.0, .5, tau=.08), 14.53 + k * .06, .1, -.4 + k * .4, 'late')
+
 
 # ================================================================== mix
 # sidechain: the music ducks under every big hit
