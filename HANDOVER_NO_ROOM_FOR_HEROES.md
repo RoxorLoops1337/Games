@@ -216,6 +216,30 @@ arrays. Lives near the `AUDIO + GAME FEEL` block.
   the selected card (`.card.sel`); every overlay's `<h1>`/`.menu-btns` drift in. The
   HUD rolls gold/dread with `countTo()` (eased per-frame lerp in `updateTop`) instead
   of snapping. All honour `prefers-reduced-motion`.
+- **Cinematic FX (ported from the trailer, `tools/nrfh_trailer/`)**, in the block after
+  `sparks()`:
+  - `callout(x,y,txt,col,{fill,size,sub,hero})` = the trailer's pixel-font pop (slams in
+    from 1.6x, springs, tilts). Letters are baked once into cached sprites (`popSprite`,
+    glow blurred at build time, never per frame). `o.hero` keeps ONE live callout per
+    hero that re-punches in place; `POP_TXT_CAP` limits how many are on screen. Used by
+    `popReact` (element fills in `REACT_FILL`), CONDUCT, Overdrive, the kill-streak
+    announcer (`COMBO_TIERS[].fill`) and CHAMPION SLAIN. Lives in `pops[]`, drawn by
+    `drawPops` after the floats.
+  - Kill pop: `skullPop` (7x7 pixel skull sprite) + `coinBurst` (spinning coins that
+    bounce on the hero's floor line).
+  - Shatter: `drawSprite` records the frame on screen in `h._spr`; `heroDies` calls
+    `shatterFx(h)` for an iced (frozen/chilled/SHATTER-killed) non-champion hero, and
+    `drawHeroDead` breaks that frame into 8 ice-tinted wedges (`drawShatter`), then
+    leaves ice rubble.
+  - `forkBolt(x1,y1,x2,y2,seed,o)`: seeded midpoint-displacement lightning with
+    branches (tesla arcs; re-seeded every 45 ms so it crackles).
+  - Room slam-in: `placeCard` calls `roomLand(room, idx, big)`; `drawRoomLanding`
+    drops + squashes the room, `landTick` (in `update`) spawns the dust + `thud` sfx.
+  - Overdrive nova in `draw()` (`glowScaled` flare, spokes, rings) + `streak` sparks.
+  - `drawBanner` = the trailer's notched ribbon with a light sweep; `banner(..., {cine:true})`
+    adds letterbox bars (champion, king, rival, set pieces).
+  - Particles take optional `shape` (`coin`/`shard`/`puff`/`streak`), `g`, `drag`,
+    `grow`, `fy` (floor to bounce on): `stepShaped` / `drawShaped`.
 - Covered by `tests/no_room_for_heroes_juice.test.mjs` — it runs a real wave through
   `draw()`/`updateTop()` and a build-phase `render()`, so a render-time error there
   fails `npm run check`.

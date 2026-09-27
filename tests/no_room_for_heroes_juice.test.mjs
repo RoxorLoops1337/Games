@@ -19,7 +19,10 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   get panelHTML(){ return panel.innerHTML; },
   get G(){return G;},set G(v){G=v;},
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
-  get decals(){ return (typeof decals!=='undefined') ? decals : null; }`);
+  get decals(){ return (typeof decals!=='undefined') ? decals : null; },
+  callout,pops,POP_TXT_CAP,elementReact,castOverdrive,RAGE_MAX,forkBolt,_boltA,_landQ,
+  banner,drawBanner,mixHex,SHATTER_T,cellX,buildHeroFromSpec,nextSpec,LIFT,
+  get overdriveT(){ return overdriveT; }, get camX(){ return camX; }, set VW(v){ VW=v; }, get CV(){ return CV; }`);
 const t = harness('render/juice smoke');
 const BOSS = Object.keys(A.BOSSES)[0];
 
@@ -471,5 +474,93 @@ try{
   t.ok(pay.length===1, 'kill payout is one combined "+Ng · +N☠" float (got '+pay.length+')');
   t.ok(!A.floats.some(f=>/^\+\d+☠$/.test(f.txt)), 'no separate dread float remains');
 }catch(e){ t.ok(false, 'kill-payout float threw: '+e.message); }
+
+// 22) 🎬 cinematic FX ported from the trailer: every piece must run through the
+//     real update()+draw() loop without throwing, and behave as designed
+try{
+  A.VW=960; A.CV.width=1280; A.CV.height=560;               // a real canvas size (the stub's is NaN)
+  freshRun([room('frost',2,'spike'), room('tesla',2)]);
+  while(A.G.heroes.length<4){ const nh=A.buildHeroFromSpec(A.nextSpec()); nh.x=-60-A.G.heroes.length*30; nh.yOff=-A.LIFT; A.G.heroes.push(nh); }
+  const hs=A.G.heroes; hs.forEach(h=>{ h.hp=h.maxHp=99999; h.champion=null; h.king=false; h.elite=false; });
+  const h=hs[0];
+  // pixel reaction callout: IGNITE, element fill, damage underneath, no old text float
+  A.pops.length=0; A.floats.length=0;
+  h.oil=3; A.elementReact(h,'fire',30);
+  const ig=A.pops.find(p=>p.kind==='txt' && /^IGNITE/.test(p.txt));
+  t.ok(ig && ig.fill==='fire' && /^-\d+$/.test(ig.sub), 'IGNITE pops as a pixel callout with the fire fill and its damage ('+(ig&&ig.txt+' '+ig.sub)+')');
+  t.ok(!A.floats.some(f=>/IGNITE/.test(f.txt)), 'the reaction no longer ALSO prints the old text float');
+  // one callout per hero: a second reaction re-punches the same callout in place
+  h.chill=3; A.elementReact(h,'phys',30);
+  const mine=A.pops.filter(p=>p.kind==='txt' && p===h._co);
+  t.ok(A.pops.filter(p=>p.kind==='txt').length===1 && mine.length===1 && /^SHATTER/.test(mine[0].txt),
+    'a second reaction on the same hero updates its callout (now '+(mine[0]&&mine[0].txt)+') instead of stacking');
+  // on-screen cap for free callouts
+  for(let i=0;i<9;i++) A.callout(100+i*5, 200, 'TEST'+i, '#fff');
+  t.ok(A.pops.filter(p=>p.kind==='txt').length<=A.POP_TXT_CAP, 'live text callouts are capped at '+A.POP_TXT_CAP);
+  for(let i=0;i<8;i++){ A.update(0.05); A.draw(); }
+  // ❄ a chilled hero shatters: its last sprite frame breaks into chunks, then rubble
+  const v=hs[1]; A.draw();                                  // capture its on-screen frame
+  t.ok(v._spr && v._spr.img, 'the hero sprite frame is captured while it is drawn');
+  v.chill=3; A.heroDies(v);
+  t.ok(v.shatterAt!=null, 'a chilled hero that dies is flagged to SHATTER');
+  t.ok(A.particles.some(p=>p.shape==='shard') && A.particles.some(p=>p.shape==='puff'), 'the shatter throws ice shards + a frost puff');
+  for(let i=0;i<6;i++){ A.update(0.03); A.draw(); }
+  t.ok(v._shCv, 'the ice-tinted frame is baked once for the chunks');
+  v.shatterAt-=A.SHATTER_T*1000+50; A.draw();               // past the chunk flight: ice rubble
+  // 💀 a plain kill: skull pop + coins that bounce on the floor, payout float unchanged
+  const w=hs[2]; w.chill=0; w.freeze=0; A.pops.length=0;
+  const before=A.particles.length; A.heroDies(w);
+  t.ok(w.shatterAt==null, 'an un-iced death does not shatter');
+  t.ok(A.pops.some(p=>p.kind==='skull'), 'a kill pops the pixel skull');
+  const coins=A.particles.slice(before).filter(p=>p.shape==='coin');
+  t.ok(coins.length>=3, 'a kill sprays spinning coins ('+coins.length+')');
+  for(let i=0;i<40;i++){ A.update(0.02); A.draw(); }
+  t.ok(coins.every(c=>c.y<=c.fy+0.001), 'coins bounce on the floor line instead of falling through');
+  // ⚡ tesla: forked bolts aim at the hero ON SCREEN (world x minus the camera)
+  const z=hs[3]||hs[0], cell=A.G.cells[1], tr=cell.traps.find(q=>q.type==='tesla');
+  hs.forEach(o=>{ if(o!==z) o.cellIndex=-1; });
+  z.state='walking'; z.cellIndex=1; z.x=A.cellX(1)+120;
+  tr.firedAt=performance.now(); A._boltA.length=0; A.draw();
+  const n=A._boltA.length;
+  t.ok(n>=8 && Math.abs(A._boltA[n-2]-(z.x-A.camX))<0.01 && Math.abs(A._boltA[n-1]-(z.y-30))<0.01,
+    'the tesla bolt ends on the hero where it is drawn (camera offset applied)');
+  // the forked bolt is deterministic per seed (it flickers by re-seeding, not by chance)
+  A.forkBolt(0,0,100,0,42); const b1=A._boltA.join(',');
+  A.forkBolt(0,0,100,0,42); const b2=A._boltA.join(',');
+  A.forkBolt(0,0,100,0,43); const b3=A._boltA.join(',');
+  t.ok(b1===b2 && b1!==b3, 'forkBolt: same seed, same bolt; new seed, new bolt');
+  // 💥 Overdrive: pixel callout, sparks down the hall, the nova draws clean
+  A.pops.length=0; A.G.boss.rage=A.RAGE_MAX; A.castOverdrive();
+  t.ok(A.pops.some(p=>p.txt==='OVERDRIVE!') && A.overdriveT>0 && A.particles.some(p=>p.shape==='streak'), 'Overdrive fires its callout, nova and spark streaks');
+  for(let i=0;i<20;i++){ A.update(0.03); A.draw(); }
+  // 🎗 ribbon banner: cinematic letterbox flag, layout cached per banner
+  A.banner('⚔️ CHAMPION APPROACHES', '#ff5470', 'Aldric the Shieldbearer', {cine:true});
+  t.ok(A.bannerMsg.cine===true, 'big arrivals raise a cinematic (letterboxed) banner');
+  for(const bt of [0.02,0.1,0.3,1.2,2.3]){ A.bannerMsg.t=bt; A.drawBanner(); }
+  t.ok(A.bannerMsg._lay && A.bannerMsg._lay.ts>0, 'the banner lays out its title once and reuses it');
+  A.banner('WAVE CLEARED'); t.ok(A.bannerMsg.cine===false, 'ordinary banners stay un-letterboxed');
+  t.ok(A.mixHex('#000000','#ffffff',0.5)==='rgb(128,128,128)' && A.mixHex('red','#ffffff',0.2)==='red', 'mixHex blends hex colours and falls back on anything else');
+}catch(e){ t.ok(false, 'cinematic FX threw: '+e.message+'\n'+String(e.stack||'').split('\n').slice(0,4).join('\n')); }
+
+// 23) 🏗 room slam-in: a new room drops + lands with dust; a unit added thumps
+try{
+  A.G = A.freshGame('campaign'); A.chooseBoss(BOSS);
+  A.G.slots=3; A.G.rooms=[room('spike',1), null, null];
+  A.G.phase='build'; A.buildCells(); A.prepCampaignWave();
+  A._landQ.length=0;
+  A.G.hand=[{type:'frost',lvl:1},{type:'spike',lvl:1}];
+  t.ok(A.placeCard(0,1)===true, 'a room builds into an empty slot');
+  const ld=A._landQ.find(e=>e.room===A.G.rooms[1]);
+  t.ok(ld && ld.big && !ld.dusted, 'the new room is queued to slam in');
+  A.draw(); A.draw();                                        // mid-air frames
+  const puffs=()=>A.particles.filter(p=>p.shape==='puff').length, p0=puffs();
+  ld.t0-=200; A.update(0.016); A.draw();                     // past the drop: it lands
+  t.ok(ld.dusted && puffs()-p0>=16, 'landing kicks up a dust cloud ('+(puffs()-p0)+' puffs)');
+  t.ok(A.placeCard(0,0)===true, 'a trap stacks onto an existing room');
+  t.ok(A._landQ.some(e=>e.room===A.G.rooms[0] && !e.big), 'a stacked unit gives its room a small thump');
+  for(const e of A._landQ) e.t0-=1000;
+  A.update(0.016); A.draw();
+  t.ok(A._landQ.length===0, 'finished landings leave the queue');
+}catch(e){ t.ok(false, 'room slam-in threw: '+e.message); }
 
 t.done();
