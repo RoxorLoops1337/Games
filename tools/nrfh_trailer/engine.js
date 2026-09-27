@@ -61,7 +61,11 @@ function img(path) {
   _pending.push(p);
   return im;
 }
-function ok(im) { return im && im.complete && !im._bad && im.naturalWidth > 0; }
+function ok(im) {
+  if (!im) return false;
+  if (im instanceof HTMLCanvasElement) return im.width > 0;     // baked canvases are always ready
+  return im.complete && !im._bad && im.naturalWidth > 0;
+}
 function assetsReady() { return Promise.all(_pending); }
 
 // ---------------------------------------------------------------- caches

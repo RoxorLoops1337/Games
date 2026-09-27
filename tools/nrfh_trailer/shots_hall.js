@@ -139,7 +139,7 @@ shot({ id: 'hall', t0: MARCH_T0, t1: 5.625,
       g.translate(0, -(1 - r.drop) * 150);
       if (land >= 0 && land < 2 / 60) { g.translate(i * ROOM_W + 100, FLOOR); g.scale(1.02, .97); g.translate(-(i * ROOM_W + 100), -FLOOR); }
       drawRoom(g, now, i, { types: r.types, e: r.e, glow: land >= 0 ? 1 : 0 }, front);
-      if (land >= 0) { const f = Math.exp(-land / .18); g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = .45 * f; g.fillStyle = CARDS[i].col; g.fillRect(i * ROOM_W + 6, 138, ROOM_W - 12, FLOOR - 134); g.restore(); }
+      if (land >= 0) { const f = Math.exp(-land / .14); g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = .24 * f; g.fillStyle = CARDS[i].col; g.fillRect(i * ROOM_W + 6, 138, ROOM_W - 12, FLOOR - 134); g.restore(); }
       g.restore();
     }
     drawThrone(g, 4, 'purple');
