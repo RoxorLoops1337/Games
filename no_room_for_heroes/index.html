@@ -2354,38 +2354,50 @@ let _hitId=0;                                    // bumps once per elementReact(
 function popEvict(want){ const i=pops.findIndex(p=>!p.pin && want(p)); if(i>=0){ pops.splice(i,1); return true; } return false; }
 function callout(x,y,txt,col,o){
   o=o||{};
-  const size=o.size||12, sub=o.sub||'', h=o.hero;
-  const live=h && h._co;
+  const size=o.size||12, sub=o.sub||'', h=o.hero, rise=(o.rise!=null?o.rise:18);
+  const w=q=>q.txt.length*q.size;                 // Press Start 2P advances one em per glyph
+  let live=h && h._co;
   // a LATER reaction re-punches the hero's callout in place; reactions from the SAME hit
   // (OVERLOAD then SHATTER, IGNITE then THERMAL SHOCK) each keep their own, stacked
   if(live && !(o.hit && live.hit===o.hit) && live.age<live.dur-0.3 && pops.includes(live)){
-    // punch again on its own clock (pt): its drift (age) keeps going, so it never jumps
-    live.pt=live.age-0.07; live.dur=live.age+(o.dur||1.1);
-    if(!live.pin) live.x=x;                      // a headline keeps its spot; a hero's callout follows the hero
-    live.txt=txt; live.col=col; live.fill=o.fill||null; live.size=size; live.sub=sub; live.hit=o.hit||0;
-    return live;
+    // a headline that grows (RAMPAGE! -> UNSTOPPABLE!) into another headline on its row
+    // hands over to a fresh, re-dodged callout instead (the old one pops out)
+    const nw=txt.length*size;
+    if(live.pin && nw>w(live) && pops.some(q=>q!==live && q.kind==='txt' && q.pin && q.age<q.dur-0.15
+        && Math.abs(q.y-live.y)<(q.size+size)*0.75+4 && Math.abs(q.x-live.x)<(w(q)+nw)*0.5+8)){
+      live.dur=Math.min(live.dur, live.age+0.15); h._co=null; live=null;
+    } else {
+      // punch again on its own clock (pt): its drift (age) keeps going, so it never jumps
+      live.pt=live.age-0.07; live.dur=live.age+(o.dur||1.1);
+      if(!live.pin) live.x=x;                    // a headline keeps its spot; a hero's callout follows the hero
+      live.txt=txt; live.col=col; live.fill=o.fill||null; live.size=size; live.sub=sub; live.hit=o.hit||0;
+      return live;
+    }
   }
   // on-screen cap: pinned headlines count for at most 2 slots, and a callout from the
   // SAME hit is never the one evicted (OVERLOAD must survive its own SHATTER)
   let n=0, pn=0; for(const p of pops) if(p.kind==='txt'){ if(p.pin) pn++; else n++; }
   if(n+Math.min(pn,2)>=POP_TXT_CAP) popEvict(p=>p.kind==='txt' && !(o.hit && p.hit===o.hit));
-  // stack above any live callout it would print over (Press Start 2P advances one em per
-  // glyph, so a callout is ~len*size wide): hop to the first free row, re-checking after
-  // every hop. If that climbs past the top of the view, the newest wins: the OLDEST
-  // non-pinned callout in its column (never one from the same hit) gives up its row.
-  const y0=y, top=viewTopY()+size*1.4;
-  const near=p=>p.kind==='txt' && Math.abs(p.x-x)<(p.txt.length*p.size+txt.length*size)*0.5+8;
+  // stack above any live callout it would print over: hop to the first free row,
+  // re-checking after every hop. If that climbs past the top of the view (with its
+  // drift), the newest wins: the oldest non-pinned callout it hopped over (never one from
+  // the same hit) gives up its row. With nothing to give way it may only clamp down onto
+  // a FREE row, never back onto what it dodged.
+  const y0=y, top=viewTopY()+rise*0.93+size*0.7;
+  const near=p=>p.kind==='txt' && Math.abs(p.x-x)<(w(p)+txt.length*size)*0.5+8;
   const gapTo=p=>(p.size+size)*0.75+(sub?size*1.2:0)+4;
-  const settle=()=>{ let yy=y0; for(let hops=0, b; hops<8 && (b=pops.find(p=>near(p) && p.age<p.dur-0.15 && Math.abs(p.y-yy)<gapTo(p))); hops++) yy=b.y-gapTo(b); return yy; };
+  const blockAt=yy=>pops.find(p=>near(p) && p.age<p.dur-0.15 && Math.abs(p.y-yy)<gapTo(p));
+  let path=[];
+  const settle=()=>{ let yy=y0; path=[]; for(let hops=0, b; hops<8 && (b=blockAt(yy)); hops++){ path.push(b); yy=b.y-gapTo(b); } return yy; };
   y=settle();
   for(let k=0; k<4 && y<top; k++){
-    const old=pops.find(p=>near(p) && !p.pin && !(o.hit && p.hit===o.hit)); if(!old) break;
+    const old=path.find(p=>!p.pin && !(o.hit && p.hit===o.hit)); if(!old) break;
     pops.splice(pops.indexOf(old),1); y=settle();
   }
-  if(y<top) y=Math.max(y, top-size*1.4);        // nothing left to give way: stay on screen
+  if(y<top && !blockAt(top)) y=top;
   if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='skull')) popEvict(()=>true);
-  const p={kind:'txt', x, y, txt, col, fill:o.fill||null, size, sub, pin:!!o.pin, hit:o.hit||0, pt:0,
-    rot:(o.rot!=null?o.rot:-0.12+Math.random()*0.1), age:0, dur:o.dur||1.1, rise:(o.rise!=null?o.rise:18)};
+  const p={kind:'txt', x, y, txt, col, fill:o.fill||null, size, sub, pin:!!o.pin, hit:o.hit||0, pt:0, who:h||null,
+    rot:(o.rot!=null?o.rot:-0.12+Math.random()*0.1), age:0, dur:o.dur||1.1, rise};
   pops.push(p); if(h) h._co=p;
   return p;
 }
@@ -2393,16 +2405,19 @@ function skullPop(x,y,rise){ if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='s
   pops.push({kind:'skull', x, y, size:2.6, rot:0, age:0, dur:1.15, rise:(rise!=null?rise:24)}); }
 // where a hero's reaction callout goes: above the overlays actually drawn over its head
 // (HP bar + gold tag; elite trait icons; a champion's or the King's crown + name banner)
-function calloutY(h){ const ft=(h._figTop!=null)?h._figTop:h.y-26;
-  const a=ft-((h.champion||h.king)?76:(h.elite && h.traits && h.traits.length)?62:52);
-  return Math.max(a, viewTopY()+28); }                      // zoomed in: never above the top of the view
+function calloutAnchor(h){ const ft=(h._figTop!=null)?h._figTop:h.y-26;
+  return ft-((h.champion||h.king)?76:(h.elite && h.traits && h.traits.length)?62:52); }
+function calloutY(h){ return Math.max(calloutAnchor(h), viewTopY()+28); }   // zoomed in: never above the top of the view
+// …and when zoom forces a champion's / the King's callout down onto its crown + name
+// banner, it steps to the side of the banner instead of covering it
+function calloutX(h){ return ((h.champion||h.king) && calloutAnchor(h)<viewTopY()+28) ? h.x+72 : h.x; }
 // world y of the top edge of the view (the world is scaled about the floor line)
 function viewTopY(){ const z=(G && (G.phase==='build'||G.phase==='run')) ? zoom : 1, v=FLOOR-FLOOR/Math.max(0.2,z);
   return isFinite(v) ? v : -Infinity; }
-// a dying hero's reaction callout (and its same-hit siblings) pops out fast, so the kill
-// pop (payout, COMBO, skull, coins) owns that space instead of printing through it
-function retireCallouts(h){ const co=h && h._co; if(!(co && pops.includes(co))) return;
-  for(const p of pops) if(p.kind==='txt' && !p.pin && (p===co || (co.hit && p.hit===co.hit))) p.dur=Math.min(p.dur, p.age+0.15); }
+// a dying hero's reaction callouts pop out fast, so the kill pop (payout, COMBO, skull,
+// coins) owns that space instead of printing through them
+function retireCallouts(h){ if(!h) return;
+  for(const p of pops) if(p.kind==='txt' && !p.pin && p.who===h) p.dur=Math.min(p.dur, p.age+0.15); }
 let _skullCv=null;                               // the trailer's 7×7 pixel skull, outlined, ember eyes
 function skullSprite(){
   if(_skullCv!==null) return _skullCv;
@@ -5497,7 +5512,7 @@ function popReact(h,label,col,x){
   const chain=h.reactCount;
   const word=label.replace(/^[^A-Z]+/,'');                   // '🔥 IGNITE' → 'IGNITE' (the pixel font has no emoji)
   h._react=word; h._reactAt=performance.now();               // a SHATTER kill breaks the hero apart (heroDies)
-  callout(h.x, calloutY(h), word+(chain>1?' x'+chain:''), col, {fill:REACT_FILL[word], size:chain>=3?15:12, sub:'-'+x, hero:h, hit:_hitId});   // chains pop big
+  callout(calloutX(h), calloutY(h), word+(chain>1?' x'+chain:''), col, {fill:REACT_FILL[word], size:chain>=3?15:12, sub:'-'+x, hero:h, hit:_hitId});   // chains pop big
   burst(h.x,h.y-24,col,16+Math.min(chain,6)*3); sfx('crit');
   if(chain>=3) flash(col, Math.min(0.3, 0.10+chain*0.03), 0.22);             // escalating reaction spectacle
   if(chain>=4) slowmo(0.25);
@@ -5592,7 +5607,7 @@ function elementReact(h, elem, baseDmg){
       const cd=Math.round(baseDmg*0.6*rm); reactHit(o,cd); floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
       arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
     if(arced){ h.reactCount=(h.reactCount||0)+1; h.reactT=3;
-      callout(h.x, calloutY(h), 'CONDUCT x'+arced, '#fff34d', {fill:'volt', hero:h, hit:_hitId}); sfx('crit'); }
+      callout(calloutX(h), calloutY(h), 'CONDUCT x'+arced, '#fff34d', {fill:'volt', hero:h, hit:_hitId}); sfx('crit'); }
   }
 }
 function healBoss(amt){

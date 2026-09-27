@@ -21,7 +21,7 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; },
   callout,pops,POP_TXT_CAP,elementReact,castOverdrive,RAGE_MAX,forkBolt,_boltA,_landQ,
-  banner,drawBanner,mixHex,SHATTER_T,SHATTER_MAX,cellX,buildHeroFromSpec,nextSpec,LIFT,skullPop,calloutY,comboCallout,
+  banner,drawBanner,mixHex,SHATTER_T,SHATTER_MAX,cellX,buildHeroFromSpec,nextSpec,LIFT,skullPop,calloutY,calloutX,comboCallout,viewTopY,FLOOR,get zoom(){ return zoom; }, set zoom(v){ zoom=v; },
   get overdriveT(){ return overdriveT; }, get camX(){ return camX; }, set VW(v){ VW=v; }, get CV(){ return CV; }`);
 const t = harness('render/juice smoke');
 const BOSS = Object.keys(A.BOSSES)[0];
@@ -550,6 +550,30 @@ try{
   // the streak headline keeps its spot when a later tier re-punches it
   A.pops.length=0; A.comboCallout(5, 300); const sc=A.pops.find(p=>/RAMPAGE/.test(p.txt)); A.comboCallout(8, 620);
   t.ok(sc && /DOMINATING/.test(sc.txt) && sc.x===300, 'a re-punched streak headline stays put (no sideways jump)');
+  // a headline that GROWS into a neighbouring headline hands over to a fresh, re-dodged one
+  A.update(2); A.pops.length=0; A.comboCallout(5, 300);
+  A.callout(460, A.FLOOR-150, 'OVERDRIVE!', '#ff5470', {fill:'blood', size:18, pin:true});
+  A.comboCallout(8, 320);
+  const od=A.pops.find(p=>p.txt==='OVERDRIVE!'), dm=A.pops.find(p=>/DOMINATING/.test(p.txt) && p.age<p.dur-0.15);
+  const clash=(a,b)=>Math.abs(a.y-b.y)<(a.size+b.size)*0.75+4 && Math.abs(a.x-b.x)<(a.txt.length*a.size+b.txt.length*b.size)*0.5+8;
+  t.ok(od && dm && !clash(od,dm), 'a widening streak headline never prints over OVERDRIVE!');
+  // dying: every callout the hero owns pops out, even a same-hit sibling after a later re-punch
+  A.update(2); A.pops.length=0;
+  { const r=hs[1]||hs[0]; r._co=null; r.state='walking'; r.hp=99999; r.freeze=0; r.refreezeT=0; r.chill=3;
+    A.elementReact(r,'shock',30); A.update(0.2); r.chill=3; A.elementReact(r,'phys',30);
+    const mine=A.pops.filter(p=>p.who===r); r.hp=1; A.dealToHero(r, 999, 'TEST', 'full', null, true);
+    t.ok(mine.length>=2 && mine.every(p=>p.dur<=p.age+0.151), 'all of a dying hero callouts retire ('+mine.length+')'); }
+  // zoomed in: a callout that can't find a free row in view never clamps back onto a headline
+  { A.update(2); A.pops.length=0; const z0=A.zoom; A.zoom=1.7;
+    const topY=A.viewTopY();
+    A.callout(400, topY+60, 'RAMPAGE!', '#ff9a3a', {pin:true, size:15});
+    A.callout(400, topY+30, 'OVERDRIVE!', '#ff5470', {pin:true, size:18});
+    const c=A.callout(400, topY+62, 'SHATTER', '#9adfff', {fill:'ice', sub:'-20'});
+    t.ok(!A.pops.some(q=>q!==c && q.pin && clash(q,c)), 'a squeezed callout never clamps onto a pinned headline (y '+c.y.toFixed(1)+')');
+    // and a zoomed-in King steps beside its crown + name instead of covering them
+    const k=A.buildHeroFromSpec(A.nextSpec()); k.king=true; k._figTop=topY+20; k.x=500;
+    t.ok(A.calloutY(k)>=topY+28-0.01 && A.calloutX(k)>k.x+40, 'a clamped King callout sits beside its banner');
+    A.zoom=z0; }
   // a crowd under a pinned headline: every callout finds its own row (no two share one)
   A.update(2); A.pops.length=0; A.callout(250, 180, 'RAMPAGE!', '#ff9a3a', {pin:true, size:15});
   for(let i=0;i<3;i++) A.callout(234+i*16, 180, 'SHATTER', '#9adfff', {fill:'ice', sub:'-20'});
