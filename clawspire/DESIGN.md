@@ -17,7 +17,7 @@ arcades run by the **Prize Master**, who turns adventurers into prizes.
   the chute is *played* (a sword deals damage, a shield blocks, a potion
   heals). What slips out lands back in the pile. A bad grab is a wasted grab.
 - **Roguelike structure:** Slay the Spire style fights with intents and status
-  effects, Roguebook style hex maps you reveal with ink and brushes, Monster
+  effects, hex maps sunk in darkness that you light with bulbs and tools, Monster
   Train style upgrades on items, relics that bend the rules, three acts, three
   characters, meta unlocks.
 - **Upgrade the claw itself:** more grabs per turn, a wider claw, stronger
@@ -333,7 +333,8 @@ Required: `grabs` (+1, max 2), `width` (+0.18, max 3), `grip` (+0.35, max 3), `s
 `prongs` (2→3, max 1), `rubber` (max 1), `magnet` (max 1).
 
 ```js
-DATA.BRUSHES[id] = { id, name, icon, text, cells: (q, r) => [[q,r],...] /*axial cells revealed around a target*/ }
+DATA.TOOLS[id] = { id, name, icon, text, kind: 'line'|'ring'|'patch' }   // flare, lantern, kite; MAP does the geometry by kind. DATA.BRUSHES === DATA.TOOLS (old name)
+DATA.TERMS = { ink: 'bulb', inkPlural: 'bulbs', brush: 'tool', brushPlural: 'tools' }   // the player-facing words; fx kinds and run fields keep 'ink' / 'brush'
 ```
 `line3` (3 in a row toward the boss), `splash` (target + 6 neighbours), `drip` (target + 2 random-ish neighbours, deterministic by (q,r)), `comb` (5 vertical column).
 
@@ -403,142 +404,243 @@ NaNs hp.
 
 ### `js/map.js` -- `MAP`
 
-Roguebook style hex world. Axial coordinates `(q, r)`, pointy-top hexes, `cols × rows`
-rectangle (offset rows), **16 × 22 by default (352 tiles)**. The generator is landscape: start
-at the left middle, boss at the right middle, difficulty by column. The game draws it as a
+A hex world sunk in darkness. The Clawspire is a dead arcade: the fog is the dark, and the
+player lights it. Axial coordinates `(q, r)`, pointy-top hexes, `cols × rows` rectangle
+(offset rows), **16 × 22 by default (352 tiles)**. The generator is landscape: start at the
+left middle, boss at the right middle, difficulty by column. The game draws it as a
 **portrait climb** with `orient: 'v'`: a pure display transform `(x, y) -> (y, -x)` that
 puts the start at the bottom middle and the boss at the top middle and turns every hex
-flat-top. Icons, labels, the ink pill and the axis chevrons stay upright; only positions
+flat-top. Icons, labels, the bulb pill and the axis chevrons stay upright; only positions
 transform. Hexes are a fixed `MAP.HEX = 46` px, so the world is about 1540 × 1310 stage px
 (`MAP.bounds`) and never fits the 540 × 768 map area: the map screen is a camera (see GAME).
-All tiles hidden except the road (below), the start's neighbours and the boss tile.
+All tiles dark except the road (below), the start's ring (its vision) and the boss tile.
 
-**Terrain.** Every tile carries `terrain` (`'land' | 'shallow' | 'sea'`), `elev` (0..1: height
-on land, depth on water), `coast` (land touching water) and `biome` (per act: 1 `cellar`
-damp stone, 2 `foundry` ash with lava pools in place of sea, 3 `vault` ice and open water;
-same rules, different look). Generation is seeded from the layout rng: two octaves of value
-noise, sea level at the water percentile (`MAP.WATER = 0.28`, the finished map lands at
-20-40% water, ~30% on average), two majority-smoothing passes, the start and boss with their
+**Words.** The field names kept their old spelling to limit churn: `M.ink` / `run.ink` is
+the **bulbs**, `M.brushes` / `run.brushes` the **tools**, `tile.revealed` means lit, the fx
+kind `ink` gives bulbs and `brush` a tool, `ECONOMY.startInk` is the bulbs per act. Every
+player-facing word comes from `DATA.TERMS` (`{ ink: 'bulb', inkPlural: 'bulbs', brush: 'tool',
+brushPlural: 'tools' }`): the HUD stat is BULBS (a marquee bulb drawn by `RENDER.bulb`), a
+tile that gives them is "a box of bulbs", the rescue toast says a bulb flickers on, events say
+bulbs. No copy in DATA says ink (the data suite greps for it).
+
+**Terrain.** Every tile carries `terrain` (`'land' | 'shallow' | 'sea'`), `ground` (the
+tileset: `grass, forest, dirt, sand, hill, mountain` on land, `shallow` / `sea` on water),
+`elev` (0..1: height on land by rank, squared so hills are the upper fifth; depth on water),
+`coast` (land touching water) and `biome` (per act: 1 `cellar` a mossy overgrown arcade,
+natural greens and browns under a purple tint; 2 `foundry` ash grass, cinder forest, lava for
+sea, obsidian mountains; 3 `vault` snow grass, pine forest, ice water, white peaks; same
+rules, different look). Generation is seeded from the layout rng: two octaves of value noise,
+sea level at the water percentile (`MAP.WATER = 0.28`, the finished map lands at 20-40%
+water, ~30% on average), two majority-smoothing passes, the start and boss with their
 neighbours forced to land, a guaranteed land route start -> boss (cheapest walk that hugs
 land, raised where it crosses water), then islands trimmed or carved to the wanted count
-(2-4 on the 16 × 22 world, 1 on 10 × 7, none under 60 tiles, which stay dry) and one ford
-per island: the shortest sea crossing to the mainland becomes `shallow`. `M.islands` and
-`M.water` record the result; `MAP.islandsOf(M)` lists the island tile keys, largest first.
-`generate({water: 0})` gives an all-land map (the legacy geometry tests use it).
+(2-4 on the 16 × 22 world, 1 on 10 × 7, none under 60 tiles, which stay dry) and one ford per
+island: the shortest sea crossing to the mainland becomes `shallow`. Then the height is
+re-spread by rank, the **mountains** are read off the top of it (`MOUNTAIN_ELEV = 0.86`,
+`MOUNTAIN_TARGET = 0.06`, `MOUNTAIN_MAX = 0.08` of the land; mainland only, never protected
+ground, never beside a ford, only where the mainland stays in one piece without them), and the
+ground is assigned: `hill` at `HILL_ELEV = 0.62`, `sand` on coast under `SAND_ELEV = 0.03`,
+the flat rest `forest` / `dirt` / `grass` by rank of a second noise (`FOREST_SHARE = 0.3`,
+`DIRT_SHARE = 0.15`). Over 100 world seeds the land is about 37% grass, 20% forest, 10%
+dirt, 10% sand, 16% hill, 5.5% mountain. `M.islands`, `M.water` and `M.seed` record the
+result; `MAP.islandsOf(M)` lists the island tile keys, largest first. `generate({water: 0})`
+gives a flat all-land map (no hills, no mountains; the legacy geometry tests use it).
 
-- Sea holds no content, is never `known`, cannot be revealed, brushed or walked; paths never
-  cross it (`pathToReveal`, `walkCost`, brushes skip sea cells).
-- A ford (`shallow`) costs `MAP.SHALLOW_COST = 2` ink to reveal and 2 ink to wade
+- Sea holds no content, is never walked and can never be lit by hand; it *can* be seen
+  (rings and views light it) and then draws as water instead of dark. Lit sea is not charted:
+  `revealedCount` and `progress()` leave it out.
+- A mountain is land nobody walks (`isMountain`, `isLand` is false for it): no content, no
+  road, `revealCost` and `moveCost` are `Infinity`, `pathToReveal` / `walkPath` go around it,
+  flares stop at it. Rings, kites, lanterns and views light it (it is seen). Every content tile
+  stays reachable around the mountains (the tests prove it).
+- A ford (`shallow`) costs `MAP.SHALLOW_COST = 2` bulbs to light by hand and 2 to wade
   (`revealCost` / `moveCost`); `canReveal`, `canMove`, `reachable`, `revealable` all check the
-  ink. Land is 1 to reveal, free to walk. `pathToReveal` is a bucket Dijkstra over those
-  costs; `pathCost(M, path)` is what a painted path spends and what `revealPath` charges.
-- Islands get the best content first: all towers but one (one always stays on the mainland),
-  a treasure, an elite, half the time a shop. Spread rules are relaxed there. Every land hex
-  is reachable from the start through land and fords.
+  bulbs. Land is 1 to light, free to walk. `pathToReveal` is a bucket Dijkstra over those
+  costs; `pathCost(M, path)` is what "light the way" spends and what `revealPath` charges.
+- Islands get the best content first: a treasure, an elite, half the time a shop (spread rules
+  are relaxed there). At most one tower stands on an island. Every land hex is reachable from
+  the start through land and fords.
 
-**The road.** The player can always reach the boss without spending a drop of ink: at
-generate the guaranteed land route from the start to the boss becomes a lit road (`tile.road`,
+**Light.** Five ways the dark goes:
+- *A bulb.* Tapping a dark hex next to the lit area lights it for `revealCost` (1, a ford 2).
+  Tapping a far one previews the cheapest chain there (`pathToReveal`, from every foothold:
+  lit tiles, the boss only once visited) with its bulb cost; a second tap lights the whole way
+  (`revealPath`) and the crawler walks it.
+- *Vision.* Entering a hex lights the ring around it for free: `VISION.low = 1` ring on lowland,
+  `VISION.hill = 2` on a hill (`elev >= HILL_ELEV`); the start counts as lowland. `MAP.move`
+  applies it (`vision(M, q, r)`, `visionRadius(tile)`), so walking reveals as you go and the
+  road's surroundings open up as it is walked. Sea and mountains in the ring are seen too.
+- *Tools* (`useTool(M, id, q, r, dir)`, no bulbs, one copy spent; `toolCells` for the preview,
+  `canTool`): a **flare** fires from the player's hex in one of the six directions
+  (`dirTo(M, from, q, r)` picks the nearest by angle to a tapped hex) and lights up to
+  `FLARE_RANGE = 5` hexes in a straight line, stopping at the edge, a mountain or open water
+  (neither lit); a ford is lit and stops it too. A **lantern** hangs on any lit hex and lights
+  its ring of six plus `LANTERN_OUTER = 0.5` of the second ring's land, picked by a hash of
+  `M.seed` and the cells (deterministic per map). A **kite** flies over any dark non-sea hex
+  within `KITE_RANGE = 6` of the player and lights it and its ring. Tools come from tool tiles
+  (a random tool), events, tower bonuses and sometimes a beaten elite
+  (`ECONOMY.eliteToolChance`). Ids `flare, lantern, kite` (`TOOL_IDS`, `DATA.TOOLS`, alias
+  `DATA.BRUSHES`); old brush ids (`line3, splash, drip, comb`) load as a lantern
+  (`normalizeTool`, `OLD_BRUSHES`). The old names `brush / canBrush / brushCells / brushIds`
+  alias the tool functions.
+- *The view from a tower* (`towerView(M, q, r)`): a taken tower lights everything within
+  `TOWER_VIEW = 4` (land, sea, all): 45-61 hexes.
+- *The road* is lit from the first moment.
+
+**The road.** The player can always reach the boss without spending a bulb: at generate
+the guaranteed land route from the start to the boss becomes a lit road (`tile.road`,
 `tile.revealed`, `M.road = [[q, r], ...]` in walking order from the start to the boss,
 `MAP.isRoad(tile)`). It is carved after the content is placed (`carveRoad`): a land-only
-Dijkstra over the mainland with a seeded wobble per tile and a toll on elites and towers, routed
-start -> rest -> shop -> boss where the rest and the shop are the mainland ones with the least
-detour that the road really passes within one hex of (a stop walled into a corner is skipped for
-the next candidate). Bends are then added into the widest column gap, first one side of the axis
-then the other, reaching further each round, until the road runs `MAP.ROAD_MEANDER = [1.15, 1.6]`
-times the straight hex distance; a bend that changes nothing or makes it too long is dropped, and a
-stop is dropped when the stops alone push it past the range. The road never repeats a tile, never
-crosses water and never passes through the boss. Its tiles keep whatever content they rolled
-(fights, events, a shop...): walking the road is still a run, and ink is for everything off it
-(islands, towers, the rests and forges the road does not touch). The road is drawn as a worn
-ochre track between its hexes over a lighter plate (`RENDER.mapRoad`, `st.road` in `RENDER.hex`),
-`progress()` counts it as charted, and it survives the save round trip; a save from before the
-road loads with `M.road = []` and plays as before (the ink rescue is the last resort there).
+Dijkstra over the mainland with a seeded wobble per tile and a toll on elites, never over a
+mountain and never through a tower or its doorstep (those are barred; only when that walls the
+boss in are they merely dear), routed start -> rest -> shop -> boss where the rest and the shop
+are the pairing among the three of each with the least detour that the road really passes both
+of and stays under the ceiling with (else the rest alone, else the shop alone). Bends are then
+added into the widest column gap, first one side of the axis then the other, reaching further
+each round, until the road runs `MAP.ROAD_MEANDER = [1.15, 1.6]` times the straight hex
+distance; a bend that changes nothing or makes it too long is dropped, and the stop whose loss
+helps most is dropped while the stops push it past the range. The road never repeats a tile,
+never crosses water and never passes through the boss. Its tiles keep whatever content they
+rolled (fights, events, a shop...): walking the road is still a run, and bulbs are for what
+lies off it. The road is drawn as a worn ochre track between its hexes over the ground and the
+pickups (`RENDER.mapRoad`, a little translucent), under the player marker; `progress()` counts
+it as charted, and it survives the save round trip; a save from before the road loads with
+`M.road = []` and plays as before (the bulb rescue is the last resort there).
 
 **Click to travel.** Tapping any lit hex the player can reach through lit hexes starts an
 auto-walk (`GAME.startWalk`, `S.walk = { path, i, t, from, done }`): the first step is taken at
 once (a tap on a neighbour is the old one-step move), the rest every `GAME.WALK_STEP = 0.28` s,
 the crawler easing between hex centres (`GAME.walkXY`, drawn by `RENDER.crawler`, the portrait
-riding along), the camera following, a step sfx per hex. Each step calls `MAP.move` then
-`enterTile`; a step onto anything that resolves (any type but empty/start that is not `done`, or
-a ford) ends the walk there and drops the rest of the path; a ford on the way is paid when stepped
-on (2 ink) and one the player cannot pay stops the walk in front of it with a toast; a tap during
-the walk stops it at the current hex. The path comes from `MAP.walkPath(M, q, r)`: Dijkstra over
-lit non-sea tiles, never through the boss, cheapest by ink first (a ford is `SHALLOW_COST`), then
-by steps, then skirting content that still resolves (a walk to a far rest does not blunder into
-a fight), then keeping to the road. Painting a hidden path (second tap) also walks it, stopping
-at the first thing that resolves. The walk is never saved; `toMap()` clears it.
+riding along), the camera following, a step sfx per hex. Each step calls `MAP.move` (which
+applies the vision) then `enterTile`; a step onto anything that resolves (any type but
+empty/start that is not `done`, or a ford) ends the walk there and drops the rest of the path;
+a ford on the way is paid when stepped on (2 bulbs) and one the player cannot pay stops the
+walk in front of it with a toast; a tap during the walk stops it at the current hex. The path
+comes from `MAP.walkPath(M, q, r)`: Dijkstra over lit walkable tiles, never through the boss,
+cheapest by bulbs first (a ford is `SHALLOW_COST`), then by steps, then skirting content that
+still resolves (a walk to a far rest does not blunder into a fight), then keeping to the road.
+Lighting the way (second tap) also walks it, stopping at the first thing that resolves. The
+walk is never saved; `toMap()` clears it.
 
-**Landmarks.** Hidden tiles of type shop, rest, forge, elite, treasure, boss and tower are
-`known` from the start: the fog shows their icon as a dim ink sketch with a dashed rim, so
-the player can see what is worth spending ink on. Fights, gems, ink pots, events, brushes
-and empties stay a faint `?`. Hidden fords show a `2`. Known tiles are still not walkable
-until revealed.
+**Landmarks.** Dark tiles of type shop, rest, forge, elite, treasure, boss and tower are
+`known` from the start: the dark shows their icon as a dim silhouette with a dashed rim, so
+the player can see what is worth lighting. Fights, gems, boxes of bulbs, events, tools and
+empties stay a faint `?`. Dark fords show a `2`. Known tiles are still not walkable until lit.
 
-**Towers.** 2 per act (3 on most world maps), never next to each other. Island towers first;
-the mainland tower sits off the start-boss axis on the top or bottom row (offset columns
-3..cols-3) when the land allows it, else anywhere at least two rows off the axis. Entering a
+**Lookout towers.** 3 per map (`DIST.tower` capped at `MAXS.tower = 3`, min 2), placed
+before the other content by a greedy farthest-first search (`placeTowers`) over empty land on
+high ground (`elev >= TOWER_ELEV = 0.5`), pairwise at least `TOWER_GAP = 6` apart and 6 from the
+start and the boss, each maximising the hexes its radius-`TOWER_VIEW` view would light that no
+earlier tower's view (nor the start's ring, nor the boss) lights, and adding at least
+`TOWER_VIEW_MIN = 30` of them, so each tower covers a region of its own; at most one on an
+island; a tower and its ring must leave the mainland joined start to boss without pushing the
+shortest land walk past the road's ceiling (the road never touches a tower). Maps too small
+for the rules relax them in steps (the end gap to 4, then a gap of 3 and 15 hexes, then any
+land that is not adjacent). Over 100 world seeds: 3 towers on every map, 54 island towers in
+all, own views 35-61 hexes (median 56), the three views together cover about 170 of the 328
+dark hexes, one seed in a hundred needs the second pass (a tower 5 from the boss). Entering a
 tower starts an elite-tier fight (the act's `tower` encounter pool when DATA has one, else its
-`elite` pool); winning pays a relic through the treasure screen plus a bonus rolled at
-generate (`content.tower.bonus`): `{k:'ink', n:2}`, `{k:'brush', id}`, `{k:'claw', u: upgradeId}`
-or `{k:'gold', n:60}`.
+`elite` pool); winning lights the view (`towerView`), pays a relic through the treasure screen
+plus a bonus rolled at generate (`content.tower.bonus`): `{k:'ink', n:2}` (2 bulbs,
+`ECONOMY.towerInk`), `{k:'brush', id}` (a tool), `{k:'claw', u: upgradeId}` or
+`{k:'gold', n:60}`.
 
-**Path paint.** Tapping a hidden hex that does not touch the lit area previews the cheapest
-hidden path to it (Dijkstra from every lit tile, the road included, never through the boss or
-the sea, fords count double) with its ink cost on the tile; tapping it again paints the whole
-path for that cost and the crawler walks it, or a toast says how much ink is missing. Tapping
-anywhere else clears the preview. Hidden hexes next to the light keep the one-tap reveal. The
-start-to-boss axis is drawn as a faint dotted line with chevrons that shows through the fog; the
-current hex has a breathing gold rim, walkable hexes a thick pulsing cyan rim.
+**Tileset and pickups (RENDER).** `terrainHex` paints the ground per `ground` and biome
+(`BIOME_PAL[biome]`: a base and a deco colour per ground, water, coast, foam, a tint and an
+accent): grass with tufts and the odd flower, forest with two or three trees (round canopies
+in the cellar, dead spikes with an ember in the foundry, snow-lined pines in the vault), dirt
+with pebbles and cracks, sand with ripples and a shell, hills with contour arcs and hatching, a
+mountain as two peaks with a lit face and a cap, a ford with stepping stones, sea with drifting
+ripples (lava with a hot core, an ice floe in the vault), every land hex with the biome's
+accent (moss, ash flecks, snow specks) so every ground draws differently in every biome
+(`groundOf(tile)` reads a ground off old tiles). `terrainFill(biome, terrain, elev, ground)`
+gives the base colour. Activities are drawn by `hex` as pickups: the icon on top of the ground
+with a small shadow (fight, elite, treasure, gem, a box of bulbs, a tool lantern, event, shop,
+rest, forge, tower, boss); once `tile.done` (resolved, taken, cleared, used) the icon is gone
+and only the terrain remains (no check mark, no plate); the boss icon stays until beaten. Dark
+tiles are darkness (`RENDER.DARK` deep purple, 0.92 alpha, 0.76 next to the light) with the
+landmark silhouettes; lit hexes next to the dark get a warm glow rim drawn after every hex
+(`RENDER.lightRim(ctx, x, y, size, mask, flat, t)`, GAME computes the mask of edges facing
+dark per frame). Draw order in `GAME.drawMap`: ground, coast, darkness and pickups, glow rims,
+the road, the axis, the crawler and portrait, the previews.
 
-**Ink economy (world size).** `DATA.ECONOMY` stays the source: startInk 10 per act, ink tiles
-give 2 and sit at 10% of the land (`DIST.ink`), a won normal fight drops 1 ink half the time,
-elites 2, towers 2 (`TOWER_INK`). `MAP.INK_PER_ACT_HINT = 24` is the ink a sensible route
-through one act should find; the balance pass reasons from it. The ink rescue (GAME) is the
-last resort: with the road lit it never fires for a player who can walk to the boss without
-wading; otherwise (an island with a spent ford, an old save) it pays the shortfall for the
-cheapest useful step, so a player stranded with a lit or hidden ford gets the 2 it needs.
+**Previews.** Tapping a dark hex that does not touch the lit area previews the cheapest chain
+to it (Dijkstra from every lit tile, the road included, never through the boss, the sea or a
+mountain, fords count double) with its bulb cost in a pill under the target (a bulb icon, pink
+when short; `RENDER.mapPath(ctx, pts, size, { cost, ink, label, unit, color, t })`); tapping it
+again lights the whole way and the crawler walks it, or a toast says how many bulbs are
+missing. An armed flare previews its line (`S.preview = { tool, dir, cells }`, an orange line
+and wash, the six possible lines marked with a gold dashed rim); a tap the same way fires it,
+a tap another way re-aims it. An armed lantern marks every lit hex, a kite every dark hex in
+range. Tapping anywhere else clears the preview. Dark hexes next to the light keep the one-tap
+reveal. The start-to-boss axis is drawn as a faint dotted line with chevrons that shows through
+the dark; the current hex has a breathing gold rim, walkable hexes a thick pulsing cyan rim.
+
+**Bulb economy (world size).** `DATA.ECONOMY` stays the source: `startInk` 10 per act, boxes
+of bulbs give 2 and sit at 10% of the land (`DIST.ink`), a won normal fight drops 1 bulb half
+the time, elites 2, towers 2 (`towerInk`) plus the view, elites hand over a tool
+`eliteToolChance` of the time. `MAP.INK_PER_ACT_HINT = 24` is the bulbs a sensible route
+through one act should find; the balance pass reasons from it. The bulb rescue (GAME
+`inkRescue`) is the last resort: with the road lit it never fires for a player who can walk to
+the boss without wading; otherwise (an island with a spent ford, an old save) it pays the
+shortfall for the cheapest useful step, so a player stranded with a lit or dark ford gets the
+2 it needs.
 
 ```js
-MAP.generate({act, rng, cols: 16, rows: 22, ink, brushes, water: 0.28, islands}) -> M    // cols clamps to >= 9, rows to >= 3
-M = { act, biome, cols, rows, tiles: { 'q,r': { q, r, type, terrain, elev, coast, biome, revealed, visited, known, road, content } },
-      start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [ids], revealedCount, islands, water, road: [[q,r], ...] }
-tile.type: 'empty'|'fight'|'elite'|'treasure'|'gem'|'ink'|'brush'|'event'|'shop'|'rest'|'boss'|'start'|'forge' (item upgrade)|'tower'
-tile.content: { enc?: [ids], gold?, ink?, brush?, event?, tower?: { bonus }, ... } rolled at generate ({} on water)
+MAP.generate({act, rng, cols: 16, rows: 22, ink, brushes, water: 0.28, islands}) -> M    // cols clamps to >= 9, rows to >= 3; ink = bulbs, brushes = tools
+M = { act, biome, cols, rows, seed, tiles: { 'q,r': { q, r, type, terrain, ground, elev, coast, biome, revealed, visited, known, road, done?, content } },
+      start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [toolIds], revealedCount, islands, water, road: [[q,r], ...] }
+tile.type: 'empty'|'fight'|'elite'|'treasure'|'gem'|'ink' (a box of bulbs)|'brush' (a tool)|'event'|'shop'|'rest'|'boss'|'start'|'forge' (item upgrade)|'tower'
+tile.ground: 'grass'|'forest'|'dirt'|'sand'|'hill'|'mountain'|'shallow'|'sea'   (MAP.GROUNDS)
+tile.content: { enc?: [ids], gold?, ink?, brush?: toolId, event?, tower?: { bonus }, ... } rolled at generate ({} on water and mountains)
 Distribution per act (share of the placeable land): fight 28%, empty 16%, gem 10%, ink 10% (min 4), event 8%, treasure 4% (min 2), brush 4% (min 2), shop 4% (min 3), rest 5% (min 3), forge 3% (min 2), elite 3% (min 2, never adjacent to start or boss), tower 3.5% (min 2, max 3). Elites/fights get harder with distance from start (content.diff = 0..1 by column).
-MAP.HEX = 46  MAP.WATER = 0.28  MAP.SHALLOW_COST = 2  MAP.INK_PER_ACT_HINT = 24  MAP.TERRAINS  MAP.BIOMES {1:'cellar',2:'foundry',3:'vault'}  MAP.DIRS
-MAP.key(q, r) MAP.neighbors(M, q, r) -> [[q,r]] (in-bounds only)
-MAP.isLandmark(tile) -> bool     // shop, rest, forge, elite, treasure, boss, tower
+MAP.HEX = 46  MAP.WATER = 0.28  MAP.SHALLOW_COST = 2  MAP.INK_PER_ACT_HINT = 24  MAP.TERRAINS  MAP.GROUNDS  MAP.BIOMES {1:'cellar',2:'foundry',3:'vault'}  MAP.DIRS
+MAP.HILL_ELEV = 0.62  MAP.TOWER_ELEV = 0.5  MAP.SAND_ELEV = 0.03  MAP.MOUNTAIN_ELEV = 0.86  MAP.MOUNTAIN_MAX = 0.08  MAP.VISION {low:1, hill:2}
+MAP.TOWER_VIEW = 4  MAP.TOWER_GAP = 6  MAP.TOWER_VIEW_MIN = 30  MAP.TOOL_IDS  MAP.FALLBACK_TOOLS  MAP.OLD_BRUSHES  MAP.FLARE_RANGE = 5  MAP.KITE_RANGE = 6  MAP.LANTERN_OUTER = 0.5
+MAP.key(q, r) MAP.neighbors(M, q, r) -> [[q,r]] (in-bounds only)   MAP.hexDist(aq, ar, bq, br)   MAP.disc(M, q, r, radius) -> [[q,r]] within radius
+MAP.isLand(t) / isWater(t) / isMountain(t)   MAP.isLandmark(tile) -> bool     // shop, rest, forge, elite, treasure, boss, tower
 MAP.isRoad(tile) -> bool         // on the lit start-to-boss road   MAP.ROAD_MEANDER = [1.15, 1.6]  MAP.ROAD_TOLL {elite, tower}
 MAP.biomeOf(act) -> biome        MAP.islandsOf(M) -> [[tileKeys], ...] largest first
-MAP.revealCost(tile) -> 1 | 2 | Infinity   MAP.moveCost(tile) -> 0 | 2 | Infinity   MAP.pathCost(M, path) -> ink
-MAP.canReveal(M, q, r) -> bool   // hidden, in bounds, not sea, adjacent to a revealed tile, ink >= revealCost
+MAP.revealCost(tile) -> 1 | 2 | Infinity   MAP.moveCost(tile) -> 0 | 2 | Infinity   MAP.pathCost(M, path) -> bulbs
+MAP.canReveal(M, q, r) -> bool   // dark, in bounds, lightable by hand, adjacent to a lit tile, bulbs >= revealCost
 MAP.reveal(M, q, r) -> tile|null // spends revealCost
-MAP.pathToReveal(M, q, r) -> [[q,r], ...]  // cheapest hidden path from the lit area to (q,r), in reveal order, ending on it; never through the boss or sea; [] when revealed, adjacent to the light, sea, the boss or unreachable
-MAP.revealPath(M, path) -> tiles[]|null    // reveals the whole path for pathCost ink; null (nothing spent) when short on ink or the chain is broken
+MAP.pathToReveal(M, q, r) -> [[q,r], ...]  // cheapest dark chain from the lit area to (q,r), in lighting order, ending on it; never through the boss, sea or a mountain; [] when lit, adjacent to the light, unlightable or unreachable
+MAP.revealPath(M, path) -> tiles[]|null    // lights the whole path for pathCost bulbs; null (nothing spent) when short or the chain is broken
+MAP.visionRadius(tile) -> 1 | 2   MAP.vision(M, q, r) -> tiles[]   MAP.lightArea(M, q, r, radius) -> tiles[]   MAP.towerView(M, q, r) -> tiles[]   // the tiles that were dark
+MAP.toolIds() -> ids   MAP.normalizeTool(id)   MAP.toolKind(id) -> 'line'|'ring'|'patch'|null   MAP.dirTo(M, from, q, r) -> 0..5 | -1
+MAP.flareCells(M, dir, from?) / lanternCells(M, q, r) / kiteCells(M, q, r) -> [[q,r]]   MAP.toolCells(M, id, q, r, dir?) -> [[q,r]] ([] when unusable there)
+MAP.canTool(M, id, q, r, dir?) -> bool   MAP.useTool(M, id, q, r, dir?) -> tiles[]|null   // lights the cells, spends one copy (old ids count)
+MAP.brush / canBrush / brushCells / brushIds  // the old names, aliases of useTool / canTool / toolCells / toolIds
 MAP.size(M, w, h, orient='h', max?) -> {size, ox, oy}  // fit with a MAP.FIT_MARGIN px margin; 'v' fits the transposed extents; max caps the hex size
 MAP.bounds(M, size, orient) -> {w, h, ox, oy}          // the world box at a fixed hex size: hex (q,r) at toPixel + (ox, oy) lies in 0..w x 0..h
-MAP.brush(M, brushId, q, r) -> tiles[]  // reveals the brush cells (no ink cost, consumes the brush, skips sea), target must be a hidden non-sea tile adjacent to revealed area
-MAP.canMove(M, q, r) -> bool     // revealed, not sea, adjacent to pos, ink >= moveCost
-MAP.move(M, q, r) -> tile        // sets pos, marks visited, spends moveCost
-MAP.walkCost(M, from, to, {any, land, ink}) -> ink | -1   // least ink to walk there (fords 2 each); any ignores the fog, land allows land only
-MAP.walkPath(M, q, r) -> [[q,r], ...] | null   // click-to-travel steps after pos, ending on (q, r): lit tiles only, never through the boss, cheapest by ink, then steps, then skirting unvisited content, then the road; null for pos, hidden, sea, cut off
+MAP.canMove(M, q, r) -> bool     // lit, walkable, adjacent to pos, bulbs >= moveCost
+MAP.move(M, q, r) -> tile        // sets pos, marks visited, spends moveCost, applies the vision
+MAP.walkCost(M, from, to, {any, land, ink}) -> bulbs | -1   // least bulbs to walk there (fords 2 each); any ignores the dark, land allows land only
+MAP.walkPath(M, q, r) -> [[q,r], ...] | null   // click-to-travel steps after pos, ending on (q, r): lit walkable tiles only, never through the boss, cheapest by bulbs, then steps, then skirting unvisited content, then the road; null for pos, dark, sea, a mountain, cut off
 MAP.pathExists(M, from, to, opts) -> bool   // walkCost >= 0, and <= opts.ink when given
 MAP.toPixel(q, r, size, orient='h') -> {x, y}   // pointy-top axial to pixel, (0,0) at (size, size); 'v' transposes to (y, -x)
 MAP.fromPixel(x, y, size, orient='h') -> {q, r}  // with cube rounding; inverse for either orientation
 MAP.hexCorners(x, y, size, orient='h') -> [{x,y} x6]  // pointy-top, or flat-top (turned 30 degrees) for 'v'
-MAP.progress(M) -> {revealed, total, pct}   // total leaves out the sea; the road counts as charted
-MAP.serialize(M) / MAP.deserialize(o)       // old saves without terrain load as dry land, without a road as M.road = []
+MAP.progress(M) -> {revealed, total, pct}   // charted hexes: total and revealed leave out the sea; the road counts
+MAP.serialize(M) / MAP.deserialize(o)       // old saves: no terrain -> flat land, no ground -> read off height and coast, no road -> M.road = [], brush ids -> lantern, no seed -> 0
 ```
 Tests (`tests/clawspire_map.test.mjs`): generation counts/minimums for 200 seeds (10 × 7 with terrain)
-and 100 seeds of the 16 × 22 world (water 20-40%, 2-4 islands with a tower and a treasure, a mainland
-tower, fords, ink at 10% of the land), the road (lit, all land, start to boss, no tile twice, meander
-1.15..1.6 on the world, past a rest and a shop, boss walkable for 0 ink at generate, save round trip,
-old saves without one), walkPath (lit only, cheapest by ink, exact hex distance when all is lit,
-skirting unvisited content, road preferred), land route start -> boss, start neighbourhood land, water empty
-and unknown, coast flags, every land hex reachable through fords, landmarks known exactly on their
-types, reveal/wade costs on fords, pathToReveal cheapest by ink (checked against an independent
-Dijkstra) and never over the sea, revealPath spends exactly pathCost, brushes skip the sea, bounds(),
-move rules, pixel<->hex round trip, serialize round trip with terrain and old-save defaults.
+and 100 seeds of the 16 × 22 world (water 20-40%, 2-4 islands with a treasure and an elite, a mainland
+tower, at most one island tower, fords, bulb boxes at 10% of the land, mountains 3-8%), the ground types
+(every tile typed, water grounds match, hills at HILL_ELEV, sand on low coast, mountains bare, impassable,
+unlightable by hand, off the islands, under MOUNTAIN_MAX, every content tile reachable around them), the
+towers (three on the world, pairwise >= TOWER_GAP, on high ground, each view >= TOWER_VIEW_MIN hexes of its
+own, never touched by the road), the road (lit, all land, start to boss, no tile twice, meander 1.15..1.6 on
+the world, past a rest and a shop or a justified miss, boss walkable for 0 bulbs at generate, save round
+trip, old saves without one), walkPath (lit only, cheapest by bulbs, exact hex distance when all is lit,
+skirting unvisited content, road preferred), the tools (the flare's line in every direction and its stops at
+a mountain, sea, a ford and the edge; the lantern's ring and seeded half ring, land only; the kite's range and
+patch, sea seen not charted; refusals; the old brush names and ids), vision on move (one ring on lowland, two
+on a hill, the start as lowland, sea seen), the tower view (exactly the radius 4 disc), land route start ->
+boss, water empty and unknown, coast flags, every land hex reachable through fords, landmarks known exactly
+on their types, reveal/wade costs on fords, pathToReveal cheapest by bulbs (checked against an independent
+Dijkstra) and never over the sea or a mountain, revealPath spends exactly pathCost, bounds(), move rules,
+pixel<->hex round trip, serialize round trip with terrain, ground and seed, old-save defaults and tool mapping.
 
 ### `js/audio.js` -- `AUDIO`
 
@@ -565,7 +667,8 @@ RENDER.bodyDebug(ctx, W)           // outlines, only for the debug flag
 RENDER.hex(ctx, x, y, size, tile, st={reachable, current, hover, path, target, orient, t})  // map tiles incl. icons for each type; tile.known draws the landmark sketch in the fog; orient 'v' = flat-top hex
 RENDER.mapBg(ctx, w, h, act, t)
 RENDER.mapAxis(ctx, x0, y0, x1, y1, size, hiddenCentres, t, flat)  // dotted start-boss axis with chevrons toward (x1, y1), clipped to the hidden hexes
-RENDER.mapPath(ctx, pts, size, {cost, ink, label, t})        // ink path preview line, cost pill, landmark label
+RENDER.mapPath(ctx, pts, size, {cost, ink, label, unit, color, t})   // light-the-way preview line, bulb cost pill (a bulb icon), label; color and no cost for a flare
+RENDER.terrainHex / terrainFill(biome, terrain, elev, ground) / groundOf(tile) / lightRim(ctx, x, y, size, mask, flat, t) / bulb(ctx, x, y, r, t, on)   // the tileset, the glow rim, the marquee bulb
 RENDER.hpBar(ctx, x, y, w, h, hp, max, block)
 RENDER.statusPips(ctx, x, y, status /*{id:n}*/, size)  // uses DATA.STATUS icon+color
 RENDER.intent(ctx, x, y, enemy, t)   // icon bubble above an enemy: sword+number, shield, skull, etc.
@@ -651,7 +754,7 @@ GAME.lookAt(q, r, ease) GAME.locate() GAME.wheel(x, y, deltaY) GAME.bossArrow() 
 ```
 Map screen: `S.cam` is a camera over `MAP.bounds`. Pointer down + move past 8 px drags
 (pans; the view centre is clamped to the map, so the start on the bottom edge still centres); a lift without a drag taps (reveal adjacent,
-preview + paint far, walk to lit, fords at 2 ink); two fingers pinch-zoom about their midpoint;
+preview + light far, walk to lit, fords at 2 bulbs, an armed tool uses the tap); two fingers pinch-zoom about their midpoint;
 the mouse wheel zooms about the cursor. Entering the map snaps the camera to the player
 (`toMap` on a new or loaded map), a move eases it there, the head's locate button (`◎`)
 recentres, and when the boss hex is off screen a pink chevron on the edge of the map area
@@ -693,7 +796,7 @@ rogue 13% wins over 8 runs each); the owner tunes it by hand from there.
 - A turn is 3 grabs; a good grab lands 1 item, a great one 2. Average item ≈ 6 dmg or 5 block.
   A typical act 1 fight lasts 4-6 turns. Whole run ≈ 25-35 minutes.
 - Gold: 10-25 per fight, items 40-120, relics 120-220, remove 60. Claw upgrade costs (50-160) are kept in data but nothing sells them: shops stock items, a relic, remove and sell; rest stops heal 30% or upgrade an item; the act transition after a boss (acts 1 and 2) shows "The Prize Master's spare parts" (1 of 3 unmaxed claw upgrades) before the boss relic; towers keep their claw bonus.
-- Ink: 5 per act start, +1-2 from ink tiles, +1 from elites. ~35% of the map is revealed in a
+- Bulbs: 10 at run start, +2 from bulb boxes, +2 from towers, +2 from elites (fights 50%). Vision lights rings for free, towers light radius 4. ~35% of the map is revealed in a
   normal run; revealing more = more fights = more loot but more risk.
 
 ## Quality bar (Game of the Year, mobile)

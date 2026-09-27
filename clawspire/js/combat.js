@@ -812,7 +812,7 @@ const COMBAT = (() => {
         break;
       }
       case 'gold': F.gain.gold += Math.round(v); text(F, p, `${v >= 0 ? '+' : ''}${Math.round(v)} gold`); break;
-      case 'ink': F.gain.ink += Math.round(v); text(F, p, `${v >= 0 ? '+' : ''}${Math.round(v)} ink`); break;
+      case 'ink': F.gain.ink += Math.round(v); text(F, p, `${v >= 0 ? '+' : ''}${Math.round(v)} bulbs`); break;
       case 'maxhp': {
         const g = Math.round(v);
         const before = p.maxHp;
