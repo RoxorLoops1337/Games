@@ -94,9 +94,29 @@ const DEMON_HI = [0, 1, 2, 3].map(i => img('sprites/demon/demon_idle_' + i + '.p
 // (relScale, dx, dy in idle source px, measured by template matching)
 const BOSS_ALIGN = { azzaroth: [1.04, -84, 4], gormauth: [1, 0, -20], ignar: [1.02, -24, -40], karnak: [1, 20, 4], mortis: [1.1, -176, -8], thornheart: [1.04, -16, 0] };
 
-// offscreen used to tint a sprite (hit flash / freeze) without touching the scene
-const _tint = document.createElement('canvas'); _tint.width = 1200; _tint.height = 1100;
-const _tg = _tint.getContext('2d');
+// tinted sprite cells (hit flash / freeze / rim silhouettes) are baked once into their own
+// canvases and never modified afterwards. (Re-using one scratch canvas, rewritten after
+// being drawn, made Chromium's deferred rasteriser drop random tiles to black.)
+const _tintCache = new Map();
+let _tintId = 0;
+function tintedCell(im, sx, sy, sw, sh, fx) {
+  if (!im._tid) im._tid = ++_tintId;
+  const tA = Math.round((fx.tintA || 0) * 20) / 20, fA = Math.round((fx.flash || 0) * 20) / 20;
+  const key = im._tid + '|' + sx + '|' + sy + '|' + sw + '|' + sh + '|' + (fx.tint || '') + '|' + tA + '|' + fA;
+  let c = _tintCache.get(key);
+  if (!c) {
+    c = document.createElement('canvas'); c.width = sw; c.height = sh;
+    const x = c.getContext('2d');
+    x.imageSmoothingEnabled = false;
+    x.drawImage(im, sx, sy, sw, sh, 0, 0, sw, sh);
+    x.globalCompositeOperation = 'source-atop';
+    if (tA > 0) { x.globalAlpha = tA; x.fillStyle = fx.tint; x.fillRect(0, 0, sw, sh); }
+    if (fA > 0) { x.globalAlpha = fA; x.fillStyle = '#fff'; x.fillRect(0, 0, sw, sh); }
+    if (_tintCache.size > 900) _tintCache.delete(_tintCache.keys().next().value);
+    _tintCache.set(key, c);
+  }
+  return c;
+}
 
 // core: draw a cell of `im` so that its anchor (ax, ay in src px) lands on (x, y); scale s; dir -1 mirrors.
 // fx: {flash:0..1 (white), tint:'#rgb', tintA, alpha}
@@ -112,16 +132,8 @@ function drawCell(g, im, sx, sy, sw, sh, ax, ay, x, y, s, dir = 1, fx = null) {
   if (fx && fx.add) g.globalCompositeOperation = 'lighter';
   if (fx && fx.alpha != null) g.globalAlpha *= fx.alpha;
   g.imageSmoothingEnabled = scr < .98; g.imageSmoothingQuality = 'medium';
-  if (fx && (fx.flash > 0 || fx.tintA > 0) && sw <= 1200 && sh <= 1100) {
-    _tg.globalCompositeOperation = 'source-over'; _tg.clearRect(0, 0, sw, sh);
-    _tg.imageSmoothingEnabled = false;
-    _tg.drawImage(im, sx, sy, sw, sh, 0, 0, sw, sh);
-    if (!(fx.tintA >= 1)) g.drawImage(_tint, 0, 0, sw, sh, -ax, -ay, sw, sh);
-    _tg.globalCompositeOperation = 'source-atop';
-    if (fx.tintA > 0) { _tg.globalAlpha = fx.tintA; _tg.fillStyle = fx.tint; _tg.fillRect(0, 0, sw, sh); }
-    if (fx.flash > 0) { _tg.globalAlpha = fx.flash; _tg.fillStyle = '#fff'; _tg.fillRect(0, 0, sw, sh); }
-    _tg.globalAlpha = 1;
-    g.drawImage(_tint, 0, 0, sw, sh, -ax, -ay, sw, sh);
+  if (fx && (fx.flash > 0 || fx.tintA > 0)) {
+    g.drawImage(tintedCell(im, sx, sy, sw, sh, fx), -ax, -ay, sw, sh);
   } else {
     const [mi, f] = mip(im, scr);
     g.drawImage(mi, sx / f, sy / f, sw / f, sh / f, -ax, -ay, sw, sh);

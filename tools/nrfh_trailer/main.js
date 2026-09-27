@@ -53,10 +53,14 @@ function renderFrame(t, Kover) {
   FRAME_T = t;
   const P = postParams(t);
   const K = Kover || P.K;
+  // the shutter never straddles a hard cut: sub-samples stay inside the shot
+  // that owns this frame (a cut on an exact frame would otherwise double-expose)
+  let lo = 0, hi = DUR - 1e-6;
+  for (const s of SHOTS) if (t >= s.t0 && t < s.t1) { lo = Math.max(lo, s.t0); hi = Math.min(hi, s.t1 - 1e-6); }
   post.begin(K);
   for (let i = 0; i < K; i++) {
     const ts = K === 1 ? t : t + ((i + .5) / K - .5) * P.shutter / FPS;
-    paint(clamp(ts, 0, DUR - 1e-6), P);
+    paint(clamp(ts, lo, hi), P);
     post.add(sceneCv);
   }
   post.finish(P, t);

@@ -275,3 +275,31 @@ function tierB(g, txt, x, y, lt, col, o = {}) {
   strokeText(g, txt, 0, 0, { font: F.pix(size), fill: o.fill || col, outline: null });
   g.restore();
 }
+
+// forked lightning: midpoint displacement with side branches (screen or world space)
+function lightning(g, x1, y1, x2, y2, seed, o = {}) {
+  const r = rng(seed);
+  const segs = [];
+  const split = (ax, ay, bx, by, d, depth) => {
+    if (depth <= 0) { segs.push([ax, ay, bx, by, o.lw || 3]); return; }
+    const mx = (ax + bx) / 2 + (r() - .5) * d, my = (ay + by) / 2 + (r() - .5) * d * .35;
+    split(ax, ay, mx, my, d * .55, depth - 1); split(mx, my, bx, by, d * .55, depth - 1);
+    if (depth >= 3 && r() < (o.branch != null ? o.branch : .45)) {
+      const len = Math.hypot(bx - ax, by - ay) * (.5 + r() * .5), ang = Math.atan2(by - ay, bx - ax) + (r() - .5) * 1.4;
+      const sub = [];
+      const bsplit = (ax2, ay2, bx2, by2, d2, dp) => {
+        if (dp <= 0) { segs.push([ax2, ay2, bx2, by2, (o.lw || 3) * .5]); return; }
+        const mx2 = (ax2 + bx2) / 2 + (r() - .5) * d2, my2 = (ay2 + by2) / 2 + (r() - .5) * d2 * .5;
+        bsplit(ax2, ay2, mx2, my2, d2 * .55, dp - 1); bsplit(mx2, my2, bx2, by2, d2 * .55, dp - 1);
+      };
+      bsplit(mx, my, mx + Math.cos(ang) * len, my + Math.sin(ang) * len, d * .6, depth - 2);
+    }
+  };
+  split(x1, y1, x2, y2, o.jit || Math.hypot(x2 - x1, y2 - y1) * .35, o.depth || 6);
+  g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'butt'; g.lineJoin = 'miter';
+  for (const [pass, wm, col, a] of [[0, 5, o.glow || '#b163ff', .28], [1, 1, o.col || '#f0e4ff', 1], [2, .4, '#ffffff', 1]]) {
+    g.strokeStyle = col; g.globalAlpha = (o.alpha != null ? o.alpha : 1) * a;
+    for (const [ax, ay, bx, by, lw] of segs) { g.lineWidth = lw * wm; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke(); }
+  }
+  g.restore();
+}

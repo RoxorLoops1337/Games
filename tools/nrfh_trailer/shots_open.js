@@ -9,7 +9,7 @@ const BOLTS = [0, .46875];
 shot({ id: 'open', t0: 0, t1: .9375,
   draw(g, lt, P) {
     if (!ok(SCENE7)) return;
-    const z = 2.5 * Math.pow(3.7 / 2.5, E.inQuad(lt / .9375));      // ease-in push toward the party
+    const z = 2.85 * Math.pow(3.9 / 2.85, E.inQuad(lt / .9375));    // ease-in push; the painting always fills the frame
     const k = (W / 1280) * z;
     const fx = 236 + lt * 10, fy = 330;
     const sh = shake(lt, 5 * kick(lt, 0, .1) + 5 * kick(lt, .46875, .1) * (lt >= .46875), 30);
@@ -20,24 +20,40 @@ shot({ id: 'open', t0: 0, t1: .9375,
     g.translate(-fx, -fy);
     const bri = .62 + .75 * clamp(lit);
     g.imageSmoothingEnabled = false;
-    g.drawImage(baked('scene7', 1280, 720, x => { x.filter = 'saturate(1.15)'; x.drawImage(SCENE7, 0, 0); }), 0, 0);
+    // resample to 640x360 and back up, nearest: at this zoom the frame shows clean square
+    // pixels instead of magnified JPEG blocks
+    const grid = baked('scene7grid', 640, 360, x => { x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.filter = 'saturate(1.15)'; x.drawImage(SCENE7, 0, 0, 640, 360); });
+    g.drawImage(grid, 0, 0, 1280, 720);
     g.save();
     if (bri < 1) { g.fillStyle = `rgba(0,0,0,${(1 - bri).toFixed(3)})`; g.fillRect(0, 0, 1280, 720); }
     else { g.globalCompositeOperation = 'lighter'; g.globalAlpha = bri - 1; g.drawImage(SCENE7, 0, 0); }
     g.restore();
-    // the storm answers the painted bolts
-    BOLTS.forEach((b0, i) => {
-      if (lt < b0) return;
-      const a = Math.exp(-(lt - b0) / .09);
-      if (a < .03) return;
-      g.save(); g.globalAlpha = a;
-      bolt(g, 175 + i * 120, -20, 205 + i * 90, 250, 11 + i * 12, '#e2ccff', 2.4, 10, 34);
-      bolt(g, 120 + i * 150, 0, 60 + i * 170, 190, 17 + i * 5, '#b163ff', 1.4, 7, 24);
-      g.restore();
-    });
     // the party's torchlight
     glow(g, 243, 340, 64, 'rgba(255,196,120,A)', .5 + .08 * Math.sin(lt * 23));
     g.restore();
+    // the storm answers: forked bolts in screen space across the painted sky
+    BOLTS.forEach((b0, i) => {
+      if (lt < b0) return;
+      const a = Math.exp(-(lt - b0) / .085);
+      if (a < .03) return;
+      lightning(g, [620, 1260][i], -20, [540, 1400][i], [330, 300][i], 11 + i * 12, { lw: 3.2, depth: 6, alpha: a, col: '#efe4ff', glow: '#a55cff' });
+    });
+    // the second strike reveals who is waiting: Azzaroth's silhouette in the storm clouds
+    const rev = lt >= BOLTS[1] ? Math.exp(-(lt - BOLTS[1]) / .16) : 0;
+    const dim = DEMON_HI[0];
+    if (rev > .02 && ok(dim)) {
+      // a dark shape cut out of the lightning-lit sky, rim-lit on its edges
+      const rimC = tintedCell(dim, 0, 0, dim.naturalWidth, dim.naturalHeight, { tint: '#e2b8ff', tintA: 1 });
+      const sil = tintedCell(dim, 0, 0, dim.naturalWidth, dim.naturalHeight, { tint: '#0a0310', tintA: 1 });
+      const hh = 560, ww = hh * dim.naturalWidth / dim.naturalHeight, cx = 1500, cy = 300 + (1 - rev) * 18;
+      g.save(); g.imageSmoothingEnabled = true;
+      g.globalCompositeOperation = 'lighter'; g.globalAlpha = .75 * rev;
+      g.drawImage(rimC, cx - ww / 2 - 6, cy - hh / 2 - 7, ww, hh);
+      g.globalCompositeOperation = 'source-over'; g.globalAlpha = .88 * rev;
+      g.drawImage(sil, cx - ww / 2, cy - hh / 2, ww, hh);
+      g.restore();
+      for (const ex of [-40, 40]) { glow(g, cx + ex - 21, cy - 131, 34, 'rgba(255,40,30,A)', rev); glow(g, cx + ex - 21, cy - 131, 12, 'rgba(255,220,200,A)', rev); }
+    }
     // a soft sky layer drifting faster than the painting (cheap parallax)
     g.save(); g.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 5; i++) {
