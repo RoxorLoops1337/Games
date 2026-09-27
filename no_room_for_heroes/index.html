@@ -2359,13 +2359,15 @@ function callout(x,y,txt,col,o){
   // a LATER reaction re-punches the hero's callout in place; reactions from the SAME hit
   // (OVERLOAD then SHATTER, IGNITE then THERMAL SHOCK) each keep their own, stacked
   if(live && !(o.hit && live.hit===o.hit) && live.age<live.dur-0.3 && pops.includes(live)){
-    const rise=q=>live.rise*(1-Math.exp(-q*2.4));
-    live.y=Math.max(live.y+rise(0.07)-rise(live.age), live.ay-10);   // hold its place, never drift off its row
-    live.x=x; live.txt=txt; live.col=col; live.fill=o.fill||null; live.size=size; live.sub=sub; live.age=0.07; live.hit=o.hit||0;
+    // punch again on its own clock (pt): its drift (age) keeps going, so it never jumps
+    live.pt=live.age-0.07; live.dur=live.age+(o.dur||1.1);
+    live.x=x; live.txt=txt; live.col=col; live.fill=o.fill||null; live.size=size; live.sub=sub; live.hit=o.hit||0;
     return live;
   }
-  let n=0; for(const p of pops) if(p.kind==='txt') n++;
-  if(n>=POP_TXT_CAP) popEvict(p=>p.kind==='txt');
+  // on-screen cap: pinned headlines count for at most 2 slots, and a callout from the
+  // SAME hit is never the one evicted (OVERLOAD must survive its own SHATTER)
+  let n=0, pn=0; for(const p of pops) if(p.kind==='txt'){ if(p.pin) pn++; else n++; }
+  if(n+Math.min(pn,2)>=POP_TXT_CAP) popEvict(p=>p.kind==='txt' && !(o.hit && p.hit===o.hit));
   // stack above any live callout it would print over (Press Start 2P advances one em per
   // glyph, so a callout is ~len*size wide); at most three rows up, then it may overlap
   const y0=y;
@@ -2373,13 +2375,22 @@ function callout(x,y,txt,col,o){
     const gap=(p.size+size)*0.75+(sub?size*1.2:0)+4;
     if(Math.abs(p.y-y)<gap && y0-(p.y-gap)<=gap*3) y=p.y-gap; }
   if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='skull')) popEvict(()=>true);
-  const p={kind:'txt', x, y, ay:y, txt, col, fill:o.fill||null, size, sub, pin:!!o.pin, hit:o.hit||0,
+  const p={kind:'txt', x, y, txt, col, fill:o.fill||null, size, sub, pin:!!o.pin, hit:o.hit||0, pt:0,
     rot:(o.rot!=null?o.rot:-0.12+Math.random()*0.1), age:0, dur:o.dur||1.1, rise:(o.rise!=null?o.rise:18)};
   pops.push(p); if(h) h._co=p;
   return p;
 }
-function skullPop(x,y){ if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='skull')) return;   // skulls never push out a callout
-  pops.push({kind:'skull', x, y, size:2.6, rot:0, age:0, dur:1.15, rise:24}); }
+function skullPop(x,y,rise){ if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='skull')) return;   // skulls never push out a callout
+  pops.push({kind:'skull', x, y, size:2.6, rot:0, age:0, dur:1.15, rise:(rise!=null?rise:24)}); }
+// where a hero's reaction callout goes: above the overlays actually drawn over its head
+// (HP bar + gold tag; elite trait icons; a champion's or the King's crown + name banner)
+function calloutY(h){ const ft=(h._figTop!=null)?h._figTop:h.y-26;
+  return ft-((h.champion||h.king)?76:(h.elite && h.traits && h.traits.length)?62:52); }
+// a dying hero's kill floats (payout, COMBO, BONUS RELIC) shift up so they print ABOVE
+// its still-live reaction callout instead of through it; 0 when it has none
+function killLane(h){ const co=h && h._co; if(!(co && co.age<co.dur && pops.includes(co))) return 0;
+  const top=co.y-co.rise*(1-Math.exp(-2.4*co.age))-co.size*0.8;
+  return Math.min(0, top-8-(h.y-60)); }
 let _skullCv=null;                               // the trailer's 7×7 pixel skull, outlined, ember eyes
 function skullSprite(){
   if(_skullCv!==null) return _skullCv;
@@ -2397,8 +2408,8 @@ function skullSprite(){
 }
 function drawPops(tx){
   for(const p of pops){
-    const lt=p.age, inT=0.07;
-    let s=lt<inT ? 1.6-0.6*(1-Math.pow(1-lt/inT,3)) : 1+0.12*Math.exp(-(lt-inT)*9)*Math.cos((lt-inT)*30);
+    const lt=p.age, lp=lt-(p.pt||0), inT=0.07;       // lp: time since its last punch
+    let s=lp<inT ? 1.6-0.6*(1-Math.pow(1-lp/inT,3)) : 1+0.12*Math.exp(-(lp-inT)*9)*Math.cos((lp-inT)*30);
     const out=clamp((lt-(p.dur-0.15))/0.15,0,1); s*=1+out*0.35;
     const a=clamp(lt/0.03,0,1)*(1-out); if(a<=0.01) continue;
     X.save(); X.translate(tx(p.x), p.y-p.rise*(1-Math.exp(-lt*2.4))); X.rotate(p.rot); X.scale(s,s); X.globalAlpha=a;
@@ -2466,7 +2477,8 @@ function shatterFrame(h){                        // the hero's last frame, ice-t
   return h._shCv;
 }
 function drawShatter(sx,footY,h,age){
-  if(sx<-120 || sx>VW/Math.max(0.2,zoom)+120) return true;   // off screen: nothing to draw
+  const m=120+200*Math.max(0,age-0.05);          // chunks fly up to ~200 units: widen the margin as they go
+  if(sx<-m || sx>VW/Math.max(0.2,zoom)+m) return true;   // off screen: nothing to draw
   const L=h._spr, im=L && L.img && shatterFrame(h); if(!im) return false;
   const r=prng(h._sid||1), n=8, cx=sx, cy=footY-22, R=Math.max(L.dw,L.dh);
   const fade=1-clamp((age-0.55)/0.4,0,1);
@@ -2569,11 +2581,12 @@ const COMBO_TIERS=[
   {n:16, t:'GODLIKE!',     c:'#b985ff', f:0.32, slow:0.50, fill:'arcane'},
   {n:20, t:'LEGENDARY!',   c:'#4dc3ff', f:0.36, slow:0.50, fill:'ice'},
 ];
+const _streakCo={};                              // owner of the single live kill-streak callout
 function comboCallout(combo, x){
   let tier=COMBO_TIERS.find(ct=>ct.n===combo);
   if(!tier && combo>20 && (combo-20)%5===0) tier={t:'LEGENDARY x'+combo+'!', c:'#4dc3ff', f:0.38, slow:0.5, fill:'ice'};
   if(!tier) return;
-  callout((x!=null?x:VW*0.5), FLOOR-150, tier.t, tier.c, {fill:tier.fill, size:15, dur:1.6, rise:14, rot:-0.07, pin:true});
+  callout((x!=null?x:VW*0.5), FLOOR-150, tier.t, tier.c, {fill:tier.fill, size:15, dur:1.6, rise:14, rot:-0.07, pin:true, hero:_streakCo});   // ONE streak callout: a new tier re-punches it
   flash(tier.c, tier.f, 0.35); shake(6+Math.min(combo,8)); sfx('combo');
   if(tier.slow) slowmo(tier.slow);
   // a flurry of embers in the streak's colour — bigger streak, bigger flourish
@@ -5472,7 +5485,7 @@ function popReact(h,label,col,x){
   const chain=h.reactCount;
   const word=label.replace(/^[^A-Z]+/,'');                   // '🔥 IGNITE' → 'IGNITE' (the pixel font has no emoji)
   h._react=word; h._reactAt=performance.now();               // a SHATTER kill breaks the hero apart (heroDies)
-  callout(h.x, h.y-78, word+(chain>1?' x'+chain:''), col, {fill:REACT_FILL[word], size:chain>=3?15:12, sub:'-'+x, hero:h, hit:_hitId});   // chains pop big
+  callout(h.x, calloutY(h), word+(chain>1?' x'+chain:''), col, {fill:REACT_FILL[word], size:chain>=3?15:12, sub:'-'+x, hero:h, hit:_hitId});   // chains pop big
   burst(h.x,h.y-24,col,16+Math.min(chain,6)*3); sfx('crit');
   if(chain>=3) flash(col, Math.min(0.3, 0.10+chain*0.03), 0.22);             // escalating reaction spectacle
   if(chain>=4) slowmo(0.25);
@@ -5567,7 +5580,7 @@ function elementReact(h, elem, baseDmg){
       const cd=Math.round(baseDmg*0.6*rm); reactHit(o,cd); floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
       arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
     if(arced){ h.reactCount=(h.reactCount||0)+1; h.reactT=3;
-      callout(h.x, h.y-78, 'CONDUCT x'+arced, '#fff34d', {fill:'volt', hero:h, hit:_hitId}); sfx('crit'); }
+      callout(h.x, calloutY(h), 'CONDUCT x'+arced, '#fff34d', {fill:'volt', hero:h, hit:_hitId}); sfx('crit'); }
   }
 }
 function healBoss(amt){
@@ -5692,6 +5705,7 @@ function castOverdrive(){
 function heroDies(h){
   if(!h || h.state==='dead') return;
   h.state='dead'; h.diedAt=performance.now();   // drives the death animation
+  const kl=killLane(h);                          // cosmetic: lift the kill floats over a live reaction callout
   // ❄ an iced hero SHATTERS instead of falling (cosmetic: see shatterFx / drawHeroDead)
   if(!h.king && !h.champion && (h.freeze>0 || h.chill>0 ||
      ((h._react==='SHATTER'||h._react==='ENCASE') && h.diedAt-(h._reactAt||0)<200))) shatterFx(h);
@@ -5711,7 +5725,7 @@ function heroDies(h){
   // 🏺 Relic-bearer elite: a bonus relic drops when it falls
   if(h.traits && h.traits.includes('relicbearer')){
     G.relicDue=(G.relicDue||0)+1;
-    floater(h.x, h.y-78, '🏺 BONUS RELIC', '#ffd34d');
+    floater(h.x, h.y-78+kl, '🏺 BONUS RELIC', '#ffd34d');
   }
   // loot: carried gold + bounty (threat dial + rune bonuses)
   // loot the hero's full purse (incl. what they spent at your shop — that sale was pure profit on top)
@@ -5753,7 +5767,7 @@ function heroDies(h){
   setStatMax('maxCombo', G.combo);              // feat: best kill streak
   let comboBonus=0;
   if(G.combo>=3){ comboBonus=G.combo; G.gold+=comboBonus;
-    floater(h.x, h.y-78, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
+    floater(h.x, h.y-78+kl, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
   comboCallout(G.combo, h.x);
   gainRage(8);                                  // 💥 every kill stokes the boss's wrath
   // room XP: credit the room the hero was IN when it fell (toward fusing a 2nd
@@ -5766,8 +5780,8 @@ function heroDies(h){
   // a hero who touched the throne returns with a grudge
   if(h.reachedThrone) makeRival(h);
   burst(h.x, h.y-20, '#ffd34d', 22);
-  floater(h.x, h.y-60, '+'+loot+'g · +'+dread+'☠', '#ffd34d');   // one combined payout float
-  skullPop(h.x, h.y-42); coinBurst(h.x, h.y-20, FLOOR+(h.yOff||0), Math.min(10, 3+Math.round(loot/8)));   // 🎬 trailer kill pop
+  floater(h.x, h.y-60+kl, '+'+loot+'g · +'+dread+'☠', '#ffd34d');   // one combined payout float
+  if(kl<0) skullPop(h.x, h.y-34, 8); else skullPop(h.x, h.y-42); coinBurst(h.x, h.y-20, FLOOR+(h.yOff||0), Math.min(10, 3+Math.round(loot/8)));   // 🎬 trailer kill pop
   sfx('kill');
   if(h.loot) dropLoot(h);                 // 💎 carriers drop their gear on the floor to collect
   // 🩸 death gore: a heavy spray, a few gibs, a pool soaking in, a soul wisp rising
@@ -8991,6 +9005,7 @@ function drawHero(sx,h){
                : king      ? (yy - 64)                 // King fallback (sprite/figure) stands taller
                : h.kingGuard ? (yy - 34)               // a little knight sits lower
                : (yy - 46);
+  h._figTop=figTop;                                  // reaction callouts anchor above it (calloutY)
   // frozen / elemental status tints
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }

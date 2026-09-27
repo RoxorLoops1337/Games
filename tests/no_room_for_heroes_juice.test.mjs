@@ -21,7 +21,7 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; },
   callout,pops,POP_TXT_CAP,elementReact,castOverdrive,RAGE_MAX,forkBolt,_boltA,_landQ,
-  banner,drawBanner,mixHex,SHATTER_T,SHATTER_MAX,cellX,buildHeroFromSpec,nextSpec,LIFT,skullPop,
+  banner,drawBanner,mixHex,SHATTER_T,SHATTER_MAX,cellX,buildHeroFromSpec,nextSpec,LIFT,skullPop,calloutY,comboCallout,
   get overdriveT(){ return overdriveT; }, get camX(){ return camX; }, set VW(v){ VW=v; }, get CV(){ return CV; }`);
 const t = harness('render/juice smoke');
 const BOSS = Object.keys(A.BOSSES)[0];
@@ -495,10 +495,17 @@ try{
   const mine=A.pops.filter(p=>p.kind==='txt' && p===h._co);
   t.ok(A.pops.filter(p=>p.kind==='txt').length===1 && mine.length===1 && /^SHATTER/.test(mine[0].txt),
     'a later reaction on the same hero updates its callout (now '+(mine[0]&&mine[0].txt)+') instead of stacking');
-  // …and keeps it near the hero: twenty quick re-punches never lift it more than 10 above its anchor
+  // …and keeps it near the hero: twenty re-punches never drift it more than its rise, never jump it down
   A.update(2); A.pops.length=0; h._co=null;                 // a fresh callout at the hero's own anchor
-  for(let i=0;i<20;i++){ A.update(0.3); h.chill=3; A.elementReact(h,'phys',30); }
-  t.ok(h._co.y>=h.y-78-10-0.01, 'a re-punched callout never drifts off its hero (y '+h._co.y.toFixed(1)+' vs anchor '+(h.y-78).toFixed(1)+')');
+  const drawnY=c=>c.y-c.rise*(1-Math.exp(-2.4*c.age));
+  let prevY=Infinity, jumped=false;
+  for(let i=0;i<20;i++){ A.update(0.3); h.chill=3; A.elementReact(h,'phys',30);
+    const dy=drawnY(h._co); if(dy>prevY+0.01) jumped=true; prevY=dy; }
+  t.ok(prevY>=h._co.y-h._co.rise-0.01 && Math.abs(h._co.y-A.calloutY(h))<=4, 'a re-punched callout stays on its hero (drawn '+prevY.toFixed(1)+', anchor '+A.calloutY(h).toFixed(1)+')');
+  t.ok(!jumped, 're-punches never snap a callout back down (the punch runs on its own clock)');
+  // anchored above what is drawn over the head: a champion's crown + name banner too
+  const ch=A.buildHeroFromSpec(A.nextSpec()); ch.champion='paladin'; ch._figTop=200;
+  t.ok(A.calloutY(ch)<=200-70, 'a champion callout clears its crown + name banner ('+A.calloutY(ch)+' vs figTop 200)');
   // reactions from ONE hit each show: OVERLOAD (the stun) is not overwritten by the SHATTER it enables
   const g=hs[3]||hs[1]; A.update(2); A.pops.length=0; g._co=null; g.freeze=0; g.refreezeT=0; g.chill=3;
   A.elementReact(g,'shock',30);
@@ -506,6 +513,12 @@ try{
   t.ok(/OVERLOAD/.test(words) && /SHATTER/.test(words), 'one shock on a chilled hero shows OVERLOAD and SHATTER ('+words+')');
   const ys=A.pops.filter(p=>p.kind==='txt').map(p=>p.y);
   t.ok(new Set(ys.map(y=>Math.round(y))).size===ys.length, 'same-hit callouts stack instead of printing over each other');
+  // …even when pinned headlines are hogging the on-screen slots
+  A.update(2); A.pops.length=0; g._co=null; g.freeze=0; g.refreezeT=0; g.chill=3;
+  for(let i=0;i<4;i++) A.callout(600+i*200, 120, 'HEADLINE'+i, '#ffd34d', {pin:true});
+  A.elementReact(g,'shock',30);
+  const w2=A.pops.filter(p=>p.kind==='txt').map(p=>p.txt).join('|');
+  t.ok(/OVERLOAD/.test(w2) && /SHATTER/.test(w2), 'OVERLOAD survives its own SHATTER with 4 pinned headlines live ('+w2+')');
   A.update(2); A.pops.length=0;
   // on-screen cap for free callouts
   for(let i=0;i<9;i++) A.callout(100+i*5, 200, 'TEST'+i, '#fff');
@@ -528,7 +541,13 @@ try{
     'a mass iced death chunks at most '+A.SHATTER_MAX+' heroes at once ('+crowd.filter(c=>!c._noChunks).length+'), the rest still shatter lite');
   for(let i=0;i<4;i++){ A.update(0.03); A.draw(); }
   // 💀 a plain kill: skull pop + coins that bounce on the floor, payout float unchanged
-  const w=hs[2]; w.chill=0; w.freeze=0; w._react=null; A.pops.length=0;   // (the sim runs faster than the 200ms real-time SHATTER window)
+  // a reaction KILL: the payout float prints above the still-live callout, not through it
+  const rk=hs[2]; A.update(2); A.pops.length=0; A.floats.length=0; rk._co=null; rk.hp=5; rk.chill=3; rk.freeze=0;
+  A.elementReact(rk,'phys',30);
+  const co=rk._co, pay=A.floats.find(f=>/g · \+\d+☠$/.test(f.txt));
+  t.ok(rk.state==='dead' && co && pay && pay.y<co.y-co.size*0.8, 'a reaction kill lifts the payout float above the killing callout ('+(pay&&pay.y.toFixed(1))+' < '+(co&&co.y.toFixed(1))+')');
+  A.update(2);
+  const w=hs[3]||hs[1]; w.chill=0; w.freeze=0; w._react=null; A.pops.length=0;   // (the sim runs faster than the 200ms real-time SHATTER window)
   const before=A.particles.length; A.heroDies(w);
   t.ok(w.shatterAt==null, 'an un-iced death does not shatter');
   t.ok(A.pops.some(p=>p.kind==='skull'), 'a kill pops the pixel skull');
@@ -556,6 +575,10 @@ try{
   for(let i=0;i<40;i++) A.skullPop(200+i, 200);
   for(let i=0;i<12;i++) A.callout(300+i*90, 200, 'SHATTER', '#9adfff', {fill:'ice'});
   t.ok(A.pops.some(p=>p.txt==='OVERDRIVE!'), 'OVERDRIVE! survives 40 skull pops + 12 callouts on its frame');
+  // a mass kill racing through the streak tiers keeps ONE streak callout, re-punched to the newest tier
+  for(const n of [5,8,12,16,20,25,30]) A.comboCallout(n, 400);
+  const tiers=A.pops.filter(p=>/RAMPAGE|DOMINATING|UNSTOPPABLE|GODLIKE|LEGENDARY/.test(p.txt||''));
+  t.ok(tiers.length===1 && /LEGENDARY x30/.test(tiers[0].txt), 'streak tiers share one callout ('+tiers.map(p=>p.txt).join('|')+')');
   for(let i=0;i<20;i++){ A.update(0.03); A.draw(); }
   // 🎗 ribbon banner: cinematic letterbox flag, layout cached per banner
   A.banner('⚔️ CHAMPION APPROACHES', '#ff5470', 'Aldric the Shieldbearer', {cine:true});
