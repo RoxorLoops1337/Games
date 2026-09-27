@@ -21,6 +21,8 @@ const GAME = (() => {
   const HIT_STOP = 0.06;        // seconds of frozen physics on a big hit
   const BEAT = 0.45;            // seconds between enemy-turn events
   const PLAY_BEAT = 0.16;       // seconds between player-side events
+  const PROC_BEAT = 0.04;       // a relic / synergy proc only takes this long
+  const PROC_MERGE = 0.7;       // procs of one relic within this window stack on one badge
   const DELIVER_HOLD = 0.25;    // a body must sit in the chute this long to count
   const AUTO_END = 0.6;         // pause before the turn auto-ends at 0 grabs
   const BIN_FLOOR = 3;          // selling or removing never empties the bin below this
@@ -63,7 +65,8 @@ const GAME = (() => {
     RENDER: typeof RENDER !== 'undefined' ? RENDER : null,
     INTRO: typeof INTRO !== 'undefined' ? INTRO : null,
   };
-  const FX0 = { burst() {}, text() {}, shake() {}, flash() {}, trail() {}, update() {}, draw() {}, offset() { return { x: 0, y: 0 }; } };
+  const FX0 = { burst() {}, text() {}, shake() {}, flash() {}, trail() {}, update() {}, draw() {}, offset() { return { x: 0, y: 0, r: 0 }; },
+    emit() {}, num() {}, badge() {}, ring() {}, slash() {}, fly(x0, y0, x1, y1, o) { if (o && o.cb) o.cb(); }, kick() {}, vignette() {}, hold() {} };
   const fx = () => (X.RENDER && X.RENDER.fx) || FX0;
   const isNode = typeof process !== 'undefined' && !!(process.versions && process.versions.node);
 
@@ -169,13 +172,181 @@ const GAME = (() => {
   function banner(str, kind, secs) {
     const el = $('banner'), tx = $('bannerTxt');
     if (tx) tx.textContent = str;
-    if (el) { el.className = 'show ' + (kind || ''); }
+    if (el) { el.className = kind || ''; replay(el, 'show'); }
     // the pips and statuses share the row: fade them while the banner is up
     const pr = $('playerRow'); if (pr && pr.classList) pr.classList.add('bannerOn');
     S.bannerT = secs || 1.1;
     S.bannerStr = str;
   }
   function hint(str) { const el = $('hint'); if (el) el.textContent = str; S.hint = str; }
+
+  // ---------------------------------------------------------------- juice helpers
+  // Restart a CSS animation class on an element (remove, reflow, add).
+  function replay(el, cls) {
+    if (!el || !el.classList) return;
+    try { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); } catch (e) { /* stub DOM */ }
+  }
+  // Stage coordinates of a DOM element's centre (the relic bar, the gold stat);
+  // the fallback when there is no layout (headless).
+  function hudPoint(el, fx0, fy0) {
+    try {
+      const st = $('stage');
+      if (el && st && el.getBoundingClientRect && !S.headless) {
+        const r = el.getBoundingClientRect(), s0 = st.getBoundingClientRect(), k = S.scale || 1;
+        if (r.width > 0) return { x: (r.left + r.width / 2 - s0.left) / k, y: (r.top + r.height / 2 - s0.top) / k };
+      }
+    } catch (e) { /* fall through */ }
+    return { x: fx0, y: fy0 };
+  }
+  const GOLD_HUD = { x: 208, y: 36 }, HP_HUD = { x: 118, y: 36 };
+  // Build archetype chips for an item / relic def when DATA.keywords exists.
+  function kwChips(def, cls) {
+    const kd = D().keywords;
+    if (typeof kd !== 'function' || !def) return null;
+    let list = null;
+    try { list = kd(def); } catch (e) { list = null; }
+    if (!list || !list.length) return null;
+    const row = h('div', 'kws' + (cls ? ' ' + cls : ''));
+    for (const k of list) {
+      if (!k) continue;
+      const c = h('span', 'kw', `${k.icon || ''} ${k.label || k.id || ''}`.trim());
+      if (k.color) { c.style.borderColor = k.color; c.style.color = k.color; }
+      row.appendChild(c);
+    }
+    return row;
+  }
+  // A DOM label that floats up from a point on the stage and fades (gains
+  // flying into the HUD counters, sale prices).
+  function domFloat(x, y, str, cls) {
+    if (S.headless) return;
+    const st = $('stage');
+    if (!st) return;
+    try {
+      const el = h('div', 'dfloat ' + (cls || ''), str);
+      el.style.left = Math.round(x) + 'px'; el.style.top = Math.round(y) + 'px';
+      st.appendChild(el);
+      setTimeout(() => { try { el.remove(); } catch (e) { /* gone */ } }, 1200);
+    } catch (e) { /* optional */ }
+  }
+  /* A DOM thing (a coin, a picked card) that flies from one stage point to
+     another along an arc, then removes itself. node is the element to fly. */
+  function domFly(node, x0, y0, x1, y1, ms, delay) {
+    if (S.headless || !node) return;
+    const st = $('stage');
+    if (!st) return;
+    try {
+      node.classList.add('dfly');
+      node.style.left = Math.round(x0) + 'px'; node.style.top = Math.round(y0) + 'px';
+      st.appendChild(node);
+      if (node.animate) {
+        const dx = x1 - x0, dy = y1 - y0;
+        node.animate([
+          { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 },
+          { transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5 - 80}px)) scale(0.9) rotate(12deg)`, opacity: 1, offset: 0.5 },
+          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.35) rotate(24deg)`, opacity: 0.2 },
+        ], { duration: ms || 520, delay: delay || 0, easing: 'cubic-bezier(.5,0,.6,1)', fill: 'forwards' });
+      }
+      setTimeout(() => { try { node.remove(); } catch (e) { /* gone */ } }, (ms || 520) + (delay || 0) + 80);
+    } catch (e) { /* optional */ }
+  }
+  // A few DOM coins arcing into the gold stat (shop buys, sale prices).
+  function coinsTo(x0, y0, n) {
+    const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
+    for (let i = 0; i < n; i++) domFly(h('div', 'dcoin'), x0 + (i - n / 2) * 8, y0, gp.x, gp.y, 480, i * 60);
+  }
+
+  /* Time: S.slowT seconds of slow motion at S.slowK (the last enemy falling,
+     a tier 3 combo). update() scales the game's dt by it; toasts and banners
+     keep real time. */
+  function slowmo(k, secs) {
+    if (fx().reduced) { k = Math.max(k, 0.6); secs *= 0.5; }
+    S.slowK = U.clamp(k, 0.05, 1); S.slowT = Math.max(S.slowT || 0, secs);
+  }
+
+  /* HUD counters roll toward their value with a tick instead of snapping.
+     rollTo(id, n, force): force (and headless) snaps. A rise floats "+n" into
+     the counter and bumps it. fmt formats the shown number. */
+  function rollTo(id, n, force, fmt) {
+    const R0 = S.rolls || (S.rolls = {});
+    let r = R0[id];
+    const el = $(id);
+    const fresh = !r;
+    if (!r) r = R0[id] = { v: n, to: n, fmt: fmt || null, el };
+    r.el = el; r.fmt = fmt || r.fmt;
+    if (fresh || force || S.headless || !el) { r.v = r.to = n; if (el) el.textContent = r.fmt ? r.fmt(n) : String(n); return; }
+    // the top bar is hidden on the other screens: hold the change until it
+    // shows again, so the roll (and the float) plays where it can be seen
+    if (S.screen !== 'fight' && S.screen !== 'map') return;
+    if (n === r.to) return;
+    const d = n - r.to;
+    r.to = n;
+    if (d > 0 && id !== 'hpTxt') {
+      const p = hudPoint(el, id === 'goldTxt' ? GOLD_HUD.x : 280, 36);
+      domFloat(p.x, p.y + 18, '+' + d, id === 'goldTxt' ? 'gold' : 'cyan');
+    }
+    replay(el.parentNode, d > 0 ? 'bump' : 'dip');
+  }
+  function rollStep(dt) {
+    const R0 = S.rolls;
+    if (!R0) return;
+    for (const id in R0) {
+      const r = R0[id];
+      if (r.v === r.to || !r.el) continue;
+      const diff = r.to - r.v, step = Math.max(1, Math.abs(diff) * Math.min(1, dt * 9));
+      r.v = Math.abs(diff) <= step ? r.to : r.v + Math.sign(diff) * Math.round(step);
+      r.el.textContent = r.fmt ? r.fmt(r.v) : String(r.v);
+      if (S.t - (S.tickT || 0) > 0.045) { S.tickT = S.t; snd('tick', { pitch: diff > 0 ? 1.15 : 0.85 }); }
+    }
+  }
+
+  /* Named grab combos stack in S.comboQ and play one after another as a big
+     banner (DOM #combo). Tier 3 flashes, bursts chromatic rings, holds a
+     longer hit stop and plays the top sting. */
+  function queueCombo(ev) {
+    S.comboQ = S.comboQ || [];
+    if (S.comboQ.length < 6) S.comboQ.push(ev);
+    if (!(S.comboT > 0)) nextCombo();
+  }
+  function nextCombo() {
+    const Q = S.comboQ || [];
+    const ev = Q.shift();
+    const el = $('combo');
+    if (!ev) { S.comboT = 0; if (el && el.classList) el.classList.remove('show'); return; }
+    const tier = U.clamp(Math.round(+ev.tier || 1), 1, 3);
+    S.comboT = 0.95 + tier * 0.3;
+    S.lastCombo = ev;
+    const nEl = $('comboName'), tEl = $('comboText');
+    const name = String(ev.name || 'COMBO') + (ev.n > 1 ? ' x' + ev.n : '');
+    if (nEl) {
+      nEl.textContent = name;
+      // fit the stage: a letter is about 0.82em with the tracking
+      const fit = Math.floor(480 / (Math.max(4, name.length) * 0.82));
+      try { nEl.style.fontSize = Math.min([0, 30, 38, 48][tier], fit) + 'px'; } catch (e) { /* stub */ }
+    }
+    if (tEl) tEl.textContent = ev.text ? String(ev.text) : '';
+    if (el) {
+      el.className = '';
+      try { el.style.setProperty('--cc', ev.color || '#ffc94d'); } catch (e) { /* stub DOM */ }
+      replay(el, 'show');
+      el.classList.add('t' + tier);
+    }
+    snd('combo', { tier });
+    haptic(tier >= 3 ? 'jackpot' : 'hit');
+    const col = ev.color || PAL0.gold, cx = 270, cy = 250;
+    const reduced = !!fx().reduced;
+    fx().ring(cx, cy, col, { r0: 20, r1: 150 + tier * 40, w: 6 + tier * 2, life: 0.55 });
+    if (tier >= 2) { fx().emit('sparks', cx, cy, { col, n: 2 }); fx().shake(4 + tier * 3); }
+    if (tier >= 3) {
+      if (!reduced) fx().flash('#ffffff', 0.45);
+      fx().ring(cx - 6, cy, PAL0.pink, { r0: 10, r1: 300, w: 10, life: 0.7 });
+      fx().ring(cx + 6, cy, PAL0.cyan, { r0: 10, r1: 300, w: 10, life: 0.7, delay: 0.04 });
+      fx().ring(cx, cy + 4, PAL0.gold, { r0: 10, r1: 260, w: 8, life: 0.7, delay: 0.08 });
+      fx().emit('confetti', 270, 330, { power: 1.1 });
+      if (FS) FS.hitStop = Math.max(FS.hitStop, 0.16);
+      slowmo(0.35, 0.35);
+    }
+  }
+  const PAL0 = { pink: '#ff2e88', cyan: '#2ee6d6', gold: '#ffc94d', lime: '#a6ff5e', blood: '#ff5a4a' };
 
   // ---------------------------------------------------------------- meta
   function freshMeta() {
@@ -202,7 +373,12 @@ const GAME = (() => {
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
     if (fx()) fx().reduced = !S.meta.settings.shake;
+    applyCalm();
     return S.meta;
+  }
+  // Shake off also calms the heavy CSS motion (html.calm).
+  function applyCalm() {
+    try { document.documentElement.classList[S.meta && S.meta.settings.shake ? 'remove' : 'add']('calm'); } catch (e) { /* headless */ }
   }
   function saveMeta() {
     try { localStorage.setItem(META_KEY, JSON.stringify(S.meta)); } catch (e) { /* storage may be blocked */ }
@@ -238,8 +414,10 @@ const GAME = (() => {
     if (!S.run || S.screen === 'gameover' || S.screen === 'win') { try { localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ } return; }
     if (S.screen === 'bin') return;
     const o = { ver: SAVE_VER, screen: S.screen, run: S.run, sd: S.sd, pendingFight: S.pendingFight, after: S.after };
-    // A fight in progress restarts from its opening bell on load.
-    if (S.screen === 'fight' && FS) o.pendingFight = FS.start;
+    // A fight in progress restarts from its opening bell on load; a won
+    // fight playing its outro is already the reward screen.
+    if (S.screen === 'fight' && FS && FS.outro) { o.screen = 'reward'; o.sd = { reward: FS.outro.reward }; o.pendingFight = null; }
+    else if (S.screen === 'fight' && FS) o.pendingFight = FS.start;
     try { localStorage.setItem(RUN_KEY, JSON.stringify(o)); } catch (e) { /* ignore */ }
   }
   function savedRun() {
@@ -261,6 +439,7 @@ const GAME = (() => {
       run.brushes = (run.brushes || []).map(toolId);
       if (!run.map) { newMap(run); }
       S.run = run;
+      S.rolls = null;
       S.sd = o.sd || null;
       S.after = o.after || null;
       F = null; FS = null;
@@ -305,6 +484,7 @@ const GAME = (() => {
     };
     for (const id of (c.bin || [])) { run.bin.push({ uid: U.uid(), id, plus: false }); seeItem(id); }
     S.run = run;
+    S.rolls = null;
     S.sd = null; S.after = null; S.pendingFight = null;
     F = null; FS = null;
     if (c.relic) gainRelic(c.relic);
@@ -403,12 +583,13 @@ const GAME = (() => {
     let pool = relicPool(rarities);
     if (!pool.length) pool = relicPool(null);
     if (!pool.length) return null;
+    if (D().pickRelic) { try { const id = D().pickRelic(rng, pool, S.run); if (id) return id; } catch (e) { /* fall through */ } }
     return rng.pick(pool);
   }
   function rollItems(rng, n) {
     const run = S.run;
     let ids = [];
-    if (D().rewardItems) { try { ids = D().rewardItems(rng, run.act, run.char, n) || []; } catch (e) { ids = []; } }
+    if (D().rewardItems) { try { ids = D().rewardItems(rng, run.act, run.char, n, run) || []; } catch (e) { ids = []; } }
     if (!ids.length) {
       const all = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity !== 'junk');
       ids = rng.shuffle(all).slice(0, n);
@@ -419,11 +600,29 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- screens
   const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection'];
+  /* Screen transitions: an iris opening onto a fight, a diagonal wipe
+     between the map and the tile screens, a quick fade for the rest (DOM
+     #wipe, CSS only, never blocks input). */
+  const WIPE_SCREENS = { map: 1, fight: 1, reward: 1, shop: 1, event: 1, rest: 1, forge: 1, treasure: 1, parts: 1, gameover: 1, win: 1 };
+  function transition(from, to) {
+    if (S.headless || from === to || from === 'intro') return;
+    const el = $('wipe');
+    if (!el) return;
+    const kind = to === 'fight' ? 'iris' : to === 'gameover' ? 'bleed' : (WIPE_SCREENS[from] && WIPE_SCREENS[to]) ? 'swipe' : 'fade';
+    el.className = '';
+    replay(el, kind);
+  }
   function setScreen(name) {
+    transition(S.screen, name);
     S.screen = name;
     S.ui.buttons = [];
     popover(null);
     if (name !== 'fight' && FS && FS.done) { F = null; FS = null; }
+    if (name !== 'fight') {
+      // fight-only juice does not follow the player out
+      fx().hold(0);
+      S.comboQ = []; S.comboT = 0; const ce = $('combo'); if (ce && ce.classList) ce.classList.remove('show');
+    }
     for (const s of SCREENS) {
       const el = $('scr-' + s);
       if (el) el.classList[s === name ? 'add' : 'remove']('show');
@@ -465,7 +664,7 @@ const GAME = (() => {
     const sOn = A ? A.sfxOn : true, mOn = A ? A.musicOn : true;
     row2.appendChild(btn('Sound ' + (sOn ? 'on' : 'off'), () => { if (A && A.toggleSfx) A.toggleSfx(); showTitle(); }, 'sm toggle ' + (sOn ? 'on' : '')));
     row2.appendChild(btn('Music ' + (mOn ? 'on' : 'off'), () => { if (A && A.toggleMusic) A.toggleMusic(); showTitle(); }, 'sm toggle ' + (mOn ? 'on' : '')));
-    row2.appendChild(btn('Shake ' + (S.meta.settings.shake ? 'on' : 'off'), () => { S.meta.settings.shake = !S.meta.settings.shake; fx().reduced = !S.meta.settings.shake; saveMeta(); showTitle(); }, 'sm toggle ' + (S.meta.settings.shake ? 'on' : '')));
+    row2.appendChild(btn('Shake ' + (S.meta.settings.shake ? 'on' : 'off'), () => { S.meta.settings.shake = !S.meta.settings.shake; fx().reduced = !S.meta.settings.shake; applyCalm(); saveMeta(); showTitle(); }, 'sm toggle ' + (S.meta.settings.shake ? 'on' : '')));
     m.appendChild(row2);
     const st = S.meta.stats;
     m.appendChild(h('div', 'footer', st.runs ? `${st.runs} runs, ${st.wins} wins, best act ${st.bestAct}` : 'The Prize Master is waiting.'));
@@ -866,6 +1065,7 @@ const GAME = (() => {
         const cells = dir >= 0 ? X.MAP.flareCells(M, dir) : [];
         if (!cells.length) { toast(dir < 0 ? 'Tap a hex in the direction to fire the flare.' : 'The flare would hit a wall of dark rock or open water at once. Aim elsewhere.'); return false; }
         if (samePv) {
+          S.bloomSrc = { q: M.pos.q, r: M.pos.r };
           const tiles = X.MAP.useTool(M, id, t.q, t.r, dir) || [];
           run.brushes = M.brushes.slice();
           S.brushSel = null; S.preview = null;
@@ -882,6 +1082,7 @@ const GAME = (() => {
         return true;
       }
       if (X.MAP.canTool(M, id, t.q, t.r)) {
+        S.bloomSrc = { q: t.q, r: t.r };
         const tiles = X.MAP.useTool(M, id, t.q, t.r) || [];
         run.brushes = M.brushes.slice();
         S.brushSel = null;
@@ -903,6 +1104,7 @@ const GAME = (() => {
     const tileCost = X.MAP.revealCost ? X.MAP.revealCost(t) : 1;
     if (!t.revealed) {
       if (X.MAP.canReveal(M, t.q, t.r)) {
+        S.bloomSrc = { q: t.q, r: t.r };
         X.MAP.reveal(M, t.q, t.r);
         run.ink = M.ink;
         snd('reveal');
@@ -924,6 +1126,7 @@ const GAME = (() => {
       const cost = X.MAP.pathCost ? X.MAP.pathCost(M, path) : path.length;
       if (samePv) {
         if (M.ink < cost) { toast(`That way needs ${bulbs(cost)}. ${cost - M.ink} short.`); return false; }
+        S.bloomSrc = pv && pv.path && pv.path[0] ? { q: pv.path[0][0], r: pv.path[0][1] } : null;
         const tiles = X.MAP.revealPath(M, path) || [];
         run.ink = M.ink;
         S.preview = null;
@@ -989,10 +1192,11 @@ const GAME = (() => {
     const resolves = (t.type !== 'empty' && t.type !== 'start' && !t.done) || t.terrain === 'shallow';
     w.from = { q: M.pos.q, r: M.pos.r };
     w.t = 0; w.i++;
+    if (mapLayout()) { const fp = hexToStage(M.pos.q, M.pos.r); fx().emit('dust', fp.x, fp.y + 10, { power: 0.5, n: 0.7 }); }
     X.MAP.move(M, q, r);
     run.ink = M.ink;
     run.floor++;
-    snd('step');
+    snd('step'); snd('footstep');
     lookAt(q, r, true);
     enterTile(t);
     if (resolves || S.screen !== 'map' || w.i >= w.path.length) w.done = true;
@@ -1017,6 +1221,154 @@ const GAME = (() => {
     const a = hexToStage(w.from.q, w.from.r), b = hexToStage(M.pos.q, M.pos.r);
     return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
   }
+  // ---------------------------------------------------------------- ambient + light blooms
+  /* Ambient drift: a capped pool of motes per biome (fireflies in the
+     cellar, embers in the foundry, snow in the vault) over the map area, or
+     over the arena band in a fight. Seeded, never Math.random. */
+  const AMB_N = 30;
+  const AMB_KIND = { cellar: 0, foundry: 1, vault: 2 };
+  function ambientTick(dt) {
+    const run = S.run;
+    if (!run) return;
+    const fight = S.screen === 'fight';
+    const area = fight ? { x: 0, y: 72, w: W, h: 268 } : MAP_AREA;
+    const biome = (run.map && run.map.biome) || ({ 1: 'cellar', 2: 'foundry', 3: 'vault' })[run.act] || 'cellar';
+    const kind = AMB_KIND[biome] || 0;
+    const r = S.ambR || (S.ambR = U.rng(7071));
+    let A = S.amb;
+    if (!A) { A = S.amb = []; for (let i = 0; i < AMB_N; i++) A.push({ x: 0, y: 0, vx: 0, vy: 0, ph: 0, life: 0 }); }
+    if (S.ambKey !== kind + ':' + S.screen) { S.ambKey = kind + ':' + S.screen; for (const m of A) m.life = 0; }
+    S.ambKind = kind; S.ambArea = area;
+    const n = fx().reduced ? 10 : (fight ? 16 : AMB_N);
+    for (let i = 0; i < A.length; i++) {
+      const m = A[i];
+      if (i >= n) { m.life = 0; continue; }
+      if (m.life <= 0) {
+        m.x = area.x + r() * area.w; m.ph = r() * 6.28; m.life = 4 + r() * 6;
+        if (kind === 0) { m.y = area.y + r() * area.h; m.vx = (r() - 0.5) * 14; m.vy = (r() - 0.5) * 10; }
+        else if (kind === 1) { m.y = area.y + area.h * (0.4 + r() * 0.6); m.vx = (r() - 0.5) * 10; m.vy = -18 - r() * 26; }
+        else { m.y = area.y + r() * area.h * 0.5; m.vx = 6 + r() * 10; m.vy = 16 + r() * 22; }
+        m.max = m.life;
+      }
+      m.life -= dt; m.ph += dt;
+      m.x += (m.vx + (kind === 0 ? Math.sin(m.ph * 1.3) * 12 : kind === 2 ? Math.sin(m.ph * 2) * 8 : Math.sin(m.ph * 3) * 6)) * dt;
+      m.y += (m.vy + (kind === 0 ? Math.cos(m.ph * 0.9) * 8 : 0)) * dt;
+      if (m.y < area.y - 10 || m.y > area.y + area.h + 10 || m.x < area.x - 10 || m.x > area.x + area.w + 10) m.life = 0;
+    }
+  }
+  function drawAmbient(ctx) {
+    const A = S.amb, R = X.RENDER;
+    if (!A) return;
+    const kind = S.ambKind || 0;
+    const col = kind === 0 ? '#d8ff7a' : kind === 1 ? '#ff8a2b' : '#ffffff';
+    const sp = R && R.glowSprite ? R.glowSprite(col, 10) : null;
+    ctx.save();
+    ctx.globalCompositeOperation = kind === 2 ? 'source-over' : 'lighter';
+    for (const m of A) {
+      if (m.life <= 0) continue;
+      const u = m.life / (m.max || 1), fade = Math.min(1, u * 3, (1 - u) * 4);
+      const blink = kind === 0 ? 0.35 + 0.65 * Math.max(0, Math.sin(m.ph * 2.2)) : 1;
+      ctx.globalAlpha = fade * blink * (kind === 2 ? 0.8 : 0.9);
+      if (sp && kind !== 2) { try { ctx.drawImage(sp, m.x - 10, m.y - 10, 20, 20); } catch (e) { /* stub */ } }
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(m.x, m.y, kind === 2 ? 1.8 : 1.4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  /* Light blooms: a hex that has just been lit stays dark for a moment by
+     its distance from where the light came from, then fades in with a gold
+     ring, so a reveal ripples outward. Detected by diffing tile.revealed on
+     the map screen (so a tower view lit behind the treasure screen blooms
+     when the map comes back). S.bloomSrc is the source hex (a tap, a tool,
+     a tower), else the player. */
+  const BLOOM_STEP = 0.075, BLOOM_T = 0.5;
+  function bloomTick() {
+    const P = mapPaint(), M = S.run && S.run.map;
+    if (!P || !M) return;
+    if (!P.litInit) { for (const it of P.items) it.lit = !!it.t.revealed; P.litInit = true; return; }
+    const src = S.bloomSrc || M.pos;
+    const dist = X.MAP.hexDist ? (t) => X.MAP.hexDist(src.q, src.r, t.q, t.r) : () => 1;
+    let n = 0, far = 0;
+    for (const it of P.items) {
+      if (it.lit || !it.t.revealed) continue;
+      it.lit = true;
+      const d = dist(it.t);
+      it.bloomAt = S.t + d * BLOOM_STEP;
+      if (d > far) far = d;
+      n++;
+    }
+    if (!n) return;
+    S.bloomSrc = null;
+    S.chimes = [];
+    for (let d = 0; d <= Math.min(far, 7); d++) S.chimes.push({ at: S.t + d * BLOOM_STEP, p: 1 + d * 0.06 });
+    if (S.beamPending) { S.beam = { q: S.beamPending.q, r: S.beamPending.r, t0: S.t }; S.beamPending = null; }
+  }
+  function chimeTick() {
+    const C = S.chimes;
+    if (!C || !C.length) return;
+    while (C.length && C[0].at <= S.t) { snd('bloom', { pitch: C[0].p }); C.shift(); }
+  }
+  // The dark cover and gold ring of a hex still blooming; true while active.
+  function drawBloom(ctx, it, x, y, size, t, flat) {
+    const u = (t - it.bloomAt) / BLOOM_T;
+    if (u >= 1) { it.bloomAt = 0; return false; }
+    const hexP = (r) => { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = (flat ? 0 : -Math.PI / 2) + i * Math.PI / 3; const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); } ctx.closePath(); };
+    ctx.save();
+    if (u < 0) { ctx.fillStyle = '#0c0518'; ctx.globalAlpha = 0.92; hexP(size + 0.5); ctx.fill(); ctx.restore(); return true; }
+    ctx.fillStyle = '#0c0518'; ctx.globalAlpha = 0.92 * (1 - u) * (1 - u); hexP(size + 0.5); ctx.fill();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = (1 - u) * 0.8; ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 4 * (1 - u) + 1;
+    hexP(size * (0.35 + u * 0.75)); ctx.stroke();
+    ctx.globalAlpha = Math.sin(u * Math.PI) * 0.35; ctx.fillStyle = '#ffe9a8'; hexP(size); ctx.fill();
+    ctx.restore();
+    return true;
+  }
+  // The tower's view: a light beam sweeping one turn around the tower.
+  function drawBeam(ctx, t, size) {
+    const B = S.beam;
+    if (!B) return;
+    const u = (t - B.t0) / 1.4;
+    if (u >= 1) { S.beam = null; return; }
+    const p = hexToStage(B.q, B.r), a = -Math.PI / 2 + u * Math.PI * 2, R0 = size * 10;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 3; k++) {
+      const w = 0.12 + k * 0.14;
+      ctx.globalAlpha = (0.22 - k * 0.06) * Math.sin(Math.min(1, u * 1.2) * Math.PI);
+      ctx.fillStyle = '#ffe9a8';
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, R0, a - w, a + w); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // The boss hex breathes: red rings expand from it and a dark glow pulses.
+  function drawBossPulse(ctx, t, size) {
+    const M = S.run && S.run.map, R = X.RENDER;
+    if (!M) return;
+    const p = hexToStage(M.boss.q, M.boss.r);
+    if (p.x < -size * 2 || p.x > W + size * 2 || p.y < MAP_AREA.y - size * 2 || p.y > H + size * 2) return;
+    ctx.save();
+    const sp = R && R.glowSprite ? R.glowSprite('#ff2e30', Math.round(size * 1.6)) : null;
+    const beat = 0.5 + 0.5 * Math.sin(t * 2.4);
+    if (sp) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.25 + beat * 0.3; try { ctx.drawImage(sp, p.x - size * 1.6, p.y - size * 1.6, size * 3.2, size * 3.2); } catch (e) { /* stub */ } ctx.globalCompositeOperation = 'source-over'; }
+    for (let k = 0; k < 2; k++) {
+      const u = ((t * 0.55 + k * 0.5) % 1);
+      ctx.globalAlpha = (1 - u) * 0.7; ctx.strokeStyle = '#ff2e30'; ctx.lineWidth = 3 * (1 - u) + 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, size * (0.9 + u * 1.4), 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // A pickup vanishes with a poof and a badge of what it gave.
+  function pickupFx(t, icon, label, col, coins) {
+    if (!t || !mapLayout()) return;
+    const p = hexToStage(t.q, t.r);
+    fx().emit('poof', p.x, p.y);
+    fx().badge(p.x, p.y - 30, icon, label, col, { life: 1.6 });
+    if (coins) {
+      const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
+      for (let i = 0; i < coins; i++) fx().fly(p.x, p.y, gp.x, gp.y, { kind: 'coin', dur: 0.6, delay: 0.1 + i * 0.07, arc: 80, size: 6, cb: () => snd('coin', { pitch: 1 + i * 0.05 }) });
+    }
+  }
+
   // Resolve a tile the player just stepped on.
   function enterTile(t) {
     const run = S.run;
@@ -1058,6 +1410,7 @@ const GAME = (() => {
         const g = c.gold || 10;
         addGold(g);
         snd('coin');
+        pickupFx(t, '\u25C6', `+${g} gold`, '#ffc94d', 4);
         toast(`A gem. +${g} gold.`);
         break;
       }
@@ -1066,6 +1419,7 @@ const GAME = (() => {
         const n = Math.max(c.ink || 1, ECON().inkTile || 1);
         addInk(n);
         snd('reveal');
+        pickupFx(t, '\u2600', `+${bulbs(n)}`, '#2ee6d6');
         toast(`A box of ${TERM('inkPlural')}. +${bulbs(n)}.`);
         buildMapHead();
         break;
@@ -1075,6 +1429,7 @@ const GAME = (() => {
         const id = toolId(c.brush || (toolIds()[0] || 'lantern'));
         addBrush(id);
         snd('brush');
+        pickupFx(t, toolDef(id).icon || '*', toolDef(id).name, '#ffb347');
         toast(`Found a ${TERM('brush')}: ${toolDef(id).name}.`);
         buildMapHead();
         break;
@@ -1145,8 +1500,14 @@ const GAME = (() => {
       playQ: [], playT: 0, queue: [], beatT: 0, onDrain: null, enemyTurn: false, actor: -1, actors: [],
       autoEndT: 0, anim: {}, fog: 0, grease: 0, tilt: 0, done: false, killer: null, keyDir: 0, then: opts.then || null,
       turnsTaken: 0, dirty: true, shown: { p: { hp: 0, block: 0 }, e: {} },
+      // juice: hp ghosts, status chip pops, item throws, cabinet party lights, claw spring
+      ghost: {}, pipPop: {}, throws: [], party: 0, marquee: '', curDef: null, outro: null,
+      claw: { px: 0, py: 0, vx: 0, bend: 0, bendV: 0, sq: 0, glow: 0 }, cargo: [], hbT: 0, dust: 0,
     };
     syncShown();
+    S.procs = {};
+    // the enemies pop in as the iris opens
+    F.enemies.forEach((e, i) => { FS.anim[i] = { hurt: 0, attack: 0, dead: 0, spawn: 1 }; });
     S.pendingFight = null;
     buildWorld();
     spawnAll();
@@ -1295,7 +1656,7 @@ const GAME = (() => {
   function syncShown() {
     if (!F || !FS) return;
     FS.shown.p.hp = F.player.hp; FS.shown.p.block = F.player.block;
-    F.enemies.forEach((e, i) => { FS.shown.e[i] = { hp: e.hp, block: e.block }; });
+    F.enemies.forEach((e, i) => { FS.shown.e[i] = { hp: e.hp, block: e.block }; if (!FS.ghost[i]) FS.ghost[i] = { v: e.hp, hold: 0 }; });
   }
   function shownOf(ev) {
     if (!ev || ev.who == null) return null;
@@ -1355,6 +1716,11 @@ const GAME = (() => {
     const a = FS.anim[idx] || (FS.anim[idx] = { hurt: 0, attack: 0, dead: 0 });
     return a;
   }
+  // The ghost chunk of an enemy hp bar: it holds, then drains to the real hp.
+  function ghostOf(idx) {
+    const g = FS.ghost[idx] || (FS.ghost[idx] = { v: FS.shown.e[idx] ? FS.shown.e[idx].hp : 0, hold: 0 });
+    return g;
+  }
   // Player-side floating text: left of the turn banner, above the cabinet.
   const PLAYER_FX = { x: 110, y: 386 };
   function nextActor() {
@@ -1362,6 +1728,8 @@ const GAME = (() => {
     let i = list.indexOf(FS.actor);
     FS.actor = i + 1 < list.length ? list[i + 1] : -1;
   }
+  // Element burst for a status id (the look of the thing landing).
+  const STATUS_FX = { poison: 'poison', burn: 'burn', chill: 'frost', freeze: 'frost', stun: 'shock', bleed: 'blood', weak: 'smoke', vuln: 'sparks', str: 'burn', enrage: 'burn', regen: 'heal', thorns: 'sparks', dodge: 'glint', armor: 'block', shield_up: 'block', streak: 'glint' };
   function applyEvent(ev) {
     if (!F || !ev) return;
     bumpShown(ev);
@@ -1375,72 +1743,210 @@ const GAME = (() => {
     // numbers from the player row, clear of the turn banner.
     const base = enemy ? enemyPos(ev.idx) : PLAYER_FX;
     const pos = enemy ? { x: base.x + fan, y: base.y - base.h * 0.6 } : { x: base.x + fan * 0.6, y: base.y };
+    const hitX = enemy ? base.x : PLAYER_FX.x, hitY = enemy ? base.y - base.h * 0.5 : PLAYER_FX.y;
     const reduced = !!fx().reduced;
     switch (ev.t) {
       case 'dmg': {
         const big = ev.amt >= 10;
         if (enemy) {
-          if (ev.amt > 0) { fx().text(pos.x, pos.y, '-' + ev.amt, ev.crit ? '#ffc94d' : '#ffffff', { big: ev.crit || big }); anim(ev.idx).hurt = 1; }
-          else fx().text(pos.x, pos.y, ev.blocked ? 'BLOCKED' : '0', '#b3a4d6');
-          if (ev.amt > 0) { fx().burst(pos.x, pos.y + 10, '#ff5a4a', reduced ? 4 : (big ? 18 : 8)); snd(big ? 'hitBig' : 'hit', { amt: ev.amt }); }
-          if (ev.amt > 0) fx().shake(Math.min(10, 1 + ev.amt * 0.35));
-          if (big) FS.hitStop = HIT_STOP;
-        } else {
-          if (FS.enemyTurn && FS.actor >= 0) { anim(FS.actor).attack = 1; FS.killer = (F.enemies[FS.actor] && F.enemies[FS.actor].def.name) || FS.killer; }
+          const e = F.enemies[ev.idx], a = anim(ev.idx);
+          // a crushing hit: a fifth of its max hp in one go (or the engine says crit)
+          const crit = !!ev.crit || (ev.amt > 0 && e && ev.amt >= e.maxHp * 0.2);
           if (ev.amt > 0) {
-            fx().text(pos.x, pos.y, '-' + ev.amt, '#ff5a4a', { big });
-            fx().shake(U.clamp(3 + ev.amt * 0.7, 3, 16)); if (!reduced) fx().flash('#ff5a4a');
-            if (big) FS.hitStop = HIT_STOP;
+            fx().num(pos.x, pos.y, '\u2212' + ev.amt, crit ? '#ffc94d' : '#ffffff', { crit });
+            if (crit) fx().text(pos.x, pos.y - 44, 'CRUSH!', '#ff2e88', { size: 18, life: 0.8, dy: -30 });
+            a.hurt = 1; a.knock = crit ? 1.6 : 1; a.barFlash = 1; a.barShake = 1;
+            const g = ghostOf(ev.idx); g.hold = 0.45;
+            fx().emit(crit ? 'crit' : 'hit', hitX, hitY, { power: crit ? 1.2 : 1 });
+            fx().ring(hitX, hitY, crit ? '#ffc94d' : '#ffffff', { r0: 8, r1: crit ? 95 : 55 + Math.min(30, ev.amt * 2), w: crit ? 8 : 5, life: crit ? 0.5 : 0.35 });
+            // weapons slash, everything else just lands
+            const pd = FS.curDef;
+            if (pd && (pd.tags || []).indexOf('weapon') >= 0) fx().slash(hitX, hitY, -0.5 + (FS.fxN % 2) * 1.0 + Math.PI * 0.5, Math.max(70, base.w * 0.9), crit ? '#ffc94d' : '#ff2e88', { w: crit ? 18 : 13 });
+            fx().shake(U.clamp(2 + ev.amt * 0.45, 2, 12) + (crit ? 5 : 0));
+            if (crit) { FS.hitStop = Math.max(FS.hitStop, 0.11); snd('crit'); haptic('hurt'); if (!reduced) fx().flash('#ffffff', 0.18); }
+            else { snd(big ? 'hitBig' : 'hit', { amt: ev.amt }); if (big) FS.hitStop = Math.max(FS.hitStop, HIT_STOP); }
+          } else fx().text(pos.x, pos.y, ev.blocked ? 'BLOCKED' : '0', '#b3a4d6');
+          if (ev.blocked > 0) { fx().emit('block', hitX, hitY - 10, { col: '#8fb6ff', n: U.clamp(ev.blocked / 5, 0.5, 2) }); if (!(ev.amt > 0)) snd('block'); }
+        } else {
+          if (FS.enemyTurn && FS.actor >= 0) {
+            const aa = anim(FS.actor);
+            aa.attack = 1; aa.wind = 0; aa.windV = 0;
+            FS.killer = (F.enemies[FS.actor] && F.enemies[FS.actor].def.name) || FS.killer;
+          }
+          if (ev.amt > 0) {
+            const crushing = ev.amt >= F.player.maxHp * 0.15;
+            fx().num(pos.x, pos.y, '\u2212' + ev.amt, '#ff5a4a', { crit: crushing });
+            fx().shake(U.clamp(4 + ev.amt * 0.7, 4, 18));
+            fx().vignette('#ff2e30', U.clamp(0.35 + ev.amt / 25, 0.35, 0.9));
+            if (big || crushing) {
+              // a red claw mark across the screen
+              fx().slash(270, 230, 0.55, 460, '#ff2e30', { w: 24, life: 0.45, claw: true });
+              FS.hitStop = Math.max(FS.hitStop, HIT_STOP * 1.5);
+              if (!reduced) fx().flash('#ff5a4a', 0.3);
+            }
+            fx().emit('blood', PLAYER_FX.x, PLAYER_FX.y, { n: U.clamp(ev.amt / 8, 0.5, 2) });
+            S.hudHit = 1; replay($('hpStat'), 'hit');
             snd('playerHurt'); haptic('hurt');
           } else {
             fx().text(pos.x, pos.y, ev.blocked ? 'BLOCKED' : 'MISS', '#2ee6d6');
             if (ev.blocked) snd('block');
           }
+          if (ev.blocked > 0) {
+            // block soaked it: shield chips fly off and a clank ring
+            fx().emit('block', PLAYER_FX.x, PLAYER_FX.y, { n: U.clamp(ev.blocked / 4, 0.6, 2.2), dir: -Math.PI / 2 });
+            fx().ring(PLAYER_FX.x, PLAYER_FX.y, '#2ee6d6', { r0: 12, r1: 70, w: 5 });
+            replay($('hpStat'), 'clank');
+          }
         }
         break;
       }
-      case 'block': fx().text(pos.x, pos.y, '+' + ev.amt + ' block', '#2ee6d6'); snd('block'); break;
-      case 'heal': fx().text(pos.x, pos.y, '+' + ev.amt, '#a6ff5e'); snd('heal'); break;
+      case 'block': {
+        fx().text(pos.x, pos.y, '+' + ev.amt + ' block', '#2ee6d6');
+        fx().ring(hitX, hitY, '#2ee6d6', { r0: 10, r1: 58, w: 5, life: 0.4 });
+        fx().emit('glint', hitX, hitY, { col: '#bfe8ff' });
+        if (!enemy) replay($('hpStat'), 'shield');
+        snd('block');
+        break;
+      }
+      case 'heal': {
+        fx().num(pos.x, pos.y, '+' + ev.amt, '#a6ff5e', { vy: -220, gravity: 300 });
+        fx().emit('heal', hitX, hitY + 10);
+        if (!enemy) replay($('hpStat'), 'heal');
+        snd('heal');
+        break;
+      }
       case 'status': {
         const sd = tbl('STATUS')[ev.s] || { name: ev.s, icon: '', color: '#fff' };
         fx().text(pos.x, pos.y, (ev.v > 0 ? '+' : '') + ev.v + ' ' + (sd.icon || '') + sd.name, sd.color || '#fff');
-        if (ev.s === 'poison') snd('poison'); else if (ev.s === 'burn') snd('burn'); else if (ev.s === 'freeze' || ev.s === 'chill') snd('freeze');
+        if (ev.v > 0 && STATUS_FX[ev.s]) fx().emit(STATUS_FX[ev.s], hitX, hitY, { col: STATUS_FX[ev.s] === 'sparks' || STATUS_FX[ev.s] === 'glint' ? sd.color : undefined });
+        if (enemy) { const pp = FS.pipPop[ev.idx] || (FS.pipPop[ev.idx] = {}); pp[ev.s] = 1; }
+        else { const pe = S.pipEls && S.pipEls[ev.s]; if (pe) replay(pe, 'pop'); else S.pipPop = ev.s; }
+        if (ev.s === 'poison') snd('poison'); else if (ev.s === 'burn') snd('burn');
+        else if (ev.s === 'freeze') { snd('freeze'); fx().emit('shatter', hitX, hitY, { col: '#bfe8ff', n: 0.6 }); }
+        else if (ev.s === 'chill') snd('freeze');
         else snd('click');
         break;
       }
       case 'die': {
-        anim(ev.idx).dead = 0.001;
-        fx().burst(pos.x, pos.y + 10, ev.escaped ? '#b3a4d6' : '#ff2e88', reduced ? 8 : 24);
+        const e = F.enemies[ev.idx], a = anim(ev.idx);
+        a.dead = 0.001; a.hurt = 1;
+        const col = (e && e.def && e.def.color) || '#ff2e88';
+        if (ev.escaped) fx().emit('poof', hitX, hitY);
+        else {
+          fx().emit('death', hitX, hitY, { col });
+          fx().ring(hitX, hitY, '#ffffff', { r0: 10, r1: 110, w: 8, life: 0.45 });
+          fx().ring(hitX, hitY, col, { r0: 10, r1: 150, w: 5, life: 0.6, delay: 0.06 });
+          // a few coins pop out and fly to the gold counter
+          const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
+          const n = reduced ? 2 : (e && e.def && e.def.tier === 'boss' ? 9 : e && e.def && e.def.tier === 'elite' ? 6 : 4);
+          for (let i = 0; i < n; i++) {
+            fx().fly(hitX + (i - n / 2) * 10, hitY, gp.x, gp.y, { kind: 'coin', dur: 0.55 + i * 0.03, delay: 0.12 + i * 0.07, arc: 90 + i * 12, side: -60, size: 7,
+              cb: () => { snd('coin', { pitch: 1 + i * 0.04 }); replay($('goldTxt') && $('goldTxt').parentNode, 'bump'); } });
+          }
+        }
         fx().text(pos.x, pos.y, ev.escaped ? 'ESCAPED' : 'DOWN', '#ff2e88', { big: true });
-        snd('enemyDie'); fx().shake(6);
+        snd('enemyDie'); fx().shake(8);
         if (!ev.escaped) { S.run.kills++; S.meta.stats.kills++; }
         if (FS.enemyTurn && FS.actor === ev.idx) nextActor();
+        // the last one down: slow motion and the victory sweep
+        const last = F.enemies.every((x) => !x.alive) && !FS.queue.some((q) => q.ev && q.ev.t === 'die');
+        if (last && !ev.escaped) {
+          slowmo(0.28, 0.75);
+          FS.lastKill = { x: hitX, y: hitY };
+          fx().ring(hitX, hitY, '#ffc94d', { r0: 20, r1: 320, w: 10, life: 0.8, delay: 0.1 });
+          snd('victory');
+        }
         break;
       }
-      case 'summon': { FS.anim[ev.idx] = { hurt: 0, attack: 0, dead: 0 }; fx().burst(pos.x, pos.y, '#a6ff5e', reduced ? 6 : 18); fx().text(pos.x, pos.y, 'SUMMONED', '#a6ff5e'); snd('boss'); break; }
+      case 'summon': {
+        FS.anim[ev.idx] = { hurt: 0, attack: 0, dead: 0, spawn: 1 };
+        fx().emit('poof', pos.x, pos.y, { col: 'rgba(166,255,94,0.5)' });
+        fx().ring(hitX, hitY, '#a6ff5e', { r0: 10, r1: 90, w: 6 });
+        fx().text(pos.x, pos.y, 'SUMMONED', '#a6ff5e'); snd('boss');
+        break;
+      }
       case 'intent': if (FS.enemyTurn && FS.actor === ev.idx) nextActor(); break;
       case 'text': {
         fx().text(pos.x, pos.y, ev.str, '#ffc94d');
+        if (ev.str === 'FROZEN') fx().emit('frost', hitX, hitY);
+        else if (ev.str === 'STUNNED') fx().emit('shock', hitX, hitY - base.h * 0.3);
+        else if (/MISS|DODGE/.test(ev.str)) fx().emit('smoke', hitX, hitY, { n: 0.5 });
         if (FS.enemyTurn && enemy && FS.actor === ev.idx && (ev.str === 'FROZEN' || ev.str === 'STUNNED')) nextActor();
         break;
       }
-      case 'play': break;
-      case 'grab': fx().text(PLAYER_FX.x, PLAYER_FX.y, (ev.v > 0 ? '+' : '') + ev.v + ' grab', '#2ee6d6'); snd('upgrade'); break;
+      case 'play': if (ev.def) FS.curDef = ev.def; break;
+      case 'grab': {
+        fx().text(PLAYER_FX.x, PLAYER_FX.y, (ev.v > 0 ? '+' : '') + ev.v + ' grab', '#2ee6d6');
+        const gp = hudPoint($('grabs'), 420, 360);
+        fx().ring(gp.x, gp.y, '#2ee6d6', { r0: 10, r1: 70, w: 5 });
+        replay($('grabs'), 'bump');
+        snd('upgrade');
+        break;
+      }
       case 'refill': queueSpawn(ev.items); fx().text(270, 430, 'REFILL', '#2ee6d6'); snd('itemLand'); break;
       case 'binShake': shakeBin(); fx().text(270, 430, 'SHAKE', '#ff5a4a'); break;
-      case 'binGrease': setGrease(ev.turns); fx().text(270, 430, 'GREASED', '#a6ff5e'); snd('itemSlip'); break;
-      case 'binFog': FS.fog = Math.max(FS.fog, ev.turns || 1); fx().text(270, 430, 'FOG', '#b3a4d6'); break;
+      case 'binGrease': setGrease(ev.turns); fx().text(270, 430, 'GREASED', '#a6ff5e'); fx().emit('poison', 270, 460, { col: '#ffe066' }); snd('itemSlip'); break;
+      case 'binFog': FS.fog = Math.max(FS.fog, ev.turns || 1); fx().text(270, 430, 'FOG', '#b3a4d6'); fx().emit('smoke', 270, 560, { n: 1.5 }); break;
       case 'binJunk': queueSpawn(ev.items); fx().text(270, 430, 'JUNK', '#ff5a4a'); snd('itemLand'); break;
-      case 'binSteal': { removeBody(bodyOf(ev.inst)); fx().text(270, 430, 'STOLEN: ' + itemName(itemDef(ev.inst.id), ev.inst.plus), '#ff5a4a'); snd('itemSlip'); break; }
-      case 'binFreeze': { swapBody(ev.inst); fx().text(270, 430, 'FROZEN: ' + itemName(itemDef(ev.inst.id), ev.inst.plus), '#8dfff5'); snd('freeze'); break; }
+      case 'binSteal': {
+        const b = bodyOf(ev.inst);
+        if (b) fx().emit('poof', CAB.x + b.x, CAB.y + b.y);
+        removeBody(b); fx().text(270, 430, 'STOLEN: ' + itemName(itemDef(ev.inst.id), ev.inst.plus), '#ff5a4a'); snd('itemSlip');
+        break;
+      }
+      case 'binFreeze': {
+        const b = swapBody(ev.inst);
+        if (b) { fx().emit('frost', CAB.x + b.x, CAB.y + b.y); fx().ring(CAB.x + b.x, CAB.y + b.y, '#bfe8ff', { r1: 50 }); }
+        fx().text(270, 430, 'FROZEN: ' + itemName(itemDef(ev.inst.id), ev.inst.plus), '#8dfff5'); snd('freeze');
+        break;
+      }
       case 'binTilt': setTilt(ev.dir || 1); fx().text(270, 430, 'TILT', '#ffc94d'); snd('shake'); break;
-      case 'binPurge': for (const inst of ev.insts || []) removeBody(bodyOf(inst)); fx().text(270, 430, 'PURGED', '#a6ff5e'); break;
-      case 'binCopy': queueSpawn([ev.inst]); fx().text(270, 430, 'COPY', '#ffc94d'); break;
+      case 'binPurge': {
+        for (const inst of ev.insts || []) { const b = bodyOf(inst); if (b) fx().emit('poof', CAB.x + b.x, CAB.y + b.y, { n: 0.6 }); removeBody(b); }
+        fx().text(270, 430, 'PURGED', '#a6ff5e');
+        break;
+      }
+      case 'binCopy': queueSpawn([ev.inst]); fx().text(270, 430, 'COPY', '#ffc94d'); fx().emit('glint', 270, 450, { n: 2 }); break;
       case 'turn': if (ev.n > 1) banner('TURN ' + ev.n, 'turn', 0.9); break;
+      case 'proc': procFx(ev, base, enemy); break;
+      case 'combo': queueCombo(ev); break;
       case 'over': break;
       default: break;
     }
     FS.dirty = true;
+  }
+  /* A relic or synergy fired ({t:'proc', src, id, name, icon, color, text,
+     who, idx}): the relic in the HUD bar pops with a glow ring, a star flies
+     from it to the unit, an icon badge rises from the player or the enemy. */
+  function procFx(ev, base, enemyHint) {
+    const onEnemy = ev.who === 'enemy' || ev.who === 'e' || (ev.who == null && enemyHint);
+    const idx = ev.idx != null ? ev.idx : F.target;
+    const at = onEnemy && F.enemies[idx] ? enemyPos(idx) : null;
+    const x = at ? at.x : PLAYER_FX.x + 40, y = at ? at.y - at.h - 30 : PLAYER_FX.y - 20;
+    const col = ev.color || (ev.src === 'combo' ? '#ffc94d' : '#2ee6d6');
+    let icon = ev.icon;
+    if (!icon && ev.src === 'relic' && ev.id) icon = relicDef(ev.id).icon;
+    const label = ev.text || ev.name || '';
+    // The same relic firing again within PROC_MERGE stacks on its badge
+    // ("x3") instead of spawning another; the relic still pops.
+    const key = (ev.src || '') + ':' + (ev.id || label) + ':' + (onEnemy ? idx : 'p');
+    const R0 = S.procs || (S.procs = {});
+    const prev = R0[key];
+    if (prev && S.t - prev.t < PROC_MERGE && prev.p && prev.p.life > 0 && prev.p.icon === (icon || '*')) {
+      prev.n++; prev.t = S.t;
+      prev.p.str = label + ' x' + prev.n; prev.p.life = Math.max(prev.p.life, prev.p.max * 0.6);
+      if (ev.src === 'relic' && ev.id && S.relicEls && S.relicEls[ev.id]) replay(S.relicEls[ev.id], 'proc');
+      return;
+    }
+    R0[key] = { t: S.t, n: 1, p: fx().badge(x, y - ((FS.procN = ((FS.procN || 0) + 1) % 3) * 22), icon || '*', label, col) };
+    if (ev.src === 'relic' && ev.id && S.relicEls && S.relicEls[ev.id]) {
+      const el = S.relicEls[ev.id];
+      replay(el, 'proc');
+      const rp = hudPoint(el, 440, 36);
+      fx().ring(rp.x, rp.y, col, { r0: 10, r1: 40, w: 4, life: 0.4 });
+      fx().fly(rp.x, rp.y, x, y + 14, { kind: 'star', col, dur: 0.4, arc: 40, size: 6 });
+    } else fx().emit('glint', x, y, { col });
+    snd('proc', { tier: ev.src === 'combo' ? 2 : 0 });
   }
 
   // ---- the grab flow
@@ -1512,21 +2018,39 @@ const GAME = (() => {
   }
   function onRigEvent(ev) {
     const rig = FS.rig;
+    const cj = FS.claw;
     switch (ev) {
-      case 'drop': break;
-      case 'touch': snd('clawTouch'); break;
-      case 'close': {
-        snd('clawClose');
-        // sparks where the prongs meet
-        const reach = rig.geo ? rig.geo.reach * 0.85 : 40;
-        fx().burst(CAB.x + rig.x, CAB.y + rig.y + reach, '#fff6c0', fx().reduced ? 4 : 10, { speed: 130, size: 2.5, life: 0.3, gravity: 300 });
+      case 'drop': cj.bendV += (FS.rng() - 0.5) * 160; cj.sq = -0.5; break;
+      case 'touch': {
+        snd('clawTouch');
+        // the palm thunks into the pile: squash, a puff and a camera nudge
+        cj.sq = 1;
+        const reach = rig.geo ? rig.geo.reach * 0.7 : 36;
+        fx().emit('dust', CAB.x + rig.x, CAB.y + rig.y + reach, { power: 0.6 });
+        fx().kick(0, 4);
         break;
       }
-      case 'lift': { snd('clawLift'); FS.wasHeld = carried().length; holdHint(); break; }
+      case 'close': {
+        snd('clawClose');
+        // a metallic spark burst where the prongs clamp
+        const reach = rig.geo ? rig.geo.reach * 0.85 : 40;
+        const px = CAB.x + rig.x, py = CAB.y + rig.y + reach;
+        fx().burst(px, py, '#fff6c0', fx().reduced ? 4 : 10, { speed: 130, size: 2.5, life: 0.3, gravity: 300 });
+        fx().emit('sparks', px - 14, py - 6, { dir: Math.PI, spread: 1.4, n: 0.8 });
+        fx().emit('sparks', px + 14, py - 6, { dir: 0, spread: 1.4, n: 0.8 });
+        fx().ring(px, py, '#fff6c0', { r0: 4, r1: 30, w: 3, life: 0.22 });
+        cj.sq = 0.7; cj.glow = 0.8;
+        break;
+      }
+      case 'lift': { snd('clawLift'); FS.wasHeld = carried().length; FS.cargo = carried().slice(); cj.sq = -0.6; cj.bendV += 40; holdHint(); break; }
       case 'carry': snd('clawMove'); holdHint(); break;
       case 'slip': {
-        // a cargo item fell out of the prongs on the way up or across
-        snd('itemSlip');
+        // a cargo item fell out of the prongs on the way up or across: it
+        // streaks down with a whoosh
+        snd('itemSlip'); snd('whoosh');
+        const now = carried();
+        for (const b of FS.cargo) if (now.indexOf(b) < 0 && FS.items.indexOf(b) >= 0) b.data.slipT = 0.6;
+        FS.cargo = now.slice();
         fx().text(CAB.x + rig.x, CAB.y + rig.y + 30, 'SLIP', '#b3a4d6', { size: 16 });
         fx().shake(2);
         FS.slips++;
@@ -1539,10 +2063,66 @@ const GAME = (() => {
         fx().text(CAB.x + rig.x, CAB.y + rig.y + 30, 'FULL', '#8e98a8', { size: 14, life: 0.7 });
         break;
       }
-      case 'release': snd('clawRelease'); FS.watch = true; FS.releaseAt = S.t; break;
+      case 'release': {
+        snd('clawRelease'); FS.watch = true; FS.releaseAt = S.t;
+        cj.sq = -0.4; cj.bendV -= 60;
+        fx().emit('glint', CAB.x + rig.x, CAB.y + rig.y + 30, { col: '#fff6c0' });
+        break;
+      }
       case 'home': break;
       default: break;
     }
+  }
+  /* A delivered item flies out of the chute in an arc to what it is aimed
+     at (the target enemy, the middle of the pack, or the player row) and
+     lands with a burst in its own element; COMBAT.play waits for the landing
+     (updateFight), so the numbers pop where the item hits. */
+  const THROW_T = 0.3;
+  function throwItem(inst, from) {
+    if (!F || !FS) return;
+    const def = itemDef(inst.id);
+    const tgt = def.target || 'enemy';
+    let to;
+    const alive = F.enemies.map((e, i) => (e.alive ? i : -1)).filter((i) => i >= 0);
+    if (tgt === 'self' || tgt === 'none' || !alive.length) to = { x: PLAYER_FX.x + 20, y: PLAYER_FX.y - 16 };
+    else if (tgt === 'all' || tgt === 'random') {
+      let sx = 0, sy = 0;
+      for (const i of alive) { const p = enemyPos(i); sx += p.x; sy += p.y - p.h * 0.5; }
+      to = { x: sx / alive.length, y: sy / alive.length };
+    } else {
+      const i = F.enemies[F.target] && F.enemies[F.target].alive ? F.target : alive[0];
+      const p = enemyPos(i);
+      to = { x: p.x, y: p.y - p.h * 0.5 };
+    }
+    const k = FS.throws.length;
+    FS.throws.push({
+      inst, def, x0: from.x, y0: from.y, x1: to.x, y1: to.y,
+      cx: (from.x + to.x) / 2 + 60, cy: Math.min(from.y, to.y) - 150 - k * 20,
+      t: 0, dur: (fx().reduced ? 0.2 : THROW_T) + k * 0.04, landed: false, spin: 10 + FS.rng() * 10, x: from.x, y: from.y,
+      self: to.x < 200 && tgt !== 'enemy',
+    });
+    snd('whoosh', { pitch: 1.2 });
+  }
+  function throwXY(th) {
+    const u = U.ease.inOut(Math.min(1, th.t)), v = 1 - u;
+    th.x = v * v * th.x0 + 2 * v * u * th.cx + u * u * th.x1;
+    th.y = v * v * th.y0 + 2 * v * u * th.cy + u * u * th.y1;
+  }
+  // The landing: a ring in the item's rarity colour and a burst by kind.
+  function landThrow(th) {
+    const d = th.def, tags = d.tags || [], x = th.x1, y = th.y1;
+    const rc = (X.RENDER && X.RENDER.RARITY_COL && X.RENDER.RARITY_COL[d.rarity]) || '#ffc94d';
+    fx().ring(x, y, rc, { r0: 6, r1: 48, w: 5, life: 0.3 });
+    const fxs = d.fx || [];
+    const has = (k) => fxs.some((f) => f && f.k === k);
+    const st = fxs.find((f) => f && f.k === 'status');
+    if (d.art === 'bomb' || has('poisonAll')) { fx().emit('burn', x, y, { n: 1.5 }); fx().emit('smoke', x, y); fx().shake(6); }
+    else if (st && STATUS_FX[st.s]) fx().emit(STATUS_FX[st.s], x, y);
+    else if (tags.indexOf('glass') >= 0 || tags.indexOf('potion') >= 0) { fx().emit('shatter', x, y, { col: d.color || '#ff2e88', n: 0.6 }); snd('shatter'); }
+    else if (has('heal')) fx().emit('heal', x, y);
+    else if (has('block')) fx().emit('block', x, y, { n: 0.7 });
+    else if (has('gold')) fx().emit('coins', x, y, { n: 0.5 });
+    else fx().emit('sparks', x, y, { n: 0.6 });
   }
   function deliver(b) {
     const inst = b.data.inst;
@@ -1553,18 +2133,33 @@ const GAME = (() => {
     S.run.delivered++;
     fx().burst(pos.x, pos.y, '#ffc94d', fx().reduced ? 6 : 14);
     fx().trail(pos.x, pos.y, '#ffc94d');
+    fx().ring(pos.x, pos.y, '#ffc94d', { r0: 8, r1: 46, w: 4 });
     FS.chuteFlash = 0.35;
+    throwItem(inst, pos);
     const chuteMid = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW * 0.5;
     // the chip rises just left of the divider so it never sits on the PRIZE lettering
     fx().text(chuteMid - 66, CAB.y + CAB.h - 40, '+PLAYED', '#ffc94d', { size: 15, dy: -80, life: 0.9 });
     snd('chute');
     haptic('tap');
     // Doubles are the norm with the basket claw: a triple is the jackpot.
-    if (FS.delivered === 2) { fx().text(chuteMid - 66, CAB.y + CAB.h - 70, 'DOUBLE', '#2ee6d6', { size: 16, dy: -60, life: 0.8 }); }
+    // Both light the cabinet up (slot-machine chase lights, the marquee);
+    // the jackpot adds confetti from the top corners and a coin fountain.
+    if (FS.delivered === 2) {
+      fx().text(chuteMid - 66, CAB.y + CAB.h - 70, 'DOUBLE', '#2ee6d6', { size: 20, dy: -60, life: 0.9 });
+      fx().emit('coins', chuteMid, CAB.y + CAB.h - 30, { n: 0.6, power: 0.9, dir: -Math.PI / 2 - 0.35 });
+      FS.party = Math.max(FS.party, 0.7); FS.marquee = 'DOUBLE!';
+      snd('coin', { pitch: 1.2 });
+    }
     if (FS.delivered === 3) {
       banner('JACKPOT', 'jackpot', 1.4);
       snd('jackpot'); haptic('jackpot');
-      fx().burst(270, 600, '#ffc94d', fx().reduced ? 12 : 40); if (!fx().reduced) fx().flash('#ffc94d');
+      fx().burst(270, 600, '#ffc94d', fx().reduced ? 12 : 40); if (!fx().reduced) fx().flash('#ffc94d', 0.4);
+      fx().emit('confetti', CAB.x + 10, CAB.y, { dir: -Math.PI / 2 + 0.55, spread: 1.0 });
+      fx().emit('confetti', CAB.x + CAB.w - 10, CAB.y, { dir: -Math.PI / 2 - 0.55, spread: 1.0 });
+      fx().emit('coins', chuteMid, CAB.y + CAB.h - 30, { n: 1.6, power: 1.25, dir: -Math.PI / 2 - 0.3 });
+      fx().ring(270, 600, '#ffc94d', { r0: 20, r1: 320, w: 10, life: 0.7 });
+      fx().shake(10);
+      FS.party = 2.2; FS.marquee = 'JACKPOT!';
       S.run.jackpots++; S.meta.stats.jackpots++;
     }
     if (S.coachStep === 2) coachNext();
@@ -1572,6 +2167,7 @@ const GAME = (() => {
   function playInst(inst) {
     if (!F || F.phase !== 'player') return;
     const def = itemDef(inst.id);
+    FS.curDef = def;
     const evs = X.COMBAT.play(F, inst, F.target);
     S.run.played++; S.meta.stats.played++;
     showTrayChip(def, inst);
@@ -1586,7 +2182,10 @@ const GAME = (() => {
     const tx = h('div', 'col');
     tx.appendChild(h('div', 'n', itemName(def, inst.plus)));
     tx.appendChild(h('div', 't', inst.frozen ? 'Encased in ice. Thawed.' : itemText(def, inst.plus)));
+    const kw = kwChips(def, 'sm');
+    if (kw) { tx.appendChild(kw); chip.classList.add('haskw'); }
     chip.appendChild(tx);
+    chip.classList.add('rr-' + (def.rarity || 'c'));
     tray.appendChild(chip);
     if (tray.children && tray.children.length > 2) { const first = tray.children[0]; if (first) { if (first.remove) first.remove(); else tray.removeChild(first); } }
     setTimeout(() => { chip.classList.add('fade'); }, 2600);
@@ -1603,11 +2202,51 @@ const GAME = (() => {
   function afterAction() {
     if (!F || FS.done) return;
     const over = F.phase === 'over' ? F.result : X.COMBAT.isOver(F);
-    if (over) { endFight(over); return; }
+    if (over) { endFight(over, true); return; }
     if (F.player.grabs > 0) hint(FS.delivered ? 'nice. steer and release' : 'steer and release');
     else { hint('out of grabs'); FS.autoEndT = AUTO_END; banner('TURN OVER', 'turn', 0.7); }
     FS.dirty = true;
   }
+  // The claw's spring: the cable bows against the carriage's acceleration and
+  // wobbles back, the hub squash and the clamp glow relax.
+  function clawSpring(dt) {
+    const cj = FS.claw, rig = FS.rig;
+    if (!rig || !(dt > 0)) return;
+    const vx = (rig.x - cj.px) / dt;
+    cj.px = rig.x;
+    if (Math.abs(vx) < 5000) { cj.bendV -= (vx - cj.vx) * 0.12; cj.vx = vx; }
+    cj.bendV += (-cj.bend * 160 - cj.bendV * 6) * dt;
+    cj.bend = U.clamp(cj.bend + cj.bendV * dt, -22, 22);
+    cj.sq *= Math.exp(-dt * 8);
+    if (cj.glow > 0) cj.glow = Math.max(0, cj.glow - dt * 2.5);
+  }
+  /* Per-frame fight juice: enemy hp ghosts drain after their hold, status
+     chip pops settle, the cabinet party lights fade, the low hp heartbeat
+     (edge glow + lub-dub under 30%). */
+  function juiceTick(dt) {
+    for (const k in FS.ghost) {
+      const g = FS.ghost[k], sh = FS.shown.e[k];
+      const hp = sh ? sh.hp : 0;
+      if (g.v < hp) { g.v = hp; continue; }
+      if (g.hold > 0) { g.hold -= dt; continue; }
+      if (g.v > hp) g.v = Math.max(hp, g.v - Math.max(12, (g.v - hp) * 4) * dt);
+    }
+    for (const k in FS.pipPop) { const pp = FS.pipPop[k]; for (const s2 in pp) if (pp[s2] > 0) pp[s2] = Math.max(0, pp[s2] - dt * 2.5); }
+    if (FS.party > 0) FS.party = Math.max(0, FS.party - dt * 0.8);
+    const lag = FS.queue.length || FS.enemyTurn;
+    const hp = lag ? FS.shown.p.hp : F.player.hp;
+    const low = !FS.done && hp > 0 && hp / Math.max(1, F.player.maxHp) < 0.3;
+    if (low) {
+      const per = 0.95, before = FS.hbT % per;
+      FS.hbT += dt;
+      const ph = (FS.hbT % per) / per;
+      if (FS.hbT % per < before) snd('heartbeat');
+      const pulse = ph < 0.1 ? ph / 0.1 : ph < 0.35 ? 1 - (ph - 0.1) / 0.25 : 0;
+      fx().hold(fx().reduced ? 0.22 : 0.16 + 0.34 * pulse, '#ff2e30');
+    } else { FS.hbT = 0; fx().hold(0); }
+    S.lowHp = low;
+  }
+
   // Force the rig home. Called by the watchdog; the world is left intact.
   function resetRig(reason) {
     if (!FS || !FS.rig) return;
@@ -1655,13 +2294,18 @@ const GAME = (() => {
     FS.enemyTurn = false;
     FS.actor = -1;
     const over = F.phase === 'over' ? F.result : X.COMBAT.isOver(F);
-    if (over) { endFight(over); return; }
+    if (over) { endFight(over, true); return; }
     syncBodies();
     banner('YOUR TURN', 'turn', 0.9);
     afterAction();
     save();
   }
-  function endFight(result) {
+  /* outro (the natural end of a won fight, not the public call): the
+     arena stays up for a beat of slow motion and the VICTORY sweep before
+     the reward screen; the reward is rolled now and a save in between lands
+     on it. A tap skips. */
+  function endFight(result, outro) {
+    if (FS && FS.outro && FS.done) { finishOutro(); return; }
     if (!F || !FS || FS.done) return;
     FS.done = true;
     FS.watch = false;
@@ -1679,12 +2323,13 @@ const GAME = (() => {
     hint('');
     if (result === 'lose') {
       run.killer = FS.killer || 'the Clawspire';
+      fx().flash('#ff2e30', fx().reduced ? 0.25 : 0.6); fx().shake(14);
       snd('lose');
       showGameOver();
       return;
     }
     snd('win');
-    banner('VICTORY', 'jackpot', 1.2);
+    banner('VICTORY', 'victory', outro ? 1.6 : 1.2);
     const rng = rngFor('reward');
     let gold = rng.int(10, 25) + 4 * (run.act - 1);
     if (tier === 'elite') gold = Math.round(gold * 1.6);
@@ -1694,7 +2339,21 @@ const GAME = (() => {
     // A beaten elite (a tower keeper too) sometimes hands over a tool.
     const brush = tier === 'elite' && rng() < (econ.eliteToolChance || 0) && toolIds().length ? rng.pick(toolIds()) : null;
     const reward = { items: rollItems(rng, 3), gold, ink, brush, tier, then };
+    if (outro) {
+      FS.outro = { t: fx().reduced ? 0.7 : 1.5, reward };
+      S.sd = { reward };
+      const lk = FS.lastKill || { x: 270, y: 200 };
+      fx().emit('confetti', lk.x, lk.y + 40, { power: 0.9 });
+      save();
+      return;
+    }
     showReward(reward);
+  }
+  function finishOutro() {
+    if (!FS || !FS.outro) return;
+    const rw = FS.outro.reward;
+    FS.outro = null;
+    showReward(rw);
   }
 
   // ---- fight update (fixed dt)
@@ -1730,6 +2389,8 @@ const GAME = (() => {
       const reduced = !!fx().reduced;
       const carrying = rig.phase === 'lifting' || rig.phase === 'carrying';
       const held = carrying && !reduced && (FS.frameN & 1) ? carried() : null;
+      FS.dust = 0;
+      clawSpring(dt);
       for (const b of FS.items) {
         const d = b.data;
         const pv = d.pvy == null ? b.vy : d.pvy;
@@ -1737,7 +2398,14 @@ const GAME = (() => {
           const imp = U.clamp((pv - 200) / 900, 0.15, 1);
           d.sq = Math.max(d.sq || 0, imp);
           if (S.t - FS.landSnd > 0.07 && imp > 0.3) { FS.landSnd = S.t; snd('itemLand', { mass: b.m, vel: pv }); }
+          // a dust puff under the landing, bigger for heavy things (3 a frame at most)
+          if (imp > 0.28 && FS.dust < 3) {
+            FS.dust++;
+            const heavy = U.clamp((b.m || 700) / 1400, 0.3, 1.6);
+            fx().emit('dust', CAB.x + b.x, CAB.y + b.y + (b.br || 12) * 0.6, { power: imp * heavy, n: 0.8 });
+          }
         }
+        if (d.slipT > 0) { d.slipT -= dt; fx().trail(CAB.x + b.x, CAB.y + b.y, '#d9ccff', { vx: b.vx, vy: b.vy, life: 0.22, w: 6 }); }
         d.pvy = b.vy;
         if (d.sq > 0) d.sq = Math.max(0, d.sq - dt * 5);
       }
@@ -1753,10 +2421,25 @@ const GAME = (() => {
         else b.data.chuteT = 0;
       }
     }
+    // Thrown items fly to their target; each lands before it resolves.
+    for (const th of FS.throws) {
+      if (th.landed) continue;
+      th.t += dt / th.dur;
+      throwXY(th);
+      if ((FS.frameN & 1) === 0) fx().emit('trailDot', th.x, th.y, { col: (X.RENDER && X.RENDER.RARITY_COL && X.RENDER.RARITY_COL[th.def.rarity]) || '#ffc94d' });
+      if (th.t >= 1) { th.t = 1; th.landed = true; landThrow(th); }
+    }
     // Played items resolve on a short beat so the numbers can be read.
     if (FS.playQ.length && !FS.queue.length) {
       FS.playT -= dt;
-      if (FS.playT <= 0) { playInst(FS.playQ.shift()); FS.playT = PLAY_BEAT; }
+      const head = FS.playQ[0];
+      let th = null;
+      for (const x of FS.throws) if (x.inst === head) { th = x; break; }
+      if (FS.playT <= 0 && (!th || th.landed)) {
+        playInst(FS.playQ.shift());
+        FS.playT = PLAY_BEAT;
+        if (th) FS.throws.splice(FS.throws.indexOf(th), 1);
+      }
     }
     // Event playback.
     if (FS.queue.length) {
@@ -1764,7 +2447,13 @@ const GAME = (() => {
       while (FS.queue.length && FS.beatT <= 0) {
         const q = FS.queue.shift();
         applyEvent(q.ev);
-        FS.beatT = q.beat;
+        // a proc is a flourish, not a beat: a relic-heavy grab can emit dozens
+        FS.beatT = q.ev && q.ev.t === 'proc' ? Math.min(q.beat, PROC_BEAT) : q.beat;
+      }
+      // The next beat is a hit on the player: the actor winds up during this one.
+      if (FS.enemyTurn && FS.actor >= 0 && FS.queue.length) {
+        const nx = FS.queue[0].ev;
+        if (nx && nx.t === 'dmg' && nx.who === 'p') anim(FS.actor).wind = 1;
       }
       if (!FS.queue.length && !FS.playQ.length) { syncShown(); if (FS.onDrain) { const fn = FS.onDrain; FS.onDrain = null; fn(); } }
       if (!FS) return;
@@ -1789,11 +2478,18 @@ const GAME = (() => {
       if (a.hurt > 0) a.hurt = Math.max(0, a.hurt - dt * 4);
       if (a.attack > 0) a.attack = Math.max(0, a.attack - dt * 2.5);
       if (a.dead > 0 && a.dead < 1) a.dead = Math.min(1, a.dead + dt * 1.6);
+      if (a.knock > 0) a.knock = Math.max(0, a.knock - dt * 5);
+      if (a.barFlash > 0) a.barFlash = Math.max(0, a.barFlash - dt * 4);
+      if (a.barShake > 0) a.barShake = Math.max(0, a.barShake - dt * 3);
+      if (a.spawn > 0) a.spawn = Math.max(0, a.spawn - dt * 2.5);
+      a.windV = (a.windV || 0) + ((a.wind || 0) - (a.windV || 0)) * Math.min(1, dt * 6);
+      if (!FS.enemyTurn) a.wind = 0;
     }
+    juiceTick(dt);
     // Won fights can end outside a grab too (poison ticks at turn start).
     if (!FS.done && !FS.grabInFlight && !FS.queue.length && !FS.playQ.length && !FS.enemyTurn) {
       const over = F.phase === 'over' ? F.result : null;
-      if (over) endFight(over);
+      if (over) endFight(over, true);
     }
   }
 
@@ -1828,16 +2524,17 @@ const GAME = (() => {
     const b = $('rewardBody');
     clear(b);
     b.appendChild(h('h1', null, rw.tier === 'boss' ? 'Boss down' : 'Victory'));
-    const line = h('div', 'row');
+    const line = h('div', 'row pops');
     line.appendChild(h('span', 'tag gold', `+${rw.gold} gold`));
     if (rw.ink) line.appendChild(h('span', 'tag cyan', `+${bulbs(rw.ink)}`));
     if (rw.brush) line.appendChild(h('span', 'tag gold', `${toolDef(rw.brush).icon || ''} ${toolDef(rw.brush).name}`.trim()));
     b.appendChild(line);
     b.appendChild(h('div', 'sub', 'Pick one item for your bin.'));
     const cards = h('div', 'cards');
-    rw.items.forEach((id) => {
+    rw.items.forEach((id, i) => {
       const def = itemDef(id);
-      const card = itemCard(def, false, { onPick: () => { addItem(id); snd('buy'); toast(`${def.name} added to the bin.`); afterReward(rw); } });
+      let card = null;
+      card = itemCard(def, false, { deal: i, onPick: () => { flyCard(card, def, false); addItem(id); snd('buy'); toast(`${def.name} added to the bin.`); afterReward(rw); } });
       cards.appendChild(card);
     });
     b.appendChild(cards);
@@ -1846,18 +2543,35 @@ const GAME = (() => {
   }
   function itemCard(def, plus, o) {
     o = o || {};
-    const card = h('div', 'card' + (o.cls ? ' ' + o.cls : ''));
+    const card = h('div', 'card rr-' + (def.rarity || 'c') + (o.cls ? ' ' + o.cls : ''));
+    if (o.deal != null) dealIn(card, o.deal);
     card.appendChild(h('div', 'rar ' + (def.rarity || 'c'), RARITY_NAME[def.rarity] || ''));
     if (o.count > 1) card.appendChild(h('div', 'cnt', 'x' + o.count));
     card.appendChild(itemCanvas(def, plus, 84));
     card.appendChild(h('div', 'name', itemName(def, plus)));
     card.appendChild(h('div', 'text', itemText(def, plus)));
+    const kw = kwChips(def);
+    if (kw) card.appendChild(kw);
     if (o.price != null) card.appendChild(h('div', 'price', o.sold ? 'SOLD' : o.price + ' gold'));
+    if (o.sold && o.price != null) card.appendChild(h('div', 'stamp' + (o.justSold ? ' slam' : ''), 'SOLD'));
     if (plus) card.appendChild(h('div', 'plus', 'PLUS'));
     const fn = () => { if (o.sold) return; if (o.onPick) o.onPick(); };
     card.onclick = (ev) => { fn(); };
     S.ui.buttons.push({ el: card, fn, label: itemName(def, plus), disabled: !!o.sold || !!o.disabled });
     return card;
+  }
+  // A card dealt onto the table: a staggered flip in with a paper flick.
+  function dealIn(card, i) {
+    try { card.classList.add('deal'); card.style.animationDelay = (i * 0.09).toFixed(2) + 's'; } catch (e) { /* stub */ }
+    if (!S.headless) setTimeout(() => snd('cardFlip', { pitch: 1 + i * 0.07 }), 60 + i * 90);
+  }
+  // A picked card flies off toward the bin (the map head's Bin button).
+  function flyCard(card, def, plus) {
+    if (S.headless || !card) return;
+    const p = hudPoint(card, 270, 480);
+    const c = h('div', 'flycard rr-' + (def.rarity || 'c'));
+    c.appendChild(itemCanvas(def, plus, 64));
+    domFly(c, p.x, p.y, 336, 96, 620);
   }
   function afterReward(rw) {
     S.sd = null;
@@ -1873,7 +2587,7 @@ const GAME = (() => {
     const run = S.run, M = run && run.map;
     const b = (tw && tw.bonus) || { k: 'ink', n: ECON().towerInk || 2 };
     let seen = 0;
-    if (M && X.MAP && X.MAP.towerView && tw && tw.q != null) { seen = X.MAP.towerView(M, tw.q, tw.r).length; run.ink = M.ink; }
+    if (M && X.MAP && X.MAP.towerView && tw && tw.q != null) { seen = X.MAP.towerView(M, tw.q, tw.r).length; run.ink = M.ink; S.bloomSrc = { q: tw.q, r: tw.r }; S.beamPending = { q: tw.q, r: tw.r }; }
     let line = '';
     switch (b.k) {
       case 'gold': { const n = b.n || 60; addGold(n); snd('coin'); line = `+${n} gold`; break; }
@@ -1920,10 +2634,12 @@ const GAME = (() => {
   // A row of claw upgrade cards; onPick(id, def) after a successful apply.
   function clawCards(ids, onPick) {
     const cards = h('div', 'cards');
+    let k = 0;
     for (const id of ids) {
       const def = tbl('CLAW_UPGRADES')[id];
       if (!def) continue;
-      const card = h('div', 'card');
+      const card = h('div', 'card rr-r');
+      dealIn(card, k++);
       card.appendChild(h('div', 'big', def.icon || ''));
       card.appendChild(h('div', 'name', def.name));
       card.appendChild(h('div', 'text', def.text || ''));
@@ -1961,12 +2677,22 @@ const GAME = (() => {
     if (td.gold) b.appendChild(h('span', 'tag gold', `+${td.gold} gold`));
     if (td.relic) {
       const def = relicDef(td.relic);
-      const card = h('div', 'card');
-      card.appendChild(relicCanvas(def, 84));
+      // the big reveal: rays spin behind the relic as it rises in
+      const card = h('div', 'card relicReveal rr-' + (def.rarity === 'boss' ? 'l' : def.rarity || 'c'));
+      card.appendChild(h('div', 'rays'));
+      const ic = relicCanvas(def, 110);
+      ic.className = 'relicIcon';
+      card.appendChild(ic);
       card.appendChild(h('div', 'name', def.name));
       card.appendChild(h('div', 'text', def.text || ''));
+      const kw = kwChips(def);
+      if (kw) card.appendChild(kw);
       b.appendChild(card);
-      b.appendChild(btn('Take it', () => { gainRelic(td.relic); snd('upgrade'); S.sd = null; toMap(); }, 'gold'));
+      if (!S.headless) setTimeout(() => snd('relic'), 120);
+      b.appendChild(btn('Take it', () => {
+        if (!S.headless) { const p = hudPoint(ic, 270, 300); const c = h('div', 'flycard'); c.appendChild(relicCanvas(def, 56)); domFly(c, p.x, p.y, 440, 36, 700); }
+        gainRelic(td.relic); snd('upgrade'); S.sd = null; toMap();
+      }, 'gold'));
     } else {
       b.appendChild(h('div', 'sub', 'The chest is empty. Someone got here first.'));
       b.appendChild(btn('Continue', () => { S.sd = null; toMap(); }, 'pri'));
@@ -2013,33 +2739,44 @@ const GAME = (() => {
     const b = $('shopBody');
     clear(b);
     const run = S.run;
+    const sold = S.justSold; S.justSold = null;
     b.appendChild(h('h1', null, 'Shop'));
     const top = h('div', 'row');
-    top.appendChild(h('span', 'tag gold big', `${run.gold} gold`));
+    const goldTag = h('span', 'tag gold big', `${run.gold} gold`);
+    goldTag.id = 'shopGold';
+    if (sold) goldTag.classList.add('dip');
+    top.appendChild(goldTag);
     top.appendChild(h('span', 'sub', 'Tap to buy. Sell from your bin for a third of the price.'));
     b.appendChild(top);
     b.appendChild(h('h3', null, 'Items'));
     const cards = h('div', 'cards');
-    shop.items.forEach((it) => {
+    shop.items.forEach((it, i) => {
       const def = itemDef(it.id);
-      cards.appendChild(itemCard(def, false, { price: it.price, sold: it.sold, onPick: () => {
-        if (run.gold < it.price) { toast('Not enough gold.'); return; }
-        addGold(-it.price); it.sold = true; addItem(it.id); snd('buy'); toast(`Bought ${def.name}.`); showShop(shop);
-      } }));
+      let card = null;
+      card = itemCard(def, false, { price: it.price, sold: it.sold, justSold: sold === 'i' + i, deal: sold ? null : i, onPick: () => {
+        if (run.gold < it.price) { toast('Not enough gold.'); replay(card, 'nope'); return; }
+        buyFx(card, it.price);
+        addGold(-it.price); it.sold = true; addItem(it.id); snd('buy'); toast(`Bought ${def.name}.`); S.justSold = 'i' + i; showShop(shop);
+      } });
+      cards.appendChild(card);
     });
     b.appendChild(cards);
     const sec = h('div', 'cards two');
     if (shop.relic) {
       const def = relicDef(shop.relic.id);
-      const card = h('div', 'card' + (shop.relic.sold ? ' sold' : ''));
+      const card = h('div', 'card rr-' + (def.rarity || 'c') + (shop.relic.sold ? ' sold' : ''));
       card.appendChild(relicCanvas(def, 64));
       card.appendChild(h('div', 'name', def.name));
       card.appendChild(h('div', 'text', def.text || ''));
+      const kw = kwChips(def);
+      if (kw) card.appendChild(kw);
       card.appendChild(h('div', 'price', shop.relic.sold ? 'SOLD' : shop.relic.price + ' gold'));
+      if (shop.relic.sold) card.appendChild(h('div', 'stamp' + (sold === 'relic' ? ' slam' : ''), 'SOLD'));
       const fn = () => {
         if (shop.relic.sold) return;
-        if (run.gold < shop.relic.price) { toast('Not enough gold.'); return; }
-        addGold(-shop.relic.price); shop.relic.sold = true; gainRelic(shop.relic.id); snd('buy'); toast(`Bought ${def.name}.`); showShop(shop);
+        if (run.gold < shop.relic.price) { toast('Not enough gold.'); replay(card, 'nope'); return; }
+        buyFx(card, shop.relic.price);
+        addGold(-shop.relic.price); shop.relic.sold = true; gainRelic(shop.relic.id); snd('buy'); toast(`Bought ${def.name}.`); S.justSold = 'relic'; showShop(shop);
       };
       card.onclick = fn;
       S.ui.buttons.push({ el: card, fn, label: def.name, disabled: shop.relic.sold });
@@ -2060,10 +2797,19 @@ const GAME = (() => {
     row.appendChild(btn('Sell an item', () => run.bin.length <= BIN_FLOOR ? toast('The bin is as light as it gets.') : openBin({ mode: 'sell', title: 'Sell which item?', back: () => showShop(shop), onPick: (inst) => {
       const p = Math.max(5, Math.round((itemDef(inst.id).cost || 30) / 3));
       removeInst(inst); addGold(p); snd('coin'); toast(`Sold for ${p} gold.`); showShop(shop);
+      if (!S.headless) { const gp = hudPoint($('shopGold'), 100, 80); for (let i = 0; i < 5; i++) domFly(h('div', 'dcoin'), 270 + (i - 2) * 14, 520, gp.x, gp.y, 480, i * 60); }
     } }), 'sm'));
     b.appendChild(row);
     b.appendChild(btn('Leave', () => toMap(), 'pri'));
     save();
+  }
+  // Coins arc from the gold tag into the card being bought, then the stamp.
+  function buyFx(card, price) {
+    if (S.headless) return;
+    const gp = hudPoint($('shopGold'), 100, 80), cp = hudPoint(card, 270, 400);
+    const n = U.clamp(Math.round(price / 25), 3, 8);
+    for (let i = 0; i < n; i++) domFly(h('div', 'dcoin'), gp.x + (i - n / 2) * 6, gp.y, cp.x, cp.y, 420, i * 45);
+    setTimeout(() => snd('stamp'), 380);
   }
   function removeInst(inst) {
     const bin = S.run.bin;
@@ -2311,15 +3057,24 @@ const GAME = (() => {
     if (!run) return;
     const lag = F && FS && (FS.queue.length || FS.enemyTurn);
     const hp = F ? (lag ? FS.shown.p.hp : F.player.hp) : run.hp, max = F ? F.player.maxHp : run.maxHp, block = F ? (lag ? FS.shown.p.block : F.player.block) : 0;
-    const key = [hp, max, block, run.gold, run.ink, run.act, run.char].join('|');
+    // In a fight the gold is the fight's view of it (pay fx spend mid-fight).
+    let gold = run.gold;
+    if (F && X.COMBAT && X.COMBAT.gold) { try { const g = X.COMBAT.gold(F); if (g >= 0) gold = g; } catch (e) { /* run gold */ } }
+    const key = [hp, max, block, gold, run.ink, run.act, run.char].join('|');
     if (force || key !== S.lastHud) {
       S.lastHud = key;
       const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
-      set('hpTxt', `${hp}/${max}`);
+      // the numbers roll (headless snaps); the hp bar drains with a ghost chunk
+      rollTo('hpTxt', hp, false, (v) => `${v}/${max}`);
       set('blockTxt', block ? `+${block} block` : '');
-      set('goldTxt', String(run.gold));
-      set('inkTxt', String(run.ink));
+      rollTo('goldTxt', gold, false);
+      rollTo('inkTxt', run.ink, false);
       set('actTxt', `${run.act} of 3`);
+      const pct = U.clamp(hp / Math.max(1, max), 0, 1) * 100;
+      const fl = $('hpFill'), gh = $('hpGhost'), hs = $('hpStat');
+      if (fl && fl.style) fl.style.width = pct.toFixed(1) + '%';
+      if (gh && gh.style) gh.style.width = pct.toFixed(1) + '%';
+      if (hs && hs.classList) { hs.classList[hp > 0 && pct < 30 ? 'add' : 'remove']('low'); hs.classList[block > 0 ? 'add' : 'remove']('shielded'); }
       if (force) {
         const pc = $('portrait');
         if (pc && X.RENDER && X.RENDER.portrait) {
@@ -2333,9 +3088,11 @@ const GAME = (() => {
       S.lastRelics = rk;
       const el = $('relics');
       clear(el);
+      S.relicEls = {};
       for (const id of run.relics) {
         const def = relicDef(id);
         const r = h('button', 'relic');
+        S.relicEls[id] = r;
         r.appendChild(relicCanvas(def, 36));
         r.onclick = (ev) => { popover(`<b>${def.name}</b><br>${def.text || ''}`, 400, 70); if (ev && ev.stopPropagation) ev.stopPropagation(); };
         el.appendChild(r);
@@ -2348,10 +3105,13 @@ const GAME = (() => {
         S.lastStatus = sk;
         const el = $('pstatus');
         clear(el);
+        S.pipEls = {};
         for (const id in st) {
           const sd = tbl('STATUS')[id] || { name: id, icon: '', kind: 'buff', text: '' };
           const p = h('button', 'pip ' + (sd.kind || ''), `${sd.icon || ''}${st[id]}`);
           p.style.borderColor = sd.color || '';
+          S.pipEls[id] = p;
+          if (S.pipPop === id) { p.classList.add('pop'); S.pipPop = null; }
           p.onclick = (ev) => { popover(`<b>${sd.icon || ''} ${sd.name} ${st[id]}</b><br>${sd.text || ''}`, 120, 360); if (ev && ev.stopPropagation) ev.stopPropagation(); };
           el.appendChild(p);
         }
@@ -2378,6 +3138,7 @@ const GAME = (() => {
     if (S.screen === 'map') { mapPointer(type, x, y, ev); return; }
     if (S.screen === 'title') return;
     if (S.screen !== 'fight' || !F || !FS) return;
+    if (FS.outro) { if (type === 'down') finishOutro(); return; }
     // One finger steers. A second finger is ignored until the first lifts.
     const pid = ev && ev.pointerId != null ? ev.pointerId : null;
     if (type === 'down') {
@@ -2460,6 +3221,7 @@ const GAME = (() => {
     ctx.clearRect(0, 0, W, H);
     const off = fx().offset ? fx().offset() : { x: 0, y: 0 };
     ctx.translate(off.x || 0, off.y || 0);
+    if (off.r) { ctx.translate(W / 2, H / 2); ctx.rotate(off.r); ctx.translate(-W / 2, -H / 2); }
     const run = S.run;
     if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection') {
       if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
@@ -2579,6 +3341,7 @@ const GAME = (() => {
         for (let i = 0; i < 6; i++) { const a = Math.PI / 180 * (60 * i + (flat ? 0 : -30)); ctx.lineTo(x + size * Math.cos(a), y + size * Math.sin(a)); }
         ctx.closePath(); ctx.fillStyle = tile.revealed ? '#2c1d4a' : '#150c26'; ctx.fill(); ctx.strokeStyle = '#3d2a63'; ctx.stroke();
       }
+      if (it.bloomAt) drawBloom(ctx, it, x, y, size, t, flat);
     }
     // Pass 3: the warm glow where the light meets the dark, over the darkness.
     if (R && R.lightRim) for (const p of rims) R.lightRim(ctx, p.x, p.y, size, p.mask, flat, t);
@@ -2588,6 +3351,9 @@ const GAME = (() => {
     if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
     // The crawler and the portrait: on the current hex, or easing between
     // hexes while a walk plays (hex() left the crawler out then).
+    drawBossPulse(ctx, t, size);
+    drawBeam(ctx, t, size);
+    drawAmbient(ctx);
     const meXY = wxy || curXY;
     if (meXY && R && R.crawler) R.crawler(ctx, meXY.x, meXY.y, size, t);
     if (meXY && R && R.portrait) R.portrait(ctx, run.char, meXY.x, meXY.y, size * 1.2, t);
@@ -2615,9 +3381,15 @@ const GAME = (() => {
       R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, actDef(run.act).name, pr ? `${pr.revealed} of ${pr.total} hexes lit` : '', t);
     }
   }
+  // Reused per-frame objects for the fight draw (no allocation per enemy).
+  const EST = { hurt: 0, attack: 0, dead: 0, frozen: false, poisoned: false, burning: false, chilled: false, windup: 0 };
+  const HPO = { ghost: 0, flash: 0, shield: 0 };
+  const CLAWJ = { bend: 0, squash: 0, speed: 0, glow: 0 };
+  const RARE_A = { u: 0.22, r: 0.4, l: 0.5 };
   function drawFight(ctx, t) {
     const R = X.RENDER, run = S.run;
     if (R && R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
+    drawAmbient(ctx);
     // Enemies.
     F.enemies.forEach((e, i) => {
       const p = enemyPos(i);
@@ -2627,24 +3399,36 @@ const GAME = (() => {
       // until the event plays, then the fall animation runs once.
       const pendingDeath = !e.alive && !a.dead;
       if (!e.alive && a.dead >= 1) return;
-      const st = { hurt: a.hurt, attack: a.attack, dead: (e.alive || pendingDeath) ? 0 : a.dead, frozen: !!(e.status.freeze), poisoned: !!(e.status.poison), burning: !!(e.status.burn) };
+      const live = e.alive || pendingDeath;
+      // knockback away from the player (+x), a summon grows in
+      const kx = (a.knock > 0 ? U.ease.outCubic(Math.min(1, a.knock)) * 14 : 0);
+      const ex = p.x + kx;
+      const sc = p.scale * (a.spawn > 0 ? 1 - a.spawn * 0.7 + Math.sin(a.spawn * Math.PI) * 0.15 : 1);
+      EST.hurt = a.hurt; EST.attack = a.attack; EST.dead = live ? 0 : a.dead;
+      EST.frozen = !!(e.status.freeze); EST.poisoned = !!(e.status.poison); EST.burning = !!(e.status.burn); EST.chilled = !!(e.status.chill);
+      EST.windup = a.windV || 0;
       if (i === F.target && e.alive) {
         ctx.save(); ctx.strokeStyle = '#ff2e88'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.lineDashOffset = -t * 30;
         ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, Math.max(40, p.w * 0.5), 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
       }
-      if (R && R.enemy) R.enemy(ctx, e.def, p.x, p.y, p.scale, t, st);
-      if (!e.alive && !pendingDeath) return;
-      // hp bar under the feet, status pips under that, intent above the head
-      // (never under the top bar)
+      if (live && R && R.enemyAura) R.enemyAura(ctx, ex, p.y, p.w, p.h, e.status, t, 'back');
+      if (R && R.enemy) R.enemy(ctx, e.def, ex, p.y, sc, t, EST);
+      if (!live) return;
+      if (R && R.enemyAura) R.enemyAura(ctx, ex, p.y, p.w, p.h, e.status, t, 'front');
+      // hp bar under the feet (a ghost chunk drains behind a hit, the bar
+      // shakes), status pips under that, intent above the head
       const bw = U.clamp(p.w * 0.9, 84, 150);
       const sh = (FS.queue.length || FS.enemyTurn) && FS.shown.e[i] ? FS.shown.e[i] : e;
-      if (R && R.hpBar) R.hpBar(ctx, p.x - bw / 2, p.y + 10, bw, 12, sh.hp, e.maxHp, sh.block);
-      if (R && R.statusPips) R.statusPips(ctx, p.x - bw / 2, p.y + 26, e.status, 14);
+      const g = FS.ghost[i];
+      HPO.ghost = g ? g.v : 0; HPO.flash = a.barFlash || 0; HPO.shield = sh.block > 0 ? t * 0.6 : 0;
+      const bs = a.barShake > 0 ? Math.sin(t * 90) * a.barShake * 3 : 0;
+      if (R && R.hpBar) R.hpBar(ctx, p.x - bw / 2 + bs, p.y + 10, bw, 12, sh.hp, e.maxHp, sh.block, HPO);
+      if (R && R.statusPips) R.statusPips(ctx, p.x - bw / 2, p.y + 26, e.status, 14, FS.pipPop[i]);
       if (R && R.intent) R.intent(ctx, p.x, intentY(p), e, t);
     });
     // The rig.
     const cfg = { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW, claw: clawFor() };
-    const cabSt = { fog: FS.fog > 0 ? 1 : 0, grease: FS.grease > 0 ? 1 : 0, tilt: FS.tilt, act: run.act, t };
+    const cabSt = { fog: FS.fog > 0 ? 1 : 0, grease: FS.grease > 0 ? 1 : 0, tilt: FS.tilt, act: run.act, t, party: Math.min(1, FS.party), marquee: FS.marquee };
     const split = R && R.cabinetBack && R.cabinetFront;
     if (split) R.cabinetBack(ctx, CAB.x, CAB.y, cfg, cabSt);
     else if (R && R.cabinet) R.cabinet(ctx, CAB.x, CAB.y, cfg, cabSt);
@@ -2653,39 +3437,64 @@ const GAME = (() => {
     ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
     const rigPh = FS.rig ? FS.rig.phase : 'idle';
     const inHand = (rigPh === 'lifting' || rigPh === 'carrying') ? carried() : null;
+    const RC = R && R.RARITY_COL;
     for (const b of FS.items) {
       const inst = b.data.inst;
       const inChute = FS.cabinet && FS.cabinet.inChute(b);
       const held = inHand && inHand.indexOf(b) >= 0;
       const sq = b.data.sq > 0.02 ? b.data.sq : 0;
       const x = CAB.x + b.x, y = CAB.y + b.y;
+      const rar = b.data.def.rarity;
+      // rarity: a soft outline glow for uncommon and up (legendary pulses)
+      let glowC = inChute ? 1 : (held ? '#2ee6d6' : 0), glowA = null;
+      if (!glowC && RC && RARE_A[rar] && !inst.frozen) { glowC = RC[rar]; glowA = rar === 'l' ? RARE_A.l + Math.sin(t * 4 + b.x * 0.05) * 0.2 : RARE_A[rar]; }
       if (sq) { ctx.save(); ctx.translate(x, y); ctx.scale(1 + sq * 0.22, 1 - sq * 0.22); ctx.translate(-x, -y); }
-      if (R && R.item) R.item(ctx, b.data.def, x, y, b.a, 1, { plus: inst.plus, frozen: inst.frozen, glow: inChute ? 1 : (held ? '#2ee6d6' : 0) });
+      if (R && R.item) R.item(ctx, b.data.def, x, y, b.a, 1, { plus: inst.plus, frozen: inst.frozen, glow: glowC, glowA });
       else { ctx.fillStyle = b.data.def.color || '#888'; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill(); }
       if (sq) ctx.restore();
+      if ((rar === 'r' || rar === 'l') && R && R.glint) R.glint(ctx, x, y, (b.br || 16), t, (inst.uid ? inst.uid.length * 7 : 0) + b.x * 0.01, rar === 'l' ? '#ff9ad0' : '#fff6c0');
     }
     if (FS.chuteFlash > 0) {
       const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
       ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
       ctx.fillRect(cx, CAB.y, CAB.chuteW, CAB.h);
     }
+    const cj = FS.claw;
+    CLAWJ.bend = fx().reduced ? 0 : cj.bend; CLAWJ.squash = cj.sq; CLAWJ.speed = cj.vx; CLAWJ.glow = cj.glow;
+    cfg.juice = CLAWJ;
     if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
     if (FS.fog > 0 && !split) { ctx.fillStyle = 'rgba(180,190,210,0.55)'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
     ctx.restore();
     if (split) R.cabinetFront(ctx, CAB.x, CAB.y, cfg, cabSt);
     if (S.debug && R && R.bodyDebug && FS.world) { ctx.save(); ctx.translate(CAB.x, CAB.y); R.bodyDebug(ctx, FS.world); ctx.restore(); }
+    // Items in flight from the chute to their target, over everything.
+    for (const th of FS.throws) {
+      if (th.landed) continue;
+      const u = Math.min(1, th.t), sc = 1.25 + Math.sin(u * Math.PI) * 0.6;
+      if (R && R.item) R.item(ctx, th.def, th.x, th.y, u * th.spin, sc, { plus: th.inst.plus, glow: (RC && RC[th.def.rarity]) || '#ffc94d', glowA: 0.8 });
+    }
   }
 
   // ---------------------------------------------------------------- loop
   function update(dt) {
     dt = dt > 0 ? Math.min(dt, 0.1) : STEP;
+    const real = dt;
+    // slow motion (the last kill, a tier 3 combo) runs on real time
+    if (S.slowT > 0) { S.slowT = Math.max(0, S.slowT - real); dt *= S.slowK || 1; }
     S.t += dt;
     fx().update(dt);
+    rollStep(real);
+    if (S.comboT > 0) { S.comboT -= real; if (S.comboT <= 0) nextCombo(); }
+    if (S.screen === 'map' || S.screen === 'fight') ambientTick(real);
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) { const el = $('banner'); if (el) el.classList.remove('show'); const pr = $('playerRow'); if (pr && pr.classList) pr.classList.remove('bannerOn'); } }
-    if (S.screen === 'map') { walkTick(dt); camStep(dt); }
+    if (S.screen === 'map') {
+      walkTick(dt); camStep(dt); bloomTick(); chimeTick();
+      if (S.t - (S.hudT || 0) > 0.15) { S.hudT = S.t; refreshHud(false); }
+    }
     if (S.screen === 'fight') {
       updateFight(dt);
+      if (FS && FS.outro) { FS.outro.t -= real; if (FS.outro.t <= 0) finishOutro(); }
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
     }
   }
@@ -2777,7 +3586,7 @@ const GAME = (() => {
   }
 
   function state() {
-    return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length : 0 };
+    return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
 
   return {

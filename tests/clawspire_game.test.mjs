@@ -810,7 +810,8 @@ h.test('over 30 drops at least 18 deliver; fights end; the game never sticks', (
 });
 
 h.test('END TURN plays the enemy turn on beats and the enemy acts', () => {
-  // Make sure we are in a fight with a live enemy.
+  // Make sure we are in a fight with a live enemy (a won fight plays its outro first).
+  settle(G, 5);
   if (G.screen === 'reward') G.choose(3);
   if (G.screen === 'map') { G.startFight(['gremlin'], 'normal'); stepFor(G, 3); }
   h.ok(settle(G, 30), 'ready');
@@ -1196,6 +1197,187 @@ h.test('intro: first launch marks introSeen and lands on the title, INTRO button
     h.eq(again.GAME.screen, 'title', 'boots to the title');
     void screens;
   }
+});
+
+
+h.test('juice: proc, combo, keywords, unknown events, throws, crits, the outro, low hp, blooms, reduced', () => {
+  const T = boot();
+  const Gt = T.GAME, R = T.RENDER, fx = R.fx;
+  Gt.newRun('knight', 21);
+  Gt.startFight(['rat', 'rat'], 'normal');
+  h.ok(settle(Gt, 10), 'fight ready');
+  // injected events play at once (the queue otherwise waits out the last beat)
+  const push = (ev) => { Gt.fs.queue.push({ ev, beat: 0.01 }); Gt.fs.beatT = Math.min(Gt.fs.beatT, 0); };
+  // unknown events are ignored
+  let threw = false;
+  try { push({ t: 'mystery', foo: 1 }); push(null); push({}); stepFor(Gt, 0.1); } catch (e) { threw = true; }
+  h.ok(!threw && Gt.screen === 'fight', 'unknown and empty events are ignored safely');
+  // a relic proc: HUD pop hook, a star from the relic, a badge on the player; an enemy-side proc badge
+  fx.clear();
+  const rid = Gt.run.relics[0];
+  h.ok(Gt.S.relicEls && Gt.S.relicEls[rid], 'the relic bar keeps an element per relic id');
+  push({ t: 'proc', src: 'relic', id: rid, name: 'Starter', icon: '*', color: '#2ee6d6', text: '+3 block', who: 'player' });
+  push({ t: 'proc', src: 'item', id: 'x', name: 'Thing', text: 'Poison spreads', color: '#a6ff5e', who: 'enemy', idx: 1 });
+  push({ t: 'proc', src: 'combo', id: 'y' });
+  stepFor(Gt, 0.1);
+  h.ok(fx.textCount() >= 3, 'each proc floats a badge (' + fx.textCount() + ')');
+  h.ok(fx.flyCount() >= 1, 'a relic proc sends a star from the relic bar');
+  // one relic firing many times in a burst stacks on one badge, and procs keep the queue quick
+  fx.clear();
+  for (let i = 0; i < 5; i++) Gt.fs.queue.push({ ev: { t: 'proc', src: 'relic', id: rid, name: 'Starter', icon: '#', text: '+1', color: '#ffc94d', who: 'player' }, beat: 0.45 });
+  Gt.fs.beatT = 0;
+  stepFor(Gt, 0.3);
+  h.eq(Gt.fs.queue.length, 0, 'five procs at 0.45 beats play within 0.3 s');
+  h.eq(fx.textCount(), 1, 'the same relic stacks on one badge');
+  h.ok(Gt.S.procs && Object.values(Gt.S.procs).some(p => p.n === 5 && /x5$/.test(p.p.str)), 'the badge counts x5');
+  // in a fight the gold stat is the fight's view of it
+  if (T.COMBAT.gold) {
+    const g0 = T.COMBAT.gold;
+    T.COMBAT.gold = () => 777;
+    Gt.S.lastHud = ''; stepFor(Gt, 0.2);
+    h.eq(T._nodes.goldTxt.textContent, '777', 'fight gold comes from COMBAT.gold(F)');
+    T.COMBAT.gold = g0;
+  }
+  // named combos queue and chain; tier 3 holds a hit stop and slows time
+  push({ t: 'combo', id: 'a', name: 'First', text: 'one', color: '#ff2e88', n: 2, tier: 1 });
+  push({ t: 'combo', id: 'b', name: 'Big One', text: 'three', color: '#ffc94d', n: 4, tier: 3 });
+  stepFor(Gt, 0.05);
+  h.eq(Gt.S.lastCombo && Gt.S.lastCombo.id, 'a', 'the first combo shows first');
+  h.eq(T._nodes.comboName.textContent, 'First x2', 'the banner names it with its count');
+  h.eq(T._nodes.comboText.textContent, 'one', 'and its text underneath');
+  h.eq(Gt.S.comboQ.length, 1, 'the second one waits');
+  stepFor(Gt, 1.4);
+  h.eq(Gt.S.lastCombo.id, 'b', 'then the next one chains in');
+  h.ok(Gt.S.slowT > 0 || Gt.fs.hitStop > 0, 'a tier 3 combo slows time / holds a hit stop');
+  stepFor(Gt, 3);
+  h.eq(Gt.S.comboT, 0, 'the queue drains');
+  // keyword chips on cards, the tray and nothing when DATA.keywords is gone
+  const D = T.DATA, kw0 = D.keywords;
+  D.keywords = () => [{ id: 'blade', label: 'Blade', icon: '/', color: '#ff2e88' }];
+  const findKw = (el) => { if (!el) return false; if (/\bkws\b/.test(el.className || '')) return true; return (el.children || []).some(findKw); };
+  // keyword-less guard
+  D.keywords = 'nope';
+  let ok = true;
+  try { Gt.showTreasure({ relic: rid, gold: 0, title: 'T' }); } catch (e) { ok = false; }
+  h.ok(ok, 'a non-function DATA.keywords is ignored');
+  D.keywords = () => { throw new Error('boom'); };
+  try { Gt.showShop(Gt.rollShop({ q: 1, r: 1 })); } catch (e) { ok = false; }
+  h.ok(ok, 'a throwing DATA.keywords is ignored');
+  D.keywords = () => [{ id: 'blade', label: 'Blade', icon: '/', color: '#ff2e88' }];
+  Gt.showShop(Gt.rollShop({ q: 1, r: 2 }));
+  h.ok(findKw(T._nodes.shopBody), 'shop cards carry keyword chips');
+  D.keywords = kw0;
+  // back to a fresh fight for the throw / crit / outro checks
+  Gt.startFight(['rat', 'rat'], 'normal');
+  h.ok(settle(Gt, 10), 'fight ready again');
+  // delivered items fly to their target and land before they resolve
+  const bodies = itemBodies(Gt).slice(0, 2);
+  const played0 = Gt.run.played;
+  Gt.playDelivered(bodies);
+  h.eq(Gt.fs.throws.length, 2, 'two items in flight');
+  h.eq(Gt.state().queue >= 2, true, 'items in flight count as pending (state().queue)');
+  stepFor(Gt, 0.05);
+  h.eq(Gt.run.played, played0, 'nothing resolves mid-flight');
+  stepFor(Gt, 1.2);
+  h.eq(Gt.run.played, played0 + 2, 'both resolved after landing');
+  h.eq(Gt.fs.throws.length, 0, 'the throws are cleared');
+  // a crushing hit (a fifth of max hp): hit stop, knockback, a ghost chunk on the bar
+  const e0 = Gt.fight.enemies[0];
+  const hp0 = e0.hp, big = Math.ceil(e0.maxHp * 0.25);
+  e0.hp = Math.max(1, hp0 - big);
+  Gt.fs.hitStop = 0;
+  push({ t: 'dmg', who: 'e', idx: 0, amt: big, blocked: 0 });
+  stepFor(Gt, 1 / 60);
+  h.ok(Gt.fs.hitStop > 0, 'a crushing hit holds a hit stop');
+  h.ok(Gt.fs.anim[0].knock > 0 && Gt.fs.anim[0].hurt > 0, 'knockback and the white flash');
+  h.ok(Gt.fs.ghost[0].v > Gt.fs.shown.e[0].hp, 'the ghost chunk lags the bar');
+  stepFor(Gt, 2);
+  h.ok(Math.abs(Gt.fs.ghost[0].v - Gt.fs.shown.e[0].hp) < 0.01, 'then drains to the real hp');
+  // a hit on the player: vignette pulse, a claw mark on big hits
+  fx.clear();
+  push({ t: 'dmg', who: 'p', amt: 12, blocked: 4 });
+  stepFor(Gt, 1 / 60);
+  h.ok(fx.slashCount() >= 1, 'a big hit on the player rakes the screen');
+  // status pops on enemies
+  push({ t: 'status', who: 'e', idx: 1, s: 'poison', v: 3 });
+  stepFor(Gt, 1 / 60);
+  h.ok(Gt.fs.pipPop[1] && Gt.fs.pipPop[1].poison > 0, 'the status chip pops');
+  // low hp: the heartbeat hold turns on under 30%
+  Gt.fight.player.hp = 5;
+  stepFor(Gt, 0.2);
+  h.ok(Gt.S.lowHp, 'low hp heartbeat on');
+  Gt.fight.player.hp = Gt.fight.player.maxHp;
+  stepFor(Gt, 0.2);
+  h.ok(!Gt.S.lowHp, 'and off again');
+  // the last kill: slow motion, the outro holds the arena, a save lands on the reward
+  const F = Gt.fight;
+  F.enemies.forEach((e, i) => { e.hp = 0; e.alive = false; push({ t: 'die', idx: i }); });
+  F.phase = 'over'; F.result = 'win';
+  stepFor(Gt, 0.1);
+  h.ok(Gt.S.slowT > 0, 'the last kill slows time');
+  stepFor(Gt, 0.3);
+  h.eq(Gt.screen, 'fight', 'the arena stays up for the outro');
+  h.ok(Gt.fs && Gt.fs.outro, 'the outro runs');
+  Gt.save();
+  const sv = JSON.parse(T._store.clawspire_run);
+  h.eq(sv.screen, 'reward', 'a save during the outro is the reward screen');
+  h.ok(!sv.pendingFight, 'and never replays the won fight');
+  let n = 0;
+  while (Gt.screen === 'fight' && n++ < 60 * 4) Gt.update(DT);
+  h.eq(Gt.screen, 'reward', 'the reward screen follows the outro');
+  // a map reveal blooms outward
+  Gt.choose(3);
+  h.eq(Gt.screen, 'map', 'back on the map');
+  stepFor(Gt, 0.1);
+  const M = Gt.run.map, MAP = T.MAP;
+  M.ink = Gt.run.ink = 20;
+  const dark = MAP.revealable(M, {})[0] || Object.values(M.tiles).find(t => !t.revealed && MAP.canReveal(M, t.q, t.r));
+  h.ok(!!dark, 'a hex to light');
+  if (dark) {
+    const p = Gt.hexToStage(dark.q, dark.r);
+    Gt.mapTap(p.x, p.y);
+    Gt.update(DT);
+    const it = Gt.S.mapPaint.items.find(x => x.t === dark);
+    h.ok(it && it.lit && it.bloomAt > 0, 'the lit hex blooms');
+    h.ok(Gt.S.chimes && Gt.S.chimes.length >= 0, 'bloom chimes scheduled');
+  }
+  // reduced mode: short slow motion, no roll
+  fx.reduced = true;
+  Gt.S.slowT = 0;
+  Gt.startFight(['rat'], 'normal');
+  settle(Gt, 10);
+  const F2 = Gt.fight;
+  F2.enemies[0].hp = 0; F2.enemies[0].alive = false; push({ t: 'die', idx: 0 }); F2.phase = 'over'; F2.result = 'win';
+  stepFor(Gt, 1 / 60);
+  h.ok(Gt.S.slowT <= 0.4 && Gt.S.slowK >= 0.6, 'reduced: a short, gentle slow motion');
+  h.eq(fx.offset().r, 0, 'reduced: no camera roll');
+  fx.reduced = false;
+  let m = 0;
+  while (Gt.screen === 'fight' && m++ < 60 * 4) Gt.update(DT);
+  h.eq(Gt.screen, 'reward', 'reduced outro ends too');
+  // a tap skips the outro
+  Gt.choose(3);
+  Gt.startFight(['rat'], 'normal');
+  settle(Gt, 10);
+  const F3 = Gt.fight;
+  F3.enemies[0].hp = 0; F3.enemies[0].alive = false; push({ t: 'die', idx: 0 }); F3.phase = 'over'; F3.result = 'win';
+  stepFor(Gt, 0.2);
+  h.ok(Gt.fs && Gt.fs.outro, 'outro running');
+  Gt.pointer('down', 270, 600, { pointerId: 1 });
+  h.eq(Gt.screen, 'reward', 'a tap skips to the reward');
+  // rewards and relics go through the data layer with the run
+  const D2 = T.DATA, ri0 = D2.rewardItems, pr0 = D2.pickRelic;
+  let riRun = null, prRun = null;
+  D2.rewardItems = (rng, act, ch, n, run) => { riRun = run; return ri0(rng, act, ch, n, run); };
+  D2.pickRelic = (rng, pool, run) => { prRun = run; return pool[0]; };
+  Gt.choose(3);
+  Gt.showShop(Gt.rollShop({ q: 5, r: 5 }));
+  h.ok(riRun === Gt.run, 'rewardItems receives the run');
+  h.ok(prRun === Gt.run, 'pickRelic receives the run');
+  D2.rewardItems = ri0; D2.pickRelic = pr0;
+  const src = fs.readFileSync(path.join(DIR, 'js', 'game.js'), 'utf8') + fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  h.ok(!/\u2014/.test(src), 'no em dashes in game.js / index.html');
+  h.ok(/id="combo"/.test(src) && /id="wipe"/.test(src), 'index.html has the combo banner and the transition layer');
 });
 
 h.done();

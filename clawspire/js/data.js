@@ -19,7 +19,11 @@ const DATA = (() => {
     'prizemaster', 'mushroom', 'knight', 'wisp', 'crab', 'drone', 'tinker', 'cultist'];
   const TAGS = ['metal', 'weapon', 'glass', 'potion', 'heavy', 'light', 'junk', 'magic', 'food', 'tool', 'small'];
   const FX_KINDS = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'shake', 'junk',
-    'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll'];
+    'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll', 'blockPer', 'pay', 'again'];
+  // What dmgPer / blockPer can count. poison and burn read the target's
+  // stacks, small the small items in the cabinet, streak the grab streak,
+  // gold the gold carried (per 10).
+  const PER_KINDS = ['block', 'junk', 'metal', 'grabsUsed', 'poison', 'burn', 'small', 'streak', 'gold'];
   const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk',
     'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape'];
   const EVENT_FX = ['hp', 'maxhp', 'gold', 'ink', 'brush', 'item', 'relic', 'remove', 'upgrade', 'claw',
@@ -27,7 +31,10 @@ const DATA = (() => {
   const RELIC_MODS = ['grabs', 'width', 'grip', 'speed', 'prongs', 'rubber', 'magnet', 'maxhp', 'gold',
     'ink', 'startBlock', 'startStr'];
   const RELIC_HOOKS = ['onFightStart', 'onTurnStart', 'onTurnEnd', 'onPlay', 'onGrab', 'onDmgDealt',
-    'onKill', 'onHurt'];
+    'onKill', 'onHurt', 'onStatus', 'onBlock', 'onHeal', 'onJunk', 'onCombo', 'onJackpot', 'onShatter', 'onGold'];
+  // Engine rules a build-defining relic can bend (relic.rules, merged into
+  // F.rules by COMBAT.newFight). See DESIGN.md "Builds and synergies".
+  const RELIC_RULES = ['poisonKeep', 'blockKeep', 'shatter', 'glassBreak', 'amp', 'comboTwice', 'echo'];
   const RARITY_WEIGHTS = {
     1: { c: 70, u: 25, r: 5, l: 0 },
     2: { c: 55, u: 33, r: 11, l: 1 },
@@ -35,6 +42,11 @@ const DATA = (() => {
   };
   // Chance that a reward slot is drawn from the character's own pool.
   const CHAR_BIAS = 0.4;
+  // Build pull: with a run to read, this share of reward screens redraws
+  // one slot from an archetype the run already invests in.
+  const BUILD_PULL = 0.25;
+  // Grab combos that may fire on one grab (biggest tier first).
+  const COMBO_MAX = 3;
   // Chance that a reward or shop screen (3+ slots) turns one of its common
   // slots into a bag of small fillers. Screens without a common slot get no
   // bag, so about 30% of act 1 screens and 26% of act 3 screens show one.
@@ -156,7 +168,7 @@ const DATA = (() => {
   const shake = () => ({ k: 'shake' });
   const junk = (id, n) => ({ k: 'junk', id, n, to: 'self' });
   const purge = (n) => ({ k: 'purge', n });
-  const copy = () => ({ k: 'copy' });
+  const copy = (tag) => (tag ? { k: 'copy', tag } : { k: 'copy' });
   const dmgPer = (v, per) => ({ k: 'dmgPer', v, per });
   const cleanse = () => ({ k: 'cleanse' });
   const lifesteal = (v) => ({ k: 'lifesteal', v });
@@ -164,6 +176,11 @@ const DATA = (() => {
   const random = (min, max) => ({ k: 'random', v: Math.round((min + max) / 2), min, max });
   // No v: every enemy takes damage equal to its Poison right now.
   const poisonAll = () => ({ k: 'poisonAll' });
+  const blockPer = (v, per) => ({ k: 'blockPer', v, per });
+  // Spend v gold (the run's gold); when broke the rest of the item fizzles.
+  const pay = (v) => ({ k: 'pay', v });
+  // Resolve the previous item played this fight again.
+  const again = () => ({ k: 'again' });
 
   // ------------------------------------------------------------------ items
   // Physical feel, by design: long thin things (swords, staffs) twist out of
@@ -225,6 +242,20 @@ const DATA = (() => {
       color: '#4a4f58', color2: '#ffc94d', art: 'anvil',
       fx: [dmgPer(3, 'metal')], plus: { fx: [dmgPer(4, 'metal')] },
       text: 'Deal {v} damage for each metal item in your bin. Good luck lifting it.' },
+    { id: 'flail', name: 'Morning Flail', rarity: 'u', cost: 65, char: 'knight',
+      tags: ['metal', 'weapon', 'heavy'], shape: box(56, 10), density: 1.9, friction: 0.55,
+      color: '#aab3bd', color2: '#ff5a4a', art: 'chain',
+      fx: [dmg(3, 3)], plus: { fx: [dmg(4, 3)] }, text: 'Deal {v} damage {n} times. Spin to win.' },
+    { id: 'magnetite', name: 'Magnetite', rarity: 'u', cost: 65, char: 'knight',
+      tags: ['metal', 'heavy'], shape: SHAPES.gem, density: 2.2, friction: 0.5,
+      color: '#4a4f58', color2: '#ff2e88', art: 'gem',
+      fx: [dmgPer(2, 'metal')], plus: { fx: [dmgPer(3, 'metal')] },
+      text: 'Deal {v} damage for each metal item in your bin. Attracts attention.' },
+    { id: 'aegis', name: 'Aegis of the Rig', rarity: 'l', cost: 130, char: 'knight',
+      tags: ['metal', 'heavy'], shape: SHAPES.kite, density: 2.2, friction: 0.5,
+      color: '#e6ebf0', color2: '#ffc94d', art: 'shield', target: 'self',
+      fx: [block(14), status('shield_up', 1, 'self')], plus: { fx: [block(18), status('shield_up', 2, 'self')] },
+      text: 'Gain {v} Block and {v2} Bulwark, so your Block survives that many turn starts. A wall with a handle.' },
 
     // ---- Alchemist: potions, bombs, poison, junk control ----
     { id: 'toxic_vial', name: 'Toxic Vial', rarity: 'c', cost: 40, char: 'alchemist', starter: true,
@@ -285,6 +316,16 @@ const DATA = (() => {
       color: '#ff2e88', color2: '#ffc94d', art: 'gem', target: 'none', exhaust: true,
       fx: [purge(3), copy(), copy()], plus: { fx: [purge(3), copy(), copy(), copy()] },
       text: 'Remove {n} junk, then copy {copies} random items in your bin for this fight. Lead not included.' },
+    { id: 'rot_catalyst', name: 'Rot Catalyst', rarity: 'u', cost: 65, char: 'alchemist',
+      tags: ['glass', 'potion'], shape: SHAPES.flask, density: 0.8, friction: 0.4,
+      color: '#6b8f2e', color2: '#d4ff3a', art: 'flask',
+      fx: [status('poison', 2), dmgPer(1, 'poison')], plus: { fx: [status('poison', 4), dmgPer(1, 'poison')] },
+      text: 'Apply {v} Poison, then deal damage equal to the Poison on the target. Ripe.' },
+    { id: 'bottled_blaze', name: 'Bottled Blaze', rarity: 'u', cost: 60, char: 'alchemist',
+      tags: ['glass', 'potion', 'weapon'], shape: SHAPES.bottle, density: 0.8, friction: 0.35,
+      color: '#ff9a2e', color2: '#6bd3a0', art: 'bottle', target: 'all', exhaust: true,
+      fx: [dmg(4), status('burn', 4, 'all')], plus: { fx: [dmg(6), status('burn', 6, 'all')] },
+      text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. Shatters on impact, by design.' },
 
     // ---- Rogue: daggers, coins, dodge, extra grabs ----
     { id: 'shiv', name: 'Shiv', rarity: 'c', cost: 40, char: 'rogue', starter: true,
@@ -344,6 +385,16 @@ const DATA = (() => {
       color: '#ffe066', color2: '#ff9a2e', art: 'star', target: 'self', exhaust: true,
       fx: [grab(2), status('dodge', 2, 'self')], plus: { fx: [grab(3), status('dodge', 2, 'self')] },
       text: 'Gain {v} extra grabs and {v2} Dodge. Wish responsibly.' },
+    { id: 'venom_dart', name: 'Venom Dart', rarity: 'c', cost: 45, char: 'rogue',
+      tags: ['metal', 'weapon', 'light'], shape: box(32, 9), density: 1.1, friction: 0.45,
+      color: '#a6ff5e', color2: '#2d5a1a', art: 'dagger',
+      fx: [dmg(2), status('poison', 3)], plus: { fx: [dmg(3), status('poison', 5)] },
+      text: 'Deal {v} damage and apply {v2} Poison. The tip does the talking.' },
+    { id: 'bribe', name: 'Bribe', rarity: 'u', cost: 60, char: 'rogue',
+      tags: ['metal'], shape: circle(11), density: 2.2, friction: 0.3, restitution: 0.3,
+      color: '#ffe066', color2: '#2a8a3a', art: 'coin',
+      fx: [pay(12), status('stun', 1)], plus: { fx: [pay(8), status('stun', 1)] },
+      text: 'Pay {v} gold: the target is Stunned and skips its next action. Everyone has a price.' },
 
     // ---- Shared ----
     { id: 'crisp_apple', name: 'Crisp Apple', rarity: 'c', cost: 40,
@@ -439,6 +490,113 @@ const DATA = (() => {
       color: '#ff5a4a', color2: '#ffc94d', art: 'egg', target: 'all',
       fx: [dmg(6), status('burn', 5, 'all')], plus: { fx: [dmg(9), status('burn', 7, 'all')] },
       text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. It hatched angry.' },
+    // ---- Build pieces (see DESIGN.md "Builds and synergies"). Most carry
+    // two archetypes on purpose, so hybrids have glue. ----
+    { id: 'firebomb', name: 'Firebomb', rarity: 'u', cost: 60,
+      tags: ['weapon'], shape: circle(15), density: 1.1, friction: 0.5, restitution: 0.2,
+      color: '#ff8a2e', color2: '#5a1a0a', art: 'bomb', target: 'all',
+      fx: [dmg(3), status('burn', 3, 'all')], plus: { fx: [dmg(4), status('burn', 5, 'all')] },
+      text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. Handle with oven mitts.' },
+    { id: 'ghost_pepper', name: 'Ghost Pepper', rarity: 'c', cost: 40,
+      tags: ['food'], shape: circle(13), density: 0.8, friction: 0.5,
+      color: '#ff2e4a', color2: '#3a8a1a', art: 'apple',
+      fx: [status('burn', 4), status('burn', 1, 'self')], plus: { fx: [status('burn', 6), status('burn', 1, 'self')] },
+      text: 'Apply {v} Burn. You gain {v2} Burn too. Worth it.' },
+    { id: 'inferno_scroll', name: 'Inferno Scroll', rarity: 'r', cost: 100,
+      tags: ['magic', 'light'], shape: box(42, 14), density: 0.5, friction: 0.6,
+      color: '#ff8a2e', color2: '#8a1a0a', art: 'scroll',
+      fx: [dmgPer(2, 'burn')], plus: { fx: [dmgPer(3, 'burn')] },
+      text: 'Deal {v} damage for each Burn on the target. Reads best out loud.' },
+    { id: 'ice_pick', name: 'Ice Pick', rarity: 'c', cost: 45,
+      tags: ['metal', 'weapon', 'tool'], shape: box(34, 10), density: 1.2, friction: 0.35,
+      color: '#bfefff', color2: '#3b6fd6', art: 'dagger',
+      fx: [dmg(4), status('chill', 1)], plus: { fx: [dmg(6), status('chill', 2)] },
+      text: 'Deal {v} damage and apply {v2} Chill. Chip, chip, freeze.' },
+    { id: 'blizzard_orb', name: 'Blizzard Orb', rarity: 'r', cost: 100,
+      tags: ['glass', 'magic'], shape: circle(16), density: 1.0, friction: 0.25, restitution: 0.15,
+      color: '#eaf6ff', color2: '#2ee6d6', art: 'orb', target: 'all',
+      fx: [dmg(5), status('chill', 2, 'all')], plus: { fx: [dmg(7), status('chill', 3, 'all')] },
+      text: 'Deal {v} damage and apply {v2} Chill to ALL enemies. Indoor weather.' },
+    { id: 'frozen_heart', name: 'Frozen Heart', rarity: 'u', cost: 60,
+      tags: ['magic'], shape: SHAPES.heart, density: 1.1, friction: 0.3,
+      color: '#9fd8ff', color2: '#2e6bd6', art: 'heart', target: 'self',
+      fx: [block(6), status('chill', 1, 'all')], plus: { fx: [block(9), status('chill', 2, 'all')] },
+      text: 'Gain {v} Block and apply {v2} Chill to ALL enemies. Cold, but it means well.' },
+    { id: 'thorn_ring', name: 'Thorn Ring', rarity: 'u', cost: 60,
+      tags: ['metal', 'magic'], shape: circle(10), density: 2.0, friction: 0.35, restitution: 0.2,
+      color: '#8fae3a', color2: '#3a4a1a', art: 'ring', target: 'self',
+      fx: [block(4), status('thorns', 1, 'self')], plus: { fx: [block(6), status('thorns', 2, 'self')] },
+      text: 'Gain {v} Block and {v2} Thorns for this fight. Thorns stack. Ouch, fashionably.' },
+    { id: 'glass_shield', name: 'Glass Shield', rarity: 'c', cost: 45,
+      tags: ['glass'], shape: SHAPES.heater, density: 1.2, friction: 0.3,
+      color: '#d8f0ff', color2: '#7fd6ff', art: 'shield', target: 'self', exhaust: true,
+      fx: [block(11)], plus: { fx: [block(15)] },
+      text: 'Gain {v} Block. Stops one big hit, then it is a mosaic.' },
+    { id: 'rage_potion', name: 'Rage Potion', rarity: 'u', cost: 60,
+      tags: ['glass', 'potion'], shape: SHAPES.potion, density: 0.8, friction: 0.4,
+      color: '#ff2e4a', color2: '#5a0a1a', art: 'potion', target: 'self', exhaust: true,
+      fx: [status('str', 3, 'self'), dmg(-3)], plus: { fx: [status('str', 4, 'self'), dmg(-2)] },
+      text: 'Gain {v} Strength. Lose {v2} HP. Tastes angry.' },
+    { id: 'scrap_shield', name: 'Scrap Shield', rarity: 'c', cost: 45,
+      tags: ['metal'], shape: circle(16), density: 1.4, friction: 0.45, restitution: 0.15,
+      color: '#8a6a4a', color2: '#ff8a2e', art: 'buckler', target: 'self',
+      fx: [block(3), blockPer(2, 'junk')], plus: { fx: [block(5), blockPer(3, 'junk')] },
+      text: 'Gain {v} Block, plus {v2} for each junk item in your bin. Upcycled.' },
+    { id: 'pet_rock', name: 'Pet Rock', rarity: 'c', cost: 40,
+      tags: ['heavy'], shape: SHAPES.rock, density: 1.9, friction: 0.7,
+      color: '#b8a898', color2: '#ff2e88', art: 'rock',
+      fx: [dmg(7), junk('rock', 1)], plus: { fx: [dmg(10), junk('rock', 1)] },
+      text: 'Deal {v} damage. Adds a Rock to your bin, so it has a friend.' },
+    { id: 'junk_cannon', name: 'Junk Cannon', rarity: 'r', cost: 100,
+      tags: ['metal', 'heavy', 'tool'], shape: SHAPES.horn, density: 1.6, friction: 0.5,
+      color: '#7a7068', color2: '#ffc94d', art: 'horn', target: 'all',
+      fx: [dmgPer(4, 'junk'), purge(10)], plus: { fx: [dmgPer(6, 'junk'), purge(10)] },
+      text: 'Deal {v} damage to ALL enemies for each junk item in your bin, then blast up to {n} junk out. Loaded with regret.' },
+    { id: 'arcade_token', name: 'Arcade Token', rarity: 'c', cost: 45,
+      tags: ['metal'], shape: circle(11), density: 2.2, friction: 0.3, restitution: 0.3,
+      color: '#2ee6d6', color2: '#1a6b66', art: 'coin',
+      fx: [dmg(3), dmgPer(2, 'streak')], plus: { fx: [dmg(4), dmgPer(3, 'streak')] },
+      text: 'Deal {v} damage, plus {v2} for each grab in your current streak. Insert to continue.' },
+    { id: 'gumball_jar', name: 'Gumball Jar', rarity: 'u', cost: 60,
+      tags: ['glass'], shape: SHAPES.bottle, density: 1.0, friction: 0.35,
+      color: '#ff9ad0', color2: '#2ee6d6', art: 'bottle', target: 'all',
+      fx: [dmgPer(1, 'small')], plus: { fx: [dmgPer(2, 'small')] },
+      text: 'Deal {v} damage to ALL enemies for each small item in your bin. Contents may vary.' },
+    { id: 'crystal_shard', name: 'Crystal Shard', rarity: 'u', cost: 65,
+      tags: ['glass', 'magic', 'weapon'], shape: SHAPES.shard, density: 1.0, friction: 0.2,
+      color: '#ff9ad0', color2: '#7a5aff', art: 'iceshard', exhaust: true,
+      fx: [dmg(7, 2)], plus: { fx: [dmg(9, 2)] },
+      text: 'Deal {v} damage {n} times. Sharp enough to cut the tension.' },
+    { id: 'blood_orange', name: 'Blood Orange', rarity: 'c', cost: 45,
+      tags: ['food'], shape: circle(13), density: 0.8, friction: 0.5,
+      color: '#ff8a2e', color2: '#8a1a2a', art: 'apple',
+      fx: [lifesteal(5)], plus: { fx: [lifesteal(7)] },
+      text: 'Deal {v} damage and heal what gets through. Juicy.' },
+    { id: 'vampire_fang', name: 'Vampire Fang', rarity: 'u', cost: 65,
+      tags: ['weapon'], shape: box(44, 12), density: 0.9, friction: 0.5,
+      color: '#f4f0e6', color2: '#8a1a2a', art: 'bone',
+      fx: [lifesteal(8)], plus: { fx: [lifesteal(11)] },
+      text: 'Deal {v} damage and heal what gets through. Bitey.' },
+    { id: 'pay_to_win', name: 'Pay to Win', rarity: 'r', cost: 105,
+      tags: ['magic'], shape: SHAPES.star, density: 0.8, friction: 0.5, restitution: 0.2,
+      color: '#ffc94d', color2: '#ff2e88', art: 'star',
+      fx: [pay(20), dmg(30)], plus: { fx: [pay(20), dmg(40)] },
+      text: 'Pay {v} gold to deal {v2} damage. The arcade way.' },
+    { id: 'golden_idol', name: 'Golden Idol', rarity: 'u', cost: 65,
+      tags: ['metal', 'magic', 'heavy'], shape: SHAPES.skull, density: 2.0, friction: 0.45,
+      color: '#ffc94d', color2: '#8a5a2b', art: 'skull',
+      fx: [dmgPer(1, 'gold')], plus: { fx: [dmgPer(2, 'gold')] },
+      text: 'Deal {v} damage for every 10 gold you carry. It watches your wallet.' },
+    { id: 'deja_vu', name: 'Deja Vu', rarity: 'r', cost: 100,
+      tags: ['magic', 'light'], shape: box(42, 14), density: 0.5, friction: 0.6,
+      color: '#b08cff', color2: '#ffe066', art: 'scroll', target: 'self',
+      fx: [block(3), again()], plus: { fx: [block(6), again()] },
+      text: 'Gain {v} Block, then play the last item you played this fight again. Have we met?' },
+    { id: 'arcane_tome', name: 'Arcane Tome', rarity: 'u', cost: 60,
+      tags: ['magic'], shape: box(30, 38), density: 1.0, friction: 0.6,
+      color: '#7a5aff', color2: '#2ee6d6', art: 'book',
+      fx: [dmg(4), copy('magic')], plus: { fx: [dmg(7), copy('magic')] },
+      text: 'Deal {v} damage and copy a random magic item in your bin for this fight. Chapter one: more chapters.' },
 
     // ---- Small fillers: marbles, beads and sweets. Circles r 9-11 so the
     // claw's cradle scoops two or three at once; each does a little. Tagged
@@ -489,6 +647,10 @@ const DATA = (() => {
       tags: ['small', 'food'], shape: circle(9), density: 0.9, friction: 0.35, restitution: 0.1,
       color: '#f4e6c8', color2: '#8a6a4a', art: 'egg', target: 'self',
       fx: [block(1), heal(1)], plus: { fx: [block(2), heal(2)] }, text: 'Gain {v} Block and heal {v2} HP. Tiny breakfast, tiny armor.' },
+    { id: 'iron_nut', name: 'Iron Nut', rarity: 'c', cost: 14,
+      tags: ['small', 'metal'], shape: circle(10), density: 2.0, friction: 0.4, restitution: 0.1,
+      color: '#8a929c', color2: '#4a5058', art: 'ring', target: 'self',
+      fx: [block(2)], plus: { fx: [block(3)] }, text: 'Gain {v} Block. Holds the whole Rig together, probably.' },
 
     // ---- Bags: reward and shop entries only. The game adds every id in
     // `bag` to the bin instead of the bag itself, so a bag never sits in a
@@ -508,6 +670,11 @@ const DATA = (() => {
       color: '#fff4f4', color2: '#ff2e4a', art: 'orb', target: 'none', exhaust: true,
       bag: ['peppermint', 'peppermint', 'sour_drop'], fx: [],
       text: 'Adds 2 Peppermints and a Sour Drop to your bin. Dentists hate it.' },
+    { id: 'bag_bolts', name: 'Bucket of Bolts', rarity: 'c', cost: 30,
+      tags: [], shape: circle(14), density: 1.0, friction: 0.5,
+      color: '#8a929c', color2: '#4a5058', art: 'ring', target: 'none', exhaust: true,
+      bag: ['iron_nut', 'iron_nut', 'iron_nut'], fx: [],
+      text: 'Adds 3 Iron Nuts to your bin. Metal, and very small about it.' },
 
     // ---- Junk: clogs the bin, does nothing useful, clears when grabbed ----
     { id: 'rock', name: 'Rock', rarity: 'junk', cost: 0,
@@ -552,6 +719,8 @@ const DATA = (() => {
     ['shield_up', 'Bulwark', '🔰', '#7fb2ff', 'buff', 'turns', 'Block does not fade at turn start.'],
     ['enrage', 'Enrage', '😡', '#ff2e4a', 'buff', 'count', 'Gains this much Strength every turn.'],
     ['armor', 'Armor', '🔩', '#aab3bd', 'buff', 'count', 'Every hit taken is reduced by this much.'],
+    // A display counter COMBAT keeps in step with F.streak (no events, no decay).
+    ['streak', 'Streak', '🎯', '#ffc94d', 'buff', 'count', 'Grabs in a row that brought something up. An empty grab resets it.'],
   ].forEach(([id, name, icon, color, kind, stack, text]) => {
     STATUS[id] = { id, name, icon, color, kind, stack, text };
   });
@@ -825,59 +994,80 @@ const DATA = (() => {
   // Per-fight relic memory lives on the fight itself.
   const mem = (F) => F.rs || (F.rs = {});
   const tagged = (def, t) => !!(def && def.tags && def.tags.indexOf(t) >= 0);
+  const emitE = (F, ev) => { const c = CB(); if (c && c.emit) c.emit(F, ev); };
+  // A relic's own proc event (a floating label on the player). COMBAT emits
+  // one automatically in front of any hook call that did something visible,
+  // labelled with relic.proc; hooks with a dynamic label call this instead.
+  const proc = (F, id, text) => {
+    const r = RELICS[id];
+    if (!r || !CB()) return;
+    const k = (r.kw || [])[0];
+    emitE(F, { t: 'proc', src: 'relic', id, name: r.name, icon: r.icon, color: k ? ARCHETYPES[k].color : '#ffc94d',
+      text: text || r.proc || r.name.toUpperCase(), who: 'player', idx: -1 });
+  };
+  // A random living enemy, drawn from the fight's own rng (deterministic).
+  const randomFoe = (F) => {
+    const al = aliveOf(F);
+    if (!al.length) return null;
+    return typeof F.rng === 'function' ? al[Math.floor(F.rng() * al.length)] : al[0];
+  };
+  const gainGold = (F, v) => { const c = CB(); if (c && c.gainGold) c.gainGold(F, v); };
+  // The item defs the current grab has delivered so far (COMBAT's buffer).
+  const grabDefs = (F) => (F.grab && Array.isArray(F.grab.defs) ? F.grab.defs : []);
+  const isJunkPlay = (inst, def) => !!((inst && inst.junk) || tagged(def, 'junk'));
 
   const RELIC_LIST = [
     // starters (not in random pools)
-    { id: 'squire_gauntlet', name: "Squire's Gauntlet", icon: '🧤', rarity: 'event', starter: true,
+    { id: 'squire_gauntlet', name: "Squire's Gauntlet", icon: '🧤', rarity: 'event', kw: ['fortress'], proc: 'GAUNTLET', starter: true,
       text: 'Your claw grips a little harder. Start each fight with 5 Block.',
       mods: { grip: 0.15 }, hooks: { onFightStart(F) { gainBlock(F, 5); } } },
-    { id: 'bubbling_satchel', name: 'Bubbling Satchel', icon: '🧪', rarity: 'event', starter: true,
+    { id: 'bubbling_satchel', name: 'Bubbling Satchel', icon: '🧪', rarity: 'event', kw: ['poison'], proc: 'SATCHEL', starter: true,
       text: 'Start each fight with 2 Poison on every enemy. Something in here is alive.',
       hooks: { onFightStart(F) { allStatus(F, 'poison', 2); } } },
-    { id: 'pickpocket_glove', name: 'Pickpocket Glove', icon: '✋', rarity: 'event', starter: true,
+    { id: 'pickpocket_glove', name: 'Pickpocket Glove', icon: '✋', rarity: 'event', kw: [], proc: 'SLIPPERY', starter: true,
       text: 'Whenever an enemy dies, gain 1 Dodge. Grab first, dodge later.',
       hooks: { onKill(F) { selfStatus(F, 'dodge', 1); } } },
 
     // common
-    { id: 'grip_tape', name: 'Grip Tape', icon: '🩹', rarity: 'c', text: 'Your claw grips 25% harder. Sticky, in a good way.',
+    { id: 'grip_tape', name: 'Grip Tape', icon: '🩹', rarity: 'c', kw: [], text: 'Your claw grips 25% harder. Sticky, in a good way.',
       mods: { grip: 0.25 } },
-    { id: 'oiled_rails', name: 'Oiled Rails', icon: '🛢', rarity: 'c', text: 'Your claw moves 30% faster. Wheee.',
+    { id: 'oiled_rails', name: 'Oiled Rails', icon: '🛢', rarity: 'c', kw: [], text: 'Your claw moves 30% faster. Wheee.',
       mods: { speed: 0.3 } },
-    { id: 'golden_ticket', name: 'Golden Ticket', icon: '🎟', rarity: 'c', text: 'On pickup, gain 90 gold. Redeemable nowhere else.',
+    { id: 'golden_ticket', name: 'Golden Ticket', icon: '🎟', rarity: 'c', kw: ['greed'], text: 'On pickup, gain 90 gold. Redeemable nowhere else.',
       mods: { gold: 90 } },
-    { id: 'inkwell', name: 'Bottomless Bulb Crate', icon: '💡', rarity: 'c', text: 'On pickup, gain 3 Bulbs. It has a bottom. It lied.',
+    { id: 'inkwell', name: 'Bottomless Bulb Crate', icon: '💡', rarity: 'c', kw: [], text: 'On pickup, gain 3 Bulbs. It has a bottom. It lied.',
       mods: { ink: 3 } },
-    { id: 'heart_locket', name: 'Heart Locket', icon: '💗', rarity: 'c', text: 'Gain 8 Max HP. There is a tiny picture of you inside.',
+    { id: 'heart_locket', name: 'Heart Locket', icon: '💗', rarity: 'c', kw: ['feast'], text: 'Gain 8 Max HP. There is a tiny picture of you inside.',
       mods: { maxhp: 8 } },
-    { id: 'kettle_helm', name: 'Kettle Helm', icon: '🫖', rarity: 'c', text: 'Start each fight with 6 Block. Also makes tea.',
+    { id: 'kettle_helm', name: 'Kettle Helm', icon: '🫖', rarity: 'c', kw: ['fortress'], text: 'Start each fight with 6 Block. Also makes tea.',
       mods: { startBlock: 6 } },
-    { id: 'consolation_prize', name: 'Consolation Prize', icon: '🧸', rarity: 'c',
+    { id: 'consolation_prize', name: 'Consolation Prize', icon: '🧸', rarity: 'c', kw: ['fortress'], proc: 'THERE THERE',
       text: 'Whenever a grab delivers nothing, gain 4 Block.',
       hooks: { onGrab(F, n) { if (!n) gainBlock(F, 4); } } },
-    { id: 'sore_loser', name: 'Sore Loser', icon: '😤', rarity: 'c',
+    { id: 'sore_loser', name: 'Sore Loser', icon: '😤', rarity: 'c', kw: [], proc: 'HMPH',
       text: 'Whenever a grab delivers nothing, deal 4 damage to the targeted enemy.',
       hooks: { onGrab(F, n) { if (!n) zap(F, focus(F), 4); } } },
-    { id: 'blood_bag', name: 'Blood Bag', icon: '🩸', rarity: 'c', text: 'Whenever an enemy dies, heal 3 HP.',
+    { id: 'blood_bag', name: 'Blood Bag', icon: '🩸', rarity: 'c', kw: ['feast'], proc: 'TOP UP', text: 'Whenever an enemy dies, heal 3 HP.',
       hooks: { onKill(F) { healP(F, 3); } } },
-    { id: 'hot_coffee', name: 'Hot Coffee', icon: '☕', rarity: 'c', text: 'Gain 1 extra grab on the first turn of each fight.',
+    { id: 'hot_coffee', name: 'Hot Coffee', icon: '☕', rarity: 'c', kw: ['jackpot'], proc: 'CAFFEINE', text: 'Gain 1 extra grab on the first turn of each fight.',
       hooks: { onFightStart(F) { moreGrabs(F, 1); } } },
 
     // uncommon
-    { id: 'wide_palm', name: 'Wide Palm', icon: '🖐', rarity: 'u', text: 'Your claw opens 20% wider.',
+    { id: 'wide_palm', name: 'Wide Palm', icon: '🖐', rarity: 'u', kw: [], text: 'Your claw opens 20% wider.',
       mods: { width: 0.2 } },
-    { id: 'rubber_thimbles', name: 'Rubber Thimbles', icon: '👆', rarity: 'u', text: 'Rubber tips on your prongs. Nothing slips as easily.',
+    { id: 'rubber_thimbles', name: 'Rubber Thimbles', icon: '👆', rarity: 'u', kw: [], text: 'Rubber tips on your prongs. Nothing slips as easily.',
       mods: { rubber: 1 } },
-    { id: 'protein_bar', name: 'Protein Bar', icon: '💪', rarity: 'u', text: 'Start each fight with 1 Strength. Chewy.',
+    { id: 'protein_bar', name: 'Protein Bar', icon: '💪', rarity: 'u', kw: ['brawler'], text: 'Start each fight with 1 Strength. Chewy.',
       mods: { startStr: 1 } },
-    { id: 'jackpot_bell', name: 'Jackpot Bell', icon: '🔔', rarity: 'u',
+    { id: 'jackpot_bell', name: 'Jackpot Bell', icon: '🔔', rarity: 'u', kw: ['jackpot'], proc: 'DING',
       text: 'Whenever one grab delivers 2 or more items, deal 5 damage to ALL enemies. DING.',
       hooks: { onGrab(F, n) { if (n >= 2) zapAll(F, 5); } } },
-    { id: 'thorn_mail', name: 'Thorn Mail', icon: '🌵', rarity: 'u', text: 'Start each fight with 3 Thorns. Hugs discouraged.',
+    { id: 'thorn_mail', name: 'Thorn Mail', icon: '🌵', rarity: 'u', kw: ['fortress'], proc: 'THORNS', text: 'Start each fight with 3 Thorns. Hugs discouraged.',
       hooks: { onFightStart(F) { selfStatus(F, 'thorns', 3); } } },
-    { id: 'venom_gland', name: 'Venom Gland', icon: '🐍', rarity: 'u',
+    { id: 'venom_gland', name: 'Venom Gland', icon: '🐍', rarity: 'u', kw: ['poison'], proc: 'VENOM',
       text: 'Whenever you play a weapon, apply 1 Poison to the targeted enemy.',
       hooks: { onPlay(F, inst, def) { if (tagged(def, 'weapon')) foeStatus(F, focus(F), 'poison', 1); } } },
-    { id: 'flint_striker', name: 'Flint Striker', icon: '🔥', rarity: 'u',
+    { id: 'flint_striker', name: 'Flint Striker', icon: '🔥', rarity: 'u', kw: ['burn'], proc: 'SPARK',
       text: 'The first item you play each turn applies 2 Burn to the targeted enemy.',
       hooks: {
         onPlay(F) {
@@ -887,37 +1077,37 @@ const DATA = (() => {
           foeStatus(F, focus(F), 'burn', 2);
         },
       } },
-    { id: 'snow_globe', name: 'Snow Globe', icon: '❄', rarity: 'u', text: 'Start each fight with 2 Chill on every enemy.',
+    { id: 'snow_globe', name: 'Snow Globe', icon: '❄', rarity: 'u', kw: ['frost'], proc: 'SNOW', text: 'Start each fight with 2 Chill on every enemy.',
       hooks: { onFightStart(F) { allStatus(F, 'chill', 2); } } },
-    { id: 'trophy_rack', name: 'Trophy Rack', icon: '🏆', rarity: 'u', text: 'Whenever an enemy dies, gain 1 Strength.',
+    { id: 'trophy_rack', name: 'Trophy Rack', icon: '🏆', rarity: 'u', kw: ['brawler'], proc: 'TROPHY', text: 'Whenever an enemy dies, gain 1 Strength.',
       hooks: { onKill(F) { selfStatus(F, 'str', 1); } } },
-    { id: 'egg_timer', name: 'Egg Timer', icon: '⏲', rarity: 'u', text: 'Every third turn, gain 1 extra grab. Ding.',
+    { id: 'egg_timer', name: 'Egg Timer', icon: '⏲', rarity: 'u', kw: ['jackpot'], proc: 'DING', text: 'Every third turn, gain 1 extra grab. Ding.',
       hooks: { onTurnStart(F) { if (F.turn % 3 === 0) moreGrabs(F, 1); } } },
-    { id: 'grudge_journal', name: 'Grudge Journal', icon: '📓', rarity: 'u',
+    { id: 'grudge_journal', name: 'Grudge Journal', icon: '📓', rarity: 'u', kw: ['fortress'], proc: 'NOTED',
       text: 'Whenever you lose HP, deal 3 damage to the targeted enemy. You wrote their name down.',
       hooks: { onHurt(F) { zap(F, focus(F), 3); } } },
-    { id: 'recycling_bin', name: 'Recycling Bin', icon: '♻', rarity: 'u',
+    { id: 'recycling_bin', name: 'Recycling Bin', icon: '♻', rarity: 'u', kw: ['junk'], proc: 'RECYCLE',
       text: 'Whenever you grab out junk, gain 3 Block and deal 3 damage to the targeted enemy.',
       hooks: { onPlay(F, inst, def) { if ((inst && inst.junk) || tagged(def, 'junk')) { gainBlock(F, 3); zap(F, focus(F), 3); } } } },
-    { id: 'potion_belt', name: 'Potion Belt', icon: '🧴', rarity: 'u', text: 'Whenever you play a potion, heal 2 HP.',
+    { id: 'potion_belt', name: 'Potion Belt', icon: '🧴', rarity: 'u', kw: ['feast', 'glass'], proc: 'GULP', text: 'Whenever you play a potion, heal 2 HP.',
       hooks: { onPlay(F, inst, def) { if (tagged(def, 'potion')) healP(F, 2); } } },
 
     // rare
-    { id: 'fridge_magnet', name: 'Fridge Magnet', icon: '🧲', rarity: 'r',
+    { id: 'fridge_magnet', name: 'Fridge Magnet', icon: '🧲', rarity: 'r', kw: ['metal'],
       text: 'Your claw becomes a magnet. Metal items drift into it.',
       mods: { magnet: 1 } },
-    { id: 'cracked_hourglass', name: 'Cracked Hourglass', icon: '⌛', rarity: 'r',
+    { id: 'cracked_hourglass', name: 'Cracked Hourglass', icon: '⌛', rarity: 'r', kw: [], proc: 'TICK',
       text: 'At the end of your turn, apply 1 Vulnerable to the targeted enemy.',
       hooks: { onTurnEnd(F) { foeStatus(F, focus(F), 'vuln', 1); } } },
-    { id: 'big_knuckles', name: 'Brass Knuckles', icon: '👊', rarity: 'r',
+    { id: 'big_knuckles', name: 'Brass Knuckles', icon: '👊', rarity: 'r', kw: ['brawler', 'fortress'], proc: 'KNUCKLES',
       text: 'Whenever one hit deals 12 or more damage, gain 4 Block.',
       hooks: { onDmgDealt(F, e, amt) { if (amt >= 12) gainBlock(F, 4); } } },
-    { id: 'four_leaf_clover', name: 'Four-Leaf Clover', icon: '🍀', rarity: 'r', text: 'Start each fight with 2 Dodge.',
+    { id: 'four_leaf_clover', name: 'Four-Leaf Clover', icon: '🍀', rarity: 'r', kw: [], proc: 'LUCKY', text: 'Start each fight with 2 Dodge.',
       hooks: { onFightStart(F) { selfStatus(F, 'dodge', 2); } } },
-    { id: 'vampire_dentures', name: 'Vampire Dentures', icon: '🦷', rarity: 'r',
+    { id: 'vampire_dentures', name: 'Vampire Dentures', icon: '🦷', rarity: 'r', kw: ['feast'], proc: 'SLURP',
       text: 'Whenever one hit deals 10 or more damage, heal 2 HP. They click when you smile.',
       hooks: { onDmgDealt(F, e, amt) { if (amt >= 10) healP(F, 2); } } },
-    { id: 'second_wind', name: 'Second Wind', icon: '🌬', rarity: 'r',
+    { id: 'second_wind', name: 'Second Wind', icon: '🌬', rarity: 'r', kw: ['fortress'], proc: 'SECOND WIND',
       text: 'The first time each fight you drop below half HP, gain 12 Block.',
       hooks: {
         onHurt(F) {
@@ -928,25 +1118,191 @@ const DATA = (() => {
         },
       } },
 
+    // ---- Build relics (DESIGN.md "Builds and synergies"). Commons nudge,
+    // uncommons connect, rares bend a rule and define the build. ----
+    // Poison
+    { id: 'contagion', name: 'Contagion', icon: '🦠', rarity: 'u', kw: ['poison'],
+      text: 'When a poisoned enemy dies, its Poison spreads to every other enemy.',
+      hooks: {
+        onKill(F, e) {
+          const p = (e && e.status && e.status.poison) || 0;
+          const rest = aliveOf(F).filter(x => x !== e);
+          if (!p || !rest.length || !CB()) return;
+          proc(F, 'contagion', 'SPREAD ' + p);
+          rest.forEach(x => foeStatus(F, x, 'poison', p));
+        },
+      } },
+    { id: 'festering_jar', name: 'Festering Jar', icon: '🫙', rarity: 'r', kw: ['poison'], proc: 'FESTER',
+      text: 'Poison on enemies no longer wears off. It only gets worse in there.',
+      rules: { poisonKeep: 1 } },
+    // Pyro
+    { id: 'bellows', name: 'Bellows', icon: '♨', rarity: 'u', kw: ['burn'], proc: 'STOKE',
+      text: 'At the end of your turn, every burning enemy gains 1 Burn. Keeps the fire fed.',
+      hooks: { onTurnEnd(F) { aliveOf(F).filter(e => (e.status && e.status.burn) > 0).forEach(e => foeStatus(F, e, 'burn', 1)); } } },
+    { id: 'powder_keg', name: 'Powder Keg', icon: '💥', rarity: 'r', kw: ['burn'],
+      text: 'When an enemy reaches 10 Burn, it explodes: ALL enemies take damage equal to its Burn, then its Burn halves.',
+      hooks: {
+        onStatus(F, u, s) {
+          if (s !== 'burn' || !u || u === F.player || !u.alive || !CB()) return;
+          const b = (u.status && u.status.burn) || 0;
+          if (b < 10) return;
+          proc(F, 'powder_keg', 'KABOOM ' + b);
+          zapAll(F, b);
+          foeStatus(F, u, 'burn', -Math.ceil(b / 2));
+        },
+      } },
+    // Frost
+    { id: 'cold_snap', name: 'Cold Snap', icon: '🥶', rarity: 'u', kw: ['frost'], proc: 'COLD SNAP',
+      text: 'Whenever an enemy is Frozen, deal 6 damage to ALL enemies.',
+      hooks: { onStatus(F, u, s) { if (s === 'freeze' && u && u !== F.player) zapAll(F, 6); } } },
+    { id: 'permafrost_core', name: 'Permafrost Core', icon: '💠', rarity: 'r', kw: ['frost'], proc: 'SHATTER',
+      text: 'Your hits on Frozen enemies deal 50% more damage. SHATTER!',
+      rules: { shatter: 0.5 } },
+    // Fortress
+    { id: 'battering_ram', name: 'Battering Ram', icon: '🐏', rarity: 'u', kw: ['fortress'], proc: 'RAM',
+      text: 'At the end of your turn, deal damage equal to half your Block to the targeted enemy.',
+      hooks: { onTurnEnd(F) { const b = Math.floor(((F.player && F.player.block) || 0) / 2); if (b > 0) zap(F, focus(F), b); } } },
+    { id: 'castle_walls', name: 'Castle Walls', icon: '🏰', rarity: 'r', kw: ['fortress'], proc: 'WALLS HOLD',
+      text: 'Your Block no longer fades at the start of your turn. Stack it high.',
+      rules: { blockKeep: 1 } },
+    // Brawler
+    { id: 'sweatband', name: 'Sweatband', icon: '🎽', rarity: 'c', kw: ['brawler', 'fortress'], proc: 'PUMPED',
+      text: 'Whenever you gain Strength, gain 4 Block.',
+      hooks: { onStatus(F, u, s, v) { if (u === F.player && s === 'str' && v > 0) gainBlock(F, 4); } } },
+    { id: 'gym_membership', name: 'Gym Membership', icon: '🏋', rarity: 'r', kw: ['brawler'], proc: 'GAINS',
+      text: 'Whenever you gain Strength, gain 1 more. No pain, no gain.',
+      hooks: { onStatus(F, u, s, v) { if (u === F.player && s === 'str' && v > 0) selfStatus(F, 'str', 1); } } },
+    // Magnet
+    { id: 'horseshoe', name: 'Horseshoe', icon: '🐴', rarity: 'c', kw: ['metal', 'fortress'], proc: 'CLINK',
+      text: 'Whenever one grab delivers 2 or more metal items, gain 4 Block.',
+      hooks: { onGrab(F) { if (grabDefs(F).filter(d => tagged(d, 'metal')).length >= 2) gainBlock(F, 4); } } },
+    { id: 'tuning_fork', name: 'Tuning Fork', icon: '🎵', rarity: 'u', kw: ['metal', 'jackpot'], proc: 'CLANG',
+      text: 'Whenever a grab combo includes a metal item, deal 4 damage to ALL enemies.',
+      hooks: { onCombo(F, combo, defs) { if ((defs || []).some(d => tagged(d, 'metal'))) zapAll(F, 4); } } },
+    { id: 'dynamo', name: 'Dynamo', icon: '🔋', rarity: 'r', kw: ['metal'],
+      text: 'At the end of your turn, deal 1 damage to the targeted enemy for each metal item in your bin.',
+      hooks: {
+        onTurnEnd(F) {
+          const n = (F.bin || []).filter(i => tagged(ITEMS[i.id], 'metal')).length;
+          if (!n || !CB()) return;
+          proc(F, 'dynamo', 'DYNAMO ' + n);
+          zap(F, focus(F), n);
+        },
+      } },
+    // Scrap
+    { id: 'dumpster_lid', name: 'Dumpster Lid', icon: '🗑', rarity: 'c', kw: ['junk', 'fortress'], proc: 'LID',
+      text: 'Whenever junk is added to your bin, gain 3 Block for each piece.',
+      hooks: { onJunk(F, n) { if (n > 0) gainBlock(F, 3 * n); } } },
+    { id: 'junkyard_king', name: 'Junkyard King', icon: '👑', rarity: 'r', kw: ['junk', 'brawler'], proc: 'KING OF TRASH',
+      text: 'Whenever you grab out junk, gain 1 Strength. Long live the king.',
+      hooks: { onPlay(F, inst, def) { if (isJunkPlay(inst, def)) selfStatus(F, 'str', 1); } } },
+    // Jackpot
+    { id: 'prize_counter', name: 'Prize Counter', icon: '🎫', rarity: 'c', kw: ['jackpot', 'fortress'], proc: 'PRIZE',
+      text: 'Whenever one grab delivers 3 or more items, gain 6 Block.',
+      hooks: { onJackpot(F) { gainBlock(F, 6); } } },
+    { id: 'winning_streak', name: 'Winning Streak', icon: '📈', rarity: 'u', kw: ['jackpot'], proc: 'ON A ROLL',
+      text: 'Every third grab in a row that brings something up gives 1 extra grab (once a turn).',
+      hooks: {
+        onGrab(F, n) {
+          const k = F.streak || 0;
+          if (!n || k < 3 || k % 3) return;
+          const m = mem(F);
+          if (m.streakTurn === F.turn) return;
+          if (!CB()) return;
+          m.streakTurn = F.turn;
+          moreGrabs(F, 1);
+        },
+      } },
+    { id: 'encore_machine', name: 'Encore Machine', icon: '🎰', rarity: 'r', kw: ['jackpot'], proc: 'ENCORE',
+      text: 'Your grab combos resolve twice. The crowd demands it.',
+      rules: { comboTwice: 1 } },
+    // Swarm
+    { id: 'marble_pouch', name: 'Marble Pouch', icon: '👝', rarity: 'c', kw: ['swarm'], proc: 'MARBLES',
+      text: 'Start each fight with 3 extra Prize Marbles in your bin.',
+      hooks: { onFightStart(F) { const c = CB(); if (c && c.addTemp) c.addTemp(F, 'prize_marble', 3); } } },
+    { id: 'beehive', name: 'Beehive', icon: '🐝', rarity: 'u', kw: ['swarm'], proc: 'BZZT',
+      text: 'Whenever you play a small item, deal 2 damage to a random enemy.',
+      hooks: { onPlay(F, inst, def) { if (tagged(def, 'small')) zap(F, randomFoe(F), 2); } } },
+    { id: 'pocket_dimension', name: 'Pocket Dimension', icon: '🌀', rarity: 'r', kw: ['swarm'], proc: 'BIGGER INSIDE',
+      text: 'Small items get +2 damage, Block and healing, and +1 to every status they apply.',
+      rules: { amp: { small: 2 } } },
+    // Glass
+    { id: 'bottle_deposit', name: 'Bottle Deposit', icon: '🍾', rarity: 'c', kw: ['glass', 'greed'], proc: 'DEPOSIT',
+      text: 'Whenever a glass item shatters, gain 3 Block and 2 gold.',
+      hooks: { onShatter(F) { gainBlock(F, 3); gainGold(F, 2); } } },
+    { id: 'sharp_shards', name: 'Sharp Shards', icon: '🔪', rarity: 'u', kw: ['glass'], proc: 'SHARDS',
+      text: 'Whenever a glass item shatters, deal 4 damage to ALL enemies.',
+      hooks: { onShatter(F) { zapAll(F, 4); } } },
+    { id: 'glass_cannon', name: 'Glass Cannon', icon: '🥂', rarity: 'r', kw: ['glass'], proc: 'GLASS CANNON',
+      text: 'Glass items resolve with double numbers, but always shatter (Exhaust) when played.',
+      rules: { glassBreak: 1 } },
+    // Feast
+    { id: 'bat_wing', name: 'Bat Wing', icon: '🦇', rarity: 'u', kw: ['feast'], proc: 'DRAIN',
+      text: 'Whenever you heal, deal that much damage (up to 10) to the targeted enemy.',
+      hooks: { onHeal(F, amt) { const v = Math.min(10, Math.round(amt) || 0); if (v > 0) zap(F, focus(F), v); } } },
+    { id: 'feast_table', name: 'Feast Table', icon: '🍗', rarity: 'r', kw: ['feast'], proc: 'SECONDS',
+      text: 'Whenever you play a food item, gain 1 Max HP for good (up to 3 per fight).',
+      hooks: {
+        onPlay(F, inst, def) {
+          const c = CB();
+          if (!tagged(def, 'food') || !c || !c.gainMaxHp) return;
+          const m = mem(F);
+          if ((m.feast || 0) >= 3) return;
+          m.feast = (m.feast || 0) + 1;
+          c.gainMaxHp(F, 1);
+        },
+      } },
+    // Greed
+    { id: 'piggy_bank', name: 'Piggy Bank', icon: '🐷', rarity: 'u', kw: ['greed', 'fortress'], proc: 'SAVINGS',
+      text: 'Start each fight with 1 Block for every 10 gold you carry (up to 20).',
+      hooks: {
+        onFightStart(F) {
+          const c = CB();
+          const g = c && c.gold ? c.gold(F) : 0;
+          const v = Math.min(20, Math.floor(g / 10));
+          if (v > 0) gainBlock(F, v);
+        },
+      } },
+    { id: 'money_bags', name: 'Money Bags', icon: '💰', rarity: 'r', kw: ['greed'],
+      text: 'Whenever you gain gold in a fight, deal that much damage (up to 15) to ALL enemies.',
+      hooks: {
+        onGold(F, amt) {
+          const v = Math.min(15, Math.round(amt) || 0);
+          if (v <= 0 || !CB()) return;
+          proc(F, 'money_bags', 'CHA-CHING ' + v);
+          zapAll(F, v);
+        },
+      } },
+    // Echo
+    { id: 'crystal_focus', name: 'Crystal Focus', icon: '🔮', rarity: 'c', kw: ['echo'], proc: 'FOCUS',
+      text: 'Start each fight by copying a random magic item in your bin.',
+      hooks: { onFightStart(F) { const c = CB(); if (c && c.copy) c.copy(F, 'magic'); } } },
+    { id: 'wizard_hat', name: 'Wizard Hat', icon: '🎩', rarity: 'u', kw: ['echo'], proc: 'ZAP',
+      text: 'Whenever you play a magic item, deal 3 damage to a random enemy.',
+      hooks: { onPlay(F, inst, def) { if (tagged(def, 'magic')) zap(F, randomFoe(F), 3); } } },
+    { id: 'echo_chamber', name: 'Echo Chamber', icon: '📯', rarity: 'r', kw: ['echo'], proc: 'ECHO',
+      text: 'Every third magic item you play resolves twice. Twice. Twice.',
+      rules: { echo: 3 } },
+
     // boss
-    { id: 'token_stack', name: 'Stack of Tokens', icon: '🪙', rarity: 'boss',
+    { id: 'token_stack', name: 'Stack of Tokens', icon: '🪙', rarity: 'boss', kw: ['jackpot', 'junk'], proc: 'TOKENS',
       text: '+1 grab every turn. Start each fight with 2 Rocks in your bin.',
       mods: { grabs: 1 }, hooks: { onFightStart(F) { const c = CB(); if (c) c.addJunk(F, 'rock', 2); } } },
-    { id: 'third_hand', name: 'Third Hand', icon: '🦾', rarity: 'boss',
+    { id: 'third_hand', name: 'Third Hand', icon: '🦾', rarity: 'boss', kw: [],
       text: 'Your claw grows a third prong. Where did it come from? Do not ask.',
       mods: { prongs: 1 } },
-    { id: 'golden_crane', name: 'Golden Crane', icon: '🏗', rarity: 'boss',
+    { id: 'golden_crane', name: 'Golden Crane', icon: '🏗', rarity: 'boss', kw: [],
       text: 'Your claw opens 20% wider and grips 30% harder. Solid gold, mostly.',
       mods: { width: 0.2, grip: 0.3 } },
-    { id: 'cursed_quarter', name: 'Cursed Quarter', icon: '👁', rarity: 'boss',
+    { id: 'cursed_quarter', name: 'Cursed Quarter', icon: '👁', rarity: 'boss', kw: ['jackpot'],
       text: '+1 grab every turn. Lose 10 Max HP. The arcade always gets paid.',
       mods: { grabs: 1, maxhp: -10 } },
 
     // event only
-    { id: 'friendship_bracelet', name: 'Friendship Bracelet', icon: '📿', rarity: 'event',
+    { id: 'friendship_bracelet', name: 'Friendship Bracelet', icon: '📿', rarity: 'event', kw: ['fortress'], proc: 'FRIEND',
       text: 'Gain 5 Max HP. Start each fight with 3 Block. You made a friend. It was a plush.',
       mods: { maxhp: 5 }, hooks: { onFightStart(F) { gainBlock(F, 3); } } },
-    { id: 'cursed_plush', name: 'Cursed Plush', icon: '🧿', rarity: 'event',
+    { id: 'cursed_plush', name: 'Cursed Plush', icon: '🧿', rarity: 'event', kw: ['brawler', 'junk'], proc: 'WHISPER',
       text: 'Start each fight with 2 Strength and 1 Slag in your bin. It whispers encouragement.',
       mods: { startStr: 2 }, hooks: { onFightStart(F) { const c = CB(); if (c) c.addJunk(F, 'slag', 1); } } },
   ];
@@ -1181,6 +1537,232 @@ const DATA = (() => {
       palette: { bg: '#0b1426', wall: '#1c2f4a', accent: '#2ee6d6' } },
   };
 
+  // ------------------------------------------------------------ archetypes
+  // Build archetypes: the chips item and relic cards show, what the build
+  // pull reads and what the combo recipes speak in. DESIGN.md "Builds and
+  // synergies" has the table.
+  const ARCHETYPES = {
+    poison: { label: 'Poison', icon: '☠', color: '#a6ff5e', blurb: 'Stack Poison high, spread it, then detonate it.' },
+    burn: { label: 'Pyro', icon: '🔥', color: '#ff8a2e', blurb: 'Pile on Burn until something explodes.' },
+    frost: { label: 'Frost', icon: '❄', color: '#9fd8ff', blurb: 'Chill to freeze, then shatter what is frozen.' },
+    fortress: { label: 'Fortress', icon: '🛡', color: '#7fb2ff', blurb: 'Block that lasts, Thorns that bite, and hitting with your wall.' },
+    brawler: { label: 'Brawler', icon: '💪', color: '#ff5a4a', blurb: 'Strength and many small hits: every hit gets the bonus.' },
+    metal: { label: 'Magnet', icon: '🧲', color: '#aab3bd', blurb: 'The more metal in the cabinet, the harder it all hits.' },
+    junk: { label: 'Scrap', icon: '♻', color: '#c8a040', blurb: 'Turn the junk they throw at you into Block, Strength and damage.' },
+    jackpot: { label: 'Jackpot', icon: '🎰', color: '#ffc94d', blurb: 'Many items per grab, grabs in a row, combos that fire twice.' },
+    swarm: { label: 'Swarm', icon: '🎱', color: '#2ee6d6', blurb: 'Lots of little things, scooped by the handful.' },
+    glass: { label: 'Glass', icon: '💎', color: '#d8f0ff', blurb: 'Fragile items that hit hard and pay out when they shatter.' },
+    feast: { label: 'Feast', icon: '🍗', color: '#ff2e88', blurb: 'Food, healing and lifesteal that grow your Max HP.' },
+    greed: { label: 'Greed', icon: '🪙', color: '#ffe066', blurb: 'Gold is a weapon: earn it in the fight, spend it or hoard it.' },
+    echo: { label: 'Echo', icon: '✨', color: '#b08cff', blurb: 'Magic items that copy, repeat and replay each other.' },
+  };
+  // Chip order: specific engines first, broad families (glass, metal) last.
+  const ARCH_ORDER = ['poison', 'burn', 'frost', 'fortress', 'brawler', 'junk', 'jackpot', 'swarm', 'greed', 'feast',
+    'echo', 'glass', 'metal'];
+  const TAG_ARCH = { metal: 'metal', small: 'swarm', glass: 'glass', food: 'feast', magic: 'echo', junk: 'junk' };
+  const PER_ARCH = { poison: 'poison', burn: 'burn', block: 'fortress', metal: 'metal', junk: 'junk', grabsUsed: 'jackpot',
+    streak: 'jackpot', small: 'swarm', gold: 'greed' };
+  const KW_CACHE = new Map();
+
+  // Archetype ids of an item or relic def, uncapped, in chip order. Relics
+  // (no fx list) carry theirs in `kw`; items derive them from tags and base
+  // fx, plus an optional explicit `kw`.
+  function kwIds(def) {
+    if (!def || typeof def !== 'object') return [];
+    if (KW_CACHE.has(def)) return KW_CACHE.get(def);
+    const got = new Set((Array.isArray(def.kw) ? def.kw : []).filter(k => ARCHETYPES[k]));
+    if (Array.isArray(def.fx)) {
+      for (const t of def.tags || []) if (TAG_ARCH[t]) got.add(TAG_ARCH[t]);
+      if (def.bag) got.add('swarm');
+      for (const f of def.fx) {
+        if (!f) continue;
+        const foe = f.k === 'status' && f.to !== 'self';
+        if (foe && f.s === 'poison') got.add('poison');
+        if (foe && f.s === 'burn') got.add('burn');
+        if (foe && (f.s === 'chill' || f.s === 'freeze')) got.add('frost');
+        if (f.k === 'status' && f.to === 'self' && (f.s === 'thorns' || f.s === 'shield_up')) got.add('fortress');
+        if (f.k === 'status' && f.to === 'self' && f.s === 'str') got.add('brawler');
+        if (f.k === 'poisonAll') got.add('poison');
+        if ((f.k === 'block' && f.v >= 4) || f.k === 'blockPer') got.add('fortress');
+        if ((f.k === 'dmg' || f.k === 'random') && f.v > 0 && (f.n || 1) >= 2) got.add('brawler');
+        if ((f.k === 'dmgPer' || f.k === 'blockPer') && PER_ARCH[f.per]) got.add(PER_ARCH[f.per]);
+        if (f.k === 'purge' || f.k === 'junk') got.add('junk');
+        if (f.k === 'grab') got.add('jackpot');
+        if (f.k === 'gold' || f.k === 'pay') got.add('greed');
+        if ((f.k === 'heal' && f.v > 0) || f.k === 'lifesteal' || (f.k === 'maxhp' && f.v > 0)) got.add('feast');
+        if (f.k === 'copy' || f.k === 'again') got.add('echo');
+      }
+    }
+    const explicit = (Array.isArray(def.kw) ? def.kw : []).filter(k => ARCHETYPES[k]);
+    const out = explicit.concat(ARCH_ORDER.filter(k => got.has(k) && explicit.indexOf(k) < 0));
+    KW_CACHE.set(def, out);
+    return out;
+  }
+  // Build-archetype chips for a card: [{id, label, icon, color}], at most max (3).
+  function keywords(def, max) {
+    const n = max == null ? 3 : max;
+    return kwIds(def).slice(0, n).map(id => ({ id, label: ARCHETYPES[id].label, icon: ARCHETYPES[id].icon, color: ARCHETYPES[id].color }));
+  }
+
+  // ---------------------------------------------------------------- combos
+  // Named recipes a single grab can fire (COMBAT.grabDone evaluates them on
+  // the items the grab delivered). match() is pure over item defs; fx run as
+  // if the player played them (Strength counts) at `target`. One per family
+  // (the biggest tier), `sup` drops the smaller recipes a big one replaces,
+  // `once: 'turn'` caps the grab-giving ones. example / miss: item ids that
+  // do / do not fire it (tests and help text).
+  const has = (d, k) => kwIds(d).indexOf(k) >= 0;
+  const tagOf = (t) => (d) => tagged(d, t);
+  const blocky = (d) => (d.fx || []).some(f => f && ((f.k === 'block' && f.v >= 4) || f.k === 'blockPer'));
+  const burny = (d) => has(d, 'burn');
+  const frosty = (d) => has(d, 'frost');
+  const toxic = (d) => has(d, 'poison');
+  const count = (defs, p) => defs.filter(d => d && p(d)).length;
+  // How many different items (by id) satisfy p.
+  const kinds = (defs, p) => new Set(defs.filter(d => d && p(d)).map(d => d.id)).size;
+  // True when distinct delivered items can fill every role, one each.
+  function roles(defs, preds) {
+    const used = new Array(defs.length).fill(false);
+    const fill = (i) => {
+      if (i >= preds.length) return true;
+      for (let j = 0; j < defs.length; j++) {
+        if (used[j] || !defs[j] || !preds[i](defs[j])) continue;
+        used[j] = true;
+        if (fill(i + 1)) return true;
+        used[j] = false;
+      }
+      return false;
+    };
+    return fill(0);
+  }
+  const COMBO_LIST = [
+    // tier 1: pairs
+    { id: 'crossed_blades', name: 'Crossed Blades', tier: 1, family: 'blades', color: '#ff5a4a', target: 'enemy',
+      text: 'Two different weapons: strike once more for 4.', fx: [dmg(4)],
+      match: (d) => kinds(d, tagOf('weapon')) >= 2, example: ['rusty_sword', 'femur'], miss: ['rusty_sword', 'rusty_sword'] },
+    { id: 'shield_wall', name: 'Shield Wall', tier: 1, family: 'guard', color: '#7fb2ff', target: 'self',
+      text: 'Two different Block items: gain 4 more Block.', fx: [block(4)],
+      match: (d) => kinds(d, blocky) >= 2, example: ['dented_shield', 'pot_lid'], miss: ['dented_shield', 'dented_shield'] },
+    { id: 'heavy_hitters', name: 'Heavy Hitters', tier: 1, family: 'heavy', color: '#aab3bd', target: 'enemy',
+      text: 'Two heavy items: deal 6 damage.', fx: [dmg(6)],
+      match: (d) => count(d, tagOf('heavy')) >= 2, example: ['heater_shield', 'iron_chain'], miss: ['heater_shield', 'shiv'] },
+    { id: 'steam_burst', name: 'Steam Burst', tier: 1, family: 'steam', color: '#e6ebf0', target: 'all',
+      text: 'Fire meets frost: deal 4 damage to ALL enemies.', fx: [dmg(4)],
+      match: (d) => roles(d, [burny, frosty]), example: ['torch', 'snowball'], miss: ['torch', 'femur'] },
+    { id: 'toxic_fumes', name: 'Toxic Fumes', tier: 1, family: 'fumes', color: '#a6ff5e', target: 'all',
+      text: 'Poison meets fire: apply 2 Poison to ALL enemies.', fx: [status('poison', 2, 'all')],
+      match: (d) => roles(d, [toxic, burny]), example: ['stink_potion', 'torch'], miss: ['stink_potion', 'femur'] },
+    { id: 'frostbite', name: 'Frostbite', tier: 1, family: 'frostbite', color: '#9fd8ff', target: 'all',
+      text: 'Poison meets frost: apply 1 Chill and 1 Poison to ALL enemies.', fx: [status('chill', 1, 'all'), status('poison', 1, 'all')],
+      match: (d) => roles(d, [toxic, frosty]), example: ['stink_potion', 'snowball'], miss: ['snowball', 'femur'] },
+    { id: 'molotov', name: 'Molotov', tier: 1, family: 'molotov', color: '#ff8a2e', target: 'all',
+      text: 'Glass meets fire: apply 2 Burn to ALL enemies.', fx: [status('burn', 2, 'all')],
+      match: (d) => roles(d, [tagOf('glass'), burny]), example: ['bubble_flask', 'torch'], miss: ['bubble_flask', 'femur'] },
+    { id: 'picnic', name: 'Picnic', tier: 1, family: 'food', color: '#ff2e88', target: 'self',
+      text: 'Two foods: heal 3 HP.', fx: [heal(3)],
+      match: (d) => count(d, tagOf('food')) >= 2, example: ['crisp_apple', 'stale_bread'], miss: ['crisp_apple', 'femur'] },
+    { id: 'pocket_change', name: 'Pocket Change', tier: 1, family: 'swarm', color: '#2ee6d6', target: 'random',
+      text: 'Two small items: deal 3 damage to a random enemy.', fx: [dmg(3)],
+      match: (d) => count(d, tagOf('small')) >= 2, example: ['prize_marble', 'glass_bead'], miss: ['prize_marble', 'femur'] },
+    { id: 'resonance', name: 'Resonance', tier: 1, family: 'magic', color: '#b08cff', target: 'none',
+      text: 'Two magic items: copy a random item in your bin for this fight.', fx: [copy()],
+      match: (d) => count(d, tagOf('magic')) >= 2, example: ['crystal_ball', 'rulebook'], miss: ['crystal_ball', 'femur'] },
+    { id: 'sharp_edges', name: 'Sharp Edges', tier: 1, family: 'edges', color: '#d8f0ff', target: 'enemy',
+      text: 'Glass and a weapon: deal 4 damage.', fx: [dmg(4)],
+      match: (d) => roles(d, [tagOf('glass'), tagOf('weapon')]), example: ['bubble_flask', 'femur'], miss: ['bubble_flask', 'crisp_apple'] },
+    { id: 'scrap_shot', name: 'Scrap Shot', tier: 1, family: 'scrap', color: '#c8a040', target: 'enemy',
+      text: 'Junk and a weapon: fire the junk for 8 damage.', fx: [dmg(8)],
+      match: (d) => roles(d, [tagOf('junk'), tagOf('weapon')]), example: ['rock', 'femur'], miss: ['rock', 'crisp_apple'] },
+    { id: 'pay_day', name: 'Pay Day', tier: 1, family: 'greed', color: '#ffe066', target: 'none',
+      text: 'Two Greed items: gain 6 gold.', fx: [gold(6)],
+      match: (d) => count(d, (x) => has(x, 'greed')) >= 2, example: ['lucky_coin', 'stolen_gem'], miss: ['lucky_coin', 'femur'] },
+    // tier 2: triples and junk
+    { id: 'magnetized', name: 'Magnetized', tier: 2, family: 'metal', color: '#aab3bd', target: 'all',
+      text: 'Three metal items: deal 5 damage to ALL enemies and gain 5 Block.', fx: [dmg(5), block(5)],
+      match: (d) => count(d, tagOf('metal')) >= 3, example: ['rusty_sword', 'dented_shield', 'pot_lid'], miss: ['rusty_sword', 'dented_shield'] },
+    { id: 'handful', name: 'Handful', tier: 2, family: 'swarm', color: '#2ee6d6', target: 'none', once: 'turn',
+      text: 'Three small items: +1 grab this turn (once a turn).', fx: [grab(1)],
+      match: (d) => count(d, tagOf('small')) >= 3, example: ['prize_marble', 'lucky_penny', 'glass_bead'], miss: ['prize_marble', 'glass_bead'] },
+    { id: 'banquet', name: 'Banquet', tier: 2, family: 'food', color: '#ff2e88', target: 'self',
+      text: 'Three foods: heal 6 HP and gain 2 Regen.', fx: [heal(6), status('regen', 2, 'self')],
+      match: (d) => count(d, tagOf('food')) >= 3, example: ['crisp_apple', 'stale_bread', 'peppermint'], miss: ['crisp_apple', 'stale_bread'] },
+    { id: 'chandelier', name: 'Chandelier Crash', tier: 2, family: 'glass', color: '#d8f0ff', target: 'all',
+      text: 'Three glass items: deal 8 damage to ALL enemies.', fx: [dmg(8)],
+      match: (d) => count(d, tagOf('glass')) >= 3, example: ['bubble_flask', 'toxic_vial', 'empty_bottle'], miss: ['bubble_flask', 'toxic_vial'] },
+    { id: 'landslide', name: 'Landslide', tier: 2, family: 'junk', color: '#c8a040', target: 'all',
+      text: 'Two junk in one grab: deal 10 damage to ALL enemies.', fx: [dmg(10)],
+      match: (d) => count(d, tagOf('junk')) >= 2, example: ['rock', 'slag'], miss: ['rock', 'femur'] },
+    { id: 'hat_trick', name: 'Hat Trick', tier: 2, family: 'jackpot', color: '#ffc94d', target: 'all',
+      text: 'Three items in one grab: deal 4 damage to ALL enemies.', fx: [dmg(4)],
+      match: (d) => d.length >= 3, example: ['femur', 'crisp_apple', 'dented_shield'], miss: ['femur', 'crisp_apple'] },
+    // tier 3: the big ones
+    { id: 'armory', name: 'Armory', tier: 3, family: 'blades', color: '#ff5a4a', target: 'enemy',
+      text: 'Three weapons: strike 4 more times for 4.', fx: [dmg(4, 4)],
+      match: (d) => count(d, tagOf('weapon')) >= 3, example: ['rusty_sword', 'femur', 'shiv'], miss: ['rusty_sword', 'femur', 'crisp_apple'] },
+    { id: 'iron_curtain', name: 'Iron Curtain', tier: 3, family: 'guard', color: '#7fb2ff', target: 'self',
+      text: 'Three Block items: gain 12 Block and 2 Thorns.', fx: [block(12), status('thorns', 2, 'self')],
+      match: (d) => count(d, blocky) >= 3, example: ['dented_shield', 'pot_lid', 'heater_shield'], miss: ['dented_shield', 'pot_lid', 'femur'] },
+    { id: 'elemental_storm', name: 'Elemental Storm', tier: 3, family: 'elements', color: '#ff2e88', target: 'all',
+      sup: ['steam_burst', 'toxic_fumes', 'frostbite'],
+      text: 'Fire, frost and poison at once: 8 damage, 3 Poison, 3 Burn and 1 Chill to ALL enemies.',
+      fx: [dmg(8), status('poison', 3, 'all'), status('burn', 3, 'all'), status('chill', 1, 'all')],
+      match: (d) => roles(d, [burny, frosty, toxic]), example: ['torch', 'snowball', 'stink_potion'], miss: ['torch', 'snowball', 'femur'] },
+    { id: 'three_of_a_kind', name: 'Three of a Kind', tier: 3, family: 'kind', color: '#ffe066', target: 'all',
+      text: 'Three of the same item: deal 10 damage to ALL enemies and gain 5 gold. Cherries!', fx: [dmg(10), gold(5)],
+      match: (d) => d.some(x => d.filter(y => y && x && y.id === x.id).length >= 3),
+      example: ['prize_marble', 'prize_marble', 'prize_marble'], miss: ['prize_marble', 'prize_marble', 'glass_bead'] },
+    { id: 'mega_jackpot', name: 'Mega Jackpot', tier: 3, family: 'jackpot', color: '#ffc94d', target: 'all', once: 'turn',
+      text: 'Four or more items in one grab: deal 12 damage to ALL enemies and +1 grab (once a turn).', fx: [dmg(12), grab(1)],
+      match: (d) => d.length >= 4, example: ['femur', 'crisp_apple', 'dented_shield', 'shiv'], miss: ['femur', 'crisp_apple', 'shiv'] },
+  ];
+  const COMBOS = {};
+  for (const c of COMBO_LIST) COMBOS[c.id] = c;
+
+  // The combos one grab fires, given the item defs it delivered: one per
+  // family (the biggest tier), minus the ones a bigger recipe replaces,
+  // biggest tier first, at most COMBO_MAX.
+  function combosFor(defs) {
+    const list = (defs || []).filter(Boolean);
+    if (list.length < 2) return [];
+    const hit = COMBO_LIST.filter(c => { try { return !!c.match(list); } catch (e) { return false; } });
+    const best = {};
+    for (const c of hit) if (!best[c.family] || c.tier > best[c.family].tier) best[c.family] = c;
+    let out = hit.filter(c => best[c.family] === c);
+    const gone = new Set();
+    for (const c of out) for (const id of c.sup || []) gone.add(id);
+    out = out.filter(c => !gone.has(c.id));
+    out.sort((a, b) => b.tier - a.tier);
+    return out.slice(0, COMBO_MAX);
+  }
+
+  // ------------------------------------------------------------ build pull
+  // How much a run leans into each archetype: keywords over the bin (items
+  // it started with or that came in bags weigh half) and 3 per relic.
+  function investment(run) {
+    const sc = {};
+    if (!run) return sc;
+    for (const it of run.bin || []) {
+      const d = ITEMS[typeof it === 'string' ? it : it && it.id];
+      if (!d || d.rarity === 'junk') continue;
+      const w = d.starter || tagged(d, 'small') ? 0.5 : 1;
+      for (const k of kwIds(d).slice(0, 3)) sc[k] = (sc[k] || 0) + w;
+    }
+    for (const id of run.relics || []) {
+      const r = RELICS[id];
+      for (const k of (r && r.kw) || []) if (ARCHETYPES[k]) sc[k] = (sc[k] || 0) + 3;
+    }
+    return sc;
+  }
+  // One archetype the run invests in (score 3+, top three, weighted by score).
+  function pullArch(rng, run) {
+    const sc = investment(run);
+    const ks = ARCH_ORDER.filter(k => (sc[k] || 0) >= 3).sort((a, b) => sc[b] - sc[a]).slice(0, 3);
+    if (!ks.length) return null;
+    let x = rng() * ks.reduce((a, k) => a + sc[k], 0);
+    for (const k of ks) { x -= sc[k]; if (x < 0) return k; }
+    return ks[ks.length - 1];
+  }
+
   // ---------------------------------------------------------------- helpers
   // Final rules text. Tokens: {v} {v2} {v3} = |v| of the 1st/2nd/3rd effect
   // that has a v, {n} = the first effect with an n, {min} {max} = the random
@@ -1249,7 +1831,7 @@ const DATA = (() => {
   // A screen of 3 or more slots then turns its last common slot into a bag
   // BAG_CHANCE of the time (a bag is common, so rarity shares hold).
   // Deterministic: the same rng state always gives the same ids.
-  function rewardItems(rng, act, char, n) {
+  function rewardItems(rng, act, char, n, run) {
     n = n == null ? 3 : n;
     const wt = RARITY_WEIGHTS[Math.min(3, Math.max(1, act | 0))];
     const out = [];
@@ -1271,7 +1853,31 @@ const DATA = (() => {
       for (let i = 0; i < out.length; i++) if (ITEMS[out[i]].rarity === 'c') at = i;
       if (at >= 0) out[at] = pickFrom(BAG_IDS);
     }
+    // Build pull: only with a run to read, so plain calls draw exactly as before.
+    if (run && out.length && rng() < BUILD_PULL) {
+      const arch = pullArch(rng, run);
+      const at = arch ? out.findIndex(id => !ITEMS[id].bag && kwIds(ITEMS[id]).indexOf(arch) < 0) : -1;
+      if (at >= 0) {
+        const cand = fresh(pool(ITEMS[out[at]].rarity, char)).filter(id => kwIds(ITEMS[id]).indexOf(arch) >= 0);
+        if (cand.length) out[at] = pickFrom(cand);
+      }
+    }
     return out;
+  }
+
+  // A relic from pool (ids). With a run, BUILD_PULL of the time the pick is
+  // limited to relics of an archetype the run invests in (when the pool has
+  // one). Without a run it is exactly rng.pick(pool).
+  function pickRelic(rng, pool, run) {
+    const ids = (pool || []).filter(id => RELICS[id]);
+    if (!ids.length) return null;
+    const pickFrom = (a) => a[Math.floor(rng() * a.length)];
+    if (run && rng() < BUILD_PULL) {
+      const arch = pullArch(rng, run);
+      const cand = arch ? ids.filter(id => (RELICS[id].kw || []).indexOf(arch) >= 0) : [];
+      if (cand.length) return pickFrom(cand);
+    }
+    return pickFrom(ids);
   }
 
   // Relic ids of a rarity (or any random-pool rarity when falsy), minus the
@@ -1289,7 +1895,8 @@ const DATA = (() => {
 
   return {
     ITEMS, STATUS, ENEMIES, ENCOUNTERS, RELICS, EVENTS, CLAW_UPGRADES, BRUSHES, TOOLS, TERMS, CHARACTERS, ACTS,
-    ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RARITY_WEIGHTS, CHAR_BIAS, BAG_CHANCE, ECONOMY, DIFFICULTY,
-    itemText, pool, rollRarity, rewardItems, relicPool,
+    ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, PER_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RELIC_RULES, RARITY_WEIGHTS,
+    CHAR_BIAS, BAG_CHANCE, BUILD_PULL, COMBO_MAX, ECONOMY, DIFFICULTY, ARCHETYPES, ARCH_ORDER, COMBOS,
+    itemText, pool, rollRarity, rewardItems, relicPool, pickRelic, keywords, kwIds, combosFor, investment,
   };
 })();

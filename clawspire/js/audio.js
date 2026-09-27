@@ -16,7 +16,9 @@ const AUDIO = (() => {
   const NAMES = ['clawMove', 'clawDrop', 'clawTouch', 'clawClose', 'clawLift', 'clawRelease', 'itemLand',
     'itemSlip', 'chute', 'jackpot', 'hit', 'hitBig', 'block', 'heal', 'poison', 'burn', 'freeze', 'shake',
     'enemyDie', 'playerHurt', 'win', 'lose', 'click', 'buy', 'reveal', 'brush', 'step', 'coin', 'upgrade',
-    'turn', 'boss'];
+    'turn', 'boss',
+    // the juice pass
+    'proc', 'combo', 'crit', 'shatter', 'tick', 'cardFlip', 'relic', 'footstep', 'bloom', 'heartbeat', 'whoosh', 'stamp', 'victory'];
   const MODES = ['off', 'title', 'map', 'fight', 'elite', 'boss', 'win'];
   const KEY = 'clawspire_audio';
   const LOOKAHEAD = 0.12;     // seconds of notes queued ahead of the clock
@@ -436,10 +438,115 @@ const AUDIO = (() => {
     },
   };
 
+  Object.assign(BANK, {
+    // A relic or synergy fires: a quick two-note glass ping, pitched by opts.tier.
+    proc(out, t, o, p) {
+      const up = U.clamp(+o.tier || 0, 0, 3) * 2;
+      blip(out, t, { w: 'triangle', f: mtof(84 + up) * p, dur: 0.09, v: 0.12 });
+      blip(out, t, { at: 0.06, w: 'sine', f: mtof(91 + up) * p, dur: 0.22, v: 0.1, vib: [9, 7] });
+      hiss(out, t, { type: 'highpass', f: 6000, dur: 0.04, v: 0.08 });
+      return 0.3;
+    },
+    // A named combo: a rising stab, bigger with opts.tier (1..3). Tier 3 adds
+    // a sub drop, a cymbal swell and a held major chord.
+    combo(out, t, o, p) {
+      const tier = U.clamp(Math.round(+o.tier || 1), 1, 3);
+      duck(0.4 + tier * 0.35);
+      const arp = tier === 1 ? [67, 71, 74] : tier === 2 ? [64, 67, 71, 76, 79] : [60, 64, 67, 72, 76, 79, 84];
+      arp.forEach((n, i) => blip(out, t, { at: i * 0.045, w: 'square', f: mtof(n) * p, dur: 0.09, v: 0.09, lp: 5200 }));
+      const h = arp.length * 0.045;
+      blip(out, t, { at: h, w: 'sawtooth', f: mtof(arp[arp.length - 1]) * p, dur: 0.25 + tier * 0.15, v: 0.07, lp: 3000, vib: [7, 6] });
+      hiss(out, t, { at: 0, type: 'bandpass', f: 800, to: 5000, q: 1, dur: h + 0.1, v: 0.08 + tier * 0.03, a: h });
+      if (tier >= 2) blip(out, t, { at: h, w: 'triangle', f: mtof(arp[0] - 12) * p, dur: 0.5, v: 0.14 });
+      if (tier >= 3) {
+        blip(out, t, { w: 'sine', f: 130, to: 35, dur: 0.5, v: 0.4 });
+        [0, 4, 7, 12].forEach((k) => blip(out, t, { at: h + 0.05, w: 'square', f: mtof(72 + k) * p, dur: 0.8, v: 0.05, lp: 3500, vib: [6, 5] }));
+        hiss(out, t, { at: h, type: 'highpass', f: 5000, dur: 0.8, v: 0.12 });
+        return h + 0.9;
+      }
+      return h + 0.45;
+    },
+    // A crushing hit: the hitBig body plus a bright metallic crack on top.
+    crit(out, t, o, p) {
+      duck(0.35);
+      blip(out, t, { w: 'sine', f: 190 * p, to: 34, dur: 0.4, v: 0.5 });
+      hiss(out, t, { type: 'lowpass', f: 3200, to: 380, dur: 0.32, v: 0.45, crunch: true });
+      [1, 2.76, 5.4].forEach((k, i) => blip(out, t, { w: 'square', f: 900 * k * p, to: 500 * k * p, dur: 0.12 - i * 0.02, v: 0.07 }));
+      hiss(out, t, { type: 'highpass', f: 5000, dur: 0.07, v: 0.28 });
+      return 0.42;
+    },
+    // Glass or ice breaking: a crack and a shower of tiny high tinkles.
+    shatter(out, t, o, p) {
+      hiss(out, t, { type: 'highpass', f: 3000, dur: 0.12, v: 0.3, crunch: true });
+      for (let i = 0; i < 8; i++) blip(out, t, { at: 0.02 + S.r() * 0.25, w: 'sine', f: (2600 + S.r() * 2400) * p, dur: 0.06, v: 0.06 });
+      blip(out, t, { w: 'triangle', f: 700 * p, to: 200, dur: 0.1, v: 0.12 });
+      return 0.35;
+    },
+    // Counter roll tick: tiny and dry, pitched by opts.pitch.
+    tick(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 1850 * p, dur: 0.018, v: 0.05, lp: 6000 });
+      return 0.03;
+    },
+    // A card dealt face up: a papery flick.
+    cardFlip(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 2600 * p, to: 5200 * p, q: 1.5, dur: 0.07, v: 0.22 });
+      blip(out, t, { at: 0.05, w: 'triangle', f: 520 * p, to: 380 * p, dur: 0.04, v: 0.06 });
+      return 0.12;
+    },
+    // Relic reveal: a shimmering swell into a bright chord.
+    relic(out, t, o, p) {
+      duck(1.4);
+      hiss(out, t, { type: 'bandpass', f: 1500, to: 7000, q: 2, dur: 0.6, v: 0.1, a: 0.5 });
+      [0, 4, 7, 11, 14].forEach((k, i) => blip(out, t, { at: 0.5 + i * 0.03, w: 'triangle', f: mtof(72 + k) * p, dur: 0.9, v: 0.07, vib: [5, 4] }));
+      for (let i = 0; i < 6; i++) blip(out, t, { at: 0.55 + i * 0.07, w: 'sine', f: mtof(96 + (i % 3) * 4) * p, dur: 0.1, v: 0.04 });
+      return 1.5;
+    },
+    // A crawler's footstep on the map: a soft scuff.
+    footstep(out, t, o, p) {
+      hiss(out, t, { type: 'lowpass', f: 900 * p, to: 300, dur: 0.06, v: 0.14 });
+      blip(out, t, { w: 'sine', f: 120 * p, to: 70, dur: 0.05, v: 0.12 });
+      return 0.08;
+    },
+    // A hex blooming into light: a soft airy chime (opts.pitch walks it up).
+    bloom(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: mtof(79) * p, dur: 0.35, v: 0.06, a: 0.02 });
+      blip(out, t, { w: 'sine', f: mtof(86) * p, dur: 0.25, v: 0.03, a: 0.02 });
+      hiss(out, t, { type: 'highpass', f: 7000, dur: 0.12, v: 0.03, a: 0.03 });
+      return 0.36;
+    },
+    // Low hp: a muffled lub-dub.
+    heartbeat(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 62 * p, to: 44, dur: 0.12, v: 0.4 });
+      blip(out, t, { at: 0.2, w: 'sine', f: 55 * p, to: 40, dur: 0.14, v: 0.3 });
+      return 0.38;
+    },
+    // Something flying fast: an air whoosh (a slip, a thrown prize).
+    whoosh(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 600 * p, to: 2600 * p, q: 1.8, dur: 0.22, v: 0.18, a: 0.08 });
+      return 0.24;
+    },
+    // A rubber stamp slamming down (SOLD): thud plus a papery slap.
+    stamp(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 140 * p, to: 60, dur: 0.12, v: 0.4 });
+      hiss(out, t, { type: 'bandpass', f: 1400, dur: 0.06, v: 0.3, crunch: true });
+      return 0.16;
+    },
+    // The last enemy falls: a rising gliss into a bright hit (the slow-mo sting).
+    victory(out, t, o, p) {
+      duck(1.2);
+      blip(out, t, { w: 'square', f: mtof(60) * p, to: mtof(84) * p, dur: 0.5, v: 0.06, lp: 4000, lin: true });
+      hiss(out, t, { type: 'bandpass', f: 500, to: 6000, q: 1, dur: 0.5, v: 0.12, a: 0.4 });
+      [72, 76, 79, 84].forEach((n) => blip(out, t, { at: 0.5, w: 'triangle', f: mtof(n) * p, dur: 0.6, v: 0.08 }));
+      blip(out, t, { at: 0.5, w: 'sine', f: 110, to: 45, dur: 0.4, v: 0.35 });
+      return 1.1;
+    },
+  });
+
   // Minimum spacing per sfx so per-frame callers (contacts, steering) do not stack.
   const GAP = { clawMove: 0.1, clawTouch: 0.08, itemLand: 0.035, itemSlip: 0.08, hit: 0.03, click: 0.03,
-    step: 0.05, coin: 0.04, poison: 0.05, burn: 0.05, freeze: 0.05, block: 0.03, heal: 0.05 };
-  const LEVEL = { clawMove: 0.7, clawLift: 0.8, itemLand: 0.9, boss: 1.1, jackpot: 1.1, hitBig: 1.1 };
+    step: 0.05, coin: 0.04, poison: 0.05, burn: 0.05, freeze: 0.05, block: 0.03, heal: 0.05,
+    proc: 0.06, tick: 0.035, cardFlip: 0.05, footstep: 0.06, bloom: 0.07, heartbeat: 0.5, whoosh: 0.06, crit: 0.05, shatter: 0.05 };
+  const LEVEL = { clawMove: 0.7, clawLift: 0.8, itemLand: 0.9, boss: 1.1, jackpot: 1.1, hitBig: 1.1, crit: 1.1, combo: 1.05, tick: 0.8, bloom: 0.8 };
 
   /* Plays a named effect. opts: {vol, pitch, mass (itemLand), vel (itemLand
      impact 0..1), amt (hit damage)}. Returns true when something was queued. */

@@ -36,6 +36,19 @@ const ITEMS = {
   cursed: { id: 'cursed', name: 'Cursed Blade', rarity: 'u', tags: [], fx: [{ k: 'dmg', v: 10 }, { k: 'dmg', v: -3 }] },
   rage: { id: 'rage', name: 'Rage', rarity: 'u', tags: [], target: 'self', fx: [{ k: 'status', s: 'str', v: 2 }] },
   frost: { id: 'frost', name: 'Frost', rarity: 'u', tags: [], fx: [{ k: 'status', s: 'chill', v: 3 }] },
+  glassy: { id: 'glassy', name: 'Glassy', rarity: 'c', tags: ['glass'], fx: [{ k: 'dmg', v: 3 }] },
+  vase: { id: 'vase', name: 'Vase', rarity: 'c', tags: ['glass'], exhaust: true, target: 'self', fx: [{ k: 'block', v: 2 }] },
+  pebble: { id: 'pebble', name: 'Pebble', rarity: 'c', tags: ['small'], fx: [{ k: 'dmg', v: 2 }, { k: 'status', s: 'poison', v: 1, to: 'enemy' }] },
+  orb: { id: 'orb', name: 'Orb', rarity: 'c', tags: ['magic'], fx: [{ k: 'dmg', v: 4 }] },
+  plate: { id: 'plate', name: 'Plate', rarity: 'c', tags: ['metal'], target: 'self', fx: [{ k: 'block', v: 3 }, { k: 'blockPer', v: 2, per: 'junk' }] },
+  bribe: { id: 'bribe', name: 'Bribe', rarity: 'u', tags: [], fx: [{ k: 'pay', v: 10 }, { k: 'dmg', v: 9 }] },
+  encore: { id: 'encore', name: 'Encore', rarity: 'r', tags: [], target: 'self', fx: [{ k: 'block', v: 1 }, { k: 'again' }] },
+  rot: { id: 'rot', name: 'Rot', rarity: 'u', tags: [], fx: [{ k: 'status', s: 'poison', v: 2, to: 'enemy' }, { k: 'dmgPer', v: 1, per: 'poison' }] },
+  scorch: { id: 'scorch', name: 'Scorch', rarity: 'u', tags: [], fx: [{ k: 'dmgPer', v: 2, per: 'burn' }] },
+  jar: { id: 'jar', name: 'Jar', rarity: 'u', tags: [], target: 'all', fx: [{ k: 'dmgPer', v: 1, per: 'small' }] },
+  token: { id: 'token', name: 'Token', rarity: 'c', tags: [], fx: [{ k: 'dmg', v: 1 }, { k: 'dmgPer', v: 2, per: 'streak' }] },
+  idol: { id: 'idol', name: 'Idol', rarity: 'u', tags: [], fx: [{ k: 'dmgPer', v: 1, per: 'gold' }] },
+  tome: { id: 'tome', name: 'Tome', rarity: 'u', tags: ['magic'], target: 'none', fx: [{ k: 'copy', tag: 'magic' }] },
   rock: { id: 'rock', name: 'Rock', rarity: 'junk', tags: ['junk', 'heavy'], target: 'none' },
   slag: { id: 'slag', name: 'Slag', rarity: 'junk', tags: ['junk'], target: 'none', fx: [{ k: 'dmg', v: -2 }] },
 };
@@ -80,6 +93,29 @@ const RELICS = {
   gauntlet: { id: 'gauntlet', name: 'Gauntlet', mods: { grabs: 1, startBlock: 5, startStr: 1 } },
   magnetclaw: { id: 'magnetclaw', name: 'Magnet', mods: { magnet: 1, prongs: 1, width: 0.2 } },
   fat: { id: 'fat', name: 'Fat', mods: { maxhp: 10, gold: 25 } },
+  // one relic per new hook: log the call, then do something visible
+  hooky: {
+    id: 'hooky', name: 'Hooky', icon: 'H', proc: 'HOOKED', hooks: {
+      onStatus(F, u, s, v) { log.push(`status:${s}:${v}:${u === F.player ? 'p' : 'e'}`); if (s === 'poison') COMBAT.damage(F, null, F.enemies[0], 1); },
+      onBlock(F, amt) { log.push('block:' + amt); COMBAT.damage(F, null, F.enemies[0], 1); },
+      onHeal(F, amt) { log.push('heal:' + amt); COMBAT.damage(F, null, F.enemies[0], 1); },
+      onJunk(F, n, insts) { log.push('junk:' + n + ':' + insts.length); COMBAT.damage(F, null, F.enemies[0], 1); },
+      onCombo(F, combo, defs) { log.push('combo:' + combo.id + ':' + defs.length); COMBAT.damage(F, null, F.enemies[0], 1); },
+      onJackpot(F, n) { log.push('jackpot:' + n); COMBAT.damage(F, null, F.enemies[0], 1); },
+      onShatter(F, inst, def) { log.push('shatter:' + def.id); COMBAT.damage(F, null, F.enemies[0], 1); },
+      onGold(F, amt) { log.push('gold:' + amt); COMBAT.damage(F, null, F.enemies[0], 1); },
+    },
+  },
+  selfproc: { id: 'selfproc', name: 'Selfproc', hooks: { onBlock(F) { COMBAT.emit(F, { t: 'proc', src: 'relic', id: 'selfproc', text: 'MINE' }); COMBAT.damage(F, null, F.enemies[0], 1); } } },
+  quiet: { id: 'quiet', name: 'Quiet', hooks: { onBlock() { log.push('quiet'); } } },
+  r_fester: { id: 'r_fester', name: 'Fester', rules: { poisonKeep: 1 } },
+  r_walls: { id: 'r_walls', name: 'Walls', rules: { blockKeep: 1 } },
+  r_shatter: { id: 'r_shatter', name: 'Shatter', rules: { shatter: 0.5 } },
+  r_glass: { id: 'r_glass', name: 'Glass', rules: { glassBreak: 1 } },
+  r_amp: { id: 'r_amp', name: 'Amp', rules: { amp: { small: 2 } } },
+  r_amp2: { id: 'r_amp2', name: 'Amp2', rules: { amp: { small: 1 } } },
+  r_encore: { id: 'r_encore', name: 'Encore', rules: { comboTwice: 1 } },
+  r_echo: { id: 'r_echo', name: 'Echo', rules: { echo: 3 } },
 };
 const STATUS = {};
 for (const [s, kind] of Object.entries({ str: 'buff', weak: 'debuff', vuln: 'debuff', poison: 'debuff', burn: 'debuff', chill: 'debuff', freeze: 'debuff', regen: 'buff', thorns: 'buff', dodge: 'buff', bleed: 'debuff', stun: 'debuff', grease: 'debuff', fog: 'debuff', shield_up: 'buff', enrage: 'buff', armor: 'buff' })) {
@@ -441,6 +477,200 @@ h.test('events mirror onto F.events; determinism', () => {
   h.eq(F.turn, 2, 'endTurn advances and starts the next turn'); h.eq(F.phase, 'player', 'back to player phase');
 });
 
+
+// ---------- builds: new hooks, procs, rules, grab buffer, combos ----------
+const procs = (evs, id) => evs.filter(e => e.t === 'proc' && (!id || e.id === id));
+// A stub recipe book: two metal items fire 'clang' (3 to the target), three
+// items fire 'bonus' (+1 grab, once a turn).
+const CLANG = { id: 'clang', name: 'Clang', text: 'Two metal.', color: '#aab3bd', tier: 1, family: 'm', target: 'enemy', fx: [{ k: 'dmg', v: 3 }] };
+const BONUS = { id: 'bonus', name: 'Bonus', text: 'Three items.', color: '#ffc94d', tier: 2, family: 'b', target: 'none', once: 'turn', fx: [{ k: 'grab', v: 1 }] };
+function withCombos(fn) {
+  STUB.combosFor = (defs) => {
+    const out = [];
+    if (defs.length >= 3) out.push(BONUS);
+    if (defs.filter(d => (d.tags || []).includes('metal')).length >= 2) out.push(CLANG);
+    return out;
+  };
+  try { fn(); } finally { delete STUB.combosFor; }
+}
+// One grab: useGrab, play the ids in order, grabDone. Returns grabDone's events.
+function grabOf(F, ids, n) {
+  COMBAT.useGrab(F);
+  for (const id of ids) playId(F, id);
+  return COMBAT.grabDone(F, n == null ? ids.length : n);
+}
+
+h.test('new relic hooks fire with their arguments and a proc event leads their effects', () => {
+  log.length = 0;
+  let F = fight(['dummy'], { relics: ['hooky'], hp: 60, bin: ['vial', 'shield', 'potion', 'pickaxe', 'vase', 'extra', 'sword', 'sword', 'sword'] });
+  let ev = playId(F, 'vial');
+  h.ok(log.includes('status:poison:3:e'), 'onStatus(F, unit, s, v) on an applied status');
+  const pi = ev.findIndex(e => e.t === 'proc' && e.id === 'hooky'), di = ev.findIndex(e => e.t === 'dmg' && e.amt === 1);
+  h.ok(pi >= 0 && di > pi, 'the proc comes before the hook effect in the returned events');
+  const pe = ev[pi];
+  h.ok(pe.src === 'relic' && pe.name === 'Hooky' && pe.icon === 'H' && pe.text === 'HOOKED' && pe.who === 'player' && pe.idx === -1 && typeof pe.color === 'string', 'proc carries the contract fields (relic.proc as text)');
+  h.ok(F.events.indexOf(pe) === F.events.findIndex(e => e.t === 'proc'), 'and it sits in F.events too');
+  ev = playId(F, 'shield'); h.ok(log.includes('block:5') && procs(ev, 'hooky').length === 1, 'onBlock(F, amt)');
+  ev = playId(F, 'potion'); h.ok(log.includes('heal:5') && procs(ev, 'hooky').length === 1, 'onHeal(F, amt)');
+  ev = playId(F, 'pickaxe'); h.ok(log.includes('junk:2:2') && procs(ev, 'hooky').length === 1, 'onJunk(F, n, insts) when junk is added');
+  ev = playId(F, 'vase'); h.ok(log.includes('shatter:vase') && procs(ev, 'hooky').length === 2, 'onShatter(F, inst, def) for exhausting glass (its Block fired onBlock too)');
+  h.ok(procs(ev).some(e => e.src === 'item' && e.id === 'vase' && e.text === 'SHATTER'), 'and the item shows a SHATTER proc');
+  ev = playId(F, 'extra'); h.ok(log.includes('gold:5') && procs(ev, 'hooky').length === 1, 'onGold(F, amt)');
+  COMBAT.useGrab(F); playId(F, 'sword'); playId(F, 'sword'); playId(F, 'sword');
+  ev = COMBAT.grabDone(F, 3); h.ok(log.includes('jackpot:3') && procs(ev, 'hooky').length >= 1, 'onJackpot(F, n) on a 3-item grab');
+  log.length = 0;
+  withCombos(() => {
+    const G = fight(['dummy'], { relics: ['hooky'], bin: ['sword', 'shield', 'potion', 'sword'] });
+    const e2 = grabOf(G, ['sword', 'shield']);
+    h.ok(log.includes('combo:clang:2'), 'onCombo(F, combo, defs)');
+    h.ok(procs(e2, 'hooky').length >= 1, 'with its proc');
+  });
+  // a hook that emits its own proc gets no second one; a silent hook gets none
+  F = fight(['dummy'], { relics: ['selfproc', 'quiet'] });
+  ev = playId(F, 'shield');
+  h.eq(procs(ev, 'selfproc').length, 1, 'a hook with its own proc is not doubled');
+  h.eq(procs(ev, 'quiet').length, 0, 'a hook that does nothing visible emits no proc');
+  // the old hooks get procs too
+  F = fight(['dummy'], { relics: ['echo'] }); ev = playId(F, 'sword');
+  h.eq(procs(ev, 'echo').length, 1, 'existing relic hooks get an automatic proc');
+});
+
+h.test('relic rules: poisonKeep, blockKeep, shatter', () => {
+  let F = fight(['dummy'], { relics: ['r_fester'] });
+  E0(F).status.poison = 3; F.player.status.poison = 2;
+  let ev = COMBAT.endTurn(F);
+  h.eq(E0(F).status.poison, 3, 'enemy poison does not decay'); h.eq(E0(F).hp, 97, 'but it still ticks');
+  h.eq(F.player.status.poison, 1, 'player poison still decays');
+  h.ok(procs(ev).some(p => p.id === 'r_fester' && p.text === 'FESTER' && p.who === 'enemy' && p.idx === 0), 'FESTER proc on the enemy');
+  COMBAT.endTurn(F); h.eq(E0(F).hp, 94, 'three a turn, forever');
+  F = fight(['blocker'], { relics: ['r_walls'] });
+  F.player.block = 9; ev = COMBAT.endTurn(F);
+  h.eq(F.player.block, 9, 'player Block survives the turn start');
+  h.ok(procs(ev, 'r_walls').some(p => p.text === 'WALLS HOLD'), 'WALLS HOLD proc');
+  COMBAT.endTurn(F); h.eq(E0(F).block, 7, 'enemy Block still fades');
+  F = fight(['dummy'], { relics: ['r_shatter'] });
+  E0(F).status.freeze = 1;
+  const pv = COMBAT.previewDamage(F, 'twin', false);
+  ev = playId(F, 'twin');
+  h.eq(E0(F).hp, 92, 'hits on a Frozen enemy deal +50% (3 -> 4, twice)');
+  h.eq(pv, 8, 'previewDamage knows about the shatter');
+  h.eq(procs(ev, 'r_shatter').filter(p => p.text === 'SHATTER').length, 1, 'one SHATTER proc per play');
+  F = fight(['dummy'], { relics: ['r_shatter'] }); playId(F, 'sword'); h.eq(E0(F).hp, 94, 'no bonus on a thawed enemy');
+  F = fight(['dummy'], { relics: ['r_shatter'] }); E0(F).status.freeze = 1; COMBAT.damage(F, null, E0(F), 10); h.eq(E0(F).hp, 90, 'relic damage (no attacker) does not shatter');
+});
+
+h.test('relic rules: glassBreak, amp, echo', () => {
+  let F = fight(['dummy'], { relics: ['r_glass', 'hooky'], bin: ['glassy', 'vase', 'sword', 'sword'] });
+  log.length = 0;
+  let ev = playId(F, 'glassy');
+  h.eq(E0(F).hp, 100 - 6 - 1, 'glass numbers double (3 -> 6), plus the onShatter hook');
+  h.ok(F.exhausted.some(i => i.id === 'glassy'), 'and it shatters (exhausts) though it has no exhaust flag');
+  h.ok(log.includes('shatter:glassy'), 'onShatter fired');
+  playId(F, 'vase'); h.eq(F.player.block, 4, 'glass Block doubles too');
+  F = fight(['dummy'], { relics: ['r_amp'], bin: ['pebble', 'sword', 'sword'] });
+  h.eq(COMBAT.previewDamage(F, 'pebble'), 4, 'preview: small +2 damage');
+  playId(F, 'pebble'); h.eq(E0(F).hp, 96, 'amp: small damage 2 -> 4'); h.eq(E0(F).status.poison, 2, 'amp: statuses get +ceil(n/2)');
+  F = fight(['dummy'], { relics: ['r_amp', 'r_amp2'], bin: ['pebble', 'sword'] });
+  playId(F, 'pebble'); h.eq(E0(F).hp, 95, 'amp rules from two relics add up (+3)');
+  F = fight(['dummy'], { relics: ['r_amp'], bin: ['sword', 'sword'] }); playId(F, 'sword'); h.eq(E0(F).hp, 94, 'amp leaves other tags alone');
+  F = fight(['dummy'], { relics: ['r_echo'], bin: ['orb', 'orb', 'orb', 'orb', 'sword'], claw: { grabs: 9 } });
+  playId(F, 'orb'); playId(F, 'orb'); h.eq(E0(F).hp, 92, 'no echo on the first two magic items');
+  ev = playId(F, 'orb'); h.eq(E0(F).hp, 84, 'the third resolves twice');
+  h.ok(procs(ev, 'r_echo').some(p => p.text === 'ECHO'), 'ECHO proc');
+  playId(F, 'sword'); playId(F, 'orb'); h.eq(E0(F).hp, 74, 'non-magic items do not count toward the echo');
+  const r = COMBAT.rulesOf(['r_amp', 'r_amp2', 'r_glass', 'r_fester', 'nope']);
+  h.eq(JSON.stringify(r.rules), JSON.stringify({ amp: { small: 3 }, glassBreak: 1, poisonKeep: 1 }), 'rulesOf merges rules');
+  h.eq(r.src.amp, 'r_amp', 'rulesOf credits the first relic');
+});
+
+h.test('grab buffer, streak and combos', () => {
+  withCombos(() => {
+    let F = fight(['dummy'], { bin: ['sword', 'shield', 'potion', 'sword', 'rock'], claw: { grabs: 6 } });
+    COMBAT.useGrab(F); playId(F, 'sword'); playId(F, 'shield');
+    h.eq(F.grab.defs.map(d => d.id).join(), 'sword,shield', 'play fills the grab buffer');
+    let ev = COMBAT.grabDone(F, 2);
+    const cb = find(ev, 'combo');
+    h.ok(cb.length === 1 && cb[0].id === 'clang' && cb[0].name === 'Clang' && cb[0].text === 'Two metal.' && cb[0].n === 2 && cb[0].tier === 1 && cb[0].color === '#aab3bd', 'combo event with the contract fields');
+    const ci = ev.indexOf(cb[0]), di = ev.findIndex(e => e.t === 'dmg');
+    h.ok(di > ci, 'the combo event comes before its effects');
+    h.eq(E0(F).hp, 100 - 6 - 3, 'the combo resolved (3 damage)');
+    h.eq(F.grab.defs.length, 0, 'grabDone clears the buffer');
+    h.eq(F.stats.combos, 1, 'stats count combos'); h.eq(F.combos.clang, 1, 'per combo');
+    // the buffer is per grab
+    COMBAT.useGrab(F); playId(F, 'sword'); COMBAT.grabDone(F, 1);
+    COMBAT.useGrab(F); ev = COMBAT.grabDone(F, 0);
+    h.eq(find(ev, 'combo').length, 0, 'an empty grab after a single one fires nothing (no carry-over)');
+    // str applies to combo hits, like an item
+    F = fight(['dummy'], { bin: ['sword', 'shield', 'sword'] }); F.player.status.str = 2;
+    grabOf(F, ['sword', 'shield']); h.eq(E0(F).hp, 100 - 8 - 5, 'Strength adds to combo hits');
+    // once a turn
+    F = fight(['dummy'], { bin: ['potion', 'potion', 'potion', 'potion', 'potion', 'potion', 'rock'], claw: { grabs: 5 }, hp: 40 });
+    ev = grabOf(F, ['potion', 'potion', 'potion']);
+    h.ok(find(ev, 'combo').some(c => c.id === 'bonus') && F.player.grabs === 5, 'bonus +1 grab');
+    ev = grabOf(F, ['potion', 'potion', 'potion']);
+    h.ok(!find(ev, 'combo').some(c => c.id === 'bonus') && F.player.grabs === 4, 'a once-a-turn combo stays quiet the second time');
+    COMBAT.endTurn(F);
+    // encore
+    F = fight(['dummy'], { relics: ['r_encore'], bin: ['sword', 'shield', 'sword'] });
+    ev = grabOf(F, ['sword', 'shield']);
+    h.eq(E0(F).hp, 100 - 6 - 3 - 3, 'Encore: the combo resolves twice');
+    h.ok(procs(ev, 'r_encore').some(p => p.text === 'ENCORE'), 'ENCORE proc');
+    // no combos once the fight is over
+    F = fight(['rat'], { bin: ['sword', 'shield', 'sword'] });
+    COMBAT.useGrab(F); playId(F, 'sword'); playId(F, 'sword');
+    h.eq(F.phase, 'over', 'the grab killed the rat'); h.eq(COMBAT.grabDone(F, 2).length, 0, 'grabDone after the win does nothing');
+    // a thawed item does not count
+    F = fight(['dummy'], { bin: ['sword', 'shield', 'sword'] });
+    F.bin[0].frozen = true;
+    COMBAT.useGrab(F); COMBAT.play(F, F.bin[0]); playId(F, 'shield');
+    h.eq(F.grab.defs.length, 1, 'an item that only thawed is not part of the grab');
+  });
+  // streak
+  const F = fight(['dummy'], { claw: { grabs: 9 }, bin: ['sword', 'sword', 'sword', 'sword', 'token', 'token'] });
+  for (let i = 0; i < 3; i++) { COMBAT.useGrab(F); COMBAT.grabDone(F, 1); }
+  h.eq(F.streak, 3, 'three good grabs make a streak of 3'); h.eq(F.player.status.streak, 3, 'shown as the streak status');
+  h.eq(find(F.events, 'status').filter(e => e.s === 'streak').length, 0, 'the streak status emits no status events');
+  const hp0 = E0(F).hp; playId(F, 'token'); h.eq(hp0 - E0(F).hp, 1 + 2 * 3, 'dmgPer streak');
+  COMBAT.useGrab(F); COMBAT.grabDone(F, 0);
+  h.eq(F.streak, 0, 'an empty grab resets it'); h.ok(!F.player.status.streak, 'status removed');
+  COMBAT.endTurn(F); COMBAT.useGrab(F); COMBAT.grabDone(F, 2); h.eq(F.streak, 1, 'streaks count across turns');
+  playId(F, 'token'); h.ok(!find(F.events, 'text').some(t => t.str === 'FIZZLE'), 'a per-count with nothing to count stays quiet after another effect');
+});
+
+h.test('new fx: blockPer, pay, again, copy tag, dmgPer poison/burn/small/gold, gold and max hp helpers', () => {
+  let F = fight(['dummy'], { bin: ['plate', 'sword', 'sword'] });
+  COMBAT.addJunk(F, 'rock', 3); playId(F, 'plate'); h.eq(F.player.block, 3 + 6, 'blockPer: 3 + 2 per junk');
+  F = fight(['dummy'], { bin: ['bribe', 'sword'] }); F.gold0 = 25;
+  h.eq(COMBAT.gold(F), 25, 'gold(F) is the run gold at fight start');
+  h.eq(COMBAT.previewDamage(F, 'bribe'), 9, 'preview when you can pay');
+  let ev = playId(F, 'bribe'); h.eq(E0(F).hp, 91, 'paid and hit'); h.eq(F.gain.gold, -10, 'the cost comes off the fight gold'); h.eq(COMBAT.gold(F), 15, 'gold left');
+  h.eq(F.stats.spent, 10, 'spent counted');
+  F.gold0 = 5; F.gain.gold = 0; F.bin.push({ uid: 'b2', id: 'bribe', plus: false });
+  h.eq(COMBAT.previewDamage(F, 'bribe'), 0, 'preview when broke');
+  ev = playId(F, 'bribe'); h.eq(E0(F).hp, 91, 'broke: the rest fizzles'); h.ok(find(ev, 'text').some(t => t.str === 'BROKE'), 'BROKE text'); h.eq(F.gain.gold, 0, 'nothing paid');
+  F = fight(['dummy'], { bin: ['sword', 'encore', 'encore', 'sword'] });
+  ev = playId(F, 'encore'); h.ok(find(ev, 'text').some(t => t.str === 'NOTHING'), 'again with nothing played before: NOTHING');
+  playId(F, 'sword'); ev = playId(F, 'encore');
+  h.eq(E0(F).hp, 88, 'again replays the sword'); h.ok(procs(ev).some(p => p.src === 'item' && p.id === 'encore' && /AGAIN/.test(p.text)), 'AGAIN proc');
+  h.eq(F.lastPlay.def.id, 'sword', 'an again item is never the last play');
+  F = fight(['dummy'], { bin: ['tome', 'orb', 'sword', 'sword'] }); ev = playId(F, 'tome');
+  h.ok(find(ev, 'binCopy').some(c => c.inst.id === 'orb'), 'copy {tag} copies an item of that tag');
+  F = fight(['dummy'], { bin: ['tome', 'sword'] }); ev = playId(F, 'tome'); h.ok(find(ev, 'text').some(t => t.str === 'NOTHING'), 'no item of the tag: NOTHING');
+  F = fight(['dummy'], { bin: ['rot', 'sword'] }); E0(F).status.poison = 3;
+  h.eq(COMBAT.previewDamage(F, 'rot'), 5, 'preview counts the poison the item applies first');
+  playId(F, 'rot'); h.eq(E0(F).hp, 95, 'dmgPer poison reads the target after the item poisons it');
+  F = fight(['dummy', 'hitter'], { bin: ['scorch', 'sword'] }); F.enemies[1].status.burn = 4; playId(F, 'scorch', 1); h.eq(F.enemies[1].hp, 52, 'dmgPer burn: 2 per Burn on the target');
+  F = fight(['dummy'], { bin: ['scorch', 'sword'] }); ev = playId(F, 'scorch'); h.ok(find(ev, 'text').some(t => t.str === 'FIZZLE'), 'nothing to count and nothing else done: FIZZLE');
+  F = fight(['dummy', 'hitter'], { bin: ['jar', 'pebble', 'pebble', 'pebble', 'sword'] }); playId(F, 'jar');
+  h.ok(E0(F).hp === 97 && F.enemies[1].hp === 57, 'dmgPer small counts small items in the cabinet, all targets');
+  F = fight(['dummy'], { bin: ['idol', 'sword'] }); F.gold0 = 57; playId(F, 'idol'); h.eq(E0(F).hp, 95, 'dmgPer gold: 1 per 10 gold');
+  F = fight(['dummy'], { hp: 50 }); h.eq(COMBAT.gainGold(F, 7), 7, 'gainGold'); h.eq(F.gain.gold, 7, 'lands on F.gain.gold');
+  h.eq(COMBAT.gainMaxHp(F, 2), 2, 'gainMaxHp'); h.ok(F.player.maxHp === 72 && F.player.hp === 52 && F.gain.maxhp === 2, 'max hp and a heal, recorded for the run');
+  const t0 = COMBAT.addTemp(F, 'pebble', 2);
+  h.ok(t0.length === 2 && t0.every(i => i.temp && !i.junk && F.bin.includes(i)), 'addTemp adds temporary non-junk copies');
+  h.ok(find(F.events, 'binCopy').filter(e => t0.includes(e.inst)).length === 2, 'with binCopy events so the game spawns them');
+});
+
 // ---------- part 2: real data ----------
 const hasData = fs.existsSync(path.join(DIR, 'js', 'data.js'));
 if (!hasData) console.log('clawspire combat: js/data.js not found, skipping data-driven checks');
@@ -480,7 +710,7 @@ else {
         } catch (e) { h.ok(false, `item ${id}${plus ? '+' : ''} threw ${e.stack}`); }
       }
     }
-    const known = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'shake', 'junk', 'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll'];
+    const known = ['dmg', 'block', 'heal', 'status', 'grab', 'gold', 'ink', 'maxhp', 'shake', 'junk', 'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll', 'blockPer', 'pay', 'again'];
     for (const k of kinds) h.ok(known.includes(k), `item fx kind ${k} is one the engine implements`);
   });
 
@@ -564,6 +794,231 @@ else {
     }
     h.ok(!fail, 'fuzz invariants hold: ' + (fail || 'ok'));
     h.ok(turns >= 300, `ran ${turns} turns over ${fights} fights (${over} finished)`);
+  });
+
+  // ---------- mini builds on the real data (DESIGN.md "Builds and synergies") ----------
+  // Enemies get 300 hp so nothing dies by accident; the player 200.
+  const mk = (bin, relics, enemies, o) => {
+    o = o || {};
+    const run = Object.assign(mkRun(bin, relics, 1), { hp: o.hp || 200, maxHp: o.maxHp || 200, gold: o.gold || 0 });
+    if (o.grabs) run.claw = { grabs: o.grabs };
+    const F = C.newFight(run, enemies || ['rat'], U.rng(o.seed || 3));
+    for (const e of F.enemies) { e.hp = 300; e.maxHp = 300; }
+    return F;
+  };
+  const pid = (F, id, t) => { const i = F.bin.find(x => x.id === id); if (!i) throw new Error('not in bin: ' + id); return C.play(F, i, t); };
+  const P = (evs, id) => (evs || []).filter(e => e.t === 'proc' && e.id === id);
+  const all = (F) => F.events;
+  const newRelicProcs = new Set();
+  const saw = (F) => { for (const e of F.events) if (e.t === 'proc' && e.src === 'relic') newRelicProcs.add(e.id); };
+
+  h.test('build: poison (Festering Jar + Contagion)', () => {
+    const F = mk(['stink_potion', 'rusty_sword', 'rusty_sword'], ['festering_jar', 'contagion'], ['rat', 'rat']);
+    pid(F, 'stink_potion', 0);
+    const p0 = F.enemies[0].status.poison;
+    C.endTurn(F); C.endTurn(F);
+    h.eq(F.enemies[0].status.poison, p0, `poison stays at ${p0} turn after turn`);
+    h.eq(F.enemies[0].hp, 300 - 2 * p0, 'and ticks every turn');
+    h.ok(P(all(F), 'festering_jar').some(e => e.text === 'FESTER'), 'FESTER proc');
+    C.damage(F, F.player, F.enemies[0], 999, { pierce: true });
+    h.eq(F.enemies[1].status.poison, p0, 'the dying rat spreads its poison');
+    h.ok(P(all(F), 'contagion').some(e => e.text === 'SPREAD ' + p0), 'SPREAD proc');
+    saw(F);
+  });
+
+  h.test('build: pyro (Powder Keg + Bellows)', () => {
+    const F = mk(['torch', 'rusty_sword'], ['powder_keg', 'bellows'], ['rat', 'rat']);
+    C.status(F, F.enemies[0], 'burn', 10);
+    h.ok(F.enemies[0].hp === 290 && F.enemies[1].hp === 290, '10 Burn explodes for 10 on ALL enemies');
+    h.eq(F.enemies[0].status.burn, 5, 'then its Burn halves');
+    h.ok(P(all(F), 'powder_keg').some(e => e.text === 'KABOOM 10'), 'KABOOM proc');
+    C.endTurn(F);
+    h.eq(F.enemies[0].hp, 284, 'Bellows stokes it to 6 before it ticks');
+    h.eq(F.enemies[0].status.burn, 5, 'so the Burn holds steady');
+    h.ok(P(all(F), 'bellows').length >= 1, 'STOKE proc');
+    saw(F);
+  });
+
+  h.test('build: frost (Permafrost Core + Cold Snap)', () => {
+    const F = mk(['snowball', 'snowball', 'snowball', 'rusty_sword'], ['permafrost_core', 'cold_snap'], ['rat', 'rat'], { grabs: 6 });
+    pid(F, 'snowball', 0); pid(F, 'snowball', 0); pid(F, 'snowball', 0);
+    h.eq(F.enemies[0].status.freeze, 1, 'three Chill freeze it');
+    h.eq(F.enemies[1].hp, 294, 'Cold Snap: the freeze hits ALL enemies for 6');
+    const before = F.enemies[0].hp;
+    const ev = pid(F, 'rusty_sword', 0);
+    h.eq(before - F.enemies[0].hp, 10, 'the sword SHATTERS a frozen rat (7 -> 10)');
+    h.ok(P(ev, 'permafrost_core').some(e => e.text === 'SHATTER' && e.who === 'enemy'), 'SHATTER proc on the enemy');
+    saw(F);
+  });
+
+  h.test('build: fortress (Castle Walls + Battering Ram)', () => {
+    const F = mk(['tower_shield', 'rusty_sword'], ['castle_walls', 'battering_ram']);
+    pid(F, 'tower_shield');
+    const b0 = F.player.block, blocked0 = F.stats.blocked;
+    C.endTurn(F);
+    h.eq(F.enemies[0].hp, 300 - Math.floor(b0 / 2), 'the Ram hits for half the Block');
+    h.eq(F.player.block, b0 - (F.stats.blocked - blocked0), 'Block survives the turn start (minus what it soaked)');
+    h.ok(P(all(F), 'battering_ram').length >= 1, 'RAM proc');
+    saw(F);
+  });
+
+  h.test('build: scrap (Dumpster Lid + Junkyard King + Recycling Bin + Junk Cannon)', () => {
+    const F = mk(['junk_cannon', 'femur', 'femur'], ['dumpster_lid', 'junkyard_king', 'recycling_bin'], ['rat', 'rat']);
+    C.addJunk(F, 'rock', 2);
+    h.eq(F.player.block, 6, 'junk thrown in: 3 Block each');
+    const rock = F.bin.find(i => i.junk);
+    C.play(F, rock, 0);
+    h.eq(F.player.status.str, 1, 'grabbing out junk: +1 Strength');
+    h.eq(F.enemies[0].hp, 297, 'and the Recycling Bin hits for 3');
+    pid(F, 'junk_cannon', 0);
+    h.ok(F.enemies[0].hp === 297 - 5 && F.enemies[1].hp === 295, 'Junk Cannon: 4 per junk (+1 Str) to ALL');
+    h.eq(F.bin.filter(i => i.junk).length, 0, 'then blasts the junk out');
+    h.ok(P(all(F), 'junkyard_king').length && P(all(F), 'dumpster_lid').length, 'procs');
+    // Scrap Shot: junk and a weapon in one grab
+    C.addJunk(F, 'rock', 1);
+    C.useGrab(F); C.play(F, F.bin.find(i => i.junk), 0); pid(F, 'femur', 0);
+    const ev = C.grabDone(F, 2);
+    h.ok(ev.some(e => e.t === 'combo' && e.id === 'scrap_shot'), 'Scrap Shot combo');
+    saw(F);
+  });
+
+  h.test('build: glass (Glass Cannon + Sharp Shards + Bottle Deposit)', () => {
+    const F = mk(['toxic_vial', 'rusty_sword'], ['glass_cannon', 'sharp_shards', 'bottle_deposit'], ['rat', 'rat']);
+    pid(F, 'toxic_vial', 0);
+    h.eq(F.enemies[0].status.poison, 4, 'glass doubles: 2 -> 4 Poison');
+    h.eq(F.enemies[0].hp, 300 - 2 - 4, 'glass doubles the hit (1 -> 2), then the shards cut ALL for 4');
+    h.eq(F.enemies[1].hp, 296, 'the shards hit everyone');
+    h.ok(F.exhausted.some(i => i.id === 'toxic_vial'), 'the vial shattered');
+    h.ok(F.player.block === 3 && F.gain.gold === 2, 'Bottle Deposit: 3 Block and 2 gold');
+    saw(F);
+  });
+
+  h.test('build: grab combos with Encore Machine, Tuning Fork and Horseshoe', () => {
+    const F = mk(['rusty_sword', 'longsword', 'crisp_apple'], ['encore_machine', 'tuning_fork', 'horseshoe']);
+    C.useGrab(F); pid(F, 'rusty_sword'); pid(F, 'longsword');
+    const ev = C.grabDone(F, 2);
+    const cb = ev.filter(e => e.t === 'combo');
+    h.ok(cb.length === 1 && cb[0].id === 'crossed_blades' && cb[0].tier === 1 && cb[0].n === 2, 'Crossed Blades');
+    h.eq(F.enemies[0].hp, 300 - 7 - 11 - 4 - 4 - 4, 'blades twice (Encore, 4 each) and the Fork clang');
+    h.eq(F.player.block, 4, 'Horseshoe: 2 metal in one grab, 4 Block');
+    for (const id of ['encore_machine', 'tuning_fork', 'horseshoe']) h.ok(P(ev, id).length >= 1, `${id} procs in the grabDone events`);
+    saw(F);
+  });
+
+  h.test('build: swarm (Pocket Dimension + Marble Pouch + Beehive)', () => {
+    const F = mk(['glass_bead', 'rusty_sword'], ['pocket_dimension', 'marble_pouch', 'beehive'], ['rat'], { grabs: 3 });
+    h.eq(F.bin.filter(i => i.id === 'prize_marble' && i.temp).length, 3, 'three marbles in the bin for this fight');
+    pid(F, 'prize_marble');
+    h.eq(F.enemies[0].hp, 300 - 4 - 2, 'a marble hits for 4 (2 + 2) and the bees for 2');
+    C.useGrab(F); pid(F, 'prize_marble'); pid(F, 'prize_marble'); pid(F, 'glass_bead');
+    const g0 = F.player.grabs;
+    const ev = C.grabDone(F, 3);
+    h.ok(ev.some(e => e.t === 'combo' && e.id === 'handful'), 'Handful combo');
+    h.eq(F.player.grabs, g0 + 1, '+1 grab');
+    saw(F);
+  });
+
+  h.test('build: greed (Piggy Bank + Money Bags + Bribe + Pay to Win)', () => {
+    const F = mk(['lucky_coin', 'bribe', 'pay_to_win', 'pay_to_win'], ['piggy_bank', 'money_bags'], ['rat'], { gold: 60, grabs: 9 });
+    h.eq(F.player.block, 6, 'Piggy Bank: 1 Block per 10 gold');
+    pid(F, 'lucky_coin');
+    h.eq(F.enemies[0].hp, 300 - 3 - 2, 'coin hits for 3, Money Bags throws the 2 gold at ALL');
+    pid(F, 'bribe');
+    h.eq(F.enemies[0].status.stun, 1, 'Bribe stuns'); h.eq(C.gold(F), 50, 'for 12 gold');
+    pid(F, 'pay_to_win'); h.eq(F.enemies[0].hp, 295 - 30, 'Pay to Win: 20 gold for 30 damage');
+    pid(F, 'pay_to_win'); h.eq(F.enemies[0].hp, 265 - 30, 'and again');
+    const ev = pid(F, 'pay_to_win'.replace('pay_to_win', 'lucky_coin'));
+    h.ok(P(ev, 'money_bags').some(e => /CHA-CHING/.test(e.text)), 'CHA-CHING proc');
+    saw(F);
+    const G = mk(['pay_to_win', 'femur'], [], ['rat'], { gold: 5 });
+    const e2 = pid(G, 'pay_to_win');
+    h.ok(G.enemies[0].hp === 300 && e2.some(e => e.t === 'text' && e.str === 'BROKE'), 'broke: no hit');
+  });
+
+  h.test('build: echo (Echo Chamber + Wizard Hat + Crystal Focus + Deja Vu)', () => {
+    const F = mk(['rulebook', 'rulebook', 'rulebook', 'femur', 'deja_vu'], ['echo_chamber', 'wizard_hat', 'crystal_focus'], ['rat'], { grabs: 9 });
+    h.ok(F.bin.length === 6 && F.bin.some(i => i.temp && DATA.ITEMS[i.id].tags.includes('magic')), 'Crystal Focus copied a magic item');
+    const books = F.bin.filter(i => i.id === 'rulebook' && !i.temp).slice(0, 3);
+    for (const b of books) C.play(F, b);
+    h.eq(F.player.block, 6 + 6 + 12, 'the third magic item resolves twice');
+    h.eq(F.enemies[0].hp, 291, 'Wizard Hat zaps 3 per magic item');
+    h.ok(P(all(F), 'echo_chamber').some(e => e.text === 'ECHO'), 'ECHO proc');
+    pid(F, 'femur');
+    const ev = pid(F, 'deja_vu');
+    h.eq(F.enemies[0].hp, 291 - 7 - 7 - 3, 'Deja Vu plays the femur again');
+    h.ok(ev.some(e => e.t === 'proc' && e.src === 'item' && e.id === 'deja_vu'), 'AGAIN proc');
+    saw(F);
+  });
+
+  h.test('build: feast (Feast Table + Bat Wing)', () => {
+    const F = mk(['crisp_apple', 'crisp_apple', 'crisp_apple', 'crisp_apple', 'femur'], ['feast_table', 'bat_wing'], ['rat'], { hp: 100, grabs: 9 });
+    for (let i = 0; i < 4; i++) pid(F, 'crisp_apple');
+    h.eq(F.player.maxHp, 203, 'three food items grow Max HP by 3 (capped per fight)');
+    h.eq(F.gain.maxhp, 3, 'recorded for the run');
+    h.eq(F.enemies[0].hp, 300 - 4 * 4 - 3, 'every heal bites back (4 per apple, 1 per Max HP heal)');
+    saw(F);
+  });
+
+  h.test('build: brawler (Gym Membership + Sweatband)', () => {
+    const F = mk(['whetstone', 'twin_daggers'], ['gym_membership', 'sweatband']);
+    pid(F, 'whetstone');
+    h.eq(F.player.status.str, 3, 'Whetstone 2 Strength +1 from the gym');
+    h.eq(F.player.block, 4, 'Sweatband: 4 Block');
+    pid(F, 'twin_daggers'); h.eq(F.enemies[0].hp, 300 - 3 * 6, 'every dagger hit gets the Strength');
+    saw(F);
+  });
+
+  h.test('build: jackpot (Winning Streak + Prize Counter)', () => {
+    const F = mk(Array.from({ length: 12 }, () => 'femur'), ['winning_streak', 'prize_counter'], ['rat']);
+    for (let i = 0; i < 3; i++) { C.useGrab(F); pid(F, 'femur'); C.grabDone(F, 1); }
+    h.eq(F.streak, 3, 'a streak of 3'); h.eq(F.player.grabs, 1, 'Winning Streak: +1 grab');
+    C.useGrab(F); pid(F, 'femur'); pid(F, 'femur'); pid(F, 'femur');
+    const ev = C.grabDone(F, 3);
+    h.ok(F.player.block >= 6, 'Prize Counter: 6 Block on a 3-item grab');
+    const ids = ev.filter(e => e.t === 'combo').map(e => e.id);
+    h.ok(ids.includes('armory') && ids.includes('three_of_a_kind') && ids.length === 3, `three femurs: ${ids.join(', ')}`);
+    h.eq(F.player.grabs, 0, 'no second streak grab in the same turn');
+    saw(F);
+  });
+
+  h.test('build: magnet (Dynamo)', () => {
+    const F = mk(['rusty_sword', 'rusty_sword', 'rusty_sword', 'dented_shield', 'dented_shield', 'crisp_apple'], ['dynamo']);
+    C.endTurn(F);
+    h.eq(F.enemies[0].hp, 295, 'Dynamo: 1 per metal item in the cabinet at turn end');
+    h.ok(P(all(F), 'dynamo').some(e => e.text === 'DYNAMO 5'), 'DYNAMO proc');
+    saw(F);
+  });
+
+  h.test('build relics proc in their builds', () => {
+    const want = ['festering_jar', 'contagion', 'powder_keg', 'bellows', 'permafrost_core', 'cold_snap', 'castle_walls', 'battering_ram',
+      'dumpster_lid', 'junkyard_king', 'recycling_bin', 'glass_cannon', 'sharp_shards', 'bottle_deposit', 'encore_machine', 'tuning_fork',
+      'horseshoe', 'marble_pouch', 'beehive', 'pocket_dimension', 'piggy_bank', 'money_bags', 'echo_chamber', 'wizard_hat', 'crystal_focus', 'feast_table',
+      'bat_wing', 'gym_membership', 'sweatband', 'winning_streak', 'prize_counter', 'dynamo'];
+    const missing = want.filter(id => DATA.RELICS[id] && !newRelicProcs.has(id));
+    h.eq(missing.join(','), '', 'every build relic emitted a proc');
+    h.ok(want.every(id => DATA.RELICS[id]), 'all of them exist');
+  });
+
+  h.test('old saves: a run of old ids fights clean', () => {
+    const bin = ['rusty_sword', 'dented_shield', 'toxic_vial', 'shiv', 'lucky_coin', 'crisp_apple', 'prize_marble', 'glass_bead', 'plague_orb', 'family_anvil'];
+    const relics = ['squire_gauntlet', 'jackpot_bell', 'venom_gland', 'token_stack', 'recycling_bin', 'second_wind'];
+    const F = C.newFight(Object.assign(mkRun(bin, relics, 2), { hp: 120, maxHp: 120 }), encOf(2)[0], U.rng(8));
+    const rng = U.rng(4);
+    for (let t = 0; t < 6 && F.phase !== 'over'; t++) randomTurn(F, rng);
+    h.ok(!invariants(F, 'old save'), `old ids fight clean ${invariants(F, 'old save') || ''}`);
+    h.ok(F.rules && Object.keys(F.rules).length === 0, 'old relics bend no rules');
+  });
+
+  h.test('data: every combo resolves on a real fight', () => {
+    for (const id of Object.keys(DATA.COMBOS || {})) {
+      const c = DATA.COMBOS[id];
+      const F = C.newFight(mkRun(c.example.concat(['rock', 'femur']), [], 1), firstEnc, U.rng(U.hashStr(id)));
+      C.useGrab(F);
+      for (const x of c.example) { const i = F.bin.find(b => b.id === x && F.grab.insts.indexOf(b) < 0); if (i && F.phase === 'player') C.play(F, i); }
+      const ev = C.grabDone(F, c.example.length);
+      h.ok(F.phase === 'over' || ev.some(e => e.t === 'combo' && e.id === id), `combo ${id} fires in a fight`);
+      h.ok(!invariants(F, id), `combo ${id} resolves cleanly ${invariants(F, id) || ''}`);
+    }
   });
 }
 

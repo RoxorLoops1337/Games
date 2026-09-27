@@ -82,7 +82,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .stat.gold .v{color:var(--gold)}
 .stat.ink .v{color:var(--cyan)}
 .stat.act .v{font-size:13px;color:var(--pink2)}
-#relics{display:flex;gap:4px;flex:1;min-width:0;height:54px;align-items:center;overflow-x:auto;overflow-y:hidden;
+#relics{display:flex;gap:4px;flex:1;min-width:0;height:54px;align-items:center;overflow-x:auto;overflow-y:hidden;padding:0 6px;
   scrollbar-width:none;pointer-events:auto}
 #relics::-webkit-scrollbar{display:none}
 .relic{width:44px;height:44px;flex:0 0 auto;border-radius:10px;border:2px solid var(--line2);background:#150c26;
@@ -229,6 +229,162 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .center{text-align:center}
 .spacer{flex:1}
 
+/* ---------- juice ---------- */
+.btn{transition:transform .08s cubic-bezier(.3,1.6,.5,1),filter .12s,box-shadow .12s}
+.btn:active{transform:translateY(3px) scale(.96,.92)}
+@media (hover:hover){
+  .btn:not(:disabled):hover{filter:brightness(1.18);box-shadow:0 4px 0 #120a22,0 0 20px rgba(255,46,136,.45)}
+  .card:not(.locked):not(.sold):hover{transform:perspective(500px) rotateX(4deg) rotateY(-5deg) translateY(-4px);
+    box-shadow:0 10px 20px rgba(0,0,0,.45),0 0 18px rgba(255,255,255,.12)}
+  .relic:hover{filter:brightness(1.25)}
+}
+.card{transition:transform .14s ease,box-shadow .14s}
+.card:active{transform:scale(.96)}
+/* rarity: uncommon cyan rim, rare gold pulse, legendary rainbow sheen */
+.card.rr-u{border-color:#1f8f88}
+.card.rr-r{border-color:var(--gold);animation:rarePulse 1.8s ease-in-out infinite}
+.card.rr-l{border-color:var(--pink);overflow:hidden;animation:rarePulse 1.4s ease-in-out infinite}
+.card.rr-l::after{content:'';position:absolute;inset:-40%;pointer-events:none;mix-blend-mode:screen;
+  background:linear-gradient(115deg,transparent 40%,rgba(255,46,136,.35) 45%,rgba(255,201,77,.35) 50%,rgba(46,230,214,.35) 55%,transparent 60%);
+  animation:sheen 2.4s linear infinite}
+@keyframes rarePulse{0%,100%{box-shadow:0 4px 0 #120a22,0 0 6px rgba(255,201,77,.25)}50%{box-shadow:0 4px 0 #120a22,0 0 22px rgba(255,201,77,.6)}}
+.card.rr-l{--glow:rgba(255,46,136,.6)}
+@keyframes sheen{0%{transform:translateX(-60%)}100%{transform:translateX(60%)}}
+/* cards deal in with a flip (the delay is set per card) */
+.card.deal{animation:dealIn .5s cubic-bezier(.2,1.3,.4,1) both}
+.card.rr-r.deal{animation:dealIn .5s cubic-bezier(.2,1.3,.4,1) both,rarePulse 1.8s ease-in-out .6s infinite}
+.card.rr-l.deal{animation:dealIn .5s cubic-bezier(.2,1.3,.4,1) both,rarePulse 1.4s ease-in-out .6s infinite}
+@keyframes dealIn{0%{opacity:0;transform:perspective(600px) translateY(-60px) rotateY(180deg) scale(.6)}
+  60%{opacity:1}100%{opacity:1;transform:perspective(600px) translateY(0) rotateY(0) scale(1)}}
+.card.nope{animation:nope .3s}
+@keyframes nope{0%,100%{transform:none}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+.card .stamp{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) rotate(-14deg);padding:2px 10px;
+  border:3px solid var(--blood);border-radius:8px;color:var(--blood);font-size:22px;font-weight:900;letter-spacing:.12em;
+  background:rgba(18,9,31,.6);pointer-events:none;opacity:.9}
+.card .stamp.slam{animation:slam .35s cubic-bezier(.3,1.5,.5,1) both}
+@keyframes slam{0%{transform:translate(-50%,-50%) rotate(-30deg) scale(3);opacity:0}100%{transform:translate(-50%,-50%) rotate(-14deg) scale(1);opacity:.9}}
+/* keyword chips (DATA.keywords): the build's archetypes on every card */
+.kws{display:flex;flex-wrap:wrap;gap:3px;justify-content:center}
+.kw{font-size:12px;font-weight:900;line-height:1;padding:3px 6px;border-radius:7px;border:1.5px solid var(--line2);
+  color:var(--dim);background:rgba(0,0,0,.3);letter-spacing:.02em;white-space:nowrap}
+.kws.sm{justify-content:flex-start}
+.kws.sm .kw{font-size:12px;padding:1px 5px}
+/* relic reveal: rays spin behind the icon as it rises */
+.relicReveal{overflow:hidden;padding-top:18px;animation:revealIn .6s cubic-bezier(.2,1.4,.4,1) both}
+.relicReveal .rays{position:absolute;left:50%;top:60px;width:340px;height:340px;margin:-170px 0 0 -170px;pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,rgba(255,201,77,.28) 0deg 10deg,transparent 10deg 24deg);
+  -webkit-mask:radial-gradient(circle,#000 20%,transparent 68%);mask:radial-gradient(circle,#000 20%,transparent 68%);
+  animation:spin 6s linear infinite}
+.relicReveal canvas.relicIcon{position:relative;width:110px;height:110px;animation:floaty 2.4s ease-in-out infinite}
+.col>.tag{align-self:flex-start}
+@keyframes revealIn{0%{opacity:0;transform:scale(.4) translateY(40px)}100%{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.row.pops .tag{animation:tagPop .45s cubic-bezier(.2,1.6,.4,1) both}
+.row.pops .tag:nth-child(2){animation-delay:.08s}.row.pops .tag:nth-child(3){animation-delay:.16s}
+@keyframes tagPop{0%{transform:scale(0)}100%{transform:scale(1)}}
+/* HUD counters: a bump on a gain, a dip on a spend, floats flying in */
+.stat.bump{animation:bump .35s cubic-bezier(.2,1.8,.4,1)}
+.stat.dip{animation:dip .3s ease}
+.tag.dip{animation:dip .3s ease}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.18);filter:brightness(1.6)}100%{transform:scale(1)}}
+@keyframes dip{0%{transform:none}40%{transform:scale(.9) translateY(2px);filter:brightness(.8)}100%{transform:none}}
+.dfloat{position:absolute;z-index:46;transform:translate(-50%,-50%);font-size:17px;font-weight:900;pointer-events:none;
+  text-shadow:0 2px 0 #12091f,0 0 10px currentColor;animation:dfloat 1.1s ease-out forwards}
+.dfloat.gold{color:var(--gold)} .dfloat.cyan{color:var(--cyan2)}
+@keyframes dfloat{0%{opacity:0;transform:translate(-50%,-10%) scale(.5)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}100%{opacity:0;transform:translate(-50%,-160%) scale(1)}}
+.dfly{position:absolute;z-index:47;pointer-events:none;transform:translate(-50%,-50%)}
+.dcoin{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff6c0,#ffc94d 45%,#c98a1a);
+  border:2px solid #12091f;box-shadow:0 0 8px rgba(255,201,77,.7)}
+.flycard{padding:6px;border-radius:12px;border:2px solid var(--gold);background:#2c1d4a;box-shadow:0 0 20px rgba(255,201,77,.5)}
+.flycard canvas{width:64px;height:64px;display:block}
+/* the player's hp: a drain bar with a ghost, a shake on hits, a shield sheen */
+.stat.hp{position:relative;overflow:hidden}
+.hpbar{position:absolute;left:4px;right:4px;bottom:3px;height:4px;border-radius:2px;background:rgba(0,0,0,.5)}
+.hpbar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;width:100%}
+.hpbar .gh{background:#fff;transition:width .5s ease .35s}
+.hpbar .fl{background:var(--blood);transition:width .12s ease-out}
+#hpStat.hit{animation:hudHit .35s}
+@keyframes hudHit{0%,100%{transform:none}20%{transform:translateX(-5px);background:rgba(255,46,48,.45)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
+#hpStat.clank{animation:clank .35s}
+@keyframes clank{0%{box-shadow:0 0 0 0 rgba(46,230,214,.9)}100%{box-shadow:0 0 0 12px rgba(46,230,214,0)}}
+#hpStat.shield,#hpStat.heal{animation:glowIn .5s}
+#hpStat.heal{--gc:rgba(166,255,94,.7)}
+@keyframes glowIn{0%{box-shadow:0 0 0 0 var(--gc,rgba(46,230,214,.8)),inset 0 0 12px var(--gc,rgba(46,230,214,.8))}100%{box-shadow:0 0 0 10px transparent,inset 0 0 0 transparent}}
+#hpStat.shielded{border-color:var(--cyan)}
+#hpStat.shielded::after{content:'';position:absolute;top:0;bottom:0;width:18px;left:-30px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(191,232,255,.35),transparent);transform:skewX(-20deg);animation:shimmer 2.2s linear infinite}
+@keyframes shimmer{0%{left:-30px}60%,100%{left:110%}}
+#hpStat.low{animation:lowPulse .95s ease-in-out infinite}
+@keyframes lowPulse{0%,100%{border-color:var(--line)}12%{border-color:var(--blood);box-shadow:0 0 14px rgba(255,46,48,.6)}}
+/* relic procs, status chips, grabs */
+.relic{transition:transform .1s}
+.relic.proc{animation:proc .55s cubic-bezier(.2,1.8,.4,1)}
+@keyframes proc{0%{transform:scale(1)}30%{transform:scale(1.18) rotate(-6deg);border-color:var(--gold);background:#4d3608;box-shadow:inset 0 0 12px rgba(255,201,77,.9)}
+  100%{transform:scale(1);box-shadow:inset 0 0 0 rgba(255,201,77,0)}}
+.pip.pop,.pip{animation:pipIn .4s cubic-bezier(.2,1.8,.4,1)}
+@keyframes pipIn{0%{transform:scale(.3)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
+#grabs .g{transition:background .2s,box-shadow .2s,transform .2s}
+#grabs .g.used{transform:scale(.8)}
+#grabs.bump{animation:bump .4s cubic-bezier(.2,1.8,.4,1)}
+.chip .col{gap:1px;min-width:0}
+.chip.haskw .t{-webkit-line-clamp:1}
+.chip .kws{margin-top:2px}
+.chip.rr-r{border-color:var(--gold)} .chip.rr-l{border-color:var(--pink);box-shadow:0 0 16px rgba(255,46,136,.4)} .chip.rr-c{border-color:var(--line2)} .chip.rr-u{border-color:var(--cyan)}
+/* banners: each kind has its own entrance, replayed on every call */
+#banner.show span{animation:bTurn .5s cubic-bezier(.2,1.5,.4,1) both}
+#banner.turn.show span{animation:bTurn .5s cubic-bezier(.2,1.5,.4,1) both}
+#banner.enemy.show span{animation:bEnemy .5s cubic-bezier(.2,1.3,.4,1) both}
+#banner.jackpot.show span{animation:pop .5s ease both,jackGlow .25s linear .5s 4 alternate}
+#banner.victory.show span{color:var(--gold);font-size:46px;text-shadow:0 0 26px var(--gold),0 5px 0 #4d3608;
+  animation:bSweep .6s cubic-bezier(.2,1.2,.4,1) both,shine 1.1s ease-in-out .6s infinite}
+@keyframes bTurn{0%{transform:translateX(-120px) scale(.6) rotate(-3deg);opacity:0}100%{transform:rotate(-3deg);opacity:1}}
+@keyframes bEnemy{0%{transform:translateX(140px) skewX(-20deg) rotate(-3deg);opacity:0}70%{transform:translateX(-8px) skewX(6deg) rotate(-3deg)}100%{transform:rotate(-3deg);opacity:1}}
+@keyframes bSweep{0%{transform:translateX(-300px) skewX(-30deg) scale(1.4);opacity:0}70%{transform:translateX(10px) skewX(8deg)}100%{transform:rotate(-3deg);opacity:1}}
+@keyframes shine{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
+@keyframes jackGlow{to{text-shadow:0 0 40px var(--gold),0 0 12px #fff,0 4px 0 #4d3608}}
+/* named combo banner: stacked name + rules text, scaled by tier */
+#combo{position:absolute;left:0;right:0;top:96px;display:none;flex-direction:column;align-items:center;pointer-events:none;z-index:30;
+  --cc:#ffc94d}
+#combo.show{display:flex}
+#combo .cn{white-space:nowrap;font-size:34px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#fff;
+  text-shadow:0 0 18px var(--cc),0 4px 0 #12091f,-3px 0 0 rgba(255,46,136,.6),3px 0 0 rgba(46,230,214,.6);
+  transform:rotate(-4deg);animation:cIn .55s cubic-bezier(.2,1.6,.4,1) both, cOut .3s ease-in var(--out,1.2s) both}
+#combo .ct{margin-top:4px;padding:5px 12px;border-radius:10px;background:rgba(18,9,31,.9);border:2px solid var(--cc);
+  font-size:14px;font-weight:900;color:var(--cc);max-width:440px;text-align:center;animation:ctIn .45s ease .12s both, cOut .3s ease-in var(--out,1.2s) both}
+#combo .ct:empty{display:none}
+#combo .cburst{position:absolute;top:26px;left:50%;width:10px;height:10px;border-radius:50%;
+  box-shadow:0 0 0 0 var(--cc);animation:cBurst .6s ease-out both}
+#combo.t3{--out:1.8s}
+#combo.t3 .cn{animation:cIn3 .7s cubic-bezier(.2,1.6,.4,1) both,cShake .08s linear .7s 6,cOut .3s ease-in 1.8s both}
+#combo.t2{--out:1.5s}
+@keyframes cIn{0%{transform:scale(3) rotate(-12deg);opacity:0}100%{transform:scale(1) rotate(-4deg);opacity:1}}
+@keyframes cIn3{0%{transform:scale(2.6) rotate(10deg);opacity:0;filter:blur(6px)}100%{transform:scale(1) rotate(-4deg);opacity:1;filter:none}}
+@keyframes cShake{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(-4deg) translate(3px,-2px)}}
+@keyframes ctIn{0%{transform:translateY(-10px) scaleY(0);opacity:0}100%{transform:none;opacity:1}}
+@keyframes cOut{to{opacity:0;transform:translateY(-20px) scale(.9) rotate(-4deg)}}
+@keyframes cBurst{0%{box-shadow:0 0 0 0 var(--cc);opacity:1}100%{box-shadow:0 0 0 160px transparent;opacity:0}}
+/* screen transitions */
+#wipe{position:absolute;inset:0;z-index:55;pointer-events:none;overflow:hidden;display:none}
+#wipe.iris,#wipe.swipe,#wipe.fade,#wipe.bleed{display:block}
+#wipe.iris::before{content:'';position:absolute;left:50%;top:48%;width:0;height:0;border-radius:50%;transform:translate(-50%,-50%);
+  box-shadow:0 0 0 1400px #12091f,inset 0 0 26px 8px rgba(255,46,136,.9);animation:iris .5s cubic-bezier(.5,0,.3,1) forwards}
+@keyframes iris{0%{width:0;height:0}100%{width:1500px;height:1500px;box-shadow:0 0 0 1400px rgba(18,9,31,0),inset 0 0 26px 8px rgba(255,46,136,0)}}
+#wipe.swipe::before{content:'';position:absolute;top:-10%;bottom:-10%;left:-20%;width:140%;
+  background:linear-gradient(100deg,#12091f 0 70%,var(--pink) 70% 73%,#12091f 73% 76%,var(--cyan) 76% 78%,transparent 78%);
+  transform:skewX(-12deg) translateX(0);animation:swipe .42s cubic-bezier(.6,0,.4,1) forwards}
+@keyframes swipe{to{transform:skewX(-12deg) translateX(110%)}}
+#wipe.fade{background:#12091f;animation:fadeOut .3s ease forwards}
+#wipe.bleed{background:radial-gradient(circle,rgba(255,46,48,.1),rgba(120,0,20,.85));animation:fadeOut 1.1s ease forwards}
+@keyframes fadeOut{to{opacity:0}}
+#scr-gameover.show .col{animation:goIn .8s cubic-bezier(.2,1.2,.4,1) both}
+@keyframes goIn{0%{transform:translateY(-80px) rotate(-4deg);opacity:0;filter:grayscale(1)}100%{transform:none;opacity:1}}
+#scr-win.show .col,#scr-reward.show h1,#scr-treasure.show h1{animation:tagPop .5s cubic-bezier(.2,1.6,.4,1) both}
+/* settings: Shake off calms the heavy CSS motion too */
+.calm .card.deal,.calm .card.rr-r,.calm .card.rr-l,.calm #hpStat.hit,.calm #hpStat.low,.calm .relicReveal .rays,.calm #combo .cn,.calm #wipe::before{animation-duration:.01s!important;animation-iteration-count:1!important}
+.calm .card:hover{transform:none}
+@media (prefers-reduced-motion:reduce){.card.deal,.relicReveal .rays,#wipe::before,#combo .cn,#hpStat.low{animation:none!important}#wipe{display:none!important}}
+
 @media (max-width:400px){ .cards{gap:6px} }
 </style>
 </head>
@@ -239,7 +395,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   <!-- top bar: portrait, hp/block, gold, bulbs (the light stat, id inkTxt), act, relics -->
   <div id="top" class="hud">
     <canvas id="portrait" width="108" height="108" class="tap"></canvas>
-    <div class="stat hp tap" id="hpStat"><span class="k">HP</span><span class="v mono" id="hpTxt">0/0</span><span class="blk mono" id="blockTxt"></span></div>
+    <div class="stat hp tap" id="hpStat"><span class="k">HP</span><span class="v mono" id="hpTxt">0/0</span><span class="blk mono" id="blockTxt"></span><span class="hpbar"><i class="gh" id="hpGhost"></i><i class="fl" id="hpFill"></i></span></div>
     <div class="stat gold"><span class="k">Gold</span><span class="v mono" id="goldTxt">0</span></div>
     <div class="stat ink"><span class="k">Bulbs</span><span class="v mono" id="inkTxt">0</span></div>
     <div class="stat act"><span class="k">Act</span><span class="v" id="actTxt">1</span></div>
@@ -262,6 +418,9 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
     </div>
   </div>
 
+  <!-- named grab combos (the synergy events) -->
+  <div id="combo"><div class="cburst"></div><div class="cn" id="comboName"></div><div class="ct" id="comboText"></div></div>
+
   <div id="coach" class="panel"><div class="t" id="coachTxt"></div><div class="row"><button id="coachBtn" class="btn go sm">Got it</button></div><div class="arrow"></div></div>
   <div id="pop" class="panel"></div>
   <div id="toast"></div>
@@ -282,6 +441,8 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   <div id="scr-win" class="screen"><div id="winBody" class="col"></div></div>
   <div id="scr-help" class="screen"><div id="helpBody" class="col help"></div></div>
   <div id="scr-collection" class="screen"><div id="collectionBody" class="col"></div></div>
+  <!-- screen transitions (iris / wipe / fade), never takes input -->
+  <div id="wipe"></div>
 </div></div>
 
 <script src="js/util.js"></script>

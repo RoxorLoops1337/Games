@@ -9,7 +9,9 @@ const T = harness('clawspire audio');
 const NAMES = ['clawMove', 'clawDrop', 'clawTouch', 'clawClose', 'clawLift', 'clawRelease', 'itemLand',
   'itemSlip', 'chute', 'jackpot', 'hit', 'hitBig', 'block', 'heal', 'poison', 'burn', 'freeze', 'shake',
   'enemyDie', 'playerHurt', 'win', 'lose', 'click', 'buy', 'reveal', 'brush', 'step', 'coin', 'upgrade',
-  'turn', 'boss'];
+  'turn', 'boss',
+  // the juice pass
+  'proc', 'combo', 'crit', 'shatter', 'tick', 'cardFlip', 'relic', 'footstep', 'bloom', 'heartbeat', 'whoosh', 'stamp', 'victory'];
 const MODES = ['off', 'title', 'map', 'fight', 'elite', 'boss', 'win'];
 
 /* ---------------------------------------------------------------- part 1: headless */
@@ -204,6 +206,33 @@ T.test('every sfx creates nodes after init', () => {
   for (const o of [{ mass: 0 }, { mass: 5000 }, { amt: -5 }, { amt: 999 }, { vol: 'x' }, { pitch: 0 }, null]) {
     ac.currentTime += 3;
     try { AUDIO.sfx('itemLand', o); AUDIO.sfx('hit', o); } catch (e) { T.ok(false, `odd opts threw: ${JSON.stringify(o)}`); }
+  }
+});
+
+T.test('juice sfx: combo scales with its tier, ticks and heartbeats are throttled', () => {
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  const nodes = [];
+  for (const tier of [1, 2, 3]) {
+    ac.currentTime += 5;
+    const before = fake.count.total;
+    T.eq(AUDIO.sfx('combo', { tier }), true, `combo tier ${tier} plays`);
+    nodes.push(fake.count.total - before);
+  }
+  T.ok(nodes[0] < nodes[1] && nodes[1] < nodes[2], `bigger tiers build more voices (${nodes.join(' < ')})`);
+  ac.currentTime += 5;
+  T.eq(AUDIO.sfx('combo', { tier: 99 }), true, 'an out of range tier clamps');
+  ac.currentTime += 5;
+  T.eq(AUDIO.sfx('tick'), true, 'a counter tick plays');
+  T.eq(AUDIO.sfx('tick'), false, 'a second tick in the same instant is throttled');
+  ac.currentTime += 0.2;
+  T.eq(AUDIO.sfx('heartbeat'), true, 'a heartbeat plays');
+  ac.currentTime += 0.2;
+  T.eq(AUDIO.sfx('heartbeat'), false, 'heartbeats are at least half a second apart');
+  for (const n of ['proc', 'crit', 'shatter', 'cardFlip', 'relic', 'footstep', 'bloom', 'whoosh', 'stamp', 'victory']) {
+    ac.currentTime += 3;
+    T.eq(AUDIO.sfx(n, { pitch: 1.3, tier: 2 }), true, `${n} plays with opts`);
   }
 });
 

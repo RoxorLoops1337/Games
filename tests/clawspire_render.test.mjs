@@ -485,4 +485,112 @@ if (HAS_DATA) {
   h.ok(!zero.seq.includes('drawImage'), 'a zero-size image is ignored');
 }
 
+
+/* ------------------------------------------------- the juice layer (fx presets, pools, shake, auras) */
+{
+  const api = boot({ only: ['util', 'render'] });
+  const R = api.RENDER, fx = R.fx, ctx = api._ctx;
+  const balanced = (label, fn) => {
+    api._resetCounts();
+    let threw = false;
+    try { fn(ctx); } catch (e) { threw = true; console.log(e); }
+    h.ok(!threw, label + ' does not throw');
+    h.eq(api._counts.save || 0, api._counts.restore || 0, label + ' save == restore');
+  };
+  for (const name of ['emit', 'num', 'badge', 'ring', 'slash', 'fly', 'kick', 'vignette', 'hold', 'trauma', 'ringCount', 'flyCount', 'slashCount'])
+    h.eq(typeof fx[name], 'function', 'RENDER.fx.' + name + ' exists');
+  h.eq(typeof R.glint, 'function', 'RENDER.glint exists');
+  h.eq(typeof R.enemyAura, 'function', 'RENDER.enemyAura exists');
+  const PRESETS = ['hit', 'crit', 'sparks', 'dust', 'smoke', 'poof', 'coins', 'confetti', 'poison', 'burn', 'frost', 'shock', 'blood', 'heal', 'block', 'shatter', 'death', 'glint', 'trailDot', 'nope'];
+  fx.clear();
+  for (const p of PRESETS) {
+    const n0 = fx.count();
+    let threw = false;
+    try { fx.emit(p, 100, 100, { col: '#ff2e88', power: 1.2 }); } catch (e) { threw = true; }
+    h.ok(!threw && fx.count() > n0, 'preset ' + p + ' spawns particles');
+  }
+  balanced('fx.draw with every particle kind', c => fx.draw(c));
+  for (let i = 0; i < 40; i++) for (const p of PRESETS) fx.emit(p, i, i);
+  h.ok(fx.count() <= 400, 'preset spam stays under the 400 cap (' + fx.count() + ')');
+  // reduced thins the bursts
+  fx.clear(); fx.emit('confetti', 0, 0); const full = fx.count();
+  fx.clear(); fx.reduced = true; fx.emit('confetti', 0, 0); const thin = fx.count(); fx.reduced = false;
+  h.ok(thin > 0 && thin < full * 0.5, `reduced thins a preset (${thin} of ${full})`);
+  // physics numbers pop and fall; badges rise; both expire
+  fx.clear();
+  const n = fx.num(200, 200, '-24', '#fff', { crit: true });
+  h.ok(n && n.mode === 1 && n.size > 20, 'a crit number is a physics number, sized up');
+  const small = fx.num(0, 0, '-2', '#fff'), big = fx.num(0, 0, '-60', '#fff');
+  h.ok(big.size > small.size, 'numbers grow with the damage');
+  fx.badge(100, 100, '*', 'Relic', '#2ee6d6');
+  h.eq(fx.textCount(), 4, 'numbers and badges share the text pool');
+  for (let i = 0; i < 8; i++) fx.update(1 / 60);
+  h.ok(n.oy < 0, 'a number flies up first');
+  for (let i = 0; i < 40; i++) fx.update(1 / 60);
+  h.ok(n.vy > 0 || fx.textCount() < 4, 'then gravity pulls it down');
+  balanced('fx.draw numbers and badges', c => fx.draw(c));
+  for (let i = 0; i < 200; i++) fx.update(1 / 30);
+  h.eq(fx.textCount(), 0, 'numbers and badges expire');
+  // rings, slashes, flyers: pooled and capped
+  for (let i = 0; i < 100; i++) { fx.ring(0, 0, '#fff', { r1: 50, delay: i % 3 ? 0 : 0.1 }); fx.slash(0, 0, 0.3, 80, '#fff', { claw: i % 2 === 0 }); }
+  h.ok(fx.ringCount() <= 40 && fx.slashCount() <= 16, `rings and slashes are capped (${fx.ringCount()}, ${fx.slashCount()})`);
+  balanced('fx.draw rings and both slash kinds', c => fx.draw(c));
+  let arrived = 0;
+  for (let i = 0; i < 60; i++) fx.fly(0, 0, 100, 50, { kind: i % 2 ? 'coin' : 'star', dur: 0.3, delay: 0.05, cb: () => arrived++ });
+  h.ok(fx.flyCount() <= 48, 'flyers capped at 48');
+  h.eq(arrived, 12, 'a recycled flyer still delivers its callback (12 recycled)');
+  for (let i = 0; i < 4; i++) fx.update(1 / 60);
+  balanced('fx.draw flyers mid-flight', c => fx.draw(c));
+  for (let i = 0; i < 40; i++) fx.update(1 / 60);
+  h.eq(arrived, 60, 'every flyer called back on arrival');
+  h.eq(fx.flyCount(), 0, 'flyers leave the pool');
+  let bad = false;
+  fx.fly(0, 0, 1, 1, { dur: 0.01, cb: () => { throw new Error('x'); } });
+  try { fx.update(0.1); } catch (e) { bad = true; }
+  h.ok(!bad, 'a throwing callback never breaks the update');
+  // trauma shake: trauma^2 falloff, bounded, a roll, reduced kills the roll and the kick
+  fx.clear();
+  fx.shake(4); const t1 = fx.trauma();
+  fx.shake(4); const t2 = fx.trauma();
+  h.ok(t2 > t1 && t1 > 0, 'shakes stack as trauma');
+  for (let i = 0; i < 20; i++) fx.shake(20);
+  h.ok(fx.trauma() <= 1, 'trauma caps at 1');
+  let maxOff = 0, maxR = 0;
+  for (let i = 0; i < 60; i++) { fx.update(1 / 240); const o = fx.offset(); maxOff = Math.max(maxOff, Math.abs(o.x), Math.abs(o.y)); maxR = Math.max(maxR, Math.abs(o.r)); }
+  h.ok(maxOff > 2 && maxOff <= 24, `a full trauma shake moves the camera (${maxOff.toFixed(1)} px)`);
+  h.ok(maxR > 0 && maxR < 0.03, 'and rolls it a little');
+  fx.reduced = true;
+  const ro = fx.offset();
+  h.eq(ro.r, 0, 'reduced: no roll');
+  fx.clear(); fx.kick(0, 8);
+  h.eq(fx.offset().y, 0, 'reduced: no kick');
+  fx.reduced = false;
+  fx.kick(0, 8);
+  h.ok(fx.offset().y > 5, 'a kick nudges the camera');
+  for (let i = 0; i < 60; i++) fx.update(1 / 60);
+  h.ok(Math.abs(fx.offset().y) < 0.05, 'the kick springs back');
+  // vignettes: a pulse and a standing hold, both drawn balanced
+  fx.vignette('#ff2e30', 0.8); fx.hold(0.3);
+  balanced('fx.draw vignette + hold', c => fx.draw(c));
+  fx.hold(0); fx.clear();
+  // the per-function juice hooks
+  const ALL = { poison: 2, burn: 2, chill: 1, freeze: 1, weak: 1, vuln: 2, str: 3, enrage: 1, thorns: 2, bleed: 1, stun: 1, shield_up: 1, armor: 2 };
+  for (const layer of ['back', 'front']) balanced('enemyAura ' + layer + ' with every status', c => R.enemyAura(c, 200, 300, 120, 110, ALL, 1.3, layer));
+  balanced('enemyAura with no status', c => R.enemyAura(c, 0, 0, 10, 10, null, 0, 'front'));
+  for (let t = 0; t < 3; t += 0.37) balanced('glint at t ' + t.toFixed(2), c => R.glint(c, 10, 10, 16, t, 3, '#fff'));
+  balanced('hpBar with a ghost, flash and shield sheen', c => R.hpBar(c, 0, 0, 100, 12, 30, 100, 5, { ghost: 60, flash: 0.7, shield: 0.4 }));
+  balanced('hpBar old signature', c => R.hpBar(c, 0, 0, 100, 12, 30, 100, 5));
+  balanced('statusPips with pops', c => R.statusPips(c, 0, 0, { poison: 2, weak: 1 }, 14, { poison: 0.5 }));
+  const def = { id: 'x', art: 'goblin', name: 'Goblin' };
+  balanced('enemy winding up, chilled', c => R.enemy(c, def, 100, 300, 1, 1, { windup: 0.8, chilled: true, attack: 0 }));
+  for (const atk of [1, 0.9, 0.6, 0.2, 0]) balanced('enemy strike curve at ' + atk, c => R.enemy(c, def, 100, 300, 1, 1, { attack: atk }));
+  balanced('cabinetBack party lights + marquee', c => R.cabinetBack(c, 30, 410, {}, { party: 1, marquee: 'JACKPOT!', t: 2.2, act: 1 }));
+  const rig = { bodies: { hub: { x: 100, y: 120, r: 12 }, prongs: [[{ x: 90, y: 125 }, { x: 80, y: 150 }, { x: 85, y: 170 }], [{ x: 110, y: 125 }, { x: 120, y: 150 }, { x: 115, y: 170 }]] }, cableTop: { x: 96, y: 26 }, phase: 'carrying' };
+  balanced('claw with juice (bend, squash, speed lines, glow)', c => R.claw(c, rig, 30, 410, { juice: { bend: 12, squash: 0.8, speed: 400, glow: 0.6 } }));
+  balanced('item with a rarity glow alpha', c => R.item(c, { id: 'x', art: 'gem', shape: { kind: 'circle', r: 12 } }, 0, 0, 0, 1, { glow: '#ffc94d', glowA: 0.4 }));
+  const src = fs.readFileSync(path.join(__dirname, '..', 'clawspire', 'js', 'render.js'), 'utf8');
+  h.ok(!/Math\.random/.test(src), 'render.js never calls Math.random');
+  h.ok(!/\u2014/.test(src), 'no em dashes in render.js');
+}
+
 h.done();
