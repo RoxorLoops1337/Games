@@ -1,437 +1,684 @@
 <!doctype html><meta charset="utf-8">
-<title>DP intro renderer</title>
+<title>DP intro renderer — director's cut</title>
 <style>body{margin:0;background:#000}canvas{display:block}</style>
 <canvas id="cv" width="720" height="1260"></canvas>
 <script src="font.js"></script>
 <script>
 'use strict';
 // ============================================================================
-// Dungeon Pusher — 20s intro. Deterministic: renderFrame(t) draws second t.
+// Dungeon Pusher — 20s intro, DIRECTOR'S CUT.
+// Deterministic: renderFrame(t) draws second t. Scene renders to an offscreen
+// canvas; a camera + post pipeline (zoom blur, chromatic split, glitch,
+// letterbox, flashes) slams it onto the main canvas.
 // ============================================================================
-const W = 720, H = 1260, CX = W / 2;
+const W = 720, H = 1260, CX = W / 2, CY = H / 2;
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
-Grimcut.install(ctx);
+const SC = document.createElement('canvas'); SC.width = W; SC.height = H;
+const sc = SC.getContext('2d');
+const TC = document.createElement('canvas'); TC.width = W; TC.height = H;
+const tc = TC.getContext('2d');
+const GC = document.createElement('canvas'); GC.width = W; GC.height = H;
+const gc = GC.getContext('2d');
+Grimcut.install(sc);
 
 // ---- deterministic helpers -------------------------------------------------
 function h1(n) { n = Math.imul(n ^ (n >>> 16), 2246822519); n = Math.imul(n ^ (n >>> 13), 3266489917); return ((n ^= n >>> 16) >>> 0) / 4294967296; }
 function hx(i, s) { return h1((i * 374761393 + s * 668265263) | 0); }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, k) => a + (b - a) * k;
-// eases — everything confident overshoots, nothing drifts in politely
 function outBack(x, k) { k = k === undefined ? 2.2 : k; x = clamp(x, 0, 1); const c = k + 1; return 1 + c * Math.pow(x - 1, 3) + k * Math.pow(x - 1, 2); }
 function outCubic(x) { x = clamp(x, 0, 1); return 1 - Math.pow(1 - x, 3); }
 function outQuint(x) { x = clamp(x, 0, 1); return 1 - Math.pow(1 - x, 5); }
 function inCubic(x) { x = clamp(x, 0, 1); return x * x * x; }
-function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }   // 0..1 inside [a,b]
+function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+
+// ============================================================================
+// TIMELINE — the one truth. audio.py carries the same numbers.
+// ============================================================================
+const HIT = 1.55;
+const WORDS = [2.35, 3.10, 3.85];              // GOLD. GLORY. GRAVITY.
+const CARD_T = [4.60, 5.20, 5.80], CARD_END = 6.40;
+const CUT_T = [6.40, 7.66, 8.92, 10.18, 11.44], CUT_END = 12.70;
+const VORTEX0 = 12.70, WHEEL0 = 14.10, WHITE0 = 14.95;
+const FLIP0 = 15.05, SLAM_T = 15.30;           // gong lands 15.60
+const TAG_T = 16.15, INS_T = 17.4, FADE0 = 19.45;
 
 // ---- assets -----------------------------------------------------------------
-const IMG = {};
-const LOAD = ['marquee', 'room', 'battle_pour', 'tilt', 'wheel_meter', 'boss'];
-const CLIP = {};                       // moving gameplay: 66 frames per cut
+const IMG = {}, CLIP = {}, MON = {};
 const CLIP_N = 66;
+const MON_SRC = {
+  goblin:  ['mon/goblin_attack_01.png', 'mon/goblin_attack_02.png', 'mon/goblin_attack_03.png', 'mon/goblin_attack_04.png', 'mon/goblin_attack_05.png'],
+  storm:   ['mon/stormknight_attack_01.png', 'mon/stormknight_attack_02.png', 'mon/stormknight_attack_03.png'],
+  inferno: ['mon/infernobrute_attack_01.png', 'mon/infernobrute_attack_02.png', 'mon/infernobrute_attack_03.png'],
+};
 let ready = false;
-const jobs = LOAD.map(n => new Promise(res => {
-  const im = new Image(); im.onload = () => { IMG[n] = im; res(); }; im.onerror = res;
-  im.src = n + '.png';
-}));
-for (const n of ['room', 'battle_pour', 'tilt', 'wheel_meter', 'boss']) {
-  CLIP[n] = [];
-  for (let i = 0; i < CLIP_N; i++) {
-    jobs.push(new Promise(res => {
-      const im = new Image();
-      im.onload = () => { CLIP[n][i] = im; res(); }; im.onerror = res;
-      im.src = 'clips/' + n + '_' + String(i).padStart(2, '0') + '.jpg';
-    }));
+{
+  const jobs = [];
+  const one = (src, sink) => jobs.push(new Promise(res => {
+    const im = new Image();
+    im.onload = () => { sink(im); res(); }; im.onerror = res;
+    im.src = src;
+  }));
+  one('marquee.png', im => IMG.marquee = im);
+  one('mon/floor_marmer.png', im => IMG.floor = im);
+  for (const n of ['room', 'battle_pour', 'tilt', 'wheel_meter', 'boss']) {
+    CLIP[n] = [];
+    for (let i = 0; i < CLIP_N; i++) {
+      const idx = i;
+      one('clips/' + n + '_' + String(i).padStart(2, '0') + '.jpg', im => CLIP[n][idx] = im);
+    }
   }
+  for (const k of Object.keys(MON_SRC)) {
+    MON[k] = [];
+    MON_SRC[k].forEach((s, i) => one(s, im => MON[k][i] = im));
+  }
+  Promise.all(jobs).then(() => { ready = true; });
 }
-Promise.all(jobs).then(() => { ready = true; });
 
-// ---- palette (the game's gold) ----------------------------------------------
-const GOLD = ['#fffbe6', '#ffd94c', '#e89a10', '#a85c05', '#713801'];
-
-// ---- coin --------------------------------------------------------------------
-// A gold piece seen edge-on to face-on: sq is cos(spin), 1 = full face.
+// ---- drawing kit (all target sc, the scene canvas) ---------------------------
 function coin(x, y, r, sq, glow) {
-  ctx.save();
-  ctx.translate(x, y);
+  sc.save(); sc.translate(x, y);
   const ry = r * Math.max(0.08, Math.abs(sq));
-  if (glow) { ctx.shadowColor = 'rgba(255,196,64,' + (0.8 * glow) + ')'; ctx.shadowBlur = r * 1.3; }
-  // edge
-  ctx.fillStyle = '#8a5206';
-  ctx.beginPath(); ctx.ellipse(0, r * 0.10, r, ry, 0, 0, 7); ctx.fill();
-  // face
-  const g = ctx.createLinearGradient(0, -ry, 0, ry);
+  if (glow) { sc.shadowColor = 'rgba(255,196,64,' + (0.8 * glow) + ')'; sc.shadowBlur = r * 1.3; }
+  sc.fillStyle = '#8a5206';
+  sc.beginPath(); sc.ellipse(0, r * 0.10, r, ry, 0, 0, 7); sc.fill();
+  const g = sc.createLinearGradient(0, -ry, 0, ry);
   g.addColorStop(0, '#ffe98a'); g.addColorStop(0.45, '#ffc93c'); g.addColorStop(1, '#d07f0a');
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.ellipse(0, 0, r, ry, 0, 0, 7); ctx.fill();
-  // rim + stamp
-  ctx.strokeStyle = 'rgba(122,66,4,0.9)'; ctx.lineWidth = Math.max(1, r * 0.10);
-  ctx.beginPath(); ctx.ellipse(0, 0, r * 0.72, ry * 0.72, 0, 0, 7); ctx.stroke();
+  sc.fillStyle = g;
+  sc.beginPath(); sc.ellipse(0, 0, r, ry, 0, 0, 7); sc.fill();
+  sc.strokeStyle = 'rgba(122,66,4,0.9)'; sc.lineWidth = Math.max(1, r * 0.10);
+  sc.beginPath(); sc.ellipse(0, 0, r * 0.72, ry * 0.72, 0, 0, 7); sc.stroke();
   if (Math.abs(sq) > 0.55 && r > 7) {
-    ctx.fillStyle = 'rgba(122,66,4,0.75)';
-    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.34, ry * 0.34, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(255,233,138,0.8)';
-    ctx.beginPath(); ctx.ellipse(-r * 0.08, -ry * 0.10, r * 0.13, ry * 0.13, 0, 0, 7); ctx.fill();
+    sc.fillStyle = 'rgba(122,66,4,0.75)';
+    sc.beginPath(); sc.ellipse(0, 0, r * 0.34, ry * 0.34, 0, 0, 7); sc.fill();
+    sc.fillStyle = 'rgba(255,233,138,0.8)';
+    sc.beginPath(); sc.ellipse(-r * 0.08, -ry * 0.10, r * 0.13, ry * 0.13, 0, 0, 7); sc.fill();
   }
-  ctx.restore();
+  sc.restore();
 }
-
-// ---- torch flame (procedural, deterministic in t) ----------------------------
 function flame(x, y, s, t, seed) {
-  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
-  ctx.globalCompositeOperation = 'lighter';
+  sc.save(); sc.translate(x, y); sc.scale(s, s);
+  sc.globalCompositeOperation = 'lighter';
   for (let i = 0; i < 3; i++) {
     const ph = t * (7 + i * 2.3) + seed * 9;
     const wob = Math.sin(ph) * 3 + Math.sin(ph * 1.7 + 1) * 2;
     const hgt = 26 - i * 6 + Math.sin(ph * 1.3) * 3;
-    const g = ctx.createRadialGradient(wob * 0.4, -hgt * 0.5, 1, wob * 0.4, -hgt * 0.5, hgt);
+    const g = sc.createRadialGradient(wob * 0.4, -hgt * 0.5, 1, wob * 0.4, -hgt * 0.5, hgt);
     const cols = [['rgba(255,120,20,', 0.35], ['rgba(255,190,60,', 0.45], ['rgba(255,245,180,', 0.55]];
     g.addColorStop(0, cols[i][0] + cols[i][1] + ')'); g.addColorStop(1, cols[i][0] + '0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(-9 + i * 2.5, 0);
-    ctx.quadraticCurveTo(-10 + wob * 0.5, -hgt * 0.55, wob, -hgt);
-    ctx.quadraticCurveTo(10 - wob * 0.5, -hgt * 0.55, 9 - i * 2.5, 0);
-    ctx.fill();
+    sc.fillStyle = g;
+    sc.beginPath();
+    sc.moveTo(-9 + i * 2.5, 0);
+    sc.quadraticCurveTo(-10 + wob * 0.5, -hgt * 0.55, wob, -hgt);
+    sc.quadraticCurveTo(10 - wob * 0.5, -hgt * 0.55, 9 - i * 2.5, 0);
+    sc.fill();
   }
-  ctx.restore();
+  sc.restore();
 }
-
-// ---- shockwave ring ----------------------------------------------------------
 function ring(x, y, r, w, a, col) {
   if (a <= 0 || r <= 0) return;
-  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = col || '#ffd94c';
-  ctx.lineWidth = Math.max(0.5, w);
-  ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke(); ctx.restore();
+  sc.save(); sc.globalAlpha = a; sc.strokeStyle = col || '#ffd94c';
+  sc.lineWidth = Math.max(0.5, w);
+  sc.beginPath(); sc.arc(x, y, r, 0, 7); sc.stroke(); sc.restore();
 }
-
-// ---- spark burst (radial, per-particle hashed) --------------------------------
 function sparks(x, y, t0, t, n, spd, seed, grav) {
   const age = t - t0; if (age < 0 || age > 1.2) return;
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  sc.save(); sc.globalCompositeOperation = 'lighter';
   for (let i = 0; i < n; i++) {
     const a = hx(i, seed) * Math.PI * 2, v = spd * (0.4 + hx(i, seed + 1) * 0.9);
     const life = 0.5 + hx(i, seed + 2) * 0.7; if (age > life) continue;
     const k = age / life, d = v * age * (1 - 0.45 * k);
     const px = x + Math.cos(a) * d, py = y + Math.sin(a) * d * 0.85 + (grav || 260) * age * age;
     const al = (1 - k) * 0.9;
-    ctx.fillStyle = 'rgba(' + (hx(i, seed + 3) > 0.4 ? '255,214,80' : '255,244,200') + ',' + al + ')';
+    sc.fillStyle = 'rgba(' + (hx(i, seed + 3) > 0.4 ? '255,214,80' : '255,244,200') + ',' + al + ')';
     const r = (1 - k * 0.6) * (1.6 + hx(i, seed + 4) * 2.4);
-    ctx.fillRect(px - r / 2, py - r / 2, r, r);
+    sc.fillRect(px - r / 2, py - r / 2, r, r);
   }
-  ctx.restore();
+  sc.restore();
 }
-
-// ---- GRIMCUT word slam --------------------------------------------------------
-function slam(word, y, t0, t1, t, sz, style, sub) {
-  if (t < t0 || t > t1) return 0;
-  const inK = seg(t, t0, t0 + 0.22), outK = seg(t, t1 - 0.18, t1);
-  const sc = lerp(2.6, 1, outBack(inK, 1.6));
-  const al = (1 - inCubic(outK)) * Math.min(1, inK * 4);
-  ctx.save();
-  ctx.globalAlpha = al;
-  ctx.translate(CX, y); ctx.scale(sc, sc);
-  ctx.font = '900 ' + sz + 'px Grimcut ' + (style || 'Gold');
-  ctx.textAlign = 'center';
-  ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
-  ctx.fillText(word, 0, 0);
-  ctx.restore();
-  if (sub && inK >= 1) {
-    ctx.save(); ctx.globalAlpha = al * 0.9;
-    ctx.font = '600 21px Georgia, serif'; ctx.textAlign = 'center';
-    ctx.fillStyle = '#d8c9a8';
-    ctx.fillText(sub, CX, y + 40);
-    ctx.restore();
+function speedLines(x, y, t, n, seed, col, aMax) {
+  sc.save(); sc.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < n; i++) {
+    const a = hx(i, seed) * Math.PI * 2 + Math.sin(t * 2 + i) * 0.02;
+    const r0 = 180 + hx(i, seed + 1) * 260;
+    const len = 90 + hx(i, seed + 2) * 260;
+    const al = aMax * (0.25 + 0.75 * hx(i, seed + 3)) * (0.7 + 0.3 * Math.sin(t * 30 + i * 2.7));
+    sc.strokeStyle = col; sc.globalAlpha = Math.max(0, al);
+    sc.lineWidth = 1 + hx(i, seed + 4) * 2.4;
+    sc.beginPath();
+    sc.moveTo(x + Math.cos(a) * r0, y + Math.sin(a) * r0);
+    sc.lineTo(x + Math.cos(a) * (r0 + len), y + Math.sin(a) * (r0 + len));
+    sc.stroke();
   }
-  return inK;
+  sc.restore();
 }
-
-// impact flash frame: first frames after a beat go bright
-function flash(t, t0, col) {
-  const k = t - t0;
-  if (k < 0 || k > 0.12) return;
-  ctx.save(); ctx.globalAlpha = 0.85 * (1 - k / 0.12);
-  ctx.fillStyle = col || '#ffedc2'; ctx.fillRect(0, 0, W, H); ctx.restore();
+function slamWord(word, y, t0, t1, t, sz, style, rot) {
+  if (t < t0 || t > t1) return;
+  const inK = seg(t, t0, t0 + 0.16), outK = seg(t, t1 - 0.14, t1);
+  const scale = lerp(4.2, 1, outQuint(inK)) * lerp(1, 1.06, seg(t, t0 + 0.16, t1)); // land, then creep
+  const al = (1 - inCubic(outK)) * Math.min(1, inK * 5);
+  sc.save();
+  sc.globalAlpha = al;
+  sc.translate(CX, y); sc.rotate(rot || 0); sc.scale(scale, scale);
+  sc.font = '900 ' + sz + 'px Grimcut ' + (style || 'Gold');
+  sc.textAlign = 'center';
+  sc.shadowColor = 'rgba(0,0,0,0.85)'; sc.shadowBlur = 18; sc.shadowOffsetY = 6;
+  sc.fillText(word, 0, 0);
+  sc.restore();
 }
-
-// screen shake offset for a hit at t0
-function shake(t, t0, amp, freq, decay) {
-  const k = t - t0; if (k < 0 || k > 1.1) return [0, 0];
-  const d = Math.exp(-(decay || 6) * k) * amp;
-  return [Math.sin(k * (freq || 55)) * d, Math.cos(k * (freq || 55) * 1.31) * d * 0.8];
-}
-
-// ============================================================================
-// SCENES
-// ============================================================================
-const CUTS = [                                     // the montage table
-  // f0: which clip frame the cut opens on (the footage runs at 30fps)
-  // the DELVE cut punches into the cabinet's dungeon window (zoom + cy)
-  { img: 'room',        w: 'DELVE',  t0: 5.0,  t1: 6.6,  dir: 1,  f0: 6,  zoom: [1.52, 1.62], cy: 556 },
-  { img: 'battle_pour', w: 'PUSH',   t0: 6.6,  t1: 8.2,  dir: -1, f0: 6 },
-  { img: 'tilt',        w: 'TILT!',  t0: 8.2,  t1: 9.7,  dir: 1,  rage: 1, f0: 8 },
-  { img: 'wheel_meter', w: 'PRESS YOUR LUCK', t0: 9.7, t1: 11.4, dir: -1, small: 1, f0: 12 },
-  { img: 'boss',        w: 'SLAY',   t0: 11.4, t1: 13.0, dir: 1,  punch: 1, f0: 4 },
-];
-
 function bgStone(t, heat) {
-  const g = ctx.createLinearGradient(0, 0, 0, H);
+  const g = sc.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, 'rgb(' + (14 + 12 * heat | 0) + ',' + (9 + 6 * heat | 0) + ',' + (8 + 3 * heat | 0) + ')');
   g.addColorStop(0.55, 'rgb(' + (26 + 20 * heat | 0) + ',' + (15 + 10 * heat | 0) + ',' + (10 + 5 * heat | 0) + ')');
   g.addColorStop(1, 'rgb(' + (10 + 8 * heat | 0) + ',' + (6 + 4 * heat | 0) + ',6)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  sc.fillStyle = g; sc.fillRect(0, 0, W, H);
 }
 
-// --- A: one coin falls out of the dark and detonates ------------------------
-const HIT = 1.55, HITY = 880;
+// ============================================================================
+// CAMERA + POST — built from a table of kicks, all decaying exponentials
+// ============================================================================
+// {t, zb: zoom-blur, ca: chromatic px, zk: zoom punch, rk: roll °, gl: glitch,
+//  shk: shake px, inv: invert frames, fl: [r,g,b] flash}
+const KICKS = [
+  { t: HIT,        zb: 1.0, ca: 7, zk: 0.10, shk: 18, inv: 2, fl: [255, 237, 194] },
+  { t: WORDS[0],   zb: 0.7, ca: 5, zk: 0.06, rk: 1.5,  shk: 10, fl: [255, 220, 120] },
+  { t: WORDS[1],   zb: 0.7, ca: 5, zk: 0.06, rk: -1.5, shk: 10, fl: [235, 235, 255] },
+  { t: WORDS[2],   zb: 0.8, ca: 6, zk: 0.07, rk: 1.8,  shk: 12, fl: [255, 160, 60] },
+  { t: CARD_T[0],  zb: 0.9, ca: 8, zk: 0.09, rk: -2.2, shk: 12, fl: [120, 255, 160] },
+  { t: CARD_T[1],  zb: 0.9, ca: 8, zk: 0.09, rk: 2.2,  shk: 12, fl: [130, 190, 255] },
+  { t: CARD_T[2],  zb: 1.0, ca: 10, zk: 0.11, rk: -2.6, shk: 15, inv: 1, fl: [255, 150, 50] },
+  { t: CUT_T[0],   zb: 1.1, ca: 6, zk: 0.09, rk: 1.6,  shk: 9,  fl: [255, 240, 200] },
+  { t: CUT_T[1],   zb: 1.1, ca: 6, zk: 0.09, rk: -1.6, shk: 9,  fl: [255, 240, 200] },
+  { t: CUT_T[2],   zb: 1.2, ca: 8, zk: 0.10, rk: 2.0,  shk: 12, fl: [255, 140, 100] },
+  { t: CUT_T[3],   zb: 1.1, ca: 6, zk: 0.09, rk: -1.6, shk: 9,  fl: [240, 220, 255] },
+  { t: CUT_T[4],   zb: 1.2, ca: 8, zk: 0.10, rk: 1.8,  shk: 12, fl: [255, 240, 200] },
+  // mid-cut punch-ins: half-beat kicks that lean INTO the action
+  { t: CUT_T[0] + 0.63, zb: 0.5, zk: 0.05, shk: 4 },
+  { t: CUT_T[1] + 0.63, zb: 0.5, zk: 0.05, shk: 4 },
+  { t: CUT_T[3] + 0.63, zb: 0.5, zk: 0.05, shk: 4 },
+  { t: CUT_T[4] + 0.63, zb: 0.6, zk: 0.06, shk: 5 },
+  // the TILT, felt in the bones: glitch on each jolt
+  { t: CUT_T[2] + 0.50, gl: 1.0, ca: 9, shk: 16, rk: -1.2 },
+  { t: CUT_T[2] + 1.11, gl: 0.8, ca: 7, shk: 13, rk: 1.0 },
+  { t: WHITE0,     zb: 1.2, fl: [255, 247, 222] },
+  { t: SLAM_T + 0.30, zb: 1.1, ca: 9, zk: 0.10, shk: 20, inv: 2, fl: [255, 237, 194] },
+  { t: TAG_T,      zb: 0.3, ca: 3, shk: 3 },
+];
+function camAt(t) {
+  const c = { zoom: 1, rot: 0, ox: 0, oy: 0, zb: 0, ca: 0, gl: 0, inv: 0, fl: null, flk: 0 };
+  for (const k of KICKS) {
+    const dt = t - k.t; if (dt < 0 || dt > 1.2) continue;
+    const d = Math.exp(-7.5 * dt);
+    if (k.zb) c.zb += k.zb * Math.exp(-11 * dt);
+    if (k.ca) c.ca += k.ca * Math.exp(-10 * dt);
+    if (k.zk) c.zoom += k.zk * d;
+    if (k.rk) c.rot += k.rk * (Math.PI / 180) * d;
+    if (k.gl) c.gl += k.gl * Math.exp(-9 * dt);
+    if (k.shk) { c.ox += Math.sin(dt * 55) * k.shk * d; c.oy += Math.cos(dt * 71) * k.shk * 0.8 * d; }
+    if (k.inv && dt < k.inv / 30) c.inv = 1;
+    if (k.fl && dt < 0.12) { c.fl = k.fl; c.flk = Math.max(c.flk, 0.85 * (1 - dt / 0.12)); }
+  }
+  return c;
+}
+// letterbox rides through the whole montage + cards
+function letterAt(t) {
+  return Math.min(seg(t, CARD_T[0] - 0.15, CARD_T[0] + 0.10), 1 - seg(t, CUT_END - 0.1, CUT_END + 0.25));
+}
+
+// ============================================================================
+// SCENES (draw into sc)
+// ============================================================================
+
+// --- A: the fall, camera locked to the coin ----------------------------------
 function sceneA(t) {
   bgStone(t, 0.06);
-  const fall = seg(t, 0.22, HIT);
+  const fall = seg(t, 0.15, HIT);
   if (t < HIT) {
-    const y = lerp(-60, HITY, fall * fall);            // gravity
-    const spin = t * 9;
-    // motion streak
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const L = 90 * fall * fall;
-    const g = ctx.createLinearGradient(CX, y - L, CX, y);
-    g.addColorStop(0, 'rgba(255,200,80,0)'); g.addColorStop(1, 'rgba(255,214,90,0.5)');
-    ctx.fillStyle = g; ctx.fillRect(CX - 5, y - L, 10, L);
-    ctx.restore();
-    coin(CX, y, 26, Math.cos(spin), 0.7);
+    // the world streaks UP past us — we are falling with the coin
+    const spd = 200 + 2200 * fall * fall;
+    sc.save(); sc.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 46; i++) {
+      const x = hx(i, 51) * W;
+      const len = 30 + hx(i, 52) * 160 * fall;
+      const y = ((hx(i, 53) * 2200 - t * spd * (0.5 + hx(i, 54))) % (H + 300)) - 150;
+      const yy = ((y % (H + 300)) + H + 300) % (H + 300) - 150;
+      sc.globalAlpha = 0.05 + 0.15 * fall * hx(i, 55);
+      sc.fillStyle = hx(i, 56) > 0.35 ? '#c9a86a' : '#8a97b8';
+      sc.fillRect(x, yy, 1.6 + hx(i, 57) * 2, len);
+    }
+    // dim wall torches whipping past
+    for (let i = 0; i < 5; i++) {
+      const y = ((hx(i, 58) * 2000 - t * spd * 0.8) % (H + 400)); const yy = ((y % (H + 400)) + H + 400) % (H + 400) - 200;
+      sc.globalAlpha = 0.5 * fall;
+      flame(i % 2 ? 30 : W - 30, yy, 1.2, t, i);
+    }
+    sc.restore();
+    // the coin, held center, spinning with ghost trails
+    const cy = 560 + Math.sin(t * 3) * 8;
+    for (let g = 3; g >= 1; g--) {
+      sc.save(); sc.globalAlpha = 0.12 * g;
+      coin(CX + Math.sin((t - g * 0.03) * 9) * 5, cy - g * 22 * fall, 30, Math.cos((t - g * 0.03) * 11), 0);
+      sc.restore();
+    }
+    coin(CX + Math.sin(t * 9) * 5, cy, 30, Math.cos(t * 11), 0.7);
+    // the floor arrives — a marble ledge rushing up into frame
+    const fk = seg(t, 1.30, HIT);
+    if (fk > 0 && IMG.floor) {
+      const fy = lerp(H + 60, 900, outCubic(fk));
+      sc.save();
+      for (let i = -1; i < 6; i++) sc.drawImage(IMG.floor, i * 160, fy, 160, 160);
+      sc.fillStyle = 'rgba(10,6,8,0.45)'; sc.fillRect(0, fy, W, 200);
+      sc.restore();
+    }
   } else {
-    // aftermath: rings + sparks + the coin sat proud where it struck
     const k = t - HIT;
-    ring(CX, HITY, k * 900, 26 * (1 - k), (1 - k / 0.8) * 0.9);
-    ring(CX, HITY, k * 520, 12 * (1 - k), (1 - k / 0.9) * 0.7, '#fff2c0');
-    sparks(CX, HITY, HIT, t, 90, 620, 7, 420);
-    coin(CX, HITY, 26, 1, 0.9);
-    // ground glow
-    ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    const gg = ctx.createRadialGradient(CX, HITY, 4, CX, HITY, 300);
-    gg.addColorStop(0, 'rgba(255,180,60,' + 0.5 * Math.max(0, 1 - k / 0.8) + ')'); gg.addColorStop(1, 'rgba(255,180,60,0)');
-    ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H);
-    ctx.restore();
+    if (IMG.floor) {
+      for (let i = -1; i < 6; i++) sc.drawImage(IMG.floor, i * 160, 900, 160, 160);
+      sc.fillStyle = 'rgba(10,6,8,0.45)'; sc.fillRect(0, 900, W, 200);
+    }
+    ring(CX, 890, k * 1000, 24 * (1 - k), (1 - k / 0.8) * 0.9);
+    ring(CX, 890, k * 560, 11 * (1 - k), (1 - k / 0.9) * 0.7, '#fff2c0');
+    sparks(CX, 880, HIT, t, 110, 680, 7, 420);
+    coin(CX, 872, 30, 1, 0.9);
+    sc.save(); sc.globalCompositeOperation = 'lighter';
+    const gg = sc.createRadialGradient(CX, 880, 4, CX, 880, 330);
+    gg.addColorStop(0, 'rgba(255,180,60,' + 0.55 * Math.max(0, 1 - k / 0.8) + ')'); gg.addColorStop(1, 'rgba(255,180,60,0)');
+    sc.fillStyle = gg; sc.fillRect(0, 0, W, H);
+    sc.restore();
   }
-  flash(t, HIT);
 }
 
-// --- B: the storm, and three words that mean business ------------------------
+// --- B: the storm, three words --------------------------------------------------
 function sceneB(t) {
-  const k = seg(t, 2.3, 5.0);
+  const k = seg(t, 1.8, CARD_T[0]);
   bgStone(t, 0.10 + 0.5 * k);
-  // rain of coins with streaks
   for (let i = 0; i < 90; i++) {
-    const born = 2.1 + hx(i, 11) * 2.4, spd = 900 + hx(i, 12) * 700;
+    const born = 1.75 + hx(i, 11) * 2.4, spd = 900 + hx(i, 12) * 700;
     const age = t - born; if (age < 0) continue;
     const x = hx(i, 13) * W + Math.sin(age * 3 + i) * 18;
     const y = -40 + age * spd; if (y > H + 40) continue;
     const r = 8 + hx(i, 14) * 12;
-    ctx.save(); ctx.globalAlpha = 0.30;
-    const sg = ctx.createLinearGradient(x, y - spd * 0.05, x, y);
+    sc.save(); sc.globalAlpha = 0.30;
+    const sg = sc.createLinearGradient(x, y - spd * 0.05, x, y);
     sg.addColorStop(0, 'rgba(255,206,79,0)'); sg.addColorStop(1, 'rgba(255,206,79,0.9)');
-    ctx.fillStyle = sg; ctx.fillRect(x - r * 0.22, y - spd * 0.05, r * 0.44, spd * 0.05);
-    ctx.restore();
+    sc.fillStyle = sg; sc.fillRect(x - r * 0.22, y - spd * 0.05, r * 0.44, spd * 0.05);
+    sc.restore();
     coin(x, y, r, Math.cos(age * 11 + i), 0);
   }
-  // torches wake along both walls
   for (let i = 0; i < 4; i++) {
-    const on = seg(t, 2.5 + i * 0.28, 2.8 + i * 0.28);
+    const on = seg(t, 1.95 + i * 0.24, 2.25 + i * 0.24);
     if (on <= 0) continue;
-    ctx.save(); ctx.globalAlpha = on;
+    sc.save(); sc.globalAlpha = on;
     flame(34, 240 + i * 260, 1.5, t, i);
     flame(W - 34, 240 + i * 260, 1.5, t, i + 9);
-    ctx.restore();
+    sc.restore();
   }
-  // GOLD. GLORY. GRAVITY.
-  slam('GOLD.',    560, 2.55, 3.35, t, 112, 'Gold');
-  slam('GLORY.',   560, 3.35, 4.15, t, 112, 'Silver');
-  slam('GRAVITY.', 560, 4.15, 5.00, t, 104, 'Ember');
-  flash(t, 2.55, 'rgba(255,220,120,1)');
-  flash(t, 3.35, 'rgba(235,235,255,1)');
-  flash(t, 4.15, 'rgba(255,160,60,1)');
+  slamWord('GOLD.',    570, WORDS[0], WORDS[1], t, 118, 'Gold', -0.03);
+  slamWord('GLORY.',   570, WORDS[1], WORDS[2], t, 118, 'Silver', 0.03);
+  slamWord('GRAVITY.', 570, WORDS[2], CARD_T[0], t, 106, 'Ember', -0.035);
 }
 
-// --- C: montage of the real machine ------------------------------------------
+// --- C: the monster triptych — NEW scenes built from the boss art ---------------
+const CARDS = [
+  { mon: 'goblin',  word: 'HORDES',     style: 'Gold',   hue: [47, 143, 79],  hue2: [16, 48, 30],  fps: 10 },
+  { mon: 'storm',   word: 'CHAMPIONS',  style: 'Silver', hue: [63, 127, 214], hue2: [16, 30, 60],  fps: 7 },
+  { mon: 'inferno', word: 'NIGHTMARES', style: 'Ember',  hue: [224, 71, 13],  hue2: [58, 16, 6],   fps: 7 },
+];
 function sceneC(t) {
-  const c = CUTS.find(c => t >= c.t0 && t < c.t1) || CUTS[CUTS.length - 1];
-  const k = seg(t, c.t0, c.t1);
-  // the footage: real captured gameplay, stepped at the video's own 30fps
-  const fi = clamp((c.f0 || 0) + Math.floor((t - c.t0) * 30), 0, CLIP_N - 1);
-  const img = (CLIP[c.img] && CLIP[c.img][fi]) || IMG[c.img];
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-  if (img) {
-    // the footage moves on its own, so the camera only leans in:
-    // a hard landing, a slow creep, and SLAY still punches INTO the banner
-    const z0 = c.zoom ? c.zoom[0] : (c.punch ? 1.02 : 1.10);
-    const z1 = c.zoom ? c.zoom[1] : (c.punch ? 1.22 : 1.03);
-    const z = lerp(z0, z1, c.punch ? inCubic(k) : outQuint(k));
-    const cy = c.cy || H / 2;
-    const panX = c.dir * lerp(10, -8, outCubic(k));
-    const panY = c.punch ? lerp(0, -110, inCubic(k)) : 0;
-    ctx.save();
-    ctx.translate(CX + panX, H / 2 + panY);
-    ctx.scale(z, z);
-    ctx.drawImage(img, -W / 2, -(cy - H / 2) - H / 2, W, H);
-    ctx.restore();
+  let ci = 0;
+  for (let i = CARDS.length - 1; i >= 0; i--) if (t >= CARD_T[i]) { ci = i; break; }
+  const c = CARDS[ci];
+  const t0 = CARD_T[ci], t1 = ci < 2 ? CARD_T[ci + 1] : CARD_END;
+  const p = seg(t, t0, t1);
+  // split-wedge background sliding in opposite directions
+  sc.fillStyle = 'rgb(' + c.hue2.join(',') + ')'; sc.fillRect(0, 0, W, H);
+  const slide = outQuint(seg(t, t0, t0 + 0.2));
+  sc.save();
+  sc.fillStyle = 'rgba(' + c.hue.join(',') + ',0.30)';
+  sc.beginPath();
+  sc.moveTo(lerp(-W, 0, slide), 0); sc.lineTo(lerp(0, W * 0.72, slide), 0);
+  sc.lineTo(lerp(-W * 0.6, W * 0.30, slide), H); sc.lineTo(lerp(-W * 1.6, -W * 0.42, slide), H);
+  sc.closePath(); sc.fill();
+  sc.fillStyle = 'rgba(0,0,0,0.34)';
+  sc.beginPath();
+  sc.moveTo(lerp(W * 2, W * 0.86, slide), 0); sc.lineTo(W + 40, 0); sc.lineTo(W + 40, H);
+  sc.lineTo(lerp(W * 1.5, W * 0.44, slide), H);
+  sc.closePath(); sc.fill();
+  sc.restore();
+  // radial speed lines in the card's colour
+  speedLines(CX, 560, t, 36, 60 + ci * 7, 'rgba(' + c.hue.join(',') + ',1)', 0.5 * (0.4 + 0.6 * (1 - p)));
+  speedLines(CX, 560, t, 20, 90 + ci * 7, 'rgba(255,244,210,1)', 0.30);
+  // the monster: attack frames, slammed in huge, still creeping closer
+  const frames = MON[c.mon];
+  if (frames && frames.length) {
+    const fi = Math.min(frames.length - 1, Math.floor((t - t0) * c.fps));
+    const im = frames[fi];
+    if (im) {
+      const inK = outQuint(seg(t, t0, t0 + 0.14));
+      const zoom = lerp(3.4, 1.06, inK) * lerp(1, 1.16, p);         // land, keep coming
+      const fitW = Math.min(W * 0.92, (W * 0.92 / im.width) * im.width);
+      const s0 = Math.min(W * 0.92 / im.width, 640 / im.height);
+      const dw = im.width * s0 * zoom, dh = im.height * s0 * zoom;
+      // shadow pool
+      sc.save(); sc.globalAlpha = 0.5 * inK;
+      sc.fillStyle = '#000';
+      sc.beginPath(); sc.ellipse(CX, 560 + dh * 0.46, dw * 0.36, 34, 0, 0, 7); sc.fill();
+      sc.restore();
+      sc.save();
+      sc.translate(CX + (1 - inK) * (ci % 2 ? -70 : 70), 560);
+      sc.rotate((1 - inK) * (ci % 2 ? 0.09 : -0.09));
+      sc.shadowColor = 'rgba(0,0,0,0.65)'; sc.shadowBlur = 26; sc.shadowOffsetY = 14;
+      sc.drawImage(im, -dw / 2, -dh / 2, dw, dh);
+      sc.restore();
+    }
   }
-  // the label, on a black band that cuts across like a stamp
-  const sz = c.small ? 52 : 88;
-  const bandIn = seg(t, c.t0 + 0.05, c.t0 + 0.22), bandOut = seg(t, c.t1 - 0.22, c.t1 - 0.06);
+  slamWord(c.word, 1015, t0 + 0.05, t1 + (ci === 2 ? 0 : 0.02), t, ci === 1 ? 76 : 92, c.style, ci % 2 ? 0.05 : -0.05);
+  // floor glow strip
+  sc.save(); sc.globalCompositeOperation = 'lighter';
+  const gg = sc.createLinearGradient(0, H - 260, 0, H);
+  gg.addColorStop(0, 'rgba(' + c.hue.join(',') + ',0)'); gg.addColorStop(1, 'rgba(' + c.hue.join(',') + ',0.22)');
+  sc.fillStyle = gg; sc.fillRect(0, H - 260, W, 260);
+  sc.restore();
+}
+
+// --- D: footage montage, whip-cut ------------------------------------------------
+const CUTS = [
+  { img: 'room',        w: 'DELVE',  f0: 6,  rate: 39, zoom: [1.62, 1.50], cy: 556, dir: 1 },
+  { img: 'battle_pour', w: 'PUSH',   f0: 6,  rate: 39, zoom: [1.38, 1.10], dir: -1 },
+  { img: 'tilt',        w: 'TILT!',  f0: 8,  rate: 36, zoom: [1.36, 1.12], dir: 1, rage: 1 },
+  { img: 'wheel_meter', w: 'PRESS YOUR LUCK', f0: 12, rate: 42, zoom: [1.30, 1.08], dir: -1, small: 1 },
+  { img: 'boss',        w: 'SLAY',   f0: 4,  rate: 39, zoom: [1.10, 1.34], cy: 700, dir: 1, punch: 1 },
+];
+function sceneD(t) {
+  let ci = 0;
+  for (let i = CUTS.length - 1; i >= 0; i--) if (t >= CUT_T[i]) { ci = i; break; }
+  const c = CUTS[ci];
+  const t0 = CUT_T[ci], t1 = ci < 4 ? CUT_T[ci + 1] : CUT_END;
+  const k = seg(t, t0, t1);
+  const fi = clamp(c.f0 + Math.floor((t - t0) * c.rate), 0, CLIP_N - 1);
+  const img = CLIP[c.img] && CLIP[c.img][fi];
+  sc.fillStyle = '#000'; sc.fillRect(0, 0, W, H);
+  if (img) {
+    // land hard, then either settle or keep punching in
+    const z = c.punch ? lerp(c.zoom[0], c.zoom[1], inCubic(k))
+                      : lerp(c.zoom[0], c.zoom[1], outQuint(k));
+    const cy = c.cy || CY;
+    const panX = c.dir * lerp(12, -9, outCubic(k));
+    sc.save();
+    sc.translate(CX + panX, CY);
+    sc.scale(z, z);
+    sc.drawImage(img, -CX, -cy, W, H);
+    sc.restore();
+  }
+  // stamped label band
+  const sz = c.small ? 54 : 92;
+  const bandIn = seg(t, t0 + 0.03, t0 + 0.16), bandOut = seg(t, t1 - 0.16, t1 - 0.04);
   const bh = sz * 1.7;
   if (bandIn > 0 && bandOut < 1) {
-    ctx.save();
-    ctx.globalAlpha = 0.82 * Math.min(1, bandIn * 2) * (1 - bandOut);
-    ctx.fillStyle = '#0a0705';
+    sc.save();
+    sc.globalAlpha = 0.82 * Math.min(1, bandIn * 2) * (1 - bandOut);
+    sc.fillStyle = '#0a0705';
     const bw = W * outQuint(bandIn);
-    ctx.fillRect(c.dir > 0 ? 0 : W - bw, 940 - bh / 2, bw, bh);
-    ctx.fillStyle = '#ffd94c';
-    ctx.fillRect(c.dir > 0 ? 0 : W - bw, 940 - bh / 2 - 3, bw, 3);
-    ctx.fillRect(c.dir > 0 ? 0 : W - bw, 940 + bh / 2, bw, 3);
-    ctx.restore();
+    sc.fillRect(c.dir > 0 ? 0 : W - bw, 950 - bh / 2, bw, bh);
+    sc.fillStyle = '#ffd94c';
+    sc.fillRect(c.dir > 0 ? 0 : W - bw, 950 - bh / 2 - 3, bw, 3);
+    sc.fillRect(c.dir > 0 ? 0 : W - bw, 950 + bh / 2, bw, 3);
+    sc.restore();
   }
-  slam(c.w, 940 + sz * 0.36, c.t0 + 0.12, c.t1 - 0.05, t, sz, c.rage ? 'Blood' : 'Gold');
-  flash(t, c.t0, c.rage ? 'rgba(255,120,80,1)' : undefined);
+  slamWord(c.w, 950 + sz * 0.36, t0 + 0.08, t1 - 0.03, t, sz, c.rage ? 'Blood' : 'Gold', c.dir * -0.02);
 }
 
-// --- D: every coin in the dungeon answers the call ----------------------------
-function sceneD(t) {
-  const k = seg(t, 13.0, 15.2);
+// --- E: vortex → the wheel itself ------------------------------------------------
+const WHEEL_COLS = ['#e5484d', '#58c470', '#f5c542', '#9a6fd0', '#4fa3e3', '#f2ead9', '#e5484d', '#f5c542', '#58c470', '#9a6fd0'];
+function sceneE(t) {
+  const k = seg(t, VORTEX0, WHEEL0 + 0.35);
   bgStone(t, 0.30 * (1 - k));
-  const cx = CX, cy = 560;
-  // center glow builds
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const gg = ctx.createRadialGradient(cx, cy, 2, cx, cy, 90 + 340 * k);
-  gg.addColorStop(0, 'rgba(255,220,120,' + (0.16 + 0.66 * k * k) + ')');
+  const cx = CX, cy = 590;
+  sc.save(); sc.globalCompositeOperation = 'lighter';
+  const gg = sc.createRadialGradient(cx, cy, 2, cx, cy, 90 + 360 * k);
+  gg.addColorStop(0, 'rgba(255,220,120,' + (0.16 + 0.6 * k * k) + ')');
   gg.addColorStop(1, 'rgba(255,160,40,0)');
-  ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H);
-  ctx.restore();
-  // the spiral — everyone arrives at k=1
-  for (let i = 0; i < 180; i++) {
+  sc.fillStyle = gg; sc.fillRect(0, 0, W, H);
+  sc.restore();
+  const vk = seg(t, VORTEX0, WHEEL0);
+  for (let i = 0; i < 170; i++) {
     const off = hx(i, 21);
-    const p = clamp(k * 1.35 - off * 0.35, 0, 1);
+    const p = clamp(vk * 1.35 - off * 0.35, 0, 1);
     if (p >= 1) continue;
     const a0 = hx(i, 22) * Math.PI * 2;
     const r0 = 320 + hx(i, 23) * 620;
-    const a = a0 + p * (5.5 + hx(i, 24) * 2.5);
+    const a = a0 + p * (6.5 + hx(i, 24) * 2.5);
     const r = r0 * (1 - inCubic(p));
     const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r * 1.15;
     if (y < -40 || y > H + 40) continue;
     const cr = (8 + hx(i, 25) * 14) * (0.55 + 0.45 * (1 - p));
     coin(x, y, cr, Math.cos(p * 22 + i), p > 0.6 ? (p - 0.6) * 2 : 0);
   }
-  if (k > 0.94) {                                  // converge → detonate
-    ctx.save(); ctx.globalAlpha = (k - 0.94) / 0.06;
-    ctx.fillStyle = '#fff7de'; ctx.fillRect(0, 0, W, H); ctx.restore();
+  // ...and what they became: THE WHEEL, spinning up until it swallows the frame
+  const wk = seg(t, WHEEL0, WHITE0);
+  if (wk > 0) {
+    const R = lerp(60, 1050, inCubic(wk));
+    const rot = 14 * wk * wk * wk + wk * 2;
+    const blur = clamp((wk - 0.45) * 2, 0, 1);
+    sc.save();
+    sc.translate(cx, cy);
+    for (let pass = 0; pass < (blur > 0.05 ? 3 : 1); pass++) {
+      sc.save();
+      sc.rotate(rot + pass * blur * 0.09);
+      sc.globalAlpha = pass === 0 ? 1 : 0.35 * blur;
+      const n = WHEEL_COLS.length;
+      for (let i = 0; i < n; i++) {
+        sc.fillStyle = WHEEL_COLS[i];
+        sc.beginPath(); sc.moveTo(0, 0);
+        sc.arc(0, 0, R, (i / n) * Math.PI * 2, ((i + 1) / n) * Math.PI * 2);
+        sc.closePath(); sc.fill();
+      }
+      sc.strokeStyle = '#7a4a10'; sc.lineWidth = R * 0.02;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        sc.beginPath(); sc.moveTo(0, 0); sc.lineTo(Math.cos(a) * R, Math.sin(a) * R); sc.stroke();
+      }
+      sc.restore();
+    }
+    // rim pins, blurring with the spin
+    sc.save(); sc.rotate(14 * wk * wk * wk + wk * 2);
+    for (let i = 0; i < WHEEL_COLS.length; i++) {
+      const a = (i / WHEEL_COLS.length) * Math.PI * 2;
+      sc.fillStyle = '#ffe9a8';
+      sc.beginPath(); sc.arc(Math.cos(a) * R * 0.93, Math.sin(a) * R * 0.93, R * 0.022, 0, 7); sc.fill();
+    }
+    sc.restore();
+    // gold hub
+    const hub = sc.createRadialGradient(0, 0, 2, 0, 0, R * 0.16);
+    hub.addColorStop(0, '#ffe98a'); hub.addColorStop(1, '#b97609');
+    sc.fillStyle = hub; sc.beginPath(); sc.arc(0, 0, R * 0.16, 0, 7); sc.fill();
+    sc.restore();
+  }
+  if (t > WHITE0) {
+    sc.save(); sc.globalAlpha = seg(t, WHITE0, FLIP0);
+    sc.fillStyle = '#fff7de'; sc.fillRect(0, 0, W, H); sc.restore();
   }
 }
 
-// --- E/F: the sign comes down off the wall -------------------------------------
-const SLAM_T = 15.30;
-function sceneE(t) {
+// --- F: coin-flip reveal → marquee slam → INSERT COIN ------------------------------
+function sceneF(t) {
   const heat = 0.5 + 0.2 * Math.sin(t * 0.9);
   bgStone(t, 0.35);
-  // warm halo behind the sign
-  ctx.save(); ctx.globalCompositeOperation = 'lighter';
-  const gg = ctx.createRadialGradient(CX, 470, 30, CX, 470, 460);
+  sc.save(); sc.globalCompositeOperation = 'lighter';
+  const gg = sc.createRadialGradient(CX, 470, 30, CX, 470, 460);
   gg.addColorStop(0, 'rgba(255,190,80,' + (0.22 * heat) + ')'); gg.addColorStop(1, 'rgba(255,150,40,0)');
-  ctx.fillStyle = gg; ctx.fillRect(0, 0, W, H);
-  ctx.restore();
-  // slow bokeh coins drifting behind
-  for (let i = 0; i < 26; i++) {
-    const y = ((hx(i, 31) * 1500 + (t - 15) * (30 + hx(i, 32) * 45)) % 1500) - 120;
-    const x = hx(i, 33) * W;
-    ctx.save(); ctx.globalAlpha = 0.16 + hx(i, 34) * 0.12;
-    coin(x, y, 10 + hx(i, 35) * 22, Math.cos(t * 2 + i * 2.4), 0);
-    ctx.restore();
+  sc.fillStyle = gg; sc.fillRect(0, 0, W, H);
+  sc.restore();
+  // parallax bokeh coins, three depths
+  for (let L = 0; L < 3; L++) {
+    const n = [10, 9, 8][L], sp = [22, 42, 70][L], al = [0.10, 0.16, 0.24][L], rr2 = [26, 17, 11][L];
+    for (let i = 0; i < n; i++) {
+      const y = ((hx(i, 31 + L) * 1500 + (t - 15) * sp) % 1500) - 120;
+      const x = hx(i, 34 + L) * W + Math.sin(t * 0.7 + i) * (8 - L * 2);
+      sc.save(); sc.globalAlpha = al;
+      coin(x, y, rr2 * (0.7 + hx(i, 37 + L) * 0.5), Math.cos(t * 2 + i * 2.4), 0);
+      sc.restore();
+    }
   }
-  // the marquee arrives like it was dropped from the floor above
+  // the white resolves into ONE giant coin that flips over into the sign
+  if (t < SLAM_T && t >= FLIP0) {
+    const fk = seg(t, FLIP0, SLAM_T);
+    const r = lerp(300, 120, fk);
+    coin(CX, 470, r, Math.cos(fk * Math.PI * 3), 0.8);
+    sc.save(); sc.globalAlpha = Math.max(0, 1 - fk * 2);
+    sc.fillStyle = '#fff7de'; sc.fillRect(0, 0, W, H); sc.restore();
+  }
   const mq = IMG.marquee;
   const inK = seg(t, SLAM_T, SLAM_T + 0.42);
   if (mq && t >= SLAM_T) {
-    const sc = lerp(3.1, 1, outBack(inK, 1.35));
+    const scl = lerp(3.1, 1, outBack(inK, 1.35));
     const wobble = Math.sin((t - SLAM_T) * 1.7) * 3 * (t > SLAM_T + 1 ? 1 : 0);
     const mw = 672, mh = mw * mq.height / mq.width;
-    ctx.save();
-    ctx.translate(CX, 470 + wobble);
-    ctx.scale(sc, sc);
-    ctx.globalAlpha = Math.min(1, inK * 3);
-    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 14;
-    ctx.drawImage(mq, -mw / 2, -mh / 2, mw, mh);
-    ctx.restore();
+    sc.save();
+    sc.translate(CX, 470 + wobble);
+    sc.scale(scl, scl);
+    sc.globalAlpha = Math.min(1, inK * 3);
+    sc.shadowColor = 'rgba(0,0,0,0.7)'; sc.shadowBlur = 30; sc.shadowOffsetY = 14;
+    sc.drawImage(mq, -mw / 2, -mh / 2, mw, mh);
+    sc.restore();
     ring(CX, 470, (t - SLAM_T - 0.30) * 1300, 12 * Math.max(0, 1 - (t - SLAM_T - 0.30)), Math.max(0, 0.8 - (t - SLAM_T - 0.30) * 1.4) * 0.55, '#ffe9a8');
-    sparks(CX, 470, SLAM_T + 0.30, t, 130, 780, 41, 300);
+    sparks(CX, 470, SLAM_T + 0.30, t, 140, 800, 41, 300);
   }
-  flash(t, SLAM_T + 0.30);
-  // tagline wipes in under the sign
-  const tagK = seg(t, 16.15, 16.75);
+  const tagK = seg(t, TAG_T, TAG_T + 0.6);
   if (tagK > 0) {
-    ctx.save();
-    ctx.beginPath(); ctx.rect(CX - 300 * outCubic(tagK), 610, 600 * outCubic(tagK), 60); ctx.clip();
-    ctx.font = '900 30px Grimcut Silver'; ctx.textAlign = 'center';
-    ctx.fillText('THE COIN·PUSHER ROGUELIKE', CX, 652);
-    ctx.restore();
-    // gold rules either side
-    ctx.save(); ctx.globalAlpha = tagK; ctx.fillStyle = '#b98a2c';
-    ctx.fillRect(CX - 290, 668, 580 * outCubic(tagK), 2); ctx.restore();
+    sc.save();
+    sc.beginPath(); sc.rect(CX - 300 * outCubic(tagK), 610, 600 * outCubic(tagK), 60); sc.clip();
+    sc.font = '900 30px Grimcut Silver'; sc.textAlign = 'center';
+    sc.fillText('THE COIN·PUSHER ROGUELIKE', CX, 652);
+    sc.restore();
+    sc.save(); sc.globalAlpha = tagK; sc.fillStyle = '#b98a2c';
+    sc.fillRect(CX - 290, 668, 580 * outCubic(tagK), 2); sc.restore();
   }
-  // INSERT COIN — the arcade's oldest promise
-  if (t > 17.4) {
-    const blink = (Math.floor((t - 17.4) / 0.55) % 2) === 0;
+  if (t > INS_T) {
+    const blink = (Math.floor((t - INS_T) / 0.55) % 2) === 0;
     if (blink) {
-      ctx.save();
-      ctx.font = '900 42px Grimcut Gold'; ctx.textAlign = 'center';
-      ctx.shadowColor = 'rgba(255,190,60,0.9)'; ctx.shadowBlur = 28;
-      ctx.fillText('INSERT COIN', CX, 900);
-      ctx.restore();
+      sc.save();
+      sc.font = '900 42px Grimcut Gold'; sc.textAlign = 'center';
+      sc.shadowColor = 'rgba(255,190,60,0.9)'; sc.shadowBlur = 28;
+      sc.fillText('INSERT COIN', CX, 900);
+      sc.restore();
     }
     coin(CX, 952 + Math.sin(t * 2.2) * 4, 18, Math.cos(t * 3), 0.6);
   }
 }
 
-// ---- post: grain + vignette ----------------------------------------------------
-function post(t) {
-  // vignette
+// ============================================================================
+// COMPOSITOR
+// ============================================================================
+function renderFrame(t) {
+  // 1. scene
+  sc.setTransform(1, 0, 0, 1, 0, 0);
+  sc.clearRect(0, 0, W, H);
+  sc.fillStyle = '#000'; sc.fillRect(0, 0, W, H);
+  if (t < 1.8) sceneA(t);
+  else if (t < CARD_T[0]) sceneB(t);
+  else if (t < CUT_T[0]) sceneC(t);
+  else if (t < VORTEX0) sceneD(t);
+  else if (t < FLIP0) sceneE(t);
+  else sceneF(t);
+
+  // 2. camera
+  const cam = camAt(t);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(CX + cam.ox, CY + cam.oy);
+  ctx.rotate(cam.rot);
+  ctx.scale(cam.zoom, cam.zoom);
+  ctx.drawImage(SC, -CX, -CY);
+  // zoom blur: additive echoes scaling out from center
+  if (cam.zb > 0.03) {
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 1; i <= 5; i++) {
+      const s = 1 + cam.zb * 0.030 * i;
+      ctx.globalAlpha = 0.085 * cam.zb;
+      ctx.drawImage(SC, -CX * s, -CY * s, W * s, H * s);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // chromatic split: red/cyan ghosts shoved sideways
+  if (cam.ca > 0.25) {
+    for (const [tint, dx] of [['rgba(255,40,70,1)', -cam.ca], ['rgba(0,190,255,1)', cam.ca]]) {
+      tc.setTransform(1, 0, 0, 1, 0, 0);
+      tc.globalCompositeOperation = 'source-over';
+      tc.clearRect(0, 0, W, H);
+      tc.drawImage(SC, 0, 0);
+      tc.globalCompositeOperation = 'multiply';
+      tc.fillStyle = tint; tc.fillRect(0, 0, W, H);
+      tc.globalCompositeOperation = 'destination-in';
+      tc.drawImage(SC, 0, 0);
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(TC, -CX + dx, -CY);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.restore();
+
+  // 3. glitch: slice the finished frame into bands and shove them
+  if (cam.gl > 0.04) {
+    const f = Math.floor(t * 30);
+    gc.clearRect(0, 0, W, H);
+    gc.drawImage(cv, 0, 0);
+    for (let i = 0; i < 8; i++) {
+      const y = Math.floor(hx(i, f * 13 + 3) * H);
+      const bh = 14 + hx(i, f * 13 + 4) * 70;
+      const ox = (hx(i, f * 13 + 5) - 0.5) * 70 * cam.gl;
+      ctx.drawImage(GC, 0, y, W, bh, ox, y, W, bh);
+    }
+  }
+
+  // 4. invert flash frames
+  if (cam.inv) {
+    ctx.save(); ctx.globalCompositeOperation = 'difference';
+    ctx.fillStyle = '#e8dfc8'; ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+
+  // 5. letterbox
+  const lb = letterAt(t);
+  if (lb > 0.01) {
+    const bh = 72 * lb;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, bh); ctx.fillRect(0, H - bh, W, bh);
+    ctx.fillStyle = 'rgba(255,217,76,0.5)';
+    ctx.fillRect(0, bh, W, 1.5); ctx.fillRect(0, H - bh - 1.5, W, 1.5);
+  }
+
+  // 6. flash
+  if (cam.fl && cam.flk > 0.01) {
+    ctx.save(); ctx.globalAlpha = cam.flk;
+    ctx.fillStyle = 'rgb(' + cam.fl.join(',') + ')';
+    ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+
+  // 7. vignette + grain + end fade
   const v = ctx.createRadialGradient(CX, H * 0.46, H * 0.28, CX, H * 0.52, H * 0.78);
   v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.5)');
   ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
-  // film grain — cheap deterministic sparkle
-  const f = Math.floor(t * 30);
+  const f2 = Math.floor(t * 30);
   ctx.save(); ctx.globalAlpha = 0.05;
   for (let i = 0; i < 240; i++) {
-    const x = hx(i, f * 7 + 1) * W, y = hx(i, f * 7 + 2) * H;
-    ctx.fillStyle = hx(i, f * 7 + 3) > 0.5 ? '#fff' : '#000';
+    const x = hx(i, f2 * 7 + 1) * W, y = hx(i, f2 * 7 + 2) * H;
+    ctx.fillStyle = hx(i, f2 * 7 + 3) > 0.5 ? '#fff' : '#000';
     ctx.fillRect(x, y, 1.6, 1.6);
   }
   ctx.restore();
-  // ending fade
-  const out = seg(t, 19.45, 19.98);
+  const out = seg(t, FADE0, 19.98);
   if (out > 0) { ctx.fillStyle = 'rgba(0,0,0,' + inCubic(out) + ')'; ctx.fillRect(0, 0, W, H); }
-}
-
-// ============================================================================
-function renderFrame(t) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-  // camera shake from whichever hit is freshest
-  let sx = 0, sy = 0;
-  const hits = [[HIT, 16], [2.55, 9], [3.35, 9], [4.15, 11], [5.0, 8], [6.6, 8], [8.2, 22], [9.7, 8], [11.4, 12], [15.3 + 0.30, 20]];
-  for (const [t0, amp] of hits) { const [a, b] = shake(t, t0, amp); sx += a; sy += b; }
-  ctx.save();
-  ctx.translate(sx, sy);
-  if (t < 2.3) sceneA(t);
-  else if (t < 5.0) sceneB(t);
-  else if (t < 13.0) sceneC(t);
-  else if (t < 15.2) sceneD(t);
-  else sceneE(t);
-  ctx.restore();
-  post(t);
 }
 window.renderFrame = renderFrame;
 window.frameJpeg = function (t, q) { renderFrame(t); return cv.toDataURL('image/jpeg', q || 0.95); };
 window.introReady = () => ready;
 
-// live preview when opened by hand
 if (location.hash === '#play') {
   const t0 = performance.now();
   (function loop() { if (ready) renderFrame(((performance.now() - t0) / 1000) % 20); requestAnimationFrame(loop); })();

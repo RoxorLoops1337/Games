@@ -17,12 +17,20 @@ after an edit reproduces everything else exactly.
    frames), and the boss lair. `capture.mjs` / `capture2.mjs` are the older
    still-shot pass, kept for the poster hunts.
 2. **Choreography** — `intro.html` is the renderer: a 720×1260 canvas exposing
-   `renderFrame(t)`. It loads the stills, `marquee.png` (copy from
-   `dungeon_pusher/art/cab/`) and `font.js` (GRIMCUT — copy from `dungeon_pusher/`)
-   from its own directory, all deterministic in `t`. Open with `#play` for a live
-   loop. Storyboard: one coin detonates (0–2.3) → coin storm + GOLD/GLORY/GRAVITY
-   (2.3–5) → five-cut gameplay montage (5–13) → coin vortex (13–15.2) → marquee
-   slam + tagline (15.2–17.4) → INSERT COIN hold and fade (→20).
+   `renderFrame(t)`, all deterministic in `t`. It loads the clips, `marquee.png`
+   (copy from `dungeon_pusher/art/cab/`), `font.js` (GRIMCUT — copy from
+   `dungeon_pusher/`), and `mon/` (the monster-card attack frames + a floor tile,
+   copied from `art/monsters/boss/{goblin,stormknight,inferno_brute}/attack/` and
+   `art/floor_marmer.png`) from its own directory. Open with `#play` for a live
+   loop. The scene draws to an offscreen canvas; a camera + post pipeline (a
+   `KICKS` table drives zoom-blur, chromatic split, glitch bands, roll kicks,
+   shakes, invert and colour flashes; letterbox rides the montage) composites it.
+   Storyboard: camera falls WITH the coin onto a marble ledge (0–1.8) → coin
+   storm + GOLD/GLORY/GRAVITY (→4.6) → monster triptych HORDES/CHAMPIONS/
+   NIGHTMARES from the boss paintings (→6.4) → five whip-cut footage cuts
+   (→12.7) → vortex collapses into a Wheel of Fortune that spins up and swallows
+   the frame (→14.95) → white → giant coin flips into the marquee slam (15.05–
+   15.3) → tagline → INSERT COIN and fade (→20).
 3. **Frames** — `frames.mjs all` steps 600 frames through Playwright into
    `frames/f_%04d.jpg`.
 4. **Soundtrack** — `audio.py` synthesizes the 20 s mix with numpy (+scipy for the
