@@ -1,0 +1,84 @@
+# No Room For Heroes: trailer generator
+
+Everything that made `no_room_for_heroes/trailer.mp4` (15 s, 1920x1080 @ 60 fps,
+h264 + AAC), its `trailer.webm` print (vp9 + opus) and `trailer_poster.jpg`.
+Every frame is a pure function of time and every sound is placed from the same
+cue sheet, so an edit re-renders deterministically and stays in sync.
+
+## Storyboard (128 BPM: 32 beats = 8 bars = 15.0 s)
+
+| time | shot | what happens |
+|---|---|---|
+| 0.00 | open | lightning on the painted party (intro_scene07), **THE HEROES**; the second strike reveals Azzaroth's silhouette and red eyes in the storm |
+| 0.94 | hall | match cut to the real sprites marching in the rain, **ARE COMING / FOR YOU.** |
+| 1.88 | hall | a pillar wipes, whip-pan to Azzaroth (right third); **YOU ARE / THE FINAL BOSS** slams, letterbox snaps open; 3.28 the throne flickers through the other five bosses |
+| 3.75 | hall | pull back to the corridor, **BUILD YOUR DUNGEON**: cards fly in, the frost room lands, spikes stack into it, then the oil + flame and tesla rooms; the party walks in along a gold path |
+| 5.63 | frost / spike / flame / tesla | **CHAIN TRAP COMBOS** x1..x4: FROZEN, SHATTER (hit-stop, the knight breaks into pieces), IGNITE (all four pillars), OVERLOAD (the coil chains the party) |
+| 8.44 | monsters | **RAISE MONSTERS** over the lair; ogre, drakeling and slime panels land on the beats, each blow lands an 8th later: gold and a skull |
+| 10.78 | champion | the game's **CHAMPION APPROACHES** banner; the Super Knight smashes the flame room on the downbeat |
+| 11.72 | overdrive | the boss charges and fires OVERDRIVE, the nova wipes the raid, the champion falls, **BURY THE HEROES.** |
+| 12.66 | stopdown | slow motion on the fallen champion, then four frames of black |
+| 13.13 | logo | one white frame, logo slam, god rays; **REVERSE TOWER DEFENSE · 6 BOSSES · 50 WAVES · ENDLESS**, **PLAY FREE IN YOUR BROWSER** and the URL; still hold from 14.06 |
+
+All the art is the game's own: sprites are sliced with the game's SPRITES /
+MON_SPRITES tables, rooms and traps use `rooms/layout.json` and the game's
+strike timing, bosses use the measured attack-to-idle alignment, and the boss
+close-up uses the unused hi-res `sprites/demon/` Azzaroth frames.
+
+## Files
+
+- `trailer.html`: the renderer page. `#play` (or no hash) loops it live in a browser;
+  `#render` waits for `window.frameJpeg(t)` calls.
+- `engine.js` (timing, easing, assets, fonts), `post.js` (the WebGL2 lens: sub-frame
+  motion blur, bloom pyramid, god rays, zoom blur, chromatic split, shockwaves, heat
+  haze, grade, grain, letterbox), `fx.js` (closed-form particles, kinetic type, caption
+  tiers), `dungeon.js` (rooms and traps, ported from the game's draw code), `actors.js`
+  (heroes, monsters, champion, bosses), `scene.js` (camera, corridor), `main.js`
+  (timeline and frame driver), `shots_*.js` (the storyboard).
+- `cues.json`: the shared clock. Picture and sound both read it.
+- `synth.py` + `audio.py`: the soundtrack, synthesized with numpy + scipy
+  (`pip install numpy scipy`).
+- `render.mjs`: steps frames through headless Chromium (playwright-core). It serves the
+  repo itself, so no separate server is needed.
+
+Render notes that cost real time to learn: the scene canvas is a CPU canvas
+(`willReadFrequently`), because Chromium's SwiftShader-emulated GPU raster is several
+times slower for 2D; static filters (blur, brightness) are baked once (`baked()`), big
+trap PNGs are drawn from a mip pyramid (`mip()`); and a canvas is never rewritten after
+it has been drawn in the same frame (tinted sprites are cached, immutable canvases),
+because Chromium's deferred rasteriser then dropped random tiles to black.
+- `fonts/`: Press Start 2P and Cinzel (SIL OFL), plus alternates.
+
+## Re-cut
+
+    node tools/nrfh_trailer/render.mjs sheet 0 15 0.25        # contact sheet to check the edit
+    node tools/nrfh_trailer/render.mjs spot 2.9 7.6            # single frames
+    node tools/nrfh_trailer/render.mjs all                     # 900 frames -> trailer_out/frames/
+    python3 tools/nrfh_trailer/audio.py trailer_out/trailer.wav
+
+Output goes to `trailer_out/` (git-ignored; override with `NRFH_OUT=`). Encode with the
+ffmpeg that ships in `pip install imageio-ffmpeg`. The film grain makes constant-quality
+encodes huge (CRF 20 was 28.6 MB, over Cloudflare Pages' 25 MB file limit), so the prints
+are two-pass at a fixed bitrate with a light denoise:
+
+    F=trailer_out/frames/f_%04d.jpg; A=trailer_out/trailer.wav; DN="hqdn3d=1.2:1.2:3:3"
+    ffmpeg -framerate 60 -i $F -vf $DN -c:v libx264 -preset slow -b:v 7500k -maxrate 11000k \
+      -bufsize 15000k -pix_fmt yuv420p -profile:v high -level 4.2 -pass 1 -an -f null /dev/null
+    ffmpeg -framerate 60 -i $F -i $A -vf $DN -c:v libx264 -preset slow -b:v 7500k -maxrate 11000k \
+      -bufsize 15000k -pix_fmt yuv420p -profile:v high -level 4.2 -pass 2 -movflags +faststart \
+      -c:a aac -b:a 192k -shortest no_room_for_heroes/trailer.mp4                  # ~15 MB
+    ffmpeg -framerate 60 -i $F -vf $DN -c:v libvpx-vp9 -b:v 5500k -maxrate 8000k -row-mt 1 \
+      -tile-columns 2 -deadline good -cpu-used 3 -pix_fmt yuv420p -pass 1 -an -f null /dev/null
+    ffmpeg -framerate 60 -i $F -i $A -vf $DN -c:v libvpx-vp9 -b:v 5500k -maxrate 8000k -row-mt 1 \
+      -tile-columns 2 -deadline good -cpu-used 3 -pix_fmt yuv420p -pass 2 \
+      -c:a libopus -b:a 160k -shortest no_room_for_heroes/trailer.webm             # ~10 MB
+    ffmpeg -ss 14.6 -i no_room_for_heroes/trailer.mp4 -frames:v 1 -q:v 2 no_room_for_heroes/trailer_poster.jpg
+
+For a full-quality master (social uploads), skip the denoise and use `-crf 17` (~48 MB).
+
+Headless Chromium renders WebGL through SwiftShader, so a frame costs about 1.5 s and the
+reel takes roughly 25 minutes. Keep one worker: SwiftShader already uses every core.
+
+The game side is `playTrailer()` in `no_room_for_heroes/index.html`: a HEAD probe for
+`trailer.mp4` reveals the 🎬 Trailer chip on the title screen, so a missing film means a
+missing button, never a broken screen.

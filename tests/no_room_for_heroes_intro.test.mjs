@@ -5,12 +5,13 @@
 //
 //   node tests/no_room_for_heroes_intro.test.mjs
 import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 
-const A = loadGame(`playIntro,introNext,skipIntro,endIntro,replayIntro,introSeen,titleScreen,
+const A = loadGame(`playIntro,introNext,skipIntro,endIntro,replayIntro,introSeen,titleScreen,playTrailer,
+  get trailerOK(){return trailerOK;},
   loadAudioPref,leaveTitle,INTRO_SCENES,INTRO_FINAL,
   get introIdx(){return introIdx;},
   get uiScreen(){return uiScreen;},
@@ -60,5 +61,20 @@ t.ok(A.audioOn === true, 'a saved mute does NOT silence the intro/title — musi
 t.ok(A.audioMutedPref === true, 'the saved mute is remembered as the standing preference');
 A.leaveTitle();
 t.ok(A.audioOn === false, 'entering the game restores the saved mute');
+
+// --- the 15s trailer film: shipped files are real, the title chip is probe-gated ---
+const game = join(here, '..', 'no_room_for_heroes');
+const big = (f, min) => existsSync(join(game, f)) && statSync(join(game, f)).size > min;
+t.ok(big('trailer.mp4', 2e6), 'trailer.mp4 ships and is a real film, not a stub');
+t.ok(big('trailer.webm', 1e6), 'trailer.webm (the vp9 print) ships alongside it');
+t.ok(big('trailer_poster.jpg', 2e4), 'the trailer poster frame ships');
+t.ok(typeof A.playTrailer === 'function', 'playTrailer() exists');
+t.ok(A.trailerOK === false, 'headless (no HTTP) the probe never runs, so the chip stays hidden');
+const src = readFileSync(join(game, 'index.html'), 'utf8');
+t.ok(/id="titletrailer"[^>]*playTrailer\(\)/.test(src) && src.includes("trailerOK?'':' hidden'"), 'the title screen carries a Trailer chip, hidden until the film is known to exist');
+const gen = join(here, '..', 'tools', 'nrfh_trailer');
+t.ok(['trailer.html', 'cues.json', 'audio.py', 'render.mjs', 'README.md'].every(f => existsSync(join(gen, f))), 'the trailer generator (page, cue sheet, soundtrack, renderer) lives in tools/nrfh_trailer/');
+const cues = JSON.parse(readFileSync(join(gen, 'cues.json'), 'utf8'));
+t.ok(cues.dur === 15 && cues.bpm === 128 && cues.shots.every((s, i) => i === 0 || Math.abs(s.t0 - cues.shots[i - 1].t1) < 1e-9), 'the cue sheet is a gapless 15.0s edit at 128 BPM');
 
 t.done();

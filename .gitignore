@@ -16,3 +16,7 @@ tools/beastfont/out/
 
 # shot walk output -- regenerate with tools/beatborne/shots.mjs
 tools/beatborne/shots/
+
+# No Room For Heroes trailer: render output (frames, wav) -- regenerate with tools/nrfh_trailer/render.mjs
+trailer_out/
+__pycache__/

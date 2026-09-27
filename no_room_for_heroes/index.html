@@ -421,6 +421,7 @@
     background:rgba(20,14,34,.6);border:1px solid #3a2c5a;color:#cdbaff;border-radius:9px;cursor:pointer;
     animation:titleCornerIn .45s ease-out 2.4s both;}
   .titlereplay:hover{background:rgba(44,30,70,.85);color:#fff;}
+  .titletrailer{left:auto;right:16px;border-color:#7a3a4a;color:#ffd0c0;}
   @keyframes titleCornerIn{0%{opacity:0;transform:translateY(14px);}100%{opacity:1;transform:none;}}
   @keyframes introImg{0%{opacity:0;transform:scale(1.085);}15%{opacity:1;}100%{opacity:1;transform:scale(1);}}
   @keyframes introTextIn{0%{opacity:0;transform:translate(-50%,22px);}100%{opacity:1;transform:translate(-50%,0);}}
@@ -2630,10 +2631,41 @@ function titleScreen(){
       <img class="titlelogo" src="title/logo.png" alt="No Room For Heroes" onerror="titleLogoFail(this)">
       <div class="titlestart"><button class="go" onclick="leaveTitle()"><span class="tri">▶</span><span>Start Game</span></button></div>
       <button class="titlereplay" onclick="replayIntro()">↻ Story</button>
+      <button class="titlereplay titletrailer" id="titletrailer" onclick="playTrailer()"${trailerOK?'':' hidden'}>🎬 Trailer</button>
       ${(typeof AC!=='undefined' && AC)?'':'<div class="titlehint" id="titlehint">🔊 tap for sound</div>'}
     </div>`;
   const bg=document.getElementById('titlebg');                 // swap to the painted
   if(bg && typeof Image!=='undefined'){ const probe=new Image(); probe.onerror=()=>bg.classList.add('missing'); probe.src='title/bg.png'; } // fallback if the art 404s
+}
+// 🎬 The trailer: a pre-rendered 15s film (generator in tools/nrfh_trailer/).
+// A HEAD probe gates the title chip, so a missing film means a missing button,
+// never a broken screen. Tap anywhere to skip; the title theme resumes after.
+let trailerOK=false, trailerEl=null;
+try{
+  if(typeof fetch==='function' && typeof location!=='undefined' && /^https?:/.test(location.protocol))
+    fetch('trailer.mp4',{method:'HEAD'}).then(r=>{ trailerOK=!!r.ok; const b=document.getElementById('titletrailer'); if(b&&trailerOK) b.hidden=false; }).catch(()=>{});
+}catch(_){ }
+function playTrailer(){
+  if(trailerEl || typeof document==='undefined') return;
+  const v=document.createElement('video');
+  // two prints: h264 for the wide world, vp9 for chromium builds without the licensed decoder
+  for(const [f,ty] of [['trailer.mp4','video/mp4'],['trailer.webm','video/webm']]){
+    const src=document.createElement('source'); src.src=f; src.type=ty; v.appendChild(src);
+  }
+  v.poster='trailer_poster.jpg'; v.playsInline=true; v.setAttribute('playsinline','');
+  v.style.cssText='position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:#000;z-index:9999;cursor:pointer';
+  const wasOn=audioOn; audioOn=false;                             // hush the title theme while the film plays
+  for(const src of _mtSrcs){ try{ src.stop(); }catch(_){ } } _mtSrcs=[];
+  const kill=()=>{
+    if(trailerEl!==v) return;
+    trailerEl=null; try{ v.pause(); }catch(_){ } v.remove();
+    audioOn=wasOn; if(audioOn && musicMood) mtStart(musicMood);    // restart the loop clock (no catch-up burst)
+  };
+  v.onended=kill; v.onerror=kill;
+  if(v.lastChild) v.lastChild.addEventListener('error',kill);    // only the LAST print failing drops the curtain
+  v.addEventListener('click',kill);                               // the whole film is the skip button
+  document.body.appendChild(v); trailerEl=v;
+  const p=v.play(); if(p && p.catch) p.catch(kill);
 }
 function titleLogoFail(img){
   const h=document.createElement('h1'); h.className='titlelogo-fallback';
