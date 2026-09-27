@@ -2361,7 +2361,8 @@ function callout(x,y,txt,col,o){
   if(live && !(o.hit && live.hit===o.hit) && live.age<live.dur-0.3 && pops.includes(live)){
     // punch again on its own clock (pt): its drift (age) keeps going, so it never jumps
     live.pt=live.age-0.07; live.dur=live.age+(o.dur||1.1);
-    live.x=x; live.txt=txt; live.col=col; live.fill=o.fill||null; live.size=size; live.sub=sub; live.hit=o.hit||0;
+    if(!live.pin) live.x=x;                      // a headline keeps its spot; a hero's callout follows the hero
+    live.txt=txt; live.col=col; live.fill=o.fill||null; live.size=size; live.sub=sub; live.hit=o.hit||0;
     return live;
   }
   // on-screen cap: pinned headlines count for at most 2 slots, and a callout from the
@@ -2369,11 +2370,19 @@ function callout(x,y,txt,col,o){
   let n=0, pn=0; for(const p of pops) if(p.kind==='txt'){ if(p.pin) pn++; else n++; }
   if(n+Math.min(pn,2)>=POP_TXT_CAP) popEvict(p=>p.kind==='txt' && !(o.hit && p.hit===o.hit));
   // stack above any live callout it would print over (Press Start 2P advances one em per
-  // glyph, so a callout is ~len*size wide); at most three rows up, then it may overlap
-  const y0=y;
-  for(const p of pops) if(p.kind==='txt' && p.age<p.dur-0.15 && Math.abs(p.x-x)<(p.txt.length*p.size+txt.length*size)*0.5+8){
-    const gap=(p.size+size)*0.75+(sub?size*1.2:0)+4;
-    if(Math.abs(p.y-y)<gap && y0-(p.y-gap)<=gap*3) y=p.y-gap; }
+  // glyph, so a callout is ~len*size wide): hop to the first free row, re-checking after
+  // every hop. If that climbs past the top of the view, the newest wins: the OLDEST
+  // non-pinned callout in its column (never one from the same hit) gives up its row.
+  const y0=y, top=viewTopY()+size*1.4;
+  const near=p=>p.kind==='txt' && Math.abs(p.x-x)<(p.txt.length*p.size+txt.length*size)*0.5+8;
+  const gapTo=p=>(p.size+size)*0.75+(sub?size*1.2:0)+4;
+  const settle=()=>{ let yy=y0; for(let hops=0, b; hops<8 && (b=pops.find(p=>near(p) && p.age<p.dur-0.15 && Math.abs(p.y-yy)<gapTo(p))); hops++) yy=b.y-gapTo(b); return yy; };
+  y=settle();
+  for(let k=0; k<4 && y<top; k++){
+    const old=pops.find(p=>near(p) && !p.pin && !(o.hit && p.hit===o.hit)); if(!old) break;
+    pops.splice(pops.indexOf(old),1); y=settle();
+  }
+  if(y<top) y=Math.max(y, top-size*1.4);        // nothing left to give way: stay on screen
   if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='skull')) popEvict(()=>true);
   const p={kind:'txt', x, y, txt, col, fill:o.fill||null, size, sub, pin:!!o.pin, hit:o.hit||0, pt:0,
     rot:(o.rot!=null?o.rot:-0.12+Math.random()*0.1), age:0, dur:o.dur||1.1, rise:(o.rise!=null?o.rise:18)};
@@ -2385,12 +2394,15 @@ function skullPop(x,y,rise){ if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='s
 // where a hero's reaction callout goes: above the overlays actually drawn over its head
 // (HP bar + gold tag; elite trait icons; a champion's or the King's crown + name banner)
 function calloutY(h){ const ft=(h._figTop!=null)?h._figTop:h.y-26;
-  return ft-((h.champion||h.king)?76:(h.elite && h.traits && h.traits.length)?62:52); }
-// a dying hero's kill floats (payout, COMBO, BONUS RELIC) shift up so they print ABOVE
-// its still-live reaction callout instead of through it; 0 when it has none
-function killLane(h){ const co=h && h._co; if(!(co && co.age<co.dur && pops.includes(co))) return 0;
-  const top=co.y-co.rise*(1-Math.exp(-2.4*co.age))-co.size*0.8;
-  return Math.min(0, top-8-(h.y-60)); }
+  const a=ft-((h.champion||h.king)?76:(h.elite && h.traits && h.traits.length)?62:52);
+  return Math.max(a, viewTopY()+28); }                      // zoomed in: never above the top of the view
+// world y of the top edge of the view (the world is scaled about the floor line)
+function viewTopY(){ const z=(G && (G.phase==='build'||G.phase==='run')) ? zoom : 1, v=FLOOR-FLOOR/Math.max(0.2,z);
+  return isFinite(v) ? v : -Infinity; }
+// a dying hero's reaction callout (and its same-hit siblings) pops out fast, so the kill
+// pop (payout, COMBO, skull, coins) owns that space instead of printing through it
+function retireCallouts(h){ const co=h && h._co; if(!(co && pops.includes(co))) return;
+  for(const p of pops) if(p.kind==='txt' && !p.pin && (p===co || (co.hit && p.hit===co.hit))) p.dur=Math.min(p.dur, p.age+0.15); }
 let _skullCv=null;                               // the trailer's 7×7 pixel skull, outlined, ember eyes
 function skullSprite(){
   if(_skullCv!==null) return _skullCv;
@@ -5705,7 +5717,7 @@ function castOverdrive(){
 function heroDies(h){
   if(!h || h.state==='dead') return;
   h.state='dead'; h.diedAt=performance.now();   // drives the death animation
-  const kl=killLane(h);                          // cosmetic: lift the kill floats over a live reaction callout
+  retireCallouts(h);                             // cosmetic: its reaction callout makes way for the kill pop
   // ❄ an iced hero SHATTERS instead of falling (cosmetic: see shatterFx / drawHeroDead)
   if(!h.king && !h.champion && (h.freeze>0 || h.chill>0 ||
      ((h._react==='SHATTER'||h._react==='ENCASE') && h.diedAt-(h._reactAt||0)<200))) shatterFx(h);
@@ -5725,7 +5737,7 @@ function heroDies(h){
   // 🏺 Relic-bearer elite: a bonus relic drops when it falls
   if(h.traits && h.traits.includes('relicbearer')){
     G.relicDue=(G.relicDue||0)+1;
-    floater(h.x, h.y-78+kl, '🏺 BONUS RELIC', '#ffd34d');
+    floater(h.x, h.y-78, '🏺 BONUS RELIC', '#ffd34d');
   }
   // loot: carried gold + bounty (threat dial + rune bonuses)
   // loot the hero's full purse (incl. what they spent at your shop — that sale was pure profit on top)
@@ -5767,7 +5779,7 @@ function heroDies(h){
   setStatMax('maxCombo', G.combo);              // feat: best kill streak
   let comboBonus=0;
   if(G.combo>=3){ comboBonus=G.combo; G.gold+=comboBonus;
-    floater(h.x, h.y-78+kl, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
+    floater(h.x, h.y-78, '🔥 COMBO x'+G.combo+' +'+comboBonus+'g', '#ff9a3a'); sfx('combo'); }
   comboCallout(G.combo, h.x);
   gainRage(8);                                  // 💥 every kill stokes the boss's wrath
   // room XP: credit the room the hero was IN when it fell (toward fusing a 2nd
@@ -5780,8 +5792,8 @@ function heroDies(h){
   // a hero who touched the throne returns with a grudge
   if(h.reachedThrone) makeRival(h);
   burst(h.x, h.y-20, '#ffd34d', 22);
-  floater(h.x, h.y-60+kl, '+'+loot+'g · +'+dread+'☠', '#ffd34d');   // one combined payout float
-  if(kl<0) skullPop(h.x, h.y-34, 8); else skullPop(h.x, h.y-42); coinBurst(h.x, h.y-20, FLOOR+(h.yOff||0), Math.min(10, 3+Math.round(loot/8)));   // 🎬 trailer kill pop
+  floater(h.x, h.y-60, '+'+loot+'g · +'+dread+'☠', '#ffd34d');   // one combined payout float
+  skullPop(h.x, h.y-42); coinBurst(h.x, h.y-20, FLOOR+(h.yOff||0), Math.min(10, 3+Math.round(loot/8)));   // 🎬 trailer kill pop
   sfx('kill');
   if(h.loot) dropLoot(h);                 // 💎 carriers drop their gear on the floor to collect
   // 🩸 death gore: a heavy spray, a few gibs, a pool soaking in, a soul wisp rising

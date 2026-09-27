@@ -541,11 +541,20 @@ try{
     'a mass iced death chunks at most '+A.SHATTER_MAX+' heroes at once ('+crowd.filter(c=>!c._noChunks).length+'), the rest still shatter lite');
   for(let i=0;i<4;i++){ A.update(0.03); A.draw(); }
   // 💀 a plain kill: skull pop + coins that bounce on the floor, payout float unchanged
-  // a reaction KILL: the payout float prints above the still-live callout, not through it
+  // a reaction KILL: the killing callout pops out fast and the payout keeps its own lane
   const rk=hs[2]; A.update(2); A.pops.length=0; A.floats.length=0; rk._co=null; rk.hp=5; rk.chill=3; rk.freeze=0;
   A.elementReact(rk,'phys',30);
   const co=rk._co, pay=A.floats.find(f=>/g · \+\d+☠$/.test(f.txt));
-  t.ok(rk.state==='dead' && co && pay && pay.y<co.y-co.size*0.8, 'a reaction kill lifts the payout float above the killing callout ('+(pay&&pay.y.toFixed(1))+' < '+(co&&co.y.toFixed(1))+')');
+  t.ok(rk.state==='dead' && co && co.dur<=co.age+0.151 && pay && Math.abs(pay.y-(rk.y-60))<0.01,
+    'a reaction kill retires the killing callout and keeps the payout in its lane ('+(co&&(co.dur-co.age).toFixed(2))+'s left)');
+  // the streak headline keeps its spot when a later tier re-punches it
+  A.pops.length=0; A.comboCallout(5, 300); const sc=A.pops.find(p=>/RAMPAGE/.test(p.txt)); A.comboCallout(8, 620);
+  t.ok(sc && /DOMINATING/.test(sc.txt) && sc.x===300, 'a re-punched streak headline stays put (no sideways jump)');
+  // a crowd under a pinned headline: every callout finds its own row (no two share one)
+  A.update(2); A.pops.length=0; A.callout(250, 180, 'RAMPAGE!', '#ff9a3a', {pin:true, size:15});
+  for(let i=0;i<3;i++) A.callout(234+i*16, 180, 'SHATTER', '#9adfff', {fill:'ice', sub:'-20'});
+  const rowsY=A.pops.filter(p=>p.kind==='txt').map(p=>Math.round(p.y));
+  t.ok(new Set(rowsY).size===rowsY.length, 'callouts under a pinned headline each get their own row ('+rowsY.join(',')+')');
   A.update(2);
   const w=hs[3]||hs[1]; w.chill=0; w.freeze=0; w._react=null; A.pops.length=0;   // (the sim runs faster than the 200ms real-time SHATTER window)
   const before=A.particles.length; A.heroDies(w);
