@@ -1,5 +1,8 @@
 // Clawspire -- content. Items, statuses, enemies, encounters, relics, events,
-// claw upgrades, brushes, characters, acts and a few small pure helpers.
+// claw upgrades, map tools, characters, acts and a few small pure helpers.
+// The map's light is bulbs (the fx kind and the run field stay 'ink', the
+// player-facing words come from TERMS) and its tools replace the brushes
+// (TOOLS, with BRUSHES as an alias for old code and saves).
 // No DOM, no module state: everything here is data or a pure function of its
 // arguments. Relic hooks mutate the fight object F they are handed, always
 // through COMBAT helpers, and only when COMBAT exists.
@@ -37,8 +40,9 @@ const DATA = (() => {
   // bag, so about 30% of act 1 screens and 26% of act 3 screens show one.
   const BAG_CHANCE = 0.33;
   // Map economy the game and map read (balance bot, 40 runs per setting):
-  // the bible's ~35% reveal share needs ~20 ink per act. 5 start ink left
-  // the map 22% revealed and a rushing player stuck on most maps.
+  // the bible's ~35% lit share needs ~20 bulbs per act. 5 start bulbs left
+  // the map 22% lit and a rushing player stuck on most maps. The keys keep
+  // the old 'ink' spelling: a bulb is what a unit of ink was.
   // Global difficulty step: the basket claw brings up one or two items on
   // nearly every drop, so the enemy bands are multiplied here rather than
   // rewritten. hp scales every enemy's hit points, dmg every attack and
@@ -46,13 +50,18 @@ const DATA = (() => {
   const DIFFICULTY = { hp: 2.0, dmg: 1.4 };   // starting point; the owner tunes by hand
 
   const ECONOMY = {
-    startInk: 10,          // ink at the start of every act (was 5)
-    inkTile: 2,            // an ink tile always gives 2 (was 1, sometimes 2)
-    fightInkChance: 0.5,   // a won normal fight drops 1 ink this often
-    eliteInk: 2,           // ink for beating an elite (was 1)
+    startInk: 10,          // bulbs at the start of every act (was 5)
+    inkTile: 2,            // a box of bulbs always gives 2 (was 1, sometimes 2)
+    fightInkChance: 0.5,   // a won normal fight drops 1 bulb this often
+    eliteInk: 2,           // bulbs for beating an elite (was 1)
+    towerInk: 2,           // bulbs a tower keeper leaves on top of the view and the relic
+    eliteToolChance: 0.35, // a beaten elite hands over a tool this often
     trickle: 2,            // used items that rain back into the bin at every turn start
     binFloor: 6,           // a bin below this at turn start is topped up from the used pile first (then the trickle)
   };
+  // The player-facing words for the map's light and its tools: every piece
+  // of copy reads them, so the rename lives in one place.
+  const TERMS = { ink: 'bulb', inkPlural: 'bulbs', brush: 'tool', brushPlural: 'tools' };
 
   // ------------------------------------------------------------ shape kit
   const box = (w, h) => ({ kind: 'box', w, h });
@@ -381,7 +390,7 @@ const DATA = (() => {
     { id: 'map_scrap', name: 'Map Scrap', rarity: 'u', cost: 55,
       tags: ['light', 'magic'], shape: box(42, 14), density: 0.5, friction: 0.6,
       color: '#f0e0b0', color2: '#8a5a2b', art: 'scroll', target: 'none', exhaust: true,
-      fx: [ink(1)], plus: { fx: [ink(2)] }, text: 'Gain {v} Ink. X marks several spots.' },
+      fx: [ink(1)], plus: { fx: [ink(2)] }, text: 'Gain {v} Bulbs. X marks several spots.' },
     { id: 'rulebook', name: 'Rulebook', rarity: 'u', cost: 60,
       tags: ['magic'], shape: box(30, 38), density: 1.0, friction: 0.6,
       color: '#4a3b8c', color2: '#ffc94d', art: 'book', target: 'self',
@@ -826,7 +835,7 @@ const DATA = (() => {
       mods: { speed: 0.3 } },
     { id: 'golden_ticket', name: 'Golden Ticket', icon: '🎟', rarity: 'c', text: 'On pickup, gain 90 gold. Redeemable nowhere else.',
       mods: { gold: 90 } },
-    { id: 'inkwell', name: 'Bottomless Inkwell', icon: '🖋', rarity: 'c', text: 'On pickup, gain 3 Ink. It has a bottom. It lied.',
+    { id: 'inkwell', name: 'Bottomless Bulb Crate', icon: '💡', rarity: 'c', text: 'On pickup, gain 3 Bulbs. It has a bottom. It lied.',
       mods: { ink: 3 } },
     { id: 'heart_locket', name: 'Heart Locket', icon: '💗', rarity: 'c', text: 'Gain 8 Max HP. There is a tiny picture of you inside.',
       mods: { maxhp: 8 } },
@@ -993,11 +1002,11 @@ const DATA = (() => {
         { txt: 'Let him experiment.', sub: 'Lose 8 HP. Upgrade two items.', fx: [{ k: 'hp', v: -8 }, { k: 'upgrade' }, { k: 'upgrade' }] },
         { txt: 'No thanks.', sub: 'Nothing happens.', fx: [] },
       ] },
-    { id: 'ink_squid', title: 'The Ink Squid', art: 'scroll',
-      text: 'A squid in a fishbowl helmet waddles up. It seems to want a hug.',
+    { id: 'ink_squid', title: 'The Glow Squid', art: 'scroll',
+      text: 'A squid in a fishbowl helmet waddles up, glowing softly. It seems to want a hug.',
       choices: [
-        { txt: 'Hug it.', sub: 'Lose 4 HP. Gain 3 Ink.', fx: [{ k: 'hp', v: -4 }, { k: 'ink', v: 3 }] },
-        { txt: 'Ask to borrow a brush.', sub: 'Gain a Splash brush.', fx: [{ k: 'brush', id: 'splash' }] },
+        { txt: 'Hug it.', sub: 'Lose 4 HP. Gain 3 Bulbs.', fx: [{ k: 'hp', v: -4 }, { k: 'ink', v: 3 }] },
+        { txt: 'Ask to borrow its lantern.', sub: 'Gain a Lantern.', fx: [{ k: 'brush', id: 'lantern' }] },
         { txt: 'Back away slowly.', sub: 'Nothing happens.', fx: [] },
       ] },
     { id: 'lonely_anvil', title: 'Lonely Anvil', art: 'anvil',
@@ -1032,15 +1041,15 @@ const DATA = (() => {
     { id: 'fortune_crane', title: 'Fortune Crane', art: 'scroll',
       text: 'A tiny claw machine full of paper fortunes. One of them just says "LEFT".',
       choices: [
-        { txt: 'Take a fortune.', sub: 'Gain 1 Ink and a Drip brush.', fx: [{ k: 'ink', v: 1 }, { k: 'brush', id: 'drip' }] },
-        { txt: 'Shake it upside down.', sub: 'Lose 6 HP. Gain 3 Ink.', fx: [{ k: 'hp', v: -6 }, { k: 'ink', v: 3 }] },
+        { txt: 'Take a fortune.', sub: 'Gain 1 Bulb and a Kite.', fx: [{ k: 'ink', v: 1 }, { k: 'brush', id: 'kite' }] },
+        { txt: 'Shake it upside down.', sub: 'Lose 6 HP. Gain 3 Bulbs.', fx: [{ k: 'hp', v: -6 }, { k: 'ink', v: 3 }] },
         LEAVE,
       ] },
     { id: 'stuffed_adventurer', title: 'Stuffed Adventurer', art: 'knight',
       text: 'A plush knight with button eyes sits on a shelf. A former Crawler. It blinks at you.',
       choices: [
         { txt: 'Take its sword.', sub: 'Gain a Longsword.', fx: [{ k: 'item', id: 'longsword' }] },
-        { txt: 'Read its diary.', sub: 'Gain 2 Ink.', fx: [{ k: 'ink', v: 2 }] },
+        { txt: 'Read its diary.', sub: 'Gain 2 Bulbs.', fx: [{ k: 'ink', v: 2 }] },
         { txt: 'Cut it free.', sub: 'Lose 5 HP. Gain Friendship Bracelet.', fx: [{ k: 'hp', v: -5 }, { k: 'relic', id: 'friendship_bracelet' }] },
       ] },
     { id: 'steam_vent', title: 'Steam Vent', art: 'bottle',
@@ -1082,11 +1091,11 @@ const DATA = (() => {
         LEAVE,
       ] },
     { id: 'map_mole', title: 'Map Mole', art: 'scroll',
-      text: 'A mole in a trench coat opens it. Ink bottles and brushes, all very legal.',
+      text: 'A mole in a trench coat opens it. Marquee bulbs and flares, all very legal.',
       choices: [
-        { txt: 'Buy ink.', sub: 'Lose 40 gold. Gain 3 Ink.', fx: [{ k: 'gold', v: -40 }, { k: 'ink', v: 3 }], cond: hasGold(40) },
-        { txt: 'Buy a comb.', sub: 'Lose 50 gold. Gain a Comb brush.', fx: [{ k: 'gold', v: -50 }, { k: 'brush', id: 'comb' }], cond: hasGold(50) },
-        { txt: 'Take a free sample.', sub: 'Gain 1 Ink.', fx: [{ k: 'ink', v: 1 }] },
+        { txt: 'Buy bulbs.', sub: 'Lose 40 gold. Gain 3 Bulbs.', fx: [{ k: 'gold', v: -40 }, { k: 'ink', v: 3 }], cond: hasGold(40) },
+        { txt: 'Buy a flare.', sub: 'Lose 50 gold. Gain a Flare.', fx: [{ k: 'gold', v: -50 }, { k: 'brush', id: 'flare' }], cond: hasGold(50) },
+        { txt: 'Take a free sample.', sub: 'Gain 1 Bulb.', fx: [{ k: 'ink', v: 1 }] },
       ] },
     { id: 'under_the_machine', title: 'Under the Machine', art: 'coin',
       text: 'Something shiny is wedged under a claw machine. Something else is breathing under there too.',
@@ -1106,31 +1115,20 @@ const DATA = (() => {
   const EVENTS = {};
   for (const e of EVENT_LIST) EVENTS[e.id] = e;
 
-  // ---------------------------------------------------------------- brushes
-  // Axial neighbour order shared with MAP (east first, then counterclockwise).
-  const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-  const BRUSHES = {
-    line3: { id: 'line3', name: 'Straight Line', icon: '➡', text: 'Reveal 3 tiles in a row toward the boss.',
-      cells: (q, r) => [[q, r], [q + 1, r], [q + 2, r]] },
-    splash: { id: 'splash', name: 'Splash', icon: '💦', text: 'Reveal a tile and all 6 of its neighbours.',
-      cells: (q, r) => [[q, r]].concat(DIRS.map(([dq, dr]) => [q + dq, r + dr])) },
-    // Two different neighbours, picked by a hash of the cell so it is stable.
-    drip: { id: 'drip', name: 'Drip', icon: '💧', text: 'Reveal a tile and 2 of its neighbours.',
-      cells: (q, r) => {
-        const h = U.hashStr('drip:' + q + ',' + r);
-        const i = h % 6;
-        const j = (i + 1 + ((h >>> 3) % 5)) % 6;
-        return [[q, r], [q + DIRS[i][0], r + DIRS[i][1]], [q + DIRS[j][0], r + DIRS[j][1]]];
-      } },
-    // Same offset column (MAP is odd-r: c = q + floor(r/2)), two rows up and down.
-    comb: { id: 'comb', name: 'Comb', icon: '🪮', text: 'Reveal a column of 5 tiles.',
-      cells: (q, r) => {
-        const c = q + Math.floor(r / 2);
-        const out = [];
-        for (let d = -2; d <= 2; d++) out.push([c - Math.floor((r + d) / 2), r + d]);
-        return out;
-      } },
+  // ------------------------------------------------------------------ tools
+  // The map's light tools (MAP does the geometry by `kind`): a flare is a
+  // straight line from the player, a lantern rings around any lit hex, a
+  // kite a patch anywhere near. BRUSHES is the same table under its old
+  // name, so old code and saves keep working (old brush ids load as a lantern).
+  const TOOLS = {
+    flare: { id: 'flare', name: 'Flare', icon: '🎇', kind: 'line',
+      text: 'Fire it from your hex: lights 5 hexes in a straight line. Mountains and open water stop it.' },
+    lantern: { id: 'lantern', name: 'Lantern', icon: '🏮', kind: 'ring',
+      text: 'Hang it on any lit hex: lights the ring around it and about half of the next ring.' },
+    kite: { id: 'kite', name: 'Kite', icon: '🪁', kind: 'patch',
+      text: 'Fly it over any dark hex within 6 of you: lights that hex and its ring.' },
   };
+  const BRUSHES = TOOLS;
 
   // ------------------------------------------------------------- characters
   const CHARACTERS = {
@@ -1280,7 +1278,7 @@ const DATA = (() => {
   }
 
   return {
-    ITEMS, STATUS, ENEMIES, ENCOUNTERS, RELICS, EVENTS, CLAW_UPGRADES, BRUSHES, CHARACTERS, ACTS,
+    ITEMS, STATUS, ENEMIES, ENCOUNTERS, RELICS, EVENTS, CLAW_UPGRADES, BRUSHES, TOOLS, TERMS, CHARACTERS, ACTS,
     ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RARITY_WEIGHTS, CHAR_BIAS, BAG_CHANCE, ECONOMY, DIFFICULTY,
     itemText, pool, rollRarity, rewardItems, relicPool,
   };

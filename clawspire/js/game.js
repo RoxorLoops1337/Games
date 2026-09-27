@@ -26,15 +26,20 @@ const GAME = (() => {
   const BIN_FLOOR = 3;          // selling or removing never empties the bin below this
   const WATCHDOG = 20;          // seconds after a drop before the rig is force-reset (phase caps sum to ~17)
   const SPAWN_GAP = 0.05;       // shower spacing when bodies are (re)spawned
-  // Ink economy lives in DATA.ECONOMY (the balance pass tunes it there).
+  // The bulb economy lives in DATA.ECONOMY (the balance pass tunes it
+  // there); its keys and the run field keep the old 'ink' spelling.
   const ECON = () => (typeof DATA !== 'undefined' && DATA && DATA.ECONOMY) || {};
   const START_INK = ECON().startInk || 10;
+  // Player-facing words for the light and the tools: DATA.TERMS, one place.
+  const TERMS0 = { ink: 'bulb', inkPlural: 'bulbs', brush: 'tool', brushPlural: 'tools' };
+  const TERM = (k) => ((typeof DATA !== 'undefined' && DATA && DATA.TERMS) || {})[k] || TERMS0[k];
+  const bulbs = (n) => `${n} ${Math.abs(n) === 1 ? TERM('ink') : TERM('inkPlural')}`;
   const REMOVE_PRICE = 60;
   const RELIC_PRICE = { c: 120, u: 160, r: 220, boss: 220, event: 160 };
   const RARITY_NAME = { c: 'common', u: 'uncommon', r: 'rare', l: 'legendary', junk: 'junk' };
   const TILE_NAMES = {
     empty: 'nothing here', fight: 'a fight', elite: 'an elite', treasure: 'treasure', gem: 'a gem',
-    ink: 'ink', brush: 'a brush', event: 'something odd', shop: 'a shop', rest: 'a rest stop',
+    ink: `a box of ${TERM('inkPlural')}`, brush: `a ${TERM('brush')}`, event: 'something odd', shop: 'a shop', rest: 'a rest stop',
     boss: 'the boss', start: 'the start', forge: 'a forge', tower: 'a tower',
   };
   // Short labels for landmarks the fog shows before they are lit.
@@ -252,6 +257,8 @@ const GAME = (() => {
     try {
       const run = o.run;
       run.map = run.map && X.MAP ? X.MAP.deserialize(run.map) : null;
+      // Brushes from a save made before the tools load as lanterns.
+      run.brushes = (run.brushes || []).map(toolId);
       if (!run.map) { newMap(run); }
       S.run = run;
       S.sd = o.sd || null;
@@ -327,10 +334,10 @@ const GAME = (() => {
   }
   function addInk(n) { const run = S.run; run.ink = Math.max(0, run.ink + n); if (run.map) run.map.ink = run.ink; }
   // The map must never dead-end. The cheapest thing that still leads
-  // somewhere is a lit walk to the boss or to a tile that hands out ink
-  // (free on land, 2 per ford to wade), else the cheapest reveal on the
-  // frontier (1, or 2 for a ford). When the ink is short of that, the
-  // shortfall seeps in. No brush in hand, or it would be the brush's job.
+  // somewhere is a lit walk to the boss or to a tile that hands out bulbs
+  // (free on land, 2 per ford to wade), else the cheapest hex to light on
+  // the frontier (1, or 2 for a ford). When the bulbs are short of that,
+  // the shortfall flickers on. No tool in hand, or it would be the tool's job.
   function inkRescue() {
     const run = S.run, M = run && run.map;
     if (!M || !X.MAP || (M.brushes && M.brushes.length)) return false;
@@ -356,11 +363,16 @@ const GAME = (() => {
     if (M.ink >= need) return false;
     const n = need - M.ink;
     addInk(n);
-    toast(`A drop of ink seeps from a cracked cabinet. +${n} ink.`);
+    toast(`A ${TERM('ink')} flickers on in a cracked cabinet. +${bulbs(n)}.`);
     return true;
   }
   function addGold(n) { const run = S.run; run.gold = Math.max(0, run.gold + n); }
-  function addBrush(id) { const run = S.run; run.brushes.push(id); if (run.map) run.map.brushes = run.brushes.slice(); }
+  // A tool id as it is today (old brush ids load as a lantern).
+  const toolId = (id) => (X.MAP && X.MAP.normalizeTool ? X.MAP.normalizeTool(id) : id);
+  const toolTable = () => { const T = tbl('TOOLS'); if (Object.keys(T).length) return T; const B = tbl('BRUSHES'); if (Object.keys(B).length) return B; return (X.MAP && X.MAP.FALLBACK_TOOLS) || {}; };
+  const toolDef = (id) => toolTable()[toolId(id)] || { id: toolId(id), name: String(toolId(id)), icon: '' };
+  const toolIds = () => (X.MAP && X.MAP.toolIds ? X.MAP.toolIds() : Object.keys(toolTable()));
+  function addBrush(id) { const run = S.run; run.brushes.push(toolId(id)); if (run.map) run.map.brushes = run.brushes.slice(); }
   function healRun(n) { const run = S.run; run.hp = U.clamp(run.hp + Math.round(n), 0, run.maxHp); }
   // A bag item (def.bag = [ids]) pours its contents into the bin instead of
   // itself; the last one added is returned so callers keep a handle.
@@ -537,7 +549,7 @@ const GAME = (() => {
     }
     b.appendChild(list);
     b.appendChild(h('h3', null, 'The map'));
-    p = h('p'); p.innerHTML = 'The map is hidden. <b>Tap a hidden hex next to the light to reveal it for 1 ink.</b> Brushes reveal a shape for free. Tap a lit hex next to you to walk there. Fights give loot, elites give ink, the boss is at the far right. Three acts, then the Prize Master.'; b.appendChild(p);
+    p = h('p'); p.innerHTML = `The Clawspire is dark. <b>Tap a dark hex next to the light to light it for 1 ${TERM('ink')}</b>, or tap a far one to light the whole way there. Walking lights the ring around you (two rings from a hill), a taken tower lights everything in view, and ${TERM('brushPlural')} light for free: a flare shoots a line, a lantern rings a lit hex, a kite scouts a patch. Tap a lit hex to walk there; the road leads to the boss. Fights give loot, elites give ${TERM('inkPlural')}, the boss is at the top. Three acts, then the Prize Master.`; b.appendChild(p);
     b.appendChild(h('h3', null, 'Keys'));
     p = h('p'); p.innerHTML = 'Arrows steer, Space or Enter drops, E ends the turn, Esc closes popups.'; b.appendChild(p);
     b.appendChild(btn('Back', () => { if (back === 'map') toMap(); else showTitle(); }, 'pri'));
@@ -611,7 +623,10 @@ const GAME = (() => {
     const a = actDef(run.act);
     const l1 = h('div', 'l1');
     l1.appendChild(h('h2', null, `Act ${run.act}: ${a.name}`));
-    l1.appendChild(h('span', 'mhInk', `${M ? M.ink : run.ink} ink`));
+    const pill = h('span', 'mhInk');
+    pill.appendChild(canvasEl(22, (ctx, p) => { if (X.RENDER && X.RENDER.bulb) X.RENDER.bulb(ctx, p / 2, p / 2 - 2, p * 0.3, S.t, true); }));
+    pill.appendChild(h('span', null, ` ${bulbs(M ? M.ink : run.ink)}`));
+    l1.appendChild(pill);
     l1.appendChild(btn('Bin', () => openBin({ mode: 'view', back: () => toMap() }), 'sm ghost'));
     const loc = btn('\u25CE', () => locate(), 'sm ghost');
     loc.title = 'Recentre on you';
@@ -620,25 +635,36 @@ const GAME = (() => {
     l1.appendChild(btn('Quit', () => { save(); showTitle(); }, 'sm ghost'));
     head.appendChild(l1);
     const l2 = h('div', 'l2');
+    // The tools in hand, one chip each (a count when there are copies).
     const counts = {};
-    for (const id of run.brushes) counts[id] = (counts[id] || 0) + 1;
+    for (const id of run.brushes) { const k = toolId(id); counts[k] = (counts[k] || 0) + 1; }
     for (const id in counts) {
-      const bd = (tbl('BRUSHES')[id]) || { name: id, icon: '~' };
+      const bd = toolDef(id);
       const chip = h('button', 'brush' + (S.brushSel === id ? ' sel' : ''), `${bd.icon || ''} ${bd.name}${counts[id] > 1 ? ' x' + counts[id] : ''}`);
-      const fn = () => { S.brushSel = S.brushSel === id ? null : id; buildMapHead(); };
+      const fn = () => selectTool(S.brushSel === id ? null : id);
       chip.onclick = fn;
       S.ui.buttons.push({ el: chip, fn, label: bd.name });
       l2.appendChild(chip);
     }
     const pv = S.preview;
     const walking = S.walk && !S.walk.done;
-    const hintTxt = S.brushSel ? `Brush ready: tap a hidden hex next to the light to paint it.`
+    const kind = S.brushSel ? (X.MAP && X.MAP.toolKind ? X.MAP.toolKind(S.brushSel) : null) : null;
+    const hintTxt = kind === 'line' ? (pv && pv.tool ? `Flare aimed: ${pv.cells.length} hexes. Tap that way again to fire it, or tap another direction.` : 'Flare ready: tap any hex in the direction to fire it. It lights 5 hexes in a line, stopping at mountains and water.')
+      : kind === 'ring' ? 'Lantern ready: tap any lit hex to hang it there. It lights the ring around it and half of the next.'
+      : kind === 'patch' ? 'Kite ready: tap any dark hex within 6 of you. It lights that hex and its ring.'
+      : S.brushSel ? `${toolDef(S.brushSel).name} ready: tap a hex to use it.`
       : walking ? 'Walking. Tap the map to stop.'
-      : pv ? (M.ink >= pv.cost ? `Path: ${pv.cost} ink. Tap that hex again to paint it and walk there.` : `Path: ${pv.cost} ink, you have ${M.ink}. Elites, towers and ink pots give more.`)
-      : 'Tap a lit hex to walk there; the road leads to the boss for free. Tap a hidden hex to preview the ink path, tap again to paint and walk it. Fords cost 2.';
+      : pv ? (M.ink >= pv.cost ? `Light the way: ${bulbs(pv.cost)}. Tap that hex again to light it and walk there.` : `Light the way: ${bulbs(pv.cost)}, you have ${M.ink}. Elites, towers and boxes of ${TERM('inkPlural')} give more.`)
+      : `Tap a lit hex to walk: it lights around you. Tap a dark hex to light the way there (1 ${TERM('ink')} each, fords 2). The road leads to the boss.`;
     l2.appendChild(h('div', 'hint', hintTxt));
     head.appendChild(l2);
     refreshHud(true);
+  }
+  // Arms a tool (its chip): the next tap uses it. null puts it away.
+  function selectTool(id) {
+    S.brushSel = id ? toolId(id) : null;
+    if (S.preview && S.preview.tool) S.preview = null;
+    if (S.screen === 'map') buildMapHead();
   }
   // The map is drawn as a portrait climb: MAP orient 'v' transposes the
   // generator's left-to-right layout so the start sits at the bottom middle
@@ -824,23 +850,55 @@ const GAME = (() => {
     // A tap during a walk stops it where the crawler stands.
     if (S.walk && !S.walk.done) { stopWalk(); toast('Stopped.'); buildMapHead(); return false; }
     const t = X.MAP.tileAt(M, hx.q, hx.r);
-    // A tap anywhere but the previewed hex clears the preview.
+    // A tap anywhere but the previewed hex clears the preview (a flare
+    // preview is by direction: a tap the same way keeps it).
     const pv = S.preview;
-    const samePv = !!(pv && t && pv.q === t.q && pv.r === t.r);
+    const flareDir = (pv && pv.tool && t && X.MAP.dirTo) ? X.MAP.dirTo(M, M.pos, t.q, t.r) : -1;
+    const samePv = !!(pv && t && (pv.tool ? (flareDir >= 0 && flareDir === pv.dir) : (pv.q === t.q && pv.r === t.r)));
     if (pv && !samePv) { S.preview = null; buildMapHead(); }
     if (!t) return false;
-    if (S.brushSel && X.MAP.canBrush && X.MAP.canBrush(M, S.brushSel, t.q, t.r)) {
-      const tiles = X.MAP.brush(M, S.brushSel, t.q, t.r) || [];
-      run.brushes = M.brushes.slice();
-      S.brushSel = null;
-      snd('brush');
-      fx().burst(x, y, '#a6ff5e', 18);
-      toast(`Painted ${tiles.length} hexes.`);
-      buildMapHead();
-      save();
-      return true;
+    // A tool in hand: the tap uses it (a flare is aimed first, fired on the
+    // second tap the same way).
+    if (S.brushSel && X.MAP.toolCells) {
+      const id = S.brushSel, kind = X.MAP.toolKind ? X.MAP.toolKind(id) : null;
+      if (kind === 'line') {
+        const dir = X.MAP.dirTo(M, M.pos, t.q, t.r);
+        const cells = dir >= 0 ? X.MAP.flareCells(M, dir) : [];
+        if (!cells.length) { toast(dir < 0 ? 'Tap a hex in the direction to fire the flare.' : 'The flare would hit a wall of dark rock or open water at once. Aim elsewhere.'); return false; }
+        if (samePv) {
+          const tiles = X.MAP.useTool(M, id, t.q, t.r, dir) || [];
+          run.brushes = M.brushes.slice();
+          S.brushSel = null; S.preview = null;
+          snd('brush');
+          fx().burst(x, y, '#ffb347', 18);
+          toast(`The flare lights ${tiles.length} ${tiles.length === 1 ? 'hex' : 'hexes'}.`);
+          buildMapHead();
+          save();
+          return true;
+        }
+        S.preview = { tool: id, dir, cells, q: t.q, r: t.r, label: 'Flare' };
+        snd('click');
+        buildMapHead();
+        return true;
+      }
+      if (X.MAP.canTool(M, id, t.q, t.r)) {
+        const tiles = X.MAP.useTool(M, id, t.q, t.r) || [];
+        run.brushes = M.brushes.slice();
+        S.brushSel = null;
+        snd('brush');
+        fx().burst(x, y, '#ffd27a', 18);
+        toast(`${toolDef(id).name}: ${tiles.length} ${tiles.length === 1 ? 'hex' : 'hexes'} lit.`);
+        buildMapHead();
+        save();
+        return true;
+      }
+      if (kind === 'ring') { toast('The lantern hangs on a lit hex. Tap one.'); return false; }
+      if (kind === 'patch') { toast(t.revealed ? 'The kite scouts the dark. Tap a dark hex within 6 of you.' : 'Too far for the kite: within 6 hexes of you.'); return false; }
+      toast(`${toolDef(id).name} cannot be used there.`);
+      return false;
     }
-    if (t.terrain === 'sea') { toast('Open water. Nothing to chart out there.'); return false; }
+    if (t.terrain === 'sea') { toast('Open water. Nothing to light out there.'); return false; }
+    if (t.ground === 'mountain') { toast(t.revealed ? 'A mountain. No way over it.' : 'Dark rock. Nobody climbs that; light past it or walk around.'); return false; }
     const ford = t.terrain === 'shallow';
     const tileCost = X.MAP.revealCost ? X.MAP.revealCost(t) : 1;
     if (!t.revealed) {
@@ -848,30 +906,30 @@ const GAME = (() => {
         X.MAP.reveal(M, t.q, t.r);
         run.ink = M.ink;
         snd('reveal');
-        fx().burst(x, y, '#2ee6d6', 12);
-        toast(ford ? `Charted a ford. ${tileCost} ink.` : `Revealed: ${TILE_NAMES[t.type] || t.type}.`);
+        fx().burst(x, y, '#ffd27a', 12);
+        toast(ford ? `Lit a ford. ${bulbs(tileCost)}.` : `Lit: ${TILE_NAMES[t.type] || t.type}.`);
         inkRescue();
         buildMapHead();
         save();
         return true;
       }
-      // Not next to the light: preview the ink path, paint it on a second tap.
+      // Not next to the light: preview the way there, light it on a second tap.
       const path = X.MAP.pathToReveal ? X.MAP.pathToReveal(M, t.q, t.r) : [];
       if (!path.length) {
-        if (M.ink < tileCost) toast(ford ? `A ford takes ${tileCost} ink to chart. You have ${M.ink}.` : 'No ink. Elites, towers and ink pots give more.');
-        else toast('No way through the fog to that hex.');
+        if (M.ink < tileCost) toast(ford ? `A ford takes ${bulbs(tileCost)} to light. You have ${M.ink}.` : `No ${TERM('inkPlural')}. Elites, towers and boxes of ${TERM('inkPlural')} give more.`);
+        else toast('No way through the dark to that hex.');
         if (inkRescue()) buildMapHead();
         return false;
       }
       const cost = X.MAP.pathCost ? X.MAP.pathCost(M, path) : path.length;
       if (samePv) {
-        if (M.ink < cost) { toast(`That path needs ${cost} ink. ${cost - M.ink} short.`); return false; }
+        if (M.ink < cost) { toast(`That way needs ${bulbs(cost)}. ${cost - M.ink} short.`); return false; }
         const tiles = X.MAP.revealPath(M, path) || [];
         run.ink = M.ink;
         S.preview = null;
         snd('reveal');
-        fx().burst(x, y, '#2ee6d6', 18);
-        toast(`Painted ${tiles.length} hexes to ${ford ? 'a ford' : (TILE_NAMES[t.type] || t.type)}.`);
+        fx().burst(x, y, '#ffd27a', 18);
+        toast(`Lit ${tiles.length} hexes to ${ford ? 'a ford' : (TILE_NAMES[t.type] || t.type)}.`);
         inkRescue();
         buildMapHead();
         save();
@@ -887,11 +945,11 @@ const GAME = (() => {
     }
     if (t.q === M.pos.q && t.r === M.pos.r) { toast('You are here.'); return false; }
     // Click to travel: any lit hex reachable through lit hexes. A neighbour
-    // is a one-step walk (the old tap); a ford the ink cannot pay stops the
-    // walk in front of it with its price.
+    // is a one-step walk (the old tap); a ford the bulbs cannot pay stops
+    // the walk in front of it with its price.
     const path = X.MAP.walkPath ? X.MAP.walkPath(M, t.q, t.r) : (X.MAP.canMove(M, t.q, t.r) ? [[t.q, t.r]] : null);
     if (path) return startWalk(path);
-    toast('No lit way there yet. Chart the fog between.');
+    toast('No lit way there yet. Light the dark between.');
     return false;
   }
   // Click to travel. S.walk = { path: [[q, r], ...], i: next step, t: time
@@ -922,7 +980,7 @@ const GAME = (() => {
     if (!t || !X.MAP.canMove(M, q, r)) {
       if (t && t.terrain === 'shallow' && X.MAP.isAdjacent(M.pos.q, M.pos.r, q, r)) {
         const wade = X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
-        toast(`Wading that ford takes ${wade} ink. You have ${M.ink}.`);
+        toast(`Wading that ford takes ${bulbs(wade)}. You have ${M.ink}.`);
         if (inkRescue()) buildMapHead();
       } else toast('The way is blocked.');
       w.done = true;
@@ -1008,17 +1066,16 @@ const GAME = (() => {
         const n = Math.max(c.ink || 1, ECON().inkTile || 1);
         addInk(n);
         snd('reveal');
-        toast(`A pot of ink. +${n} ink.`);
+        toast(`A box of ${TERM('inkPlural')}. +${bulbs(n)}.`);
         buildMapHead();
         break;
       }
       case 'brush': {
         finish();
-        const id = c.brush || (X.MAP && X.MAP.brushIds ? X.MAP.brushIds()[0] : 'splash');
+        const id = toolId(c.brush || (toolIds()[0] || 'lantern'));
         addBrush(id);
         snd('brush');
-        const bd = tbl('BRUSHES')[id] || { name: id };
-        toast(`Found a brush: ${bd.name}.`);
+        toast(`Found a ${TERM('brush')}: ${toolDef(id).name}.`);
         buildMapHead();
         break;
       }
@@ -1035,7 +1092,7 @@ const GAME = (() => {
       case 'empty': {
         if (t.terrain === 'shallow') {
           const wade = X.MAP && X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
-          toast(`You wade the ford. ${wade} ink, and cold to the knees.`);
+          toast(`You wade the ford. ${bulbs(wade)}, and cold to the knees.`);
           inkRescue();
           buildMapHead();
           break;
@@ -1634,7 +1691,9 @@ const GAME = (() => {
     if (tier === 'boss') gold = Math.round(gold * 2.5);
     const econ = ECON();
     const ink = tier === 'elite' ? (econ.eliteInk || 1) : (tier === 'normal' && rng() < (econ.fightInkChance || 0) ? 1 : 0);
-    const reward = { items: rollItems(rng, 3), gold, ink, tier, then };
+    // A beaten elite (a tower keeper too) sometimes hands over a tool.
+    const brush = tier === 'elite' && rng() < (econ.eliteToolChance || 0) && toolIds().length ? rng.pick(toolIds()) : null;
+    const reward = { items: rollItems(rng, 3), gold, ink, brush, tier, then };
     showReward(reward);
   }
 
@@ -1763,6 +1822,7 @@ const GAME = (() => {
       rw.taken = true;
       if (rw.gold) addGold(rw.gold);
       if (rw.ink) addInk(rw.ink);
+      if (rw.brush) addBrush(rw.brush);
     }
     setScreen('reward');
     const b = $('rewardBody');
@@ -1770,7 +1830,8 @@ const GAME = (() => {
     b.appendChild(h('h1', null, rw.tier === 'boss' ? 'Boss down' : 'Victory'));
     const line = h('div', 'row');
     line.appendChild(h('span', 'tag gold', `+${rw.gold} gold`));
-    if (rw.ink) line.appendChild(h('span', 'tag cyan', `+${rw.ink} ink`));
+    if (rw.ink) line.appendChild(h('span', 'tag cyan', `+${bulbs(rw.ink)}`));
+    if (rw.brush) line.appendChild(h('span', 'tag gold', `${toolDef(rw.brush).icon || ''} ${toolDef(rw.brush).name}`.trim()));
     b.appendChild(line);
     b.appendChild(h('div', 'sub', 'Pick one item for your bin.'));
     const cards = h('div', 'cards');
@@ -1805,17 +1866,21 @@ const GAME = (() => {
     if (rw.then) { const then = rw.then; resolveFx(then.fx || [], then.i || 0, () => toMap()); return; }
     toMap();
   }
-  // A tower taken: the bonus rolled at generate is applied here, then the
+  // A tower taken: the view from the top lights everything within
+  // MAP.TOWER_VIEW, the bonus rolled at generate is applied, then the
   // treasure screen offers a relic on top (the usual treasure flow).
   function towerPrize(tw) {
-    const b = (tw && tw.bonus) || { k: 'ink', n: 2 };
+    const run = S.run, M = run && run.map;
+    const b = (tw && tw.bonus) || { k: 'ink', n: ECON().towerInk || 2 };
+    let seen = 0;
+    if (M && X.MAP && X.MAP.towerView && tw && tw.q != null) { seen = X.MAP.towerView(M, tw.q, tw.r).length; run.ink = M.ink; }
     let line = '';
     switch (b.k) {
       case 'gold': { const n = b.n || 60; addGold(n); snd('coin'); line = `+${n} gold`; break; }
       case 'brush': {
-        const id = b.id || (X.MAP && X.MAP.brushIds ? rngFor('tower').pick(X.MAP.brushIds()) : 'splash');
+        const id = toolId(b.id || (toolIds().length ? rngFor('tower').pick(toolIds()) : 'lantern'));
         addBrush(id);
-        line = `a brush (${(tbl('BRUSHES')[id] || { name: id }).name})`;
+        line = `a ${TERM('brush')} (${toolDef(id).name})`;
         break;
       }
       case 'claw': {
@@ -1824,10 +1889,10 @@ const GAME = (() => {
         else { addGold(60); snd('coin'); line = '+60 gold (the claw part did not fit)'; }
         break;
       }
-      default: { const n = b.n || 2; addInk(n); line = `+${n} ink`; break; }
+      default: { const n = b.n || ECON().towerInk || 2; addInk(n); line = `+${bulbs(n)}`; break; }
     }
     const id = rollRelic(rngFor('tower'), ['u', 'r']);
-    showTreasure({ relic: id, gold: b.k === 'gold' ? (b.n || 60) : 0, title: 'Tower taken', sub: `The keeper leaves ${line} and a relic.` });
+    showTreasure({ relic: id, gold: b.k === 'gold' ? (b.n || 60) : 0, title: 'Tower taken', sub: `The view lights ${seen} ${seen === 1 ? 'hex' : 'hexes'}. The keeper leaves ${line} and a relic.` });
   }
   function nextAct() {
     const run = S.run;
@@ -1841,7 +1906,7 @@ const GAME = (() => {
     addInk(START_INK);
     newMap(run);
     const id = rollRelic(rngFor('bossrelic'), ['boss', 'r']);
-    const td = { relic: id, gold: 0, title: `Act ${run.act}: ${actDef(run.act).name}`, sub: `Healed 30%. +${START_INK} ink. The Prize Master left you something.` + (unl.length ? ` Unlocked: ${unl.map((c) => (charDef(c) || {}).name || c).join(', ')}.` : '') };
+    const td = { relic: id, gold: 0, title: `Act ${run.act}: ${actDef(run.act).name}`, sub: `Healed 30%. +${bulbs(START_INK)}. The Prize Master left you something.` + (unl.length ? ` Unlocked: ${unl.map((c) => (charDef(c) || {}).name || c).join(', ')}.` : '') };
     // Claw upgrades come from bosses (and tower bonuses) only: the spare
     // parts screen first, then the relic. Everything maxed skips straight on.
     const pick = rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3);
@@ -2090,8 +2155,8 @@ const GAME = (() => {
         }
         case 'maxhp': run.maxHp = Math.max(1, run.maxHp + f.v); run.hp = U.clamp(run.hp + Math.max(0, f.v), 1, run.maxHp); toast(`${f.v > 0 ? '+' : ''}${f.v} max hp`); break;
         case 'gold': addGold(f.v); toast(`${f.v > 0 ? '+' : ''}${f.v} gold`); snd('coin'); break;
-        case 'ink': addInk(f.v); toast(`${f.v > 0 ? '+' : ''}${f.v} ink`); break;
-        case 'brush': addBrush(f.id || (X.MAP && X.MAP.brushIds ? rngFor('brush').pick(X.MAP.brushIds()) : 'splash')); toast('Got a brush.'); break;
+        case 'ink': addInk(f.v); toast(`${f.v > 0 ? '+' : ''}${bulbs(f.v)}`); break;
+        case 'brush': { const id = toolId(f.id || (toolIds().length ? rngFor('brush').pick(toolIds()) : 'lantern')); addBrush(id); toast(`Got a ${TERM('brush')}: ${toolDef(id).name}.`); break; }
         case 'item': {
           let id = f.id;
           if (!id || id === 'random' || id === 'rare') {
@@ -2434,13 +2499,16 @@ const GAME = (() => {
       const t = M.tiles[k];
       const w = worldOf(t.q, t.r);
       let mask = 0;
-      if (t.coast) dirs.forEach(([dq, dr], i) => { const n = X.MAP.tileAt(M, t.q + dq, t.r + dr); if (n && n.terrain && n.terrain !== 'land') mask |= 1 << edgeOf[i]; });
+      if (t.coast) dirs.forEach(([dq, dr], i) => { const n = X.MAP.tileAt(M, t.q + dq, t.r + dr); if (n && (n.terrain === 'sea' || n.terrain === 'shallow')) mask |= 1 << edgeOf[i]; });
       const terr = t.terrain || 'land';
-      const fill = R && R.terrainFill ? R.terrainFill(biome, terr, t.elev || 0) : (terr === 'sea' ? '#173142' : terr === 'shallow' ? '#3b7d86' : '#8a8570');
-      items.push({ t, k, wx: w.x, wy: w.y, fill, mask, seed: U.hashStr(k) });
+      const fill = R && R.terrainFill ? R.terrainFill(biome, terr, t.elev || 0, t.ground) : (terr === 'sea' ? '#173142' : terr === 'shallow' ? '#3b7d86' : '#8a8570');
+      // the neighbour on each drawn edge, for the glow where light meets dark
+      const nb = dirs.map(([dq, dr]) => X.MAP.tileAt(M, t.q + dq, t.r + dr));
+      const nbEdge = dirs.map((d, i) => edgeOf[i]);
+      items.push({ t, k, wx: w.x, wy: w.y, fill, mask, seed: U.hashStr(k), nb, nbEdge });
     }
     const road = (M.road || []).map(([q, r]) => worldOf(q, r));
-    S.mapPaint = { M, biome, items, road, hidden: [], pool: [], st: {}, cur: { x: 0, y: 0 } };
+    S.mapPaint = { M, biome, items, road, hidden: [], pool: [], st: {}, cur: { x: 0, y: 0 }, rims: [] };
     return S.mapPaint;
   }
   function drawMap(ctx, t) {
@@ -2453,11 +2521,17 @@ const GAME = (() => {
     const ox = A.x + A.w / 2 - c.x * z, oy = A.y + A.h / 2 - c.y * z;
     const x0 = A.x - size, x1 = A.x + A.w + size, y0 = A.y - size, y1 = A.y + A.h + size;
     const reach = new Set(X.MAP.reachable ? X.MAP.reachable(M).map((x) => X.MAP.key(x.q, x.r)) : []);
+    // Where the armed tool could go: a flare's six lines, a lantern's lit
+    // hexes, a kite's dark hexes in range.
     const brushable = new Set();
-    if (S.brushSel && X.MAP.revealable) for (const x of X.MAP.revealable(M, { brush: true })) brushable.add(X.MAP.key(x.q, x.r));
-    const pv = S.preview && S.preview.path && S.preview.path.length ? S.preview : null;
+    const kind = S.brushSel && X.MAP.toolKind ? X.MAP.toolKind(S.brushSel) : null;
+    if (kind === 'line' && X.MAP.flareCells) { for (let d = 0; d < 6; d++) for (const [q, r] of X.MAP.flareCells(M, d)) brushable.add(X.MAP.key(q, r)); }
+    else if (kind === 'ring') { for (const k in M.tiles) if (M.tiles[k].revealed && M.tiles[k].terrain !== 'sea') brushable.add(k); }
+    else if (kind === 'patch' && X.MAP.hexDist) { for (const k in M.tiles) { const x = M.tiles[k]; if (!x.revealed && x.terrain !== 'sea' && X.MAP.hexDist(M.pos.q, M.pos.r, x.q, x.r) <= (X.MAP.KITE_RANGE || 6)) brushable.add(k); } }
+    else if (S.brushSel && X.MAP.revealable) for (const x of X.MAP.revealable(M, { brush: true })) brushable.add(X.MAP.key(x.q, x.r));
+    const pv = S.preview && ((S.preview.path && S.preview.path.length) || (S.preview.cells && S.preview.cells.length)) ? S.preview : null;
     const onPath = {};
-    if (pv) pv.path.forEach(([q, r], i) => { onPath[X.MAP.key(q, r)] = i + 1; });
+    if (pv) (pv.tool ? pv.cells : pv.path).forEach(([q, r], i) => { onPath[X.MAP.key(q, r)] = i + 1; });
     const flat = L.orient === 'v';
     const st = P.st;
     ctx.save();
@@ -2475,25 +2549,29 @@ const GAME = (() => {
         ctx.closePath(); ctx.fillStyle = it.fill; ctx.fill();
       }
     }
-    // The road: a worn track between its hexes, over the ground, under the icons.
-    if (P.road.length > 1 && R && R.mapRoad) R.mapRoad(ctx, P.road.map((w) => ({ x: w.x * z + ox, y: w.y * z + oy })), size, t);
-    // Pass 2: coast, fog, icons and states on everything but the sea.
-    const hidden = P.hidden;
-    hidden.length = 0;
+    // Pass 2: coast, darkness, pickups and states on every hex (the sea
+    // too: unlit water is dark). Lit hexes with a dark neighbour note the
+    // edges that face it for the glow pass.
+    const hidden = P.hidden, rims = P.rims;
+    hidden.length = 0; rims.length = 0;
     const wxy = walkXY();
+    const isDark = (n) => n && !n.revealed && n.type !== 'boss';
     let curXY = null, np = 0;
     for (const it of P.items) {
       const tile = it.t;
-      if (tile.terrain === 'sea') continue;
       const x = it.wx * z + ox, y = it.wy * z + oy;
       if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       const cur = tile.q === M.pos.q && tile.r === M.pos.r;
       if (cur) { P.cur.x = x; P.cur.y = y; curXY = P.cur; }
-      if (!tile.revealed && tile.type !== 'boss' && tile.terrain !== 'shallow') { const pt = P.pool[np] || (P.pool[np] = { x: 0, y: 0 }); pt.x = x; pt.y = y; hidden.push(pt); np++; }
-      st.reachable = reach.has(it.k); st.current = cur; st.hover = brushable.has(it.k);
-      st.canReveal = !tile.revealed && X.MAP.canReveal(M, tile.q, tile.r);
-      st.path = onPath[it.k] || 0; st.target = !!(pv && pv.q === tile.q && pv.r === tile.r); st.known = !!tile.known;
-      st.road = !!tile.road; st.walking = !!wxy;
+      const dark = isDark(tile);
+      if (dark && tile.terrain !== 'shallow') { const pt = P.pool[np] || (P.pool[np] = { x: 0, y: 0 }); pt.x = x; pt.y = y; hidden.push(pt); np++; }
+      let darkMask = 0, nearLight = false;
+      for (let i = 0; i < 6; i++) { const n = it.nb[i]; if (!n) continue; if (dark) { if (!isDark(n)) nearLight = true; } else if (isDark(n)) darkMask |= 1 << it.nbEdge[i]; }
+      if (darkMask) { const pt = P.pool[np] || (P.pool[np] = { x: 0, y: 0 }); pt.x = x; pt.y = y; pt.mask = darkMask; rims.push(pt); np++; }
+      st.reachable = reach.has(it.k); st.current = cur; st.hover = brushable.has(it.k); st.nearLight = nearLight;
+      st.canReveal = dark && X.MAP.canReveal(M, tile.q, tile.r);
+      st.path = onPath[it.k] || 0; st.flare = !!(pv && pv.tool); st.target = !!(pv && !pv.tool && pv.q === tile.q && pv.r === tile.r); st.known = !!tile.known;
+      st.road = !!tile.road; st.walking = true;   // the marker is drawn after the road, never by hex()
       st.fill = it.fill; st.mask = it.mask; st.seed = it.seed;
       if (R && R.hex) R.hex(ctx, x, y, size, tile, st);
       else {
@@ -2502,20 +2580,30 @@ const GAME = (() => {
         ctx.closePath(); ctx.fillStyle = tile.revealed ? '#2c1d4a' : '#150c26'; ctx.fill(); ctx.strokeStyle = '#3d2a63'; ctx.stroke();
       }
     }
-    // The start-boss axis shows through the fog so the direction is obvious.
+    // Pass 3: the warm glow where the light meets the dark, over the darkness.
+    if (R && R.lightRim) for (const p of rims) R.lightRim(ctx, p.x, p.y, size, p.mask, flat, t);
+    // The road: a worn track between its hexes, over the ground and the pickups.
+    if (P.road.length > 1 && R && R.mapRoad) R.mapRoad(ctx, P.road.map((w) => ({ x: w.x * z + ox, y: w.y * z + oy })), size, t);
+    // The start-boss axis shows through the dark so the direction is obvious.
     if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
     // The crawler and the portrait: on the current hex, or easing between
     // hexes while a walk plays (hex() left the crawler out then).
     const meXY = wxy || curXY;
-    if (wxy && R && R.crawler) R.crawler(ctx, wxy.x, wxy.y, size, t);
+    if (meXY && R && R.crawler) R.crawler(ctx, meXY.x, meXY.y, size, t);
     if (meXY && R && R.portrait) R.portrait(ctx, run.char, meXY.x, meXY.y, size * 1.2, t);
     if (pv && R && R.mapPath) {
-      // Draw the path from the lit hex it grows out of.
-      const pts = pv.path.map(([q, r]) => hexToStage(q, r));
-      const [fq, fr] = pv.path[0];
-      const from = X.MAP.neighbors(M, fq, fr).map(([q, r]) => M.tiles[X.MAP.key(q, r)]).find((n) => n.revealed && (n.type !== 'boss' || n.visited));
-      if (from) pts.unshift(hexToStage(from.q, from.r));
-      R.mapPath(ctx, pts, size, { cost: pv.cost, ink: M.ink, label: pv.label, t });
+      if (pv.tool) {
+        // the flare: a line from the player through the hexes it would light
+        const pts = [hexToStage(M.pos.q, M.pos.r)].concat(pv.cells.map(([q, r]) => hexToStage(q, r)));
+        R.mapPath(ctx, pts, size, { label: pv.label, color: '#ffb347', t });
+      } else {
+        // Draw the way from the lit hex it grows out of.
+        const pts = pv.path.map(([q, r]) => hexToStage(q, r));
+        const [fq, fr] = pv.path[0];
+        const from = X.MAP.neighbors(M, fq, fr).map(([q, r]) => M.tiles[X.MAP.key(q, r)]).find((n) => n.revealed && (n.type !== 'boss' || n.visited));
+        if (from) pts.unshift(hexToStage(from.q, from.r));
+        R.mapPath(ctx, pts, size, { cost: pv.cost, ink: M.ink, label: pv.label, unit: TERM('inkPlural'), t });
+      }
     }
     ctx.restore();
     // Off-screen boss: an arrow on the edge of the map area pointing at it.
@@ -2524,7 +2612,7 @@ const GAME = (() => {
     if (R && R.mapCompass) R.mapCompass(ctx, A.x + A.w - 42, A.y + A.h - 42, 28, t);
     if (R && R.mapHeader) {
       const pr = X.MAP.progress ? X.MAP.progress(M) : null;
-      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, actDef(run.act).name, pr ? `${pr.revealed} of ${pr.total} hexes charted` : '', t);
+      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, actDef(run.act).name, pr ? `${pr.revealed} of ${pr.total} hexes lit` : '', t);
     }
   }
   function drawFight(ctx, t) {
@@ -2696,7 +2784,7 @@ const GAME = (() => {
     boot, update, draw, loop, resize,
     newRun, toMap, enterTile, addItem, startFight, endFight, dropClaw, steer, endTurn, save, load, mapTap,
     playDelivered: (bodies) => { for (const b of bodies || []) if (FS && FS.items.indexOf(b) >= 0) deliver(b); },
-    tap, pointer, choose, state, hexToStage, stageToHex, lookAt, locate, wheel, bossArrow, startWalk, stopWalk, walkXY, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
+    tap, pointer, choose, state, hexToStage, stageToHex, lookAt, locate, wheel, bossArrow, startWalk, stopWalk, walkXY, selectTool, towerPrize, showTitle, showChars, showReward, showShop, showEvent, showRest, showForge,
     showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, playIntro, resolveFx, gainRelic, applyClawUpgrade, rollShop,
     rigEvent: (ev) => { if (FS && FS.rig) onRigEvent(ev); },   // test hook: feed one rig event
     get run() { return S.run; }, set run(v) { S.run = v; },

@@ -313,8 +313,8 @@ Flat glyphs, 128x128, square, transparent background. They are drawn at about 14
 | `art/hex/elite.png` | 256x256 | elite | map tile icon: a bone skull wearing a small gold crown, simple bold icon, square |
 | `art/hex/treasure.png` | 256x256 | treasure | map tile icon: a small closed wooden treasure chest with a gold lock, simple bold icon, square |
 | `art/hex/gem.png` | 256x256 | gem | map tile icon: a big cyan cut gem with facet highlights, simple bold icon, square |
-| `art/hex/ink.png` | 256x256 | ink | map tile icon: a round blue ink bottle with a drip running down, simple bold icon, square |
-| `art/hex/brush.png` | 256x256 | brush | map tile icon: a paintbrush with a wooden handle and a glossy blue ink-loaded tip, simple bold icon, square |
+| `art/hex/ink.png` | 256x256 | ink (bulb box) | map tile icon: a small open wooden crate holding three glowing gold light bulbs, warm glow, simple bold icon, square |
+| `art/hex/brush.png` | 256x256 | brush (tool) | map tile icon: a hanging paper lantern glowing warm gold on a short hook, simple bold icon, square |
 | `art/hex/event.png` | 256x256 | event | map tile icon: a big purple question mark made of neon tube, simple bold icon, square |
 | `art/hex/shop.png` | 256x256 | shop | map tile icon: a small striped awning market stall with a gold coin sign (no text), simple bold icon, square |
 | `art/hex/rest.png` | 256x256 | rest | map tile icon: a cosy campfire with two logs and a curl of smoke, simple bold icon, square |
@@ -375,13 +375,13 @@ Chrome machine parts, transparent background, flat side view. The palm and carri
 
 ## UI icons
 
-128x128, square, transparent background. Shown at 14 to 20 px next to the Gold and Ink counters in the top bar and on the brush buttons of the map header.
+128x128, square, transparent background. Shown at 14 to 20 px next to the Gold and Bulbs counters in the top bar and on the tool buttons of the map header.
 
 | File | Gen size (px) | Used for | Prompt |
 | --- | --- | --- | --- |
 | `art/ui/coin.png` | 128x128 | Gold counter | UI icon: a single gold arcade token coin with a star stamp, tilted slightly, bold and simple, square |
-| `art/ui/ink.png` | 128x128 | Ink counter | UI icon: a round blue ink bottle with a single drip running down the side, bold and simple, square |
-| `art/ui/brush.png` | 128x128 | Brush buttons | UI icon: a paintbrush with a wooden handle and a blue ink-loaded tip, diagonal, bold and simple, square |
+| `art/ui/ink.png` | 128x128 | Bulbs counter | UI icon: a single glowing gold light bulb with a short screw base, bold and simple, square |
+| `art/ui/brush.png` | 128x128 | Tool buttons | UI icon: a small hanging paper lantern glowing warm gold, bold and simple, square |
 
 ## Event illustrations
 

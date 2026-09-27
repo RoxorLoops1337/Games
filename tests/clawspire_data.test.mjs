@@ -522,30 +522,38 @@ t.test('claw upgrades', () => {
   t.eq(Object.keys(CLAW_UPGRADES).length, 7, 'exactly the 7 upgrades');
 });
 
-// ---------------------------------------------------------------- brushes
-t.test('brushes', () => {
-  const size = { line3: 3, splash: 7, drip: 3, comb: 5 };
-  const hexDist = (a, b) => (Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[0] + a[1] - b[0] - b[1])) / 2;
-  for (const id in size) {
-    const b = BRUSHES[id];
-    t.ok(!!b && b.id === id && typeof b.name === 'string' && typeof b.icon === 'string' && typeof b.text === 'string', `brush ${id} labels`);
-    for (const [q, r] of [[3, 3], [0, 0], [5, -2], [7, 6], [-1, 4]]) {
-      const cells = b.cells(q, r);
-      t.ok(Array.isArray(cells) && cells.every(c => Array.isArray(c) && c.length === 2 && c.every(Number.isInteger)), `brush ${id}: [q,r] pairs`);
-      t.ok(cells.some(c => c[0] === q && c[1] === r), `brush ${id}: contains target`);
-      t.eq(new Set(cells.map(c => c.join())).size, size[id], `brush ${id}: ${size[id]} unique cells at ${q},${r}`);
-      t.eq(JSON.stringify(b.cells(q, r)), JSON.stringify(cells), `brush ${id}: deterministic`);
-      if (id === 'splash' || id === 'drip') t.ok(cells.every(c => hexDist(c, [q, r]) <= 1), `brush ${id}: neighbours only`);
-      if (id === 'line3') t.ok(cells.every(c => c[1] === r && c[0] >= q), `brush line3 runs east toward the boss`);
-      if (id === 'comb') {
-        t.eq(new Set(cells.map(c => c[1])).size, 5, 'comb spans 5 rows');
-        t.ok(cells.every(c => c[0] + Math.floor(c[1] / 2) === q + Math.floor(r / 2)), 'comb keeps one offset column');
-      }
-    }
+// ------------------------------------------------------------------ tools
+// The map's light: TOOLS (flare, lantern, kite) with BRUSHES as an alias,
+// TERMS for the player-facing words, and no copy that still says ink.
+t.test('tools, terms and the light copy', () => {
+  const { TOOLS, TERMS } = DATA;
+  t.ok(TOOLS && BRUSHES === TOOLS, 'DATA.BRUSHES aliases DATA.TOOLS');
+  t.eq(Object.keys(TOOLS).join(), 'flare,lantern,kite', 'three tools: flare, lantern, kite');
+  const kinds = { flare: 'line', lantern: 'ring', kite: 'patch' };
+  for (const id in kinds) {
+    const b = TOOLS[id];
+    t.ok(!!b && b.id === id && typeof b.name === 'string' && typeof b.icon === 'string' && typeof b.text === 'string' && b.text.length > 20, `tool ${id} labels`);
+    t.eq(b.kind, kinds[id], `tool ${id} kind`);
+    t.ok(!('cells' in b), `tool ${id} has no brush footprint (MAP does the geometry)`);
   }
-  const drips = new Set();
-  for (let q = 0; q < 12; q++) for (let r = 0; r < 7; r++) drips.add(JSON.stringify(BRUSHES.drip.cells(q, r).slice(1).map(c => [c[0] - q, c[1] - r])));
-  t.ok(drips.size >= 6, `drip varies by cell [${drips.size}]`);
+  t.ok(TERMS && TERMS.ink === 'bulb' && TERMS.inkPlural === 'bulbs' && TERMS.brush === 'tool' && TERMS.brushPlural === 'tools', 'TERMS: bulb / bulbs / tool / tools');
+  t.ok(DATA.ECONOMY.towerInk === 2 && DATA.ECONOMY.eliteToolChance > 0 && DATA.ECONOMY.eliteToolChance < 1, 'economy: towers leave 2 bulbs, elites sometimes a tool');
+  t.ok(DATA.ECONOMY.startInk === 10 && DATA.ECONOMY.inkTile === 2, 'economy keys keep their spelling: startInk is the bulbs per act');
+  // No copy says ink (a word starting with ink: Ink, inks, inkwell...; drink, pink and blink are fine).
+  const bad = [];
+  const walk = (v, path) => {
+    if (typeof v === 'string') { if (/\bink/i.test(v) && !/^[a-z_]+$/.test(v)) bad.push(path + ': ' + v); }
+    else if (Array.isArray(v)) v.forEach((x, i) => walk(x, path + '[' + i + ']'));
+    else if (v && typeof v === 'object') for (const k in v) if (k !== 'id' && k !== 'k' && k !== 'art') walk(v[k], path + '.' + k);
+  };
+  for (const k of ['ITEMS', 'STATUS', 'ENEMIES', 'RELICS', 'EVENTS', 'CLAW_UPGRADES', 'TOOLS', 'CHARACTERS', 'ACTS', 'TERMS']) walk(DATA[k], k);
+  t.eq(bad.length, 0, 'no DATA copy says ink: ' + bad.join(' | '));
+  t.ok(RELICS.inkwell && /Bulb/.test(RELICS.inkwell.name) && /Bulbs/.test(RELICS.inkwell.text), 'the inkwell relic (id kept) reads as bulbs');
+  t.ok(ITEMS.map_scrap && /Bulbs/.test(ITEMS.map_scrap.text), 'Map Scrap gives Bulbs');
+  const evTools = [];
+  for (const id in EVENTS) for (const c of EVENTS[id].choices) for (const f of c.fx) if (f.k === 'brush') evTools.push(f.id);
+  t.ok(evTools.length >= 3 && evTools.every(id => TOOLS[id]), 'events hand out real tools (' + evTools.join(',') + ')');
+  t.ok(evTools.includes('flare') && evTools.includes('lantern') && evTools.includes('kite'), 'every tool can come from an event');
 });
 
 // ------------------------------------------------------------- characters

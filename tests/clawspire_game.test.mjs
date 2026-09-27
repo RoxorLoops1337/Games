@@ -2,7 +2,9 @@
 // Boots the whole game headless through tests/clawspire_lib.mjs and drives a
 // run: title -> new run -> map -> reveal/move -> fight -> claw drops -> enemy
 // turn -> fight end -> reward -> save/load -> game over -> meta stats.
-import { boot, harness } from './clawspire_lib.mjs';
+import fs from 'fs';
+import path from 'path';
+import { boot, harness, DIR } from './clawspire_lib.mjs';
 
 const h = harness('clawspire game');
 const DT = 1 / 60;
@@ -466,8 +468,9 @@ h.test('map: sea cannot be tapped, a ford costs 2 to chart and 2 to wade, the re
   const sp2 = Gt.hexToStage(shore.q, shore.r);
   Gt.tap(sp2.x, sp2.y);
   h.ok(M.pos.q === shore.q && Gt.run.ink === 1, 'stepping back onto land is free');
+  const inkBefore = Gt.run.ink;
   Gt.tap(fp.x, fp.y);
-  h.ok(M.pos.q === shore.q && Gt.run.ink === 1, 'with 1 ink the ford is refused');
+  h.ok(M.pos.q === shore.q && (Gt.run.ink === inkBefore || /flickers on/.test(Gt.S.lastToast)), 'with 1 bulb the ford is refused (the rescue may light one)');
   Gt.draw();
   // Stranded on a fully cleared island with a hidden ford: the rescue seeps
   // in the 2 the ford needs, not just 1.
@@ -502,13 +505,15 @@ h.test('map: a tower is an elite fight that pays a relic and its bonus', () => {
   h.eq(Gt.screen, 'treasure', 'then the treasure screen');
   h.ok(Gt.S.sd && Gt.S.sd.treasure && Gt.S.sd.treasure.relic, 'a relic is offered');
   const eliteInk = (DATA.ECONOMY && DATA.ECONOMY.eliteInk) || 1;
-  h.eq(Gt.run.ink, ink + eliteInk + 2, 'elite ink plus the +2 ink bonus');
+  h.eq(Gt.run.ink, ink + eliteInk + 2, 'elite bulbs plus the +2 bulb bonus');
+  h.ok(Object.values(M.tiles).every(t => MAP.hexDist(t.q, t.r, tower.q, tower.r) > MAP.TOWER_VIEW || t.revealed), 'the view from the tower lights everything within radius ' + MAP.TOWER_VIEW);
+  h.ok(/view lights \d+ hexes/.test(Gt.S.sd.treasure.sub), 'the treasure screen says how much the view lit');
   Gt.choose(0);
   h.eq(Gt.run.relics.length, relics + 1, 'relic taken');
   h.eq(Gt.screen, 'map', 'back on the map');
   h.ok(tower.done, 'tower cleared');
   // The other bonus kinds apply without throwing.
-  for (const bonus of [{ k: 'gold', n: 60 }, { k: 'brush', id: 'splash' }, { k: 'claw', u: 'width' }]) {
+  for (const bonus of [{ k: 'gold', n: 60 }, { k: 'brush', id: 'splash' }, { k: 'brush', id: 'kite' }, { k: 'claw', u: 'width' }]) {
     const T2 = boot(); const G2 = T2.GAME; G2.newRun('knight', 77);
     const tw = Object.values(G2.run.map.tiles).find(t => t.type === 'tower');
     tw.content.tower.bonus = bonus;
@@ -516,11 +521,194 @@ h.test('map: a tower is an elite fight that pays a relic and its bonus', () => {
     G2.enterTile(tw); stepFor(G2, 0.2); G2.endFight('win'); G2.choose(3);
     h.eq(G2.screen, 'treasure', bonus.k + ' bonus reaches the treasure screen');
     if (bonus.k === 'gold') h.ok(G2.run.gold >= gold + 60, 'gold bonus paid');
-    if (bonus.k === 'brush') h.eq(G2.run.brushes.length, brushes + 1, 'brush bonus paid');
+    if (bonus.k === 'brush') h.ok(G2.run.brushes.length === brushes + 1 && G2.run.brushes[brushes] === (bonus.id === 'splash' ? 'lantern' : bonus.id), 'tool bonus paid (' + bonus.id + ' -> ' + G2.run.brushes[brushes] + ')');
     if (bonus.k === 'claw') h.ok(G2.run.claw.width > width, 'claw bonus applied');
     G2.choose(0);
     h.eq(G2.screen, 'map', bonus.k + ': back on the map');
   }
+});
+
+h.test('map: the HUD reads BULBS, the map head shows bulbs and the tool chips', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 45);
+  const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  h.ok(/class="stat ink"><span class="k">Bulbs<\/span>/.test(html), 'the top bar stat is labelled Bulbs (id inkTxt kept)');
+  h.ok(!/<span class="k">Ink<\/span>/.test(html), 'no Ink label left in index.html');
+  h.eq(T._nodes.inkTxt.textContent, String(Gt.run.ink), 'the stat shows the bulbs in hand');
+  const texts = [];
+  const walk = (el) => { if (!el) return; if (el.textContent) texts.push(el.textContent); (el.children || []).forEach(walk); };
+  walk(T._nodes.mapHead);
+  h.ok(texts.some(x => new RegExp('\\b' + Gt.run.ink + ' bulbs').test(x)), 'the map head pill says N bulbs (' + texts.filter(x => /bulb/.test(x)).join(' / ') + ')');
+  h.ok(!texts.some(x => /\bink\b/i.test(x)), 'no copy in the map head says ink');
+  Gt.run.brushes = ['flare', 'lantern', 'lantern', 'kite']; Gt.run.map.brushes = Gt.run.brushes.slice();
+  Gt.toMap();
+  const labels = Gt.S.ui.buttons.map(b => b.label);
+  h.ok(labels.includes('Flare') && labels.includes('Lantern') && labels.includes('Kite'), 'a chip per tool (' + labels.join(',') + ')');
+  const src = fs.readFileSync(path.join(DIR, 'js', 'game.js'), 'utf8');
+  const strings = src.match(/(['"`])(?:\\.|(?!\1)[^\\\n])*\1/g) || [];
+  const inkCopy = strings.filter(x => /\bink\b/i.test(x) && /\s/.test(x) && !/\$\{|\.ink|Ink economy/.test(x));
+  h.eq(inkCopy.length, 0, 'no player-facing string in game.js says ink: ' + inkCopy.slice(0, 5).join(' | '));
+  h.ok(!/\u2014/.test(src), 'no em dashes in game.js');
+  Gt.draw();
+});
+
+h.test('map: flare, lantern and kite flow through GAME.tap', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 45);
+  const M = Gt.run.map;
+  Gt.run.brushes = ['flare', 'lantern', 'kite']; M.brushes = Gt.run.brushes.slice();
+  Gt.toMap();
+  // Flare: arm, aim (a preview), fire on the second tap the same way.
+  Gt.selectTool('flare');
+  h.eq(Gt.S.brushSel, 'flare', 'the flare is armed');
+  const dirs = MAP.DIRS.map((d, i) => i).filter(i => MAP.flareCells(M, i).length >= 3);
+  h.ok(dirs.length > 0, 'a direction with room for a flare');
+  const dir = dirs[0];
+  const [dq, dr] = MAP.DIRS[dir];
+  const aim = MAP.tileAt(M, M.pos.q + dq * 2, M.pos.r + dr * 2);
+  Gt.lookAt(aim.q, aim.r);
+  const p = Gt.hexToStage(aim.q, aim.r);
+  const dark = MAP.flareCells(M, dir).filter(([q, r]) => !M.tiles[MAP.key(q, r)].revealed).length;
+  Gt.tap(p.x, p.y);
+  h.ok(Gt.S.preview && Gt.S.preview.tool === 'flare' && Gt.S.preview.dir === dir && Gt.S.preview.cells.length >= 3, 'the first tap previews the line (' + (Gt.S.preview && Gt.S.preview.cells.length) + ' hexes)');
+  h.eq(Gt.run.brushes.length, 3, 'nothing spent on the preview');
+  Gt.draw();
+  // a tap in another direction re-aims
+  const other = (dir + 3) % 6;
+  const [oq, or] = MAP.DIRS[other];
+  const aim2 = MAP.tileAt(M, M.pos.q + oq, M.pos.r + or);
+  if (aim2 && MAP.flareCells(M, other).length) {
+    const p2 = Gt.hexToStage(aim2.q, aim2.r);
+    Gt.tap(p2.x, p2.y);
+    h.ok(Gt.S.preview && Gt.S.preview.dir === other, 'a tap another way re-aims the flare');
+    Gt.tap(p.x, p.y);
+    h.ok(Gt.S.preview && Gt.S.preview.dir === dir, 'and back');
+  }
+  const rev = MAP.progress(M).revealed;
+  Gt.tap(p.x, p.y);
+  h.ok(!Gt.S.preview && Gt.S.brushSel === null, 'the second tap fires and puts the tool away');
+  h.eq(Gt.run.brushes.length, 2, 'one flare spent');
+  h.ok(M.brushes.length === 2 && !M.brushes.includes('flare'), 'the map tools follow');
+  h.eq(MAP.progress(M).revealed, rev + dark, 'the line is lit');
+  h.ok(MAP.flareCells(M, dir).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'every hex of the line is lit');
+  // Lantern: tap a lit hex.
+  Gt.selectTool('lantern');
+  const lit = Object.values(M.tiles).find(t => t.revealed && t.terrain === 'land' && MAP.neighbors(M, t.q, t.r).some(([q, r]) => !M.tiles[MAP.key(q, r)].revealed));
+  const darkT = Object.values(M.tiles).find(t => !t.revealed && t.terrain === 'land' && !MAP.neighbors(M, t.q, t.r).some(([q, r]) => M.tiles[MAP.key(q, r)].revealed));
+  Gt.lookAt(darkT.q, darkT.r);
+  const pd = Gt.hexToStage(darkT.q, darkT.r);
+  Gt.tap(pd.x, pd.y);
+  h.ok(Gt.run.brushes.length === 2 && Gt.S.brushSel === 'lantern', 'a lantern on a dark hex is refused and stays armed');
+  Gt.lookAt(lit.q, lit.r);
+  const pl = Gt.hexToStage(lit.q, lit.r);
+  Gt.tap(pl.x, pl.y);
+  h.ok(Gt.run.brushes.length === 1 && Gt.S.brushSel === null, 'the lantern is hung and spent');
+  h.ok(MAP.neighbors(M, lit.q, lit.r).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'its ring is lit');
+  // Kite: tap a dark hex within 6.
+  Gt.selectTool('kite');
+  const far = Object.values(M.tiles).find(t => !t.revealed && t.terrain === 'land' && MAP.hexDist(t.q, t.r, M.pos.q, M.pos.r) === 5);
+  const tooFar = Object.values(M.tiles).find(t => !t.revealed && t.terrain === 'land' && MAP.hexDist(t.q, t.r, M.pos.q, M.pos.r) === 8);
+  Gt.lookAt(tooFar.q, tooFar.r);
+  const pt = Gt.hexToStage(tooFar.q, tooFar.r);
+  Gt.tap(pt.x, pt.y);
+  h.ok(Gt.run.brushes.length === 1 && Gt.S.brushSel === 'kite', 'a kite out of range is refused');
+  Gt.lookAt(far.q, far.r);
+  const pf = Gt.hexToStage(far.q, far.r);
+  Gt.tap(pf.x, pf.y);
+  h.ok(Gt.run.brushes.length === 0 && far.revealed && MAP.neighbors(M, far.q, far.r).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'the kite lights the patch and is spent');
+  h.ok(!Gt.S.brushSel && Gt.S.ui.buttons.every(b => !/Flare|Lantern|Kite/.test(b.label)), 'no chips left');
+  h.eq(Gt.run.ink, M.ink, 'bulbs untouched by the tools (' + Gt.run.ink + ')');
+  Gt.draw();
+  // selectTool(null) puts a tool away and drops a flare preview.
+  Gt.run.brushes = ['flare']; M.brushes = ['flare']; Gt.toMap();
+  Gt.selectTool('flare'); Gt.tap(p.x, p.y);
+  Gt.selectTool(null);
+  h.ok(!Gt.S.brushSel && !Gt.S.preview, 'putting the flare away clears its preview');
+});
+
+h.test('map: terrain vision on a hill lights two rings, on lowland one, as the crawler walks', () => {
+  const R = walkRig(23);
+  const { G: Gt, M, chain } = R;
+  const [a, b, c] = chain;
+  for (const t of [a, b, c]) t.elev = 0.3;
+  b.elev = 0.9; b.ground = 'hill';
+  for (const t of Object.values(M.tiles)) if (![a, b, c].includes(t) && t.type !== 'start' && t.type !== 'boss') t.revealed = false;
+  M.revealedCount = Object.values(M.tiles).filter(t => t.revealed && t.terrain !== 'sea').length;
+  Gt.toMap();
+  Gt.lookAt(a.q, a.r);
+  const p = Gt.hexToStage(a.q, a.r);
+  Gt.tap(p.x, p.y);
+  h.ok(M.pos.q === a.q && M.pos.r === a.r, 'stepped onto the lowland hex');
+  h.ok(MAP.disc(M, a.q, a.r, 1).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'lowland: its ring is lit');
+  h.ok(MAP.disc(M, a.q, a.r, 2).some(([q, r]) => MAP.hexDist(q, r, a.q, a.r) === 2 && MAP.hexDist(q, r, M.start.q, M.start.r) > 1 && !M.tiles[MAP.key(q, r)].revealed), 'lowland: the second ring stays dark');
+  Gt.lookAt(b.q, b.r);
+  const pb = Gt.hexToStage(b.q, b.r);
+  Gt.tap(pb.x, pb.y);
+  h.ok(M.pos.q === b.q && M.pos.r === b.r, 'stepped onto the hill');
+  h.ok(MAP.disc(M, b.q, b.r, 2).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'hill: two rings lit');
+  h.eq(MAP.progress(M).revealed, Object.values(M.tiles).filter(t => t.revealed && t.terrain !== 'sea').length, 'progress in sync');
+  Gt.draw();
+});
+
+h.test('map: a resolved tile loses its icon (tile.done and the draw fingerprint)', () => {
+  const T = boot();
+  const Gt = T.GAME, R = T.RENDER;
+  Gt.newRun('knight', 45);
+  const M = Gt.run.map;
+  const gem = Object.values(M.tiles).find(t => t.type === 'gem' && t.revealed) || Object.values(M.tiles).find(t => t.type === 'gem');
+  gem.revealed = true;
+  const paints = (tile) => { T._resetCounts(); R.hex(T._ctx, 50, 50, 30, tile, { t: 1, orient: 'v', fill: '#888', seed: 3, biome: 'cellar' }); return Object.assign({}, T._counts); };
+  const before = paints(gem);
+  const gold = Gt.run.gold;
+  M.pos = { q: gem.q, r: gem.r };
+  Gt.enterTile(gem);
+  h.ok(gem.done && Gt.run.gold > gold, 'the gem is taken and done');
+  const after = paints(gem);
+  const sum = (c) => (c.fill || 0) + (c.stroke || 0) + (c.drawImage || 0);
+  h.ok(sum(before) > sum(after), 'a done tile draws fewer paints (no icon): ' + sum(before) + ' -> ' + sum(after));
+  const bare = paints({ type: 'empty', revealed: true, q: gem.q, r: gem.r, terrain: 'land' });
+  h.eq(sum(after), sum(bare), 'a done tile paints like bare ground');
+  // A box of bulbs and a tool tile vanish too, once taken.
+  const box = Object.values(M.tiles).find(t => t.type === 'ink');
+  box.revealed = true; M.pos = { q: box.q, r: box.r };
+  const bulbs = Gt.run.ink;
+  Gt.enterTile(box);
+  h.ok(box.done && Gt.run.ink === bulbs + (DATA.ECONOMY.inkTile || 2) && /box of bulbs/.test(Gt.S.lastToast), 'a box of bulbs is taken (' + Gt.S.lastToast + ')');
+  const tool = Object.values(M.tiles).find(t => t.type === 'brush');
+  tool.revealed = true; M.pos = { q: tool.q, r: tool.r };
+  const n = Gt.run.brushes.length;
+  Gt.enterTile(tool);
+  h.ok(tool.done && Gt.run.brushes.length === n + 1 && ['flare', 'lantern', 'kite'].includes(Gt.run.brushes[n]) && /Found a tool/.test(Gt.S.lastToast), 'a tool tile hands out a tool (' + Gt.S.lastToast + ')');
+  // done survives the save round trip and the icon stays gone
+  Gt.toMap(); Gt.save();
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T2.GAME.load(), 'reloaded');
+  const M2 = T2.GAME.run.map;
+  h.ok(M2.tiles[MAP.key(gem.q, gem.r)].done && M2.tiles[MAP.key(box.q, box.r)].done, 'done flags survive the save');
+  Gt.draw(); T2.GAME.draw();
+});
+
+h.test('map: an old save with brushes and no tileset loads as lanterns on a sane map', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 45);
+  Gt.toMap(); Gt.save();
+  const raw = JSON.parse(T._store[Gt.RUN_KEY]);
+  raw.run.brushes = ['splash', 'comb'];
+  raw.run.map.brushes = ['splash', 'comb'];
+  delete raw.run.map.seed;
+  for (const k in raw.run.map.tiles) { delete raw.run.map.tiles[k].ground; if (raw.run.map.tiles[k].type === 'brush') raw.run.map.tiles[k].content.brush = 'drip'; }
+  const T2 = boot({ store: { [Gt.RUN_KEY]: JSON.stringify(raw) } });
+  h.ok(T2.GAME.load(), 'the old save loads');
+  const M2 = T2.GAME.run.map;
+  h.eq(T2.GAME.run.brushes.join(), 'lantern,lantern', 'old brushes are lanterns');
+  h.eq(M2.brushes.join(), 'lantern,lantern', 'on the map too');
+  h.ok(Object.values(M2.tiles).every(t => MAP.GROUNDS.includes(t.ground)), 'every tile got a ground');
+  h.ok(Object.values(M2.tiles).filter(t => t.type === 'brush').every(t => t.content.brush === 'lantern'), 'tool tiles hand out lanterns');
+  h.ok(T2.GAME.S.ui.buttons.some(b => b.label === 'Lantern'), 'a lantern chip (x2)');
+  T2.GAME.draw();
 });
 
 h.test('walking onto a fight tile starts a fight with a body per bin item', () => {
