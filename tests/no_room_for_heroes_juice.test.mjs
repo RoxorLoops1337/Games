@@ -573,6 +573,9 @@ try{
     // and a zoomed-in King steps beside its crown + name instead of covering them
     const k=A.buildHeroFromSpec(A.nextSpec()); k.king=true; k._figTop=topY+20; k.x=500;
     t.ok(A.calloutY(k)>=topY+28-0.01 && A.calloutX(k)>k.x+40, 'a clamped King callout sits beside its banner');
+    // …and no callout is ever printed past the left/right edge of the view
+    const L=A.callout(A.camX-400, topY+120, 'SHATTER x5', '#9adfff', {fill:'ice'}), R=A.callout(A.camX+5000, topY+120, 'IGNITE x5', '#ff7a2e', {fill:'fire'});
+    t.ok(L.x-L.txt.length*L.size*0.5>=A.camX-0.01 && R.x+R.txt.length*R.size*0.5<=A.camX+960/A.zoom+0.01, 'callouts stay inside the view horizontally');
     A.zoom=z0; }
   // a crowd under a pinned headline: every callout finds its own row (no two share one)
   A.update(2); A.pops.length=0; A.callout(250, 180, 'RAMPAGE!', '#ff9a3a', {pin:true, size:15});

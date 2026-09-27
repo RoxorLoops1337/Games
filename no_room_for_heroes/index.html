@@ -2356,6 +2356,7 @@ function callout(x,y,txt,col,o){
   o=o||{};
   const size=o.size||12, sub=o.sub||'', h=o.hero, rise=(o.rise!=null?o.rise:18);
   const w=q=>q.txt.length*q.size;                 // Press Start 2P advances one em per glyph
+  x=viewClampX(x, txt.length*size*0.55+6);        // never past the left/right edge of the view
   let live=h && h._co;
   // a LATER reaction re-punches the hero's callout in place; reactions from the SAME hit
   // (OVERLOAD then SHATTER, IGNITE then THERMAL SHOCK) each keep their own, stacked
@@ -2411,6 +2412,10 @@ function calloutY(h){ return Math.max(calloutAnchor(h), viewTopY()+28); }   // z
 // …and when zoom forces a champion's / the King's callout down onto its crown + name
 // banner, it steps to the side of the banner instead of covering it
 function calloutX(h){ return ((h.champion||h.king) && calloutAnchor(h)<viewTopY()+28) ? h.x+72 : h.x; }
+// keep a callout of half-width hw inside the view horizontally (build/run only)
+function viewClampX(x,hw){ if(!(G && (G.phase==='build'||G.phase==='run'))) return x;
+  const l=camX+hw, r=camX+VW/Math.max(0.2,zoom)-hw;
+  return (isFinite(l) && isFinite(r) && r>l) ? Math.min(Math.max(x,l),r) : x; }
 // world y of the top edge of the view (the world is scaled about the floor line)
 function viewTopY(){ const z=(G && (G.phase==='build'||G.phase==='run')) ? zoom : 1, v=FLOOR-FLOOR/Math.max(0.2,z);
   return isFinite(v) ? v : -Infinity; }
