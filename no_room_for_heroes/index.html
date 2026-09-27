@@ -2297,20 +2297,328 @@ function bloodPool(x,r){ decals.push({ x, y:FLOOR-1, r:r||rnd(11,18),
 // A short burst of bright sparks (weapon contact, ability cast).
 function sparks(x,y,col,n){ for(let i=0;i<(n||6);i++) particles.push({ x, y,
     vx:rnd(-130,130), vy:-rnd(40,180), life:rnd(.2,.5), col:col||'#ffe39a', sz:rnd(1,2.5) }); }
+/* ---- 🎬 Cinematic FX, ported from the trailer (tools/nrfh_trailer) ----
+   Pixel-font reaction callouts, kill pops (a pixel skull + spinning coins),
+   frozen heroes shattering into ice chunks, forked tesla lightning, room
+   slam-ins with dust, the Overdrive nova and the ribbon banner. Cosmetic like
+   the rest of the juice; the glows are baked into small cached sprites (no
+   per-frame shadowBlur), so it stays cheap on iPad. */
+let pops=[];                                     // world-space callouts + skull pops
+const POP_CAP=24;
+function prng(seed){ let a=seed>>>0; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a;
+  t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+const PIX_FONT='"Press Start 2P","Courier New",monospace';
+let _pixOK=false;                                // cached text sprites are rebuilt once the pixel font decodes
+function pixFontReady(){ if(!_pixOK){ try{ _pixOK=!!(document.fonts && document.fonts.check && document.fonts.check('12px "Press Start 2P"')); }catch(_){ } } return _pixOK; }
+// element gradients for the callout letters (top → bottom), as in the trailer
+const POP_FILL={
+  ice:['#ffffff','#9adfff','#2a74c9'], fire:['#fff3b0','#ffb03a','#ff4a12','#8a1004'],
+  volt:['#ffffff','#fff34d','#c79a00'], venom:['#f4ffd8','#9be86b','#2f7a1c'],
+  blood:['#ffb3a8','#ff3b2f','#b3120e','#5c0606'], gold:['#fff6c8','#ffd34d','#e39a1f','#8a4a0c'],
+  arcane:['#f3e2ff','#c07bff','#5a1ea0'],
+};
+const POP_RES=3;                                 // sprite px per world unit (crisp up to ~3× device scale)
+const _popCache=new Map();
+function popSprite(txt,size,fill,glow){
+  const key=txt+'|'+size+'|'+fill+'|'+glow+'|'+(pixFontReady()?1:0);
+  let s=_popCache.get(key); if(s!==undefined) return s;
+  s=null;
+  try{
+    const fs=size*POP_RES, font=fs+'px '+PIX_FONT;
+    const cv=document.createElement('canvas'), c=cv.getContext&&cv.getContext('2d');
+    if(c && c.measureText && c.fillText){
+      c.font=font; const tw=Math.ceil(c.measureText(txt).width||txt.length*fs), pad=Math.ceil(fs*0.8);
+      cv.width=tw+pad*2; cv.height=Math.ceil(fs)+pad*2;
+      c.font=font; c.textAlign='center'; c.textBaseline='middle'; c.lineJoin='round';
+      const cx=cv.width/2, cy=cv.height/2;
+      c.lineWidth=fs*0.34; c.strokeStyle='#12081c';
+      c.shadowColor=glow; c.shadowBlur=fs*0.8; c.strokeText(txt,cx,cy);   // the glow, blurred once here
+      c.shadowBlur=0; c.strokeText(txt,cx,cy);
+      const st=POP_FILL[fill]; let f=glow;
+      if(st && c.createLinearGradient){ f=c.createLinearGradient(0,cy-fs*0.5,0,cy+fs*0.5); st.forEach((col,i)=>f.addColorStop(i/(st.length-1),col)); }
+      c.fillStyle=f; c.fillText(txt,cx,cy);
+      s={cv, w:cv.width/POP_RES, h:cv.height/POP_RES};
+    }
+  }catch(_){ s=null; }
+  if(_popCache.size>=64) _popCache.delete(_popCache.keys().next().value);
+  _popCache.set(key,s); return s;
+}
+// A trailer-style pixel callout (IGNITE, SHATTER, OVERDRIVE…): slams in from 1.6×,
+// springs, tilts, drifts up, then pops out. `sub` is a small line under it (damage).
+// o.hero keeps ONE live callout per hero: a new reaction re-punches it in place
+// (new word + damage) instead of stacking another, so a chilled party in a spike
+// room reads as a few callouts, not a wall of them.
+const POP_TXT_CAP=5;
+let _hitId=0;                                    // bumps once per elementReact() call: reactions from ONE hit share it
+// make room in pops[]: drop the oldest entry matching `want`, never a pinned headline
+function popEvict(want){ const i=pops.findIndex(p=>!p.pin && want(p)); if(i>=0){ pops.splice(i,1); return true; } return false; }
+function callout(x,y,txt,col,o){
+  o=o||{};
+  const size=o.size||12, sub=o.sub||'', h=o.hero, rise=(o.rise!=null?o.rise:18);
+  const w=q=>q.txt.length*q.size;                 // Press Start 2P advances one em per glyph
+  x=viewClampX(x, txt.length*size*0.55+6);        // never past the left/right edge of the view
+  let live=h && h._co;
+  // a LATER reaction re-punches the hero's callout in place; reactions from the SAME hit
+  // (OVERLOAD then SHATTER, IGNITE then THERMAL SHOCK) each keep their own, stacked
+  if(live && !(o.hit && live.hit===o.hit) && live.age<live.dur-0.3 && pops.includes(live)){
+    // a headline that grows (RAMPAGE! -> UNSTOPPABLE!) into another headline on its row
+    // hands over to a fresh, re-dodged callout instead (the old one pops out)
+    const nw=txt.length*size;
+    if(live.pin && nw>w(live) && pops.some(q=>q!==live && q.kind==='txt' && q.pin && q.age<q.dur-0.15
+        && Math.abs(q.y-live.y)<(q.size+size)*0.75+4 && Math.abs(q.x-live.x)<(w(q)+nw)*0.5+8)){
+      live.dur=Math.min(live.dur, live.age+0.15); h._co=null; live=null;
+    } else {
+      // punch again on its own clock (pt): its drift (age) keeps going, so it never jumps
+      live.pt=live.age-0.07; live.dur=live.age+(o.dur||1.1);
+      if(!live.pin) live.x=x;                    // a headline keeps its spot; a hero's callout follows the hero
+      live.txt=txt; live.col=col; live.fill=o.fill||null; live.size=size; live.sub=sub; live.hit=o.hit||0;
+      return live;
+    }
+  }
+  // on-screen cap: pinned headlines count for at most 2 slots, and a callout from the
+  // SAME hit is never the one evicted (OVERLOAD must survive its own SHATTER)
+  let n=0, pn=0; for(const p of pops) if(p.kind==='txt'){ if(p.pin) pn++; else n++; }
+  if(n+Math.min(pn,2)>=POP_TXT_CAP) popEvict(p=>p.kind==='txt' && !(o.hit && p.hit===o.hit));
+  // stack above any live callout it would print over: hop to the first free row,
+  // re-checking after every hop. If that climbs past the top of the view (with its
+  // drift), the newest wins: the oldest non-pinned callout it hopped over (never one from
+  // the same hit) gives up its row. With nothing to give way it may only clamp down onto
+  // a FREE row, never back onto what it dodged.
+  const y0=y, top=viewTopY()+rise*0.93+size*0.7;
+  const near=p=>p.kind==='txt' && Math.abs(p.x-x)<(w(p)+txt.length*size)*0.5+8;
+  const gapTo=p=>(p.size+size)*0.75+(sub?size*1.2:0)+4;
+  const blockAt=yy=>pops.find(p=>near(p) && p.age<p.dur-0.15 && Math.abs(p.y-yy)<gapTo(p));
+  let path=[];
+  const settle=()=>{ let yy=y0; path=[]; for(let hops=0, b; hops<8 && (b=blockAt(yy)); hops++){ path.push(b); yy=b.y-gapTo(b); } return yy; };
+  y=settle();
+  for(let k=0; k<4 && y<top; k++){
+    const old=path.find(p=>!p.pin && !(o.hit && p.hit===o.hit)); if(!old) break;
+    pops.splice(pops.indexOf(old),1); y=settle();
+  }
+  if(y<top && !blockAt(top)) y=top;
+  if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='skull')) popEvict(()=>true);
+  const p={kind:'txt', x, y, txt, col, fill:o.fill||null, size, sub, pin:!!o.pin, hit:o.hit||0, pt:0, who:h||null,
+    rot:(o.rot!=null?o.rot:-0.12+Math.random()*0.1), age:0, dur:o.dur||1.1, rise};
+  pops.push(p); if(h) h._co=p;
+  return p;
+}
+function skullPop(x,y,rise){ if(pops.length>=POP_CAP && !popEvict(p=>p.kind==='skull')) return;   // skulls never push out a callout
+  pops.push({kind:'skull', x, y, size:2.6, rot:0, age:0, dur:1.15, rise:(rise!=null?rise:24)}); }
+// where a hero's reaction callout goes: above the overlays actually drawn over its head
+// (HP bar + gold tag; elite trait icons; a champion's or the King's crown + name banner)
+function calloutAnchor(h){ const ft=(h._figTop!=null)?h._figTop:h.y-26;
+  return ft-((h.champion||h.king)?76:(h.elite && h.traits && h.traits.length)?62:52); }
+function calloutY(h){ return Math.max(calloutAnchor(h), viewTopY()+28); }   // zoomed in: never above the top of the view
+// …and when zoom forces a champion's / the King's callout down onto its crown + name
+// banner, it steps to the side of the banner instead of covering it
+function calloutX(h){ return ((h.champion||h.king) && calloutAnchor(h)<viewTopY()+28) ? h.x+72 : h.x; }
+// keep a callout of half-width hw inside the view horizontally (build/run only)
+function viewClampX(x,hw){ if(!(G && (G.phase==='build'||G.phase==='run'))) return x;
+  const l=camX+hw, r=camX+VW/Math.max(0.2,zoom)-hw;
+  return (isFinite(l) && isFinite(r) && r>l) ? Math.min(Math.max(x,l),r) : x; }
+// world y of the top edge of the view (the world is scaled about the floor line)
+function viewTopY(){ const z=(G && (G.phase==='build'||G.phase==='run')) ? zoom : 1, v=FLOOR-FLOOR/Math.max(0.2,z);
+  return isFinite(v) ? v : -Infinity; }
+// a dying hero's reaction callouts pop out fast, so the kill pop (payout, COMBO, skull,
+// coins) owns that space instead of printing through them
+function retireCallouts(h){ if(!h) return;
+  for(const p of pops) if(p.kind==='txt' && !p.pin && p.who===h) p.dur=Math.min(p.dur, p.age+0.15); }
+let _skullCv=null;                               // the trailer's 7×7 pixel skull, outlined, ember eyes
+function skullSprite(){
+  if(_skullCv!==null) return _skullCv;
+  _skullCv=false;
+  try{
+    const rows=['.XXXXX.','XXXXXXX','X..X..X','X..X..X','XXX.XXX','.XXXXX.','.X.X.X.'];
+    const cv=document.createElement('canvas'), c=cv.getContext&&cv.getContext('2d');
+    if(c && c.fillRect){ cv.width=cv.height=9;
+      c.fillStyle='#1a0f14'; rows.forEach((r,j)=>{ for(let i=0;i<7;i++) if(r[i]==='X') c.fillRect(i,j,3,3); });
+      c.fillStyle='#f2ead8'; rows.forEach((r,j)=>{ for(let i=0;i<7;i++) if(r[i]==='X') c.fillRect(i+1,j+1,1,1); });
+      c.fillStyle='#ff4a3a'; c.fillRect(3,4,1,1); c.fillRect(5,4,1,1);
+      _skullCv=cv; }
+  }catch(_){ }
+  return _skullCv;
+}
+function drawPops(tx){
+  for(const p of pops){
+    const lt=p.age, lp=lt-(p.pt||0), inT=0.07;       // lp: time since its last punch
+    let s=lp<inT ? 1.6-0.6*(1-Math.pow(1-lp/inT,3)) : 1+0.12*Math.exp(-(lp-inT)*9)*Math.cos((lp-inT)*30);
+    const out=clamp((lt-(p.dur-0.15))/0.15,0,1); s*=1+out*0.35;
+    const a=clamp(lt/0.03,0,1)*(1-out); if(a<=0.01) continue;
+    X.save(); X.translate(tx(p.x), p.y-p.rise*(1-Math.exp(-lt*2.4))); X.rotate(p.rot); X.scale(s,s); X.globalAlpha=a;
+    if(p.kind==='skull'){ const sk=skullSprite(), z=p.size; X.imageSmoothingEnabled=false;
+      if(sk) X.drawImage(sk, -4.5*z, -4.5*z, 9*z, 9*z);
+      else { X.font='16px Trebuchet MS'; X.textAlign='center'; X.fillText('💀',0,6); }
+    } else {
+      const sp=popSprite(p.txt,p.size,p.fill,p.col); X.imageSmoothingEnabled=true;
+      if(sp) X.drawImage(sp.cv, -sp.w/2, -sp.h/2, sp.w, sp.h);
+      else { X.font=p.size+'px '+PIX_FONT; X.textAlign='center'; X.fillStyle=p.col; X.fillText(p.txt,0,p.size*0.4); }
+      if(p.sub){ const fs=Math.max(6,Math.round(p.size*0.8)), sy=p.size*1.45;
+        X.font=fs+'px '+PIX_FONT; X.textAlign='center'; X.lineJoin='round';
+        X.lineWidth=3; X.strokeStyle='#12081c'; X.strokeText(p.sub,0,sy);
+        X.fillStyle='#fff3d0'; X.fillText(p.sub,0,sy); }
+    }
+    X.restore();
+  }
+}
+// Particle shapes beyond the plain square (set p.shape): 'coin' flips as it spins,
+// 'shard' is a tumbling sliver (ice / stone), 'puff' a growing dust cloud, 'streak'
+// a spark drawn along its velocity. Optional p.g (gravity), p.drag, p.grow, and
+// p.fy: a floor line the particle bounces on instead of falling through.
+function stepShaped(p,dt){
+  if(p.drag){ const k=Math.exp(-p.drag*dt); p.vx*=k; p.vy*=k; }
+  if(p.spinV) p.spin+=p.spinV*dt;
+  if(p.grow) p.sz+=p.grow*dt;
+  if(p.fy!==undefined && p.vy>0 && p.y>=p.fy){ p.y=p.fy; p.vy*=-0.4; p.vx*=0.55; if(p.spinV) p.spinV*=0.55; }
+}
+function drawShaped(p,sx){
+  if(p.shape==='coin'){ const c=Math.cos(p.spin), w=Math.max(0.7,Math.abs(c)*p.sz);
+    X.fillStyle=c>0?'#ffd34d':'#c98a1a'; X.fillRect(sx-w/2, p.y-p.sz/2, w, p.sz);
+    if(c>0.45){ X.fillStyle='#fff6c8'; X.fillRect(sx-w/2, p.y-p.sz/2, Math.max(0.6,w*0.35), p.sz*0.45); } }
+  else if(p.shape==='shard'){ const c=Math.cos(p.spin)*p.sz, s=Math.sin(p.spin)*p.sz, k=0.4;
+    X.beginPath(); X.moveTo(sx+c,p.y+s); X.lineTo(sx-s*k,p.y+c*k); X.lineTo(sx-c,p.y-s); X.lineTo(sx+s*k,p.y-c*k); X.closePath(); X.fill(); }
+  else if(p.shape==='puff'){ X.globalAlpha*=0.4; X.beginPath(); X.arc(sx,p.y,p.sz,0,6.2832); X.fill(); }
+  else if(p.shape==='streak'){ X.strokeStyle=p.col; X.lineWidth=p.sz; X.beginPath(); X.moveTo(sx,p.y); X.lineTo(sx-p.vx*0.035,p.y-p.vy*0.035); X.stroke(); }
+  else X.fillRect(sx,p.y,p.sz,p.sz);
+}
+// 💰 kill pop: coins spray from the body, spin, and bounce on the floor
+function coinBurst(x,y,floorY,n){ for(let i=0;i<n;i++) particles.push({x:x+rnd(-4,4), y, vx:rnd(-80,80), vy:-rnd(150,240),
+    life:rnd(.8,1.1), col:'#ffd34d', sz:rnd(3,4.4), shape:'coin', spin:rnd(0,6.28), spinV:rnd(12,20), fy:floorY-1}); }
+// ❄ a frozen hero doesn't fall, it SHATTERS: drawHeroDead breaks its last sprite
+// frame into tumbling ice-tinted wedges, with shards and a puff of frost mist
+const SHATTER_T=0.95, SHATTER_MAX=6;           // at most 6 chunked shatters at once (the King's host can ice a room-full)
+let _shatterT=[];
+function shatterFx(h){
+  const now=performance.now();
+  h.shatterAt=now; if(!h._sid) h._sid=1+((Math.random()*1e9)|0);
+  compact(_shatterT, t=>now-t<SHATTER_T*1000);
+  if(_shatterT.length>=SHATTER_MAX) h._noChunks=true; else _shatterT.push(now);   // past the cap: shards + rubble only
+  const fy=FLOOR+(h.yOff||0);
+  for(let i=0;i<12;i++) particles.push({x:h.x+rnd(-8,8), y:h.y-rnd(0,26), vx:rnd(-150,150), vy:-rnd(60,260), life:rnd(.6,1.1),
+    col:pick(['#ffffff','#d8f4ff','#9adfff','#5fb6ff']), sz:rnd(2.5,5), shape:'shard', spin:rnd(0,6.28), spinV:rnd(-18,18), fy:fy-1});
+  particles.push({x:h.x, y:h.y-10, vx:0, vy:-8, g:0, drag:2, life:.6, col:'#d8f4ff', sz:10, grow:46, shape:'puff'});
+  sfx('shatter');
+}
+function shatterFrame(h){                        // the hero's last frame, ice-tinted, built once
+  if(h._shCv!==undefined) return h._shCv;
+  h._shCv=null; const L=h._spr;
+  try{ const cv=document.createElement('canvas'), c=cv.getContext&&cv.getContext('2d');
+    if(L && c && c.drawImage){ cv.width=L.fw; cv.height=L.fh; c.imageSmoothingEnabled=false;
+      c.drawImage(L.img, L.sx, L.sy, L.fw, L.fh, 0, 0, L.fw, L.fh);
+      c.globalCompositeOperation='source-atop'; c.globalAlpha=0.4; c.fillStyle='#9adfff'; c.fillRect(0,0,L.fw,L.fh);
+      h._shCv=cv; } }catch(_){ h._shCv=null; }
+  return h._shCv;
+}
+function drawShatter(sx,footY,h,age){
+  const m=120+200*Math.max(0,age-0.05);          // chunks fly up to ~200 units: widen the margin as they go
+  if(sx<-m || sx>VW/Math.max(0.2,zoom)+m) return true;   // off screen: nothing to draw
+  const L=h._spr, im=L && L.img && shatterFrame(h); if(!im) return false;
+  const r=prng(h._sid||1), n=8, cx=sx, cy=footY-22, R=Math.max(L.dw,L.dh);
+  const fade=1-clamp((age-0.55)/0.4,0,1);
+  for(let i=0;i<n;i++){
+    const a0=i/n*6.2832, a1=(i+1)/n*6.2832, ang=(a0+a1)/2+(r()-0.5)*0.4, sp=70+r()*130, spin=(r()-0.5)*11;
+    const t=Math.max(0,age-0.05);                                   // holds whole for 3 frames, flashing white
+    const dx=Math.cos(ang)*sp*t, dy=Math.min(footY-3-cy, (Math.sin(ang)*sp-120)*t+260*t*t);
+    X.save(); X.translate(cx+dx, cy+dy); X.rotate(spin*Math.min(age,0.6)); X.translate(-cx,-cy);
+    X.beginPath(); X.moveTo(cx,cy); X.arc(cx,cy,R,a0,a1); X.closePath(); X.clip();
+    X.globalAlpha=fade; X.imageSmoothingEnabled=false;
+    X.drawImage(im, sx+L.ox, footY+L.oy, L.dw, L.dh);
+    if(age<0.12){ X.globalCompositeOperation='lighter'; X.globalAlpha=1-age/0.12;   // the freeze-flash
+      X.drawImage(im, sx+L.ox, footY+L.oy, L.dw, L.dh); }
+    X.restore();
+  }
+  return true;
+}
+function drawIceRubble(sx,footY,h){               // what's left of a shattered hero
+  const r=prng((h._sid||7)+3); X.globalAlpha=0.85;
+  for(let i=0;i<5;i++){ const w=2+r()*4, hh=1.5+r()*2.5; X.fillStyle=i%2?'#bfefff':'#7cc4ee';
+    X.fillRect(Math.round(sx-14+r()*28), Math.round(footY-hh), Math.round(w), Math.round(hh)); }
+  X.globalAlpha=1;
+}
+// ⚡ Forked lightning (the trailer's bolt): midpoint displacement with side
+// branches, stroked as a wide glow, a coloured body and a white-hot core. The
+// segments batch into one path per width, so a bolt costs ~6 strokes.
+const _boltA=[], _boltB=[];
+function forkBolt(x1,y1,x2,y2,seed,o){
+  o=o||{}; const r=prng(seed), A=_boltA, B=_boltB, br=(o.branch!=null?o.branch:0.45); A.length=0; B.length=0;
+  const split=(ax,ay,bx,by,d,depth,out)=>{
+    if(depth<=0){ out.push(ax,ay,bx,by); return; }
+    const vx=bx-ax, vy=by-ay, L=Math.hypot(vx,vy)||1, off=(r()-0.5)*d;
+    const mx=(ax+bx)/2-vy/L*off, my=(ay+by)/2+vx/L*off;          // displace across the bolt
+    split(ax,ay,mx,my,d*0.55,depth-1,out); split(mx,my,bx,by,d*0.55,depth-1,out);
+    if(out===A && depth>=3 && r()<br){
+      const len=L*(0.5+r()*0.5), ang=Math.atan2(vy,vx)+(r()-0.5)*1.4;
+      split(mx,my,mx+Math.cos(ang)*len,my+Math.sin(ang)*len,d*0.6,depth-2,B);
+    }
+  };
+  split(x1,y1,x2,y2,o.jit||Math.hypot(x2-x1,y2-y1)*0.35,o.depth||5,A);
+  const lw=o.lw||2, al=(o.alpha!=null?o.alpha:1);
+  const pass=(arr,w,col,a)=>{ if(!arr.length) return; X.strokeStyle=col; X.globalAlpha=al*a; X.lineWidth=w; X.beginPath();
+    let lx=NaN, ly=NaN;                          // segments arrive in order: one polyline per chain
+    for(let i=0;i<arr.length;i+=4){ if(arr[i]!==lx || arr[i+1]!==ly) X.moveTo(arr[i],arr[i+1]); X.lineTo(arr[i+2],arr[i+3]); lx=arr[i+2]; ly=arr[i+3]; }
+    X.stroke(); };
+  X.save(); X.globalCompositeOperation='lighter'; X.lineCap='round'; X.lineJoin='round';
+  pass(A,lw*5,o.glow||'#b163ff',0.28); if(!o.lite) pass(B,lw*2.5,o.glow||'#b163ff',0.28);
+  pass(A,lw,o.col||'#f0e4ff',1);       pass(B,lw*0.5,o.col||'#f0e4ff',1);
+  if(!o.lite) pass(A,lw*0.4,'#ffffff',1);
+  X.restore();
+}
+// 🏗 Room slam-in: a freshly built room drops into its slot, squashes on the
+// floor and kicks up dust; a unit added to a room gets a small thump instead.
+let _landQ=[];                                   // {room, idx, t0, big, dusted}
+const LAND_DROP=0.16, LAND_T=0.5;
+function roomLand(room,idx,big){ if(!room) return;
+  for(let i=_landQ.length-1;i>=0;i--) if(_landQ[i].room===room) _landQ.splice(i,1);
+  _landQ.push({room, idx, t0:performance.now(), big:!!big, dusted:false}); }
+function landFor(room){ for(const e of _landQ) if(e.room===room) return e; return null; }
+function landTick(){
+  const now=performance.now();
+  for(const e of _landQ){
+    if(e.dusted || (e.big && now-e.t0<LAND_DROP*1000)) continue;
+    e.dusted=true;
+    const cx=cellX(e.idx)+ROOM_W/2, n=e.big?16:6;
+    for(let i=0;i<n;i++){ const side=i%2?1:-1;
+      particles.push({x:cx+side*rnd(10,ROOM_W*0.5), y:FLOOR-rnd(1,6), vx:side*rnd(30,150), vy:-rnd(5,40), g:-15, drag:3.2,
+        life:rnd(.6,1.1), col:pick(['#cbbba0','#a8987e','#e2d6c0']), sz:rnd(4,7), grow:rnd(10,22), shape:'puff'}); }
+    if(e.big){
+      for(let i=0;i<8;i++) particles.push({x:cx+rnd(-ROOM_W*0.45,ROOM_W*0.45), y:FLOOR-rnd(4,20), vx:rnd(-90,90), vy:-rnd(90,220),
+        life:rnd(.5,.9), col:pick(['#9aa4b2','#6d6154','#3a3430']), sz:rnd(2,4), shape:'shard', spin:rnd(0,6.28), spinV:rnd(-20,20), fy:FLOOR-1});
+      shake(3);
+    }
+    sfx('thud');
+  }
+  compact(_landQ, e=>now-e.t0<LAND_T*1000);
+}
+function drawRoomLanding(x0,w,room,i,ld){
+  const t=(performance.now()-ld.t0)/1000;
+  let dy=0, sx=1, sy=1, a=1;
+  if(ld.big && t<LAND_DROP){ const u=t/LAND_DROP; dy=-150*(1-u*u); a=Math.min(1,0.25+u*3); }   // falls, accelerating
+  else { const v=ld.big?t-LAND_DROP:t, k=Math.exp(-v*11)*Math.cos(v*34)*(ld.big?1:0.6);
+    sy=1-0.10*k; sx=1+0.06*k; }                                                                // squash, then spring
+  const ft=_frontTraps; _frontTraps=null;        // its traps draw inline so they move with it
+  X.save(); if(a<1) X.globalAlpha=a;
+  const px0=x0+w/2; X.translate(px0, FLOOR+dy); X.scale(sx,sy); X.translate(-px0, -FLOOR);
+  drawRoomFull(x0,w,room,i);
+  X.restore(); _frontTraps=ft;
+}
+// tiny hex colour helpers for tinting the banner ribbon to its message colour
+function hexRGB(h){ const m=/^#([0-9a-f]{6})$/i.exec(h||''); if(!m) return null; const n=parseInt(m[1],16); return [n>>16&255, n>>8&255, n&255]; }
+function mixHex(a,b,t){ const A=hexRGB(a), B=hexRGB(b); if(!A||!B) return (t<0.5?a:b);
+  return 'rgb('+Math.round(A[0]+(B[0]-A[0])*t)+','+Math.round(A[1]+(B[1]-A[1])*t)+','+Math.round(A[2]+(B[2]-A[2])*t)+')'; }
 // Escalating kill-streak announcer — banners get louder the longer your dungeon
 // holds an airtight line (the streak breaks if a hero ever reaches the throne).
 const COMBO_TIERS=[
-  {n:5,  t:'RAMPAGE!',     c:'#ff9a3a', f:0.20, slow:0},
-  {n:8,  t:'DOMINATING!',  c:'#ff7a2e', f:0.24, slow:0.30},
-  {n:12, t:'UNSTOPPABLE!', c:'#ff5470', f:0.28, slow:0.40},
-  {n:16, t:'GODLIKE!',     c:'#b985ff', f:0.32, slow:0.50},
-  {n:20, t:'LEGENDARY!',   c:'#4dc3ff', f:0.36, slow:0.50},
+  {n:5,  t:'RAMPAGE!',     c:'#ff9a3a', f:0.20, slow:0,    fill:'fire'},
+  {n:8,  t:'DOMINATING!',  c:'#ff7a2e', f:0.24, slow:0.30, fill:'fire'},
+  {n:12, t:'UNSTOPPABLE!', c:'#ff5470', f:0.28, slow:0.40, fill:'blood'},
+  {n:16, t:'GODLIKE!',     c:'#b985ff', f:0.32, slow:0.50, fill:'arcane'},
+  {n:20, t:'LEGENDARY!',   c:'#4dc3ff', f:0.36, slow:0.50, fill:'ice'},
 ];
+const _streakCo={};                              // owner of the single live kill-streak callout
 function comboCallout(combo, x){
   let tier=COMBO_TIERS.find(ct=>ct.n===combo);
-  if(!tier && combo>20 && (combo-20)%5===0) tier={t:'LEGENDARY ×'+combo+'!', c:'#4dc3ff', f:0.38, slow:0.5};
+  if(!tier && combo>20 && (combo-20)%5===0) tier={t:'LEGENDARY x'+combo+'!', c:'#4dc3ff', f:0.38, slow:0.5, fill:'ice'};
   if(!tier) return;
-  floater((x!=null?x:VW*0.5), FLOOR-150, tier.t, tier.c, true);
+  callout((x!=null?x:VW*0.5), FLOOR-150, tier.t, tier.c, {fill:tier.fill, size:15, dur:1.6, rise:14, rot:-0.07, pin:true, hero:_streakCo});   // ONE streak callout: a new tier re-punches it
   flash(tier.c, tier.f, 0.35); shake(6+Math.min(combo,8)); sfx('combo');
   if(tier.slow) slowmo(tier.slow);
   // a flurry of embers in the streak's colour — bigger streak, bigger flourish
@@ -2390,6 +2698,9 @@ const SFX={
   champdown:()=>{ tone(220,0.28,'sawtooth',0.18,58); noiseBurst(0.12,0.10,1500);
     setTimeout(()=>tone(147,0.34,'square',0.16,49),110); },                                             // 👑 champion slain — dark heavy sting
   go:()=>tone(880,0.07,'triangle',0.12,1320),                                                           // ▶ start-gate confirm blip
+  shatter:()=>{ noiseBurst(0.09,0.15,7200); tone(2400,0.05,'triangle',0.09,3600);
+    setTimeout(()=>noiseBurst(0.05,0.08,4200),45); },                                                   // ❄ a frozen hero breaks like glass
+  thud:()=>{ tone(92,0.12,'square',0.15,48); noiseBurst(0.06,0.09,700); },                              // 🏗 a room lands in its slot
   // 🔊 boss-doctrine stings — a one-shot flourish when a raider first breaches the throne room this wave
   doc_inferno:()=>{ tone(180,0.14,'sawtooth',0.16,60); setTimeout(()=>tone(90,0.22,'square',0.14,50),90); },      // 🔥 guttural fire pulse
   doc_undeath:()=>{ tone(110,0.3,'square',0.14,70); setTimeout(()=>tone(70,0.4,'sawtooth',0.13,40),140); },       // 💀 low decaying groan
@@ -4437,6 +4748,7 @@ function placeCard(ci, idx){
   const room=G.rooms[idx];
   if(!room){
     G.rooms[idx]=makeRoom(T, card.lvl, card);
+    roomLand(G.rooms[idx], idx, true);                 // 🎬 slams into the slot
     if(cdef.kind==='trap') bumpStat('traps');          // feat: traps built
     else if(cdef.kind==='monster') bumpStat('guards'); // feat: monster guards stationed
     G.hand.splice(ci,1);
@@ -4449,7 +4761,7 @@ function placeCard(ci, idx){
   if(cdef.kind==='shop'){
     if(roomIsShop){
       if((room.cap||1)>=MAX_SLOTS){ showHint('Shop is already max tier ('+MAX_SLOTS+').'); return false; }
-      room.cap=(room.cap||1)+1;
+      room.cap=(room.cap||1)+1; roomLand(room, idx, false);
       G.hand.splice(ci,1);
       burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
       floater(cellX(idx)+ROOM_W/2, FLOOR-70, 'Shop Lv '+room.cap, '#ffd34d');
@@ -4467,7 +4779,7 @@ function placeCard(ci, idx){
     if(existing){
       if(cdef.amp){ showHint('Runestones don\'t stack — place it in another room.'); return false; }   // lvl++ on an amp trap changes nothing
       if(existing.lvl>=maxLevel()){ showHint(ROOMS[T].name+' is already max level ('+maxLevel()+').'); return false; }
-      existing.lvl++;
+      existing.lvl++; roomLand(room, idx, false);
       bumpStat('traps');                                 // feat: traps built (a level-up counts)
       G.hand.splice(ci,1);
       burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
@@ -4486,7 +4798,7 @@ function placeCard(ci, idx){
       const same=room.units.find(u=>u.kind==='monster' && u.type===T);
       if(same){
         if(same.lvl>=maxLevel()){ showHint(ROOMS[T].name+' is already max level ('+maxLevel()+').'); return false; }
-        same.lvl++;
+        same.lvl++; roomLand(room, idx, false);
         bumpStat('guards');                              // feat: monster guards stationed (a level-up counts)
         G.hand.splice(ci,1);
         burst(cellX(idx)+ROOM_W/2, FLOOR-30, '#ffd34d', 16);
@@ -4502,6 +4814,7 @@ function placeCard(ci, idx){
     if(T==='minion'){ room.minHp=u.minHp; room.minAtk=u.minAtk; if(!room.label) room.label=u.label; }
   }
   room.type=room.units[0].type;                       // keep primary type in sync
+  roomLand(room, idx, false);
   G.hand.splice(ci,1);
   burst(cellX(idx)+ROOM_W/2, FLOOR-40, cdef.col, 18);
   floater(cellX(idx)+ROOM_W/2, FLOOR-80, '+ '+ROOMS[T].name, '#7bdc6b');
@@ -4885,7 +5198,7 @@ function spawnGroup(n){
     const king=buildHeroFromSpec(kingSpec());
     king.x=-40 - vanguard*16; king.yOff=-LIFT;          // the crown rides near the front of its host
     G.heroes.push(king); G.heroNum++;                   // pushed last → drawn on top of the swarm
-    banner('👑 THE HIGH KING & HIS HOST', '#ffd34d', KING_GUARD+' knights and a crown — hold the line');
+    banner('👑 THE HIGH KING & HIS HOST', '#ffd34d', KING_GUARD+' knights and a crown — hold the line', {cine:true});
     shake(14); sfx('boss');
     G.waveStartSlain=G.totalSlain; G.waveEnding=false; G.hero=leadHero();
     return;
@@ -4921,15 +5234,15 @@ function spawnGroup(n){
   const anyRival=G.heroes.find(h=>h.rival && !h.champion);
   const setp=specs.find(s=>s && s.setName);          // 🏛️ L20/L35 set-piece: its title outranks the stock champion banner
   if(setp){
-    banner(setp.setName, '#ffd34d', setp.setSub||'');
+    banner(setp.setName, '#ffd34d', setp.setSub||'', {cine:true});
     shake(8); sfx('boss'); }
   else if(anyChamp){
     banner('⚔️ CHAMPION APPROACHES', anyChamp.champCol||'#ffd34d',
-      anyChamp.heroName+(anyChamp.title?' '+anyChamp.title:''));
+      anyChamp.heroName+(anyChamp.title?' '+anyChamp.title:''), {cine:true});
     shake(8); sfx('boss'); }
   else if(anyRival){
     banner('😡 YOUR RIVAL RETURNS', '#ff5470',
-      (anyRival.heroName||'A grudge-bearer')+' remembers your throne');
+      (anyRival.heroName||'A grudge-bearer')+' remembers your throne', {cine:true});
     shake(6); sfx('boss'); }
   else if(arch){                          // 🎭 announce the named composition at wave start
     banner(arch.name, '#ff9a3a', arch.sub);
@@ -5196,12 +5509,15 @@ const ELEM_COMBO={
   phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
 };
 function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.3:1); }   // escalating chain (capped at +100%); Conductor mandate +30%
+const REACT_FILL={IGNITE:'fire', COMBUST:'venom', OVERLOAD:'volt', CONDUCT:'volt', ENCASE:'ice', SHATTER:'ice', 'THERMAL SHOCK':'blood'};
 function popReact(h,label,col,x){
   h.reactCount=(h.reactCount||0)+1; h.reactT=3;              // combo window
   if(G.stats) G.stats.reactions++;                           // telemetry: elemental combos landed
   bumpStat('reactions');                                     // feat: lifetime elemental reactions
   const chain=h.reactCount;
-  floater(h.x,h.y-66, label+(chain>1?' ×'+chain:'')+' -'+x, col, chain>=3);   // chains pop big
+  const word=label.replace(/^[^A-Z]+/,'');                   // '🔥 IGNITE' → 'IGNITE' (the pixel font has no emoji)
+  h._react=word; h._reactAt=performance.now();               // a SHATTER kill breaks the hero apart (heroDies)
+  callout(calloutX(h), calloutY(h), word+(chain>1?' x'+chain:''), col, {fill:REACT_FILL[word], size:chain>=3?15:12, sub:'-'+x, hero:h, hit:_hitId});   // chains pop big
   burst(h.x,h.y-24,col,16+Math.min(chain,6)*3); sfx('crit');
   if(chain>=3) flash(col, Math.min(0.3, 0.10+chain*0.03), 0.22);             // escalating reaction spectacle
   if(chain>=4) slowmo(0.25);
@@ -5243,6 +5559,7 @@ function reactHit(h,x){
 }
 function elementReact(h, elem, baseDmg){
   if(!h || h.state==='dead') return;
+  _hitId++;                                  // cosmetic: lets this hit's reaction callouts stack (see callout)
   const rm=reactMul(h);          // snapshot once — a single hit can't self-amplify across its own reactions
   // priming statuses — refreshed while in the room, then carried down the hall
   if(elem==='oil')  h.oil  =Math.max(h.oil||0,  ccDur(h,PRIME_OIL));
@@ -5295,7 +5612,7 @@ function elementReact(h, elem, baseDmg){
       const cd=Math.round(baseDmg*0.6*rm); reactHit(o,cd); floater(o.x,o.y-50,'⚡-'+cd,'#fff34d'); burst(o.x,o.y-20,'#fff34d',6);
       arced++; if(o.hp<=0){o.hp=0;heroDies(o);} }
     if(arced){ h.reactCount=(h.reactCount||0)+1; h.reactT=3;
-      floater(h.x,h.y-66,'⚡ CONDUCT ×'+arced,'#fff34d'); sfx('crit'); }
+      callout(calloutX(h), calloutY(h), 'CONDUCT x'+arced, '#fff34d', {fill:'volt', hero:h, hit:_hitId}); sfx('crit'); }
   }
 }
 function healBoss(amt){
@@ -5401,8 +5718,12 @@ function castOverdrive(){
   b.rage=0; b.castAt=performance.now();              // play the boss's attack animation
   // cinematic
   flash(b.col||'#ff5470', 0.55, 0.55); slowmo(0.7); shake(16); sfx('relic'); hitStop=0.06;
-  floater(bossX(), FLOOR-150, '💥 OVERDRIVE!', b.col||'#ff5470', true);
-  overdriveT=0.6;                                   // drives the corridor shockwave in draw()
+  // at the throne, but pulled into view when the camera is off following the party
+  const odx=Math.min(bossX()-30, camX+VW/Math.max(0.2,zoom)-130);
+  callout(isFinite(odx)?odx:bossX()-30, FLOOR-150, 'OVERDRIVE!', b.col||'#ff5470', {fill:'blood', size:18, dur:1.5, rise:10, rot:-0.06, pin:true});
+  overdriveT=0.6;                                   // drives the corridor nova in draw()
+  for(let i=0;i<28;i++) particles.push({x:bossX()+rnd(-10,20), y:FLOOR-rnd(30,110), vx:-rnd(260,640), vy:rnd(-160,90), g:120,
+    life:rnd(.35,.7), col:pick(['#ffffff','#ffd34d',b.col||'#ff5470']), sz:rnd(1.5,3), shape:'streak'});   // sparks blasting down the hall
   const living=(G.heroes||[]).filter(h=>h && h.state!=='dead');
   for(const h of living){
     const dmg=Math.round(h.maxHp*0.45 + 25 + (b.lvl||1)*6);
@@ -5416,6 +5737,10 @@ function castOverdrive(){
 function heroDies(h){
   if(!h || h.state==='dead') return;
   h.state='dead'; h.diedAt=performance.now();   // drives the death animation
+  retireCallouts(h);                             // cosmetic: its reaction callout makes way for the kill pop
+  // ❄ an iced hero SHATTERS instead of falling (cosmetic: see shatterFx / drawHeroDead)
+  if(!h.king && !h.champion && (h.freeze>0 || h.chill>0 ||
+     ((h._react==='SHATTER'||h._react==='ENCASE') && h.diedAt-(h._reactAt||0)<200))) shatterFx(h);
   // 👑 The King falls — the realm is yours forever.
   if(h.king){
     G.totalSlain++;
@@ -5488,6 +5813,7 @@ function heroDies(h){
   if(h.reachedThrone) makeRival(h);
   burst(h.x, h.y-20, '#ffd34d', 22);
   floater(h.x, h.y-60, '+'+loot+'g · +'+dread+'☠', '#ffd34d');   // one combined payout float
+  skullPop(h.x, h.y-42); coinBurst(h.x, h.y-20, FLOOR+(h.yOff||0), Math.min(10, 3+Math.round(loot/8)));   // 🎬 trailer kill pop
   sfx('kill');
   if(h.loot) dropLoot(h);                 // 💎 carriers drop their gear on the floor to collect
   // 🩸 death gore: a heavy spray, a few gibs, a pool soaking in, a soul wisp rising
@@ -5504,7 +5830,7 @@ function heroDies(h){
     // a felled champion is a big payday + a guaranteed relic + a guaranteed rune drop
     G.dread+=6; G.relicDue=(G.relicDue||0)+1;
     G.drops.runes++; bumpStat('drops'); floater(h.x+26, h.y-66, '+1 ᚱ', '#b985ff');
-    floater(h.x, h.y-92, '👑 CHAMPION SLAIN! 🏺', h.champCol||'#ffd34d', true); burst(h.x,h.y-30,h.champCol||'#ffd34d',46);
+    callout(h.x, h.y-96, 'CHAMPION SLAIN!', h.champCol||'#ffd34d', {fill:'gold', size:15, dur:1.8, rise:12, pin:true}); burst(h.x,h.y-30,h.champCol||'#ffd34d',46);
     flash(h.champCol||'#ffd34d', 0.4, 0.45); slowmo(0.55); shake(12); sfx('champdown');
     showHint('🏆 '+nm+' is slain! Big loot + a relic awaits.');
   } else if(h.carrier){
@@ -6523,11 +6849,14 @@ function update(dt){
   // animate floaters/particles always (compacted in place — no per-frame arrays)
   for(const f of floats){ f.y+=f.vy*dt; f.life-=dt*0.9; }
   compact(floats,_liveLife);
-  for(const p of particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=380*dt; p.life-=dt;
+  for(const p of particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=(p.g!==undefined?p.g:380)*dt; p.life-=dt;
+    if(p.shape) stepShaped(p,dt);
     if(p.blood && p.vy>0 && p.y>=FLOOR){ p.life=0;             // spray that lands soaks into the floor
       if(decals.length<DECAL_CAP && Math.random()<0.5)
         decals.push({x:p.x, y:FLOOR-1, r:rnd(3,7), col:p.col, life:rnd(.6,1), seed:rnd(0,6.28)}); } }
   compact(particles,_liveLife);
+  if(pops.length){ for(const p of pops) p.age+=dt; compact(pops,p=>p.age<p.dur); }
+  if(_landQ.length) landTick();
   if(decals.length){ for(const d of decals) d.life-=dt*0.05; compact(decals,_liveLife); }   // blood dries slowly
   if(embers.length){ for(const e of embers){ e.x+=e.vx*dt; e.y+=e.vy*dt; e.life-=dt; } compact(embers,_liveLife); }
   if(throneHitT>0) throneHitT=Math.max(0,throneHitT-dt);
@@ -7171,22 +7500,57 @@ let _lxT=0, _lxNext=3, _lxBolt=null;   // storm lightning over the castle: flash
 let _vig=null,_vigH=0, _redVig=null,_redVigH=0;   // cached vignette gradients (rebuilt on resize)
 // nameplate banner (champion/King/rival arrivals) + wave-end slow-mo kill cam
 let bannerMsg=null, killCamT=0;
-function banner(text, col, sub){ bannerMsg={text, sub:sub||'', col:col||'#ffd34d', t:0, dur:2.4}; }
+function banner(text, col, sub, o){ bannerMsg={text, sub:sub||'', col:col||'#ffd34d', t:0, dur:2.4, cine:!!(o&&o.cine)}; }
+// The trailer's ribbon banner: a notched ribbon unfurls from the centre, the title
+// slams in (pixel font, gradient fill tinted to the message colour), a light sweeps
+// across the ribbon, and big arrivals (cine) get cinematic letterbox bars. The
+// layout + gradients are built once per banner (cached on the message).
 function drawBanner(){
   if(!bannerMsg) return;
-  const m=bannerMsg, p=m.t/m.dur;
-  const a=Math.min(1, p*6, (1-p)*4);                  // quick in, gentle out
-  const slide=(1-Math.min(1,p*5))*40;
+  const m=bannerMsg, lt=m.t;
   X.setTransform(1,0,0,1,0,0);
-  const W=CV.width, bh=Math.round(CV.height*0.16), by=Math.round(CV.height*0.24);
-  X.globalAlpha=a*0.78; X.fillStyle='#0c0916'; X.fillRect(0,by,W,bh);
-  X.globalAlpha=a; X.fillStyle=m.col;
-  X.fillRect(0,by,W,3); X.fillRect(0,by+bh-3,W,3);
-  X.textAlign='center';
-  X.font='bold '+Math.round(bh*0.34)+'px Trebuchet MS';
-  X.fillText(m.text, W/2+slide, by+bh*0.46);
-  if(m.sub){ X.font=Math.round(bh*0.22)+'px Trebuchet MS'; X.fillStyle='#e9e0ff';
-    X.fillText(m.sub, W/2+slide*1.4, by+bh*0.80); }
+  const W=CV.width, H=CV.height; if(!(W>0 && H>0)) return;
+  if(m.cine){ const lb=Math.round(H*0.085*clamp(Math.min(lt/0.25, (m.dur-lt)/0.35),0,1));
+    if(lb>0){ X.globalAlpha=0.92; X.fillStyle='#000'; X.fillRect(0,0,W,lb); X.fillRect(0,H-lb,W,lb); } }
+  const bh=Math.round(H*0.16), cy=Math.round(H*0.24+bh/2);
+  let L=m._lay;
+  if(!L || L.W!==W || L.H!==H){
+    L=m._lay={W, H};
+    const maxW=W*0.84;
+    L.ts=Math.round(bh*0.33); X.font=L.ts+'px '+PIX_FONT; L.tw=X.measureText(m.text).width||0;
+    if(L.tw>maxW){ L.ts=Math.max(8,Math.floor(L.ts*maxW/L.tw)); X.font=L.ts+'px '+PIX_FONT; L.tw=X.measureText(m.text).width||0; }
+    L.ss=Math.round(bh*0.135); L.sw=0;
+    if(m.sub){ X.font=L.ss+'px '+PIX_FONT; L.sw=X.measureText(m.sub).width||0;
+      if(L.sw>maxW){ L.ss=Math.max(7,Math.floor(L.ss*maxW/L.sw)); X.font=L.ss+'px '+PIX_FONT; L.sw=X.measureText(m.sub).width||0; } }
+    L.bw=Math.min(W*0.97, Math.max(L.tw,L.sw)+bh*1.1);
+    const rg=X.createLinearGradient(0,-bh/2,0,bh/2);
+    rg.addColorStop(0, mixHex('#0c0916', m.col, 0.34)); rg.addColorStop(1, mixHex('#0c0916', m.col, 0.06)); L.rg=rg;
+    const tg=X.createLinearGradient(0,-L.ts,0,0);
+    tg.addColorStop(0, mixHex(m.col,'#ffffff',0.8)); tg.addColorStop(0.5, m.col); tg.addColorStop(1, mixHex(m.col,'#000000',0.45)); L.tg=tg;
+    const sg=X.createLinearGradient(-bh*0.7,0,bh*0.7,0);
+    sg.addColorStop(0,'rgba(255,255,255,0)'); sg.addColorStop(0.5, mixHex(m.col,'#ffffff',0.55)); sg.addColorStop(1,'rgba(255,255,255,0)'); L.sg=sg;
+  }
+  const u=1-Math.pow(1-clamp(lt/0.14,0,1),3);            // ribbon unfurls
+  const a=1-clamp((lt-(m.dur-0.3))/0.3,0,1);              // …and fades at the end
+  const bw=L.bw*u, notch=bh*0.28;
+  X.save(); X.translate(W/2, cy); X.globalAlpha=a;
+  X.beginPath(); X.moveTo(-bw/2-notch,-bh/2); X.lineTo(bw/2+notch,-bh/2); X.lineTo(bw/2,0); X.lineTo(bw/2+notch,bh/2);
+  X.lineTo(-bw/2-notch,bh/2); X.lineTo(-bw/2,0); X.closePath();
+  X.globalAlpha=a*0.94; X.fillStyle=L.rg; X.fill();
+  X.globalAlpha=a; X.strokeStyle=m.col; X.lineWidth=Math.max(2,Math.round(bh*0.025)); X.stroke();
+  const sw=clamp((lt-0.12)/0.5,0,1);                      // the light sweep, clipped to the ribbon
+  if(sw>0 && sw<1){ X.save(); X.clip(); X.globalCompositeOperation='lighter'; X.globalAlpha=a*0.55*Math.sin(sw*Math.PI);
+    X.translate(-bw/2+(bw)*sw, 0); X.fillStyle=L.sg; X.fillRect(-bh*0.7,-bh/2,bh*1.4,bh); X.restore(); }
+  if(u>0.6){
+    const ta=a*clamp((u-0.6)/0.4,0,1), sl=1+0.3*Math.pow(1-clamp(lt/0.2,0,1),3);   // title slams in
+    X.globalAlpha=ta; X.textAlign='center'; X.textBaseline='alphabetic'; X.lineJoin='round';
+    X.save(); X.translate(0, m.sub?bh*0.02:bh*0.16); X.scale(sl,sl);
+    X.font=L.ts+'px '+PIX_FONT; X.lineWidth=Math.max(3,L.ts*0.3); X.strokeStyle='#12081c';
+    X.strokeText(m.text,0,0); X.fillStyle=L.tg; X.fillText(m.text,0,0); X.restore();
+    if(m.sub){ X.font=L.ss+'px '+PIX_FONT; X.lineWidth=Math.max(2,L.ss*0.35); X.strokeStyle='#12081c';
+      X.strokeText(m.sub,0,bh*0.33); X.fillStyle='#f2e6d0'; X.fillText(m.sub,0,bh*0.33); }
+  }
+  X.restore();
   X.textAlign='left'; X.globalAlpha=1;
 }
 // Optional painted arena backdrop — drop art at arena/bg.png and it fills the
@@ -7277,7 +7641,7 @@ function draw(){
 
   // floaters & particles (world space)
   for(const p of particles){ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
-    X.fillRect(tx(p.x), p.y, p.sz, p.sz); }
+    if(p.shape) drawShaped(p, tx(p.x)); else X.fillRect(tx(p.x), p.y, p.sz, p.sz); }
   X.globalAlpha=1;
   // ambient embers + rising soul wisps (additive glow, world space)
   if(embers.length){ X.save(); X.globalCompositeOperation='lighter';
@@ -7327,14 +7691,25 @@ function draw(){
       X.lineWidth=3; X.strokeStyle='rgba(0,0,0,.55)'; X.strokeText(f.txt, tx(f.x), f.y);
       X.fillStyle=f.col; X.fillText(f.txt, tx(f.x), f.y); } }
   X.globalAlpha=1; X.textAlign='left';
+  if(pops.length) drawPops(tx);                // 🎬 pixel callouts + skull pops
 
-  // 💥 Overdrive shockwave — a bright ring sweeping out from the throne
+  // 💥 Overdrive nova (as in the trailer): the throne flares white-hot, god-ray
+  // spokes fan down the hall, and a blast front with a white leading edge sweeps out
   if(overdriveT>0){
-    const p=1-(overdriveT/0.6);                 // 0→1 over the effect
-    const cx=tx(cellX(G.slots)+ROOM_W*0.6), cy=FLOOR-40;
-    const r=20+p*VW*1.1;
-    X.globalAlpha=clamp(1-p,0,1)*0.8; X.strokeStyle=(G.boss&&G.boss.col)||'#ff5470'; X.lineWidth=10+(1-p)*18;
-    X.beginPath(); X.arc(cx,cy,r,0,Math.PI*2); X.stroke(); X.globalAlpha=1;
+    const p=1-(overdriveT/0.6), e=1-Math.pow(1-p,3), fade=clamp(1-p,0,1);
+    const cx=tx(cellX(G.slots)+ROOM_W*0.6), cy=FLOOR-40, col=(G.boss&&G.boss.col)||'#ff5470';
+    glowScaled(cx, cy, Math.min(150, 90+170*e), col, fade*0.9);
+    if(p<0.25) glowScaled(cx, cy, 60, '#ffffff', (1-p/0.25)*0.85);
+    X.save(); X.globalCompositeOperation='lighter';
+    X.globalAlpha=fade*0.2; X.fillStyle=col; X.beginPath();
+    const L=VW*0.75*(0.55+0.45*e);
+    for(let i=0;i<11;i++){ const a=Math.PI*(0.55+0.9*i/10)+p*0.25+Math.sin(i*2.3)*0.05, hw=0.03+0.02*(i%3)/2;
+      X.moveTo(cx,cy); X.lineTo(cx+Math.cos(a-hw)*L, cy+Math.sin(a-hw)*L); X.lineTo(cx+Math.cos(a+hw)*L, cy+Math.sin(a+hw)*L); X.closePath(); }
+    X.fill();
+    const r=20+e*VW*1.15;
+    X.globalAlpha=fade*0.7; X.strokeStyle=col; X.lineWidth=12+(1-p)*22; X.beginPath(); X.arc(cx,cy,r,0,6.2832); X.stroke();
+    X.globalAlpha=fade*0.9; X.strokeStyle='#ffffff'; X.lineWidth=3+(1-p)*4; X.beginPath(); X.arc(cx,cy,r+8,0,6.2832); X.stroke();
+    X.restore();
   }
 
   // ---- screen-space atmosphere (device space, above the world) ----
@@ -7430,7 +7805,8 @@ function drawDungeon(tx, scale, isBuild){
       X.save(); X.globalAlpha=0.5; X.translate(0,-48); drawRoomFull(x0, w, room, i); X.restore();
       _frontTraps=_ft;
     } else {
-      drawRoomFull(x0, w, room, i);
+      const ld=_landQ.length?landFor(room):null;   // 🏗 just built: slam it into the slot
+      if(ld) drawRoomLanding(x0, w, room, i, ld); else drawRoomFull(x0, w, room, i);
     }
     // tutorial: a bright blinking ring around the slot you should act on
     if(G && G.tutorial && G.tutCell===i){
@@ -7887,6 +8263,10 @@ function drawGlow(cx,cy,r,col,a){
     X.fillStyle=g; X.fillRect(cx-r,cy-r,r*2,r*2); }
   X.restore();
 }
+// a glow whose radius animates: ONE cached 64px sprite, scaled (smoothly), so a
+// growing flare doesn't mint a new offscreen canvas per radius bucket
+function glowScaled(cx,cy,r,col,a){ if(!(r>2)) return;
+  X.save(); X.imageSmoothingEnabled=true; X.translate(cx,cy); X.scale(r/64,r/64); drawGlow(0,0,64,col,a); X.restore(); }
 function lightCfg(attach){ return (LAYOUT._lights||{})[attach]; }
 // Draw a single-trap accent glow. Uses the aligned light entry if one exists,
 // otherwise centres on the trap art so the effect shows before it's tuned.
@@ -8054,6 +8434,8 @@ function drawSprite(sx, footY, h, key, scaleMul=1){
   const dx=Math.round(sx-clip.ax*S), dy=Math.round(footY-clip.ay*S);
   X.imageSmoothingEnabled=false;
   X.drawImage(img, srcX,srcY,fw,fh, dx,dy, Math.round(fw*S), Math.round(fh*S));
+  const L=h._spr||(h._spr={});                  // the frame on screen, so a frozen death can shatter it
+  L.img=img; L.sx=srcX; L.sy=srcY; L.fw=fw; L.fh=fh; L.ox=dx-sx; L.oy=dy-footY; L.dw=Math.round(fw*S); L.dh=Math.round(fh*S);
   return true;
 }
 // ---- animated monster sprites (guard a room; face LEFT toward the raiders) ----
@@ -8195,7 +8577,10 @@ function drawGaps(tx, scale){
 }
 // ⚡ Lightning arcs from a Tesla coil to every hero in the room (and chaining
 // across them) for ~180ms after the coil fires. Pure visual — damage is dealt
-// in trapTick. Jagged segments re-randomise per frame so the bolt feels alive.
+// in trapTick. Forked bolts (forkBolt, the trailer's lightning) re-strike every
+// ~45ms, so they crackle instead of smearing. x0 is screen-space (tx), so hero
+// positions go through the same camera offset.
+const TESLA_FORKS=4;
 function drawTeslaArcs(x0, w, cell){
   if(!cell || G.phase!=='run' || !cell.traps || !cell.traps.length) return;
   const tr=cell.traps.find(t=>t.type==='tesla' && t.firedAt); if(!tr) return;
@@ -8205,31 +8590,20 @@ function drawTeslaArcs(x0, w, cell){
   const targets = (G.heroes||[]).filter(h=>h && h.state!=='dead' && h.cellIndex===cell.index);
   if(!targets.length) return;
   const cx = x0 + w*0.5, cy = FLOOR-50;     // coil tip
-  X.save();
-  X.strokeStyle='#fff34d'; X.lineWidth=2.2; X.globalAlpha=0.55+0.45*fade;
-  for(const h of targets) drawJaggedBolt(cx, cy, h.x, h.y-30);
-  // chain across heroes (visual mirror of the CONDUCT mechanic)
-  if(targets.length>1){
-    X.strokeStyle='#9adfff'; X.lineWidth=1.4; X.globalAlpha=0.4+0.4*fade;
-    for(let i=1;i<targets.length;i++) drawJaggedBolt(targets[i-1].x, targets[i-1].y-30, targets[i].x, targets[i].y-30);
-  }
-  X.restore();
-}
-function drawJaggedBolt(x1,y1,x2,y2){
-  X.beginPath(); X.moveTo(x1,y1);
-  const segs=6;
-  for(let i=1;i<segs;i++){
-    const t=i/segs;
-    const x = x1 + (x2-x1)*t + (Math.random()-0.5)*18;
-    const y = y1 + (y2-y1)*t + (Math.random()-0.5)*14;
-    X.lineTo(x,y);
-  }
-  X.lineTo(x2,y2);
-  // glow = the SAME path stroked twice: a wide translucent underglow then the
-  // bright core. Replaces shadowBlur, which forces a slow blur pass per stroke.
-  const lw=X.lineWidth, ga=X.globalAlpha;
-  X.lineWidth=lw*3.4; X.globalAlpha=ga*0.32; X.stroke();
-  X.lineWidth=lw; X.globalAlpha=ga; X.stroke();
+  const seed = ((tr.firedAt*7)|0) + Math.floor(since/45)*131;
+  // the TESLA_FORKS heroes nearest the coil get the full forked bolt + a hit glow; a
+  // packed room (the King's host) gives the rest a cheap unbranched one
+  const cwx=cx+camX; targets.sort((a,b)=>Math.abs(a.x-cwx)-Math.abs(b.x-cwx));
+  const near=targets.slice(0,TESLA_FORKS).sort((a,b)=>a.x-b.x);
+  drawGlow(cx, cy, 30, '#fff7b0', 0.55*fade);
+  for(let k=0;k<targets.length;k++){ const h=targets[k], hx=h.x-camX, hy=h.y-30, full=k<TESLA_FORKS;
+    forkBolt(cx, cy, hx, hy, seed+k*97, full ? {lw:1.7, col:'#fff7c0', glow:'#ffd84d', alpha:0.55+0.45*fade}
+      : {lw:1.3, col:'#fff7c0', glow:'#ffd84d', alpha:0.4+0.4*fade, depth:3, branch:0, lite:true});
+    if(full) drawGlow(hx, hy, 16, '#fff34d', 0.3*fade); }
+  // chain across the near heroes (visual mirror of the CONDUCT mechanic)
+  for(let i=1;i<near.length;i++)
+    forkBolt(near[i-1].x-camX, near[i-1].y-30, near[i].x-camX, near[i].y-30, seed+i*53+7,
+      {lw:1.1, col:'#dff6ff', glow:'#9adfff', alpha:0.4+0.4*fade, branch:0.3, depth:4});
 }
 function drawRoomFull(x0,w,room,i){
   const k=roomArtReady(room);
@@ -8663,6 +9037,7 @@ function drawHero(sx,h){
                : king      ? (yy - 64)                 // King fallback (sprite/figure) stands taller
                : h.kingGuard ? (yy - 34)               // a little knight sits lower
                : (yy - 46);
+  h._figTop=figTop;                                  // reaction callouts anchor above it (calloutY)
   // frozen / elemental status tints
   if(h.freeze>0){ X.globalAlpha=.4; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
@@ -8707,6 +9082,14 @@ function drawHero(sx,h){
 }
 function drawHeroDead(sx,h){
   const y=FLOOR+(h.yOff||0);
+  if(h.shatterAt!=null){                        // ❄ shattered: tumbling ice chunks, then a little rubble
+    const age=(performance.now()-h.shatterAt)/1000;
+    if(!(age<SHATTER_T && !h._noChunks && drawShatter(sx,y,h,age))){
+      if(h._shCv){ h._shCv.width=0; h._shCv=null; }        // the chunks are done: free their frame
+      drawIceRubble(sx,y,h);
+    }
+    return;
+  }
   // champions get their painted death animation (play once, hold last frame).
   // Rogue-class champions use the Super Rogue death frames; everyone else uses
   // the Super Knight set.
