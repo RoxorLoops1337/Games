@@ -21,7 +21,7 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,
   get shakeMag(){return shakeMag;},set shakeMag(v){shakeMag=v;},
   get decals(){ return (typeof decals!=='undefined') ? decals : null; },
   callout,pops,POP_TXT_CAP,elementReact,castOverdrive,RAGE_MAX,forkBolt,_boltA,_landQ,
-  banner,drawBanner,mixHex,SHATTER_T,cellX,buildHeroFromSpec,nextSpec,LIFT,
+  banner,drawBanner,mixHex,SHATTER_T,SHATTER_MAX,cellX,buildHeroFromSpec,nextSpec,LIFT,skullPop,
   get overdriveT(){ return overdriveT; }, get camX(){ return camX; }, set VW(v){ VW=v; }, get CV(){ return CV; }`);
 const t = harness('render/juice smoke');
 const BOSS = Object.keys(A.BOSSES)[0];
@@ -489,11 +489,24 @@ try{
   const ig=A.pops.find(p=>p.kind==='txt' && /^IGNITE/.test(p.txt));
   t.ok(ig && ig.fill==='fire' && /^-\d+$/.test(ig.sub), 'IGNITE pops as a pixel callout with the fire fill and its damage ('+(ig&&ig.txt+' '+ig.sub)+')');
   t.ok(!A.floats.some(f=>/IGNITE/.test(f.txt)), 'the reaction no longer ALSO prints the old text float');
-  // one callout per hero: a second reaction re-punches the same callout in place
+  // one callout per hero: a LATER reaction re-punches the same callout in place
+  A.update(0.016);
   h.chill=3; A.elementReact(h,'phys',30);
   const mine=A.pops.filter(p=>p.kind==='txt' && p===h._co);
   t.ok(A.pops.filter(p=>p.kind==='txt').length===1 && mine.length===1 && /^SHATTER/.test(mine[0].txt),
-    'a second reaction on the same hero updates its callout (now '+(mine[0]&&mine[0].txt)+') instead of stacking');
+    'a later reaction on the same hero updates its callout (now '+(mine[0]&&mine[0].txt)+') instead of stacking');
+  // …and keeps it near the hero: twenty quick re-punches never lift it more than 10 above its anchor
+  A.update(2); A.pops.length=0; h._co=null;                 // a fresh callout at the hero's own anchor
+  for(let i=0;i<20;i++){ A.update(0.3); h.chill=3; A.elementReact(h,'phys',30); }
+  t.ok(h._co.y>=h.y-78-10-0.01, 'a re-punched callout never drifts off its hero (y '+h._co.y.toFixed(1)+' vs anchor '+(h.y-78).toFixed(1)+')');
+  // reactions from ONE hit each show: OVERLOAD (the stun) is not overwritten by the SHATTER it enables
+  const g=hs[3]||hs[1]; A.update(2); A.pops.length=0; g._co=null; g.freeze=0; g.refreezeT=0; g.chill=3;
+  A.elementReact(g,'shock',30);
+  const words=A.pops.filter(p=>p.kind==='txt').map(p=>p.txt).join('|');
+  t.ok(/OVERLOAD/.test(words) && /SHATTER/.test(words), 'one shock on a chilled hero shows OVERLOAD and SHATTER ('+words+')');
+  const ys=A.pops.filter(p=>p.kind==='txt').map(p=>p.y);
+  t.ok(new Set(ys.map(y=>Math.round(y))).size===ys.length, 'same-hit callouts stack instead of printing over each other');
+  A.update(2); A.pops.length=0;
   // on-screen cap for free callouts
   for(let i=0;i<9;i++) A.callout(100+i*5, 200, 'TEST'+i, '#fff');
   t.ok(A.pops.filter(p=>p.kind==='txt').length<=A.POP_TXT_CAP, 'live text callouts are capped at '+A.POP_TXT_CAP);
@@ -507,8 +520,15 @@ try{
   for(let i=0;i<6;i++){ A.update(0.03); A.draw(); }
   t.ok(v._shCv, 'the ice-tinted frame is baked once for the chunks');
   v.shatterAt-=A.SHATTER_T*1000+50; A.draw();               // past the chunk flight: ice rubble
+  t.ok(v._shCv===null, 'the chunk frame is released once the shatter is over');
+  // a room-full of iced deaths at once: only SHATTER_MAX break into chunks, the rest get shards + rubble
+  const crowd=[]; for(let i=0;i<10;i++){ const c=A.buildHeroFromSpec(A.nextSpec()); c.x=A.cellX(0)+60+i*8; c.yOff=-A.LIFT; c.hp=c.maxHp=50; A.G.heroes.push(c); crowd.push(c); }
+  A.draw(); for(const c of crowd){ c.chill=3; A.heroDies(c); }
+  t.ok(crowd.filter(c=>!c._noChunks).length<=A.SHATTER_MAX && crowd.every(c=>c.shatterAt!=null),
+    'a mass iced death chunks at most '+A.SHATTER_MAX+' heroes at once ('+crowd.filter(c=>!c._noChunks).length+'), the rest still shatter lite');
+  for(let i=0;i<4;i++){ A.update(0.03); A.draw(); }
   // 💀 a plain kill: skull pop + coins that bounce on the floor, payout float unchanged
-  const w=hs[2]; w.chill=0; w.freeze=0; A.pops.length=0;
+  const w=hs[2]; w.chill=0; w.freeze=0; w._react=null; A.pops.length=0;   // (the sim runs faster than the 200ms real-time SHATTER window)
   const before=A.particles.length; A.heroDies(w);
   t.ok(w.shatterAt==null, 'an un-iced death does not shatter');
   t.ok(A.pops.some(p=>p.kind==='skull'), 'a kill pops the pixel skull');
@@ -532,6 +552,10 @@ try{
   // 💥 Overdrive: pixel callout, sparks down the hall, the nova draws clean
   A.pops.length=0; A.G.boss.rage=A.RAGE_MAX; A.castOverdrive();
   t.ok(A.pops.some(p=>p.txt==='OVERDRIVE!') && A.overdriveT>0 && A.particles.some(p=>p.shape==='streak'), 'Overdrive fires its callout, nova and spark streaks');
+  // the headline is pinned: a mass kill's skulls and a burst of reaction callouts can't evict it
+  for(let i=0;i<40;i++) A.skullPop(200+i, 200);
+  for(let i=0;i<12;i++) A.callout(300+i*90, 200, 'SHATTER', '#9adfff', {fill:'ice'});
+  t.ok(A.pops.some(p=>p.txt==='OVERDRIVE!'), 'OVERDRIVE! survives 40 skull pops + 12 callouts on its frame');
   for(let i=0;i<20;i++){ A.update(0.03); A.draw(); }
   // 🎗 ribbon banner: cinematic letterbox flag, layout cached per banner
   A.banner('⚔️ CHAMPION APPROACHES', '#ff5470', 'Aldric the Shieldbearer', {cine:true});
