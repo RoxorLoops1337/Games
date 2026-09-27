@@ -57,15 +57,24 @@ because Chromium's deferred rasteriser then dropped random tiles to black.
     python3 tools/nrfh_trailer/audio.py trailer_out/trailer.wav
 
 Output goes to `trailer_out/` (git-ignored; override with `NRFH_OUT=`). Encode with the
-ffmpeg that ships in `pip install imageio-ffmpeg`:
+ffmpeg that ships in `pip install imageio-ffmpeg`. The film grain makes constant-quality
+encodes huge (CRF 20 was 28.6 MB, over Cloudflare Pages' 25 MB file limit), so the prints
+are two-pass at a fixed bitrate with a light denoise:
 
-    ffmpeg -framerate 60 -i trailer_out/frames/f_%04d.jpg -i trailer_out/trailer.wav \
-      -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -profile:v high -movflags +faststart \
-      -c:a aac -b:a 192k -shortest no_room_for_heroes/trailer.mp4
-    ffmpeg -framerate 60 -i trailer_out/frames/f_%04d.jpg -i trailer_out/trailer.wav \
-      -c:v libvpx-vp9 -crf 33 -b:v 0 -row-mt 1 -cpu-used 2 -pix_fmt yuv420p \
-      -c:a libopus -b:a 160k -shortest no_room_for_heroes/trailer.webm
-    ffmpeg -ss 14.5 -i no_room_for_heroes/trailer.mp4 -frames:v 1 -q:v 2 no_room_for_heroes/trailer_poster.jpg
+    F=trailer_out/frames/f_%04d.jpg; A=trailer_out/trailer.wav; DN="hqdn3d=1.2:1.2:3:3"
+    ffmpeg -framerate 60 -i $F -vf $DN -c:v libx264 -preset slow -b:v 7500k -maxrate 11000k \
+      -bufsize 15000k -pix_fmt yuv420p -profile:v high -level 4.2 -pass 1 -an -f null /dev/null
+    ffmpeg -framerate 60 -i $F -i $A -vf $DN -c:v libx264 -preset slow -b:v 7500k -maxrate 11000k \
+      -bufsize 15000k -pix_fmt yuv420p -profile:v high -level 4.2 -pass 2 -movflags +faststart \
+      -c:a aac -b:a 192k -shortest no_room_for_heroes/trailer.mp4                  # ~15 MB
+    ffmpeg -framerate 60 -i $F -vf $DN -c:v libvpx-vp9 -b:v 5500k -maxrate 8000k -row-mt 1 \
+      -tile-columns 2 -deadline good -cpu-used 3 -pix_fmt yuv420p -pass 1 -an -f null /dev/null
+    ffmpeg -framerate 60 -i $F -i $A -vf $DN -c:v libvpx-vp9 -b:v 5500k -maxrate 8000k -row-mt 1 \
+      -tile-columns 2 -deadline good -cpu-used 3 -pix_fmt yuv420p -pass 2 \
+      -c:a libopus -b:a 160k -shortest no_room_for_heroes/trailer.webm             # ~10 MB
+    ffmpeg -ss 14.6 -i no_room_for_heroes/trailer.mp4 -frames:v 1 -q:v 2 no_room_for_heroes/trailer_poster.jpg
+
+For a full-quality master (social uploads), skip the denoise and use `-crf 17` (~48 MB).
 
 Headless Chromium renders WebGL through SwiftShader, so a frame costs about 1.5 s and the
 reel takes roughly 25 minutes. Keep one worker: SwiftShader already uses every core.
