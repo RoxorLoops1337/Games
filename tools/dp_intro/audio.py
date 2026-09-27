@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Dungeon Pusher intro soundtrack — 20s, synced to the choreography.
 
-Timeline anchors (must match intro.html):
-  1.55 coin impact | 2.55/3.35/4.15 word slams | cuts 5.0 6.6 8.2 9.7 11.4
-  13.0-15.2 vortex riser | 15.60 title slam | 16.15 tagline | 17.4+1.1k blinks
+Timeline anchors (must match intro.html, director's cut):
+  1.55 coin impact | 2.35/3.10/3.85 word slams | monster cards 4.60/5.20/5.80
+  cuts 6.40 7.66 8.92 10.18 11.44 (tilt jolts +0.50/+1.11 on the 8.92 cut)
+  12.7-14.95 vortex+wheel riser | 15.60 title slam | 16.15 tagline | 17.4+1.1k blinks
 """
 import numpy as np, wave
 
@@ -157,43 +158,58 @@ at(ding(1760.0, 0.35), 1.66, pan=0.25)
 at(pad([D2, A2], 3.6, 0.30, tau=1.4), 1.7)
 
 # ---- B: three words, three punches ----
-for i, (tw, fz) in enumerate([(2.55, 2349.3), (3.35, 2637.0), (4.15, 2093.0)]):
+for i, (tw, fz) in enumerate([(2.35, 2349.3), (3.10, 2637.0), (3.85, 2093.0)]):
     at(boom(0.9 - i * 0.08, 1.0), tw)
     at(crash(0.30), tw)
     at(ding(fz, 0.5), tw + 0.03, pan=(-0.3 + 0.3 * i))
 # ticking hats build under the storm
-tt0 = 2.55
-while tt0 < 4.95:
-    at(hat(0.16 + 0.10 * (tt0 - 2.55) / 2.4), tt0, pan=0.2 if int(tt0 / (B/2)) % 2 else -0.2)
+tt0 = 2.35
+while tt0 < 4.55:
+    at(hat(0.16 + 0.10 * (tt0 - 2.35) / 2.2), tt0, pan=0.2 if int(tt0 / (B/2)) % 2 else -0.2)
     tt0 += B / 2
 # scattered coin rain dings
 for i in range(14):
-    tc = 2.4 + (i * 0.183) % 2.5
+    tc = 2.1 + (i * 0.183) % 2.4
     at(ding(1500 + (i * 397) % 1400, 0.10), tc, pan=((i * 73) % 100 - 50) / 60)
 
-# ---- C: the groove (5.0 - 13.0) ----
-CUTS = [5.0, 6.6, 8.2, 9.7, 11.4]
-GROOVE_END = 12.9
+# ---- B2: the monster cards — three growls out of the dark ----
+def growl(f0, dur, gain):
+    n = int(dur * SR); tt2 = np.arange(n) / SR
+    def saw(freq): return 2 * ((freq * tt2) % 1.0) - 1.0
+    g = saw(f0) + saw(f0 * 1.011) + saw(f0 * 0.5) * 0.8 + saw(f0 * 1.498) * 0.5
+    g = lp(g, 900)
+    # a snarl rides on top: pitch-bent noise
+    g += lp(hp(noise(dur), 300), 2200)[:n] * np.exp(-tt2 * 9) * 0.8
+    env2 = (1 - np.exp(-tt2 * 700)) * np.exp(-tt2 / 0.22)
+    return g * env2 * gain
+for i, (tm, fg) in enumerate([(4.60, 98.0), (5.20, 82.4), (5.80, 65.4)]):
+    at(growl(fg, 0.9, 0.55 + 0.12 * i), tm)
+    at(boom(0.9 + 0.15 * i, 1.0), tm)
+    at(crash(0.4 + 0.1 * i), tm)
+
+# ---- C: the groove (4.6 - 12.7) ----
+CUTS = [6.40, 7.66, 8.92, 10.18, 11.44]
+GROOVE_END = 12.65
 # kick: four on the floor
-tk = 5.0
+tk = 4.60
 while tk < GROOVE_END - 0.05:
     at(kick(0.95), tk)
     tk += B
 # backbeat crash-lite hats
-tk = 5.0 + B / 2
+tk = 4.60 + B / 2
 while tk < GROOVE_END:
     at(hat(0.30), tk, pan=0.15)
     at(hat(0.13), tk - B / 4, pan=-0.25)
     tk += B
 # bass line: D D F D | C C A, C  (one bar = 4 beats, 8th notes)
 BASSPAT = [D2, D2, F2, D2, C3, C3, A2, C3]
-tb = 5.0; step = B / 2; bi = 0
+tb = 4.60; step = B / 2; bi = 0
 while tb < GROOVE_END - 0.1:
     at(bass_note(BASSPAT[bi % 8], step * 0.92, 0.62), tb)
     bi += 1; tb += step
 # arp: Dm add9 16ths, echoed
 ARP = [D4, F4, A4, C5, E5, C5, A4, F4]
-ta = 5.0; ai = 0
+ta = 6.40; ai = 0
 while ta < GROOVE_END - 0.1:
     g = 0.20 + 0.05 * ((ai % 8) in (0, 4))
     at(pluck(ARP[ai % 8], 0.26, g), ta, pan=-0.4 + 0.8 * ((ai % 4) / 3))
@@ -204,21 +220,32 @@ for i, tc in enumerate(CUTS):
     at(boom(0.85, 0.9), tc)
     at(crash(0.5), tc)
     at(ding(2349.3 if i % 2 == 0 else 2793.8, 0.4), tc + 0.02)
-# TILT gets a rattle — coins thrown against glass
-for i in range(10):
-    at(ding(900 + (i * 613) % 2200, 0.16), 8.22 + i * 0.035, pan=((i * 41) % 100 - 50) / 55)
-at(boom(0.5, 0.5), 8.2 + 0.12)
+# TILT gets a rattle on each jolt — coins thrown against glass
+for j0 in (8.92 + 0.50, 8.92 + 1.11):
+    for i in range(10):
+        at(ding(900 + (i * 613) % 2200, 0.14), j0 + i * 0.03, pan=((i * 41) % 100 - 50) / 55)
+    at(boom(0.5, 0.5), j0)
 
-# ---- D: the vortex (13.0-15.2) ----
-at(riser(2.55, 150, 3400, 0.6), 12.95)
+# ---- D: the vortex, then the WHEEL spinning up (12.7-14.95) ----
+at(riser(2.35, 150, 3600, 0.62), 12.70)
 # accelerating dings spiralling in
-td = 13.1; gap = 0.30
-while td < 15.05:
+td = 12.8; gap = 0.30
+while td < 14.05:
     at(ding(1400 + ((td * 997) % 1600), 0.16), td, pan=np.sin(td * 9) * 0.7)
-    gap *= 0.86; td += max(0.045, gap)
+    gap *= 0.86; td += max(0.05, gap)
+# the wheel's pins, ticking up from a clack to a snarl
+tp = 14.10; pgap = 0.16
+while tp < 14.93:
+    at(hat(0.5), tp)
+    at(ding(3100.0, 0.07), tp, pan=np.sin(tp * 31) * 0.5)
+    pgap *= 0.80; tp += max(0.022, pgap)
 # heartbeat kick halves, then doubles
-for tb2 in [13.0, 13.9, 14.55, 14.9, 15.05]:
+for tb2 in [12.7, 13.6, 14.2, 14.6, 14.85]:
     at(kick(0.8), tb2)
+at(boom(0.7, 0.8), 14.95)
+# the coin flip: two whooshes before the sign lands
+at(whoosh(0.28, 0.30), 15.02)
+at(whoosh(0.24, 0.34), 15.16)
 
 # ---- E: the title (15.60) ----
 at(boom(1.5, 2.4), 15.58)

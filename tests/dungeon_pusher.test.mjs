@@ -7478,7 +7478,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.22.1', 'the cabinet ships as v1.22.1');
+  t.eq(D.VERSION, '1.23.0', 'the cabinet ships as v1.23.0');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ATTRACT REEL') >= 0)),
        'and the notes carry the film');
   // the reel itself ships in the folder — a squash-merge that drops the
