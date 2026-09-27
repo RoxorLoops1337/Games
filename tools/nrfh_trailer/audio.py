@@ -100,6 +100,9 @@ for j in range(8):
     s = lp(supersaw(f, b(.5) * .9, 5, .008), 900 + j * 120) * adsr(int(b(.5) * .9 * SR), .005, .1, .7, .04)
     at(s, t_cut + j * b(.5), .28, 0, 'music')
 at(reverse_crash(.8, .9), HIT['whip'][0] - .8, .5, 0, 'sfx')
+# FOR YOU. (1.406): a low stab, the first hint of who is waiting
+at(braam(D1 * 2, .45, .9, 700), 1.40625, .55, 0, 'music')
+at(sub_drop(.6, .7, 70, 32), 1.40625, .5, 0, 'hit')
 
 # ================================================================== III. the boss (1.875 - 3.75)
 t_w = HIT['whip'][0]
@@ -115,9 +118,11 @@ at(braam(D1 * 2, 2.6, 1.0, 2600), t_boss, 1.0, 0, 'hit')
 at(crash(.9, 2.6), t_boss, .55, 0, 'hit')
 at(growl(62, 1.4, 1.0), t_boss + .05, .8, .1, 'sfx')
 at(choir([hz(50), hz(53), hz(57), hz(62)], 1.8, 1.0, 'ah'), t_boss, 1.1, 0, 'music')
-# held breath: heartbeat
-for k, tt in enumerate((3.28125, 3.28125 + .28)):
-    at(kick(.9 - k * .2, .4, 90, 40), tt, .7, 0, 'music')
+# 3.28: the throne flickers through all six bosses: a glitchy chip stutter, then a heartbeat
+for k in range(5):
+    at(chip_sq(hz(62 + k * 3), 1 / 30, 1.0, .25, tau=.02) + chip_noise(1 / 30, .6, .01, 3)[:int(SR / 30)], 3.28125 + k / 30, .22, -.5 + k * .25, 'sfx')
+at(kick(.8, .4, 90, 40), 3.28125 + 5 / 30, .6, 0, 'music')
+at(kick(.6, .4, 90, 40), 3.28125 + 5 / 30 + .28, .5, 0, 'music')
 
 # ================================================================== IV. build (3.75 - 5.625)
 t_deal = HIT['deal'][0]
