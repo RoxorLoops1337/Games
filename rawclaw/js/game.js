@@ -2617,18 +2617,39 @@ const GAME = (() => {
     if (!S.headless) S.frame = requestAnimationFrame(frame);
   }
   function resize() {
-    let vw = W, vh = H;
-    try { vw = window.innerWidth || W; vh = window.innerHeight || H; } catch (e) { /* headless */ }
+    // Mobile browser bars and keyboards can shrink the visible viewport
+    // without changing the layout viewport. Fit inside their intersection,
+    // then reserve the notch / home-indicator padding from #wrap.
+    let vw = W, vh = H, vx = 0, vy = 0;
+    try {
+      const v = window.visualViewport;
+      vw = (v && v.width) || window.innerWidth || W;
+      vh = (v && v.height) || window.innerHeight || H;
+      vx = (v && v.offsetLeft) || 0; vy = (v && v.offsetTop) || 0;
+    } catch (e) { /* headless */ }
     const wrap = $('wrap');
-    let iw = vw, ih = vh;
-    try { if (wrap && wrap.clientWidth) { iw = wrap.clientWidth; ih = wrap.clientHeight; } } catch (e) { /* ignore */ }
-    const k = Math.min(iw / W, ih / H) || 1;
+    let left = vx, top = vy, right = vx + vw, bottom = vy + vh;
+    let ox = 0, oy = 0;
+    try {
+      if (wrap && wrap.clientWidth) {
+        const r = wrap.getBoundingClientRect();
+        const css = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(wrap) : {};
+        const px = (v) => parseFloat(v) || 0;
+        ox = r.left; oy = r.top;
+        left = Math.max(left, r.left + px(css.paddingLeft));
+        top = Math.max(top, r.top + px(css.paddingTop));
+        right = Math.min(right, r.left + wrap.clientWidth - px(css.paddingRight));
+        bottom = Math.min(bottom, r.top + wrap.clientHeight - px(css.paddingBottom));
+      }
+    } catch (e) { /* headless */ }
+    const iw = Math.max(1, right - left), ih = Math.max(1, bottom - top);
+    const k = Math.min(iw / W, ih / H);
     S.scale = k;
     const stage = $('stage');
     if (stage) {
       stage.style.transform = `scale(${k})`;
-      stage.style.left = Math.floor((iw - W * k) / 2) + 'px';
-      stage.style.top = Math.floor((ih - H * k) / 2) + 'px';
+      stage.style.left = (left - ox + (iw - W * k) / 2) + 'px';
+      stage.style.top = (top - oy + (ih - H * k) / 2) + 'px';
     }
     let dpr = 1;
     try { dpr = Math.min(2.5, window.devicePixelRatio || 1); } catch (e) { dpr = 1; }
@@ -2661,6 +2682,11 @@ const GAME = (() => {
       document.addEventListener('keyup', (ev) => onKey(ev, false));
       document.addEventListener('pointerdown', () => { if (X.AUDIO && X.AUDIO.init) { try { X.AUDIO.init(); } catch (e) { /* optional */ } } });
       window.addEventListener('resize', resize);
+      window.addEventListener('orientationchange', resize);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', resize);
+        window.visualViewport.addEventListener('scroll', resize);
+      }
       document.addEventListener('visibilitychange', () => { if (!document.hidden) { S.last = performance.now(); S.acc = 0; } if (FS) FS.keyDir = 0; if (document.hidden) save(); });
       window.addEventListener('blur', () => { if (FS) FS.keyDir = 0; });
     } catch (e) { /* headless */ }
