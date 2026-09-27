@@ -47,7 +47,10 @@ const DATA = (() => {
   // nearly every drop, so the enemy bands are multiplied here rather than
   // rewritten. hp scales every enemy's hit points, dmg every attack and
   // charge value. Tuned with the whole-run bot.
-  const DIFFICULTY = { hp: 2.0, dmg: 1.4 };   // starting point; the owner tunes by hand
+  // hp/dmg multiply every enemy. ramp is the hidden escalation: after every
+  // `every` fights of a run, enemies gain +hp/+dmg (as fractions) per step,
+  // up to `max` steps. The player never sees the counter.
+  const DIFFICULTY = { hp: 2.0, dmg: 1.8, ramp: { every: 3, hp: 0.12, dmg: 0.12, max: 8 } };   // the owner tunes by hand
 
   const ECONOMY = {
     startInk: 10,          // bulbs at the start of every act (was 5)
@@ -603,6 +606,7 @@ const DATA = (() => {
         mheal('sprout', 'Sprout', 5, 'Regrows 5 HP')] },
     { id: 'crab', name: 'Claw Crab', act: 1, tier: 'normal', hp: [26, 30], art: 'crab', size: 1, color: '#ff8a5a',
       desc: 'Thinks your claw is a rival. Wants a rematch.', ai: 'cycle', pattern: [0, 1, 2, 1],
+      status: { thorns: 2 },
       moves: [blk('shell', 'Shell Up', 8, 'Shells up (Block 8)'), atk('pinch', 'Pinch', 4, 2, 'Pinches 4 x2'),
         buff('harden', 'Harden', 'armor', 1, 'Hardens its shell (+1 Armor)')] },
     // act 1 elites
@@ -645,25 +649,29 @@ const DATA = (() => {
       moves: [mv('snatch', 'Snatch', 'steal', 'Snatches an item from your bin'), atk('buzz', 'Buzz', 9, 1, 'Buzzes you for 9'),
         mv('getaway', 'Getaway', 'escape', 'Flies off with the loot')] },
     { id: 'tinker', name: 'Tinker Gnome', act: 2, tier: 'normal', hp: [44, 53], art: 'tinker', size: 0.9, color: '#ff9a2e',
-      desc: 'Fixes things so they break in more interesting ways.', ai: 'cycle', pattern: [0, 1, 2, 3, 1],
+      desc: 'Fixes things so they break in more interesting ways.', ai: 'cycle', pattern: [0, 1, 2, 4, 3, 1],
       moves: [mv('jack', 'Jack Up', 'tilt', 'Jacks up one side of the cabinet (tilt)'), atk('wrench', 'Wrench', 12, 1, 'Wrenches you for 12'),
-        mv('drone', 'Build Drone', 'summon', 'Builds a Claw Drone'), mheal('patch', 'Patch Up', 8, 'Patches itself (heal 8)')] },
+        mv('drone', 'Build Drone', 'summon', 'Builds a Claw Drone'), mheal('patch', 'Patch Up', 8, 'Patches itself (heal 8)'),
+        debuff('solder', 'Hot Solder', 'burn', 3, 'Flicks hot solder at you (3 Burn)')] },
     { id: 'golem', name: 'Brass Golem', act: 2, tier: 'normal', hp: [68, 75], art: 'golem', size: 1.1, color: '#c8a040',
       desc: 'Built to guard a prize. Forgot which one.', ai: 'cycle', pattern: [0, 1, 3, 2],
-      status: { armor: 1 },
+      status: { armor: 1, thorns: 2 },
       moves: [blk('brace', 'Brace', 12, 'Braces (Block 12)'), mv('windup', 'Wind Up', 'charge', 'Winding up (27 next turn)', { v: 27 }),
         atk('punch', 'Punch', 14, 1, 'Punches for 14'), mv('stomp', 'Stomp', 'shake', 'Stomps. Your bin rattles.')] },
     { id: 'tinknight', name: 'Tin Knight', act: 2, tier: 'normal', hp: [55, 64], art: 'knight', size: 1, color: '#aab3bd',
       desc: 'A suit of armor from the prize shelf. Nobody is inside. Probably.', ai: 'cycle', pattern: [0, 1, 2, 1],
+      status: { thorns: 3 },
       moves: [blk('guard', 'Guard', 10, 'Raises its shield (Block 10)'), atk('lunge', 'Lunge', 15, 1, 'Lunges for 15'),
         debuff('taunt', 'Taunt', 'vuln', 1, 'Taunts you (Vulnerable)')] },
     { id: 'oilslick', name: 'Oil Slick', act: 2, tier: 'normal', hp: [51, 59], art: 'slime', size: 1, color: '#3a3230',
       desc: 'A slime that went into the machine oil and never came back out.', ai: 'random',
       moves: [mv('slick', 'Slick', 'grease', 'Oils your bin (slippery for 1 turn)', { v: 1 }),
-        atk('slap', 'Slap', 14, 1, 'Slaps for 14'), debuff('ooze', 'Ooze', 'weak', 2, 'Oozes on your gloves (Weak 2)')] },
+        atk('slap', 'Slap', 14, 1, 'Slaps for 14'), debuff('ooze', 'Ooze', 'weak', 2, 'Oozes on your gloves (Weak 2)'),
+        debuff('fumes', 'Fumes', 'poison', 4, 'Breathes oil fumes (4 Poison)')] },
     // act 2 elites
     { id: 'ironjaw', name: 'Ironjaw', act: 2, tier: 'elite', hp: [136, 148], art: 'ironjaw', size: 1.2, color: '#7d8590',
       desc: 'A bear trap that learned to walk. And swallow.', ai: 'cycle', pattern: [0, 1, 2, 3, 0],
+      status: { thorns: 4 },
       moves: [atk('bite', 'Bite', 22, 1, 'Bites for 22'), mv('swallow', 'Swallow', 'steal', 'Swallows an item from your bin'),
         buff('clench', 'Clench', 'armor', 1, 'Clenches (+1 Armor)'), mv('gape', 'Gape', 'charge', 'Opens wide (46 next turn)', { v: 46 })] },
     { id: 'lodestone', name: 'The Lodestone', act: 2, tier: 'elite', hp: [125, 135], art: 'magnet', size: 1.2, color: '#ff2e4a',
@@ -688,6 +696,7 @@ const DATA = (() => {
     // ================= ACT 3: The Frozen Penthouse (fog, freezeItem) ==========
     { id: 'wraith', name: 'Glass Wraith', act: 3, tier: 'normal', hp: [73, 83], art: 'wraith', size: 1, color: '#bfefff',
       desc: 'Haunts display cases. Breathes on the glass so you cannot see.', ai: 'cycle', pattern: [0, 1, 2, 3, 1],
+      status: { thorns: 3 },
       moves: [mv('haunt', 'Haunt', 'fog', 'Breathes on the glass (fog 1 turn)', { v: 1 }), atk('claw', 'Claw', 17, 1, 'Claws for 17'),
         debuff('wail', 'Wail', 'weak', 2, 'Wails (Weak 2)'), buff('fade', 'Fade', 'dodge', 1, 'Fades out (Dodge 1)')] },
     { id: 'wisp', name: 'Cold Wisp', act: 3, tier: 'normal', hp: [55, 65], art: 'wisp', size: 0.8, color: '#9fd8ff',
@@ -703,9 +712,10 @@ const DATA = (() => {
       moves: [blk('lurk', 'Lurk', 14, 'Pretends to be a prize (Block 14)'), mv('encase', 'Encase', 'freezeItem', 'Freezes an item in your bin solid'),
         atk('bite', 'Bite', 16, 1, 'Bites for 16'), mv('gape', 'Gape', 'charge', 'Opening wide (39 next turn)', { v: 39 })] },
     { id: 'cultist', name: 'Claw Cultist', act: 3, tier: 'normal', hp: [83, 96], art: 'cultist', size: 1, color: '#ff2e88',
-      desc: 'Worships the Prize Master. Has a punch card.', ai: 'cycle', pattern: [0, 1, 2, 1, 3],
+      desc: 'Worships the Prize Master. Has a punch card.', ai: 'cycle', pattern: [0, 1, 4, 2, 1, 3],
       moves: [buff('chant', 'Chant', 'str', 3, 'Chants (+3 Strength)'), atk('slash', 'Slash', 16, 1, 'Slashes for 16'),
-        debuff('curse', 'Curse', 'vuln', 2, 'Curses you (Vulnerable 2)'), mheal('pray', 'Pray', 10, 'Prays (heal 10)')] },
+        debuff('curse', 'Curse', 'vuln', 2, 'Curses you (Vulnerable 2)'), mheal('pray', 'Pray', 10, 'Prays (heal 10)'),
+        debuff('blight', 'Blight', 'poison', 5, 'Blights you (5 Poison)')] },
     { id: 'yeti', name: 'Snow Yeti', act: 3, tier: 'normal', hp: [114, 130], art: 'yeti', size: 1.15, color: '#f2fbff',
       desc: 'Fell asleep in the freezer aisle. You woke it.', ai: 'cycle', pattern: [0, 1, 2, 0, 3],
       moves: [atk('maul', 'Maul', 22, 1, 'Mauls for 22'), mv('pound', 'Pound', 'shake', 'Pounds the cabinet. Your bin rattles.'),
