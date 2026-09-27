@@ -153,6 +153,7 @@ PHYS.clawRig(W, {
   homeX,            // where the claw parks, default half the bin width
   chuteX,           // carry target: the chute column centre
   railY: 26,        // the rail; the hub parks RIG.hubDrop (14) below it
+  type: 'classic',  // the claw type: classic | tri | scoop | hand | magnet | hook (see "Claw types")
   prongs: 2|3,      // 3 = +0.1 grip_cc, x1.08 size, and a drawn-only ghost finger
   width: 1,         // size = RIG.base (0.74) * width
   grip: 1,          // Clawspire grip (0.75 .. 2+); see the mapping below
@@ -312,7 +313,8 @@ Move kinds (combat implements): `attack {v, n}`, `block {v}`, `buff {s, v}` (sel
 (player), `heal {v}`, `shake`, `grease`, `fog`, `junk {item, n}`, `steal` (remove a random non-junk item from the bin until end of fight),
 `freezeItem` (encase a random bin item in an ice block for the fight), `summon {id}`, `tilt` (gravity tilt for a turn), `charge {v}` (big telegraphed attack next turn), `escape`,
 and the monsters pass (see Enemies): `gulp {n, like?}`, `bomb {v, fuse}`, `corrode {n}`, `jam {v}`, `eggs {n, hatch, turns}`.
-Optional enemy fields: `enrage: {name, text, str?, pattern?} | false` (phase two), `digest` (turns), `noAffix`.
+Optional enemy fields: `enrage: {name, text, str?, pattern?} | false` (phase two), `digest` (turns), `noAffix`,
+`taunt` (the versus card's line) and `sig: {id, name, sign, shout, text, first, every, ...}` (a boss signature, see Bosses).
 At least **26 enemies**: act 1 six normal + 2 elites + 1 boss; act 2 the same; act 3 the same; plus
 the final boss `prizemaster`. Art keys: `rat, slime, bat, gremlin, mimic, spider, goblin, hoard,
 imp, clockwork, golem, furnace, magnet, ironjaw, wraith, yeti, frostmage, icemimic, prizemaster,
@@ -410,7 +412,10 @@ Event objects (renderer/game consume these; keep this list exact):
 (see Builds and synergies), and the monsters pass (see Enemies): `{t:'binEat', inst, idx, kind}`,
 `{t:'binReturn', insts, idx, why:'hiccup'|'burst'}`, `{t:'binDigest', inst, idx, k:'digest'|'boom'|'drink'|'snack'|'escape'}`,
 `{t:'binBomb', inst, idx}`, `{t:'binBoom', inst}`, `{t:'binEggs', items, idx}`, `{t:'binHatch', inst}`,
-`{t:'binRust', inst, idx}`, `{t:'binJam', idx}`, `{t:'enrage', idx, name, text}`.
+`{t:'binRust', inst, idx}`, `{t:'binJam', idx}`, `{t:'enrage', idx, name, text}`, and the boss signatures (see Bosses):
+`{t:'boss', k:'spill'|'lean'|'heat'|'sear'|'cool'|'ice'|'thaw'|'rig'|'final', idx, ...}`
+(`items` / `insts` / `part` / `dir` / `stage` / `name` / `text` / `v` by kind).
+COMBAT also has `sigNext(e)`, `sigInfo(e)`, `crackIce(F, heavy)`, `breakIce(F)`, `unrig(F)`.
 
 Damage formula: `base + str` per hit, ×0.75 if weak, ×1.5 if vuln on target, −armor, then block
 absorbs. Player burn: `v` dmg at end of player turn then −1. Enemy poison/burn tick at the start
@@ -1408,6 +1413,332 @@ rust, jam, escape, every affix, phase two once, data rolls by act and
 escalation, every new user fights 14 turns with every item accounted for),
 data (move fields, phase two specs, affixes, act introductions), game (the
 events move real bodies and draw with the stub ctx), render (the new art).
+
+## Bosses (the boss arena: spectacle for elites and bosses, round 2)
+
+Every elite and boss fight is an event: a versus card before it, a trick of
+its own inside the machine, a finale when it falls. Presentation first, but
+the signatures do touch the fight (coins, hot metal, ice, a hijacked drop).
+Balance is loose on purpose. State lives in `FS.vs` / `FS.bs` (fight-only,
+never saved) and on COMBAT's `F` (`heat`, `ice`, `rigged`, `lean`, `final`,
+`inst.hot`), none of it in the run save.
+
+**The versus card (game.js boss arena `vsStart / vsTick / vsSkip / vsEnd`,
+`RENDER.vsCard`).** `startFight` of an `elite` / `boss` tier opens it instead
+of the ELITE / BOSS banner: the crawler's portrait slides in from the left on
+its colour, the enemy from the right on its own, a lightning seam between
+them, VS slams from 3x with a white flash and a drum hit (`vsSlam`), the name
+slams in chrome, the def's `taunt` types itself, the affix badges pop. The
+title is `ELITE`, `TOWER KEEPER` (a tower), `ACT n BOSS` (hazard stripes, a
+rumble shake and `rumble`, the `stingBoss` / `stingElite` music sting) or
+`FINAL BOSS` (the Prize Master, also when it steps out of Glacius mid fight:
+a `summon` of a boss tier plays its own card, after the mid-fight finale).
+Timeline `RENDER.VS` in card seconds (`VS_DUR` boss 3.3, elite 2.3); a repeat
+(`localStorage` key `clawspire_vs`, `{enemy id: times seen}`) runs it
+`VS_FAST` (1.9x); reduced motion drops the slides, the flash and the rumble
+and runs 1.3x. Input waits (`canSteer` / `canEndTurn` are false, the event
+queue holds its beat, the HUD rows step aside); a tap or a key jumps to the
+exit, a second one ends it. The fight exists before the card, so a save
+under it reloads into the same seeded fight and one card (quick this time);
+it can never start twice.
+
+**Entrances, footfalls, badges.** When the card goes, an elite drops in from
+above and bounces (two footfalls), a boss stomps in from the right in three
+heavy strides (`enterOff`, a `stomp` each: dust at both feet, a downward
+kick, a floor ring). Elites and bosses stomp when they lunge too. A crown
+(boss) or a skull (elite) sits right of the hp bar (`RENDER.eliteBadge`).
+
+**Signatures (`def.sig`, combat.js boss signatures).** One trick per boss,
+on top of its move like Greedy: due on action `first` (0-based `e.acts`) and
+every `every` after (0: once), or on the next action when `e.sigForce`.
+`COMBAT.sigNext(e)` is the telegraph a turn ahead: the intent text adds
+"then ..." (`sigInfo(e).text`), the bubble gets a pulsing ribbon, and the
+cabinet hangs a warning sign on its top frame (`RENDER.bossSign`, "... NEXT
+TURN", then the state while it lasts). Each fires `{t:'boss', k, idx, ...}`
+(plus a shout) and its state clears as the player's next turn ends
+(`bossTurnEnd`: `{k:'cool'}`, `{k:'thaw'}`, the rig comes off).
+- **The Hoard, Coin Avalanche** (`spill`, first 1, every 3): 5 Hoard Coins
+  (junk `hoardcoin`, temporary, `gold 2`: they clutter the bin but grabbing
+  one out pays) arc from its mouth into the bin with the party lights and a
+  coin cascade; 7 once enraged. Phase two: `F.lean = -1` (`{k:'lean'}`), the
+  whole pile lurches toward it and a standing sideways gravity (`LEAN_G`)
+  holds whenever no tilt is on; the back panel leans.
+- **The Smelter, Furnace Blast** (`heat`, first 1, every 3): `F.heat`, up to
+  4 real metal items turn red hot (`inst.hot`, a glow and shimmer), one Slag
+  drips off the rail. Delivering a hot item still plays it, then burns the
+  hand for `sig.burn` (2) through Block (`{k:'sear'}`, RED HOT!). The cabinet
+  glows: a coal floor, heat haze ribbons, slag drips, hot glass edges.
+- **Glacius, Deep Freeze** (`ice`, first 1, every 3, parts `lid` then
+  `rail`): the chute lip ices over (a static wall segment across the chute
+  mouth sloping into the bin: a prize dropped on it slides back; each
+  landing `COMBAT.crackIce(F)` cracks it, the 2nd opens it, a heavy one
+  smashes it at once and falls through), or the claw rail does (the carriage
+  runs at `RAIL_SLOW` 0.4; a heavy prize delivered smashes it,
+  `COMBAT.breakIce`). Waiting a turn thaws it. Snow drifts pile up in the
+  corners freeze after freeze.
+- **The Prize Master, Rigged!** (`rig`, first 1, never on its own after,
+  `rephase` and `final`): once per phase (and again at the final phase) the
+  bin is shuffled (every loose body swaps places) and `F.rigged` takes the
+  next drop: the claw hangs on pink puppet strings and wanders toward the
+  junk farthest from the chute; after `HIJACK_AUTO` (3.4 s) untouched the
+  house drops it itself (a grab spent). The player wrestles it by steering
+  against the pull (the claw only goes `HIJACK_GRIP` of the way to the
+  finger) and releases to drop where the tug of war stands; one drop, then
+  `COMBAT.unrig`. At a quarter hp after phase two, `F.final`
+  (`{k:'final'}`): +1 Strength, one more rigged drop, a siren, FINAL PHASE,
+  and the cabinet's neon and bulbs go red with sweeping siren beams.
+
+**The death finale (`bossDie / finTick`, `RENDER.finale`).** An elite or
+boss killed (the `die` event) blows apart instead of just falling: long slow
+motion, the body held and flashing while `FIN.booms` blasts chain across it
+(boss 10 over 1.1 s, elite 5 over 0.6 s, the last one the biggest), then for
+a boss the whiteout, then the title card across the cabinet (BOSS DEFEATED in
+chrome with rays and an epitaph, or ELITE DOWN), the `bossDown` fanfare and a
+shower of coins into the gold counter and ticket stubs into the ticket
+counter. The outro waits for it (`FIN.total`); the VICTORY banner stays down
+under the card; a tap still skips to the reward, and a save during it is the
+reward screen as before. A boss that dies mid fight (Glacius) gets the
+blasts only (`mid`), holding the queue, then the next boss's card.
+
+**Sounds (`AUDIO.sfx`).** `vsSlam, rumble, stomp, coinSpill, sizzle, drip,
+freezeOver, iceBreak, hijack, shuffle, alarm, kaboom, bossDown, stingBoss,
+stingElite`, through the sfx bus with gaps and ducking.
+
+`GAME.boss` exposes `vsStart, vsSkip, shuffle, enterOff, vs, bs` and the dials
+for tests and screenshot drivers. Tests: combat (every boss has a signature
+and every elite / boss a taunt, the cadence and the telegraph text, the
+avalanche and its gold, the lean, hot metal and the burn through Block, the
+lid / rail ice cycle with cracks and smashes, one rig per phase and the final
+phase once, a 24 turn clean fuzz per boss), game (the elite and boss cards,
+tap to skip, input waits, the quick repeat, the tower keeper, reduced motion,
+a save under the card, coins as bodies, the lean, heat and a hot delivery,
+the ice wall in the physics and the slow rail, the hijacked drop and the
+wrestle, the red lights, the finale and its outro, the elite finale, the tap
+skip, Glacius into the FINAL BOSS card, every look drawn), render (the card
+at every beat for all ten, the signs, every cabinet look distinct, badges,
+the finale, the intent ribbon), audio (every voice, the sting throttle).
+
+## Claw types (the rig variants, round 2)
+
+The Crawler picks a claw at the start of a run (the claw row on character
+select, `run.clawType`; a save without one is `'classic'`). Every type is a
+variant of the one `PHYS.clawRig` (same phase machine, same events, same
+public surface), with its own geometry, grip rules, look and sounds. The
+data lives in `DATA.CLAWS[id]` (name, joke, stats for the picker); the
+physics dials in `PHYS.CLAW_TYPES[id]`. Claw upgrades still apply to every
+type (see the per-type notes below).
+
+### Auto-steer API (for the Prize Master and any other AI driver)
+
+```js
+R.autoSteer(x, {drop: true, speed: 1.6}) -> bool
+  // Only while idle / moving. Sets the aim (clamped to the bin) and takes
+  // the claw away from the player: R.setTarget(x) is ignored while R.auto is
+  // set. drop: true commits the drop the moment the carriage arrives (the
+  // same as R.drop()). speed multiplies the carriage speed until the grab
+  // ends. R.auto = {x, drop, speed} until the claw is home again ('home'
+  // event) or R.cancelAuto(). Returns false while busy.
+R.cancelAuto()             // hands the claw back (the speed boost ends)
+R.auto                     // null, or the AI steer in charge (the renderer tints the carriage lamp red)
+R.aimAt(pred) -> x | null  // the x above the best body for a steer: the topmost dynamic body with
+                           // pred(body) true (default: any item), null when none matches
+```
+The game still owns the grab bookkeeping (`COMBAT.useGrab`, `FS.grabInFlight`);
+an AI grab is driven exactly like a player grab, only the steer and the drop
+come from `autoSteer`.
+
+### The six claws (`PHYS.CLAW_TYPES`, `DATA.CLAWS`)
+
+| type | body | physics | good / bad |
+| --- | --- | --- | --- |
+| `classic` | two chrome prongs | the old rig, bit for bit (every multiplier 1) | a bit of everything |
+| `tri` | three curled prongs, gold rivets, a star plate | size x0.9, cupped `TRI_PRONG`, grip +0.06, claw friction x1.7 on balls (x1.35 blobs), x0.8 on long capsules; the middle prong is drawn only | round things / long things |
+| `scoop` | a clamshell bucket (see-through shell, teeth) | `SCOOP_JAW` jaws, halt x3 (it plows), keeps sinking 0.1 s after the touch (`dig`), closes x1.35 faster, rails x0.85; a capsule longer than 38 px tips out over the rim at 0.22 s into the lift with chance 0.8 | handfuls of small things / swords |
+| `hand` | a cartoon rubber glove, fingers curl as it closes | fat `FINGER` polylines, grip +0.22, friction x1.45, rails x0.72, drop and lift x0.8; at the lift the heaviest thing it touches is welded to it, everything else drops out | one big heavy thing / handfuls, hurry |
+| `magnet` | a red electromagnet drum on the cable, hazard band, coil face | no prongs, a hub disc r 24; a field pulls metal (`fieldR` 118, `fieldF` 2600 px/s^2) while dropping, energising (0.4 s) and the first 0.3 s of the lift; every metal part touching the face sticks (and metal touching stuck metal while energising); non-metal slides off the housing; drops everything on release | metal builds / anything not metal |
+| `hook` | a barbed harpoon on a rope | no claw segments at all (the rope passes through the pile); drops x2.1; the first item part the barb (3 px x size, +3 with the third prong) enters is speared and welded; the rope drags it up through the pile | sniping one item fast / heavy things tear off |
+
+Welds (`hand`, `magnet`, `hook`): each stuck body is driven to its spot under
+the hub by a capped velocity weld (`weldK`, `weldV`) and keeps its angle; it
+tears off (a `slip`) when it lags more than `tear` x size + 6 px, and at the
+top of the lift a load heavier than the claw bears (`14 + 40 grip_cc` magnet,
+`10 + 36` hook, `18 + 50` hand) may tear off with a seeded roll. The cargo
+of a weld claw is what it holds (`R.stuck()`); riders on it are a bonus.
+
+Upgrades on every type: Extra Token and Greased Rails as ever; Wider Palm
+scales the whole claw (a bigger magnet, a bigger barb); Stronger Motor, Rubber
+Tips and the Third Prong raise grip_cc (the magnet's field strength and what
+it bears, the harpoon's tear limit); on the magnet the Third Prong is a second
+coil (+25% range) and the Electromagnet upgrade overcharges it (+40% pull); on
+the harpoon the Third Prong is a second barb. `DATA.CLAWS[id].ups` says so in
+the picker.
+
+Rig additions: `R.type`, `R.stuck()`, `R.field` (0..1, the magnet's live
+field), `R.bodies.tip` (the harpoon's barb), `R.setConfig({type})`, and the
+auto-steer API above. `PHYS.clawPose(type, {x, y, open, width, cable})` is a
+rig-shaped pose for drawing a claw without a world (the picker chips).
+
+### The picker, the run, the save
+
+Character select has a claw row (`clawPickerRow`, one line in `showChars`):
+six chips (a still of each claw) and a panel for the picked one with a live
+demo cabinet (a tiny world where the claw grabs on its own through
+`autoSteer`, on a pile that shows the type off), grip / haul / speed pips,
+the matchups and the joke. Chips are plain taps, not `GAME.choose` entries,
+so the crawler cards keep their indices. The pick is remembered on the
+profile (`meta.clawPick`) and copied to `run.clawType` by `newRun`; a run
+without it (an old save) is the classic claw. `GAME.claws` exposes `ids`,
+`info`, `type`, `picked`, `pick`, `turnStart`, `celebrate`, `demo`,
+`demoStep`, `demoDraw`, `SLOT`, `ANTIC_AFTER`, `zones`.
+
+### Claw juice
+
+- Each player turn (and the opening bell) a coin flies from the gold counter
+  into the coin slot on the cabinet's bottom rail (`RENDER.coinSlot`): a clunk
+  (`clawCoin`), the slot and its INSERT COIN lamp light up, then the claw
+  spins up (`clawSpin`, `J.spin`: two turns about the cable, an x squash, a
+  cyan glow) with the LED chase.
+- A jackpot: the claw twirls (`J.spin`), starry `wow` eyes, confetti, `clawCheer`.
+- Idle antics when the player waits 7 s (then every 5 s): taps the glass twice
+  (`J.tap` leans the claw at you, rings on the glass, `clawTap`), looks
+  around, yawns (`sleepy` eyes and drifting zZ).
+- Per type: the magnet hums on the drop (`magHum`), zaps and sparks on every
+  catch (`magZap`), crackling arcs to what it holds (`J.hold`) and to metal it
+  pulls (`J.pull`), a hum ring under the face, a power-down on release
+  (`magDrop`); the scoop sloshes into the pile (`scoopSlosh`) and throws dust;
+  the hand squishes (`handSquish`, sweat drops, `J.squish`); the harpoon fires
+  (`hookFire`, a streak), thunks home (`hookThunk`, an impact star at the
+  barb) or clanks on the floor; the tri-claw clamps with a gold ring.
+- Reduced motion drops the spin and the tap.
+
+### Floating text layout (`RENDER.fx`)
+
+Labels (the classic rising texts and the badges; the physics damage numbers
+keep their flight) are laid out every frame, oldest first: each reserves its
+rect, and a label that would overlap an older one, a keep-out zone or the
+screen edge moves to the nearest free spot above or below and drifts back to
+its own path when that frees up. When the screen is full a new label waits
+hidden while the oldest one hurries off. The same text in the same colour
+within 0.5 s (and 120 px) merges into the live label as "x2", "x3" with a pop;
+a label wider than 516 px shrinks to fit; life is at least `0.55 + 0.055 x
+length` s (max 2.8), so long lines stay readable. `fx.zone(id, x0, y0, x1,
+y1)` / `fx.zone(id)` set keep-out rects; the game sets the cabinet marquee,
+the top HUD, the grabs pill and the control bar on the fight screen (the top
+HUD on the map) in `setScreen` (`labelZones`). `o.free` opts a label out,
+`o.noMerge` stops a merge, `fx.labels()` returns the laid-out rects, and
+`fx.layout = false` switches the manager off. `fx.LAYOUT` holds the dials.
+
+Tests: physics (six types, the default is the classic, every type delivers a
+lone item, the magnet lifts only metal and does lift metal, the scoop lifts
+handfuls and loses swords, the hand holds one thing (the heaviest), the
+harpoon spears through the pile with no claw segments, tri vs classic on
+balls, upgrades on every type, the auto-steer API, determinism), render
+(every type in every state, all distinct, the coin slot, a 40-label stress
+test with no overlaps, nothing off screen or in a zone over 90 frames, the
+marquee, merges, long labels, lifetimes, opt outs), game (the picker, the
+pick saved and loaded, old saves are classic, a real grab delivers with
+every type and the magnet delivers only metal, the coin clunk and spin-up,
+idle antics, the jackpot twirl, per-type sounds, label zones), data
+(`DATA.CLAWS` matches the rigs, copy lengths, no em dashes), audio (every
+claw voice).
+
+## Meta (reasons to play one more run)
+
+Meta progression: a ladder to climb (Tilt), a book to fill (the Prizedex),
+stickers to earn, a daily seed to beat, and an arcade front door. Enemies get
+stronger on purpose; balance is loose. Pure data in `data.js` (the META
+block), the fight side in `combat.js` (the TILT block), the flow in `game.js`
+(the META block, reached through one-line hooks), the look in `index.html`
+(`<style id="meta-css">`), the sounds `coinIn, sticker, discover, tiltUp`.
+
+**Tilt levels** (ascension). `DATA.TILT[0..10]` `{lv, name, text, k, v, color}`,
+`DATA.TILT_MAX` 10, `DATA.tiltMods(lv)` -> the cumulative twists `{hp, dmg,
+eliteAffix, bulbs, junk: [ids], shop, ramp, rest, caps, bossRage}` (neutral at 0).
+Winning a run with a crawler at its highest unlocked level unlocks the next one
+for that crawler (`meta.tilt[char]`); the selector then sits on it.
+
+| lv | name | twist | where |
+| --- | --- | --- | --- |
+| 1 | Loose Coin | enemies +10% hp | combat `tiltScale` (makeEnemy, summons too) |
+| 2 | Sticky Joystick | enemies hit +10% (attacks, charges, bombs) | combat `tiltScale` |
+| 3 | Bent Prong | every elite gets one more affix (never Greedy on a gulper) | combat `tiltFight` |
+| 4 | Dim Marquee | 3 fewer bulbs at the start of each act (never below 1) | game `metaNewRun` / `metaActStart` |
+| 5 | Junk Drawer | a rock in the starting bin | game `metaNewRun` |
+| 6 | Price Hike | shop items and relics +25% | game `metaShop` (rollShop) |
+| 7 | Hot Streak | the hidden escalation steps every 2 fights, not 3 | combat `tiltScale` |
+| 8 | Hard Bench | rests heal 20% instead of 30% | game `metaRest` |
+| 9 | Cheap Plastic | capsules one tier lower (boss capsules stay >= uncommon; pity and the counter untouched) | game `metaCap` (makeCapsule) |
+| 10 | Rigged | bosses start with their phase two Strength (the transformation still comes at half hp) | combat `tiltFight` |
+
+`run.tilt` rides the run save; `COMBAT.newFight` copies it to `F.tiltLv`;
+`DATA.DIFFICULTY` is never touched. Character select: a Tilt box above the cards
+(a big glowing number, -/+ buttons, the level's name, the list of active twists;
+locked until the first win) and a tag per crawler ("Plays Tilt 3 · max 4 · won 3",
+gold when capped below the pick). The +/- buttons are not `GAME.choose` entries
+(the cards keep index 0..2); tests use `GAME.prog.setTilt(n)`. The HUD shows a
+pink `T3` (or a gold `DAILY`) badge on the act stat. The win screen shows the
+unlock as a big card.
+
+**Prizedex** (screen `collection`). Four tabs (`DATA.DEX_TABS`: items, relics,
+enemies, combos; `DATA.dexEntries()`), `DATA.dexProgress(seen)` -> `{n, total, pct,
+per}`. Discovered entries show the art, the name and keyword chips; the rest are
+dark silhouettes of the same art (combos show their example items) and "???",
+with a hint on tap (rarity, act, the recipe line). A completion bar on top, per
+tab counts, "NEW!" badges (and a count dot on the tab) that clear once a tab has
+been shown. Sightings (`dexSee`): items when offered (rewards, shops) or added
+(junk, bombs, eggs), relics when gained, enemies when a fight starts or one is
+summoned, combos when fired. The first sighting in a run slaps a toast top left
+("NEW PRIZE DISCOVERED", "NEW MONSTER SPOTTED", "NEW COMBO FOUND"; several at once
+share one toast with up to three pictures); a run's own starting bin never toasts.
+
+**Achievement stickers** (screen `stickers`). `DATA.ACHIEVEMENTS` (36, `ACH_IDS`
+in board order) `{id, name, icon, color, text, check(c), goal?, val?(c)}`;
+`DATA.achCheck(c, have)` -> newly earned ids (a throwing check is skipped). The
+game builds `c` and never lets a check mutate anything: `kind` 'tick' (polled
+every 0.25 s in a run), 'ev' (a fight event: combo, die, binReturn), 'fight' (a won
+fight), 'win' / 'end' (the run end), 'meta' (profile changes, the title); `c.run`,
+`c.meta`, `c.f` (tier, grab, streak, dmgTaken, turn, hp, curDef, lucky, free,
+enemy), `c.dex`. The observer is `metaEvent(ev)` at the top of `applyEvent`,
+`metaFightEnd` in `endFight`, `metaRunEnd` on game over / win, and `metaTick`.
+An unlock (`achUnlock`) saves at once, lists the id on `run.achNew` (the run-end
+panel shows "Stickers this run") and queues a sticker that slaps onto the top
+right corner (a die-cut card, a stamp and a sparkle, confetti and a ring), one at
+a time, 2.8 s each, peeling off. The board: a 3-column grid, earned stickers
+tilted and coloured, locked ones dashed with their goal text and a progress bar
+when they count something.
+
+**Daily run.** `DATA.dailyKey(date)` 'YYYY-MM-DD', `dailySeed(key)` (FNV), `dailyChar(key)`
+(any crawler, locked or not), `dailyScore(run, won)` = act x 500 + kills x 20 +
+jackpots x 15 + tickets won x 3 + gold (+2500 for a win). The title's gold DAILY
+RUN button (date, crawler, today's best) starts `newRun(char, seed)` at Tilt 0 with
+`run.daily`; the same seed means the same map and starting bin for everyone.
+`meta.daily {key, best, runs, last}`; the run-end panel shows the score and NEW
+BEST.
+
+**Title.** An arcade attract mode on the first title of a page load (never
+headless): a ring of chasing marquee bulbs, a hi-score line, INSERT COIN blinking
+over the tower, a coin slot. A tap or a key drops a coin (`coinIn`), CREDIT 01
+lights, the overlay zooms away and the menu slides up. The menu: Continue, New
+run, Daily run, Prizedex / Stickers / Help / Intro, the toggles, then a stats row
+(runs, wins, best Tilt won, stickers x/y, Prizedex %). Profile stickers catch up
+here (`achRun('meta')`) and slap once the menu is up.
+
+**Save fields.** Meta (`clawspire_meta`, `metaFix` defaults every one, junk
+included): `tilt {char: lv}`, `tiltSel`, `bestTilt {char: lv}`, `winsBy {char: n}`,
+`ach {id: {run, at}}`, `achNew {id: 1}`, `seen.enemies`, `seen.combos` (next to the
+old `seen.items` / `seen.relics`), `dexNew {'tab:id': 1}`, `daily`. Run
+(`clawspire_run`): `tilt` (missing = 0), `daily` (key or null), `achNew`, `metaEnd`.
+No key was renamed.
+
+`GAME.prog` = `{startRun(char, tilt), startDaily(key?), setTilt(n), tiltCap(char),
+tiltMax(), dexSee(tab, id, quiet), dexProg(), achUnlock(id), achRun(kind, extra),
+runEnd(won), insertCoin(), metaFix, queue, log, current}`; `GAME.showStickers()`.
+Tests: data (levels, cumulative twists, achievements and their checks, the
+Prizedex tables, the daily seed and score), combat (Tilt 0 neutral, hp, damage,
+the elite affix, the faster ramp, boss rage), game (defaults and old saves, the
+unlock on a win and its reload, per-crawler caps, every twist in the game, the
+HUD badge, the observer and the sticker queue, discoveries and the screen, the
+board and the title, the daily).
 
 ## Quality bar (Game of the Year, mobile)
 

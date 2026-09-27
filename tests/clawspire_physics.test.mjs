@@ -685,4 +685,221 @@ h.test('scaleShape shrinks every shape kind', () => {
   h.eq(src.r, 10, 'the original shape is untouched');
 });
 
+// ---- claw types (DESIGN.md "Claw types")
+const TYPES = Object.keys(PHYS.CLAW_TYPES);
+const METAL = { tags: ['metal'] };
+/* A world with the given item list [[kind, x, y, data]], settled. */
+function typeWorld(list, secs) {
+  const { W, C } = mkWorld();
+  for (const [k, x, y, data] of list) spawn(W, ITEM[k]({}), x, y, { data: Object.assign({ tags: [] }, data || {}) });
+  settle(W, secs || 1.5);
+  for (const b of items(W).filter(b => C.inChute(b))) W.remove(b);
+  return { W, C };
+}
+
+h.test('claw types: six types, the classic is the default and unchanged', () => {
+  for (const t of ['classic', 'tri', 'scoop', 'hand', 'magnet', 'hook']) h.ok(PHYS.CLAW_TYPES[t], 'claw type ' + t);
+  const { W, C } = mkWorld();
+  const R = PHYS.clawRig(W, { cabinet: C });
+  h.eq(R.cfg.type, 'classic', 'no type is the classic claw');
+  h.near(R.geo.reach, (PHYS.RIG.hingeY + PHYS.PRONG[3][1]) * R.geo.s, 1e-9, 'classic reach as before');
+  const R2 = PHYS.clawRig(mkWorld().W, { cabinet: C, type: 'nonsense' });
+  h.eq(R2.cfg.type, 'classic', 'an unknown type is the classic claw');
+  for (const t of TYPES) {
+    const p = PHYS.clawPose(t, { x: 100, y: 50, open: 0.5 });
+    h.ok(p.bodies.hub && p.bodies.hub.r > 0 && Array.isArray(p.bodies.prongs), 'clawPose ' + t);
+    h.eq(p.bodies.prongs[0].length, PHYS.CLAW_TYPES[t].poly ? PHYS.CLAW_TYPES[t].poly.length : 0, 'clawPose prong points ' + t);
+  }
+});
+
+h.test('claw types: every type delivers a lone item in a scripted grab', () => {
+  for (const t of TYPES) {
+    let ok = 0;
+    for (const x of [140, 200, 260]) {
+      const { W, C } = typeWorld([['ball', x, 340, METAL]]);
+      const R = PHYS.clawRig(W, { cabinet: C, type: t, rand: U.rng(3) });
+      const g = grab(W, C, R, x);
+      if (g.delivered >= 1) ok++;
+      h.ok(g.events.includes('drop') && g.events.includes('lift') && g.events.includes('release') && g.events.includes('home'), t + ' runs the full cycle');
+      h.ok(!anyNaN(W) && inside(W, C), t + ' keeps everything sane and inside');
+    }
+    h.ok(ok >= 2, `${t} delivers a lone ball (${ok}/3)`);
+  }
+});
+
+h.test('magnet crane: only lifts metal, and it lifts metal', () => {
+  const soft = [];
+  for (let i = 0; i < 16; i++) soft.push([i % 3 ? 'ball' : 'flask', 40 + (i % 8) * 45, 200 + Math.floor(i / 8) * 40]);
+  let got = 0;
+  for (const x of [100, 180, 260, 340]) {
+    const { W, C } = typeWorld(soft);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 1.6, rand: U.rng(5) });
+    let stuckMax = 0;
+    R.setTarget(x);
+    for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) { R.update(DT); W.step(DT); stuckMax = Math.max(stuckMax, R.stuck().length); }
+    got += items(W).filter(b => C.inChute(b)).length;
+    h.eq(stuckMax, 0, 'nothing but metal sticks to the magnet');
+  }
+  h.eq(got, 0, 'the magnet delivers nothing from a pile with no metal');
+  // a mixed pile: whatever sticks is metal, and metal gets delivered
+  let metal = 0;
+  for (const x of [120, 200, 280]) {
+    const mix = [];
+    for (let i = 0; i < 16; i++) mix.push([i % 2 ? 'sword' : 'ball', 40 + (i % 8) * 45, 200 + Math.floor(i / 8) * 40, i % 2 ? METAL : null]);
+    const { W, C } = typeWorld(mix);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'magnet', grip: 1.6, rand: U.rng(7) });
+    R.setTarget(x);
+    for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    let allMetal = true;
+    for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) {
+      R.update(DT); W.step(DT);
+      for (const b of R.stuck()) if (b.data.tags.indexOf('metal') < 0) allMetal = false;
+    }
+    h.ok(allMetal, 'every stuck body is metal');
+    metal += items(W).filter(b => C.inChute(b) && b.data.tags.indexOf('metal') >= 0).length;
+  }
+  h.ok(metal >= 2, `the magnet delivers metal from a mixed pile (${metal})`);
+});
+
+h.test('scoop: lifts a handful of small things at once; a sword tips out', () => {
+  let best = 0, total = 0;
+  for (const x of [170, 200, 230]) {
+    const list = [];
+    for (let i = 0; i < 18; i++) list.push(['marble', 150 + (i % 6) * 20, 250 + Math.floor(i / 6) * 22]);
+    const { W, C } = typeWorld(list);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'scoop', rand: U.rng(9) });
+    const g = grab(W, C, R, x);
+    best = Math.max(best, g.delivered); total += g.delivered;
+  }
+  h.ok(best >= 3, `a scoop of marbles delivers 3+ at once (best ${best})`);
+  h.ok(total >= 6, `scoops deliver handfuls (${total} over 3 grabs)`);
+  // long things: the bucket tips them out on the way up most of the time
+  let swords = 0;
+  for (let s = 0; s < 6; s++) {
+    const { W, C } = typeWorld([['sword', 200, 350]]);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'scoop', rand: U.rng(11 + s) });
+    swords += grab(W, C, R, 200).delivered;
+  }
+  h.ok(swords <= 3, `the scoop is bad with a sword (${swords}/6)`);
+});
+
+h.test('grabber hand: takes the biggest thing it touched, and only that', () => {
+  const { W, C } = typeWorld([['tower', 200, 330], ['marble', 170, 300], ['marble', 230, 300], ['ball', 200, 250]]);
+  const tower = items(W).find(b => b.spec.len === 50);
+  const R = PHYS.clawRig(W, { cabinet: C, type: 'hand', rand: U.rng(2) });
+  R.setTarget(tower.x);
+  for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+  R.drop();
+  let sawCarry = false, maxStuck = 0, heldTower = false;
+  for (let i = 0; i < 1200 && !(i > 30 && R.phase === 'idle'); i++) {
+    R.update(DT); W.step(DT);
+    maxStuck = Math.max(maxStuck, R.stuck().length);
+    if (R.phase === 'carrying') { sawCarry = true; if (R.stuck().indexOf(tower) >= 0) heldTower = true; }
+  }
+  h.ok(sawCarry, 'the hand carried');
+  h.ok(maxStuck <= 1, 'one thing sticks to the hand at most');
+  h.ok(heldTower, 'the heaviest thing it touched is the one it holds');
+  h.ok(C.inChute(tower), 'the tower shield was delivered');
+});
+
+h.test('harpoon: spears one item through the pile and pulls it up on its rope', () => {
+  const { W, C } = typeWorld([['shield', 200, 330], ['ball', 150, 330], ['ball', 250, 330]]);
+  const R = PHYS.clawRig(W, { cabinet: C, type: 'hook', rand: U.rng(4) });
+  R.setTarget(200);
+  for (let i = 0; i < 60; i++) { R.update(DT); W.step(DT); }
+  R.drop();
+  let speared = null, csegs = 0;
+  for (let i = 0; i < 900 && !(i > 30 && R.phase === 'idle'); i++) {
+    R.update(DT); W.step(DT);
+    csegs = Math.max(csegs, W.csegs.length);
+    if (!speared && R.stuck().length) speared = R.stuck()[0];
+  }
+  h.ok(speared, 'the barb speared something');
+  h.eq(csegs, 0, 'the rope and hook never shove the pile');
+  h.ok(speared && C.inChute(speared), 'the speared item was delivered');
+  h.ok(R.bodies.tip && R.bodies.tip.y > R.y, 'the rig reports the barb below the hub');
+});
+
+h.test('tri-claw grips round things better than the classic (a greased weak claw on balls)', () => {
+  const run = (type) => {
+    let n = 0;
+    for (let s = 0; s < 8; s++) {
+      const list = [];
+      for (let i = 0; i < 10; i++) list.push(['ball', 60 + i * 30, 330 - (i % 2) * 30]);
+      const { W, C } = typeWorld(list);
+      const R = PHYS.clawRig(W, { cabinet: C, type, grip: 0.75, grease: 1, rand: U.rng(20 + s) });
+      n += grab(W, C, R, 110 + s * 25).delivered;
+    }
+    return n;
+  };
+  const tri = run('tri'), classic = run('classic');
+  h.ok(tri > 0 && tri >= classic * 0.8, `tri ${tri} vs classic ${classic} balls`);
+  const { W } = mkWorld();
+  const R = PHYS.clawRig(W, { type: 'tri' }), Rc = PHYS.clawRig(mkWorld().W, {});
+  h.ok(R.geo.span < Rc.geo.span, 'the tri-claw is narrower');
+  h.ok(R.gripCC() > Rc.gripCC(), 'and grips a little harder');
+});
+
+h.test('claw types: upgrades apply (width, grip, third prong, magnet) and setConfig switches type', () => {
+  for (const t of TYPES) {
+    const { W, C } = mkWorld();
+    const R = PHYS.clawRig(W, { cabinet: C, type: t });
+    const s0 = R.geo.s, g0 = R.gripCC();
+    R.setConfig({ width: 1.36 }); h.ok(R.geo.s > s0, t + ': wider palm is bigger');
+    R.setConfig({ grip: 2 }); h.ok(R.gripCC() >= g0, t + ': stronger motor grips harder');
+    R.setConfig({ prongs: 3 }); h.ok(R.gripCC() >= g0, t + ': third prong helps');
+    R.setConfig({ magnet: 1 }); h.eq(R.cfg.magnet, 1, t + ': the magnet upgrade sticks');
+  }
+  const { W, C } = mkWorld();
+  const R = PHYS.clawRig(W, { cabinet: C });
+  R.setConfig({ type: 'magnet' });
+  h.eq(R.type, 'magnet', 'setConfig switches the claw type');
+  h.eq(R.bodies.prongs[0].length, 0, 'the magnet has no prongs');
+  R.setConfig({ type: 'classic' });
+  h.eq(R.bodies.prongs[0].length, 4, 'back to two classic prongs');
+});
+
+h.test('auto-steer API: an AI takes the claw, drops on arrival, hands it back at home', () => {
+  const { W, C } = typeWorld([['ball', 300, 340], ['shield', 120, 340]]);
+  const R = PHYS.clawRig(W, { cabinet: C, rand: U.rng(1) });
+  const ax = R.aimAt((b) => b.spec.kind === 'ball');
+  h.ok(Math.abs(ax - 300) < 20, 'aimAt finds the ball');
+  h.eq(R.aimAt(() => false), null, 'aimAt with no match is null');
+  h.ok(R.autoSteer(ax, { drop: true, speed: 2 }), 'autoSteer accepted while idle');
+  h.ok(R.auto && R.auto.drop && R.auto.speed === 2, 'R.auto describes the AI steer');
+  h.eq(R.setTarget(50), false, 'the player cannot steer while the AI has the claw');
+  const ev = [];
+  let t = 0, dropAt = -1;
+  while (t < 15) { const e = R.update(DT); ev.push(...e); if (e.includes('drop') && dropAt < 0) dropAt = t; W.step(DT); t += DT; if (ev.includes('home')) break; }
+  ev.push(...R.update(DT));
+  h.ok(dropAt > 0 && dropAt < 1.2, `the drop fired on arrival at double speed (${dropAt.toFixed(2)} s)`);
+  h.ok(ev.includes('home'), 'the grab ran home');
+  h.eq(R.auto, null, 'the claw is handed back at home');
+  h.ok(R.setTarget(200), 'the player steers again');
+  h.ok(R.autoSteer(100), 'autoSteer without a drop');
+  R.cancelAuto();
+  h.eq(R.auto, null, 'cancelAuto hands it back');
+  R.setTarget(R.x); R.drop();
+  for (let i = 0; i < 20; i++) { R.update(DT); W.step(DT); }
+  h.eq(R.phase, 'dropping', 'dropping');
+  h.eq(R.autoSteer(100), false, 'autoSteer is refused while busy');
+});
+
+h.test('claw types are deterministic with a seeded rand', () => {
+  for (const t of ['magnet', 'hook', 'hand', 'scoop']) {
+    const run = () => {
+      const list = [];
+      for (let i = 0; i < 12; i++) list.push([i % 2 ? 'sword' : 'ball', 50 + i * 28, 300, i % 3 ? METAL : null]);
+      const { W, C } = typeWorld(list);
+      const R = PHYS.clawRig(W, { cabinet: C, type: t, rand: U.rng(77) });
+      grab(W, C, R, 190);
+      return items(W).map(b => b.x.toFixed(6) + ',' + b.y.toFixed(6)).join('|');
+    };
+    h.eq(run(), run(), t + ' is deterministic');
+  }
+});
+
 h.done();

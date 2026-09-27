@@ -1898,4 +1898,712 @@ h.test('monsters: eat, hiccup, burst, lit bomb, eggs, rust, jam and phase two pl
   h.ok(Gt.screen === 'fight', 'still fighting');
 });
 
+// ---------------------------------------------------------------- BOSSES (the boss arena)
+{
+  // Pushes the fight's pending COMBAT events onto the playback queue.
+  const flushB = (G) => { const F = G.fight, FS = G.fs; const list = F.events.splice(0); for (const ev of list) FS.queue.push({ ev, beat: 0.02 }); FS.beatT = 0; };
+  const skipVs = (G) => { G.boss.vsSkip(); G.boss.vsSkip(); stepFor(G, 0.05); };
+  const bossRun = (seed, act) => { const T = boot(); T.GAME.newRun('knight', seed); if (act) T.GAME.run.act = act; return T; };
+
+  h.test('bosses: an elite opens with the versus card; input waits; a tap skips; it drops in with a stomp', () => {
+    const T = bossRun(71);
+    const G = T.GAME;
+    G.startFight(['mimic'], 'elite');
+    const v = G.boss.vs;
+    h.ok(v && v.title === 'ELITE' && v.name === 'Prize Mimic' && /customer/.test(v.taunt), 'the card: ELITE, the name, the taunt');
+    h.ok(Array.isArray(v.affixes) && v.affixes.length === G.fight.enemies[0].affix.length && v.affixes.every(a => a.name && a.color), 'the affix badges are listed');
+    h.eq(v.rate, 1, 'first sighting: full length');
+    h.ok(!G.dropClaw() && !G.endTurn(), 'no drop, no end turn under the card');
+    stepFor(G, 0.2);
+    h.ok(G.boss.vs && G.boss.vs.t > 0.15, 'the card runs on');
+    G.tap(270, 600);
+    h.ok(G.boss.vs && G.boss.vs.t >= G.boss.vs.dur - 0.31 && G.boss.vs.slam, 'a tap jumps to the exit');
+    G.tap(270, 600);
+    h.ok(!G.boss.vs, 'a second tap ends it');
+    const a = G.fs.anim[0];
+    h.ok(a.enter > 0 && a.enterK === 'elite', 'the elite makes its entrance');
+    stepFor(G, 0.1);
+    h.ok(G.boss.enterOff(0).y < -20, 'dropping in from above (' + G.boss.enterOff(0).y.toFixed(0) + ')');
+    stepFor(G, 1);
+    h.ok(a.steps >= 1 && !(a.enter > 0), 'it landed with a footfall');
+    h.eq(G.boss.enterOff(0).y, 0, 'and stands in its place');
+    h.ok(settle(G, 5), 'the fight is ready to play');
+    h.ok(G.boss.bs && G.fight.enemies[0].def.taunt, 'arena state up');
+    // the card plays itself out without a tap
+    G.startFight(['broodmother'], 'elite');
+    h.ok(G.boss.vs, 'a second elite, a second card');
+    stepFor(G, G.boss.vs.dur / G.boss.vs.rate + 0.2);
+    h.ok(!G.boss.vs, 'the card ends on its own');
+    // normal fights have none
+    G.startFight(['rat'], 'normal');
+    h.ok(!G.boss.vs && G.S.bannerStr === 'FIGHT', 'a normal fight keeps its banner');
+  });
+
+  h.test('bosses: boss titles, the quick repeat, the tower keeper, reduced motion', () => {
+    const T = bossRun(72);
+    const G = T.GAME;
+    G.startFight(['hoard'], 'boss');
+    h.ok(G.boss.vs.boss && G.boss.vs.title === 'ACT 1 BOSS', 'ACT 1 BOSS');
+    h.ok(G.boss.vs.dur > G.boss.VS_DUR.elite, 'a boss card runs longer');
+    h.eq(JSON.parse(T._store[G.boss.VS_KEY]).hoard, 1, 'seen once (its own storage key)');
+    G.startFight(['hoard'], 'boss');
+    h.eq(G.boss.vs.rate, G.boss.VS_FAST, 'the second time is quicker');
+    G.run.act = 3;
+    G.startFight(['prizemaster'], 'boss');
+    h.eq(G.boss.vs.title, 'FINAL BOSS', 'the Prize Master is the FINAL BOSS');
+    G.run.act = 1;
+    const tw = Object.values(G.run.map.tiles).find(t => t.type === 'tower');
+    if (tw) { G.enterTile(tw); h.eq(G.boss.vs && G.boss.vs.title, 'TOWER KEEPER', 'a tower elite is the TOWER KEEPER'); }
+    const fx = T.RENDER.fx;
+    fx.reduced = true;
+    G.startFight(['ironjaw'], 'elite');
+    h.ok(G.boss.vs.rate > 1, 'reduced motion plays it quicker');
+    skipVs(G);
+    stepFor(G, 0.1);
+    h.eq(G.boss.enterOff(0).y, 0, 'and without the drop');
+    fx.reduced = false;
+  });
+
+  h.test('bosses: a save under the card reloads into one fight and one card', () => {
+    const T = bossRun(73);
+    const G = T.GAME;
+    const f0 = G.run.fights;
+    G.startFight(['hoard'], 'boss');
+    stepFor(G, 0.5);
+    G.save();
+    const saved = JSON.parse(T._store.clawspire_run);
+    h.ok(saved.pendingFight && saved.pendingFight.tier === 'boss', 'the save holds the pending boss fight');
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    const G2 = T2.GAME;
+    G2.choose(G2.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+    h.eq(G2.screen, 'fight', 'back in the fight');
+    h.eq(G2.fight.enemies.map(e => e.id).join(), 'hoard', 'the same boss');
+    h.eq(G2.run.fights, f0 + 1, 'counted once, never twice');
+    h.ok(G2.boss.vs && G2.boss.vs.rate === G2.boss.VS_FAST, 'the card again, quick this time');
+    h.eq(G2.fight.seed, G.fight.seed, 'the same fight');
+  });
+
+  h.test('bosses: the Hoard\'s avalanche arcs coins into the bin as bodies; phase two leans the pile', () => {
+    const T = bossRun(74);
+    const G = T.GAME, C = T.COMBAT;
+    G.startFight(['hoard'], 'boss');
+    skipVs(G);
+    h.ok(settle(G, 5), 'ready');
+    const F = G.fight, e = F.enemies[0];
+    e.acts = 1;
+    h.ok(C.sigNext(e), 'the avalanche is due');
+    stepFor(G, 0.5);
+    h.ok(/AVALANCHE NEXT TURN/.test(G.boss.bs.sign.label) && G.boss.bs.sign.k > 0.5, 'a warning sign hangs on the cabinet: ' + G.boss.bs.sign.label);
+    e.intent = { id: 'calm', k: 'block', v: 1, txt: 'calm' };
+    G.endTurn();
+    h.ok(settle(G, 12), 'the enemy turn plays out');
+    const coins = G.fight.bin.filter(i => i.id === 'hoardcoin');
+    h.eq(coins.length, 5, 'five coins in the bin');
+    h.eq(G.fs.items.filter(b => b.data.inst.id === 'hoardcoin').length, 5, 'each one a body in the cabinet');
+    // phase two
+    C.damage(F, F.player, e, e.hp - Math.floor(e.maxHp / 2), { pierce: true });
+    flushB(G);
+    stepFor(G, 0.6);
+    h.ok(F.lean === -1 && G.world.gravity.x < -100, 'the pile leans toward the Hoard (gx ' + G.world.gravity.x.toFixed(0) + ')');
+    // a tilt takes over for its turn, the lean comes back after
+    G.fs.tilt = 1; G.world.setGravity(510, 1030); stepFor(G, 0.05);
+    G.fs.tilt = 0; G.world.setGravity(0, 1150); stepFor(G, 0.05);
+    h.ok(G.world.gravity.x < -100, 'the lean returns after a tilt');
+  });
+
+  h.test('bosses: the Smelter heats the cabinet: red hot metal glows, slag drips in, a hot delivery sears', () => {
+    const T = bossRun(75, 2);
+    const G = T.GAME, C = T.COMBAT;
+    G.run.bin.forEach((i, k) => { if (k < 5) i.id = 'rusty_sword'; });
+    G.startFight(['smelter'], 'boss');
+    skipVs(G);
+    h.ok(settle(G, 5), 'ready');
+    const F = G.fight, e = F.enemies[0];
+    e.acts = 1; e.intent = { id: 'calm', k: 'block', v: 1, txt: 'calm' };
+    G.endTurn();
+    h.ok(settle(G, 12), 'the enemy turn plays out');
+    h.ok(F.heat === 1 && F.bin.some(i => i.hot), 'metal glows red hot');
+    stepFor(G, 1.2);
+    h.ok(G.boss.bs.heatK > 0.5, 'the cabinet heats up');
+    h.eq(G.boss.bs.sign.label, 'HOT METAL', 'the sign says so');
+    h.ok(G.fs.items.some(b => b.data.inst.id === 'slag'), 'the slag dripped in as a body');
+    const hot = F.bin.find(i => i.hot);
+    const b = G.toys.bodyOf(hot);
+    F.player.block = 0;
+    const hp0 = F.player.hp;
+    G.playDelivered([b]);
+    stepFor(G, 1.2);
+    h.ok(F.player.hp <= hp0 - 2 && !hot.hot, 'the hot delivery burned the hand (' + hp0 + ' -> ' + F.player.hp + ')');
+    T._resetCounts(); G.S.ctx = T._ctx; G.S.px = 1; G.draw();
+    h.ok(T._counts.drawImage >= 0, 'draws with the heat on');
+  });
+
+  h.test('bosses: Glacius ices the chute lip into a wall (prizes crack it, a heavy one smashes through) and slows the rail', () => {
+    const T = bossRun(76, 3);
+    const G = T.GAME;
+    G.startFight(['glacius'], 'boss');
+    skipVs(G);
+    h.ok(settle(G, 5), 'ready');
+    const F = G.fight, FS = G.fs;
+    F.ice = { part: 'lid', hp: 2 };
+    FS.queue.push({ ev: { t: 'boss', k: 'ice', idx: 0, part: 'lid' }, beat: 0.02 }); FS.beatT = 0;
+    stepFor(G, 0.1);
+    const lid = G.boss.bs.lid;
+    h.ok(lid && G.world.segs.includes(lid), 'a static ice wall sits over the chute mouth');
+    const cb = G.cabinet.bounds;
+    // a light prize dropped on it slides back into the bin and cracks it
+    const light = FS.items.find(x => !(x.data.tags || []).includes('heavy'));
+    light.x = cb.chuteX + 34; light.y = 40; light.vx = 0; light.vy = 0; light.held = 0;
+    G.world.wakeAll();
+    stepFor(G, 1.5);
+    h.ok(!(light.x > cb.chuteX && light.y > cb.dividerTop), 'it never reaches the chute (' + light.x.toFixed(0) + ',' + light.y.toFixed(0) + ')');
+    h.ok(F.ice && F.ice.hp === 1, 'it cracked the ice');
+    // a heavy one smashes it and falls through
+    const heavy = FS.items.find(x => x !== light);
+    heavy.data.tags = ['heavy'];
+    heavy.x = cb.chuteX + 34; heavy.y = 40; heavy.vx = 0; heavy.vy = 0; heavy.held = 0;
+    G.world.wakeAll();
+    stepFor(G, 1.2);
+    h.ok(!F.ice && !G.boss.bs.lid && !G.world.segs.includes(lid), 'smashed: the wall is gone');
+    h.ok(!FS.items.includes(heavy) || heavy.y > cb.dividerTop, 'the heavy prize fell into the chute');
+    // the rail: the carriage slows while it is iced, and gets its speed back
+    const sp0 = G.rig.cfg.speed;
+    F.ice = { part: 'rail', hp: 2 };
+    stepFor(G, 0.05);
+    h.ok(Math.abs(G.rig.cfg.speed - sp0 * G.boss.RAIL_SLOW) < 1e-6, 'the iced rail slows the claw');
+    h.eq(G.boss.bs.sign.label, 'RAIL FROZEN', 'the sign');
+    F.ice = null;
+    stepFor(G, 0.05);
+    h.eq(G.rig.cfg.speed, sp0, 'thawed: full speed');
+    h.ok(G.boss.bs.snow > 0, 'snow piles up in the corners');
+  });
+
+  h.test('bosses: the Prize Master hijacks one drop (the claw wanders to junk and drops itself; a wrestle pulls it part way) and shuffles the bin', () => {
+    const T = bossRun(77, 3);
+    const G = T.GAME, C = T.COMBAT;
+    G.startFight(['prizemaster'], 'boss');
+    skipVs(G);
+    h.ok(settle(G, 5), 'ready');
+    const F = G.fight, FS = G.fs;
+    const xs0 = FS.items.map(b => b.x.toFixed(1)).join();
+    h.ok(G.boss.shuffle() >= 2, 'the shuffle moves the pile');
+    h.ok(FS.items.map(b => b.x.toFixed(1)).join() !== xs0, 'every body swapped places');
+    stepFor(G, 1.5);
+    // a rock far left is the junk it wants
+    C.addJunk(F, 'rock', 1); flushB(G); stepFor(G, 1);
+    const rock = FS.items.find(b => b.data.inst.id === 'rock');
+    rock.x = 70;
+    stepFor(G, 0.8);
+    F.rigged = { drops: 1, stage: 1 };
+    const g0 = F.player.grabs;
+    stepFor(G, 0.2);
+    h.ok(G.boss.bs.hj, 'the house takes the claw');
+    h.eq(G.boss.bs.sign.label, 'RIGGED', 'the RIGGED sign');
+    stepFor(G, 1.8);
+    h.ok(G.rig.x < 200, 'the claw wanders toward the junk (' + G.rig.x.toFixed(0) + ')');
+    stepFor(G, G.boss.HIJACK_AUTO);
+    h.ok(F.player.grabs === g0 - 1 && !F.rigged && !G.boss.bs.hj, 'the house dropped it itself: one grab spent, the rig let go');
+    h.ok(settle(G, 25), 'the grab finishes');
+    // the wrestle: steering holds it only part way to the finger
+    F.rigged = { drops: 1, stage: 2 };
+    stepFor(G, 0.3);
+    const fx0 = G.CAB.x + 380;
+    G.pointer('down', fx0, 700);
+    for (let i = 0; i < 90; i++) { G.pointer('move', fx0, 700); G.update(1 / 60); }
+    const tx = G.rig.targetX;
+    h.ok(tx < 380 - 60 && tx > 90, 'wrestled part way (' + tx.toFixed(0) + ' of 380)');
+    G.pointer('up', fx0, 700);
+    stepFor(G, 0.6);
+    h.ok(!F.rigged && G.rig.x < 380 - 60, 'released: it drops where the tug of war stood (' + G.rig.x.toFixed(0) + ')');
+    h.ok(settle(G, 25), 'and the grab finishes');
+    // the final phase: red lights
+    const e = F.enemies[0];
+    C.damage(F, F.player, e, e.hp - Math.floor(e.maxHp / 4), { pierce: true });
+    flushB(G); stepFor(G, 1.5);
+    h.ok(F.final && G.boss.bs.alarmK > 0.5, 'the cabinet lights go red');
+    T._resetCounts(); G.S.ctx = T._ctx; G.S.px = 1; G.draw();
+    h.ok(T._counts.fillText > 0, 'the rigged, red cabinet draws');
+  });
+
+  h.test('bosses: the death finale: chained blasts, a whiteout, BOSS DEFEATED, a coin shower, then the reward', () => {
+    const T = bossRun(78);
+    const G = T.GAME, C = T.COMBAT;
+    G.startFight(['hoard'], 'boss');
+    skipVs(G);
+    h.ok(settle(G, 5), 'ready');
+    const F = G.fight, e = F.enemies[0];
+    C.damage(F, F.player, e, 9999, { pierce: true });
+    flushB(G);
+    stepFor(G, 0.1);
+    const fin = G.boss.bs.fin;
+    h.ok(fin && fin.kind === 'boss' && fin.last, 'the boss finale starts on the killing blow');
+    h.ok(G.fs.anim[0].dead > 0 && G.fs.anim[0].dead <= 0.02, 'the body is held while it blows apart');
+    stepFor(G, 1.6);
+    h.ok(fin.n === fin.booms && fin.white, 'every blast went off, then the whiteout (' + fin.n + ')');
+    h.ok(G.screen === 'fight' && G.fs.outro && G.fs.outro.t > 0.5, 'the outro waits for the show');
+    h.ok(G.S.bannerStr !== 'VICTORY', 'no VICTORY banner under the title card');
+    const saved = JSON.parse(T._store.clawspire_run);
+    h.eq(saved.screen, 'reward', 'a save during the finale is the reward screen');
+    stepFor(G, 0.5);
+    h.ok(fin.card, 'BOSS DEFEATED');
+    h.ok(T.RENDER.fx.flyCount() >= 10, 'coins and tickets fly to the counters');
+    T._resetCounts(); G.S.ctx = T._ctx; G.S.px = 1; G.draw();
+    h.ok(T._counts.fillText > 0, 'the title card draws');
+    stepFor(G, 4);
+    h.eq(G.screen, 'reward', 'then the reward');
+    // a tap skips it
+    G.choose(3);
+    const G2 = bossRun(79).GAME, C2 = G2 && T.COMBAT;
+    void C2;
+    const T3 = bossRun(80); const G3 = T3.GAME;
+    G3.startFight(['mimic'], 'elite');
+    skipVs(G3); settle(G3, 5);
+    T3.COMBAT.damage(G3.fight, G3.fight.player, G3.fight.enemies[0], 9999, { pierce: true });
+    flushB(G3); stepFor(G3, 0.2);
+    h.ok(G3.boss.bs.fin && G3.boss.bs.fin.kind === 'elite', 'an elite gets the smaller finale');
+    h.ok(G3.boss.bs.fin.P.total < G.boss.FIN.boss.total && G3.boss.bs.fin.booms < G.boss.FIN.boss.booms, 'shorter, fewer blasts');
+    stepFor(G3, 0.5);
+    G3.tap(270, 600);
+    h.eq(G3.screen, 'reward', 'a tap skips to the reward');
+  });
+
+  h.test('bosses: Glacius blows apart mid fight and the Prize Master gets its own FINAL BOSS card', () => {
+    const T = bossRun(81, 3);
+    const G = T.GAME, C = T.COMBAT;
+    G.startFight(['glacius'], 'boss');
+    skipVs(G);
+    h.ok(settle(G, 5), 'ready');
+    const F = G.fight;
+    C.damage(F, F.player, F.enemies[0], 9999, { pierce: true });
+    flushB(G);
+    stepFor(G, 0.1);
+    h.ok(G.boss.bs.fin && G.boss.bs.fin.kind === 'mid', 'a mid-fight finale (no title card)');
+    stepFor(G, 1.6);
+    h.ok(G.boss.vs && G.boss.vs.title === 'FINAL BOSS' && G.boss.vs.id === 'prizemaster', 'the FINAL BOSS card');
+    h.ok(!G.dropClaw(), 'input waits for it');
+    skipVs(G);
+    h.ok(F.enemies.some(e => e.alive && e.id === 'prizemaster'), 'the Prize Master is in the fight');
+    h.ok(settle(G, 6), 'and the fight goes on');
+  });
+
+  h.test('bosses: every boss look draws with the stub ctx, the VS card and the finale included', () => {
+    const T = bossRun(82, 3);
+    const G = T.GAME;
+    G.S.ctx = T._ctx; G.S.px = 1;
+    let threw = null;
+    try {
+      for (const [ids, tier] of [[['mimic'], 'elite'], [['glacius'], 'boss'], [['prizemaster'], 'boss']]) {
+        G.startFight(ids, tier);
+        for (let i = 0; i < 12; i++) { stepFor(G, 0.25); G.draw(); }
+        const F = G.fight;
+        F.heat = 1; F.bin.forEach((x, k) => { if (k < 3) x.hot = true; });
+        F.ice = { part: k2(F) ? 'lid' : 'rail', hp: 1 }; F.final = true; F.lean = -1; F.rigged = { drops: 1, stage: 3 };
+        stepFor(G, 0.5); G.draw();
+        F.ice = { part: 'rail', hp: 2 }; stepFor(G, 0.2); G.draw();
+      }
+    } catch (err) { threw = err; }
+    function k2(F) { return F.turn % 2 === 1; }
+    h.ok(!threw, 'no throw ' + (threw ? threw.stack : ''));
+  });
+}
+
+// ---------------------------------------------------------------- META (meta progression)
+// A profile with Tilt unlocked for the knight (and a peek at the saved meta).
+function metaBoot(meta, extra) {
+  const store = Object.assign({ clawspire_meta: JSON.stringify(Object.assign({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }, meta || {})) }, extra || {});
+  const T = boot({ store });
+  return { T, G: T.GAME, saved: () => JSON.parse(T._store.clawspire_meta || '{}') };
+}
+const TIER_IX = { c: 0, u: 1, r: 2, l: 3 };
+
+h.test('meta: a fresh profile and an old profile get the new fields with defaults', () => {
+  const { G } = metaBoot({});
+  const m = G.meta;
+  h.ok(m.tilt && m.bestTilt && m.winsBy && m.ach && m.achNew && m.dexNew && typeof m.tiltSel === 'number', 'tilt, bestTilt, winsBy, ach, achNew, dexNew, tiltSel');
+  h.ok(m.seen.items && m.seen.relics && m.seen.enemies && m.seen.combos, 'seen has items, relics, enemies, combos');
+  h.eq(m.daily, null, 'no daily yet');
+  // an old save: only the round 1 fields, plus junk in the new ones
+  const { G: G2 } = metaBoot({ stats: { runs: 5, wins: 1, bestAct: 3 }, seen: { items: { rusty_sword: 1 }, relics: {} }, tilt: 'bogus', ach: [1, 2], tiltSel: 99 });
+  h.eq(G2.meta.stats.runs, 5, 'old stats kept');
+  h.ok(G2.meta.seen.items.rusty_sword === 1 && G2.meta.seen.enemies && G2.meta.seen.combos, 'old seen kept, new tabs added');
+  h.ok(G2.meta.tilt && typeof G2.meta.tilt === 'object' && !Array.isArray(G2.meta.ach), 'junk fields reset');
+  h.eq(G2.meta.tiltSel, 10, 'tiltSel clamped');
+});
+
+h.test('meta: the Tilt selector is locked until a win, then unlocks level by level', () => {
+  const { T, G, saved } = metaBoot({});
+  h.eq(G.prog.tiltMax(), 0, 'nothing unlocked on a fresh profile');
+  G.showChars();
+  h.eq(G.S.ui.buttons[0].label, T.DATA.CHARACTERS.knight.name, 'the first choice on the screen is still the knight card');
+  h.eq(G.prog.setTilt(3), 0, 'setTilt clamps to what is unlocked');
+  G.choose(0);
+  h.eq(G.run.tilt, 0, 'a run started from the card is Tilt 0');
+  // win it
+  G.run.act = 3;
+  G.showWin();
+  h.eq(G.meta.tilt.knight, 1, 'a win unlocks Tilt 1 for the knight');
+  h.eq(G.meta.bestTilt.knight, 0, 'best Tilt won is recorded');
+  h.eq(G.meta.winsBy.knight, 1, 'wins per crawler');
+  h.eq(G.meta.tiltSel, 1, 'the selector moves onto the new level');
+  h.ok(G.run.metaEnd && G.run.metaEnd.tiltUp && G.run.metaEnd.tiltUp.lv === 1, 'the win screen shows the unlock');
+  h.eq(saved().tilt.knight, 1, 'saved');
+  const again = G.prog.runEnd(true);
+  h.eq(G.meta.tilt.knight, 1, 'the run end counts once');
+  h.ok(again === G.run.metaEnd, 'the same summary');
+  // a win below the cap unlocks nothing
+  G.prog.startRun('knight', 0);
+  G.run.act = 3; G.showWin();
+  h.eq(G.meta.tilt.knight, 1, 'a Tilt 0 win at cap 1 unlocks nothing');
+  h.ok(!G.run.metaEnd.tiltUp, 'no unlock card');
+  // reload keeps it
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.eq(T2.GAME.meta.tilt.knight, 1, 'Tilt unlocks survive a reload');
+  h.eq(T2.GAME.prog.tiltCap('knight'), 1, 'tiltCap');
+  h.eq(T2.GAME.prog.tiltCap('rogue'), 0, 'per crawler');
+});
+
+h.test('meta: starting a run at a Tilt, capped per crawler, saved with the run', () => {
+  const { T, G } = metaBoot({ unlocks: { knight: true, rogue: true }, tilt: { knight: 10, rogue: 2 }, tiltSel: 10 });
+  G.showChars();
+  const i = G.S.ui.buttons.findIndex(b => b.label === T.DATA.CHARACTERS.rogue.name);
+  G.choose(i);
+  h.eq(G.run.tilt, 2, 'the rogue plays at its own cap (2) when the selector says 10');
+  G.prog.startRun('knight', 10);
+  h.eq(G.run.tilt, 10, 'the knight plays Tilt 10');
+  G.save();
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  T2.GAME.choose(T2.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.eq(T2.GAME.run.tilt, 10, 'run.tilt survives save / load');
+  // an old run save without the field
+  G.save();
+  const o = JSON.parse(T._store.clawspire_run);
+  delete o.run.tilt; delete o.run.daily; delete o.run.achNew;
+  const T3 = boot({ store: { clawspire_run: JSON.stringify(o), clawspire_meta: T._store.clawspire_meta } });
+  T3.GAME.choose(T3.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.eq(T3.GAME.screen, 'map', 'an old run save continues');
+  h.eq(T3.GAME.run.tilt | 0, 0, 'and plays at Tilt 0');
+  T3.GAME.startFight(['rat'], 'normal');
+  h.eq(T3.GAME.fight.tiltLv, 0, 'the fight reads Tilt 0');
+});
+
+h.test('meta: every Tilt twist lands in the game', () => {
+  const { T, G } = metaBoot({ tilt: { knight: 10 } });
+  const D = T.DATA;
+  const at = (lv, seed) => { G.prog.startRun('knight', lv); return G.run; };
+  // bulbs and junk
+  const r0 = at(0), bin0 = r0.bin.length, ink0 = r0.ink;
+  h.eq(at(3).ink, ink0, 'Tilt 3 keeps the bulbs');
+  h.eq(at(4).ink, ink0 - 3, 'Dim Marquee: 3 fewer bulbs at the start');
+  h.eq(G.run.map.ink, G.run.ink, 'the map agrees');
+  h.eq(at(4).bin.length, bin0, 'Tilt 4 has no junk');
+  const r5 = at(5);
+  h.eq(r5.bin.length, bin0 + 1, 'Junk Drawer: one more item');
+  h.ok(r5.bin.some(i => i.id === 'rock'), 'a rock in the starting bin');
+  // shop prices
+  G.prog.startRun('knight', 5); G.run.seed = 4242;
+  const s5 = G.rollShop({ q: 3, r: 4 });
+  G.prog.startRun('knight', 6); G.run.seed = 4242;
+  const s6 = G.rollShop({ q: 3, r: 4 });
+  h.eq(s6.items.map(x => x.id).join(), s5.items.map(x => x.id).join(), 'same shelf');
+  s6.items.forEach((x, i) => h.eq(x.price, Math.round(s5.items[i].price * 1.25), `Price Hike: ${x.id} costs 25% more`));
+  if (s5.relic) h.eq(s6.relic.price, Math.round(s5.relic.price * 1.25), 'the relic too');
+  // rest
+  G.prog.startRun('knight', 8); G.run.hp = 10;
+  G.showRest(); G.choose(0);
+  h.eq(G.run.hp, 10 + Math.round(G.run.maxHp * 0.2), 'Hard Bench: rests heal 20%');
+  G.prog.startRun('knight', 7); G.run.hp = 10;
+  G.showRest(); G.choose(0);
+  h.eq(G.run.hp, 10 + Math.round(G.run.maxHp * 0.3), 'below Tilt 8 rests heal 30%');
+  // capsules: the same rolls, one tier lower
+  const caps = (lv) => { G.prog.startRun('knight', lv); G.run.seed = 777; G.run.nonce = 0; const out = []; for (let i = 0; i < 40; i++) { G.run.pity = 0; out.push(G.loot.makeCapsule(i % 4 === 3 ? 'boss' : 'elite')); } return out; };
+  const c8 = caps(8), c9 = caps(9);
+  let lower = 0, sum8 = 0, sum9 = 0;
+  c9.forEach((c, i) => {
+    const a = TIER_IX[c8[i].tier], b = TIER_IX[c.tier];
+    sum8 += a; sum9 += b;
+    if (b < a) lower++;
+    h.ok(b <= a, `capsule ${i}: never rarer at Tilt 9 (${c8[i].tier} -> ${c.tier})`);
+    if (c.src === 'boss') h.ok(b >= 1, `capsule ${i}: a boss capsule is never common`);
+  });
+  h.ok(lower > 20 && sum9 < sum8, `Cheap Plastic: capsules drop a tier (${lower} of 40 lower)`);
+  // enemies in a fight
+  G.prog.startRun('knight', 10);
+  const boss = D.ENCOUNTERS[1].boss[0];
+  G.startFight(boss, 'boss');
+  h.eq(G.fight.tiltLv, 10, 'the fight knows the Tilt');
+  h.ok(G.fight.enemies.some(e => (e.status.str || 0) > 0), 'Rigged: the boss starts with Strength');
+});
+
+h.test('meta: the Tilt badge in the HUD', () => {
+  const { T, G } = metaBoot({ tilt: { knight: 3 } });
+  const parent = { children: [], appendChild(c) { this.children.push(c); c.parentNode = this; return c; } };
+  G.prog.startRun('knight', 3);
+  // hand the act stat a parent (the stub DOM has no tree) so the badge has somewhere to live
+  const actEl = T._nodes.actTxt;
+  h.ok(actEl, 'the act stat exists');
+  actEl.parentNode = parent;
+  G.update(0.2); G.toMap();
+  h.ok(G.S.tiltEl && G.S.tiltEl.parentNode === parent, 'the badge sits on the act stat');
+  h.eq(G.S.tiltEl.textContent, 'T3', 'it reads T3');
+  G.prog.startDaily();
+  G.toMap();
+  h.eq(G.S.tiltEl.textContent, 'DAILY', 'a daily run says so');
+  G.prog.startRun('knight', 0);
+  G.toMap();
+  h.eq(G.S.tiltEl.textContent, '', 'Tilt 0 shows nothing');
+});
+
+h.test('meta: stickers unlock through the observer, slap one at a time and persist', () => {
+  const { T, G, saved } = metaBoot({});
+  G.newRun('knight', 5);
+  G.startFight(['rat'], 'normal');
+  stepFor(G, 0.5);
+  h.ok(!G.meta.ach.jackpot, 'no jackpot yet');
+  G.run.jackpots = 1;
+  stepFor(G, 0.4);
+  h.ok(G.meta.ach.jackpot, 'a jackpot in the run earns the sticker (polled)');
+  h.ok(saved().ach && saved().ach.jackpot, 'saved at once');
+  h.ok(G.run.achNew.includes('jackpot'), 'listed for the run end');
+  h.ok(G.prog.log.some(x => x.k === 'ach' && x.id === 'jackpot') || G.prog.queue.some(x => x.k === 'ach' && x.id === 'jackpot'), 'it slaps (now or next in line)');
+  // fight events: a tier 3 Mega Jackpot combo records the combo and three stickers
+  G.fs.queue.push({ ev: { t: 'combo', id: 'mega_jackpot', name: 'Mega Jackpot', text: '', color: '#fff', n: 1, tier: 3 }, beat: 0 });
+  stepFor(G, 0.2);
+  h.ok(G.meta.seen.combos.mega_jackpot, 'the combo is in the Prizedex');
+  h.ok(G.meta.ach.combo && G.meta.ach.three_star && G.meta.ach.mega, 'combo, three star and mega stickers');
+  // the stickers queue: one on screen at a time
+  const shown = G.prog.log.filter(x => x.k === 'ach').length;
+  h.ok(G.prog.current && G.prog.current.k, 'one toast is up');
+  stepFor(G, 12);
+  h.ok(G.prog.log.filter(x => x.k === 'ach').length > shown, 'the rest follow');
+  h.eq(G.prog.queue.length, 0, 'the queue drains');
+  // eat and burst
+  G.fs.queue.push({ ev: { t: 'binReturn', insts: [], idx: 0, why: 'burst' }, beat: 0 });
+  stepFor(G, 0.2);
+  h.ok(G.meta.ach.indigestion, 'Indigestion from a burst');
+  // a boss finished by a thrown bomb
+  G.startFight(T.DATA.ENCOUNTERS[1].boss[0], 'boss');
+  stepFor(G, 0.3);
+  const bomb = Object.keys(T.DATA.ITEMS).find(id => T.DATA.ITEMS[id].art === 'bomb' && T.DATA.ITEMS[id].rarity !== 'junk');
+  const bi = G.fight.enemies.findIndex(e => e.def.tier === 'boss');
+  h.ok(bi >= 0, 'a boss in the fight');
+  G.fs.queue.length = 0; G.fs.beatT = 0;
+  G.fs.curDef = T.DATA.ITEMS[bomb];
+  G.fs.queue.push({ ev: { t: 'die', idx: bi }, beat: 0 });
+  stepFor(G, 0.1);
+  h.ok(G.meta.ach.special_delivery, 'Special Delivery');
+  // a flawless one-turn elite win
+  G.startFight(T.DATA.ENCOUNTERS[1].elite[0], 'elite');
+  stepFor(G, 0.2);
+  G.fight.stats.dmgTaken = 0; G.fight.turn = 1;
+  G.endFight('win');
+  h.ok(G.meta.ach.untouchable && G.meta.ach.one_turn, 'Untouchable and One Turn Wonder');
+  h.ok(!G.prog.achUnlock('jackpot'), 'never twice');
+  h.ok(!G.prog.achUnlock('nope'), 'unknown ids ignored');
+});
+
+h.test('meta: Prizedex discoveries, the toast and the screen', () => {
+  const { T, G } = metaBoot({});
+  G.newRun('knight', 6);
+  const knightBin = T.DATA.CHARACTERS.knight.bin;
+  h.ok(knightBin.every(id => G.meta.seen.items[id]), 'the starting bin is recorded');
+  h.ok(!G.prog.log.some(x => x.k === 'dex'), 'the first starting bin never toasts');
+  h.ok(G.meta.seen.relics[T.DATA.CHARACTERS.knight.relic], 'the starting relic is recorded');
+  stepFor(G, 0.3);
+  h.eq(G.prog.queue.length + (G.prog.current ? 1 : 0), 0, 'nothing queued from the start');
+  const fresh = Object.keys(T.DATA.ITEMS).filter(id => !G.meta.seen.items[id]).slice(0, 3);
+  for (const id of fresh) h.ok(G.prog.dexSee('items', id), 'a first sighting: ' + id);
+  h.ok(!G.prog.dexSee('items', fresh[0]), 'a second sighting is nothing');
+  stepFor(G, 0.1);
+  const d = G.prog.log.find(x => x.k === 'dex');
+  h.ok(d && d.n === 3, 'three sightings at once share one toast');
+  // enemies are recorded when a fight starts
+  G.startFight(['rat', 'slime'].filter(id => T.DATA.ENEMIES[id]), 'normal');
+  stepFor(G, 0.3);
+  h.ok(G.meta.seen.enemies.rat, 'the enemies of a fight are spotted');
+  // the screen
+  const P0 = G.prog.dexProg();
+  h.ok(P0.n > 0 && P0.pct > 0 && P0.pct < 100, 'progress: ' + P0.pct.toFixed(1) + '%');
+  G.toMap();
+  G.showCollection('items');
+  h.eq(G.screen, 'collection', 'the Prizedex opens');
+  const labels = G.S.ui.buttons.map(b => b.label);
+  h.ok(['Items', 'Relics', 'Enemies', 'Combos'].every(l => labels.includes(l)), 'four tabs: ' + labels.join(','));
+  h.ok(!fresh.some(id => G.meta.dexNew['items:' + id]), 'NEW! marks clear once the tab was shown');
+  G.prog.dexSee('combos', 'molotov');
+  G.showCollection('combos');
+  h.ok(!G.meta.dexNew['combos:molotov'], 'per tab');
+  G.showCollection('enemies'); G.draw();
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Back'));
+  h.eq(G.screen, 'title', 'back to the title');
+});
+
+h.test('meta: the sticker board and the title', () => {
+  const { T, G } = metaBoot({ ach: { jackpot: { run: 1 } }, achNew: { jackpot: 1 }, stats: { runs: 3, wins: 0, kills: 40 } });
+  const labels = G.S.ui.buttons.map(b => b.label);
+  for (const l of ['New run', 'Daily run', 'Prizedex', 'Stickers', 'Help', 'Intro']) h.ok(labels.includes(l), 'title has ' + l);
+  h.ok(!G.S.attract, 'no attract mode headless');
+  h.eq(G.prog.insertCoin(), false, 'no coin to insert');
+  G.choose(labels.indexOf('Stickers'));
+  h.eq(G.screen, 'stickers', 'the sticker board');
+  h.eq(Object.keys(G.meta.achNew).length, 0, 'NEW! marks clear on view');
+  G.draw();
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Back'));
+  h.eq(G.screen, 'title', 'back');
+  // the board does not eat a saved run (it never saves)
+  G.newRun('knight', 8); G.save();
+  const runSave = T._store.clawspire_run;
+  G.run = null;
+  G.showTitle(); G.showStickers(); G.showCollection(); G.showTitle();
+  h.eq(T._store.clawspire_run, runSave, 'the saved run survives the meta screens');
+});
+
+h.test('meta: the daily run', () => {
+  const { T, G, saved } = metaBoot({ tilt: { rogue: 3, knight: 3, alchemist: 3 }, tiltSel: 3 });
+  const key = T.DATA.dailyKey();
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Daily run'));
+  h.eq(G.screen, 'map', 'the daily starts');
+  h.eq(G.run.daily, key, 'run.daily is today');
+  h.eq(G.run.seed, T.DATA.dailySeed(key), 'today\'s seed');
+  h.eq(G.run.char, T.DATA.dailyChar(key), 'today\'s crawler (locked or not)');
+  h.eq(G.run.tilt, 0, 'always Tilt 0');
+  const T2 = metaBoot({}).G;
+  T2.prog.startDaily();
+  h.eq(JSON.stringify(T2.run.map.tiles), JSON.stringify(G.run.map.tiles), 'the same map for everyone');
+  h.eq(T2.run.bin.map(i => i.id).join(), G.run.bin.map(i => i.id).join(), 'the same bin');
+  G.run.kills = 7;
+  G.showGameOver();
+  const d = saved().daily;
+  h.ok(d && d.key === key && d.best > 0 && d.best === G.run.metaEnd.daily.score && d.best === T.DATA.dailyScore(G.run, false), 'the best score is saved: ' + (d && d.best));
+  h.ok(G.run.metaEnd.daily.newBest, 'a first try is a new best');
+  h.ok(G.meta.ach.daily_grind, 'Daily Grind');
+  const best = d.best;
+  G.prog.startDaily();
+  G.showGameOver();
+  h.eq(saved().daily.best, best, 'a worse run keeps the best');
+  h.eq(saved().daily.runs, 2, 'two tries today');
+});
+
+// ---- claw types (DESIGN.md "Claw types")
+function clawBoot() {
+  const T = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  return { T, G: T.GAME };
+}
+const CLAW_BIN = ['rusty_sword', 'rusty_sword', 'dented_shield', 'lucky_coin', 'iron_nut', 'skeleton_key', 'pot_lid', 'prize_marble', 'prize_marble',
+  'glass_bead', 'glass_bead', 'crisp_apple', 'bubble_flask', 'peppermint', 'sour_drop', 'tower_shield', 'lucky_penny', 'arcade_token'];
+function clawFight(G, type, seed) {
+  G.claws.pick(type);
+  G.newRun('knight', seed || 3131);
+  G.run.bin = CLAW_BIN.map((id, i) => ({ uid: 'ct' + i, id, plus: false }));
+  G.startFight(['slime'], 'normal', { seed: 555 });
+  for (const e of G.fight.enemies) { e.hp = e.maxHp = 999; }
+  stepFor(G, 3.5);
+}
+
+h.test('claw types: the picker sets run.clawType, old saves load as the classic claw', () => {
+  const { T, G } = clawBoot();
+  h.eq(G.claws.picked(), 'classic', 'a fresh profile picks the classic claw');
+  G.showChars();
+  h.eq(G.screen, 'chars', 'character select');
+  h.ok(G.S.ui.buttons[0] && /Grabsworth|knight/i.test(G.S.ui.buttons[0].label), 'the first choice is still the knight (claw chips are not choose entries)');
+  h.ok(G.S.clawDemo && G.S.clawDemo.rig, 'the picker builds a demo cabinet');
+  const D = G.claws.demo('magnet');
+  for (let i = 0; i < 600; i++) G.claws.demoStep(D, DT);
+  h.ok(D.rig.type === 'magnet' && D.t > 9, 'the demo runs on its own');
+  G.claws.demoDraw(D, T._ctx, 1);
+  h.ok(G.claws.pick('hook'), 'pick the harpoon');
+  h.eq(G.claws.pick('nonsense'), false, 'an unknown claw is refused');
+  h.eq(JSON.parse(T._store.clawspire_meta).clawPick, 'hook', 'the pick is saved on the profile');
+  G.choose(0);
+  h.eq(G.run.clawType, 'hook', 'the new run carries the claw');
+  G.startFight(['slime'], 'normal', { seed: 9 });
+  h.eq(G.rig.type, 'hook', 'the fight builds a harpoon rig');
+  G.save();
+  const saved = JSON.parse(T._store.clawspire_run);
+  h.eq(saved.run.clawType, 'hook', 'the save has run.clawType');
+  // a reload keeps it
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T2.GAME.load(), 'the run loads');
+  h.eq(T2.GAME.run.clawType, 'hook', 'run.clawType survives a save/load');
+  h.eq(T2.GAME.meta.clawPick, 'hook', 'the profile remembers the pick');
+  // an old save without the field is the classic claw
+  delete saved.run.clawType;
+  const T3 = boot({ store: { clawspire_meta: T._store.clawspire_meta, clawspire_run: JSON.stringify(saved) } });
+  h.ok(T3.GAME.load(), 'an old save loads');
+  h.eq(T3.GAME.claws.type(), 'classic', 'a run without a claw type is the classic claw');
+  if (T3.GAME.rig) h.eq(T3.GAME.rig.type, 'classic', 'and its fight has the classic rig');
+});
+
+h.test('claw types: every type delivers in a real grab (steer, drop, deliver)', () => {
+  const { T, G } = clawBoot();
+  for (const type of G.claws.ids()) {
+    clawFight(G, type);
+    h.eq(G.rig.type, type, type + ' rig');
+    let delivered = 0, tries = 0, metalOnly = true;
+    const played = [];
+    const play0 = G.fight.used.length;
+    while (tries < 3 && delivered === 0) {
+      tries++;
+      const metal = (b) => b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0;
+      const x = G.rig.aimAt(type === 'magnet' ? metal : null);
+      h.ok(G.steer(x == null ? 200 : x), type + ' steer');
+      stepFor(G, 0.8);
+      h.ok(G.dropClaw(), type + ' drop');
+      let n = 0;
+      while (G.state().grabInFlight && n < 60 * 25) { G.update(DT); n++; }
+      h.ok(!G.state().grabInFlight, type + ' grab finished');
+      delivered += G.fs.delivered;
+      settle(G, 10);
+      if (G.fight.player.grabs <= 0) break;
+    }
+    for (const inst of G.fight.used.slice(play0)) played.push(inst.id);
+    if (type === 'magnet') for (const id of played) if ((DATA.ITEMS[id].tags || []).indexOf('metal') < 0) metalOnly = false;
+    h.ok(delivered >= 1, `${type} delivered ${delivered} in ${tries} grab(s)`);
+    if (type === 'magnet') h.ok(metalOnly, 'the magnet crane only delivered metal: ' + played.join(','));
+    G.draw();
+  }
+});
+
+h.test('claw juice: coin clunk and spin-up each turn, a jackpot twirl, idle antics, label zones', () => {
+  const { T, G } = clawBoot();
+  const calls = [];
+  const sfx0 = T.AUDIO.sfx;
+  T.AUDIO.sfx = (n) => { calls.push(n); return true; };
+  clawFight(G, 'magnet');
+  h.ok(calls.includes('clawCoin'), 'the fight opens with the coin clunk');
+  h.ok(calls.includes('clawSpin'), '...and the claw spinning up');
+  h.ok(T.RENDER.fx.zones().some(z => z.id === 'marquee'), 'the fight keeps labels off the marquee');
+  calls.length = 0;
+  G.claws.turnStart();
+  stepFor(G, 0.5);
+  h.ok(calls.includes('clawCoin') && G.fs.claw.slotFl > 0, 'a new turn drops a coin in the slot');
+  stepFor(G, 0.4);
+  h.ok(G.fs.claw.spin > 0 && calls.includes('clawSpin'), 'and spins the claw up');
+  // idle: the bored claw taps the glass
+  calls.length = 0;
+  stepFor(G, G.claws.ANTIC_AFTER + 1.2);
+  h.ok(calls.includes('clawTap'), 'a claw left waiting taps the glass');
+  stepFor(G, 12);
+  h.ok(G.fs.claw.mood === 'sleepy' || G.fs.claw.anticN >= 3, 'and later yawns');
+  G.draw();
+  // jackpot
+  calls.length = 0;
+  G.claws.celebrate();
+  h.ok(calls.includes('clawCheer') && G.fs.claw.spin === 1 && G.fs.claw.mood === 'wow', 'a jackpot twirl');
+  // per-type rig events
+  for (const ev of ['drop', 'touch', 'close', 'lift', 'carry', 'release', 'home']) G.rigEvent(ev);
+  h.ok(calls.includes('magHum') && calls.includes('magZap') && calls.includes('magDrop'), 'the magnet hums, zaps and lets go');
+  G.draw();
+  for (const type of ['hook', 'scoop', 'hand', 'tri']) {
+    clawFight(G, type);
+    calls.length = 0;
+    for (const ev of ['drop', 'touch', 'close', 'lift', 'carry', 'release', 'home']) G.rigEvent(ev);
+    const want = { hook: 'hookFire', scoop: 'scoopSlosh', hand: 'handSquish', tri: 'clawClose' }[type];
+    h.ok(calls.includes(want), `${type} has its own sound (${want})`);
+    G.draw();
+  }
+  G.toMap();
+  h.ok(!T.RENDER.fx.zones().some(z => z.id === 'marquee'), 'off the fight screen the marquee zone is gone');
+  T.AUDIO.sfx = sfx0;
+});
+
 h.done();

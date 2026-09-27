@@ -653,4 +653,162 @@ if (HAS_DATA) {
   R.fx.update(1 / 60);
 }
 
+// ---------------------------------------------------------------- BOSSES (the boss arena looks)
+if (HAS_DATA) {
+  const api = boot({ only: ['util', 'data', 'combat', 'render'] });
+  const R = api.RENDER, D = api.DATA, C = api.COMBAT;
+  const big = Object.values(D.ENEMIES).filter(e => e.tier === 'elite' || e.tier === 'boss');
+  h.ok(big.length >= 10, 'six elites and four bosses to show');
+  // The versus card at every beat of its timeline, for every elite and boss.
+  for (const def of big) {
+    const boss = def.tier === 'boss';
+    for (const t of [0, 0.1, 0.3, 0.37, 0.5, 0.7, 1.2, 2.0, 3.1, 3.3]) {
+      drawCheck(`vsCard ${def.id} t${t}`, c => R.vsCard(c, 540, 960, { t, dur: boss ? 3.3 : 2.3, boss, title: boss ? 'ACT 1 BOSS' : 'ELITE', name: def.name, taunt: def.taunt,
+        affixes: [{ icon: '*', name: 'Hasty', color: '#ffe066' }, { icon: '!', name: 'Spiky', color: '#8fae3a' }], charId: 'rogue', charName: 'ROGUE', def, color: def.color, now: t }));
+    }
+  }
+  drawCheck('vsCard reduced', c => R.vsCard(c, 540, 960, { t: 1, dur: 2, def: big[0], name: 'X', taunt: 'y', reduced: true }));
+  drawCheck('vsCard with nothing', c => R.vsCard(c));
+  const a = seqCtx(), b = seqCtx();
+  R.vsCard(a.ctx, 540, 960, { t: 1.2, dur: 3, boss: true, title: 'ACT 2 BOSS', name: 'The Smelter', def: D.ENEMIES.smelter, charId: 'knight', now: 1 });
+  R.vsCard(b.ctx, 540, 960, { t: 1.2, dur: 3, boss: false, title: 'ELITE', name: 'Ironjaw', def: D.ENEMIES.ironjaw, charId: 'knight', now: 1 });
+  h.ok(fingerprint(a.stat) !== fingerprint(b.stat), 'a boss card and an elite card look different');
+  // Cabinet signs and the signature looks inside the machine.
+  for (const [id, col] of Object.entries(R.SIG_COL)) {
+    for (const k of [0.2, 1]) drawCheck(`bossSign ${id} k${k}`, c => R.bossSign(c, 270, 398, id.toUpperCase() + ' NEXT TURN', col, 1.3, k));
+  }
+  const empty = seqCtx();
+  R.bossSign(empty.ctx, 270, 398, 'X', '#fff', 1, 0);
+  h.eq(empty.stat.paints, 0, 'a sign at k 0 is not there');
+  const cfg = { w: 480, h: 390, chuteW: 64, dividerH: 0.45, frame: 30, railY: 26, chuteX: 416 };
+  const looks = {
+    heat: { heat: 1 }, snow: { snow: 1 }, lid: { ice: { part: 'lid', hp: 1, k: 1 } }, rail: { ice: { part: 'rail', hp: 2, k: 0.5 } },
+    hijack: { hijack: 1, hx: 120 }, alarm: { alarm: 1 },
+  };
+  const prints = {};
+  for (const [k, st] of Object.entries(looks)) {
+    for (const layer of ['back', 'front']) {
+      const s0 = Object.assign({ t: 2.2 }, st);
+      const quiet = (k === 'lid' || k === 'rail' || k === 'hijack' || k === 'alarm') ? layer === 'back' : layer === 'front' && k === 'snow';
+      if (quiet) continue;
+      const stat = drawCheck(`bossCab ${k} ${layer}`, c => R.bossCab(c, 30, 410, cfg, s0, layer));
+      prints[k + layer] = fingerprint(stat);
+    }
+  }
+  h.eq(new Set(Object.values(prints)).size, Object.keys(prints).length, 'every signature look draws differently');
+  drawCheck('bossCab everything at once', c => { for (const l of ['back', 'front']) R.bossCab(c, 30, 410, cfg, { t: 1, heat: 1, snow: 1, ice: { part: 'lid', hp: 1 }, hijack: 1, alarm: 1 }, l); });
+  const none = seqCtx();
+  R.bossCab(none.ctx, 30, 410, cfg, { t: 1 }, 'front'); R.bossCab(none.ctx, 30, 410, cfg, null, 'back');
+  h.eq(none.stat.save, none.stat.restore, 'bossCab with no state stays balanced');
+  drawCheck('cabinetBack in the red alarm', c => R.cabinetBack(c, 30, 410, cfg, { t: 1, act: 3, alarm: 1 }));
+  drawCheck('hotItem', c => R.hotItem(c, 100, 100, 14, 1.2, 3));
+  const crown = drawCheck('eliteBadge boss (crown)', c => R.eliteBadge(c, 50, 50, 'boss', 1, 24));
+  const skull = drawCheck('eliteBadge elite (skull)', c => R.eliteBadge(c, 50, 50, 'elite', 1, 24));
+  h.ok(fingerprint(crown) !== fingerprint(skull), 'a crown for bosses, a skull for elites');
+  for (const st of [{ white: 1 }, { white: 0.5, card: 0.1, boss: true, title: 'BOSS DEFEATED', sub: 'GAME OVER, Prize Master.' }, { card: 1, boss: false, sub: 'Ironjaw is down.' }, { card: 0.4, reduced: true, boss: true }]) {
+    drawCheck('finale ' + JSON.stringify(st).slice(0, 40), c => R.finale(c, 540, 960, Object.assign({ now: 1, y: 190 }, st)));
+  }
+  const nofin = seqCtx();
+  R.finale(nofin.ctx, 540, 960, { white: 0, card: -1 });
+  h.eq(nofin.stat.paints, 0, 'no whiteout and no card: nothing drawn');
+  // The intent bubble carries the signature's ribbon when it is due.
+  for (const id of ['hoard', 'smelter', 'glacius', 'prizemaster']) {
+    const F = C.newFight({ hp: 50, maxHp: 50, act: D.ENEMIES[id].act, bin: [], relics: [] }, [id], api.U.rng(2));
+    const e = F.enemies[0];
+    e.acts = 0;
+    const off = drawCheck(`intent ${id} (no signature)`, c => R.intent(c, 270, 120, e, 1));
+    e.acts = 1;
+    const on = drawCheck(`intent ${id} (signature due)`, c => R.intent(c, 270, 120, e, 1));
+    h.ok(on.seq.length > off.seq.length, `${id}: the ribbon adds to the bubble`);
+  }
+}
+
+/* ------------------------------------------------- claw types and the label layout */
+{
+  const api = boot({ only: ['util', 'physics', 'render'] });
+  const R = api.RENDER, P = api.PHYS;
+  // every claw type draws in every phase and state, and they all look different
+  const looks = new Map();
+  for (const t of Object.keys(P.CLAW_TYPES)) {
+    for (const open of [0, 0.5, 1]) {
+      const pose = P.clawPose(t, { x: 200, y: 120, open });
+      const J = { t: 1.3, mood: 'happy', spin: open, tap: 1 - open, squish: 0.5, lucky: 1, hold: [{ x: 210, y: 180 }], holdN: 1, pull: [{ x: 150, y: 200 }], pullN: 1, field: 1, chase: 0.5, idle: 1 };
+      const st = drawCheck(`claw ${t} open ${open}`, c => R.claw(c, pose, 30, 410, { juice: J }));
+      if (open === 1) looks.set(t, fingerprint(st));
+    }
+    drawCheck(`claw ${t} bare (no juice)`, c => R.claw(c, P.clawPose(t, {}), 0, 0, {}));
+    // a live rig of that type, mid-grab
+    const W = P.world({ gravity: { x: 0, y: 1150 }, w: 480, h: 390 }), C = P.cabinet(W, { w: 480, h: 390, chuteW: 64, dividerH: 0.45 });
+    const rig = P.clawRig(W, { cabinet: C, type: t });
+    rig.drop();
+    for (let i = 0; i < 40; i++) { rig.update(1 / 60); W.step(1 / 60); }
+    drawCheck(`claw ${t} live rig dropping`, c => R.claw(c, rig, 30, 410, { juice: { t: 2, mood: 'focus' } }));
+  }
+  const u = uniqueRatio(looks);
+  h.eq(u.ratio, 1, 'every claw type looks different ' + JSON.stringify(u.dupes));
+  drawCheck('claw sleepy mood', c => R.claw(c, P.clawPose('classic', {}), 0, 0, { juice: { mood: 'sleepy', t: 3 } }));
+  drawCheck('coin slot idle', c => R.coinSlot(c, 76, 815, { t: 1 }));
+  drawCheck('coin slot clunk', c => R.coinSlot(c, 76, 815, { t: 1, coin: 0.5, flash: 1 }));
+
+  // the label layout manager: a stress test of 40 labels spawned on one spot
+  const fx = R.fx;
+  fx.clear();
+  fx.zone('marquee', 178, 376, 362, 408);
+  fx.zone('hud', 0, 0, 540, 68);
+  const words = ['SWALLOWED: Dented Shield', 'HICCUP! +1', 'STOLEN: Rusty Sword', 'GREASED', 'FOG', 'JUNK', 'TILT', 'COPY', 'BOOM!',
+    'DIGESTED: Crisp Apple (back after the fight)', 'RUSTED: Iron Nut', 'CLAW JAMMED! (one grab fewer)', '+PLAYED', 'DOUBLE', 'SLIP'];
+  const check = (label) => {
+    const L = fx.labels();
+    let overlap = 0, off = 0, inZone = 0;
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i];
+      if (a.x0 < 0 || a.x1 > 540 || a.y0 < 0 || a.y1 > 960) off++;
+      for (const z of fx.zones()) if (a.x0 < z.x1 && a.x1 > z.x0 && a.y0 < z.y1 && a.y1 > z.y0) inZone++;
+      for (let j = i + 1; j < L.length; j++) { const b = L[j]; if (a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0) overlap++; }
+    }
+    h.eq(overlap, 0, label + ': no two labels overlap');
+    h.eq(off, 0, label + ': every label is on the screen');
+    h.eq(inZone, 0, label + ': no label sits in a keep-out zone');
+    return L;
+  };
+  for (let i = 0; i < 40; i++) fx.text(270 + ((i * 37) % 60) - 30, 430 + (i % 5) * 6, words[i % words.length] + (i >= words.length ? ' ' + i : ''), '#ffffff', { size: 14 + (i % 4) * 4 });
+  let L = check('40 labels at once');
+  h.ok(L.length >= 20, `the labels that fit are laid out (${L.length}); the rest wait for room`);
+  for (let f = 0; f < 90; f++) { fx.update(1 / 60); if (f % 10 === 0) check('frame ' + f); }
+  // labels spawning next to the marquee get pushed off it
+  fx.clear();
+  const p = fx.text(270, 392, 'SWALLOWED: Dented Shield', '#ff2e88');
+  L = check('a label born on the marquee');
+  h.ok(L.length === 1 && (L[0].y0 >= 408 || L[0].y1 <= 376), 'it moved off the marquee');
+  for (let f = 0; f < 60; f++) fx.update(1 / 60);
+  check('...and it never rises into it');
+  h.ok(p.life > 0, 'still readable after a second');
+  // merging, long labels, lifetime by length, opting out
+  fx.clear();
+  const a1 = fx.text(270, 430, 'HICCUP! +1', '#a6ff5e');
+  const a2 = fx.text(275, 432, 'HICCUP! +1', '#a6ff5e');
+  h.ok(a1 === a2 && a1.str === 'HICCUP! +1 x2', 'the same label within a moment merges into "x2"');
+  const a3 = fx.text(270, 430, 'HICCUP! +1', '#a6ff5e');
+  h.eq(a3.str, 'HICCUP! +1 x3', '...and again "x3"');
+  h.eq(fx.textCount(), 1, 'one label on screen for the three');
+  for (let f = 0; f < 40; f++) fx.update(1 / 60);
+  const a4 = fx.text(270, 430, 'HICCUP! +1', '#a6ff5e');
+  h.ok(a4 !== a1, 'after the merge window it is a new label');
+  const b1 = fx.badge(110, 386, '*', 'Squire Gauntlet', '#ffc94d');
+  const b2 = fx.badge(110, 386, '*', 'Squire Gauntlet', '#ffc94d');
+  h.ok(b1 === b2 && b1.mode === 2, 'badges merge too and stay badges');
+  const long = fx.text(270, 500, 'A VERY LONG LABEL THAT WOULD NEVER FIT ACROSS THE WHOLE PHONE SCREEN AT ALL', '#fff', { size: 28 });
+  h.ok(long.size < 28, 'a long label shrinks to fit the screen width');
+  const short = fx.text(100, 600, 'OK', '#fff');
+  h.ok(long.max > short.max, 'a long label lives longer than a short one');
+  const free = fx.text(270, 430, 'FREE', '#fff', { free: true });
+  h.ok(!free.lay, 'o.free opts out of the layout');
+  const dmg = fx.num(300, 200, '12', '#fff');
+  h.ok(!dmg.lay, 'damage numbers keep their physics flight');
+  drawCheck('fx draw with laid-out labels', c => fx.draw(c));
+  fx.zone('marquee'); fx.zone('hud');
+  h.eq(fx.zones().length, 0, 'zones are removed by id');
+  fx.clear();
+}
+
 h.done();

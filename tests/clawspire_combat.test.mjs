@@ -1448,4 +1448,248 @@ h.test('bin trickle: 2 a turn, floor of 6, cabinet cap, immediate refill mid-tur
   }
 }
 
+// ---------------------------------------------------------------- META: Tilt levels in a fight
+{
+  const T = boot({ only: ['util', 'data', 'combat'] });
+  const TC = T.COMBAT, TD = T.DATA, TU = T.U;
+  const run = (tilt, o) => Object.assign({ hp: 70, maxHp: 70, act: 1, relics: [], claw: { grabs: 3 }, bin: [], tilt, fights: 0 }, o || {});
+  const fight = (tilt, ids, o) => TC.newFight(run(tilt, o), ids, TU.rng((o && o.seed) || 11));
+  const normal = Object.keys(TD.ENEMIES).find(id => TD.ENEMIES[id].act === 1 && TD.ENEMIES[id].tier === 'normal' && (TD.ENEMIES[id].moves || []).some(m => m.k === 'attack'));
+  const elite = Object.keys(TD.ENEMIES).find(id => TD.ENEMIES[id].act === 1 && TD.ENEMIES[id].tier === 'elite');
+  const boss = Object.keys(TD.ENEMIES).find(id => TD.ENEMIES[id].act === 1 && TD.ENEMIES[id].tier === 'boss' && TD.ENEMIES[id].enrage !== false);
+  const atk = (e) => (e.def.moves.find(m => m.k === 'attack') || {}).v;
+
+  h.test('tilt: level 0 (and an old run with no tilt) changes nothing', () => {
+    const a = fight(0, [normal, elite]), b = TC.newFight({ hp: 70, maxHp: 70, act: 1, relics: [], claw: { grabs: 3 }, bin: [], fights: 0 }, [normal, elite], TU.rng(11));
+    h.eq(a.tiltLv, 0, 'F.tiltLv 0');
+    h.eq(b.tiltLv, 0, 'no run.tilt reads as 0');
+    h.eq(a.enemies.map(e => e.maxHp).join(), b.enemies.map(e => e.maxHp).join(), 'same hp');
+    h.eq(a.enemies.map(e => e.affix.join('+')).join(), b.enemies.map(e => e.affix.join('+')).join(), 'same affixes');
+  });
+  h.test('tilt: Loose Coin adds hp, Sticky Joystick adds damage', () => {
+    const a = fight(0, [normal]), b = fight(1, [normal]), c = fight(2, [normal]);
+    h.near(b.enemies[0].maxHp, Math.round(a.enemies[0].maxHp * 1.1), 1, 'Tilt 1: +10% hp');
+    h.eq(atk(b.enemies[0]), atk(a.enemies[0]), 'Tilt 1: attacks unchanged');
+    h.ok(atk(c.enemies[0]) >= atk(a.enemies[0]) && Math.abs(atk(c.enemies[0]) - Math.round(atk(a.enemies[0]) * 1.1)) <= 1, `Tilt 2: +10% damage (${atk(a.enemies[0])} -> ${atk(c.enemies[0])})`);
+    h.eq(c.enemies[0].maxHp, b.enemies[0].maxHp, 'Tilt 2 keeps Tilt 1 hp (cumulative)');
+    h.ok(c.enemies[0].dmgMul > a.enemies[0].dmgMul, 'the bomb multiplier follows');
+    h.ok(TD.DIFFICULTY.hp === 2.0 && TD.DIFFICULTY.dmg === 1.8, 'DATA.DIFFICULTY defaults untouched');
+  });
+  h.test('tilt: Bent Prong gives elites one more affix, normals none', () => {
+    for (let s = 1; s <= 12; s++) {
+      const a = fight(2, [elite, normal], { seed: s }), b = fight(3, [elite, normal], { seed: s });
+      h.eq(b.enemies[0].affix.length, a.enemies[0].affix.length + 1, `seed ${s}: the elite has one more affix (${b.enemies[0].affix.join('+')})`);
+      h.eq(b.enemies[1].affix.length, a.enemies[1].affix.length, `seed ${s}: the normal is left alone`);
+      h.eq(new Set(b.enemies[0].affix).size, b.enemies[0].affix.length, `seed ${s}: no duplicate affix`);
+    }
+  });
+  h.test('tilt: Hot Streak steps the hidden escalation every 2 fights', () => {
+    const every = TD.DIFFICULTY.ramp.every;
+    const a = fight(6, [normal], { fights: 4 }), b = fight(7, [normal], { fights: 4 });
+    const steps = (n) => 1 + Math.min(Math.floor(4 / n), TD.DIFFICULTY.ramp.max) * TD.DIFFICULTY.ramp.hp;
+    h.near(b.enemies[0].maxHp / a.enemies[0].maxHp, steps(2) / steps(every), 0.03, `4 fights in: ${Math.floor(4 / 2)} steps instead of ${Math.floor(4 / every)}`);
+    const c = fight(6, [normal], { fights: 0 }), d = fight(7, [normal], { fights: 0 });
+    h.eq(d.enemies[0].maxHp, c.enemies[0].maxHp, 'no fights yet: no difference');
+    h.eq(TC.tiltScale({ tiltLv: 0 }).join(), '1,1', 'tiltScale at 0 is neutral');
+  });
+  h.test('tilt: Rigged bosses start with their phase two Strength', () => {
+    const a = fight(9, [boss]), b = fight(10, [boss]);
+    const R = TD.ENEMIES[boss].enrage;
+    const want = R && R.str != null ? R.str : 1;
+    h.eq((b.enemies[0].status.str || 0) - (a.enemies[0].status.str || 0), want, `+${want} Strength from the opening bell`);
+    h.ok(!b.enemies[0].enraged, 'the transformation itself still waits for half hp');
+    const n = fight(10, [normal]);
+    h.ok(!(n.enemies[0].status.str > 0), 'normals get no rage');
+  });
+  h.test('tilt: summons mid-fight get the same scaling', () => {
+    const a = fight(1, [normal]);
+    const e = a.enemies[0];
+    h.ok(e.maxHp > 0 && a.tiltLv === 1, 'fight at Tilt 1');
+    h.ok(TC.tiltScale(a)[0] > 1, 'makeEnemy scale for summons > 1');
+  });
+}
+
+// ---------- Bosses (DESIGN.md "Bosses"): each boss's signature trick ----------
+if (hasData) {
+  const B = boot({ only: ['util', 'data', 'combat'] });
+  const BD = B.DATA, BC = B.COMBAT;
+  const IDS = Object.keys(BD.ITEMS);
+  const metal = IDS.filter(id => BD.ITEMS[id].rarity !== 'junk' && (BD.ITEMS[id].tags || []).includes('metal') && !BD.ITEMS[id].bag);
+  const soft = IDS.filter(id => BD.ITEMS[id].rarity !== 'junk' && !(BD.ITEMS[id].tags || []).includes('metal') && !BD.ITEMS[id].bag && (BD.ITEMS[id].target || 'enemy') === 'self');
+  const run = (bin, act) => ({ hp: 90, maxHp: 90, act: act || 1, relics: [], claw: { grabs: 3 }, gold: 50, bin: bin.map((id, i) => ({ uid: 'b' + i, id, plus: false })) });
+  const bossFight = (id, bin, seed) => B.COMBAT.newFight(run(bin || metal.slice(0, 6).concat(soft.slice(0, 4)), BD.ENEMIES[id].act), [id], B.U.rng(seed || 7));
+  // Make the boss's next action a harmless block so only the signature acts.
+  const calm = (e) => { e.intent = { id: 'calm', name: 'Calm', k: 'block', v: 1, txt: 'calm' }; e.charged = 0; };
+  const evK = (evs, k) => evs.filter(x => x.t === 'boss' && x.k === k);
+
+  h.test('bosses: every boss has a signature, every elite and boss a taunt', () => {
+    for (const id of ['hoard', 'smelter', 'glacius', 'prizemaster']) {
+      const s = BD.ENEMIES[id].sig;
+      h.ok(s && ['spill', 'heat', 'ice', 'rig'].includes(s.id) && s.name && s.sign && s.text, `${id}: a signature with name, sign and text`);
+    }
+    for (const e of Object.values(BD.ENEMIES)) if (e.tier === 'elite' || e.tier === 'boss') h.ok(typeof e.taunt === 'string' && e.taunt.length > 8 && e.taunt.indexOf(String.fromCharCode(0x2014)) < 0, `${e.id}: a taunt`);
+    h.ok(BD.ITEMS.hoardcoin && BD.ITEMS.hoardcoin.rarity === 'junk' && BD.ITEMS.hoardcoin.fx.some(f => f.k === 'gold'), 'the Hoard\'s coins are junk that pays gold');
+  });
+
+  h.test('bosses: the signature is telegraphed a turn ahead on a cadence', () => {
+    const F = bossFight('hoard');
+    const e = F.enemies[0];
+    const due = [];
+    for (let a = 0; a < 9; a++) { e.acts = a; due.push(BC.sigNext(e) ? 1 : 0); }
+    h.eq(due.join(''), '010010010', 'first on its 2nd action, then every 3rd');
+    e.acts = 1;
+    h.ok(/then spills a coin avalanche/.test(BC.intentText(e)), 'the intent text names it: ' + BC.intentText(e));
+    e.acts = 2;
+    h.ok(!/avalanche/.test(BC.intentText(e)), 'and only when it is due');
+    const P = bossFight('prizemaster').enemies[0];
+    const pd = []; for (let a = 0; a < 8; a++) { P.acts = a; pd.push(BC.sigNext(P) ? 1 : 0); }
+    h.eq(pd.join(''), '01000000', 'the Prize Master rigs once on its own (then once per phase)');
+    h.ok(!BC.sigNext({ alive: true, acts: 1, def: BD.ENEMIES.rat }), 'normals have none');
+  });
+
+  h.test('bosses: the Hoard spills coins that clutter the bin and pay gold', () => {
+    const F = bossFight('hoard');
+    const e = F.enemies[0];
+    e.acts = 1; calm(e);
+    const n0 = F.bin.length;
+    const evs = BC.endTurn(F);
+    const sp = evK(evs, 'spill');
+    h.eq(sp.length, 1, 'a spill event');
+    const coins = F.bin.filter(i => i.id === 'hoardcoin');
+    h.eq(coins.length, BD.ENEMIES.hoard.sig.n, 'five coins land in the bin');
+    h.ok(coins.every(i => i.junk && i.temp) && sp[0].items.length === coins.length, 'as temporary junk, listed on the event');
+    h.ok(F.bin.length >= n0 + coins.length - 3, 'the bin is fuller');
+    h.ok(evs.some(x => x.t === 'text' && x.str === 'MY COINS!'), 'the Hoard shouts');
+    const g0 = BC.gold(F);
+    BC.play(F, coins[0]);
+    h.eq(BC.gold(F), g0 + 2, 'grabbing a coin out pays 2 gold');
+    h.ok(F.exhausted.includes(coins[0]), 'and it is gone for the fight');
+    // phase two: the pile leans toward it for good
+    BC.damage(F, F.player, e, e.hp - Math.floor(e.maxHp / 2), { pierce: true });
+    h.ok(e.enraged && F.lean === -1, 'phase two leans the cabinet toward the Hoard');
+    h.ok(F.events.some(x => x.t === 'boss' && x.k === 'lean' && x.dir === -1), 'a lean event');
+    // enraged, the next avalanche is bigger
+    e.acts = 4; calm(e);
+    const before = F.bin.filter(i => i.id === 'hoardcoin').length;
+    BC.endTurn(F);
+    h.eq(F.bin.filter(i => i.id === 'hoardcoin').length - before, BD.ENEMIES.hoard.sig.n + 2, 'an enraged spill pours two more');
+    // a full cabinet: no room, no throw
+    const G = bossFight('hoard', Array(34).fill(soft[0]));
+    G.enemies[0].acts = 1; calm(G.enemies[0]);
+    BC.endTurn(G);
+    h.ok(G.bin.length <= BC.MAX_CABINET, 'never past the cabinet cap');
+  });
+
+  h.test('bosses: the Smelter turns metal red hot; each one delivered burns the hand through Block', () => {
+    const F = bossFight('smelter');
+    const e = F.enemies[0];
+    e.acts = 1; calm(e);
+    const evs = BC.endTurn(F);
+    const hv = evK(evs, 'heat')[0];
+    const hot = F.bin.filter(i => i.hot);
+    h.ok(hv && F.heat === 1, 'a heat event and the cabinet is hot');
+    h.eq(hot.length, Math.min(BD.ENEMIES.smelter.sig.n, metal.slice(0, 6).length), 'up to 4 metal items glow');
+    h.ok(hot.every(i => (BD.ITEMS[i.id].tags || []).includes('metal') && !i.junk), 'only real metal items');
+    h.ok(F.bin.some(i => i.id === 'slag' && hv.items.includes(i)), 'a lump of slag drips in');
+    // a plain weapon (damage only), so the hand is the only thing that changes
+    const pure = metal.find(id => (BD.ITEMS[id].fx || []).every(f => f.k === 'dmg' && f.v > 0) && (BD.ITEMS[id].target || 'enemy') === 'enemy');
+    hot[0].id = pure; hot[1].id = pure;
+    F.player.block = 0;
+    const hp0 = F.player.hp;
+    const evp = BC.play(F, hot[0]);
+    h.ok(evK(evp, 'sear').length === 1 && evp.some(x => x.t === 'text' && x.str === 'RED HOT!'), 'the hand is seared');
+    h.eq(F.player.hp, hp0 - BD.ENEMIES.smelter.sig.burn, '2 damage for the hot item');
+    h.ok(!hot[0].hot, 'it cooled in the hand');
+    F.player.block = 10;
+    const hp1 = F.player.hp;
+    BC.play(F, hot[1]);
+    h.ok(F.player.hp === hp1 && F.player.block === 10 - BD.ENEMIES.smelter.sig.burn, 'Block soaks the burn');
+    // the turn ends: everything cools
+    calm(e); e.acts = 2;
+    const ev2 = BC.endTurn(F);
+    h.ok(evK(ev2, 'cool').length === 1 && !F.heat && ![...F.bin, ...F.used].some(i => i.hot), 'the cabinet cools as the turn ends');
+  });
+
+  h.test('bosses: Glacius ices the chute lip, then the rail; prizes crack it, a heavy one smashes it, the turn thaws it', () => {
+    const F = bossFight('glacius', null, 3);
+    const e = F.enemies[0];
+    e.acts = 1; calm(e);
+    h.eq(BC.sigInfo(e).part, 'lid', 'the first freeze is the chute lip');
+    h.ok(/prize chute shut/.test(BC.intentText(e)), 'telegraphed by part: ' + BC.intentText(e));
+    let evs = BC.endTurn(F);
+    h.ok(evK(evs, 'ice')[0] && evK(evs, 'ice')[0].part === 'lid' && F.ice && F.ice.part === 'lid', 'the lid is iced');
+    h.eq(F.ice.hp, BC.ICE_HP, 'two prizes to crack it');
+    h.ok(BC.crackIce(F, false) && F.ice.hp === 1, 'one prize cracks it');
+    h.eq(BC.crackIce(F, false), null, 'a second one breaks it');
+    h.ok(!F.ice, 'the chute is open');
+    // next one: the rail, and a heavy item smashes at once
+    e.acts = 4; calm(e);
+    h.eq(BC.sigInfo(e).part, 'rail', 'then the claw rail');
+    evs = BC.endTurn(F);
+    h.ok(F.ice && F.ice.part === 'rail', 'the rail is iced');
+    h.ok(BC.breakIce(F) && !F.ice, 'a heavy delivery breaks it');
+    e.acts = 7; calm(e);
+    BC.endTurn(F);
+    h.ok(F.ice && F.ice.part === 'lid', 'and around again to the lid');
+    h.eq(BC.crackIce(F, true), null, 'a heavy prize smashes the lid outright');
+    e.acts = 10; calm(e);
+    BC.endTurn(F);
+    h.ok(F.ice, 'iced again');
+    e.acts = 11; calm(e);
+    evs = BC.endTurn(F);
+    h.ok(evK(evs, 'thaw').length === 1 && !F.ice, 'waiting a turn thaws it');
+  });
+
+  h.test('bosses: the Prize Master rigs one drop per phase and goes red at a quarter hp', () => {
+    const F = bossFight('prizemaster', null, 5);
+    const e = F.enemies[0];
+    e.acts = 1; calm(e);
+    let evs = BC.endTurn(F);
+    h.ok(evK(evs, 'rig').length === 1 && F.rigged && F.rigged.drops === 1 && F.rigged.stage === 1, 'rigged for one drop');
+    h.ok(BC.unrig(F) && !F.rigged, 'the hijacked drop spends it');
+    h.ok(!BC.unrig(F), 'only once');
+    e.acts = 3; calm(e);
+    h.ok(!BC.sigNext(e), 'not again on its own');
+    BC.damage(F, F.player, e, e.hp - Math.floor(e.maxHp / 2), { pierce: true });
+    h.ok(e.enraged && BC.sigNext(e), 'phase two rigs the machine again (telegraphed at once)');
+    calm(e);
+    evs = BC.endTurn(F);
+    h.ok(F.rigged && F.rigged.stage === 2 && !e.sigForce, 'stage two rig');
+    calm(e);
+    evs = BC.endTurn(F);
+    h.ok(!F.rigged, 'a rig lasts one turn');
+    const str0 = e.status.str || 0;
+    BC.damage(F, F.player, e, e.hp - Math.floor(e.maxHp / 4), { pierce: true });
+    h.ok(e.final && F.final && BC.sigNext(e), 'the final phase: lights red and one more rigged drop');
+    h.eq((e.status.str || 0) - str0, 1, '+1 Strength');
+    h.eq(F.events.filter(x => x.t === 'boss' && x.k === 'final').length, 1, 'one final event');
+    BC.damage(F, F.player, e, 1, { pierce: true });
+    h.eq(F.events.filter(x => x.t === 'boss' && x.k === 'final').length, 1, 'never twice');
+  });
+
+  h.test('bosses: 24 turns of every boss with random plays stay clean', () => {
+    for (const id of ['hoard', 'smelter', 'glacius', 'prizemaster']) {
+      const F = bossFight(id, null, 11);
+      const r = B.U.rng(B.U.hashStr(id));
+      let err = null;
+      try {
+        for (let turn = 0; turn < 24 && F.phase !== 'over'; turn++) {
+          while (F.phase === 'player' && F.player.grabs > 0 && BC.useGrab(F)) {
+            for (let k = r.int(0, 2); k > 0 && F.bin.length && F.phase === 'player'; k--) BC.play(F, F.bin[r.int(0, F.bin.length - 1)], 0);
+            if (F.ice && r() < 0.3) BC.crackIce(F, r() < 0.3);
+            if (F.rigged && r() < 0.5) BC.unrig(F);
+            BC.grabDone(F, 1);
+          }
+          if (F.phase === 'player') BC.endTurn(F);
+          F.player.hp = Math.max(F.player.hp, 40);
+          const bad = [F.player, ...F.enemies].find(u => !Number.isFinite(u.hp) || u.hp < 0);
+          if (bad) { err = 'bad hp'; break; }
+          if (F.bin.length > BC.MAX_CABINET) { err = 'bin over cap ' + F.bin.length; break; }
+        }
+      } catch (e) { err = e.stack; }
+      h.ok(!err, `${id}: clean (${err || 'ok'})`);
+    }
+  });
+}
+
 h.done();
