@@ -784,11 +784,22 @@ rewards → shop → boss → act 2 → save/load round trip → game over path.
 
 ## Balance targets (v1)
 
-`DATA.DIFFICULTY = { hp, dmg }` multiplies every enemy's hit points and every
-attack/charge value on top of the bands below (combat.js makeEnemy). It is the
-one dial to turn when the claw's yield changes. It ships at hp 3.0, dmg 1.7,
-where the perfect-aim bot loses about 6 runs in 10 (knight 38%, alchemist 75%,
-rogue 13% wins over 8 runs each); the owner tunes it by hand from there.
+`DATA.DIFFICULTY = { hp, dmg, ramp }` multiplies every enemy's hit points and
+every attack/charge value on top of the bands below (combat.js makeEnemy). It
+is the one dial to turn when the claw's yield changes. It ships at hp 2.0,
+dmg 1.8; the owner tunes it by hand from there.
+
+`ramp = { every, hp, dmg, max }` is the hidden escalation: `run.fights` counts
+every fight started (normal, elite, boss). After every `every` fights (3) the
+enemies of the next fight gain +hp/+dmg per step (12%/12%), up to `max` (8)
+steps, so a run that fights everything meets act 3 at roughly double strength
+while a run that picks its fights does not. The player never sees the counter.
+`F.fights` carries it into the fight.
+
+Enemies with teeth: crab (2 Thorns), tin knight (3), brass golem (2 + armor),
+ironjaw (4) and glass wraith (3) punish weapon spam; every act has at least one
+poisoner (spider, spore cap, spiderling; oil slick fumes; rime cap, cultist
+blight) and the tinker gnome flicks burn.
 
 
 - Character HP 70 (knight 80, alchemist 60, rogue 65). Act 1 normal enemies 12-30 hp,

@@ -230,6 +230,36 @@ h.test('the difficulty dial scales enemy hp and attacks', () => {
   if (atk && scaled) h.eq(scaled.v, Math.max(1, Math.round(atk.v * d.dmg)), 'attack value scaled by the dial');
 });
 
+h.test('hidden escalation ramps enemies with fights fought', () => {
+  const d = DATA.DIFFICULTY || {};
+  const ramp = d.ramp;
+  h.ok(ramp && ramp.every > 0 && ramp.hp > 0 && ramp.dmg > 0, 'DATA.DIFFICULTY.ramp is set (every/hp/dmg)');
+  if (!ramp) return;
+  const mk = fights => COMBAT.newFight({ hp: 80, maxHp: 80, act: 1, bin: [], relics: [], claw: {}, fights }, ['goblin'], U.rng(11)).enemies[0];
+  const base = mk(0), same = mk(ramp.every - 1), up = mk(ramp.every), up2 = mk(ramp.every * 2);
+  h.eq(same.maxHp, base.maxHp, `fight ${ramp.every - 1}: no step yet (${same.maxHp} hp)`);
+  h.ok(up.maxHp > base.maxHp, `fight ${ramp.every}: first step raises hp (${base.maxHp} -> ${up.maxHp})`);
+  h.ok(up2.maxHp > up.maxHp, `fight ${ramp.every * 2}: second step raises hp again (${up2.maxHp})`);
+  const jab = e => e.def.moves.find(m => m.k === 'attack').v;
+  h.ok(jab(up) > jab(base), `attacks ramp too (${jab(base)} -> ${jab(up)})`);
+  const capped = mk(ramp.every * (ramp.max + 5));
+  const atMax = mk(ramp.every * ramp.max);
+  h.eq(capped.maxHp, atMax.maxHp, `ramp caps at ${ramp.max} steps (${capped.maxHp} hp)`);
+  h.eq(mk(undefined).maxHp, base.maxHp, 'a run without a fight counter is step 0');
+});
+
+h.test('some enemies bite back or poison', () => {
+  const ids = Object.keys(DATA.ENEMIES);
+  const thorny = ids.filter(id => DATA.ENEMIES[id].status && DATA.ENEMIES[id].status.thorns > 0);
+  h.ok(thorny.length >= 4, `${thorny.length} enemies start with thorns (${thorny.join(', ')})`);
+  for (const act of [1, 2, 3]) {
+    const poisoners = ids.filter(id => DATA.ENEMIES[id].act === act && (DATA.ENEMIES[id].moves || []).some(m => m.k === 'debuff' && m.s === 'poison'));
+    h.ok(poisoners.length >= 1, `act ${act} has a poisoner (${poisoners.join(', ')})`);
+  }
+  const F = COMBAT.newFight({ hp: 80, maxHp: 80, act: 1, bin: [], relics: [], claw: {} }, ['crab'], U.rng(3));
+  h.eq(F.enemies[0].status.thorns, DATA.ENEMIES.crab.status.thorns, 'crab spawns with its thorns');
+});
+
 h.test('enemy hp scales by act as the bible says', () => {
   const avg = (act, tier) => {
     const ids = Object.keys(DATA.ENEMIES).filter(id => { const e = DATA.ENEMIES[id]; return e.act === act && e.tier === tier && !e.minion; });

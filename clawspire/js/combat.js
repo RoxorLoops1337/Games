@@ -199,7 +199,14 @@ const COMBAT = (() => {
     // Global difficulty (DATA.DIFFICULTY): hp and attack values scale together
     // so the content bands stay readable while the claw's yield changes.
     const diff = (api.defs() || {}).DIFFICULTY || {};
-    const hpMul = num(diff.hp, 1), dmgMul = num(diff.dmg, 1);
+    let hpMul = num(diff.hp, 1), dmgMul = num(diff.dmg, 1);
+    // Hidden escalation: every `ramp.every` fights of the run, enemies gain
+    // +ramp.hp / +ramp.dmg (fractions) per step, capped at ramp.max steps.
+    const ramp = diff.ramp || null;
+    if (ramp && num(ramp.every, 0) > 0) {
+      const step = Math.min(Math.floor(num(F.fights, 0) / ramp.every), num(ramp.max, 99));
+      if (step > 0) { hpMul *= 1 + step * num(ramp.hp, 0); dmgMul *= 1 + step * num(ramp.dmg, 0); }
+    }
     let edef = def;
     if (hpMul !== 1) hp = Math.max(1, Math.round(hp * hpMul));
     if (dmgMul !== 1 && Array.isArray(def.moves)) {
@@ -235,6 +242,7 @@ const COMBAT = (() => {
     const F = {
       seed: rng.seed ? rng.seed() : 0, rng, turn: 1, phase: 'player', result: null,
       act: clamp(num(run.act, 1) | 0, 1, 3),
+      fights: Math.max(0, num(run.fights, 0) | 0),   // fights already fought this run (escalation counter)
       player: {
         hp: clamp(Math.round(num(run.hp, maxHp)), 0, maxHp), maxHp, block: 0, status: {},
         grabs: claw.grabs, grabsMax: claw.grabs, grabsUsed: 0,
