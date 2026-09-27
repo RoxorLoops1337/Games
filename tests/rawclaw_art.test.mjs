@@ -14,6 +14,7 @@ const FOLDERS = {
   item: /^art\/items\/[a-z0-9_]+\.png$/,
   itemId: /^art\/items\/id\/[a-z0-9_]+\.png$/,
   enemy: /^art\/enemies\/[a-z0-9_]+\.png$/,
+  enemyIdle: /^art\/enemies\/idle\/[a-z0-9_]+_[0-5]\.png$/,
   portrait: /^art\/portraits\/[a-z0-9_]+\.png$/,
   relic: /^art\/relics\/[a-z0-9_]+\.png$/,
   status: /^art\/status\/[a-z0-9_]+\.png$/,

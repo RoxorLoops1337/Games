@@ -27,6 +27,16 @@ const ART = (() => {
   const CHARS0 = ['knight', 'alchemist', 'rogue'];
   const CLAW_PARTS = { palm: [56, 14, 256, 128], prong: [10, 46, 128, 256], carriage: [46, 14, 256, 128] };
   const UI_KEYS = ['coin', 'ink', 'brush'];
+  // Per-frame holds in seconds: give a blink one beat and breathing room to settle.
+  const IDLE_CLIPS = {
+    rat: [0.85, 0.18, 0.20, 0.10, 0.22, 0.30],
+    slime: [0.28, 0.18, 0.20, 0.10, 0.20, 0.26],
+    bat: [0.10, 0.08, 0.10, 0.08, 0.10, 0.08],
+    gremlin: [0.75, 0.25, 0.10, 0.24, 0.24, 0.30],
+    mimic: [0.65, 0.22, 0.28, 0.22, 0.22, 0.35],
+    spider: [0.65, 0.18, 0.20, 0.18, 0.20, 0.30],
+  };
+
 
   // kind -> key -> {path, img, ok, done}. Nested plain objects so a lookup
   // in the draw loop never builds a string.
@@ -46,6 +56,7 @@ const ART = (() => {
       case 'item': return ROOT + 'items/' + key + '.png';
       case 'itemId': return ROOT + 'items/id/' + key + '.png';
       case 'enemy': return ROOT + 'enemies/' + key + '.png';
+      case 'enemyIdle': return ROOT + 'enemies/idle/' + key + '.png';
       case 'portrait': return ROOT + 'portraits/' + key + '.png';
       case 'relic': return ROOT + 'relics/' + key + '.png';
       case 'hex': return ROOT + 'hex/' + key + '.png';
@@ -107,6 +118,7 @@ const ART = (() => {
       const first = Object.values(enemies).find(d => d && d.art === k);
       const sz = enemySize(first ? { art: k, size: first.size, tier: first.tier } : { art: k }, k);
       add('enemy', k, sz, genFor(sz[0], sz[1], first && first.tier === 'boss' ? 768 : 512));
+      if (IDLE_CLIPS[k]) for (let i = 0; i < IDLE_CLIPS[k].length; i++) add('enemyIdle', k + '_' + i, sz, [256, 256]);
     }
     for (const id in enemies) {
       const d = enemies[id], sz = enemySize(d, d.art);
@@ -187,6 +199,23 @@ const ART = (() => {
     const img = r.img;
     return img && img.complete !== false && img.naturalWidth > 0 ? img : null;
   }
+
+  function idleFrame(key, time) {
+    const clip = IDLE_CLIPS[key];
+    if (!clip) return -1;
+    const duration = clip.reduce((sum, d) => sum + d, 0);
+    let t = ((Number.isFinite(time) ? time : 0) % duration + duration) % duration;
+    for (let i = 0; i < clip.length; i++) { if (t < clip[i]) return i; t -= clip[i]; }
+    return 0;
+  }
+  // Wait for the whole clip before switching away from the static portrait.
+  // That keeps a slow connection from flashing between incompatible frames.
+  function idle(key, time) {
+    const clip = IDLE_CLIPS[key];
+    if (!clip) return null;
+    for (let i = 0; i < clip.length; i++) if (!get('enemyIdle', key + '_' + i)) return null;
+    return get('enemyIdle', key + '_' + idleFrame(key, time));
+  }
   const has = (kind, key) => get(kind, key) !== null;
   // Loading progress for debugging: {total, done, found}.
   function status() {
@@ -195,5 +224,5 @@ const ART = (() => {
     return { total, done, found };
   }
 
-  return { load, get, has, paths, pathOf, status, ROOT, _request: request };
+  return { load, get, has, paths, pathOf, status, idle, idleFrame, IDLE_CLIPS, ROOT, _request: request };
 })();

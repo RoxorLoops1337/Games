@@ -52,7 +52,7 @@
     "test:choirimport": "node tests/choir_import.test.mjs",
     "check:times": "node tools/check-times.mjs",
     "test:claw": "node tests/claw_crawl.test.mjs",
-    "test:rawclaw": "node tests/rawclaw_physics.test.mjs && node tests/rawclaw_data.test.mjs && node tests/rawclaw_combat.test.mjs && node tests/rawclaw_map.test.mjs && node tests/rawclaw_audio.test.mjs && node tests/rawclaw_render.test.mjs && node tests/rawclaw_art.test.mjs && node tests/rawclaw_game.test.mjs && node tests/rawclaw_intro.test.mjs && node tests/rawclaw_balance.test.mjs && node tests/rawclaw_assets.test.mjs"
+    "test:rawclaw": "node tests/rawclaw_physics.test.mjs && node tests/rawclaw_data.test.mjs && node tests/rawclaw_combat.test.mjs && node tests/rawclaw_map.test.mjs && node tests/rawclaw_audio.test.mjs && node tests/rawclaw_render.test.mjs && node tests/rawclaw_art.test.mjs && node tests/rawclaw_game.test.mjs && node tests/rawclaw_intro.test.mjs && node tests/rawclaw_balance.test.mjs && node tests/rawclaw_assets.test.mjs && node tests/rawclaw_idle.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",

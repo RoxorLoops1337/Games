@@ -1188,10 +1188,12 @@ const RENDER = (() => {
       }
       const lunge = Math.sin(atk * Math.PI);
       ctx.translate(-lunge * 34 * s, 0);
-      const sx = (1 + hurt * 0.28 + lunge * 0.12) * (1 - dead * 0.2), sy = (1 - hurt * 0.28 - lunge * 0.08) * (1 - dead * 0.5) * (1 + Math.sin(t * 3) * 0.02);
+      const sx = (1 + hurt * 0.28 + lunge * 0.12) * (1 - dead * 0.2), sy = (1 - hurt * 0.28 - lunge * 0.08) * (1 - dead * 0.5) * (st.frozen ? 1 : 1 + Math.sin(t * 3) * 0.02);
       ctx.scale(s * sx, s * sy);
       // PNG override: height = the nominal body box, feet on the origin.
-      const img = artImg('enemy', def.id) || artImg('enemy', key);
+      const idleTime = st.frozen || hurt > 0 || atk > 0 || dead > 0 ? 0 : t + (x || 0) * 0.009;
+      const idle = (k) => typeof ART !== 'undefined' && ART.idle ? ART.idle(k, idleTime) : null;
+      const img = idle(def.id) || artImg('enemy', def.id) || idle(key) || artImg('enemy', key);
       const ih = art.h, iw = img ? ih * imW(img) / imH(img) : 0;
       if (img) blit(ctx, img, -iw / 2, -ih, iw, ih);
       else art.draw(ctx, t, p, art === EA.blob ? (def.name || key) : null);

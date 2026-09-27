@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>RawClaw · Enemy idles</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#12091f;color:#f3ecff;font:16px system-ui;text-align:center;padding:24px 12px}h1{font-size:26px;color:#ff6bb0;margin:0 0 8px}p{color:#b3a4d6}a{color:#8dfff5}canvas{display:block;width:min(100%,960px);height:auto;margin:16px auto;border-radius:18px;border:1px solid #493064}label{display:inline-flex;align-items:center;gap:8px;padding:12px}input{width:20px;height:20px}</style></head><body>
+<h1>Small monsters. Big attitudes.</h1><p>RawClaw enemy idle loops</p><canvas id="idle" width="960" height="620"></canvas>
+<label><input id="freeze" type="checkbox">Freeze</label> · <a href="./">Play RawClaw</a>
+<script src="js/util.js"></script><script src="js/art.js"></script><script src="js/physics.js"></script><script src="js/data.js"></script><script src="js/map.js"></script><script src="js/render.js"></script>
+<script>
+const canvas=document.getElementById('idle'),ctx=canvas.getContext('2d');
+const names=['rat','slime','bat','gremlin','mimic','spider'],labels=['COIN RAT','STICKY SLIME','ARCADE BAT','TOKEN GREMLIN','PRIZE MIMIC','CRAWL SPIDER'];
+ART.load();
+function drawIdle(t){
+ ctx.clearRect(0,0,960,620);ctx.fillStyle='#12091f';ctx.fillRect(0,0,960,620);
+ names.forEach((key,i)=>{
+  const x=(i%3)*320+160,y=Math.floor(i/3)*310+246;
+  ctx.fillStyle='#211532';ctx.beginPath();ctx.roundRect(x-150,y-228,300,284,14);ctx.fill();
+  const def={id:key,art:key,size:1},h=RENDER.enemyBox(def,1).h;
+  RENDER.enemy(ctx,def,x,y,156/h,t,{frozen:document.getElementById('freeze').checked});
+  ctx.font='bold 16px system-ui';ctx.fillStyle='#8dfff5';ctx.textAlign='center';ctx.fillText(labels[i],x,y+32);
+ });
+}
+window.IDLE_PREVIEW={draw:drawIdle,ART,RENDER,names};
+function tick(t){if(!window.previewPaused)drawIdle(t/1000);requestAnimationFrame(tick)}requestAnimationFrame(tick);
+</script></body></html>
