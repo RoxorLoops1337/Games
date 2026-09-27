@@ -51,9 +51,9 @@ function seqCtx() {
 }
 
 const ITEM_KEYS = ['sword', 'dagger', 'axe', 'hammer', 'anvil', 'shield', 'buckler', 'potion', 'flask', 'bomb', 'torch', 'iceshard', 'snowball', 'coin', 'gem', 'rock', 'slag', 'iceblock', 'apple', 'bread', 'book', 'scroll', 'orb', 'ring', 'key', 'chain', 'horn', 'whetstone', 'feather', 'skull', 'star', 'boot', 'bone', 'bottle', 'heart', 'lantern', 'wand', 'mask', 'egg', 'dice'];
-const ENEMY_KEYS = ['rat', 'slime', 'bat', 'gremlin', 'mimic', 'spider', 'goblin', 'hoard', 'imp', 'clockwork', 'golem', 'furnace', 'magnet', 'ironjaw', 'wraith', 'yeti', 'frostmage', 'icemimic', 'prizemaster', 'mushroom', 'knight', 'wisp', 'crab', 'drone', 'tinker', 'cultist'];
+const ENEMY_KEYS = ['rat', 'slime', 'bat', 'gremlin', 'mimic', 'spider', 'goblin', 'hoard', 'imp', 'clockwork', 'golem', 'furnace', 'magnet', 'ironjaw', 'wraith', 'yeti', 'frostmage', 'icemimic', 'prizemaster', 'mushroom', 'knight', 'wisp', 'crab', 'drone', 'tinker', 'cultist', 'raccoon', 'goat', 'magpie'];
 const TILE_TYPES = ['empty', 'fight', 'elite', 'treasure', 'gem', 'ink', 'brush', 'event', 'shop', 'rest', 'forge', 'boss', 'start'];
-const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape'];
+const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'];
 
 const SHAPES = { circle: { kind: 'circle', r: 14 }, box: { kind: 'box', w: 44, h: 10 }, poly: { kind: 'poly', verts: [{ x: -16, y: 4 }, { x: -10, y: -12 }, { x: 10, y: -14 }, { x: 18, y: 0 }, { x: 12, y: 14 }] } };
 // A rig the way PHYS.clawRig describes itself: a hub circle, two prongs as
@@ -591,6 +591,66 @@ if (HAS_DATA) {
   const src = fs.readFileSync(path.join(__dirname, '..', 'clawspire', 'js', 'render.js'), 'utf8');
   h.ok(!/Math\.random/.test(src), 'render.js never calls Math.random');
   h.ok(!/\u2014/.test(src), 'no em dashes in render.js');
+}
+
+/* ------------------------------------------------- cabinet materials (itemFx, shards, the claw's face) */
+if (HAS_DATA) {
+  const api = boot();
+  const R = api.RENDER, D = api.DATA, P = api.PHYS;
+  h.ok(typeof R.itemFx === 'function' && typeof R.shard === 'function' && typeof R.clawHead === 'function', 'RENDER.itemFx, shard and clawHead exist');
+  // every item with its own material, in every state and layer, at a few times
+  const STATES = [
+    { crack: 0, slosh: 0, fuse: 0, golden: false, mag: 0, melt: 0 },
+    { crack: 1, slosh: 0.6, fuse: 2, golden: true, mag: 1, melt: 0.5 },
+    { crack: 2, slosh: -0.8, fuse: 1, golden: false, mag: 0.4, melt: 0.3 },
+  ];
+  let n = 0, bad = 0;
+  const mats = new Set();
+  for (const def of Object.values(D.ITEMS)) {
+    const mat = P.materialOf(def);
+    mats.add(mat.id);
+    for (const s0 of STATES) {
+      for (const layer of ['back', 'front', 'top']) {
+        const { ctx, stat } = seqCtx();
+        let threw = null;
+        const st = Object.assign({ mat, t: 1.7 + n * 0.13, seed: n % 7 }, s0);
+        try { R.itemFx(ctx, def, 100, 200, 0.7, 0.85, st, layer); } catch (e) { threw = e; }
+        n++;
+        if (threw || stat.save !== stat.restore || stat.nan.length) { bad++; if (bad < 4) h.ok(false, `itemFx ${def.id} ${layer} :: ${threw || stat.nan.join(',') || 'save/restore'}`); }
+      }
+    }
+  }
+  h.eq(bad, 0, `itemFx draws ${n} item / state / layer combos cleanly`);
+  for (const m of ['metal', 'glass', 'heavy', 'rubber', 'potion', 'food', 'magic', 'bomb', 'frost']) h.ok(mats.has(m), 'the roster has a ' + m + ' item');
+  // the looks actually paint
+  const pot = Object.values(D.ITEMS).find(d => d.art === 'potion' && (d.tags || []).includes('potion'));
+  const bomb = Object.values(D.ITEMS).find(d => d.art === 'bomb');
+  const magic = Object.values(D.ITEMS).find(d => (d.tags || []).includes('magic'));
+  drawCheck('itemFx potion liquid + crack (front)', c => R.itemFx(c, pot, 0, 0, 1.2, 1, { mat: P.materialOf(pot), t: 1, crack: 1, slosh: 0.4 }, 'front'));
+  drawCheck('itemFx bomb fuse badge (top)', c => R.itemFx(c, bomb, 0, 0, 0, 1, { mat: P.materialOf(bomb), t: 1, fuse: 1 }, 'top'));
+  drawCheck('itemFx magic glow (back)', c => R.itemFx(c, magic, 0, 0, 0, 1, { mat: P.materialOf(magic), t: 1 }, 'back'));
+  drawCheck('itemFx golden prize (front)', c => R.itemFx(c, magic, 0, 0, 0, 1, { mat: P.materialOf(magic), t: 1, golden: true }, 'front'));
+  const quiet = seqCtx();
+  R.itemFx(quiet.ctx, { id: 'x', art: 'rock', shape: { kind: 'circle', r: 10 } }, 0, 0, 0, 1, { mat: P.materialOf({ id: 'x2', tags: [] }), t: 1 }, 'top');
+  h.eq(quiet.stat.paints, 0, 'plain stuff with no state draws nothing on top');
+  h.ok(!(() => { try { R.itemFx(quiet.ctx, null, 0, 0, 0, 1, null); R.itemFx(quiet.ctx, null, 0, 0, 0, 1, {}, 'front'); return false; } catch (e) { return true; } })(), 'itemFx tolerates missing args');
+  drawCheck('a glass shard', c => R.shard(c, 10, 10, 0.4, 5, '#bfe8ff'));
+  // the claw's face in every mood, the lucky flames, the LED chase, the magnet's field
+  const pull = [{ x: 220, y: 240 }, { x: 270, y: 250 }];
+  for (const mood of ['', 'focus', 'happy', 'sad', 'wow', 'lucky', 'nonsense']) {
+    for (const ph of ['idle', 'dropping', 'carrying']) {
+      const r = fakeRig({ cfg: { magnet: 1, rubber: 1 } }); r.phase = ph;
+      drawCheck(`claw mood '${mood}' ${ph}`, c => R.claw(c, r, 30, 410, { juice: { t: 2.3, idle: ph === 'idle' ? 1 : 0, mood, blink: 1, look: -0.6, chase: 0.7, lucky: 1, pull, pullN: 2, bend: 4, squash: 0.2 } }));
+    }
+  }
+  const a = seqCtx(), b = seqCtx();
+  R.claw(a.ctx, fakeRig(), 30, 410, { juice: { t: 1, mood: 'happy' } });
+  R.claw(b.ctx, fakeRig(), 30, 410, { juice: { t: 1, mood: 'sad' } });
+  h.ok(fingerprint(a.stat) !== fingerprint(b.stat), 'happy and sad faces draw differently');
+  drawCheck('claw with an old-style cfg (no juice)', c => R.claw(c, fakeRig(), 30, 410, {}));
+  for (const p of ['crumbs', 'blast']) { R.fx.emit(p, 100, 100, { col: '#d9a05b' }); }
+  h.ok(R.fx.count ? R.fx.count() > 0 : true, 'the crumbs and blast presets emit');
+  R.fx.update(1 / 60);
 }
 
 h.done();

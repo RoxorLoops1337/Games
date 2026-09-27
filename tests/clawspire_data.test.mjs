@@ -15,18 +15,18 @@ const {
 // The bible's closed lists, written out here independently of data.js so a
 // drifted list in data.js is caught too.
 const ITEM_ART = 'sword dagger axe hammer anvil shield buckler potion flask bomb torch iceshard snowball coin gem rock slag iceblock apple bread book scroll orb ring key chain horn whetstone feather skull star boot bone bottle heart lantern wand mask egg dice'.split(' ');
-const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork golem furnace magnet ironjaw wraith yeti frostmage icemimic prizemaster mushroom knight wisp crab drone tinker cultist'.split(' ');
+const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork golem furnace magnet ironjaw wraith yeti frostmage icemimic prizemaster mushroom knight wisp crab drone tinker cultist raccoon goat magpie'.split(' ');
 const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
 const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again'.split(' ');
 const PER = 'block junk metal grabsUsed poison burn small streak gold'.split(' ');
-const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape'.split(' ');
+const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
 const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBlock startStr'.split(' ');
 const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold'.split(' ');
 const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo'.split(' ');
 const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo'.split(' ');
 const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor streak'.split(' ');
-const BIN_KINDS = ['shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'tilt'];
+const BIN_KINDS = ['shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'tilt', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'];
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isHex = (c) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
 const junkIds = () => Object.keys(ITEMS).filter(id => ITEMS[id].rarity === 'junk');
@@ -116,7 +116,7 @@ t.test('items', () => {
   t.ok(by('u') >= 12, `uncommons [${by('u')}]`);
   t.ok(by('r') >= 10, `rares [${by('r')}]`);
   t.ok(by('l') >= 4, `legendaries [${by('l')}]`);
-  t.eq(junkIds().sort().join(','), 'iceblock,rock,slag', 'junk items are rock, slag, iceblock');
+  t.eq(junkIds().sort().join(','), 'broodegg,fusebomb,iceblock,rock,slag', 'junk items are rock, slag, iceblock plus the monster junk (lit bomb, spider egg)');
   for (const ch of ['knight', 'alchemist', 'rogue']) {
     const n = ids.filter(id => ITEMS[id].char === ch).length;
     t.ok(n >= 6, `${ch} pool >= 6 [${n}]`);
@@ -323,11 +323,15 @@ t.test('enemies', () => {
     ids.map(i => ENEMIES[i]).filter(e => e.act === act).forEach(e => e.moves.forEach(m => { if (BIN_KINDS.includes(m.k)) bin.add(m.k); }));
     if (act === 1) {
       t.ok(bin.has('shake') && bin.has('junk'), 'act 1 introduces shake and junk');
-      t.ok([...bin].every(k => k === 'shake' || k === 'junk'), `act 1 only shakes and junks [${[...bin]}]`);
+      // The monsters pass: act 1 also eats items, drops a bomb and lays eggs
+      // (each shown in its telegraph); grease, steal, tilt, fog, ice stay later.
+      t.ok([...bin].every(k => ['shake', 'junk', 'gulp', 'bomb', 'eggs'].includes(k)), `act 1 only shakes, junks, gulps, bombs and lays eggs [${[...bin]}]`);
+      for (const k of ['gulp', 'bomb', 'eggs']) t.ok(bin.has(k), `act 1 introduces ${k}`);
     }
     if (act === 2) {
       for (const k of ['grease', 'steal', 'tilt']) t.ok(bin.has(k), `act 2 introduces ${k}`);
       t.ok(!bin.has('fog') && !bin.has('freezeItem'), 'act 2 saves fog and freezeItem for act 3');
+      for (const k of ['corrode', 'jam']) t.ok(bin.has(k), `act 2 introduces ${k}`);
     }
     if (act === 3) for (const k of ['fog', 'freezeItem']) t.ok(bin.has(k), `act 3 introduces ${k}`);
     // Balance bands: the bible's, lifted ~x1.3 by the balance pass (the
@@ -342,6 +346,48 @@ t.test('enemies', () => {
     mine.filter(e => e.tier === 'boss' && ENCOUNTERS[act].boss.some(enc => enc.includes(e.id)))
       .forEach(e => t.ok(fightHp(e) >= bossMin, `act ${act} boss fight ${e.id} hp ${fightHp(e)} >= ${bossMin}`));
   }
+});
+
+// The monsters pass: new move fields, phase two specs, affixes.
+t.test('monsters: new moves, phase two, affixes', () => {
+  const likes = TAGS.concat(['shiny']);
+  let gulpers = 0;
+  for (const id in ENEMIES) {
+    const e = ENEMIES[id], W = `enemy ${id}`;
+    for (const m of e.moves) {
+      const M = `${W} move ${m.id}`;
+      if (m.k === 'gulp') { gulpers++; t.ok(Number.isInteger(m.n) && m.n >= 1 && m.n <= 3, `${M}: gulp n 1..3`); t.ok(m.like == null || likes.includes(m.like), `${M}: like ${m.like}`); }
+      if (m.k === 'bomb') { t.ok(isNum(m.v) && m.v > 0 && Number.isInteger(m.fuse) && m.fuse >= 1, `${M}: bomb v + fuse`); }
+      if (m.k === 'eggs') {
+        t.ok(!!ENEMIES[m.hatch] && ENEMIES[m.hatch].minion, `${M}: hatches a minion (${m.hatch})`);
+        t.ok(Number.isInteger(m.n) && m.n >= 1 && Number.isInteger(m.turns) && m.turns >= 1, `${M}: eggs n + turns`);
+      }
+      if (m.k === 'corrode') t.ok(Number.isInteger(m.n) && m.n >= 1, `${M}: corrode n`);
+      if (m.k === 'jam') t.ok(isNum(m.v) && m.v >= 1, `${M}: jam turns`);
+    }
+    if (e.enrage != null) {
+      t.ok(e.tier === 'elite' || e.tier === 'boss', `${W}: only elites and bosses have a phase two`);
+      if (e.enrage) {
+        t.ok(typeof e.enrage.name === 'string' && e.enrage.name.length > 2, `${W}: phase two name`);
+        if (e.enrage.str != null) t.ok(isNum(e.enrage.str) && e.enrage.str >= 0, `${W}: phase two str`);
+        const pat = e.enrage.pattern;
+        if (pat) {
+          t.ok(e.ai === 'cycle' && pat.every(i => Number.isInteger(i) && i >= 0 && i < e.moves.length), `${W}: phase two pattern valid`);
+          pat.forEach((i, k) => { if (e.moves[i].k === 'charge') t.ok(e.moves[pat[(k + 1) % pat.length]].k !== 'charge', `${W}: phase two no charge after charge`); });
+        }
+      }
+    }
+  }
+  t.ok(gulpers >= 5, `five or more enemies eat items [${gulpers}]`);
+  for (const id of ['mimic', 'ironjaw', 'hoard', 'gloop', 'trashpanda']) t.ok(ENEMIES[id].moves.some(m => m.k === 'gulp'), `${id} eats items`);
+  for (const k of ['fusebomb', 'broodegg']) t.ok(ITEMS[k] && ITEMS[k].rarity === 'junk' && ITEMS[k].exhaust, `${k}: monster junk, exhausts`);
+  t.ok(DATA.AFFIXES && Object.keys(DATA.AFFIXES).length >= 6, '6+ affixes');
+  for (const id in DATA.AFFIXES) {
+    const a = DATA.AFFIXES[id];
+    t.ok(a.id === id && a.name && a.icon && /^#[0-9a-f]{6}$/i.test(a.color) && a.text.length > 8, `affix ${id}: id, name, icon, colour, text`);
+  }
+  t.eq(typeof DATA.affixRoll, 'function', 'DATA.affixRoll');
+  t.ok(!!STATUS.jam && STATUS.jam.kind === 'debuff', 'jam status is a debuff');
 });
 
 t.test('encounters', () => {
@@ -652,7 +698,7 @@ t.test('pool and rarity', () => {
   t.ok(c.length > 0 && c.every(id => ITEMS[id].rarity === 'c'), 'pool(c) only commons');
   t.ok(c.every(id => !ITEMS[id].starter), 'pool skips starters');
   t.ok(DATA.pool().every(id => ITEMS[id].rarity !== 'junk'), 'pool skips junk');
-  t.eq(DATA.pool('junk').sort().join(), 'iceblock,rock,slag', 'pool(junk)');
+  t.eq(DATA.pool('junk').sort().join(), 'broodegg,fusebomb,iceblock,rock,slag', 'pool(junk)');
   const k = DATA.pool(null, 'knight');
   t.ok(k.every(id => !ITEMS[id].char || ITEMS[id].char === 'knight'), 'pool(char) excludes other characters');
   t.ok(k.some(id => ITEMS[id].char === 'knight') && k.some(id => !ITEMS[id].char), 'pool(char) has own + shared');
@@ -795,7 +841,7 @@ t.test('new content sits in the pools', () => {
   const pooled = new Set(DATA.pool());
   for (const id of newItems) {
     const d = ITEMS[id];
-    if (d.bag || d.tags.includes('small')) continue;
+    if (d.bag || d.tags.includes('small') || d.rarity === 'junk') continue;
     t.ok(pooled.has(id), `${id}: in the reward pool`);
     t.ok(!d.starter, `${id}: not a starter`);
   }
@@ -911,6 +957,102 @@ t.test('old saves: every id a save can hold still resolves', () => {
   const OLD = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
   for (const id of OLD) t.ok(!!RELICS[id] && RELICS[id].id === id, `old relic ${id} still exists`);
   for (const id of OLD) t.eq(RELICS[id].rarity, { squire_gauntlet: 'event', bubbling_satchel: 'event', pickpocket_glove: 'event' }[id] || RELICS[id].rarity, `old relic ${id} keeps its rarity`);
+});
+
+// ---------------------------------------------------------------- loot
+t.test('loot: capsule tiers roll deterministically by seed, upgrade now and then, pity lifts to rare', () => {
+  const L = DATA.LOOT;
+  t.ok(L && Array.isArray(L.TIERS) && L.TIERS.join() === 'c,u,r,l', 'LOOT.TIERS is c,u,r,l');
+  for (const k of L.TIERS) t.ok(isHex(L.COLOR[k]) && typeof L.NAME[k] === 'string', `tier ${k} has a colour and a name`);
+  const roll = (seed, src, o) => { const r = U.rng(seed); return [0, 1, 2, 3, 4].map(() => JSON.stringify(DATA.rollCapsule(r, src, o))); };
+  for (const src of ['normal', 'bonus', 'elite', 'boss', 'treasure']) {
+    t.eq(roll(77, src).join('|'), roll(77, src).join('|'), `${src}: same seed, same capsules`);
+    t.ok(roll(77, src).join('|') !== roll(78, src).join('|'), `${src}: another seed rolls differently`);
+  }
+  const idx = (x) => L.TIERS.indexOf(x);
+  const cnt = { c: 0, u: 0, r: 0, l: 0 };
+  let ups = 0, upFromC = 0, cs = 0;
+  const r = U.rng(4242);
+  for (let i = 0; i < 4000; i++) {
+    const c = DATA.rollCapsule(r, 'normal');
+    cnt[c.tier]++;
+    t.ok(L.TIERS.includes(c.tier0) && L.TIERS.includes(c.tier), 'tiers are known');
+    let prev = c.tier0;
+    for (const u of c.ups) { if (idx(u) !== idx(prev) + 1) t.ok(false, 'every upgrade is one step up'); prev = u; }
+    t.eq(prev, c.tier, 'the last up is the final tier');
+    if (c.pity) t.ok(false, 'no pity without a pity count');
+    if (c.ups.length) ups++;
+    if (c.tier0 === 'c') { cs++; if (c.ups.length) upFromC++; }
+  }
+  t.ok(cnt.c > cnt.u && cnt.u > cnt.r && cnt.r > cnt.l, `normal capsules: common most, legendary least (${JSON.stringify(cnt)})`);
+  const pc = upFromC / cs;
+  t.ok(Math.abs(pc - L.UP.c) < 0.03, `a common upgrades mid-open about ${L.UP.c} of the time (${pc.toFixed(3)})`);
+  t.ok(ups > 200 && ups < 1000, `upgrades are a treat, not the norm (${ups}/4000)`);
+  const boss = { c: 0, u: 0, r: 0, l: 0 };
+  for (let i = 0; i < 500; i++) boss[DATA.rollCapsule(r, 'boss').tier]++;
+  t.eq(boss.c, 0, 'a boss never drops a common');
+  t.ok(boss.r + boss.l > 350, 'boss capsules are mostly rare or better');
+  for (let i = 0; i < 300; i++) {
+    const c = DATA.rollCapsule(r, 'normal', { pity: L.PITY });
+    t.ok(idx(c.tier) >= 2, 'at the pity count the capsule ends rare or better');
+    if (idx(c.tier0) < 2) t.ok(c.ups.length >= 1, 'the pity lift plays as upgrades');
+  }
+  const fixed = DATA.rollCapsule(U.rng(1), 'counter', { tier: 'r' });
+  t.eq(fixed.tier0, 'r', 'a counter capsule starts at the tier it was bought at');
+});
+
+t.test('loot: every capsule prize is valid for its tier', () => {
+  const pools = { c: DATA.relicPool('c'), u: DATA.relicPool('u'), r: DATA.relicPool('r'), boss: DATA.relicPool('boss') };
+  const ctx = { act: 2, char: 'knight', relics: pools, claws: Object.keys(CLAW_UPGRADES), tools: Object.keys(DATA.TOOLS) };
+  const kinds = {};
+  const r = U.rng(99);
+  for (const tier of DATA.LOOT.TIERS) {
+    for (let i = 0; i < 400; i++) {
+      const p = DATA.capsulePrize(r, tier, ctx);
+      kinds[tier + ':' + p.k] = 1;
+      t.ok(['item', 'relic', 'gold', 'ink', 'maxhp', 'tickets', 'tool', 'claw'].includes(p.k), `${tier}: known prize kind ${p.k}`);
+      if (p.k === 'item') { t.ok(!!ITEMS[p.id] && ITEMS[p.id].rarity !== 'junk', `${tier}: item ${p.id} exists`); if (!p.plus && tier !== 'l') t.eq(ITEMS[p.id].rarity, tier, `${tier}: item rarity matches`); }
+      if (p.k === 'relic') { t.ok(!!RELICS[p.id], `${tier}: relic ${p.id} exists`); t.ok(DATA.LOOT.RELIC_RAR[tier].includes(RELICS[p.id].rarity), `${tier}: relic rarity fits the tier`); }
+      if (p.k === 'claw') t.ok(!!CLAW_UPGRADES[p.u], `${tier}: claw part ${p.u} exists`);
+      if (p.k === 'tool') t.ok(!!DATA.TOOLS[p.id], `${tier}: tool ${p.id} exists`);
+      if (['gold', 'ink', 'maxhp', 'tickets'].includes(p.k)) t.ok(Number.isInteger(p.n) && p.n > 0, `${tier}: ${p.k} amount is a positive int`);
+      const info = DATA.prizeInfo(p);
+      t.ok(info && typeof info.name === 'string' && info.name.length > 0 && typeof info.text === 'string', `${tier}: ${p.k} has a name and text`);
+      t.ok(!/\bink\b/i.test(info.name + ' ' + info.text), 'prize copy never says ink');
+    }
+  }
+  t.ok(kinds['l:claw'] && kinds['l:relic'] && kinds['c:gold'] && kinds['c:tickets'], 'the tables reach their headline prizes');
+  // empty pools fall back to gold, never to a bad id
+  const bare = { act: 1, char: 'knight', relics: {}, claws: [], tools: [] };
+  for (let i = 0; i < 200; i++) { const p = DATA.capsulePrize(r, 'l', bare); t.ok(p.k !== 'relic' && p.k !== 'claw', 'no relic or claw prize from empty pools'); }
+  for (let i = 0; i < 100; i++) { const p = DATA.capsulePrize(r, 'u', Object.assign({ prefer: 'relic' }, ctx)); t.eq(p.k, 'relic', 'a treasure capsule prefers a relic'); }
+  const a = DATA.capsulePrize(U.rng(5), 'r', ctx), b = DATA.capsulePrize(U.rng(5), 'r', ctx);
+  t.eq(JSON.stringify(a), JSON.stringify(b), 'prizes are deterministic by seed');
+});
+
+t.test('loot: the prize shelf and the payout lines', () => {
+  const shelf = DATA.prizeShelf(U.rng(3), 1, { char: 'rogue', tools: Object.keys(DATA.TOOLS) });
+  t.eq(shelf.length, 6, 'six slots on the shelf');
+  t.eq(shelf.filter(s => s.k === 'cap').length, 3, 'three capsules on the shelf');
+  for (const s of shelf) { t.ok(Number.isInteger(s.price) && s.price > 0, `slot ${s.k} has a ticket price`); t.eq(s.sold, false, 'slots start unsold'); t.ok(DATA.prizeInfo(s).name.length > 0, `slot ${s.k} has a label`); }
+  t.eq(JSON.stringify(DATA.prizeShelf(U.rng(3), 1, { char: 'rogue' })), JSON.stringify(DATA.prizeShelf(U.rng(3), 1, { char: 'rogue' })), 'the shelf is deterministic by seed');
+  const plain = DATA.payout({ tier: 'normal', gold: 17, jackpots: 0, combos: [], dmgTaken: 4, turns: 5, overkill: 0 });
+  t.eq(plain.lines.length, 1, 'a plain win has one line');
+  t.eq(plain.gold, 17, 'its gold is the base roll');
+  t.eq(plain.tix, DATA.LOOT.TICKETS.normal, 'its tickets are the normal base');
+  const big = DATA.payout({ tier: 'elite', gold: 20, jackpots: 2, combos: [{ name: 'X', tier: 3 }, { name: 'Y', tier: 1 }], dmgTaken: 0, turns: 1, overkill: 14 });
+  const ids = big.lines.map(l => l.id);
+  t.eq(ids.join(','), 'base,jackpot,combo,flawless,speedy,overkill', 'every bonus line in order');
+  t.eq(big.gold, big.lines.reduce((a, l) => a + l.gold, 0), 'gold total is the sum of the lines');
+  t.eq(big.tix, big.lines.reduce((a, l) => a + l.tix, 0), 'ticket total is the sum of the lines');
+  t.eq(big.lines[1].tix, 2 * DATA.LOOT.TICKETS.jackpot, 'tickets per jackpot');
+  t.eq(big.lines[2].label, 'Combos x2', 'two combos are counted');
+  const dbl = DATA.payout({ tier: 'elite', gold: 20, jackpots: 2, combos: [], dmgTaken: 0, turns: 1, overkill: 14, double: true });
+  t.eq(dbl.lines[dbl.lines.length - 1].id, 'double', 'the double line comes last');
+  const nodbl = DATA.payout({ tier: 'elite', gold: 20, jackpots: 2, combos: [], dmgTaken: 0, turns: 1, overkill: 14 });
+  t.eq(dbl.gold, nodbl.gold * 2, 'DOUBLE doubles the gold');
+  t.eq(dbl.tix, nodbl.tix * 2, 'DOUBLE doubles the tickets');
+  t.ok(DATA.LOOT.DOUBLE > 0 && DATA.LOOT.DOUBLE <= 0.1, 'the double is a rare treat');
 });
 
 t.done();

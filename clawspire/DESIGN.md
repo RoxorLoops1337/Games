@@ -310,11 +310,13 @@ DATA.ENEMIES[id] = {
 ```
 Move kinds (combat implements): `attack {v, n}`, `block {v}`, `buff {s, v}` (self), `debuff {s, v}`
 (player), `heal {v}`, `shake`, `grease`, `fog`, `junk {item, n}`, `steal` (remove a random non-junk item from the bin until end of fight),
-`freezeItem` (encase a random bin item in an ice block for the fight), `summon {id}`, `tilt` (gravity tilt for a turn), `charge {v}` (big telegraphed attack next turn), `escape`.
+`freezeItem` (encase a random bin item in an ice block for the fight), `summon {id}`, `tilt` (gravity tilt for a turn), `charge {v}` (big telegraphed attack next turn), `escape`,
+and the monsters pass (see Enemies): `gulp {n, like?}`, `bomb {v, fuse}`, `corrode {n}`, `jam {v}`, `eggs {n, hatch, turns}`.
+Optional enemy fields: `enrage: {name, text, str?, pattern?} | false` (phase two), `digest` (turns), `noAffix`.
 At least **26 enemies**: act 1 six normal + 2 elites + 1 boss; act 2 the same; act 3 the same; plus
 the final boss `prizemaster`. Art keys: `rat, slime, bat, gremlin, mimic, spider, goblin, hoard,
 imp, clockwork, golem, furnace, magnet, ironjaw, wraith, yeti, frostmage, icemimic, prizemaster,
-mushroom, knight, wisp, crab, drone, tinker, cultist`.
+mushroom, knight, wisp, crab, drone, tinker, cultist, raccoon, goat, magpie`.
 
 ```js
 DATA.ENCOUNTERS[act] = { normal: [[ids...], ...], elite: [[ids]], boss: [[ids]] }   // >=6 normal, 2 elite, 1 boss per act
@@ -405,7 +407,10 @@ Event objects (renderer/game consume these; keep this list exact):
 `{t:'binTilt', dir:-1|1}`, `{t:'binPurge', insts}`, `{t:'binCopy', inst}`, `{t:'turn', n}`, `{t:'over', result}`,
 `{t:'text', who, idx, str}` (floating text like "MISS", "FROZEN"), `{t:'grab', v}`,
 `{t:'proc', src, id, name, icon, color, text, who:'player'|'enemy', idx}`, `{t:'combo', id, name, text, color, n, tier}`
-(see Builds and synergies).
+(see Builds and synergies), and the monsters pass (see Enemies): `{t:'binEat', inst, idx, kind}`,
+`{t:'binReturn', insts, idx, why:'hiccup'|'burst'}`, `{t:'binDigest', inst, idx, k:'digest'|'boom'|'drink'|'snack'|'escape'}`,
+`{t:'binBomb', inst, idx}`, `{t:'binBoom', inst}`, `{t:'binEggs', items, idx}`, `{t:'binHatch', inst}`,
+`{t:'binRust', inst, idx}`, `{t:'binJam', idx}`, `{t:'enrage', idx, name, text}`.
 
 Damage formula: `base + str` per hit, ×0.75 if weak, ×1.5 if vuln on target, −armor, then block
 absorbs. Player burn: `v` dmg at end of player turn then −1. Enemy poison/burn tick at the start
@@ -1107,6 +1112,302 @@ reduced, auras, the new hooks balanced), game (proc, combo queue, keyword
 chips, unknown events, throws, crits and ghosts, low hp, the outro and its
 save, blooms, reduced, tap to skip), audio (the new names, combo tiers,
 throttles).
+
+## Cabinet materials
+
+Every item in the Rig has a physical personality, derived from its tags (plus
+its art and fx for the elements), so a new item behaves right with no extra
+data. Presentation first, but some of it is physics and some of it touches
+the fight (glass, bombs, ice, the Golden Prize, the Lucky Claw).
+
+**Derivation (`PHYS.materialOf(def)`, pure, cached by id).** Traits:
+`metal, glass, heavy, food, magic, light, small` from the tags; `liquid` =
+`potion` tag; `fuse` = art `bomb`; `frost` = art `snowball`/`iceblock`, art
+`iceshard` (unless magic), a `chill` status fx or a `frost` tag; `fire` =
+art `torch`/`slag`, a `burn` status fx or a `fire` tag; `poison` = a
+`poison` status or `poisonAll`; `rubber` = a circle that is not metal,
+glass, a bomb or ice with restitution >= 0.3 (or light and >= 0.2). The lead
+material (`id`, used for the label and sound) is the first of
+`bomb, frost, potion, glass, rubber, food, magic, heavy, metal, light`, else
+`stuff`. `PHYS.MATERIALS` holds the base profiles.
+
+**Physics (`PHYS.applyMaterial(b, m)`, body fields, all default to the
+old behaviour).** `b.gs` gravity scale (magic 0.62, heavy magic 0.8, light
+0.92), `b.drag` extra linear damping per second (magic 0.6, light 0.8),
+`b.slick` multiplier on wall and item-item friction, never on the claw's
+grip (frost 0.3), `b.bounceV` the approach speed restitution starts at
+(rubber 35, else `PH.bounceV`) and a restitution floor (rubber 0.62).
+`PHYS.blast(W, x, y, r, power, except)` throws every body within r outward
+and up (a bomb), `PHYS.hop(W, x, y, r, v, except)` makes bodies near a heavy
+landing hop (never one the claw holds), `PHYS.scaleShape(shape, k)` shrinks
+a shape (melting ice). All deterministic; the hard clamps keep everything in.
+
+**Reactions (`game.js`, `MAT` dials).** Each frame each body's impact is its
+change of velocity less gravity's share (`matBody`); at most 4 reactions a
+frame and one per body per 0.12 s. A body is *armed* `MAT.armT` (1.2 s)
+after it spawns, so a refill shower never cracks or lights anything.
+- metal: sparks where it hit (the direction of the push) and a clank above
+  `MAT.sparkV`; the magnet claw draws crackling field lines to metal in reach
+  and the tugged items flicker cyan.
+- heavy (armed, above `MAT.thudV`): a thud, dust, a downward camera kick and
+  shake, neighbours hop (`PHYS.hop`), stacked metal rattles.
+- glass (armed, above `MAT.crackV`): CRACK. A cracked item shows crack lines
+  and, when played, plays for +50% (half its dmg / block / heal / lifesteal /
+  status again, through `COMBAT.damage/heal/status`) and then goes to
+  `F.exhausted` for the fight. A second crack in the bin shatters it: gone for
+  the fight, leaving `MAT.shardN` glass shard bodies (`FS.debris`, max 12,
+  physical fillers with no inst; the chute sweeps them out). Softer landings
+  tinkle.
+- bomb (a real bomb, not a monster's junk `fusebomb`, which keeps COMBAT's own
+  `inst.fuse`): an armed landing above `MAT.fuseV` lights the fuse for
+  `MAT.fuseTurns` (2) turns: a sparkling fuse tip, a countdown badge over the
+  pile (red and pulsing on the last turn), beeps, a toast. At the start of
+  each player turn it burns down; at 0 it goes off in the bin: `PHYS.blast`,
+  KABOOM, a flash and a shockwave, and every enemy takes `MAT.blastDmg` (+2
+  per act after the first, +2 upgraded, `COMBAT.damage` with no source, fixed).
+  The bomb goes to `F.used`. Grabbing it puts the fuse out; ice douses it.
+- rubber: squash on landing, a boing, stretched along its flight.
+- food: a wobbling squish and crumbs.
+- potion: the liquid stays level in the world (the art's bulb is redrawn with
+  a tilted surface) and sloshes on a sideways jolt; bubbles, a slosh.
+- magic: floats down, hovers a few px above where it rests, three orbiting
+  sparkles, a glow pulse, chimes.
+- frost: slides, leaves a frost trail on the floor, and melts at each turn
+  start (x `MAT.meltK`, never below `MAT.meltMin`; the body is rebuilt
+  smaller). A junk ice block melts away for good under `MAT.iceGone`.
+- fire and poison: ambient embers and bubbles (one ambient particle a frame,
+  round robin over the bin).
+- two items knocking together above `MAT.starV`: impact stars and a tiny kick.
+
+Fight-only state lives in `FS.mst[uid]` (`crack`, `melt`, `lit`), never on
+COMBAT's insts or in the save; old saves are untouched.
+
+**Cabinet toys.**
+- Golden Prize: `MAT.goldenP` of fights, one bin item (its fight copy) is
+  upgraded for the fight and shimmers gold (glow, glint, orbiting stars, a
+  sparkle trail). Delivering it: GOLDEN PRIZE!, a fanfare, coins, confetti,
+  the GOLDEN! marquee; +`MAT.goldenGold` gold if it was upgraded already.
+- FREE PRIZE: a delivery the claw never touched this grab (`d.clawG !==
+  FS.grabN`: shaken, blasted or knocked in) gets its own label, confetti and
+  jingle.
+- Lucky Claw: `MAT.luckyAfter` (2) grabs in a row that deliver make the next
+  grab grip harder (+`MAT.luckyGrip`, survives a rig rebuild): flaming
+  fingertips, star eyes, LUCKY CLAW!. Spent by that grab; a miss resets.
+- SO CLOSE: a cargo item that slips within `MAT.closeX` of the divider while
+  carrying, or that the claw let go of over the chute but ended up back in the
+  bin: the label, a sad trombone, a glum claw. Once per grab.
+- The claw's face (`RENDER.clawHead`): a chrome head with a visor and two LED
+  eyes over the palm: blinks, looks where it travels, `focus` while dropping,
+  `happy` with cargo and on a loaded return (plus a ding and an LED chase on
+  the brow and the carriage lamp), `sad` on an empty lift, a slip or a near
+  miss, `wow` for a golden prize or a blast, `lucky` star eyes. Parked, the
+  whole claw sways on its cable.
+
+**Render.** `RENDER.itemFx(ctx, def, x, y, angle, scale, st, layer)` draws the
+material looks around `RENDER.item` (layers `back`: glows, `front`: liquid,
+cracks, frost rim and drip, sparkles, the fuse spark, the magnet flicker,
+`top`: the fuse countdown, drawn after the whole pile). `RENDER.shard` draws
+debris. `RENDER.claw` reads `cfg.juice.{t, idle, mood, blink, look, chase,
+lucky, pull, pullN}`. fx presets `crumbs` and `blast`.
+
+**Audio.** `clank, tinkle, crack, thud, boing, squish, slosh, chime` (opts.vel
+0..1.4 scales a landing), `fuse, beep, boom, groan, fanfare, ding, lucky`.
+
+**Reduced motion.** Particles go through the presets (a third), shake and
+kicks follow `fx.reduced`, the parked sway and rubber stretch are off, the
+flash is capped, ambient and fuse sparks thin out.
+
+`GAME.toys` exposes `MAT`, `mstOf`, `bodyOf`, `crack`, `lightFuse`, `explode`,
+`fuseTick`, `meltTick`, `matTurn`, `soClose`, `setMood`, `luckAfterGrab` for
+tests and screenshot drivers. Tests: physics (derivation, gravity scale,
+slide, bounce, blast, hop, scaleShape, determinism), game (materials on the
+bodies, armed cracks and shatter into shards, +50% cracked play, fuse
+lighting / burning down / blast damage / junk bombs / grab to defuse, melt,
+golden prize, free prize, lucky claw, near miss, moods, a real grab),
+render (itemFx for every item, state and layer, shards, every mood), audio
+(every material voice).
+
+## Loot (capsules, tickets, the payout, the prize counter)
+
+The reward layer is about anticipation and spectacle, not power (balance is
+kept loose on purpose). Rolls live in `data.js` (`DATA.LOOT`, pure, seeded);
+the flow and the feel live in `game.js` (the loot section); the art is
+`RENDER.capsule` / `RENDER.ticket`; the sounds `capDrop, capCrack, capUpgrade,
+capBurst, ticket, tally, slam, roulette, double`.
+
+**Prize capsules** (gacha balls). Tiers `c` common grey, `u` uncommon cyan, `r`
+rare pink, `l` legendary gold with a rainbow sheen (`LOOT.COLOR`, `LOOT.NAME`).
+`DATA.rollCapsule(rng, src, {pity, tier})` -> `{src, tier0, ups, tier, pity}`:
+`tier0` is the colour it drops in (weights per source in `LOOT.WEIGHTS`:
+normal, bonus, elite, boss, treasure; a counter capsule has a fixed tier),
+then each step upgrades with `LOOT.UP` (c 16%, u 11%, r 7%, chaining); `ups`
+lists every tier it turns into mid-open. Pity: `run.pity` counts capsules
+below rare; at `LOOT.PITY` (5) the next one is lifted to rare through `ups`,
+so the guarantee plays as the "it turned pink!" moment (tag LUCKY STREAK).
+`DATA.capsulePrize(rng, tier, ctx)` picks what falls out from `LOOT.PRIZES`
+(item, plus item, relic, gold, bulbs, tickets, tool, claw part, max hp; an
+empty pool falls back to gold); `ctx` carries the live pools (relics not
+owned, claw parts not maxed, tools) and `prefer: 'relic'` (treasure).
+`DATA.prizeInfo(p)` gives the card's name, text, icon and colour. The prize is
+rolled when the capsule is made and saved with it, so a reload never rerolls.
+
+Sources: an elite or a tower keeper drops one, a boss drops one (never
+common), a fight with a jackpot (a triple) or a tier 3 combo adds a bonus
+one, every treasure tile *is* a capsule (always a relic when one is in stock,
+its rarity by tier: c -> common relic ... l -> rare or boss relic; the tile's
+gold is paid on entry), and the prize counter sells them.
+
+The ritual (`showCapsule({cap, then, gold?, bank?, rwIdx?})`, screen
+`capsule`, a transparent DOM frame over a canvas scene drawn under the fx
+layer): the capsule drops onto a pedestal with a bounce, rays spin behind it
+(brighter per tier, a counter-spinning rainbow set for legendary), it rattles
+now and then while it waits. Each tap (the whole screen, Space, or the
+`Crack` entry of `GAME.choose`) shakes it harder, throws sparks and shards,
+spreads glowing cracks from the seam and plays a rising snap. From the second
+tap each tap reveals one of `ups`: a flash in the new colour, chromatic
+rings, confetti, the riser, the title slams in anew with UPGRADE! (JACKPOT
+UPGRADE! for legendary). The last tap bursts it: the halves fly apart, light
+pours out, confetti from both sides, rings (a rainbow of them and slow motion
+for legendary), coins for gold and tickets, the prize is paid and saved at
+that instant, then the prize card pops out with Collect (the prize flies to
+where it lives). Taps: 3 (plus one per extra up), 2 once the player has opened
+`LOOT.FAST_AFTER` (12) capsules (meta `loot.caps`), and the drop is shorter
+then too. Skip bursts it at once; a tap during the burst shows the card. A
+reload before the burst restarts the ritual with the same capsule; after it
+lands on the card, never a second prize.
+
+Capsules from a fight sit on the reward screen as pulsing slots above the
+cards (DOM taps, not `GAME.choose` entries, so the cards stay 0..2 and Skip 3);
+the ritual returns to the reward screen. Anything unopened when the reward
+screen closes goes to the bank (`run.caps`), shown as a pulsing capsule chip
+on the map head (`Capsule` entry), opened oldest first, back to the map.
+
+**Arcade tickets.** `run.tickets` (HUD stat `TIX`, id `tixTxt`, rolls like
+gold). A jackpot or a combo in a fight spits `LOOT.TICKETS.jackpot` (3) /
+one per combo tier from two slots on the marquee at once: they arc up,
+flutter, then zip into the ticket counter one by one (tick, bump). The rest
+stream out during the victory outro (held up to 2.4 s so it lands; a tap
+skips). The stream is visual only: the tickets are paid once, by the reward.
+
+**Payout** (`DATA.payout(st)` -> `{lines, gold, tix}`, Balatro's cash out).
+Lines: the base (Victory / Elite down / Boss down: the old gold roll and
+4 / 8 / 15 tickets), Jackpot xN (+4 gold, +3 tickets each), Combo (the name,
+or Combos xN: +2 gold, +1 ticket per tier), Flawless (no damage taken, +8,
++5), Speedy / One turn KO (won by turn 2, +5, +3), Overkill N (damage past
+the last hit point of a kill, from `F.stats.overkill`, N >= 5: +1 gold per 3,
++1 ticket per 5, capped 8 / 4). The lucky DOUBLE REWARD (`LOOT.DOUBLE`, 1 in
+20, rolled at the fight's end) doubles both totals. The reward screen shows a
+receipt: the rows tick in one by one (a register ding walking up), a
+roulette strip flicks past its window and lands on x2 before the double row,
+then TOTAL slams in (ka-ching, a shake, a little fountain of coins and
+tickets) and only then do the capsule slots and the cards deal in. A tap or
+Space finishes it; 0.3 s per row, 0.16 s once the player has seen five
+(`meta.loot.payouts`); a reload shows it finished (`rw.payShown`).
+
+**Prize counter** (inside every shop: a neon slot at the top of the shop,
+its `Prize counter` entry registered last; screen `counter`). A glass case of
+six prizes from `DATA.prizeShelf(rng, act, ctx)`, rolled once per shop and
+saved with it: a common, an uncommon and a rare (a legendary one time in
+five) capsule at 12 / 28 / 55 (110) tickets, an item by act rarity (14 / 24 /
+40 / 70), +4 max hp (30), and 3 bulbs (10) or a tool (18). A buy flies ticket
+stubs from the balance into the slot, stamps it WON and pays it; a capsule
+opens on the spot and comes back to the counter. Too few tickets: the slot
+shakes and says how to get more.
+
+**Run highlights** (game over and win, above the stats): biggest hit (and best
+overkill), best combo (with its tier as stars), jackpots (and flawless wins),
+capsules opened (and the best tier), tickets won (and double rewards), gold
+paid out. `F.stats.bigHit` / `F.stats.overkill` are kept by `COMBAT.damage`.
+
+**Save shape.** Run (all optional, `lootRun` defaults them for older saves):
+`tickets` 0, `pity` 0, `caps` [] (banked capsules), `loot` {bigHit, overkill,
+capsOpened, tixEarned, flawless, doubles, payGold, bestCombo, bestCap}. A
+reward carries `pay` (lines), `tix`, `double`, `caps`, `payShown`, `banked`;
+a shop carries `counter` (the shelf). Screens `capsule` (`sd.capsule`) and
+`counter` (`sd.counter`) save and reload. Meta: `loot` {caps, payouts}.
+Rewards saved before this layer have no `pay` and show the plain gold tag.
+
+Tests: data (tiers deterministic by seed, weights order, the upgrade rate,
+the pity lift, boss capsules, every prize valid per tier, empty pools, the
+relic preference, the shelf, payout lines and totals, DOUBLE), game (an elite
+win's payout, tickets and capsule with the card indices unchanged, the tally,
+cracking on the reward screen, banking and the map chip, reload before and
+after the burst, treasure capsules, upgrades per tap, the pity timer, the
+ticket stream paid once, the counter buy / refusal / reload / capsule, old
+saves, highlights), audio (the loot sfx).
+
+## Enemies (the monsters pass: they eat your stuff and get angry)
+
+Inspiration: Slay the Spire (telegraphs, Looter / Mugger, phase two bosses),
+Monster Train (elite affixes as badges), Peglin / Luck be a Landlord (the
+board itself is the enemy's target). Readability first: every trick is
+telegraphed in the intent bubble, and every item that leaves the bin is seen
+leaving and is seen coming back.
+
+**Gulp (item-eating).** `gulp {n, like}` swallows up to n bin items into
+`e.belly` (max 4; never junk or an iced item). `like` is a tag it prefers,
+or `'shiny'` (the rarest, metal first). What it ate matters (combat.js
+`mealKind`): a bomb (art `bomb`) goes off inside it for 2x its damage (min 8)
+plus its debuffs; a potion or food is drunk / eaten on the spot: its
+debuffs land on the eater (BLEGH), its healing heals it double, Strength
+potions buff it; those go to the used pile as if played. Held items: a
+weapon lends +2 Strength, other metal +1 Armor, glass cuts it for 4 x act
+every turn. They come back when the enemy **dies** (all, a burst), when the
+player deals **`COMBAT.hiccupAt(e)`** (15% of max hp, min 6) damage to it in
+one player turn (one item per threshold, HIC!; the green ring on the belly
+bubble is the meter), or are **digested** after `DIGEST` (3) of its turns
+(`F.digested`: gone for this fight only; the run's bin is never touched). An
+escaping enemy takes its belly with it (`F.stolen`). Returns land in the bin
+(the used pile when the cabinet is full). Users: Trash Panda, Hungry Gloop,
+Prize Mimic, The Hoard (act 1), Scrap Goat, Ironjaw (act 2), Ice Mimic,
+Crystal Magpie (act 3), plus anything Greedy.
+
+**Bin tricks.** `bomb {v, fuse}` drops a Lit Bomb (junk `fusebomb`, inst
+`fuse`, `boom`, `by`): grabbed out, it flies back at its thrower for 1.5x;
+left alone it burns down at the end of each enemy phase (not the one it
+landed in) and blows up in the cabinet for `boom` through Block. `eggs {n,
+hatch, turns}` lays Spider Eggs (junk `broodegg`) that hatch into `hatch`
+after `turns` rounds when there is room. `corrode {n}` rusts metal items
+(`inst.rust`: their numbers are halved for the fight). `jam {v}` gives the
+player `jam` (a wrench in the rail: one grab fewer that turn, never the
+last). Users: Token Gremlin, Smelter, Crystal Magpie (bombs), Brood Mother
+(eggs), Rust Mite (rust), Tinker Gnome and the Prize Master (jam).
+
+**Affixes** (`DATA.AFFIXES`, `DATA.affixRoll(rng, def, act, fights)`, on
+their own rng stream so a fight's other rolls stay put): Armored (+1 Armor),
+Hasty (every third action twice, an attack's repeat at half size, never
+after an unleash; the bubble shows x2), Vampiric (heals half
+of the attack damage that gets through), Spiky (+1 Thorns, +2 in act 3), Explosive (a blast
+on death that never kills), Regenerating (2% max hp a turn), Greedy (gulps on its first and
+every third action; the bubble shows +). Each adds 5% max hp. Odds
+(`AFFIX_ODDS`): act 1 elites 1, act 2 elites 1 + 25%, act 3 elites 1 + 50%;
+normals 0 / 10% / 20% by act, bosses 0 / 20% / 40%; every hidden
+escalation step adds 4% to each chance. Minions never, gulpers never Greedy.
+Drawn as a column of badges beside the body and a coloured aura.
+
+**Phase two.** Every elite and boss transforms once at 50% hp: `{t:'enrage'}`
+(a banner with its name, a red flash, a roar, slow motion, a size pop into a
+red-tinted, 8% bigger body with a flame crown), `+str` (def.enrage.str, else
+1 in act 1 and 2 after) and sometimes a new pattern (def.enrage.pattern) from the next
+pick on. `enrage: false` opts out.
+
+**Presentation (game.js `monsterEvent`, render.js `belly`, `affixAura`,
+`affixBadges`, `binMark`, `wrench`, `rageCrown`).** A swallowed body leaves
+the cabinet with a pink ring and arcs (FS.arcs, `RENDER.item` along a
+quadratic, the callback on an `fx.fly` flyer so it also lands headless) into
+the mouth; the enemy squashes (st.chomp) and taunts (NOM / GULP / MINE! /
+CHOMP). The belly bubble wobbles on the back half of the body with the items
+tumbling inside, each with its digest clock. Returns stretch the enemy
+(st.spit) and arc back into the bin as fresh bodies. Bombs and eggs carry a
+countdown chip (a red danger pulse on a bomb's last turn); rust is an orange
+cast with speckles; a jam drops a wrench onto the rail. Sounds: `gulp`,
+`burp`, `roar` (plus the cabinet's `fuse` / `boom`).
+
+Tests: combat (gulp taste, cap, hiccup, burst, digest, meals, bombs, eggs,
+rust, jam, escape, every affix, phase two once, data rolls by act and
+escalation, every new user fights 14 turns with every item accounted for),
+data (move fields, phase two specs, affixes, act introductions), game (the
+events move real bodies and draw with the stub ctx), render (the new art).
 
 ## Quality bar (Game of the Year, mobile)
 

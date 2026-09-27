@@ -75,6 +75,94 @@ const PHYS = (() => {
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   let nextId = 1;
 
+  // ---- materials -----------------------------------------------------------
+  // Every item gets a physical personality from its tags (and its art / fx for
+  // the elements), so a new item behaves right with no extra data.  The
+  // physics half lives on the body (gravity scale, air drag, floor slickness,
+  // a bouncier restitution); the rest are trait flags the game and the
+  // renderer turn into sparks, cracks, sloshing, fuses and so on.
+  //   g        gravity scale (magic floats down, light things drift)
+  //   drag     extra linear damping per second (air resistance)
+  //   slick    multiplier on floor / item friction (ice slides), never on the claw's grip
+  //   bounce   minimum restitution, bounceV the approach speed restitution starts at
+  const MATERIALS = {
+    stuff: { id: 'stuff', label: 'Stuff' },
+    metal: { id: 'metal', label: 'Metal', snd: 'clank' },
+    glass: { id: 'glass', label: 'Glass', snd: 'tinkle' },
+    heavy: { id: 'heavy', label: 'Heavy', snd: 'thud' },
+    rubber: { id: 'rubber', label: 'Bouncy', snd: 'boing', bounce: 0.62, bounceV: 35 },
+    potion: { id: 'potion', label: 'Potion', snd: 'slosh' },
+    food: { id: 'food', label: 'Food', snd: 'squish' },
+    magic: { id: 'magic', label: 'Magic', snd: 'chime', g: 0.62, drag: 0.6 },
+    bomb: { id: 'bomb', label: 'Bomb', snd: 'thud' },
+    frost: { id: 'frost', label: 'Frost', snd: 'tinkle', slick: 0.3 },
+    light: { id: 'light', label: 'Light', snd: 'squish', g: 0.92, drag: 0.8 },
+  };
+  // Which personality leads (the sound, the label) when an item has several.
+  const MAT_ORDER = ['bomb', 'frost', 'potion', 'glass', 'rubber', 'food', 'magic', 'heavy', 'metal', 'light'];
+  const matCache = new Map();
+  /* PHYS.materialOf(def) -> {id, label, snd, g, drag, slick, bounce, bounceV,
+     traits: {metal, glass, heavy, rubber, liquid, food, magic, fuse, frost,
+     light, small, fire, poison}}.  Pure; cached per def id. */
+  function materialOf(def) {
+    def = def || {};
+    const key = def.id ? def.id + '|' + (def.art || '') : null;
+    if (key && matCache.has(key)) return matCache.get(key);
+    const tags = Array.isArray(def.tags) ? def.tags : [];
+    const has = (t) => tags.indexOf(t) >= 0;
+    const fxs = Array.isArray(def.fx) ? def.fx : [];
+    const st = (s) => fxs.some(f => f && ((f.k === 'status' && f.s === s) || (s === 'poison' && f.k === 'poisonAll')));
+    const art = def.art || '';
+    const circle = !!(def.shape && def.shape.kind === 'circle');
+    const rest = def.restitution == null ? 0.1 : def.restitution;
+    const T = {
+      metal: has('metal'), glass: has('glass'), heavy: has('heavy'), food: has('food'), magic: has('magic'),
+      light: has('light'), small: has('small'), liquid: has('potion'), fuse: art === 'bomb',
+      frost: art === 'snowball' || art === 'iceblock' || (art === 'iceshard' && !has('magic')) || st('chill') || has('frost'),
+      fire: art === 'torch' || art === 'slag' || st('burn') || has('fire'),
+      poison: st('poison') || has('poison'),
+      rubber: false,
+    };
+    T.rubber = circle && !T.metal && !T.glass && !T.fuse && !T.frost && (rest >= 0.3 || (T.light && rest >= 0.2));
+    let id = 'stuff';
+    const lead = { bomb: T.fuse, frost: T.frost, potion: T.liquid, glass: T.glass, rubber: T.rubber, food: T.food, magic: T.magic, heavy: T.heavy, metal: T.metal, light: T.light };
+    for (const k of MAT_ORDER) if (lead[k]) { id = k; break; }
+    const base = MATERIALS[id];
+    const m = {
+      id, label: base.label, snd: base.snd || null, traits: T,
+      g: T.magic ? (T.heavy ? 0.8 : 0.62) : T.light ? 0.92 : 1,
+      drag: T.magic ? 0.6 : T.light ? 0.8 : 0,
+      slick: T.frost ? 0.3 : 1,
+      bounce: T.rubber ? Math.max(rest, 0.62) : rest,
+      bounceV: T.rubber ? 35 : PH.bounceV,
+    };
+    if (key) matCache.set(key, m);
+    return m;
+  }
+  /* Put a material's physics on a body (gravity scale, drag, slickness, bounce). */
+  function applyMaterial(b, m) {
+    if (!b || !m) return b;
+    b.gs = m.g == null ? 1 : m.g;
+    b.drag = m.drag || 0;
+    b.slick = m.slick == null ? 1 : m.slick;
+    if (m.bounce != null) b.restitution = Math.max(b.restitution, m.bounce);
+    b.bounceV = m.bounceV || PH.bounceV;
+    b.mat = m;
+    return b;
+  }
+  /* A shape descriptor scaled by k (a melting ice item shrinks). */
+  function scaleShape(sh, k) {
+    if (!sh) return sh;
+    switch (sh.kind) {
+      case 'circle': case 'ball': return Object.assign({}, sh, { r: sh.r * k });
+      case 'box': return { kind: 'box', w: sh.w * k, h: sh.h * k };
+      case 'cap': return Object.assign({}, sh, { len: sh.len * k, r: sh.r * k });
+      case 'blob': return Object.assign({}, sh, { r: sh.r * k });
+      case 'poly': return { kind: 'poly', verts: (sh.verts || []).map(v => ({ x: v.x * k, y: v.y * k })) };
+      default: return sh;
+    }
+  }
+
   // ---- shapes ------------------------------------------------------------
   /* Box shape descriptor (maps to a capsule). */
   function box(w, h) { return { kind: 'box', w, h }; }
@@ -143,9 +231,12 @@ const PHYS = (() => {
       m, I, invM: dyn ? 1 / m : 0, invI: dyn ? 1 / I : 0,
       parts, br, px: new Float64Array(parts.length), py: new Float64Array(parts.length),
       sl: !dyn, slT: 0, held: 0, world: null,
+      // material physics (applyMaterial): gravity scale, air drag, floor slickness, bounce threshold
+      gs: o.gs == null ? 1 : o.gs, drag: o.drag || 0, slick: o.slick == null ? 1 : o.slick, bounceV: o.bounceV || PH.bounceV, mat: null,
       box: { x0: 0, y0: 0, x1: 0, y1: 0 },
       aabb() { return this.box; },
     };
+    if (o.mat) applyMaterial(b, o.mat);
     sync(b);
     return b;
   }
@@ -203,7 +294,7 @@ const PHYS = (() => {
       const pen = rr - d;
       let mu;
       if (claw) mu = K.mu * clamp(Math.sqrt(b.friction / 0.45), 0.35, 1.15);
-      else mu = Math.sqrt(PH.wallMu * b.friction);
+      else mu = Math.sqrt(PH.wallMu * b.friction) * b.slick;
       addContact(W, b, null, px + nx * r, py + ny * r, nx, ny, pen, mu, s);
       if (claw) {
         wake(b);
@@ -232,7 +323,7 @@ const PHYS = (() => {
         if (a.sl && b.sl) continue;
         const dx = b.x - a.x, dy = b.y - a.y, RR = a.br + b.br;
         if (dx * dx + dy * dy > RR * RR) continue;
-        const mu = Math.sqrt(a.friction * b.friction);
+        const mu = Math.sqrt(a.friction * b.friction) * Math.min(a.slick, b.slick);
         for (let m = 0; m < a.parts.length; m++) {
           const ra = a.parts[m].r;
           for (let n = 0; n < b.parts.length; n++) {
@@ -286,7 +377,9 @@ const PHYS = (() => {
       c.bias = Math.min(cap, PH.beta / h * Math.max(0, c.pen - PH.slop));
       const v = relVel(c, rv), vn = v.x * nx + v.y * ny;
       const e = Math.max(a.restitution, b ? b.restitution : 0);
-      if (vn < -PH.bounceV) c.bias = Math.max(c.bias, -e * vn);
+      // a bouncy body (rubber) rebounds from gentler hits too
+      const bv = b ? Math.min(a.bounceV, b.bounceV) : a.bounceV;
+      if (vn < -bv) c.bias = Math.max(c.bias, -e * vn);
       c.jn = 0; c.jt = 0;
     }
   }
@@ -322,8 +415,9 @@ const PHYS = (() => {
     const g = W.gravity, B = W.bodies, cb = W.clampBox;
     for (const b of B) {
       if (b.sl || b.type !== 'dynamic') continue;
-      b.vx += g.x * h; b.vy += g.y * h;
-      const ld = 1 - PH.linDamp * h, ad = 1 - PH.angDamp * h;
+      // material gravity scale (magic floats down) and air drag (light things drift)
+      b.vx += g.x * h * b.gs; b.vy += g.y * h * b.gs;
+      const ld = 1 - (PH.linDamp + b.drag) * h, ad = 1 - PH.angDamp * h;
       b.vx *= ld; b.vy *= ld; b.av *= ad;
     }
     collide(W);
@@ -414,6 +508,48 @@ const PHYS = (() => {
       for (const b of W.bodies) sync(b);
     }
     return W;
+  }
+
+  // ---- impulses ----------------------------------------------------------
+  /* A bomb going off in the bin: every dynamic body within r of (x, y) is
+     woken and thrown outward (and a little up), harder the closer it is.
+     Deterministic; the hard clamps keep everything inside the glass.
+     Returns the bodies it pushed. */
+  function blast(W, x, y, r, power, except) {
+    const out = [];
+    if (!W || !(r > 0)) return out;
+    power = power == null ? 900 : power;
+    for (const b of W.bodies) {
+      if (b.type !== 'dynamic' || b === except) continue;
+      const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy);
+      if (d > r + b.br) continue;
+      const k = clamp(1 - d / (r + b.br), 0.15, 1);
+      const nx = d > 1 ? dx / d : 0, ny = d > 1 ? dy / d : -1;
+      wake(b);
+      b.passClaw = 0;
+      b.vx += nx * power * k;
+      b.vy += ny * power * k - power * 0.45 * k;
+      b.av += (nx >= 0 ? 1 : -1) * 9 * k;
+      out.push(b);
+    }
+    return out;
+  }
+  /* A heavy thud shakes the floor: bodies within r hop up by up to v px/s
+     (less the farther they are). Returns the bodies that hopped. */
+  function hop(W, x, y, r, v, except) {
+    const out = [];
+    if (!W || !(r > 0)) return out;
+    for (const b of W.bodies) {
+      if (b.type !== 'dynamic' || b === except || b.held > 0) continue;
+      const d = Math.hypot(b.x - x, b.y - y);
+      if (d > r) continue;
+      const k = clamp(1 - d / r, 0.3, 1);
+      wake(b);
+      b.vy = Math.min(b.vy, 0) - v * k;
+      b.av += (b.x < x ? -1 : 1) * 2.5 * k;
+      out.push(b);
+    }
+    return out;
   }
 
   // ---- cabinet -----------------------------------------------------------
@@ -738,5 +874,6 @@ const PHYS = (() => {
     return R;
   }
 
-  return { box, body, world, cabinet, clawRig, setPose, sync, partSpec, RIG, PH, SHAPE, PRONG, PHI_OPEN, PHI_CLOSED, H };
+  return { box, body, world, cabinet, clawRig, setPose, sync, partSpec, RIG, PH, SHAPE, PRONG, PHI_OPEN, PHI_CLOSED, H,
+    MATERIALS, materialOf, applyMaterial, scaleShape, blast, hop };
 })();

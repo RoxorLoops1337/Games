@@ -1380,4 +1380,522 @@ h.test('juice: proc, combo, keywords, unknown events, throws, crits, the outro, 
   h.ok(/id="combo"/.test(src) && /id="wipe"/.test(src), 'index.html has the combo banner and the transition layer');
 });
 
+// ---------------------------------------------------------------- loot
+// Taps a capsule open through GAME.choose (the screen's Crack entry), then
+// collects the prize. Returns the capsule it opened.
+function crackOpen(Gt) {
+  const cap = Gt.loot.cap && Gt.loot.cap.cap;
+  for (let i = 0; i < 12 && Gt.loot.cap && Gt.loot.cap.phase !== 'done'; i++) {
+    const k = Gt.S.ui.buttons.findIndex(b => b.label === 'Crack');
+    if (k >= 0) Gt.choose(k); else Gt.loot.capsuleTap();
+    stepFor(Gt, 0.1);
+  }
+  stepFor(Gt, 0.8);
+  return cap;
+}
+
+h.test('loot: an elite win pays a tallied payout, tickets and a capsule; the cards keep their indices', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 61);
+  h.eq(Gt.run.tickets, 0, 'a new run starts with no tickets');
+  h.ok(Array.isArray(Gt.run.caps) && Gt.run.caps.length === 0 && Gt.run.pity === 0, 'no banked capsules, no pity yet');
+  const gold0 = Gt.run.gold;
+  Gt.startFight(T.DATA.ENCOUNTERS[1].elite[0], 'elite');
+  stepFor(Gt, 0.3);
+  Gt.endFight('win');
+  h.eq(Gt.screen, 'reward', 'reward screen');
+  const rw = Gt.S.sd.reward;
+  h.ok(Array.isArray(rw.pay) && rw.pay[0].id === 'base' && rw.pay[0].label === 'Elite down', 'the payout opens with the elite line');
+  h.ok(rw.pay.some(l => l.id === 'flawless') && rw.pay.some(l => l.id === 'speedy'), 'an untouched one-turn win pays flawless and speedy lines');
+  h.eq(rw.gold, rw.pay.filter(l => l.id !== 'double').reduce((a, l) => a + l.gold, 0) * (rw.double ? 2 : 1), 'reward gold is the payout total');
+  h.eq(Gt.run.gold, gold0 + rw.gold, 'the gold is paid once');
+  h.eq(Gt.run.tickets, rw.tix, 'the tickets are paid');
+  h.ok(rw.tix >= T.DATA.LOOT.TICKETS.elite, 'an elite prints at least its base tickets');
+  h.eq(rw.caps.length, 1, 'an elite drops a capsule');
+  h.eq(rw.caps[0].src, 'elite', 'an elite capsule');
+  h.eq(Gt.S.ui.buttons.length, 4, 'three cards and Skip, the capsule slot is a tap target of its own');
+  h.ok(Gt.loot.pay && !Gt.loot.pay.done, 'the tally is running');
+  stepFor(Gt, 6);
+  h.ok(Gt.loot.pay.done && rw.payShown, 'the tally runs to the end on its own');
+  // crack the capsule right on the reward screen
+  const tier0 = Gt.run.relics.length, bin0 = Gt.run.bin.length;
+  h.ok(Gt.loot.openRewardCap(rw, 0), 'the capsule opens from its slot');
+  h.eq(Gt.screen, 'capsule', 'the capsule screen');
+  Gt.draw();
+  h.eq(Gt.loot.cap.phase, 'drop', 'it drops in first');
+  const cap = crackOpen(Gt);
+  h.eq(Gt.loot.cap.phase, 'done', 'cracked open');
+  h.ok(cap.opened && rw.caps[0].opened, 'marked opened on the reward too');
+  h.ok(Gt.S.ui.buttons.some(b => /collect/i.test(b.label)), 'Collect offered');
+  h.ok(Gt.run.relics.length > tier0 || Gt.run.bin.length > bin0 || Gt.run.gold > gold0 + rw.gold || Gt.run.tickets > rw.tix || Gt.run.maxHp > 80 || Gt.run.brushes.length || Gt.run.ink > 10 || Object.keys(Gt.run.claw.ups || {}).length, 'the prize was paid');
+  Gt.draw();
+  Gt.choose(Gt.S.ui.buttons.findIndex(b => /collect/i.test(b.label)));
+  h.eq(Gt.screen, 'reward', 'back on the reward screen');
+  h.ok(Gt.loot.pay.done, 'no second tally');
+  h.eq(Gt.run.tickets, rw.tix + (cap.prize.k === 'tickets' ? cap.prize.n : 0), 'the tickets were not paid twice');
+  Gt.choose(3);
+  h.eq(Gt.screen, 'map', 'skip -> map');
+  h.eq(Gt.run.caps.length, 0, 'nothing banked (it was opened)');
+  h.eq(Gt.run.loot.capsOpened, 1, 'highlights count the capsule');
+});
+
+h.test('loot: an unopened capsule banks on the map and opens from its chip', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 62);
+  Gt.startFight(T.DATA.ENCOUNTERS[1].elite[0], 'elite');
+  stepFor(Gt, 0.2);
+  Gt.endFight('win');
+  Gt.choose(3);
+  h.eq(Gt.screen, 'map', 'skipped to the map');
+  h.eq(Gt.run.caps.length, 1, 'the capsule waits in the bank');
+  const i = Gt.S.ui.buttons.findIndex(b => b.label === 'Capsule');
+  h.ok(i >= 0, 'the map head shows a capsule chip');
+  // save and reload with a banked capsule
+  Gt.save();
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  T2.GAME.choose(T2.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.eq(T2.GAME.run.caps.length, 1, 'the bank survives a reload');
+  const G2 = T2.GAME;
+  G2.choose(G2.S.ui.buttons.findIndex(b => b.label === 'Capsule'));
+  h.eq(G2.screen, 'capsule', 'the chip opens the capsule');
+  G2.loot.skipCapsule();
+  h.eq(G2.loot.cap.phase, 'burst', 'Skip bursts it at once');
+  h.eq(G2.run.caps.length, 0, 'the bank is emptied when it bursts');
+  // a reload during the reveal lands on the prize, not a second one
+  const snap = JSON.stringify(G2.run.relics) + G2.run.gold + G2.run.bin.length + G2.run.tickets;
+  const T3 = boot({ store: Object.assign({}, T2._store) });
+  T3.GAME.choose(T3.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.eq(T3.GAME.screen, 'capsule', 'reload lands on the capsule screen');
+  h.eq(T3.GAME.loot.cap.phase, 'done', 'already opened: the prize card');
+  h.eq(JSON.stringify(T3.GAME.run.relics) + T3.GAME.run.gold + T3.GAME.run.bin.length + T3.GAME.run.tickets, snap, 'the prize was not paid again');
+  T3.GAME.loot.collectCapsule();
+  h.eq(T3.GAME.screen, 'map', 'collect returns to the map');
+  h.eq(T3.GAME.run.caps.length, 0, 'the bank stays empty');
+});
+
+h.test('loot: treasure is a capsule; tiers upgrade mid-open; the pity timer guarantees a rare', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 63);
+  const M = Gt.run.map;
+  const t = Object.values(M.tiles).find(x => x.type === 'treasure');
+  const relics = Gt.run.relics.length, gold = Gt.run.gold;
+  Gt.enterTile(t);
+  h.eq(Gt.screen, 'capsule', 'a treasure tile opens a capsule');
+  h.eq(Gt.loot.cap.cap.src, 'treasure', 'a treasure capsule');
+  h.eq(Gt.loot.cap.cap.prize.k, 'relic', 'holding a relic');
+  h.eq(Gt.run.gold, gold + (t.content.gold || 0), 'the treasure gold is paid on entry');
+  crackOpen(Gt);
+  h.eq(Gt.run.relics.length, relics + 1, 'the relic is granted at the burst');
+  Gt.loot.collectCapsule();
+  h.eq(Gt.screen, 'map', 'back to the map');
+  // a capsule with an upgrade turns rarer on the second tap
+  const cap = { src: 'normal', tier0: 'c', ups: ['u', 'r'], tier: 'r', pity: false, prize: { k: 'gold', n: 5 }, opened: false };
+  const goldB = Gt.run.gold;
+  Gt.loot.showCapsule({ cap, then: { k: 'map' } });
+  const C = Gt.loot.cap;
+  h.eq(C.burstTap, 3, 'two ups: four taps to open');
+  Gt.loot.capsuleTap();   // lands the drop
+  h.eq(C.phase, 'idle', 'a tap skips the drop');
+  Gt.loot.capsuleTap();
+  h.eq(C.shown, 'c', 'the first crack keeps the colour');
+  h.ok(C.crack > 0, 'cracks spread');
+  Gt.loot.capsuleTap();
+  h.eq(C.shown, 'u', 'the second tap upgrades it');
+  Gt.loot.capsuleTap();
+  h.eq(C.shown, 'r', 'and again');
+  h.ok(C.flash > 0, 'with a flash');
+  Gt.draw();
+  Gt.loot.capsuleTap();
+  h.eq(C.phase, 'burst', 'the last tap bursts it');
+  Gt.draw();
+  h.eq(Gt.run.gold, goldB + 5, 'the gold prize is paid');
+  Gt.loot.capsuleTap();
+  h.eq(C.phase, 'done', 'a tap during the burst shows the prize');
+  Gt.loot.collectCapsule();
+  // pity
+  Gt.run.pity = T.DATA.LOOT.PITY;
+  const p = Gt.loot.makeCapsule('normal');
+  h.ok(['r', 'l'].includes(p.tier), 'at the pity count a capsule ends rare or better (' + p.tier + ')');
+  h.eq(Gt.run.pity, 0, 'and the pity timer resets');
+  const q = Gt.loot.makeCapsule('counter', { tier: 'c' });
+  if (q.tier === 'c' || q.tier === 'u') h.eq(Gt.run.pity, 1, 'a capsule below rare counts toward pity');
+});
+
+h.test('loot: jackpots stream tickets out of the cabinet into the HUD counter', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 64);
+  Gt.run.tickets = 5;
+  Gt.startFight(['rat'], 'normal');
+  stepFor(Gt, 0.1);
+  Gt.run.jackpots += 1;   // as deliver() counts a triple
+  stepFor(Gt, 0.1);
+  h.ok(Gt.loot.tix && Gt.loot.tix.list.some(k => k.on), 'tickets fly');
+  Gt.draw();
+  stepFor(Gt, 2);
+  h.eq(Gt.loot.tix.arrived, T.DATA.LOOT.TICKETS.jackpot, 'every ticket of the jackpot lands');
+  h.eq(Gt.loot.tixShown(), 5 + T.DATA.LOOT.TICKETS.jackpot, 'the counter shows them');
+  h.eq(Gt.run.tickets, 5, 'but they are paid by the reward, not the stream');
+  Gt.endFight('win', true);
+  h.ok(Gt.fs.outro, 'the victory outro plays');
+  stepFor(Gt, 3);
+  h.eq(Gt.screen, 'reward', 'then the reward');
+  const rw = Gt.S.sd.reward;
+  h.ok(rw.pay.some(l => l.id === 'jackpot' && l.label === 'Jackpot x1'), 'the payout lists the jackpot');
+  h.eq(Gt.run.tickets, 5 + rw.tix, 'the tickets are paid once, in full');
+  h.ok(rw.caps.some(c => c.src === 'bonus'), 'a jackpot earns a bonus capsule');
+  h.ok(Gt.loot.tix === null, 'the stream is cleared off the fight');
+  Gt.loot.finishPay();
+  h.ok(Gt.loot.pay.done, 'a tap finishes the tally');
+});
+
+h.test('loot: the prize counter sells for tickets; a capsule opens and returns to it', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 65);
+  const shop = Gt.rollShop({ q: 2, r: 2 });
+  Gt.showShop(shop);
+  const pc = Gt.S.ui.buttons.findIndex(b => b.label === 'Prize counter');
+  h.ok(pc >= 0 && pc === Gt.S.ui.buttons.length - 1, 'the shop offers the prize counter, registered last');
+  Gt.choose(pc);
+  h.eq(Gt.screen, 'counter', 'the counter screen');
+  h.eq(shop.counter.length, 6, 'six prizes on the shelf');
+  const capIdx = shop.counter.findIndex(s => s.k === 'cap');
+  h.eq(Gt.loot.counterBuy(shop, capIdx), false, 'no tickets, no prize');
+  h.ok(!shop.counter[capIdx].sold, 'still on the shelf');
+  Gt.run.tickets = 500;
+  Gt.loot.showCounter(shop);
+  const heart = shop.counter.findIndex(s => s.k === 'maxhp');
+  const hp0 = Gt.run.maxHp, tix0 = Gt.run.tickets;
+  Gt.choose(heart);
+  h.ok(shop.counter[heart].sold, 'the heart is won');
+  h.eq(Gt.run.maxHp, hp0 + shop.counter[heart].n, 'max hp rises');
+  h.eq(Gt.run.tickets, tix0 - shop.counter[heart].price, 'tickets spent');
+  h.ok(Gt.S.ui.buttons[heart].disabled, 'a won slot is disabled');
+  Gt.save();
+  const saved = JSON.parse(T._store.clawspire_run);
+  h.eq(saved.screen, 'counter', 'the counter saves');
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  T2.GAME.choose(T2.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.eq(T2.GAME.screen, 'counter', 'and reloads');
+  h.ok(T2.GAME.S.sd.counter.counter[heart].sold, 'with the won slot still won');
+  const tix1 = Gt.run.tickets;
+  Gt.choose(capIdx);
+  h.eq(Gt.screen, 'capsule', 'a capsule prize opens on the spot');
+  h.eq(Gt.loot.cap.cap.src, 'counter', 'a counter capsule');
+  h.eq(Gt.loot.cap.cap.tier0, shop.counter[capIdx].tier, 'of the tier on the tag');
+  h.eq(Gt.run.tickets, tix1 - shop.counter[capIdx].price, 'paid in tickets');
+  crackOpen(Gt);
+  Gt.loot.collectCapsule();
+  h.eq(Gt.screen, 'counter', 'collect returns to the counter');
+  Gt.choose(Gt.S.ui.buttons.findIndex(b => /back to the shop/i.test(b.label)));
+  h.eq(Gt.screen, 'shop', 'back to the shop');
+});
+
+h.test('loot: old saves without loot fields load with defaults; highlights on the run end', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 66);
+  Gt.save();
+  const o = JSON.parse(T._store.clawspire_run);
+  delete o.run.tickets; delete o.run.pity; delete o.run.caps; delete o.run.loot;
+  const T2 = boot({ store: { clawspire_run: JSON.stringify(o), clawspire_meta: T._store.clawspire_meta } });
+  T2.GAME.choose(T2.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  const r = T2.GAME.run;
+  h.eq(T2.GAME.screen, 'map', 'an old save continues');
+  h.ok(r.tickets === 0 && r.pity === 0 && Array.isArray(r.caps) && r.caps.length === 0 && r.loot && r.loot.capsOpened === 0, 'loot fields default');
+  h.eq(T2._nodes.tixTxt.textContent, '0', 'the HUD shows 0 tickets');
+  // an old reward (no payout lines) still shows and pays as before
+  const G2 = T2.GAME;
+  G2.showReward({ items: ['rusty_sword', 'rusty_sword', 'rusty_sword'].filter(id => T2.DATA.ITEMS[id]).concat(Object.keys(T2.DATA.ITEMS).slice(0, 3)).slice(0, 3), gold: 12, ink: 0, brush: null, tier: 'normal', then: null });
+  h.eq(G2.S.ui.buttons.length, 4, 'an old reward: three cards and Skip');
+  h.ok(!G2.loot.pay, 'no tally without payout lines');
+  G2.choose(3);
+  // meta keeps the loot counters
+  G2.meta.loot = { caps: 20, payouts: 9 };
+  G2.save(); try { T2._store.clawspire_meta = JSON.stringify(G2.meta); } catch (e) { /* */ }
+  const T3 = boot({ store: Object.assign({}, T2._store) });
+  h.eq(T3.GAME.meta.loot.caps, 20, 'meta loot counters survive a reload');
+  // game over shows the highlights
+  G2.run.loot.bigHit = 42; G2.run.loot.bestCombo = { name: 'Blade Storm', tier: 3 };
+  G2.showGameOver();
+  const texts = [];
+  const walk = (el) => { if (!el) return; if (el.textContent) texts.push(el.textContent); (el.children || []).forEach(walk); };
+  walk(T2._nodes.gameoverBody);
+  h.ok(texts.includes('Highlights') && texts.includes('42') && texts.includes('Blade Storm'), 'the highlights list the biggest hit and the best combo');
+  const src = fs.readFileSync(path.join(DIR, 'js', 'game.js'), 'utf8') + fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  h.ok(/id="scr-capsule"/.test(src) && /id="scr-counter"/.test(src) && /id="tixTxt"/.test(src), 'index.html has the capsule and counter screens and the ticket stat');
+});
+
+// ---------------------------------------------------------------- cabinet materials and toys
+{
+  const CM = boot();
+  const GM = CM.GAME, TOYS = GM.toys, MAT = TOYS && TOYS.MAT;
+  // A knight fight against one rat with a hand-picked bin, settled and waiting for the player.
+  const mkFight = (ids, seed) => {
+    GM.newRun('knight', seed);
+    GM.run.bin = ids.map((id, i) => ({ uid: 'm' + seed + '_' + i, id, plus: false }));
+    GM.startFight(['rat'], 'normal', { seed });
+    GM.fs.golden = null;
+    for (const i of GM.fight.bin) i.plus = false;
+    stepFor(GM, 2.5);
+    settle(GM, 10);
+    return GM.fight;
+  };
+  const instOf = (F, id) => F.bin.find(i => i.id === id);
+  const bodyOfId = (F, id) => TOYS.bodyOf(instOf(F, id));
+  // Throw a body down hard from near the lid (a slip from the top of the cabinet).
+  const slam = (b, armed) => {
+    b.data.age = armed ? 5 : 0; b.data.cd = 0; b.data.crackCd = 0;
+    b.x = 150; b.y = -30; b.vx = 0; b.vy = 900; b.sl = false; b.data.pvy = 900; b.data.pvx = 0;
+    for (let i = 0; i < 90; i++) GM.update(DT);
+  };
+  const BIN = ['empty_bottle', 'cherry_bomb', 'snowball', 'iceblock', 'stolen_gem', 'rusty_sword', 'family_anvil', 'crisp_apple', 'bouncy_ball', 'toxic_vial', 'rock', 'pot_lid', 'icicle'];
+
+  h.test('materials: every bin body carries its material physics', () => {
+    h.ok(!!TOYS, 'GAME.toys is exposed');
+    const F = mkFight(BIN, 11);
+    const items = GM.fs.items;
+    h.ok(items.length >= BIN.length - 1, 'the bin spawned');
+    h.ok(items.every(b => b.data.mat && b.data.mat.id === CM.PHYS.materialOf(b.data.def).id), 'each body has its derived material');
+    const gem = bodyOfId(F, 'stolen_gem'), snow = bodyOfId(F, 'snowball'), ball = bodyOfId(F, 'bouncy_ball');
+    h.ok(gem && gem.gs < 1, 'magic floats (gravity scale ' + (gem && gem.gs) + ')');
+    h.ok(snow && snow.slick < 1, 'frost slides');
+    h.ok(ball && ball.bounceV < CM.PHYS.PH.bounceV, 'rubber bounces');
+    // deterministic: the same fight lays the pile out the same way
+    const pose = () => GM.fs.items.map(b => b.x.toFixed(2) + ',' + b.y.toFixed(2)).join(';');
+    const a = pose();
+    mkFight(BIN, 11);
+    h.eq(pose(), a, 'the same seed settles the same pile with materials on');
+  });
+
+  h.test('glass: a fresh spawn never cracks, a hard landing does, a second one shatters into shards', () => {
+    const F = mkFight(BIN, 12);
+    const inst = instOf(F, 'empty_bottle');
+    let b = TOYS.bodyOf(inst);
+    slam(b, false);
+    h.eq(TOYS.mstOf(inst).crack, 0, 'a landing within MAT.armT of a spawn does not crack it');
+    b = TOYS.bodyOf(inst);
+    slam(b, true);
+    h.eq(TOYS.mstOf(inst).crack, 1, 'a hard landing cracks it');
+    h.ok(F.bin.indexOf(inst) >= 0 && TOYS.bodyOf(inst), 'a cracked item stays in the bin');
+    TOYS.crack(TOYS.bodyOf(inst));
+    h.ok(F.bin.indexOf(inst) < 0 && F.exhausted.indexOf(inst) >= 0, 'the second crack shatters it for the fight');
+    h.ok(!TOYS.bodyOf(inst), 'its body is gone');
+    h.eq(GM.fs.debris.length, MAT.shardN, 'it left glass shards in the bin');
+    h.ok(GM.fs.debris.every(s => s.world === GM.world && !s.data.inst), 'shards are physical fillers, not prizes');
+    const s = GM.fs.debris[0];
+    s.x = 448; s.y = 320; s.vx = 0; s.vy = 200; s.sl = false;
+    stepFor(GM, 1);
+    h.ok(GM.fs.debris.indexOf(s) < 0, 'the chute sweeps a shard out');
+    settle(GM, 10);
+    h.ok(GM.state().screen === 'fight', 'the fight goes on');
+  });
+
+  h.test('glass: a cracked item plays for +50%, then breaks', () => {
+    const hit = (cracked) => {
+      const F = mkFight(BIN, 13);
+      const inst = instOf(F, 'icicle');   // glass that does not break on its own
+      if (cracked) TOYS.mstOf(inst).crack = 1;
+      const e = F.enemies[0], hp0 = e.hp;
+      GM.playDelivered([TOYS.bodyOf(inst)]);
+      settle(GM, 10);
+      return { dmg: hp0 - e.hp, gone: F.exhausted.indexOf(inst) >= 0, F };
+    };
+    const plain = hit(false), cracked = hit(true);
+    h.ok(plain.dmg > 0, 'the icicle hits (' + plain.dmg + ')');
+    h.ok(cracked.dmg >= plain.dmg + Math.ceil(plain.dmg * 0.5) - 1, `cracked hits for +50% (${cracked.dmg} vs ${plain.dmg})`);
+    h.ok(!plain.gone && cracked.gone, 'only the cracked one breaks for the fight');
+  });
+
+  h.test('bombs: a rough landing lights the fuse, it burns down over turns and goes off in the bin', () => {
+    const F = mkFight(BIN, 14);
+    const inst = instOf(F, 'cherry_bomb');
+    slam(TOYS.bodyOf(inst), true);
+    h.eq(TOYS.mstOf(inst).lit, MAT.fuseTurns, 'the fuse is lit for MAT.fuseTurns turns');
+    TOYS.fuseTick();
+    h.eq(TOYS.mstOf(inst).lit, MAT.fuseTurns - 1, 'a turn start burns it down');
+    h.ok(F.bin.indexOf(inst) >= 0, 'still in the bin with a turn to spare');
+    const e = F.enemies[0], hp0 = e.hp, blk = e.block;
+    const b = TOYS.bodyOf(inst), near = GM.fs.items.filter(o => o !== b && Math.hypot(o.x - b.x, o.y - b.y) < 100);
+    for (let k = 1; k < MAT.fuseTurns; k++) TOYS.fuseTick();
+    h.ok(!TOYS.bodyOf(inst) && F.used.indexOf(inst) >= 0 && F.bin.indexOf(inst) < 0, 'the bomb went off: out of the bin, into the used pile');
+    h.eq(hp0 + blk - e.hp - e.block, MAT.blastDmg, 'the blast hits the enemy for MAT.blastDmg');
+    h.ok(!near.length || near.some(o => Math.hypot(o.vx, o.vy) > 200), 'nearby items were thrown about');
+    settle(GM, 10);
+    h.ok(GM.fs.items.every(o => o.x > 0 && o.x < 480 && o.y < 440), 'everything stayed in the cabinet');
+    // an unarmed (fresh) landing and a monster's junk bomb never light
+    const F2 = mkFight(BIN.concat(CM.DATA.ITEMS.fusebomb ? ['fusebomb'] : []), 15);
+    const i2 = instOf(F2, 'cherry_bomb');
+    slam(TOYS.bodyOf(i2), false);
+    h.eq(TOYS.mstOf(i2).lit, 0, 'a spawn landing does not light a fuse');
+    const junk = instOf(F2, 'fusebomb');
+    if (junk) { slam(TOYS.bodyOf(junk), true); h.eq(TOYS.mstOf(junk).lit, 0, "a monster's lit junk bomb keeps its own fuse"); }
+    // a delivered bomb is out: no fuse left
+    const F3 = mkFight(BIN, 16);
+    const i3 = instOf(F3, 'cherry_bomb');
+    TOYS.lightFuse(TOYS.bodyOf(i3));
+    GM.playDelivered([TOYS.bodyOf(i3)]);
+    h.eq(TOYS.mstOf(i3).lit, 0, 'grabbing the bomb puts its fuse out');
+    settle(GM, 10);
+  });
+
+  h.test('frost: ice shrinks each turn, a junk ice block melts away', () => {
+    const F = mkFight(BIN, 17);
+    const snow = instOf(F, 'snowball'), ice = instOf(F, 'iceblock');
+    const r0 = TOYS.bodyOf(snow).br;
+    TOYS.meltTick();
+    h.ok(TOYS.mstOf(snow).melt < 1 && TOYS.bodyOf(snow).br < r0, 'the snowball melted a little (smaller body)');
+    for (let i = 0; i < 12; i++) TOYS.meltTick();
+    h.ok(TOYS.mstOf(snow).melt >= MAT.meltMin - 1e-9 && F.bin.indexOf(snow) >= 0, 'a real item never melts below MAT.meltMin');
+    h.ok(F.bin.indexOf(ice) < 0 && F.exhausted.indexOf(ice) >= 0, 'the junk ice block melted away');
+    settle(GM, 10);
+  });
+
+  h.test('golden prize: an item is upgraded for the fight only, grabbing it ends the shimmer', () => {
+    let found = null, n = 0;
+    for (let seed = 100; seed < 140; seed++) {
+      GM.newRun('knight', seed);
+      GM.run.bin = BIN.map((id, i) => ({ uid: 'g' + seed + '_' + i, id, plus: false }));
+      GM.startFight(['rat'], 'normal', { seed });
+      if (GM.fs.golden) { n++; if (!found) found = { seed, uid: GM.fs.golden.uid }; }
+    }
+    h.ok(n >= 6 && n <= 28, `golden prizes show up some fights (${n} of 40)`);
+    GM.newRun('knight', found.seed);
+    GM.run.bin = BIN.map((id, i) => ({ uid: 'g' + found.seed + '_' + i, id, plus: false }));
+    const F = GM.startFight(['rat'], 'normal', { seed: found.seed });
+    const inst = F.bin.find(i => i.uid === GM.fs.golden.uid);
+    h.ok(inst && inst.plus, 'the golden item is upgraded in the fight');
+    h.ok(GM.run.bin.every(i => !i.plus), "the run's item is untouched");
+    stepFor(GM, 2.5); settle(GM, 10);
+    GM.playDelivered([TOYS.bodyOf(inst)]);
+    h.eq(GM.fs.golden, null, 'grabbing it ends the golden prize');
+    settle(GM, 10);
+  });
+
+  h.test('free prize, lucky claw, near miss and the claw face', () => {
+    const F = mkFight(BIN, 18);
+    const free0 = GM.fs.freeN;
+    GM.playDelivered([bodyOfId(F, 'rock')]);
+    h.eq(GM.fs.freeN, free0 + 1, 'a prize the claw never touched is a FREE PRIZE');
+    settle(GM, 10);
+    // two good grabs in a row: the Lucky Claw grips harder for one grab
+    const base = GM.rig.cfg.grip;
+    GM.fs.lucky = 0; GM.fs.delivered = 1;
+    TOYS.luckAfterGrab();
+    h.ok(!GM.fs.luckyOn, 'one good grab is not enough');
+    TOYS.luckAfterGrab();
+    h.ok(GM.fs.luckyOn && Math.abs(GM.rig.cfg.grip - (base + MAT.luckyGrip)) < 1e-9, 'the second makes the claw lucky (+grip)');
+    TOYS.luckAfterGrab();
+    h.ok(!GM.fs.luckyOn && Math.abs(GM.rig.cfg.grip - base) < 1e-9, 'the lucky grab spends it');
+    GM.fs.delivered = 0; GM.fs.lucky = 1; TOYS.luckAfterGrab();
+    h.eq(GM.fs.lucky, 0, 'a miss resets the streak');
+    // so close: once a grab, with a glum claw
+    TOYS.soClose(400, 700);
+    h.eq(GM.fs.claw.mood, 'sad', 'the claw is sad about a near miss');
+    const g = GM.fs.closeG;
+    TOYS.soClose(400, 700);
+    h.eq(GM.fs.closeG, g, 'one SO CLOSE per grab');
+    // moods from the rig's events
+    GM.rigEvent('lift');
+    h.eq(GM.fs.claw.mood, 'sad', 'an empty lift is glum');
+    GM.fs.delivered = 1; GM.rigEvent('home');
+    h.ok(GM.fs.claw.mood === 'happy' && GM.fs.claw.chase === 1, 'home with a prize: happy, LED chase');
+    stepFor(GM, 3);
+    h.eq(GM.fs.claw.mood, '', 'moods wear off');
+  });
+
+  h.test('a real grab over the material pile finishes cleanly', () => {
+    const F = mkFight(BIN, 19);
+    const g0 = F.player.grabs;
+    GM.steer(200);
+    settle(GM, 2);
+    stepFor(GM, 0.6);
+    h.ok(GM.dropClaw(), 'drop accepted');
+    h.ok(settle(GM, 30), 'the grab finishes');
+    // (a lucky grab can win the fight outright, which tears the cabinet down)
+    if (GM.screen === 'fight' && GM.world) {
+      h.eq(F.player.grabs, g0 - 1, 'one grab spent');
+      h.ok(GM.world.bodies.every(b => Number.isFinite(b.x) && Number.isFinite(b.y)), 'no NaN in the world');
+    }
+  });
+}
+
+// The monsters pass: the new bin events move real bodies and never throw.
+h.test('monsters: eat, hiccup, burst, lit bomb, eggs, rust, jam and phase two play on the cabinet', () => {
+  const T = boot();
+  const Gt = T.GAME, C = T.COMBAT;
+  Gt.newRun('knight', 33);
+  Gt.startFight(['gloop', 'slime'], 'normal');
+  h.ok(settle(Gt, 10), 'fight ready');
+  const F = Gt.fight, FS = Gt.fs;
+  const flush = () => { const list = F.events.splice(0); for (const ev of list) FS.queue.push({ ev, beat: 0.02 }); FS.beatT = 0; };
+  const hasBody = (inst) => FS.items.some(b => b.data.inst === inst);
+  // a gulp: the bodies leave the cabinet and fly into the mouth
+  const e = F.enemies[0];
+  F.bin.forEach(i => { i.id = 'rusty_sword'; });   // weapons stay in the belly
+  C.gulp(F, 0, 2, 'metal');
+  const eaten = e.belly.map(b => b.inst);
+  h.eq(eaten.length, 2, 'two items swallowed');
+  flush(); stepFor(Gt, 0.2);
+  h.ok(eaten.every(i => !hasBody(i)), 'their bodies are gone from the cabinet');
+  h.ok(FS.arcs && FS.arcs.length >= 1, 'and fly to the enemy');
+  h.eq(FS.belly[0].length, 2, 'the shown belly holds them');
+  stepFor(Gt, 0.6);
+  h.eq(FS.arcs.length, 0, 'the arcs land');
+  // a hiccup: one comes back up and lands in the bin as a body
+  C.damage(F, F.player, e, C.hiccupAt(e), { pierce: true });
+  const back = F.events.filter(x => x.t === 'binReturn')[0];
+  h.ok(back && back.why === 'hiccup', 'a hiccup event');
+  flush(); stepFor(Gt, 1.2);
+  h.ok(back.insts.every(hasBody), 'the hiccuped item is a body in the bin again');
+  h.eq(FS.belly[0].length, 1, 'the shown belly lost it');
+  // death: the rest bursts out
+  const rest = e.belly.map(b => b.inst);
+  C.damage(F, F.player, e, 9999, { pierce: true });
+  flush(); stepFor(Gt, 1.5);
+  h.ok(rest.length === 1 && rest.every(hasBody), 'the burst brings the last one back');
+  // a lit bomb, then its blast
+  const bomb = { uid: 'lit1', id: 'fusebomb', plus: false, frozen: false, junk: true, temp: true, fuse: 2, boom: 9, by: F.enemies[1].uid };
+  F.bin.push(bomb);
+  FS.queue.push({ ev: { t: 'binBomb', inst: bomb, idx: 1 }, beat: 0.02 }); FS.beatT = 0;
+  stepFor(Gt, 1);
+  h.ok(hasBody(bomb), 'the lit bomb lands in the bin');
+  F.bin.splice(F.bin.indexOf(bomb), 1);
+  FS.queue.push({ ev: { t: 'binBoom', inst: bomb }, beat: 0.02 }); FS.beatT = 0;
+  stepFor(Gt, 0.1);
+  h.ok(!hasBody(bomb), 'BOOM removes it');
+  // eggs, a hatch, rust, a jam and a phase two
+  const egg = { uid: 'egg1', id: 'broodegg', plus: false, frozen: false, junk: true, temp: true, hatch: 2, spawn: 'spiderling' };
+  F.bin.push(egg);
+  FS.queue.push({ ev: { t: 'binEggs', items: [egg], idx: 1 }, beat: 0.02 }); FS.beatT = 0;
+  stepFor(Gt, 1);
+  h.ok(hasBody(egg), 'the egg lands');
+  F.bin.splice(F.bin.indexOf(egg), 1);
+  let threw = null;
+  try {
+    const any = F.bin[0];
+    any.rust = true;
+    for (const ev of [{ t: 'binHatch', inst: egg }, { t: 'binRust', inst: any, idx: 1 }, { t: 'binJam', idx: 1 }, { t: 'binDigest', inst: any, idx: 1, k: 'digest' },
+      { t: 'binDigest', inst: any, idx: 1, k: 'boom' }, { t: 'enrage', idx: 1, name: 'MAD', text: 'grr' }, { t: 'binReturn', insts: [], idx: 7 }, { t: 'binEat', idx: 1 }]) FS.queue.push({ ev, beat: 0.02 });
+    FS.beatT = 0;
+    stepFor(Gt, 0.6);
+    // draw the fight once with the stub ctx: bellies, badges, marks, the wrench
+    F.enemies[1].affix = ['hasty', 'spiky']; F.enemies[1].enraged = true;
+    F.enemies[1].belly.push({ inst: { uid: 'bx', id: 'rusty_sword' }, turns: 2, kind: 'armed' });
+    F.player.status.jam = 1;
+    FS.items[0].data.inst.fuse = 1;
+    Gt.S.ctx = T._ctx; Gt.S.px = 1;
+    Gt.draw();
+    F.enemies[1].belly.length = 0; delete F.player.status.jam; delete FS.items[0].data.inst.fuse;
+  } catch (err) { threw = err; }
+  h.ok(!threw, 'every monster event plays and draws without throwing ' + (threw ? threw.stack : ''));
+  h.ok(!hasBody(egg), 'a hatched egg leaves the bin');
+  h.eq(Gt.S.bannerStr, 'MAD', 'phase two gets a banner');
+  h.ok(Gt.screen === 'fight', 'still fighting');
+});
+
 h.done();

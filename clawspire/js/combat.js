@@ -272,6 +272,10 @@ const COMBAT = (() => {
     const e = {
       uid: newUid(), id, def: edef, hp, maxHp: hp, block: 0, status: {}, intent: null, moveIdx: -1,
       alive: true, charged: 0, escaped: false, cyc: 0,
+      // The monsters pass: swallowed items [{inst, turns, kind, str, armor}],
+      // damage taken this player turn (hiccups), actions taken (Hasty /
+      // Greedy), affix ids, the phase two flag and the attack multiplier.
+      belly: [], gut: 0, acts: 0, affix: [], enraged: false, dmgMul,
     };
     // Optional starting statuses (e.g. a golem's armor): def.status {s: v}.
     if (def.status && typeof def.status === 'object') {
@@ -329,6 +333,10 @@ const COMBAT = (() => {
     }
     for (const id of (enemyIds || []).slice(0, MAX_ALIVE)) F.enemies.push(makeEnemy(F, id));
     if (!F.enemies.length) F.enemies.push(makeEnemy(F, 'dummy'));
+    // Elite affixes ride their own rng stream so the fight's rolls stay put.
+    const arng = (typeof U !== 'undefined' && U.rng) ? U.rng((num(F.seed, 0) ^ 0x51f15e) + 1) : null;
+    if (arng) F.enemies.forEach(e => rollAffixes(F, e, arng));
+    F.digested = [];   // items enemies swallowed and digested: gone for this fight only
     for (const e of F.enemies) api.pickIntent(F, e);
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
     api.startTurn(F);
@@ -402,6 +410,7 @@ const COMBAT = (() => {
     } else {
       if (src === F.player && amt > 0) { F.stats.dmgDealt += amt; hook(F, 'onDmgDealt', tgt, amt); }
       if (tgt.alive && tgt.hp <= 0) kill(F, tgt);
+      else if (tgt.alive && amt > 0) monsterHurt(F, tgt, amt);
     }
   }
 
@@ -450,12 +459,23 @@ const COMBAT = (() => {
     tgt.hp -= loss;
     F.stats.blocked += isPlayer(F, tgt) ? blocked : 0;
     const ev = { t: 'dmg', who: whoOf(F, tgt), idx: idxOf(F, tgt), amt: loss, blocked };
+    // Loot bookkeeping for the payout screen: the player's biggest hit and
+    // the overkill of a killing blow (damage past the last hit point).
+    if (isPlayer(F, src) && !isPlayer(F, tgt)) {
+      const raw = amt - blocked;
+      F.stats.bigHit = Math.max(F.stats.bigHit || 0, raw);
+      if (raw > loss && tgt.hp <= 0) F.stats.overkill = Math.max(F.stats.overkill || 0, raw - loss);
+    }
     if (!opts.fixed && st(tgt, 'vuln') > 0 && amt >= 12) ev.crit = true;
     emit(F, ev);
     // Thorns bite back at a unit that attacked (block still soaks thorns).
     const th = st(tgt, 'thorns');
     if (attack && th > 0 && !opts.noThorns && (isPlayer(F, src) || src.alive)) {
       api.damage(F, tgt, src, th, { fixed: true, noThorns: true });
+    }
+    // Vampiric affix: the attacker drinks half of what got through.
+    if (loss > 0 && attack && src && !isPlayer(F, src) && isPlayer(F, tgt) && src.alive && hasAffix(src, 'vampiric')) {
+      if (api.heal(F, src, Math.ceil(loss / 2)) > 0) text(F, src, 'SLURP');
     }
     afterHit(F, src, tgt, loss);
     return loss;
@@ -552,6 +572,14 @@ const COMBAT = (() => {
     const idx = F.enemies.indexOf(e);
     emit(F, { t: 'die', idx });
     log(F, `${e.def.name || e.id} is defeated.`);
+    // Everything it swallowed bursts out and rains back into the bin.
+    if (e.belly && e.belly.length) spit(F, e, e.belly.length, 'burst');
+    // Explosive affix: a parting blast (it never finishes the player off).
+    if (hasAffix(e, 'explosive') && F.player.hp > 1) {
+      const v = Math.min(F.player.hp - 1, Math.round((4 + 4 * F.act) * num(e.dmgMul, 1)));
+      text(F, e, 'KABOOM');
+      if (v > 0) api.damage(F, null, F.player, v);
+    }
     hook(F, 'onKill', e);
     const od = e.def.onDeath;
     if (od && F.player.hp > 0) {
@@ -633,7 +661,16 @@ const COMBAT = (() => {
   };
 
   function sName(s) { const d = statusDef(s); return (d && d.name) || s; }
+  // The telegraph, plus what the affixes add to this next action.
   api.intentText = function (e) {
+    const s = baseIntent(e);
+    if (!s || !e) return s;
+    const extra = [];
+    if (api.hasteNext(e)) extra.push('twice (Hasty)');
+    if (api.greedNext(e)) extra.push('and gulps an item (Greedy)');
+    return extra.length ? s + ', ' + extra.join(', ') : s;
+  };
+  function baseIntent(e) {
     const m = e && e.intent;
     if (!m) return '';
     const n = Math.max(1, num(m.n, 1) | 0);
@@ -663,10 +700,15 @@ const COMBAT = (() => {
       }
       case 'tilt': return 'Tilts the cabinet';
       case 'escape': return 'Tries to escape';
+      case 'gulp': { const k = Math.max(1, num(m.n, 1) | 0); return k > 1 ? `Swallows ${k} of your items` : 'Swallows one of your items'; }
+      case 'bomb': return `Drops a lit bomb (${Math.round(num(m.v, 0) * num(e.dmgMul, 1))}) in your bin`;
+      case 'corrode': return `Rusts ${Math.max(1, num(m.n, 1) | 0)} metal items`;
+      case 'jam': return 'Jams your claw rail';
+      case 'eggs': return `Lays ${Math.max(1, num(m.n, 1) | 0)} eggs in your bin`;
       case 'none': return 'Waits';
       default: return m.txt || m.name || '???';
     }
-  };
+  }
 
   // A summon move's `id` doubles as the move id in the schema, so accept an
   // explicit summon/enemy/item field first, then `id` if it names an enemy.
@@ -675,6 +717,318 @@ const COMBAT = (() => {
     for (const k of ['summon', 'enemy', 'item', 'id']) if (m[k] && E[m[k]]) return m[k];
     return m.summon || m.enemy || null;
   }
+
+  // ---------- the monsters pass: bellies, bin tricks, affixes, phase two ----------
+  // (DESIGN.md "Enemies".) A gulp moves bin items into e.belly; they come
+  // back when the enemy dies (all of them), when the player deals it
+  // hiccupAt(e) damage in one turn (one per threshold), and are digested
+  // (gone for this fight only) after DIGEST of its turns. What it ate
+  // matters: a bomb goes off inside it, potions and food are drunk / eaten on
+  // the spot (healing it or giving it the potion's debuffs), a weapon lends
+  // it Strength and plate lends it Armor while held, glass cuts it every turn.
+  const BELLY_MAX = 4;       // items one enemy holds at once
+  const DIGEST = 3;          // its turns before a swallowed item is digested
+  const GLASS_CUT = 4;       // hp per act a swallowed glass item costs its eater each turn
+  const RAR = { junk: 0, c: 1, u: 2, r: 3, l: 4 };
+  const MEAL_DEBUFFS = ['poison', 'burn', 'chill', 'weak', 'vuln', 'bleed', 'stun'];
+  const TAUNTS = ['NOM', 'GULP', 'MINE!', 'CHOMP'];
+
+  const hasAffix = (e, id) => !!(e && Array.isArray(e.affix) && e.affix.indexOf(id) >= 0);
+  function affixProc(F, e, id, str) {
+    const A = (D().AFFIXES || {})[id] || {};
+    return emit(F, procEv('affix', id, A.name || id, A.icon || '!', A.color || '#ff5a4a', str, e, F));
+  }
+  // Put an affix on an enemy: +5% max hp each (AFFIXES[id].hp), Armored / Spiky start stacks.
+  function giveAffix(F, e, id) {
+    if (!e || !id || hasAffix(e, id)) return false;
+    if (!Array.isArray(e.affix)) e.affix = [];
+    const A = (D().AFFIXES || {})[id];
+    e.affix.push(id);
+    const add = Math.round(e.maxHp * num(A && A.hp, 0.1));
+    if (add > 0) { e.maxHp += add; e.hp += add; }
+    if (id === 'armored') e.status.armor = clamp(st(e, 'armor') + 1, 0, MAX_STACK);
+    if (id === 'spiky') e.status.thorns = clamp(st(e, 'thorns') + (F.act >= 3 ? 2 : 1), 0, MAX_STACK);
+    return true;
+  }
+  function rollAffixes(F, e, rng) {
+    const roll = D().affixRoll;
+    if (typeof roll !== 'function') return;
+    let ids = [];
+    try { ids = roll(rng, e.def, F.act, F.fights) || []; } catch (err) { ids = []; }
+    for (const id of ids) giveAffix(F, e, id);
+  }
+  // Hasty acts twice on every third action; Greedy gulps on its first and
+  // every third after (the telegraph shows both ahead of time).
+  api.hasteNext = (e) => hasAffix(e, 'hasty') && num(e.acts, 0) % 3 === 2 &&
+    !(e.intent && (e.intent.charged || e.intent.k === 'charge' || e.intent.k === 'escape'));
+  api.greedNext = (e) => hasAffix(e, 'greedy') && num(e.acts, 0) % 3 === 0;
+  // Damage in one player turn that makes an enemy hiccup one item back up.
+  api.hiccupAt = (e) => Math.max(6, Math.ceil(num(e && e.maxHp, 20) * 0.15));
+
+  // The telegraphed move, with Greedy and Hasty on top.
+  function actMove(F, e) {
+    const m = e.intent;
+    const greedy = api.greedNext(e), twice = api.hasteNext(e);
+    e.acts = num(e.acts, 0) + 1;
+    if (greedy && (!m || m.k !== 'gulp')) { affixProc(F, e, 'greedy', 'GREEDY'); gulpItems(F, e, 1, 'shiny'); }
+    if (!e.alive || F.phase === 'over') return;
+    doMove(F, e, m);
+    // The extra action: a quick jab at half value for an attack (never after
+    // an unleash), the whole move again for anything else.
+    if (twice && m && !m.charged && m.k !== 'charge' && m.k !== 'escape' && e.alive && F.phase !== 'over' && F.player.hp > 0) {
+      affixProc(F, e, 'hasty', 'AGAIN!');
+      doMove(F, e, m.k === 'attack' ? { id: 'haste', k: 'attack', v: Math.max(1, Math.round(num(m.v, 0) / 2)), n: m.n } : m);
+    }
+  }
+
+  // What a swallowed item does to its eater.
+  function mealKind(def) {
+    if (def.art === 'bomb') return 'boom';
+    if (tagHas(def, 'potion')) return 'drink';
+    if (tagHas(def, 'food')) return 'snack';
+    if (tagHas(def, 'weapon')) return 'armed';
+    if (tagHas(def, 'glass')) return 'crunch';
+    if (tagHas(def, 'metal')) return 'plated';
+    return 'held';
+  }
+  function fxSum(def, plus, k) {
+    let s = 0;
+    for (const f of fxOf(def, plus)) {
+      if (!f || f.k !== k) continue;
+      s += Math.max(0, num(f.v, 0)) * Math.max(1, num(f.n, 1) | 0);
+    }
+    return s;
+  }
+  // The potion's (or bomb's) debuffs land on the eater. Returns how many.
+  function mealDebuffs(F, e, def, plus) {
+    let n = 0;
+    for (const f of fxOf(def, plus)) {
+      if (!f || !e.alive) continue;
+      if (f.k === 'status' && MEAL_DEBUFFS.indexOf(f.s) >= 0 && f.to !== 'self' && num(f.v, 1) > 0) { api.status(F, e, f.s, num(f.v, 1)); n++; }
+      if (f.k === 'poisonAll' && num(f.v, 0) > 0) { api.status(F, e, 'poison', num(f.v, 0)); n++; }
+    }
+    return n;
+  }
+  function selfStr(def, plus) {
+    let s = 0;
+    for (const f of fxOf(def, plus)) if (f && f.k === 'status' && f.s === 'str' && f.to === 'self') s += Math.max(0, num(f.v, 0));
+    return s;
+  }
+  // The item a gulp goes for: its favourite tag first, else the rarest
+  // (shiny also loves metal); never junk or an iced item.
+  function pickMeal(F, like) {
+    let best = null, bs = -1;
+    for (const i of F.bin) {
+      if (isJunk(i) || i.frozen) continue;
+      const d = itemDef(i.id);
+      const rank = num(RAR[d.rarity], 1);
+      let s = rank * 10 + (i.plus ? 5 : 0) + F.rng() * 8;
+      if (like === 'shiny') s += rank * 10 + (tagHas(d, 'metal') ? 6 : 0);
+      else if (like && tagHas(d, like)) s += 100;
+      if (s > bs) { bs = s; best = i; }
+    }
+    return best;
+  }
+  function eat(F, e, inst) {
+    const at = F.bin.indexOf(inst);
+    if (at < 0) return;
+    F.bin.splice(at, 1);
+    const def = itemDef(inst.id), plus = !!inst.plus;
+    const kind = mealKind(def), idx = F.enemies.indexOf(e);
+    emit(F, { t: 'binEat', inst, idx, kind });
+    text(F, e, TAUNTS[Math.floor(F.rng() * TAUNTS.length)]);
+    log(F, `${e.def.name || e.id} swallows ${def.name || def.id}.`);
+    if (kind === 'boom') {
+      // It swallowed a bomb. It went off.
+      F.used.push(inst);
+      emit(F, { t: 'binDigest', inst, idx, k: 'boom' });
+      text(F, e, 'KABOOM');
+      mealDebuffs(F, e, def, plus);
+      loseHp(F, e, Math.max(8, 2 * (fxSum(def, plus, 'dmg') + fxSum(def, plus, 'random'))));
+      return;
+    }
+    if (kind === 'drink' || kind === 'snack') {
+      // Drunk or eaten on the spot; the item goes to the used pile as if played.
+      F.used.push(inst);
+      emit(F, { t: 'binDigest', inst, idx, k: kind });
+      const bad = mealDebuffs(F, e, def, plus);
+      const s = selfStr(def, plus);
+      if (s > 0) api.status(F, e, 'str', s);
+      let h = fxSum(def, plus, 'heal') * 2 + (kind === 'snack' ? 4 : 0);
+      if (!bad && !s && !h) h = 5;
+      if (h > 0) api.heal(F, e, h);
+      text(F, e, bad ? 'BLEGH' : kind === 'drink' ? 'GLUG' : 'YUM');
+      return;
+    }
+    const b = { inst, turns: Math.max(1, num(e.def.digest, DIGEST) | 0), kind, str: 0, armor: 0 };
+    e.belly.push(b);
+    if (kind === 'armed') { b.str = 2; api.status(F, e, 'str', 2); }
+    if (kind === 'plated') { b.armor = 1; api.status(F, e, 'armor', 1); }
+  }
+  // Swallow up to n bin items. Returns how many went down.
+  function gulpItems(F, e, n, like) {
+    let got = 0;
+    for (let i = 0; i < n; i++) {
+      if (!e.alive || F.phase === 'over' || e.belly.length >= BELLY_MAX) break;
+      const inst = pickMeal(F, like);
+      if (!inst) break;
+      eat(F, e, inst);
+      got++;
+    }
+    return got;
+  }
+  // A held item stops lending its Strength / Armor.
+  function unhold(F, e, b) {
+    if (!e.alive) return;
+    if (b.str) api.status(F, e, 'str', -Math.min(b.str, st(e, 'str')));
+    if (b.armor) api.status(F, e, 'armor', -Math.min(b.armor, st(e, 'armor')));
+  }
+  // Items come back out (the newest first) and land in the bin, or in the
+  // used pile when the cabinet is full. why: 'hiccup' | 'burst'.
+  function spit(F, e, n, why) {
+    const out = [];
+    for (let i = 0; i < n && e.belly.length; i++) {
+      const b = e.belly.pop();
+      unhold(F, e, b);
+      out.push(b.inst);
+      if (F.bin.length < MAX_CABINET) F.bin.push(b.inst); else F.used.push(b.inst);
+    }
+    if (!out.length) return out;
+    emit(F, { t: 'binReturn', insts: out, idx: F.enemies.indexOf(e), why });
+    text(F, e, why === 'hiccup' ? 'HIC!' : 'BLORP');
+    return out;
+  }
+  // Start of its action: glass cuts, digestion counts down.
+  function bellyTick(F, e) {
+    if (!e.belly || !e.belly.length) return;
+    const idx = F.enemies.indexOf(e);
+    for (const b of e.belly.slice()) {
+      if (!e.alive || F.phase === 'over') return;
+      if (b.kind === 'crunch') {
+        text(F, e, 'CRUNCH');
+        loseHp(F, e, GLASS_CUT * F.act);
+        if (!e.alive || F.phase === 'over') return;
+      }
+      b.turns--;
+      if (b.turns > 0) continue;
+      e.belly.splice(e.belly.indexOf(b), 1);
+      unhold(F, e, b);
+      F.digested.push(b.inst);
+      emit(F, { t: 'binDigest', inst: b.inst, idx, k: 'digest' });
+      text(F, e, 'BURP');
+    }
+  }
+  // Every hit on an enemy: hiccups (the player's turn only), then phase two.
+  function monsterHurt(F, e, amt) {
+    if (F.phase === 'player' && e.belly && e.belly.length) {
+      e.gut = num(e.gut, 0) + amt;
+      const need = api.hiccupAt(e);
+      while (e.alive && e.belly.length && e.gut >= need) { e.gut -= need; spit(F, e, 1, 'hiccup'); }
+    }
+    phaseTwo(F, e);
+  }
+  // Elites and bosses transform once at half hp: a roar, Strength and
+  // sometimes a new pattern (def.enrage {name, text, str, pattern}; false: never).
+  function phaseTwo(F, e) {
+    if (e.enraged || !e.alive || e.hp * 2 > e.maxHp) return;
+    const tier = e.def.tier;
+    if ((tier !== 'elite' && tier !== 'boss') || e.def.enrage === false) return;
+    e.enraged = true;
+    const R = (e.def.enrage && typeof e.def.enrage === 'object') ? e.def.enrage : {};
+    const moves = e.def.moves || [];
+    emit(F, { t: 'enrage', idx: F.enemies.indexOf(e), name: R.name || 'ENRAGED', text: R.text || `${e.def.name || e.id} is furious` });
+    log(F, `${e.def.name || e.id} enters phase two.`);
+    const s = R.str != null ? num(R.str, 0) : (F.act >= 2 ? 2 : 1);
+    if (s > 0) api.status(F, e, 'str', s);
+    const pat = Array.isArray(R.pattern) ? R.pattern.filter(i => i >= 0 && i < moves.length) : [];
+    if (pat.length && (e.def.ai || 'cycle') === 'cycle') { e.def = Object.assign({}, e.def, { pattern: pat }); e.cyc = 0; }
+  }
+
+  // ---- bin tricks: lit bombs, rust, eggs
+  const roomFor = (F) => F.bin.length < MAX_CABINET && F.bin.length + F.used.length < MAX_ITEMS;
+  function dropBomb(F, e, m) {
+    if (!roomFor(F)) { text(F, e, 'NO ROOM'); return null; }
+    const inst = { uid: newUid(), id: m.item || 'fusebomb', plus: false, frozen: false, junk: true, temp: true,
+      fuse: Math.max(1, num(m.fuse, 2) | 0), boom: Math.max(1, Math.round(num(m.v, 8) * num(e.dmgMul, 1))), by: e.uid, lit: F.turn };
+    F.bin.push(inst);
+    emit(F, { t: 'binBomb', inst, idx: F.enemies.indexOf(e) });
+    hook(F, 'onJunk', 1, [inst]);
+    return inst;
+  }
+  function layEggs(F, e, m) {
+    const items = [];
+    const n = clamp(num(m.n, 1) | 0, 1, 6);
+    for (let i = 0; i < n && roomFor(F); i++) {
+      const inst = { uid: newUid(), id: m.item || 'broodegg', plus: false, frozen: false, junk: true, temp: true,
+        hatch: Math.max(1, num(m.turns, 2) | 0), spawn: m.hatch || 'spiderling', by: e.uid, lit: F.turn };
+      F.bin.push(inst);
+      items.push(inst);
+    }
+    if (!items.length) { text(F, e, 'NO ROOM'); return items; }
+    emit(F, { t: 'binEggs', items, idx: F.enemies.indexOf(e) });
+    hook(F, 'onJunk', items.length, items);
+    return items;
+  }
+  function corrode(F, e, n) {
+    const pool = F.bin.filter(i => !i.rust && !isJunk(i) && tagHas(itemDef(i.id), 'metal'));
+    let k = 0;
+    while (k < n && pool.length) {
+      const inst = pool.splice(Math.floor(F.rng() * pool.length), 1)[0];
+      inst.rust = true;
+      k++;
+      emit(F, { t: 'binRust', inst, idx: F.enemies.indexOf(e) });
+    }
+    return k;
+  }
+  // A rusted item's numbers are halved (rounded up) for this fight.
+  function rusty(inst, f) {
+    if (!inst || !inst.rust || !f) return f;
+    const half = (v) => (num(v, 0) > 0 ? Math.ceil(num(v, 0) / 2) : v);
+    switch (f.k) {
+      case 'dmg': case 'block': case 'heal': case 'lifesteal': case 'dmgPer': case 'blockPer':
+        return num(f.v, 0) > 0 ? Object.assign({}, f, { v: half(f.v) }) : f;
+      case 'random': return Object.assign({}, f, { v: half(f.v), min: half(f.min), max: half(f.max) });
+      default: return f;
+    }
+  }
+  // End of the enemy phase: a bomb not lit this round burns down (at 0 it
+  // blows up in the cabinet, hitting the player through Block), an egg
+  // counts down and hatches into its minion when there is room.
+  function binTimers(F) {
+    for (const inst of F.bin.slice()) {
+      if (F.phase === 'over') return;
+      if (inst.lit === F.turn) continue;
+      if (inst.fuse != null) {
+        inst.fuse--;
+        if (inst.fuse > 0) continue;
+        F.bin.splice(F.bin.indexOf(inst), 1);
+        F.purged.push(inst);
+        emit(F, { t: 'binBoom', inst });
+        text(F, F.player, 'BOOM');
+        api.damage(F, null, F.player, num(inst.boom, 8));
+      } else if (inst.hatch != null) {
+        inst.hatch--;
+        if (inst.hatch > 0) continue;
+        if (alive(F).length >= MAX_ALIVE) { inst.hatch = 1; continue; }
+        F.bin.splice(F.bin.indexOf(inst), 1);
+        F.purged.push(inst);
+        emit(F, { t: 'binHatch', inst });
+        summon(F, null, inst.spawn);
+      }
+    }
+  }
+  // A lit bomb the player grabbed out: back at the thrower (or the target).
+  function throwBack(F, inst) {
+    const tgt = F.enemies.find(x => x.uid === inst.by && x.alive) || aimOf(F, { idx: F.target });
+    if (!tgt) return;
+    text(F, F.player, 'RETURN TO SENDER');
+    api.damage(F, F.player, tgt, Math.round(num(inst.boom, 8) * 1.5));
+  }
+  api.giveAffix = (F, e, id) => giveAffix(F, unit(F, e), id);
+  api.gulp = (F, e, n, like) => { const c = begin(F); const u = unit(F, e); if (u && u.alive) gulpItems(F, u, Math.max(1, num(n, 1) | 0), like); return end(F, c); };
+  api.hasAffix = hasAffix;
+  api.BELLY_MAX = BELLY_MAX;
+  api.DIGEST = DIGEST;
 
   // ---------- enemy moves ----------
   function doMove(F, e, m) {
@@ -721,11 +1075,26 @@ const COMBAT = (() => {
         text(F, e, 'CHARGING');
         break;
       }
+      // The monsters pass (see the monsters section below).
+      case 'gulp': if (!gulpItems(F, e, Math.max(1, num(m.n, 1) | 0), m.like)) text(F, e, 'NOTHING'); break;
+      case 'bomb': dropBomb(F, e, m); break;
+      case 'corrode': if (!corrode(F, e, Math.max(1, num(m.n, 1) | 0))) text(F, e, 'NOTHING'); break;
+      case 'jam': {
+        api.status(F, p, 'jam', Math.max(1, num(m.v, 1)));
+        emit(F, { t: 'binJam', idx: F.enemies.indexOf(e) });
+        break;
+      }
+      case 'eggs': layEggs(F, e, m); break;
       case 'escape': {
         e.alive = false;
         e.escaped = true;
         e.block = 0;
         F.escaped.push(e.id);
+        // Whatever it swallowed leaves with it (gone for this fight).
+        for (const b of (e.belly || []).splice(0)) {
+          F.stolen.push(b.inst);
+          emit(F, { t: 'binDigest', inst: b.inst, idx: F.enemies.indexOf(e), k: 'escape' });
+        }
         // The die event carries escaped:true; the game shows ESCAPED from it.
         emit(F, { t: 'die', idx: F.enemies.indexOf(e), escaped: true });
         retarget(F);
@@ -756,6 +1125,10 @@ const COMBAT = (() => {
     tickDmg(F, e, 'burn');
     if (!e.alive || F.phase === 'over') return;
     tickRegen(F, e);
+    // The monsters pass: Regenerating heals, the belly digests (glass cuts).
+    if (hasAffix(e, 'regen')) api.heal(F, e, Math.max(2, Math.ceil(e.maxHp * 0.02)));
+    bellyTick(F, e);
+    if (!e.alive || F.phase === 'over') return;
     if (st(e, 'enrage') > 0) api.status(F, e, 'str', st(e, 'enrage'));
     if (st(e, 'freeze') > 0 || st(e, 'stun') > 0) {
       const s = st(e, 'freeze') > 0 ? 'freeze' : 'stun';
@@ -767,7 +1140,7 @@ const COMBAT = (() => {
     }
     tickDmg(F, e, 'bleed');
     if (!e.alive || F.phase === 'over') return;
-    doMove(F, e, e.intent);
+    actMove(F, e);
     if (e.alive && F.phase !== 'over') api.pickIntent(F, e);
     decayTurns(e);
   }
@@ -825,6 +1198,10 @@ const COMBAT = (() => {
         text(F, p, s === 'freeze' ? 'FROZEN' : 'STUNNED');
       }
     }
+    // A wrench in the rail (jam) costs a grab while it lasts (never the last
+    // one); a fresh turn empties every belly's hiccup meter.
+    if (st(p, 'jam') > 0 && p.grabs > 1) { p.grabs--; text(F, p, 'JAMMED'); }
+    for (const e of F.enemies) e.gut = 0;
     if (F.dry && F.used.length) refill(F);
     else trickle(F);
     F.dry = false;
@@ -958,7 +1335,7 @@ const COMBAT = (() => {
   function resolveFx(F, ctx, plus) {
     for (const f0 of fxOf(ctx.def, plus)) {
       if (!f0 || F.result === 'lose' || ctx.stop) break;
-      runFx(F, scaled(F, ctx.def, f0), ctx);
+      runFx(F, rusty(ctx.inst, scaled(F, ctx.def, f0)), ctx);
       ctx.acted = true;
     }
   }
@@ -1098,7 +1475,10 @@ const COMBAT = (() => {
         F.grab.amped = true;   // once a grab: a scoop of marbles is one proc
         ruleProc(F, 'amp');
       }
+      if (inst.rust && fxOf(def, plus).length) text(F, F.player, 'RUSTY');
       resolveFx(F, ctx, plus);
+      // A lit bomb grabbed out flies back at whoever lit it.
+      if (inst.fuse != null) throwBack(F, inst);
       // Echo rule: every nth magic item played resolves twice.
       const echo = Math.round(num(F.rules.echo, 0));
       if (echo > 0 && tagHas(def, 'magic') && F.phase === 'player') {
@@ -1153,6 +1533,9 @@ const COMBAT = (() => {
       sanitize(F);
       if (checkOver(F)) break;
     }
+    // After the enemies acted: lit bombs left in the bin burn down, eggs
+    // left alone hatch (the hatchlings act from next round).
+    if (F.phase === 'enemy') { binTimers(F); sanitize(F); checkOver(F); }
     // End of round: the player's turn-based statuses lose a stack (after the
     // enemies acted, so a vuln on the player bites during the enemy phase).
     decayTurns(p, F.fresh);

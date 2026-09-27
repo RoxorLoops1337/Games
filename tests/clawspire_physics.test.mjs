@@ -574,4 +574,115 @@ h.test('nothing rides the claw home: a wedged item is shed and falls', () => {
   h.ok(b.passClaw > 0, 'a shed body ignores the claw for a moment');
 });
 
+// ---------------------------------------------------------------- cabinet materials
+h.test('materials: derived from tags, art and fx', () => {
+  const M = (d) => PHYS.materialOf(Object.assign({ shape: { kind: 'circle', r: 12 }, tags: [], fx: [] }, d));
+  const metal = M({ id: 'm1', tags: ['metal', 'weapon'] });
+  h.eq(metal.id, 'metal', 'metal leads a sword');
+  h.ok(metal.traits.metal && metal.g === 1 && metal.slick === 1, 'metal: normal gravity and friction');
+  const heavy = M({ id: 'm2', tags: ['metal', 'heavy'] });
+  h.eq(heavy.id, 'heavy', 'heavy leads a heavy metal item');
+  h.ok(heavy.traits.metal, '...which keeps its metal trait (it still sparks)');
+  const pot = M({ id: 'm3', tags: ['glass', 'potion'], art: 'potion' });
+  h.eq(pot.id, 'potion', 'a potion is a potion');
+  h.ok(pot.traits.glass && pot.traits.liquid, '...made of glass, with liquid in it');
+  const bomb = M({ id: 'm4', tags: ['weapon'], art: 'bomb', fx: [{ k: 'status', s: 'burn', v: 2 }] });
+  h.eq(bomb.id, 'bomb', 'the bomb art has a fuse');
+  h.ok(bomb.traits.fuse && bomb.traits.fire, 'a burn bomb is fuse + fire');
+  const ice = M({ id: 'm5', tags: ['glass'], art: 'bottle', fx: [{ k: 'status', s: 'chill', v: 2 }] });
+  h.eq(ice.id, 'frost', 'a chill item is frost');
+  h.ok(ice.slick < 0.5, 'frost slides (low floor friction)');
+  const magic = M({ id: 'm6', tags: ['magic'] });
+  h.ok(magic.g < 0.8 && magic.drag > 0, 'magic floats down (gravity scale ' + magic.g + ')');
+  h.ok(M({ id: 'm6b', tags: ['magic', 'heavy'] }).g > magic.g, 'heavy magic floats less');
+  const ball = M({ id: 'm7', tags: ['small', 'light'], restitution: 0.9 });
+  h.eq(ball.id, 'rubber', 'a light bouncy ball is rubber');
+  h.ok(ball.bounce >= 0.6 && ball.bounceV < PHYS.PH.bounceV, 'rubber rebounds from gentler hits');
+  h.eq(M({ id: 'm8', tags: ['food'] }).id, 'food', 'food');
+  h.ok(M({ id: 'm9', tags: [], fx: [{ k: 'poisonAll' }] }).traits.poison, 'poisonAll is a poison item');
+  h.eq(M({ id: 'm10', tags: [] }).id, 'stuff', 'no tags: plain stuff');
+  h.ok(M({ id: 'm1', tags: ['metal', 'weapon'] }) === metal, 'cached per def id');
+  const b = PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r: 12 }, mat: magic });
+  h.ok(b.gs === magic.g && b.drag === magic.drag && b.mat === magic, 'body({mat}) takes the material physics');
+  const plain = PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r: 12 } });
+  h.ok(plain.gs === 1 && plain.drag === 0 && plain.slick === 1 && plain.bounceV === PHYS.PH.bounceV, 'a plain body is unchanged');
+});
+
+h.test('materials: magic falls slower, ice slides farther, rubber bounces higher', () => {
+  const M = (d) => PHYS.materialOf(Object.assign({ shape: { kind: 'circle', r: 12 }, fx: [] }, d));
+  // time to fall from the top to the floor
+  const fall = (mat) => {
+    const { W } = mkWorld();
+    const b = spawn(W, ITEM.ball({}), 200, 40, mat ? { mat } : {});
+    let t = 0; while (b.y < 360 && t < 5) { W.step(DT); t += DT; }
+    return t;
+  };
+  const tPlain = fall(null), tMagic = fall(M({ id: 'fm', tags: ['magic'] }));
+  h.ok(tMagic > tPlain * 1.15, `magic takes longer to fall (${tMagic.toFixed(2)} vs ${tPlain.toFixed(2)} s)`);
+  // a push along the floor
+  const slide = (mat) => {
+    const { W } = mkWorld();
+    const b = spawn(W, ITEM.sword({}), 80, 370, mat ? { mat } : {});
+    settle(W, 0.6);
+    const x0 = b.x; W.wakeAll(); b.vx = 320;
+    settle(W, 2);
+    return b.x - x0;
+  };
+  const sPlain = slide(null), sIce = slide(M({ id: 'fi', tags: [], art: 'iceblock' }));
+  h.ok(sIce > sPlain * 1.5, `ice slides farther (${sIce.toFixed(0)} vs ${sPlain.toFixed(0)} px)`);
+  // the rebound off the floor
+  const bounce = (mat) => {
+    const { W } = mkWorld();
+    const b = spawn(W, ITEM.ball({ restitution: 0.3 }), 200, 150, mat ? { mat } : {});
+    let hit = false, top = 999;
+    for (let i = 0; i < 180; i++) { W.step(DT); if (b.y > 360) hit = true; if (hit) top = Math.min(top, b.y); }
+    return 375 - top;
+  };
+  const bPlain = bounce(null), bRubber = bounce(M({ id: 'fr', tags: ['light'], restitution: 0.3 }));
+  h.ok(bRubber > bPlain + 20, `rubber rebounds higher (${bRubber.toFixed(0)} vs ${bPlain.toFixed(0)} px)`);
+});
+
+h.test('blast and hop: impulses, containment, determinism', () => {
+  const run = () => {
+    const { W, C } = mkWorld();
+    const rng = U.rng(9);
+    const bodies = pile(W, rng, 20);
+    settle(W, 3);
+    const centre = bodies[10];
+    const x0 = bodies.map(b => b.x);
+    const pushed = PHYS.blast(W, centre.x, centre.y, 150, 950, centre);
+    const up = pushed.filter(b => b.vy < -100).length;
+    const out = pushed.every(b => Math.sign(b.x - centre.x) === Math.sign(b.vx) || Math.abs(b.x - centre.x) < 2);
+    settle(W, 3);
+    return { pushed: pushed.length, up, out, inside: inside(W, C, 2), moved: bodies.filter((b, i) => Math.abs(b.x - x0[i]) > 5).length, pose: bodies.map(b => b.x.toFixed(3) + ',' + b.y.toFixed(3)).join(';'), nan: anyNaN(W) };
+  };
+  const a = run(), b = run();
+  h.ok(a.pushed >= 3, `the blast reached ${a.pushed} bodies`);
+  h.ok(!a.pushed || a.up >= a.pushed * 0.6, 'the blast throws them upward');
+  h.ok(a.out, 'the blast pushes away from its centre');
+  h.ok(a.moved >= 3, 'the pile moved');
+  h.ok(a.inside && !a.nan, 'everything stays inside the glass');
+  h.eq(a.pose, b.pose, 'a blast is deterministic');
+  const { W } = mkWorld();
+  const heavy = spawn(W, ITEM.tower({}), 200, 350);
+  const near = spawn(W, ITEM.ball({}), 250, 360), far = spawn(W, ITEM.ball({}), 420, 360);
+  settle(W, 2);
+  const hopped = PHYS.hop(W, heavy.x, heavy.y, 150, 170, heavy);
+  h.ok(hopped.indexOf(near) >= 0 && near.vy < -50, 'a neighbour hops');
+  h.ok(hopped.indexOf(heavy) < 0, 'the heavy item itself does not');
+  h.ok(hopped.indexOf(far) < 0, 'a far body does not');
+  h.eq(PHYS.blast(null, 0, 0, 10).length, 0, 'blast without a world is a no-op');
+});
+
+h.test('scaleShape shrinks every shape kind', () => {
+  h.eq(PHYS.scaleShape({ kind: 'circle', r: 10 }, 0.5).r, 5, 'circle');
+  const bx = PHYS.scaleShape({ kind: 'box', w: 40, h: 10 }, 0.5);
+  h.ok(bx.w === 20 && bx.h === 5, 'box');
+  const pv = PHYS.scaleShape({ kind: 'poly', verts: [{ x: 10, y: -4 }, { x: -10, y: 4 }] }, 0.5);
+  h.ok(pv.verts[0].x === 5 && pv.verts[1].y === 2, 'poly');
+  const src = { kind: 'circle', r: 10 };
+  PHYS.scaleShape(src, 0.3);
+  h.eq(src.r, 10, 'the original shape is untouched');
+});
+
 h.done();

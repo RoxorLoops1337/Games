@@ -548,6 +548,241 @@ const AUDIO = (() => {
     proc: 0.06, tick: 0.035, cardFlip: 0.05, footstep: 0.06, bloom: 0.07, heartbeat: 0.5, whoosh: 0.06, crit: 0.05, shatter: 0.05 };
   const LEVEL = { clawMove: 0.7, clawLift: 0.8, itemLand: 0.9, boss: 1.1, jackpot: 1.1, hitBig: 1.1, crit: 1.1, combo: 1.05, tick: 0.8, bloom: 0.8 };
 
+  // ---------------------------------------------------------------- loot
+  // Prize capsules, tickets and the payout tally (DESIGN.md "Loot").
+  Object.assign(BANK, {
+    // A capsule drops onto the pedestal: a hollow plastic thunk and a boing.
+    capDrop(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 190 * p, to: 70, dur: 0.14, v: 0.4 });
+      hiss(out, t, { type: 'bandpass', f: 900, dur: 0.05, v: 0.18 });
+      blip(out, t, { at: 0.08, w: 'triangle', f: 320 * p, to: 520 * p, dur: 0.18, v: 0.12, vib: [18, 30] });
+      return 0.3;
+    },
+    // A tap cracks the shell: a plastic snap, higher and harder with opts.n.
+    capCrack(out, t, o, p) {
+      const n = U.clamp(+o.n || 0, 0, 4);
+      hiss(out, t, { type: 'highpass', f: 2400 + n * 500, dur: 0.05 + n * 0.015, v: 0.28 + n * 0.05, crunch: true });
+      blip(out, t, { w: 'square', f: (620 + n * 180) * p, to: (300 + n * 60) * p, dur: 0.06, v: 0.12, lp: 4200 });
+      blip(out, t, { w: 'sine', f: (140 - n * 12) * p, to: 60, dur: 0.1, v: 0.3 });
+      for (let i = 0; i < 2 + n; i++) blip(out, t, { at: 0.03 + i * 0.03, w: 'sine', f: (2400 + S.r() * 2200) * p, dur: 0.04, v: 0.04 });
+      return 0.2;
+    },
+    // It turned rarer: a swelling riser into a bright two-chord shimmer.
+    capUpgrade(out, t, o, p) {
+      duck(1.0);
+      hiss(out, t, { type: 'bandpass', f: 700, to: 8000, q: 1.6, dur: 0.4, v: 0.16, a: 0.35 });
+      blip(out, t, { w: 'sawtooth', f: mtof(60) * p, to: mtof(84) * p, dur: 0.38, v: 0.06, lp: 3800, lin: true });
+      [72, 76, 79, 84, 88].forEach((n, i) => blip(out, t, { at: 0.38 + i * 0.035, w: 'square', f: mtof(n) * p, dur: 0.5, v: 0.06, lp: 4500, vib: [7, 5] }));
+      for (let i = 0; i < 6; i++) blip(out, t, { at: 0.42 + i * 0.06, w: 'sine', f: mtof(96 + (i % 3) * 4) * p, dur: 0.1, v: 0.05 });
+      return 1.0;
+    },
+    // The capsule bursts: a pop, a paper crackle and a chord; opts.tier
+    // 0..3 (common..legendary) stacks a fanfare and a sub hit on top.
+    capBurst(out, t, o, p) {
+      const tier = U.clamp(+o.tier || 0, 0, 3);
+      duck(0.6 + tier * 0.3);
+      blip(out, t, { w: 'sine', f: 420 * p, to: 90, dur: 0.12, v: 0.4 });
+      hiss(out, t, { type: 'bandpass', f: 1800, to: 600, q: 0.7, dur: 0.2, v: 0.3, crunch: true });
+      for (let i = 0; i < 10; i++) hiss(out, t, { at: 0.05 + S.r() * 0.5, type: 'highpass', f: 5000, dur: 0.02, v: 0.06 });
+      const chord = [[72, 76, 79], [72, 76, 79, 84], [67, 72, 76, 79, 84], [60, 67, 72, 76, 79, 84, 88]][tier];
+      chord.forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.03, w: i % 2 ? 'triangle' : 'square', f: mtof(n) * p, dur: 0.6 + tier * 0.2, v: 0.06, lp: 4200, vib: [6, 4] }));
+      if (tier >= 2) blip(out, t, { w: 'sine', f: 130, to: 36, dur: 0.5, v: 0.4 });
+      if (tier >= 3) for (let i = 0; i < 8; i++) blip(out, t, { at: 0.3 + i * 0.07, w: 'sine', f: mtof(96 + (i % 4) * 3) * p, dur: 0.12, v: 0.05 });
+      return 0.9 + tier * 0.25;
+    },
+    // Tickets feeding out of the cabinet: a quick ratchet of paper clicks.
+    ticket(out, t, o, p) {
+      for (let i = 0; i < 3; i++) {
+        hiss(out, t, { at: i * 0.028, type: 'bandpass', f: 3400 * p, q: 3, dur: 0.018, v: 0.12 });
+        blip(out, t, { at: i * 0.028, w: 'square', f: 1100 * p, dur: 0.012, v: 0.03, hp: 600 });
+      }
+      return 0.1;
+    },
+    // A payout line ticks in: a register ding, walking up with opts.pitch.
+    tally(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 1320 * p, dur: 0.05, v: 0.07, lp: 5000 });
+      blip(out, t, { at: 0.04, w: 'sine', f: 1980 * p, dur: 0.22, v: 0.08 });
+      hiss(out, t, { type: 'bandpass', f: 2600, dur: 0.03, v: 0.1 });
+      return 0.27;
+    },
+    // The total slams in: a thump and a cash register ka-ching.
+    slam(out, t, o, p) {
+      duck(0.5);
+      blip(out, t, { w: 'sine', f: 150 * p, to: 50, dur: 0.18, v: 0.5 });
+      hiss(out, t, { type: 'lowpass', f: 1800, to: 300, dur: 0.12, v: 0.3, crunch: true });
+      blip(out, t, { at: 0.1, w: 'square', f: 2093 * p, dur: 0.06, v: 0.07, lp: 6000 });
+      blip(out, t, { at: 0.16, w: 'sine', f: 2637 * p, dur: 0.5, v: 0.1, vib: [9, 8] });
+      blip(out, t, { at: 0.16, w: 'sine', f: 3136 * p, dur: 0.4, v: 0.05 });
+      return 0.66;
+    },
+    // The roulette flicks past a slot: a tiny wooden tock.
+    roulette(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 900 * p, to: 700 * p, dur: 0.03, v: 0.12 });
+      return 0.05;
+    },
+    // DOUBLE REWARD: two stacked fanfares a fifth apart.
+    double(out, t, o, p) {
+      duck(1.4);
+      [0, 7].forEach((k, j) => [60, 64, 67, 72].forEach((n, i) => blip(out, t, { at: j * 0.22 + i * 0.05, w: 'square', f: mtof(n + k) * p, dur: 0.12, v: 0.08, lp: 5000 })));
+      [72, 79, 84, 88].forEach((n) => blip(out, t, { at: 0.5, w: 'square', f: mtof(n) * p, dur: 0.8, v: 0.05, lp: 3800, vib: [6, 5] }));
+      blip(out, t, { at: 0.5, w: 'sine', f: 110, to: 45, dur: 0.4, v: 0.35 });
+      return 1.35;
+    },
+  });
+  Object.assign(GAP, { ticket: 0.05, tally: 0.05, roulette: 0.03, capCrack: 0.06 });
+  Object.assign(LEVEL, { capBurst: 1.1, capUpgrade: 1.05, slam: 1.05 });
+  NAMES.push('capDrop', 'capCrack', 'capUpgrade', 'capBurst', 'ticket', 'tally', 'slam', 'roulette', 'double');
+
+  // ---------------------------------------------------------------- cabinet materials
+  // What things sound like in the bin (DESIGN.md "Cabinet materials"): each
+  // material has its own voice for a hard landing (opts.vel 0..1.4 scales
+  // it), plus the cabinet toys (fuse, blast, near miss, golden prize, the
+  // claw's happy ding and the Lucky Claw).
+  const impV = (o) => 0.3 * U.clamp(o.vel == null ? 1 : +o.vel || 0, 0.2, 1.4);
+  Object.assign(BANK, {
+    // Metal: a bright clank, an inharmonic ring (1 : 2.76 : 5.4) and a scrape.
+    clank(out, t, o, p) {
+      const v = impV(o);
+      blip(out, t, { w: 'square', f: 1250 * p, to: 820 * p, dur: 0.03, v: v * 0.6, lp: 5200 });
+      [1, 2.76, 5.4].forEach((k, i) => blip(out, t, { w: 'sine', f: 560 * k * p, dur: 0.28 - i * 0.06, v: v * 0.32 / (i + 1) }));
+      hiss(out, t, { type: 'highpass', f: 4200, dur: 0.05, v: v * 0.5 });
+      return 0.3;
+    },
+    // Glass: a few high glassy pings.
+    tinkle(out, t, o, p) {
+      const v = impV(o);
+      for (let i = 0; i < 3; i++) blip(out, t, { at: i * 0.035 + S.r() * 0.01, w: 'sine', f: (2900 + i * 620 + S.r() * 300) * p, dur: 0.12, v: v * 0.22 });
+      hiss(out, t, { type: 'highpass', f: 6500, dur: 0.02, v: v * 0.3 });
+      return 0.2;
+    },
+    // Glass cracking: a sharp tick, a splintering crackle and a bent ping.
+    crack(out, t, o, p) {
+      hiss(out, t, { type: 'highpass', f: 2600, dur: 0.07, v: 0.42, crunch: true });
+      for (let i = 0; i < 5; i++) hiss(out, t, { at: 0.02 + i * 0.022 + S.r() * 0.01, type: 'bandpass', f: 3800 + S.r() * 2400, q: 6, dur: 0.012, v: 0.18 });
+      blip(out, t, { w: 'sine', f: 3400 * p, to: 2300 * p, dur: 0.18, v: 0.12 });
+      return 0.22;
+    },
+    // Heavy: a deep floor thump with a rattle of the cabinet on top.
+    thud(out, t, o, p) {
+      const v = impV(o) * 1.4;
+      blip(out, t, { w: 'sine', f: 95 * p, to: 38, dur: 0.24, v });
+      hiss(out, t, { type: 'lowpass', f: 500, to: 120, dur: 0.14, v: v * 0.6, crunch: true });
+      for (let i = 0; i < 3; i++) blip(out, t, { at: 0.05 + i * 0.03, w: 'square', f: (700 + i * 160) * p, dur: 0.02, v: v * 0.08, lp: 3000 });
+      return 0.3;
+    },
+    // Rubber: the cartoon boing (a sine with a wobbling pitch bend).
+    boing(out, t, o, p) {
+      const v = impV(o);
+      blip(out, t, { w: 'sine', f: 200 * p, to: 520 * p, dur: 0.22, v: v * 0.8, vib: [22, 60] });
+      blip(out, t, { w: 'triangle', f: 100 * p, to: 70, dur: 0.08, v: v * 0.5 });
+      return 0.24;
+    },
+    // Food: a soft wet squish.
+    squish(out, t, o, p) {
+      const v = impV(o);
+      hiss(out, t, { type: 'lowpass', f: 1400 * p, to: 300, q: 3, dur: 0.1, v: v * 0.6 });
+      blip(out, t, { w: 'sine', f: 260 * p, to: 120, dur: 0.08, v: v * 0.5 });
+      return 0.12;
+    },
+    // Potion: liquid glugs inside the glass.
+    slosh(out, t, o, p) {
+      const v = impV(o);
+      for (let i = 0; i < 3; i++) blip(out, t, { at: i * 0.06, w: 'sine', f: (300 + i * 90 + S.r() * 40) * p, to: (520 + i * 60) * p, dur: 0.06, v: v * 0.35 });
+      hiss(out, t, { type: 'bandpass', f: 900, q: 2, dur: 0.16, v: v * 0.2 });
+      return 0.2;
+    },
+    // Magic: a soft bell chime with a shimmer.
+    chime(out, t, o, p) {
+      const v = impV(o);
+      [84, 91].forEach((n, i) => blip(out, t, { at: i * 0.04, w: 'sine', f: mtof(n) * p, dur: 0.4, v: v * 0.2, vib: [6, 6] }));
+      hiss(out, t, { type: 'highpass', f: 7000, dur: 0.1, v: v * 0.1, a: 0.02 });
+      return 0.44;
+    },
+    // A fuse catching: a hissing fizz with crackles.
+    fuse(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 5200 * p, q: 1.2, dur: 0.5, v: 0.2, a: 0.02 });
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: S.r() * 0.45, type: 'highpass', f: 6000, dur: 0.012, v: 0.2 });
+      return 0.52;
+    },
+    // The fuse's countdown beep (opts.pitch goes up on the last turn).
+    beep(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 1760 * p, dur: 0.07, v: 0.09, lp: 5000 });
+      return 0.09;
+    },
+    // A bomb going off in the bin: a sub drop, a crunchy blast and debris.
+    boom(out, t, o, p) {
+      duck(0.9, 0.2);
+      blip(out, t, { w: 'sine', f: 120 * p, to: 28, dur: 0.6, v: 0.7 });
+      hiss(out, t, { type: 'lowpass', f: 2600, to: 160, dur: 0.55, v: 0.6, crunch: true });
+      hiss(out, t, { type: 'highpass', f: 3000, dur: 0.08, v: 0.35 });
+      for (let i = 0; i < 6; i++) blip(out, t, { at: 0.12 + S.r() * 0.4, w: 'square', f: (500 + S.r() * 900) * p, dur: 0.02, v: 0.05, lp: 3000 });
+      return 0.7;
+    },
+    // SO CLOSE: the sad trombone, two falling notes and a wah.
+    groan(out, t, o, p) {
+      [[62, 0], [61, 0.2], [60, 0.4]].forEach(([n, at]) => blip(out, t, { at, w: 'sawtooth', f: mtof(n - 12) * p, dur: 0.18, v: 0.07, lp: 900 }));
+      blip(out, t, { at: 0.6, w: 'sawtooth', f: mtof(47) * p, to: mtof(44) * p, dur: 0.5, v: 0.08, lp: 800, vib: [5, 14] });
+      return 1.1;
+    },
+    // A Golden Prize grabbed: a short bright fanfare.
+    fanfare(out, t, o, p) {
+      duck(0.9);
+      [67, 72, 76, 79].forEach((n, i) => blip(out, t, { at: i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.08, lp: 5000 }));
+      [76, 79, 84].forEach((n) => blip(out, t, { at: 0.3, w: 'triangle', f: mtof(n) * p, dur: 0.55, v: 0.08, vib: [6, 5] }));
+      for (let i = 0; i < 5; i++) blip(out, t, { at: 0.32 + i * 0.06, w: 'sine', f: mtof(96 + (i % 3) * 3) * p, dur: 0.08, v: 0.04 });
+      return 0.9;
+    },
+    // The claw comes home loaded: a little two-tone ding.
+    ding(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: mtof(88) * p, dur: 0.25, v: 0.13 });
+      blip(out, t, { at: 0.09, w: 'sine', f: mtof(93) * p, dur: 0.4, v: 0.12 });
+      return 0.5;
+    },
+    // Lucky Claw: a rising sparkle into a power-up chord.
+    lucky(out, t, o, p) {
+      duck(0.6);
+      blip(out, t, { w: 'square', f: mtof(64) * p, to: mtof(88) * p, dur: 0.3, v: 0.06, lp: 4000, lin: true });
+      [76, 81, 85, 88].forEach((n) => blip(out, t, { at: 0.3, w: 'triangle', f: mtof(n) * p, dur: 0.45, v: 0.07 }));
+      hiss(out, t, { type: 'bandpass', f: 2000, to: 8000, q: 2, dur: 0.3, v: 0.08 });
+      return 0.78;
+    },
+  });
+  Object.assign(GAP, { clank: 0.05, tinkle: 0.05, crack: 0.05, thud: 0.08, boing: 0.06, squish: 0.06, slosh: 0.08, chime: 0.08, fuse: 0.2, beep: 0.2, boom: 0.1, groan: 0.5, fanfare: 0.3, ding: 0.3, lucky: 0.3 });
+  Object.assign(LEVEL, { boom: 1.15, thud: 1.0 });
+  NAMES.push('clank', 'tinkle', 'crack', 'thud', 'boing', 'squish', 'slosh', 'chime', 'fuse', 'beep', 'boom', 'groan', 'fanfare', 'ding', 'lucky');
+
+  // ---------------------------------------------------------------- monsters
+  // Enemies eating your stuff and getting angry (DESIGN.md "Enemies").
+  Object.assign(BANK, {
+    // A wet swallow: a throat thump sliding down, a little slurp on top.
+    gulp(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 260 * p, to: 70, dur: 0.22, v: 0.4 });
+      hiss(out, t, { type: 'bandpass', f: 900 * p, to: 300, q: 3, dur: 0.16, v: 0.16 });
+      blip(out, t, { at: 0.12, w: 'triangle', f: 140 * p, to: 55, dur: 0.16, v: 0.28 });
+      return 0.32;
+    },
+    // A burp (items coming back up): a buzzy saw wobbling down; opts.big for a death burst.
+    burp(out, t, o, p) {
+      const big = !!o.big;
+      blip(out, t, { w: 'sawtooth', f: (big ? 110 : 150) * p, to: (big ? 60 : 90) * p, dur: big ? 0.45 : 0.28, v: 0.22, lp: 700, q: 5, vib: [24, 18] });
+      hiss(out, t, { type: 'lowpass', f: 600, dur: big ? 0.3 : 0.18, v: 0.16, crunch: true });
+      if (big) blip(out, t, { at: 0.05, w: 'sine', f: 500 * p, to: 900 * p, dur: 0.2, v: 0.12 });
+      return big ? 0.5 : 0.32;
+    },
+    // Phase two: a growl that swells into a roar, a sub hit under it.
+    roar(out, t, o, p) {
+      duck(1.2);
+      blip(out, t, { w: 'sawtooth', f: 70 * p, to: 120 * p, dur: 0.9, v: 0.2, a: 0.12, lp: 900, q: 6, vib: [11, 14] });
+      blip(out, t, { w: 'square', f: 105 * p, to: 180 * p, dur: 0.8, v: 0.08, a: 0.15, lp: 1400, vib: [7, 10] });
+      hiss(out, t, { type: 'bandpass', f: 500, to: 1400, q: 1.2, dur: 0.9, v: 0.2, a: 0.2, crunch: true });
+      blip(out, t, { w: 'sine', f: 90, to: 35, dur: 0.5, v: 0.4 });
+      return 1.0;
+    },
+  });
+  Object.assign(GAP, { gulp: 0.08, burp: 0.1, roar: 0.4 });
+  Object.assign(LEVEL, { roar: 1.1 });
+  NAMES.push('gulp', 'burp', 'roar');
+
   /* Plays a named effect. opts: {vol, pitch, mass (itemLand), vel (itemLand
      impact 0..1), amt (hit damage)}. Returns true when something was queued. */
   function sfx(name, opts) {
