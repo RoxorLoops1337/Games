@@ -74,6 +74,7 @@ const STATIC_PATHS = [
   'world_choir_games',
   'grudge_draft',
   'clawspire',
+  'rawclaw',
   'claw_crawl',
   'tools',
 ];
@@ -124,8 +125,8 @@ const copyStatic = () => {
 // loader reads art/manifest.json (every PNG present, relative to art/) so a
 // deployed page only requests files that exist; without the manifest it
 // probes every path. Written into dist/ only, never into the source tree.
-const writeArtManifest = () => {
-  const root = path.join(DIST, 'clawspire', 'art');
+const writeArtManifest = (game = 'clawspire') => {
+  const root = path.join(DIST, game, 'art');
   if (!fs.existsSync(root)) return;
   const out = [];
   const walk = (dir, rel) => {
@@ -138,7 +139,7 @@ const writeArtManifest = () => {
   walk(root, '');
   out.sort();
   fs.writeFileSync(path.join(root, 'manifest.json'), JSON.stringify(out));
-  console.log(`clawspire art manifest: ${out.length} file(s)`);
+  console.log(`${game} art manifest: ${out.length} file(s)`);
 };
 
 (async () => {
@@ -160,6 +161,7 @@ const writeArtManifest = () => {
   wipeDist();
   copyStatic();
   writeArtManifest();
+  writeArtManifest('rawclaw');
 
   for (const t of BUNDLES) {
     await esbuild.build(buildOpts(t));
