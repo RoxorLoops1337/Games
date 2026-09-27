@@ -92,7 +92,7 @@ function uniqueRatio(map) {
   const R = api.RENDER;
   h.ok(R && typeof R.item === 'function', 'RENDER namespace loads with util only');
   for (const name of ['item', 'enemy', 'cabinet', 'cabinetBack', 'cabinetFront', 'claw', 'bodyDebug', 'hex', 'mapBg', 'bg', 'hpBar', 'statusPips', 'intent', 'portrait', 'relicIcon', 'title', 'enemyBox',
-    'terrainHex', 'terrainFill', 'biomePal', 'mapCompass', 'mapHeader', 'mapArrow'])
+    'terrainHex', 'terrainFill', 'biomePal', 'groundOf', 'lightRim', 'bulb', 'mapCompass', 'mapHeader', 'mapArrow'])
     h.eq(typeof R[name], 'function', 'RENDER.' + name + ' exists');
   for (const name of ['burst', 'text', 'shake', 'flash', 'trail', 'update', 'draw', 'offset'])
     h.eq(typeof R.fx[name], 'function', 'RENDER.fx.' + name + ' exists');
@@ -218,32 +218,70 @@ function uniqueRatio(map) {
     drawCheck('bg act ' + act, c => R.bg(c, 540, 340, act, 1));
     balanced('bg act ' + act, c => R.bg(c, 540, 340, act, 2));
   }
-  // map terrain: every biome x terrain paints, land fill follows elevation and biome
+  // the tileset: every ground type in every biome paints, with a
+  // fingerprint of its own (24 distinct), plus the old terrain-only calls
+  const GROUNDS = ['grass', 'forest', 'dirt', 'sand', 'hill', 'mountain', 'shallow', 'sea'];
   const tfp = new Map();
   for (const biome of ['cellar', 'foundry', 'vault']) {
-    for (const terr of ['land', 'shallow', 'sea']) {
-      const st = drawCheck(`terrainHex ${biome} ${terr}`, c => R.terrainHex(c, 50, 50, 30, { terrain: terr, elev: 0.9 }, { biome, seed: 12345, t: 1, orient: 'v' }));
-      tfp.set(biome + terr, fingerprint(st));
+    for (const g of GROUNDS) {
+      const terr = g === 'sea' || g === 'shallow' ? g : 'land';
+      const st = drawCheck(`terrainHex ${biome} ${g}`, c => R.terrainHex(c, 50, 50, 30, { terrain: terr, ground: g, elev: g === 'hill' ? 0.7 : 0.4, coast: g === 'sand' }, { biome, seed: 12345, t: 1, orient: 'v' }));
+      tfp.set(biome + '/' + g, fingerprint(st));
+      drawCheck(`terrainHex ${biome} ${g} other seed`, c => R.terrainHex(c, 50, 50, 30, { terrain: terr, ground: g, elev: 0.4 }, { biome, seed: 777, t: 2, orient: 'v' }));
     }
+    for (const terr of ['land', 'shallow', 'sea']) drawCheck(`terrainHex ${biome} ${terr} (no ground)`, c => R.terrainHex(c, 50, 50, 30, { terrain: terr, elev: 0.9 }, { biome, seed: 12345, t: 1, orient: 'v' }));
     drawCheck(`terrainHex ${biome} lowland`, c => R.terrainHex(c, 50, 50, 30, { terrain: 'land', elev: 0.1 }, { biome, seed: 6, t: 2, orient: 'v' }));
   }
-  h.ok(uniqueRatio(new Map([['l', tfp.get('cellarland')], ['s', tfp.get('cellarshallow')], ['w', tfp.get('cellarsea')]])).ratio === 1, 'land, ford and sea draw differently');
-  h.ok(tfp.get('cellarsea') !== tfp.get('foundrysea'), 'lava pools differ from water');
+  const tur = uniqueRatio(tfp);
+  h.ok(tur.ratio === 1, 'every ground type draws differently in every biome (' + Math.round(tur.ratio * 100) + '%) dupes=' + JSON.stringify(tur.dupes));
+  h.eq(R.groundOf({ terrain: 'land', elev: 0.9 }), 'hill', 'groundOf: high land without a ground is a hill');
+  h.eq(R.groundOf({ terrain: 'land', elev: 0.02, coast: true }), 'sand', 'groundOf: low coast is sand');
+  h.eq(R.groundOf({ terrain: 'sea' }) + R.groundOf({ terrain: 'shallow' }) + R.groundOf({ ground: 'forest' }) + R.groundOf(null), 'seashallowforestgrass', 'groundOf: water, own ground, default');
   drawCheck('terrainHex defaults', c => R.terrainHex(c, 0, 0, 30, null, null));
   h.ok(R.terrainFill('cellar', 'land', 0.1) !== R.terrainFill('cellar', 'land', 0.9), 'terrainFill shades by elevation');
-  h.ok(R.terrainFill('vault', 'sea', 0.5) !== R.terrainFill('cellar', 'sea', 0.5), 'terrainFill differs per biome');
+  h.ok(R.terrainFill('cellar', 'land', 0.4, 'grass') !== R.terrainFill('cellar', 'land', 0.4, 'forest') && R.terrainFill('cellar', 'land', 0.4, 'dirt') !== R.terrainFill('cellar', 'land', 0.4, 'sand'), 'terrainFill differs per ground');
+  h.ok(R.terrainFill('vault', 'sea', 0.5) !== R.terrainFill('cellar', 'sea', 0.5) && R.terrainFill('vault', 'land', 0.4, 'grass') !== R.terrainFill('cellar', 'land', 0.4, 'grass'), 'terrainFill differs per biome');
   h.eq(R.terrainFill('cellar', 'land', 0.5), R.terrainFill('cellar', 'land', 0.5), 'terrainFill is stable');
   h.ok(/^rgb\(/.test(R.terrainFill('foundry', 'sea', 0.3)) && R.biomePal('nope') === R.biomePal('cellar'), 'fills are rgb strings, unknown biomes fall back');
-  // hex in terrain mode: coast edges, translucent fog, plate under the icon
+  for (const b of ['cellar', 'foundry', 'vault']) for (const k of ['grass', 'forest', 'dirt', 'sand', 'hill', 'mtn', 'cap', 'sea', 'shallow', 'coast', 'foam', 'tint']) h.ok(typeof R.BIOME_PAL[b][k] === 'string', `BIOME_PAL ${b}.${k}`);
+  // hex in terrain mode: coast edges, darkness (lighter next to the light),
+  // the pickup on top of the ground, gone when done, no plate, no check
   const tst = { t: 1, fill: 'rgb(120,110,90)', mask: 0b101010, biome: 'cellar', orient: 'v' };
   const th = drawCheck('hex terrain hidden coast', c => R.hex(c, 50, 50, 30, { type: 'fight', revealed: false, q: 1, r: 2, terrain: 'land', coast: true }, tst));
   const ph = drawCheck('hex plain hidden', c => R.hex(c, 50, 50, 30, { type: 'fight', revealed: false, q: 1, r: 2 }, { t: 1, orient: 'v' }));
-  h.ok(fingerprint(th) !== fingerprint(ph), 'terrain fog differs from the solid fog');
+  h.ok(fingerprint(th) !== fingerprint(ph), 'terrain darkness differs from the solid fog');
+  const dk = drawCheck('hex terrain dark', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: false, q: 1, r: 2, terrain: 'land' }, Object.assign({}, tst, { mask: 0 })));
+  const nl = drawCheck('hex terrain dark near light', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: false, q: 1, r: 2, terrain: 'land' }, Object.assign({}, tst, { mask: 0, nearLight: true })));
+  h.ok(dk.paints >= 1 && nl.paints >= 1, 'darkness paints');
+  for (const type of ['fight', 'elite', 'treasure', 'gem', 'ink', 'brush', 'event', 'shop', 'rest', 'forge', 'tower']) {
+    const undone = drawCheck('hex terrain lit ' + type, c => R.hex(c, 50, 50, 30, { type, revealed: true, q: 1, r: 2, terrain: 'land' }, Object.assign({}, tst, { mask: 0 })));
+    const done = drawCheck('hex terrain done ' + type, c => R.hex(c, 50, 50, 30, { type, revealed: true, done: true, visited: true, q: 1, r: 2, terrain: 'land' }, Object.assign({}, tst, { mask: 0 })));
+    const empty = drawCheck('hex terrain empty vs ' + type, c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: true, q: 1, r: 2, terrain: 'land' }, Object.assign({}, tst, { mask: 0 })));
+    h.ok(fingerprint(undone) !== fingerprint(done) && undone.paints > done.paints, type + ': an undone tile draws its icon, a done one does not');
+    h.eq(fingerprint(done), fingerprint(empty), type + ': a done tile draws like bare terrain (no plate, no check mark)');
+    const plainDone = drawCheck('hex plain done ' + type, c => R.hex(c, 50, 50, 30, { type, revealed: true, done: true, q: 1, r: 2 }, { t: 1 }));
+    const plainUndone = drawCheck('hex plain lit ' + type, c => R.hex(c, 50, 50, 30, { type, revealed: true, q: 1, r: 2 }, { t: 1 }));
+    h.ok(plainUndone.paints > plainDone.paints, type + ': done hides the icon in the plain look too');
+  }
   drawCheck('hex terrain revealed shop', c => R.hex(c, 50, 50, 30, { type: 'shop', revealed: true, q: 1, r: 2, terrain: 'land' }, tst));
   drawCheck('hex terrain visited empty', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: true, visited: true, q: 1, r: 2, terrain: 'land' }, tst));
   drawCheck('hex terrain ford hidden', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: false, q: 1, r: 2, terrain: 'shallow' }, tst));
   drawCheck('hex terrain ford revealed reachable', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: true, q: 1, r: 2, terrain: 'shallow' }, Object.assign({ reachable: true, path: 2, target: true }, tst)));
+  drawCheck('hex terrain flare wash', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: false, q: 1, r: 2, terrain: 'land' }, Object.assign({ path: 1, flare: true }, tst)));
+  drawCheck('hex terrain dark sea', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: false, q: 1, r: 2, terrain: 'sea' }, tst));
   drawCheck('hex terrain known landmark', c => R.hex(c, 50, 50, 30, { type: 'tower', revealed: false, known: true, q: 3, r: 4, terrain: 'land' }, tst));
+  drawCheck('hex terrain lit mountain', c => R.hex(c, 50, 50, 30, { type: 'empty', revealed: true, q: 3, r: 4, terrain: 'land', ground: 'mountain' }, tst));
+  // the glow where the light meets the dark, and the marquee bulb
+  const rim = drawCheck('lightRim', c => R.lightRim(c, 50, 50, 30, 0b100101, true, 1));
+  h.ok(rim.paints >= 2, 'lightRim paints its edges');
+  drawCheck('lightRim none', c => { R.lightRim(c, 50, 50, 30, 0, true, 1); c.fillRect(0, 0, 1, 1); });
+  drawCheck('lightRim defaults', c => R.lightRim(c, 0, 0, 0, 1));
+  const bOn = drawCheck('bulb on', c => R.bulb(c, 20, 20, 8, 1, true)), bOff = drawCheck('bulb off', c => R.bulb(c, 20, 20, 8, 1, false));
+  h.ok(fingerprint(bOn) !== fingerprint(bOff), 'a lit bulb draws differently from a dark one');
+  drawCheck('bulb defaults', c => R.bulb(c));
+  drawCheck('mapPath bulbs pill', c => R.mapPath(c, [{ x: 10, y: 10 }, { x: 40, y: 30 }, { x: 70, y: 30 }], 30, { cost: 3, ink: 2, label: 'Shop', unit: 'bulbs', t: 1 }));
+  drawCheck('mapPath one bulb', c => R.mapPath(c, [{ x: 10, y: 10 }, { x: 40, y: 30 }], 30, { cost: 1, ink: 5, t: 1 }));
+  drawCheck('mapPath flare', c => R.mapPath(c, [{ x: 10, y: 10 }, { x: 40, y: 30 }, { x: 70, y: 50 }], 30, { label: 'Flare', color: '#ffb347', t: 1 }));
   drawCheck('mapCompass', c => R.mapCompass(c, 100, 100, 28, 1));
   drawCheck('mapCompass defaults', c => R.mapCompass(c, 0, 0, 0, 0));
   drawCheck('mapHeader', c => R.mapHeader(c, 10, 10, 190, 32, 'The Damp Arcade', '7 of 246 hexes charted', 1));

@@ -1,10 +1,12 @@
 // Clawspire map suite: generation rules over many seeds, terrain (water,
-// islands, fords, coast), fog / ink / brush / movement rules with ford
-// costs, pixel <-> hex round trips, fitting, bounds, paths, save round trip.
+// islands, fords, coast, the ground types and mountains), the light (bulbs,
+// tools, vision on move, tower views) and movement rules with ford costs,
+// pixel <-> hex round trips, fitting, bounds, paths, save round trip.
 // gen() makes a 10x7 map with terrain, genL() a dry one (the legacy
 // geometry checks want land everywhere), world() the game's 16x22.
 // Runs util+map alone, then util+data+map when data.js exists, plus a stub
-// DATA eval to prove the DATA.BRUSHES / ENCOUNTERS / EVENTS paths.
+// DATA eval to prove the DATA.TOOLS / ENCOUNTERS / EVENTS paths. The map's
+// fields keep their old names: M.ink is the bulbs, M.brushes the tools.
 import fs from 'fs';
 import path from 'path';
 import { harness, boot, source, DIR } from './clawspire_lib.mjs';
@@ -19,9 +21,12 @@ const tilesOf = (M) => Object.values(M.tiles);
 const gen = (seed, extra) => MAP.generate(Object.assign({ act: 1, rng: U.rng(seed), cols: 10, rows: 7 }, extra || {}));
 const genL = (seed, extra) => gen(seed, Object.assign({ water: 0 }, extra || {}));
 const world = (seed, extra) => MAP.generate(Object.assign({ act: 1, rng: U.rng(seed) }, extra || {}));
-const isLand = (t) => t.terrain === 'land';
+const isMountain = (t) => t.ground === 'mountain';
+const isLand = (t) => t.terrain === 'land' && !isMountain(t);
+const isWater = (t) => t.terrain === 'sea' || t.terrain === 'shallow';
 const landOf = (M) => tilesOf(M).filter(isLand);
-// Independent Dijkstra over hidden, non-boss, non-sea tiles from the lit area: the ink a path to `t` must cost.
+const TOOL_IDS = ['flare', 'lantern', 'kite'];
+// Independent Dijkstra over hidden, non-boss, lightable tiles (no sea, no mountain) from the lit area: the bulbs a path to `t` must cost.
 function inkTo(M, t) {
   const lit = tilesOf(M).filter(x => x.revealed && (x.type !== 'boss' || x.visited));
   const dist = {};
@@ -35,7 +40,7 @@ function inkTo(M, t) {
     if (c === t) return dist[ck];
     for (const [q, r] of MAP.neighbors(M, c.q, c.r)) {
       const n = M.tiles[MAP.key(q, r)];
-      if (n.revealed || n.type === 'boss' || n.terrain === 'sea') continue;
+      if (n.revealed || n.type === 'boss' || n.terrain === 'sea' || isMountain(n)) continue;
       const nd = dist[ck] + cost(n);
       const nk = MAP.key(q, r);
       if (dist[nk] == null || nd < dist[nk]) { dist[nk] = nd; if (!open.includes(n)) open.push(n); }
@@ -48,6 +53,8 @@ const LANDMARK = ['shop', 'rest', 'forge', 'elite', 'treasure', 'boss', 'tower']
 const inB = (M, q, r) => r >= 0 && r < M.rows && colOf(q, r) >= 0 && colOf(q, r) < M.cols;
 const snapshot = (M) => JSON.stringify(M);
 const revealedSet = (M) => new Set(tilesOf(M).filter(t => t.revealed).map(t => MAP.key(t.q, t.r)));
+// Lights a tile by hand and keeps revealedCount honest (the count leaves out the sea).
+const litBy = (M, t) => { if (!t.revealed) { t.revealed = true; if (t.terrain !== 'sea') M.revealedCount++; } return t; };
 // Hex distance in axial coordinates.
 const hexDist = (a, b) => Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(a.q + a.r - b.q - b.r));
 // Puts the road back under the fog (the start and its neighbours stay lit),
@@ -92,33 +99,51 @@ function checkMap(M, label, D) {
   // Landmarks: known exactly on the landmark types, from the start.
   h.ok(tiles.every(t => t.known === LANDMARK.includes(t.type)), label + ' known flag exactly on landmark types');
   h.ok(tiles.every(t => MAP.isLandmark(t) === LANDMARK.includes(t.type)), label + ' isLandmark agrees');
-  // Towers: islands first (one each while towers remain), at least one on
-  // the mainland, never next to each other. Mainland towers sit off the
-  // axis; on a dry map they keep the old edge rule (top or bottom row,
-  // columns 3..cols-3, no special beside them).
+  // Lookout towers: 2 or 3, never next to each other, at most one on an
+  // island, on land, never on or beside the road. The world (16x22) keeps
+  // the full rules: exactly 3, pairwise TOWER_GAP apart, on high ground
+  // (elev >= TOWER_ELEV), each with TOWER_VIEW_MIN hexes in its radius
+  // TOWER_VIEW view that no other tower's view covers.
   const towers = tiles.filter(t => t.type === 'tower');
   const islands = MAP.islandsOf(M);
   const onIsland = new Set([].concat(...islands));
-  const mainTowers = towers.filter(t => !onIsland.has(MAP.key(t.q, t.r)));
   const isleTowers = towers.filter(t => onIsland.has(MAP.key(t.q, t.r)));
-  h.ok(mainTowers.length >= 1, label + ' at least one tower on the mainland');
-  h.ok(mainTowers.every(t => t.r !== M.start.r), label + ' mainland towers off the start-boss axis');
+  const roadSet = new Set((M.road || []).map(([q, r]) => MAP.key(q, r)));
   h.ok(towers.every(a => towers.every(b => a === b || !adj(a, b))), label + ' towers never adjacent to each other');
-  if (islands.length && towers.length >= 2) h.ok(isleTowers.length >= 1, label + ' an island holds a tower');
-  h.ok(isleTowers.length <= islands.length && islands.every(isle => isle.filter(k => M.tiles[k].type === 'tower').length <= 1), label + ' at most one tower per island');
-  if (!(M.water > 0)) {
-    h.ok(towers.every(t => t.r === 0 || t.r === M.rows - 1), label + ' dry map: towers on the top or bottom row');
-    h.ok(towers.every(t => colOf(t.q, t.r) >= 3 && colOf(t.q, t.r) <= M.cols - 3), label + ' dry map: towers in columns 3..cols-3');
-    if (tiles.length >= 60) {
-      h.ok(towers.every(t => MAP.neighbors(M, t.q, t.r).every(([q, r]) => !SPECIAL.includes(M.tiles[MAP.key(q, r)].type))),
-        label + ' dry map: towers not adjacent to another special');
-    }
+  h.ok(isleTowers.length <= 1, label + ' at most one tower on an island');
+  h.ok(towers.every(t => isLand(t)), label + ' towers stand on land');
+  h.ok(towers.every(t => !roadSet.has(MAP.key(t.q, t.r)) && !MAP.neighbors(M, t.q, t.r).some(([q, r]) => roadSet.has(MAP.key(q, r)))), label + ' the road never touches a tower');
+  if (tiles.length >= 200) {
+    h.eq(towers.length, 3, label + ' three towers');
+    h.ok(towers.every(a => towers.every(b => a === b || hexDist(a, b) >= MAP.TOWER_GAP)), label + ' towers pairwise >= ' + MAP.TOWER_GAP + ' apart');
+    h.ok(towers.every(t => t.elev >= MAP.TOWER_ELEV), label + ' towers on hills (elev >= ' + MAP.TOWER_ELEV + ')');
+    const own = towers.map(a => MAP.disc(M, a.q, a.r, MAP.TOWER_VIEW).filter(([q, r]) => !towers.some(b => b !== a && hexDist(b, { q, r }) <= MAP.TOWER_VIEW)).length);
+    h.ok(own.every(n => n >= MAP.TOWER_VIEW_MIN), label + ' each tower view covers >= ' + MAP.TOWER_VIEW_MIN + ' hexes of its own (' + own.join('/') + ')');
+    h.ok(towers.every(t => hexDist(t, M.start) >= 4 && hexDist(t, M.boss) >= 4), label + ' towers keep away from the start and the boss');
   }
   // Terrain: three kinds, sea empty and unknown, coast flags right, elevation
   // in range, biome per act, every island reachable through a ford.
   h.ok(tiles.every(t => ['land', 'shallow', 'sea'].includes(t.terrain)), label + ' terrain is land, shallow or sea');
   h.ok(tiles.filter(t => t.terrain !== 'land').every(t => t.type === 'empty' && !t.known && Object.keys(t.content).length === 0), label + ' water holds no content');
-  h.ok(tiles.every(t => t.coast === (isLand(t) && MAP.neighbors(M, t.q, t.r).some(([q, r]) => !isLand(M.tiles[MAP.key(q, r)])))), label + ' coast flag on land touching water');
+  h.ok(tiles.every(t => t.coast === (isLand(t) && MAP.neighbors(M, t.q, t.r).some(([q, r]) => isWater(M.tiles[MAP.key(q, r)])))), label + ' coast flag on land touching water');
+  // The ground (tileset) and the mountains: no content, no road, never
+  // walked or lit by hand, at most MOUNTAIN_MAX of the land, every content
+  // tile still reachable around them.
+  h.ok(tiles.every(t => MAP.GROUNDS.includes(t.ground)), label + ' every tile has a ground type');
+  h.ok(tiles.every(t => !isWater(t) || t.ground === t.terrain), label + ' water grounds match the terrain');
+  h.ok(tiles.every(t => isWater(t) || t.terrain !== 'land' || t.ground !== 'shallow' && t.ground !== 'sea'), label + ' land never has a water ground');
+  const mountains = tiles.filter(isMountain);
+  const terrLand = tiles.filter(t => t.terrain === 'land');
+  h.ok(mountains.length <= Math.floor(terrLand.length * MAP.MOUNTAIN_MAX), label + ' mountains at most ' + MAP.MOUNTAIN_MAX * 100 + '% of the land (' + mountains.length + '/' + terrLand.length + ')');
+  h.ok(mountains.every(t => t.terrain === 'land' && t.type === 'empty' && !t.known && !t.road && !t.coast && Object.keys(t.content).length === 0), label + ' mountains are bare land: no content, no road');
+  h.ok(mountains.every(t => MAP.moveCost(t) === Infinity && MAP.revealCost(t) === Infinity && !MAP.canMove(M, t.q, t.r) && !MAP.canReveal(M, t.q, t.r) && !MAP.isLand(t) && MAP.isMountain(t)), label + ' mountains are impassable and cannot be lit by hand');
+  h.ok(mountains.every(t => !onIsland.has(MAP.key(t.q, t.r))), label + ' no mountain on an island');
+  h.ok(tiles.filter(t => t.type !== 'empty').every(t => MAP.pathExists(M, M.start, t, { any: true })), label + ' every content tile is reachable around the mountains');
+  h.ok(tiles.filter(t => isLand(t)).every(t => (t.ground === 'hill') === (t.elev >= MAP.HILL_ELEV)), label + ' hills are the land at or above HILL_ELEV');
+  h.ok(tiles.filter(t => t.ground === 'sand').every(t => t.coast && t.elev < MAP.SAND_ELEV), label + ' sand is low coast');
+  h.ok(tiles.filter(t => isLand(t) && t.elev < MAP.HILL_ELEV && !(t.coast && t.elev < MAP.SAND_ELEV)).every(t => ['grass', 'forest', 'dirt'].includes(t.ground)), label + ' flat land is grass, forest or dirt');
+  if (M.water > 0) h.ok(mountains.every(t => t.elev >= MAP.MOUNTAIN_ELEV), label + ' mountains are the highest ground');
+  else h.ok(mountains.length === 0 && tiles.every(t => ['grass', 'forest', 'dirt'].includes(t.ground)), label + ' dry map: flat grass, forest and dirt, no mountains');
   h.ok(tiles.every(t => typeof t.elev === 'number' && t.elev >= 0 && t.elev <= 1), label + ' elev in 0..1');
   h.ok(tiles.every(t => t.biome === MAP.BIOMES[M.act]) && M.biome === MAP.BIOMES[M.act], label + ' biome follows the act');
   h.ok(isLand(MAP.tileAt(M, M.start.q, M.start.r)) && isLand(MAP.tileAt(M, M.boss.q, M.boss.r)), label + ' start and boss on land');
@@ -129,9 +154,10 @@ function checkMap(M, label, D) {
   h.ok(islands.every(isle => isle.every(k => !MAP.neighbors(M, M.tiles[k].q, M.tiles[k].r).some(([q, r]) => isLand(M.tiles[MAP.key(q, r)]) && !isle.includes(MAP.key(q, r))))), label + ' islands touch no other land');
   h.ok(land.every(t => MAP.pathExists(M, M.start, t, { any: true })), label + ' every land hex reachable through fords');
   if (islands.length) h.ok(tiles.some(t => t.terrain === 'shallow'), label + ' islands come with fords');
-  const wet = tiles.filter(t => !isLand(t)).length;
+  const wet = tiles.filter(isWater).length;
   h.ok(Math.abs(M.water - wet / tiles.length) < 0.011, label + ' M.water is the water share');
   h.ok(towers.every(t => t.content.elite && t.content.tower && ['ink', 'brush', 'claw', 'gold'].includes(t.content.tower.bonus.k)), label + ' towers carry an elite flag and a bonus');
+  h.ok(towers.every(t => t.content.tower.bonus.k !== 'brush' || (D && D.TOOLS ? Object.keys(D.TOOLS) : TOOL_IDS).includes(t.content.tower.bonus.id)), label + ' a tower tool bonus is a known tool');
   const elites = tiles.filter(t => t.type === 'elite');
   h.ok(elites.every(e => !adj(e, M.start)), label + ' no elite next to start');
   h.ok(MAP.neighbors(M, M.boss.q, M.boss.r).every(([q, r]) => M.tiles[MAP.key(q, r)].type !== 'elite'),
@@ -142,8 +168,8 @@ function checkMap(M, label, D) {
   h.ok(fights.every(t => Math.abs(t.content.diff - colOf(t.q, t.r) / (M.cols - 1)) < 0.006),
     label + ' fight diff follows column distance');
   h.ok(tiles.filter(t => t.type === 'ink').every(t => t.content.ink >= 1 && t.content.ink <= 2), label + ' ink tiles give 1-2');
-  const brushIds = D && D.BRUSHES ? Object.keys(D.BRUSHES) : Object.keys(MAP.FALLBACK_BRUSHES);
-  h.ok(tiles.filter(t => t.type === 'brush').every(t => brushIds.includes(t.content.brush)), label + ' brush tiles carry a known brush');
+  const brushIds = D && D.TOOLS ? Object.keys(D.TOOLS) : MAP.TOOL_IDS;
+  h.ok(tiles.filter(t => t.type === 'brush').every(t => brushIds.includes(t.content.brush)), label + ' tool tiles carry a known tool');
   h.ok(tiles.filter(t => t.type === 'gem' || t.type === 'treasure').every(t => t.content.gold > 0), label + ' gem/treasure carry gold');
   // Fog.
   const st = MAP.tileAt(M, M.start.q, M.start.r);
@@ -152,12 +178,13 @@ function checkMap(M, label, D) {
   h.ok(MAP.tileAt(M, M.boss.q, M.boss.r).revealed, label + ' boss revealed');
   const lit = new Set([MAP.key(M.start.q, M.start.r), MAP.key(M.boss.q, M.boss.r)]
     .concat(MAP.neighbors(M, M.start.q, M.start.r).map(([q, r]) => MAP.key(q, r)), (M.road || []).map(([q, r]) => MAP.key(q, r))));
-  h.eq(M.revealedCount, lit.size, label + ' only the road, the start neighbours and the boss are revealed');
+  h.eq(M.revealedCount, lit.size, label + ' only the road, the start ring (its vision) and the boss are lit');
   h.ok(tiles.every(t => t.revealed === lit.has(MAP.key(t.q, t.r))), label + ' revealed flags match that set');
   checkRoad(M, label);
-  h.eq(M.ink, MAP.START_INK, label + ' ink starts at START_INK');
+  h.eq(M.ink, MAP.START_INK, label + ' bulbs start at START_INK');
   h.ok(M.pos.q === M.start.q && M.pos.r === M.start.r, label + ' pos = start');
-  h.ok(Array.isArray(M.brushes) && M.brushes.length === 0, label + ' no brushes yet');
+  h.ok(Array.isArray(M.brushes) && M.brushes.length === 0, label + ' no tools yet');
+  h.ok(typeof M.seed === 'number', label + ' carries a seed (the lantern reads it)');
   h.ok(MAP.pathExists(M, M.start, M.boss, { any: true }), label + ' boss reachable through the fog');
   h.ok(MAP.walkCost(M, M.start, M.boss, { any: true, land: true }) === 0, label + ' the land route costs no ink to walk');
   h.eq(MAP.walkCost(M, M.start, M.boss), 0, label + ' the boss is reachable through lit tiles for no ink (the road)');
@@ -196,9 +223,15 @@ h.test('shape and module hygiene', () => {
   for (const fn of ['generate', 'key', 'neighbors', 'canReveal', 'reveal', 'brush', 'canMove', 'move', 'toPixel',
     'fromPixel', 'pathExists', 'progress', 'serialize', 'deserialize', 'tileAt', 'reachable', 'revealable', 'hexCorners', 'size',
     'isLandmark', 'pathToReveal', 'revealPath', 'bounds', 'islandsOf', 'revealCost', 'moveCost', 'pathCost', 'walkCost', 'biomeOf',
-    'isRoad', 'walkPath']) {
+    'isRoad', 'walkPath', 'disc', 'visionRadius', 'vision', 'towerView', 'lightArea', 'toolIds', 'normalizeTool', 'toolKind', 'dirTo',
+    'flareCells', 'lanternCells', 'kiteCells', 'toolCells', 'canTool', 'useTool', 'isLand', 'isWater', 'isMountain', 'hexDist']) {
     h.eq(typeof MAP[fn], 'function', 'MAP.' + fn + ' exists');
   }
+  h.ok(MAP.brush === MAP.useTool && MAP.canBrush === MAP.canTool && MAP.brushIds === MAP.toolIds && MAP.brushCells === MAP.toolCells, 'the old brush names alias the tool functions');
+  h.ok(MAP.FALLBACK_BRUSHES === MAP.FALLBACK_TOOLS && JSON.stringify(MAP.TOOL_IDS) === JSON.stringify(TOOL_IDS), 'tool ids are flare, lantern, kite');
+  h.ok(JSON.stringify(MAP.GROUNDS) === JSON.stringify(['grass', 'forest', 'dirt', 'sand', 'hill', 'mountain', 'shallow', 'sea']), 'GROUNDS lists the tileset');
+  h.ok(MAP.TOWER_GAP === 6 && MAP.TOWER_VIEW === 4 && MAP.TOWER_VIEW_MIN === 30 && MAP.HILL_ELEV === 0.62 && MAP.TOWER_ELEV === 0.5 && MAP.MOUNTAIN_MAX === 0.08, 'tower, hill and mountain dials');
+  h.ok(MAP.VISION.low === 1 && MAP.VISION.hill === 2 && MAP.FLARE_RANGE === 5 && MAP.KITE_RANGE === 6, 'vision and tool ranges');
   h.eq(MAP.key(-2, 5), '-2,5', 'key format');
 });
 
@@ -207,7 +240,7 @@ h.test('200 seeds satisfy every generation rule', () => {
 });
 
 h.test('16x22 world: 100 seeds keep every rule, water 20-40%, 2-4 islands, best content on them', () => {
-  let minW = 1, maxW = 0, isles = new Set(), islandLoot = 0, shops = 0, fords = 0, inkShare = 0;
+  let minW = 1, maxW = 0, isles = new Set(), islandLoot = 0, shops = 0, fords = 0, inkShare = 0, isleTowers = 0, mountains = 0;
   for (let s = 1; s <= 100; s++) {
     const M = world(s * 131, { act: 1 + (s % 3) });
     checkMap(M, 'world ' + s);
@@ -219,20 +252,25 @@ h.test('16x22 world: 100 seeds keep every rule, water 20-40%, 2-4 islands, best 
     h.ok(M.water >= 0.2 && M.water <= 0.4, 'world ' + s + ' water share 20-40% (' + M.water + ')');
     const islands = MAP.islandsOf(M);
     const isleTiles = [].concat(...islands).map(k => M.tiles[k]);
-    h.ok(isleTiles.some(t => t.type === 'tower') && isleTiles.some(t => t.type === 'treasure'), 'world ' + s + ' islands hold a tower and a treasure');
+    h.ok(isleTiles.some(t => t.type === 'treasure') && isleTiles.some(t => t.type === 'elite'), 'world ' + s + ' islands hold a treasure and an elite');
     islandLoot += isleTiles.filter(t => ['tower', 'treasure', 'elite'].includes(t.type)).length;
+    isleTowers += isleTiles.filter(t => t.type === 'tower').length;
     shops += isleTiles.filter(t => t.type === 'shop').length;
     fords += tiles.filter(t => t.terrain === 'shallow').length;
     inkShare += tiles.filter(t => t.type === 'ink').length / land.length;
+    mountains += tiles.filter(isMountain).length / tiles.filter(t => t.terrain === 'land').length;
     h.ok(tiles.filter(t => t.type === 'tower').some(t => !isleTiles.includes(t)), 'world ' + s + ' keeps a tower on the mainland');
+    h.ok(tiles.some(isMountain), 'world ' + s + ' has mountains');
     h.eq(M.ink, MAP.START_INK, 'world ' + s + ' starts with START_INK');
   }
   h.ok(minW >= 0.2 && maxW <= 0.4, `water share over 100 seeds within 20-40% (${minW}..${maxW})`);
   h.ok(isles.size >= 2, 'island count varies');
-  h.ok(islandLoot >= 300, 'islands average 3+ prizes (' + islandLoot + ')');
+  h.ok(islandLoot >= 250, 'islands average 2.5+ prizes (' + islandLoot + ')');
+  h.ok(isleTowers >= 20 && isleTowers <= 100, 'an island tower on some maps, never two (' + isleTowers + ' over 100 maps)');
   h.ok(shops > 10 && shops < 250, 'islands sometimes carry a shop (' + shops + ')');
   h.ok(fords >= 200, 'a few fords per map (' + fords + ' over 100 maps)');
-  h.ok(inkShare / 100 >= 0.085 && inkShare / 100 <= 0.12, 'ink pots about 10% of the land (' + (inkShare / 100).toFixed(3) + ')');
+  h.ok(inkShare / 100 >= 0.085 && inkShare / 100 <= 0.12, 'bulb boxes about 10% of the land (' + (inkShare / 100).toFixed(3) + ')');
+  h.ok(mountains / 100 >= 0.03 && mountains / 100 <= 0.08, 'mountains 3-8% of the land on average (' + (mountains / 100).toFixed(3) + ')');
   h.ok(MAP.INK_PER_ACT_HINT >= 15 && MAP.INK_PER_ACT_HINT <= 40, 'INK_PER_ACT_HINT is a sane number');
   h.eq(MAP.SHALLOW_COST, 2, 'fords cost 2');
 });
@@ -309,82 +347,159 @@ h.test('reveal spends ink and respects adjacency', () => {
   h.eq(M.revealedCount, tilesOf(M).filter(x => x.revealed).length, 'revealedCount stays in sync');
 });
 
-// Expected footprints, written independently of map.js.
-const EXPECT = {
-  line3: (q, r) => [[q, r], [q + 1, r], [q + 2, r]],
-  splash: (q, r) => [[q, r], ...DIRS.map(([a, b]) => [q + a, r + b])],
-  comb: (q, r) => [-2, -1, 0, 1, 2].map(d => [colOf(q, r) - Math.floor((r + d) / 2), r + d]),
-};
-
-/* Applies brush `id` at `target` (with MAP or the given module) and checks
-   the result against the expected footprint. */
-function brushCase(M, id, target, expectCells, label, mod) {
+// The cells a tool must light, written independently of map.js.
+const disc = (M, q, r, rad) => tilesOf(M).filter(t => hexDist(t, { q, r }) <= rad).map(t => [t.q, t.r]);
+const ringOf = (M, q, r) => tilesOf(M).filter(t => hexDist(t, { q, r }) === 1).map(t => [t.q, t.r]);
+// Everything dark except the start (pos) and the boss: a clean board for the tools.
+function darkBoard(M) {
+  for (const t of tilesOf(M)) { t.revealed = t.type === 'start' || t.type === 'boss'; t.road = false; }
+  M.road = []; M.pos = { q: M.start.q, r: M.start.r };
+  M.revealedCount = tilesOf(M).filter(t => t.revealed && t.terrain !== 'sea').length;
+  return M;
+}
+/* Uses tool `id` at `target` (with MAP or the given module) and checks
+   the result against the expected cells (already lit cells are skipped). */
+function toolCase(M, id, target, expectCells, label, mod, dir) {
   const X = mod || MAP;
   M.brushes = [id, 'zzz', id];
   const before = revealedSet(M);
   const ink = M.ink;
   const inb = expectCells.filter(([q, r]) => inB(M, q, r)).map(([q, r]) => MAP.key(q, r));
   const fresh = inb.filter(k => !before.has(k));
-  const got = X.brush(M, id, target.q, target.r);
-  h.ok(Array.isArray(got), label + ' brush applied');
+  h.ok(X.canTool(M, id, target.q, target.r, dir), label + ' can be used there');
+  const got = X.useTool(M, id, target.q, target.r, dir);
+  h.ok(Array.isArray(got), label + ' tool applied');
   if (!got) return;
   const after = revealedSet(M);
-  h.ok(inb.every(k => after.has(k)), label + ' every in-bounds cell revealed');
+  h.ok(inb.every(k => after.has(k)), label + ' every expected cell lit');
   const added = [...after].filter(k => !before.has(k)).sort();
-  h.eq(added.join(' '), fresh.slice().sort().join(' '), label + ' nothing else revealed');
-  h.eq(got.map(t => MAP.key(t.q, t.r)).sort().join(' '), fresh.slice().sort().join(' '), label + ' returns the newly revealed tiles');
-  h.eq(M.ink, ink, label + ' costs no ink');
+  h.eq(added.join(' '), fresh.slice().sort().join(' '), label + ' nothing else lit');
+  h.eq(got.map(t => MAP.key(t.q, t.r)).sort().join(' '), fresh.slice().sort().join(' '), label + ' returns the tiles that were dark');
+  h.eq(M.ink, ink, label + ' costs no bulbs');
   h.eq(M.brushes.join(), 'zzz,' + id, label + ' consumes exactly one copy');
-  h.eq(M.revealedCount, after.size, label + ' revealedCount in sync');
+  h.eq(M.revealedCount, tilesOf(M).filter(t => t.revealed && t.terrain !== 'sea').length, label + ' revealedCount in sync (sea is seen, not charted)');
 }
 
-h.test('fallback brushes reveal exactly their in-bounds cells', () => {
-  for (const id of ['line3', 'splash', 'comb']) {
-    const M = genL(21);
-    const tgt = MAP.revealable(M).find(t => colOf(t.q, t.r) === 2) || MAP.revealable(M)[0];
-    brushCase(M, id, tgt, EXPECT[id](tgt.q, tgt.r), id + ' mid');
+h.test('flare: a straight line of 5 from the player that stops at mountains, sea and the edge, fords lit and stopping it', () => {
+  h.eq(MAP.dirTo(darkBoard(genL(20)), { q: 0, r: 0 }, 0, 0), -1, 'dirTo: the same hex is -1');
+  for (let d = 0; d < 6; d++) {
+    const M = darkBoard(genL(20));
+    const mid = { q: 2, r: 3 };
+    M.pos = mid; litBy(M, M.tiles[MAP.key(mid.q, mid.r)]);
+    const [dq, dr] = DIRS[d];
+    h.eq(MAP.dirTo(M, mid, mid.q + dq * 2, mid.r + dr * 2), d, 'dirTo finds direction ' + d + ' two hexes out');
+    h.eq(MAP.dirTo(M, mid, mid.q + dq, mid.r + dr), d, 'dirTo finds direction ' + d + ' next door');
+    const line = [1, 2, 3, 4, 5].map(i => [mid.q + dq * i, mid.r + dr * i]).filter(([q, r]) => inB(M, q, r));
+    h.eq(JSON.stringify(MAP.flareCells(M, d)), JSON.stringify(line), 'direction ' + d + ': the line runs to 5 or the edge (' + line.length + ')');
+    h.eq(JSON.stringify(MAP.toolCells(M, 'flare', mid.q + dq * 3, mid.r + dr * 3)), JSON.stringify(line), 'toolCells aims the flare at a tapped hex');
+    if (line.length) toolCase(M, 'flare', { q: mid.q + dq, r: mid.r + dr }, line, 'flare direction ' + d, null, d);
   }
-  // Clipping: reveal the right and top edges by hand, then brush on the edge.
-  for (const id of ['line3', 'splash', 'comb']) {
-    const M = genL(22);
-    const tgt = { q: M.cols - 2 - 0, r: 0 }; // row 0, column cols-2
-    M.tiles[MAP.key(tgt.q - 1, 0)].revealed = true;
-    M.revealedCount = tilesOf(M).filter(t => t.revealed).length;
-    const cells = EXPECT[id](tgt.q, tgt.r);
-    h.ok(cells.some(([q, r]) => !inB(M, q, r)), id + ' edge case really clips');
-    brushCase(M, id, tgt, cells, id + ' edge');
-  }
-  // drip: target + 2 distinct neighbours, same pick every time for (q, r).
-  const M = genL(23);
-  const tgt = MAP.revealable(M)[0];
-  const cells = MAP.brushCells('drip', tgt.q, tgt.r);
-  h.eq(cells.length, 3, 'drip is 3 cells');
-  h.ok(cells[0][0] === tgt.q && cells[0][1] === tgt.r, 'drip includes the target');
-  h.ok(adj(tgt, { q: cells[1][0], r: cells[1][1] }) && adj(tgt, { q: cells[2][0], r: cells[2][1] }), 'drip extras are neighbours');
-  h.ok(MAP.key(...cells[1]) !== MAP.key(...cells[2]), 'drip extras differ');
-  h.eq(JSON.stringify(MAP.brushCells('drip', tgt.q, tgt.r)), JSON.stringify(cells), 'drip is deterministic');
-  const spread = new Set();
-  for (let q = 0; q < 6; q++) for (let r = 0; r < 6; r++) spread.add(JSON.stringify(MAP.brushCells('drip', q, r).slice(1).map(([a, b]) => [a - q, b - r])));
-  h.ok(spread.size >= 6, 'drip varies with (q, r)');
-  brushCase(M, 'drip', tgt, cells, 'drip');
-  // comb reads as a vertical column on screen.
-  const comb = MAP.brushCells('comb', 3, 3).map(([q, r]) => MAP.toPixel(q, r, 20).x);
-  h.ok(Math.max(...comb) - Math.min(...comb) <= SQRT3 * 10 + 1e-9, 'comb stays within half a hex of vertical');
+  // Blockers on the eastward line from (0, 3): a mountain at 3 lights 2, sea at 3 lights 2, a ford at 3 lights 3 and stops.
+  const east = (blocker) => {
+    const M = darkBoard(genL(20));
+    M.pos = { q: 0, r: 3 }; litBy(M, M.tiles[MAP.key(0, 3)]);
+    const t3 = M.tiles[MAP.key(3, 3)];
+    if (blocker === 'mountain') t3.ground = 'mountain';
+    else if (blocker) { t3.terrain = blocker; t3.ground = blocker; }
+    return { M, cells: MAP.flareCells(M, 0) };
+  };
+  h.eq(east(null).cells.length, 5, 'open ground: 5 hexes');
+  h.eq(JSON.stringify(east('mountain').cells), JSON.stringify([[1, 3], [2, 3]]), 'a mountain stops the flare short and is not lit');
+  h.eq(JSON.stringify(east('sea').cells), JSON.stringify([[1, 3], [2, 3]]), 'open water stops the flare and is not lit');
+  h.eq(JSON.stringify(east('shallow').cells), JSON.stringify([[1, 3], [2, 3], [3, 3]]), 'a ford is lit and stops the flare');
+  const { M } = east('shallow');
+  toolCase(M, 'flare', { q: 4, r: 3 }, [[1, 3], [2, 3], [3, 3]], 'flare into a ford');
+  h.ok(!M.tiles[MAP.key(4, 3)].revealed, 'beyond the ford stays dark');
+  const B = east('mountain').M;
+  B.tiles[MAP.key(1, 3)].ground = 'mountain';
+  h.eq(MAP.flareCells(B, 0).length, 0, 'a mountain next door: nothing to light');
+  h.ok(!MAP.canTool(Object.assign(B, { brushes: ['flare'] }), 'flare', 3, 3), 'a flare that lights nothing cannot be fired');
+  h.eq(MAP.useTool(B, 'flare', 3, 3), null, 'and useTool refuses it');
+  h.eq(B.brushes.join(), 'flare', 'keeping the flare');
 });
 
-h.test('brush refusals', () => {
-  const M = genL(31);
-  const tgt = MAP.revealable(M)[0];
-  h.eq(MAP.brush(M, 'splash', tgt.q, tgt.r), null, 'refuses a brush you do not own');
-  M.brushes = ['splash', 'mystery'];
-  h.eq(MAP.brush(M, 'mystery', tgt.q, tgt.r), null, 'refuses an unknown brush id');
-  h.eq(MAP.brush(M, 'splash', M.start.q, M.start.r), null, 'refuses a revealed target');
-  const far = tilesOf(M).find(x => !x.revealed && !MAP.neighbors(M, x.q, x.r).some(([q, r]) => M.tiles[MAP.key(q, r)].revealed));
-  h.eq(MAP.brush(M, 'splash', far.q, far.r), null, 'refuses a target away from the revealed area');
-  h.eq(MAP.brush(M, 'splash', 50, 50), null, 'refuses out of bounds');
-  h.eq(M.brushes.join(), 'splash,mystery', 'refusals keep the brush');
+h.test('lantern: the ring of six around any lit hex plus half of the second ring, by the map seed', () => {
+  const M = darkBoard(genL(24));
+  const c = { q: 3, r: 3 };
+  litBy(M, M.tiles[MAP.key(c.q, c.r)]);
+  const cells = MAP.lanternCells(M, c.q, c.r);
+  const ring1 = ringOf(M, c.q, c.r).map(k => k.join());
+  h.ok(ring1.every(k => cells.some(x => x.join() === k)), 'the whole first ring');
+  const outer = cells.filter(([q, r]) => hexDist({ q, r }, c) === 2);
+  h.ok(cells.every(([q, r]) => hexDist({ q, r }, c) === 1 || hexDist({ q, r }, c) === 2), 'nothing beyond the second ring');
+  h.ok(outer.length >= 2 && outer.length <= 10, 'about half of the second ring (' + outer.length + ' of 12)');
+  h.eq(JSON.stringify(MAP.lanternCells(M, c.q, c.r)), JSON.stringify(cells), 'deterministic for a map');
+  const other = MAP.deserialize(MAP.serialize(M)); other.seed = M.seed + 1;
+  const pick = (X) => MAP.lanternCells(X, c.q, c.r).filter(([q, r]) => hexDist({ q, r }, c) === 2).map(([q, r]) => MAP.key(q, r)).join();
+  let differs = false;
+  for (let i = 1; i <= 8 && !differs; i++) { other.seed = M.seed + i; if (pick(other) !== pick(M)) differs = true; }
+  h.ok(differs, 'another seed picks another half');
+  // Over many seeds the outer pick is about half.
+  let sum = 0;
+  for (let i = 0; i < 40; i++) { other.seed = 1000 + i * 7; sum += MAP.lanternCells(other, c.q, c.r).filter(([q, r]) => hexDist({ q, r }, c) === 2).length; }
+  h.ok(sum / 40 >= 4 && sum / 40 <= 8, 'outer ring picks average about 6 of 12 (' + (sum / 40).toFixed(1) + ')');
+  h.eq(MAP.toolCells(M, 'lantern', 5, 5).length, 0, 'a lantern needs a lit hex');
+  toolCase(M, 'lantern', c, cells, 'lantern on a lit hex');
+  h.ok(MAP.canTool(Object.assign(M, { brushes: ['lantern'] }), 'lantern', M.pos.q, M.pos.r), 'the player hex is a lantern spot');
+  // The second ring only ever takes land (or a mountain): a wet world.
+  const Wm = world(25);
+  for (const t of tilesOf(Wm)) t.revealed = true;
+  let bad = 0, wetSecond = 0;
+  for (const t of tilesOf(Wm)) {
+    for (const [q, r] of MAP.lanternCells(Wm, t.q, t.r)) {
+      const n = Wm.tiles[MAP.key(q, r)];
+      if (hexDist(n, t) === 2 && (n.terrain === 'sea' || n.terrain === 'shallow')) bad++;
+      if (hexDist(n, t) === 2) wetSecond++;
+    }
+  }
+  h.eq(bad, 0, 'the second ring never takes water');
+  h.ok(wetSecond > 500, 'second ring picks happen on the world');
+});
+
+h.test('kite: any dark hex within 6 of the player, its ring lit too (sea seen, not charted)', () => {
+  const M = darkBoard(genL(26));
+  const c = { q: 4, r: 1 };
+  h.ok(hexDist(c, M.pos) <= 6 && !M.tiles[MAP.key(c.q, c.r)].revealed, 'a dark target within 6');
+  toolCase(M, 'kite', c, disc(M, c.q, c.r, 1), 'kite in range');
+  const far = tilesOf(M).find(t => !t.revealed && hexDist(t, M.pos) === 7);
+  h.ok(far && !MAP.canTool(Object.assign(M, { brushes: ['kite'] }), 'kite', far.q, far.r) && MAP.toolCells(M, 'kite', far.q, far.r).length === 0, 'seven away is out of range');
+  const six = tilesOf(M).find(t => !t.revealed && hexDist(t, M.pos) === 6);
+  h.ok(six && MAP.canTool(M, 'kite', six.q, six.r), 'six away is in range');
+  h.ok(!MAP.canTool(M, 'kite', M.pos.q, M.pos.r), 'a lit target is refused');
+  // Over water: the target may not be sea, but the ring lights the sea it touches.
+  const Wm = darkBoard(world(27));
+  const shore = tilesOf(Wm).find(t => t.terrain === 'land' && !t.revealed && hexDist(t, Wm.pos) <= 6 && MAP.neighbors(Wm, t.q, t.r).some(([q, r]) => Wm.tiles[MAP.key(q, r)].terrain === 'sea'));
+  h.ok(!!shore, 'a dark shore hex within 6');
+  Wm.brushes = ['kite'];
+  const got = MAP.useTool(Wm, 'kite', shore.q, shore.r);
+  h.ok(got && got.some(t => t.terrain === 'sea') && got.every(t => hexDist(t, shore) <= 1), 'the kite lights the sea in its ring');
+  h.eq(Wm.revealedCount, tilesOf(Wm).filter(t => t.revealed && t.terrain !== 'sea').length, 'lit sea is not charted');
+  const seaT = tilesOf(Wm).find(t => t.terrain === 'sea' && !t.revealed && hexDist(t, Wm.pos) <= 6);
+  Wm.brushes = ['kite'];
+  h.ok(seaT && !MAP.canTool(Wm, 'kite', seaT.q, seaT.r), 'the sea is no kite target');
+});
+
+h.test('tool refusals and the old brush names', () => {
+  const M = darkBoard(genL(31));
+  const tgt = tilesOf(M).find(t => !t.revealed && hexDist(t, M.pos) === 2);
+  h.eq(MAP.useTool(M, 'kite', tgt.q, tgt.r), null, 'refuses a tool you do not own');
+  M.brushes = ['kite', 'mystery'];
+  h.eq(MAP.useTool(M, 'mystery', tgt.q, tgt.r), null, 'refuses an unknown tool id');
+  h.eq(MAP.useTool(M, 'kite', 50, 50), null, 'refuses out of bounds');
+  h.eq(M.brushes.join(), 'kite,mystery', 'refusals keep the tool');
   M.ink = 0;
-  h.ok(Array.isArray(MAP.brush(M, 'splash', tgt.q, tgt.r)), 'brushes work with 0 ink');
+  h.ok(Array.isArray(MAP.useTool(M, 'kite', tgt.q, tgt.r)), 'tools work with 0 bulbs');
+  h.eq(MAP.normalizeTool('splash') + MAP.normalizeTool('line3') + MAP.normalizeTool('drip') + MAP.normalizeTool('comb'), 'lanternlanternlanternlantern', 'old brush ids are a lantern');
+  h.eq(MAP.normalizeTool('flare') + MAP.normalizeTool('kite') + MAP.normalizeTool('other'), 'flarekiteother', 'tool ids pass through');
+  h.eq(MAP.toolKind('flare') + MAP.toolKind('lantern') + MAP.toolKind('kite'), 'lineringpatch', 'tool kinds');
+  h.eq(MAP.toolKind('splash'), null, 'an old id has no kind of its own');
+  // An old brush in hand is a lantern: canBrush / brush (the aliases) use it as one.
+  const O = darkBoard(genL(32));
+  O.brushes = ['splash'];
+  h.ok(MAP.canBrush(O, 'splash', O.pos.q, O.pos.r) && MAP.canBrush(O, 'lantern', O.pos.q, O.pos.r), 'a splash in hand hangs as a lantern');
+  const got = MAP.brush(O, 'lantern', O.pos.q, O.pos.r);
+  h.ok(got && got.length >= 6 && O.brushes.length === 0, 'and is spent as one');
+  h.eq(JSON.stringify(MAP.brushIds()), JSON.stringify(TOOL_IDS), 'brushIds lists the tools');
 });
 
 h.test('movement', () => {
@@ -393,17 +508,21 @@ h.test('movement', () => {
   h.eq(reach.length, MAP.neighbors(M, M.start.q, M.start.r).length, 'all start neighbours reachable');
   h.ok(!MAP.canMove(M, M.start.q, M.start.r), 'cannot move onto the current tile');
   h.eq(MAP.move(M, M.boss.q, M.boss.r), null, 'cannot jump to the (revealed) boss');
-  const hiddenAdj = () => MAP.neighbors(M, M.pos.q, M.pos.r).map(([q, r]) => M.tiles[MAP.key(q, r)]).find(t => !t.revealed);
   const step = reach.find(t => colOf(t.q, t.r) === 1) || reach[0];
+  const ring = MAP.neighbors(M, step.q, step.r).map(([q, r]) => M.tiles[MAP.key(q, r)]);
+  h.ok(ring.some(t => !t.revealed), 'some of the step target ring is dark before the move');
   const got = MAP.move(M, step.q, step.r);
   h.ok(got === M.tiles[MAP.key(step.q, step.r)], 'move returns the tile');
   h.ok(M.pos.q === step.q && M.pos.r === step.r, 'move sets pos');
   h.ok(got.visited, 'move marks visited');
-  const hid = hiddenAdj();
-  h.ok(hid && !MAP.canMove(M, hid.q, hid.r) && MAP.move(M, hid.q, hid.r) === null, 'refuses an adjacent hidden tile');
+  h.ok(ring.every(t => t.revealed), 'vision: the move lights the ring around the new hex');
+  // Put one neighbour back in the dark: it is not walkable until lit.
+  const hid = ring.find(t => t.type !== 'boss' && !t.road && !adj(t, M.start));
+  hid.revealed = false; M.revealedCount--;
+  h.ok(hid && !MAP.canMove(M, hid.q, hid.r) && MAP.move(M, hid.q, hid.r) === null, 'refuses an adjacent dark tile');
   h.ok(M.pos.q === step.q && M.pos.r === step.r, 'refusal keeps pos');
   const tgt = MAP.reveal(M, hid.q, hid.r);
-  h.ok(MAP.canMove(M, tgt.q, tgt.r), 'revealing it makes it walkable');
+  h.ok(MAP.canMove(M, tgt.q, tgt.r), 'lighting it makes it walkable');
   h.ok(MAP.reachable(M).includes(tgt), 'reachable() lists it');
   h.ok(MAP.reachable(M).every(t => MAP.canMove(M, t.q, t.r)), 'reachable() agrees with canMove()');
   h.eq(tilesOf(M).filter(t => MAP.canMove(M, t.q, t.r)).length, MAP.reachable(M).length, 'reachable() is complete');
@@ -525,7 +644,7 @@ h.test('serialize / deserialize', () => {
   const t = MAP.revealable(M)[0];
   MAP.reveal(M, t.q, t.r);
   MAP.move(M, t.q, t.r) || MAP.move(M, MAP.reachable(M)[0].q, MAP.reachable(M)[0].r);
-  M.brushes.push('splash', 'line3');
+  M.brushes.push('lantern', 'flare');
   const o = MAP.serialize(M);
   const json = JSON.stringify(o);
   h.eq(json, JSON.stringify(M), 'serialize is deep-equal to M');
@@ -537,8 +656,7 @@ h.test('serialize / deserialize', () => {
   const ops = (X) => {
     const r1 = MAP.revealable(X)[2];
     MAP.reveal(X, r1.q, r1.r);
-    const bt = MAP.revealable(X, { brush: true }).slice(-1)[0];
-    MAP.brush(X, 'splash', bt.q, bt.r);
+    MAP.useTool(X, 'lantern', r1.q, r1.r);
     const step = MAP.reachable(X).slice(-1)[0];
     MAP.move(X, step.q, step.r);
     return X;
@@ -546,8 +664,8 @@ h.test('serialize / deserialize', () => {
   const A = ops(MAP.deserialize(MAP.serialize(M)));
   const Bm = ops(D);
   h.eq(JSON.stringify(A), JSON.stringify(Bm), 'loaded map behaves identically');
-  h.eq(Bm.revealedCount, tilesOf(Bm).filter(x => x.revealed).length, 'loaded map keeps revealedCount in sync');
-  h.eq(Bm.brushes.join(), 'line3', 'loaded map consumed its brush');
+  h.eq(Bm.revealedCount, tilesOf(Bm).filter(x => x.revealed && x.terrain !== 'sea').length, 'loaded map keeps revealedCount in sync');
+  h.eq(Bm.brushes.join(), 'flare', 'loaded map consumed its lantern');
   const broken = JSON.parse(json);
   broken.revealedCount = 3;
   h.eq(MAP.deserialize(broken).revealedCount, M.revealedCount, 'deserialize recomputes a stale revealedCount');
@@ -556,22 +674,84 @@ h.test('serialize / deserialize', () => {
   const tw = tilesOf(D).filter(t => t.type === 'tower');
   h.ok(tw.length >= 2 && tw.every(t => t.known && t.content.tower && t.content.tower.bonus), 'loaded towers keep known + bonus');
   h.ok(tilesOf(D).every(t => t.known === LANDMARK.includes(t.type)), 'loaded known flags match the landmark types');
-  h.ok(tilesOf(D).every((t, i) => { const o = tilesOf(M)[i]; return t.terrain === o.terrain && t.elev === o.elev && t.coast === o.coast && t.biome === o.biome; }), 'terrain, elev, coast and biome survive the trip');
-  h.ok(D.biome === M.biome && D.islands === M.islands && D.water === M.water, 'map biome, islands and water survive');
+  h.ok(tilesOf(D).every((t, i) => { const o = tilesOf(M)[i]; return t.terrain === o.terrain && t.ground === o.ground && t.elev === o.elev && t.coast === o.coast && t.biome === o.biome; }), 'terrain, ground, elev, coast and biome survive the trip');
+  h.ok(D.biome === M.biome && D.islands === M.islands && D.water === M.water && D.seed === M.seed, 'map biome, islands, water and seed survive');
   // A save from before the terrain gets a dry map back.
   const flat = JSON.parse(json);
   delete flat.biome; delete flat.islands; delete flat.water;
   for (const k in flat.tiles) { const t = flat.tiles[k]; delete t.terrain; delete t.elev; delete t.coast; delete t.biome; }
+  for (const k in flat.tiles) delete flat.tiles[k].ground;
+  delete flat.seed;
   const Fm = MAP.deserialize(flat);
   h.ok(tilesOf(Fm).every(t => t.terrain === 'land' && typeof t.elev === 'number' && t.coast === false && t.biome === MAP.BIOMES[2]), 'old save: all land, act biome');
-  h.ok(Fm.biome === MAP.BIOMES[2] && Fm.islands === 0 && Fm.water === 0, 'old save: dry map fields');
+  h.ok(tilesOf(Fm).every(t => t.ground === 'grass'), 'old save without a tileset: flat grass (elev 0.35, no coast)');
+  h.ok(Fm.biome === MAP.BIOMES[2] && Fm.islands === 0 && Fm.water === 0 && Fm.seed === 0, 'old save: dry map fields, seed 0');
   h.ok(MAP.reveal(Fm, MAP.revealable(Fm)[0].q, MAP.revealable(Fm)[0].r) !== null, 'old save still plays');
-  // An old save (no known, tower without content) gets defaults.
+  // A save with terrain but no ground reads the ground off height and coast.
+  const Wm = world(93);
+  const wo = MAP.serialize(Wm);
+  for (const k in wo.tiles) delete wo.tiles[k].ground;
+  const Wd = MAP.deserialize(wo);
+  h.ok(tilesOf(Wd).every(t => (t.terrain !== 'land' && t.ground === t.terrain) || (t.terrain === 'land' && (t.elev >= MAP.HILL_ELEV ? t.ground === 'hill' : (t.coast && t.elev < MAP.SAND_ELEV) ? t.ground === 'sand' : t.ground === 'grass'))), 'old save with terrain: water, hills, sand and grass derived (no mountains, no forest)');
+  // An old save (no known, tower without content, brushes) gets defaults.
   const old = JSON.parse(json);
-  for (const k in old.tiles) { delete old.tiles[k].known; if (old.tiles[k].type === 'tower') old.tiles[k].content = {}; }
+  old.brushes = ['comb', 'drip', 'kite'];
+  for (const k in old.tiles) { delete old.tiles[k].known; if (old.tiles[k].type === 'tower') old.tiles[k].content = {}; if (old.tiles[k].type === 'brush') old.tiles[k].content.brush = 'splash'; }
   const O = MAP.deserialize(old);
   h.ok(tilesOf(O).every(t => t.known === LANDMARK.includes(t.type)), 'old save: known derived from the type');
   h.ok(tilesOf(O).filter(t => t.type === 'tower').every(t => t.content.tower && t.content.tower.bonus.k === 'ink'), 'old save: towers get a default bonus');
+  h.eq(O.brushes.join(), 'lantern,lantern,kite', 'old save: brushes in hand become lanterns, tools stay');
+  h.ok(tilesOf(O).filter(t => t.type === 'brush').every(t => t.content.brush === 'lantern'), 'old save: a brush tile hands out a lantern');
+  const tb = JSON.parse(json);
+  const tk = Object.keys(tb.tiles).find(k => tb.tiles[k].type === 'tower');
+  tb.tiles[tk].content.tower.bonus = { k: 'brush', id: 'comb' };
+  h.eq(MAP.deserialize(tb).tiles[tk].content.tower.bonus.id, 'lantern', 'old save: a tower brush bonus becomes a lantern');
+});
+
+h.test('terrain vision: entering a hex lights one ring on lowland and two on a hill, the start counts as lowland', () => {
+  const M = darkBoard(genL(35));
+  for (const t of tilesOf(M)) t.elev = 0.35;
+  const s = M.pos;
+  h.eq(MAP.visionRadius(M.tiles[MAP.key(s.q, s.r)]), MAP.VISION.low, 'the start is lowland');
+  M.tiles[MAP.key(s.q, s.r)].elev = 0.9;
+  h.eq(MAP.visionRadius(M.tiles[MAP.key(s.q, s.r)]), MAP.VISION.low, 'even a high start counts as lowland');
+  const lit = MAP.vision(M, s.q, s.r);
+  h.ok(lit.length === ringOf(M, s.q, s.r).length && tilesOf(M).filter(t => t.revealed && t.type !== 'boss').every(t => hexDist(t, s) <= 1), 'vision from the start lights exactly its ring');
+  // Walk east onto lowland: one ring; then onto a hill: two rings.
+  const a = MAP.tileAt(M, s.q + 1, s.r), b = MAP.tileAt(M, s.q + 2, s.r);
+  b.elev = MAP.HILL_ELEV;
+  h.ok(a.revealed && !b.revealed, 'the next hex is lit, the one after dark');
+  MAP.move(M, a.q, a.r);
+  h.ok(disc(M, a.q, a.r, 1).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'lowland: the ring around the new hex is lit');
+  h.ok(tilesOf(M).filter(t => t.revealed && t.type !== 'boss').every(t => hexDist(t, s) <= 1 || hexDist(t, a) <= 1), 'lowland: nothing beyond one ring');
+  h.eq(MAP.visionRadius(b), MAP.VISION.hill, 'a hex at HILL_ELEV is a hill');
+  MAP.move(M, b.q, b.r);
+  h.ok(disc(M, b.q, b.r, 2).every(([q, r]) => M.tiles[MAP.key(q, r)].revealed), 'hill: two rings lit');
+  h.ok(tilesOf(M).filter(t => t.revealed && t.type !== 'boss').every(t => hexDist(t, s) <= 1 || hexDist(t, a) <= 1 || hexDist(t, b) <= 2), 'hill: nothing beyond two rings');
+  h.eq(M.revealedCount, tilesOf(M).filter(t => t.revealed).length, 'revealedCount follows the vision');
+  h.ok(MAP.reachable(M).length === MAP.neighbors(M, b.q, b.r).length, 'every neighbour of the hill is walkable now');
+  // Vision lights the sea it sees, a mountain too; the world's fords and mountains stay what they are.
+  const Wm = darkBoard(world(36));
+  const shore = tilesOf(Wm).find(t => t.terrain === 'land' && t.ground !== 'mountain' && MAP.neighbors(Wm, t.q, t.r).some(([q, r]) => Wm.tiles[MAP.key(q, r)].terrain === 'sea'));
+  Wm.pos = { q: shore.q, r: shore.r }; litBy(Wm, shore);
+  const got = MAP.vision(Wm, shore.q, shore.r);
+  h.ok(got.some(t => t.terrain === 'sea'), 'the sea next to the shore is lit');
+  h.eq(Wm.revealedCount, tilesOf(Wm).filter(t => t.revealed && t.terrain !== 'sea').length, 'lit sea is not charted');
+  h.ok(MAP.progress(Wm).revealed === Wm.revealedCount, 'progress counts charted hexes');
+});
+
+h.test('tower view: everything within TOWER_VIEW, land, sea and all', () => {
+  const M = darkBoard(world(37));
+  const tw = tilesOf(M).find(t => t.type === 'tower');
+  const before = revealedSet(M);
+  const got = MAP.towerView(M, tw.q, tw.r);
+  const want = disc(M, tw.q, tw.r, MAP.TOWER_VIEW).map(([q, r]) => MAP.key(q, r)).filter(k => !before.has(k));
+  h.eq(got.map(t => MAP.key(t.q, t.r)).sort().join(' '), want.sort().join(' '), 'the view lights exactly the radius 4 disc');
+  h.ok(got.length >= 45, 'a big circle (' + got.length + ' hexes)');
+  h.ok(tilesOf(M).every(t => t.revealed === (before.has(MAP.key(t.q, t.r)) || hexDist(t, tw) <= MAP.TOWER_VIEW)), 'nothing else lit');
+  h.eq(MAP.towerView(M, tw.q, tw.r).length, 0, 'a second view lights nothing new');
+  h.eq(MAP.towerView(M, 99, 99).length, 0, 'out of bounds lights nothing');
+  h.eq(M.revealedCount, tilesOf(M).filter(t => t.revealed && t.terrain !== 'sea').length, 'revealedCount in sync');
 });
 
 h.test('landmarks stay hidden until revealed', () => {
@@ -640,7 +820,8 @@ h.test('terrain paths: sea impassable, fords cost 2, cheapest by ink', () => {
     let bad = 0;
     for (const t of tilesOf(M)) {
       const path = MAP.pathToReveal(M, t.q, t.r);
-      if (t.terrain === 'sea') { if (path.length || MAP.canReveal(M, t.q, t.r) || MAP.revealCost(t) !== Infinity) bad++; continue; }
+      if (t.terrain === 'sea' || isMountain(t)) { if (path.length || MAP.canReveal(M, t.q, t.r) || MAP.revealCost(t) !== Infinity) bad++; continue; }
+      if (path.some(([q, r]) => isMountain(M.tiles[MAP.key(q, r)]))) bad++;
       const lit = MAP.neighbors(M, t.q, t.r).some(([q, r]) => { const n = M.tiles[MAP.key(q, r)]; return n.revealed && (n.type !== 'boss' || n.visited); });
       if (t.revealed || t.type === 'boss' || lit) { if (path.length) bad++; continue; }
       const want = inkTo(M, t);
@@ -651,9 +832,11 @@ h.test('terrain paths: sea impassable, fords cost 2, cheapest by ink', () => {
       if (path.some(([q, r]) => M.tiles[MAP.key(q, r)].terrain === 'shallow')) fordPaths++;
       checked++;
     }
-    h.eq(bad, 0, 'world ' + s + ': every path is the cheapest by ink, never over the sea (bad=' + bad + ')');
+    h.eq(bad, 0, 'world ' + s + ': every path is the cheapest by bulbs, never over the sea or a mountain (bad=' + bad + ')');
   }
   h.ok(checked > 2000 && fordPaths > 50, `checked ${checked} paths, ${fordPaths} cross a ford`);
+  h.eq(MAP.revealCost({ terrain: 'land', ground: 'mountain' }), Infinity, 'a mountain cannot be lit by hand');
+  h.eq(MAP.moveCost({ terrain: 'land', ground: 'mountain' }), Infinity, 'a mountain is never walked');
   h.eq(MAP.revealCost({ terrain: 'shallow' }), 2, 'revealCost of a ford is 2');
   h.eq(MAP.revealCost({ terrain: 'land' }), 1, 'revealCost of land is 1');
   h.eq(MAP.moveCost({ terrain: 'shallow' }), 2, 'moveCost of a ford is 2');
@@ -700,17 +883,17 @@ h.test('fords: reveal and wade at 2 ink, revealPath spends pathCost', () => {
   const got = MAP.revealPath(N, path);
   h.ok(got && got.length === path.length && N.ink === 3, 'revealPath spends exactly pathCost');
   h.eq(MAP.revealPath(N, [[N.tiles[Object.keys(N.tiles).find(k => N.tiles[k].terrain === 'sea')].q, N.tiles[Object.keys(N.tiles).find(k => N.tiles[k].terrain === 'sea')].r]]), null, 'a sea step is refused');
-  // Brushes skip the sea.
+  // A ford is lit for free by vision and tools; the sea is never a target.
   const Bm = world(79);
-  const seaEdge = tilesOf(Bm).find(t => !t.revealed && t.terrain !== 'sea' && MAP.neighbors(Bm, t.q, t.r).some(([q, r]) => Bm.tiles[MAP.key(q, r)].terrain === 'sea'));
-  for (const [q, r] of MAP.neighbors(Bm, seaEdge.q, seaEdge.r)) if (isLand(Bm.tiles[MAP.key(q, r)])) { Bm.tiles[MAP.key(q, r)].revealed = true; break; }
-  Bm.brushes = ['splash'];
-  const painted = MAP.brush(Bm, 'splash', seaEdge.q, seaEdge.r);
-  h.ok(painted && painted.length >= 1 && painted.every(t => t.terrain !== 'sea'), 'a splash over the shore never reveals sea');
-  h.ok(tilesOf(Bm).every(t => t.terrain !== 'sea' || !t.revealed), 'sea stays hidden');
-  const seaT = tilesOf(Bm).find(t => t.terrain === 'sea' && MAP.neighbors(Bm, t.q, t.r).some(([q, r]) => Bm.tiles[MAP.key(q, r)].revealed));
-  Bm.brushes = ['splash'];
-  h.ok(seaT && !MAP.canBrush(Bm, 'splash', seaT.q, seaT.r), 'a brush cannot target the sea');
+  const ford2 = tilesOf(Bm).find(t => t.terrain === 'shallow' && !t.revealed);
+  const bank = MAP.neighbors(Bm, ford2.q, ford2.r).map(([q, r]) => Bm.tiles[MAP.key(q, r)]).find(t => isLand(t));
+  bank.revealed = true; Bm.pos = { q: bank.q, r: bank.r }; Bm.ink = 0;
+  MAP.vision(Bm, bank.q, bank.r);
+  h.ok(ford2.revealed && Bm.ink === 0, 'standing on the bank lights the ford for nothing');
+  const seaT = tilesOf(Bm).find(t => t.terrain === 'sea' && hexDist(t, Bm.pos) <= 6);
+  Bm.brushes = ['kite', 'lantern'];
+  h.ok(seaT && !MAP.canBrush(Bm, 'kite', seaT.q, seaT.r), 'a kite cannot target the sea');
+  h.ok(!MAP.canReveal(Bm, seaT.q, seaT.r) && MAP.reveal(Bm, seaT.q, seaT.r) === null, 'the sea cannot be lit by hand');
 });
 
 h.test('revealPath spends exactly path.length ink and refuses when short', () => {
@@ -850,8 +1033,14 @@ h.test('the road: 200 seeds lit start to boss, all land, meandering past a rest 
     if (main.some(t => t.type === 'rest')) h.ok(main.some(t => t.type === 'rest' && nearRoad(M, t)), 'world ' + s + ' road passes within one hex of a rest');
     if (main.some(t => t.type === 'shop') && !main.some(t => t.type === 'shop' && nearRoad(M, t))) {
       shopMiss++;
-      const cheapest = Math.min(...main.filter(t => t.type === 'shop').map(t => hexDist(M.start, t) + hexDist(t, M.boss) - hexDist(M.start, M.boss)));
-      h.ok(cheapest >= 5, 'world ' + s + ' skips its shops only when the nearest needs a long detour (' + cheapest + ')');
+      // The real detour: the shortest land walk start -> shop -> boss (the
+      // water, the mountains and the tower rings in the way), against the
+      // road's ceiling.
+      const L = MAP.deserialize(MAP.serialize(M));
+      for (const t of tilesOf(L)) t.revealed = true;
+      const via = (shop) => { L.pos = { q: L.start.q, r: L.start.r }; const a = MAP.walkPath(L, shop.q, shop.r); L.pos = { q: shop.q, r: shop.r }; const b = MAP.walkPath(L, L.boss.q, L.boss.r); return a && b ? a.length + b.length : Infinity; };
+      const cheapest = Math.min(...main.filter(t => t.type === 'shop').map(via));
+      h.ok(cheapest > hi * hexDist(M.start, M.boss) - 2, 'world ' + s + ' skips its shops only when the road through the nearest would run past the ceiling (' + cheapest + ' steps for a ceiling of ' + (hi * hexDist(M.start, M.boss)).toFixed(1) + ')');
     }
     h.ok(MAP.walkCost(M, M.start, M.boss) === 0 && MAP.pathExists(M, M.start, M.boss, { ink: 0 }), 'world ' + s + ' boss reachable through lit tiles for 0 ink at generate');
     h.ok(M.road.slice(1, -1).every(([q, r]) => M.tiles[MAP.key(q, r)].type !== 'elite' && M.tiles[MAP.key(q, r)].type !== 'tower') || true, 'world ' + s + ' (tolls only bias the road)');
@@ -979,13 +1168,13 @@ h.test('the road survives serialize / deserialize, old saves get none', () => {
   h.eq(MAP.deserialize(junk).road.length, 1, 'junk road entries are dropped');
 });
 
-/* Stub DATA: proves map.js reads DATA.BRUSHES lazily (and overrides the
-   fallback), and fills enc/event/brush content from DATA. */
+/* Stub DATA: proves map.js reads DATA.TOOLS lazily (and overrides the
+   fallback), and fills enc/event/tool content from DATA. */
 h.test('stub DATA path', () => {
   const stub = `const DATA = {
-    BRUSHES: {
-      line3: { id: 'line3', cells: (q, r) => [[q, r], [q, r + 1]] },
-      dot: { id: 'dot', cells: (q, r) => [[q, r]] },
+    TOOLS: {
+      flare: { id: 'flare', kind: 'line' },
+      torch: { id: 'torch', kind: 'patch' },
     },
     ENCOUNTERS: { 1: { normal: [['rat'], ['slime'], ['bat', 'bat']], elite: [['mimic']], boss: [['hoard']] } },
     EVENTS: { a: {}, b: {}, c: {} },
@@ -1000,30 +1189,33 @@ h.test('stub DATA path', () => {
   h.ok(tiles.filter(t => t.type === 'elite').every(t => t.content.enc[0] === 'mimic' && t.content.elite), 'elites get elite encounters');
   h.eq(S.MAP.tileAt(M, M.boss.q, M.boss.r).content.enc.join(), 'hoard', 'boss gets the boss encounter');
   h.ok(tiles.filter(t => t.type === 'event').every(t => ['a', 'b', 'c'].includes(t.content.event)), 'events get event ids');
-  h.ok(tiles.filter(t => t.type === 'brush').every(t => ['line3', 'dot'].includes(t.content.brush)), 'brush tiles use DATA brush ids');
-  const tgt = S.MAP.revealable(M).find(t => t.r < M.rows - 1);
-  M.brushes = ['line3', 'dot'];
-  const got = S.MAP.brush(M, 'line3', tgt.q, tgt.r);
-  const exp = [[tgt.q, tgt.r], [tgt.q, tgt.r + 1]].filter(([q, r]) => !P.tiles[MAP.key(q, r)].revealed);
-  h.eq(got.map(t => S.MAP.key(t.q, t.r)).sort().join(' '), exp.map(([q, r]) => MAP.key(q, r)).sort().join(' '), 'DATA.BRUSHES shape wins over the fallback');
-  h.ok(M.brushes.join() === 'dot', 'DATA brush consumed');
-  const other = S.MAP.revealable(M, { brush: true })[0];
-  h.eq(S.MAP.brush(M, 'line3', other.q, other.r), null, 'a spent DATA brush is refused');
+  h.ok(tiles.filter(t => t.type === 'brush').every(t => ['flare', 'torch'].includes(t.content.brush)), 'tool tiles use DATA tool ids');
+  h.eq(S.MAP.toolIds().join(), 'flare,torch', 'toolIds lists the DATA tools');
+  h.ok(tiles.filter(t => t.type === 'tower' && t.content.tower.bonus.k === 'brush').every(t => ['flare', 'torch'].includes(t.content.tower.bonus.id)), 'tower tool bonuses use DATA ids');
+  const tgt = tiles.find(t => !t.revealed && t.terrain === 'land' && S.MAP.hexDist(t.q, t.r, M.pos.q, M.pos.r) === 2);
+  M.brushes = ['torch', 'flare'];
+  const got = S.MAP.useTool(M, 'torch', tgt.q, tgt.r);
+  h.ok(got && got.length >= 1 && got.every(t => S.MAP.hexDist(t.q, t.r, tgt.q, tgt.r) <= 1), 'a DATA tool of kind patch lights a patch');
+  h.ok(M.brushes.join() === 'flare', 'DATA tool consumed');
+  h.eq(S.MAP.useTool(M, 'torch', tgt.q, tgt.r), null, 'a spent DATA tool is refused');
+  h.eq(S.MAP.toolKind('lantern'), 'ring', 'a fallback kind still answers for an id DATA does not list');
 });
 
 /* Real data.js, when the data module has landed. */
 const dataPath = path.join(DIR, 'js', 'data.js');
 if (fs.existsSync(dataPath)) {
-  h.test('real DATA.BRUSHES path', () => {
+  h.test('real DATA.TOOLS path', () => {
     const R = boot({ only: ['util', 'data', 'map'] });
     const D = R.DATA;
-    h.ok(D && D.BRUSHES, 'DATA.BRUSHES present');
+    h.ok(D && D.TOOLS && D.BRUSHES === D.TOOLS, 'DATA.TOOLS present, BRUSHES aliases it');
+    h.eq(R.MAP.toolIds().join(), Object.keys(D.TOOLS).join(), 'toolIds reads DATA.TOOLS');
     for (let s = 1; s <= 30; s++) checkMap(R.MAP.generate({ act: 1 + (s % 3), rng: R.U.rng(s * 31) }), 'data seed ' + s, D);
-    for (const id of Object.keys(D.BRUSHES)) {
-      const M = R.MAP.generate({ act: 1, rng: R.U.rng(500) });
-      const tgt = R.MAP.revealable(M)[0];
-      brushCase(M, id, tgt, D.BRUSHES[id].cells(tgt.q, tgt.r), 'DATA ' + id, R.MAP);
-    }
+    const M = darkBoard(R.MAP.generate({ act: 1, rng: R.U.rng(500), water: 0 }));
+    const e = { q: M.pos.q + 1, r: M.pos.r };
+    toolCase(M, 'flare', e, [1, 2, 3, 4, 5].map(i => [M.pos.q + i, M.pos.r]).filter(([q, r]) => inB(M, q, r)), 'DATA flare', R.MAP);
+    toolCase(M, 'lantern', M.pos, R.MAP.lanternCells(M, M.pos.q, M.pos.r), 'DATA lantern', R.MAP);
+    const far = tilesOf(M).find(t => !t.revealed && hexDist(t, M.pos) === 4);
+    toolCase(M, 'kite', far, disc(M, far.q, far.r, 1), 'DATA kite', R.MAP);
   });
 }
 

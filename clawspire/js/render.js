@@ -1530,19 +1530,25 @@ const RENDER = (() => {
         tone(ctx, c => rrect(c, -s * 0.22, -s * 0.4, s * 0.44, s * 0.5, 2), PAL.gold, 0, -s * 0.15, s * 0.25, { ol: 1.5 });
         break;
       case 'gem': IA.gem(ctx, s * 1.6, s * 1.7, PAL.cyan, '#ffffff'); break;
-      case 'ink':
-        tone(ctx, c => { c.moveTo(-s * 0.35, -s); c.lineTo(s * 0.35, -s); c.lineTo(s * 0.35, -s * 0.5); c.quadraticCurveTo(s, -s * 0.3, s, s * 0.4); c.quadraticCurveTo(s, s, 0, s); c.quadraticCurveTo(-s, s, -s, s * 0.4); c.quadraticCurveTo(-s, -s * 0.3, -s * 0.35, -s * 0.5); c.closePath(); }, '#3b3fd6', 0, s * 0.2, s, { dark: -0.35 });
-        tone(ctx, c => rrect(c, -s * 0.4, -s * 1.1, s * 0.8, s * 0.35, 1.5), '#c9d3e0', 0, -s, s * 0.4, NOSPEC);
-        F(ctx, '#f4ecd6'); ctx.beginPath(); rrect(ctx, -s * 0.5, -s * 0.1, s, s * 0.6, 1); ctx.fill();
+      case 'ink': {
+        // a box of marquee bulbs: an open crate with three bulbs glowing in it
+        glow(ctx, 0, -s * 0.2, s * 1.1, PAL.gold, 0.3 + Math.sin((t || 0) * 4) * 0.1);
+        tone(ctx, c => rrect(c, -s, -s * 0.1, s * 2, s * 1.1, 2), '#8a5a2b', 0, s * 0.4, s, { dark: -0.35 });
+        for (let i = -1; i <= 1; i++) bulb(ctx, i * s * 0.62, -s * 0.25 - (i ? 0 : s * 0.15), s * 0.42, t, true);
+        ctx.beginPath(); rrect(ctx, -s, -s * 0.1, s * 2, s * 0.3, 1); F(ctx, '#a06a34'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
         break;
-      case 'brush':
-        ctx.save(); ctx.rotate(-0.7);
-        tone(ctx, c => rrect(c, -s * 0.2, -s * 1.1, s * 0.4, s * 1.5, 2), '#8a5a2b', 0, -s * 0.3, s * 0.6, NOSPEC);
-        tone(ctx, c => rrect(c, -s * 0.28, s * 0.2, s * 0.56, s * 0.3, 1), '#c9d3e0', 0, s * 0.35, s * 0.3, NOSPEC);
-        tone(ctx, c => { c.moveTo(-s * 0.32, s * 0.45); c.lineTo(s * 0.32, s * 0.45); c.lineTo(0, s * 1.2); c.closePath(); }, INK, 0, s * 0.7, s * 0.4, { spec: false, dark: 0, ol: 1.5 });
-        F(ctx, PAL.pink); ctx.beginPath(); ctx.arc(0, s * 1.05, s * 0.18, 0, TAU); ctx.fill();
-        ctx.restore();
+      }
+      case 'brush': {
+        // a tool: a hanging lantern with a warm pane
+        ctx.beginPath(); ctx.moveTo(0, -s * 1.25); ctx.lineTo(0, -s * 0.95); S(ctx, INK, 2.5); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -s * 1.3, s * 0.16, 0, TAU); S(ctx, INK, 2.5); ctx.stroke();
+        tone(ctx, c => rrect(c, -s * 0.55, -s * 0.95, s * 1.1, s * 0.22, 2), '#5a6373', 0, -s * 0.85, s * 0.5, NOSPEC);
+        glow(ctx, 0, 0, s * 1.2, PAL.gold, 0.35 + Math.sin((t || 0) * 5) * 0.12);
+        tone(ctx, c => rrect(c, -s * 0.5, -s * 0.75, s, s * 1.4, 3), '#ffd27a', 0, 0, s * 0.6, { dark: -0.2 });
+        ctx.beginPath(); ctx.moveTo(-s * 0.15, -s * 0.75); ctx.lineTo(-s * 0.15, s * 0.65); ctx.moveTo(s * 0.15, -s * 0.75); ctx.lineTo(s * 0.15, s * 0.65); S(ctx, rgba(INK, 0.6), 1.5); ctx.stroke();
+        tone(ctx, c => rrect(c, -s * 0.55, s * 0.6, s * 1.1, s * 0.25, 2), '#5a6373', 0, s * 0.72, s * 0.5, NOSPEC);
         break;
+      }
       case 'event':
         IA.scroll(ctx, s * 1.9, s * 1.2, '#f4ecd6', '#8a5a2b');
         txt(ctx, '?', 0, s * 0.05, s * 1.3, INK, true);
@@ -1595,6 +1601,16 @@ const RENDER = (() => {
     }
     ctx.closePath();
   }
+  // A hex of the map over its ground. Terrain mode (st.fill set, the ground
+  // painted by terrainHex first): a dark tile is darkness, a deep purple
+  // wash (lighter next to the light, st.nearLight) with the landmark
+  // silhouettes showing through; a lit tile shows its ground with the
+  // activity drawn as a pickup icon on top (a small shadow under it) that
+  // is gone once tile.done. No plates, no check marks: a resolved hex is
+  // just terrain. Without st.fill the old solid plate look stands (the
+  // icon still vanishes when done). st: { t, orient, fill, mask, seed,
+  // biome, nearLight, reachable, current, hover, canReveal, path, target,
+  // flare, known, road, walking }.
   function hex(ctx, x, y, size, tile, st) {
     ctx.save();
     try {
@@ -1603,47 +1619,37 @@ const RENDER = (() => {
       const flat = st.orient === 'v';   // portrait map: flat-top hexes, upright icons
       ctx.translate(x || 0, y || 0);
       ctx.lineJoin = 'round';
-      // Terrain mode (st.fill set): the ground was painted by terrainHex, so
-      // the fog is a translucent ink wash and lit tiles get a tinted plate
-      // instead of a solid type colour. Without it the old solid look stands.
       const terr = st.fill ? (tile.terrain || 'land') : null;
       const ford = terr === 'shallow';
       if (terr && st.mask) coastEdges(ctx, r, st.mask, flat, biomePal(st.biome));
       const hidden = !tile.revealed && type !== 'boss';
       if (hidden) {
-        ctx.beginPath(); brushedHex(ctx, r * (terr ? 0.99 : 0.96), tile.q, tile.r, flat);
-        if (terr) { F(ctx, rgba(FOG, ford ? 0.3 : 0.5)); ctx.fill(); S(ctx, rgba(INK, 0.6), 2); ctx.stroke(); }
+        ctx.beginPath(); brushedHex(ctx, r * (terr ? 1.01 : 0.96), tile.q, tile.r, flat);
+        if (terr) { F(ctx, rgba(DARK, st.nearLight ? (ford ? 0.62 : 0.76) : 0.92)); ctx.fill(); }
         else { F(ctx, FOG); ctx.fill(); S(ctx, rgba(INK, 0.9), 3); ctx.stroke(); }
-        ctx.beginPath(); brushedHex(ctx, r * 0.8, tile.r, tile.q, flat);
-        S(ctx, rgba('#6a5a8a', 0.18), 5); ctx.stroke();
+        if (!terr) { ctx.beginPath(); brushedHex(ctx, r * 0.8, tile.r, tile.q, flat); S(ctx, rgba('#6a5a8a', 0.18), 5); ctx.stroke(); }
         if (ford) {
-          // a hidden ford still shows its price
+          // a dark ford still shows its price
           txt(ctx, '2', 0, 1, r * 0.6, rgba('#f4ecd6', 0.5), true);
         } else if (tile.known && type !== 'empty') {
-          // Landmark: the icon as a dim ink sketch under a fog wash, with a
-          // dashed rim, so it can be planned for before it is lit.
+          // Landmark: the icon as a dim silhouette under the darkness, with
+          // a dashed rim, so it can be planned for before it is lit.
           ctx.save();
           ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.9, flat); ctx.clip();
           ctx.globalAlpha = 0.95;
           const limg = artImg('hex', type);
           if (limg) blitContain(ctx, limg, 0, 0, r * 1.2, r * 1.2); else hexIcon(ctx, type, r * 0.95, t);
-          ctx.globalAlpha = 0.42;
-          F(ctx, FOG); ctx.fillRect(-r, -r, r * 2, r * 2);
+          ctx.globalAlpha = terr ? 0.62 : 0.42;
+          F(ctx, terr ? DARK : FOG); ctx.fillRect(-r, -r, r * 2, r * 2);
           ctx.restore();
           ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.86, flat);
-          ctx.setLineDash([3, 4]); S(ctx, rgba('#f4ecd6', 0.4), 1.5); ctx.stroke(); ctx.setLineDash([]);
-        } else txt(ctx, '?', 0, 1, r * (terr ? 0.55 : 0.8), rgba(terr ? INK : '#f4ecd6', terr ? 0.22 : 0.16), true);
+          ctx.setLineDash([3, 4]); S(ctx, rgba('#f4ecd6', 0.35), 1.5); ctx.stroke(); ctx.setLineDash([]);
+        } else if (!terr || terr !== 'sea') txt(ctx, '?', 0, 1, r * (terr ? 0.55 : 0.8), rgba('#f4ecd6', terr ? 0.1 : 0.16), true);
       } else {
         if (terr) {
-          ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.97, flat);
-          // the road: a lighter, sun-worn plate under everything on it
-          if (st.road || tile.road) { F(ctx, rgba(ROAD, 0.2)); ctx.fill(); }
-          if (tile.visited) { F(ctx, rgba(FOG, 0.3)); ctx.fill(); }
-          S(ctx, rgba(INK, 0.8), 2); ctx.stroke();
-          if (type !== 'empty' && !ford) {
-            ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.74, flat);
-            F(ctx, rgba(TILE_COL[type] || TILE_COL.empty, tile.visited ? 0.4 : 0.75)); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
-          }
+          // lit ground: a thin dark seam between hexes, nothing else
+          ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat);
+          S(ctx, rgba(INK, 0.28), 1); ctx.stroke();
         } else {
           const base = tile.visited ? '#3a3648' : (TILE_COL[type] || TILE_COL.empty);
           ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
@@ -1653,22 +1659,22 @@ const RENDER = (() => {
           ctx.restore();
           S(ctx, INK, 3); ctx.stroke();
         }
-        if (tile.visited) ctx.globalAlpha = 0.55;
-        const himg = ford ? null : artImg('hex', type);
-        if (himg) blitContain(ctx, himg, 0, 0, r * 1.3, r * 1.3);
-        else if (!ford && !(terr && type === 'empty')) hexIcon(ctx, type, r, t);
-        ctx.globalAlpha = 1;
-        if (tile.visited && !st.current) {
-          ctx.beginPath(); ctx.moveTo(r * 0.25, r * 0.35); ctx.lineTo(r * 0.45, r * 0.55); ctx.lineTo(r * 0.8, r * 0.15);
-          S(ctx, INK, 5); ctx.stroke(); S(ctx, PAL.lime, 2.5); ctx.stroke();
+        // the pickup: gone once the tile is done (taken, cleared, used)
+        if (!ford && type !== 'empty' && !tile.done) {
+          const himg = artImg('hex', type);
+          ctx.beginPath(); ell(ctx, 0, r * 0.5, r * 0.5, r * 0.16, 0); F(ctx, rgba(INK, 0.32)); ctx.fill();
+          ctx.save(); ctx.translate(0, -r * 0.08);
+          if (himg) blitContain(ctx, himg, 0, 0, r * 1.3, r * 1.3); else hexIcon(ctx, type, r, t);
+          ctx.restore();
         }
       }
       if (st.path) {
-        // ink path preview: a cyan wash, stronger on the target
+        // light the way / flare preview: a wash, stronger on the target
+        const col = st.flare ? '#ffb347' : PAL.cyan;
         ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
-        F(ctx, rgba(PAL.cyan, st.target ? 0.32 : 0.18)); ctx.fill();
+        F(ctx, rgba(col, st.target ? 0.32 : 0.18)); ctx.fill();
         ctx.setLineDash([4, 4]); ctx.lineDashOffset = -t * 20;
-        S(ctx, rgba(PAL.cyan, 0.95), 2.5); ctx.stroke(); ctx.setLineDash([]);
+        S(ctx, rgba(col, 0.95), 2.5); ctx.stroke(); ctx.setLineDash([]);
       }
       if (st.reachable) {
         // walkable now: a thick pulsing cyan rim plus a steady inner line
@@ -1679,8 +1685,10 @@ const RENDER = (() => {
         S(ctx, rgba(PAL.cyan, 0.9), 2); ctx.stroke();
       }
       if (st.hover) {
-        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
-        F(ctx, rgba('#ffffff', 0.14)); ctx.fill(); S(ctx, PAL.gold, 3); ctx.stroke();
+        // a tool could go here: a gold dashed rim
+        ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.9, flat);
+        ctx.setLineDash([5, 4]); ctx.lineDashOffset = -t * 15;
+        S(ctx, rgba(PAL.gold, 0.8), 2); ctx.stroke(); ctx.setLineDash([]);
       }
       if (st.current) {
         // you are here: a gold rim that breathes, over a soft glow
@@ -1691,6 +1699,49 @@ const RENDER = (() => {
         // the crawler stands here, unless a walk is drawing it between hexes
         if (!st.walking) crawler(ctx, 0, 0, r, t);
       }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The warm glow where the light meets the dark: drawn after every hex on
+  // a lit tile's edges that face darkness (bit i = edge from corner i to
+  // corner i+1, hexPath order, like coastEdges): a soft wide band that
+  // spills onto the dark neighbour and a thin bright rim, flickering a
+  // little like a bulb.
+  function lightRim(ctx, x, y, size, mask, flat, t) {
+    ctx.save();
+    try {
+      const r = size || 30; t = t || 0;
+      if (!mask) { ctx.restore(); return; }
+      ctx.translate(x || 0, y || 0);
+      ctx.lineCap = 'round';
+      const off = flat ? 0 : -Math.PI / 2;
+      const flick = 0.85 + Math.sin(t * 7 + x * 0.05) * 0.1 + Math.sin(t * 2.3 + y * 0.03) * 0.05;
+      for (let pass = 0; pass < 2; pass++) {
+        const rr = pass ? r * 0.97 : r * 1.06;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          if (!(mask & (1 << i))) continue;
+          const a0 = off + i * Math.PI / 3, a1 = off + (i + 1) * Math.PI / 3;
+          ctx.moveTo(Math.cos(a0) * rr, Math.sin(a0) * rr); ctx.lineTo(Math.cos(a1) * rr, Math.sin(a1) * rr);
+        }
+        if (pass) S(ctx, rgba('#ffd27a', 0.5 * flick), Math.max(1.5, r * 0.09)); else S(ctx, rgba('#ff9a3c', 0.16 * flick), Math.max(4, r * 0.38));
+        ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A marquee bulb: the HUD's light stat, the box of bulbs, the cost pill.
+  // r is the bulb's radius; on = lit (a warm glow and a glint).
+  function bulb(ctx, x, y, r, t, on) {
+    ctx.save();
+    try {
+      r = r || 8; t = t || 0; if (on == null) on = true;
+      ctx.translate(x || 0, y || 0);
+      if (on) glow(ctx, 0, 0, r * 2.2, PAL.gold, 0.45 + Math.sin(t * 6) * 0.1);
+      tone(ctx, c => rrect(c, -r * 0.42, r * 0.55, r * 0.84, r * 0.6, r * 0.12), '#5a6373', 0, r * 0.85, r * 0.4, NOSPEC);
+      ctx.beginPath(); ctx.moveTo(-r * 0.42, r * 0.75); ctx.lineTo(r * 0.42, r * 0.75); ctx.moveTo(-r * 0.42, r * 0.95); ctx.lineTo(r * 0.42, r * 0.95); S(ctx, rgba(INK, 0.6), 1); ctx.stroke();
+      tone(ctx, c => circ(c, 0, 0, r), on ? '#ffe28a' : '#8a8ea0', 0, 0, r, { dark: -0.2, ol: Math.max(1.5, r * 0.18) });
+      if (on) { F(ctx, rgba('#ffffff', 0.85)); ctx.beginPath(); ell(ctx, -r * 0.3, -r * 0.35, r * 0.2, r * 0.12, -0.6); ctx.fill(); }
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
@@ -1718,7 +1769,8 @@ const RENDER = (() => {
   }
   // The road: a worn ochre track through pts (consecutive road hex centres,
   // start first): a dark rut under a lighter band with a dashed pale core.
-  // Static, drawn over the ground and under the icons.
+  // Static, drawn over the ground and the pickups (a little translucent so
+  // an icon on the road stays readable) and under the crawler.
   function mapRoad(ctx, pts, size, t) {
     ctx.save();
     try {
@@ -1726,10 +1778,10 @@ const RENDER = (() => {
       if (pts.length > 1) {
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-        S(ctx, rgba('#2a1c0c', 0.5), size * 0.36); ctx.stroke();
-        S(ctx, rgba(ROAD, 0.6), size * 0.24); ctx.stroke();
+        S(ctx, rgba('#2a1c0c', 0.4), size * 0.3); ctx.stroke();
+        S(ctx, rgba(ROAD, 0.5), size * 0.2); ctx.stroke();
         ctx.setLineDash([size * 0.2, size * 0.28]);
-        S(ctx, rgba('#f2dc9a', 0.8), size * 0.08); ctx.stroke();
+        S(ctx, rgba('#f2dc9a', 0.7), size * 0.07); ctx.stroke();
         ctx.setLineDash([]);
       }
     } catch (e) { /* never throws */ }
@@ -1760,32 +1812,37 @@ const RENDER = (() => {
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
-  // Ink path preview: a dashed cyan line through pts (lit origin first,
-  // target last), the ink cost in a pill under the target (pink when the
-  // player is short) and an optional landmark label above it.
+  // "Light the way" preview: a dashed line through pts (lit origin first,
+  // target last), the bulb cost in a pill under the target with a bulb
+  // icon (pink when the player is short) and an optional label above it.
+  // o: { cost, ink (the bulbs in hand), label, unit ('bulbs'), color, t }.
+  // A flare preview passes color and no cost.
   function mapPath(ctx, pts, size, o) {
     ctx.save();
     try {
       o = o || {}; size = size || 30; const t = o.t || 0;
+      const col = o.color || PAL.cyan;
       pts = pts || [];
       if (pts.length > 1) {
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
         S(ctx, rgba(INK, 0.8), 7); ctx.stroke();
         ctx.setLineDash([size * 0.3, size * 0.3]); ctx.lineDashOffset = -t * 40;
-        S(ctx, PAL.cyan, 3.5); ctx.stroke(); ctx.setLineDash([]);
-        for (const p of pts) { ctx.beginPath(); circ(ctx, p.x, p.y, 2.5); F(ctx, PAL.cyan); ctx.fill(); }
+        S(ctx, col, 3.5); ctx.stroke(); ctx.setLineDash([]);
+        for (const p of pts) { ctx.beginPath(); circ(ctx, p.x, p.y, 2.5); F(ctx, col); ctx.fill(); }
       }
       const end = pts.length ? pts[pts.length - 1] : null;
       if (end && o.cost != null) {
         const enough = o.ink == null || o.ink >= o.cost;
-        const s = o.cost + ' ink';
-        const fs = Math.max(12, size * 0.5), w = s.length * fs * 0.62 + 14, hh = fs + 8;
+        const unit = o.unit || 'bulbs';
+        const s = o.cost + ' ' + (o.cost === 1 && unit.slice(-1) === 's' ? unit.slice(0, -1) : unit);
+        const fs = Math.max(12, size * 0.5), ic = fs * 0.55, w = s.length * fs * 0.62 + 18 + ic * 1.6, hh = fs + 8;
         const by = end.y + size * 0.92 + hh / 2;
         tone(ctx, c => rrect(c, end.x - w / 2, by - hh / 2, w, hh, hh / 2), enough ? PAL.cyan : PAL.pink, end.x, by, w / 2, { spec: false, dark: -0.2, ol: 2 });
-        txt(ctx, s, end.x, by + 1, fs, INK, true);
-        if (o.label) txt(ctx, o.label, end.x, end.y - size * 1.05, Math.max(12, size * 0.5), '#f4ecd6', true, 'center', true);
+        bulb(ctx, end.x - w / 2 + 8 + ic * 0.6, by - ic * 0.15, ic * 0.5, t, enough);
+        txt(ctx, s, end.x + ic * 0.7, by + 1, fs, INK, true);
       }
+      if (end && o.label) txt(ctx, o.label, end.x, end.y - size * 1.05, Math.max(12, size * 0.5), '#f4ecd6', true, 'center', true);
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
@@ -1811,14 +1868,62 @@ const RENDER = (() => {
   }
 
   /* ========================================================= TERRAIN */
-  // One palette per biome (act): land runs low -> high with elevation, water
-  // sea -> deep with depth. The foundry's "water" is lava: same rules, hot look.
+  // The darkness: what the map is before it is lit.
+  const DARK = '#0c0518';
+  // One palette per biome (act): a base and a deco colour per ground type
+  // (grass, forest, dirt, sand, hill, mountain), water sea -> deep with
+  // depth, a coast ink and a foam line. Act 1 (cellar) is a mossy overgrown
+  // arcade: natural greens and browns under a purple tint. Act 2 (foundry)
+  // is ash grass, cinder forest, lava for sea and obsidian mountains. Act 3
+  // (vault) is snow grass, pine forest, ice water and white peaks.
   const BIOME_PAL = {
-    cellar: { low: '#75775f', high: '#cdbb8e', sea: '#173142', deep: '#0b1824', shallow: '#3b7d86', foam: '#9fd8d8', coast: '#15111f', hatch: '#3f3a2e', ripple: '#2e5b70', name: 'damp stone' },
-    foundry: { low: '#635349', high: '#b09a7a', sea: '#a02a0c', deep: '#4e0e05', shallow: '#4a2318', foam: '#ffa03a', coast: '#1c0d08', hatch: '#2b2220', ripple: '#ff6a2a', lava: true, name: 'ash and slag' },
-    vault: { low: '#9bb0c7', high: '#f1f5fa', sea: '#163a68', deep: '#08192f', shallow: '#5fa8cf', foam: '#d8f1fb', coast: '#22334f', hatch: '#6c8098', ripple: '#3c6f9c', name: 'ice and open water' },
+    cellar: {
+      low: '#5f7a5c', high: '#93a06a',
+      grass: '#5f7d58', grass2: '#3d5e3a', flower: '#c48ad6',
+      forest: '#3d6247', tree: '#3a7a4a', tree2: '#25563a', trunk: '#4a3628',
+      dirt: '#6e5542', dirt2: '#4a3a30', pebble: '#8f7d6a',
+      sand: '#bfae7e', sand2: '#9c8a5c',
+      hill: '#8a8e66', hill2: '#5e6247',
+      mtn: '#6c6784', mtn2: '#3a3650', cap: '#cfc9e6',
+      sea: '#173142', deep: '#0b1824', shallow: '#3b7d86', foam: '#9fd8d8', coast: '#15111f', hatch: '#3f3a2e', ripple: '#2e5b70',
+      tint: 'rgba(90,40,140,0.12)', accent: 'moss', moss: '#4f8a5a', name: 'mossy arcade',
+    },
+    foundry: {
+      low: '#6a655c', high: '#9a8f7a',
+      grass: '#6e6c62', grass2: '#46443c', flower: '#ff8a2b',
+      forest: '#4a423c', tree: '#2a2320', tree2: '#181310', trunk: '#1a1412', ember: '#ff6a2a',
+      dirt: '#5e4d44', dirt2: '#3e3028', pebble: '#7a6a60',
+      sand: '#8c847a', sand2: '#6a6258',
+      hill: '#7c7268', hill2: '#4c443e',
+      mtn: '#2e2934', mtn2: '#15111a', cap: '#5a5064',
+      sea: '#a02a0c', deep: '#4e0e05', shallow: '#4a2318', foam: '#ffa03a', coast: '#1c0d08', hatch: '#2b2220', ripple: '#ff6a2a', lava: true,
+      tint: 'rgba(120,40,10,0.1)', accent: 'ash', ash: '#2a2320', name: 'ash and slag',
+    },
+    vault: {
+      low: '#c9d6e2', high: '#f1f5fa',
+      grass: '#d9e4ee', grass2: '#9fb4c8', flower: '#9fd4ff',
+      forest: '#a9c2cf', tree: '#3c6c64', tree2: '#274a46', trunk: '#3a2e28',
+      dirt: '#8f95a8', dirt2: '#666c80', pebble: '#b0b6c8',
+      sand: '#cdd8e4', sand2: '#a6b6c8',
+      hill: '#c0cfdd', hill2: '#8898ac',
+      mtn: '#8d9eb6', mtn2: '#55657e', cap: '#ffffff',
+      sea: '#163a68', deep: '#08192f', shallow: '#5fa8cf', foam: '#d8f1fb', coast: '#22334f', hatch: '#6c8098', ripple: '#3c6f9c',
+      tint: 'rgba(80,120,200,0.08)', accent: 'snow', snow: '#ffffff', name: 'ice and open water',
+    },
   };
   function biomePal(biome) { return BIOME_PAL[biome] || BIOME_PAL.cellar; }
+  // The ground type of a tile: its own, or read off the terrain, height
+  // and coast for tiles from before the tileset (old saves, the intro).
+  function groundOf(tile) {
+    if (!tile) return 'grass';
+    if (tile.ground) return tile.ground;
+    const terr = tile.terrain || 'land';
+    if (terr !== 'land') return terr;
+    const e = tile.elev == null ? 0.35 : tile.elev;
+    if (e >= 0.62) return 'hill';
+    if (tile.coast && e < 0.06) return 'sand';
+    return 'grass';
+  }
   const mixCache = new Map();
   // Colour lerp a -> b by t, quantised to 24 steps and cached (never allocates in steady state).
   function mix(a, b, t) {
@@ -1831,26 +1936,38 @@ const RENDER = (() => {
     mixCache.set(ck, s);
     return s;
   }
-  // The ground colour of a tile: precompute it once per tile, it is cached anyway.
-  function terrainFill(biome, terrain, elev) {
+  // The ground colour of a tile: the ground type's base, a touch lighter
+  // with height. ground is optional (read off the height when missing).
+  // Precompute it once per tile, it is cached anyway.
+  function terrainFill(biome, terrain, elev, ground) {
     const p = biomePal(biome);
     if (terrain === 'sea') return mix(p.sea, p.deep, elev);
     if (terrain === 'shallow') return p.shallow;
-    return mix(p.low, p.high, Math.pow(elev == null ? 0.5 : elev, 1.15));
+    const e = elev == null ? 0.5 : elev;
+    const g = ground || groundOf({ terrain, elev: e });
+    const base = p[g === 'mountain' ? 'mtn' : g] || p.grass;
+    return mix(base, p.high, e * 0.25);
   }
-  // The ground under a hex: water with drifting ripples (lava with a hot
-  // core), a ford with stepping stones, or land with hill hatching on the
-  // high ground and a faint grid line. st: { fill, seed, biome, orient, t }.
+  // The tileset: the ground under a hex, per ground type and biome, with
+  // two or three seeded decorations each (tufts and flowers, trees, pebbles
+  // and cracks, sand ripples, hill contours, peaks with caps), water with
+  // drifting ripples (lava with a hot core) and a ford with stepping
+  // stones. st: { fill, seed, biome, orient, t }.
   function terrainHex(ctx, x, y, size, tile, st) {
     ctx.save();
     try {
       tile = tile || {}; st = st || {};
       const r = size || 30, t = st.t || 0, flat = st.orient === 'v', p = biomePal(st.biome), seed = st.seed || 0;
       const terrain = tile.terrain || 'land';
+      const ground = groundOf(tile);
       ctx.translate(x || 0, y || 0);
-      ctx.lineCap = 'round';
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.beginPath(); hexPath(ctx, 0, 0, r * 1.02, flat);
-      F(ctx, st.fill || terrainFill(st.biome, terrain, tile.elev)); ctx.fill();
+      F(ctx, st.fill || terrainFill(st.biome, terrain, tile.elev, ground)); ctx.fill();
+      // seeded positions inside the hex: j-th deco at (px(j), py(j))
+      const px = (j) => ((((seed >>> (j * 5)) & 31) / 31) - 0.5) * r * 0.9;
+      const py = (j) => ((((seed >>> (j * 5 + 3)) & 31) / 31) - 0.5) * r * 0.8;
+      const lw = Math.max(1, r * 0.05);
       if (terrain === 'sea') {
         // ripples on two tiles in five, a lone wave or a pair, drifting slowly
         if ((seed % 5) < 2) {
@@ -1865,6 +1982,12 @@ const RENDER = (() => {
           F(ctx, rgba(p.foam, 0.07 + 0.05 * Math.sin(t * 1.4 + (seed & 7))));
           ctx.beginPath(); circ(ctx, 0, 0, r * (0.3 + ((seed >> 4) & 3) * 0.08)); ctx.fill();
         }
+        if (p.accent === 'snow') {
+          // an ice floe drifting on the vault's water
+          const fx = px(1) * 0.5, fy = py(1) * 0.5, fs = r * 0.22;
+          ctx.beginPath(); ctx.moveTo(fx - fs, fy - fs * 0.2); ctx.lineTo(fx - fs * 0.3, fy - fs * 0.7); ctx.lineTo(fx + fs * 0.9, fy - fs * 0.4); ctx.lineTo(fx + fs * 0.6, fy + fs * 0.5); ctx.lineTo(fx - fs * 0.6, fy + fs * 0.6); ctx.closePath();
+          F(ctx, rgba(p.foam, 0.55)); ctx.fill(); S(ctx, rgba(p.deep, 0.5), 1); ctx.stroke();
+        }
         S(ctx, rgba(p.deep, 0.45), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
       } else if (terrain === 'shallow') {
         // a ford: a pale wave and three stepping stones
@@ -1873,18 +1996,105 @@ const RENDER = (() => {
         F(ctx, p.high); S(ctx, p.coast, Math.max(1, r * 0.04));
         ctx.beginPath(); ell(ctx, -r * 0.3, -r * 0.12, r * 0.15, r * 0.1, 0.2); ell(ctx, r * 0.05, 0.02 * r, r * 0.13, r * 0.09, -0.3); ell(ctx, r * 0.36, -r * 0.2, r * 0.12, r * 0.08, 0.1);
         ctx.fill(); ctx.stroke();
+        if (p.accent === 'ash') { F(ctx, rgba(p.foam, 0.18)); ctx.beginPath(); circ(ctx, 0, r * 0.1, r * 0.4); ctx.fill(); }
+        else if (p.accent === 'snow') { S(ctx, rgba(p.foam, 0.6), Math.max(1, r * 0.04)); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.86, flat); ctx.stroke(); }
         S(ctx, rgba(p.coast, 0.35), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
-      } else {
-        const e = tile.elev || 0;
-        if (e > 0.62) {
-          // hills: hatch strokes, a peak on the highest ground
-          S(ctx, rgba(p.hatch, 0.55), Math.max(1, r * 0.05));
-          ctx.beginPath();
-          for (let i = -1; i <= 1; i++) { ctx.moveTo(i * r * 0.28 - r * 0.22, r * 0.3); ctx.lineTo(i * r * 0.28 + r * 0.1, -r * 0.2); }
-          ctx.stroke();
-          if (e > 0.82) { ctx.beginPath(); ctx.moveTo(-r * 0.3, r * 0.05); ctx.lineTo(0, -r * 0.45); ctx.lineTo(r * 0.3, r * 0.05); S(ctx, rgba(p.hatch, 0.8), Math.max(1.5, r * 0.06)); ctx.stroke(); }
+      } else if (ground === 'mountain') {
+        // two peaks, a lit face and a shaded face, a cap on the taller one
+        const drawPeak = (cx, base, w, h, cap) => {
+          ctx.beginPath(); ctx.moveTo(cx - w, base); ctx.lineTo(cx, base - h); ctx.lineTo(cx + w, base); ctx.closePath();
+          F(ctx, p.mtn2); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(cx - w, base); ctx.lineTo(cx, base - h); ctx.lineTo(cx, base); ctx.closePath();
+          F(ctx, mix(p.mtn, p.high, 0.15)); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(cx - w, base); ctx.lineTo(cx, base - h); ctx.lineTo(cx + w, base); ctx.closePath();
+          S(ctx, rgba(INK, 0.7), lw); ctx.stroke();
+          if (cap) {
+            ctx.beginPath(); ctx.moveTo(cx - w * 0.32, base - h * 0.68); ctx.lineTo(cx, base - h); ctx.lineTo(cx + w * 0.32, base - h * 0.68);
+            ctx.lineTo(cx + w * 0.16, base - h * 0.6); ctx.lineTo(cx, base - h * 0.7); ctx.lineTo(cx - w * 0.16, base - h * 0.6); ctx.closePath();
+            F(ctx, p.cap); ctx.fill();
+          }
+        };
+        ctx.beginPath(); ell(ctx, 0, r * 0.42, r * 0.8, r * 0.2, 0); F(ctx, rgba(INK, 0.18)); ctx.fill();
+        const lean = (seed & 1) ? 1 : -1;
+        drawPeak(lean * r * 0.28, r * 0.42, r * 0.42, r * 0.62, false);
+        drawPeak(-lean * r * 0.12, r * 0.45, r * 0.55, r * 0.95, true);
+      } else if (ground === 'hill') {
+        // a mound: two contour arcs and a few hatch strokes on the upper side
+        S(ctx, rgba(p.hill2, 0.8), Math.max(1.2, r * 0.06));
+        ctx.beginPath(); ctx.arc(px(0) * 0.3, r * 0.15, r * 0.55, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+        ctx.beginPath(); ctx.arc(px(0) * 0.3, r * 0.2, r * 0.32, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+        S(ctx, rgba(p.hill2, 0.45), lw);
+        ctx.beginPath();
+        for (let i = 0; i < 3; i++) { const hx = px(0) * 0.3 + (i - 1) * r * 0.2; ctx.moveTo(hx + r * 0.32, r * 0.28); ctx.lineTo(hx + r * 0.42, r * 0.05); }
+        ctx.stroke();
+        S(ctx, rgba(p.grass2, 0.7), Math.max(1.2, r * 0.06));
+        const gx = px(2) * 0.6, gy = -r * 0.45 + py(2) * 0.2, gs = r * 0.15;
+        ctx.beginPath(); ctx.moveTo(gx - gs, gy + gs * 0.5); ctx.lineTo(gx - gs * 0.6, gy - gs * 0.6); ctx.moveTo(gx, gy + gs * 0.6); ctx.lineTo(gx, gy - gs); ctx.moveTo(gx + gs, gy + gs * 0.5); ctx.lineTo(gx + gs * 0.6, gy - gs * 0.6); ctx.stroke();
+      } else if (ground === 'forest') {
+        // two or three trees: round canopies (cellar), dead spikes with an
+        // ember (foundry), snow-lined pines (vault)
+        const n = 2 + (seed & 1);
+        const spots = [[-r * 0.32, r * 0.18], [r * 0.3, r * 0.3], [0, -r * 0.28]];
+        for (let i = 0; i < n; i++) {
+          const tx = spots[i][0] + px(i) * 0.25, ty = spots[i][1] + py(i) * 0.2, s = r * (0.36 + ((seed >>> (i * 3)) & 3) * 0.03);
+          if (p.accent === 'ash') {
+            ctx.beginPath(); ctx.moveTo(tx, ty + s * 0.6); ctx.lineTo(tx, ty - s * 0.8); ctx.moveTo(tx, ty - s * 0.2); ctx.lineTo(tx - s * 0.5, ty - s * 0.7); ctx.moveTo(tx, ty); ctx.lineTo(tx + s * 0.5, ty - s * 0.5);
+            S(ctx, p.tree, Math.max(1.5, r * 0.07)); ctx.stroke();
+            F(ctx, rgba(p.ember, 0.55 + 0.35 * Math.sin(t * 3 + i + (seed & 7)))); ctx.beginPath(); circ(ctx, tx + s * 0.5, ty - s * 0.5, s * 0.14); ctx.fill();
+          } else if (p.accent === 'snow') {
+            ctx.beginPath(); ctx.moveTo(tx, ty + s * 0.7); ctx.lineTo(tx, ty + s * 0.3); S(ctx, p.trunk, Math.max(1.5, r * 0.06)); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(tx - s * 0.55, ty + s * 0.4); ctx.lineTo(tx, ty - s * 0.8); ctx.lineTo(tx + s * 0.55, ty + s * 0.4); ctx.closePath();
+            F(ctx, p.tree); ctx.fill(); S(ctx, rgba(INK, 0.7), lw); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(tx - s * 0.32, ty); ctx.lineTo(tx, ty - s * 0.28); ctx.lineTo(tx + s * 0.32, ty); S(ctx, p.cap, Math.max(1.5, r * 0.06)); ctx.stroke();
+          } else {
+            ctx.beginPath(); ctx.moveTo(tx, ty + s * 0.75); ctx.lineTo(tx, ty + s * 0.2); S(ctx, p.trunk, Math.max(1.5, r * 0.07)); ctx.stroke();
+            ctx.beginPath(); circ(ctx, tx, ty, s * 0.55); circ(ctx, tx - s * 0.32, ty + s * 0.18, s * 0.38); circ(ctx, tx + s * 0.32, ty + s * 0.18, s * 0.38);
+            F(ctx, p.tree); ctx.fill(); S(ctx, rgba(INK, 0.6), lw); ctx.stroke();
+            ctx.beginPath(); circ(ctx, tx - s * 0.15, ty - s * 0.2, s * 0.22); F(ctx, mix(p.tree, p.high, 0.3)); ctx.fill();
+          }
         }
-        S(ctx, rgba(p.coast, 0.3), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
+      } else if (ground === 'dirt') {
+        // bare ground: two pebbles and a crack
+        F(ctx, p.pebble); S(ctx, rgba(INK, 0.5), lw);
+        ctx.beginPath(); ell(ctx, px(0) * 0.6, py(0) * 0.6, r * 0.12, r * 0.08, 0.3); ell(ctx, px(1) * 0.6, py(1) * 0.6 + r * 0.1, r * 0.09, r * 0.06, -0.4); ctx.fill(); ctx.stroke();
+        F(ctx, rgba(p.dirt2, 0.25)); ctx.beginPath(); ell(ctx, px(3) * 0.5, py(3) * 0.5, r * 0.34, r * 0.2, py(4) * 0.03); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(px(2) * 0.5 - r * 0.3, py(2) * 0.4); ctx.lineTo(px(2) * 0.5 - r * 0.05, py(2) * 0.4 + r * 0.12); ctx.lineTo(px(2) * 0.5 + r * 0.25, py(2) * 0.4 + r * 0.05);
+        ctx.moveTo(px(4) * 0.5 - r * 0.15, py(4) * 0.5 - r * 0.2); ctx.lineTo(px(4) * 0.5 + r * 0.05, py(4) * 0.5 - r * 0.05);
+        S(ctx, rgba(p.dirt2, 0.85), Math.max(1.2, r * 0.055)); ctx.stroke();
+      } else if (ground === 'sand') {
+        // ripples in the sand and a shell
+        S(ctx, rgba(p.sand2, 0.8), Math.max(1.2, r * 0.055));
+        for (let i = 0; i < 3; i++) {
+          const yy = -r * 0.4 + i * r * 0.36 + py(i) * 0.12;
+          ctx.beginPath(); ctx.moveTo(-r * 0.5, yy); ctx.quadraticCurveTo(-r * 0.25, yy - r * 0.12, 0, yy); ctx.quadraticCurveTo(r * 0.25, yy + r * 0.12, r * 0.5, yy); ctx.stroke();
+        }
+        F(ctx, p.high); ctx.beginPath(); circ(ctx, px(2) * 0.5, py(2) * 0.5, r * 0.06); ctx.fill();
+      } else {
+        // grass: tufts and, on a few tiles, a flower or a speck of snow
+        S(ctx, rgba(p.grass2, 0.85), Math.max(1.2, r * 0.06));
+        const n = 2 + (seed & 1);
+        for (let i = 0; i < n; i++) {
+          const gx = px(i) * 0.8, gy = py(i) * 0.8, s = r * 0.19;
+          ctx.beginPath(); ctx.moveTo(gx - s, gy + s * 0.5); ctx.lineTo(gx - s * 0.6, gy - s * 0.6); ctx.moveTo(gx, gy + s * 0.6); ctx.lineTo(gx, gy - s); ctx.moveTo(gx + s, gy + s * 0.5); ctx.lineTo(gx + s * 0.6, gy - s * 0.6); ctx.stroke();
+        }
+        if ((seed & 12) === 12) { F(ctx, p.flower); ctx.beginPath(); circ(ctx, px(3) * 0.7, py(3) * 0.7, r * 0.07); ctx.fill(); }
+      }
+      if (terrain === 'land') {
+        // the biome's accent on every land hex: a moss patch (cellar), ash
+        // flecks (foundry), snow specks (vault); then the tint and a seam
+        if (p.accent === 'ash') {
+          S(ctx, rgba(p.ash, 0.55), lw);
+          ctx.beginPath(); ctx.moveTo(px(3) * 0.8 - r * 0.08, py(3) * 0.8); ctx.lineTo(px(3) * 0.8 + r * 0.08, py(3) * 0.8 - r * 0.05);
+          ctx.moveTo(px(4) * 0.8 - r * 0.06, py(4) * 0.8 + r * 0.02); ctx.lineTo(px(4) * 0.8 + r * 0.06, py(4) * 0.8 - r * 0.03); ctx.stroke();
+        } else if (p.accent === 'snow') {
+          F(ctx, rgba(p.snow, 0.8)); ctx.beginPath();
+          for (let i = 3; i < 6; i++) { ctx.moveTo(px(i) * 0.85 + r * 0.04, py(i) * 0.85); ctx.arc(px(i) * 0.85, py(i) * 0.85, r * 0.04, 0, TAU); }
+          ctx.fill();
+        } else {
+          F(ctx, rgba(p.moss, 0.28)); ctx.beginPath(); ell(ctx, px(4) * 0.7, py(4) * 0.7, r * 0.22, r * 0.14, px(5) * 0.05); ctx.fill();
+        }
+        F(ctx, p.tint); ctx.beginPath(); hexPath(ctx, 0, 0, r * 1.02, flat); ctx.fill();
+        S(ctx, rgba(p.coast, 0.25), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -2396,7 +2606,7 @@ const RENDER = (() => {
 
   return {
     item, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
-    terrainHex, terrainFill, biomePal, mapCompass, mapHeader, mapArrow, BIOME_PAL,
+    terrainHex, terrainFill, biomePal, groundOf, lightRim, bulb, mapCompass, mapHeader, mapArrow, BIOME_PAL, DARK,
     portrait, relicIcon, title, fx, flames,
     ITEM_KEYS, ENEMY_KEYS, ITEM_DEFAULT, PAL, shade, rgba, glowSprite,
   };

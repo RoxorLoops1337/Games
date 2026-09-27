@@ -1,5 +1,7 @@
-// Clawspire -- the overworld. A Roguebook style hex map the player reveals
-// with ink and brushes, then walks one hex at a time.
+// Clawspire -- the overworld. A hex map sunk in darkness that the player
+// lights up (bulbs, tools, the view from a tower, the lie of the land) and
+// walks one hex at a time. The field names keep their old spelling: M.ink
+// is the bulbs, M.brushes the tools, tile.revealed means lit.
 //
 // Coordinate convention (everything in this file and every caller uses it):
 //   * Axial (q, r), pointy-top hexes. Row r runs 0..rows-1 top to bottom.
@@ -11,18 +13,30 @@
 //     with cube rounding. MAP.size() gives the extra {ox, oy} to centre a map,
 //     MAP.bounds() the world box a camera pans over.
 //
-// Terrain: every tile has terrain 'land' | 'shallow' | 'sea', elev 0..1 (land
-// height, or depth for water), coast (land touching water) and biome (per act).
-// Sea holds nothing, is never revealed and never walked. A shallow is a ford:
-// it costs SHALLOW_COST ink to reveal and SHALLOW_COST ink to wade, and it is
-// what joins an island to the mainland. Islands carry the best content.
+// Terrain: every tile has terrain 'land' | 'shallow' | 'sea', a ground type
+// for the tileset (GROUNDS: grass, forest, dirt, sand, hill, mountain,
+// shallow, sea), elev 0..1 (land height by rank, or depth for water), coast
+// (land touching water) and biome (per act). Sea holds nothing and is never
+// walked; it can be lit (seen) by rings and tower views. A shallow is a
+// ford: it costs SHALLOW_COST bulbs to light by hand and SHALLOW_COST to
+// wade, and it is what joins an island to the mainland. A mountain is land
+// nobody walks: no content, no road, flares stop at it, at most
+// MOUNTAIN_MAX of the land. Islands carry the best content.
+//
+// Light: a hex next to the lit area is lit for one bulb (reveal), a chain
+// of them for their sum (pathToReveal / revealPath). Standing on a hex
+// lights the ring around it for free (vision: one ring on lowland, two on a
+// hill, applied by move). Tools (useTool): a flare lights a straight line
+// from the player, a lantern the rings around any lit hex, a kite a patch
+// anywhere within KITE_RANGE. A tower taken lights everything within
+// TOWER_VIEW (towerView).
 //
 // The road: the guaranteed land route from the start to the boss is lit
 // from the first moment (tile.road, M.road in walking order), so the boss
-// can always be reached without spending ink; ink is for what lies off it.
-// It meanders and passes a rest and a shop, and its tiles keep whatever
-// content they rolled. walkPath() plans a click-to-travel walk over lit
-// tiles for the game's auto-walk.
+// can always be reached without spending a bulb; bulbs are for what lies
+// off it. It meanders, passes a rest and a shop, never touches a tower and
+// its tiles keep whatever content they rolled. walkPath() plans a
+// click-to-travel walk over lit tiles for the game's auto-walk.
 //
 // Pure data + functions: no DOM, no global randomness (every roll comes from
 // the rng handed to generate), and M is plain JSON so it saves as-is.
@@ -33,9 +47,26 @@ const MAP = (() => {
   const TYPES = ['empty', 'fight', 'elite', 'treasure', 'gem', 'ink', 'brush', 'event',
     'shop', 'rest', 'boss', 'start', 'forge', 'tower'];
   const TERRAINS = ['land', 'shallow', 'sea'];
+  // Ground types (the tileset). Land is one of the first six; water keeps
+  // its terrain name. A mountain is terrain 'land' with ground 'mountain'
+  // so old code that only knows the three terrains still loads it.
+  const GROUNDS = ['grass', 'forest', 'dirt', 'sand', 'hill', 'mountain', 'shallow', 'sea'];
+  const HILL_ELEV = 0.62;       // land at or above this is a hill (two rings of vision, the hill tile)
+  const TOWER_ELEV = 0.5;       // a tower wants high ground
+  const SAND_ELEV = 0.03;       // low coast is sand
+  const MOUNTAIN_ELEV = 0.86;   // the highest land may turn to mountain...
+  const MOUNTAIN_MAX = 0.08;    // ...up to this share of the land
+  const MOUNTAIN_TARGET = 0.06;
+  const FOREST_SHARE = 0.3, DIRT_SHARE = 0.15;   // of the flat land, by a second noise
+  // Vision: rings lit for free around the hex the player stands on.
+  const VISION = { low: 1, hill: 2 };
+  // Lookout towers: 3 per map on hills, TOWER_GAP apart (and from the start
+  // and the boss), each with a radius TOWER_VIEW view that must add
+  // TOWER_VIEW_MIN hexes no other tower sees. At most one on an island.
+  const TOWER_VIEW = 4, TOWER_GAP = 6, TOWER_VIEW_MIN = 30;
   const BIOMES = { 1: 'cellar', 2: 'foundry', 3: 'vault' };
   // Share of the placeable land tiles per type, and the hard minimums.
-  // Ink pots sit at 10% of the land: the 16x22 world has long walks.
+  // Bulb boxes sit at 10% of the land: the 16x22 world has long walks.
   const DIST = {
     fight: 0.28, empty: 0.16, gem: 0.10, ink: 0.10, event: 0.08, treasure: 0.04,
     brush: 0.04, shop: 0.04, rest: 0.05, forge: 0.03, elite: 0.03, tower: 0.035,
@@ -51,19 +82,20 @@ const MAP = (() => {
   // the fog from the start, so the player can plan where to spend ink.
   const LANDMARKS = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1, boss: 1, tower: 1 };
   // Tower bonuses (rolled at generate, awarded after the tower fight on top
-  // of the relic). game.js applies them; the ids match its fx kinds.
+  // of the relic and the view). game.js applies them; the ids match its fx
+  // kinds ('ink' is bulbs, 'brush' a tool).
   const TOWER_BONUS = ['ink', 'brush', 'claw', 'gold'];
   const TOWER_INK = 2, TOWER_GOLD = 60;
   const FALLBACK_UPGRADES = ['grabs', 'width', 'grip', 'speed', 'prongs', 'rubber', 'magnet'];
-  const START_INK = 10;   // per act; game.js reads DATA.ECONOMY.startInk and passes it in
-  // Ink a run can expect to find on one act's map along a sensible route
-  // (start 10, a few pots at 2, half the fights at 1, elites and towers at
+  const START_INK = 10;   // bulbs per act; game.js reads DATA.ECONOMY.startInk and passes it in
+  // Bulbs a run can expect to find on one act's map along a sensible route
+  // (start 10, a few boxes at 2, half the fights at 1, elites and towers at
   // 2): the number the balance pass should reason from.
   const INK_PER_ACT_HINT = 24;
   const DEFAULT_COLS = 16, DEFAULT_ROWS = 22;
   const HEX = 46;         // the game's fixed hex size in stage px (the camera scales it)
   const WATER = 0.28;     // target share of water (sea + shallow) hexes (lands near 0.30 after the islands)
-  const SHALLOW_COST = 2; // ink to reveal a ford, and again to wade it
+  const SHALLOW_COST = 2; // bulbs to light a ford by hand, and again to wade it
   // The road runs ROAD_MEANDER[0]..[1] times the straight hex distance from
   // the start to the boss (bends are added until it does, on maps with the
   // rows to bend in). ROAD_TOLL keeps it off the heaviest content when a
@@ -72,29 +104,26 @@ const MAP = (() => {
   const ROAD_TOLL = { elite: 12, tower: 12 };
   const FIT_MARGIN = 4;   // px kept free around the map by size()
 
-  // Built-in brush shapes, used when DATA.BRUSHES is missing or lacks an id.
-  // "Vertical" for comb means the same offset column (c = q + floor(r/2)),
-  // which zigzags half a hex per row but reads as a straight column on screen.
-  const FALLBACK_BRUSHES = {
-    line3: (q, r) => [[q, r], [q + 1, r], [q + 2, r]],
-    splash: (q, r) => [[q, r]].concat(DIRS.map(([dq, dr]) => [q + dq, r + dr])),
-    drip: (q, r) => {
-      const h = hash2(q, r);
-      const i = h % 6;
-      const j = (i + 1 + ((h >>> 3) % 5)) % 6; // always differs from i
-      return [[q, r], [q + DIRS[i][0], r + DIRS[i][1]], [q + DIRS[j][0], r + DIRS[j][1]]];
-    },
-    comb: (q, r) => {
-      const c = q + Math.floor(r / 2);
-      const out = [];
-      for (let d = -2; d <= 2; d++) out.push([c - Math.floor((r + d) / 2), r + d]);
-      return out;
-    },
+  // The tools (DATA.TOOLS when loaded, this table otherwise). A flare
+  // lights a straight line of FLARE_RANGE from the player and stops at
+  // mountains and open water (a ford is lit and stops it too); a lantern
+  // hung on any lit hex lights its ring and LANTERN_OUTER of the second
+  // ring's land, chosen by the map seed; a kite flown over any dark hex
+  // within KITE_RANGE of the player lights it and its ring.
+  const TOOL_IDS = ['flare', 'lantern', 'kite'];
+  const FLARE_RANGE = 5, KITE_RANGE = 6, LANTERN_OUTER = 0.5;
+  const FALLBACK_TOOLS = {
+    flare: { id: 'flare', name: 'Flare', icon: '*', kind: 'line', text: 'Lights 5 hexes in a straight line from where you stand.' },
+    lantern: { id: 'lantern', name: 'Lantern', icon: 'o', kind: 'ring', text: 'Hang it on a lit hex: lights the ring around it and half of the next.' },
+    kite: { id: 'kite', name: 'Kite', icon: '^', kind: 'patch', text: 'Fly it over any dark hex within 6: lights it and its ring.' },
   };
+  // Brush ids from saves made before the tools all load as a lantern.
+  const OLD_BRUSHES = { line3: 'lantern', splash: 'lantern', drip: 'lantern', comb: 'lantern' };
 
-  function hash2(q, r) {
-    if (typeof U !== 'undefined' && U.hashStr) return U.hashStr('drip:' + q + ',' + r);
-    let h = Math.imul(q | 0, 73856093) ^ Math.imul(r | 0, 19349663);
+  function hashN(str) {
+    if (typeof U !== 'undefined' && U.hashStr) return U.hashStr(str);
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
     return h >>> 0;
   }
 
@@ -134,16 +163,61 @@ const MAP = (() => {
   }
 
   const isSea = (t) => !!t && t.terrain === 'sea';
-  const isLand = (t) => !!t && (t.terrain || 'land') === 'land';
-  // Ink to reveal a tile: 1 on land, SHALLOW_COST on a ford, never for sea.
+  const isWater = (t) => !!t && (t.terrain === 'sea' || t.terrain === 'shallow');
+  const isMountain = (t) => !!t && t.ground === 'mountain';
+  // Walkable land: terrain land that is not a mountain.
+  const isLand = (t) => !!t && (t.terrain || 'land') === 'land' && !isMountain(t);
+  // Bulbs to light a tile by hand: 1 on land, SHALLOW_COST on a ford, never
+  // for sea or a mountain (those are only ever lit by rings and views).
   function revealCost(t) {
-    if (!t || isSea(t)) return Infinity;
+    if (!t || isSea(t) || isMountain(t)) return Infinity;
     return t.terrain === 'shallow' ? SHALLOW_COST : 1;
   }
-  // Ink to step onto a tile: free on land, SHALLOW_COST to wade a ford.
+  // Bulbs to step onto a tile: free on land, SHALLOW_COST to wade a ford,
+  // never for sea or a mountain.
   function moveCost(t) {
-    if (!t || isSea(t)) return Infinity;
+    if (!t || isSea(t) || isMountain(t)) return Infinity;
     return t.terrain === 'shallow' ? SHALLOW_COST : 0;
+  }
+  // Hex distance from the hill or lowland the player stands on that is lit
+  // for free: two rings on a hill, one elsewhere (the start counts as lowland).
+  function visionRadius(t) {
+    if (!t || t.type === 'start') return VISION.low;
+    return isLand(t) && (t.elev || 0) >= HILL_ELEV ? VISION.hill : VISION.low;
+  }
+  // Every in-bounds hex within `radius` of (q, r), the centre first.
+  function disc(M, q, r, radius) {
+    const out = [];
+    for (let dq = -radius; dq <= radius; dq++) {
+      for (let dr = Math.max(-radius, -dq - radius); dr <= Math.min(radius, -dq + radius); dr++) {
+        if (inBounds(M, q + dq, r + dr)) out.push([q + dq, r + dr]);
+      }
+    }
+    return out;
+  }
+  // Lights one tile of any terrain (sea included: it is seen, not charted).
+  // Returns true when it was dark.
+  function lightTile(M, t) {
+    if (!t || t.revealed) return false;
+    t.revealed = true;
+    if (!isSea(t)) M.revealedCount++;
+    return true;
+  }
+  // Lights everything within `radius` of (q, r); returns the tiles that were dark.
+  function lightArea(M, q, r, radius) {
+    const out = [];
+    for (const [cq, cr] of disc(M, q, r, radius)) { const t = M.tiles[key(cq, cr)]; if (lightTile(M, t)) out.push(t); }
+    return out;
+  }
+  // Terrain vision from (q, r): what standing there lights for free.
+  function vision(M, q, r) {
+    if (!inBounds(M, q, r)) return [];
+    return lightArea(M, q, r, visionRadius(M.tiles[key(q, r)]));
+  }
+  // The view from a tower at (q, r): radius TOWER_VIEW, land, sea, all.
+  function towerView(M, q, r) {
+    if (!inBounds(M, q, r)) return [];
+    return lightArea(M, q, r, TOWER_VIEW);
   }
   function pathCost(M, path) {
     let n = 0;
@@ -152,28 +226,29 @@ const MAP = (() => {
   }
   const biomeOf = (act) => BIOMES[act] || BIOMES[((Math.max(1, act | 0) - 1) % 3) + 1];
 
-  // A revealed tile the ink may grow from (the boss only once visited).
+  // A lit tile the light may grow from (the boss only once visited).
   function isFoothold(t) {
     return !!t && t.revealed && (t.type !== 'boss' || t.visited);
   }
 
-  // The boss tile is lit from the start but it is not a foothold: the ink
+  // The boss tile is lit from the start but it is not a foothold: the light
   // must grow out from where the player has actually been, or the far side
-  // of the map could be painted open from the boss's doorstep.
+  // of the map could be lit open from the boss's doorstep.
   function touchesRevealed(M, q, r) {
     return neighbors(M, q, r).some(([nq, nr]) => isFoothold(M.tiles[key(nq, nr)]));
   }
 
-  // Cheapest chain of hidden tiles from the lit area to (q, r), in reveal
-  // order, ending on (q, r) itself: what "paint the path" would reveal.
+  // Cheapest chain of dark tiles from the lit area to (q, r), in lighting
+  // order, ending on (q, r) itself: what "light the way" would reveal.
   // Multi-source Dijkstra (bucket queue, costs are 1 or SHALLOW_COST) from
-  // every foothold through hidden, non-boss, non-sea tiles; pathCost() gives
-  // the ink. Empty when the target is revealed, out of bounds, sea, the boss,
-  // already touching the lit area (that is a plain reveal) or unreachable.
+  // every foothold through dark, non-boss tiles that can be lit by hand (no
+  // sea, no mountains); pathCost() gives the bulbs. Empty when the target is
+  // lit, out of bounds, sea, a mountain, the boss, already touching the lit
+  // area (that is a plain reveal) or unreachable.
   function pathToReveal(M, q, r) {
     if (!inBounds(M, q, r)) return [];
     const goal = M.tiles[key(q, r)];
-    if (goal.revealed || goal.type === 'boss' || isSea(goal) || touchesRevealed(M, q, r)) return [];
+    if (goal.revealed || goal.type === 'boss' || revealCost(goal) === Infinity || touchesRevealed(M, q, r)) return [];
     const goalK = key(q, r);
     const dist = {}, parent = {};
     const buckets = [[]];
@@ -193,7 +268,7 @@ const MAP = (() => {
         for (const [nq, nr] of neighbors(M, ct.q, ct.r)) {
           const k = key(nq, nr);
           const t = M.tiles[k];
-          if (t.revealed || t.type === 'boss' || isSea(t)) continue;
+          if (t.revealed || t.type === 'boss' || revealCost(t) === Infinity) continue;
           const nd = d + revealCost(t);
           if (dist[k] != null && dist[k] <= nd) continue;
           dist[k] = nd; parent[k] = ck;
@@ -204,9 +279,9 @@ const MAP = (() => {
     return [];
   }
 
-  // Reveals a whole path (as returned by pathToReveal) for pathCost() ink.
-  // Refuses, spending nothing, when the ink is short or any step could not
-  // be revealed in order. Returns the revealed tiles or null.
+  // Lights a whole path (as returned by pathToReveal) for pathCost() bulbs.
+  // Refuses, spending nothing, when the bulbs are short or any step could
+  // not be lit in order. Returns the lit tiles or null.
   function revealPath(M, path) {
     if (!Array.isArray(path) || !path.length) return null;
     const seen = {};
@@ -214,7 +289,7 @@ const MAP = (() => {
       if (!step || !inBounds(M, step[0], step[1])) return null;
       const k = key(step[0], step[1]);
       const t = M.tiles[k];
-      if (t.revealed || t.type === 'boss' || isSea(t) || seen[k]) return null;
+      if (t.revealed || t.type === 'boss' || revealCost(t) === Infinity || seen[k]) return null;
       const ok = touchesRevealed(M, t.q, t.r) || neighbors(M, t.q, t.r).some(([nq, nr]) => seen[key(nq, nr)]);
       if (!ok) return null;
       seen[k] = 1;
@@ -231,38 +306,119 @@ const MAP = (() => {
     return out;
   }
 
-  // Available brush ids: the data module's list when present, else the fallback set.
-  function brushIds() {
-    if (typeof DATA !== 'undefined' && DATA && DATA.BRUSHES) {
-      const ids = Object.keys(DATA.BRUSHES);
-      if (ids.length) return ids;
+  // The tool table: DATA.TOOLS (or its BRUSHES alias) when present, else the fallback.
+  function toolTable() {
+    if (typeof DATA !== 'undefined' && DATA) {
+      const T = DATA.TOOLS || DATA.BRUSHES;
+      if (T && Object.keys(T).length) return T;
     }
-    return Object.keys(FALLBACK_BRUSHES);
+    return FALLBACK_TOOLS;
+  }
+  // Available tool ids.
+  function toolIds() { return Object.keys(toolTable()); }
+  // A tool id as it is today: old brush ids map to the lantern.
+  function normalizeTool(id) { return OLD_BRUSHES[id] || id; }
+  function toolKind(id) {
+    const d = toolTable()[id] || FALLBACK_TOOLS[id];
+    return (d && d.kind) || (FALLBACK_TOOLS[id] && FALLBACK_TOOLS[id].kind) || null;
+  }
+  // The axial direction (index into DIRS) in which (q, r) lies from `from`:
+  // the nearest of the six by angle, or -1 for the same hex.
+  function dirTo(M, from, q, r) {
+    if (!from || (from.q === q && from.r === r)) return -1;
+    const a = toPixel(from.q, from.r, 10), b = toPixel(q, r, 10);
+    const vx = b.x - a.x, vy = b.y - a.y;
+    let best = -1, bd = -Infinity;
+    DIRS.forEach(([dq, dr], i) => {
+      const p = toPixel(from.q + dq, from.r + dr, 10);
+      const ux = p.x - a.x, uy = p.y - a.y;
+      const d = (vx * ux + vy * uy) / Math.hypot(ux, uy);
+      if (d > bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+  // The hexes a flare fired from `from` (default pos) in direction `dir`
+  // lights: up to FLARE_RANGE in a straight line, stopping at the map's
+  // edge, a mountain or open water (neither is lit); a ford is lit and
+  // stops it too.
+  function flareCells(M, dir, from) {
+    from = from || M.pos;
+    if (!(dir >= 0 && dir < 6) || !from) return [];
+    const [dq, dr] = DIRS[dir];
+    const out = [];
+    for (let i = 1; i <= FLARE_RANGE; i++) {
+      const cq = from.q + dq * i, cr = from.r + dr * i;
+      if (!inBounds(M, cq, cr)) break;
+      const t = M.tiles[key(cq, cr)];
+      if (isSea(t) || isMountain(t)) break;
+      out.push([cq, cr]);
+      if (t.terrain === 'shallow') break;
+    }
+    return out;
+  }
+  // The hexes a lantern hung on (q, r) lights: the ring of six, plus the
+  // land hexes of the second ring that the map seed picks (about half).
+  function lanternCells(M, q, r) {
+    const out = [];
+    for (const [cq, cr] of disc(M, q, r, 2)) {
+      const d = hexDist(q, r, cq, cr);
+      if (d === 0) continue;
+      const t = M.tiles[key(cq, cr)];
+      if (d === 1) { out.push([cq, cr]); continue; }
+      if (!isLand(t) && !isMountain(t)) continue;
+      if ((hashN('lantern:' + (M.seed || 0) + ':' + q + ',' + r + ':' + cq + ',' + cr) % 1000) / 1000 < LANTERN_OUTER) out.push([cq, cr]);
+    }
+    return out;
+  }
+  // The hexes a kite flown over (q, r) lights: the hex and its ring.
+  function kiteCells(M, q, r) { return disc(M, q, r, 1); }
+  // What using tool `id` on (q, r) would light ([] when it cannot be used
+  // there). A flare ignores (q, r) when `dir` is given, else fires toward it.
+  function toolCells(M, id, q, r, dir) {
+    id = normalizeTool(id);
+    const kind = toolKind(id);
+    if (!M || !kind) return [];
+    if (kind === 'line') {
+      if (!(dir >= 0)) dir = dirTo(M, M.pos, q, r);
+      return flareCells(M, dir);
+    }
+    if (!inBounds(M, q, r)) return [];
+    const t = M.tiles[key(q, r)];
+    if (kind === 'ring') return t.revealed ? lanternCells(M, q, r) : [];
+    if (kind === 'patch') return (!t.revealed && !isSea(t) && M.pos && hexDist(M.pos.q, M.pos.r, q, r) <= KITE_RANGE) ? kiteCells(M, q, r) : [];
+    return [];
+  }
+  // Index of a copy of the tool in M.brushes (old ids count), or -1.
+  function toolIndex(M, id) {
+    id = normalizeTool(id);
+    for (let i = 0; i < (M.brushes || []).length; i++) if (normalizeTool(M.brushes[i]) === id) return i;
+    return -1;
+  }
+  function canTool(M, id, q, r, dir) {
+    if (!M || toolIndex(M, id) < 0) return false;
+    return toolCells(M, id, q, r, dir).length > 0;
+  }
+  // Uses one copy of the tool: lights its cells (no bulbs spent) and takes
+  // the copy. Returns the tiles that were dark, or null when it cannot be
+  // used there.
+  function useTool(M, id, q, r, dir) {
+    if (!canTool(M, id, q, r, dir)) return null;
+    const out = [];
+    for (const [cq, cr] of toolCells(M, id, q, r, dir)) { const t = M.tiles[key(cq, cr)]; if (lightTile(M, t)) out.push(t); }
+    M.brushes.splice(toolIndex(M, id), 1);
+    return out;
   }
 
-  // Raw footprint of a brush (may include out-of-bounds cells), or null if unknown.
-  function brushCells(brushId, q, r) {
-    let fn = null;
-    if (typeof DATA !== 'undefined' && DATA && DATA.BRUSHES && DATA.BRUSHES[brushId] &&
-      typeof DATA.BRUSHES[brushId].cells === 'function') fn = DATA.BRUSHES[brushId].cells;
-    else if (FALLBACK_BRUSHES[brushId]) fn = FALLBACK_BRUSHES[brushId];
-    if (!fn) return null;
-    const cells = fn(q, r) || [];
-    // De-duplicate so a sloppy shape cannot double count.
-    const seen = {};
-    return cells.filter(([cq, cr]) => { const k = key(cq, cr); if (seen[k]) return false; seen[k] = 1; return true; });
-  }
-
-  // Least ink needed to walk from `from` to `to` (wading fords costs
+  // Least bulbs needed to walk from `from` to `to` (wading fords costs
   // SHALLOW_COST each, land is free), or -1 when there is no way. Default
-  // walks revealed tiles only; opts.any ignores the fog (used to prove the
+  // walks lit tiles only; opts.any ignores the dark (used to prove the
   // boss is reachable at generate time), opts.land allows land only. The
   // boss tile is never passed *through*, only ended on, since stepping on it
-  // starts the boss fight. Sea is never walked.
+  // starts the boss fight. Sea and mountains are never walked.
   function walkCost(M, from, to, opts) {
     opts = opts || {};
     if (!from || !to || !inBounds(M, from.q, from.r) || !inBounds(M, to.q, to.r)) return -1;
-    const ok = (t) => !isSea(t) && (opts.any || t.revealed) && (!opts.land || isLand(t));
+    const ok = (t) => moveCost(t) < Infinity && (opts.any || t.revealed) && (!opts.land || isLand(t));
     const goal = key(to.q, to.r);
     if (!ok(M.tiles[goal])) return -1;
     const startK = key(from.q, from.r);
@@ -312,7 +468,7 @@ const MAP = (() => {
     if (!M || !M.pos || !inBounds(M, q, r)) return null;
     const goal = key(q, r);
     const gt = M.tiles[goal];
-    if (!gt.revealed || isSea(gt)) return null;
+    if (!gt.revealed || moveCost(gt) === Infinity) return null;
     const startK = key(M.pos.q, M.pos.r);
     if (goal === startK) return null;
     const stepCost = (t) => 1000 * moveCost(t) + 8 +
@@ -336,7 +492,7 @@ const MAP = (() => {
       for (const [nq, nr] of neighbors(M, ct.q, ct.r)) {
         const k = key(nq, nr);
         const t = M.tiles[k];
-        if (!t.revealed || isSea(t) || closed[k]) continue;
+        if (!t.revealed || moveCost(t) === Infinity || closed[k]) continue;
         const nd = dist[ck] + stepCost(t);
         if (dist[k] != null && dist[k] <= nd) continue;
         dist[k] = nd; parent[k] = ck; open.push(k);
@@ -414,7 +570,7 @@ const MAP = (() => {
         content.ink = (typeof DATA !== 'undefined' && DATA && DATA.ECONOMY && DATA.ECONOMY.inkTile) || (crng() < 0.35 ? 2 : 1);
         break;
       case 'brush':
-        content.brush = crng.pick(brushIds());
+        content.brush = crng.pick(toolIds());
         break;
       case 'event':
         if (typeof DATA !== 'undefined' && DATA && DATA.EVENTS) {
@@ -431,13 +587,13 @@ const MAP = (() => {
     return content;
   }
 
-  // The bonus a tower pays out on top of its relic. Brush and claw ids come
-  // from DATA when it is loaded, else from the fallback lists.
+  // The bonus a tower pays out on top of its relic and its view. Tool and
+  // claw ids come from DATA when it is loaded, else from the fallback lists.
   function rollTowerBonus(crng) {
     const k = crng.pick(TOWER_BONUS);
     if (k === 'ink') return { k, n: TOWER_INK };
     if (k === 'gold') return { k, n: TOWER_GOLD };
-    if (k === 'brush') return { k, id: crng.pick(brushIds()) };
+    if (k === 'brush') return { k, id: crng.pick(toolIds()) };
     let ups = FALLBACK_UPGRADES;
     if (typeof DATA !== 'undefined' && DATA && DATA.CLAW_UPGRADES && Object.keys(DATA.CLAW_UPGRADES).length) ups = Object.keys(DATA.CLAW_UPGRADES);
     return { k, u: crng.pick(ups) };
@@ -648,26 +804,99 @@ const MAP = (() => {
       if (!path) continue;
       for (const k of path) if (isSea(T[k])) { set(k, 'shallow'); T[k].elev = 0; }
     }
+    // Height by rank: the noise is bell shaped, so land elevation is
+    // re-spread over 0..1 (squared, so hills stay the upper fifth) before
+    // the mountains, hills and sand are read off it. Dry maps stay flat.
+    if (water > 0) {
+      const land = keys.filter((k) => isLand(T[k]));
+      land.sort((a, b) => (T[a].elev - T[b].elev) || ((T[a].q + T[a].r * 0.37) - (T[b].q + T[b].r * 0.37)));
+      land.forEach((k, i) => { const p = land.length > 1 ? i / (land.length - 1) : 0.5; T[k].elev = p * p; });
+    }
+    placeMountains(M, rng, protectedK, water > 0);
     // Coast flags, biome, rounding.
     for (const k of keys) {
       const t = T[k];
-      t.coast = isLand(t) && neighbors(M, t.q, t.r).some(([nq, nr]) => !isLand(T[key(nq, nr)]));
+      t.coast = isLand(t) && neighbors(M, t.q, t.r).some(([nq, nr]) => isWater(T[key(nq, nr)]));
       t.elev = Math.round((t.elev || 0) * 100) / 100;
       t.biome = M.biome;
     }
+    assignGrounds(M, rng);
     M.islands = groups.length - 1;
     let wet = 0;
-    for (const k of keys) if (!isLand(T[k])) wet++;
+    for (const k of keys) if (isWater(T[k])) wet++;
     M.water = Math.round((wet / keys.length) * 100) / 100;
   }
 
+  // Mountains: the highest mainland hexes, never protected ground (the
+  // start and boss disks, the carved route), never on an island, only
+  // where the mainland stays in one piece without them, MOUNTAIN_TARGET of
+  // the land (MOUNTAIN_MAX at most). Sets ground = 'mountain'.
+  function placeMountains(M, rng, protectedK, wet) {
+    const T = M.tiles;
+    for (const k in T) delete T[k].ground;
+    if (!wet) return;
+    const groups = landGroups(M);
+    const main = groups[0];
+    const mainK = {};
+    for (const k of main) mainK[k] = 1;
+    let landN = 0;
+    for (const k in T) if (isLand(T[k])) landN++;
+    const want = Math.round(landN * MOUNTAIN_TARGET), cap = Math.floor(landN * MOUNTAIN_MAX);
+    // Never a ford's landing (the fords are already laid): no mountain
+    // beside a shallow.
+    const cand = main.filter((k) => !protectedK[k] && T[k].elev >= MOUNTAIN_ELEV &&
+      !neighbors(M, T[k].q, T[k].r).some(([nq, nr]) => T[key(nq, nr)].terrain === 'shallow'))
+      .map((k) => ({ k, s: T[k].elev + rng() * 0.02 })).sort((a, b) => b.s - a.s).map((c) => c.k);
+    const sk = key(M.start.q, M.start.r);
+    let size = main.length, placed = 0;
+    // The mainland minus the mountains so far stays connected from the start.
+    const connected = () => {
+      const seen = { [sk]: 1 };
+      const q = [sk];
+      for (let i = 0; i < q.length; i++) {
+        const t = T[q[i]];
+        for (const [nq, nr] of neighbors(M, t.q, t.r)) { const k = key(nq, nr); if (!seen[k] && mainK[k] && isLand(T[k])) { seen[k] = 1; q.push(k); } }
+      }
+      return q.length === size;
+    };
+    for (const k of cand) {
+      if (placed >= Math.min(want, cap)) break;
+      T[k].ground = 'mountain';
+      size--;
+      if (connected()) { placed++; continue; }
+      delete T[k].ground;
+      size++;
+    }
+  }
+
+  // The ground under every tile: water keeps its terrain name, mountains
+  // stay, hills sit at HILL_ELEV, low coast is sand, and the rest is grass,
+  // forest or dirt by a second, softer noise (by rank, so every map has its
+  // woods and its bare patches).
+  function assignGrounds(M, rng) {
+    const T = M.tiles;
+    const veg = noiseMap(M, rng);
+    const flat = [];
+    for (const k in T) {
+      const t = T[k];
+      if (isWater(t)) { t.ground = t.terrain; continue; }
+      if (isMountain(t)) continue;
+      if (t.elev >= HILL_ELEV) { t.ground = 'hill'; continue; }
+      if (t.coast && t.elev < SAND_ELEV) { t.ground = 'sand'; continue; }
+      flat.push(k);
+    }
+    flat.sort((a, b) => (veg[a] - veg[b]) || (a < b ? -1 : 1));
+    flat.forEach((k, i) => {
+      const p = flat.length > 1 ? i / (flat.length - 1) : 0.5;
+      T[k].ground = p >= 1 - FOREST_SHARE ? 'forest' : p < DIRT_SHARE ? 'dirt' : 'grass';
+    });
+  }
+
   // Island content: the best things live across the water. Largest island
-  // first: a tower (all but one tower go to islands), a treasure, an elite
-  // (never beside start or boss), half the time a shop. Spread rules are
-  // relaxed on islands, there is no room for them. Returns the tower cells.
+  // first: a treasure, an elite (never beside start or boss), half the time
+  // a shop. Spread rules are relaxed on islands, there is no room for them.
+  // Towers are placed on their own (placeTowers) and may use an island too.
   function placeIslandContent(M, islands, counts, rng, eliteOk) {
-    const towers = [];
-    let spare = Math.max(0, counts.tower - 1);   // one tower stays on the mainland
     islands.forEach((isle) => {
       const cells = rng.shuffle(isle).filter((k) => M.tiles[k].type === 'empty');
       const give = (type) => {
@@ -677,36 +906,86 @@ const MAP = (() => {
         counts[type]--;
         return true;
       };
-      if (spare > 0) { const k = cells[0]; if (give('tower')) { spare--; towers.push([M.tiles[k].q, M.tiles[k].r]); } }
       if (counts.treasure > 0) give('treasure');
       const ek = cells.find((k) => eliteOk(M.tiles[k].q, M.tiles[k].r));
       if (ek && counts.elite > 0) { cells.splice(cells.indexOf(ek), 1); M.tiles[ek].type = 'elite'; counts.elite--; }
       if (counts.shop > 0 && rng() < 0.5) give('shop');
     });
-    return towers;
   }
 
-  // Mainland towers sit off the start-boss axis: top or bottom row, offset
-  // columns 3..cols-3 when the land allows it, else anywhere at least two
-  // rows off the axis. Never next to each other. Returns the cells taken.
-  function placeTowers(M, n, rng, placed) {
-    placed = placed || [];
-    const main = landGroups(M)[0];
-    const mid = M.start.r;
-    const tiers = [
-      (t) => (t.r === 0 || t.r === M.rows - 1) && t.q + Math.floor(t.r / 2) >= 3 && t.q + Math.floor(t.r / 2) <= M.cols - 3,
-      (t) => Math.abs(t.r - mid) >= 2,
-      (t) => t.r !== mid,
-    ];
-    for (const tier of tiers) {
-      if (placed.length >= n) break;
-      const cand = main.map((k) => M.tiles[k]).filter((t) => t.type === 'empty' && tier(t)).map((t) => [t.q, t.r]);
-      for (const [q, r] of rng.shuffle(cand)) {
-        if (placed.length >= n) break;
-        if (placed.some(([pq, pr]) => isAdjacent(pq, pr, q, r))) continue;
-        M.tiles[key(q, r)].type = 'tower';
-        placed.push([q, r]);
+  // Lookout towers: a greedy farthest-first pick over empty land hexes on
+  // high ground (elev >= TOWER_ELEV) at least TOWER_GAP from each other,
+  // the start and the boss, each maximising the hexes its TOWER_VIEW view
+  // would light that no earlier tower's view (nor the start's ring, nor the
+  // boss) lights, and adding at least TOWER_VIEW_MIN of them; at most one
+  // tower stands on an island. Maps too small for those rules relax them
+  // in steps (a closer gap, then any land that is not adjacent). Returns
+  // the cells taken; throws when even the minimum will not fit.
+  function placeTowers(M, n, rng) {
+    const T = M.tiles;
+    const placed = [];
+    const isleOf = {};
+    islandsOf(M).forEach((isle, i) => { for (const k of isle) isleOf[k] = i + 1; });
+    let islandUsed = false;
+    const covered = {};
+    covered[key(M.boss.q, M.boss.r)] = 1;
+    for (const [q, r] of disc(M, M.start.q, M.start.r, VISION.low)) covered[key(q, r)] = 1;
+    const gain = (t) => { let g = 0; for (const [q, r] of disc(M, t.q, t.r, TOWER_VIEW)) if (!covered[key(q, r)]) g++; return g; };
+    // The road never touches a tower, so a tower and its ring must leave
+    // the mainland joined from the start to the boss (with the earlier
+    // towers' rings barred too).
+    const barred = {};
+    const sk = key(M.start.q, M.start.r), bk = key(M.boss.q, M.boss.r);
+    // ...and (until the last resort) must not push the shortest land walk
+    // past the road's ceiling, or more than a step past what it already is.
+    const straight = Math.max(1, hexDist(M.start.q, M.start.r, M.boss.q, M.boss.r));
+    const shortest = (bar) => {
+      const seen = { [sk]: 0 };
+      const queue = [sk];
+      for (let i = 0; i < queue.length; i++) {
+        if (queue[i] === bk) return seen[bk];
+        const c = T[queue[i]];
+        for (const [nq, nr] of neighbors(M, c.q, c.r)) { const k = key(nq, nr); if (seen[k] == null && !bar[k] && isLand(T[k])) { seen[k] = seen[queue[i]] + 1; queue.push(k); } }
       }
+      return Infinity;
+    };
+    const limit = Math.max(shortest({}) + 1, ROAD_MEANDER[1] * straight - 1);
+    const roadStillFits = (t, anyLength) => {
+      const bar = Object.assign({}, barred);
+      for (const [q, r] of disc(M, t.q, t.r, 1)) bar[key(q, r)] = 1;
+      delete bar[sk]; delete bar[bk];
+      const d = shortest(bar);
+      return anyLength ? d < Infinity : d <= limit;
+    };
+    // gap: between towers; ends: from the start and the boss.
+    const passes = [
+      { gap: TOWER_GAP, ends: TOWER_GAP, min: TOWER_VIEW_MIN, elev: TOWER_ELEV },
+      { gap: TOWER_GAP, ends: Math.max(2, TOWER_GAP - 2), min: TOWER_VIEW_MIN, elev: TOWER_ELEV },
+      { gap: Math.max(2, Math.floor(TOWER_GAP / 2)), ends: Math.max(2, Math.floor(TOWER_GAP / 2)), min: Math.floor(TOWER_VIEW_MIN / 2), elev: TOWER_ELEV },
+      { gap: 2, ends: 2, min: 0, elev: 0, anyLength: true },
+    ];
+    for (const P of passes) {
+      while (placed.length < n) {
+        let best = null, bs = -1;
+        for (const k in T) {
+          const t = T[k];
+          if (t.type !== 'empty' || !isLand(t) || (t.elev || 0) < P.elev) continue;
+          if (hexDist(t.q, t.r, M.start.q, M.start.r) < P.ends || hexDist(t.q, t.r, M.boss.q, M.boss.r) < P.ends) continue;
+          if (placed.some(([pq, pr]) => hexDist(pq, pr, t.q, t.r) < P.gap)) continue;
+          if (isleOf[k] && islandUsed) continue;
+          const g = gain(t);
+          if (g < P.min) continue;
+          const s = g + rng() * 0.5;
+          if (s > bs && roadStillFits(t, P.anyLength)) { bs = s; best = t; }
+        }
+        if (!best) break;
+        best.type = 'tower';
+        placed.push([best.q, best.r]);
+        if (isleOf[key(best.q, best.r)]) islandUsed = true;
+        else for (const [q, r] of disc(M, best.q, best.r, 1)) barred[key(q, r)] = 1;
+        for (const [q, r] of disc(M, best.q, best.r, TOWER_VIEW)) covered[key(q, r)] = 1;
+      }
+      if (placed.length >= n) break;
     }
     if (placed.length < Math.min(n, MINS.tower)) throw new Error('MAP.generate: could not place tower');
     return placed;
@@ -765,7 +1044,13 @@ const MAP = (() => {
     const colOf = (t) => t.q + Math.floor(t.r / 2);
     const wob = {};
     for (const k in T) wob[k] = rng() * 6;
-    const weight = (t) => 10 + wob[key(t.q, t.r)] + (ROAD_TOLL[t.type] || 0);
+    // Towers and their doorsteps are barred (the road never touches a
+    // tower); when that walls the boss in, they are merely dear.
+    const towerK = {};
+    for (const k in T) if (T[k].type === 'tower') { towerK[k] = 1; for (const [nq, nr] of neighbors(M, T[k].q, T[k].r)) towerK[key(nq, nr)] = 1; }
+    delete towerK[sk]; delete towerK[bk];
+    let barTowers = true;
+    const weight = (t) => 10 + wob[key(t.q, t.r)] + (ROAD_TOLL[t.type] || 0) + (towerK[key(t.q, t.r)] ? (barTowers ? Infinity : ROAD_TOLL.tower) : 0);
     // Mainland tiles of a type by detour (start -> tile -> boss minus the
     // straight line), a little luck mixed in.
     const candidates = (type) => {
@@ -824,27 +1109,47 @@ const MAP = (() => {
       return out[out.length - 1] === bk ? out : null;
     };
     const hits = (road, goal) => road.some((k) => goal[k]);
-    // The stops: the rest and the shop with the least detour that the road
-    // really passes (a stop walled into a corner is skipped for the next).
-    for (const type of ['rest', 'shop']) {
-      const cands = candidates(type).slice(0, 4);
-      for (const t of cands) {
-        const a = { c: colOf(t), goal: near(t) };
-        anchors.push(a);
-        const road = route();
-        if (road && hits(road, a.goal)) break;
-        anchors.pop();
-      }
-    }
     const ratio = (road) => (road.length - 1) / straight;
     const err = (road) => { const x = ratio(road); return x < ROAD_MEANDER[0] ? ROAD_MEANDER[0] - x : x > ROAD_MEANDER[1] ? x - ROAD_MEANDER[1] : 0; };
+    // The stops: a rest and a shop among the three of each with the least
+    // detour, in the pairing the road really passes both of and stays
+    // under the ceiling with (the water, the mountains and the tower rings
+    // can wall a stop off); else the rest alone, else the shop alone.
+    const pickStops = () => {
+      const rests = [null].concat(candidates('rest').slice(0, 3)), shops = [null].concat(candidates('shop').slice(0, 3));
+      let bestScore = -1, bestAnchors = [];
+      for (const rt of rests) {
+        for (const sh of shops) {
+          anchors.length = 0;
+          if (rt) anchors.push({ c: colOf(rt), goal: near(rt) });
+          if (sh) anchors.push({ c: colOf(sh), goal: near(sh) });
+          const road = route();
+          if (!road || !anchors.every((a) => hits(road, a.goal))) continue;
+          const under = ratio(road) <= ROAD_MEANDER[1];
+          const score = (under ? 100 : 0) + (rt ? 10 : 0) + (sh ? 5 : 0) - (under ? 0 : err(road));
+          if (score > bestScore) { bestScore = score; bestAnchors = anchors.slice(); }
+        }
+      }
+      anchors.length = 0;
+      for (const a of bestAnchors) anchors.push(a);
+    };
+    pickStops();
     let best = route();
-    // Too long already (the stops sit far off a route the water bends
-    // anyway): drop a stop, the shop first, while that helps.
-    for (let i = anchors.length - 1; best && i >= 0 && ratio(best) > ROAD_MEANDER[1]; i--) {
-      const a = anchors.splice(i, 1)[0];
-      const road = route();
-      if (road && err(road) < err(best)) best = road; else anchors.splice(i, 0, a);
+    if (!best) { barTowers = false; pickStops(); best = route(); }
+    // Too long already (the stops sit far off a route the water, the
+    // mountains and the towers bend anyway): drop the stop whose loss
+    // helps most, again while that helps.
+    for (let guard = 0; best && anchors.length && ratio(best) > ROAD_MEANDER[1] && guard < 4; guard++) {
+      let bi = -1, be = err(best), broad = null;
+      for (let i = anchors.length - 1; i >= 0; i--) {
+        const a = anchors.splice(i, 1)[0];
+        const road = route();
+        anchors.splice(i, 0, a);
+        if (road && err(road) < be) { be = err(road); bi = i; broad = road; }
+      }
+      if (bi < 0) break;
+      anchors.splice(bi, 1);
+      best = broad;
     }
     // Too straight: bend into the widest column gap, first one side of the
     // axis then the other, reaching further each round. A bend that makes
@@ -877,12 +1182,14 @@ const MAP = (() => {
   // cols is clamped to >= 9 and rows to >= 3 so the minimums always fit.
   // water is the share of water hexes (0 = an all-land map); islands the
   // number wanted (default 2..4 on big maps, 1 on small ones, 0 when dry).
+  // ink is the bulbs, brushes the tools (the fields keep their old names).
   function generate(opts) {
     opts = opts || {};
     const rng = opts.rng || U.rng(1);
     const cols = Math.max(9, Math.floor(opts.cols || DEFAULT_COLS));
     const rows = Math.max(3, Math.floor(opts.rows || DEFAULT_ROWS));
     const act = opts.act || 1;
+    const seed = Math.floor(rng() * 4294967296);
     const crng = U.rng(Math.floor(rng() * 4294967296));
     const midR = Math.floor(rows / 2);
     const start = { q: -Math.floor(midR / 2), r: midR };
@@ -891,15 +1198,15 @@ const MAP = (() => {
     // minimums and a third of water.
     const water = cols * rows < 60 ? 0 : (opts.water != null ? opts.water : WATER);
     const M = {
-      act, biome: biomeOf(act), cols, rows, tiles: {}, start, boss, pos: { q: start.q, r: start.r },
+      act, biome: biomeOf(act), cols, rows, seed, tiles: {}, start, boss, pos: { q: start.q, r: start.r },
       ink: opts.ink != null ? opts.ink : START_INK,
-      brushes: (opts.brushes || []).slice(), revealedCount: 0, islands: 0, water: 0, road: [],
+      brushes: (opts.brushes || []).map(normalizeTool), revealedCount: 0, islands: 0, water: 0, road: [],
     };
     const cells = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const q = c - Math.floor(r / 2);
-        M.tiles[key(q, r)] = { q, r, type: 'empty', terrain: 'land', elev: 0, coast: false, biome: M.biome, revealed: false, visited: false, road: false, content: {} };
+        M.tiles[key(q, r)] = { q, r, type: 'empty', terrain: 'land', ground: 'grass', elev: 0, coast: false, biome: M.biome, revealed: false, visited: false, road: false, content: {} };
         cells.push([q, r]);
       }
     }
@@ -913,9 +1220,8 @@ const MAP = (() => {
     const counts = rollCounts(free.length, rng);
     const eliteOk = (q, r) => !isAdjacent(q, r, start.q, start.r) && !isAdjacent(q, r, boss.q, boss.r);
     const islands = islandsOf(M);
-    const towerCount = counts.tower;
-    const towers = placeIslandContent(M, islands, counts, rng, eliteOk);
-    placeTowers(M, towerCount, rng, towers);
+    placeTowers(M, counts.tower, rng);
+    placeIslandContent(M, islands, counts, rng, eliteOk);
     const nearTower = (q, r) => neighbors(M, q, r).some(([nq, nr]) => M.tiles[key(nq, nr)].type === 'tower');
     let pool = rng.shuffle(free.filter(([q, r]) => M.tiles[key(q, r)].type === 'empty'));
     const take = (type, n, allowed) => {
@@ -946,12 +1252,12 @@ const MAP = (() => {
       t.known = isLandmark(t);
     }
 
-    // Fog: the road (start to boss), the start's neighbours and the boss
-    // are lit; the start is visited.
+    // Light: the road (start to boss), the start's vision (one ring, it
+    // counts as lowland) and the boss are lit; the start is visited.
     if (!carveRoad(M, rng)) throw new Error('MAP.generate: boss unreachable by land');
     const st = M.tiles[key(start.q, start.r)];
     st.revealed = true; st.visited = true;
-    for (const [nq, nr] of neighbors(M, start.q, start.r)) M.tiles[key(nq, nr)].revealed = true;
+    vision(M, start.q, start.r);
     M.tiles[key(boss.q, boss.r)].revealed = true;
     M.revealedCount = countRevealed(M);
 
@@ -959,20 +1265,22 @@ const MAP = (() => {
     return M;
   }
 
+  // Charted hexes: lit tiles that are not sea (lit sea is seen, not charted).
   function countRevealed(M) {
     let n = 0;
-    for (const k in M.tiles) if (M.tiles[k].revealed) n++;
+    for (const k in M.tiles) { const t = M.tiles[k]; if (t.revealed && !isSea(t)) n++; }
     return n;
   }
 
-  // Hidden, in bounds, not sea, touching the revealed area, and the ink for it.
+  // Dark, in bounds, lightable by hand (no sea, no mountain), touching the
+  // lit area, and the bulbs for it.
   function canReveal(M, q, r) {
     if (!inBounds(M, q, r)) return false;
     const t = M.tiles[key(q, r)];
-    return !t.revealed && !isSea(t) && M.ink >= revealCost(t) && touchesRevealed(M, q, r);
+    return !t.revealed && M.ink >= revealCost(t) && touchesRevealed(M, q, r);
   }
 
-  // Spends the reveal cost; returns the tile, or null if the reveal is not allowed.
+  // Spends the bulbs; returns the tile, or null if the reveal is not allowed.
   function reveal(M, q, r) {
     if (!canReveal(M, q, r)) return null;
     const t = M.tiles[key(q, r)];
@@ -982,45 +1290,21 @@ const MAP = (() => {
     return t;
   }
 
-  // A brush may target any hidden, non-sea tile touching the revealed area (no ink).
-  function canBrush(M, brushId, q, r) {
-    if (!inBounds(M, q, r) || M.brushes.indexOf(brushId) < 0) return false;
-    if (!brushCells(brushId, q, r)) return false;
-    const t = M.tiles[key(q, r)];
-    return !t.revealed && !isSea(t) && touchesRevealed(M, q, r);
-  }
-
-  // Reveals the brush's in-bounds cells (sea stays sea) and consumes one
-  // copy of the brush. Returns the tiles newly revealed (already revealed
-  // cells are skipped), or null when the brush cannot be used there.
-  function brush(M, brushId, q, r) {
-    if (!canBrush(M, brushId, q, r)) return null;
-    const out = [];
-    for (const [cq, cr] of brushCells(brushId, q, r)) {
-      if (!inBounds(M, cq, cr)) continue;
-      const t = M.tiles[key(cq, cr)];
-      if (t.revealed || isSea(t)) continue;
-      t.revealed = true;
-      M.revealedCount++;
-      out.push(t);
-    }
-    M.brushes.splice(M.brushes.indexOf(brushId), 1);
-    return out;
-  }
-
-  // One step onto an adjacent revealed tile (a ford also needs the ink to wade it).
+  // One step onto an adjacent lit tile (a ford also needs the bulbs to wade it).
   function canMove(M, q, r) {
     if (!inBounds(M, q, r)) return false;
     const t = M.tiles[key(q, r)];
-    return t.revealed && !isSea(t) && M.ink >= moveCost(t) && isAdjacent(M.pos.q, M.pos.r, q, r);
+    return t.revealed && M.ink >= moveCost(t) && isAdjacent(M.pos.q, M.pos.r, q, r);
   }
 
+  // Steps onto the tile and lights what can be seen from it (vision).
   function move(M, q, r) {
     if (!canMove(M, q, r)) return null;
     const t = M.tiles[key(q, r)];
     M.ink -= moveCost(t);
     M.pos = { q, r };
     t.visited = true;
+    vision(M, q, r);
     return t;
   }
 
@@ -1029,14 +1313,15 @@ const MAP = (() => {
     return neighbors(M, M.pos.q, M.pos.r).map(([q, r]) => M.tiles[key(q, r)]).filter((t) => canMove(M, t.q, t.r));
   }
 
-  // Tiles that may be revealed right now. opts.brush ignores ink (brush targets).
+  // Dark tiles on the lit frontier that a bulb could light right now.
+  // opts.brush ignores the bulbs (the frontier itself).
   function revealable(M, opts) {
     const out = [];
     const ignoreInk = opts && opts.brush;
     if (!ignoreInk && M.ink < 1) return out;
     for (const k in M.tiles) {
       const t = M.tiles[k];
-      if (!t.revealed && !isSea(t) && (ignoreInk || M.ink >= revealCost(t)) && touchesRevealed(M, t.q, t.r)) out.push(t);
+      if (!t.revealed && revealCost(t) < Infinity && (ignoreInk || M.ink >= revealCost(t)) && touchesRevealed(M, t.q, t.r)) out.push(t);
     }
     return out;
   }
@@ -1129,8 +1414,10 @@ const MAP = (() => {
   function deserialize(o) {
     if (!o || !o.tiles || !o.cols || !o.rows) return null;
     const M = JSON.parse(JSON.stringify(o));
-    M.brushes = M.brushes || [];
+    // Old brush ids (line3, splash, drip, comb) load as lanterns.
+    M.brushes = (M.brushes || []).map(normalizeTool);
     M.ink = M.ink || 0;
+    M.seed = (M.seed || 0) >>> 0;
     M.pos = M.pos || { q: M.start.q, r: M.start.r };
     M.biome = M.biome || biomeOf(M.act || 1);
     // Saves from before the road carry none: they keep playing without one
@@ -1150,20 +1437,33 @@ const MAP = (() => {
       if (t.coast == null) t.coast = false;
       if (!t.biome) t.biome = M.biome;
       if (!t.content) t.content = {};
+      if (t.content.brush) t.content.brush = normalizeTool(t.content.brush);
+      if (t.content.tower && t.content.tower.bonus && t.content.tower.bonus.k === 'brush') t.content.tower.bonus.id = normalizeTool(t.content.tower.bonus.id);
+      // Saves from before the tileset carry no ground: read it off the
+      // terrain (water), the height (hills) and the coast (sand).
+      if (GROUNDS.indexOf(t.ground) < 0 || (t.ground === 'mountain' && t.terrain !== 'land') || (isWater(t) && t.ground !== t.terrain)) {
+        t.ground = isWater(t) ? t.terrain : t.elev >= HILL_ELEV ? 'hill' : (t.coast && t.elev < SAND_ELEV) ? 'sand' : 'grass';
+      }
     }
     if (M.islands == null) M.islands = islandsOf(M).length;
-    if (M.water == null) { let wet = 0, n = 0; for (const k in M.tiles) { n++; if (!isLand(M.tiles[k])) wet++; } M.water = Math.round((wet / Math.max(1, n)) * 100) / 100; }
+    if (M.water == null) { let wet = 0, n = 0; for (const k in M.tiles) { n++; if (isWater(M.tiles[k])) wet++; } M.water = Math.round((wet / Math.max(1, n)) * 100) / 100; }
     M.revealedCount = countRevealed(M);
     return M;
   }
 
   return {
-    TYPES, TERRAINS, BIOMES, DIRS, DIST, MINS, MAXS, LANDMARKS, TOWER_BONUS, TOWER_INK, TOWER_GOLD, START_INK, INK_PER_ACT_HINT,
-    DEFAULT_COLS, DEFAULT_ROWS, HEX, WATER, SHALLOW_COST, FIT_MARGIN, FALLBACK_BRUSHES, ROAD_MEANDER, ROAD_TOLL,
-    generate, key, tileAt, inBounds, neighbors, isAdjacent, isLandmark, isRoad, biomeOf, islandsOf,
+    TYPES, TERRAINS, GROUNDS, BIOMES, DIRS, DIST, MINS, MAXS, LANDMARKS, TOWER_BONUS, TOWER_INK, TOWER_GOLD, START_INK, INK_PER_ACT_HINT,
+    DEFAULT_COLS, DEFAULT_ROWS, HEX, WATER, SHALLOW_COST, FIT_MARGIN, ROAD_MEANDER, ROAD_TOLL,
+    HILL_ELEV, TOWER_ELEV, SAND_ELEV, MOUNTAIN_MAX, MOUNTAIN_ELEV, VISION, TOWER_VIEW, TOWER_GAP, TOWER_VIEW_MIN,
+    TOOL_IDS, FALLBACK_TOOLS, FALLBACK_BRUSHES: FALLBACK_TOOLS, OLD_BRUSHES, FLARE_RANGE, KITE_RANGE, LANTERN_OUTER,
+    generate, key, tileAt, inBounds, neighbors, isAdjacent, isLandmark, isRoad, biomeOf, islandsOf, isLand, isWater, isMountain, hexDist,
     revealCost, moveCost, pathCost, walkCost, walkPath,
     canReveal, reveal, pathToReveal, revealPath,
-    brushCells, brushIds, canBrush, brush, canMove, move, reachable, revealable,
+    disc, visionRadius, vision, towerView, lightArea,
+    toolIds, normalizeTool, toolKind, dirTo, flareCells, lanternCells, kiteCells, toolCells, canTool, useTool,
+    // the old brush names, kept for callers and saves from before the tools
+    brushIds: toolIds, brushCells: toolCells, canBrush: canTool, brush: useTool,
+    canMove, move, reachable, revealable,
     toPixel, fromPixel, hexCorners, size, bounds, pathExists, progress, serialize, deserialize,
   };
 })();
