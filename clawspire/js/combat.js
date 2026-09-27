@@ -243,6 +243,58 @@ const COMBAT = (() => {
     for (const e of F.enemies) sanitizeUnit(e);
   }
 
+  // ================= TILT (meta progression, DESIGN.md "Meta") =================
+  // F.tiltLv (the run's Tilt, 0..10) -> DATA.tiltMods(lv), the cumulative
+  // twists. Read here only: enemy hp / attack multipliers on top of
+  // DATA.DIFFICULTY and its ramp (summons too, through makeEnemy), a faster
+  // hidden escalation, one more elite affix, boss rage from the opening
+  // bell. DATA.DIFFICULTY itself is never touched; Tilt 0 changes nothing.
+  const TILT_ONE = [1, 1];
+  function tiltModsOf(F) {
+    const lv = F ? num(F.tiltLv, 0) : 0;
+    const fn = D().tiltMods;
+    if (!(lv > 0) || typeof fn !== 'function') return null;
+    try { return fn(lv); } catch (err) { return null; }
+  }
+  // [hpMul, dmgMul] for makeEnemy.
+  function tiltScale(F) {
+    const m = tiltModsOf(F);
+    if (!m) return TILT_ONE;
+    let hp = 1 + num(m.hp, 0), dmg = 1 + num(m.dmg, 0);
+    // Hot Streak: the ramp steps every m.ramp fights instead of ramp.every.
+    const ramp = (D().DIFFICULTY || {}).ramp || null;
+    if (num(m.ramp, 0) > 0 && ramp && num(ramp.every, 0) > m.ramp) {
+      const f = num(F.fights, 0), cap = num(ramp.max, 99);
+      const s0 = Math.min(Math.floor(f / ramp.every), cap), s1 = Math.min(Math.floor(f / m.ramp), cap);
+      hp *= (1 + s1 * num(ramp.hp, 0)) / (1 + s0 * num(ramp.hp, 0));
+      dmg *= (1 + s1 * num(ramp.dmg, 0)) / (1 + s0 * num(ramp.dmg, 0));
+    }
+    return [hp, dmg];
+  }
+  // Once per fight, after the rolled affixes: Bent Prong gives every elite
+  // one more affix (never Greedy on a gulper), Rigged hands every boss its
+  // phase two Strength up front (the transformation itself still comes at
+  // half hp, with more Strength).
+  function tiltFight(F, rng) {
+    const m = tiltModsOf(F);
+    if (!m) return;
+    for (const e of F.enemies) {
+      const tier = e.def && e.def.tier;
+      if (tier === 'elite' && num(m.eliteAffix, 0) > 0) {
+        const eats = (e.def.moves || []).some(mv => mv && mv.k === 'gulp');
+        const ids = Object.keys(D().AFFIXES || {}).filter(id => !hasAffix(e, id) && !(id === 'greedy' && eats));
+        for (let k = 0; k < m.eliteAffix && ids.length; k++) giveAffix(F, e, ids.splice(Math.floor(rng() * ids.length), 1)[0]);
+      }
+      if (tier === 'boss' && num(m.bossRage, 0) > 0 && e.def.enrage !== false) {
+        const R = (e.def.enrage && typeof e.def.enrage === 'object') ? e.def.enrage : {};
+        const s = R.str != null ? num(R.str, 0) : (F.act >= 2 ? 2 : 1);
+        if (s > 0) e.status.str = clamp(st(e, 'str') + s, 0, MAX_STACK);
+      }
+    }
+  }
+  api.tiltScale = tiltScale;
+  // ================= /TILT =================
+
   // ---------- fight setup ----------
   function makeEnemy(F, id) {
     const def = enemyDef(id);
@@ -264,6 +316,7 @@ const COMBAT = (() => {
       const step = Math.min(Math.floor(num(F.fights, 0) / ramp.every), num(ramp.max, 99));
       if (step > 0) { hpMul *= 1 + step * num(ramp.hp, 0); dmgMul *= 1 + step * num(ramp.dmg, 0); }
     }
+    { const tsc = tiltScale(F); hpMul *= tsc[0]; dmgMul *= tsc[1]; }   // meta: the run's Tilt level (TILT block)
     let edef = def;
     if (hpMul !== 1) hp = Math.max(1, Math.round(hp * hpMul));
     if (dmgMul !== 1 && Array.isArray(def.moves)) {
@@ -331,11 +384,13 @@ const COMBAT = (() => {
       F.bin = all.slice(0, MAX_CABINET);
       F.used = all.slice(MAX_CABINET);
     }
+    F.tiltLv = clamp(num(run.tilt, 0) | 0, 0, 10);   // meta: the run's Tilt level (TILT block)
     for (const id of (enemyIds || []).slice(0, MAX_ALIVE)) F.enemies.push(makeEnemy(F, id));
     if (!F.enemies.length) F.enemies.push(makeEnemy(F, 'dummy'));
     // Elite affixes ride their own rng stream so the fight's rolls stay put.
     const arng = (typeof U !== 'undefined' && U.rng) ? U.rng((num(F.seed, 0) ^ 0x51f15e) + 1) : null;
     if (arng) F.enemies.forEach(e => rollAffixes(F, e, arng));
+    if (arng) tiltFight(F, arng);   // meta: Tilt's extra elite affix and boss rage (TILT block)
     F.digested = [];   // items enemies swallowed and digested: gone for this fight only
     for (const e of F.enemies) api.pickIntent(F, e);
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
@@ -668,6 +723,8 @@ const COMBAT = (() => {
     const extra = [];
     if (api.hasteNext(e)) extra.push('twice (Hasty)');
     if (api.greedNext(e)) extra.push('and gulps an item (Greedy)');
+    // A boss signature rides on the next action too (see bossSig).
+    if (api.sigNext && api.sigNext(e)) { const si = api.sigInfo(e); if (si && si.text) extra.push('then ' + si.text); }
     return extra.length ? s + ', ' + extra.join(', ') : s;
   };
   function baseIntent(e) {
@@ -768,7 +825,7 @@ const COMBAT = (() => {
   // The telegraphed move, with Greedy and Hasty on top.
   function actMove(F, e) {
     const m = e.intent;
-    const greedy = api.greedNext(e), twice = api.hasteNext(e);
+    const greedy = api.greedNext(e), twice = api.hasteNext(e), sig = api.sigNext(e);
     e.acts = num(e.acts, 0) + 1;
     if (greedy && (!m || m.k !== 'gulp')) { affixProc(F, e, 'greedy', 'GREEDY'); gulpItems(F, e, 1, 'shiny'); }
     if (!e.alive || F.phase === 'over') return;
@@ -779,6 +836,8 @@ const COMBAT = (() => {
       affixProc(F, e, 'hasty', 'AGAIN!');
       doMove(F, e, m.k === 'attack' ? { id: 'haste', k: 'attack', v: Math.max(1, Math.round(num(m.v, 0) / 2)), n: m.n } : m);
     }
+    // A boss's signature trick, telegraphed a turn ahead (DESIGN.md "Bosses").
+    if (sig && e.alive && F.phase !== 'over' && F.player.hp > 0) bossSig(F, e);
   }
 
   // What a swallowed item does to its eater.
@@ -926,6 +985,7 @@ const COMBAT = (() => {
       while (e.alive && e.belly.length && e.gut >= need) { e.gut -= need; spit(F, e, 1, 'hiccup'); }
     }
     phaseTwo(F, e);
+    bossFinal(F, e);
   }
   // Elites and bosses transform once at half hp: a roar, Strength and
   // sometimes a new pattern (def.enrage {name, text, str, pattern}; false: never).
@@ -942,6 +1002,7 @@ const COMBAT = (() => {
     if (s > 0) api.status(F, e, 'str', s);
     const pat = Array.isArray(R.pattern) ? R.pattern.filter(i => i >= 0 && i < moves.length) : [];
     if (pat.length && (e.def.ai || 'cycle') === 'cycle') { e.def = Object.assign({}, e.def, { pattern: pat }); e.cyc = 0; }
+    bossPhase(F, e);
   }
 
   // ---- bin tricks: lit bombs, rust, eggs
@@ -1029,6 +1090,149 @@ const COMBAT = (() => {
   api.hasAffix = hasAffix;
   api.BELLY_MAX = BELLY_MAX;
   api.DIGEST = DIGEST;
+
+  // ---------- boss signatures (DESIGN.md "Bosses") ----------
+  /* Each boss has one signature trick that rides on top of its move, like
+     Greedy: def.sig {id, name, sign, shout, text, first, every, ...}. It is
+     due on the action numbered `first` (0-based, counted by e.acts) and every
+     `every` actions after (0: never again on its own); e.sigForce makes the
+     next action carry it whatever the count (the Prize Master rigs the
+     machine again at each new phase). sigNext is the telegraph (the intent
+     text, the bubble's chip, the game's cabinet sign). The state a signature
+     leaves (F.heat + inst.hot, F.ice, F.rigged) lasts for the player's next
+     turn and clears as that turn ends; F.lean (the Hoard's phase two) and
+     F.final (the Prize Master's last quarter) stay for the fight. */
+  const HOT_DMG = 2;     // a red hot metal item delivered burns the hand (Block soaks it)
+  const ICE_HP = 2;      // prizes it takes to crack the iced chute lip open (a heavy one: 1)
+  const sigOf = (e) => (e && e.def && e.def.sig && typeof e.def.sig === 'object') ? e.def.sig : null;
+  api.sigNext = function (e) {
+    const s = sigOf(e);
+    if (!s || !e.alive) return false;
+    if (e.sigForce) return true;
+    const a = num(e.acts, 0), first = Math.max(0, num(s.first, 1) | 0), every = Math.max(0, num(s.every, 3) | 0);
+    if (a < first) return false;
+    return a === first || (every > 0 && (a - first) % every === 0);
+  };
+  // The next signature, for the telegraph: Glacius alternates its parts.
+  api.sigInfo = function (e) {
+    const s = sigOf(e);
+    if (!s) return null;
+    const parts = Array.isArray(s.parts) && s.parts.length ? s.parts : null;
+    const part = parts ? parts[num(e.sigN, 0) % parts.length] : null;
+    const text = (part && s.texts && s.texts[part]) || s.text || '';
+    return { id: s.id, name: s.name || s.id, sign: s.sign || s.name || s.id, shout: s.shout || s.sign || s.name || s.id, text, part };
+  };
+  function bossJunk(F, id, n) {
+    const out = [];
+    for (let i = 0; i < n && roomFor(F); i++) {
+      const inst = { uid: newUid(), id, plus: false, frozen: false, junk: true, temp: true };
+      F.bin.push(inst);
+      out.push(inst);
+    }
+    if (out.length) hook(F, 'onJunk', out.length, out);
+    return out;
+  }
+  function bossSig(F, e) {
+    const s = sigOf(e), info = api.sigInfo(e);
+    if (!s || !info) return;
+    e.sigN = num(e.sigN, 0) + 1;
+    e.sigForce = false;
+    const idx = F.enemies.indexOf(e);
+    text(F, e, String(info.shout).toUpperCase());
+    switch (s.id) {
+      // The Hoard: a coin avalanche (junk that pays a little gold when grabbed out).
+      case 'spill': {
+        const items = bossJunk(F, s.item || 'hoardcoin', clamp(Math.round(num(s.n, 4)) + (e.enraged ? 2 : 0), 1, 10));
+        emit(F, { t: 'boss', k: 'spill', idx, items, name: info.name });
+        if (!items.length) text(F, e, 'NO ROOM');
+        break;
+      }
+      // The Smelter: metal in the bin turns red hot, a lump of slag drips in.
+      case 'heat': {
+        F.heat = 1;
+        F.heatBurn = Math.max(1, Math.round(num(s.burn, HOT_DMG)));
+        const pool = F.bin.filter(i => !i.hot && !isJunk(i) && tagHas(itemDef(i.id), 'metal'));
+        const insts = [];
+        const n = clamp(Math.round(num(s.n, 4)), 1, 12);
+        while (insts.length < n && pool.length) {
+          const inst = pool.splice(Math.floor(F.rng() * pool.length), 1)[0];
+          inst.hot = true;
+          insts.push(inst);
+        }
+        const items = bossJunk(F, 'slag', clamp(Math.round(num(s.drip, 1)), 0, 3));
+        emit(F, { t: 'boss', k: 'heat', idx, insts, items, name: info.name });
+        break;
+      }
+      // Glacius: the chute lip or the claw rail ices over for a turn.
+      case 'ice': {
+        F.ice = { part: info.part || 'lid', hp: ICE_HP, by: e.uid };
+        emit(F, { t: 'boss', k: 'ice', idx, part: F.ice.part, name: info.name });
+        break;
+      }
+      // The Prize Master: the machine is rigged (a drop it steers, a shuffle).
+      case 'rig': {
+        F.rigged = { drops: 1, stage: e.final ? 3 : e.enraged ? 2 : 1, by: e.uid };
+        emit(F, { t: 'boss', k: 'rig', idx, stage: F.rigged.stage, name: info.name });
+        break;
+      }
+      default: break;
+    }
+    log(F, `${e.def.name || e.id}: ${info.name}.`);
+  }
+  // Phase two on a boss: the Hoard's pile leans its way for good; the Prize
+  // Master rigs the machine again on its next action.
+  function bossPhase(F, e) {
+    const s = sigOf(e);
+    if (!s) return;
+    if (s.lean) { F.lean = -1; emit(F, { t: 'boss', k: 'lean', idx: F.enemies.indexOf(e), dir: -1 }); }
+    if (s.rephase) e.sigForce = true;
+  }
+  // The final phase (sig.final, a quarter hp, after phase two): +1 Strength,
+  // one more rigged drop and the cabinet lights go red.
+  function bossFinal(F, e) {
+    const s = sigOf(e);
+    if (!s || !s.final || e.final || !e.enraged || !e.alive || e.hp * 4 > e.maxHp) return;
+    e.final = true;
+    F.final = true;
+    if (s.rephase) e.sigForce = true;
+    emit(F, { t: 'boss', k: 'final', idx: F.enemies.indexOf(e), name: 'FINAL PHASE', text: s.finalText || '' });
+    api.status(F, e, 'str', 1);
+    log(F, `${e.def.name || e.id} enters its final phase.`);
+  }
+  // A red hot item delivered burns the hand that grabbed it (through Block).
+  function burnHot(F, inst) {
+    delete inst.hot;
+    if (F.phase !== 'player' || F.player.hp <= 0) return;
+    const v = Math.max(1, Math.round(num(F.heatBurn, HOT_DMG)));
+    emit(F, { t: 'boss', k: 'sear', idx: -1, inst, v });
+    text(F, F.player, 'RED HOT!');
+    api.damage(F, null, F.player, v);
+  }
+  // The player's turn is over: hot metal cools, ice thaws, the rigging comes off.
+  function bossTurnEnd(F) {
+    let cooled = false;
+    for (const list of [F.bin, F.used]) for (const i of list) if (i && i.hot) { delete i.hot; cooled = true; }
+    if (F.heat || cooled) { F.heat = 0; emit(F, { t: 'boss', k: 'cool', idx: -1 }); }
+    if (F.ice) { F.ice = null; emit(F, { t: 'boss', k: 'thaw', idx: -1 }); }
+    F.rigged = null;
+  }
+  // Game hooks: a prize lands on the iced chute lip (a heavy one smashes it),
+  // the ice is shattered outright, a rigged drop is spent. Return the new state.
+  api.crackIce = function (F, heavy) {
+    if (!F || !F.ice) return null;
+    F.ice.hp = heavy ? 0 : F.ice.hp - 1;
+    if (F.ice.hp <= 0) F.ice = null;
+    return F.ice;
+  };
+  api.breakIce = function (F) { if (!F || !F.ice) return false; F.ice = null; return true; };
+  api.unrig = function (F) {
+    if (!F || !F.rigged) return false;
+    F.rigged.drops--;
+    if (F.rigged.drops <= 0) F.rigged = null;
+    return true;
+  };
+  api.HOT_DMG = HOT_DMG;
+  api.ICE_HP = ICE_HP;
 
   // ---------- enemy moves ----------
   function doMove(F, e, m) {
@@ -1506,6 +1710,8 @@ const COMBAT = (() => {
       F.grab.insts.push(inst);
       F.grab.defs.push(def);
     }
+    // The Smelter's red hot metal: the grab worked, the hand pays for it.
+    if (inst.hot) burnHot(F, inst);
     sanitize(F);
     checkOver(F);
     // Never leave an empty cabinet mid-turn.
@@ -1527,6 +1733,7 @@ const COMBAT = (() => {
     F.fresh = {};
     F.dry = !F.playedThisTurn;
     F.phase = 'enemy';
+    bossTurnEnd(F);
     for (const e of F.enemies.slice()) {
       if (!e.alive || F.enemies.indexOf(e) < 0) continue;
       enemyAct(F, e);

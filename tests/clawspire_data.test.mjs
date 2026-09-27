@@ -116,7 +116,7 @@ t.test('items', () => {
   t.ok(by('u') >= 12, `uncommons [${by('u')}]`);
   t.ok(by('r') >= 10, `rares [${by('r')}]`);
   t.ok(by('l') >= 4, `legendaries [${by('l')}]`);
-  t.eq(junkIds().sort().join(','), 'broodegg,fusebomb,iceblock,rock,slag', 'junk items are rock, slag, iceblock plus the monster junk (lit bomb, spider egg)');
+  t.eq(junkIds().sort().join(','), 'broodegg,fusebomb,hoardcoin,iceblock,rock,slag', 'junk items are rock, slag, iceblock plus the monster junk (lit bomb, spider egg) and the Hoard\'s coins');
   for (const ch of ['knight', 'alchemist', 'rogue']) {
     const n = ids.filter(id => ITEMS[id].char === ch).length;
     t.ok(n >= 6, `${ch} pool >= 6 [${n}]`);
@@ -698,7 +698,7 @@ t.test('pool and rarity', () => {
   t.ok(c.length > 0 && c.every(id => ITEMS[id].rarity === 'c'), 'pool(c) only commons');
   t.ok(c.every(id => !ITEMS[id].starter), 'pool skips starters');
   t.ok(DATA.pool().every(id => ITEMS[id].rarity !== 'junk'), 'pool skips junk');
-  t.eq(DATA.pool('junk').sort().join(), 'broodegg,fusebomb,iceblock,rock,slag', 'pool(junk)');
+  t.eq(DATA.pool('junk').sort().join(), 'broodegg,fusebomb,hoardcoin,iceblock,rock,slag', 'pool(junk)');
   const k = DATA.pool(null, 'knight');
   t.ok(k.every(id => !ITEMS[id].char || ITEMS[id].char === 'knight'), 'pool(char) excludes other characters');
   t.ok(k.some(id => ITEMS[id].char === 'knight') && k.some(id => !ITEMS[id].char), 'pool(char) has own + shared');
@@ -836,7 +836,7 @@ t.test('new content sits in the pools', () => {
     t.ok(DATA.relicPool(r.rarity).includes(id), `${id}: in relicPool('${r.rarity}')`);
   }
   const OLD_ITEMS = OLD_ITEM_IDS;
-  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id));
+  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin');   // the Hoard's coins are boss junk, not a build piece
   t.ok(newItems.length >= 20 && newItems.length <= 32, `20..32 new items [${newItems.length}]`);
   const pooled = new Set(DATA.pool());
   for (const id of newItems) {
@@ -1053,6 +1053,124 @@ t.test('loot: the prize shelf and the payout lines', () => {
   t.eq(dbl.gold, nodbl.gold * 2, 'DOUBLE doubles the gold');
   t.eq(dbl.tix, nodbl.tix * 2, 'DOUBLE doubles the tickets');
   t.ok(DATA.LOOT.DOUBLE > 0 && DATA.LOOT.DOUBLE <= 0.1, 'the double is a rare treat');
+});
+
+// ---------------------------------------------------------------- META (meta progression)
+t.test('meta: Tilt levels 0..10, named, each one adds its own twist', () => {
+  t.eq(DATA.TILT_MAX, 10, 'ten Tilt levels above zero');
+  t.eq(DATA.TILT.length, 11, 'levels 0..10');
+  DATA.TILT.forEach((l, i) => { t.eq(l.lv, i, `level ${i} in order`); t.ok(l.name && l.text, `level ${i} has a name and a line`); });
+  t.eq(new Set(DATA.TILT.map(l => l.name)).size, 11, 'every level has its own name');
+  t.eq(DATA.TILT[1].name, 'Loose Coin', 'level 1 is Loose Coin');
+  t.eq(DATA.TILT[2].name, 'Sticky Joystick', 'level 2 is Sticky Joystick');
+  t.eq(DATA.TILT[10].name, 'Rigged', 'level 10 is Rigged');
+  const zero = DATA.tiltMods(0);
+  t.ok(zero.hp === 0 && zero.dmg === 0 && zero.eliteAffix === 0 && zero.bulbs === 0 && zero.junk.length === 0 && zero.shop === 0 && zero.ramp === 0 && zero.rest === 0 && zero.caps === 0 && zero.bossRage === 0, 'Tilt 0 is neutral');
+  t.eq(JSON.stringify(DATA.tiltMods(-3)), JSON.stringify(zero), 'below 0 clamps to neutral');
+  t.eq(JSON.stringify(DATA.tiltMods(99)), JSON.stringify(DATA.tiltMods(10)), 'above 10 clamps to 10');
+  const key = (m) => ({ hp: m.hp, dmg: m.dmg, eliteAffix: m.eliteAffix, bulbs: m.bulbs, junk: m.junk.length, shop: m.shop, ramp: m.ramp, rest: m.rest, caps: m.caps, bossRage: m.bossRage });
+  for (let i = 1; i <= 10; i++) {
+    const a = key(DATA.tiltMods(i - 1)), b = key(DATA.tiltMods(i));
+    const diff = Object.keys(a).filter(k => a[k] !== b[k]);
+    t.eq(diff.length, 1, `level ${i} (${DATA.TILT[i].name}) changes exactly one twist: ${diff.join(',')}`);
+    t.eq(diff[0], DATA.TILT[i].k === 'junk' ? 'junk' : DATA.TILT[i].k, `level ${i} changes its own twist`);
+  }
+  const top = DATA.tiltMods(10);
+  t.ok(top.hp > 0 && top.dmg > 0 && top.eliteAffix >= 1 && top.bulbs > 0 && top.junk.every(id => DATA.ITEMS[id]) && top.shop > 0 && top.ramp > 0 && top.ramp < DATA.DIFFICULTY.ramp.every && top.rest > 0 && top.rest < 0.3 && top.caps >= 1 && top.bossRage > 0, 'Tilt 10 carries every twist (cumulative)');
+  t.ok(DATA.DIFFICULTY.hp === 2.0 && DATA.DIFFICULTY.dmg === 1.8, 'DIFFICULTY defaults untouched');
+});
+
+t.test('meta: achievements are well formed and checked safely', () => {
+  const ids = DATA.ACH_IDS;
+  t.ok(ids.length >= 25 && ids.length <= 40, `25 to 40 stickers (${ids.length})`);
+  t.eq(new Set(ids).size, ids.length, 'unique ids');
+  for (const id of ids) {
+    const a = DATA.ACHIEVEMENTS[id];
+    t.ok(a && a.name && a.icon && a.text && a.color && typeof a.check === 'function', `${id} has name, icon, text, colour, check`);
+    if (a.goal) t.ok(typeof a.val === 'function' && a.goal > 0, `${id} progress has a val()`);
+    t.ok(!DATA.achCheck({ kind: 'tick' }, {}).includes(id), `${id} does not fire on an empty context`);
+  }
+  for (const want of ['jackpot', 'handful', 'full_roster', 'special_delivery', 'indigestion', 'golden_capsule', 'seriously_tilted', 'untouchable', 'ticket_tycoon'])
+    t.ok(DATA.ACHIEVEMENTS[want], `the brief's sticker ${want} exists`);
+  const run = { delivered: 3, jackpots: 1, act: 2, gold: 320, relics: [], bin: [], loot: { tixEarned: 120, bestCap: 'l', bigHit: 44, overkill: 31, doubles: 1 } };
+  const got = DATA.achCheck({ kind: 'tick', run, meta: { stats: {} } }, {});
+  for (const id of ['first_prize', 'jackpot', 'going_up', 'money_bags', 'ticket_tycoon', 'golden_capsule', 'crusher', 'overkill', 'double_down']) t.ok(got.includes(id), `tick earns ${id}`);
+  t.ok(!DATA.achCheck({ kind: 'tick', run, meta: {} }, { jackpot: 1 }).includes('jackpot'), 'an owned sticker is never earned twice');
+  const f = { tier: 'elite', dmgTaken: 0, turn: 1, hp: 4 };
+  const fight = DATA.achCheck({ kind: 'fight', run: {}, meta: {}, f }, {});
+  t.ok(fight.includes('untouchable') && fight.includes('one_turn') && fight.includes('by_a_thread'), 'won-fight stickers');
+  t.ok(!DATA.achCheck({ kind: 'tick', run: {}, meta: {}, f }, {}).includes('untouchable'), 'fight stickers need a won fight');
+  const boom = DATA.achCheck({ kind: 'ev', ev: { t: 'die', idx: 0 }, f: { enemy: { tier: 'boss' }, curDef: { art: 'bomb' } } }, {});
+  t.ok(boom.includes('special_delivery'), 'a boss finished by a bomb');
+  t.ok(!DATA.achCheck({ kind: 'ev', ev: { t: 'die', idx: 0 }, f: { enemy: { tier: 'boss' }, curDef: { art: 'sword' } } }, {}).includes('special_delivery'), 'not by a sword');
+  t.ok(DATA.achCheck({ kind: 'ev', ev: { t: 'binReturn', why: 'burst' } }, {}).includes('indigestion'), 'eat and burst');
+  t.ok(DATA.achCheck({ kind: 'ev', ev: { t: 'combo', id: 'mega_jackpot', tier: 3 } }, {}).includes('mega'), 'the Mega Jackpot combo');
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { winsBy: { knight: 1, alchemist: 2, rogue: 1 } } }, {}).includes('full_roster'), 'three crawlers won with');
+  t.ok(!DATA.achCheck({ kind: 'meta', meta: { winsBy: { knight: 5 } } }, {}).includes('full_roster'), 'one crawler is not a roster');
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { tilt: { rogue: 5 } } }, {}).includes('seriously_tilted'), 'Tilt 5 unlocked');
+  t.ok(DATA.achCheck({ kind: 'win', run: { tilt: 10 } }, {}).includes('rigged'), 'a Tilt 10 win');
+  t.ok(DATA.achCheck({ kind: 'end', run: { daily: '2026-09-27' } }, {}).includes('daily_grind'), 'a finished daily');
+  t.eq(DATA.ACHIEVEMENTS.full_roster.val({ meta: { winsBy: { knight: 1, rogue: 0 } } }), 1, 'progress counts crawlers with a win');
+  // a throwing check never breaks the rest
+  const bad = DATA.achCheck(null, null);
+  t.ok(Array.isArray(bad), 'a null context is safe');
+  const SRC = fs.readFileSync(path.join(DIR, 'js', 'data.js'), 'utf8');
+  t.ok(SRC.indexOf(String.fromCharCode(0x2014)) < 0, 'no em dash in data.js');
+});
+
+t.test('meta: the Prizedex entries and progress', () => {
+  const E = DATA.dexEntries();
+  t.eq(DATA.DEX_TABS.map(x => x.id).join(','), 'items,relics,enemies,combos', 'four tabs');
+  t.eq(E.items.length, Object.keys(DATA.ITEMS).length, 'every item (junk included)');
+  t.eq(E.relics.length, Object.keys(DATA.RELICS).length, 'every relic');
+  t.eq(E.combos.length, Object.keys(DATA.COMBOS).length, 'every combo');
+  t.ok(E.enemies.length >= 26 && E.enemies.every(id => DATA.ENEMIES[id]), 'the enemies');
+  const none = DATA.dexProgress({});
+  t.ok(none.n === 0 && none.pct === 0 && none.total === E.items.length + E.relics.length + E.enemies.length + E.combos.length, 'empty book');
+  const all = {};
+  for (const tab in E) { all[tab] = {}; for (const id of E[tab]) all[tab][id] = 1; }
+  const full = DATA.dexProgress(all);
+  t.ok(full.n === full.total && full.pct === 100, 'a full book is 100%');
+  const one = DATA.dexProgress({ items: { [E.items[0]]: 1, nope: 1 } });
+  t.ok(one.n === 1 && one.per.items.n === 1 && one.per.relics.n === 0, 'unknown ids do not count');
+});
+
+t.test('meta: the daily run seed, crawler and score', () => {
+  const k = DATA.dailyKey(new Date(2026, 8, 27, 15, 0));
+  t.eq(k, '2026-09-27', 'day key');
+  t.eq(DATA.dailySeed(k), DATA.dailySeed('2026-09-27'), 'the same seed for everyone that day');
+  t.ok(DATA.dailySeed(k) !== DATA.dailySeed('2026-09-28'), 'a new seed tomorrow');
+  t.ok(DATA.dailySeed(k) > 0, 'a positive seed');
+  t.ok(DATA.CHARACTERS[DATA.dailyChar(k)], 'a real crawler');
+  const seen = new Set();
+  for (let d = 1; d <= 30; d++) seen.add(DATA.dailyChar(`2026-10-${d < 10 ? '0' : ''}${d}`));
+  t.eq(seen.size, Object.keys(DATA.CHARACTERS).length, 'every crawler gets a day');
+  const r = { act: 2, kills: 10, jackpots: 2, gold: 80, loot: { tixEarned: 20 } };
+  t.ok(DATA.dailyScore(r, true) > DATA.dailyScore(r, false), 'a win scores more');
+  t.ok(DATA.dailyScore(Object.assign({}, r, { act: 3 }), false) > DATA.dailyScore(r, false), 'climbing higher scores more');
+  t.eq(DATA.dailyScore({}, false), 0, 'an empty run scores 0');
+});
+
+t.test('claw types: DATA.CLAWS matches the physics rig types and reads well', () => {
+  const P = boot({ only: ['util', 'physics'] }).PHYS;
+  const ids = Object.keys(DATA.CLAWS);
+  t.eq(ids.sort().join(), Object.keys(P.CLAW_TYPES).sort().join(), 'one entry per PHYS.CLAW_TYPES rig');
+  const orders = new Set();
+  for (const id of ids) {
+    const c = DATA.CLAWS[id];
+    t.eq(c.id, id, id + ' id');
+    for (const k of ['name', 'icon', 'text', 'joke', 'good', 'bad', 'color']) t.ok(typeof c[k] === 'string' && c[k].length > 0, `${id}.${k}`);
+    for (const k of ['grip', 'reach', 'speed']) t.ok(c.stats[k] >= 1 && c.stats[k] <= 5 && (c.stats[k] | 0) === c.stats[k], `${id} stat ${k} in 1..5`);
+    t.ok(c.text.length <= 170 && c.joke.length <= 90, id + ' copy is short enough for a phone');
+    for (const s of [c.name, c.text, c.joke, c.good, c.bad].concat(Object.values(c.ups || {}))) t.ok(s.indexOf(String.fromCharCode(0x2014)) < 0, id + ' has no em dash');
+    for (const u in (c.ups || {})) t.ok(DATA.CLAW_UPGRADES[u], `${id} notes a real upgrade (${u})`);
+    orders.add(c.order);
+  }
+  t.eq(orders.size, ids.length, 'every claw has its own place in the picker');
+  t.eq(DATA.CLAWS.classic.order, 0, 'the classic claw comes first');
+  t.eq(DATA.clawType('magnet').id, 'magnet', 'clawType finds a claw');
+  t.eq(DATA.clawType(undefined).id, 'classic', 'a missing claw type is the classic claw');
+  t.eq(DATA.clawType('laser').id, 'classic', 'an unknown claw type is the classic claw');
 });
 
 t.done();

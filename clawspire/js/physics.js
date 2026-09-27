@@ -75,6 +75,76 @@ const PHYS = (() => {
   const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   let nextId = 1;
 
+  // ---- claw types ----------------------------------------------------------
+  // Every claw type is the same rig and phase machine with its own geometry
+  // and grip rules (DESIGN.md "Claw types"). Polylines are one prong / jaw /
+  // finger, local (x out, y down) from its hinge, times size. The classic
+  // row is the old rig exactly (its multipliers are all 1, so the classic
+  // claw steps bit for bit as before).
+  //   poly       one side's polyline (null: no prongs, the magnet and the hook)
+  //   segR hubR  capsule radius of a prong segment, hub radius (times size)
+  //   open closed  prong angles (rad)
+  //   size       x the base size (the tri-claw is narrower)
+  //   speed drop lift close   x the carriage / drop / lift / closing speed
+  //   gripAdd    added to grip_cc (the hand is sticky)
+  //   mu         x the claw-item friction; roundMu / longMu for balls and
+  //              blobs / for long capsules (tri cups round things, the
+  //              scoop cannot hold a sword)
+  //   haltK      x the halt threshold (the scoop plows through the pile)
+  //   dig        s the scoop keeps sinking after it touched the pile
+  //   floorClear the hub stops this far (x size, + 2) above the floor
+  //   weld       'metal' (magnet: every touching metal sticks), 'one' (hand:
+  //              the heaviest held item sticks, the rest drop), 'spear'
+  //              (hook: the first item the barb enters sticks)
+  //   tear       px (x size) a welded item may lag its spot before it tears off
+  //   closeT     s the magnet energises / the barb bites before the lift
+  const TRI_PRONG = [[0, 0], [15, 20], [13, 40], [3, 53]];
+  const SCOOP_JAW = [[0, 0], [20, 6], [30, 22], [29, 40], [18, 53], [2, 59]];
+  const FINGER = [[0, 0], [9, 16], [13, 34], [10, 50], [2, 60]];
+  const CLAW_TYPES = {
+    classic: { id: 'classic', poly: PRONG, segR: RIG.segR, hubR: RIG.hubR, open: PHI_OPEN, closed: PHI_CLOSED, size: 1,
+      speed: 1, drop: 1, lift: 1, close: 1, gripAdd: 0, mu: 1, roundMu: 1, longMu: 1, haltK: 1, dig: 0, floorClear: RIG.floorClear, weld: null },
+    tri: { id: 'tri', poly: TRI_PRONG, segR: 4.2, hubR: 12, open: 0.66, closed: -0.16, size: 0.9,
+      speed: 1, drop: 1, lift: 1, close: 1.1, gripAdd: 0.06, mu: 1, roundMu: 1.7, longMu: 0.8, haltK: 1, dig: 0, floorClear: 56, weld: null, ghost: true },
+    scoop: { id: 'scoop', poly: SCOOP_JAW, segR: 5, hubR: 14, open: 0.95, closed: 0, size: 0.94,
+      speed: 0.85, drop: 1, lift: 0.9, close: 1.35, gripAdd: 0, mu: 1.1, roundMu: 1.3, longMu: 0.35, haltK: 3, dig: 0.1, floorClear: 60, weld: null,
+      tipLen: 38, tipP: 0.8 },   // a long thing (a capsule over tipLen px) tips out of the bucket on the way up, with chance tipP
+    hand: { id: 'hand', poly: FINGER, segR: 6.5, hubR: 15, open: 0.72, closed: -0.28, size: 0.98,
+      speed: 0.72, drop: 0.8, lift: 0.8, close: 0.85, gripAdd: 0.22, mu: 1.45, roundMu: 1, longMu: 1, haltK: 1.2, dig: 0, floorClear: 62, weld: 'one', tear: 30, weldK: 0.2, weldV: 320 },
+    magnet: { id: 'magnet', poly: null, segR: 0, hubR: 24, open: 0, closed: 0, size: 1,
+      speed: 0.95, drop: 0.9, lift: 0.9, close: 1, gripAdd: 0, mu: 1, roundMu: 1, longMu: 1, haltK: 1, dig: 0, floorClear: 25, weld: 'metal', tear: 26, weldK: 0.3, weldV: 700, closeT: 0.4,
+      fieldR: 118, fieldF: 2600 },
+    hook: { id: 'hook', poly: null, segR: 0, hubR: 6, open: 0, closed: 0, size: 1,
+      speed: 1.1, drop: 2.1, lift: 1.1, close: 1, gripAdd: 0, mu: 1, roundMu: 1, longMu: 1, haltK: 1, dig: 0, floorClear: 30, weld: 'spear', tear: 34, weldK: 0.3, weldV: 800, closeT: 0.12,
+      tip: 28, barb: 3 },
+  };
+  const typeOf = (id) => CLAW_TYPES[id] || CLAW_TYPES.classic;
+  /* A claw drawn without a world (the picker, the title): the same geometry
+     as a rig of that type, hub at (x, y), o.open 0 (closed) .. 1 (open),
+     o.width, o.cable (px of cable above the hub). Returns an object shaped
+     like a rig for RENDER.claw. */
+  function clawPose(type, o) {
+    o = o || {};
+    const T = typeOf(type), id = CLAW_TYPES[type] ? type : 'classic';
+    const s = RIG.base * (o.width || 1) * T.size;
+    const x = o.x || 0, y = o.y || 0, u = o.open == null ? 1 : clamp(o.open, 0, 1);
+    const phi = T.closed + (T.open - T.closed) * u;
+    const side = (sd) => {
+      if (!T.poly) return [];
+      const hx = x + sd * RIG.hingeX * s, hy = y + RIG.hingeY * s, al = -sd * phi, ca = Math.cos(al), sa = Math.sin(al);
+      return T.poly.map(([lx, ly]) => { const px = sd * lx * s, py = ly * s; return { x: hx + px * ca - py * sa, y: hy + px * sa + py * ca }; });
+    };
+    const hy = y + RIG.hingeY * s;
+    const ghost = T.ghost ? T.poly.map(([lx, ly]) => ({ x: x + lx * 0.18 * s * (u - 0.35), y: hy + ly * (0.9 - 0.08 * u) * s })) : null;
+    return {
+      phase: o.phase || 'idle', type: id, sway: 0, field: o.field || 0, auto: null,
+      geo: { s, hubR: T.hubR * s, type: id }, cfg: { type: id, prongs: 2, rubber: 0, magnet: 0 },
+      cableTop: { x, y: y - (o.cable == null ? 40 : o.cable) },
+      bodies: { hub: { x, y, r: T.hubR * s }, prongs: [side(-1), side(1)], ghost, tip: T.weld === 'spear' ? { x, y: y + T.tip * s } : null },
+      stuck: () => [],
+    };
+  }
+
   // ---- materials -----------------------------------------------------------
   // Every item gets a physical personality from its tags (and its art / fx for
   // the elements), so a new item behaves right with no extra data.  The
@@ -293,7 +363,7 @@ const PHYS = (() => {
       const nx = d > 1e-6 ? ex / d : 0, ny = d > 1e-6 ? ey / d : -1;
       const pen = rr - d;
       let mu;
-      if (claw) mu = K.mu * clamp(Math.sqrt(b.friction / 0.45), 0.35, 1.15);
+      if (claw) { mu = K.mu * clamp(Math.sqrt(b.friction / 0.45), 0.35, 1.15); if (K.T !== CLAW_TYPES.classic) mu *= shapeMu(K.T, b); }
       else mu = Math.sqrt(PH.wallMu * b.friction) * b.slick;
       addContact(W, b, null, px + nx * r, py + ny * r, nx, ny, pen, mu, s);
       if (claw) {
@@ -304,7 +374,7 @@ const PHYS = (() => {
         // a prong only stalls on something in the way of its closing sweep,
         // not on the pile leaning against its outside
         if (s.own !== 0) {
-          const open = ((s.own < 0 ? K.pL : K.pR) - PHI_CLOSED) / (PHI_OPEN - PHI_CLOSED);
+          const open = ((s.own < 0 ? K.pL : K.pR) - K.T.closed) / (K.T.open - K.T.closed);
           if (pen > K.halt + RIG.haltOpen * open * open) {
             const omc = s.own * RIG.closeRate, cvx = -omc * (py - s.hy), cvy = omc * (px - s.hx);
             if (cvx * nx + cvy * ny < 0) { if (s.own < 0) K.hitL = true; else K.hitR = true; }
@@ -312,6 +382,14 @@ const PHYS = (() => {
         }
       }
     }
+  }
+  /* A claw type's friction multiplier for one body: round things (balls,
+     blobs) and long capsules grip differently in a tri-claw or a scoop. */
+  function shapeMu(T, b) {
+    const k = b.spec ? b.spec.kind : 'ball';
+    if (k === 'ball') return T.mu * T.roundMu;
+    if (k === 'blob') return T.mu * (1 + T.roundMu) * 0.5;
+    return T.mu * (b.spec.len > 40 ? T.longMu : (1 + T.longMu) * 0.5);
   }
   function collide(W) {
     const B = W.bodies; W.contacts.length = 0;
@@ -587,16 +665,18 @@ const PHYS = (() => {
   }
 
   // ---- claw rig ----------------------------------------------------------
-  /* clawRig(W, {cabinet, homeX, chuteX, railY, prongs, width, grip, speed,
-     rubber, magnet, rand}).  Kinematic hub + two prongs driven by Claw
-     Crawl's state machine: idle -> drop -> close -> lift -> carry -> open ->
-     return.  See DESIGN.md for the public surface. */
+  /* clawRig(W, {cabinet, homeX, chuteX, railY, type, prongs, width, grip,
+     speed, rubber, magnet, rand}).  Kinematic hub + two prongs driven by
+     Claw Crawl's state machine: idle -> drop -> close -> lift -> carry ->
+     open -> return.  type picks the variant (CLAW_TYPES; default classic).
+     See DESIGN.md for the public surface. */
   function clawRig(W, o) {
     o = o || {};
     const C = o.cabinet;
     const cw = C ? C.bounds.w : W.w, ch = C ? C.bounds.h : W.h;
     const binX = C ? C.bounds.chuteX : cw - 64;              // right edge of the bin (the divider)
     const cfg = {
+      type: CLAW_TYPES[o.type] ? o.type : 'classic',
       prongs: o.prongs === 3 ? 3 : 2, width: o.width == null ? 1 : o.width,
       grip: o.grip == null ? 1 : o.grip, speed: o.speed == null ? 1 : o.speed,
       rubber: o.rubber ? 1 : 0, magnet: o.magnet ? 1 : 0, grease: o.grease ? 1 : 0,
@@ -606,64 +686,87 @@ const PHYS = (() => {
     const RAIL = railY + RIG.hubDrop;
     const homeX = o.homeX == null ? binX * 0.5 : o.homeX;
     const chuteX = o.chuteX == null ? binX + (C ? C.bounds.chuteW : 64) * 0.5 : o.chuteX;
+    const T0 = typeOf(cfg.type);
     // Internal claw state (Claw Crawl's F.claw), shared with bodyVsSeg through W.ctl.
     const K = {
-      x: homeX, y: RAIL, tx: homeX, vx: 0, vy: 0, pL: PHI_OPEN, pR: PHI_OPEN, wL: 0, wR: 0,
+      x: homeX, y: RAIL, tx: homeX, vx: 0, vy: 0, pL: T0.open, pR: T0.open, wL: 0, wR: 0,
       st: 'idle', t: 0, s: 1, grip: 0.5, mu: 1, halt: 2.2, pending: false, moving: false,
       touch: false, hitL: false, hitR: false, haltL: false, haltR: false, blkL: 0, blkR: 0,
       loosen: 0, jolt: 0, sway: 0, swayV: 0, cargo: [], returning: false,
+      T: T0, stuck: [], digT: 0, spear: null, field: 0,
     };
     const R = {
-      phase: 'idle', x: homeX, y: RAIL, targetX: homeX, sway: 0,
+      phase: 'idle', x: homeX, y: RAIL, targetX: homeX, sway: 0, type: cfg.type, auto: null, field: 0,
       cableTop: { x: homeX, y: railY },
-      bodies: { hub: { x: homeX, y: RAIL, r: RIG.hubR }, prongs: [[], []], ghost: null },
+      bodies: { hub: { x: homeX, y: RAIL, r: T0.hubR }, prongs: [[], []], ghost: null, tip: null },
       cfg, homeX, chuteX, railY, geo: null, ctl: K, events: [],
       setTarget, drop, update, held, locked, cradle, open, setConfig, destroy, calm, size, gripCC, shed: () => shedRiders(),
+      autoSteer, cancelAuto, aimAt, stuck: () => K.stuck.map(sk => sk.b),
     };
-    function size() { return RIG.base * cfg.width * (cfg.prongs === 3 ? RIG.prong3Size : 1); }
+    function size() { return RIG.base * cfg.width * (cfg.prongs === 3 ? RIG.prong3Size : 1) * K.T.size; }
     /* Clawspire's grip (0.75..2+) mapped onto Claw Crawl's 0..1 grip. */
     function gripCC() {
       let g = clamp(RIG.gripBase + RIG.gripSlope * (cfg.grip - 0.75), RIG.gripMin, 1);
       g += cfg.rubber ? RIG.rubberGrip : 0;
       g += cfg.prongs === 3 ? RIG.prong3Grip : 0;
       g -= cfg.grease ? RIG.greaseGrip : 0;
+      g += K.T.gripAdd;
       return clamp(g, 0.05, 1);
     }
+    /* How far down a closed claw reaches below the hub centre (the tips, the
+       magnet's face, the hook's barb). */
+    function reachOf() {
+      const T = K.T;
+      if (T.weld === 'spear') return T.tip * K.s;
+      if (!T.poly) return T.hubR * K.s;
+      return (RIG.hingeY + T.poly[T.poly.length - 1][1]) * K.s;
+    }
     function refresh() {
+      K.T = typeOf(cfg.type); R.type = cfg.type;
       K.s = size(); K.grip = gripCC(); K.mu = 0.6 + K.grip * 0.8;
       const s = K.s;
-      R.geo = { s, grip: K.grip, hubR: RIG.hubR * s, reach: (RIG.hingeY + PRONG[3][1]) * s, span: openSpan() * 2, halt: RIG.haltBase + RIG.haltGrip * K.grip, mu: K.mu };
+      R.geo = { s, grip: K.grip, hubR: K.T.hubR * s, reach: reachOf(), span: openSpan() * 2, halt: (RIG.haltBase + RIG.haltGrip * K.grip) * K.T.haltK, mu: K.mu, type: cfg.type };
     }
     /* Horizontal reach of an open prong tip from the hub centre. */
     function openSpan() {
       const P = prongPts(1);
-      let m = 0; for (const p of P) m = Math.max(m, p.x - K.x);
+      let m = K.T.hubR * K.s; for (const p of P) m = Math.max(m, p.x - K.x);
       return m;
     }
-    function lim() { return 34 * K.s + 6; }
+    function lim() { return Math.max(34 * K.s, K.T.hubR * K.s + 4) + 6; }
     function clampX(x) { return clamp(x, lim(), binX - lim()); }
     function prongPts(side) {
+      const T = K.T;
+      if (!T.poly) return [];
       const s = K.s, phi = side < 0 ? K.pL : K.pR;
       const hx = K.x + side * RIG.hingeX * s, hy = K.y + RIG.hingeY * s;
       const al = -side * phi, ca = Math.cos(al), sa = Math.sin(al);
-      return PRONG.map(([lx, ly]) => { const x = side * lx * s, y = ly * s; return { x: hx + x * ca - y * sa, y: hy + x * sa + y * ca }; });
+      return T.poly.map(([lx, ly]) => { const x = side * lx * s, y = ly * s; return { x: hx + x * ca - y * sa, y: hy + x * sa + y * ca }; });
     }
-    /* The drawn-only third finger: a shorter straight prong down the middle. */
+    /* The drawn-only third finger: a shorter straight prong down the middle
+       (the tri-claw's is a full prong that curls with the other two). */
     function ghostPts() {
       const s = K.s, phi = (K.pL + K.pR) * 0.5;
-      const hy = K.y + RIG.hingeY * s, k = 0.86;
+      const hy = K.y + RIG.hingeY * s;
+      if (K.T.ghost) {
+        const T = K.T, u = (phi - T.closed) / (T.open - T.closed);
+        return T.poly.map(([lx, ly]) => ({ x: K.x + lx * 0.18 * s * (u - 0.35), y: hy + ly * (0.9 - 0.08 * u) * s }));
+      }
+      const k = 0.86;
       return PRONG.map(([lx, ly]) => ({ x: K.x + lx * 0.25 * s * (1 - phi), y: hy + ly * k * s }));
     }
     function buildSegs() {
-      const s = K.s, out = W.csegs; out.length = 0;
-      const hub = mkSeg(K.x, K.y, K.x, K.y, RIG.hubR * s); hub.own = 0; hub.vx = K.vx; hub.vy = K.vy; hub.hx = K.x; hub.hy = K.y;
+      const s = K.s, out = W.csegs, T = K.T; out.length = 0;
+      if (T.weld === 'spear') return;   // the harpoon's rope passes through everything
+      const hub = mkSeg(K.x, K.y, K.x, K.y, T.hubR * s); hub.own = 0; hub.vx = K.vx; hub.vy = K.vy; hub.hx = K.x; hub.hy = K.y;
       out.push(hub);
+      if (!T.poly) return;
       for (const side of [-1, 1]) {
         const dphi = side < 0 ? K.wL : K.wR;
         const hx = K.x + side * RIG.hingeX * s, hy = K.y + RIG.hingeY * s;
         const P = prongPts(side);
         for (let k = 0; k < P.length - 1; k++) {
-          const g = mkSeg(P[k].x, P[k].y, P[k + 1].x, P[k + 1].y, RIG.segR * s);
+          const g = mkSeg(P[k].x, P[k].y, P[k + 1].x, P[k + 1].y, T.segR * s);
           g.own = side; g.vx = K.vx; g.vy = K.vy; g.om = -side * dphi; g.hx = hx; g.hy = hy;
           out.push(g);
         }
@@ -682,22 +785,24 @@ const PHYS = (() => {
       }
     }
     function mirror() {
-      R.x = K.x; R.y = K.y; R.phase = phaseName(); R.sway = K.sway; R.targetX = K.tx;
+      R.x = K.x; R.y = K.y; R.phase = phaseName(); R.sway = K.sway; R.targetX = K.tx; R.field = K.field;
       R.cableTop.x = K.x - K.sway * 12; R.cableTop.y = railY;
-      const hb = R.bodies.hub; hb.x = K.x; hb.y = K.y; hb.r = RIG.hubR * K.s;
+      const hb = R.bodies.hub; hb.x = K.x; hb.y = K.y; hb.r = K.T.hubR * K.s;
       R.bodies.prongs[0] = prongPts(-1); R.bodies.prongs[1] = prongPts(1);
-      R.bodies.ghost = cfg.prongs === 3 ? ghostPts() : null;
+      R.bodies.ghost = cfg.prongs === 3 || K.T.ghost ? (K.T.poly ? ghostPts() : null) : null;
+      R.bodies.tip = K.T.weld === 'spear' ? { x: K.x, y: K.y + K.T.tip * K.s } : null;
     }
     /* Travel toward tx at the carriage speed; true when arrived. */
     function travel(tx, h) {
       const d = tx - K.x;
-      if (Math.abs(d) > 0.6) { K.vx = Math.sign(d) * Math.min(RIG.carSpeed * cfg.speed, Math.abs(d) / h); return false; }
+      if (Math.abs(d) > 0.6) { K.vx = Math.sign(d) * Math.min(RIG.carSpeed * cfg.speed * K.T.speed * (R.auto ? R.auto.speed : 1), Math.abs(d) / h); return false; }
       return true;
     }
     /* Decide this substep's claw velocities (pre hook). */
     function plan(h) {
       K.vx = 0; K.vy = 0; K.wL = 0; K.wR = 0; K.t += h;
-      const maxY = ch - RIG.floorClear * K.s - 2;
+      const T = K.T;
+      const maxY = ch - T.floorClear * K.s - 2;
       switch (K.st) {
         case 'idle': {
           const arrived = travel(clampX(K.tx), h);
@@ -705,59 +810,79 @@ const PHYS = (() => {
           // Nothing rides the parked claw: a leftover passenger is dropped.
           if (arrived && K.t > RIG.idleShed && W.bodies.some(b => b.held > 0 && b.type === 'dynamic')) shedRiders();
           if (arrived && K.pending) {
-            K.pending = false; K.st = 'drop'; K.t = 0; K.touch = false; K.cargo = [];
+            K.pending = false; K.st = 'drop'; K.t = 0; K.touch = false; K.cargo = []; K.digT = 0; K.spear = null;
             W.wakeAll(); emit('drop');
           }
           break;
         }
         case 'return': {
-          if (travel(clampX(K.tx), h)) { K.st = 'idle'; K.t = 0; K.moving = false; emit('home'); }
+          if (travel(clampX(K.tx), h)) { K.st = 'idle'; K.t = 0; K.moving = false; R.auto = null; emit('home'); }
           break;
         }
-        case 'drop':
-          K.vy = RIG.dropSpeed;
-          if (K.touch || K.y >= maxY) {
-            if (K.touch) emit('touch');
+        case 'drop': {
+          K.vy = RIG.dropSpeed * T.drop;
+          if (T.weld === 'spear' && !K.spear) spearTest();
+          let touched = K.touch || !!K.spear;
+          // the scoop bites on into the pile a moment before it closes
+          if (T.dig > 0 && (touched || K.digT > 0) && K.digT < T.dig && K.y < maxY) {
+            if (K.digT === 0) emit('touch');
+            K.digT += h; touched = false;
+          }
+          if (touched || (T.dig > 0 && K.digT >= T.dig) || K.y >= maxY) {
+            if (touched && !(T.dig > 0)) emit('touch');
             K.st = 'close'; K.t = 0; K.haltL = K.haltR = false; K.blkL = K.blkR = 0;
-            K.halt = RIG.haltBase + RIG.haltGrip * K.grip;
+            K.halt = (RIG.haltBase + RIG.haltGrip * K.grip) * T.haltK;
+            if (K.spear) stick(K.spear);
             emit('close');
           }
           break;
+        }
         case 'close': {
+          if (T.weld === 'metal' || T.weld === 'spear') {
+            // the magnet energises (every piece of metal it touches sticks), the barb bites
+            if (T.weld === 'metal') magnetStick(true);
+            if (K.t > T.closeT) toLift();
+            break;
+          }
           // keep squeezing; a prong that has been blocked for a moment has closed on something
           K.blkL = K.hitL ? K.blkL + h : 0;
           K.blkR = K.hitR ? K.blkR + h : 0;
-          if (!K.hitL && K.pL > PHI_CLOSED) K.wL = -RIG.closeRate;
-          if (!K.hitR && K.pR > PHI_CLOSED) K.wR = -RIG.closeRate;
+          const cr = RIG.closeRate * T.close;
+          if (!K.hitL && K.pL > T.closed) K.wL = -cr;
+          if (!K.hitR && K.pR > T.closed) K.wR = -cr;
           if (K.hitL && !K.haltL) K.haltL = true;
           if (K.hitR && !K.haltR) K.haltR = true;
-          const doneL = K.blkL > RIG.blockT || K.pL <= PHI_CLOSED, doneR = K.blkR > RIG.blockT || K.pR <= PHI_CLOSED;
-          if ((doneL && doneR && K.t > RIG.closeMin) || K.t > RIG.closeMax) {
-            K.st = 'lift'; K.t = 0;
-            K.loosen = (1 - K.grip) * RIG.loosen * (0.7 + rand() * 0.6);
-            K.cargo = W.bodies.filter(b => b.type === 'dynamic' && b.held > 0 && b.y < K.y + RIG.cargoY * K.s);
-            emit('lift');
-          }
+          const doneL = K.blkL > RIG.blockT || K.pL <= T.closed, doneR = K.blkR > RIG.blockT || K.pR <= T.closed;
+          if ((doneL && doneR && K.t > RIG.closeMin) || K.t > RIG.closeMax) toLift();
           break;
         }
         case 'lift':
-          K.vy = -RIG.liftSpeed;
-          if (K.t < RIG.loosenT) { K.wL = K.wR = K.loosen / RIG.loosenT; }
+          K.vy = -RIG.liftSpeed * T.lift;
+          if (K.t < RIG.loosenT && T.poly) { K.wL = K.wR = K.loosen / RIG.loosenT; }
+          // a live magnet keeps snatching the metal that leaps up to it
+          if (T.weld === 'metal' && K.t < 0.3) magnetStick(false);
+          // a long thing in the scoop sticks out over the rim and tips out
+          if (K.tipOut && K.tipOut.length && K.t > 0.22) {
+            for (const b of K.tipOut) { const sd = b.x < K.x ? -1 : 1; b.passClaw = RIG.passT; b.held = 0; wake(b); b.vx += sd * 90; b.av += sd * 5; }
+            K.tipOut.length = 0;
+          }
           if (K.y <= RAIL) {
             K.st = 'carry'; K.t = 0; K.swayV += RIG.swayKick;
             // the jolt at the top: a weak claw twitches open a touch
             K.jolt = rand() < (1 - K.grip) * RIG.joltP ? RIG.jolt : 0;
+            // ...and a welded load too heavy for it may tear off
+            if (T.weld) tearHeavy();
             emit('carry');
           }
           break;
         case 'carry': {
-          if (K.jolt > 0 && K.t < RIG.joltT) { K.wL = K.wR = K.jolt / RIG.joltT; }
-          if (travel(chuteX, h) && K.t > RIG.carryWait) { K.st = 'open'; K.t = 0; K.jolt = 0; emit('release'); }
+          if (K.jolt > 0 && K.t < RIG.joltT && T.poly) { K.wL = K.wR = K.jolt / RIG.joltT; }
+          if (travel(chuteX, h) && K.t > RIG.carryWait) { K.st = 'open'; K.t = 0; K.jolt = 0; unstickAll(); emit('release'); }
           break;
         }
         case 'open':
-          if (K.pL < PHI_OPEN) K.wL = RIG.openRate;
-          if (K.pR < PHI_OPEN) K.wR = RIG.openRate;
+          if (K.pL < T.open) K.wL = RIG.openRate;
+          if (K.pR < T.open) K.wR = RIG.openRate;
           // hold still until the load has let go of the prongs (it can hang on a
           // tip for a moment), then travel back to the aim point
           if (K.t > RIG.openT && (K.t > RIG.openT + RIG.openHold || !W.bodies.some(b => b.held > 0))) {
@@ -774,14 +899,160 @@ const PHYS = (() => {
       K.touch = false; K.hitL = false; K.hitR = false;
       W.busy = K.st === 'drop' || K.st === 'close' || K.st === 'lift';
       W.ctl = K;
+      if (T.weld) weldStep(h);
       buildSegs();
       magnet(h);
+      if (T.weld === 'metal') {
+        // the field: warming up on the way down, full while it holds, off when it lets go
+        const on = K.st === 'close' || ((K.st === 'lift' || K.st === 'carry') && K.stuck.length) ? 1 : K.st === 'drop' ? 0.45 : 0;
+        K.field += (on - K.field) * Math.min(1, h * 12);
+        if (K.st === 'drop' || K.st === 'close' || (K.st === 'lift' && K.t < 0.3)) field(h);
+      }
+    }
+    /* close -> lift: the loosen, and what the claw has hold of. */
+    function toLift() {
+      const T = K.T;
+      K.st = 'lift'; K.t = 0;
+      K.loosen = (1 - K.grip) * RIG.loosen * (0.7 + rand() * 0.6);
+      if (!T.weld) {
+        K.cargo = W.bodies.filter(b => b.type === 'dynamic' && b.held > 0 && b.y < K.y + RIG.cargoY * K.s);
+        // the scoop is a bucket: a sword sticks out of it and tips out on the way up
+        K.tipOut = [];
+        if (T.tipLen) for (const b of K.cargo) if (b.spec && b.spec.kind === 'cap' && b.spec.len > T.tipLen && rand() < T.tipP) K.tipOut.push(b);
+      } else if (T.weld === 'one') {
+        // the hand: the biggest thing in its fingers sticks, the rest drops out
+        let best = null;
+        for (const b of W.bodies) {
+          if (b.type !== 'dynamic' || !(b.held > 0) || b.y > K.y + RIG.cargoY * K.s) continue;
+          if (!best || b.m > best.m + 1e-9 || (Math.abs(b.m - best.m) <= 1e-9 && b.y < best.y)) best = b;
+        }
+        for (const b of W.bodies) if (b !== best && b.type === 'dynamic' && b.held > 0) { b.passClaw = RIG.passT; b.held = 0; wake(b); }
+        if (best) stick(best);
+        K.cargo = K.stuck.map(sk => sk.b);
+      } else {
+        // the magnet and the hook carry only what they hold (plus whatever
+        // happens to ride on that, which is a bonus, not cargo)
+        K.cargo = K.stuck.map(sk => sk.b);
+      }
+      emit('lift');
+    }
+    const isMetal = (b) => !!(b && b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0);
+    const isStuck = (b) => { for (const sk of K.stuck) if (sk.b === b) return true; return false; };
+    /* Weld a body to the claw at its current offset from the hub. */
+    function stick(b) {
+      if (!b || isStuck(b)) return;
+      K.stuck.push({ b, dx: b.x - K.x, dy: b.y - K.y, a: b.a });
+      b.held = 2; b.passClaw = 0; wake(b);
+    }
+    function unstick(i, drop) {
+      const sk = K.stuck[i]; if (!sk) return;
+      K.stuck.splice(i, 1);
+      const b = sk.b;
+      b.held = 0; wake(b);
+      if (drop) { b.passClaw = 0.3; if (b.vy < 30) b.vy = 30; }
+      const c = K.cargo.indexOf(b); if (c >= 0) K.cargo.splice(c, 1);
+    }
+    function unstickAll() { for (let i = K.stuck.length - 1; i >= 0; i--) unstick(i, true); }
+    /* Every welded body is driven to its spot under the hub (a soft velocity
+       weld, capped), keeps its angle, and tears off when it lags too far. */
+    function weldStep(h) {
+      const T = K.T;
+      if (!(K.st === 'close' || K.st === 'lift' || K.st === 'carry')) { if (K.stuck.length) unstickAll(); return; }
+      if (T.weld === 'metal' && K.st !== 'close') {
+        // the magnet's smooth housing holds nothing that is not metal: it slides off
+        for (const b of W.bodies) {
+          if (b.type !== 'dynamic' || !(b.held > 0) || isMetal(b) || isStuck(b)) continue;
+          const sd = b.x < K.x ? -1 : 1;
+          b.passClaw = RIG.passT * 0.5; b.held = 0; wake(b); b.vx += sd * 60; if (b.vy < 0) b.vy = 0;
+        }
+      }
+      for (let i = K.stuck.length - 1; i >= 0; i--) {
+        const sk = K.stuck[i], b = sk.b;
+        if (b.world !== W) { K.stuck.splice(i, 1); continue; }
+        const tx = K.x + K.vx * h + sk.dx, ty = K.y + K.vy * h + sk.dy;
+        const ex = tx - b.x, ey = ty - b.y, e = Math.hypot(ex, ey);
+        if (e > T.tear * K.s + 6) { unstick(i, true); b.passClaw = RIG.passT; emit('slip'); continue; }
+        let vx = ex * T.weldK / h, vy = ey * T.weldK / h;
+        const v = Math.hypot(vx, vy);
+        if (v > T.weldV) { vx *= T.weldV / v; vy *= T.weldV / v; }
+        b.vx = K.vx + vx; b.vy = K.vy + vy;
+        b.av = clamp((sk.a - b.a) * 0.25 / h, -6, 6);
+        b.held = 2; b.sl = false; b.slT = 0;
+      }
+    }
+    /* The harpoon's barb: the first item part it enters is speared. */
+    function spearTest() {
+      const T = K.T, tx = K.x, ty = K.y + T.tip * K.s, rb = T.barb * K.s + (cfg.prongs === 3 ? 3 : 0) + (cfg.width - 1) * 6;
+      let best = null, bd = Infinity;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic') continue;
+        const bx = b.box;
+        if (tx < bx.x0 - rb || tx > bx.x1 + rb || ty < bx.y0 - rb || ty > bx.y1 + rb) continue;
+        for (let i = 0; i < b.parts.length; i++) {
+          const d = Math.hypot(b.px[i] - tx, b.py[i] - ty) - b.parts[i].r;
+          if (d < rb && d < bd) { bd = d; best = b; }
+        }
+      }
+      if (best) K.spear = best;
+    }
+    /* The electromagnet crane's field: metal in range leaps toward the face. */
+    function field(h) {
+      const T = K.T, s = K.s;
+      const R0 = T.fieldR * (0.8 + 0.2 * cfg.width) * (cfg.prongs === 3 ? 1.25 : 1);
+      const F0 = T.fieldF * (0.6 + 0.8 * K.grip) * (cfg.magnet ? 1.4 : 1);
+      const fx = K.x, fy = K.y + T.hubR * s * 0.6;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || !isMetal(b) || isStuck(b)) continue;
+        const dx = fx - b.x, dy = fy - b.y, d = Math.hypot(dx, dy);
+        if (d > R0 || d < 1) continue;
+        const f = F0 * h / Math.max(1, d / 40);
+        wake(b); b.vx += dx / d * f; b.vy += dy / d * f;
+      }
+    }
+    /* Metal touching the magnet's face sticks; while energising, metal
+       touching stuck metal sticks too (it is magnetised). */
+    function magnetStick(chain) {
+      const hr = K.T.hubR * K.s;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || !isMetal(b) || isStuck(b)) continue;
+        for (let i = 0; i < b.parts.length; i++) {
+          if (Math.hypot(b.px[i] - K.x, b.py[i] - K.y) < hr + b.parts[i].r + 3) { stick(b); break; }
+        }
+      }
+      if (!chain || !K.stuck.length) return;
+      const n0 = K.stuck.length;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || !isMetal(b) || isStuck(b)) continue;
+        let hit = false;
+        for (let k = 0; k < n0 && !hit; k++) {
+          const o2 = K.stuck[k].b;
+          if (Math.hypot(o2.x - b.x, o2.y - b.y) > o2.br + b.br + 2) continue;
+          for (let i = 0; i < b.parts.length && !hit; i++) {
+            for (let j = 0; j < o2.parts.length; j++) {
+              if (Math.hypot(b.px[i] - o2.px[j], b.py[i] - o2.py[j]) < b.parts[i].r + o2.parts[j].r + 2) { hit = true; break; }
+            }
+          }
+        }
+        if (hit) stick(b);
+      }
+    }
+    /* At the top of the lift a welded load heavier than the claw can bear
+       may tear off (seeded rand; grip raises what it can bear). */
+    function tearHeavy() {
+      const T = K.T;
+      const cap = T.weld === 'metal' ? 14 + 40 * K.grip : T.weld === 'spear' ? 10 + 36 * K.grip : 18 + 50 * K.grip;
+      for (let i = K.stuck.length - 1; i >= 0; i--) {
+        const b = K.stuck[i].b;
+        const p = clamp((b.m - cap) / (cap * 1.5), 0, 0.75);
+        if (p > 0 && rand() < p) { unstick(i, true); b.passClaw = RIG.passT; emit('slip'); }
+      }
     }
     /* Let every body still touching the claw fall through it. */
     function shedRiders() {
       let n = 0;
       for (const b of W.bodies) {
         if (b.type !== 'dynamic' || !(b.held > 0)) continue;
+        if (K.stuck.length && isStuck(b)) continue;
         b.passClaw = RIG.passT; b.held = 0; wake(b);
         if (b.vy < 40) b.vy = 40;
         n++;
@@ -792,12 +1063,12 @@ const PHYS = (() => {
     /* The electromagnet: metal within magnetR of the hub drifts in while the
        claw drops and closes. */
     function magnet(h) {
-      if (!cfg.magnet || (K.st !== 'drop' && K.st !== 'close')) return;
-      const s = K.s, hx = K.x, hy = K.y + RIG.hingeY * s;
+      if (!cfg.magnet || K.T.weld === 'metal' || (K.st !== 'drop' && K.st !== 'close')) return;
+      const s = K.s, hx = K.x, hy = K.y + (K.T.weld === 'spear' ? K.T.tip * s : RIG.hingeY * s);
       for (const b of W.bodies) {
         if (b.type !== 'dynamic' || !b.data || !b.data.tags || b.data.tags.indexOf('metal') < 0) continue;
         const dx = hx - b.x, dy = hy - b.y, d = Math.hypot(dx, dy);
-        if (d > RIG.magnetR || d < RIG.hubR * s + b.br - 2) continue;
+        if (d > RIG.magnetR || d < K.T.hubR * s + b.br - 2) continue;
         const f = RIG.magnetF * h / Math.max(1, d / 40);
         if (b.sl && f < 2) continue;
         wake(b); b.vx += dx / d * f; b.vy += dy / d * f;
@@ -805,9 +1076,10 @@ const PHYS = (() => {
     }
     /* Move the claw by this substep's velocities (post hook) and watch the cargo. */
     function move(h) {
+      const T = K.T;
       K.x += K.vx * h; K.y += K.vy * h;
-      K.pL = clamp(K.pL + K.wL * h, PHI_CLOSED - 0.02, PHI_OPEN);
-      K.pR = clamp(K.pR + K.wR * h, PHI_CLOSED - 0.02, PHI_OPEN);
+      K.pL = clamp(K.pL + K.wL * h, T.closed - 0.02, T.open);
+      K.pR = clamp(K.pR + K.wR * h, T.closed - 0.02, T.open);
       // purely visual cable sway
       K.swayV += (-K.sway * 40 - K.swayV * 3 - K.vx * 0.02) * h; K.sway += K.swayV * h;
       // cargo that slipped out of the prongs on the way
@@ -815,6 +1087,7 @@ const PHYS = (() => {
         for (let i = K.cargo.length - 1; i >= 0; i--) {
           const b = K.cargo[i];
           if (b.world !== W) { K.cargo.splice(i, 1); continue; }
+          if (T.weld && isStuck(b)) continue;
           if (b.y > K.y + RIG.slipY * K.s && b.vy > RIG.slipV && b.x < binX) { K.cargo.splice(i, 1); emit('slip'); }
         }
       }
@@ -822,7 +1095,7 @@ const PHYS = (() => {
     }
     // ---- public
     function setTarget(x) {
-      if (K.st !== 'idle') return false;
+      if (K.st !== 'idle' || R.auto) return false;
       K.tx = clampX(x); R.targetX = K.tx;
       return true;
     }
@@ -830,6 +1103,28 @@ const PHYS = (() => {
       if (K.st !== 'idle') return false;
       K.pending = true;
       return true;
+    }
+    /* An AI driver (the Prize Master) takes the claw: aim at x, optionally
+       drop on arrival, carriage speed x o.speed. The player's setTarget is
+       ignored until the claw is home again or cancelAuto(). */
+    function autoSteer(x, o) {
+      if (K.st !== 'idle') return false;
+      o = o || {};
+      K.tx = clampX(x); R.targetX = K.tx;
+      R.auto = { x: K.tx, drop: !!o.drop, speed: o.speed > 0 ? o.speed : 1 };
+      if (o.drop) K.pending = true;
+      return true;
+    }
+    function cancelAuto() { R.auto = null; }
+    /* The x over the topmost body matching pred (default: any item in the bin). */
+    function aimAt(pred) {
+      let best = null;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || b.x >= binX) continue;
+        if (pred ? !pred(b) : b.group !== 'item') continue;
+        if (!best || b.box.y0 < best.box.y0) best = b;
+      }
+      return best ? clampX(best.x) : null;
     }
     /* Drive events out; the world's substeps do the moving. */
     function update() {
@@ -845,12 +1140,17 @@ const PHYS = (() => {
     function cradle(b) { return b ? K.cargo.indexOf(b) >= 0 : K.cargo.slice(); }
     /* Force the prongs open: a busy claw goes straight to 'releasing' and then returns. */
     function open() {
-      if (K.st === 'idle' || K.st === 'return') { K.pL = K.pR = PHI_OPEN; return; }
+      unstickAll();
+      if (K.st === 'idle' || K.st === 'return') { K.pL = K.pR = K.T.open; return; }
       K.st = 'open'; K.t = 0; K.cargo = []; K.pending = false; K.jolt = 0;
       mirror();
     }
     function setConfig(c) {
       c = c || {};
+      if (c.type != null && CLAW_TYPES[c.type] && c.type !== cfg.type) {
+        unstickAll(); cfg.type = c.type;
+        K.pL = K.pR = typeOf(c.type).open;
+      }
       if (c.width != null) cfg.width = c.width;
       if (c.prongs != null) cfg.prongs = c.prongs === 3 ? 3 : 2;
       if (c.rubber != null) cfg.rubber = c.rubber ? 1 : 0;
@@ -861,6 +1161,7 @@ const PHYS = (() => {
       refresh(); mirror();
     }
     function destroy() {
+      unstickAll();
       W.removeHook(plan); W.removePost(move);
       W.csegs.length = 0; W.ctl = null; W.busy = false;
       for (const b of W.bodies) b.held = 0;
@@ -875,5 +1176,5 @@ const PHYS = (() => {
   }
 
   return { box, body, world, cabinet, clawRig, setPose, sync, partSpec, RIG, PH, SHAPE, PRONG, PHI_OPEN, PHI_CLOSED, H,
-    MATERIALS, materialOf, applyMaterial, scaleShape, blast, hop };
+    MATERIALS, materialOf, applyMaterial, scaleShape, blast, hop, CLAW_TYPES, clawPose };
 })();

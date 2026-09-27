@@ -783,6 +783,252 @@ const AUDIO = (() => {
   Object.assign(LEVEL, { roar: 1.1 });
   NAMES.push('gulp', 'burp', 'roar');
 
+  // Meta progression (DESIGN.md "Meta"): the attract mode's coin, sticker
+  // slaps, Prizedex discoveries and a Tilt level going up.
+  Object.assign(BANK, {
+    // A coin into the slot: a bright clink, a rattle down the chute, a clunk and the credit chime.
+    coinIn(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 2600 * p, to: 2300 * p, dur: 0.08, v: 0.16 });
+      blip(out, t, { at: 0.02, w: 'sine', f: 3900 * p, dur: 0.12, v: 0.06 });
+      for (let i = 0; i < 4; i++) hiss(out, t, { at: 0.1 + i * 0.05, type: 'bandpass', f: 3000 - i * 400, q: 6, dur: 0.03, v: 0.1 - i * 0.015 });
+      blip(out, t, { at: 0.32, w: 'sine', f: 180 * p, to: 70, dur: 0.1, v: 0.35 });
+      [76, 83, 88].forEach((n, i) => blip(out, t, { at: 0.42 + i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.05, lp: 3500 }));
+      return 0.75;
+    },
+    // A sticker slapped on the corner: a smack plus a sparkly rising arpeggio.
+    sticker(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 1800, q: 1.2, dur: 0.05, v: 0.3, crunch: true });
+      [79, 83, 86, 91].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.06, w: 'triangle', f: mtof(n) * p, dur: 0.22, v: 0.08 }));
+      blip(out, t, { at: 0.32, w: 'sine', f: mtof(98) * p, dur: 0.4, v: 0.04, vib: [7, 12] });
+      return 0.75;
+    },
+    // A first sighting for the Prizedex: a quick "ooh" chime.
+    discover(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: mtof(84) * p, dur: 0.14, v: 0.08 });
+      blip(out, t, { at: 0.07, w: 'sine', f: mtof(91) * p, dur: 0.24, v: 0.07, vib: [6, 8] });
+      hiss(out, t, { type: 'highpass', f: 6500, dur: 0.1, v: 0.03, a: 0.02 });
+      return 0.32;
+    },
+    // A Tilt level up: an electric buzz winding up into a tense stab.
+    tiltUp(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 90 * p, to: 180 * p, dur: 0.3, v: 0.12, lp: 1400, q: 4 });
+      [0, 6, 12].forEach((k) => blip(out, t, { at: 0.26, w: 'square', f: mtof(50 + k) * p, dur: 0.24, v: 0.05, lp: 2200 }));
+      hiss(out, t, { type: 'bandpass', f: 400, to: 2400, q: 1.4, dur: 0.3, v: 0.08 });
+      return 0.55;
+    },
+  });
+  Object.assign(GAP, { coinIn: 0.3, sticker: 0.2, discover: 0.15, tiltUp: 0.08 });
+  NAMES.push('coinIn', 'sticker', 'discover', 'tiltUp');
+
+  // ---------------------------------------------------------------- bosses
+  // Boss and elite spectacle (DESIGN.md "Bosses"): the versus card, the four
+  // cabinet signatures, heavy footsteps and the death finale. The stings
+  // duck the music so they cut through it.
+  Object.assign(BANK, {
+    // The VS slam: a fat drum hit (sub kick + snare crack) with a thunder tail.
+    vsSlam(out, t, o, p) {
+      duck(0.8, 0.25);
+      blip(out, t, { w: 'sine', f: 150 * p, to: 38, dur: 0.45, v: 0.75 });
+      hiss(out, t, { type: 'bandpass', f: 1800, q: 0.7, dur: 0.18, v: 0.5, crunch: true });
+      hiss(out, t, { at: 0.03, type: 'lowpass', f: 1400, to: 90, dur: 1.1, v: 0.32, crunch: true });
+      blip(out, t, { at: 0.02, w: 'square', f: 3200 * p, to: 700, dur: 0.06, v: 0.08, lp: 6000 });
+      return 1.2;
+    },
+    // A boss arrives: a long sub rumble that swells and fades.
+    rumble(out, t, o, p) {
+      const len = U.clamp(+o.len || 1.6, 0.4, 4);
+      blip(out, t, { w: 'sawtooth', f: 41 * p, dur: len, v: 0.16, a: len * 0.35, lp: 220, vib: [7, 3] });
+      hiss(out, t, { type: 'lowpass', f: 260, dur: len, v: 0.35, a: len * 0.3, crunch: true, rate: 0.5 });
+      return len + 0.1;
+    },
+    // Heavy footsteps: a thump with a wooden knock (opts.big for a boss).
+    stomp(out, t, o, p) {
+      const k = o.big ? 1.3 : 1;
+      blip(out, t, { w: 'sine', f: 95 * p / k, to: 32, dur: 0.28 * k, v: 0.55 });
+      hiss(out, t, { type: 'lowpass', f: 700, to: 120, dur: 0.16 * k, v: 0.3, crunch: true });
+      return 0.35 * k;
+    },
+    // The Hoard's coin avalanche: a cascade of clinks over a pour.
+    coinSpill(out, t, o, p) {
+      hiss(out, t, { type: 'highpass', f: 3500, dur: 0.9, v: 0.12, a: 0.1 });
+      for (let i = 0; i < 16; i++) {
+        const at = i * 0.05 + S.r() * 0.03, f = (1900 + S.r() * 1500) * p;
+        blip(out, t, { at, w: 'sine', f, dur: 0.09, v: 0.07 });
+        blip(out, t, { at: at + 0.01, w: 'sine', f: f * 2.7, dur: 0.05, v: 0.03 });
+      }
+      return 1.0;
+    },
+    // Hot metal meets a hand: a sharp sizzle.
+    sizzle(out, t, o, p) {
+      hiss(out, t, { type: 'highpass', f: 5000, dur: 0.45, v: 0.28, a: 0.01 });
+      hiss(out, t, { type: 'bandpass', f: 2600 * p, to: 900, q: 2, dur: 0.3, v: 0.16, crunch: true });
+      return 0.5;
+    },
+    // Molten slag drips: a heavy drop and a hiss.
+    drip(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 520 * p, to: 140, dur: 0.12, v: 0.25 });
+      hiss(out, t, { at: 0.08, type: 'highpass', f: 4000, dur: 0.3, v: 0.12 });
+      return 0.4;
+    },
+    // Ice creeping over metal: a glassy rising shimmer and creaks.
+    freezeOver(out, t, o, p) {
+      for (let i = 0; i < 6; i++) blip(out, t, { at: i * 0.06, w: 'sine', f: mtof(84 + i * 2) * p, dur: 0.25, v: 0.05 });
+      hiss(out, t, { type: 'bandpass', f: 5000, to: 9000, q: 3, dur: 0.5, v: 0.1 });
+      hiss(out, t, { at: 0.2, type: 'bandpass', f: 400, q: 6, dur: 0.12, v: 0.2, crunch: true });
+      return 0.6;
+    },
+    // The ice breaks: a crack and a spray of pings.
+    iceBreak(out, t, o, p) {
+      hiss(out, t, { type: 'highpass', f: 2200, dur: 0.1, v: 0.5, crunch: true });
+      for (let i = 0; i < 7; i++) blip(out, t, { at: 0.02 + S.r() * 0.2, w: 'sine', f: (2500 + S.r() * 2500) * p, dur: 0.1, v: 0.07 });
+      blip(out, t, { w: 'sine', f: 180 * p, to: 60, dur: 0.2, v: 0.3 });
+      return 0.4;
+    },
+    // The Prize Master takes the claw: a warped carnival organ glide.
+    hijack(out, t, o, p) {
+      duck(1.0, 0.35);
+      [[60, 0], [63, 0.12], [67, 0.24], [66, 0.36]].forEach(([n, at]) => blip(out, t, { at, w: 'square', f: mtof(n) * p, to: mtof(n - 1) * p, dur: 0.16, v: 0.06, lp: 2400, vib: [6, 9] }));
+      blip(out, t, { at: 0.5, w: 'sawtooth', f: mtof(55) * p, to: mtof(43) * p, dur: 0.6, v: 0.08, lp: 1200, vib: [4, 12] });
+      return 1.2;
+    },
+    // The bin is shuffled: a card shuffle clatter.
+    shuffle(out, t, o, p) {
+      for (let i = 0; i < 10; i++) hiss(out, t, { at: i * 0.045, type: 'bandpass', f: (1500 + S.r() * 1500) * p, q: 1.5, dur: 0.04, v: 0.16 });
+      return 0.55;
+    },
+    // The final phase: a two-tone siren.
+    alarm(out, t, o, p) {
+      duck(1.4, 0.3);
+      for (let i = 0; i < 3; i++) {
+        blip(out, t, { at: i * 0.46, w: 'square', f: 660 * p, to: 880 * p, dur: 0.22, v: 0.07, lp: 3000, lin: true });
+        blip(out, t, { at: i * 0.46 + 0.23, w: 'square', f: 880 * p, to: 660 * p, dur: 0.22, v: 0.07, lp: 3000, lin: true });
+      }
+      return 1.45;
+    },
+    // One blast of the death finale's chain.
+    kaboom(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 90 * p, to: 25, dur: 0.5, v: 0.55 });
+      hiss(out, t, { type: 'lowpass', f: 3200 * p, to: 200, dur: 0.45, v: 0.45, crunch: true });
+      return 0.55;
+    },
+    // BOSS DEFEATED: a big major fanfare over a gong.
+    bossDown(out, t, o, p) {
+      duck(3.0, 0.15);
+      [60, 64, 67, 72].forEach((n, i) => blip(out, t, { at: i * 0.09, w: 'square', f: mtof(n) * p, dur: 0.16, v: 0.08, lp: 4500 }));
+      [72, 76, 79, 84].forEach((n) => blip(out, t, { at: 0.4, w: 'triangle', f: mtof(n) * p, dur: 1.6, v: 0.07, vib: [5, 4] }));
+      [1, 1.48, 2.1, 2.9].forEach((k, i) => blip(out, t, { at: 0.4, w: 'sine', f: 130 * k * p, dur: 2.2 - i * 0.3, v: 0.1 / (i + 1) }));
+      hiss(out, t, { at: 0.4, type: 'highpass', f: 6000, dur: 1.2, v: 0.08, a: 0.05 });
+      return 2.7;
+    },
+    // Music stings under the VS card: boss (minor, heavy) and elite (shorter).
+    stingBoss(out, t, o, p) {
+      duck(2.4, 0.2);
+      [[45, 0], [44, 0.35], [45, 0.7]].forEach(([n, at]) => {
+        blip(out, t, { at, w: 'sawtooth', f: mtof(n) * p, dur: 0.3, v: 0.12, lp: 900 });
+        blip(out, t, { at, w: 'square', f: mtof(n + 12) * p, dur: 0.28, v: 0.05, lp: 1800 });
+      });
+      [57, 60, 63, 66].forEach((n) => blip(out, t, { at: 1.05, w: 'sawtooth', f: mtof(n) * p, dur: 1.2, v: 0.05, a: 0.05, lp: 1600, vib: [5, 3] }));
+      return 2.3;
+    },
+    stingElite(out, t, o, p) {
+      duck(1.2, 0.3);
+      [[57, 0], [60, 0.14], [63, 0.28]].forEach(([n, at]) => blip(out, t, { at, w: 'square', f: mtof(n) * p, dur: 0.14, v: 0.07, lp: 2400 }));
+      blip(out, t, { at: 0.42, w: 'sawtooth', f: mtof(66) * p, dur: 0.7, v: 0.07, lp: 2000, vib: [6, 5] });
+      return 1.2;
+    },
+  });
+  Object.assign(GAP, { vsSlam: 0.3, rumble: 0.8, stomp: 0.12, coinSpill: 0.5, sizzle: 0.1, drip: 0.15, freezeOver: 0.4, iceBreak: 0.2,
+    hijack: 0.8, shuffle: 0.4, alarm: 1.0, kaboom: 0.06, bossDown: 2.0, stingBoss: 2.0, stingElite: 1.0 });
+  Object.assign(LEVEL, { vsSlam: 1.15, kaboom: 1.05, bossDown: 1.1, stomp: 1.05 });
+  NAMES.push('vsSlam', 'rumble', 'stomp', 'coinSpill', 'sizzle', 'drip', 'freezeOver', 'iceBreak', 'hijack', 'shuffle', 'alarm', 'kaboom', 'bossDown', 'stingBoss', 'stingElite');
+
+  // ---------------------------------------------------------------- claw types
+  // The claws' own voices (DESIGN.md "Claw types"): the coin clunk and the
+  // motor spinning up at the start of a turn, the glass tap of a bored claw,
+  // the jackpot twirl, the magnet's hum / zap / let-go, the scoop's slosh,
+  // the rubber hand's squish, the harpoon's shot and thunk.
+  Object.assign(BANK, {
+    // A token into the Rig: a short clink and a solid clunk (no credit chime).
+    clawCoin(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 2400 * p, to: 2100 * p, dur: 0.06, v: 0.12 });
+      hiss(out, t, { at: 0.05, type: 'bandpass', f: 2600, q: 5, dur: 0.05, v: 0.08 });
+      blip(out, t, { at: 0.12, w: 'sine', f: 160 * p, to: 60, dur: 0.12, v: 0.4 });
+      hiss(out, t, { at: 0.12, type: 'lowpass', f: 900, dur: 0.06, v: 0.2, crunch: true });
+      return 0.26;
+    },
+    // The claw motor spinning up: a rising whine with a ratchet.
+    clawSpin(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 90 * p, to: 520 * p, dur: 0.55, v: 0.07, lp: 1800, q: 3 });
+      blip(out, t, { w: 'square', f: 45 * p, to: 260 * p, dur: 0.55, v: 0.04, lp: 900 });
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: i * 0.08, type: 'bandpass', f: 1800 + i * 300, q: 8, dur: 0.018, v: 0.07 });
+      blip(out, t, { at: 0.5, w: 'sine', f: mtof(88) * p, dur: 0.1, v: 0.06 });
+      return 0.62;
+    },
+    // A bored claw knocking on the glass: two hollow taps.
+    clawTap(out, t, o, p) {
+      for (let i = 0; i < 2; i++) {
+        blip(out, t, { at: i * 0.16, w: 'sine', f: 1400 * p, to: 900 * p, dur: 0.05, v: 0.14 });
+        hiss(out, t, { at: i * 0.16, type: 'bandpass', f: 3200, q: 4, dur: 0.02, v: 0.12 });
+      }
+      return 0.26;
+    },
+    // The jackpot twirl: a whirring spin up into a little ta-da.
+    clawCheer(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 300 * p, to: 1200 * p, dur: 0.35, v: 0.07, vib: [18, 30] });
+      [72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: 0.3 + i * 0.05, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.06, lp: 4500 }));
+      return 0.62;
+    },
+    // The magnet warming up: a mains hum with a buzz on top.
+    magHum(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 60 * p, dur: 0.7, v: 0.1, a: 0.08, lp: 500 });
+      blip(out, t, { w: 'square', f: 120 * p, dur: 0.7, v: 0.04, a: 0.1, lp: 900, vib: [8, 3] });
+      hiss(out, t, { type: 'bandpass', f: 2400, q: 3, dur: 0.6, v: 0.03, a: 0.1 });
+      return 0.72;
+    },
+    // Metal slapping onto the live magnet: a zap and a clack.
+    magZap(out, t, o, p) {
+      hiss(out, t, { type: 'highpass', f: 3000, dur: 0.09, v: 0.3, crunch: true });
+      blip(out, t, { w: 'square', f: 1800 * p, to: 300 * p, dur: 0.08, v: 0.08, lp: 5000 });
+      blip(out, t, { at: 0.03, w: 'sine', f: 700 * p, dur: 0.12, v: 0.14 });
+      return 0.16;
+    },
+    // The magnet lets go: a power-down whoop and a hiss.
+    magDrop(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 240 * p, to: 50, dur: 0.35, v: 0.08, lp: 1200 });
+      hiss(out, t, { type: 'bandpass', f: 1200, to: 300, q: 1.5, dur: 0.3, v: 0.08 });
+      return 0.38;
+    },
+    // The scoop biting into the pile: a gravelly slosh.
+    scoopSlosh(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 700 * p, to: 1800 * p, q: 1.3, dur: 0.22, v: 0.22, crunch: true });
+      for (let i = 0; i < 5; i++) hiss(out, t, { at: 0.03 + i * 0.035, type: 'bandpass', f: 2200 + i * 380, q: 5, dur: 0.02, v: 0.08 });
+      blip(out, t, { w: 'sine', f: 180 * p, to: 110, dur: 0.12, v: 0.2 });
+      return 0.28;
+    },
+    // The rubber hand squeezing: a squeaky squish.
+    handSquish(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 900 * p, to: 1500 * p, dur: 0.1, v: 0.09, vib: [40, 80] });
+      hiss(out, t, { type: 'lowpass', f: 1600 * p, to: 400, q: 4, dur: 0.14, v: 0.25 });
+      blip(out, t, { at: 0.05, w: 'triangle', f: 240 * p, to: 140, dur: 0.1, v: 0.2 });
+      return 0.2;
+    },
+    // The harpoon fires: a crossbow twang and a rope whizz.
+    hookFire(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 220 * p, to: 110 * p, dur: 0.14, v: 0.25, vib: [60, 20] });
+      hiss(out, t, { type: 'bandpass', f: 1600, to: 5200, q: 1.4, dur: 0.18, v: 0.16 });
+      return 0.22;
+    },
+    // The barb sinks in: a meaty thunk.
+    hookThunk(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 220 * p, to: 70, dur: 0.12, v: 0.4 });
+      hiss(out, t, { type: 'lowpass', f: 1400, to: 200, dur: 0.08, v: 0.28, crunch: true });
+      blip(out, t, { at: 0.02, w: 'square', f: 900 * p, dur: 0.02, v: 0.05, lp: 3000 });
+      return 0.16;
+    },
+  });
+  Object.assign(GAP, { clawCoin: 0.2, clawSpin: 0.4, clawTap: 0.3, clawCheer: 0.5, magHum: 0.5, magZap: 0.06, magDrop: 0.3, scoopSlosh: 0.12, handSquish: 0.12, hookFire: 0.15, hookThunk: 0.1 });
+  NAMES.push('clawCoin', 'clawSpin', 'clawTap', 'clawCheer', 'magHum', 'magZap', 'magDrop', 'scoopSlosh', 'handSquish', 'hookFire', 'hookThunk');
+
   /* Plays a named effect. opts: {vol, pitch, mass (itemLand), vel (itemLand
      impact 0..1), amt (hit damage)}. Returns true when something was queued. */
   function sfx(name, opts) {

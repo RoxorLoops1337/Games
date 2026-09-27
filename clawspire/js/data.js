@@ -705,6 +705,12 @@ const DATA = (() => {
       tags: ['junk', 'light'], shape: SHAPES.egg, density: 0.8, friction: 0.6, restitution: 0.2,
       color: '#e8d8f0', color2: '#8a4a7a', art: 'egg', target: 'none', exhaust: true,
       fx: [], text: 'Something inside is kicking. Grab it out before it hatches.' },
+    // Boss junk (DESIGN.md "Bosses"): The Hoard's coin avalanche. It clutters
+    // the bin like any junk, but grabbing it out pays a little gold.
+    { id: 'hoardcoin', name: 'Hoard Coin', rarity: 'junk', cost: 0,
+      tags: ['junk', 'metal'], shape: circle(12), density: 1.4, friction: 0.35, restitution: 0.15,
+      color: '#ffc94d', color2: '#c98a1a', art: 'coin', target: 'self', exhaust: true,
+      fx: [{ k: 'gold', v: 2 }], text: 'Spilled from the Hoard. Clutters the bin, but grabbing it out pays {v} gold.' },
   ];
   const ITEMS = {};
   for (const d of ITEM_LIST) {
@@ -816,6 +822,7 @@ const DATA = (() => {
     // act 1 elites
     { id: 'mimic', name: 'Prize Mimic', act: 1, tier: 'elite', hp: [60, 66], art: 'mimic', size: 1.15, color: '#ffc94d',
       desc: 'Looks like a prize. Is a mouth. Eats your best stuff first.', ai: 'cycle', pattern: [4, 1, 0, 2, 3, 1],
+      taunt: 'Ooh, a customer. You look delicious.',
       moves: [mv('lure', 'Lure', 'junk', 'Spits 2 Rocks into your bin', { item: 'rock', n: 2 }),
         atk('chomp', 'Chomp', 11, 1, 'Chomps for 11'), mv('rattle', 'Rattle', 'shake', 'Rattles the cabinet. Your bin rattles.'),
         mv('gulp', 'Deep Breath', 'charge', 'Opening wide (20 next turn)', { v: 20 }),
@@ -823,6 +830,7 @@ const DATA = (() => {
       enrage: { name: 'FEEDING FRENZY', text: 'The lid will not close any more', str: 2, pattern: [4, 1, 4, 1, 3] } },
     { id: 'broodmother', name: 'Brood Mother', act: 1, tier: 'elite', hp: [55, 62], art: 'spider', size: 1.2, color: '#6b2a5a',
       desc: 'Every egg sac is a tiny, furious prize. She lays them in your bin.', ai: 'cycle', pattern: [3, 0, 1, 2, 0],
+      taunt: 'My babies are hungry. You will do nicely.',
       moves: [atk('bite', 'Bite', 9, 1, 'Bites for 9'),
         debuff('venom', 'Venom', 'poison', 4, 'Venom (4 Poison)'), debuff('web', 'Web', 'weak', 2, 'Webs your arms (Weak 2)'),
         mv('lay', 'Lay Eggs', 'eggs', 'Lays 2 eggs in your bin. Grab them before they hatch', { n: 2, hatch: 'spiderling', turns: 3 })],
@@ -833,6 +841,11 @@ const DATA = (() => {
     // act 1 boss
     { id: 'hoard', name: 'The Hoard', act: 1, tier: 'boss', hp: [100, 100], art: 'hoard', size: 1, color: '#ffc94d',
       desc: 'Every prize nobody ever won, piled up and angry about it.', ai: 'cycle',
+      taunt: 'Finders keepers. Losers? Also keepers.',
+      // Boss signature (DESIGN.md "Bosses"): a coin avalanche into the bin;
+      // at phase two the whole pile leans toward the Hoard for good.
+      sig: { id: 'spill', name: 'Coin Avalanche', sign: 'AVALANCHE', shout: 'MY COINS!', text: 'spills a coin avalanche into your bin',
+        first: 1, every: 3, n: 5, lean: true },
       pattern: [8, 0, 2, 4, 1, 3, 8, 5, 7, 6],
       enrage: { name: 'THE PILE SHIFTS', text: 'Everything it ever swallowed wants out', str: 2, pattern: [8, 0, 6, 8, 5, 1] },
       moves: [atk('avalanche', 'Prize Avalanche', 4, 3, 'Prize avalanche: 4 x3'),
@@ -891,12 +904,14 @@ const DATA = (() => {
     // act 2 elites
     { id: 'ironjaw', name: 'Ironjaw', act: 2, tier: 'elite', hp: [136, 148], art: 'ironjaw', size: 1.2, color: '#7d8590',
       desc: 'A bear trap that learned to walk. And swallow. Metal goes down easiest.', ai: 'cycle', pattern: [0, 1, 2, 3, 0],
+      taunt: 'CLANK. CLANK. CHOMP.',
       status: { thorns: 4 },
       enrage: { name: 'LOCKJAW', text: 'The springs wind all the way tight', str: 3, pattern: [1, 0, 1, 3, 0] },
       moves: [atk('bite', 'Bite', 22, 1, 'Bites for 22'), gulp('swallow', 'Swallow', 1, 'metal', 'Swallows a metal item from your bin'),
         buff('clench', 'Clench', 'armor', 1, 'Clenches (+1 Armor)'), mv('gape', 'Gape', 'charge', 'Opens wide (46 next turn)', { v: 46 })] },
     { id: 'lodestone', name: 'The Lodestone', act: 2, tier: 'elite', hp: [125, 135], art: 'magnet', size: 1.2, color: '#ff2e4a',
       desc: 'A living magnet. Your metal things are very interested in it.', ai: 'cycle', pattern: [0, 1, 2, 4, 3, 4],
+      taunt: 'Your sword already agrees with me.',
       enrage: { name: 'FULL POLARITY', text: 'Every bolt in the room points at you' },
       moves: [buff('polarize', 'Polarize', 'shield_up', 2, 'Polarizes (Block persists 2 turns)'),
         blk('plate', 'Plate', 15, 'Pulls scrap into armor (Block 15)'),
@@ -906,6 +921,11 @@ const DATA = (() => {
     // act 2 boss
     { id: 'smelter', name: 'The Smelter', act: 2, tier: 'boss', hp: [165, 165], art: 'furnace', size: 1, color: '#ff8a2e',
       desc: 'The foundry furnace. It melts down failed adventurers into prize tokens.', ai: 'cycle',
+      taunt: 'Step closer. I run a little hot.',
+      // Boss signature: the cabinet heats up, metal glows red hot (each one
+      // delivered burns the hand for `burn`, Block soaks it), slag drips in.
+      sig: { id: 'heat', name: 'Furnace Blast', sign: 'HOT METAL', shout: 'FEEL THE HEAT', text: 'heats the cabinet: your metal items turn red hot',
+        first: 1, every: 3, n: 4, drip: 1, burn: 2 },
       pattern: [0, 8, 1, 2, 3, 6, 4, 8, 5, 7, 1],
       enrage: { name: 'MELTDOWN', text: 'The grate glows white', str: 2, pattern: [8, 1, 4, 8, 7, 1] },
       moves: [buff('stoke', 'Stoke', 'str', 2, 'Stokes its fire (+2 Strength)'), atk('spew', 'Spew', 6, 3, 'Spews embers: 6 x3'),
@@ -960,6 +980,7 @@ const DATA = (() => {
     // act 3 elites
     { id: 'frostknight', name: 'The Frozen Knight', act: 3, tier: 'elite', hp: [190, 203], art: 'knight', size: 1.25, color: '#7fb2ff',
       desc: 'A Crawler who got too close to the ice box. Still guarding it.', ai: 'cycle', pattern: [0, 1, 3, 2, 4, 5, 3],
+      taunt: 'None shall pass. None have. None will.',
       enrage: { name: 'OATH BROKEN', text: 'The ice cracks. Something warm and furious is inside' },
       moves: [buff('bulwark', 'Bulwark', 'shield_up', 3, 'Frozen bulwark (Block persists 3 turns)'),
         blk('wall', 'Ice Wall', 20, 'Ice wall (Block 20)'), mv('encase', 'Encase', 'freezeItem', 'Freezes an item in your bin solid'),
@@ -967,6 +988,7 @@ const DATA = (() => {
         buff('temper', 'Temper', 'armor', 2, 'Tempers its armor (+2 Armor)')] },
     { id: 'highcultist', name: 'High Cultist', act: 3, tier: 'elite', hp: [174, 190], art: 'cultist', size: 1.2, color: '#b02e88',
       desc: 'Has the gold punch card. Twelve more stamps until a free soul.', ai: 'cycle', pattern: [0, 1, 2, 3, 5, 2, 4],
+      taunt: 'Twelve more stamps. You are number eleven.',
       enrage: { name: 'LAST STAMP', text: 'The punch card is full' },
       moves: [buff('ritual', 'Ritual', 'enrage', 1, 'Begins a ritual (Enrage 1)'), mv('wisp', 'Summon Wisp', 'summon', 'Summons a Cold Wisp'),
         atk('lash', 'Lash', 14, 2, 'Lashes 14 x2'), mv('veil', 'Veil', 'fog', 'Veils the glass (fog 2 turns)', { v: 2 }),
@@ -975,6 +997,11 @@ const DATA = (() => {
     // act 3 boss (phase one); the Prize Master steps out when it breaks
     { id: 'glacius', name: 'Glacius, the Ice Box', act: 3, tier: 'boss', hp: [110, 110], art: 'frostmage', size: 1, color: '#2ee6d6',
       desc: 'The penthouse freezer, awake. Behind it, a door marked STAFF ONLY.', ai: 'cycle',
+      taunt: 'Stay a while. Stay forever.',
+      // Boss signature: ices over the prize chute lip, then the claw rail,
+      // turn about, for one turn (a heavy prize delivered shatters it early).
+      sig: { id: 'ice', name: 'Deep Freeze', sign: 'FROZEN', shout: 'FREEZE!', text: 'freezes part of the machine',
+        parts: ['lid', 'rail'], texts: { lid: 'freezes the prize chute shut', rail: 'freezes the claw rail' }, first: 1, every: 3 },
       enrage: { name: 'DEFROST CYCLE', text: 'The compressor screams' },
       pattern: [0, 1, 2, 4, 3, 5, 6, 7, 1],
       moves: [mv('blizzard', 'Blizzard', 'fog', 'Blizzard on the glass (fog 2 turns)', { v: 2 }),
@@ -987,6 +1014,12 @@ const DATA = (() => {
     // final boss: every trick in the machine, in three acts of its own
     { id: 'prizemaster', name: 'The Prize Master', act: 3, tier: 'boss', hp: [190, 190], art: 'prizemaster', size: 1, color: '#ff2e88',
       desc: 'Runs the Clawspire. Turns adventurers into prizes. Very good at claw machines.', ai: 'cycle',
+      taunt: 'Step right up! Everybody wins! (Not you.)',
+      // Boss signature: rigs the machine once per phase (and again at the
+      // final phase, a quarter hp, when the cabinet lights go red): the bin
+      // is shuffled and the next drop's claw wanders off toward junk.
+      sig: { id: 'rig', name: 'Rigged!', sign: 'RIGGED', shout: 'HOUSE RULES', text: 'rigs the machine: it takes your claw for a drop',
+        first: 1, every: 0, rephase: true, final: true, finalText: 'The lights go red. No more games.' },
       // The Show: 0 1 2 3 13 5 | Rigged: 7 8 9 6 10 4 11 5 | Endgame: 12 1 3 2 6 5
       pattern: [0, 1, 2, 3, 13, 5, 7, 8, 9, 6, 14, 10, 4, 11, 5, 12, 1, 3, 2, 14, 6, 5],
       enrage: { name: 'OUT OF ORDER', text: 'The Prize Master stops pretending to play fair', str: 2 },
@@ -1449,6 +1482,48 @@ const DATA = (() => {
     magnet: { id: 'magnet', name: 'Electromagnet', icon: '🧲', max: 1, cost: 90,
       text: 'The palm pulls nearby metal items in while it drops.', apply: upgrade('magnet', 1, c => { c.magnet = 1; }) },
   };
+
+  // ------------------------------------------------------------ claw types
+  // The claw the Crawler bolts onto the Rig at the start of a run (the claw
+  // row on character select, run.clawType; a run without one is 'classic').
+  // The physics lives in PHYS.CLAW_TYPES; this is what the picker shows.
+  // stats are 1..5 pips: grip (how well it holds), reach (how much it can
+  // take at once), speed (the rails and the drop), plus the good and bad
+  // matchups. ups: how the spare-parts upgrades behave on this claw.
+  const CLAWS = {
+    classic: { id: 'classic', name: 'Classic Claw', icon: '🦀', color: '#c9d3e0', order: 0,
+      text: 'Two chrome prongs and a dream. Grabs a bit of everything.',
+      joke: 'Factory default. Has never once been rigged. Allegedly.',
+      stats: { grip: 3, reach: 3, speed: 3 }, good: 'A bit of everything', bad: 'Nothing in particular',
+      ups: {} },
+    tri: { id: 'tri', name: 'Tri-Claw', icon: '🔱', color: '#ffc94d', order: 1,
+      text: 'Three curled prongs that cup round things like eggs. Narrower than the classic.',
+      joke: 'Holds a marble like a jeweller. Holds a sword like a toddler.',
+      stats: { grip: 4, reach: 2, speed: 3 }, good: 'Balls, orbs, fruit', bad: 'Long things',
+      ups: { prongs: 'A fourth prong. Even grippier.' } },
+    scoop: { id: 'scoop', name: 'Scoop', icon: '🪣', color: '#ff8a2b', order: 2,
+      text: 'A clamshell bucket. Scoops loose small things by the handful. Swords stick out and tip over the rim.',
+      joke: 'Technically a shovel. The union is looking into it.',
+      stats: { grip: 3, reach: 5, speed: 2 }, good: 'Small loose things, heaps', bad: 'Swords, axes, anything long',
+      ups: { prongs: 'Taller bucket lips: grips a little better.', rubber: 'A rubber lining.' } },
+    hand: { id: 'hand', name: 'Grabber Hand', icon: '🧤', color: '#ff9ad0', order: 3,
+      text: 'A big rubber glove with curling fingers. Sticky. Always takes the biggest thing it touched, and only that.',
+      joke: 'Previously employed as a high five. Still very enthusiastic.',
+      stats: { grip: 5, reach: 1, speed: 1 }, good: 'One big heavy thing', bad: 'Handfuls, hurry',
+      ups: { prongs: 'An extra finger. Even stickier.', width: 'A bigger glove.' } },
+    magnet: { id: 'magnet', name: 'Magnet Crane', icon: '🧲', color: '#2ee6d6', order: 4,
+      text: 'A round electromagnet on a cable. Only lifts metal (and what rides on it), with a pull that makes metal leap up. Drops everything when it lets go.',
+      joke: 'Loves swords, keys and coins. Has not noticed the potions exist.',
+      stats: { grip: 4, reach: 4, speed: 3 }, good: 'Metal builds', bad: 'Potions, food, anything not metal',
+      ups: { grip: 'A stronger field: holds heavier metal.', width: 'A bigger magnet.', prongs: 'A second coil: 25% more range.', magnet: 'Overcharged: the pull gets 40% stronger.' } },
+    hook: { id: 'hook', name: 'Harpoon', icon: '🪝', color: '#a6ff5e', order: 5,
+      text: 'Fires a barbed hook straight down on a rope. Spears the first thing it hits and yanks it up through the pile.',
+      joke: 'Technically fishing. Technically legal.',
+      stats: { grip: 3, reach: 1, speed: 5 }, good: 'Sniping one item fast', bad: 'Heavy things tear off the barb',
+      ups: { prongs: 'A second barb: easier to hit.', width: 'A bigger barb.', grip: 'A tougher rope: heavy things hold.' } },
+  };
+  /* The claw type def for an id (a missing or unknown id is the classic). */
+  function clawType(id) { return CLAWS[id] || CLAWS.classic; }
 
   // ----------------------------------------------------------------- events
   const hasGold = (n) => (run) => (run && run.gold || 0) >= n;
@@ -2190,9 +2265,179 @@ const DATA = (() => {
     return { lines, gold, tix };
   }
 
+  // ================================================================ META (meta progression)
+  /* Reasons to play one more run (DESIGN.md "Meta"): Tilt levels (the
+     ascension ladder), the Prizedex (the collection book), achievement
+     stickers and the daily run. Pure data and pure helpers; the game keeps
+     the profile (meta save) and the flow. */
+
+  // Tilt: winning a run with a crawler unlocks the next level for that
+  // crawler. Every level keeps all the twists below it (cumulative).
+  const TILT_MAX = 10;
+  const TILT = [
+    { lv: 0, name: 'Fresh Cabinet', text: 'The machine as it left the factory.', color: '#2ee6d6' },
+    { lv: 1, name: 'Loose Coin', text: 'Enemies have 10% more hp.', k: 'hp', v: 0.1, color: '#a6ff5e' },
+    { lv: 2, name: 'Sticky Joystick', text: 'Enemies hit 10% harder.', k: 'dmg', v: 0.1, color: '#a6ff5e' },
+    { lv: 3, name: 'Bent Prong', text: 'Elites carry one extra affix.', k: 'eliteAffix', v: 1, color: '#ffc94d' },
+    { lv: 4, name: 'Dim Marquee', text: 'Start every act with 3 fewer bulbs.', k: 'bulbs', v: 3, color: '#ffc94d' },
+    { lv: 5, name: 'Junk Drawer', text: 'A rock rattles in your starting bin.', k: 'junk', id: 'rock', v: 1, color: '#ffc94d' },
+    { lv: 6, name: 'Price Hike', text: 'Shops charge 25% more.', k: 'shop', v: 0.25, color: '#ff6bb0' },
+    { lv: 7, name: 'Hot Streak', text: 'The hidden escalation climbs every 2 fights, not 3.', k: 'ramp', v: 2, color: '#ff6bb0' },
+    { lv: 8, name: 'Hard Bench', text: 'Rest stops heal 20% instead of 30%.', k: 'rest', v: 0.2, color: '#ff6bb0' },
+    { lv: 9, name: 'Cheap Plastic', text: 'Prize capsules drop one tier lower.', k: 'caps', v: 1, color: '#ff2e88' },
+    { lv: 10, name: 'Rigged', text: 'Bosses start with their phase two Strength.', k: 'bossRage', v: 1, color: '#ff2e88' },
+  ];
+  // The combined twists of a level (every level up to it). Neutral at 0.
+  function tiltMods(lv) {
+    const n = Math.max(0, Math.min(TILT_MAX, Math.floor(+lv || 0)));
+    const m = { lv: n, hp: 0, dmg: 0, eliteAffix: 0, bulbs: 0, junk: [], shop: 0, ramp: 0, rest: 0, caps: 0, bossRage: 0 };
+    for (let i = 1; i <= n; i++) {
+      const t = TILT[i];
+      if (!t || !t.k) continue;
+      if (t.k === 'junk') m.junk.push(t.id);
+      else if (t.k === 'ramp' || t.k === 'rest') m[t.k] = t.v;   // a replacement value, not a sum
+      else m[t.k] += t.v;
+    }
+    return m;
+  }
+
+  /* Achievement stickers. check(c) is a pure test over a context the game
+     builds (never mutates): c.kind 'tick' (polled a few times a second in a
+     run), 'ev' (a fight event c.ev), 'fight' (a won fight), 'win' (a won
+     run), 'end' (any finished run), 'meta' (profile changes); c.run, c.meta,
+     c.f = {tier, grab (items this grab), streak, dmgTaken, turn, hp, curDef,
+     lucky, free, enemy (the def an ev is about)}, c.dex = dexProgress(). An
+     optional goal + val(c) shows a progress bar on the sticker board. */
+  const A_ = (id, name, icon, color, text, check, extra) => Object.assign({ id, name, icon, color, text, check }, extra || {});
+  const RUNS = (c) => c.run || {};
+  const LOOTOF = (c) => (c.run && c.run.loot) || {};
+  const MSTAT = (c) => (c.meta && c.meta.stats) || {};
+  const ACH_LIST = [
+    // the claw
+    A_('first_prize', 'First Prize', '\u{1F3AF}', '#2ee6d6', 'Drop an item down the chute.', (c) => (RUNS(c).delivered | 0) >= 1),
+    A_('jackpot', 'Jackpot!', '\u{1F3B0}', '#ffc94d', 'Land three items in one grab.', (c) => (RUNS(c).jackpots | 0) >= 1),
+    A_('handful', 'Five Finger Discount', '\u{1F590}', '#ffc94d', 'Land five items in one grab.', (c) => c.kind === 'tick' && !!c.f && (c.f.grab | 0) >= 5),
+    A_('on_a_roll', 'On a Roll', '\u{1F525}', '#ff6bb0', 'Keep a grab streak of 10.', (c) => !!c.f && (c.f.streak | 0) >= 10),
+    A_('lucky', 'Lucky Claw', '\u{1F340}', '#a6ff5e', 'Light up the Lucky Claw.', (c) => !!c.f && !!c.f.lucky),
+    A_('freebie', 'Free Prize', '\u{1F381}', '#2ee6d6', 'Land an item the claw never touched.', (c) => !!c.f && (c.f.free | 0) >= 1),
+    A_('delivered500', 'Chute Veteran', '\u{1F4E6}', '#b3a4d6', 'Deliver 500 items over all your runs.', (c) => (MSTAT(c).played | 0) >= 500, { goal: 500, val: (c) => MSTAT(c).played | 0 }),
+    // combos
+    A_('combo', 'Combo Starter', '✨', '#2ee6d6', 'Fire any grab combo.', (c) => c.kind === 'ev' && c.ev && c.ev.t === 'combo'),
+    A_('three_star', 'Three Star Grab', '⭐', '#ffc94d', 'Fire a tier 3 combo.', (c) => c.kind === 'ev' && c.ev && c.ev.t === 'combo' && (c.ev.tier | 0) >= 3),
+    A_('mega', 'Mega Jackpot', '\u{1F4B0}', '#ff2e88', 'Fire the Mega Jackpot combo.', (c) => c.kind === 'ev' && c.ev && c.ev.t === 'combo' && c.ev.id === 'mega_jackpot'),
+    A_('recipe_book', 'Recipe Book', '\u{1F4D6}', '#a6ff5e', 'Discover 12 different combos.', (c) => (c.dex && c.dex.per && c.dex.per.combos ? c.dex.per.combos.n : 0) >= 12,
+      { goal: 12, val: (c) => (c.dex && c.dex.per && c.dex.per.combos ? c.dex.per.combos.n : 0) }),
+    // fights
+    A_('untouchable', 'Untouchable', '\u{1F6E1}', '#2ee6d6', 'Beat an elite without taking damage.', (c) => c.kind === 'fight' && !!c.f && c.f.tier === 'elite' && c.f.dmgTaken === 0),
+    A_('one_turn', 'One Turn Wonder', '⚡', '#ffc94d', 'Win a fight on your first turn.', (c) => c.kind === 'fight' && !!c.f && (c.f.turn | 0) === 1),
+    A_('by_a_thread', 'By a Thread', '\u{1F9F5}', '#ff5a4a', 'Win a fight with 5 hp or less.', (c) => c.kind === 'fight' && !!c.f && c.f.hp > 0 && c.f.hp <= 5),
+    A_('crusher', 'Crusher', '\u{1F528}', '#ff6bb0', 'Deal 40 damage in one hit.', (c) => (LOOTOF(c).bigHit | 0) >= 40),
+    A_('overkill', 'Overkill', '\u{1F4A5}', '#ff2e88', 'Hit 30 past the last hit point of a kill.', (c) => (LOOTOF(c).overkill | 0) >= 30),
+    A_('special_delivery', 'Special Delivery', '\u{1F4A3}', '#ff5a4a', 'Finish a boss with a thrown bomb.',
+      (c) => c.kind === 'ev' && c.ev && c.ev.t === 'die' && !c.ev.escaped && !!c.f && !!c.f.enemy && c.f.enemy.tier === 'boss' && !!c.f.curDef && c.f.curDef.art === 'bomb'),
+    A_('indigestion', 'Indigestion', '\u{1F92E}', '#a6ff5e', 'Kill a monster with your stuff in its belly and get it all back.', (c) => c.kind === 'ev' && c.ev && c.ev.t === 'binReturn' && c.ev.why === 'burst'),
+    A_('hiccup', 'HIC!', '\u{1F4A8}', '#a6ff5e', 'Hit a monster so hard it hiccups an item back up.', (c) => c.kind === 'ev' && c.ev && c.ev.t === 'binReturn' && c.ev.why === 'hiccup'),
+    A_('boss_down', 'Boss Down', '\u{1F480}', '#ff2e88', 'Beat your first boss.', (c) => c.kind === 'fight' && !!c.f && c.f.tier === 'boss'),
+    A_('prize_hunter', 'Prize Hunter', '\u{1F3F9}', '#ff6bb0', 'Take down 100 enemies over all your runs.', (c) => (MSTAT(c).kills | 0) >= 100, { goal: 100, val: (c) => MSTAT(c).kills | 0 }),
+    // loot
+    A_('golden_capsule', 'Golden Capsule', '\u{1F31F}', '#ffc94d', 'Open a legendary capsule.', (c) => LOOTOF(c).bestCap === 'l'),
+    A_('capsule_fan', 'Gacha Fan', '\u{1F52E}', '#2ee6d6', 'Open 25 capsules over all your runs.', (c) => (((c.meta && c.meta.loot) || {}).caps | 0) >= 25, { goal: 25, val: (c) => ((c.meta && c.meta.loot) || {}).caps | 0 }),
+    A_('ticket_tycoon', 'Ticket Tycoon', '\u{1F39F}', '#a6ff5e', 'Win 100 tickets in one run.', (c) => (LOOTOF(c).tixEarned | 0) >= 100),
+    A_('double_down', 'Double Down', '✖', '#ffc94d', 'Hit a DOUBLE REWARD.', (c) => (LOOTOF(c).doubles | 0) >= 1),
+    A_('money_bags', 'Money Bags', '\u{1F4B5}', '#ffc94d', 'Carry 300 gold at once.', (c) => (RUNS(c).gold | 0) >= 300),
+    A_('relic_hoarder', 'Relic Hoarder', '\u{1F3FA}', '#ff6bb0', 'Hold 10 relics in one run.', (c) => ((RUNS(c).relics || []).length) >= 10),
+    A_('packed_bin', 'Packed Bin', '\u{1F5D1}', '#b3a4d6', 'Own 30 items in one bin.', (c) => ((RUNS(c).bin || []).length) >= 30),
+    // the climb
+    A_('going_up', 'Going Up', '⬆', '#2ee6d6', 'Reach act 2.', (c) => (RUNS(c).act | 0) >= 2),
+    A_('champion', 'Prize Master Down', '\u{1F451}', '#ffc94d', 'Win a run.', (c) => c.kind === 'win'),
+    A_('full_roster', 'Full Roster', '\u{1F46A}', '#ffc94d', 'Win with three different crawlers.', (c) => winCount(c) >= 3, { goal: 3, val: winCount }),
+    A_('tilted', 'Tilted', '\u{1F579}', '#a6ff5e', 'Win a run at Tilt 1 or higher.', (c) => c.kind === 'win' && (RUNS(c).tilt | 0) >= 1),
+    A_('seriously_tilted', 'Seriously Tilted', '\u{1F300}', '#ff6bb0', 'Unlock Tilt 5 with any crawler.', (c) => maxTilt(c) >= 5, { goal: 5, val: maxTilt }),
+    A_('rigged', 'Beat the Rigged Game', '\u{1F3C6}', '#ff2e88', 'Win a run at Tilt 10.', (c) => c.kind === 'win' && (RUNS(c).tilt | 0) >= TILT_MAX),
+    A_('half_shelf', 'Half the Shelf', '\u{1F4DA}', '#2ee6d6', 'Fill half of the Prizedex.', (c) => !!c.dex && c.dex.pct >= 50, { goal: 50, val: (c) => (c.dex ? Math.floor(c.dex.pct) : 0) }),
+    A_('daily_grind', 'Daily Grind', '\u{1F4C5}', '#a6ff5e', 'Finish a daily run.', (c) => c.kind === 'end' && !!RUNS(c).daily),
+  ];
+  function winCount(c) { const w = (c && c.meta && c.meta.winsBy) || {}; return Object.keys(w).filter((k) => w[k] > 0).length; }
+  function maxTilt(c) { const t = (c && c.meta && c.meta.tilt) || {}; let m = 0; for (const k in t) m = Math.max(m, t[k] | 0); return m; }
+  const ACHIEVEMENTS = {};
+  for (const a of ACH_LIST) ACHIEVEMENTS[a.id] = a;
+  const ACH_IDS = ACH_LIST.map((a) => a.id);
+  // The ids a context newly earns (have: {id: truthy} already unlocked).
+  function achCheck(c, have) {
+    const out = [];
+    have = have || {};
+    for (const a of ACH_LIST) {
+      if (have[a.id]) continue;
+      let ok = false;
+      try { ok = !!a.check(c || {}); } catch (e) { ok = false; }
+      if (ok) out.push(a.id);
+    }
+    return out;
+  }
+
+  /* The Prizedex: every item, relic, enemy and combo there is to find. Junk
+     counts (you met it), test dummies and bare fixtures do not. */
+  const DEX_TABS = [
+    { id: 'items', label: 'Items', icon: '⚔' },
+    { id: 'relics', label: 'Relics', icon: '\u{1F48E}' },
+    { id: 'enemies', label: 'Enemies', icon: '\u{1F47E}' },
+    { id: 'combos', label: 'Combos', icon: '✨' },
+  ];
+  function dexEntries() {
+    return {
+      items: Object.keys(ITEMS).filter((id) => !ITEMS[id].noDex),
+      relics: Object.keys(RELICS).filter((id) => !RELICS[id].noDex),
+      enemies: Object.keys(ENEMIES).filter((id) => id !== 'dummy' && !ENEMIES[id].noDex),
+      combos: Object.keys(COMBOS),
+    };
+  }
+  // seen: {items: {id: 1}, relics, enemies, combos} -> {n, total, pct, per: {tab: {n, total}}}
+  function dexProgress(seen) {
+    seen = seen || {};
+    const E = dexEntries();
+    const per = {};
+    let n = 0, total = 0;
+    for (const tab of DEX_TABS) {
+      const ids = E[tab.id] || [], got = seen[tab.id] || {};
+      let k = 0;
+      for (const id of ids) if (got[id]) k++;
+      per[tab.id] = { n: k, total: ids.length };
+      n += k; total += ids.length;
+    }
+    return { n, total, pct: total ? (n * 100) / total : 0, per };
+  }
+
+  /* The daily run: one seed and one crawler per calendar day (the same for
+     everyone), always at Tilt 0. The score rewards the climb first. */
+  function dailyKey(d) {
+    d = d instanceof Date ? d : new Date(d == null ? Date.now() : d);
+    const p = (n) => (n < 10 ? '0' : '') + n;
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  function dailySeed(key) {
+    const s = 'clawspire-daily:' + key;
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return (h >>> 0) || 1;
+  }
+  function dailyChar(key) {
+    const ids = Object.keys(CHARACTERS);
+    return ids.length ? ids[dailySeed(key + ':char') % ids.length] : 'knight';
+  }
+  // run -> score (won: the run finished act 3).
+  function dailyScore(run, won) {
+    run = run || {};
+    const L = run.loot || {};
+    return Math.max(0, Math.round((run.act | 0) * 500 + (run.kills | 0) * 20 + (run.jackpots | 0) * 15 + (L.tixEarned | 0) * 3 + (run.gold | 0) + (won ? 2500 : 0)));
+  }
+  // ================================================================ /META
+
   return {
+    // meta progression (Tilt, achievements, Prizedex, daily)
+    TILT, TILT_MAX, tiltMods, ACHIEVEMENTS, ACH_IDS, achCheck, DEX_TABS, dexEntries, dexProgress, dailyKey, dailySeed, dailyChar, dailyScore,
     LOOT, rollCapsule, capsulePrize, prizeInfo, prizeShelf, payout,
     ITEMS, STATUS, ENEMIES, ENCOUNTERS, RELICS, EVENTS, CLAW_UPGRADES, BRUSHES, TOOLS, TERMS, CHARACTERS, ACTS,
+    CLAWS, clawType,
     ITEM_ART, ENEMY_ART, TAGS, FX_KINDS, PER_KINDS, MOVE_KINDS, EVENT_FX, RELIC_MODS, RELIC_HOOKS, RELIC_RULES, RARITY_WEIGHTS,
     CHAR_BIAS, BAG_CHANCE, BUILD_PULL, COMBO_MAX, ECONOMY, DIFFICULTY, ARCHETYPES, ARCH_ORDER, COMBOS,
     itemText, pool, rollRarity, rewardItems, relicPool, pickRelic, keywords, kwIds, combosFor, investment,

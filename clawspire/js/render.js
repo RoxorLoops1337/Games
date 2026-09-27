@@ -1664,7 +1664,9 @@ const RENDER = (() => {
     ctx.save();
     try {
       const c = cabCfg(cfg); st = st || {};
-      const t = st.t || 0, neon = ACT_NEON[st.act] || (st.act && typeof st.act === 'string' ? st.act : PAL.pink);
+      // st.alarm (the Prize Master's final phase): the neon and the bulbs go red
+      const alarm = st.alarm > 0;
+      const t = st.t || 0, neon = alarm ? '#ff2e30' : ACT_NEON[st.act] || (st.act && typeof st.act === 'string' ? st.act : PAL.pink);
       const w = c.w, h = c.h, f = c.frame;
       ctx.translate(x || 0, y || 0);
       ctx.lineJoin = 'round';
@@ -1682,9 +1684,9 @@ const RENDER = (() => {
       let k = 0;
       const bulb = (bx, by) => {
         const on = ((k - chase) % mod + mod) % mod === 0;
-        const pc = party > 0.05 ? PARTY_COLS[(k + chase) % PARTY_COLS.length] : PAL.gold;
+        const pc = alarm ? '#ff2e30' : party > 0.05 ? PARTY_COLS[(k + chase) % PARTY_COLS.length] : PAL.gold;
         ctx.beginPath(); ctx.arc(bx, by, 3.2 + party * 1.2, 0, TAU);
-        F(ctx, on ? (party > 0.05 ? pc : '#fff6c0') : shade(neon, -0.55)); ctx.fill();
+        F(ctx, on ? (alarm ? '#ff6a6a' : party > 0.05 ? pc : '#fff6c0') : shade(neon, -0.55)); ctx.fill();
         if (on) glow(ctx, bx, by, 9 + party * 8, pc, 0.8);
         k++;
       };
@@ -1842,7 +1844,7 @@ const RENDER = (() => {
     ctx.beginPath(); path(); S(ctx, shade(CHROME, -0.35), Math.max(1, w * 0.28)); ctx.stroke();
     for (let i = 1; i < pts.length - 1; i++) {
       const px = ox + pts[i].x, py = oy + pts[i].y, rr = Math.max(1.6, w * 0.26);
-      tone(ctx, q => circ(q, px, py, rr), '#8e98a8', px, py, rr, { dark: -0.4, ol: 1.2, spec: false });
+      tone(ctx, q => circ(q, px, py, rr), o.tri ? '#ffc94d' : '#8e98a8', px, py, rr, { dark: -0.4, ol: 1.2, spec: false });
     }
     const a = pts[pts.length - 2], b = pts[pts.length - 1];
     if (o.rubber) {
@@ -1851,6 +1853,220 @@ const RENDER = (() => {
       S(ctx, INK, w + 1.5); ctx.stroke(); S(ctx, '#ff5a4a', Math.max(1.5, w - 2)); ctx.stroke();
     } else {
       F(ctx, '#ffffff'); ctx.beginPath(); ctx.arc(ox + b.x - w * 0.15, oy + b.y - w * 0.15, Math.max(1, w * 0.18), 0, TAU); ctx.fill();
+    }
+  }
+  /* ---- claw types (DESIGN.md "Claw types"): each has its own body art. */
+  const CLAW_DRAW = { classic: 1, tri: 1, scoop: 1, hand: 1, magnet: 1, hook: 1 };
+  /* The cabinet's coin slot (centred at x, y, stage px): a chrome plate with
+     a slot, a coin-return button and an INSERT COIN lamp. st: {t, coin 0..1
+     (a coin sliding into the slot, 1 = just dropped in), flash 0..1 (the
+     clunk: the lamp and slot light up)}. */
+  function coinSlot(ctx, x, y, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, coin = U.clamp(st.coin || 0, 0, 1), fl = U.clamp(st.flash || 0, 0, 1);
+      tone(ctx, q => rrect(q, x - 26, y - 13, 52, 26, 6), CHROME, x, y, 22, { dark: -0.4 });
+      // the INSERT COIN lamp bar (blinks; solid on the clunk)
+      ctx.beginPath(); rrect(ctx, x - 22, y - 10.5, 44, 10, 3); F(ctx, '#1d1233'); ctx.fill();
+      const on = fl > 0.05 || Math.floor(t * 2) % 2 === 0;
+      F(ctx, on ? '#fff6c0' : shade(PAL.gold, -0.5));
+      ctx.font = 'bold 6px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('INSERT COIN', x, y - 5.3, 40);
+      // the slot, lit gold on the clunk, and the coin-return button
+      ctx.beginPath(); rrect(ctx, x - 14, y + 3, 15, 4, 2); F(ctx, fl > 0.05 ? PAL.gold : INK); ctx.fill();
+      if (fl > 0.05) glow(ctx, x - 6.5, y + 5, 18, PAL.gold, fl);
+      tone(ctx, q => circ(q, x + 13, y + 5, 4.5), '#ff5a4a', x + 13, y + 5, 4.5, NOSPEC);
+      if (coin > 0) {
+        // the coin (st.coin runs 1 -> 0) drops edge-on into the slot and vanishes in it
+        const cy = y - 3 - coin * 20;
+        ctx.save(); ctx.beginPath(); ctx.rect(x - 20, y - 44, 40, 49); ctx.clip();
+        tone(ctx, q => ell(q, x - 6.5, cy, 3.2, 7), PAL.gold, x - 6.5, cy, 5, NOSPEC);
+        ctx.restore();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Where the Lucky Claw's flames sit on each type.
+  function clawTips(type, rig, hub, prongs, s) {
+    const out = [];
+    if (!hub) return out;
+    if (type === 'magnet') { for (let i = -1; i <= 1; i++) out.push({ x: hub.x + i * hub.r * 0.7, y: hub.y + hub.r * 0.75 }); return out; }
+    if (type === 'hook') { const tp = rig.bodies && rig.bodies.tip; out.push(tp || { x: hub.x, y: hub.y + 28 * s }); return out; }
+    for (const p of prongs) if (p && p.length) out.push(p[p.length - 1]);
+    return out;
+  }
+  // How open a live rig (or a PHYS.clawPose) is, 0 closed .. 1 open.
+  function openness(rig, type) {
+    const T = typeof PHYS !== 'undefined' && PHYS.CLAW_TYPES ? PHYS.CLAW_TYPES[type] : null;
+    if (rig.openU != null) return U.clamp(rig.openU, 0, 1);
+    if (!T || !rig.ctl || !(T.open > T.closed)) return 1;
+    return U.clamp(((rig.ctl.pL + rig.ctl.pR) * 0.5 - T.closed) / (T.open - T.closed), 0, 1);
+  }
+  /* A crackling electric arc from (x0, y0) to (x1, y1): a jittered zig-zag,
+     cyan with a white core, flickering with t. */
+  function arc(ctx, x0, y0, x1, y1, t, seed, a) {
+    const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L, seg = 7;
+    ctx.beginPath(); ctx.moveTo(x0, y0);
+    for (let k = 1; k <= seg; k++) {
+      const u = k / seg, wv = k === seg ? 0 : Math.sin(t * 43 + k * 2.7 + seed * 1.9) * 4.5 + Math.sin(t * 71 + k * 5.1 + seed) * 2;
+      ctx.lineTo(x0 + dx * u + nx * wv, y0 + dy * u + ny * wv);
+    }
+    ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin(t * 29 + seed * 1.3));
+    S(ctx, PAL.cyan, 2.6); ctx.stroke(); S(ctx, '#ffffff', 1); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  /* The Magnet Crane: a red electromagnet drum on the cable with a hazard
+     band and a copper-coil face plate. rig.field (0..1) lights the face
+     cyan; arcs crackle to everything it holds (J.hold) and to the metal it
+     tugs (J.pull), with a hum ring while it is live. */
+  function magnetCrane(ctx, rig, hub, s, ox, oy, J, t) {
+    if (!hub) return;
+    const x = ox + hub.x, y = oy + hub.y, r = Math.max(6, hub.r);
+    const f = U.clamp(rig.field != null ? rig.field : (J.field || 0), 0, 1);
+    const w = r * 1.02, top = y - r * 0.86, bot = y + r * 0.58;
+    if (f > 0.02) {
+      glow(ctx, x, bot + r * 0.2, r * (2 + f * 1.4), PAL.cyan, 0.3 + 0.55 * f);
+      // the hum: a soft ring pulsing out of the face
+      const u = (t * 2.2) % 1;
+      ctx.beginPath(); ell(ctx, x, bot + r * 0.2, r * (1.1 + u * 1.3), r * (0.35 + u * 0.4));
+      ctx.globalAlpha = f * (1 - u) * 0.7; S(ctx, PAL.cyan, 2); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    // housing: a squat drum with a domed top
+    tone(ctx, q => { q.moveTo(x - w, bot); q.lineTo(x - w, top + r * 0.35); q.quadraticCurveTo(x - w, top, x, top); q.quadraticCurveTo(x + w, top, x + w, top + r * 0.35); q.lineTo(x + w, bot); q.closePath(); }, '#d8343a', x, y - r * 0.2, r, { dark: -0.35 });
+    // hazard band
+    const by = y - r * 0.1, bh = r * 0.34;
+    ctx.save(); ctx.beginPath(); ctx.rect(x - w, by, w * 2, bh); ctx.clip();
+    F(ctx, PAL.gold); ctx.fillRect(x - w, by, w * 2, bh);
+    F(ctx, INK); ctx.beginPath();
+    for (let i = -4; i < 5; i++) { const bx = x + i * r * 0.4; ctx.moveTo(bx, by); ctx.lineTo(bx + r * 0.2, by); ctx.lineTo(bx + r * 0.02, by + bh); ctx.lineTo(bx - r * 0.18, by + bh); ctx.closePath(); }
+    ctx.fill(); ctx.restore();
+    ctx.beginPath(); ctx.rect(x - w, by, w * 2, bh); S(ctx, INK, 1.5); ctx.stroke();
+    // bolts on the dome
+    F(ctx, '#ffd0d0'); ctx.beginPath(); circ(ctx, x - w * 0.55, top + r * 0.42, Math.max(1, r * 0.07)); circ(ctx, x + w * 0.55, top + r * 0.42, Math.max(1, r * 0.07)); ctx.fill();
+    // face plate with three copper coil bars; it glows when live
+    tone(ctx, q => rrect(q, x - w * 1.08, bot - r * 0.06, w * 2.16, r * 0.34, r * 0.12), '#4a4e58', x, bot + r * 0.1, w, NOSPEC);
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath(); rrect(ctx, x + i * w * 0.62 - w * 0.22, bot + r * 0.02, w * 0.44, r * 0.18, r * 0.06);
+      F(ctx, f > 0.05 ? (Math.sin(t * 30 + i) > 0 ? '#bffcff' : PAL.cyan) : '#c8783a'); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+    }
+    // arcs to what it holds, and to the metal it is pulling
+    const fx0 = x, fy0 = bot + r * 0.2;
+    const nh = Math.min(J.holdN || 0, J.hold ? J.hold.length : 0);
+    for (let i = 0; i < nh; i++) arc(ctx, fx0 + (i % 3 - 1) * w * 0.5, fy0, ox + J.hold[i].x, oy + J.hold[i].y, t, i + 1, 0.4 + 0.6 * f);
+    const np = Math.min(J.pullN || 0, J.pull ? J.pull.length : 0);
+    for (let i = 0; i < np; i++) arc(ctx, fx0, fy0, ox + J.pull[i].x, oy + J.pull[i].y, t, i + 7, 0.25 + 0.5 * f);
+  }
+  /* The Harpoon: a steel shaft under the rope's eye with a barbed head.
+     A catch (J.hold) gets a little impact star at the barb. */
+  function harpoon(ctx, rig, hub, s, ox, oy, J, t) {
+    if (!hub) return;
+    const tip = rig.bodies && rig.bodies.tip;
+    const x = ox + hub.x, y = oy + hub.y, tx = tip ? ox + tip.x : x, ty = tip ? oy + tip.y : y + 28 * s;
+    const hw = 9 * s + 3, hh = 15 * s + 4;
+    limb(ctx, x, y, tx, ty - hh * 0.8, Math.max(2.5, 4 * s), '#8e98a8');
+    // the eye the rope is tied through
+    ctx.beginPath(); ctx.arc(x, y - 1, 4 * s + 2.5, 0, TAU); S(ctx, INK, 4.5); ctx.stroke(); S(ctx, CHROME, 2.2); ctx.stroke();
+    // fletching-like collar under the eye
+    tone(ctx, q => poly(q, [x - 5 * s - 2, y + 4, x + 5 * s + 2, y + 4, x + 3 * s + 1, y + 10 * s + 4, x - 3 * s - 1, y + 10 * s + 4]), '#ff5a4a', x, y + 7, 6, NOSPEC);
+    // the barbed head
+    tone(ctx, q => poly(q, [tx, ty + 3, tx - hw, ty - hh * 0.55, tx - hw * 0.35, ty - hh * 0.45, tx - hw * 0.8, ty - hh * 1.05,
+      tx, ty - hh * 0.8, tx + hw * 0.8, ty - hh * 1.05, tx + hw * 0.35, ty - hh * 0.45, tx + hw, ty - hh * 0.55]), CHROME, tx, ty - hh * 0.4, hw, { dark: -0.4 });
+    line(ctx, tx, ty - hh * 0.75, tx, ty + 1, shade(CHROME, -0.4), 1.2);
+    if ((J.holdN || 0) > 0) {
+      // speared: a star of impact lines where the barb went in
+      S(ctx, '#fff6c0', 1.6);
+      for (let i = 0; i < 5; i++) {
+        const a = i * TAU / 5 + t * 1.5, r0 = hw * 0.9, r1 = hw * (1.5 + 0.3 * Math.sin(t * 12 + i));
+        ctx.beginPath(); ctx.moveTo(tx + Math.cos(a) * r0, ty - hh * 0.3 + Math.sin(a) * r0); ctx.lineTo(tx + Math.cos(a) * r1, ty - hh * 0.3 + Math.sin(a) * r1); ctx.stroke();
+      }
+    }
+  }
+  /* One clamshell jaw of the Scoop: a painted steel shell (the curve closed
+     by its chord), a thick rim along the curve, teeth at the lip. */
+  function scoopJaw(ctx, pts, s, ox, oy, rubber) {
+    if (!pts || pts.length < 2) return;
+    const n = pts.length, cx = (pts[0].x + pts[n - 1].x) / 2, cy = (pts[0].y + pts[n - 1].y) / 2;
+    // the shell is see-through enough to show the haul inside
+    ctx.globalAlpha = 0.62;
+    tone(ctx, q => { q.moveTo(ox + pts[0].x, oy + pts[0].y); for (let i = 1; i < n; i++) q.lineTo(ox + pts[i].x, oy + pts[i].y); q.closePath(); },
+      '#ffb02e', ox + cx, oy + cy, 22 * s + 4, { dark: -0.3, ol: 0 });
+    ctx.globalAlpha = 1;
+    const w = Math.max(3, 8 * s);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const path = () => { ctx.beginPath(); ctx.moveTo(ox + pts[0].x, oy + pts[0].y); for (let i = 1; i < n; i++) ctx.lineTo(ox + pts[i].x, oy + pts[i].y); };
+    path(); S(ctx, INK, w + OL * 1.6); ctx.stroke();
+    path(); S(ctx, '#e0902a', w); ctx.stroke();
+    path(); S(ctx, 'rgba(255,255,255,0.35)', Math.max(1, w * 0.25)); ctx.stroke();
+    // rivets on the shell
+    F(ctx, '#7a4a10');
+    ctx.beginPath(); for (let i = 1; i < n - 1; i++) circ(ctx, ox + (pts[i].x * 2 + cx) / 3, oy + (pts[i].y * 2 + cy) / 3, Math.max(1, 1.5 * s)); ctx.fill();
+    // teeth (or a rubber lip) at the end of the curve
+    const a = pts[n - 2], b = pts[n - 1], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+    if (rubber) { line(ctx, ox + b.x - ux * 6 * s, oy + b.y - uy * 6 * s, ox + b.x + ux * 2, oy + b.y + uy * 2, '#ff5a4a', Math.max(2, w - 2)); return; }
+    F(ctx, CHROME);
+    ctx.beginPath();
+    for (let i = 0; i < 2; i++) {
+      const bx = ox + b.x - ux * i * 6 * s, by = oy + b.y - uy * i * 6 * s;
+      ctx.moveTo(bx - uy * 2.5, by + ux * 2.5); ctx.lineTo(bx + ux * 6 * s + 2, by + uy * 6 * s + 2); ctx.lineTo(bx + uy * 2.5, by - ux * 2.5); ctx.closePath();
+    }
+    ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+  }
+  /* The Grabber Hand: a cartoon rubber glove. Two back fingers, the palm
+     with its stitching and a pink cuff, then the thumb and the index
+     finger over the prong polylines, curling harder as the hand closes. */
+  function glove(ctx, rig, hub, prongs, s, ox, oy, J, t) {
+    if (!hub) return;
+    const x = ox + hub.x, y = oy + hub.y, r = Math.max(6, hub.r);
+    const curl = 1 - openness(rig, 'hand');
+    const W = Math.max(5, 12 * s);
+    const WHITE = '#f6f2e8', BACK = '#dcd5c6';
+    // a finger through pts, each joint bent a bit more inward as it curls
+    const finger = (pts, sd, col, k) => {
+      if (!pts || pts.length < 2) return;
+      const P = [{ x: ox + pts[0].x, y: oy + pts[0].y }];
+      let ang = 0;
+      for (let i = 1; i < pts.length; i++) {
+        ang += sd * curl * 0.24;
+        const vx = (pts[i].x - pts[i - 1].x) * k, vy = (pts[i].y - pts[i - 1].y) * k, c = Math.cos(ang), sn = Math.sin(ang);
+        const p = P[i - 1];
+        P.push({ x: p.x + vx * c - vy * sn, y: p.y + vx * sn + vy * c });
+      }
+      const path = () => { ctx.beginPath(); ctx.moveTo(P[0].x, P[0].y); for (let i = 1; i < P.length; i++) ctx.lineTo(P[i].x, P[i].y); };
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      path(); S(ctx, INK, W + OL * 1.8); ctx.stroke();
+      path(); S(ctx, col, W); ctx.stroke();
+      // knuckle creases and a shine along the finger
+      S(ctx, 'rgba(18,9,31,0.35)', 1.2);
+      for (let i = 1; i < P.length - 1; i++) {
+        const dx = P[i + 1].x - P[i - 1].x, dy = P[i + 1].y - P[i - 1].y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * W * 0.38, ny = dx / L * W * 0.38;
+        ctx.beginPath(); ctx.moveTo(P[i].x - nx, P[i].y - ny); ctx.lineTo(P[i].x + nx * 0.2, P[i].y + ny * 0.2); ctx.stroke();
+      }
+      const e = P[P.length - 1];
+      F(ctx, 'rgba(255,255,255,0.8)'); ctx.beginPath(); ctx.arc(e.x - W * 0.15, e.y - W * 0.12, Math.max(1, W * 0.16), 0, TAU); ctx.fill();
+    };
+    const L = prongs[0], R2 = prongs[1];
+    if (L && R2 && L.length && R2.length) {
+      // the two back fingers run between the thumb and the index finger
+      for (const m of [0.36, 0.64]) {
+        const mid = L.map((p, i) => ({ x: p.x + (R2[i].x - p.x) * m, y: p.y + (R2[i].y - p.y) * m }));
+        finger(mid, m < 0.5 ? -1 : 1, BACK, 0.9);
+      }
+    }
+    // palm, stitching, cuff
+    tone(ctx, q => ell(q, x, y + r * 0.15, r * 1.25, r * 1.05), WHITE, x, y, r * 1.1, { dark: -0.18 });
+    S(ctx, 'rgba(18,9,31,0.4)', 1.3);
+    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(x + i * r * 0.38, y - r * 0.35); ctx.lineTo(x + i * r * 0.32, y + r * 0.35); ctx.stroke(); }
+    tone(ctx, q => rrect(q, x - r * 0.95, y - r * 1.5, r * 1.9, r * 0.62, r * 0.25), '#ff5a9a', x, y - r * 1.2, r, { dark: -0.3 });
+    S(ctx, 'rgba(18,9,31,0.35)', 1.2);
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(x + i * r * 0.34, y - r * 1.44); ctx.lineTo(x + i * r * 0.34, y - r * 0.94); ctx.stroke(); }
+    // thumb and index finger in front
+    finger(L, -1, WHITE, 1);
+    finger(R2, 1, WHITE, 1);
+    // a squish on a fresh grab (J.squish 0..1): little sweat drops of effort
+    if (J.squish > 0) {
+      F(ctx, rgba('#9fd8ff', J.squish));
+      for (const sd of [-1, 1]) { ctx.beginPath(); ell(ctx, x + sd * r * 1.5, y - r * (0.4 + (1 - J.squish) * 0.8), 2, 3); ctx.fill(); }
     }
   }
   /* The claw. rig.bodies = {hub:{x,y,r}, prongs:[[pts],[pts]], ghost:[pts]|null}
@@ -1874,6 +2090,8 @@ const RENDER = (() => {
       // lucky 0..1 (flames on the prongs), pull/pullN (cabinet points the magnet tugs)}
       const J = cfg.juice || NOJUICE;
       const t = J.t || 0;
+      // the claw type (DESIGN.md "Claw types"): rig.type, else the flags / cfg
+      const type = CLAW_DRAW[rig.type] ? rig.type : CLAW_DRAW[flags.type] ? flags.type : CLAW_DRAW[cfg.clawType] ? cfg.clawType : 'classic';
       // parked: the whole claw swings a hair on its cable, like it is breathing
       if (J.idle > 0 && hub) {
         const a = Math.sin(t * 1.3) * 0.035 * J.idle;
@@ -1882,8 +2100,13 @@ const RENDER = (() => {
       // cable (the top end sways, the hub does not); a wobble bows it
       if (hub) {
         const mx = (top.x + hub.x) / 2 + (J.bend || 0), my = (top.y + hub.y) / 2;
-        ctx.beginPath(); ctx.moveTo(ox + top.x, oy + top.y); ctx.quadraticCurveTo(ox + mx, oy + my, ox + hub.x, oy + hub.y - hub.r * 0.6);
-        S(ctx, INK, 5); ctx.stroke(); S(ctx, '#8e98a8', 2.2); ctx.stroke();
+        const endY = hub.y - hub.r * (type === 'hook' ? 1 : type === 'magnet' ? 0.8 : 0.6);
+        ctx.beginPath(); ctx.moveTo(ox + top.x, oy + top.y); ctx.quadraticCurveTo(ox + mx, oy + my, ox + hub.x, oy + endY);
+        if (type === 'hook') {
+          // the harpoon hangs on a twisted rope, not a steel cable
+          S(ctx, INK, 5.5); ctx.stroke(); S(ctx, '#c79a5a', 3); ctx.stroke();
+          ctx.setLineDash([3, 4]); ctx.lineDashOffset = -hub.y * 0.6; S(ctx, '#7a5530', 1.6); ctx.stroke(); ctx.setLineDash([]);
+        } else { S(ctx, INK, 5); ctx.stroke(); S(ctx, '#8e98a8', 2.2); ctx.stroke(); }
         if (Math.abs(J.speed || 0) > 160) {
           // speed lines trailing the hub while it travels
           const dir = J.speed > 0 ? -1 : 1, n = 3, a = U.clamp((Math.abs(J.speed) - 160) / 300, 0, 0.7);
@@ -1911,7 +2134,17 @@ const RENDER = (() => {
         glow(ctx, ox + top.x, oy + top.y - 1, 12 + J.chase * 10, pc, J.chase);
       }
       const ph = rig.phase;
-      if (flags.magnet && hub) {
+      // spin-up (a new turn, a jackpot twirl) turns the claw about its cable
+      // (an x squash through two turns); the idle glass tap leans it at you
+      const spin = U.clamp(J.spin || 0, 0, 1), tap = U.clamp(J.tap || 0, 0, 1);
+      const bodyXf = !!hub && (spin > 0 || tap > 0);
+      if (bodyXf) {
+        const c2 = spin > 0 ? Math.cos((1 - spin) * TAU * 2) : 1, k = 1 + tap * 0.16;
+        const sx = (Math.abs(c2) < 0.12 ? (c2 < 0 ? -0.12 : 0.12) : c2) * k;
+        ctx.save(); ctx.translate(ox + hub.x, oy + hub.y); ctx.scale(sx, k); ctx.translate(-(ox + hub.x), -(oy + hub.y));
+        if (spin > 0.05) glow(ctx, ox + hub.x, oy + hub.y, hub.r * 3.2, PAL.cyan, spin * 0.55);
+      }
+      if (flags.magnet && hub && type !== 'magnet') {
         const active = ph === 'dropping' || ph === 'closing' || ph === 'lifting';
         glow(ctx, ox + hub.x, oy + hub.y + 6 * s, active ? 60 : 34, PAL.cyan, active ? 0.9 : 0.4);
         // the field: wavy lines crackling from the palm to whatever metal it tugs
@@ -1932,14 +2165,20 @@ const RENDER = (() => {
           ctx.globalAlpha = 1;
         }
       }
-      // the ghost third finger sits behind the pair
-      if (ghost) prongChain(ctx, ghost, s, ox, oy, { ghost: true });
-      for (const p of prongs) prongChain(ctx, p, s, ox, oy, { rubber: !!flags.rubber });
+      // the body of each claw type (the ghost third finger sits behind the pair)
+      if (type === 'magnet') magnetCrane(ctx, rig, hub, s, ox, oy, J, t);
+      else if (type === 'hook') harpoon(ctx, rig, hub, s, ox, oy, J, t);
+      else if (type === 'scoop') { for (const p of prongs) scoopJaw(ctx, p, s, ox, oy, !!flags.rubber); }
+      else if (type === 'hand') glove(ctx, rig, hub, prongs, s, ox, oy, J, t);
+      else {
+        if (ghost) prongChain(ctx, ghost, s, ox, oy, { ghost: type !== 'tri', tri: type === 'tri' });
+        for (const p of prongs) prongChain(ctx, p, s, ox, oy, { rubber: !!flags.rubber, tri: type === 'tri' });
+      }
       if (J.lucky > 0) {
-        // Lucky Claw: the fingertips burn gold
-        for (const p of prongs) {
-          if (!p || !p.length) continue;
-          const tip = p[p.length - 1], tx = ox + tip.x, ty = oy + tip.y;
+        // Lucky Claw: the fingertips (the magnet's rim, the barb) burn gold
+        const tips = clawTips(type, rig, hub, prongs, s);
+        for (const tip of tips) {
+          const tx = ox + tip.x, ty = oy + tip.y;
           glow(ctx, tx, ty, 18, PAL.gold, 0.75 * J.lucky);
           flames(ctx, tx, ty + 3, 7 * s + 4, 12 * s + 6, t, tip.x * 0.07);
         }
@@ -1950,19 +2189,32 @@ const RENDER = (() => {
         const sq = U.clamp(J.squash || 0, -1, 1);
         if (sq) { ctx.save(); ctx.translate(hx, hy); ctx.scale(1 + sq * 0.22, 1 - sq * 0.22); ctx.translate(-hx, -hy); }
         if (J.glow > 0) glow(ctx, hx, hy, r * 3, PAL.gold, J.glow);
-        tone(ctx, q => circ(q, hx, hy, r), CHROME, hx, hy, r, { dark: -0.45 });
-        tone(ctx, q => circ(q, hx, hy, r * 0.36), flags.magnet ? PAL.cyan : '#8e98a8', hx, hy, r * 0.36, { dark: -0.4, ol: 1.5, spec: false });
-        ctx.beginPath(); ctx.moveTo(hx - r * 0.18, hy); ctx.lineTo(hx + r * 0.18, hy); S(ctx, INK, 1.2); ctx.stroke();
-        clawHead(ctx, hx, hy - r * 1.02, r, J, t);
+        let headR = r, headY = hy - r * 1.02;
+        if (type === 'classic' || type === 'tri') {
+          if (type === 'tri') tone(ctx, q => star(q, hx, hy + r * 0.1, r * 1.45, 3, 0.62), '#ffc94d', hx, hy, r * 1.2, { dark: -0.4, spec: false });
+          tone(ctx, q => circ(q, hx, hy, r), CHROME, hx, hy, r, { dark: -0.45 });
+          tone(ctx, q => circ(q, hx, hy, r * 0.36), flags.magnet ? PAL.cyan : '#8e98a8', hx, hy, r * 0.36, { dark: -0.4, ol: 1.5, spec: false });
+          ctx.beginPath(); ctx.moveTo(hx - r * 0.18, hy); ctx.lineTo(hx + r * 0.18, hy); S(ctx, INK, 1.2); ctx.stroke();
+        } else if (type === 'scoop') {
+          // a yellow hydraulic block with its piston
+          tone(ctx, q => rrect(q, hx - r * 1.15, hy - r * 0.8, r * 2.3, r * 1.45, r * 0.3), '#ffb02e', hx, hy, r, { dark: -0.35 });
+          ctx.beginPath(); ctx.rect(hx - r * 1.15, hy - r * 0.1, r * 2.3, r * 0.26); F(ctx, INK); ctx.fill();
+          F(ctx, '#ffe066'); ctx.beginPath(); for (let i = -1; i <= 1; i += 2) circ(ctx, hx + i * r * 0.78, hy + r * 0.4, Math.max(1.2, r * 0.12)); ctx.fill();
+          headY = hy - r * 1.3;
+        } else if (type === 'magnet') { headR = r * 0.62; headY = hy - r * 0.86 - headR * 0.55; }
+        else if (type === 'hand') { headR = Math.max(r * 0.8, 9); headY = hy - r * 1.55 - headR * 0.3; }
+        else if (type === 'hook') { headR = Math.max(9.5 * s + 3, r); headY = hy - headR * 1.05; }
+        clawHead(ctx, hx, headY, headR, J, t);
         if (sq) ctx.restore();
       }
+      if (bodyXf) ctx.restore();
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
   /* The claw's little robot head above the palm: a chrome dome with a dark
      visor and two LED eyes that show its mood (J.mood), blink, look where it
      travels, and a row of LEDs that chase on a loaded return (J.chase). */
-  const MOOD_COL = { '': PAL.cyan, focus: PAL.cyan, happy: PAL.gold, sad: '#6f8cff', wow: PAL.pink, lucky: PAL.gold };
+  const MOOD_COL = { '': PAL.cyan, focus: PAL.cyan, happy: PAL.gold, sad: '#6f8cff', wow: PAL.pink, lucky: PAL.gold, sleepy: '#9b7bff' };
   function clawHead(ctx, x, y, r, J, t) {
     const w = r * 2.3, h = r * 1.35, mood = J.mood || '';
     const col = MOOD_COL[mood] || PAL.cyan;
@@ -1991,7 +2243,17 @@ const RENDER = (() => {
       } else if (mood === 'wow') { circ(ctx, cx, cy, er * 1.05); S(ctx, col, Math.max(1.2, er * 0.55)); ctx.stroke(); }
       else if (mood === 'lucky') tone(ctx, q => star(q, cx, cy, er * 1.5, 4, 0.4), col, cx, cy, er, { ol: 0, spec: false });
       else if (mood === 'focus') { ctx.rect(cx - er, cy - er * 0.35, er * 2, er * 0.7); F(ctx, col); ctx.fill(); }
+      else if (mood === 'sleepy') { ctx.arc(cx, cy - er * 0.3, er, Math.PI * 0.15, Math.PI * 0.85); S(ctx, col, Math.max(1.3, er * 0.6)); ctx.stroke(); }
       else { ell(ctx, cx, cy, er, er * Math.max(0.12, 1 - blink)); F(ctx, col); ctx.fill(); }
+    }
+    if (mood === 'sleepy') {
+      // zZ drifting up off the head
+      for (let i = 0; i < 2; i++) {
+        const u = (t * 0.5 + i * 0.5) % 1;
+        ctx.globalAlpha = Math.sin(u * Math.PI);
+        txt(ctx, 'z', x + w * 0.55 + u * r * 1.2, y - h * 0.6 - u * r * 2, Math.max(7, r * (0.55 + u * 0.4)), '#d9ccff', true, 'center', INK);
+      }
+      ctx.globalAlpha = 1;
     }
     if (mood === 'happy' || mood === 'lucky') {
       F(ctx, rgba(PAL.pink, 0.55));
@@ -2955,6 +3217,19 @@ const RENDER = (() => {
         if (C.hasteNext(enemy)) chip('x2', '#ffe066');
         if (C.greedNext && C.greedNext(enemy) && k !== 'gulp') chip('+', PAL.gold);
       }
+      // A boss signature rides on this action: a pulsing ribbon over the bubble.
+      if (C && C.sigNext && enemy.def && enemy.def.sig && C.sigNext(enemy)) {
+        const si = C.sigInfo ? C.sigInfo(enemy) : null;
+        const label = si ? (si.part === 'lid' ? 'CHUTE ICE' : si.part === 'rail' ? 'RAIL ICE' : si.sign) : 'SPECIAL';
+        const col = SIG_COL[enemy.def.sig.id] || PAL.gold, pul = 1 + Math.abs(Math.sin(t * 5)) * 0.08;
+        const lw = Math.max(60, String(label).length * 8 + 26);
+        // left of the bubble (the affix chips ride on its right; above it is the top bar)
+        ctx.save(); ctx.translate(-bw / 2 - lw / 2 - 6, cy); ctx.scale(pul, pul);
+        glow(ctx, 0, 0, lw * 0.6, col, 0.4 + Math.sin(t * 7) * 0.15);
+        ctx.beginPath(); rrect(ctx, -lw / 2, -10, lw, 20, 10); F(ctx, shade(col, -0.62)); ctx.fill(); S(ctx, col, 2); ctx.stroke();
+        txt(ctx, String(label), 0, 0.5, 11, col, true, 'center', INK);
+        ctx.restore();
+      }
     } catch (e) { /* */ }
     ctx.restore();
   }
@@ -3118,7 +3393,8 @@ const RENDER = (() => {
     const K = { dot: 0, sq: 1, spark: 2, star: 3, coin: 4, confetti: 5, bubble: 6, plus: 7, smoke: 8, shard: 9, ember: 10, snow: 11 };
     const ADD = [false, false, true, true, false, false, false, false, false, false, true, false];
     const parts = []; for (let i = 0; i < MAXP; i++) parts.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, size: 3, col: '#fff', g: 0, drag: 1, kind: 0, rot: 0, vr: 0, grow: 0 });
-    const texts = []; for (let i = 0; i < MAXT; i++) texts.push({ x: 0, y: 0, str: '', col: '#fff', life: 0, max: 1, size: 20, dy: -40, mode: 0, vx: 0, vy: 0, g: 0, crit: false, icon: '', ox: 0, oy: 0 });
+    const texts = []; for (let i = 0; i < MAXT; i++) texts.push({ x: 0, y: 0, str: '', col: '#fff', life: 0, max: 1, size: 20, dy: -40, mode: 0, vx: 0, vy: 0, g: 0, crit: false, icon: '', ox: 0, oy: 0,
+      lay: false, lx: 0, ly: 0, n: 1, base: '', born: 0, born0: 0, pop: 0, w: 0, h: 0, ms: '', mm: -1, hide: false });
     const trails = []; for (let i = 0; i < MAXR; i++) trails.push({ x: 0, y: 0, x2: 0, y2: 0, col: '#fff', life: 0, max: 1, w: 3 });
     const rings = []; for (let i = 0; i < MAXRING; i++) rings.push({ x: 0, y: 0, r0: 0, r1: 40, col: '#fff', life: 0, max: 1, w: 4, delay: 0 });
     const slashes = []; for (let i = 0; i < MAXSL; i++) slashes.push({ x: 0, y: 0, a: 0, len: 60, col: '#fff', life: 0, max: 1, w: 12, claw: false });
@@ -3244,10 +3520,32 @@ const RENDER = (() => {
        damage numbers) pops with an overshoot, flies up and falls with gravity. */
     api.text = (x, y, str, col, o) => {
       o = o || 0;
+      str = String(str); col = col || '#fff';
+      const lay = !o.phys && !o.free && api.layout;
+      // the same label again within a moment merges into the live one ("x2")
+      if (lay && !o.noMerge) {
+        const mode = o.badge ? 2 : 0;
+        for (let i = 0; i < tn; i++) {
+          const q = texts[i];
+          if (!q.lay || q.base !== str || q.col !== col || q.mode !== mode || clock - q.born > LAYOUT.merge || q.life <= 0) continue;
+          if (Math.abs(q.x - x) > LAYOUT.mergeR || Math.abs(q.y - y) > LAYOUT.mergeR || (o.badge && q.icon !== String(o.icon == null ? '' : o.icon))) continue;
+          q.n++; q.str = str + ' x' + q.n; q.life = Math.max(q.life, q.max * 0.75); q.pop = 1; q.born = clock;
+          return q;
+        }
+      }
       const p = tn < MAXT ? texts[tn++] : texts[0];
-      p.x = x; p.y = y; p.str = String(str); p.col = col || '#fff'; p.life = p.max = o.life || 1; p.size = o.size || (o.big ? 28 : 20); p.dy = o.dy == null ? -46 : o.dy;
+      p.x = x; p.y = y; p.str = str; p.col = col; p.life = p.max = o.life || 1; p.size = o.size || (o.big ? 28 : 20); p.dy = o.dy == null ? -46 : o.dy;
       p.mode = o.phys ? 1 : 0; p.crit = !!o.crit; p.icon = ''; p.ox = p.oy = 0;
       p.vx = o.vx == null ? (rnd() - 0.5) * 120 : o.vx; p.vy = o.vy == null ? -300 - rnd() * 80 : o.vy; p.g = o.gravity == null ? 900 : o.gravity;
+      p.lay = lay; p.lx = 0; p.ly = 0; p.n = 1; p.base = str; p.born = clock; p.born0 = ++seq; p.pop = 0; p.ms = ''; p.mm = -1; p.hide = false;
+      if (lay) {
+        // a long label lives longer (there is more to read) and shrinks to fit the screen
+        p.life = p.max = Math.min(LAYOUT.lifeMax, Math.max(p.max, LAYOUT.life0 + str.length * LAYOUT.lifeK));
+        const w = textW(str, p.size, !!o.badge, o.badge && o.icon);
+        if (w > LAYOUT.maxW) p.size *= LAYOUT.maxW / w;
+        if (o.badge) { p.mode = 2; p.icon = o.icon == null ? '' : String(o.icon); }
+        layoutPass();
+      }
       return p;
     };
     // A damage number: size by magnitude, a crit pops bigger and wobbles.
@@ -3260,9 +3558,119 @@ const RENDER = (() => {
     // An icon pill with a label that rises (relic procs, pickups).
     api.badge = (x, y, icon, str, col, o) => {
       o = o || 0;
-      const p = api.text(x, y, str, col, { life: o.life || 1.4, size: o.size || 15, dy: o.dy == null ? -64 : o.dy });
+      const p = api.text(x, y, str, col, { life: o.life || 1.4, size: o.size || 15, dy: o.dy == null ? -64 : o.dy, badge: true, icon, free: o.free });
       p.mode = 2; p.icon = icon == null ? '' : String(icon);
       return p;
+    };
+    /* ---- the label layout manager. Labels (the classic texts and the
+       badges, not the physics damage numbers) reserve their rect every
+       frame, oldest first: a label that would overlap an older one, a keep
+       out zone (the cabinet marquee, the HUD) or the screen edge is nudged
+       to the nearest free spot above or below, and eases back toward its own
+       path when that frees up. The same label again within LAYOUT.merge s
+       merges into the live one ("x2"); long labels shrink to fit the width
+       and live longer. o.free opts a label out. */
+    const LAYOUT = { merge: 0.5, mergeR: 120, maxW: 516, life0: 0.55, lifeK: 0.055, lifeMax: 2.8, pad: 3, edge: 6, back: 0.9, sw: 540, sh: 960 };
+    api.layout = true;
+    api.LAYOUT = LAYOUT;
+    let clock = 0, seq = 0;
+    const zones = [];
+    /* A keep-out rect for labels (stage px): zone(id, x0, y0, x1, y1);
+       zone(id) removes it. */
+    api.zone = (id, x0, y0, x1, y1) => {
+      for (let i = zones.length - 1; i >= 0; i--) if (zones[i].id === id) zones.splice(i, 1);
+      if (x1 > x0 && y1 > y0) zones.push({ id, x0, y0, x1, y1 });
+    };
+    api.zones = () => zones.slice();
+    // Estimated drawn width of a label (bold system font, ~0.62 em per glyph).
+    function textW(str, size, badge, icon) {
+      const n = String(str).length;
+      if (badge) { const tw = Math.min(260, 15 * 0.6 * n + 8); return (tw + (icon ? 30 : 12)) * size / 15; }
+      return n * size * 0.62 + 6;
+    }
+    // A label's rect size, cached until its text changes (a merge renames it).
+    function dims(p) {
+      if (p.ms === p.str && p.mm === p.mode) return;
+      p.ms = p.str; p.mm = p.mode;
+      p.w = textW(p.str, p.size, p.mode === 2, p.icon);
+      p.h = p.mode === 2 ? 28 * p.size / 15 : p.size * 1.2 + 4;
+    }
+    // Where the label sits on its own path (no nudge): its centre.
+    const natY = (p) => p.y + p.dy * U.ease.outCubic(U.clamp(1 - p.life / p.max, 0, 1));
+    const order = [], placed = [], ivs = [];
+    for (let i = 0; i < MAXT; i++) { placed.push({ x0: 0, y0: 0, x1: 0, y1: 0 }); }
+    for (let i = 0; i < MAXT + 16; i++) ivs.push({ lo: 0, hi: 0 });
+    let np = 0;
+    function blocked(x0, y0, x1, y1) {
+      const pd = LAYOUT.pad;
+      for (let i = 0; i < np; i++) { const r = placed[i]; if (x0 < r.x1 + pd && x1 > r.x0 - pd && y0 < r.y1 + pd && y1 > r.y0 - pd) return true; }
+      for (const z of zones) if (x0 < z.x1 && x1 > z.x0 && y0 < z.y1 && y1 > z.y0) return true;
+      return y0 < LAYOUT.edge || y1 > LAYOUT.sh - LAYOUT.edge;
+    }
+    // The nearest free top for a label of height h across [x0, x1], from top0.
+    function freeTop(x0, x1, h, top0) {
+      const pd = LAYOUT.pad;
+      let n = 0;
+      const add = (lo, hi) => { if (n < ivs.length) { ivs[n].lo = lo; ivs[n].hi = hi; n++; } };
+      for (let i = 0; i < np; i++) { const r = placed[i]; if (x0 < r.x1 + pd && x1 > r.x0 - pd) add(r.y0 - pd - h, r.y1 + pd); }
+      for (const z of zones) if (x0 < z.x1 && x1 > z.x0) add(z.y0 - h, z.y1);
+      const lo0 = LAYOUT.edge, hi0 = LAYOUT.sh - LAYOUT.edge - h;
+      // walk the forbidden intervals that chain through top0, both ways
+      let up = top0, down = top0, moved = true, guard = 0;
+      while (moved && guard++ < 64) {
+        moved = false;
+        for (let i = 0; i < n; i++) { const v = ivs[i]; if (up > v.lo && up < v.hi) { up = v.lo; moved = true; } }
+      }
+      moved = true; guard = 0;
+      while (moved && guard++ < 64) {
+        moved = false;
+        for (let i = 0; i < n; i++) { const v = ivs[i]; if (down > v.lo && down < v.hi) { down = v.hi; moved = true; } }
+      }
+      const upOk = up >= lo0, downOk = down <= hi0;
+      if (upOk && downOk) return top0 - up <= down - top0 ? up : down;
+      if (upOk) return up;
+      if (downOk) return down;
+      return NaN;   // no room anywhere in this column
+    }
+    /* Place every live label, oldest first (see above). */
+    function layoutPass() {
+      order.length = 0;
+      for (let i = 0; i < tn; i++) if (texts[i].lay && texts[i].life > 0) order.push(texts[i]);
+      order.sort((a, b) => a.born0 - b.born0);
+      np = 0;
+      for (const p of order) {
+        dims(p);
+        const w = p.w, h = p.h, cy = natY(p);
+        // keep it on the screen sideways
+        let x0 = p.x - w / 2;
+        p.lx = x0 < LAYOUT.edge ? LAYOUT.edge - x0 : x0 + w > LAYOUT.sw - LAYOUT.edge ? LAYOUT.sw - LAYOUT.edge - (x0 + w) : 0;
+        x0 += p.lx;
+        const x1 = x0 + w, nat = cy - h / 2;
+        let top = nat + p.ly;
+        if (!blocked(x0, top, x1, top + h)) {
+          // free where it is: drift back toward its own path while that stays free
+          if (p.ly !== 0) {
+            const back = nat + p.ly * LAYOUT.back;
+            if (!blocked(x0, back, x1, back + h)) top = Math.abs(p.ly) < 0.5 && !blocked(x0, nat, x1, nat + h) ? nat : back;
+          }
+        } else top = freeTop(x0, x1, h, top);
+        if (!(top === top)) {
+          // the screen is full: this one waits (hidden) while the oldest label hurries off
+          p.hide = true;
+          for (const q of order) if (!q.hide && q !== p) { if (q.life > 0.25) q.life = 0.25; break; }
+          continue;
+        }
+        p.hide = false;
+        p.ly = top - nat;
+        if (np < placed.length) { const r = placed[np++]; r.x0 = x0; r.y0 = top; r.x1 = x1; r.y1 = top + h; r.str = p.str; }
+      }
+    }
+    // The laid-out rects of the live labels (tests and debug): [{x0, y0, x1, y1, str}]
+    api.labels = () => {
+      layoutPass();
+      const out = [];
+      for (let i = 0; i < np; i++) out.push({ x0: placed[i].x0, y0: placed[i].y0, x1: placed[i].x1, y1: placed[i].y1, str: placed[i].str || '' });
+      return out;
     };
     api.trail = (x, y, col, o) => {
       o = o || 0;
@@ -3321,8 +3729,11 @@ const RENDER = (() => {
         const p = texts[i]; p.life -= dt;
         if (p.life <= 0) { tn--; const q = texts[tn]; texts[tn] = p; texts[i] = q; continue; }
         if (p.mode === 1) { p.vy += p.g * dt; p.vx *= 0.98; p.ox += p.vx * dt; p.oy += p.vy * dt; }
+        if (p.pop > 0) p.pop = Math.max(0, p.pop - dt * 5);
         i++;
       }
+      clock += dt;
+      if (api.layout && tn) layoutPass();
       for (let i = 0; i < rn;) { const p = trails[i]; p.life -= dt; if (p.life <= 0) { rn--; const q = trails[rn]; trails[rn] = p; trails[i] = q; continue; } i++; }
       for (let i = 0; i < gn;) {
         const p = rings[i];
@@ -3522,6 +3933,7 @@ const RENDER = (() => {
         ctx.font = 'bold 20px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
         for (let i = 0; i < tn; i++) {
           const p = texts[i], u = 1 - p.life / p.max;
+          if (p.lay && p.hide) continue;   // waiting for room (the layout manager)
           ctx.save();
           ctx.globalAlpha = u > 0.7 ? (1 - u) / 0.3 : 1;
           if (p.mode === 1) {
@@ -3534,8 +3946,8 @@ const RENDER = (() => {
             ctx.fillStyle = p.col; ctx.fillText(p.str, 0, 0);
             if (u < 0.1) { ctx.globalAlpha = 1 - u / 0.1; ctx.fillStyle = '#ffffff'; ctx.fillText(p.str, 0, 0); }
           } else if (p.mode === 2) {
-            const sc = U.ease.outBack(Math.min(1, u * 5)) * (p.size / 15);
-            ctx.translate(p.x, p.y + p.dy * U.ease.outCubic(u)); ctx.scale(sc, sc);
+            const sc = U.ease.outBack(Math.min(1, u * 5)) * (p.size / 15) * (1 + p.pop * 0.25);
+            ctx.translate(p.x + p.lx, p.y + p.dy * U.ease.outCubic(u) + p.ly); ctx.scale(sc, sc);
             ctx.font = 'bold 15px ' + FONT;
             const tw = Math.min(260, 15 * 0.6 * p.str.length + 8), w = tw + (p.icon ? 30 : 12);
             ctx.beginPath(); rrect(ctx, -w / 2, -14, w, 28, 14);
@@ -3543,8 +3955,13 @@ const RENDER = (() => {
             if (p.icon) { ctx.font = 'bold 16px ' + FONT; ctx.fillStyle = '#ffffff'; ctx.fillText(p.icon, -w / 2 + 15, 1); ctx.font = 'bold 15px ' + FONT; }
             ctx.fillStyle = p.col; ctx.fillText(p.str, p.icon ? 9 : 0, 1);
           } else {
-            const sc = U.ease.outBack(Math.min(1, u * 3)) * (p.size / 20);
-            ctx.translate(p.x, p.y + p.dy * U.ease.outCubic(u)); ctx.scale(sc, sc);
+            let sc = U.ease.outBack(Math.min(1, u * 3)) * (p.size / 20) * (1 + p.pop * 0.3);
+            if (p.lay && p.w > 0) {
+              // never wider than the rect the layout reserved for it
+              const mw = ctx.measureText(p.str).width * (p.size / 20);
+              if (mw > p.w - 4 && mw > 0) sc *= (p.w - 4) / mw;
+            }
+            ctx.translate(p.x + p.lx, p.y + p.dy * U.ease.outCubic(u) + p.ly); ctx.scale(sc, sc);
             ctx.strokeStyle = INK; ctx.lineWidth = 5; ctx.strokeText(p.str, 0, 0);
             ctx.fillStyle = p.col; ctx.fillText(p.str, 0, 0);
           }
@@ -3809,12 +4226,468 @@ const RENDER = (() => {
     ctx.restore();
   }
 
+  /* ========================================================= BOSSES */
+  /* Boss and elite spectacle (DESIGN.md "Bosses"): the versus card, the
+     cabinet signs and the four signature looks inside the machine, the elite
+     / boss badge, red hot items and the death finale's title card. Pure
+     functions of their arguments (the game passes the clocks), and every
+     one survives the no-op test context. */
+  const SIG_COL = { spill: PAL.gold, heat: '#ff8a2b', ice: '#8dfff5', rig: PAL.pink };
+  const VS = { slide: 0.32, slam: 0.36, name: 0.58, taunt: 0.8, badges: 1.0, exit: 0.3 };
+  // A tiny seeded LCG for flicker (lightning bolts, sparks): same seed, same shape.
+  function lcg(seed) { let s = (seed >>> 0) || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  // A jagged lightning bolt from (x0, y0) to (x1, y1), drawn glow then core.
+  function bolt(ctx, x0, y0, x1, y1, seed, w, col, a) {
+    const r = lcg(seed), n = 9, dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
+    ctx.save();
+    ctx.globalAlpha = a == null ? 1 : a;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.beginPath(); ctx.moveTo(x0, y0);
+    for (let i = 1; i < n; i++) { const k = i / n, o = (r() - 0.5) * len * 0.22; ctx.lineTo(x0 + dx * k + nx * o, y0 + dy * k + ny * o); }
+    ctx.lineTo(x1, y1);
+    ctx.lineJoin = 'miter';
+    S(ctx, rgba(col, 0.35), w * 3.5); ctx.stroke();
+    S(ctx, col, w * 1.4); ctx.stroke();
+    S(ctx, '#ffffff', w * 0.6); ctx.stroke();
+    ctx.restore();
+  }
+  // Chrome lettering (the logo's look): pink under-glow, ink rim, a white top half, a coloured bottom half.
+  function chrome(ctx, s, x, y, size, low, glowCol) {
+    ctx.save();
+    ctx.font = '900 ' + size + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    if (glowCol) { ctx.strokeStyle = rgba(glowCol, 0.45); ctx.lineWidth = size * 0.32; ctx.strokeText(s, x, y); }
+    ctx.strokeStyle = INK; ctx.lineWidth = size * 0.17; ctx.strokeText(s, x, y);
+    ctx.fillStyle = CHROME; ctx.fillText(s, x, y);
+    ctx.save(); ctx.beginPath(); ctx.rect(x - 2000, y - size * 0.55, 4000, size * 0.47); ctx.clip();
+    ctx.fillStyle = '#ffffff'; ctx.fillText(s, x, y); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(x - 2000, y + size * 0.06, 4000, size * 0.5); ctx.clip();
+    ctx.fillStyle = low || PAL.pink; ctx.fillText(s, x, y); ctx.restore();
+    ctx.strokeStyle = rgba('#ffffff', 0.55); ctx.lineWidth = 1.5; ctx.strokeText(s, x, y);
+    ctx.restore();
+  }
+  // Diagonal hazard stripes filling the rect (x, y, w, h), scrolling with t.
+  function stripes(ctx, x, y, w, h, c1, c2, t) {
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    F(ctx, c1); ctx.fillRect(x, y, w, h);
+    F(ctx, c2); ctx.beginPath();
+    const off = ((t || 0) * 40) % 28;
+    for (let i = -2; i * 28 < w + h + 28; i++) { const sx = x + i * 28 + off; ctx.moveTo(sx, y + h); ctx.lineTo(sx + 14, y + h); ctx.lineTo(sx + 14 + h, y); ctx.lineTo(sx + h, y); ctx.closePath(); }
+    ctx.fill();
+    ctx.restore();
+  }
+  const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+  /* RENDER.vsCard(ctx, w, h, st): the fighting-game versus splash before an
+     elite or boss fight. st {t (timeline s), dur, boss, title, name, taunt,
+     affixes: [{icon, name, color}], charId, charName, def, color, reduced, now}.
+     Timeline (VS): the panels slide in (0..0.32), VS slams with lightning
+     (0.36), the name slams (0.58), the taunt types (0.8), the badges pop
+     (1.0 on), everything slides out over the last 0.3 s. Reduced: fades only. */
+  function vsCard(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = +st.t || 0, dur = Math.max(0.6, +st.dur || 2), now = +st.now || t, red = !!st.reduced;
+      const boss = !!st.boss, ecol = st.color || PAL.pink, pcol = CHAR_COL[st.charId] || PAL.cyan;
+      const out = clamp01((t - (dur - VS.exit)) / VS.exit);
+      const inK = red ? clamp01(t / 0.2) : U.ease.outCubic(clamp01(t / VS.slide));
+      const vis = red ? inK * (1 - out) : 1 - out;
+      const slideOut = red ? 0 : U.ease.inCubic(out);
+      const y0 = 250, y1 = 700, midX = w / 2;
+      // backdrop
+      ctx.globalAlpha = 0.96 * clamp01(t / 0.12) * (1 - out);
+      F(ctx, '#07030d'); ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = vis;
+      // player panel (left) and enemy panel (right), split by a slanted seam
+      const lx = red ? 0 : -(1 - inK) * w * 0.8 - slideOut * w, rx = red ? 0 : (1 - inK) * w * 0.8 + slideOut * w;
+      const seamT = midX + 70, seamB = midX - 70;
+      ctx.save(); ctx.translate(lx, 0);
+      ctx.beginPath(); ctx.moveTo(-20, y0); ctx.lineTo(seamT, y0); ctx.lineTo(seamB, y1); ctx.lineTo(-20, y1); ctx.closePath();
+      F(ctx, shade(pcol, -0.55)); ctx.fill();
+      ctx.save(); ctx.clip();
+      // speed lines streaking right
+      S(ctx, rgba(pcol, 0.35), 3);
+      for (let i = 0; i < 14; i++) { const yy = y0 + 18 + i * 31, sx = ((now * (380 + i * 23) + i * 97) % (w + 200)) - 200; ctx.beginPath(); ctx.moveTo(sx, yy); ctx.lineTo(sx + 60 + (i % 3) * 30, yy); ctx.stroke(); }
+      glow(ctx, 140, 440, 190, pcol, 0.35);
+      ctx.restore();
+      portrait(ctx, st.charId, 140, 440, 170, now);
+      const cn = String(st.charName || 'YOU');
+      txt(ctx, cn, 132, 560, Math.min(22, 250 / Math.max(4, cn.length) * 1.5), '#ffffff', true, 'center', INK);
+      ctx.restore();
+      ctx.save(); ctx.translate(rx, 0);
+      ctx.beginPath(); ctx.moveTo(seamT, y0); ctx.lineTo(w + 20, y0); ctx.lineTo(w + 20, y1); ctx.lineTo(seamB, y1); ctx.closePath();
+      F(ctx, shade(ecol, -0.62)); ctx.fill();
+      ctx.save(); ctx.clip();
+      S(ctx, rgba(ecol, 0.35), 3);
+      for (let i = 0; i < 14; i++) { const yy = y0 + 18 + i * 31, sx = w + 200 - ((now * (380 + i * 23) + i * 131) % (w + 200)); ctx.beginPath(); ctx.moveTo(sx, yy); ctx.lineTo(sx - 60 - (i % 3) * 30, yy); ctx.stroke(); }
+      glow(ctx, 395, 470, 210, ecol, boss ? 0.55 : 0.4);
+      ctx.restore();
+      // the enemy, scaled to stand about 250px tall on the panel's floor
+      if (st.def) {
+        const b = enemyBox(st.def, 1), fit = Math.min((boss ? 270 : 240) / Math.max(1, b.h), 250 / Math.max(1, b.w));
+        const pop = t < VS.slam ? 0 : Math.max(0, 1 - (t - VS.slam) / 0.25);
+        enemy(ctx, st.def, 395, 670, fit, now, { hurt: 0, attack: pop * 0.6, enraged: false });
+      }
+      ctx.restore();
+      // the seam: a white hot edge with lightning crackling along it
+      const seamA = clamp01((t - 0.2) / 0.15) * vis;
+      if (seamA > 0) {
+        ctx.save(); ctx.globalAlpha = seamA;
+        ctx.beginPath(); ctx.moveTo(seamT, y0 - 30); ctx.lineTo(seamB, y1 + 30);
+        S(ctx, rgba('#ffffff', 0.3), 16); ctx.stroke(); S(ctx, '#ffffff', 4); ctx.stroke();
+        ctx.restore();
+        const fl = Math.floor(now * 14);
+        bolt(ctx, seamT + 6, y0 - 40, seamB - 6, y1 + 40, fl * 7 + 3, 2.4, boss ? PAL.pink : PAL.cyan, seamA * 0.9);
+        if (t > VS.slam) {
+          const k = clamp01(1 - (t - VS.slam) / 0.6);
+          if (k > 0 || boss) {
+            const a = red ? 0.5 : Math.max(boss ? 0.35 : 0, k);
+            bolt(ctx, midX, 470, 30, y0 - 60, fl * 13 + 1, 2, PAL.gold, a);
+            bolt(ctx, midX, 470, w - 30, y1 + 60, fl * 17 + 5, 2, PAL.cyan, a);
+            if (boss) bolt(ctx, midX, 470, w - 60, y0 - 90, fl * 19 + 9, 1.6, PAL.pink, a * 0.8);
+          }
+        }
+      }
+      // VS: slams from 3x to 1x with an overshoot, a white flash on impact
+      if (t >= VS.slam - 0.12) {
+        const u = clamp01((t - (VS.slam - 0.12)) / 0.12);
+        const sc = red ? 1 : (u < 1 ? 3 - 2 * U.ease.inCubic(u) : 1 + Math.sin(clamp01((t - VS.slam) / 0.3) * Math.PI) * 0.12);
+        ctx.save(); ctx.translate(midX, 468); ctx.rotate(-0.12); ctx.scale(sc, sc);
+        ctx.globalAlpha = vis * (red ? clamp01((t - VS.slam + 0.12) / 0.2) : u);
+        glow(ctx, 0, 0, 120, boss ? PAL.pink : PAL.cyan, 0.6 + Math.sin(now * 9) * 0.15);
+        chrome(ctx, 'VS', 0, 0, 118, boss ? PAL.pink : PAL.cyan, boss ? PAL.blood : PAL.pink);
+        ctx.restore();
+        const fk = clamp01(1 - (t - VS.slam) / 0.18);
+        if (fk > 0 && t >= VS.slam && !red) { ctx.save(); ctx.globalAlpha = fk * 0.75 * vis; F(ctx, '#ffffff'); ctx.fillRect(0, 0, w, h); ctx.restore(); }
+      }
+      // the title band on top: ACT n BOSS on hazard stripes, or ELITE
+      if (st.title) {
+        const u = red ? 1 : U.ease.outBack(clamp01((t - 0.05) / 0.3));
+        const ty = y0 - 58 - (1 - u) * 120;
+        ctx.save(); ctx.globalAlpha = vis;
+        if (boss) {
+          stripes(ctx, 0, ty - 26, w, 52, '#1a0c10', rgba(PAL.blood, 0.9), now);
+          ctx.beginPath(); ctx.rect(0, ty - 26, w, 52); S(ctx, INK, 3); ctx.stroke();
+          chrome(ctx, st.title, midX, ty, 38, PAL.gold, PAL.blood);
+        } else {
+          ctx.beginPath(); rrect(ctx, midX - 110, ty - 22, 220, 44, 22); F(ctx, '#1d1233'); ctx.fill(); S(ctx, ecol, 3); ctx.stroke();
+          txt(ctx, st.title, midX, ty + 1, 26, ecol, true, 'center', INK);
+        }
+        ctx.restore();
+      }
+      // the name slams in, the taunt types itself, the affix badges pop
+      if (t >= VS.name) {
+        const u = clamp01((t - VS.name) / 0.18), sc = red ? 1 : 1.7 - 0.7 * U.ease.outBack(u);
+        ctx.save(); ctx.globalAlpha = vis * u; ctx.translate(midX, 752); ctx.scale(sc, sc);
+        const nm = String(st.name || '').toUpperCase(), size = Math.min(42, (w - 40) / Math.max(4, nm.length) * 1.55);
+        chrome(ctx, nm, 0, 0, size, boss ? PAL.gold : ecol, boss ? PAL.blood : null);
+        ctx.restore();
+      }
+      if (t >= VS.taunt && st.taunt) {
+        const s = String(st.taunt), n = red ? s.length : Math.min(s.length, Math.floor((t - VS.taunt) * 48));
+        ctx.save(); ctx.globalAlpha = vis;
+        // typed from a fixed left edge (the whole line's width), so it does not slide as it grows
+        ctx.font = 'italic bold 17px ' + FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        let fw = s.length * 8.5;
+        try { const m = ctx.measureText('"' + s + '"'); if (m && m.width > 40) fw = m.width; } catch (e) { /* stub */ }
+        const lx0 = midX - fw / 2, line = '"' + s.slice(0, n) + (n < s.length ? '' : '"');
+        S(ctx, INK, 4); ctx.lineJoin = 'round'; ctx.strokeText(line, lx0, 796);
+        F(ctx, '#f4ecff'); ctx.fillText(line, lx0, 796);
+        ctx.restore();
+      }
+      const af = st.affixes || [];
+      if (af.length && t >= VS.badges) {
+        const bw = 118, gap = 8, tot = af.length * bw + (af.length - 1) * gap;
+        af.forEach((a, i) => {
+          const u = clamp01((t - VS.badges - i * 0.12) / 0.2);
+          if (u <= 0) return;
+          const x = midX - tot / 2 + i * (bw + gap) + bw / 2, sc = red ? 1 : U.ease.outBack(u);
+          ctx.save(); ctx.globalAlpha = vis * u; ctx.translate(x, 842); ctx.scale(sc, sc);
+          ctx.beginPath(); rrect(ctx, -bw / 2, -16, bw, 32, 16); F(ctx, shade(a.color || PAL.gold, -0.62)); ctx.fill(); S(ctx, a.color || PAL.gold, 2.5); ctx.stroke();
+          txt(ctx, (a.icon ? a.icon + ' ' : '') + String(a.name || '').toUpperCase(), 0, 1, 13, a.color || PAL.gold, true, 'center', INK);
+          ctx.restore();
+        });
+      }
+      // skip hint
+      if (t > 0.5 && out <= 0) { ctx.globalAlpha = vis * (0.45 + Math.sin(now * 4) * 0.2); txt(ctx, 'tap to skip', midX, 918, 13, '#b3a4d6', true, 'center', INK); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  /* RENDER.bossSign(ctx, x, y, label, col, t, k): the warning plate a boss
+     hangs on the cabinet's top frame a turn before its trick (and while it
+     lasts). k 0..1 drops it in on its chains; it swings, the border chases. */
+  function bossSign(ctx, x, y, label, col, t, k) {
+    ctx.save();
+    try {
+      t = t || 0; k = k == null ? 1 : clamp01(k);
+      if (k <= 0) { ctx.restore(); return; }
+      col = col || PAL.gold;
+      label = String(label || '').toUpperCase();
+      ctx.font = 'bold 15px ' + FONT;
+      let tw = 120;
+      try { const m = ctx.measureText(label); if (m && m.width > 0) tw = m.width; } catch (e) { /* stub */ }
+      const pw = Math.max(150, tw + 58), ph = 32;
+      const drop = (1 - U.ease.outBack(k)) * -60;
+      ctx.translate(x, y + drop);
+      ctx.rotate(Math.sin(t * 2.2) * 0.035 + (1 - k) * 0.3);
+      // chains
+      S(ctx, '#8e98a8', 2);
+      for (const cx of [-pw * 0.32, pw * 0.32]) { ctx.beginPath(); ctx.moveTo(cx, -ph / 2 - 14); ctx.lineTo(cx, -ph / 2); ctx.stroke(); }
+      glow(ctx, 0, 0, pw * 0.6, col, 0.35 + Math.sin(t * 6) * 0.12);
+      ctx.beginPath(); rrect(ctx, -pw / 2, -ph / 2, pw, ph, 7);
+      F(ctx, '#140a1c'); ctx.fill();
+      ctx.save(); ctx.clip();
+      stripes(ctx, -pw / 2, -ph / 2, 16, ph, '#140a1c', col, t);
+      stripes(ctx, pw / 2 - 16, -ph / 2, 16, ph, '#140a1c', col, t);
+      ctx.restore();
+      ctx.beginPath(); rrect(ctx, -pw / 2, -ph / 2, pw, ph, 7); S(ctx, INK, 3); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, -pw / 2 + 2, -ph / 2 + 2, pw - 4, ph - 4, 6); S(ctx, rgba(col, 0.7 + Math.sin(t * 8) * 0.3), 1.5); ctx.stroke();
+      // a blinking warning triangle and the label
+      const on = Math.sin(t * 7) > -0.3;
+      ctx.beginPath(); ctx.moveTo(-tw / 2 - 16, -8); ctx.lineTo(-tw / 2 - 7, 8); ctx.lineTo(-tw / 2 - 25, 8); ctx.closePath();
+      F(ctx, on ? col : shade(col, -0.5)); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+      txt(ctx, '!', -tw / 2 - 16, 3, 10, INK, true, 'center');
+      txt(ctx, label, 6, 1, 15, col, true, 'center', INK);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  /* RENDER.bossCab(ctx, x, y, cfg, st, layer): the boss signatures inside
+     the machine. (x, y) is the interior's top-left, cfg the cabinet cfg
+     (w, h, chuteX, dividerH, railY, frame). st {t, heat 0..1, snow 0..1,
+     ice: null|{part, hp, k 0..1 (forming)}, rigged 0..1, alarm 0..1,
+     hijack 0..1, hx (carriage x), coins 0..1}. Layer 'back' draws behind the
+     pile (the glowing floor, snow drifts), 'front' over the glass (heat
+     haze, slag drips, the iced lip or rail, puppet strings, the red alarm). */
+  function bossCab(ctx, x, y, cfg, st, layer) {
+    ctx.save();
+    try {
+      const c = cabCfg(cfg); st = st || {};
+      const t = st.t || 0, w = c.w, h = c.h, f = c.frame;
+      const chuteX = cfg && cfg.chuteX != null ? cfg.chuteX : w - c.chuteW, dTop = h - h * c.dividerH;
+      const heat = clamp01(+st.heat || 0), snow = clamp01(+st.snow || 0), alarm = clamp01(+st.alarm || 0);
+      ctx.translate(x || 0, y || 0);
+      if (layer === 'back') {
+        ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+        if (heat > 0) {
+          // the floor glows like a grate over coals, pulsing
+          const pul = 0.75 + Math.sin(t * 3.1) * 0.15 + Math.sin(t * 7.3) * 0.08;
+          const g = ctx.createLinearGradient ? ctx.createLinearGradient(0, h * 0.5, 0, h) : null;
+          if (g && g.addColorStop) { g.addColorStop(0, 'rgba(255,90,20,0)'); g.addColorStop(1, rgba('#ff5a14', 0.8 * heat * pul)); F(ctx, g); ctx.fillRect(0, h * 0.45, w, h * 0.55); }
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = heat * pul;
+          for (let i = 0; i < 4; i++) glow(ctx, chuteX * (0.14 + i * 0.25), h - 6, 70, '#ff5a14', 0.7 * heat * pul);
+          S(ctx, 'rgba(255,170,60,0.9)', 4);
+          ctx.beginPath(); for (let gx = 14; gx < chuteX; gx += 22) { ctx.moveTo(gx, h - 3); ctx.lineTo(gx + 11, h - 3); } ctx.stroke();
+          for (let i = 0; i < 10; i++) {
+            const ph = (t * 0.45 + i * 0.137) % 1, ex = ((i * 97 + Math.sin(t + i) * 12) % Math.max(40, chuteX - 20)) + 10, ey = h - ph * h * 0.8;
+            ctx.globalAlpha = heat * (1 - ph); F(ctx, i % 2 ? '#ffe066' : '#ff8a2b'); ctx.beginPath(); circ(ctx, ex, ey, 2.2 * (1 - ph) + 0.8); ctx.fill();
+          }
+          ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+        }
+        if (snow > 0) {
+          // drifts heaped in the corners and along the floor
+          const hs = 10 + snow * 34;
+          const drift = (x0, x1, peak) => {
+            ctx.beginPath(); ctx.moveTo(x0, h + 2);
+            ctx.quadraticCurveTo(x0 + (x1 - x0) * 0.15, h - peak, (x0 + x1) / 2, h - peak * 0.8);
+            ctx.quadraticCurveTo(x0 + (x1 - x0) * 0.85, h - peak * 0.55, x1, h + 2); ctx.closePath();
+            F(ctx, '#eef8ff'); ctx.fill(); S(ctx, rgba('#9fc8e8', 0.9), 2); ctx.stroke();
+          };
+          drift(-10, 150, hs * 1.3);
+          drift(chuteX - 170, chuteX - 4, hs);
+          drift(130, chuteX - 150, hs * 0.45);
+          F(ctx, '#ffffff'); ctx.globalAlpha = 0.85;
+          for (let i = 0; i < 18; i++) { const px = (i * 53 + t * 18 + Math.sin(t * 0.7 + i) * 16) % w, py = (i * 71 + t * (30 + i % 5 * 6)) % h; ctx.beginPath(); circ(ctx, px, py, 1.4 + (i % 3) * 0.6); ctx.fill(); }
+          ctx.globalAlpha = 1;
+        }
+      } else {
+        // over the glass
+        if (heat > 0) {
+          ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+          // heat haze: wavering bright ribbons rising through the cabinet
+          ctx.globalAlpha = 0.16 * heat; S(ctx, '#ffd9a0', 3);
+          for (let i = 0; i < 6; i++) {
+            const bx = 30 + i * (w - 60) / 5, ph = (t * 0.6 + i * 0.21) % 1;
+            ctx.beginPath();
+            for (let k = 0; k <= 10; k++) { const yy = h - k * h / 10 - ph * 40, xx = bx + Math.sin(t * 5 + k * 0.9 + i) * 7; if (k) ctx.lineTo(xx, yy); else ctx.moveTo(xx, yy); }
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+          F(ctx, rgba('#ff5a14', 0.1 * heat)); ctx.fillRect(0, 0, w, h);
+          // the glass glows hot at its edges
+          ctx.beginPath(); ctx.rect(4, 4, w - 8, h - 8);
+          S(ctx, rgba('#ff6a1a', (0.22 + Math.sin(t * 3) * 0.06) * heat), 10); ctx.stroke();
+          // slag drips from the rail: three streams, a drop every ~1.7 s
+          for (let i = 0; i < 3; i++) {
+            const dx = [w * 0.22, w * 0.47, w * 0.7][i], ph = ((t + i * 0.57) / 1.7) % 1;
+            // the lump gathering on the rail
+            const gk = ph < 0.35 ? ph / 0.35 : 1;
+            tone(ctx, q => { q.moveTo(dx - 7, c.railY + 4); q.quadraticCurveTo(dx, c.railY + 8 + gk * 10, dx + 7, c.railY + 4); q.closePath(); }, '#ff8a2b', dx, c.railY + 8, 6, { ol: 1.5, spec: false, dark: 0.1 });
+            if (ph > 0.35) {
+              const u = (ph - 0.35) / 0.65, yy = c.railY + 14 + u * u * (h - c.railY - 20);
+              glow(ctx, dx, yy, 12, '#ff8a2b', heat * 0.9);
+              F(ctx, '#ffe066'); ctx.beginPath(); ell(ctx, dx, yy, 3.5, 5 + u * 3, 0); ctx.fill();
+            }
+          }
+          ctx.restore();
+        }
+        const ice = st.ice;
+        if (ice && ice.part) {
+          const k = clamp01(ice.k == null ? 1 : +ice.k), cracked = ice.hp != null && ice.hp < 2;
+          ctx.save(); ctx.globalAlpha = k;
+          if (ice.part === 'lid') {
+            // a slab of ice over the chute mouth, sloping down toward the bin
+            const x0 = chuteX - 10, x1 = w + 2, yl = dTop - 8, yr = dTop - 30, th = 16;
+            ctx.beginPath(); ctx.moveTo(x0, yl - th); ctx.lineTo(x1, yr - th); ctx.lineTo(x1, yr + 6); ctx.lineTo(x0, yl + 4); ctx.closePath();
+            F(ctx, 'rgba(190,235,255,0.82)'); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x0 + 4, yl - th + 4); ctx.lineTo(x1 - 4, yr - th + 4); S(ctx, 'rgba(255,255,255,0.9)', 2); ctx.stroke();
+            // icicles under it
+            for (let i = 0; i < 5; i++) { const ix = x0 + 8 + i * (x1 - x0 - 16) / 4, iy = yl + (yr - yl) * (i / 4) + 3, il = 8 + (i % 2) * 7; ctx.beginPath(); ctx.moveTo(ix - 4, iy); ctx.lineTo(ix + 4, iy); ctx.lineTo(ix, iy + il * k); ctx.closePath(); F(ctx, '#dff4ff'); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke(); }
+            if (cracked) { S(ctx, INK, 1.8); ctx.beginPath(); ctx.moveTo(x0 + 18, yl - 12); ctx.lineTo(x0 + 30, yl - 4); ctx.lineTo(x0 + 26, yl + 2); ctx.moveTo(x0 + 30, yl - 4); ctx.lineTo(x0 + 44, yr - 6); ctx.stroke(); }
+            glint(ctx, x0 + 20 + ((t * 30) % 40), yl - 10, 10, t, 2, '#ffffff');
+          } else {
+            // frost crusted along the claw rail, icicles hanging off it
+            const ry = c.railY;
+            ctx.beginPath(); rrect(ctx, 2, ry - 9, w - 4, 18, 7); F(ctx, 'rgba(210,240,255,0.85)'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+            for (let i = 0; i < 16; i++) { const ix = 14 + i * (w - 28) / 15, il = (7 + ((i * 37) % 11)) * k; ctx.beginPath(); ctx.moveTo(ix - 4, ry + 8); ctx.lineTo(ix + 4, ry + 8); ctx.lineTo(ix + 0.5, ry + 8 + il); ctx.closePath(); F(ctx, '#e8f8ff'); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke(); }
+            for (let i = 0; i < 5; i++) glint(ctx, 40 + i * (w - 80) / 4, ry, 9, t, i * 1.7, '#ffffff');
+          }
+          ctx.restore();
+        }
+        const hj = clamp01(+st.hijack || 0);
+        if (hj > 0) {
+          // puppet strings: the Prize Master works the claw from above
+          const hx = st.hx != null ? st.hx : w / 2, bar = -f - 30 + Math.sin(t * 3) * 3;
+          ctx.save(); ctx.globalAlpha = hj;
+          glow(ctx, hx, c.railY, 40, PAL.pink, 0.5 + Math.sin(t * 8) * 0.2);
+          S(ctx, rgba(PAL.pink, 0.85), 1.6);
+          for (const o of [-18, 0, 18]) { ctx.beginPath(); ctx.moveTo(hx + o * 1.6 + Math.sin(t * 4 + o) * 4, bar); ctx.quadraticCurveTo(hx + o, (bar + c.railY) / 2, hx + o * 0.5, c.railY + 4); ctx.stroke(); }
+          ctx.beginPath(); rrect(ctx, hx - 42, bar - 5, 84, 10, 4); F(ctx, '#3a1030'); ctx.fill(); S(ctx, PAL.pink, 2); ctx.stroke();
+          ctx.restore();
+        }
+        if (alarm > 0) {
+          // final phase: a red wash and two siren beams sweeping from the top corners
+          const pul = 0.5 + Math.sin(t * 6) * 0.5;
+          ctx.save(); ctx.beginPath(); ctx.rect(-f, -f, w + f * 2, h + f * 2); ctx.clip();
+          F(ctx, rgba('#ff1e2e', (0.06 + pul * 0.1) * alarm)); ctx.fillRect(-f, -f, w + f * 2, h + f * 2);
+          ctx.globalCompositeOperation = 'lighter';
+          for (const [sx, dir] of [[8, 1], [w - 8, -1]]) {
+            const a = Math.PI / 2 + dir * (0.6 + Math.sin(t * 2.4 + (dir > 0 ? 0 : 1.6)) * 0.5);
+            ctx.beginPath(); ctx.moveTo(sx, 4);
+            ctx.lineTo(sx + Math.cos(a - 0.12) * 520, 4 + Math.sin(a - 0.12) * 520); ctx.lineTo(sx + Math.cos(a + 0.12) * 520, 4 + Math.sin(a + 0.12) * 520); ctx.closePath();
+            F(ctx, rgba('#ff3a3a', 0.12 * alarm)); ctx.fill();
+            glow(ctx, sx, 6, 22, '#ff2e30', alarm * (0.6 + pul * 0.4));
+          }
+          ctx.restore();
+        }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  /* RENDER.hotItem(ctx, x, y, r, t, seed): a red hot item's glow and the
+     heat shimmer above it (drawn over the item). */
+  function hotItem(ctx, x, y, r, t, seed) {
+    ctx.save();
+    try {
+      t = t || 0; r = Math.max(6, r || 14);
+      const pul = 0.7 + Math.sin(t * 6 + (seed || 0)) * 0.3;
+      glow(ctx, x, y, r * 2.2, '#ff4a1a', 0.95 * pul);
+      glow(ctx, x, y, r * 1.2, '#ffe066', 0.55 * pul);
+      // a red hot rim
+      ctx.beginPath(); ctx.arc(x, y, r * 1.05, 0, TAU);
+      S(ctx, rgba('#ff5a1a', 0.55 + 0.35 * pul), 2.5); ctx.stroke();
+      ctx.globalAlpha = 0.6; S(ctx, '#ffb070', 1.6);
+      for (let i = -1; i <= 1; i++) {
+        const ph = (t * 0.9 + i * 0.3 + (seed || 0) * 0.1) % 1, bx = x + i * r * 0.5;
+        ctx.globalAlpha = 0.6 * (1 - ph);
+        ctx.beginPath(); ctx.moveTo(bx, y - r - ph * 18); ctx.quadraticCurveTo(bx + 5, y - r - 6 - ph * 18, bx, y - r - 12 - ph * 18); ctx.stroke();
+      }
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+
+  /* RENDER.eliteBadge(ctx, x, y, tier, t, size): a gold crown for a boss, a
+     skull for an elite, beside the hp bar. */
+  function eliteBadge(ctx, x, y, tier, t, size) {
+    ctx.save();
+    try {
+      t = t || 0; const s = (size || 22) / 22;
+      ctx.translate(x, y + Math.sin(t * 2.5) * 1.2); ctx.scale(s, s);
+      if (tier === 'boss') {
+        glow(ctx, 0, 0, 20, PAL.gold, 0.45 + Math.sin(t * 4) * 0.15);
+        tone(ctx, q => poly(q, [-12, 7, -13, -6, -6, 0, 0, -10, 6, 0, 13, -6, 12, 7]), PAL.gold, 0, 0, 12, { ol: 2, dark: -0.35 });
+        F(ctx, PAL.pink); ctx.beginPath(); circ(ctx, 0, 2, 2.4); ctx.fill();
+        F(ctx, PAL.cyan); ctx.beginPath(); circ(ctx, -7, 3, 1.8); circ(ctx, 7, 3, 1.8); ctx.fill();
+      } else {
+        ctx.beginPath(); circ(ctx, 0, 0, 11); F(ctx, '#3a0a1c'); ctx.fill(); S(ctx, PAL.blood, 2); ctx.stroke();
+        tone(ctx, q => { q.moveTo(-6, 2); q.quadraticCurveTo(-7, -8, 0, -8); q.quadraticCurveTo(7, -8, 6, 2); q.lineTo(4, 6); q.lineTo(-4, 6); q.closePath(); }, '#f1e9d6', 0, -2, 7, { ol: 1.5, spec: false });
+        F(ctx, INK); ctx.beginPath(); circ(ctx, -2.6, -1.5, 1.8); circ(ctx, 2.6, -1.5, 1.8); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-2, 6); ctx.lineTo(-2, 3.5); ctx.moveTo(0, 6); ctx.lineTo(0, 3.5); ctx.moveTo(2, 6); ctx.lineTo(2, 3.5); S(ctx, INK, 1); ctx.stroke();
+      }
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+
+  /* RENDER.finale(ctx, w, h, st): the death finale's screen layer. st {white
+     0..1 (the whiteout), card: seconds since the title card began (< 0: none),
+     boss, title, sub, color, reduced, now}. The card is a dark band with rays
+     behind, the title slamming in from 2.2x and the enemy's epitaph under it. */
+  function finale(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {}; w = w || 540; h = h || 960;
+      const now = +st.now || 0, red = !!st.reduced;
+      const wh = clamp01(+st.white || 0);
+      if (wh > 0) { ctx.globalAlpha = wh; F(ctx, '#ffffff'); ctx.fillRect(0, 0, w, h); ctx.globalAlpha = 1; }
+      const ct = st.card == null ? -1 : +st.card;
+      if (ct >= 0) {
+        const cy = st.y || 200, boss = !!st.boss, col = st.color || PAL.gold;
+        const inK = red ? clamp01(ct / 0.2) : U.ease.outCubic(clamp01(ct / 0.22));
+        const bh = (boss ? 150 : 110) * inK;
+        // rays
+        ctx.save(); ctx.translate(w / 2, cy); ctx.globalAlpha = 0.55 * inK;
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 14; i++) {
+          const a = i / 14 * TAU + now * 0.5;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a - 0.09) * 520, Math.sin(a - 0.09) * 520); ctx.lineTo(Math.cos(a + 0.09) * 520, Math.sin(a + 0.09) * 520); ctx.closePath();
+          F(ctx, rgba(i % 2 ? col : '#ffffff', 0.16)); ctx.fill();
+        }
+        ctx.restore();
+        ctx.save(); ctx.globalAlpha = 0.92;
+        F(ctx, '#0b0614'); ctx.fillRect(0, cy - bh / 2, w, bh);
+        ctx.globalAlpha = 1;
+        S(ctx, col, 3); ctx.beginPath(); ctx.moveTo(0, cy - bh / 2); ctx.lineTo(w, cy - bh / 2); ctx.moveTo(0, cy + bh / 2); ctx.lineTo(w, cy + bh / 2); ctx.stroke();
+        ctx.restore();
+        const u = clamp01((ct - 0.08) / 0.2), sc = red ? 1 : 2.2 - 1.2 * U.ease.outBack(u);
+        if (u > 0) {
+          ctx.save(); ctx.globalAlpha = u; ctx.translate(w / 2, cy - (boss ? 16 : 10)); ctx.rotate(-0.04); ctx.scale(sc, sc);
+          const title = String(st.title || (boss ? 'BOSS DEFEATED' : 'ELITE DOWN'));
+          chrome(ctx, title, 0, 0, Math.min(boss ? 52 : 46, (w - 40) / Math.max(4, title.length) * 1.35), col, boss ? PAL.pink : null);
+          ctx.restore();
+        }
+        if (st.sub && ct > 0.35) {
+          ctx.save(); ctx.globalAlpha = clamp01((ct - 0.35) / 0.25);
+          txt(ctx, String(st.sub), w / 2, cy + (boss ? 42 : 30), 17, '#f4ecff', true, 'center', INK);
+          ctx.restore();
+        }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
   return {
     item, itemFx, shard, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, clawHead, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
+    vsCard, bossSign, bossCab, hotItem, eliteBadge, finale, SIG_COL, VS,
     terrainHex, terrainFill, biomePal, groundOf, lightRim, bulb, mapCompass, mapHeader, mapArrow, BIOME_PAL, DARK,
     portrait, relicIcon, title, fx, flames, glint, enemyAura, RARITY_COL,
     belly, affixAura, affixBadges, binMark, wrench, rageCrown,
     capsule, ticket, CAP_COL,
     ITEM_KEYS, ENEMY_KEYS, ITEM_DEFAULT, PAL, shade, rgba, glowSprite,
+    coinSlot, CLAW_DRAW,
   };
 })();

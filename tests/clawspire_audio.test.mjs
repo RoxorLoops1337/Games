@@ -452,4 +452,41 @@ T.test('cabinet materials: every material voice plays, landings scale with opts.
   T.eq(AUDIO.sfx('beep'), false, 'a second beep right away is throttled');
 });
 
+T.test('bosses: the versus card, signatures, footfalls and finale voices play; stings are throttled', () => {
+  const BOSS_NAMES = ['vsSlam', 'rumble', 'stomp', 'coinSpill', 'sizzle', 'drip', 'freezeOver', 'iceBreak', 'hijack', 'shuffle', 'alarm', 'kaboom', 'bossDown', 'stingBoss', 'stingElite'];
+  const { AUDIO, fake } = bootFake();
+  for (const n of BOSS_NAMES) { T.ok(AUDIO.names.includes(n), 'sfx name listed: ' + n); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of BOSS_NAMES) {
+    ac.currentTime += 5;
+    const before = fake.count.total;
+    let r = false;
+    try { r = AUDIO.sfx(n, { big: true, len: 2, pitch: 0.9 }); } catch (e) { T.ok(false, n + ' threw ' + e); }
+    T.ok(r && fake.count.total - before >= 2, 'boss sfx ' + n + ' plays');
+  }
+  ac.currentTime += 5;
+  T.ok(AUDIO.sfx('stingBoss'), 'a boss sting plays');
+  T.eq(AUDIO.sfx('stingBoss'), false, 'a second sting right away is throttled');
+  for (const o of [{ len: -1 }, { len: 99 }, { len: 'x' }, null]) { ac.currentTime += 5; try { AUDIO.sfx('rumble', o); } catch (e) { T.ok(false, 'odd rumble len threw'); } }
+});
+
+T.test('claw types: every claw voice plays, no-ops cold, and the spin-up is throttled', () => {
+  const CLAW_NAMES = ['clawCoin', 'clawSpin', 'clawTap', 'clawCheer', 'magHum', 'magZap', 'magDrop', 'scoopSlosh', 'handSquish', 'hookFire', 'hookThunk'];
+  const { AUDIO, fake } = bootFake();
+  for (const n of CLAW_NAMES) { T.ok(AUDIO.names.includes(n), 'sfx name listed: ' + n); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of CLAW_NAMES) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    let r = false;
+    try { r = AUDIO.sfx(n, { pitch: 1.1 }); } catch (e) { T.ok(false, n + ' threw ' + e); }
+    T.ok(r && fake.count.total - before >= 2, 'claw sfx ' + n + ' plays');
+  }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('clawSpin'), 'a spin-up plays');
+  T.eq(AUDIO.sfx('clawSpin'), false, 'a second one right away is throttled');
+});
+
 T.done();
