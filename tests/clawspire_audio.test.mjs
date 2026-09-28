@@ -1217,4 +1217,60 @@ T.test('duo: every new voice plays after init and no-ops before; every taunt voi
   T.ok(!AUDIO.sfx('duoTaunt', { v: 'horn' }), 'one taunt at a time (the gap)');
 });
 
+/* ---------------------------------------------------------------- DEP (round 15): the Neon Depths' dub */
+T.test('dep: the Depths are act 4 to the music: a muffled dub map theme, every mode bubbles, the old acts unchanged', () => {
+  const { AUDIO } = boot({ only: ['util', 'audio'] });
+  const fresh = boot({ only: ['util', 'audio'] }).AUDIO;
+  T.ok(AUDIO.ACT_CFG[4] && AUDIO.ACT_NAMES[4] === 'flooded dub', 'act 4: the flooded dub');
+  const map = AUDIO._songFor('map', 4);
+  T.ok(map && map.act === 4 && map.cfg.dub && map.cfg.bub, 'its own map theme, dub and bubbles');
+  T.ok([1, 2, 3].every(a => AUDIO._songFor('map', a).bpm !== map.bpm) && map.bpm < AUDIO._songFor('map', 3).bpm, `the slowest map theme (${map.bpm} bpm)`);
+  const voices = (s) => new Set(s.steps.flat().map(e => e.v));
+  T.ok(voices(map).has('bub') && voices(map).has('snare') && voices(map).has('bass'), 'bubbles over a one-drop kit and a walking sub');
+  for (const m of ['fight', 'elite', 'boss']) {
+    const s = AUDIO._songFor(m, 4), b = AUDIO._song(m);
+    T.ok(s && s.act === 4 && s.cfg.dub && JSON.stringify(s.steps) !== JSON.stringify(b.steps) && JSON.stringify(s.steps) !== JSON.stringify(AUDIO._songFor(m, 3).steps), `${m} act 4: its own variant`);
+    T.ok(voices(s).has('bub'), `${m} act 4 bubbles`);
+    const L = AUDIO._layerSong(m, 4);
+    T.ok(L && L.hype.length === s.len && L.tense.length === s.len, `${m} act 4: the hype and tense layers fit it`);
+  }
+  for (const a of [0, 1, 2, 3]) for (const m of ['map', 'fight', 'boss']) T.ok(!voices(AUDIO._songFor(m, a)).has('bub'), `${m} act ${a}: no bubbles (the old tunes stay bit for bit)`);
+  T.eq(JSON.stringify(AUDIO._songFor('map', 4).steps), JSON.stringify(fresh._songFor('map', 4).steps), 'deterministic');
+  T.eq(AUDIO.setAct(4), 4, 'setAct takes the Depths');
+  T.ok(AUDIO.mix.musK('fight', 4) < 1, 'the dub fight sits a little under the others');
+});
+
+T.test('dep: the dub plays live (a tape echo lead, bubbles), the act switch crossfades, and its sounds sit in their tiers', () => {
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  const run = (secs) => { let n = 0; for (let i = 0; i < secs / 0.025; i++) { ac.currentTime += 0.025; n += AUDIO._tick(); } return n; };
+  AUDIO.setAct(3); AUDIO.music('map'); run(0.5);
+  AUDIO.setAct(4);
+  const L = AUDIO._liveActs();
+  T.ok(L.some(x => x.act === 3 && x.fading) && L.some(x => x.act === 4 && !x.fading), 'the vault crossfades into the Depths');
+  let queued = 0, threw = false;
+  try { queued = run(4); AUDIO.music('boss'); AUDIO.musicState({ hype: true, tense: true }); queued += run(3); } catch (e) { threw = true; console.log(e.stack); }
+  T.ok(!threw && queued > 0, `the dub plays without throwing (${queued} notes)`);
+  const M = AUDIO.mix;
+  const want = { depLure: 'mid', depBubble: 'soft', depSting: 'mid', depPinch: 'soft', depZap: 'mid', depChest: 'mid', depTide: 'big' };
+  for (const n in want) {
+    T.ok(AUDIO.names.includes(n), n + ' is a sound');
+    T.eq(M.tier(n), want[n], `${n} is ${want[n]}`);
+    ac.currentTime += 2;
+    T.ok(AUDIO.sfx(n), n + ' plays');
+  }
+  ac.currentTime += 2;
+  T.ok(AUDIO.sfx('depChest', { bite: 1 }), 'a biting chest chomps');
+  // levels, as heard, against a hit
+  const midHeard = M.TARGET.mid + 20 * Math.log10(0.8);
+  for (const [mode, layers] of [['map'], ['fight', ['hype', 'tense']], ['boss', ['hype', 'tense']]]) {
+    const oc = mixRenderAC(22050, 6.1);
+    T.ok(M.offline(oc, { music: mode, act: 4, layers, secs: 6 }) > 0, `${mode} act 4 renders`);
+    const r = mixMeasure(oc.render(), 22050);
+    T.ok(r.int <= midHeard - 5, `${mode}:4 sits 5 dB or more under a hit (${r.int.toFixed(1)})`);
+    T.ok(r.m <= midHeard + 0.5, `${mode}:4's loudest moment stays under a hit (${r.m.toFixed(1)})`);
+  }
+});
+
 T.done();

@@ -2069,6 +2069,7 @@ const AUDIO = (() => {
       // bells: the chord tones a twelfth up, sparse and ringing
       for (const s of [0, 6, 10]) if (s === 0 || rng.chance(0.5)) push(steps, base + s, { v: 'bell', n: tone(rng.pick([0, 2, 4, 7]), 36), g: s === 0 ? 1 : 0.7 });
     }
+    if (c.bub) depFlavor(c, steps, base, b, tone, rng);   // DEP: the Neon Depths' bubbles
   }
   /* Tells the music which act biome the player is in (1..3; 0 = none).
      A live map or fight tune of another act crossfades into this act's
@@ -2420,9 +2421,16 @@ const AUDIO = (() => {
       const v = DUO_V[o && o.v] || DUO_V.kazoo;
       return v(out, t, p);
     },
+    // DUO NET (round 15): online co-op's link chimes (opts.k): join (a friend is in: two notes up),
+    // turn (your turn: a bright three-note call), lost (the line drops: two notes down), back (it is up again).
+    duoLink(out, t, o, p) {
+      const k = o && o.k, seq = k === 'lost' ? [79, 72] : k === 'turn' ? [72, 79, 84] : k === 'back' ? [72, 76, 79] : [76, 83];
+      seq.forEach((n, i) => blip(out, t, { at: i * 0.09, w: k === 'lost' ? 'triangle' : 'square', f: mtof(n) * p, dur: 0.14, v: 0.06, lp: 4200 }));
+      return 0.2 + seq.length * 0.09;
+    },
   });
-  Object.assign(GAP, { duoFlip: 0.2, duoCoin: 0.1, duoCount: 0.08, duoReady: 0.2, duoSabo: 0.3, duoCrowd: 1.0, duoTaunt: 0.4 });
-  NAMES.push('duoFlip', 'duoCoin', 'duoCount', 'duoReady', 'duoSabo', 'duoCrowd', 'duoTaunt');
+  Object.assign(GAP, { duoFlip: 0.2, duoCoin: 0.1, duoCount: 0.08, duoReady: 0.2, duoSabo: 0.3, duoCrowd: 1.0, duoTaunt: 0.4, duoLink: 0.3 });
+  NAMES.push('duoFlip', 'duoCoin', 'duoCount', 'duoReady', 'duoSabo', 'duoCrowd', 'duoTaunt', 'duoLink');
   /* ---------------------------------------------------------------- /DUO */
 
   /* ---------------------------------------------------------------- FAMILY + REROLL (round 9)
@@ -2594,6 +2602,7 @@ const AUDIO = (() => {
         blip(dest, t, { w: c.bassWave, f: mtof(ev.n), dur: ev.d * sd, v: 0.3 * g, a: 0.006, lp: c.bassWave === 'triangle' ? 3000 : 700, q: 3 });
         break;
       case 'lead':
+        if (c.dub && depLead(dest, t, ev, g, sd, c)) break;   // DEP: the muffled dub lead with its tape echo
         if (c.box && inst.mode === 'map') {
           // the vault's music box: a struck tine that rings out, a quiet octave overtone
           blip(dest, t, { w: 'sine', f: mtof(ev.n), dur: Math.max(0.5, ev.d * sd * 1.6), v: 0.17 * g, a: 0.003 });
@@ -2634,7 +2643,7 @@ const AUDIO = (() => {
         blip(dest, t, { w: 'sine', f: mtof(ev.n), dur: 0.9, v: 0.05 * g, a: 0.002 });
         blip(dest, t, { w: 'triangle', f: mtof(ev.n) * 3.01, dur: 0.25, v: 0.012 * g, a: 0.001 });
         break;
-      default: seaVoice(dest, t, ev, g, sd); break;   // SEASON: the organ and the sleigh bells
+      default: if (!depVoice(dest, t, ev, g, sd)) seaVoice(dest, t, ev, g, sd); break;   // SEASON: the organ and the sleigh bells; DEP: the bubbles
     }
   }
 
@@ -3291,6 +3300,105 @@ const AUDIO = (() => {
     'title:sea:halloween': 2, 'map:sea:halloween': 2, 'title:sea:winter': -2, 'map:sea:winter': -1.5,
   };
   function mixMusK(mode, act) { const d = MIX_MUS[accSongKey(mode, act)]; return d ? Math.pow(10, d / 20) : 1; }
+
+  /* ---------------------------------------------------------------- DEP (round 15): the Neon Depths
+     DESIGN.md "The Neon Depths (round 15)". The flooded basement is act 4 to
+     the music (the game's accMusicAct says 4 on a dive's map and in its
+     fights): its map theme is a muffled dub (72 bpm minor, a sub bass that
+     walks, a one-drop half-time kit, offbeat chord skanks, a dreamy lead
+     through a low pass with a tape echo), and every mode of the act (the
+     fight, elite and boss variants keep their own tempo, key and layers)
+     borrows the echo and the bubbles (blips that sweep up like a bubble
+     leaving a regulator). Only a config with dub / bub draws from the rng
+     for them, so every other tune stays bit for bit. Sounds, calibrated
+     into their MIX tiers: the angler's lure pings like sonar, jellies bloop,
+     a sting crackles, a pincer snips, live water zaps, a chest creaks (or
+     chomps), the High Tide rolls in. */
+  ACT_CFG[4] = {
+    all: { dub: 1, bub: 1 },
+    map: { bpm: 72, root: 38, scale: 'minor', bass: 'walk', lead: 'dreamy', hat: 'off', drums: 'half', wave: 'triangle', bassWave: 'sine',
+      stab: 0.55, swing: 0.14, vol: 0.85, leadUp: 12, prog: [[0, 5, 3, 4], [0, 3, 5, 6], [5, 3, 0, 4], [0, 6, 5, 4]] },
+    fight: { scale: 'dorian', wave: 'triangle' },
+    elite: { wave: 'triangle' },
+  };
+  ACT_NAMES[4] = 'flooded dub';
+  Object.assign(MIX_MUS, { 'map:act4': 0, 'fight:act4': -2.5, 'elite:act4': -1, 'boss:act4': -1.5 });
+  // accFlavor: bubbles rise off the beat, two or three a bar (only a dub config draws for them).
+  function depFlavor(c, steps, base, b, tone, rng) {
+    for (const s of [3, 7, 11, 15]) if (rng.chance(s === 7 ? 0.7 : 0.35)) push(steps, base + s, { v: 'bub', n: tone(rng.pick([0, 2, 4]), 36), g: 0.8 });
+  }
+  // playEvent's lead in a dub config: muffled under a low pass, with a tape echo a dotted eighth later, and another.
+  function depLead(dest, t, ev, g, sd, c) {
+    const f = mtof(ev.n), dur = Math.max(0.12, ev.d * sd * 0.95), w = c.wave === 'sawtooth' ? 'triangle' : c.wave;
+    blip(dest, t, { w, f, dur, v: 0.14 * g, a: 0.02, lp: 900, q: 2 });
+    blip(dest, t + sd * 3, { w: 'sine', f, dur: dur * 0.8, v: 0.06 * g, a: 0.02, lp: 700 });
+    blip(dest, t + sd * 6, { w: 'sine', f, dur: dur * 0.7, v: 0.025 * g, a: 0.02, lp: 520 });
+    return true;
+  }
+  // playEvent's default: the bubble voice (a sine that sweeps up fast); false for any other voice.
+  function depVoice(dest, t, ev, g, sd) {
+    if (ev.v !== 'bub') return false;
+    const f = mtof(ev.n);
+    blip(dest, t, { w: 'sine', f: f * 0.5, to: f * 1.4, dur: 0.07, v: 0.05 * g, a: 0.004 });
+    blip(dest, t + 0.05, { w: 'sine', f: f * 0.7, to: f * 1.8, dur: 0.05, v: 0.025 * g, a: 0.003 });
+    return true;
+  }
+  Object.assign(BANK, {
+    // The angler's lure: a sonar ping and its echo.
+    depLure(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 1180 * p, to: 1120 * p, dur: 0.5, v: 0.14, a: 0.005 });
+      blip(out, t, { at: 0.28, w: 'sine', f: 1180 * p, to: 1120 * p, dur: 0.4, v: 0.05, a: 0.005 });
+      blip(out, t, { w: 'triangle', f: 590 * p, dur: 0.2, v: 0.04 });
+      return 0.72;
+    },
+    // Jellies drifting in: two bloops.
+    depBubble(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 240 * p, to: 700 * p, dur: 0.1, v: 0.16, a: 0.01 });
+      blip(out, t, { at: 0.09, w: 'sine', f: 330 * p, to: 900 * p, dur: 0.08, v: 0.1, a: 0.01 });
+      return 0.2;
+    },
+    // A jelly stings the claw: a nettle crackle over a high buzz.
+    depSting(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 2200 * p, to: 1600 * p, dur: 0.12, v: 0.05, lp: 5000, vib: [40, 200] });
+      hiss(out, t, { type: 'highpass', f: 4000, dur: 0.1, v: 0.14, crunch: true });
+      blip(out, t, { at: 0.05, w: 'sine', f: 880 * p, to: 440 * p, dur: 0.12, v: 0.08 });
+      return 0.2;
+    },
+    // A pincer snips shut (a clack and a scrape).
+    depPinch(out, t, o, p) {
+      for (const at of [0, 0.08]) hiss(out, t, { at, type: 'bandpass', f: 3600 * p, q: 5, dur: 0.03, v: 0.22, crunch: true });
+      blip(out, t, { at: 0.08, w: 'triangle', f: 700 * p, to: 420 * p, dur: 0.06, v: 0.08 });
+      hiss(out, t, { at: 0.12, type: 'bandpass', f: 1400 * p, q: 1.5, dur: 0.18, v: 0.06 });
+      return 0.32;
+    },
+    // Live water: a mains hum that bites, and a crack.
+    depZap(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 110 * p, dur: 0.28, v: 0.1, lp: 2400, vib: [30, 20] });
+      blip(out, t, { w: 'square', f: 1760 * p, to: 900 * p, dur: 0.1, v: 0.04, lp: 4000 });
+      hiss(out, t, { type: 'highpass', f: 3000, dur: 0.16, v: 0.16, crunch: true });
+      return 0.32;
+    },
+    // A sunken chest: a wet creak; opts.bite adds a chomp.
+    depChest(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 600 * p, to: 1100 * p, q: 3, dur: 0.3, v: 0.5 });
+      blip(out, t, { w: 'sawtooth', f: 180 * p, to: 140 * p, dur: 0.25, v: 0.12, lp: 900 });
+      if (o && o.bite) { blip(out, t, { at: 0.26, w: 'square', f: 140 * p, to: 70, dur: 0.1, v: 0.12, lp: 1200 }); hiss(out, t, { at: 0.26, type: 'lowpass', f: 1500, dur: 0.08, v: 0.2, crunch: true }); }
+      return 0.42;
+    },
+    // High Tide: the water rolls in over a bass drop.
+    depTide(out, t, o, p) {
+      hiss(out, t, { type: 'lowpass', f: 300 * p, to: 1800 * p, q: 0.8, dur: 0.9, v: 0.2, a: 0.25 });
+      blip(out, t, { w: 'sine', f: 90 * p, to: 42, dur: 0.9, v: 0.3, a: 0.02 });
+      [50, 57, 62].forEach((n, i) => blip(out, t, { at: 0.1 + i * 0.12, w: 'triangle', f: mtof(n) * p, dur: 0.5, v: 0.05, lp: 1100 }));
+      return 1.0;
+    },
+  });
+  Object.assign(GAP, { depLure: 0.3, depBubble: 0.08, depSting: 0.08, depPinch: 0.1, depZap: 0.12, depChest: 0.15, depTide: 0.8 });
+  NAMES.push('depLure', 'depBubble', 'depSting', 'depPinch', 'depZap', 'depChest', 'depTide');
+  Object.assign(MIX_TIER, { depBubble: 'soft', depPinch: 'soft', depLure: 'mid', depSting: 'mid', depZap: 'mid', depChest: 'mid', depTide: 'big' });
+  Object.assign(MIX_TRIM, { depLure: -0.5, depBubble: 1, depSting: 4, depPinch: 5.5, depZap: 1.5, depChest: 5.5, depTide: -1.5 });
+  /* ---------------------------------------------------------------- /DEP */
+
   const mixApi = {
     TIERS: MIX_TIERS, TARGET: MIX_TARGET, WIN: MIX_WIN, CAP: MIX_CAP, TIER: MIX_TIER, TRIM: MIX_TRIM, VARY: MIX_VARY,
     DUCK: MIX_DUCK, LIM: MIX_LIM, MUS: MIX_MUS, MINOR: MIX_MINOR, STING: MIX_STING,

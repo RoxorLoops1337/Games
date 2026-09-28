@@ -5819,6 +5819,13 @@ saves) and only what is shown changes.
 
 - Load order: `util`, `art`, **`i18n`, `lang_nl`, `lang_nl2`** (round 14),
   `physics` ... (`art` must stay right after `util`, the art suite pins it).
+  Round 15: the two tables are no longer script tags. `I18N.lazyBoot` writes
+  them in right after `i18n.js` while the page parses, only when the saved
+  choice (else the browser) is Dutch; a switch in Settings fetches them
+  (`I18N.need`, `I18N.FILES`) and `I18N.onLand` (game.js `i18nRefresh`)
+  redoes the screen when they land. An English player never downloads them.
+  The suites' `scriptFiles()` still puts them after `i18n` (`boot({noLang})`
+  leaves them out).
   `tests/clawspire_lib.mjs` lists `i18n` (namespace `I18N`, `lang_nl` and
   `lang_nl2` ride along with it) and passes
   `opts.language` to the stub navigator. `window.CS.I18N` for the console.
@@ -6082,6 +6089,391 @@ item, a relic or gold to the run; the service and the bundle shrink the bin, the
   goods, the map icon and its silhouette, every final form, the ceremony through `st.art`), i18n (every new
   line and pattern in Dutch, the screens in Dutch with none of the new English left). Screenshots: scratchpad
   `r14_trd_shots.mjs` (`r14_trd_*.png`).
+
+## HUD and title menu polish (round 15)
+
+Owner request: the HUD (the health bar and the rest) looked crowded, and the title had too many
+buttons. Both are reorganized; no feature went away, no id changed.
+
+**The top bar** (index.html `#top`, CSS in `<style id="ui15-css">`, still 70 px tall so the arena,
+the labels, the toasts and every canvas layout under it keep their places):
+- the portrait (56 px, tap: the crawler card) | the vitals column (268 px) | the relic strip.
+- the vitals column, row 1: a real hp bar (`#hpStat`, 28 px) with "HP 36/80" inside it. The fill
+  (`#hpFill`) drains over the ghost chunk (`#hpGhost`); the incoming-damage stripes (`.qaIn`) ride in
+  it. Block is a cyan shield chip (`#blockTxt`, just the number) at the bar's right end: the bar steps
+  aside for it (`#hpStat.shielded .hpbar{right:58px}`), so nothing of the bar is ever hidden under it.
+  Hit shake, the red flash on the bar, the low-hp pulse, the shield shimmer (now inside the bar),
+  the heal / shield glows all still play.
+- the vitals column, row 2: compact chips, an icon and a number: gold (a CSS coin), bulbs (a cyan
+  bulb, `#inkTxt`), tickets (a pink ticket, `#tixStat`), and the act chip at the row's end ("ACT 1/3";
+  Endless "Loop 3" in its gold frame; the rush "BOSS 3/7"). The words stay in the markup (screen
+  readers, the i18n table, the round 1 markup test) and a tap on a chip shows its name and what it is
+  for. A Tilt / DAILY / WEEKLY / RUSH badge takes the word's place in the act chip. The rush clock
+  sits in the row in place of bulbs and tickets. The counters still roll, bump and float "+n".
+- the relic strip: 40 px medallions; what does not fit folds into a dashed "+N" chip
+  (`uiRelicFit`, a browser only) that opens the whole list (`uiRelicList`: every mutator and relic
+  with its name and rules, closes on its X, the chip or a tap elsewhere). A folded relic hands its
+  proc flash and ring to the chip (`S.relicEls[id]` points at it).
+- the player row: the status chips and the GRABS pill share one height (36 / 38 px) and centre line.
+- the control bar: the round Settings and Photo buttons (48 px), the hint (two lines at most), END
+  TURN (156 px, 164 in Dutch), evenly spaced.
+
+**The title menu** (`uiTitleTidy`, called at the end of `showTitle`). Every older builder still
+makes its own button, so `S.ui.buttons`, their labels, handlers and `GAME.choose` indices are
+exactly as before (Continue / New run first, History after Codex and Boss Rush, Duo last); the pass
+only moves the elements:
+- the big action: CONTINUE when a run is saved (NEW RUN under it, smaller), else NEW RUN (62 px,
+  breathing).
+- "New here? Try Claw School" under it (a fresh profile only, as before).
+- the play row: the Daily run card (today's date, crawler, mutators) and MODES, which opens the
+  **Play modes** sheet: Weekly challenge, Boss Rush, Duo.
+- five tiles (an icon over a short word): Vault (the Prize Vault, its "new" dot kept), Collection
+  (a sheet: Prizedex, Stickers, Codex, History; a badge counts fresh Codex pages and new stickers),
+  School (Claw School, its stars badge kept), Options (the Settings panel: sound, music, language,
+  text size, colour modes, hands, reduced flashing...), More (a sheet: Help, Tips, Intro, Sound
+  on/off, Music on/off).
+- the stats line: runs, wins, best Tilt, stickers, Prizedex, as small numbers without boxes.
+- the season ribbon, the hidden Event preview (five taps on the logo) and the attract mode are
+  untouched.
+A sheet is a panel rising from the bottom over a dimmed title (`.uiSheet`, inside `#scr-title`); it
+closes on its X, a tap on the dim or Escape. A sheet you left through (Back from the Prizedex, the
+Sound toggle, the Intro) opens again, without the rise, when the title comes back; a run coming back
+to the title finds it clean. The group buttons are plain taps, not `GAME.choose` entries; a sheet
+opened from the keyboard moves the focus into it and back to its button when it closes.
+
+Where every moved button went: Prizedex, Stickers, Codex, History: Collection sheet. Weekly
+challenge, Boss Rush, Duo: Play modes sheet. Help, Tips, Intro, Sound, Music: More sheet. Settings:
+the Options tile (sound and music are in its panel too). Prize Vault, Claw School: tiles. Daily run:
+the play row.
+
+Words: every new line has its Dutch (`js/lang_nl2.js`, the "(round 15) HUD and title menu polish"
+block): Modes / Modi, Play modes / Speelmodi, Vault / Kluis, Collection / Collectie, Options /
+Opties, More / Meer, and the chip cards. "Instellingen" does not fit a tile, hence the tile's own
+word. Minimum text size 12 px logical everywhere in the new chrome.
+
+Tests (`tests/clawspire_game.test.mjs`, "ui15:"): every older title button still registered in its
+order, where each one lives (menu or which sheet), the group tiles are plain taps, the sheets open and
+close, the Collection badge, Back reopens the sheet you left through (a run does not), CONTINUE and
+NEW RUN in the big action, DUO still works from its sheet; the HUD markup keeps every id and the
+vitals / resource / relic structure, the act chip reads "1/3", the shield chip shows the Block and
+empties without it, the relic fold and list stay off headless. Three older structure checks moved with
+the layout (the rush card, DUO and Claw School now asserted in their sheet / tile). Screenshots:
+scratchpad `r15ui/shots.mjs` (before_* and after_*, 390 x 844 and 540 x 960, English and Dutch),
+`shots2.mjs` (360 px, a fresh profile, extra large text, the rush HUD), `shots3.mjs` (the daily and
+Endless act chips).
+
+## Online co-op (round 15)
+
+The owner asked for Duo's CO-OP BOSS to work online. Duo, Co-op Boss now asks
+**Same phone** (the round 11 pass and play, unchanged) or **Online**: each
+player on their own phone, anywhere, sharing a four letter room code. Versus
+stays pass and play this round; the link (`NET`) is generic, so a versus claw-off
+(or anything else) can ride it later with message types of its own.
+
+### Transport: the shared relay
+
+- No server of our own: Clawspire uses the relay the owner already runs for
+  Ironbridge (`ironbridge-relay/worker.js`, a Cloudflare Worker with a Durable
+  Object per room, live at `wss://ironbridge-relay.danhieux-senjka.workers.dev`).
+  It knows nothing about either game: `POST /new` mints a code, `GET /room/<CODE>`
+  is a WebSocket, it gives each side `{k:'hello', side, seed}`, then
+  `{k:'peers', n}` and `{k:'start', seed, side}` once both are in, `{k:'peerGone'}`
+  when one drops, `{k:'rejoin', role}` when one comes back (`?side=` claims its
+  own seat back, `?have=1&tick=N` says it still holds the match), answers
+  `"ping"` with `{k:'pong'}` and copies everything else verbatim to the other side.
+  Plain WebSockets through Cloudflare: no NAT, STUN or TURN, so it works on the
+  strict mobile networks where direct peer links fail. Nothing in
+  `ironbridge-relay/` or `ironbridge/` was changed.
+- **The namespace.** Codes are shared with Ironbridge, so the first thing each
+  side says is `{t:'hi', game:'clawspire', v:1, b, p, ready, g, n}`. A partner
+  whose first word is anything else (an Ironbridge command batch) is another
+  game: "That code belongs to a different game." Another `v` (the message format,
+  `DUO.NET.PROTO`) or another `b` (this build's fingerprint: the bosses' moves, the
+  difficulty dials, the item count, `SAVE_VER`) is "Your partner has a different
+  game version, both reload."
+- **The heartbeat.** `"ping"` every 3 s while the socket is open (the relay copies
+  it to the partner and pongs back), in the lobby and through long turns alike:
+  the relay lets a newcomer claim a seat that has been silent for 10 s. A partner
+  silent 10 s is lost; a relay silent 13 s means our own socket is dead and it is
+  reopened. A partner who only went quiet (a phone in a pocket throttles timers)
+  is back on its next word, no rejoin needed.
+- **Reconnect.** A dropped socket reopens every 2.5 s with `?side=` (our seat) and
+  `?have=1&tick=N`; after the relay's `rejoin` both sides say hello again and
+  each resends its last turn (a repeat is ignored). After 30 s the game offers
+  **Keep fighting alone** or **Quit to title**, and the retries go on quietly (every
+  6 s) until one is picked. The seat is also kept in `sessionStorage`
+  (`clawspire_net`, this tab only) so a reload claims the same seat.
+- **The dev override.** The relay's host is `NET.HOST`; `?relay=host` (plus
+  `&relayws=ws` for plain `ws://` and `http://`) or `localStorage.clawspire_relay`
+  (`host` or `ws://host:port`, a dev key read in try/catch) point it elsewhere.
+- **Load.** `js/net.js` is about 17 KB with its comments and loads after `game.js` (no library):
+  nothing opens until the player taps Online.
+
+### The flow
+
+1. **Host a game**: the relay mints a code; the lobby shows it big in four letter
+   boxes with **Copy code** and **Share invite** (`navigator.share` with
+   `https://games-71g.pages.dev/clawspire/?join=CODE`, else the link to the
+   clipboard). **Join a game**: four big letter boxes (typing moves on, a paste
+   spreads out, the fourth letter joins). A page opened with `?join=CODE` goes
+   straight to joining (read once as the scripts load; the address loses it when
+   the online game is left).
+2. **The lobby**: both players side by side, each editing only their own look on
+   their own phone (name, colour, crawler, claw, paint, from that profile; the
+   last one is remembered in `meta.duo.online.me`). The host is seat 0 (the
+   relay's side 0) and owns the setup: it picks the boss (beaten ones or Random)
+   and keeps the colours apart (the guest's moves when both want the same). Each
+   taps **Ready!**; when both are, the host sends `go` (the seed stirred from the
+   relay's, the boss, both looks) and the coin goes up on both phones.
+3. **Turns**, strictly alternating, so nothing ever conflicts. **YOUR TURN**
+   (`RENDER.duo.turn`, the hand-off card face up in your colour, a ring that starts
+   it by itself after 5 s) and **Grab!**; the fight is the local co-op seat fight
+   (`duoCoopEnter`). The boss answers on your seat (COMBAT's enemy phase), then
+   the turn goes over the line at once (`duoTurnPass`) with a "NAME'S TURN" beat
+   here, and this phone watches.
+4. **Watching** (`duoNetDraw`, `RENDER.duo.watch`): both players up top (hp,
+   DOWN), the shared boss with its hp and next move, NAME'S TURN then "NAME is
+   grabbing", and **their cabinet** from the stream: their claw (built with
+   `PHYS.clawPose` in their claw type and paint), their bin's bodies moving,
+   each prize they land flying from the chute to their corner, their combos in
+   their colours, hp numbers popping, their colour round the glass. A cheer bar
+   (Let's go, Sing, Boots, Hug) sends cheers that play on both phones in the
+   sender's bubble (over the fight on the other phone, `duoNetOver`).
+5. **Results**: the TEAM WIN / KNOCKED OUT podium on both phones, booked on both
+   like local co-op (`meta.duo`, the names' team games and wins) plus
+   `meta.duo.online {games, wins}`. **Play again** takes both back to the lobby on
+   the same code; **Title** leaves.
+
+### Messages (all JSON, `t` the type, `v` the format; everything checked on arrival)
+
+| t | from | carries |
+|---|---|---|
+| `hi` | both | game, v, b (build), p (look), ready, g (in a game), n (turns seen) |
+| `me` | guest | p, ready (lobby) |
+| `lobby` | host | p [both, colours fixed], ready [both], boss |
+| `go` | host | seed, boss, pick, p [both] |
+| `turn` | active | n (a counter both sides keep), seat, next, res (''/win/ko), turns, foes (the shared enemies), pub (the seat's hp, max, block, statuses), down |
+| `cl` | active | the claw (x, y, cable top, open, phase, type, width), hp, the enemies' hp; `b` the bin's bodies [uid, item id, x, y, angle] every 0.25 s; sent 10 times a second only when something moved |
+| `fx` | active | k: prize (id, plus) or combo (id) |
+| `cheer` | either | id (a DUO.CHEERS id) |
+| `away` | either | on (the page is hidden) |
+| `bye` | either | leaving |
+| `again` | either | back to the lobby |
+| `need` / `sync` | returning / staying | a phone that lost the game (a reload) asks; the other sends the table: seed, boss, both looks, whose turn, down, the foes, both seats' public state |
+
+- **Never trust the partner.** `duoNetPlayer` (data.js) repairs a look against
+  this game's tables; `duoNetFoesIn` refuses a list unless every entry names a
+  real enemy (all or nothing), clamps every number, keeps only plain status
+  names, checks belly items and move indexes, and takes this game's own move
+  object as the intent (a checked copy only when it names none); a slot whose
+  enemy changed (a summon) is made fresh with COMBAT's own maker. A turn for this
+  phone's own seat, an old one, or one outside the watch phase changes nothing.
+- **The active phone's word stands.** The claw's physics may differ between
+  phones, so nothing is simulated twice: the enemies and the seat come over as
+  they ended. Each phone owns its own DOWN flag.
+
+### Failures (the game never hangs and always gets back to the title)
+
+- The relay unreachable: "Can't reach the online lobby, check your connection."
+  A code nobody hosts (alone in the room 7 s): "No game with that code. Check the
+  letters with your friend." A full room: "That game is already full." A code
+  that is no code: "A code is four letters (no I or O)."
+- The partner leaves the lobby: the host waits for a friend again on the same
+  code; a guest whose host left is told and goes back.
+- Mid game: "Partner connection lost, reconnecting..." (a card over the watch
+  screen with a spinner and the seconds, a toast and an amber `#duoBar` dot on the
+  fight screen), then Keep fighting alone (the partner's seat counts as DOWN, the
+  local rule: this seat simply goes again) or Quit to title. A partner who left
+  (`bye`) or whose page is hidden for 45 s (`away`, "NAME stepped away", with Wait)
+  gets the same choice at once. Nothing freezes the other phone for good.
+- Leave (with a "Leave the game?" check) sends `bye`. An online duel is never
+  saved (`duoSaveState` skips it), never touches the local duel save
+  (`clawspire_duo`) or the run save, and never changes the local setup memory.
+
+### Code map, API, tests
+
+- `js/net.js` (`NET`): the transport. `data.js` DUO block: `DUO.NET`,
+  `duoNetCode`, `duoNetJoinParam`, `duoNetPlayer`, `duoNetOnline` (`duoFix` keeps
+  `online`). `game.js` DUO block, the DUO NET part (`duoNet*`), reached through
+  one-line hooks in the round 11 code (the co-op button, `duoBegin` {net},
+  `duoAfterToss`, `duoHand`, `duoTurnPass`, `duoCoopBook`, `duoFightTick`,
+  `duoOver`, `duoTick`, `duoDraw`, `duoEndDom`, `duoKey`, `duoHud`'s dot) and one in
+  `deliver()`. `render.js` DUO block: `RENDER.duo.watch`, `turn`, `lost`, `wfx`.
+  `audio.js`: `duoLink` (opts.k: join, turn, lost, back). `index.html`: the
+  `duo-css` rules for the code boxes, the lobby and the dot. Dutch in
+  `lang_nl2.js` (the DUO NET block).
+- `GAME.duo.net = {choose, menu, host, joinDom, join, set, boss, ready, start,
+  go, alone, quit, again, cheer, live, send, onTurn, boot, foesOut, foesIn,
+  pubOut, pubIn, build, sheet, draw, state, log, bootCode}`.
+- `tests/clawspire_net.test.mjs` runs two whole games against the REAL relay
+  worker in memory (the stand-ins of `tests/ironbridge_relay.test.mjs`, a queue
+  pumped by hand): the codes and `?join=`, a look repaired, the enemies' round
+  trip and junk, the lobby, turn alternation with the stream, combos, a prize and
+  a cheer, a dropped line and its rejoin, a quiet partner, a hidden page, a seat
+  down, the team win on both, play again, 30 s then alone, a reload that syncs
+  back in, and every failure message.
+- End to end (scratchpad `r15net/`): `relay.mjs` hosts the real worker behind
+  `ws` on :8787 and the site on :8080; `e2e.mjs` drives two Chromium pages
+  (390x844, one English, one Dutch) through host, join by typing the code, the
+  lobby, four real turns with the watch screen, a cut line and its rejoin, a
+  team win, play again, a reload through the invite link, a closed page, 30 s,
+  Keep fighting alone. Screenshots `r15_net_*.png`.
+
+### Known limits
+
+- A turn cut short by a drop is not replayed: the turn is sent when it ends, so
+  if the active phone's page dies mid turn, that turn starts over when it comes
+  back (or the other goes on alone).
+- The stream is a picture, not a simulation: the watcher's bodies glide between
+  samples 4 times a second, so a fast tumble looks smoother than it was.
+- The relay's free plan has a daily message budget shared with Ironbridge; a
+  co-op match is a few thousand messages (the stream only while someone grabs,
+  only when something moved).
+
+## The Neon Depths (round 15)
+
+A fourth biome, for Endless only: the flooded basement under the Clawspire.
+
+- **When**: every third loop from Loop 3 dives (`DATA.depLoop`: 3, 6, 9, ...). The classic
+  cycle carries on between dives (`DATA.depAct`: 1 cellar, 2 foundry, D, 3 vault, 1, D, 2,
+  3, D, ...), so every act still comes round; `DATA.endlessAct` itself is unchanged. A dive
+  plays act 3 underneath (its scaling, its rewards). `run.endless.dep` marks the dive and
+  `run.endless.dp` counts them, so an old save at Loop 3 (no flag, a vault map) stays the
+  vault. The Drowned Jukebox keeps its own trick (a dive's `E.mix` is null; the rng was
+  still drawn, so later streams hold) and no loop boss ever borrows High Tide.
+- **The map** (`MAP.generate({biome: 'depths'})`): the vault's own layout for the seed,
+  only the biome differs, so every map rule holds. Tiles: flooded floor tiles, glowing
+  kelp (forest), a checkerboard through the silt (dirt), sand with starfish, drowned
+  arcade cabinets (mountains), pipes (hills), sunken arcade stools (fords), deep water
+  with ripples and rising bubbles. Teal fog, bubbles for motes, the Depths' own pools
+  on every fight, elite, boss and roamer.
+- **The fight**: an underwater arcade (light rays, a row of drowned cabinets, kelp, a
+  sunken ARCADE marquee, fish, a jellyfish, a sand floor), pink on High Tide, crackling
+  on live water. The cabinet stands in water (`DEP_K.water`, 16 percent of the bin) with
+  caustics; it is PHYS.rosFlood's buoyancy, so heavy prizes sink and light ones float.
+  There is one water: a Rising Water mutator folds in (the higher mark wins).
+- **The monsters** (act 3 pools' strength, then x1.1 hp and hits, `DEP_K.hpK / dmgK`):
+  Angler Token (`lure`: an Old Boot and a light over it; the aim creeps toward it and a
+  falling claw is pulled; grab the boot and the lure snaps off), Jellyfish Coin
+  (`jellies`: floating junk that stings the claw that touches it, once a grab; delivered,
+  it stings an enemy), Crab Changer (`pinch`: your best prizes are dragged to the far
+  wall; lift one clear to free it; still pinched a turn later, it goes into the shell),
+  Volt Eel (`shock`: next turn a prize lifted from under the waterline zaps you on
+  delivery), Sunken Mimic, the elite (`decoy`: look-alike chests, one pays gold and Block,
+  the rest bite). The boss, **The Drowned Jukebox**, High Tide: for your next turn the
+  water swells from 14 to 62 percent of the bin and back with its music (74 and 1.5x
+  faster on the B-side). Every trick lands on the player's turn or after the enemy phase,
+  so COMBAT.qaIntent / qaThreat stay exact.
+- **Music**: act 4 to AUDIO, a muffled dub (72 bpm minor, a walking sub, a one-drop kit,
+  a low-passed lead with a tape echo, bubbles). Seven sounds in their MIX tiers.
+- **Records**: the reboot card floods (DRAIN PUMP FAILED, THE NEON DEPTHS over rising
+  water), `meta.dep` {dives, jukebox, best}, a score line (1500 a Jukebox), the history
+  card's NEON DEPTHS tag, the Deep Diver sticker (the board's cap 60 -> 63), seven Codex
+  pages. Dutch for every line (the DEP block at the end of `lang_nl2.js`).
+
+## QA pass 5 and polish (round 15)
+
+Owner of this section: the QA and polish pass. Scratchpad `r15/` (`qa15.mjs` the tours and bot runs, `bot_fn.js`,
+`scan_fn.js` the text audit, `toast*.mjs`, `trd*.mjs`, `rival.mjs`, `dw.mjs`, `load15.mjs`, `bal15.mjs` / `cal15.sh` /
+`agg15.mjs`), screenshots `r15_qa_*.png`, `r15_toast_*.png`, `r15_trd_*.png`. Tests: `q15:` in the game and i18n suites.
+
+### The backlog
+
+- **"March" read "maart".** The Wind-Up Soldier's move and the month shared the ui key. A move now resolves by its
+  enemy: `content.move['clockwork.march']` (Opmars) and `['wraith.claw']` (Klauw, not the grijper) in `lang_nl2.js`,
+  `I18N.move(enemyId, name)`, and a pattern slot named `{mv}` reads the move table first (the death recap "Killed by
+  {s} with {mv} for {n}", the cabinet sign "{mv} NEXT TURN: {n}" and "{mv}: {n} INCOMING"). The date keeps its month
+  with its own line, "On until {n} March." Every move of every enemy is checked against the twelve months.
+- **The corner toast on DANSDUEL.** An event's title weighed as a heading and the vignette as text, so with the plain
+  toast in the bottom strip the least covered spot was the title. The title and a story's STORY / PART tags are
+  `.qaKeep`, the vignette's neon word is `QA_SIGNS.event` (measured off the scene canvas, `Q15_EV_SIGN`), and
+  `POL13_SPOTS.event` offers spots under the page's last button (`pol13Cands` now passes the measured keys). Measured
+  at 390 and 360 in both languages on the dance-off, the vending machine and an event: under the choices every time.
+- **The Trading Post in Dutch.** Shorter Dutch rules and "gets" (Rommel weg, Voorwerp weg; every line no longer than
+  its English) and a tighter card under `html[lang="nl"]` (`trd-css`). Over 40 rolled visits at 390 x 844 the three
+  trades now always fit: they needed up to 554 px of a 515 px panel before (26 of 40 visits scrolled), a Dutch card
+  is now shorter than the English one (292 against 321 px for the same three).
+
+### QA pass 5, both languages
+
+Scripted tours in English and in Dutch (Duo versus to the podium with a reload, Duo co-op through its hand-offs, all
+26 Claw School challenges, the practice cabinet, the Boss Rush with reloads, the daily ghost race, legendary relics
+and the new evolutions in a fight and the Prizedex, the three animated cabinets, the Trading Post: every trade kind
+dealt and refused a second time, a reload mid haggle, pet evolution by rest, gold and relic, the pet shop, both
+seasons' doors and stands) and bot runs in both languages with 8 live language switches each (in fights, on the map,
+in shops, rests, rewards and the post) and 4 reloads. Every step audits the page: page and console errors, stalls,
+NaN, raw `{placeholders}` and ids, English words left on a Dutch screen and Dutch on an English one (the DOM and every
+word drawn on the canvas), buttons overlapping or off stage, a corner item over a button.
+
+Found and fixed (tests `q15:`):
+1. **A Duo claw-off crashed** when a prize rolled into the chute after a drop was booked (`V.cur` gone). It now
+   scores for the one who knocked it loose (`duoVsCredit`).
+2. **A Gary claw-off could wait for ever**: his aim retried every 0.2 s on a claw still busy from the last drop (the
+   bot saw it hold a prize at the top for good). An aim on a busy claw now forces the prongs open after 6 s
+   (`Q15_AIM_STUCK`) and skips that drop after 10 s.
+3. **An item's rules text kept its old language after a switch** (both ways: the rules are built from DATA's numbers,
+   so no pattern reads them back). Every rules text now remembers how it was made (`I18N.itemText` memo) and `tr`
+   remakes it in the new language.
+4. **An icon in front kept the words English** ("🔥 Let's gooo!": a loose "{s}!" pattern took the whole string). The
+   words after an icon are tried first: 552 icon-led lines were English before, none now.
+5. **Glued toast lines lost their Dutch** ("Relic: Tuning Fork. +50 gold. Two Rocks in the bin." matched "Relic: {s}"
+   whole): sentences that are each known are now translated one by one first.
+6. **Canvas words in English**: a pet's quip bubble in fights, the pet shop's labels, a challenge's DROPS / TIME line,
+   the GOLD / SLOT chips of the legendaries, and a chalkboard goal (wrapped before it was translated, so its pieces had
+   no Dutch); `loreFit` measured the English. Plus the capsule prize cards (gold, bulbs, heart, tickets, capsule).
+7. **A switch right after boot waited 3 to 6 s** for the Dutch tables behind the art still loading (locally, HTTP/1):
+   the fetch now asks `fetchPriority = 'high'` (about 0.25 s).
+
+By design, noted: Duo's setup keeps its Toss button sticky over the scrolling list (in both languages); a floating
+word or a toast already on screen keeps its words for its last second after a switch; the Trading Post's haggle has
+no button (a tap hurries it). The language switch never touched the run or its save in the 24 switches checked in one beat (8 runs, 64 switches
+in all; the 40 of the first round were read across running frames and are not counted), and every reload came back where
+it was (20 mid run in the bot runs, plus the rush, the ghost race and a haggle in each language).
+
+### Balance check (round 15)
+
+The round 12 skilled bot (`PRO=2`, `r11/bal.mjs`) on the round 14 build, plus what a skilled player would do with the
+round 14 systems (`r15/bal15.mjs`: a detour to the Trading Post, swaps that the bot's item value rates higher, bundles
+of two weak items in a fat bin, removals with gold to spare, one relic swap in three; a pet evolved for gold at the
+post or at a rest). Six crawlers x classic / tri / scoop / twins, 8 seeds, Tilt 0: 190 runs (2 hit the 15 minute cap).
+
+| skilled bot, Tilt 0 | round 12 after (48 runs) | round 15 (190 runs) |
+| --- | --- | --- |
+| win | 31% | 32% |
+| deaths act 1 / 2 / 3 (share of losses) | 12 / 16 / 5 (36 / 48 / 15%) | 34 / 65 / 30 (26 / 50 / 23%) |
+| win: Knight / Alchemist / Rogue / Lucky Lou / Mama Mech / Ms. Bubbles | 38 / 38 / 38 / 13 / 25 / 38% | 34 / 44 / 55 / 25 / 13 / 19% |
+| win: classic / tri / scoop / twins | 42 / 25 / 50 / 8% | 27 / 27 / 61 / 13% |
+| gold on arrival, act 1 / 2 / 3 | 103 / 419 / 720 | 104 / 420 / 639 |
+| relics at the start of act 1 / 2 / 3 | 1.6 / 9.0 / 16.9 | 1.6 / 8.4 / 16.2 |
+| a won run ends with | 23.9 relics, 81 items, 1128 gold | 23.6 relics, 80 items, 796 gold |
+| capsules a run | 21.7 | 22.5 |
+| the killers | the Plushie Queen 6, Ironjaw 4, the Prize Mimic 3, the Dozer 3 | Ironjaw 18, the Plushie Queen 17, the Collector 13, the Golem 11, the Dozer 9, Tin Knight 8 |
+
+The round 14 systems in these runs: 2.0 trades a run (66% of runs trade: 112 swaps, 120 bundles, 92 removals, 55
+relic swaps), a pet evolved in 21% of runs, a legendary relic held at the end in 23% (0.6 in a won run). Runs that
+traded win 42% and runs that did not 11%, but that is who reaches the post (a run that dies early in act 1 never
+does), not what the trades are worth: the loot per act is flat against round 12 and the only real change is where
+the gold goes (a won run ends with 330 gold less, spent at the post). **The legendaries, the evolutions, the Trading
+Post and pet evolution did not push the game back toward easy**: the skilled bot wins 32% (the owner's target is a
+skilled player losing about 70%), and the deaths now spread wider over the acts (act 3 went from 15 to 23% of the
+losses). Left for the owner: the scoop still leads (61%) and the twins trail (13%); Mama Mech (13%) dies in act 2
+and 3 (Ironjaw and the Collector); Ironjaw and the Plushie Queen are the top killers again.
+
+### Load (round 15)
+
+The round 11 method (`r15/load15.mjs`: Chromium, 4x CPU throttle, slow 4G, served gzipped, the median of 3 cold and
+3 warm loads), on round 12, round 14 (HEAD) and round 14 with the lazy tables:
+
+| | round 12 | round 14 | round 15, English | round 15, Dutch |
+| --- | --- | --- | --- | --- |
+| bytes on the wire (cold) | 1036 KB | 1183 KB | 1070 KB | 1184 KB |
+| cold first frame (ms) | 7148 | 7994 | 7380 | 8030 |
+| warm first frame (ms) | 2403 | 3006 | 2023 | 3177 |
+
+The two Dutch tables are 116 KB gzipped (`lang_nl.js` 80, `lang_nl2.js` 36; 323 KB raw, `i18n.js` another 6): most of
+the round 14 growth (+147 KB, +846 ms to the first frame). They now load only for a Dutch player (written in while
+the page parses, so a Dutch boot is exactly as before) or on a switch (fetched, the screen redone when they land). An
+English player saves 113 KB and about 0.6 s cold, 1 s warm.
 
 ## Quality bar (Game of the Year, mobile)
 

@@ -3204,7 +3204,7 @@ const DATA = (() => {
   // The boss whose signature this loop's boss borrows (never its own).
   function endlessMix(rng, act) {
     const own = ((ENCOUNTERS[act] || {}).boss || [[]])[0] || [];
-    const ids = Object.keys(ENEMIES).filter((id) => ENEMIES[id].tier === 'boss' && ENEMIES[id].sig && !ENEMIES[id].secret && own.indexOf(id) < 0);   // (never the secret boss's tricks)
+    const ids = Object.keys(ENEMIES).filter((id) => ENEMIES[id].tier === 'boss' && ENEMIES[id].sig && !ENEMIES[id].secret && !ENEMIES[id].dep && own.indexOf(id) < 0);   // (never the secret boss's tricks) (DEP: the High Tide stays in the Depths)
     return ids.length ? ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))] : null;
   }
 
@@ -3229,6 +3229,7 @@ const DATA = (() => {
     add('jackpots', 'Jackpots', run.jackpots | 0, SCORE.jackpot);
     add('combos', 'Combos', sc.combos | 0, SCORE.combo);
     add('loops', 'Endless loops', loops, SCORE.loop);
+    add('dep', 'Drowned Jukeboxes unplugged', sc.dep | 0, DEP_K.dive);   // DEP (round 15): a Depths boss
     if (won) lines.push({ k: 'win', label: 'Prize Master down', n: 1, v: SCORE.win });
     if (run.sec && run.sec.beat) lines.push({ k: 'machine', label: 'The Machine powered down', n: 1, v: SECRET.score });   // SECRET: the true ending
     const base = lines.reduce((s, l) => s + l.v, 0);
@@ -5118,6 +5119,7 @@ const DATA = (() => {
     if (st.length) o.st = st;
     for (const k of ['o', 'se', 'dl', 'k', 'kk', 'ke', 'km']) { const s = hisStr(r[k], 40); if (s) o[k] = s; }
     if (r.kh > 0) o.kh = hisInt(r.kh, 0, 1e7);
+    if (r.dp > 0) o.dp = hisInt(r.dp, 0, 9999);   // DEP (round 15): the Neon Depths dives this run
     if (r.bc && typeof r.bc === 'object' && hisStr(r.bc.n, 40)) o.bc = { n: hisStr(r.bc.n, 40), t: hisInt(r.bc.t, 1, 3) };
     const mp = r.mp;
     if (mp && typeof mp === 'object' && hisMapCells(mp)) o.mp = { w: mp.w | 0, h: mp.h | 0, g: mp.g, p: hisInt(mp.p, -1, 1e4), b: hisInt(mp.b, -1, 1e4), s: hisInt(mp.s, -1, 1e4) };
@@ -5376,7 +5378,7 @@ const DATA = (() => {
   // The book: chapters in order, pages in order, lookups. Built once, on first use.
   function loreBook() {
     if (LORE_BOOK) return LORE_BOOK;
-    const entries = loreEntries(), byId = {}, ch = {};
+    const entries = loreEntries().concat(depLorePages()), byId = {}, ch = {};   // (DEP round 15: the Neon Depths' pages)
     for (const c of LORE_CH) ch[c.id] = [];
     for (const e of entries) { byId[e.id] = e; if (ch[e.ch]) ch[e.ch].push(e.id); }
     LORE_BOOK = { chapters: LORE_CH, entries, byId, ids: entries.map((e) => e.id), ch };
@@ -6161,7 +6163,54 @@ const DATA = (() => {
     return {
       games: n(d.games), vs: n(d.vs), coop: n(d.coop), coopWins: n(d.coopWins), names,
       last: { p: Array.isArray(last.p) ? last.p.slice(0, 2).filter((p) => p && typeof p === 'object') : [], drops: duoInt(last.drops, 3, 5, DUO.DROPS_DEF), boss: typeof last.boss === 'string' ? last.boss : '', mode: last.mode === 'coop' ? 'coop' : 'vs' },
+      online: duoNetOnline(d.online),   // DUO NET (round 15): online co-op games and wins, the last online look
     };
+  }
+  // ---- DUO NET (round 15): online co-op (DESIGN.md "Online co-op (round 15)"). The rules the
+  // game's DUO NET block and js/net.js share: the room code, the timings, a partner's profile repaired.
+  DUO.NET = {
+    PROTO: 1,                                  // the message format; a partner on another one is told to reload
+    ALPHA: 'ABCDEFGHJKLMNPQRSTUVWXYZ', CODE_LEN: 4,   // the relay's room codes: no I, no O, no digits
+    STREAM: 0.1, BODIES: 0.25,                 // the claw to the spectator 10 times a second, the bin 4 times
+    YOURS: 5,                                  // YOUR TURN starts on its own after this many seconds
+    AWAY: 45,                                  // a partner stepped away this long: keep fighting alone is offered
+    FX_MAX: 24, BODIES_MAX: 40, LOG_MAX: 12,   // what one message may carry
+  };
+  // A room code as typed or pasted ("ab-cd", " abcd "): the four letters, or null.
+  function duoNetCode(raw) {
+    const s = String(raw == null ? '' : raw).toUpperCase().replace(/[^A-Z]/g, '');
+    if (s.length !== DUO.NET.CODE_LEN) return null;
+    for (const c of s) if (DUO.NET.ALPHA.indexOf(c) < 0) return null;
+    return s;
+  }
+  // The code in a page address (?join=ABCD), or null.
+  function duoNetJoinParam(search) {
+    const m = /[?&]join=([^&#]*)/i.exec(String(search || ''));
+    let v = m ? m[1] : '';
+    try { v = decodeURIComponent(v); } catch (e) { /* a broken escape: the raw text */ }
+    return m ? duoNetCode(v) : null;
+  }
+  /* A player's profile from the other phone, repaired against this game's
+     tables: a name, a colour of the six, a crawler that exists, a claw type
+     that exists, a claw paint that exists ('' the team colour). Nothing
+     from the wire is trusted. */
+  function duoNetPlayer(p, i) {
+    p = p && typeof p === 'object' && !Array.isArray(p) ? p : {};
+    const pick = (v, ok, d) => (typeof v === 'string' && v.length < 40 && ok(v) ? v : d);
+    const has = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
+    return {
+      name: duoName(typeof p.name === 'string' ? p.name : '', i),
+      color: pick(p.color, (v) => DUO.COLORS.some((c) => c.id === v), DUO.DEF[(i | 0) === 1 ? 1 : 0].color),
+      char: pick(p.char, (v) => has(CHARACTERS, v), 'knight'),
+      claw: pick(p.claw, (v) => has(CLAWS, v), 'classic'),
+      paint: pick(p.paint, (v) => has(COSMETICS, v) && COSMETICS[v].cat === 'paint', ''),
+    };
+  }
+  // meta.duo.online: games and wins played online, the look last used there.
+  function duoNetOnline(o) {
+    const d = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    const n = (v) => Math.max(0, Math.floor(+v) || 0);
+    return { games: n(d.games), wins: Math.min(n(d.wins), n(d.games)), me: d.me && typeof d.me === 'object' && !Array.isArray(d.me) ? duoNetPlayer(d.me, 0) : null };
   }
   /* A finished duel on the record. o {mode: 'vs' | 'coop', names: [a, b],
      w: 0 | 1 | -1 (versus), won (co-op)}. Returns the record (mutated). */
@@ -6915,11 +6964,149 @@ const DATA = (() => {
   const PEV = { K: PEV_K, FORMS: PEV_FORMS, can: pevCan, on: pevOn, fee: pevFee, pow: pevPow };
   // ================================================================ /TRD
 
+  // ================================================================ DEP (round 15): the Neon Depths
+  /* The flooded basement under the Clawspire, a fourth biome for Endless
+     (DESIGN.md "The Neon Depths (round 15)"). From Loop 3, every third loop
+     (3, 6, 9 ...) dives into the Depths; the classic biomes carry on in
+     order between the dives (cellar, foundry, DEPTHS, vault, cellar, DEPTHS,
+     foundry, vault, DEPTHS ...). A dive plays at act 3 strength (run.act 3
+     keeps every act-keyed rule) on its own map biome ('depths') with its
+     own pools, plus a danger dial on top (DEP_K.hpK / dmgK). The monsters
+     play with the water in the cabinet (COMBAT's DEP block decides, the
+     game's DEP block stages it):
+     - lure {v}: the Angler Token drops an Old Boot and hangs its lure over
+       it: next turn the claw drifts toward the light (grab the boot out and
+       the lure has nothing to hang over).
+     - jellies {n, v}: the Jellyfish Coin drifts n jellies into the bin (junk
+       that floats); each stings the claw that touches it for v (x its hits),
+       once a grab. Delivered, a jelly stings them instead.
+     - pinch {n}: the Crab Changer pinches your n best prizes and drags them
+       along the floor to the far wall; whatever is still pinched when the
+       enemy phase ends goes into its shell (the belly rules).
+     - shock {v}: the Volt Eel electrifies the water for your next turn: a
+       prize the claw lifted from under the waterline shocks you for v.
+     - decoy {n, v}: the Sunken Mimic scatters n look-alike chests; one holds
+       treasure (gold and Block), the rest bite the hand that delivers them.
+     - sig 'tide' (The Drowned Jukebox, High Tide): for your next turn the
+       water rises and falls with its music between tide.lo and tide.hi of
+       the bin (heavy prizes sink, light ones float up and drift away). */
+  const DEP_K = {
+    from: 3, every: 3,                 // the first dive, and the loops between dives
+    hpK: 1.1, dmgK: 1.1,               // the Depths hit harder than the act 3 pools they stand in for
+    water: 0.16,                       // the standing water in a Depths cabinet (share of the bin's height)
+    tide: { lo: 0.14, hi: 0.62, hiRage: 0.74, beats: 8, bpm: 88, rageK: 1.5 },
+    real: { gold: 12, block: 8 },      // the Sunken Mimic's one real chest
+    jelly: 5,                          // a delivered jelly's sting on a random enemy
+    dive: 1500,                        // score per Drowned Jukebox unplugged (run.sc.dep)
+    boss: 'dep_jukebox',
+    name: 'The Neon Depths', sub: 'The flooded basement under the Clawspire',
+  };
+  const DEP_KINDS = ['lure', 'jellies', 'pinch', 'shock', 'decoy'];
+  // Is this Endless loop a dive? How many dives up to it? Its act (3 for a dive, else the classic cycle without the dives).
+  const depLoop = (loop) => { loop = Math.floor(+loop || 0); return loop >= DEP_K.from && (loop - DEP_K.from) % DEP_K.every === 0; };
+  const depDives = (loop) => { loop = Math.floor(+loop || 0); return loop < DEP_K.from ? 0 : Math.floor((loop - DEP_K.from) / DEP_K.every) + 1; };
+  const depAct = (loop) => (depLoop(loop) ? 3 : endlessAct(Math.max(1, Math.floor(+loop || 1) - depDives(loop))));
+  const depMv = (id, name, k, txt, extra) => Object.assign({ id, name, k, txt }, extra || {});
+  const DEP_ENEMIES = [
+    { id: 'dep_angler', dep: 'angler', name: 'Angler Token', act: 3, tier: 'normal', hp: [66, 78], art: 'wisp', look: 'dep_angler', size: 0.95, color: '#1f4a6a', color2: '#ffe066', color3: '#2ee6d6',
+      desc: 'A sunken arcade token with a lantern on a rod. It dangles the light over the junk in your bin, and your claw follows it like a moth.', ai: 'cycle', pattern: [0, 1, 2, 0, 3],
+      moves: [depMv('lure', 'Dangle the Lure', 'lure', 'Hangs its lure over an Old Boot: next turn your claw drifts toward the light', { v: 1, item: 'dep_boot' }),
+        atk('chomp', 'Lantern Chomp', 17, 1, 'Chomps for 17'), debuff('glare', 'Deep Glare', 'weak', 2, 'Glares from the deep (Weak 2)'),
+        atk('snap', 'Snap Bite', 7, 2, 'Snap bites: 7 x2')] },
+    { id: 'dep_jelly', dep: 'jelly', name: 'Jellyfish Coin', act: 3, tier: 'normal', hp: [58, 70], art: 'jelly', look: 'dep_jelly', size: 0.9, color: '#ffc94d', color2: '#ff6bd6', color3: '#8dfff5',
+      desc: 'A gold token that grew a jellyfish. It drifts its little ones into your bin, and every one of them stings the claw that touches it.', ai: 'cycle', pattern: [0, 1, 2, 1, 3],
+      moves: [depMv('drift', 'Drift Jellies', 'jellies', 'Drifts 2 jellies into your bin: each stings your claw when it touches it', { n: 2, v: 2 }),
+        atk('sting', 'Sting', 6, 3, 'Stings: 6 x3'), debuff('venom', 'Venom Bell', 'poison', 5, 'Rings its venom bell (5 Poison)'),
+        blk('pulse', 'Pulse', 14, 'Pulses into a ball (Block 14)')] },
+    { id: 'dep_crab', dep: 'crab', name: 'Crab Changer', act: 3, tier: 'normal', hp: [74, 86], art: 'crab', look: 'dep_crab', size: 1, color: '#ff6b4a', color2: '#9aa6b8', color3: '#ffc94d',
+      desc: 'A hermit crab living in a coin changer. It pinches your best prizes and drags them off along the floor. Whatever is still pinched when your turn ends goes into its shell.', ai: 'cycle', pattern: [0, 1, 2, 0, 3],
+      moves: [depMv('pinch', 'Pinch', 'pinch', 'Pinches your 2 best items and drags them away: grab them back before your turn ends', { n: 2 }),
+        atk('clack', 'Claw Clack', 8, 2, 'Clacks: 8 x2'), blk('shell', 'Into the Shell', 16, 'Hides in its shell (Block 16)'),
+        atk('crush', 'Crusher Claw', 19, 1, 'Crusher claw for 19')] },
+    { id: 'dep_eel', dep: 'eel', name: 'Volt Eel', act: 3, tier: 'normal', hp: [68, 80], art: 'magbat', look: 'dep_eel', size: 1, color: '#2ee6d6', color2: '#ff2e88', color3: '#ffe066',
+      desc: 'A neon sign tube that learned to swim. It lights up the water: every wet prize you pull out of it gives you a shock.', ai: 'cycle', pattern: [0, 1, 2, 3, 1],
+      moves: [depMv('livewire', 'Live Wire', 'shock', 'Electrifies the water: next turn every wet prize you deliver shocks you', { v: 3 }),
+        atk('lash', 'Zap Lash', 9, 2, 'Zap lash: 9 x2'), debuff('static', 'Static Cling', 'vuln', 2, 'Static cling (Vulnerable 2)'),
+        depMv('surge', 'Power Surge', 'charge', 'Powering up (38 next turn)', { v: 38 })] },
+    { id: 'dep_mimic', dep: 'mimic', name: 'Sunken Mimic', act: 3, tier: 'elite', hp: [182, 196], art: 'mimic', look: 'dep_mimic', size: 1.15, color: '#8a5a2b', color2: '#2ee6d6', color3: '#ffc94d',
+      desc: 'A treasure chest that sank with the arcade and grew barnacles and a grudge. It scatters look-alike chests into your bin: one holds treasure, the others bite.', ai: 'cycle', pattern: [0, 1, 2, 3, 0, 4, 5],
+      taunt: 'Go on. Open one. Open them all.',
+      enrage: { name: 'DAVY JONES', text: 'Every chest in the deep snaps open at once', str: 2 },
+      moves: [depMv('decoy', 'Sunken Treasure', 'decoy', 'Scatters 3 chests into your bin: one holds treasure, the others bite the hand that delivers them', { n: 3, v: 6 }),
+        atk('lid', 'Lid Slam', 26, 1, 'Lid slam for 26'), gulp('gulp', 'Swallow', 1, 'shiny', 'Swallows your rarest item'),
+        atk('barnacle', 'Barnacle Barrage', 8, 3, 'Barnacle barrage: 8 x3'), depMv('breath', 'Deep Breath', 'charge', 'Taking a deep breath (54 next turn)', { v: 54 }),
+        blk('clamp', 'Clamp Shut', 22, 'Clamps shut (Block 22)')] },
+    { id: 'dep_jukebox', dep: 'jukebox', name: 'The Drowned Jukebox', act: 3, tier: 'boss', hp: [150, 150], art: 'furnace', look: 'dep_jukebox', size: 1, color: '#ff6bd6', color2: '#2ee6d6', color3: '#ffc94d',
+      desc: 'The basement jukebox, flooded to the coin slot and still playing. The water in your cabinet rises and falls with its music: heavy prizes sink, light ones float away.', ai: 'cycle',
+      taunt: 'Now spinning: your last song.',
+      // Boss signature: High Tide. For your next turn the water in the cabinet rises and falls with its music.
+      sig: { id: 'tide', name: 'High Tide', sign: 'HIGH TIDE', shout: 'DROP THE BASS!', text: 'floods your cabinet: the water rises and falls with the music', first: 1, every: 2 },
+      pattern: [0, 2, 1, 4, 3, 5, 6, 7, 0],
+      enrage: { name: 'B-SIDE', text: 'The record flips. The tide comes in faster.', str: 2, pattern: [0, 7, 5, 6, 1, 2] },
+      moves: [atk('bass', 'Bass Drop', 11, 3, 'Bass drop: 11 x3'), depMv('dep_jelly', 'Jelly Jam', 'summon', 'Calls a Jellyfish Coin'),
+        debuff('feedback', 'Feedback', 'weak', 2, 'Feedback squeal (Weak 2)'), blk('seal', 'Waterproof Case', 26, 'Seals its case (Block 26)'),
+        depMv('splash', 'Splash Down', 'shake', 'Splashes the cabinet. Your bin rattles.'),
+        depMv('crank', 'Crank It Up', 'charge', 'Cranking the volume (38 next turn)', { v: 38 }),
+        atk('scratch', 'Needle Scratch', 24, 1, 'Needle scratch for 24'),
+        depMv('pour', 'Pour Jellies', 'jellies', 'Pours 2 jellies into your bin: each stings your claw when it touches it', { n: 2, v: 2 })] },
+  ];
+  for (const e of DEP_ENEMIES) ENEMIES[e.id] = Object.assign({ size: 1 }, e);
+  // The Depths' pools (not in ENCOUNTERS, which stays act-keyed): normals run easy -> hard, like every act's.
+  const DEP_ENC = {
+    normal: [['dep_jelly', 'dep_jelly'], ['dep_angler'], ['dep_crab'], ['dep_eel'], ['dep_jelly', 'dep_angler'], ['dep_crab', 'dep_jelly'],
+      ['dep_eel', 'dep_jelly'], ['dep_angler', 'dep_crab'], ['dep_eel', 'dep_angler'], ['dep_crab', 'dep_eel']],
+    elite: [['dep_mimic'], ['dep_mimic', 'dep_jelly']],
+    boss: [['dep_jukebox']],
+  };
+  const depEnc = () => DEP_ENC;
+  // The monsters' junk: reachable as ITEMS[id], never listed (no pool, shop or Prizedex sees them).
+  const depItem = (d) => Object.defineProperty(ITEMS, d.id, { value: Object.assign({ density: 1, friction: 0.5, restitution: 0.1, target: 'none', tags: ['junk'], rarity: 'junk', cost: 0, exhaust: true, fx: [] }, d),
+    enumerable: false, configurable: true, writable: true });
+  depItem({ id: 'dep_boot', name: 'Old Boot', tags: ['junk', 'heavy'], shape: box(40, 30), density: 1.5, friction: 0.7, color: '#6a5a3a', color2: '#2e6a5a', art: 'boot', dep: 'boot',
+    text: 'A waterlogged boot, the Angler Token\'s bait. Its lure hangs over it; grab the boot out and the lure has nothing to hang over.' });
+  depItem({ id: 'dep_jellyling', name: 'Jelly', tags: ['junk', 'light'], shape: circle(16), density: 0.55, friction: 0.35, restitution: 0.3, color: '#ff6bd6', color2: '#8dfff5', art: 'orb', dep: 'jelly',
+    target: 'random', fx: [{ k: 'dmg', v: DEP_K.jelly }],
+    text: 'A little jellyfish. It stings the claw that touches it. Delivered, it stings a random enemy for {v} instead.' });
+  depItem({ id: 'dep_chest', name: 'Sunken Chest', tags: ['junk', 'heavy'], shape: box(38, 30), density: 1.3, friction: 0.6, color: '#8a5a2b', color2: '#ffc94d', art: 'rock', dep: 'chest',
+    text: 'One of the Sunken Mimic\'s chests. One of them holds treasure. The others bite the hand that delivers them.' });
+  // The Codex: the floor, its boss and its five monsters.
+  function depLorePages() {
+    return [
+      { id: 'fl_depths', ch: 'floors', name: 'The Neon Depths', art: { k: 'act', act: 3, dep: 1 }, r: ['seen', 'dep_jelly'], hint: 'Keep playing past the Prize Master until the machine forgets to drain.',
+        text: 'Under the Clawspire there is a basement nobody mentions, and under the basement there is water. The pipes gave up years ago. The arcade down there kept its power and lost its floor: cabinets stand knee deep in green light, their screens still playing to the fish. Kelp grew out of the carpet. The prizes that sank learned to swim. Every third time the machine reboots, it forgets to drain, and the loop dives into the Depths instead.' },
+      { id: 'bo_jukebox', ch: 'bosses', name: 'The Drowned Jukebox', art: { k: 'enemy', id: 'dep_jukebox', act: 3, dep: 1 }, r: ['kills', 'dep_jukebox', 1],
+        text: 'The basement jukebox was playing when the pipes burst, and it never stopped. It sits in the deep end with water up to its coin slot, flipping records nobody picked, and the whole flooded floor moves to its music. When the bass drops, the tide comes in: heavy prizes sink to the bottom, light ones drift off toward the far wall. It does not want to hurt anybody. It just wants one more quarter, and one more song, forever.' },
+      { id: 'be_dep_angler', ch: 'bestiary', name: 'Angler Token', art: { k: 'enemy', id: 'dep_angler', act: 3, dep: 1 }, r: ['kills', 'dep_angler', 5],
+        text: 'An arcade token that sank to the bottom and grew a lantern on a stick. The Angler Token dangles its little light over the junk in your bin, and your claw, which has never been able to resist a glowing thing, drifts after it. Steer against the pull or fish the bait out. Anglers are not clever, exactly. They have just noticed that Crawlers and moths make the same face when they see a light.' },
+      { id: 'be_dep_jelly', ch: 'bestiary', name: 'Jellyfish Coin', art: { k: 'enemy', id: 'dep_jelly', act: 3, dep: 1 }, r: ['kills', 'dep_jelly', 5],
+        text: 'A gold coin that drifted into the Depths and grew a skirt of glowing tentacles. Jellyfish Coins breed in the coin returns and send their little ones floating into your bin, where they bob about looking harmless and sting any claw that brushes them. Grab one out and it stings the other side instead. They are not angry. They are ninety five percent water and five percent static, and the static does all the talking.' },
+      { id: 'be_dep_crab', ch: 'bestiary', name: 'Crab Changer', art: { k: 'enemy', id: 'dep_crab', act: 3, dep: 1 }, r: ['kills', 'dep_crab', 5],
+        text: 'A hermit crab that moved into a broken coin changer and liked the acoustics. It pinches your best prizes and drags them along the floor to its corner, clacking happily the whole way. Whatever is still pinched when your turn ends goes into its shell, at least until you knock it back out of there. It gives change for nothing. It has never given change. It just likes the sound of coins.' },
+      { id: 'be_dep_eel', ch: 'bestiary', name: 'Volt Eel', art: { k: 'enemy', id: 'dep_eel', act: 3, dep: 1 }, r: ['kills', 'dep_eel', 5],
+        text: 'A neon sign tube that fell into the Depths, lit up, and decided it liked being a fish. The Volt Eel coils through the flooded cabinets humming at mains voltage. When it charges the water, every wet prize you pull out gives you a jolt on the way down the chute. Grab from the top of the pile, where it is dry. Old Crawlers say the eel used to spell OPEN. Now it mostly spells OUCH.' },
+      { id: 'be_dep_mimic', ch: 'bestiary', name: 'Sunken Mimic', art: { k: 'enemy', id: 'dep_mimic', act: 3, dep: 1 }, r: ['kills', 'dep_mimic', 3],
+        text: 'A treasure chest that sank with the arcade and grew barnacles and a grudge. The Sunken Mimic scatters look-alike chests into your bin. One of them really does hold treasure; the others have teeth. The real one glints when it thinks nobody is looking. Deliver a biter and it bites the hand that won it. It has waited at the bottom for a very long time, and it has learned to be patient, and a little mean.' },
+    ];
+  }
+  // meta.dep: {dives (Depths loops entered), jukebox (Drowned Jukeboxes beaten), best (the deepest dive's loop)}; junk is repaired.
+  function depFix(o) {
+    const s = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    const n = (v) => Math.max(0, Math.min(1e9, Math.floor(+v) || 0));
+    return { dives: n(s.dives), jukebox: n(s.jukebox), best: n(s.best) };
+  }
+  // One sticker (the board's cap moved from 60 to 61 for it).
+  for (const a of [
+    A_('deep_diver', 'Deep Diver', '\u{1F93F}', '#2ee6d6', 'Unplug The Drowned Jukebox in the Neon Depths.', (c) => (((c.meta && c.meta.dep) || {}).jukebox | 0) >= 1),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  const DEP = { K: DEP_K, KINDS: DEP_KINDS, ENEMIES: DEP_ENEMIES, ENC: DEP_ENC, loop: depLoop, dives: depDives, act: depAct, enc: depEnc, fix: depFix, lore: depLorePages };
+  // ================================================================ /DEP
+
   return {
     // SCHOOL (round 11): Claw School and the Practice Cabinet (DESIGN.md "Claw School and the Practice Cabinet (round 11)")
     SCH, SCH_LESSONS, SCH_CH, SCH_IDS, schMatch, schEval, schStars, schStarText, schPay, schTotal, schLessonStars, schOpen, schChOpen, schGrade, schFix,
     // DUO (round 11): pass and play for two (DESIGN.md "Duo: pass and play (round 11)")
     DUO, duoName, duoKey, duoColor, duoCard, duoTaunt, duoPlayers, duoPile, duoDropScore, duoDeck, duoDrawCards, duoRoundWin, duoMatch, duoStarter, duoToss, duoBosses, duoFix, duoRecord, duoBoard,
+    duoNetCode, duoNetJoinParam, duoNetPlayer, duoNetOnline,   // DUO NET (round 15): online co-op
     // the Boss Rush and the ghost race (DESIGN.md "Boss Rush and the ghost race (round 10)")
     RUSH, rushOrder, rushActOf, rushHpK, rushDmgK, rushTierK, rushKit, rushDraftKinds, rushScore, rushFmt, rushFix, rushRecord, rushBoard,
     GHO, ghoCp, ghoRead, ghoRecFix, ghoFix, ghoAt, ghoDelta, ghoPassed, ghoSeries,
@@ -6937,6 +7124,8 @@ const DATA = (() => {
     LEG,
     // TRD (round 14): the Trading Post and pet evolution (DESIGN.md "The Trading Post and pet evolution (round 14)")
     TRD, PEV, TRD_K, PEV_K, PEV_FORMS, trdValue, trdRoll, trdFix, pevCan, pevOn, pevFee, pevPow,
+    // DEP (round 15): the Neon Depths, Endless's fourth biome (DESIGN.md "The Neon Depths (round 15)")
+    DEP, DEP_K, DEP_KINDS, DEP_ENEMIES, DEP_ENC, depLoop, depDives, depAct, depEnc, depFix,
     // run history and the death recap (DESIGN.md "Run history, the death recap and photo mode (round 8)")
     HIS, hisRecFix, hisFix, hisPush, hisRank, hisFilter, hisChart, hisMapPack, hisMapCells, hisKillLine, hisTips, hisWon,
     // stories, the rival, alternate bosses (DESIGN.md "Stories, the rival and alternate bosses (round 8)")

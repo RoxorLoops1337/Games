@@ -413,6 +413,7 @@ const COMBAT = (() => {
     if (diff.tierDmg && diff.tierDmg[tier] != null) dmgMul *= num(diff.tierDmg[tier], 1);
     { const tsc = tiltScale(F); hpMul *= tsc[0]; dmgMul *= tsc[1]; }   // meta: the run's Tilt level (TILT block)
     { const esc = endlessMul(F); hpMul *= esc[0]; dmgMul *= esc[1]; }   // the Endless loop's lift (ENDLESS block)
+    { const dm = depMul(def); hpMul *= dm[0]; dmgMul *= dm[1]; }   // DEP (round 15): the Neon Depths' danger dial
     let edef = def;
     if (hpMul !== 1) hp = Math.max(1, Math.round(hp * hpMul));
     if (dmgMul !== 1 && Array.isArray(def.moves)) {
@@ -756,6 +757,7 @@ const COMBAT = (() => {
     bestDeath(F, e);   // a Mole's buried items pop back up (BESTIARY block)
     famDeath(F, e);   // the band loses the beat, the choir gets angry, the Change Machine pays out (FAMILY block)
     stoDeath(F, e);   // the Arctic Arcade's ice block melts open, the King's belt stops (STORY block)
+    depDeath(F, e);   // a crab lets go, the lure, the live water and the tide end with their owner (DEP block)
     // Explosive affix: a parting blast (it never finishes the player off).
     if (hasAffix(e, 'explosive') && F.player.hp > 1) {
       const v = Math.min(F.player.hp - 1, Math.round((4 + 4 * F.act) * num(e.dmgMul, 1)));
@@ -892,7 +894,7 @@ const COMBAT = (() => {
       case 'jam': return 'Jams your claw rail';
       case 'eggs': return `Lays ${Math.max(1, num(m.n, 1) | 0)} eggs in your bin`;
       case 'none': return 'Waits';
-      default: return famText(e, m) || bestIntent(e, m) || m.txt || m.name || '???';   // (FAMILY: restock, cans, change, lost the beat)
+      default: return famText(e, m) || depIntent(e, m) || bestIntent(e, m) || m.txt || m.name || '???';   // (FAMILY: restock, cans, change, lost the beat)
     }
   }
 
@@ -1341,6 +1343,7 @@ const COMBAT = (() => {
       }
       case 'machine': secSig(F, e, s, info, idx); break;   // The Machine's cabinet events (SECRET block)
       case 'plush': case 'belt': case 'glacier': stoSig(F, e, s, info, idx); break;   // the alternate bosses (STORY block)
+      case 'tide': depSig(F, e, s, info, idx); break;   // The Drowned Jukebox's High Tide (DEP block)
       default: break;
     }
     log(F, `${e.def.name || e.id}: ${info.name}.`);
@@ -1383,6 +1386,7 @@ const COMBAT = (() => {
     F.rigged = null;
     secTurnEnd(F);   // The Machine: zero g, the live rail, the shutter (SECRET block)
     stoTurnEnd(F);   // the Conveyor King's belt stops (STORY block)
+    depTurnEnd(F);   // the lure, the live water and the tide go (DEP block)
   }
   // Game hooks: a prize lands on the iced chute lip (a heavy one smashes it),
   // the ice is shattered outright, a rigged drop is spent. Return the new state.
@@ -1587,7 +1591,7 @@ const COMBAT = (() => {
         checkOver(F);
         break;
       }
-      default: if (!famMove(F, e, m)) bestMove(F, e, m); break;   // the families' moves (FAMILY block), the bestiary's machine tricks (BESTIARY block)   // the bestiary's machine tricks (BESTIARY block)
+      default: if (!famMove(F, e, m) && !depMove(F, e, m)) bestMove(F, e, m); break;   // (DEP round 15: the Neon Depths' water tricks)   // the families' moves (FAMILY block), the bestiary's machine tricks (BESTIARY block)   // the bestiary's machine tricks (BESTIARY block)
     }
   }
 
@@ -2200,6 +2204,7 @@ const COMBAT = (() => {
     // The Smelter's red hot metal: the grab worked, the hand pays for it.
     if (inst.hot) burnHot(F, inst);
     stoPlayed(F, inst, def);   // the ice block smashes, metal jams the conveyor (STORY block)
+    depPlayed(F, inst, def);   // the boot snaps the lure off, a chest pays or bites (DEP block)
     sanitize(F);
     checkOver(F);
     // Never leave an empty cabinet mid-turn.
@@ -2233,6 +2238,7 @@ const COMBAT = (() => {
       if (checkOver(F)) break;
     }
     famPhaseEnd(F);   // the choir's anger, a full Crescendo turns into a SOLO, the choir in step (FAMILY block)
+    depPhaseEnd(F);   // a Crab Changer takes what is still pinched into its shell (DEP block)
     // After the enemies acted: lit bombs left in the bin burn down, eggs
     // left alone hatch (the hatchlings act from next round).
     if (F.phase === 'enemy') { binTimers(F); sanitize(F); checkOver(F); }
@@ -3350,6 +3356,208 @@ const COMBAT = (() => {
     return end(F, c);
   };
   /* ================= /TRD ================= */
+
+  /* ================= DEP (round 15): the Neon Depths' monsters and The Drowned Jukebox =================
+     DESIGN.md "The Neon Depths (round 15)". Five move kinds (DATA.DEP_KINDS)
+     and one boss signature ('tide'), decided here and staged by the game's
+     DEP block. Fight state only (never saved; a reload replays the seeded
+     fight): F.depLure {by, inst} (the Angler Token's lure over its Old Boot,
+     for the player's next turn), F.depShock {v, by} (live water, the next
+     turn), inst.depPinch / depPinchT (a prize a Crab Changer pinched, and
+     when), inst.depSting (a jelly's sting), inst.depBite / depReal (the
+     Sunken Mimic's chests), F.tide {lo, hi, beats, bpm, by, rage} (High
+     Tide, the next turn). Nothing here changes a hit of the enemy phase (a
+     crab takes its catch only after the enemies have acted, a turn after it
+     pinched), so COMBAT.qaIntent / qaThreat stay exact. The claw's own
+     troubles (a sting, a shock, a bite) land on the player's turn through
+     depSting / depZap / play. Events: {t:'dep', k:'lure' | 'lureOff' |
+     'jellies' | 'sting' | 'pinch' | 'unpinch' | 'take' | 'shock' |
+     'shockOff' | 'zap' | 'decoy' | 'chest', idx, ...} and the boss's
+     {t:'boss', k:'tide' | 'ebb', ...}. */
+  const DEP_KINDS = ['lure', 'jellies', 'pinch', 'shock', 'decoy'];
+  const depK = () => tbl('DEP_K');
+  // A trick's number, scaled with its owner's hits (the Endless lift, Tilt, the Depths' dial).
+  const depHit = (e, v) => Math.max(1, Math.round(num(v, 1) * num(e && e.dmgMul, 1)));
+  // makeEnemy: a Depths monster hits and lasts a little more than the act 3 pools it stands in for.
+  function depMul(def) {
+    if (!def || !def.dep) return END_ONE;
+    const K = depK();
+    return [Math.max(0.1, num(K.hpK, 1)), Math.max(0.1, num(K.dmgK, 1))];
+  }
+  // What a crab goes for: the rarest, then upgraded, then bin order (pure: the telegraph is the truth).
+  const depVal = (i) => num(RAR[itemDef(i.id).rarity], 1) * 10 + (i.plus ? 5 : 0);
+  function depPinchPick(F, n) {
+    const pool = F.bin.filter(i => !isJunk(i) && !i.frozen && !i.depPinch);
+    const ord = pool.map((i, k) => [i, k]).sort((a, b) => depVal(b[0]) - depVal(a[0]) || a[1] - b[1]);
+    return ord.slice(0, n).map(x => x[0]);
+  }
+  // Resolve one Depths move. False for a kind this block does not know.
+  function depMove(F, e, m) {
+    if (!m || DEP_KINDS.indexOf(m.k) < 0) return false;
+    const idx = F.enemies.indexOf(e);
+    switch (m.k) {
+      case 'lure': {
+        const items = bossJunk(F, m.item || 'dep_boot', 1);
+        F.depLure = { by: e.uid, inst: items[0] || null };
+        emit(F, { t: 'dep', k: 'lure', idx, items, inst: F.depLure.inst });
+        text(F, e, 'OOH, A LIGHT');
+        break;
+      }
+      case 'jellies': {
+        const n = clamp(Math.round(num(m.n, 2)) + (e.enraged ? 1 : 0), 1, 4);
+        const v = depHit(e, m.v || 2);
+        const items = bossJunk(F, 'dep_jellyling', n);
+        for (const i of items) i.depSting = v;
+        emit(F, { t: 'dep', k: 'jellies', idx, items, v });
+        text(F, e, items.length ? 'BLOOP' : 'NO ROOM');
+        break;
+      }
+      case 'pinch': {
+        const insts = depPinchPick(F, clamp(Math.round(num(m.n, 1)), 1, 3));
+        for (const i of insts) { i.depPinch = e.uid; i.depPinchT = F.turn; }
+        emit(F, { t: 'dep', k: 'pinch', idx, insts });
+        text(F, e, insts.length ? 'SNIP SNIP' : 'NOTHING');
+        break;
+      }
+      case 'shock': {
+        F.depShock = { v: depHit(e, m.v || 3), by: e.uid };
+        emit(F, { t: 'dep', k: 'shock', idx, v: F.depShock.v });
+        text(F, e, 'BZZZT');
+        break;
+      }
+      case 'decoy': {
+        const n = clamp(Math.round(num(m.n, 3)) + (e.enraged ? 1 : 0), 1, 5);
+        const bite = depHit(e, m.v || 6);
+        const items = bossJunk(F, 'dep_chest', n);
+        const real = items.length ? items[Math.floor(F.rng() * items.length)] : null;
+        for (const i of items) { i.depBite = bite; if (i === real) i.depReal = true; }
+        emit(F, { t: 'dep', k: 'decoy', idx, items, v: bite });
+        text(F, e, items.length ? 'PICK ONE' : 'NO ROOM');
+        break;
+      }
+      default: break;
+    }
+    return true;
+  }
+  // The Drowned Jukebox's High Tide (bossSig): the water rises and falls with the music for the player's next turn.
+  function depSig(F, e, s, info, idx) {
+    const T = depK().tide || {}, rage = !!e.enraged;
+    F.tide = {
+      lo: clamp(num(T.lo, 0.14), 0, 0.9), hi: clamp(rage ? num(T.hiRage, 0.74) : num(T.hi, 0.62), 0.05, 0.9),
+      beats: Math.max(2, num(T.beats, 8) | 0), bpm: Math.max(30, num(T.bpm, 88) * (rage ? num(T.rageK, 1.5) : 1)), by: e.uid, rage,
+    };
+    emit(F, { t: 'boss', k: 'tide', idx, name: info.name, lo: F.tide.lo, hi: F.tide.hi, bpm: F.tide.bpm, rage });
+  }
+  // bossTurnEnd: the player's turn is over: the lure, the live water and the tide go.
+  function depTurnEnd(F) {
+    if (F.depLure) { F.depLure = null; emit(F, { t: 'dep', k: 'lureOff', idx: -1 }); }
+    if (F.depShock) { F.depShock = null; emit(F, { t: 'dep', k: 'shockOff', idx: -1 }); }
+    if (F.tide) { F.tide = null; emit(F, { t: 'boss', k: 'ebb', idx: -1 }); }
+  }
+  // endTurn, after every enemy has acted: a crab takes into its shell what it
+  // pinched on an earlier turn and is still in the bin (the belly rules; never
+  // below BEST_FLOOR real items, never past a full shell).
+  function depPhaseEnd(F) {
+    if (!F || F.phase !== 'enemy') return;
+    for (const e of F.enemies.slice()) {
+      if (!e.alive || !e.def || e.def.dep !== 'crab' || F.phase === 'over') continue;
+      const mine = F.bin.filter(i => i.depPinch === e.uid && num(i.depPinchT, F.turn) < F.turn);
+      if (!mine.length) continue;
+      const took = [];
+      for (const inst of mine) {
+        delete inst.depPinch; delete inst.depPinchT;
+        if (!Array.isArray(e.belly) || e.belly.length + took.length >= BELLY_MAX || playable(F) - took.length <= BEST_FLOOR) continue;
+        took.push(inst);
+      }
+      if (!took.length) continue;
+      emit(F, { t: 'dep', k: 'take', idx: F.enemies.indexOf(e), insts: took });
+      text(F, e, 'MINE NOW');
+      for (const inst of took) { if (!e.alive || F.phase === 'over') break; eat(F, e, inst); }
+    }
+  }
+  // COMBAT.play: the Old Boot snaps the lure off; a chest pays or bites; a delivered prize is no longer pinched.
+  function depPlayed(F, inst, def) {
+    if (!inst || !def) return;
+    if (inst.depPinch) { delete inst.depPinch; delete inst.depPinchT; }
+    if (def.dep === 'boot' && F.depLure && F.depLure.inst && (F.depLure.inst === inst || F.depLure.inst.uid === inst.uid)) {
+      F.depLure = null;
+      emit(F, { t: 'dep', k: 'lureOff', idx: -1, why: 'bait' });
+      text(F, F.player, 'LURE LOST');
+    }
+    if (def.dep !== 'chest' || F.phase !== 'player' || F.player.hp <= 0) return;
+    if (inst.depReal) {
+      const R = depK().real || {};
+      emit(F, { t: 'dep', k: 'chest', idx: -1, inst, real: true });
+      text(F, F.player, 'TREASURE!');
+      api.gainGold(F, Math.max(1, num(R.gold, 12)));
+      gainBlock(F, F.player, Math.max(1, num(R.block, 8)));
+    } else {
+      const v = Math.max(1, Math.round(num(inst.depBite, 6)));
+      emit(F, { t: 'dep', k: 'chest', idx: -1, inst, real: false, v });
+      text(F, F.player, 'CHOMP!');
+      api.damage(F, null, F.player, v);
+    }
+  }
+  // kill: a crab lets go of what it pinched; the angler's lure, the eel's current and the tide end with their owner.
+  function depDeath(F, e) {
+    if (!e || !e.def) return;
+    if (e.def.dep === 'crab') {
+      const insts = [];
+      for (const i of F.bin) if (i.depPinch === e.uid) { delete i.depPinch; delete i.depPinchT; insts.push(i); }
+      if (insts.length) emit(F, { t: 'dep', k: 'unpinch', idx: F.enemies.indexOf(e), insts });
+    }
+    if (F.depLure && F.depLure.by === e.uid) { F.depLure = null; emit(F, { t: 'dep', k: 'lureOff', idx: -1 }); }
+    if (F.depShock && F.depShock.by === e.uid) { F.depShock = null; emit(F, { t: 'dep', k: 'shockOff', idx: -1 }); }
+    if (F.tide && F.tide.by === e.uid) { F.tide = null; emit(F, { t: 'boss', k: 'ebb', idx: -1 }); }
+  }
+  // intentText for the Depths' tricks ('' for any other kind).
+  function depIntent(e, m) {
+    const n = Math.max(1, num(m && m.n, 1) | 0);
+    switch (m && m.k) {
+      case 'lure': return 'Lures your claw toward junk';
+      case 'jellies': return `Drifts ${n} stinging jellies into your bin`;
+      case 'pinch': return n > 1 ? `Pinches your ${n} best items` : 'Pinches your best item';
+      case 'shock': return `Electrifies the water (${depHit(e, m.v || 3)} per wet prize)`;
+      case 'decoy': return `Scatters ${n} chests (one holds treasure)`;
+      default: return '';
+    }
+  }
+  // The claw touched a jelly (the game calls it once a grab per jelly): it stings through Block. -> events
+  api.depSting = function (F, inst) {
+    const c = begin(F);
+    if (!F || F.phase !== 'player' || !inst || F.player.hp <= 0) return end(F, c);
+    const v = Math.max(1, Math.round(num(inst.depSting, 2)));
+    emit(F, { t: 'dep', k: 'sting', idx: -1, inst, v });
+    text(F, F.player, 'STUNG!');
+    api.damage(F, null, F.player, v);
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  // A wet prize was delivered while the water is live: a shock through Block. -> events
+  api.depZap = function (F, inst) {
+    const c = begin(F);
+    if (!F || F.phase !== 'player' || !F.depShock || F.player.hp <= 0) return end(F, c);
+    const v = Math.max(1, Math.round(num(F.depShock.v, 3)));
+    emit(F, { t: 'dep', k: 'zap', idx: -1, inst: inst || null, v });
+    text(F, F.player, 'ZAP!');
+    api.damage(F, null, F.player, v);
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  // The claw lifted a pinched prize clear: the crab lets go of it. -> bool
+  api.depUnpinch = function (F, inst) {
+    if (!F || !inst || !inst.depPinch) return false;
+    delete inst.depPinch; delete inst.depPinchT;
+    emit(F, { t: 'dep', k: 'unpinch', idx: -1, insts: [inst] });
+    return true;
+  };
+  api.depPinched = (F) => (F ? F.bin.filter(i => !!i.depPinch) : []);
+  api.depPinchPick = (F, n) => (F ? depPinchPick(F, Math.max(1, n | 0)) : []);
+  api.depOf = (F) => (F ? { lure: F.depLure || null, shock: F.depShock || null, tide: F.tide || null } : null);
+  api.DEP_KINDS = DEP_KINDS;
+  /* ================= /DEP ================= */
 
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).

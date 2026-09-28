@@ -8710,7 +8710,8 @@ h.test('rush: The Machine only once met, a fall, giving up, the killer on the re
   unmet.G.choose(rushLbl(unmet.G).indexOf('Back to title'));
   h.ok(unmet.G.screen === 'title' && !unmet.G.run, 'back to the title');
   unmet.G.showTitle();
-  h.ok(unmet.T._nodes.titleMenu.children.some((c) => /rushCard/.test(c.className || '') && /every boss|best/.test(secWalk(c).map((n) => n.textContent).join(' '))), 'the title card');
+  // (round 15: the card lives in the title's Modes sheet)
+  h.ok(secWalk(unmet.G.ui15.T.sheets.modes).some((c) => /rushCard/.test(c.className || '') && /every boss|best/.test(secWalk(c).map((n) => n.textContent).join(' '))), 'the title card');
 });
 
 /* ---------------------------------------------------------------- QA pass 4 (round 11): regressions */
@@ -9339,7 +9340,9 @@ h.test('mix: the run-end numbers count up from zero and land exactly', () => {
     const labels = G.S.ui.buttons.map((b) => b.label);
     h.ok(labels.indexOf('Duo') > labels.indexOf('History') && labels.indexOf('History') > labels.indexOf('Boss Rush'), 'DUO registers after History (every older index holds)');
     const nr = G.S.ui.buttons.find((b) => b.label === 'New run'), du = G.S.ui.buttons.find((b) => b.label === 'Duo');
-    h.ok(nr.el.parentNode && nr.el.parentNode === du.el.parentNode && /duoRow/.test(nr.el.parentNode.className), 'it shares the NEW RUN row (the menu is no taller)');
+    // (round 15: NEW RUN is the big action; DUO waits one tap away in the Modes sheet)
+    h.ok(nr.el.parentNode && /uiPri/.test(nr.el.parentNode.className), 'NEW RUN leads the menu');
+    h.ok(du.el.parentNode && /uiSheetB/.test(du.el.parentNode.className) && secWalk(G.ui15.T.sheets.modes).includes(du.el), 'DUO sits in the Modes sheet');
     h.ok(!/resume/.test(JSON.stringify(du.el.children.map((c) => c.textContent))), 'no duel saved: "2 players"');
     G.choose(labels.length - 1);
     h.eq(G.screen, 'duo', 'the duo screen');
@@ -9681,7 +9684,9 @@ h.test('mix: the run-end numbers count up from zero and land exactly', () => {
     h.ok(i >= 0 && hi > i, 'Claw School is registered before History: ' + L.join(', '));
     h.ok(L.indexOf('New run') === 0, 'New run keeps its index');
     const sb = G.S.ui.buttons[i], hb = G.S.ui.buttons[hi];
-    h.ok(sb.el.parentNode && sb.el.parentNode === hb.el.parentNode, 'it shares the small row with History (the menu gets no new row)');
+    // (round 15: Claw School is a title tile, History waits in the Collection sheet)
+    h.ok(sb.el.parentNode && /uiTiles/.test(sb.el.parentNode.className) && /uiTile/.test(sb.el.className), 'Claw School is a title tile');
+    h.ok(secWalk(G.ui15.T.sheets.collection).includes(hb.el), 'History sits in the Collection sheet');
     h.ok(G.sch.X.tip && /Try Claw School/.test(G.sch.X.tip.children.map(c => c.textContent).join('')), 'a fresh profile: the "New here?" line');
     h.ok(!L.some(l => /New here/.test(l)), 'the tip is a plain tap, not a GAME.choose entry');
     G.sch.X.tip.onclick({});
@@ -10537,6 +10542,370 @@ h.test('mix: the run-end numbers count up from zero and land exactly', () => {
     const cards = secWalk(T._nodes.collectionBody).filter((n) => /pevc/.test(n.className || ''));
     h.eq(cards.length, D.PET_IDS.length, 'a card per pet');
     h.ok(cards.some((c) => /got/.test(c.className) && secWalk(c).some((x) => x.textContent === D.PEV_FORMS.hamster.name)), 'the Turbo Hamster is in the book');
+  });
+}
+
+/* ---------------------------------------------------------------- HUD AND TITLE MENU (round 15) */
+h.test('ui15: the title: one big action, the play row, the tiles; every older button reachable through a sheet, indices unchanged', () => {
+  const { T, G } = metaBoot({ stats: { runs: 7, wins: 1, fights: 30 }, achNew: { jackpot: 1 } });
+  G.showTitle();
+  const L = G.S.ui.buttons.map((b) => b.label);
+  for (const l of ['New run', 'Daily run', 'Prize Vault', 'Prizedex', 'Stickers', 'Help', 'Intro', 'Tips', 'Codex', 'Weekly challenge', 'Boss Rush', 'Claw School', 'History', 'Duo'])
+    h.ok(L.includes(l), 'still registered: ' + l);
+  h.ok(L.some((l) => /Settings$/.test(l)) && L.some((l) => /^Sound /.test(l)) && L.some((l) => /^Music /.test(l)), 'Settings, Sound and Music too');
+  h.eq(L[0], 'New run', 'NEW RUN keeps index 0');
+  h.eq(L[L.length - 1], 'Duo', 'DUO is still registered last');
+  const m = T._nodes.titleMenu, kids = m.children.map((c) => c.className);
+  h.ok(/uiPri/.test(kids[0]), 'the big action leads: ' + kids.join(' | '));
+  h.ok(kids.some((c) => /uiPlay/.test(c)) && kids.some((c) => /uiTiles/.test(c)) && kids.some((c) => /mStats/.test(c)), 'then the play row, the tiles, the stats line');
+  h.ok(kids.length <= 5, 'five blocks at most (was a wall of rows)');
+  const byLabel = (l) => G.S.ui.buttons.find((b) => b.label === l).el;
+  const where = (el) => { for (const id in G.ui15.T.sheets) if (secWalk(G.ui15.T.sheets[id]).includes(el)) return id; return secWalk(m).includes(el) ? 'menu' : '?'; };
+  const want = { 'New run': 'menu', 'Daily run': 'menu', 'Prize Vault': 'menu', 'Claw School': 'menu', Prizedex: 'collection', Stickers: 'collection', Codex: 'collection', History: 'collection',
+    'Weekly challenge': 'modes', 'Boss Rush': 'modes', Duo: 'modes', Help: 'more', Tips: 'more', Intro: 'more' };
+  for (const l in want) h.eq(where(byLabel(l)), want[l], l + ' lives in ' + want[l]);
+  h.eq(where(G.S.ui.buttons.find((b) => /Settings$/.test(b.label)).el), 'menu', 'Settings is a tile');
+  // the group buttons are plain taps (no GAME.choose entries), and open their sheets
+  const tiles = m.children.find((c) => /uiTiles/.test(c.className));
+  const grp = tiles.children.filter((c) => /uiGrp/.test(c.className));
+  h.eq(grp.length, 2, 'two group tiles: Collection and More');
+  h.ok(!L.includes('Collection') && !L.includes('More') && !L.includes('Modes'), 'not GAME.choose entries');
+  grp[0].onclick({});
+  h.eq(G.ui15.T.open, 'collection', 'Collection opens its sheet');
+  h.ok(grp[0].children.some((c) => /vdot/.test(c.className) && +c.textContent >= 1), 'a new sticker puts a badge on the tile');
+  G.ui15.sheet(null);
+  h.eq(G.ui15.T.open, null, 'and it closes');
+  // a sheet you left through comes back when the title does
+  G.ui15.T.reopen = 'collection';
+  G.choose(G.S.ui.buttons.findIndex((b) => b.label === 'Stickers'));
+  h.eq(G.screen, 'stickers', 'Stickers from the sheet');
+  G.choose(G.S.ui.buttons.findIndex((b) => b.label === 'Back'));
+  h.ok(G.screen === 'title' && G.ui15.T.open === 'collection', 'Back: the title with the Collection sheet open again');
+  G.newRun('knight', 5); G.save(); G.run = null;
+  G.ui15.T.reopen = 'modes';
+  G.showTitle();
+  h.eq(G.ui15.T.open, null, 'from a run the title comes back clean');
+  const L2 = G.S.ui.buttons.map((b) => b.label);
+  h.ok(L2[0] === 'Continue' && L2.slice(1).join() === L.join(), 'CONTINUE first, every other index as before');
+  const pri = T._nodes.titleMenu.children[0];
+  h.ok(pri.children[0] === G.S.ui.buttons[0].el && pri.children[1] === byLabel('New run'), 'CONTINUE is the big action, NEW RUN under it');
+  h.ok(G.choose(L2.indexOf('Duo')) && G.screen === 'duo', 'DUO still works from its sheet');
+});
+
+h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id', () => {
+  const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  for (const id of ['portrait', 'hpStat', 'hpTxt', 'blockTxt', 'hpFill', 'hpGhost', 'goldTxt', 'inkTxt', 'tixStat', 'tixTxt', 'actTxt', 'relics', 'pstatus', 'grabs', 'banner', 'bannerTxt', 'tray', 'hint', 'endTurn'])
+    h.ok(new RegExp('id="' + id + '"').test(html), 'the HUD keeps #' + id);
+  h.ok(/<div class="uiVit">[\s\S]*id="hpStat"[\s\S]*<div class="uiRes">[\s\S]*id="goldTxt"[\s\S]*id="inkTxt"[\s\S]*id="tixTxt"[\s\S]*id="actTxt"[\s\S]*<\/div>\s*<\/div>\s*<div id="relics">/.test(html),
+    'the top bar: the vitals column (the hp bar over the resource row), then the relics');
+  h.ok(/#hpStat\.shielded \.hpbar\{right:58px/.test(html), 'Block: the bar steps aside for the shield chip');
+  const { T, G } = metaBoot({});
+  G.newRun('knight', 1501);
+  G.toMap();
+  h.eq(T._nodes.actTxt.textContent, '1/3', 'the act chip reads 1/3');
+  G.startFight(['rat'], 'normal');
+  const blk = (v) => { G.fight.player.block = v; if (G.fs && G.fs.shown && G.fs.shown.p) G.fs.shown.p.block = v; G.S.lastHud = ''; };
+  blk(7);
+  stepFor(G, 0.3);
+  h.eq(T._nodes.blockTxt.textContent, '7', 'the shield chip shows the Block');
+  blk(0);
+  stepFor(G, 0.3);
+  h.eq(T._nodes.blockTxt.textContent, '', 'and empties without it');
+  h.eq(G.ui15.relicFit(), undefined, 'the relic fit is a no-op headless');
+  h.ok(!G.ui15.H.need && G.ui15.relicList(false) === false, 'the relic list stays shut headless');
+});
+
+// ---------------------------------------------------------------- POLISH (round 15, q15): the corner lane keeps off an event's and a story's title and the vignette sign
+{
+  const P15 = boot(), G = P15.GAME, D = P15.DATA;
+  const over = (a, r) => Math.min(a.x1, r[2]) - Math.max(a.x0, r[0]) > 1 && Math.min(a.y1, r[3]) - Math.max(a.y0, r[1]) > 1;
+  const R = (a) => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], w: a[4] || 10 });
+  const walk = (n, re, out = []) => { if (!n) return out; if (re.test(n.className || '')) out.push(n); for (const c of n.children || []) walk(c, re, out); return out; };
+  // what the browser measures at 390 x 844 (stage px, scratchpad r15/toast3.mjs): the title pill, the story tags, the scene, the text, the choices
+  let DOM = [];
+  G.qa.measure = () => DOM.map(R);
+  G.qa.size = (el, tight) => (/mSticker/.test(el.className || '') ? (tight ? { w: 237, h: 56 } : { w: 250, h: 97 }) : el.id === 'toast' ? { w: 180, h: 44 } : tight ? { w: 250, h: 56 } : { w: 280, h: 84 });
+  const push = (kind) => {
+    const S = G.S;
+    if (S.mcur && S.mcur.el && S.mcur.el.remove) S.mcur.el.remove();
+    S.mcur = null; S.mq = [];
+    if (kind === 'dex') { for (const id of Object.keys(D.ITEMS).filter(i => !G.meta.seen.items[i]).slice(0, 2)) G.prog.dexSee('items', id); }
+    else G.prog.achUnlock(D.ACH_IDS.find(a => !G.meta.ach[a]));
+    stepFor(G, 0.3);
+    return S.mcur;
+  };
+  const clear = (keep, tag) => {
+    h.eq(G.screen, 'event', `${tag}: on the event screen`);
+    for (const kind of ['dex', 'ach']) {
+      const cur = push(kind);
+      if (!cur || !cur.rect) { h.ok(false, `${tag}: no ${kind} corner item`); continue; }
+      const hit = G.qa.signs('event').concat(keep).filter(r => over(cur.rect, r));
+      h.ok(!hit.length && !cur.hold && cur.qa && cur.qa.hard === 0, `${tag}: the ${kind} at ${Math.round(cur.rect.x0)},${Math.round(cur.rect.y0)} keeps off the title, the tags and the sign${hit.length ? ' (over ' + JSON.stringify(hit) + ')' : ''}`);
+    }
+  };
+  h.test('q15: a story page (DANSDUEL): the title, its tags and the vignette sign are kept; the corner item sits under the choices', () => {
+    G.newRun('knight', 1501); if (G.screen === 'boon') G.choose(0); if (G.screen !== 'map') G.toMap();
+    G.sto.beat('sto_dance', 'start', 1);
+    h.ok(walk(P15._nodes.eventBody, /evTitle/).every(n => /qaKeep/.test(n.className)), 'the story title is .qaKeep');
+    const tags = walk(P15._nodes.eventBody, /stoTag\b/);
+    h.ok(tags.length >= 2 && tags.every(n => /qaKeep/.test(n.className)), 'its STORY / PART tags are .qaKeep');
+    G.qa.QA.q15Scene = [16, 96, 524, 286];
+    const sg = G.qa.signs('event');
+    h.ok(sg.length === 1 && sg[0][0] > 340 && sg[0][2] < 524 && sg[0][1] >= 96 && sg[0][3] < 190, 'the neon word on the vignette is a sign: ' + JSON.stringify(sg.map(r => r.map(Math.round))));
+    const title = [163, 16, 377, 60], t1 = [183, 66, 276, 86], t2 = [282, 66, 357, 86];
+    const toastStrip = [150, 896, 390, 948, 5];   // the plain toast ("A prize capsule!") in the bottom strip, as in the screenshot
+    DOM = [title, t1, t2, [16, 96, 524, 286, 1], [32, 306, 504, 392, 1], [16, 412, 524, 499], [16, 507, 524, 593], [16, 601, 524, 665], toastStrip];
+    clear([title, t1, t2], 'the dance-off, its choices');
+    const cur = G.S.mcur;
+    h.ok(cur && cur.rect && cur.rect.y0 >= 665, 'the corner item sits under the last choice (y ' + Math.round(cur && cur.rect ? cur.rect.y0 : -1) + ')');
+    // the outcome: its Continue is the last button
+    DOM = [title, t1, t2, [16, 96, 524, 286, 1], [32, 306, 504, 392, 1], [16, 499, 524, 543], toastStrip];
+    clear([title, t1, t2], 'the dance-off, its outcome');
+  });
+  h.test('q15: an event page: the title and the sign are kept; a full page still places the corner item', () => {
+    G.newRun('knight', 1502); if (G.screen === 'boon') G.choose(0); if (G.screen !== 'map') G.toMap();
+    G.showEvent({ id: 'ink_squid' in D.EVENTS ? 'ink_squid' : Object.keys(D.EVENTS)[3] });
+    h.ok(walk(P15._nodes.eventBody, /evTitle/).length === 1 && walk(P15._nodes.eventBody, /evTitle/).every(n => /qaKeep/.test(n.className)), 'the event title is .qaKeep');
+    G.qa.QA.q15Scene = [16, 70, 524, 260];
+    const title = [103, 16, 437, 60];
+    DOM = [title, [16, 70, 524, 260, 1], [32, 280, 496, 321, 1], [16, 341, 524, 428], [16, 436, 524, 522], [16, 530, 524, 617], [150, 896, 390, 948, 5]];
+    clear([title], 'an event, three choices');
+    // buttons down to the bottom: no spot under them, qaCands' eight as before, still on the stage
+    DOM = [title, [16, 70, 524, 260, 1], [16, 280, 524, 900]];
+    push('dex');
+    h.ok(G.S.mcur && G.S.mcur.rect && G.S.mcur.rect.y1 <= 960 && G.S.mcur.rect.y0 >= 0, 'a full page still places the corner item on the stage');
+    // headless with no scene handed in: no sign, nothing breaks
+    delete G.qa.QA.q15Scene;
+    h.eq(G.qa.signs('event').length, 0, 'no scene measured: no sign');
+    G.qa.measure = null; G.qa.size = null;
+  });
+  h.test('q15: a prize that rolls into the chute after a claw-off drop was booked scores for its dropper (it threw: V.cur is gone)', () => {
+    const T = boot(), G = T.GAME;
+    G.duo.seed = 4242; G.duo.menu(); G.duo.setup('vs');
+    const Dd = G.duo.start();
+    stepFor(G, 2); G.duo.afterToss(); stepFor(G, 4); G.duo.ready();
+    G.duo.drop(G.duo.aim());
+    for (let i = 0; i < 60 * 25 && Dd.ph === 'play'; i++) G.update(DT);
+    const V = G.duo.v;
+    h.ok(Dd.ph === 'sabo' && V.sub === 'done' && !V.cur, 'the drop is booked, the sabotage choice is up');
+    const who = Dd.last.who, s0 = Dd.score[who], other = Dd.score[1 - who];
+    const b = V.W.bodies.find((x) => x.type === 'dynamic' && x.data && x.data.pile != null && Dd.taken.indexOf(x.data.pile) < 0);
+    const bd = V.C.bounds;
+    b.x = bd.chuteX + 20; b.y = bd.floorY + 30; b.vx = 0; b.vy = 0;
+    let err = null;
+    try { stepFor(G, 0.1); } catch (e) { err = e; }
+    h.ok(!err, 'no throw: ' + (err && err.message));
+    h.eq(Dd.score[who], s0 + (b.data.v | 0) * (b.data.gold ? 2 : 1), 'the straggler scores for the one who dropped');
+    h.eq(Dd.score[1 - who], other, 'and not for the rival');
+    h.ok(Dd.taken.indexOf(b.data.pile) >= 0 && V.W.bodies.indexOf(b) < 0, 'it is taken off the pile');
+    G.duo.leave();
+  });
+  h.test('q15: a Gary claw-off never waits for good on a claw still busy from the last drop (the bot saw Gary aim for ever)', () => {
+    const T = boot(), G = T.GAME;
+    G.sto.force = true; G.newRun('bubbler', 505); if (G.screen === 'boon') G.choose(0);
+    const t = Object.values(G.run.map.tiles).find((x) => x.type === 'rival');
+    G.sto.rival.show({ q: t.q, r: t.r });
+    const R = G.sto.rival;
+    h.ok(R.accept(), 'the claw-off is on');
+    const st = R.state, live = t.content.gary.live;
+    R.drop(200);
+    for (let i = 0; i < 60 * 60 && st.who === 'p'; i++) G.update(DT);
+    h.eq(st.who + ':' + st.sub, 'g:aim', 'Gary\'s turn');
+    // the claw is wedged busy: Gary's aim can never start
+    const rig = st.rig; let opened = 0;
+    rig.autoSteer = () => false;
+    const o0 = rig.open; rig.open = () => { opened++; o0(); };
+    Object.defineProperty(rig, 'phase', { get: () => 'carry', set: () => {}, configurable: true });
+    const d0 = live.drops.length;
+    stepFor(G, 5);
+    h.eq(live.drops.length, d0, 'a few seconds: still his drop');
+    stepFor(G, 3);
+    h.eq(opened, 1, 'past 6 s the prongs are forced open, once');
+    stepFor(G, 4);
+    h.eq(live.drops.length, d0 + 1, 'and past 10 s the drop is skipped: the claw-off goes on');
+    h.eq(live.drops[d0].who + ':' + live.drops[d0].pts, 'g:0', 'Gary scores nothing for it');
+    h.eq(st.who, 'p', 'your turn');
+  });
+}
+
+/* ------------------------------------------------- DEP (round 15): the Neon Depths */
+{
+  const nodesOf = (el, out) => { if (!el) return out; out.push({ c: String(el.className || ''), t: el.textContent && !(el.children || []).length ? el.textContent : '' }); for (const c of el.children || []) nodesOf(c, out); return out; };
+  // an Endless run at Loop 3: the first dive
+  const dive = (seed, meta) => {
+    const { T, G, saved } = endBoot(meta);
+    endWin(G, seed);
+    G.endless.start(); G.endless.next(); G.endless.next();
+    return { T, G, saved };
+  };
+  const inDive = (seed) => { const o = dive(seed); o.G.endless.cont(); toMapFrom(o.G); return o; };
+  const settleTurn = (G) => { for (let i = 0; i < 1800 && (G.fight.phase !== 'player' || G.fs.enemyTurn || G.fs.queue.length || G.fs.playQ.length); i++) G.update(DT); stepFor(G, 0.2); };
+  const fightIn = (G, ids, kind) => { G.run.hp = G.run.maxHp = 999; G.startFight(ids, kind || 'normal'); endSkip(G); stepFor(G, 0.6); return G.fight; };
+
+  h.test('dep: Loop 3 dives into the Neon Depths: the reboot card floods, the map is the Depths\', the dub plays; Loop 4 is the vault again', () => {
+    const { T, G, saved } = dive(415);
+    const E = G.run.endless;
+    h.eq(G.screen, 'loop', 'the reboot screen');
+    h.ok(E.loop === 3 && E.dep === true && E.dp === 1, 'Loop 3 is a dive (the first)');
+    h.eq(G.run.act, 3, 'it plays act 3 underneath');
+    h.eq(G.run.map.biome, 'depths', 'a Depths map');
+    h.eq(E.mix, null, 'the Drowned Jukebox keeps its own trick');
+    const ns = nodesOf(T._nodes.loopBody, []);
+    const texts = ns.map((n) => n.t);
+    h.ok(ns.some((n) => /\bcrt\b/.test(n.c) && /\bdep\b/.test(n.c)), 'the tube floods (crt dep)');
+    h.ok(texts.includes('> LOADING LOOP 3: THE NEON DEPTHS') && texts.includes('> DRAIN PUMP ...... FAILED') && texts.includes('> WARNING: WATER IN THE CABINET'), 'the boot log dives');
+    h.ok(texts.includes('THE NEON DEPTHS') && ns.some((n) => n.c === 'depWave'), 'THE NEON DEPTHS over rising water');
+    h.ok(texts.includes('The Neon Depths, flooded. Act 6 of forever.'), 'the subtitle');
+    h.ok(saved().dep && saved().dep.dives === 1 && saved().dep.best === 3, 'the dive is on the profile');
+    G.endless.cont();
+    toMapFrom(G);
+    h.eq(G.screen, 'map', 'onto the Depths\' map');
+    h.ok(G.dep.in(), 'in the Depths');
+    h.eq(T.AUDIO.act, 4, 'the music plays the Depths\' dub (act 4)');
+    h.eq(G.dep.actName(), 'The Neon Depths', 'the map plate names it');
+    const fights = Object.values(G.run.map.tiles).filter((t) => t.content && t.content.enc && !t.content.sec);
+    h.ok(fights.length > 4 && fights.every((t) => t.content.enc.every((id) => DATA.ENEMIES[id].dep)), 'only Depths monsters on the map');
+    h.ok((G.run.map.roam || []).every((m) => !m.enc || m.enc.every((id) => DATA.ENEMIES[id].dep)), 'and prowling it');
+    G.draw();
+    // the act intro card
+    const intro = G.dep.intro({ name: 'x', lines: [] });
+    h.ok(intro.name === 'The Neon Depths' && intro.biome === 'depths' && intro.lines.length === 2, 'the act card is the Depths\'');
+    // the boss down: Loop 4 is the vault, not a dive
+    G.startFight(['dep_jukebox'], 'boss');
+    h.eq(G.boss.vs && G.boss.vs.title, 'LOOP 3 BOSS', 'the versus card');
+    endSkip(G);
+    COMBAT.damage(G.fight, G.fight.player, G.fight.enemies[0], 99999);
+    G.endFight('win');
+    h.eq(G.run.sc.dep, 1, 'the unplugged Jukebox scores');
+    h.ok(G.meta.dep.jukebox === 1 && G.meta.ach.deep_diver, 'Deep Diver');
+    G.choose(G.S.ui.buttons.length - 1);
+    for (let i = 0; i < 4 && G.screen !== 'loop'; i++) chooseFirst(G);
+    h.eq(G.screen, 'loop', 'the next reboot');
+    h.ok(G.run.endless.loop === 4 && !G.run.endless.dep && G.run.act === 3 && G.run.map.biome !== 'depths', 'Loop 4: the vault, dry');
+    h.ok(G.run.endless.mix, 'its boss borrows a trick again');
+    h.ok(!nodesOf(T._nodes.loopBody, []).some((n) => n.t === 'THE NEON DEPTHS'), 'no flood on its card');
+    h.eq(T.AUDIO.act === 4, false, 'the dub stops');
+  });
+
+  h.test('dep: a Depths fight: standing water, the lure pulls the aim, jellies sting once a grab, pinched prizes drag, live water zaps a wet delivery, chests', () => {
+    const { T, G } = inDive(416);
+    const K = DATA.DEP_K;
+    // standing water
+    let F = fightIn(G, ['dep_angler']);
+    stepFor(G, 1);
+    h.ok(G.dep.water() >= K.water - 1e-9 && G.dep.owns() && Number.isFinite(G.dep.level()) && G.dep.level() === G.dep.fs().levelTo, `the cabinet stands in water (${G.dep.water()}, the Depths' own or a Rising Water mutator's, whichever is higher)`);
+    G.draw();
+    // the lure
+    G.endTurn(); settleTurn(G);
+    h.ok(F.depLure && F.depLure.inst && F.depLure.inst.id === 'dep_boot', 'the lure hangs over an Old Boot');
+    h.ok(G.fs.items.some((b) => b.data.inst === F.depLure.inst), 'the boot is in the cabinet');
+    const lx = G.dep.lureX(), tx0 = G.rig.targetX;
+    stepFor(G, 3);
+    h.ok(Math.abs(G.rig.targetX - lx) < Math.abs(tx0 - lx) || Math.abs(tx0 - lx) <= G.dep.K.lureDead, `the aim drifts toward the light (${tx0.toFixed(0)} -> ${G.rig.targetX.toFixed(0)}, lure ${lx.toFixed(0)})`);
+    G.draw();
+    // jellies
+    F = fightIn(G, ['dep_jelly']);
+    G.endTurn(); settleTurn(G);
+    const jel = G.fs.items.filter((b) => b.data.def.dep === 'jelly');
+    h.eq(jel.length, 2, 'two jellies in the cabinet');
+    h.ok(jel.every((b) => b.density < 1), 'they float');
+    const hp0 = F.player.hp + F.player.block;
+    const n0 = G.dep.fs().stings;
+    G.fs.grabInFlight = true; jel[0].held = 1;
+    G.dep.tick(DT); G.dep.tick(DT);
+    jel[0].held = 0; G.fs.grabInFlight = false;
+    settleTurn(G);
+    h.eq(G.dep.fs().stings - n0, 1, 'a held jelly stings once a grab');
+    h.eq(hp0 - (F.player.hp + F.player.block), jel[0].data.inst.depSting, 'for its number');
+    G.draw();
+    // pinch
+    F = fightIn(G, ['dep_crab']);
+    G.endTurn(); settleTurn(G);
+    const pin = G.fs.items.filter((b) => b.data.inst.depPinch);
+    h.ok(pin.length === 2 && G.dep.fs().pinchN === 2, 'two prizes pinched');
+    const x0 = pin.reduce((a, b) => a + b.x, 0);
+    stepFor(G, 4);
+    h.ok(pin.reduce((a, b) => a + b.x, 0) < x0 || pin.every((b) => b.x <= G.dep.K.pinchX + 20), 'they drag off toward the far wall');
+    G.draw();
+    // left pinched: into its shell when the next enemy phase ends
+    G.endTurn(); settleTurn(G);
+    h.ok(G.dep.fs().log.includes('take'), 'a pinched prize went into its shell');
+    // live water
+    F = fightIn(G, ['dep_eel']);
+    G.endTurn(); settleTurn(G);
+    h.ok(F.depShock && G.dep.fs().log.includes('shock'), 'the water is live');
+    const dry = G.fs.items.find((b) => !b.data.def.dep && !(b.data.inst.junk));
+    G.playDelivered([dry]); settleTurn(G);
+    h.eq(G.dep.fs().zaps, 0, 'a dry prize: no zap');
+    const wet = G.fs.items.find((b) => !b.data.def.dep && !(b.data.inst.junk) && b !== dry);
+    wet.data.depWetG = G.fs.grabN;
+    const h1 = F.player.hp + F.player.block;
+    G.playDelivered([wet]); settleTurn(G);
+    h.ok(G.dep.fs().zaps === 1 && G.dep.fs().log.includes('zap'), 'a wet prize zaps');
+    h.ok(h1 - (F.player.hp + F.player.block) >= 1 || F.player.hp <= 0, 'it hurts');
+    G.draw();
+    // chests
+    F = fightIn(G, ['dep_mimic'], 'elite');
+    G.endTurn(); settleTurn(G);
+    const ch = G.fs.items.filter((b) => b.data.def.dep === 'chest');
+    h.ok(ch.length === 3 && ch.filter((b) => b.data.inst.depReal).length === 1, 'three chests, one real');
+    G.draw();
+    void T;
+  });
+
+  h.test('dep: The Drowned Jukebox\'s High Tide: the water rises and falls with the music, heavy prizes sink, light ones float', () => {
+    const { G } = inDive(417);
+    const F = fightIn(G, ['dep_jukebox'], 'boss');
+    const K = DATA.DEP_K.tide;
+    for (let i = 0; i < 6 && !F.tide; i++) { G.endTurn(); settleTurn(G); F.player.hp = Math.max(F.player.hp, 500); }
+    h.ok(F.tide && G.dep.fs().log.includes('tide'), 'High Tide rolls in, staged');
+    let lo = 1, hi = 0;
+    for (let i = 0; i < 480; i++) { G.update(DT); const w = G.dep.water(); lo = Math.min(lo, w); hi = Math.max(hi, w); if (i % 60 === 0) G.draw(); }
+    // (Loop 3's boss rings in enraged: the B-side mark; a Rising Water mutator can hold the floor higher)
+    h.ok(hi >= F.tide.hi - 0.06 && hi <= K.hiRage + 1e-9 && lo <= hi - 0.25 && lo >= DATA.DEP_K.water - 1e-9, `the water swells up to its mark and back (${lo.toFixed(2)}..${hi.toFixed(2)} of ${F.tide.lo}..${F.tide.hi})`);
+    h.eq(G.dep.tideAt(F.tide, 0), F.tide.lo, 'the tide starts low');
+    const per = F.tide.beats * 60 / F.tide.bpm;
+    h.ok(Math.abs(G.dep.tideAt(F.tide, per / 2) - F.tide.hi) < 1e-9, 'a full swell at half a period');
+    // at high water, the floaters ride above the sinkers
+    const floatY = G.fs.items.filter((b) => b.density < 0.9).map((b) => b.y), sinkY = G.fs.items.filter((b) => b.density > 1.2).map((b) => b.y);
+    if (floatY.length && sinkY.length) h.ok(Math.min(...floatY) < Math.max(...sinkY), 'light prizes float up, heavy ones stay down');
+    G.endTurn(); settleTurn(G);
+    h.ok(!F.tide || G.dep.fs().log.includes('ebb'), 'it ebbs with the turn');
+  });
+
+  h.test('dep: save and load mid-Depths: the same monsters, the same flooded map, the water back', () => {
+    const { T, G } = inDive(418);
+    const F = fightIn(G, ['dep_crab', 'dep_jelly']);
+    const ids = F.enemies.map((e) => e.id).join(), hps = F.enemies.map((e) => e.maxHp).join();
+    G.save();
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    const G2 = T2.GAME;
+    h.ok(G2.load() && G2.screen === 'fight', 'a reload mid Depths fight');
+    h.ok(G2.fight.enemies.map((e) => e.id).join() === ids && G2.fight.enemies.map((e) => e.maxHp).join() === hps, 'the same Depths monsters');
+    h.ok(G2.run.endless.dep && G2.run.map.biome === 'depths' && G2.dep.in(), 'still in the Depths');
+    stepFor(G2, 1);
+    h.ok(G2.dep.water() > 0 && G2.dep.owns(), 'the water is back');
+    G2.draw();
+    // an old save at Loop 3 (before the Depths): no dive flag, a vault map; it plays on as the vault
+    const raw = JSON.parse(T._store[G.RUN_KEY]);
+    delete raw.run.endless.dep; delete raw.run.endless.dp; raw.run.map.biome = 'vault';
+    for (const t of Object.values(raw.run.map.tiles)) if (t.biome) t.biome = 'vault';
+    raw.screen = 'map'; delete raw.pendingFight;
+    const T3 = boot({ store: Object.assign({}, T._store, { [G.RUN_KEY]: JSON.stringify(raw) }) });
+    h.ok(T3.GAME.load(), 'an old Loop 3 save loads');
+    h.ok(!T3.GAME.run.endless.dep && !T3.GAME.dep.in() && T3.GAME.run.endless.loop === 3, 'and stays the vault');
+    T3.GAME.draw();
+  });
+
+  h.test('dep: death in the Depths: the history card counts the dive', () => {
+    const { G } = inDive(419);
+    fightIn(G, ['dep_eel']);
+    G.fight.player.hp = 0;
+    G.endFight('lose');
+    h.eq(G.screen, 'gameover', 'game over');
+    const rec = G.meta.his.runs[0];
+    h.ok(rec && rec.dp === 1 && rec.lp === 3, 'the history record keeps the dive');
+    G.draw();
   });
 }
 

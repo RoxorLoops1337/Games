@@ -509,4 +509,297 @@ h.test('trd: every new line of the Trading Post and pet evolution has its Dutch,
   h.eq(texts.filter((s) => /\{\w+(\|[^}]*)?\}/.test(s)).length, 0, 'no {placeholder} on screen');
 });
 
+/* ------------------------------------------------- round 15: a move name never takes its word's other sense */
+h.test('q15: the Wind-Up Soldier\'s March is an Opmars, never the month; every move name stays a move', () => {
+  const { I18N, DATA } = boot({ only: ['util', 'i18n', 'data'] });
+  I18N.set('nl');
+  const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+  const month = (s) => MONTHS.some((m) => new RegExp('(^|\\s)' + m + '(\\s|$)', 'i').test(String(s)));
+  h.eq(I18N.TC('move', 'clockwork.march', 'name'), 'Opmars', 'TC: the march move has its own Dutch name');
+  h.eq(I18N.move('clockwork', 'March'), 'Opmars', 'I18N.move by the enemy');
+  h.eq(I18N.tr('March'), 'Opmars', 'the bare word is the move (the month keeps its own date line)');
+  h.eq(I18N.move('wraith', 'Claw'), 'Klauw', 'a wraith\'s Claw is a klauw, not the grijper');
+  h.eq(I18N.tr('Claw'), 'Grijper', 'while the claw itself stays the grijper');
+  // the death recap and the cabinet sign carry the move in a {mv} slot
+  const line = DATA.hisKillLine({ kind: 'hit', name: DATA.ENEMIES.clockwork.name, mv: 'March', amt: 33 });
+  h.eq(I18N.tr(line), 'Verslagen door Opwindsoldaat met Opmars voor 33', 'the recap: ' + I18N.tr(line));
+  h.eq(I18N.tr(DATA.hisKillLine({ kind: 'hit', name: DATA.ENEMIES.wraith.name, mv: 'Claw', amt: 9 })).indexOf('met Klauw voor 9') > 0, true, 'the recap: the wraith\'s Klauw');
+  h.eq(I18N.tr('MARCH NEXT TURN: 12'), 'OPMARS VOLGENDE BEURT: 12', 'the charge sign in capitals');
+  h.eq(I18N.tr('WIND UP NEXT TURN: 27'), 'UITHALEN VOOR DE KLAP VOLGENDE BEURT: 27', 'another move on the sign');
+  h.eq(I18N.tr('BIG HIT: 30 INCOMING'), 'GROTE KLAP: 30 KOMT ERAAN', 'a sign with no move name still reads');
+  // the date keeps its month
+  h.eq(I18N.tr('On until 5 March.'), 'Nog tot 5 maart.', 'the season\'s end date says maart');
+  h.eq(I18N.tr('On until 31 October.'), 'Nog tot 31 oktober.', 'and every other month too');
+  // every move of every enemy: never a month, bare, by its enemy, or in the recap
+  const bad = [];
+  for (const [eid, e] of Object.entries(DATA.ENEMIES)) for (const m of e.moves || []) {
+    if (!m || !m.name) continue;
+    const a = I18N.move(eid, m.name), b = I18N.tr(m.name), c = I18N.tr(DATA.hisKillLine({ kind: 'hit', name: e.name, mv: m.name, amt: 5 }));
+    if (month(a) || month(b) || month(c)) bad.push(eid + '.' + m.id + ': ' + [a, b, c].join(' / '));
+  }
+  h.eq(bad.length, 0, 'no move reads as a month: ' + bad.slice(0, 3).join(' | '));
+  I18N.set('en');
+  h.eq(I18N.move('clockwork', 'March'), 'March', 'English: the move\'s own name');
+  h.eq(I18N.tr(line), line, 'English: the recap as built');
+});
+
+h.test('q15: a pet\'s quip bubble in a fight speaks the language (it drew its English)', () => {
+  const T = boot({ language: 'nl-NL' });
+  const G = T.GAME;
+  G.newRun('knight', 1503); if (G.screen === 'boon') G.choose(0); if (G.screen !== 'map') G.toMap();
+  G.pet.give('octopus', 40);
+  G.startFight(['rat'], 'normal');
+  stepFor(G, 0.5);
+  const P = G.pet.fs();
+  h.ok(P, 'the fight has the pet');
+  const drawn = [];
+  T._ctx.fillText = (s) => drawn.push(String(s));
+  P.quip = { str: 'Hold on tight!', t: 1.5 };
+  G.draw();
+  h.ok(drawn.includes('Hou je vast!'), 'the octopus says Hou je vast!');
+  h.ok(!drawn.includes('Hold on tight!'), 'and not its English');
+  G.setLang('en');
+  drawn.length = 0; P.quip = { str: 'Hold on tight!', t: 1.5 };
+  G.draw();
+  h.ok(drawn.includes('Hold on tight!'), 'English: the quip as written');
+  delete T._ctx.fillText;
+});
+
+h.test('q15: a Claw School chalkboard translates a goal before it wraps it (the wrapped English pieces had no Dutch)', () => {
+  const T = boot({ language: 'nl-NL' });
+  const G = T.GAME, D = T.DATA;
+  const M = G.sch.meta(); for (const L of D.SCH_LESSONS) for (const c of L.ch) M.stars[c.id] = Math.max(M.stars[c.id] | 0, 1);
+  const drawn = [];
+  T._ctx.fillText = (s) => drawn.push(String(s));
+  const bad = [];
+  D.SCH_LESSONS.forEach((L, li) => L.ch.forEach((c, ci) => {
+    G.sch.start(li, ci);
+    drawn.length = 0;
+    G.draw();
+    const en = c.goal.split(' ').slice(0, 3).join(' ');
+    if (drawn.some((s) => s.indexOf(en) === 0)) bad.push(c.id + ': ' + drawn.find((s) => s.indexOf(en) === 0));
+  }));
+  h.eq(bad.length, 0, 'no challenge board shows a piece of its English goal: ' + bad.slice(0, 3).join(' | '));
+  G.sch.start(0, 0); drawn.length = 0; G.draw();
+  const nl = T.I18N.tr(D.SCH_LESSONS[0].ch[0].goal);
+  h.ok(nl !== D.SCH_LESSONS[0].ch[0].goal && drawn.some((s) => nl.indexOf(s) === 0 && s.length > 4), 'the first board says ' + nl);
+  delete T._ctx.fillText;
+});
+
+h.test('q15: the words game.js draws on the canvas itself (the pet shop, a challenge\'s clock) are Dutch', () => {
+  const T = boot({ language: 'nl-NL' });
+  const G = T.GAME, D = T.DATA;
+  const drawn = [];
+  T._ctx.fillText = (s) => drawn.push(String(s));
+  G.newRun('knight', 1504); if (G.screen === 'boon') G.choose(0); if (G.screen !== 'map') G.toMap();
+  const M = G.run.map;
+  const t = Object.values(M.tiles).find((x) => x.type === 'petshop') || Object.values(M.tiles).find((x) => x.type === 'empty' && x.terrain === 'land' && !x.done);
+  t.type = 'petshop'; t.content = Object.assign({ seed: 77, game: 'petshop' }, t.content || {});
+  G.arc.show({ q: t.q, r: t.r });
+  drawn.length = 0; G.draw();
+  h.ok(drawn.includes('Nog geen maatje. Kies er hierboven een!'), 'the pet shop: no buddy yet, in Dutch');
+  h.ok(drawn.some((s) => /^HUISDIERENALBUM \d+\/\d+$/.test(s)), 'the pet album in Dutch');
+  h.ok(!drawn.some((s) => /PET ALBUM|No buddy yet|YOUR BUDDY/.test(s)), 'none of the shop\'s English');
+  G.pet.give('cat', 10);
+  drawn.length = 0; G.draw();
+  h.ok(drawn.some((s) => /^JE MAATJE: .+ {2}· {2}NIV \d+$/.test(s)), 'your buddy\'s line in Dutch: ' + drawn.find((s) => /MAATJE|BUDDY/.test(s)));
+  G.arc.leave && G.arc.leave();
+  // a challenge's board: DROPS and the clock
+  const SM = G.sch.meta(); for (const L of D.SCH_LESSONS) for (const c of L.ch) SM.stars[c.id] = Math.max(SM.stars[c.id] | 0, 1);
+  G.sch.start(0, 1);
+  h.eq(G.screen, 'school', 'the challenge is up');
+  drawn.length = 0; G.draw();
+  h.ok(!drawn.some((s) => /^TIME \d/.test(s)), 'the challenge clock is not English: ' + drawn.filter((s) => /TIME|TIJD/.test(s)).join(' | '));
+  h.ok(drawn.some((s) => /^TIJD \d+:\d\d$/.test(s)) || drawn.some((s) => /^\d+:\d\d$/.test(s)), 'it says TIJD');
+  delete T._ctx.fillText;
+});
+
+h.test('q15: every capsule prize card (gold, bulbs, a heart, tickets, a capsule) has its Dutch', () => {
+  const { I18N, DATA } = boot({ only: ['util', 'i18n', 'data'] });
+  I18N.set('nl');
+  const left = [];
+  for (const p of [{ k: 'gold', n: 20 }, { k: 'ink', n: 1 }, { k: 'ink', n: 3 }, { k: 'maxhp', n: 4 }, { k: 'tickets', n: 1 }, { k: 'tickets', n: 12 }, { k: 'cap', tier: 'c' }, { k: 'cap', tier: 'l' }]) {
+    const info = DATA.prizeInfo(p);
+    for (const s of [info.name, info.text]) if (s && /[a-z]{3}/.test(s) && I18N.tr(s) === s && !/^\+?\d+ (max HP|tickets?)$/.test(s)) left.push(p.k + ': ' + s);   // the same words in Dutch: "12 tickets", "+4 max HP"
+  }
+  h.eq(left.length, 0, 'no prize card left in English: ' + left.join(' | '));
+  h.eq(I18N.tr('A fat roll of arcade tickets for the prize counter.'), 'Een dikke rol arcadetickets voor de prijzenbalie.', 'the tickets card');
+});
+
+h.test('q15: an item\'s rules text on screen follows a language switch both ways (it stayed in the old language)', () => {
+  const T = boot({ language: 'en-US' });
+  const G = T.GAME, D = T.DATA, I = T.I18N;
+  const ids = ['rusty_sword', 'whetstone', 'iron_chain', 'glass_beads'].filter((id) => D.ITEMS[id]).concat(Object.keys(D.ITEMS).slice(0, 40));
+  const bad = [];
+  for (const id of ids) for (const plus of [false, true]) {
+    G.setLang('en');
+    const en = G.i18n.itemText(D.ITEMS[id], plus);
+    G.setLang('nl');
+    const nl = G.i18n.itemText(D.ITEMS[id], plus);
+    if (I.tr(en) !== nl) bad.push(`${id}${plus ? '+' : ''} en->nl: ${I.tr(en)}`);
+    G.setLang('en');
+    if (I.tr(nl) !== en) bad.push(`${id}${plus ? '+' : ''} nl->en: ${I.tr(nl)}`);
+  }
+  h.eq(bad.length, 0, 'every card\'s rules come back in the new language: ' + bad.slice(0, 3).join(' | '));
+  G.setLang('en');
+  h.eq(I.tr('A sentence nobody wrote.'), 'A sentence nobody wrote.', 'English stays a pass-through for anything else');
+});
+
+h.test('q15: a boon\'s glued outcome lines translate sentence by sentence (a "Relic: {s}" pattern swallowed the rest)', () => {
+  const { I18N, DATA } = boot({ only: ['util', 'i18n', 'data'] });
+  I18N.set('nl');
+  h.eq(I18N.tr('Relic: Tuning Fork. +50 gold. Two Rocks in the bin.'), 'Relikwie: Stemvork. +50 goud. Twee Stenen in de bak.', 'the Deep Pockets boon, as the bot saw it');
+  const tails = ['+50 gold. Two Rocks in the bin.', 'Your wallet is empty.', 'A Slag joins the bin.', '+40 gold.', '+100 gold.'];
+  const bad = [];
+  for (const id of Object.keys(DATA.RELICS).slice(0, 60)) {
+    const nm = DATA.RELICS[id].name;
+    for (const t of tails) {
+      const en = `Relic: ${nm}. ${t}`, nl = I18N.tr(en);
+      if (nl.indexOf(t) >= 0 || nl.indexOf('Relic:') >= 0) bad.push(en + ' -> ' + nl);
+    }
+  }
+  h.eq(bad.length, 0, 'no English sentence left: ' + bad.slice(0, 2).join(' | '));
+});
+
+h.test('q15: an icon in front never keeps the words English ("🔥 Let\'s gooo!": a loose "{s}!" pattern took it whole)', () => {
+  const { I18N } = boot({ only: ['util', 'i18n', 'data'] });
+  I18N.set('nl');
+  h.eq(I18N.tr("Let's gooo!"), 'Kom ooop!', 'the line alone');
+  h.eq(I18N.tr("🔥 Let's gooo!"), '🔥 Kom ooop!', 'with an emoji and a space, the icon kept');
+  h.eq(I18N.tr("🔥Let's gooo!"), '🔥Kom ooop!', 'with no space');
+  h.eq(I18N.tr('⚙ Settings'), '⚙ Instellingen', 'a symbol in front, as before');
+  // every translated ui line behind an icon (552 of these stayed English before)
+  const ui = I18N.table('nl').ui, left = [];
+  for (const k in ui) {
+    if (k.indexOf('{') >= 0 || !/^[A-Z]/.test(k) || ui[k] === k) continue;
+    for (const ic of ['🔥', '⚙', '★']) { const s = ic + ' ' + k; if (I18N.tr(s) === s) left.push(s); }
+  }
+  h.eq(left.length, 0, 'no icon-led line left in English: ' + left.slice(0, 3).join(' | '));
+  I18N.set('en');
+  h.eq(I18N.tr("🔥 Let's gooo!"), "🔥 Let's gooo!", 'English untouched');
+});
+
+h.test('q15: the Trading Post\'s Dutch cards are tight enough for three trades on a phone', () => {
+  const { I18N } = boot({ only: ['util', 'i18n', 'data'] });
+  I18N.set('nl');
+  // the lines a trade card carries (its rule, what you get): at most the English length, the rule one line at 390 px (about 50 letters)
+  const lines = ['Your upgrade for a rarity step: one rarity up, not upgraded.', 'A different item of the same rarity that shares a keyword.',
+    'Same rarity, another archetype. Face down until the handshake.', 'Lift a curse: Rocco takes one junk item of your choice.',
+    'Lighten your bin: Rocco takes one item of your choice.', 'Two for one: an item one rarity up, sight unseen.', 'A junk item gone', 'An item gone'];
+  for (const en of lines) {
+    const nl = I18N.T(en);
+    h.ok(nl !== en && nl.length <= Math.min(en.length, 58), `a short Dutch line (${nl.length} <= ${Math.min(en.length, 58)}): ${nl}`);
+  }
+  const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  const css = (/<style id="trd-css">([\s\S]*?)<\/style>/.exec(html) || [])[1] || '';
+  h.ok(/html\[lang="nl"\] \.trdOffer\{[^}]*padding/.test(css) && /html\[lang="nl"\] \.trdPanel\{/.test(css), 'a tighter card under html[lang=nl] (measured: 3 of 3 trades in view at 390 x 844 over 40 visits, r15/trd2.mjs)');
+});
+
+h.test('q15: the Dutch tables load lazily: never for an English player, written in for a Dutch one, fetched on a switch', () => {
+  const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  h.ok(!/<script src="js\/lang_nl2?\.js">/.test(html), 'index.html no longer loads the Dutch tables up front');
+  h.ok(/<script src="js\/i18n\.js"><\/script>/.test(html), 'it still loads i18n.js');
+  // an English browser: no table, the game is English, nothing fetched
+  const E = boot({ only: ['util', 'i18n', 'data'], noLang: true, language: 'en-US' });
+  h.eq(E.I18N.table('nl'), null, 'no Dutch table in an English boot');
+  h.eq(E.I18N.lazy, '', 'nothing written in while an English page parses');
+  h.eq(E.I18N.tr('END TURN'), 'END TURN', 'English as ever');
+  // lazyBoot on a parsing page: a Dutch player gets both files written in, in order; an English one gets none
+  const lb = (saved, navLang) => {
+    const out = [];
+    const doc = { readyState: 'loading', write: (s) => out.push(s), createElement: () => ({}) };
+    const ls = { getItem: () => (saved ? JSON.stringify({ settings: { lang: saved } }) : null) };
+    const src = fs.readFileSync(path.join(DIR, 'js', 'i18n.js'), 'utf8') + '\n;return I18N;';
+    const I = new Function('document', 'localStorage', 'navigator', 'DATA', 'MutationObserver', src)(doc, ls, { languages: [navLang], language: navLang }, undefined, undefined);
+    return { I, out: out.join('') };
+  };
+  const a = lb(null, 'nl-BE');
+  h.eq(a.I.lazy, 'nl', 'a Dutch browser: the tables are written in');
+  h.ok(/<script src="js\/lang_nl\.js"><\/script><script src="js\/lang_nl2\.js"><\/script>/.test(a.out), 'lang_nl.js, then lang_nl2.js, right after i18n.js');
+  h.eq(lb('nl', 'en-US').I.lazy, 'nl', 'a saved Dutch choice on an English browser: written in');
+  h.eq(lb('en', 'nl-NL').out, '', 'a saved English choice on a Dutch browser: nothing written');
+  h.eq(lb(null, 'fr-FR').out, '', 'any other browser: nothing written');
+  // a switch to Dutch in Settings: the files are fetched in order, the screen is redone when they land
+  const T = boot({ only: ['util', 'i18n', 'data'], noLang: true, language: 'en-US' });
+  const I = T.I18N, head = T._document.head;
+  let landed = 0;
+  I.onLand(() => { landed++; });
+  const n0 = head.children.length;
+  I.set('nl');
+  const s1 = head.children.slice(n0);
+  h.ok(s1.length === 1 && s1[0].src === 'js/lang_nl.js' && s1[0].async === false, 'the switch fetches js/lang_nl.js first');
+  h.eq(s1[0].fetchPriority, 'high', 'ahead of the art still loading (a switch right after boot waited 3 to 6 s behind it on HTTP/1)');
+  h.ok(I.loading('nl'), 'the fetch is on its way');
+  h.eq(I.tr('END TURN'), 'END TURN', 'English words until the table lands (never a raw key)');
+  I.set('nl');
+  h.eq(head.children.length - n0, 1, 'a second set while loading asks for nothing more');
+  I.add('nl', { ui: { 'END TURN': 'EINDE BEURT' } });   // what js/lang_nl.js does when it runs
+  s1[0].onload();
+  const s2 = head.children.slice(n0 + 1);
+  h.ok(s2.length === 1 && s2[0].src === 'js/lang_nl2.js', 'then js/lang_nl2.js');
+  h.eq(landed, 0, 'not redone before the last file');
+  s2[0].onload();
+  h.eq(landed, 1, 'the game redoes the screen once both landed');
+  h.ok(!I.loading('nl'), 'done loading');
+  h.eq(I.tr('END TURN'), 'EINDE BEURT', 'and the words are Dutch');
+  I.set('en'); I.set('nl');
+  h.eq(head.children.length - n0, 2, 'a table that landed is never fetched again');
+  // a file that fails: no redo, English stays, a later switch may try again
+  const F = boot({ only: ['util', 'i18n', 'data'], noLang: true, language: 'en-US' });
+  let ok = null;
+  F.I18N.need('nl', (v) => { ok = v; });
+  const fs1 = F._document.head.children.filter((x) => x.src === 'js/lang_nl.js');
+  fs1[0].onerror();
+  h.eq(ok, false, 'a failed file reports false');
+  h.ok(!F.I18N.loading('nl'), 'and the loader lets go');
+  // the game in full: a Dutch boot in the suites still has its tables (the lib carries them)
+  const G = boot({ language: 'nl-NL' });
+  h.ok(G.I18N.table('nl') && G.GAME.lang() === 'nl', 'the suites boot Dutch with the tables');
+});
+
+/* ------------------------------------------------- DEP (round 15): the Neon Depths in Dutch */
+h.test('dep: every Neon Depths line has its Dutch (the tricks, the reboot card, the monsters, their moves, the Codex), and the screens show it', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  const { GAME: G, I18N, DATA: D } = T;
+  const nl = I18N.table('nl'), ui = nl.ui, C = nl.content;
+  const same = new Set(['BZZZT']);
+  const miss = [], flat = [], em = [];
+  for (const k of G.dep.WORDS) { if (!ui[k]) miss.push(k); else if (ui[k] === k && !same.has(k)) flat.push(k); if (ui[k] && ui[k].indexOf(EM) >= 0) em.push(k); }
+  h.eq(miss.length, 0, 'every word has a Dutch entry: ' + miss.slice(0, 4).join(' | '));
+  h.eq(flat.length, 0, 'and it is Dutch: ' + flat.slice(0, 4).join(' | '));
+  for (const k in G.dep.PATTERNS) {
+    h.ok(ui[k], 'a pattern: ' + k);
+    const ex = G.dep.PATTERNS[k], out = I18N.tr(ex);
+    h.ok(out !== ex && !/\{\w+\}/.test(out), `the example comes back in Dutch: ${ex} -> ${out}`);
+  }
+  // the monsters: name, blurb, taunt, every move and its line, the enrages, High Tide
+  for (const e of D.DEP_ENEMIES) {
+    const c = (C.enemy || {})[e.id] || {};
+    for (const f of ['name', 'desc', 'taunt']) if (e[f]) { h.ok(c[f] && c[f] !== e[f] && c[f].indexOf(EM) < 0, `${e.id}.${f} in Dutch`); }
+    for (const m of e.moves) { h.ok(I18N.known(m.name), `${e.id}.${m.id} name`); h.ok(I18N.known(m.txt), `${e.id}.${m.id} line`); }
+    if (e.enrage) for (const f of ['name', 'text']) h.ok(I18N.known(e.enrage[f]), `${e.id} enrage ${f}`);
+    h.ok(I18N.tr(D.ENEMIES[e.id].name) !== e.name, `${e.name} -> ${I18N.tr(D.ENEMIES[e.id].name)}`);
+  }
+  const sig = (C.path || {})['ENEMIES.dep_jukebox.sig'] || {};
+  h.ok(['name', 'sign', 'shout', 'text'].every((f) => sig[f] && sig[f] !== D.ENEMIES.dep_jukebox.sig[f]), 'High Tide in Dutch');
+  for (const id of ['dep_boot', 'dep_jellyling', 'dep_chest']) { const c = (C.item || {})[id] || {}; h.ok(c.name && c.text && (c.text.match(/\{v\}/g) || []).length === (D.ITEMS[id].text.match(/\{v\}/g) || []).length, id + ' in Dutch, tokens kept'); }
+  for (const e of D.loreBook().entries.filter((x) => x.art && x.art.dep)) { const c = (C.lore || {})[e.id] || {}; h.ok(c.text && c.name && (!e.hint || c.hint), e.id + ': the Codex page in Dutch'); }
+  h.eq(I18N.tr('The Neon Depths'), 'De Neondiepte', 'the biome\'s name');
+  h.eq(I18N.tr('Deep Diver'), 'Diepzeeduiker', 'the sticker');
+  h.eq(I18N.tr('Drifts 3 stinging jellies into your bin'), 'Laat 3 prikkende kwallen je bak in drijven', 'an intent with its number');
+  // the reboot card of a dive, in Dutch, then a Depths fight draws
+  G.endless.pick([]); G.newRun('knight', 1501); G.run.act = 3; G.showWin();
+  G.endless.start(); G.endless.next(); G.endless.next();
+  h.ok(G.run.endless.dep, 'a dive');
+  const texts = [];
+  const walk = (el) => { if (!el || typeof el !== 'object') return; if (typeof el.textContent === 'string' && el.textContent && !(el.children || []).length) texts.push(el.textContent); for (const c of el.children || []) walk(c); };
+  walk(T._nodes.loopBody);
+  const eng = new Set(G.dep.WORDS.filter((k) => ui[k] && ui[k] !== k));
+  h.eq(texts.filter((s) => eng.has(s)).length, 0, 'none of the Depths\' English is left on the card: ' + texts.filter((s) => eng.has(s)).slice(0, 3).join(' | '));
+  h.ok(texts.includes('DE NEONDIEPTE'), 'DE NEONDIEPTE on the card');
+  let ok = true;
+  try { G.endless.cont(); for (let i = 0; i < 4 && G.screen !== 'map'; i++) G.choose(0); G.draw(); G.startFight(['dep_jukebox', 'dep_jelly'], 'boss'); stepFor(G, 1); G.draw(); } catch (e) { ok = false; console.log(e && e.stack); }
+  h.ok(ok, 'the Depths map and a boss fight draw in Dutch');
+});
+
 h.done();

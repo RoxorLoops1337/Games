@@ -865,6 +865,8 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .stat.act.endless{border-color:var(--gold);background:linear-gradient(180deg,rgba(255,46,136,.25),rgba(0,0,0,.35));animation:loopGlow 1.8s ease-in-out infinite}
 .stat.act.endless .k{color:var(--gold)}
 .stat.act.endless .v{color:#fff;font-size:14px;text-shadow:0 0 8px rgba(255,201,77,.9)}
+#top .uiRes .stat.act.endless.depths,.stat.act.endless.depths{border-color:#3de0d0;background:linear-gradient(180deg,rgba(40,200,200,.3),rgba(0,20,40,.45))}
+#top .uiRes .stat.act.endless.depths .v::before,.stat.act.endless.depths .v::before{content:'\1F30A';margin-right:3px}
 @keyframes loopGlow{50%{box-shadow:0 0 14px rgba(255,201,77,.6)}}
 .mutBadge{--mc:var(--lime);width:44px;height:44px;flex:0 0 auto;border-radius:50%;padding:0;cursor:pointer;font-size:20px;line-height:1;
   display:flex;align-items:center;justify-content:center;border:2px dashed var(--mc);
@@ -897,6 +899,34 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .mutChip.on .ml{color:var(--gold)}
 .btn.daily .d3{font-size:12px;letter-spacing:.02em;text-transform:none;color:#c6ff8e;font-weight:700}
 /* ================= /ENDLESS ================= */
+</style>
+<style id="dep-css">
+/* ================= DEP (round 15): a dive's loop reboot floods (DESIGN.md "The Neon Depths (round 15)") ================= */
+.crt.dep .tube{background:radial-gradient(ellipse at 50% 30%,#0f4a5c 0,#062a3a 55%,#010b12 100%);
+  box-shadow:inset 0 0 90px rgba(0,0,0,.95),inset 0 0 0 3px #11566a,0 0 0 6px #04161e,0 0 60px rgba(46,230,214,.4)}
+.crt.dep .tube::before{background:linear-gradient(180deg,rgba(141,255,245,0),rgba(141,255,245,.12),rgba(141,255,245,0))}
+/* (steps(1) at the end can land a hair short in Chromium, 2.09s + .01s finishing at 2099.999ms, and leave a line at opacity 0: step at the start) */
+.crt.dep .boot div{animation-timing-function:step-start}
+.crt.dep .loopN{text-shadow:-4px 0 0 rgba(46,230,214,.95),4px 0 0 rgba(90,160,255,.9),0 0 34px rgba(141,255,245,.85),0 6px 0 #04202a}
+.crt.dep .loopN small{color:#8dfff5;text-shadow:0 0 12px rgba(46,230,214,.9)}
+.crt .depName{position:relative;z-index:2;font-size:30px;font-weight:900;letter-spacing:.14em;color:#c9fff9;text-align:center;opacity:0;
+  text-shadow:0 0 18px rgba(46,230,214,.95),0 0 4px #fff,0 4px 0 #04303c;animation:depSurface .9s cubic-bezier(.2,1.4,.4,1) forwards,depSway 3.2s 1s ease-in-out infinite}
+@keyframes depSurface{0%{opacity:0;transform:translateY(60px) scale(.8);filter:blur(4px)}60%{opacity:1;filter:none}100%{opacity:1;transform:none}}
+@keyframes depSway{50%{transform:translateY(-4px) rotate(-1deg)}}
+.crt .depWave{position:absolute;left:0;right:0;bottom:0;height:0;z-index:1;pointer-events:none;
+  background:linear-gradient(180deg,rgba(46,230,214,.5),rgba(14,90,120,.55) 14%,rgba(4,30,44,.85));
+  box-shadow:0 -2px 0 rgba(201,255,249,.8),0 -10px 24px rgba(46,230,214,.35);animation:depRise 2.4s 1s cubic-bezier(.3,.7,.3,1) forwards}
+@keyframes depRise{0%{height:0}100%{height:24%}}
+.crt .depWave i{position:absolute;bottom:0;width:10px;height:10px;border-radius:50%;border:2px solid rgba(201,255,249,.8);opacity:0;
+  background:radial-gradient(circle at 35% 35%,rgba(255,255,255,.7),rgba(141,255,245,.08) 60%);animation:depBub 2.2s ease-in infinite}
+.crt .depWave i:nth-child(odd){width:6px;height:6px;animation-duration:1.7s}
+@keyframes depBub{0%{opacity:0;transform:translateY(0)}15%{opacity:1}100%{opacity:0;transform:translate(8px,-220px)}}
+.crt.fast .depName,.crt.fast .depWave{animation-delay:0s!important;animation-duration:.01s!important}
+.calm .crt .depName{animation:depSurface .01s forwards!important}
+.calm .crt .depWave{animation:depRise .01s forwards!important}
+.calm .crt .depWave i{animation:none;display:none}
+@media (prefers-reduced-motion:reduce){.crt .depName{animation:depSurface .01s forwards!important}.crt .depWave{animation:depRise .01s forwards!important}.crt .depWave i{display:none}}
+/* ================= /DEP ================= */
 </style>
 <style id="feel-css">
 /* ================= FEEL (round 4): tip cards, room scenes, toast lanes (DESIGN.md "Feel (round 4)") ================= */
@@ -1349,6 +1379,13 @@ html[class*="txt-"] .pip{font-size:calc(13px * var(--accK))}
 .pevc .text{font-size:12px;width:100%}
 .calm .trdWait{animation:none}
 @media (prefers-reduced-motion:reduce){.trdWait{animation:none}}
+/* (POLISH round 15) Dutch cards run longer (two-line names, longer labels): a tighter card so all three trades fit without scrolling */
+html[lang="nl"] .trdPanel{gap:6px;padding-top:6px}
+html[lang="nl"] .trdOffer{gap:1px;padding:4px 8px 5px}
+html[lang="nl"] .trdSide,html[lang="nl"] .trdGood{gap:1px}
+html[lang="nl"] .trdNm{line-height:1.08}
+html[lang="nl"] .trdRule{line-height:1.2}
+html[lang="nl"] .trdGood canvas{width:44px;height:44px}
 /* ================= /TRD ================= */
 </style>
 <style id="secret-css">
@@ -2028,6 +2065,37 @@ input.duoName:focus{box-shadow:0 0 12px var(--dc)}
 .duoChipH.down span{color:var(--blood)}
 .calm .btn.duoReady{animation:none}
 @media (prefers-reduced-motion:reduce){.btn.duoReady{animation:none}}
+/* DUO NET (round 15): online co-op: same phone or online, host or join, the code, the lobby, the link's dot */
+.btn.duoMode.dm-local{border-color:var(--lime);background:linear-gradient(180deg,#2c4a14,#14240a);box-shadow:0 4px 0 #0a1404,0 0 18px rgba(166,255,94,.25)}
+.btn.duoMode.dm-online,.btn.duoMode.dm-join{border-color:var(--cyan);background:linear-gradient(180deg,#123f4a,#0a2026);box-shadow:0 4px 0 #04121a,0 0 18px rgba(46,230,214,.3)}
+.btn.duoMode.dm-host{border-color:var(--gold);background:linear-gradient(180deg,#4a3a12,#261c08);box-shadow:0 4px 0 #140e02,0 0 18px rgba(255,201,77,.3)}
+.duoNetErr{padding:10px 12px;border-color:var(--blood);color:#ffd6d0;font-weight:800;font-size:14px;line-height:1.35}
+.duoNetRec{text-align:center;color:var(--dim)}
+.duoCodeIn{display:flex;gap:10px;justify-content:center;margin:6px 0}
+input.duoCodeBox{width:62px;height:76px;border-radius:14px;border:3px solid var(--cyan);background:#120a22;color:#fff;font-size:40px;font-weight:900;
+  text-align:center;text-transform:uppercase;padding:0;caret-color:var(--gold);box-shadow:0 4px 0 #04121a}
+input.duoCodeBox:focus{outline:none;border-color:var(--gold);box-shadow:0 0 16px var(--gold)}
+.duoCodeBig{text-align:center;font-size:44px;font-weight:900;letter-spacing:.12em;color:var(--gold);text-shadow:0 3px 0 #12091f}
+.duoNetSpin{text-align:center;animation:duoNetBlink 1.2s ease-in-out infinite}
+@keyframes duoNetBlink{50%{opacity:.45}}
+.duoCodeCard{padding:10px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;border-color:var(--gold)}
+.duoCodeL{display:flex;gap:8px}
+.duoCodeL span{display:flex;align-items:center;justify-content:center;width:58px;height:70px;border-radius:12px;border:3px solid var(--gold);background:#120a22;
+  font-size:40px;font-weight:900;color:#fff;box-shadow:0 4px 0 #140e02,0 0 14px rgba(255,201,77,.25)}
+.duoNetStatus{text-align:center;font-size:14px;font-weight:900;color:#fff6c0;min-height:18px}
+.duoNetSlot{display:flex;flex-direction:column}
+.duoNetPart .col{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.duoNetPName{font-size:18px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.duoNetRdy{flex:0 0 auto;min-width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;
+  background:#1b1030;border:2px solid var(--line2);color:var(--dim)}
+.duoNetRdy.on,.duoP>.duoPTop>.duoNetRdy{background:var(--dc,var(--lime));border-color:#fff;color:#12091f}
+.duoNetWait{text-align:center;font-weight:900;color:var(--dim);padding:14px 0;animation:duoNetBlink 1.6s ease-in-out infinite}
+.duoNetBossName{font-size:17px;font-weight:900;color:#fff}
+.duoNetSheet .row{flex-wrap:wrap;gap:8px}
+.duoNetDot{flex:0 0 auto;align-self:center;width:12px;height:12px;border-radius:50%;background:var(--lime);box-shadow:0 0 8px var(--lime)}
+.duoNetDot.lost{background:var(--gold);box-shadow:0 0 8px var(--gold);animation:duoNetBlink .8s ease-in-out infinite}
+.duoNetDot.alone{background:#6a5a80;box-shadow:none}
+@media (prefers-reduced-motion:reduce){.duoNetSpin,.duoNetWait,.duoNetDot.lost{animation:none}}
 /* ================= /DUO ================= */
 </style>
 <style id="sch-css">
@@ -2205,6 +2273,182 @@ html[lang="nl"] .mSticker .n{font-size:14px;overflow-wrap:break-word}
 /* (round 14) VOORWERPEN / RELIKWIEËN fit their Prizedex tabs */
 html[lang="nl"] .dexTabs .btn.dexTab{letter-spacing:0;font-size:11.5px;padding:4px 2px}
 </style>
+<style id="ui15-css">
+/* ================= HUD AND TITLE MENU (round 15, DESIGN.md "HUD and title menu polish (round 15)") =================
+   The top bar: the portrait | the vitals column (the hp bar, the resource chips under it) | the relic strip.
+   Same 70 px bar as before, so every canvas layout under it (the arena, the labels, the toasts) keeps its place. */
+#top{gap:8px;padding:6px 8px;align-items:center;
+  background:linear-gradient(180deg,rgba(26,14,46,.97),rgba(18,9,31,.88));border-bottom:2px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.35)}
+#portrait{width:56px;height:56px;border-radius:14px;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+#top .uiVit{display:flex;flex-direction:column;justify-content:center;gap:5px;flex:0 0 268px;min-width:0;height:56px}
+#top .uiRes{display:flex;align-items:center;gap:4px;height:23px;min-width:0}
+/* the hp bar: the number sits inside it, the ghost chunk drains behind the fill */
+#hpStat{flex-direction:row;align-items:center;justify-content:flex-start;gap:7px;height:28px;min-width:0;padding:0 10px;
+  background:none;border:0;border-radius:10px;overflow:visible;line-height:1;cursor:pointer}
+#hpStat .hpbar{position:absolute;left:0;right:0;top:0;bottom:0;height:auto;border-radius:10px;background:#0b0616;
+  border:2px solid var(--line2);overflow:hidden;box-shadow:inset 0 2px 5px rgba(0,0,0,.6);transition:right .22s ease,border-color .2s}
+#hpStat .hpbar i{border-radius:0}
+#hpStat .hpbar .fl{background:linear-gradient(180deg,#ff8a74 0%,#ec3b43 45%,#b8203a 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+#hpStat .hpbar .gh{background:#ffe2dc}
+#hpStat .k{position:relative;z-index:1;font-size:12px;letter-spacing:.12em;color:#ffe2dc;text-shadow:0 1px 0 rgba(0,0,0,.7)}
+#hpStat .v{position:relative;z-index:1;font-size:16px;color:#fff;text-shadow:0 1px 0 #3a0a14,0 0 6px rgba(0,0,0,.75)}
+/* Block: a shield chip at the bar's end, the bar steps aside for it (nothing of the bar is hidden under it) */
+#hpStat .blk{position:absolute;right:0;top:0;bottom:0;width:54px;display:none;align-items:center;justify-content:center;gap:3px;z-index:1;
+  border-radius:10px;border:2px solid var(--cyan);background:linear-gradient(180deg,#127a74,#0a3538);color:#eafffd;font-size:15px;
+  text-shadow:0 1px 0 rgba(0,0,0,.6);box-shadow:0 0 10px rgba(46,230,214,.45)}
+#hpStat .blk:not(:empty){display:flex}
+#hpStat .blk::before{content:'';width:11px;height:13px;flex:0 0 auto;background:var(--cyan2);
+  clip-path:polygon(50% 0,100% 16%,100% 52%,50% 100%,0 52%,0 16%)}
+#hpStat.shielded .hpbar{right:58px;border-color:var(--cyan)}
+#hpStat.shielded::after{display:none}
+#hpStat.shielded .hpbar::after{content:'';position:absolute;top:0;bottom:0;width:18px;left:-30px;pointer-events:none;z-index:2;
+  background:linear-gradient(90deg,transparent,rgba(191,232,255,.35),transparent);transform:skewX(-20deg);animation:shimmer 2.2s linear infinite}
+#hpStat.hit .hpbar{animation:uiHpFlash .35s}
+@keyframes uiHpFlash{0%,100%{border-color:var(--line2)}25%{border-color:var(--blood);box-shadow:inset 0 0 14px rgba(255,46,48,.8)}}
+#hpStat.low .hpbar{animation:uiHpLow .95s ease-in-out infinite}
+@keyframes uiHpLow{0%,100%{border-color:var(--line2)}12%{border-color:var(--blood);box-shadow:0 0 12px rgba(255,46,48,.7),inset 0 2px 5px rgba(0,0,0,.6)}}
+#hpStat.qaWarn .hpbar{height:auto;bottom:0}
+#hpStat.qaLethal .hpbar{border-color:var(--blood)}
+.calm #hpStat.low .hpbar,.calm #hpStat.shielded .hpbar::after{animation:none}
+@media (prefers-reduced-motion:reduce){#hpStat.low .hpbar,#hpStat.shielded .hpbar::after{animation:none}}
+html[class*="cb-"] #hpStat .v{color:#fff}
+html[class*="cb-"] #hpStat .hpbar .fl{background:var(--acc-dmg)}
+/* the resource chips: an icon and a number (the word is kept for screen readers and the tap card) */
+#top .uiRes .stat{flex:0 0 auto;flex-direction:row;align-items:center;gap:4px;height:23px;min-width:0;padding:0 8px 0 5px;border-radius:12px;
+  background:rgba(0,0,0,.4);border:1px solid var(--line);pointer-events:auto;cursor:pointer;line-height:1}
+#top .uiRes .stat .v{font-size:14px}
+#top .uiRes .stat .k{font-size:0;letter-spacing:0;display:inline-flex;align-items:center;color:transparent}
+#top .uiRes .stat .k::before{content:'';display:block;width:14px;height:14px;margin:0;flex:0 0 auto}
+#top .uiRes .stat.gold .k::before{border-radius:50%;background:radial-gradient(circle at 35% 32%,#fff6c0,#ffc94d 45%,#c98a1a);
+  box-shadow:inset 0 0 0 1.5px #8a5a0a,0 0 6px rgba(255,201,77,.5)}
+#top .uiRes .stat.ink .k::before{width:12px;height:14px;border-radius:50% 50% 45% 45%;background:radial-gradient(circle at 40% 35%,#fff,#8dfff5 40%,#2ee6d6);
+  box-shadow:0 0 7px rgba(46,230,214,.8),inset 0 -3px 0 #3d6a70}
+#top .uiRes .stat.tix .k::before{width:16px;height:11px;
+  background:radial-gradient(circle at 0 50%,transparent 3px,#ff9ec7 3.5px) left/51% 100% no-repeat,radial-gradient(circle at 100% 50%,transparent 3px,#ff9ec7 3.5px) right/51% 100% no-repeat;
+  filter:drop-shadow(0 0 4px rgba(255,158,199,.6))}
+.art-ui-coin #top .uiRes .stat.gold .k::before{background:center/contain no-repeat url(art/ui/coin.png);box-shadow:none}
+.art-ui-ink #top .uiRes .stat.ink .k::before{background:center/contain no-repeat url(art/ui/ink.png);box-shadow:none}
+/* the act chip keeps its word and sits at the row's end */
+#top .uiRes .stat.act{margin-left:auto;gap:5px;padding:0 8px}
+#top .uiRes .stat.act .k{font-size:12px;letter-spacing:.06em;color:var(--dim)}
+#top .uiRes .stat.act .k::before{display:none}
+#top .uiRes .stat.act .v{font-size:13px;color:var(--pink2);white-space:nowrap}
+#top .uiRes .stat.act.endless{border-color:var(--gold);background:linear-gradient(180deg,rgba(255,46,136,.3),rgba(0,0,0,.4))}
+#top .uiRes .stat.act.secret{border-color:var(--gold);box-shadow:0 0 8px rgba(255,201,77,.45)}
+#top .uiRes .stat.act.endless .k{display:none}
+#top .uiRes .stat.act.endless .v{font-size:13px}
+/* a Tilt / DAILY / WEEKLY / RUSH badge takes the word's place inside the act chip */
+#top .uiRes .stat.act .tiltBadge.on{position:static;order:-1;font-size:12px;padding:0 5px;line-height:16px;border-radius:8px;box-shadow:none}
+#top .uiRes .stat.act:has(.tiltBadge.on) .k{display:none}
+/* the rush clock takes the bulbs' and the tickets' place in the row */
+#top.rushOn .uiRes .rushClk{display:flex;min-width:0;padding:0 8px 0 6px}
+#top.rushOn .uiRes .rushClk .k{font-size:0}
+#top.rushOn .uiRes .rushClk .k::before{content:'\23F1';font-size:12px;width:auto;height:auto;color:var(--gold)}
+#top.rushOn .uiRes .rushClk .v{font-size:14px}
+/* a duel: the duo bar has the row, the vitals column shrinks to the hp bar */
+#top.duoOn .uiRes{display:none}
+#top.duoOn .uiVit{flex-basis:200px}
+/* the relic strip: medallions left to right; past what fits a "+N" chip opens the whole list */
+#relics{flex:1 1 0;height:56px;padding:0;gap:4px;justify-content:flex-start}
+#relics.uiFit{overflow:hidden}
+#relics .uiOver{display:none!important}
+#relics .relic.uiRelMore{width:40px;border-style:dashed;border-color:var(--cyan);background:rgba(10,53,56,.7);color:var(--cyan2);
+  font-size:15px;font-weight:900;letter-spacing:0}
+.uiRelList{position:absolute;left:10px;right:10px;top:76px;max-height:560px;z-index:60;display:none;flex-direction:column;padding:10px 10px 8px;pointer-events:auto}
+.uiRelList.show{display:flex;animation:mixPop .28s cubic-bezier(.2,1.5,.4,1)}
+.uiRelList .uiRlHead{display:flex;align-items:center;gap:8px;padding:0 2px 8px;border-bottom:2px solid var(--line)}
+.uiRelList .uiRlHead h3{flex:1}
+.uiRelList .uiRlBody{overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-top:8px;min-height:0}
+.uiRelList .uiRl{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:12px;background:rgba(0,0,0,.25);border:1px solid var(--line)}
+.uiRelList .uiRl canvas{width:40px;height:40px;flex:0 0 auto}
+.uiRelList .uiRl .ic{width:40px;text-align:center;font-size:24px;flex:0 0 auto}
+.uiRelList .uiRl .n{font-size:14px;font-weight:900;color:var(--gold)}
+.uiRelList .uiRl .t{font-size:12.5px;color:var(--dim);line-height:1.35}
+.uiX{min-width:44px;min-height:44px;padding:0;font-size:20px}
+.calm .uiRelList.show{animation:none}
+/* the player row: the status chips and the GRABS pill share one height and one baseline */
+#playerRow{gap:10px}
+#pstatus{align-items:center;height:40px}
+#pstatus .pip{height:36px;padding:0 10px;border-radius:12px;gap:4px;font-size:14px;background:rgba(18,9,31,.88);box-shadow:0 2px 8px rgba(0,0,0,.35)}
+#pstatus.many .pip{padding:0 6px}
+#grabs{height:38px;border-radius:19px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+/* the control bar: the round buttons, the hint and END TURN on one line, evenly spaced */
+#ctrl{gap:4px;padding:6px 12px 8px}
+.ctrlRow{gap:10px;height:54px}
+.ctrlRow .accPauseBtn{width:48px;height:48px;min-height:48px;padding:0;border-radius:14px;font-size:20px}
+#hint{font-size:13.5px;color:var(--cyan2);line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;opacity:.92}
+#endTurn{min-width:156px;height:54px;border-radius:14px;font-size:16px}
+html[lang="nl"]:not([class*="hand-"]) #endTurn{min-width:164px;letter-spacing:.04em}
+
+/* ---- the title menu: one big action, the play row, a row of tiles, the stats line; the rest in sheets ---- */
+#titleMenu{gap:10px;padding:64px 0 22px}
+#titleMenu .uiPri,#titleMenu .uiPlay,#titleMenu .uiTiles{width:440px;max-width:calc(100% - 24px)}
+#titleMenu .uiPri{display:flex;flex-direction:column;gap:10px}
+#titleMenu .uiPri .btn{width:100%;min-height:50px;font-size:17px;letter-spacing:.12em;border-radius:14px}
+#titleMenu .uiPri .btn.uiBig{min-height:62px;font-size:22px;letter-spacing:.16em;border-radius:16px}
+#titleMenu .uiPri > .btn:first-child{animation:mixBreath 2.8s ease-in-out 1.2s infinite}
+.calm #titleMenu .uiPri > .btn:first-child{animation:none}
+@media (prefers-reduced-motion:reduce){#titleMenu .uiPri > .btn:first-child{animation:none}}
+#titleMenu .schTip{width:440px;max-width:calc(100% - 24px);margin-top:-2px}
+/* the play row: the daily run (today's crawler and mutators) beside MODES */
+#titleMenu .uiPlay{display:flex;gap:10px}
+#titleMenu .uiPlay .btn{flex:1 1 0;width:auto;min-width:0;min-height:66px;border-radius:14px;padding:6px 10px}
+#titleMenu .uiPlay .btn.daily .d2,#titleMenu .uiPlay .btn.daily .d3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.btn.uiModes{display:grid;grid-template-columns:auto auto;grid-template-rows:auto auto;column-gap:6px;row-gap:2px;align-content:center;justify-content:center;align-items:center;
+  line-height:1.1;border-color:var(--cyan);background:linear-gradient(180deg,#153f60,#0c2038);box-shadow:0 4px 0 #061426,0 0 18px rgba(46,230,214,.22)}
+.btn.uiModes .uiTi{font-size:17px;line-height:1;justify-self:end}
+.btn.uiModes .m1{font-size:15px;justify-self:start}
+.btn.uiModes .m2{grid-column:1 / span 2;justify-self:center;font-size:12px;letter-spacing:.02em;text-transform:none;color:#bff4ff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* the tiles: an icon over a short word, all one size */
+#titleMenu .uiTiles{display:flex;gap:8px}
+#titleMenu .uiTiles .btn{position:relative;flex:1 1 0;width:auto;min-width:0;height:66px;min-height:66px;flex-direction:column;gap:4px;padding:6px 2px 5px;
+  border-radius:14px;text-transform:none;letter-spacing:.01em;font-size:12px}
+#titleMenu .uiTiles .uiTi{font-size:24px;line-height:1;filter:drop-shadow(0 2px 0 rgba(0,0,0,.35))}
+#titleMenu .uiTiles .uiTl{font-size:12px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;color:var(--text)}
+#titleMenu .uiTiles .btn.vaultBtn{border-color:#ff9ec7}
+#titleMenu .uiTiles .btn.schTitleBtn .uiTl{color:#c8ffd8}
+#titleMenu .uiTiles .vdot,#titleMenu .uiTiles .schTitleBtn[data-n]::after{position:absolute;top:-8px;right:-6px;margin:0;min-width:22px;height:22px;padding:0 6px;border-radius:11px;
+  display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-style:normal;font-weight:900;line-height:1;z-index:1;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+#titleMenu .uiTiles .vdot{background:var(--pink);color:#fff}
+#titleMenu .uiTiles .schTitleBtn[data-n]::after{background:#1f4a3a;color:var(--gold)}
+html[class*="txt-"] #titleMenu .uiTiles .btn{height:auto}
+/* the stats line: small numbers, no boxes */
+#titleMenu .mStats{gap:2px 12px;margin-top:2px;width:460px;max-width:calc(100% - 16px)}
+#titleMenu .mStats .ms{flex-direction:row;align-items:baseline;gap:4px;min-width:0;padding:0;background:none;border:0}
+#titleMenu .mStats .ms b{font-size:15px}
+#titleMenu .mStats .ms span{font-size:12px;letter-spacing:.04em}
+/* a group sheet: the menu dims, a panel rises from the bottom with the group's buttons */
+.uiSheet{position:absolute;inset:0;z-index:5;display:none;flex-direction:column;justify-content:flex-end;align-items:center;padding:0 12px 16px;
+  background:rgba(8,4,16,.62);pointer-events:auto}
+.uiSheet.show{display:flex}
+.uiSheetP{width:444px;max-width:100%;max-height:78%;display:flex;flex-direction:column;padding:10px 12px 14px;animation:uiSheetIn .3s cubic-bezier(.2,1.2,.4,1) both}
+.uiSheet.quiet .uiSheetP{animation:none}
+@keyframes uiSheetIn{0%{transform:translateY(60px);opacity:0}100%{transform:none;opacity:1}}
+.uiSheetH{display:flex;align-items:center;gap:8px;padding:0 2px 8px;margin-bottom:8px;border-bottom:2px solid var(--line)}
+.uiSheetH h3{flex:1;font-size:15px;letter-spacing:.14em}
+.uiSheetB{display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:0;padding:2px 2px 4px}
+.uiSheetB .btn{width:100%;min-height:54px;justify-content:flex-start;gap:12px;padding:6px 14px;border-radius:14px;font-size:15px;text-align:left}
+.uiSheetB .btn::before{font-size:22px;line-height:1;width:30px;text-align:center;flex:0 0 auto;letter-spacing:0}
+.uiSheetB .btn.uiI-dex::before{content:'\1F4E6'}
+.uiSheetB .btn.uiI-stk::before{content:'\2B50'}
+.uiSheetB .btn.uiI-codex::before{content:'\1F4DC'}
+.uiSheetB .btn.uiI-his::before{content:'\1F4C5'}
+.uiSheetB .btn.uiI-help::before{content:'\2753'}
+.uiSheetB .btn.uiI-tips::before{content:'\1F4A1'}
+.uiSheetB .btn.uiI-intro::before{content:'\1F3AC'}
+.uiSheetB .btn.toggle::before{content:'';width:14px;height:14px;margin:0 8px;border-radius:50%;background:var(--dimmer)}
+.uiSheetB .btn.toggle.on::before{background:var(--lime);box-shadow:0 0 8px rgba(166,255,94,.8)}
+.uiSheetB .btn.wkCard,.uiSheetB .btn.rushCard,.uiSheetB .btn.duoBtn{min-height:62px;align-items:center;text-transform:none}
+.uiSheetB .btn.rushCard,.uiSheetB .btn.duoBtn{flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;padding-left:16px}
+.uiSheetB .btn.wkCard .wkTx .d2{max-width:300px}
+.uiSheetB .btn.rushCard .r1,.uiSheetB .btn.duoBtn .d1{text-transform:uppercase;letter-spacing:.06em}
+.uiSheetB .hisTitleBtn[data-n]::after,.uiSheetB .loreTitleBtn[data-n]::after{content:attr(data-n);margin-left:auto;min-width:24px;height:24px;padding:0 7px;border-radius:12px;
+  display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#fff;background:var(--line2)}
+.uiSheetB .loreTitleBtn[data-n]::after{background:var(--pink)}
+.calm .uiSheetP{animation:none}
+@media (prefers-reduced-motion:reduce){.uiSheetP{animation:none}}
+#scr-title.attracting .uiSheet{display:none}
+</style>
 </head>
 <body>
 <div id="csBoot" role="status" aria-live="polite" aria-label="Loading CLAWSPIRE">
@@ -2262,14 +2506,19 @@ html[lang="nl"] .dexTabs .btn.dexTab{letter-spacing:0;font-size:11.5px;padding:4
 <div id="wrap"><div id="stage">
   <canvas id="cv" width="540" height="960"></canvas>
 
-  <!-- top bar: portrait, hp/block, gold, bulbs (the light stat, id inkTxt), act, relics -->
+  <!-- top bar (round 15): the portrait; the vitals column (the hp bar with its shield chip on top,
+       the resource chips under it: gold, bulbs (the light stat, id inkTxt), tickets, act); the relic strip ("+N" past what fits) -->
   <div id="top" class="hud">
     <canvas id="portrait" width="108" height="108" class="tap"></canvas>
-    <div class="stat hp tap" id="hpStat"><span class="k">HP</span><span class="v mono" id="hpTxt">0/0</span><span class="blk mono" id="blockTxt"></span><span class="hpbar"><i class="gh" id="hpGhost"></i><i class="fl" id="hpFill"></i></span></div>
-    <div class="stat gold"><span class="k">Gold</span><span class="v mono" id="goldTxt">0</span></div>
-    <div class="stat ink"><span class="k">Bulbs</span><span class="v mono" id="inkTxt">0</span></div>
-    <div class="stat tix" id="tixStat"><span class="k">Tix</span><span class="v mono" id="tixTxt">0</span></div>
-    <div class="stat act"><span class="k">Act</span><span class="v" id="actTxt">1</span></div>
+    <div class="uiVit">
+      <div class="stat hp tap" id="hpStat"><span class="hpbar"><i class="gh" id="hpGhost"></i><i class="fl" id="hpFill"></i></span><span class="k">HP</span><span class="v mono" id="hpTxt">0/0</span><span class="blk mono" id="blockTxt"></span></div>
+      <div class="uiRes">
+        <div class="stat gold"><span class="k">Gold</span><span class="v mono" id="goldTxt">0</span></div>
+        <div class="stat ink"><span class="k">Bulbs</span><span class="v mono" id="inkTxt">0</span></div>
+        <div class="stat tix" id="tixStat"><span class="k">Tix</span><span class="v mono" id="tixTxt">0</span></div>
+        <div class="stat act"><span class="k">Act</span><span class="v" id="actTxt">1</span></div>
+      </div>
+    </div>
     <div id="relics"></div>
   </div>
 
@@ -2355,8 +2604,7 @@ html[lang="nl"] .dexTabs .btn.dexTab{letter-spacing:0;font-size:11.5px;padding:4
 <script src="js/util.js"></script>
 <script src="js/art.js"></script>
 <script src="js/i18n.js"></script>
-<script src="js/lang_nl.js"></script>
-<script src="js/lang_nl2.js"></script>
+<!-- (round 15) js/lang_nl.js and js/lang_nl2.js load lazily: i18n.js writes them in here for a Dutch player, or fetches them on a switch -->
 <script src="js/physics.js"></script>
 <script src="js/data.js"></script>
 <script src="js/combat.js"></script>
@@ -2365,6 +2613,7 @@ html[lang="nl"] .dexTabs .btn.dexTab{letter-spacing:0;font-size:11.5px;padding:4
 <script src="js/render.js"></script>
 <script src="js/intro.js"></script>
 <script src="js/game.js"></script>
+<script src="js/net.js"></script>
 <script>GAME.boot();</script>
 </body>
 </html>
