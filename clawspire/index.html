@@ -1291,6 +1291,66 @@ html[class*="txt-"] .pip{font-size:calc(13px * var(--accK))}
 @media (prefers-reduced-motion:reduce){.setLink.full,.setLink.full .setChain,.bnBack .bnLogo{animation:none}.bnIn{transition:none}}
 /* ================= /SETS ================= */
 </style>
+<style id="trd-css">
+/* ================= TRD (round 14): the Trading Post and pet evolution (DESIGN.md "The Trading Post and pet evolution (round 14)") ================= */
+.screen.trdScr{background:transparent;padding:0;overflow:hidden}
+.trdWin{flex:0 0 288px;cursor:pointer}
+.trdPanel{gap:8px;padding-top:8px;background:linear-gradient(180deg,#1a0f2e,#12091f 40px)}
+.trdMid{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px}
+.trdRes{padding-top:10px}
+.trdOffer{position:relative;flex:0 0 auto;display:flex;flex-direction:column;gap:3px;padding:6px 10px 8px;border-radius:14px;background:linear-gradient(180deg,#221540,#170d2b);
+  border:2px solid var(--tc,#ffc94d);box-shadow:0 0 14px rgba(0,0,0,.35),inset 0 0 18px rgba(255,255,255,.03)}
+.trdOffer.done{opacity:.62;filter:saturate(.6)}
+.trdOffer .stamp{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) rotate(-10deg);padding:2px 12px;border:3px solid var(--lime);border-radius:8px;
+  color:var(--lime);font-size:22px;font-weight:900;letter-spacing:.12em;background:rgba(18,9,31,.75);pointer-events:none;z-index:2}
+.trdOffer.done .trdGo{visibility:hidden}
+.trdHead{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.trdKind{font-size:12px;font-weight:900;letter-spacing:.1em;color:#12091f;background:var(--tc,#ffc94d);padding:2px 8px;border-radius:8px}
+.trdFair{font-size:12px;font-weight:900;color:var(--dim)}
+.trdRow{display:flex;align-items:center;justify-content:center;gap:6px}
+.trdSide{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px}
+.trdLbl{font-size:12px;font-weight:900;letter-spacing:.1em;color:var(--dim)}
+.trdGoods{display:flex;gap:6px;justify-content:center;flex-wrap:nowrap;width:100%}
+.trdGood{flex:0 1 auto;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;max-width:128px;text-align:center}
+.trdGood canvas{width:48px;height:48px}
+.trdNm{font-size:12px;font-weight:900;color:#fff;line-height:1.15}
+.trdRar{font-size:12px;font-weight:700;color:var(--dim)}
+.trdRar.rr-u{color:#2ee6d6}.trdRar.rr-r{color:#ffc94d}.trdRar.rr-l{color:#ff2e88}
+.trdArrow{font-size:22px;font-weight:900;line-height:1;color:var(--tc,#ffc94d);text-shadow:0 0 10px var(--tc,#ffc94d)}
+.trdBack{width:40px;height:52px;border-radius:8px;border:3px solid #8e98a8;background:repeating-linear-gradient(45deg,#2a1845 0 6px,#34205a 6px 12px);
+  display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;color:#fff;box-shadow:0 0 12px rgba(255,255,255,.12)}
+.trdBack.rr-u{border-color:#2ee6d6}.trdBack.rr-r{border-color:#ffc94d}.trdBack.rr-l{border-color:#ff2e88}
+.trdHint{font-size:12px;font-weight:900;color:#12091f;background:var(--kc,#ffc94d);padding:1px 7px;border-radius:9px}
+.trdCoin{width:44px;height:44px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff3b0,#ffc94d 55%,#b07d12);border:3px solid #12091f;
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#4d3608}
+.trdClean{width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:28px;color:#a6ff5e;text-shadow:0 0 12px #a6ff5e}
+.trdRule{font-size:12px;font-weight:700;color:#ffe9a8;text-align:center;line-height:1.3}
+.trdWhy{font-size:12px;font-weight:900;color:#ff8a7a;text-align:center}
+.trdGo{min-width:100px;min-height:44px;padding:0 12px;font-size:15px}
+.trdWait{margin:auto;font-size:15px;font-weight:900;color:var(--gold);text-align:center;animation:secPulse 1.2s ease-in-out infinite}
+.trdPev{background:linear-gradient(180deg,#34143f,#1b0d2e)}
+.trdPevBox{justify-content:flex-start;gap:10px;padding:0 4px}
+.trdPevBox canvas{width:72px;height:72px;flex:0 0 auto}
+.trdPevTx{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;text-align:left}
+.trdPevTx .trdNm{font-size:14px}
+.trdPevTx .trdRule{text-align:left}
+.trdPevRow{justify-content:center;gap:10px}
+.trdRelics{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.trdRelic{display:flex;flex-direction:column;align-items:center;gap:2px;width:84px;min-height:64px;padding:4px;border-radius:10px;border:2px solid var(--line2);
+  background:#140c24;color:#fff;font:inherit;cursor:pointer}
+.trdRelic canvas{width:40px;height:40px}
+.pevChoice{border-color:#ff9ec7 !important;box-shadow:0 0 14px rgba(255,158,199,.45)}
+.pevGrid{margin-top:4px}
+.pevc{border-color:var(--ec);gap:4px;align-items:center}
+.pevc.locked{border-color:var(--line2)}
+.pevc.got{box-shadow:0 0 12px var(--ec)}
+.pevc .name{font-size:13px;color:var(--ec)}
+.pevc.locked .name{color:var(--dimmer)}
+.pevc .text{font-size:12px;width:100%}
+.calm .trdWait{animation:none}
+@media (prefers-reduced-motion:reduce){.trdWait{animation:none}}
+/* ================= /TRD ================= */
+</style>
 <style id="secret-css">
 /* ================= SECRET (round 6): the golden keys, the hidden door, the true ending (DESIGN.md "Secret act (round 6)") ================= */
 .mh .secKeys{display:inline-flex;align-items:center;gap:1px;height:32px;padding:0 6px 0 2px;border-radius:9px;flex:0 0 auto;cursor:pointer;
@@ -2140,11 +2200,15 @@ input.duoName:focus{box-shadow:0 0 12px var(--dc)}
    break at their soft hyphens, fixed-width labels size to their words. */
 html[lang="nl"] .clawChip .n{hyphens:manual;overflow-wrap:break-word;max-width:100%}
 html[lang="nl"] .clawInfo .cpip .k{width:64px}
+/* (round 14) a long Dutch sticker name ("Verhalenbewaarder") stays on its card */
+html[lang="nl"] .mSticker .n{font-size:14px;overflow-wrap:break-word}
+/* (round 14) VOORWERPEN / RELIKWIEËN fit their Prizedex tabs */
+html[lang="nl"] .dexTabs .btn.dexTab{letter-spacing:0;font-size:11.5px;padding:4px 2px}
 </style>
 </head>
 <body>
 <div id="csBoot" role="status" aria-live="polite" aria-label="Loading CLAWSPIRE">
-  <div class="bm"><div class="bmT">CLAW<b>SPIRE</b></div><div class="bmB" id="csBootB"></div><div class="bmS" id="csBootS">Warming up the claw</div><button class="bmR" id="csBootR" type="button" onclick="location.reload()">Reload</button></div>
+  <div class="bm"><div class="bmT" translate="no">CLAW<b>SPIRE</b></div><div class="bmB" id="csBootB"></div><div class="bmS" id="csBootS">Warming up the claw</div><button class="bmR" id="csBootR" type="button" onclick="location.reload()">Reload</button></div>
 </div>
 <script id="csBootJs">
 /* LOADER (round 9): the first paint while the game's scripts download. One bulb
@@ -2155,6 +2219,20 @@ html[lang="nl"] .clawInfo .cpip .k{width:64px}
 (function () {
   var el = document.getElementById('csBoot'), bar = document.getElementById('csBootB'), say = document.getElementById('csBootS');
   if (!el || !bar || !window.requestAnimationFrame) return;
+  /* I18N (round 14): the loader runs before js/i18n.js, so it reads the language itself: the saved
+     choice (meta.settings.lang), else the browser's (nl* is Dutch). The words match js/lang_nl.js. */
+  var NL = { 'Warming up the claw': 'De grijper warmt op', 'Reload': 'Herladen', 'A piece went missing': 'Er ging een stukje kwijt',
+    'Slow line, still loading': 'Trage lijn, nog aan het laden', 'Loading CLAWSPIRE': 'CLAWSPIRE laden' }, nl = false;
+  try { var sv = JSON.parse(localStorage.getItem('clawspire_meta') || 'null'), lg = sv && sv.settings && sv.settings.lang;
+    nl = lg === 'nl' || (lg !== 'en' && /^nl(\b|[-_])/i.test(String((navigator.languages && navigator.languages[0]) || navigator.language || ''))); } catch (e) { nl = false; }
+  function i18n14W(s) { return nl && NL[s] ? NL[s] : s; }
+  if (nl) {
+    try { document.documentElement.lang = 'nl'; } catch (e) { /* old browser */ }
+    var rb = document.getElementById('csBootR');
+    if (say) say.textContent = i18n14W(say.textContent);
+    if (rb) rb.textContent = i18n14W(rb.textContent);
+    el.setAttribute('aria-label', i18n14W(el.getAttribute('aria-label')));
+  }
   var N = 12, bulbs = [], lit = -1, seen = 0, t0 = Date.now(), shown = 0, i, k, TOT = 0;
   var WT = { util: 1, art: 4, physics: 26, data: 110, combat: 42, map: 26, audio: 37, render: 210, intro: 17, game: 293 };
   for (k in WT) TOT += WT[k];
@@ -2165,7 +2243,7 @@ html[lang="nl"] .clawInfo .cpip .k{width:64px}
     return d / TOT;
   }
   function booted() { try { return typeof GAME !== 'undefined' && !!GAME && !!GAME.S && !!GAME.S.booted; } catch (e) { return false; } }
-  function slow(msg) { if (el.className === 'out') return; el.className = 'slow'; if (say) say.textContent = msg; }
+  function slow(msg) { if (el.className === 'out') return; el.className = 'slow'; if (say) say.textContent = i18n14W(msg); }
   window.addEventListener('error', function (e) { if (e && e.target && e.target.tagName === 'SCRIPT') slow('A piece went missing'); }, true);
   function tick() {
     var up = booted(), n, j;
@@ -2252,6 +2330,7 @@ html[lang="nl"] .clawInfo .cpip .k{width:64px}
   <!-- SETS (round 6): the boon draft (the canvas draws the machine) and the Compactor (the canvas draws the press), the set fanfare -->
   <div id="scr-boon" class="screen boonScr"><div id="boonBody" class="boonBody"></div></div>
   <div id="scr-compactor" class="screen cmpScr"><div id="cmpBody" class="cmpBody"></div></div>
+  <div id="scr-trade" class="screen trdScr"><div id="trdBody" class="cmpBody trdBody"></div></div>
   <!-- SEASON (round 7): a trick-or-treat door (the canvas paints the haunted house under this frame) -->
   <div id="scr-sea" class="screen seaScr"><div id="seaBody"></div></div>
   <!-- STORY (round 8): Grabby Gary and the claw-off (the canvas paints him, the scoreboard and the cabinet under this frame) -->
@@ -2277,6 +2356,7 @@ html[lang="nl"] .clawInfo .cpip .k{width:64px}
 <script src="js/art.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/lang_nl.js"></script>
+<script src="js/lang_nl2.js"></script>
 <script src="js/physics.js"></script>
 <script src="js/data.js"></script>
 <script src="js/combat.js"></script>

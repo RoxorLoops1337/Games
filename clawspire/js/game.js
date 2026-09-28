@@ -758,6 +758,7 @@ const GAME = (() => {
       else if (sc === 'compactor' && S.sd && S.sd.compactor) cmpShow(S.sd.compactor);   // SETS: the Compactor
       else if (sc === 'sea' && S.sd && S.sd.sea) seaShow(S.sd.sea);   // SEASON: a trick-or-treat door
       else if (sc === 'rival' && S.sd && S.sd.rival) stoRivalShow(S.sd.rival);   // STORY: Grabby Gary
+      else if (sc === 'trade' && S.sd && S.sd.trade) trdShow(S.sd.trade);   // TRD (round 14): the Trading Post
       else if (sc === 'rush' && rushOf(run)) rushShow(S.sd && S.sd.rush);   // RUSH (round 10): NEXT CHALLENGER, the draft, the result
       else if (sc === 'win' && run.winDone && !run.endless) showWin();   // ENDLESS: the offer is still open
       else toMap();
@@ -812,6 +813,7 @@ const GAME = (() => {
     seaNewMap(run);   // trick-or-treat doors in season (SEASON)
     stoNewMap(run);   // Grabby Gary's tile, a Card Shark on the hunt (STORY)
     loreNewMap(run);   // LORE: a jukebox, lost tickets, the old high score board
+    trdNewMap(run);   // TRD (round 14): the Trading Post, placed last so every older roll stays put
     run.floor = 0;
     S.brushSel = null;
     S.preview = null;
@@ -3983,6 +3985,7 @@ const GAME = (() => {
       // ARCADE: a mini-game cabinet (done once its plays are spent and you leave)
       case 'plinko': case 'wheel': case 'slots': arcShow({ q: t.q, r: t.r }); return;
       case 'moles': case 'skee': case 'petshop': arcShow({ q: t.q, r: t.r }); return;   // PETS (round 5)
+      case 'trader': trdEnter(t); return;   // TRD (round 14): the Trading Post (done once you leave)
       case 'empty': {
         if (t.terrain === 'shallow') {
           const wade = X.MAP && X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
@@ -10196,7 +10199,7 @@ const GAME = (() => {
   function petWake(b) { b.sl = false; b.slT = 0; }
   // The trick itself, on the body where it is now.
   function petEffect(P) {
-    const A = P.act, b = A.b, ok = petAlive(b), lv = P.lv, pow = (D().petPow ? D().petPow(lv) : 1) * (1 + setPetStat('pow'));
+    const A = P.act, b = A.b, ok = petAlive(b), lv = P.lv, pow = ((D().petPow ? D().petPow(lv) : 1) + pevPowUp()) * (1 + setPetStat('pow'));   // (TRD: evolved, stronger)
     setPetTrick(P);   // Treat Jar, Dog Whistle, The Hungry Pack (SETS block)
     const def = petDefOf(P.id), col = (X.RENDER && X.RENDER.pets && X.RENDER.pets.COL[P.id] || ['#ffc94d'])[0];
     const sx = ok ? CAB.x + b.x : P.x, sy = ok ? CAB.y + b.y : P.y;
@@ -10304,6 +10307,7 @@ const GAME = (() => {
       default: rosPetEffect(P, A, ok, b, pow, label); break;   // ROS: the penguin, the mole rat, the robot vacuum
     }
     evoPetEffect(P, A, ok, pow);   // the pet's synergy with the build (EVOLVE block)
+    pevPetTrick(P);   // TRD (round 14): an evolved pet's flourish
     if (def) P.log.push({ k: A.k, fx: true, turn: F.turn, uid: A.uid });
     haptic('tap');
   }
@@ -10324,6 +10328,7 @@ const GAME = (() => {
     P.act.legs = petGoLegs(P, 'leap');
     fx().text(CAB.x + b.x, CAB.y + b.y + 24, 'HOLD ON!', '#c77dff', { size: 14 });
     petSay(P);
+    pevPetTrick(P);   // TRD (round 14): an evolved pet's flourish
     return true;
   }
   function petHoldEnd(P) {
@@ -10418,7 +10423,7 @@ const GAME = (() => {
     if (!P || !p || P.act) return false;
     if (Math.abs(x - P.x) > 34 || y < P.y - 46 || y > P.y + 26) return false;
     const def = petDefOf(p.id), nx = D().petNext ? D().petNext(p.xp) : null;
-    popover(`<b>${p.name}</b> the ${def.name}, Lv ${p.lv}<br>${D().petText ? D().petText(p.id, p.lv) : def.text}<br><i>${nx ? `XP ${p.xp}, ${nx.need} to Lv ${p.lv + 1}` : 'Max level!'}</i>${evoPetTapLine(p)}`, P.x + 60, P.y - 10);   // + its synergy (EVOLVE)
+    popover(`<b>${p.name}</b> the ${def.name}, Lv ${p.lv}<br>${D().petText ? D().petText(p.id, p.lv) : def.text}<br><i>${nx ? `XP ${p.xp}, ${nx.need} to Lv ${p.lv + 1}` : 'Max level!'}</i>${evoPetTapLine(p)}${pevTapLine(p)}`, P.x + 60, P.y - 10);   // + its synergy (EVOLVE)
     petMood(P, 'happy', 1.2); P.sq = 0.7;
     snd('petChirp', { pitch: PET_PITCH[p.id] || 1 });
     return true;
@@ -10453,6 +10458,7 @@ const GAME = (() => {
     V.t = t; V.lv = P.lv; V.mood = P.mood; V.moodK = P.moodT >= 900 ? 1 : U.clamp(P.moodT * 2, 0, 1); V.blink = P.blinkT < 0 ? 1 : 0; V.look = P.look;
     V.dir = P.dir; V.pose = P.pose; V.k = P.k || 0; V.sq = fx().reduced ? 0 : P.sq; V.air = !!P.air; V.lvUp = P.lvUp; V.talk = P.quip ? 1 : 0;
     V.reach = null;
+    V.evo = pevLookOf(p);   // TRD (round 14): the final form's look
     if (P.hold && petAlive(P.hold.b)) { PET_REACH.x = (CAB.x + P.hold.b.x - P.x) / sc * P.dir; PET_REACH.y = (CAB.y + P.hold.b.y - P.y) / sc; V.reach = PET_REACH; }
     R.pet(ctx, P.id, P.x, P.y, sc, V);
     // the raccoon's snack shrinks in its paws
@@ -10506,7 +10512,7 @@ const GAME = (() => {
     const k = size / 46, bx = x + size * 0.74, by = y + size * 0.62;
     const walking = !!(S.walk && !S.walk.done);
     if (!walking && R.petBed) R.petBed(ctx, bx, by, 0.85 * k, PET_BED[p.id]);
-    PETM.t = t; PETM.lv = p.lv; PETM.pose = walking ? 'run' : 'sit';
+    PETM.t = t; PETM.lv = p.lv; PETM.pose = walking ? 'run' : 'sit'; PETM.evo = pevLookOf(p);   // (TRD: the final form)
     PETM.mood = walking ? '' : (S.petMapIdle || 0) > 5 ? 'sleep' : (S.petTagFl > 0 ? 'cheer' : '');
     PETM.blink = Math.sin(t * 1.3 + 1) > 0.97 ? 1 : 0;
     R.pet(ctx, p.id, bx, by - (walking ? 0 : 2 * k), 0.78 * k, PETM);
@@ -10661,7 +10667,7 @@ const GAME = (() => {
       ctx.fillStyle = '#c9a24a'; ctx.beginPath(); ctx.ellipse(x, y0 + hgt - 22, w * 0.4, 10, 0, 0, Math.PI * 2); ctx.fill();
       const u = got ? 1 - C.adoptT / 1.6 : 0;
       if (!gone) {
-        PSV.t = t + i * 1.7; PSV.lv = 1; PSV.mood = got ? 'cheer' : (Math.sin(t * 0.7 + i * 2) > 0.8 ? 'happy' : ''); PSV.moodK = 1;
+        PSV.t = t + i * 1.7; PSV.lv = 1; PSV.evo = null; PSV.mood = got ? 'cheer' : (Math.sin(t * 0.7 + i * 2) > 0.8 ? 'happy' : ''); PSV.moodK = 1;
         PSV.blink = Math.sin(t * 1.1 + i * 3) > 0.96 ? 1 : 0; PSV.look = Math.sin(t * 0.5 + i) * 0.8; PSV.pose = got ? 'run' : 'sit'; PSV.air = got;
         R.pet(ctx, id, x, y0 + hgt - 22 - (got ? Math.sin(u * Math.PI) * 120 : 0), 2.1 * (got ? 1 - u * 0.5 : 1), PSV);
       }
@@ -10680,7 +10686,7 @@ const GAME = (() => {
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     if (p) {
       if (R.petBed) R.petBed(ctx, 118, py, 1.6, PET_BED[p.id]);
-      PSV.t = t; PSV.lv = p.lv; PSV.mood = C.heart > 0 ? 'happy' : (C.adoptT > 0 ? 'cheer' : ''); PSV.pose = 'sit'; PSV.air = false; PSV.look = 0.5; PSV.blink = Math.sin(t * 1.3) > 0.97 ? 1 : 0;
+      PSV.t = t; PSV.lv = p.lv; PSV.evo = pevLookOf(p); PSV.mood = C.heart > 0 ? 'happy' : (C.adoptT > 0 ? 'cheer' : ''); PSV.pose = 'sit'; PSV.air = false; PSV.look = 0.5; PSV.blink = Math.sin(t * 1.3) > 0.97 ? 1 : 0;
       R.pet(ctx, p.id, 118, py - 4, 1.9, PSV);
       const nx = D().petNext ? D().petNext(p.xp) : null;
       ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px system-ui, sans-serif'; ctx.fillText(p.name, 190, 604);
@@ -10698,7 +10704,7 @@ const GAME = (() => {
     ctx.fillText(`PET ALBUM ${met}/${ids.length}`, 270, 734);
     ids.forEach((id, i) => {
       const x = 270 + (i - (ids.length - 1) / 2) * Math.min(54, 470 / Math.max(1, ids.length - 1)), y = 790;   // (ROS: 11 pets fit the stage)
-      if (al[id]) { PSV.t = t + i; PSV.lv = Math.max(1, al[id].lv | 0); PSV.mood = ''; PSV.pose = 'sit'; PSV.air = false; PSV.blink = 0; R.pet(ctx, id, x, y, 0.95, PSV); }
+      if (al[id]) { PSV.t = t + i; PSV.lv = Math.max(1, al[id].lv | 0); PSV.evo = al[id].evo ? pevForm(id) : null; PSV.mood = ''; PSV.pose = 'sit'; PSV.air = false; PSV.blink = 0; R.pet(ctx, id, x, y, 0.95, PSV); }
       else { ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(x, y - 16, 16, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillText('?', x, y - 15); }
     });
     ctx.restore();
@@ -12731,6 +12737,7 @@ const GAME = (() => {
     EVO_ST.t = E.t; EVO_ST.dur = E.dur; EVO_ST.burst = E.burstAt; EVO_ST.rise = E.riseAt; EVO_ST.x0 = E.x0; EVO_ST.y0 = E.y0; EVO_ST.x = x; EVO_ST.y = y;
     EVO_ST.from = E.from; EVO_ST.to = E.to; EVO_ST.name = d.name || ''; EVO_ST.aura = d.auraName ? `${d.auraName}: ${d.auraText}` : '';
     EVO_ST.col = (E.r && E.r.glow) || PAL0.gold; EVO_ST.reduced = !!fx().reduced; EVO_ST.dim = E.dim == null ? 0.62 : E.dim;
+    EVO_ST.art = E.art || null;   // TRD (round 14): a pet's evolution draws the pet instead of an item
     return EVO_ST;
   }
   function evoDraw(ctx) {
@@ -12871,6 +12878,7 @@ const GAME = (() => {
       grid.appendChild(card);
     }
     b.appendChild(grid);
+    pevDexGrid(b);   // TRD (round 14): the pets' final forms
     m.new = {};
     saveMeta();
   }
@@ -14027,6 +14035,7 @@ const GAME = (() => {
     list.appendChild(c3);
     cmpRestChoice(list);   // the Compactor instead of resting (SETS block)
     evoRestChoice(list);   // Evolve an item, when one is ready (EVOLVE block)
+    pevRestChoice(list);   // TRD (round 14): evolve the pet instead of resting, when it can
     b.appendChild(list);
     save();
   }
@@ -14376,7 +14385,8 @@ const GAME = (() => {
     secOver(ctx, t);    // SECRET: a golden key spinning up out of where it was found
     feelDraw(t);        // FEEL: the tip card art, the shopkeeper, the campfire, the forge
     setDraw(ctx, t);    // SETS: the boon draft's machine, the Compactor's press
-    evoDraw(ctx);       // EVOLVE: the evolution ceremony over the fight (its bursts are fx, drawn over it)
+    trdDraw(ctx, t);    // TRD (round 14): Rocco, his cart, the counter and the haggle
+    evoDraw(ctx);      // EVOLVE: the evolution ceremony over the fight (its bursts are fx, drawn over it)
     loreDraw(ctx, t);   // LORE: a landmark's lore line, the old high score board, the act intro card
     duoOver(ctx, t);    // DUO (round 11): co-op's cabinet rim and the boss's target
     fx().draw(ctx);
@@ -15242,7 +15252,8 @@ const GAME = (() => {
     famTick(real); holoTick(real); rrTick(real);   // ROUND 9: families in a fight, holo cards, the shop's reroll reels
     qaTick(real);        // QA (round 7): the incoming-damage telegraph, safe spots for the corner lane and the toast
     evoTickAll(real);    // EVOLVE (round 7): the evolution ceremony, the pet synergy badge
-    mixTick(real);       // MIX (round 10): the screen entrances come off, the run-end numbers count up
+    trdTick(real);       // TRD (round 14): the Trading Post's haggle
+    mixTick(real);      // MIX (round 10): the screen entrances come off, the run-end numbers count up
     loreTick(real);      // LORE (round 9): new Codex pages, the act intro card, landmark bubbles, the board, the live pictures
     rushTick(real); ghoTick(real);   // RUSH (round 10): the slam, the fight's clock; the ghost race's clock, chip and GHOST PASSED!
     schTick(dt, real);   // SCHOOL (round 11): the practice cabinet or a challenge, the result card's stars
@@ -17827,7 +17838,7 @@ const GAME = (() => {
     return hisCanvas(w, hh, (ctx) => { const R = X.RENDER; if (R && R.lore && e) R.lore.vignette(ctx, e.art, w, hh, loreArtSt(e, locked)); });
   }
   // The first sentence of a page (the chapter list's teaser).
-  const loreTeaser = (s) => { const m = /^(.*?[.!?])(\s|$)/.exec(String(s || '')); return m ? m[1] : String(s || ''); };
+  const loreTeaser = (s) => { s = i18nTr(String(s || '')); const m = /^(.*?[.!?])(\s|$)/.exec(s); return m ? m[1] : s; };   // (I18N round 14: the first sentence of the page as shown)
   function showCodex(o) {
     o = o || {};
     const U0 = S.loreUi || (S.loreUi = { ch: null, id: null, from: 'title' });
@@ -20230,7 +20241,7 @@ const GAME = (() => {
   // The trick while it runs: the penguin slides and shoves, the vacuum drives and sucks up.
   function rosPetDo(P, A, dt) {
     if (!A || !ROS_PETS[A.k] || A.ph !== 'do') return;
-    const lv = P.lv | 0, pow = (D().petPow ? D().petPow(lv) : 1) * (1 + setPetStat('pow'));
+    const lv = P.lv | 0, pow = ((D().petPow ? D().petPow(lv) : 1) + pevPowUp()) * (1 + setPetStat('pow'));   // (TRD: evolved, stronger)
     if (A.k === 'slide' || A.k === 'sweep') {
       const u = U.clamp(A.t / Math.max(0.1, A.run - 0.1), 0, 1);
       if (u >= 1 && !A.fin) { A.fin = true; rosPetFinish(P, A); }
@@ -22739,6 +22750,548 @@ const GAME = (() => {
   }
   // ================================================================ /LEG
 
+  // ================================================================ TRD (round 14)
+  /* The Trading Post and pet evolution (DESIGN.md "The Trading Post and pet
+     evolution (round 14)"). One trader tile per map (MAP.trdPlace, placed by
+     trdNewMap after the rest of the map). Rocco, a raccoon peddler with a
+     cart, deals three trades a visit (DATA.TRD.roll): rolled on the first
+     entry and saved on the tile (content.trd {seed, offers, done, res, n}),
+     so a reload shows the same deals. A deal pays, applies and saves in one
+     beat (st.done[i], st.res), then the haggle plays over the counter (the
+     goods slide across, Rocco thinks, the goods come back, a handshake and
+     the DEAL! stamp); a reload after the deal shows it TRADED, never a
+     second payment. Leaving packs the cart up (the tile is done). Screen
+     'trade' (sd {trade: {q, r}}). Pet evolution: a pet at its top level
+     evolves once (run.pet.evo) at the Trading Post (a gold fee by act, or a
+     relic given up) or at a rest stop (instead of resting); the item
+     evolution's overlay plays the ceremony with the pet drawn in it; the
+     evolved trick is stronger (DATA.PEV.pow) and ends in its form's flourish
+     (COMBAT.pevTrick). The album (meta.pets[id].evo) and the Prizedex's
+     Evolve tab record it. Hooks: newMap, enterTile, load, update, draw,
+     showRest, petEffect, petHoldStart, rosPetDo, petDraw, petMapDraw, the pet
+     shop's album, petTap, evoSt, evoDexGrid. */
+  SCREENS.push('trade');
+  Object.assign(TILE_NAMES, { trader: 'a trading post' });
+  Object.assign(LANDMARK_LABELS, { trader: 'Trades' });
+  // the haggle's beats (s): the goods slide over, Rocco thinks, yours come back, the handshake, the stamp settles
+  const TRDK = { give: 0.7, think: 1.15, get: 1.75, shake: 2.0, done: 2.6, fastAfter: 4, fastK: 1.6 };
+  const TRD_KIND = { swap: 'ITEM SWAP', relic: 'RELIC SWAP', bundle: 'MYSTERY BUNDLE' };
+  const TRD_COL = { swap: '#2ee6d6', relic: '#ffc94d', service: '#a6ff5e', bundle: '#ff2e88', pev: '#ff9ec7' };
+  const trdD = () => D().TRD || null;
+  const pevD = () => D().PEV || null;
+  const pevForm = (id) => (pevD() && pevD().FORMS[id]) || null;
+  // The removal price: the shop's, at the round 12 prices (x shopK), and the Tilt's Price Hike.
+  function trdRemovePrice() {
+    const K = trdD() ? trdD().K : { removeBase: 60 }, m = tiltRun();
+    return Math.round((K.removeBase || 60) * (ECON().shopK || 1) * (m && m.shop > 0 ? 1 + m.shop : 1));
+  }
+  // A new map gets its Trading Post (not the Back Room).
+  function trdNewMap(run) {
+    const M = run && run.map;
+    if (!M || M.room || !X.MAP || !X.MAP.trdPlace) return null;
+    try { return X.MAP.trdPlace(M); } catch (e) { return null; }
+  }
+  const trdTile = (q, r) => { const M = S.run && S.run.map; return M && X.MAP ? X.MAP.tileAt(M, q, r) : null; };
+  // The visit's trades: rolled once (the tile's seed and the run's), saved on the tile.
+  function trdState(t) {
+    const run = S.run, c = t.content || (t.content = {});
+    const fixed = c.trd && trdD() ? trdD().fix(c.trd) : null;
+    if (fixed) { c.trd = fixed; return fixed; }
+    const seed = (c.seed >>> 0) || (U.hashStr(run.seed + ':trd:' + t.q + ',' + t.r) >>> 0) || 1;
+    const rng = U.rng(U.hashStr(run.seed + ':trd:' + run.act + ':' + t.q + ',' + t.r + ':' + seed));
+    const offers = trdD() ? trdD().roll(rng, { bin: run.bin, relics: run.relics || [], relicPool: relicPool(trdD().K.relicRar), char: run.char, removePrice: trdRemovePrice(), binFloor: BIN_FLOOR }) : [];
+    c.trd = { seed, offers, done: offers.map(() => false), res: null, n: 0 };
+    return c.trd;
+  }
+  function trdEnter(t) {
+    trdState(t);
+    trdShow({ q: t.q, r: t.r });
+  }
+  function trdShow(sd) {
+    const t = sd ? trdTile(sd.q, sd.r) : null;
+    if (!t || t.type !== 'trader' || !S.run) { S.trd = null; toMap(); return; }
+    const st = trdState(t);
+    S.sd = { trade: { q: t.q, r: t.r } };
+    if (!S.trd || S.trd.tile !== t) S.trd = { tile: t, st, t: 0, phase: 'idle', k: 0, fired: {}, res: null, pick: null, stamp: 0, wave: 0 };
+    S.trd.st = st;
+    setScreen('trade');
+    trdDom();
+  }
+  // A relic leaves the run: its lasting Max HP goes with it (gold and bulbs it paid stay paid).
+  function trdLoseRelic(id) {
+    const run = S.run, i = run ? (run.relics || []).indexOf(id) : -1;
+    if (i < 0) return false;
+    run.relics.splice(i, 1);
+    const m = relicDef(id).mods || {};
+    if (+m.maxhp > 0) { run.maxHp = Math.max(1, run.maxHp - m.maxhp); run.hp = U.clamp(run.hp, 1, run.maxHp); }
+    S.lastRelics = '';
+    return true;
+  }
+  const trdBinOf = (g) => (S.run && g ? S.run.bin.find((x) => x.uid === g.uid && x.id === g.id && !!x.plus === !!g.plus) || null : null);
+  // Can trade i be taken right now? -> '' or the reason (a toast).
+  function trdWhy(of, o) {
+    const run = S.run;
+    switch (of.k) {
+      case 'swap': return trdBinOf(of.give) ? '' : 'You no longer have that item.';
+      case 'relic': return (run.relics || []).indexOf(of.give) < 0 ? 'You no longer have that relic.' : (run.relics || []).indexOf(of.get) >= 0 ? 'You already have that one.' : '';
+      case 'service': {
+        if (run.gold < of.price) return 'Not enough gold.';
+        if (run.bin.length <= BIN_FLOOR) return 'The bin is as light as it gets.';
+        const inst = o && o.uid ? run.bin.find((x) => x.uid === o.uid) : null;
+        if (o && o.uid && !inst) return 'You no longer have that item.';
+        if (inst && of.mode === 'curse' && itemDef(inst.id).rarity !== 'junk') return 'Pick a junk item.';
+        if (of.mode === 'curse' && !run.bin.some((x) => itemDef(x.id).rarity === 'junk')) return 'No curse left to lift.';
+        return '';
+      }
+      case 'bundle': return !trdBinOf(of.give[0]) || !trdBinOf(of.give[1]) ? 'You no longer have both items.' : run.bin.length - 1 < BIN_FLOOR ? 'The bin is as light as it gets.' : '';
+      default: return 'Already traded.';
+    }
+  }
+  /* Takes trade i (o.uid: the item a service takes away): checks, pays,
+     applies, saves, then the haggle plays. -> the result | null */
+  function trdDeal(i, o) {
+    const T = S.trd, run = S.run;
+    if (!T || !run || T.phase === 'haggle') return null;
+    const st = T.st, of = st.offers[i];
+    if (!of) return null;
+    if (st.done[i]) { toast('Already traded.'); return null; }
+    const why = trdWhy(of, o);
+    if (why) { toast(why); snd('click', { pitch: 0.6 }); return null; }
+    if (of.k === 'service' && !(o && o.uid)) return trdPickFor(i);
+    const it = (id, plus) => ({ kind: 'item', id, plus: !!plus });
+    let res = null;
+    if (of.k === 'swap') {
+      const inst = trdBinOf(of.give);
+      removeInst(inst); addItem(of.get.id, of.get.plus);
+      res = { give: [it(inst.id, inst.plus)], get: [it(of.get.id, of.get.plus)] };
+    } else if (of.k === 'relic') {
+      trdLoseRelic(of.give); gainRelic(of.get);
+      res = { give: [{ kind: 'relic', id: of.give }], get: [{ kind: 'relic', id: of.get, hidden: true }] };
+    } else if (of.k === 'service') {
+      const inst = run.bin.find((x) => x.uid === o.uid);
+      addGold(-of.price); removeInst(inst);
+      res = { give: [{ kind: 'gold', n: of.price }, it(inst.id, inst.plus)], get: [{ kind: 'clean', mode: of.mode }] };
+    } else if (of.k === 'bundle') {
+      const a = trdBinOf(of.give[0]), b = trdBinOf(of.give[1]);
+      removeInst(a); removeInst(b); addItem(of.get.id, false);
+      res = { give: [it(a.id, a.plus), it(b.id, b.plus)], get: [Object.assign(it(of.get.id, false), { hidden: true })] };
+    }
+    if (!res) return null;
+    res.i = i; res.k = of.k;
+    st.done[i] = true; st.n = (st.n | 0) + 1; st.res = res;
+    run.trdN = (run.trdN | 0) + 1;
+    trdMetaAdd('deals');
+    save();
+    trdStart(res);
+    return res;
+  }
+  // A service: pick the item the merchant takes (a junk item for a curse).
+  function trdPickFor(i) {
+    const T = S.trd, of = T && T.st.offers[i], sd = S.sd && S.sd.trade;
+    if (!of || !sd) return null;
+    openBin({ mode: 'remove', title: of.mode === 'curse' ? 'Lift which curse?' : 'Remove which item?', can: (x) => of.mode !== 'curse' || itemDef(x.id).rarity === 'junk',
+      back: () => trdShow(sd), onPick: (inst) => { trdShow(sd); trdDeal(i, { uid: inst.uid }); } });
+    return null;
+  }
+  function trdMetaAdd(k) {
+    if (!S.meta) return;
+    const m = S.meta.trd && typeof S.meta.trd === 'object' && !Array.isArray(S.meta.trd) ? S.meta.trd : (S.meta.trd = { deals: 0, pev: 0 });
+    m[k] = (m[k] | 0) + 1;
+    saveMeta();
+  }
+  // The haggle starts (headless: it is over at once).
+  function trdStart(res) {
+    const T = S.trd;
+    T.res = res; T.k = 0; T.fired = {}; T.stamp = 0;
+    T.phase = S.headless ? 'done' : 'haggle';
+    if (!S.headless) snd('coin', { pitch: 0.9 });
+    trdDom();
+  }
+  const trdSpeed = () => (((S.meta && S.meta.trd && S.meta.trd.deals) | 0) > TRDK.fastAfter ? TRDK.fastK : 1);
+  function trdTick(real) {
+    const T = S.trd;
+    if (!T || S.screen !== 'trade') return;
+    T.wave += real;
+    if (T.stamp > 0) T.stamp = Math.max(0, T.stamp - real);
+    if (T.lineT > 0) T.lineT = Math.max(0, T.lineT - real);
+    if (T.phase !== 'haggle') return;
+    T.k += real * trdSpeed();
+    const k = T.k, F0 = T.fired;
+    if (!F0.a) { F0.a = 1; snd('cardFlip', { pitch: 0.9 }); }
+    if (k >= TRDK.give && !F0.b) { F0.b = 1; snd('ding', { pitch: 1.2, vol: 0.5 }); }
+    if (k >= TRDK.think && !F0.c) { F0.c = 1; snd('cardFlip', { pitch: 1.2 }); }
+    if (k >= TRDK.shake && !F0.d) trdStamp();
+    if (k >= TRDK.done) { T.phase = 'done'; trdDom(); }
+  }
+  // The handshake: DEAL! slams in.
+  function trdStamp() {
+    const T = S.trd;
+    T.fired.d = 1; T.stamp = 1;
+    snd('stamp'); haptic('tap');
+    fx().shake(5);
+    fx().emit('confetti', 270, 250, { n: 0.6, power: 0.8 });
+    fx().ring(270, 262, PAL0.gold, { r0: 10, r1: 130, w: 6, life: 0.5 });
+  }
+  // A tap on the scene hurries the haggle to the handshake, then to the end.
+  function trdHurry() {
+    const T = S.trd;
+    if (!T || T.phase !== 'haggle') return false;
+    if (!T.fired.d) { T.k = TRDK.shake; trdStamp(); return true; }
+    T.k = TRDK.done; T.phase = 'done'; trdDom();
+    return true;
+  }
+  function trdLeave() {
+    const T = S.trd;
+    if (T && T.phase === 'haggle') { trdHurry(); trdHurry(); }
+    if (T && T.tile) T.tile.done = true;
+    S.trd = null; S.sd = null;
+    toast('Rocco packs up his cart and rolls on.', 2);
+    toMap();
+  }
+  // A token for the scene (and the card art): what slides across the counter.
+  function trdTok(g) {
+    if (!g) return null;
+    if (g.kind === 'item') return { kind: 'item', def: itemDef(g.id), plus: !!g.plus, hidden: !!g.hidden };
+    if (g.kind === 'relic') return { kind: 'relic', def: relicDef(g.id), hidden: !!g.hidden };
+    return g;
+  }
+  // ---- the screen
+  function trdSide(label, kids) {
+    const s = h('div', 'trdSide');
+    s.appendChild(h('div', 'trdLbl', label));
+    const row = h('div', 'trdGoods');
+    for (const k of kids) if (k) row.appendChild(k);
+    s.appendChild(row);
+    return s;
+  }
+  function trdGood(cv, name, sub) {
+    const g = h('div', 'trdGood');
+    g.appendChild(cv);
+    g.appendChild(h('div', 'trdNm', name));
+    if (sub) g.appendChild(sub);
+    return g;
+  }
+  // A face-down card: its rarity, and the archetype hint for a relic.
+  function trdFaceDown(rar, kw) {
+    const g = h('div', 'trdGood');
+    const c = h('div', 'trdBack rr-' + (rar || 'c'));
+    c.appendChild(h('span', null, '?'));
+    g.appendChild(c);
+    g.appendChild(h('div', 'trdNm', RARITY_NAME[rar] || 'common'));
+    const A = kw ? (D().ARCHETYPES || {})[kw] : null;
+    if (A) { const chip = h('div', 'trdHint', `${A.icon || ''} ${A.label}`); try { chip.style.setProperty('--kc', A.color || PAL0.gold); } catch (e) { /* stub */ } g.appendChild(chip); }
+    return g;
+  }
+  const trdItemGood = (id, plus) => trdGood(itemCanvas(itemDef(id), !!plus, 48), itemName(itemDef(id), !!plus), h('div', 'trdRar rr-' + (itemDef(id).rarity || 'c'), RARITY_NAME[itemDef(id).rarity] || ''));
+  function trdOfferEl(of, i, done, noBtn) {
+    const card = h('div', 'trdOffer' + (done ? ' done' : ''));
+    try { card.style.setProperty('--tc', TRD_COL[of.k] || PAL0.gold); } catch (e) { /* stub */ }
+    const head = h('div', 'trdHead');
+    head.appendChild(h('span', 'trdKind', of.k === 'service' ? (of.mode === 'curse' ? 'CURSE LIFTING' : 'BIN CLEANING') : TRD_KIND[of.k]));
+    head.appendChild(h('span', 'trdFair', `⚖ ${of.vGive} : ${of.vGet}`));
+    card.appendChild(head);
+    const row = h('div', 'trdRow');
+    let give = [], get = [], rule = '';
+    if (of.k === 'swap') {
+      give = [trdItemGood(of.give.id, of.give.plus)];
+      get = [trdItemGood(of.get.id, of.get.plus)];
+      rule = of.give.plus && !of.get.plus ? 'Your upgrade for a rarity step: one rarity up, not upgraded.' : 'A different item of the same rarity that shares a keyword.';
+    } else if (of.k === 'relic') {
+      const rd = relicDef(of.give);
+      give = [trdGood(relicCanvas(rd, 44), rd.name)];
+      get = [done ? trdGood(relicCanvas(relicDef(of.get), 44), relicDef(of.get).name) : trdFaceDown(of.rar, of.kw)];
+      rule = 'Same rarity, another archetype. Face down until the handshake.';
+    } else if (of.k === 'service') {
+      give = [trdGood(h('div', 'trdCoin', String(of.price)), `${of.price} gold`)];
+      get = [trdGood(h('div', 'trdClean', of.mode === 'curse' ? '✧' : '🧹'), of.mode === 'curse' ? 'A junk item gone' : 'An item gone')];
+      rule = of.mode === 'curse' ? 'Lift a curse: Rocco takes one junk item of your choice.' : 'Lighten your bin: Rocco takes one item of your choice.';
+    } else if (of.k === 'bundle') {
+      give = of.give.map((g) => trdItemGood(g.id, g.plus));
+      get = [done ? trdItemGood(of.get.id, false) : trdFaceDown(of.rar, null)];
+      rule = 'Two for one: an item one rarity up, sight unseen.';
+    }
+    // give | the deal button (the arrow) | get
+    row.appendChild(trdSide('YOU GIVE', give));
+    const mid = h('div', 'trdMid');
+    mid.appendChild(h('div', 'trdArrow', '⇄'));
+    const why = done ? '' : trdWhy(of, of.k === 'service' ? null : undefined);
+    if (!noBtn) {
+      const b = btn(done ? 'TRADED' : of.k === 'service' ? `Pay ${of.price} gold` : 'TRADE', () => trdDeal(i), 'pri trdGo');
+      if (done || why) b.disabled = true;
+      const reg = S.ui.buttons[S.ui.buttons.length - 1];
+      if (reg && reg.el === b) reg.disabled = !!(done || why);
+      mid.appendChild(b);
+    }
+    row.appendChild(mid);
+    row.appendChild(trdSide('YOU GET', get));
+    card.appendChild(row);
+    card.appendChild(h('div', 'trdRule', rule));
+    if (done) card.appendChild(h('div', 'stamp', 'TRADED'));
+    else if (why && why !== 'Not enough gold.' && !noBtn) card.appendChild(h('div', 'trdWhy', why));
+    return card;
+  }
+  // The pet evolution slot (only while the pet can evolve).
+  function trdPevEl() {
+    const p = petOf(), f = p ? pevForm(p.id) : null, run = S.run;
+    if (!p || !f || !pevD() || !pevD().can(p)) return null;
+    const T = S.trd, card = h('div', 'trdOffer trdPev');
+    try { card.style.setProperty('--tc', f.col || TRD_COL.pev); } catch (e) { /* stub */ }
+    const head = h('div', 'trdHead');
+    head.appendChild(h('span', 'trdKind', 'PET EVOLUTION'));
+    card.appendChild(head);
+    const row = h('div', 'trdRow trdPevBox');
+    const cv = canvasEl(72, (ctx, px) => { if (X.RENDER && X.RENDER.pet) X.RENDER.pet(ctx, p.id, px / 2, px * 0.8, 0.95, { t: 0, lv: p.lv, evo: f, air: false }); });
+    row.appendChild(cv);
+    const col = h('div', 'trdPevTx');
+    col.appendChild(h('div', 'trdNm', `${p.name} can evolve into the ${f.name}!`));
+    col.appendChild(h('div', 'trdRule', `${f.trick}: ${f.text}`));
+    row.appendChild(col);
+    card.appendChild(row);
+    if (T.pick === 'relic') {
+      card.appendChild(h('div', 'trdRule', 'Give which relic? It is gone for good.'));
+      const grid = h('div', 'trdRelics');
+      for (const id of (run.relics || []).filter(pevRelicOk)) {
+        const rd = relicDef(id), el = h('button', 'trdRelic');
+        el.appendChild(relicCanvas(rd, 40));
+        el.appendChild(h('div', 'trdNm', rd.name));
+        const fn = () => pevEvolve('relic', id);
+        el.onclick = fn;
+        S.ui.buttons.push({ el, fn, label: rd.name });
+        grid.appendChild(el);
+      }
+      card.appendChild(grid);
+      card.appendChild(btn('Cancel', () => { T.pick = null; trdDom(); }, 'ghost sm'));
+      return card;
+    }
+    const fee = pevFee(), bar = h('div', 'row trdPevRow');
+    const g = btn(`Pay ${fee} gold`, () => pevEvolve('gold'), 'pri sm');
+    if (run.gold < fee) { g.disabled = true; const reg = S.ui.buttons[S.ui.buttons.length - 1]; if (reg && reg.el === g) reg.disabled = true; }
+    bar.appendChild(g);
+    const r = btn('Give a relic', () => { T.pick = 'relic'; trdDom(); }, 'sm');
+    if (!(run.relics || []).some(pevRelicOk)) { r.disabled = true; const reg = S.ui.buttons[S.ui.buttons.length - 1]; if (reg && reg.el === r) reg.disabled = true; }
+    bar.appendChild(r);
+    card.appendChild(bar);
+    return card;
+  }
+  function trdDom() {
+    const T = S.trd, b = $('trdBody');
+    if (!T || !b || S.screen !== 'trade') return;
+    clear(b);
+    S.ui.buttons = [];
+    const top = h('div', 'cmpTop trdTop qaKeep');
+    top.appendChild(h('h1', null, 'Trading Post'));
+    top.appendChild(h('div', 'sub', 'Rocco trades fair: every deal is a swap, and each one only once.'));
+    b.appendChild(top);
+    const win = h('div', 'trdWin');
+    win.onclick = () => { if (!trdHurry()) trdPoke(); };
+    b.appendChild(win);
+    const panel = h('div', 'cmpPanel trdPanel');
+    const dock = h('div', 'cmpDock trdDock qaKeep');
+    const st = T.st;
+    if (T.phase === 'haggle') {
+      const of = T.res ? st.offers[T.res.i] : null;
+      if (of) panel.appendChild(trdOfferEl(of, T.res.i, false, true));
+      panel.appendChild(h('div', 'trdWait', 'Haggling... tap the counter to hurry.'));
+    } else if (T.phase === 'done' && T.res) {
+      const res = h('div', 'cmpRes trdRes show');
+      res.appendChild(h('div', 'cmpStamp', 'DEAL!'));
+      const rec = h('div', 'cmpRecipe');
+      const icon = (g) => (g.kind === 'item' ? itemCanvas(itemDef(g.id), !!g.plus, 44) : g.kind === 'relic' ? relicCanvas(relicDef(g.id), 40) : g.kind === 'gold' ? h('div', 'trdCoin', String(g.n)) : h('div', 'trdClean', '✧'));
+      for (const g of T.res.give) rec.appendChild(icon(g));
+      rec.appendChild(h('span', 'cmpArrow', '⇄'));
+      for (const g of T.res.get) rec.appendChild(icon(g));
+      res.appendChild(rec);
+      const got = T.res.get[0];
+      if (got && got.kind === 'item') res.appendChild(itemCard(itemDef(got.id), !!got.plus, { cls: 'cmpCard' }));
+      else if (got && got.kind === 'relic') { const rd = relicDef(got.id), c = h('div', 'card rr-' + (rd.rarity || 'c')); c.appendChild(relicCanvas(rd, 64)); c.appendChild(h('div', 'name', rd.name)); c.appendChild(h('div', 'text', rd.text || '')); res.appendChild(c); }
+      else res.appendChild(h('div', 'trdRule', 'Gone for good. Your bin is lighter.'));
+      panel.appendChild(res);
+      dock.appendChild(btn('Continue', () => { T.phase = 'idle'; T.res = null; trdDom(); }, 'pri cmpGo'));
+    } else {
+      st.offers.forEach((of, i) => panel.appendChild(trdOfferEl(of, i, !!st.done[i])));
+      if (!st.offers.length) panel.appendChild(h('div', 'trdRule', 'Rocco has nothing you would want today.'));
+      const pv = trdPevEl();
+      if (pv) panel.appendChild(pv);
+      dock.appendChild(btn('Leave', () => trdLeave(), 'ghost'));
+    }
+    b.appendChild(panel); b.appendChild(dock);
+  }
+  // A tap on Rocco while nothing is going on: a line.
+  const TRD_LINES = ['Fair and square, friend.', 'Everything is a swap. Everything.', 'I never sell. I trade.', 'That one is shiny. I like shiny.'];
+  function trdPoke() {
+    const T = S.trd;
+    if (!T) return;
+    T.line = TRD_LINES[(T.poke = (T.poke | 0) + 1) % TRD_LINES.length]; T.lineT = 2.2;
+    snd('petChirp', { pitch: 0.7 });
+  }
+  // The canvas behind the screen: Rocco, his cart and the counter, the haggle.
+  const TRD_ST = { t: 0, x: 0, y: 0, w: W, h: 330, phase: 'idle', k: 0, K: TRDK, give: [], get: [], stamp: 0, reduced: false, line: '', lineK: 0, deals: 0 };
+  function trdDraw(ctx, t) {
+    const T = S.trd, R = X.RENDER;
+    if (!T || S.screen !== 'trade' || !R || !R.trd) return;
+    const s = TRD_ST;
+    s.t = t; s.x = 0; s.y = 66; s.w = W; s.h = 330; s.phase = T.phase; s.k = T.k; s.stamp = T.stamp; s.reduced = !!fx().reduced;
+    s.give = T.res ? T.res.give.map(trdTok) : [];
+    s.get = T.res ? T.res.get.map(trdTok) : [];
+    s.line = T.lineT > 0 ? T.line : ''; s.lineK = U.clamp((T.lineT || 0) * 3, 0, 1);
+    s.deals = T.st ? T.st.n | 0 : 0;
+    R.trd.scene(ctx, s);
+  }
+
+  // ---- pet evolution
+  const pevOnRun = () => { const p = petOf(); return !!(p && pevD() && pevD().on(p)); };
+  const pevPowUp = () => (pevOnRun() ? pevD().K.pow : 0);
+  const pevFee = () => (pevD() && S.run ? pevD().fee(S.run.act, (tiltRun() || {}).shop) : 0);
+  // A relic the Trading Post takes for an evolution: any you hold but your crawler's own.
+  function pevRelicOk(id) {
+    const r = relicDef(id), c = S.run ? charDef(S.run.char) : null;
+    return !!(tbl('RELICS')[id] && !r.starter && !(c && c.relic === id));
+  }
+  /* Evolve the run's pet: how 'gold' | 'relic' (relicId) | 'rest'. Pays,
+     evolves, records, saves in one beat, then the ceremony plays over
+     whatever screen follows. -> true | false */
+  function pevEvolve(how, relicId) {
+    const run = S.run, p = petOf(), f = p ? pevForm(p.id) : null;
+    if (!run || !p || !f || !pevD() || !pevD().can(p)) return false;
+    if (how === 'gold') {
+      const fee = pevFee();
+      if (run.gold < fee) { toast('Not enough gold.'); return false; }
+      addGold(-fee);
+    } else if (how === 'relic') {
+      if (!relicId || (run.relics || []).indexOf(relicId) < 0 || !pevRelicOk(relicId)) { toast('Pick a relic to give.'); return false; }
+      trdLoseRelic(relicId);
+    } else if (how !== 'rest') return false;
+    p.evo = 1;
+    run.pevN = (run.pevN | 0) + 1;
+    const m = petMeta(), e = m[p.id] && typeof m[p.id] === 'object' ? m[p.id] : (m[p.id] = { n: 1, lv: p.lv });
+    e.lv = Math.max(e.lv | 0, p.lv | 0); e.evo = 1;
+    trdMetaAdd('pev');
+    if (S.trd) S.trd.pick = null;
+    save();
+    pevCeremony(p);
+    toast(`${p.name} evolved into the ${f.name}!`, 3);
+    if (S.screen === 'trade') trdDom();
+    return true;
+  }
+  // The ceremony: the item evolution's overlay with the pet drawn in it.
+  function pevCeremony(p) {
+    const f = pevForm(p.id);
+    if (!f) return null;
+    const E = evoTiming({ r: { glow: f.col }, from: null, to: { name: f.name, auraName: f.trick, auraText: f.text }, t: 0, x0: EVO.ui.x, y0: H + 40, first: true, burst: false, dim: 0.86, el: null, cv: null, g: null, pet: p.id });
+    E.dur += 0.6;
+    E.art = (ctx, x, y, spin, sc, after) => pevCerArt(ctx, p.id, f, x, y, spin, sc, after, E.t);
+    if (S.evoUi) evoUiClose();
+    S.evoUi = E;
+    snd('evoRise');
+    try {
+      const stage = $('stage'), el = h('div', 'evoOver'), cv = document.createElement('canvas');
+      const px = S.px || 1;
+      cv.width = Math.round(W * px); cv.height = Math.round(H * px);
+      el.appendChild(cv);
+      el.appendChild(h('div', 'evoTap', 'Tap to continue'));
+      el.onpointerdown = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); evoUiTap(); };
+      if (stage) stage.appendChild(el);
+      E.el = el; E.cv = cv; E.g = cv.getContext ? cv.getContext('2d') : null; E.px = px;
+    } catch (e) { /* headless */ }
+    return E;
+  }
+  const PEV_V = { t: 0, lv: 5, mood: '', moodK: 1, blink: 0, look: 0, dir: 1, pose: 'sit', k: 0, sq: 0, air: true, evo: null, lvUp: 0 };
+  // The pet in the ceremony: the old form spins up, the new one bursts in big.
+  function pevCerArt(ctx, id, f, x, y, spin, sc, after, t) {
+    const R = X.RENDER;
+    if (!R || !R.pet) return;
+    PEV_V.t = t || 0; PEV_V.evo = after ? f : null; PEV_V.mood = after ? 'cheer' : ''; PEV_V.lvUp = after ? 0.6 : 0; PEV_V.pose = after ? 'sit' : 'fly';
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(after ? spin : spin * 0.35);
+    R.pet(ctx, id, 0, 20 * sc * 0.8, sc * 0.9, PEV_V);
+    ctx.restore();
+  }
+  // The rest stop's choice (only while the pet can evolve; the old choices keep their indices).
+  function pevRestChoice(list) {
+    const p = petOf(), f = p ? pevForm(p.id) : null;
+    if (!list || !f || !pevD() || !pevD().can(p)) return;
+    const c = btn('', () => { if (FE.beat) return; if (pevEvolve('rest')) toMap(); }, 'choice pevChoice');
+    c.textContent = '';
+    c.appendChild(h('div', 'c1', `Evolve ${p.name}`));
+    c.appendChild(h('div', 'c2', `Instead of resting: ${p.name} becomes the ${f.name}. For good.`));
+    list.appendChild(c);
+  }
+  // In a fight: an evolved pet's trick ends in its form's flourish.
+  function pevPetTrick(P) {
+    const p = petOf(), f = P ? pevForm(P.id) : null;
+    if (!P || !f || !p || p.id !== P.id || !F || !FS || F.phase === 'over' || !pevOnRun() || !X.COMBAT || !X.COMBAT.pevTrick) return false;
+    const evs = X.COMBAT.pevTrick(F, P.id);
+    if (evs && evs.length) enqueue(evs, PROC_BEAT);
+    fx().text(P.x + 34, P.y - 66, String(f.trick).toUpperCase() + '!', f.col || PAL0.gold, { size: 14 });
+    if (Array.isArray(P.log)) P.log.push({ k: 'pev', turn: F.turn });
+    return true;
+  }
+  // The pet's popover line: its final form, or a nudge once it can evolve.
+  function pevTapLine(p) {
+    const f = p ? pevForm(p.id) : null;
+    if (!f) return '';
+    if (pevD() && pevD().on(p)) return `<br><b>${i18nTr(f.name)}</b>: ${i18nTr(f.text)}`;
+    if (pevD() && pevD().can(p)) return `<br><i>${i18nTr('Ready to evolve! A rest stop or the Trading Post can do it.')}</i>`;
+    return '';
+  }
+  // The look a draw call needs (null for an ordinary pet).
+  const pevLookOf = (p) => (p && pevD() && pevD().on(p) ? pevForm(p.id) : null);
+  // The Prizedex's Evolve tab: the pets' final forms under the item evolutions.
+  function pevDexGrid(b) {
+    const F0 = pevD() ? pevD().FORMS : null;
+    if (!b || !F0) return;
+    const al = petMeta(), ids = (D().PET_IDS || Object.keys(F0)).filter((id) => F0[id]);
+    const n = ids.filter((id) => al[id] && al[id].evo).length;
+    b.appendChild(h('h3', null, 'Pet evolutions'));
+    b.appendChild(metaBar(n, ids.length, `${n} of ${ids.length} pets evolved`, 'gold'));
+    const grid = h('div', 'evoGrid pevGrid');
+    for (const id of ids) {
+      const f = F0[id], ok = !!(al[id] && al[id].evo), met = !!al[id];
+      const card = h('div', 'card pevc' + (ok ? ' got' : ' locked'));
+      try { card.style.setProperty('--ec', f.col || PAL0.gold); } catch (e) { /* stub */ }
+      const cv = canvasEl(64, (ctx, px) => {
+        if (!X.RENDER || !X.RENDER.pet) return;
+        if (!ok) { ctx.globalAlpha = met ? 0.45 : 0.18; }
+        X.RENDER.pet(ctx, id, px / 2, px * 0.86, 1, { t: 0, lv: 5, evo: ok ? f : null, air: false });
+      });
+      try { cv.style.width = '64px'; cv.style.height = '64px'; } catch (e) { /* stub */ }
+      card.appendChild(cv);
+      card.appendChild(h('div', 'name', ok ? f.name : '???'));
+      card.appendChild(h('div', 'text', ok ? `${f.trick}: ${f.text}` : met ? 'Raise it to its top level, then evolve it.' : 'A pet you have yet to meet.'));
+      grid.appendChild(card);
+    }
+    b.appendChild(grid);
+  }
+  // Every English line of the round (the Dutch table covers them; the i18n test checks).
+  const TRD_WORDS = ['Trading Post', 'Rocco trades fair: every deal is a swap, and each one only once.', 'ITEM SWAP', 'RELIC SWAP', 'MYSTERY BUNDLE', 'CURSE LIFTING', 'BIN CLEANING',
+    'YOU GIVE', 'YOU GET', 'TRADE', 'TRADED', 'Leave', 'Continue', 'Cancel', 'DEAL!', 'PET EVOLUTION', 'Give a relic', 'Give which relic? It is gone for good.',
+    'Your upgrade for a rarity step: one rarity up, not upgraded.', 'A different item of the same rarity that shares a keyword.',
+    'Same rarity, another archetype. Face down until the handshake.', 'Lift a curse: Rocco takes one junk item of your choice.',
+    'Lighten your bin: Rocco takes one item of your choice.', 'Two for one: an item one rarity up, sight unseen.', 'A junk item gone', 'An item gone',
+    'Haggling... tap the counter to hurry.', 'Gone for good. Your bin is lighter.', 'Rocco has nothing you would want today.', 'Rocco packs up his cart and rolls on.',
+    'You no longer have that item.', 'You no longer have that relic.', 'You already have that one.', 'You no longer have both items.', 'Pick a junk item.',
+    'No curse left to lift.', 'Already traded.', 'Pick a relic to give.', 'Lift which curse?', 'Remove which item?', 'a trading post', 'Trades',
+    'Ready to evolve! A rest stop or the Trading Post can do it.', 'Pet evolutions', 'Raise it to its top level, then evolve it.', 'A pet you have yet to meet.',
+    'TRADES', 'HMM...', 'Tap to continue'].concat(TRD_LINES);
+  // ... and its patterns, with an example each ({s} words, {n} numbers).
+  const TRD_PATTERNS = { 'Pay {n} gold': 'Pay 78 gold', '{s} can evolve into the {s2}!': 'Hammy can evolve into the Turbo Hamster!', 'Evolve {s}': 'Evolve Hammy',
+    'Instead of resting: {s} becomes the {s2}. For good.': 'Instead of resting: Hammy becomes the Turbo Hamster. For good.', '{s} evolved into the {s2}!': 'Hammy evolved into the Turbo Hamster!',
+    '{n} of {n2} pets evolved': '2 of 11 pets evolved', '{n} gold': '78 gold' };
+  function TRD_API() {
+    return {
+      K: TRDK, WORDS: TRD_WORDS, PATTERNS: TRD_PATTERNS, show: trdShow, enter: trdEnter, state: trdState, deal: trdDeal, why: trdWhy, hurry: trdHurry, leave: trdLeave, tick: trdTick,
+      removePrice: trdRemovePrice, newMap: trdNewMap, loseRelic: trdLoseRelic, draw: trdDraw, poke: trdPoke,
+      get ui() { return S.trd || null; },
+    };
+  }
+  function PEV_API() {
+    return {
+      evolve: pevEvolve, fee: pevFee, relicOk: pevRelicOk, powUp: pevPowUp, on: pevOnRun, trick: (P) => pevPetTrick(P || (FS ? petFS() : null)), ceremony: pevCeremony,
+      tapLine: pevTapLine, look: pevLookOf, dex: pevDexGrid,
+    };
+  }
+  // ================================================================ /TRD
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -22968,6 +23521,8 @@ const GAME = (() => {
     sch: SCH_API(),
     // LEG (round 12, DESIGN.md "Legends (round 12)"): legendary relics' sources and cabinet looks
     leg: LEG_API(),
+    // TRD (round 14): the Trading Post and pet evolution (DESIGN.md "The Trading Post and pet evolution (round 14)")
+    trd: TRD_API(), pev: PEV_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

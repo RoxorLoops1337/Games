@@ -2900,4 +2900,52 @@ h.test('LEG: the legendary crest, the Hype plate, the peek chip, the black hole,
   h.eq(prints.size, D.LEG.EVOS.length, 'ten distinct drawings');
 });
 
+// ---------------------------------------------------------------- TRD (round 14): the Trading Post and the evolved pets
+h.test('TRD: Rocco, his cart, the counter and the haggle at every beat; the map icon; every evolved pet', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, T = R.trd;
+  h.ok(T && typeof T.scene === 'function' && typeof T.icon === 'function' && typeof T.rocco === 'function', 'RENDER.trd');
+  const K = { give: 0.7, think: 1.15, get: 1.75, shake: 2.0, done: 2.6 };
+  const give = [{ kind: 'item', def: D.ITEMS.rusty_sword, plus: true }, { kind: 'gold', n: 78 }];
+  const get = [{ kind: 'item', def: D.ITEMS.torch, hidden: true }, { kind: 'relic', def: D.RELICS.festering_jar }, { kind: 'clean', mode: 'curse' }];
+  const st = (phase, k, o) => Object.assign({ t: 1.3, x: 0, y: 66, w: 540, h: 330, phase, k, K, give, get, stamp: 0, line: '', lineK: 0, reduced: false }, o || {});
+  const beats = [['idle', 0], ['haggle', 0.3], ['haggle', 0.9], ['haggle', 1.4], ['haggle', 1.9], ['haggle', 2.05], ['haggle', 2.4], ['done', 2.6]];
+  const prints = beats.map(([ph, k]) => argPrint(c => T.scene(c, st(ph, k, ph === 'haggle' && k > 2 ? { stamp: 0.9 } : {}))));
+  for (let i = 0; i < beats.length; i++) drawCheck('trade scene ' + beats[i].join(' '), c => T.scene(c, st(beats[i][0], beats[i][1])));
+  h.eq(new Set(prints).size, prints.length, 'every beat of the haggle draws apart');
+  h.ok(prints[5].indexOf('DEAL!') >= 0, 'the DEAL! stamp at the handshake');
+  h.ok(prints[3].indexOf('HMM...') >= 0, 'Rocco thinks it over');
+  h.ok(argPrint(c => T.scene(c, st('idle', 0, { line: 'Fair and square, friend.', lineK: 1 }))).indexOf('Fair and square, friend.') >= 0, 'Rocco talks when tapped');
+  h.eq(argPrint(c => T.scene(c, st('idle', 0, { reduced: true, t: 1 }))), argPrint(c => T.scene(c, st('idle', 0, { reduced: true, t: 1 }))), 'deterministic');
+  drawCheck('trade scene null-safe', c => { T.scene(c, null); T.scene(c, { phase: 'haggle', k: 1 }); T.rocco(c, 0, 0, 1, null); T.token(c, null, 0, 0, 1); T.icon(c, 12, 0); });
+  const poses = ['idle', 'think', 'take', 'give', 'shake', 'grin'].map(p => argPrint(c => T.rocco(c, 270, 300, 1, { t: 1, pose: p })));
+  h.eq(new Set(poses).size, poses.length, 'six poses of Rocco');
+  const toks = [{ kind: 'item', def: D.ITEMS.torch }, { kind: 'item', def: D.ITEMS.torch, hidden: true }, { kind: 'relic', def: D.RELICS.festering_jar }, { kind: 'gold', n: 5 }, { kind: 'clean' }].map(k => argPrint(c => T.token(c, k, 50, 50, 1)));
+  h.eq(new Set(toks).size, toks.length, 'every good on the counter draws its own way');
+  // the map icon: its own, apart from the shop's and the pet shop's
+  const hx = (type, revealed) => fingerprint(drawCheck(`hex ${type} ${revealed ? 'lit' : 'dark'}`, c => R.hex(c, 50, 50, 30, { type, revealed, known: true, q: 1, r: 2 }, { t: 1 })));
+  h.ok(hx('trader', true) !== hx('petshop', true) && hx('trader', true) !== hx('shop', true), 'the icon on the map is its own');
+  h.ok(hx('trader', false) !== hx('empty', false), 'and its silhouette shows in the dark');
+  // every final form: bigger, glowing, its own flourish; an ordinary Lv 5 pet is untouched
+  const forms = new Set();
+  for (const id of D.PET_IDS) {
+    const f = D.PEV_FORMS[id];
+    const plain = argPrint(c => R.pet(c, id, 100, 100, 1, { t: 1, lv: 5 }));
+    const evo = argPrint(c => R.pet(c, id, 100, 100, 1, { t: 1, lv: 5, evo: f }));
+    h.ok(plain !== evo, id + ': the final form draws apart');
+    h.eq(plain, argPrint(c => R.pet(c, id, 100, 100, 1, { t: 1, lv: 5, evo: null })), id + ': no evo, the old look');
+    const lk = Math.round(T.LOOK * 10) / 10;   // (argPrint keeps one decimal)
+    h.ok(T.LOOK > 1 && evo.indexOf('scale(' + lk + ',' + lk + ')') >= 0, id + ': bigger');
+    drawCheck('evolved ' + id, c => R.pet(c, id, 100, 100, 1, { t: 2, lv: 5, evo: f, mood: 'cheer', pose: 'run' }));
+    forms.add(f.flair);
+  }
+  h.eq(forms.size, 6, 'six kinds of flourish');
+  // the evolution ceremony draws the pet through st.art
+  let drew = 0;
+  const cer = { t: 2.0, dur: 3.2, burst: 1.4, rise: 0.7, x0: 270, y0: 1000, x: 270, y: 470, from: null, to: { name: 'Turbo Hamster' }, name: 'Turbo Hamster', aura: 'Stampede: Every trick also hits a random enemy for 3.', col: '#ffb347', W: 540, H: 960, art: (c, x, y, spin, sc, after) => { drew++; R.pet(c, 'hamster', x, y, sc, { t: 2, lv: 5, evo: after ? D.PEV_FORMS.hamster : null }); } };
+  drawCheck('pet ceremony before', c => R.evo.ceremony(c, Object.assign({}, cer, { t: 0.8 })));
+  drawCheck('pet ceremony after', c => R.evo.ceremony(c, cer));
+  h.eq(drew, 2, 'the ceremony drew the pet both times');
+});
+
 h.done();

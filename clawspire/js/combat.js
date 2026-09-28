@@ -3325,6 +3325,32 @@ const COMBAT = (() => {
   api.legOf = (F) => (F && F.leg ? F.leg : null);
   /* ================= /LEG ================= */
 
+  /* ================= TRD (round 14): an evolved pet's trick ================= */
+  // An evolved pet's flourish (DATA.PEV_FORMS[petId].fx) after its trick: a
+  // proc badge, then dmg (a random enemy), dmgAll, block, heal or status (ALL
+  // enemies). The game calls it once per trick of an evolved pet. -> events
+  api.pevTrick = function (F, petId) {
+    const c = begin(F);
+    const f = (tbl('PEV_FORMS') || {})[petId];
+    if (!F || F.phase === 'over' || !f || !f.fx) return end(F, c);
+    const x = f.fx, v = Math.max(1, Math.round(num(x.v, 1))), p = F.player;
+    emit(F, procEv('pet', 'pev:' + petId, f.name || petId, f.icon || '', f.col || '#ffc94d', String(f.trick || f.name || 'EVOLVED').toUpperCase() + '!', p, F));
+    switch (x.k) {
+      case 'dmg': { const e = hitTargets(F, 'random')[0]; if (e) api.damage(F, null, e, v); break; }
+      case 'dmgAll': for (const e of alive(F)) { if (F.phase === 'over') break; api.damage(F, null, e, v); } break;
+      case 'block': gainBlock(F, p, v); break;
+      case 'heal': api.heal(F, p, v); break;
+      case 'status': alive(F).forEach(e => api.status(F, e, x.s, v)); break;
+      default: break;
+    }
+    if (!Array.isArray(F.pevLog)) F.pevLog = [];
+    F.pevLog.push({ pet: petId, k: x.k, v, turn: F.turn });
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  /* ================= /TRD ================= */
+
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).
   api.emit = function (F, ev) { return F && ev ? emit(F, ev) : ev; };

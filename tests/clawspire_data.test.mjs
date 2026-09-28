@@ -3437,4 +3437,124 @@ t.test('round 12: three animated cabinets on the Vault shelf', () => {
   t.ok(L.SKINS.some(id => DATA.vaultHow(id) === 'buy') && L.SKINS.some(id => DATA.vaultHow(id) === 'capsule'), 'some sold, one a capsule prize');
 });
 
+// ---------------------------------------------------------------- TRD (round 14): the Trading Post and pet evolution
+// A random run's bin (a crawler's starter, reward items, some plus copies, sometimes a curse) and relics.
+function trdCtx(seed) {
+  const rng = U.rng(seed), chars = Object.keys(CHARACTERS), char = chars[seed % chars.length];
+  const ids = Object.keys(ITEMS).filter(id => ITEMS[id].rarity !== 'junk');
+  const bin = (CHARACTERS[char].bin || []).map((id, i) => ({ uid: 'a' + i, id, plus: rng() < 0.25 }));
+  const extra = 2 + Math.floor(rng() * 10);
+  for (let i = 0; i < extra; i++) bin.push({ uid: 'b' + i, id: ids[Math.floor(rng() * ids.length)], plus: rng() < 0.3 });
+  if (rng() < 0.5) bin.push({ uid: 'j0', id: 'rock', plus: false });
+  const pool = DATA.relicPool(null);
+  const relics = [CHARACTERS[char].relic];
+  for (let i = 0; i < Math.floor(rng() * 5); i++) relics.push(pool[Math.floor(rng() * pool.length)]);
+  return { bin, relics, relicPool: pool.filter(id => relics.indexOf(id) < 0), char, removePrice: 78, binFloor: 3 };
+}
+t.test('trd: every trade is a swap by its value rule, never free value', () => {
+  const T = DATA.TRD, K = DATA.TRD_K, RANK = T.RANK;
+  t.eq(K.n, 3, 'three trades a visit');
+  t.eq(DATA.trdValue('rusty_sword', false), K.VAL.c, 'a common is worth the common shelf price');
+  t.eq(DATA.trdValue('rusty_sword', true), Math.round(K.VAL.c * K.plusK), 'a plus copy is worth plusK more');
+  t.eq(DATA.trdValue('rock', true), 0, 'junk is worth nothing, plus or not');
+  // the value table matches the shelf (the average item cost by rarity)
+  for (const r of ['c', 'u', 'r', 'l']) {
+    const cs = Object.keys(ITEMS).filter(id => ITEMS[id].rarity === r).map(id => ITEMS[id].cost || 0);
+    const avg = cs.reduce((a, b) => a + b, 0) / cs.length;
+    t.ok(Math.abs(avg - K.VAL[r]) <= 3, `VAL.${r} ${K.VAL[r]} is the shelf's average (${avg.toFixed(1)})`);
+  }
+  // a plus copy is worth about one rarity step (the Compactor's own rate)
+  t.ok(Math.abs(K.VAL.c * K.plusK / K.VAL.u - 1) < 0.1 && Math.abs(K.VAL.u * K.plusK / K.VAL.r - 1) < 0.1, 'plus c ~ u, plus u ~ r');
+  const kinds = { swap: 0, relic: 0, service: 0, bundle: 0 }, ratio = { swap: [], relic: [], service: [], bundle: [] };
+  let n = 0;
+  for (let s = 1; s <= 600; s++) {
+    const ctx = trdCtx(s), offers = DATA.trdRoll(U.rng(s * 7 + 1), ctx), L = 'seed ' + s;
+    t.ok(offers.length >= 1 && offers.length <= K.n, L + ': one to three trades');
+    const uids = [];
+    for (const o of offers) {
+      kinds[o.k]++; n++;
+      if (o.vGive > 0) ratio[o.k].push(o.vGet / o.vGive);
+      if (o.k === 'swap') {
+        const g = ctx.bin.find(i => i.uid === o.give.uid);
+        t.ok(g && g.id === o.give.id && !!g.plus === o.give.plus, L + ': swap names an item of your bin');
+        const gd = ITEMS[o.give.id], rd = ITEMS[o.get.id];
+        t.ok(rd && o.get.id !== o.give.id && rd.rarity !== 'junk' && !rd.starter && !rd.evolved && gd.rarity !== 'junk' && !gd.evolved, L + ': a different real item for a real item');
+        const up = o.give.plus && gd.rarity !== 'l';
+        t.ok(up ? RANK[rd.rarity] === RANK[gd.rarity] + 1 && !o.get.plus : rd.rarity === gd.rarity && o.get.plus === o.give.plus, L + ': the rarity rule (' + gd.rarity + (o.give.plus ? '+' : '') + ' -> ' + rd.rarity + (o.get.plus ? '+' : '') + ')');
+        const mine = DATA.kwIds(gd);
+        if (mine.length) t.ok(DATA.kwIds(rd).some(k => mine.includes(k)) && mine.includes(o.get.kw), L + ': shares a keyword');
+        t.ok(!rd.char || rd.char === ctx.char, L + ': from the crawler\'s own pool');
+        uids.push(o.give.uid);
+      } else if (o.k === 'relic') {
+        const a = RELICS[o.give], b = RELICS[o.get];
+        t.ok(ctx.relics.includes(o.give) && ctx.relicPool.includes(o.get) && !ctx.relics.includes(o.get), L + ': one of yours for one you lack');
+        t.ok(a.rarity === b.rarity && ['c', 'u', 'r'].includes(a.rarity) && o.rar === a.rarity && !a.starter && o.give !== CHARACTERS[ctx.char].relic, L + ': the same rarity, never the crawler\'s own');
+        t.ok(DATA.kwIds(b).length && !DATA.kwIds(b).some(k => DATA.kwIds(a).includes(k)) && DATA.kwIds(b).includes(o.kw), L + ': another archetype, and the hint names it');
+      } else if (o.k === 'service') {
+        t.eq(o.price, ctx.removePrice, L + ': the removal at the price given');
+        t.eq(o.mode, ctx.bin.some(i => ITEMS[i.id].rarity === 'junk') ? 'curse' : 'remove', L + ': a curse to lift when there is junk');
+        t.ok(o.vGive === o.price && o.vGet === o.price, L + ': gold for its worth');
+      } else if (o.k === 'bundle') {
+        const [a, b] = o.give.map(g => ctx.bin.find(i => i.uid === g.uid));
+        t.ok(a && b && a.uid !== b.uid && !a.plus && !b.plus, L + ': two different items, neither a plus');
+        t.ok(ITEMS[a.id].rarity === ITEMS[b.id].rarity && K.bundleRar.includes(ITEMS[a.id].rarity), L + ': both of one rarity, common or uncommon');
+        t.eq(ITEMS[o.get.id].rarity, T.bundleRar(a, b), L + ': the next rarity up');
+        t.eq(RANK[o.rar], RANK[ITEMS[a.id].rarity] + 1, L + ': one step up');
+        t.ok(o.get.id !== a.id && o.get.id !== b.id && !o.get.plus, L + ': never one of the two, not a plus');
+        uids.push(a.uid, b.uid);
+      }
+    }
+    t.eq(new Set(uids).size, uids.length, L + ': an item is never in two trades');
+    t.eq(JSON.stringify(DATA.trdRoll(U.rng(s * 7 + 1), trdCtx(s))), JSON.stringify(offers), L + ': the same seed deals the same trades');
+  }
+  for (const k in kinds) t.ok(kinds[k] > 60, `every kind is dealt (${k}: ${kinds[k]} of ${n})`);
+  // about neutral: the swap and the relic exactly or near; the bundle keeps a cut for the thinner bin
+  const avg = (a) => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length);
+  t.ok(avg(ratio.swap) > 0.93 && avg(ratio.swap) < 1.08, 'swap: worth for worth ' + avg(ratio.swap).toFixed(3));
+  t.ok(ratio.relic.every(r => r === 1), 'relic: always the same rarity');
+  t.ok(ratio.service.every(r => r === 1), 'service: the price is the worth');
+  t.ok(avg(ratio.bundle) > 0.78 && avg(ratio.bundle) < 0.9, 'bundle: two for one step up, the merchant\'s cut ' + avg(ratio.bundle).toFixed(3));
+  // the bundle rule on mixed pairs; the floors
+  t.eq(T.bundleRar({ id: 'rock' }, { id: 'rusty_sword' }), 'c', 'junk and a common: a common');
+  const u = Object.keys(ITEMS).find(id => ITEMS[id].rarity === 'u'), r = Object.keys(ITEMS).find(id => ITEMS[id].rarity === 'r');
+  t.eq(T.bundleRar({ id: u }, { id: r }), 'r', 'an uncommon and a rare: one above the lower');
+  const small = { bin: [0, 1, 2].map(i => ({ uid: 's' + i, id: 'rusty_sword', plus: false })), relics: [], relicPool: DATA.relicPool(null), char: 'knight', removePrice: 78, binFloor: 3 };
+  t.ok(DATA.trdRoll(U.rng(5), small).every(o => o.k === 'swap'), 'a bin at its floor: no removal and no bundle, and no relic without relics');
+  t.ok(DATA.trdRoll(U.rng(5), { bin: [], relics: [] }).length === 0, 'an empty bin deals nothing');
+  // the saved post
+  t.eq(DATA.trdFix(null), null, 'junk: null');
+  t.eq(DATA.trdFix({ offers: 'x' }), null, 'no offers: null');
+  const fx = DATA.trdFix({ seed: 5, offers: [{ k: 'swap' }, { k: 'nope' }, { k: 'service' }] });
+  t.ok(fx && fx.offers.length === 2 && fx.done.length === 2 && fx.done.every(d => d === false), 'unknown kinds dropped, done defaulted');
+});
+t.test('trd: pet evolution: gated by level, once, the fee by act, a final form for every pet', () => {
+  const P = DATA.PEV, K = DATA.PEV_K;
+  t.eq(K.lv, DATA.PET_MAX, 'evolves at the top level');
+  for (const id of DATA.PET_IDS) {
+    const f = DATA.PEV_FORMS[id];
+    t.ok(f && f.name && f.trick && f.text && f.icon && isHex(f.col) && ['bolts', 'hat', 'fangs', 'ink', 'stars', 'wings'].includes(f.flair), id + ': a final form');
+    t.ok(f.fx && ['dmg', 'dmgAll', 'block', 'heal', 'status'].includes(f.fx.k) && f.fx.v > 0 && (f.fx.k !== 'status' || STATUS[f.fx.s]), id + ': a flourish COMBAT runs');
+    t.ok((f.name + f.trick + f.text).indexOf(String.fromCharCode(0x2014)) < 0, id + ': no em dash');
+    const p = DATA.petNew(id, 7);
+    t.ok(!DATA.pevCan(p), id + ': Lv 1 cannot evolve');
+    p.xp = DATA.PET_XP[3]; t.ok(!DATA.pevCan(p), id + ': Lv 4 cannot');
+    p.xp = DATA.PET_XP[4]; p.lv = 5; t.ok(DATA.pevCan(p) && !DATA.pevOn(p), id + ': Lv 5 can');
+    p.evo = 1; t.ok(!DATA.pevCan(p) && DATA.pevOn(p), id + ': once evolved, never again');
+  }
+  t.ok(!DATA.pevCan(null) && !DATA.pevCan({ id: 'dragon', xp: 999 }) && !DATA.pevOn({ id: 'cat' }), 'junk and ordinary pets');
+  const k = DATA.ECONOMY.shopK;
+  t.eq(DATA.pevFee(1), Math.round(80 * k), 'act 1 fee');
+  t.eq(DATA.pevFee(2), Math.round(120 * k), 'act 2 fee');
+  t.eq(DATA.pevFee(3), Math.round(160 * k), 'act 3 fee');
+  t.eq(DATA.pevFee(7), DATA.pevFee(3), 'Endless loops pay the act 3 fee');
+  t.eq(DATA.pevFee(1, 0.25), Math.round(80 * k * 1.25), 'the Price Hike stacks');
+  t.ok(DATA.pevFee(2) >= 100 && DATA.pevFee(2) <= 208, 'about a relic\'s worth, never more than a shop\'s uncommon relic');
+  t.near(DATA.pevPow(5, true) - DATA.pevPow(5, false), K.pow, 1e-9, 'evolved: the trick is PEV_K.pow stronger');
+  // the saved pet keeps its evolution; an old or junk flag does not sneak in
+  const top = DATA.petFix({ id: 'cat', xp: 100, evo: 1 });
+  t.eq(top.evo, 1, 'an evolved pet stays evolved');
+  t.ok(!('evo' in DATA.petFix({ id: 'cat', xp: 100 })), 'an old save has no flag');
+  t.ok(!('evo' in DATA.petFix({ id: 'cat', xp: 20, evo: 1 })), 'a flag below the top level is dropped');
+});
+
 t.done();

@@ -155,7 +155,7 @@ export function boot(opts) {
   const wanted = only ? files.filter(f => only.includes(f)) : files;
   const expose = '\n;__out.mods = {' + wanted.map((f, i) => `${names[files.indexOf(f)]}: (typeof ${names[files.indexOf(f)]} !== 'undefined' ? ${names[files.indexOf(f)]} : undefined)`).join(', ') + '};\n';
   // (round 13) the i18n module brings its language tables along
-  const src = source(only ? wanted.concat(wanted.includes('i18n') ? ['lang_nl'] : []) : null) + expose;
+  const src = source(only ? wanted.concat(wanted.includes('i18n') ? ['lang_nl', 'lang_nl2'] : []) : null) + expose;
   const fn = new Function('window', 'document', 'localStorage', 'requestAnimationFrame', 'cancelAnimationFrame',
     'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'navigator', '__out', src);
   fn(sandbox.window, sandbox.document, sandbox.localStorage, sandbox.requestAnimationFrame, sandbox.cancelAnimationFrame,

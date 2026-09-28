@@ -3469,7 +3469,9 @@ const DATA = (() => {
   function petFix(p) {
     if (!p || typeof p !== 'object' || !PETS[p.id]) return null;
     const xp = Math.max(0, Math.floor(+p.xp || 0));
-    return { id: p.id, name: typeof p.name === 'string' && p.name ? p.name.slice(0, 16) : petName(p.id, p.seed | 0), xp, lv: petLevel(xp), seed: (p.seed >>> 0) || 1, fed: Math.max(0, p.fed | 0) };
+    const o = { id: p.id, name: typeof p.name === 'string' && p.name ? p.name.slice(0, 16) : petName(p.id, p.seed | 0), xp, lv: petLevel(xp), seed: (p.seed >>> 0) || 1, fed: Math.max(0, p.fed | 0) };
+    if (p.evo && o.lv >= PET_MAX) o.evo = 1;   // TRD (round 14): evolved once, for good (only at the top level; junk is dropped)
+    return o;
   }
   // Pets for the shop's pens: n different ids, never the one you have.
   function petOffer(rng, have, n) {
@@ -6718,6 +6720,201 @@ const DATA = (() => {
   const LEG = { K: LEG_K, RELICS: LEG_RELIC_IDS, EVOS: LEG_EVO_IDS, SKINS: LEG_SKINS.map(c => c.id), goldNow: legGoldNow };
   // ================================================================ /LEG
 
+  // ================================================================ TRD (round 14): the Trading Post and pet evolution
+  /* The Trading Post (DESIGN.md "The Trading Post and pet evolution (round
+     14)"): a travelling merchant, one per act off the road, deals three
+     TRADES a visit. Every trade is a swap at an even rate, never free value:
+       swap     an item of your bin for a different item sharing a keyword:
+                the same rarity (a plus stays a plus), or a plus copy for an
+                item one rarity up that is not upgraded (the Compactor's own
+                rate: three of a kind make one plus, three of a rarity one of
+                the next, so a plus is worth about a rarity step)
+       relic    a relic for a face-down relic of the same rarity from another
+                archetype (its archetype is the hint)
+       service  gold for lifting a curse (a junk item) or removing an item,
+                at the shop's removal price with the round 12 shopK
+       bundle   two named items of one rarity (common or uncommon, never a
+                plus) for one face-down item of the next rarity above the
+                lower of the two
+     Rolled from the tile's own seed on arrival and saved with the tile (the
+     game pays each trade once). Pure: the game hands in the bin, the relics,
+     the unowned relic pool and the prices. Pet evolution rides here too: a
+     pet at its top level can evolve ONCE into a final form (PEV_FORMS: a
+     bigger, glowing look and an upgraded trick) for a price (a relic, a
+     rest, or a gold fee by act, PEV_K). */
+  const TRD_K = {
+    n: 3,                                                  // trades a visit
+    W: { swap: 40, relic: 25, service: 15, bundle: 20 },   // how often each kind is dealt (one that cannot be dealt is skipped)
+    VAL: { junk: 0, c: 37, u: 63, r: 100, l: 132 },        // an item's worth: the shelf's average cost by rarity (DATA.ITEMS, round 14)
+    plusK: 1.6,                                            // a plus copy is worth this much more (about one rarity step up)
+    removeBase: 60,                                        // the shop's removal price, before ECONOMY.shopK
+    bundleRar: ['c', 'u'],                                 // the bundle takes two of one of these
+    relicRar: ['c', 'u', 'r'],                             // relics the merchant swaps
+    RVAL: { c: 120, u: 160, r: 220 },                      // a relic's worth: the shop's relic price before shopK
+  };
+  const TRD_RANK = { junk: 0, c: 1, u: 2, r: 3, l: 4 }, TRD_RAR = ['junk', 'c', 'u', 'r', 'l'];
+  // An item instance's worth in gold (the value rule the tests check).
+  function trdValue(id, plus) {
+    const d = ITEMS[id];
+    if (!d) return 0;
+    return Math.round((TRD_K.VAL[d.rarity] || 0) * (plus && d.rarity !== 'junk' ? TRD_K.plusK : 1));
+  }
+  // An item the merchant takes: real, not junk, never an evolved item.
+  const trdTradable = (inst) => !!(inst && ITEMS[inst.id] && ITEMS[inst.id].rarity !== 'junk' && !ITEMS[inst.id].evolved && !ITEMS[inst.id].bag);
+  // What a swap hands back for this instance: {rar, plus}.
+  function trdSwapRule(inst) {
+    const d = ITEMS[inst.id];
+    if (inst.plus && d.rarity !== 'l') return { rar: TRD_RAR[Math.min(4, TRD_RANK[d.rarity] + 1)], plus: false };
+    return { rar: d.rarity, plus: !!inst.plus };
+  }
+  // rng, inst, char -> {id, plus, kw} (a different item sharing a keyword) | null
+  function trdSwapFor(rng, inst, char) {
+    if (!trdTradable(inst)) return null;
+    const R = trdSwapRule(inst), mine = kwIds(ITEMS[inst.id]);
+    const all = pool(R.rar, char).filter(id => id !== inst.id);
+    const cand = mine.length ? all.filter(id => kwIds(ITEMS[id]).some(k => mine.indexOf(k) >= 0)) : all;
+    if (!cand.length) return null;
+    const id = cand[Math.min(cand.length - 1, Math.floor(rng() * cand.length))];
+    const kw = kwIds(ITEMS[id]).find(k => mine.indexOf(k) >= 0) || null;
+    return { id, plus: R.plus, kw };
+  }
+  // A relic the merchant swaps: of a swapped rarity, not a crawler's own.
+  const trdRelicOk = (id) => !!(RELICS[id] && TRD_K.relicRar.indexOf(RELICS[id].rarity) >= 0 && !RELICS[id].starter);
+  // rng, relicId, unowned ids -> {id, kw, rar} (same rarity, another archetype) | null
+  function trdRelicFor(rng, relicId, poolIds) {
+    if (!trdRelicOk(relicId)) return null;
+    const rar = RELICS[relicId].rarity, mine = kwIds(RELICS[relicId]);
+    const cand = (poolIds || []).filter(id => id !== relicId && RELICS[id] && RELICS[id].rarity === rar && !RELICS[id].starter &&
+      kwIds(RELICS[id]).length && !kwIds(RELICS[id]).some(k => mine.indexOf(k) >= 0));
+    if (!cand.length) return null;
+    const id = cand[Math.min(cand.length - 1, Math.floor(rng() * cand.length))];
+    return { id, kw: kwIds(RELICS[id])[0], rar };
+  }
+  // The bundle's rule: one rarity above the lower of the two (legendary at most).
+  function trdBundleRar(a, b) {
+    const lo = Math.min(TRD_RANK[(ITEMS[a.id] || {}).rarity] || 0, TRD_RANK[(ITEMS[b.id] || {}).rarity] || 0);
+    return TRD_RAR[Math.min(4, lo + 1)];
+  }
+  // rng, a, b, char -> {id, rar} (never one of the two; a dry pool steps down) | null
+  function trdBundleFor(rng, a, b, char) {
+    let rar = trdBundleRar(a, b), cand = [];
+    while (!cand.length && TRD_RANK[rar] >= 1) {
+      cand = pool(rar, char).filter(id => id !== a.id && id !== b.id);
+      if (!cand.length) rar = TRD_RAR[TRD_RANK[rar] - 1];
+    }
+    if (!cand.length) return null;
+    return { id: cand[Math.min(cand.length - 1, Math.floor(rng() * cand.length))], rar };
+  }
+  const trdGive = (inst) => ({ uid: inst.uid, id: inst.id, plus: !!inst.plus });
+  const trdShuffle = (rng, a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
+  /* The visit's trades. ctx: {bin: [inst], relics: [ids], relicPool: [unowned
+     ids], char, removePrice, binFloor}. -> [offer] (at most TRD_K.n):
+       {k: 'swap', give: {uid, id, plus}, get: {id, plus, kw}, vGive, vGet}
+       {k: 'relic', give: relicId, get: relicId, kw, rar, vGive, vGet}
+       {k: 'service', mode: 'curse' | 'remove', price, vGive, vGet}
+       {k: 'bundle', give: [{uid, id, plus} x2], get: {id, plus: false}, rar, vGive, vGet}
+     A kind that cannot be dealt is skipped; the rest is filled with more
+     swaps (other items). An item is never named in two trades. */
+  function trdRoll(rng, ctx) {
+    ctx = ctx || {};
+    const bin = (ctx.bin || []).filter(i => i && ITEMS[i.id]), floor = ctx.binFloor == null ? 3 : ctx.binFloor;
+    const used = {}, out = [];
+    const swap = () => {
+      const list = trdShuffle(rng, bin.filter(i => trdTradable(i) && !used[i.uid]));
+      // a plus copy is offered first half the time (the rarity step is the fun one)
+      if (rng() < 0.5) list.sort((a, b) => (b.plus ? 1 : 0) - (a.plus ? 1 : 0));
+      for (const inst of list) {
+        const g = trdSwapFor(rng, inst, ctx.char);
+        if (!g) continue;
+        used[inst.uid] = 1;
+        return { k: 'swap', give: trdGive(inst), get: g, vGive: trdValue(inst.id, inst.plus), vGet: trdValue(g.id, g.plus) };
+      }
+      return null;
+    };
+    const relic = () => {
+      for (const id of trdShuffle(rng, (ctx.relics || []).filter(trdRelicOk))) {
+        const g = trdRelicFor(rng, id, ctx.relicPool || []);
+        if (!g) continue;
+        return { k: 'relic', give: id, get: g.id, kw: g.kw, rar: g.rar, vGive: TRD_K.RVAL[g.rar] || 0, vGet: TRD_K.RVAL[g.rar] || 0 };
+      }
+      return null;
+    };
+    const service = () => {
+      if (bin.length <= floor) return null;
+      const p = Math.max(1, Math.round(+ctx.removePrice || TRD_K.removeBase));
+      return { k: 'service', mode: bin.some(i => ITEMS[i.id].rarity === 'junk') ? 'curse' : 'remove', price: p, vGive: p, vGet: p };
+    };
+    const bundle = () => {
+      if (bin.length - 1 < floor) return null;   // two out, one in: the bin keeps its floor
+      const groups = {};
+      for (const i of bin) { const r = ITEMS[i.id].rarity; if (TRD_K.bundleRar.indexOf(r) >= 0 && trdTradable(i) && !i.plus && !used[i.uid]) (groups[r] = groups[r] || []).push(i); }
+      for (const r of trdShuffle(rng, Object.keys(groups).filter(r => groups[r].length >= 2).sort())) {
+        const two = trdShuffle(rng, groups[r]).slice(0, 2);
+        const g = trdBundleFor(rng, two[0], two[1], ctx.char);
+        if (!g) continue;
+        for (const i of two) used[i.uid] = 1;
+        return { k: 'bundle', give: two.map(trdGive), get: { id: g.id, plus: false }, rar: g.rar,
+          vGive: trdValue(two[0].id, two[0].plus) + trdValue(two[1].id, two[1].plus), vGet: trdValue(g.id, false) };
+      }
+      return null;
+    };
+    const make = { swap, relic, service, bundle };
+    // deal the kinds by weight without repeats; each one that cannot be dealt is dropped
+    let kinds = Object.keys(TRD_K.W);
+    while (out.length < TRD_K.n && kinds.length) {
+      let x = rng() * kinds.reduce((s, k) => s + TRD_K.W[k], 0), pick = kinds[kinds.length - 1];
+      for (const k of kinds) { x -= TRD_K.W[k]; if (x < 0) { pick = k; break; } }
+      kinds = kinds.filter(k => k !== pick);
+      const o = make[pick]();
+      if (o) out.push(o);
+    }
+    while (out.length < TRD_K.n) { const o = swap(); if (!o) break; out.push(o); }
+    return out;
+  }
+  // A saved trade post (tile.content.trd) as it is today, or null (junk).
+  function trdFix(o) {
+    if (!o || typeof o !== 'object' || !Array.isArray(o.offers)) return null;
+    const offers = o.offers.filter(x => x && typeof x === 'object' && ['swap', 'relic', 'service', 'bundle'].indexOf(x.k) >= 0);
+    const done = Array.isArray(o.done) ? offers.map((x, i) => !!o.done[i]) : offers.map(() => false);
+    return Object.assign({}, o, { offers, done, seed: (o.seed >>> 0) || 1 });
+  }
+
+  /* Pet evolution: a pet at PET_MAX evolves once (run.pet.evo = 1) into its
+     final form: PEV_K.look times bigger, glowing, a flourish of its own, its
+     trick PEV_K.pow stronger and ending in the form's `fx` (COMBAT.pevTrick).
+     It costs a relic (the Trading Post takes it), a rest (the rest stop's
+     choice, instead of healing) or gold (the Trading Post, PEV_K.gold by act
+     times shopK and the Tilt's Price Hike). */
+  const PEV_K = { lv: PET_MAX, pow: 0.4, look: 1.25, gold: { 1: 80, 2: 120, 3: 160 } };
+  const PEV_FORMS = {
+    hamster: { name: 'Turbo Hamster', trick: 'Stampede', icon: '⚡', col: '#ffb347', flair: 'bolts', fx: { k: 'dmg', v: 3 }, text: 'Every trick also hits a random enemy for 3.' },
+    parrot: { name: 'Captain Parrot', trick: "Crow's Nest", icon: '⚓', col: '#3ddc84', flair: 'hat', fx: { k: 'block', v: 3 }, text: 'Every trick also gives you 3 Block.' },
+    cat: { name: 'Sabertooth Cat', trick: 'Pounce', icon: '🗡', col: '#ff9a3c', flair: 'fangs', fx: { k: 'dmg', v: 4 }, text: 'Every trick also hits a random enemy for 4.' },
+    octopus: { name: 'Kraken', trick: 'Ink Cloud', icon: '🌊', col: '#c77dff', flair: 'ink', fx: { k: 'status', s: 'weak', v: 1 }, text: 'Every trick also gives ALL enemies 1 Weak.' },
+    firefly: { name: 'Starfly', trick: 'Dazzle', icon: '🌟', col: '#ffe066', flair: 'stars', fx: { k: 'status', s: 'vuln', v: 1 }, text: 'Every trick also gives ALL enemies 1 Vulnerable.' },
+    mouse: { name: 'Tesla Mouse', trick: 'Arc Zap', icon: '⚡', col: '#8dfff5', flair: 'bolts', fx: { k: 'dmgAll', v: 2 }, text: 'Every trick also hits ALL enemies for 2.' },
+    raccoon: { name: 'Raccoon Baron', trick: 'Recycling', icon: '🎩', col: '#ffc94d', flair: 'hat', fx: { k: 'block', v: 4 }, text: 'Every trick also gives you 4 Block.' },
+    goose: { name: 'Golden Swan', trick: 'Grace', icon: '🦢', col: '#ffe27a', flair: 'wings', fx: { k: 'heal', v: 2 }, text: 'Every trick also heals you 2.' },
+    penguin: { name: 'Emperor Penguin', trick: 'Blizzard', icon: '❄', col: '#9fd8ff', flair: 'stars', fx: { k: 'status', s: 'chill', v: 1 }, text: 'Every trick also gives ALL enemies 1 Chill.' },
+    molerat: { name: 'Mole King', trick: 'Tremor', icon: '👑', col: '#f2b8a8', flair: 'fangs', fx: { k: 'dmgAll', v: 2 }, text: 'Every trick also hits ALL enemies for 2.' },
+    roomba: { name: 'Robo Butler', trick: 'Polish', icon: '🤖', col: '#2ee6d6', flair: 'wings', fx: { k: 'block', v: 3 }, text: 'Every trick also gives you 3 Block.' },
+  };
+  for (const id in PEV_FORMS) PEV_FORMS[id].id = id;
+  // A pet that may evolve now: at the top level, not evolved yet.
+  const pevCan = (p) => !!(p && typeof p === 'object' && PETS[p.id] && PEV_FORMS[p.id] && !p.evo && petLevel(p.xp) >= PEV_K.lv);
+  const pevOn = (p) => !!(p && typeof p === 'object' && p.evo && PEV_FORMS[p.id]);
+  // The gold fee: by act (3 and Endless loops at the act 3 price), x shopK x the Price Hike.
+  function pevFee(act, hike) {
+    const a = U.clamp(act | 0, 1, 3);
+    return Math.round((PEV_K.gold[a] || 120) * (ECONOMY.shopK || 1) * (1 + Math.max(0, +hike || 0)));
+  }
+  // The trick's strength: the level's, plus PEV_K.pow once evolved.
+  const pevPow = (lv, evo) => petPow(lv) + (evo ? PEV_K.pow : 0);
+  const TRD = { K: TRD_K, RANK: TRD_RANK, RAR: TRD_RAR, value: trdValue, tradable: trdTradable, swapRule: trdSwapRule, swapFor: trdSwapFor, relicOk: trdRelicOk,
+    relicFor: trdRelicFor, bundleRar: trdBundleRar, bundleFor: trdBundleFor, roll: trdRoll, fix: trdFix };
+  const PEV = { K: PEV_K, FORMS: PEV_FORMS, can: pevCan, on: pevOn, fee: pevFee, pow: pevPow };
+  // ================================================================ /TRD
+
   return {
     // SCHOOL (round 11): Claw School and the Practice Cabinet (DESIGN.md "Claw School and the Practice Cabinet (round 11)")
     SCH, SCH_LESSONS, SCH_CH, SCH_IDS, schMatch, schEval, schStars, schStarText, schPay, schTotal, schLessonStars, schOpen, schChOpen, schGrade, schFix,
@@ -6738,6 +6935,8 @@ const DATA = (() => {
     ROS, rosMutMerge,
     // LEG (round 12): legendary relics, ten more evolutions, animated cabinets (DESIGN.md "Legends (round 12)")
     LEG,
+    // TRD (round 14): the Trading Post and pet evolution (DESIGN.md "The Trading Post and pet evolution (round 14)")
+    TRD, PEV, TRD_K, PEV_K, PEV_FORMS, trdValue, trdRoll, trdFix, pevCan, pevOn, pevFee, pevPow,
     // run history and the death recap (DESIGN.md "Run history, the death recap and photo mode (round 8)")
     HIS, hisRecFix, hisFix, hisPush, hisRank, hisFilter, hisChart, hisMapPack, hisMapCells, hisKillLine, hisTips, hisWon,
     // stories, the rival, alternate bosses (DESIGN.md "Stories, the rival and alternate bosses (round 8)")

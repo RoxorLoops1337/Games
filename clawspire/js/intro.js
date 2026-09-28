@@ -287,7 +287,12 @@ const INTRO = (() => {
   }
 
   /* --------------------------------------------------------- utilities */
+  // I18N (round 14): the intro's drawn words in the current language (js/lang_nl2.js has them)
+  function i18n14Intro(s) {
+    try { return typeof I18N !== 'undefined' && I18N && I18N.get() !== 'en' && typeof s === 'string' ? I18N.tr(s) : s; } catch (e) { return s; }
+  }
   function txt(ctx, s, x, y, size, col, weight, align, ol, olW) {
+    s = i18n14Intro(s);
     ctx.font = (weight || 'bold') + ' ' + size + 'px ' + FONT;
     ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
     ctx.lineJoin = 'round';
@@ -886,10 +891,11 @@ const INTRO = (() => {
       ctx.restore();
     }
     // the tagline types in
-    const nCh = Math.floor(clamp((t - TAG_T0) / TAG_RATE, 0, TAGLINE.length));
+    const TAG = i18n14Intro(TAGLINE);   // (I18N: typed in the current language, the pace kept to the English length)
+    const nCh = Math.floor(clamp((t - TAG_T0) / TAG_RATE * (TAG.length / TAGLINE.length), 0, TAG.length));
     if (nCh > 0) {
-      const shown = TAGLINE.slice(0, nCh);
-      const caret = nCh < TAGLINE.length && Math.floor(t * 14) % 2 === 0 ? '_' : '';
+      const shown = TAG.slice(0, nCh);
+      const caret = nCh < TAG.length && Math.floor(t * 14) % 2 === 0 ? '_' : '';
       txt(ctx, shown + caret, cx, ly + fs * 0.85, 28, CYAN, '800', 'center', INK, 6);
     }
     // sub line

@@ -626,7 +626,7 @@ shortfall for the cheapest useful step, so a player stranded with a lit or dark 
 MAP.generate({act, rng, cols: 16, rows: 22, ink, brushes, water: 0.28, islands}) -> M    // cols clamps to >= 9, rows to >= 3; ink = bulbs, brushes = tools
 M = { act, biome, cols, rows, seed, tiles: { 'q,r': { q, r, type, terrain, ground, elev, coast, biome, revealed, visited, known, road, done?, content } },
       start: {q,r}, boss: {q,r}, pos: {q,r}, ink, brushes: [toolIds], revealedCount, islands, water, road: [[q,r], ...] }
-tile.type: 'empty'|'fight'|'elite'|'treasure'|'gem'|'ink' (a box of bulbs)|'brush' (a tool)|'event'|'shop'|'rest'|'boss'|'start'|'forge' (item upgrade)|'tower'
+tile.type: 'empty'|'fight'|'elite'|'treasure'|'gem'|'ink' (a box of bulbs)|'brush' (a tool)|'event'|'shop'|'rest'|'boss'|'start'|'forge' (item upgrade)|'tower'   (later rounds add the cabinets, 'petshop' and, round 14, 'trader': MAP.trdPlace, see "The Trading Post and pet evolution")
 tile.ground: 'grass'|'forest'|'dirt'|'sand'|'hill'|'mountain'|'shallow'|'sea'   (MAP.GROUNDS)
 tile.content: { enc?: [ids], gold?, ink?, brush?: toolId, event?, tower?: { bonus }, ... } rolled at generate ({} on water and mountains)
 Distribution per act (share of the placeable land): fight 28%, empty 16%, gem 10%, ink 10% (min 4), event 8%, treasure 4% (min 2), brush 4% (min 2), shop 4% (min 3), rest 5% (min 3), forge 3% (min 2), elite 3% (min 2, never adjacent to start or boss), tower 3.5% (min 2, max 3). Elites/fights get harder with distance from start (content.diff = 0..1 by column).
@@ -5817,9 +5817,10 @@ saves) and only what is shown changes.
 
 ### Architecture (`js/i18n.js` -> `I18N`, `js/lang_nl.js`)
 
-- Load order: `util`, `art`, **`i18n`, `lang_nl`**, `physics` ... (`art` must
-  stay right after `util`, the art suite pins it). `tests/clawspire_lib.mjs`
-  lists `i18n` (namespace `I18N`, `lang_nl` rides along with it) and passes
+- Load order: `util`, `art`, **`i18n`, `lang_nl`, `lang_nl2`** (round 14),
+  `physics` ... (`art` must stay right after `util`, the art suite pins it).
+  `tests/clawspire_lib.mjs` lists `i18n` (namespace `I18N`, `lang_nl` and
+  `lang_nl2` ride along with it) and passes
   `opts.language` to the stub navigator. `window.CS.I18N` for the console.
   Besides `I18N` the file declares the three short globals the brief asked
   for, `T`, `TP` and `TC` (aliases of `I18N.T / TP / TC`); game.js and
@@ -5905,14 +5906,46 @@ JACKPOT and the characters' own names stay as they are.
   title cards, Tilt levels, mutators, elite affixes, all 20 events, boons,
   pets (species, tricks, quips), relic sets and their bonuses, stickers, vault
   categories and cosmetics, weekly themes, Codex chapter names and blurbs.
-- **Still English (the structure takes them, add rows to `lang_nl.js`)**: the
-  Codex pages themselves (about 45 long lore texts in `loreEntries`), the
-  branching stories (`STORY_LIST`) and Grabby Gary's lines, the 30 evolved
-  items (`EVO_LIST`: names, texts, auras), pet synergies (`PET_SYN`), the
-  seasonal items, relics and enemies (Claw-o-ween, Winter Wonderclaw), enemy
-  move names (the intents themselves are translated), the lore snippets on the
-  map, the 10 s intro video's tagline (baked into the video and the canvas
-  intro), the loading screen (it runs before the game's scripts).
+- **Phase 3 (round 14, `js/lang_nl2.js`), the rest**: all 43 Codex pages
+  (`content.lore`: name, text, hint; a crawler's page keeps the crawler's
+  name), the 9 branching stories (titles, every beat, every choice and its
+  line; the dance-off's scored beats are ui patterns), Grabby Gary
+  (Graaiende Gary, as round 13 named him: every taunt, the `{gear}` line with
+  his gear in lower case, his gear, the claw-off quips), the 28 evolved items
+  (name and rules in `content.item`, aura in `content.evo`, the proc word, the
+  ceremony's "aura: text" line), the 11 pet synergies, both seasons (names,
+  blurbs, the Snoepbalie and the Sneeuwvlokkenkraam, candy as snoepje /
+  snoepjes and sneeuwvlokje / sneeuwvlokjes, the wallet and counter lines,
+  the seasonal items, relics and their procs, the costumed monsters, the
+  Pumpkin King (de Pompoenkoning) and Krampus), every enemy move (name and
+  its own line, the hidden story, family and seasonal ones too), every
+  enrage and boss signature (the Machine's events too), the map's lore
+  snippets and landmarks, Duo's cards, taunts and colours, the families'
+  bonds, Mama Mech's turret names, the claw part lines, the canvas intro
+  (tagline "Elk gevecht is een greep.", TIK OM TE SPELEN) and the pre-boot
+  loader.
+- **How phase 3 is wired**: `I18N.TC` has two more kinds. `lore` is a Codex
+  page by id; `path` is any other DATA words by dotted path with the field
+  last (`TC('path', 'STORIES.sto_crab.beats.start', 'text')`,
+  `'GARY_LINES.win'` / `'2'`, `'ENEMIES.krampus.sig'` / `'shout'`). Both are
+  indexed by their English like every other kind, so the game's own
+  `h()` / `txt()` calls find them with no screen code changed. Canvas text
+  that is wrapped into lines before it is drawn (Gary's speech bubble, the
+  evolution plate, the lore bubbles, Duo's cards) is translated before the
+  wrap (render.js), the evolution plate gets one line more in Dutch; the
+  Codex list's teaser is the first sentence of the Dutch page. `tr` keeps a
+  label's trailing ":" and curly quotes around a known core ("“Koop hem vrij
+  (35 goud).”"). An element marked `translate="no"` is left alone (the
+  loader's CLAWSPIRE logo). The loader (`#csBootJs`, before any script)
+  reads `meta.settings.lang`, else the browser, and swaps its own four
+  phrases; the canvas intro runs its words through `I18N.tr` (the tagline is
+  translated whole, then typed). The intro.mp4 / intro.webm files are not
+  used by the game.
+- **Still English**: the character names, Crawler, Tilt, Boss Rush, Duo,
+  JACKPOT, the season names Claw-o-ween and Winter Wonderclaw, Duo's "Boots
+  and cats" and "Mic drop" (untranslatable jokes), pet names (Hammy,
+  Mittens...), the combat log (`F.log`, never shown). The Trading Post and
+  pet evolution (round 14, TRD) bring their own Dutch in `lang_nl.js`.
 
 ### Adding a language or a line
 
@@ -5925,6 +5958,130 @@ game's words, content against DATA with the same `{v}` tokens, no em dashes,
 browser default, saved override, old and junk profiles, the live switch, every
 main screen rendered in Dutch with no raw keys, the canvas words, English
 untouched).
+
+## The Trading Post and pet evolution (round 14)
+
+The owner asked for a harder game (round 12) and then for more interesting choices, not more loot. Both
+features are **power-neutral by design**: every trade is a swap at an even rate and every evolution costs
+something that would otherwise be power. Data in `data.js` (the TRD block before `return`: `TRD`, `PEV`,
+`TRD_K`, `PEV_K`, `PEV_FORMS`, `trdRoll`, `trdValue`, `trdFix`, `pevCan`, `pevOn`, `pevFee`, `pevPow`, and
+`petFix` keeps `evo`), placement in `map.js` (`trdPlace`, the TRD block after LORE), the flourish in
+`combat.js` (`COMBAT.pevTrick`, the TRD block after LEG), the flow in `game.js` (the TRD block after LEG,
+`GAME.trd` / `GAME.pev`), the art in `render.js` (the TRD block after LEG, `RENDER.trd`), the frame in
+`index.html` (`<style id="trd-css">`, `#scr-trade`), the Dutch in `lang_nl.js` (its own marked
+`I18N.add` block at the end). No sound was added (the haggle reuses `coin`, `cardFlip`, `ding`, `stamp`; the
+ceremony `evoRise` / `evoBurst`).
+
+### The Trading Post (tile type `trader`)
+
+- **Placement.** One per map, never in the Back Room. `trdNewMap` calls `MAP.trdPlace(M)` at the end of
+  `newMap` (after the golden key, the season's doors, Gary and the lore landmarks), on its own rng drawn from
+  `M.seed`, so every older roll stays where it was. It takes an empty land hex off the road, 2 to 4 hexes
+  from it first (`TRD_ROAD_GAP`..`TRD_ROAD_FAR`, a short detour), `TRD_GAP` (4) from the cabinets, the pet
+  shop and the shops, 3 from the start, 2 from the boss, never a tower's doorstep, a monster's, the golden
+  key's or a lore landmark's hex; small maps relax the rules in steps. A landmark (`LANDMARKS.trader`,
+  known from the start, a peddler's cart under a striped canopy with a coin, `RENDER.trd.icon`). Over 60
+  worlds: always placed, 52 of 60 in the 2-4 band, every one 3+ from the shops and cabinets. A map saved
+  before the round has none and keeps having none.
+- **Rocco** (`RENDER.trd.scene`, `rocco`, `cart`): a raccoon peddler in a straw hat with a cyan feather, a
+  patched vest and a bandolier of trinkets, behind a wooden counter (a bell, a brass balance) with his
+  wagon behind him (a striped canopy, wares, a lantern, the TRADES sign), string lights over a night alley.
+  A tap on him when nothing is going on: a line (`TRD_LINES`).
+- **Three trades a visit** (`DATA.trdRoll(rng, ctx)`), rolled on the first entry from the tile's seed and the
+  run's (never `rngFor`: the run's nonce and every other stream stay put) and saved on the tile
+  (`content.trd = {seed, offers, done, res, n}`). Kinds are dealt by weight without repeats (`TRD_K.W`:
+  swap 40, relic 25, service 15, bundle 20); one that cannot be dealt is dropped and the rest is filled with
+  more swaps; an item is never named in two trades:
+  - **Item swap**: a named item of your bin (never junk or an evolved item) for a different item from your
+    crawler's reward pool that **shares a keyword** with it: the same rarity (a plus stays a plus), or a plus
+    copy for an item **one rarity up, not upgraded**. Shown face up before you commit.
+  - **Relic swap**: one of your relics (common, uncommon or rare; never your crawler's own) for a relic
+    **of the same rarity from another archetype**, face down with its archetype chip as the hint, revealed at
+    the handshake.
+  - **Service**: gold for **lifting a curse** (a junk item of your choice, while there is junk) or **removing
+    an item** of your choice, at the shop's removal price with the round 12 dial: `60 x shopK` (78), times
+    the Tilt's Price Hike. A picker opens (`openBin`, junk only for a curse).
+  - **Mystery bundle**: two named items of one rarity (common or uncommon, never a plus) for one face-down
+    item **one rarity above the lower of the two** (`TRD.bundleRar`), never one of the two.
+- **The deal** (`GAME.trd.deal(i, {uid})`): checks (the item still in the bin, the relic still held, the
+  gold, the bin floor), pays, applies and saves in one beat (`st.done[i]`, `st.res`, `run.trdN`,
+  `meta.trd.deals`); a relic that gave lasting Max HP takes it along (`trdLoseRelic`). Then **the haggle**
+  (`TRDK`, 2.6 s, x1.6 after 4 deals): your goods slide across the counter to Rocco (the balance tips), he
+  studies them through a brass loupe (HMM...), his goods slide back (a face-down card turns over at the
+  handshake), your glove meets his paw, **DEAL!** stamps in (confetti, a ring, a shake), then the result
+  card and Continue. A tap hurries it (to the handshake, then the end). A reload mid haggle shows the trade
+  TRADED, never a second payment. Leave packs the cart up: the tile is done.
+
+### The balance math (every trade about neutral)
+
+Worth is gold at the shelf: an item is its rarity's average shop cost (`TRD_K.VAL`: common 37, uncommon 63,
+rare 100, legendary 132, from `DATA.ITEMS`), a plus copy `plusK` 1.6 times that, a relic the shop's relic
+price (`TRD_K.RVAL`), a service its price. `plusK` is the Compactor's own exchange rate: three of a kind
+make one plus and three of a rarity one of the next, so a plus is worth about a rarity step (plus common 59
+~ uncommon 63; plus uncommon 100 ~ rare 100). The card shows both numbers (`⚖ give : get`).
+
+| trade | rule | worth in : out (4000 rolled visits) |
+| --- | --- | --- |
+| item swap, same rarity | a different item of that rarity sharing a keyword | 1.000 |
+| item swap, plus for a step | plus X for X+1 not upgraded (a plus legendary stays a plus legendary) | 1.053 (c 59:63, u 100:100, r 159:132) |
+| relic swap | same rarity, another archetype | 1.000 |
+| curse lift / removal | 78 gold (60 x shopK) | 1.000 (the shop's own price) |
+| mystery bundle | two commons for an uncommon, two uncommons for a rare | 0.838 (c 74:63, u 126:100) |
+
+The bundle keeps a cut on purpose: it also thins the bin by one item, which a shop sells for 60 to 78, and
+unlike the Compactor (three in, one out, you pick the inputs, the output leans to their keywords, 30 gold or
+a rest) the merchant names the two and the output is a blind draw with no keyword pull. No trade adds an
+item, a relic or gold to the run; the service and the bundle shrink the bin, the swaps keep its size.
+
+### Pet evolution
+
+- **Gate.** A pet at `PET_MAX` (Lv 5) can evolve **once** (`DATA.pevCan`; `run.pet.evo = 1`, kept by
+  `petFix` only at the top level). The popover says when it is ready.
+- **The price** (one of): **a rest** (the rest stop's fourth choice, "Evolve <name>", instead of healing),
+  **gold** at the Trading Post (`PEV_K.gold` 80 / 120 / 160 by act, Endless at the act 3 price, x shopK and
+  the Price Hike: 104 / 156 / 208, up to a shop's uncommon relic), or **a relic** given up there (any you
+  hold but your crawler's own). The Trading Post shows the offer as a card under the trades while the pet
+  can evolve.
+- **The final form** (`PEV_FORMS`): Turbo Hamster (Stampede: 3 to a random enemy), Captain Parrot (Crow's
+  Nest: 3 Block), Sabertooth Cat (Pounce: 4 to a random enemy), Kraken (Ink Cloud: 1 Weak to ALL), Starfly
+  (Dazzle: 1 Vulnerable to ALL), Tesla Mouse (Arc Zap: 2 to ALL), Raccoon Baron (Recycling: 4 Block),
+  Golden Swan (Grace: heal 2), Emperor Penguin (Blizzard: 1 Chill to ALL), Mole King (Tremor: 2 to ALL),
+  Robo Butler (Polish: 3 Block). The trick's strength goes up `PEV_K.pow` (x1.8 -> x2.2 at Lv 5, through
+  `petEffect` and the ROS pets' `rosPetDo`), and every trick (the octopus's hold included) ends in the form's
+  flourish: `COMBAT.pevTrick(F, petId)` (a pet proc named after the trick, then the effect, `F.pevLog`). At
+  two tricks a turn that is about 6 damage or Block a turn: a relic's worth, paid for with a relic, a rest or
+  a relic's price.
+- **The look** (`RENDER.pet` with `st.evo`): 1.25 times bigger (`PEV_LOOK`), a glow and a turning dashed
+  halo, the form's flourish (bolts, a captain's tricorn instead of the crown, a gold crest, ink droplets,
+  orbiting stars, or wings and a halo) and the evolution chevron over the head. On the cabinet, the map bed,
+  the pet shop and its album.
+- **The ceremony**: the item evolution's overlay (`S.evoUi`, `evoTiming`, tap to continue) with the pet drawn
+  in it (`E.art`, `EVO_ST.art`, one hook in `RENDER.evo.ceremony`): the old form spins up in the light
+  pillar, the new one bursts in, EVOLVED!, its name in chrome and its trick on the plate. It is paid,
+  applied and saved before it plays, so a reload never evolves twice.
+- **Records.** The album (`meta.pets[id].evo`), the Prizedex's Evolve tab (a "Pet evolutions n/11" grid
+  under the item evolutions, silhouettes until evolved), `meta.trd {deals, pev}`, `run.pevN`.
+
+### Save fields, API, tests
+
+- Map: tile type `trader` with `content {seed, diff, game, trd}`. Run: `pet.evo`, `trdN`, `pevN`. Screen
+  `trade` (`sd.trade {q, r}`). Meta: `trd {deals, pev}`, `pets[id].evo`. All optional; old saves and profiles
+  load unchanged. No key renamed.
+- `GAME.trd = {K, WORDS, PATTERNS, show, enter, state, deal, why, hurry, leave, tick, removePrice, newMap,
+  loseRelic, draw, poke, ui}`, `GAME.pev = {evolve, fee, relicOk, powUp, on, trick, ceremony, tapLine, look,
+  dex}`, `MAP.trdPlace` and the dials, `COMBAT.pevTrick`, `RENDER.trd = {LOOK, scene, rocco, cart, icon,
+  token, pevBack, pevFront}`.
+- Tests: map (one per world over 60 seeds by the rules, every other tile untouched, deterministic and
+  idempotent, the save, small maps, the Back Room, old saves), data (600 rolled visits: every kind by its
+  rule, no item in two trades, determinism, the value table against the shelf, the EV bands, the floors,
+  `trdFix`; pet forms, gating by level, once, the fee by act and the Price Hike, `petFix`), combat (every
+  form's flourish and its proc, a finished fight, a long fuzz), game (the post on every act's map, the
+  screen, every kind of trade paid once with its refusals, the Price Hike, a reload before, during and after
+  a haggle, Leave, old saves; the rest choice, the gold and relic prices, once only, the ceremony, the save,
+  the album and Prizedex, the evolved trick in a real fight), render (every haggle beat, Rocco's poses, the
+  goods, the map icon and its silhouette, every final form, the ceremony through `st.art`), i18n (every new
+  line and pattern in Dutch, the screens in Dutch with none of the new English left). Screenshots: scratchpad
+  `r14_trd_shots.mjs` (`r14_trd_*.png`).
 
 ## Quality bar (Game of the Year, mobile)
 
