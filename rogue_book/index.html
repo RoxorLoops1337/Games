@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0d0b1e">
+<title>INKWOVEN -- a rogue storybook</title>
+<meta name="description" content="Two heroes, one living book. Paint the fog away with ink, build a deck of gem-socketed cards, and rewrite the ending. An anime deckbuilding roguelike.">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/menu.css">
+<link rel="stylesheet" href="css/map.css">
+<link rel="stylesheet" href="css/combat.css">
+<link rel="stylesheet" href="css/node.css">
+<link rel="stylesheet" href="css/end.css">
+<style id="boot-css">
+/* Painted from the HTML while the scripts download; UI removes #boot on the first frame. */
+html,body{margin:0;height:100%;background:#0d0b1e;overflow:hidden}
+#boot{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+  background:radial-gradient(ellipse at 50% 40%,#2a1d5a 0%,#0d0b1e 70%);font-family:Georgia,"Hiragino Mincho ProN","Yu Mincho",serif;color:#f3e6c8;transition:opacity .4s}
+#boot.out{opacity:0;pointer-events:none}
+#boot b{font-size:clamp(34px,8vw,72px);letter-spacing:.18em;font-weight:700;text-shadow:0 0 22px #ff7eb6,0 3px 0 #0d0b1e}
+#boot i{display:block;width:14px;height:20px;border-radius:50% 50% 50% 50%/62% 62% 38% 38%;background:#7a6bff;box-shadow:0 0 14px #5ff5ff;animation:bootDrip 1.1s ease-in infinite}
+@keyframes bootDrip{0%{transform:translateY(-14px) scaleY(.8);opacity:0}30%{opacity:1}100%{transform:translateY(16px) scaleY(1.2);opacity:0}}
+@media (prefers-reduced-motion:reduce){#boot i{animation:none}}
+</style>
+</head>
+<body>
+<div id="boot"><b>INKWOVEN</b><i></i></div>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="view" width="1280" height="720"></canvas>
+    <div id="screens"></div>
+    <div id="overlays"></div>
+    <div id="toasts"></div>
+  </div>
+</div>
+<noscript>Inkwoven needs JavaScript.</noscript>
+
+<!-- Load order matters: each file may use every namespace above it. -->
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/data_text.js"></script>
+<script src="js/data_cards_hanae.js"></script>
+<script src="js/data_cards_kuro.js"></script>
+<script src="js/data_cards_suzu.js"></script>
+<script src="js/data_cards_raiga.js"></script>
+<script src="js/data_cards_shared.js"></script>
+<script src="js/data_enemies_1.js"></script>
+<script src="js/data_enemies_2.js"></script>
+<script src="js/data_enemies_3.js"></script>
+<script src="js/data_relics.js"></script>
+<script src="js/data_gems.js"></script>
+<script src="js/data_events.js"></script>
+<script src="js/data_meta.js"></script>
+<script src="js/art.js"></script>
+<script src="js/art_heroes.js"></script>
+<script src="js/art_enemies_1.js"></script>
+<script src="js/art_enemies_2.js"></script>
+<script src="js/art_enemies_3.js"></script>
+<script src="js/art_cards.js"></script>
+<script src="js/art_icons.js"></script>
+<script src="js/art_scenes.js"></script>
+<script src="js/art_map.js"></script>
+<script src="js/art_fx.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/map.js"></script>
+<script src="js/run.js"></script>
+<script src="js/meta.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/screen_menu.js"></script>
+<script src="js/screen_map.js"></script>
+<script src="js/screen_combat.js"></script>
+<script src="js/screen_node.js"></script>
+<script src="js/screen_end.js"></script>
+<script src="js/tutorial.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

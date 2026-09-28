@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>INKWOVEN gallery</title>
+<style>
+html,body{margin:0;background:#0d0b1e;color:#f3e6c8;font:14px Georgia,serif}
+nav{padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;background:#161232}
+nav a{color:#ff9ac8;text-decoration:none;border:1px solid #3a2f7a;border-radius:6px;padding:3px 9px}
+canvas{display:block}
+</style>
+</head>
+<body>
+<nav id="nav"></nav>
+<canvas id="c"></canvas>
+<!-- Art sheets: ?sheet=NAME&w=1600&h=900&t=0&any=param. Each art file registers
+     ART.sheets.NAME = (canvas, params) => void. Missing files 404 harmlessly. -->
+<script src="js/util.js"></script>
+<script src="js/data.js"></script>
+<script src="js/data_text.js"></script>
+<script src="js/data_cards_hanae.js"></script>
+<script src="js/data_cards_kuro.js"></script>
+<script src="js/data_cards_suzu.js"></script>
+<script src="js/data_cards_raiga.js"></script>
+<script src="js/data_cards_shared.js"></script>
+<script src="js/data_enemies_1.js"></script>
+<script src="js/data_enemies_2.js"></script>
+<script src="js/data_enemies_3.js"></script>
+<script src="js/data_relics.js"></script>
+<script src="js/data_gems.js"></script>
+<script src="js/data_events.js"></script>
+<script src="js/data_meta.js"></script>
+<script src="js/art.js"></script>
+<script src="js/art_heroes.js"></script>
+<script src="js/art_enemies_1.js"></script>
+<script src="js/art_enemies_2.js"></script>
+<script src="js/art_enemies_3.js"></script>
+<script src="js/art_cards.js"></script>
+<script src="js/art_icons.js"></script>
+<script src="js/art_scenes.js"></script>
+<script src="js/art_map.js"></script>
+<script src="js/art_fx.js"></script>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search), params = {};
+  q.forEach(function (v, k) { params[k] = isNaN(+v) || v === '' ? v : +v; });
+  var sheets = (typeof ART !== 'undefined' && ART.sheets) || {};
+  var nav = document.getElementById('nav');
+  Object.keys(sheets).sort().forEach(function (k) {
+    var a = document.createElement('a'); a.href = '?sheet=' + k; a.textContent = k; nav.appendChild(a);
+  });
+  var c = document.getElementById('c');
+  c.width = params.w || 1600; c.height = params.h || 900;
+  window.__sheetError = null;
+  try {
+    if (params.sheet && sheets[params.sheet]) sheets[params.sheet](c, params);
+    else if (params.sheet) throw new Error('unknown sheet ' + params.sheet);
+  } catch (e) { window.__sheetError = String(e && e.stack || e); console.error(window.__sheetError); }
+  window.__sheetReady = true;
+})();
+</script>
+</body>
+</html>
