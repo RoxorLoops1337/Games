@@ -1208,6 +1208,165 @@ const AUDIO = (() => {
   Object.assign(GAP, { giggle: 0.35, gooSplat: 0.1, magLift: 0.4, dig: 0.15, boo: 0.3, dozer: 0.8, rivalClaw: 0.4 });
   NAMES.push('giggle', 'gooSplat', 'magLift', 'dig', 'boo', 'dozer', 'rivalClaw');
 
+  // ---------------------------------------------------------------- pets (round 5)
+  // Companion pets (DESIGN.md "Pets"): a chirp per species (opts.pitch), a
+  // hop, the helping action's whoosh, a crunch, a honk, the level-up jingle,
+  // hearts; whack-a-mole (a pop, a bonk, a bomb, a combo ping, the round's
+  // whistle) and skee-ball (the roll, the hop off the ramp, a ring's clunk,
+  // the 100 cup's bells, the ticket spray).
+  Object.assign(BANK, {
+    // A pet's little voice: a two-note chirp (pitch sets the species).
+    petChirp(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 900 * p, to: 1400 * p, dur: 0.06, v: 0.12 });
+      blip(out, t, { at: 0.07, w: 'sine', f: 1300 * p, to: 1000 * p, dur: 0.07, v: 0.1 });
+      return 0.16;
+    },
+    // A hop off the frame or across the pile.
+    petHop(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 300 * p, to: 700 * p, dur: 0.1, v: 0.12 });
+      return 0.12;
+    },
+    // The helping action: a swish and a pop.
+    petAct(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 900, to: 2600, q: 1.4, dur: 0.14, v: 0.12 });
+      blip(out, t, { at: 0.1, w: 'sine', f: 520 * p, to: 880 * p, dur: 0.1, v: 0.18 });
+      return 0.22;
+    },
+    // The raccoon eats junk: crunch crunch, a gulp.
+    petCrunch(out, t, o, p) {
+      for (let i = 0; i < 3; i++) hiss(out, t, { at: i * 0.09, type: 'bandpass', f: 1700 * p, q: 2, dur: 0.05, v: 0.16, crunch: true });
+      blip(out, t, { at: 0.3, w: 'sine', f: 260 * p, to: 120, dur: 0.12, v: 0.2 });
+      return 0.44;
+    },
+    // HONK: the goose, two nasal squawks.
+    petHonk(out, t, o, p) {
+      for (let i = 0; i < 2; i++) blip(out, t, { at: i * 0.16, w: 'sawtooth', f: 420 * p, to: 360 * p, dur: 0.12, v: 0.07, lp: 1400, vib: [18, 20] });
+      return 0.32;
+    },
+    // A pet grows a level: a bright rising run and a sparkle.
+    petLevel(out, t, o, p) {
+      [67, 71, 74, 79, 83].forEach((n, i) => blip(out, t, { at: i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.06, lp: 5200 }));
+      for (let i = 0; i < 5; i++) blip(out, t, { at: 0.38 + i * 0.05, w: 'triangle', f: (2400 + i * 300) * p, dur: 0.05, v: 0.04 });
+      return 0.7;
+    },
+    // Hearts: a soft two-note coo.
+    petLove(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: mtof(76) * p, dur: 0.12, v: 0.1, vib: [6, 6] });
+      blip(out, t, { at: 0.11, w: 'sine', f: mtof(81) * p, dur: 0.18, v: 0.1, vib: [6, 6] });
+      return 0.32;
+    },
+    // Whack-a-mole: a mole pops up.
+    molePop(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 240 * p, to: 620 * p, dur: 0.08, v: 0.16 });
+      return 0.1;
+    },
+    // BONK: the mallet lands on a mole (a squeak on a golden one, opts.pitch).
+    bonk(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 180 * p, to: 70, dur: 0.1, v: 0.4 });
+      hiss(out, t, { type: 'bandpass', f: 1200, q: 2, dur: 0.05, v: 0.2 });
+      blip(out, t, { at: 0.03, w: 'square', f: 1400 * p, to: 2000 * p, dur: 0.06, v: 0.05, lp: 4000 });
+      return 0.16;
+    },
+    // The mallet hits a bomb: a pop and a fizzle.
+    moleBomb(out, t, o, p) {
+      hiss(out, t, { type: 'lowpass', f: 1600, to: 200, dur: 0.4, v: 0.4, crunch: true });
+      blip(out, t, { w: 'sine', f: 110 * p, to: 40, dur: 0.35, v: 0.4 });
+      return 0.42;
+    },
+    // A combo step: a ping that climbs with opts.pitch.
+    moleCombo(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 1046 * p, dur: 0.09, v: 0.07 });
+      blip(out, t, { at: 0.05, w: 'triangle', f: 1568 * p, dur: 0.1, v: 0.05 });
+      return 0.16;
+    },
+    // The referee's whistle: the round starts or ends.
+    whistle(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 2200 * p, dur: 0.32, v: 0.1, vib: [30, 60] });
+      return 0.34;
+    },
+    // Skee-ball: the ball rumbling up the lane.
+    skeeRoll(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 60 * p, to: 110 * p, dur: 0.7, v: 0.06, lp: 400, vib: [12, 6] });
+      hiss(out, t, { type: 'lowpass', f: 500, dur: 0.7, v: 0.08 });
+      return 0.72;
+    },
+    // Off the hump and into the air.
+    skeeHop(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 160 * p, to: 90, dur: 0.1, v: 0.3 });
+      hiss(out, t, { type: 'highpass', f: 2000, dur: 0.12, v: 0.06 });
+      return 0.14;
+    },
+    // The ball drops into a ring: a wooden clunk, brighter for more points.
+    skeeRing(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 140 * p, to: 80, dur: 0.12, v: 0.35 });
+      hiss(out, t, { type: 'bandpass', f: 900, q: 3, dur: 0.05, v: 0.2 });
+      [72, 76, 79].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.05, w: 'square', f: mtof(n) * p, dur: 0.08, v: 0.05, lp: 4200 }));
+      return 0.3;
+    },
+    // The ticket spray: a paper flutter with a register ding.
+    ticketSpray(out, t, o, p) {
+      for (let i = 0; i < 10; i++) hiss(out, t, { at: i * 0.035, type: 'bandpass', f: 3000 + (i % 3) * 600, q: 4, dur: 0.02, v: 0.06 });
+      blip(out, t, { at: 0.36, w: 'triangle', f: 2093 * p, dur: 0.2, v: 0.06 });
+      return 0.6;
+    },
+  });
+  Object.assign(GAP, { petChirp: 0.2, petHop: 0.1, petAct: 0.15, petCrunch: 0.3, petHonk: 0.3, petLevel: 0.6, petLove: 0.25, molePop: 0.04, bonk: 0.03, moleBomb: 0.2, moleCombo: 0.05, whistle: 0.3, skeeRoll: 0.4, skeeHop: 0.1, skeeRing: 0.1, ticketSpray: 0.3 });
+  NAMES.push('petChirp', 'petHop', 'petAct', 'petCrunch', 'petHonk', 'petLevel', 'petLove', 'molePop', 'bonk', 'moleBomb', 'moleCombo', 'whistle', 'skeeRoll', 'skeeHop', 'skeeRing', 'ticketSpray');
+
+  // ---------------------------------------------------------------- vault (round 5)
+  // The Prize Vault (DESIGN.md "Prize Vault"): the glass door sliding open on
+  // the redemption counter, a purchase (register and sparkle), equipping (a
+  // latch and a chime), a capsule's new prize (a bright fanfare, bigger for
+  // a legendary), a dupe paying out tickets (a coin cascade), the share card
+  // (a camera shutter).
+  Object.assign(BANK, {
+    // A glass door sliding open, then a shimmering chord.
+    vaultOpen(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 900, to: 2600, q: 1.2, dur: 0.32, v: 0.1 });
+      [72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: 0.18 + i * 0.05, w: 'sine', f: mtof(n) * p, dur: 0.5, v: 0.05, vib: [6, 6] }));
+      return 0.75;
+    },
+    // A purchase: a register bell, a drawer thunk and a rising sparkle.
+    vaultBuy(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 2093 * p, dur: 0.25, v: 0.1 });
+      blip(out, t, { at: 0.02, w: 'sine', f: 3136 * p, dur: 0.3, v: 0.05 });
+      blip(out, t, { at: 0.12, w: 'sine', f: 110 * p, to: 60, dur: 0.12, v: 0.3 });
+      [79, 83, 86, 91, 95].forEach((n, i) => blip(out, t, { at: 0.2 + i * 0.045, w: 'square', f: mtof(n) * p, dur: 0.1, v: 0.04, lp: 5000 }));
+      return 0.6;
+    },
+    // Equip: a solid latch and a two note chime.
+    vaultEquip(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 2400, q: 5, dur: 0.03, v: 0.2 });
+      blip(out, t, { at: 0.01, w: 'square', f: 180 * p, to: 120, dur: 0.05, v: 0.12, lp: 1500 });
+      blip(out, t, { at: 0.07, w: 'sine', f: mtof(81) * p, dur: 0.16, v: 0.08 });
+      blip(out, t, { at: 0.15, w: 'sine', f: mtof(88) * p, dur: 0.26, v: 0.07 });
+      return 0.42;
+    },
+    // A new prize out of a Vault Capsule: a fanfare; o.tier 3 (legendary) climbs a whole rainbow of notes.
+    vaultNew(out, t, o, p) {
+      const tier = Math.max(0, Math.min(3, (o && o.tier) | 0));
+      const notes = tier >= 3 ? [72, 76, 79, 84, 88, 91, 96] : tier >= 2 ? [72, 76, 79, 84, 88] : [72, 76, 79, 84];
+      notes.forEach((n, i) => blip(out, t, { at: 0.05 + i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.16, v: 0.05, lp: 4200 }));
+      blip(out, t, { at: 0.05 + notes.length * 0.07, w: 'triangle', f: mtof(notes[notes.length - 1]) * p, dur: 0.6, v: 0.07, vib: [6, 10] });
+      return 0.6 + notes.length * 0.07;
+    },
+    // A dupe: coins pour back into the wallet.
+    vaultDupe(out, t, o, p) {
+      for (let i = 0; i < 7; i++) blip(out, t, { at: 0.04 + i * 0.06, w: 'triangle', f: (2400 + (i % 3) * 300) * p, to: (2000 + (i % 3) * 250) * p, dur: 0.07, v: 0.07 });
+      blip(out, t, { at: 0.5, w: 'sine', f: mtof(84) * p, dur: 0.3, v: 0.06 });
+      return 0.8;
+    },
+    // The share card: a camera shutter and a little flash whine.
+    vaultShare(out, t, o, p) {
+      hiss(out, t, { type: 'highpass', f: 3000, dur: 0.04, v: 0.25 });
+      hiss(out, t, { at: 0.07, type: 'highpass', f: 2600, dur: 0.05, v: 0.2 });
+      blip(out, t, { at: 0.12, w: 'sine', f: 1800 * p, to: 4200 * p, dur: 0.3, v: 0.03 });
+      return 0.42;
+    },
+  });
+  Object.assign(GAP, { vaultOpen: 0.4, vaultBuy: 0.2, vaultEquip: 0.1, vaultNew: 0.4, vaultDupe: 0.4, vaultShare: 0.3 });
+  NAMES.push('vaultOpen', 'vaultBuy', 'vaultEquip', 'vaultNew', 'vaultDupe', 'vaultShare');
+
   /* Plays a named effect. opts: {vol, pitch, mass (itemLand), vel (itemLand
      impact 0..1), amt (hit damage)}. Returns true when something was queued. */
   function sfx(name, opts) {

@@ -47,7 +47,9 @@ const MAP = (() => {
   const TYPES = ['empty', 'fight', 'elite', 'treasure', 'gem', 'ink', 'brush', 'event',
     'shop', 'rest', 'boss', 'start', 'forge', 'tower',
     // ARCADE: the mini-game cabinets (placed off the road after it is carved)
-    'plinko', 'wheel', 'slots'];
+    'plinko', 'wheel', 'slots',
+    // PETS (round 5): whack-a-mole, skee-ball and the pet shop, one of each per map
+    'moles', 'skee', 'petshop'];
   const TERRAINS = ['land', 'shallow', 'sea'];
   // Ground types (the tileset). Land is one of the first six; water keeps
   // its terrain name. A mountain is terrain 'land' with ground 'mountain'
@@ -82,7 +84,7 @@ const MAP = (() => {
   const SPREAD = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1 };
   // Landmarks: hidden tiles of these types are drawn as a dim silhouette in
   // the fog from the start, so the player can plan where to spend ink.
-  const LANDMARKS = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1, boss: 1, tower: 1, plinko: 1, wheel: 1, slots: 1 };
+  const LANDMARKS = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1, boss: 1, tower: 1, plinko: 1, wheel: 1, slots: 1, moles: 1, skee: 1, petshop: 1 };
   // Tower bonuses (rolled at generate, awarded after the tower fight on top
   // of the relic and the view). game.js applies them; the ids match its fx
   // kinds ('ink' is bulbs, 'brush' a tool).
@@ -1287,7 +1289,7 @@ const MAP = (() => {
   const ROAM_N = { 1: 3, 2: 4, 3: 5 };
   const ROAM_SIGHT = 4, ROAM_START = 5, ROAM_BOSS = 3, ROAM_GAP = 4;
 
-  function isArcade(t) { return !!t && ARC_GAMES.indexOf(t.type) >= 0; }
+  function isArcade(t) { return !!t && (ARC_GAMES.indexOf(t.type) >= 0 || ARC_R5.indexOf(t.type) >= 0); }
 
   // What a cabinet holds: plays (plinko tokens, wheel spins, free slot
   // pulls) and a seed; the game keeps its live session in content.arc.
@@ -1328,7 +1330,54 @@ const MAP = (() => {
       placed.push(pick);
     }
     placeRoamers(M, rng);
+    placeR5(M, placed);   // PETS (round 5): whack-a-mole, skee-ball, the pet shop
     return placed;
+  }
+
+  /* Round 5 (DESIGN.md "Pets"): one whack-a-mole, one skee-ball and one pet
+     shop per map, by the cabinets' own rules (an empty land hex off the road,
+     ARC_GAP from the other cabinets, 3 from the start, 2 from the boss, never
+     on a tower's doorstep or a monster's hex, relaxed in steps on small maps).
+     Their own rng stream from M.seed and placed after everything else, so
+     every older roll (terrain, content, road, cabinets, monsters) is
+     unchanged. The pet shop leans toward the start (the nearest third of its
+     spots): your first buddy should not wait for the boss. */
+  const ARC_R5 = ['moles', 'skee'];
+  const PET_TILE = 'petshop';
+  function placeR5(M, placed) {
+    const rng = U.rng((((M.seed >>> 0) ^ 0x9e7a5eed) >>> 0) || 3);
+    const T = M.tiles, road = M.road || [];
+    const roam = {};
+    for (const m of M.roam || []) roam[key(m.q, m.r)] = 1;
+    const free = [];
+    for (const k in T) {
+      const t = T[k];
+      if (t.type !== 'empty' || !isLand(t) || t.road || roam[k]) continue;
+      let d = Infinity;
+      for (const s of road) { const x = hexDist(t.q, t.r, s[0], s[1]); if (x < d) d = x; }
+      const tower = neighbors(M, t.q, t.r).some(([q, r]) => T[key(q, r)].type === 'tower');
+      if (!tower && hexDist(t.q, t.r, M.start.q, M.start.r) >= 3 && hexDist(t.q, t.r, M.boss.q, M.boss.r) >= 2) free.push({ t, d, s: hexDist(t.q, t.r, M.start.q, M.start.r) });
+    }
+    const all = placed.slice(), out = [];
+    const passes = [[ARC_ROAD_GAP, ARC_GAP], [ARC_ROAD_GAP, 3], [1, 3], [1, 2], [1, 1]];
+    for (const g of [PET_TILE].concat(ARC_R5)) {
+      let pick = null;
+      for (const [rg, gap] of passes) {
+        let cand = free.filter((f) => f.t.type === 'empty' && f.d >= rg && all.every((p) => hexDist(p.q, p.r, f.t.q, f.t.r) >= gap));
+        if (!cand.length) continue;
+        if (g === PET_TILE) { cand = cand.slice().sort((a, b) => a.s - b.s || a.t.q - b.t.q || a.t.r - b.t.r); cand = cand.slice(0, Math.max(1, Math.ceil(cand.length / 3))); }
+        pick = rng.pick(cand).t;
+        break;
+      }
+      if (!pick) continue;
+      pick.type = g;
+      pick.known = true;
+      const a = rng(), seed = Math.floor(rng() * 1e9);
+      pick.content = g === PET_TILE ? { seed, diff: diffOf(M, pick.q, pick.r), game: g }
+        : { seed, diff: diffOf(M, pick.q, pick.r), tokens: 1 + (a < 0.3 ? 1 : 0), game: g };
+      all.push(pick); out.push(pick);
+    }
+    return out;
   }
 
   // The fight a monster starts: a normal encounter by its column (like a
@@ -1670,5 +1719,7 @@ const MAP = (() => {
     // ARCADE: cabinets and roaming monsters
     ARC_GAMES, ARC_ROAD_GAP, ARC_GAP, ROAM_N, ROAM_SIGHT, ROAM_START, ROAM_BOSS,
     isArcade, placeArcade, roamAt, roamOk, roamDist, roamNext, roamStep, roamPlan, roamRemove,
+    // PETS (round 5): whack-a-mole, skee-ball, the pet shop
+    ARC_R5, PET_TILE, placeR5,
   };
 })();

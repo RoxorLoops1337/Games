@@ -2975,7 +2975,248 @@ const DATA = (() => {
   function endlessBest(c) { return (((c && c.meta && c.meta.endless) || {}).best | 0); }
   // ================================================================ /ENDLESS
 
+  // ================================================================ VAULT (the Prize Vault: cosmetics)
+  /* A meta ticket sink (DESIGN.md "Prize Vault"). Every arcade ticket won
+     in a run also lands in the lifetime Vault Tickets wallet (spending in a
+     run never takes it back), and the Prize Vault on the title trades them
+     for cosmetics: cabinet skins, claw paint, marquee titles, crawler outfits
+     and map trails. Buy one outright, or crack a Vault Capsule (a cosmetic
+     gacha; a dupe pays tickets back, legendaries are the rainbow ones). A few
+     come only from a sticker. Pure data: the look fields are read by
+     RENDER.vault, the flow and the wallet live in game.js (the VAULT block). */
+  const VAULT = {
+    SHARE: 1,                // the share of every ticket won that banks into the vault (all of them)
+    PRICE: { c: 40, u: 90, r: 180, l: 450 },
+    CAP_PRICE: 60,           // a Vault Capsule
+    CAP_W: { c: 58, u: 30, r: 10, l: 2 },
+    DUPE: { c: 12, u: 25, r: 55, l: 150 },   // tickets back for a dupe
+    PITY: 12,                // capsules in a row without a legendary, then the next one is (while one is left to win)
+    FRESH: 0.6,              // the chance a capsule prefers a prize you do not own yet (when there is one in its tier)
+    UP: 0.3,                 // the chance per step a capsule shows one tier lower and upgrades mid-open
+    NAME: { c: 'Common', u: 'Uncommon', r: 'Rare', l: 'Legendary' },
+    COLOR: { c: '#b9b0cc', u: '#2ee6d6', r: '#ff2e88', l: '#ffc94d' },
+  };
+  const VAULT_CATS = [
+    { id: 'skin', label: 'Cabinets', icon: '\u{1F579}', text: 'The whole machine: frame, bulbs, back panel.' },
+    { id: 'paint', label: 'Claw paint', icon: '\u{1F3A8}', text: 'A new coat for every claw type.' },
+    { id: 'marquee', label: 'Marquees', icon: '\u{1F4A1}', text: 'The sign on top and how its bulbs chase.' },
+    { id: 'outfit', label: 'Outfits', icon: '\u{1F3A9}', text: 'Hats, capes and shades for your crawlers.' },
+    { id: 'trail', label: 'Trails', icon: '✨', text: 'What your footsteps leave on the map.' },
+  ];
+  // The defaults every profile owns (the look the game always had).
+  const VAULT_DEFAULT = { skin: 'skin_classic', paint: 'paint_chrome', marquee: 'mq_classic', trail: 'trail_dust' };
+  const V_ = (id, cat, name, rarity, text, look, extra) => Object.assign({ id, cat, name, rarity, text, look }, extra || {});
+  const COSMETIC_LIST = [
+    // ---- cabinet skins: frame (fill, trim, frame pattern fp), panel (fill, pattern pp), bulbs (lit, glow, off), neon
+    V_('skin_classic', 'skin', 'Neon Classic', 'c', 'The cabinet as the Prize Master built it.', { frame: '#1d1233', trim: null, fp: '', panel: '#0f0a1f', pp: 'dots', bulb: '#fff6c0', glow: '#ffc94d', neon: null }, { free: true }),
+    V_('skin_candy', 'skin', 'Candy Shop', 'c', 'Pink stripes, sugar bulbs, a toothache waiting to happen.', { frame: '#ff6fae', trim: '#fff0f7', fp: 'stripes', panel: '#3a0f2a', pp: 'candy', bulb: '#ffffff', glow: '#ff9ad0', neon: '#ff9ad0' }),
+    V_('skin_wood', 'skin', 'Retro Wood', 'c', 'Walnut veneer and brass, like the machine in the diner.', { frame: '#6b3f1f', trim: '#c9a24a', fp: 'grain', panel: '#20140c', pp: 'planks', bulb: '#ffe9b0', glow: '#ffb347', neon: '#ffb347' }),
+    V_('skin_chrome', 'skin', 'Chrome Deluxe', 'u', 'Polished steel, rivets and a cold blue glow.', { frame: '#8e9bb0', trim: '#e8f0ff', fp: 'rivets', panel: '#10151d', pp: 'grid', bulb: '#e8f6ff', glow: '#8dfff5', neon: '#8dfff5' }),
+    V_('skin_jungle', 'skin', 'Jungle Bash', 'u', 'Vines on the frame, leaves on the glass, something growling.', { frame: '#2e5a1e', trim: '#a6ff5e', fp: 'vines', panel: '#0d1f0f', pp: 'leaves', bulb: '#e4ffb0', glow: '#a6ff5e', neon: '#a6ff5e' }),
+    V_('skin_haunted', 'skin', 'Haunted House', 'u', 'Cobwebs, bats and bulbs that glow a sickly green.', { frame: '#2a2238', trim: '#9b7bff', fp: 'drips', panel: '#0b0714', pp: 'bats', bulb: '#d6ffc2', glow: '#7dff7a', neon: '#9b7bff' }),
+    V_('skin_space', 'skin', 'Deep Space', 'r', 'A starfield behind the pile and planets on the frame.', { frame: '#1a1f4a', trim: '#6f8cff', fp: 'stars', panel: '#05061a', pp: 'stars', bulb: '#ffffff', glow: '#9b7bff', neon: '#6f8cff' }),
+    V_('skin_lava', 'skin', 'Molten Core', 'r', 'Cracked basalt with lava glowing through the seams.', { frame: '#2e0f08', trim: '#ff5a1f', fp: 'cracks', panel: '#1a0604', pp: 'lava', bulb: '#ffd27a', glow: '#ff5a1f', neon: '#ff5a1f' }),
+    V_('skin_gold', 'skin', 'Gold Jackpot', 'l', 'Solid gold, coins on the frame. Only a Mega Jackpot earns it.', { frame: '#b8860b', trim: '#fff1a8', fp: 'coins', panel: '#1f1605', pp: 'coins', bulb: '#fff6c0', glow: '#ffc94d', neon: '#ffc94d' }, { ach: 'mega' }),
+    V_('skin_rainbow', 'skin', 'Rainbow Riot', 'l', 'Every colour at once, chasing around the frame.', { frame: '#1d1233', trim: '#ffffff', fp: 'rainbow', panel: '#0f0a1f', pp: 'rainbow', bulb: '#ffffff', glow: '#ffffff', neon: '#ff2e88', rainbow: true }),
+    // ---- claw paint: c1 (the body), c2 (rivets, seams, accents), fx (rainbow, glow, sparkle, stripe, stealth, frost)
+    V_('paint_chrome', 'paint', 'Factory Chrome', 'c', 'Bright steel, straight off the line.', { c1: '#c9d3e0', c2: '#8e98a8', fx: '' }, { free: true }),
+    V_('paint_bubblegum', 'paint', 'Bubblegum', 'c', 'Pink enough to pop.', { c1: '#ff9ad0', c2: '#ff4fa3', fx: '' }),
+    V_('paint_mint', 'paint', 'Mint Chip', 'c', 'Cool green with dark flecks.', { c1: '#9df5d0', c2: '#2e9c6a', fx: '' }),
+    V_('paint_copper', 'paint', 'Copper Pot', 'c', 'Warm copper that never goes green.', { c1: '#e0935a', c2: '#8a4a1e', fx: '' }),
+    V_('paint_stealth', 'paint', 'Stealth Black', 'u', 'Matte black with red eyes. Nobody hears it coming.', { c1: '#3a3d46', c2: '#1b1d22', fx: 'stealth' }),
+    V_('paint_glow', 'paint', 'Glow in the Dark', 'u', 'Charged by the neon, it glows green all turn.', { c1: '#c8ffd8', c2: '#3ddc84', fx: 'glow', glow: '#6bff9a' }),
+    V_('paint_candy', 'paint', 'Candy Cane', 'u', 'Red and white stripes down every prong.', { c1: '#ffffff', c2: '#ff2e4a', fx: 'stripe' }),
+    V_('paint_gold', 'paint', 'Solid Gold', 'r', 'It sparkles. It is probably not real gold.', { c1: '#ffd35a', c2: '#b8860b', fx: 'sparkle' }),
+    V_('paint_frost', 'paint', 'Frostbite', 'r', 'Ice blue, cold to the touch, flakes drifting off.', { c1: '#bff4ff', c2: '#3aa8e6', fx: 'frost', glow: '#8dfff5' }),
+    V_('paint_rainbow', 'paint', 'Rainbow Chrome', 'l', 'The whole spectrum, shifting as it moves.', { c1: '#ff2e88', c2: '#ffffff', fx: 'rainbow' }),
+    // ---- marquees: text, style (neon, retro, dots, glitch, fire, gold, rainbow), bulbs (chase, blink, wave, sparkle, alt)
+    V_('mq_classic', 'marquee', 'CLAWSPIRE', 'c', 'The name in neon, bulbs chasing round.', { text: 'CLAWSPIRE', style: 'neon', bulbs: 'chase' }, { free: true }),
+    V_('mq_grab', 'marquee', 'GRAB IT!', 'c', 'Chunky yellow letters, bulbs blinking together.', { text: 'GRAB IT!', style: 'retro', bulbs: 'blink', col: '#ffe066' }),
+    V_('mq_prize', 'marquee', 'PRIZE ZONE', 'u', 'Letters made of bulbs, a wave rolling through.', { text: 'PRIZE ZONE', style: 'dots', bulbs: 'wave', col: '#8dfff5' }),
+    V_('mq_glitch', 'marquee', 'CL4WSP1RE', 'u', 'A sign that hacked itself. The bulbs twinkle at random.', { text: 'CL4WSP1RE', style: 'glitch', bulbs: 'sparkle', col: '#ff2e88' }),
+    V_('mq_hot', 'marquee', 'HOT CLAW', 'r', 'Flaming letters, every other bulb burning.', { text: 'HOT CLAW', style: 'fire', bulbs: 'alt', col: '#ff8a2b' }),
+    V_('mq_winner', 'marquee', 'WINNER!', 'r', 'Gold letters, a fast chase. Beat the Prize Master for it.', { text: 'WINNER!', style: 'gold', bulbs: 'fast', col: '#ffc94d' }, { ach: 'champion' }),
+    V_('mq_rainbow', 'marquee', 'JACKPOT', 'l', 'Rainbow letters riding a rainbow wave.', { text: 'JACKPOT', style: 'rainbow', bulbs: 'rainbow', col: '#ffffff' }),
+    // ---- crawler outfits: two per crawler; kind hat (style) / shades (style) / cape (colours)
+    V_('fit_knight_cape', 'outfit', 'Royal Cape', 'u', 'Red velvet and ermine. Sir Grabsworth insists.', { kind: 'cape', c1: '#d81f3a', c2: '#fff8ec' }, { char: 'knight' }),
+    V_('fit_knight_shades', 'outfit', 'Cool Shades', 'c', 'Sunglasses over a visor. Why not.', { kind: 'shades', style: 'bar', c1: '#12091f', c2: '#2ee6d6' }, { char: 'knight' }),
+    V_('fit_alch_wizard', 'outfit', 'Wizard Hat', 'u', 'A starry hat that fizzes when she thinks.', { kind: 'hat', style: 'wizard', c1: '#6b3fd6', c2: '#ffc94d' }, { char: 'alchemist' }),
+    V_('fit_alch_flowers', 'outfit', 'Flower Crown', 'c', 'Fresh from the greenhouse behind the forge.', { kind: 'hat', style: 'flowers', c1: '#ff6bb0', c2: '#ffe066' }, { char: 'alchemist' }),
+    V_('fit_rogue_pirate', 'outfit', 'Pirate Hat', 'r', 'A tricorn with a skull. Arr, the prizes.', { kind: 'hat', style: 'tricorn', c1: '#1b1320', c2: '#ffc94d' }, { char: 'rogue' }),
+    V_('fit_rogue_stars', 'outfit', 'Star Shades', 'c', 'Pink star glasses. Very subtle.', { kind: 'shades', style: 'star', c1: '#ff2e88', c2: '#ffffff' }, { char: 'rogue' }),
+    V_('fit_lou_cowboy', 'outfit', 'Ten Gallon Hat', 'u', 'Lou bets it holds ten gallons. It does not.', { kind: 'hat', style: 'cowboy', c1: '#a8703a', c2: '#ffc94d' }, { char: 'gambler' }),
+    V_('fit_lou_cape', 'outfit', 'High Roller Cape', 'r', 'Gold lamé and a lucky clover pin.', { kind: 'cape', c1: '#ffc94d', c2: '#3ddc84' }, { char: 'gambler' }),
+    // ---- map trails: what the crawler's footsteps leave behind
+    V_('trail_dust', 'trail', 'Dust', 'c', 'Plain old footprints in the dust.', { art: 'dust', col: '#b3a4d6' }, { free: true }),
+    V_('trail_sparkle', 'trail', 'Sparkles', 'c', 'A little glitter with every step.', { art: 'sparkle', col: '#fff6c0' }),
+    V_('trail_hearts', 'trail', 'Hearts', 'c', 'Love for every hex you walk.', { art: 'hearts', col: '#ff6bb0' }),
+    V_('trail_fire', 'trail', 'Fire Walk', 'u', 'Hot feet. The map smokes behind you.', { art: 'fire', col: '#ff8a2b' }),
+    V_('trail_snow', 'trail', 'Snowfall', 'u', 'Every step a snowflake.', { art: 'snow', col: '#dff6ff' }),
+    V_('trail_coins', 'trail', 'Coin Drop', 'r', 'You jingle when you walk.', { art: 'coins', col: '#ffc94d' }),
+    V_('trail_confetti', 'trail', 'Confetti', 'r', 'Party wherever you go. Score 25,000 in a run for it.', { art: 'confetti', col: '#2ee6d6' }, { ach: 'high_score' }),
+    V_('trail_rainbow', 'trail', 'Rainbow Road', 'l', 'A rainbow ribbon follows you everywhere.', { art: 'rainbow', col: '#ffffff' }),
+  ];
+  const COSMETICS = {};
+  for (const c of COSMETIC_LIST) COSMETICS[c.id] = c;
+  const COSMETIC_IDS = COSMETIC_LIST.map((c) => c.id);
+  // The cosmetic ids of a category, in shelf order (outfits of one crawler with char).
+  function vaultList(cat, char) {
+    return COSMETIC_IDS.filter((id) => (!cat || COSMETICS[id].cat === cat) && (!char || COSMETICS[id].char === char));
+  }
+  // Ticket price, or 0 when it is not for sale (a default, a sticker prize, a legendary: capsule only).
+  function vaultPrice(id) {
+    const c = COSMETICS[id];
+    if (!c || c.free || c.ach || c.rarity === 'l') return 0;
+    return VAULT.PRICE[c.rarity] || 0;
+  }
+  // What a Vault Capsule can hold: everything but the defaults and the sticker prizes.
+  function vaultPool(tier) {
+    return COSMETIC_IDS.filter((id) => { const c = COSMETICS[id]; return !c.free && !c.ach && (!tier || c.rarity === tier); });
+  }
+  // How a cosmetic is unlocked, for the shelf: 'own' | 'buy' | 'sticker' | 'capsule'.
+  function vaultHow(id) {
+    const c = COSMETICS[id];
+    if (!c) return null;
+    return c.free ? 'own' : c.ach ? 'sticker' : c.rarity === 'l' ? 'capsule' : 'buy';
+  }
+  // The sticker prizes an achievement id unlocks.
+  function vaultForSticker(achId) { return COSMETIC_IDS.filter((id) => COSMETICS[id].ach === achId); }
+  /* A Vault Capsule: rng, owned {id: 1}, pity (capsules since the last
+     legendary). Rolls the tier (the pity lifts it to legendary while one is
+     left to win), prefers a prize you do not own (FRESH), and dresses it for
+     the ritual: tier0 shows lower and ups climb to the tier. Returns {id,
+     tier0, ups, tier, dupe, tix, pity (the new count), lucky (the pity fired)}. */
+  function vaultRoll(rng, owned, pity) {
+    owned = owned || {};
+    const T = ['c', 'u', 'r', 'l'];
+    let tier = wpick(rng, VAULT.CAP_W);
+    let lucky = false;
+    const unownedL = vaultPool('l').filter((id) => !owned[id]);
+    if (tier !== 'l' && (pity | 0) + 1 >= VAULT.PITY && unownedL.length) { tier = 'l'; lucky = true; }
+    let pool = vaultPool(tier);
+    if (!pool.length) pool = vaultPool(null);
+    const fresh = pool.filter((id) => !owned[id]);
+    const pickFresh = lucky || (fresh.length && rng() < VAULT.FRESH);
+    const id = (pickFresh && fresh.length ? fresh : pool)[Math.floor(rng() * (pickFresh && fresh.length ? fresh.length : pool.length))];
+    tier = COSMETICS[id].rarity;
+    // the reveal: show a lower tier and climb (never below common)
+    let i0 = T.indexOf(tier);
+    while (i0 > 0 && rng() < VAULT.UP) i0--;
+    const ups = T.slice(i0 + 1, T.indexOf(tier) + 1);
+    const dupe = !!owned[id];
+    return { id, tier0: T[i0], ups, tier, dupe, tix: dupe ? VAULT.DUPE[tier] || 0 : 0, pity: tier === 'l' ? 0 : (pity | 0) + 1, lucky };
+  }
+  // ================================================================ /VAULT
+
+  // ================================================================ PETS (companion pets, round 5)
+  /* Companion pets (DESIGN.md "Pets"): a small creature that lives on the
+     cabinet frame, reacts to everything and helps the claw once a turn
+     (twice from Lv 3) with a visible action. Pure data: the game stages the
+     actions (game.js PET block), the renderer draws them (render.js PET
+     block). `when`: 'turn' acts once the pile settles on your turn (the
+     second use after your first grab), 'lift' when the claw lifts cargo,
+     'grab' after a grab that delivers enough. `act` is the action the game
+     runs; `verb` its label. A run carries one pet (`run.pet`). */
+  const PETS = {
+    hamster: { id: 'hamster', name: 'Hamster', icon: '\u{1F439}', col: '#f0a860', col2: '#fff1dc', when: 'turn', act: 'nudge', verb: 'NUDGE',
+      names: ['Hammy', 'Nibbles', 'Pip', 'Biscuit'], text: 'Runs along the floor and shoves the farthest item toward the chute.',
+      quips: ['Wheee!', 'Heave ho!', 'Snack break later.'] },
+    parrot: { id: 'parrot', name: 'Parrot', icon: '\u{1F99C}', col: '#3ddc84', col2: '#ff5a4a', when: 'turn', act: 'peck', verb: 'PECK',
+      names: ['Polly', 'Captain', 'Mango', 'Squawks'], text: 'Flies in, pecks the most buried item loose and carries it up on top of the pile.',
+      quips: ['SQUAWK!', 'Polly wants a prize!', 'Dig it out!', 'Shiny! Shiny!', 'Pieces of eight!'] },
+    cat: { id: 'cat', name: 'Cat', icon: '\u{1F408}', col: '#ff9a3c', col2: '#fff1dc', when: 'turn', act: 'bat', verb: 'BAT',
+      names: ['Mittens', 'Socks', 'Noodle', 'Pumpkin'], text: 'Bats at the pile: one item flies at the chute. Sometimes it lands in!',
+      quips: ['Mrrp.', '*knocks it off the table*', 'Mine now.'] },
+    octopus: { id: 'octopus', name: 'Octopus', icon: '\u{1F419}', col: '#c77dff', col2: '#ffd1f0', when: 'lift', act: 'hold', verb: 'HOLD',
+      names: ['Inky', 'Squish', 'Octavia', 'Suction'], text: 'Rides the claw on a lift and holds a prize tight: it cannot slip on the way.',
+      quips: ['Got it!', 'Eight arms, zero slips.', 'Hold on tight!'] },
+    firefly: { id: 'firefly', name: 'Firefly', icon: '✨', col: '#ffe066', col2: '#a6ff5e', when: 'turn', act: 'glow', verb: 'GLOW',
+      names: ['Glim', 'Sparky', 'Lumen', 'Twinkle'], text: 'Lights an item: deliver it this turn for bonus gold. Lights Blackout and finds invisible items.',
+      quips: ['Over here!', 'Bzzt!', 'Follow the light.'] },
+    mouse: { id: 'mouse', name: 'Magnet Mouse', icon: '\u{1F42D}', col: '#b8c0cc', col2: '#ff5a4a', when: 'turn', act: 'pull', verb: 'PULL',
+      names: ['Volt', 'Ferris', 'Squeak', 'Coil'], text: 'Pulls one metal item across the floor to right under the claw.',
+      quips: ['Squeak!', 'Opposites attract.', 'Zap zap!'] },
+    raccoon: { id: 'raccoon', name: 'Trash Raccoon', icon: '\u{1F99D}', col: '#8e8a9a', col2: '#2a2433', when: 'turn', act: 'eat', verb: 'CHOMP',
+      names: ['Bandit', 'Rascal', 'Dumpy', 'Scraps'], text: 'Eats one junk item from the bin for the fight. No junk? It digs the pile loose.',
+      quips: ['Yum, garbage.', '*crunch crunch*', 'Delicious rock.'] },
+    goose: { id: 'goose', name: 'Golden Goose', icon: '\u{1F9A2}', col: '#fff6d6', col2: '#ffc94d', when: 'grab', act: 'egg', verb: 'EGG',
+      names: ['Goldie', 'Honk', 'Duchess', 'Nugget'], text: 'Lays a golden egg on a jackpot (a double from Lv 3): gold and tickets.',
+      quips: ['HONK!', 'HONK HONK!', 'Golden!'] },
+  };
+  const PET_IDS = ['hamster', 'parrot', 'cat', 'octopus', 'firefly', 'mouse', 'raccoon', 'goose'];
+  // XP to reach Lv 1..5: one per item delivered, more for a won fight, a treat.
+  const PET_XP = [0, 12, 30, 60, 100];
+  const PET_MAX = 5;
+  const PET_GAIN = { item: 1, fight: 2, elite: 4, boss: 6, treat: 8 };
+  // The pet shop: three pets in the pens, treats for your own (gold, max per shop).
+  const PET_SHOP = { offer: 3, treat: 12, treats: 3, swap: 25 };
+  function petLevel(xp) {
+    xp = Math.max(0, +xp || 0);
+    let lv = 1;
+    for (let i = 1; i < PET_XP.length; i++) if (xp >= PET_XP[i]) lv = i + 1;
+    return Math.min(PET_MAX, lv);
+  }
+  // XP still needed for the next level ({need, into, span}) or null at the top.
+  function petNext(xp) {
+    const lv = petLevel(xp);
+    if (lv >= PET_MAX) return null;
+    const a = PET_XP[lv - 1], b = PET_XP[lv];
+    return { need: b - xp, into: xp - a, span: b - a };
+  }
+  // The action's strength (x1 at Lv 1 to x1.8 at Lv 5) and its uses a turn.
+  const petPow = (lv) => 1 + 0.2 * (U.clamp(lv | 0, 1, PET_MAX) - 1);
+  const petUses = (lv) => ((lv | 0) >= 3 ? 2 : 1);
+  // The look by level: a scarf from Lv 2, a crown from Lv 4, sparkles at Lv 5.
+  const petLook = (lv) => ({ scarf: lv >= 2, crown: lv >= 4, aura: lv >= 5 });
+  // The Golden Goose's egg: gold and tickets by level; it lays on this many delivered items.
+  const petEgg = (lv) => ({ gold: 3 + 2 * U.clamp(lv | 0, 1, PET_MAX), tix: 1 + Math.floor(U.clamp(lv | 0, 1, PET_MAX) / 2), need: (lv | 0) >= 3 ? 2 : 3 });
+  // The Firefly's spotlight bonus (gold for delivering the lit item that turn).
+  const petGlow = (lv) => 2 + U.clamp(lv | 0, 1, PET_MAX);
+  // The pet's own name from a seed (stable across reloads).
+  function petName(id, seed) {
+    const d = PETS[id];
+    if (!d) return 'Buddy';
+    const n = d.names.length;
+    return d.names[(((seed >>> 0) % n) + n) % n];
+  }
+  function petNew(id, seed) {
+    if (!PETS[id]) return null;
+    return { id, name: petName(id, seed), xp: 0, lv: 1, seed: (seed >>> 0) || 1, fed: 0 };
+  }
+  // A saved pet as it is today (old or junk saves: null, or the fields defaulted).
+  function petFix(p) {
+    if (!p || typeof p !== 'object' || !PETS[p.id]) return null;
+    const xp = Math.max(0, Math.floor(+p.xp || 0));
+    return { id: p.id, name: typeof p.name === 'string' && p.name ? p.name.slice(0, 16) : petName(p.id, p.seed | 0), xp, lv: petLevel(xp), seed: (p.seed >>> 0) || 1, fed: Math.max(0, p.fed | 0) };
+  }
+  // Pets for the shop's pens: n different ids, never the one you have.
+  function petOffer(rng, have, n) {
+    const pool = PET_IDS.filter((id) => id !== have);
+    const out = [];
+    n = Math.min(pool.length, n == null ? PET_SHOP.offer : n);
+    while (out.length < n) {
+      const id = pool.splice(Math.min(pool.length - 1, Math.floor(rng() * pool.length)), 1)[0];
+      out.push(id);
+    }
+    return out;
+  }
+  // The card line with the level's numbers in it.
+  function petText(id, lv) {
+    const d = PETS[id];
+    if (!d) return '';
+    lv = U.clamp(lv | 0, 1, PET_MAX);
+    const uses = petUses(lv) === 2 ? ' Twice a turn.' : '';
+    if (d.act === 'egg') { const e = petEgg(lv); return `Lays a golden egg when one grab delivers ${e.need}+ items: ${e.gold} gold, ${e.tix} ticket${e.tix === 1 ? '' : 's'}.${uses}`; }
+    if (d.act === 'glow') return `${d.text.replace('bonus gold', petGlow(lv) + ' bonus gold')}${uses}`;
+    return d.text + uses;
+  }
+  // ================================================================ /PETS
+
   return {
+    // companion pets (DESIGN.md "Pets")
+    PETS, PET_IDS, PET_XP, PET_MAX, PET_GAIN, PET_SHOP, petLevel, petNext, petPow, petUses, petLook, petEgg, petGlow, petName, petNew, petFix, petOffer, petText,
+    // the Prize Vault (DESIGN.md "Prize Vault"): cosmetics, prices, the Vault Capsule
+    VAULT, VAULT_CATS, VAULT_DEFAULT, COSMETICS, COSMETIC_IDS, vaultList, vaultPrice, vaultPool, vaultHow, vaultForSticker, vaultRoll,
     // endless mode and run mutators (DESIGN.md "Endless and mutators")
     MUTATORS, MUT_IDS, MUT_MAX, mutMods, mutMult, mutClean, mutClash, mutPick, dailyMutators, ENDLESS, endlessScale, endlessAct, endlessMix, SCORE, runMode, runScore,
     // meta progression (Tilt, achievements, Prizedex, daily)

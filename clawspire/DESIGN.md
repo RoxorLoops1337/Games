@@ -2498,6 +2498,370 @@ unchanged buttons; the campfire's beat, its save and a reload in it, no
 second heal; the forge's three blows; a tap skip; the Tips page; veterans,
 newcomers, junk fields, old rest saves, the arcade counts).
 
+## Prize Vault (round 5): a meta ticket sink, cosmetics, the share card
+
+Tickets had nowhere to go once a run ended. Now every arcade ticket a run
+wins also lands in a lifetime wallet, and the title's Prize Vault trades it
+for cosmetics that change how the machine, the claw and the crawler look.
+Pure looks: nothing here touches a fight. Data in `data.js` (the VAULT
+block), the flow in `game.js` (the VAULT block, reached through one-line
+hooks), the art in `render.js` (the VAULT block, `RENDER.vault`), the frame
+in `index.html` (`#scr-vault`, `<style id="vault-css">`), the sounds
+`vaultOpen, vaultBuy, vaultEquip, vaultNew, vaultDupe, vaultShare`.
+
+**Vault tickets.** `addTickets(n)` with n > 0 (payouts, capsules, arcade
+wins, relic tickets, anything that pays tickets in a run) also banks
+`n x DATA.VAULT.SHARE` (1: all of it) into `meta.vault.tix` and `earned`.
+Spending tickets in the run (the prize counter, the slots) never takes any
+back. The wallet saves half a second after it changes (and with any other
+meta save). The title shows it on a gold-and-pink PRIZE VAULT button under
+the daily run, with a pink count of NEW prizes and an unopened capsule.
+
+**Cosmetics (`DATA.COSMETICS`, `COSMETIC_IDS`, `VAULT_CATS`).** Five shelves,
+43 prizes, each `{id, cat, name, rarity c|u|r|l, text, look, char?, ach?,
+free?}`; `look` is read by the renderer only.
+
+| shelf | what it changes | prizes |
+| --- | --- | --- |
+| Cabinets (`skin`, 10) | the frame (fill, a frame pattern, trim), the back panel (fill and pattern), the bulbs (lit, glow), the neon | Neon Classic (default), Candy Shop, Retro Wood, Chrome Deluxe, Jungle Bash, Haunted House, Deep Space, Molten Core, Gold Jackpot (the Mega Jackpot sticker), Rainbow Riot (l) |
+| Claw paint (`paint`, 10) | the steel of every claw type (the prongs, the hub, the head, the carriage; the magnet's drum, the scoop's shell, the glove), plus an effect: glow, sparkle, frost, stripes, stealth red eyes, rainbow | Factory Chrome (default), Bubblegum, Mint Chip, Copper Pot, Stealth Black, Glow in the Dark, Candy Cane, Solid Gold, Frostbite, Rainbow Chrome (l) |
+| Marquees (`marquee`, 7) | the words on the top frame, their style (neon, retro, dot matrix, glitch, fire, gold, rainbow) and the bulb pattern (chase, blink, wave, sparkle, alternate, fast, rainbow) | CLAWSPIRE (default), GRAB IT!, PRIZE ZONE, CL4WSP1RE, HOT CLAW, WINNER! (the Prize Master Down sticker), JACKPOT (l) |
+| Outfits (`outfit`, 2 per crawler) | a hat, a cape or shades drawn over the portrait (the HUD, the map token, the versus card, the share card) | Royal Cape, Cool Shades; Wizard Hat, Flower Crown; Pirate Hat, Star Shades; Ten Gallon Hat, High Roller Cape |
+| Trails (`trail`, 8) | marks the crawler leaves while walking the map, fading over 2.6 s | Dust (default: the old puffs only), Sparkles, Hearts, Fire Walk, Snowfall, Coin Drop, Confetti (the High Score sticker), Rainbow Road (l) |
+
+Prices (`VAULT.PRICE`): common 40, uncommon 90, rare 180. Legendaries (the
+rainbow ones) only come out of a Vault Capsule; sticker prizes only come with
+their sticker (`vaultForSticker(achId)`: `achUnlock` grants them, and a
+profile that already had the sticker owns them on load). `vaultHow(id)` is
+`own | buy | sticker | capsule`, `vaultPrice(id)` 0 when not for sale.
+
+**The Vault Capsule** (`VAULT.CAP_PRICE` 60). `DATA.vaultRoll(rng, owned,
+pity)` -> `{id, tier0, ups, tier, dupe, tix, pity, lucky}`: the tier by
+`CAP_W` (c 58, u 30, r 10, l 2), a prize you do not own `FRESH` (60%) of the
+time when one is left in the tier, then dressed for the ritual (it shows
+`UP` 30% per step lower and climbs through `ups`). `PITY` (12): the twelfth
+capsule in a row without a legendary is one while any is left to win. A dupe
+pays `DUPE` tickets back (12 / 25 / 55 / 150). The game pays and rolls in the
+same beat and saves the roll as `meta.vault.pend`, so a reload reopens the
+same capsule and never charges twice; the prize is paid at the burst. The
+ritual is the run capsule's: drop and bounce on a pedestal, rays, taps crack
+it (sparks, rings, shake), an up flashes the new colour (RAINBOW UPGRADE! for
+a legendary), the burst pours out confetti and, for a legendary, a rainbow of
+rings and slow motion; the prize floats up out of the halves, then a card
+with NEW! or "Already yours: +N vault tickets back", Equip it, Again (when
+the wallet allows) and Back to the vault. Space / Enter taps.
+
+**The screen** (screen `vault`, never saved, never touches the run save).
+The canvas paints the wall (`RENDER.vault.wall`: a pegboard, shelf glows, a
+PRIZE VAULT neon sign in chasing bulbs, the counter window) and, behind the
+glass (`vault.glass`), a live preview: the claw picker's demo cabinet
+grabbing on its own in the previewed skin, marquee and paint (a tap on the
+claw switch cycles the claw type), the crawler in the previewed outfit (the
+crawler switch cycles them), and a little walker leaving the previewed trail.
+The DOM: Back, the wallet (a tap explains it), a detail strip for the picked
+prize (rarity, shelf, text, and Buy / Equip / Take off / the sticker it needs
+/ capsule only), five tabs with NEW counts, the shelf (a glowing slot per
+prize: a thumbnail, `RENDER.vault.thumb`, the name, the price or OWNED / ON /
+STICKER / CAPSULE, legendary slots with a rainbow rim), and the Vault Capsule
+button with the odds and the pity count. Picking a prize previews it; a buy
+throws ticket stubs from the wallet into the window, confetti, a ring, the
+cabinet's party lights with YOURS! on its marquee, and puts it on.
+
+**The renderer** (`RENDER.vault`): `equip(eq)` (the game calls it on load and
+on every change), `look(cat, id?)`, `thumb(ctx, id, x, y, size, t)`,
+`marquee(ctx, look, x, y, size, t, neon)`, `trail(ctx, pts, n, t, id?,
+size)`, `withOutfit(ctx, char, x, y, size, t, id)`, `wall`, `glass`,
+`share(ctx, st)`, `RB` (24 rainbow hues), `TRAIL_LIFE`. A draw can override
+the equipped set: `st.skin` / `st.mqId` on `cabinetBack` (the old `st.marquee`
+is still the party text), `cfg.paint` on `claw` (the paint never leaks into
+the next claw: `CHROME` is restored), `withOutfit` for a portrait. The skin's
+id is part of the cached cabinet layer's key; the rainbow skin's tube and
+bulbs run live over it. The alarm (FINAL PHASE) and the party lights win over
+a skin's bulbs and a marquee's pattern. With the defaults equipped every draw
+is the old one exactly (the render suite pins it).
+
+**The map trail.** While the crawler walks, `vaultTick` samples its eased
+position every 0.05 s (world coordinates, 48 marks at most); `drawMap` draws
+them under the crawler (`vaultTrailDraw`), each fading over 2.6 s.
+
+**The share card.** A Share run card button on the game over (and Endless
+end) and the win screen, registered after the screen's own buttons so
+`GAME.choose` indices stay put, shown above the Highlights.
+`vaultShareCard(run, won)` draws `RENDER.vault.share` on an offscreen 1080 x
+1350 canvas: the logo, VICTORY! / RUN OVER, the crawler in their outfit with
+their name, the score (the run's best, `scoreTop`, else `runScore`), the mode
+and act or loop, a Tilt badge, tiles for the best combo (with its stars), the
+biggest hit and the boss defeated, the mutator chips, a mini cabinet in the
+equipped skin, marquee and paint with the run's rarest items and the claw
+type, and PLAY FREE with https://games-71g.pages.dev/clawspire/. Share turns
+it into a PNG (`toBlob`) and hands it to `navigator.share({files})` when the
+device can share files; otherwise (or when the share fails for any reason but
+a cancel) it downloads it. Headless the canvas is a stub and nothing throws.
+
+**Save fields.** Meta `vault` (`vaultFix` defaults and repairs every field;
+old profiles get an empty wallet and the old look): `tix`, `earned`,
+`spent`, `caps`, `pity`, `shares`, `owned {id: 1}` (the defaults always),
+`eq {skin, paint, marquee, trail, outfit {char: id}}` (only owned, only the
+right shelf and crawler), `news {id: 1}`, `pend` (a paid capsule). No key
+was renamed; the run save is untouched.
+
+`GAME.vault` = `{show, leave, select, buy, equip, unequip, bank, fix, capsule,
+open, tap, skip, close, preview, draw, shareCard, shareInfo, share,
+onSticker, tick, URL, WIN, state, ui, cap, trail, card}`. Tests: data (the
+table: counts, two outfits per crawler, defaults, legendaries, prices, the
+sticker prizes, no em dashes; the capsule odds over 20,000 rolls, determinism,
+the climbing reveal, dupes and their refund, fresh first, the pity), render
+(no DATA is the default look; every skin, marquee, paint on every claw type,
+outfit on its crawler only, trail and thumbnail draws balanced, without NaN
+and distinct; the defaults draw the old art exactly; equip applies; the paint
+never leaks; the wall, the glass, the share card for a win and a loss), game
+(banking, spends never reduce it, a real payout banks exactly, the title
+button and its index, the screen and every prize previewed and drawn, buy /
+refusals / equip / outfits / take off, save and load with the renderer
+applied at boot, old and junk profiles, the capsule paid once across a reload,
+cracked, equipped, dupes refunded, too poor refused, the pity, sticker
+prizes, every cosmetic in a real fight and a real grab, the map trail, the
+share card and both Share buttons with the old first choices).
+
+## Pets (round 5): companion pets, whack-a-mole, skee-ball
+
+A buddy that lives on the cabinet and plays with the machine, and two more
+map cabinets. Pure data in `data.js` (the PETS block), placement in `map.js`
+(`placeR5`, called at the end of `placeArcade`), the flow in `game.js` (the
+PETS block and the ARCADE R5 block, reached through one-line hooks), the art
+in `render.js` (the PETS block, `RENDER.pet*`, `arcMoles`, `arcSkee`), the CSS
+in `index.html` (`<style id="pets-css">`), the sounds in `audio.js`.
+
+### Companion pets (`DATA.PETS`, `PET_IDS`)
+
+A run carries one pet (`run.pet = {id, name, xp, lv, seed, fed}`). In a fight
+it sits on the cabinet's top frame at the left (`PET_K.perchX/Y`), its name
+tag and xp bar on the frame under it (`RENDER.petTag`); the player row pads
+its status chips past it (`#playerRow.hasPet`) and the floating labels keep
+off it (`fx.zone('pet')`). A tap on it shows its trick in words (`petTap`).
+
+| pet | when | trick (what the game does to the physics) |
+| --- | --- | --- |
+| Hamster | turn | runs down the wall and along the floor, shoves the free item lowest in the pile and farthest from the chute toward it (vx 380 x power) |
+| Parrot | turn | flies to the most buried item, pecks it loose and carries it in its beak (a velocity weld under its feet) up onto the top of the pile, a little toward the chute (further with levels) |
+| Cat | turn | pounces on a random item from the top of the pile and bats it on a ballistic arc at the chute; the aim error shrinks with power (+-110 / power px), so it sometimes lands in: a FREE PRIZE, "NICE SHOT, CAT!" |
+| Octopus | lift | on a lift with cargo it leaps onto the hub and holds the lowest cargo item with a long arm: a weld draws it under the hub (the carrier's velocity fed forward), so it cannot slip; on the release it lets it drop straight down through the opening prongs |
+| Firefly | turn | finds invisible items (the Ghost's vanish; one, two from Lv 3, three at Lv 5), else spotlights the top item nearest the chute: deliver it this turn for `petGlow(lv)` gold; in a Blackout it hovers in the cabinet by the flashlight and the pile shows through its pool of light |
+| Magnet Mouse | turn | stands on the floor under the claw's aim and pulls the metal item farthest from it across the floor (any item at half strength when there is no metal) |
+| Trash Raccoon | turn | eats one junk item from the bin for the fight (`F.purged`, an item's worth of xp); no junk: it rummages (`PHYS.hop`) |
+| Golden Goose | grab | a grab that delivers `petEgg(lv).need` items (3, 2 from Lv 3) lays a golden egg: `COMBAT.gainGold` and `COMBAT.tickets` (the payout's ticket line) |
+
+- **Uses.** Once a turn, twice from Lv 3 (`petUses`). A 'turn' pet acts once the
+  pile has settled (nothing faster than 150 px/s, the claw idle or aiming, no
+  queue, `PET_K.first` 0.9 s into the turn), its second use `PET_K.second` after
+  your first grab has settled. A use with no target is spent with a shrug.
+  Any pet action resets `FS.delivered`, so a prize it knocks in never turns the
+  last grab into a DOUBLE.
+- **Motion.** Every action is legs (`petLeg`: a leap, a run, a flight, homing on
+  a target that rolls), a 'do' beat (the effect lands at `fxAt`), then legs
+  back to the perch. The goose never leaves the perch; the octopus rides the
+  hub until the claw lets go.
+- **Determinism.** The pet's picks come from its own rng stream off the fight
+  seed (`FS.seed ^ 0x7e7a11`), never the fight's `FS.rng`, so a fight without a
+  pet is bit for bit the same as before. `FS.pet.log` records every trick.
+- **XP and levels** (`PET_XP` [0, 12, 30, 60, 100], `PET_MAX` 5): one per
+  delivered item, `PET_GAIN` fight 2 / elite 4 / boss 6 for a win, a treat 8.
+  Power `petPow(lv)` = 1 + 0.2 per level. Looks (`petLook`): a scarf from Lv 2,
+  a crown from Lv 4, orbiting sparkles at Lv 5. A level up in a fight is a
+  banner through the announcer (class `pet`, priority 52, between combos and
+  the jackpot: "MITTENS LV 3!") with confetti, a ring and the tag flashing; in
+  the pet shop the machine's sign; elsewhere a toast.
+- **Reactions.** Hearts on a delivery, a cheer on a jackpot, a kill and a win,
+  scared on a hit to you, a roar (phase two), a boss signature and the versus
+  card, a sulk on a slip or an empty grab, focus on a lift, asleep after 14 s of
+  nothing, a chomp while eating; its eyes follow the claw and it blinks.
+- **The map.** The pet naps on a little bed beside the crawler's portrait
+  (`RENDER.petBed`), hops along on a walk, cheers on a level up.
+
+### The pet shop (tile `petshop`)
+
+One per map (`placeR5`: the cabinet rules, leaning toward the start: the
+nearest third of its spots), a landmark. It opens on the arcade screen
+(`petShopShow`, `S.arc.g === 'petshop'`): three pets in pens
+(`DATA.petOffer`, rolled once from the tile's seed, never the pet you have,
+saved as `content.pet = {offer, names, adopted, treats}`), each with its name,
+kind, card line (`petText`, the level's numbers) and a button: **Adopt
+(free)** when you have no pet (the starting choice), **Swap (25 gold)**
+(`PET_SHOP.swap`) when you do. One adoption per shop: the door swings open,
+the pet leaps out, ADOPTED! / NEW BUDDY!, confetti. Below, your buddy on its
+bed with its xp bar, **Treat (12 gold)** for 8 xp (hearts; 3 a shop), and the
+album (`meta.pets = {id: {n, lv}}`, "PET ALBUM n/8"). The tile is done once a
+pet is adopted there.
+
+### Whack-a-mole and skee-ball (tiles `moles`, `skee`)
+
+One of each per map (`MAP.ARC_R5`, `MAP.isArcade` counts them), by the
+cabinet rules; 1-2 plays (rounds / games). They run inside the arcade flow:
+`r5Own(C)` dispatches `arcAct / arcBegin / arcHurry / arcSkip / arcSettle /
+arcPrizeAt / arcLeave / arcPointer / arcTick / arcDrawMachine / arcInfo` to
+the round 5 code. The pay-once model: a play spends its token and is saved
+the moment it starts (`A.live`), its outcome is saved the moment it is known
+(`A.pend`) and `arcSettle` pays it and clears it on the same beat, so a reload
+replays or settles, never pays twice. After `ARC.fastAfter` plays everything
+runs faster.
+
+- **WHACK-A-MOLE** (`WAM`, `WAM_TIERS`). A 3 x 3 table of holes under a
+  scoreboard (score, a time bar, best or the live combo). Play: a 3-2-1
+  countdown (1.2 s when fast), a 14 s round. The pops are seeded
+  (`wamSched(A.live.seed)`: the pace quickens and the stays shorten, doubles in
+  the second half, a hole never busy twice): moles 10, golden moles 30 (8%, a
+  crown and a glow, shorter), bombs (16%) cost 20 and the combo. Tap a hole to
+  whack (the mallet swings, BONK, stars, a kick, "+n", "x5 COMBO!"): whacks
+  within `chainGap` (1.1 s) chain a combo worth +2 per step (max +20); an empty
+  hole breaks it. At TIME! the score is saved (`A.pend`) and after a beat paid
+  by tier: MOLE MASTER 480+ (a rare capsule, 30 gold, 12 tickets), MOLE MANIA
+  340+ (a capsule, 8 tickets), GREAT 220+ (25 gold, 6 tickets), NICE 110+ (12
+  gold, 3 tickets), else 2 tickets (0: nothing). A simulated player over 300
+  rounds scores 180 casual, 336 good, 532 sharp (a perfect round ~710).
+  A reload mid-round restarts the same round (the token stays spent); Stop or
+  Leave mid-round pays the score so far.
+- **SKEE-BALL** (`SKEE`). A ring board (10 / 20 / 30 / 40 / 50 concentric, two
+  100 cups in the top corners) above a wooden lane with neon rails and a hump.
+  Five balls a game: swipe up the lane (a longer, faster swipe goes higher;
+  the release point and the sideways flick aim) or tap Roll on the swaying
+  aim and pulsing power meter. `skeeSim(aim, pow, seed)` decides at once where
+  it lands (power sets the height, aim the side, +-20 px of seeded wobble; too
+  hard bounces off the back into the 10) and records the path: the roll up
+  the lane (the ball shrinking with the perspective), the hop off the hump,
+  the arc, the drop into its ring (lit, the score pops, confetti for a 100).
+  Each roll is saved at the swipe (`A.live.roll`), each landed ball on
+  `A.live.balls`; after the fifth the total pays a ticket per 10 points (the
+  ticket spray), plus 15 gold at 180+, a capsule at 270+, SKEE JACKPOT at 380+
+  (a rare capsule and 30 gold). Leave mid-game pays the balls rolled.
+
+**Tips** (FEEL): `pet` (a fight with a pet), `petshop`, `moles`, `skee` (a lit
+tile), with their own pictures (`RENDER.feelTipArt`).
+
+**Sounds.** `petChirp` (opts.pitch per species), `petHop, petAct, petCrunch,
+petHonk, petLevel, petLove, molePop, bonk, moleBomb, moleCombo, whistle,
+skeeRoll, skeeHop, skeeRing, ticketSpray`.
+
+**Save fields.** Run: `pet` (null or `{id, name, xp, lv, seed, fed}`,
+`DATA.petFix` repairs it, an unknown id is dropped, a save from before pets
+has none). Map: tile types `moles | skee | petshop`; `content.arc` for the
+two games carries `live` (the game in progress) and `best`; `content.pet` the
+shop's pens. Meta: `pets {id: {n, lv}}` (kept by `loadMeta`). No key was
+renamed; old saves and maps load (no new tiles, no pet).
+
+`GAME.pet = {K, MOVE, of, give, gain, fix, fs, start, hold, tick, draw,
+mapDraw, event, rig, grab, deliver, tap, shop, adopt, treat, album}`,
+`GAME.wam = {WAM, TIERS, sched, perfect, pays, whack, holes, visible, state}`,
+`GAME.skee = {SKEE, sim, pays, roll, meter, state}`. `DATA` adds `PETS,
+PET_IDS, PET_XP, PET_MAX, PET_GAIN, PET_SHOP, petLevel, petNext, petPow,
+petUses, petLook, petEgg, petGlow, petName, petNew, petFix, petOffer,
+petText`; `MAP` adds `ARC_R5, PET_TILE, placeR5`; `RENDER` adds `pet, petTag,
+petBed, petIcon, arcMoles, arcSkee, pets {COL, KEYS, SCARF, ART, tipArt,
+TIPS}`. Tests: data (the table, levels, looks, the offer, names, repairs, card
+lines), map (one of each per world over 60 seeds by the cabinet rules, off the
+road and the monsters, the shop near the start, deterministic, small maps,
+the save round trip and old saves), render (every pet in every pose, mood and
+level look, distinct; the tag, the bed, the icons, the hexes; every machine
+state; the tip pictures), game (the perch, one use a turn and two from Lv 3,
+every trick moving the right thing, the octopus through real lifts,
+determinism, xp and the banner, reactions, the tap, save / load / junk / old
+saves, the pet shop's adoption, swap, treats and reload, tips, whack-a-mole's
+schedule, scoring, combos, bombs, tiers, pay once across reloads, reload
+mid-round, leaving mid-round, skee-ball's simulation, rings and cups, the
+game paid once, reload mid-roll, swipes, leaving mid-game).
+
+## Polish (round 5): item identity, relic medallions, layout fixes
+
+Presentation only. The art lives in `render.js` (the POLISH blocks next to
+`itemArt` and `relicIcon`), the fixes in `game.js` (`pol*` helpers), no save
+field and no rule changed.
+
+**Item identity.** 122 items shared 48 art keys, so two flasks differed only
+by colour (48 distinct drawings; now 121 of 122). Three layers, all drawn into
+the item sprite, so the per-frame cost is unchanged:
+- **Silhouettes** (`RENDER.pol.SIL`, 43 items, same physics bounds): the
+  starters first (Rusty Sword with notches and rust, Dented Shield, Shiv,
+  Cherry Bomb as two cherries on a lit stem, Peppermint, Sour Drop, Lucky
+  Coin, Lead Shot, Glass Bead, Frost Pearl), the rares and legendaries
+  (Aegis, Dragon Egg, Stolen Gem with its price tag, Elixir heart flask,
+  Blizzard Orb snow globe, Crystal Ball on a stand), the bags (a drawstring
+  pouch with its marbles / beads / sweets / bolts peeking out), the daggers
+  (serrated, twin, a blowgun dart, an ice pick), Pet Rock with googly eyes,
+  a gumball machine, a hex nut, a thorn ring, a winged token and more.
+- **Decals** from the keywords (`DATA.kwIds`): a skull stamp (poison), flame
+  licks (pyro), frost rime on balls plus a snowflake stamp (frost), glass
+  glints (glass: glints, not cracks, because cracks already mean "cracked in
+  the bin, plays for +50%"), a rune stamp (echo), dice pips (luck), a coin
+  stamp (greed); at most two, one on an item under 22 px or a legendary,
+  none on junk; a star on every legendary. Art keys that already say it skip
+  it (no pips on dice, no coin stamp on coins). `RENDER.pol.DECAL[id]`
+  overrides the pick.
+- **Rarity rim light**: the item's own silhouette in the rarity colour
+  nudged up-left behind the art (uncommon cyan, rare gold, legendary pink
+  plus a gold counter-rim).
+- The sprite cache key includes the identity layer (`sp.dk`); a change of
+  it (or `RENDER.pol.on = false`, the before / after switch) redraws the
+  sprite. A PNG override (`art/items/...`) replaces all three layers.
+
+**Relic medallions** (`relicIcon(ctx, def, x, y, size, t)`): the emoji sits
+on a dark disc in a metal ring: common bronze, uncommon silver, rare gold
+with a sunburst edge, boss (and any legendary) a turning rainbow ring with
+twinkles, event jade. A shine sweeps across each every 4.6 s on its own
+phase (`RENDER.pol.shine`). The DOM canvases (HUD bar, rewards, the reveal,
+the shop, the Prizedex) are drawn once; `polTick` redraws only the live ones
+(`RENDER.relicLive`: a legendary, or a sweep in progress) at 30 fps. The HUD
+relic slot is 40 px now. A relic PNG still wins (plus its rarity pip).
+
+**Fixes.**
+- Turn banners (ENEMY TURN, YOUR TURN, VICTORY, phase names) take the span
+  of the player row left of the GRABS pill (`polBannerBox`, 12 px clear of
+  it, words shrink to fit, the label keep-out zone follows); the pill no
+  longer fades under the banner. END TURN is in the control bar far below.
+- A hit on the player pops its number just under the HP stat and floats in
+  a soft arc there (`polPlayerNum`, blood with it); it used to spawn on the
+  player row and fall into the cabinet as a faded "-49".
+- 360 x 780 / 390 x 844 audit of every screen (reward, shop, prize counter,
+  the three arcade cabinets, event, stickers, the Prizedex tabs, the vault,
+  capsule, win, the endless reboot, game over, title, chars; DOM checks for
+  clipped, cut and overlapping text, button overlaps, text under 12 px):
+  the map's plate, compass and boss arrow drew through the arcade, shop and
+  event overlays (the plate sat under PULL); they draw on the map screen
+  only now. Event outcome chips were 11 px (now 12). What remains is by
+  design: the sticker slap and NEW BEST! stamp overlap text on purpose, and
+  the vault's capsule bar floats over its scrolled grid.
+
+### Difficulty snapshot (round 5)
+
+No tuning; a measurement for the owner. A headless bot (scratchpad
+`r5_balance.mjs`, raw lines `r5_bal_raw.jsonl`, tables `r5_bal_report.txt`)
+plays whole runs through the real game: it values items by their fx and the
+enemy intents, aims at the best top item, lights with bulbs toward known
+elites and towers, spends spare tools, takes one elite (or tower) an act
+above 60% hp, 9 normal fights an act, then the boss; opens every capsule,
+buys rares and relics, rests under 70% hp, skips arcade cabinets and cashes
+out at the win. 10 runs per crawler x claw (classic, tri) x Tilt (0, 5),
+160 runs, seeds 500-509.
+
+| crawler | win | deaths act 1 / 2 / 3 | hp lost / fight, act 1 / 2 / 3 | elites won | bosses won, act 1 · 2 · 3 | turns / fight, normal / elite / boss |
+| --- | --- | --- | --- | --- | --- | --- |
+| Knight | 28% (T0 40, T5 15) | 10 / 16 / 3 | 5.0 / 6.5 / 1.8 | 80% | 30/30 · 14/14 · 11/11 | 2.2 / 5.0 / 4.4 |
+| Alchemist | 25% (T0 20, T5 30) | 7 / 17 / 6 | 2.7 / 4.7 / 5.5 | 87% | 33/36 · 16/16 · 10/10 | 2.5 / 4.8 / 4.9 |
+| Rogue | 25% (T0 30, T5 20) | 11 / 16 / 3 | 5.1 / 6.7 / 3.3 | 80% | 29/30 · 13/13 · 10/11 | 2.0 / 4.8 / 5.4 |
+| Lucky Lou | 33% (T0 45, T5 20) | 2 / 18 / 7 | 1.6 / 6.2 / 4.4 | 87% | 38/38 · 20/20 · 13/14 | 1.6 / 3.2 / 4.1 |
+| all | 28% | 30 / 67 / 19 | 3.4 / 6.0 / 3.8 (4.9 / 7.6 / 3.5% of max hp) | 84% of 487 | 130/134 · 63/63 · 44/46 | 2.0 / 4.4 / 4.7 |
+
+Reading it: normal fights are short (2 turns) and cheap everywhere; bosses
+almost never kill (6 of 116 deaths); **elites are the run killers**: 79 of
+116 deaths, Ironjaw alone 27 (act 2), then Lodestone 13, the Carnival Barker
+9, the High Cultist, the Brood Mother, the Bulldozer, the Collector. Act 2
+holds 58% of the deaths. The claw matters more than the Tilt for this bot:
+classic 30-40% wins, tri 10-25%. Tilt 5 costs 10-25 points for the knight,
+rogue and Lou (the alchemist's 20 vs 30 is inside the noise: 20 runs per cell
+is about +-10 points). Late runs snowball (act 3 normals cost under 4% of max
+hp; runs that reach act 3 carry 80-100 items and 23-36 relics, mostly
+from capsules and payouts). The bot
+walks into elites at 60% hp, so the real elite danger for a careful player is
+lower; the ranking (Ironjaw first) is the signal.
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the

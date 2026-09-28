@@ -87,7 +87,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 #relics::-webkit-scrollbar{display:none}
 .relic{width:44px;height:44px;flex:0 0 auto;border-radius:10px;border:2px solid var(--line2);background:#150c26;
   display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;padding:0}
-.relic canvas{width:36px;height:36px;display:block}
+.relic canvas{width:40px;height:40px;display:block}
 #playerRow{top:338px;height:44px;align-items:center;gap:8px;padding:0 10px}
 #pstatus{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
 #pstatus::-webkit-scrollbar{display:none}
@@ -107,7 +107,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 #grabs .g.used{background:transparent;box-shadow:none;border-color:var(--dimmer)}
 #grabs .lbl{font-size:12px;letter-spacing:.14em;color:var(--cyan2);text-transform:uppercase;font-weight:900;margin-right:2px}
 #grabs,#pstatus{transition:opacity .2s}
-#playerRow.bannerOn #grabs,#playerRow.bannerOn #pstatus{opacity:.1}
+#playerRow.bannerOn #pstatus{opacity:.1}
 #banner{position:absolute;left:0;right:0;top:-30px;height:100px;display:flex;align-items:center;justify-content:center;
   pointer-events:none;opacity:0;transition:opacity .2s}
 #banner.show{opacity:1}
@@ -742,7 +742,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .evText{font-size:15px;color:var(--text);background:rgba(0,0,0,.28);border-radius:12px;padding:8px 12px;border-left:4px solid var(--gold)}
 .choice{min-height:64px}
 .evChips{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
-.evChip{font-size:11px;font-weight:900;letter-spacing:.06em;padding:2px 7px;border-radius:7px;border:1.5px solid currentColor;line-height:1.3}
+.evChip{font-size:12px;font-weight:900;letter-spacing:.06em;padding:2px 7px;border-radius:7px;border:1.5px solid currentColor;line-height:1.3}
 .evChip.good{color:var(--lime);background:rgba(166,255,94,.08)}
 .evChip.bad{color:var(--blood);background:rgba(255,90,74,.08)}
 .evChip.rnd{color:var(--gold);background:rgba(255,201,77,.1)}
@@ -929,6 +929,116 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 @media (prefers-reduced-motion:reduce){#tipCard.show,#tipCard.out,.keepBub.pop,.feelScene.thud{animation:none!important}}
 /* ================= /FEEL ================= */
 </style>
+<style id="vault-css">
+/* ================= VAULT (round 5): the Prize Vault ================= */
+/* the title's button: gold with a pink glow, the wallet under the name */
+.btn.vaultBtn{position:relative;flex-direction:column;gap:0;line-height:1.1;padding:6px 18px;border-color:#ff9ec7;
+  background:linear-gradient(180deg,#7a2a8c,#3a1260);color:#fff;box-shadow:0 4px 0 #22093a,0 0 22px rgba(255,46,136,.4)}
+.btn.vaultBtn .v1{font-size:15px}
+.btn.vaultBtn .v2{font-size:12px;letter-spacing:.04em;text-transform:none;color:#ffd6ea;font-weight:700}
+.btn.vaultBtn .v2 b{color:#fff;margin:0 1px}
+.btn.vaultBtn .vdot{position:absolute;top:-8px;right:-8px;min-width:24px;height:24px;border-radius:12px;background:var(--pink);color:#fff;
+  font-style:normal;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px;
+  box-shadow:0 0 12px var(--pink);animation:vPulse 1s ease-in-out infinite}
+@keyframes vPulse{50%{transform:scale(1.15)}}
+/* the vault screen: the canvas paints the wall and the preview window, the DOM frames it */
+.screen.vault{background:transparent;padding:0;overflow:hidden}
+.vaultBody{position:absolute;inset:0;display:flex;flex-direction:column;align-items:stretch}
+.vaultBody.vcap{pointer-events:none}
+.vaultBody.vcap .btn,.vaultBody.vcap .prize{pointer-events:auto}
+.vTop{display:flex;align-items:center;gap:8px;height:64px;padding:10px 10px 0}
+.vTop .vBack{min-width:84px}
+.vWallet{display:flex;align-items:center;gap:4px;height:44px;padding:0 12px;border-radius:12px;border:2px solid #ff9ec7;
+  background:linear-gradient(180deg,#3a1650,#1d0c30);box-shadow:0 0 14px rgba(255,46,136,.35);cursor:pointer;white-space:nowrap}
+.vWallet b{font-size:20px;color:#fff;font-weight:900}
+.vWallet span{font-size:12px;color:#ffd6ea;font-weight:900;letter-spacing:.08em;text-transform:uppercase;max-width:44px;line-height:1.05;white-space:normal}
+.vWallet.nope{animation:nope .3s}
+.vWallet.dip{animation:dip .3s ease}
+.vPrevBar{position:absolute;top:296px;left:22px;right:22px;display:flex;gap:6px;pointer-events:none}
+.vMini{pointer-events:auto;min-height:36px;padding:4px 10px;border-radius:10px;border:1.5px solid rgba(141,255,245,.5);background:rgba(12,6,24,.8);
+  color:var(--cyan2);font:inherit;font-size:12px;font-weight:900;letter-spacing:.04em;cursor:pointer}
+.vDetail{position:absolute;top:346px;left:12px;right:12px;height:96px;display:flex;align-items:center;gap:10px;padding:8px 12px;
+  border-radius:14px;border:2px solid var(--vc,#b9b0cc);background:linear-gradient(180deg,rgba(44,29,74,.95),rgba(21,12,38,.95));
+  box-shadow:0 0 18px color-mix(in srgb,var(--vc,#b9b0cc) 35%,transparent)}
+.vdTx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.vdK{font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--vc,#b9b0cc)}
+.vdN{font-size:20px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vdN.lg{background:linear-gradient(90deg,#ff6bb0,#ffe28a,#c8ff8f,#8dfff5,#c3adff,#ff6bb0);background-size:200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;animation:rainbow 1.6s linear infinite}
+.vdT{font-size:12px;color:var(--dim);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vDetail .btn{flex:0 0 auto;min-width:108px}
+.vDetail .btn.poor{filter:saturate(.4) brightness(.8)}
+.vdOn,.vdLock{flex:0 0 auto;max-width:150px;font-size:13px;font-weight:900;color:var(--vc,#fff);text-align:center;letter-spacing:.04em;line-height:1.25}
+.vdLock{color:var(--dim);cursor:pointer}
+.vTabs{position:absolute;top:450px;left:8px;right:8px;display:flex;gap:4px}
+.vTab{flex:1;position:relative;min-height:48px;padding:3px 2px;border-radius:12px 12px 4px 4px;border:2px solid var(--line2);
+  background:linear-gradient(180deg,#2c1d4a,#1b1030);color:var(--dim);font:inherit;font-weight:900;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+.vTab .ic{font-size:17px;line-height:1}
+.vTab .lb{font-size:12px;letter-spacing:.02em;white-space:nowrap}
+.vTab.on{border-color:var(--gold);color:#fff;background:linear-gradient(180deg,#5a3a10,#2a1a08);box-shadow:0 0 14px rgba(255,201,77,.35)}
+.vTab .nd{position:absolute;top:-7px;right:-3px;min-width:20px;height:20px;border-radius:10px;background:var(--pink);color:#fff;font-style:normal;
+  font-size:12px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.vShelf{position:absolute;top:504px;left:8px;right:8px;bottom:104px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px 4px 12px;align-content:start;
+  border-radius:4px 4px 14px 14px;border:2px solid #6d5a9a;background:linear-gradient(180deg,rgba(40,24,70,.72),rgba(18,10,34,.86));
+  box-shadow:inset 0 0 30px rgba(255,46,136,.18),inset 0 2px 0 rgba(255,255,255,.12)}
+.vShelf::-webkit-scrollbar{display:none}
+.vCard{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 3px 5px;border-radius:12px;min-height:128px;
+  border:2px solid color-mix(in srgb,var(--vc,#b9b0cc) 60%,#1b1030);background:radial-gradient(circle at 50% 30%,rgba(255,255,255,.1),rgba(0,0,0,.25) 70%);
+  cursor:pointer;transition:transform .08s}
+.vCard:active{transform:scale(.96)}
+.vCard canvas{width:70px;height:70px;display:block;filter:drop-shadow(0 0 6px color-mix(in srgb,var(--vc,#b9b0cc) 60%,transparent))}
+.vCard .nm{font-size:12px;font-weight:900;color:#fff;text-align:center;line-height:1.1;min-height:26px;display:flex;align-items:center}
+.vCard .tg{font-size:12px;font-weight:900;color:#ffd6ea;letter-spacing:.04em;white-space:nowrap}
+.vCard .tg b{color:#fff}
+.vCard .who{position:absolute;top:4px;left:5px;font-size:12px;font-weight:900;color:var(--cyan2);letter-spacing:.02em}
+.vCard .nb{position:absolute;top:-6px;right:-4px;font-style:normal;font-size:12px;font-weight:900;color:#fff;background:var(--pink);
+  border-radius:8px;padding:1px 5px;box-shadow:0 0 10px var(--pink);animation:vPulse 1s ease-in-out infinite}
+.vCard.own .tg{color:var(--cyan2)}
+.vCard.eq{box-shadow:0 0 16px color-mix(in srgb,var(--vc,#b9b0cc) 55%,transparent)}
+.vCard.eq .tg{color:var(--gold)}
+.vCard.sel{border-color:#fff;transform:translateY(-3px);box-shadow:0 0 0 2px var(--vc,#fff),0 0 22px var(--vc,#fff)}
+.vCard.lock canvas{filter:brightness(.55) saturate(.6)}
+.vCard.lock .tg{color:var(--dim)}
+.vCard.poor .tg{opacity:.7}
+.vCard.r-l{border-color:transparent;background:linear-gradient(#1b1030,#1b1030) padding-box,
+  linear-gradient(90deg,#ff6bb0,#ffe28a,#c8ff8f,#8dfff5,#c3adff,#ff6bb0) border-box;background-size:auto,200% 100%;animation:vRb 2s linear infinite}
+@keyframes vRb{to{background-position:0 0,200% 0}}
+.vBottom{position:absolute;left:10px;right:10px;bottom:10px;height:88px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.btn.vCapBtn{width:100%;max-width:380px;min-height:62px;gap:10px;justify-content:center;font-size:18px;
+  animation:vCapGlow 1.6s ease-in-out infinite}
+.btn.vCapBtn canvas{width:44px;height:44px}
+.btn.vCapBtn .cw{display:flex;flex-direction:column;align-items:flex-start;line-height:1.1}
+.btn.vCapBtn .c1{font-size:18px}
+.btn.vCapBtn .c2{font-size:12px;text-transform:none;letter-spacing:.04em;color:#fff1c8}
+.btn.vCapBtn.poor{animation:none;filter:saturate(.5) brightness(.85)}
+@keyframes vCapGlow{50%{box-shadow:0 4px 0 #2a1d04,0 0 34px rgba(255,201,77,.7)}}
+.vOdds{font-size:12px;color:var(--dim);text-align:center;line-height:1.25}
+.vPrize .vNew{position:absolute;top:10px;right:14px;font-size:16px;font-weight:900;color:#fff;background:var(--pink);padding:2px 9px;border-radius:9px;
+  transform:rotate(8deg);box-shadow:0 0 14px var(--pink);animation:tagPop .45s cubic-bezier(.2,1.8,.4,1) both}
+.vPrize .row{margin-top:4px}
+.vPrize.dupe .pt{color:var(--gold)}
+.btn.vShareBtn{align-self:center;min-width:240px}
+.calm .vCard.r-l,.calm .btn.vCapBtn,.calm .vdN.lg,.calm .btn.vaultBtn .vdot,.calm .vCard .nb{animation:none!important}
+@media (prefers-reduced-motion:reduce){.vCard.r-l,.btn.vCapBtn,.vdN.lg,.btn.vaultBtn .vdot,.vCard .nb{animation:none!important}}
+/* ================= /VAULT ================= */
+</style>
+<style id="pets-css">
+/* ================= PETS (round 5): the pet on the frame, the pet shop ================= */
+/* the player row leaves the frame's top-left corner to the pet */
+#playerRow.hasPet{padding-left:98px}
+#banner.pet span{color:#ffe0f0;text-shadow:0 0 22px var(--pink),0 0 40px #ffc94d,0 4px 0 #3a0a22;animation:pop .5s ease both}
+.petPens{position:absolute;left:24px;right:24px;top:354px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;pointer-events:none}
+.petPen{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;min-width:0}
+.petPen .n{font-size:17px;font-weight:900;color:#fff;letter-spacing:.04em;text-shadow:0 2px 0 #12091f}
+.petPen .k{font-size:12px;font-weight:900;color:var(--ac);letter-spacing:.08em;text-transform:uppercase}
+.petPen .t{font-size:12px;color:var(--text);line-height:1.25;min-height:78px;background:rgba(18,9,31,.82);border-radius:8px;padding:4px 6px;border:1.5px solid var(--line2)}
+.petPen .btn{pointer-events:auto;min-width:0;width:100%;padding:6px 4px}
+.petPen.got .n{color:var(--gold)}
+.petPen.got .t{border-color:var(--ac)}
+/* ================= /PETS ================= */
+</style>
 </head>
 <body>
 <div id="wrap"><div id="stage">
@@ -995,6 +1105,8 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   <div id="scr-arcade" class="screen arcade"><div id="arcadeBody" class="arcBody"></div></div>
   <!-- ENDLESS: the loop reboot (a CRT powering on) -->
   <div id="scr-loop" class="screen loop"><div id="loopBody"></div></div>
+  <!-- VAULT: the Prize Vault (the canvas paints the prize wall and the preview window under this frame) -->
+  <div id="scr-vault" class="screen vault"><div id="vaultBody" class="vaultBody"></div></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>
 </div></div>
