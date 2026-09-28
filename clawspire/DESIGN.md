@@ -3266,7 +3266,9 @@ exactly as before.
   dead Clawspire, the crawler walks out along a path, a five-line epilogue,
   a credit roll ("RoxorLoops & Jasmin", thanks for playing), CONTINUE. Then
   the normal win flow: title "THE MACHINE POWERS DOWN", +5000 score line,
-  stickers, and the endless offer (endless shows the act as `Back Rm`).
+  stickers, and the endless offer. In the Back Room the HUD's act stat reads
+  "4" with a key (`4 🔑`, a gold rim, class `secret`), like the map head's "Act 4"
+  (round 7; it read `Back Rm` before).
 
 ### Save fields (all optional, defaults on load)
 
@@ -3316,6 +3318,503 @@ exactly as before.
   walk away, the room, every fight event, phases to power-down to ending to
   win to endless, save and reload at every step, and old saves and the
   Prizedex.
+
+## Evolutions and pet synergies (round 7)
+
+Vampire Survivors' best trick in a claw machine: an item you have upgraded
+and the right relic turn into a legend. Plus a bonus trick for every pet
+that fits a build, and four combos around them. Data in `data.js` (the
+EVOLVE block), the fight side in `combat.js` (the EVOLVE block), the flow in
+`game.js` (the EVOLVE block, reached through one-line hooks), the art in
+`render.js` (the EVOLVE block, `RENDER.evo`), the CSS in `index.html`
+(`<style id="evo-css">`), the sounds `evoRise`, `evoBurst`, `petSyn`.
+
+### Item evolutions (`DATA.EVOLUTIONS`, `EVOLVED`, `EVO_FX`)
+
+A recipe is **base item + relic**. The base item must be upgraded (plus); the
+run must hold the relic. Then the item evolves when it is **delivered in a
+fight**, or on the spot **at a rest** (an Evolve choice, only when something
+is ready) or **a forge** (EVOLVE cards next to the upgrades; and an upgrade
+there that completes a recipe evolves at once). An evolved item is a new item
+for good: no plus (it cannot be upgraded again), a unique drawing, and an
+**aura**: a relic-shaped def (`EVO_FX['evo:<id>']`, hooks and rules like a
+relic) that runs in every fight while the item is in the run's bin.
+
+| evolved item | base item + | relic | when played | aura (while in your bin) |
+| --- | --- | --- | --- | --- |
+| Excalibur Claw | Rusty Sword (knight starter) | Trophy Rack | 18 damage, +1 Strength | King's Oath: every kill gives 5 Block |
+| Plague Needle | Venom Dart | Festering Jar | 4 damage, 7 Poison, then every enemy takes its Poison | Epidemic: an enemy gaining Poison gives every other enemy 1 |
+| Nuke Pop | Cherry Bomb | Powder Keg | 10 and 5 Burn to ALL (a real bomb: its fuse lights) | Chain Reaction: a burning enemy's death hits the rest for 8 |
+| Prism Lance | Glass Bead | Glass Cannon | 3 beams of 6 at random; not glass, so it never shatters | Refraction: a shatter hits ALL for 5 |
+| Loaded Fate | Bone Dice (Lou's starter) | High Roller | 8-14 twice, 2 Luck | House Edge: cash outs +1 per Luck (`rules.cashAmp`) |
+| Absolute Zero | Frost Pearl | Permafrost Core | 4 damage, 2 Chill to ALL, Freeze the target | Deep Cold: SHATTER +25% (`rules.shatter`) |
+| Tower Aegis | Pot Lid | Castle Walls | 15 Block, 2 Thorns | Battlements: turn end, a quarter of your Block (max 15) to ALL |
+| Scrap Titan | Scrap Shield | Junkyard King | 6 Block, 3 Block and 3 damage per junk | Scrap Heap: a Rock at the bell; junk grabbed out hits ALL for 5 |
+| Black Death Vial | Toxic Vial (alchemist starter) | Contagion | 3 and 5 Poison to ALL | Miasma: turn end, every poisoned enemy +1 Poison |
+| Midas Coin | Lucky Coin | Money Bags | 8 damage, 8 gold | Golden Touch: gold gained gives as much Block (max 10) |
+| Swarm Queen | Prize Marble | Pocket Dimension | stings 4 random enemies for 3 (small: +2 each with the Dimension) | The Hive: small items played hit a random enemy for 2 |
+| Echo Grimoire | Arcane Tome | Echo Chamber | 9 damage, copies 2 magic items | Reverb: magic echoes one play sooner (`rules.echo -1`: every 2nd) |
+| Streak Stiletto | Shiv (rogue starter) | Winning Streak | 6 +3 per streak | Momentum: at a streak of 5+, every grab that brings something up hits a random enemy for 3 |
+| Phoenix Torch | Torch | Bellows | 7 and 6 Burn to ALL | Rebirth: a burning enemy's death heals 4 |
+
+Every crawler's starting bin has a base item (Rusty Sword, Toxic Vial, Shiv,
+Bone Dice), so the first evolution is one forge visit and one relic away.
+
+**The item table trick.** The evolved defs are attached to `DATA.ITEMS` as
+**non-enumerable** properties: `ITEMS[id]` finds them everywhere (COMBAT, the
+renderer, combos, the bin, a save), but `Object.keys(ITEMS)`, `for..in` and
+`ITEM_IDS` never list them, so reward pools, shops, capsules, the
+Compactor's pool, the item Prizedex and every "all items" test stay exactly
+as before. `DATA.EVOLVED` lists them. Base ids are never renamed; evolved ids
+are new (`excalibur_claw` ...).
+
+`DATA.evoOf(itemId)` (the recipe of a base id), `evoReady(inst, relics|run)`
+(plus, not a fight copy or junk, the relic held), `evoAuraIds(run)` (one aura
+per evolved id in the run's bin), `evoMetaFix(o)`, `evoProc(F, id, text)`.
+
+**COMBAT.** `newFight` puts the auras on `F.evos` (their hooks run after the
+relics and set bonuses through `setHookIds`, their rules merge into
+`F.rules`, `relicDef` resolves `evo:*` so the automatic procs name the aura)
+and the pet along on `F.petId`. `COMBAT.evoCheck(F, inst)` -> recipe | null;
+`COMBAT.evolve(F, inst, recipe?)` turns the fight instance (the evolved id, no
+plus), adds its aura and merges its rules at once, records `F.evolved`.
+
+**The ceremony (game.js).** `deliver` asks `evoDeliver`: the run's copy of
+the instance must be plus (a Golden Prize's fight-only plus never counts),
+then COMBAT evolves it, the run's bin copy follows, the book is updated and
+the run is **saved at once**. The throw waits: the fight holds its breath
+(`updateFight` returns while `FS.evo` is set: no physics, no queue, no
+plays), and `RENDER.evo.ceremony` plays over the stage (2.6 s; 1.8 s after
+five evolutions on the profile; 1.5 s in reduced motion): the stage dims, a
+light pillar rises from the chute, the old item spins up out of it
+accelerating while shards spiral in (EVOLVING...), then at 52% a white flash,
+rings, shards, confetti, the `evoBurst` fanfare and the new form bursts in
+big over turning rays, EVOLVED! and its name slam in in chrome, and its aura
+sits on a plate under it. Then the evolved item is thrown from where it
+hovers and plays. A tap before the burst jumps to it; a tap 0.3 s into the
+reveal ends it. Two in one grab queue (`FS.evoQ`). At a rest or a forge the
+same ceremony plays on an overlay (`S.evoUi`, `.evoOver`, a canvas of its
+own over any screen) that waits on the reveal until a tap.
+
+**Save and reload.** The run's bin already holds the evolved item when the
+ceremony starts, so a save mid ceremony reloads into the same fight from its
+opening bell with the evolved item and its aura, no ceremony, nothing counted
+twice. Run: `evoN` (optional count). Meta: `evo {seen: {id: 1}, made, syn,
+new: {id: 1}}` (`evoMetaFix` repairs junk; an old profile starts empty). No
+key was renamed.
+
+**Hints and the Prizedex.** Once a recipe has been seen (evolved once), every
+card of its base item says **Evolves with: <relic>** (gold with "(ready!)" or
+"(upgrade it)" while the run holds the relic). An evolved card wears a gold
+EVOLVED badge (in place of the rarity word), its aura in words and a glow.
+The Prizedex's **Evolve** tab (after Sets; `DATA.DEX_TABS` is unchanged, so
+the completion bar is too): "n of 14 evolutions found", a card per recipe:
+base item + relic -> evolved item, silhouettes until found (the base item and
+relic show once seen elsewhere, the hint names the base), NEW! once.
+
+**Art.** `RENDER.evo.ART[id]`: 14 drawings (a claw-guarded sword with a rune
+line, a syringe dart, a trefoil cherry bomb, a rainbow crystal lance, a gold
+die with an eye, a snowflake orb, a castle tower shield, a scrap robot head, a
+skull-corked flask, a crowned coin, a bee-striped marble with a crown, an
+eye grimoire with echo rings, a stiletto with speed streaks, a phoenix
+torch), each with a gold up-chevron. `itemArt` picks them before the POLISH
+silhouettes, so they live in the item sprite; an evolved item never borrows
+its art key's shared PNG (only `art/items/id/<id>.png`, see ART_PROMPTS).
+In the cabinet `evoAura` adds a pulsing glow and slow turning rays behind it
+and two motes in front (through `itemFx`).
+
+### Pet synergies (`DATA.PET_SYN`, `petSynOn(pet, run)`)
+
+Each pet gets a bonus with a build. `on(run)` reads the run only; the game
+adds the extra to the pet's own trick and fires `COMBAT.evoPet(F, pet, k, o)`:
+a `{t:'proc', src:'pet', id:'pet:<pet>'}` badge, then the effect.
+
+| pet | switched on by | synergy |
+| --- | --- | --- |
+| Hamster | a Swarm relic | Marble Run: each shove, 2 damage to a random enemy per small item in the bin (max 5) |
+| Parrot | an Echo relic | Mimic: the item it carries is copied into the bin for the fight (3 a fight) |
+| Cat | a Pyro item in the bin | Fire Cat: it bats Pyro items first; a batted Pyro item gives ALL 2 Burn |
+| Octopus | the Tri-Claw | Two Arms: it holds the two lowest prizes on a lift (a second weld) |
+| Firefly | a Frost relic | Frost Light: the spotlit item, played against a Frozen enemy, resolves twice |
+| Magnet Mouse | the Magnet Crane | Double Pull: a second metal item is pulled to the claw |
+| Trash Raccoon | Junkyard King | King's Feast: every junk it eats gives 1 Strength and 3 Block |
+| Golden Goose | 2 High Rollers pieces | Golden Clutch: two golden eggs at once and 1 Luck |
+
+While it is on, the pet's name tag wears a round badge with the synergy's
+icon (`RENDER.evo.petBadge`, pulsing harder right after it fires), and a tap
+on the pet adds its synergy line (ON, or what it needs).
+
+### Combos (4 new)
+
+| tier | combo | recipe | effect |
+| --- | --- | --- | --- |
+| 2 | Legend Rising | an evolved item and two more | 10 to ALL, 6 Block |
+| 3 secret | Twin Legends | two different evolved items | 25 to ALL, 2 Strength (same family: it replaces Legend Rising) |
+| 2 | Fetch! | a bone and a ball with any pet along (`ctx.pet`) | 6 x2, 4 Block |
+| 2 | Nest Egg | an egg and a coin with the Golden Goose along | 12 gold, 8 to ALL |
+
+`COMBAT.grabDone` passes `pet: F.petId` in the combo ctx; a recipe's `ctx`
+fixture says which pet its example needs.
+
+### Stickers
+
+It Evolved! (evolve an item) and Best Buds (set off a pet synergy), read off
+`meta.evo.made` / `meta.evo.syn`.
+
+### Hooks and API
+
+game.js: `loadMeta` (evoMetaFix), `itemCard` (evoCardTag), `openBin` (`o.can`,
+and the upgrade picker skips evolved items), `showRest` (evoRestChoice, the
+sharpen evolves), `showForge` (evoForgeCards, the upgrade evolves, evolved
+items are not offered), the event `upgrade` fx, `showCollection` (the tab),
+`deliver`, `updateFight`, `pointer`, `update` (evoTickAll), `draw` (evoDraw),
+and the pet's `petStart` (evoPetPick), `petEffect` (evoPetEffect),
+`petHoldStart` / `petHoldEnd` (the second arm), `petDeliver`, `petDraw` (the
+badge), `petTap`. `GAME.evo = {EVO, meta, metaFix, seen, deliver, now, skip,
+end, ready, cardTag, syn, fire, tapLine, uiTap, uiClose, draw, fs, queue, ui}`.
+combat.js: `relicDef`, `setHookIds`, `newFight` (evoFight), `play` (evoSpot),
+`grabDone` (ctx.pet); `COMBAT.evoCheck / evolve / evoPet`. render.js:
+`itemArt`, `item` (no shared PNG), `itemFx` (evoAura); `RENDER.evo = {ART, K,
+artFn, aura, ceremony, petBadge, chevron, wrap}`.
+
+Tests: data (14 recipes, one per base item, pool relics, the defs hidden from
+every pool and the item Prizedex, shapes, fx, texts, auras on known hooks and
+rules, evoReady only with the right item + plus + relic, auras per run,
+meta repair, auras with and without a recording COMBAT, the synergy table and
+its switches, the combos, the stickers), combat (only the right recipe
+evolves and only once, every recipe with and without its relic, every aura's
+effect in a fight, rules merged mid fight, every `evoPet` kind and its proc,
+Frost Light only on a Frozen target, the four combos in a fight, a 30 turn
+fuzz with all 14), game (a real delivery: the ceremony, the frozen fight, the
+run's bin, the book and the sticker, tap skip and end, the throw and the
+18 damage, the auto end; the wrong relic, a golden prize's plus and no relic
+never evolve; two in one grab queue; a save mid ceremony reloads the fight
+with the evolved item and no second ceremony; hints before and after
+discovery, the badge, the forge upgrade and EVOLVE card, the rest choice and
+its picker, evolved items never offered for upgrade; the Evolve tab, NEW!,
+old and junk profiles, old run saves; every pet synergy switching on and
+firing in a real fight), render (every evolved drawing distinct from the
+others and from its base, the aura layers, the ceremony at every beat, reduced,
+null safe, the badge), audio (the three voices).
+
+## Seasonal events (round 7)
+
+A reason to come back every few weeks: date-bound events that dress the
+whole machine up, bring their own content into every run, and pay out in
+their own currency for cosmetics you keep forever. The first is
+**Claw-o-ween** (1 October to 3 November); **Winter Wonderclaw** (10
+December to 6 January) is the skeleton that proves the system with a
+second season. Data in `data.js` (the SEASON block), the flow in `game.js`
+(the SEASON block, reached through one-line hooks), the looks in
+`render.js` (the SEASON block, `RENDER.sea`), the tunes and sounds in
+`audio.js` (the SEASON block), the frame in `index.html`
+(`<style id="season-css">`, `#scr-sea`).
+
+### Which season is on
+
+- `DATA.SEASONS[id] = {id, name, icon, from: [month, day], to: [month, day],
+  col, col2, cur {id, name, icon}, blurb, counter, items, relics, costumes
+  {base: costumedId}, elite, tile, cosmetics, hats}`; both ends inclusive; a
+  span may wrap the new year (winter). `DATA.seasonAt(date)` (pure: a Date, a
+  timestamp or 'YYYY-MM-DD', never the clock) -> the def or null.
+  `seasonWindow(id, date)` -> `{start, end}` (end exclusive: the midnight
+  after the last day; a January day belongs to the span that began in
+  December; after a span, next year's), `seasonLeft(id, date)` -> ms left
+  (0 out of season).
+- The game's live season (`seaNow`): `?season=<id>` (or `?season=off`),
+  else the profile's preview pick, else `seasonAt(today)`. Headless (the
+  suites, the bots) "today" is never the wall clock: only a date the tests
+  set (`GAME.season.setDate`) turns a season on, so every other suite is
+  deterministic whatever the real date is.
+- **Event preview** (for the owner): tap the title logo five times (a hidden
+  zone over it) and a picker offers By the calendar, each season and No event;
+  the pick is saved on the profile (`meta.sea.preview`).
+- **A run keeps its season.** `newRun` stores `run.season` (the season it
+  starts in) and every seasonal rule reads that, so a run started on Halloween
+  stays spooky to its end and an old save (no field) never turns seasonal.
+
+### The title, the map, the arena, the cabinet (the looks)
+
+Every draw takes the season id; with none nothing is drawn, so the base art
+is exactly as before. **Claw-o-ween:** a violet-to-orange dusk over the
+title, a full moon, bats circling the claw, cobwebs and a spider in the
+corners, jack-o'-lanterns on the tower's tiers and the ground, rolling fog,
+a dripping CLAW-O-WEEN over the logo; a ribbon at the top of the title
+names the event with its countdown ("ends in 13d 09h", ticking; "EVENT
+PREVIEW" when forced) and the wallet. The map gets drifting fog, bats with
+a violet glow, a violet edge and a lit jack-o'-lantern on about one lit
+empty hex in six (picked by the tile's hash). The arena gets a moon and
+bats over the fight, the cabinet cobwebs in three interior corners, a
+dangling spider, two jack-o'-lanterns on the marquee and orange / purple
+chasing bulbs (unless an equipped skin, the party lights or the alarm own
+the bulbs). **Winter:** snow falling over the title, map and arena, snow
+caps on the tower and the frame, icicles under the rail and the logo's
+banner, a frost vignette, red and green bulbs, snowmen on the map.
+
+### Claw-o-ween content (only in a Claw-o-ween run)
+
+The seasonal items, relics, enemies and cosmetics are reachable as
+`ITEMS[id]` / `RELICS[id]` / `ENEMIES[id]` / `COSMETICS[id]` through
+**non-enumerable** properties (like the evolved items): every lookup finds
+them, while `Object.keys` / `for..in` / `ITEM_IDS` never list them, so the
+year-round pools, shops, capsules, the Prizedex, the balance averages and
+the Vault shelves are exactly as before. The game brings them in while the
+run's season is on.
+
+- **Items (7)**, one reward screen in three swaps its last slot for one:
+  Candy Corn (a small filler: heal 1, Block 1, and every one landed is a
+  candy), Candy Corn Bag (three of them), Pumpkin Bomb (u, a real bomb: its
+  fuse lights; 5 to ALL and 2 Burn), Cursed Lollipop (u, 9 and 3 Poison, but
+  you get 1 Weak), Haunted Teddy (r, magic and light: it floats; 7 Block and 2
+  Weak to ALL), Witch Broom (u, 5 and 3 Block, then it sweeps the pile toward
+  the chute: every item low in the bin slides right), Skull Candle (r, 4 Burn
+  and 1 Vulnerable to ALL). Each has its own drawing (`RENDER.sea.SIL`, on the
+  polish pass's silhouettes, non-enumerable too).
+- **Relics (4)** join the relic pools by rarity: Candy Bucket (c, a kill heals
+  2; +2 candy a won fight), Jack-o'-Lantern (u, 1 Burn to ALL each turn),
+  Witch's Brew (u, every potion also poisons a random enemy for 2), Ghost
+  Sheet (r, 1 Dodge at the bell; 3 Block whenever you are hit).
+- **Costumes.** In a Claw-o-ween run a monster with a costume wears it
+  `SEA_K.costumeP` (55%) of the time (seeded by the run, the act, the fight
+  count and the ids; a reloaded fight keeps its saved ids): Count Ratula (the
+  rat as a vampire: a cape and collar; it drains 5 hp and hides in the cape for
+  a Dodge), Sheet Slime (the slime under a bedsheet with eye holes: it starts
+  with a Dodge, so your first hit goes through it; BOO! is Weak), Goblin Witch
+  (a pointed hat and a broom: it hexes you Vulnerable and tosses a Slag into
+  your bin). Every other monster turns up in a party hat (witch, pumpkin,
+  horns; winter: a Santa hat) `hatP` (30%) of the time, on the fight's copy of
+  its def (never saved, never the data). Each costumed monster beaten pays 2
+  more candy.
+- **The Pumpkin King** (act 1 elite, `look: 'pumpking'`, his own drawing: a
+  crowned jack-o'-lantern lit from inside on a ribbed pumpkin body, vine arms,
+  a leaf collar): Vine Lash 9, Seed Spit 3 x3, Harvest Moon +2 Strength, Squash
+  (18 next turn) and a lit pumpkin lobbed into your bin; phase two JACK'S FURY.
+  He takes an act 1 elite fight `kingP` (45%) of the time (never a tower
+  keeper), drops 12 more candy and one of the season's relics you lack.
+- **Trick-or-treat doors** (tile type `treat`): 3 per map (4 on the 16 x 22
+  world), on empty land at least 3 from the start and 2 from the boss, apart,
+  never under a roaming monster or the golden key, known from the start (a
+  silhouette in the dark), seeded by the map. The door screen (screen `sea`,
+  sd `{sea: {q, r}}`): a haunted house at night under the moon, a porch of
+  jack-o'-lanterns, door 13. Knock: the outcome is rolled
+  (`DATA.seaTreatRoll(rng, act, {relics, items})`) and saved on the tile
+  (`content.sea.out`) at once; three knocks shake the door, it creaks open,
+  light pours out and the reveal pays it (once: `content.sea.paid`, the tile is
+  done). Treats (70%) always carry 8 to 14 candy plus candy (6 more), gold, a
+  prize capsule (banked, cracked on Continue), a seasonal item or relic
+  floating out of the candy bowl; tricks (30%) are a ghost bursting out
+  (TRICK!: a costumed fight from the act's normal pool, started by Fight!,
+  once) or a green cackle (CURSED!: a Slag joins the bin for good). A tap
+  hurries it; Leave before knocking keeps the door for later. A reload before
+  the reveal replays the same outcome; after it shows the result; never paid
+  twice.
+
+### Candy and the Candy Counter
+
+- The season's currency (`cur`: candy for Claw-o-ween, snowflakes for winter)
+  banks straight into the profile wallet (`meta.sea.wallet[cur]`, `earned`),
+  with the run's tally on `run.sea.cur`: a won fight `DATA.seaEarn(tier,
+  costumes, king)` (normal 3, elite 8, boss 15, +2 a costume, +12 the Pumpkin
+  King) plus the Candy Bucket's 2, a door's treat, a Candy Corn landed. The map
+  head shows a chip with the wallet (a tap explains). Out of season nothing
+  drops.
+- **The counter** is a tab in the Prize Vault while the season is on (Candy
+  Counter / Snowflake Stand; the wallet pill shows the currency there). It
+  sells the season's cosmetics (`DATA.seaCosmetics(id)`, `price` in the
+  currency): **Claw-o-ween** Haunted Mansion (a cabinet: rotten boards,
+  jack-o'-lanterns and a vine on the frame, a full moon, bats and tombstones
+  behind the pile), Pumpkin Spice (claw paint: orange and black, a candle glow),
+  a Witch Hat for each crawler (60 each), Bat Trail (bats flap up out of every
+  step); **winter** Frosted Cabinet (snow on the roof, icicles, a snowy panel)
+  and Hollyberry paint. Tickets never buy them (`vaultHow` is 'event',
+  `vaultPrice` 0); they are never in a Vault Capsule. A buy takes the price,
+  owns and equips it at once (the party lights, SPOOKY! on the marquee).
+- **Owned forever.** Bought event cosmetics are in `meta.vault.owned` like any
+  prize; after the event the counter tab is gone, but they sit on their normal
+  shelves (after the year-round ones), equip and draw as ever. The cosmetic
+  looks reuse the Vault's renderer (skin fields, paint fields; the new
+  patterns `sea_pumpkins`, `sea_moon`, `sea_icicles`, `sea_snow`, the `witch`
+  hat, the `bats` trail are one-line hooks into it).
+
+### Music and sounds
+
+`AUDIO.setSeason(id)` (the game calls it with every music change: the live
+season on the title screens, the run's own in a run) swaps the title and map
+tunes for the season's (`SEA_CFG`: Claw-o-ween a spooky organ swing in
+harmonic minor, a walking bass, an organ pad and a bell tolling every four
+bars; winter a sleigh bell jingle in major with chimes), crossfading a live
+one; fights keep their tunes and layers; no season is the base and act tunes
+bit for bit. Sounds: `knock, creak, treat, boo, cackle, candy`.
+
+### Sticker, save fields, code map
+
+- One sticker (the board's cap is shared with the round's other work): Trick or
+  Treat! (knock on 5 doors during Claw-o-ween, with a progress bar).
+- Meta `sea` (`seaMetaFix` / `DATA.seaFix` repair junk; old profiles get an
+  empty record): `preview` ('' | 'off' | id), `wallet`, `earned`, `spent`
+  ({currency: n}), `knocks`, `king`, `runs` {season: n}, `seen`. Run: `season`
+  (null or an id; missing on old saves = none), `sea` {cur, knocks, costumes,
+  king}. A door tile: `type: 'treat'`, `content.sea` {seed, out, paid, lines,
+  fought}. Screen `sea`. No key was renamed.
+- `GAME.season = {DOOR, now, run, setDate, readUrl, previewing, preview, pick,
+  logoTap, meta, fix, give, wallet, newMap, enemies, dress, fightEnd, event,
+  sweep, rewardItems, relicAdd, show, knock, hurry, leave, cont, pay, trickEnc,
+  shelf, buy, countdown, fmt, musicId, door, log, date, url}`; `DATA` adds
+  `SEASONS, SEASON_IDS, SEA_K, SEA_ITEMS, SEA_RELICS, SEA_ENEMIES,
+  SEA_COSMETIC_IDS, seasonAt, seasonWindow, seasonLeft, seaFix, seaEarn,
+  seaTreatRoll, seaCosmetics, seaCostumeOf`; `RENDER.sea = {SIL, prop,
+  pumpkin, bat, web, moon, snow, fog, title, map, sky, cab, costume, hat,
+  treat, door, coin, framePat, panelPat, trailMark}`; `AUDIO` adds `setSeason,
+  season, SEA_CFG, SEA_NAMES, _seaSong`.
+
+Tests: data (seasonAt on every edge and across the new year, a Date, a
+timestamp, junk; the countdown and the spans; the content looked up but never
+listed or pooled year-round, over 200 reward rolls; the items' fx, shapes and
+texts; the relics' hooks; the costumes against their base; the Pumpkin King;
+no seasonal monster in the encounters; the cosmetics off every shelf and
+capsule, priced in candy, a witch hat per crawler; the wallet repair; the
+currency per fight; the doors' odds and payouts; the sticker), game (no
+season headless without a date; dates, `?season=`, `?season=off`, the preview
+and its reload; doors per map and seed, none out of season or on an old save;
+a run keeps its season; costumes, the King, hats, trick fights, never out of
+season, a reloaded fight keeps its ids; the door: Leave, knock, reload mid
+knock, paid once, the result after a reload; every outcome; candy per fight,
+per costume, the King's relic, Candy Corn, the broom's sweep, rewards and relic
+pools in and out of season; the counter: tickets refused, too little candy,
+bought and equipped, never twice, gone after the event, still owned on its
+shelves and across a reload, a real fight in the mansion; the title banner,
+its countdown, the music id, winter's snowflakes; old saves and junk
+profiles), render (every overlay in both seasons at several times, nothing
+without a season, the bulbs stepping aside for a skin, every costume and the
+King in every state, the hats, the versus card, the door at every beat and
+outcome, the tile, the currency, the items' own drawings, the event cosmetics'
+thumbnails, cabinets, hats on every crawler, the bat trail), audio (the six
+sounds, the four seasonal tunes against the base ones, determinism, the
+crossfade, fights untouched).
+
+## QA sweep 2 and polish (round 7)
+
+Presentation only: no rule, no balance number and no save field changed. The
+flow lives in `game.js` (the QA block before the loop, reached through
+one-line hooks), the pure numbers in `combat.js` (the QA block), the looks in
+`render.js` (`intent`'s `qa` argument, `cmpScene`'s `s`, the title logo fit),
+the CSS in `index.html` (`<style id="qa-css">`, plus small edits to the
+Compactor and the true ending CSS).
+
+### Elite readability: telegraphs that say the real number
+
+The round 5 snapshot blamed act 2 elites for most deaths (Ironjaw's Gape: 46
+charged, x1.8 difficulty, +3 Strength once enraged, x1.5 on a Vulnerable
+player: 129 against an 80 hp knight). The numbers stay; the telegraph tells
+the truth now.
+- `COMBAT.qaIntent(F, e)` (pure) -> `{k, hit, n, jab, total, next, skip,
+  charged}`: the per-hit value exactly as `api.damage` will compute it
+  (`calcHit` with the enemy's Strength plus its Enrage, which lands before it
+  acts, minus a held weapon due to be digested; its Weak; the player's
+  Vulnerable and Armor), the hits, a Hasty jab, the total; a charge's `next`
+  is the unleash a turn ahead (one more Enrage, a 1-stack Vulnerable or Weak
+  gone by then); `skip` for a frozen or stunned enemy or one its own Poison
+  and Burn finish first.
+- `COMBAT.qaThreat(F)` (pure) -> `{raw, burn, poison, bomb, dodged, blocked,
+  net, loss, hp, left, lethal, per}`: the whole enemy phase if the turn ended
+  now, in the engine's order: the player's Burn (a Hot Potato adds to it,
+  through Block), the hits in acting order (Dodge eats whole hits, Block soaks
+  the rest, a Vulnerable debuff lands for the enemies after it, Hasty repeats
+  a debuff), lit bombs on their last turn, then the player's own Poison as the
+  next turn starts. `net` is uncapped (so a lethal preview can say how much
+  Block would save you), `loss` is what the engine takes. The combat suite
+  proves it against the engine: every real enemy, 8 turns, two seeds: exact on
+  every turn (a Greedy gulp's lent Strength, a boss trick and the wheel are
+  left out by design).
+- The intent bubble (`RENDER.intent(..., qa)`) shows the real hit; a multi-hit
+  shows its total big with "25x2" under it (a Hasty jab as "+12x2"); a charge
+  shows the warning and next turn's exact unleash ("! 129"). A big hit (a
+  charge, an unleash, or a total of `QA_BIG` 30% of max hp) turns the bubble red
+  and gets a pulsing danger ring around the enemy (behind its body; one static
+  ring under reduced motion).
+- A charge hangs the cabinet warning sign a turn ahead with the number
+  ("GAPE NEXT TURN: 129"), then "GAPE: 129 INCOMING" on the unleash turn; a
+  boss or bestiary sign always wins the frame.
+- On your turn the HP stat shows a striped ghost of what the phase would take
+  (the bar grows to 6 px), and a compact block at the arena's left edge (no
+  enemy stands there; a label keep-out zone) reads INCOMING -n with "n blocked",
+  ALL BLOCKED, or LETHAL! -n with "need n Block" (pulsing red, the HP stat's rim
+  red). Hidden during the enemy turn, the versus card and the outro.
+- A tap on an enemy adds "Hits you for n (hit xn)" or "Next turn: n" to its
+  popover.
+
+### Safe spots for the corner lane and the toast
+
+The discovery toast used to cover the Compactor's sign, the Prize Vault's
+"Unlocked" toast the win screen's Endless button. On every screen but the fight
+and the map (which keep their own lanes), `qaCornerPlace` and `qaToastPlace`
+measure the screen (`qaKeys`: buttons, headings, text by the box of its letters,
+canvases, `.qaKeep` areas, the other lane's item, and `QA_SIGNS` for signs drawn
+on the canvas: the Compactor's crossbeam at the press's live size) and take the
+first candidate spot that covers nothing: the corner item tries the top strip
+right then left (titles sit left), under it, then the bottom; the toast its old
+y 400, the bottom, the top and four more. Else the least covered (a button or a
+sign weighs 10, a heading 3, other text 1), full size first, then compact. A
+sticker whose every spot would cover a button or a sign waits hidden with its
+clock paused, `QA_HOLD` 4 s at most. Re-measured every 0.4 s and on a screen
+change. `GAME.qa.measure` / `size` feed rects headless.
+
+### The Compactor on a phone
+
+The press is drawn at 0.8 (`cmpScene` `st.s`, `cmpPressK`) while you pick and
+eases to full size for the crush; the bin grid scrolls in the middle under
+"Your bin: tap an item to feed it (n/3)"; a dock in the thumb zone holds the
+three chosen items (68 px slots), the rule line and CRUSH / Back. The result:
+COMPACTED!, a recipe row (three in, an arrow, the new item), the card centred,
+Continue in the dock. Button registration order is unchanged.
+
+### Other polish
+
+- The true ending's epilogue sits on a soft dark blurred panel, the credits on
+  a soft gradient (no blur, the walk-out stays visible) that fades in with the
+  roll; every line has a dark outline shadow, "RoxorLoops & Jasmin" too.
+- The Back Room's HUD act stat reads "4 🔑" with a gold rim (was "Back Rm").
+- The title logo is measured and fitted to the stage with a 14 px margin, its
+  glow stroke included (at 92 px bold it ran past both edges; the C and E were
+  cut at 360 and 390 px, Halloween too).
+- The data suite's sticker cap is 60 (room for the round 7 stickers) and
+  sticker names must be unique.
+
+### The sweep (scratchpad `r7/bot.mjs`, `r7/tour.mjs`, `r7/perf.mjs`)
+
+24 bot runs (4 crawlers x 6 claws, Tilt 0-10, 8 mutator mixes, every pet, boon
+drafts, keys granted for the Back Room, reloads every 400 ticks; runs 16 and 0
+reached the Back Room, 16 fought The Machine) plus Endless-only runs, and a
+scripted tour (the vault's buy, equip and capsule; a boon; a set's fanfare and
+a pet in a fight; all six map cabinets; the Compactor with reloads before and
+after a crush; three keys, the door, the Back Room, The Machine to OVERCLOCKED
+and MELTDOWN, the power down, the ending, the win, Endless to Loop 1; a reload
+at each step). No page or console error, no stall, no NaN in the DOM, no button
+overlap or off-stage button, no double banner. Found and fixed: the corner lane
+and the toast over buttons and signs (above; the Compactor's dock was empty
+while the press ran, so the toast settled where Continue then appeared: the
+dock is `.qaKeep` now), and block-level text measured full width. By design:
+a mid-fight reload restarts the fight from its seed; the rest's upgrade
+picker reloads to the rest; the magnet claw on a crawler with no metal makes
+very long fights for a random bot.
+
+Perf (4x CPU throttle, 390 x 844 DPR 2, software raster, mean frame ms, HEAD
+(round 6) -> round 7 working tree): fight idle 90 -> 79, grabbing 100 -> 95,
+JACKPOT + tier 3 combo + labels 232 -> 198, boss finale 269 -> 228, map pan 139
+-> 129, The Machine's MELTDOWN 283 -> 224, Blackout + a pet + two full sets
+166 -> 140, an elite with the telegraph up 131 -> 125. No regression; the
+profiles are native raster ("(program)"), no JS function over 1%.
+
+`GAME.qa` = `{QA, BIG, HOLD, W, SIGNS, signs, tick, spot, cands, keys, corner,
+toast, signOf, hud, bubble, cmpPressK, threat, by, sign, measure, size,
+refresh}`. Tests: combat (every telegraph number against the engine, the
+charge a turn ahead, Dodge, Block, Burn, Poison, bombs, lethal, purity, the
+real-enemy sweep), game (the Gape's bubble, ring and sign, the pill and the
+ghost in every state, a multi-hit's total and the popover, the safe-spot
+picker, the Compactor's toast and the win screen's vault toast, the sticker
+hold, the toast clear of the corner item, the Compactor's layout, the Back
+Room HUD), render (the bubble's numbers in every mode, the logo fits), data
+(the sticker cap and unique names).
 
 ## Quality bar (Game of the Year, mobile)
 

@@ -1453,6 +1453,39 @@ const AUDIO = (() => {
   Object.assign(LEVEL, { setDone: 1.1, cmpCrunch: 1.1 });
   NAMES.push('setPiece', 'setDone', 'boonDeal', 'boonFlip', 'boonPick', 'cmpFeed', 'cmpPress', 'cmpCrunch', 'cmpPop');
 
+  // ---------------------------------------------------------------- EVOLVE (round 7)
+  // Item evolutions (the item charging up out of the chute, the new form
+  // bursting in) and the pet synergy sparkle.
+  Object.assign(BANK, {
+    // Charging: a rising hum under a quickening shimmer.
+    evoRise(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 90 * p, to: 360 * p, dur: 1.2, v: 0.07, lp: 1400, a: 0.3 });
+      blip(out, t, { w: 'sine', f: 220 * p, to: 880 * p, dur: 1.25, v: 0.06, vib: [8, 14] });
+      for (let i = 0; i < 10; i++) blip(out, t, { at: 0.1 + i * 0.1 * (1 - i * 0.05), w: 'triangle', f: mtof(76 + i * 2) * p, dur: 0.06, v: 0.04 });
+      return 1.3;
+    },
+    // The burst: a crash of glass, a sub hit, a bright major fanfare and sparkles.
+    evoBurst(out, t, o, p) {
+      duck(1.8);
+      hiss(out, t, { type: 'highpass', f: 2600, dur: 0.35, v: 0.22 });
+      blip(out, t, { w: 'sine', f: 120, to: 36, dur: 0.6, v: 0.45 });
+      [60, 64, 67, 72, 76].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.06, w: 'square', f: mtof(n) * p, dur: 0.16, v: 0.07, lp: 4200 }));
+      [72, 76, 79, 84].forEach((n) => blip(out, t, { at: 0.42, w: n % 2 ? 'triangle' : 'square', f: mtof(n) * p, dur: 1.0, v: 0.05, lp: 3800, vib: [5, 6] }));
+      for (let i = 0; i < 10; i++) blip(out, t, { at: 0.5 + i * 0.05, w: 'sine', f: mtof(88 + (i % 5) * 2) * p, dur: 0.09, v: 0.04 });
+      return 1.5;
+    },
+    // A pet synergy: a two-note chirp and a sparkle.
+    petSyn(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: mtof(79) * p, dur: 0.08, v: 0.08 });
+      blip(out, t, { at: 0.07, w: 'triangle', f: mtof(86) * p, dur: 0.12, v: 0.08 });
+      for (let i = 0; i < 3; i++) blip(out, t, { at: 0.14 + i * 0.04, w: 'sine', f: mtof(93 + i * 2) * p, dur: 0.07, v: 0.035 });
+      return 0.32;
+    },
+  });
+  Object.assign(GAP, { evoRise: 0.8, evoBurst: 0.8, petSyn: 0.12 });
+  Object.assign(LEVEL, { evoBurst: 1.1 });
+  NAMES.push('evoRise', 'evoBurst', 'petSyn');
+
   // ---------------------------------------------------------------- SECRET (round 6)
   // The secret act (DESIGN.md "Secret act (round 6)"): a golden key found
   // (a jingle and a sparkle run), the hidden door grinding open, and The
@@ -1681,7 +1714,7 @@ const AUDIO = (() => {
      For boss, the second section is a half-time drop. */
   function compose(mode, act) {
     const c = accCfg(mode, act);
-    const rng = U.rng(U.hashStr('clawspire:' + mode + (c.actKey ? ':act' + c.actKey : '')));
+    const rng = U.rng(U.hashStr('clawspire:' + mode + (c.actKey ? ':act' + c.actKey : '') + (c.seaKey ? ':sea:' + c.seaKey : '')));   // (SEASON: its own tune)
     const scale = SCALES[c.scale];
     const bars = 16, len = bars * BAR;
     const steps = [];
@@ -1782,6 +1815,7 @@ const AUDIO = (() => {
         push(steps, base + at, { v: 'stab', ns: [tone(0, 12), tone(2, 12), tone(4, 12)], d: half ? 6 : 2, g: half ? 1.2 : 1 });
       }
       accFlavor(c, steps, base, b, tone, rng, half);   // the act's own colour (round 6); the base tunes have none
+      seaFlavor(c, steps, base, b, tone, rng);   // the season's own voices (round 7); only its tunes have them
     }
     return { mode, act: c.actKey || 0, bpm: c.bpm, stepDur: 60 / c.bpm / 4, swing: c.swing, len, bars, steps, cfg: c };
   }
@@ -1831,11 +1865,13 @@ const AUDIO = (() => {
     return ACT_MODES[mode] && ACT_CFG[a] ? a : 0;
   }
   function accSongKey(mode, act) {
+    const sk = seaSongKey(mode); if (sk) return sk;   // SEASON: the season's own title / map tune
     const a = accActOf(mode, act);
     return a ? mode + ':act' + a : mode;
   }
   // The mode's config for an act: the base, the act's all, the act's own.
   function accCfg(mode, act) {
+    const sc = seaCfgOf(mode); if (sc) return sc;   // SEASON: the season's variant wins over the act's
     const a = accActOf(mode, act);
     if (!a) return CFG[mode];
     return Object.assign({}, CFG[mode], ACT_CFG[a].all || {}, ACT_CFG[a][mode] || {}, { actKey: a });
@@ -1873,6 +1909,112 @@ const AUDIO = (() => {
     return S.act;
   }
   const ACT_XFADE = 1.6;
+
+  /* ---------------------------------------------------------------- SEASON (round 7)
+     Seasonal events (DESIGN.md "Seasonal events (round 7)"): each season has
+     its own title and map tune on the same composer. Claw-o-ween is a
+     spooky organ swing (harmonic minor, a creeping walking bass, a church
+     organ pad, a low bell tolling every four bars); Winter Wonderclaw a
+     sleigh bell jingle (major, bouncing, sleigh bells on the eighths, a
+     chime up high). AUDIO.setSeason(id) picks it (null: none, the base and
+     act tunes bit for bit); a live title / map tune crossfades into it.
+     Sounds for the trick-or-treat door and the candy. */
+  const SEA_CFG = {
+    halloween: {
+      title: { bpm: 84, root: 38, scale: 'harm', bass: 'walk', lead: 'tense', hat: 'soft', drums: 'light', wave: 'triangle', bassWave: 'triangle',
+        stab: 0.3, swing: 0.2, vol: 0.85, leadUp: 24, organ: 0.6, toll: 1, prog: [[0, 5, 3, 4], [0, 1, 4, 0], [5, 3, 1, 4], [0, 3, 5, 4]] },
+      map: { bpm: 104, root: 40, scale: 'harm', bass: 'walk', lead: 'pluck', hat: 'off', drums: 'light', wave: 'square', bassWave: 'triangle',
+        stab: 0.25, swing: 0.3, vol: 0.8, leadUp: 24, organ: 0.35, toll: 1, prog: [[0, 3, 0, 4], [0, 5, 1, 4], [5, 3, 0, 4], [0, 1, 3, 4]] },
+    },
+    winter: {
+      title: { bpm: 92, root: 43, scale: 'major', bass: 'long', lead: 'dreamy', hat: 'soft', drums: 'none', wave: 'triangle', bassWave: 'sine',
+        stab: 0.25, swing: 0.1, vol: 0.85, leadUp: 36, sleigh: 0.5, chime: 1, prog: [[0, 3, 4, 0], [0, 5, 3, 4], [3, 4, 0, 5], [0, 4, 5, 3]] },
+      map: { bpm: 116, root: 45, scale: 'major', bass: 'bounce', lead: 'pluck', hat: '8', drums: 'four', wave: 'square', bassWave: 'triangle',
+        stab: 0.35, swing: 0, vol: 0.8, leadUp: 24, sleigh: 1, chime: 0.6, prog: [[0, 3, 4, 0], [0, 5, 3, 4], [0, 3, 1, 4], [3, 4, 0, 0]] },
+    },
+  };
+  const SEA_NAMES = { halloween: 'spooky organ swing', winter: 'sleigh bell jingle' };
+  const SEA_XFADE = 1.2;
+  const SEA_FULL = {};
+  const seaOn = (mode) => !!(S.sea && SEA_CFG[S.sea] && SEA_CFG[S.sea][mode]);
+  function seaSongKey(mode) { return seaOn(mode) ? mode + ':sea:' + S.sea : ''; }
+  // The season's config for a mode (the act's colour voices off), or null.
+  function seaCfgOf(mode) {
+    if (!seaOn(mode)) return null;
+    const k = S.sea + ':' + mode;
+    return SEA_FULL[k] || (SEA_FULL[k] = Object.assign({}, CFG[mode], { arp: 0, clank: 0, steam: 0, box: 0 }, SEA_CFG[S.sea][mode], { seaKey: S.sea }));
+  }
+  // The season's own voices for one bar (only its configs draw from the rng).
+  function seaFlavor(c, steps, base, b, tone, rng) {
+    if (!c.seaKey) return;
+    if (c.organ && (b % 2 === 0 || rng.chance(c.organ))) push(steps, base, { v: 'organ', ns: [tone(0, 12), tone(2, 12), tone(4, 12)], d: 14, g: 0.9 });
+    if (c.toll && b % 4 === 0) push(steps, base, { v: 'bell', n: tone(0, 12), g: 1.3 });
+    if (c.sleigh) for (let s = 0; s < BAR; s += 2) if (s % 4 === 0 || rng.chance(c.sleigh)) push(steps, base + s, { v: 'sleigh', g: s % 4 === 0 ? 1 : 0.6 });
+    if (c.chime) for (const s of [0, 8]) if (s === 0 || rng.chance(c.chime * 0.6)) push(steps, base + s, { v: 'bell', n: tone(rng.pick([0, 2, 4]), 36), g: 0.8 });
+  }
+  function seaVoice(dest, t, ev, g, sd) {
+    if (ev.v === 'organ') {
+      for (const n of ev.ns || []) {
+        blip(dest, t, { w: 'triangle', f: mtof(n), dur: ev.d * sd, v: 0.028 * g, a: 0.09, vib: [5, mtof(n) * 0.006] });
+        blip(dest, t, { w: 'square', f: mtof(n) * 1.004, dur: ev.d * sd, v: 0.01 * g, a: 0.09, lp: 1300 });
+      }
+    } else if (ev.v === 'sleigh') {
+      hiss(dest, t, { type: 'highpass', f: 7600, q: 0.8, dur: 0.07, v: 0.05 * g });
+      blip(dest, t, { w: 'sine', f: 5100, dur: 0.05, v: 0.008 * g, a: 0.001 });
+      blip(dest, t, { w: 'sine', f: 6400, dur: 0.04, v: 0.006 * g, a: 0.001, at: 0.02 });
+    }
+  }
+  /* The season the music plays in (null: none). A live title or map tune
+     of another season crossfades into this one. Returns the season. */
+  function setSeason(id) {
+    id = id && SEA_CFG[id] ? id : null;
+    if (id === (S.sea || null)) return S.sea || null;
+    S.sea = id;
+    if (S.ac && prefs().music && S.want && CFG[S.want] && S.seqs.some((q) => q.mode === S.want && q.fadeEnd == null && q.song !== song(S.want, accActOf(S.want)))) startMode(S.want, SEA_XFADE);
+    return S.sea || null;
+  }
+  Object.assign(BANK, {
+    // Knuckles on an old wooden door.
+    knock(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 190 * p, to: 90, dur: 0.09, v: 0.45, a: 0.001 });
+      hiss(out, t, { type: 'bandpass', f: 900 * p, q: 1.4, dur: 0.05, v: 0.3, crunch: true });
+      return 0.15;
+    },
+    // The door swings open: a long wobbling hinge.
+    creak(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 150 * p, to: 95 * p, dur: 0.85, v: 0.08, a: 0.05, lp: 1400, q: 4, vib: [11, 14] });
+      blip(out, t, { at: 0.3, w: 'square', f: 420 * p, to: 330 * p, dur: 0.4, v: 0.025, lp: 1800, vib: [16, 20] });
+      hiss(out, t, { type: 'lowpass', f: 400, dur: 0.9, v: 0.08, a: 0.2 });
+      return 1.0;
+    },
+    // A treat: a happy arpeggio and a sparkle.
+    treat(out, t, o, p) {
+      [72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.14, v: 0.07, lp: 4800 }));
+      blip(out, t, { at: 0.3, w: 'sine', f: mtof(96) * p, dur: 0.5, v: 0.05, vib: [8, 14] });
+      return 0.85;
+    },
+    // A ghost: a wobbling "whooo" sliding down, then a low thump.
+    boo(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 620 * p, to: 260 * p, dur: 0.9, v: 0.16, a: 0.08, vib: [6, 30] });
+      blip(out, t, { w: 'triangle', f: 930 * p, to: 390 * p, dur: 0.8, v: 0.05, a: 0.1, vib: [6, 40] });
+      blip(out, t, { at: 0.05, w: 'sine', f: 90, to: 45, dur: 0.25, v: 0.4 });
+      return 1.0;
+    },
+    // A curse: a witch's cackle, five nasal bleeps tumbling down.
+    cackle(out, t, o, p) {
+      [88, 86, 84, 83, 81].forEach((n, i) => blip(out, t, { at: i * 0.09, w: 'square', f: mtof(n) * p, dur: 0.07, v: 0.06, lp: 2600, q: 5, vib: [40, 18] }));
+      hiss(out, t, { at: 0.1, type: 'bandpass', f: 1400, q: 2, dur: 0.4, v: 0.05 });
+      return 0.6;
+    },
+    // Candy: a wrapper crinkle and a tiny ding.
+    candy(out, t, o, p) {
+      for (let i = 0; i < 3; i++) hiss(out, t, { at: i * 0.03, type: 'highpass', f: 5200, dur: 0.025, v: 0.12 });
+      blip(out, t, { at: 0.06, w: 'sine', f: mtof(88) * p, dur: 0.18, v: 0.06 });
+      return 0.3;
+    },
+  });
+  Object.assign(GAP, { knock: 0.1, creak: 0.8, treat: 0.5, boo: 0.6, cackle: 0.5, candy: 0.06 });
+  NAMES.push('knock', 'creak', 'treat', 'boo', 'cackle', 'candy');
 
   // ---------------------------------------------------------------- music voices
   function playEvent(inst, ev, t) {
@@ -1923,7 +2065,7 @@ const AUDIO = (() => {
         blip(dest, t, { w: 'sine', f: mtof(ev.n), dur: 0.9, v: 0.05 * g, a: 0.002 });
         blip(dest, t, { w: 'triangle', f: mtof(ev.n) * 3.01, dur: 0.25, v: 0.012 * g, a: 0.001 });
         break;
-      default: break;
+      default: seaVoice(dest, t, ev, g, sd); break;   // SEASON: the organ and the sleigh bells
     }
   }
 
@@ -2376,6 +2518,8 @@ const AUDIO = (() => {
     set muted(v) { setSfx(!v); setMusic(!v); },
     // round 6: per-act music (the act biome picks the map and fight variants)
     setAct, get act() { return S.act; }, ACT_CFG, ACT_NAMES, setMaster, get master() { return S.vMaster == null ? 1 : S.vMaster; },
+    // round 7: the seasonal events' title and map tunes
+    setSeason, get season() { return S.sea || null; }, SEA_CFG, SEA_NAMES, _seaSong: (m, id) => { const k = S.sea; S.sea = id || null; try { return song(m, S.act); } finally { S.sea = k; } },
     _songFor: (m, a) => song(m, a == null ? S.act : a),
     _actOf: (m, a) => accActOf(m, a),
     _liveActs: () => S.seqs.map((q) => ({ mode: q.mode, act: q.act || 0, fading: q.fadeEnd != null })),

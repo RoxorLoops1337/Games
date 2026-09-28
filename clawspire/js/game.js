@@ -114,7 +114,7 @@ const GAME = (() => {
     return (plus && def.plus && def.plus.text) || def.text || '';
   };
   const snd = (name, opts) => { if (X.AUDIO && X.AUDIO.sfx) { try { X.AUDIO.sfx(name, opts); } catch (e) { /* audio is optional */ } } };
-  const music = (mode) => { if (X.AUDIO && X.AUDIO.music) { try { accMusicAct(); X.AUDIO.music(secMusic(mode)); } catch (e) { /* optional */ } } };   // ACCESS: the act's own tune (SECRET: the Back Room's own)
+  const music = (mode) => { if (X.AUDIO && X.AUDIO.music) { try { accMusicAct(); seaMusic(); X.AUDIO.music(secMusic(mode)); } catch (e) { /* optional */ } } };   // (SEASON: the season's variant)   // ACCESS: the act's own tune (SECRET: the Back Room's own)
   const haptic = (k) => feelHaptic(k);   // patterns, the Buzz setting and reduced motion (FEEL block)
 
   // Seeded stream for a named purpose; the run's nonce makes every call fresh
@@ -208,6 +208,7 @@ const GAME = (() => {
     S.toastT = secs || 1.8;
     S.lastToast = str;
     feelToastLane(true);   // off the play area on the arcade and fight screens; the shopkeeper says it (FEEL block)
+    qaToastPlace();        // elsewhere off the screen's buttons and headings (QA round 7)
   }
   function popover(html, x, y) {
     const el = $('pop');
@@ -615,6 +616,8 @@ const GAME = (() => {
           if (o.arc && typeof o.arc === 'object' && !Array.isArray(o.arc)) S.meta.arc = Object.assign({}, o.arc);   // ARCADE play counts (were dropped on load)
           if (o.pets && typeof o.pets === 'object' && !Array.isArray(o.pets)) S.meta.pets = Object.assign({}, o.pets);   // PETS: the album
           secMetaFix(S.meta, o);   // SECRET: golden keys found, back rooms entered, true endings seen
+          seaMetaFix(S.meta, o);   // SEASON: the event preview, the season wallets, doors knocked
+          evoMetaFix(S.meta, o);   // EVOLVE: evolutions found, pet synergies set off
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -728,6 +731,7 @@ const GAME = (() => {
       else if (sc === 'secret' && S.sd && S.sd.secret) secShow(S.sd.secret);   // SECRET: the hidden door, the true ending
       else if (sc === 'boon' && run.boon) showBoon();   // SETS: the boon draft (a pick already made moves on)
       else if (sc === 'compactor' && S.sd && S.sd.compactor) cmpShow(S.sd.compactor);   // SETS: the Compactor
+      else if (sc === 'sea' && S.sd && S.sd.sea) seaShow(S.sd.sea);   // SEASON: a trick-or-treat door
       else if (sc === 'win' && run.winDone && !run.endless) showWin();   // ENDLESS: the offer is still open
       else toMap();
       return true;
@@ -754,6 +758,7 @@ const GAME = (() => {
     run.clawType = pickedClaw();   // the claw picked on character select (CLAW TYPES block)
     metaNewRun(run);   // Tilt level, daily flag, Tilt junk and bulbs (META block)
     endlessNewRun(run);   // the run's mutators (ENDLESS block)
+    seaNewRun(run);   // the season the run starts in, kept for good (SEASON block)
     S.run = run;
     lootRun(run);
     S.tix = null; S.pay = null; S.cap = null;
@@ -772,6 +777,7 @@ const GAME = (() => {
     const rng = U.rng(U.hashStr(run.seed + ':map:' + run.act + endlessMapTag(run)));   // a new map every Endless loop (ENDLESS block)
     run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes });
     secNewMap(run);   // this act's golden key (SECRET)
+    seaNewMap(run);   // trick-or-treat doors in season (SEASON)
     run.floor = 0;
     S.brushSel = null;
     S.preview = null;
@@ -852,6 +858,7 @@ const GAME = (() => {
       if (rarities && rarities.indexOf(r.rarity || 'c') < 0) continue;
       out.push(id);
     }
+    seaRelicAdd(out, rarities, own);   // the season's relics while the run's season is on (SEASON block)
     return out;
   }
   function rollRelic(rng, rarities) {
@@ -869,6 +876,7 @@ const GAME = (() => {
       const all = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity !== 'junk');
       ids = rng.shuffle(all).slice(0, n);
     }
+    ids = seaRewardItems(ids);   // a seasonal item now and then (SEASON block)
     ids.forEach(seeItem);
     return ids;
   }
@@ -934,6 +942,7 @@ const GAME = (() => {
     metaDailyBtn(m);   // the daily run (META block)
     endlessDailyTag(m);   // today's mutators on it (ENDLESS block)
     vaultTitleBtn(m);   // the Prize Vault with the vault ticket wallet (VAULT block)
+    seaTitle(m);   // the event banner and its countdown, the hidden Event preview (SEASON block)
     const row = h('div', 'row');
     row.appendChild(btn('Prizedex', () => showCollection()));
     row.appendChild(btn('Stickers', () => showStickers()));
@@ -1450,7 +1459,7 @@ const GAME = (() => {
   function metaFxTick(dt) {
     const cur = S.mcur;
     if (cur) {
-      cur.t -= dt;
+      if (!cur.hold) cur.t -= dt;   // a sticker waiting for a clear spot keeps its time (QA round 7)
       if (cur.t > 0) return;
       const el = cur.el;
       if (el) { try { el.classList.add('out'); } catch (e) { /* stub */ } setTimeout(() => { try { el.remove(); } catch (e) { /* gone */ } }, 400); }
@@ -1471,11 +1480,13 @@ const GAME = (() => {
     if (L.length > 30) L.shift();
     const st = $('stage');
     if (el && st && !S.headless) { st.appendChild(el); replay(el, 'in'); }
+    const sp = qaCornerPlace();   // a safe spot off this screen's buttons and signs (QA round 7)
     if (it.k === 'ach') {
       const a = (D().ACHIEVEMENTS || {})[it.id] || {};
+      const rx = sp ? sp.x + 185 : 462, ry = sp ? sp.y + 40 : 118;
       snd('stamp'); snd('sticker'); haptic('jackpot');
-      fx().ring(462, 118, a.color || PAL0.gold, { r0: 10, r1: 110, w: 6, life: 0.5, delay: 0.12 });
-      fx().emit('confetti', 462, 118, { power: 0.6, n: 0.5 });
+      fx().ring(rx, ry, a.color || PAL0.gold, { r0: 10, r1: 110, w: 6, life: 0.5, delay: 0.12 });
+      fx().emit('confetti', rx, ry, { power: 0.6, n: 0.5 });
     } else snd('discover');
   }
   function stickerEl(id) {
@@ -1578,7 +1589,7 @@ const GAME = (() => {
     setScreen('collection');
     metaFix(S.meta);
     const tabs = dexTabs();
-    tab = (typeof tab === 'string' && (tabs.some((t) => t.id === tab) || tab === 'sets')) ? tab : (S.dexTab || 'items');   // 'sets': the SETS block's tab
+    tab = (typeof tab === 'string' && (tabs.some((t) => t.id === tab) || tab === 'sets' || tab === 'evo')) ? tab : (S.dexTab || 'items');   // 'sets': the SETS block's tab, 'evo': the EVOLVE block's
     S.dexTab = tab;
     const b = $('collectionBody');
     clear(b);
@@ -1596,8 +1607,10 @@ const GAME = (() => {
       row.appendChild(bt);
     }
     setDexTab(row, tab);   // the relic sets (SETS block)
+    evoDexTab(row, tab);   // the evolutions (EVOLVE block)
     b.appendChild(row);
     if (tab === 'sets') setDexGrid(b);
+    if (tab === 'evo') evoDexGrid(b);
     const grid = h('div', 'grid4 dex');
     const ids = E[tab] || [];
     for (const id of ids) grid.appendChild(dexCard(tab, id));
@@ -2077,15 +2090,16 @@ const GAME = (() => {
   // A new map per loop: act 1's biome again, but never act 1's map (outside Endless the seed is unchanged).
   const endlessMapTag = (run) => (run && run.endless && run.endless.loop > 0 ? ':loop' + run.endless.loop : '');
   const endlessBossTitle = (run) => (run && run.endless && run.endless.loop > 0 ? 'LOOP ' + run.endless.loop + ' BOSS' : 'ACT ' + ((run && run.act) || 1) + ' BOSS');
-  const endlessHudAct = (run) => (run.endless && run.endless.loop > 0 ? 'Loop ' + run.endless.loop : secIn(run) ? 'Back Rm' : `${run.act} of 3`);   // (SECRET: the Back Room)
+  const endlessHudAct = (run) => (run.endless && run.endless.loop > 0 ? 'Loop ' + run.endless.loop : secIn(run) ? '4 \u{1F511}' : `${run.act} of 3`);   // (SECRET: the Back Room reads "Act 4" and a key, like the map head; round 7 QA)
   // The act stat turns into the Loop stat in Endless.
   function endlessHud(run) {
     const st = S.actStat || (S.actStat = ($('actTxt') || {}).parentNode || null);
     if (!st || !st.classList) return;
-    const on = !!(run && run.endless && run.endless.loop > 0);
-    if (S.loopHud === on) return;
-    S.loopHud = on;
+    const on = !!(run && run.endless && run.endless.loop > 0), sec = !on && !!(run && secIn(run));
+    if (S.loopHud === on && S.secHud === sec) return;
+    S.loopHud = on; S.secHud = sec;
     st.classList[on ? 'add' : 'remove']('endless');
+    st.classList[sec ? 'add' : 'remove']('secret');   // the Back Room: a gold key stat (round 7 QA)
     const k = st.querySelector ? st.querySelector('.k') : null;
     if (k) k.textContent = on ? 'Endless' : 'Act';
   }
@@ -2619,10 +2633,11 @@ const GAME = (() => {
       tb.onclick = () => { Vs.tab = c.id; Vs.sel = null; snd('cardFlip'); vaultDom(); };
       tabs.appendChild(tb);
     }
+    seaVaultTab(tabs);   // the season's counter (SEASON block)
     b.appendChild(tabs);
     // the shelf: a glowing slot per prize
     const shelf = h('div', 'vShelf');
-    const list = D().vaultList ? D().vaultList(Vs.tab) : [];
+    const list = seaShelf(Vs.tab, D().vaultList ? D().vaultList(Vs.tab) : []);   // (SEASON: the counter's stock, the event cosmetics you own)
     for (const id of list) shelf.appendChild(vaultCard(id));
     b.appendChild(shelf);
     try { if (scroll) shelf.scrollTop = scroll; } catch (e) { /* stub */ }
@@ -2657,6 +2672,7 @@ const GAME = (() => {
     if (eq) tg.textContent = '★ ON';
     else if (own) tg.textContent = 'OWNED';
     else if (how === 'buy') { tg.appendChild(h('i', 'tixi')); tg.appendChild(h('b', null, String(price))); }
+    else if (how === 'event') seaTag(tg, id);   // the season's currency (SEASON block)
     else tg.textContent = how === 'sticker' ? '🔒 STICKER' : '🎰 CAPSULE';
     el.appendChild(tg);
     if (d.char && Vs.tab === 'outfit') el.appendChild(h('div', 'who', ((charDef(d.char) || {}).name || d.char).split(' ')[0]));
@@ -2688,7 +2704,8 @@ const GAME = (() => {
       act.appendChild(h('span', null, 'Buy '));
       act.appendChild(h('i', 'tixi'));
       act.appendChild(h('b', null, String(price)));
-    } else if (how === 'sticker') {
+    } else if (how === 'event') act = seaBuyBtn(id);   // bought with the season's currency (SEASON block)
+    else if (how === 'sticker') {
       const a = (D().ACHIEVEMENTS || {})[d.ach];
       act = h('div', 'vdLock', `🔒 Sticker: ${a ? a.name : d.ach}`);
       act.onclick = () => popover(`<b>${a ? a.icon + ' ' + a.name : d.ach}</b><br>${a ? a.text : ''}<br><i>Earn the sticker and this is yours.</i>`, 400, 400);
@@ -3297,6 +3314,7 @@ const GAME = (() => {
       : `Tap a lit hex to walk: it lights around you. Tap a dark hex to light the way there (1 ${TERM('ink')} each, fords 2). The road leads to the boss.`;
     lootMapChip(l2);   // banked capsules, waiting to be cracked
     secHeadChip(l2);   // the golden keys counter (SECRET)
+    seaHeadChip(l2);   // the season's currency (SEASON)
     l2.appendChild(h('div', 'hint', hintTxt));
     const gear = btn('⚙', () => accOpen(), 'sm ghost accGear');   // the Settings panel (ACCESS block)
     gear.title = 'Settings';
@@ -3830,6 +3848,7 @@ const GAME = (() => {
     // A cleared tile: nothing to do (no toast for one merely crossed mid-walk).
     if (t.done) { if (!(S.walk && !S.walk.done && S.walk.i < S.walk.path.length)) toast('Already cleared.'); save(); return; }
     const finish = () => { t.done = true; };
+    if (t.type === 'treat' && seaEnterTile(t)) return;   // a trick-or-treat door (SEASON)
     switch (t.type) {
       case 'fight': case 'elite': {
         finish();
@@ -3949,8 +3968,10 @@ const GAME = (() => {
     enemyIds = (enemyIds || []).slice();
     tier = tier || 'normal';
     enemyIds = mutEnemies(enemyIds, tier, opts);   // Double Trouble (ENDLESS block)
+    enemyIds = seaEnemies(enemyIds, tier, opts);   // costumes and the season's elite (SEASON block)
     const seed = opts.seed != null ? opts.seed : U.hashStr(run.seed + ':fight:' + run.act + ':' + run.floor + ':' + (run.nonce = (run.nonce || 0) + 1));
     F = X.COMBAT.newFight(run, enemyIds, U.rng(seed));
+    seaDress(F, seed, opts);   // party hats in season (SEASON block)
     FS = {
       start: { enemyIds, tier, seed, then: opts.then || null }, tier, seed, rng: U.rng(seed ^ 0x5bd1e995),
       world: null, cabinet: null, rig: null, items: [], spawnQ: [], spawnT: 0,
@@ -4663,6 +4684,7 @@ const GAME = (() => {
     metaEvent(ev);   // Prizedex sightings and sticker checks, read only (META block)
     feelEvent(ev);   // tip cards for things met for the first time (FEEL block)
     petEvent(ev);   // the pet reacts (PETS block)
+    seaEvent(ev);   // Candy Corn pays candy, the Witch Broom sweeps (SEASON block)
     bumpShown(ev);
     if (ev.t === 'turn') { FS.shown.p.block = F.player.block; }
     // die/summon/intent carry only an enemy index, no who.
@@ -6417,7 +6439,7 @@ const GAME = (() => {
     fx().trail(pos.x, pos.y, '#ffc94d');
     fx().ring(pos.x, pos.y, '#ffc94d', { r0: 8, r1: 46, w: 4 });
     FS.chuteFlash = 0.35;
-    throwItem(inst, pos);
+    if (!evoDeliver(inst, pos)) throwItem(inst, pos);   // an evolution throws it after its ceremony (EVOLVE)
     const chuteMid = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW * 0.5;
     // the chip rises just left of the divider so it never sits on the PRIZE lettering
     fx().text(chuteMid - 66, CAB.y + CAB.h - 40, '+PLAYED', '#ffc94d', { size: 15, dy: -80, life: 0.9 });
@@ -6823,6 +6845,7 @@ const GAME = (() => {
     endlessFightEnd(result, tier);   // score counters: bosses, combos (ENDLESS block)
     petFightEnd(result, tier);   // pet XP for a win (PETS block)
     setFightEnd(result);   // the boon's warm-up grabs run out, Chew Toy xp (SETS block)
+    seaFightEnd(result, tier);   // the season's currency for a win (SEASON block)
     hint('');
     if (result === 'lose') {
       run.killer = FS.killer || 'the Clawspire';
@@ -6874,6 +6897,7 @@ const GAME = (() => {
   function updateFight(dt) {
     if (!F || !FS) return;
     const rig = FS.rig, Wd = FS.world;
+    if (evoHold()) return;   // the fight holds its breath while an item evolves (EVOLVE)
     // Shower spawn.
     if (FS.spawnQ.length) {
       FS.spawnT -= dt;
@@ -7086,6 +7110,7 @@ const GAME = (() => {
     card.appendChild(h('div', 'text', itemText(def, plus)));
     const kw = kwChips(def);
     if (kw) card.appendChild(kw);
+    evoCardTag(card, def, plus);   // EVOLVE: the EVOLVED badge, or "Evolves with" once the recipe is known
     if (o.price != null) card.appendChild(h('div', 'price', o.sold ? 'SOLD' : o.price + ' gold'));
     if (o.sold && o.price != null) card.appendChild(h('div', 'stamp' + (o.justSold ? ' slam' : ''), 'SOLD'));
     if (plus) card.appendChild(h('div', 'plus', 'PLUS'));
@@ -9827,7 +9852,7 @@ const GAME = (() => {
     P.uses--; P.acted++; P.waitT = 0; P.idleT = 0;
     if (P.mood === 'sleep') { P.mood = ''; P.moodT = 0; }
     FS.delivered = 0;   // a prize the pet knocks in is a prize of its own, never the last grab's DOUBLE
-    const tg = petPick(P, k);
+    const tg = evoPetPick(P, k) || petPick(P, k);   // the Fire Cat bats Pyro first (EVOLVE)
     if (!tg) { petQuip(P, 'Hmm, nothing to do.', 1.4); petMood(P, 'sad', 1); P.log.push({ k, turn: F.turn, none: true }); return false; }
     const style = PET_MOVE[P.id] || 'leap';
     P.act = { k, b: tg.b || null, uid: tg.b ? tg.b.data.inst.uid : null, x: tg.b ? tg.b.x : tg.x, y: tg.b ? tg.b.y : tg.y, ghost: !!tg.ghost, rummage: !!tg.rummage, metal: tg.metal !== false,
@@ -10001,6 +10026,7 @@ const GAME = (() => {
       }
       default: break;
     }
+    evoPetEffect(P, A, ok, pow);   // the pet's synergy with the build (EVOLVE block)
     if (def) P.log.push({ k: A.k, fx: true, turn: F.turn, uid: A.uid });
     haptic('tap');
   }
@@ -10016,6 +10042,7 @@ const GAME = (() => {
     const s = rig.geo && rig.geo.s ? rig.geo.s : 0.74;
     P.hold = { b, dx: U.clamp(b.x - rig.x, -40, 40), dy: U.clamp(b.y - rig.y, 12, 62 * s + 16), t: 0 };
     if (P.hookW !== FS.world) { FS.world.addHook(petHook); P.hookW = FS.world; }
+    evoPetHold(P, cargo);   // Two Arms on the Tri-Claw (EVOLVE)
     P.act = { k: 'hold', b, uid: b.data.inst.uid, x: b.x, y: b.y, style: 'leap', ph: 'go', t: 0, li: 0, legs: null, fx: false, fxAt: 0, dur: 0.5 };
     P.act.legs = petGoLegs(P, 'leap');
     fx().text(CAB.x + b.x, CAB.y + b.y + 24, 'HOLD ON!', '#c77dff', { size: 14 });
@@ -10023,6 +10050,7 @@ const GAME = (() => {
     return true;
   }
   function petHoldEnd(P) {
+    evoPetHoldEnd(P);   // the second arm lets go too (EVOLVE)
     if (P.hookW && P.hookW.removeHook) { try { P.hookW.removeHook(petHook); } catch (e) { /* the world is gone */ } }
     P.hookW = null; P.hold = null;
   }
@@ -10076,6 +10104,7 @@ const GAME = (() => {
     const P = petFS();
     if (P) {
       petMood(P, FS.delivered >= 3 ? 'cheer' : 'happy', FS.delivered >= 3 ? 2 : 1.1);
+      evoPetDeliver(P, inst);   // Frost Light: the spotlit item carries its mark into COMBAT (EVOLVE)
       if (P.glowUid && inst && inst.uid === P.glowUid && F) {
         const g = D().petGlow ? D().petGlow(P.lv) : 3;
         P.glowUid = null;
@@ -10112,7 +10141,7 @@ const GAME = (() => {
     if (!P || !p || P.act) return false;
     if (Math.abs(x - P.x) > 34 || y < P.y - 46 || y > P.y + 26) return false;
     const def = petDefOf(p.id), nx = D().petNext ? D().petNext(p.xp) : null;
-    popover(`<b>${p.name}</b> the ${def.name}, Lv ${p.lv}<br>${D().petText ? D().petText(p.id, p.lv) : def.text}<br><i>${nx ? `XP ${p.xp}, ${nx.need} to Lv ${p.lv + 1}` : 'Max level!'}</i>`, P.x + 60, P.y - 10);
+    popover(`<b>${p.name}</b> the ${def.name}, Lv ${p.lv}<br>${D().petText ? D().petText(p.id, p.lv) : def.text}<br><i>${nx ? `XP ${p.xp}, ${nx.need} to Lv ${p.lv + 1}` : 'Max level!'}</i>${evoPetTapLine(p)}`, P.x + 60, P.y - 10);   // + its synergy (EVOLVE)
     petMood(P, 'happy', 1.2); P.sq = 0.7;
     snd('petChirp', { pitch: PET_PITCH[p.id] || 1 });
     return true;
@@ -10142,6 +10171,7 @@ const GAME = (() => {
     const nx = D().petNext ? D().petNext(p.xp) : null;
     PET_TAGV.name = p.name; PET_TAGV.lv = p.lv; PET_TAGV.col = PET_BED[p.id] || '#ffc94d'; PET_TAGV.xpK = nx ? nx.into / nx.span : 1; PET_TAGV.t = t; PET_TAGV.flash = S.petTagFl || 0;
     if (R.petTag) R.petTag(ctx, PET_K.perchX, PET_K.tagY, PET_TAGV);
+    evoPetTagBadge(ctx, t);   // the synergy badge while it is on (EVOLVE)
     const V = PETV;
     V.t = t; V.lv = P.lv; V.mood = P.mood; V.moodK = P.moodT >= 900 ? 1 : U.clamp(P.moodT * 2, 0, 1); V.blink = P.blinkT < 0 ? 1 : 0; V.look = P.look;
     V.dir = P.dir; V.pose = P.pose; V.k = P.k || 0; V.sq = fx().reduced ? 0 : P.sq; V.air = !!P.air; V.lvUp = P.lvUp; V.talk = P.quip ? 1 : 0;
@@ -12115,38 +12145,50 @@ const GAME = (() => {
     top.appendChild(h('h1', null, 'The Compactor'));
     top.appendChild(h('div', 'sub', cd.from === 'shop' ? `Three in, one out. ${cmpPrice()} gold a crush.` : 'Three in, one out. Free, instead of resting.'));
     b.appendChild(top);
+    // QA round 7 layout (a phone): the press on top (smaller while you pick),
+    // the bin in the middle, and a dock in the thumb zone at the bottom with
+    // the three chosen items, the rule and CRUSH / Back (or Continue).
     const win = h('div', 'cmpWin');
     win.onclick = () => cmpHurry();
     b.appendChild(win);
     const panel = h('div', 'cmpPanel');
-    b.appendChild(panel);
+    const dock = h('div', 'cmpDock qaKeep');   // qaKeep: the corner lane keeps off it even while Continue is still coming
+    try { b.classList[cd.res ? 'add' : 'remove']('res'); } catch (e) { /* stub */ }
     if (cd.res) {
       const def = itemDef(cd.res.id);
       const res = h('div', 'cmpRes' + (C.phase === 'done' ? ' show' : ''));
       res.appendChild(h('div', 'cmpStamp', 'COMPACTED!'));
+      // what went in and what came out, in one line
+      const rec = h('div', 'cmpRecipe');
+      for (const i of cd.res.ins || []) rec.appendChild(itemCanvas(itemDef(i.id), !!i.plus, 40));
+      rec.appendChild(h('span', 'cmpArrow', '→'));
+      rec.appendChild(itemCanvas(def, !!cd.res.plus, 48));
+      res.appendChild(rec);
       res.appendChild(itemCard(def, !!cd.res.plus, { cls: 'cmpCard' }));
-      res.appendChild(btn('Continue', () => cmpLeave(), 'pri'));
       panel.appendChild(res);
-      if (C.phase !== 'done') panel.appendChild(h('div', 'cmpRule cmpWait', 'CRUNCH... tap the press to hurry it.'));
+      if (C.phase === 'done') dock.appendChild(btn('Continue', () => cmpLeave(), 'pri cmpGo'));
+      else dock.appendChild(h('div', 'cmpRule cmpWait', 'CRUNCH... tap the press to hurry it.'));
       S.cmp.resEl = res;
+      b.appendChild(panel); b.appendChild(dock);
       return;
     }
     const insts = cmpInsts(cd);
     const slots = h('div', 'cmpSlots');
     for (let i = 0; i < 3; i++) {
       const inst = insts[i], s = h('button', 'cmpSlotBox' + (inst ? ' on' : ''));
-      if (inst) { s.appendChild(itemCanvas(itemDef(inst.id), inst.plus, 40)); s.onclick = () => cmpUnpick(inst.uid); } else s.appendChild(h('span', null, String(i + 1)));
+      if (inst) { s.appendChild(itemCanvas(itemDef(inst.id), inst.plus, 48)); s.onclick = () => cmpUnpick(inst.uid); } else s.appendChild(h('span', null, String(i + 1)));
       slots.appendChild(s);
     }
-    panel.appendChild(slots);
-    panel.appendChild(h('div', 'cmpRule', cmpRuleText(insts)));
+    dock.appendChild(slots);
+    dock.appendChild(h('div', 'cmpRule', cmpRuleText(insts)));
     const row = h('div', 'row cmpRow');
     const crush = btn(cd.from === 'shop' ? `CRUSH (${cmpPrice()})` : 'CRUSH', () => cmpCrush(), 'pri cmpGo');
     if (insts.length < 3) crush.disabled = true;
     row.appendChild(crush);
     row.appendChild(btn(cd.from === 'shop' ? 'Back to the shop' : 'Back', () => cmpLeave(), 'ghost'));
-    panel.appendChild(row);
+    dock.appendChild(row);
     // the bin, grouped: a tap feeds one more of that item
+    panel.appendChild(h('div', 'cmpHead', `Your bin: tap an item to feed it (${insts.length}/3)`));
     const groups = {}, order = [];
     for (const inst of run.bin) {
       const k = inst.id + (inst.plus ? '+' : '');
@@ -12159,7 +12201,10 @@ const GAME = (() => {
       grid.appendChild(itemCard(def, g.inst.plus, { count: g.left.length, cls: g.left.length ? '' : 'sold', disabled: !g.left.length, onPick: () => { if (g.left.length) cmpPick(g.left[0].uid); } }));
     }
     panel.appendChild(grid);
+    b.appendChild(panel); b.appendChild(dock);
   }
+  // The press is drawn smaller while you pick (the bin needs the room), full size for the crush (QA round 7).
+  const cmpPressK = (C) => (C && C.cd && C.cd.res ? 1 : 0.8);
   function cmpPick(uid) {
     const C = S.cmp, run = S.run;
     if (!C || C.cd.res || C.cd.pick.length >= 3 || C.cd.pick.indexOf(uid) >= 0 || !run.bin.some((i) => i.uid === uid)) return false;
@@ -12266,10 +12311,413 @@ const GAME = (() => {
       const C = S.cmp, cd = C.cd;
       const ins = (cd.res ? cd.res.ins : cmpInsts(cd)).map((i) => ({ def: itemDef(i.id), plus: !!i.plus }));
       const res = cd.res ? { def: itemDef(cd.res.id), plus: !!cd.res.plus } : null;
-      R.cmpScene(ctx, { t, x: 0, y: 70, w: W, h: 350, phase: C.phase, k: C.t, K: CMPK, ins, res, shake: C.shake, reduced: !!fx().reduced });
+      // the press eases from its picking size to full size for the crush (QA round 7 layout)
+      const want = cmpPressK(C), dt = U.clamp(t - (C.sT == null ? t : C.sT), 0, 0.1);
+      C.sT = t; C.s = C.s == null || fx().reduced ? want : C.s + (want - C.s) * Math.min(1, dt * 7);
+      R.cmpScene(ctx, { t, x: (W - W * C.s) / 2, y: 70, w: W, h: 350, s: C.s, phase: C.phase, k: C.t, K: CMPK, ins, res, shake: C.shake, reduced: !!fx().reduced });
     }
   }
   // ================================================================ /SETS
+
+  // ================================================================ EVOLVE (round 7)
+  /* Item evolutions and pet synergies (DESIGN.md "Evolutions and pet
+     synergies (round 7)"). An upgraded item whose relic the run holds
+     evolves as it is delivered: COMBAT.evolve turns the fight's copy, the
+     run's bin copy follows at once and the run is saved, so a reload never
+     loses it and never evolves it twice; then the fight holds its breath for
+     the ceremony (FS.evo: the item spins up out of the chute into a light
+     pillar, bursts into its new form, EVOLVED! and its name slam in) and the
+     new form is thrown at its target and plays. At a rest (an Evolve choice)
+     and a forge (EVOLVE cards), or when an upgrade completes a recipe there,
+     it evolves on the spot with the same ceremony on an overlay (S.evoUi).
+     meta.evo {seen, made, syn, new} feeds the item card hints ("Evolves
+     with: <relic>"), the Prizedex's Evolutions tab and two stickers. Pets:
+     DATA.petSynOn(pet, run) switches a pet's synergy on; its trick then does
+     more (evoPet*), fires {t:'proc', src:'pet'} and the tag wears a badge.
+     Hooks elsewhere: loadMeta, itemCard, openBin, showRest, showForge,
+     showCollection, deliver, updateFight, pointer, update, draw, and the
+     pet's petStart, petEffect, petHoldStart / petHoldEnd, petDeliver,
+     petDraw and petTap. */
+  const EVO = { dur: 2.6, fast: 1.8, calm: 1.5, fastAfter: 5, rise: 0.27, burst: 0.52, hover: { x: 270, y: 600 }, tapAfter: 0.3, ui: { x: 270, y: 470 }, parrotMax: 3 };
+  const evoFix0 = () => ({ seen: {}, made: 0, syn: 0, new: {} });
+  // meta.evo, repaired (loadMeta) or made on first use.
+  function evoMetaFix(m, o) {
+    if (!m) return m;
+    const f = D().evoMetaFix, src = o && typeof o === 'object' ? o.evo : m.evo;
+    m.evo = f ? f(src) : evoFix0();
+    return m;
+  }
+  function evoMeta() {
+    if (!S.meta) S.meta = freshMeta();
+    if (!S.meta.evo || typeof S.meta.evo !== 'object' || !S.meta.evo.seen) evoMetaFix(S.meta);
+    return S.meta.evo;
+  }
+  const evoSeen = (id) => !!evoMeta().seen[id];
+  const evoRecipeOf = (itemId) => (D().evoOf ? D().evoOf(itemId) : null);
+  // The run's own copy of an instance (by uid).
+  function evoRunInst(uid) {
+    const run = S.run;
+    return run && Array.isArray(run.bin) ? run.bin.find((i) => i && i.uid === uid) || null : null;
+  }
+  // A recipe found: the book remembers it (the hints, the Prizedex, the sticker).
+  function evoDiscover(r) {
+    const m = evoMeta(), first = !m.seen[r.to];
+    m.seen[r.to] = 1; m.made = (m.made | 0) + 1;
+    if (first) m.new[r.to] = 1;
+    if (S.run) S.run.evoN = (S.run.evoN | 0) + 1;
+    saveMeta();
+    achRun('meta');
+    return first;
+  }
+  function evoTiming(E) {
+    const m = evoMeta();
+    E.dur = fx().reduced ? EVO.calm : ((m.made | 0) > EVO.fastAfter ? EVO.fast : EVO.dur);
+    E.riseAt = E.dur * EVO.rise; E.burstAt = E.dur * EVO.burst;
+    return E;
+  }
+  // ---- in a fight: a delivery evolves (the throw waits for the ceremony)
+  // True when inst evolved here (deliver then leaves its throw to evoEnd).
+  function evoDeliver(inst, pos) {
+    if (!F || !FS || !inst || !X.COMBAT || !X.COMBAT.evolve || !S.run) return false;
+    const ri = evoRunInst(inst.uid);
+    // the run's copy must be upgraded (a golden prize's plus is for this fight only)
+    if (!ri || !ri.plus || ri.id !== inst.id) return false;
+    const r = X.COMBAT.evoCheck(F, inst);
+    if (!r || !X.COMBAT.evolve(F, inst, r)) return false;
+    ri.id = r.to; ri.plus = false;
+    const first = evoDiscover(r);
+    const E = evoTiming({ r, inst, from: itemDef(r.from), to: itemDef(r.to), t: 0, x0: pos.x, y0: pos.y, first, burst: false });
+    if (FS.evo) (FS.evoQ || (FS.evoQ = [])).push(E);
+    else evoStart(E);
+    save();   // the run's bin already holds the evolved item: a reload restarts the fight with it
+    return true;
+  }
+  function evoStart(E) {
+    FS.evo = E;
+    snd('evoRise');
+    haptic('capCrack');
+    FS.party = Math.max(FS.party, 1.2); FS.marquee = 'EVOLUTION!';
+  }
+  // The new form bursts in: a flash, rings, shards, confetti, the fanfare.
+  function evoBurst(E) {
+    if (!E || E.burst) return;
+    E.burst = true;
+    const x = EVO.hover.x, y = EVO.hover.y, col = (E.r && E.r.glow) || PAL0.gold;
+    snd('evoBurst'); haptic('jackpot');
+    fx().shake(9);
+    fx().emit('shatter', x, y, { col, n: 1.4 });
+    fx().emit('confetti', x, y - 20, { n: 1, power: 1.1 });
+    fx().burst(x, y, col, fx().reduced ? 10 : 34, { kind: 'star', speed: 260, size: 5, life: 0.8, gravity: 120 });
+    fx().ring(x, y, col, { r0: 20, r1: 280, w: 10, life: 0.6 });
+    fx().ring(x, y, '#ffffff', { r0: 10, r1: 170, w: 6, life: 0.45, delay: 0.08 });
+    FS.party = Math.max(FS.party, 2); FS.marquee = 'LEGENDARY!';   // (the ceremony says EVOLVED! itself)
+  }
+  // The ceremony ends: the evolved item flies from where it hovers to its target.
+  function evoEnd() {
+    const E = FS && FS.evo;
+    if (!E) return false;
+    evoBurst(E);
+    FS.evo = null;
+    if (FS.grabInFlight) FS.dropAt += E.t;   // the claw's watchdog does not count the ceremony
+    throwItem(E.inst, { x: EVO.hover.x, y: EVO.hover.y });
+    const q = FS.evoQ;
+    if (q && q.length) evoStart(q.shift());
+    return true;
+  }
+  // A tap: before the burst it jumps to the reveal, after it (a beat in) it moves on.
+  function evoSkip() {
+    const E = FS && FS.evo;
+    if (!E) return false;
+    if (!E.burst) { E.t = Math.max(E.t, E.burstAt); evoBurst(E); return true; }
+    if (E.t - E.burstAt >= EVO.tapAfter) evoEnd();
+    return true;
+  }
+  // Per frame (real time): the fight's ceremony and the overlay's.
+  function evoTickAll(real) {
+    if (S.evoUi) evoUiTick(real);
+    evoSynTick(real);
+    const E = S.screen === 'fight' && FS ? FS.evo : null;
+    if (!E) return;
+    E.t += real;
+    if (!E.burst && E.t >= E.burstAt) evoBurst(E);
+    if (E.t >= E.dur) evoEnd();
+  }
+  const evoHold = () => !!(FS && FS.evo);
+  const EVO_ST = { t: 0, dur: 0, burst: 0, rise: 0, x0: 0, y0: 0, x: 0, y: 0, from: null, to: null, name: '', aura: '', col: '', W, H, reduced: false, plus: true, dim: 0.62 };
+  function evoSt(E, x, y) {
+    const d = E.to || {};
+    EVO_ST.t = E.t; EVO_ST.dur = E.dur; EVO_ST.burst = E.burstAt; EVO_ST.rise = E.riseAt; EVO_ST.x0 = E.x0; EVO_ST.y0 = E.y0; EVO_ST.x = x; EVO_ST.y = y;
+    EVO_ST.from = E.from; EVO_ST.to = E.to; EVO_ST.name = d.name || ''; EVO_ST.aura = d.auraName ? `${d.auraName}: ${d.auraText}` : '';
+    EVO_ST.col = (E.r && E.r.glow) || PAL0.gold; EVO_ST.reduced = !!fx().reduced; EVO_ST.dim = E.dim == null ? 0.62 : E.dim;
+    return EVO_ST;
+  }
+  function evoDraw(ctx) {
+    const E = S.screen === 'fight' && FS ? FS.evo : null, R = X.RENDER;
+    if (!E || !R || !R.evo) return;
+    R.evo.ceremony(ctx, evoSt(E, EVO.hover.x, EVO.hover.y));
+  }
+  // ---- out of a fight: the rest, the forge, an upgrade that completes a recipe
+  // Evolve a run instance on the spot (the overlay plays the ceremony). -> recipe | null
+  function evoNow(inst) {
+    const run = S.run;
+    if (!run || !inst || !D().evoReady) return null;
+    const r = D().evoReady(inst, run.relics);
+    if (!r) return null;
+    inst.id = r.to; inst.plus = false;
+    const first = evoDiscover(r);
+    evoUiShow(r, first);
+    toast(`${itemName(itemDef(r.from), true)} evolved into ${itemDef(r.to).name}!`, 3);
+    save();
+    return r;
+  }
+  // An upgrade (rest, forge) that makes a ready item evolves it at once.
+  function evoAfterUpgrade(inst) { return evoNow(inst); }
+  const evoReadyInsts = () => (S.run && D().evoReady ? S.run.bin.filter((i) => D().evoReady(i, S.run.relics)) : []);
+  // The rest stop's extra choice (only when something is ready; the old choices keep their indices).
+  function evoRestChoice(list) {
+    if (!list || !evoReadyInsts().length) return;
+    const c = btn('', () => openBin({ mode: 'evolve', title: 'Evolve which item?', can: (i) => !!D().evoReady(i, S.run.relics), back: () => showRest(),
+      onPick: (inst) => { if (evoNow(inst)) toMap(); } }), 'choice evoChoice');
+    c.textContent = ''; c.appendChild(h('div', 'c1', 'Evolve an item')); c.appendChild(h('div', 'c2', 'An upgraded item and its relic become something new. For good.'));
+    list.appendChild(c);
+  }
+  // The forge's EVOLVE cards (after the upgrade cards; Leave stays last).
+  function evoForgeCards(cards) {
+    if (!cards) return;
+    const seen = {};
+    for (const inst of evoReadyInsts()) {
+      if (seen[inst.id]) continue;
+      seen[inst.id] = 1;
+      const def = itemDef(inst.id);
+      cards.appendChild(itemCard(def, true, { cls: 'evoReady', onPick: () => {
+        if (FE.beat) return;
+        const i2 = S.run.bin.find((x) => x.id === def.id && x.plus && D().evoReady(x, S.run.relics));
+        if (i2 && evoNow(i2)) feelLeave('forge', toMap, 1.7);
+      } }));
+    }
+  }
+  function evoUiShow(r, first) {
+    const E = evoTiming({ r, from: itemDef(r.from), to: itemDef(r.to), t: 0, x0: EVO.ui.x, y0: H + 40, first, burst: false, dim: 0.86, el: null, cv: null, g: null });
+    E.dur += 0.6;   // the overlay holds the reveal until a tap
+    if (S.evoUi) evoUiClose();
+    S.evoUi = E;
+    snd('evoRise');
+    try {
+      const stage = $('stage'), el = h('div', 'evoOver'), cv = document.createElement('canvas');
+      const px = S.px || 1;
+      cv.width = Math.round(W * px); cv.height = Math.round(H * px);
+      el.appendChild(cv);
+      el.appendChild(h('div', 'evoTap', 'Tap to continue'));
+      el.onpointerdown = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); evoUiTap(); };
+      if (stage) stage.appendChild(el);
+      E.el = el; E.cv = cv; E.g = cv.getContext ? cv.getContext('2d') : null; E.px = px;
+    } catch (e) { /* headless */ }
+  }
+  function evoUiTick(real) {
+    const E = S.evoUi;
+    if (!E) return;
+    E.t = Math.min(E.t + real, E.dur - 0.32);   // it stays on the reveal until tapped
+    if (!E.burst && E.t >= E.burstAt) { E.burst = true; snd('evoBurst'); haptic('jackpot'); }
+    const g = E.g, R = X.RENDER;
+    if (!g || !R || !R.evo) return;
+    try {
+      g.setTransform(E.px, 0, 0, E.px, 0, 0);
+      g.clearRect(0, 0, W, H);
+      R.evo.ceremony(g, evoSt(E, EVO.ui.x, EVO.ui.y));
+    } catch (e) { /* stub canvas */ }
+  }
+  function evoUiTap() {
+    const E = S.evoUi;
+    if (!E) return false;
+    if (!E.burst) { E.t = Math.max(E.t, E.burstAt); E.burst = true; snd('evoBurst'); return true; }
+    if (E.t - E.burstAt < EVO.tapAfter) return true;
+    evoUiClose();
+    return true;
+  }
+  function evoUiClose() {
+    const E = S.evoUi;
+    S.evoUi = null;
+    if (E && E.el) { try { if (E.el.remove) E.el.remove(); else if (E.el.parentNode) E.el.parentNode.removeChild(E.el); } catch (e) { /* gone */ } }
+  }
+  // ---- hints: the EVOLVED badge, or "Evolves with" once the recipe is known
+  function evoCardTag(card, def, plus) {
+    if (!card || !def) return;
+    if (def.evolved) {
+      card.appendChild(h('div', 'evoBadge', 'EVOLVED'));
+      if (def.auraName) card.appendChild(h('div', 'evoAura', `${def.auraName}: ${def.auraText}`));
+      try { card.classList.add('evo'); } catch (e) { /* stub */ }
+      return;
+    }
+    const r = evoRecipeOf(def.id);
+    if (!r || !evoSeen(r.to)) return;
+    const rel = relicDef(r.relic), have = !!(S.run && (S.run.relics || []).indexOf(r.relic) >= 0);
+    card.appendChild(h('div', 'evoHint' + (have ? ' have' : ''), `Evolves with: ${rel.icon || ''} ${rel.name}` + (have ? (plus ? ' (ready!)' : ' (upgrade it)') : '')));
+  }
+  // ---- the Prizedex's Evolutions tab (after the DATA tabs and Sets)
+  function evoDexTab(row, tab) {
+    const ids = D().EVO_IDS || [];
+    if (!ids.length || !row) return;
+    const m = evoMeta(), n = ids.filter((id) => m.seen[id]).length, fresh = ids.filter((id) => m.new[id]).length;
+    const bt = btn('Evolve', () => showCollection('evo'), 'sm dexTab' + (tab === 'evo' ? ' on' : ''));
+    bt.appendChild(h('small', null, `${n}/${ids.length}`));
+    if (fresh) bt.appendChild(h('i', 'dot', String(fresh)));
+    row.appendChild(bt);
+  }
+  function evoDexGrid(b) {
+    const ids = D().EVO_IDS || [], m = evoMeta(), R0 = D().EVOLUTIONS || {};
+    const seenI = (S.meta.seen && S.meta.seen.items) || {}, seenR = (S.meta.seen && S.meta.seen.relics) || {};
+    const n = ids.filter((id) => m.seen[id]).length;
+    b.appendChild(metaBar(n, ids.length, `${n} of ${ids.length} evolutions found`, 'gold'));
+    const grid = h('div', 'evoGrid');
+    for (const id of ids) {
+      const r = R0[id], ok = !!m.seen[id], to = itemDef(id), from = itemDef(r.from), rel = relicDef(r.relic);
+      const card = h('div', 'card evoc' + (ok ? ' got' : ' locked'));
+      try { card.style.setProperty('--ec', r.glow || PAL0.gold); } catch (e) { /* stub */ }
+      const row = h('div', 'evoRow');
+      const sized = (cv, px) => { try { cv.style.width = px + 'px'; cv.style.height = px + 'px'; } catch (e) { /* stub */ } return cv; };
+      row.appendChild(sized(dexArt('items', from, 40, !ok && !seenI[r.from]), 40));
+      row.appendChild(h('i', 'evoOp', '+'));
+      row.appendChild(sized(dexArt('relics', rel, 34, !ok && !seenR[r.relic]), 34));
+      row.appendChild(h('i', 'evoOp', '→'));
+      row.appendChild(sized(dexArt('items', to, 62, !ok), 62));
+      card.appendChild(row);
+      card.appendChild(h('div', 'name', ok ? to.name : '???'));
+      const hint = seenI[r.from] ? `${from.name}+ and a relic you have yet to pair it with.` : 'An upgraded item and the right relic.';
+      card.appendChild(h('div', 'text', ok ? `${from.name}+ and ${rel.icon || ''} ${rel.name}` : hint));
+      if (ok && m.new[id]) card.appendChild(h('div', 'newb', 'NEW!'));
+      card.onclick = () => popover(ok ? `<b>${to.name}</b><br><i>${from.name}+ and ${rel.name}</i><br>${itemText(to, false)}<br><b>${to.auraName}:</b> ${to.auraText}` : `<b>???</b><br>${hint}`, 270, 300);
+      grid.appendChild(card);
+    }
+    b.appendChild(grid);
+    m.new = {};
+    saveMeta();
+  }
+  // ---- pet synergies (DATA.PET_SYN)
+  const EVC = { t: -1, id: '', syn: null };
+  // The live synergy of the run's pet (cached a quarter second).
+  function evoSyn() {
+    const p = petOf();
+    if (!p || !D().petSynOn) return null;
+    if (EVC.id === p.id && S.t - EVC.t < 0.25 && EVC.t >= 0) return EVC.syn;
+    EVC.t = S.t; EVC.id = p.id; EVC.syn = D().petSynOn(p.id, S.run) || null;
+    return EVC.syn;
+  }
+  function evoSynTick(real) { if (S.evoSynFl > 0) S.evoSynFl = Math.max(0, S.evoSynFl - real); }
+  // Fire a synergy through COMBAT (its proc and effect), count it for the sticker.
+  function evoPetFire(P, k, o) {
+    if (!F || !FS || !X.COMBAT || !X.COMBAT.evoPet || F.phase === 'over') return false;
+    const evs = X.COMBAT.evoPet(F, P.id, k, o);
+    if (evs && evs.length) enqueue(evs, PROC_BEAT);
+    const m = evoMeta();
+    m.syn = (m.syn | 0) + 1;
+    if (m.syn === 1) { saveMeta(); achRun('meta'); }
+    S.evoSynFl = 1.2;
+    P.log.push({ k: 'syn', syn: P.id, turn: F.turn });
+    snd('petSyn', { pitch: PET_PITCH[P.id] || 1 });
+    return true;
+  }
+  // The cat bats a Pyro item first while its synergy is on.
+  function evoPetPick(P, k) {
+    if (k !== 'bat' || P.id !== 'cat' || !evoSyn() || !FS) return null;
+    const pyro = petItems().filter((b) => (D().kwIds ? D().kwIds(itemDef(b.data.inst.id)) : []).indexOf('burn') >= 0);
+    if (!pyro.length) return null;
+    const tops = petTops(pyro), pool = tops.length ? tops : pyro;
+    return { b: pool[Math.floor(P.rng() * pool.length)] };
+  }
+  // After a trick's effect: the synergy's extra.
+  function evoPetEffect(P, A, ok, pow) {
+    if (!A || !evoSyn()) return;
+    const b = A.b;
+    switch (A.k) {
+      case 'nudge': evoPetFire(P, 'marbles'); break;
+      case 'peck': {
+        FS.evoParrot = FS.evoParrot | 0;
+        if (ok && b && b.data && b.data.inst && FS.evoParrot < EVO.parrotMax && !b.data.inst.junk && itemDef(b.data.inst.id).rarity !== 'junk') { FS.evoParrot++; evoPetFire(P, 'copy', { id: b.data.inst.id, label: 'MIMIC!' }); }
+        break;
+      }
+      case 'bat': {
+        const d = ok && b ? itemDef(b.data.inst.id) : null;
+        if (d && (D().kwIds ? D().kwIds(d) : []).indexOf('burn') >= 0) evoPetFire(P, 'burn', { v: 2, label: 'FIRE CAT!' });
+        break;
+      }
+      case 'pull': {
+        if (!ok) break;
+        // a second metal item comes along
+        const aim = FS.rig ? FS.rig.targetX : binWidth() / 2;
+        let o2 = null;
+        for (const x of petItems()) if (x !== b && x.data.mat && x.data.mat.traits && x.data.mat.traits.metal && !x.data.inst.frozen && (!o2 || Math.abs(x.x - aim) > Math.abs(o2.x - aim))) o2 = x;
+        if (o2 && Math.abs(o2.x - aim) > 30) {
+          const dx = aim - o2.x;
+          petWake(o2); o2.vx = Math.sign(dx) * Math.min(Math.sqrt(2 * 520 * Math.abs(dx)), 560) * (0.8 + 0.2 * pow); o2.vy = -150;
+          fx().emit('shock', CAB.x + o2.x, CAB.y + o2.y, { n: 0.5 });
+          evoPetFire(P, 'proc', { label: 'DOUBLE PULL!' });
+        }
+        break;
+      }
+      case 'eat': if (!A.rummage && ok) evoPetFire(P, 'feast', { label: "KING'S FEAST" }); break;
+      case 'egg': {
+        const e = D().petEgg ? D().petEgg(P.lv) : { gold: 5, tix: 1 };
+        if (X.COMBAT.gainGold) X.COMBAT.gainGold(F, e.gold);
+        if (X.COMBAT.tickets) X.COMBAT.tickets(F, e.tix);
+        drainF(PLAY_BEAT);
+        fx().text(P.x + 50, P.y - 80, `GOLDEN CLUTCH! +${e.gold}`, PAL0.gold, { size: 15 });
+        evoPetFire(P, 'luck', { label: 'GOLDEN CLUTCH' });
+        break;
+      }
+      default: break;
+    }
+  }
+  // The octopus on the Tri-Claw: a second arm holds the next lowest prize.
+  function evoPetHold(P, cargo) {
+    if (!P || P.id !== 'octopus' || !evoSyn() || !FS.rig || !FS.world || !cargo || cargo.length < 2 || !P.hold) return false;
+    let b2 = null;
+    for (const c of cargo) if (c !== P.hold.b && (!b2 || c.y > b2.y)) b2 = c;
+    if (!b2) return false;
+    const rig = FS.rig, s = rig.geo && rig.geo.s ? rig.geo.s : 0.74;
+    P.hold2 = { b: b2, dx: U.clamp(b2.x - rig.x, -40, 40), dy: U.clamp(b2.y - rig.y, 12, 62 * s + 16), t: 0 };
+    FS.world.addHook(evoPetHook); P.hookW2 = FS.world;
+    evoPetFire(P, 'proc', { label: 'TWO ARMS!' });
+    return true;
+  }
+  function evoPetHoldEnd(P) {
+    if (!P) return;
+    if (P.hookW2 && P.hookW2.removeHook) { try { P.hookW2.removeHook(evoPetHook); } catch (e) { /* the world is gone */ } }
+    P.hookW2 = null; P.hold2 = null;
+  }
+  // Pre-physics hook: the second prize keeps its spot under the hub (petHook's weld).
+  function evoPetHook(hh) {
+    const P = FS && FS.pet, H2 = P && P.hold2, rig = FS && FS.rig;
+    if (!H2 || !rig || FS.items.indexOf(H2.b) < 0) return;
+    const b = H2.b;
+    H2.t += hh;
+    const k = Math.max(0, 1 - H2.t / 0.5), tx = rig.x + H2.dx * k, ty = rig.y + H2.dy;
+    const fvx = H2.px == null || !(hh > 0) ? 0 : (tx - H2.px) / hh, fvy = H2.py == null || !(hh > 0) ? 0 : (ty - H2.py) / hh;
+    H2.px = tx; H2.py = ty;
+    let vx = U.clamp(fvx, -600, 600) + (tx - b.x) * 16, vy = U.clamp(fvy, -600, 600) + (ty - b.y) * 16;
+    if (rig.phase === 'releasing') { vx = (rig.x - b.x) * 10; vy = 380; }
+    const sp = Math.hypot(vx, vy);
+    if (sp > 900) { vx *= 900 / sp; vy *= 900 / sp; }
+    b.vx = vx; b.vy = vy - GRAVITY * (b.gs == null ? 1 : b.gs) * hh;
+    b.av *= 0.8; b.sl = false; b.slT = 0;
+  }
+  // The firefly: a spotlit item delivered carries the mark into COMBAT (Frost Light).
+  function evoPetDeliver(P, inst) {
+    if (P && inst && P.id === 'firefly' && P.glowUid && inst.uid === P.glowUid && evoSyn()) { inst.spot = 1; fx().text(CAB.x + CAB.w - 130, CAB.y + CAB.h - 170, 'FROST LIGHT', '#9fd8ff', { size: 14 }); }
+  }
+  // The badge on the pet's tag while its synergy is on.
+  function evoPetTagBadge(ctx, t) {
+    const syn = evoSyn(), R = X.RENDER;
+    if (!syn || !R || !R.evo) return;
+    R.evo.petBadge(ctx, PET_K.perchX, PET_K.tagY, PET_TAGV, syn, t + (S.evoSynFl > 0 ? S.evoSynFl * 6 : 0));
+  }
+  // The pet's popover line for its synergy (on, or what switches it on).
+  function evoPetTapLine(p) {
+    const S0 = (D().PET_SYN || {})[p && p.id];
+    if (!S0) return '';
+    const on = !!evoSyn();
+    return `<br><span style="color:${on ? S0.color : '#8d7fb3'}"><b>${S0.icon} ${S0.name}${on ? ' (ON)' : ''}:</b> ${S0.text}${on ? '' : ` Needs ${S0.need}.`}</span>`;
+  }
+  // ================================================================ /EVOLVE
 
   // ---------------------------------------------------------------- bin viewer / picker
   function openBin(o) {
@@ -12291,10 +12739,10 @@ const GAME = (() => {
     for (const k of order) {
       const g = groups[k];
       const def = itemDef(g.inst.id);
-      const eligible = o.mode !== 'upgrade' || !g.inst.plus;
+      const eligible = o.can ? !!o.can(g.inst) : (o.mode !== 'upgrade' || (!g.inst.plus && !def.evolved));   // o.can: a picker's own rule; an evolved item has no plus (EVOLVE)
       cards.appendChild(itemCard(def, g.inst.plus, { count: g.count, cls: eligible ? '' : 'sold', disabled: !eligible, onPick: () => {
         if (o.mode === 'view') { popover(`<b>${itemName(def, g.inst.plus)}</b><br>${itemText(def, g.inst.plus)}` + (def.plus ? `<br><i>Plus: ${itemText(def, true)}</i>` : ''), 270, 330); return; }
-        if (!eligible) { toast('Already upgraded.'); return; }
+        if (!eligible) { toast(o.mode === 'evolve' ? 'Not ready to evolve.' : 'Already upgraded.'); return; }
         if (o.onPick) o.onPick(g.insts[0]);
       } }));
     }
@@ -12405,7 +12853,7 @@ const GAME = (() => {
         case 'upgrade': {
           const rest = i + 1;
           if (!run.bin.some((x) => !x.plus)) break;
-          openBin({ mode: 'upgrade', title: 'Upgrade which item?', back: () => resolveFx(list, rest, done), onPick: (inst) => { inst.plus = true; snd('upgrade'); toast(`${itemName(itemDef(inst.id), true)}!`); resolveFx(list, rest, done); } });
+          openBin({ mode: 'upgrade', title: 'Upgrade which item?', back: () => resolveFx(list, rest, done), onPick: (inst) => { inst.plus = true; snd('upgrade'); toast(`${itemName(itemDef(inst.id), true)}!`); evoAfterUpgrade(inst); resolveFx(list, rest, done); } });   // EVOLVE: a ready item evolves
           return;
         }
         case 'fight': {
@@ -12437,10 +12885,11 @@ const GAME = (() => {
     const c1 = btn('', () => { if (FE.beat) return; healRun(heal); snd('heal'); toast(`+${heal} hp`); feelRestHeal(heal); feelLeave('rest', toMap, 1.5); }, 'choice go');
     c1.textContent = ''; c1.appendChild(h('div', 'c1', 'Rest')); c1.appendChild(h('div', 'c2', `Heal ${heal} hp (${Math.round(metaRest() * 100)}%). Now ${run.hp}/${run.maxHp}.`));
     list.appendChild(c1);
-    const c3 = btn('', () => openBin({ mode: 'upgrade', title: 'Upgrade which item?', back: () => showRest(), onPick: (inst) => { inst.plus = true; snd('upgrade'); toast(`${itemName(itemDef(inst.id), true)}!`); toMap(); } }), 'choice');
+    const c3 = btn('', () => openBin({ mode: 'upgrade', title: 'Upgrade which item?', back: () => showRest(), onPick: (inst) => { inst.plus = true; snd('upgrade'); toast(`${itemName(itemDef(inst.id), true)}!`); evoAfterUpgrade(inst); toMap(); } }), 'choice');   // EVOLVE: a ready item evolves
     c3.textContent = ''; c3.appendChild(h('div', 'c1', 'Sharpen an item')); c3.appendChild(h('div', 'c2', 'Upgrade one item to its plus version.'));
     list.appendChild(c3);
     cmpRestChoice(list);   // the Compactor instead of resting (SETS block)
+    evoRestChoice(list);   // Evolve an item, when one is ready (EVOLVE block)
     b.appendChild(list);
     save();
   }
@@ -12458,7 +12907,7 @@ const GAME = (() => {
     const groups = {};
     const order = [];
     for (const inst of run.bin) {
-      if (inst.plus) continue;
+      if (inst.plus || itemDef(inst.id).evolved) continue;   // (an evolved item has no plus: EVOLVE)
       if (!groups[inst.id]) { groups[inst.id] = { inst, count: 0 }; order.push(inst.id); }
       groups[inst.id].count++;
     }
@@ -12469,10 +12918,11 @@ const GAME = (() => {
         if (FE.beat) return;
         const inst = run.bin.find((x) => x.id === id && !x.plus);
         if (!inst) return;
-        inst.plus = true; snd('upgrade'); toast(`${itemName(def, true)}: ${itemText(def, true)}`, 3); feelForgeStrike(def); feelLeave('forge', toMap, 1.7);
+        inst.plus = true; snd('upgrade'); toast(`${itemName(def, true)}: ${itemText(def, true)}`, 3); feelForgeStrike(def); evoAfterUpgrade(inst); feelLeave('forge', toMap, 1.7);   // EVOLVE: a ready item evolves
       } }));
     }
     if (!order.length) cards.appendChild(h('div', 'sub', 'Everything is already upgraded.'));
+    evoForgeCards(cards);   // EVOLVE cards for items ready to evolve (EVOLVE block)
     b.appendChild(cards);
     b.appendChild(btn('Leave', () => toMap(), 'ghost'));
     save();
@@ -12648,6 +13098,7 @@ const GAME = (() => {
     if (S.screen !== 'fight' || !F || !FS) return;
     if (FS.outro) { if (type === 'down') finishOutro(); return; }
     if (FS.vs) { if (type === 'down') vsSkip(); return; }
+    if (FS.evo) { if (type === 'down') evoSkip(); return; }   // a tap hurries the evolution (EVOLVE)
     if (type === 'down') annTap();   // a tap cuts the live banner short (ANNOUNCER)
     // One finger steers. A second finger is ignored until the first lifts.
     const pid = ev && ev.pointerId != null ? ev.pointerId : null;
@@ -12696,7 +13147,8 @@ const GAME = (() => {
     if (best < 0) return false;
     if (X.COMBAT.setTarget) X.COMBAT.setTarget(F, best); else F.target = best;
     const e = F.enemies[best];
-    const txt = X.COMBAT.intentText ? X.COMBAT.intentText(e) : '';
+    let txt = X.COMBAT.intentText ? X.COMBAT.intentText(e) : '';
+    txt += qaPopLine(e);   // what it really hits you for (QA round 7)
     const p = enemyPos(best);
     // every status in words (the chips under it may be cut to one row with a "+N")
     const SD = tbl('STATUS'), sts = [];
@@ -12749,6 +13201,7 @@ const GAME = (() => {
     else if (S.screen === 'vault') vaultDraw(ctx, t);   // the Prize Vault: the wall, the preview, the capsule (VAULT block)
     else if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection' || S.screen === 'stickers' || S.screen === 'tips') {
       if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
+      seaTitleDraw(ctx, t);   // SEASON: the spooky dusk or the snowfall over the title
     } else if (S.screen === 'map' || (run && S.screen !== 'fight' && S.screen !== 'gameover' && S.screen !== 'win')) {
       drawMap(ctx, t);
     } else if (S.screen === 'fight' && F && FS) {
@@ -12759,9 +13212,11 @@ const GAME = (() => {
     drawBossUnder(ctx, t);   // the death finale's whiteout and title card (boss arena)
     drawLoot(ctx, t);   // the ticket stream / the capsule scene, under the particles
     arcDraw(ctx, t);    // ARCADE: the mini-game machine, the event vignette
+    seaDraw(ctx, t);    // SEASON: the trick-or-treat door
     secOver(ctx, t);    // SECRET: a golden key spinning up out of where it was found
     feelDraw(t);        // FEEL: the tip card art, the shopkeeper, the campfire, the forge
     setDraw(ctx, t);    // SETS: the boon draft's machine, the Compactor's press
+    evoDraw(ctx);       // EVOLVE: the evolution ceremony over the fight (its bursts are fx, drawn over it)
     fx().draw(ctx);
     drawBossTop(ctx, t);     // the versus card, over everything
     accIrisDraw(ctx);        // ACCESS (round 6): the map zooming into the fight's tile under the closing iris
@@ -12934,6 +13389,7 @@ const GAME = (() => {
       }
     }
     ctx.restore();
+    seaMapDraw(ctx, t);   // SEASON: fog and bats (or snow) over the map, under its chrome
     // The map's own chrome belongs to the map screen: under the arcade,
     // shop or event overlays the plate showed through their bottom buttons
     // (POLISH round 5 audit).
@@ -12964,6 +13420,7 @@ const GAME = (() => {
     ctx.save(); ctx.beginPath(); ctx.rect(-30, -30, W + 60, CAB.y - CAB.frame + 30 + 24); ctx.clip();
     if (R && R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
     secBg(ctx, t);   // the Back Room: the machine's insides (SECRET)
+    seaBg(ctx, t);   // SEASON: a moon and bats (or snow) over the arena
     ctx.restore();
     drawAmbient(ctx);
     // Enemies.
@@ -12991,6 +13448,7 @@ const GAME = (() => {
       // an elite drops in / a boss stomps in after its versus card (boss arena)
       const eo = enterOff(i);
       ctx.save(); ctx.translate(eo.x, eo.y);
+      if (live) qaRing(ctx, i, ex, p, t);   // a big hit coming: the danger ring (QA round 7)
       monsterBack(ctx, e, i, ex, p, t, live);
       if (live && R && R.enemyAura) R.enemyAura(ctx, ex, p.y, p.w, p.h, e.status, t, 'back');
       if (R && R.enemy) R.enemy(ctx, e.def, ex, p.y, sc, t, EST);
@@ -13011,7 +13469,7 @@ const GAME = (() => {
       for (let j = 0; j < F.enemies.length; j++) if (j !== i && F.enemies[j].alive) near = Math.min(near, Math.abs(j - i));
       PIPO.maxW = Math.min(300, near * (ARENA.x1 - ARENA.x0) / Math.max(1, F.enemies.length) - 12);
       if (R && R.statusPips) R.statusPips(ctx, p.x, p.y + 26, e.status, 14, FS.pipPop[i], PIPO);
-      if (R && R.intent) R.intent(ctx, p.x, intentY(p), e, t);
+      if (R && R.intent) R.intent(ctx, p.x, intentY(p), e, t, qaBubble(i));   // the real numbers (QA round 7)
       bossBadge(ctx, e, i, ex, p, t);
       ctx.restore();
     });
@@ -13109,8 +13567,10 @@ const GAME = (() => {
     clawSlotDraw(ctx, t);   // the coin slot (CLAW TYPES block)
     luckDraw(ctx, t);   // Lucky Lou's Luck meter (CONTENT block)
     bossCabDraw(ctx, t, cfg, 'front');
+    seaCabDraw(ctx, t, cfg, cabSt);   // SEASON: cobwebs, jack-o'-lanterns, orange and purple bulbs (or snow and icicles)
     secCabDraw(ctx, t, 'front');   // The Machine's face, the rail, the shutter, the cracks, the power down (SECRET)
     bestCabTop(ctx, t);   // the prize wheel sign, the trick's warning sign (BESTIARY)
+    qaCabTop(ctx, t);     // a big charge's warning sign a turn ahead (QA round 7)
     petDraw(ctx, t);   // the companion pet on the frame, or at work in the cabinet (PETS block)
     drawMonsterFx(ctx, t);
     if (S.debug && R && R.bodyDebug && FS.world) { ctx.save(); ctx.translate(CAB.x, CAB.y); R.bodyDebug(ctx, FS.world); ctx.restore(); }
@@ -13121,6 +13581,281 @@ const GAME = (() => {
       if (R && R.item) R.item(ctx, th.def, th.x, th.y, u * th.spin, sc, { plus: th.inst.plus, glow: (RC && RC[th.def.rarity]) || '#ffc94d', glowA: 0.8 });
     }
   }
+
+  /* ================= QA (round 7): elite telegraphs, safe spots for the corner lane and the toast =================
+     Presentation only: no rule, number or save field changes (DESIGN.md "QA sweep 2 (round 7)").
+     - The telegraph reads COMBAT.qaIntent / qaThreat (pure): the intent bubble
+       shows the real hit (Strength, Vulnerable, Armor, a Hasty jab; a
+       multi-hit its total), a charge its exact unleash; a big one (a charge,
+       an unleash, or a hit worth QA_BIG of your max hp) gets a pulsing danger
+       ring, and a charge hangs its warning sign on the cabinet a turn ahead
+       with the number. On your turn the HP stat shows a striped ghost of what
+       the enemy phase would take through your Block, and a pill under it says
+       INCOMING -n, ALL BLOCKED, or LETHAL! with the Block that would save you.
+     - Safe spots: the corner lane (a sticker, a discovery toast) and the plain
+       toast measure the screen (buttons, headings, text, and QA_SIGNS for the
+       signs drawn on the canvas) and take the first candidate spot that
+       covers none, else the least covered (a button or a sign weighs 10, a
+       heading 3, other text 1). A sticker whose every spot would cover a
+       button or a sign waits hidden (its clock paused) up to QA_HOLD s. The
+       fight and the map keep their own lanes. */
+  const QA_BIG = 0.3;     // a hit worth this share of your max hp is a big one
+  const QA_HOLD = 4;      // seconds a corner item waits for a clear spot
+  const QA_RE = 0.4;      // seconds between re-measures while something is up
+  const QA_W = { btn: 10, sign: 10, head: 3, text: 1 };
+  // Signs drawn on the canvas (stage px x0, y0, x1, y1): the Compactor's crossbeam, lamp and COMPACTOR
+  // plate (at the press's live size: cmpScene's beam spans +-200 and 0..62 around its top, scaled).
+  const QA_SIGNS = {
+    compactor: () => { const s = S.cmp && S.cmp.s > 0 ? S.cmp.s : cmpPressK(S.cmp); return [[270 - 200 * s, 70, 270 + 200 * s, 70 + 62 * s]]; },
+  };
+  const qaSigns = (scr) => (typeof QA_SIGNS[scr] === 'function' ? QA_SIGNS[scr]() : QA_SIGNS[scr] || []);
+  const QA = { t: 0, by: [], threat: null, sign: '', signK: 0, pillKey: '', dom: null, names: {}, cn: { cur: null, scr: '', t: 0 }, tt: 0, tScr: '', measure: null, size: null, log: [] };
+  const qaCol = (c) => (X.RENDER && X.RENDER.acc && X.RENDER.acc.col ? X.RENDER.acc.col(c) : c);
+
+  // Every 0.1 s in a fight: each enemy's numbers (the bubbles, the rings), and on your turn the whole phase.
+  function qaThreatTick(real) {
+    QA.t -= real;
+    if (QA.t > 0) return;
+    QA.t = 0.1;
+    QA.by.length = 0;
+    QA.threat = null;
+    const C = X.COMBAT;
+    if (S.screen !== 'fight' || !F || !FS || !C || !C.qaIntent) return;
+    const maxHp = Math.max(1, F.player.maxHp);
+    F.enemies.forEach((e, i) => {
+      if (!e || !e.alive || !e.intent) return;
+      const q = C.qaIntent(F, e);
+      q.big = q.skip ? false : q.k === 'charge' ? q.next > 0 : q.k === 'attack' && (q.charged || q.total >= maxHp * QA_BIG);
+      if (q.k === 'charge' && e.uid != null) QA.names[e.uid] = String(e.intent.name || 'Big hit');
+      QA.by[i] = q;
+    });
+    if (F.phase === 'player' && !FS.enemyTurn && !FS.queue.length && !FS.vs && !FS.outro && C.qaThreat) QA.threat = C.qaThreat(F);
+  }
+  // The cabinet sign for the first big charge: a turn ahead, then as it lands.
+  function qaSignOf() {
+    if (!QA.threat) return '';
+    for (let i = 0; i < QA.by.length; i++) {
+      const q = QA.by[i], e = F.enemies[i];
+      if (!q || !e || q.skip) continue;
+      if (q.k === 'charge' && q.next > 0) return `${String(e.intent.name || 'Big hit').toUpperCase()} NEXT TURN: ${q.next}`;
+      if (q.charged && q.total > 0) return `${String(QA.names[e.uid] || 'Big hit').toUpperCase()}: ${q.total} INCOMING`;
+    }
+    return '';
+  }
+  function qaSignTick(real) {
+    const lab = S.screen === 'fight' ? qaSignOf() : '';
+    if (lab) { if (QA.signK <= 0.01) QA.signK = 0; QA.sign = lab; }
+    QA.signK = lab ? Math.min(1, QA.signK + real * 2.5) : Math.max(0, QA.signK - real * 3);
+  }
+  // Over the cabinet frame, only when no boss or bestiary sign holds it.
+  function qaCabTop(ctx, t) {
+    const R = X.RENDER;
+    if (!R || !R.bossSign || !FS || QA.signK <= 0.01 || !QA.sign) return;
+    if (FS.bs && FS.bs.sign && FS.bs.sign.label) return;
+    if (FS.best && FS.best.sign && FS.best.signK > 0.01) return;
+    R.bossSign(ctx, CAB.x + CAB.w / 2, CAB.y - 12, QA.sign, qaCol(PAL0.blood), t, QA.signK);
+  }
+  // A pulsing danger ring around an enemy winding up (or landing) a big hit, behind its body.
+  function qaRing(ctx, i, x, p, t) {
+    const q = QA.by[i];
+    if (!q || !q.big || !F || F.phase !== 'player' || !FS || FS.enemyTurn || FS.vs) return;
+    const cy = p.y - p.h * 0.5, rx = Math.max(46, p.w * 0.62), ry = Math.max(46, p.h * 0.6);
+    const calm = !!fx().reduced, pu = calm ? 0.5 : Math.sin(t * 6) * 0.5 + 0.5;
+    ctx.save();
+    ctx.strokeStyle = qaCol(PAL0.blood);
+    ctx.globalAlpha = 0.45 + pu * 0.4; ctx.lineWidth = 4 + pu * 2;
+    ctx.beginPath(); ctx.ellipse(x, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+    if (!calm) {
+      const u = (t * 0.9) % 1;
+      ctx.globalAlpha = (1 - u) * 0.5; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(x, cy, rx * (1 + u * 0.3), ry * (1 + u * 0.3), 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // The pill under the HP stat and the striped ghost in its bar.
+  function qaDom() {
+    if (QA.dom) return QA.dom;
+    const st = $('stage');
+    if (!st || !st.appendChild) return null;
+    const pill = h('div', 'qaThreat'), main = h('b', null, ''), num = h('span', 'num', ''), sub = h('small', null, '');
+    pill.id = 'qaThreat';
+    pill.appendChild(main); pill.appendChild(num); pill.appendChild(sub);
+    st.appendChild(pill);
+    let gh = null;
+    const hs = $('hpStat'), bar = hs && hs.querySelector ? hs.querySelector('.hpbar') : null;
+    try { if (bar && bar.appendChild) { gh = document.createElement('i'); gh.className = 'qaIn'; bar.appendChild(gh); } } catch (e) { gh = null; }
+    QA.dom = { pill, main, num, sub, gh: gh || { style: {} } };
+    return QA.dom;
+  }
+  function qaHud() {
+    const T = QA.threat, show = !!(T && S.screen === 'fight' && T.raw + T.net > 0);
+    const key = show ? [T.net, T.loss, T.blocked + T.dodged, T.hp, F.player.maxHp].join('|') : '';
+    if (key === QA.pillKey) return;
+    QA.pillKey = key;
+    const d = qaDom(), hs = $('hpStat'), f = fx();
+    if (hs && hs.classList) { hs.classList[show && T.loss > 0 ? 'add' : 'remove']('qaWarn'); hs.classList[show && T.lethal ? 'add' : 'remove']('qaLethal'); }
+    if (!d) return;
+    if (!show) {
+      d.pill.className = 'qaThreat'; d.gh.style.width = '0%';
+      if (f.zone) f.zone('qa');
+      return;
+    }
+    const max = Math.max(1, F.player.maxHp), hp = U.clamp(T.hp, 0, max), loss = Math.min(hp, T.loss);
+    d.gh.style.left = ((hp - loss) / max * 100).toFixed(1) + '%';
+    d.gh.style.width = (loss / max * 100).toFixed(1) + '%';
+    const saved = T.blocked + T.dodged;
+    // a compact block at the arena's left edge (no enemy stands there): the word, the number, the Block line
+    d.main.textContent = T.lethal ? 'LETHAL!' : T.net > 0 ? 'INCOMING' : 'ALL BLOCKED';
+    d.num.textContent = T.net > 0 ? `-${T.net}` : '';
+    d.sub.textContent = T.lethal ? (T.burn + T.poison >= T.hp ? 'no Block helps' : `need ${1 - T.left} Block`) : T.net > 0 && saved > 0 ? `${saved} blocked` : '';
+    d.pill.className = 'qaThreat show ' + (T.lethal ? 'lethal' : T.net > 0 ? 'hurt' : 'safe');
+    if (f.zone) f.zone('qa', 2, 70, 124, 134);
+    QA.log.push({ net: T.net, lethal: T.lethal, text: `${d.main.textContent} ${d.num.textContent} ${d.sub.textContent}`.trim() });
+    if (QA.log.length > 30) QA.log.shift();
+  }
+  // What the bubble reads for enemy i (the draw passes it to RENDER.intent).
+  const qaBubble = (i) => (S.screen === 'fight' ? QA.by[i] : undefined);
+  // The tap popover's line: the real hit on you, as the bubble shows it.
+  function qaPopLine(e) {
+    const q = F && X.COMBAT && X.COMBAT.qaIntent ? X.COMBAT.qaIntent(F, e) : null;
+    if (!q || q.skip) return '';
+    if (q.k === 'attack' && q.total > 0) return `<br><b>Hits you for ${q.total}</b>${q.n > 1 || q.jab ? ` (${q.hit} x${q.n}${q.jab ? ` + ${q.jab} x${q.n}` : ''})` : ''}`;
+    if (q.k === 'charge' && q.next > 0) return `<br><b>Next turn: ${q.next}</b> in one hit. Block up or kill it first.`;
+    return '';
+  }
+
+  // ---- safe spots
+  // Rects to keep clear on this screen, stage px: {x0, y0, x1, y1, w (weight)}.
+  // other: the other lane's rect (the toast for the corner item and back), so they never stack.
+  function qaKeys(scr, other) {
+    const out = [];
+    for (const r of qaSigns(scr)) out.push({ x0: r[0], y0: r[1], x1: r[2], y1: r[3], w: QA_W.sign });
+    if (other) out.push(other);
+    if (QA.measure) return out.concat(QA.measure(scr) || []);   // tests hand in the DOM's rects
+    if (S.headless) return out;
+    let root = null, stage = $('stage');
+    try { root = document.querySelector('.screen.show'); } catch (e) { root = null; }
+    if (!stage || !stage.getBoundingClientRect || !root || !root.querySelectorAll || typeof getComputedStyle !== 'function') return out;
+    try { qaMeasure(stage, root, out); } catch (e) { /* a layout read never breaks a toast */ }
+    return out;
+  }
+  function qaMeasure(stage, root, out) {
+    const sr = stage.getBoundingClientRect(), k = S.scale || 1;
+    const clipOf = new Map();
+    // the visible box of the nearest scroller (a card scrolled out of it is not on screen)
+    const clip = (el) => {
+      for (let p = el.parentElement; p && p !== stage; p = p.parentElement) {
+        if (clipOf.has(p)) return clipOf.get(p);
+        const cs = getComputedStyle(p);
+        if (cs.overflowY !== 'visible' || cs.overflowX !== 'visible') { const r = p.getBoundingClientRect(); clipOf.set(p, r); return r; }
+        clipOf.set(p, null);
+      }
+      return null;
+    };
+    const els = root.querySelectorAll('button, h1, h2, h3, p, canvas, .name, .n, .t, .k, .sub, .text, .price, .cmpRule, .who, .qaKeep');
+    let n = 0, rg = null;
+    try { rg = document.createRange(); } catch (e) { rg = null; }
+    for (const el of els) {
+      if (++n > 500) break;
+      if (el.closest && el.closest('.mSticker, .mDex')) continue;
+      if (el.offsetParent === null) continue;
+      let r = el.getBoundingClientRect();
+      // text is where its letters are (a block title or subtitle spans the row, its words do not)
+      const keep = el.classList && el.classList.contains('qaKeep');
+      if (rg && el.tagName !== 'BUTTON' && el.tagName !== 'CANVAS' && !keep && !(el.closest && el.closest('button'))) { rg.selectNodeContents(el); const tr = rg.getBoundingClientRect(); if (tr.width > 1 && tr.height > 1) r = tr; }
+      if (!(r.width > 1 && r.height > 1)) continue;
+      const c = clip(el);
+      const x0 = Math.max(r.left, c ? c.left : -1e9), y0 = Math.max(r.top, c ? c.top : -1e9), x1 = Math.min(r.right, c ? c.right : 1e9), y1 = Math.min(r.bottom, c ? c.bottom : 1e9);
+      if (x1 - x0 < 2 || y1 - y0 < 2) continue;
+      const tag = el.tagName;
+      out.push({ x0: (x0 - sr.left) / k, y0: (y0 - sr.top) / k, x1: (x1 - sr.left) / k, y1: (y1 - sr.top) / k, w: tag === 'BUTTON' || keep ? QA_W.btn : /^H[123]$/.test(tag) ? QA_W.head : QA_W.text });
+    }
+    // the HUD's top bar when it shows over this screen
+    const top = $('top');
+    if (top && top.offsetParent !== null && getComputedStyle(top).visibility !== 'hidden' && +getComputedStyle(top).opacity > 0.05) {
+      const r = top.getBoundingClientRect();
+      if (r.height > 1) out.push({ x0: (r.left - sr.left) / k, y0: (r.top - sr.top) / k, x1: (r.right - sr.left) / k, y1: (r.bottom - sr.top) / k, w: QA_W.btn });
+    }
+    return out;
+  }
+  // The corner spots, in order: the top strip right then left (titles sit left), under it, the bottom.
+  function qaCands(w, h) {
+    const P = 6, R = W - w - P, B = H - h - P, C = (W - w) / 2;
+    return [[R, P], [P, P], [R, 78], [P, 78], [R, B], [P, B], [C, B], [C, P]];
+  }
+  // The first spot that covers nothing, else the least weighted cover (pure: tests feed it rects).
+  function qaSpot(cands, w, h, keys) {
+    let best = null;
+    for (const c of cands) {
+      let o = 0, hard = 0;
+      for (const r of keys) {
+        const ox = Math.min(c[0] + w, r.x1) - Math.max(c[0], r.x0), oy = Math.min(c[1] + h, r.y1) - Math.max(c[1], r.y0);
+        if (ox > 1 && oy > 1) { const a = ox * oy; o += a * (r.w || 1); if ((r.w || 1) >= QA_W.btn) hard += a; }
+      }
+      if (o === 0) return { x: c[0], y: c[1], o: 0, hard: 0 };
+      if (!best || o < best.o) best = { x: c[0], y: c[1], o, hard };
+    }
+    return best;
+  }
+  const qaSizeOf = (el, tight) => (QA.size ? QA.size(el, !!tight) : S.headless ? null : { w: el.offsetWidth, h: el.offsetHeight });
+  // Place the corner item (a sticker, a discovery toast) on a safe spot of this screen:
+  // full size when a spot is clear, else compact (.tight) when that finds a better one.
+  function qaCornerPlace() {
+    const cur = S.mcur, el = cur && cur.el;
+    if (!el || !el.style) return null;
+    if (S.screen === 'fight' || S.screen === 'map' || S.screen === 'intro') {
+      // their own compact corner (the intents, the map head): no inline spot
+      if (cur.qa) { el.style.left = el.style.top = el.style.right = el.style.bottom = el.style.visibility = ''; cur.qa = null; cur.rect = null; cur.hold = false; }
+      return null;
+    }
+    let sz = qaSizeOf(el, cur.qaTight);
+    if (!sz || !(sz.w > 0) || !(sz.h > 0)) return null;
+    const keys = qaKeys(S.screen, S.toastT > 0 ? QA.tRect : null);
+    let spot = qaSpot(qaCands(sz.w, sz.h), sz.w, sz.h, keys);
+    if (spot && spot.o > 0 && !cur.qaTight) {
+      cur.qaTight = true;
+      if (el.classList) el.classList.add('tight');
+      const s2 = qaSizeOf(el, true);
+      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = qaSpot(qaCands(sz.w, sz.h), sz.w, sz.h, keys); }
+    }
+    if (!spot) return null;
+    el.style.left = Math.round(spot.x) + 'px'; el.style.top = Math.round(spot.y) + 'px';
+    el.style.right = 'auto'; el.style.bottom = 'auto';
+    const was = !!cur.hold;
+    cur.qa = spot;
+    cur.rect = { x0: spot.x, y0: spot.y, x1: spot.x + sz.w, y1: spot.y + sz.h, w: 5 };
+    cur.hold = spot.hard > 0 && (cur.held || 0) < QA_HOLD;
+    el.style.visibility = cur.hold ? 'hidden' : '';
+    if (was && !cur.hold) replay(el, 'in');
+    return spot;
+  }
+  // The plain toast on a screen without a lane: off the buttons and headings.
+  function qaToastPlace() {
+    const el = $('toast');
+    if (!el || !el.style) return null;
+    const scr = S.screen;
+    if (FE.lane || scr === 'fight' || scr === 'map') { if (el.style.top) el.style.top = ''; return null; }
+    const sz = qaSizeOf(el);
+    if (!sz || !(sz.w > 0) || !(sz.h > 0)) return null;
+    const x = (W - sz.w) / 2, tops = [400, H - sz.h - 14, 10, 120, 260, 560, 700];
+    const cur = S.mcur, other = cur && cur.rect && !cur.hold && cur.el ? cur.rect : null;
+    const spot = qaSpot(tops.map((y) => [x, y]), sz.w, sz.h, qaKeys(scr, other));
+    if (spot) { el.style.top = Math.round(spot.y) + 'px'; QA.tRect = { x0: x, y0: spot.y, x1: x + sz.w, y1: spot.y + sz.h, w: 5 }; }
+    return spot;
+  }
+  function qaTick(real) {
+    qaThreatTick(real);
+    qaSignTick(real);
+    qaHud();
+    const cur = S.mcur;
+    if (cur && cur.el) {
+      if (cur.hold) cur.held = (cur.held || 0) + real;
+      QA.cn.t -= real;
+      if (cur !== QA.cn.cur || S.screen !== QA.cn.scr || QA.cn.t <= 0) { QA.cn.cur = cur; QA.cn.scr = S.screen; QA.cn.t = QA_RE; qaCornerPlace(); }
+    } else QA.cn.cur = null;
+    if (S.toastT > 0) { QA.tt -= real; if (QA.tt <= 0 || S.screen !== QA.tScr) { QA.tt = QA_RE; QA.tScr = S.screen; qaToastPlace(); } }
+  }
+  /* ================= /QA ================= */
 
   // ---------------------------------------------------------------- loop
   function update(dt) {
@@ -13145,6 +13880,9 @@ const GAME = (() => {
     polTick(real);       // POLISH (round 5): relic badges shine
     secTickAll(real);    // SECRET (round 6): a key celebration, the hidden door, the true ending
     setTick(real);       // SETS (round 6): the set fanfare queue, the boon cards, the Compactor's press
+    seaTick(real);       // SEASON (round 7): the trick-or-treat door, the title countdown, the wallet's save
+    qaTick(real);        // QA (round 7): the incoming-damage telegraph, safe spots for the corner lane and the toast
+    evoTickAll(real);    // EVOLVE (round 7): the evolution ceremony, the pet synergy badge
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.screen === 'map') {
       walkTick(dt); camStep(dt); bloomTick(); chimeTick();
@@ -13805,6 +14543,634 @@ const GAME = (() => {
   }
   // ================================================================ /ACCESS
 
+  // ================================================================ SEASON (round 7)
+  /* Seasonal events (DESIGN.md "Seasonal events (round 7)"). The live season
+     comes from ?season=<id|off>, else the profile's preview pick (the hidden
+     Event preview: tap the title logo 5 times), else DATA.seasonAt(today).
+     Headless (the suites) "today" is never the wall clock: only a date the
+     tests set (GAME.season.setDate) or an override turns a season on, so
+     every other test is deterministic whatever the real date is.
+     A run takes the season it starts in (run.season, kept for its whole
+     life; an old save has none and plays as ever). While it is on: the
+     costumed monsters and the season's elite (startFight), party hats
+     (after newFight), trick-or-treat doors on every map (newMap, screen
+     'sea'), the seasonal items in rewards and the relics in the relic
+     pools, candy for every won fight (endFight) and every Candy Corn
+     landed, the overlays (title, map, arena, cabinet) and the music
+     variant. The currency banks in the profile wallet (meta.sea.wallet)
+     and buys the event cosmetics at the season's counter, a tab in the
+     Prize Vault while the season is on; bought ones are owned for good and
+     sit on the normal shelves after the event.
+     Hooks, one line each: loadMeta (seaMetaFix), newRun (seaNewRun), newMap
+     (seaNewMap), enterTile (seaEnterTile), startFight (seaEnemies,
+     seaDress), endFight (seaFightEnd), applyEvent (seaEvent), rollItems
+     (seaRewardItems), relicPool (seaRelicAdd), music (seaMusic), load (the
+     'sea' screen), showTitle (seaTitle), draw (seaTitleDraw, seaDraw),
+     drawMap (seaMapDraw), drawFight (seaBg, seaCabDraw), update (seaTick),
+     buildMapHead (seaHeadChip), the vault's tabs, shelf, card and detail.
+     Meta: sea {preview, wallet {cur: n}, earned, spent, knocks, king, runs,
+     seen}. Run: season, sea {cur, knocks, costumes, king}; a door's tile
+     content.sea {seed, out, paid, lines, fought}; screen 'sea' (sd.sea {q, r}). */
+  const SEA = { url: undefined, date: null, taps: [], log: [] };
+  const SEA_DOOR = { knock: 0.34, knocks: 3, gap: 0.3, open: 0.75, reveal: 0.9 };   // the door's beats (s)
+  SCREENS.push('sea');
+  WIPE_SCREENS.sea = 1;
+  const seaDefs = () => D().SEASONS || {};
+  const seaDef = (id) => (id && seaDefs()[id]) || null;
+  const seaKs = () => D().SEA_K || { costumeP: 0.55, kingP: 0.45, hatP: 0.3, treatN: [3, 4], treatGap: 4, treatStart: 3, earn: { normal: 3, elite: 8, boss: 15, costume: 2, king: 12 } };
+  const seaCur = (id) => ((seaDef(id) || {}).cur) || { id: 'candy', name: 'candy', one: 'candy', icon: '\u{1F36C}', col: '#ff8a1f' };
+  // The ?season= of the page (read once; the tests re-read it after changing the URL).
+  function seaReadUrl() {
+    let v = null;
+    try { const m = /[?&]season=([a-z]+)/i.exec((window.location && window.location.search) || ''); v = m ? m[1].toLowerCase() : null; } catch (e) { v = null; }
+    SEA.url = v === 'off' || v === 'none' ? 'off' : (v && seaDef(v) ? v : null);
+    return SEA.url;
+  }
+  // Today as the season logic sees it: a date set by the tests or a driver, else the wall clock (never headless).
+  function seaDate() {
+    if (SEA.date != null) return SEA.date;
+    return S.headless ? null : new Date();
+  }
+  function seaSetDate(d) { SEA.date = d == null ? null : d; seaApplyLook(); return seaNow(); }
+  function seaMetaFix(m, o) {
+    if (!m) return m;
+    const src = o && typeof o === 'object' ? o.sea : m.sea;
+    m.sea = D().seaFix ? D().seaFix(src) : { preview: '', wallet: {}, earned: {}, spent: {}, knocks: 0, king: 0, runs: {}, seen: {} };
+    return m;
+  }
+  function seaM() {
+    if (!S.meta) S.meta = freshMeta();
+    const m = S.meta.sea;
+    if (!m || !m.wallet || !m.earned || !m.spent || !m.runs) seaMetaFix(S.meta, { sea: m });
+    return S.meta.sea;
+  }
+  // The live season id (the URL, the preview pick, then the date), or null.
+  function seaNow() {
+    if (SEA.url === undefined) seaReadUrl();
+    const pick = SEA.url || (S.meta && S.meta.sea ? S.meta.sea.preview : '') || '';
+    if (pick === 'off') return null;
+    if (pick && seaDef(pick)) return pick;
+    const d = seaDate();
+    if (d == null || !D().seasonAt) return null;
+    const s = D().seasonAt(d);
+    return s ? s.id : null;
+  }
+  // True when the live season comes from the URL or the preview pick, not the calendar.
+  function seaPreviewing() {
+    const id = seaNow();
+    if (!id) return false;
+    const d = seaDate(), s = d != null && D().seasonAt ? D().seasonAt(d) : null;
+    return !(s && s.id === id);
+  }
+  // The run's own season (fixed when it starts), or null.
+  const seaRun = () => (S.run && seaDef(S.run.season) ? S.run.season : null);
+  function seaRS() {
+    const run = S.run;
+    if (!run) return { cur: 0, knocks: 0, costumes: 0, king: 0 };
+    if (!run.sea || typeof run.sea !== 'object') run.sea = { cur: 0, knocks: 0, costumes: 0, king: 0 };
+    return run.sea;
+  }
+  // The currency: into the profile wallet (for good) and the run's tally.
+  function seaGive(n, id) {
+    id = id || seaRun() || seaNow();
+    n = Math.max(0, Math.floor(+n || 0));
+    if (!n || !seaDef(id)) return 0;
+    const m = seaM(), c = seaCur(id).id;
+    m.wallet[c] = (m.wallet[c] | 0) + n; m.earned[c] = (m.earned[c] | 0) + n;
+    if (S.run && seaRun() === id) seaRS().cur += n;
+    SEA.dirty = true;
+    return n;
+  }
+  const seaWallet = (id) => { const c = seaCur(id || seaNow() || seaRun()).id; return seaM().wallet[c] | 0; };
+  // The renderer's season is not state: every draw passes it; the audio gets it here.
+  function seaMusicId() {
+    const titleLike = ['title', 'chars', 'help', 'collection', 'stickers', 'tips', 'vault', 'intro'].indexOf(S.screen) >= 0;
+    return titleLike || !S.run ? seaNow() : seaRun();
+  }
+  function seaMusic() { const A = X.AUDIO; if (A && A.setSeason) { try { A.setSeason(seaMusicId()); } catch (e) { /* optional */ } } }
+  function seaApplyLook() { seaMusic(); }
+
+  // ---- the run: its season, the doors, the costumes, the candy
+  function seaNewRun(run) {
+    run.season = seaNow() || null;
+    run.sea = { cur: 0, knocks: 0, costumes: 0, king: 0 };
+    if (run.season) { const m = seaM(); m.runs[run.season] = (m.runs[run.season] | 0) + 1; }
+  }
+  // Trick-or-treat doors on empty land off the start, apart from each other and from the monsters and the key.
+  function seaNewMap(run) {
+    const id = seaRun(), def = seaDef(id), M = run && run.map, MP = X.MAP;
+    if (!def || !def.tile || !M || M.room || !MP) return 0;
+    const K = seaKs(), rng = U.rng(U.hashStr((M.seed >>> 0) + ':sea:' + id + ':' + run.act));
+    const busy = {};
+    for (const m of M.roam || []) busy[MP.key(m.q, m.r)] = 1;
+    if (M.sec && M.sec.q != null) busy[MP.key(M.sec.q, M.sec.r)] = 1;
+    const cand = [];
+    for (const k in M.tiles) {
+      const t = M.tiles[k];
+      if (t.type !== 'empty' || busy[k] || (MP.isLand && !MP.isLand(t))) continue;
+      if (MP.hexDist(t.q, t.r, M.start.q, M.start.r) < (K.treatStart || 3) || MP.hexDist(t.q, t.r, M.boss.q, M.boss.r) < 2) continue;
+      cand.push(t);
+    }
+    const n = (M.cols * M.rows >= 200 ? K.treatN[1] : K.treatN[0]) || 3;
+    const picked = [];
+    for (const gap of [K.treatGap || 4, 3, 2]) {
+      for (const t of rng.shuffle(cand.slice())) {
+        if (picked.length >= n) break;
+        if (picked.indexOf(t) >= 0 || picked.some((p) => MP.hexDist(p.q, p.r, t.q, t.r) < gap)) continue;
+        picked.push(t);
+      }
+      if (picked.length >= n) break;
+    }
+    for (const t of picked) {
+      t.type = def.tile; t.known = true;
+      t.content = Object.assign({}, t.content, { sea: { seed: U.hashStr(M.seed + ':' + t.q + ',' + t.r) >>> 0, out: null, paid: false } });
+    }
+    return picked.length;
+  }
+  /* The fight's monsters in season: an act 1 elite fight (not a tower) is the
+     season's elite kingP of the time, a monster with a costume wears it
+     costumeP of the time (a trick fight: always). A reloaded fight keeps
+     the ids it was saved with. */
+  function seaEnemies(ids, tier, opts) {
+    const id = seaRun(), def = seaDef(id), run = S.run;
+    opts = opts || {};
+    if (!def || opts.seed != null || !ids || !ids.length) return ids;
+    const K = seaKs(), trick = opts.sea === 'trick' || !!(opts.then && opts.then.sea === 'trick');
+    const rng = U.rng(U.hashStr(run.seed + ':seaenc:' + run.act + ':' + (run.fights | 0) + ':' + ids.join(',')));
+    if (tier === 'elite' && run.act === 1 && def.elite && tbl('ENEMIES')[def.elite] && !(opts.then && opts.then.tower) && ids.indexOf(def.elite) < 0 && rng() < (K.kingP || 0)) return [def.elite];
+    return ids.map((e) => { const c = D().seaCostumeOf ? D().seaCostumeOf(id, e) : null; return c && (trick || rng() < (K.costumeP || 0)) ? c : e; });
+  }
+  // Party hats on the other monsters of a seasonal fight (their fight copy of the def; never saved).
+  function seaDress(Fi, seed, opts) {
+    const id = seaRun(), def = seaDef(id);
+    if (!def || !Fi || !def.hats || !def.hats.length) return 0;
+    const K = seaKs(), trick = !!(opts && (opts.sea === 'trick' || (opts.then && opts.then.sea === 'trick')));
+    const rng = U.rng(((seed >>> 0) ^ 0x5ea5011) >>> 0 || 3);
+    let n = 0;
+    for (const e of Fi.enemies || []) {
+      if (!e || !e.def || e.def.costume || e.def.look || e.def.tier === 'boss') { rng(); continue; }
+      if (trick || rng() < (K.hatP || 0)) { e.def = Object.assign({}, e.def, { seaHat: def.hats[Math.floor(rng() * def.hats.length)] }); n++; }
+    }
+    return n;
+  }
+  // A won fight drops the season's currency (tier, costumes beaten, the elite), plus the Candy Bucket's share.
+  function seaFightEnd(result, tier) {
+    const id = seaRun(), def = seaDef(id);
+    if (!def || result !== 'win' || !F) return 0;
+    const cos = F.enemies.filter((e) => e && e.def && e.def.costume).length;
+    const king = !!def.elite && F.enemies.some((e) => e && e.id === def.elite);
+    let n = D().seaEarn ? D().seaEarn(tier, cos, king) : 3;
+    for (const rid of (S.run.relics || [])) { const r = tbl('RELICS')[rid]; if (r && r.sea && r.sea.candy) n += r.sea.candy | 0; }
+    seaGive(n, id);
+    const rs = seaRS();
+    rs.costumes += cos;
+    if (king) {
+      rs.king++; seaM().king++;
+      const want = (def.relics || []).filter((r) => tbl('RELICS')[r] && S.run.relics.indexOf(r) < 0);
+      if (want.length) { const got = want[U.hashStr(S.run.seed + ':king:' + rs.king) % want.length]; gainRelic(got); toast(`The Pumpkin King drops ${relicDef(got).name}!`, 2.4); }
+    }
+    const cur = seaCur(id);
+    try { fx().text(W / 2, 300, `+${n} ${cur.icon}`, cur.col, { size: 26 }); } catch (e) { /* optional */ }
+    SEA.log.push({ k: 'fight', tier, n, cos, king });
+    saveMeta(); SEA.dirty = false;
+    return n;
+  }
+  // Fight events: Candy Corn landed pays a candy, the Witch Broom sweeps the pile.
+  function seaEvent(ev) {
+    if (!ev || ev.t !== 'play' || !ev.def || !ev.def.sea || !seaRun() || !FS) return;
+    const s = ev.def.sea;
+    if (s.candy) {
+      const n = seaGive(s.candy);
+      const cur = seaCur(seaRun());
+      if (n) { try { fx().text(CAB.x + CAB.w - 40, CAB.y - 16, `+${n} ${cur.icon}`, cur.col, { size: 18 }); } catch (e) { /* optional */ } }
+    }
+    if (s.sweep) seaSweep();
+  }
+  // The Witch Broom: everything low in the pile slides toward the chute.
+  function seaSweep() {
+    if (!FS || !FS.world) return 0;
+    let n = 0;
+    try { FS.world.wakeAll(); } catch (e) { /* ok */ }
+    for (const b of FS.items) {
+      if (!b || (FS.cabinet && FS.cabinet.inChute(b)) || b.y < CAB.h * 0.45) continue;
+      b.vx = Math.max(b.vx || 0, 300 + ((b.x * 13) % 90)); b.vy = Math.min(b.vy || 0, -60);
+      n++;
+    }
+    try { fx().emit('dust', CAB.x + 60, CAB.y + CAB.h - 10, { n: 1.2 }); fx().text(CAB.x + CAB.w / 2, CAB.y + CAB.h - 50, 'SWEEP!', '#c9a24a', { size: 22 }); } catch (e) { /* optional */ }
+    snd('whoosh');
+    SEA.log.push({ k: 'sweep', n });
+    return n;
+  }
+  // Rewards in season: one slot in three turns into a seasonal item.
+  function seaRewardItems(ids) {
+    const id = seaRun(), def = seaDef(id), run = S.run;
+    if (!def || !def.items || !def.items.length || !ids || !ids.length) return ids;
+    const rng = U.rng(U.hashStr(run.seed + ':seaitem:' + (run.nonce | 0) + ':' + ids.join(',')));
+    if (rng() >= 0.35) return ids;
+    const pool = def.items.filter((x) => tbl('ITEMS')[x] && ids.indexOf(x) < 0);
+    if (!pool.length) return ids;
+    const out = ids.slice();
+    out[out.length - 1] = pool[Math.floor(rng() * pool.length)];
+    return out;
+  }
+  // The season's relics join the relic pools (by rarity) while the run's season is on.
+  function seaRelicAdd(out, rarities, own) {
+    const def = seaDef(seaRun());
+    if (!def || !out) return out;
+    for (const rid of def.relics || []) {
+      const r = tbl('RELICS')[rid];
+      if (!r || (own && own.indexOf(rid) >= 0) || out.indexOf(rid) >= 0) continue;
+      if (rarities && rarities.indexOf(r.rarity || 'c') < 0) continue;
+      out.push(rid);
+    }
+    return out;
+  }
+
+  // ---- the trick-or-treat door (screen 'sea', the canvas draws the house under this frame)
+  function seaTile(sd) { const M = S.run && S.run.map; return M && sd && X.MAP ? M.tiles[X.MAP.key(sd.q, sd.r)] || null : null; }
+  function seaEnterTile(t) {
+    if (!t || t.done) return false;
+    if (!t.content || !t.content.sea) t.content = Object.assign({}, t.content, { sea: { seed: U.hashStr(t.q + ',' + t.r) >>> 0, out: null, paid: false } });
+    seaShow({ q: t.q, r: t.r });
+    return true;
+  }
+  function seaShow(sd) {
+    const t = seaTile(sd);
+    if (!t || !t.content || !t.content.sea) { toMap(); return null; }
+    const c = t.content.sea;
+    S.sd = { sea: { q: sd.q, r: sd.r } };
+    const D0 = { q: sd.q, r: sd.r, t: 0, ph: 'door', knock: 0, knocks: 0, kT: 0, open: 0, reveal: 0, out: c.out || null };
+    if (c.out && c.paid) { D0.ph = 'done'; D0.open = 1; D0.reveal = 1; }
+    else if (c.out) { D0.ph = 'open'; }   // knocked before a reload: the same outcome plays again, and is paid once
+    S.seaDoor = D0;
+    setScreen('sea');
+    const scr = $('scr-sea');
+    if (scr) scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button')) return; seaHurry(); };
+    seaDom();
+    snd('arcIn');
+    return D0;
+  }
+  function seaDom() {
+    const b = $('seaBody'), Dd = S.seaDoor;
+    if (!b || !Dd) return;
+    clear(b);
+    S.ui.buttons = [];
+    const t = seaTile(Dd), c = t && t.content ? t.content.sea : null;
+    const top = h('div', 'seaTop');
+    top.appendChild(h('div', 'seaK', '\u{1F383} Trick or treat'));
+    top.appendChild(h('div', 'seaSub', Dd.ph === 'door' ? 'A door with a pumpkin on every step. Knock and see what opens it.' : Dd.ph === 'done' ? '' : 'Knock, knock...'));
+    b.appendChild(top);
+    b.appendChild(h('div', 'grow'));
+    const bot = h('div', 'seaBot');
+    if (Dd.ph === 'door') {
+      bot.appendChild(btn('Knock', () => seaKnock(), 'pri seaKnock'));
+      bot.appendChild(btn('Leave', () => seaLeave(), 'ghost'));
+    } else if (Dd.ph === 'done' && c) {
+      const card = h('div', 'seaCard ' + (c.out && c.out.kind === 'trick' ? 'trick' : 'treat'));
+      for (const ln of c.lines || []) card.appendChild(h('div', 'ln', ln));
+      bot.appendChild(card);
+      if (c.out && c.out.k === 'fight' && !c.fought) bot.appendChild(btn('Fight!', () => seaCont(), 'pri'));
+      else bot.appendChild(btn('Continue', () => seaCont(), 'go'));
+    } else bot.appendChild(h('div', 'seaTap', 'tap to hurry'));
+    b.appendChild(bot);
+  }
+  // Knock: the outcome is rolled and saved at once, paid when the door opens (once, across reloads).
+  function seaKnock() {
+    const Dd = S.seaDoor, t = seaTile(Dd), run = S.run;
+    if (!Dd || !t || !t.content || !t.content.sea || Dd.ph !== 'door') return null;
+    const c = t.content.sea;
+    if (!c.out) {
+      const def = seaDef(seaRun()) || seaDef('halloween');
+      const want = (def.relics || []).filter((r) => tbl('RELICS')[r] && run.relics.indexOf(r) < 0);
+      const rng = U.rng(U.hashStr(run.seed + ':treat:' + t.q + ',' + t.r + ':' + c.seed));
+      c.out = D().seaTreatRoll ? D().seaTreatRoll(rng, run.act, { relics: want, items: def.items }) : { kind: 'treat', k: 'candy', candy: 10 };
+      if (c.out.k === 'fight') c.out.enc = seaTrickEnc(rng);
+      c.paid = false;
+      const m = seaM(); m.knocks++;
+      seaRS().knocks++;
+      saveMeta();
+      achRun('meta');   // Trick or Treat! (5 doors)
+      save();
+    }
+    Dd.out = c.out; Dd.ph = 'knock'; Dd.kT = 0; Dd.knocks = 0;
+    seaDom();
+    return c.out;
+  }
+  // A trick's fight: the act's normal pool, a monster with a costume if there is one (everything costumed or hatted).
+  function seaTrickEnc(rng) {
+    const run = S.run, id = seaRun() || 'halloween', enc = (tbl('ENCOUNTERS')[run.act] || {}).normal || [];
+    const cos = enc.filter((e) => e.some((x) => D().seaCostumeOf && D().seaCostumeOf(id, x)));
+    const list = cos.length ? cos : enc;
+    const pick = list.length ? list[Math.floor(rng() * list.length)].slice() : ['rat'];
+    return pick.map((x) => (D().seaCostumeOf && D().seaCostumeOf(id, x)) || x);
+  }
+  // Pays the door once: the currency, then the treat (or the curse); a fight waits for its button.
+  function seaPay() {
+    const Dd = S.seaDoor, t = seaTile(Dd);
+    if (!t || !t.content || !t.content.sea) return false;
+    const c = t.content.sea, o = c.out;
+    if (!o || c.paid) return false;
+    const id = seaRun() || 'halloween', cur = seaCur(id), lines = [];
+    if (o.candy) { seaGive(o.candy, id); lines.push(`+${o.candy} ${cur.name} ${cur.icon}`); }
+    if (o.k === 'gold' && o.gold) { addGold(o.gold); lines.push(`+${o.gold} gold`); }
+    if (o.k === 'capsule') { const run = lootRun(); run.caps.push(makeCapsule('bonus', { tier: o.tier || 'c' })); lines.push('A prize capsule to crack'); }
+    if (o.k === 'item' && o.id && tbl('ITEMS')[o.id]) { addItem(o.id); lines.push(`Item: ${itemDef(o.id).name}`); }
+    if (o.k === 'relic' && o.id) {
+      if (tbl('RELICS')[o.id] && S.run.relics.indexOf(o.id) < 0) { gainRelic(o.id); lines.push(`Relic: ${relicDef(o.id).name}`); } else { addGold(40); lines.push('+40 gold'); }
+    }
+    if (o.k === 'curse' && o.id) { addItem(o.id); lines.push(`CURSED: a ${itemDef(o.id).name} joins your bin for good`); }
+    if (o.k === 'fight') lines.push('Something in a costume wants a fight!');
+    c.lines = lines; c.paid = true; t.done = true;
+    SEA.log.push({ k: 'pay', out: o.k, candy: o.candy | 0 });
+    saveMeta(); SEA.dirty = false;
+    save();
+    return true;
+  }
+  function seaTickDoor(real) {
+    const Dd = S.seaDoor;
+    if (!Dd || S.screen !== 'sea') return;
+    Dd.t += real;
+    Dd.knock = Math.max(0, Dd.knock - real * 3);
+    if (Dd.ph === 'knock') {
+      Dd.kT += real;
+      const want = Math.min(SEA_DOOR.knocks, Math.floor(Dd.kT / SEA_DOOR.knock) + 1);
+      while (Dd.knocks < want) { Dd.knocks++; Dd.knock = 1; snd('knock', { pitch: 1 + Dd.knocks * 0.04 }); haptic('tap'); }
+      if (Dd.kT >= SEA_DOOR.knocks * SEA_DOOR.knock + SEA_DOOR.gap) { Dd.ph = 'open'; Dd.open = 0; }
+    } else if (Dd.ph === 'open') {
+      if (Dd.open === 0) snd('creak');
+      Dd.open = Math.min(1, Dd.open + real / SEA_DOOR.open);
+      if (Dd.open >= 1) seaReveal();
+    } else if (Dd.ph === 'reveal') {
+      Dd.reveal = Math.min(1, Dd.reveal + real / SEA_DOOR.reveal);
+      if (Dd.reveal >= 1) { Dd.ph = 'done'; seaDom(); }
+    }
+  }
+  // The door is open: pay, and put on the show.
+  function seaReveal() {
+    const Dd = S.seaDoor;
+    if (!Dd) return;
+    Dd.open = 1; Dd.ph = 'reveal'; Dd.reveal = Math.max(Dd.reveal, 0.001);
+    seaPay();
+    const o = Dd.out || {};
+    const trick = o.kind === 'trick';
+    snd(trick ? (o.k === 'curse' ? 'cackle' : 'boo') : 'treat');
+    try {
+      if (!trick) { fx().emit('confetti', W / 2, 520, { power: 0.9 }); fx().emit('coins', W / 2, 520, { n: 0.6 }); }
+      else { fx().flash(o.k === 'curse' ? '#7dff7a' : '#9b4dff', 0.25); fx().shake(8); }
+    } catch (e) { /* optional */ }
+    haptic(trick ? 'hurt' : 'jackpot');
+  }
+  // A tap: hurry the knocks and the door to the reveal, or finish the reveal.
+  function seaHurry() {
+    const Dd = S.seaDoor;
+    if (!Dd || S.screen !== 'sea') return false;
+    if (Dd.ph === 'knock' || Dd.ph === 'open') { seaReveal(); return true; }
+    if (Dd.ph === 'reveal') { Dd.reveal = 1; Dd.ph = 'done'; seaDom(); return true; }
+    return false;
+  }
+  function seaLeave() {
+    const Dd = S.seaDoor;
+    if (Dd && Dd.ph !== 'door' && Dd.ph !== 'done') seaHurry();
+    S.seaDoor = null;
+    toMap();
+  }
+  // After the reveal: a trick's fight, a treat's capsule, or back to the map.
+  function seaCont() {
+    const Dd = S.seaDoor, t = seaTile(Dd);
+    const c = t && t.content ? t.content.sea : null;
+    if (Dd && Dd.ph !== 'done') seaHurry();
+    S.seaDoor = null;
+    if (c && c.out && c.out.k === 'fight' && !c.fought && c.out.enc) {
+      c.fought = true;
+      startFight(c.out.enc.slice(), 'normal', { sea: 'trick', then: { sea: 'trick' } });
+      return;
+    }
+    if (c && c.out && c.out.k === 'capsule' && lootRun().caps.length && openBankedCap()) return;
+    toMap();
+  }
+
+  // ---- the title: the event banner with its countdown, the hidden Event preview
+  function seaFmt(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000)), d = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+    const p2 = (n) => (n < 10 ? '0' : '') + n;
+    return d > 0 ? `${d}d ${p2(hh)}h` : hh > 0 ? `${hh}h ${p2(mm)}m` : `${mm}m ${p2(ss)}s`;
+  }
+  function seaCountdown(id) {
+    const d = seaDate();
+    if (!id || d == null || !D().seasonLeft) return '';
+    const ms = D().seasonLeft(id, d);
+    return ms > 0 ? 'ends in ' + seaFmt(ms) : '';
+  }
+  function seaTitle(menu) {
+    const scr = $('scr-title');
+    // the hidden preview: tap the logo five times
+    if (scr && !$('seaLogo')) {
+      const z = h('div', 'seaLogo');
+      z.id = 'seaLogo';
+      z.onpointerdown = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); seaLogoTap(); };
+      scr.appendChild(z);
+    }
+    const old = $('seaBanEl');
+    if (old && old.remove) { try { old.remove(); } catch (e) { /* stub */ } }
+    const id = seaNow(), def = seaDef(id);
+    if (!menu || !def) return null;
+    const MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const b = btn(def.name, () => popover(`<b>${def.icon} ${def.name}</b><br>${def.blurb}<br><i>${seaPreviewing() ? 'Preview on (Event preview).' : 'On until ' + def.to[1] + ' ' + MON[def.to[0] - 1] + '.'}</i>`, W / 2, 200), 'seaBan s-' + id);
+    b.textContent = '';
+    b.appendChild(h('span', 'sb0', def.icon));
+    const col = h('span', 'sbc');
+    col.appendChild(h('span', 'sb1', def.name));
+    const cd = h('span', 'sb2', seaPreviewing() ? 'EVENT PREVIEW' : (seaCountdown(id) || 'on now'));
+    cd.id = 'seaCd';
+    col.appendChild(cd);
+    b.appendChild(col);
+    const wal = h('span', 'sb3');
+    wal.appendChild(h('b', null, String(seaWallet(id))));
+    wal.appendChild(h('span', null, ' ' + seaCur(id).icon));
+    b.appendChild(wal);
+    b.id = 'seaBanEl';
+    // a ribbon over the sky at the top of the title (the menu keeps its place under the logo)
+    if (scr) scr.appendChild(b); else menu.appendChild(b);
+    return b;
+  }
+  function seaLogoTap() {
+    const now = S.t;
+    SEA.taps = SEA.taps.filter((x) => now - x < 2.5);
+    SEA.taps.push(now);
+    snd('click', { pitch: 0.8 + SEA.taps.length * 0.12 });
+    if (SEA.taps.length >= 5) { SEA.taps = []; seaPickOpen(); return true; }
+    return false;
+  }
+  // The Event preview: pick a season to see today (saved on the profile), or back to the calendar.
+  function seaPickOpen() {
+    const st = $('stage');
+    let el = $('seaPick');
+    if (!el && st) { el = h('div', 'seaPick panel'); el.id = 'seaPick'; st.appendChild(el); }
+    if (!el) return false;
+    clear(el);
+    el.classList.add('show');
+    S.seaPickOn = true;
+    el.appendChild(h('h3', null, 'Event preview'));
+    el.appendChild(h('div', 'sub', 'Preview a seasonal event on any day. Runs you start now take it with them.'));
+    const cur = seaM().preview || '';
+    // the tap that opened it must not also press a button that appeared under the finger
+    const at = typeof performance !== 'undefined' ? performance.now() : 0;
+    const late = () => S.headless || (typeof performance !== 'undefined' ? performance.now() : 1e9) - at > 400;
+    const opt = (label, v) => { const b = btn(label + (cur === v ? '  ✓' : ''), () => { if (late()) seaPreview(v); }, v === cur ? 'go' : ''); el.appendChild(b); };
+    opt('By the calendar', '');
+    for (const id of Object.keys(seaDefs())) opt(seaDefs()[id].icon + ' ' + seaDefs()[id].name, id);
+    opt('No event', 'off');
+    el.appendChild(btn('Close', () => { if (late()) seaPickClose(); }, 'ghost'));
+    return true;
+  }
+  function seaPickClose() {
+    const el = $('seaPick');
+    if (el) { el.classList.remove('show'); clear(el); }
+    S.seaPickOn = false;
+    if (S.screen === 'title') showTitle();
+  }
+  function seaPreview(v) {
+    const m = seaM();
+    m.preview = v === 'off' || seaDef(v) ? v : '';
+    saveMeta();
+    seaApplyLook();
+    toast(m.preview === 'off' ? 'Events off.' : m.preview ? `${seaDef(m.preview).name} preview on.` : 'Events follow the calendar.', 2);
+    seaPickClose();
+    return seaNow();
+  }
+
+  // ---- the Prize Vault: the season's counter tab (its own currency), and the event cosmetics you own on the normal shelves
+  function seaVaultTab(tabs) {
+    const id = seaNow(), def = seaDef(id), Vs = S.vault;
+    if (Vs && Vs.tab === 'sea' && !def) { Vs.tab = 'skin'; Vs.sel = null; }
+    if (!def || !tabs) return null;
+    const tb = h('button', 'vTab seaTab' + (Vs && Vs.tab === 'sea' ? ' on' : ''));
+    tb.appendChild(h('span', 'ic', def.icon));
+    tb.appendChild(h('span', 'lb', def.counter));
+    tb.onclick = () => { if (Vs) { Vs.tab = 'sea'; Vs.sel = (D().seaCosmetics ? D().seaCosmetics(id) : [])[0] || null; } snd('cardFlip'); vaultDom(); };
+    tabs.appendChild(tb);
+    // on the counter the wallet pill shows the season's currency
+    const wal = $('vWallet');
+    if (wal && Vs && Vs.tab === 'sea') {
+      const cur = seaCur(id), m = seaM();
+      clear(wal);
+      wal.appendChild(h('b', null, String(m.wallet[cur.id] | 0)));
+      wal.appendChild(h('span', null, cur.icon + ' ' + cur.name));
+      wal.onclick = () => popover(`<b>${cur.icon} ${m.wallet[cur.id] | 0} ${cur.name}</b><br>Won in fights and at trick-or-treat doors during ${def.name}. It buys the event prizes here, and they stay yours after the event.<br>Won so far: ${m.earned[cur.id] | 0}.`, 400, 60);
+    }
+    return tb;
+  }
+  // The shelf's list: the counter's stock on the season tab, else the normal list plus the owned event cosmetics of that shelf.
+  function seaShelf(tab, list) {
+    const V = vaultM();
+    if (tab === 'sea') {
+      const id = seaNow();
+      return id && D().seaCosmetics ? D().seaCosmetics(id) : [];
+    }
+    const own = (D().SEA_COSMETIC_IDS || []).filter((x) => V.owned[x] && vaultDef(x) && vaultDef(x).cat === tab);
+    return own.length ? (list || []).concat(own) : list;
+  }
+  function seaTag(tg, id) {
+    const d = vaultDef(id), cur = seaCur(d && d.season);
+    if (tg.classList) tg.classList.add('seaTg');
+    tg.appendChild(h('b', null, String((d && d.price) | 0)));
+    tg.appendChild(h('span', null, ' ' + cur.icon));
+  }
+  function seaBuyBtn(id) {
+    const d = vaultDef(id);
+    if (!d || !d.season) return h('div', 'vdLock', '');
+    if (seaNow() !== d.season) return h('div', 'vdLock', `${seaDef(d.season) ? seaDef(d.season).icon + ' ' + seaDef(d.season).name : 'Event'} only`);
+    const cur = seaCur(d.season), have = seaWallet(d.season);
+    const b = btn('Buy', () => seaBuy(id), 'gold vBuy seaBuy' + (have < (d.price | 0) ? ' poor' : ''));
+    b.textContent = '';
+    b.appendChild(h('span', null, 'Buy '));
+    b.appendChild(h('b', null, String(d.price | 0)));
+    b.appendChild(h('span', null, ' ' + cur.icon));
+    return b;
+  }
+  // Buy an event cosmetic with the season's currency: owned for good, worn at once.
+  function seaBuy(id) {
+    const d = vaultDef(id), V = vaultM(), m = seaM();
+    if (!d || !d.season || V.owned[id]) return false;
+    if (seaNow() !== d.season) { toast(`That one is only sold during ${seaDef(d.season) ? seaDef(d.season).name : 'its event'}.`, 2.2); return false; }
+    const cur = seaCur(d.season), price = d.price | 0, have = m.wallet[cur.id] | 0;
+    if (have < price) { toast(`${price - have} more ${cur.name}. Win fights and knock on doors during the event.`, 2.4); snd('click'); haptic('tap'); return false; }
+    m.wallet[cur.id] = have - price; m.spent[cur.id] = (m.spent[cur.id] | 0) + price;
+    V.owned[id] = 1;
+    vaultEquip(id, true);
+    if (S.vault) { S.vault.sel = id; S.vault.party = 1.6; S.vault.mq = 'SPOOKY!'; S.vault.flash = 1; }
+    vaultSave();
+    snd('vaultBuy'); haptic('jackpot');
+    try { fx().emit('confetti', VLT_WIN.x + VLT_WIN.w * 0.3, VLT_WIN.y + 40, { power: 0.9, n: 0.8 }); fx().ring(VLT_WIN.x + VLT_WIN.w * 0.32, VLT_WIN.y + VLT_WIN.h * 0.5, cur.col, { r0: 20, r1: 240, w: 10, life: 0.6 }); } catch (e) { /* optional */ }
+    if (S.screen === 'vault') vaultDom();
+    return true;
+  }
+
+  // ---- the map head's currency chip
+  function seaHeadChip(row) {
+    const id = seaRun(), def = seaDef(id);
+    if (!def || !row) return null;
+    const cur = seaCur(id), rs = seaRS();
+    const b = h('button', 'seaChip s-' + id, `${cur.icon} ${seaWallet(id)}`);
+    const fn = () => popover(`<b>${def.icon} ${def.name}</b><br>${cur.icon} ${seaWallet(id)} ${cur.name} in your wallet (+${rs.cur} this run).<br>Spend it at the ${def.counter} in the Prize Vault.`, 270, 170);
+    b.onclick = fn;
+    row.appendChild(b);
+    return b;
+  }
+
+  // ---- drawing and ticking
+  function seaTitleDraw(ctx, t) { const R = X.RENDER, id = seaNow(); if (id && R && R.sea) R.sea.title(ctx, W, H, t, id); }
+  function seaMapDraw(ctx, t) {
+    const R = X.RENDER, id = seaRun();
+    if (!id || !R || !R.sea || S.screen !== 'map') return;
+    seaProps(ctx, t, id);
+    R.sea.map(ctx, MAP_AREA.x, MAP_AREA.y, MAP_AREA.w, MAP_AREA.h, t, id);
+  }
+  // Props on about one lit, empty land hex in six (picked once per map by the tile's hash).
+  function seaProps(ctx, t, id) {
+    const M = S.run && S.run.map, R = X.RENDER, MP = X.MAP, L = mapLayout();
+    if (!M || !MP || !L || !R.sea.prop) return 0;
+    if (!SEA.props || SEA.props.M !== M) {
+      const list = [];
+      for (const k in M.tiles) { const tl = M.tiles[k]; if (tl.type === 'empty' && (!MP.isLand || MP.isLand(tl)) && U.hashStr(k + ':seaprop') % 6 === 0 && list.length < 60) list.push(tl); }
+      SEA.props = { M, list };
+    }
+    const size = L.size * cam().zoom, A = MAP_AREA;
+    let n = 0;
+    for (const tl of SEA.props.list) {
+      if (!tl.revealed || tl.type !== 'empty' || (MP.roamAt && MP.roamAt(M, tl.q, tl.r)) || (M.pos.q === tl.q && M.pos.r === tl.r)) continue;
+      const p = hexToStage(tl.q, tl.r), x = p.x + size * 0.3, y = p.y + size * 0.22;
+      if (x < A.x - 20 || x > A.x + A.w + 20 || y < A.y - 20 || y > A.y + A.h + 20) continue;
+      R.sea.prop(ctx, x, y, size * 0.17, t, id, tl.q * 7 + tl.r);
+      n++;
+    }
+    return n;
+  }
+  function seaBg(ctx, t) { const R = X.RENDER, id = seaRun(); if (id && R && R.sea) R.sea.sky(ctx, W, 70, CAB.y - CAB.frame, t, id); }
+  function seaCabDraw(ctx, t, cfg, cabSt) {
+    const R = X.RENDER, id = seaRun();
+    if (!id || !R || !R.sea) return;
+    const V = S.meta && S.meta.vault, skinned = !!(V && V.eq && V.eq.skin && V.eq.skin !== vaultDefault('skin'));
+    R.sea.cab(ctx, CAB.x, CAB.y, cfg, { t, party: cabSt ? cabSt.party : 0, alarm: cabSt ? cabSt.alarm : 0, skinned }, id);
+  }
+  // The door scene over the map (screen 'sea').
+  function seaDraw(ctx, t) {
+    const Dd = S.seaDoor, R = X.RENDER;
+    if (S.screen !== 'sea' || !Dd || !R || !R.sea) return;
+    const o = Dd.out || {};
+    const prize = o.k === 'item' && o.id && tbl('ITEMS')[o.id] ? itemDef(o.id) : o.k === 'relic' && o.id && tbl('RELICS')[o.id] ? relicDef(o.id) : null;
+    R.sea.door(ctx, W, H, { t: Dd.t, knock: Dd.knock, knocks: Dd.knocks, open: Dd.open, reveal: Dd.reveal, out: Dd.open > 0 ? Dd.out : null, prize });
+  }
+  function seaTick(real) {
+    seaTickDoor(real);
+    if (S.screen === 'title' && !S.headless) {
+      SEA.cdT = (SEA.cdT || 0) - real;
+      if (SEA.cdT <= 0) { SEA.cdT = 1; const el = $('seaCd'), id = seaNow(); if (el && id && !seaPreviewing()) el.textContent = seaCountdown(id) || 'on now'; }
+    }
+    if (SEA.dirty && S.screen !== 'fight') { SEA.dirty = false; saveMeta(); }
+  }
+  // ================================================================ /SEASON
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -13824,6 +15190,10 @@ const GAME = (() => {
       get force() { return BOON.force; }, set force(v) { BOON.force = !!v; }, get state() { return S.boon; } },
     cmp: { K: CMPK, show: cmpShow, pick: cmpPick, unpick: cmpUnpick, crush: cmpCrush, hurry: cmpHurry, leave: cmpLeave, rule: cmpRuleText, price: cmpPrice,
       get state() { return S.cmp; } },
+    // item evolutions and pet synergies (DESIGN.md "Evolutions and pet synergies (round 7)")
+    evo: { EVO, meta: evoMeta, metaFix: evoMetaFix, seen: evoSeen, deliver: (inst, pos) => evoDeliver(inst, pos || { x: 470, y: 780 }), now: evoNow, skip: evoSkip, end: () => (FS ? evoEnd() : false),
+      ready: evoReadyInsts, cardTag: evoCardTag, syn: () => evoSyn(), fire: (k, o) => { const P = FS ? petFS() : null; return P ? evoPetFire(P, k, o) : false; }, tapLine: evoPetTapLine,
+      uiTap: evoUiTap, uiClose: evoUiClose, draw: evoDraw, get fs() { return FS ? FS.evo || null : null; }, get queue() { return FS ? FS.evoQ || [] : []; }, get ui() { return S.evoUi || null; } },
     prog: { startRun, startDaily, setTilt: pickTilt, tiltCap, tiltMax, dexSee, dexProg, achUnlock, achRun, runEnd: metaRunEnd, insertCoin, metaFix,
       get queue() { return S.mq || []; }, get log() { return S.mlog || []; }, get current() { return S.mcur; } },
     // loot (DESIGN.md "Loot"): capsules, tickets, the payout tally, the prize counter
@@ -13920,6 +15290,22 @@ const GAME = (() => {
       show: secShow, enter: secEnter, walkAway: secWalkAway, hurry: secHurry, endDone: secEndDone, inRoom: secIn, meta: secMeta, music: secMusic,
       power: (i) => (FS ? secPowerStart(i) : null), drop: secDrop, sign: () => (F ? secSign() : null), shutTick: () => (FS ? secShutTick() : null),
       get fs() { return FS ? FS.sec || null : null; }, get scr() { return S.secScr || null; }, get keyFx() { return S.secKeyFx || null; },
+    },
+    // QA (round 7): the elite telegraphs and the safe spots (tests set measure / size to feed rects headless).
+    qa: {
+      QA, BIG: QA_BIG, HOLD: QA_HOLD, W: QA_W, SIGNS: QA_SIGNS, signs: qaSigns, tick: qaTick, spot: qaSpot, cands: qaCands, keys: qaKeys,
+      corner: qaCornerPlace, toast: qaToastPlace, signOf: qaSignOf, hud: qaHud, bubble: qaBubble, cmpPressK,
+      get threat() { return QA.threat; }, get by() { return QA.by; }, get sign() { return QA.signK > 0.01 ? QA.sign : ''; },
+      set measure(fn) { QA.measure = fn || null; }, set size(fn) { QA.size = fn || null; },
+      refresh() { QA.t = 0; QA.pillKey = '\u0000'; qaTick(0); return QA.threat; },
+    },
+    // SEASON (round 7, DESIGN.md "Seasonal events (round 7)"): the live season, the doors, the costumes, the currency, the counter.
+    season: {
+      DOOR: SEA_DOOR, now: seaNow, run: seaRun, setDate: seaSetDate, readUrl: seaReadUrl, previewing: seaPreviewing, preview: seaPreview, pick: seaPickOpen, logoTap: seaLogoTap,
+      meta: seaM, fix: seaMetaFix, give: seaGive, wallet: seaWallet, newMap: seaNewMap, enemies: seaEnemies, dress: seaDress, fightEnd: seaFightEnd, event: seaEvent, sweep: seaSweep,
+      rewardItems: seaRewardItems, relicAdd: seaRelicAdd, show: seaShow, knock: seaKnock, hurry: seaHurry, leave: seaLeave, cont: seaCont, pay: seaPay, trickEnc: seaTrickEnc,
+      shelf: seaShelf, buy: seaBuy, countdown: seaCountdown, fmt: seaFmt, musicId: seaMusicId,
+      get door() { return S.seaDoor || null; }, get log() { return SEA.log; }, get date() { return SEA.date; }, get url() { return SEA.url; },
     },
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },

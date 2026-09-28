@@ -3090,7 +3090,7 @@ const DATA = (() => {
   // Ticket price, or 0 when it is not for sale (a default, a sticker prize, a legendary: capsule only).
   function vaultPrice(id) {
     const c = COSMETICS[id];
-    if (!c || c.free || c.ach || c.rarity === 'l') return 0;
+    if (!c || c.free || c.ach || c.rarity === 'l' || c.season) return 0;   // (SEASON: event cosmetics cost the season's currency)
     return VAULT.PRICE[c.rarity] || 0;
   }
   // What a Vault Capsule can hold: everything but the defaults and the sticker prizes.
@@ -3101,7 +3101,7 @@ const DATA = (() => {
   function vaultHow(id) {
     const c = COSMETICS[id];
     if (!c) return null;
-    return c.free ? 'own' : c.ach ? 'sticker' : c.rarity === 'l' ? 'capsule' : 'buy';
+    return c.free ? 'own' : c.season ? 'event' : c.ach ? 'sticker' : c.rarity === 'l' ? 'capsule' : 'buy';   // (SEASON: 'event' = the season's counter)
   }
   // The sticker prizes an achievement id unlocks.
   function vaultForSticker(achId) { return COSMETIC_IDS.filter((id) => COSMETICS[id].ach === achId); }
@@ -3603,7 +3603,447 @@ const DATA = (() => {
   }
   // ================================================================ /SETS
 
+  // ================================================================ EVOLVE (round 7: item evolutions and pet synergies)
+  /* Item evolutions (DESIGN.md "Evolutions and pet synergies (round 7)").
+     A recipe is "base item + relic": an upgraded (plus) copy of the base item,
+     delivered in a fight while the run holds the relic (or picked at a rest
+     or a forge), turns into the evolved item for good. The evolved defs live
+     in EVOLVED and are also reachable as ITEMS[id] through NON-ENUMERABLE
+     properties: every lookup (COMBAT, the renderer, combos, the bin, the
+     save) finds them, while Object.keys(ITEMS) / for..in / ITEM_IDS never
+     list them, so reward pools, shops, capsules, the Compactor's pool and
+     the Prizedex's item tab stay exactly as before. An evolved item has no
+     plus and carries an aura: a relic-shaped def in EVO_FX ('evo:<id>')
+     that COMBAT runs next to the relics while the item is in the run's bin.
+     Ids never change: the base ids are untouched, the evolved ids are new. */
+  const evoProc = (F, id, text) => {
+    const r = EVO_FX[id];
+    if (!r || !CB()) return;
+    emitE(F, { t: 'proc', src: 'relic', id, name: r.name, icon: r.icon, color: r.color, text: text || r.proc, who: 'player', idx: -1 });
+  };
+  const EVO_LIST = [
+    { id: 'excalibur_claw', name: 'Excalibur Claw', from: 'rusty_sword', relic: 'trophy_rack', icon: '⚔', glow: '#ffe27a',
+      tags: ['metal', 'weapon'], shape: box(56, 12), density: 1.4, friction: 0.45, color: '#fff3c4', color2: '#3b6fd6', art: 'sword',
+      fx: [dmg(18), status('str', 1, 'self')], text: 'Deal {v} damage and gain {v2} Strength. The pile chose you.',
+      aura: { name: "King's Oath", proc: "KING'S OATH", text: 'Whenever an enemy dies, gain 5 Block.', hooks: { onKill(F) { gainBlock(F, 5); } } } },
+    { id: 'plague_needle', name: 'Plague Needle', from: 'venom_dart', relic: 'festering_jar', icon: '💉', glow: '#a6ff5e',
+      tags: ['metal', 'weapon', 'light'], shape: box(50, 10), density: 0.9, friction: 0.45, color: '#c6ff8a', color2: '#3a2f5a', art: 'dagger',
+      fx: [dmg(4), status('poison', 7), { k: 'poisonAll' }], text: 'Deal {v} damage and apply {v2} Poison, then every enemy takes its Poison now.',
+      aura: { name: 'Epidemic', proc: 'EPIDEMIC', text: 'Whenever an enemy gains Poison, every other enemy gains 1.',
+        hooks: { onStatus(F, u, s, v) { if (s === 'poison' && u && u !== F.player && v > 0) aliveOf(F).filter(e => e !== u).forEach(e => foeStatus(F, e, 'poison', 1)); } } } },
+    { id: 'nuke_pop', name: 'Nuke Pop', from: 'cherry_bomb', relic: 'powder_keg', icon: '☢', glow: '#ff8a2e',
+      tags: ['weapon'], shape: circle(17), density: 1.2, friction: 0.55, restitution: 0.2, color: '#ff3b3b', color2: '#ffe066', art: 'bomb', target: 'all',
+      fx: [dmg(10), status('burn', 5, 'all')], text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. Duck.',
+      aura: { name: 'Chain Reaction', proc: 'CHAIN REACTION', text: 'Whenever a burning enemy dies, every other enemy takes 8 damage.',
+        hooks: { onKill(F, e) { if (e && e.status && e.status.burn > 0) aliveOf(F).filter(x => x !== e).forEach(x => zap(F, x, 8)); } } } },
+    { id: 'prism_lance', name: 'Prism Lance', from: 'glass_bead', relic: 'glass_cannon', icon: '🔷', glow: '#9ff6ff',
+      tags: ['magic', 'weapon'], shape: box(54, 12), density: 0.8, friction: 0.35, color: '#d8f8ff', color2: '#ff6bd6', art: 'iceshard', target: 'random',
+      fx: [dmg(6, 3)], text: 'Split into {n} beams of {v} damage at random enemies. It never shatters.',
+      aura: { name: 'Refraction', proc: 'REFRACTION', text: 'Whenever a glass item shatters, deal 5 damage to ALL enemies.', hooks: { onShatter(F) { zapAll(F, 5); } } } },
+    { id: 'loaded_fate', name: 'Loaded Fate', from: 'bone_dice', relic: 'high_roller', icon: '🎲', glow: '#3ddc84',
+      tags: ['magic'], shape: circle(14), density: 1.1, friction: 0.5, restitution: 0.25, color: '#ffe8a0', color2: '#1a6b3a', art: 'dice',
+      fx: [{ k: 'random', v: 11, min: 8, max: 14, n: 2 }, status('luck', 2, 'self')], text: 'Roll {min} to {max} damage twice and gain 2 Luck.',
+      aura: { name: 'House Edge', proc: 'HOUSE EDGE', text: 'Cash outs deal 1 more damage per Luck.', rules: { cashAmp: 1 } } },
+    { id: 'absolute_zero', name: 'Absolute Zero', from: 'frost_pearl', relic: 'permafrost_core', icon: '❄', glow: '#bfe8ff',
+      tags: ['magic'], shape: circle(14), density: 0.9, friction: 0.2, color: '#e8f8ff', color2: '#4aa8ff', art: 'snowball',
+      fx: [dmg(4), status('chill', 2, 'all'), status('freeze', 1)], text: 'Deal {v} damage, {v2} Chill to ALL enemies, and Freeze the target.',
+      aura: { name: 'Deep Cold', proc: 'DEEP COLD', text: 'Your hits on Frozen enemies deal 25% more (on top of SHATTER).', rules: { shatter: 0.25 } } },
+    { id: 'tower_aegis', name: 'Tower Aegis', from: 'pot_lid', relic: 'castle_walls', icon: '🏰', glow: '#8fb6ff',
+      tags: ['metal', 'heavy'], shape: box(40, 50), density: 2.2, friction: 0.55, color: '#9fb4d8', color2: '#ffc94d', art: 'shield', target: 'self',
+      fx: [block(15), status('thorns', 2, 'self')], text: 'Gain {v} Block and {v2} Thorns. A castle you can carry.',
+      aura: { name: 'Battlements', proc: 'BATTLEMENTS', text: 'At the end of your turn, deal a quarter of your Block (up to 15) to ALL enemies.',
+        hooks: { onTurnEnd(F) { const v = Math.min(15, Math.floor(((F.player && F.player.block) || 0) / 4)); if (v > 0) zapAll(F, v); } } } },
+    { id: 'scrap_titan', name: 'Scrap Titan', from: 'scrap_shield', relic: 'junkyard_king', icon: '🤖', glow: '#ffb347',
+      tags: ['metal', 'heavy'], shape: box(42, 40), density: 2.2, friction: 0.6, color: '#b89a6a', color2: '#ff5a4a', art: 'buckler',
+      fx: [block(6), blockPer(3, 'junk'), dmgPer(3, 'junk')], text: 'Gain {v} Block, then {v2} Block and {v3} damage for each junk in your bin.',
+      aura: { name: 'Scrap Heap', proc: 'SCRAP HEAP', text: 'Start each fight with a Rock in your bin. Grabbing out junk deals 5 damage to ALL enemies.',
+        hooks: { onFightStart(F) { const c = CB(); if (c) c.addJunk(F, 'rock', 1); }, onPlay(F, inst, def) { if (isJunkPlay(inst, def)) zapAll(F, 5); } } } },
+    { id: 'black_death', name: 'Black Death Vial', from: 'toxic_vial', relic: 'contagion', icon: '☠', glow: '#7dff5e',
+      tags: ['glass', 'potion'], shape: SHAPES.flask, density: 1, friction: 0.4, color: '#2b1f3a', color2: '#7dff5e', art: 'flask', target: 'all',
+      fx: [dmg(3), status('poison', 5, 'all')], text: 'Deal {v} damage and apply {v2} Poison to ALL enemies.',
+      aura: { name: 'Miasma', proc: 'MIASMA', text: 'At the end of your turn, every poisoned enemy gains 1 Poison.',
+        hooks: { onTurnEnd(F) { aliveOf(F).filter(e => e.status && e.status.poison > 0).forEach(e => foeStatus(F, e, 'poison', 1)); } } } },
+    { id: 'midas_coin', name: 'Midas Coin', from: 'lucky_coin', relic: 'money_bags', icon: '👑', glow: '#ffe066',
+      tags: ['metal'], shape: circle(16), density: 1.5, friction: 0.35, restitution: 0.15, color: '#ffd84a', color2: '#b8860b', art: 'coin',
+      fx: [dmg(8), gold(8)], text: 'Deal {v} damage and gain {v2} gold. Everything it hits is worth something.',
+      aura: { name: 'Golden Touch', proc: 'GOLDEN TOUCH', text: 'Whenever you gain gold in a fight, gain that much Block (up to 10).',
+        hooks: { onGold(F, amt) { if (amt > 0) gainBlock(F, Math.min(10, amt)); } } } },
+    { id: 'swarm_queen', name: 'Swarm Queen', from: 'prize_marble', relic: 'pocket_dimension', icon: '🐝', glow: '#ffe066',
+      tags: ['small', 'magic'], shape: circle(13), density: 1, friction: 0.4, restitution: 0.3, color: '#ffcf3f', color2: '#3a2a10', art: 'orb', target: 'random',
+      fx: [dmg(3, 4)], text: 'Sting random enemies {n} times for {v} damage each. Small, but she is the queen.',
+      aura: { name: 'The Hive', proc: 'THE HIVE', text: 'Whenever you play a small item, deal 2 damage to a random enemy.',
+        hooks: { onPlay(F, inst, def) { if (tagged(def, 'small')) zap(F, randomFoe(F), 2); } } } },
+    { id: 'echo_grimoire', name: 'Echo Grimoire', from: 'arcane_tome', relic: 'echo_chamber', icon: '📖', glow: '#b08cff',
+      tags: ['magic'], shape: box(34, 40), density: 1, friction: 0.55, color: '#5a2b9c', color2: '#9ff6ff', art: 'book',
+      fx: [dmg(9), copy('magic'), copy('magic')], text: 'Deal {v} damage and copy {copies} magic items into your bin for this fight.',
+      aura: { name: 'Reverb', proc: 'REVERB', text: 'Magic items echo one play sooner (every 2nd with the Echo Chamber).', rules: { echo: -1 } } },
+    { id: 'streak_stiletto', name: 'Streak Stiletto', from: 'shiv', relic: 'winning_streak', icon: '🗡', glow: '#2ee6d6',
+      tags: ['metal', 'weapon', 'light'], shape: box(46, 10), density: 0.9, friction: 0.45, color: '#e8fbff', color2: '#ff2e88', art: 'dagger',
+      fx: [dmg(6), dmgPer(3, 'streak')], text: 'Deal {v} damage, then {v2} more for each grab in your streak.',
+      aura: { name: 'Momentum', proc: 'MOMENTUM', text: 'While your grab streak is 5 or more, every grab that brings something up deals 3 damage to a random enemy.',
+        hooks: { onGrab(F, n) { if ((n | 0) > 0 && (F.streak | 0) >= 5) zap(F, randomFoe(F), 3); } } } },
+    { id: 'phoenix_torch', name: 'Phoenix Torch', from: 'torch', relic: 'bellows', icon: '🔥', glow: '#ff8a2e',
+      tags: ['light', 'weapon'], shape: box(14, 50), density: 0.8, friction: 0.5, color: '#ffb347', color2: '#8a2b2b', art: 'torch',
+      fx: [dmg(7), status('burn', 6, 'all')], text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. It never goes out.',
+      aura: { name: 'Rebirth', proc: 'REBIRTH', text: 'Whenever a burning enemy dies, heal 4 HP.', hooks: { onKill(F, e) { if (e && e.status && e.status.burn > 0) healP(F, 4); } } } },
+  ];
+  const EVOLVED = {}, EVOLUTIONS = {}, EVO_OF = {}, EVO_FX = {};
+  for (const d of EVO_LIST) {
+    const def = Object.assign({ density: 1, friction: 0.5, restitution: 0.1, target: 'enemy', tags: [] }, d, { rarity: 'l', cost: 0, evolved: true });
+    delete def.aura;
+    const a = d.aura, fxId = 'evo:' + d.id;
+    def.auraId = fxId; def.auraName = a.name; def.auraText = a.text;
+    EVOLVED[d.id] = def;
+    // reachable as ITEMS[id], never listed by Object.keys(ITEMS) (see above)
+    Object.defineProperty(ITEMS, d.id, { value: def, enumerable: false, configurable: true, writable: true });
+    EVOLUTIONS[d.id] = { id: d.id, from: d.from, relic: d.relic, to: d.id, name: d.name, icon: d.icon, glow: d.glow };
+    EVO_OF[d.from] = d.id;
+    EVO_FX[fxId] = Object.assign({ id: fxId, name: a.name, icon: d.icon, rarity: 'evo', kw: kwIds(def).slice(0, 1), proc: a.proc, text: a.text,
+      color: d.glow, evo: d.id }, a.hooks ? { hooks: a.hooks } : {}, a.rules ? { rules: a.rules } : {});
+  }
+  const EVO_IDS = EVO_LIST.map(d => d.id);
+  // The recipe that evolves this base item id (or null).
+  function evoOf(itemId) { const to = EVO_OF[itemId]; return to ? EVOLUTIONS[to] : null; }
+  // The recipe a bin instance is ready for: plus, a real item (not a fight
+  // copy, not junk), and the relic in hand. relics: an id list or a run.
+  function evoReady(inst, relics) {
+    if (!inst || !inst.plus || inst.temp || inst.junk) return null;
+    const r = evoOf(inst.id), have = relicIdsOf(relics);
+    return r && have.indexOf(r.relic) >= 0 ? r : null;
+  }
+  // The auras a run carries: one per evolved item id in its bin.
+  function evoAuraIds(run) {
+    const out = [];
+    for (const i of (run && Array.isArray(run.bin) ? run.bin : [])) {
+      const d = i && !i.temp ? EVOLVED[i.id] : null;
+      if (d && out.indexOf(d.auraId) < 0) out.push(d.auraId);
+    }
+    return out;
+  }
+  // meta.evo {seen: {evolvedId: 1}, made, syn, new: {evolvedId: 1}}: a junk value becomes the default.
+  function evoMetaFix(o) {
+    const src = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    const seen = {}, fresh = {};
+    if (src.seen && typeof src.seen === 'object') for (const k in src.seen) if (EVOLVED[k] && src.seen[k]) seen[k] = 1;
+    if (src.new && typeof src.new === 'object') for (const k in src.new) if (seen[k] && src.new[k]) fresh[k] = 1;
+    const n = (v) => Math.max(0, Math.floor(+v) || 0);
+    return { seen, made: n(src.made), syn: n(src.syn), new: fresh };
+  }
+
+  /* Pet synergies: each companion pet gets a bonus trick with a build. on(run)
+     reads the run only (relics, the claw type, the bin, the sets); the game
+     applies the effect in the pet's trick and fires a {t:'proc', src:'pet'}. */
+  const relicKw = (run, k) => relicIdsOf(run).some(id => RELICS[id] && (RELICS[id].kw || []).indexOf(k) >= 0);
+  const binHas = (run, p) => (run && Array.isArray(run.bin) ? run.bin : []).some(i => i && ITEMS[i.id] && p(ITEMS[i.id]));
+  const PET_SYN = {
+    hamster: { name: 'Marble Run', icon: '🎱', color: '#2ee6d6', need: 'a Swarm relic',
+      text: 'Every shove flicks your small items too: 2 damage to a random enemy for each small item in the cabinet (up to 5).', on: (run) => relicKw(run, 'swarm') },
+    parrot: { name: 'Mimic', icon: '🦜', color: '#b08cff', need: 'an Echo relic',
+      text: 'The item it carries is copied into your bin for this fight (up to 3 a fight).', on: (run) => relicKw(run, 'echo') },
+    cat: { name: 'Fire Cat', icon: '🔥', color: '#ff8a2e', need: 'a Pyro item in your bin',
+      text: 'It bats Pyro items first, and every Pyro item it bats gives ALL enemies 2 Burn.', on: (run) => binHas(run, (d) => kwIds(d).indexOf('burn') >= 0) },
+    octopus: { name: 'Two Arms', icon: '🐙', color: '#c77dff', need: 'the Tri-Claw',
+      text: 'On the Tri-Claw it holds the two lowest prizes on a lift, not one.', on: (run) => !!run && run.clawType === 'tri' },
+    firefly: { name: 'Frost Light', icon: '❄', color: '#9fd8ff', need: 'a Frost relic',
+      text: 'An item in its spotlight that is played against a Frozen enemy resolves twice.', on: (run) => relicKw(run, 'frost') },
+    mouse: { name: 'Double Pull', icon: '🧲', color: '#ff5a4a', need: 'the Magnet Crane',
+      text: 'On the Magnet Crane it pulls two metal items to the claw, not one.', on: (run) => !!run && run.clawType === 'magnet' },
+    raccoon: { name: "King's Feast", icon: '👑', color: '#ffc94d', need: 'Junkyard King',
+      text: 'Every junk it eats gives 1 Strength and 3 Block.', on: (run) => relicIdsOf(run).indexOf('junkyard_king') >= 0 },
+    goose: { name: 'Golden Clutch', icon: '🥚', color: '#ffe066', need: '2 pieces of High Rollers',
+      text: 'It lays two golden eggs at once, and every clutch gives 1 Luck.', on: (run) => setCount(run, 'luck') >= 2 },
+  };
+  for (const id in PET_SYN) PET_SYN[id].id = id;
+  // The pet's synergy when the run has switched it on, else null.
+  function petSynOn(petId, run) {
+    const s = PET_SYN[petId];
+    if (!s) return null;
+    try { return s.on(run) ? s : null; } catch (e) { return null; }
+  }
+
+  // Combos with the evolved items and the pets (COMBAT passes ctx.pet).
+  const evoIs = (d) => !!(d && d.evolved);
+  COMBO_LIST.push(
+    { id: 'legend_rising', name: 'Legend Rising', tier: 2, family: 'evo', color: '#ffe27a', target: 'all',
+      text: 'An evolved item and two more: deal 10 damage to ALL enemies and gain 6 Block.', fx: [dmg(10), block(6)],
+      match: (d) => d.length >= 3 && d.some(evoIs), example: ['excalibur_claw', 'femur', 'crisp_apple'], miss: ['rusty_sword', 'femur', 'crisp_apple'] },
+    { id: 'twin_legends', name: 'Twin Legends', tier: 3, family: 'evo', color: '#fff6a0', target: 'all', secret: true,
+      text: 'Two different evolved items in one grab: deal 25 damage to ALL enemies and gain 2 Strength.', fx: [dmg(25), status('str', 2, 'self')],
+      match: (d) => kinds(d, evoIs) >= 2, example: ['excalibur_claw', 'plague_needle'], miss: ['excalibur_claw', 'excalibur_claw'] },
+    { id: 'fetch', name: 'Fetch!', tier: 2, family: 'fetch', color: '#ff9ec7', target: 'enemy',
+      text: 'A bone and a ball with your pet along: strike twice for 6 and gain 4 Block.', fx: [dmg(6, 2), block(4)],
+      match: (d, ctx) => !!ctx && !!ctx.pet && roles(d, [artIs('bone'), artIs('orb')]), ctx: { pet: 'hamster' },
+      example: ['femur', 'bouncy_ball'], miss: ['femur', 'crisp_apple'] },
+    { id: 'nest_egg', name: 'Nest Egg', tier: 2, family: 'nest', color: '#ffe066', target: 'all',
+      text: 'An egg and a coin with the Golden Goose along: gain 12 gold and deal 8 damage to ALL enemies.', fx: [gold(12), dmg(8)],
+      match: (d, ctx) => !!ctx && ctx.pet === 'goose' && roles(d, [artIs('egg'), artIs('coin')]), ctx: { pet: 'goose' },
+      example: ['quail_egg', 'lucky_penny'], miss: ['quail_egg', 'femur'] },
+  );
+  for (const c of COMBO_LIST) if (!COMBOS[c.id]) COMBOS[c.id] = c;
+  const EVO_COMBOS = ['legend_rising', 'twin_legends', 'fetch', 'nest_egg'];
+
+  // Two stickers (the board caps the list, see the data suite).
+  for (const a of [
+    A_('evolved', 'It Evolved!', '\u{1F9EC}', '#ffe27a', 'Evolve an item: an upgraded item and its relic.', (c) => (((c.meta && c.meta.evo) || {}).made | 0) >= 1),
+    A_('best_buds', 'Best Buds', '\u{1F43E}', '#ff9ec7', 'Set off a pet synergy in a fight.', (c) => (((c.meta && c.meta.evo) || {}).syn | 0) >= 1),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  // ================================================================ /EVOLVE
+
+  // ================================================================ SEASON (round 7: seasonal events)
+  /* Seasonal events (DESIGN.md "Seasonal events (round 7)"). A season is a
+     date span (month, day inclusive at both ends; a span may wrap the
+     new year) with its own content: items, relics, costumed enemies, an
+     elite, a map tile, cosmetics bought with its own currency, a sticker.
+     Everything here is pure: seasonAt(date) reads only the date it is
+     given (a Date, a timestamp or 'YYYY-MM-DD'), never the clock.
+     The seasonal items, relics, enemies and cosmetics are reachable as
+     ITEMS[id] / RELICS[id] / ENEMIES[id] / COSMETICS[id] through
+     NON-ENUMERABLE properties (like the evolved items): every lookup finds
+     them (COMBAT, the renderer, the save), while Object.keys / for..in /
+     ITEM_IDS never list them, so the year-round pools, shops, capsules, the
+     Prizedex and the Vault shelves stay exactly as they are. The game's
+     SEASON block brings them in while a run's season is on. */
+  const seaAdd = (T, d) => { Object.defineProperty(T, d.id, { value: d, enumerable: false, configurable: true, writable: true }); return d; };
+  const SEASONS = {
+    halloween: {
+      id: 'halloween', name: 'Claw-o-ween', icon: '\u{1F383}', from: [10, 1], to: [11, 3], col: '#ff8a1f', col2: '#9b4dff',
+      cur: { id: 'candy', name: 'candy', one: 'candy', icon: '\u{1F36C}', col: '#ff8a1f' },
+      blurb: 'Costumed monsters, trick-or-treat doors, candy in every fight. Spend it at the Candy Counter in the Prize Vault.',
+      counter: 'Candy Counter', look: 'spooky', music: 'spooky',
+      items: ['candy_corn', 'bag_candycorn', 'pumpkin_bomb', 'cursed_lollipop', 'haunted_teddy', 'witch_broom', 'skull_candle'],
+      relics: ['candy_bucket', 'jack_o_lantern', 'witch_brew', 'ghost_sheet'],
+      costumes: { rat: 'rat_vamp', slime: 'slime_ghost', goblin: 'goblin_witch' }, elite: 'pumpking', tile: 'treat',
+      cosmetics: ['skin_sea_mansion', 'paint_sea_pumpkin', 'fit_knight_witch', 'fit_alch_witch', 'fit_rogue_witch', 'fit_lou_witch', 'trail_sea_bats'],
+      hats: ['witch', 'pumpkin', 'horns'],
+    },
+    winter: {
+      id: 'winter', name: 'Winter Wonderclaw', icon: '❄', from: [12, 10], to: [1, 6], col: '#8dfff5', col2: '#ff2e4a',
+      cur: { id: 'flakes', name: 'snowflakes', one: 'snowflake', icon: '❄', col: '#bff4ff' },
+      blurb: 'Snow on the machine, frost on the glass, snowflakes in every fight for the Snowflake Stand in the Prize Vault.',
+      counter: 'Snowflake Stand', look: 'snowy', music: 'jingle',
+      items: [], relics: [], costumes: {}, elite: null, tile: null,
+      cosmetics: ['skin_sea_frost', 'paint_sea_holly'],
+      hats: ['santa'],
+    },
+  };
+  const SEASON_IDS = Object.keys(SEASONS);
+  // Dials: costumes, the Pumpkin King, generic party hats, the doors, the currency.
+  const SEA_K = {
+    costumeP: 0.55,          // a monster with a costume wears it this often in season
+    kingP: 0.45,             // an act 1 elite fight (not a tower) is the season's elite this often
+    hatP: 0.3,               // any other monster turns up in a party hat this often
+    treatN: [3, 4],          // trick-or-treat doors per map (the big world gets the top)
+    treatGap: 4, treatStart: 3,
+    earn: { normal: 3, elite: 8, boss: 15, costume: 2, king: 12, treat: [8, 14], corn: 1 },
+    // a door's outcome: 70% treats, 30% tricks
+    treat: { candy: 22, gold: 18, capsule: 16, item: 10, relic: 4, fight: 18, curse: 12 },
+    curse: 'slag',
+  };
+  // 'YYYY-MM-DD' / a Date / a timestamp -> {y, m, d} (local calendar), null when unreadable.
+  function seaYmd(date) {
+    if (date == null) return null;
+    if (typeof date === 'string') {
+      const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(date);
+      return m ? { y: +m[1], m: +m[2], d: +m[3] } : null;
+    }
+    const dt = typeof date === 'number' ? new Date(date) : date;
+    if (!dt || typeof dt.getFullYear !== 'function' || !isFinite(dt.getTime())) return null;
+    return { y: dt.getFullYear(), m: dt.getMonth() + 1, d: dt.getDate() };
+  }
+  const seaMd = (m, d) => m * 100 + d;
+  function seaIn(def, ymd) {
+    const a = seaMd(def.from[0], def.from[1]), b = seaMd(def.to[0], def.to[1]), x = seaMd(ymd.m, ymd.d);
+    return a <= b ? (x >= a && x <= b) : (x >= a || x <= b);
+  }
+  // The season on a date (its def), or null.
+  function seasonAt(date) {
+    const ymd = seaYmd(date);
+    if (!ymd) return null;
+    for (const id of SEASON_IDS) if (seaIn(SEASONS[id], ymd)) return SEASONS[id];
+    return null;
+  }
+  const seaTime = (date) => (typeof date === 'string' ? (() => { const q = seaYmd(date); return q ? new Date(q.y, q.m - 1, q.d).getTime() : NaN; })() : typeof date === 'number' ? date : (date && date.getTime ? date.getTime() : NaN));
+  /* The span of a season around a date: the one it is in, else the next
+     one. {start, end} timestamps, end exclusive (the local midnight after
+     the last day), so a countdown is end - now. */
+  function seasonWindow(id, date) {
+    const def = SEASONS[id], ymd = seaYmd(date);
+    if (!def || !ymd) return null;
+    const wraps = seaMd(def.from[0], def.from[1]) > seaMd(def.to[0], def.to[1]);
+    let y0 = ymd.y;
+    if (wraps && seaMd(ymd.m, ymd.d) <= seaMd(def.to[0], def.to[1])) y0 -= 1;   // January of a span that began last year
+    let start = new Date(y0, def.from[0] - 1, def.from[1]).getTime();
+    let end = new Date(y0 + (wraps ? 1 : 0), def.to[0] - 1, def.to[1] + 1).getTime();
+    if (seaTime(date) >= end) { start = new Date(y0 + 1, def.from[0] - 1, def.from[1]).getTime(); end = new Date(y0 + 1 + (wraps ? 1 : 0), def.to[0] - 1, def.to[1] + 1).getTime(); }
+    return { start, end };
+  }
+  // Milliseconds left in the season on that date (0 when it is not on).
+  function seasonLeft(id, date) {
+    const def = SEASONS[id], ymd = seaYmd(date);
+    if (!def || !ymd || !seaIn(def, ymd)) return 0;
+    const w = seasonWindow(id, date), now = seaTime(date);
+    return w && isFinite(now) ? Math.max(0, w.end - now) : 0;
+  }
+  // The profile's seasonal fields (meta.sea): the preview pick, the wallets, the counters.
+  function seaFix(o) {
+    const src = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    const num = (v) => Math.max(0, Math.floor(+v || 0));
+    const bag = (v) => { const out = {}; if (v && typeof v === 'object' && !Array.isArray(v)) for (const k in v) out[k] = num(v[k]); return out; };
+    const pv = typeof src.preview === 'string' && (src.preview === 'off' || SEASONS[src.preview]) ? src.preview : '';
+    return { preview: pv, wallet: bag(src.wallet), earned: bag(src.earned), spent: bag(src.spent), knocks: num(src.knocks), king: num(src.king),
+      runs: bag(src.runs), seen: bag(src.seen) };
+  }
+  // Currency a won fight drops: by tier, plus the costumed monsters beaten and the season's elite.
+  function seaEarn(tier, costumed, king) {
+    const E = SEA_K.earn;
+    return (E[tier] || E.normal) + (costumed | 0) * E.costume + (king ? E.king : 0);
+  }
+  /* A trick-or-treat door: rng, act, ctx {relics: ids still to win, items}.
+     -> {kind: 'treat' | 'trick', k, candy, gold?, id?, tier?}. A treat always
+     carries candy on top of its prize; a trick is a fight or a curse. */
+  function seaTreatRoll(rng, act, ctx) {
+    ctx = ctx || {};
+    const w = Object.assign({}, SEA_K.treat);
+    const relics = (ctx.relics || []).filter((id) => RELICS[id]);
+    const items = (ctx.items || SEASONS.halloween.items).filter((id) => ITEMS[id]);
+    if (!relics.length) w.relic = 0;
+    if (!items.length) w.item = 0;
+    const k = wpick(rng, w);
+    const [c0, c1] = SEA_K.earn.treat;
+    const a = Math.max(1, act | 0);
+    const out = { kind: k === 'fight' || k === 'curse' ? 'trick' : 'treat', k, candy: 0 };
+    if (out.kind === 'treat') out.candy = c0 + Math.floor(rng() * (c1 - c0 + 1));
+    if (k === 'candy') out.candy += 6;
+    if (k === 'gold') out.gold = 18 + Math.floor(rng() * 16) + 6 * (a - 1);
+    if (k === 'capsule') out.tier = rng() < 0.3 ? 'u' : 'c';
+    if (k === 'item') out.id = items[Math.floor(rng() * items.length)];
+    if (k === 'relic') out.id = relics[Math.floor(rng() * relics.length)];
+    if (k === 'curse') out.id = SEA_K.curse;
+    return out;
+  }
+  // ---- Claw-o-ween's items (a pumpkin is a real bomb: its fuse lights)
+  const SEA_ITEMS = [
+    { id: 'candy_corn', name: 'Candy Corn', rarity: 'c', cost: 15, season: 'halloween', sea: { candy: 1 },
+      tags: ['small', 'food'], shape: circle(10), density: 0.8, friction: 0.4, restitution: 0.15,
+      color: '#ff8a1f', color2: '#ffe066', art: 'gem', target: 'self',
+      fx: [heal(1), block(1)], plus: { fx: [heal(2), block(2)] }, text: 'Heal {v} and gain {v2} Block. In season, every one you land is a piece of candy.' },
+    { id: 'bag_candycorn', name: 'Candy Corn Bag', rarity: 'c', cost: 30, season: 'halloween',
+      tags: [], shape: circle(14), density: 1.0, friction: 0.5,
+      color: '#ff8a1f', color2: '#3a1f4a', art: 'orb', target: 'none', exhaust: true,
+      bag: ['candy_corn', 'candy_corn', 'candy_corn'], fx: [],
+      text: 'Adds 3 Candy Corn to your bin. Nobody knows who likes it. You will.' },
+    { id: 'pumpkin_bomb', name: 'Pumpkin Bomb', rarity: 'u', cost: 70, season: 'halloween',
+      tags: ['weapon'], shape: circle(15), density: 1.2, friction: 0.5, restitution: 0.2,
+      color: '#ff8a1f', color2: '#2e6a1e', art: 'bomb', target: 'all',
+      fx: [dmg(5), status('burn', 2, 'all')], plus: { fx: [dmg(7), status('burn', 3, 'all')] },
+      text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. Carved with love, lit with malice.' },
+    { id: 'cursed_lollipop', name: 'Cursed Lollipop', rarity: 'u', cost: 60, season: 'halloween',
+      tags: ['magic', 'food'], shape: box(40, 14), density: 0.8, friction: 0.45,
+      color: '#9b4dff', color2: '#ffe066', art: 'wand',
+      fx: [dmg(9), status('poison', 3), status('weak', 1, 'self')], plus: { fx: [dmg(12), status('poison', 4), status('weak', 1, 'self')] },
+      text: 'Deal {v} damage and apply {v2} Poison. Cursed: you get {v3} Weak.' },
+    { id: 'haunted_teddy', name: 'Haunted Teddy', rarity: 'r', cost: 110, season: 'halloween',
+      tags: ['magic', 'light'], shape: egg(14, 17), density: 0.6, friction: 0.55, restitution: 0.2,
+      color: '#b98a5a', color2: '#7dff7a', art: 'heart', target: 'self',
+      fx: [block(7), status('weak', 2, 'all')], plus: { fx: [block(10), status('weak', 3, 'all')] },
+      text: 'Gain {v} Block and apply {v2} Weak to ALL enemies. It floats. It watches. It hugs.' },
+    { id: 'witch_broom', name: 'Witch Broom', rarity: 'u', cost: 65, season: 'halloween', sea: { sweep: 1 },
+      tags: ['tool', 'light'], shape: box(56, 10), density: 0.6, friction: 0.5,
+      color: '#c9a24a', color2: '#6b3f1f', art: 'feather',
+      fx: [dmg(5), block(3)], plus: { fx: [dmg(8), block(4)] },
+      text: 'Deal {v} damage and gain {v2} Block, then it sweeps the pile toward the chute.' },
+    { id: 'skull_candle', name: 'Skull Candle', rarity: 'r', cost: 100, season: 'halloween',
+      tags: ['light'], shape: SHAPES.skull, density: 0.9, friction: 0.5,
+      color: '#f1e9d6', color2: '#ff8a1f', art: 'torch', target: 'all',
+      fx: [status('burn', 4, 'all'), status('vuln', 1, 'all')], plus: { fx: [status('burn', 6, 'all'), status('vuln', 2, 'all')] },
+      text: 'Apply {v} Burn and {v2} Vulnerable to ALL enemies. The wax screams a little.' },
+  ];
+  for (const d of SEA_ITEMS) {
+    const def = Object.assign({ density: 1, friction: 0.5, restitution: 0.1, target: 'enemy', tags: [] }, d);
+    if (def.plus) def.plus = Object.assign({ name: def.name + '+' }, def.plus);
+    seaAdd(ITEMS, def);
+  }
+  // ---- Claw-o-ween's relics (the Candy Bucket's sea field: more candy per win)
+  const SEA_RELICS = [
+    { id: 'candy_bucket', name: 'Candy Bucket', icon: '\u{1F36C}', rarity: 'c', season: 'halloween', sea: { candy: 2 }, kw: ['feast'], proc: 'TREAT',
+      text: 'Every kill heals 2 HP. In season, each fight you win drops 2 more candy.', hooks: { onKill(F) { healP(F, 2); } } },
+    { id: 'jack_o_lantern', name: "Jack-o'-Lantern", icon: '\u{1F383}', rarity: 'u', season: 'halloween', kw: ['burn'], proc: 'SPOOKY',
+      text: 'At the start of your turn, apply 1 Burn to ALL enemies.', hooks: { onTurnStart(F) { allStatus(F, 'burn', 1); } } },
+    { id: 'witch_brew', name: "Witch's Brew", icon: '\u{1F9D9}', rarity: 'u', season: 'halloween', kw: ['poison'], proc: 'BREW',
+      text: 'Every potion you play also applies 2 Poison to a random enemy.',
+      hooks: { onPlay(F, inst, def) { if (tagged(def, 'potion')) foeStatus(F, randomFoe(F), 'poison', 2); } } },
+    { id: 'ghost_sheet', name: 'Ghost Sheet', icon: '\u{1F47B}', rarity: 'r', season: 'halloween', kw: ['fortress'], proc: 'BOO',
+      text: 'Start each fight with 1 Dodge. Whenever you take damage, gain 3 Block.',
+      hooks: { onFightStart(F) { selfStatus(F, 'dodge', 1); }, onHurt(F) { gainBlock(F, 3); } } },
+  ];
+  for (const r of SEA_RELICS) seaAdd(RELICS, r);
+  // ---- costumed monsters (the base monster plus a twist) and the season's elite
+  const SEA_ENEMIES = [
+    { id: 'rat_vamp', name: 'Count Ratula', act: 1, tier: 'normal', hp: [17, 21], art: 'rat', costume: 'vampire', base: 'rat', size: 0.85, color: '#8a7a9a',
+      season: 'halloween', desc: 'A Coin Rat in a cape. It drinks now, and hides in the cape when you swing.', ai: 'weighted',
+      moves: [w(atk('bite', 'Fang Bite', 5, 1, 'Bites for 5'), 3), w(mheal('drain', 'Drain', 5, 'Drinks deep (heals 5)'), 2),
+        w(buff('cape', 'Cape Swirl', 'dodge', 1, 'Hides in its cape (Dodge 1)'), 1)] },
+    { id: 'slime_ghost', name: 'Sheet Slime', act: 1, tier: 'normal', hp: [30, 38], art: 'slime', costume: 'ghost', base: 'slime', size: 1, color: '#c8ffd8',
+      season: 'halloween', desc: 'A slime under a bedsheet. Your first hit goes straight through it.', ai: 'cycle', pattern: [0, 1, 0, 2],
+      status: { dodge: 1 },
+      moves: [atk('slam', 'Slam', 7, 1, 'Slams for 7'), debuff('boo', 'Boo!', 'weak', 1, 'BOO! Your hands shake (Weak)'),
+        blk('wobble', 'Wobble', 6, 'Wobbles under the sheet (Block 6)')],
+      onDeath: { k: 'summon', id: 'slimeling' } },
+    { id: 'goblin_witch', name: 'Goblin Witch', act: 1, tier: 'normal', hp: [26, 33], art: 'goblin', costume: 'witch', base: 'goblin', size: 1, color: '#6bd35e',
+      season: 'halloween', desc: 'Traded the wrench for a broom. The spells are worse than the swings.', ai: 'cycle', pattern: [0, 1, 2, 3],
+      moves: [atk('jab', 'Broom Jab', 5, 1, 'Jabs for 5'), debuff('hex', 'Hex', 'vuln', 1, 'Hexes you (Vulnerable)'),
+        mv('brew', 'Toss Brew', 'junk', 'Tosses a Slag into your bin', { item: 'slag', n: 1 }),
+        mv('windup', 'Wind Up', 'charge', 'Winding up a big swing (14 next turn)', { v: 14 })] },
+    { id: 'pumpking', name: 'The Pumpkin King', act: 1, tier: 'elite', hp: [60, 68], art: 'mushroom', look: 'pumpking', size: 1.15,
+      color: '#ff8a1f', color2: '#2e6a1e', color3: '#ffe066', season: 'halloween',
+      desc: 'Carved himself a crown and rules the patch with an iron vine. Lobs lit pumpkins into your bin.',
+      ai: 'cycle', pattern: [0, 2, 1, 3, 4, 2], taunt: 'Trick or treat? I only do tricks.',
+      moves: [atk('lash', 'Vine Lash', 9, 1, 'Lashes for 9'), bombMv('pumpkin', 'Lit Pumpkin', 8, 2, 'Lobs a lit pumpkin into your bin (8 in 2 turns)'),
+        atk('seeds', 'Seed Spit', 3, 3, 'Spits seeds 3 x3'), buff('moon', 'Harvest Moon', 'str', 2, 'Grows under the moon (+2 Strength)'),
+        mv('squash', 'Squash', 'charge', 'Rolling up for a squash (18 next turn)', { v: 18 })],
+      enrage: { name: "JACK'S FURY", text: 'The candle inside burns white hot', str: 2 } },
+  ];
+  for (const e of SEA_ENEMIES) seaAdd(ENEMIES, Object.assign({ size: 1 }, e));
+  // ---- the event cosmetics: bought with the season's currency, owned for good
+  const SEA_COSMETICS = [
+    V_('skin_sea_mansion', 'skin', 'Haunted Mansion', 'r', 'Rotten boards, jack-o-lanterns on the frame, a full moon behind the pile.',
+      { frame: '#2b1a12', trim: '#ff8a1f', fp: 'sea_pumpkins', panel: '#140b1c', pp: 'sea_moon', bulb: '#ffd08a', glow: '#ff8a1f', neon: '#9b4dff' }, { season: 'halloween', price: 120 }),
+    V_('paint_sea_pumpkin', 'paint', 'Pumpkin Spice', 'u', 'Orange and black, with a candle glowing inside.', { c1: '#ff8a1f', c2: '#2a1a12', fx: 'glow', glow: '#ffb347' }, { season: 'halloween', price: 80 }),
+    V_('fit_knight_witch', 'outfit', 'Witch Hat', 'u', 'A pointy hat over the visor. Sir Grabsworth is a good witch.', { kind: 'hat', style: 'witch', c1: '#2a1a3a', c2: '#ff8a1f' }, { char: 'knight', season: 'halloween', price: 60 }),
+    V_('fit_alch_witch', 'outfit', 'Witch Hat', 'u', 'A crooked hat with a buckle. Finally, the right uniform.', { kind: 'hat', style: 'witch', c1: '#3a1a5a', c2: '#a6ff5e' }, { char: 'alchemist', season: 'halloween', price: 60 }),
+    V_('fit_rogue_witch', 'outfit', 'Witch Hat', 'u', 'A black hat, a purple band. Very sneaky, very spooky.', { kind: 'hat', style: 'witch', c1: '#1b1320', c2: '#9b4dff' }, { char: 'rogue', season: 'halloween', price: 60 }),
+    V_('fit_lou_witch', 'outfit', 'Witch Hat', 'u', 'Lou bets the hat is lucky. A spider lives in it.', { kind: 'hat', style: 'witch', c1: '#241a2e', c2: '#3ddc84' }, { char: 'gambler', season: 'halloween', price: 60 }),
+    V_('trail_sea_bats', 'trail', 'Bat Trail', 'r', 'Little bats flap up out of every step you take.', { art: 'bats', col: '#2a1a3a' }, { season: 'halloween', price: 90 }),
+    V_('skin_sea_frost', 'skin', 'Frosted Cabinet', 'r', 'Snow on the roof, icicles on the frame, a cosy frost on the glass.',
+      { frame: '#dfeaf5', trim: '#ff2e4a', fp: 'sea_icicles', panel: '#0c1a2a', pp: 'sea_snow', bulb: '#ffffff', glow: '#8dfff5', neon: '#ff2e4a' }, { season: 'winter', price: 120 }),
+    V_('paint_sea_holly', 'paint', 'Hollyberry', 'u', 'Holly green with red berry rivets and a sparkle of frost.', { c1: '#2e9c4a', c2: '#d81f3a', fx: 'sparkle' }, { season: 'winter', price: 80 }),
+  ];
+  for (const c of SEA_COSMETICS) seaAdd(COSMETICS, c);
+  const SEA_COSMETIC_IDS = SEA_COSMETICS.map((c) => c.id);
+  // The season's cosmetics of a category (outfits of one crawler with char).
+  function seaCosmetics(id, cat, char) {
+    const S0 = SEASONS[id];
+    const ids = S0 ? S0.cosmetics : SEA_COSMETIC_IDS;
+    return ids.filter((x) => COSMETICS[x] && (!cat || COSMETICS[x].cat === cat) && (!char || COSMETICS[x].char === char));
+  }
+  // The costumed twin of a monster in a season (null when it has none).
+  function seaCostumeOf(season, enemyId) {
+    const S0 = SEASONS[season];
+    const id = S0 && S0.costumes ? S0.costumes[enemyId] : null;
+    return id && ENEMIES[id] ? id : null;
+  }
+  // One sticker for the event (the board's cap is shared with the other rounds).
+  for (const a of [
+    A_('trick_or_treat', 'Trick or Treat!', '\u{1F383}', '#ff8a1f', 'Knock on 5 trick-or-treat doors during Claw-o-ween.',
+      (c) => (((c.meta && c.meta.sea) || {}).knocks | 0) >= 5, { goal: 5, val: (c) => ((c.meta && c.meta.sea) || {}).knocks | 0, season: 'halloween' }),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  // ================================================================ /SEASON
+
   return {
+    // seasonal events (DESIGN.md "Seasonal events (round 7)")
+    SEASONS, SEASON_IDS, SEA_K, SEA_ITEMS, SEA_RELICS, SEA_ENEMIES, SEA_COSMETIC_IDS, seasonAt, seasonWindow, seasonLeft, seaFix, seaEarn, seaTreatRoll, seaCosmetics, seaCostumeOf,
+    // item evolutions and pet synergies (DESIGN.md "Evolutions and pet synergies (round 7)")
+    EVOLVED, EVOLUTIONS, EVO_IDS, EVO_FX, EVO_COMBOS, evoOf, evoReady, evoAuraIds, evoMetaFix, evoProc, PET_SYN, petSynOn,
     // the secret act (DESIGN.md "Secret act (round 6)")
     SECRET, secKinds, secFix, secKeyN, secShopStock,
     // relic sets, the boon draft, the Compactor (DESIGN.md "Sets, boons and the Compactor")

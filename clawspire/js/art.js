@@ -112,6 +112,12 @@ const ART = (() => {
       const d = enemies[id], sz = enemySize(d, d.art);
       add('enemy', id, sz, genFor(sz[0], sz[1], d.tier === 'boss' ? 768 : 512));
     }
+    // SEASON (round 7): the seasonal items, monsters and relics are non-enumerable in DATA, the door tile is not a MAP type
+    const SD = typeof DATA !== 'undefined' && DATA ? DATA : {};
+    for (const d of SD.SEA_ITEMS || []) { const sz = shapeBox(d.shape); add('itemId', d.id, sz, genFor(sz[0], sz[1], 512)); }
+    for (const d of SD.SEA_ENEMIES || []) { const e = enemies[d.id] || d, sz = enemySize(e, e.art); add('enemy', d.id, sz, genFor(sz[0], sz[1], 512)); }
+    for (const r of SD.SEA_RELICS || []) add('relic', r.id, [32, 32], [256, 256]);
+    add('hex', 'treat', [36, 36], [256, 256]);
     const chars = Object.keys(tbl('CHARACTERS'));
     for (const id of chars.length ? chars : CHARS0) add('portrait', id, [96, 96], [512, 512]);
     for (const id in tbl('RELICS')) add('relic', id, [32, 32], [256, 256]);

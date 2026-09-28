@@ -71,7 +71,7 @@ const COMBAT = (() => {
   }
   const statusDef = (id) => tbl('STATUS')[id] || null;
   // A relic, or a set bonus / boon effect riding next to the relics (SETS block).
-  const relicDef = (id) => tbl('RELICS')[id] || tbl('SET_FX')[id] || null;
+  const relicDef = (id) => tbl('RELICS')[id] || tbl('SET_FX')[id] || tbl('EVO_FX')[id] || null;   // EVO_FX: an evolved item's aura (EVOLVE block)
 
   // ---------- small helpers ----------
   const num = (v, d) => { const n = +v; return Number.isFinite(n) ? n : (d || 0); };
@@ -472,7 +472,8 @@ const COMBAT = (() => {
       echoN: 0, lastPlay: null, comboTurn: {}, combos: {},
     };
     F.sets = setIds;
-    const rs = api.rulesOf(F.relics.concat(setIds));
+    evoFight(F, run);   // the evolved items' auras and the pet along (EVOLVE block)
+    const rs = api.rulesOf(F.relics.concat(setIds, F.evos));
     F.rules = rs.rules; F.ruleSrc = rs.src;
     // Round 3: who is fighting with which claw (relics read F.clawType), and
     // the Luck meter: the gambler's gift, doubled by the Rabbit's Foot, or
@@ -1739,7 +1740,7 @@ const COMBAT = (() => {
       setStreak(F);
       const defs = g.defs.slice();
       // the grab's state for recipes that read it (Lucky Seven)
-      const fire = D().combosFor ? (D().combosFor(defs, { luck: st(F.player, 'luck'), streak: F.streak }) || []) : [];
+      const fire = D().combosFor ? (D().combosFor(defs, { luck: st(F.player, 'luck'), streak: F.streak, pet: F.petId || null }) || []) : [];   // pet: the pet combos (EVOLVE)
       for (const combo of fire) { if (F.phase !== 'player') break; if (combo && combo.id) fireCombo(F, combo, defs); }
       const got = Math.max(n, defs.length);
       if (F.phase === 'player') luckAfterGrab(F, got);
@@ -1832,7 +1833,7 @@ const COMBAT = (() => {
     if (typeof f !== 'function') return [];
     try { return (f(run) || []).filter(id => tbl('SET_FX')[id]); } catch (e) { return []; }
   }
-  function setHookIds(F) { return F.sets && F.sets.length ? F.relics.concat(F.sets) : F.relics; }
+  function setHookIds(F) { const e = F.evos && F.evos.length ? F.evos : null; return F.sets && F.sets.length ? F.relics.concat(F.sets, e || []) : e ? F.relics.concat(e) : F.relics; }   // + the evolved items' auras (EVOLVE)
   // The game's companion pet did a trick (Treat Jar, Dog Whistle, The Hungry Pack).
   api.petTrick = function (F, petId) {
     const c = begin(F);
@@ -1844,6 +1845,90 @@ const COMBAT = (() => {
   };
   api.setFxOf = setFxOf;
   // ================= /SETS =================
+
+  // ================= EVOLVE (round 7: item evolutions and pet synergies) =================
+  // An evolved item's aura (DATA.EVO_FX 'evo:<id>') runs next to the relics
+  // while the item is in the run's bin: F.evos, read by setHookIds and the
+  // rules. The game evolves an item as it is delivered (api.evolve) and
+  // stages the ceremony; api.evoPet fires a pet synergy (a proc, then its
+  // effect). F.petId is the pet along (the pet combos read it).
+  function evoFight(F, run) {
+    const f = D().evoAuraIds;
+    let ids = [];
+    if (typeof f === 'function') { try { ids = (f(run) || []).filter(id => tbl('EVO_FX')[id]); } catch (e) { ids = []; } }
+    F.evos = ids;
+    F.petId = run && run.pet && typeof run.pet.id === 'string' ? run.pet.id : null;
+    F.evolved = [];
+  }
+  // Merge one def's rules into the live F.rules (numbers add, amp per tag).
+  function evoRules(F, id) {
+    const rs = api.rulesOf([id]);
+    for (const k in rs.rules) {
+      const v = rs.rules[k];
+      if (v && typeof v === 'object') { F.rules[k] = F.rules[k] || {}; for (const t in v) F.rules[k][t] = num(F.rules[k][t], 0) + num(v[t], 0); }
+      else F.rules[k] = num(F.rules[k], 0) + num(v, 0);
+      if (!F.ruleSrc[k]) F.ruleSrc[k] = id;
+    }
+  }
+  // The recipe a fight instance is ready for: plus, real, the relic in hand (else null).
+  api.evoCheck = function (F, inst) {
+    const f = D().evoReady;
+    if (!F || !inst || typeof f !== 'function') return null;
+    try { return f(inst, F.relics) || null; } catch (e) { return null; }
+  };
+  // Evolve a fight instance for good (the game mirrors it on the run's bin):
+  // the evolved id, no plus, and its aura joins the fight at once. -> recipe | null
+  api.evolve = function (F, inst, recipe) {
+    const r = recipe || api.evoCheck(F, inst);
+    if (!F || !inst || !r || !itemDef(r.to) || !tbl('ITEMS')[r.to]) return null;
+    inst.id = r.to; inst.plus = false;
+    if (!Array.isArray(F.evolved)) F.evolved = [];
+    if (!Array.isArray(F.evos)) F.evos = [];
+    F.evolved.push({ uid: inst.uid, from: r.from, to: r.to });
+    const aid = 'evo:' + r.to;
+    if (relicDef(aid) && F.evos.indexOf(aid) < 0) { F.evos.push(aid); evoRules(F, aid); }
+    log(F, `${r.name || r.to} evolved.`);
+    return r;
+  };
+  // A pet synergy (DATA.PET_SYN) goes off: its proc, then k's effect.
+  //   marbles  2 damage to a random enemy per small item in the bin (max 5)   copy {id}  a fight copy of that item
+  //   burn {v} Burn on ALL enemies   feast  1 Strength and 3 Block   luck  1 Luck   anything else: the proc only
+  api.evoPet = function (F, petId, k, o) {
+    const c = begin(F);
+    if (!F || F.phase === 'over') return end(F, c);
+    o = o || {};
+    const s = tbl('PET_SYN')[petId] || {};
+    emit(F, procEv('pet', 'pet:' + petId, s.name || petId, s.icon || '', s.color || '#ff9ec7', o.label || String(s.name || 'PET').toUpperCase(), F.player, F));
+    const p = F.player;
+    switch (k) {
+      case 'marbles': {
+        const n = clamp(F.bin.filter(i => tagHas(itemDef(i.id), 'small')).length, 0, 5);
+        for (let i = 0; i < n && F.phase !== 'over'; i++) { const e = hitTargets(F, 'random')[0]; if (e) api.damage(F, null, e, 2); }
+        break;
+      }
+      case 'copy': if (o.id && tbl('ITEMS')[o.id]) api.addTemp(F, o.id, 1); break;
+      case 'burn': alive(F).forEach(e => api.status(F, e, 'burn', Math.max(1, Math.round(num(o.v, 2))))); break;
+      case 'feast': api.status(F, p, 'str', 1); gainBlock(F, p, 3); break;
+      case 'luck': api.status(F, p, 'luck', 1); break;
+      default: break;
+    }
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  // The firefly's Frost Light: the game marks the spotlit instance (inst.spot);
+  // played against a Frozen target it resolves once more.
+  function evoSpot(F, inst, def, mode, plus) {
+    if (!inst || !inst.spot) return;
+    delete inst.spot;
+    const e = aimOf(F, { idx: F.target });
+    if (F.phase !== 'player' || !e || st(e, 'freeze') <= 0) return;
+    const s = tbl('PET_SYN').firefly || {};
+    emit(F, procEv('pet', 'pet:firefly', s.name || 'Frost Light', s.icon || '', s.color || '#9fd8ff', 'FROST LIGHT x2', F.player, F));
+    retarget(F);
+    resolveFx(F, { inst, def, mode, idx: F.target, again: true }, plus);
+  }
+  // ================= /EVOLVE =================
   // Bait (def.eaten, per plus): what a swallowed Poison Pill or Hot Potato
   // does to its eater instead of feeding it.
   function eatenOf(def, plus) {
@@ -2075,6 +2160,7 @@ const COMBAT = (() => {
           resolveFx(F, { inst, def, mode, idx: F.target, again: true }, plus);
         }
       }
+      evoSpot(F, inst, def, mode, plus);   // the firefly's Frost Light: a spotlit item on a Frozen enemy resolves twice (EVOLVE)
       if (!hasAgain(def, plus)) F.lastPlay = { inst, def, plus };
       // Bleed: the player bleeds when acting (playing an item).
       if (F.phase !== 'over') tickDmg(F, F.player, 'bleed');
@@ -2449,6 +2535,94 @@ const COMBAT = (() => {
   api.BEST_FLOOR = BEST_FLOOR;
   api.bestRide = bestRide;
   /* ============================================================ end BESTIARY */
+
+  /* ================= QA (round 7): the incoming-damage telegraph =================
+     A pure read of F (nothing changes, no rng) for the elite readability pass:
+     what one enemy's next action hits the player for, and what the whole
+     enemy phase would cost if the turn ended now. A hit is calcHit of the
+     move's value with the enemy's Strength (its Enrage lands before it acts,
+     a held weapon due to be digested or coughed up leaves first), its Weak,
+     the player's Vulnerable and Armor, exactly as api.damage does. Multi-hits
+     and a Hasty jab count; a frozen or stunned enemy, or one its own Poison
+     and Burn finish first, skips. A charge reports the unleash it winds up
+     for next turn (one more Enrage by then; a 1-stack Vulnerable or Weak has
+     worn off). The phase: the player's Burn ticks first (a Hot Potato adds
+     to it, through Block), then the hits in acting order (Dodge eats whole
+     hits, Block soaks the rest, a Vulnerable debuff lands for the enemies
+     after it), then lit bombs that go off in the bin, then the player's own
+     Poison as the next turn starts. */
+  function qaIntentOf(F, e, vulnSim, strAdd) {
+    const m = e && e.alive ? e.intent : null;
+    const out = { k: m ? m.k || '' : '', hit: 0, n: 0, jab: 0, total: 0, next: 0, skip: false, charged: !!(m && m.charged), name: m ? m.name || '' : '' };
+    if (!m || !F || !F.player) return out;
+    const p = F.player;
+    let str = st(e, 'str') + st(e, 'enrage') + num(strAdd, 0);
+    for (const b of e.belly || []) if (b && b.str && num(b.turns, 9) <= 1) str -= Math.min(b.str, Math.max(0, str));
+    const weak = st(e, 'weak') > 0, vuln = vulnSim || st(p, 'vuln') > 0, armor = st(p, 'armor');
+    out.skip = st(e, 'freeze') > 0 || st(e, 'stun') > 0 || st(e, 'poison') + st(e, 'burn') >= e.hp;
+    if (m.k === 'attack') {
+      out.n = Math.max(1, num(m.n, 1) | 0);
+      out.hit = calcHit(m.charged ? e.charged : num(m.v, 0), str, weak, vuln, armor);
+      if (api.hasteNext(e)) out.jab = calcHit(Math.max(1, Math.round(num(m.v, 0) / 2)), str, weak, vuln, armor);
+      out.total = (out.hit + out.jab) * out.n;
+    } else if (m.k === 'charge') {
+      out.next = calcHit(Math.max(0, num(m.v, 0)), str + st(e, 'enrage'), st(e, 'weak') > 1, st(p, 'vuln') > 1, armor);
+    }
+    return out;
+  }
+  api.qaIntent = (F, e) => qaIntentOf(F, unit(F, e) || e, false, 0);
+  api.qaThreat = function (F) {
+    // net: everything that gets through (uncapped, so a lethal preview can say
+    // how much more Block would do); loss: what the engine would take (capped at hp)
+    const r = { raw: 0, burn: 0, poison: 0, bomb: 0, dodged: 0, blocked: 0, net: 0, loss: 0, hp: 0, left: 0, lethal: false, per: [] };
+    if (!F || !F.player || F.phase === 'over') return r;
+    const p = F.player;
+    let block = Math.max(0, num(p.block, 0)), dodge = st(p, 'dodge');
+    r.hp = Math.max(0, num(p.hp, 0));
+    let burn = st(p, 'burn');
+    for (const inst of F.bin) if (inst && !inst.frozen) burn += Math.max(0, num(itemDef(inst.id).hot, 0));
+    r.burn = Math.min(MAX_STACK, burn);
+    r.net = r.burn;
+    let vulnSim = false, strAll = 0, poisonAdd = 0;
+    F.enemies.forEach((e, idx) => {
+      if (!e || !e.alive) return;
+      const q = qaIntentOf(F, e, vulnSim, strAll);
+      q.idx = idx;
+      r.per.push(q);
+      const m = e.intent;
+      if (q.skip) return;
+      const reps = m && m.k !== 'attack' && api.hasteNext(e) ? 2 : 1;   // Hasty does the whole move again
+      if (m && m.k === 'debuff' && m.s === 'vuln') vulnSim = true;
+      if (m && m.k === 'debuff' && m.s === 'poison') poisonAdd += reps * Math.max(0, Math.round(num(m.v, 1)));
+      if (m && m.k === 'buff' && m.s === 'str' && m.to === 'all') strAll += reps * num(m.v, 1);
+      if (q.k !== 'attack') return;
+      for (let s = 0; s < 2; s++) {
+        const v = s ? q.jab : q.hit;
+        if (s && !v) break;
+        for (let i = 0; i < q.n; i++) {
+          r.raw += v;
+          if (dodge > 0) { dodge--; r.dodged += v; continue; }
+          const b = Math.min(block, v);
+          block -= b; r.blocked += b; r.net += v - b;
+        }
+      }
+    });
+    // lit bombs left in the bin go off as the enemy phase ends (no Strength, through Block)
+    for (const inst of F.bin) {
+      if (!inst || inst.fuse == null || inst.lit === F.turn || num(inst.fuse, 9) > 1) continue;
+      const v = calcHit(num(inst.boom, 8), 0, false, vulnSim || st(p, 'vuln') > 0, st(p, 'armor'));
+      const b = Math.min(block, v);
+      block -= b; r.blocked += b; r.raw += v; r.bomb += v; r.net += v - b;
+    }
+    // and the player's own Poison ticks as the next turn starts (no Block by then)
+    r.poison = Math.min(MAX_STACK, st(p, 'poison') + poisonAdd);
+    r.net += r.poison;
+    r.loss = Math.min(r.hp, r.net);
+    r.left = r.hp - r.net;
+    r.lethal = r.hp > 0 && r.left <= 0;
+    return r;
+  };
+  /* ================= /QA ================= */
 
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).

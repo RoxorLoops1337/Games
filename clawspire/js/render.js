@@ -724,7 +724,7 @@ const RENDER = (() => {
       const dflt = ITEM_DEFAULT[key] || ITEM_DEFAULT.rock;
       const c1 = def.color || dflt[0], c2 = def.color2 || dflt[1];
       const R = Math.max(w, h) / 2;
-      const img = artImg('itemId', def.id) || artImg('item', key);
+      const img = artImg('itemId', def.id) || (def.evolved ? null : artImg('item', key));   // EVOLVE: an evolved item never borrows its key's shared PNG
       ctx.translate(x || 0, y || 0);
       if (opts.alpha != null) ctx.globalAlpha = opts.alpha;
       if (opts.glow) glow(ctx, 0, 0, R * 1.8 * s, opts.glow === true ? PAL.gold : opts.glow, opts.glowA == null ? 0.9 : opts.glowA);
@@ -782,7 +782,7 @@ const RENDER = (() => {
     const key = def.art;
     // POLISH (round 5): the item's own silhouette when it has one (a PNG still wins)
     const pi = img ? null : polInfo(def);
-    const fn = (pi && pi.sil) || (IA[key] && key !== 'crate' ? IA[key] : null);
+    const fn = (img ? null : evoArtFn(def)) || (pi && pi.sil) || (IA[key] && key !== 'crate' ? IA[key] : null);   // EVOLVE: an evolved item's own drawing
     const R = Math.max(w, h) / 2;
     {
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -1523,6 +1523,7 @@ const RENDER = (() => {
       const c1 = def.color || dflt[0];
       ctx.translate(x || 0, y || 0);
       if (layer === 'back') {
+        if (def.evolved) evoAura(ctx, def, R, t, seed, 'back');   // EVOLVE: the evolved item's pulsing glow and rays
         if (st.golden) glow(ctx, 0, 0, R * 2.3, PAL.gold, 0.55 + Math.sin(t * 5 + seed) * 0.2);
         if (T.magic) glow(ctx, 0, 0, R * 1.9, c1, 0.18 + 0.14 * Math.sin(t * 2.6 + seed));
         if (T.fire) glow(ctx, 0, -R * 0.2, R * 1.5, '#ff8a2b', 0.16 + 0.1 * Math.sin(t * 13 + seed * 3));
@@ -1577,6 +1578,7 @@ const RENDER = (() => {
           glow(ctx, fx0, fy0, 10 + fl * 6, '#ffe066', 0.9);
           tone(ctx, c => star(c, fx0, fy0, 3 + fl * 2.5, 6, 0.35), '#fff6c0', fx0, fy0, 3, { ol: 0, spec: false });
         }
+        if (def.evolved) evoAura(ctx, def, R, t, seed, 'front');   // EVOLVE: orbiting motes
       }
       if (layer === 'top' && st.fuse > 0) {
         // the turn countdown over the bomb, pulsing red on its last turn
@@ -2215,6 +2217,7 @@ const RENDER = (() => {
       const ih = art.h, iw = img ? ih * imW(img) / imH(img) : 0;
       if (img) blit(ctx, img, -iw / 2, -ih, iw, ih);
       else art.draw(ctx, t, p, art === EA.blob ? (def.name || key) : null);
+      if (!img && (def.costume || def.seaHat)) seaCostume(ctx, def, art, t);   // SEASON: a costume or a party hat over its own art
       bestHurtLook(ctx, art, t);   // sweat, cracks, dizzy stars at low hp (BESTIARY block)
       if (st.frozen) {
         if (img) silhouette(ctx, img, -iw / 2, -ih, iw, ih, 'rgba(120,200,255,0.45)');
@@ -3310,6 +3313,7 @@ const RENDER = (() => {
       case 'plinko': case 'wheel': case 'slots': arcIcon(ctx, type, s, t); break;
       // PETS (round 5): whack-a-mole, skee-ball, the pet shop
       case 'moles': case 'skee': case 'petshop': petIcon(ctx, type, s, t); break;
+      case 'treat': seaTreatIcon(ctx, r, t); break;   // SEASON: a trick-or-treat door
       default:
         F(ctx, rgba('#f4ecd6', 0.45)); ctx.beginPath(); ctx.arc(0, 0, s * 0.25, 0, TAU); ctx.fill();
     }
@@ -4074,7 +4078,12 @@ const RENDER = (() => {
   }
   const BIN_KINDS = { shake: 1, grease: 1, fog: 1, junk: 1, tilt: 1, steal: 1, freezeItem: 1, gulp: 1, bomb: 1, corrode: 1, jam: 1, eggs: 1,
     tickle: 1, glue: 1, ceiling: 1, plow: 1, vanish: 1, bury: 1, wheel: 1 };   // (the bestiary's too)
-  function intent(ctx, x, y, enemy, t) {
+  /* qa (optional, QA round 7): COMBAT.qaIntent's numbers from the game: the
+     real hit after Strength, Vulnerable, Armor and a Hasty jab ({hit, n, jab,
+     total}), a charge's unleash next turn ({next}), big: a danger hit. A
+     multi-hit shows its total big with "hit x n" under it. Without it the
+     bubble reads the move's own value, as before. */
+  function intent(ctx, x, y, enemy, t, qa) {
     ctx.save();
     try {
       enemy = enemy || {}; t = t || 0;
@@ -4083,14 +4092,24 @@ const RENDER = (() => {
       if (k === 'charge' || enemy.charged) { const pu = 1 + Math.max(0, Math.sin(t * 8)) * 0.1; ctx.scale(pu, pu); }
       ctx.lineJoin = 'round';
       const wide = k === 'attack' || k === 'charge' || k === 'block' || k === 'heal';
-      const bw = wide ? 52 : 34, bh = 30;
+      const qn = !!(qa && k === 'attack' && qa.hit != null), two = qn && (qa.n > 1 || qa.jab > 0), qc = !!(qa && k === 'charge' && qa.next > 0);
+      const hot = enemy.charged || (qa && qa.big);
+      const bw = two || qc ? 62 : wide ? 52 : 34, bh = two ? 42 : 30;
       ctx.beginPath(); rrect(ctx, -bw / 2, -bh, bw, bh, 8); ctx.moveTo(-6, 0); ctx.lineTo(0, 6); ctx.lineTo(6, 0);
-      F(ctx, enemy.charged ? '#5a1030' : '#1d1233'); ctx.fill(); S(ctx, enemy.charged ? accC(PAL.blood) : INK, 2.5); ctx.stroke();
+      F(ctx, hot ? '#5a1030' : '#1d1233'); ctx.fill(); S(ctx, hot ? accC(PAL.blood) : INK, 2.5); ctx.stroke();
       const cy = -bh / 2;
       const shakeX = k in BIN_KINDS ? Math.sin(t * 30) * 1.5 : 0;
       switch (k) {
         case 'attack': {
           ctx.save(); ctx.translate(-bw / 2 + 12, cy); ctx.rotate(-0.8); IA.sword(ctx, 22, 6, '#c9d3e0', '#8a5a2b'); ctx.restore();
+          if (qn) {
+            const col = hot ? accC(PAL.blood) : '#fff';
+            if (two) {
+              txt(ctx, String(qa.total), 9, cy - 7, 16, col, true, 'center', INK);
+              txt(ctx, qa.hit + (qa.n > 1 ? 'x' + qa.n : '') + (qa.jab ? '+' + qa.jab + (qa.n > 1 ? 'x' + qa.n : '') : ''), 9, cy + 10, 12, '#ffd9e0', true, 'center', INK);
+            } else txt(ctx, String(qa.hit), 8, cy + 0.5, 14, col, true, 'center', INK);
+            break;
+          }
           const v = enemy.charged && it.v != null ? it.v : it.v;
           txt(ctx, String(v == null ? '' : v) + (it.n > 1 ? 'x' + it.n : ''), 8, cy + 0.5, 14, enemy.charged ? accC(PAL.blood) : '#fff', true, 'center', INK);
           break;
@@ -4114,6 +4133,13 @@ const RENDER = (() => {
           break;
         }
         case 'charge': {
+          if (qc) {
+            // the exact unleash next turn beside the warning (QA round 7)
+            glow(ctx, -bw / 2 + 13, cy, 14, accC(PAL.blood), 0.6 + Math.sin(t * 8) * 0.3);
+            txt(ctx, '!', -bw / 2 + 13, cy + 1, 20, accC(PAL.blood), true, 'center', INK);
+            txt(ctx, String(qa.next), 9, cy + 0.5, 15, accC(PAL.blood), true, 'center', INK);
+            break;
+          }
           glow(ctx, 0, cy, 18, accC(PAL.blood), 0.6 + Math.sin(t * 8) * 0.3);
           txt(ctx, '!', 0, cy + 1, 22, accC(PAL.blood), true, 'center', INK);
           break;
@@ -4345,13 +4371,21 @@ const RENDER = (() => {
         ctx.restore();
       }
       // logo
-      const ly = h * 0.5, fs = Math.min(w * 0.16, 92);
+      const ly = h * 0.5;
+      let fs = Math.min(w * 0.16, 92);
       let subY = ly + fs * 0.72;
       if (limg) {
         const lw = Math.min(w * 0.9, 486), lh = lw * imH(limg) / imW(limg);
         blit(ctx, limg, cx - lw / 2, ly - lh / 2, lw, lh);
         subY = ly + lh / 2 + 12;
       } else {
+        // fit the word, its outer glow stroke (fs x 0.3) included, inside the stage with a
+        // margin: at 92 px bold it ran past both edges, cutting the C and the E (QA round 7)
+        const LOGO_M = 14;
+        ctx.font = '900 ' + fs + 'px ' + FONT;
+        let tw0 = 0;
+        try { const m = ctx.measureText('CLAWSPIRE'); tw0 = m && m.width > 0 ? m.width : 0; } catch (e) { tw0 = 0; }
+        if (tw0 > 0 && tw0 + fs * 0.3 > w - LOGO_M * 2) { fs = Math.max(24, Math.floor(fs * (w - LOGO_M * 2) / (tw0 + fs * 0.3))); subY = ly + fs * 0.72; }
         ctx.font = '900 ' + fs + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.lineJoin = 'round';
         ctx.strokeStyle = rgba(PAL.pink, 0.35); ctx.lineWidth = fs * 0.3; ctx.strokeText('CLAWSPIRE', cx, ly);
@@ -7462,7 +7496,7 @@ const RENDER = (() => {
       try { const g = ctx.createLinearGradient(-f, -f, w + f, h + f); g.addColorStop(0, rgba('#fff6c0', 0.35)); g.addColorStop(0.45, rgba('#fff6c0', 0)); g.addColorStop(0.55, rgba('#fff6c0', 0.3)); g.addColorStop(1, rgba('#fff6c0', 0)); ctx.fillStyle = g; ctx.fillRect(-f, -f, w + f * 2, h + f * 2); } catch (e) { /* stub */ }
     } else if (fp === 'rainbow') {
       for (let i = 0; i < 6; i++) { ctx.beginPath(); rrect(ctx, -f + 3 + i * 3, -f + 3 + i * 3, w + f * 2 - 6 - i * 6, h + f * 2 - 6 - i * 6, 12); S(ctx, rgba(RB[i * 4], 0.55), 3); ctx.stroke(); }
-    }
+    } else if (fp && String(fp).indexOf('sea_') === 0) seaFramePat(ctx, fp, w, h, f, tr);   // SEASON: the event cabinets
     ctx.restore();
     ctx.beginPath(); rrect(ctx, -f + 3, -f + 3, w + f * 2 - 6, h + f * 2 - 6, 11); S(ctx, rgba(tr, 0.7), 2); ctx.stroke();
   }
@@ -7521,6 +7555,8 @@ const RENDER = (() => {
       for (let yy = 20; yy < fy; yy += 34) for (let xx = ((yy / 34 | 0) % 2) * 22 + 16; xx < w; xx += 44) ctx.fillText('$', xx, yy);
     } else if (pp === 'rainbow') {
       for (let i = 0; i < 12; i++) { F(ctx, rgba(RB[(i * 2) % 24], 0.07)); ctx.beginPath(); ctx.moveTo(i * 60 - 120, 0); ctx.lineTo(i * 60 - 90, 0); ctx.lineTo(i * 60 - 90 + fy, fy); ctx.lineTo(i * 60 - 120 + fy, fy); ctx.closePath(); ctx.fill(); }
+    } else if (pp && String(pp).indexOf('sea_') === 0) {
+      seaPanelPat(ctx, pp, w, fy);   // SEASON: the event cabinets
     } else {
       F(ctx, rgba('#ffffff', 0.05)); ctx.beginPath(); for (let yy = 16; yy < fy; yy += 24) for (let xx = 16; xx < w; xx += 24) circ(ctx, xx, yy, 1.5); ctx.fill();
     }
@@ -7720,7 +7756,7 @@ const RENDER = (() => {
           tone(ctx, q => { q.moveTo(-hw * 0.62, top + r * 0.06); q.quadraticCurveTo(-hw * 0.7, top - r * 0.46, -hw * 0.2, top - r * 0.4); q.quadraticCurveTo(0, top - r * 0.3, hw * 0.2, top - r * 0.4); q.quadraticCurveTo(hw * 0.7, top - r * 0.46, hw * 0.62, top + r * 0.06); q.closePath(); }, L.c1, 0, top - r * 0.2, r * 0.4, { dark: -0.3 });
           ctx.beginPath(); rrect(ctx, -hw * 0.64, top - r * 0.08, hw * 1.28, r * 0.1, r * 0.03); F(ctx, L.c2); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
           tone(ctx, q => { q.moveTo(-hw * 1.5, top - r * 0.02); q.quadraticCurveTo(-hw * 1.2, top + r * 0.22, 0, top + r * 0.14); q.quadraticCurveTo(hw * 1.2, top + r * 0.22, hw * 1.5, top - r * 0.02); q.quadraticCurveTo(0, top + r * 0.3, -hw * 1.5, top - r * 0.02); q.closePath(); }, shade(L.c1, -0.1), 0, top + r * 0.1, hw, NOSPEC);
-        }
+        } else if (L.style === 'witch') seaWitchHat(ctx, L, top, hw, r, t);   // SEASON: the Claw-o-ween witch hats
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -7768,6 +7804,7 @@ const RENDER = (() => {
           case 'coins': { const sx = Math.abs(Math.cos(t * 5 + sd)) * 3.5 * k + 0.6; tone(ctx, q => ell(q, x, y - Math.sin(u * Math.PI) * 8 * k, sx, 3.5 * k), col, x, y, 3.5 * k, { ol: 1, spec: false }); break; }
           case 'confetti': { ctx.save(); ctx.translate(x + Math.sin(sd * 3) * 5 * k, y + u * 10 * k); ctx.rotate(t * 4 + sd); F(ctx, CONFETTI[(sd | 0) % 5 < 0 ? 0 : (sd | 0) % 5]); ctx.fillRect(-2.5 * k, -1.2 * k, 5 * k, 2.4 * k); ctx.restore(); break; }
           case 'rainbow': F(ctx, '#ffffff'); ctx.beginPath(); star(ctx, x, y, 2.5 * k * a + 0.5, 4, 0.35); ctx.fill(); break;
+          case 'bats': seaTrailMark(ctx, art, x, y, u, a, k, t, sd, col); break;   // SEASON: the Bat Trail
           default: F(ctx, rgba(col, 0.6)); ctx.beginPath(); circ(ctx, x, y, (2 + u * 3) * k); ctx.fill();
         }
       }
@@ -9335,6 +9372,7 @@ const RENDER = (() => {
       }
       const sh = st.reduced ? 0 : (st.shake || 0) * 6;
       ctx.translate(X0 + (sh ? (setH(t * 60, 1) - 0.5) * sh : 0), Y0 + (sh ? (setH(t * 60, 2) - 0.5) * sh : 0));
+      if (st.s > 0 && st.s !== 1) ctx.scale(st.s, st.s);   // the whole press smaller while you pick (QA round 7 layout)
       const cx = w / 2, bedY = h - 70, pw = 290, travel = 150;
       // the warning lamp spins while the press works
       const busy = ph === 'press' || ph === 'grind' || ph === 'lift';
@@ -9428,7 +9466,955 @@ const RENDER = (() => {
   const SETS_R = { boonBack, cmpScene, cmpPlate };
   /* ============================================================ end SETS */
 
+  /* ============================================================ EVOLVE (round 7)
+     Item evolutions and pet synergies (DESIGN.md "Evolutions and pet
+     synergies (round 7)"). Every evolved item has its own drawing (EVO_ART,
+     picked by itemArt before the POLISH silhouettes, so it lands in the
+     item sprite like any art), a gold EVOLVED chevron on its corner, and a
+     live look in the cabinet (evoAura: a pulsing glow and turning rays
+     behind, motes orbiting in front). evo.ceremony draws the evolution
+     itself over the stage, evo.petBadge the synergy badge on the pet tag. */
+  const EVO_ART = {};
+  // The gold EVOLVED chevron (drawn into the sprite, top left).
+  function evoChevron(ctx, x, y, r) {
+    ctx.beginPath(); circ(ctx, x, y, r); F(ctx, '#ffe27a'); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - r * 0.5, y + r * 0.25); ctx.lineTo(x, y - r * 0.35); ctx.lineTo(x + r * 0.5, y + r * 0.25); S(ctx, INK, Math.max(1.2, r * 0.32)); ctx.stroke();
+  }
+  // A sword whose crossguard is a three-pronged claw, a runed blade and a sky gem.
+  EVO_ART.excalibur_claw = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2, g = -hw * 0.4;
+    tone(ctx, c => poly(c, [g, -hh * 0.62, hw * 0.8, -hh * 0.5, hw, 0, hw * 0.8, hh * 0.5, g, hh * 0.62]), c1, hw * 0.2, 0, hw * 0.6, { dark: -0.15 });
+    ctx.beginPath(); ctx.moveTo(g + 5, 0); ctx.lineTo(hw * 0.74, 0); S(ctx, '#7fe7ff', 1.6); ctx.stroke();
+    for (let i = 0; i < 3; i++) { const x = g + 9 + i * 8; ctx.beginPath(); ctx.moveTo(x, -1.6); ctx.lineTo(x + 2.5, 1.6); S(ctx, '#3b6fd6', 1); ctx.stroke(); }
+    // the grip and the claw guard
+    tone(ctx, c => rrect(c, -hw * 0.9, -hh * 0.42, hw * 0.52, hh * 0.84, 2), c2, -hw * 0.64, 0, hh, NOSPEC);
+    F(ctx, rgba('#ffffff', 0.35)); for (let i = 0; i < 3; i++) ctx.fillRect(-hw * 0.84 + i * 5, -hh * 0.42, 1.6, hh * 0.84);
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(g, 0); ctx.quadraticCurveTo(g - 2, s * hh * 1.5, g + 6, s * hh * 1.7);
+      S(ctx, INK, 5.2); ctx.stroke(); S(ctx, '#ffc94d', 3); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(g - 1, 0); ctx.lineTo(g + 7, 0); S(ctx, INK, 5.2); ctx.stroke(); S(ctx, '#ffc94d', 3); ctx.stroke();
+    tone(ctx, c => circ(c, -hw * 0.94, 0, hh * 0.7), '#2ee6d6', -hw * 0.94, 0, hh * 0.7, { ol: 1.5 });
+    evoChevron(ctx, hw * 0.1, -hh - 3.5, 4.2);
+  };
+  // A syringe dart: a glass barrel of glowing venom, a plunger and a long needle.
+  EVO_ART.plague_needle = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); ctx.moveTo(hw * 0.3, 0); ctx.lineTo(hw, 0); S(ctx, INK, 3); ctx.stroke(); S(ctx, '#e8f0ff', 1.4); ctx.stroke();
+    tone(ctx, c => rrect(c, -hw * 0.5, -hh * 0.85, hw * 0.85, hh * 1.7, 2.5), rgba('#e8f8ff', 0.9), 0, 0, hh * 2, NOSPEC);
+    ctx.beginPath(); rrect(ctx, -hw * 0.45, -hh * 0.5, hw * 0.75, hh * 1.2, 1.5); F(ctx, c1); ctx.fill();
+    F(ctx, INK); for (let i = 0; i < 4; i++) ctx.fillRect(-hw * 0.3 + i * hw * 0.16, -hh * 0.85, 1, hh * 0.55);
+    tone(ctx, c => rrect(c, -hw * 0.82, -hh * 0.35, hw * 0.34, hh * 0.7, 1), c2, -hw * 0.66, 0, hh, NOSPEC);
+    tone(ctx, c => rrect(c, -hw, -hh * 0.95, hw * 0.12, hh * 1.9, 1.5), c2, -hw * 0.94, 0, hh, NOSPEC);
+    F(ctx, INK); ctx.beginPath(); circ(ctx, -hw * 0.06, -hh * 0.05, 1.3); circ(ctx, hw * 0.06, -hh * 0.05, 1.3); ctx.fill();
+    evoChevron(ctx, -hw * 0.05, -hh - 4, 4);
+  };
+  // One huge cherry bomb with a radiation trefoil and a lit leaf fuse.
+  EVO_ART.nuke_pop = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2 * 0.92;
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.9); ctx.quadraticCurveTo(r * 0.3, -r * 1.35, r * 0.55, -r * 1.1); S(ctx, '#3a7a2a', 2.6); ctx.stroke();
+    tone(ctx, c => ell(c, r * 0.62, -r * 1.12, r * 0.28, r * 0.14, -0.4), '#6bd35e', r * 0.62, -r * 1.12, r * 0.3, { ol: 1.4 });
+    tone(ctx, c => circ(c, 0, r * 0.05, r * 0.95), c1, 0, 0, r);
+    F(ctx, c2); ctx.beginPath(); circ(ctx, 0, r * 0.05, r * 0.2); ctx.fill();
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TAU / 3; ctx.moveTo(Math.cos(a - 0.5) * r * 0.3, r * 0.05 + Math.sin(a - 0.5) * r * 0.3); ctx.arc(0, r * 0.05, r * 0.72, a - 0.5, a + 0.5); ctx.arc(0, r * 0.05, r * 0.3, a + 0.5, a - 0.5, true); }
+    F(ctx, c2); ctx.fill(); S(ctx, INK, 1.3); ctx.stroke();
+    evoChevron(ctx, -r * 0.78, -r * 0.72, 4.5);
+  };
+  // A faceted crystal lance with rainbow bands running down it.
+  EVO_ART.prism_lance = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    const P = [-hw, -hh * 0.35, -hw * 0.75, -hh, hw * 0.55, -hh * 0.7, hw, 0, hw * 0.55, hh * 0.7, -hw * 0.75, hh, -hw, hh * 0.35];
+    tone(ctx, c => poly(c, P), c1, 0, 0, hw * 0.5, { dark: -0.12 });
+    ctx.save(); ctx.beginPath(); poly(ctx, P); ctx.clip();
+    const bands = ['#ff6b8a', '#ffc94d', '#a6ff5e', '#2ee6d6', '#9b7bff'];
+    bands.forEach((col, i) => { F(ctx, rgba(col, 0.55)); ctx.beginPath(); poly(ctx, [-hw * 0.6 + i * hw * 0.28, -hh * 1.2, -hw * 0.46 + i * hw * 0.28, -hh * 1.2, -hw * 0.56 + i * hw * 0.28, hh * 1.2, -hw * 0.7 + i * hw * 0.28, hh * 1.2]); ctx.fill(); });
+    ctx.beginPath(); ctx.moveTo(-hw, 0); ctx.lineTo(hw, 0); S(ctx, rgba('#ffffff', 0.8), 1.2); ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); poly(ctx, P); S(ctx, INK, OL); ctx.stroke();
+    evoChevron(ctx, -hw * 0.6, -hh - 4, 4);
+  };
+  // A golden die with one glowing green eye for a pip.
+  EVO_ART.loaded_fate = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2 * 0.9;
+    tone(ctx, c => rrect(c, -r, -r, r * 2, r * 2, r * 0.38), c1, 0, 0, r, { dark: -0.25 });
+    ctx.beginPath(); rrect(ctx, -r + 2.5, -r + 2.5, r * 2 - 5, r * 2 - 5, r * 0.3); S(ctx, '#ffc94d', 1.5); ctx.stroke();
+    tone(ctx, c => ell(c, 0, 0, r * 0.52, r * 0.34, 0), '#ffffff', 0, 0, r * 0.5, NOSPEC);
+    F(ctx, '#3ddc84'); ctx.beginPath(); circ(ctx, 0, 0, r * 0.26); ctx.fill();
+    F(ctx, INK); ctx.beginPath(); circ(ctx, 0, 0, r * 0.12); circ(ctx, -r * 0.62, -r * 0.62, r * 0.12); circ(ctx, r * 0.62, r * 0.62, r * 0.12); ctx.fill();
+    evoChevron(ctx, r * 0.72, -r * 0.72, 4);
+  };
+  // An ice orb with a six-point snowflake frozen inside.
+  EVO_ART.absolute_zero = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2 * 0.95;
+    tone(ctx, c => circ(c, 0, 0, r), c1, 0, 0, r, { dark: -0.12 });
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = i * TAU / 6, cx = Math.cos(a), cy = Math.sin(a);
+      ctx.moveTo(0, 0); ctx.lineTo(cx * r * 0.72, cy * r * 0.72);
+      const bx = cx * r * 0.45, by = cy * r * 0.45;
+      ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a + 0.7) * r * 0.2, by + Math.sin(a + 0.7) * r * 0.2);
+      ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a - 0.7) * r * 0.2, by + Math.sin(a - 0.7) * r * 0.2);
+    }
+    S(ctx, c2, 2); ctx.stroke();
+    F(ctx, '#ffffff'); ctx.beginPath(); circ(ctx, 0, 0, r * 0.12); ctx.fill();
+    evoChevron(ctx, -r * 0.72, -r * 0.72, 4);
+  };
+  // A shield shaped like a castle tower: battlements, a gate, gold trim.
+  EVO_ART.tower_aegis = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2, m = hw / 3.5;
+    const P = [-hw, -hh + m, -hw, -hh, -hw + m, -hh, -hw + m, -hh + m * 0.7, -m * 0.5, -hh + m * 0.7, -m * 0.5, -hh, m * 0.5, -hh, m * 0.5, -hh + m * 0.7,
+      hw - m, -hh + m * 0.7, hw - m, -hh, hw, -hh, hw, hh * 0.35, 0, hh, -hw, hh * 0.35];
+    tone(ctx, c => poly(c, P), c1, 0, 0, Math.max(hw, hh), { dark: -0.28 });
+    ctx.save(); ctx.beginPath(); poly(ctx, P); ctx.clip();
+    S(ctx, rgba(INK, 0.35), 1);
+    for (let y = -hh + m * 1.6; y < hh; y += 7) { ctx.beginPath(); ctx.moveTo(-hw, y); ctx.lineTo(hw, y); ctx.stroke(); }
+    ctx.restore();
+    tone(ctx, c => { c.moveTo(-hw * 0.3, hh * 0.45); c.lineTo(-hw * 0.3, 0); c.arc(0, 0, hw * 0.3, Math.PI, 0); c.lineTo(hw * 0.3, hh * 0.45); c.closePath(); }, '#2b1f3a', 0, hh * 0.2, hw * 0.3, NOSPEC);
+    ctx.beginPath(); poly(ctx, [hw, hh * 0.35, 0, hh, -hw, hh * 0.35]); S(ctx, c2, 2.5); ctx.stroke();
+    evoChevron(ctx, -hw + 5, -hh + m + 6, 4.5);
+  };
+  // A robot head bolted together from scrap: rivets, red eyes, a grille, an antenna nut.
+  EVO_ART.scrap_titan = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); ctx.moveTo(0, -hh * 0.75); ctx.lineTo(0, -hh * 1.05); S(ctx, INK, 3); ctx.stroke();
+    tone(ctx, c => circ(c, 0, -hh * 1.08, 3.2), '#aab3bd', 0, -hh * 1.08, 3.2, { ol: 1.3 });
+    tone(ctx, c => rrect(c, -hw, -hh * 0.78, w, hh * 1.78, 6), c1, 0, 0, Math.max(hw, hh), { dark: -0.35 });
+    F(ctx, shade(c1, -0.4)); ctx.beginPath(); rrect(ctx, -hw * 0.9, -hh * 0.2, hw * 0.55, hh * 0.25, 2); ctx.fill();
+    F(ctx, '#5a6373'); ctx.beginPath(); rrect(ctx, -hw * 0.66, hh * 0.35, hw * 1.32, hh * 0.38, 3); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
+    S(ctx, INK, 1); ctx.beginPath(); for (let i = 1; i < 5; i++) { const x = -hw * 0.66 + i * hw * 0.264; ctx.moveTo(x, hh * 0.35); ctx.lineTo(x, hh * 0.73); } ctx.stroke();
+    for (const s of [-1, 1]) { tone(ctx, c => circ(c, s * hw * 0.42, -hh * 0.18, hh * 0.24), INK, s * hw * 0.42, -hh * 0.18, 5, { ol: 0, spec: false }); F(ctx, c2); ctx.beginPath(); circ(ctx, s * hw * 0.42, -hh * 0.18, hh * 0.14); ctx.fill(); }
+    F(ctx, '#e8d8b0'); ctx.beginPath(); for (const [x, y] of [[-0.82, -0.6], [0.82, -0.6], [-0.82, 0.8], [0.82, 0.8]]) circ(ctx, x * hw, y * hh, 1.8); ctx.fill();
+    evoChevron(ctx, hw * 0.62, -hh * 0.62, 4.5);
+  };
+  // A dark flask with a skull cork and a glowing green brew.
+  EVO_ART.black_death = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    const P = [-hw * 0.3, -hh * 0.72, hw * 0.3, -hh * 0.72, hw, hh, -hw, hh];
+    tone(ctx, c => poly(c, P), c1, 0, hh * 0.3, Math.max(hw, hh), { dark: -0.2 });
+    ctx.save(); ctx.beginPath(); poly(ctx, P); ctx.clip();
+    F(ctx, c2); ctx.fillRect(-hw, hh * 0.1, w, hh);
+    F(ctx, rgba('#ffffff', 0.5)); ctx.beginPath(); circ(ctx, -hw * 0.25, hh * 0.45, 1.8); circ(ctx, hw * 0.2, hh * 0.3, 1.3); ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); poly(ctx, P); S(ctx, INK, OL); ctx.stroke();
+    tone(ctx, c => { circ(c, 0, -hh * 0.92, hw * 0.34); }, '#f1e9d6', 0, -hh * 0.92, hw * 0.34, { ol: 1.4 });
+    F(ctx, INK); ctx.beginPath(); circ(ctx, -hw * 0.12, -hh * 0.95, 1.6); circ(ctx, hw * 0.12, -hh * 0.95, 1.6); ctx.fill();
+    evoChevron(ctx, -hw * 0.62, hh * 0.05, 4);
+  };
+  // A fat gold coin embossed with a crown, a beaded rim.
+  EVO_ART.midas_coin = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2 * 0.95;
+    tone(ctx, c => circ(c, 0, 0, r), c1, 0, 0, r, { dark: -0.2 });
+    F(ctx, c2); ctx.beginPath(); for (let i = 0; i < 18; i++) { const a = i * TAU / 18; circ(ctx, Math.cos(a) * r * 0.84, Math.sin(a) * r * 0.84, 1.1); } ctx.fill();
+    tone(ctx, c => poly(c, [-r * 0.5, r * 0.3, -r * 0.55, -r * 0.3, -r * 0.25, 0, 0, -r * 0.45, r * 0.25, 0, r * 0.55, -r * 0.3, r * 0.5, r * 0.3]), '#fff2a8', 0, 0, r * 0.5, { ol: 1.4 });
+    evoChevron(ctx, -r * 0.72, -r * 0.72, 4);
+  };
+  // A golden marble in bee stripes with a tiny crown and two wings.
+  EVO_ART.swarm_queen = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2 * 0.85;
+    for (const s of [-1, 1]) tone(ctx, c => ell(c, s * r * 0.55, -r * 0.8, r * 0.45, r * 0.26, s * 0.5), rgba('#e8f8ff', 0.9), s * r * 0.5, -r * 0.8, r * 0.4, { ol: 1.2, spec: false });
+    tone(ctx, c => circ(c, 0, 0, r), c1, 0, 0, r);
+    ctx.save(); ctx.beginPath(); circ(ctx, 0, 0, r); ctx.clip();
+    F(ctx, c2); ctx.fillRect(-r, -r * 0.2, r * 2, r * 0.28); ctx.fillRect(-r, r * 0.38, r * 2, r * 0.26);
+    ctx.restore();
+    ctx.beginPath(); circ(ctx, 0, 0, r); S(ctx, INK, OL); ctx.stroke();
+    tone(ctx, c => poly(c, [-r * 0.4, -r * 0.8, -r * 0.45, -r * 1.3, -r * 0.15, -r * 1.05, 0, -r * 1.4, r * 0.15, -r * 1.05, r * 0.45, -r * 1.3, r * 0.4, -r * 0.8]), '#ffc94d', 0, -r * 1.05, r * 0.4, { ol: 1.2, spec: false });
+    evoChevron(ctx, r * 0.78, r * 0.62, 3.8);
+  };
+  // A grimoire with a glowing eye on the cover and echo rings around it.
+  EVO_ART.echo_grimoire = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh, w, h, 3), c1, 0, 0, Math.max(hw, hh), { dark: -0.3 });
+    F(ctx, '#f4ecd6'); ctx.fillRect(hw - 4, -hh + 3, 3, h - 6);
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); circ(ctx, 0, 0, hw * (0.3 + i * 0.2)); S(ctx, rgba(c2, 0.9 - i * 0.25), 1.4); ctx.stroke(); }
+    tone(ctx, c => ell(c, 0, 0, hw * 0.34, hh * 0.18, 0), '#ffffff', 0, 0, hw * 0.3, NOSPEC);
+    F(ctx, c2); ctx.beginPath(); circ(ctx, 0, 0, hh * 0.13); ctx.fill();
+    F(ctx, '#ffc94d'); for (const [x, y] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { ctx.beginPath(); poly(ctx, [x * hw, y * hh, x * (hw - 7), y * hh, x * hw, y * (hh - 7)]); ctx.fill(); }
+    evoChevron(ctx, -hw + 6, -hh + 6, 4.2);
+  };
+  // A slim stiletto trailing three pink speed streaks.
+  EVO_ART.streak_stiletto = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); for (let i = -1; i <= 1; i++) { ctx.moveTo(-hw, i * hh * 0.7); ctx.lineTo(-hw * 0.45, i * hh * 0.7); } S(ctx, rgba(c2, 0.85), 1.6); ctx.stroke();
+    tone(ctx, c => poly(c, [-hw * 0.05, -hh * 0.45, hw, 0, -hw * 0.05, hh * 0.45]), c1, hw * 0.4, 0, hw * 0.4, { dark: -0.15 });
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(hw * 0.85, 0); S(ctx, c2, 1); ctx.stroke();
+    tone(ctx, c => rrect(c, -hw * 0.12, -hh * 1.05, hw * 0.08, hh * 2.1, 1), '#ffc94d', -hw * 0.08, 0, hh, NOSPEC);
+    tone(ctx, c => rrect(c, -hw * 0.45, -hh * 0.38, hw * 0.34, hh * 0.76, 1.5), '#2b1f3a', -hw * 0.28, 0, hh, NOSPEC);
+    tone(ctx, c => circ(c, -hw * 0.5, 0, hh * 0.45), c2, -hw * 0.5, 0, hh * 0.45, { ol: 1.2 });
+    evoChevron(ctx, hw * 0.2, -hh - 3.5, 3.8);
+  };
+  // A torch whose flame is a phoenix with its wings spread.
+  EVO_ART.phoenix_torch = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => poly(c, [-hw * 0.5, -hh * 0.2, hw * 0.5, -hh * 0.2, hw * 0.3, hh, -hw * 0.3, hh]), c2, 0, hh * 0.4, hw, { dark: -0.3 });
+    tone(ctx, c => rrect(c, -hw * 0.7, -hh * 0.3, hw * 1.4, hh * 0.16, 1.5), '#ffc94d', 0, -hh * 0.22, hw, NOSPEC);
+    for (const s of [-1, 1]) tone(ctx, c => { c.moveTo(0, -hh * 0.45); c.quadraticCurveTo(s * hw * 2.2, -hh * 0.9, s * hw * 1.8, -hh * 0.35); c.quadraticCurveTo(s * hw * 1.1, -hh * 0.5, 0, -hh * 0.35); c.closePath(); }, '#ff8a2e', s * hw, -hh * 0.55, hw, { ol: 1.3, spec: false });
+    tone(ctx, c => { c.moveTo(0, -hh * 0.3); c.quadraticCurveTo(hw * 0.9, -hh * 0.6, 0, -hh); c.quadraticCurveTo(-hw * 0.9, -hh * 0.6, 0, -hh * 0.3); c.closePath(); }, c1, 0, -hh * 0.6, hw * 0.8, { ol: 1.4 });
+    F(ctx, '#fff6a0'); ctx.beginPath(); ell(ctx, 0, -hh * 0.55, hw * 0.25, hh * 0.12, 0); ctx.fill();
+    evoChevron(ctx, 0, hh * 0.35, 3.8);
+  };
+  // The drawing for an evolved def (null for everything else).
+  function evoArtFn(def) { return def && def.evolved ? EVO_ART[def.id] || null : null; }
+  // In the cabinet: a pulsing glow and slow turning rays behind, motes in front.
+  function evoAura(ctx, def, R, t, seed, layer) {
+    const col = def.glow || PAL.gold;
+    if (layer === 'back') {
+      glow(ctx, 0, 0, R * 2.1, col, 0.35 + 0.15 * Math.sin(t * 3.2 + seed));
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.13 + 0.06 * Math.sin(t * 2 + seed);
+      ctx.rotate(t * 0.6 + seed); F(ctx, col); ctx.beginPath();
+      for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.moveTo(0, 0); ctx.arc(0, 0, R * 1.65, a - 0.1, a + 0.1); ctx.closePath(); }
+      ctx.fill(); ctx.restore();
+      return;
+    }
+    for (let i = 0; i < 2; i++) {
+      const a = t * 2.4 + i * Math.PI + seed, ox = Math.cos(a) * R * 1.3, oy = Math.sin(a) * R * 0.5 - R * 0.15;
+      tone(ctx, c => star(c, ox, oy, 2.6 + Math.sin(t * 7 + i) * 0.8, 4, 0.4), i ? '#ffffff' : col, ox, oy, 3, { ol: 0, spec: false });
+    }
+  }
+  // Word wrap for the canvas captions (about n characters a line, at most 3 lines).
+  function evoWrap(s, n) {
+    const out = [];
+    let cur = '';
+    for (const wd of String(s || '').split(' ')) { if ((cur + ' ' + wd).trim().length > n && cur) { out.push(cur); cur = wd; } else cur = (cur + ' ' + wd).trim(); }
+    if (cur) out.push(cur);
+    return out.slice(0, 3);
+  }
+  const EVO_K = { rise: 0.7, burst: 1.35 };
+  /* The ceremony over the stage (st, stage px): {t, dur, burst, x0, y0 (the
+     chute), x, y (where it hovers), from, to (item defs), name, aura, col,
+     W, H, reduced, dim}. The old item glows and spins up out of the chute
+     inside a light pillar with shards spiralling in; at st.burst a white
+     flash and the new form bursts in big over turning rays, EVOLVED! and
+     its name slam in, and the aura's words sit under it. */
+  function evoCeremony(ctx, st) {
+    if (!st) return;
+    ctx.save();
+    try {
+      const t = st.t || 0, B = st.burst || EVO_K.burst, W0 = st.W || 540, H0 = st.H || 960, col = st.col || PAL.gold;
+      const dur = st.dur || 2.6, fade = Math.min(1, t / 0.3, Math.max(0, (dur - t) / 0.3));
+      const rise = U.clamp(t / (st.rise || EVO_K.rise), 0, 1), e = U.ease.outCubic ? U.ease.outCubic(rise) : rise;
+      const x = st.x0 + (st.x - st.x0) * e, y = st.y0 + (st.y - st.y0) * e;
+      // the stage dims
+      F(ctx, rgba(INK, (st.dim == null ? 0.62 : st.dim) * fade)); ctx.fillRect(-40, -40, W0 + 80, H0 + 80);
+      // the light pillar: soft layers, narrowing to a white core
+      const pw = 40 + 50 * Math.min(1, t / B);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      let pg = null;
+      try { pg = ctx.createLinearGradient(x - pw, 0, x + pw, 0); pg.addColorStop(0, rgba(col, 0)); pg.addColorStop(0.35, rgba(col, 0.28)); pg.addColorStop(0.5, rgba('#ffffff', 0.6)); pg.addColorStop(0.65, rgba(col, 0.28)); pg.addColorStop(1, rgba(col, 0)); } catch (e) { pg = null; }
+      ctx.globalAlpha = fade * (0.85 + 0.15 * Math.sin(t * 9));
+      ctx.fillStyle = FLAT || pg || rgba(col, 0.2); ctx.fillRect(x - pw, -40, pw * 2, H0 + 80);
+      ctx.restore();
+      const after = t >= B, k = after ? U.clamp((t - B) / 0.35, 0, 1) : 0;
+      if (after) {
+        // turning rays behind the new form: a wide faint set and a narrow bright one
+        ctx.save(); ctx.translate(x, y); ctx.globalCompositeOperation = 'lighter';
+        const rr0 = 240 + 40 * k;
+        for (const [w0, a0, dir, n] of [[0.11, 0.5, 1, 12], [0.035, 0.7, -1, 16]]) {
+          const c0 = dir > 0 ? col : '#ffffff';
+          let rg = null;
+          try { rg = ctx.createRadialGradient(0, 0, 10, 0, 0, rr0); rg.addColorStop(0, rgba(c0, 0.8)); rg.addColorStop(0.45, rgba(c0, 0.3)); rg.addColorStop(1, rgba(c0, 0)); } catch (e) { rg = null; }
+          ctx.save(); ctx.rotate(t * 0.5 * dir); ctx.globalAlpha = a0 * fade; ctx.fillStyle = FLAT || rg || rgba(c0, 0.2); ctx.beginPath();
+          for (let i = 0; i < n; i++) { const a = i * TAU / n; ctx.moveTo(0, 0); ctx.arc(0, 0, rr0, a - w0, a + w0); ctx.closePath(); }
+          ctx.fill(); ctx.restore();
+        }
+        ctx.restore();
+      }
+      glow(ctx, x, y, 70 + (after ? 60 : 50 * Math.min(1, t / B)), col, 0.9 * fade);
+      // shards spiralling in before the burst, flying out after it
+      for (let i = 0; i < 8; i++) {
+        const a = i * TAU / 8 + t * (after ? 1 : 3 + t * 3);
+        const rr = after ? 40 + 260 * k : 120 * (1 - Math.min(1, t / B)) + 26;
+        const sx = x + Math.cos(a) * rr, sy = y + Math.sin(a) * rr * 0.8;
+        ctx.save(); ctx.globalAlpha = fade * (after ? 1 - k : 1);
+        tone(ctx, c => poly(c, [sx, sy - 7, sx + 4, sy, sx, sy + 7, sx - 4, sy]), i % 2 ? '#ffffff' : col, sx, sy, 5, { ol: 1.2, spec: false });
+        ctx.restore();
+      }
+      // the item: the old one spinning up, the new one bursting in
+      const def = after ? st.to : st.from;
+      if (def && item) {
+        const spin = after ? Math.sin(t * 2) * 0.12 : t * t * 9;
+        const sc = after ? 2.5 + 0.7 * (1 - k) * Math.cos(k * 6) * (1 - k) : 1.3 + 0.9 * Math.min(1, t / B);
+        item(ctx, def, x, y + (after ? Math.sin(t * 2.4) * 4 : 0), spin, sc, { plus: !after && !!st.plus, glow: col, glowA: 0.9 });
+      }
+      // the flash
+      if (after && t - B < 0.3) { F(ctx, rgba('#ffffff', (st.reduced ? 0.25 : 0.85) * (1 - (t - B) / 0.3))); ctx.fillRect(-40, -40, W0 + 80, H0 + 80); }
+      if (!after) {
+        const a = 0.6 + 0.4 * Math.sin(t * 12);
+        ctx.globalAlpha = fade * a; txt(ctx, 'EVOLVING...', st.x, st.y + 100, 22, '#ffffff', true, 'center', true); ctx.globalAlpha = 1;
+      } else {
+        const s = 1 + (1 - k) * 0.5, ty = st.y - 104;
+        ctx.save(); ctx.globalAlpha = fade * Math.min(1, k * 3 + 0.2); ctx.translate(W0 / 2, ty); ctx.scale(s, s);
+        txt(ctx, 'EVOLVED!', 0, -36, 20, '#ffe27a', true, 'center', true);
+        chrome(ctx, String(st.name || '').toUpperCase(), 0, 0, st.name && st.name.length > 13 ? 30 : 36, col, col);
+        ctx.restore();
+        // the aura's words on a dark plate
+        const ka = fade * U.clamp((t - B - 0.3) / 0.3, 0, 1);
+        const lines = evoWrap(st.aura || '', 40);
+        if (ka > 0 && lines.length) {
+          ctx.save(); ctx.globalAlpha = ka;
+          const py = st.y + 82, ph = 14 + lines.length * 20;
+          ctx.beginPath(); rrect(ctx, W0 / 2 - 222, py, 444, ph, 12); F(ctx, rgba(INK, 0.86)); ctx.fill(); S(ctx, col, 2); ctx.stroke();
+          lines.forEach((ln, i) => txt(ctx, ln, W0 / 2, py + 17 + i * 20, 15, i === 0 ? col : '#ffffff', true, 'center'));
+          ctx.restore();
+        }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The synergy badge on the pet's name tag (right of it): {icon, color}; st is the tag's own state.
+  function evoPetBadge(ctx, x, y, st, syn, t) {
+    if (!syn) return;
+    ctx.save();
+    try {
+      const name = String((st && st.name) || 'Buddy').toUpperCase(), lab = name + ' LV' + ((st && st.lv) || 1);
+      const w = Math.max(64, lab.length * 7.4 + 14), bx = x + w / 2 + 10, pop = 1 + 0.08 * Math.sin((t || 0) * 5);
+      glow(ctx, bx, y, 16, syn.color || PAL.gold, 0.55);
+      ctx.beginPath(); circ(ctx, bx, y, 9.5 * pop); F(ctx, rgba('#12091f', 0.95)); ctx.fill(); S(ctx, syn.color || PAL.gold, 2); ctx.stroke();
+      txt(ctx, syn.icon || '★', bx, y + 0.5, 11, '#ffffff', false, 'center');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const EVO_R = { ART: EVO_ART, K: EVO_K, artFn: evoArtFn, aura: evoAura, ceremony: evoCeremony, petBadge: evoPetBadge, chevron: evoChevron, wrap: evoWrap };
+  /* ============================================================ end EVOLVE */
+
+  /* ================================================================ SEASON (round 7)
+     Seasonal events (DESIGN.md "Seasonal events (round 7)"): the overlays a
+     season lays over the base art (the title, the map, the arena sky, the
+     cabinet), the costumes monsters wear, the Pumpkin King, the
+     trick-or-treat tile and its door scene, the event cosmetics' patterns
+     and the seasonal item silhouettes. Every draw takes the season id; with
+     none (or an unknown one) nothing is drawn, so the base art is untouched
+     out of season. Pure functions of their arguments. */
+  const SEA_OR = '#ff8a1f', SEA_PU = '#9b4dff', SEA_GR = '#7dff7a', SEA_NIGHT = '#12091f';
+  const seaH = (i, k) => h01(i * 1.37 + 0.5, k * 2.11 + 0.3);
+  // Soft fog: glow sprites blended normally (not added), so it greys the scene instead of lighting it.
+  function seaPuff(ctx, x, y, r, col, a) {
+    const sp = glowSprite(col, r);
+    if (!sp) return;
+    ctx.globalAlpha = a;
+    try { ctx.drawImage(sp, x - r - 1, y - r - 1, r * 2 + 2, r * 2 + 2); } catch (e) { /* stub canvas */ }
+    ctx.globalAlpha = 1;
+  }
+  function seaFog(ctx, x0, y0, w, h, t, n, a, col) {
+    ctx.save();
+    try {
+      for (let i = 0; i < n; i++) {
+        const sp = 8 + seaH(i, 1) * 14, r = 60 + seaH(i, 2) * 80;
+        const x = x0 - r + (((seaH(i, 3) * (w + r * 2)) + t * sp) % (w + r * 2));
+        const y = y0 + seaH(i, 4) * h + Math.sin(t * 0.4 + i) * 10;
+        seaPuff(ctx, x, y, r, col || '#d8cff0', a * (0.6 + seaH(i, 5) * 0.4));
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A jack-o'-lantern: ribbed, a curly stem, carved eyes and a zigzag grin glowing when lit.
+  function seaPumpkin(ctx, x, y, r, t, lit, seed) {
+    ctx.save();
+    try {
+      ctx.translate(x, y);
+      const fl = lit ? 0.75 + 0.25 * Math.sin(t * 11 + (seed || 0) * 3) * Math.sin(t * 7.3 + (seed || 0)) : 0;
+      if (lit) glow(ctx, 0, 0, r * 2.4, SEA_OR, 0.35 + fl * 0.25);
+      tone(ctx, q => ell(q, 0, 0, r * 1.18, r, 0), '#ff8a1f', 0, 0, r, { dark: -0.35, ol: Math.max(1.2, r * 0.12) });
+      S(ctx, rgba('#9a3f00', 0.8), Math.max(1, r * 0.1)); ctx.beginPath();
+      ctx.moveTo(0, -r * 0.95); ctx.quadraticCurveTo(-r * 0.35, 0, 0, r * 0.95);
+      ctx.moveTo(-r * 0.6, -r * 0.82); ctx.quadraticCurveTo(-r * 0.95, 0, -r * 0.6, r * 0.82);
+      ctx.moveTo(r * 0.6, -r * 0.82); ctx.quadraticCurveTo(r * 0.95, 0, r * 0.6, r * 0.82);
+      ctx.stroke();
+      tone(ctx, q => rrect(q, -r * 0.13, -r * 1.32, r * 0.26, r * 0.42, r * 0.08), '#3a7a2a', 0, -r * 1.1, r * 0.2, NOSPEC);
+      const face = lit ? (FLAT || (fl > 0.9 ? '#fff6c0' : '#ffe066')) : '#3a1a08';
+      F(ctx, face); ctx.beginPath();
+      poly(ctx, [-r * 0.62, -r * 0.1, -r * 0.2, -r * 0.1, -r * 0.42, -r * 0.5]);
+      poly(ctx, [r * 0.62, -r * 0.1, r * 0.2, -r * 0.1, r * 0.42, -r * 0.5]);
+      ctx.moveTo(-r * 0.7, r * 0.2);
+      for (let i = 0; i <= 6; i++) ctx.lineTo(-r * 0.7 + i * r * 0.233, r * 0.2 + (i % 2 ? r * 0.2 : 0));
+      ctx.lineTo(r * 0.55, r * 0.55); ctx.quadraticCurveTo(0, r * 0.8, -r * 0.55, r * 0.55); ctx.closePath();
+      ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A bat: a body, two scalloped wings flapping on t, orange eyes.
+  function seaBat(ctx, x, y, s, t, seed, col) {
+    ctx.save();
+    try {
+      ctx.translate(x, y);
+      const fl = Math.sin(t * 14 + (seed || 0) * 2.3), wy = fl * s * 0.6;
+      F(ctx, col || '#1b1024'); ctx.beginPath();
+      for (const sd of [-1, 1]) {
+        ctx.moveTo(0, 0); ctx.quadraticCurveTo(sd * s * 0.9, -s * 0.5 + wy, sd * s * 2, -s * 0.2 + wy);
+        ctx.quadraticCurveTo(sd * s * 1.6, s * 0.2 + wy * 0.5, sd * s * 1.35, s * 0.1 + wy * 0.4);
+        ctx.quadraticCurveTo(sd * s * 1.1, s * 0.5 + wy * 0.3, sd * s * 0.7, s * 0.25);
+        ctx.quadraticCurveTo(sd * s * 0.4, s * 0.55, 0, s * 0.35); ctx.closePath();
+      }
+      ctx.fill();
+      ctx.beginPath(); ell(ctx, 0, s * 0.05, s * 0.36, s * 0.48, 0); ctx.fill();
+      ctx.beginPath(); poly(ctx, [-s * 0.3, -s * 0.3, -s * 0.2, -s * 0.72, -s * 0.05, -s * 0.36]); poly(ctx, [s * 0.3, -s * 0.3, s * 0.2, -s * 0.72, s * 0.05, -s * 0.36]); ctx.fill();
+      F(ctx, SEA_OR); ctx.beginPath(); circ(ctx, -s * 0.13, -s * 0.08, Math.max(0.6, s * 0.08)); circ(ctx, s * 0.13, -s * 0.08, Math.max(0.6, s * 0.08)); ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A cobweb in a corner (corner 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left).
+  function seaWeb(ctx, x, y, r, corner, a) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.rotate((corner | 0) * Math.PI / 2);
+      S(ctx, rgba('#e8e2f5', a == null ? 0.55 : a), 1); ctx.beginPath();
+      const n = 5;
+      for (let i = 0; i < n; i++) { const an = (i / (n - 1)) * Math.PI / 2; ctx.moveTo(0, 0); ctx.lineTo(Math.cos(an) * r, Math.sin(an) * r); }
+      for (let k = 1; k <= 4; k++) {
+        const rr = r * k / 4.4;
+        ctx.moveTo(rr, 0);
+        for (let i = 1; i < n; i++) {
+          const a0 = ((i - 1) / (n - 1)) * Math.PI / 2, a1 = (i / (n - 1)) * Math.PI / 2, am = (a0 + a1) / 2;
+          ctx.quadraticCurveTo(Math.cos(am) * rr * 0.78, Math.sin(am) * rr * 0.78, Math.cos(a1) * rr, Math.sin(a1) * rr);
+        }
+      }
+      ctx.stroke();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A dangling spider on its thread.
+  function seaSpider(ctx, x, y0, len, t, s) {
+    const y = y0 + len * (0.75 + 0.25 * Math.sin(t * 0.9));
+    line(ctx, x, y0, x, y, rgba('#e8e2f5', 0.6), 1);
+    F(ctx, '#1b1024'); ctx.beginPath(); circ(ctx, x, y, s); circ(ctx, x, y - s * 1.2, s * 0.65); ctx.fill();
+    S(ctx, '#1b1024', 1.2); ctx.beginPath();
+    for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) { ctx.moveTo(x, y - s * 0.2 + k * s * 0.4); ctx.quadraticCurveTo(x + sd * s * 1.6, y - s + k * s * 0.6, x + sd * s * 2, y + k * s * 0.7); }
+    ctx.stroke();
+    F(ctx, SEA_OR); ctx.beginPath(); circ(ctx, x - s * 0.3, y - s * 1.3, 0.9); circ(ctx, x + s * 0.3, y - s * 1.3, 0.9); ctx.fill();
+  }
+  function seaMoon(ctx, x, y, r, t) {
+    glow(ctx, x, y, r * 2.6, '#ffe7b0', 0.35);
+    tone(ctx, q => circ(q, x, y, r), '#fff0c8', x, y, r, { dark: -0.12, spec: false, ol: 0 });
+    F(ctx, rgba('#d8c090', 0.5)); ctx.beginPath(); circ(ctx, x - r * 0.3, y - r * 0.2, r * 0.18); circ(ctx, x + r * 0.25, y + r * 0.3, r * 0.12); circ(ctx, x + r * 0.35, y - r * 0.35, r * 0.08); ctx.fill();
+  }
+  // Falling snow over a rect (deterministic from t).
+  function seaSnow(ctx, x0, y0, w, h, t, n, a) {
+    ctx.save();
+    try {
+      F(ctx, rgba('#ffffff', a == null ? 0.85 : a)); ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const sp = 18 + seaH(i, 1) * 30, u = ((seaH(i, 2) * h + t * sp) % h);
+        const x = x0 + ((seaH(i, 3) * w + Math.sin(t * 0.8 + i) * 12) % w + w) % w;
+        circ(ctx, x, y0 + u, 0.9 + seaH(i, 4) * 1.8);
+      }
+      ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Snow heaped along the top of a rect (a cap on a frame or a tier).
+  function seaSnowCap(ctx, x, y, w, th) {
+    F(ctx, '#f4fbff'); ctx.beginPath(); ctx.moveTo(x, y + th * 0.4);
+    const n = Math.max(3, Math.round(w / 22));
+    for (let i = 0; i <= n; i++) { const xx = x + i * w / n; ctx.quadraticCurveTo(xx - w / n / 2, y - th * (0.6 + seaH(i, 7) * 0.5), xx, y + th * 0.1); }
+    ctx.lineTo(x + w, y + th * 0.7); ctx.lineTo(x, y + th * 0.7); ctx.closePath(); ctx.fill();
+    S(ctx, rgba('#9fc8e8', 0.8), 1); ctx.stroke();
+  }
+  function seaIcicles(ctx, x, y, w, len, t) {
+    F(ctx, rgba('#dff6ff', 0.9)); ctx.beginPath();
+    const n = Math.max(2, Math.round(w / 16));
+    for (let i = 0; i < n; i++) { const xx = x + (i + 0.5) * w / n, L = len * (0.4 + seaH(i, 9) * 0.6); ctx.moveTo(xx - 4, y); ctx.lineTo(xx + 4, y); ctx.lineTo(xx, y + L); ctx.closePath(); }
+    ctx.fill();
+    S(ctx, rgba('#8fc4e8', 0.8), 1); ctx.stroke();
+    F(ctx, rgba('#ffffff', 0.9)); ctx.beginPath();
+    for (let i = 0; i < n; i += 3) { const xx = x + (i + 0.5) * w / n, L = len * (0.4 + seaH(i, 9) * 0.6), u = (t * 0.5 + i * 0.37) % 1; circ(ctx, xx, y + L + u * 18, 1.3 * (1 - u)); }
+    ctx.fill();
+  }
+
+  // ---- the title: a spooky dusk (or a snowfall) over the tower, a banner over the logo
+  const SEA_TIERS = [0, 1, 2, 6];   // the tower's tiers clear of the logo and its banner (3 to 5 sit behind the words)
+  function seaTitle(ctx, w, h, t, id) {
+    if (id !== 'halloween' && id !== 'winter') return;
+    ctx.save();
+    try {
+      w = w || 540; h = h || 960; t = t || 0;
+      const base = h * 0.86, th = h * 0.075, cx = w / 2;
+      if (id === 'halloween') {
+        try { const g = ctx.createLinearGradient(0, 0, 0, h * 0.6); g.addColorStop(0, rgba('#3a1260', 0.45)); g.addColorStop(1, rgba('#ff8a1f', 0.12)); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h * 0.6); } catch (e) { /* stub */ }
+        seaMoon(ctx, w * 0.8, h * 0.17, 46, t);
+        for (let i = 0; i < 7; i++) {
+          const a = t * (0.35 + seaH(i, 1) * 0.3) + i * 0.9, rx = w * (0.18 + seaH(i, 2) * 0.28), ry = h * (0.05 + seaH(i, 3) * 0.06);
+          seaBat(ctx, w * 0.62 + Math.cos(a) * rx, h * 0.2 + Math.sin(a * 1.3) * ry, 7 + seaH(i, 4) * 6, t, i);
+        }
+        seaWeb(ctx, 0, 0, 96, 0, 0.45); seaWeb(ctx, w, 0, 70, 1, 0.35);
+        seaSpider(ctx, 58, 0, 60, t, 4);
+        // the tower's windows glow orange, a pumpkin on every other tier
+        for (const i of SEA_TIERS) { const tw = w * (0.62 - i * 0.06), ty = base - (i + 1) * th; seaPumpkin(ctx, cx + tw / 2 - 4, ty - 7, 9 - i * 0.6, t, true, i); }
+        // a banner over the logo
+        const ly = h * 0.5, by = ly - Math.min(w * 0.16, 92) * 0.86;
+        glow(ctx, cx, by, 120, SEA_OR, 0.25 + 0.08 * Math.sin(t * 3));
+        const wob = Math.sin(t * 2) * 2;
+        txt(ctx, 'CLAW-O-WEEN', cx, by + wob, 30, SEA_OR, true, 'center', '#2a0a3a');
+        F(ctx, rgba(SEA_OR, 0.9)); ctx.beginPath();
+        for (let i = 0; i < 9; i++) { const dx = cx - 92 + i * 23, dl = 5 + seaH(i, 6) * 10 + ((t * 0.7 + i * 0.3) % 1) * 5; ctx.moveTo(dx - 2.5, by + 10 + wob); ctx.lineTo(dx + 2.5, by + 10 + wob); ctx.lineTo(dx, by + 10 + wob + dl); ctx.closePath(); }
+        ctx.fill();
+        // pumpkins on the ground, fog rolling over it
+        const P = [[w * 0.1, 18, 0], [w * 0.22, 12, 1], [w * 0.8, 20, 2], [w * 0.91, 13, 3], [w * 0.68, 10, 4]];
+        for (const [px, pr, s] of P) seaPumpkin(ctx, px, base - pr * 0.9, pr, t, true, s);
+        seaFog(ctx, 0, base - 60, w, 150, t, 7, 0.22, '#c8b8e8');
+      } else {
+        try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, rgba('#8dd8ff', 0.12)); g.addColorStop(1, rgba('#ffffff', 0.06)); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); } catch (e) { /* stub */ }
+        for (const i of SEA_TIERS) { const tw = w * (0.62 - i * 0.06), ty = base - (i + 1) * th; seaSnowCap(ctx, cx - tw / 2 - 2, ty, tw + 4, 8); }
+        seaSnowCap(ctx, 0, base - 6, w, 14);
+        seaSnow(ctx, 0, 0, w, h, t, 90, 0.8);
+        const ly = h * 0.5, by = ly - Math.min(w * 0.16, 92) * 0.86;
+        glow(ctx, cx, by, 120, '#8dfff5', 0.25);
+        txt(ctx, 'WINTER WONDERCLAW', cx, by, 24, '#e8fbff', true, 'center', '#1a3a5a');
+        seaIcicles(ctx, cx - 150, by + 14, 300, 16, t);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // ---- the map: fog drifting over the hexes, bats, a violet edge (or snow and frost)
+  function seaMap(ctx, x0, y0, w, h, t, id) {
+    if (id !== 'halloween' && id !== 'winter') return;
+    ctx.save();
+    try {
+      if (id === 'halloween') {
+        seaFog(ctx, x0, y0 + 40, w, h - 80, t, 12, 0.34, '#e0d8f8');
+        for (let i = 0; i < 5; i++) {
+          const u = ((t * (0.05 + seaH(i, 1) * 0.04) + seaH(i, 2)) % 1);
+          const bx = x0 - 40 + u * (w + 80), by = y0 + 40 + seaH(i, 3) * h * 0.5 + Math.sin(t * 2 + i) * 16, bs = 10 + seaH(i, 4) * 5;
+          glow(ctx, bx, by, bs * 2.6, SEA_PU, 0.35);
+          seaBat(ctx, bx, by, bs, t, i, '#140a1c');
+        }
+        try {
+          const g = ctx.createRadialGradient(x0 + w / 2, y0 + h / 2, Math.min(w, h) * 0.35, x0 + w / 2, y0 + h / 2, Math.max(w, h) * 0.75);
+          g.addColorStop(0, rgba(SEA_PU, 0)); g.addColorStop(1, rgba('#3a1260', 0.5)); ctx.fillStyle = g; ctx.fillRect(x0, y0, w, h);
+        } catch (e) { /* stub */ }
+      } else {
+        seaSnow(ctx, x0, y0, w, h, t, 70, 0.75);
+        try {
+          const g = ctx.createRadialGradient(x0 + w / 2, y0 + h / 2, Math.min(w, h) * 0.38, x0 + w / 2, y0 + h / 2, Math.max(w, h) * 0.75);
+          g.addColorStop(0, rgba('#dff6ff', 0)); g.addColorStop(1, rgba('#dff6ff', 0.35)); ctx.fillStyle = g; ctx.fillRect(x0, y0, w, h);
+        } catch (e) { /* stub */ }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A prop on a lit, empty hex of a seasonal map: a jack-o'-lantern, or a little snowman.
+  function seaProp(ctx, x, y, r, t, id, seed) {
+    ctx.save();
+    try {
+      if (id === 'halloween') { F(ctx, rgba(INK, 0.3)); ctx.beginPath(); ell(ctx, x, y + r * 0.9, r * 1.1, r * 0.3, 0); ctx.fill(); seaPumpkin(ctx, x, y, r, t, true, seed || 0); }
+      else if (id === 'winter') {
+        F(ctx, rgba(INK, 0.3)); ctx.beginPath(); ell(ctx, x, y + r * 0.9, r, r * 0.28, 0); ctx.fill();
+        tone(ctx, q => circ(q, x, y + r * 0.2, r * 0.75), '#f4fbff', x, y + r * 0.2, r * 0.7, { ol: 1.4 });
+        tone(ctx, q => circ(q, x, y - r * 0.75, r * 0.5), '#f4fbff', x, y - r * 0.75, r * 0.45, { ol: 1.4 });
+        F(ctx, '#ff8a1f'); ctx.beginPath(); poly(ctx, [x + r * 0.1, y - r * 0.75, x + r * 0.55, y - r * 0.68, x + r * 0.1, y - r * 0.6]); ctx.fill();
+        F(ctx, '#d81f3a'); ctx.fillRect(x - r * 0.5, y - r * 0.35, r, r * 0.16);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // ---- the arena's sky over the fight: a moon and bats (or snow), above the cabinet
+  function seaSky(ctx, w, y0, y1, t, id) {
+    if (id !== 'halloween' && id !== 'winter') return;
+    ctx.save();
+    try {
+      if (id === 'halloween') {
+        seaMoon(ctx, w - 44, y0 + 44, 24, t);
+        for (let i = 0; i < 3; i++) { const u = (t * 0.06 + i * 0.33) % 1; seaBat(ctx, -30 + u * (w + 60), y0 + 30 + seaH(i, 5) * 40 + Math.sin(t * 3 + i) * 8, 6, t, i, '#241432'); }
+        seaFog(ctx, 0, y1 - 60, w, 60, t, 4, 0.12, '#cfc2e8');
+      } else seaSnow(ctx, 0, y0, w, y1 - y0, t, 40, 0.7);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // ---- the cabinet: cobwebs in the corners, jack-o'-lanterns on the marquee,
+  // orange / purple bulbs (unless a skin, the party lights or the alarm own them); snow and icicles in winter.
+  function seaCab(ctx, x, y, cfg, st, id) {
+    if (id !== 'halloween' && id !== 'winter') return;
+    ctx.save();
+    try {
+      st = st || {};
+      const c = cabCfg(cfg), w = c.w, h = c.h, f = c.frame, t = st.t || 0;
+      ctx.translate(x || 0, y || 0);
+      const bulbs = !st.party && !st.alarm && !st.skinned;
+      if (bulbs) {
+        const step = 26, P = [];
+        for (let i = 0; i * step < w; i++) P.push(i * step + 8, -f + 8);
+        for (let i = 0; i * step < h; i++) P.push(w + f - 8, i * step + 8);
+        for (let i = 0; i * step < w; i++) P.push(w - i * step - 8, h + f - 8);
+        for (let i = 0; i * step < h; i++) P.push(-f + 8, h - i * step - 8);
+        const n = P.length / 2, ch = Math.floor(t * 6);
+        const lit = (k) => ((k + ch) % 4) < 2;
+        const halo = id === 'halloween' ? [SEA_OR, SEA_PU] : ['#ff2e4a', '#3ddc84'];
+        for (let pass = 0; pass < 3; pass++) {
+          ctx.beginPath();
+          for (let k = 0; k < n; k++) { const on = lit(k); if ((pass === 0 && !on) || (pass > 0 && on && (k % 2) === pass - 1)) circ(ctx, P[k * 2], P[k * 2 + 1], 3.6); }
+          F(ctx, pass === 0 ? '#2a1a30' : halo[pass - 1]); ctx.fill();
+        }
+        // their glows in one additive pass (one composite switch, like cabBulbs)
+        ctx.save(); ctx.globalAlpha = 0.55; ctx.globalCompositeOperation = 'lighter';
+        for (let k = 0; k < n; k++) {
+          if (!lit(k)) continue;
+          const sp = glowSprite(halo[k % 2], 10);
+          if (!sp) break;
+          try { ctx.drawImage(sp, P[k * 2] - 11, P[k * 2 + 1] - 11, 22, 22); } catch (e) { /* stub canvas */ }
+        }
+        ctx.restore();
+      }
+      if (id === 'halloween') {
+        seaWeb(ctx, 0, 0, 70, 0, 0.5); seaWeb(ctx, w - c.chuteW, 0, 54, 1, 0.4); seaWeb(ctx, 0, h, 46, 3, 0.35);
+        seaSpider(ctx, w * 0.28, 32, 40, t, 3.2);
+        seaPumpkin(ctx, w / 2 - 96, -f * 0.52, 10, t, true, 1);
+        seaPumpkin(ctx, w / 2 + 96, -f * 0.52, 10, t, true, 2);
+      } else {
+        seaSnowCap(ctx, -f, -f - 2, w + f * 2, 10);
+        seaIcicles(ctx, 10, 0, w - c.chuteW - 20, 22, t);
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+        for (const [fx0, fy0] of [[0, 0], [w, 0], [0, h], [w, h]]) seaPuff(ctx, fx0, fy0, 90, '#e8fbff', 0.45);
+        ctx.restore();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- costumes: drawn over a monster's own art (its body box, feet at the origin)
+  function seaCostume(ctx, def, art, t) {
+    ctx.save();
+    try {
+      const cos = def.costume || '', hat = def.seaHat || '';
+      if (cos === 'vampire') {
+        // a cape swept over the back with a red lining, a high collar behind the head
+        tone(ctx, q => { q.moveTo(-16, -36); q.quadraticCurveTo(10, -46, 34, -30); q.quadraticCurveTo(46, -10 + Math.sin(t * 3) * 3, 38, 2); q.quadraticCurveTo(12, -4, -6, -8); q.closePath(); }, '#241432', 12, -22, 22, { dark: -0.35 });
+        F(ctx, '#b0103a'); ctx.beginPath(); ctx.moveTo(34, -28); ctx.quadraticCurveTo(44, -10 + Math.sin(t * 3) * 3, 38, 1); ctx.quadraticCurveTo(30, -12, 34, -28); ctx.closePath(); ctx.fill();
+        tone(ctx, q => { q.moveTo(-22, -34); q.lineTo(-28, -54); q.lineTo(-16, -42); q.lineTo(-10, -56); q.lineTo(-6, -36); q.closePath(); }, '#241432', -16, -44, 10, { dark: -0.3, spec: false });
+        F(ctx, '#d81f3a'); ctx.beginPath(); circ(ctx, -12, -32, 2.2); ctx.fill();
+      } else if (cos === 'ghost') {
+        // a bedsheet with two eye holes, the hem rippling
+        ctx.globalAlpha = FLAT ? 1 : 0.94;
+        tone(ctx, q => {
+          q.moveTo(-36, 2); q.quadraticCurveTo(-40, -50, -4, -56); q.quadraticCurveTo(32, -58, 36, -20); q.lineTo(36, 2);
+          for (let i = 6; i >= 0; i--) q.quadraticCurveTo(-36 + (i + 0.5) * 12, 6 + Math.sin(t * 4 + i) * 3, -36 + i * 12, 2);
+          q.closePath();
+        }, '#f4f0ff', 0, -26, 30, { dark: -0.12 });
+        ctx.globalAlpha = 1;
+        F(ctx, SEA_NIGHT); ctx.beginPath(); ell(ctx, -16, -28, 4.5, 6.5, 0); ell(ctx, 2, -30, 4.5, 6.5, 0); ctx.fill();
+        F(ctx, rgba('#5a4a7a', 0.5)); ctx.beginPath(); ell(ctx, -8, -12, 5, 3.5, 0); ctx.fill();
+      } else if (cos === 'witch') {
+        // a pointed hat and a broom in the free hand
+        ctx.save(); ctx.translate(24, -26); ctx.rotate(0.5 + Math.sin(t * 2) * 0.05);
+        line(ctx, 0, -30, 0, 26, '#6b3f1f', 3.5);
+        tone(ctx, q => { q.moveTo(-5, 18); q.lineTo(5, 18); q.lineTo(10, 38); q.lineTo(-10, 38); q.closePath(); }, '#c9a24a', 0, 28, 8, NOSPEC);
+        ctx.restore();
+        seaHatDraw(ctx, 'witch', -2, -74, 22, t, '#2a1a3a', SEA_OR);
+      }
+      // a party hat worn at a jaunty angle, off to the back of the head so the intent bubble above stays clear
+      if (hat) { ctx.save(); ctx.translate(art.w * 0.26, -art.h * 0.8); ctx.rotate(0.32 + Math.sin(t * 2.2) * 0.04); seaHatDraw(ctx, hat, 0, 0, Math.max(10, Math.min(art.w, art.h) * 0.2), t, null, null); ctx.restore(); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A small hat sitting at (x, y) (its brim), s its half width.
+  function seaHatDraw(ctx, kind, x, y, s, t, c1, c2) {
+    if (kind === 'witch') {
+      c1 = c1 || '#2a1a3a'; c2 = c2 || SEA_OR;
+      tone(ctx, q => ell(q, x, y, s * 1.15, s * 0.24, 0), shade(c1, 0.1), x, y, s, NOSPEC);
+      tone(ctx, q => { q.moveTo(x - s * 0.62, y - 1); q.quadraticCurveTo(x - s * 0.3, y - s * 0.9, x + s * 0.2, y - s * 1.45); q.quadraticCurveTo(x + s * 0.75, y - s * 1.3 + Math.sin(t * 2) * s * 0.06, x + s * 0.55, y - s * 1.1); q.quadraticCurveTo(x + s * 0.3, y - s * 0.6, x + s * 0.62, y - 1); q.closePath(); }, c1, x, y - s * 0.6, s * 0.6, { dark: -0.3 });
+      F(ctx, c2); ctx.beginPath(); rrect(ctx, x - s * 0.6, y - s * 0.34, s * 1.2, s * 0.22, s * 0.05); ctx.fill();
+      F(ctx, '#ffe066'); ctx.beginPath(); rrect(ctx, x - s * 0.12, y - s * 0.36, s * 0.24, s * 0.26, s * 0.04); ctx.fill();
+    } else if (kind === 'pumpkin') {
+      seaPumpkin(ctx, x, y - s * 0.55, s * 0.62, t, true, 5);
+    } else if (kind === 'horns') {
+      for (const sd of [-1, 1]) tone(ctx, q => { q.moveTo(x + sd * s * 0.35, y); q.quadraticCurveTo(x + sd * s * 0.9, y - s * 0.3, x + sd * s * 0.75, y - s * 1.0); q.quadraticCurveTo(x + sd * s * 0.62, y - s * 0.45, x + sd * s * 0.1, y); q.closePath(); }, '#d81f3a', x + sd * s * 0.5, y - s * 0.4, s * 0.3, { dark: -0.3, spec: false });
+    } else if (kind === 'santa') {
+      tone(ctx, q => { q.moveTo(x - s * 0.7, y); q.quadraticCurveTo(x - s * 0.2, y - s * 1.3, x + s * 0.9, y - s * 0.9); q.lineTo(x + s * 0.7, y); q.closePath(); }, '#d81f3a', x, y - s * 0.5, s * 0.6, { dark: -0.3 });
+      tone(ctx, q => rrect(q, x - s * 0.8, y - s * 0.2, s * 1.6, s * 0.32, s * 0.16), '#ffffff', x, y, s * 0.5, NOSPEC);
+      tone(ctx, q => circ(q, x + s * 0.92, y - s * 0.88, s * 0.2), '#ffffff', x + s * 0.92, y - s * 0.88, s * 0.2, NOSPEC);
+    }
+  }
+  // ---- the Pumpkin King: a crowned jack-o'-lantern on a pumpkin body with vine arms
+  EA.pumpking = { w: 116, h: 150, draw(ctx, t, p) {
+    const bob = Math.sin(t * 2.2) * 2, fl = 0.75 + 0.25 * Math.sin(t * 9) * Math.sin(t * 6.1);
+    shadow(ctx, 120);
+    // vines curling on the ground
+    S(ctx, INK, 7); ctx.beginPath(); ctx.moveTo(-58, -2); ctx.quadraticCurveTo(-30, -14, 0, -4); ctx.quadraticCurveTo(30, 6, 58, -6); ctx.stroke();
+    S(ctx, p.b, 4); ctx.stroke();
+    // the body: a big ribbed pumpkin
+    tone(ctx, q => ell(q, 0, -38 + bob * 0.3, 48, 36, 0), p.a, 0, -38, 42, { dark: -0.35 });
+    S(ctx, rgba('#9a3f00', FLAT ? 1 : 0.7), 3); ctx.beginPath();
+    for (const k of [-0.6, -0.2, 0.2, 0.6]) { ctx.moveTo(k * 40, -72 + bob * 0.3); ctx.quadraticCurveTo(k * 62, -38, k * 40, -4 + bob * 0.3); }
+    ctx.stroke();
+    // vine arms with leaf hands
+    for (const sd of [-1, 1]) {
+      const sw = Math.sin(t * 2.4 + sd) * 6;
+      ctx.beginPath(); ctx.moveTo(sd * 40, -54 + bob); ctx.quadraticCurveTo(sd * 70, -70 + sw, sd * 62, -30 + sw);
+      S(ctx, INK, 8); ctx.stroke(); S(ctx, p.b, 5); ctx.stroke();
+      tone(ctx, q => ell(q, sd * 62, -26 + sw, 9, 5, sd * 0.6), shade(p.b, 0.15), sd * 62, -26 + sw, 8, NOSPEC);
+    }
+    // a leafy collar
+    for (let i = -3; i <= 3; i++) tone(ctx, q => ell(q, i * 9, -76 + bob + Math.abs(i) * 1.5, 8, 5, i * 0.35), shade(p.b, i % 2 ? 0.1 : -0.05), i * 9, -76, 6, { ol: 1.5, spec: false });
+    // the head: a jack-o'-lantern lit from inside
+    const hy = -106 + bob;
+    if (!FLAT) glow(ctx, 0, hy, 60, '#ff8a1f', 0.25 + fl * 0.25);
+    tone(ctx, q => ell(q, 0, hy, 34, 27, 0), shade(p.a, 0.05), 0, hy, 30, { dark: -0.35 });
+    S(ctx, rgba('#9a3f00', FLAT ? 1 : 0.7), 2.5); ctx.beginPath();
+    ctx.moveTo(-14, hy - 25); ctx.quadraticCurveTo(-22, hy, -14, hy + 25); ctx.moveTo(14, hy - 25); ctx.quadraticCurveTo(22, hy, 14, hy + 25); ctx.stroke();
+    const glowC = FLAT || (fl > 0.92 ? '#fff6c0' : p.c);
+    F(ctx, glowC); ctx.beginPath();
+    poly(ctx, [-24, hy - 2, -8, hy - 4, -17, hy - 17]); poly(ctx, [24, hy - 2, 8, hy - 4, 17, hy - 17]);
+    ctx.moveTo(-22, hy + 6);
+    for (let i = 0; i <= 8; i++) ctx.lineTo(-22 + i * 5.5, hy + 6 + (i % 2 ? 6 : 0));
+    ctx.lineTo(18, hy + 14); ctx.quadraticCurveTo(0, hy + 22, -18, hy + 14); ctx.closePath(); ctx.fill();
+    // the crown
+    tone(ctx, q => { q.moveTo(-18, hy - 24); q.lineTo(-20, hy - 44); q.lineTo(-9, hy - 32); q.lineTo(0, hy - 48); q.lineTo(9, hy - 32); q.lineTo(20, hy - 44); q.lineTo(18, hy - 24); q.closePath(); }, '#ffc94d', 0, hy - 34, 16, { dark: -0.3, ol: 2 });
+    F(ctx, SEA_PU); ctx.beginPath(); circ(ctx, 0, hy - 30, 2.8); circ(ctx, -12, hy - 28, 2); circ(ctx, 12, hy - 28, 2); ctx.fill();
+  } };
+
+  // ---- the trick-or-treat tile: a candy pail carved like a jack-o'-lantern
+  function seaTreatIcon(ctx, r, t) {
+    const s = r * 0.62;
+    ctx.save();
+    try {
+      glow(ctx, 0, 0, s * 1.4, SEA_OR, 0.3 + 0.1 * Math.sin((t || 0) * 4));
+      ctx.beginPath(); ctx.moveTo(-s * 0.85, -s * 0.2); ctx.quadraticCurveTo(0, -s * 1.5, s * 0.85, -s * 0.2); S(ctx, INK, 4); ctx.stroke(); S(ctx, '#c9d3e0', 2); ctx.stroke();
+      // candies peeking over the rim
+      tone(ctx, q => circ(q, -s * 0.3, -s * 0.52, s * 0.22), '#ff2e88', -s * 0.3, -s * 0.52, s * 0.2, { ol: 1.5 });
+      tone(ctx, q => rrect(q, s * 0.02, -s * 0.72, s * 0.38, s * 0.24, s * 0.08), SEA_PU, s * 0.2, -s * 0.6, s * 0.2, { ol: 1.5 });
+      seaPumpkin(ctx, 0, s * 0.12, s * 0.72, t || 0, true, 3);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  /* ---- the door scene (the trick-or-treat screen): a haunted house front
+     at night, a door that shakes to the knocks and swings open, then a
+     treat (a bowl of candy held out, candy flying) or a trick (a ghost
+     bursting out, or a green curse). st = {t, knock (0..1, the last knock
+     fading), knocks, open 0..1, reveal 0..1, out: {kind, k}}. */
+  function seaDoor(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {}; w = w || 540; h = h || 960;
+      const t = st.t || 0, open = U.clamp(+st.open || 0, 0, 1), rev = U.clamp(+st.reveal || 0, 0, 1), kn = U.clamp(+st.knock || 0, 0, 1);
+      const out = st.out || null, trick = !!(out && out.kind === 'trick'), curse = !!(out && out.k === 'curse');
+      try { const g = ctx.createLinearGradient(0, 0, 0, h * 0.6); g.addColorStop(0, '#0b0616'); g.addColorStop(1, '#2a1240'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#1b0f2a'; }
+      ctx.fillRect(0, 0, w, h);
+      F(ctx, rgba('#ffffff', 0.5)); ctx.beginPath(); for (let i = 0; i < 30; i++) circ(ctx, seaH(i, 1) * w, seaH(i, 2) * h * 0.3, 0.7 + seaH(i, 3)); ctx.fill();
+      seaMoon(ctx, w * 0.8, h * 0.13, 42, t);
+      for (let i = 0; i < 4; i++) { const a = t * 0.5 + i * 1.6; seaBat(ctx, w * 0.8 + Math.cos(a) * 90, h * 0.14 + Math.sin(a * 1.4) * 40, 8, t, i); }
+      const cx = w / 2, dw = 160, dh = 250, dx = cx - dw / 2, dy = h * 0.4, floor = dy + dh;
+      // the house: a pointed roof, boards, a round attic window
+      tone(ctx, q => poly(q, [w * 0.04, dy - 70, cx, dy - 230, w * 0.96, dy - 70]), '#1a0f1c', cx, dy - 140, 120, { dark: -0.3, spec: false });
+      F(ctx, '#2e1b26'); ctx.fillRect(w * 0.08, dy - 72, w * 0.84, h - dy + 72);
+      S(ctx, rgba('#000000', 0.45), 2); ctx.beginPath();
+      for (let yy = dy - 50; yy < h; yy += 26) { ctx.moveTo(w * 0.08, yy); ctx.lineTo(w * 0.92, yy); }
+      ctx.stroke();
+      const wy = dy - 130;
+      glow(ctx, cx, wy, 50, SEA_OR, 0.5);
+      tone(ctx, q => circ(q, cx, wy, 26), '#ffb347', cx, wy, 26, { spec: false, ol: 4 });
+      line(ctx, cx - 26, wy, cx + 26, wy, INK, 3); line(ctx, cx, wy - 26, cx, wy + 26, INK, 3);
+      // the doorway: dark, then warm light pouring out as it opens
+      F(ctx, '#0a0508'); ctx.fillRect(dx, dy, dw, dh);
+      if (open > 0) {
+        glow(ctx, cx, dy + dh * 0.55, 150, trick ? (curse ? SEA_GR : SEA_PU) : '#ffb347', 0.25 + open * 0.55);
+        try { const g = ctx.createLinearGradient(0, dy, 0, floor); g.addColorStop(0, rgba(trick ? '#3a1260' : '#ffb347', 0.35 * open)); g.addColorStop(1, rgba(trick ? '#12091f' : '#ff8a1f', 0.7 * open)); ctx.fillStyle = g; ctx.fillRect(dx, dy, dw, dh); } catch (e) { /* stub */ }
+        // light on the porch
+        F(ctx, rgba(trick ? SEA_PU : '#ffb347', 0.22 * open)); ctx.beginPath(); ctx.moveTo(dx, floor); ctx.lineTo(dx + dw, floor); ctx.lineTo(dx + dw + 70, floor + 90); ctx.lineTo(dx - 70, floor + 90); ctx.closePath(); ctx.fill();
+      }
+      // what waits inside
+      if (rev > 0 && out) {
+        ctx.save(); ctx.beginPath(); ctx.rect(dx - 60, dy - 80, dw + 120, dh + 80); ctx.clip();
+        if (!trick) {
+          const by = floor - 40 - U.ease.outBack(Math.min(1, rev * 1.6)) * 70;
+          limb(ctx, cx - 50, floor + 10, cx - 30, by + 14, 12, '#5a2a7a');
+          tone(ctx, q => ell(q, cx - 30, by + 14, 9, 7, 0.4), '#8fd35e', cx - 30, by + 14, 7, NOSPEC);
+          // the prize itself floats up out of the bowl
+          const pd = st.prize, py = by - 46 - Math.sin(t * 2.4) * 5, pk = Math.min(1, rev * 1.8);
+          if (pd && pk > 0) {
+            glow(ctx, cx, py, 60, '#ffe066', 0.5 * pk);
+            if (pd.hooks || pd.icon) relicIcon(ctx, pd, cx, py, 52 * pk);
+            else if (pd.shape) item(ctx, pd, cx, py, Math.sin(t * 1.3) * 0.15, 1.5 * pk, { glow: '#ffe066' });
+          }
+          tone(ctx, q => { q.moveTo(cx - 52, by); q.lineTo(cx + 52, by); q.quadraticCurveTo(cx + 44, by + 34, cx, by + 36); q.quadraticCurveTo(cx - 44, by + 34, cx - 52, by); q.closePath(); }, SEA_PU, cx, by + 16, 40, { dark: -0.3 });
+          const cc = ['#ff2e88', '#ffe066', SEA_OR, '#2ee6d6', '#a6ff5e'];
+          for (let i = 0; i < 7; i++) tone(ctx, q => circ(q, cx - 36 + i * 12, by - 4 - (i % 2) * 5, 6), cc[i % 5], cx - 36 + i * 12, by - 4, 6, { ol: 1.5 });
+        } else if (curse) {
+          for (let i = 0; i < 6; i++) { const u = (t * 0.4 + i * 0.17) % 1; seaPuff(ctx, cx + Math.sin(i * 2 + t) * 40, floor - u * dh * 0.9, 50 * (0.6 + u), SEA_GR, 0.5 * (1 - u) * rev); }
+          ctx.save(); ctx.translate(cx, floor - dh * 0.5 + Math.sin(t * 2) * 6); ctx.rotate(Math.sin(t * 1.7) * 0.12);
+          glow(ctx, 0, 0, 70, SEA_GR, 0.5 * rev);
+          IA.skull(ctx, 60 * rev + 12, 66 * rev + 12, '#c8ffb0', INK);
+          ctx.restore();
+        } else {
+          const gs = 0.3 + U.ease.outBack(Math.min(1, rev * 1.4)) * 0.85, gy = floor - 20 - rev * 60;
+          ctx.save(); ctx.translate(cx, gy + Math.sin(t * 3) * 6); ctx.scale(gs, gs);
+          tone(ctx, q => { q.moveTo(-60, 0); q.quadraticCurveTo(-66, -120, 0, -130); q.quadraticCurveTo(66, -120, 60, 0); for (let i = 5; i >= 0; i--) q.quadraticCurveTo(-60 + (i + 0.5) * 20, 12 + Math.sin(t * 5 + i) * 5, -60 + i * 20, 0); q.closePath(); }, '#f4f0ff', 0, -60, 60, { dark: -0.15 });
+          for (const sd of [-1, 1]) tone(ctx, q => ell(q, sd * 70, -70, 16, 10, sd * -0.6), '#f4f0ff', sd * 70, -70, 12, NOSPEC);
+          F(ctx, SEA_NIGHT); ctx.beginPath(); ell(ctx, -20, -80, 10, 15, 0); ell(ctx, 20, -80, 10, 15, 0); ell(ctx, 0, -46, 14, 18, 0); ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+      // the door itself, hinged on the left, shaking to each knock
+      const shake = kn > 0 ? Math.sin(t * 90) * 3 * kn : 0;
+      const dwOpen = dw * Math.max(0.12, Math.cos(open * 1.35)), sk = open * 18;
+      ctx.save(); ctx.translate(shake, 0);
+      tone(ctx, q => poly(q, [dx, dy, dx + dwOpen, dy - sk, dx + dwOpen, floor + sk, dx, floor]), '#6b3a1e', dx + dwOpen / 2, dy + dh / 2, dh * 0.4, { dark: -0.25, spec: false, ol: 3 });
+      if (dwOpen > dw * 0.4) {
+        const k = dwOpen / dw;
+        S(ctx, rgba('#000000', 0.4), 3); ctx.beginPath(); rrect(ctx, dx + 18 * k, dy + 22, (dw - 36) * k, dh * 0.36, 6); rrect(ctx, dx + 18 * k, dy + dh * 0.52, (dw - 36) * k, dh * 0.36, 6); ctx.stroke();
+        // the brass knocker lifts on a knock
+        const kx = dx + dwOpen * 0.5, ky = dy + dh * 0.44;
+        tone(ctx, q => circ(q, kx, ky - 12, 7), '#ffc94d', kx, ky - 12, 6, { ol: 2 });
+        ctx.beginPath(); ctx.ellipse(kx, ky + 4 - kn * 8, 13, 15, 0, 0, TAU); S(ctx, INK, 6); ctx.stroke(); S(ctx, '#ffc94d', 3.5); ctx.stroke();
+        F(ctx, INK); ctx.beginPath(); circ(ctx, dx + dwOpen * 0.86, dy + dh * 0.56, 4); ctx.fill();
+      }
+      ctx.restore();
+      // the frame, the number plate, the porch steps and two lanterns
+      S(ctx, INK, 3); F(ctx, '#3a2418');
+      ctx.beginPath(); rrect(ctx, dx - 16, dy - 18, 16, dh + 18, 3); rrect(ctx, dx + dw, dy - 18, 16, dh + 18, 3); rrect(ctx, dx - 22, dy - 30, dw + 44, 18, 4); ctx.fill(); ctx.stroke();
+      txt(ctx, '13', cx, dy - 21, 13, '#ffc94d', true, 'center', INK);
+      for (let i = 0; i < 3; i++) { F(ctx, shade('#3a2418', -i * 0.08)); ctx.beginPath(); rrect(ctx, dx - 40 - i * 26, floor + i * 26, dw + 80 + i * 52, 26, 3); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke(); }
+      seaPumpkin(ctx, dx - 64, floor + 14, 22, t, true, 1);
+      seaPumpkin(ctx, dx + dw + 64, floor + 14, 22, t, true, 2);
+      seaPumpkin(ctx, dx + dw + 110, floor + 76, 14, t, true, 3);
+      seaWeb(ctx, w * 0.08, dy - 72, 60, 0, 0.5);
+      seaFog(ctx, 0, h * 0.82, w, h * 0.2, t, 6, 0.25, '#c8b8e8');
+      // the words
+      if (kn > 0.05 && open === 0) { const side = (st.knocks | 0) % 2 ? 1 : -1; txt(ctx, 'KNOCK!', cx + side * 120, dy + 40 - (1 - kn) * 30, 22 + kn * 10, rgba('#ffe066', kn), true, 'center', rgba(INK, kn)); }
+      if (rev > 0 && out) {
+        const word = trick ? (curse ? 'CURSED!' : 'TRICK!') : 'TREAT!', col = trick ? (curse ? SEA_GR : SEA_PU) : SEA_OR, sz = 50 * (0.6 + U.ease.outBack(Math.min(1, rev * 1.5)) * 0.4);
+        glow(ctx, cx, dy - 150, 140, col, 0.35 * rev);
+        txt(ctx, word, cx, h * 0.14 + 30, sz, col, true, 'center', '#12091f');
+      }
+      if (trick && !curse && rev > 0 && rev < 0.25) { F(ctx, rgba(SEA_PU, (0.25 - rev) * 2)); ctx.fillRect(0, 0, w, h); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A piece of the season's currency (a wrapped candy, or a snowflake).
+  function seaCoin(ctx, x, y, r, t, id) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.rotate(Math.sin((t || 0) * 2) * 0.2);
+      if (id === 'winter') {
+        S(ctx, INK, r * 0.5); ctx.beginPath();
+        for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3; ctx.moveTo(-Math.cos(a) * r, -Math.sin(a) * r); ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+        ctx.stroke(); S(ctx, '#dff6ff', r * 0.26); ctx.stroke();
+      } else {
+        for (const sd of [-1, 1]) tone(ctx, q => poly(q, [sd * r * 0.7, 0, sd * r * 1.45, -r * 0.55, sd * r * 1.45, r * 0.55]), SEA_PU, sd * r, 0, r * 0.4, { ol: 1.4, spec: false });
+        tone(ctx, q => circ(q, 0, 0, r * 0.8), SEA_OR, 0, 0, r * 0.8, { ol: 1.4 });
+        S(ctx, rgba('#ffffff', 0.7), Math.max(1, r * 0.14)); ctx.beginPath(); ctx.arc(0, 0, r * 0.45, -2.4, -0.8); ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- the event cosmetics: skin patterns, the witch hat, the bat trail (the VAULT block calls these)
+  function seaFramePat(ctx, fp, w, h, f, tr) {
+    if (fp === 'sea_pumpkins') {
+      S(ctx, rgba('#000000', 0.45), 1.5); ctx.beginPath();
+      for (let yy = -f + 5; yy < h + f; yy += 8) { ctx.moveTo(-f, yy); ctx.lineTo(w + f, yy + Math.sin(yy) * 1.5); }
+      ctx.stroke();
+      const r = Math.max(3, f * 0.3);
+      for (let xx = 40; xx < w - 20; xx += 110) { seaPumpkin(ctx, xx, -f * 0.5, r, 0, true, xx); seaPumpkin(ctx, w - xx, h + f * 0.5, r, 0, true, xx + 1); }
+      S(ctx, rgba('#3a7a2a', 0.9), Math.max(1.2, f * 0.08)); ctx.beginPath();
+      for (let yy = 10; yy < h; yy += 6) { const xx = -f * 0.5 + Math.sin(yy * 0.1) * f * 0.2; if (yy === 10) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); }
+      ctx.stroke();
+    } else if (fp === 'sea_icicles') {
+      seaSnowCap(ctx, -f, -f - 1, w + f * 2, Math.max(5, f * 0.4));
+      F(ctx, rgba('#dff6ff', 0.9)); ctx.beginPath();
+      for (let xx = 4; xx < w; xx += 14) { const L = f * (0.25 + ((xx * 7) % 11) / 22); ctx.moveTo(xx - 3, -f * 0.3); ctx.lineTo(xx + 3, -f * 0.3); ctx.lineTo(xx, -f * 0.3 + L); ctx.closePath(); }
+      ctx.fill();
+      F(ctx, tr || '#ff2e4a'); ctx.beginPath();
+      for (let yy = 20; yy < h; yy += 40) { circ(ctx, -f * 0.5, yy, Math.max(1.5, f * 0.08)); circ(ctx, w + f * 0.5, yy + 20, Math.max(1.5, f * 0.08)); }
+      ctx.fill();
+    }
+  }
+  function seaPanelPat(ctx, pp, w, fy) {
+    if (pp === 'sea_moon') {
+      glow(ctx, w * 0.72, fy * 0.28, 70, '#ffe7b0', 0.35);
+      F(ctx, rgba('#fff0c8', 0.35)); ctx.beginPath(); circ(ctx, w * 0.72, fy * 0.28, Math.min(34, fy * 0.2)); ctx.fill();
+      for (let i = 0; i < 5; i++) seaBat(ctx, w * (0.15 + seaH(i, 1) * 0.7), fy * (0.12 + seaH(i, 2) * 0.4), 5 + seaH(i, 3) * 3, 0.2 * i, i, rgba('#000000', 0.55));
+      F(ctx, rgba('#000000', 0.45)); ctx.beginPath();
+      for (let i = 0; i < 4; i++) { const tx = w * (0.1 + i * 0.24), tw = 16, thh = 22 + (i % 2) * 6; ctx.moveTo(tx, fy); ctx.lineTo(tx, fy - thh + tw / 2); ctx.arc(tx + tw / 2, fy - thh + tw / 2, tw / 2, Math.PI, 0); ctx.lineTo(tx + tw, fy); ctx.closePath(); }
+      ctx.fill();
+    } else if (pp === 'sea_snow') {
+      F(ctx, rgba('#ffffff', 0.55)); ctx.beginPath();
+      for (let i = 0; i < 50; i++) circ(ctx, seaH(i, 1) * w, seaH(i, 2) * fy, 0.6 + seaH(i, 3) * 1.4);
+      ctx.fill();
+      F(ctx, rgba('#e8fbff', 0.14)); ctx.beginPath(); ctx.moveTo(0, fy); ctx.quadraticCurveTo(w * 0.25, fy * 0.7, w * 0.5, fy * 0.86); ctx.quadraticCurveTo(w * 0.75, fy * 0.7, w, fy * 0.84); ctx.lineTo(w, fy); ctx.closePath(); ctx.fill();
+    }
+  }
+  function seaWitchHat(ctx, L, top, hw, r, t) {
+    seaHatDraw(ctx, 'witch', 0, top + r * 0.1, hw * 1.05, t, L.c1, L.c2);
+  }
+  function seaTrailMark(ctx, art, x, y, u, a, k, t, sd, col) {
+    if (art !== 'bats') return false;
+    const bx = x + Math.sin(sd * 3 + u * 6) * 8 * k, by = y - u * 20 * k, s = 4.6 * k * (0.6 + a * 0.4);
+    glow(ctx, bx, by, s * 3, SEA_PU, 0.5 * a);
+    seaBat(ctx, bx, by, s, t, sd, col || '#2a1a3a');
+    return true;
+  }
+
+  // ---- the seasonal items' own silhouettes (the item polish pass draws them in the physics box;
+  // registered on POL_SIL as non-enumerable entries, like the items themselves)
+  const SEA_SIL = {};
+  SEA_SIL.candy_corn = (ctx, w, h) => {
+    const r = w / 2;
+    ctx.save(); ctx.beginPath(); poly(ctx, [0, -r, r * 0.95, r * 0.8, -r * 0.95, r * 0.8]); ctx.clip();
+    F(ctx, '#ffe066'); ctx.fillRect(-r, r * 0.25, r * 2, r);
+    F(ctx, '#ff8a1f'); ctx.fillRect(-r, -r * 0.3, r * 2, r * 0.55);
+    F(ctx, '#fff8ec'); ctx.fillRect(-r, -r, r * 2, r * 0.7);
+    ctx.restore();
+    ctx.beginPath(); poly(ctx, [0, -r, r * 0.95, r * 0.8, -r * 0.95, r * 0.8]); S(ctx, INK, 1.8); ctx.lineJoin = 'round'; ctx.stroke();
+  };
+  SEA_SIL.bag_candycorn = (ctx, w, h) => {
+    const r = w / 2;
+    tone(ctx, q => { q.moveTo(-r * 0.7, -r * 0.35); q.quadraticCurveTo(-r * 1.05, r * 0.9, 0, r * 0.95); q.quadraticCurveTo(r * 1.05, r * 0.9, r * 0.7, -r * 0.35); q.closePath(); }, SEA_PU, 0, r * 0.3, r * 0.8, { dark: -0.3 });
+    for (let i = 0; i < 3; i++) { ctx.save(); ctx.translate(-r * 0.35 + i * r * 0.35, -r * 0.45 - (i % 2) * r * 0.15); ctx.rotate(-0.4 + i * 0.4); SEA_SIL.candy_corn(ctx, r * 0.55, r * 0.55); ctx.restore(); }
+    line(ctx, -r * 0.7, -r * 0.3, r * 0.7, -r * 0.3, '#ffe066', 2);
+  };
+  SEA_SIL.pumpkin_bomb = (ctx, w) => {
+    const r = w / 2;
+    seaPumpkin(ctx, 0, r * 0.1, r * 0.82, 0, false, 0);
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.8); ctx.quadraticCurveTo(r * 0.4, -r * 1.05, r * 0.55, -r * 0.8); S(ctx, INK, 3); ctx.stroke(); S(ctx, '#c9a24a', 1.6); ctx.stroke();
+  };
+  SEA_SIL.cursed_lollipop = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2, R = hh * 0.98;
+    line(ctx, -hw, 0, hw - R * 1.6, 0, INK, 5); line(ctx, -hw, 0, hw - R * 1.6, 0, '#f4ecd6', 3);
+    const cx = hw - R;
+    tone(ctx, q => circ(q, cx, 0, R), '#9b4dff', cx, 0, R, { ol: 1.8 });
+    S(ctx, '#ffe066', 1.6); ctx.beginPath();
+    for (let a = 0; a < TAU * 2; a += 0.3) { const rr = R * 0.9 * a / (TAU * 2); if (!a) ctx.moveTo(cx, 0); else ctx.lineTo(cx + Math.cos(a) * rr, Math.sin(a) * rr); }
+    ctx.stroke();
+    F(ctx, '#f4ecd6'); ctx.beginPath(); circ(ctx, cx - R * 0.25, -R * 0.1, R * 0.16); circ(ctx, cx + R * 0.25, -R * 0.1, R * 0.16); ctx.fill();
+  };
+  SEA_SIL.haunted_teddy = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2, c = '#b98a5a';
+    for (const sd of [-1, 1]) tone(ctx, q => circ(q, sd * hw * 0.62, -hh * 0.72, hw * 0.3), c, sd * hw * 0.62, -hh * 0.72, hw * 0.3, NOSPEC);
+    tone(ctx, q => ell(q, 0, hh * 0.35, hw * 0.78, hh * 0.58, 0), c, 0, hh * 0.35, hw * 0.7, { dark: -0.3 });
+    tone(ctx, q => circ(q, 0, -hh * 0.3, hw * 0.66), c, 0, -hh * 0.3, hw * 0.6, { dark: -0.3 });
+    tone(ctx, q => ell(q, 0, -hh * 0.14, hw * 0.3, hw * 0.22, 0), '#e8cfa8', 0, -hh * 0.14, hw * 0.25, NOSPEC);
+    F(ctx, '#7dff7a'); ctx.beginPath(); circ(ctx, -hw * 0.26, -hh * 0.4, hw * 0.12); ctx.fill();
+    S(ctx, INK, 1.4); ctx.beginPath(); ctx.moveTo(hw * 0.14, -hh * 0.5); ctx.lineTo(hw * 0.36, -hh * 0.3); ctx.moveTo(hw * 0.36, -hh * 0.5); ctx.lineTo(hw * 0.14, -hh * 0.3);
+    ctx.moveTo(-hw * 0.3, hh * 0.1); for (let i = 0; i < 5; i++) ctx.lineTo(-hw * 0.3 + i * hw * 0.15, hh * (0.1 + (i % 2) * 0.08));
+    ctx.stroke();
+  };
+  SEA_SIL.witch_broom = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    line(ctx, -hw, 0, hw * 0.35, 0, INK, hh * 1.1); line(ctx, -hw, 0, hw * 0.35, 0, '#6b3f1f', hh * 0.7);
+    tone(ctx, q => { q.moveTo(hw * 0.25, -hh * 0.5); q.lineTo(hw, -hh * 1.0); q.lineTo(hw, hh * 1.0); q.lineTo(hw * 0.25, hh * 0.5); q.closePath(); }, '#c9a24a', hw * 0.6, 0, hh, NOSPEC);
+    S(ctx, rgba('#6b3f1f', 0.8), 1); ctx.beginPath(); for (let i = -2; i <= 2; i++) { ctx.moveTo(hw * 0.35, i * hh * 0.2); ctx.lineTo(hw, i * hh * 0.45); } ctx.stroke();
+    line(ctx, hw * 0.28, -hh * 0.55, hw * 0.28, hh * 0.55, SEA_PU, 2.5);
+  };
+  SEA_SIL.skull_candle = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    IA.skull(ctx, w * 0.95, h * 0.72, '#f1e9d6', INK);
+    tone(ctx, q => rrect(q, -hw * 0.22, -hh, hw * 0.44, hh * 0.5, 2), '#fff8ec', 0, -hh * 0.75, hw * 0.2, NOSPEC);
+    F(ctx, '#fff8ec'); ctx.beginPath(); ell(ctx, -hw * 0.3, -hh * 0.52, 2.2, 3.5, 0); ell(ctx, hw * 0.28, -hh * 0.46, 2, 4, 0); ctx.fill();
+    tone(ctx, q => { q.moveTo(0, -hh * 1.42); q.quadraticCurveTo(hw * 0.2, -hh * 1.1, 0, -hh * 1.0); q.quadraticCurveTo(-hw * 0.2, -hh * 1.1, 0, -hh * 1.42); q.closePath(); }, '#ffb347', 0, -hh * 1.15, 4, { ol: 1.2, spec: false });
+  };
+
+  for (const k in SEA_SIL) Object.defineProperty(POL_SIL, k, { value: SEA_SIL[k], enumerable: false, configurable: true, writable: true });
+
+  const SEA_R = { SIL: SEA_SIL, prop: seaProp, pumpkin: seaPumpkin, bat: seaBat, web: seaWeb, moon: seaMoon, snow: seaSnow, fog: seaFog, title: seaTitle, map: seaMap, sky: seaSky,
+    cab: seaCab, costume: seaCostume, hat: seaHatDraw, treat: seaTreatIcon, door: seaDoor, coin: seaCoin, framePat: seaFramePat, panelPat: seaPanelPat,
+    trailMark: seaTrailMark, ids: ['halloween', 'winter'] };
+  /* ============================================================ end SEASON */
+
   return {
+    // SEASON (round 7): the seasonal overlays, costumes, the Pumpkin King, the door scene, the event cosmetics
+    sea: SEA_R,
+    // EVOLVE (round 7): evolved item art, the evolution ceremony, the pet synergy badge
+    evo: EVO_R,
     // SETS (round 6): the boon draft's machine, the Compactor's press
     boonBack, cmpScene, sets: SETS_R,
     item, itemFx, shard, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, clawHead, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
