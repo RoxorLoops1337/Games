@@ -118,6 +118,10 @@ const ART = (() => {
     for (const d of SD.SEA_ENEMIES || []) { const e = enemies[d.id] || d, sz = enemySize(e, e.art); add('enemy', d.id, sz, genFor(sz[0], sz[1], 512)); }
     for (const r of SD.SEA_RELICS || []) add('relic', r.id, [32, 32], [256, 256]);
     add('hex', 'treat', [36, 36], [256, 256]);
+    // STORY (round 8): the story vignettes, the rival's tile, the Plushie Queen's plush and the Conveyor King's crate (non-enumerable in DATA)
+    for (const id of SD.STORY_IDS || []) add('event', id, [240, 160], [768, 512]);
+    add('hex', 'rival', [36, 36], [256, 256]);
+    for (const id of ['sto_plush', 'sto_crate']) { const d = items[id]; if (d) { const sz = shapeBox(d.shape); add('itemId', id, sz, genFor(sz[0], sz[1], 512)); } }
     const chars = Object.keys(tbl('CHARACTERS'));
     for (const id of chars.length ? chars : CHARS0) add('portrait', id, [96, 96], [512, 512]);
     for (const id in tbl('RELICS')) add('relic', id, [32, 32], [256, 256]);

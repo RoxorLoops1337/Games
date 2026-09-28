@@ -264,11 +264,12 @@ const GAME = (() => {
   }
   function polBannerBox(grabsW, str, kind) {
     const gw = U.clamp(+grabsW || 0, POL_BAN.minW, POL_BAN.maxW);
-    const x0 = POL_BAN.left, x1 = W - POL_BAN.pad - gw - POL_BAN.gap;
+    const pad = POL_BAN.pad + (S.cr8Row ? 54 : 0);   // (CR8: the pill steps aside for Mama Mech's turret)
+    const x0 = POL_BAN.left, x1 = W - pad - gw - POL_BAN.gap;
     const big = kind === 'victory' ? 46 : 34, n = Math.max(1, String(str == null ? '' : str).length);
     // a glyph is about k x size wide (letter spacing included), plus the 24 px of the span's own padding
     const size = Math.max(16, Math.min(big, (x1 - x0 - 24) / (n * POL_BAN.k)));
-    return { x0, x1, size, big, grabsX0: W - POL_BAN.pad - gw, y0: 338 - 30, y1: 338 - 30 + 100 };
+    return { x0, x1, size, big, grabsX0: W - pad - gw, y0: 338 - 30, y1: 338 - 30 + 100 };
   }
   function bannerOff(a, quick) {
     const el = $('banner');
@@ -618,6 +619,8 @@ const GAME = (() => {
           secMetaFix(S.meta, o);   // SECRET: golden keys found, back rooms entered, true endings seen
           seaMetaFix(S.meta, o);   // SEASON: the event preview, the season wallets, doors knocked
           evoMetaFix(S.meta, o);   // EVOLVE: evolutions found, pet synergies set off
+          stoMetaFix(S.meta, o);   // STORY: Grabby Gary's record, stories told
+          hisMetaFix(S.meta, o);   // HISTORY: the run records and the Hall of Fame
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -625,6 +628,7 @@ const GAME = (() => {
     endlessMetaFix(S.meta);
     feelFix(S.meta);
     vaultFix(S.meta);   // defaults, sticker prizes, and the equipped cosmetics to the renderer (VAULT block)
+    stoMetaFix(S.meta);   // Grabby Gary's record and the stories told, defaulted for a new profile (STORY)
     if (fx()) fx().reduced = !S.meta.settings.shake;
     applyCalm();
     accApply();   // the accessibility settings, volumes and palettes (ACCESS block)
@@ -702,6 +706,7 @@ const GAME = (() => {
       lootRun(run);   // tickets, pity, banked capsules, highlights: defaults for older saves
       endlessRunFix(run);   // mutators, the Endless loop, score counters (ENDLESS block)
       petRunFix(run);   // the companion pet (PETS block)
+      stoRunFix(run);   // stories, callbacks, Gary (STORY; a save from before has Gary off)
       S.rolls = null;
       S.sd = o.sd || null;
       S.after = o.after || null;
@@ -732,6 +737,7 @@ const GAME = (() => {
       else if (sc === 'boon' && run.boon) showBoon();   // SETS: the boon draft (a pick already made moves on)
       else if (sc === 'compactor' && S.sd && S.sd.compactor) cmpShow(S.sd.compactor);   // SETS: the Compactor
       else if (sc === 'sea' && S.sd && S.sd.sea) seaShow(S.sd.sea);   // SEASON: a trick-or-treat door
+      else if (sc === 'rival' && S.sd && S.sd.rival) stoRivalShow(S.sd.rival);   // STORY: Grabby Gary
       else if (sc === 'win' && run.winDone && !run.endless) showWin();   // ENDLESS: the offer is still open
       else toMap();
       return true;
@@ -744,6 +750,7 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- run
   function newRun(charId, seed) {
+    hisQuit();   // HISTORY: the run in progress (after a fight) goes on record as abandoned
     charId = charId || 'knight';
     const c = charDef(charId) || { id: charId, hp: 70, gold: 60, bin: [], claw: {}, relic: null };
     if (seed == null) seed = (Date.now() ^ (Math.floor((typeof performance !== 'undefined' ? performance.now() : 0) * 1000))) >>> 0;
@@ -759,6 +766,8 @@ const GAME = (() => {
     metaNewRun(run);   // Tilt level, daily flag, Tilt junk and bulbs (META block)
     endlessNewRun(run);   // the run's mutators (ENDLESS block)
     seaNewRun(run);   // the season the run starts in, kept for good (SEASON block)
+    stoNewRun(run);   // stories, callbacks, Gary on or off (STORY)
+    hisNewRun(run);   // the run's own id for its history record (HISTORY block)
     S.run = run;
     lootRun(run);
     S.tix = null; S.pay = null; S.cap = null;
@@ -778,6 +787,7 @@ const GAME = (() => {
     run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes });
     secNewMap(run);   // this act's golden key (SECRET)
     seaNewMap(run);   // trick-or-treat doors in season (SEASON)
+    stoNewMap(run);   // Grabby Gary's tile, a Card Shark on the hunt (STORY)
     run.floor = 0;
     S.brushSel = null;
     S.preview = null;
@@ -928,7 +938,7 @@ const GAME = (() => {
     else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward' || name === 'capsule' || name === 'counter' || name === 'arcade') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
-    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault'].indexOf(name) < 0) save();
+    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault', 'history'].indexOf(name) < 0) save();
   }
 
   // ---- title
@@ -959,6 +969,7 @@ const GAME = (() => {
     row2.appendChild(btn('⚙ Settings', () => accOpen(), 'sm accTitleBtn'));
     m.appendChild(row2);
     metaTitle(m);   // the stats marquee and the attract mode (META block)
+    hisTitleBtn(row);   // HISTORY: registered last, shown in the first row
   }
 
   // ---- intro cinematic (js/intro.js). The first launch plays it once;
@@ -1048,7 +1059,8 @@ const GAME = (() => {
       if (!X.RENDER || !X.RENDER.claw || !X.PHYS || !X.PHYS.clawPose) return;
       // drawn in a 100 x 100 box scaled to the chip
       ctx.scale(p / 100, p / 100);
-      const pose = X.PHYS.clawPose(id, { x: 50, y: id === 'magnet' ? 50 : 38, open: 0.75, cable: 40, width: 1 });
+      // (CR8: the vacuum's canister rides above its nozzle, so its nozzle sits low and small)
+      const pose = X.PHYS.clawPose(id, { x: 50, y: id === 'magnet' ? 50 : id === 'vacuum' ? 80 : 38, open: 0.75, cable: id === 'vacuum' ? 70 : 40, width: id === 'vacuum' ? 0.8 : 1, fill: id === 'vacuum' ? 0.67 : 0 });
       X.RENDER.claw(ctx, pose, 0, 0, { juice: { t: 0.4, mood: 'happy' } });
     });
   }
@@ -1115,12 +1127,15 @@ const GAME = (() => {
     hand: ['tower_shield', 'prize_marble', 'crisp_apple', 'war_hammer', 'glass_bead'],
     magnet: ['rusty_sword', 'lucky_coin', 'iron_nut', 'bubble_flask', 'crisp_apple', 'skeleton_key', 'pot_lid'],
     hook: ['rusty_sword', 'crisp_apple', 'dented_shield', 'prize_marble', 'bubble_flask', 'lucky_coin'],
+    // CR8: small light things for the vacuum (and a sword that will not come), pairs for the twins
+    vacuum: ['prize_marble', 'glass_bead', 'peppermint', 'lucky_penny', 'sour_drop', 'bouncy_ball', 'rusty_sword', 'prize_marble'],
+    twin: ['prize_marble', 'crisp_apple', 'glass_bead', 'peppermint', 'lucky_coin', 'prize_marble', 'bouncy_ball'],
   };
   function clawDemoBuild(id) {
     const P = X.PHYS;
     const Wd = P.world({ gravity: { x: 0, y: GRAVITY }, w: DEMO.w, h: DEMO.h });
     const C = P.cabinet(Wd, { w: DEMO.w, h: DEMO.h, chuteW: DEMO.chuteW, dividerH: 0.45 });
-    const rig = P.clawRig(Wd, { cabinet: C, type: id, grip: 1.1, width: 1, rand: U.rng(0xC1A0 + id.length) });
+    const rig = P.clawRig(Wd, { cabinet: C, type: id, grip: 1.1, width: id === 'vacuum' ? 0.72 : 1, rand: U.rng(0xC1A0 + id.length) });   // (CR8: a smaller vacuum fits the little cabinet)
     const D = { id, W: Wd, C, rig, t: 0, wait: 0.9, rng: U.rng(0xDE30 + id.length), spawn: [] };
     for (const iid of (DEMO_PILE[id] || DEMO_PILE.classic)) {
       const def = tbl('ITEMS')[iid];
@@ -1174,7 +1189,7 @@ const GAME = (() => {
     const st = { t, act: 1, party: 0 };
     if (R.cabinetBack) R.cabinetBack(ctx, DEMO.ox, DEMO.oy, cfg, st);
     ctx.save(); ctx.beginPath(); ctx.rect(DEMO.ox, DEMO.oy, DEMO.w, DEMO.h); ctx.clip();
-    for (const b of D.W.bodies) if (b.type === 'dynamic' && R.item) R.item(ctx, b.data.def, DEMO.ox + b.x, DEMO.oy + b.y, b.a, 1, {});
+    for (const b of D.W.bodies) if (b.type === 'dynamic' && R.item) R.item(ctx, b.data.def, DEMO.ox + b.x, DEMO.oy + b.y, b.a, b.tubeK || 1, {});   // (CR8: shrunk in the vacuum's canister)
     const r = D.rig, busy = r.phase !== 'idle' && r.phase !== 'moving';
     DEMO_J.t = t; DEMO_J.mood = busy && r.locked().length ? 'happy' : busy ? 'focus' : '';
     DEMO_J.idle = busy ? 0 : 1;
@@ -3320,6 +3335,7 @@ const GAME = (() => {
     gear.title = 'Settings';
     gear.setAttribute('aria-label', 'Settings');
     l2.appendChild(gear);
+    hisMapCam(l2);   // HISTORY: photo mode (registered after the head's own buttons)
     head.appendChild(l2);
     refreshHud(true);
   }
@@ -3431,6 +3447,7 @@ const GAME = (() => {
     S.camTo = null;
   }
   function wheel(x, y, deltaY) {
+    if (hisPhotoWheel(x, y, deltaY)) return;   // HISTORY: photo mode zooms its own camera
     if (S.screen !== 'map') return;
     zoomAt(x, y, Math.exp(-(deltaY || 0) * 0.0012));
   }
@@ -3849,6 +3866,7 @@ const GAME = (() => {
     if (t.done) { if (!(S.walk && !S.walk.done && S.walk.i < S.walk.path.length)) toast('Already cleared.'); save(); return; }
     const finish = () => { t.done = true; };
     if (t.type === 'treat' && seaEnterTile(t)) return;   // a trick-or-treat door (SEASON)
+    if (t.type === 'rival' && stoRivalTile(t)) return;   // Grabby Gary (STORY)
     switch (t.type) {
       case 'fight': case 'elite': {
         finish();
@@ -3910,6 +3928,7 @@ const GAME = (() => {
       }
       case 'event': {
         finish();
+        if (stoEventTile(t)) return;   // a story, or the next part of one (STORY)
         const id = pickEvent(c.event);
         if (id) { showEvent({ id }); return; }
         toast('Whatever was here has moved on.');
@@ -3969,9 +3988,11 @@ const GAME = (() => {
     tier = tier || 'normal';
     enemyIds = mutEnemies(enemyIds, tier, opts);   // Double Trouble (ENDLESS block)
     enemyIds = seaEnemies(enemyIds, tier, opts);   // costumes and the season's elite (SEASON block)
+    [enemyIds, tier] = stoFightIds(enemyIds, tier, opts);   // the act's alternate boss, a hunting Card Shark is an elite (STORY)
     const seed = opts.seed != null ? opts.seed : U.hashStr(run.seed + ':fight:' + run.act + ':' + run.floor + ':' + (run.nonce = (run.nonce || 0) + 1));
     F = X.COMBAT.newFight(run, enemyIds, U.rng(seed));
     seaDress(F, seed, opts);   // party hats in season (SEASON block)
+    stoFightStart(F, tier, opts, seed);   // a friend from a story, a sabotaged boss, Gary's gear (STORY)
     FS = {
       start: { enemyIds, tier, seed, then: opts.then || null }, tier, seed, rng: U.rng(seed ^ 0x5bd1e995),
       world: null, cabinet: null, rig: null, items: [], spawnQ: [], spawnT: 0,
@@ -4023,6 +4044,7 @@ const GAME = (() => {
     FS.items = [];
     FS.debris = [];
     mutWorld();   // Magnet Storm, Conveyor Belt (ENDLESS block)
+    stoWorld();   // the Conveyor King's belt (STORY)
   }
   function buildRig() {
     const P = X.PHYS;
@@ -4204,7 +4226,7 @@ const GAME = (() => {
     const pvx = d.pvx == null ? b.vx : d.pvx, pvy = d.pvy == null ? b.vy : d.pvy;
     d.pvx = b.vx;
     if (b.held > 0) d.clawG = FS.grabN;
-    if (!m) return;
+    if (!m || b.tube) return;   // (CR8: riding up the vacuum's hose is not a landing)
     d.age += dt;
     if (d.cd > 0) d.cd -= dt;
     if (d.crackCd > 0) d.crackCd -= dt;
@@ -4560,6 +4582,175 @@ const GAME = (() => {
     return up;
   }
   // ================================================================ /CONTENT
+
+  // ================================================================ CR8 (round 8)
+  /* Mama Mech and two new claws (DESIGN.md "Mama Mech and two new claws
+     (round 8)"). The scrap turret on the cabinet's top right corner: COMBAT
+     builds and fires it ({t:'turret'} events: a part, a new level, a shot,
+     an overclock), this shows it (parts fly up from the chute, the dome
+     grows, the barrel swings to the target and recoils, bolts streak to the
+     enemy), the player row steps aside for it. And the juice of the two new
+     claws: the vacuum's roar, slurps up the hose, a clog, the blow at the
+     chute; the twin claws' servo and their double clack. */
+  const CR8T = { x: CAB.x + CAB.w - 5, y: CAB.y - 12, k: 1.7, zone: [474, 328, 540, 414], shot: 0.16, beat: 0.12 };
+  function cr8S() {
+    return FS.cr8 || (FS.cr8 = { lv: 0, parts: 0, need: 2, fire: 0, up: 0, aim: -2.3, mood: '', moodT: 0, spin: 0, bolts: [], quick: 0, fired: 0 });
+  }
+  // Where a shot aims: the enemy at idx (or the middle of the pack).
+  function cr8Aim(idx) {
+    if (!F) return { x: 270, y: 200 };
+    const i = idx != null && idx >= 0 && F.enemies[idx] ? idx : (F.enemies[F.target] && F.enemies[F.target].alive ? F.target : F.enemies.findIndex((e) => e.alive));
+    if (i < 0 || idx === -1) return { x: 270, y: 200 };
+    const p = enemyPos(i);
+    return { x: p.x, y: p.y - p.h * 0.5 };
+  }
+  // A {t:'turret'} event plays out on the frame.
+  function cr8TurretEv(ev) {
+    const T = cr8S(), X0 = CR8T.x, Y0 = CR8T.y - 9 * CR8T.k;
+    if (ev.k === 'part') {
+      T.parts = ev.parts | 0; T.lv = ev.lv | 0; T.need = ev.need | 0;
+      // the parts fly from the chute up to the turret
+      const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW / 2;
+      for (let i = 0; i < Math.min(3, ev.n | 0); i++) fx().fly(cx, CAB.y + CAB.h - 40, X0, Y0, { kind: 'star', col: '#cfd6df', dur: 0.36 + i * 0.05, delay: i * 0.05, arc: 80, size: 5 });
+      fx().text(X0 - 18, Y0 - 34, '+' + (ev.n | 0) + ' PART' + ((ev.n | 0) > 1 ? 'S' : ''), '#ffc94d', { size: 13, life: 0.8 });
+      snd('turBuild', { pitch: 0.9 + Math.min(16, T.parts) * 0.03 });
+      T.mood = 'happy'; T.moodT = 0.7;
+    } else if (ev.k === 'up') {
+      T.lv = ev.lv | 0; T.up = 1;
+      const names = (tbl('CR8') && tbl('CR8').TUR_NAMES) || [];
+      fx().text(X0 - 120, Y0 - 58, 'TURRET LV ' + T.lv + (names[T.lv] ? ': ' + names[T.lv].toUpperCase() : ''), '#ff8a2e', { size: T.lv >= 5 ? 20 : 16, life: 1.3, dy: -30 });
+      fx().emit('sparks', X0, Y0, { n: 1.2 });
+      fx().ring(X0, Y0, '#ff8a2e', { r0: 6, r1: 40 + T.lv * 6, w: 4, life: 0.4 });
+      if (T.lv >= 5) { fx().emit('confetti', X0, Y0, { n: 0.6, power: 0.8 }); fx().shake(5); FS.party = Math.max(FS.party, 0.8); FS.marquee = 'MEGA MECH!'; }
+      snd('turUp', { lv: T.lv }); haptic('clamp');
+    } else if (ev.k === 'fire' || ev.k === 'over') {
+      const p = cr8Aim(ev.all ? -1 : ev.idx);
+      T.aim = Math.atan2(p.y - Y0, p.x - X0);
+      T.fire = 1; T.fired++; T.quick = 3;
+      const L = (12 + Math.max(1, T.lv) * 2.4) * CR8T.k;
+      T.bolts.push({ x0: X0 + Math.cos(T.aim) * L, y0: Y0 + Math.sin(T.aim) * L, x1: p.x, y1: p.y, t: 0, lv: T.lv, all: !!ev.all });
+      if (T.bolts.length > 8) T.bolts.shift();
+      snd(ev.all ? 'turMega' : 'turFire', { lv: T.lv });
+      fx().emit('sparks', X0 + Math.cos(T.aim) * L, Y0 + Math.sin(T.aim) * L, { n: 0.4, dir: T.aim });
+      if (ev.k === 'over') fx().text(X0 - 40, Y0 - 50, 'OVERCLOCK!', '#ffe066', { size: 15, life: 0.8 });
+      if (ev.all) { fx().shake(8); if (!fx().reduced) fx().flash('#ff8a2e', 0.18); }
+      T.mood = 'happy'; T.moodT = 0.4;
+    }
+  }
+  // The beat after a turret event: parts and shots are quick, and so are the hits a shot causes.
+  function cr8Beat(q) {
+    const ev = q.ev, T = FS.cr8;
+    if (ev && ev.t === 'turret') return ev.k === 'up' ? Math.min(q.beat, 0.5) : ev.k === 'part' ? Math.min(q.beat, PROC_BEAT) : Math.min(q.beat, CR8T.shot);
+    if (T && T.quick > 0) { T.quick--; if (ev && (ev.t === 'dmg' || ev.t === 'text' || ev.t === 'status' || ev.t === 'proc' || ev.t === 'block')) return Math.min(q.beat, CR8T.beat); T.quick = 0; }
+    return q.beat;
+  }
+  // Per frame: recoil, the level-up pop and the gatling spin wear off, the
+  // barrel drifts to the target, the bolts fly, and the shown turret settles
+  // on COMBAT's once nothing is queued (a reload, a test driving COMBAT).
+  function cr8Tick(dt) {
+    cr8RowPad();
+    if (S.screen !== 'fight' || !F || !FS || !F.tur) return;
+    const T = cr8S();
+    T.fire = Math.max(0, T.fire - dt * 5); T.up = Math.max(0, T.up - dt * 1.3);
+    T.spin += dt * (T.lv >= 4 ? 3 + T.fire * 24 : 0);
+    if (T.moodT > 0) { T.moodT -= dt; if (T.moodT <= 0) { T.moodT = 0; T.mood = ''; } }
+    if (T.fire <= 0.05 && T.lv > 0) {
+      const p = cr8Aim(null), a = Math.atan2(p.y - (CR8T.y - 9 * CR8T.k), p.x - CR8T.x);
+      T.aim += (a - T.aim) * Math.min(1, dt * 3);
+    }
+    if (!FS.queue.length) {
+      T.parts = F.tur.parts | 0; T.lv = F.tur.lv | 0;
+      const need = (X.COMBAT.TUR && X.COMBAT.TUR.need) || [0, 2, 4, 7, 11, 16];
+      T.need = T.lv < need.length - 1 ? need[T.lv + 1] : need[need.length - 1];
+    }
+    for (let i = T.bolts.length - 1; i >= 0; i--) {
+      const b = T.bolts[i];
+      b.t += dt / CR8T.shot;
+      if (b.t >= 1) {
+        T.bolts.splice(i, 1);
+        fx().emit(b.all ? 'burn' : 'sparks', b.x1, b.y1, { n: b.all ? 1.2 : 0.6 });
+        if (b.all) fx().ring(b.x1, b.y1, '#ff8a2e', { r0: 10, r1: 110, w: 6, life: 0.4 });
+      }
+    }
+  }
+  // The player row leaves the frame's right corner to the turret; labels keep off it.
+  function cr8RowPad() {
+    const on = !!(S.screen === 'fight' && F && F.tur);
+    if (S.cr8Row === on) return;
+    S.cr8Row = on;
+    const pr = $('playerRow');
+    if (pr && pr.classList) pr.classList[on ? 'add' : 'remove']('cr8Tur');
+    try { const z = CR8T.zone; if (on) fx().zone('turret', z[0], z[1], z[2], z[3]); else fx().zone('turret'); } catch (e) { /* no layout */ }
+  }
+  const CR8_ST = { lv: 0, parts: 0, need: 2, t: 0, aim: -2.3, fire: 0, up: 0, spin: 0, mood: '' };
+  function cr8Draw(ctx, t) {
+    const R = X.RENDER;
+    if (!R || !R.cr8 || !F || !F.tur || !FS) return;
+    const T = cr8S();
+    for (const b of T.bolts) R.cr8.bolt(ctx, b.x0, b.y0, b.x1, b.y1, Math.min(1, b.t), b.lv);
+    CR8_ST.lv = T.lv; CR8_ST.parts = T.parts; CR8_ST.need = T.need; CR8_ST.t = t; CR8_ST.aim = T.aim;
+    CR8_ST.fire = fx().reduced ? Math.min(0.6, T.fire) : T.fire; CR8_ST.up = fx().reduced ? 0 : T.up; CR8_ST.spin = T.spin; CR8_ST.mood = T.mood; CR8_ST.k = CR8T.k;
+    R.cr8.turret(ctx, CR8T.x, CR8T.y, CR8_ST);
+  }
+  /* The two new claws' juice (called from clawTypeEvent). Returns true when
+     it replaces the default handling of the event (never for a release or
+     home: the delivery watch rides on those). */
+  function cr8ClawEvent(ev, r, cj, x, y, reach) {
+    if (r.type === 'vacuum') {
+      const V = r.vac, my = CAB.y + (V ? V.mouthY : r.y + 10);
+      if (ev === 'drop') { snd('vacWhoosh', { pitch: 0.8, vol: 0.6 }); return false; }
+      if (ev === 'touch' || ev === 'close') {
+        if (ev === 'close') { snd('vacWhoosh'); haptic('clamp'); cj.sq = 0.5; }
+        fx().ring(x, my + 6, '#bfe8ff', { r0: 6, r1: 38, w: 3, life: 0.3 });
+        fx().emit('dust', x, my + 14, { power: 0.5, n: 0.6 });
+        return true;
+      }
+      if (ev === 'suck') {
+        const n = r.tube ? r.tube().length : 1;
+        snd('vacSlurp', { pitch: 0.85 + n * 0.12 });
+        fx().trail(x, my - 10, '#e8f8ff', { vx: 0, vy: -420, life: 0.18, w: 4 });
+        if (n >= 2) fx().text(x + 34, my - 30, 'SLURP x' + n, '#bfe8ff', { size: 14, life: 0.7 });
+        setMood('happy', 1.2);
+        return true;
+      }
+      if (ev === 'full') { fx().text(x, my - 70, 'FULL!', '#a6ff5e', { size: 16, life: 0.9 }); snd('ding', { pitch: 1.2 }); return true; }
+      if (ev === 'clog') {
+        snd('vacClog'); haptic('hurt');
+        fx().text(x, my + 26, 'CLOGGED!', '#ff5a4a', { size: 18, life: 1.1 });
+        fx().emit('smoke', x, my - 10, { n: 0.6 });
+        fx().shake(3); setMood('sad', 1.6);
+        return true;
+      }
+      if (ev === 'unclog') { fx().emit('smoke', x, my, { n: 0.4 }); snd('vacBlow', { pitch: 0.8 }); return true; }
+      if (ev === 'blow') { snd('vacBlow'); fx().emit('smoke', x, my + 8, { n: 0.5 }); fx().ring(x, my + 8, '#e8f8ff', { r0: 4, r1: 30, w: 3, life: 0.25 }); return true; }
+      return false;
+    }
+    if (r.type === 'twin') {
+      const H = r.bodies && r.bodies.twin;
+      if (ev === 'drop') { snd('twinSeek'); return false; }
+      if (ev === 'close') {
+        snd('clawClose', { pitch: 1.3 }); snd('twinClick'); haptic('clamp');
+        for (let i = 0; H && i < 2; i++) {
+          const hx = CAB.x + H[i].x, hy = CAB.y + H[i].y + reach * 0.45;
+          fx().ring(hx, hy, i ? PAL_CR8.cyan : PAL_CR8.pink, { r0: 3, r1: 24, w: 2.5, life: 0.22 });
+          fx().emit('sparks', hx, hy, { n: 0.4 });
+        }
+        cj.sq = 0.6; cj.glow = 0.6;
+        return true;
+      }
+      if (ev === 'touch' && H) {
+        const i = H[0].y >= H[1].y ? 0 : 1;
+        snd('clawTouch', { pitch: 1.3 });
+        fx().emit('dust', CAB.x + H[i].x, CAB.y + H[i].y + reach * 0.4, { power: 0.4 });
+        cj.sq = 0.6;
+        return true;
+      }
+      return false;
+    }
+    return false;
+  }
+  const PAL_CR8 = { pink: '#ff2e88', cyan: '#2ee6d6' };
+  // ================================================================ /CR8
   // Lucky Claw: two grabs in a row that deliver make the next one grip harder.
   function luckAfterGrab() {
     if (FS.luckyOn) {
@@ -4682,6 +4873,7 @@ const GAME = (() => {
   function applyEvent(ev) {
     if (!F || !ev) return;
     metaEvent(ev);   // Prizedex sightings and sticker checks, read only (META block)
+    hisEvent(ev);   // the death recap books every hit on you to its source (HISTORY block)
     feelEvent(ev);   // tip cards for things met for the first time (FEEL block)
     petEvent(ev);   // the pet reacts (PETS block)
     seaEvent(ev);   // Candy Corn pays candy, the Witch Broom sweeps (SEASON block)
@@ -4825,6 +5017,7 @@ const GAME = (() => {
         break;
       }
       case 'boss': bossEvent(ev); break;
+      case 'sto': stoFightEvent(ev); break;   // a friend's cameo, a sabotage (STORY)
       case 'intent': if (FS.enemyTurn && FS.actor === ev.idx) nextActor(); break;
       case 'text': {
         fx().text(pos.x, pos.y, ev.str, '#ffc94d');
@@ -4874,6 +5067,7 @@ const GAME = (() => {
       case 'turn': if (ev.n > 1) banner('TURN ' + ev.n, 'turn', 0.9); break;
       case 'proc': procFx(ev, base, enemy); break;
       case 'luck': luckFx(ev); break;   // Lucky Lou's cash out (CONTENT block)
+      case 'turret': cr8TurretEv(ev); break;   // Mama Mech's turret (CR8 block)
       case 'combo': queueCombo(ev); break;
       case 'over': break;
       default: break;
@@ -5797,6 +5991,7 @@ const GAME = (() => {
   // ---- signature events ({t:'boss', k, idx, ...} from COMBAT)
   function bossEvent(ev) {
     if (secBossEvent(ev)) return;   // The Machine's cabinet events (SECRET)
+    if (stoBossEvent(ev)) return;   // the alternate bosses' plushies, belt and ice block (STORY)
     const bs = BS(), reduced = !!fx().reduced;
     const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
     const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
@@ -6136,6 +6331,8 @@ const GAME = (() => {
     const bs = FS.bs;
     const sl = secSign();   // The Machine's cabinet events hold the sign (SECRET)
     if (sl) return sl;
+    const so = stoSign();   // the belt, the plush shield, the ice block (STORY)
+    if (so) return so;
     if (F.rigged || (bs && bs.hj)) return ['RIGGED', 'rig'];
     if (F.ice) return [F.ice.part === 'rail' ? 'RAIL FROZEN' : 'CHUTE FROZEN', 'ice'];
     if (F.heat) return ['HOT METAL', 'heat'];
@@ -6624,6 +6821,7 @@ const GAME = (() => {
     const r = FS.rig, cj = FS.claw, type = r ? r.type : 'classic';
     if (!r || type === 'classic') return false;
     const x = CAB.x + r.x, y = CAB.y + r.y, reach = r.geo ? r.geo.reach : 40;
+    if (type === 'vacuum' || type === 'twin') return cr8ClawEvent(ev, r, cj, x, y, reach);   // CR8: the vacuum and the twin claws
     if (type === 'magnet') {
       if (ev === 'drop') { snd('magHum'); return false; }
       if (ev === 'close') {
@@ -6799,6 +6997,7 @@ const GAME = (() => {
     bestTurnEnd();   // the tickle, the goo and the magnetic lid wear off (BESTIARY)
     FS.actors = F.enemies.map((e, i) => (e.alive ? i : -1)).filter((i) => i >= 0);
     FS.actor = FS.actors.length ? FS.actors[0] : -1;
+    hisTurnEnd();   // HISTORY: the recap's snapshot of the telegraphs and your Block
     const evs = X.COMBAT.endTurn(F);
     enqueue(evs, BEAT);
     FS.onDrain = finishEnemyTurn;
@@ -6846,6 +7045,7 @@ const GAME = (() => {
     petFightEnd(result, tier);   // pet XP for a win (PETS block)
     setFightEnd(result);   // the boon's warm-up grabs run out, Chew Toy xp (SETS block)
     seaFightEnd(result, tier);   // the season's currency for a win (SEASON block)
+    stoFightEnd(result);   // Gary's showdown on his record (STORY)
     hint('');
     if (result === 'lose') {
       run.killer = FS.killer || 'the Clawspire';
@@ -6870,6 +7070,7 @@ const GAME = (() => {
     lootReward(reward);   // payout lines, tickets, the lucky double, capsules, highlights
     arcRoamBounty(reward, then);   // ARCADE: a roaming monster drops a bounty capsule
     secFightWin(reward, then);   // ...and maybe the golden key it swallowed (SECRET)
+    stoReward(reward);   // Gary and the Card Shark leave a capsule (STORY)
     if (outro) {
       // a veteran (OUTRO_FAST fights on the profile) gets the quick version
       FS.outro = { t: fx().reduced ? 0.7 : quickOutro() ? 1.0 : 1.5, reward };
@@ -6989,7 +7190,7 @@ const GAME = (() => {
         const q = FS.queue.shift();
         applyEvent(q.ev);
         // a proc is a flourish, not a beat: a relic-heavy grab can emit dozens
-        FS.beatT = q.ev && q.ev.t === 'proc' ? Math.min(q.beat, PROC_BEAT) : q.beat;
+        FS.beatT = q.ev && q.ev.t === 'proc' ? Math.min(q.beat, PROC_BEAT) : cr8Beat(q);   // (CR8: the turret's shots are quick)
       }
       // The next beat is a hit on the player: the actor winds up during this one.
       if (FS.enemyTurn && FS.actor >= 0 && FS.queue.length) {
@@ -10033,7 +10234,7 @@ const GAME = (() => {
   // The octopus: on a lift it rides the claw and holds the likeliest slipper tight.
   function petHoldStart(P) {
     const rig = FS.rig;
-    const cargo = carried().filter((b) => b.data && b.data.inst);
+    const cargo = carried().filter((b) => b.data && b.data.inst && !b.tube);   // (CR8: nothing to hold inside the vacuum's canister)
     if (!rig || !cargo.length || !FS.world) return false;
     let b = cargo[0];
     for (const c of cargo) if (c.y > b.y) b = c;
@@ -11605,6 +11806,7 @@ const GAME = (() => {
     const sold = S.justSold; S.justSold = null;
     feelShopScene(b, shop);   // the neon SHOP sign and Chester the shopkeeper (FEEL block)
     secShopNote(b, shop);   // the Back Room's service counter (SECRET)
+    stoShop(b, shop);   // Vendy runs this shop now: a gift, once (STORY)
     const top = h('div', 'row');
     const goldTag = h('span', 'tag gold big', `${run.gold} gold`);
     goldTag.id = 'shopGold';
@@ -12719,6 +12921,860 @@ const GAME = (() => {
   }
   // ================================================================ /EVOLVE
 
+  // ================================================================ HISTORY (round 8)
+  /* Run history, the death recap and photo mode (DESIGN.md "Run history,
+     the death recap and photo mode (round 8)"), reached through one-line
+     hooks. Pure data (records, the cap, the Hall of Fame, filters, charts,
+     the map packing, the recap's words) is DATA's HISTORY block; the art is
+     RENDER.his.
+     - History: every finished run (a win, a loss, an Endless end, a run
+       abandoned for a new one after at least one fight) leaves a compact
+       record on meta.his. The title's History button lists the run cards
+       (filters by crawler and result, Recent or Hall of Fame, the lifetime
+       charts); a card opens the run: the final bin, relics, the act's map and
+       Share (the share card, drawn from the record).
+     - The recap: a fight keeps a log of its enemy turns (hisTurnEnd before
+       COMBAT.endTurn snapshots the telegraphs, hisEvent at the top of
+       applyEvent books every hit on you); a game over opens with what killed
+       you, the last five turns and one or two tips. A tap goes on.
+     - Photo mode: a camera button on the fight's control row and the map
+       head. It freezes the game (update() returns at once, so nothing
+       advances), hides the HUD and draws the frozen scene through a camera
+       (drag, pinch, wheel, +/-), a filter and a frame; Save PNG shares or
+       downloads it. Leaving resumes on the very same frame. */
+  const HIS_UI = {
+    RES: [['all', 'All'], ['win', 'Wins'], ['loss', 'Losses'], ['endless', 'Endless'], ['quit', 'Quit']],
+    WORD: { win: 'Victory', loss: 'K.O.', endless: 'Endless', quit: 'Quit' },
+    ARM: 0.5,   // s before a tap can put the recap away (a tap meant for the fight must not skip it)
+  };
+  const PHO = {
+    FILTERS: ['none', 'crt', 'neon', 'sepia', 'pixel'], FRAMES: ['none', 'marquee', 'polaroid', 'stickers'],
+    FNAME: { none: 'None', crt: 'CRT', neon: 'Neon', sepia: 'Sepia', pixel: 'Pixel' },
+    FRNAME: { none: 'None', marquee: 'Marquee', polaroid: 'Polaroid', stickers: 'Stickers' },
+    ZMIN: 1, ZMAX: 3, PAN: 36, STEP: 1.25, EXPORT_K: 2,
+    // the viewfinder: with the controls up the whole photo fits between the top bar and the sheet
+    VIEW: { top: 62, bot: 188 },
+  };
+  // The fight's recap log: turn snapshots (at most 8), the hit that landed last.
+  const HISR = { F: null, turns: [], cur: null, last: null, tier: 'normal', seq: 0, hid: '' };
+  SCREENS.push('history');
+  const hisDat = () => D().HIS || { CAP: 50, HOF: 10, BIN: 8, RELICS: 16, TURNS: 5 };
+
+  // ---- the profile's history
+  function hisMetaFix(m, o) {
+    if (!m) return m;
+    const src = o && typeof o === 'object' ? o.his : m.his;
+    m.his = D().hisFix ? D().hisFix(src) : { runs: [], hof: [], by: {}, n: 0 };
+    return m;
+  }
+  function hisM() {
+    if (!S.meta) S.meta = freshMeta();
+    const hh = S.meta.his;
+    if (!hh || !Array.isArray(hh.runs) || !Array.isArray(hh.hof) || !hh.by) hisMetaFix(S.meta);
+    return S.meta.his;
+  }
+  // A new run's id (the daily shares its seed with everyone, so the seed alone will not do).
+  function hisNewRun(run) {
+    let t = 0;
+    try { t = Math.floor(Date.now() / 1000); } catch (e) { t = 0; }
+    HISR.seq++;
+    run.hid = 'r' + t.toString(36) + '.' + ((run.seed >>> 0) % 1679616).toString(36) + '.' + HISR.seq.toString(36);
+  }
+  const hisIdOf = (run) => (run && typeof run.hid === 'string' && run.hid) || ('s' + (((run && run.seed) >>> 0) || 0).toString(36) + '.' + ((run && run.char) || 'x'));
+  // The record of a run (DATA's HISTORY block has the key); rc: the death recap, or null.
+  function hisBuild(run, result, rc) {
+    const won = result === 'win' || result === 'endless';
+    const L = (lootRun(run) || {}).loot || {};
+    let score = run.scoreTop | 0;
+    if (D().runScore) { try { score = Math.max(score, D().runScore(run, won).total | 0); } catch (e) { /* the best on record */ } }
+    let d = 0;
+    try { d = Math.floor(Date.now() / 1000); } catch (e) { d = 0; }
+    // the final bin: the rarest first, one of each
+    const RK = { l: 4, r: 3, u: 2, c: 1 }, seen = {}, bin = [];
+    const sorted = (run.bin || []).filter((i) => i && tbl('ITEMS')[i.id]).map((i, k) => ({ i, k }))
+      .sort((a, b) => ((RK[itemDef(b.i.id).rarity] || 0) - (RK[itemDef(a.i.id).rarity] || 0)) || ((b.i.plus ? 1 : 0) - (a.i.plus ? 1 : 0)) || a.k - b.k);
+    for (const { i } of sorted) {
+      const key = i.id + (i.plus ? '+' : '');
+      if (seen[key]) continue;
+      seen[key] = 1; bin.push(key);
+      if (bin.length >= hisDat().BIN) break;
+    }
+    const sets = [];
+    if (D().SET_IDS && D().setCount) for (const sid of D().SET_IDS) { try { if (D().setCount(run.relics || [], sid) >= 3) sets.push(sid); } catch (e) { /* skip it */ } }
+    const V = S.meta && S.meta.vault, outfit = V && V.eq && V.eq.outfit ? V.eq.outfit[run.char] : null;
+    let mode = 'classic';
+    if (D().runMode) { try { mode = D().runMode(run); } catch (e) { mode = 'classic'; } }
+    const rec = {
+      id: hisIdOf(run), d, c: run.char, cl: runClawType(run), o: outfit || '', tl: run.tilt | 0, mu: (run.muts || []).slice(),
+      se: typeof run.season === 'string' ? run.season : '', dl: typeof run.daily === 'string' ? run.daily : '',
+      m: mode, s: score, r: result, a: run.act | 0, lp: run.endless ? run.endless.loop | 0 : 0,
+      tu: run.turns | 0, kl: run.kills | 0, f: run.fights | 0, bs: (run.sc && run.sc.bosses) | 0, bh: L.bigHit | 0,
+      bc: L.bestCombo ? { n: L.bestCombo.name, t: L.bestCombo.tier } : null, jp: run.jackpots | 0, ev: run.evoN | 0, st: sets, b: bin,
+      rl: (run.relics || []).slice(0, hisDat().RELICS), mp: D().hisMapPack ? D().hisMapPack(run.map) : null,
+    };
+    if (rc) {
+      rec.k = String(rc.name || run.killer || '');
+      rec.kk = rc.kind || '';
+      if (rc.id) rec.ke = rc.id;
+      const mv = (rc.charged && rc.chargeName) || rc.mv;
+      if (mv) rec.km = mv;
+      if (rc.amt > 0) rec.kh = rc.amt;
+      if (rc.turns && rc.turns.length) rec.lt = rc.turns.map((T) => [T.dmg | 0, T.bl | 0, T.blk | 0]);
+    } else if (result === 'loss' && run.killer) rec.k = String(run.killer);
+    return rec;
+  }
+  /* A run is over: record it (once per result; a banked win that goes on
+     into Endless is updated in place). recap: the game over body, which
+     opens with the death recap. Returns DATA.hisPush's {rec, fresh, hof}. */
+  function hisRunEnd(run, result, body) {
+    if (!run || !run.char || !S.meta || !D().hisPush) return null;
+    const rc = body ? hisRecapData(run) : null;
+    let res = null;
+    try { res = D().hisPush(hisM(), hisBuild(run, result, rc)); } catch (e) { res = null; }
+    run.hisDone = result;
+    S.hisLast = res;
+    saveMeta();
+    const b = body || (result === 'win' ? $('winBody') : null);
+    if (b && res && res.fresh && res.hof > 0 && hisM().n > 1) b.appendChild(h('div', 'hisHofTag', `Hall of Fame #${res.hof}`));
+    if (body && rc) hisRecapShow(rc);
+    return res;
+  }
+  // A new run replaces the one in progress: that one was abandoned (after at least one fight).
+  function hisQuit() {
+    let run = S.run;
+    if (!run) { const o = savedRun(); run = o && o.run; }
+    if (!run || !run.char) return null;
+    const endlessOn = run.hisDone === 'win' && !!run.endless;
+    if (run.hisDone && !endlessOn) return null;
+    if (!endlessOn && !((run.fights | 0) > 0)) return null;
+    return hisRunEnd(run, endlessOn ? 'endless' : 'quit', null);
+  }
+
+  // ---- the death recap
+  function hisSync() {
+    if (HISR.F === F) return;
+    HISR.F = F; HISR.turns = []; HISR.cur = null; HISR.last = null;
+    HISR.tier = (FS && FS.tier) || 'normal';
+    HISR.hid = S.run ? hisIdOf(S.run) : '';
+  }
+  // Before the enemy phase: what every enemy is about to do (the telegraphs' own numbers) and your state.
+  function hisTurnEnd() {
+    if (!F || !F.player) return;
+    hisSync();
+    const p = F.player, C = X.COMBAT, st = p.status || {};
+    let thr = null;
+    try { thr = C && C.qaThreat ? C.qaThreat(F) : null; } catch (e) { thr = null; }
+    const en = [];
+    F.enemies.forEach((e, i) => {
+      if (!e || !e.alive) return;
+      const m = e.intent || {};
+      let q = null;
+      try { q = C && C.qaIntent ? C.qaIntent(F, e) : null; } catch (err) { q = null; }
+      en.push({ i, id: e.id, name: (e.def && e.def.name) || e.id, mv: m.name || '', k: m.k || '', ch: !!m.charged, txt: m.txt || '', hit: q ? q.hit | 0 : 0, n: q ? q.n | 0 : 0, nx: q ? q.next | 0 : 0 });
+    });
+    const T = {
+      n: F.turn | 0, hp: p.hp | 0, max: p.maxHp | 0, blk: p.block | 0, gl: Math.max(0, p.grabs | 0), burn: thr ? thr.burn | 0 : st.burn | 0, poison: st.poison | 0,
+      dmg: 0, bl: 0, hits: [], ph: 'pre', thr: thr ? { net: thr.net | 0, hp: thr.hp | 0, lethal: !!thr.lethal } : null, en,
+    };
+    HISR.turns.push(T);
+    if (HISR.turns.length > 8) HISR.turns.shift();
+    HISR.cur = T;
+  }
+  /* Every event as it plays: a hit on you is booked to its source. The enemy
+     phase runs in the engine's order: your Burn ticks first, then each enemy
+     acts (FS.actor), then lit bombs go off, then your turn starts ('turn') and
+     your Poison ticks. A hit outside the enemy phase is your own bin. */
+  function hisEvent(ev) {
+    if (!F || !ev) return;
+    hisSync();
+    const T = HISR.cur, mine = ev.who === 'p';
+    if (ev.t === 'turn') { if (T) T.ph = 'start'; return; }
+    if (ev.t !== 'dmg' || !mine) { if (T && T.ph === 'pre' && !mine && ev.t !== 'text') T.ph = 'hits'; return; }
+    const amt = Math.max(0, ev.amt | 0), bl = Math.max(0, ev.blocked | 0);
+    if (!(amt > 0 || bl > 0)) return;
+    const enemyPhase = !!(FS && FS.enemyTurn && T);
+    let src;
+    if (!enemyPhase) src = { k: 'self' };
+    else if (T.ph === 'pre' && T.burn > 0 && !bl) { src = { k: 'burn' }; T.ph = 'hits'; }
+    else if (T.ph === 'start') src = { k: T.poison > 0 ? 'poison' : 'self' };
+    else if (FS.actor >= 0) {
+      const e = T.en.find((x) => x.i === FS.actor), fe = F.enemies[FS.actor];
+      src = { k: 'hit', i: FS.actor, id: e ? e.id : fe && fe.id, name: e ? e.name : (fe && fe.def && fe.def.name) || 'a monster', mv: e ? e.mv : '', ch: !!(e && e.ch), hit: e ? e.hit : 0 };
+      T.ph = 'hits';
+    } else src = { k: 'bomb' };
+    if (enemyPhase) { T.dmg += amt; T.bl += bl; if (src.k === 'hit') T.hits.push(src.i); }
+    if (amt > 0) HISR.last = Object.assign({ amt, bl, turn: T ? T.n : 0 }, src);
+  }
+  // 'Opening wide (39 next turn)' -> 'opening wide'; 'Opens wide' -> 'opening wide'.
+  function hisVerb(txt) {
+    const s = String(txt || '').split(' (')[0].trim();
+    if (!s) return '';
+    const w = s.split(' '), f = w[0].toLowerCase();
+    if (!/ing$/.test(f) && /s$/.test(f)) { const stem = f.slice(0, -1); w[0] = (/e$/.test(stem) ? stem.slice(0, -1) : stem) + 'ing'; } else w[0] = f;
+    return w.join(' ');
+  }
+  // The recap's facts (DATA.hisKillLine / hisTips read them). A death outside a fight has none but the killer's name.
+  function hisRecapData(run) {
+    // (the log of this run's last fight, and only when that fight killed you)
+    const inFight = !!(HISR.F && HISR.F.player && HISR.F.player.hp <= 0 && HISR.hid === hisIdOf(run));
+    const turns = inFight ? HISR.turns : [], last = inFight ? HISR.last : null, fatal = turns[turns.length - 1] || null;
+    const rc = {
+      // a hit's full strength (the telegraph's number), not just the hp it had left to take
+      kind: last ? last.k : '', name: '', id: '', mv: '', amt: last ? (last.k === 'hit' ? Math.max(last.amt + (last.bl | 0), last.hit | 0) : last.amt) : 0, charged: false, chargeName: '', verb: '', hits: 0,
+      grabsLeft: fatal && last && last.k !== 'self' ? fatal.gl : 0, lethal: !!(fatal && fatal.thr && fatal.thr.lethal), need: 0, bare: 0,
+      maxHp: (fatal && fatal.max) || (run.maxHp | 0), tier: inFight ? HISR.tier : '', turns: [],
+    };
+    if (last && last.k === 'hit') {
+      rc.name = last.name; rc.id = last.id || ''; rc.mv = last.mv; rc.charged = !!last.ch;
+      rc.hits = fatal ? fatal.hits.filter((i) => i === last.i).length : 1;
+      if (rc.charged) {
+        for (let j = turns.length - 2; j >= 0; j--) {
+          const e = turns[j].en.find((x) => x.i === last.i && x.id === last.id);
+          if (e && e.k === 'charge') { rc.chargeName = e.mv; rc.verb = hisVerb(e.txt); break; }
+        }
+      }
+    } else rc.name = String(run.killer || 'the Clawspire');
+    if (rc.lethal && fatal && fatal.thr) rc.need = Math.max(0, fatal.thr.net - fatal.thr.hp + 1);
+    for (let j = turns.length - 1; j >= 0; j--) { const T = turns[j]; if (T.dmg > 0 && T.blk === 0) rc.bare++; else break; }
+    rc.turns = turns.slice(-hisDat().TURNS).map((T) => ({ n: T.n, dmg: T.dmg, bl: T.bl, blk: T.blk }));
+    return rc;
+  }
+  // A canvas of w x hh logical px drawn at 2x (its CSS width is set, the height follows).
+  function hisCanvas(w, hh, draw) {
+    const c = document.createElement('canvas');
+    c.width = w * 2; c.height = hh * 2;
+    try { c.style.width = w + 'px'; } catch (e) { /* stub */ }
+    let ctx = null;
+    try { ctx = c.getContext('2d'); } catch (e) { ctx = null; }
+    if (ctx && draw) { try { ctx.save(); ctx.scale(2, 2); draw(ctx); ctx.restore(); } catch (e) { /* art is optional */ } }
+    return c;
+  }
+  // The recap panel over the game over (it is not a GAME.choose button: the screen's own stay put).
+  function hisRecapShow(rc) {
+    hisRecapDismiss(true);
+    const stage = $('stage');
+    if (!stage || !stage.appendChild) return null;
+    const R = X.RENDER, el = h('div', 'hisRecap');
+    el.id = 'hisRecap';
+    const card = h('div', 'hisRcCard panel');
+    card.appendChild(h('div', 'hisRcK', 'What got you'));
+    const def = rc.id ? tbl('ENEMIES')[rc.id] || null : null;
+    const foe = hisCanvas(240, 176, (ctx) => { if (R && R.his) R.his.foe(ctx, def, 240, 176, { t: S.t }); });
+    foe.className = 'hisRcFoe';
+    card.appendChild(foe);
+    card.appendChild(h('div', 'hisRcLine', D().hisKillLine ? D().hisKillLine(rc) : 'Killed by ' + (rc.name || 'the Clawspire')));
+    if (rc.turns.length) {
+      const tl = hisCanvas(460, 150, (ctx) => { if (R && R.his) R.his.timeline(ctx, rc.turns, 460, 150, { t: S.t }); });
+      tl.className = 'hisRcTl';
+      card.appendChild(tl);
+    }
+    const tips = D().hisTips ? D().hisTips(rc) : [];
+    for (const s of tips) { const tp = h('div', 'hisTip'); tp.appendChild(h('span', 'ic', '\u{1F4A1}')); tp.appendChild(h('span', 'tx', s)); card.appendChild(tp); }
+    card.appendChild(h('div', 'hisRcTap', 'Tap to continue'));
+    el.appendChild(card);
+    el.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); if (S.hisRecap && S.hisRecap.t < HIS_UI.ARM) return; hisRecapDismiss(); };
+    stage.appendChild(el);
+    S.hisRecap = { rc, el, t: 0, tips };
+    return el;
+  }
+  function hisRecapDismiss(quiet) {
+    const Rc = S.hisRecap;
+    S.hisRecap = null;
+    const el = Rc && Rc.el;
+    if (el) {
+      const gone = () => { try { if (el.remove) el.remove(); else if (el.parentNode) el.parentNode.removeChild(el); } catch (e) { /* gone */ } };
+      if (quiet || S.headless) gone();
+      else { try { el.classList.add('out'); } catch (e) { /* stub */ } setTimeout(gone, 260); }
+    }
+    if (Rc && !quiet) snd('click');
+    return !!Rc;
+  }
+
+  // ---- the History screen
+  const hisName = (c) => (charDef(c) || {}).name || c;
+  // A chip-sized name: 'Sir Grabsworth' -> 'Grabsworth', 'Lucky Lou' -> 'Lou', 'Mira Fizzwick' -> 'Mira'.
+  const hisShort = (c) => { const w = String(hisName(c)).split(' '); return w.length > 1 && /^(Sir|Lady|Dame|Lucky|Captain|Doctor|Dr\.?|Old|Big|Little|The)$/i.test(w[0]) ? w[1] : w[0]; };
+  function hisDate(d, long) {
+    if (!(d > 0)) return '';
+    try {
+      const dt = new Date(d * 1000);
+      const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dt.getMonth()];
+      return M + ' ' + dt.getDate() + (long ? ', ' + dt.getFullYear() : '');
+    } catch (e) { return ''; }
+  }
+  const hisWhere = (r) => (r.lp > 0 ? 'Loop ' + r.lp : r.a >= 4 ? 'The Back Room' : 'Act ' + r.a);
+  function hisFind(id) { const hh = hisM(); return hh.runs.find((r) => r.id === id) || hh.hof.find((r) => r.id === id) || null; }
+  function showHistory(o) {
+    o = o || {};
+    const U0 = S.hisUi || (S.hisUi = { tab: 'recent', c: 'all', r: 'all', open: null });
+    if (o.tab) U0.tab = o.tab === 'hof' ? 'hof' : 'recent';
+    if (o.c) U0.c = o.c;
+    if (o.r) U0.r = o.r;
+    U0.open = o.open || null;
+    if (S.screen !== 'history') setScreen('history');
+    else S.ui.buttons = [];
+    popover(null);
+    const b = $('historyBody');
+    if (!b) return false;
+    clear(b);
+    try { const scr = $('scr-history'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
+    const rec = U0.open ? hisFind(U0.open) : null;
+    if (rec) hisDetail(b, rec);
+    else { U0.open = null; hisList(b); }
+    return true;
+  }
+  function hisList(b) {
+    const hh = hisM(), U0 = S.hisUi, R = X.RENDER;
+    const head = h('div', 'hisHead');
+    head.appendChild(btn('Back', () => showTitle(), 'ghost sm'));
+    head.appendChild(h('h1', null, 'Run history'));
+    b.appendChild(head);
+    const wins = hh.runs.filter((r) => D().hisWon(r)).length, best = hh.hof.length ? hh.hof[0].s : 0;
+    b.appendChild(h('div', 'sub', hh.n ? `${hh.n} ${hh.n === 1 ? 'run' : 'runs'} on record, ${wins} of the last ${hh.runs.length} won. Best score ${fmtNum(best)}.` : 'Every run you finish lands here: the wins, the knockouts, the Endless dives.'));
+    // the lifetime charts (the crawler filter narrows the score line)
+    const names = {};
+    for (const id in tbl('CHARACTERS')) names[id] = hisShort(id);
+    const cd = D().hisChart(D().hisFilter(hh.runs, { c: U0.c }), hh.by);
+    const ch = hisCanvas(508, 176, (ctx) => { if (R && R.his) R.his.chart(ctx, cd, 508, 176, { t: S.t, names }); });
+    ch.className = 'hisChart';
+    b.appendChild(ch);
+    const tabs = h('div', 'hisTabs');
+    for (const [k, label] of [['recent', 'Recent'], ['hof', 'Hall of Fame']]) tabs.appendChild(btn(label, () => showHistory({ tab: k }), 'sm hisTab' + (U0.tab === k ? ' on' : '')));
+    b.appendChild(tabs);
+    // the filters: a crawler, a result
+    const fc = h('div', 'hisFilt');
+    fc.appendChild(btn('All crawlers', () => showHistory({ c: 'all' }), 'sm hisChip' + (U0.c === 'all' ? ' on' : '')));
+    for (const id in tbl('CHARACTERS')) {
+      const bt = btn(hisName(id), () => showHistory({ c: id }), 'sm hisChip' + (U0.c === id ? ' on' : ''));
+      bt.textContent = hisShort(id);
+      const pc = portraitCanvas(id, 26);
+      try { pc.style.width = '26px'; pc.style.height = '26px'; } catch (e) { /* stub */ }
+      if (bt.insertBefore) bt.insertBefore(pc, bt.firstChild || null);
+      fc.appendChild(bt);
+    }
+    b.appendChild(fc);
+    const fr = h('div', 'hisFilt');
+    for (const [k, label] of HIS_UI.RES) fr.appendChild(btn(label, () => showHistory({ r: k }), 'sm hisChip r-' + k + (U0.r === k ? ' on' : '')));
+    b.appendChild(fr);
+    const src = U0.tab === 'hof' ? hh.hof : hh.runs.slice().reverse();
+    const list = D().hisFilter(src, { c: U0.c, r: U0.r });
+    const box = h('div', 'hisList');
+    if (!list.length) box.appendChild(h('div', 'hisEmpty', src.length ? 'No run matches these filters.' : U0.tab === 'hof' ? 'The Hall of Fame is empty. Your best ten runs will hang here.' : 'No runs yet. Finish one and its card lands here.'));
+    list.forEach((rec) => box.appendChild(hisCard(rec, U0.tab === 'hof' ? hh.hof.indexOf(rec) + 1 : 0)));
+    b.appendChild(box);
+  }
+  // One run card: the crawler in their outfit, where it ended and how, the score and the stamp.
+  function hisCard(rec, place) {
+    const R = X.RENDER;
+    const c = h('div', 'hisCard r-' + rec.r);
+    if (place) c.appendChild(h('div', 'hisRank', '#' + place));
+    const pc = canvasEl(58, (ctx, p) => { if (R && R.vault && R.vault.withOutfit) R.vault.withOutfit(ctx, rec.c, p / 2, p / 2, p * 0.92, S.t, rec.o || null); });
+    pc.className = 'hisPort';
+    c.appendChild(pc);
+    const mid = h('div', 'hisCm');
+    const l1 = h('div', 'hisCn');
+    l1.appendChild(h('b', null, hisName(rec.c)));
+    l1.appendChild(h('span', 'hisDate', hisDate(rec.d)));
+    mid.appendChild(l1);
+    const bits = [hisWhere(rec)];
+    if (rec.tl > 0) bits.push('Tilt ' + rec.tl);
+    bits.push(rec.kl + ' kills', rec.tu + ' turns');
+    mid.appendChild(h('div', 'hisCs', bits.join(' · ')));
+    const how = rec.r === 'win' ? 'Beat the Prize Master' : rec.r === 'endless' ? 'Beat the Prize Master, then dove in' : rec.r === 'quit' ? 'Abandoned for a new run' : rec.k ? 'Knocked out by ' + rec.k : 'Knocked out';
+    mid.appendChild(h('div', 'hisCh', how));
+    const tags = h('div', 'hisTags');
+    if (rec.m === 'daily') tags.appendChild(h('span', 'tag gold', 'DAILY'));
+    if (rec.lp > 0) tags.appendChild(h('span', 'tag cyan', 'ENDLESS'));
+    const MU = tbl('MUTATORS');
+    for (const id of rec.mu || []) if (MU[id]) tags.appendChild(h('span', 'tag hisMu', MU[id].icon || '?'));
+    if (tags.children && tags.children.length) mid.appendChild(tags);
+    c.appendChild(mid);
+    const rt = h('div', 'hisCr');
+    rt.appendChild(h('div', 'hisStamp r-' + rec.r, HIS_UI.WORD[rec.r] || rec.r));
+    rt.appendChild(h('div', 'hisScore mono', fmtNum(rec.s)));
+    c.appendChild(rt);
+    const fn = () => { snd('click'); showHistory({ open: rec.id }); };
+    c.onclick = fn;
+    S.ui.buttons.push({ el: c, fn, label: 'Run ' + hisName(rec.c) + ' ' + fmtNum(rec.s) });
+    return c;
+  }
+  // One run in full: the header, the numbers, how it ended, the final bin, the relics, the map, Share.
+  function hisDetail(b, rec) {
+    const R = X.RENDER, won = rec.r === 'win' || rec.r === 'endless';
+    const head = h('div', 'hisHead');
+    head.appendChild(btn('Back', () => showHistory({}), 'ghost sm'));
+    head.appendChild(h('h1', null, 'The run'));
+    b.appendChild(head);
+    const cn = charDef(rec.c) || {};
+    const where = hisWhere(rec) + (rec.m === 'daily' ? ' · Daily ' + (rec.dl || '') : rec.lp > 0 ? ' · Endless' : ' · Classic');
+    const hero = hisCanvas(508, 160, (ctx) => { if (R && R.his) R.his.hero(ctx, { char: rec.c, outfit: rec.o || null, name: cn.name || rec.c, date: hisDate(rec.d, true), result: rec.r, score: rec.s, where, tilt: rec.tl, t: S.t }, 508, 160); });
+    hero.className = 'hisHero';
+    b.appendChild(hero);
+    const tags = h('div', 'hisTags');
+    const ci = clawInfo(rec.cl);
+    tags.appendChild(h('span', 'tag cyan', (ci && ci.name) || rec.cl));
+    if (rec.se) tags.appendChild(h('span', 'tag gold', rec.se === 'halloween' ? 'Claw-o-ween' : rec.se));
+    const MU = tbl('MUTATORS');
+    for (const id of rec.mu || []) if (MU[id]) tags.appendChild(h('span', 'tag pink', (MU[id].icon || '') + ' ' + MU[id].name));
+    b.appendChild(tags);
+    // the numbers, as the run end's highlights
+    const grid = h('div', 'hl');
+    const tile = (label, v, sub, cls) => { const el = h('div', 'hlt ' + (cls || '')); el.appendChild(h('span', 'k', label)); el.appendChild(h('span', 'v', String(v))); if (sub) el.appendChild(h('span', 's', sub)); grid.appendChild(el); };
+    tile('Reached', hisWhere(rec), rec.bs ? `${rec.bs} ${rec.bs === 1 ? 'boss' : 'bosses'} down` : '', 'pink');
+    tile('Biggest hit', rec.bh, `${rec.kl} kills in ${rec.f} fights`, 'pink');
+    tile('Best combo', rec.bc ? rec.bc.n : 'none', rec.bc ? '★'.repeat(rec.bc.t) : '', 'gold');
+    tile('Jackpots', rec.jp, `${rec.tu} turns`, 'cyan');
+    tile('Evolutions', rec.ev, rec.ev ? 'items grew up' : '', 'lime');
+    tile('Sets', (rec.st || []).length, (rec.st || []).map((sid) => ((tbl('SETS')[sid] || {}).name || sid)).join(', ').slice(0, 40), 'gold');
+    b.appendChild(grid);
+    // how it ended
+    if (!won && rec.r === 'loss') {
+      const box = h('div', 'hisEnd panel');
+      const def = rec.ke ? tbl('ENEMIES')[rec.ke] : null;
+      if (def) { const fc = hisCanvas(96, 80, (ctx) => { if (R && R.his) R.his.foe(ctx, def, 96, 80, { t: S.t }); }); fc.className = 'hisEndFoe'; box.appendChild(fc); }
+      const tx = h('div', 'col');
+      tx.appendChild(h('b', null, D().hisKillLine ? D().hisKillLine({ kind: rec.kk || (rec.km ? 'hit' : ''), name: rec.k || 'the Clawspire', mv: rec.km, amt: rec.kh }) : 'Knocked out'));
+      tx.appendChild(h('span', 'sub', `On ${hisWhere(rec).toLowerCase() === 'the back room' ? 'the Back Room' : hisWhere(rec)}, turn ${rec.tu}.`));
+      box.appendChild(tx);
+      b.appendChild(box);
+      if (rec.lt && rec.lt.length) {
+        const n0 = Math.max(1, rec.tu - rec.lt.length + 1);
+        const turns = rec.lt.map((x, i) => ({ n: n0 + i, dmg: x[0], bl: x[1], blk: x[2] }));
+        const tl = hisCanvas(508, 130, (ctx) => { if (R && R.his) R.his.timeline(ctx, turns, 508, 130, { t: S.t }); });
+        tl.className = 'hisTl';
+        b.appendChild(tl);
+      }
+    }
+    // the final bin
+    b.appendChild(h('h3', null, 'The final bin'));
+    const defs = (rec.b || []).map((k) => { const plus = /\+$/.test(k), id = plus ? k.slice(0, -1) : k; return tbl('ITEMS')[id] ? { def: itemDef(id), plus } : null; }).filter(Boolean);
+    const bc = hisCanvas(508, 176, (ctx) => { if (R && R.his) R.his.bin(ctx, defs, 508, 176, { t: S.t }); });
+    bc.className = 'hisBin';
+    b.appendChild(bc);
+    if (defs.length) {
+      const nm = h('div', 'hisNames');
+      for (const d of defs) nm.appendChild(h('span', 'hisName r-' + (d.def.rarity || 'c'), itemName(d.def, d.plus)));
+      b.appendChild(nm);
+    }
+    // the relics
+    b.appendChild(h('h3', null, `Relics (${(rec.rl || []).length})`));
+    const rr = h('div', 'hisRelics');
+    for (const id of rec.rl || []) {
+      const def = relicDef(id);
+      const r = h('button', 'relic');
+      r.appendChild(relicCanvas(def, 40));
+      r.onclick = (ev) => { popover(`<b>${def.name}</b><br>${def.text || ''}`, 270, 520); if (ev && ev.stopPropagation) ev.stopPropagation(); };
+      rr.appendChild(r);
+    }
+    if (!(rec.rl || []).length) rr.appendChild(h('div', 'sub', 'No relics this time.'));
+    b.appendChild(rr);
+    // the act's map
+    b.appendChild(h('h3', null, `The map: ${hisWhere(rec)}`));
+    const cells = D().hisMapCells ? D().hisMapCells(rec.mp) : null;
+    const biome = X.MAP && X.MAP.biomeOf ? X.MAP.biomeOf(U.clamp(rec.a | 0, 1, 3)) : 'cellar';
+    const mc = hisCanvas(508, 300, (ctx) => { if (R && R.his) R.his.map(ctx, cells, rec.mp, 508, 300, { biome, t: S.t }); });
+    mc.className = 'hisMap';
+    b.appendChild(mc);
+    if (cells) b.appendChild(h('div', 'sub center', 'Gold dots: where you walked. The skull: the boss. The crawler: where it ended.'));
+    const row = h('div', 'row center');
+    row.appendChild(btn('Share run card', () => hisShare(rec), 'go'));
+    row.appendChild(btn('All runs', () => showHistory({}), 'ghost'));
+    b.appendChild(row);
+  }
+  // The title's History button: registered last, so the menu's other GAME.choose indices stay put.
+  function hisTitleBtn(row) {
+    if (!row || !row.appendChild) return null;
+    const n = S.meta ? hisM().n : 0;
+    const b = btn('History', () => showHistory({ open: null }), 'hisTitleBtn');
+    if (n) b.setAttribute('data-n', String(Math.min(999, n)));
+    row.appendChild(b);
+    return b;
+  }
+  // The History screen's canvas: the title's art behind the list.
+  function hisDraw(ctx, t) {
+    const R = X.RENDER;
+    if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
+  }
+  // Share a past run: the share card, drawn from the record (its own outfit, date and score).
+  function hisShare(rec) {
+    if (!rec) return false;
+    const pr = {
+      char: rec.c, seed: 0, act: rec.a, tilt: rec.tl, muts: (rec.mu || []).slice(), kills: rec.kl, jackpots: rec.jp,
+      bin: (rec.b || []).map((k) => ({ id: /\+$/.test(k) ? k.slice(0, -1) : k, plus: /\+$/.test(k) })),
+      endless: rec.lp > 0 ? { loop: rec.lp } : null, sc: { bosses: rec.bs, combos: 0 }, scoreTop: rec.s, daily: rec.dl || null, clawType: rec.cl,
+      loot: { bigHit: rec.bh, bestCombo: rec.bc ? { name: rec.bc.n, tier: rec.bc.t } : null },
+    };
+    let st = null;
+    try { st = vaultShareInfo(pr, rec.r === 'win' || rec.r === 'endless'); } catch (e) { st = null; }
+    if (!st) return false;
+    st.outfit = rec.o || null; st.date = hisDate(rec.d, true); st.score = rec.s;
+    let cv = null, ctx = null;
+    try { cv = document.createElement('canvas'); cv.width = 1080; cv.height = 1350; ctx = cv.getContext ? cv.getContext('2d') : null; } catch (e) { ctx = null; }
+    const R = X.RENDER;
+    if (ctx && R && R.vault && R.vault.share) { try { R.vault.share(ctx, st); } catch (e) { /* art is optional */ } }
+    S.hisCard = { cv, st };
+    snd('vaultShare'); haptic('tap');
+    if (!cv) return false;
+    return hisSaveCanvas(cv, 'clawspire-run-' + rec.id.replace(/[^a-z0-9]/gi, '') + '.png', `I scored ${fmtNum(st.score)} in CLAWSPIRE, the claw machine roguelike.`, 'Run card saved. Show it off!');
+  }
+  // A PNG to the share sheet when the device takes files, else a download. Headless: a stub, nothing throws.
+  function hisSaveCanvas(cv, name, text, msg) {
+    const down = (blob) => hisDownload(cv, blob, name, msg);
+    const go = (blob) => {
+      try {
+        const nav = typeof navigator !== 'undefined' ? navigator : null;
+        if (blob && nav && typeof nav.share === 'function' && typeof File === 'function') {
+          const file = new File([blob], name, { type: 'image/png' });
+          if (!nav.canShare || nav.canShare({ files: [file] })) {
+            const p = nav.share({ files: [file], title: 'CLAWSPIRE', text, url: VLT_URL });
+            if (p && p.catch) p.catch((e) => { if (!e || e.name !== 'AbortError') down(blob); });
+            S.hisShared = (S.hisShared | 0) + 1;
+            return;
+          }
+        }
+      } catch (e) { /* no share sheet: save it instead */ }
+      down(blob);
+    };
+    try { if (cv && typeof cv.toBlob === 'function') { cv.toBlob((b) => go(b), 'image/png'); return true; } } catch (e) { /* stub canvas */ }
+    go(null);
+    return true;
+  }
+  function hisDownload(cv, blob, name, msg) {
+    try {
+      let url = null;
+      if (blob && typeof URL !== 'undefined' && URL.createObjectURL) url = URL.createObjectURL(blob);
+      else if (cv && cv.toDataURL) url = cv.toDataURL('image/png');
+      if (!url) return false;
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      try { document.body.appendChild(a); } catch (e) { /* stub */ }
+      if (a.click) a.click();
+      setTimeout(() => { try { if (a.remove) a.remove(); if (blob && URL.revokeObjectURL) URL.revokeObjectURL(url); } catch (e) { /* gone */ } }, 4000);
+      S.hisSaved = (S.hisSaved | 0) + 1;
+      if (msg) { if (S.hisPh) hisPhotoMsg(msg); else toast(msg, 2); }
+      return true;
+    } catch (e) { toast('This browser cannot save the picture.', 2); return false; }
+  }
+
+  // ---- photo mode
+  function hisPhotoCan() {
+    if (S.hisPh || S.accOpen || !S.run) return false;
+    return (S.screen === 'fight' && !!F && !!FS) || (S.screen === 'map' && !!S.run.map);
+  }
+  function hisPhotoOpen() {
+    if (!hisPhotoCan()) return false;
+    popover(null);
+    if (FS) { FS.steering = false; FS.keyDir = 0; }
+    S.ptrId = null;
+    S.hisPh = {
+      screen: S.screen, buttons: S.ui.buttons, cam: { x: W / 2, y: H / 2, z: 1 }, filter: 'none', frame: 'none', stamp: true, ui: true,
+      dirty: true, t: 0, ptr: {}, moved: false, buf: null, bctx: null, scratch: {}, flash: 0, saved: 0, msg: '', msgT: 0, vk: 1,
+    };
+    hisPhotoDom(true);
+    snd('whoosh'); haptic('tap');
+    return true;
+  }
+  function hisPhotoClose() {
+    const P = S.hisPh;
+    if (!P) return false;
+    S.hisPh = null;
+    hisPhotoDom(false);
+    S.ui.buttons = P.buttons || [];
+    snd('click');
+    return true;
+  }
+  // Per frame before anything else: while photo mode is up, nothing in the game advances.
+  function hisPhotoPaused(real) {
+    const Rc = S.hisRecap;
+    if (Rc) { Rc.t += real; if (S.screen !== 'gameover') hisRecapDismiss(true); }
+    const P = S.hisPh;
+    if (!P) return false;
+    if (S.screen !== P.screen) { hisPhotoClose(); return false; }
+    P.t += real;
+    const vk = hisPhotoViewK(P);
+    P.vk = feelReduced() ? vk : P.vk + (vk - P.vk) * Math.min(1, real * 12);
+    if (P.flash > 0) P.flash = Math.max(0, P.flash - real * 2.5);
+    if (P.msgT > 0) { P.msgT -= real; if (P.msgT <= 0) { P.msg = ''; hisPhotoBuild(); } }
+    return true;
+  }
+  function hisPhotoSet(k, v) {
+    const P = S.hisPh;
+    if (!P) return false;
+    if (k === 'filter' && PHO.FILTERS.indexOf(v) >= 0) P.filter = v;
+    else if (k === 'frame' && PHO.FRAMES.indexOf(v) >= 0) P.frame = v;
+    else if (k === 'stamp') P.stamp = v == null ? !P.stamp : !!v;
+    else if (k === 'ui') P.ui = v == null ? !P.ui : !!v;
+    else return false;
+    snd('click');
+    hisPhotoBuild();
+    return true;
+  }
+  function hisPhotoClamp(P) {
+    const c = P.cam;
+    c.z = U.clamp(c.z, PHO.ZMIN, PHO.ZMAX);
+    const hw = W / (2 * c.z), hh = H / (2 * c.z);
+    c.x = U.clamp(c.x, hw, W - hw); c.y = U.clamp(c.y, hh, H - hh);
+    P.dirty = true;
+  }
+  function hisPhotoPan(dx, dy) {
+    const P = S.hisPh;
+    if (!P) return false;
+    P.cam.x += dx || 0; P.cam.y += dy || 0;
+    hisPhotoClamp(P);
+    return true;
+  }
+  // Zoom by k about the stage point (sx, sy): the scene point under it stays put.
+  function hisPhotoZoomAt(sx, sy, k) {
+    const P = S.hisPh;
+    if (!P || !(k > 0)) return false;
+    const c = P.cam, wx = c.x + (sx - W / 2) / c.z, wy = c.y + (sy - H / 2) / c.z;
+    c.z = U.clamp(c.z * k, PHO.ZMIN, PHO.ZMAX);
+    c.x = wx - (sx - W / 2) / c.z; c.y = wy - (sy - H / 2) / c.z;
+    hisPhotoClamp(P);
+    return true;
+  }
+  function hisPhotoReset() { const P = S.hisPh; if (!P) return false; P.cam.x = W / 2; P.cam.y = H / 2; P.cam.z = 1; hisPhotoClamp(P); snd('click'); return true; }
+  // One finger pans, two pinch, a tap without a drag hides or shows the controls.
+  function hisPhotoPointer(type, x, y, ev) {
+    const P = S.hisPh;
+    if (!P) return false;
+    const id = 'p' + (ev && ev.pointerId != null ? ev.pointerId : 0), ps = P.ptr;
+    if (type === 'down') { ps[id] = { x, y, x0: x, y0: y }; if (Object.keys(ps).length > 1) P.moved = true; return true; }
+    const p = ps[id];
+    if (!p) return true;
+    if (type === 'move') {
+      const ids = Object.keys(ps);
+      if (ids.length >= 2) {
+        const a = ps[ids[0]], b = ps[ids[1]], d0 = Math.hypot(a.x - b.x, a.y - b.y);
+        p.x = x; p.y = y;
+        const d1 = Math.hypot(a.x - b.x, a.y - b.y);
+        const m = hisPhotoAt(P, (a.x + b.x) / 2, (a.y + b.y) / 2);
+        if (d0 > 10 && d1 > 10) hisPhotoZoomAt(m.x, m.y, d1 / d0);
+        P.moved = true;
+      } else {
+        const dx = x - p.x, dy = y - p.y;
+        p.x = x; p.y = y;
+        if (Math.hypot(x - p.x0, y - p.y0) > 8) P.moved = true;
+        const k = hisPhotoView(P).k * P.cam.z;
+        if (P.moved) hisPhotoPan(-dx / k, -dy / k);
+      }
+      return true;
+    }
+    if (type === 'up' || type === 'cancel') {
+      delete ps[id];
+      if (!Object.keys(ps).length) {
+        if (type === 'up' && !P.moved) hisPhotoSet('ui');
+        P.moved = false;
+      }
+    }
+    return true;
+  }
+  function hisPhotoWheel(x, y, deltaY) {
+    if (!S.hisPh) return false;
+    const m = hisPhotoAt(S.hisPh, x, y);
+    hisPhotoZoomAt(m.x, m.y, Math.exp(-(deltaY || 0) * 0.0015));
+    return true;
+  }
+  // Keys: Escape leaves, the arrows pan, + and - zoom. Nothing reaches the fight meanwhile.
+  function hisKey(ev, down) {
+    const k = ev && ev.key;
+    if (S.hisRecap && S.screen === 'gameover') {
+      if (down && (k === ' ' || k === 'Enter' || k === 'Escape')) { if (ev.preventDefault) ev.preventDefault(); hisRecapDismiss(); }
+      return true;
+    }
+    const P = S.hisPh;
+    if (!P) {
+      if (down && k === 'Escape' && S.screen === 'history') { if (S.hisUi && S.hisUi.open) showHistory({}); else showTitle(); return true; }
+      return false;
+    }
+    if (!down) return true;
+    const s = PHO.PAN / P.cam.z;
+    if (k === 'Escape') hisPhotoClose();
+    else if (k === 'ArrowLeft') hisPhotoPan(-s, 0);
+    else if (k === 'ArrowRight') hisPhotoPan(s, 0);
+    else if (k === 'ArrowUp') hisPhotoPan(0, -s);
+    else if (k === 'ArrowDown') hisPhotoPan(0, s);
+    else if (k === '+' || k === '=') hisPhotoZoomAt(W / 2, H / 2, PHO.STEP);
+    else if (k === '-' || k === '_') hisPhotoZoomAt(W / 2, H / 2, 1 / PHO.STEP);
+    if (ev.preventDefault && (k === ' ' || /^Arrow/.test(k || ''))) ev.preventDefault();
+    return true;
+  }
+  // The frozen scene, drawn once into a buffer (again only when the camera moves).
+  function hisPhotoBuf(P) {
+    const w = Math.max(1, Math.round(W * (S.px || 1))), hh = Math.max(1, Math.round(H * (S.px || 1)));
+    if (!P.buf || P.buf.width !== w || P.buf.height !== hh) {
+      try {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = hh;
+        const x = c.getContext ? c.getContext('2d') : null;
+        if (!x) return null;
+        P.buf = c; P.bctx = x; P.dirty = true;
+      } catch (e) { return null; }
+    }
+    return P.buf;
+  }
+  function hisPhotoScene(P) {
+    const keep = S.ctx;
+    S.hisPhIn = true; S.ctx = P.bctx;
+    try { draw(); } catch (e) { /* a broken frame is a blank photo */ } finally { S.ctx = keep; S.hisPhIn = false; }
+    P.dirty = false;
+  }
+  // draw()'s hook: the camera over the scene while it paints into the buffer.
+  function hisPhotoCam(ctx) {
+    const P = S.hisPh;
+    if (!P || !S.hisPhIn) return;
+    const c = P.cam;
+    ctx.translate(W / 2, H / 2); ctx.scale(c.z, c.z); ctx.translate(-c.x, -c.y);
+  }
+  function hisPhotoSt(P) {
+    const run = S.run || {}, V = S.meta && S.meta.vault, cn = hisName(run.char);
+    const where = run.endless ? 'Loop ' + (run.endless.loop | 0) : 'Act ' + (run.act | 0);
+    let date = '';
+    try { date = hisDate(Math.floor(Date.now() / 1000), true); } catch (e) { date = ''; }
+    return {
+      w: W, h: H, filter: P.filter, frame: P.frame, t: P.t, noFlash: !!(S.meta && S.meta.settings && S.meta.settings.noFlash), scratch: P.scratch,
+      stamp: P.stamp ? { char: run.char, outfit: V && V.eq && V.eq.outfit ? V.eq.outfit[run.char] || null : null, name: cn } : null,
+      caption: cn + ' · ' + where, sub: (date ? date + ' · ' : '') + 'CLAWSPIRE',
+    };
+  }
+  function hisPhotoCompose(ctx, P, exporting) {
+    const R = X.RENDER;
+    if (R && R.his && R.his.photo) R.his.photo(ctx, P.buf, hisPhotoSt(P));
+    else if (P.buf) { try { ctx.drawImage(P.buf, 0, 0, W, H); } catch (e) { /* stub */ } }
+    if (!exporting && P.flash > 0) {
+      const calm = !!(S.meta && S.meta.settings && S.meta.settings.noFlash);
+      ctx.fillStyle = 'rgba(255,255,255,' + (P.flash * (calm ? 0.12 : 0.55)).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+  // draw()'s hook: in photo mode the frame is the photo (true: draw() is done).
+  function hisPhotoDraw(ctx) {
+    const P = S.hisPh;
+    if (!P || S.hisPhIn || !ctx || P.screen !== S.screen) return false;
+    if (!hisPhotoBuf(P)) return false;
+    if (P.dirty) hisPhotoScene(P);
+    const vf = hisPhotoView(P), R = X.RENDER, vst = { t: P.t, noFlash: !!(S.meta && S.meta.settings && S.meta.settings.noFlash) };
+    ctx.save();
+    ctx.setTransform(S.px || 1, 0, 0, S.px || 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const framed = vf.k < 0.999 && R && R.his && R.his.viewfinder;
+    if (framed) R.his.viewfinder(ctx, 'back', vf.x, vf.y, W * vf.k, H * vf.k, W, H, vst);
+    ctx.save();
+    ctx.translate(vf.x, vf.y); ctx.scale(vf.k, vf.k);
+    hisPhotoCompose(ctx, P, false);
+    ctx.restore();
+    if (framed) R.his.viewfinder(ctx, 'front', vf.x, vf.y, W * vf.k, H * vf.k, W, H, vst);
+    ctx.restore();
+    return true;
+  }
+  // The viewfinder's scale: the whole photo between the bars while the controls are up, full screen without them.
+  function hisPhotoViewK(P) { const V = PHO.VIEW; return P && P.ui ? (H - V.top - V.bot) / H : 1; }
+  // Where the photo sits on the stage right now: {x, y, k} (it eases between the two).
+  function hisPhotoView(P) {
+    const V = PHO.VIEW, K = (H - V.top - V.bot) / H, k = U.clamp(P && P.vk > 0 ? P.vk : 1, K, 1), u = K < 1 ? (1 - k) / (1 - K) : 0;
+    return { x: (W - W * k) / 2, y: V.top * u, k };
+  }
+  // A stage point to the photo's own coordinates.
+  function hisPhotoAt(P, sx, sy) { const vf = hisPhotoView(P); return { x: (sx - vf.x) / vf.k, y: (sy - vf.y) / vf.k, k: vf.k }; }
+  // The photo at the screen's pixel ratio on its own canvas (a stub headless).
+  function hisPhotoExport() {
+    const P = S.hisPh;
+    if (!P) return null;
+    // at least 1080 x 1920: the frozen scene is painted again at that scale into its own buffer
+    const k = Math.max(PHO.EXPORT_K, S.px || 1);
+    let cv = null, ctx = null, sb = null, sctx = null;
+    try {
+      cv = document.createElement('canvas'); cv.width = Math.round(W * k); cv.height = Math.round(H * k); ctx = cv.getContext ? cv.getContext('2d') : null;
+      sb = document.createElement('canvas'); sb.width = cv.width; sb.height = cv.height; sctx = sb.getContext ? sb.getContext('2d') : null;
+    } catch (e) { ctx = null; }
+    if (ctx && sctx) {
+      const keep = { px: S.px, buf: P.buf, bctx: P.bctx, dirty: P.dirty };
+      S.px = k; P.buf = sb; P.bctx = sctx;
+      try {
+        hisPhotoScene(P);
+        ctx.save(); ctx.setTransform(k, 0, 0, k, 0, 0); hisPhotoCompose(ctx, P, true); ctx.restore();
+      } catch (e) { /* art is optional */ } finally { S.px = keep.px; P.buf = keep.buf; P.bctx = keep.bctx; P.dirty = keep.dirty; }
+    }
+    S.hisPhoto = cv;
+    return cv;
+  }
+  function hisPhotoSave() {
+    const P = S.hisPh;
+    if (!P) return false;
+    const cv = hisPhotoExport();
+    P.saved++; P.flash = 1;
+    snd('vaultShare'); haptic('tap');
+    if (!cv) { hisPhotoMsg('This browser cannot take photos.'); return false; }
+    const run = S.run || {};
+    return hisSaveCanvas(cv, 'clawspire-photo-' + hisIdOf(run).replace(/[^a-z0-9]/gi, '') + '-' + P.saved + '.png', 'A snapshot from CLAWSPIRE, the claw machine roguelike.', 'Photo saved!');
+  }
+  function hisPhotoMsg(s) { const P = S.hisPh; if (!P) return; P.msg = s; P.msgT = 2.2; hisPhotoBuild(); }
+  // The controls: a top bar (the title, a hint, exit) and a bottom sheet (filter, frame, stamp, zoom, save).
+  function hisPhotoDom(on) {
+    const stage = $('stage');
+    if (stage && stage.classList) stage.classList[on ? 'add' : 'remove']('hisPhotoOn');
+    let el = $('hisPhoto');
+    if (!el && on && stage && stage.appendChild) { el = h('div', null); el.id = 'hisPhoto'; stage.appendChild(el); }
+    if (!el) return null;
+    if (!on) { el.className = ''; clear(el); return el; }
+    hisPhotoBuild();
+    return el;
+  }
+  function hisPhotoBuild() {
+    const P = S.hisPh, el = $('hisPhoto');
+    if (!P || !el) return;
+    clear(el);
+    S.ui.buttons = [];
+    el.className = 'show' + (P.ui ? '' : ' bare');
+    const lab = (b, text, aria) => { b.textContent = text; try { b.setAttribute('aria-label', aria); } catch (e) { /* stub */ } return b; };
+    const top = h('div', 'phTop');
+    top.appendChild(h('div', 'phTitle', '\u{1F4F7} Photo mode'));
+    top.appendChild(h('div', 'phHint', P.msg || 'Drag to pan, pinch or +/- to zoom. Tap the picture to hide the controls.'));
+    top.appendChild(lab(btn('Exit photo mode', () => hisPhotoClose(), 'sm phX'), '✕', 'Exit photo mode'));
+    el.appendChild(top);
+    const sheet = h('div', 'phSheet panel');
+    const row = (label) => { const r = h('div', 'phRow'); r.appendChild(h('span', 'phK', label)); sheet.appendChild(r); return r; };
+    const rf = row('Filter');
+    for (const f of PHO.FILTERS) rf.appendChild(lab(btn('Filter ' + PHO.FNAME[f], () => hisPhotoSet('filter', f), 'sm phChip' + (P.filter === f ? ' on' : '')), PHO.FNAME[f], 'Filter ' + PHO.FNAME[f]));
+    const rm = row('Frame');
+    for (const f of PHO.FRAMES) rm.appendChild(lab(btn('Frame ' + PHO.FRNAME[f], () => hisPhotoSet('frame', f), 'sm phChip' + (P.frame === f ? ' on' : '')), PHO.FRNAME[f], 'Frame ' + PHO.FRNAME[f]));
+    const ra = h('div', 'phRow phAct');
+    ra.appendChild(lab(btn('Stamp ' + (P.stamp ? 'on' : 'off'), () => hisPhotoSet('stamp'), 'sm phChip phStamp' + (P.stamp ? ' on' : '')), 'Stamp ' + (P.stamp ? 'on' : 'off'), 'Crawler stamp ' + (P.stamp ? 'on' : 'off')));
+    ra.appendChild(lab(btn('Zoom out', () => hisPhotoZoomAt(W / 2, H / 2, 1 / PHO.STEP), 'sm phZ'), '−', 'Zoom out'));
+    ra.appendChild(lab(btn('Zoom in', () => hisPhotoZoomAt(W / 2, H / 2, PHO.STEP), 'sm phZ'), '+', 'Zoom in'));
+    ra.appendChild(lab(btn('Reset view', () => hisPhotoReset(), 'sm phZ'), '⟲', 'Reset view'));
+    ra.appendChild(lab(btn('Save PNG', () => hisPhotoSave(), 'sm go phSave'), '⬇ Save PNG', 'Save PNG'));
+    sheet.appendChild(ra);
+    el.appendChild(sheet);
+    if (!P.ui) el.appendChild(h('div', 'phBare', P.msg || 'Tap to show the controls'));
+  }
+  // The camera buttons: the fight's control row (next to the pause gear); the map head adds its own (hisMapCam).
+  function hisDom() {
+    const row = document.querySelector ? document.querySelector('#ctrl .ctrlRow') : null;
+    if (row && !$('hisCam') && row.insertBefore) {
+      const b = h('button', 'btn ghost sm accPauseBtn hisCamBtn', '\u{1F4F7}');
+      b.id = 'hisCam';
+      b.title = 'Photo mode (freezes the fight)';
+      b.setAttribute('aria-label', 'Photo mode');
+      b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); hisPhotoOpen(); };
+      const gear = $('accPause');
+      const at = gear && gear.parentNode === row ? gear.nextSibling : row.firstChild;
+      row.insertBefore(b, at || null);
+    }
+    const cv = S.cv;
+    if (cv && cv.addEventListener) cv.addEventListener('wheel', (ev) => { if (!S.hisPh || S.screen === 'map') return; const p = stagePoint(ev); hisPhotoWheel(p.x, p.y, ev.deltaY); if (ev.preventDefault) ev.preventDefault(); }, { passive: false });
+  }
+  function hisMapCam(l2) {
+    if (!l2 || !l2.appendChild) return null;
+    const b = btn('Photo mode', () => hisPhotoOpen(), 'sm ghost hisCamBtn');
+    b.textContent = '\u{1F4F7}';
+    b.title = 'Photo mode';
+    b.setAttribute('aria-label', 'Photo mode');
+    l2.appendChild(b);
+    return b;
+  }
+  // ================================================================ /HISTORY
+
   // ---------------------------------------------------------------- bin viewer / picker
   function openBin(o) {
     o = o || { mode: 'view' };
@@ -12753,6 +13809,7 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- events
   function showEvent(ed) {
+    if (stoShowEvent(ed)) return;   // a story beat has its own page (STORY)
     const def = tbl('EVENTS')[ed.id];
     if (!def) { toMap(); return; }
     S.sd = { event: ed };
@@ -12962,6 +14019,7 @@ const GAME = (() => {
       endlessScorePanel(b, sc);
       metaEndPanel(b, metaRunEnd(false));   // daily score, stickers this run (META block)
     }
+    hisRunEnd(run, run.endless ? 'endless' : 'loss', b);   // HISTORY: the run's record, and the death recap over this screen
     b.appendChild(h('h3', null, 'Highlights'));
     b.appendChild(lootHighlights(run));
     b.appendChild(statsList(run));
@@ -12991,6 +14049,7 @@ const GAME = (() => {
     endlessScorePanel(b, sc);
     endlessChoice(b);   // CASH OUT (the first choice) or KEEP PLAYING: ENDLESS (ENDLESS block)
     metaEndPanel(b, metaRunEnd(true));   // Tilt unlock, daily score, stickers this run (META block)
+    hisRunEnd(run, 'win');   // HISTORY: the run's record (Endless later updates it)
     b.appendChild(h('h3', null, 'Highlights'));
     b.appendChild(lootHighlights(run));
     b.appendChild(statsList(run));
@@ -13090,10 +14149,12 @@ const GAME = (() => {
   // ---------------------------------------------------------------- input
   function pointer(type, x, y, ev) {
     if (X.AUDIO && X.AUDIO.init && type === 'down') { try { X.AUDIO.init(); } catch (e) { /* optional */ } }
+    if (hisPhotoPointer(type, x, y, ev)) return;   // HISTORY: photo mode pans and pinches instead
     if (type === 'down' && S.popover) { popover(null); }
     if (S.screen === 'intro') { if (type === 'down' && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'map') { mapPointer(type, x, y, ev); return; }
     if (S.screen === 'arcade') { arcPointer(type, x, y); return; }   // ARCADE
+    if (S.screen === 'rival') { stoPointer(type, x, y); return; }   // STORY: the claw-off
     if (S.screen === 'title') return;
     if (S.screen !== 'fight' || !F || !FS) return;
     if (FS.outro) { if (type === 'down') finishOutro(); return; }
@@ -13169,11 +14230,13 @@ const GAME = (() => {
   function onKey(ev, down) {
     const k = ev.key;
     if (accKey(ev, down)) return;   // ACCESS: the Settings panel takes the keys (Escape closes it)
+    if (hisKey(ev, down)) return;   // HISTORY: photo mode, the recap, the History screen's Escape
     if (down && k === 'Escape') { popover(null); return; }
     if (S.screen === 'intro') { if (down && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'capsule') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); capsuleTap(); } return; }
     if (S.screen === 'vault') { vaultKey(ev, down); return; }   // VAULT: crack a capsule, Escape leaves
     if (S.screen === 'arcade') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); arcKey(); } return; }   // ARCADE
+    if (S.screen === 'rival') { stoKey(ev, down); return; }   // STORY: the claw-off
     if (S.screen === 'reward' && S.pay && !S.pay.done) { if (down && (k === ' ' || k === 'Enter')) finishPay(); return; }
     if (S.screen !== 'fight' || !FS) return;
     if (FS.vs) { if (down && !ev.repeat) vsSkip(); return; }
@@ -13188,17 +14251,20 @@ const GAME = (() => {
     const ctx = S.ctx;
     if (!ctx) return;
     if (S.screen === 'intro') return;   // the intro paints the canvas itself
+    if (hisPhotoDraw(ctx)) return;   // HISTORY: photo mode shows the frozen frame through its camera, filter and frame
     const t = S.t;
     const R = X.RENDER;
     ctx.save();
     ctx.setTransform(S.px, 0, 0, S.px, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    hisPhotoCam(ctx);   // HISTORY: photo mode's pan and zoom while the scene paints into its buffer
     const off = fx().offset ? fx().offset() : { x: 0, y: 0 };
     ctx.translate(off.x || 0, off.y || 0);
     if (off.r) { ctx.translate(W / 2, H / 2); ctx.rotate(off.r); ctx.translate(-W / 2, -H / 2); }
     const run = S.run;
     if (S.screen === 'secret') secDraw(ctx, t);   // the hidden door, the true ending (SECRET)
     else if (S.screen === 'vault') vaultDraw(ctx, t);   // the Prize Vault: the wall, the preview, the capsule (VAULT block)
+    else if (S.screen === 'history') hisDraw(ctx, t);   // HISTORY: the title's art behind the run cards
     else if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection' || S.screen === 'stickers' || S.screen === 'tips') {
       if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
       seaTitleDraw(ctx, t);   // SEASON: the spooky dusk or the snowfall over the title
@@ -13213,6 +14279,7 @@ const GAME = (() => {
     drawLoot(ctx, t);   // the ticket stream / the capsule scene, under the particles
     arcDraw(ctx, t);    // ARCADE: the mini-game machine, the event vignette
     seaDraw(ctx, t);    // SEASON: the trick-or-treat door
+    stoDraw(ctx, t);    // STORY: Grabby Gary and the claw-off
     secOver(ctx, t);    // SECRET: a golden key spinning up out of where it was found
     feelDraw(t);        // FEEL: the tip card art, the shopkeeper, the campfire, the forge
     setDraw(ctx, t);    // SETS: the boon draft's machine, the Compactor's press
@@ -13473,6 +14540,7 @@ const GAME = (() => {
       bossBadge(ctx, e, i, ex, p, t);
       ctx.restore();
     });
+    stoArenaDraw(ctx, t);   // a friend from a story runs in (STORY)
     // The rig.
     const cfg = { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW, claw: clawFor() };
     const cabSt = { fog: FS.fog > 0 ? 1 : 0, grease: FS.grease > 0 ? 1 : 0, tilt: FS.tilt, act: run.act, t, party: Math.min(1, FS.party), marquee: FS.marquee };
@@ -13486,6 +14554,7 @@ const GAME = (() => {
     ctx.save();
     ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
     mutCabDraw(ctx, t, 'back');   // the Conveyor Belt under the pile (ENDLESS block)
+    stoCabDraw(ctx, t, 'back');   // the Conveyor King's belt, running the other way (STORY)
     const rigPh = FS.rig ? FS.rig.phase : 'idle';
     const inHand = (rigPh === 'lifting' || rigPh === 'carrying') ? carried() : null;
     const RC = R && R.RARITY_COL;
@@ -13507,7 +14576,7 @@ const GAME = (() => {
       // food wobbles, melting ice is drawn at its shrunken size
       const d = b.data, mat = d.mat, ms = FS.mst[inst.uid];
       const yy = mat && mat.traits.magic && !held ? y - 2 - Math.sin(t * 2.4 + (d.seed || 0)) * 2.2 : y;
-      const melt = (ms && ms.melt < 1 && !inst.frozen ? ms.melt : 1) * mutScaleK();   // Tiny / Giant Items (ENDLESS block)
+      const melt = (ms && ms.melt < 1 && !inst.frozen ? ms.melt : 1) * mutScaleK() * (b.tubeK || 1);   // Tiny / Giant Items (ENDLESS block); CR8: shrunk in the vacuum's canister
       let mag = 0;
       if (pullOn && mat && mat.traits.metal) {
         const dx = b.x - FS.rig.x, dy = b.y - FS.rig.y;
@@ -13559,6 +14628,7 @@ const GAME = (() => {
     clawJuiceFill();   // spin, glass tap, squish, what it holds (CLAW TYPES block)
     cfg.juice = CLAWJ;
     mutCabDraw(ctx, t, 'front');   // Blackout: the dark, and the flashlight on the claw (ENDLESS block)
+    stoCabDraw(ctx, t, 'front');   // the prizes frozen in the Arctic Arcade's ice block (STORY)
     if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
     bestCabDraw(ctx, t);   // goo, the magnetic lid, mounds, the plow, feathers, the rival claw (BESTIARY)
     if (FS.fog > 0 && !split) { ctx.fillStyle = 'rgba(180,190,210,0.55)'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
@@ -13566,6 +14636,7 @@ const GAME = (() => {
     if (split) R.cabinetFront(ctx, CAB.x, CAB.y, cfg, cabSt);
     clawSlotDraw(ctx, t);   // the coin slot (CLAW TYPES block)
     luckDraw(ctx, t);   // Lucky Lou's Luck meter (CONTENT block)
+    cr8Draw(ctx, t);   // Mama Mech's turret on the frame, its shots (CR8 block)
     bossCabDraw(ctx, t, cfg, 'front');
     seaCabDraw(ctx, t, cfg, cabSt);   // SEASON: cobwebs, jack-o'-lanterns, orange and purple bulbs (or snow and icicles)
     secCabDraw(ctx, t, 'front');   // The Machine's face, the rail, the shutter, the cracks, the power down (SECRET)
@@ -13862,6 +14933,7 @@ const GAME = (() => {
     dt = dt > 0 ? Math.min(dt, 0.1) : STEP;
     const real = dt;
     if (accPaused(real)) return;   // ACCESS (round 6): the Settings panel pauses a run
+    if (hisPhotoPaused(real)) return;   // HISTORY (round 8): photo mode freezes everything (and the recap's clock)
     accTick(real);
     // slow motion (the last kill, a tier 3 combo) runs on real time
     if (S.slowT > 0) { S.slowT = Math.max(0, S.slowT - real); dt *= S.slowK || 1; }
@@ -13876,11 +14948,13 @@ const GAME = (() => {
     feelTick(real);   // tip cards, the room scenes, the exit beats (FEEL block)
     endlessTick(real);   // the score count-up, the reboot's beeps (ENDLESS block)
     petTick(dt, real);   // the companion pet, its tips (PETS block)
+    cr8Tick(dt);   // CR8 (round 8): Mama Mech's turret, the player row beside it
     vaultTick(real);     // VAULT (round 5): the wallet's save, the map trail, the vault preview and capsule
     polTick(real);       // POLISH (round 5): relic badges shine
     secTickAll(real);    // SECRET (round 6): a key celebration, the hidden door, the true ending
     setTick(real);       // SETS (round 6): the set fanfare queue, the boon cards, the Compactor's press
     seaTick(real);       // SEASON (round 7): the trick-or-treat door, the title countdown, the wallet's save
+    stoTick(dt, real);   // STORY (round 8): the claw-off, a friend's cameo, the belt, the hunter's arrival
     qaTick(real);        // QA (round 7): the incoming-damage telegraph, safe spots for the corner lane and the toast
     evoTickAll(real);    // EVOLVE (round 7): the evolution ceremony, the pet synergy badge
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
@@ -13980,6 +15054,7 @@ const GAME = (() => {
     const e = $('endTurn');
     if (e) e.onclick = () => endTurn();
     try { accDom(); } catch (err) { /* ACCESS: the pause and thumb buttons are optional */ }
+    try { hisDom(); } catch (err) { /* HISTORY: the fight's camera button is optional */ }
     const stage = $('stage');
     // Any tap outside the popover closes it, except the tap that just opened it.
     if (stage && stage.addEventListener) stage.addEventListener('pointerdown', (ev) => { if (S.popover && ev.target && ev.target.id !== 'pop' && performance.now() - (S.popStamp || 0) > 60) popover(null); });
@@ -15171,6 +16246,971 @@ const GAME = (() => {
   }
   // ================================================================ /SEASON
 
+  // ================================================================ STORY (round 8)
+  /* DESIGN.md "Stories, the rival and alternate bosses (round 8)". Branching
+     stories told in beats on the event screen, callbacks that come back in a
+     later act (a friend in a big fight, a Card Shark hunting you, the next
+     part of a story, a sabotaged boss, a gift in a shop), Grabby Gary (his
+     map tile, the claw-off, the act 3 showdown, his memory of you on the
+     profile) and the alternate bosses' cabinet looks. The rest of the game
+     reaches in through one-line hooks: stoShowEvent (showEvent), stoEventTile
+     (enterTile's event case), stoRivalTile (enterTile), stoNewRun (newRun),
+     stoNewMap (newMap), stoRunFix and the 'rival' screen (load), stoMetaFix
+     (loadMeta), stoFightIds / stoFightStart (startFight), stoFightEnd /
+     stoReward (endFight), stoFightEvent (applyEvent's 'sto'), stoBossEvent
+     (bossEvent), stoSign (signLabel), stoWorld (buildWorld), stoCabDraw /
+     stoArenaDraw (drawFight), stoShop (showShop), stoTick (update), stoDraw
+     (draw), stoPointer / stoKey (input).
+     Run: run.sto (DATA.stoFix repairs it; a save from before has Gary off).
+     Map: tile type 'rival' with content.gary {seed, kind, said, met, live
+     {drops: [{who, got, pts}], p, g}, res, paid}, and an awake Card Shark
+     roamer (id 'sto_shark'). Meta: gary {met, offs, wins, losses, ties,
+     duels, beat}, sto {done {id: n}, pays}. Screen 'rival' (sd {rival: {q,
+     r}}); a story beat is the event screen (sd {event: {id, sto: 1, beat, n,
+     cb, out}}). Headless (the suites, the bots) none of it starts unless
+     GAME.sto.force is set, so every other suite plays as before. */
+  const STOX = { force: false, log: [] };
+  SCREENS.push('rival');
+  WIPE_SCREENS.rival = 1;
+  ANN.PRI.story = 60; ANN.WAIT.story = 2.5;
+  Object.assign(EPITAPH, { plushqueen: 'Unstuffed. Back to the prize bin.', conveyorking: 'Shipped. Return to sender.', arcticarcade: 'Unplugged. The ice can melt now.', gary: 'Undefeated no more.', cardshark: 'Folded.' });
+  const stoOn = () => !S.headless || STOX.force;
+  const stoK = () => D().STO || {};
+  const STO_CALL_TXT = { ally: 'It will remember you.', hunt: 'Someone is going to want that back.', later: 'To be continued, next act.', boss: 'This act\'s boss will not know what hit it.', shop: 'You made a friend in retail.' };
+  const STO_QUIPS = ['Watch and learn.', 'Textbook.', 'Too easy.', 'Eyes on the pro.', 'This one is going on my shelf.', 'Hold my trophy.'];
+
+  // ---- the run's and the profile's records
+  function stoRun(run) {
+    run = run || S.run;
+    if (!run) return null;
+    if (!run.sto || typeof run.sto !== 'object' || !run.sto.gary) run.sto = D().stoFix ? D().stoFix(run.sto && typeof run.sto === 'object' ? run.sto : {}, run.seed) : { st: {}, seen: {}, done: {}, cur: null, calls: [], alt: {}, pays: 0, gary: { on: false, w: 0, l: 0, met: 0, duel: '' } };
+    return run.sto;
+  }
+  function stoNewRun(run) { if (run && D().stoFix) run.sto = D().stoFix(null, run.seed); }
+  function stoRunFix(run) { if (run && D().stoFix) run.sto = D().stoFix(run.sto && typeof run.sto === 'object' ? run.sto : {}, run.seed); }
+  function stoMetaFix(m, o) {
+    if (!m) return m;
+    const src = o && typeof o === 'object' ? o : m;
+    m.gary = D().garyFix ? D().garyFix(src.gary) : Object.assign({}, src.gary || {});
+    const s = src.sto && typeof src.sto === 'object' && !Array.isArray(src.sto) ? src.sto : {};
+    const done = {};
+    if (s.done && typeof s.done === 'object' && !Array.isArray(s.done)) for (const k in s.done) { const n = Math.floor(+s.done[k]); if (n > 0) done[k] = n; }
+    m.sto = { done, pays: Math.max(0, Math.floor(+s.pays) || 0) };
+    stoGearSync(m);
+    return m;
+  }
+  function stoMeta() {
+    if (!S.meta) S.meta = freshMeta();
+    if (!S.meta.gary || !S.meta.sto) stoMetaFix(S.meta, S.meta);
+    return S.meta;
+  }
+  const stoGear = () => (D().garyGear ? D().garyGear(stoMeta().gary) : 0);
+  // The renderer draws Gary in the gear the profile has seen him buy.
+  function stoGearSync(m) { const R = X.RENDER && X.RENDER.sto; if (R && D().garyGear) R.gear = D().garyGear(((m || S.meta) || {}).gary || {}); }
+  // A callback pays off: counted on the run and the profile (the Full Circle sticker), with its chime.
+  function stoPay(c) {
+    const R = stoRun(); if (R) R.pays++;
+    const m = stoMeta(); m.sto.pays++;
+    saveMeta();
+    achRun('meta');
+    snd('stoCallback');
+    STOX.log.push({ k: 'pay', call: c ? c.k : '', id: c ? (c.id || c.story || '') : '' });
+  }
+
+  // ---- stories: an event tile tells one (or the next part of one)
+  function stoEventTile(t) {
+    const run = S.run, SD = D().STORIES;
+    if (!run || !t || !SD || !D().stoPick || !stoOn()) return false;
+    const R = stoRun(run);
+    const later = R.calls.find((c) => c.k === 'later' && SD[c.story] && SD[c.story].beats[c.beat] && D().stoDue(c, run));
+    if (later) {
+      later.done = true;
+      stoPay(later);
+      stoShowBeat(later.story, later.beat, 1, true);
+      return true;
+    }
+    const rng = U.rng(U.hashStr(run.seed + ':sto:' + t.q + ',' + t.r + ':' + D().stoStage(run)));
+    if (rng() >= (stoK().p || 0)) return false;
+    const id = D().stoPick(rng, run);
+    if (!id) return false;
+    R.seen[id] = 1;
+    stoShowBeat(id, 'start', 1);
+    return true;
+  }
+  function stoShowBeat(id, beat, n, cb) {
+    const R = stoRun();
+    if (R) R.cur = { id, beat, n: Math.max(1, n | 0) };
+    showEvent({ id, sto: 1, beat, n: Math.max(1, n | 0), cb: !!cb });
+  }
+  // showEvent hook: a story beat has its own page.
+  function stoShowEvent(ed) {
+    if (!ed || !ed.sto) return false;
+    stoShow(ed);
+    return true;
+  }
+  function stoShow(ed) {
+    const S0 = D().STORIES && D().STORIES[ed.id], beat = S0 && S0.beats[ed.beat];
+    const run = S.run;
+    if (!beat || !run) { S.sd = null; toMap(); return; }
+    const R = stoRun(run), st = R.st[ed.id] || (R.st[ed.id] = {});
+    S.sd = { event: ed };
+    setScreen('event');
+    const b = $('eventBody');
+    clear(b);
+    S.arcEv = null;
+    b.appendChild(h('h1', 'evTitle', S0.title));
+    const tags = h('div', 'stoTags');
+    tags.appendChild(h('span', 'stoTag', 'STORY'));
+    if (!ed.cb) tags.appendChild(h('span', 'stoTag part', 'PART ' + Math.max(1, ed.n | 0)));
+    if (ed.cb) tags.appendChild(h('span', 'stoTag back', 'IT CAME BACK'));
+    b.appendChild(tags);
+    // an illustration dropped at art/events/<story id>.png replaces the drawn vignette (the dice still run)
+    const evPic = typeof ART !== 'undefined' && ART && ART.get ? ART.get('event', ed.id) : null;
+    const scene = arcSceneEl({ id: ed.id }, { art: beat.art || S0.art, title: S0.title });
+    if (evPic) {
+      const pic = document.createElement('img');
+      pic.src = evPic.src; pic.alt = ''; pic.className = 'eventArt eventPic';
+      b.appendChild(pic);
+      if (S.arcEv) S.arcEv.ctx = null;
+    } else b.appendChild(scene);
+    b.appendChild(h('div', 'sub evText', D().stoBeatText(beat, st)));
+    if (ed.out) { stoOutDom(b, ed); save(); return; }
+    const list = h('div', 'list');
+    beat.choices.forEach((ch, idx) => {
+      const ok = D().stoOk(ch, run, st);
+      const bt = btn('', () => { if (!ok) { toast('Not possible right now.'); return; } stoPick(ed, idx); }, 'choice' + (ok ? '' : ' off'));
+      bt.textContent = '';
+      bt.appendChild(h('div', 'c1', ch.txt));
+      if (ch.sub) bt.appendChild(h('div', 'c2', ch.sub));
+      const chips = h('div', 'evChips');
+      const fxl = (ch.fx || []).filter((f) => f && f.k !== 'pet');
+      if (fxl.length) for (const c of arcFxChips(fxl)) chips.appendChild(h('span', 'evChip ' + c.c, c.t));
+      if ((ch.fx || []).some((f) => f && f.k === 'pet')) chips.appendChild(h('span', 'evChip good', 'A PET'));
+      if (ch.roll) chips.appendChild(h('span', 'evChip dice', '⚄ ROLL ' + Math.round(ch.roll.p * 100) + '%'));
+      if (ch.go || (ch.roll && ((ch.roll.win && ch.roll.win.go) || (ch.roll.lose && ch.roll.lose.go)))) chips.appendChild(h('span', 'evChip neutral', 'TO BE CONTINUED'));
+      if (ch.call) chips.appendChild(h('span', 'evChip stoMem', 'IT WILL REMEMBER'));
+      if (!chips.children || chips.children.length) bt.appendChild(chips);
+      list.appendChild(bt);
+    });
+    b.appendChild(list);
+    snd('stoPage');
+    save();
+  }
+  /* A choice: DATA.stoChoose rolls it; the story's state, its callbacks and
+     the next beat are written first, then the fx resolve (pickers included),
+     then the outcome (the dice, the lines) and Continue to the next beat.
+     Headless it goes straight on to the next beat or the map. */
+  function stoPick(ed, idx) {
+    const run = S.run, S0 = D().STORIES && D().STORIES[ed.id];
+    if (!run || !S0 || ed.out) return false;
+    const R = stoRun(run), st = R.st[ed.id] || (R.st[ed.id] = {});
+    const rng = U.rng(U.hashStr(run.seed + ':storoll:' + ed.id + ':' + ed.beat + ':' + idx + ':' + (ed.n | 0)));
+    const res = D().stoChoose(S0, ed.beat, idx, st, run, rng);
+    if (!res) { toast('Not possible right now.'); return false; }
+    const snap = arcSnap();
+    snap.pet = run.pet ? run.pet.id + ':' + (run.pet.xp | 0) : '';
+    Object.assign(st, res.set);
+    for (const k in res.add) st[k] = (+st[k] || 0) + (+res.add[k] || 0);
+    const stage = D().stoStage(run);
+    for (const c of res.calls) R.calls.push(Object.assign({ story: ed.id, stage, act: run.act, done: false }, c));
+    if (R.calls.length > (stoK().maxCalls || 12)) R.calls = R.calls.slice(-(stoK().maxCalls || 12));
+    if (res.next) R.cur = { id: ed.id, beat: res.next, n: (ed.n | 0) + 1 };
+    else { R.cur = null; R.done[ed.id] = ed.beat; const m = stoMeta(); m.sto.done[ed.id] = (m.sto.done[ed.id] | 0) + 1; saveMeta(); }
+    STOX.log.push({ k: 'pick', id: ed.id, beat: ed.beat, idx, win: res.win, next: res.next });
+    if (res.fx.some((f) => f && f.k === 'pet')) stoPetFx();
+    const list = res.fx.filter((f) => f && f.k !== 'pet');
+    S.sd = null;
+    snd('click');
+    resolveFx(list, 0, () => stoOutcome(ed, idx, res, snap));
+    return true;
+  }
+  // The egg hatches: a pet at Lv 2 when you have none, else 30 XP for the one you have.
+  function stoPetFx() {
+    const run = S.run;
+    if (!run) return;
+    if (run.pet && run.pet.id) { petGain(30); return; }
+    const ids = D().PET_IDS || [];
+    if (!ids.length) { addGold(30); return; }
+    petGive(ids[U.hashStr(run.seed + ':stoegg') % ids.length], (D().PET_XP || [0, 12])[1] || 12);
+  }
+  // What changed (the run before and after), plus the story's own promises.
+  function stoLines(snap, res) {
+    const run = S.run, lines = [];
+    const num = (d, word, ic) => { if (d) lines.push({ t: `${d > 0 ? '+' : ''}${d} ${word}`, c: d > 0 ? 'good' : 'bad', ic }); };
+    num(run.hp - snap.hp, 'HP', '♥');
+    num(run.maxHp - snap.maxHp, 'MAX HP', '♥');
+    num(run.gold - snap.gold, 'GOLD', '●');
+    num(run.ink - snap.ink, (Math.abs(run.ink - snap.ink) === 1 ? TERM('ink') : TERM('inkPlural')).toUpperCase(), '☀');
+    num((run.tickets || 0) - snap.tix, 'TICKETS', '★');
+    for (const id of (run.brushes || []).slice(snap.nb)) lines.push({ t: toolDef(id).name, c: 'good', ic: toolDef(id).icon || '*' });
+    for (const id of run.relics || []) if (snap.relics.indexOf(id) < 0) lines.push({ t: relicDef(id).name, c: 'good', relic: id });
+    const now = {};
+    for (const i of run.bin || []) {
+      now[i.uid] = 1;
+      const was = snap.bin[i.uid], d = itemDef(i.id);
+      if (!was) lines.push({ t: itemName(d, i.plus), c: d.rarity === 'junk' ? 'bad' : 'good', item: i.id, plus: !!i.plus });
+      else if (i.plus && !was.plus) lines.push({ t: `Upgraded: ${itemName(d, true)}`, c: 'good', item: i.id, plus: true });
+    }
+    for (const uid in snap.bin) if (!now[uid]) lines.push({ t: `Removed: ${itemDef(snap.bin[uid].id).name}`, c: 'neutral', item: snap.bin[uid].id });
+    const pet = run.pet ? run.pet.id + ':' + (run.pet.xp | 0) : '';
+    if (pet !== snap.pet && run.pet) lines.push({ t: snap.pet && snap.pet.split(':')[0] === run.pet.id ? `${run.pet.name}: +XP` : `New pet: ${run.pet.name}`, c: 'good', ic: '\u{1F43E}' });
+    for (const c of (res && res.calls) || []) lines.push({ t: STO_CALL_TXT[c.k] || 'It will remember.', c: 'good', ic: '\u{1F501}' });
+    if (!lines.length) lines.push({ t: 'Nothing happens.', c: 'neutral' });
+    return lines;
+  }
+  function stoOutcome(ed, idx, res, snap) {
+    if (!S.run) return;
+    const lines = stoLines(snap, res);
+    const te = $('toast');
+    if (te && te.classList) te.classList.remove('show');
+    S.toastT = 0;
+    if (!arcEvJuice()) {
+      if (res.next) { stoShowBeat(ed.id, res.next, (ed.n | 0) + 1); return; }
+      S.sd = null; toMap(); return;
+    }
+    ed.out = { i: idx, pick: res.txt || '', rnd: res.win != null, win: !!res.win, lines, fresh: true, next: res.next || null };
+    showEvent(ed);
+  }
+  // The outcome view: your pick, the dice when it was a roll, the lines stamping in, Continue.
+  function stoOutDom(b, ed) {
+    const out = ed.out;
+    const box = h('div', 'evOut');
+    box.appendChild(h('div', 'evPick', out.pick ? `“${out.pick}”` : ''));
+    // a roll's verdict is the first line to stamp in, once the die has landed
+    const all = out.rnd ? [{ t: out.win ? 'THE DICE SAY YES' : 'THE DICE SAY NO', c: out.win ? 'good' : 'bad', ic: '⚄', roll: 1 }].concat(out.lines) : out.lines;
+    const els = [];
+    for (const ln of all) {
+      const row = h('div', 'evLine ' + (ln.c || 'neutral'));
+      if (ln.item && tbl('ITEMS')[ln.item]) row.appendChild(itemCanvas(itemDef(ln.item), !!ln.plus, 44));
+      else if (ln.relic) row.appendChild(relicCanvas(relicDef(ln.relic), 44));
+      else row.appendChild(h('span', 'ic', ln.ic || '•'));
+      row.appendChild(h('span', 'tx', ln.t));
+      box.appendChild(row);
+      els.push(row);
+    }
+    b.appendChild(box);
+    b.appendChild(btn(out.next ? 'Continue the story' : 'Continue', () => stoContinue(ed), 'pri'));
+    const E = S.arcEv;
+    if (E) {
+      E.lines = els; E.out = { lines: all }; E.shown = 0;
+      E.roll = out.fresh && out.rnd ? (fx().reduced ? 0.5 : 1.05) : 0;
+      E.rt = 0; E.landed = !E.roll;
+      const hsh = U.hashStr(ed.id + ':' + ed.beat + ':' + out.i) % 2;
+      E.face = out.rnd ? (out.win ? 5 + hsh : 1 + hsh) : 1;
+      if (!out.fresh || !arcEvJuice()) { for (const el of els) if (el.classList) el.classList.add('in'); E.shown = els.length; }
+      else if (E.roll) snd('diceRoll');
+    }
+    out.fresh = false;
+  }
+  function stoContinue(ed) {
+    const out = ed && ed.out;
+    S.arcEv = null;
+    if (out && out.next) { stoShowBeat(ed.id, out.next, (ed.n | 0) + 1); return; }
+    S.sd = null;
+    toMap();
+  }
+
+  // ---- the map: the Card Shark on the hunt, Grabby Gary's tile
+  function stoNewMap(run) {
+    const M = run && run.map;
+    if (!M || !X.MAP || !stoOn() || !D().STO) return;
+    stoHunt(run, M);
+    stoGaryPlace(run, M);
+  }
+  // A cheat comes back: the next act's map has the Card Shark awake on the road, walking at you.
+  function stoHunt(run, M) {
+    const R = stoRun(run), MP = X.MAP;
+    const c = R.calls.find((x) => x.k === 'hunt' && D().stoDue(x, run));
+    if (!c || M.room) return null;
+    const road = M.road || [], busy = {};
+    for (const m of M.roam || []) busy[MP.key(m.q, m.r)] = 1;
+    const ok = { empty: 1, fight: 1, gem: 1, ink: 1, brush: 1, event: 1 };
+    let spot = null;
+    for (let i = Math.min(road.length - 2, 7); i >= 3 && !spot; i--) {
+      const t = MP.tileAt(M, road[i][0], road[i][1]);
+      if (t && ok[t.type] && !busy[MP.key(t.q, t.r)]) spot = t;
+    }
+    if (!spot) return null;
+    if (!Array.isArray(M.roam)) M.roam = [];
+    const m = { id: 'sto_shark', q: spot.q, r: spot.r, awake: true, enc: (stoK().hunt || ['cardshark']).slice() };
+    M.roam.push(m);
+    c.done = true;
+    R.huntNote = 1;
+    stoPay(c);
+    return m;
+  }
+  // Gary's tile: act 1 he meets you, act 2 a rematch, act 3 a showdown after two losses (a rubber match after one).
+  function stoGaryPlace(run, M) {
+    const R = stoRun(run), G = R.gary, MP = X.MAP;
+    if (!G || !G.on || run.endless || M.room) return null;
+    const act = run.act | 0;
+    const kind = act === 1 ? 'meet' : act === 2 ? 'off' : act === 3 ? (G.w >= 2 ? 'duel' : G.w >= 1 ? 'off' : '') : '';
+    if (!kind) return null;
+    const busy = {}, onRoad = {}, road = M.road || [];
+    for (const m of M.roam || []) busy[MP.key(m.q, m.r)] = 1;
+    if (M.sec && M.sec.q != null) busy[MP.key(M.sec.q, M.sec.r)] = 1;
+    for (const [q, r] of road) onRoad[MP.key(q, r)] = 1;
+    const land = (t) => !MP.isLand || MP.isLand(t);
+    const cand = [];
+    const ok = (t) => !!t && t.type === 'empty' && !t.done && !onRoad[MP.key(t.q, t.r)] && !busy[MP.key(t.q, t.r)] && land(t) && cand.indexOf(t) < 0 && MP.hexDist(t.q, t.r, M.start.q, M.start.r) >= 3;
+    // beside the road a quarter to three fifths of the way up; else anywhere beside it; else two off it; else any land
+    const lo = Math.max(2, Math.floor(road.length * 0.25)), hi = Math.max(lo + 1, Math.floor(road.length * 0.6));
+    for (const [a, z, rad] of [[lo, hi, 1], [2, road.length - 1, 1], [2, road.length - 1, 2]]) {
+      for (let i = a; i < z && i < road.length; i++) for (const [q, r] of (MP.disc ? MP.disc(M, road[i][0], road[i][1], rad) : MP.neighbors(M, road[i][0], road[i][1]))) { const t = M.tiles[MP.key(q, r)]; if (ok(t)) cand.push(t); }
+      if (cand.length) break;
+    }
+    if (!cand.length) for (const k in M.tiles) if (ok(M.tiles[k])) cand.push(M.tiles[k]);
+    if (!cand.length) return null;
+    const rng = U.rng(U.hashStr((M.seed >>> 0) + ':gary:' + act));
+    const t = cand[Math.min(cand.length - 1, Math.floor(rng() * cand.length))];
+    t.type = 'rival'; t.known = true;
+    t.content = Object.assign({}, t.content, { gary: { seed: U.hashStr(M.seed + ':gary:' + t.q + ',' + t.r) >>> 0, kind, said: '', met: 0, live: null, res: null, paid: false } });
+    return t;
+  }
+  function stoRivalTile(t) {
+    if (!t || !t.content || !t.content.gary) return false;
+    stoRivalShow({ q: t.q, r: t.r });
+    return true;
+  }
+
+  // ---- the rival screen: the meeting, the claw-off, the result, the showdown's call-out
+  const GOFF = { think: 0.9, settle: 0.5, grabMax: 16, turns: 6 };
+  function stoGaryTile(sd) { const M = S.run && S.run.map; return M && sd && X.MAP ? X.MAP.tileAt(M, sd.q, sd.r) : null; }
+  function stoGaryC(G) { const t = stoGaryTile(G); return t && t.content ? t.content.gary || null : null; }
+  function stoRivalShow(sd) {
+    const run = S.run, t = stoGaryTile(sd), c = t && t.content && t.content.gary;
+    if (!run || !c) { toMap(); return null; }
+    S.sd = { rival: { q: sd.q, r: sd.r } };
+    const m = stoMeta().gary, R = stoRun(run);
+    if (!c.said) c.said = D().garyTaunt ? D().garyTaunt(m, c.kind, U.rng((c.seed ^ 0x6a7) >>> 0 || 1)) : 'Name\'s Gary.';
+    if (!c.met) { c.met = 1; m.met++; R.gary.met++; saveMeta(); }
+    stoGearSync();
+    const G = S.gary = { q: sd.q, r: sd.r, ph: c.res ? 'done' : 'intro', t: 0, lineT: 0, line: c.res ? (c.res.quip || c.said) : c.said, gear: stoGear(),
+      W: null, C: null, rig: null, pile: [], sub: 'aim', who: 'p', think: 0, grabT: 0, settle: 0, cur: null, steer: false, keyDir: 0, flashP: 0, flashG: 0, party: 0, msg: '' };
+    setScreen('rival');
+    if (c.live && !c.res) stoOffStart(G, c);   // a reload mid claw-off picks up at the next drop
+    stoRivalDom();
+    snd('garyTaunt');
+    return G;
+  }
+  function stoRivalDom() {
+    const b = $('rivalBody'), G = S.gary, c = G ? stoGaryC(G) : null;
+    if (!b || !G || !c) return;
+    clear(b);
+    S.ui.buttons = [];
+    const m = stoMeta().gary, K = D().GARY || {};
+    const top = h('div', 'stoTop');
+    if (G.ph !== 'play') {
+      top.appendChild(h('div', 'stoK', 'GRABBY GARY'));
+      top.appendChild(h('div', 'stoSub', `Record vs Gary: ${m.wins | 0} won, ${m.losses | 0} lost${m.beat ? `, ${m.beat} showdown${m.beat > 1 ? 's' : ''} won` : ''}`));
+      if (G.gear > 0 && K.gear) top.appendChild(h('div', 'stoSub gear', 'New gear: ' + K.gear[G.gear]));
+    }
+    b.appendChild(top);
+    const msg = h('div', 'arcMsg');
+    msg.id = 'stoMsg';
+    b.appendChild(msg);
+    b.appendChild(h('div', 'grow'));
+    const bot = h('div', 'stoBot');
+    if (G.ph === 'intro') {
+      if (c.kind === 'duel') {
+        bot.appendChild(h('div', 'stoHow', 'You beat him twice this run. He wants a real fight: his own claw grabs your best prize every turn.'));
+        bot.appendChild(btn('Showdown!', () => stoDuel(), 'pri stoGo'));
+      } else {
+        bot.appendChild(h('div', 'stoHow', 'A claw-off: three drops each from one bin. The most prize value in the chute wins. Win and you keep the best thing you grabbed.'));
+        bot.appendChild(btn('Claw-off!', () => stoAccept(), 'pri stoGo'));
+      }
+      bot.appendChild(btn('Not now', () => stoLeave(), 'ghost'));
+    } else if (G.ph === 'play') {
+      const k = c.live ? c.live.drops.length : 0;
+      bot.appendChild(h('div', 'stoHint', G.who === 'p' ? `Your drop ${Math.floor(k / 2) + 1} of 3: drag on the glass, let go to drop.` : 'Gary is aiming...'));
+    } else if (c.res) {
+      const r = c.res, card = h('div', 'stoCard ' + r.res);
+      card.appendChild(h('div', 'big', r.res === 'win' ? 'YOU WIN THE CLAW-OFF!' : r.res === 'lose' ? 'GARY WINS' : 'A TIE'));
+      card.appendChild(h('div', 'sc', `You ${r.p} : ${r.g} Gary`));
+      const lines = [];
+      if (r.gold) lines.push(`+${r.gold} gold`);
+      if (r.tix) lines.push(`+${r.tix} tickets`);
+      if (r.cap) lines.push('A prize capsule (on your map)');
+      if (r.keep) lines.push('You keep: ' + itemDef(r.keep).name);
+      for (const ln of lines) card.appendChild(h('div', 'ln', ln));
+      bot.appendChild(card);
+      bot.appendChild(btn('Continue', () => stoLeave(), 'go'));
+    }
+    b.appendChild(bot);
+  }
+  // A big word over the machine (the arcade's sign style).
+  function stoMsg(str, col, sub) {
+    const G = S.gary;
+    if (G) G.msg = str;
+    const el = $('stoMsg');
+    if (!el) return;
+    clear(el);
+    if (!str) { el.className = 'arcMsg'; return; }
+    el.appendChild(h('span', null, str));
+    if (sub) el.appendChild(h('small', null, sub));
+    el.className = 'arcMsg';
+    try { if (el.style && el.style.setProperty) el.style.setProperty('--ac', col || '#3ddc84'); } catch (e) { /* stub */ }
+    replay(el, 'show');
+  }
+  function stoLeave() {
+    const G = S.gary;
+    if (G && G.ph === 'play') return false;   // a claw-off in progress plays out
+    S.gary = null;
+    stoGearSync();
+    toMap();
+    return true;
+  }
+  // Claw-off! The live record is saved at once; each finished drop is saved, the result is paid once.
+  function stoAccept() {
+    const G = S.gary, c = G ? stoGaryC(G) : null;
+    if (!G || !c || c.res || G.ph !== 'intro' || c.kind === 'duel') return false;
+    if (!c.live) { c.live = { drops: [], p: 0, g: 0 }; save(); }
+    stoOffStart(G, c);
+    stoRivalDom();
+    snd('clawOffBell');
+    music('elite');
+    return true;
+  }
+  function stoPlayerClaw() {
+    const cl = Object.assign({ grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 }, (S.run && S.run.claw) || {});
+    return { prongs: cl.prongs, width: cl.width, grip: cl.grip, speed: cl.speed * accClawK(), rubber: cl.rubber, magnet: cl.magnet };
+  }
+  function stoGaryClaw() {
+    const K = D().GARY || {}, g = S.gary ? S.gary.gear : stoGear();
+    return { type: 'classic', prongs: 2, width: 1.05, grip: (K.grip || [1.1])[g] || 1.1, speed: 1.1 + g * 0.05, rubber: 0, magnet: 0 };
+  }
+  // The shared bin: the pile rolled from the tile's seed, less what was already won, settled.
+  function stoOffStart(G, c) {
+    const P = X.PHYS, run = S.run;
+    G.ph = 'play';
+    if (!P || !P.world || !P.clawRig) return G;
+    const Wd = P.world({ gravity: { x: 0, y: GRAVITY }, w: CAB.w, h: CAB.h });
+    const Cb = P.cabinet(Wd, { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, wallThick: CAB.wallThick, slopeW: CAB.slopeW, slopeH: CAB.slopeH });
+    const bd = Cb.bounds, chuteX = bd.chuteX || CAB.w - CAB.chuteW;
+    G.W = Wd; G.C = Cb;
+    G.rig = P.clawRig(Wd, Object.assign({ cabinet: Cb, homeX: chuteX * 0.5, chuteX: chuteX + CAB.chuteW * 0.5, railY: 26, type: runClawType(), rand: U.rng(((c.seed ^ 0x6a11) >>> 0) || 1) }, stoPlayerClaw()));
+    G.pile = D().garyPile ? D().garyPile(U.rng((c.seed >>> 0) || 1), run.act) : [];
+    const taken = {};
+    for (const d of c.live.drops) for (const i of d.got || []) taken[i] = 1;
+    const rng = U.rng((((c.seed >>> 0) ^ 0x5eed) + c.live.drops.length) >>> 0 || 1);
+    G.pile.forEach((p, i) => {
+      if (taken[i]) return;
+      const def = itemDef(p.id);
+      const body = P.body({ type: 'dynamic', shape: shapeFor(def), x: 30 + rng() * Math.max(20, chuteX - 60), y: 60 + rng() * 150, angle: (rng() - 0.5) * 1.2,
+        density: def.density == null ? 1 : def.density, friction: def.friction == null ? 0.5 : def.friction, restitution: def.restitution == null ? 0.12 : def.restitution,
+        group: 'item', data: { def, pile: i, v: p.v | 0, tags: def.tags || [] } });
+      const mat = P.materialOf ? P.materialOf(def) : null;
+      if (mat && P.applyMaterial) P.applyMaterial(body, mat);
+      Wd.add(body);
+    });
+    for (let i = 0; i < 150; i++) Wd.step(1 / 60);
+    stoTurn(G, c);
+    return G;
+  }
+  // The next drop: yours on even turns, Gary's on odd ones (his claw config, his quip); after six, the result.
+  function stoTurn(G, c) {
+    const k = c.live.drops.length;
+    if (k >= GOFF.turns) { stoOffEnd(G, c); return; }
+    G.who = k % 2 === 0 ? 'p' : 'g';
+    G.sub = 'aim'; G.grabT = 0; G.settle = 0; G.think = GOFF.think; G.steer = false;
+    G.cur = { who: G.who, got: [], pts: 0 };
+    if (G.rig && G.rig.setConfig && G.rig.phase === 'idle') G.rig.setConfig(G.who === 'g' ? stoGaryClaw() : Object.assign({ type: runClawType() }, stoPlayerClaw()));
+    const n = Math.floor(k / 2) + 1;
+    if (G.who === 'g') { G.line = STO_QUIPS[(c.seed + k) % STO_QUIPS.length]; G.lineT = 0; snd('garyTaunt', { pitch: 1.12 }); }
+    stoRivalDom();
+    stoMsg(G.who === 'p' ? 'YOUR DROP' : 'GARY\'S DROP', G.who === 'p' ? PAL0.cyan : '#3ddc84', n + ' of 3');
+  }
+  // Gary aims at the best prize he can see: value first, then how near the top it sits, with his (gear-sharpened) wobble.
+  function stoGaryAim(G, c) {
+    const K = D().GARY || {}, bd = G.C.bounds, chuteX = bd.chuteX || CAB.w - CAB.chuteW;
+    let best = null, bs = -1e9;
+    for (const b of G.W.bodies) {
+      if (b.type !== 'dynamic' || !b.data || b.data.pile == null || b.x > chuteX - 10) continue;
+      const s = (b.data.v | 0) * 10 + ((bd.floorY || CAB.h) - b.y) * 0.15;
+      if (s > bs) { bs = s; best = b; }
+    }
+    const err = ((K.aim || [30])[G.gear] || 30) * (U.rng(((c.seed + c.live.drops.length * 7919) >>> 0) || 1)() * 2 - 1);
+    return U.clamp((best ? best.x : chuteX * 0.5) + err, 24, chuteX - 24);
+  }
+  // Your drop (a release on the glass, Space, or the test driver).
+  function stoOffDrop(x) {
+    const G = S.gary, rig = G && G.rig;
+    if (!G || G.ph !== 'play' || G.who !== 'p' || G.sub !== 'aim' || !rig) return false;
+    if (rig.phase !== 'idle' && rig.phase !== 'moving') return false;
+    if (x != null) rig.setTarget(U.clamp(x, 20, CAB.w - CAB.chuteW - 20));
+    rig.drop();
+    G.sub = 'grab'; G.grabT = 0; G.settle = 0; G.steer = false;
+    stoMsg('');
+    return true;
+  }
+  function stoOffRig(G, ev) {
+    switch (ev) {
+      case 'drop': snd('clawDrop'); break;
+      case 'touch': snd('clawTouch'); break;
+      case 'close': snd('clawClose'); break;
+      case 'lift': snd('clawLift'); break;
+      case 'release': snd('clawRelease'); break;
+      case 'slip': snd('itemSlip'); break;
+      default: break;
+    }
+  }
+  // A prize fell through the chute: it counts for whoever's drop this is.
+  function stoCredit(G, c, body) {
+    G.W.remove(body);
+    const v = body.data.v | 0, idx = body.data.pile;
+    if (!G.cur) G.cur = { who: G.who, got: [], pts: 0 };
+    G.cur.got.push(idx); G.cur.pts += v;
+    if (G.who === 'p') G.flashP = 1; else G.flashG = 1;
+    G.party = v >= 4 ? 1 : Math.max(G.party, 0.5);
+    const x = CAB.x + CAB.w - CAB.chuteW / 2, y = CAB.y + CAB.h - 40;
+    fx().text(x - 30, y - 30, v ? '+' + v : 'A ROCK!', v >= 4 ? '#ffc94d' : v ? '#ffffff' : '#b3a4d6', { size: v >= 4 ? 22 : 17 });
+    if (v > 0) fx().emit('coins', x, y, { n: 0.4 + Math.min(1, v / 5) });
+    snd(v >= 4 ? 'arcWin' : v ? 'coin' : 'thud');
+    STOX.log.push({ k: 'credit', who: G.who, idx, v });
+  }
+  function stoDropEnd(G, c) {
+    const d = G.cur || { who: G.who, got: [], pts: 0 };
+    c.live.drops.push({ who: d.who, got: d.got.slice(), pts: d.pts | 0 });
+    if (d.who === 'p') c.live.p = (c.live.p | 0) + (d.pts | 0); else c.live.g = (c.live.g | 0) + (d.pts | 0);
+    G.cur = null;
+    save();
+    stoTurn(G, c);
+  }
+  // All six drops are in: the result is decided, paid and saved in the same beat (a reload shows it, never pays it twice).
+  function stoOffEnd(G, c) {
+    const t = stoGaryTile(G), run = S.run;
+    if (!c.res) {
+      const p = c.live.p | 0, g = c.live.g | 0, res = p > g ? 'win' : p < g ? 'lose' : 'tie';
+      const prize = D().garyPrize ? D().garyPrize(run.act, res) : { gold: 10, tix: 2, cap: '' };
+      let best = -1;
+      for (const d of c.live.drops) if (d.who === 'p') for (const i of d.got) if (G.pile[i] && (best < 0 || G.pile[i].v > G.pile[best].v)) best = i;
+      const keep = res === 'win' && best >= 0 && G.pile[best].v > 0 ? G.pile[best].id : null;
+      const quip = D().garyTaunt ? D().garyTaunt(stoMeta().gary, res === 'win' ? 'lose' : res === 'lose' ? 'win' : 'tie', U.rng(((c.seed ^ 0x9a) >>> 0) || 1)) : '';
+      c.res = { p, g, res, gold: prize.gold | 0, tix: prize.tix | 0, cap: prize.cap || '', keep, quip };
+      stoOffPay(c, t);
+    }
+    G.ph = 'done';
+    G.line = c.res.quip || '';
+    G.lineT = 0;
+    G.rig = null; G.W = null;
+    const r = c.res;
+    stoRivalDom();
+    stoMsg(r.res === 'win' ? 'YOU WIN!' : r.res === 'lose' ? 'GARY WINS' : 'TIE!', r.res === 'win' ? PAL0.gold : r.res === 'lose' ? '#3ddc84' : PAL0.cyan, `${r.p} : ${r.g}`);
+    if (r.res === 'win') { fx().emit('confetti', 270, 300, { n: 1.4 }); snd('arcJackpot'); } else snd(r.res === 'lose' ? 'garyTaunt' : 'arcWin');
+    music('map');
+  }
+  function stoOffPay(c, t) {
+    if (!c || !c.res || c.paid) return false;
+    c.paid = true;
+    const r = c.res, run = S.run, R = stoRun(run), m = stoMeta().gary;
+    if (r.gold) addGold(r.gold);
+    if (r.tix) addTickets(r.tix);
+    if (r.cap) { const cap = makeCapsule(r.cap); cap.src = 'gary'; lootRun().caps.push(cap); }
+    if (r.keep) { addItem(r.keep); dexSee('items', r.keep); }
+    m.offs++;
+    if (r.res === 'win') { m.wins++; R.gary.w++; } else if (r.res === 'lose') { m.losses++; R.gary.l++; } else m.ties++;
+    if (t) t.done = true;
+    saveMeta();
+    achRun('meta');
+    save();
+    STOX.log.push({ k: 'paid', res: r.res, gold: r.gold });
+    return true;
+  }
+  // The act 3 showdown: an elite fight against Gary and his claw.
+  function stoDuel() {
+    const G = S.gary, t = G ? stoGaryTile(G) : null, c = t && t.content && t.content.gary;
+    if (!c || c.kind !== 'duel' || t.done) return false;
+    t.done = true; c.duel = 1;
+    stoMeta().gary.duels++;
+    saveMeta();
+    S.gary = null;
+    snd('clawOffBell');
+    startFight(['gary'], 'elite', { then: { gary: { q: t.q, r: t.r } } });
+    return true;
+  }
+  function stoRivalTick(real) {
+    const G = S.gary;
+    G.t += real; G.lineT += real;
+    G.flashP = Math.max(0, G.flashP - real * 2.5); G.flashG = Math.max(0, G.flashG - real * 2.5); G.party = Math.max(0, G.party - real * 1.2);
+    if (G.ph !== 'play' || !G.W || !G.rig) return;
+    const c = stoGaryC(G);
+    if (!c || !c.live) return;
+    const rig = G.rig, bd = G.C.bounds;
+    if (G.sub === 'aim' && G.who === 'g') {
+      G.think -= real;
+      if (G.think <= 0) {
+        if (rig.autoSteer && rig.autoSteer(stoGaryAim(G, c), { drop: true, speed: 1.3 })) { G.sub = 'grab'; G.grabT = 0; stoMsg(''); } else G.think = 0.2;
+      }
+    }
+    if (G.sub === 'aim' && G.who === 'p' && G.keyDir) rig.setTarget(U.clamp(rig.targetX + G.keyDir * 300 * real, 20, CAB.w - CAB.chuteW - 20));
+    const evs = rig.update(real);
+    G.W.step(real);
+    for (const ev of evs) stoOffRig(G, ev);
+    for (const body of G.W.bodies.slice()) {
+      if (body.type !== 'dynamic' || !body.data || body.data.pile == null) continue;
+      if (G.C.inChute(body) && body.y > (bd.floorY || CAB.h) + 4) stoCredit(G, c, body);
+    }
+    if (G.sub === 'grab') {
+      G.grabT += real;
+      const home = rig.phase === 'idle' || (rig.phase === 'moving' && !rig.auto);
+      if (home && G.grabT > 0.5) { G.settle += real; if (G.settle >= GOFF.settle) stoDropEnd(G, c); } else G.settle = 0;
+      if (G.grabT > GOFF.grabMax) { if (rig.open && rig.phase !== 'returning' && rig.phase !== 'idle') rig.open(); if (G.grabT > GOFF.grabMax + 3) stoDropEnd(G, c); }
+    }
+  }
+  function stoPointer(type, x, y) {
+    const G = S.gary;
+    if (!G) return;
+    if (G.ph !== 'play') { if (type === 'down') G.lineT = Math.max(G.lineT, 0.3); return; }
+    if (G.who !== 'p' || G.sub !== 'aim' || !G.rig) return;
+    const cx = U.clamp(x - CAB.x, 20, CAB.w - CAB.chuteW - 20);
+    if (type === 'down' && inCabinet(x, y)) { G.steer = true; G.rig.setTarget(cx); }
+    else if (type === 'move' && G.steer) G.rig.setTarget(cx);
+    else if ((type === 'up' || type === 'cancel') && G.steer) { G.steer = false; if (type === 'up') stoOffDrop(cx); }
+  }
+  function stoKey(ev, down) {
+    const G = S.gary, k = ev.key;
+    if (!G || G.ph !== 'play') return;
+    if (k === 'ArrowLeft') G.keyDir = down ? -1 : (G.keyDir === -1 ? 0 : G.keyDir);
+    else if (k === 'ArrowRight') G.keyDir = down ? 1 : (G.keyDir === 1 ? 0 : G.keyDir);
+    else if (down && (k === ' ' || k === 'Enter') && !ev.repeat) { if (ev.preventDefault) ev.preventDefault(); stoOffDrop(null); }
+  }
+  const STO_EST = { hurt: 0, attack: 0, dead: 0 };
+  const STO_CJ = { t: 0, mood: '', blink: 0, idle: 1, look: 0, chase: 0, lucky: 0, bend: 0, squash: 0, speed: 0, glow: 0, hold: [], holdN: 0, pull: [], pullN: 0 };
+  const STO_CFG = { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: CAB.w - CAB.chuteW };
+  const STO_BOARD = { t: 0, p: 0, g: 0, pd: 0, gd: 0, who: 'p', drops: 3, name: 'YOU', flashP: 0, flashG: 0, label: '' };
+  function stoDraw(ctx, t) {
+    if (S.screen !== 'rival' || !S.gary) return;
+    const G = S.gary, R = X.RENDER, run = S.run;
+    if (!R || !run) return;
+    const c = stoGaryC(G);
+    ctx.save();
+    try {
+      if (R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
+      if (R.sto) R.sto.gear = G.gear;
+      const gd = enemyDef('gary');
+      STO_EST.attack = 0;
+      if (G.ph !== 'play') {
+        ctx.fillStyle = 'rgba(18,9,31,0.4)'; ctx.fillRect(0, 0, W, H);
+        if (R.portrait) R.portrait(ctx, run.char, 112, 590, 150, t);
+        if (R.enemy) R.enemy(ctx, gd, 372, 690, 2.1, t, STO_EST);
+        if (R.sto && G.line) R.sto.bubble(ctx, 270, 300, 460, G.line, G.lineT, 356, 425);
+      } else {
+        const live = (c && c.live) || { p: 0, g: 0, drops: [] };
+        const B = STO_BOARD;
+        B.t = t; B.who = G.who; B.name = charDef(run.char) ? String(charDef(run.char).name).split(' ')[0] : 'YOU';
+        B.p = (live.p | 0) + (G.cur && G.cur.who === 'p' ? G.cur.pts : 0); B.g = (live.g | 0) + (G.cur && G.cur.who === 'g' ? G.cur.pts : 0);
+        B.pd = live.drops.filter((d) => d.who === 'p').length; B.gd = live.drops.filter((d) => d.who === 'g').length;
+        B.flashP = G.flashP; B.flashG = G.flashG; B.label = G.who === 'p' ? 'YOUR DROP' : 'GARY\'S DROP';
+        if (R.sto) R.sto.board(ctx, B);
+        if (R.portrait) R.portrait(ctx, run.char, 76, 300, 84, t);
+        if (R.enemy) R.enemy(ctx, gd, 462, 372, 0.95, t, STO_EST);
+        if (R.sto && G.line && G.who === 'g' && G.lineT < 2.4) R.sto.bubble(ctx, 262, 226, 250, G.line, G.lineT, 432, 284);
+        STO_CFG.chuteX = G.C ? G.C.bounds.chuteX : CAB.w - CAB.chuteW;
+        const cst = { t, act: run.act, party: Math.min(1, G.party), marquee: G.party > 0.5 ? 'SCORE!' : '' };
+        if (R.cabinetBack) R.cabinetBack(ctx, CAB.x, CAB.y, STO_CFG, cst);
+        ctx.save(); ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
+        const RC = R.RARITY_COL || {};
+        if (G.W) {
+          for (const b of G.W.bodies) {
+            if (b.type !== 'dynamic' || !b.data || !b.data.def) continue;
+            const d = b.data.def, rar = d.rarity;
+            if (R.item) R.item(ctx, d, CAB.x + b.x, CAB.y + b.y, b.a, 1, { glow: rar === 'u' || rar === 'r' || rar === 'l' ? RC[rar] : 0, glowA: rar === 'l' ? 0.8 : 0.5 });
+          }
+          // the value of the prizes worth 2 or more, on little tags
+          ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          for (const b of G.W.bodies) {
+            if (!b.data || !(b.data.v >= 2)) continue;
+            const x = CAB.x + b.x, y = CAB.y + b.y - (b.br || 14) - 9;
+            ctx.fillStyle = b.data.v >= 4 ? '#ffc94d' : '#2ee6d6'; ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#12091f'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = '#12091f'; ctx.fillText(String(b.data.v), x, y + 0.5);
+          }
+        }
+        if (G.rig && R.claw) {
+          const busy = G.rig.phase !== 'idle' && G.rig.phase !== 'moving';
+          STO_CJ.t = t; STO_CJ.mood = G.who === 'g' ? (busy ? 'focus' : 'happy') : (busy ? 'focus' : ''); STO_CJ.idle = busy ? 0 : 1;
+          R.claw(ctx, G.rig, CAB.x, CAB.y, { juice: STO_CJ, paint: G.who === 'g' ? 'paint_glow' : undefined });
+        }
+        ctx.restore();
+        if (R.cabinetFront) R.cabinetFront(ctx, CAB.x, CAB.y, STO_CFG, cst);
+      }
+    } catch (e) { /* the scene is optional */ }
+    ctx.restore();
+  }
+
+  // ---- fights: the alternate boss, the hunter's tier, the callbacks at the bell, Gary's gear
+  /* startFight hook: an act's boss is its alternate STO.altP of the time
+     (decided once per act and saved on run.sto.alt, so a reload and the map
+     agree); a hunting Card Shark is an elite fight. A reloaded fight keeps
+     the ids it was saved with. Returns [ids, tier]. */
+  function stoFightIds(ids, tier, opts) {
+    opts = opts || {};
+    const run = S.run;
+    if (!run || !stoOn() || !ids || !ids.length) return [ids, tier];
+    if (tier === 'normal' && ids.indexOf('cardshark') >= 0) tier = 'elite';
+    if (tier !== 'boss' || opts.seed != null) return [ids, tier];
+    const act = run.act, own = stoK().own && stoK().own[act], alt = D().stoAltOf ? D().stoAltOf(act) : null;
+    if (!alt || !own || ids.indexOf(own) < 0) return [ids, tier];
+    const R = stoRun(run), key = String(D().stoStage(run));
+    let pick = R.alt[key];
+    if (pick == null) { pick = U.rng(U.hashStr(run.seed + ':altboss:' + key))() < (stoK().altP == null ? 0.5 : stoK().altP) ? alt : ''; R.alt[key] = pick; }
+    if (!pick) return [ids, tier];
+    return [ids.map((x) => (x === own ? pick : x)), tier];
+  }
+  // After newFight: Gary's gear and his line, then the callbacks due in an elite or boss fight (again on a reload of the same fight).
+  function stoFightStart(Fi, tier, opts, seed) {
+    if (!Fi || !S.run || !stoOn() || !X.COMBAT) return;
+    opts = opts || {};
+    if (Fi.enemies.some((e) => e.id === 'gary')) {
+      stoGearSync();
+      if (X.COMBAT.stoGear) X.COMBAT.stoGear(Fi, stoGear());
+      const line = D().garyTaunt ? D().garyTaunt(stoMeta().gary, 'duel', U.rng((seed >>> 0) || 1)) : '';
+      for (const e of Fi.enemies) if (e.id === 'gary' && line) e.def = Object.assign({}, e.def, { taunt: line });
+    }
+    if (tier !== 'elite' && tier !== 'boss') return;
+    const run = S.run, R = stoRun(run);
+    const list = opts.seed != null ? R.calls.filter((c) => c.done && c.fight === seed && (c.k === 'ally' || c.k === 'boss'))
+      : R.calls.filter((c) => !c.done && (c.k === 'ally' || (c.k === 'boss' && tier === 'boss')) && D().stoDue(c, run));
+    for (const c of list) {
+      if (c.k === 'ally' && X.COMBAT.stoAlly) X.COMBAT.stoAlly(Fi, c.id, c.pow || 1);
+      else if (c.k === 'boss' && X.COMBAT.stoSabotage) X.COMBAT.stoSabotage(Fi, c.s || {}, (stoK().sabotage || {}).hp);
+      if (!c.done) { c.done = true; c.fight = seed; stoPay(c); }
+    }
+  }
+  // endFight: the showdown's result goes on Gary's record.
+  function stoFightEnd(result) {
+    if (!F || !S.run || !F.enemies.some((e) => e.id === 'gary')) return;
+    const m = stoMeta().gary, R = stoRun();
+    if (result === 'win') { m.beat++; R.gary.duel = 'won'; } else R.gary.duel = 'lost';
+    saveMeta();
+    achRun('meta');
+  }
+  // endFight (a win): Gary and the Card Shark each leave a capsule on top of the reward.
+  function stoReward(rw) {
+    if (!rw || !F || !stoOn()) return;
+    const gary = F.enemies.some((e) => e.id === 'gary'), shark = F.enemies.some((e) => e.id === 'cardshark');
+    if (!gary && !shark) return;
+    if (!Array.isArray(rw.caps)) rw.caps = [];
+    const cap = makeCapsule(gary ? 'boss' : 'elite');
+    cap.src = gary ? 'gary' : 'shark';
+    rw.caps.push(cap);
+  }
+  function stoFS() { return FS.sto || (FS.sto = { ally: null, beltK: 0, beltV: 70 }); }
+  // applyEvent 'sto': a friend's cameo, the intern's sabotage.
+  function stoFightEvent(ev) {
+    if (!F || !FS || !ev) return;
+    const T = stoFS();
+    if (ev.k === 'ally') {
+      T.ally = { id: ev.id, t: 0, idx: ev.idx };
+      FS.beatT = Math.max(FS.beatT || 0, 0.6);
+      banner(ev.id === 'ghost' ? 'GHOST PAL!' : 'CLAW CRAB RETURNS!', 'jackpot', 1.5, 'story');
+      fx().text(210, 250, ev.id === 'ghost' ? 'Boo! That one was for you.' : 'I owe you one!', '#fff6c0', { size: 15, life: 1.8 });
+      snd(ev.id === 'ghost' ? 'boo' : 'crabSnip');
+    } else if (ev.k === 'sabotage') {
+      const p = ev.idx >= 0 && F.enemies[ev.idx] ? enemyPos(ev.idx) : { x: 380, y: 280, w: 120, h: 150 };
+      banner('SABOTAGED!', 'jackpot', 1.5, 'story');
+      for (let i = 0; i < 6; i++) fx().emit('sparks', p.x + (i - 3) * 14, p.y - p.h * 0.5, { n: 0.4 });
+      fx().text(p.x, p.y - p.h - 12, 'LOOSE SCREWS -' + (ev.v | 0), '#ffc94d', { size: 16 });
+      snd('clank');
+    }
+  }
+  function stoArenaDraw(ctx, t) {
+    const T = FS && FS.sto, A = T && T.ally, R = X.RENDER;
+    if (!A || !R || !R.sto) return;
+    const u = A.t, dur = 1.9;
+    if (u >= dur) { T.ally = null; return; }
+    // it runs in from the left edge, pinches (or haunts), and runs back out
+    const x = u < 0.4 ? -50 + (u / 0.4) * 200 : u < 1.35 ? 150 : 150 - ((u - 1.35) / 0.55) * 220;
+    const atk = u >= 0.45 && u < 1.2 ? Math.max(0, 1 - ((u - 0.45) % 0.35) / 0.35) : 0;
+    const y = ARENA.floor + (A.id === 'ghost' ? -26 + Math.sin(u * 6) * 6 : 0);
+    R.sto.ally(ctx, A.id, x, y, A.id === 'ghost' ? 1.3 : 1.1, t, { attack: atk });
+  }
+  // The alternate bosses' signatures in the cabinet ({t:'boss'} kinds of their own).
+  const STO_BK = { plush: 1, belt: 1, beltJam: 1, beltOff: 1, glacier: 1, glacierBreak: 1 };
+  function stoBossEvent(ev) {
+    if (!ev || !STO_BK[ev.k] || !F || !FS) return false;
+    const reduced = !!fx().reduced, T = stoFS();
+    const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
+    const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
+    switch (ev.k) {
+      case 'plush': {
+        stoArcIn(ev.items || [], m, 'plushSqueak');
+        fx().text(270, 430, 'PLUSH PARADE!', '#ff9ec7', { big: true });
+        fx().text(270, 470, 'Each plush soaks 1 off every hit on her. Grab them out!', '#ffd1e6', { size: 14, life: 2.4 });
+        fx().emit('confetti', m.x, m.y, { n: 0.8 });
+        FS.party = Math.max(FS.party || 0, 0.6); FS.marquee = 'HUG TIME!';
+        if (has) anim(ev.idx).spitT = S.t;
+        snd('plushSqueak'); fx().shake(5);
+        break;
+      }
+      case 'belt': {
+        T.beltV = ev.v || 70;
+        stoArcIn(ev.items || [], m, 'thud');
+        fx().text(270, 430, 'CONVEYOR ON!', '#ffb347', { big: true });
+        fx().text(270, 470, 'The floor runs away from the chute. A metal prize jams it.', '#ffe0b0', { size: 14, life: 2.4 });
+        if (has) anim(ev.idx).spitT = S.t;
+        snd('beltRun'); fx().shake(6);
+        break;
+      }
+      case 'beltJam': {
+        const cx = CAB.x + binW() - 20, cy = CAB.y + CAB.h - 10;
+        for (let i = 0; i < 4; i++) fx().emit('sparks', cx - i * 100, cy, { n: 0.7 });
+        fx().text(270, 470, 'JAMMED! THE BELT STOPS', '#ffc94d', { size: 18 });
+        snd('clank'); snd('beltRun', { pitch: 0.5 }); fx().shake(5);
+        break;
+      }
+      case 'beltOff': snd('beltRun', { pitch: 0.6, vol: 0.5 }); break;
+      case 'glacier': {
+        for (const inst of ev.insts || []) {
+          const b = bodyOf(inst);
+          if (!b) continue;
+          fx().emit('frost', CAB.x + b.x, CAB.y + b.y, { n: 1 });
+          fx().ring(CAB.x + b.x, CAB.y + b.y, '#bfe8ff', { r0: 6, r1: 50, w: 4, life: 0.35 });
+          removeBody(b);
+        }
+        stoRebuild(ev.inst);
+        fx().text(270, 430, (ev.n | 0) > 1 ? 'THE ICE BLOCK GROWS!' : 'FROZEN INTO A BLOCK!', '#8dfff5', { big: true });
+        fx().text(270, 470, 'Deliver the block to smash it open.', '#dff6ff', { size: 14, life: 2.2 });
+        if (!reduced) fx().flash('#bfe8ff', 0.18);
+        snd('iceGrow'); snd('freeze');
+        break;
+      }
+      case 'glacierBreak': {
+        let k = 0;
+        for (const inst of ev.insts || []) {
+          if (F.bin.indexOf(inst) < 0 || bodyOf(inst)) continue;
+          const spot = { x: 60 + ((hashOf(inst) % 1000) / 1000) * Math.max(40, binW() - 120), y: 40 + (k % 3) * 14 };
+          dropIn(inst, spot);
+          fx().emit('frost', CAB.x + spot.x, CAB.y + spot.y, { n: 0.6 });
+          k++;
+        }
+        fx().text(270, 430, ev.smash ? 'SMASHED! ' + (ev.insts || []).length + ' BACK' : 'THE ICE MELTS', '#8dfff5', { big: true });
+        snd('iceBreak'); fx().shake(ev.smash ? 9 : 4);
+        break;
+      }
+      default: break;
+    }
+    return true;
+  }
+  // Junk from a boss's mouth arcs into the bin, one after another.
+  function stoArcIn(items, m, sound) {
+    let k = 0;
+    for (const inst of items) {
+      if (F.bin.indexOf(inst) < 0 || bodyOf(inst)) continue;
+      const q = FS.spawnQ.indexOf(inst);
+      if (q >= 0) FS.spawnQ.splice(q, 1);
+      const spot = { x: 40 + ((hashOf(inst) % 1000) / 1000) * Math.max(40, binW() * 0.6), y: 26 + (k % 3) * 12 }, kk = k;
+      arcItem(inst, m.x, m.y, CAB.x + spot.x, CAB.y + spot.y, 0.5, () => { dropIn(inst, spot); snd(sound, { pitch: 1 + (kk % 4) * 0.08 }); }, k * 0.1);
+      k++;
+    }
+  }
+  // The ice block grew a size: its body is rebuilt from the bigger def where it lay.
+  function stoRebuild(inst) {
+    if (!inst || F.bin.indexOf(inst) < 0) return;
+    const b = bodyOf(inst);
+    if (b) { const at = { x: b.x, y: Math.min(b.y, CAB.h - 70), a: b.a }; removeBody(b); spawnBody(inst, at); }
+    else { const q = FS.spawnQ.indexOf(inst); if (q >= 0) FS.spawnQ.splice(q, 1); dropIn(inst, { x: binW() * 0.45, y: 40 }); }
+  }
+  // signLabel: the belt while it runs; the plush shield and the ice block when no warning is due.
+  function stoSign() {
+    if (!F || !FS) return null;
+    if (F.conv) return ['CONVEYOR ON', 'belt'];
+    if (F.phase === 'player' && X.COMBAT.sigNext && F.enemies.some((e) => e.alive && X.COMBAT.sigNext(e))) return null;
+    const q = F.enemies.some((e) => e.alive && e.def && e.def.sig && e.def.sig.id === 'plush');
+    const n = q && X.COMBAT.stoPlush ? X.COMBAT.stoPlush(F) : 0;
+    if (n > 0) return ['FLUFF SHIELD -' + n, 'plush'];
+    const I = F.stoIce;
+    if (I && I.insts && I.insts.length) return ['ICE BLOCK: ' + I.insts.length + ' FROZEN', 'glacier'];
+    return null;
+  }
+  /* buildWorld: the Conveyor King's belt. While F.conv runs, the floor wall
+     itself moves (a surface velocity on the floor segment: friction carries
+     the pile away from the chute like a real belt, however much sits on it)
+     and the bodies touching it are kept awake; it stops the substep it ends. */
+  function stoWorld() {
+    if (!FS || !FS.world || !FS.cabinet) return;
+    const floor = (FS.cabinet.segs || []).filter((s) => s && (s.wall === 'floor' || s.wall === 'slopeL' || s.wall === 'slopeR'));
+    FS.world.addHook((hh) => {
+      const v = F && F.conv && FS ? -Math.abs(F.conv.v || 70) : 0;
+      for (const s of floor) s.vx = v;
+      if (!v || !FS.cabinet) return;
+      const cb = FS.cabinet.bounds;
+      for (const b of FS.items) {
+        if (b.held > 0 || b.type !== 'dynamic') continue;
+        if (b.x < cb.chuteX - 8 && b.box && b.box.y1 >= cb.floorY - 6) {
+          if (b.vx > v) b.vx += Math.max(v - b.vx, -300 * hh);
+          if (b.sl) { b.sl = false; b.slT = 0; }
+        }
+      }
+    });
+  }
+  // drawFight: the reverse belt under the pile ('back'); what the ice block holds, seen through it ('front').
+  function stoCabDraw(ctx, t, layer) {
+    const R = X.RENDER && X.RENDER.sto;
+    if (!F || !FS || !R) return;
+    const T = FS.sto;
+    if (layer === 'back') {
+      if (T && T.beltK > 0.01) R.belt(ctx, CAB.x, CAB.x + binW(), CAB.y + CAB.h - 12, t, T.beltV || 70, T.beltK);
+      return;
+    }
+    const I = F.stoIce;
+    if (!I || !I.insts || !I.insts.length || !X.RENDER.item) return;
+    for (const b of FS.items) {
+      const d = b.data && b.data.def;
+      if (!d || d.sto !== 'glacier' || !d.shape || !d.shape.verts) continue;
+      const vs = d.shape.verts, w = Math.abs(vs[1].x - vs[0].x), hh = Math.abs(vs[2].y - vs[1].y);
+      const n = Math.min(6, I.insts.length), cols = n > 3 ? 3 : n, rows = n > 3 ? 2 : 1;
+      const cw = w / cols, ch = hh / rows;
+      ctx.save(); ctx.translate(CAB.x + b.x, CAB.y + b.y); ctx.rotate(b.a);
+      for (let i = 0; i < n; i++) {
+        const idef = itemDef(I.insts[i].id), k = Math.min(cw, ch) * 0.78 / Math.max(8, shapeLong(idef.shape));
+        X.RENDER.item(ctx, idef, ((i % cols) - (cols - 1) / 2) * cw * 0.9, (Math.floor(i / cols) - (rows - 1) / 2) * ch * 0.8, 0.35 * (i - 1), k, { plus: !!I.insts[i].plus, alpha: 0.9 });
+      }
+      ctx.restore();
+      R.glaze(ctx, CAB.x + b.x, CAB.y + b.y, w, hh, b.a, t);
+    }
+  }
+  // showShop: the vending machine you saved runs this shop now, and remembers you (a gift, once).
+  function stoShop(b, shop) {
+    const run = S.run;
+    if (!run || !shop || !b || !stoOn()) return;
+    const R = stoRun(run);
+    if (!shop.stoGift) {
+      const c = R.calls.find((x) => x.k === 'shop' && D().stoDue(x, run));
+      if (!c) return;
+      const rng = U.rng(U.hashStr(run.seed + ':vendy:' + D().stoStage(run)));
+      let pool = D().pool ? (D().pool(stoK().vendy || 'u', run.char) || []) : [];
+      pool = pool.filter((id) => !itemDef(id).bag);
+      const id = pool.length ? pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))] : '';
+      c.done = true;
+      shop.stoGift = { id, gold: id ? 0 : 40 };
+      if (id) { addItem(id); dexSee('items', id); } else addGold(40);
+      stoPay(c);
+    }
+    const g = shop.stoGift, note = h('div', 'stoNote');
+    note.appendChild(h('div', 'k', 'VENDY RUNS THIS SHOP NOW'));
+    note.appendChild(h('div', 's', g.id ? `The vending machine you saved remembers you. A free ${itemDef(g.id).name} is in your bin. EXACT CHANGE NOT REQUIRED.` : 'The vending machine you saved remembers you: 40 gold, on the house.'));
+    b.appendChild(note);
+  }
+  // update: the claw-off, a friend's cameo, the belt's ease, the hunter's arrival on the map.
+  function stoTick(dt, real) {
+    if (!S.run) return;
+    if (S.screen === 'rival' && S.gary) stoRivalTick(real);
+    else if (S.screen === 'fight' && F && FS && (FS.sto || F.conv)) {
+      const T = stoFS();
+      if (T.ally) T.ally.t += real;
+      T.beltK += ((F.conv ? 1 : 0) - T.beltK) * Math.min(1, real * 5);
+      if (F.conv) T.beltV = F.conv.v || T.beltV;
+    } else if (S.screen === 'map' && S.run.sto && S.run.sto.huntNote && stoOn()) {
+      S.run.sto.huntNote = 0;
+      toast('HUNTED! Lefty\'s big brother is on the road. He wants his money back.', 3.4);
+      fx().text(270, 320, 'HUNTED!', '#ff5a4a', { big: true, life: 2 });
+      snd('hunted');
+      save();
+    }
+  }
+  // ================================================================ /STORY
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -15211,6 +17251,11 @@ const GAME = (() => {
     content: {
       luckFx: (ev) => { if (FS) luckFx(ev); }, luckDraw: (ctx, t) => { if (FS) luckDraw(ctx, t); }, matHook: (k, inst) => { if (FS) matHook(k, inst); },
       capUp: () => capUp(S.run), LUCKM, get luckM() { return FS ? FS.luckM || null : null; },
+    },
+    // CR8 (round 8, DESIGN.md "Mama Mech and two new claws"): the turret as shown, its dials, the claws' juice
+    cr8: {
+      K: CR8T, get tur() { return FS && F && F.tur ? cr8S() : null; }, draw: (ctx, t) => { if (FS) cr8Draw(ctx, t); },
+      event: (ev) => { if (FS && ev) cr8TurretEv(ev); }, clawEvent: (ev) => (FS && FS.rig ? clawTypeEvent(ev) : false), tick: (dt) => cr8Tick(dt || 1 / 60),
     },
     // Claw types (DESIGN.md "Claw types"): the picker, the run's claw, the claw juice.
     claws: {
@@ -15306,6 +17351,32 @@ const GAME = (() => {
       rewardItems: seaRewardItems, relicAdd: seaRelicAdd, show: seaShow, knock: seaKnock, hurry: seaHurry, leave: seaLeave, cont: seaCont, pay: seaPay, trickEnc: seaTrickEnc,
       shelf: seaShelf, buy: seaBuy, countdown: seaCountdown, fmt: seaFmt, musicId: seaMusicId,
       get door() { return S.seaDoor || null; }, get log() { return SEA.log; }, get date() { return SEA.date; }, get url() { return SEA.url; },
+    },
+    // HISTORY (round 8, DESIGN.md "Run history, the death recap and photo mode (round 8)"): the records, the screen, the recap, photo mode.
+    his: {
+      K: HIS_UI, PHO, show: showHistory, find: hisFind, build: hisBuild, runEnd: hisRunEnd, quit: hisQuit, metaFix: hisMetaFix, idOf: hisIdOf, verb: hisVerb,
+      recapData: hisRecapData, recapShow: hisRecapShow, recapDismiss: hisRecapDismiss, share: hisShare, saveCanvas: hisSaveCanvas, turnEnd: hisTurnEnd, event: hisEvent,
+      photo: {
+        open: hisPhotoOpen, close: hisPhotoClose, set: hisPhotoSet, pan: hisPhotoPan, zoom: hisPhotoZoomAt, reset: hisPhotoReset, save: hisPhotoSave, export: hisPhotoExport,
+        pointer: hisPhotoPointer, wheel: hisPhotoWheel, can: hisPhotoCan, draw: (ctx) => hisPhotoDraw(ctx), compose: (ctx) => { const P = S.hisPh; if (!P) return false; hisPhotoBuf(P); hisPhotoCompose(ctx, P, true); return true; },
+        get state() { return S.hisPh || null; }, get last() { return S.hisPhoto || null; },
+      },
+      get meta() { return hisM(); }, get ui() { return S.hisUi || null; }, get recap() { return S.hisRecap || null; }, get log() { return HISR; },
+      get last() { return S.hisLast || null; }, get card() { return S.hisCard || null; }, get saved() { return S.hisSaved | 0; },
+    },
+    // STORY (round 8, DESIGN.md "Stories, the rival and alternate bosses (round 8)"): stories and their callbacks, Grabby Gary, the alternate bosses.
+    sto: {
+      get force() { return STOX.force; }, set force(v) { STOX.force = !!v; }, on: stoOn, log: STOX.log, K: GOFF,
+      run: stoRun, meta: stoMeta, metaFix: stoMetaFix, runFix: stoRunFix, eventTile: stoEventTile, beat: stoShowBeat,
+      pick: (i) => (S.sd && S.sd.event && S.sd.event.sto ? stoPick(S.sd.event, i) : false),
+      cont: () => { const ed = S.sd && S.sd.event; if (ed && ed.sto && ed.out) { stoContinue(ed); return true; } return false; },
+      get ed() { return S.sd && S.sd.event && S.sd.event.sto ? S.sd.event : null; },
+      newMap: stoNewMap, hunt: stoHunt, garyPlace: stoGaryPlace, fightIds: stoFightIds, fightStart: stoFightStart, reward: stoReward, shop: stoShop, sign: stoSign,
+      bossEvent: stoBossEvent, gear: stoGear, gearSync: stoGearSync,
+      setAlt: (key, id) => { const R = stoRun(); if (R) R.alt[String(key)] = id || ''; return R ? R.alt : null; },
+      rival: { show: stoRivalShow, accept: stoAccept, drop: stoOffDrop, leave: stoLeave, duel: stoDuel, pay: stoOffPay, tile: stoGaryTile,
+        aim: () => { const G = S.gary, c = G ? stoGaryC(G) : null; return G && c && G.W ? stoGaryAim(G, c) : null; },
+        get state() { return S.gary || null; } },
     },
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },

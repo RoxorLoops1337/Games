@@ -1038,6 +1038,84 @@ const AUDIO = (() => {
   Object.assign(GAP, { clawCoin: 0.2, clawSpin: 0.4, clawTap: 0.3, clawCheer: 0.5, magHum: 0.5, magZap: 0.06, magDrop: 0.3, scoopSlosh: 0.12, handSquish: 0.12, hookFire: 0.15, hookThunk: 0.1 });
   NAMES.push('clawCoin', 'clawSpin', 'clawTap', 'clawCheer', 'magHum', 'magZap', 'magDrop', 'scoopSlosh', 'handSquish', 'hookFire', 'hookThunk');
 
+  // ---------------------------------------------------------------- CR8 (round 8)
+  // Mama Mech and two new claws (DESIGN.md "Mama Mech and two new claws"):
+  // the vacuum's roar, each slurp up the hose, the choke of a clog, the blow
+  // at the chute; the twin claws' servo and double clack; the turret's
+  // ratchet as a part goes on, its power-up, its shots and the mega blast.
+  Object.assign(BANK, {
+    // The vacuum spins up: a rising whine over a roar of air.
+    vacWhoosh(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 500 * p, to: 2600 * p, q: 0.9, dur: 0.55, v: 0.2, a: 0.08 });
+      blip(out, t, { w: 'sawtooth', f: 140 * p, to: 420 * p, dur: 0.5, v: 0.05, lp: 1400, a: 0.06 });
+      return 0.6;
+    },
+    // A prize shoots up the hose: a hollow fwoomp that rises in pitch.
+    vacSlurp(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 180 * p, to: 900 * p, dur: 0.16, v: 0.22 });
+      hiss(out, t, { type: 'bandpass', f: 1200 * p, to: 4200 * p, q: 3, dur: 0.14, v: 0.12 });
+      blip(out, t, { at: 0.12, w: 'triangle', f: 1400 * p, dur: 0.05, v: 0.06 });
+      return 0.2;
+    },
+    // A big thing plugs the nozzle: a thunk and a choked, sputtering motor.
+    vacClog(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 160 * p, to: 60, dur: 0.14, v: 0.35 });
+      for (let i = 0; i < 4; i++) hiss(out, t, { at: 0.08 + i * 0.09, type: 'lowpass', f: 700, dur: 0.05, v: 0.14, crunch: true });
+      blip(out, t, { at: 0.05, w: 'sawtooth', f: 90 * p, to: 50, dur: 0.4, v: 0.06, lp: 600 });
+      return 0.46;
+    },
+    // Over the chute: the canister blows out with a puff.
+    vacBlow(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 2400 * p, to: 600, q: 1, dur: 0.3, v: 0.2 });
+      blip(out, t, { w: 'sine', f: 600 * p, to: 200, dur: 0.18, v: 0.1 });
+      return 0.32;
+    },
+    // The twin heads slide to their prizes: a little servo whirr.
+    twinSeek(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 300 * p, to: 520 * p, dur: 0.18, v: 0.04, lp: 1800 });
+      blip(out, t, { at: 0.02, w: 'square', f: 330 * p, to: 560 * p, dur: 0.16, v: 0.03, lp: 1800 });
+      return 0.22;
+    },
+    // Both small claws clamp: clack-clack.
+    twinClick(out, t, o, p) {
+      for (let i = 0; i < 2; i++) {
+        blip(out, t, { at: i * 0.07, w: 'triangle', f: (1500 + i * 300) * p, to: 700 * p, dur: 0.04, v: 0.12 });
+        hiss(out, t, { at: i * 0.07, type: 'highpass', f: 3500, dur: 0.03, v: 0.1 });
+      }
+      return 0.14;
+    },
+    // A part bolted onto the turret: a ratchet and a clank.
+    turBuild(out, t, o, p) {
+      for (let i = 0; i < 3; i++) hiss(out, t, { at: i * 0.045, type: 'bandpass', f: 2200 + i * 400, q: 7, dur: 0.02, v: 0.1 });
+      blip(out, t, { at: 0.14, w: 'triangle', f: 520 * p, to: 380 * p, dur: 0.1, v: 0.16 });
+      return 0.26;
+    },
+    // A new turret level: a power-up arpeggio over a motor.
+    turUp(out, t, o, p) {
+      const lv = Math.max(1, Math.min(5, (o && o.lv) | 0 || 1));
+      blip(out, t, { w: 'sawtooth', f: 120 * p, to: 360 * p, dur: 0.4, v: 0.05, lp: 1600 });
+      [60, 64, 67, 72].slice(0, 2 + Math.min(2, lv >> 1)).forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.07, w: 'square', f: mtof(n + lv) * p, dur: 0.12, v: 0.07, lp: 4000 }));
+      return 0.5;
+    },
+    // A turret shot: a punchy pew, deeper at a higher level.
+    turFire(out, t, o, p) {
+      const lv = Math.max(1, Math.min(5, (o && o.lv) | 0 || 1));
+      blip(out, t, { w: 'square', f: (1100 - lv * 110) * p, to: 180, dur: 0.1, v: 0.1, lp: 3000 });
+      hiss(out, t, { type: 'lowpass', f: 1600, to: 300, dur: 0.07, v: 0.14 + lv * 0.02, crunch: true });
+      return 0.14;
+    },
+    // The Mega Mech's last shot hits everything: a boom with a zap on top.
+    turMega(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 110 * p, to: 40, dur: 0.45, v: 0.4 });
+      hiss(out, t, { type: 'lowpass', f: 1200, to: 150, dur: 0.4, v: 0.3, crunch: true });
+      blip(out, t, { at: 0.02, w: 'sawtooth', f: 1800 * p, to: 300, dur: 0.12, v: 0.06, lp: 5000 });
+      return 0.5;
+    },
+  });
+  Object.assign(GAP, { vacWhoosh: 0.4, vacSlurp: 0.05, vacClog: 0.4, vacBlow: 0.3, twinSeek: 0.2, twinClick: 0.1, turBuild: 0.08, turUp: 0.3, turFire: 0.05, turMega: 0.4 });
+  NAMES.push('vacWhoosh', 'vacSlurp', 'vacClog', 'vacBlow', 'twinSeek', 'twinClick', 'turBuild', 'turUp', 'turFire', 'turMega');
+  // ---------------------------------------------------------------- /CR8
+
   // ---------------------------------------------------------------- arcade
   // The map's arcade (DESIGN.md "Arcade"): plinko pegs and drops, the prize
   // wheel's clicker, the slot machine's lever / reels / thunks, the drumroll
@@ -2015,6 +2093,77 @@ const AUDIO = (() => {
   });
   Object.assign(GAP, { knock: 0.1, creak: 0.8, treat: 0.5, boo: 0.6, cackle: 0.5, candy: 0.06 });
   NAMES.push('knock', 'creak', 'treat', 'boo', 'cackle', 'candy');
+
+  /* ---------------------------------------------------------------- STORY (round 8)
+     DESIGN.md "Stories, the rival and alternate bosses (round 8)": a story
+     beat turning, a callback coming back around, Grabby Gary's laugh, the
+     claw-off bell, the Plushie Queen's squeak, the Conveyor King's belt,
+     the Arctic Arcade's freeze, the crab's snip and the hunted sting. */
+  Object.assign(BANK, {
+    // A page of the story turns: a paper flick and a soft two-note chime.
+    stoPage(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 2600 * p, q: 0.9, dur: 0.12, v: 0.12 });
+      blip(out, t, { at: 0.06, w: 'sine', f: mtof(79) * p, dur: 0.22, v: 0.06 });
+      blip(out, t, { at: 0.14, w: 'sine', f: mtof(84) * p, dur: 0.3, v: 0.05 });
+      return 0.45;
+    },
+    // Something from earlier comes back: a harp run up and a bell on top.
+    stoCallback(out, t, o, p) {
+      [67, 71, 74, 79, 83, 86].forEach((n, i) => blip(out, t, { at: i * 0.05, w: 'triangle', f: mtof(n) * p, dur: 0.3, v: 0.06 }));
+      blip(out, t, { at: 0.32, w: 'sine', f: mtof(91) * p, dur: 0.7, v: 0.06, vib: [6, 10] });
+      return 1.0;
+    },
+    // Grabby Gary: a nasal "nyeh heh heh", three bleeps bouncing down.
+    garyTaunt(out, t, o, p) {
+      [76, 72, 69, 72, 67].forEach((n, i) => blip(out, t, { at: i * 0.085, w: 'square', f: mtof(n) * p, to: mtof(n - 2) * p, dur: 0.07, v: 0.06, lp: 2400, q: 6 }));
+      return 0.55;
+    },
+    // The claw-off bell: ding ding.
+    clawOffBell(out, t, o, p) {
+      for (const at of [0, 0.18]) {
+        blip(out, t, { at, w: 'sine', f: 1320 * p, dur: 0.6, v: 0.14 });
+        blip(out, t, { at, w: 'sine', f: 2640 * p, dur: 0.35, v: 0.05 });
+        hiss(out, t, { at, type: 'highpass', f: 6000, dur: 0.03, v: 0.1 });
+      }
+      return 0.85;
+    },
+    // A squeaky plush toy.
+    plushSqueak(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 900 * p, to: 1500 * p, dur: 0.09, v: 0.07, lp: 3200, q: 8 });
+      blip(out, t, { at: 0.1, w: 'square', f: 1400 * p, to: 800 * p, dur: 0.12, v: 0.06, lp: 3000, q: 8 });
+      return 0.25;
+    },
+    // The conveyor starts: a motor spinning up, rollers clacking.
+    beltRun(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 55 * p, to: 110 * p, dur: 0.7, v: 0.08, lp: 600 });
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: 0.08 + i * 0.1, type: 'bandpass', f: 1800, q: 3, dur: 0.03, v: 0.1, crunch: true });
+      return 0.8;
+    },
+    // An item freezes into the block: a crackling crunch and a cold shimmer.
+    iceGrow(out, t, o, p) {
+      for (let i = 0; i < 5; i++) hiss(out, t, { at: i * 0.04, type: 'highpass', f: 4200 + i * 400, dur: 0.035, v: 0.12, crunch: true });
+      blip(out, t, { at: 0.12, w: 'sine', f: mtof(96) * p, to: mtof(89) * p, dur: 0.5, v: 0.04, vib: [9, 20] });
+      return 0.6;
+    },
+    // The Claw Crab snips twice.
+    crabSnip(out, t, o, p) {
+      for (const at of [0, 0.11]) {
+        hiss(out, t, { at, type: 'bandpass', f: 3400 * p, q: 4, dur: 0.035, v: 0.2, crunch: true });
+        blip(out, t, { at, w: 'triangle', f: 1900 * p, to: 700 * p, dur: 0.05, v: 0.08 });
+      }
+      return 0.3;
+    },
+    // Hunted: a low stab and a tense rising minor second.
+    hunted(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 73 * p, dur: 0.6, v: 0.16, lp: 900 });
+      blip(out, t, { at: 0.05, w: 'square', f: mtof(64) * p, dur: 0.5, v: 0.05, lp: 1800 });
+      blip(out, t, { at: 0.05, w: 'square', f: mtof(65) * p, dur: 0.5, v: 0.05, lp: 1800 });
+      return 0.7;
+    },
+  });
+  Object.assign(GAP, { stoPage: 0.2, stoCallback: 0.8, garyTaunt: 0.5, clawOffBell: 0.6, plushSqueak: 0.06, beltRun: 0.5, iceGrow: 0.2, crabSnip: 0.2, hunted: 0.8 });
+  NAMES.push('stoPage', 'stoCallback', 'garyTaunt', 'clawOffBell', 'plushSqueak', 'beltRun', 'iceGrow', 'crabSnip', 'hunted');
+  /* ---------------------------------------------------------------- /STORY */
 
   // ---------------------------------------------------------------- music voices
   function playEvent(inst, ev, t) {

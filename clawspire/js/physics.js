@@ -117,6 +117,28 @@ const PHYS = (() => {
     hook: { id: 'hook', poly: null, segR: 0, hubR: 6, open: 0, closed: 0, size: 1,
       speed: 1.1, drop: 2.1, lift: 1.1, close: 1, gripAdd: 0, mu: 1, roundMu: 1, longMu: 1, haltK: 1, dig: 0, floorClear: 30, weld: 'spear', tear: 34, weldK: 0.3, weldV: 800, closeT: 0.12,
       tip: 28, barb: 3 },
+    // ---- CR8 (round 8, DESIGN.md "Mama Mech and two new claws"): the vacuum
+    // nozzle and the twin claws.
+    //   vacuum: weld 'suck'. It parks and lifts `park` px lower (the wand and
+    //     the canister ride above the nozzle); suction pulls light things
+    //     within suckR (x width, x1.25 with the second intake) toward the mouth
+    //     with suckF (x grip), weaker on heavy ones; whatever reaches the mouth
+    //     and fits the bore (bore x size) and weighs under suckM (x grip) flies
+    //     up the wand into the canister (at most `cap`, +1 wide, +1 third prong);
+    //     a big thing plugs the nozzle (the clog: welded to the mouth, no more
+    //     suction until it is released). `can` / `wand` size the canister.
+    //   twin: two small claws on one bar (sep x size from the middle). At the
+    //     drop each head slides up to `seek` x size toward the nearest prize
+    //     under it (`slide` px/s), keeping `gap` x size apart; the bar comes
+    //     down until one head lands, then the other reels out on its own
+    //     cable (at most `ext` x size); they close independently (pL / pR are
+    //     the two heads), `hang` x size of cable under the bar.
+    vacuum: { id: 'vacuum', poly: null, segR: 0, hubR: 17, open: 0, closed: 0, size: 1,
+      speed: 0.9, drop: 0.95, lift: 0.95, close: 1, gripAdd: 0, mu: 1, roundMu: 1, longMu: 1, haltK: 1, dig: 0, floorClear: 22, weld: 'suck', tear: 20, weldK: 0.3, weldV: 600, closeT: 0.6,
+      park: 70, suckR: 92, suckF: 5200, suckM: 11, bore: 20.5, cap: 3, can: 34, wand: 38 },
+    twin: { id: 'twin', poly: PRONG, segR: RIG.segR, hubR: 10, open: PHI_OPEN, closed: PHI_CLOSED, size: 0.72,
+      speed: 1, drop: 1, lift: 1, close: 1.15, gripAdd: -0.05, mu: 1, roundMu: 1, longMu: 0.9, haltK: 1, dig: 0, floorClear: 60, weld: null,
+      twin: { sep: 36, seek: 32, slide: 260, hang: 22, ext: 110, gap: 70 } },
   };
   const typeOf = (id) => CLAW_TYPES[id] || CLAW_TYPES.classic;
   /* A claw drawn without a world (the picker, the title): the same geometry
@@ -136,6 +158,7 @@ const PHYS = (() => {
     };
     const hy = y + RIG.hingeY * s;
     const ghost = T.ghost ? T.poly.map(([lx, ly]) => ({ x: x + lx * 0.18 * s * (u - 0.35), y: hy + ly * (0.9 - 0.08 * u) * s })) : null;
+    if (T.twin || T.weld === 'suck') return cr8Pose(T, id, s, x, y, phi, o);   // CR8: the twin claws, the vacuum nozzle
     return {
       phase: o.phase || 'idle', type: id, sway: 0, field: o.field || 0, auto: null,
       geo: { s, hubR: T.hubR * s, type: id }, cfg: { type: id, prongs: 2, rubber: 0, magnet: 0 },
@@ -143,6 +166,43 @@ const PHYS = (() => {
       bodies: { hub: { x, y, r: T.hubR * s }, prongs: [side(-1), side(1)], ghost, tip: T.weld === 'spear' ? { x, y: y + T.tip * s } : null },
       stuck: () => [],
     };
+  }
+  // ---- CR8: the twin claws and the vacuum nozzle (shared by the rig and clawPose)
+  /* One prong of a small twin head hung at (hx, hy), angle phi: the same
+     maths as a classic prong, side -1 / 1 the geometric side. */
+  function cr8Prong(T, s, hx, hy, side, phi) {
+    const px0 = hx + side * RIG.hingeX * s, py0 = hy + RIG.hingeY * s, al = -side * phi, ca = Math.cos(al), sa = Math.sin(al);
+    return T.poly.map(([lx, ly]) => { const px = side * lx * s, py = ly * s; return { x: px0 + px * ca - py * sa, y: py0 + px * sa + py * ca }; });
+  }
+  /* The vacuum's parts for the renderer, around a nozzle hub at (x, y): the
+     mouth, the wand's top (the intake), the canister (centre and radius)
+     and the load. Fills and returns out. */
+  function cr8VacGeo(T, s, x, y, st, out) {
+    out = out || {};
+    out.x = x; out.y = y; out.s = s; out.r = T.hubR * s;
+    out.mouthY = y + T.hubR * s * 0.55;
+    out.topY = y - T.wand * s;
+    out.cr = T.can * s; out.cy = out.topY - out.cr * 0.72;
+    out.n = st.n | 0; out.cap = st.cap | 0; out.clog = !!st.clog; out.full = out.cap > 0 && out.n >= out.cap; out.suck = st.suck || 0;
+    return out;
+  }
+  function cr8Pose(T, id, s, x, y, phi, o) {
+    const base = { phase: o.phase || 'idle', type: id, sway: 0, field: o.field || 0, auto: null,
+      geo: { s, hubR: T.hubR * s, type: id }, cfg: { type: id, prongs: 2, rubber: 0, magnet: 0 },
+      cableTop: { x, y: y - (o.cable == null ? 40 : o.cable) }, stuck: () => [], tube: () => [] };
+    if (T.twin) {
+      const sep = T.twin.sep * s, hang = T.twin.hang * s;
+      const heads = [{ x: x - sep, y: y + hang, r: T.hubR * s }, { x: x + sep, y: y + hang, r: T.hubR * s }];
+      const prongs = [];
+      for (const hd of heads) for (const sd of [-1, 1]) prongs.push(cr8Prong(T, s, hd.x, hd.y, sd, phi));
+      base.bodies = { hub: { x, y, r: 5 * s + 2 }, prongs, ghost: null, tip: null, twin: heads };
+      base.geo.reach = hang + (RIG.hingeY + T.poly[T.poly.length - 1][1]) * s;
+      return base;
+    }
+    base.bodies = { hub: { x, y, r: T.hubR * s }, prongs: [[], []], ghost: null, tip: null };
+    base.vac = cr8VacGeo(T, s, x, y, { n: o.fill ? Math.round(o.fill * T.cap) : 0, cap: T.cap, clog: !!o.clog, suck: o.field || 0 });
+    base.geo.reach = T.hubR * s;
+    return base;
   }
 
   // ---- materials -----------------------------------------------------------
@@ -369,14 +429,22 @@ const PHYS = (() => {
       if (claw) {
         wake(b);
         b.held = 2;
-        if (s.own === 0 && pen > RIG.touchHub && ny < -0.2) K.touch = true;
-        if (s.own !== 0 && pen > RIG.touchProng && ny < -0.3) K.touch = true;
+        if ((s.own === 0 && pen > RIG.touchHub && ny < -0.2) || (s.own !== 0 && pen > RIG.touchProng && ny < -0.3)) {
+          K.touch = true;
+          if (s.head) K.tw.touch[s.head < 0 ? 0 : 1] = true;   // CR8: which twin head landed
+        }
+        // CR8: a light twin head can shove a loose pile down instead of sinking
+        // into it, so steady pressing on anything below also counts as landing
+        if (s.head && s.own === 0 && ny < -0.5 && pen > 0.08) K.tw.press[s.head < 0 ? 0 : 1] = true;
+        // ...and so does shoving something too big to hold into the floor
+        if (s.head && ny < -0.3 && b.br > 40 * K.s && b.box.y1 > W.clampBox.floorY + RIG.floorSink + 5 && b.x < W.clampBox.chuteX) K.tw.touch[s.head < 0 ? 0 : 1] = true;
         // a prong only stalls on something in the way of its closing sweep,
         // not on the pile leaning against its outside
         if (s.own !== 0) {
           const open = ((s.own < 0 ? K.pL : K.pR) - K.T.closed) / (K.T.open - K.T.closed);
           if (pen > K.halt + RIG.haltOpen * open * open) {
-            const omc = s.own * RIG.closeRate, cvx = -omc * (py - s.hy), cvy = omc * (px - s.hx);
+            // (a twin head's prongs: own is the head, sd the side it sweeps from)
+            const omc = (s.sd || s.own) * RIG.closeRate, cvx = -omc * (py - s.hy), cvy = omc * (px - s.hx);
             if (cvx * nx + cvy * ny < 0) { if (s.own < 0) K.hitL = true; else K.hitR = true; }
           }
         }
@@ -393,12 +461,14 @@ const PHYS = (() => {
   }
   function collide(W) {
     const B = W.bodies; W.contacts.length = 0;
+    if (W.ctl && W.ctl.tw) W.ctl.tw.press[0] = W.ctl.tw.press[1] = false;   // CR8: twin heads re-read each step
     for (const b of B) sync(b);
     for (let i = 0; i < B.length; i++) {
       const a = B[i];
+      if (a.tube) continue;   // CR8: riding up the vacuum's hose (the rig moves it)
       for (let j = i + 1; j < B.length; j++) {
         const b = B[j];
-        if (a.sl && b.sl) continue;
+        if ((a.sl && b.sl) || b.tube) continue;
         const dx = b.x - a.x, dy = b.y - a.y, RR = a.br + b.br;
         if (dx * dx + dy * dy > RR * RR) continue;
         const mu = Math.sqrt(a.friction * b.friction) * Math.min(a.slick, b.slick);
@@ -417,7 +487,7 @@ const PHYS = (() => {
       }
     }
     for (const b of B) {
-      if (b.type !== 'dynamic') continue;
+      if (b.type !== 'dynamic' || b.tube) continue;
       if (!b.sl) for (const s of W.segs) bodyVsSeg(W, b, s, false);
       if (!(b.passClaw > 0)) for (const s of W.csegs) bodyVsSeg(W, b, s, true);
     }
@@ -492,7 +562,7 @@ const PHYS = (() => {
   function physStep(W, h) {
     const g = W.gravity, B = W.bodies, cb = W.clampBox;
     for (const b of B) {
-      if (b.sl || b.type !== 'dynamic') continue;
+      if (b.sl || b.type !== 'dynamic' || b.tube) continue;
       // material gravity scale (magic floats down) and air drag (light things drift)
       b.vx += g.x * h * b.gs; b.vy += g.y * h * b.gs;
       const ld = 1 - (PH.linDamp + b.drag) * h, ad = 1 - PH.angDamp * h;
@@ -502,7 +572,7 @@ const PHYS = (() => {
     prepContacts(W, h);
     solveContacts(W);
     for (const b of B) {
-      if (b.sl || b.type !== 'dynamic') continue;
+      if (b.sl || b.type !== 'dynamic' || b.tube) continue;
       const sp = b.vx * b.vx + b.vy * b.vy;
       if (sp > PH.maxV * PH.maxV) { const k = PH.maxV / Math.sqrt(sp); b.vx *= k; b.vy *= k; }
       b.x += b.vx * h; b.y += b.vy * h; b.a += b.av * h;
@@ -694,15 +764,26 @@ const PHYS = (() => {
       touch: false, hitL: false, hitR: false, haltL: false, haltR: false, blkL: 0, blkR: 0,
       loosen: 0, jolt: 0, sway: 0, swayV: 0, cargo: [], returning: false,
       T: T0, stuck: [], digT: 0, spear: null, field: 0,
+      // CR8: the twin heads (x offsets from the bar, cable reeled out, their
+      // slide / reel speeds, the goals, who landed), the vacuum's tube, clog and clock
+      tw: { x: [0, 0], d: [0, 0], vx: [0, 0], vd: [0, 0], goal: [0, 0], touch: [false, false], done: [false, false], press: [false, false], lean: [0, 0] },
+      tube: [], clog: null, vt: 0, blowN: 0,
     };
+    /* CR8: how far below the rail a type parks (the vacuum's wand and canister
+       ride above its nozzle; a small cabinet gets a shorter drop). */
+    const parkOf = (T) => Math.min(T.park || 0, ch * 0.18);
     const R = {
-      phase: 'idle', x: homeX, y: RAIL, targetX: homeX, sway: 0, type: cfg.type, auto: null, field: 0,
+      phase: 'idle', x: homeX, y: RAIL + parkOf(T0), targetX: homeX, sway: 0, type: cfg.type, auto: null, field: 0,
       cableTop: { x: homeX, y: railY },
-      bodies: { hub: { x: homeX, y: RAIL, r: T0.hubR }, prongs: [[], []], ghost: null, tip: null },
+      bodies: { hub: { x: homeX, y: RAIL + parkOf(T0), r: T0.hubR }, prongs: [[], []], ghost: null, tip: null },
       cfg, homeX, chuteX, railY, geo: null, ctl: K, events: [],
       setTarget, drop, update, held, locked, cradle, open, setConfig, destroy, calm, size, gripCC, shed: () => shedRiders(),
       autoSteer, cancelAuto, aimAt, stuck: () => K.stuck.map(sk => sk.b),
+      tube: () => K.tube.map(e => e.b), vac: null,   // CR8: what the vacuum holds in its canister, its parts for the renderer
     };
+    K.y = RAIL + parkOf(T0);
+    /* CR8: where the hub parks and lifts to. */
+    function railOf() { return RAIL + parkOf(K.T); }
     function size() { return RIG.base * cfg.width * (cfg.prongs === 3 ? RIG.prong3Size : 1) * K.T.size; }
     /* Clawspire's grip (0.75..2+) mapped onto Claw Crawl's 0..1 grip. */
     function gripCC() {
@@ -717,6 +798,7 @@ const PHYS = (() => {
        magnet's face, the hook's barb). */
     function reachOf() {
       const T = K.T;
+      if (T.twin) return T.twin.hang * K.s + (RIG.hingeY + T.poly[T.poly.length - 1][1]) * K.s;   // CR8: a twin head's tips
       if (T.weld === 'spear') return T.tip * K.s;
       if (!T.poly) return T.hubR * K.s;
       return (RIG.hingeY + T.poly[T.poly.length - 1][1]) * K.s;
@@ -729,11 +811,11 @@ const PHYS = (() => {
     }
     /* Horizontal reach of an open prong tip from the hub centre. */
     function openSpan() {
-      const P = prongPts(1);
+      const P = K.T.twin ? twinPts(1, 1) : prongPts(1);
       let m = K.T.hubR * K.s; for (const p of P) m = Math.max(m, p.x - K.x);
       return m;
     }
-    function lim() { return Math.max(34 * K.s, K.T.hubR * K.s + 4) + 6; }
+    function lim() { return K.T.twin ? twinSpan() + K.T.twin.sep * K.s + 6 : Math.max(34 * K.s, K.T.hubR * K.s + 4) + 6; }
     function clampX(x) { return clamp(x, lim(), binX - lim()); }
     function prongPts(side) {
       const T = K.T;
@@ -742,6 +824,91 @@ const PHYS = (() => {
       const hx = K.x + side * RIG.hingeX * s, hy = K.y + RIG.hingeY * s;
       const al = -side * phi, ca = Math.cos(al), sa = Math.sin(al);
       return T.poly.map(([lx, ly]) => { const x = side * lx * s, y = ly * s; return { x: hx + x * ca - y * sa, y: hy + x * sa + y * ca }; });
+    }
+    // ---- CR8: the twin heads. Head i (0 left, 1 right) hangs hang x size under
+    // the bar plus the cable it reeled out, its prongs at the head's own angle
+    // (pL for the left head, pR for the right one).
+    function headX(i) { return K.x + K.tw.x[i]; }
+    function headY(i) { return K.y + K.T.twin.hang * K.s + K.tw.d[i]; }
+    function twinPts(i, side) { return cr8Prong(K.T, K.s, headX(i), headY(i), side, i ? K.pR : K.pL); }
+    // How far an open head reaches out from its own centre.
+    function twinSpan() { let m = K.T.hubR * K.s; for (const p of cr8Prong(K.T, K.s, 0, 0, 1, K.T.open)) m = Math.max(m, p.x); return m; }
+    /* The height the cargo and slip checks measure from: the hub, or the lower twin head. */
+    function hubY() { return K.T.twin ? Math.max(headY(0), headY(1)) : K.y; }
+    /* The drop's first beat: the prize nearest the aim (the topmost on a
+       tie) is the main one. A big one (wider than a head can hold) is hugged
+       by both heads, one on each side; a small one goes to the head on its
+       side and the other head picks the nearest prize on its own side (or
+       stays home). The heads always keep gap apart. */
+    function twinSeek() {
+      const T = K.T, tw = K.tw, s = K.s, sep = T.twin.sep * s, reach = (T.twin.sep + T.twin.seek) * s, gap = T.twin.gap * s;
+      const best = (x0, side, not) => {
+        let bb = null, bd = Infinity;
+        for (const b of W.bodies) {
+          if (b.type !== 'dynamic' || b.tube || b === not || b.group !== 'item' || b.x >= binX || b.y < K.y) continue;
+          if (Math.abs(b.x - K.x) > reach || (side < 0 && b.x > K.x + sep * 0.25) || (side > 0 && b.x < K.x - sep * 0.25)) continue;
+          const d = Math.abs(b.x - x0);
+          if (d < bd - 2 || (d <= bd + 2 && bb && b.box.y0 < bb.box.y0)) { bd = Math.min(d, bd); bb = b; }
+        }
+        return bb;
+      };
+      const main = best(K.x, 0, null);
+      let g0 = -sep, g1 = sep;
+      if (main && main.br > twinSpan() * 0.85) {
+        const hs = Math.max(gap / 2, Math.min(main.br * 0.75, sep * 1.4));
+        g0 = main.x - K.x - hs; g1 = main.x - K.x + hs;
+      } else if (main) {
+        const mine = main.x <= K.x ? 0 : 1;
+        const other = best(K.x + (mine ? -sep : sep), mine ? -1 : 1, main);
+        if (mine === 0) { g0 = main.x - K.x; if (other) g1 = other.x - K.x; }
+        else { g1 = main.x - K.x; if (other) g0 = other.x - K.x; }
+      }
+      if (g1 - g0 < gap) {
+        // too close: the main prize's head stays on it, the other steps aside
+        if (main && main.br <= twinSpan() * 0.85 && main.x > K.x) g0 = g1 - gap;
+        else if (main && main.br <= twinSpan() * 0.85) g1 = g0 + gap;
+        else { const m = (g0 + g1) / 2; g0 = m - gap / 2; g1 = m + gap / 2; }
+      }
+      const lo = twinSpan() + 6 - K.x, hi = binX - twinSpan() - 6 - K.x;
+      tw.goal[0] = clamp(g0, lo, hi - gap); tw.goal[1] = clamp(g1, lo + gap, hi);
+    }
+    /* Slide each head toward its goal (px/s capped), this substep. */
+    function twinSlide(h, g0, g1) {
+      const tw = K.tw, v = K.T.twin.slide;
+      if (g0 != null) { tw.goal[0] = g0; tw.goal[1] = g1; }
+      for (let i = 0; i < 2; i++) tw.vx[i] = clamp((tw.goal[i] - tw.x[i]) / h, -v, v);
+    }
+    /* The twin drop: the bar comes down until a head lands, then the other
+       head reels out on its own cable until it lands too (or the floor, or
+       the end of its cable); both landed, the claws close. */
+    function twinDrop(h, maxY) {
+      const T = K.T, tw = K.tw, s = K.s;
+      if (K.t <= h * 1.5) { twinSeek(); tw.done[0] = tw.done[1] = tw.touch[0] = tw.touch[1] = false; tw.lean[0] = tw.lean[1] = 0; }
+      twinSlide(h);
+      const was = tw.done[0] || tw.done[1];
+      for (let i = 0; i < 2; i++) {
+        tw.lean[i] = tw.press[i] ? tw.lean[i] + h : 0;
+        if (tw.done[i]) continue;
+        if (tw.touch[i] || tw.lean[i] > 0.03 || headY(i) >= maxY - 0.5 || tw.d[i] >= T.twin.ext * s) tw.done[i] = true;
+      }
+      const first = !was && (tw.done[0] || tw.done[1]);
+      tw.touch[0] = tw.touch[1] = false;
+      const v = RIG.dropSpeed * T.drop;
+      tw.vd[0] = tw.vd[1] = 0;
+      if (!tw.done[0] && !tw.done[1]) {
+        K.vy = v;
+        const low = Math.max(headY(0), headY(1));
+        if (low + K.vy * h > maxY) K.vy = Math.max(0, (maxY - low) / h);
+      } else {
+        for (let i = 0; i < 2; i++) if (!tw.done[i]) tw.vd[i] = Math.max(0, Math.min(v, (maxY - headY(i)) / h));
+      }
+      if (first) emit('touch');
+      if (tw.done[0] && tw.done[1]) {
+        K.st = 'close'; K.t = 0; K.haltL = K.haltR = false; K.blkL = K.blkR = 0;
+        K.halt = (RIG.haltBase + RIG.haltGrip * K.grip) * T.haltK;
+        K.vy = 0;
+        emit('close');
+      }
     }
     /* The drawn-only third finger: a shorter straight prong down the middle
        (the tri-claw's is a full prong that curls with the other two). */
@@ -758,6 +925,24 @@ const PHYS = (() => {
     function buildSegs() {
       const s = K.s, out = W.csegs, T = K.T; out.length = 0;
       if (T.weld === 'spear') return;   // the harpoon's rope passes through everything
+      if (T.twin) {
+        // CR8: two small heads, each a hub and two prongs; own is the head
+        // (-1 left, 1 right), sd the prong's side, head says who touched
+        for (let i = 0; i < 2; i++) {
+          const hx = headX(i), hy = headY(i), vx = K.vx + K.tw.vx[i], vy = K.vy + K.tw.vd[i], own = i ? 1 : -1, dphi = i ? K.wR : K.wL;
+          const hub = mkSeg(hx, hy, hx, hy, T.hubR * s); hub.own = 0; hub.head = own; hub.vx = vx; hub.vy = vy; hub.hx = hx; hub.hy = hy;
+          out.push(hub);
+          for (const side of [-1, 1]) {
+            const P = twinPts(i, side), phx = hx + side * RIG.hingeX * s, phy = hy + RIG.hingeY * s;
+            for (let k = 0; k < P.length - 1; k++) {
+              const g = mkSeg(P[k].x, P[k].y, P[k + 1].x, P[k + 1].y, T.segR * s);
+              g.own = own; g.sd = side; g.head = own; g.vx = vx; g.vy = vy; g.om = -side * dphi; g.hx = phx; g.hy = phy;
+              out.push(g);
+            }
+          }
+        }
+        return;
+      }
       const hub = mkSeg(K.x, K.y, K.x, K.y, T.hubR * s); hub.own = 0; hub.vx = K.vx; hub.vy = K.vy; hub.hx = K.x; hub.hy = K.y;
       out.push(hub);
       if (!T.poly) return;
@@ -788,14 +973,29 @@ const PHYS = (() => {
       R.x = K.x; R.y = K.y; R.phase = phaseName(); R.sway = K.sway; R.targetX = K.tx; R.field = K.field;
       R.cableTop.x = K.x - K.sway * 12; R.cableTop.y = railY;
       const hb = R.bodies.hub; hb.x = K.x; hb.y = K.y; hb.r = K.T.hubR * K.s;
+      if (K.T.twin) { cr8Mirror(); return; }   // CR8: the twin heads
+      R.bodies.prongs.length = 2; R.bodies.twin = null;
       R.bodies.prongs[0] = prongPts(-1); R.bodies.prongs[1] = prongPts(1);
       R.bodies.ghost = cfg.prongs === 3 || K.T.ghost ? (K.T.poly ? ghostPts() : null) : null;
       R.bodies.tip = K.T.weld === 'spear' ? { x: K.x, y: K.y + K.T.tip * K.s } : null;
+      R.vac = K.T.weld === 'suck' ? cr8VacGeo(K.T, K.s, K.x, K.y, { n: K.tube.length, cap: vacCap(), clog: !!K.clog, suck: K.field }, R.vac || {}) : null;
+    }
+    /* CR8: the rig's picture of the twin claws: the bar (the hub), four prongs
+       (left head's two, then the right head's) and the two heads. */
+    function cr8Mirror() {
+      const B = R.bodies, s = K.s;
+      B.hub.r = 5 * s + 2;
+      for (let i = 0; i < 2; i++) {
+        B.prongs[i * 2] = twinPts(i, -1); B.prongs[i * 2 + 1] = twinPts(i, 1);
+      }
+      if (!B.twin) B.twin = [{ x: 0, y: 0, r: 0 }, { x: 0, y: 0, r: 0 }];
+      for (let i = 0; i < 2; i++) { B.twin[i].x = headX(i); B.twin[i].y = headY(i); B.twin[i].r = K.T.hubR * s; }
+      B.ghost = null; B.tip = null; R.vac = null;
     }
     /* Travel toward tx at the carriage speed; true when arrived. */
     function travel(tx, h) {
       const d = tx - K.x;
-      if (Math.abs(d) > 0.6) { K.vx = Math.sign(d) * Math.min(RIG.carSpeed * cfg.speed * K.T.speed * (R.auto ? R.auto.speed : 1), Math.abs(d) / h); return false; }
+      if (Math.abs(d) > 0.6) { K.vx = Math.sign(d) * Math.min(RIG.carSpeed * cfg.speed * K.T.speed * (R.auto ? R.auto.speed : 1) * (K.clog ? 0.7 : 1), Math.abs(d) / h); return false; }   // (CR8: a plugged vacuum strains)
       return true;
     }
     /* Decide this substep's claw velocities (pre hook). */
@@ -803,6 +1003,7 @@ const PHYS = (() => {
       K.vx = 0; K.vy = 0; K.wL = 0; K.wR = 0; K.t += h;
       const T = K.T;
       const maxY = ch - T.floorClear * K.s - 2;
+      if (T.twin) cr8TwinPlan(h);   // CR8: the heads slide home, reel in, bunch up over the chute
       switch (K.st) {
         case 'idle': {
           const arrived = travel(clampX(K.tx), h);
@@ -811,6 +1012,7 @@ const PHYS = (() => {
           if (arrived && K.t > RIG.idleShed && W.bodies.some(b => b.held > 0 && b.type === 'dynamic')) shedRiders();
           if (arrived && K.pending) {
             K.pending = false; K.st = 'drop'; K.t = 0; K.touch = false; K.cargo = []; K.digT = 0; K.spear = null;
+            K.blowN = 0; K.tw.done[0] = K.tw.done[1] = false;   // (CR8)
             W.wakeAll(); emit('drop');
           }
           break;
@@ -820,8 +1022,10 @@ const PHYS = (() => {
           break;
         }
         case 'drop': {
+          if (T.twin) { twinDrop(h, maxY); break; }   // CR8: each head lands on its own
           K.vy = RIG.dropSpeed * T.drop;
           if (T.weld === 'spear' && !K.spear) spearTest();
+          if (T.weld === 'suck' && vacNear()) K.touch = true;   // CR8: the nozzle hovers just over the pile
           let touched = K.touch || !!K.spear;
           // the scoop bites on into the pile a moment before it closes
           if (T.dig > 0 && (touched || K.digT > 0) && K.digT < T.dig && K.y < maxY) {
@@ -838,8 +1042,9 @@ const PHYS = (() => {
           break;
         }
         case 'close': {
-          if (T.weld === 'metal' || T.weld === 'spear') {
-            // the magnet energises (every piece of metal it touches sticks), the barb bites
+          if (T.weld === 'metal' || T.weld === 'spear' || T.weld === 'suck') {
+            // the magnet energises (every piece of metal it touches sticks), the barb bites,
+            // the vacuum sucks for closeT (CR8: suck() does the work)
             if (T.weld === 'metal') magnetStick(true);
             if (K.t > T.closeT) toLift();
             break;
@@ -866,7 +1071,7 @@ const PHYS = (() => {
             for (const b of K.tipOut) { const sd = b.x < K.x ? -1 : 1; b.passClaw = RIG.passT; b.held = 0; wake(b); b.vx += sd * 90; b.av += sd * 5; }
             K.tipOut.length = 0;
           }
-          if (K.y <= RAIL) {
+          if (K.y <= railOf()) {
             K.st = 'carry'; K.t = 0; K.swayV += RIG.swayKick;
             // the jolt at the top: a weak claw twitches open a touch
             K.jolt = rand() < (1 - K.grip) * RIG.joltP ? RIG.jolt : 0;
@@ -877,12 +1082,13 @@ const PHYS = (() => {
           break;
         case 'carry': {
           if (K.jolt > 0 && K.t < RIG.joltT && T.poly) { K.wL = K.wR = K.jolt / RIG.joltT; }
-          if (travel(chuteX, h) && K.t > RIG.carryWait) { K.st = 'open'; K.t = 0; K.jolt = 0; unstickAll(); emit('release'); }
+          if (travel(chuteX + (T.twin ? 3 : 0), h) && K.t > RIG.carryWait) { K.st = 'open'; K.t = 0; K.jolt = 0; unstickAll(); emit('release'); }   // (CR8: the twin a hair right, clear of the divider)
           break;
         }
         case 'open':
           if (K.pL < T.open) K.wL = RIG.openRate;
           if (K.pR < T.open) K.wR = RIG.openRate;
+          if (T.weld === 'suck') cr8Blow();   // CR8: the vacuum blows its canister out, one prize at a time
           // hold still until the load has let go of the prongs (it can hang on a
           // tip for a moment), then travel back to the aim point
           if (K.t > RIG.openT && (K.t > RIG.openT + RIG.openHold || !W.bodies.some(b => b.held > 0))) {
@@ -895,11 +1101,12 @@ const PHYS = (() => {
           break;
       }
       if (K.st === 'drop' && K.y + K.vy * h > maxY) K.vy = (maxY - K.y) / h;
-      if (K.st === 'lift' && K.y + K.vy * h < RAIL) K.vy = (RAIL - K.y) / h;
+      if (K.st === 'lift' && K.y + K.vy * h < railOf()) K.vy = (railOf() - K.y) / h;
       K.touch = false; K.hitL = false; K.hitR = false;
       W.busy = K.st === 'drop' || K.st === 'close' || K.st === 'lift';
       W.ctl = K;
       if (T.weld) weldStep(h);
+      if (T.weld === 'suck') suck(h);   // CR8: the vacuum's suction
       buildSegs();
       magnet(h);
       if (T.weld === 'metal') {
@@ -915,7 +1122,8 @@ const PHYS = (() => {
       K.st = 'lift'; K.t = 0;
       K.loosen = (1 - K.grip) * RIG.loosen * (0.7 + rand() * 0.6);
       if (!T.weld) {
-        K.cargo = W.bodies.filter(b => b.type === 'dynamic' && b.held > 0 && b.y < K.y + RIG.cargoY * K.s);
+        const y0 = hubY();   // (CR8: the lower twin head)
+        K.cargo = W.bodies.filter(b => b.type === 'dynamic' && b.held > 0 && b.y < y0 + RIG.cargoY * K.s);
         // the scoop is a bucket: a sword sticks out of it and tips out on the way up
         K.tipOut = [];
         if (T.tipLen) for (const b of K.cargo) if (b.spec && b.spec.kind === 'cap' && b.spec.len > T.tipLen && rand() < T.tipP) K.tipOut.push(b);
@@ -931,8 +1139,10 @@ const PHYS = (() => {
         K.cargo = K.stuck.map(sk => sk.b);
       } else {
         // the magnet and the hook carry only what they hold (plus whatever
-        // happens to ride on that, which is a bonus, not cargo)
+        // happens to ride on that, which is a bonus, not cargo); the vacuum
+        // what is in its canister and a clog (CR8)
         K.cargo = K.stuck.map(sk => sk.b);
+        if (T.weld === 'suck') for (const e of K.tube) K.cargo.push(e.b);
       }
       emit('lift');
     }
@@ -951,6 +1161,7 @@ const PHYS = (() => {
       b.held = 0; wake(b);
       if (drop) { b.passClaw = 0.3; if (b.vy < 30) b.vy = 30; }
       const c = K.cargo.indexOf(b); if (c >= 0) K.cargo.splice(c, 1);
+      if (K.clog === b) { K.clog = null; emit('unclog'); }   // CR8: the plug is out of the vacuum's nozzle
     }
     function unstickAll() { for (let i = K.stuck.length - 1; i >= 0; i--) unstick(i, true); }
     /* Every welded body is driven to its spot under the hub (a soft velocity
@@ -1040,7 +1251,7 @@ const PHYS = (() => {
        may tear off (seeded rand; grip raises what it can bear). */
     function tearHeavy() {
       const T = K.T;
-      const cap = T.weld === 'metal' ? 14 + 40 * K.grip : T.weld === 'spear' ? 10 + 36 * K.grip : 18 + 50 * K.grip;
+      const cap = T.weld === 'metal' ? 14 + 40 * K.grip : T.weld === 'spear' ? 10 + 36 * K.grip : T.weld === 'suck' ? 8 + 30 * K.grip : 18 + 50 * K.grip;
       for (let i = K.stuck.length - 1; i >= 0; i--) {
         const b = K.stuck[i].b;
         const p = clamp((b.m - cap) / (cap * 1.5), 0, 0.75);
@@ -1080,18 +1291,178 @@ const PHYS = (() => {
       K.x += K.vx * h; K.y += K.vy * h;
       K.pL = clamp(K.pL + K.wL * h, T.closed - 0.02, T.open);
       K.pR = clamp(K.pR + K.wR * h, T.closed - 0.02, T.open);
+      // CR8: the twin heads slide along the bar and reel their cables; the vacuum's hose carries its catch
+      if (T.twin) for (let i = 0; i < 2; i++) { K.tw.x[i] += K.tw.vx[i] * h; K.tw.d[i] = Math.max(0, K.tw.d[i] + K.tw.vd[i] * h); }
+      if (T.weld === 'suck') { K.vt += h; if (K.tube.length) tubeStep(h); }
       // purely visual cable sway
       K.swayV += (-K.sway * 40 - K.swayV * 3 - K.vx * 0.02) * h; K.sway += K.swayV * h;
       // cargo that slipped out of the prongs on the way
       if (K.st === 'lift' || K.st === 'carry') {
+        const y0 = hubY();
         for (let i = K.cargo.length - 1; i >= 0; i--) {
           const b = K.cargo[i];
           if (b.world !== W) { K.cargo.splice(i, 1); continue; }
-          if (T.weld && isStuck(b)) continue;
-          if (b.y > K.y + RIG.slipY * K.s && b.vy > RIG.slipV && b.x < binX) { K.cargo.splice(i, 1); emit('slip'); }
+          if ((T.weld && isStuck(b)) || b.tube) continue;
+          if (b.y > y0 + RIG.slipY * K.s && b.vy > RIG.slipV && b.x < binX) { K.cargo.splice(i, 1); emit('slip'); }
         }
       }
       mirror();
+    }
+    // ---- CR8: the twin heads' plan and the vacuum's suction, tube and blow
+    /* Every substep before the state machine: a twin head slides home while
+       the claw is idle or on its way back, reels in and bunches up over the
+       chute as it lifts and carries (so both prizes fall into the chute). */
+    function cr8TwinPlan(h) {
+      const tw = K.tw, T = K.T, s = K.s;
+      tw.vx[0] = tw.vx[1] = 0; tw.vd[0] = tw.vd[1] = 0;
+      const sep = T.twin.sep * s, gap = T.twin.gap * s;
+      if (K.st === 'idle' || K.st === 'return') twinSlide(h, -sep, sep);
+      else if (K.st === 'carry' || K.st === 'open') {
+        // closed heads fit closer together: both prizes over the chute (gently, not to knock them out)
+        twinSlide(h, -gap * 0.3, gap * 0.3);
+        for (let i = 0; i < 2; i++) tw.vx[i] = clamp(tw.vx[i], -120, 120);
+      }
+      if (K.st === 'lift' || K.st === 'carry' || K.st === 'open' || K.st === 'return' || K.st === 'idle') {
+        const v = RIG.liftSpeed * T.lift * 1.4;
+        for (let i = 0; i < 2; i++) tw.vd[i] = -Math.min(tw.d[i] / h, v);
+      }
+    }
+    /* The vacuum stops a hair over the pile (never on it): true when a prize
+       lies within 7 px under the nozzle's rim. */
+    function vacNear() {
+      const s = K.s, hr = K.T.hubR * s, bot = K.y + hr;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || b.tube || b.x >= binX + 8) continue;
+        if (b.box.x1 < K.x - hr || b.box.x0 > K.x + hr || b.box.y1 < bot || b.box.y0 > bot + 7) continue;
+        for (let i = 0; i < b.parts.length; i++) {
+          const r = b.parts[i].r;
+          if (Math.abs(b.px[i] - K.x) < hr * 0.8 + r && b.py[i] - r < bot + 7 && b.py[i] > bot - r * 0.5) return true;
+        }
+      }
+      return false;
+    }
+    /* How many prizes the canister holds: a Wider Palm and the Third Prong
+       (a second intake) each add one. */
+    function vacCap() { const T = K.T; return (T.cap || 3) + (cfg.width >= 1.3 ? 1 : 0) + (cfg.prongs === 3 ? 1 : 0); }
+    const hasTag = (b, t) => !!(b && b.data && b.data.tags && b.data.tags.indexOf(t) >= 0);
+    /* The suction (per substep, after the plan): light things in range are
+       pulled at the mouth (weaker the heavier they are); at the mouth a
+       prize that fits the bore flies up the wand, a big one plugs the
+       nozzle (only while it sucks at full power: while dropping it just
+       tugs). K.field is the suction's strength for the renderer. */
+    function suck(h) {
+      const T = K.T, s = K.s;
+      const full = K.tube.length >= vacCap();
+      const on = K.clog || full ? 0 : (K.st === 'close' || (K.st === 'lift' && K.t < 0.35)) ? 1 : K.st === 'drop' ? 0.45 : 0;
+      K.field += (on - K.field) * Math.min(1, h * 14);
+      if (on <= 0) return;
+      const mx = K.x, my = K.y + T.hubR * s * 0.55, mr = T.hubR * s * 0.8;
+      const R0 = T.suckR * (0.8 + 0.2 * cfg.width) * (cfg.prongs === 3 ? 1.25 : 1);
+      const F0 = T.suckF * (0.6 + 0.8 * K.grip) * on;
+      const bore = T.bore * s, mMax = T.suckM * (0.6 + 0.8 * K.grip) * cfg.width;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || b.tube || isStuck(b) || b.x >= binX + 8) continue;
+        const dx = mx - b.x, dy = my - b.y, d = Math.hypot(dx, dy);
+        if (d > R0 + b.br) continue;
+        let at = false, deep = false;
+        for (let i = 0; i < b.parts.length; i++) {
+          const q = Math.hypot(b.px[i] - mx, b.py[i] - my) - mr - b.parts[i].r;
+          if (q < 2) at = true;
+          if (q < -3) deep = true;
+        }
+        const heavy = hasTag(b, 'heavy');
+        if (at) {
+          if (b.br <= bore && !heavy && b.m <= mMax) {
+            intoTube(b);
+            if (K.tube.length >= vacCap()) { emit('full'); return; }
+            continue;
+          }
+          // a big thing the suction really lifted (or rammed into the mouth) plugs it
+          if (b.br > bore && on >= 1 && (b.vy < -30 || deep)) { clogWith(b); return; }
+        }
+        if (d < 1) continue;
+        // heavy things resist; big ones hardly catch the airflow (only light big things jam it)
+        const k = clamp(3.5 / b.m, 0.12, 1.5) * (heavy ? 0.3 : 1) * (b.br > bore ? 0.35 : 1);
+        const f = F0 * k * h / Math.max(1, d / 30);
+        wake(b); b.vx += dx / d * f; b.vy += dy / d * f;
+      }
+    }
+    /* A prize flies up the hose: it stops colliding (b.tube) and the rig
+       moves it from here on (tubeStep), up the wand into a canister slot. */
+    function intoTube(b) {
+      K.tube.push({ b, st: 'up', u: 0, rx: b.x - K.x, ry: b.y - K.y, k: K.tube.length });
+      b.tube = 1; b.tubeK = 1; b.held = 2; b.passClaw = 0; b.sl = false; b.slT = 0; b.vx = 0; b.vy = 0;
+      if (K.st === 'lift' || K.st === 'carry') K.cargo.push(b);
+      emit('suck');
+    }
+    /* A big thing plugs the nozzle: welded to the mouth, and the suction
+       stops until it is let go (at the chute, or when it tears off). */
+    function clogWith(b) {
+      if (K.clog) return;
+      K.clog = b;
+      stick(b);
+      if (K.st === 'lift' || K.st === 'carry') K.cargo.push(b);
+      emit('clog');
+    }
+    /* The canister's slot for the k-th prize of n, swirling (a cyclone). */
+    const SLOT = { x: 0, y: 0 };
+    function tubeSlot(k, n) {
+      const T = K.T, s = K.s, cr = T.can * s, cy = K.y - T.wand * s - cr * 0.72;
+      const a = K.vt * 5 + k * Math.PI * 2 / Math.max(1, n), rr = n > 1 ? cr * 0.4 : 0;
+      SLOT.x = K.x + Math.cos(a) * rr; SLOT.y = cy + Math.sin(a) * rr * 0.55 + cr * 0.08;
+      return SLOT;
+    }
+    /* Move what rides the hose (post hook, after the nozzle moved): from
+       where it was caught to the mouth (never downward), up the wand, into
+       its slot; it shrinks as it goes (b.tubeK, drawing only). Its
+       velocity is the path's, so the game reads a smooth flight. */
+    function tubeStep(h) {
+      const T = K.T, s = K.s, n = K.tube.length;
+      const mouthY = K.y + T.hubR * s * 0.55, topY = K.y - T.wand * s;
+      for (let i = n - 1; i >= 0; i--) {
+        const e = K.tube[i], b = e.b;
+        if (b.world !== W) { K.tube.splice(i, 1); continue; }
+        let x, y;
+        if (e.st === 'up') {
+          e.u = Math.min(1, e.u + h * 5.5);
+          const u = e.u, y1 = Math.min(K.y + e.ry, mouthY);
+          if (u < 0.3) { const q = u / 0.3; x = K.x + e.rx * (1 - q); y = K.y + e.ry + (y1 - K.y - e.ry) * q; }
+          else if (u < 0.75) { const q = (u - 0.3) / 0.45; x = K.x; y = y1 + (topY - y1) * q; }
+          else { const q = (u - 0.75) / 0.25, p = tubeSlot(e.k, Math.max(n, 1)); x = K.x + (p.x - K.x) * q; y = topY + (p.y - topY) * q; }
+          b.tubeK = 1 - 0.4 * Math.min(1, u / 0.75);
+          b.av = 14;
+          if (u >= 1) e.st = 'in';
+        } else {
+          const p = tubeSlot(e.k, n);
+          x = p.x; y = p.y; b.av = 5; b.tubeK = 0.6;
+        }
+        b.vx = (x - b.x) / h; b.vy = (y - b.y) / h;
+        b.x = x; b.y = y; b.a += b.av * h;
+        b.held = 2;
+      }
+      for (let i = 0; i < K.tube.length; i++) K.tube[i].k = i;
+    }
+    /* Over the chute: the canister blows its prizes out of the mouth, one
+       every 0.07 s (the first with a 'blow'); they fall into the chute. */
+    function cr8Blow() {
+      if (!K.tube.length) return;
+      if (K.t < K.blowN * 0.07) return;
+      const e = K.tube.shift(), b = e.b, T = K.T;
+      if (!K.blowN) emit('blow');
+      K.blowN++;
+      tubeOut(b, K.x + ((K.blowN % 2) ? -3 : 3), K.y + T.hubR * K.s * 0.55 + b.br * 0.6, 160);
+    }
+    /* Let a prize out of the hose at (x, y), falling at vy, colliding again. */
+    function tubeOut(b, x, y, vy) {
+      b.tube = 0; b.tubeK = 1; b.held = 0; b.passClaw = RIG.passT; b.sl = false; b.slT = 0;
+      b.x = x; b.y = y; b.vx = 0; b.vy = vy; b.av = 0;
+      sync(b); wake(b);
+      const c = K.cargo.indexOf(b); if (c >= 0) K.cargo.splice(c, 1);
+    }
+    /* Everything in the hose drops out where it is (a rebuild, a type switch). */
+    function ejectTube() {
+      for (const e of K.tube) if (e.b.world === W) tubeOut(e.b, e.b.x, e.b.y, 0);
+      K.tube.length = 0; K.blowN = 0;
     }
     // ---- public
     function setTarget(x) {
@@ -1141,15 +1512,18 @@ const PHYS = (() => {
     /* Force the prongs open: a busy claw goes straight to 'releasing' and then returns. */
     function open() {
       unstickAll();
-      if (K.st === 'idle' || K.st === 'return') { K.pL = K.pR = K.T.open; return; }
-      K.st = 'open'; K.t = 0; K.cargo = []; K.pending = false; K.jolt = 0;
+      if (K.st === 'idle' || K.st === 'return') { K.pL = K.pR = K.T.open; ejectTube(); return; }
+      K.st = 'open'; K.t = 0; K.cargo = []; K.pending = false; K.jolt = 0; K.blowN = 0;
       mirror();
     }
     function setConfig(c) {
       c = c || {};
       if (c.type != null && CLAW_TYPES[c.type] && c.type !== cfg.type) {
-        unstickAll(); cfg.type = c.type;
+        unstickAll(); ejectTube(); cfg.type = c.type;
         K.pL = K.pR = typeOf(c.type).open;
+        // CR8: a new type parks at its own height with its heads home
+        K.tw.x[0] = K.tw.x[1] = K.tw.d[0] = K.tw.d[1] = 0; K.clog = null;
+        if (K.st === 'idle') K.y = RAIL + parkOf(typeOf(c.type));
       }
       if (c.width != null) cfg.width = c.width;
       if (c.prongs != null) cfg.prongs = c.prongs === 3 ? 3 : 2;
@@ -1158,10 +1532,12 @@ const PHYS = (() => {
       if (c.speed != null) cfg.speed = c.speed;
       if (c.magnet != null) cfg.magnet = c.magnet ? 1 : 0;
       if (c.grease != null) cfg.grease = c.grease ? 1 : 0;
-      refresh(); mirror();
+      refresh();
+      if (K.T.twin && K.st === 'idle' && !K.tw.x[0] && !K.tw.x[1]) { K.tw.x[0] = -K.T.twin.sep * K.s; K.tw.x[1] = K.T.twin.sep * K.s; }
+      mirror();
     }
     function destroy() {
-      unstickAll();
+      unstickAll(); ejectTube();
       W.removeHook(plan); W.removePost(move);
       W.csegs.length = 0; W.ctl = null; W.busy = false;
       for (const b of W.bodies) b.held = 0;
@@ -1169,6 +1545,7 @@ const PHYS = (() => {
     function calm() { return K.st === 'idle' && !K.moving && Math.abs(K.x - K.tx) < 1; }
 
     refresh();
+    if (K.T.twin) { K.tw.x[0] = -K.T.twin.sep * K.s; K.tw.x[1] = K.T.twin.sep * K.s; refresh(); }   // CR8: the heads start home
     K.tx = clampX(homeX); K.x = K.tx;
     W.addHook(plan); W.addPost(move);
     buildSegs(); mirror();

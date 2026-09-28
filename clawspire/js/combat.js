@@ -486,6 +486,7 @@ const COMBAT = (() => {
       F.luckK = gift ? (foot ? 2 : 1) : (foot ? 1 : 0);
     }
     F.stats.tix = 0; F.stats.cash = 0;
+    F.tur = null;   // Mama Mech's turret (CR8 block; cr8Fight builds it once the fight is set up)
     // A late-run bin can outgrow the cabinet: the overflow waits in the used
     // pile and cycles in through refills, so the physics budget holds.
     if (F.bin.length > MAX_CABINET) {
@@ -505,6 +506,7 @@ const COMBAT = (() => {
     if (arng) secFight(F, run, arng);   // the Back Room's elites: the strongest affixes (SECRET block)
     F.digested = [];   // items enemies swallowed and digested: gone for this fight only
     for (const e of F.enemies) api.pickIntent(F, e);
+    cr8Fight(F, run);   // Mama Mech's turret (CR8 block)
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
     api.startTurn(F);
     if (num(mods.startStr, 0)) api.status(F, F.player, 'str', mods.startStr);
@@ -621,6 +623,7 @@ const COMBAT = (() => {
       }
       // Double Grabs, Half Damage (a run mutator, ENDLESS block): the player's hits land for less
       if (F.mut && num(F.mut.dmgOut, 1) !== 1 && isPlayer(F, src) && !isPlayer(F, tgt) && amt > 0) amt = Math.max(1, Math.round(amt * num(F.mut.dmgOut, 1)));
+      amt = stoAbsorb(F, tgt, amt);   // the Plushie Queen's plushies soak the hit (STORY block)
     }
     let blocked = 0;
     if (!opts.pierce) { blocked = Math.min(tgt.block, amt); tgt.block -= blocked; }
@@ -745,6 +748,7 @@ const COMBAT = (() => {
     // Everything it swallowed bursts out and rains back into the bin.
     if (e.belly && e.belly.length) spit(F, e, e.belly.length, 'burst');
     bestDeath(F, e);   // a Mole's buried items pop back up (BESTIARY block)
+    stoDeath(F, e);   // the Arctic Arcade's ice block melts open, the King's belt stops (STORY block)
     // Explosive affix: a parting blast (it never finishes the player off).
     if (hasAffix(e, 'explosive') && F.player.hp > 1) {
       const v = Math.min(F.player.hp - 1, Math.round((4 + 4 * F.act) * num(e.dmgMul, 1)));
@@ -1328,6 +1332,7 @@ const COMBAT = (() => {
         break;
       }
       case 'machine': secSig(F, e, s, info, idx); break;   // The Machine's cabinet events (SECRET block)
+      case 'plush': case 'belt': case 'glacier': stoSig(F, e, s, info, idx); break;   // the alternate bosses (STORY block)
       default: break;
     }
     log(F, `${e.def.name || e.id}: ${info.name}.`);
@@ -1369,6 +1374,7 @@ const COMBAT = (() => {
     if (F.ice) { F.ice = null; emit(F, { t: 'boss', k: 'thaw', idx: -1 }); }
     F.rigged = null;
     secTurnEnd(F);   // The Machine: zero g, the live rail, the shutter (SECRET block)
+    stoTurnEnd(F);   // the Conveyor King's belt stops (STORY block)
   }
   // Game hooks: a prize lands on the iced chute lip (a heavy one smashes it),
   // the ice is shattered outright, a rigged drop is spent. Return the new state.
@@ -2148,6 +2154,7 @@ const COMBAT = (() => {
       }
       if (inst.rust && fxOf(def, plus).length) text(F, F.player, 'RUSTY');
       resolveFx(F, ctx, plus);
+      if (F.phase === 'player') cr8Play(F, inst, def);   // metal feeds Mama Mech's turret (CR8 block)
       // A lit bomb grabbed out flies back at whoever lit it.
       if (inst.fuse != null) throwBack(F, inst);
       // Echo rule: every nth magic item played resolves twice.
@@ -2180,6 +2187,7 @@ const COMBAT = (() => {
     }
     // The Smelter's red hot metal: the grab worked, the hand pays for it.
     if (inst.hot) burnHot(F, inst);
+    stoPlayed(F, inst, def);   // the ice block smashes, metal jams the conveyor (STORY block)
     sanitize(F);
     checkOver(F);
     // Never leave an empty cabinet mid-turn.
@@ -2194,6 +2202,8 @@ const COMBAT = (() => {
     if (!F || F.phase !== 'player') return end(F, c);
     const p = F.player;
     hook(F, 'onTurnEnd');
+    if (checkOver(F)) return end(F, c);
+    cr8TurnEnd(F);   // Mama Mech's turret fires its volley (CR8 block)
     if (checkOver(F)) return end(F, c);
     hotHands(F);   // a Hot Potato left in the bin (round 3)
     tickDmg(F, p, 'burn');
@@ -2623,6 +2633,272 @@ const COMBAT = (() => {
     return r;
   };
   /* ================= /QA ================= */
+
+  /* ================= STORY (round 8: the alternate bosses, story callbacks in a fight) =================
+     DESIGN.md "Stories, the rival and alternate bosses (round 8)". The
+     alternate bosses' signatures ride bossSig like the old ones (a one-line
+     case there); what they leave lasts the player's next turn like the rest:
+     - plush (the Plushie Queen): sig.n Royal Plush junk into the bin (one more
+       enraged, never past sig.max in the bin); while they sit there every
+       hit on an enemy carrying the plush signature loses sig.soak per plush
+       (stoAbsorb, one line in damage). Grabbed out they give Block like junk.
+     - belt (the Conveyor King): F.conv {v, by, dir} for the player's next turn
+       (the game runs the floor away from the chute) and sig.crates Shipping
+       Crates ride in; a metal item delivered jams it (stoPlayed). It stops
+       as the turn ends (stoTurnEnd).
+     - glacier (the Arctic Arcade): sig.n real items (one more enraged) leave
+       the bin into F.stoIce.insts and the block (a junk sto_glacierN in the
+       bin) grows a size; delivering the block smashes it (the items come
+       back, the boss takes sig.dmg per item, fixed); its death gives them
+       back too (stoDeath). Never below BEST_FLOOR real items.
+     Story callbacks at the bell (the game calls them after newFight):
+     stoAlly(F, id, pow) (the crab pinches the strongest foe twice and gives
+     Block; the ghost makes every foe Weak and gives a Dodge), stoSabotage(F,
+     s, cut) (the boss starts with less hp and debuffs), stoGear(F, gear)
+     (Grabby Gary's gear: more hp, Strength from the jacket on). Events:
+     {t:'boss', k:'plush' | 'belt' | 'beltJam' | 'beltOff' | 'glacier' |
+     'glacierBreak', ...} and {t:'sto', k:'ally' | 'sabotage' | 'gear', ...}. */
+  const STO_SOAK_MAX = 6;
+  const stoSigOf = (e) => (e && e.def && e.def.sig && typeof e.def.sig === 'object' ? e.def.sig : null);
+  function stoPlushN(F) { let n = 0; for (const i of F.bin) if (itemDef(i.id).sto === 'plush') n++; return n; }
+  function stoSig(F, e, s, info, idx) {
+    switch (s.id) {
+      case 'plush': {
+        const cap = clamp(num(s.max, STO_SOAK_MAX) | 0, 1, 12);
+        const want = clamp(Math.round(num(s.n, 3)) + (e.enraged ? 1 : 0), 1, 8);
+        const items = bossJunk(F, s.item || 'sto_plush', Math.max(0, Math.min(want, cap - stoPlushN(F))));
+        emit(F, { t: 'boss', k: 'plush', idx, items, name: info.name });
+        if (!items.length) text(F, e, 'FULLY FLUFFED');
+        break;
+      }
+      case 'belt': {
+        F.conv = { v: Math.round(num(s.v, 70) * (e.enraged ? 1.4 : 1)), by: e.uid, dir: -1 };
+        const items = bossJunk(F, s.item || 'sto_crate', clamp(Math.round(num(s.crates, 2)), 0, 4));
+        emit(F, { t: 'boss', k: 'belt', idx, v: F.conv.v, items, name: info.name });
+        break;
+      }
+      case 'glacier': {
+        if (!stoFreeze(F, e, s, clamp(Math.round(num(s.n, 1)) + (e.enraged ? 1 : 0), 1, 3))) text(F, e, 'TOO WARM');
+        break;
+      }
+      default: break;
+    }
+  }
+  // The Arctic Arcade freezes n real items into its block (the block is made, or grows a size).
+  function stoFreeze(F, e, s, n) {
+    const cap = clamp(num(s.cap, 6) | 0, 1, 6);
+    const I = F.stoIce || (F.stoIce = { insts: [], block: null, by: e.uid });
+    const froze = [];
+    for (let k = 0; k < n; k++) {
+      if (I.insts.length >= cap || playable(F) <= BEST_FLOOR) break;
+      const pool = F.bin.filter(i => !isJunk(i) && !i.frozen && !i.hot);
+      if (!pool.length) break;
+      const inst = pool[Math.floor(F.rng() * pool.length)];
+      F.bin.splice(F.bin.indexOf(inst), 1);
+      I.insts.push(inst);
+      froze.push(inst);
+    }
+    if (!froze.length) return 0;
+    I.by = e.uid;
+    const id = 'sto_glacier' + Math.min(6, I.insts.length);
+    let block = I.block && (F.bin.indexOf(I.block) >= 0 || F.used.indexOf(I.block) >= 0) ? I.block : null;
+    if (block) block.id = id;
+    else { block = { uid: newUid(), id, plus: false, frozen: false, junk: true, temp: true }; F.bin.push(block); I.block = block; }
+    emit(F, { t: 'boss', k: 'glacier', idx: F.enemies.indexOf(e), inst: block, insts: froze, n: I.insts.length });
+    text(F, e, 'FROZEN SOLID');
+    return froze.length;
+  }
+  // The block breaks: everything inside comes back; smashed (delivered) the boss takes sig.dmg per item.
+  function stoBreak(F, block, smash) {
+    const I = F.stoIce;
+    if (!I) return 0;
+    if (block && I.block && I.block !== block && I.block.uid !== block.uid) return 0;
+    I.block = null;
+    if (!I.insts.length) return 0;
+    const back = I.insts.splice(0);
+    for (const i of back) (F.bin.length < MAX_CABINET ? F.bin : F.used).push(i);
+    const e = F.enemies.find(x => x.uid === I.by) || null, s = stoSigOf(e);
+    const v = smash && e && e.alive ? back.length * Math.max(1, num(s && s.dmg, 5)) : 0;
+    emit(F, { t: 'boss', k: 'glacierBreak', idx: e ? F.enemies.indexOf(e) : -1, insts: back, v, smash: !!smash });
+    if (v > 0) { text(F, e, 'SMASH!'); api.damage(F, null, e, v, { fixed: true }); }
+    return back.length;
+  }
+  // COMBAT.damage: the plushies in the bin soak hits on the Queen (and on any boss borrowing her trick).
+  function stoAbsorb(F, tgt, amt) {
+    if (!(amt > 0) || !tgt || isPlayer(F, tgt) || !tgt.alive) return amt;
+    const s = stoSigOf(tgt);
+    if (!s || s.id !== 'plush') return amt;
+    const n = Math.min(stoPlushN(F), clamp(num(s.max, STO_SOAK_MAX) | 0, 1, 12));
+    const soak = Math.min(amt, n * Math.max(1, num(s.soak, 1)));
+    if (soak <= 0) return amt;
+    text(F, tgt, 'FLUFF -' + soak);
+    return amt - soak;
+  }
+  // COMBAT.play: the ice block smashes open; a metal item jams the conveyor.
+  function stoPlayed(F, inst, def) {
+    if (!def) return;
+    if (def.sto === 'glacier') { stoBreak(F, inst, true); return; }
+    if (F.conv && tagHas(def, 'metal')) {
+      F.conv = null;
+      emit(F, { t: 'boss', k: 'beltJam', idx: -1, inst });
+      text(F, F.player, 'JAMMED!');
+    }
+  }
+  // bossTurnEnd: the conveyor stops as the player's turn ends.
+  function stoTurnEnd(F) {
+    if (!F.conv) return;
+    F.conv = null;
+    emit(F, { t: 'boss', k: 'beltOff', idx: -1 });
+  }
+  // kill: the Arctic Arcade's block melts open when it goes down; the King's belt stops.
+  function stoDeath(F, e) {
+    if (F.stoIce && F.stoIce.by === e.uid) stoBreak(F, null, false);
+    if (F.conv && F.conv.by === e.uid) stoTurnEnd(F);
+  }
+  // A friend from a story fights one turn for you (the game calls it at the bell).
+  api.stoAlly = function (F, id, pow) {
+    const c = begin(F);
+    if (!F || F.phase === 'over') return end(F, c);
+    const A = (D().STO && D().STO.ally) || {};
+    pow = clamp(num(pow, 1), 1, 3);
+    if (id === 'crab') {
+      const K = A.crab || { dmg: 6, perAct: 3, hits: 2, block: 5 };
+      const foes = alive(F);
+      if (!foes.length) return end(F, c);
+      const e = foes.reduce((a, b) => (b.hp > a.hp ? b : a));
+      const v = Math.round((num(K.dmg, 6) + num(K.perAct, 3) * (F.act - 1)) * pow);
+      const n = Math.max(1, num(K.hits, 2) | 0);
+      emit(F, { t: 'sto', k: 'ally', id, idx: F.enemies.indexOf(e), v, n, pow });
+      text(F, e, 'PINCH!');
+      for (let k = 0; k < n && e.alive; k++) api.damage(F, null, e, v);
+      gainBlock(F, F.player, Math.round(num(K.block, 5) * pow));
+    } else if (id === 'ghost') {
+      const K = A.ghost || { weak: 2, dodge: 1 };
+      emit(F, { t: 'sto', k: 'ally', id, idx: -1, pow });
+      for (const e of alive(F)) api.status(F, e, 'weak', Math.round(num(K.weak, 2) * pow));
+      api.status(F, F.player, 'dodge', Math.round(num(K.dodge, 1) * pow));
+    } else return end(F, c);
+    log(F, `A friend from the road helps out (${id}).`);
+    checkOver(F);
+    return end(F, c);
+  };
+  // The intern's sabotage: the boss starts cut * its hp down, with statuses {s: v}.
+  api.stoSabotage = function (F, s, cut) {
+    const c = begin(F);
+    const e = F && F.phase !== 'over' ? alive(F).find(x => x.def && x.def.tier === 'boss') : null;
+    if (!e) return end(F, c);
+    const lost = Math.round(e.hp * clamp(num(cut, 0.12), 0, 0.5));
+    e.hp = Math.max(1, e.hp - lost);
+    emit(F, { t: 'sto', k: 'sabotage', id: 'intern', idx: F.enemies.indexOf(e), v: lost });
+    text(F, e, 'SABOTAGED');
+    for (const k in (s || {})) if (statusDef(k)) api.status(F, e, k, clamp(num(s[k], 0) | 0, 0, 5));
+    log(F, `${e.def.name || e.id} was sabotaged.`);
+    return end(F, c);
+  };
+  // Grabby Gary's gear: +hp per piece, and from the jacket on he starts pumped.
+  api.stoGear = function (F, gear) {
+    const c = begin(F);
+    const K = (D().GARY && D().GARY.duel) || { hpPerGear: 0.06, strAt: 3 };
+    gear = clamp(num(gear, 0) | 0, 0, 9);
+    for (const e of F ? F.enemies : []) {
+      if (!e.alive || e.id !== 'gary' || e.gear != null) continue;
+      e.gear = gear;
+      if (gear > 0) { const m = 1 + num(K.hpPerGear, 0.06) * gear; e.maxHp = Math.round(e.maxHp * m); e.hp = Math.round(e.hp * m); }
+      if (gear >= num(K.strAt, 3)) api.status(F, e, 'str', 1);
+      emit(F, { t: 'sto', k: 'gear', idx: F.enemies.indexOf(e), v: gear });
+    }
+    return end(F, c);
+  };
+  api.stoIce = (F) => (F && F.stoIce ? F.stoIce : null);
+  api.stoPlush = (F) => (F ? stoPlushN(F) : 0);
+  api.stoBreak = (F, block, smash) => { const c = begin(F); if (F) stoBreak(F, block || null, !!smash); return end(F, c); };
+  /* ================= /STORY ================= */
+
+  /* ================= CR8 (round 8): Mama Mech's scrap turret ================= */
+  // DESIGN.md "Mama Mech and two new claws". Mama Mech (CHARACTERS.engineer,
+  // `turret: true`) builds a turret on the cabinet frame out of what she
+  // delivers: every metal item played is a part (an item's `part` field says
+  // how many it is worth instead), the parts climb the levels in TUR.need, and
+  // at the end of each player turn (before the enemies act) the turret fires
+  // TUR.shots[lv] shots of TUR.dmg[lv] (+ the relics' tur.amp) at the target
+  // (at Lv 5 the last one hits ALL). Past the top level every part is ammo: an
+  // OVERCLOCK shot on the spot. A relic's `tur: {amp}` adds shot damage.
+  // Turret damage has no attacker (no Strength, no Thorns), like a
+  // relic's. rules.turret (Blueprints) builds it for any crawler, and gives
+  // Mama TUR.bonus more parts at the bell. F.tur = {parts, lv, amp, shots,
+  // dealt, over} or null. Events: {t:'turret', k:'part'|'up'|'fire'|'over', ...}.
+  const TUR = {
+    need: [0, 2, 4, 7, 11, 16], shots: [0, 1, 2, 2, 3, 4], dmg: [0, 3, 3, 5, 5, 6], max: 5, bonus: 3,
+    names: ['BARE MOUNT', 'PEA SHOOTER', 'BOLT GUN', 'RIVET CANNON', 'GATLING', 'MEGA MECH'],
+  };
+  function turLv(parts) { let lv = 0; for (let i = 1; i < TUR.need.length; i++) if (parts >= TUR.need[i]) lv = i; return lv; }
+  // newFight: who has a turret, its relic bonuses, the starting parts.
+  function cr8Fight(F, run) {
+    const cd = run.char ? (tbl('CHARACTERS')[run.char] || null) : null;
+    const gift = !!(cd && cd.turret), rule = num(F.rules && F.rules.turret, 0) > 0;
+    let amp = 0;
+    for (const id of F.relics.concat(F.sets || [], F.evos || [])) {
+      const r = relicDef(id), t = r && r.tur;
+      if (t && typeof t === 'object') amp += Math.max(0, num(t.amp, 0));
+    }
+    const more = gift && rule ? TUR.bonus : 0;
+    F.tur = gift || rule ? { parts: 0, lv: 0, amp, shots: 0, dealt: 0, over: 0 } : null;
+    if (F.tur && rule) ruleProc(F, 'turret', gift ? 'BLUEPRINTS +' + more : 'TURRET BUILT');
+    if (F.tur && more) turretParts(F, more, 'BLUEPRINTS');
+  }
+  // Feed the turret n parts (label: who gave them, for the float). Returns the parts added.
+  function turretParts(F, n, label) {
+    const T = F && F.tur;
+    n = Math.round(num(n, 0));
+    if (!T || n <= 0 || F.phase === 'over') return 0;
+    const lv0 = T.lv, top = TUR.need[TUR.max];
+    const add = Math.min(n, Math.max(0, top - T.parts)), extra = n - add;
+    if (add > 0) {
+      T.parts += add;
+      T.lv = turLv(T.parts);
+      emit(F, { t: 'turret', k: 'part', n: add, parts: T.parts, lv: T.lv, need: T.lv < TUR.max ? TUR.need[T.lv + 1] : top, label: label || '' });
+      if (T.lv > lv0) {
+        emit(F, { t: 'turret', k: 'up', lv: T.lv, name: TUR.names[T.lv], parts: T.parts });   // (the game floats the words by the turret)
+        log(F, `The turret is now a ${TUR.names[T.lv]}.`);
+      }
+    }
+    // maxed out: every extra part is ammo, fired at once
+    for (let i = 0; i < extra && F.phase !== 'over'; i++) { T.over++; turretShot(F, 'over', 0, 1); }
+    return add;
+  }
+  // One shot at the target (or ALL on a mega shot). Returns the damage dealt.
+  function turretShot(F, k, i, n, all) {
+    const T = F.tur;
+    retarget(F);
+    const lv = Math.max(1, T.lv), dmg = TUR.dmg[lv] + T.amp;
+    const foes = all ? alive(F) : [F.enemies[F.target]].filter(e => e && e.alive);
+    if (!foes.length) return 0;
+    emit(F, { t: 'turret', k, idx: all ? -1 : F.enemies.indexOf(foes[0]), dmg, shot: i, shots: n, lv: T.lv, all: !!all });
+    let got = 0;
+    for (const e of foes) { if (F.phase === 'over') break; got += api.damage(F, null, e, dmg); }
+    T.shots++; T.dealt += got;
+    return got;
+  }
+  // The end of the player's turn: the turret fires its volley.
+  function cr8TurnEnd(F) {
+    const T = F.tur;
+    if (!T || T.lv < 1 || F.phase !== 'player') return;
+    const n = TUR.shots[T.lv];
+    for (let i = 0; i < n && F.phase === 'player'; i++) turretShot(F, 'fire', i, n, T.lv >= TUR.max && i === n - 1);
+    sanitize(F);
+  }
+  // A played item: metal feeds the turret (def.part overrides the count).
+  function cr8Play(F, inst, def) {
+    if (!F.tur || !def) return;
+    const p = def.part != null ? num(def.part, 0) : tagHas(def, 'metal') ? 1 : 0;
+    if (p > 0) turretParts(F, p);
+  }
+  api.TUR = TUR;
+  api.turLv = turLv;
+  api.turretParts = function (F, n, label) { const c = begin(F); if (F && F.tur) { turretParts(F, n, label); sanitize(F); checkOver(F); } return end(F, c); };
+  api.turretFire = function (F) { const c = begin(F); if (F && F.tur) { cr8TurnEnd(F); checkOver(F); } return end(F, c); };
+  api.turretOf = (F) => (F && F.tur ? F.tur : null);
+  /* ================= /CR8 ================= */
 
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).

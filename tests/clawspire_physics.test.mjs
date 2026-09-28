@@ -902,4 +902,188 @@ h.test('claw types are deterministic with a seeded rand', () => {
   }
 });
 
+// ---- CR8 (round 8): the vacuum nozzle and the twin claws (DESIGN.md "Mama Mech and two new claws")
+const LIGHT = { tags: ['light'] }, HEAVY = { tags: ['heavy', 'metal'] };
+/* Run one grab and watch it: {delivered, events, tubeMax, clogs, sawTube (a body flying up the hose), tubeCollided, cargoSides}. */
+function watchGrab(W, C, R, x) {
+  const out = { events: [], tubeMax: 0, clog: null, sawUp: false, tubeHits: 0, carry: null, heads: null };
+  R.setTarget(x);
+  for (let i = 0; i < 90 && !R.calm(); i++) { out.events.push(...R.update(DT)); W.step(DT); }
+  R.drop();
+  let started = false;
+  for (let i = 0; i < 1200; i++) {
+    out.events.push(...R.update(DT)); W.step(DT);
+    const tube = R.tube ? R.tube() : [];
+    out.tubeMax = Math.max(out.tubeMax, tube.length);
+    for (const b of tube) { if (b.y < R.y) out.sawUp = true; if (W.contacts.some(c => c.a === b || c.b === b)) out.tubeHits++; }
+    if (R.ctl.clog && !out.clog) out.clog = R.ctl.clog;
+    if (R.phase === 'carrying' && !out.carry) { out.carry = R.locked().map(b => ({ x: b.x, y: b.y })); out.heads = R.bodies.twin ? R.bodies.twin.map(p => ({ x: p.x, y: p.y })) : null; }
+    if (R.phase !== 'idle' && R.phase !== 'moving') started = true;
+    if (started && R.phase === 'idle') break;
+  }
+  out.events.push(...R.update(DT));
+  out.delivered = items(W).filter(b => C.inChute(b));
+  return out;
+}
+
+h.test('CR8 vacuum: small light things fly up the wand into the canister and blow out into the chute', () => {
+  let best = 0, total = 0;
+  for (const x of [170, 200, 230]) {
+    const list = [];
+    for (let i = 0; i < 12; i++) list.push(['marble', 150 + (i % 6) * 20, 280 + Math.floor(i / 6) * 22, LIGHT]);
+    const { W, C } = typeWorld(list);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'vacuum', rand: U.rng(5) });
+    const g = watchGrab(W, C, R, x);
+    best = Math.max(best, g.delivered.length); total += g.delivered.length;
+    h.ok(g.events.includes('suck') && g.events.includes('blow') && g.events.includes('release') && g.events.includes('home'), 'the vacuum sucks, carries, blows and comes home');
+    h.ok(g.tubeMax >= 2 && g.tubeMax <= 3, `the canister holds up to three (${g.tubeMax})`);
+    h.ok(g.sawUp, 'the catch rides up above the nozzle');
+    h.eq(g.tubeHits, 0, 'nothing in the hose collides with anything');
+    h.ok(!anyNaN(W) && inside(W, C), 'sane and inside the glass');
+    h.ok(W.bodies.every(b => !b.tube), 'the hose is empty once the claw is home');
+  }
+  h.ok(best >= 3, `a canister of three is delivered (best ${best})`);
+  h.ok(total >= 7, `the vacuum delivers handfuls of small things (${total} over 3 grabs)`);
+});
+
+h.test('CR8 vacuum: heavy things resist, and a big light thing clogs the nozzle until it is let go', () => {
+  // heavy lead balls under the nozzle: tugged at, never sucked up
+  let up = 0;
+  for (const x of [160, 220]) {
+    const { W, C } = typeWorld([['marble', x, 350, HEAVY], ['marble', x + 20, 350, HEAVY], ['marble', x - 20, 350, HEAVY]]);
+    for (const b of items(W)) { b.m *= 3; b.invM = 1 / b.m; }
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'vacuum', rand: U.rng(6) });
+    up += watchGrab(W, C, R, x).tubeMax;
+  }
+  h.eq(up, 0, 'heavy things never fly up the hose');
+  // a big light thing (a card, a paper sword): sucked into the mouth, it plugs it
+  let clogs = 0, released = 0, noSuckWhileClogged = true;
+  for (const x of [150, 200, 250]) {
+    const { W, C } = typeWorld([['sword', x, 340, LIGHT], ['marble', x + 60, 350, LIGHT]]);
+    const sw = items(W).find(b => b.spec.kind === 'cap');
+    sw.m = 3; sw.invM = 1 / 3;
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'vacuum', rand: U.rng(7) });
+    let clog = null, n0 = 0;
+    R.setTarget(x); for (let i = 0; i < 90 && !R.calm(); i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    const ev = [];
+    for (let i = 0; i < 1200; i++) {
+      ev.push(...R.update(DT)); W.step(DT);
+      if (R.ctl.clog && !clog) { clog = R.ctl.clog; n0 = R.tube().length; }
+      if (clog && R.ctl.clog && R.tube().length > n0) noSuckWhileClogged = false;
+      if (R.phase === 'idle' && i > 30) break;
+    }
+    ev.push(...R.update(DT));
+    if (clog) { clogs++; h.ok(clog === sw, 'the big thing is the plug'); h.ok(ev.includes('clog') && ev.includes('unclog'), 'clog and unclog events'); }
+    if (clog && !R.ctl.clog) released++;
+    h.ok(R.stuck().length === 0 && !R.ctl.clog, 'nothing stays plugged once the claw is home');
+  }
+  h.ok(clogs >= 2, `a big light thing clogs the nozzle (${clogs}/3)`);
+  h.eq(released, clogs, 'every clog is let go');
+  h.ok(noSuckWhileClogged, 'a clogged nozzle sucks nothing else up');
+});
+
+h.test('CR8 twin claws: two heads grab two prizes separately, each on its own cable', () => {
+  let pairs = 0;
+  for (const [a, b] of [[170, 212], [180, 230], [150, 196], [240, 290]]) {
+    const { W, C } = typeWorld([['marble', a, 350], ['marble', b, 350]]);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'twin', rand: U.rng(8) });
+    h.ok(R.bodies.twin && R.bodies.twin.length === 2 && R.bodies.prongs.length === 4, 'two heads, four prongs');
+    const g = watchGrab(W, C, R, (a + b) / 2);
+    if (g.carry && g.carry.length === 2 && g.heads) {
+      // one prize under each head
+      const [p, q] = g.carry.slice().sort((u, v) => u.x - v.x);
+      if (Math.abs(p.x - g.heads[0].x) < 14 && Math.abs(q.x - g.heads[1].x) < 14) pairs++;
+    }
+    h.ok(g.events.includes('close') && g.events.includes('home'), 'the twin cycle runs');
+    h.ok(!anyNaN(W) && inside(W, C), 'sane and inside the glass');
+    if (g.delivered.length === 2) pairs += 0;
+  }
+  h.ok(pairs >= 3, `each head carries its own prize (${pairs}/4)`);
+  // the heads seek: with prizes wider apart than home, they slide out to them
+  const { W, C } = typeWorld([['marble', 160, 350], ['marble', 240, 350]]);
+  const R = PHYS.clawRig(W, { cabinet: C, type: 'twin', rand: U.rng(9) });
+  const home = R.bodies.twin[1].x - R.bodies.twin[0].x;
+  const g = watchGrab(W, C, R, 200);
+  h.ok(g.delivered.length === 2, `both prizes delivered (${g.delivered.length})`);
+  h.ok(g.events.includes('touch'), 'a head landing is a touch');
+  // independent cables: a block up on a tower shield lying flat for one head, a marble on the floor for the other
+  const w2 = mkWorld();
+  spawn(w2.W, ITEM.tower({}), 165, 360, { angle: Math.PI / 2, data: { tags: [] } });
+  spawn(w2.W, { shape: { kind: 'box', w: 22, h: 14 } }, 165, 330, { data: { tags: [] } });
+  spawn(w2.W, ITEM.marble({}), 226, 370, { data: { tags: [] } });
+  settle(w2.W, 1.5);
+  const R2 = PHYS.clawRig(w2.W, { cabinet: w2.C, type: 'twin', rand: U.rng(10) });
+  R2.setTarget(195); for (let i = 0; i < 90 && !R2.calm(); i++) { R2.update(DT); w2.W.step(DT); }
+  R2.drop();
+  let reel = 0;
+  for (let i = 0; i < 400 && R2.phase !== 'lifting'; i++) { R2.update(DT); w2.W.step(DT); reel = Math.max(reel, Math.abs(R2.ctl.tw.d[0] - R2.ctl.tw.d[1])); }
+  h.ok(reel > 12, `one head reels out further than the other (${reel.toFixed(0)} px)`);
+  h.ok(home > 0, 'the heads hang apart at home');
+});
+
+h.test('CR8 new claws: upgrades apply sensibly, the auto-steer drives them, a rebuild empties the hose, determinism', () => {
+  for (const t of ['vacuum', 'twin']) {
+    const { W, C } = typeWorld([['marble', 200, 350], ['marble', 240, 350], ['ball', 120, 340]]);
+    const R = PHYS.clawRig(W, { cabinet: C, type: t, rand: U.rng(11) });
+    const ax = R.aimAt((b) => b.spec.r === 9 || (b.spec.kind === 'ball' && b.spec.r < 12));
+    h.ok(ax != null, t + ': aimAt finds a prize');
+    h.ok(R.autoSteer(ax, { drop: true, speed: 1.8 }), t + ': autoSteer accepted');
+    h.eq(R.setTarget(50), false, t + ': the player cannot steer while the AI has it');
+    const ev = [];
+    for (let i = 0; i < 1200 && !ev.includes('home'); i++) { ev.push(...R.update(DT)); W.step(DT); }
+    h.ok(ev.includes('drop') && ev.includes('home'), t + ': the AI grab runs home');
+    h.eq(R.auto, null, t + ': handed back at home');
+  }
+  // the vacuum: a Wider Palm and the Third Prong each add a slot and widen the bore
+  {
+    const { W, C } = mkWorld();
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'vacuum' });
+    const s0 = R.geo.s;
+    R.setConfig({ width: 1.36 });
+    h.ok(R.geo.s > s0, 'a wider nozzle');
+    R.setConfig({ prongs: 3 });
+    R.update(DT);
+    h.eq(R.vac.cap, 5, 'the canister holds five with both upgrades');
+  }
+  // a rebuild mid-suck lets everything in the hose drop where it is
+  {
+    const list = [];
+    for (let i = 0; i < 8; i++) list.push(['marble', 170 + (i % 4) * 20, 330 + Math.floor(i / 4) * 20, LIGHT]);
+    const { W, C } = typeWorld(list);
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'vacuum', rand: U.rng(12) });
+    R.setTarget(200); for (let i = 0; i < 90 && !R.calm(); i++) { R.update(DT); W.step(DT); }
+    R.drop();
+    for (let i = 0; i < 400 && R.tube().length < 1; i++) { R.update(DT); W.step(DT); }
+    h.ok(R.tube().length >= 1, 'something is in the hose');
+    R.destroy();
+    h.ok(W.bodies.every(b => !b.tube), 'destroy empties the hose');
+    for (let i = 0; i < 120; i++) W.step(DT);
+    h.ok(!anyNaN(W) && inside(W, C), 'the dropped prizes land sanely');
+  }
+  // a type switch while idle parks the claw at its own height
+  {
+    const { W, C } = mkWorld();
+    const R = PHYS.clawRig(W, { cabinet: C, type: 'classic' });
+    const y0 = R.y;
+    R.setConfig({ type: 'vacuum' });
+    h.ok(R.y > y0 + 40, 'the vacuum parks lower (its canister rides above)');
+    R.setConfig({ type: 'twin' });
+    h.ok(R.y === y0 && R.bodies.twin && R.bodies.prongs.length === 4, 'the twin parks on the rail with its two heads');
+    R.setConfig({ type: 'classic' });
+    h.ok(R.bodies.prongs.length === 2 && !R.bodies.twin, 'back to one classic claw');
+  }
+  for (const t of ['vacuum', 'twin']) {
+    const run = () => {
+      const list = [];
+      for (let i = 0; i < 12; i++) list.push([i % 3 ? 'marble' : 'sword', 60 + i * 28, 300, i % 2 ? LIGHT : null]);
+      const { W, C } = typeWorld(list);
+      const R = PHYS.clawRig(W, { cabinet: C, type: t, rand: U.rng(77) });
+      grab(W, C, R, 190);
+      return items(W).map(b => b.x.toFixed(6) + ',' + b.y.toFixed(6)).join('|');
+    };
+    h.eq(run(), run(), t + ' is deterministic');
+  }
+});
+
 h.done();

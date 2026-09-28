@@ -2823,4 +2823,299 @@ if (hasData) {
   });
 }
 
+// ---------- round 8: the alternate bosses' signatures and the story callbacks (DESIGN.md "Stories, the rival and alternate bosses (round 8)")
+{
+  const L8 = boot({ only: ['util', 'data', 'combat'] });
+  const C = L8.COMBAT, D = L8.DATA, U8 = L8.U;
+  if (D && D.STO) {
+    const IDS = Object.keys(D.ITEMS).filter(id => D.ITEMS[id].rarity !== 'junk' && !D.ITEMS[id].bag && !D.ITEMS[id].hot);
+    const srun = (extra, n) => Object.assign({ hp: 400, maxHp: 400, act: 1, relics: [], claw: { grabs: 3 }, gold: 40, bin: IDS.slice(0, n || 14).map((x, i) => ({ uid: 's' + i, id: x, plus: false })) }, extra || {});
+    const bossEv = (list, k) => list.filter(e => e.t === 'boss' && e.k === k);
+    const count = (F) => F.bin.length + F.used.length + F.exhausted.length + F.stolen.length + (F.digested || []).length + F.purged.length
+      + F.enemies.reduce((a, e) => a + (e.belly || []).length, 0) + (F.stoIce ? F.stoIce.insts.length : 0) + (F.buried || []).length;
+    const calm = (F) => { for (const e of F.enemies) { e.hp = e.maxHp = 500; e.block = 0; e.status = {}; } F.player.block = 0; F.player.status = {}; F.events.length = 0; };
+    const sig = (F) => { F.enemies[0].sigForce = true; F.player.hp = 400; return C.endTurn(F); };
+
+    h.test('story bosses: the Plushie Queen\'s plushies soak every hit on her', () => {
+      const F = C.newFight(srun(), ['plushqueen'], U8.rng(4));
+      const e = F.enemies[0];
+      const ev = sig(F);
+      const p = bossEv(ev, 'plush')[0];
+      h.ok(p && p.items.length === 3 && C.stoPlush(F) === 3, 'Plush Parade: three plushies in the bin');
+      h.ok(p.items.every(i => i.junk && i.temp && D.ITEMS[i.id].sto === 'plush'), 'fight-only junk');
+      calm(F);
+      let got = C.damage(F, F.player, e, 10);
+      h.eq(got, 7, 'three plushies soak 3 of a 10');
+      h.ok(F.events.some(x => x.t === 'text' && x.str === 'FLUFF -3'), 'and say so');
+      h.eq(C.damage(F, F.player, e, 2), 0, 'a small hit vanishes into the fluff');
+      h.eq(C.damage(F, null, e, 10, { fixed: true }), 10, 'fixed damage (a bomb, thorns) goes straight through');
+      const plush = F.bin.find(i => D.ITEMS[i.id].sto === 'plush');
+      const b0 = F.player.block;
+      C.play(F, plush);
+      h.ok(F.player.block === b0 + 2 && C.stoPlush(F) === 2 && F.exhausted.includes(plush), 'grabbed out: 2 Block, one plush fewer, gone for the fight');
+      h.eq(C.damage(F, F.player, e, 10), 8, 'two left soak 2');
+      for (let k = 0; k < 4; k++) { F.phase = 'player'; sig(F); }
+      h.ok(C.stoPlush(F) >= D.ENEMIES.plushqueen.sig.max, 'parades fill the bin up to sig.max (a Royal Decree may add one more)');
+      calm(F);
+      h.eq(C.damage(F, F.player, e, 20), 20 - D.ENEMIES.plushqueen.sig.max, 'the soak never passes sig.max');
+      const G = C.newFight(srun(), ['plushqueen'], U8.rng(5));
+      G.enemies[0].enraged = true;
+      h.eq(bossEv(sig(G), 'plush')[0].items.length, 4, 'enraged: one more a parade');
+      const H = C.newFight(srun({ endless: { loop: 1, mix: 'plushqueen' } }), ['hoard'], U8.rng(3));
+      h.ok(H.enemies[0].def.sig.id === 'plush', 'an Endless Hoard can borrow the parade');
+      sig(H); calm(H);
+      h.ok(C.stoPlush(H) > 0 && C.damage(H, H.player, H.enemies[0], 10) === 10 - C.stoPlush(H), 'and its plushies soak for it');
+    });
+    h.test('story bosses: the Conveyor King\'s belt, crates, the jam, the stop', () => {
+      const F = C.newFight(srun({ act: 2 }), ['conveyorking'], U8.rng(4));
+      const ev = sig(F);
+      const b = bossEv(ev, 'belt')[0];
+      h.ok(b && F.conv && F.conv.v === 70 && F.conv.dir === -1, 'Belt Drive: the floor runs away from the chute for your turn');
+      h.ok(b.items.length === 2 && b.items.every(i => i.id === 'sto_crate'), 'two crates ride in');
+      const crate = F.bin.find(i => i.id === 'sto_crate'), b0 = F.player.block;
+      C.play(F, crate);
+      h.eq(F.player.block, b0 + 3, 'a crate grabbed out: cardboard armour');
+      h.ok(!!F.conv, 'a crate does not jam it');
+      const metal = F.bin.find(i => (D.ITEMS[i.id].tags || []).includes('metal'));
+      const jam = C.play(F, metal);
+      h.ok(bossEv(jam, 'beltJam').length === 1 && !F.conv, 'a metal prize delivered jams the belt');
+      const G = C.newFight(srun({ act: 2 }), ['conveyorking'], U8.rng(6));
+      sig(G);
+      h.ok(!!G.conv, 'running');
+      const off = C.endTurn(G);
+      h.ok(bossEv(off, 'beltOff').length === 1, 'your turn ends: it stops');
+      const E = C.newFight(srun({ act: 2 }), ['conveyorking'], U8.rng(7));
+      E.enemies[0].enraged = true;
+      sig(E);
+      h.eq(E.conv.v, 98, 'overtime: faster');
+      C.damage(E, E.player, E.enemies[0], 99999, { pierce: true });
+      h.ok(!E.conv, 'the King goes down: the belt stops');
+    });
+    h.test('story bosses: the Arctic Arcade\'s growing ice block', () => {
+      const F = C.newFight(srun({ act: 3 }), ['arcticarcade'], U8.rng(4));
+      const n0 = count(F), real0 = F.bin.filter(i => !i.junk).length;
+      let ev = sig(F);
+      const g1 = bossEv(ev, 'glacier')[0];
+      h.ok(g1 && g1.insts.length === 1 && g1.n === 1 && g1.inst.id === 'sto_glacier1', 'one item freezes into a block');
+      h.ok(F.bin.includes(g1.inst) && !F.bin.includes(g1.insts[0]) && C.stoIce(F).insts[0] === g1.insts[0], 'the item leaves the bin, the block sits in it');
+      h.eq(count(F), n0 + 1, 'nothing vanished (the block is new)');
+      F.phase = 'player'; ev = sig(F);
+      const g2 = bossEv(ev, 'glacier')[0];
+      h.ok(g2 && g2.inst === g1.inst && g1.inst.id === 'sto_glacier2' && C.stoIce(F).insts.length === 2, 'the same block grows a size');
+      F.phase = 'player'; F.enemies[0].enraged = true; ev = sig(F);
+      h.ok(bossEv(ev, 'glacier')[0].insts.length === 2 && g1.inst.id === 'sto_glacier4', 'enraged: two at once');
+      F.phase = 'player'; calm(F); F.enemies[0].status = {};
+      const hp0 = F.enemies[0].hp;
+      const out = C.play(F, g1.inst);
+      const br = bossEv(out, 'glacierBreak')[0];
+      h.ok(br && br.smash && br.insts.length === 4 && br.v === 20, 'delivered: it smashes, four come back, 5 each');
+      h.eq(F.enemies[0].hp, hp0 - 20, 'the boss takes it');
+      h.ok(C.stoIce(F).insts.length === 0 && br.insts.every(i => F.bin.includes(i) || F.used.includes(i)), 'every frozen item is back');
+      h.eq(F.bin.filter(i => !i.junk).length + F.used.filter(i => !i.junk).length, real0, 'no real item lost');
+      // its death melts the block open
+      const G = C.newFight(srun({ act: 3 }), ['arcticarcade'], U8.rng(8));
+      sig(G);
+      const inside = C.stoIce(G).insts.slice();
+      const d = C.damage(G, G.player, G.enemies[0], 99999, { pierce: true });
+      h.ok(d > 0 && inside.every(i => G.bin.includes(i)) && G.events.some(x => x.t === 'boss' && x.k === 'glacierBreak' && !x.smash), 'it goes down: the ice melts, the items come back');
+      // the floor: never below BEST_FLOOR real items
+      const S5 = C.newFight(srun({ act: 3 }, 5), ['arcticarcade'], U8.rng(9));
+      for (let k = 0; k < 4; k++) { S5.phase = 'player'; sig(S5); }
+      h.eq(S5.bin.filter(i => !i.junk).length + S5.used.filter(i => !i.junk).length, 4, 'a small bin keeps four real items');
+    });
+    h.test('story bosses: 24 turns each, clean, nothing vanishes', () => {
+      for (const id of ['plushqueen', 'conveyorking', 'arcticarcade', 'gary', 'cardshark']) {
+        const F = C.newFight(srun({ act: D.ENEMIES[id].act }), [id], U8.rng(11));
+        const rng = U8.rng(21), n0 = count(F);
+        let ok = true;
+        for (let turn = 0; turn < 24 && F.phase !== 'over'; turn++) {
+          try {
+            while (F.phase === 'player' && F.player.grabs > 0 && C.useGrab(F)) {
+              const n = rng.int(0, 2);
+              for (let k = 0; k < n && F.bin.length && F.phase === 'player'; k++) C.play(F, F.bin[rng.int(0, F.bin.length - 1)], 0);
+              C.grabDone(F, n);
+            }
+            if (F.phase === 'player') C.endTurn(F);
+            F.player.hp = Math.max(F.player.hp, 200);
+          } catch (err) { ok = false; h.ok(false, id + ' threw ' + err.stack); break; }
+          if (count(F) < n0 || !Number.isFinite(F.player.hp) || F.enemies.some(e => !Number.isFinite(e.hp))) { ok = false; h.ok(false, `${id}: broke at turn ${turn}`); break; }
+        }
+        h.ok(ok, `${id}: 24 turns clean`);
+      }
+    });
+    h.test('story callbacks: the crab, the ghost, the sabotage, Gary\'s gear', () => {
+      const F = C.newFight(srun({ act: 2 }), ['rat', 'slime'], U8.rng(3));
+      calm(F);
+      F.enemies[0].hp = 300; F.enemies[1].hp = 450;
+      const ev = C.stoAlly(F, 'crab', 1);
+      const a = ev.find(x => x.t === 'sto' && x.k === 'ally');
+      h.ok(a && a.id === 'crab' && a.idx === 1 && a.v === 9 && a.n === 2, 'the crab goes for the strongest (6 + 3 in act 2, twice)');
+      h.eq(F.enemies[1].hp, 450 - 18, 'two pinches land');
+      h.eq(F.player.block, 5, 'and it covers you');
+      const F2 = C.newFight(srun({ act: 1 }), ['rat'], U8.rng(3));
+      calm(F2);
+      C.stoAlly(F2, 'crab', 2);
+      h.ok(F2.enemies[0].hp === 500 - 24 && F2.player.block === 10, 'a fed crab hits twice as hard');
+      const F3 = C.newFight(srun(), ['rat', 'slime'], U8.rng(3));
+      calm(F3);
+      C.stoAlly(F3, 'ghost', 1);
+      h.ok(F3.enemies.every(e => e.status.weak === 2) && F3.player.status.dodge === 1, 'the ghost: every foe Weak, a Dodge for you');
+      h.eq(C.stoAlly(F3, 'nobody', 1).length, 0, 'an unknown friend does nothing');
+      const B = C.newFight(srun(), ['plushqueen'], U8.rng(3));
+      const hp0 = B.enemies[0].hp;
+      const sv = C.stoSabotage(B, { weak: 2, vuln: 3 }, 0.12);
+      h.ok(sv.some(x => x.t === 'sto' && x.k === 'sabotage') && B.enemies[0].hp === hp0 - Math.round(hp0 * 0.12), 'the boss starts 12% down');
+      h.ok(B.enemies[0].status.vuln === 3 && B.enemies[0].status.weak === 2, 'Vulnerable and Weak');
+      h.eq(C.stoSabotage(C.newFight(srun(), ['rat'], U8.rng(3)), { vuln: 2 }, 0.12).length, 0, 'no boss: nothing to sabotage');
+      const G0 = C.newFight(srun({ act: 3 }), ['gary'], U8.rng(3)), G3 = C.newFight(srun({ act: 3 }), ['gary'], U8.rng(3));
+      C.stoGear(G0, 0); C.stoGear(G3, 3);
+      h.ok(G3.enemies[0].maxHp === Math.round(G0.enemies[0].maxHp * 1.18) && G3.enemies[0].status.str === 1 && !G0.enemies[0].status.str, 'Gary\'s jacket: more hp and a Strength');
+      const hpNow = G3.enemies[0].maxHp;
+      C.stoGear(G3, 4);
+      h.eq(G3.enemies[0].maxHp, hpNow, 'only once a fight');
+    });
+  }
+}
+
+// ---------- round 8: Mama Mech's scrap turret (DESIGN.md "Mama Mech and two new claws")
+{
+  const LM = boot({ only: ['util', 'data', 'combat'] });
+  const C = LM.COMBAT, D = LM.DATA, UM = LM.U;
+  if (D && D.CHARACTERS && D.CHARACTERS.engineer) {
+    const MBIN = D.CHARACTERS.engineer.bin;
+    const mrun = (extra, bin) => Object.assign({ hp: 400, maxHp: 400, act: 1, char: 'engineer', relics: ['socket_set'], claw: { grabs: 3 }, gold: 40,
+      bin: (bin || MBIN).map((id, i) => ({ uid: 'm' + i, id, plus: false })) }, extra || {});
+    const mfight = (extra, bin, enc, seed) => {
+      const F = C.newFight(mrun(extra, bin), enc || ['rat'], UM.rng(seed || 7));
+      for (const e of F.enemies) { e.hp = e.maxHp = 500; e.block = 0; e.status = {}; }
+      return F;
+    };
+    const grabOf = (F, ids) => {
+      C.useGrab(F);
+      const out = [];
+      for (const id of ids) { const i = F.bin.find(b => b.id === id && F.grab.insts.indexOf(b) < 0); if (i && F.phase === 'player') out.push(...C.play(F, i)); }
+      out.push(...C.grabDone(F, ids.length));
+      return out;
+    };
+    const turEv = (list, k) => list.filter(e => e.t === 'turret' && (!k || e.k === k));
+
+    h.test('round 8: Mama Mech starts with a Lv 1 turret (Socket Set), nobody else has one', () => {
+      const F = mfight();
+      h.ok(F.tur && F.tur.parts === 2 && F.tur.lv === 1, 'two parts from the Socket Set: Lv 1');
+      h.eq(F.player.block, 3, 'and 3 Block');
+      h.ok(turEv(F.events, 'up').some(e => e.lv === 1 && e.name === 'PEA SHOOTER'), 'a level-up event for the game');
+      h.eq(C.turretOf(F), F.tur, 'turretOf');
+      const K = mfight({ char: 'knight', relics: [] });
+      h.eq(K.tur, null, 'the Knight has no turret');
+      h.eq(C.turretParts(K, 3).length, 0, 'feeding a fight without a turret does nothing');
+      const M0 = mfight({ relics: [] });
+      h.ok(M0.tur && M0.tur.parts === 0 && M0.tur.lv === 0, 'Mama without her starter: a bare mount');
+      for (let lv = 0; lv <= 5; lv++) h.eq(C.turLv(C.TUR.need[lv]), lv, 'turLv at ' + C.TUR.need[lv] + ' parts');
+      h.eq(C.turLv(C.TUR.need[2] - 1), 1, 'one part short stays down');
+    });
+
+    h.test('round 8: Blueprints build it for anyone, and give Mama 3 more', () => {
+      const K = mfight({ char: 'knight', relics: ['blueprints'] });
+      h.ok(K.tur && K.tur.parts === 0, 'the Knight gets a bare turret');
+      const M = mfight({ relics: ['socket_set', 'blueprints'] });
+      h.ok(M.tur.parts === 5 && M.tur.lv === 2, 'Mama: 2 + 3 parts, Lv 2');
+      h.ok(D.RELICS.blueprints.rules && D.RELICS.blueprints.rules.turret === 1 && D.RELIC_RULES.includes('turret'), 'a rule relic');
+    });
+
+    h.test('round 8: metal parts, `part` counts, the volley at the end of the turn', () => {
+      const F = mfight({}, MBIN.concat(['pipe_wrench', 'toolbox', 'mech_core']));
+      F.events.length = 0;
+      let ev = grabOf(F, ['hex_bolt']);
+      h.eq(F.tur.parts, 3, 'a hex bolt: one part');
+      h.ok(turEv(ev, 'part').some(e => e.n === 1 && e.parts === 3), 'a part event');
+      ev = grabOf(F, ['crisp_apple']);
+      h.eq(F.tur.parts, 3, 'an apple is not a part');
+      grabOf(F, ['pipe_wrench']);
+      h.ok(F.tur.parts === 5 && F.tur.lv === 2, 'a wrench is two: Lv 2');
+      const hp0 = F.enemies[0].hp;
+      F.enemies[0].block = 0;
+      const e2 = C.turretFire(F);
+      const shots = turEv(e2, 'fire');
+      h.eq(shots.length, C.TUR.shots[2], 'Lv 2 fires two shots');
+      h.eq(hp0 - F.enemies[0].hp, C.TUR.shots[2] * C.TUR.dmg[2], 'each for its level');
+      h.ok(shots.every(s => s.idx === 0 && !s.all), 'at the target');
+      // the real end of the turn fires too (before the enemies act)
+      const hp1 = F.enemies[0].hp;
+      const et = C.endTurn(F);
+      h.ok(turEv(et, 'fire').length === C.TUR.shots[2] && hp1 - F.enemies[0].hp >= C.TUR.shots[2] * C.TUR.dmg[2], 'endTurn fires the volley');
+    });
+
+    h.test('round 8: Lv 5 (MEGA MECH) ends on a shot at ALL, extra parts are overclock shots', () => {
+      const F = mfight({}, null, ['rat', 'rat']);
+      for (const e of F.enemies) { e.hp = e.maxHp = 500; }
+      C.turretParts(F, 30, 'TEST');
+      h.eq(F.tur.lv, 5, 'maxed');
+      h.eq(F.tur.parts, C.TUR.need[5], 'parts stop at the top');
+      h.ok(F.tur.over > 0 && F.events.some(e => e.t === 'turret' && e.k === 'over'), 'the rest fired as overclock shots');
+      const a0 = F.enemies[0].hp, b0 = F.enemies[1].hp;
+      const ev = turEv(C.turretFire(F), 'fire');
+      h.eq(ev.length, C.TUR.shots[5], 'four shots');
+      h.ok(ev[ev.length - 1].all && ev.slice(0, -1).every(s => !s.all), 'the last one hits ALL');
+      h.ok(b0 - F.enemies[1].hp === C.TUR.dmg[5] && a0 - F.enemies[0].hp === C.TUR.dmg[5] * 4, 'the mega shot reaches the second rat');
+      h.ok(D.achCheck({ kind: 'ev', ev: { t: 'turret', k: 'up', lv: 5 } }, {}).includes('fully_armed'), 'Fully Armed at Lv 5');
+      h.ok(!D.achCheck({ kind: 'ev', ev: { t: 'turret', k: 'up', lv: 4 } }, {}).includes('fully_armed'), 'not at Lv 4');
+    });
+
+    h.test('round 8: Armor-Piercing Rounds and the Grease Gun, with and without a turret', () => {
+      const F = mfight({ relics: ['socket_set', 'armor_piercing'] });
+      h.eq(F.tur.amp, 2, 'AP: +2 a shot');
+      const hp0 = F.enemies[0].hp;
+      C.turretFire(F);
+      h.eq(hp0 - F.enemies[0].hp, C.TUR.dmg[1] + 2, 'a Lv 1 shot for 5');
+      const K = mfight({ char: 'knight', relics: ['armor_piercing'] }, ['hex_bolt', 'tin_plate', 'crisp_apple', 'spring_coil']);
+      const k0 = K.enemies[0].hp;
+      grabOf(K, ['hex_bolt', 'spring_coil']);
+      h.eq(k0 - K.enemies[0].hp, 4 + 6 + 3, 'no turret: 2 metal in a grab zaps for 3 more');
+      const G = mfight({ relics: ['socket_set', 'grease_gun'] });
+      G.player.block = 0;
+      D.RELICS.grease_gun.hooks.onTurnEnd(G);
+      h.eq(G.player.block, 2, 'Grease Gun: 2 Block per turret level');
+      const N = mfight({ char: 'knight', relics: ['grease_gun'] }, ['hex_bolt', 'tin_plate', 'spring_coil', 'crisp_apple']);
+      grabOf(N, ['hex_bolt', 'spring_coil']);
+      N.player.block = 0;
+      D.RELICS.grease_gun.hooks.onTurnEnd(N);
+      h.eq(N.player.block, 4, 'no turret: 2 per metal item this turn');
+      const J = mfight({}, MBIN.concat(['rock']));
+      const p0 = J.tur.parts;
+      const r = J.bin.find(b => b.id === 'rock');
+      if (r) { C.useGrab(J); C.play(J, r); C.grabDone(J, 1); h.eq(J.tur.parts, p0 + 1, 'Socket Set: junk is scrap'); }
+    });
+
+    h.test('round 8: the evolutions feed the turret too', () => {
+      const F = mfight({ evos: ['thunder_bolt'] });
+      const p0 = F.tur.parts;
+      h.ok(D.EVOLUTIONS.thunder_bolt.from === 'hex_bolt' && D.EVOLUTIONS.mech_plating.from === 'tin_plate', 'the recipes');
+      D.EVO_FX['evo:thunder_bolt'].hooks.onTurnStart(F);
+      h.eq(F.tur.parts, p0 + 1, 'Live Wire: a free part a turn');
+      F.player.block = 0;
+      D.EVO_FX['evo:mech_plating'].hooks.onTurnEnd(F);
+      h.eq(F.player.block, 2 * F.tur.lv, 'Armor Up: 2 Block a level');
+    });
+
+    h.test('round 8: 40 turns of Mama Mech stay clean (fuzz)', () => {
+      const rng = UM.rng(88);
+      for (const seed of [1, 2, 3]) {
+        const F = C.newFight(mrun({ relics: ['socket_set', 'blueprints', 'armor_piercing', 'grease_gun'] }, MBIN.concat(['toolbox', 'mech_core', 'tesla_coil', 'mech_arm', 'rivet_gun'])), ['rat', 'slime'], UM.rng(seed));
+        let ok = true;
+        for (let t = 0; t < 40 && F.phase !== 'over'; t++) {
+          for (let g = 0; g < 3 && F.phase === 'player'; g++) {
+            const ids = F.bin.filter(() => rng() < 0.2).slice(0, 3).map(b => b.id);
+            grabOf(F, ids);
+          }
+          if (F.phase === 'player') C.endTurn(F);
+          if (!Number.isFinite(F.player.hp) || F.enemies.some(e => !Number.isFinite(e.hp)) || (F.tur && !(F.tur.lv >= 0 && F.tur.lv <= 5))) { ok = false; break; }
+          if (F.phase === 'over') break;
+        }
+        h.ok(ok, 'seed ' + seed + ': clean');
+        h.ok(F.tur && F.tur.shots > 0 && F.tur.dealt > 0, 'seed ' + seed + ': the turret did its share');
+      }
+    });
+  }
+}
+
 h.done();

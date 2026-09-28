@@ -1918,4 +1918,210 @@ h.test('qa: the intent bubble: the real hit, a multi-hit total over "hit x n", a
   for (const mode of ['deutan', 'tritan', 'off']) { R.acc.set({ mode }); drawCheck('qa intent ' + mode, (c) => R.intent(c, 200, 120, zap, 1, { k: 'attack', hit: 25, n: 2, jab: 0, total: 50, big: true })); }
 });
 
+/* ------------------------------------------------- HISTORY (round 8): run cards, charts, the recap, photo mode */
+h.test('history: stamps, charts, the bin, the map, the timeline, the killer, the header, photo filters and frames', () => {
+  const api = boot();
+  const R = api.RENDER, D = api.DATA, His = R.his;
+  h.ok(His && ['stamp', 'chart', 'bin', 'map', 'timeline', 'foe', 'hero', 'photo', 'viewfinder'].every((k) => typeof His[k] === 'function'), 'RENDER.his has every drawing');
+  // (the stamps share a shape: they differ in their word and colour, so read the words)
+  const words = (fn) => { const out = []; const ctx = new Proxy({}, { get(t, k) { if (k === 'measureText') return () => ({ width: 40 }); if (k === 'fillText') return (s) => out.push(String(s)); if (k in t) return t[k]; return () => {}; }, set(t, k, v) { t[k] = v; return true; } }); fn(ctx); return out.join('|'); };
+  for (const r of ['win', 'loss', 'endless', 'quit']) drawCheck('stamp ' + r, (c) => His.stamp(c, r, 100, 50, 24));
+  h.eq(['win', 'loss', 'endless', 'quit'].map((r) => words((c) => His.stamp(c, r, 0, 0, 24))).join(), 'VICTORY,K.O.,ENDLESS,QUIT', 'four stamps, four words');
+  drawCheck('stamp junk result', (c) => His.stamp(c, 'nope', 0, 0));
+  // the charts: a history, one run, none
+  const recs = [];
+  for (let i = 0; i < 30; i++) recs.push({ id: 'r' + i, c: ['knight', 'rogue', 'alchemist', 'gambler'][i % 4], s: 500 + ((i * 7919) % 20000), r: ['loss', 'win', 'loss', 'endless', 'quit'][i % 5], d: i });
+  const full = D.hisChart(recs, { knight: [9, 3], rogue: [8, 1], alchemist: [7, 0], gambler: [6, 6] });
+  const cs = drawCheck('chart full', (c) => His.chart(c, full, 508, 176, { t: 1, names: { knight: 'Grabsworth' } }));
+  const c1 = drawCheck('chart one run', (c) => His.chart(c, D.hisChart(recs.slice(0, 1), { knight: [1, 0] }), 508, 176, { t: 0 }));
+  drawCheck('chart empty', (c) => His.chart(c, D.hisChart([], {}), 508, 176, {}));
+  drawCheck('chart null', (c) => His.chart(c, null, 508, 176));
+  h.ok(fingerprint(cs) !== fingerprint(c1), 'the chart shows the data');
+  // the bin: prizes of every rarity, plus, empty
+  const ids = Object.keys(D.ITEMS).filter((id) => !D.ITEMS[id].season);
+  const defs = ids.slice(0, 8).map((id, i) => ({ def: D.ITEMS[id], plus: i % 2 === 0 }));
+  drawCheck('bin of 8', (c) => His.bin(c, defs, 508, 176, { t: 1 }));
+  drawCheck('bin of 3', (c) => His.bin(c, defs.slice(0, 3), 508, 176, {}));
+  drawCheck('bin empty', (c) => His.bin(c, [], 508, 176));
+  // the map: a packed act map, every biome, none
+  const M = { cols: 16, rows: 22, tiles: {}, pos: { q: 2, r: 9 }, boss: { q: 10, r: 11 }, start: { q: -5, r: 11 } };
+  for (let r = 0; r < 22; r++) for (let c = 0; c < 16; c++) { const q = c - Math.floor(r / 2); M.tiles[q + ',' + r] = { terrain: (c * 3 + r) % 9 === 0 ? 'sea' : 'land', revealed: (c + r) % 3 === 0, visited: (c + r) % 6 === 0 }; }
+  const mp = D.hisMapPack(M), cells = D.hisMapCells(mp);
+  for (const biome of ['cellar', 'foundry', 'glacier', 'machine', undefined]) drawCheck('map ' + biome, (c) => His.map(c, cells, mp, 508, 300, { biome, t: 2 }));
+  const mNone = drawCheck('map none', (c) => His.map(c, null, null, 508, 300, {}));
+  h.ok(mNone.seq.indexOf('fillText') >= 0, 'no map says so');
+  // the last turns
+  const turns = [{ n: 3, dmg: 12, bl: 5, blk: 5 }, { n: 4, dmg: 0, bl: 14, blk: 20 }, { n: 5, dmg: 0, bl: 0, blk: 0 }, { n: 6, dmg: 9, bl: 0, blk: 0 }, { n: 7, dmg: 46, bl: 3, blk: 3 }];
+  const tl = drawCheck('timeline', (c) => His.timeline(c, turns, 460, 150, {}));
+  drawCheck('timeline of one', (c) => His.timeline(c, turns.slice(-1), 460, 150, {}));
+  drawCheck('timeline of none', (c) => His.timeline(c, [], 460, 150, {}));
+  drawCheck('timeline zeros', (c) => His.timeline(c, [{ n: 1, dmg: 0, bl: 0, blk: 0 }], 460, 150));
+  h.ok(tl.seq.filter((k) => k === 'fillText').length >= 10, 'every turn has its number and its label');
+  // the killer, every enemy art and none
+  let foes = 0;
+  for (const id of Object.keys(D.ENEMIES).slice(0, 40)) { drawCheck('foe ' + id, (c) => His.foe(c, D.ENEMIES[id], 240, 176, { t: 1 })); foes++; }
+  drawCheck('foe unknown', (c) => His.foe(c, null, 96, 80, {}));
+  h.ok(foes > 20, 'the killer portrait for many enemies');
+  // the detail header for every result, with an outfit and a Tilt
+  for (const r of ['win', 'loss', 'endless', 'quit']) drawCheck('hero ' + r, (c) => His.hero(c, { char: 'knight', outfit: 'fit_knight_cape', name: 'Sir Grabsworth', date: 'Sep 28, 2026', result: r, score: 48299, where: 'Loop 5 · Endless', tilt: r === 'win' ? 3 : 0, t: 1 }, 508, 160));
+  drawCheck('hero empty', (c) => His.hero(c, null, 508, 160));
+  // photo mode: every filter with every frame, the stamp, reduced flashing, the viewfinder
+  const src = { width: 1080, height: 1920 };
+  const fps = new Map(), frs = new Map();
+  for (const f of His.FILTERS) for (const fr of His.FRAMES) {
+    const st = drawCheck(`photo ${f} ${fr}`, (c) => His.photo(c, src, { w: 540, h: 960, filter: f, frame: fr, t: 1.3, stamp: { char: 'rogue', outfit: null, name: 'Pip Quickclaw' }, caption: 'Pip Quickclaw · Act 2', sub: 'Sep 28, 2026' }));
+    if (fr === 'none') fps.set(f, fingerprint(st));
+    if (f === 'none') frs.set(fr, fingerprint(st));
+  }
+  h.eq(uniqueRatio(fps).ratio, 1, 'five distinct filters');
+  h.eq(uniqueRatio(frs).ratio, 1, 'four distinct frames');
+  const calm = drawCheck('photo marquee calm', (c) => His.photo(c, src, { filter: 'neon', frame: 'marquee', t: 1.3, noFlash: true }));
+  const calm2 = drawCheck('photo marquee calm later', (c) => His.photo(c, src, { filter: 'neon', frame: 'marquee', t: 2.9, noFlash: true }));
+  h.eq(fingerprint(calm), fingerprint(calm2), 'reduced flashing: the bulbs and the glow hold still');
+  const live = drawCheck('photo marquee live later', (c) => His.photo(c, src, { filter: 'neon', frame: 'marquee', t: 2.9 }));
+  h.ok(fingerprint(live) !== fingerprint(calm2), 'the bulbs chase otherwise');
+  const noStamp = drawCheck('photo no stamp', (c) => His.photo(c, src, { filter: 'none', frame: 'none', stamp: null }));
+  h.ok(fingerprint(noStamp) !== frs.get('none'), 'the stamp is drawn when on');
+  drawCheck('photo junk', (c) => His.photo(c, null, { filter: 'x', frame: 'y' }));
+  drawCheck('photo no state', (c) => His.photo(c, src));
+  for (const ph of ['back', 'front']) drawCheck('viewfinder ' + ph, (c) => His.viewfinder(c, ph, 70, 62, 400, 710, 540, 960, { t: 1 }));
+  for (const fr of His.FRAMES) { const r = His.photoRect(fr, 540, 960); h.ok(r.w > 400 && r.h > 700 && r.x >= 0 && r.y >= 0 && r.x + r.w <= 540 && r.y + r.h <= 960, 'the picture fits its frame ' + fr); }
+});
+
+// ---------- round 8: stories, the rival and the alternate bosses (DESIGN.md "Stories, the rival and alternate bosses (round 8)")
+if (HAS_DATA) h.test('story: Gary, the Card Shark, the alternate bosses, their junk, the claw-off, the cameo', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, E = D.ENEMIES;
+  h.ok(R.sto && typeof R.sto.board === 'function', 'RENDER.sto');
+  const LOOKS = ['gary', 'cardshark', 'plushqueen', 'conveyorking', 'arcticarcade'];
+  const prints = new Map();
+  for (const id of LOOKS) {
+    const st = drawCheck('enemy ' + id, (c) => R.enemy(c, E[id], 270, 300, 1, 1.3, {}));
+    prints.set(id, fingerprint(st));
+    const fall = fingerprint(drawCheck('its art key ' + E[id].art, (c) => R.enemy(c, { id: 'x', art: E[id].art, tier: E[id].tier, size: E[id].size, color: E[id].color }, 270, 300, 1, 1.3, {})));
+    h.ok(fall !== prints.get(id), id + ' has its own drawing, not its art key\'s');
+    for (const k of ['hurt', 'attack', 'dead', 'frozen', 'burning', 'enraged']) drawCheck(`enemy ${id} ${k}`, (c) => R.enemy(c, E[id], 270, 300, 1, 2.1, { [k]: k === 'frozen' || k === 'burning' || k === 'enraged' ? true : 0.6 }));
+    const box = R.enemyBox(E[id], 1);
+    h.ok(box.w > 40 && box.h > 60, id + ' has a body box');
+    for (const t of [0.3, 1.2, 2.4]) drawCheck(`vs card ${id} t${t}`, (c) => R.vsCard(c, 540, 960, { t, dur: E[id].tier === 'boss' ? 3.3 : 2.3, boss: E[id].tier === 'boss', title: E[id].tier === 'boss' ? 'ACT ' + E[id].act + ' BOSS' : 'ELITE', name: E[id].name, taunt: E[id].taunt, def: E[id], charId: 'rogue', color: E[id].color, now: t }));
+  }
+  h.eq(uniqueRatio(prints).ratio, 1, 'five distinct drawings');
+  // Gary's gear shows: every level its own look
+  const gear = new Map();
+  for (let g = 0; g <= 4; g++) { R.sto.gear = g; gear.set(g, fingerprint(drawCheck('gary gear ' + g, (c) => R.enemy(c, E.gary, 270, 300, 1, 0.7, {})))); }
+  h.eq(uniqueRatio(gear).ratio, 1, 'rookie cap, shades, chain, jacket and turbo claw all show');
+  R.sto.gear = 99; h.eq(R.sto.gear, 4, 'gear clamps'); R.sto.gear = 0;
+  // the bosses' junk: their own silhouettes
+  const junk = new Map();
+  for (const id of ['sto_plush', 'sto_crate', 'sto_glacier1']) {
+    const st = drawCheck('item ' + id, (c) => R.item(c, D.ITEMS[id], 100, 100, 0.3, 1, {}));
+    junk.set(id, fingerprint(st));
+    h.ok(fingerprint(drawCheck('fallback ' + id, (c) => R.item(c, Object.assign({}, D.ITEMS[id], { id: 'x_' + id }), 100, 100, 0.3, 1, {}))) !== junk.get(id), id + ': its own silhouette');
+  }
+  h.eq(uniqueRatio(junk).ratio, 1, 'plush, crate and ice differ');
+  for (const id of D.STO_ICE) drawCheck('item ' + id, (c) => R.item(c, D.ITEMS[id], 100, 100, 0, 1, {}));
+  h.ok(!Object.keys(R.pol.SIL).includes('sto_plush') && !!R.pol.SIL.sto_plush, 'the silhouettes are reachable, never listed');
+  // the signatures' sign colours, the vignettes' props
+  for (const k of ['plush', 'belt', 'glacier']) h.ok(/^#/.test(R.SIG_COL[k]), 'sign colour ' + k);
+  for (const id of D.STORY_IDS) drawCheck('story vignette ' + id, (c) => R.arcScene(c, 508, 190, { id, def: { art: D.STORIES[id].art }, t: 0.9, act: 2, enemy: E[D.STORIES[id].art] || null, item: null, roll: 1, face: 6 }));
+  // the rival tile, on the map and as a dark landmark
+  const tile = fingerprint(drawCheck('hex rival', (c) => R.hex(c, 50, 50, 30, { type: 'rival', revealed: true, q: 1, r: 2 }, { t: 1 })));
+  h.ok(tile !== fingerprint(drawCheck('hex event', (c) => R.hex(c, 50, 50, 30, { type: 'event', revealed: true, q: 1, r: 2 }, { t: 1 }))), 'the rival tile has its own icon');
+  drawCheck('hex rival dark', (c) => R.hex(c, 50, 50, 30, { type: 'rival', revealed: false, known: true, q: 1, r: 2 }, { t: 1 }));
+  drawCheck('rival icon', (c) => R.sto.tile(c, 20, 0.4));
+  // the claw-off board, the bubble, the belt, the glaze, the cameo
+  const boards = new Map();
+  for (const who of ['p', 'g']) boards.set(who, fingerprint(drawCheck('board ' + who, (c) => R.sto.board(c, { t: 1, p: 9, g: 4, pd: 2, gd: 1, who, name: 'Pip', flashP: who === 'p' ? 1 : 0, label: 'YOUR DROP' }))));
+  h.eq(uniqueRatio(boards).ratio, 1, 'the board lights the side at the claw');
+  drawCheck('board empty', (c) => R.sto.board(c, null));
+  drawCheck('bubble', (c) => R.sto.bubble(c, 270, 240, 300, 'Name\'s Gary. Grabby Gary. Undefeated claw-off champion, three arcades running.', 0.1, 400, 300));
+  drawCheck('bubble no tail', (c) => R.sto.bubble(c, 270, 240, 300, '', 2));
+  for (const k of [0.3, 1]) drawCheck('belt k' + k, (c) => R.sto.belt(c, 30, 446, 788, 1.3, 70, k));
+  drawCheck('glaze', (c) => R.sto.glaze(c, 200, 600, 70, 50, 0.2, 1));
+  const al = new Map();
+  for (const id of ['crab', 'ghost']) al.set(id, fingerprint(drawCheck('ally ' + id, (c) => R.sto.ally(c, id, 150, 300, 1.1, 1, { attack: 0.5 }))));
+  h.eq(uniqueRatio(al).ratio, 1, 'the crab and the ghost differ');
+  drawCheck('ally unknown', (c) => R.sto.ally(c, 'nobody', 150, 300, 1, 1, null));
+});
+
+// ---------------- CR8 (round 8): Mama Mech's face and hats, her turret, the vacuum and the twins
+h.test('CR8: Mama Mech, her turret at every level, the vacuum\'s canister, the twin heads', () => {
+  const api = boot({ only: ['util', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, P = api.PHYS;
+  // a deeper fingerprint than the call names: every call's rounded args and the fill colour
+  // it paints with (a lamp lighting up or a head reeling down changes only those)
+  const deep = (fn) => {
+    const out = [];
+    const t = { canvas: { width: 540, height: 960 }, fillStyle: '#000' };
+    const ctx = new Proxy(t, {
+      get(o, k) {
+        if (typeof k !== 'string' || k === 'then') return o[k];
+        if (k in o) return o[k];
+        if (k === 'measureText') return () => ({ width: 40 });
+        if (k.startsWith('create')) return () => ({ addColorStop() {} });
+        if (k === 'getImageData') return () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 });
+        return (...a) => out.push(k + '(' + a.map(v => (typeof v === 'number' ? Math.round(v) : typeof v)).join(',') + ')' + (k === 'fill' ? o.fillStyle : ''));
+      },
+      set(o, k, v) { o[k] = v; return true; },
+    });
+    fn(ctx);
+    return out.join(';');
+  };
+  h.ok(R.cr8 && ['vacuum', 'twin', 'portrait', 'hat', 'turret', 'bolt'].every(k => typeof R.cr8[k] === 'function'), 'RENDER.cr8');
+  // her face
+  const pfp = new Map();
+  for (const id of ['knight', 'alchemist', 'rogue', 'gambler', 'engineer']) pfp.set(id, fingerprint(drawCheck('portrait ' + id, c => R.portrait(c, id, 40, 40, 64, 1))));
+  h.eq(uniqueRatio(pfp).ratio, 1, 'Mama Mech has a face of her own');
+  // her two hats: each changes the portrait, and they differ
+  const bare = pfp.get('engineer'), hats = new Map();
+  for (const fit of ['fit_mama_welder', 'fit_mama_hardhat', 'fit_mama_witch']) {
+    R.vault.equip({ outfit: { engineer: fit } });
+    hats.set(fit, fingerprint(drawCheck('portrait engineer ' + fit, c => R.portrait(c, 'engineer', 40, 40, 64, 1))));
+    drawCheck('thumb ' + fit, c => R.vault.thumb(c, fit, 50, 50, 100, 0.5));
+  }
+  R.vault.equip({ outfit: {} });
+  h.ok([...hats.values()].every(fp => fp !== bare), 'every hat shows on her');
+  h.eq(uniqueRatio(hats).ratio, 1, 'and the hats differ');
+  // the turret: six levels, each its own look; firing, levelling up and the gatling spin show
+  const lv = new Map();
+  for (let l = 0; l <= 5; l++) {
+    const st = { lv: l, parts: [0, 2, 4, 7, 11, 16][l], need: [2, 4, 7, 11, 16, 16][l], t: 1, aim: -2.4, fire: 0, up: 0, spin: 0, mood: '', k: 1.7 };
+    lv.set(l, fingerprint(drawCheck('turret lv ' + l, c => R.cr8.turret(c, 500, 400, st))));
+  }
+  h.eq(uniqueRatio(lv).ratio, 1, 'every turret level looks different');
+  const st3 = (o) => Object.assign({ lv: 3, parts: 8, need: 11, t: 1, aim: -2.4, fire: 0, up: 0, spin: 0, mood: '', k: 1.7 }, o);
+  h.ok(fingerprint(drawCheck('turret firing', c => R.cr8.turret(c, 500, 400, st3({ fire: 1 })))) !== lv.get(3), 'a shot recoils and flashes');
+  h.ok(fingerprint(drawCheck('turret level-up', c => R.cr8.turret(c, 500, 400, st3({ up: 1 })))) !== lv.get(3), 'a level-up pops');
+  h.ok(fingerprint(drawCheck('turret happy', c => R.cr8.turret(c, 500, 400, st3({ mood: 'happy' })))) !== lv.get(3), 'the dome smiles');
+  drawCheck('turret gatling spin', c => R.cr8.turret(c, 500, 400, st3({ lv: 4, spin: 7.1, fire: 0.6 })));
+  drawCheck('turret null state', c => { R.cr8.turret(c, 500, 400, null); c.fillRect(0, 0, 1, 1); });
+  for (const l of [1, 3, 5]) for (const u of [0, 0.5, 1]) drawCheck(`bolt lv ${l} at ${u}`, c => R.cr8.bolt(c, 500, 380, 200, 250, u, l));
+  // the vacuum: an empty canister, one, two, three prizes, a clog: each shows
+  const vac = new Map();
+  for (const [k, o] of [['empty', {}], ['one', { fill: 0.34 }], ['two', { fill: 0.67 }], ['full', { fill: 1 }], ['clog', { clog: 1 }], ['suck', { field: 1 }]]) {
+    const pose = P.clawPose('vacuum', Object.assign({ x: 200, y: 120, phase: 'dropping' }, o));
+    drawCheck('vacuum ' + k, c => R.claw(c, pose, 30, 410, { juice: { t: 1.2 } }));
+    vac.set(k, deep(c => R.claw(c, pose, 30, 410, { juice: { t: 1.2 } })));
+  }
+  h.eq(uniqueRatio(vac).ratio, 1, 'the canister shows how full it is, the clog and the suction');
+  // the twins: open, closed, and the heads apart show
+  const tw = new Map();
+  for (const open of [0, 1]) {
+    const pose = P.clawPose('twin', { x: 200, y: 120, open });
+    drawCheck('twin open ' + open, c => R.claw(c, pose, 30, 410, { juice: { t: 1 } }));
+    tw.set('open ' + open, deep(c => R.claw(c, pose, 30, 410, { juice: { t: 1 } })));
+  }
+  const apart = P.clawPose('twin', { x: 200, y: 120, open: 1 });
+  apart.bodies.twin[0].x -= 20; apart.bodies.twin[0].y += 30;
+  for (const p of apart.bodies.prongs.slice(0, 2)) for (const q of p) { q.x -= 20; q.y += 30; }
+  drawCheck('twin heads apart', c => R.claw(c, apart, 30, 410, { juice: { t: 1 } }));
+  tw.set('apart', deep(c => R.claw(c, apart, 30, 410, { juice: { t: 1 } })));
+  h.eq(uniqueRatio(tw).ratio, 1, 'the twin heads close and reel on their own');
+  // her items: each its own silhouette
+  const its = new Map();
+  for (const id of Object.keys(D.ITEMS).filter(id => D.ITEMS[id].char === 'engineer')) its.set(id, fingerprint(drawCheck('item ' + id, c => R.item(c, D.ITEMS[id], 100, 100, 0.3, 1, {}))));
+  h.ok(its.size >= 10 && uniqueRatio(its).ratio === 1, `her ${its.size} items all look different`);
+  for (const id of ['thunder_bolt', 'mech_plating']) drawCheck('evolved ' + id, c => R.item(c, D.ITEMS[id], 100, 100, 0, 1, {}));
+});
+
 h.done();
