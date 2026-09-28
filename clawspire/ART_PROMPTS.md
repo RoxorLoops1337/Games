@@ -79,6 +79,14 @@ Items live in the claw machine bin and are grabbed by the claw, so they must rea
 | `art/items/mask.png` | 512x464 | 1.1:1, horizontal | 32x29 | harlequin_mask | a masquerade mask facing the viewer, wide at the top with two eye holes, narrowing to a chin at the bottom |
 | `art/items/egg.png` | 384x512 | 1:1.33, vertical | 24x32 | volatile_egg, golden_egg, dragon_egg | an egg standing upright, slightly pointed top |
 | `art/items/dice.png` | 512x512 | 1:1, square | 24x24 | loaded_dice | a single six-sided die in three-quarter view, rounded corners, pips on the visible faces |
+| `art/items/chip.png` | 512x512 | 1:1, square | 26x26 | poker_chip, roulette_wheel | a casino poker chip seen face on, a ring of eight white edge stripes, a raised inlay with a small star in the middle |
+| `art/items/card.png` | 368x512 | 1:1.39, vertical | 24x34 | scratch_card, marked_deck | a playing card standing upright facing the viewer, a coloured border, a pale panel with one big diamond pip in the middle and two corner pips |
+| `art/items/horseshoe.png` | 512x512 | 1:1, square | 32x29 | lucky_horseshoe | a lucky horseshoe with the open end pointing up, steel with four nail holes and two gold tips |
+| `art/items/clover.png` | 512x512 | 1:1, square | 18x18 | lucky_clover | a four-leaf clover, four round leaves around a pale centre, a short curled stem |
+| `art/items/slot.png` | 384x512 | 1:1.33, vertical | 30x40 | one_armed_bandit | a tiny tabletop slot machine standing upright, a gold dome on top, a window of three reels showing red sevens, a lever with a ball on the right side |
+| `art/items/potato.png` | 512x328 | 1.55:1, horizontal | 34x21 | hot_potato | a lumpy baked potato lying flat, a few dark eyes, two wisps of orange steam rising off it |
+| `art/items/pill.png` | 512x240 | 2.17:1, horizontal | 26x12 | poison_pill | a two-tone capsule pill lying flat, one half lime green, the other hot pink, a glossy highlight along the top |
+| `art/items/cookie.png` | 512x344 | 1.5:1, horizontal | 32x21 | fortune_cookie | a golden fortune cookie in side view, folded into a crescent, a white paper slip with two tiny red lucky numbers poking out |
 
 ### Per-item overrides (optional, beat the shared key for one item)
 
@@ -175,6 +183,22 @@ Use these when an item should look different from the others that share its key 
 | `art/items/id/arcane_tome.png` | 408x512 | 1:1.27, vertical | 30x38 | book | Arcane Tome: a thick spellbook standing upright facing the viewer, violet cover (#7a5aff), a cyan glowing sigil (#2ee6d6) on the front, a ribbon bookmark, no text |
 | `art/items/id/iron_nut.png` | 512x512 | 1:1, square | 20x20 | ring | Iron Nut: a chunky hexagonal iron nut seen face on, steel grey (#8a929c) with darker thread shading (#4a5058), tiny and important |
 | `art/items/id/bag_bolts.png` | 512x512 | 1:1, square | 28x28 | ring | Bucket of Bolts: a small tin bucket overflowing with grey iron nuts and bolts (#8a929c), dark shading (#4a5058) |
+| `art/items/id/bone_dice.png` | 512x512 | 1:1, square | 22x22 | dice | Bone Dice: a yellowed bone die in three-quarter view (#f1e9d6), rounded chipped corners, dark red pips (#8a1a2a) |
+| `art/items/id/poker_chip.png` | 512x512 | 1:1, square | 26x26 | chip | Poker Chip: a red casino chip seen face on (#ff2e4a) with eight white edge stripes and a white star inlay |
+| `art/items/id/scratch_card.png` | 368x512 | 1:1.39, vertical | 24x34 | card | Scratch Card: a gold lottery scratch card standing upright (#ffe066), three silver scratch-off circles, one scratched to show a pink star (#ff2e88) |
+| `art/items/id/fortune_cookie.png` | 512x344 | 1.5:1, horizontal | 32x21 | cookie | Fortune Cookie: a golden brown fortune cookie (#e8b25e) folded into a crescent, a cream paper slip (#fff6e0) with tiny red numbers poking out |
+| `art/items/id/double_or_nothing.png` | 512x512 | 1:1, square | 24x24 | coin | Double or Nothing: a thick silver coin seen face on (#e6ebf0), a dark stamped "2x" on one side of a split face (#2a2a3a) |
+| `art/items/id/lucky_horseshoe.png` | 512x512 | 1:1, square | 32x29 | horseshoe | Lucky Horseshoe: a steel horseshoe pointing up (#aab3bd), four nail holes, gold tips (#ffc94d), a tiny sparkle |
+| `art/items/id/marked_deck.png` | 368x512 | 1:1.39, vertical | 26x34 | card | Marked Deck: a small deck of playing cards standing upright, blue backs (#3b6fd6) with a white diamond pattern, the top card slightly askew, a pencil tick on the corner |
+| `art/items/id/one_armed_bandit.png` | 384x512 | 1:1.33, vertical | 30x40 | slot | One-Armed Bandit: a tiny red slot machine (#ff2e4a) with a gold dome (#ffc94d), three reels showing red sevens, a chrome lever on the right |
+| `art/items/id/roulette_wheel.png` | 512x512 | 1:1, square | 36x36 | chip | Roulette Wheel: a small roulette wheel seen from above, black body (#1a1224) with red pockets (#ff2e4a), a white ball in one pocket |
+| `art/items/id/golden_dice.png` | 512x512 | 1:1, square | 26x26 | dice | Golden Dice: a solid gold die in three-quarter view (#ffc94d), glossy highlights, deep purple pips (#12091f), a little glint |
+| `art/items/id/poison_pill.png` | 512x240 | 2.17:1, horizontal | 26x12 | pill | Poison Pill: a capsule pill lying flat, one half toxic lime (#a6ff5e) with a tiny skull, the other hot pink (#ff2e88) |
+| `art/items/id/hot_potato.png` | 512x328 | 1.55:1, horizontal | 34x21 | potato | Hot Potato: a lumpy baked potato lying flat (#c98a4a), glowing red-orange cracks (#ff5a2e), wisps of steam, visibly too hot to hold |
+| `art/items/id/crystal_dice.png` | 512x512 | 1:1, square | 22x22 | dice | Crystal Dice: a clear glass die in three-quarter view (#bfefff) with violet pips (#7a5aff) floating inside, bright refractions |
+| `art/items/id/floating_token.png` | 512x512 | 1:1, square | 22x22 | coin | Floating Token: a lilac arcade token (#b08cff) with a gold rim (#ffe066), hovering with a soft purple glow under it |
+| `art/items/id/firecracker.png` | 512x512 | 1:1, square | 26x26 | bomb | Firecracker: a round red firecracker bomb (#ff2e4a) with gold bands (#ffe066) and a short curly fuse with a spark |
+| `art/items/id/lucky_clover.png` | 512x512 | 1:1, square | 18x18 | clover | Lucky Clover: a four-leaf clover, bright green leaves (#3ddc84) with darker veins (#1a6b3a), a curled stem |
 
 ## Enemies
 
@@ -260,6 +284,7 @@ Square, head and shoulders bust, facing the camera, the face centred. The game c
 | --- | --- | --- | --- | --- |
 | `art/portraits/knight.png` | 512x512 | 1:1, square | 96x96 | Sir Grabsworth, The Knight: a sturdy good-natured knight in a round steel helmet with the visor up, a hot pink plume, cyan trim on the armour (#2ee6d6), a very firm handshake face, the strap of a claw machine backpack over one shoulder, head and shoulders bust, facing the camera, flat dark background in #2ee6d6 |
 | `art/portraits/alchemist.png` | 512x512 | 1:1, square | 96x96 | Mira Fizzwick, The Alchemist: a cheerful young alchemist with wild orange hair, big lime green goggles pushed up (#a6ff5e), a stain on one cheek, a bubbling vial tucked behind one ear, the strap of a claw machine backpack over one shoulder, head and shoulders bust, facing the camera, flat dark background in #a6ff5e |
+| `art/portraits/gambler.png` | 512x512 | 1:1, square | 96x96 | Lucky Lou, The Gambler: a slick card sharp with oiled dark hair, a translucent green dealer's visor with a playing card tucked in the band, one eye winking, a pencil moustache, a grin with one gold tooth, a red bow tie on a green felt vest, the strap of a claw machine backpack over one shoulder, head and shoulders bust, facing the camera, flat dark background in #ffc94d |
 | `art/portraits/rogue.png` | 512x512 | 1:1, square | 96x96 | Pip Quickclaw, The Rogue: a sly rogue in a deep purple hood, face in shadow except gold eyes and a smirk, a hot pink scarf (#ff2e88), a coin rolling across the knuckles, the strap of a claw machine backpack over one shoulder, head and shoulders bust, facing the camera, flat dark background in #ff2e88 |
 
 ## Relics
@@ -337,6 +362,22 @@ Small emblems shown at about 32 px in the relic strip, 256x256, square, transpar
 | `art/relics/crystal_focus.png` | 256x256 | c | Crystal Focus | Crystal Focus relic emblem: a small crystal ball on a brass stand with a lilac glow and a reflected second ball inside, small icon, square |
 | `art/relics/wizard_hat.png` | 256x256 | u | Wizard Hat | Wizard Hat relic emblem: a tall floppy purple wizard hat with gold stars and a spark leaping off the tip, small icon, square |
 | `art/relics/echo_chamber.png` | 256x256 | r | Echo Chamber | Echo Chamber relic emblem: a brass horn with lilac sound rings repeating out of it, each ring smaller, small icon, square |
+| `art/relics/snake_eyes.png` | 256x256 | event | Snake Eyes | Snake Eyes relic emblem: two ivory dice both showing one pip, a little green snake curled around them, small icon, square |
+| `art/relics/pity_timer.png` | 256x256 | c | Pity Timer | Pity Timer relic emblem: a brass hourglass with green sand and a tiny sympathetic frowny face on the glass, small icon, square |
+| `art/relics/dealers_visor.png` | 256x256 | c | Dealer's Visor | Dealer's Visor relic emblem: a translucent green casino dealer's visor with a white band, small icon, square |
+| `art/relics/lucky_ticket.png` | 256x256 | c | Lucky Ticket | Lucky Ticket relic emblem: a red envelope with a gold arcade ticket and a four-leaf clover peeking out, small icon, square |
+| `art/relics/lucky_cat.png` | 256x256 | u | Lucky Cat | Lucky Cat relic emblem: a white maneki-neko beckoning cat raising one paw, holding a gold coin, small icon, square |
+| `art/relics/wheel_of_fortune.png` | 256x256 | r | Wheel of Fortune | Wheel of Fortune relic emblem: a carnival prize wheel with four coloured wedges and a gold pointer, small icon, square |
+| `art/relics/rabbits_foot.png` | 256x256 | r | Rabbit's Foot | Rabbit's Foot relic emblem: a fluffy white rabbit's foot keychain on a gold chain with a green clover charm, small icon, square |
+| `art/relics/high_roller.png` | 256x256 | r | High Roller | High Roller relic emblem: a tall stack of pink and gold casino chips topped with a cut diamond, small icon, square |
+| `art/relics/ticket_roll.png` | 256x256 | c | Ticket Roll | Ticket Roll relic emblem: a spool of pink arcade tickets unrolling in a curl, small icon, square |
+| `art/relics/gacha_charm.png` | 256x256 | u | Gacha Charm | Gacha Charm relic emblem: a gold gacha capsule charm on a string, half open with rainbow light spilling out, small icon, square |
+| `art/relics/heartburn.png` | 256x256 | u | Heartburn | Heartburn relic emblem: a red chili pepper with a small flame and a green bubble of poison at its tip, small icon, square |
+| `art/relics/broken_mirror.png` | 256x256 | c | Broken Mirror | Broken Mirror relic emblem: a small round hand mirror with a spidery crack and a green clover reflected in it, small icon, square |
+| `art/relics/blasting_cap.png` | 256x256 | u | Blasting Cap | Blasting Cap relic emblem: a red firework stick with a brass cap and a lit spark, small icon, square |
+| `art/relics/lodestone.png` | 256x256 | u | Lodestone | Lodestone relic emblem: a dark grey magnetic stone with iron filings bristling toward one end and cyan field lines, small icon, square |
+| `art/relics/sand_pail.png` | 256x256 | u | Sand Pail | Sand Pail relic emblem: a small cyan beach bucket overflowing with marbles, small icon, square |
+| `art/relics/big_catch.png` | 256x256 | u | Big Catch | Big Catch relic emblem: a barbed harpoon tip hooked through a gold fish, small icon, square |
 
 ## Status icons
 
@@ -363,6 +404,7 @@ Flat glyphs, 128x128, square, transparent background. They are drawn at about 14
 | `art/status/enrage.png` | 128x128 | Enrage (buff) | flat game status icon glyph: an angry red face with a vein mark (#ff2e4a), one bold shape, thick outline, minimal detail, square |
 | `art/status/armor.png` | 128x128 | Armor (buff) | flat game status icon glyph: a steel bolt and nut (#aab3bd), one bold shape, thick outline, minimal detail, square |
 | `art/status/streak.png` | 128x128 | Streak (buff) | flat game status icon glyph: a gold bullseye target with a small arrow in the centre (#ffc94d), one bold shape, thick outline, minimal detail, square |
+| `art/status/luck.png` | 128x128 | Luck (buff) | flat game status icon glyph: a bright green four-leaf clover (#3ddc84), one bold shape, thick outline, minimal detail, square |
 
 ## Map hex tile icons
 

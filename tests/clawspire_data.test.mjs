@@ -14,18 +14,23 @@ const {
 
 // The bible's closed lists, written out here independently of data.js so a
 // drifted list in data.js is caught too.
-const ITEM_ART = 'sword dagger axe hammer anvil shield buckler potion flask bomb torch iceshard snowball coin gem rock slag iceblock apple bread book scroll orb ring key chain horn whetstone feather skull star boot bone bottle heart lantern wand mask egg dice'.split(' ');
+const ITEM_ART = 'sword dagger axe hammer anvil shield buckler potion flask bomb torch iceshard snowball coin gem rock slag iceblock apple bread book scroll orb ring key chain horn whetstone feather skull star boot bone bottle heart lantern wand mask egg dice chip card horseshoe clover slot potato pill cookie'.split(' ');
 const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork golem furnace magnet ironjaw wraith yeti frostmage icemimic prizemaster mushroom knight wisp crab drone tinker cultist raccoon goat magpie'.split(' ');
 const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
 const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again'.split(' ');
-const PER = 'block junk metal grabsUsed poison burn small streak gold'.split(' ');
+const PER = 'block junk metal grabsUsed poison burn small streak gold luck'.split(' ');
 const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
 const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBlock startStr'.split(' ');
-const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold'.split(' ');
-const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo'.split(' ');
-const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo'.split(' ');
-const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor streak'.split(' ');
+const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial'.split(' ');
+const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo luck cashAmp'.split(' ');
+const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo luck'.split(' ');
+const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor streak luck'.split(' ');
+const CHARS = 'knight alchemist rogue gambler'.split(' ');
+// Round 3 content (Lucky Lou and the synergy pass): checked in its own block
+// below, left out of the build pass's own "new content" counts.
+const R3_ITEMS = 'bone_dice poker_chip scratch_card fortune_cookie double_or_nothing lucky_horseshoe marked_deck one_armed_bandit roulette_wheel golden_dice poison_pill hot_potato crystal_dice floating_token firecracker lucky_clover'.split(' ');
+const R3_RELICS = 'snake_eyes pity_timer dealers_visor lucky_ticket lucky_cat wheel_of_fortune rabbits_foot high_roller ticket_roll gacha_charm heartburn broken_mirror blasting_cap lodestone sand_pail big_catch'.split(' ');
 const BIN_KINDS = ['shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'tilt', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'];
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isHex = (c) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
@@ -155,7 +160,7 @@ t.test('items', () => {
       t.ok(d.plus.fx.map(f => f.k).join() !== '' , `${W}: plus fx non-empty`);
       t.ok(JSON.stringify(d.plus.fx) !== JSON.stringify(d.fx), `${W}: plus differs`);
     }
-    if (d.char != null) t.ok(['knight', 'alchemist', 'rogue'].includes(d.char), `${W}: char`);
+    if (d.char != null) t.ok(CHARS.includes(d.char), `${W}: char`);
     t.ok(typeof d.text === 'string' && d.text.length > 5, `${W}: text`);
     for (const plus of [false, true]) {
       const s = DATA.itemText(d, plus);
@@ -453,6 +458,9 @@ function runHooks(r, F) {
   if (h.onJackpot) h.onJackpot(F, 3);
   if (h.onShatter) h.onShatter(F, { uid: 'g', id: 'empty_bottle' }, ITEMS.empty_bottle);
   if (h.onGold) h.onGold(F, 5);
+  if (h.onCashOut) h.onCashOut(F, 6, 2);
+  if (h.onEat) h.onEat(F, F.enemies[0], { uid: 'p', id: 'poison_pill' }, ITEMS.poison_pill);
+  if (h.onMaterial) for (const k of ['crack', 'shatter', 'fuse', 'blast']) h.onMaterial(F, k, { uid: 'q', id: 'firecracker' }, ITEMS.firecracker);
   if (h.onTurnEnd) h.onTurnEnd(F);
 }
 
@@ -499,6 +507,7 @@ t.test('relics', () => {
     addTemp: (F, id, n) => { calls.push(['addTemp', id, n]); return []; },
     copy: (F, tag) => { calls.push(['copy', tag]); return null; },
     gainGold: (F, v) => { calls.push(['gainGold', v]); return v; },
+    tickets: (F, v) => { calls.push(['tickets', v]); return v; },
     gainMaxHp: (F, v) => { calls.push(['gainMaxHp', v]); return v; },
     gold: () => 150,
     emit: (F, ev) => { calls.push(['emit', ev.t]); return ev; },
@@ -644,8 +653,8 @@ t.test('tools, terms and the light copy', () => {
 
 // ------------------------------------------------------------- characters
 t.test('characters', () => {
-  t.eq(Object.keys(CHARACTERS).sort().join(), 'alchemist,knight,rogue', 'three characters');
-  const hp = { knight: 80, alchemist: 60, rogue: 65 };
+  t.eq(Object.keys(CHARACTERS).sort().join(), 'alchemist,gambler,knight,rogue', 'four characters');
+  const hp = { knight: 80, alchemist: 60, rogue: 65, gambler: 70 };
   for (const id in CHARACTERS) {
     const c = CHARACTERS[id], W = `char ${id}`;
     t.eq(c.id, id, `${W}: key`);
@@ -785,7 +794,7 @@ const kwOf = (d) => DATA.kwIds(d);
 
 t.test('archetypes and keywords', () => {
   const A = DATA.ARCHETYPES;
-  t.eq(Object.keys(A).sort().join(), ARCHS.slice().sort().join(), '13 archetypes');
+  t.eq(Object.keys(A).sort().join(), ARCHS.slice().sort().join(), '14 archetypes');
   for (const k of ARCHS) {
     const a = A[k];
     t.ok(a && typeof a.label === 'string' && a.label.length >= 3 && a.label.length <= 10, `${k}: label`);
@@ -828,7 +837,7 @@ t.test('archetypes and keywords', () => {
 
 t.test('new content sits in the pools', () => {
   const OLD_RELICS = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
-  const fresh = Object.keys(RELICS).filter(id => !OLD_RELICS.includes(id));
+  const fresh = Object.keys(RELICS).filter(id => !OLD_RELICS.includes(id) && !R3_RELICS.includes(id));
   t.ok(fresh.length >= 20 && fresh.length <= 32, `20..32 new relics [${fresh.length}]`);
   for (const id of fresh) {
     const r = RELICS[id];
@@ -836,7 +845,7 @@ t.test('new content sits in the pools', () => {
     t.ok(DATA.relicPool(r.rarity).includes(id), `${id}: in relicPool('${r.rarity}')`);
   }
   const OLD_ITEMS = OLD_ITEM_IDS;
-  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin');   // the Hoard's coins are boss junk, not a build piece
+  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece
   t.ok(newItems.length >= 20 && newItems.length <= 32, `20..32 new items [${newItems.length}]`);
   const pooled = new Set(DATA.pool());
   for (const id of newItems) {
@@ -875,11 +884,13 @@ t.test('grab combos', () => {
     if (c.fx.some(f => f.k === 'grab')) t.eq(c.once, 'turn', `${W}: a grab-giving combo fires once a turn`);
     t.ok(Array.isArray(c.example) && c.example.length >= 2 && c.example.every(x => ITEMS[x]), `${W}: example items exist`);
     t.ok(Array.isArray(c.miss) && c.miss.every(x => ITEMS[x]), `${W}: miss items exist`);
-    t.ok(c.match(defs(c.example)), `${W}: matches its example`);
-    t.ok(!c.match(defs(c.miss)), `${W}: does not match its near miss`);
-    t.ok(DATA.combosFor(defs(c.example)).some(x => x.id === id), `${W}: fires on its example (${c.example.join('+')})`);
-    t.ok(!DATA.combosFor(defs(c.miss)).some(x => x.id === id), `${W}: stays quiet on its near miss (${c.miss.join('+')})`);
-    t.ok(!c.match([defs(c.example)[0]]), `${W}: never on a single item`);
+    // c.ctx: the grab state a state-reading recipe needs (Lucky Seven's Luck)
+    t.ok(c.match(defs(c.example), c.ctx), `${W}: matches its example`);
+    t.ok(!c.match(defs(c.miss), c.ctx), `${W}: does not match its near miss`);
+    t.ok(DATA.combosFor(defs(c.example), c.ctx).some(x => x.id === id), `${W}: fires on its example (${c.example.join('+')})`);
+    t.ok(!DATA.combosFor(defs(c.miss), c.ctx).some(x => x.id === id), `${W}: stays quiet on its near miss (${c.miss.join('+')})`);
+    t.ok(!c.match([defs(c.example)[0]], c.ctx), `${W}: never on a single item`);
+    t.ok(c.secret == null || (c.secret === true && c.tier === 3), `${W}: only tier 3 recipes are secret`);
   }
   // selection rules
   const fire = (list) => DATA.combosFor(defs(list)).map(c => c.id);
@@ -1082,7 +1093,7 @@ t.test('meta: Tilt levels 0..10, named, each one adds its own twist', () => {
 
 t.test('meta: achievements are well formed and checked safely', () => {
   const ids = DATA.ACH_IDS;
-  t.ok(ids.length >= 25 && ids.length <= 40, `25 to 40 stickers (${ids.length})`);
+  t.ok(ids.length >= 25 && ids.length <= 50, `25 to 50 stickers (${ids.length})`);
   t.eq(new Set(ids).size, ids.length, 'unique ids');
   for (const id of ids) {
     const a = DATA.ACHIEVEMENTS[id];
@@ -1171,6 +1182,147 @@ t.test('claw types: DATA.CLAWS matches the physics rig types and reads well', ()
   t.eq(DATA.clawType('magnet').id, 'magnet', 'clawType finds a claw');
   t.eq(DATA.clawType(undefined).id, 'classic', 'a missing claw type is the classic claw');
   t.eq(DATA.clawType('laser').id, 'classic', 'an unknown claw type is the classic claw');
+});
+
+// ------------------------------------------------ round 3: Lucky Lou
+// DESIGN.md "Lucky Lou and the synergy pass": the fourth crawler, the Luck
+// build, bait, material and claw relics, the casino combos and the secrets.
+t.test('round 3: Lucky Lou, the Gambler', () => {
+  const c = CHARACTERS.gambler;
+  t.ok(c && c.name === 'Lucky Lou' && c.title === 'The Gambler', 'Lucky Lou, The Gambler');
+  t.eq(c.bin.length, 19, 'a 19 item starting bin like the others');
+  t.ok(c.luck === true, 'his gift: the Luck meter');
+  t.eq(c.relic, 'snake_eyes', 'starts with Snake Eyes');
+  t.ok(RELICS.snake_eyes.starter && RELICS.snake_eyes.rarity === 'event', 'Snake Eyes is a starter, never in a pool');
+  t.ok(c.bin.filter(id => ITEMS[id].char === 'gambler').length >= 10 && c.bin.every(id => R3_ITEMS.includes(id) || !ITEMS[id].char), 'the bin is mostly his new kit');
+  t.ok(c.claw.grip < CHARACTERS.knight.claw.grip, 'a looser claw than the knight (whiffs are fuel)');
+  for (const id of CHARS) t.ok(typeof CHARACTERS[id].vsLine === 'string' && CHARACTERS[id].vsLine.length > 4 && CHARACTERS[id].vsLine.length <= 32, `${id} has a versus card line`);
+  t.eq(CHARACTERS.gambler.vsLine, 'Double or nothing, pal.', 'his line');
+  const seen = new Set();
+  for (let d = 0; d < 120; d++) seen.add(DATA.dailyChar('2026-11-' + d));
+  t.ok(seen.has('gambler'), 'the daily rotation deals him in');
+  for (const r of ['c', 'u', 'r', 'l']) t.ok(DATA.pool(r, 'gambler').length >= (r === 'l' ? 2 : 3), `pool ${r}/gambler has choices`);
+  t.ok(Object.keys(ITEMS).some(id => ITEMS[id].char === 'gambler' && ITEMS[id].rarity === 'l'), 'a legendary of his own');
+  for (let seed = 1; seed <= 200; seed++) {
+    const r = DATA.rewardItems(U.rng(seed), 1 + (seed % 3), 'gambler');
+    if (r.length !== 3 || !r.every(id => ITEMS[id] && !ITEMS[id].starter && (!ITEMS[id].char || ITEMS[id].char === 'gambler'))) { t.ok(false, `gambler rewards seed ${seed} [${r}]`); break; }
+  }
+  t.ok(true, 'his reward screens only offer shared and gambler items');
+});
+
+t.test('round 3: new items, relics and the Luck archetype', () => {
+  t.ok(R3_ITEMS.length >= 15 && R3_ITEMS.length <= 20 && R3_ITEMS.every(id => ITEMS[id]), `15..20 new items [${R3_ITEMS.length}]`);
+  const poolR = R3_RELICS.filter(id => !RELICS[id].starter);
+  t.ok(poolR.length >= 12 && poolR.length <= 15, `12..15 new pool relics [${poolR.length}]`);
+  for (const id of poolR) t.ok(['c', 'u', 'r'].includes(RELICS[id].rarity) && DATA.relicPool(RELICS[id].rarity).includes(id), `${id}: in relicPool`);
+  for (const id of R3_ITEMS) {
+    const d = ITEMS[id];
+    if (!d.starter && !d.tags.includes('small')) t.ok(DATA.pool().includes(id), `${id}: in the reward pool`);
+    t.ok(DATA.kwIds(d).length >= 1, `${id}: carries a build chip`);
+  }
+  const kw = (id) => DATA.kwIds(ITEMS[id]);
+  t.ok(kw('fortune_cookie').includes('luck') && kw('one_armed_bandit').includes('luck') && kw('lucky_clover').includes('luck'), 'Luck from cookies, clovers and the bandit');
+  t.ok(!kw('poker_chip').includes('luck') && kw('poker_chip').includes('fortress'), 'chips are Block: Lou\'s Luck comes from whiffs, clovers and cookies');
+  t.ok(kw('loaded_dice').includes('luck') && kw('volatile_egg').includes('luck'), 'old dice items join the Luck build (Luck rolls them twice)');
+  t.ok(kw('hot_potato').includes('burn') && kw('hot_potato').includes('feast'), 'Hot Potato bridges pyro and feast');
+  t.ok(kw('floating_token').includes('luck') && kw('floating_token').includes('greed'), 'the Floating Token bridges luck and greed');
+  t.ok(DATA.keywords(RELICS.lucky_cat, Infinity).map(x => x.id).join() === 'luck,greed', 'Lucky Cat chips');
+  // bait for hungry monsters
+  t.ok(ITEMS.poison_pill.lure > 0 && ITEMS.poison_pill.eaten.status.poison > 0 && ITEMS.poison_pill.plus.eaten.dmg > ITEMS.poison_pill.eaten.dmg, 'the Poison Pill is bait that hurts its eater');
+  t.ok(ITEMS.hot_potato.hot > 0 && ITEMS.hot_potato.eaten.status.burn > 0, 'the Hot Potato burns whoever holds it');
+  // materials: a bomb with a fuse, glass dice, a magic coin that floats
+  t.eq(ITEMS.firecracker.art, 'bomb', 'the Firecracker has a real fuse');
+  t.ok(ITEMS.crystal_dice.tags.includes('glass') && ITEMS.floating_token.tags.includes('magic') && ITEMS.floating_token.tags.includes('metal'), 'glass dice crack, the token floats and sticks to magnets');
+  // claw and loot relics
+  t.ok(RELICS.gacha_charm.loot && RELICS.gacha_charm.loot.capUp > 0, 'the Gacha Charm upgrades capsules');
+  for (const id of ['lodestone', 'sand_pail', 'big_catch']) t.ok(/Magnet|Scoop|Harpoon/.test(RELICS[id].text), `${id} names its claw`);
+  for (const id of R3_ITEMS.concat(R3_RELICS)) {
+    const s = JSON.stringify([ITEMS[id] && ITEMS[id].text, RELICS[id] && RELICS[id].text]);
+    t.ok(s.indexOf(String.fromCharCode(0x2014)) < 0, `${id}: no em dash`);
+  }
+});
+
+t.test('round 3: relic hooks with a recording COMBAT', () => {
+  const calls = [];
+  globalThis.COMBAT = {
+    damage: (F, src, e, v) => { calls.push(['damage', v]); return v; },
+    status: (F, who, s, v) => { calls.push(['status', s, v, who === F.player ? 'p' : 'e']); return v; },
+    heal: () => 0, gainGold: (F, v) => { calls.push(['gold', v]); return v; }, tickets: (F, v) => { calls.push(['tix', v]); return v; },
+    emit: (F, ev) => { calls.push(['emit', ev.t, ev.text]); return ev; }, gold: () => 0,
+  };
+  try {
+    const F = mockF();
+    F.rng = U.rng(5);
+    RELICS.snake_eyes.hooks.onGrab(F, 0);
+    RELICS.snake_eyes.hooks.onGrab(F, 0);
+    t.eq(calls.filter(x => x[0] === 'damage').length, 1, 'Snake Eyes rolls once a turn');
+    t.ok(calls.some(x => x[0] === 'emit' && /\d\+\d/.test(x[2] || '')), 'and shows the dice');
+    calls.length = 0;
+    RELICS.snake_eyes.hooks.onGrab(F, 2);
+    t.eq(calls.length, 0, 'never on a grab that delivered');
+    // a doubles roll gives the grab back
+    let doubles = false;
+    for (let s = 1; s < 200 && !doubles; s++) {
+      const G = mockF(); G.rng = U.rng(s); const g0 = G.player.grabs;
+      RELICS.snake_eyes.hooks.onGrab(G, 0);
+      if (G.player.grabs > g0) doubles = true;
+    }
+    t.ok(doubles, 'doubles refund the grab');
+    calls.length = 0;
+    const L = mockF();
+    RELICS.lucky_cat.hooks.onCashOut(L, 7, 2);
+    RELICS.lucky_ticket.hooks.onCashOut(L, 7, 2);
+    t.ok(calls.some(x => x[0] === 'gold' && x[1] === 7) && calls.some(x => x[0] === 'tix' && x[1] === 4), 'cash outs pay gold and tickets');
+    calls.length = 0;
+    const M = mockF(); M.clawType = 'magnet'; M.grab = { insts: [], defs: [ITEMS.rusty_sword] };
+    RELICS.lodestone.hooks.onGrab(M, 1);
+    t.ok(calls.some(x => x[0] === 'damage'), 'the Lodestone zaps with the Magnet Crane from one metal item');
+    calls.length = 0;
+    const N = mockF(); N.grab = { insts: [], defs: [ITEMS.rusty_sword] };
+    RELICS.lodestone.hooks.onGrab(N, 1);
+    t.eq(calls.length, 0, 'but needs two metal items on any other claw');
+    const H = mockF(); H.clawType = 'hook';
+    calls.length = 0; RELICS.big_catch.hooks.onPlay(H); RELICS.big_catch.hooks.onPlay(H);
+    t.eq(JSON.stringify(calls.filter(x => x[0] === 'damage')), JSON.stringify([['damage', 8]]), 'Big Catch: 8 with the Harpoon, once a turn');
+    const P = mockF(); P.clawType = 'scoop';
+    calls.length = 0; RELICS.sand_pail.hooks.onGrab(P, 2);
+    t.ok(calls.some(x => x[0] === 'damage' && x[1] === 6), 'the Sand Pail pays on a 2 item scoop');
+    calls.length = 0; RELICS.sand_pail.hooks.onGrab(mockF(), 2);
+    t.eq(calls.length, 0, 'but not on another claw');
+    calls.length = 0; RELICS.blasting_cap.hooks.onMaterial(mockF(), 'blast');
+    t.ok(calls.some(x => x[0] === 'status' && x[1] === 'burn') && calls.some(x => x[0] === 'status' && x[1] === 'block'), 'the Blasting Cap burns and blocks on a blast');
+  } finally { delete globalThis.COMBAT; }
+});
+
+t.test('round 3: combos, secret recipes and the loot hooks', () => {
+  const R3_COMBOS = 'double_dice poker_night hot_lunch two_pair bad_medicine full_house royal_flush dead_mans_hand midas_touch lucky_seven'.split(' ');
+  t.ok(R3_COMBOS.length >= 6 && R3_COMBOS.length <= 10 && R3_COMBOS.every(id => DATA.COMBOS[id]), `6..10 new combos [${R3_COMBOS.length}]`);
+  const secrets = Object.keys(DATA.COMBOS).filter(id => DATA.COMBOS[id].secret);
+  t.ok(secrets.length >= 3 && secrets.every(id => DATA.COMBOS[id].tier === 3), `secret legendary recipes [${secrets}]`);
+  const defs = (list) => list.map(id => ITEMS[id]);
+  const fire = (list, ctx) => DATA.combosFor(defs(list), ctx).map(c => c.id);
+  t.ok(!fire(['bone_dice', 'poker_chip']).includes('lucky_seven'), 'Lucky Seven needs the grab state');
+  t.ok(fire(['bone_dice', 'poker_chip'], { luck: 7 }).includes('lucky_seven'), 'fires on exactly 7 Luck');
+  t.ok(!fire(['bone_dice', 'poker_chip'], { luck: 8 }).includes('lucky_seven'), 'not on 8');
+  const house = fire(['prize_marble', 'prize_marble', 'prize_marble', 'glass_bead', 'glass_bead']);
+  t.ok(house.includes('full_house') && !house.includes('three_of_a_kind') && !house.includes('two_pair'), `a Full House replaces the kind and the pairs [${house}]`);
+  t.ok(fire(['hoardcoin', 'lucky_coin', 'lucky_penny']).includes('midas_touch'), 'the Hoard\'s coins can start a Midas Touch');
+  t.ok(!fire(['lucky_coin', 'lucky_coin', 'lucky_penny']).includes('midas_touch'), 'Midas wants three different coins');
+  t.ok(fire(['poison_pill', 'toxic_vial']).includes('bad_medicine'), 'Bad Medicine');
+  // loot: capsules that upgrade more often, ticket relics on the payout
+  let a = 0, b = 0;
+  const r1 = U.rng(8), r2 = U.rng(8);
+  for (let i = 0; i < 2000; i++) { a += DATA.rollCapsule(r1, 'normal', {}).ups.length; b += DATA.rollCapsule(r2, 'normal', { up: 0.2 }).ups.length; }
+  t.ok(b > a * 1.8, `the Gacha Charm doubles the upgrades or so (${a} -> ${b})`);
+  t.eq(JSON.stringify(DATA.rollCapsule(U.rng(3), 'elite', { up: 0 })), JSON.stringify(DATA.rollCapsule(U.rng(3), 'elite', {})), 'no charm, no change');
+  const p = DATA.payout({ tier: 'normal', gold: 10, relicTix: 5 });
+  t.ok(p.lines.some(l => l.id === 'relictix' && l.tix === 5) && p.tix === DATA.LOOT.TICKETS.normal + 5, 'ticket relics get a payout line');
+  t.ok(!DATA.payout({ tier: 'normal', gold: 10 }).lines.some(l => l.id === 'relictix'), 'none without them');
+  // stickers
+  const A = DATA.ACHIEVEMENTS;
+  t.ok(A.big_payout.check({ kind: 'ev', ev: { t: 'luck', k: 'cash', v: 10 } }) && !A.big_payout.check({ kind: 'ev', ev: { t: 'luck', k: 'cash', v: 9 } }), 'Big Payout: 10 Luck cashed out');
+  t.ok(A.secret_menu.check({ kind: 'ev', ev: { t: 'combo', id: 'midas_touch' } }) && !A.secret_menu.check({ kind: 'ev', ev: { t: 'combo', id: 'armory' } }), 'Secret Menu: a secret recipe');
+  t.ok(A.house_loses.check({ kind: 'win', run: { char: 'gambler' } }) && !A.house_loses.check({ kind: 'win', run: { char: 'knight' } }), 'The House Loses: a win with Lou');
 });
 
 t.done();

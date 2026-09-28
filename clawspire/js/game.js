@@ -189,14 +189,29 @@ const GAME = (() => {
     S.popover = { html, x, y };
     S.popStamp = typeof performance !== 'undefined' ? performance.now() : 0;
   }
-  function banner(str, kind, secs) {
+  /* A big banner in the player row (#banner). It goes through the announcer
+     (see ANNOUNCER below): cls is its class there ('turn', 'fight',
+     'jackpot', 'rage', 'final', 'victory'; derived from kind when omitted). */
+  function banner(str, kind, secs, cls) {
+    cls = cls || (kind === 'victory' ? 'victory' : kind === 'jackpot' ? 'jackpot' : kind === 'enemy' ? 'rage' : 'turn');
+    const key = cls === 'rage' ? 'rage:' + str : cls === 'fight' ? 'turn' : cls;
+    return announce({ key, cls, dur: secs || 1.1, str, show: bannerOn, hide: bannerOff, kind });
+  }
+  function bannerOn(a) {
     const el = $('banner'), tx = $('bannerTxt');
-    if (tx) tx.textContent = str;
-    if (el) { el.className = kind || ''; replay(el, 'show'); }
+    if (tx) tx.textContent = a.str;
+    if (el) { el.className = a.kind || ''; replay(el, 'show'); }
     // the pips and statuses share the row: fade them while the banner is up
     const pr = $('playerRow'); if (pr && pr.classList) pr.classList.add('bannerOn');
-    S.bannerT = secs || 1.1;
-    S.bannerStr = str;
+    S.bannerStr = a.str;
+    // floating labels keep out of it while it is up
+    const n = String(a.str).length, big = a.kind === 'victory' ? 46 : 34, w = Math.min(520, n * big * 0.76 + 24);
+    fx().zone && fx().zone('ann', 270 - w / 2, 330, 270 + w / 2, 386);
+  }
+  function bannerOff(a, quick) {
+    const el = $('banner');
+    if (el && el.classList) { if (quick) el.classList.add('quick'); el.classList.remove('show'); }
+    const pr = $('playerRow'); if (pr && pr.classList) pr.classList.remove('bannerOn');
   }
   function hint(str) { const el = $('hint'); if (el) el.textContent = str; S.hint = str; }
 
@@ -323,18 +338,21 @@ const GAME = (() => {
      banner (DOM #combo). Tier 3 flashes, bursts chromatic rings, holds a
      longer hit stop and plays the top sting. */
   function queueCombo(ev) {
-    S.comboQ = S.comboQ || [];
-    if (S.comboQ.length < 6) S.comboQ.push(ev);
-    if (!(S.comboT > 0)) nextCombo();
-  }
-  function nextCombo() {
-    const Q = S.comboQ || [];
-    const ev = Q.shift();
-    const el = $('combo');
-    if (!ev) { S.comboT = 0; if (el && el.classList) el.classList.remove('show'); return; }
     const tier = U.clamp(Math.round(+ev.tier || 1), 1, 3);
-    S.comboT = 0.95 + tier * 0.3;
+    return announce({ key: 'combo:' + (ev.id || ev.name), cls: 'combo', dur: 0.95 + tier * 0.3, ev, show: comboOn, hide: comboOff });
+  }
+  function comboOff(a, quick) {
+    const el = $('combo');
+    if (!el || !el.classList) return;
+    if (quick) el.classList.add('out');
+    else el.classList.remove('show');
+  }
+  function comboOn(a) {
+    const ev = a.ev;
+    const el = $('combo');
+    const tier = U.clamp(Math.round(+ev.tier || 1), 1, 3);
     S.lastCombo = ev;
+    try { fx().zone('ann', 30, 92, 510, ev.text ? 206 : 164); } catch (e) { /* no layout */ }
     const nEl = $('comboName'), tEl = $('comboText');
     const name = String(ev.name || 'COMBO') + (ev.n > 1 ? ' x' + ev.n : '');
     if (nEl) {
@@ -350,6 +368,7 @@ const GAME = (() => {
       replay(el, 'show');
       el.classList.add('t' + tier);
     }
+    if (a.back) return;   // back after an interruption: the words again, not the fireworks
     snd('combo', { tier });
     haptic(tier >= 3 ? 'jackpot' : 'hit');
     const col = ev.color || PAL0.gold, cx = 270, cy = 250;
@@ -367,6 +386,142 @@ const GAME = (() => {
     }
   }
   const PAL0 = { pink: '#ff2e88', cyan: '#2ee6d6', gold: '#ffc94d', lime: '#a6ff5e', blood: '#ff5a4a' };
+
+  /* ---------------------------------------------------------------- ANNOUNCER
+     One lane for the big centre-screen announcements (the #banner kinds and
+     the #combo banner), so spectacle never piles up: one is up at a time.
+     announce({key, cls, dur, show(a), hide(a, quick), ...}):
+     - a bigger class (ANN.PRI) interrupts a smaller one with a quick exit
+       (ANN.EXIT s); the interrupted one comes back later if it had shown for
+       less than half its time and is still fresh, else it is dropped;
+     - an equal or smaller one waits its turn (bigger first, then oldest),
+       and is dropped once it has waited longer than its ANN.WAIT;
+     - the same key again merges: the live one is re-shown with the new
+       words (the turn banners), a waiting one takes the new payload;
+     - every end runs the quick exit first, so two never overlap;
+     - while a full-stage card is up (the versus card, a boss finale's title)
+       the lane holds: the live one steps out and the queue waits (and ages);
+     - a tap anywhere cuts the live one short (annTap).
+     Real time. The corner lane (stickers, discoveries) is metaToast. */
+  const ANN = {
+    PRI: { turn: 10, fight: 20, combo: 50, jackpot: 55, rage: 70, final: 80, victory: 90 },
+    WAIT: { turn: 0.5, fight: 1.2, jackpot: 1.0, combo: 3.0, rage: 2.5, final: 3.0, victory: 4.0 },
+    EXIT: 0.14, QMAX: 8, TAP_MIN: 0.3,
+  };
+  const AN = { cur: null, q: [], exit: null, exitT: 0, clock: 0, log: [], dom: {} };
+  function announce(o) {
+    const a = Object.assign({ pri: ANN.PRI[o.cls] || 10, wait: ANN.WAIT[o.cls] || 1, t: 0, shows: 0 }, o);
+    a.at = AN.clock;
+    annLog('in', a);
+    const cur = AN.cur;
+    if (cur && cur.key === a.key) { annMerge(cur, a); annShow(cur); return 'merged'; }
+    const qi = AN.q.findIndex((x) => x.key === a.key);
+    if (qi >= 0) { annMerge(AN.q[qi], a); AN.q[qi].at = AN.clock; annMirror(); return 'merged'; }
+    if (!cur && !AN.exit && !annBlocked()) { annShow(a); return 'shown'; }
+    if (cur && a.pri > cur.pri && !annBlocked()) {
+      annEnd(true);
+      AN.q.unshift(a);
+      annMirror();
+      return 'interrupt';
+    }
+    annQueue(a);
+    return 'queued';
+  }
+  function annMerge(into, a) {
+    for (const k of ['str', 'kind', 'ev', 'dur', 'show', 'hide']) if (a[k] !== undefined) into[k] = a[k];
+    into.t = 0; into.back = false;
+  }
+  function annQueue(a) {
+    // bigger first, then oldest (stable)
+    let i = AN.q.length;
+    while (i > 0 && AN.q[i - 1].pri < a.pri) i--;
+    AN.q.splice(i, 0, a);
+    while (AN.q.length > ANN.QMAX) annLog('drop', AN.q.pop());
+    annMirror();
+  }
+  function annShow(a) {
+    AN.cur = a;
+    a.shows++;
+    a.t = 0;
+    AN.dom[a.cls === 'combo' ? 'combo' : 'banner'] = a;
+    annLog('show', a);
+    try { a.show(a); } catch (e) { /* stub DOM */ }
+    annMirror();
+  }
+  // The live one steps out (quick exit), then the lane is free.
+  function annEnd(interrupted) {
+    const a = AN.cur;
+    if (!a) return;
+    AN.cur = null;
+    try { a.hide(a, true); } catch (e) { /* stub DOM */ }
+    AN.exit = a; AN.exitT = ANN.EXIT;
+    // an early interruption comes back (fresh) after the bigger one
+    if (interrupted && a.t < a.dur * 0.5 && a.cls !== 'turn') { a.at = AN.clock; a.back = true; annQueue(a); }
+    annLog(interrupted ? 'cut' : 'end', a);
+    annMirror();
+  }
+  function annOff() {
+    const a = AN.exit;
+    AN.exit = null;
+    if (!a) return;
+    try { a.hide(a, false); } catch (e) { /* stub DOM */ }
+    for (const k in AN.dom) if (AN.dom[k] === a) AN.dom[k] = null;
+    if (!AN.cur) { try { fx().zone('ann'); } catch (e) { /* no layout */ } }
+  }
+  // A full-stage card owns the screen: the versus card, a boss finale's title.
+  function annBlocked() {
+    if (!FS) return false;
+    if (FS.vs) return true;
+    const fin = FS.bs && FS.bs.fin;
+    return !!(fin && fin.card);
+  }
+  function annTick(real) {
+    AN.clock += real;
+    if (AN.exit) { AN.exitT -= real; if (AN.exitT <= 0) annOff(); }
+    const blocked = annBlocked();
+    const cur = AN.cur;
+    if (cur) {
+      cur.t += real;
+      if (cur.t >= cur.dur || blocked) annEnd(blocked);
+    }
+    // stale ones drop out of the queue
+    let drop = false;
+    for (let i = AN.q.length - 1; i >= 0; i--) if (AN.clock - AN.q[i].at > AN.q[i].wait) { annLog('stale', AN.q[i]); AN.q.splice(i, 1); drop = true; }
+    if (drop) annMirror();
+    if (!AN.cur && !AN.exit && !blocked && AN.q.length) annShow(AN.q.shift());
+  }
+  // A tap cuts the live announcement short (never the one that just landed).
+  function annTap() {
+    if (AN.cur && AN.cur.t >= ANN.TAP_MIN) { annEnd(false); return true; }
+    return false;
+  }
+  // Leaving the fight: everything goes, at once.
+  function annClear() {
+    if (AN.cur) { AN.exit = AN.cur; AN.cur = null; }
+    annOff();
+    for (const k in AN.dom) { const a = AN.dom[k]; if (a) { try { a.hide(a, false); } catch (e) { /* stub */ } } AN.dom[k] = null; }
+    AN.q.length = 0;
+    try { fx().zone('ann'); } catch (e) { /* no layout */ }
+    annMirror();
+  }
+  // Old names the tests and drivers read: S.comboQ (waiting combos), S.comboT, S.bannerT.
+  function annMirror() {
+    S.comboQ = AN.q.filter((a) => a.cls === 'combo').map((a) => a.ev);
+    const c = AN.cur;
+    S.comboT = c && c.cls === 'combo' ? Math.max(0.001, c.dur - c.t) : (S.comboQ.length ? 0.001 : 0);
+    S.bannerT = c && c.cls !== 'combo' ? Math.max(0.001, c.dur - c.t) : 0;
+  }
+  function annLog(k, a) {
+    AN.log.push({ k, key: a.key, cls: a.cls, t: +AN.clock.toFixed(3) });
+    if (AN.log.length > 80) AN.log.shift();
+  }
+  // How many big banners are on screen right now (the live one plus one
+  // still stepping out): the tests pin this at <= 1 whatever the burst.
+  function annVisible() {
+    let n = 0;
+    for (const k in AN.dom) if (AN.dom[k]) n++;
+    return n;
+  }
 
   // ---------------------------------------------------------------- meta
   function freshMeta() {
@@ -413,7 +568,11 @@ const GAME = (() => {
     const c = charDef(charId);
     if (!c) return false;
     if (!c.unlock || c.unlock === 'start') return true;
-    return !!(S.meta && S.meta.unlocks[charId]);
+    if (S.meta && S.meta.unlocks[charId]) return true;
+    // A crawler added later (Lucky Lou) is open to a profile that already
+    // met his rule with another crawler that shares it (CONTENT block).
+    const tb = tbl('CHARACTERS');
+    return !!(S.meta && Object.keys(S.meta.unlocks).some((k) => k !== charId && S.meta.unlocks[k] && tb[k] && tb[k].unlock === c.unlock));
   }
   function unlockRule(c) {
     if (c.unlock === 'act2') return 'Reach act 2 to unlock';
@@ -488,6 +647,7 @@ const GAME = (() => {
       else if (sc === 'parts' && S.sd && S.sd.parts) showSpareParts(S.sd.parts);
       else if (sc === 'capsule' && S.sd && S.sd.capsule && S.sd.capsule.cap) showCapsule(S.sd.capsule);
       else if (sc === 'counter' && S.sd && S.sd.counter) showCounter(S.sd.counter);
+      else if (sc === 'arcade' && S.sd && S.sd.arcade) arcShow(S.sd.arcade);   // ARCADE
       else toMap();
       return true;
     } catch (e) {
@@ -630,11 +790,11 @@ const GAME = (() => {
   }
 
   // ---------------------------------------------------------------- screens
-  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection', 'capsule', 'counter', 'stickers'];
+  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection', 'capsule', 'counter', 'stickers', 'arcade'];
   /* Screen transitions: an iris opening onto a fight, a diagonal wipe
      between the map and the tile screens, a quick fade for the rest (DOM
      #wipe, CSS only, never blocks input). */
-  const WIPE_SCREENS = { map: 1, fight: 1, reward: 1, shop: 1, event: 1, rest: 1, forge: 1, treasure: 1, parts: 1, gameover: 1, win: 1, counter: 1 };
+  const WIPE_SCREENS = { map: 1, fight: 1, reward: 1, shop: 1, event: 1, rest: 1, forge: 1, treasure: 1, parts: 1, gameover: 1, win: 1, counter: 1, arcade: 1 };
   function transition(from, to) {
     if (S.headless || from === to || from === 'intro') return;
     const el = $('wipe');
@@ -653,13 +813,13 @@ const GAME = (() => {
     if (name !== 'fight') {
       // fight-only juice does not follow the player out
       fx().hold(0);
-      S.comboQ = []; S.comboT = 0; const ce = $('combo'); if (ce && ce.classList) ce.classList.remove('show');
+      annClear();   // the big banners go with it (ANNOUNCER)
     }
     for (const s of SCREENS) {
       const el = $('scr-' + s);
       if (el) el.classList[s === name ? 'add' : 'remove']('show');
     }
-    const hud = name === 'fight' || name === 'map';
+    const hud = name === 'fight' || name === 'map' || name === 'arcade';   // ARCADE: the counters roll while you play
     for (const id of ['top', 'playerRow', 'ctrl']) {
       const el = $(id);
       if (el) el.classList[(id === 'top' ? hud : name === 'fight') ? 'add' : 'remove']('show');
@@ -672,7 +832,7 @@ const GAME = (() => {
     }
     refreshHud(true);
     if (name === 'title') music('title');
-    else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward' || name === 'capsule' || name === 'counter') music('map');
+    else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward' || name === 'capsule' || name === 'counter' || name === 'arcade') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
     if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win'].indexOf(name) < 0) save();
@@ -1206,7 +1366,8 @@ const GAME = (() => {
       S.mcur = null;
     }
     const Q = S.mq;
-    if (!Q || !Q.length || S.screen === 'intro' || (S.attract && S.screen === 'title')) return;
+    // the corner lane waits while a full-stage card (versus, a finale's title) owns the screen
+    if (!Q || !Q.length || S.screen === 'intro' || (S.attract && S.screen === 'title') || annBlocked()) return;
     const it = Q.shift();
     const el = it.k === 'ach' ? stickerEl(it.id) : dexToastEl(it.list);
     // in a fight the toasts go compact so the intents stay readable
@@ -1273,7 +1434,9 @@ const GAME = (() => {
       } else if (tab === 'combos') {
         ctx.strokeStyle = def.color || PAL0.gold; ctx.lineWidth = 3;
         ctx.beginPath(); ctx.arc(p / 2, p / 2, p * 0.44, 0, Math.PI * 2); ctx.stroke();
-        const ex = (def.example || []).filter((id) => tbl('ITEMS')[id]).slice(0, 3);
+        // a secret recipe (round 3) shows a question mark until found, never its items
+        const ex = sil && def.secret ? [] : (def.example || []).filter((id) => tbl('ITEMS')[id]).slice(0, 3);
+        if (sil && def.secret) { ctx.font = 'bold ' + Math.round(p * 0.5) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = def.color || PAL0.gold; ctx.fillText('?', p / 2, p / 2 + 2); }
         ex.forEach((id, i) => {
           const d = itemDef(id), n = ex.length;
           const x = p / 2 + (i - (n - 1) / 2) * p * 0.24, y = p / 2 + (i % 2 ? 4 : -3);
@@ -1306,7 +1469,7 @@ const GAME = (() => {
     if (tab === 'items') { text = `<i>${rar}</i><br>` + itemText(def, false); hintTxt = `A ${rar} prize still in the machine.`; }
     else if (tab === 'relics') { text = `<i>${rar} relic</i><br>` + (def.text || ''); hintTxt = `A ${rar} relic nobody has handed you yet.`; }
     else if (tab === 'enemies') { tag = def.tier === 'boss' ? 'BOSS' : def.tier === 'elite' ? 'ELITE' : ''; text = `<i>act ${def.act || '?'} ${TIER_NAME[def.tier] || ''}</i>` + (def.desc ? '<br>' + def.desc : ''); hintTxt = `Something lurks in act ${def.act || '?'}.`; }
-    else { tag = '★'.repeat(U.clamp(def.tier | 0, 1, 3)); text = def.text || ''; hintTxt = `Recipe: ${String(def.text || '').split(':')[0] || '???'}.`; }
+    else { tag = '★'.repeat(U.clamp(def.tier | 0, 1, 3)) + (def.secret ? ' SECRET' : ''); text = def.text || ''; hintTxt = def.secret ? 'Recipe: ???. A secret combo: fire it once to learn it.' : `Recipe: ${String(def.text || '').split(':')[0] || '???'}.`; }
     if (tag) card.appendChild(h('div', 'rar ' + (tab === 'enemies' ? (def.tier === 'boss' ? 'r' : 'l') : 'l'), tag));
     if (ok && (tab === 'items' || tab === 'relics')) { const kw = kwChips(def, 'sm'); if (kw) card.appendChild(kw); }
     if (ok && m.dexNew[tab + ':' + id]) card.appendChild(h('div', 'newb', 'NEW!'));
@@ -1610,6 +1773,7 @@ const GAME = (() => {
     if (S.camMap !== run.map) { S.camMap = run.map; lookAt(run.map.pos.q, run.map.pos.r, false); }
     else lookAt(run.map.pos.q, run.map.pos.r, true);
     buildMapHead();
+    arcAfterMap();   // ARCADE: a monster beaten on a tile with content: the tile resolves now
   }
   function buildMapHead() {
     const run = S.run, M = run.map;
@@ -1618,7 +1782,11 @@ const GAME = (() => {
     S.ui.buttons = [];
     const a = actDef(run.act);
     const l1 = h('div', 'l1');
-    l1.appendChild(h('h2', null, `Act ${run.act}: ${a.name}`));
+    // just the act here: the name (which never fit beside the buttons, "ACT 1: T...")
+    // is on the map's own plate at the bottom left
+    const h2 = h('h2', null, `Act ${run.act}`);
+    h2.title = a.name || '';
+    l1.appendChild(h2);
     const pill = h('span', 'mhInk');
     pill.appendChild(canvasEl(22, (ctx, p) => { if (X.RENDER && X.RENDER.bulb) X.RENDER.bulb(ctx, p / 2, p / 2 - 2, p * 0.3, S.t, true); }));
     pill.appendChild(h('span', null, ` ${bulbs(M ? M.ink : run.ink)}`));
@@ -1996,6 +2164,7 @@ const GAME = (() => {
     run.floor++;
     snd('step'); snd('footstep');
     lookAt(q, r, true);
+    if (arcRoamAfterStep(t)) { w.done = true; return true; }   // ARCADE: roaming monsters move, or pounce
     enterTile(t);
     if (resolves || S.screen !== 'map' || w.i >= w.path.length) w.done = true;
     return true;
@@ -2245,6 +2414,8 @@ const GAME = (() => {
       case 'shop': finish(); showShop(rollShop(t)); return;
       case 'rest': finish(); showRest(); return;
       case 'forge': finish(); showForge(); return;
+      // ARCADE: a mini-game cabinet (done once its plays are spent and you leave)
+      case 'plinko': case 'wheel': case 'slots': arcShow({ q: t.q, r: t.r }); return;
       case 'empty': {
         if (t.terrain === 'shallow') {
           const wade = X.MAP && X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
@@ -2319,10 +2490,11 @@ const GAME = (() => {
     setScreen('fight');
     if (opts.seed == null) { S.meta.stats.fights++; run.fights++; }
     music(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight');
+    annClear();   // nothing from the last fight carries over (ANNOUNCER)
     // Elites and bosses open with the versus card (the boss arena block).
     if (!(tier !== 'normal' && vsStart())) {
       if (tier === 'boss') { snd('boss'); haptic('boss'); }
-      banner(tier === 'boss' ? 'BOSS' : tier === 'elite' ? 'ELITE' : 'FIGHT', tier === 'boss' ? 'enemy' : 'turn', 1.2);
+      banner(tier === 'boss' ? 'BOSS' : tier === 'elite' ? 'ELITE' : 'FIGHT', tier === 'boss' ? 'enemy' : 'turn', 1.2, 'fight');
     }
     hint('steer and release');
     clawTurnStart();   // coin clunk and spin-up (CLAW TYPES block)
@@ -2666,6 +2838,7 @@ const GAME = (() => {
     fx().emit('shatter', sx, sy, { col: '#ffffff', n: 0.25 });
     fx().ring(sx, sy, '#e8f8ff', { r0: 4, r1: 32, w: 2.5, life: 0.25 });
     fx().text(sx, sy - 24, 'CRACK! +50%', '#bfe8ff', { size: 15, life: 0.9, dy: -36 });
+    matHook('crack', d.inst);   // relics hear the crack (CONTENT block)
     snd('crack');
   }
   function shatterInBin(b) {
@@ -2679,6 +2852,7 @@ const GAME = (() => {
     fx().shake(3);
     snd('shatter');
     spawnShards(x, y, def.color, MAT.shardN);
+    matHook('shatter', inst);   // a shatter in the bin is a shatter (CONTENT block)
   }
   // Glass shards: little physical fillers that clutter the bin (the chute sweeps them out).
   function spawnShards(x, y, col, n) {
@@ -2704,6 +2878,7 @@ const GAME = (() => {
     fx().text(CAB.x + b.x, CAB.y + b.y - 30, 'FUSE LIT!', '#ff8a2b', { size: 17, life: 1.2, dy: -40 });
     snd('fuse');
     toast('A bomb is lit! Grab it within ' + MAT.fuseTurns + ' turns or it goes off in the bin.', 2.4);
+    matHook('fuse', b.data.inst);   // (CONTENT block)
   }
   // A bomb going off in the bin: everything nearby is thrown about (maybe
   // over the divider: a free prize), and the blast reaches the arena.
@@ -2724,6 +2899,7 @@ const GAME = (() => {
     setMood('wow', 1.4);
     const dmg = MAT.blastDmg + 2 * Math.max(0, ((S.run && S.run.act) || 1) - 1) + (inst.plus ? 2 : 0);
     if (F.phase === 'player' && X.COMBAT.damage) for (const e of F.enemies) if (e.alive) X.COMBAT.damage(F, null, e, dmg, { fixed: true });
+    matHook('blast', inst);   // (CONTENT block)
     enqueue([], PLAY_BEAT);
     FS.dirty = true;
   }
@@ -2813,7 +2989,66 @@ const GAME = (() => {
     fx().ring(x, y, '#ff9ad0', { r0: 6, r1: 44, w: 4, life: 0.35 });
     snd('groan');
     setMood('sad', 1.8);
+    if (F && X.COMBAT.nearMiss) enqueue(X.COMBAT.nearMiss(F), PROC_BEAT);   // Lucky Lou: a near miss is Luck (CONTENT block)
   }
+
+  // ================================================================ CONTENT (round 3)
+  /* Lucky Lou and the synergy pass (DESIGN.md): the Luck meter on the
+     cabinet's left frame and its CASH OUT show, the relic hooks for the
+     cabinet materials (crack, shatter, fuse, blast), the dynamic fight
+     music, and the Gacha Charm's capsule luck. COMBAT owns the rules. */
+  const LUCKM = { x: 15, y0: 424, y1: 792 };
+  function luckState() {
+    const L = FS.luckM || (FS.luckM = { shown: 0, pop: 0, cash: 0 });
+    return L;
+  }
+  // A {t:'luck'} event: the cash out (a chase up the meter, coins, the marquee).
+  function luckFx(ev) {
+    const L = luckState();
+    if (ev.k !== 'cash') return;
+    L.cash = 1;
+    const x = LUCKM.x, y = (LUCKM.y0 + LUCKM.y1) / 2;
+    fx().text(270, 236, (ev.jackpot ? 'JACKPOT PAYOUT ' : 'CASH OUT ') + (ev.dmg | 0), '#3ddc84', { size: 26, life: 1.4, dy: -30, big: true });
+    fx().ring(x + 4, y, '#ffc94d', { r0: 8, r1: 70, w: 6, life: 0.45 });
+    fx().emit('coins', 270, 360, { n: fx().reduced ? 0.4 : 1 + Math.min(1.5, (ev.v | 0) / 6), power: 1 });
+    for (let i = 0; i < Math.min(8, ev.v | 0); i++) fx().fly(x, LUCKM.y1 - i * 36, 270, 240, { kind: 'star', col: '#3ddc84', dur: 0.45 + i * 0.03, delay: i * 0.04, arc: 60, size: 6 });
+    fx().shake(4 + Math.min(8, (ev.v | 0)));
+    FS.party = Math.max(FS.party, 0.9); FS.marquee = ev.jackpot ? 'JACKPOT PAYOUT!' : 'CASH OUT!';
+    snd('jackpot', { vol: 0.9 }); snd('coin', { pitch: 1.2 });
+    haptic('jackpot');
+  }
+  // The meter: drawn while this crawler has it (or holds Luck at all).
+  function luckDraw(ctx, t) {
+    const R = X.RENDER;
+    if (!R || !R.luckMeter || !F) return;
+    const luck = (F.player.status && F.player.status.luck) | 0, L = luckState();
+    if (!(F.luckK > 0) && !luck && !(L.cash > 0)) return;
+    if (luck > L.shown) { L.pop = 1; snd('chime', { pitch: 1 + luck * 0.06, vol: 0.6 }); }
+    L.shown = luck;
+    L.pop = Math.max(0, L.pop - 0.05); L.cash = Math.max(0, L.cash - 0.012);
+    R.luckMeter(ctx, LUCKM.x, LUCKM.y0, LUCKM.y1, { luck, max: (X.COMBAT.LUCK && X.COMBAT.LUCK.max) || 10, t, pop: L.pop, cash: L.cash, on: F.luckK > 0 });
+  }
+  // A cabinet material reacted: relics hear it (Broken Mirror, Blasting Cap).
+  function matHook(kind, inst) {
+    if (!F || !inst || !X.COMBAT.material || F.phase === 'over') return;
+    const evs = X.COMBAT.material(F, kind, inst);
+    if (evs && evs.length) enqueue(evs, PROC_BEAT);
+  }
+  // The fight music layers up with the fight: hype on a streak or a party,
+  // tension under 30% hp or while an elite or boss is in phase two.
+  function musicLayers(low) {
+    const A = X.AUDIO;
+    if (!A || !A.musicState || !F) return;
+    const rage = F.enemies.some((e) => e.alive && e.enraged);
+    try { A.musicState({ hype: !FS.done && ((F.streak | 0) >= 3 || FS.party > 0.3), tense: !FS.done && (low || rage) }); } catch (e) { /* optional */ }
+  }
+  // The Gacha Charm (relic.loot.capUp): extra upgrade chance per capsule step.
+  function capUp(run) {
+    let up = 0;
+    for (const id of (run && run.relics) || []) { const r = tbl('RELICS')[id]; if (r && r.loot) up += +r.loot.capUp || 0; }
+    return up;
+  }
+  // ================================================================ /CONTENT
   // Lucky Claw: two grabs in a row that deliver make the next one grip harder.
   function luckAfterGrab() {
     if (FS.luckyOn) {
@@ -3046,6 +3281,7 @@ const GAME = (() => {
           FS.lastKill = { x: hitX, y: hitY };
           fx().ring(hitX, hitY, '#ffc94d', { r0: 20, r1: 320, w: 10, life: 0.8, delay: 0.1 });
           snd('victory');
+          if (X.AUDIO && X.AUDIO.victory) { try { X.AUDIO.victory(); } catch (e2) { /* optional */ } }   // the music's victory sting (CONTENT block)
         }
         bossDie(ev, e, a, last && !ev.escaped);   // an elite or boss blows apart (the boss arena)
         break;
@@ -3106,6 +3342,7 @@ const GAME = (() => {
       case 'binRust': case 'binJam': case 'enrage': monsterEvent(ev); break;
       case 'turn': if (ev.n > 1) banner('TURN ' + ev.n, 'turn', 0.9); break;
       case 'proc': procFx(ev, base, enemy); break;
+      case 'luck': luckFx(ev); break;   // Lucky Lou's cash out (CONTENT block)
       case 'combo': queueCombo(ev); break;
       case 'over': break;
       default: break;
@@ -3663,7 +3900,7 @@ const GAME = (() => {
         break;
       }
       case 'final': {
-        banner(ev.name || 'FINAL PHASE', 'enemy', 1.6);
+        banner(ev.name || 'FINAL PHASE', 'enemy', 1.6, 'final');
         if (ev.text) fx().text(270, 230, ev.text, '#ff5a4a', { size: 15, life: 1.8 });
         fx().shake(12); haptic('boss');
         if (!reduced) { fx().flash('#ff2e30', 0.35); slowmo(0.5, 0.4); }
@@ -3880,7 +4117,8 @@ const GAME = (() => {
     if (P.white > 0 && !fin.white && fin.t >= P.white) { fin.white = true; fx().shake(16); haptic('boss'); }
     if (P.card >= 0 && !fin.card && fin.t >= P.card) { fin.card = true; snd(fin.boss ? 'bossDown' : 'fanfare'); finShower(fin); }
     // the outro waits for the whole show (a tap still skips to the reward)
-    if (FS.outro && fin.last && !fin.ext) { fin.ext = true; FS.outro.t = Math.max(FS.outro.t, P.total - fin.t); }
+    // (an elite's show is 0.8 s shorter for a veteran: it plays after every elite)
+    if (FS.outro && fin.last && !fin.ext) { fin.ext = true; FS.outro.t = Math.max(FS.outro.t, P.total - (quickOutro() && !fin.boss ? 0.8 : 0) - fin.t); }
     if (fin.kind === 'mid' && fin.t >= P.total) {
       bs.fin = null;
       if (bs.vsNext >= 0) { const i = bs.vsNext; bs.vsNext = -1; vsStart(i, 'final'); }
@@ -4517,6 +4755,7 @@ const GAME = (() => {
       fx().hold(fx().reduced ? 0.22 : 0.16 + 0.34 * pulse, '#ff2e30');
     } else { FS.hbT = 0; fx().hold(0); }
     S.lowHp = low;
+    musicLayers(low);   // the dynamic fight music (CONTENT block)
   }
 
   // Force the rig home. Called by the watchdog; the world is left intact.
@@ -4547,7 +4786,7 @@ const GAME = (() => {
     hint('');
     FS.turnsTaken++;
     S.run.turns++;
-    banner('ENEMY TURN', 'enemy', 1.0);
+    banner('ENEMY TURN', 'enemy', 1.0, 'turn');
     snd('turn');
     clearTilt();
     if (FS.grease > 0) { FS.grease--; if (!FS.grease) clearGrease(); }
@@ -4617,8 +4856,10 @@ const GAME = (() => {
     const brush = tier === 'elite' && rng() < (econ.eliteToolChance || 0) && toolIds().length ? rng.pick(toolIds()) : null;
     const reward = { items: rollItems(rng, 3), gold, ink, brush, tier, then };
     lootReward(reward);   // payout lines, tickets, the lucky double, capsules, highlights
+    arcRoamBounty(reward, then);   // ARCADE: a roaming monster drops a bounty capsule
     if (outro) {
-      FS.outro = { t: fx().reduced ? 0.7 : 1.5, reward };
+      // a veteran (OUTRO_FAST fights on the profile) gets the quick version
+      FS.outro = { t: fx().reduced ? 0.7 : quickOutro() ? 1.0 : 1.5, reward };
       lootOutro(reward);  // the rest of the tickets stream out of the cabinet (may hold the outro a beat longer)
       S.sd = { reward };
       const lk = FS.lastKill || { x: 270, y: 200 };
@@ -4628,6 +4869,9 @@ const GAME = (() => {
     }
     showReward(reward);
   }
+  // The victory beat fast-forwards once a profile has seen plenty of them (Polish and QA).
+  const OUTRO_FAST = 10;
+  function quickOutro() { return !!(S.meta && S.meta.stats && (S.meta.stats.fights | 0) >= OUTRO_FAST); }
   function finishOutro() {
     if (!FS || !FS.outro) return;
     const rw = FS.outro.reward;
@@ -5064,7 +5308,7 @@ const GAME = (() => {
     const run = lootRun();
     const rng = rngFor('capsule:' + src);
     let cap = { src, tier0: opts.tier || 'c', ups: [], tier: opts.tier || 'c', pity: false };
-    if (D().rollCapsule) { try { cap = D().rollCapsule(rng, src, { pity: run.pity, tier: opts.tier }); } catch (e) { /* keep the plain one */ } }
+    if (D().rollCapsule) { try { cap = D().rollCapsule(rng, src, { pity: run.pity, tier: opts.tier, up: capUp(run) }); } catch (e) { /* keep the plain one */ } }
     cap = metaCap(cap, src);   // Tilt: Cheap Plastic (META block)
     let prize = { k: 'gold', n: 20 };
     if (D().capsulePrize) { try { prize = D().capsulePrize(rng, cap.tier, capCtx(opts.prefer)) || prize; } catch (e) { /* gold */ } }
@@ -5324,6 +5568,7 @@ const GAME = (() => {
     S.cap = null; S.sd = null;
     if (then && then.k === 'reward' && then.rw) { showReward(then.rw); return; }
     if (then && then.k === 'counter' && then.shop) { showCounter(then.shop); return; }
+    if (then && then.k === 'arcade') { arcShow(then); return; }   // ARCADE: back to the machine
     toMap();
   }
   // Per-frame capsule motion: the drop with a bounce, the wobble spring,
@@ -5542,7 +5787,7 @@ const GAME = (() => {
     const double = rngFor('double')() < (LT().DOUBLE || 0.05);
     if (D().payout) {
       try {
-        const pay = D().payout({ tier: rw.tier, gold: rw.gold, jackpots: jp, combos, dmgTaken: st.dmgTaken, turns: F.turn, overkill: st.overkill, double });
+        const pay = D().payout({ tier: rw.tier, gold: rw.gold, jackpots: jp, combos, dmgTaken: st.dmgTaken, turns: F.turn, overkill: st.overkill, double, relicTix: st.tix || 0 });
         rw.pay = pay.lines; rw.gold = pay.gold; rw.tix = pay.tix; rw.double = double;
       } catch (e) { /* the plain reward stands */ }
     }
@@ -5640,7 +5885,7 @@ const GAME = (() => {
     if (!S.tix || !FS || !FS.loot) return;
     tixSpit(Math.max(0, (rw.tix || 0) - FS.loot.queued));
     // hold the victory beat until most of the stream has landed (a tap still skips)
-    if (FS.outro && S.tix.q > 0 && !fx().reduced) FS.outro.t = Math.max(FS.outro.t, Math.min(2.4, 0.9 + S.tix.q * 0.03));
+    if (FS.outro && S.tix.q > 0 && !fx().reduced) FS.outro.t = Math.max(FS.outro.t, Math.min(quickOutro() ? 1.5 : 2.4, 0.9 + S.tix.q * 0.03));
   }
   function tixEmit(X0) {
     let k = X0.list.find((o) => !o.on);
@@ -5831,6 +6076,999 @@ const GAME = (() => {
     return grid;
   }
 
+  // ================================================================ ARCADE
+  /* The arcade on the map (DESIGN.md "Arcade"): three mini-game cabinets on
+     their own tiles (PLINKO, the PRIZE WHEEL, LUCKY SLOTS), the roaming
+     monsters and the event scenes. A cabinet's live session is
+     tile.content.arc, saved with the map: plays left, results, the pending
+     play (its outcome rolled and saved the moment it starts, paid the
+     moment it lands, so a reload replays the same outcome and never pays
+     twice) and capsules won but not cracked yet. S.arc is the screen's
+     animation state (never saved). Screen 'arcade', sd {arcade: {q, r}}. */
+  const ARC_TAU = Math.PI * 2;
+  const ARC_NAME = { plinko: 'PLINKO', wheel: 'PRIZE WHEEL', slots: 'LUCKY SLOTS' };
+  const ARC_COL = { plinko: '#2ee6d6', wheel: '#ffc94d', slots: '#ff2e88' };
+  const ARC_HOW = {
+    plinko: 'Tap the board to drop a token. The pegs decide the rest. The middle slot is the JACKPOT.',
+    wheel: 'Tap to spin. x2 SPIN doubles your next prize, CURSE takes it all back.',
+    slots: 'Drag the lever down (or tap PULL). Three of a kind pays. Three of one of your items upgrades it.',
+  };
+  const ARC = { slotCost: 3, fastAfter: 6, capDelay: 0.45 };
+  const ARC_JUNK = ['rock', 'slag'];
+  Object.assign(TILE_NAMES, { plinko: 'a plinko cabinet', wheel: 'a prize wheel', slots: 'a slot machine' });
+  Object.assign(LANDMARK_LABELS, { plinko: 'Plinko', wheel: 'Wheel', slots: 'Slots' });
+  Object.assign(CAP_SRC, { arcade: 'Arcade prize', roam: 'Monster bounty' });
+  function arcMeta() {
+    if (!S.meta) S.meta = freshMeta();
+    const a = S.meta.arc && typeof S.meta.arc === 'object' ? S.meta.arc : (S.meta.arc = {});
+    if (!(a.plays >= 0)) a.plays = 0;
+    if (!(a.jackpots >= 0)) a.jackpots = 0;
+    return a;
+  }
+  const arcMul = () => 1 + 0.35 * (((S.run && S.run.act) || 1) - 1);
+  const arcIsCab = (t) => !!(t && X.MAP && X.MAP.isArcade && X.MAP.isArcade(t));
+  function arcTile(o) {
+    const M = S.run && S.run.map;
+    return M && o && X.MAP ? X.MAP.tileAt(M, o.q, o.r) : null;
+  }
+  // The cabinet's session (created on the first visit; old tiles default).
+  function arcSession(t) {
+    const c = t.content || (t.content = {});
+    let A = c.arc;
+    if (!A || typeof A !== 'object') A = c.arc = { g: t.type, tokens: Math.max(1, c.tokens | 0), used: 0, res: [], pend: null, caps: [], mult: 1, rot: 0 };
+    A.g = t.type;
+    if (!Array.isArray(A.res)) A.res = [];
+    if (!Array.isArray(A.caps)) A.caps = [];
+    if (!(A.mult >= 1)) A.mult = 1;
+    if (!(A.tokens >= 0)) A.tokens = 0;
+    if (A.g === 'slots' && !(Array.isArray(A.strips) && A.strips.length === 3 && Array.isArray(A.items))) arcSlotSetup(A, c);
+    return A;
+  }
+
+  // ---- PLINKO: a peg board, a token, nine prize slots
+  const PLK = { x0: 50, x1: 490, top: 214, row0: 292, rows: 9, dx: 46, dy: 44, pegR: 6, ballR: 12, divTop: 682, floor: 760, g: 1300, e: 0.4, n: 9, jit: 100, jpW: 34 };
+  // (over 2000 drops each: aimed at the middle 9% JACKPOT and 13-19% CAPSULE, aimed down a capsule lane 22%)
+  // The edges pay least (a drop down the side is the safe, dull play); the
+  // capsules sit a step in from them, the narrow jackpot in the middle.
+  const PLK_SLOTS = [
+    { k: 'gold', n: 8, label: '8', col: '#ffc94d' }, { k: 'tix', n: 3, label: '3 TIX', col: '#ff9ec7' }, { k: 'cap', tier: 'u', label: 'CAPSULE', col: '#ff2e88' },
+    { k: 'ink', n: 2, label: '2 BULBS', col: '#8dfff5' }, { k: 'jackpot', label: 'JACKPOT', col: '#ffffff' }, { k: 'ink', n: 2, label: '2 BULBS', col: '#8dfff5' },
+    { k: 'cap', tier: 'u', label: 'CAPSULE', col: '#ff2e88' }, { k: 'tix', n: 3, label: '3 TIX', col: '#ff9ec7' }, { k: 'gold', n: 8, label: '8', col: '#ffc94d' },
+  ];
+  let PLK_PEGS = null;
+  function plkPegs() {
+    if (PLK_PEGS) return PLK_PEGS;
+    const out = [];
+    for (let i = 0; i < PLK.rows; i++) {
+      const n = i % 2 ? 8 : 9;
+      for (let j = 0; j < n; j++) out.push({ x: 270 + (j - (n - 1) / 2) * PLK.dx, y: PLK.row0 + i * PLK.dy, row: i });
+      // half pegs on the walls of the wide rows kick a token that hugs the side back in
+      if (i % 2) { out.push({ x: PLK.x0, y: PLK.row0 + i * PLK.dy, row: i, wall: -1 }); out.push({ x: PLK.x1, y: PLK.row0 + i * PLK.dy, row: i, wall: 1 }); }
+    }
+    return (PLK_PEGS = out);
+  }
+  // Slot edges: the jackpot in the middle is a narrow slot (PLK.jpW), the rest share the width.
+  let PLK_EDGES = null;
+  function plkEdges() {
+    if (PLK_EDGES && PLK_EDGES.key === PLK.jpW) return PLK_EDGES;
+    const mid = Math.floor(PLK.n / 2), w = (PLK.x1 - PLK.x0 - PLK.jpW) / (PLK.n - 1), e = [PLK.x0];
+    for (let i = 0; i < PLK.n; i++) e.push(e[i] + (i === mid ? PLK.jpW : w));
+    e.key = PLK.jpW;
+    return (PLK_EDGES = e);
+  }
+  const plkSlotX = (i) => { const e = plkEdges(); return (e[i] + e[i + 1]) / 2; };
+  function plkSlotOf(x) {
+    const e = plkEdges();
+    for (let i = 0; i < PLK.n; i++) if (x < e[i + 1]) return i;
+    return PLK.n - 1;
+  }
+  /* The whole drop, simulated at once (fixed 1/240 s steps, seeded jitter
+     at each peg so no two drops match): {path: [x, y, ...] one pair per
+     1/60 s, hits: [{f: frame, i: peg}], slot, x}. The screen plays it back. */
+  function plkSim(x, seed) {
+    const rng = U.rng((seed >>> 0) || 1);
+    const pegs = plkPegs(), dt = 1 / 240, R = PLK.ballR, m = R + PLK.pegR, edges = plkEdges();
+    let bx = U.clamp(x, PLK.x0 + R + 2, PLK.x1 - R - 2), by = PLK.top, vx = (rng() - 0.5) * 40, vy = 0, slow = 0;
+    const path = [], hits = [], last = {};
+    for (let s = 0; s < 240 * 20; s++) {
+      vy += PLK.g * dt;
+      bx += vx * dt; by += vy * dt;
+      for (let i = 0; i < pegs.length; i++) {
+        const p = pegs[i], dx = bx - p.x, dy = by - p.y;
+        if (dx > m || dx < -m || dy > m || dy < -m) continue;
+        const d = Math.hypot(dx, dy);
+        if (d >= m || d < 1e-6) continue;
+        const nx = dx / d, ny = dy / d;
+        bx = p.x + nx * m; by = p.y + ny * m;
+        const vn = vx * nx + vy * ny;
+        if (vn < 0) {
+          vx -= (1 + PLK.e) * vn * nx; vy -= (1 + PLK.e) * vn * ny;
+          const j = (rng() - 0.5) * PLK.jit;   // a little chaos along the tangent
+          vx += -ny * j; vy += nx * j;
+          if (!(s - (last[i] || -99) < 24)) hits.push({ f: path.length / 2, i });
+          last[i] = s;
+        }
+      }
+      if (bx < PLK.x0 + R) { bx = PLK.x0 + R; vx = Math.abs(vx) * 0.5; }
+      if (bx > PLK.x1 - R) { bx = PLK.x1 - R; vx = -Math.abs(vx) * 0.5; }
+      if (by + R > PLK.divTop) {
+        // the slot dividers: vertical bars with round tops
+        for (let k = 1; k < PLK.n; k++) {
+          const ex = edges[k], cy = U.clamp(by, PLK.divTop, PLK.floor);
+          const dx = bx - ex, dy = by - cy, d = Math.hypot(dx, dy), mm = R + 3;
+          if (d < mm && d > 1e-6) {
+            const nx = dx / d, ny = dy / d;
+            bx = ex + nx * mm; by = cy + ny * mm;
+            const vn = vx * nx + vy * ny;
+            if (vn < 0) { vx -= 1.35 * vn * nx; vy -= 1.35 * vn * ny; }
+          }
+        }
+      }
+      const sp = Math.hypot(vx, vy);
+      if (sp > 900) { vx *= 900 / sp; vy *= 900 / sp; }
+      // never wedged: a still token gets a seeded nudge
+      if (sp < 10) { if (++slow > 60) { vx += (rng() < 0.5 ? -1 : 1) * 140; vy -= 80; slow = 0; } } else slow = 0;
+      if (s % 4 === 0) path.push(bx, by);
+      if (by >= PLK.floor - R) { by = PLK.floor - R; path.push(bx, by); break; }
+    }
+    return { path, hits, slot: plkSlotOf(bx), x: bx };
+  }
+  function plkPays(slot) {
+    const res = plkPay0(slot);
+    // one slot off the jackpot: the near miss is said out loud
+    if (Math.abs(slot - Math.floor(PLK.n / 2)) === 1) { res.sub = 'One slot off the JACKPOT!'; res.near = true; }
+    return res;
+  }
+  function plkPay0(slot) {
+    const s = PLK_SLOTS[slot] || PLK_SLOTS[1], m = arcMul();
+    switch (s.k) {
+      case 'jackpot': return { tier: 3, label: 'JACKPOT!', pays: [{ k: 'cap', tier: 'r' }, { k: 'gold', n: Math.round(30 * m) }, { k: 'tix', n: 10 }] };
+      case 'cap': return { tier: 2, label: 'CAPSULE!', pays: [{ k: 'cap', tier: s.tier }] };
+      case 'gold': return { tier: 1, label: `+${Math.round(s.n * m)} GOLD`, pays: [{ k: 'gold', n: Math.round(s.n * m) }] };
+      case 'tix': return { tier: 1, label: `+${s.n} TICKETS`, pays: [{ k: 'tix', n: s.n }] };
+      default: return { tier: 1, label: `+${bulbs(s.n)}`.toUpperCase(), pays: [{ k: 'ink', n: s.n }] };
+    }
+  }
+  const plkAim = () => 270 + Math.sin(((S.arc && S.arc.t) || 0) * 1.7) * 170;
+  function arcPlinkoDrop(x) {
+    const C = S.arc, A = C.A;
+    if (A.tokens <= 0) return arcNoPlays();
+    x = Math.round(U.clamp(x, PLK.x0 + PLK.ballR + 4, PLK.x1 - PLK.ballR - 4));
+    A.tokens--;
+    A.pend = { x, seed: U.hashStr(`${C.tile.content.seed | 0}:plinko:${A.used}:${x}`) };
+    save();
+    snd('plinkDrop');
+    arcBegin();
+    return true;
+  }
+  function plkTick(dt) {
+    const C = S.arc, P = C.pl, sim = P.sim, n = sim.path.length / 2;
+    const i0 = Math.min(n - 1, Math.floor(P.i)), x = sim.path[i0 * 2], y = sim.path[i0 * 2 + 1];
+    // suspense: slow motion when the token rolls toward the jackpot over the last rows
+    const near = P.speed === 1 && y > PLK.row0 + (PLK.rows - 3) * PLK.dy && Math.abs(x - 270) < 90;
+    P.slowK += ((near ? 0.42 : 1) - P.slowK) * Math.min(1, dt * 8);
+    if (near && !P.drum) { P.drum = true; snd('drumroll'); }
+    const prev = Math.floor(P.i);
+    P.i += dt * 60 * P.speed * P.slowK * (C.fast ? 1.25 : 1);
+    const cur = Math.min(n - 1, Math.floor(P.i));
+    const pegs = plkPegs();
+    for (const hit of sim.hits) {
+      if (hit.f <= prev || hit.f > cur) continue;
+      const peg = pegs[hit.i];
+      C.lit[hit.i] = 1;
+      snd('peg', { pitch: 0.8 + peg.row * 0.08 });
+      if (!S.headless) fx().emit('glint', peg.x, peg.y, { col: ARC_COL.plinko, n: 0.5 });
+    }
+    if (P.i >= n - 1) { P.i = n - 1; arcSettle(); }
+  }
+
+  // ---- the PRIZE WHEEL: twelve wedges, a clicker flapper, double or nothing
+  const WHEEL = [
+    { k: 'gold', n: 15, w: 12, label: '15', col: '#ffc94d' }, { k: 'tix', n: 5, w: 10, label: '5 TIX', col: '#ff6bb0' },
+    { k: 'heal', n: 10, w: 9, label: '+10 HP', col: '#a6ff5e' }, { k: 'gold', n: 30, w: 7, label: '30', col: '#ffb347' },
+    { k: 'cap', tier: 'r', w: 5, label: 'CAPSULE', col: '#ff2e88' }, { k: 'tix', n: 8, w: 7, label: '8 TIX', col: '#c3adff' },
+    { k: 'curse', w: 8, label: 'CURSE', col: '#4a3a5a' }, { k: 'gold', n: 15, w: 12, label: '15', col: '#ffc94d' },
+    { k: 'double', w: 7, label: 'x2 SPIN', col: '#2ee6d6' }, { k: 'heal', n: 10, w: 9, label: '+10 HP', col: '#a6ff5e' },
+    { k: 'tix', n: 5, w: 10, label: '5 TIX', col: '#ff6bb0' }, { k: 'jackpot', w: 2, label: 'JACKPOT', col: '#ffffff' },
+  ];
+  const WH = { x: 270, y: 476, r: 196 };
+  /* The outcome of a spin: wedge i (weighted) and where in it the flapper
+     rests (f 0..1). A plain wedge next to the jackpot or the capsule stops
+     right at their shared peg: the near miss. */
+  function wheelRoll(rng) {
+    let tot = 0;
+    for (const w of WHEEL) tot += w.w;
+    let u = rng() * tot, i = 0;
+    for (; i < WHEEL.length - 1; i++) { u -= WHEEL[i].w; if (u < 0) break; }
+    const n = WHEEL.length, big = (j) => { const k = WHEEL[(j + n) % n].k; return k === 'jackpot' || k === 'cap'; };
+    let f = 0.2 + rng() * 0.6;
+    const near = !big(i) && (big(i - 1) || big(i + 1));
+    if (near) f = big(i - 1) ? 0.03 + rng() * 0.06 : 0.91 + rng() * 0.06;
+    return { i, f, near };
+  }
+  // The rotation that puts wedge i (at f) under the pointer, turns full spins on.
+  function whTarget(p) {
+    const Wd = ARC_TAU / WHEEL.length;
+    let d = (-(p.i + p.f) * Wd - p.rot0) % ARC_TAU;
+    if (d < 0) d += ARC_TAU;
+    return p.rot0 + p.turns * ARC_TAU + d;
+  }
+  function arcWheelSpin() {
+    const C = S.arc, A = C.A;
+    if (A.tokens <= 0) return arcNoPlays();
+    A.tokens--;
+    const r = wheelRoll(rngFor('wheel'));
+    A.pend = { i: r.i, f: r.f, near: r.near, rot0: A.rot || 0, turns: 4 + (r.i % 2) };
+    save();
+    snd('wheelSpin');
+    arcBegin();
+    return true;
+  }
+  function whTick(dt) {
+    const C = S.arc, P = C.wh, Wd = ARC_TAU / WHEEL.length;
+    P.t += dt;
+    const u = Math.min(1, P.t / P.D);
+    C.rot = P.rot0 + (P.rot1 - P.rot0) * (1 - Math.pow(1 - u, 4));
+    let phi = (-C.rot) % ARC_TAU;
+    if (phi < 0) phi += ARC_TAU;
+    const peg = Math.floor(phi / Wd);
+    if (peg !== P.peg) {
+      // a peg passes the pointer: the flapper flicks and clicks
+      if (P.peg >= 0) { C.flapV -= 9 + 14 * (1 - u); snd('wheelTick', { pitch: 0.8 + 0.6 * (1 - u) }); }
+      P.peg = peg;
+    }
+    if (u > 0.82 && !P.drum && (WHEEL[C.A.pend.i].k === 'jackpot' || C.A.pend.near)) { P.drum = true; snd('drumroll'); }
+    if (u >= 1) arcSettle();
+  }
+  function wheelPays(A, p) {
+    const w = WHEEL[p.i] || WHEEL[0], m = arcMul(), x = A.mult || 1;
+    let res;
+    switch (w.k) {
+      case 'double':
+        A.mult = Math.min(8, x * 2); A.tokens++;
+        return { tier: 2, label: `x${A.mult} SPIN!`, sub: `Double or nothing: your next prize pays x${A.mult}.`, pays: [] };
+      case 'curse': {
+        A.mult = 1;
+        const id = tbl('ITEMS')[ARC_JUNK[p.i % 2]] ? ARC_JUNK[p.i % 2] : (Object.keys(tbl('ITEMS')).find((k) => itemDef(k).rarity === 'junk') || 'rock');
+        return { tier: 0, label: 'CURSED!', sub: x > 1 ? 'Nothing! The double is gone and junk lands in your bin.' : 'Junk lands in your bin.', pays: [{ k: 'junk', id }] };
+      }
+      case 'gold': res = { tier: x > 1 ? 2 : 1, label: `+${Math.round(w.n * m * x)} GOLD`, pays: [{ k: 'gold', n: Math.round(w.n * m * x) }] }; break;
+      case 'tix': res = { tier: x > 1 ? 2 : 1, label: `+${w.n * x} TICKETS`, pays: [{ k: 'tix', n: w.n * x }] }; break;
+      case 'heal': res = { tier: 1, label: `+${w.n * x} HP`, pays: [{ k: 'heal', n: w.n * x }] }; break;
+      case 'cap': res = { tier: 2, label: 'CAPSULE!', pays: [{ k: 'cap', tier: x >= 4 ? 'l' : x >= 2 ? 'r' : w.tier }] }; break;
+      default: res = { tier: 3, label: 'JACKPOT!', pays: [{ k: 'cap', tier: x >= 2 ? 'l' : 'r' }, { k: 'gold', n: Math.round(60 * m * x) }, { k: 'tix', n: 15 * x }] };
+    }
+    if (x > 1) res.sub = `Doubled x${x}!`;
+    A.mult = 1;
+    return res;
+  }
+
+  // ---- LUCKY SLOTS: three reels, a lever, your own items on the strips
+  const REEL = ['cherry', 'A', 'bell', 'bulb', 'cherry', 'B', 'seven', 'bell', 'cherry', 'C', 'bulb', 'A'];
+  const SLOT_ODDS = [['seven', 0.03], ['item', 0.09], ['cherry', 0.08], ['bell', 0.08], ['bulb', 0.06], ['pair', 0.13]];
+  // Three item symbols from the bin (the reels show your own stuff) and the strips, rolled once per cabinet.
+  function arcSlotSetup(A, c) {
+    const rng = U.rng((((c.seed | 0) ^ 0x51075) >>> 0) || 7);
+    const ids = [];
+    for (const inst of (S.run && S.run.bin) || []) if (itemDef(inst.id).rarity !== 'junk' && ids.indexOf(inst.id) < 0) ids.push(inst.id);
+    const pool = rng.shuffle(ids);
+    const fill = Object.keys(tbl('ITEMS')).filter((id) => itemDef(id).rarity === 'c');
+    while (pool.length < 3) pool.push(fill.length ? rng.pick(fill) : 'sword');
+    A.items = pool.slice(0, 3);
+    A.strips = [0, 1, 2].map(() => rng.shuffle(REEL.slice()));
+    A.stops = [0, 1, 2].map(() => rng.int(0, REEL.length - 1));
+  }
+  function slotEval(A, stops) {
+    const s = stops.map((i, k) => A.strips[k][((i % REEL.length) + REEL.length) % REEL.length]);
+    if (s[0] === s[1] && s[1] === s[2]) return { cat: s[0].length === 1 ? 'item' : s[0], sym: s[0] };
+    if (s[0] === 'cherry' && s[1] === 'cherry') return { cat: 'pair', sym: 'cherry' };
+    return { cat: 'lose', sym: null };
+  }
+  /* A pull's outcome: {stops, near}. The category is rolled first, then
+     stops that show it; 40% of the losses are near misses (two of a big
+     symbol, the third one step off the line, in plain view). */
+  function slotRoll(A, rng) {
+    const L = REEL.length, SS = A.strips;
+    const at = (k, sym) => { const out = []; for (let i = 0; i < L; i++) if (SS[k][i] === sym) out.push(i); return out; };
+    const u = rng();
+    let cat = 'lose', acc = 0;
+    for (const [c, p] of SLOT_ODDS) { acc += p; if (u < acc) { cat = c; break; } }
+    let stops = null, near = null;
+    if (cat === 'pair') {
+      const off = []; for (let i = 0; i < L; i++) if (SS[2][i] !== 'cherry') off.push(i);
+      stops = [rng.pick(at(0, 'cherry')), rng.pick(at(1, 'cherry')), rng.pick(off)];
+    } else if (cat !== 'lose') {
+      const sym = cat === 'item' ? rng.pick(['A', 'B', 'C']) : cat;
+      stops = [0, 1, 2].map((k) => rng.pick(at(k, sym)));
+    } else {
+      if (rng() < 0.4) {
+        const big = rng.pick(['seven', 'A', 'B', 'C']);
+        const offs = [];
+        for (const i of at(2, big)) for (const j of [(i + 1) % L, (i + L - 1) % L]) if (SS[2][j] !== big) offs.push(j);
+        if (offs.length) { stops = [rng.pick(at(0, big)), rng.pick(at(1, big)), rng.pick(offs)]; near = big; }
+      }
+      for (let n = 0; n < 40 && (!stops || (!near && slotEval(A, stops).cat !== 'lose')); n++) stops = [0, 1, 2].map(() => rng.int(0, L - 1));
+    }
+    return { stops, near };
+  }
+  function slotPays(A, ev, p) {
+    const m = arcMul();
+    switch (ev.cat) {
+      case 'seven': return { tier: 3, label: 'JACKPOT!', pays: [{ k: 'cap', tier: 'r' }, { k: 'gold', n: Math.round(40 * m) }, { k: 'tix', n: 12 }] };
+      case 'item': {
+        const id = A.items['ABC'.indexOf(ev.sym)] || A.items[0];
+        return { tier: 2, label: 'UPGRADE!', sub: `${itemName(itemDef(id), true)}!`, pays: [{ k: 'up', id }] };
+      }
+      case 'cherry': return { tier: 2, label: `+${Math.round(25 * m)} GOLD`, pays: [{ k: 'gold', n: Math.round(25 * m) }] };
+      case 'bell': return { tier: 2, label: '+10 TICKETS', pays: [{ k: 'tix', n: 10 }] };
+      case 'bulb': return { tier: 2, label: `+${bulbs(3)}`.toUpperCase(), pays: [{ k: 'ink', n: 3 }] };
+      case 'pair': return { tier: 1, label: `+${Math.round(8 * m)} GOLD`, sub: 'Two cherries!', pays: [{ k: 'gold', n: Math.round(8 * m) }] };
+      default: return { tier: 0, label: p && p.near ? 'SO CLOSE!' : 'NO LUCK', near: !!(p && p.near), pays: [] };
+    }
+  }
+  function arcSlotPull() {
+    const C = S.arc, A = C.A, run = lootRun();
+    let cost = 0;
+    if (A.tokens > 0) A.tokens--;
+    else if ((run.tickets || 0) >= ARC.slotCost) { cost = ARC.slotCost; addTickets(-cost); }
+    else return arcNoPlays();
+    const r = slotRoll(A, rngFor('slots'));
+    A.pend = { stops: r.stops, near: r.near, cost };
+    C.lever = 1; C.leverV = 0;
+    save();
+    snd('lever'); snd('reelSpin');
+    if (cost) { const p = hudPoint($('tixTxt'), TIX_HUD.x, TIX_HUD.y); fx().text(p.x, p.y + 30, `-${cost}`, '#ff9ec7', { size: 18 }); }
+    arcBegin();
+    return true;
+  }
+  function slTick(dt) {
+    const C = S.arc, P = C.sl, L = REEL.length, p = C.A.pend;
+    P.t += dt;
+    let all = true;
+    P.reels.forEach((rl, k) => {
+      if (rl.phase === 'spin') {
+        rl.v = Math.min(24, rl.v + dt * 70);
+        rl.pos += rl.v * dt;
+        if (P.t >= rl.stopT) {
+          rl.phase = 'stop'; rl.e0 = rl.pos; rl.et = 0;
+          let d = (p.stops[k] - (rl.pos + 3)) % L;
+          if (d < 0) d += L;
+          rl.e1 = rl.pos + 3 + d;
+        }
+        all = false;
+      } else if (rl.phase === 'stop') {
+        rl.et += dt;
+        const u = Math.min(1, rl.et / 0.42);
+        rl.pos = rl.e0 + (rl.e1 - rl.e0) * U.ease.outBack(u);
+        if (u >= 1) {
+          rl.pos = rl.e1; rl.phase = 'done'; rl.flash = 1;
+          snd('reelStop', { pitch: 1 + k * 0.08 });
+          fx().shake(2.5);
+          // two alike and one reel to go: the tease (the last reel spins on and the lights race)
+          if (k === 1 && P.reels[2].phase === 'spin') {
+            const a = C.A.strips[0][p.stops[0] % L], b = C.A.strips[1][p.stops[1] % L];
+            if (a === b && a !== 'cherry') { P.reels[2].stopT = P.t + (C.fast ? 0.7 : 1.25); P.tease = 1; snd('drumroll'); }
+          }
+        }
+        all = false;
+      }
+      if (rl.flash) rl.flash = Math.max(0, rl.flash - dt * 3);
+    });
+    if (all) arcSettle();
+  }
+
+  // ---- the shared flow: show, act, tick, settle, pay, celebrate, leave
+  function arcShow(o) {
+    const t = arcTile(o);
+    if (!arcIsCab(t)) { toMap(); return false; }
+    const A = arcSession(t);
+    S.sd = { arcade: { q: t.q, r: t.r } };
+    S.arc = { A, tile: t, g: A.g, phase: 'idle', t: 0, win: null, winT: 0, capT: 0, fast: arcMeta().plays >= ARC.fastAfter,
+      lit: {}, flash: 0, party: 0, drag: null, lever: 0, leverV: 0, rot: A.rot || 0, flap: 0, flapV: 0, pl: null, wh: null, sl: null };
+    setScreen('arcade');
+    arcDom();
+    if (A.pend) arcBegin();                    // a reload mid-play: the same outcome plays out again
+    else if (A.caps.length) S.arc.capT = 0.6;  // a capsule won before the reload: crack it now
+    if (!A.used && !A.pend) snd('arcIn');
+    save();
+    return true;
+  }
+  function arcActLabel() {
+    const C = S.arc, A = C && C.A;
+    if (!A) return 'Play';
+    if (C.phase === 'play') return 'Skip';
+    if (A.g === 'plinko') return A.tokens > 0 ? 'Drop' : 'No tokens';
+    if (A.g === 'wheel') return A.tokens > 0 ? (A.mult > 1 ? `Spin x${A.mult}` : 'Spin') : 'No spins';
+    return A.tokens > 0 ? 'Pull (free)' : `Pull (${ARC.slotCost} tix)`;
+  }
+  // The DOM frame over the canvas machine: the how-to, the win sign, the plays, Drop/Spin/Pull and Leave.
+  function arcDom() {
+    const C = S.arc, b = $('arcadeBody');
+    if (!C || !b) return;
+    clear(b);
+    S.ui.buttons = [];
+    try { b.style.setProperty('--ac', ARC_COL[C.g]); } catch (e) { /* stub */ }
+    const msg = h('div', 'arcMsg');
+    msg.id = 'arcMsg';
+    b.appendChild(msg);
+    const bot = h('div', 'arcBot');
+    bot.appendChild(h('div', 'arcHow', ARC_HOW[C.g]));
+    const info = h('div', 'arcInfo');
+    info.id = 'arcInfo';
+    bot.appendChild(info);
+    const row = h('div', 'row');
+    const go = btn(arcActLabel(), () => arcAct(), 'pri arcGo');
+    go.id = 'arcGo';
+    row.appendChild(go);
+    row.appendChild(btn('Leave', () => arcLeave(), 'ghost'));
+    bot.appendChild(row);
+    b.appendChild(bot);
+    arcInfo();
+  }
+  function arcInfo() {
+    const C = S.arc;
+    if (!C) return;
+    const A = C.A, tix = (S.run && S.run.tickets) || 0;
+    const s = A.g === 'plinko' ? `TOKENS ${A.tokens}`
+      : A.g === 'wheel' ? `SPINS ${A.tokens}` + (A.mult > 1 ? `  ·  NEXT PRIZE x${A.mult}` : '')
+      : (A.tokens > 0 ? `FREE PULLS ${A.tokens}` : `${ARC.slotCost} TICKETS A PULL`) + `  ·  TIX ${tix}`;
+    const el = $('arcInfo');
+    if (el) el.textContent = s;
+    const go = $('arcGo');
+    if (go) { go.textContent = arcActLabel(); if (go.classList) go.classList[C.phase === 'idle' && arcCanPlay() ? 'add' : 'remove']('ready'); }
+    S.arcInfoStr = s;
+  }
+  function arcCanPlay() {
+    const A = S.arc && S.arc.A;
+    if (!A) return false;
+    return A.tokens > 0 || (A.g === 'slots' && ((S.run && S.run.tickets) || 0) >= ARC.slotCost);
+  }
+  function arcMsg(str, cls, sub) {
+    S.arcMsgStr = str;
+    const el = $('arcMsg');
+    if (!el) return;
+    clear(el);
+    if (!str) { el.className = 'arcMsg'; return; }
+    el.appendChild(h('span', null, str));
+    if (sub) el.appendChild(h('small', null, sub));
+    el.className = 'arcMsg ' + (cls || '');
+    replay(el, 'show');
+  }
+  function arcNoPlays() {
+    const C = S.arc, A = C.A;
+    C.flash = 0.4;
+    snd('arcLose', { pitch: 1.4 });
+    if (A.g === 'slots') toast(`${ARC.slotCost} tickets a pull, you have ${(S.run && S.run.tickets) || 0}. Jackpots and combos in fights pay tickets.`, 2.4);
+    else toast(A.g === 'plinko' ? 'Out of tokens. Thanks for playing!' : 'Out of spins. Thanks for playing!');
+    if (A.g === 'slots') { C.leverV = -6; }
+    return false;
+  }
+  // The main action: a tap on the machine, Space, or the big button.
+  function arcAct(x) {
+    const C = S.arc;
+    if (!C || S.screen !== 'arcade') return false;
+    if (C.phase === 'play') { arcHurry(); return true; }
+    if (C.phase === 'win') { arcWinDone(); return true; }
+    if (C.capT > 0) { arcOpenCap(); return true; }
+    if (C.g === 'plinko') return arcPlinkoDrop(x != null ? x : plkAim());
+    if (C.g === 'wheel') return arcWheelSpin();
+    return arcSlotPull();
+  }
+  // Starts the animation of the pending play (fresh, or again after a reload).
+  function arcBegin() {
+    const C = S.arc, A = C.A, p = A.pend;
+    if (!p) return;
+    C.phase = 'play'; C.win = null;
+    arcMsg('');
+    if (A.g === 'plinko') C.pl = { sim: plkSim(p.x, p.seed), i: 0, speed: 1, slowK: 1, drum: false };
+    else if (A.g === 'wheel') { C.wh = { t: 0, D: C.fast ? 3.2 : 4.6, rot0: p.rot0, rot1: whTarget(p), peg: -1, drum: false }; C.rot = p.rot0; }
+    else {
+      const base = C.fast ? 0.55 : 0.8, gap = C.fast ? 0.3 : 0.45;
+      C.sl = { t: 0, tease: 0, reels: [0, 1, 2].map((k) => ({ pos: (A.stops && A.stops[k]) || 0, v: 4, phase: 'spin', stopT: base + gap * k, e0: 0, e1: 0, et: 0, flash: 0 })) };
+    }
+    arcInfo();
+  }
+  // A tap mid-play: plinko fast-forwards (a second tap skips), the wheel skips, the reels slam to a stop.
+  function arcHurry() {
+    const C = S.arc;
+    if (C.g === 'plinko' && C.pl && C.pl.speed < 4) { C.pl.speed = 4; return; }
+    if (C.g === 'slots' && C.sl && C.sl.reels.some((r) => r.phase === 'spin' && r.stopT > C.sl.t + 0.05)) { for (const r of C.sl.reels) if (r.phase === 'spin') r.stopT = Math.min(r.stopT, C.sl.t); return; }
+    arcSkip();
+  }
+  // Ends the current play at once (it lands and pays, the celebration
+  // plays); called again during the celebration, ends that.
+  function arcSkip() {
+    const C = S.arc;
+    if (!C) return;
+    if (C.phase === 'play' && C.A.pend) {
+      if (C.g === 'plinko' && C.pl) C.pl.i = C.pl.sim.path.length / 2 - 1;
+      else if (C.g === 'wheel' && C.wh) { C.wh.t = C.wh.D; C.rot = C.wh.rot1; }
+      else if (C.sl) for (const [k, r] of C.sl.reels.entries()) { r.phase = 'done'; r.pos = C.A.pend.stops[k]; }
+      arcSettle();
+      return;
+    }
+    if (C.phase === 'win') arcWinDone();
+  }
+  // The play lands: its prize is paid now and the session saved in the same beat.
+  function arcSettle() {
+    const C = S.arc, A = C && C.A, p = A && A.pend;
+    if (!p) return null;
+    let res;
+    if (A.g === 'plinko') { const slot = C.pl ? C.pl.sim.slot : plkSim(p.x, p.seed).slot; res = plkPays(slot); res.slot = slot; }
+    else if (A.g === 'wheel') { res = wheelPays(A, p); res.wedge = p.i; A.rot = ((whTarget(p) % ARC_TAU) + ARC_TAU) % ARC_TAU; C.rot = A.rot; }
+    else { A.stops = p.stops.slice(); res = slotPays(A, slotEval(A, p.stops), p); }
+    A.pend = null;
+    A.used++;
+    for (const pay of res.pays) arcPay(pay);
+    A.res.push({ label: res.label, tier: res.tier });
+    if (A.res.length > 40) A.res.shift();
+    const am = arcMeta();
+    am.plays++;
+    if (res.tier >= 3) am.jackpots++;
+    saveMeta();
+    save();
+    C.phase = 'win'; C.win = res;
+    C.winT = res.tier >= 3 ? 2.4 : res.tier >= 2 ? 1.5 : 1.0;
+    arcCelebrate(res);
+    arcInfo();
+    return res;
+  }
+  // Where the prize shows on screen (the slot, the pointer, the payline).
+  function arcPrizeAt() {
+    const C = S.arc;
+    if (C.g === 'plinko') { const sl = C.win && C.win.slot != null ? C.win.slot : 4; return { x: plkSlotX(sl), y: PLK.floor - 30 }; }
+    if (C.g === 'wheel') return { x: WH.x, y: WH.y - WH.r + 30 };
+    return { x: 250, y: 470 };
+  }
+  function arcPay(p) {
+    const run = S.run, C = S.arc;
+    if (!run || !p || !C) return;
+    const at = arcPrizeAt();
+    switch (p.k) {
+      case 'gold': {
+        addGold(p.n);
+        const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y), n = Math.min(10, 2 + Math.round(p.n / 6));
+        for (let i = 0; i < n; i++) fx().fly(at.x, at.y, gp.x, gp.y, { kind: 'coin', dur: 0.6, delay: 0.15 + i * 0.06, arc: 90, size: 6, cb: () => snd('coin', { pitch: 1 + i * 0.04 }) });
+        break;
+      }
+      case 'tix': {
+        addTickets(p.n);
+        const tp = hudPoint($('tixTxt'), TIX_HUD.x, TIX_HUD.y), n = Math.min(10, p.n);
+        for (let i = 0; i < n; i++) fx().fly(at.x, at.y, tp.x, tp.y, { kind: 'confetti', col: '#ff9ec7', dur: 0.55, delay: 0.1 + i * 0.07, arc: 70, size: 7, cb: () => snd('ticket', { pitch: 1 + i * 0.05 }) });
+        break;
+      }
+      case 'ink': addInk(p.n); snd('reveal'); break;
+      case 'heal': healRun(p.n); snd('heal'); fx().emit('heal', at.x, at.y); break;
+      case 'cap': { const cap = makeCapsule('bonus', { tier: p.tier }); cap.src = 'arcade'; C.A.caps.push(cap); break; }
+      case 'junk': addItem(p.id || 'rock'); snd('groan'); break;
+      case 'up': arcUpgrade(p.id); break;
+      default: break;
+    }
+  }
+  // Three of one of your items: a copy in the bin turns plus (another plus copy when all of them are).
+  function arcUpgrade(id) {
+    const run = S.run;
+    const inst = (run.bin || []).find((x) => x.id === id && !x.plus);
+    if (inst) inst.plus = true; else addItem(id, true);
+    snd('upgrade');
+  }
+  function arcCelebrate(res) {
+    const C = S.arc, at = arcPrizeAt(), reduced = !!fx().reduced, col = ARC_COL[C.g];
+    const cls = res.tier >= 3 ? 'jp' : res.tier >= 2 ? 'big' : res.tier >= 1 ? 'win' : 'lose';
+    arcMsg(res.label, cls, res.sub || (res.near ? 'One step off the line!' : ''));
+    if (res.tier <= 0) { snd('arcLose'); fx().shake(3); return; }
+    C.party = res.tier >= 3 ? 3 : res.tier >= 2 ? 1.4 : 0.6;
+    C.flash = res.tier === 2 ? 0.8 : res.tier >= 3 ? 0.4 : 0.4;
+    fx().emit('coins', at.x, at.y, { n: res.tier, power: 0.9 + res.tier * 0.1 });
+    fx().ring(at.x, at.y, col, { r0: 20, r1: 120 + res.tier * 60, w: 8, life: 0.5 });
+    if (res.tier === 1) { snd('arcWin'); return; }
+    snd('arcWin', { pitch: 1.2 });
+    fx().emit('confetti', at.x, at.y - 20, { power: 0.8, n: 0.7 });
+    fx().shake(6);
+    if (res.tier < 3) return;
+    // the jackpot: a flash, confetti from both corners, chromatic rings, slow motion
+    snd('arcJackpot');
+    haptic('jackpot');
+    if (!reduced) fx().flash('#ffffff', 0.35);
+    fx().emit('confetti', 30, 150, { power: 1.2, dir: -Math.PI / 4, spread: 1 });
+    fx().emit('confetti', 510, 150, { power: 1.2, dir: -Math.PI * 3 / 4, spread: 1 });
+    fx().ring(at.x, at.y, PAL0.pink, { r0: 10, r1: 420, w: 12, life: 0.8, delay: 0.05 });
+    fx().ring(at.x, at.y, PAL0.cyan, { r0: 10, r1: 460, w: 10, life: 0.85, delay: 0.12 });
+    fx().ring(at.x, at.y, PAL0.gold, { r0: 10, r1: 500, w: 10, life: 0.9, delay: 0.2 });
+    fx().shake(14);
+    slowmo(0.4, 0.5);
+  }
+  function arcWinDone() {
+    const C = S.arc;
+    if (!C) return;
+    C.phase = 'idle'; C.win = null;
+    arcMsg('');
+    if (C.A.caps.length) C.capT = ARC.capDelay;   // a capsule won: its ritual comes next
+    arcInfo();
+  }
+  // A capsule won at the machine: cracked on the capsule screen, which comes back here.
+  function arcOpenCap() {
+    const C = S.arc;
+    if (!C) return false;
+    C.capT = 0;
+    const cap = C.A.caps.shift();
+    if (!cap) return false;
+    const back = { k: 'arcade', q: C.tile.q, r: C.tile.r };
+    S.arc = null;
+    showCapsule({ cap, then: back });
+    return true;
+  }
+  function arcLeave() {
+    const C = S.arc;
+    if (!C) { toMap(); return; }
+    if (C.phase !== 'idle') { arcSkip(); arcSkip(); }   // a play in flight lands (and pays) first
+    const A = C.A;
+    if (A.caps.length) {
+      // anything won and not cracked waits on the map
+      const run = lootRun();
+      for (const c of A.caps) run.caps.push(c);
+      A.caps = [];
+    }
+    if (A.tokens <= 0) C.tile.done = true;
+    else toast(`${A.tokens} ${A.g === 'plinko' ? 'token' : A.g === 'wheel' ? 'spin' : 'free pull'}${A.tokens === 1 ? '' : 's'} left. Come back any time.`);
+    S.arc = null;
+    snd('whoosh', { pitch: 0.9 });
+    toMap();
+  }
+  // Canvas taps on the machine (the DOM frame lets them through): the lever drags, a tap plays.
+  function arcPointer(type, x, y) {
+    const C = S.arc;
+    if (!C) return;
+    if (type === 'down') {
+      if (C.g === 'slots' && C.phase === 'idle' && x > 440 && y > 360 && y < 720) { C.drag = { y0: y, pulled: false }; return; }
+      C.down = { x, y };
+      return;
+    }
+    if (type === 'move') {
+      if (C.drag) {
+        C.lever = U.clamp((y - C.drag.y0) / 120, 0, 1);
+        if (C.lever >= 0.95 && !C.drag.pulled) { C.drag.pulled = true; arcAct(); }
+      }
+      return;
+    }
+    if (C.drag) { const d = C.drag; C.drag = null; if (type === 'up' && !d.pulled && C.lever < 0.2) arcAct(); return; }
+    if (type === 'up' && C.down && y > 150 && y < 830) arcAct(x);
+    C.down = null;
+  }
+  // Per frame (real time): the machine, the map's monsters, the event scene.
+  function arcTick(dt) {
+    arcRoamTick(dt);
+    if (S.screen === 'event' && S.arcEv) arcEvTick(dt);
+    const C = S.arc;
+    if (!C || S.screen !== 'arcade') return;
+    C.t += dt;
+    if (S.t - (S.hudT || 0) > 0.15) { S.hudT = S.t; refreshHud(false); }   // the counters roll as prizes land
+    C.flash = Math.max(0, C.flash - dt * 2);
+    C.party = Math.max(0, C.party - dt);
+    for (const k in C.lit) { C.lit[k] -= dt * 1.6; if (C.lit[k] <= 0) delete C.lit[k]; }
+    if (!C.drag) { C.leverV += (-C.lever * 160 - C.leverV * 11) * dt; C.lever = U.clamp(C.lever + C.leverV * dt, -0.15, 1); }
+    C.flapV += (-C.flap * 420 - C.flapV * 16) * dt; C.flap = U.clamp(C.flap + C.flapV * dt, -1.2, 1.2);
+    if (C.phase === 'play') {
+      if (C.g === 'plinko' && C.pl) plkTick(dt);
+      else if (C.g === 'wheel' && C.wh) whTick(dt);
+      else if (C.sl) slTick(dt);
+    } else if (C.phase === 'win') {
+      C.winT -= dt;
+      // a slot win keeps the coin waterfall pouring from the tray
+      if (C.g === 'slots' && C.win && C.win.tier >= 1 && !S.headless && Math.floor(C.t * 12) !== Math.floor((C.t - dt) * 12)) fx().emit('coins', 250 + Math.sin(C.t * 9) * 60, 700, { n: 0.25 * C.win.tier, power: 0.6, dir: -Math.PI / 2 });
+      if (C.winT <= 0) arcWinDone();
+    } else if (C.capT > 0) { C.capT -= dt; if (C.capT <= 0) arcOpenCap(); }
+  }
+  // The machine over the dimmed map (under the particles).
+  const ARCV = { t: 0, col: '', title: '', party: 0, flash: 0, g: '', lit: null, pegs: null, slots: null, edges: null, ball: null, aim: -1, win: -1, tokens: 0, x0: 0, x1: 0, top: 0, divTop: 0, floor: 0, ballR: 0, pegR: 0,
+    rot: 0, flap: 0, wedges: null, cx: 0, cy: 0, r: 0, mult: 1, spinning: false, reels: null, strips: null, items: null, lever: 0, tease: 0, near: false, winTier: 0, cost: 0, free: 0, tix: 0 };
+  const ARC_BALL = { x: 0, y: 0 };
+  function arcDrawMachine(ctx, t) {
+    const C = S.arc, R = X.RENDER;
+    ctx.fillStyle = 'rgba(10,5,20,0.93)';
+    ctx.fillRect(-40, -40, W + 80, H + 80);
+    if (!C || !R) return;
+    const V = ARCV, A = C.A;
+    V.t = t; V.g = C.g; V.col = ARC_COL[C.g]; V.title = ARC_NAME[C.g]; V.party = C.party; V.flash = C.flash;
+    V.win = -1; V.winTier = C.win ? C.win.tier : 0; V.tokens = A.tokens;
+    if (R.arcCabinet) R.arcCabinet(ctx, 20, 96, 500, 740, V);
+    if (C.g === 'plinko' && R.arcPlinko) {
+      V.lit = C.lit; V.pegs = plkPegs(); V.slots = PLK_SLOTS; V.edges = plkEdges(); V.x0 = PLK.x0; V.x1 = PLK.x1; V.top = PLK.top; V.divTop = PLK.divTop; V.floor = PLK.floor; V.ballR = PLK.ballR; V.pegR = PLK.pegR;
+      V.ball = null; V.aim = -1;
+      if (C.phase === 'play' && C.pl) {
+        const P = C.pl, n = P.sim.path.length / 2, i = Math.min(n - 1, Math.floor(P.i)), j = Math.min(n - 1, i + 1), f = P.i - Math.floor(P.i);
+        ARC_BALL.x = P.sim.path[i * 2] + (P.sim.path[j * 2] - P.sim.path[i * 2]) * f;
+        ARC_BALL.y = P.sim.path[i * 2 + 1] + (P.sim.path[j * 2 + 1] - P.sim.path[i * 2 + 1]) * f;
+        V.ball = ARC_BALL;
+      } else if (C.phase === 'win' && C.win) { V.win = C.win.slot; }
+      else if (A.tokens > 0) V.aim = plkAim();
+      R.arcPlinko(ctx, V);
+    } else if (C.g === 'wheel' && R.arcWheel) {
+      V.rot = C.rot; V.flap = C.flap; V.wedges = WHEEL; V.cx = WH.x; V.cy = WH.y; V.r = WH.r; V.mult = A.mult; V.spinning = C.phase === 'play';
+      if (C.phase === 'win' && C.win) V.win = C.win.wedge;
+      R.arcWheel(ctx, V);
+    } else if (C.g === 'slots' && R.arcSlots) {
+      const reels = V.reels || (V.reels = [{ pos: 0, flash: 0, blur: 0 }, { pos: 0, flash: 0, blur: 0 }, { pos: 0, flash: 0, blur: 0 }]);
+      for (let k = 0; k < 3; k++) {
+        const r = C.phase === 'play' && C.sl ? C.sl.reels[k] : null;
+        reels[k].pos = r ? r.pos : ((A.stops && A.stops[k]) || 0);
+        reels[k].flash = r ? r.flash : 0;
+        reels[k].blur = r && r.phase === 'spin' ? U.clamp(r.v / 24, 0, 1) : 0;
+      }
+      V.strips = A.strips; V.items = A.items; V.lever = C.lever; V.tease = C.sl && C.phase === 'play' ? C.sl.tease : 0;
+      V.near = !!(C.win && C.win.near); V.cost = ARC.slotCost; V.free = A.tokens; V.tix = (S.run && S.run.tickets) || 0;
+      R.arcSlots(ctx, V);
+    }
+  }
+
+  // ---- roaming monsters (MAP.roamStep does the moves; this is the feel)
+  /* After each step of a walk: stepping onto a monster starts its fight; else
+     the sleepers that see you wake ("!"), the awake take a step toward you
+     (a hop), and one that reaches you jumps you: AMBUSH!. The fight is a
+     normal one, with a Monster bounty capsule on top. True when a fight
+     started (the walk stops). */
+  function arcRoamAfterStep(t) {
+    const run = S.run, M = run && run.map;
+    if (!M || !X.MAP || !X.MAP.roamStep || !M.roam || !M.roam.length) return false;
+    const here = X.MAP.roamAt(M, M.pos.q, M.pos.r);
+    if (here) { arcRoamFight(here, false); return true; }
+    const busy = !t || (t.type !== 'empty' && t.type !== 'start' && !t.done) || t.terrain !== 'land';
+    const out = X.MAP.roamStep(M, { hold: busy });
+    for (const mv of out.moved) arcRoamAnim(mv.m, mv.from);
+    if (out.moved.length) snd('roamStep');
+    if (out.woke.length) {
+      const m = out.woke[0], def = arcRoamDef(m);
+      S.arcWoke = S.arcWoke || {};
+      for (const w of out.woke) S.arcWoke[w.id] = 1.4;
+      snd('roamWake');
+      if (mapLayout()) { const p = hexToStage(m.q, m.r); fx().text(p.x, p.y - 58, 'SPOTTED!', '#ff5a4a', { size: 18, life: 1.3 }); }
+      toast(`${def.name || 'A monster'} spotted you! It is coming.`);
+    }
+    if (out.ambush) {
+      arcRoamAnim(out.ambush, [out.ambush.q, out.ambush.r], [M.pos.q, M.pos.r]);
+      arcRoamFight(out.ambush, true);
+      return true;
+    }
+    return false;
+  }
+  function arcRoamDef(m) {
+    const id = m && m.enc && m.enc[0];
+    return id && tbl('ENEMIES')[id] ? enemyDef(id) : { id: 'rat', name: 'A monster', art: 'rat', tier: 'normal', size: 1 };
+  }
+  function arcRoamAnim(m, from, to) {
+    S.arcRA = S.arcRA || {};
+    S.arcRA[m.id] = { fq: from[0], fr: from[1], tq: to ? to[0] : m.q, tr: to ? to[1] : m.r, t: 0 };
+  }
+  function arcRoamFight(m, ambush) {
+    const run = S.run, M = run.map;
+    X.MAP.roamRemove(M, m.id);
+    const enc = m.enc && m.enc.length ? m.enc.slice() : encounterFor('normal');
+    if (mapLayout()) { const p = hexToStage(M.pos.q, M.pos.r); fx().emit('poof', p.x, p.y); fx().ring(p.x, p.y, '#ff5a4a', { r0: 10, r1: 90, w: 6, life: 0.4 }); }
+    snd(ambush ? 'ambush' : 'roamWake');
+    stopWalk();
+    // jumped on a tile that still holds something: it resolves once the monster is beaten
+    const tile = X.MAP.tileAt(M, M.pos.q, M.pos.r);
+    const enter = tile && tile.type !== 'empty' && tile.type !== 'start' && !tile.done ? { q: tile.q, r: tile.r } : null;
+    startFight(enc, 'normal', { then: { roam: m.id, ambush: !!ambush, enter } });
+    if (ambush) banner('AMBUSH!', 'enemy', 1.3, 'fight');   // replaces the FIGHT banner in place (ANNOUNCER)
+    else toast('You jumped a prowling monster!');
+    return true;
+  }
+  // endFight hook: a beaten roaming monster drops a bounty capsule on top of the reward.
+  function arcRoamBounty(rw, then) {
+    if (!rw || !then || !then.roam) return;
+    if (!Array.isArray(rw.caps)) rw.caps = [];
+    const cap = makeCapsule('bonus');
+    cap.src = 'roam';
+    rw.caps.push(cap);
+    S.arcEnter = then.enter || null;
+  }
+  // Back on the map after a monster fought on a tile with content: that tile resolves now.
+  function arcAfterMap() {
+    const e = S.arcEnter, M = S.run && S.run.map;
+    S.arcEnter = null;
+    if (!e || !M || M.pos.q !== e.q || M.pos.r !== e.r || S.screen !== 'map') return;
+    const t = X.MAP.tileAt(M, e.q, e.r);
+    if (t && !t.done) enterTile(t);
+  }
+  function arcRoamTick(dt) {
+    const RA = S.arcRA;
+    if (RA) for (const id in RA) { RA[id].t += dt; if (RA[id].t >= 0.32) delete RA[id]; }
+    const WK = S.arcWoke;
+    if (WK) for (const id in WK) { WK[id] -= dt; if (WK[id] <= 0) delete WK[id]; }
+  }
+  const ROAMV = { def: null, awake: false, t: 0, arrow: null, hop: 0, seed: 0, woke: 0, alpha: 1 };
+  const ROAM_ARROW = { x: 0, y: 0, a: 0 };
+  // Drawn in drawMap over the pickups: the monster, zZ or its next-step arrow.
+  function arcDrawRoam(ctx, t, size, z, ox, oy) {
+    const M = S.run && S.run.map, R = X.RENDER;
+    if (!M || !M.roam || !M.roam.length || !R || !R.arcRoamer || !X.MAP.roamPlan) return;
+    let key = M.pos.q + ',' + M.pos.r + ':' + M.revealedCount;
+    for (const m of M.roam) key += '|' + m.q + ',' + m.r + (m.awake ? 'a' : '');
+    if (S.arcPlanKey !== key) { S.arcPlanKey = key; S.arcPlan = X.MAP.roamPlan(M); }
+    const plan = S.arcPlan || [];
+    for (const m of M.roam) {
+      const tile = X.MAP.tileAt(M, m.q, m.r);
+      if (!tile || !tile.revealed) continue;
+      const w = worldOf(m.q, m.r);
+      let x = w.x * z + ox, y = w.y * z + oy, hop = 0;
+      const an = S.arcRA && S.arcRA[m.id];
+      if (an) {
+        const k = U.clamp(an.t / 0.32, 0, 1), e = k * k * (3 - 2 * k);
+        const a = worldOf(an.fq, an.fr), b = worldOf(an.tq, an.tr);
+        x = (a.x + (b.x - a.x) * e) * z + ox; y = (a.y + (b.y - a.y) * e) * z + oy;
+        hop = Math.sin(k * Math.PI);
+      }
+      if (x < -size * 2 || x > W + size * 2 || y < MAP_AREA.y - size * 2 || y > H + size * 2) continue;
+      ROAMV.def = arcRoamDef(m); ROAMV.awake = !!m.awake; ROAMV.t = t; ROAMV.hop = hop; ROAMV.seed = U.hashStr(m.id) % 97; ROAMV.woke = (S.arcWoke && S.arcWoke[m.id]) || 0;
+      ROAMV.arrow = null;
+      const pe = m.awake && !an ? plan.find((p) => p.m === m || p.m.id === m.id) : null;
+      if (pe && pe.next) {
+        const nw = worldOf(pe.next[0], pe.next[1]);
+        ROAM_ARROW.x = nw.x * z + ox; ROAM_ARROW.y = nw.y * z + oy;
+        ROAM_ARROW.a = Math.atan2(ROAM_ARROW.y - y, ROAM_ARROW.x - x);
+        ROAMV.arrow = ROAM_ARROW;
+      }
+      R.arcRoamer(ctx, x, y, size, ROAMV);
+    }
+  }
+
+  // ---- event scenes: a vignette, choices with outcome chips, a dice roll, the reveal
+  const EV_RANDOM = (f) => !!f && ((f.k === 'item' && (!f.id || f.id === 'random' || f.id === 'rare')) || (f.k === 'relic' && (!f.id || f.id === 'random')) || (f.k === 'brush' && !f.id));
+  const arcEvJuice = () => !S.headless || !!S.arcForce;
+  // Outcome hints for a choice: [{t, c: 'good' | 'bad' | 'rnd' | 'fight' | 'neutral'}].
+  function arcFxChips(list) {
+    const out = [];
+    const sg = (v) => (v > 0 ? '+' : '') + v;
+    for (const f of list || []) {
+      if (!f) continue;
+      switch (f.k) {
+        case 'hp': out.push({ t: `${sg(f.v)} HP`, c: f.v > 0 ? 'good' : 'bad' }); break;
+        case 'maxhp': out.push({ t: `${sg(f.v)} MAX HP`, c: f.v > 0 ? 'good' : 'bad' }); break;
+        case 'gold': out.push({ t: `${sg(f.v)} GOLD`, c: f.v > 0 ? 'good' : 'bad' }); break;
+        case 'ink': out.push({ t: `${sg(f.v)} ${(Math.abs(f.v) === 1 ? TERM('ink') : TERM('inkPlural')).toUpperCase()}`, c: f.v > 0 ? 'good' : 'bad' }); break;
+        case 'brush': out.push(f.id ? { t: toolDef(f.id).name.toUpperCase(), c: 'good' } : { t: 'RANDOM TOOL', c: 'rnd' }); break;
+        case 'item': out.push(EV_RANDOM(f) ? { t: f.id === 'rare' ? 'RARE ITEM ?' : 'RANDOM ITEM ?', c: 'rnd' } : { t: itemDef(f.id).name.toUpperCase(), c: 'good' }); break;
+        case 'relic': out.push(EV_RANDOM(f) ? { t: 'RANDOM RELIC ?', c: 'rnd' } : { t: relicDef(f.id).name.toUpperCase(), c: 'good' }); break;
+        case 'junk': out.push({ t: `+${f.n || 1} JUNK`, c: 'bad' }); break;
+        case 'remove': out.push({ t: 'REMOVE AN ITEM', c: 'neutral' }); break;
+        case 'upgrade': out.push({ t: 'UPGRADE', c: 'good' }); break;
+        case 'fight': out.push({ t: f.elite ? 'ELITE FIGHT' : 'FIGHT', c: 'fight' }); break;
+        default: break;
+      }
+    }
+    if (!out.length) out.push({ t: 'NOTHING', c: 'neutral' });
+    return out;
+  }
+  // The run's stats and bin before a choice (the reveal shows the difference).
+  function arcSnap() {
+    const run = S.run, bin = {};
+    for (const i of run.bin || []) bin[i.uid] = { id: i.id, plus: !!i.plus };
+    return { hp: run.hp, maxHp: run.maxHp, gold: run.gold, ink: run.ink, tix: run.tickets || 0, nb: (run.brushes || []).length, relics: (run.relics || []).slice(), bin };
+  }
+  function arcEvOutcome(ed, idx, snap) {
+    const run = S.run;
+    if (!run) return;
+    const def = tbl('EVENTS')[ed.id], ch = def && def.choices && def.choices[idx];
+    const lines = [];
+    const num = (d, word, ic) => { if (d) lines.push({ t: `${d > 0 ? '+' : ''}${d} ${word}`, c: d > 0 ? 'good' : 'bad', ic }); };
+    num(run.hp - snap.hp, 'HP', '♥');
+    num(run.maxHp - snap.maxHp, 'MAX HP', '♥');
+    num(run.gold - snap.gold, 'GOLD', '●');
+    num(run.ink - snap.ink, (Math.abs(run.ink - snap.ink) === 1 ? TERM('ink') : TERM('inkPlural')).toUpperCase(), '☀');
+    num((run.tickets || 0) - snap.tix, 'TICKETS', '★');
+    for (const id of (run.brushes || []).slice(snap.nb)) lines.push({ t: toolDef(id).name, c: 'good', ic: toolDef(id).icon || '*' });
+    for (const id of run.relics || []) if (snap.relics.indexOf(id) < 0) lines.push({ t: relicDef(id).name, c: 'good', relic: id });
+    const now = {};
+    for (const i of run.bin || []) {
+      now[i.uid] = 1;
+      const was = snap.bin[i.uid], d = itemDef(i.id);
+      if (!was) lines.push({ t: itemName(d, i.plus), c: d.rarity === 'junk' ? 'bad' : 'good', item: i.id, plus: !!i.plus });
+      else if (i.plus && !was.plus) lines.push({ t: `Upgraded: ${itemName(d, true)}`, c: 'good', item: i.id, plus: true });
+    }
+    for (const uid in snap.bin) if (!now[uid]) lines.push({ t: `Removed: ${itemDef(snap.bin[uid].id).name}`, c: 'neutral', item: snap.bin[uid].id });
+    if (!lines.length) lines.push({ t: 'Nothing happens.', c: 'neutral' });
+    ed.out = { i: idx, pick: ch ? ch.txt : '', rnd: !!(ch && (ch.fx || []).some(EV_RANDOM)), lines, fresh: true };
+    // the reveal says it all: the choice's own toasts step aside
+    const te = $('toast');
+    if (te && te.classList) te.classList.remove('show');
+    S.toastT = 0;
+    showEvent(ed);
+  }
+  // The outcome view (the choices are gone): what you picked, then the lines stamp in.
+  function arcEvOutDom(b, ed) {
+    const out = ed.out;
+    const box = h('div', 'evOut');
+    box.appendChild(h('div', 'evPick', out.pick ? `“${out.pick}”` : ''));
+    const els = [];
+    for (const ln of out.lines) {
+      const row = h('div', 'evLine ' + (ln.c || 'neutral'));
+      if (ln.item && tbl('ITEMS')[ln.item]) row.appendChild(itemCanvas(itemDef(ln.item), !!ln.plus, 44));
+      else if (ln.relic) row.appendChild(relicCanvas(relicDef(ln.relic), 44));
+      else row.appendChild(h('span', 'ic', ln.ic || '•'));
+      row.appendChild(h('span', 'tx', ln.t));
+      box.appendChild(row);
+      els.push(row);
+    }
+    b.appendChild(box);
+    const go = btn('Continue', () => { S.sd = null; S.arcEv = null; toMap(); }, 'pri');
+    b.appendChild(go);
+    const E = S.arcEv;
+    if (E) {
+      E.lines = els; E.out = out; E.shown = 0;
+      E.roll = out.fresh && out.rnd ? (fx().reduced ? 0.5 : 1.05) : 0;
+      E.rt = 0; E.landed = !E.roll;
+      E.face = 1 + (U.hashStr(ed.id + ':' + out.i) % 6);
+      if (!out.fresh || !arcEvJuice()) { for (const el of els) if (el.classList) el.classList.add('in'); E.shown = els.length; }
+      else if (E.roll) snd('diceRoll');
+    }
+    out.fresh = false;
+  }
+  // The scene canvas for an event (the vignette), sized for the event card.
+  function arcSceneEl(ed, def) {
+    const c = document.createElement('canvas');
+    c.width = 1016; c.height = 380;
+    c.className = 'evScene';
+    let ctx = null;
+    try { ctx = c.getContext('2d'); } catch (e) { ctx = null; }
+    S.arcEv = { cv: c, ctx, id: ed.id, def, t: 0, roll: 0, rt: 0, landed: true, face: 1, lines: null, shown: 0, out: null, lineT: 0 };
+    return c;
+  }
+  function arcEvTick(dt) {
+    const E = S.arcEv;
+    E.t += dt;
+    if (E.roll && !E.landed) {
+      E.rt += dt;
+      if (E.rt >= E.roll) {
+        E.landed = true;
+        snd('diceLand'); fx().shake(5);
+        const p = E.cv ? hudPoint(E.cv, 270, 200) : { x: 270, y: 200 };
+        fx().emit('sparks', p.x, p.y, { col: PAL0.gold, n: 1.4 });
+        fx().ring(p.x, p.y, PAL0.gold, { r0: 10, r1: 110, w: 6, life: 0.45 });
+      }
+      return;
+    }
+    if (E.lines && E.shown < E.lines.length) {
+      E.lineT -= dt;
+      if (E.lineT <= 0) {
+        const el = E.lines[E.shown], ln = E.out && E.out.lines[E.shown];
+        if (el && el.classList) el.classList.add('in');
+        E.shown++; E.lineT = 0.26;
+        const good = ln && ln.c === 'good', bad = ln && ln.c === 'bad';
+        snd(good ? (ln.item || ln.relic ? 'relic' : 'coin') : bad ? 'stamp' : 'tick', { pitch: 1 + E.shown * 0.06 });
+        if (el) {
+          const p = hudPoint(el, 270, 560);
+          fx().emit(good ? 'sparks' : bad ? 'dust' : 'glint', p.x - 150, p.y, { col: good ? PAL0.lime : bad ? PAL0.blood : '#ffffff', n: 0.8 });
+          if (good && (ln.item || ln.relic)) fx().emit('confetti', p.x, p.y, { n: 0.4, power: 0.7 });
+        }
+      }
+    }
+  }
+  const SCENEV = { id: '', def: null, t: 0, act: 1, roll: -1, face: 1, landed: true, enemy: null, item: null };
+  function arcDrawScene(t) {
+    const E = S.arcEv, R = X.RENDER;
+    if (!E || !E.ctx || !R || !R.arcScene) return;
+    const ctx = E.ctx, V = SCENEV;
+    V.id = E.id; V.def = E.def; V.t = E.t; V.act = (S.run && S.run.act) || 1;
+    V.roll = E.roll && !E.landed ? U.clamp(E.rt / E.roll, 0, 1) : (E.roll ? 1 : -1);
+    V.face = E.face; V.landed = E.landed;
+    const art = E.def && E.def.art;
+    V.enemy = art && tbl('ENEMIES')[art] ? tbl('ENEMIES')[art] : null;
+    V.item = null;
+    if (art && !V.enemy) { const id = Object.keys(tbl('ITEMS')).find((k) => itemDef(k).art === art); V.item = id ? itemDef(id) : { id: art, art, shape: { kind: 'circle', r: 22 }, color: '#ffc94d' }; }
+    try {
+      ctx.setTransform(2, 0, 0, 2, 0, 0);
+      ctx.clearRect(0, 0, 508, 190);
+      R.arcScene(ctx, 508, 190, V);
+    } catch (e) { /* the scene is optional */ }
+  }
+  function arcDraw(ctx, t) {
+    if (S.screen === 'arcade' && S.arc) arcDrawMachine(ctx, t);
+    else if (S.screen === 'event' && S.arcEv) arcDrawScene(t);
+  }
+  function arcKey() { if (S.screen === 'arcade') arcAct(); }
+  // ================================================================ /ARCADE
+
   // ---------------------------------------------------------------- shop
   function rollShop(tile) {
     const run = S.run;
@@ -6005,27 +7243,45 @@ const GAME = (() => {
     const b = $('eventBody');
     clear(b);
     const run = S.run;
-    b.appendChild(h('h1', null, def.title || 'Event'));
+    // ARCADE event scene: a marquee title, a canvas vignette (RENDER.arcScene)
+    // or the illustration from art/, the text on a card, big choices with
+    // outcome chips; after a choice, a dice roll when it was random and the
+    // outcome stamping in (arcEvOutcome). Headless it resolves straight to
+    // the map as before.
+    S.arcEv = null;
+    b.appendChild(h('h1', 'evTitle', def.title || 'Event'));
     const evPic = typeof ART !== 'undefined' && ART && ART.get ? ART.get('event', ed.id) : null;
     if (evPic) {
-      // an illustration dropped at art/events/<id>.png replaces the creature
+      // an illustration dropped at art/events/<id>.png replaces the vignette
       const pic = document.createElement('img');
       pic.src = evPic.src; pic.alt = ''; pic.className = 'eventArt eventPic';
       b.appendChild(pic);
-    } else if (X.RENDER && X.RENDER.enemy && def.art && tbl('ENEMIES')[def.art]) {
-      const art = canvasEl(110, (ctx, p) => X.RENDER.enemy(ctx, tbl('ENEMIES')[def.art], p / 2, p * 0.75, 0.8, S.t, {}));
-      art.className = 'eventArt';
-      b.appendChild(art);
-    }
-    b.appendChild(h('div', 'sub', def.text || ''));
+      arcSceneEl(ed, def);   // the dice timeline still runs (drawn nowhere)
+      S.arcEv.ctx = null;
+    } else b.appendChild(arcSceneEl(ed, def));
+    b.appendChild(h('div', 'sub evText', def.text || ''));
+    if (ed.out) { arcEvOutDom(b, ed); save(); return; }
     const list = h('div', 'list');
-    (def.choices || []).forEach((ch) => {
+    (def.choices || []).forEach((ch, idx) => {
       let ok = true;
       if (typeof ch.cond === 'function') { try { ok = !!ch.cond(run); } catch (e) { ok = false; } }
-      const bt = btn('', () => { if (!ok) { toast('Not possible right now.'); return; } S.sd = null; resolveFx(ch.fx || [], 0, () => toMap()); }, 'choice' + (ok ? '' : ' off'));
+      const pick = () => {
+        if (!ok) { toast('Not possible right now.'); return; }
+        const list = ch.fx || [];
+        S.sd = null;
+        if (!arcEvJuice() || list.some((f) => f && f.k === 'fight')) { resolveFx(list, 0, () => toMap()); return; }
+        const snap = arcSnap();
+        snd('click');
+        resolveFx(list, 0, () => arcEvOutcome(ed, idx, snap));
+      };
+      const bt = btn('', pick, 'choice' + (ok ? '' : ' off'));
       bt.textContent = '';
       bt.appendChild(h('div', 'c1', ch.txt));
       if (ch.sub) bt.appendChild(h('div', 'c2', ch.sub));
+      const chips = h('div', 'evChips');
+      for (const c of arcFxChips(ch.fx)) chips.appendChild(h('span', 'evChip ' + c.c, c.t));
+      if ((ch.fx || []).some(EV_RANDOM)) chips.appendChild(h('span', 'evChip dice', '⚄ ROLL'));
+      bt.appendChild(chips);
       list.appendChild(bt);
     });
     if (!(def.choices || []).length) list.appendChild(btn('Leave', () => toMap(), 'pri'));
@@ -6260,6 +7516,9 @@ const GAME = (() => {
         const el = $('pstatus');
         clear(el);
         S.pipEls = {};
+        let npip = 0;
+        for (const id in st) if (st[id]) npip++;
+        if (el && el.classList) el.classList[npip >= 6 ? 'add' : 'remove']('many');
         for (const id in st) {
           const sd = tbl('STATUS')[id] || { name: id, icon: '', kind: 'buff', text: '' };
           const p = h('button', 'pip ' + (sd.kind || ''), `${sd.icon || ''}${st[id]}`);
@@ -6290,10 +7549,12 @@ const GAME = (() => {
     if (type === 'down' && S.popover) { popover(null); }
     if (S.screen === 'intro') { if (type === 'down' && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'map') { mapPointer(type, x, y, ev); return; }
+    if (S.screen === 'arcade') { arcPointer(type, x, y); return; }   // ARCADE
     if (S.screen === 'title') return;
     if (S.screen !== 'fight' || !F || !FS) return;
     if (FS.outro) { if (type === 'down') finishOutro(); return; }
     if (FS.vs) { if (type === 'down') vsSkip(); return; }
+    if (type === 'down') annTap();   // a tap cuts the live banner short (ANNOUNCER)
     // One finger steers. A second finger is ignored until the first lifts.
     const pid = ev && ev.pointerId != null ? ev.pointerId : null;
     if (type === 'down') {
@@ -6342,7 +7603,10 @@ const GAME = (() => {
     const e = F.enemies[best];
     const txt = X.COMBAT.intentText ? X.COMBAT.intentText(e) : '';
     const p = enemyPos(best);
-    popover(`<b>${e.def.name}</b> ${e.hp}/${e.maxHp}${e.block ? ' +' + e.block + ' block' : ''}<br>${txt}${e.def.desc ? '<br><i>' + e.def.desc + '</i>' : ''}`, p.x, p.y + 26);
+    // every status in words (the chips under it may be cut to one row with a "+N")
+    const SD = tbl('STATUS'), sts = [];
+    for (const id in e.status) if (e.status[id] > 0) sts.push(`${(SD[id] && SD[id].icon) || ''}${(SD[id] && SD[id].name) || id} ${e.status[id]}`);
+    popover(`<b>${e.def.name}</b> ${e.hp}/${e.maxHp}${e.block ? ' +' + e.block + ' block' : ''}<br>${txt}${sts.length ? '<br>' + sts.join(', ') : ''}${e.def.desc ? '<br><i>' + e.def.desc + '</i>' : ''}`, p.x, p.y + 26);
     snd('click');
     FS.dirty = true;
     return true;
@@ -6358,6 +7622,7 @@ const GAME = (() => {
     if (down && k === 'Escape') { popover(null); return; }
     if (S.screen === 'intro') { if (down && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'capsule') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); capsuleTap(); } return; }
+    if (S.screen === 'arcade') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); arcKey(); } return; }   // ARCADE
     if (S.screen === 'reward' && S.pay && !S.pay.done) { if (down && (k === ' ' || k === 'Enter')) finishPay(); return; }
     if (S.screen !== 'fight' || !FS) return;
     if (FS.vs) { if (down && !ev.repeat) vsSkip(); return; }
@@ -6392,6 +7657,7 @@ const GAME = (() => {
     } else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
     drawBossUnder(ctx, t);   // the death finale's whiteout and title card (boss arena)
     drawLoot(ctx, t);   // the ticket stream / the capsule scene, under the particles
+    arcDraw(ctx, t);    // ARCADE: the mini-game machine, the event vignette
     fx().draw(ctx);
     drawBossTop(ctx, t);     // the versus card, over everything
     ctx.restore();
@@ -6434,6 +7700,21 @@ const GAME = (() => {
     S.mapPaint = { M, biome, items, road, hidden: [], pool: [], st: {}, cur: { x: 0, y: 0 }, rims: [] };
     return S.mapPaint;
   }
+  /* The map's per-frame lookups (the reachable ring, the "n of m hexes lit"
+     line) only change when the player moves, spends a bulb or lights a hex:
+     cached on that key instead of rebuilt every frame (Polish and QA). */
+  const MAPC = { M: null, key: '', reach: new Set(), prog: '', road: [] };
+  function mapCache(M) {
+    // (and twice a second anyway, for anything else that moves the ring)
+    const key = M.pos.q + ',' + M.pos.r + ',' + M.ink + ',' + M.revealedCount + ',' + Math.floor(S.t * 2);
+    if (MAPC.M === M && MAPC.key === key) return MAPC;
+    MAPC.M = M; MAPC.key = key;
+    MAPC.reach.clear();
+    if (X.MAP.reachable) for (const x of X.MAP.reachable(M)) MAPC.reach.add(X.MAP.key(x.q, x.r));
+    const pr = X.MAP.progress ? X.MAP.progress(M) : null;
+    MAPC.prog = pr ? `${pr.revealed} of ${pr.total} hexes lit` : '';
+    return MAPC;
+  }
   function drawMap(ctx, t) {
     const R = X.RENDER, run = S.run, M = run && run.map;
     if (R && R.mapBg) R.mapBg(ctx, W, H, run ? run.act : 1, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
@@ -6443,7 +7724,7 @@ const GAME = (() => {
     const A = L.area, z = c.zoom, size = L.size * z;
     const ox = A.x + A.w / 2 - c.x * z, oy = A.y + A.h / 2 - c.y * z;
     const x0 = A.x - size, x1 = A.x + A.w + size, y0 = A.y - size, y1 = A.y + A.h + size;
-    const reach = new Set(X.MAP.reachable ? X.MAP.reachable(M).map((x) => X.MAP.key(x.q, x.r)) : []);
+    const MC = mapCache(M), reach = MC.reach;
     // Where the armed tool could go: a flare's six lines, a lantern's lit
     // hexes, a kite's dark hexes in range.
     const brushable = new Set();
@@ -6507,7 +7788,13 @@ const GAME = (() => {
     // Pass 3: the warm glow where the light meets the dark, over the darkness.
     if (R && R.lightRim) for (const p of rims) R.lightRim(ctx, p.x, p.y, size, p.mask, flat, t);
     // The road: a worn track between its hexes, over the ground and the pickups.
-    if (P.road.length > 1 && R && R.mapRoad) R.mapRoad(ctx, P.road.map((w) => ({ x: w.x * z + ox, y: w.y * z + oy })), size, t);
+    if (P.road.length > 1 && R && R.mapRoad) {
+      // pooled points: the road is redrawn every frame
+      const rp = MC.road;
+      rp.length = P.road.length;
+      for (let i = 0; i < P.road.length; i++) { const w = P.road[i], p = rp[i] || (rp[i] = { x: 0, y: 0 }); p.x = w.x * z + ox; p.y = w.y * z + oy; }
+      R.mapRoad(ctx, rp, size, t);
+    }
     // The start-boss axis shows through the dark so the direction is obvious.
     if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
     // The crawler and the portrait: on the current hex, or easing between
@@ -6515,6 +7802,7 @@ const GAME = (() => {
     drawBossPulse(ctx, t, size);
     drawBeam(ctx, t, size);
     drawAmbient(ctx);
+    arcDrawRoam(ctx, t, size, z, ox, oy);   // ARCADE: roaming monsters and their next step
     const meXY = wxy || curXY;
     if (meXY && R && R.crawler) R.crawler(ctx, meXY.x, meXY.y, size, t);
     if (meXY && R && R.portrait) R.portrait(ctx, run.char, meXY.x, meXY.y, size * 1.2, t);
@@ -6538,13 +7826,13 @@ const GAME = (() => {
     if (ba && R && R.mapArrow) R.mapArrow(ctx, ba.x, ba.y, ba.a, 16, t, 'Boss');
     if (R && R.mapCompass) R.mapCompass(ctx, A.x + A.w - 42, A.y + A.h - 42, 28, t);
     if (R && R.mapHeader) {
-      const pr = X.MAP.progress ? X.MAP.progress(M) : null;
-      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, actDef(run.act).name, pr ? `${pr.revealed} of ${pr.total} hexes lit` : '', t);
+      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, actDef(run.act).name, MC.prog, t);
     }
   }
   // Reused per-frame objects for the fight draw (no allocation per enemy).
   const EST = { hurt: 0, attack: 0, dead: 0, frozen: false, poisoned: false, burning: false, chilled: false, windup: 0, enraged: false, rage: 0, chomp: 0, spit: 0 };
   const HPO = { ghost: 0, flash: 0, shield: 0 };
+  const PIPO = { maxW: 300, center: true, rows: 1 };
   const CLAWJ = { bend: 0, squash: 0, speed: 0, glow: 0, t: 0, idle: 0, mood: '', blink: 0, look: 0, chase: 0, lucky: 0, pull: [], pullN: 0 };
   for (let i = 0; i < 8; i++) CLAWJ.pull.push({ x: 0, y: 0 });
   // Reused per-item material look (RENDER.itemFx).
@@ -6553,7 +7841,12 @@ const GAME = (() => {
   const RARE_A = { u: 0.22, r: 0.4, l: 0.5 };
   function drawFight(ctx, t) {
     const R = X.RENDER, run = S.run;
+    // the backdrop only shows above the cabinet (its frame covers the stage's
+    // full width from y 380, the control bar the rest): clip it there
+    // instead of filling the whole stage twice (Polish and QA perf)
+    ctx.save(); ctx.beginPath(); ctx.rect(-30, -30, W + 60, CAB.y - CAB.frame + 30 + 24); ctx.clip();
     if (R && R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
+    ctx.restore();
     drawAmbient(ctx);
     // Enemies.
     F.enemies.forEach((e, i) => {
@@ -6593,7 +7886,12 @@ const GAME = (() => {
       HPO.ghost = g ? g.v : 0; HPO.flash = a.barFlash || 0; HPO.shield = sh.block > 0 ? t * 0.6 : 0;
       const bs = a.barShake > 0 ? Math.sin(t * 90) * a.barShake * 3 : 0;
       if (R && R.hpBar) R.hpBar(ctx, p.x - bw / 2 + bs, p.y + 10, bw, 12, sh.hp, e.maxHp, sh.block, HPO);
-      if (R && R.statusPips) R.statusPips(ctx, p.x - bw / 2, p.y + 26, e.status, 14, FS.pipPop[i]);
+      // centred and cut to one row that stops short of the next enemy's chips
+      // ("+N" for the rest; a tap on the enemy lists them all) (Polish and QA)
+      let near = 99;   // index distance to the nearest living neighbour (enemyPos slots are even)
+      for (let j = 0; j < F.enemies.length; j++) if (j !== i && F.enemies[j].alive) near = Math.min(near, Math.abs(j - i));
+      PIPO.maxW = Math.min(300, near * (ARENA.x1 - ARENA.x0) / Math.max(1, F.enemies.length) - 12);
+      if (R && R.statusPips) R.statusPips(ctx, p.x, p.y + 26, e.status, 14, FS.pipPop[i], PIPO);
       if (R && R.intent) R.intent(ctx, p.x, intentY(p), e, t);
       bossBadge(ctx, e, i, ex, p, t);
       ctx.restore();
@@ -6685,6 +7983,7 @@ const GAME = (() => {
     ctx.restore();
     if (split) R.cabinetFront(ctx, CAB.x, CAB.y, cfg, cabSt);
     clawSlotDraw(ctx, t);   // the coin slot (CLAW TYPES block)
+    luckDraw(ctx, t);   // Lucky Lou's Luck meter (CONTENT block)
     bossCabDraw(ctx, t, cfg, 'front');
     drawMonsterFx(ctx, t);
     if (S.debug && R && R.bodyDebug && FS.world) { ctx.save(); ctx.translate(CAB.x, CAB.y); R.bodyDebug(ctx, FS.world); ctx.restore(); }
@@ -6705,12 +8004,12 @@ const GAME = (() => {
     S.t += dt;
     fx().update(dt);
     rollStep(real);
-    if (S.comboT > 0) { S.comboT -= real; if (S.comboT <= 0) nextCombo(); }
+    annTick(real);   // the big banners, one at a time (ANNOUNCER)
     if (S.screen === 'map' || S.screen === 'fight') ambientTick(real);
     lootTick(real);   // payout tally, capsule ritual, the ticket stream
+    arcTick(real);    // ARCADE: the machines, the roaming monsters, the event scene
     metaTick(real);   // stickers, discoveries (META block)
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
-    if (S.bannerT > 0) { S.bannerT -= dt; if (S.bannerT <= 0) { const el = $('banner'); if (el) el.classList.remove('show'); const pr = $('playerRow'); if (pr && pr.classList) pr.classList.remove('bannerOn'); } }
     if (S.screen === 'map') {
       walkTick(dt); camStep(dt); bloomTick(); chimeTick();
       if (S.t - (S.hudT || 0) > 0.15) { S.hudT = S.t; refreshHud(false); }
@@ -6722,8 +8021,25 @@ const GAME = (() => {
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
     }
   }
+  /* Adaptive quality (Polish and QA perf): a device that cannot keep up
+     (real frames over PERF.slow ms on average for PERF.onAfter s) thins the
+     particles (RENDER.fx.lite: half the preset counts, half the pool) until
+     it runs under PERF.fast again for long enough; each re-entry waits
+     longer before letting go, so it never flickers between the two. */
+  const PERF = { slow: 26, fast: 19, onAfter: 0.5, offAfter: 2.5 };
+  function perfTick(ms) {
+    if (!(ms > 0) || ms > 250) return;   // a tab switch or a one-off hitch says nothing
+    const P = S.perf || (S.perf = { ema: 16.7, slowT: 0, fastT: 0, lite: false, n: 0 });
+    P.ema += (ms - P.ema) * 0.1;
+    if (P.ema > PERF.slow) { P.slowT += ms / 1000; P.fastT = 0; } else if (P.ema < PERF.fast) { P.fastT += ms / 1000; P.slowT = 0; }
+    if (!P.lite && P.slowT > PERF.onAfter) { P.lite = true; P.n++; P.fastT = 0; }
+    else if (P.lite && P.fastT > PERF.offAfter * P.n) { P.lite = false; P.slowT = 0; }
+    const f = fx();
+    if (f && f.lite !== P.lite) f.lite = P.lite;
+  }
   function frame(now) {
     if (!S.headless) S.frame = requestAnimationFrame(frame);
+    perfTick(now - S.last);
     const dt = Math.min(0.1, (now - S.last) / 1000);
     S.last = now;
     S.acc += dt;
@@ -6834,6 +8150,11 @@ const GAME = (() => {
       fuseTick: () => { if (FS) fuseTick(); }, meltTick: () => { if (FS) meltTick(); }, matTurn: () => { if (FS) matTurn(); },
       soClose: (x, y) => { if (FS) soClose(x, y); }, setMood: (m, s) => setMood(m, s), luckAfterGrab: () => { if (FS) luckAfterGrab(); },
     },
+    // Round 3 (DESIGN.md "Lucky Lou and the synergy pass"): test and screenshot hooks.
+    content: {
+      luckFx: (ev) => { if (FS) luckFx(ev); }, luckDraw: (ctx, t) => { if (FS) luckDraw(ctx, t); }, matHook: (k, inst) => { if (FS) matHook(k, inst); },
+      capUp: () => capUp(S.run), LUCKM, get luckM() { return FS ? FS.luckM || null : null; },
+    },
     // Claw types (DESIGN.md "Claw types"): the picker, the run's claw, the claw juice.
     claws: {
       ids: () => clawIds(), info: (id) => clawInfo(id), type: () => runClawType(), picked: () => pickedClaw(), pick: (id) => setClawType(id),
@@ -6846,6 +8167,19 @@ const GAME = (() => {
       vsStart: (i, kind) => (FS ? vsStart(i, kind) : false), vsSkip: () => (FS ? vsSkip() : false),
       shuffle: () => (FS ? shuffleBin() : 0), enterOff: (i) => (FS ? Object.assign({}, enterOff(i)) : { x: 0, y: 0 }),
       get vs() { return FS ? FS.vs : null; }, get bs() { return FS ? BS() : null; },
+    },
+    // The announcer (DESIGN.md "Polish and QA"): one big banner at a time.
+    ann: { ANN, announce, banner, combo: queueCombo, tap: annTap, clear: annClear, visible: annVisible, blocked: annBlocked,
+      get cur() { return AN.cur; }, get queue() { return AN.q; }, get log() { return AN.log; }, get exiting() { return AN.exit; } },
+    // Adaptive quality (Polish and QA perf): feed real frame times to perfTick.
+    perf: { PERF, tick: perfTick, get state() { return S.perf; } },
+    // ARCADE (DESIGN.md "Arcade"): the mini-game cabinets, roaming monsters, event scenes
+    arc: {
+      ARC, PLK, PLK_SLOTS, WHEEL, WH, REEL, show: arcShow, act: arcAct, skip: arcSkip, leave: arcLeave, hurry: arcHurry, pointer: arcPointer,
+      session: arcSession, plkSim, plkPegs, plkPays, plkEdges, plkSlotOf, wheelRoll, wheelPays, whTarget, slotRoll, slotEval, slotPays, fxChips: arcFxChips,
+      roamStep: (t) => arcRoamAfterStep(t), roamFight: arcRoamFight, drawRoam: arcDrawRoam, draw: arcDraw,
+      get state() { return S.arc; }, get ev() { return S.arcEv; }, get msg() { return S.arcMsgStr || ''; }, get info() { return S.arcInfoStr || ''; },
+      get force() { return !!S.arcForce; }, set force(v) { S.arcForce = !!v; },
     },
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },

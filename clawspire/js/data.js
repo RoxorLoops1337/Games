@@ -13,7 +13,9 @@ const DATA = (() => {
   const ITEM_ART = ['sword', 'dagger', 'axe', 'hammer', 'anvil', 'shield', 'buckler', 'potion', 'flask',
     'bomb', 'torch', 'iceshard', 'snowball', 'coin', 'gem', 'rock', 'slag', 'iceblock', 'apple', 'bread',
     'book', 'scroll', 'orb', 'ring', 'key', 'chain', 'horn', 'whetstone', 'feather', 'skull', 'star',
-    'boot', 'bone', 'bottle', 'heart', 'lantern', 'wand', 'mask', 'egg', 'dice'];
+    'boot', 'bone', 'bottle', 'heart', 'lantern', 'wand', 'mask', 'egg', 'dice',
+    // round 3 (Lucky Lou and the synergy pass): casino kit and bait
+    'chip', 'card', 'horseshoe', 'clover', 'slot', 'potato', 'pill', 'cookie'];
   const ENEMY_ART = ['rat', 'slime', 'bat', 'gremlin', 'mimic', 'spider', 'goblin', 'hoard', 'imp',
     'clockwork', 'golem', 'furnace', 'magnet', 'ironjaw', 'wraith', 'yeti', 'frostmage', 'icemimic',
     'prizemaster', 'mushroom', 'knight', 'wisp', 'crab', 'drone', 'tinker', 'cultist',
@@ -24,8 +26,8 @@ const DATA = (() => {
     'purge', 'copy', 'dmgPer', 'cleanse', 'lifesteal', 'random', 'poisonAll', 'blockPer', 'pay', 'again'];
   // What dmgPer / blockPer can count. poison and burn read the target's
   // stacks, small the small items in the cabinet, streak the grab streak,
-  // gold the gold carried (per 10).
-  const PER_KINDS = ['block', 'junk', 'metal', 'grabsUsed', 'poison', 'burn', 'small', 'streak', 'gold'];
+  // gold the gold carried (per 10), luck the player's Luck (it is not spent).
+  const PER_KINDS = ['block', 'junk', 'metal', 'grabsUsed', 'poison', 'burn', 'small', 'streak', 'gold', 'luck'];
   const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk',
     'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape',
     // the monsters pass (see DESIGN.md "Enemies"): eat items, drop a ticking
@@ -36,10 +38,16 @@ const DATA = (() => {
   const RELIC_MODS = ['grabs', 'width', 'grip', 'speed', 'prongs', 'rubber', 'magnet', 'maxhp', 'gold',
     'ink', 'startBlock', 'startStr'];
   const RELIC_HOOKS = ['onFightStart', 'onTurnStart', 'onTurnEnd', 'onPlay', 'onGrab', 'onDmgDealt',
-    'onKill', 'onHurt', 'onStatus', 'onBlock', 'onHeal', 'onJunk', 'onCombo', 'onJackpot', 'onShatter', 'onGold'];
+    'onKill', 'onHurt', 'onStatus', 'onBlock', 'onHeal', 'onJunk', 'onCombo', 'onJackpot', 'onShatter', 'onGold',
+    // round 3: Luck cashed out (F, luck, items), an enemy swallowed one of your
+    // items (F, e, inst, def), a cabinet material reacted (F, kind 'crack' |
+    // 'shatter' | 'fuse' | 'blast', inst, def)
+    'onCashOut', 'onEat', 'onMaterial'];
   // Engine rules a build-defining relic can bend (relic.rules, merged into
   // F.rules by COMBAT.newFight). See DESIGN.md "Builds and synergies".
-  const RELIC_RULES = ['poisonKeep', 'blockKeep', 'shatter', 'glassBreak', 'amp', 'comboTwice', 'echo'];
+  // luck: empty grabs and near misses fill the Luck meter (Lucky Lou's gift);
+  // cashAmp: +1 damage per Luck on every cash out.
+  const RELIC_RULES = ['poisonKeep', 'blockKeep', 'shatter', 'glassBreak', 'amp', 'comboTwice', 'echo', 'luck', 'cashAmp'];
   const RARITY_WEIGHTS = {
     1: { c: 70, u: 25, r: 5, l: 0 },
     2: { c: 55, u: 33, r: 11, l: 1 },
@@ -603,6 +611,96 @@ const DATA = (() => {
       fx: [dmg(4), copy('magic')], plus: { fx: [dmg(7), copy('magic')] },
       text: 'Deal {v} damage and copy a random magic item in your bin for this fight. Chapter one: more chapters.' },
 
+    // ---- Round 3 (DESIGN.md "Lucky Lou and the synergy pass"). Lucky Lou's
+    // casino kit: dice roll twice and keep the best while you hold Luck, Luck
+    // comes from chips, clovers and whiffs, and a grab of 2+ items cashes it
+    // out on everything. Then shared pieces for the round 1 and 2 systems:
+    // bait for hungry monsters, glass dice that crack, a fuse to light, a
+    // coin that floats. ----
+    { id: 'bone_dice', name: 'Bone Dice', rarity: 'c', cost: 40, char: 'gambler', starter: true,
+      tags: [], shape: box(22, 22), density: 1.2, friction: 0.4, restitution: 0.3,
+      color: '#f1e9d6', color2: '#8a1a2a', art: 'dice',
+      fx: [random(2, 8)], plus: { fx: [random(4, 10)] },
+      text: 'Deal {min} to {max} damage. Carved from something that lost a bet.' },
+    { id: 'poker_chip', name: 'Poker Chip', rarity: 'c', cost: 40, char: 'gambler', starter: true,
+      tags: [], shape: circle(13), density: 1.3, friction: 0.3, restitution: 0.15,
+      color: '#ff2e4a', color2: '#ffffff', art: 'chip', target: 'self',
+      fx: [block(4)], plus: { fx: [block(6)] },
+      text: 'Gain {v} Block. Stack them high, hide behind them.' },
+    { id: 'scratch_card', name: 'Scratch Card', rarity: 'c', cost: 45, char: 'gambler',
+      tags: ['light'], shape: box(24, 34), density: 0.5, friction: 0.6,
+      color: '#ffe066', color2: '#ff2e88', art: 'card',
+      fx: [random(0, 10), gold(2)], plus: { fx: [random(2, 12), gold(3)] },
+      text: 'Scratch it: deal {min} to {max} damage and win {v2} gold. Not a winner? Try again!' },
+    { id: 'fortune_cookie', name: 'Fortune Cookie', rarity: 'c', cost: 40, char: 'gambler',
+      tags: ['food'], shape: poly([[-16, 5], [-11, -8], [0, -12], [11, -8], [16, 5], [0, 11]]), density: 0.6, friction: 0.6,
+      color: '#e8b25e', color2: '#fff6e0', art: 'cookie', target: 'self',
+      fx: [heal(3), status('luck', 1, 'self')], plus: { fx: [heal(5), status('luck', 2, 'self')] },
+      text: 'Heal {v} HP and gain {v2} Luck. It says: you will grab something soon.' },
+    { id: 'double_or_nothing', name: 'Double or Nothing', rarity: 'u', cost: 60, char: 'gambler',
+      tags: ['metal'], shape: circle(12), density: 2.2, friction: 0.3, restitution: 0.3,
+      color: '#e6ebf0', color2: '#2a2a3a', art: 'coin',
+      fx: [random(0, 20)], plus: { fx: [random(0, 26)] },
+      text: 'Flip it: deal {min} to {max} damage. With Luck it flips twice and keeps the best.' },
+    { id: 'lucky_horseshoe', name: 'Lucky Horseshoe', rarity: 'u', cost: 60, char: 'gambler',
+      tags: ['metal', 'heavy'], shape: poly([[-15, -14], [15, -14], [16, 4], [8, 15], [-8, 15], [-16, 4]]), density: 2.0, friction: 0.5,
+      color: '#aab3bd', color2: '#ffc94d', art: 'horseshoe', target: 'self',
+      fx: [block(6), status('luck', 2, 'self')], plus: { fx: [block(9), status('luck', 2, 'self')] },
+      text: 'Gain {v} Block and {v2} Luck. Points up, so the luck stays in.' },
+    { id: 'marked_deck', name: 'Marked Deck', rarity: 'u', cost: 65, char: 'gambler',
+      tags: ['tool'], shape: box(26, 34), density: 0.9, friction: 0.55,
+      color: '#3b6fd6', color2: '#ffffff', art: 'card', target: 'none',
+      fx: [grab(1), status('luck', 1, 'self')], plus: { fx: [grab(1), status('luck', 2, 'self')] },
+      text: 'Gain {v} extra grab this turn and {v2} Luck. Every card is the ace of spades.' },
+    { id: 'one_armed_bandit', name: 'One-Armed Bandit', rarity: 'r', cost: 100, char: 'gambler',
+      tags: ['metal', 'heavy'], shape: box(30, 40), density: 2.0, friction: 0.55,
+      color: '#ff2e4a', color2: '#ffc94d', art: 'slot',
+      fx: [dmg(4), dmgPer(3, 'luck')], plus: { fx: [dmg(6), dmgPer(4, 'luck')] },
+      text: 'Pull the lever: deal {v} damage, plus {v2} for each Luck you hold. The Luck stays put.' },
+    { id: 'roulette_wheel', name: 'Roulette Wheel', rarity: 'r', cost: 95, char: 'gambler',
+      tags: ['heavy'], shape: circle(18), density: 1.6, friction: 0.35, restitution: 0.15,
+      color: '#1a1224', color2: '#ff2e4a', art: 'chip',
+      fx: [random(1, 36)], plus: { fx: [random(6, 36)] },
+      text: 'Spin it: deal {min} to {max} damage. No zero on this wheel. Probably.' },
+    { id: 'golden_dice', name: 'Golden Dice', rarity: 'l', cost: 130, char: 'gambler',
+      tags: ['metal', 'heavy'], shape: box(26, 26), density: 2.2, friction: 0.4, restitution: 0.25,
+      color: '#ffc94d', color2: '#12091f', art: 'dice', target: 'all',
+      fx: [{ k: 'random', v: 9, min: 4, max: 14, n: 2 }, status('luck', 2, 'self')],
+      plus: { fx: [{ k: 'random', v: 11, min: 6, max: 16, n: 2 }, status('luck', 3, 'self')] },
+      text: 'Roll twice: deal {min} to {max} damage to ALL enemies each time, then gain {v2} Luck. Solid gold, never loaded.' },
+    // Bait: good to be eaten. Gulpers go for the lure first; a Poison Pill
+    // or a Hot Potato hurts whoever swallows it (COMBAT reads def.eaten).
+    { id: 'poison_pill', name: 'Poison Pill', rarity: 'c', cost: 45,
+      tags: ['potion'], shape: box(26, 12), density: 0.7, friction: 0.4,
+      color: '#a6ff5e', color2: '#ff2e88', art: 'pill', lure: 40, eaten: { dmg: 6, status: { poison: 8 } },
+      fx: [status('poison', 4)], plus: { fx: [status('poison', 6)], eaten: { dmg: 9, status: { poison: 10 } } },
+      text: 'Apply {v} Poison. Monsters cannot resist it: whoever swallows it takes 6 damage and 8 Poison.' },
+    { id: 'hot_potato', name: 'Hot Potato', rarity: 'u', cost: 60,
+      tags: ['food'], shape: poly([[-17, -3], [-11, -10], [4, -11], [15, -6], [17, 3], [9, 10], [-8, 10], [-16, 5]]), density: 1.0, friction: 0.5,
+      color: '#c98a4a', color2: '#ff5a2e', art: 'potato', hot: 2, lure: 25, eaten: { status: { burn: 10 } },
+      fx: [dmg(10), status('burn', 2)], plus: { fx: [dmg(14), status('burn', 3)] },
+      text: 'Deal {v} damage and apply {v2} Burn. Too hot to keep: in your bin at the end of your turn it gives you 2 Burn. Swallowed, 10 Burn.' },
+    { id: 'crystal_dice', name: 'Crystal Dice', rarity: 'u', cost: 55,
+      tags: ['glass'], shape: box(22, 22), density: 1.1, friction: 0.25, restitution: 0.2,
+      color: '#bfefff', color2: '#7a5aff', art: 'dice',
+      fx: [random(3, 12)], plus: { fx: [random(5, 14)] },
+      text: 'Deal {min} to {max} damage. Glass: land it hard and it cracks for half again.' },
+    { id: 'floating_token', name: 'Floating Token', rarity: 'u', cost: 55,
+      tags: ['metal', 'magic'], shape: circle(11), density: 0.9, friction: 0.35, restitution: 0.15,
+      color: '#b08cff', color2: '#ffe066', art: 'coin', target: 'self',
+      fx: [dmg(4), status('luck', 1, 'self'), gold(1)], plus: { fx: [dmg(6), status('luck', 1, 'self'), gold(2)] },
+      text: 'Deal {v} damage, gain {v2} Luck and {v3} gold. It floats on top of the pile, and magnets love it.' },
+    { id: 'firecracker', name: 'Firecracker', rarity: 'c', cost: 45,
+      tags: ['weapon', 'light'], shape: circle(13), density: 0.8, friction: 0.5, restitution: 0.2,
+      color: '#ff2e4a', color2: '#ffe066', art: 'bomb', target: 'all',
+      fx: [dmg(3), status('burn', 1, 'all')], plus: { fx: [dmg(5), status('burn', 2, 'all')] },
+      text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. Slam it into the pile and its fuse catches.' },
+    { id: 'lucky_clover', name: 'Lucky Clover', rarity: 'c', cost: 15,
+      tags: ['small', 'light'], shape: circle(9), density: 0.5, friction: 0.5, restitution: 0.15,
+      color: '#3ddc84', color2: '#1a6b3a', art: 'clover', target: 'self',
+      fx: [status('luck', 1, 'self')], plus: { fx: [status('luck', 2, 'self')] },
+      text: 'Gain {v} Luck. Four leaves, no waiting.' },
+
     // ---- Small fillers: marbles, beads and sweets. Circles r 9-11 so the
     // claw's cradle scoops two or three at once; each does a little. Tagged
     // 'small', they stay out of the single-item reward and shop pools and
@@ -745,6 +843,8 @@ const DATA = (() => {
     ['jam', 'Jammed', '🔧', '#c98a1a', 'debuff', 'turns', 'A wrench is stuck in the claw rail: one grab fewer this turn.'],
     // A display counter COMBAT keeps in step with F.streak (no events, no decay).
     ['streak', 'Streak', '🎯', '#ffc94d', 'buff', 'count', 'Grabs in a row that brought something up. An empty grab resets it.'],
+    // Round 3: Lucky Lou's meter (any crawler can hold it). Never decays.
+    ['luck', 'Luck', '🍀', '#3ddc84', 'buff', 'count', 'Dice roll twice and keep the best. A grab of 2+ items cashes it all out: 2 damage per Luck to ALL enemies (max 10).'],
   ].forEach(([id, name, icon, color, kind, stack, text]) => {
     STATUS[id] = { id, name, icon, color, kind, stack, text };
   });
@@ -1156,6 +1256,13 @@ const DATA = (() => {
   // The item defs the current grab has delivered so far (COMBAT's buffer).
   const grabDefs = (F) => (F.grab && Array.isArray(F.grab.defs) ? F.grab.defs : []);
   const isJunkPlay = (inst, def) => !!((inst && inst.junk) || tagged(def, 'junk'));
+  // Round 3 helpers: Luck on the player, arcade tickets for the payout
+  // (COMBAT.tickets banks them on F.stats.tix), the claw type in play, and a
+  // die roll from the fight's own seeded rng.
+  const luckUp = (F, v) => selfStatus(F, 'luck', v);
+  const tix = (F, v) => { const c = CB(); if (c && c.tickets) c.tickets(F, v); };
+  const clawIs = (F, type) => !!F && F.clawType === type;
+  const d6 = (F) => 1 + Math.floor((typeof F.rng === 'function' ? F.rng() : 0.5) * 6);
 
   const RELIC_LIST = [
     // starters (not in random pools)
@@ -1168,6 +1275,21 @@ const DATA = (() => {
     { id: 'pickpocket_glove', name: 'Pickpocket Glove', icon: '✋', rarity: 'event', kw: [], proc: 'SLIPPERY', starter: true,
       text: 'Whenever an enemy dies, gain 1 Dodge. Grab first, dodge later.',
       hooks: { onKill(F) { selfStatus(F, 'dodge', 1); } } },
+    // Lucky Lou's: the first whiff of a turn is a dice roll.
+    { id: 'snake_eyes', name: 'Snake Eyes', icon: '🐍', rarity: 'event', kw: ['luck'], proc: 'ROLL', starter: true,
+      text: 'The first grab each turn that brings up nothing rolls two dice: a random enemy takes the total. Doubles give the grab back.',
+      hooks: {
+        onGrab(F, n) {
+          if (n || !CB()) return;
+          const m = mem(F);
+          if (m.snake === F.turn) return;
+          m.snake = F.turn;
+          const a = d6(F), b = d6(F);
+          proc(F, 'snake_eyes', (a === b ? (a === 1 ? 'SNAKE EYES! ' : 'DOUBLES! ') : 'ROLL ') + a + '+' + b);
+          zap(F, randomFoe(F), a + b);
+          if (a === b) moreGrabs(F, 1);
+        },
+      } },
 
     // common
     { id: 'grip_tape', name: 'Grip Tape', icon: '🩹', rarity: 'c', kw: [], text: 'Your claw grips 25% harder. Sticky, in a good way.',
@@ -1424,6 +1546,95 @@ const DATA = (() => {
     { id: 'echo_chamber', name: 'Echo Chamber', icon: '📯', rarity: 'r', kw: ['echo'], proc: 'ECHO',
       text: 'Every third magic item you play resolves twice. Twice. Twice.',
       rules: { echo: 3 } },
+
+    // ---- Round 3 (DESIGN.md "Lucky Lou and the synergy pass"): the Luck
+    // build, tickets and capsules, hungry monsters, cabinet materials and
+    // the claw types. ----
+    // Luck
+    { id: 'pity_timer', name: 'Pity Timer', icon: '⏳', rarity: 'c', kw: ['luck'], proc: 'PITY',
+      text: 'Whenever a grab brings up nothing, gain 1 Luck. The machine feels bad for you.',
+      hooks: { onGrab(F, n) { if (!n) luckUp(F, 1); } } },
+    { id: 'dealers_visor', name: "Dealer's Visor", icon: '🧢', rarity: 'c', kw: ['luck'], proc: 'HOUSE RULES',
+      text: 'Start each fight with 3 Luck. The house never starts empty.',
+      hooks: { onFightStart(F) { luckUp(F, 3); } } },
+    { id: 'lucky_ticket', name: 'Lucky Ticket', icon: '🧧', rarity: 'c', kw: ['luck', 'fortress'], proc: 'PAYOUT',
+      text: 'Whenever you cash out Luck, gain that much Block and print a ticket for every 2 Luck.',
+      hooks: { onCashOut(F, luck) { gainBlock(F, luck); tix(F, Math.ceil(luck / 2)); } } },
+    { id: 'lucky_cat', name: 'Lucky Cat', icon: '🐱', rarity: 'u', kw: ['luck', 'greed'], proc: 'MANEKI',
+      text: 'Whenever you cash out Luck, gain that much gold. It waves at every customer.',
+      hooks: { onCashOut(F, luck) { gainGold(F, luck); } } },
+    { id: 'wheel_of_fortune', name: 'Wheel of Fortune', icon: '🎡', rarity: 'r', kw: ['luck', 'jackpot'],
+      text: 'At the start of each turn the wheel spins: 5 Block, 4 damage to ALL enemies, 2 Luck, or (rarely) an extra grab.',
+      hooks: {
+        onTurnStart(F) {
+          if (!CB()) return;
+          const r = typeof F.rng === 'function' ? F.rng() : 0.5;
+          if (r < 0.3) { proc(F, 'wheel_of_fortune', 'WHEEL: BLOCK'); gainBlock(F, 5); }
+          else if (r < 0.6) { proc(F, 'wheel_of_fortune', 'WHEEL: ZAP'); zapAll(F, 4); }
+          else if (r < 0.88) { proc(F, 'wheel_of_fortune', 'WHEEL: LUCK'); luckUp(F, 2); }
+          else { proc(F, 'wheel_of_fortune', 'WHEEL: JACKPOT'); moreGrabs(F, 1); }
+        },
+      } },
+    { id: 'rabbits_foot', name: "Rabbit's Foot", icon: '🐇', rarity: 'r', kw: ['luck'], proc: 'LUCKY FOOT',
+      text: 'Your empty grabs give 2 Luck and near misses 1, like Lucky Lou. Lucky Lou gets double.',
+      rules: { luck: 1 } },
+    { id: 'high_roller', name: 'High Roller', icon: '💎', rarity: 'r', kw: ['luck'], proc: 'HIGH ROLLER',
+      text: 'Cash outs deal 3 damage per Luck instead of 2. Bet big.',
+      rules: { cashAmp: 1 } },
+    // Tickets and capsules
+    { id: 'ticket_roll', name: 'Ticket Roll', icon: '🧾', rarity: 'c', kw: ['jackpot'], proc: 'TICKETS',
+      text: 'Every grab combo prints 2 extra arcade tickets.',
+      hooks: { onCombo(F) { tix(F, 2); } } },
+    { id: 'gacha_charm', name: 'Gacha Charm', icon: '💊', rarity: 'u', kw: ['jackpot'], proc: 'GACHA',
+      text: 'Prize capsules upgrade 20% more often as they open. Every jackpot prints 2 tickets.',
+      loot: { capUp: 0.2 }, hooks: { onJackpot(F) { tix(F, 2); } } },
+    // Hungry monsters
+    { id: 'heartburn', name: 'Heartburn', icon: '🌶', rarity: 'u', kw: ['burn', 'poison'], proc: 'HEARTBURN',
+      text: 'Whenever an enemy swallows one of your items, it gains 4 Burn and 2 Poison.',
+      hooks: { onEat(F, e) { foeStatus(F, e, 'burn', 4); foeStatus(F, e, 'poison', 2); } } },
+    // Cabinet materials
+    { id: 'broken_mirror', name: 'Broken Mirror', icon: '🪞', rarity: 'c', kw: ['glass', 'luck'], proc: 'SEVEN YEARS',
+      text: 'Whenever a glass item cracks or shatters, gain 1 Luck. Seven years of good luck.',
+      hooks: {
+        onMaterial(F, kind) { if (kind === 'crack') luckUp(F, 1); },
+        onShatter(F) { luckUp(F, 1); },
+      } },
+    { id: 'blasting_cap', name: 'Blasting Cap', icon: '🧨', rarity: 'u', kw: ['burn', 'fortress'], proc: 'BLAST CAP',
+      text: 'Whenever a bomb goes off in your bin, every enemy gains 3 Burn and you gain 5 Block. Lighting a fuse gives 2 Block.',
+      hooks: {
+        onMaterial(F, kind) {
+          if (kind === 'blast') { allStatus(F, 'burn', 3); gainBlock(F, 5); }
+          else if (kind === 'fuse') gainBlock(F, 2);
+        },
+      } },
+    // Claw types (useful with any claw, better with their own)
+    { id: 'lodestone', name: 'Lodestone', icon: '🪨', rarity: 'u', kw: ['metal', 'fortress'], proc: 'LODESTONE',
+      text: 'A grab with 2+ metal items gives 3 Block per metal item. Magnet Crane: from 1, and it zaps ALL for 2 each.',
+      hooks: {
+        onGrab(F) {
+          const m = grabDefs(F).filter(d => tagged(d, 'metal')).length;
+          const mag = clawIs(F, 'magnet');
+          if (m < (mag ? 1 : 2)) return;
+          gainBlock(F, 3 * m);
+          if (mag) zapAll(F, 2 * m);
+        },
+      } },
+    { id: 'sand_pail', name: 'Sand Pail', icon: '🪣', rarity: 'u', kw: ['swarm', 'jackpot'], proc: 'SCOOPED',
+      text: 'A grab of 3+ items deals 3 damage per item to a random enemy. The Scoop counts from 2 items.',
+      hooks: {
+        onJackpot(F, n) { zap(F, randomFoe(F), 3 * (n | 0)); },
+        onGrab(F, n) { if (n === 2 && clawIs(F, 'scoop')) zap(F, randomFoe(F), 6); },
+      } },
+    { id: 'big_catch', name: 'Big Catch', icon: '🎣', rarity: 'u', kw: ['brawler'], proc: 'BIG CATCH',
+      text: 'The first item you deliver each turn deals 4 more damage to the targeted enemy. Harpoon: 8.',
+      hooks: {
+        onPlay(F) {
+          const m = mem(F);
+          if (m.catch === F.turn || !CB()) return;
+          m.catch = F.turn;
+          zap(F, focus(F), clawIs(F, 'hook') ? 8 : 4);
+        },
+      } },
 
     // boss
     { id: 'token_stack', name: 'Stack of Tokens', icon: '🪙', rarity: 'boss', kw: ['jackpot', 'junk'], proc: 'TOKENS',
@@ -1708,7 +1919,25 @@ const DATA = (() => {
         'old_boot', 'old_boot', 'old_boot', 'old_boot', 'old_boot',
         'lucky_coin', 'lucky_coin', 'skeleton_key',
         'lucky_penny', 'lucky_penny', 'lucky_penny', 'lead_shot', 'lead_shot', 'lead_shot'] },
+    // Round 3: the Gambler. `luck` is his gift (COMBAT: empty grabs give 2
+    // Luck, near misses 1; a grab of 2+ items cashes it out), so a whiff is
+    // never wasted and a loose claw is part of the plan.
+    gambler: { id: 'gambler', name: 'Lucky Lou', title: 'The Gambler', color: '#ffc94d',
+      blurb: 'Dice, chips and a loose claw. Every whiff fills his Luck meter; the next double grab cashes it out on everything.',
+      hp: 70, gold: 110, unlock: 'act2', unlockText: 'Reach Act 2 with any Crawler.',
+      claw: { grabs: 3, width: 1, grip: 0.9, speed: 1.1, prongs: 2, rubber: 0, magnet: 0 },
+      relic: 'snake_eyes', luck: true,
+      bin: ['bone_dice', 'bone_dice', 'bone_dice', 'bone_dice', 'bone_dice',
+        'poker_chip', 'poker_chip', 'poker_chip', 'poker_chip', 'poker_chip',
+        'scratch_card', 'fortune_cookie', 'crisp_apple',
+        'lucky_clover', 'lucky_clover', 'lucky_clover', 'pocket_die', 'pocket_die', 'pocket_die'] },
   };
+  // The crawler's line on the versus card before an elite or boss (RENDER.vsCard).
+  const VS_LINES = {
+    knight: 'Have at thee, prize!', alchemist: 'Hold still, this might fizz.',
+    rogue: 'Your wallet looks heavy.', gambler: 'Double or nothing, pal.',
+  };
+  for (const id in CHARACTERS) CHARACTERS[id].vsLine = VS_LINES[id] || '';
 
   // ------------------------------------------------------------------- acts
   const ACTS = {
@@ -1738,13 +1967,15 @@ const DATA = (() => {
     feast: { label: 'Feast', icon: '🍗', color: '#ff2e88', blurb: 'Food, healing and lifesteal that grow your Max HP.' },
     greed: { label: 'Greed', icon: '🪙', color: '#ffe066', blurb: 'Gold is a weapon: earn it in the fight, spend it or hoard it.' },
     echo: { label: 'Echo', icon: '✨', color: '#b08cff', blurb: 'Magic items that copy, repeat and replay each other.' },
+    // round 3: Lucky Lou's build (whiffs fill the meter, a double grab cashes it out)
+    luck: { label: 'Luck', icon: '🍀', color: '#3ddc84', blurb: 'Dice that roll twice, whiffs that pay later and a meter that cashes out on everything.' },
   };
   // Chip order: specific engines first, broad families (glass, metal) last.
-  const ARCH_ORDER = ['poison', 'burn', 'frost', 'fortress', 'brawler', 'junk', 'jackpot', 'swarm', 'greed', 'feast',
+  const ARCH_ORDER = ['poison', 'burn', 'frost', 'fortress', 'brawler', 'junk', 'jackpot', 'swarm', 'greed', 'luck', 'feast',
     'echo', 'glass', 'metal'];
   const TAG_ARCH = { metal: 'metal', small: 'swarm', glass: 'glass', food: 'feast', magic: 'echo', junk: 'junk' };
   const PER_ARCH = { poison: 'poison', burn: 'burn', block: 'fortress', metal: 'metal', junk: 'junk', grabsUsed: 'jackpot',
-    streak: 'jackpot', small: 'swarm', gold: 'greed' };
+    streak: 'jackpot', small: 'swarm', gold: 'greed', luck: 'luck' };
   const KW_CACHE = new Map();
 
   // Archetype ids of an item or relic def, uncapped, in chip order. Relics
@@ -1768,6 +1999,8 @@ const DATA = (() => {
         if (f.k === 'poisonAll') got.add('poison');
         if ((f.k === 'block' && f.v >= 4) || f.k === 'blockPer') got.add('fortress');
         if ((f.k === 'dmg' || f.k === 'random') && f.v > 0 && (f.n || 1) >= 2) got.add('brawler');
+        // Luck: gaining it, reading it, or rolling dice (Luck rolls them twice)
+        if ((f.k === 'status' && f.s === 'luck' && f.to === 'self') || f.k === 'random') got.add('luck');
         if ((f.k === 'dmgPer' || f.k === 'blockPer') && PER_ARCH[f.per]) got.add(PER_ARCH[f.per]);
         if (f.k === 'purge' || f.k === 'junk') got.add('junk');
         if (f.k === 'grab') got.add('jackpot');
@@ -1803,6 +2036,15 @@ const DATA = (() => {
   const count = (defs, p) => defs.filter(d => d && p(d)).length;
   // How many different items (by id) satisfy p.
   const kinds = (defs, p) => new Set(defs.filter(d => d && p(d)).map(d => d.id)).size;
+  // Round 3 recipe helpers: an art key, how many copies of each item (most
+  // first), how many different items came in pairs or better.
+  const artIs = (a) => (d) => !!d && d.art === a;
+  function sameCounts(defs) {
+    const n = {};
+    for (const d of defs) if (d && d.id) n[d.id] = (n[d.id] || 0) + 1;
+    return Object.values(n).sort((a, b) => b - a).concat([0, 0]);
+  }
+  const pairs = (defs) => sameCounts(defs).filter(k => k >= 2).length;
   // True when distinct delivered items can fill every role, one each.
   function roles(defs, preds) {
     const used = new Array(defs.length).fill(false);
@@ -1897,17 +2139,59 @@ const DATA = (() => {
     { id: 'mega_jackpot', name: 'Mega Jackpot', tier: 3, family: 'jackpot', color: '#ffc94d', target: 'all', once: 'turn',
       text: 'Four or more items in one grab: deal 12 damage to ALL enemies and +1 grab (once a turn).', fx: [dmg(12), grab(1)],
       match: (d) => d.length >= 4, example: ['femur', 'crisp_apple', 'dented_shield', 'shiv'], miss: ['femur', 'crisp_apple', 'shiv'] },
+
+    // ---- Round 3: the casino table. Two pairs and a pill are on the menu;
+    // the `secret` ones hide their recipe in the Prizedex (???) until they
+    // fire once. match(defs, ctx) may read ctx {luck, streak} (the grab's
+    // state, COMBAT passes it); `ctx` on a recipe is its test fixture. ----
+    { id: 'double_dice', name: 'Double Dice', tier: 1, family: 'dice', color: '#f1e9d6', target: 'random',
+      text: 'Two dice: deal 4 damage to a random enemy and gain 2 Luck.', fx: [dmg(4), status('luck', 2, 'self')],
+      match: (d) => count(d, artIs('dice')) >= 2, example: ['bone_dice', 'pocket_die'], miss: ['bone_dice', 'femur'] },
+    { id: 'poker_night', name: 'Poker Night', tier: 1, family: 'cards', color: '#ff2e4a', target: 'self',
+      text: 'A card and a chip: gain 4 Block and 1 Luck.', fx: [block(4), status('luck', 1, 'self')],
+      match: (d) => roles(d, [artIs('card'), artIs('chip')]), example: ['scratch_card', 'poker_chip'], miss: ['poker_chip', 'poker_chip'] },
+    { id: 'hot_lunch', name: 'Hot Lunch', tier: 1, family: 'hotfood', color: '#ff8a2e', target: 'enemy',
+      text: 'Food meets fire: heal 3 HP and apply 2 Burn.', fx: [heal(3), status('burn', 2)],
+      match: (d) => roles(d, [tagOf('food'), burny]), example: ['crisp_apple', 'torch'], miss: ['crisp_apple', 'femur'] },
+    { id: 'two_pair', name: 'Two Pair', tier: 2, family: 'pairs', color: '#ffe066', target: 'all',
+      text: 'Two different pairs in one grab: deal 8 damage to ALL enemies and gain 2 Luck.', fx: [dmg(8), status('luck', 2, 'self')],
+      match: (d) => pairs(d) >= 2, example: ['bone_dice', 'bone_dice', 'poker_chip', 'poker_chip'], miss: ['bone_dice', 'bone_dice', 'poker_chip', 'femur'] },
+    { id: 'bad_medicine', name: 'Bad Medicine', tier: 2, family: 'medicine', color: '#a6ff5e', target: 'all',
+      text: 'A Poison Pill and another potion: apply 4 Poison and 2 Weak to ALL enemies.', fx: [status('poison', 4, 'all'), status('weak', 2, 'all')],
+      match: (d) => roles(d, [(x) => x.id === 'poison_pill', tagOf('potion')]), example: ['poison_pill', 'stink_potion'], miss: ['poison_pill', 'femur'] },
+    // secret recipes (tier 3)
+    { id: 'full_house', name: 'Full House', tier: 3, family: 'house', color: '#ff2e88', target: 'all', secret: true,
+      sup: ['three_of_a_kind', 'two_pair'],
+      text: 'Three of one item and two of another: deal 16 damage to ALL enemies, gain 4 Luck and 10 gold.', fx: [dmg(16), status('luck', 4, 'self'), gold(10)],
+      match: (d) => { const n = sameCounts(d); return n[0] >= 3 && n[1] >= 2; },
+      example: ['prize_marble', 'prize_marble', 'prize_marble', 'glass_bead', 'glass_bead'], miss: ['prize_marble', 'prize_marble', 'prize_marble', 'glass_bead', 'femur'] },
+    { id: 'royal_flush', name: 'Royal Flush', tier: 3, family: 'flush', color: '#ffc94d', target: 'all', secret: true,
+      text: 'A card, a chip, a die and a coin at once: 20 damage to ALL enemies, 5 Luck and 15 gold.', fx: [dmg(20), status('luck', 5, 'self'), gold(15)],
+      match: (d) => roles(d, [artIs('card'), artIs('chip'), artIs('dice'), artIs('coin')]),
+      example: ['marked_deck', 'poker_chip', 'bone_dice', 'lucky_coin'], miss: ['marked_deck', 'poker_chip', 'bone_dice', 'femur'] },
+    { id: 'dead_mans_hand', name: "Dead Man's Hand", tier: 3, family: 'deadman', color: '#b3a4d6', target: 'enemy', secret: true,
+      text: 'A skull, a bone and a card: apply 3 Vulnerable, then strike 3 times for 6.', fx: [status('vuln', 3), dmg(6, 3)],
+      match: (d) => roles(d, [artIs('skull'), artIs('bone'), artIs('card')]),
+      example: ['grudge_skull', 'femur', 'scratch_card'], miss: ['grudge_skull', 'femur', 'crisp_apple'] },
+    { id: 'midas_touch', name: 'Midas Touch', tier: 3, family: 'midas', color: '#ffe066', target: 'all', secret: true,
+      text: 'Three different coins in one grab: deal 14 damage to ALL enemies and gain 20 gold.', fx: [dmg(14), gold(20)],
+      match: (d) => kinds(d, artIs('coin')) >= 3, example: ['lucky_coin', 'lucky_penny', 'arcade_token'], miss: ['lucky_coin', 'lucky_coin', 'lucky_penny'] },
+    { id: 'lucky_seven', name: 'Lucky Seven', tier: 3, family: 'seven', color: '#3ddc84', target: 'random', secret: true,
+      text: 'A grab of 2+ items while you hold exactly 7 Luck: 7 damage 7 times at random and 7 gold.', fx: [dmg(7, 7), gold(7)],
+      match: (d, ctx) => d.length >= 2 && !!ctx && (ctx.luck | 0) === 7, ctx: { luck: 7 },
+      example: ['bone_dice', 'femur'], miss: ['bone_dice'] },
   ];
   const COMBOS = {};
   for (const c of COMBO_LIST) COMBOS[c.id] = c;
 
   // The combos one grab fires, given the item defs it delivered: one per
   // family (the biggest tier), minus the ones a bigger recipe replaces,
-  // biggest tier first, at most COMBO_MAX.
-  function combosFor(defs) {
+  // biggest tier first, at most COMBO_MAX. ctx (optional): the grab's state
+  // {luck, streak} for the recipes that read it (Lucky Seven).
+  function combosFor(defs, ctx) {
     const list = (defs || []).filter(Boolean);
     if (list.length < 2) return [];
-    const hit = COMBO_LIST.filter(c => { try { return !!c.match(list); } catch (e) { return false; } });
+    const hit = COMBO_LIST.filter(c => { try { return !!c.match(list, ctx || null); } catch (e) { return false; } });
     const best = {};
     for (const c of hit) if (!best[c.family] || c.tier > best[c.family].tier) best[c.family] = c;
     let out = hit.filter(c => best[c.family] === c);
@@ -2146,7 +2430,9 @@ const DATA = (() => {
     const tier0 = CAP_TIERS.indexOf(opts.tier) >= 0 ? opts.tier : rollRarity(rng, LOOT.WEIGHTS[src] || LOOT.WEIGHTS.normal);
     const ups = [];
     let cur = tier0;
-    while (cur !== 'l' && rng() < (LOOT.UP[cur] || 0)) { cur = capNext(cur); ups.push(cur); }
+    // opts.up: extra upgrade chance per step (the Gacha Charm relic, relic.loot.capUp)
+    const up = Math.max(0, Math.min(0.6, +opts.up || 0));
+    while (cur !== 'l' && rng() < (LOOT.UP[cur] || 0) + up) { cur = capNext(cur); ups.push(cur); }
     let pity = false;
     if ((opts.pity || 0) >= LOOT.PITY && capIdx(cur) < 2) {
       while (capIdx(cur) < 2) { cur = capNext(cur); ups.push(cur); }
@@ -2259,6 +2545,9 @@ const DATA = (() => {
     if (turns > 0 && turns <= LOOT.SPEEDY_TURNS) lines.push({ id: 'speedy', label: turns === 1 ? 'One turn KO' : `Speedy: ${turns} turns`, gold: G.speedy, tix: T.speedy });
     const ok = Math.max(0, Math.round(st.overkill || 0));
     if (ok >= LOOT.OVERKILL_MIN) lines.push({ id: 'overkill', label: `Overkill ${ok}`, gold: Math.min(G.overkillMax, Math.floor(ok / G.overkillPer)), tix: Math.min(T.overkillMax, Math.ceil(ok / T.overkillPer)) });
+    // Tickets relics printed in the fight (Ticket Roll, Gacha Charm, Lucky Ticket: F.stats.tix)
+    const rt = Math.max(0, Math.round(st.relicTix || 0));
+    if (rt > 0) lines.push({ id: 'relictix', label: 'Ticket relics', gold: 0, tix: rt });
     let gold = 0, tix = 0;
     for (const l of lines) { gold += l.gold; tix += l.tix; }
     if (st.double) { lines.push({ id: 'double', label: 'DOUBLE REWARD x2', gold, tix }); gold *= 2; tix *= 2; }
@@ -2356,6 +2645,10 @@ const DATA = (() => {
     A_('rigged', 'Beat the Rigged Game', '\u{1F3C6}', '#ff2e88', 'Win a run at Tilt 10.', (c) => c.kind === 'win' && (RUNS(c).tilt | 0) >= TILT_MAX),
     A_('half_shelf', 'Half the Shelf', '\u{1F4DA}', '#2ee6d6', 'Fill half of the Prizedex.', (c) => !!c.dex && c.dex.pct >= 50, { goal: 50, val: (c) => (c.dex ? Math.floor(c.dex.pct) : 0) }),
     A_('daily_grind', 'Daily Grind', '\u{1F4C5}', '#a6ff5e', 'Finish a daily run.', (c) => c.kind === 'end' && !!RUNS(c).daily),
+    // round 3: Lucky Lou and the secret recipes
+    A_('big_payout', 'Big Payout', '\u{1F340}', '#3ddc84', 'Cash out 10 Luck in one grab.', (c) => c.kind === 'ev' && !!c.ev && c.ev.t === 'luck' && c.ev.k === 'cash' && (c.ev.v | 0) >= 10),
+    A_('secret_menu', 'Secret Menu', '\u{1F92B}', '#ff2e88', 'Discover a secret combo.', (c) => c.kind === 'ev' && !!c.ev && c.ev.t === 'combo' && !!COMBOS[c.ev.id] && !!COMBOS[c.ev.id].secret),
+    A_('house_loses', 'The House Loses', '\u{1F3B2}', '#ffc94d', 'Win a run as Lucky Lou.', (c) => c.kind === 'win' && RUNS(c).char === 'gambler'),
   ];
   function winCount(c) { const w = (c && c.meta && c.meta.winsBy) || {}; return Object.keys(w).filter((k) => w[k] > 0).length; }
   function maxTilt(c) { const t = (c && c.meta && c.meta.tilt) || {}; let m = 0; for (const k in t) m = Math.max(m, t[k] | 0); return m; }

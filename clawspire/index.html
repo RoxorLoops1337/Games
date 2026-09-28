@@ -89,7 +89,12 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;padding:0}
 .relic canvas{width:36px;height:36px;display:block}
 #playerRow{top:338px;height:44px;align-items:center;gap:8px;padding:0 10px}
-#pstatus{display:flex;gap:4px;flex:1;min-width:0;overflow:hidden}
+#pstatus{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+#pstatus::-webkit-scrollbar{display:none}
+#pstatus .pip{flex:0 0 auto}
+/* a crowded row (six or more) packs tighter; past the width it scrolls instead of hiding chips */
+#pstatus.many{gap:2px}
+#pstatus.many .pip{padding:0 5px;gap:1px}
 .pip{display:inline-flex;align-items:center;gap:3px;height:44px;padding:0 9px;border-radius:9px;
   background:#1a1030;border:1.5px solid var(--line2);font-size:13px;font-weight:900;color:#fff;cursor:pointer;
   pointer-events:auto}
@@ -156,13 +161,13 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .screen.mapHead{background:transparent;pointer-events:none;justify-content:flex-start;padding:0;top:70px;bottom:auto;
   height:100px;gap:0}
 .screen.mapHead .mh{pointer-events:auto;background:linear-gradient(180deg,rgba(18,9,31,.92),rgba(18,9,31,.7));
-  border-bottom:2px solid var(--line);padding:5px 10px;display:flex;flex-direction:column;gap:4px;height:100px}
+  border-bottom:2px solid var(--line);padding:3px 10px 5px;display:flex;flex-direction:column;gap:1px;height:100px}
 .mh .l1{display:flex;align-items:center;gap:8px}
 .mh .l1 h2{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}
 .mh .l1 .mhInk{font-size:19px;font-weight:900;color:var(--cyan2);letter-spacing:.02em;white-space:nowrap;line-height:1;
   padding:3px 7px;border:2px solid var(--line2);border-radius:10px;background:#1a1030}
 .mh .l2{display:flex;align-items:center;gap:6px;min-height:44px}
-.mh .l2 .hint{flex:1;min-width:0;font-size:11px;color:var(--dim);line-height:1.2;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.mh .l2 .hint{flex:1;min-width:0;font-size:12px;color:var(--dim);line-height:1.2;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .brush{display:inline-flex;align-items:center;gap:3px;height:40px;padding:0 8px;border-radius:10px;flex:0 0 auto;
   border:2px solid var(--line2);background:#1a1030;color:#fff;font-size:13px;font-weight:900;cursor:pointer}
 .brush.sel{border-color:var(--lime);color:var(--lime);box-shadow:0 0 12px rgba(166,255,94,.4)}
@@ -379,6 +384,9 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 #combo.t3{--out:1.8s}
 #combo.t3 .cn{animation:cIn3 .7s cubic-bezier(.2,1.6,.4,1) both,cShake .08s linear .7s 6,cOut .3s ease-in 1.8s both}
 #combo.t2{--out:1.5s}
+/* the announcer's quick exit: a bigger banner is coming, or this one is done */
+#banner.quick{transition:opacity .1s}
+#combo.out .cn,#combo.out .ct{animation:cOut .12s ease-in both!important}
 @keyframes cIn{0%{transform:scale(3) rotate(-12deg);opacity:0}100%{transform:scale(1) rotate(-4deg);opacity:1}}
 @keyframes cIn3{0%{transform:scale(2.6) rotate(10deg);opacity:0;filter:blur(6px)}100%{transform:scale(1) rotate(-4deg);opacity:1;filter:none}}
 @keyframes cShake{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(-4deg) translate(3px,-2px)}}
@@ -702,6 +710,58 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .calm .attract .mq i,.calm .attract .ins,.calm .attract .slot::before,.calm .newb,.calm .mSticker.in,.calm .mDex.in{animation-duration:.01s!important;animation-iteration-count:1!important}
 @media (prefers-reduced-motion:reduce){.attract .mq i,.attract .ins,.newb{animation:none!important}}
 /* ================= /META ================= */
+/* ================= ARCADE: mini-game cabinets, event scenes ================= */
+/* the canvas draws the machine; this frame only carries the words and the buttons */
+.screen.arcade{background:transparent;padding:0;pointer-events:none}
+.arcBody{position:absolute;inset:0;pointer-events:none;--ac:#ffc94d}
+.arcBody .btn{pointer-events:auto}
+.arcMsg{position:absolute;left:10px;right:10px;top:168px;display:flex;flex-direction:column;align-items:center;gap:2px;opacity:0;pointer-events:none}
+.arcMsg span{font-size:40px;font-weight:900;letter-spacing:.06em;color:#fff;text-transform:uppercase;padding:2px 18px;border-radius:14px;
+  background:rgba(18,9,31,.78);border:3px solid var(--ac);text-shadow:0 0 16px var(--ac),0 3px 0 #12091f;box-shadow:0 0 30px var(--ac)}
+.arcMsg small{font-size:14px;font-weight:900;letter-spacing:.08em;color:#fff;background:rgba(18,9,31,.85);padding:3px 10px;border-radius:8px}
+.arcMsg.show{animation:arcSlam .5s cubic-bezier(.2,1.7,.4,1) forwards}
+.arcMsg.win span{font-size:38px}
+.arcMsg.lose span{font-size:34px;color:var(--dim);border-color:var(--line2);box-shadow:none;text-shadow:0 3px 0 #12091f}
+.arcMsg.jp span{font-size:54px;color:#fff6c0;text-shadow:0 0 10px #ff2e88,0 0 24px #ffc94d,0 4px 0 #12091f;border-width:4px;animation:arcJp .6s steps(1) infinite}
+.arcMsg.show.jp{animation:arcSlam .6s cubic-bezier(.2,1.7,.4,1) forwards,arcShake .12s 5 .5s}
+@keyframes arcJp{0%{border-color:#ff2e88;box-shadow:0 0 34px #ff2e88}25%{border-color:#ffc94d;box-shadow:0 0 34px #ffc94d}
+  50%{border-color:#a6ff5e;box-shadow:0 0 34px #a6ff5e}75%{border-color:#2ee6d6;box-shadow:0 0 34px #2ee6d6}}
+@keyframes arcSlam{0%{opacity:0;transform:scale(2.4) rotate(6deg)}100%{opacity:1;transform:scale(1) rotate(-2deg)}}
+@keyframes arcShake{0%,100%{translate:0 0}25%{translate:-4px 2px}75%{translate:4px -2px}}
+.arcBot{position:absolute;left:12px;right:12px;bottom:10px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.arcHow{font-size:12px;color:var(--dim);text-align:center;line-height:1.3;max-width:500px}
+.arcInfo{font-size:14px;font-weight:900;color:var(--ac);letter-spacing:.08em;background:rgba(18,9,31,.85);padding:3px 14px;border-radius:10px;border:2px solid var(--line2)}
+.arcBot .row{justify-content:center}
+.btn.arcGo{min-width:210px;font-size:20px}
+.btn.arcGo.ready{animation:arcReady 1.1s ease-in-out infinite}
+@keyframes arcReady{0%,100%{box-shadow:0 4px 0 #3a0a22,0 0 14px rgba(255,46,136,.3)}50%{box-shadow:0 4px 0 #3a0a22,0 0 30px rgba(255,46,136,.85)}}
+/* event scenes: the vignette, outcome chips, the reveal */
+#scr-event h1.evTitle{font-size:26px;text-align:center;color:#ffe9b0;text-shadow:0 0 14px rgba(255,201,77,.7),0 3px 0 #12091f;
+  padding:4px 10px;border:3px solid #ffc94d;border-radius:12px;background:linear-gradient(180deg,#3a1a40,#1e1030);box-shadow:0 0 22px rgba(255,201,77,.35);align-self:center}
+.evScene{width:100%;height:190px;display:block;flex:0 0 auto;border-radius:14px;border:2px solid var(--line2);background:#0d0718;box-shadow:0 6px 0 #0a0514}
+.evText{font-size:15px;color:var(--text);background:rgba(0,0,0,.28);border-radius:12px;padding:8px 12px;border-left:4px solid var(--gold)}
+.choice{min-height:64px}
+.evChips{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.evChip{font-size:11px;font-weight:900;letter-spacing:.06em;padding:2px 7px;border-radius:7px;border:1.5px solid currentColor;line-height:1.3}
+.evChip.good{color:var(--lime);background:rgba(166,255,94,.08)}
+.evChip.bad{color:var(--blood);background:rgba(255,90,74,.08)}
+.evChip.rnd{color:var(--gold);background:rgba(255,201,77,.1)}
+.evChip.fight{color:var(--pink2);background:rgba(255,46,136,.1)}
+.evChip.neutral{color:var(--dim)}
+.evChip.dice{color:#12091f;background:var(--gold);border-color:var(--gold)}
+.evOut{display:flex;flex-direction:column;gap:7px}
+.evPick{font-size:15px;font-style:italic;color:var(--dim);text-align:center}
+.evLine{display:flex;align-items:center;gap:10px;padding:6px 12px;min-height:52px;border-radius:12px;background:rgba(0,0,0,.32);border:2px solid var(--line2);
+  font-size:18px;font-weight:900;letter-spacing:.03em;opacity:0;transform:translateX(-24px) scale(.9)}
+.evLine.in{animation:evIn .4s cubic-bezier(.2,1.6,.4,1) forwards}
+.evLine.good{border-color:var(--lime);color:#eaffd8;box-shadow:0 0 14px rgba(166,255,94,.25)}
+.evLine.bad{border-color:var(--blood);color:#ffd8d2}
+.evLine canvas{width:44px;height:44px;flex:0 0 auto}
+.evLine .ic{width:44px;text-align:center;font-size:24px;flex:0 0 auto}
+@keyframes evIn{0%{opacity:0;transform:translateX(-24px) scale(.9)}100%{opacity:1;transform:none}}
+.calm .arcMsg.show,.calm .evLine.in,.calm .btn.arcGo.ready{animation-duration:.01s!important;animation-iteration-count:1!important}
+@media (prefers-reduced-motion:reduce){.btn.arcGo.ready,.arcMsg.jp span{animation:none!important}}
+/* ================= /ARCADE ================= */
 </style>
 </head>
 <body>
@@ -762,6 +822,8 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   <!-- loot: the capsule ritual (the canvas draws the capsule under it) and the prize counter -->
   <div id="scr-capsule" class="screen capsule"><div id="capsuleBody" class="capBody"></div></div>
   <div id="scr-counter" class="screen"><div id="counterBody" class="col"></div></div>
+  <!-- ARCADE: the mini-game cabinets (the canvas draws the machine under this frame) -->
+  <div id="scr-arcade" class="screen arcade"><div id="arcadeBody" class="arcBody"></div></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>
 </div></div>

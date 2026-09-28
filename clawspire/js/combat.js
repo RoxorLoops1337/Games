@@ -32,7 +32,15 @@ const COMBAT = (() => {
   // Statuses with their own explicit rules (ticks, consumption, conversion) or
   // that persist for the fight. Anything else falls back to DATA.STATUS.stack.
   const RULED = ['str', 'thorns', 'armor', 'enrage', 'shield_up', 'dodge', 'chill', 'freeze',
-    'stun', 'poison', 'burn', 'regen', 'bleed', 'streak'];
+    'stun', 'poison', 'burn', 'regen', 'bleed', 'streak', 'luck'];
+  // Round 3: Lucky Lou's Luck meter (DESIGN.md "Lucky Lou and the synergy
+  // pass"). Luck is a player status that never decays, capped at max. With
+  // the meter on (the gambler, or the Rabbit's Foot rule) an empty grab gives
+  // miss Luck and a near miss (the game's SO CLOSE) near. A grab that
+  // delivers 2+ items cashes all of it out: per damage per Luck to ALL
+  // enemies (+rules.cashAmp), x jackpot on 3+ items. While the player holds
+  // Luck, dice (the `random` fx) roll twice and keep the best.
+  const LUCK = { max: 10, miss: 2, near: 1, per: 2, jackpot: 1.5 };
   const CLAW0 = { grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 };
 
   let override = null;
@@ -377,6 +385,17 @@ const COMBAT = (() => {
     };
     const rs = api.rulesOf(F.relics);
     F.rules = rs.rules; F.ruleSrc = rs.src;
+    // Round 3: who is fighting with which claw (relics read F.clawType), and
+    // the Luck meter: the gambler's gift, doubled by the Rabbit's Foot, or
+    // the Rabbit's Foot alone for any other crawler.
+    F.char = run.char || null;
+    F.clawType = run.clawType || 'classic';
+    {
+      const cd = run.char ? (tbl('CHARACTERS')[run.char] || null) : null;
+      const gift = !!(cd && cd.luck), foot = num(F.rules.luck, 0) > 0;
+      F.luckK = gift ? (foot ? 2 : 1) : (foot ? 1 : 0);
+    }
+    F.stats.tix = 0; F.stats.cash = 0;
     // A late-run bin can outgrow the cabinet: the overflow waits in the used
     // pile and cycles in through refills, so the physics budget holds.
     if (F.bin.length > MAX_CABINET) {
@@ -557,7 +576,7 @@ const COMBAT = (() => {
     if (!isPlayer(F, u) && !u.alive) return 0;
     if (id === 'block') return gainBlock(F, u, v);
     const before = st(u, id);
-    const now = clamp(before + v, 0, MAX_STACK);
+    const now = clamp(before + v, 0, id === 'luck' ? LUCK.max : MAX_STACK);
     if (now) u.status[id] = now; else delete u.status[id];
     const d = now - before;
     // Debuffs an enemy puts on the player skip this round's decay, so a
@@ -785,6 +804,14 @@ const COMBAT = (() => {
   // it Strength and plate lends it Armor while held, glass cuts it every turn.
   const BELLY_MAX = 4;       // items one enemy holds at once
   const DIGEST = 3;          // its turns before a swallowed item is digested
+  const DIGEST_FLOOR = 4;    // digestion never takes the player below this many real (non-junk) items
+  // The real items the player still has this fight (bin + used pile, junk aside).
+  function playable(F) {
+    let n = 0;
+    for (const i of F.bin) if (!isJunk(i)) n++;
+    for (const i of F.used) if (!isJunk(i)) n++;
+    return n;
+  }
   const GLASS_CUT = 4;       // hp per act a swallowed glass item costs its eater each turn
   const RAR = { junk: 0, c: 1, u: 2, r: 3, l: 4 };
   const MEAL_DEBUFFS = ['poison', 'burn', 'chill', 'weak', 'vuln', 'bleed', 'stun'];
@@ -884,6 +911,7 @@ const COMBAT = (() => {
       let s = rank * 10 + (i.plus ? 5 : 0) + F.rng() * 8;
       if (like === 'shiny') s += rank * 10 + (tagHas(d, 'metal') ? 6 : 0);
       else if (like && tagHas(d, like)) s += 100;
+      s += Math.max(0, num(d.lure, 0));   // bait (round 3): monsters go for it
       if (s > bs) { bs = s; best = i; }
     }
     return best;
@@ -904,12 +932,26 @@ const COMBAT = (() => {
       text(F, e, 'KABOOM');
       mealDebuffs(F, e, def, plus);
       loseHp(F, e, Math.max(8, 2 * (fxSum(def, plus, 'dmg') + fxSum(def, plus, 'random'))));
+      hook(F, 'onEat', e, inst, def);
+      return;
+    }
+    const bait = eatenOf(def, plus);
+    if (bait && (kind === 'drink' || kind === 'snack')) {
+      // Bait (a Poison Pill, a Hot Potato): it hurts whoever swallowed it.
+      F.used.push(inst);
+      emit(F, { t: 'binDigest', inst, idx, k: kind });
+      const ss = bait.status && typeof bait.status === 'object' ? bait.status : {};
+      for (const s in ss) if (e.alive) api.status(F, e, s, Math.max(0, num(ss[s], 0)));
+      if (num(bait.dmg, 0) > 0 && e.alive) loseHp(F, e, bait.dmg);
+      if (e.alive) text(F, e, 'BLEGH');
+      hook(F, 'onEat', e, inst, def);
       return;
     }
     if (kind === 'drink' || kind === 'snack') {
       // Drunk or eaten on the spot; the item goes to the used pile as if played.
       F.used.push(inst);
       emit(F, { t: 'binDigest', inst, idx, k: kind });
+      hook(F, 'onEat', e, inst, def);
       const bad = mealDebuffs(F, e, def, plus);
       const s = selfStr(def, plus);
       if (s > 0) api.status(F, e, 'str', s);
@@ -923,6 +965,7 @@ const COMBAT = (() => {
     e.belly.push(b);
     if (kind === 'armed') { b.str = 2; api.status(F, e, 'str', 2); }
     if (kind === 'plated') { b.armor = 1; api.status(F, e, 'armor', 1); }
+    hook(F, 'onEat', e, inst, def);
   }
   // Swallow up to n bin items. Returns how many went down.
   function gulpItems(F, e, n, like) {
@@ -970,6 +1013,14 @@ const COMBAT = (() => {
       }
       b.turns--;
       if (b.turns > 0) continue;
+      // never the player's last few items: a gulper that ate the bin down to
+      // one or two things made a fight nobody could win (the QA bot's
+      // Ironjaw, 17 of 19 digested), so it coughs this one back up instead
+      if (playable(F) < DIGEST_FLOOR) {
+        e.belly.splice(e.belly.indexOf(b), 1); e.belly.push(b);
+        spit(F, e, 1, 'burst');
+        continue;
+      }
       e.belly.splice(e.belly.indexOf(b), 1);
       unhold(F, e, b);
       F.digested.push(b.inst);
@@ -1090,6 +1141,7 @@ const COMBAT = (() => {
   api.hasAffix = hasAffix;
   api.BELLY_MAX = BELLY_MAX;
   api.DIGEST = DIGEST;
+  api.DIGEST_FLOOR = DIGEST_FLOOR;
 
   // ---------- boss signatures (DESIGN.md "Bosses") ----------
   /* Each boss has one signature trick that rides on top of its move, like
@@ -1471,9 +1523,11 @@ const COMBAT = (() => {
       F.streak = n > 0 || g.defs.length ? num(F.streak, 0) + 1 : 0;
       setStreak(F);
       const defs = g.defs.slice();
-      const fire = D().combosFor ? (D().combosFor(defs) || []) : [];
+      // the grab's state for recipes that read it (Lucky Seven)
+      const fire = D().combosFor ? (D().combosFor(defs, { luck: st(F.player, 'luck'), streak: F.streak }) || []) : [];
       for (const combo of fire) { if (F.phase !== 'player') break; if (combo && combo.id) fireCombo(F, combo, defs); }
       const got = Math.max(n, defs.length);
+      if (F.phase === 'player') luckAfterGrab(F, got);
       if (F.phase === 'player' && got >= 3) hook(F, 'onJackpot', got);
       if (F.phase === 'player') hook(F, 'onGrab', n);
       sanitize(F);
@@ -1483,6 +1537,90 @@ const COMBAT = (() => {
     return end(F, c);
   };
   api.comboFx = function (F, combo) { const c = begin(F); if (F && combo && F.phase === 'player') runCombo(F, combo); return end(F, c); };
+
+  // ---------- round 3: Luck, tickets, bait, materials ----------
+  // Add Luck to the player (capped at LUCK.max by api.status). label floats
+  // over the player. Returns the Luck actually gained.
+  function addLuck(F, v, label) {
+    const p = F.player;
+    const g = Math.min(Math.round(num(v, 0)), LUCK.max - st(p, 'luck'));
+    if (g <= 0) { if (v > 0) text(F, p, 'MAX LUCK'); return 0; }
+    if (label) text(F, p, label);
+    return api.status(F, p, 'luck', g);
+  }
+  // Spend every point of Luck: per damage each to ALL enemies (x jackpot
+  // on 3+ items). Relic damage rules: no attacker, so no Strength or Thorns.
+  function cashOut(F, got) {
+    const p = F.player, L = st(p, 'luck');
+    if (L <= 0 || F.phase !== 'player') return 0;
+    const amp = Math.max(0, num(F.rules && F.rules.cashAmp, 0));
+    const jack = got >= 3;
+    const dmg = Math.round(L * (LUCK.per + amp) * (jack ? LUCK.jackpot : 1));
+    delete p.status.luck;
+    emit(F, { t: 'status', who: 'p', idx: -1, s: 'luck', v: -L });
+    emit(F, { t: 'luck', k: 'cash', v: L, dmg, jackpot: jack });
+    text(F, p, (jack ? 'JACKPOT PAYOUT ' : 'CASH OUT ') + dmg);
+    if (amp > 0) ruleProc(F, 'cashAmp', 'HIGH ROLLER');
+    F.stats.cash = Math.max(num(F.stats.cash, 0), L);
+    log(F, `Cashed out ${L} Luck for ${dmg}.`);
+    for (const e of alive(F)) { if (F.phase === 'over') break; api.damage(F, null, e, dmg); }
+    if (F.phase !== 'over') hook(F, 'onCashOut', L, got);
+    return dmg;
+  }
+  // After each grab: a whiff fills the meter (when it is on), a grab of 2+
+  // items cashes it out.
+  function luckAfterGrab(F, got) {
+    if (got === 0 && F.luckK > 0) {
+      if (num(F.rules.luck, 0) > 0) ruleProc(F, 'luck', 'LUCKY FOOT');
+      addLuck(F, LUCK.miss * F.luckK, 'BAD BEAT');
+    } else if (got >= 2 && st(F.player, 'luck') > 0) cashOut(F, got);
+  }
+  // The game calls this on a near miss (SO CLOSE): +1 Luck with the meter on.
+  api.nearMiss = function (F) {
+    const c = begin(F);
+    if (F && F.phase === 'player' && num(F.luckK, 0) > 0) addLuck(F, LUCK.near * F.luckK, '+LUCK');
+    return end(F, c);
+  };
+  api.addLuck = function (F, v, label) { const c = begin(F); if (F && F.player) addLuck(F, v, label); return end(F, c); };
+  api.cashOut = function (F, got) { const c = begin(F); if (F && F.player) cashOut(F, got == null ? 2 : got); return end(F, c); };
+  api.luckOf = (F) => (F && F.player ? st(F.player, 'luck') : 0);
+  api.LUCK = LUCK;
+  // Arcade tickets a relic prints in the fight: banked on F.stats.tix, the
+  // game adds them to the payout (a 'Ticket relics' line).
+  api.tickets = function (F, v) {
+    v = Math.round(num(v, 0));
+    if (!F || v <= 0) return 0;
+    F.stats.tix = num(F.stats.tix, 0) + v;
+    text(F, F.player, `+${v} tickets`);
+    return v;
+  };
+  // A cabinet material reacted in the game (crack, shatter in the bin, a
+  // fuse lit, a bomb going off): relics hear it on onMaterial, and a glass
+  // item shattering in the bin counts as a shatter (onShatter) too.
+  api.material = function (F, kind, inst) {
+    const c = begin(F);
+    if (!F || F.phase === 'over' || !kind) return end(F, c);
+    const def = inst ? itemDef(inst.id) : null;
+    if (kind === 'shatter' && def) { F.stats.shattered++; hook(F, 'onShatter', inst, def); }
+    hook(F, 'onMaterial', kind, inst || null, def);
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  // Bait (def.eaten, per plus): what a swallowed Poison Pill or Hot Potato
+  // does to its eater instead of feeding it.
+  function eatenOf(def, plus) {
+    if (plus && def.plus && def.plus.eaten) return def.plus.eaten;
+    return def.eaten && typeof def.eaten === 'object' ? def.eaten : null;
+  }
+  // Hot items (def.hot) still in the bin as the turn ends burn their holder.
+  function hotHands(F) {
+    let v = 0;
+    for (const inst of F.bin) if (!inst.frozen) v += Math.max(0, num(itemDef(inst.id).hot, 0));
+    if (v <= 0) return;
+    text(F, F.player, 'HOT POTATO!');
+    api.status(F, F.player, 'burn', v);
+  }
 
   // Enemies hit by one hit of an item, by target mode.
   function hitTargets(F, mode, idx) {
@@ -1508,6 +1646,7 @@ const COMBAT = (() => {
       case 'small': return F.bin.filter(i => tagHas(itemDef(i.id), 'small')).length;
       case 'streak': return Math.max(0, num(F.streak, 0));
       case 'gold': return Math.floor(api.gold(F) / 10);
+      case 'luck': return st(F.player, 'luck');
       default: return 0;
     }
   }
@@ -1619,7 +1758,13 @@ const COMBAT = (() => {
         const lo = Math.round(num(f.min, f.max == null ? 1 : 0));
         const hi = Math.max(lo, Math.round(num(f.max, v || lo)));
         const n = Math.max(1, num(f.n, 1) | 0);
-        for (let i = 0; i < n && F.phase !== 'over'; i++) hit(F.rng.int(lo, hi));
+        // Luck: the dice roll twice and keep the best (never on a combo's roll)
+        const lucky = !ctx.combo && st(p, 'luck') > 0 && hi > lo;
+        if (lucky && !ctx.luckyRoll) { ctx.luckyRoll = true; text(F, p, 'LUCKY ROLL'); }
+        for (let i = 0; i < n && F.phase !== 'over'; i++) {
+          const r = F.rng.int(lo, hi);
+          hit(lucky ? Math.max(r, F.rng.int(lo, hi)) : r);
+        }
         break;
       }
       case 'poisonAll': {
@@ -1727,6 +1872,7 @@ const COMBAT = (() => {
     const p = F.player;
     hook(F, 'onTurnEnd');
     if (checkOver(F)) return end(F, c);
+    hotHands(F);   // a Hot Potato left in the bin (round 3)
     tickDmg(F, p, 'burn');
     if (checkOver(F)) return end(F, c);
     F.tilt = 0;

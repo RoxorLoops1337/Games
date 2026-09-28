@@ -45,7 +45,9 @@ const MAP = (() => {
   // Axial neighbour directions, clockwise from east.
   const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
   const TYPES = ['empty', 'fight', 'elite', 'treasure', 'gem', 'ink', 'brush', 'event',
-    'shop', 'rest', 'boss', 'start', 'forge', 'tower'];
+    'shop', 'rest', 'boss', 'start', 'forge', 'tower',
+    // ARCADE: the mini-game cabinets (placed off the road after it is carved)
+    'plinko', 'wheel', 'slots'];
   const TERRAINS = ['land', 'shallow', 'sea'];
   // Ground types (the tileset). Land is one of the first six; water keeps
   // its terrain name. A mountain is terrain 'land' with ground 'mountain'
@@ -80,7 +82,7 @@ const MAP = (() => {
   const SPREAD = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1 };
   // Landmarks: hidden tiles of these types are drawn as a dim silhouette in
   // the fog from the start, so the player can plan where to spend ink.
-  const LANDMARKS = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1, boss: 1, tower: 1 };
+  const LANDMARKS = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1, boss: 1, tower: 1, plinko: 1, wheel: 1, slots: 1 };
   // Tower bonuses (rolled at generate, awarded after the tower fight on top
   // of the relic and the view). game.js applies them; the ids match its fx
   // kinds ('ink' is bulbs, 'brush' a tool).
@@ -1259,11 +1261,209 @@ const MAP = (() => {
     st.revealed = true; st.visited = true;
     vision(M, start.q, start.r);
     M.tiles[key(boss.q, boss.r)].revealed = true;
+    placeArcade(M);   // ARCADE: mini-game cabinets off the road, roaming monsters
     M.revealedCount = countRevealed(M);
 
     if (!pathExists(M, start, boss, { any: true, land: true })) throw new Error('MAP.generate: boss unreachable by land');
     return M;
   }
+
+  // ================================================================ ARCADE
+  /* Arcade cabinets and roaming monsters (DESIGN.md "Arcade"). Placed after
+     the road is carved, on their own rng stream drawn from M.seed, so the
+     terrain, the content rolls and the road of every seed stay exactly what
+     they were. A cabinet (plinko, wheel, slots) takes an empty land hex at
+     least ARC_ROAD_GAP off the road (a detour), ARC_GAP from the others,
+     never on a tower's doorstep; it is a landmark (its silhouette shows in
+     the dark). Monsters (M.roam) stand on empty mainland hexes away from
+     the start and the boss, asleep until their hex is lit and the player
+     comes within ROAM_SIGHT; awake, each takes one step toward the player
+     every time the player walks (roamStep), over lit empty or cleared land
+     only, never onto the start or the boss. They never block anything: a
+     walk onto one (or one onto the player) is a normal fight. */
+  const ARC_GAMES = ['plinko', 'wheel', 'slots'];
+  const ARC_COUNT = [2, 3];
+  const ARC_ROAD_GAP = 2, ARC_GAP = 5;
+  const ROAM_N = { 1: 3, 2: 4, 3: 5 };
+  const ROAM_SIGHT = 4, ROAM_START = 5, ROAM_BOSS = 3, ROAM_GAP = 4;
+
+  function isArcade(t) { return !!t && ARC_GAMES.indexOf(t.type) >= 0; }
+
+  // What a cabinet holds: plays (plinko tokens, wheel spins, free slot
+  // pulls) and a seed; the game keeps its live session in content.arc.
+  function arcContent(M, t, g, rng) {
+    const a = rng(), b = rng();
+    const tokens = g === 'plinko' ? 1 + (a < 0.6 ? 1 : 0) + (b < 0.25 ? 1 : 0) : 1 + (a < (g === 'wheel' ? 0.35 : 0.3) ? 1 : 0);
+    return { seed: Math.floor(rng() * 1e9), diff: diffOf(M, t.q, t.r), tokens, game: g };
+  }
+
+  function placeArcade(M) {
+    const rng = U.rng((((M.seed >>> 0) ^ 0x5eed7a3c) >>> 0) || 1);
+    const T = M.tiles;
+    const road = M.road || [];
+    const free = [];
+    for (const k in T) {
+      const t = T[k];
+      if (t.type !== 'empty' || !isLand(t) || t.road) continue;
+      let d = Infinity;
+      for (const s of road) { const x = hexDist(t.q, t.r, s[0], s[1]); if (x < d) d = x; }
+      const tower = neighbors(M, t.q, t.r).some(([q, r]) => T[key(q, r)].type === 'tower');
+      if (!tower && hexDist(t.q, t.r, M.start.q, M.start.r) >= 3 && hexDist(t.q, t.r, M.boss.q, M.boss.r) >= 2) free.push({ t, d });
+    }
+    const n = rng() < 0.5 ? ARC_COUNT[0] : ARC_COUNT[1];
+    const games = rng.shuffle(ARC_GAMES.slice()).slice(0, n);
+    const placed = [];
+    // Relax in steps on small maps: nearer the road, closer together.
+    const passes = [[ARC_ROAD_GAP, ARC_GAP], [ARC_ROAD_GAP, 3], [1, 3], [1, 2]];
+    for (const g of games) {
+      let pick = null;
+      for (const [rg, gap] of passes) {
+        const cand = free.filter((f) => f.t.type === 'empty' && f.d >= rg && placed.every((p) => hexDist(p.q, p.r, f.t.q, f.t.r) >= gap));
+        if (cand.length) { pick = rng.pick(cand).t; break; }
+      }
+      if (!pick) break;
+      pick.type = g;
+      pick.known = true;
+      pick.content = arcContent(M, pick, g, rng);
+      placed.push(pick);
+    }
+    placeRoamers(M, rng);
+    return placed;
+  }
+
+  // The fight a monster starts: a normal encounter by its column (like a
+  // fight tile). The rng is drawn either way so the positions never depend
+  // on DATA being loaded.
+  function roamEnc(M, t, rng) {
+    const u = rng();
+    const enc = (typeof DATA !== 'undefined' && DATA && DATA.ENCOUNTERS) ? DATA.ENCOUNTERS[M.act] : null;
+    const list = enc && enc.normal;
+    if (!list || !list.length) return null;
+    const i = U.clamp(Math.floor((diffOf(M, t.q, t.r) * 0.7 + u * 0.5) * list.length), 0, list.length - 1);
+    return list[i].slice();
+  }
+
+  function placeRoamers(M, rng) {
+    const want = ROAM_N[M.act] || 3;
+    const main = {};
+    for (const k of landGroups(M)[0] || []) main[k] = 1;
+    const keys = [];
+    for (const k in M.tiles) {
+      const t = M.tiles[k];
+      if (main[k] && t.type === 'empty' && isLand(t) && hexDist(t.q, t.r, M.start.q, M.start.r) >= ROAM_START && hexDist(t.q, t.r, M.boss.q, M.boss.r) >= ROAM_BOSS) keys.push(k);
+    }
+    M.roam = [];
+    for (const k of rng.shuffle(keys)) {
+      if (M.roam.length >= want) break;
+      const t = M.tiles[k];
+      if (M.roam.some((m) => hexDist(m.q, m.r, t.q, t.r) < ROAM_GAP)) continue;
+      M.roam.push({ id: 'm' + M.roam.length, q: t.q, r: t.r, awake: false, enc: roamEnc(M, t, rng) });
+    }
+    return M.roam;
+  }
+
+  function roamAt(M, q, r) {
+    for (const m of (M && M.roam) || []) if (m.q === q && m.r === r) return m;
+    return null;
+  }
+  // Where a monster may stand: lit land, not the start or the boss; empty,
+  // cleared, or a plain pickup / fight / event it prowls over (it takes
+  // nothing). Landmarks (shops, rests, forges, towers, elites, treasure,
+  // the arcade cabinets) stay off limits until cleared.
+  const ROAM_OVER = { empty: 1, fight: 1, gem: 1, ink: 1, brush: 1, event: 1 };
+  function roamOk(t) {
+    return !!t && !!t.revealed && isLand(t) && t.type !== 'boss' && t.type !== 'start' && (!!ROAM_OVER[t.type] || !!t.done);
+  }
+  // A monster may step onto the player only on plain land (not the start, the boss or a ford).
+  function roamAmbushOk(t) { return !!t && isLand(t) && t.type !== 'boss' && t.type !== 'start'; }
+  // Hops from the player over the hexes a monster may walk (a BFS).
+  function roamDist(M) {
+    const d = {};
+    const P = M.pos;
+    d[key(P.q, P.r)] = 0;
+    const Q = [[P.q, P.r]];
+    for (let i = 0; i < Q.length; i++) {
+      const [q, r] = Q[i], dd = d[key(q, r)];
+      for (const [nq, nr] of neighbors(M, q, r)) {
+        const k = key(nq, nr);
+        if (d[k] != null || !roamOk(M.tiles[k])) continue;
+        d[k] = dd + 1;
+        Q.push([nq, nr]);
+      }
+    }
+    return d;
+  }
+  // The hex monster m steps to next: the player's own when adjacent (an
+  // ambush, unless hold or the player's hex forbids it), else the neighbour
+  // fewest hops from the player (ties in DIRS order), else null.
+  function roamNext(M, m, dist, occ, hold) {
+    dist = dist || roamDist(M);
+    const P = M.pos;
+    const here = dist[key(m.q, m.r)];
+    let best = null, bd = here == null ? Infinity : here;
+    for (const [nq, nr] of neighbors(M, m.q, m.r)) {
+      if (nq === P.q && nr === P.r) {
+        if (!hold && roamAmbushOk(M.tiles[key(nq, nr)])) return [nq, nr];
+        continue;
+      }
+      const k = key(nq, nr);
+      if (occ && occ[k]) continue;
+      const v = dist[k];
+      if (v != null && v < bd) { bd = v; best = [nq, nr]; }
+    }
+    return best;
+  }
+  /* One monster turn, after the player's step: sleepers whose hex is lit
+     and within ROAM_SIGHT wake (and hold still this turn: the telegraph),
+     the awake step one hex toward the player. opts.hold: the player's hex
+     is busy (content resolving), so nobody steps onto it. Returns {woke:
+     [m], moved: [{m, from: [q, r]}], ambush: m | null} (the first monster
+     to reach the player; the rest wait). */
+  function roamStep(M, opts) {
+    opts = opts || {};
+    const out = { woke: [], moved: [], ambush: null };
+    const list = (M && M.roam) || [];
+    if (!list.length) return out;
+    const P = M.pos;
+    const fresh = {};
+    for (const m of list) {
+      if (m.awake) continue;
+      const t = M.tiles[key(m.q, m.r)];
+      if (t && t.revealed && hexDist(m.q, m.r, P.q, P.r) <= ROAM_SIGHT) { m.awake = true; fresh[m.id] = 1; out.woke.push(m); }
+    }
+    const dist = roamDist(M);
+    const occ = {};
+    for (const m of list) occ[key(m.q, m.r)] = 1;
+    for (const m of list) {
+      if (!m.awake || fresh[m.id]) continue;
+      const nx = roamNext(M, m, dist, occ, opts.hold);
+      if (!nx) continue;
+      if (nx[0] === P.q && nx[1] === P.r) { out.ambush = m; break; }
+      const from = [m.q, m.r];
+      delete occ[key(m.q, m.r)];
+      m.q = nx[0]; m.r = nx[1];
+      occ[key(m.q, m.r)] = 1;
+      out.moved.push({ m, from });
+    }
+    return out;
+  }
+  // The telegraph: each awake monster's next hex if the player stood still.
+  function roamPlan(M) {
+    const out = [];
+    const list = (M && M.roam) || [];
+    if (!list.some((m) => m.awake)) return out;
+    const dist = roamDist(M);
+    const occ = {};
+    for (const m of list) occ[key(m.q, m.r)] = 1;
+    for (const m of list) if (m.awake) out.push({ m, next: roamNext(M, m, dist, occ, false) });
+    return out;
+  }
+  function roamRemove(M, id) {
+    if (!M || !M.roam) return null;
+    const i = M.roam.findIndex((m) => m.id === id);
+    return i >= 0 ? M.roam.splice(i, 1)[0] : null;
+  }
+  // ================================================================ /ARCADE
 
   // Charted hexes: lit tiles that are not sea (lit sea is seen, not charted).
   function countRevealed(M) {
@@ -1445,6 +1645,8 @@ const MAP = (() => {
         t.ground = isWater(t) ? t.terrain : t.elev >= HILL_ELEV ? 'hill' : (t.coast && t.elev < SAND_ELEV) ? 'sand' : 'grass';
       }
     }
+    // ARCADE: saves from before the roaming monsters carry none.
+    M.roam = Array.isArray(M.roam) ? M.roam.filter((m) => m && M.tiles[key(m.q, m.r)]) : [];
     if (M.islands == null) M.islands = islandsOf(M).length;
     if (M.water == null) { let wet = 0, n = 0; for (const k in M.tiles) { n++; if (isWater(M.tiles[k])) wet++; } M.water = Math.round((wet / Math.max(1, n)) * 100) / 100; }
     M.revealedCount = countRevealed(M);
@@ -1465,5 +1667,8 @@ const MAP = (() => {
     brushIds: toolIds, brushCells: toolCells, canBrush: canTool, brush: useTool,
     canMove, move, reachable, revealable,
     toPixel, fromPixel, hexCorners, size, bounds, pathExists, progress, serialize, deserialize,
+    // ARCADE: cabinets and roaming monsters
+    ARC_GAMES, ARC_ROAD_GAP, ARC_GAP, ROAM_N, ROAM_SIGHT, ROAM_START, ROAM_BOSS,
+    isArcade, placeArcade, roamAt, roamOk, roamDist, roamNext, roamStep, roamPlan, roamRemove,
   };
 })();

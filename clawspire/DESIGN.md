@@ -355,7 +355,8 @@ DATA.TERMS = { ink: 'bulb', inkPlural: 'bulbs', brush: 'tool', brushPlural: 'too
 DATA.CHARACTERS[id] = { id, name, title, blurb, hp, gold, bin: [itemIds...] /*12-14*/, claw: {...}, relic: relicId, unlock: 'start'|'act2'|'win', color }
 ```
 `knight` (swords & shields, sturdy), `alchemist` (potions, bombs, poison; 4 grabs, small claw), `rogue`
-(daggers, coins, dodge; fast claw, gold).
+(daggers, coins, dodge; fast claw, gold), `gambler` (Lucky Lou: dice, chips, the Luck meter; see
+"Lucky Lou and the synergy pass"). Optional: `luck` (the meter is his gift), `vsLine` (the versus card line).
 
 ```js
 DATA.ACTS[1..3] = { name, sub, palette: {bg, wall, accent}, floors: 1 }
@@ -859,6 +860,7 @@ uncapped id list.
 | feast | 🍗 Feast | food, heal, lifesteal, max HP | Feast Table (food: +1 Max HP, 3 a fight) | Blood Bag, Bat Wing, Vampire Dentures, Blood Orange, Vampire Fang |
 | greed | 🪙 Greed | gold fx, pay, per gold | Money Bags (gold gained hits ALL), Pay to Win (r) | Piggy Bank, Golden Ticket, Bribe, Golden Idol |
 | echo | ✨ Echo | magic tag, copy, again | Echo Chamber (every 3rd magic item resolves twice), Deja Vu (r) | Wizard Hat, Crystal Focus, Arcane Tome |
+| luck | 🍀 Luck | self Luck, per luck, random (dice) | Rabbit's Foot (the meter for anyone), High Roller, One-Armed Bandit (r), Golden Dice (l) | Poker Chip, Lucky Clover, Pity Timer, Lucky Cat, Wheel of Fortune |
 
 Every archetype has at least 4 items and 3 relics carrying its keyword (the data
 suite pins it). Bridges worth knowing: Ghost Pepper (burn + feast), Frozen Heart
@@ -1361,7 +1363,10 @@ every turn. They come back when the enemy **dies** (all, a burst), when the
 player deals **`COMBAT.hiccupAt(e)`** (15% of max hp, min 6) damage to it in
 one player turn (one item per threshold, HIC!; the green ring on the belly
 bubble is the meter), or are **digested** after `DIGEST` (3) of its turns
-(`F.digested`: gone for this fight only; the run's bin is never touched). An
+(`F.digested`: gone for this fight only; the run's bin is never touched).
+Digestion never takes the player below `DIGEST_FLOOR` (4) real (non-junk)
+items in the bin and the used pile: that item is coughed back up instead
+(`binReturn` why `burst`), so a gulper can never eat a fight into a stalemate. An
 escaping enemy takes its belly with it (`F.stolen`). Returns land in the bin
 (the used pile when the cabinet is full). Users: Trash Panda, Hungry Gloop,
 Prize Mimic, The Hoard (act 1), Scrap Goat, Ironjaw (act 2), Ice Mimic,
@@ -1739,6 +1744,418 @@ the elite affix, the faster ramp, boss rage), game (defaults and old saves, the
 unlock on a win and its reload, per-crawler caps, every twist in the game, the
 HUD badge, the observer and the sticker queue, discoveries and the screen, the
 board and the title, the daily).
+
+## Lucky Lou and the synergy pass (round 3)
+
+A fourth crawler whose mechanic turns a bad grab into a plan, plus content
+that ties the round 1 and 2 systems (materials, hungry monsters, tickets and
+capsules, claw types) into builds. Balance stays loose; new numbers sit in
+the band of the old ones.
+
+### Lucky Lou, The Gambler (`DATA.CHARACTERS.gambler`)
+
+70 hp, 110 gold, 3 grabs, a slightly loose claw (width 1, grip 0.9, speed
+1.1), unlock `act2` (a profile that already met a crawler's rule with another
+crawler of the same rule gets him at once: `unlocked()` in game.js). His
+bin (19): 5 Bone Dice (2-8), 5 Poker Chips (4 Block), Scratch Card,
+Fortune Cookie, Crisp Apple, 3 Lucky Clovers, 3 Pocket Dice. Starter relic
+**Snake Eyes**: the first grab each turn that brings up nothing rolls two
+dice (the fight rng): a random enemy takes the total; doubles give the grab
+back. Portrait (render.js `portrait`): green dealer's visor with a card in
+the band, a wink, a pencil moustache, a gold tooth, a red bow tie. Every
+crawler now has a `vsLine` (`DATA.CHARACTERS[id].vsLine`, Lou: "Double or
+nothing, pal.") typed in a speech bubble under their name on the versus card
+(`RENDER.vsCard`, `st.charLine` overrides). Tilt, the Prizedex, stickers and
+the daily rotation read `CHARACTERS` generically, so he joins all of them.
+
+**The Luck meter** (combat.js `LUCK = {max 10, miss 2, near 1, per 2, jackpot 1.5}`).
+Luck is a player status (`luck`, 🍀, count, never decays, capped at 10 by
+`COMBAT.status`). `F.luckK` is 1 for the gambler (`CHARACTERS[id].luck`), 1 for
+any crawler holding the Rabbit's Foot (`rules.luck`), 2 for Lou with it.
+- An empty grab gives `miss x luckK` Luck (BAD BEAT); a near miss (the game's
+  SO CLOSE, `COMBAT.nearMiss(F)`) gives `near x luckK`.
+- A grab that delivers 2+ items **cashes out** every point: `per` damage per
+  Luck to ALL enemies (+`rules.cashAmp`, High Roller), x1.5 on a jackpot (3+
+  items), no attacker (relic damage rules). Event `{t:'luck', k:'cash', v, dmg,
+  jackpot}`, then `onCashOut(F, luck, items)`. `F.stats.cash` keeps the best.
+- While Luck is held, dice (every `random` fx, never a combo's) roll twice and
+  keep the best (LUCKY ROLL). `dmgPer {per:'luck'}` reads it without spending.
+- `combosFor(defs, ctx)`: COMBAT passes `{luck, streak}` so a recipe can read
+  the grab's state (Lucky Seven).
+- The game draws the meter on the cabinet's left frame (`RENDER.luckMeter`,
+  game.js CONTENT block `luckDraw`): ten clover lamps, a LUCK plate, a pop on
+  each gain (a rising chime), a gold chase and CASH OUT! on the plate and the
+  marquee at a cash out (`luckFx`: coins, stars from the lamps, shake).
+
+### New content
+
+Items (16, `R3_ITEMS` in the data suite): Lou's Bone Dice, Poker Chip (starters),
+Scratch Card, Fortune Cookie (c), Double or Nothing, Lucky Horseshoe, Marked Deck
+(u), One-Armed Bandit (4 + 3 per Luck), Roulette Wheel (1-36) (r), Golden Dice (l:
+two rolls of 4-14 to ALL, 2 Luck); shared: **Poison Pill** (c, bait), **Hot
+Potato** (u, bait, hot), Crystal Dice (u, glass: cracks for +50%), Floating
+Token (u, magic metal coin: floats, magnets pull it), Firecracker (c, a real bomb:
+its fuse lights), Lucky Clover (small filler, 1 Luck). New art keys: `chip, card,
+horseshoe, clover, slot, potato, pill, cookie`.
+
+Item fields COMBAT reads: `lure` (score bonus when a gulper picks its meal, so
+bait goes first), `eaten {dmg, status: {s: v}}` (per plus: a swallowed Poison
+Pill / Hot Potato hurts the eater instead of feeding it: BLEGH), `hot` (Burn to
+the player at each turn end while it sits in the bin, not frozen: HOT POTATO!).
+
+Relics (15 + the starter): Luck: Pity Timer (c, a whiff: +1 Luck), Dealer's Visor
+(c, start with 3), Lucky Ticket (c, cash outs give Block and tickets), Lucky Cat
+(u, cash outs give gold), Wheel of Fortune (r, spins each turn: Block, zap ALL,
+Luck or a grab), Rabbit's Foot (r, `rules.luck`), High Roller (r, `rules.cashAmp`).
+Tickets and capsules: Ticket Roll (c, +2 tickets a combo), Gacha Charm (u,
+`loot.capUp` 0.2 per capsule step, `DATA.rollCapsule(rng, src, {up})`, and 2
+tickets a jackpot). Monsters: Heartburn (u, every meal gives the eater 4 Burn and
+2 Poison). Materials: Broken Mirror (c, crack or shatter: +1 Luck), Blasting Cap
+(u, a bomb in the bin: 3 Burn to ALL and 5 Block; a lit fuse 2 Block). Claws:
+Lodestone (u, 2+ metal in a grab: 3 Block each; Magnet Crane from 1, plus a zap),
+Sand Pail (u, 3+ items: 3 damage each to a random enemy; the Scoop from 2), Big
+Catch (u, the first delivery each turn +4 to the target; the Harpoon 8).
+Relics read the claw from `F.clawType` (`run.clawType`) and the crawler from `F.char`.
+
+New hooks (`DATA.RELIC_HOOKS`): `onCashOut(F, luck, items)`, `onEat(F, e, inst,
+def)` (every meal: bombs, drinks, snacks, held items, bait), `onMaterial(F, kind,
+inst, def)` with kind `crack | shatter | fuse | blast`, fired by the game through
+`COMBAT.material(F, kind, inst)` from `crack`, `shatterInBin`, `lightFuse` and
+`explode`; a shatter in the bin is also a shatter (`onShatter`, `stats.shattered`).
+New rules: `luck`, `cashAmp`. `COMBAT.tickets(F, v)` banks relic tickets on
+`F.stats.tix`; the payout adds a "Ticket relics" line (`DATA.payout({relicTix})`).
+
+The Luck archetype (`luck`, 🍀 Luck, #3ddc84): self Luck, `per: 'luck'` and every
+`random` fx (old dice join it). Bridges: Floating Token (luck + greed), Broken
+Mirror (glass + luck), Lucky Cat (luck + greed), Hot Potato (burn + feast).
+
+### Combos (10 new; `secret: true` hides a recipe)
+
+| tier | combo | recipe | effect |
+| --- | --- | --- | --- |
+| 1 | Double Dice | 2 dice | 4 to a random enemy, 2 Luck |
+| 1 | Poker Night | a card + a chip | 4 Block, 1 Luck |
+| 1 | Hot Lunch | food + a Pyro item | heal 3, 2 Burn |
+| 2 | Two Pair | two different pairs | 8 to ALL, 2 Luck |
+| 2 | Bad Medicine | Poison Pill + another potion | 4 Poison, 2 Weak to ALL |
+| 3 secret | Full House | 3 of one + 2 of another (replaces Three of a Kind, Two Pair) | 16 to ALL, 4 Luck, 10 gold |
+| 3 secret | Royal Flush | a card, a chip, a die and a coin | 20 to ALL, 5 Luck, 15 gold |
+| 3 secret | Dead Man's Hand | a skull, a bone and a card | 3 Vulnerable, 6 x3 |
+| 3 secret | Midas Touch | 3 different coins (the Hoard's coins count) | 14 to ALL, 20 gold |
+| 3 secret | Lucky Seven | 2+ items while holding exactly 7 Luck (`ctx`) | 7 x7 at random, 7 gold |
+
+A secret combo in the Prizedex (game.js `dexCard` / `dexArt`) is a "?" disc with
+"??? SECRET" until it fires once; its hint is "Recipe: ???". Once found it shows
+its name, examples and recipe like any other.
+
+Stickers: Big Payout (cash out 10 Luck), Secret Menu (fire a secret combo), The
+House Loses (win with Lou).
+
+### Dynamic fight music (audio.js)
+
+`AUDIO.musicState({hype, tense})` (the game calls it every frame from
+`juiceTick`; only a change acts): the fight, elite and boss tunes carry two
+extra layers on their own gains under the mode's layer, crossfaded with
+`setTargetAtTime` (time constant 0.45 s) and scheduled through a 2.5 s tail
+after they switch off. **Hype** (a streak of 3+ or the cabinet party lights):
+shaker 16ths, claps on 2 and 4, offbeat kicks, a tom fill closing each phrase.
+**Tense** (under 30% hp, or an elite / boss in phase two): a low filtered saw
+drone with a slow wobble, a heartbeat kick, a high tremolo minor second. Layer
+tunes come from their own seed (`clawspire:layers:<mode>`), so the base songs
+are unchanged. `AUDIO.victory()` (the last kill) fades the fight out under a
+major-key arpeggio and chord in the fight's key. All on the music bus: the music
+toggle and volume apply; before init everything is remembered and no-ops.
+`AUDIO.layers`, `_layerSong(mode)`, `_liveLayers()` are for tests.
+
+Tests: data (Lou, the pools, the new content and the Luck archetype, hooks
+with a recording COMBAT, the combos and secrets, Lucky Seven's ctx, the Gacha
+Charm odds, the payout line, the stickers), combat (the meter and its owners,
+whiffs and cash outs, the jackpot x1.5, High Roller, the cap, near misses,
+Snake Eyes and the Pity Timer, dice advantage, the Bandit, bait, the Hot Potato,
+materials and tickets, Lucky Seven and Midas in a fight, a 30 turn fuzz with
+every new relic on four claws), render (every new art key, Lou's portrait, the
+meter in every state, the versus line), audio (headless safety, the layer
+tunes, switching and crossfades, the victory sting, the music toggle), game
+(his card and unlock, a real fight with every claw type and the meter drawn,
+near misses and materials reaching COMBAT, the music layers and the sting,
+secrets hidden in the Prizedex, relic tickets on the payout).
+
+## Arcade (the map comes alive, round 3)
+
+The dead arcade wakes up: mini-game cabinets worth a detour, monsters that
+prowl the lit hexes, and events staged as little scenes. Balance is loose on
+purpose. Map rules live in `map.js` (the ARCADE block), the flow in `game.js`
+(the ARCADE block, reached through one-line hooks), the look in `render.js`
+(the ARCADE block, `arc*`), the sounds in `audio.js`, the frame in
+`index.html` (`#scr-arcade`, the ARCADE CSS block).
+
+**Cabinets (map).** Three new tile types, `plinko`, `wheel`, `slots`
+(`MAP.ARC_GAMES`, `MAP.isArcade`), 2 or 3 per map, each game at most once.
+`placeArcade(M)` runs inside `generate` after the road is carved, on its own
+rng drawn from `M.seed`, so every seed's terrain, content and road are
+unchanged. A cabinet takes an empty land hex at least `ARC_ROAD_GAP` (2) off
+the road, `ARC_GAP` (5) from the others, 3 from the start, 2 from the boss,
+never on a tower's doorstep (small maps relax the gaps in steps). Cabinets
+are landmarks (their silhouette shows in the dark, `LANDMARKS`). Content:
+`{seed, diff, game, tokens}`: plinko 1-3 tokens, the wheel 1-2 spins, the
+slots 1-2 free pulls. Old maps have none and load as ever.
+
+**The session.** Entering a cabinet opens screen `arcade` (sd `{arcade: {q,
+r}}`). Its state is `tile.content.arc` = `{g, tokens, used, res, pend, caps,
+mult, rot}` (plus `items`, `strips`, `stops` for the slots), saved with the
+map. A play spends its token and rolls its outcome the moment it starts
+(`pend`, saved); the animation plays it; the landing pays it and clears
+`pend` in the same beat and saves. A reload mid-play replays the same
+outcome; a reload after the landing pays nothing. Capsules won go to
+`arc.caps` and are cracked through the usual ritual (`showCapsule` with
+`then: {k: 'arcade', q, r}`, which comes back to the machine). Leave: a play
+in flight lands and pays first, unopened capsules go to the bank, and the
+tile is `done` once its plays are spent (plays left keep it open). A tap on
+the machine, Space or the big button plays; a tap mid-play hurries it
+(plinko fast-forwards then skips, the wheel skips, the reels slam shut), a
+tap in the celebration moves on. After `ARC.fastAfter` (6) plays on the
+profile (`meta.arc.plays`) everything runs faster.
+
+- **PLINKO** (`PLK`, `PLK_SLOTS`). A 9-row peg board (half pegs on the walls
+  kick a hugging token back in), nine slots: 8 gold and 3 tickets on the
+  edges, a capsule a step in, 2 bulbs, and the narrow JACKPOT in the middle
+  (`PLK.jpW` 34 px: a rare capsule, 30 gold, 10 tickets). The token sways
+  above the board; a tap drops it where you tapped. `plkSim(x, seed)`
+  simulates the whole drop at once (1/240 s steps, seeded jitter at each
+  peg, a stuck guard), the screen plays the recorded path back: pegs light
+  and ding up the scale, a drumroll and slow motion when it rolls toward the
+  jackpot over the last rows, "One slot off the JACKPOT!" beside it. Over
+  2000 drops aimed at the middle: 9% jackpot, 13-19% capsule.
+- **The PRIZE WHEEL** (`WHEEL`, `WH`). Twelve weighted wedges: gold 15/30,
+  tickets 5/8, +10 HP, a rare CAPSULE, CURSE (junk in the bin, and any double
+  is lost), x2 SPIN (double or nothing: a free respin and the next prize x2,
+  stacking to x8), JACKPOT (a rare capsule, legendary when doubled, 60 gold,
+  15 tickets). `wheelRoll` picks the wedge and where the flapper rests; a
+  plain wedge beside the jackpot or the capsule stops right at their shared
+  peg (the near miss). `whTarget` gives the rotation, the spin eases out
+  (quartic, 4.6 s) so the clicker (a flapper flicked by every peg, a tick
+  each) slows with suspense.
+- **LUCKY SLOTS** (`REEL`, `SLOT_ODDS`). Three reels of cherries, bells,
+  bulbs, a lucky 7 and three items from your own bin. The first pull is free
+  (the tile's pulls), then `ARC.slotCost` (3) tickets. Drag the lever down
+  (or tap). `slotRoll` rolls the category first (7s 3%, items 9%, cherries
+  8%, bells 8%, bulbs 6%, a cherry pair 13%) then stops that show it; 40% of
+  losses are near misses (two of a big symbol, the third one step off the
+  line). Reels stop one by one with thunks; two alike and one to go and the
+  last reel spins on while the lights race (the tease). Pays: 777 JACKPOT (a
+  rare capsule, 40 gold, 12 tickets), three of an item upgrades a copy of it
+  in the bin (another plus copy when all are plus), cherries 25 gold, bells 10
+  tickets, bulbs 3, a cherry pair 8 gold. Wins pour a coin waterfall from the
+  tray; a paytable sits under the machine.
+
+Wins celebrate by tier (the DOM sign `#arcMsg`, chasing cabinet bulbs, coins
+and tickets flying to the HUD counters, confetti, rings); the jackpot adds a
+flash, confetti from both corners, chromatic rings, slow motion and the
+fanfare. Gold scales x(1 + 0.35 per act after the first).
+
+**Roaming monsters** (`M.roam = [{id, q, r, awake, enc}]`). 3 / 4 / 5 per
+act (`ROAM_N`), on empty mainland hexes at least `ROAM_START` (5) from the
+start and `ROAM_BOSS` (3) from the boss, `ROAM_GAP` (4) apart, asleep, each
+with a normal encounter by its column. After every step of a walk
+(`walkStep`): stepping onto a monster starts its fight; else `roamStep`
+wakes the sleepers whose hex is lit and within `ROAM_SIGHT` (4) (a "!" and a
+hold that turn: the telegraph), and every awake one steps one hex toward you
+(fewest hops over the hexes it may walk: lit land, not the start or the
+boss, empty, cleared, or a fight / gem / bulb box / tool / event it prowls
+over; never a landmark). The first to reach you jumps you (AMBUSH!, through
+the announcer); when your hex is busy (content resolving) it waits. The
+fight is normal with a Monster bounty capsule on top; a monster beaten on a
+tile with content lets that tile resolve right after. Monsters never block
+a path (walking onto one is a fight). The map draws them on lit hexes: zZ
+asleep, a pulsing red rim awake with a chevron, a dotted trail and a dashed
+rim on the hex it steps to next (`roamPlan`), a hop when it moves. Saves
+from before carry no monsters.
+
+**Event scenes.** `showEvent` stages the event: a marquee title, a canvas
+vignette (`RENDER.arcScene`: the act's backroom with a flickering neon word,
+a prop per event, the subject in a spotlight, drifting motes; an
+`art/events/<id>.png` still replaces it), the text on a card, and big
+choices with outcome chips (`arcFxChips`: -6 HP, RANDOM ITEM ?, FIGHT ...,
+a ROLL chip when the outcome is random). Choosing resolves the fx as before
+(pickers and fights included), then the outcome view: a die tumbles across
+the scene when the choice was random, then the lines (HP, gold, bulbs,
+tools, relics, items added, upgraded, removed; the difference of the run
+before and after) stamp in with sounds, Continue goes to the map. The
+outcome is saved on the event (`ed.out`): a reload shows it, never pays it
+again. A fight choice goes straight to its fight; headless (the suites) it
+resolves straight to the map as before (`GAME.arc.force` opts in).
+
+**Sounds.** `plinkDrop, peg, wheelSpin, wheelTick, lever, reelSpin,
+reelStop, drumroll, arcWin, arcJackpot, arcLose, arcIn, diceRoll, diceLand,
+roamWake, roamStep, ambush`.
+
+**Save fields.** Map: tile types `plinko | wheel | slots` with
+`content.arc` (the session), `M.roam`. Run sd: `{arcade: {q, r}}`,
+`event.out`, a capsule's `then: {k: 'arcade', q, r}`, the roam fight's `then:
+{roam, ambush, enter}`. Meta: `arc {plays, jackpots}`. No key was renamed.
+
+`GAME.arc` exposes the tables and dials, `show, act, skip, leave, hurry,
+pointer, session, plkSim, plkPegs, plkPays, plkEdges, wheelRoll, wheelPays,
+whTarget, slotRoll, slotEval, slotPays, fxChips, roamStep, roamFight, state,
+ev, msg, info, force`. `MAP` adds `ARC_GAMES, isArcade, placeArcade,
+roamAt, roamOk, roamDist, roamNext, roamStep, roamPlan, roamRemove` and the
+dials. `RENDER` adds `arcIcon, arcCabinet, arcPlinko, arcWheel, arcSlots,
+arcSym, arcRoamer, arcScene, arcDice`. Tests: map (placement over seeds,
+off the road, landmarks, reachable, deterministic; monsters placed, wake,
+telegraph, step, ambush, hold, dark and start and landmark rules, a world
+fuzz, the boss always reachable, save round trip, old saves), game (every
+cabinet from its tile, plinko determinism and odds, pay once across
+reloads, the wheel's double / curse / jackpot and ticks, slots odds, near
+misses, ticket pulls and refusals, item upgrades, jackpot reloads, Leave,
+monster fights, bounties, ambushes, the tile under a monster, event chips,
+dice and reveal and its reload, old saves), render (icons distinct, every
+machine state, symbols, monsters, every event vignette, dice), audio (every
+arcade voice).
+
+## Polish and QA (round 3)
+
+Spectacle must never turn into clutter, and nothing may cost a frame it
+does not need. Owner of this section: the QA pass.
+
+### The announcer (game.js ANNOUNCER, `GAME.ann`)
+
+One lane for the big centre-screen announcements: the `#banner` kinds (turn
+banners, FIGHT / ELITE / BOSS, JACKPOT, phase two names, FINAL PHASE,
+VICTORY) and the `#combo` banner. Only one is on screen at a time.
+`banner(str, kind, secs, cls)` and `queueCombo(ev)` keep their old look and
+call `announce({key, cls, dur, show, hide})`:
+
+| class | priority | max wait | who |
+| --- | --- | --- | --- |
+| `turn` | 10 | 0.5 s | TURN n, YOUR TURN, ENEMY TURN, TURN OVER (one key: the newer replaces) |
+| `fight` | 20 | 1.2 s | FIGHT / ELITE / BOSS at the start of a fight, AMBUSH! (shares the turn key: the newer replaces) |
+| `combo` | 50 | 3 s | named grab combos, one after another in firing order |
+| `jackpot` | 55 | 1 s | JACKPOT (three in one grab) |
+| `rage` | 70 | 2.5 s | an elite or boss's phase two name |
+| `final` | 80 | 3 s | the Prize Master's FINAL PHASE |
+| `victory` | 90 | 4 s | VICTORY |
+
+- A bigger class interrupts a smaller one: the live one gets a quick exit
+  (`ANN.EXIT` 0.14 s: `#banner.quick` fades in 0.1 s, `#combo.out` runs cOut in
+  0.12 s) and the bigger one follows. An interrupted announcement that had
+  shown for less than half its time comes back afterwards if it is still
+  fresh (a combo shows its words again without re-firing its rings, flash
+  and sting); a turn banner never comes back.
+- An equal or smaller one waits, bigger first then oldest, and is dropped
+  once it has waited longer than its max wait (a YOUR TURN behind a VICTORY
+  sweep is simply never shown). At most `ANN.QMAX` (8) wait.
+- The same key again merges: the live one is re-shown with the new words
+  (TURN OVER -> ENEMY TURN), a waiting one takes the new payload.
+- Every end goes through the quick exit, so the live banner and one stepping
+  out never overlap (`GAME.ann.visible()` is at most 1, the tests pin it).
+- While a full-stage card is up (the versus card, a boss finale's title
+  card) the lane holds: the live one steps out and the queue waits (and ages).
+- A tap in the fight cuts the live banner short (after 0.3 s on screen).
+- While a banner is up it is a keep-out zone for the floating labels
+  (`fx.zone('ann')`): LUCKY CLAW!, KABOOM!, RED HOT! and the badges flow
+  around it instead of under it. Those stay spatial labels (they belong to
+  the place in the cabinet or the arena where they happen), managed by the
+  label layout, not by the announcer.
+- Leaving the fight, and every `startFight`, clears the lane.
+- Old names still read: `S.comboQ` (the waiting combos), `S.comboT`,
+  `S.bannerT`, `S.bannerStr`, `S.lastCombo`.
+
+The corner lane is the sticker slap and the discovery toast (`metaToast`,
+one at a time, top right / top left, dex sightings merge into one toast). It
+now also waits while a full-stage card owns the screen.
+
+`GAME.ann = {ANN, announce, banner, combo, tap, clear, visible, blocked, cur,
+queue, log, exiting}`.
+
+### Performance
+
+Measured with `Emulation.setCPUThrottlingRate 4` in headless Chromium at a
+390 x 844 phone viewport, DPR 2 (canvas scale 1.44). The container has no
+GPU: canvas raster runs on the main thread in software, so the throttle
+slows raster too and the absolute numbers are far worse than a phone's (a
+phone rasters the canvas on its GPU). The relative changes are what count.
+
+- Item sprites (`RENDER.item`): an item's art is static, so each (def, plus,
+  frozen, device scale in quarter steps) is drawn once on a tight offscreen
+  canvas and blitted after (one `drawImage` instead of a dozen clipped
+  paths). Glow and alpha stay live. Headless / no transform / a flat-colour
+  pass / a full cache (700): the live path, so the art suites still test the
+  art. 24 items: 5.3-6.4 ms -> 3.2-3.9 ms per frame (1x).
+- The cabinet: the static back (frame, neon tube, back panel, chute) is one
+  cached layer per (size, neon, tilt, scale) (`RENDER.perf.cabLayer`), and
+  the ~67 chase bulbs are batched (one path for the dark ones, one per lit
+  colour, every glow under one additive composite instead of a save /
+  composite / restore each). Neutral in software raster, a large cut in draw
+  calls and state changes on a GPU.
+- The arena backdrop is clipped to the band above the cabinet (it used to
+  fill the whole 540 x 960 stage twice under the cabinet and the control bar).
+- The chrome titles (the versus card name, BOSS DEFEATED / ELITE DOWN) are
+  cached sprites (five passes of big stroked, clipped text per frame before);
+  the finale's 14 rays are two fills.
+- The map caches its reachable ring and the "n of m hexes lit" line on
+  (position, bulbs, lit count) instead of rebuilding a Set and walking every
+  tile each frame, and pools the road's points.
+- Adaptive quality (`perfTick`, `GAME.perf`): real frame times averaging over
+  `PERF.slow` (26 ms) for 0.5 s switch `RENDER.fx.lite` on (half the preset
+  particle counts, half the pool); under `PERF.fast` (19 ms) for 2.5 s (x the
+  number of times it has switched) lets go. A hitch over 250 ms is ignored.
+
+Numbers (mean frame ms at 4x, HEAD -> this pass, interleaved runs): fight
+idle 93-97 -> 85-88; the sustained heavy moment (JACKPOT + a tier 3 combo +
+a label storm + party lights + confetti) 110 -> 89; boss idle 90-106 ->
+84-97. The boss finale (ten chained blasts: ~400 particles, 36 flyers, the
+whiteout, the card) stays around 210 ms at 4x in software raster and is the
+case the lite mode exists for. Unthrottled: 52-54 fps in software raster.
+
+### Feel
+
+- The victory outro fast-forwards for a veteran (`OUTRO_FAST`: 10 fights on
+  the profile): 1.0 s instead of 1.5, the ticket stream holds 1.5 s at most
+  instead of 2.4, and an elite's finale holds the outro 0.8 s less. The
+  versus card, the capsule ritual and the payout tally already had theirs. A
+  tap skips all of them, and now the banners too.
+- Enemy status chips are centred under the enemy and cut to one row that
+  stops short of the neighbour's (`statusPips(..., {maxW, center, rows})`, the
+  rest is a "+N" chip); a tap on the enemy lists every status in words. They
+  used to run into each other from six statuses on.
+- The player's status row scrolls instead of hiding chips under the GRABS
+  pill, and packs tighter from six chips on (`#pstatus.many`).
+- The versus card fits the crawler's name between the edge and the seam, and
+  draws its comeback line over both panels, left of the seam (the enemy's
+  panel used to cut "prize!" off, and SIR GRABSWORTH ran into the lightning).
+- The map head shows "Act n" (the act's name never fit beside the buttons:
+  "ACT 1: T..."; the name is on the map's own plate); its hint is 12 px.
+
+### Bugs found and fixed
+
+- Two big banners at once (the pre-announcer game: JACKPOT or ENEMY TURN in
+  the player row while a combo banner filled the arena; the bot's HEAD run
+  caught "ENEMY TURN / Hat Trick x3"). The announcer.
+- A gulper could digest the whole bin (the bot's Ironjaw fight: 17 of 19
+  items digested, the enemy healing on what was left, no way to win).
+  `DIGEST_FLOOR`.
+- The layout nits above (status chips, the player row, the versus card, the
+  map head).
+
+Known and left for the owner: an elite's Armor can stack without a cap (the
+bot's Frost Knight reached 34 Armor by turn 110 against a low-damage build;
+the player loses rather than locks), and the magnet claw on a crawler with
+little metal (Lucky Lou) makes very long act 1 fights for a random bot.
+- JACKPOT outranks the combos it causes: it holds its 1.4 s and the combos
+  chain after it (the old way showed both at once, one over the arena and
+  one over the player row).
+
+### The playtest bot (scratchpad, not the repo)
+
+A Playwright bot plays whole runs in a real Chromium page through
+`window.CS.GAME`: every crawler, every claw type, Tilt 0 / 1 / 3 / 5 / 7 / 10,
+half the runs in god mode to reach the later acts. It grabs at random items,
+takes rewards and capsules, shops and buys at the prize counter, rests,
+takes events, walks the map to landmarks and the boss, and reloads the page
+mid-fight and mid-screen now and then. It watches for page and console
+errors, no progress for 25 s of game time, NaN / undefined / Infinity in
+the DOM and the HUD, overlapping or off-stage buttons, screens with no
+enabled button, clipped single-line text, and two big banners at once.
 
 ## Quality bar (Game of the Year, mobile)
 

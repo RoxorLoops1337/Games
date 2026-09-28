@@ -489,4 +489,100 @@ T.test('claw types: every claw voice plays, no-ops cold, and the spin-up is thro
   T.eq(AUDIO.sfx('clawSpin'), false, 'a second one right away is throttled');
 });
 
+T.test('arcade: every arcade voice plays, no-ops cold, and the clicker is throttled', () => {
+  const ARC_NAMES = ['plinkDrop', 'peg', 'wheelSpin', 'wheelTick', 'lever', 'reelSpin', 'reelStop', 'drumroll', 'arcWin', 'arcJackpot', 'arcLose', 'arcIn', 'diceRoll', 'diceLand', 'roamWake', 'roamStep', 'ambush'];
+  const { AUDIO, fake } = bootFake();
+  for (const n of ARC_NAMES) { T.ok(AUDIO.names.includes(n), 'sfx name listed: ' + n); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of ARC_NAMES) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    let r = false;
+    try { r = AUDIO.sfx(n, { pitch: 1.2 }); } catch (e) { T.ok(false, n + ' threw ' + e); }
+    T.ok(r && fake.count.total - before >= 2, 'arcade sfx ' + n + ' plays');
+  }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('wheelTick'), 'a click');
+  T.eq(AUDIO.sfx('wheelTick'), false, 'a second click in the same instant is throttled');
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('arcJackpot') && !AUDIO.sfx('arcJackpot'), 'one jackpot fanfare at a time');
+});
+
+/* ------------------------------------------- round 3: dynamic fight music */
+T.test('dynamic music: the layers never throw headless', () => {
+  const { AUDIO } = boot({ only: ['util', 'audio'] });
+  let r;
+  try { r = AUDIO.musicState({ hype: true, tense: true }); } catch (e) { T.ok(false, 'musicState threw before init ' + e); }
+  T.ok(r && r.hype && r.tense && r.changed, 'the wanted layers are remembered before init');
+  T.eq(JSON.stringify(AUDIO.layers), '{"hype":true,"tense":true}', 'layers getter');
+  T.eq(AUDIO.musicState({ hype: true, tense: true }).changed, false, 'the same state again is not a change');
+  T.eq(AUDIO.victory(), false, 'no sting before init');
+  T.eq(JSON.stringify(AUDIO.layers), '{"hype":false,"tense":false}', 'the victory clears the layers');
+  AUDIO.musicState(null); AUDIO.musicState(); AUDIO.musicState({ hype: 'yes' });
+  T.eq(AUDIO._layerSong('map'), null, 'only the fight modes layer up');
+  for (const m of ['fight', 'elite', 'boss']) {
+    const L = AUDIO._layerSong(m), base = AUDIO._song(m);
+    T.ok(L && L.hype.length === base.len && L.tense.length === base.len, m + ': the layers loop with the base song');
+    const hv = new Set(L.hype.flat().map(e => e.v)), tv = new Set(L.tense.flat().map(e => e.v));
+    T.ok(hv.has('shaker') && hv.has('clap') && hv.has('tom'), m + ': the hype layer is percussion (shaker, claps, tom fills)');
+    T.ok(tv.has('drone') && tv.has('hbeat') && tv.has('trem'), m + ': the tense layer is a drone, a heartbeat and a tremolo');
+    T.ok(L.tense.flat().every(e => e.n == null || Number.isFinite(e.n)), m + ': finite notes');
+  }
+  const again = boot({ only: ['util', 'audio'] }).AUDIO;
+  T.eq(JSON.stringify(again._layerSong('boss')), JSON.stringify(AUDIO._layerSong('boss')), 'the layer tunes are deterministic');
+  T.eq(JSON.stringify(again._song('fight').steps), JSON.stringify(boot({ only: ['util', 'audio'] }).AUDIO._song('fight').steps), 'the base songs are unchanged by the layers');
+});
+
+T.test('dynamic music: layers switch on state changes, crossfade and respect the music toggle', () => {
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  const run = (secs) => { let n = 0; for (let i = 0; i < secs / 0.025; i++) { ac.currentTime += 0.025; n += AUDIO._tick(); } return n; };
+  AUDIO.music('fight');
+  run(1);
+  let L = AUDIO._liveLayers();
+  T.eq(L.length, 1, 'the fight tune carries the layer gains');
+  T.ok(L[0].hype === 0 && L[0].tense === 0, 'both layers start silent');
+  const base = run(4);
+  AUDIO.musicState({ hype: true });
+  L = AUDIO._liveLayers();
+  T.ok(L[0].hype === 1 && L[0].tense === 0, 'a streak brings in the hype layer');
+  const hyped = run(4);
+  T.ok(hyped > base * 1.3, `more notes with the percussion on (${base} -> ${hyped})`);
+  AUDIO.musicState({ hype: true, tense: true });
+  T.ok(AUDIO._liveLayers()[0].tense === 1, 'low hp brings in the tense layer');
+  const both = run(4);
+  T.ok(both > hyped, `and more again with the tension (${hyped} -> ${both})`);
+  AUDIO.musicState({ hype: false, tense: false });
+  L = AUDIO._liveLayers();
+  T.ok(L[0].hype === 0 && L[0].tense === 0, 'switched off');
+  const tail = run(1.5);
+  T.ok(tail > base / 4 * 1.2 * 0.8, 'the layers keep playing through their fade tail');
+  run(3);
+  const after = run(4);
+  T.ok(after < both, `and stop after it (${after})`);
+  // a boss keeps the state it is handed; a map tune has no layers
+  AUDIO.musicState({ tense: true });
+  AUDIO.music('boss');
+  run(1.5);
+  T.ok(AUDIO._liveLayers().some(x => x.mode === 'boss' && x.tense === 1 && !x.fading), 'the boss tune starts with the tension already on');
+  AUDIO.music('map');
+  run(1.5);
+  T.eq(AUDIO._liveLayers().filter(x => !x.fading).length, 0, 'the map has no layers');
+  T.eq(JSON.stringify(AUDIO.layers), '{"hype":false,"tense":false}', 'leaving the fight resets them');
+  // the victory sting
+  AUDIO.music('fight');
+  run(1);
+  const n0 = fake.count.total;
+  T.eq(AUDIO.victory(), true, 'the victory sting plays');
+  T.ok(fake.count.total - n0 >= 8, 'a fanfare of voices');
+  T.ok(AUDIO._live().every(x => x.fading), 'the fight fades out under it');
+  // music off: no sting, no layers
+  AUDIO.toggleMusic();
+  T.eq(AUDIO.victory(), false, 'music off: no sting');
+  AUDIO.musicState({ hype: true });
+  T.eq(AUDIO._liveLayers().filter(x => !x.fading).length, 0, 'music off: nothing layers up');
+});
+
 T.done();
