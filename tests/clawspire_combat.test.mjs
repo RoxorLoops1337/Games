@@ -3734,4 +3734,41 @@ if (hasData) {
   }
 }
 
+// ---------- TRD (round 14): an evolved pet's flourish (DESIGN.md "The Trading Post and pet evolution (round 14)")
+{
+  const LT = boot({ only: ['util', 'data', 'combat'] });
+  const C = LT.COMBAT, D = LT.DATA, UT = LT.U;
+  const tfight = (pet) => {
+    const run = { hp: 50, maxHp: 70, act: 1, char: 'knight', relics: [], claw: { grabs: 3 }, pet: { id: pet, xp: 100, lv: 5, evo: 1 },
+      bin: ['rusty_sword', 'crisp_apple', 'femur'].map((id, i) => ({ uid: 't' + i, id, plus: false })) };
+    const F = C.newFight(run, ['rat', 'rat'], UT.rng(21));
+    for (const e of F.enemies) { e.hp = e.maxHp = 300; e.status = {}; e.block = 0; }
+    F.player.block = 0; F.player.status = {};
+    return F;
+  };
+  h.test('trd: every evolved form\'s flourish does what its card says', () => {
+    for (const id of D.PET_IDS) {
+      const f = D.PEV_FORMS[id], F = tfight(id), x = f.fx;
+      const hp0 = F.enemies.map(e => e.hp), me0 = F.player.hp;
+      const ev = C.pevTrick(F, id);
+      h.ok(ev[0] && ev[0].t === 'proc' && ev[0].src === 'pet' && ev[0].id === 'pev:' + id && ev[0].text === f.trick.toUpperCase() + '!', id + ': a pet proc named after the trick');
+      const lost = F.enemies.map((e, i) => hp0[i] - e.hp);
+      if (x.k === 'dmg') h.ok(lost.reduce((a, b) => a + b, 0) === x.v && lost.filter(v => v > 0).length === 1, `${id}: ${x.v} to one random enemy (${lost})`);
+      if (x.k === 'dmgAll') h.ok(lost.every(v => v === x.v), `${id}: ${x.v} to ALL (${lost})`);
+      if (x.k === 'block') h.eq(F.player.block, x.v, id + ': Block');
+      if (x.k === 'heal') h.eq(F.player.hp - me0, x.v, id + ': a heal');
+      if (x.k === 'status') h.ok(F.enemies.every(e => (e.status[x.s] | 0) >= x.v || (x.s === 'chill' && e.status.freeze > 0)), `${id}: ${x.v} ${x.s} on ALL`);
+      h.ok(F.pevLog && F.pevLog.length === 1 && F.pevLog[0].pet === id, id + ': logged on F.pevLog');
+    }
+    // nothing for an unknown pet, nothing once the fight is over, never a NaN
+    const F = tfight('cat');
+    h.eq(C.pevTrick(F, 'dragon').length, 0, 'an unknown pet does nothing');
+    F.phase = 'over';
+    h.eq(C.pevTrick(F, 'cat').length, 0, 'a finished fight does nothing');
+    const Z = tfight('mouse');
+    for (let i = 0; i < 400 && Z.phase !== 'over'; i++) C.pevTrick(Z, 'mouse');
+    h.ok(Z.phase === 'over' && Z.enemies.every(e => Number.isFinite(e.hp) && e.hp >= 0), 'Arc Zap over and over wins the fight cleanly');
+  });
+}
+
 h.done();

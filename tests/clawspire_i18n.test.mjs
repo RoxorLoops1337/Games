@@ -8,7 +8,7 @@ import { boot, harness, DIR } from './clawspire_lib.mjs';
 const h = harness('clawspire i18n');
 const DT = 1 / 60;
 const stepFor = (G, secs) => { for (let i = 0, n = Math.round(secs / DT); i < n; i++) G.update(DT); };
-const EM = '—';
+const EM = String.fromCharCode(0x2014);
 
 /* ------------------------------------------------- the module */
 h.test('T: English is the key, {vars} fill in, Dutch replaces it', () => {
@@ -101,8 +101,8 @@ h.test('the Dutch table: every key exists in English, no em dashes, vars line up
   }
   h.eq(badC.length, 0, 'every content entry exists in DATA: ' + badC.slice(0, 4).join(' | '));
   h.eq(badV.length, 0, 'item texts keep their {v} tokens: ' + badV.slice(0, 4).join(' | '));
-  const lang = fs.readFileSync(path.join(DIR, 'js', 'lang_nl.js'), 'utf8') + fs.readFileSync(path.join(DIR, 'js', 'i18n.js'), 'utf8');
-  h.ok(lang.indexOf(EM) < 0, 'no em dash in js/lang_nl.js or js/i18n.js');
+  const lang = fs.readFileSync(path.join(DIR, 'js', 'lang_nl.js'), 'utf8') + fs.readFileSync(path.join(DIR, 'js', 'lang_nl2.js'), 'utf8') + fs.readFileSync(path.join(DIR, 'js', 'i18n.js'), 'utf8');
+  h.ok(lang.indexOf(EM) < 0, 'no em dash in js/lang_nl.js, js/lang_nl2.js or js/i18n.js');
   // the most visible content is in
   for (const id of ['knight', 'alchemist', 'rogue', 'gambler', 'engineer', 'bubbler']) h.ok(nl.content.char[id] && nl.content.char[id].blurb, 'character blurb: ' + id);
   for (const id in DATA.STATUS) h.ok(nl.content.status[id] && nl.content.status[id].name && nl.content.status[id].text, 'status: ' + id);
@@ -258,6 +258,255 @@ h.test('English is untouched: the hooks are a pass-through', () => {
   h.eq(T._nodes.hint.textContent, G.S.hint, 'the hint shows the English as set');
   h.eq(T.I18N.tr('END TURN'), 'END TURN', 'tr is the identity in English');
   h.eq(T.RENDER.fx.text(100, 100, 'BLOCKED', '#fff', {}).str, 'BLOCKED', 'canvas words stay English');
+});
+
+/* ------------------------------------------------- round 14: the rest of the content (js/lang_nl2.js) */
+h.test('round 14: every Codex page, story, Gary line, evolution, pet synergy, seasonal entry and move has Dutch', () => {
+  const { I18N, DATA } = boot({ only: ['util', 'i18n', 'data'] });
+  I18N.set('nl');
+  const nl = I18N.table('nl'), C = nl.content;
+  const EMs = [], miss = [], tok = [];
+  const toks = (s) => (String(s).match(/\{(\w+)\}/g) || []).sort().join(',');
+  // a Dutch value that is really there (not the English fallback), the same {tokens}, no em dash
+  const want = (tag, en, nlv) => {
+    if (typeof en !== 'string' || !en) return;
+    if (typeof nlv !== 'string' || !nlv.trim()) { miss.push(tag); return; }
+    if (toks(en) !== toks(nlv)) tok.push(tag);
+    if (nlv.indexOf(EM) >= 0) EMs.push(tag);
+  };
+  const path_ = (p, f) => C.path && C.path[p] ? C.path[p][f] : undefined;
+  // the Codex: every page's words, its name unless it is a crawler's own
+  for (const e of DATA.loreBook().entries) {
+    const c = (C.lore || {})[e.id] || {};
+    want('lore:' + e.id + ':text', e.text, c.text);
+    want('lore:' + e.id + ':name', e.name, I18N.known(e.name) ? I18N.tr(e.name) : c.name);
+    if (e.hint) want('lore:' + e.id + ':hint', e.hint, c.hint);
+  }
+  h.eq(Object.keys(C.lore || {}).length, DATA.loreBook().entries.length, 'all ' + DATA.loreBook().entries.length + ' Codex pages are in the table');
+  // the branching stories: titles, beats (a beat written as a function comes back through a pattern), choices
+  let beats = 0;
+  for (const s of Object.values(DATA.STORIES)) {
+    want('story:' + s.id, s.title, path_('STORIES.' + s.id, 'title'));
+    for (const [b, beat] of Object.entries(s.beats)) {
+      beats++;
+      if (typeof beat.text === 'string') want(`story:${s.id}.${b}`, beat.text, path_(`STORIES.${s.id}.beats.${b}`, 'text'));
+      else for (const score of [0, 1, 3, 4, 5]) { const en = beat.text({ score }); if (I18N.tr(en) === en) miss.push(`story:${s.id}.${b} (score ${score})`); }
+      beat.choices.forEach((ch, i) => {
+        const p = `STORIES.${s.id}.beats.${b}.choices.${i}`;
+        want(p + ':txt', ch.txt, path_(p, 'txt') || (I18N.tr(ch.txt) !== ch.txt ? I18N.tr(ch.txt) : undefined));
+        if (ch.sub) want(p + ':sub', ch.sub, path_(p, 'sub') || (I18N.tr(ch.sub) !== ch.sub ? I18N.tr(ch.sub) : undefined));
+      });
+    }
+  }
+  h.ok(beats >= 30, 'the stories have their beats (' + beats + ')');
+  // Grabby Gary: every line as he says it, with every piece of gear
+  for (const k in DATA.GARY_LINES) DATA.GARY_LINES[k].forEach((l, i) => {
+    want(`gary:${k}.${i}`, l, path_('GARY_LINES.' + k, String(i)));
+    for (const g of DATA.GARY.gear) { const said = l.replace('{gear}', g.toLowerCase()); if (I18N.tr(said) === said) miss.push(`gary said:${k}.${i} (${g})`); }
+  });
+  DATA.GARY.gear.forEach((g, i) => want('gary gear ' + i, g, path_('GARY.gear', String(i))));
+  // the evolved items: name, rules, aura, the proc word and the aura line the ceremony shows
+  const evo = Object.getOwnPropertyNames(DATA.EVOLVED);
+  h.ok(evo.length >= 28, 'the evolved items (' + evo.length + ')');
+  for (const id of evo) {
+    const d = DATA.EVOLVED[id], ci = (C.item || {})[id] || {}, ce = (C.evo || {})[id] || {};
+    want('evo:' + id + ':name', d.name, ci.name);
+    want('evo:' + id + ':text', d.text, ci.text);
+    want('evo:' + id + ':auraName', d.auraName, ce.auraName);
+    want('evo:' + id + ':auraText', d.auraText, ce.auraText);
+    want('evo:' + id + ':proc', DATA.EVO_FX['evo:' + id].proc, path_('EVO_FX.evo:' + id, 'proc'));
+    const line = `${d.auraName}: ${d.auraText}`;
+    if (I18N.tr(line) === line) miss.push('evo aura line:' + id);
+  }
+  for (const id in DATA.PET_SYN) for (const f of ['name', 'need', 'text']) want('petsyn:' + id + ':' + f, DATA.PET_SYN[id][f], path_('PET_SYN.' + id, f) || (I18N.known(DATA.PET_SYN[id][f]) ? I18N.tr(DATA.PET_SYN[id][f]) : undefined));
+  // the seasons: their words, currencies, items, relics, costumed monsters and elites (with their enrages and signatures)
+  for (const sid in DATA.SEASONS) {
+    const S0 = DATA.SEASONS[sid];
+    for (const f of ['name', 'blurb', 'counter']) want('season:' + sid + ':' + f, S0[f], path_('SEASONS.' + sid, f));
+    for (const f of ['name', 'one']) want('season:' + sid + ':cur.' + f, S0.cur[f], path_(`SEASONS.${sid}.cur`, f));
+    for (const id of S0.items) { const d = DATA.ITEMS[id], c = (C.item || {})[id] || {}; want('sea item:' + id, d.name, c.name); want('sea item text:' + id, d.text, c.text); }
+    for (const id of S0.relics) { const d = DATA.RELICS[id], c = (C.relic || {})[id] || {}; want('sea relic:' + id, d.name, c.name); want('sea relic text:' + id, d.text, c.text); if (d.proc) want('sea relic proc:' + id, d.proc, path_('RELICS.' + id, 'proc')); }
+    for (const id of Object.values(S0.costumes).concat([S0.elite])) {
+      const d = DATA.ENEMIES[id], c = (C.enemy || {})[id] || {};
+      for (const f of ['name', 'desc', 'taunt']) if (d[f]) want('sea enemy:' + id + ':' + f, d[f], c[f]);
+      if (d.enrage) for (const f of ['name', 'text']) want('sea enrage:' + id + ':' + f, d.enrage[f], path_(`ENEMIES.${id}.enrage`, f));
+      if (d.sig) for (const f of ['name', 'sign', 'shout', 'text']) if (d.sig[f]) want('sea sig:' + id + ':' + f, d.sig[f], path_(`ENEMIES.${id}.sig`, f) || (I18N.known(d.sig[f]) ? I18N.tr(d.sig[f]) : undefined));
+    }
+  }
+  // every enemy's moves (the hidden seasonal, story and family ones too): the name, and its own line
+  let moves = 0;
+  for (const id of Object.getOwnPropertyNames(DATA.ENEMIES)) {
+    const d = DATA.ENEMIES[id];
+    if (!d || !Array.isArray(d.moves)) continue;
+    for (const m of d.moves) {
+      moves++;
+      if (m.name && !I18N.known(m.name)) miss.push('move:' + id + '.' + m.id);
+      if (m.txt && !I18N.known(m.txt)) miss.push('move line:' + id + '.' + m.id);
+    }
+    if (d.enrage) for (const f of ['name', 'text']) if (d.enrage[f] && !I18N.known(d.enrage[f])) miss.push('enrage:' + id + ':' + f);
+  }
+  h.ok(moves > 250, 'the moves counted (' + moves + ')');
+  h.eq(miss.length, 0, 'every round 14 entry has Dutch: ' + miss.slice(0, 5).join(' | '));
+  h.eq(tok.length, 0, 'the Dutch keeps the English {tokens}: ' + tok.slice(0, 5).join(' | '));
+  h.eq(EMs.length, 0, 'no em dash in the round 14 Dutch: ' + EMs.slice(0, 5).join(' | '));
+  const lint = I18N.lint('nl');
+  h.eq(lint.em.length + lint.vars.length + lint.empty.length, 0, 'the merged table still lints clean');
+});
+
+h.test('round 14: the new screens in Dutch show no English (Codex, stories, Gary, evolution, seasons, the intro)', () => {
+  const T = boot({ language: 'nl-NL' });
+  const G = T.GAME, D = T.DATA, I = T.I18N;
+  // the English the round 14 content would show if a hook were missing
+  const EN = /\b(the|and|your|you|with|this|that|every|when|from|into|them|they|their|would|could)\b/i;
+  const bad = new Map();
+  let tag = '';
+  // canvas words: everything the renderer and the game pass through the language
+  const tr0 = I.tr;
+  I.tr = function (s) { const r = tr0(s); if (typeof s === 'string' && r === s && s.length > 12 && EN.test(s) && !bad.has(s)) bad.set(s, tag + ' (canvas)'); return r; };
+  const seen = new Set();
+  const scan = () => {
+    const walk = (el) => {
+      if (!el || typeof el !== 'object' || seen.has(el)) return; seen.add(el);
+      const kids = el.children || [], tc = typeof el.textContent === 'string' ? el.textContent : '';
+      // (text set by hand is Dutch in a browser, where the observer runs, whenever the table knows it)
+      if (tc && !kids.length && EN.test(tc) && !I.known(tc) && !bad.has(tc)) bad.set(tc, tag);
+      for (const c of kids) walk(c);
+    };
+    for (const id in T._nodes) walk(T._nodes[id]);
+    seen.clear();
+  };
+  const run = (t, fn) => { tag = t; let ok = true; try { fn(); G.draw(); } catch (e) { ok = false; console.log(t, e && e.stack); } h.ok(ok, 'renders in Dutch: ' + t); scan(); };
+  const fresh = (seed) => { G.newRun('knight', seed); if (G.screen === 'boon') G.choose(0); G.toMap(); };
+  try {
+    run('codex pages', () => {
+      G.showTitle();
+      for (const e of D.loreBook().entries) G.meta.lore.got[e.id] = 1;
+      for (const c of D.LORE_CH) G.lore.show({ ch: c.id, id: null });
+      for (const e of D.loreBook().entries) G.lore.show({ ch: e.ch, id: e.id });
+    });
+    fresh(141);
+    for (const s of Object.values(D.STORIES)) for (const b of Object.keys(s.beats)) {
+      run('story ' + s.id + '.' + b, () => { G.run.gold = 999; G.sto.beat(s.id, b, 1); });
+    }
+    run('story outcome', () => { G.run.gold = 999; G.sto.beat('sto_crab', 'start', 1); G.sto.pick(1); stepFor(G, 1); });
+    run('gary', () => {
+      fresh(142);
+      const R = G.sto.run(); R.gary.on = true;
+      const t = G.sto.garyPlace(G.run, G.run.map);
+      h.ok(!!t, 'Gary has a tile');
+      if (t) { G.sto.rival.show({ q: t.q, r: t.r }); stepFor(G, 1); }
+    });
+    h.ok(!bad.size || [...bad.values()].every((v) => !/^gary/.test(v)), 'Gary speaks Dutch');
+    run('evolution', () => {
+      fresh(143);
+      G.run.relics.push('trophy_rack');
+      const inst = { id: 'rusty_sword', plus: true, uid: 9143 };
+      G.run.bin.push(inst);
+      h.ok(!!G.evo.now(inst), 'the rusty sword evolves');
+      for (let i = 0; i < 180; i++) { G.update(DT); if (i % 30 === 0) G.draw(); }
+    });
+    for (const [date, ty] of [['2026-10-15', 'treat'], ['2026-12-12', 'advent']]) {
+      run('season ' + ty, () => {
+        G.season.setDate(date);
+        fresh(144);
+        const t = Object.values(G.run.map.tiles).find((x) => x.type === ty);
+        h.ok(!!t, 'a ' + ty + ' tile on the map');
+        if (t) { G.enterTile(t); stepFor(G, 1); G.season.knock(); for (let i = 0; i < 360; i++) { G.update(DT); if (i % 60 === 0) G.draw(); } }
+      });
+      run('season elite ' + ty, () => { G.startFight([ty === 'treat' ? 'pumpking' : 'krampus'], 'elite'); stepFor(G, 3); G.endTurn(); for (let i = 0; i < 480; i++) { G.update(DT); if (i % 60 === 0) G.draw(); } });
+    }
+    G.season.setDate(null);
+    run('intro', () => { if (G.playIntro) G.playIntro(); for (let i = 0; i < 600; i++) { G.update(DT); if (i % 30 === 0) G.draw(); } });
+  } finally { I.tr = tr0; }
+  const list = [...bad].map(([s, t]) => t + ': ' + s.slice(0, 60));
+  h.eq(list.length, 0, 'no English left on these screens: ' + list.slice(0, 4).join(' | '));
+  // spot checks: the words themselves
+  I.set('nl');
+  h.eq(I.tr(D.loreBook().byId.be_mimic.text).slice(0, 26), 'Hij ziet eruit als een pri', 'a Codex page in Dutch');
+  h.eq(I.tr(D.STORIES.sto_crab.title), 'De Gekooide Krab', 'a story title in Dutch');
+  h.eq(I.tr(D.GARY_LINES.win[2]), 'En DAAROM noemen ze me Graaiende Gary.', 'Gary gloats in Dutch');
+  h.eq(I.tr('Oh. It is YOU. I have been practising. Like the new gold chain? Bought them with YOUR tickets. Eventually.'),
+    'O. Jij WEER. Ik heb geoefend. Mooi hè, mijn nieuwe gouden ketting? Gekocht met JOUW kaartjes. Straks.', 'his gear goes into the Dutch line');
+  h.eq(I.tr('Excalibur Claw'), 'Excaligrijper', 'an evolved item\'s name');
+  h.eq(I.tr("King's Oath: Whenever an enemy dies, gain 5 Block."), 'Koningseed: Elke keer dat een vijand sterft, krijg je 5 Blok.', 'the ceremony\'s aura line');
+  h.eq(I.tr('+11 candy \u{1F36C}'), '+11 snoepjes \u{1F36C}', 'the candy a door pays');
+  h.eq(I.tr('The Pumpkin King'), 'De Pompoenkoning', 'the Pumpkin King');
+  h.eq(I.tr('Joystick Jab'), 'Joystickpor', 'a move name');
+  h.eq(I.tr('Every fight is a grab.'), 'Elk gevecht is een greep.', 'the intro\'s tagline');
+  h.eq(I.tr('“Buy it out (35 gold).”'), '“Koop hem vrij (35 goud).”', 'a quoted pick keeps its quotes');
+  I.set('en');
+  h.eq(I.tr('Excalibur Claw'), 'Excalibur Claw', 'English stays English');
+});
+
+h.test('round 14: the pre-boot loader reads the language itself', () => {
+  const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  const boot0 = (/<script id="csBootJs">([\s\S]*?)<\/script>/.exec(html) || [])[1] || '';
+  h.ok(/clawspire_meta/.test(boot0) && /settings\.lang/.test(boot0) && /navigator\.language/.test(boot0), 'the loader reads the saved choice, then the browser');
+  h.ok(/De grijper warmt op/.test(boot0) && /Herladen/.test(boot0), 'the loader has its Dutch words');
+  h.ok(/class="bmT" translate="no"/.test(html), 'the logo is marked translate="no"');
+  // run it against a stub page: Dutch browser, no saved choice
+  const mk = (lang, saved) => {
+    const els = {}, mkEl = (id, text) => (els[id] = { id, textContent: text, className: '', attrs: { 'aria-label': 'Loading CLAWSPIRE' },
+      getAttribute(k) { return this.attrs[k]; }, setAttribute(k, v) { this.attrs[k] = v; }, appendChild(x) { return x; } });
+    mkEl('csBoot', ''); mkEl('csBootB', ''); mkEl('csBootS', 'Warming up the claw'); mkEl('csBootR', 'Reload');
+    const doc = { documentElement: { lang: 'en' }, getElementById: (id) => els[id] || null, createElement: () => ({}) };
+    const win = { requestAnimationFrame: () => 0, addEventListener() {} };
+    const ls = { getItem: () => (saved ? JSON.stringify({ settings: { lang: saved } }) : null) };
+    new Function('window', 'document', 'localStorage', 'navigator', 'performance', 'requestAnimationFrame', 'setTimeout', boot0.replace(/window\.requestAnimationFrame/g, 'window.requestAnimationFrame'))(
+      win, doc, ls, { languages: [lang], language: lang }, { getEntriesByType: () => [] }, () => 0, () => 0);
+    return { say: els.csBootS.textContent, btn: els.csBootR.textContent, aria: els.csBoot.attrs['aria-label'], lang: doc.documentElement.lang };
+  };
+  const nlB = mk('nl-NL', null);
+  h.eq(nlB.say, 'De grijper warmt op', 'a Dutch browser: the loader speaks Dutch');
+  h.eq(nlB.btn, 'Herladen', 'and its reload button');
+  h.eq(nlB.aria, 'CLAWSPIRE laden', 'and its label');
+  h.eq(mk('en-US', null).say, 'Warming up the claw', 'an English browser: English');
+  h.eq(mk('en-US', 'nl').say, 'De grijper warmt op', 'a saved Dutch choice wins over the browser');
+  h.eq(mk('nl-BE', 'en').say, 'Warming up the claw', 'a saved English choice wins too');
+});
+
+/* ------------------------------------------------- TRD (round 14): the Trading Post and pet evolution */
+h.test('trd: every new line of the Trading Post and pet evolution has its Dutch, and the screens show it', () => {
+  const T = boot({ language: 'nl-NL' });
+  const { GAME: G, I18N, DATA: D } = T;
+  const nl = I18N.table('nl').ui;
+  const same = new Set(['Kraken']);   // the same word in both languages
+  const miss = [], flat = [];
+  for (const k of G.trd.WORDS) { if (!nl[k]) miss.push(k); else if (nl[k] === k && !same.has(k) && !/^(Continue|Leave|Cancel|Tap to continue)$/.test(k)) flat.push(k); }
+  for (const id in D.PEV_FORMS) {
+    const f = D.PEV_FORMS[id];
+    for (const k of [f.name, f.trick, f.text, `${f.trick}: ${f.text}`, f.trick.toUpperCase() + '!']) { if (!nl[k]) miss.push(k); else if (nl[k] === k && !same.has(k)) flat.push(k); }
+  }
+  h.eq(miss.length, 0, 'every line has a Dutch entry: ' + miss.slice(0, 4).join(' | '));
+  h.eq(flat.length, 0, 'and it is Dutch: ' + flat.slice(0, 4).join(' | '));
+  for (const k in G.trd.PATTERNS) {
+    h.ok(nl[k], 'a pattern: ' + k);
+    const ex = G.trd.PATTERNS[k], out = I18N.tr(ex);
+    h.ok(out !== ex && !/\{\w+\}/.test(out), `the example comes back in Dutch: ${ex} -> ${out}`);
+  }
+  h.eq(I18N.tr('Pay 78 gold'), 'Betaal 78 goud', 'a button with its number');
+  h.eq(T.RENDER.fx.text(100, 100, 'STAMPEDE!', '#fff', {}).str, 'STORMLOOP!', 'the flourish floats in Dutch');
+  // the screens in Dutch: the post with a pet that can evolve, the rest's choice, the Prizedex tab
+  const texts = [];
+  const walk = (el) => { if (!el || typeof el !== 'object') return; if (typeof el.textContent === 'string' && el.textContent) texts.push(el.textContent); for (const c of el.children || []) walk(c); };
+  G.newRun('knight', 1401); if (G.screen === 'boon') G.choose(0);
+  G.run.bin.push({ uid: 'zrock', id: 'rock', plus: false });
+  G.run.gold = 400;
+  G.pet.give('cat', 100);
+  const t = Object.values(G.run.map.tiles).find((x) => x.type === 'trader');
+  G.enterTile(t);
+  h.eq(G.screen, 'trade', 'the Trading Post opens');
+  walk(T._nodes.trdBody);
+  G.showRest(); walk(T._nodes.restBody);
+  G.pev.evolve('rest'); G.evo.uiClose();
+  G.showCollection('evo'); walk(T._nodes.collectionBody);
+  h.ok(texts.includes('Ruilpost') && texts.includes('JIJ GEEFT') && texts.includes('JIJ KRIJGT'), 'the post speaks Dutch');
+  h.ok(texts.some((s) => /^Laat \S+ evolueren$/.test(s)), 'the rest\'s choice speaks Dutch');
+  h.ok(texts.includes('Huisdier-evoluties') && texts.includes('Sabeltandkat'), 'the Prizedex speaks Dutch');
+  const eng = new Set(G.trd.WORDS.filter((k) => nl[k] && nl[k] !== k));
+  const left = texts.filter((s) => eng.has(s));
+  h.eq(left.length, 0, 'none of the new English is left on screen: ' + left.slice(0, 4).join(' | '));
+  h.eq(texts.filter((s) => /\{\w+(\|[^}]*)?\}/.test(s)).length, 0, 'no {placeholder} on screen');
 });
 
 h.done();

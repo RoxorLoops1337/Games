@@ -3344,6 +3344,7 @@ const RENDER = (() => {
       case 'treat': seaTreatIcon(ctx, r, t); break;   // SEASON: a trick-or-treat door
       case 'advent': winAdventIcon(ctx, r, t); break;   // WIN (round 12): an advent present
       case 'rival': stoTileIcon(ctx, s, t); break;   // STORY: Grabby Gary's tile
+      case 'trader': trdIcon(ctx, s, t); break;   // TRD (round 14): the Trading Post
       default:
         F(ctx, rgba('#f4ecd6', 0.45)); ctx.beginPath(); ctx.arc(0, 0, s * 0.25, 0, TAU); ctx.fill();
     }
@@ -8542,6 +8543,8 @@ const RENDER = (() => {
       ctx.translate(x || 0, y || 0); ctx.scale(s || 1, s || 1);
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
       if (!st.air) { ctx.beginPath(); ell(ctx, 0, 0, 14, 3.5, 0); F(ctx, rgba(INK, 0.35)); ctx.fill(); }
+      const ev = st.evo && typeof st.evo === 'object' ? st.evo : null;   // TRD (round 14): the final form (bigger, glowing, a flourish)
+      if (ev) { ctx.scale(PEV_LOOK, PEV_LOOK); pevBack(ctx, ev, t); }
       if (lv >= 5) petAura(ctx, t, cols[0]);
       if (st.lvUp > 0) glow(ctx, 0, -16, 44, PAL.gold, Math.min(1, st.lvUp));
       ctx.save();
@@ -8550,7 +8553,8 @@ const RENDER = (() => {
       if (st.mood === 'scared') ctx.translate(Math.sin(t * 60) * 0.8, 0);
       (PET_ART[id] || petHamster)(ctx, st, cols[0], cols[1], t);
       if (lv >= 2) petScarf(ctx, PET_SCARF[id] || PAL.pink, t);
-      if (lv >= 4) petCrown(ctx, t);
+      if (lv >= 4 && !(ev && ev.flair === 'hat')) petCrown(ctx, t);
+      if (ev) pevFront(ctx, ev, t);
       ctx.restore();
       petMoodFx(ctx, st, t);
     } catch (e) { /* never throws */ }
@@ -9912,9 +9916,11 @@ const RENDER = (() => {
   function evoWrap(s, n) {
     const out = [];
     let cur = '';
-    for (const wd of String(s || '').split(' ')) { if ((cur + ' ' + wd).trim().length > n && cur) { out.push(cur); cur = wd; } else cur = (cur + ' ' + wd).trim(); }
+    const en = String(s || ''), tl = String(i18nTr(en) || '');   // I18N (round 14): wrap the words shown, a bit wider and one line more for the longer Dutch
+    if (tl !== en) n = Math.round(n * 1.15);
+    for (const wd of tl.split(' ')) { if ((cur + ' ' + wd).trim().length > n && cur) { out.push(cur); cur = wd; } else cur = (cur + ' ' + wd).trim(); }
     if (cur) out.push(cur);
-    return out.slice(0, 3);
+    return out.slice(0, tl !== en ? 4 : 3);
   }
   const EVO_K = { rise: 0.7, burst: 1.35 };
   /* The ceremony over the stage (st, stage px): {t, dur, burst, x0, y0 (the
@@ -9968,7 +9974,11 @@ const RENDER = (() => {
       }
       // the item: the old one spinning up, the new one bursting in
       const def = after ? st.to : st.from;
-      if (def && item) {
+      if (typeof st.art === 'function') {   // TRD (round 14): a pet's evolution draws the pet (spin and scale as the item's)
+        const spin = after ? Math.sin(t * 2) * 0.12 : t * t * 9;
+        const sc = after ? 2.5 + 0.7 * (1 - k) * Math.cos(k * 6) * (1 - k) : 1.3 + 0.9 * Math.min(1, t / B);
+        try { st.art(ctx, x, y + (after ? Math.sin(t * 2.4) * 4 : 0), spin, sc, after); } catch (e) { /* never throws */ }
+      } else if (def && item) {
         const spin = after ? Math.sin(t * 2) * 0.12 : t * t * 9;
         const sc = after ? 2.5 + 0.7 * (1 - k) * Math.cos(k * 6) * (1 - k) : 1.3 + 0.9 * Math.min(1, t / B);
         item(ctx, def, x, y + (after ? Math.sin(t * 2.4) * 4 : 0), spin, sc, { plus: !after && !!st.plus, glow: col, glowA: 0.9 });
@@ -12524,7 +12534,7 @@ const RENDER = (() => {
   function stoBubble(ctx, x, y, w, text, t, tx, ty) {
     ctx.save();
     try {
-      const size = 14, lh = 17, words = String(text || '').split(/\s+/), lines = [];
+      const size = 14, lh = 17, words = String(i18nTr(String(text || '')) || '').split(/\s+/), lines = [];   // (I18N round 14: wrap the words shown)
       ctx.font = 'bold ' + size + 'px ' + FONT;
       let cur = '';
       for (const wd of words) {
@@ -13100,7 +13110,7 @@ const RENDER = (() => {
   // Words wrapped to maxW at a bold size (the stub context measures everything as 40 px wide).
   function loreWrap(ctx, s, maxW, size) {
     ctx.font = 'bold ' + size + 'px ' + FONT;
-    const words = String(s || '').split(/\s+/).filter(Boolean), out = [];
+    const words = String(i18nTr(String(s || '')) || '').split(/\s+/).filter(Boolean), out = [];   // (I18N round 14: wrap the words shown)
     let cur = '';
     for (const wd of words) {
       const tr = cur ? cur + ' ' + wd : wd;
@@ -14576,7 +14586,7 @@ const RENDER = (() => {
         txt(ctx, nm, 0, h * 0.14, ns, INK, true);
         if (st.text && card.text && h > 150) {
           ctx.font = 'bold ' + Math.round(h * 0.055) + 'px ' + FONT;
-          const words = String(card.text).split(/\s+/), lines = [];
+          const words = String(i18nTr(String(card.text)) || '').split(/\s+/), lines = [];   // (I18N round 14)
           let cur = '';
           for (const wd of words) { const tl = cur ? cur + ' ' + wd : wd; if ((ctx.measureText(tl).width || tl.length * 6) > w - 22 && cur) { lines.push(cur); cur = wd; } else cur = tl; }
           if (cur) lines.push(cur);
@@ -15446,7 +15456,339 @@ const RENDER = (() => {
     crest: legCrest, hype: legHype, peek: legPeek, vortex: legVortex, gold: legGoldSparkle };
   /* ============================================================ /LEG */
 
+  /* ============================================================ TRD (round 14)
+     The Trading Post and pet evolution (DESIGN.md "The Trading Post and pet
+     evolution (round 14)"): the map icon (a peddler's cart and a coin),
+     Rocco the raccoon peddler behind his counter with his cart, the haggle
+     (the goods slide across the counter, Rocco studies them through a loupe,
+     yours slide back, a handshake and the DEAL! stamp), and an evolved pet's
+     final form (RENDER.pet with st.evo: PEV_LOOK times bigger, a halo that
+     turns, and the form's flourish: bolts, a captain's hat, a crest, ink,
+     stars or wings). Every function saves, restores and never throws. */
+  const PEV_LOOK = 1.25;
+  // Behind the pet: the glow, a turning dashed halo, the wings.
+  function pevBack(ctx, ev, t) {
+    const col = ev.col || PAL.gold;
+    glow(ctx, 0, -18, 46, col, 0.5 + 0.15 * Math.sin(t * 3));
+    ctx.save();
+    try { ctx.setLineDash([4, 5]); ctx.lineDashOffset = -t * 18; } catch (e) { /* stub */ }
+    ctx.beginPath(); ell(ctx, 0, -17, 25, 21, 0); S(ctx, rgba(col, 0.75), 1.6); ctx.stroke();
+    ctx.restore();
+    if (ev.flair === 'wings') {
+      const fl = Math.sin(t * 5) * 0.18;
+      for (const d of [-1, 1]) {
+        ctx.save(); ctx.translate(d * 7, -22); ctx.rotate(d * (0.35 + fl)); ctx.scale(d, 1);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(12, -16, 26, -12); ctx.quadraticCurveTo(20, -6, 23, -2); ctx.quadraticCurveTo(15, -1, 17, 4); ctx.quadraticCurveTo(8, 4, 0, 4); ctx.closePath();
+        F(ctx, rgba('#ffffff', 0.92)); ctx.fill(); S(ctx, INK, 1.3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(4, 1); ctx.quadraticCurveTo(13, -8, 22, -9); S(ctx, rgba(col, 0.9), 1.4); ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+  // In front: the flourish and the evolution badge over the head.
+  function pevFront(ctx, ev, t) {
+    const col = ev.col || PAL.gold, hx = PA.hx, hy = PA.hy;
+    switch (ev.flair) {
+      case 'bolts':
+        for (let i = 0; i < 3; i++) {
+          const a = t * 2.2 + i * TAU / 3, x = Math.cos(a) * 22, y = -17 + Math.sin(a) * 12;
+          ctx.beginPath(); ctx.moveTo(x - 2, y - 5); ctx.lineTo(x + 1.5, y - 1); ctx.lineTo(x - 1, y); ctx.lineTo(x + 2, y + 5);
+          S(ctx, INK, 3.2); ctx.stroke(); S(ctx, col, 1.8); ctx.stroke();
+        }
+        break;
+      case 'hat': {
+        // a captain's tricorn, gold trim and a plume in the form's colour
+        const y = hy + 2;
+        tone(ctx, c => { c.moveTo(hx - 11, y); c.quadraticCurveTo(hx - 6, y - 4, hx - 5, y - 9); c.quadraticCurveTo(hx, y - 12, hx + 5, y - 9); c.quadraticCurveTo(hx + 6, y - 4, hx + 11, y); c.quadraticCurveTo(hx, y - 3, hx - 11, y); c.closePath(); }, '#2a2238', hx, y - 5, 8, { ol: 1.3, spec: false });
+        ctx.beginPath(); ctx.moveTo(hx - 10, y - 0.6); ctx.quadraticCurveTo(hx, y - 3.6, hx + 10, y - 0.6); S(ctx, PAL.gold, 1.3); ctx.stroke();
+        const w = Math.sin(t * 4) * 1.2;
+        ctx.beginPath(); ctx.moveTo(hx + 3, y - 9); ctx.quadraticCurveTo(hx + 10, y - 17 + w, hx + 15, y - 13 + w); ctx.quadraticCurveTo(hx + 9, y - 12, hx + 4, y - 8); F(ctx, col); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+        break;
+      }
+      case 'fangs': {
+        // a spiky gold crest (a mane) on the head
+        const y = hy + 2;
+        tone(ctx, c => poly(c, [hx - 9, y, hx - 8, y - 7, hx - 4, y - 3, hx - 2, y - 10, hx + 1, y - 4, hx + 4, y - 11, hx + 6, y - 3, hx + 9, y - 7, hx + 9, y]), PAL.gold, hx, y - 5, 7, { ol: 1.3 });
+        break;
+      }
+      case 'ink':
+        for (let i = 0; i < 4; i++) {
+          const u = (t * 0.45 + i / 4) % 1, a = i * 1.7 + t, x = Math.cos(a) * (14 + u * 10), y = -10 - u * 26;
+          ctx.save(); ctx.globalAlpha = 1 - u;
+          ctx.beginPath(); circ(ctx, x, y, 2.4 + (1 - u) * 1.4); F(ctx, '#3a1f5a'); ctx.fill(); S(ctx, col, 0.9); ctx.stroke();
+          ctx.restore();
+        }
+        break;
+      case 'stars':
+        for (let i = 0; i < 5; i++) {
+          const a = -t * 1.3 + i * TAU / 5, x = Math.cos(a) * 24, y = -17 + Math.sin(a) * 13, r = 2.6 + Math.sin(t * 6 + i) * 0.9;
+          ctx.beginPath(); star(ctx, x, y, r * 1.5, 4, 0.36); F(ctx, i % 2 ? '#ffffff' : col); ctx.fill();
+        }
+        break;
+      case 'wings': {
+        ctx.beginPath(); ell(ctx, hx, hy - 6 + Math.sin(t * 3), 8, 2.4, 0); S(ctx, INK, 3); ctx.stroke(); S(ctx, PAL.gold, 1.7); ctx.stroke();
+        break;
+      }
+      default: break;
+    }
+    evoChevron(ctx, hx + 11, hy - 6 + Math.sin(t * 2.5) * 1.2, 3.2);
+  }
+
+  // The map icon: a peddler's cart under a striped canopy, a coin above it.
+  function trdIcon(ctx, s, t) {
+    t = t || 0;
+    glow(ctx, 0, 0, s * 1.3, PAL.gold, 0.18 + Math.sin(t * 2.6) * 0.07);
+    tone(ctx, c => rrect(c, -s * 0.85, -s * 0.15, s * 1.7, s * 0.8, 2), '#a8703c', 0, s * 0.25, s, { dark: -0.3, spec: false });
+    ctx.beginPath(); ctx.moveTo(-s * 0.95, -s * 0.15); ctx.quadraticCurveTo(0, -s * 1.15, s * 0.95, -s * 0.15); ctx.closePath();
+    F(ctx, '#ffe9d6'); ctx.fill();
+    ctx.save(); ctx.clip();
+    for (let i = -2; i <= 2; i += 2) { ctx.beginPath(); ctx.rect(i * s * 0.2 - s * 0.1, -s * 1.2, s * 0.2, s * 1.1); F(ctx, PAL.pink); ctx.fill(); }
+    ctx.restore();
+    ctx.beginPath(); ctx.moveTo(-s * 0.95, -s * 0.15); ctx.quadraticCurveTo(0, -s * 1.15, s * 0.95, -s * 0.15); ctx.closePath(); S(ctx, INK, 1.6); ctx.stroke();
+    for (const d of [-1, 1]) { tone(ctx, c => circ(c, d * s * 0.52, s * 0.68, s * 0.26), '#5a3a22', d * s * 0.52, s * 0.68, s * 0.26, { ol: 1.4, spec: false }); ctx.beginPath(); circ(ctx, d * s * 0.52, s * 0.68, s * 0.07); F(ctx, PAL.gold); ctx.fill(); }
+    const bob = Math.sin(t * 3) * s * 0.08;
+    tone(ctx, c => circ(c, s * 0.62, -s * 0.95 + bob, s * 0.3), PAL.gold, s * 0.62, -s * 0.95 + bob, s * 0.3, { ol: 1.4 });
+    ctx.beginPath(); ctx.moveTo(s * 0.52, -s * 0.95 + bob); ctx.lineTo(s * 0.72, -s * 0.95 + bob); S(ctx, shade(PAL.gold, -0.4), 1.4); ctx.stroke();
+  }
+
+  /* Rocco the raccoon peddler, from the waist up (his counter hides the
+     rest). (x, y) the waist, s the scale (1: about 150 px tall). st: {t,
+     pose 'idle'|'think'|'take'|'give'|'shake'|'grin', blink, look -1..1, reduced}. */
+  function trdRocco(ctx, x, y, s, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, pose = st.pose || 'idle', bob = st.reduced ? 0 : Math.sin(t * 2.2) * 1.6;
+      ctx.translate(x, y + bob); ctx.scale(s || 1, s || 1);
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      const fur = '#8e8a9a', furD = '#5e5a6c', furL = '#e8e2ef', vest = '#2f7a5a';
+      // the ringed tail, swishing up behind him
+      const sw = st.reduced ? 0 : Math.sin(t * 1.7) * 0.25;
+      ctx.save(); ctx.translate(34, -10); ctx.rotate(-0.5 + sw);
+      tone(ctx, c => ell(c, 18, -8, 24, 10, -0.5), fur, 18, -8, 12, NOSPEC);
+      for (let i = 0; i < 3; i++) { ctx.save(); ctx.beginPath(); ell(ctx, 18, -8, 24, 10, -0.5); ctx.clip(); ctx.beginPath(); ctx.rect(4 + i * 12, -30, 5, 40); F(ctx, INK); ctx.fill(); ctx.restore(); }
+      ctx.beginPath(); ell(ctx, 18, -8, 24, 10, -0.5); S(ctx, INK, OL); ctx.stroke();
+      ctx.restore();
+      // the body: fur, a patched vest, a bandolier of trinkets
+      tone(ctx, c => { c.moveTo(-34, 0); c.quadraticCurveTo(-38, -52, 0, -60); c.quadraticCurveTo(38, -52, 34, 0); c.closePath(); }, fur, 0, -30, 32, NOSPEC);
+      tone(ctx, c => { c.moveTo(-32, 0); c.quadraticCurveTo(-34, -44, -12, -54); c.lineTo(-4, -8); c.lineTo(4, -8); c.lineTo(12, -54); c.quadraticCurveTo(34, -44, 32, 0); c.closePath(); }, vest, 0, -28, 30, NOSPEC);
+      ctx.beginPath(); ctx.rect(-26, -30, 9, 9); F(ctx, '#c9a24a'); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-26, -30); ctx.lineTo(-17, -21); ctx.moveTo(-17, -30); ctx.lineTo(-26, -21); S(ctx, rgba(INK, 0.6), 1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-28, -50); ctx.lineTo(24, -6); S(ctx, '#6b4424', 5); ctx.stroke();
+      for (let i = 0; i < 3; i++) { const bx = -16 + i * 14, by = -40 + i * 12; tone(ctx, c => circ(c, bx, by, 3.2), [PAL.gold, PAL.cyan, PAL.pink][i], bx, by, 3.2, { ol: 1.2 }); }
+      // arms: resting on the counter, or doing the pose
+      const paw = (px, py) => { tone(ctx, c => ell(c, px, py, 8, 6, 0), furD, px, py, 7, { ol: 1.6, spec: false }); };
+      limb(ctx, -28, -40, -40, -4, 10, fur);
+      paw(-40, -2);
+      if (pose === 'think') { limb(ctx, 26, -42, 14, -70, 10, fur); paw(12, -74); }
+      else if (pose === 'shake') { limb(ctx, 26, -40, -30, -18, 10, fur); paw(-36, -18); }
+      else if (pose === 'take' || pose === 'give') { limb(ctx, 26, -40, pose === 'take' ? 10 : -12, -6, 10, fur); paw(pose === 'take' ? 10 : -12, -4); }
+      else { limb(ctx, 28, -40, 40, -4, 10, fur); paw(40, -2); }
+      // the head
+      ctx.save(); ctx.translate(0, -84 + (pose === 'think' ? 2 : 0)); ctx.rotate((st.look || 0) * 0.06 + (pose === 'think' ? -0.08 : 0));
+      for (const d of [-1, 1]) {
+        tone(ctx, c => poly(c, [d * 14, -18, d * 30, -38, d * 30, -12]), fur, d * 25, -24, 8, { ol: OL, spec: false });
+        ctx.beginPath(); poly(ctx, [d * 18, -18, d * 27, -31, d * 27, -16]); F(ctx, INK); ctx.fill();
+      }
+      tone(ctx, c => ell(c, 0, 0, 32, 26, 0), fur, 0, 0, 28, NOSPEC);
+      // the mask across the eyes, the light cheeks and muzzle
+      ctx.beginPath(); ctx.moveTo(-30, -2); ctx.quadraticCurveTo(-16, -16, 0, -6); ctx.quadraticCurveTo(16, -16, 30, -2); ctx.quadraticCurveTo(16, 8, 0, 2); ctx.quadraticCurveTo(-16, 8, -30, -2); ctx.closePath(); F(ctx, '#2a2433'); ctx.fill();
+      ctx.beginPath(); ell(ctx, 0, 12, 16, 11, 0); F(ctx, furL); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
+      ctx.beginPath(); ell(ctx, 0, -14, 6, 7, 0); F(ctx, furL); ctx.fill();
+      // the eyes (a blink; squinting while he thinks)
+      for (const d of [-1, 1]) {
+        const ex = d * 12, ey = -3;
+        if (st.blink || (pose === 'think' && d < 0)) { ctx.beginPath(); ctx.moveTo(ex - 5, ey); ctx.quadraticCurveTo(ex, ey + 3, ex + 5, ey); S(ctx, '#ffffff', 2); ctx.stroke(); }
+        else {
+          ctx.beginPath(); circ(ctx, ex, ey, 5.4); F(ctx, '#ffffff'); ctx.fill();
+          ctx.beginPath(); circ(ctx, ex + (st.look || 0) * 1.8, ey + 0.5, 2.8); F(ctx, INK); ctx.fill();
+          ctx.beginPath(); circ(ctx, ex + (st.look || 0) * 1.8 - 1, ey - 0.8, 0.9); F(ctx, '#ffffff'); ctx.fill();
+        }
+      }
+      // the nose, the whiskers, the mouth (a grin at the deal)
+      tone(ctx, c => ell(c, 0, 7, 5, 3.6, 0), INK, 0, 7, 4, { ol: 0 });
+      for (const d of [-1, 1]) for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.moveTo(d * 12, 12 + i * 4); ctx.lineTo(d * 26, 10 + i * 6); S(ctx, rgba(INK, 0.55), 1); ctx.stroke(); }
+      if (pose === 'grin' || pose === 'shake') {
+        ctx.beginPath(); ctx.moveTo(-9, 14); ctx.quadraticCurveTo(0, 25, 9, 14); ctx.closePath(); F(ctx, '#5a1f3a'); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
+        ctx.beginPath(); ctx.rect(-3.5, 14, 3, 3); ctx.rect(0.5, 14, 3, 3); F(ctx, '#ffffff'); ctx.fill();
+      } else { ctx.beginPath(); ctx.moveTo(-6, 15); ctx.quadraticCurveTo(0, 19, 7, 14); S(ctx, INK, 1.6); ctx.stroke(); }
+      // the hat: a wide straw brim, a pink band, a cyan feather
+      const hb = -22;
+      tone(ctx, c => ell(c, 0, hb, 44, 8, -0.04), '#e0b55e', 0, hb, 20, NOSPEC);
+      tone(ctx, c => { c.moveTo(-22, hb); c.quadraticCurveTo(-22, hb - 26, 0, hb - 28); c.quadraticCurveTo(22, hb - 26, 22, hb); c.closePath(); }, '#e8c46e', 0, hb - 14, 18, NOSPEC);
+      ctx.beginPath(); ctx.rect(-21, hb - 9, 42, 6); F(ctx, PAL.pink); ctx.fill(); S(ctx, INK, 1.3); ctx.stroke();
+      const fw = st.reduced ? 0 : Math.sin(t * 3) * 1.5;
+      ctx.beginPath(); ctx.moveTo(14, hb - 8); ctx.quadraticCurveTo(28, hb - 34 + fw, 38, hb - 30 + fw); ctx.quadraticCurveTo(28, hb - 22, 16, hb - 6); F(ctx, PAL.cyan); ctx.fill(); S(ctx, INK, 1.3); ctx.stroke();
+      ctx.restore();
+      // the loupe while he thinks: a brass ring and a lens glint at his right eye
+      if (pose === 'think') {
+        ctx.beginPath(); circ(ctx, 12, -88, 10); F(ctx, rgba('#bff6ff', 0.35)); ctx.fill(); S(ctx, INK, 4); ctx.stroke(); S(ctx, '#d9a441', 2.4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(8, -93); ctx.lineTo(12, -95); S(ctx, '#ffffff', 1.6); ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The cart behind him: a wagon under a striped canopy, a lantern, pots, the TRADES sign.
+  function trdCart(ctx, x, y, s, t, reduced) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.scale(s || 1, s || 1);
+      ctx.lineJoin = 'round';
+      tone(ctx, c => rrect(c, -70, -44, 140, 58, 5), '#8a5a2b', 0, -15, 60, { dark: -0.3, spec: false });
+      for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(i * 26, -40); ctx.lineTo(i * 26, 10); S(ctx, rgba(INK, 0.3), 1.4); ctx.stroke(); }
+      for (const d of [-1, 1]) {
+        ctx.beginPath(); circ(ctx, d * 46, 18, 20); F(ctx, '#5a3a22'); ctx.fill(); S(ctx, INK, OL); ctx.stroke();
+        for (let i = 0; i < 6; i++) { const a = i * TAU / 6 + (reduced ? 0 : t * 0.2); ctx.beginPath(); ctx.moveTo(d * 46, 18); ctx.lineTo(d * 46 + Math.cos(a) * 17, 18 + Math.sin(a) * 17); S(ctx, '#c9a24a', 2); ctx.stroke(); }
+        ctx.beginPath(); circ(ctx, d * 46, 18, 4); F(ctx, PAL.gold); ctx.fill();
+      }
+      // the canopy: cream with pink stripes, scalloped
+      ctx.beginPath(); ctx.moveTo(-78, -44); ctx.quadraticCurveTo(0, -122, 78, -44); ctx.closePath();
+      F(ctx, '#ffe9d6'); ctx.fill();
+      ctx.save(); ctx.clip();
+      for (let i = -4; i <= 4; i += 2) { ctx.beginPath(); ctx.moveTo(i * 18 - 8, -44); ctx.lineTo(i * 8 - 4, -124); ctx.lineTo(i * 8 + 4, -124); ctx.lineTo(i * 18 + 8, -44); ctx.closePath(); F(ctx, PAL.pink); ctx.fill(); }
+      ctx.restore();
+      ctx.beginPath(); ctx.moveTo(-78, -44); ctx.quadraticCurveTo(0, -122, 78, -44); ctx.closePath(); S(ctx, INK, OL); ctx.stroke();
+      for (let i = 0; i < 8; i++) { const sx = -70 + i * 20; ctx.beginPath(); ctx.arc(sx, -44, 10, 0, Math.PI); F(ctx, i % 2 ? PAL.pink : '#ffe9d6'); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke(); }
+      // wares on the rail: a pot, a vase, a bundle of scrolls
+      tone(ctx, c => ell(c, -40, -52, 11, 8, 0), '#5a6373', -40, -52, 9, { ol: 1.4 });
+      tone(ctx, c => { c.moveTo(-6, -46); c.quadraticCurveTo(-12, -64, -4, -70); c.lineTo(4, -70); c.quadraticCurveTo(12, -64, 6, -46); c.closePath(); }, PAL.cyan, 0, -58, 8, { ol: 1.4 });
+      for (let i = 0; i < 3; i++) tone(ctx, c => rrect(c, 26 + i * 7, -66 + i * 2, 6, 22, 2), '#f1e9d6', 29 + i * 7, -55, 4, { ol: 1.2, spec: false });
+      // the lantern on a hook, glowing
+      const sway = reduced ? 0 : Math.sin(t * 1.8) * 0.12;
+      ctx.save(); ctx.translate(-80, -60); ctx.rotate(sway);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 14); S(ctx, INK, 1.6); ctx.stroke();
+      glow(ctx, 0, 24, 34, '#ffb347', 0.5 + (reduced ? 0 : Math.sin(t * 7) * 0.08));
+      tone(ctx, c => rrect(c, -7, 14, 14, 18, 3), '#ffcf6b', 0, 23, 8, { ol: 1.4 });
+      ctx.restore();
+      // the sign
+      ctx.beginPath(); rrect(ctx, -44, -34, 88, 24, 5); F(ctx, INK); ctx.fill(); S(ctx, PAL.gold, 2); ctx.stroke();
+      txt(ctx, 'TRADES', 0, -22, 15, PAL.gold, true, 'center');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // One good on the counter: an item, a relic, coins, a sparkle (a curse lifted) or a face-down card.
+  function trdToken(ctx, tok, x, y, sc, reveal) {
+    if (!tok) return;
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.scale(sc || 1, sc || 1);
+      const hid = tok.hidden && !reveal;
+      if (hid) {
+        const col = RARITY_COL[(tok.def && tok.def.rarity) || 'c'] || PAL.cyan;
+        ctx.beginPath(); rrect(ctx, -17, -23, 34, 46, 6); F(ctx, '#2a1845'); ctx.fill(); S(ctx, col, 3); ctx.stroke();
+        txt(ctx, '?', 0, 1, 24, col, true, 'center');
+      } else if (tok.kind === 'item' && tok.def) item(ctx, tok.def, 0, 0, 0, Math.min(1, 40 / 50), { plus: !!tok.plus });
+      else if (tok.kind === 'relic' && tok.def) relicIcon(ctx, tok.def, 0, 0, 40);
+      else if (tok.kind === 'gold') {
+        for (let i = 0; i < 4; i++) tone(ctx, c => ell(c, 0, 8 - i * 5, 14, 5, 0), PAL.gold, 0, 8 - i * 5, 12, { ol: 1.4, spec: false });
+        txt(ctx, String(tok.n || ''), 0, -20, 13, '#ffffff', true, 'center', true);
+      } else {
+        glow(ctx, 0, 0, 26, PAL.lime, 0.6);
+        ctx.beginPath(); star(ctx, 0, 0, 13, 4, 0.3); F(ctx, '#ffffff'); ctx.fill();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const trdEase = (u) => { u = U.clamp(u, 0, 1); return u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2; };
+  /* The scene behind the Trading Post screen. st: {t, x, y, w, h, phase
+     'idle'|'haggle'|'done', k (the haggle's clock), K (its beats: give,
+     think, get, shake, done), give / get: [tokens], stamp (1 at the slam,
+     fading), line (Rocco's speech), lineK, reduced}. */
+  function trdScene(ctx, st) {
+    if (!st) return;
+    ctx.save();
+    try {
+      const t = st.t || 0, x0 = st.x || 0, y0 = st.y || 0, w = st.w || 540, h = st.h || 330, K = st.K || { give: 0.7, think: 1.15, get: 1.75, shake: 2, done: 2.6 };
+      const red = !!st.reduced;
+      ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.clip();
+      // the night alley between the machines
+      let g = null;
+      try { g = ctx.createLinearGradient(0, y0, 0, y0 + h); g.addColorStop(0, '#1b0f33'); g.addColorStop(1, '#3a1f4e'); } catch (e) { g = null; }
+      ctx.fillStyle = g || '#24143d'; ctx.fillRect(x0, y0, w, h);
+      for (let i = 0; i < 4; i++) glow(ctx, x0 + 60 + i * 140, y0 + 60 + (i % 2) * 30, 50, [PAL.pink, PAL.cyan, PAL.gold, PAL.lime][i], 0.18 + (red ? 0 : Math.sin(t * 1.3 + i) * 0.05));
+      // a string of lights across the top
+      ctx.beginPath(); ctx.moveTo(x0, y0 + 20); ctx.quadraticCurveTo(x0 + w / 2, y0 + 58, x0 + w, y0 + 20); S(ctx, rgba('#000000', 0.6), 1.5); ctx.stroke();
+      for (let i = 1; i < 12; i++) {
+        const u = i / 12, bx = x0 + w * u, by = y0 + 20 + 38 * 4 * u * (1 - u) * 0.95 + 4, on = red || ((Math.floor(t * 2) + i) % 3 !== 0);
+        const c = [PAL.gold, PAL.pink, PAL.cyan][i % 3];
+        if (on) glow(ctx, bx, by, 9, c, 0.7);
+        ctx.beginPath(); circ(ctx, bx, by, 3); F(ctx, on ? c : shade(c, -0.5)); ctx.fill();
+      }
+      const cy = y0 + h * 0.74;   // the counter top
+      trdCart(ctx, x0 + w * 0.78, cy - 16, 1, t, red);
+      // Rocco's pose follows the haggle
+      const ph = st.phase, k = st.k || 0;
+      let pose = 'idle';
+      if (ph === 'haggle') pose = k < K.give ? 'take' : k < K.think ? 'think' : k < K.get ? 'give' : k < K.done ? 'shake' : 'grin';
+      else if (ph === 'done' || (st.stamp || 0) > 0) pose = 'grin';
+      const rx = x0 + w * 0.6, blink = red ? 0 : (Math.sin(t * 1.9) > 0.985 ? 1 : 0);
+      trdRocco(ctx, rx, cy + 4, 1, { t, pose, blink, look: ph === 'haggle' ? -0.6 : Math.sin(t * 0.6) * 0.6, reduced: red });
+      // the counter: a plank top and a front of boards, a bell and a brass balance
+      tone(ctx, c => rrect(c, x0 + 10, cy, w - 20, 16, 4), '#b07a44', x0 + w / 2, cy + 8, 60, { dark: -0.25, spec: false });
+      ctx.beginPath(); ctx.rect(x0 + 18, cy + 16, w - 36, h); F(ctx, '#6b4424'); ctx.fill(); S(ctx, INK, OL); ctx.stroke();
+      for (let i = 1; i < 8; i++) { ctx.beginPath(); ctx.moveTo(x0 + 18 + (w - 36) * i / 8, cy + 16); ctx.lineTo(x0 + 18 + (w - 36) * i / 8, y0 + h); S(ctx, rgba(INK, 0.35), 1.4); ctx.stroke(); }
+      const bellX = x0 + 44;
+      tone(ctx, c => { c.moveTo(bellX - 12, cy); c.quadraticCurveTo(bellX - 12, cy - 16, bellX, cy - 17); c.quadraticCurveTo(bellX + 12, cy - 16, bellX + 12, cy); c.closePath(); }, PAL.gold, bellX, cy - 8, 10, { ol: 1.6 });
+      ctx.beginPath(); circ(ctx, bellX, cy - 19, 2.6); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+      // the balance: it tips toward what is on the counter and settles level at the handshake
+      const bx = x0 + w * 0.36, bTop = cy - 46;
+      let tilt = red ? 0 : Math.sin(t * 1.4) * 0.05;
+      if (ph === 'haggle') tilt = k < K.give ? -0.18 * trdEase(k / K.give) : k < K.get ? -0.18 + 0.36 * trdEase((k - K.give) / (K.get - K.give)) : 0.18 * (1 - trdEase((k - K.get) / Math.max(0.01, K.shake - K.get)));
+      ctx.beginPath(); ctx.moveTo(bx, cy); ctx.lineTo(bx, bTop); S(ctx, INK, 4); ctx.stroke(); S(ctx, '#d9a441', 2.2); ctx.stroke();
+      ctx.save(); ctx.translate(bx, bTop); ctx.rotate(tilt);
+      ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(26, 0); S(ctx, INK, 4); ctx.stroke(); S(ctx, '#d9a441', 2.2); ctx.stroke();
+      for (const d of [-1, 1]) { ctx.save(); ctx.translate(d * 26, 0); ctx.rotate(-tilt); ctx.beginPath(); ctx.moveTo(-8, 12); ctx.lineTo(0, 0); ctx.lineTo(8, 12); S(ctx, rgba(INK, 0.8), 1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-10, 12); ctx.quadraticCurveTo(0, 18, 10, 12); ctx.closePath(); F(ctx, '#d9a441'); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke(); ctx.restore(); }
+      ctx.restore();
+      ctx.beginPath(); circ(ctx, bx, bTop, 3); F(ctx, PAL.gold); ctx.fill();
+      // the goods: yours slide over to him, he studies them, his slide back to you
+      const you = x0 + w * 0.14, him = x0 + w * 0.56, ty = cy - 22;
+      const give = st.give || [], get = st.get || [];
+      const lay = (list, cx, i) => cx + (i - (list.length - 1) / 2) * 44;
+      if (ph === 'haggle' || ph === 'done') {
+        const u = ph === 'done' ? 1 : trdEase(k / K.give), gone = ph === 'done' || k >= K.get;
+        if (!gone) give.forEach((tok, i) => { const px = lay(give, you, i) + (lay(give, him, i) - lay(give, you, i)) * u; trdToken(ctx, tok, px, ty - Math.sin(u * Math.PI) * 18, 1); });
+        const v = ph === 'done' ? 1 : trdEase((k - K.think) / (K.get - K.think));
+        if (ph === 'done' || k >= K.think) {
+          const reveal = ph === 'done' || k >= K.shake;
+          get.forEach((tok, i) => { const px = lay(get, him, i) + (lay(get, you, i) - lay(get, him, i)) * v; trdToken(ctx, tok, px, ty - Math.sin(v * Math.PI) * 18, 1, reveal); });
+        }
+        // the handshake: your glove comes in from the left to meet his paw
+        if (ph === 'haggle' && k >= K.get - 0.1) {
+          const hu = trdEase((k - (K.get - 0.1)) / 0.3), hx = x0 + w * 0.2 + (w * 0.22) * hu, hy = cy - 30 + (red ? 0 : Math.sin(k * 30) * 2 * (k > K.shake ? 1 : 0));
+          limb(ctx, x0 - 20, cy + 30, hx - 10, hy + 4, 14, '#3b6fd6');
+          tone(ctx, c => ell(c, hx, hy, 11, 9, 0), '#ffffff', hx, hy, 10, { ol: 1.8 });
+        }
+      }
+      // DEAL! stamps in at the handshake
+      const sk = st.stamp || 0;
+      if (sk > 0 || (ph === 'done' && sk === 0 && st.showStamp)) {
+        const a = Math.min(1, sk * 3), sz = 1 + Math.max(0, sk - 0.8) * 5;
+        ctx.save(); ctx.globalAlpha = Math.max(0.2, a); ctx.translate(x0 + w * 0.4, cy - 76); ctx.rotate(-0.16); ctx.scale(sz, sz);
+        const word = i18nTr('DEAL!'), sw = Math.max(140, word.length * 22 + 24);   // (the Dutch word is longer)
+        ctx.beginPath(); rrect(ctx, -sw / 2, -24, sw, 48, 8); F(ctx, rgba('#ff2e4a', 0.18)); ctx.fill(); S(ctx, '#ff2e4a', 4); ctx.stroke();
+        txt(ctx, 'DEAL!', 0, 1, 34, '#ff2e4a', true, 'center');
+        ctx.restore();
+      }
+      // Rocco's line
+      if (st.line && st.lineK > 0) {
+        ctx.save(); ctx.globalAlpha = st.lineK;
+        const bw = 220, bxx = U.clamp(rx - bw / 2 - 60, x0 + 8, x0 + w - bw - 8), byy = y0 + 26;
+        ctx.beginPath(); rrect(ctx, bxx, byy, bw, 34, 10); F(ctx, '#fffaf0'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bxx + bw - 40, byy + 34); ctx.lineTo(bxx + bw - 26, byy + 46); ctx.lineTo(bxx + bw - 22, byy + 34); F(ctx, '#fffaf0'); ctx.fill();
+        txt(ctx, st.line, bxx + bw / 2, byy + 17, 13, INK, true, 'center');
+        ctx.restore();
+      } else if (ph === 'haggle' && k >= K.give && k < K.get) {
+        txt(ctx, 'HMM...', rx + 44, cy - 150, 15, '#ffffff', true, 'center', true);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const TRD_R = { LOOK: PEV_LOOK, scene: trdScene, rocco: trdRocco, cart: trdCart, icon: trdIcon, token: trdToken, pevBack, pevFront };
+  /* ============================================================ /TRD */
+
   return {
+    // TRD (round 14): the Trading Post (Rocco, his cart, the counter, the haggle, the map icon) and the evolved pets' looks
+    trd: TRD_R,
     // LEG (round 12): the legendary relics' crest, the new evolved art, the Hype plate, the Monocle's peek, the black hole, the animated cabinets
     leg: LEG_R,
     // SCHOOL (round 11): Claw School and the Practice Cabinet: the chalkboard, Professor Pincher, stars, the scoreboard, the report card and the diploma

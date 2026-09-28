@@ -49,7 +49,9 @@ const MAP = (() => {
     // ARCADE: the mini-game cabinets (placed off the road after it is carved)
     'plinko', 'wheel', 'slots',
     // PETS (round 5): whack-a-mole, skee-ball and the pet shop, one of each per map
-    'moles', 'skee', 'petshop'];
+    'moles', 'skee', 'petshop',
+    // TRD (round 14): the Trading Post, one per map (the game places it with trdPlace after the map is made)
+    'trader'];
   const TERRAINS = ['land', 'shallow', 'sea'];
   // Ground types (the tileset). Land is one of the first six; water keeps
   // its terrain name. A mountain is terrain 'land' with ground 'mountain'
@@ -84,7 +86,7 @@ const MAP = (() => {
   const SPREAD = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1 };
   // Landmarks: hidden tiles of these types are drawn as a dim silhouette in
   // the fog from the start, so the player can plan where to spend ink.
-  const LANDMARKS = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1, boss: 1, tower: 1, plinko: 1, wheel: 1, slots: 1, moles: 1, skee: 1, petshop: 1 };
+  const LANDMARKS = { shop: 1, rest: 1, forge: 1, elite: 1, treasure: 1, boss: 1, tower: 1, plinko: 1, wheel: 1, slots: 1, moles: 1, skee: 1, petshop: 1, trader: 1 };
   // Tower bonuses (rolled at generate, awarded after the tower fight on top
   // of the relic and the view). game.js applies them; the ids match its fx
   // kinds ('ink' is bulbs, 'brush' a tool).
@@ -1681,6 +1683,55 @@ const MAP = (() => {
   }
   // ================================================================ /LORE
 
+  // ================================================================ TRD (round 14)
+  /* The Trading Post (DESIGN.md "The Trading Post and pet evolution (round
+     14)"): one per map, placed by the game once the map is whole (after the
+     golden key, the season's doors, Gary and the lore landmarks), on its own
+     rng drawn from M.seed, so every older roll stays where it was. It takes
+     an empty land hex off the road (TRD_ROAD_GAP..TRD_ROAD_FAR hexes from it
+     first: a short detour), TRD_GAP from the cabinets, the pet shop and the
+     shops, 3 from the start, 2 from the boss, never a tower's doorstep, a
+     monster's hex, the golden key's or a lore landmark's (small maps relax
+     the rules in steps). A landmark (known from the start). The Back Room
+     has none. -> the tile, or null. */
+  const TRD_ROAD_GAP = 2, TRD_ROAD_FAR = 4, TRD_GAP = 4;
+  const TRD_TILE = 'trader';
+  const trdVenue = (t) => !!t && (isArcade(t) || t.type === 'petshop' || t.type === 'shop' || t.type === TRD_TILE);
+  function trdPlace(M) {
+    if (!M || !M.tiles || M.room || !M.start || !M.boss) return null;
+    const T = M.tiles;
+    for (const k in T) if (T[k].type === TRD_TILE) return T[k];
+    const rng = U.rng((((M.seed >>> 0) ^ 0x7ade7057) >>> 0) || 5);
+    const road = M.road || [], sec = M.sec || {}, busy = {};
+    for (const m of Array.isArray(M.roam) ? M.roam : []) if (m) busy[key(m.q, m.r)] = 1;
+    for (const x of Array.isArray(M.lore) ? M.lore : []) if (x) busy[key(x.q, x.r)] = 1;
+    if (sec.q != null) busy[key(sec.q, sec.r)] = 1;
+    const free = [], venues = [];
+    for (const k in T) {
+      const t = T[k];
+      if (trdVenue(t)) venues.push(t);
+      if (t.type !== 'empty' || !isLand(t) || t.road || busy[k]) continue;
+      if (hexDist(t.q, t.r, M.start.q, M.start.r) < 3 || hexDist(t.q, t.r, M.boss.q, M.boss.r) < 2) continue;
+      if (neighbors(M, t.q, t.r).some(([q, r]) => T[key(q, r)].type === 'tower')) continue;
+      let d = Infinity;
+      for (const s of road) { const x = hexDist(t.q, t.r, s[0], s[1]); if (x < d) d = x; }
+      free.push({ t, d: road.length ? d : TRD_ROAD_GAP });
+    }
+    // [nearest to the road, farthest, gap to the venues]
+    const passes = [[TRD_ROAD_GAP, TRD_ROAD_FAR, TRD_GAP], [TRD_ROAD_GAP, TRD_ROAD_FAR, 3], [TRD_ROAD_GAP, 99, 3], [1, 99, 3], [1, 99, 2], [1, 99, 1], [0, 99, 0]];
+    let pick = null;
+    for (const [d0, d1, gap] of passes) {
+      const cand = free.filter((f) => f.d >= d0 && f.d <= d1 && venues.every((v) => hexDist(v.q, v.r, f.t.q, f.t.r) >= gap));
+      if (cand.length) { pick = cand[Math.min(cand.length - 1, Math.floor(rng() * cand.length))].t; break; }
+    }
+    if (!pick) return null;
+    pick.type = TRD_TILE;
+    pick.known = true;
+    pick.content = { seed: Math.floor(rng() * 1e9) + 1, diff: diffOf(M, pick.q, pick.r), game: TRD_TILE };
+    return pick;
+  }
+  // ================================================================ /TRD
+
   // Charted hexes: lit tiles that are not sea (lit sea is seen, not charted).
   function countRevealed(M) {
     let n = 0;
@@ -1892,5 +1943,7 @@ const MAP = (() => {
     SEC_BIOME, SEC_ROOM, secKeys, secKeyAt, secRoom,
     // LORE (round 9): the decorative landmarks (a jukebox, lost tickets, the old high score board)
     LORE_KINDS, LORE_GAP, lorePlace, loreAt,
+    // TRD (round 14): the Trading Post
+    TRD_TILE, TRD_ROAD_GAP, TRD_ROAD_FAR, TRD_GAP, trdPlace,
   };
 })();

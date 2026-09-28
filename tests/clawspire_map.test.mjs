@@ -1605,4 +1605,62 @@ h.test('lore: a jukebox, lost tickets and the old high score board on every map,
   h.eq(MAP.loreAt(world(9), 0, 0), null, 'a map from before the landmarks has none until the game places them');
 });
 
+// ---------------------------------------------------------------- TRD (round 14): the Trading Post
+h.test('trd: one Trading Post per map, off the road, a landmark by the cabinet rules, every older roll untouched', () => {
+  h.ok(MAP.TYPES.includes('trader') && MAP.TRD_TILE === 'trader', 'the tile type is known');
+  h.ok(MAP.isLandmark({ type: 'trader' }) && MAP.LANDMARKS.trader, 'a landmark (its silhouette shows in the dark)');
+  let far = 0, spread = 0, n = 0;
+  for (let s = 1; s <= 60; s++) {
+    const act = 1 + (s % 3), M = world(s, { act }), L = `world ${s}`;
+    M.lore = MAP.lorePlace(M);   // the game places the lore landmarks first
+    const before = JSON.parse(JSON.stringify(M));
+    const t = MAP.trdPlace(M);
+    h.ok(!!t, L + ': placed');
+    if (!t) continue;
+    n++;
+    const list = tilesOf(M).filter((x) => x.type === 'trader');
+    h.eq(list.length, 1, L + ': exactly one');
+    const k = MAP.key(t.q, t.r);
+    h.eq(before.tiles[k].type, 'empty', L + ': on an empty hex');
+    // nothing else changed (terrain, content, the road, the cabinets, the monsters, the lore)
+    let changed = 0;
+    for (const kk in M.tiles) if (kk !== k && JSON.stringify(M.tiles[kk]) !== JSON.stringify(before.tiles[kk])) changed++;
+    h.eq(changed, 0, L + ': every other tile untouched');
+    h.eq(JSON.stringify(M.road) + JSON.stringify(M.roam) + JSON.stringify(M.lore), JSON.stringify(before.road) + JSON.stringify(before.roam) + JSON.stringify(before.lore), L + ': road, monsters and lore untouched');
+    h.ok(isLand(t) && !t.road, L + ': on land, off the road');
+    const dRoad = Math.min(...M.road.map(([q, r]) => hexDist(t, { q, r })));
+    h.ok(dRoad >= 1, L + ': not on the road');
+    if (dRoad >= MAP.TRD_ROAD_GAP && dRoad <= MAP.TRD_ROAD_FAR) far++;
+    h.ok(t.known && MAP.isLandmark(t), L + ': a known landmark');
+    h.ok(!(M.roam || []).some((m) => m.q === t.q && m.r === t.r), L + ': never under a roaming monster');
+    h.ok(!(M.lore || []).some((m) => m.q === t.q && m.r === t.r), L + ': never on a lore landmark');
+    h.ok(hexDist(t, M.start) >= 3 && hexDist(t, M.boss) >= 2, L + ': away from the start and the boss');
+    h.ok(!MAP.neighbors(M, t.q, t.r).some(([q, r]) => M.tiles[MAP.key(q, r)].type === 'tower'), L + ': not on a tower doorstep');
+    h.ok(MAP.pathExists(M, M.start, t, { any: true }), L + ': reachable');
+    h.ok(Number.isFinite(t.content.seed) && t.content.seed > 0 && Number.isFinite(t.content.diff) && t.content.game === 'trader', L + ': content: seed, diff, game');
+    const venues = tilesOf(M).filter((x) => x !== t && (MAP.isArcade(x) || x.type === 'petshop' || x.type === 'shop'));
+    if (venues.every((v) => hexDist(v, t) >= 3)) spread++;
+    // deterministic, idempotent, and the save keeps it
+    const M2 = world(s, { act }); M2.lore = MAP.lorePlace(M2);
+    const t2 = MAP.trdPlace(M2);
+    h.ok(t2 && t2.q === t.q && t2.r === t.r && t2.content.seed === t.content.seed, L + ': the same seed places the same post');
+    h.eq(MAP.trdPlace(M), t, L + ': a second call returns the one already there');
+    const O = MAP.deserialize(JSON.parse(JSON.stringify(MAP.serialize(M))));
+    const t3 = O.tiles[k];
+    h.ok(t3.type === 'trader' && t3.known && t3.content.seed === t.content.seed, L + ': survives the save');
+  }
+  h.eq(n, 60, 'every world gets one');
+  h.ok(far >= 45, `most sit 2 to 4 hexes off the road, a short detour (${far}/60)`);
+  h.ok(spread >= 50, `spread from the shops and cabinets (${spread}/60 at 3+)`);
+  // a small map and the Back Room
+  for (let s = 1; s <= 30; s++) { const M = gen(s); M.lore = MAP.lorePlace(M); const t = MAP.trdPlace(M); h.ok(!t || (t.type === 'trader' && isLand(t) && !t.road), `small map ${s}: placed by the relaxed rules or not at all`); }
+  h.eq(MAP.trdPlace(Object.assign(world(3), { room: true })), null, 'the Back Room has no Trading Post');
+  h.eq(MAP.trdPlace(null), null, 'null safe');
+  // an old save: a trader tile saved without `known` is a landmark again; maps from before have none
+  const M = world(4); M.lore = MAP.lorePlace(M); const t = MAP.trdPlace(M); delete t.known;
+  const O = MAP.deserialize(JSON.parse(JSON.stringify(M)));
+  h.ok(O.tiles[MAP.key(t.q, t.r)].known, 'an old trader tile is known again');
+  h.eq(tilesOf(MAP.deserialize(JSON.parse(JSON.stringify(world(5))))).filter((x) => x.type === 'trader').length, 0, 'a map from before the round has no Trading Post');
+});
+
 h.done();

@@ -10290,4 +10290,254 @@ h.test('mix: the run-end numbers count up from zero and land exactly', () => {
   });
 }
 
+// ---------------------------------------------------------------- TRD (round 14): the Trading Post and pet evolution
+{
+  const TRD_META = JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } });
+  const trdBoot = (store) => boot({ store: Object.assign({ clawspire_meta: TRD_META }, store || {}) });
+  const traderOf = (G) => Object.values(G.run.map.tiles).find((t) => t.type === 'trader') || null;
+  // A run standing in its Trading Post: plus copies, a curse (a Rock), two relics; o.want: a kind the post must deal.
+  function trdPost(G, o) {
+    o = o || {};
+    for (let s = o.seed || 1; s < (o.seed || 1) + 80; s++) {
+      G.newRun('knight', s);
+      G.run.gold = o.gold == null ? 400 : o.gold;
+      for (const r of ['festering_jar', 'magnet_charm']) G.gainRelic(r);
+      G.run.bin.forEach((i, k) => { if (k % 4 === 1) i.plus = true; });
+      G.run.bin.push({ uid: 'zrock', id: 'rock', plus: false });
+      if (o.tilt) G.run.tilt = o.tilt;
+      const t = traderOf(G);
+      G.enterTile(t);
+      const st = G.trd.ui && G.trd.ui.st;
+      if (!o.want || (st && st.offers.some((x) => x.k === o.want))) return { t, st, i: st ? st.offers.findIndex((x) => x.k === o.want) : -1, seed: s };
+    }
+    return null;
+  }
+  h.test('trd: a Trading Post on every map (not the Back Room), a landmark, entered from its tile, three trades and Leave', () => {
+    const T = trdBoot(), G = T.GAME, MP = T.MAP;
+    for (const seed of [11, 12, 13]) {
+      G.newRun('knight', seed);
+      for (let act = 1; act <= 3; act++) {
+        if (act > 1) { G.run.act = act; G.run.map = MP.generate({ act, rng: T.U.rng(seed * 10 + act) }); G.trd.newMap(G.run); }
+        const list = Object.values(G.run.map.tiles).filter((t) => t.type === 'trader');
+        h.eq(list.length, 1, `seed ${seed} act ${act}: one Trading Post`);
+        const t = list[0];
+        if (!t) continue;
+        h.ok(t.known && MP.isLandmark(t) && MP.isLand(t) && !t.road, `seed ${seed} act ${act}: a known landmark off the road`);
+      }
+    }
+    h.eq(G.trd.newMap({ map: { room: true, tiles: {}, start: {}, boss: {} } }), null, 'the Back Room has none');
+    const P = trdPost(G, { seed: 21 });
+    h.eq(G.screen, 'trade', 'entering the tile opens the Trading Post');
+    h.eq(P.st.offers.length, 3, 'three trades');
+    const labels = G.S.ui.buttons.map((b) => b.label);
+    h.eq(labels[labels.length - 1], 'Leave', 'Leave is last');
+    h.eq(labels.filter((l) => l === 'TRADE' || /^Pay \d+ gold$/.test(l)).length, 3, 'a deal button per trade: ' + labels.join(', '));
+    h.ok(P.t.content.trd && P.t.content.trd.offers === P.st.offers, 'the trades are saved on the tile');
+    G.draw();
+    G.trd.leave();
+    h.eq(G.screen, 'map', 'Leave goes back to the map');
+    h.ok(P.t.done, 'the cart packs up: the tile is done');
+    G.enterTile(P.t);
+    h.eq(G.screen, 'map', 'a second visit finds nobody');
+  });
+  h.test('trd: each kind of trade swaps by its rule and is paid once', () => {
+    const T = trdBoot(), G = T.GAME, D = T.DATA;
+    // the item swap
+    let P = trdPost(G, { want: 'swap', seed: 31 });
+    let of = P.st.offers[P.i], n0 = G.run.bin.length, g0 = G.run.gold;
+    const r = G.trd.deal(P.i);
+    h.ok(r && r.k === 'swap', 'swap: dealt');
+    h.ok(!G.run.bin.some((i) => i.uid === of.give.uid), 'swap: your item is gone');
+    h.ok(G.run.bin.some((i) => i.id === of.get.id && !!i.plus === of.get.plus), 'swap: the new one is in the bin');
+    h.ok(G.run.bin.length === n0 && G.run.gold === g0, 'swap: the bin keeps its size, no gold changes hands');
+    h.eq(G.trd.deal(P.i), null, 'swap: never twice');
+    h.ok(P.st.done[P.i], 'swap: marked done');
+    // the relic swap: a relic with lasting Max HP takes it along
+    P = trdPost(G, { want: 'relic', seed: 41 });
+    of = P.st.offers[P.i];
+    const hp0 = G.run.maxHp, mods = (D.RELICS[of.give].mods || {}).maxhp || 0, gmods = (D.RELICS[of.get].mods || {}).maxhp || 0;
+    h.ok(G.trd.deal(P.i), 'relic: dealt');
+    h.ok(G.run.relics.indexOf(of.give) < 0 && G.run.relics.indexOf(of.get) >= 0, 'relic: yours for the face-down one');
+    h.eq(G.run.maxHp, hp0 - mods + gmods, 'relic: lasting Max HP follows the relics');
+    h.eq(D.RELICS[of.give].rarity, D.RELICS[of.get].rarity, 'relic: the same rarity');
+    // the service: a curse lifted at the shop's removal price with shopK
+    P = trdPost(G, { want: 'service', seed: 51 });
+    of = P.st.offers[P.i];
+    h.eq(of.mode, 'curse', 'service: a Rock in the bin is a curse to lift');
+    h.eq(of.price, Math.round(60 * D.ECONOMY.shopK), 'service: 60 x shopK');
+    g0 = G.run.gold; n0 = G.run.bin.length;
+    h.eq(G.trd.deal(P.i, { uid: G.run.bin.find((i) => i.id !== 'rock').uid }), null, 'service: a curse lift takes junk only');
+    h.eq(G.run.gold, g0, 'service: nothing paid for a refusal');
+    h.ok(G.trd.deal(P.i, { uid: 'zrock' }), 'service: the Rock goes');
+    h.ok(G.run.gold === g0 - of.price && G.run.bin.length === n0 - 1 && !G.run.bin.some((i) => i.uid === 'zrock'), 'service: paid once, the junk gone');
+    h.eq(G.trd.deal(P.i, { uid: G.run.bin[0].uid }), null, 'service: never twice');
+    // the price follows the Tilt's Price Hike
+    const tl = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].find((n) => (D.tiltMods(n) || {}).shop > 0);
+    if (tl) { P = trdPost(G, { want: 'service', seed: 51, tilt: tl }); h.eq(P.st.offers[P.i].price, Math.round(60 * D.ECONOMY.shopK * (1 + D.tiltMods(tl).shop)), 'service: the Price Hike stacks (Tilt ' + tl + ')'); }
+    // too poor
+    P = trdPost(G, { want: 'service', seed: 51, gold: 5 });
+    h.eq(G.trd.deal(P.i, { uid: 'zrock' }), null, 'service: too poor, refused');
+    h.ok(G.run.bin.some((i) => i.uid === 'zrock'), 'service: and the Rock stays');
+    // the mystery bundle
+    P = trdPost(G, { want: 'bundle', seed: 61 });
+    of = P.st.offers[P.i]; n0 = G.run.bin.length;
+    h.ok(G.trd.deal(P.i), 'bundle: dealt');
+    h.eq(G.run.bin.length, n0 - 1, 'bundle: two out, one in');
+    h.ok(!of.give.some((g) => G.run.bin.some((i) => i.uid === g.uid)), 'bundle: both named items gone');
+    const got = G.run.bin[G.run.bin.length - 1];
+    h.ok(got.id === of.get.id && !got.plus && D.TRD.RANK[D.ITEMS[got.id].rarity] === D.TRD.RANK[D.ITEMS[of.give[0].id].rarity] + 1, 'bundle: an item one rarity up');
+    // an item no longer in the bin
+    P = trdPost(G, { want: 'swap', seed: 31 });
+    of = P.st.offers[P.i];
+    G.run.bin = G.run.bin.filter((i) => i.uid !== of.give.uid);
+    h.eq(G.trd.deal(P.i), null, 'swap: refused when the item is gone');
+    h.ok(!P.st.done[P.i], 'swap: and still open');
+  });
+  h.test('trd: rolled once, a reload shows the same deals, a deal mid haggle is never paid twice', () => {
+    const T = trdBoot(), G = T.GAME;
+    const P = trdPost(G, { want: 'swap', seed: 71 });
+    const offers = JSON.stringify(P.st.offers);
+    G.save(); G.load();
+    h.eq(G.screen, 'trade', 'a reload comes back to the post');
+    h.eq(JSON.stringify(G.trd.ui.st.offers), offers, 'the same trades after the reload');
+    // a deal with the haggle playing (not headless for the start), then a reload mid haggle
+    G.S.headless = false;
+    const bin0 = G.run.bin.length, gold0 = G.run.gold;
+    const r = G.trd.deal(P.i);
+    G.S.headless = true;
+    h.ok(r && G.trd.ui.phase === 'haggle', 'the haggle plays');
+    stepFor(G, 0.4);
+    h.ok(G.trd.ui.k > 0.3 && G.trd.ui.phase === 'haggle', 'the goods slide over');
+    G.draw();
+    const binIds = JSON.stringify(G.run.bin.map((i) => i.uid + i.id));
+    G.save(); G.load();
+    h.eq(G.screen, 'trade', 'reloaded mid haggle');
+    h.ok(G.trd.ui.st.done[P.i] && G.trd.ui.phase === 'idle', 'the deal is done, no haggle replays');
+    h.eq(JSON.stringify(G.run.bin.map((i) => i.uid + i.id)), binIds, 'the bin as it was after the deal');
+    h.ok(G.run.bin.length === bin0 && G.run.gold === gold0, 'nothing paid twice');
+    h.eq(G.trd.deal(P.i), null, 'and the trade stays taken');
+    // the haggle runs its course: the stamp, then the result
+    const P2 = trdPost(G, { seed: 72 });
+    G.S.headless = false;
+    const i2 = P2.st.offers.findIndex((o) => o.k !== 'service');
+    G.trd.deal(i2);
+    G.S.headless = true;
+    for (let i = 0; i < 400 && G.trd.ui.phase === 'haggle'; i++) { G.update(DT); if (i % 40 === 0) G.draw(); }
+    h.eq(G.trd.ui.phase, 'done', 'the haggle ends on its own');
+    h.ok(G.trd.ui.fired.d, 'the DEAL! stamp fired');
+    h.ok(G.S.ui.buttons.some((b) => b.label === 'Continue'), 'Continue back to the trades');
+    G.choose(G.S.ui.buttons.findIndex((b) => b.label === 'Continue'));
+    h.eq(G.trd.ui.phase, 'idle', 'back to the trades');
+    // a tap hurries
+    const i3 = P2.st.offers.findIndex((o, k) => !P2.st.done[k] && o.k !== 'service');
+    if (i3 >= 0) { G.S.headless = false; G.trd.deal(i3); G.S.headless = true; h.ok(G.trd.hurry() && G.trd.ui.fired.d, 'a tap jumps to the handshake'); h.ok(G.trd.hurry() && G.trd.ui.phase === 'done', 'a second tap ends it'); }
+  });
+  h.test('trd: old saves: a map and a pet from before the round load and play', () => {
+    const T = trdBoot(), G = T.GAME;
+    G.newRun('knight', 81);
+    G.pet.give('cat', 100);
+    const t = traderOf(G);
+    G.save();
+    const raw = JSON.parse(T._store.clawspire_run);
+    const k = t.q + ',' + t.r;
+    raw.run.map.tiles[k].type = 'empty'; raw.run.map.tiles[k].content = {}; raw.run.map.tiles[k].known = false;
+    delete raw.run.pet.evo;
+    T._store.clawspire_run = JSON.stringify(raw);
+    h.ok(G.load(), 'an old save loads');
+    h.eq(Object.values(G.run.map.tiles).filter((x) => x.type === 'trader').length, 0, 'its map keeps having no Trading Post');
+    h.ok(G.run.pet && !G.run.pet.evo && T.DATA.pevCan(G.run.pet), 'its Lv 5 pet can evolve');
+    G.draw();
+    // an old profile's album without evolutions
+    const T2 = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, unlocks: { knight: true }, pets: { cat: { n: 2, lv: 5 } } }) } });
+    T2.GAME.showCollection('evo');
+    const cards = secWalk(T2._nodes.collectionBody).filter((n) => /pevc/.test(n.className || ''));
+    h.eq(cards.length, T2.DATA.PET_IDS.length, 'the Prizedex lists every pet\'s final form');
+    h.ok(cards.every((c) => /locked/.test(c.className)), 'none evolved on an old profile');
+  });
+  h.test('pev: a Lv 5 pet evolves once: at a rest instead of healing, for gold or a relic at the Trading Post', () => {
+    const T = trdBoot(), G = T.GAME, D = T.DATA;
+    // gated by level
+    G.newRun('knight', 91);
+    G.pet.give('hamster', 60);
+    G.showRest();
+    h.eq(G.S.ui.buttons.length, 3, 'a Lv 4 pet: the rest keeps its three choices');
+    h.eq(G.pev.evolve('rest'), false, 'a Lv 4 pet cannot evolve');
+    // at a rest: instead of healing
+    G.pet.give('hamster', 100);
+    G.run.hp = 30;
+    G.showRest();
+    h.eq(G.S.ui.buttons.length, 4, 'a Lv 5 pet: a fourth choice');
+    G.choose(3);
+    h.eq(G.run.pet.evo, 1, 'the rest evolved it');
+    h.eq(G.run.hp, 30, 'and nothing was healed');
+    h.eq(G.screen, 'map', 'back to the map');
+    const E = G.evo.ui;
+    h.ok(E && typeof E.art === 'function' && E.to.name === D.PEV_FORMS.hamster.name, 'the ceremony plays with the pet in it');
+    for (let i = 0; i < 200; i++) G.update(DT);
+    G.draw();
+    G.evo.uiTap(); G.evo.uiTap();
+    h.ok(!G.evo.ui, 'a tap or two closes it');
+    h.eq(G.meta.pets.hamster.evo, 1, 'the album records it');
+    h.ok(G.meta.trd && G.meta.trd.pev === 1, 'the profile counts it');
+    h.eq(G.pev.evolve('rest'), false, 'never twice');
+    G.showRest();
+    h.eq(G.S.ui.buttons.length, 3, 'an evolved pet: no fourth choice');
+    G.save(); G.load();
+    h.eq(G.run.pet.evo, 1, 'the save keeps it');
+    h.near(G.pev.powUp(), D.PEV_K.pow, 1e-9, 'its trick is stronger');
+    // at the Trading Post for gold
+    let P = trdPost(G, { seed: 92 });
+    G.pet.give('cat', 100);
+    G.trd.show({ q: P.t.q, r: P.t.r });
+    const fee = D.pevFee(G.run.act);
+    h.ok(G.S.ui.buttons.some((b) => b.label === `Pay ${fee} gold`) && G.S.ui.buttons.some((b) => b.label === 'Give a relic'), 'the post offers the evolution: the fee and a relic');
+    G.run.gold = fee - 1;
+    h.eq(G.pev.evolve('gold'), false, 'too poor for the fee');
+    G.run.gold = fee + 10;
+    h.ok(G.pev.evolve('gold') && G.run.gold === 10 && G.run.pet.evo === 1, 'the fee paid once, the cat evolved');
+    h.ok(!G.S.ui.buttons.some((b) => b.label === 'Give a relic'), 'the slot is gone');
+    // for a relic
+    P = trdPost(G, { seed: 93 });
+    G.pet.give('parrot', 100);
+    const own = D.CHARACTERS.knight.relic;
+    h.eq(G.pev.evolve('relic', own), false, 'the crawler\'s own relic is never taken');
+    h.eq(G.pev.evolve('relic', 'nope'), false, 'a relic you lack');
+    const g0 = G.run.gold, r0 = G.run.relics.length;
+    h.ok(G.pev.evolve('relic', 'festering_jar') && G.run.relics.indexOf('festering_jar') < 0 && G.run.relics.length === r0 - 1 && G.run.gold === g0, 'the relic given up, no gold');
+    h.eq(G.run.pet.evo, 1, 'the parrot evolved');
+    // no pet
+    G.newRun('knight', 94);
+    h.eq(G.pev.evolve('gold'), false, 'no pet, nothing to evolve');
+  });
+  h.test('pev: an evolved pet looks the part and its trick ends in the flourish in a real fight', () => {
+    const T = trdBoot(), G = T.GAME, D = T.DATA;
+    const go = (evo) => {
+      G.newRun('knight', 95);
+      G.pet.give('hamster', 100);
+      if (evo) { h.ok(G.pev.evolve('rest'), 'evolved'); G.evo.uiClose(); }
+      G.startFight(['rat', 'slime'], 'normal', { seed: 800 });
+      stepFor(G, 0.5);
+      const P = G.pet.fs();
+      let n = 0;
+      while (n++ < 300 && !P.log.some((e) => e.fx)) { G.update(DT); if (n % 30 === 0) G.draw(); }
+      return { P, F: G.fight };
+    };
+    const A = go(false);
+    h.ok(A.P.log.some((e) => e.fx) && !A.P.log.some((e) => e.k === 'pev') && !A.F.pevLog, 'an ordinary pet: no flourish');
+    const B = go(true);
+    h.ok(B.P.log.some((e) => e.k === 'pev') && B.F.pevLog && B.F.pevLog[0].pet === 'hamster', 'an evolved pet: its trick ends in Stampede');
+    h.eq(B.F.pevLog[0].v, D.PEV_FORMS.hamster.fx.v, 'Stampede hits for its number');
+    h.ok(G.pev.powUp() > 0, 'and the shove is stronger');
+    G.draw();
+    G.pet.tap && G.pet.tap();
+    h.ok(G.pev.tapLine(G.run.pet).indexOf(D.PEV_FORMS.hamster.name) >= 0, 'the popover names its final form');
+    G.endFight('win'); G.toMap(); G.draw();
+    // the Prizedex's Evolve tab: the hamster found
+    G.showCollection('evo');
+    const cards = secWalk(T._nodes.collectionBody).filter((n) => /pevc/.test(n.className || ''));
+    h.eq(cards.length, D.PET_IDS.length, 'a card per pet');
+    h.ok(cards.some((c) => /got/.test(c.className) && secWalk(c).some((x) => x.textContent === D.PEV_FORMS.hamster.name)), 'the Turbo Hamster is in the book');
+  });
+}
+
 h.done();

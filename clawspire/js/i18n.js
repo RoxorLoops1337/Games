@@ -96,6 +96,15 @@ const I18N = (() => {
   // shows the game's own words.
   const DATA_KIND = { item: 'ITEMS', relic: 'RELICS', status: 'STATUS', enemy: 'ENEMIES', char: 'CHARACTERS',
     combo: 'COMBOS', kw: 'ARCHETYPES', claw: 'CLAWS', pet: 'PETS', set: 'SETS', boon: 'BOONS', act: 'ACTS', mut: 'MUTATORS', evo: 'EVOLVED' };
+  // (round 14) two more kinds: 'lore' (a Codex page by id: name, text, hint)
+  // and 'path', any other DATA words by their dotted path, the field last
+  // (TC('path', 'STORIES.sto_crab.beats.start', 'text'), 'GARY_LINES.win' '0',
+  // 'ENEMIES.rat.enrage' 'name'). Only strings count, so a story beat whose
+  // text is a function goes through the ui patterns instead.
+  const i18n14Kinds = {
+    lore: (id) => (typeof DATA.loreBook === 'function' ? DATA.loreBook().byId[id] : null),
+    path: (id) => { let o = DATA; for (const k of id.split('.')) { if (o == null || typeof o !== 'object') return null; o = o[k]; } return o && typeof o === 'object' ? o : null; },
+  };
   function dataField(kind, id, field) {
     try {
       if (typeof DATA === 'undefined' || !DATA) return undefined;
@@ -105,6 +114,7 @@ const I18N = (() => {
         const m = e && Array.isArray(e.moves) ? e.moves.find((x) => x && x.id === mid) : null;
         return m ? m[field] : undefined;
       }
+      if (i18n14Kinds[kind]) { const o = i18n14Kinds[kind](String(id)); const v = o ? o[field] : undefined; return typeof v === 'string' ? v : undefined; }
       const tb = DATA[DATA_KIND[kind]];
       const def = tb && tb[id];
       if (def && field === 'plusName') return def.plus ? def.plus.name : undefined;
@@ -212,8 +222,8 @@ const I18N = (() => {
     const b = c.buckets.get(s[0]);
     if (b) for (const p of b) { if (s.startsWith(p.pre)) { const r = tryPat(p, s, depth); if (r != null) return r; } }
     for (const p of c.loose) { const r = tryPat(p, s, depth); if (r != null) return r; }
-    // a lead/trail of spaces or an item's "+" stays around the translated core
-    const lm = /^(\s*)(.*?)(\+?)(\s*)$/s.exec(s);
+    // a lead/trail of spaces, an item's "+", a label's ":" or curly quotes (round 14) stay around the translated core
+    const lm = /^(\s*“?)(.*?)(\+?:?”?)(\s*)$/s.exec(s);
     if (lm && (lm[1] || lm[3] || lm[4]) && lm[2] && lm[2] !== s) {
       const r = core(lm[2], depth + 1);
       if (r !== lm[2]) return lm[1] + r + lm[3] + lm[4];
@@ -301,6 +311,7 @@ const I18N = (() => {
       if (el.nodeType === 3) { textNode(el); n++; return; }
       if (el.nodeType !== 1 && el.nodeType !== 9 && el.nodeType !== 11) return;
       if (SKIP[el.tagName]) return;
+      if (el.nodeType === 1 && el.getAttribute && el.getAttribute('translate') === 'no') return;   // (round 14) a brand name, the HTML way
       if (el.nodeType === 1) {
         attrs(el);
         if (el.__i18nSrc !== undefined && el.childNodes && el.childNodes.length === 1 && el.childNodes[0].nodeType === 3 &&
