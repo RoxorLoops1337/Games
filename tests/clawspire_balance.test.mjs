@@ -228,6 +228,13 @@ h.test('the difficulty dial scales enemy hp and attacks', () => {
   const atk = def.moves.find(m => m.k === 'attack');
   const scaled = e.def.moves.find(m => m.k === 'attack');
   if (atk && scaled) h.eq(scaled.v, Math.max(1, Math.round(atk.v * d.dmg)), 'attack value scaled by the dial');
+  // round 12: DIFFICULTY.tierDmg lifts elite and boss attacks on top of the dial (normals untouched above)
+  for (const [id, tier] of [['ironjaw', 'elite'], ['plushqueen', 'boss']]) {
+    const k = (d.tierDmg && d.tierDmg[tier]) || 1;
+    const G = COMBAT.newFight(Object.assign({}, run, { act: DATA.ENEMIES[id].act || 1 }), [id], U.rng(4)).enemies[0];
+    const a0 = DATA.ENEMIES[id].moves.find(m => m.k === 'attack'), a1 = G.def.moves.find(m => m.k === 'attack');
+    h.eq(a1.v, Math.max(1, Math.round(a0.v * d.dmg * k)), `${id} (${tier}): attack x${d.dmg} x${k}`);
+  }
 });
 
 h.test('hidden escalation ramps enemies with fights fought', () => {
@@ -341,7 +348,9 @@ h.test('prices: items, claw upgrades and shop stock are affordable', () => {
       const prices = shop.items.map(i => i.price).sort((a, b) => a - b);
       n++;
       if (prices[0] + prices[1] <= budget) ok++;
-      h.ok(shop.items.every(i => i.price <= 150), `seed ${s} ${ch}: no item above 150 gold`);
+      // round 12: DATA.ECONOMY.shopK scales every shelf price (150 before the pass)
+      const cap = Math.round(150 * ((DATA.ECONOMY && DATA.ECONOMY.shopK) || 1));
+      h.ok(shop.items.every(i => i.price <= cap), `seed ${s} ${ch}: no item above ${cap} gold`);
       h.ok(!shop.claws, `seed ${s} ${ch}: no claw upgrades for sale`);
     }
   }

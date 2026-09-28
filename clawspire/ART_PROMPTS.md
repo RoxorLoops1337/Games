@@ -653,6 +653,35 @@ Ms. Bubbles' own art (DESIGN.md "Ms. Bubbles, the mutator pack and three pets (r
 | `art/items/id/captain_quack.png` | 512x512 | 1:1, square | 30x30 | captain_quack | Captain Quack (evolved): a yellow rubber duck in a navy captain's hat with a gold star, saluting, a proud chest out |
 | `art/items/id/bubble_shield.png` | 512x301 | 1.7:1, horizontal | 34x20 | bubble_shield | Bubble Shield (evolved): a pink bar of soap sealed inside a big shining soap bubble, rainbow film highlights, a white window glint |
 
+## Legends (round 12)
+
+The twelve legendary relics and the ten new evolved items (DESIGN.md "Legends (round 12)"). Every file is optional: the drawn art is the fallback (the relic medallion with its gold flame crown, `RENDER.leg` and `RENDER.evo.ART`). A legendary relic emblem is the most ornate on the strip: one bold object, a warm gold rim light, a faint rainbow sheen, readable at 32 px. The animated cabinets (Aquarium, Neon Tokyo, Retro CRT and the live layers of the older rare skins) are drawn in code and take no files.
+
+| File | Gen size (px) | Aspect, orientation | In game (px) | Used by | Prompt |
+| --- | --- | --- | --- | --- | --- |
+| `art/relics/leg_golden_claw.png` | 256x256 | 1:1, square | 32x32 | The Golden Claw | The Golden Claw relic emblem: a solid gold arcade claw with three prongs, a trophy handle on each side of its hub, sparkles, small icon, square |
+| `art/relics/leg_coin_slot.png` | 256x256 | 1:1, square | 32x32 | Infinite Coin Slot | Infinite Coin Slot relic emblem: a chrome coin slot plate with an infinity sign glowing cyan above the slot and a coin halfway in, small icon, square |
+| `art/relics/leg_monocle.png` | 256x256 | 1:1, square | 32x32 | Prize Master's Monocle | Prize Master's Monocle relic emblem: a gold-rimmed monocle on a chain, two tiny ghostly future enemy silhouettes reflected in the lens, small icon, square |
+| `art/relics/leg_black_hole.png` | 256x256 | 1:1, square | 32x32 | Black Hole Bin | Black Hole Bin relic emblem: a small trash bin with a swirling purple black hole inside it, a rock and a bolt spiralling in, small icon, square |
+| `art/relics/leg_perpetual.png` | 256x256 | 1:1, square | 32x32 | Perpetual Motion Machine | Perpetual Motion Machine relic emblem: a brass gear wheel with a looping arrow around it and a tiny ball riding the loop, small icon, square |
+| `art/relics/leg_crowd.png` | 256x256 | 1:1, square | 32x32 | The Crowd | The Crowd relic emblem: a red megaphone with a row of tiny cheering cartoon heads bursting out of its bell, small icon, square |
+| `art/relics/leg_foam_crown.png` | 256x256 | 1:1, square | 32x32 | Crown of Foam | Crown of Foam relic emblem: a crown made of shiny soap bubbles with rainbow film highlights, a rubber duck peeking over the rim, small icon, square |
+| `art/relics/leg_overclock.png` | 256x256 | 1:1, square | 32x32 | Overclocked Core | Overclocked Core relic emblem: a glowing battery cell with a gauge needle pinned in the red, orange sparks and a turret barrel behind it, small icon, square |
+| `art/relics/leg_fate_engine.png` | 256x256 | 1:1, square | 32x32 | Fate Engine | Fate Engine relic emblem: a shooting star trailing a green four-leaf clover spiral, a small brass engine gear at its tail, small icon, square |
+| `art/relics/leg_alpha_collar.png` | 256x256 | 1:1, square | 32x32 | Alpha Collar | Alpha Collar relic emblem: a spiked leather pet collar with a gold wolf-head tag, small icon, square |
+| `art/relics/leg_glass_heart.png` | 256x256 | 1:1, square | 32x32 | Glass Heart | Glass Heart relic emblem: a faceted crystal heart with a single hairline crack glowing cyan, tiny shards floating off it, small icon, square |
+| `art/relics/leg_slayer_crown.png` | 256x256 | 1:1, square | 32x32 | Giant Slayer's Crown | Giant Slayer's Crown relic emblem: a small dented gold crown with a sling tucked through it and a tiny boss skull under it, small icon, square |
+| `art/items/id/calliope_pipe.png` | 512x179 | 2.86:1, horizontal | 40x14 | calliope_pipe | Calliope Pipe (evolved): a wooden bubble pipe whose bowl grew three little silver organ pipes, a big soap bubble rising from them |
+| `art/items/id/kraken_sponge.png` | 512x375 | 1.36:1, horizontal | 30x22 | kraken_sponge | Kraken Sponge (evolved): a yellow bath sponge with two googly kraken eyes and four purple tentacles curling off its bottom |
+| `art/items/id/gear_grinder.png` | 512x178 | 2.88:1, horizontal | 46x16 | gear_grinder | Gear Grinder (evolved): a red pipe wrench lying flat whose jaw is a big gold toothed gear, motion lines round the gear |
+| `art/items/id/railgun_coil.png` | 512x512 | 1:1, square | 28x28 | railgun_coil | Railgun Coil (evolved): a gold spring coiled round a short cyan rail, crackling with electric arcs |
+| `art/items/id/all_in_chip.png` | 512x512 | 1:1, square | 30x30 | all_in_chip | All-In Chip (evolved): a black poker chip with a dashed gold rim and a gold spade, three coloured chips stacked under it |
+| `art/items/id/showstopper.png` | 398x512 | 1:1.29, vertical | 28x36 | showstopper | Showstopper Deck (evolved): a hot pink playing card with a big gold star, two white cards fanned behind it |
+| `art/items/id/boomerang_blades.png` | 512x189 | 2.71:1, horizontal | 38x14 | boomerang_blades | Boomerang Blades (evolved): two curved silver daggers joined at a pink hub into a boomerang, a curved speed trail |
+| `art/items/id/vanishing_act.png` | 512x512 | 1:1, square | 32x32 | vanishing_act | Vanishing Act (evolved): a dark purple magician's top hat with a lavender band, a white-tipped wand across it, two gold sparkles |
+| `art/items/id/master_key.png` | 512x189 | 2.71:1, horizontal | 38x14 | master_key | Master Key (evolved): an ornate gold key lying flat, a ruby in its round bow, its bit shaped like three curled claw prongs |
+| `art/items/id/singularity.png` | 512x512 | 1:1, square | 36x36 | singularity | Singularity (evolved): a black orb in a tilted glowing purple accretion ring, a thin gold light rim on the orb |
+
 ---
 
-333 prompts in total. Sizes in this book come from `ART.paths()` in `js/art.js`; if an item or enemy changes size in `js/data.js`, the in-game size changes with it and the game still fits whatever PNG is there.
+355 prompts in total. Sizes in this book come from `ART.paths()` in `js/art.js`; if an item or enemy changes size in `js/data.js`, the in-game size changes with it and the game still fits whatever PNG is there.

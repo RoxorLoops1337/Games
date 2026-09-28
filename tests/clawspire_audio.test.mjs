@@ -731,6 +731,38 @@ T.test('season: Claw-o-ween and winter have their own title and map tunes; the b
   T.eq(AUDIO._seaSong('fight', 'halloween'), AUDIO._song('fight'), 'fights keep their own tunes (and layers)');
   T.ok(AUDIO.SEA_CFG.halloween && AUDIO.SEA_CFG.winter && AUDIO.SEA_NAMES.halloween, 'the configs and their names are exposed');
 });
+// WIN (round 12): the winter jingle and the advent / Krampus sounds
+T.test('winter: the title and map carry the jingle hook on the chord\'s own tones; fights and Claw-o-ween do not', () => {
+  const { AUDIO } = bootFake();
+  const wt = AUDIO._seaSong('title', 'winter'), wm = AUDIO._seaSong('map', 'winter'), ht = AUDIO._seaSong('title', 'halloween');
+  // the hook: three bells on the same note, twice, then a run of four, then a long one (bars 0..3 of each half)
+  const hook = (s, b0) => [0, 1, 2, 3].map(b => s.steps.slice((b0 + b) * 16, (b0 + b + 1) * 16).map((st, i) => st.filter(e => e.v === 'bell' && e.d).map(e => i)).flat());
+  for (const [s, name] of [[wt, 'title'], [wm, 'map']]) {
+    for (const b0 of [0, 8]) {
+      const h = hook(s, b0);
+      T.eq(JSON.stringify(h), JSON.stringify([[0, 4, 8], [0, 4, 8], [0, 4, 8, 14], [0]]), `${name}: the jingle rhythm from bar ${b0}`);
+    }
+    const bar0 = s.steps.slice(0, 16).map(st => st.filter(e => e.v === 'bell' && e.d)).flat();
+    T.ok(bar0.length === 3 && bar0.every(e => e.n === bar0[0].n), `${name}: jingle, jingle, jingle (one note)`);
+    T.ok(s.steps.slice(4 * 16, 8 * 16).every(st => !st.some(e => e.v === 'bell' && e.d)), `${name}: the answer bars leave room`);
+  }
+  T.ok(!ht.steps.some(st => st.some(e => e.v === 'bell' && e.d)), 'Claw-o-ween has no jingle');
+  T.eq(AUDIO._seaSong('fight', 'winter'), AUDIO._song('fight'), 'fights keep their own tunes');
+  T.eq(JSON.stringify(AUDIO._seaSong('map', 'winter').steps), JSON.stringify(wm.steps), 'deterministic');
+});
+T.test('winter: the ribbon, the pop, the present and the coal play in their tiers', () => {
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  const want = { winRibbon: 'soft', winPop: 'mid', winGift: 'big', winCoal: 'soft' };
+  for (const n in want) {
+    ac.currentTime += 2;
+    const before = fake.count.total;
+    T.ok(AUDIO.names.includes(n) && AUDIO.sfx(n) && fake.count.total - before >= 2, n + ' plays');
+    T.eq(AUDIO.mix.tier(n), want[n], n + ' sits in ' + want[n]);
+  }
+  T.ok(AUDIO.mix.TRIM.winRibbon > 0 && AUDIO.mix.TRIM.winCoal < 0, 'calibrated (the ribbon lifted, the coal pulled down)');
+});
 T.test('season: setSeason crossfades a live title or map tune, before init it is remembered', () => {
   const { AUDIO, fake } = bootFake();
   T.eq(AUDIO.setSeason('halloween'), 'halloween', 'remembered before init');

@@ -2502,6 +2502,7 @@ const RENDER = (() => {
       if (lay) { try { ctx.drawImage(lay.cv, lay.x0, lay.y0, lay.lw, lay.lh); } catch (e) { /* stub canvas */ } }
       else cabStatic(ctx, c, neon, tilt, sk);
       if (sk && sk.rainbow && !alarm) vRainbowTube(ctx, c, t);
+      if (sk) legSkinAnim(ctx, c, skd, t, alarm);   // LEG (round 12): the rarer skins' live layer over the cached back
       // chasing bulbs around the frame; st.party (0..1, a double or a
       // jackpot) turns them into a fast rainbow slot-machine chase
       const party = U.clamp(+st.party || 0, 0, 1);
@@ -2751,6 +2752,7 @@ const RENDER = (() => {
     ctx.beginPath(); path(); S(ctx, o.ghost ? (PAINT.on ? shade(CHROME, -0.25) : '#8e98a8') : body, w); ctx.stroke();
     if (o.ghost) return;
     if (PAINT.on && PAINT.fx === 'stripe') { ctx.setLineDash([w * 0.9, w * 0.9]); ctx.beginPath(); path(); S(ctx, PAINT.c2, w * 0.8); ctx.stroke(); ctx.setLineDash([]); }
+    if (PAINT.on && PAINT.fx === 'sea_cane') winCaneStripe(ctx, path, w);   // WIN (round 12): Peppermint Swirl
     // a darker seam down the middle reads as the bevel of a bent steel rod
     ctx.beginPath(); path(); S(ctx, shade(CHROME, -0.35), Math.max(1, w * 0.28)); ctx.stroke();
     for (let i = 1; i < pts.length - 1; i++) {
@@ -3337,6 +3339,7 @@ const RENDER = (() => {
       // PETS (round 5): whack-a-mole, skee-ball, the pet shop
       case 'moles': case 'skee': case 'petshop': petIcon(ctx, type, s, t); break;
       case 'treat': seaTreatIcon(ctx, r, t); break;   // SEASON: a trick-or-treat door
+      case 'advent': winAdventIcon(ctx, r, t); break;   // WIN (round 12): an advent present
       case 'rival': stoTileIcon(ctx, s, t); break;   // STORY: Grabby Gary's tile
       default:
         F(ctx, rgba('#f4ecd6', 0.45)); ctx.beginPath(); ctx.arc(0, 0, s * 0.25, 0, TAU); ctx.fill();
@@ -4343,6 +4346,7 @@ const RENDER = (() => {
         tone(ctx, c => circ(c, r * 0.72, r * 0.72, r * 0.2), col, r * 0.72, r * 0.72, r * 0.2, { ol: 1.5, spec: false });
       } else if (POL.on) {
         polBadge(ctx, def, r, t);   // POLISH (round 5): the rarity medallion
+        if (def.leg && def.rarity === 'l') legCrest(ctx, def, r, t);   // LEG (round 12): a legendary's flame crown
       } else {
         tone(ctx, c => poly(c, [-r * 0.55, -r, r * 0.55, -r, r, -r * 0.3, 0, r, -r, -r * 0.3]), shade(col, -0.55), 0, -r * 0.1, r, { dark: -0.3, ol: 2.5, olc: col });
         if (!FLAT) { ctx.fillStyle = rgba('#ffffff', 0.12); ctx.beginPath(); poly(ctx, [-r * 0.55, -r + 2, r * 0.55, -r + 2, r * 0.3, -r * 0.3, -r * 0.3, -r * 0.3]); ctx.fill(); }
@@ -7713,6 +7717,7 @@ const RENDER = (() => {
     } else if (fp === 'rainbow') {
       for (let i = 0; i < 6; i++) { ctx.beginPath(); rrect(ctx, -f + 3 + i * 3, -f + 3 + i * 3, w + f * 2 - 6 - i * 6, h + f * 2 - 6 - i * 6, 12); S(ctx, rgba(RB[i * 4], 0.55), 3); ctx.stroke(); }
     } else if (fp && String(fp).indexOf('sea_') === 0) seaFramePat(ctx, fp, w, h, f, tr);   // SEASON: the event cabinets
+    else if (fp && String(fp).indexOf('leg_') === 0) legFramePat(ctx, fp, w, h, f, tr);   // LEG (round 12): the animated cabinets
     ctx.restore();
     ctx.beginPath(); rrect(ctx, -f + 3, -f + 3, w + f * 2 - 6, h + f * 2 - 6, 11); S(ctx, rgba(tr, 0.7), 2); ctx.stroke();
   }
@@ -7773,6 +7778,8 @@ const RENDER = (() => {
       for (let i = 0; i < 12; i++) { F(ctx, rgba(RB[(i * 2) % 24], 0.07)); ctx.beginPath(); ctx.moveTo(i * 60 - 120, 0); ctx.lineTo(i * 60 - 90, 0); ctx.lineTo(i * 60 - 90 + fy, fy); ctx.lineTo(i * 60 - 120 + fy, fy); ctx.closePath(); ctx.fill(); }
     } else if (pp && String(pp).indexOf('sea_') === 0) {
       seaPanelPat(ctx, pp, w, fy);   // SEASON: the event cabinets
+    } else if (pp && String(pp).indexOf('leg_') === 0) {
+      legPanelPat(ctx, pp, w, fy);   // LEG (round 12): the animated cabinets
     } else {
       F(ctx, rgba('#ffffff', 0.05)); ctx.beginPath(); for (let yy = 16; yy < fy; yy += 24) for (let xx = 16; xx < w; xx += 24) circ(ctx, xx, yy, 1.5); ctx.fill();
     }
@@ -7798,6 +7805,7 @@ const RENDER = (() => {
       case 'alt': return (k + Math.floor(t * 1.6)) % 2 === 0;
       case 'fast': return ((k - Math.floor(t * 26)) % 3 + 3) % 3 === 0;
       case 'rainbow': return ((k - Math.floor(t * 12)) % 2 + 2) % 2 === 0;
+      case 'sea_twinkle': return winTwinkle(k, t);   // WIN (round 12): the festive marquee's twinkle
       default: return ((k - chase) % mod + mod) % mod === 0;
     }
   }
@@ -7857,6 +7865,7 @@ const RENDER = (() => {
           for (let i = 0; i < s.length; i++) txt(ctx, s[i], x0 + i * adv, y + Math.sin(t * 6 - i * 0.8) * size * 0.14, size, rbCol(t, i * 3), true, 'center', INK);
           break;
         }
+        case 'sea_festive': winMarquee(ctx, L, x, y, size, t); break;   // WIN (round 12): MERRY CLAWMAS
         default:
           glow(ctx, x, y, size * 2.2, col, 0.25 + 0.1 * Math.sin(t * 3));
           txt(ctx, s, x, y, size, col, true, 'center', INK);
@@ -7898,6 +7907,7 @@ const RENDER = (() => {
       ctx.fill();
     }
     if (fx === 'glow') { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35; for (const p of tips) glow(ctx, ox + p.x, oy + p.y, 12, PAINT.glow || '#6bff9a', 0.9); ctx.restore(); }
+    if (fx === 'sea_cane') winCaneFx(ctx, tips, ox, oy, t);   // WIN (round 12): Peppermint Swirl's sugar sparkle
   }
   // A rainbow stroke along a prong (the Rainbow Chrome paint).
   function vRainbowStroke(ctx, x0, y0, x1, y1, t) {
@@ -7978,6 +7988,7 @@ const RENDER = (() => {
         } else if (L.style === 'witch') seaWitchHat(ctx, L, top, hw, r, t);   // SEASON: the Claw-o-ween witch hats
         else if (L.style === 'welder' || L.style === 'hardhat') cr8Hat(ctx, L, top, hw, r, t);   // CR8: Mama Mech's hats
         else if (L.style === 'showercap') rosHat(ctx, L, top, hw, r, t);   // ROS: Ms. Bubbles' shower cap
+        else if (L.style === 'sea_scarf') winScarf(ctx, L, r, t, Hd);   // WIN (round 12): scarf and earmuffs
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -8026,6 +8037,7 @@ const RENDER = (() => {
           case 'confetti': { ctx.save(); ctx.translate(x + Math.sin(sd * 3) * 5 * k, y + u * 10 * k); ctx.rotate(t * 4 + sd); F(ctx, CONFETTI[(sd | 0) % 5 < 0 ? 0 : (sd | 0) % 5]); ctx.fillRect(-2.5 * k, -1.2 * k, 5 * k, 2.4 * k); ctx.restore(); break; }
           case 'rainbow': F(ctx, '#ffffff'); ctx.beginPath(); star(ctx, x, y, 2.5 * k * a + 0.5, 4, 0.35); ctx.fill(); break;
           case 'bats': seaTrailMark(ctx, art, x, y, u, a, k, t, sd, col); break;   // SEASON: the Bat Trail
+          case 'sea_flakes': winTrailMark(ctx, art, x, y, u, a, k, t, sd, col); break;   // WIN (round 12): the Snowflake Trail
           default: F(ctx, rgba(col, 0.6)); ctx.beginPath(); circ(ctx, x, y, (2 + u * 3) * k); ctx.fill();
         }
       }
@@ -10172,16 +10184,7 @@ const RENDER = (() => {
         const P = [[w * 0.1, 18, 0], [w * 0.22, 12, 1], [w * 0.8, 20, 2], [w * 0.91, 13, 3], [w * 0.68, 10, 4]];
         for (const [px, pr, s] of P) seaPumpkin(ctx, px, base - pr * 0.9, pr, t, true, s);
         seaFog(ctx, 0, base - 60, w, 150, t, 7, 0.22, '#c8b8e8');
-      } else {
-        try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, rgba('#8dd8ff', 0.12)); g.addColorStop(1, rgba('#ffffff', 0.06)); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); } catch (e) { /* stub */ }
-        for (const i of SEA_TIERS) { const tw = w * (0.62 - i * 0.06), ty = base - (i + 1) * th; seaSnowCap(ctx, cx - tw / 2 - 2, ty, tw + 4, 8); }
-        seaSnowCap(ctx, 0, base - 6, w, 14);
-        seaSnow(ctx, 0, 0, w, h, t, 90, 0.8);
-        const ly = Q9_TL.ly > 0 ? Q9_TL.ly : h * 0.5, by = ly - Math.min(w * 0.16, 92) * 0.86;
-        glow(ctx, cx, by, 120, '#8dfff5', 0.25);
-        txt(ctx, 'WINTER WONDERCLAW', cx, by, 24, '#e8fbff', true, 'center', '#1a3a5a');
-        seaIcicles(ctx, cx - 150, by + 14, 300, 16, t);
-      }
+      } else winTitle(ctx, w, h, t);   // WIN (round 12): the aurora, the garland, the hatted claw, the snowman, the frost
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
@@ -10202,13 +10205,7 @@ const RENDER = (() => {
           const g = ctx.createRadialGradient(x0 + w / 2, y0 + h / 2, Math.min(w, h) * 0.35, x0 + w / 2, y0 + h / 2, Math.max(w, h) * 0.75);
           g.addColorStop(0, rgba(SEA_PU, 0)); g.addColorStop(1, rgba('#3a1260', 0.5)); ctx.fillStyle = g; ctx.fillRect(x0, y0, w, h);
         } catch (e) { /* stub */ }
-      } else {
-        seaSnow(ctx, x0, y0, w, h, t, 70, 0.75);
-        try {
-          const g = ctx.createRadialGradient(x0 + w / 2, y0 + h / 2, Math.min(w, h) * 0.38, x0 + w / 2, y0 + h / 2, Math.max(w, h) * 0.75);
-          g.addColorStop(0, rgba('#dff6ff', 0)); g.addColorStop(1, rgba('#dff6ff', 0.35)); ctx.fillStyle = g; ctx.fillRect(x0, y0, w, h);
-        } catch (e) { /* stub */ }
-      }
+      } else winMap(ctx, x0, y0, w, h, t);   // WIN (round 12): snow, the frosty rim, ferns in the corners
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
@@ -10217,13 +10214,7 @@ const RENDER = (() => {
     ctx.save();
     try {
       if (id === 'halloween') { F(ctx, rgba(INK, 0.3)); ctx.beginPath(); ell(ctx, x, y + r * 0.9, r * 1.1, r * 0.3, 0); ctx.fill(); seaPumpkin(ctx, x, y, r, t, true, seed || 0); }
-      else if (id === 'winter') {
-        F(ctx, rgba(INK, 0.3)); ctx.beginPath(); ell(ctx, x, y + r * 0.9, r, r * 0.28, 0); ctx.fill();
-        tone(ctx, q => circ(q, x, y + r * 0.2, r * 0.75), '#f4fbff', x, y + r * 0.2, r * 0.7, { ol: 1.4 });
-        tone(ctx, q => circ(q, x, y - r * 0.75, r * 0.5), '#f4fbff', x, y - r * 0.75, r * 0.45, { ol: 1.4 });
-        F(ctx, '#ff8a1f'); ctx.beginPath(); poly(ctx, [x + r * 0.1, y - r * 0.75, x + r * 0.55, y - r * 0.68, x + r * 0.1, y - r * 0.6]); ctx.fill();
-        F(ctx, '#d81f3a'); ctx.fillRect(x - r * 0.5, y - r * 0.35, r, r * 0.16);
-      }
+      else if (id === 'winter') winProp(ctx, x, y, r, t, seed || 0);   // WIN (round 12): a snowman, a cottage with its window lit, a snowy pine
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
@@ -10236,7 +10227,7 @@ const RENDER = (() => {
         seaMoon(ctx, w - 44, y0 + 44, 24, t);
         for (let i = 0; i < 3; i++) { const u = (t * 0.06 + i * 0.33) % 1; seaBat(ctx, -30 + u * (w + 60), y0 + 30 + seaH(i, 5) * 40 + Math.sin(t * 3 + i) * 8, 6, t, i, '#241432'); }
         seaFog(ctx, 0, y1 - 60, w, 60, t, 4, 0.12, '#cfc2e8');
-      } else seaSnow(ctx, 0, y0, w, y1 - y0, t, 40, 0.7);
+      } else winSky(ctx, w, y0, y1, t);   // WIN (round 12): snow, a garland over the fight, drifts
     } catch (e) { /* never throws */ }
     ctx.restore();
   }
@@ -10250,7 +10241,7 @@ const RENDER = (() => {
       const c = cabCfg(cfg), w = c.w, h = c.h, f = c.frame, t = st.t || 0;
       ctx.translate(x || 0, y || 0);
       const bulbs = !st.party && !st.alarm && !st.skinned;
-      if (bulbs) {
+      if (bulbs && id === 'halloween') {   // (WIN: winter twinkles its own red, green and gold in winCab)
         const step = 26, P = [];
         for (let i = 0; i * step < w; i++) P.push(i * step + 8, -f + 8);
         for (let i = 0; i * step < h; i++) P.push(w + f - 8, i * step + 8);
@@ -10280,11 +10271,7 @@ const RENDER = (() => {
         seaPumpkin(ctx, w / 2 - 96, -f * 0.52, 10, t, true, 1);
         seaPumpkin(ctx, w / 2 + 96, -f * 0.52, 10, t, true, 2);
       } else {
-        seaSnowCap(ctx, -f, -f - 2, w + f * 2, 10);
-        seaIcicles(ctx, 10, 0, w - c.chuteW - 20, 22, t);
-        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
-        for (const [fx0, fy0] of [[0, 0], [w, 0], [0, h], [w, h]]) seaPuff(ctx, fx0, fy0, 90, '#e8fbff', 0.45);
-        ctx.restore();
+        winCab(ctx, c, st, t, bulbs);   // WIN (round 12): twinkling bulbs, snow, icicles, frost ferns, holly
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -10319,7 +10306,7 @@ const RENDER = (() => {
         tone(ctx, q => { q.moveTo(-5, 18); q.lineTo(5, 18); q.lineTo(10, 38); q.lineTo(-10, 38); q.closePath(); }, '#c9a24a', 0, 28, 8, NOSPEC);
         ctx.restore();
         seaHatDraw(ctx, 'witch', -2, -74, 22, t, '#2a1a3a', SEA_OR);
-      }
+      } else if (cos === 'reindeer' || cos === 'snowman' || cos === 'elf') winCostume(ctx, cos, art, t);   // WIN (round 12): the winter costumes
       // a party hat worn at a jaunty angle, off to the back of the head so the intent bubble above stays clear
       if (hat) { ctx.save(); ctx.translate(art.w * 0.26, -art.h * 0.8); ctx.rotate(0.32 + Math.sin(t * 2.2) * 0.04); seaHatDraw(ctx, hat, 0, 0, Math.max(10, Math.min(art.w, art.h) * 0.2), t, null, null); ctx.restore(); }
     } catch (e) { /* never throws */ }
@@ -10341,7 +10328,7 @@ const RENDER = (() => {
       tone(ctx, q => { q.moveTo(x - s * 0.7, y); q.quadraticCurveTo(x - s * 0.2, y - s * 1.3, x + s * 0.9, y - s * 0.9); q.lineTo(x + s * 0.7, y); q.closePath(); }, '#d81f3a', x, y - s * 0.5, s * 0.6, { dark: -0.3 });
       tone(ctx, q => rrect(q, x - s * 0.8, y - s * 0.2, s * 1.6, s * 0.32, s * 0.16), '#ffffff', x, y, s * 0.5, NOSPEC);
       tone(ctx, q => circ(q, x + s * 0.92, y - s * 0.88, s * 0.2), '#ffffff', x + s * 0.92, y - s * 0.88, s * 0.2, NOSPEC);
-    }
+    } else if (kind === 'elf' || kind === 'antlers') winHat(ctx, kind, x, y, s, t);   // WIN (round 12): the winter party hats
   }
   // ---- the Pumpkin King: a crowned jack-o'-lantern on a pumpkin body with vine arms
   EA.pumpking = { w: 116, h: 150, draw(ctx, t, p) {
@@ -10537,7 +10524,7 @@ const RENDER = (() => {
       F(ctx, tr || '#ff2e4a'); ctx.beginPath();
       for (let yy = 20; yy < h; yy += 40) { circ(ctx, -f * 0.5, yy, Math.max(1.5, f * 0.08)); circ(ctx, w + f * 0.5, yy + 20, Math.max(1.5, f * 0.08)); }
       ctx.fill();
-    }
+    } else if (fp === 'sea_ginger') winFramePat(ctx, w, h, f, tr);   // WIN (round 12): the Gingerbread House
   }
   function seaPanelPat(ctx, pp, w, fy) {
     if (pp === 'sea_moon') {
@@ -10552,7 +10539,7 @@ const RENDER = (() => {
       for (let i = 0; i < 50; i++) circ(ctx, seaH(i, 1) * w, seaH(i, 2) * fy, 0.6 + seaH(i, 3) * 1.4);
       ctx.fill();
       F(ctx, rgba('#e8fbff', 0.14)); ctx.beginPath(); ctx.moveTo(0, fy); ctx.quadraticCurveTo(w * 0.25, fy * 0.7, w * 0.5, fy * 0.86); ctx.quadraticCurveTo(w * 0.75, fy * 0.7, w, fy * 0.84); ctx.lineTo(w, fy); ctx.closePath(); ctx.fill();
-    }
+    } else if (pp === 'sea_gumdrops') winPanelPat(ctx, w, fy);   // WIN (round 12): the Gingerbread House
   }
   function seaWitchHat(ctx, L, top, hw, r, t) {
     seaHatDraw(ctx, 'witch', 0, top + r * 0.1, hw * 1.05, t, L.c1, L.c2);
@@ -10630,6 +10617,780 @@ const RENDER = (() => {
     cab: seaCab, costume: seaCostume, hat: seaHatDraw, treat: seaTreatIcon, door: seaDoor, coin: seaCoin, framePat: seaFramePat, panelPat: seaPanelPat,
     trailMark: seaTrailMark, ids: ['halloween', 'winter'] };
   /* ============================================================ end SEASON */
+
+  /* ================================================================ WIN (round 12)
+     Winter Wonderclaw (DESIGN.md "Winter Wonderclaw (round 12)"): the snowy
+     title (an aurora, a garland of fairy lights, a Santa hat on the claw, a
+     snowman on the logo, frost creeping from the corners), the map
+     (snowmen, cottages with warm windows, snowy pines), the arena (a
+     garland over the fight, drifts at the edges), the cabinet (twinkling
+     red, green and gold bulbs, snow on the roof, icicles, frost ferns on
+     the glass, holly on the marquee), the reindeer, snowman and elf
+     costumes, the elf and antler party hats, Krampus, the advent tile and
+     its unwrapping scene, the winter items' own drawings and the Snowflake
+     Stand's looks. The SEASON block's winter branches and the VAULT
+     renderers call in here with one-line hooks. Pure functions of their
+     arguments; a fixed set of seeded shapes, no allocation per bulb. */
+  const WIN_RED = '#e8203a', WIN_GRN = '#2e9c4a', WIN_GOLD = '#ffc94d', WIN_SNOW = '#f4fbff';
+  const WIN_BULBS = [WIN_RED, '#3ddc84', WIN_GOLD];
+  const winH = (i, k) => h01(i * 2.17 + 0.3, k * 1.31 + 0.7);
+  // Is fairy bulb k lit at t? A slow random twinkle, never a chase.
+  const winTwinkle = (k, t) => h01(k * 0.37 + 1, Math.floor((t || 0) * 2.2 + winH(k, 3) * 7)) > 0.3;
+  const winEase = (u) => U.ease && U.ease.outBack ? U.ease.outBack(U.clamp(u, 0, 1)) : U.clamp(u, 0, 1);
+  // A six-armed snowflake with little branches.
+  function winFlake(ctx, x, y, r, rot, col, lw) {
+    S(ctx, col || '#ffffff', lw || Math.max(1, r * 0.16)); ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = rot + i * Math.PI / 3, ca = Math.cos(a), sa = Math.sin(a);
+      ctx.moveTo(x, y); ctx.lineTo(x + ca * r, y + sa * r);
+      for (const k of [0.45, 0.72]) {
+        const bx = x + ca * r * k, by = y + sa * r * k, bl = r * (0.36 - k * 0.2);
+        ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a + 0.8) * bl, by + Math.sin(a + 0.8) * bl);
+        ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a - 0.8) * bl, by + Math.sin(a - 0.8) * bl);
+      }
+    }
+    ctx.stroke();
+  }
+  // A sprig of holly: two spiky leaves and three berries.
+  function winHolly(ctx, x, y, s, seed) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.rotate((seed % 2 ? 0.35 : -0.35));
+      for (const sd of [-1, 1]) {
+        tone(ctx, q => {
+          q.moveTo(0, 0);
+          for (let i = 1; i <= 4; i++) q.quadraticCurveTo(sd * s * (i - 0.5) * 0.36, -s * (i % 2 ? 0.52 : 0.18), sd * s * i * 0.36, -s * (i === 4 ? 0 : 0.26));
+          for (let i = 3; i >= 0; i--) q.quadraticCurveTo(sd * s * (i + 0.5) * 0.36, s * ((i % 2) ? 0.46 : 0.2), sd * s * i * 0.36, s * (i === 0 ? 0 : 0.24));
+          q.closePath();
+        }, WIN_GRN, sd * s * 0.7, 0, s * 0.5, { dark: -0.35, spec: false, ol: Math.max(1, s * 0.12) });
+      }
+      for (const [bx, by] of [[-s * 0.16, -s * 0.22], [s * 0.18, -s * 0.2], [0, s * 0.08]]) tone(ctx, q => circ(q, bx, by, s * 0.2), WIN_RED, bx, by, s * 0.2, { ol: Math.max(1, s * 0.1) });
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* A string of fairy lights swagging from x0 to x1 at y (n swags, sag px),
+     a bulb every step px, twinkling red, green and gold; glows in one
+     additive pass. */
+  function winGarland(ctx, x0, x1, y, sag, n, step, t, r) {
+    ctx.save();
+    try {
+      const L = x1 - x0, sw = L / Math.max(1, n), nb = Math.max(2, Math.floor(L / step));
+      const at = (x) => y + Math.sin((((x - x0) % sw) / sw) * Math.PI) * sag;
+      S(ctx, '#0c2a18', 2.2); ctx.beginPath();
+      for (let x = x0; x <= x1 + 0.1; x += 5) { if (x === x0) ctx.moveTo(x, at(x)); else ctx.lineTo(x, at(x)); }
+      ctx.stroke();
+      for (let pass = 0; pass < 4; pass++) {
+        ctx.beginPath();
+        for (let i = 0; i < nb; i++) {
+          const on = winTwinkle(i, t);
+          if (pass === 0 ? on : !(on && i % 3 === pass - 1)) continue;
+          const x = x0 + (i + 0.5) * L / nb;
+          ell(ctx, x, at(x) + r * 1.15, r * 0.7, r, 0);
+        }
+        F(ctx, pass === 0 ? '#3a2a40' : WIN_BULBS[pass - 1]); ctx.fill();
+      }
+      F(ctx, '#0c2a18'); ctx.beginPath();
+      for (let i = 0; i < nb; i++) { const x = x0 + (i + 0.5) * L / nb; ctx.rect(x - r * 0.4, at(x) - r * 0.1, r * 0.8, r * 0.45); }
+      ctx.fill();
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6;
+      const gr = Math.round(r * 3.2);
+      for (let i = 0; i < nb; i++) {
+        if (!winTwinkle(i, t)) continue;
+        const sp = glowSprite(WIN_BULBS[i % 3], gr);
+        if (!sp) break;
+        const x = x0 + (i + 0.5) * L / nb;
+        try { ctx.drawImage(sp, x - gr - 1, at(x) + r * 1.15 - gr - 1, gr * 2 + 2, gr * 2 + 2); } catch (e) { /* stub canvas */ }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Frost ferns growing from a corner (0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left), r long.
+  function winFerns(ctx, x, y, corner, r, a) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.rotate((corner | 0) * Math.PI / 2);
+      S(ctx, rgba('#f4fbff', a == null ? 0.5 : a), 1.2); ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const an = 0.18 + i * 0.4 + winH(i, corner + 1) * 0.2, L = r * (0.55 + winH(i, corner + 5) * 0.45), ca = Math.cos(an), sa = Math.sin(an);
+        ctx.moveTo(0, 0); ctx.lineTo(ca * L, sa * L);
+        for (let k = 1; k <= 5; k++) {
+          const u = k / 6, bx = ca * L * u, by = sa * L * u, bl = L * 0.26 * (1 - u * 0.7);
+          ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(an + 0.7) * bl, by + Math.sin(an + 0.7) * bl);
+          ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(an - 0.7) * bl, by + Math.sin(an - 0.7) * bl);
+        }
+      }
+      ctx.stroke();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A snowman standing on (x, y), s tall-ish: three balls, coal, a carrot, stick arms (one waves), a top hat and a scarf.
+  function winSnowman(ctx, x, y, s, t, hat) {
+    ctx.save();
+    try {
+      ctx.translate(x, y);
+      F(ctx, rgba(INK, 0.25)); ctx.beginPath(); ell(ctx, 0, 0, s * 0.62, s * 0.14, 0); ctx.fill();
+      const wave = Math.sin((t || 0) * 3) * 0.35;
+      S(ctx, INK, Math.max(2, s * 0.1)); ctx.beginPath();
+      ctx.moveTo(-s * 0.3, -s * 1.3); ctx.lineTo(-s * 0.85, -s * 1.62);
+      ctx.moveTo(s * 0.3, -s * 1.3); ctx.lineTo(s * 0.8, -s * (1.7 + wave * 0.5));
+      ctx.stroke();
+      S(ctx, '#8a5a2e', Math.max(1.2, s * 0.06)); ctx.stroke();
+      tone(ctx, q => circ(q, 0, -s * 0.48, s * 0.5), WIN_SNOW, 0, -s * 0.48, s * 0.5, { dark: -0.12, ol: Math.max(1.2, s * 0.06) });
+      tone(ctx, q => circ(q, 0, -s * 1.22, s * 0.37), WIN_SNOW, 0, -s * 1.22, s * 0.37, { dark: -0.12, ol: Math.max(1.2, s * 0.06) });
+      tone(ctx, q => circ(q, 0, -s * 1.78, s * 0.28), WIN_SNOW, 0, -s * 1.78, s * 0.28, { dark: -0.12, ol: Math.max(1.2, s * 0.06) });
+      F(ctx, INK); ctx.beginPath(); circ(ctx, -s * 0.1, -s * 1.84, s * 0.045); circ(ctx, s * 0.09, -s * 1.84, s * 0.045);
+      for (const by of [-1.1, -1.28, -0.62]) circ(ctx, 0, s * by, s * 0.045);
+      ctx.fill();
+      F(ctx, '#ff8a1f'); ctx.beginPath(); poly(ctx, [-s * 0.02, -s * 1.78, -s * 0.34, -s * 1.73, -s * 0.02, -s * 1.7]); ctx.fill();
+      // the scarf
+      tone(ctx, q => rrect(q, -s * 0.33, -s * 1.56, s * 0.66, s * 0.13, s * 0.05), WIN_RED, 0, -s * 1.5, s * 0.3, NOSPEC);
+      tone(ctx, q => rrect(q, s * 0.12, -s * 1.52, s * 0.13, s * 0.36, s * 0.04), WIN_RED, s * 0.18, -s * 1.35, s * 0.1, NOSPEC);
+      if (hat) {
+        tone(ctx, q => rrect(q, -s * 0.32, -s * 2.05, s * 0.64, s * 0.08, s * 0.03), '#1b1622', 0, -s * 2.0, s * 0.3, NOSPEC);
+        tone(ctx, q => rrect(q, -s * 0.2, -s * 2.4, s * 0.4, s * 0.36, s * 0.04), '#1b1622', 0, -s * 2.2, s * 0.2, NOSPEC);
+        F(ctx, WIN_GRN); ctx.fillRect(-s * 0.2, -s * 2.12, s * 0.4, s * 0.07);
+        winHolly(ctx, s * 0.12, -s * 2.12, s * 0.16, 1);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A cottage with a snowy roof, a warm window and smoke curling from the chimney (the map's cosy lights).
+  function winCottage(ctx, x, y, r, t, seed) {
+    ctx.save();
+    try {
+      ctx.translate(x, y);
+      glow(ctx, -r * 0.2, -r * 0.35, r * 1.8, '#ffb347', 0.3 + 0.08 * Math.sin((t || 0) * 2 + seed));
+      F(ctx, rgba(INK, 0.3)); ctx.beginPath(); ell(ctx, 0, r * 0.05, r * 1.1, r * 0.25, 0); ctx.fill();
+      tone(ctx, q => rrect(q, r * 0.35, -r * 1.35, r * 0.24, r * 0.5, 1), '#6b4a3a', r * 0.47, -r * 1.1, r * 0.2, NOSPEC);
+      tone(ctx, q => rrect(q, -r * 0.8, -r * 0.8, r * 1.6, r * 0.82, r * 0.06), '#7a4a2e', 0, -r * 0.4, r * 0.8, { dark: -0.3, spec: false });
+      tone(ctx, q => poly(q, [-r * 1.0, -r * 0.72, 0, -r * 1.45, r * 1.0, -r * 0.72]), WIN_SNOW, 0, -r * 1.0, r * 0.8, { dark: -0.15, spec: false });
+      const lit = FLAT || (0.85 + 0.15 * Math.sin((t || 0) * 5 + seed * 2) > 0.8 ? '#ffd27a' : '#ffc060');
+      tone(ctx, q => rrect(q, -r * 0.52, -r * 0.62, r * 0.42, r * 0.36, 1), lit, -r * 0.31, -r * 0.44, r * 0.2, { spec: false, ol: 1.2 });
+      line(ctx, -r * 0.31, -r * 0.62, -r * 0.31, -r * 0.26, INK, 1); line(ctx, -r * 0.52, -r * 0.44, -r * 0.1, -r * 0.44, INK, 1);
+      tone(ctx, q => rrect(q, r * 0.12, -r * 0.5, r * 0.3, r * 0.5, 1), '#3a2418', r * 0.27, -r * 0.25, r * 0.15, NOSPEC);
+      for (let i = 0; i < 3; i++) { const u = (((t || 0) * 0.35 + i / 3 + seed * 0.13) % 1); seaPuff(ctx, r * 0.47 + Math.sin(u * 5 + i) * r * 0.25, -r * 1.45 - u * r * 1.4, r * (0.18 + u * 0.3), '#e8eef8', 0.5 * (1 - u)); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A snowy pine with a star and a few twinkling lights.
+  function winPine(ctx, x, y, r, t, seed) {
+    ctx.save();
+    try {
+      ctx.translate(x, y);
+      F(ctx, rgba(INK, 0.3)); ctx.beginPath(); ell(ctx, 0, 0, r * 0.7, r * 0.18, 0); ctx.fill();
+      tone(ctx, q => rrect(q, -r * 0.1, -r * 0.3, r * 0.2, r * 0.32, 1), '#6b3f1f', 0, -r * 0.15, r * 0.1, NOSPEC);
+      for (let k = 0; k < 3; k++) {
+        const yb = -r * (0.2 + k * 0.52), wd = r * (0.8 - k * 0.2);
+        tone(ctx, q => poly(q, [-wd, yb, 0, yb - r * 0.78, wd, yb]), '#1f6a3a', 0, yb - r * 0.3, wd * 0.7, { dark: -0.35, spec: false });
+        F(ctx, WIN_SNOW); ctx.beginPath(); ctx.moveTo(-wd * 0.8, yb - r * 0.05); ctx.quadraticCurveTo(0, yb - r * 0.3, wd * 0.8, yb - r * 0.05); ctx.quadraticCurveTo(0, yb - r * 0.15, -wd * 0.8, yb - r * 0.05); ctx.fill();
+      }
+      for (let i = 0; i < 5; i++) if (winTwinkle(i + seed, t)) { F(ctx, WIN_BULBS[i % 3]); ctx.beginPath(); circ(ctx, (winH(i, seed) - 0.5) * r * 0.9, -r * (0.35 + i * 0.26), Math.max(1, r * 0.07)); ctx.fill(); }
+      F(ctx, WIN_GOLD); ctx.beginPath(); star(ctx, 0, -r * 1.82, r * 0.2, 5, 0.45); ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A few big soft flakes drifting in front (the snowfall's foreground).
+  function winBigFlakes(ctx, x0, y0, w, h, t, n) {
+    ctx.save();
+    try {
+      for (let i = 0; i < n; i++) {
+        const sp = 14 + winH(i, 1) * 16, u = ((winH(i, 2) * h + (t || 0) * sp) % h);
+        const x = x0 + ((winH(i, 3) * w + Math.sin((t || 0) * 0.6 + i) * 20) % w + w) % w, r = 5 + winH(i, 4) * 6;
+        ctx.globalAlpha = 0.55 + winH(i, 5) * 0.3;
+        winFlake(ctx, x, y0 + u, r, (t || 0) * 0.4 + i, '#ffffff', 1.3);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The northern lights: three soft green and cyan ribbons rippling slowly.
+  function winAurora(ctx, x0, y0, w, h, t) {
+    ctx.save();
+    try {
+      const cols = ['#3ddc84', '#8dfff5', '#9b7bff'];
+      for (let k = 0; k < 3; k++) {
+        const yb = y0 + h * (0.3 + k * 0.2), amp = h * 0.18, th = h * (0.22 - k * 0.04);
+        ctx.beginPath();
+        for (let x = x0; x <= x0 + w; x += 12) ctx.lineTo(x, yb + Math.sin(x * 0.011 + (t || 0) * 0.25 + k * 1.7) * amp);
+        for (let x = x0 + w; x >= x0; x -= 12) ctx.lineTo(x, yb + th + Math.sin(x * 0.013 + (t || 0) * 0.3 + k) * amp * 0.8);
+        ctx.closePath();
+        F(ctx, rgba(cols[k], 0.09)); ctx.fill();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- the title: snow on the tower, the aurora, a garland, a hatted claw, a snowman on the logo, frost
+  function winTitle(ctx, w, h, t) {
+    const base = h * 0.86, th = h * 0.075, cx = w / 2;
+    try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, rgba('#1a3a7a', 0.3)); g.addColorStop(0.55, rgba('#8dd8ff', 0.08)); g.addColorStop(1, rgba('#ffffff', 0.06)); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); } catch (e) { /* stub */ }
+    winAurora(ctx, 0, 60, w, 230, t);
+    for (const i of SEA_TIERS) { const tw = w * (0.62 - i * 0.06), ty = base - (i + 1) * th; seaSnowCap(ctx, cx - tw / 2 - 2, ty, tw + 4, 8); }
+    seaSnowCap(ctx, 0, base - 6, w, 14);
+    // the title claw (the base art's own sway) wears a Santa hat
+    const cy = h * 0.06 + Math.sin(t * 0.8) * 10, sw = Math.sin(t * 0.8) * 0.05;
+    winGarland(ctx, -10, w + 10, 80, 24, 3, 22, t, 4);
+    ctx.save(); ctx.translate(cx + Math.sin(sw) * 60, cy + 60); ctx.rotate(sw); ctx.scale(2.6, 2.6);
+    seaHatDraw(ctx, 'santa', -3, -7, 13, t);
+    ctx.restore();
+    seaSnow(ctx, 0, 0, w, h, t, 90, 0.8);
+    winBigFlakes(ctx, 0, 0, w, h, t, 7);
+    // the banner over the logo, icicles under it, holly at both ends, a snowman on the logo's shoulder
+    const ly = Q9_TL.ly > 0 ? Q9_TL.ly : h * 0.5, fs = Math.min(w * 0.16, 92), by = ly - fs * 0.86;
+    glow(ctx, cx, by, 120, '#8dfff5', 0.25);
+    txt(ctx, 'WINTER WONDERCLAW', cx, by, 24, '#e8fbff', true, 'center', '#1a3a5a');
+    seaIcicles(ctx, cx - 150, by + 14, 300, 16, t);
+    winHolly(ctx, cx - 176, by, 12, 0); winHolly(ctx, cx + 176, by, 12, 1);
+    winSnowman(ctx, 56, ly - fs * 0.36, 28, t, true);
+    winPine(ctx, w - 50, ly - fs * 0.36, 26, t, 4);
+    // frost creeping in from the corners
+    for (const [fx0, fy0, k] of [[0, 0, 0], [w, 0, 1], [w, h, 2], [0, h, 3]]) { seaPuff(ctx, fx0, fy0, 120, '#e8fbff', 0.28); winFerns(ctx, fx0, fy0, k, 90, 0.4); }
+  }
+  // ---- the map: snowfall, a frosty rim with ferns in the corners
+  function winMap(ctx, x0, y0, w, h, t) {
+    seaSnow(ctx, x0, y0, w, h, t, 70, 0.75);
+    winBigFlakes(ctx, x0, y0, w, h, t, 4);
+    try {
+      const g = ctx.createRadialGradient(x0 + w / 2, y0 + h / 2, Math.min(w, h) * 0.38, x0 + w / 2, y0 + h / 2, Math.max(w, h) * 0.75);
+      g.addColorStop(0, rgba('#dff6ff', 0)); g.addColorStop(1, rgba('#dff6ff', 0.32)); ctx.fillStyle = g; ctx.fillRect(x0, y0, w, h);
+    } catch (e) { /* stub */ }
+    winFerns(ctx, x0, y0, 0, 80, 0.35); winFerns(ctx, x0 + w, y0, 1, 80, 0.35); winFerns(ctx, x0 + w, y0 + h, 2, 70, 0.3); winFerns(ctx, x0, y0 + h, 3, 70, 0.3);
+  }
+  // A prop on a lit, empty hex of a winter map: a snowman, a cottage with its window lit, or a snowy pine (by the seed).
+  function winProp(ctx, x, y, r, t, seed) {
+    const k = ((seed | 0) % 3 + 3) % 3;
+    if (k === 0) winSnowman(ctx, x, y + r * 0.9, r * 1.05, t, (seed | 0) % 2 === 0);
+    else if (k === 1) winCottage(ctx, x, y + r * 0.8, r * 1.05, t, seed | 0);
+    else winPine(ctx, x, y + r * 0.9, r * 1.1, t, seed | 0);
+  }
+  // ---- the arena: snow, a garland of fairy lights over the fight, drifts at the edges of the floor
+  function winSky(ctx, w, y0, y1, t) {
+    seaSnow(ctx, 0, y0, w, y1 - y0, t, 40, 0.7);
+    winGarland(ctx, -10, w + 10, y0 + 1, 16, 4, 20, t, 3.2);
+    const fy = y0 + 232;
+    F(ctx, WIN_SNOW); ctx.beginPath();
+    ctx.moveTo(0, fy + 4); ctx.quadraticCurveTo(20, fy - 18, 58, fy - 6); ctx.quadraticCurveTo(76, fy - 2, 84, fy + 4); ctx.closePath();
+    ctx.moveTo(w, fy + 4); ctx.quadraticCurveTo(w - 24, fy - 20, w - 60, fy - 5); ctx.quadraticCurveTo(w - 78, fy, w - 88, fy + 4); ctx.closePath();
+    ctx.fill();
+  }
+  // ---- the cabinet: twinkling red, green and gold bulbs (unless a skin, the party or the alarm own them), snow, icicles, frost, holly
+  const WIN_CABP = { key: '', pts: [] };
+  function winCab(ctx, c, st, t, bulbs) {
+    const w = c.w, h = c.h, f = c.frame;
+    if (bulbs) {
+      const key = w + 'x' + h + ':' + f, step = 26;
+      if (WIN_CABP.key !== key) {
+        WIN_CABP.key = key; WIN_CABP.pts.length = 0;
+        const P = WIN_CABP.pts;
+        for (let i = 0; i * step < w; i++) P.push(i * step + 8, -f + 8);
+        for (let i = 0; i * step < h; i++) P.push(w + f - 8, i * step + 8);
+        for (let i = 0; i * step < w; i++) P.push(w - i * step - 8, h + f - 8);
+        for (let i = 0; i * step < h; i++) P.push(-f + 8, h - i * step - 8);
+      }
+      const P = WIN_CABP.pts, n = P.length / 2;
+      for (let pass = 0; pass < 4; pass++) {
+        ctx.beginPath();
+        for (let k = 0; k < n; k++) { const on = winTwinkle(k, t); if (pass === 0 ? !on : on && k % 3 === pass - 1) circ(ctx, P[k * 2], P[k * 2 + 1], 3.6); }
+        F(ctx, pass === 0 ? '#2a1a30' : WIN_BULBS[pass - 1]); ctx.fill();
+      }
+      ctx.save(); ctx.globalAlpha = 0.6; ctx.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < n; k++) {
+        if (!winTwinkle(k, t)) continue;
+        const sp = glowSprite(WIN_BULBS[k % 3], 10);
+        if (!sp) break;
+        try { ctx.drawImage(sp, P[k * 2] - 11, P[k * 2 + 1] - 11, 22, 22); } catch (e) { /* stub canvas */ }
+      }
+      ctx.restore();
+    }
+    seaSnowCap(ctx, -f, -f - 2, w + f * 2, 10);
+    seaIcicles(ctx, 10, 0, w - c.chuteW - 20, 22, t);
+    // frosted glass: a cold haze and ferns of frost in the corners
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+    for (const [fx0, fy0] of [[0, 0], [w, 0], [0, h], [w, h]]) seaPuff(ctx, fx0, fy0, 90, '#e8fbff', 0.42);
+    winFerns(ctx, 0, 0, 0, 64, 0.5); winFerns(ctx, w, 0, 1, 54, 0.45); winFerns(ctx, 0, h, 3, 58, 0.45); winFerns(ctx, w, h, 2, 44, 0.4);
+    ctx.restore();
+    winHolly(ctx, w / 2 - 138, -f * 0.5, 9, 0); winHolly(ctx, w / 2 + 138, -f * 0.5, 9, 1);   // clear of a long marquee (MERRY CLAWMAS)
+  }
+
+  // ---- costumes over a monster's own art (its body box, feet at the origin, facing left)
+  function winAntler(ctx, x, y, s, sd, col) {
+    ctx.beginPath();
+    ctx.moveTo(x, y); ctx.quadraticCurveTo(x + sd * s * 0.1, y - s * 0.6, x + sd * s * 0.45, y - s);
+    ctx.moveTo(x + sd * s * 0.07, y - s * 0.4); ctx.quadraticCurveTo(x - sd * s * 0.2, y - s * 0.55, x - sd * s * 0.32, y - s * 0.75);
+    ctx.moveTo(x + sd * s * 0.2, y - s * 0.72); ctx.quadraticCurveTo(x + sd * s * 0.05, y - s * 0.95, x + sd * s * 0.02, y - s * 1.1);
+    ctx.moveTo(x + sd * s * 0.32, y - s * 0.86); ctx.lineTo(x + sd * s * 0.62, y - s * 0.86);
+    S(ctx, INK, Math.max(2.5, s * 0.2)); ctx.stroke(); S(ctx, col || '#a0703f', Math.max(1.5, s * 0.12)); ctx.stroke();
+  }
+  function winCostume(ctx, cos, art, t) {
+    ctx.save();
+    try {
+      if (cos === 'reindeer') {
+        // antlers, a harness with jingle bells, a nose you could land a sleigh by
+        winAntler(ctx, -24, -42, 26, -1, '#c9965a'); winAntler(ctx, -12, -44, 24, 1, '#b07d45');
+        ctx.beginPath(); ctx.moveTo(-22, -36); ctx.quadraticCurveTo(-8, -20, -14, -6); S(ctx, INK, 7); ctx.stroke(); S(ctx, WIN_RED, 4.5); ctx.stroke();
+        for (const [bx, by] of [[-13, -18], [-12, -9]]) tone(ctx, q => circ(q, bx, by, 3.4), WIN_GOLD, bx, by, 3.4, { ol: 1.4 });
+        const pul = 0.6 + 0.4 * Math.sin(t * 4);
+        if (!FLAT) glow(ctx, -46, -20, 16, '#ff2e30', 0.35 + pul * 0.35);
+        tone(ctx, q => circ(q, -46, -20, 5.2), FLAT || '#ff2e30', -46, -20, 5.2, { ol: 1.6 });
+      } else if (cos === 'snowman') {
+        // stick arms, a carrot nose, coal buttons and a top hat with holly (following the slime's wobble)
+        const wob = Math.sin(t * 3) * 0.06;
+        ctx.scale(1 + wob, 1 - wob);
+        S(ctx, INK, 4.5); ctx.beginPath(); ctx.moveTo(-28, -22); ctx.lineTo(-48, -36); ctx.moveTo(-40, -30); ctx.lineTo(-46, -24); ctx.moveTo(28, -26); ctx.lineTo(46, -42 + Math.sin(t * 2.5) * 3); ctx.moveTo(38, -34); ctx.lineTo(44, -30);
+        ctx.stroke(); S(ctx, '#8a5a2e', 2.2); ctx.stroke();
+        tone(ctx, q => poly(q, [-6, -21, -24, -18, -6, -15]), '#ff8a1f', -10, -18, 6, { ol: 1.4, spec: false });
+        F(ctx, INK); ctx.beginPath(); circ(ctx, 12, -18, 2.2); circ(ctx, 14, -9, 2.2); circ(ctx, 16, -27, 2); ctx.fill();
+        ctx.save(); ctx.translate(-6, -45); ctx.rotate(-0.12); ctx.scale(1.3, 1.3);
+        tone(ctx, q => ell(q, 0, 0, 17, 4.2, 0), '#1b1622', 0, 0, 14, NOSPEC);
+        tone(ctx, q => rrect(q, -11, -24, 22, 24, 3), '#1b1622', 0, -12, 12, NOSPEC);
+        F(ctx, WIN_RED); ctx.fillRect(-11, -7, 22, 4.5);
+        winHolly(ctx, 6, -6, 5, 0);
+        ctx.restore();
+      } else if (cos === 'elf') {
+        // a floppy green elf hat with a bell over the hood, a scalloped collar, a present in the free hand
+        const bob = Math.sin(t * 4) * 2;
+        ctx.save(); ctx.translate(26, -26 + bob); ctx.rotate(Math.sin(t * 3) * 0.06);
+        winPresentBox(ctx, 0, 0, 16, 14, WIN_RED, WIN_GOLD, { bow: 1 });
+        ctx.restore();
+        F(ctx, '#ffffff'); ctx.beginPath();
+        for (let i = 0; i < 5; i++) { const x = -16 + i * 8; ctx.moveTo(x, -47 + bob); ctx.lineTo(x + 8, -47 + bob); ctx.lineTo(x + 4, -40 + bob); ctx.closePath(); }
+        ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+        F(ctx, WIN_RED); ctx.beginPath(); for (let i = 0; i < 5; i += 2) { const x = -16 + i * 8; ctx.moveTo(x + 1.5, -46 + bob); ctx.lineTo(x + 6.5, -46 + bob); ctx.lineTo(x + 4, -42 + bob); ctx.closePath(); } ctx.fill();
+        winHat(ctx, 'elf', -2, -72 + bob, 21, t);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The winter party hats (a pointed elf hat with a bell, antlers on a headband), brim at (x, y), s its half width.
+  function winHat(ctx, kind, x, y, s, t) {
+    if (kind === 'elf') {
+      const flop = Math.sin((t || 0) * 2.4) * s * 0.08;
+      tone(ctx, q => { q.moveTo(x - s * 0.72, y); q.quadraticCurveTo(x - s * 0.3, y - s * 1.4, x + s * 0.6, y - s * 1.55 + flop); q.quadraticCurveTo(x + s * 0.35, y - s * 0.8, x + s * 0.72, y); q.closePath(); }, WIN_GRN, x, y - s * 0.6, s * 0.6, { dark: -0.35 });
+      tone(ctx, q => rrect(q, x - s * 0.82, y - s * 0.22, s * 1.64, s * 0.34, s * 0.16), WIN_RED, x, y, s * 0.5, NOSPEC);
+      F(ctx, WIN_GOLD); ctx.beginPath(); for (let i = -2; i <= 2; i++) circ(ctx, x + i * s * 0.3, y - s * 0.05, Math.max(0.8, s * 0.06)); ctx.fill();
+      tone(ctx, q => circ(q, x + s * 0.64, y - s * 1.5 + flop, s * 0.17), WIN_GOLD, x + s * 0.64, y - s * 1.5, s * 0.17, { ol: 1.2 });
+    } else if (kind === 'antlers') {
+      ctx.beginPath(); ctx.arc(x, y + s * 0.5, s * 0.72, Math.PI * 1.15, Math.PI * 1.85); S(ctx, INK, Math.max(3, s * 0.2)); ctx.stroke(); S(ctx, WIN_RED, Math.max(1.6, s * 0.12)); ctx.stroke();
+      winAntler(ctx, x - s * 0.45, y + s * 0.05, s * 1.1, -1, '#c9965a'); winAntler(ctx, x + s * 0.45, y + s * 0.05, s * 1.1, 1, '#c9965a');
+      F(ctx, WIN_GRN); ctx.beginPath(); circ(ctx, x - s * 0.42, y - s * 0.1, s * 0.12); circ(ctx, x + s * 0.42, y - s * 0.1, s * 0.12); ctx.fill();
+    }
+  }
+
+  // ---- Krampus: a hunched, shaggy goat devil with long ribbed horns, chains, a birch switch and a sack of coal
+  EA.krampus = { w: 124, h: 168, draw(ctx, t, p) {
+    const bob = Math.sin(t * 2) * 2, sw = Math.sin(t * 3.1) * 0.14;
+    shadow(ctx, 118);
+    // the sack over his back, tied at the neck, coal peeking out
+    ctx.save(); ctx.translate(40, -98 + bob * 0.5); ctx.rotate(0.28);
+    tone(ctx, q => { q.moveTo(-20, -26); q.quadraticCurveTo(-36, 12, -18, 38); q.quadraticCurveTo(10, 48, 28, 32); q.quadraticCurveTo(40, 2, 20, -26); q.closePath(); }, '#9a7a4a', 4, 8, 30, { dark: -0.32, spec: false });
+    S(ctx, rgba('#5a4020', FLAT ? 1 : 0.7), 1.4); ctx.beginPath(); ctx.moveTo(-14, 6); ctx.lineTo(-4, 10); ctx.moveTo(8, 22); ctx.lineTo(18, 18); ctx.moveTo(-8, 28); ctx.lineTo(2, 30); ctx.stroke();
+    F(ctx, FLAT || '#1a1618'); ctx.beginPath(); circ(ctx, -8, -30, 6); circ(ctx, 4, -34, 7); circ(ctx, 14, -28, 5.5); ctx.fill();
+    F(ctx, FLAT || '#ff6a3a'); ctx.beginPath(); circ(ctx, 3, -36, 1.5); circ(ctx, -9, -31, 1.1); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-18, -22); ctx.quadraticCurveTo(0, -16, 20, -22); S(ctx, INK, 5); ctx.stroke(); S(ctx, '#c9a24a', 3); ctx.stroke();
+    ctx.restore();
+    // goat legs (bent backwards) and black hooves
+    for (const hx of [-20, 18]) {
+      ctx.beginPath(); ctx.moveTo(hx + 6, -60); ctx.quadraticCurveTo(hx - 16, -42, hx - 4, -26); ctx.lineTo(hx + 1, -7);
+      S(ctx, INK, 17); ctx.stroke(); S(ctx, p.a, 12.5); ctx.stroke();
+      F(ctx, shade(p.a, 0.15)); ctx.beginPath(); poly(ctx, [hx - 12, -40, hx - 18, -34, hx - 10, -32]); ctx.fill();
+      tone(ctx, q => rrect(q, hx - 8, -9, 16, 10, 3), '#1a1214', hx, -4, 8, NOSPEC);
+      line(ctx, hx, -8, hx, 1, '#3a3036', 1.5);
+    }
+    // the hunched, shaggy torso
+    const by = -88 + bob;
+    tone(ctx, q => {
+      for (let i = 0; i <= 20; i++) {
+        const a = i / 20 * TAU, rr = (i % 2 ? 1.07 : 0.97), x = Math.cos(a) * 38 * rr, y = by + Math.sin(a) * 42 * rr;
+        if (i) q.lineTo(x, y); else q.moveTo(x, y);
+      }
+      q.closePath();
+    }, p.a, 0, by, 38, { dark: -0.36 });
+    tone(ctx, q => ell(q, -10, by + 8, 20, 26, 0.12), shade(p.a, 0.2), -10, by + 8, 18, { dark: -0.2, spec: false });
+    // chains across the chest, a bell hanging from them
+    for (let i = 0; i < 9; i++) {
+      const u = i / 8, cx0 = -34 + u * 62, cy0 = by - 26 + u * 40 + Math.sin(u * Math.PI) * 10;
+      ctx.beginPath(); ell(ctx, cx0, cy0, i % 2 ? 4.2 : 3, i % 2 ? 2.6 : 3.6, 0.6);
+      S(ctx, INK, 3.4); ctx.stroke(); S(ctx, '#b8c0cc', 1.8); ctx.stroke();
+    }
+    const bx = -4, bly = by + 12 + Math.sin(t * 3) * 2;
+    tone(ctx, q => { q.moveTo(bx - 7, bly + 8); q.quadraticCurveTo(bx - 7, bly - 6, bx, bly - 7); q.quadraticCurveTo(bx + 7, bly - 6, bx + 7, bly + 8); q.closePath(); }, WIN_GOLD, bx, bly, 7, { ol: 1.5 });
+    F(ctx, INK); ctx.beginPath(); circ(ctx, bx, bly + 8, 2); ctx.fill();
+    // the back arm on the sack's neck
+    limb(ctx, 24, by - 20, 36, by - 42, 10, p.a);
+    // the head: long ribbed horns behind, ears, a long muzzle, burning eyes, a lolling tongue
+    const hx = -16, hy = -132 + bob;
+    ctx.save(); ctx.translate(hx, hy); ctx.scale(1.15, 1.15); ctx.translate(-hx, -hy);
+    for (const [ox, sc] of [[10, 0.82], [-4, 1]]) {
+      const x0 = hx + ox, y0 = hy - 12, c1x = x0 + 6 * sc, c1y = hy - 44 * sc, c2x = x0 + 36 * sc, c2y = hy - 52 * sc, ex = x0 + 44 * sc, ey = hy - 30 * sc;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.bezierCurveTo(c1x, c1y, c2x, c2y, ex, ey);
+      S(ctx, INK, 12 * sc + 2.5); ctx.stroke(); S(ctx, p.b, 10 * sc); ctx.stroke();
+      S(ctx, shade(p.b, -0.3), 1.5); ctx.beginPath();
+      for (let k = 1; k < 8; k++) {
+        const u = k / 8, iu = 1 - u;
+        const px = iu * iu * iu * x0 + 3 * iu * iu * u * c1x + 3 * iu * u * u * c2x + u * u * u * ex, py = iu * iu * iu * y0 + 3 * iu * iu * u * c1y + 3 * iu * u * u * c2y + u * u * u * ey;
+        const rw = 4.5 * sc * (1 - u * 0.5);
+        ctx.moveTo(px - rw * 0.7, py - rw * 0.7); ctx.lineTo(px + rw * 0.7, py + rw * 0.7);
+      }
+      ctx.stroke();
+    }
+    tone(ctx, q => { q.moveTo(hx + 10, hy - 6); q.lineTo(hx + 34, hy - 2); q.lineTo(hx + 12, hy + 5); q.closePath(); }, p.a, hx + 20, hy - 1, 8, { dark: -0.3, spec: false });
+    tone(ctx, q => { q.moveTo(hx - 10, hy - 9); q.lineTo(hx - 32, hy - 16); q.lineTo(hx - 12, hy + 1); q.closePath(); }, p.a, hx - 20, hy - 8, 8, { dark: -0.3, spec: false });
+    tone(ctx, q => { q.moveTo(hx + 14, hy - 16); q.quadraticCurveTo(hx - 2, hy - 24, hx - 16, hy - 8); q.quadraticCurveTo(hx - 28, hy + 12, hx - 20, hy + 26); q.quadraticCurveTo(hx - 4, hy + 32, hx + 12, hy + 16); q.quadraticCurveTo(hx + 22, hy + 2, hx + 14, hy - 16); q.closePath(); }, p.a, hx, hy + 4, 20, { dark: -0.35 });
+    // the goatee and the tongue
+    tone(ctx, q => poly(q, [hx - 18, hy + 22, hx - 4, hy + 26, hx - 14, hy + 42]), shade(p.a, -0.12), hx - 12, hy + 30, 8, { dark: -0.2, spec: false });
+    const tw = Math.sin(t * 2.6) * 3;
+    tone(ctx, q => { q.moveTo(hx - 22, hy + 14); q.quadraticCurveTo(hx - 34, hy + 30, hx - 30 + tw, hy + 52); q.quadraticCurveTo(hx - 24 + tw, hy + 58, hx - 20 + tw, hy + 50); q.quadraticCurveTo(hx - 22, hy + 30, hx - 14, hy + 16); q.closePath(); }, '#e8203a', hx - 25, hy + 34, 10, { dark: -0.3 });
+    fangs(ctx, hx - 17, hy + 13, 3, 3.6);
+    if (!FLAT) glow(ctx, hx - 5, hy - 5, 26, p.c, 0.35 + 0.15 * Math.sin(t * 5));
+    F(ctx, FLAT || p.c); ctx.beginPath(); ell(ctx, hx - 12, hy - 4, 4.6, 2.7, -0.3); ell(ctx, hx + 3, hy - 6, 4.2, 2.5, 0.25); ctx.fill();
+    F(ctx, INK); ctx.beginPath(); ell(ctx, hx - 12, hy - 4, 1, 2.4, 0); ell(ctx, hx + 3, hy - 6, 1, 2.2, 0); ctx.fill();
+    S(ctx, INK, 3); ctx.beginPath(); ctx.moveTo(hx - 19, hy - 12); ctx.lineTo(hx - 6, hy - 7); ctx.moveTo(hx + 10, hy - 13); ctx.lineTo(hx - 1, hy - 9); ctx.stroke();
+    ctx.restore();
+    // the front arm raising the birch switch
+    ctx.save(); ctx.translate(-28, by - 14); ctx.rotate(sw);
+    limb(ctx, 0, 0, -20, 20, 11, p.a); limb(ctx, -20, 20, -44, 10, 10, p.a);
+    S(ctx, INK, 3.6); ctx.beginPath();
+    for (let i = 0; i < 7; i++) { const a = -2.35 + (i - 3) * 0.11, L = 46 + (i % 3) * 5; ctx.moveTo(-44, 10); ctx.lineTo(-44 + Math.cos(a) * L, 10 + Math.sin(a) * L); }
+    ctx.stroke();
+    S(ctx, '#e8dcc0', 1.8); ctx.stroke();
+    S(ctx, INK, 1.2); ctx.beginPath();
+    for (let i = 0; i < 7; i += 2) { const a = -2.35 + (i - 3) * 0.11; for (const k of [0.45, 0.75]) { const px = -44 + Math.cos(a) * 46 * k, py = 10 + Math.sin(a) * 46 * k; ctx.moveTo(px - 1.5, py); ctx.lineTo(px + 1.5, py); } }
+    ctx.stroke();
+    tone(ctx, q => circ(q, -44, 10, 6.5), shade(p.a, 0.1), -44, 10, 6, NOSPEC);
+    tone(ctx, q => rrect(q, -50, 4, 12, 5, 2), WIN_RED, -44, 6, 5, NOSPEC);
+    ctx.restore();
+  } };
+
+  // ---- presents: a wrapped box centred on (x, y) w x h, the lid lifted by o.lift and tilted by o.rot, the bow (0..1 its size)
+  function winPresentBox(ctx, x, y, bw, bh, col, rib, o) {
+    o = o || {};
+    const lidH = bh * 0.24, lift = o.lift || 0, bow = o.bow == null ? 1 : o.bow, ol = Math.max(1.2, bw * 0.02);
+    const top = y - bh / 2 + lidH * 0.55;
+    tone(ctx, q => rrect(q, x - bw / 2, top, bw, y + bh / 2 - top, Math.max(1, bw * 0.03)), col, x, y, bw * 0.45, { dark: -0.3, spec: false, ol });
+    if (o.dots) { F(ctx, rgba('#ffffff', 0.5)); ctx.beginPath(); for (let i = 0; i < 9; i++) circ(ctx, x - bw * 0.4 + (i % 3) * bw * 0.4 + (i > 2 && i < 6 ? bw * 0.2 : 0), top + bh * 0.15 + Math.floor(i / 3) * bh * 0.25, Math.max(1, bw * 0.03)); ctx.fill(); }
+    if (!o.noRibbon) {
+      tone(ctx, q => q.rect(x - bw * 0.08, top, bw * 0.16, y + bh / 2 - top), rib, x, y, bw * 0.08, { spec: false, ol: ol * 0.7 });
+      tone(ctx, q => q.rect(x - bw / 2, y + bh * 0.08, bw, bh * 0.14), rib, x, y + bh * 0.15, bw * 0.3, { spec: false, ol: ol * 0.7 });
+    }
+    ctx.save(); ctx.translate(x + (o.lidX || 0), y - bh / 2 + lidH * 0.3 - lift); ctx.rotate(o.rot || 0);
+    if (o.lidA != null) ctx.globalAlpha = U.clamp(o.lidA, 0, 1);
+    tone(ctx, q => rrect(q, -bw * 0.55, -lidH / 2, bw * 1.1, lidH, Math.max(1, bw * 0.03)), shade(col, 0.08), 0, 0, bw * 0.5, { dark: -0.25, spec: false, ol });
+    if (!o.noRibbon) tone(ctx, q => q.rect(-bw * 0.08, -lidH / 2, bw * 0.16, lidH), rib, 0, 0, bw * 0.08, { spec: false, ol: ol * 0.7 });
+    if (bow > 0.02 && !o.noRibbon) {
+      const bs = bw * 0.24 * bow;
+      for (const sd of [-1, 1]) tone(ctx, q => ell(q, sd * bs * 0.75, -lidH / 2 - bs * 0.35, bs * 0.8, bs * 0.45, sd * -0.5), rib, sd * bs * 0.7, -lidH / 2 - bs * 0.35, bs * 0.6, { dark: -0.3, spec: false, ol: ol * 0.8 });
+      tone(ctx, q => circ(q, 0, -lidH / 2 - bs * 0.25, bs * 0.3), shade(rib, -0.1), 0, -lidH / 2 - bs * 0.25, bs * 0.3, { spec: false, ol: ol * 0.8 });
+    }
+    ctx.restore();
+  }
+  // ---- the advent tile on the map: a present with a bow and a snowflake tag, glowing
+  function winAdventIcon(ctx, r, t) {
+    const s = r * 0.62;
+    ctx.save();
+    try {
+      glow(ctx, 0, 0, s * 1.5, WIN_GOLD, 0.3 + 0.1 * Math.sin((t || 0) * 4));
+      const wig = Math.sin((t || 0) * 5) * 0.05;
+      ctx.rotate(wig);
+      winPresentBox(ctx, 0, s * 0.12, s * 1.3, s * 1.1, WIN_RED, WIN_GOLD, { bow: 1, dots: true });
+      ctx.rotate(-wig);
+      tone(ctx, q => rrect(q, s * 0.48, -s * 0.05, s * 0.42, s * 0.3, s * 0.06), '#fff6ec', s * 0.69, s * 0.1, s * 0.2, { spec: false, ol: 1.2 });
+      winFlake(ctx, s * 0.69, s * 0.1, s * 0.11, 0, '#2e9cff', 1);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* ---- the unwrapping (the advent screen): a cosy room at night, the
+     advent calendar on the wall (the doors before today's open, today's
+     glowing), a big present on the rug. st = {t, tug (0..1, the last tug
+     fading), tugs (0..3), open 0..1 (the lid pops), reveal 0..1, out {k,
+     day, big, candy, gold}, prize (an item or relic def), day}. */
+  function winGiftScene(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {}; w = w || 540; h = h || 960;
+      const t = st.t || 0, open = U.clamp(+st.open || 0, 0, 1), rev = U.clamp(+st.reveal || 0, 0, 1), tug = U.clamp(+st.tug || 0, 0, 1);
+      const out = st.out || null, day = U.clamp(Math.floor(+st.day || (out && out.day) || 1), 1, 24), cx = w / 2;
+      // the room: a deep blue wall, a window full of snow, a wooden floor
+      try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#0b1430'); g.addColorStop(0.62, '#1c1236'); g.addColorStop(0.63, '#3a2418'); g.addColorStop(1, '#1e120c'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#141028'; }
+      ctx.fillRect(0, 0, w, h);
+      const fy = h * 0.63;
+      S(ctx, rgba('#000000', 0.35), 2); ctx.beginPath(); for (let yy = fy + 24; yy < h; yy += 30) { ctx.moveTo(0, yy); ctx.lineTo(w, yy); } ctx.stroke();
+      glow(ctx, w * 0.86, fy - 20, 170, '#ff8a3a', 0.22 + 0.05 * Math.sin(t * 3));
+      // the window at the left, snow falling past it
+      const wx = 22, wy = 390, ww = 92, wh = 120;
+      ctx.save(); ctx.beginPath(); ctx.rect(wx, wy, ww, wh); ctx.clip();
+      F(ctx, '#0a1e3a'); ctx.fillRect(wx, wy, ww, wh);
+      seaMoon(ctx, wx + 64, wy + 30, 13, t);
+      seaSnow(ctx, wx, wy, ww, wh, t, 16, 0.9);
+      ctx.restore();
+      S(ctx, INK, 4); F(ctx, '#6b4a2e'); ctx.beginPath(); rrect(ctx, wx - 6, wy - 6, ww + 12, wh + 12, 4); ctx.rect(wx, wy + wh, ww, -wh); ctx.fill('evenodd'); ctx.stroke();
+      line(ctx, wx + ww / 2, wy, wx + ww / 2, wy + wh, '#6b4a2e', 4); line(ctx, wx, wy + wh / 2, wx + ww, wy + wh / 2, '#6b4a2e', 4);
+      seaSnowCap(ctx, wx - 6, wy + wh + 2, ww + 12, 7);
+      // the advent calendar: 24 little doors, the ones before today open
+      const bw = 380, bh = 236, bx = cx - bw / 2, by0 = 126;
+      tone(ctx, q => rrect(q, bx, by0, bw, bh, 10), '#8a4a26', cx, by0 + bh / 2, bw / 2, { dark: -0.25, spec: false, ol: 3 });
+      S(ctx, rgba('#ffe7b0', 0.35), 2); ctx.beginPath(); rrect(ctx, bx + 6, by0 + 6, bw - 12, bh - 12, 7); ctx.stroke();
+      txt(ctx, 'ADVENT', cx, by0 + 20, 18, '#ffe7b0', true, 'center', INK);
+      winHolly(ctx, cx - 62, by0 + 20, 9, 0); winHolly(ctx, cx + 62, by0 + 20, 9, 1);
+      const cw = 58, chh = 46, gx0 = bx + (bw - cw * 6 - 4 * 5) / 2, gy0 = by0 + 38;
+      for (let i = 0; i < 24; i++) {
+        const d = i + 1, gx = gx0 + (i % 6) * (cw + 4), gy = gy0 + Math.floor(i / 6) * (chh + 2);
+        const opened = d < day || (d === day && open > 0), today = d === day;
+        if (opened) {
+          F(ctx, '#1a0e08'); ctx.beginPath(); rrect(ctx, gx, gy, cw, chh, 4); ctx.fill();
+          if (d < day) { F(ctx, rgba(WIN_GOLD, 0.7)); ctx.beginPath(); star(ctx, gx + cw / 2, gy + chh / 2, 7, 5, 0.45); ctx.fill(); }
+          // the little door swung open on its hinge
+          const k = today ? Math.min(1, open * 2) : 1;
+          F(ctx, today ? '#ffd27a' : '#c9763e'); ctx.beginPath(); poly(ctx, [gx, gy, gx - cw * 0.28 * k, gy + 3, gx - cw * 0.28 * k, gy + chh - 3, gx, gy + chh]); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+        } else {
+          tone(ctx, q => rrect(q, gx, gy, cw, chh, 4), today ? '#d8783a' : (i % 2 ? '#b8622e' : '#c26a34'), gx + cw / 2, gy + chh / 2, cw / 2, { dark: -0.2, spec: false, ol: 1.6 });
+          txt(ctx, String(d), gx + cw / 2, gy + chh / 2 + 1, today ? 20 : 16, today ? '#fff6c0' : '#ffe7b0', true, 'center', INK);
+        }
+        if (today) {
+          const pul = 0.5 + 0.5 * Math.sin(t * 5);
+          ctx.beginPath(); rrect(ctx, gx - 2, gy - 2, cw + 4, chh + 4, 6); S(ctx, rgba(WIN_GOLD, 0.6 + pul * 0.4), 3); ctx.stroke();
+          glow(ctx, gx + cw / 2, gy + chh / 2, 50, WIN_GOLD, 0.2 + pul * 0.2);
+        }
+      }
+      winGarland(ctx, bx - 10, bx + bw + 10, by0 - 6, 10, 3, 18, t, 3);
+      seaSnow(ctx, 0, 0, w, h * 0.6, t, 24, 0.35);
+      // the rug and the present
+      F(ctx, rgba(WIN_RED, 0.55)); ctx.beginPath(); ell(ctx, cx, fy + 64, 200, 40, 0); ctx.fill();
+      S(ctx, rgba(WIN_GOLD, 0.5), 3); ctx.beginPath(); ell(ctx, cx, fy + 64, 186, 34, 0); ctx.stroke();
+      const pw = 190, ph = 150, px = cx, py = fy + 64 - ph / 2;
+      const pull = U.clamp(((st.tugs | 0) - tug * 0.7) / 3, 0, 1), untied = open > 0 || rev > 0;
+      const jig = tug > 0 ? Math.sin(t * 60) * 0.035 * tug : 0;
+      // light pouring out of the open box
+      if (open > 0) {
+        glow(ctx, px, py - ph * 0.4, 170, rev > 0 ? '#fff6c0' : WIN_GOLD, 0.25 + open * 0.45);
+        ctx.save(); ctx.globalAlpha = 0.15 * open; F(ctx, '#fff6c0');
+        for (let i = 0; i < 7; i++) { const a = -Math.PI / 2 + (i - 3) * 0.24 + Math.sin(t * 0.8 + i) * 0.03; ctx.beginPath(); ctx.moveTo(px - 30, py - ph / 2 + 10); ctx.lineTo(px + Math.cos(a - 0.05) * 300, py - ph / 2 + Math.sin(a - 0.05) * 300); ctx.lineTo(px + Math.cos(a + 0.05) * 300, py - ph / 2 + Math.sin(a + 0.05) * 300); ctx.lineTo(px + 30, py - ph / 2 + 10); ctx.closePath(); ctx.fill(); }
+        ctx.restore();
+      }
+      // the prize rising out of the box (under the words, over the box)
+      if (rev > 0 && out) {
+        const k = Math.min(1, rev * 1.8), qy = py - ph / 2 - 30 - winEase(Math.min(1, rev * 1.5)) * 42 - Math.sin(t * 2.4) * 4;
+        glow(ctx, px, qy, 80, '#fff6c0', 0.5 * k);
+        const pd = st.prize;
+        if (pd && (pd.hooks || pd.icon)) relicIcon(ctx, pd, px, qy, 60 * k);
+        else if (pd && pd.shape) item(ctx, pd, px, qy, Math.sin(t * 1.3) * 0.15, 1.7 * k, { glow: '#ffe066' });
+        else if (out.k === 'capsule') capsule(ctx, px, qy, 26 * k, { t });
+        else if (out.k === 'gold') { for (let i = 0; i < 5; i++) tone(ctx, q => ell(q, px - 24 + i * 12, qy + 10 - (i % 2) * 8, 11 * k, 7 * k, 0), WIN_GOLD, px - 24 + i * 12, qy + 8, 9 * k, { ol: 1.5 }); }
+        else { for (let i = 0; i < 5; i++) { const a = t * 0.8 + i * TAU / 5; winFlake(ctx, px + Math.cos(a) * 36 * k, qy + Math.sin(a) * 18 * k, 9 * k, t + i, '#dff6ff', 2); } winFlake(ctx, px, qy, 24 * k, t * 0.6, '#ffffff', 3.2); }
+      }
+      // the box (its ribbon comes off in three tugs, then the lid pops)
+      ctx.save(); ctx.translate(px, py + ph / 2); ctx.rotate(jig); ctx.translate(-px, -(py + ph / 2));
+      const lift = open > 0 ? winEase(open) * 150 + rev * 50 : 0;
+      winPresentBox(ctx, px, py, pw, ph, WIN_RED, WIN_GOLD, { bow: untied ? 0 : 1 - pull * 0.8, noRibbon: untied, dots: true, lift, rot: open * 0.35 + rev * 0.25, lidX: open * 150 + rev * 70, lidA: 1 - Math.max(0, rev - 0.4) * 2 });
+      if (open > 0) {   // the open top: a dark mouth with light welling up out of it
+        const ty0 = py - ph / 2 + ph * 0.24 * 0.55;
+        F(ctx, '#4a0610'); ctx.beginPath(); rrect(ctx, px - pw / 2 + 5, ty0 + 3, pw - 10, 14, 4); ctx.fill();
+        F(ctx, rgba('#fff6c0', 0.55 * open)); ctx.beginPath(); ell(ctx, px, ty0 + 8, pw * 0.36, 5, 0); ctx.fill();
+      }
+      ctx.restore();
+      // the pulled ribbon trailing off to the right
+      if (!untied && pull > 0) {
+        const ex = px + 20 + pull * 220, ey = py - ph / 2 - 10 + Math.sin(t * 4) * 6 * (1 - tug);
+        ctx.beginPath(); ctx.moveTo(px + 8, py - ph / 2 - 12); ctx.bezierCurveTo(px + 60, py - ph / 2 - 60 * pull, ex - 60, ey + 40, ex, ey);
+        S(ctx, INK, 9); ctx.stroke(); S(ctx, WIN_GOLD, 6); ctx.stroke();
+      }
+      // the gift tag with the door's number
+      if (!untied) {
+        const tx = px - pw / 2 - 6, ty = py - 6 + Math.sin(t * 2) * 3;
+        line(ctx, px - pw * 0.3, py - ph / 2 + 12, tx + 10, ty - 10, INK, 1.5);
+        tone(ctx, q => { q.moveTo(tx, ty - 12); q.lineTo(tx + 22, ty - 12); q.lineTo(tx + 30, ty); q.lineTo(tx + 22, ty + 12); q.lineTo(tx, ty + 12); q.closePath(); }, '#fff6ec', tx + 14, ty, 12, { spec: false, ol: 1.6 });
+        txt(ctx, String(day), tx + 13, ty + 1, 14, WIN_RED, true, 'center');
+      }
+      // confetti and snowflakes bursting out at the reveal
+      if (open > 0) {
+        const tau = rev * 1.6 + open * 0.2;
+        for (let i = 0; i < 36; i++) {
+          const a = -Math.PI / 2 + (winH(i, 1) - 0.5) * 2.2, v = 240 + winH(i, 2) * 260;
+          const x = px + Math.cos(a) * v * tau, y = py - ph / 2 + Math.sin(a) * v * tau + 320 * tau * tau;
+          if (y > fy + 110) continue;
+          ctx.globalAlpha = U.clamp(1.2 - rev, 0, 1);
+          if (i % 4 === 0) winFlake(ctx, x, y, 5, t * 3 + i, '#ffffff', 1.4);
+          else { ctx.save(); ctx.translate(x, y); ctx.rotate(t * 6 + i); F(ctx, [WIN_RED, '#3ddc84', WIN_GOLD, '#2ee6d6', '#ff2e88'][i % 5]); ctx.fillRect(-4, -2, 8, 4); ctx.restore(); }
+        }
+        ctx.globalAlpha = 1;
+      }
+      // the words
+      if (open > 0 && open < 1 && rev === 0) txt(ctx, 'POP!', px + 110, py - ph / 2 - 40 - open * 30, 30 + open * 10, rgba('#fff6c0', 1 - open * 0.5), true, 'center', INK);
+      if (!untied && tug > 0.05) txt(ctx, 'TUG!', px + 150 - (st.tugs % 2) * 40, py - ph / 2 - 60 - (1 - tug) * 20, 20 + tug * 8, rgba(WIN_GOLD, tug), true, 'center', rgba(INK, tug));
+      if (rev > 0 && out) {
+        const word = out.big ? 'BIG PRESENT!' : 'MERRY CLAWMAS!', col = out.big ? WIN_GOLD : '#e8fbff', sz = 40 * (0.6 + winEase(Math.min(1, rev * 1.5)) * 0.4);
+        glow(ctx, cx, 394, 140, out.big ? WIN_GOLD : '#8dfff5', 0.3 * rev);
+        txt(ctx, word, cx, 394, sz, col, true, 'center', out.big ? '#5a2a08' : '#1a3a5a');
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- the winter items' own silhouettes (registered on POL_SIL as non-enumerable entries)
+  const WIN_SIL = {};
+  WIN_SIL.win_snowball = (ctx, w) => {
+    const r = w / 2;
+    tone(ctx, q => circ(q, 0, 0, r * 0.95), WIN_SNOW, 0, 0, r * 0.95, { dark: -0.2, ol: 1.6 });
+    F(ctx, rgba('#9fd8ff', 0.6)); ctx.beginPath(); circ(ctx, r * 0.3, r * 0.25, r * 0.22); circ(ctx, -r * 0.2, r * 0.45, r * 0.14); ctx.fill();
+    winFlake(ctx, -r * 0.25, -r * 0.2, r * 0.3, 0.3, '#9fd8ff', 1);
+  };
+  WIN_SIL.bag_snowball = (ctx, w) => {
+    const r = w / 2;
+    tone(ctx, q => { q.moveTo(-r * 0.7, -r * 0.3); q.quadraticCurveTo(-r * 1.05, r * 0.9, 0, r * 0.95); q.quadraticCurveTo(r * 1.05, r * 0.9, r * 0.7, -r * 0.3); q.closePath(); }, '#c8b08a', 0, r * 0.3, r * 0.8, { dark: -0.3 });
+    for (let i = 0; i < 3; i++) tone(ctx, q => circ(q, -r * 0.35 + i * r * 0.35, -r * 0.42 - (i % 2) * r * 0.15, r * 0.26), WIN_SNOW, -r * 0.35 + i * r * 0.35, -r * 0.45, r * 0.24, { dark: -0.15, ol: 1.2 });
+    line(ctx, -r * 0.72, -r * 0.24, r * 0.72, -r * 0.24, WIN_RED, 2.6);
+  };
+  WIN_SIL.candy_cane = (ctx, w, h) => {
+    const hw = w / 2, th = Math.max(4, h * 0.9), R = hw * 0.3;
+    const path = () => { ctx.beginPath(); ctx.moveTo(-hw + th / 2, 0); ctx.lineTo(hw - R * 2, 0); ctx.arc(hw - R - th / 4, -R + th / 4, R, Math.PI / 2, -Math.PI * 0.35, true); };
+    path(); ctx.lineCap = 'round'; S(ctx, INK, th + 3); ctx.stroke();
+    path(); S(ctx, '#ffffff', th); ctx.stroke();
+    ctx.setLineDash([th * 0.8, th * 0.8]); path(); S(ctx, WIN_RED, th * 0.8); ctx.stroke(); ctx.setLineDash([]);
+  };
+  WIN_SIL.hot_cocoa = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); ctx.arc(hw * 0.95, 0, hh * 0.45, -Math.PI / 2, Math.PI / 2); S(ctx, INK, 5); ctx.stroke(); S(ctx, '#fff4e0', 2.6); ctx.stroke();
+    tone(ctx, q => poly(q, [-hw * 0.95, -hh * 0.85, hw * 0.95, -hh * 0.85, hw * 0.8, hh, -hw * 0.8, hh]), '#fff4e0', 0, 0, hw * 0.8, { dark: -0.2 });
+    F(ctx, WIN_RED); ctx.fillRect(-hw * 0.9, hh * 0.1, hw * 1.75, hh * 0.25);
+    tone(ctx, q => ell(q, 0, -hh * 0.82, hw * 0.9, hh * 0.18, 0), '#6b3a1e', 0, -hh * 0.82, hw * 0.8, NOSPEC);
+    F(ctx, '#ffffff'); ctx.beginPath(); rrect(ctx, -hw * 0.5, -hh * 1.0, hw * 0.34, hh * 0.28, 2); rrect(ctx, hw * 0.05, -hh * 1.05, hw * 0.34, hh * 0.28, 2); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+    S(ctx, rgba('#ffffff', 0.7), 1.4); ctx.beginPath(); ctx.moveTo(-hw * 0.2, -hh * 1.2); ctx.quadraticCurveTo(-hw * 0.4, -hh * 1.5, -hw * 0.15, -hh * 1.8); ctx.moveTo(hw * 0.3, -hh * 1.2); ctx.quadraticCurveTo(hw * 0.1, -hh * 1.5, hw * 0.35, -hh * 1.8); ctx.stroke();
+  };
+  WIN_SIL.present_box = (ctx, w, h) => { winPresentBox(ctx, 0, h * 0.06, w * 0.95, h * 0.88, WIN_RED, WIN_GOLD, { bow: 1 }); };
+  WIN_SIL.ornament = (ctx, w) => {
+    const r = w / 2 * 0.92;
+    tone(ctx, q => rrect(q, -r * 0.28, -r * 1.2, r * 0.56, r * 0.32, 2), WIN_GOLD, 0, -r * 1.05, r * 0.2, { ol: 1.3 });
+    ctx.beginPath(); ctx.arc(0, -r * 1.3, r * 0.14, 0, TAU); S(ctx, INK, 1.4); ctx.stroke();
+    tone(ctx, q => circ(q, 0, 0, r), '#2e9cff', 0, 0, r, { dark: -0.35, ol: 1.6 });
+    S(ctx, rgba(WIN_GOLD, 0.9), 1.6); ctx.beginPath(); ctx.moveTo(-r * 0.95, -r * 0.1); ctx.quadraticCurveTo(0, r * 0.25, r * 0.95, -r * 0.1); ctx.stroke();
+    winFlake(ctx, 0, r * 0.5, r * 0.25, 0, '#ffffff', 1);
+    F(ctx, rgba('#ffffff', 0.7)); ctx.beginPath(); ell(ctx, -r * 0.4, -r * 0.4, r * 0.22, r * 0.12, -0.7); ctx.fill();
+  };
+  WIN_SIL.fruitcake = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, q => rrect(q, -hw * 0.95, -hh * 0.7, hw * 1.9, hh * 1.5, hh * 0.3), '#7a3f1f', 0, 0, hw * 0.8, { dark: -0.35 });
+    F(ctx, '#fff6ec'); ctx.beginPath(); ctx.moveTo(-hw * 0.95, -hh * 0.45);
+    for (let i = 0; i <= 6; i++) ctx.lineTo(-hw * 0.95 + i * hw * 0.316, -hh * (0.45 - (i % 2) * 0.35));
+    ctx.lineTo(hw * 0.95, -hh * 0.7); ctx.lineTo(-hw * 0.95, -hh * 0.7); ctx.closePath(); ctx.fill();
+    for (let i = 0; i < 7; i++) { F(ctx, i % 2 ? WIN_RED : '#3ddc84'); ctx.beginPath(); circ(ctx, -hw * 0.7 + i * hw * 0.24, hh * (0.1 + (i % 3) * 0.2), Math.max(1.2, hw * 0.07)); ctx.fill(); }
+  };
+  WIN_SIL.jingle_bell = (ctx, w) => {
+    const r = w / 2 * 0.9;
+    tone(ctx, q => circ(q, 0, r * 0.1, r * 0.9), WIN_GOLD, 0, r * 0.1, r * 0.9, { dark: -0.35, ol: 1.6 });
+    line(ctx, -r * 0.7, r * 0.1, r * 0.7, r * 0.1, INK, 1.4);
+    F(ctx, INK); ctx.beginPath(); ell(ctx, 0, r * 0.45, r * 0.12, r * 0.28, 0); circ(ctx, 0, r * 0.28, r * 0.14); ctx.fill();
+    for (const sd of [-1, 1]) tone(ctx, q => ell(q, sd * r * 0.35, -r * 0.85, r * 0.35, r * 0.2, sd * -0.5), WIN_RED, sd * r * 0.35, -r * 0.85, r * 0.3, { spec: false, ol: 1.2 });
+  };
+  WIN_SIL.yule_log = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, q => rrect(q, -hw, -hh * 0.9, hw * 1.9, hh * 1.8, hh * 0.8), '#8a5a2e', 0, 0, hw * 0.7, { dark: -0.35 });
+    S(ctx, rgba('#4a2a12', 0.8), 1.2); ctx.beginPath(); for (let i = 0; i < 4; i++) { ctx.moveTo(-hw * 0.8 + i * hw * 0.4, -hh * 0.6); ctx.quadraticCurveTo(-hw * 0.7 + i * hw * 0.4, 0, -hw * 0.8 + i * hw * 0.4, hh * 0.6); } ctx.stroke();
+    tone(ctx, q => ell(q, hw * 0.9, 0, hh * 0.45, hh * 0.9, 0), '#e8c08a', hw * 0.9, 0, hh * 0.5, { spec: false, ol: 1.4 });
+    S(ctx, rgba('#8a5a2e', 0.9), 1); ctx.beginPath(); ctx.ellipse(hw * 0.9, 0, hh * 0.22, hh * 0.45, 0, 0, TAU); ctx.stroke();
+    winHolly(ctx, -hw * 0.3, -hh * 0.9, hh * 0.7, 0);
+    flames(ctx, hw * 0.3, -hh * 0.8, hh * 0.9, hh * 1.3, 0, 3);
+  };
+  WIN_SIL.win_coal = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, q => poly(q, [-hw * 0.9, -hh * 0.3, -hw * 0.3, -hh * 0.95, hw * 0.65, -hh * 0.8, hw * 0.95, hh * 0.15, hw * 0.4, hh * 0.9, -hw * 0.7, hh * 0.8]), '#2a2628', 0, 0, hw * 0.8, { dark: -0.4 });
+    F(ctx, '#ff6a3a'); ctx.beginPath(); circ(ctx, -hw * 0.2, hh * 0.1, Math.max(1, hw * 0.08)); circ(ctx, hw * 0.35, -hh * 0.3, Math.max(0.8, hw * 0.06)); ctx.fill();
+    F(ctx, rgba('#ffffff', 0.25)); ctx.beginPath(); poly(ctx, [-hw * 0.5, -hh * 0.4, -hw * 0.2, -hh * 0.7, -hw * 0.1, -hh * 0.4]); ctx.fill();
+  };
+  for (const k in WIN_SIL) Object.defineProperty(POL_SIL, k, { value: WIN_SIL[k], enumerable: false, configurable: true, writable: true });
+
+  // ---- the Snowflake Stand's looks (the VAULT block's renderers call these)
+  // The Gingerbread House frame: icing scallops, gumdrops on the rails, candy canes in the top corners.
+  function winFramePat(ctx, w, h, f, tr) {
+    F(ctx, rgba('#5a2a0e', 0.25)); ctx.beginPath();
+    for (let i = 0; i < 70; i++) circ(ctx, -f + winH(i, 1) * (w + f * 2), -f + winH(i, 2) * (h + f * 2), 1);
+    ctx.fill();
+    S(ctx, tr || '#fff6ec', Math.max(2, f * 0.13)); ctx.beginPath();
+    const m = f * 0.5, sc = 14;
+    ctx.moveTo(-m, -m); for (let x = -m; x < w + m; x += sc) ctx.quadraticCurveTo(x + sc / 2, -m + sc * 0.5, x + sc, -m);
+    ctx.moveTo(-m, h + m); for (let x = -m; x < w + m; x += sc) ctx.quadraticCurveTo(x + sc / 2, h + m - sc * 0.5, x + sc, h + m);
+    ctx.moveTo(-m, -m); for (let y = -m; y < h + m; y += sc) ctx.quadraticCurveTo(-m + sc * 0.5, y + sc / 2, -m, y + sc);
+    ctx.moveTo(w + m, -m); for (let y = -m; y < h + m; y += sc) ctx.quadraticCurveTo(w + m - sc * 0.5, y + sc / 2, w + m, y + sc);
+    ctx.stroke();
+    const gd = ['#ff2e4a', '#3ddc84', '#ffd23f', '#ff9ad0'];
+    for (let x = 30, i = 0; x < w - 10; x += 46, i++) {
+      tone(ctx, q => { q.moveTo(x - 6, -f * 0.18); q.quadraticCurveTo(x - 6, -f * 0.62, x, -f * 0.64); q.quadraticCurveTo(x + 6, -f * 0.62, x + 6, -f * 0.18); q.closePath(); }, gd[i % 4], x, -f * 0.4, 6, { ol: 1.2 });
+      tone(ctx, q => circ(q, w - x, h + f * 0.5, Math.max(3, f * 0.16)), gd[(i + 2) % 4], w - x, h + f * 0.5, 4, { ol: 1.2 });
+    }
+    for (const [x, sd] of [[-f * 0.5, 1], [w + f * 0.5, -1]]) {
+      ctx.beginPath(); ctx.moveTo(x, h * 0.35); ctx.lineTo(x, -f * 0.2); ctx.arc(x + sd * f * 0.22, -f * 0.2, f * 0.22, Math.PI, sd > 0 ? 0 : Math.PI * 2, sd < 0);
+      ctx.lineCap = 'round'; S(ctx, INK, f * 0.3); ctx.stroke(); S(ctx, '#ffffff', f * 0.2); ctx.stroke();
+      ctx.setLineDash([f * 0.2, f * 0.2]); S(ctx, WIN_RED, f * 0.18); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+  // The Gingerbread House back panel: an icing lattice, gumdrops, a gingerbread man waving in the corner.
+  function winPanelPat(ctx, w, fy) {
+    S(ctx, rgba('#fff6ec', 0.1), 2); ctx.beginPath();
+    for (let x = -fy; x < w + fy; x += 40) { ctx.moveTo(x, 0); ctx.lineTo(x + fy, fy); ctx.moveTo(x + fy, 0); ctx.lineTo(x, fy); }
+    ctx.stroke();
+    const gd = ['#ff2e4a', '#3ddc84', '#ffd23f', '#ff9ad0'];
+    for (let i = 0; i < 12; i++) { F(ctx, rgba(gd[i % 4], 0.22)); ctx.beginPath(); circ(ctx, winH(i, 7) * w, winH(i, 8) * fy * 0.9, 4 + winH(i, 9) * 3); ctx.fill(); }
+    const gx = w - 46, gy = fy - 34;
+    F(ctx, rgba('#c07a3e', 0.45)); ctx.beginPath();
+    circ(ctx, gx, gy - 20, 9); ell(ctx, gx, gy + 2, 10, 14, 0); ell(ctx, gx - 12, gy - 6, 8, 4, 0.5); ell(ctx, gx + 12, gy - 10, 8, 4, -0.8); ell(ctx, gx - 6, gy + 18, 4, 9, 0.2); ell(ctx, gx + 6, gy + 18, 4, 9, -0.2);
+    ctx.fill();
+    F(ctx, rgba('#fff6ec', 0.55)); ctx.beginPath(); circ(ctx, gx - 3, gy - 22, 1.3); circ(ctx, gx + 3, gy - 22, 1.3); circ(ctx, gx, gy - 2, 1.5); circ(ctx, gx, gy + 5, 1.5); ctx.fill();
+  }
+  // Peppermint Swirl: red stripes and a mint pinstripe down every prong (pts drawn by path).
+  function winCaneStripe(ctx, path, w) {
+    ctx.setLineDash([w * 0.9, w * 0.9]); ctx.beginPath(); path(); S(ctx, PAINT.c2, w * 0.8); ctx.stroke();
+    ctx.setLineDash([w * 0.28, w * 1.52]); ctx.lineDashOffset = -w * 1.0; ctx.beginPath(); path(); S(ctx, PAINT.glow || '#3ddc84', w * 0.8); ctx.stroke();
+    ctx.setLineDash([]); ctx.lineDashOffset = 0;
+  }
+  // Peppermint Swirl's sugar sparkle at the tips.
+  function winCaneFx(ctx, tips, ox, oy, t) {
+    const n = Math.min(tips.length, 4);
+    for (let i = 0; i < n; i++) glint(ctx, ox + tips[i].x, oy + tips[i].y, 9, t + i * 0.9, i * 5 + 2, i % 2 ? '#c8ffe0' : '#ffffff');
+  }
+  // MERRY CLAWMAS: red and green letters with snow on their tops, holly at both ends.
+  function winMarquee(ctx, L, x, y, size, t) {
+    const s = String(L.text || 'MERRY CLAWMAS'), adv = size * 0.8, x0 = x - (s.length - 1) * adv / 2;
+    glow(ctx, x, y, size * 3, '#ff2e4a', 0.18 + 0.06 * Math.sin((t || 0) * 2));
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === ' ') continue;
+      const lx = x0 + i * adv, ly = y + Math.sin((t || 0) * 3 - i * 0.6) * size * 0.05;
+      txt(ctx, s[i], lx, ly, size, i % 2 ? '#3ddc84' : '#ff2e4a', true, 'center', INK);
+      F(ctx, WIN_SNOW); ctx.beginPath(); ell(ctx, lx, ly - size * 0.44, size * 0.22, size * 0.08, 0); ctx.fill();
+    }
+    winHolly(ctx, x0 - adv * 1.6, y, size * 0.55, 0); winHolly(ctx, x0 + (s.length - 1) * adv + adv * 1.6, y, size * 0.55, 1);
+  }
+  // The Snowflake Trail: six-armed flakes twirling up out of every step.
+  function winTrailMark(ctx, art, x, y, u, a, k, t, sd, col) {
+    if (art !== 'sea_flakes') return false;
+    const fx0 = x + Math.sin(sd * 2.3 + u * 4) * 6 * k, fy0 = y - u * 16 * k, r = 5 * k * (0.6 + a * 0.4);
+    winFlake(ctx, fx0, fy0, r, t * 1.6 + sd, col || '#dff6ff', Math.max(0.8, 1.2 * k));
+    if ((sd | 0) % 3 === 0) glint(ctx, fx0, fy0, r * 1.4, t + sd, sd | 0, '#ffffff');
+    return true;
+  }
+  // Scarf and earmuffs over a crawler's portrait (portrait-local, r the disc radius, Hd its head metrics).
+  function winScarf(ctx, L, r, t, Hd) {
+    const top = Hd.top * r, hw = Hd.w * r, ey = Hd.eye * r - r * 0.04, rad = Math.max(hw * 1.02, ey - top);
+    ctx.beginPath(); ctx.arc(0, ey, rad, Math.PI * 1.08, Math.PI * 1.92); S(ctx, INK, r * 0.1 + 2.5); ctx.stroke(); S(ctx, L.c1, r * 0.08); ctx.stroke();
+    for (const sd of [-1, 1]) {
+      const px = sd * rad * 0.98;
+      tone(ctx, q => circ(q, px, ey, r * 0.17), L.c2, px, ey, r * 0.17, { dark: -0.2, ol: 1.6 });
+      F(ctx, rgba('#ffffff', 0.55)); ctx.beginPath(); for (let i = 0; i < 5; i++) { const an = i * TAU / 5 + t * 0.5; circ(ctx, px + Math.cos(an) * r * 0.12, ey + Math.sin(an) * r * 0.12, r * 0.045); } ctx.fill();
+    }
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r - 1.5, 0, TAU); ctx.clip();
+    const ny = r * 0.52, sway = Math.sin(t * 2) * r * 0.04;
+    tone(ctx, q => { q.moveTo(-r * 0.52, ny - r * 0.08); q.quadraticCurveTo(0, ny + r * 0.14, r * 0.52, ny - r * 0.08); q.lineTo(r * 0.48, ny + r * 0.14); q.quadraticCurveTo(0, ny + r * 0.38, -r * 0.48, ny + r * 0.14); q.closePath(); }, L.c1, 0, ny + r * 0.1, r * 0.4, { dark: -0.25, spec: false });
+    tone(ctx, q => { q.moveTo(r * 0.14, ny + r * 0.14); q.lineTo(r * 0.36, ny + r * 0.14); q.lineTo(r * 0.42 + sway, r * 1.1); q.lineTo(r * 0.2 + sway, r * 1.1); q.closePath(); }, L.c1, r * 0.3, ny + r * 0.5, r * 0.15, { dark: -0.25, spec: false });
+    S(ctx, L.c2, Math.max(1.2, r * 0.05)); ctx.beginPath();
+    for (const k of [-0.3, 0, 0.3]) { ctx.moveTo(k * r - r * 0.04, ny - r * 0.02 + Math.abs(k) * -r * 0.1); ctx.lineTo(k * r + r * 0.04, ny + r * 0.22 + Math.abs(k) * -r * 0.1); }
+    for (const yy of [0.62, 0.8]) { ctx.moveTo(r * 0.16 + sway * yy, ny + r * yy * 0.6 + r * 0.1); ctx.lineTo(r * 0.38 + sway * yy, ny + r * yy * 0.6 + r * 0.1); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  Object.assign(SEA_R, {
+    gift: winGiftScene, advent: winAdventIcon,
+    win: { SIL: WIN_SIL, BULBS: WIN_BULBS, twinkle: winTwinkle, flake: winFlake, holly: winHolly, garland: winGarland, ferns: winFerns, snowman: winSnowman, cottage: winCottage,
+      pine: winPine, aurora: winAurora, title: winTitle, map: winMap, prop: winProp, sky: winSky, cab: winCab, costume: winCostume, hat: winHat, present: winPresentBox,
+      framePat: winFramePat, panelPat: winPanelPat, marquee: winMarquee, trailMark: winTrailMark, scarf: winScarf },
+  });
+  /* ============================================================ end WIN */
 
   /* ============================================================ CR8 (round 8)
      Mama Mech and two new claws (DESIGN.md "Mama Mech and two new claws
@@ -14296,7 +15057,393 @@ const RENDER = (() => {
     score: schScore, target: schTarget, room: schRoom, result: schResult, stamp: schGradeStamp, report: schReport, diploma: schDiploma };
   /* ============================================================ end SCHOOL */
 
+  /* ============================================================ LEG (round 12)
+     Legends (DESIGN.md "Legends (round 12)"): the legendary relics' crest
+     over their medallion, the ten new evolved drawings, the fight's
+     legendary looks (the Hype plate, the Monocle's peek chip, the black hole
+     in the chute, the golden claw's sparkle) and the animated cabinets.
+     An animated skin keeps its cached static back (cabLayer, keyed by the
+     skin id as ever, so the cache stays bounded) and draws a handful of live
+     sprites over it each frame (legSkinAnim, between the back and the
+     bulbs): stars and a nebula, lava in the frame, a peeking ghost, swaying
+     leaves, coin rain, a hue sweep, fish, scrolling signs, a rolling CRT
+     band. Reduced motion (fx.reduced) holds one still pose (LEG_STILL);
+     reduced flashing drops the flicker. Pure drawing, never throws. */
+  const LEG_STILL = 1.7;
+  const LEG_SKIN_ANIM = { skin_space: 'space', skin_lava: 'lava', skin_haunted: 'haunt', skin_jungle: 'jungle', skin_gold: 'gold', skin_rainbow: 'rainbow' };
+  const LEG_STAT = { anim: 0, frames: 0 };
+  function legAnimOf(skd) { return skd && skd.look ? (skd.look.anim || LEG_SKIN_ANIM[skd.id] || '') : ''; }
+  // A deterministic 0..1 per (i, k) for placing sprites.
+  const legH = (i, k) => { const s = Math.sin(i * 91.7 + k * 17.3) * 43758.5453; return s - Math.floor(s); };
+  // The live layer of an animated skin, in the cabinet's local frame (0, 0 = interior top left).
+  function legSkinAnim(ctx, c, skd, t, alarm) {
+    const kind = legAnimOf(skd);
+    if (!kind) return;
+    const tt = fx.reduced ? LEG_STILL : t, flick = !ACC.noFlash && !fx.reduced;
+    const w = c.w, h = c.h, f = c.frame, fy = h * 0.72;
+    LEG_STAT.anim++;
+    ctx.save();
+    try {
+      if (kind === 'lava' || kind === 'gold' || kind === 'rainbow') {
+        // frame ring clip
+        ctx.beginPath(); rrect(ctx, -f, -f, w + f * 2, h + f * 2, 14); ctx.rect(w, 0, -w, h); ctx.clip('evenodd');
+        const per = (w + h) * 2;
+        const at = (u) => {   // a point on the frame's midline, u in 0..1 around it
+          let d = ((u % 1) + 1) % 1 * per;
+          if (d < w) return [d, -f * 0.5];
+          d -= w; if (d < h) return [w + f * 0.5, d];
+          d -= h; if (d < w) return [w - d, h + f * 0.5];
+          d -= w; return [-f * 0.5, h - d];
+        };
+        if (kind === 'lava') {
+          // molten blobs flowing round the frame, glowing
+          ctx.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 9; i++) {
+            const [x, y] = at(i / 9 + tt * 0.018);
+            glow(ctx, x, y, f * 0.9, i % 2 ? '#ff5a1f' : '#ffb347', 0.55 + (flick ? 0.2 * Math.sin(tt * 3 + i) : 0));
+          }
+          ctx.globalCompositeOperation = 'source-over';
+          F(ctx, '#ffd27a'); ctx.beginPath();
+          for (let i = 0; i < 12; i++) { const [x, y] = at(i / 12 + tt * 0.03 + 0.04); circ(ctx, x, y, 1.6 + legH(i, 1) * 1.6); }
+          ctx.fill();
+        } else if (kind === 'gold') {
+          // coins tumbling down the side posts, a glint running round
+          for (let i = 0; i < 10; i++) {
+            const side = i % 2, x = side ? w + f * 0.5 : -f * 0.5, y = -f + (((tt * (40 + legH(i, 2) * 30) + legH(i, 3) * (h + f * 2)) % (h + f * 2)));
+            const sq = Math.abs(Math.cos(tt * 5 + i)), cx = x + (legH(i, 4) - 0.5) * f * 0.4;
+            ctx.beginPath(); ell(ctx, cx, y, Math.max(1, 7.5 * sq), 7.5, 0);
+            F(ctx, sq > 0.4 ? '#ffe066' : '#b8860b'); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
+            if (sq > 0.55) { ctx.beginPath(); ell(ctx, cx, y, 4.2 * sq, 4.2, 0); S(ctx, '#b8860b', 1.2); ctx.stroke(); }
+          }
+          const [gx, gy] = at(tt * 0.12);
+          glow(ctx, gx, gy, f * 1.2, '#fff6c0', 0.7);
+        } else {
+          // the rainbow's hue sweep round the frame
+          for (let i = 0; i < 16; i++) {
+            const [x, y] = at(i / 16 + tt * 0.05);
+            glow(ctx, x, y, f * 0.85, RB[(i * 3 + Math.floor(tt * 8)) % 24], 0.5);
+          }
+        }
+      } else {
+        // everything else lives behind the pile: clip to the interior above the floor band
+        ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
+        if (kind === 'space') {
+          // a slow nebula, drifting stars, now and then a shooting star
+          glow(ctx, w * (0.35 + 0.1 * Math.sin(tt * 0.13)), fy * (0.45 + 0.08 * Math.cos(tt * 0.11)), 120, '#9b7bff', 0.35);
+          glow(ctx, w * (0.7 + 0.08 * Math.cos(tt * 0.09)), fy * (0.3 + 0.06 * Math.sin(tt * 0.17)), 90, '#ff6bd6', 0.22);
+          F(ctx, '#ffffff'); ctx.beginPath();
+          for (let i = 0; i < 18; i++) {
+            const x = (((legH(i, 5) * w - tt * (6 + legH(i, 6) * 14)) % w) + w) % w, y = legH(i, 7) * fy;
+            circ(ctx, x, y, 0.7 + (flick ? 0.6 * (0.5 + 0.5 * Math.sin(tt * 3 + i * 1.7)) : 0.3));
+          }
+          ctx.fill();
+          const sc = (tt % 7) / 7;
+          if (sc < 0.12 && !fx.reduced) {
+            const u = sc / 0.12, x = w * (0.9 - u * 0.7), y = fy * (0.1 + u * 0.3);
+            line(ctx, x, y, x + 36, y - 14, rgba('#ffffff', 0.8 * (1 - u)), 2);
+          }
+        } else if (kind === 'haunt') {
+          // green wisps, and a ghost that peeks in from the left edge every 9 s
+          for (let i = 0; i < 3; i++) glow(ctx, w * (0.2 + 0.3 * i) + Math.sin(tt * 0.7 + i) * 18, fy * (0.3 + 0.2 * Math.sin(tt * 0.5 + i * 2)), 26, '#7dff7a', 0.25);
+          const ph = (tt % 9) / 9, peek = ph < 0.35 ? Math.sin(ph / 0.35 * Math.PI) : 0;
+          const gx = -30 + peek * 44, gy = fy * 0.42 + Math.sin(tt * 2) * 4;
+          ctx.globalAlpha = 0.85;
+          tone(ctx, q => { q.moveTo(gx - 22, gy + 30); q.lineTo(gx - 22, gy); q.arc(gx, gy, 22, Math.PI, 0); q.lineTo(gx + 22, gy + 30); for (let k = 0; k < 4; k++) q.quadraticCurveTo(gx + 16 - k * 11, gy + 22, gx + 11 - k * 11, gy + 30); q.closePath(); }, '#eef6ff', gx, gy + 6, 22, NOSPEC);
+          ctx.globalAlpha = 1;
+          F(ctx, INK); ctx.beginPath(); ell(ctx, gx + 4, gy - 2, 3, 5, 0); ell(ctx, gx + 13, gy - 2, 3, 5, 0); ctx.fill();
+        } else if (kind === 'jungle') {
+          // leaves hanging from the top, swaying; two fireflies
+          for (let i = 0; i < 7; i++) {
+            const x = 20 + i * (w - 40) / 6, a = Math.sin(tt * 1.3 + i * 0.9) * 0.28, L = 28 + legH(i, 8) * 26;
+            ctx.save(); ctx.translate(x, 0); ctx.rotate(a);
+            line(ctx, 0, 0, 0, L, '#1f7a2a', 2);
+            tone(ctx, q => ell(q, 0, L + 9, 6, 12, 0), i % 2 ? '#3ddc84' : '#6bd35e', 0, L + 9, 10, { ol: 1.2, spec: false });
+            ctx.restore();
+          }
+          for (let i = 0; i < 2; i++) glow(ctx, w * (0.3 + 0.4 * i) + Math.sin(tt * 0.8 + i * 3) * 40, fy * 0.5 + Math.cos(tt * 1.1 + i) * 30, 10, '#e4ffb0', flick ? 0.5 + 0.4 * Math.sin(tt * 5 + i) : 0.6);
+        } else if (kind === 'aqua') {
+          // weed swaying on the floor line, bubbles rising, four fish swimming the tank
+          for (let i = 0; i < 6; i++) {
+            const x = 24 + i * (w - 80) / 5, sw = Math.sin(tt * 1.1 + i) * 10;
+            ctx.beginPath(); ctx.moveTo(x, fy); ctx.quadraticCurveTo(x + sw, fy - 30, x - sw * 0.6, fy - 56 - legH(i, 9) * 20);
+            S(ctx, '#1fae6b', 4); ctx.stroke();
+          }
+          S(ctx, rgba('#d8fbff', 0.8), 1.2); ctx.beginPath();
+          for (let i = 0; i < 8; i++) { const y = fy - ((tt * (22 + legH(i, 10) * 18) + legH(i, 11) * fy) % fy), x = legH(i, 12) * (w - 70) + 10 + Math.sin(tt * 2 + i) * 3; circ(ctx, x, y, 2 + legH(i, 13) * 2.5); }
+          ctx.stroke();
+          for (let i = 0; i < 4; i++) {
+            const sp = 18 + legH(i, 14) * 22, span = w + 60, dir = i % 2 ? 1 : -1;
+            const u = ((tt * sp + legH(i, 15) * span) % span), x = dir > 0 ? u - 30 : w + 30 - u, y = fy * (0.2 + 0.18 * i) + Math.sin(tt * 1.6 + i) * 6;
+            const col = ['#ff8a2e', '#ffd23f', '#ff6bd6', '#2ee6d6'][i];
+            ctx.save(); ctx.translate(x, y); ctx.scale(dir, 1);
+            tone(ctx, q => ell(q, 0, 0, 12, 7, 0), col, 0, 0, 9, { ol: 1.4, spec: false });
+            tone(ctx, q => poly(q, [-10, 0, -19, -7 + Math.sin(tt * 8 + i) * 2, -19, 7 + Math.sin(tt * 8 + i) * 2]), shade(col, -0.15), -14, 0, 6, { ol: 1.2, spec: false });
+            F(ctx, INK); ctx.beginPath(); circ(ctx, 6, -2, 1.6); ctx.fill();
+            ctx.restore();
+          }
+        } else if (kind === 'tokyo') {
+          // rain on the glass, blinking windows, a scrolling sign on the skyline
+          S(ctx, rgba('#bfe8ff', 0.35), 1); ctx.beginPath();
+          for (let i = 0; i < 16; i++) { const x = legH(i, 16) * w, y = ((tt * (160 + legH(i, 17) * 80) + legH(i, 18) * h) % (h + 20)) - 20; ctx.moveTo(x, y); ctx.lineTo(x - 2, y + 12); }
+          ctx.stroke();
+          F(ctx, '#ffe066'); ctx.beginPath();
+          for (let i = 0; i < 10; i++) if (!flick || legH(i, Math.floor(tt * 0.7)) > 0.35) ctx.rect(20 + legH(i, 19) * (w - 80), fy * (0.45 + legH(i, 20) * 0.4), 4, 5);
+          ctx.fill();
+          const sy = fy * 0.2, sw = w * 0.52, sx = w * 0.12;
+          ctx.beginPath(); rrect(ctx, sx, sy - 11, sw, 22, 4); F(ctx, '#12091f'); ctx.fill(); S(ctx, '#ff2e88', 2); ctx.stroke();
+          ctx.save(); ctx.beginPath(); ctx.rect(sx + 3, sy - 10, sw - 6, 20); ctx.clip();
+          const msg = 'CLAW CITY • GRAB IT • PRIZES 24H • ';
+          ctx.font = 'bold 13px ' + FONT;
+          const mw = (ctx.measureText(msg).width || msg.length * 8.4), off = (tt * 40) % mw;
+          for (let k = -1; k < 3; k++) txt(ctx, msg, sx + 6 - off + k * mw, sy + 1, 13, '#8dfff5', true, 'left');
+          ctx.restore();
+          glow(ctx, sx + sw / 2, sy, 60, '#ff2e88', flick ? 0.25 + 0.08 * Math.sin(tt * 9) : 0.28);
+        } else if (kind === 'crt') {
+          // a bright band rolling down the tube, a faint flicker
+          const by = ((tt * 60) % (h + 80)) - 40;
+          F(ctx, rgba('#6bff9a', 0.1)); ctx.fillRect(0, by, w, 26);
+          F(ctx, rgba('#d8ffd8', 0.07)); ctx.fillRect(0, by + 8, w, 8);
+          if (flick) { F(ctx, rgba('#6bff9a', 0.03 + 0.03 * legH(Math.floor(tt * 14), 21))); ctx.fillRect(0, 0, w, h); }
+          txt(ctx, (Math.floor(tt * 2) % 2 ? '> INSERT COIN_' : '> INSERT COIN'), 22, 58, 12, rgba('#6bff9a', 0.8), true, 'left');
+        }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The new skins' static frame and panel (they live in the cached back).
+  function legFramePat(ctx, fp, w, h, f, tr) {
+    if (fp === 'leg_aqua') {
+      F(ctx, rgba('#8dfff5', 0.25)); ctx.beginPath();
+      for (let i = 0; i < 30; i++) circ(ctx, -f + legH(i, 30) * (w + f * 2), -f + legH(i, 31) * (h + f * 2), 1.5 + legH(i, 32) * 3);
+      ctx.fill();
+    } else if (fp === 'leg_tokyo') {
+      S(ctx, rgba(tr, 0.8), 2); ctx.beginPath();
+      for (let xx = 8; xx < w; xx += 30) { ctx.moveTo(xx, -f + 6); ctx.lineTo(xx + 14, -f + 6); ctx.moveTo(xx + 6, h + f - 6); ctx.lineTo(xx + 20, h + f - 6); }
+      ctx.stroke();
+      S(ctx, rgba('#2ee6d6', 0.7), 2); ctx.beginPath(); rrect(ctx, -f + 6, -f + 6, w + f * 2 - 12, h + f * 2 - 12, 9); ctx.stroke();
+    } else if (fp === 'leg_crt') {
+      F(ctx, rgba('#000000', 0.25)); ctx.beginPath();
+      for (let yy = -f + 4; yy < h + f; yy += 5) ctx.rect(-f, yy, w + f * 2, 1.5);
+      ctx.fill();
+      F(ctx, '#1b1b18'); ctx.beginPath(); for (const [x, y] of [[w + f * 0.5, h * 0.2], [w + f * 0.5, h * 0.35]]) circ(ctx, x, y, f * 0.28); ctx.fill();
+      F(ctx, '#c9c3a6'); ctx.beginPath(); for (const [x, y] of [[w + f * 0.5, h * 0.2], [w + f * 0.5, h * 0.35]]) circ(ctx, x, y, f * 0.12); ctx.fill();
+    }
+  }
+  function legPanelPat(ctx, pp, w, fy) {
+    if (pp === 'leg_aqua') {
+      try { const g = ctx.createLinearGradient(0, 0, 0, fy); g.addColorStop(0, rgba('#2ee6d6', 0.18)); g.addColorStop(1, rgba('#04263a', 0)); ctx.fillStyle = g; ctx.fillRect(0, 0, w, fy); } catch (e) { /* stub */ }
+      F(ctx, rgba('#ffe9a8', 0.35)); ctx.beginPath(); ctx.rect(0, fy - 8, w, 8); ctx.fill();
+      F(ctx, rgba('#8dfff5', 0.12)); ctx.beginPath();
+      for (let i = 0; i < 5; i++) { ctx.moveTo(w * (0.1 + i * 0.2), 0); ctx.lineTo(w * (0.16 + i * 0.2), 0); ctx.lineTo(w * (0.02 + i * 0.2), fy); ctx.lineTo(w * (-0.02 + i * 0.2), fy); ctx.closePath(); }
+      ctx.fill();
+    } else if (pp === 'leg_tokyo') {
+      F(ctx, '#1d1233'); ctx.beginPath();
+      let x = 0;
+      for (let i = 0; x < w; i++) { const bw = 26 + legH(i, 33) * 34, bh = fy * (0.3 + legH(i, 34) * 0.45); ctx.rect(x, fy - bh, bw - 3, bh); x += bw; }
+      ctx.fill();
+      glow(ctx, w * 0.75, fy * 0.4, 70, '#2ee6d6', 0.2);
+    } else if (pp === 'leg_crt') {
+      F(ctx, rgba('#6bff9a', 0.06)); ctx.fillRect(0, 0, w, fy);
+      F(ctx, rgba('#000000', 0.35)); ctx.beginPath();
+      for (let yy = 0; yy < fy; yy += 4) ctx.rect(0, yy, w, 1.4);
+      ctx.fill();
+      S(ctx, rgba('#6bff9a', 0.25), 1); ctx.beginPath(); rrect(ctx, 10, 8, w - 20, fy - 16, 22); ctx.stroke();
+    }
+  }
+  /* A legendary relic's crest over its medallion: a gold crown of three
+     flames that breathe with t, so a legendary reads apart from a boss relic. */
+  function legCrest(ctx, def, r, t) {
+    const tt = t >= 0 ? t : 0, k = 0.5 + 0.5 * Math.sin(tt * 3 + (polHash(def.id) % 7));
+    ctx.save();
+    try {
+      ctx.translate(0, -r * 0.92);
+      for (let i = -1; i <= 1; i++) {
+        const hh = r * (i ? 0.26 : 0.36) * (0.9 + 0.2 * k), x = i * r * 0.22;
+        tone(ctx, q => { q.moveTo(x - r * 0.1, 0); q.quadraticCurveTo(x - r * 0.08, -hh * 0.6, x, -hh); q.quadraticCurveTo(x + r * 0.08, -hh * 0.6, x + r * 0.1, 0); q.closePath(); }, i ? '#ffb347' : '#ffe066', x, -hh * 0.4, r * 0.12, { ol: Math.max(1, r * 0.05), spec: false });
+      }
+      ctx.beginPath(); rrect(ctx, -r * 0.36, -r * 0.04, r * 0.72, r * 0.14, r * 0.05); F(ctx, '#ffc94d'); ctx.fill(); S(ctx, INK, Math.max(1, r * 0.05)); ctx.stroke();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // ---- the fight's legendary looks (the game places them)
+  // The Crowd's Hype plate: bobbing heads (arms up with Hype) over ten pips.
+  function legHype(ctx, x, y, hype, t, max) {
+    ctx.save();
+    try {
+      max = max || 10; hype = U.clamp(hype | 0, 0, max);
+      const w = 126, hot = hype / max;
+      ctx.translate(x, y);
+      for (let i = 0; i < 6; i++) {
+        const hx = 10 + i * 21, jump = hype ? Math.abs(Math.sin(t * (4 + hot * 6) + i * 1.3)) * (2 + hot * 6) : 0, hy = -6 - jump;
+        if (hype) { line(ctx, hx - 5, hy + 3, hx - 9, hy - 7, '#ffd6a8', 2.2); line(ctx, hx + 5, hy + 3, hx + 9, hy - 7, '#ffd6a8', 2.2); }
+        tone(ctx, q => circ(q, hx, hy, 6), ['#ff9a6a', '#ffd6a8', '#c68a5a', '#ffe0c0', '#a86a3a', '#ffd6a8'][i], hx, hy, 6, { ol: 1.2, spec: false });
+      }
+      ctx.beginPath(); rrect(ctx, 0, 0, w, 20, 6); F(ctx, '#1d1233'); ctx.fill(); S(ctx, hype ? '#ff2e88' : '#5a4a7a', 2); ctx.stroke();
+      txt(ctx, 'HYPE', 20, 10.5, 10, hype ? '#ffc94d' : '#8e7fb0', true, 'center');
+      for (let i = 0; i < max; i++) {
+        ctx.beginPath(); circ(ctx, 42 + i * 8, 10, 3);
+        F(ctx, i < hype ? RB[(i * 2 + Math.floor(t * 6)) % 24] : '#3a2d55'); ctx.fill();
+      }
+      if (hype) txt(ctx, '+' + Math.round(hype * 10) + '%', w + 20, 10.5, 12, '#ffc94d', true, 'center', INK);
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The Monocle's peek: a small chip saying what an enemy does after its telegraph.
+  function legPeek(ctx, x, y, info, t) {
+    ctx.save();
+    try {
+      if (!info) { ctx.restore(); return; }
+      const atk = info.k === 'attack', unk = !!info.unknown;
+      const WORD = { charge: 'CHARGE', block: 'BLOCK', none: 'WAIT', debuff: 'HEX', buff: 'BUFF', heal: 'HEAL', summon: 'CALL' };
+      const s = unk ? 'THEN ?' : atk ? 'THEN ' + info.v + (info.n > 1 ? 'x' + info.n : '') : 'THEN ' + String(WORD[info.k] || 'TRICK');
+      ctx.font = 'bold 10px ' + FONT;
+      const tw = (ctx.measureText(s).width || s.length * 6.4), w = tw + 26;
+      ctx.globalAlpha = 0.92;
+      ctx.beginPath(); rrect(ctx, x - w / 2, y - 8, w, 16, 7); F(ctx, '#12091f'); ctx.fill(); S(ctx, atk ? '#ff5a4a' : unk ? '#8e7fb0' : '#2ee6d6', 1.6); ctx.stroke();
+      ctx.globalAlpha = 1;
+      txt(ctx, s, x + 6, y + 0.5, 10, atk ? '#ffb3a8' : '#dff6ff', true, 'center');
+      // the monocle's glint, inside the chip's left end
+      const gx = x - w / 2 + 9;
+      ctx.beginPath(); circ(ctx, gx, y, 4.5); S(ctx, '#ffc94d', 1.5); ctx.stroke();
+      F(ctx, rgba('#ffffff', 0.5 + 0.3 * Math.sin(t * 3))); ctx.beginPath(); circ(ctx, gx - 1.5, y - 1.5, 1.3); ctx.fill();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The black hole in the chute: spiral arms turning round a dark core; k (0..1) flares it.
+  function legVortex(ctx, x, y, r, t, k) {
+    ctx.save();
+    try {
+      k = U.clamp(+k || 0, 0, 1);
+      const R = r * (1 + 0.35 * k);
+      glow(ctx, x, y, R * 1.8, '#9b7bff', 0.35 + 0.4 * k);
+      ctx.translate(x, y); ctx.rotate(-t * (1.6 + 4 * k));
+      for (let i = 0; i < 3; i++) {
+        ctx.rotate(TAU / 3);
+        ctx.beginPath(); ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(R * 0.6, -R * 0.2, R, R * 0.45);
+        S(ctx, i % 2 ? '#c77dff' : '#ff6bd6', 2.2 + k * 1.5); ctx.stroke();
+      }
+      ctx.beginPath(); circ(ctx, 0, 0, R * 0.32); F(ctx, '#05030a'); ctx.fill(); S(ctx, '#ffe066', 1.2); ctx.stroke();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The golden claw: gold sparkles round the hub while the grab is golden (or next).
+  function legGoldSparkle(ctx, x, y, t, k) {
+    ctx.save();
+    try {
+      glow(ctx, x, y, 34 + 10 * k, '#ffe066', 0.35 + 0.3 * k);
+      for (let i = 0; i < 4; i++) {
+        const a = t * 2.2 + i * TAU / 4, ox = Math.cos(a) * 26, oy = Math.sin(a) * 12 + 10;
+        tone(ctx, q => star(q, x + ox, y + oy, 3 + Math.sin(t * 8 + i) * 1.2, 4, 0.4), i % 2 ? '#ffffff' : '#ffe066', x + ox, y + oy, 3, { ol: 0, spec: false });
+      }
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+
+  // ---- the ten new evolved drawings
+  // A bubble pipe grown into a little steam organ: a bowl of pipes and a rising bubble.
+  EVO_ART.calliope_pipe = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); ctx.moveTo(-hw, hh * 0.4); ctx.quadraticCurveTo(-hw * 0.2, hh * 1.1, hw * 0.25, hh * 0.1); S(ctx, INK, 5.5); ctx.stroke(); S(ctx, '#b0763a', 3.2); ctx.stroke();
+    tone(ctx, c => rrect(c, hw * 0.1, -hh * 0.2, hw * 0.8, hh * 1.1, 3), c1, hw * 0.5, hh * 0.3, hw * 0.4, { dark: -0.2 });
+    for (let i = 0; i < 3; i++) tone(ctx, c => rrect(c, hw * (0.2 + i * 0.22), -hh * (1.1 + i * 0.25), hw * 0.14, hh * (1.1 + i * 0.25), 1.5), '#e8e8f0', hw * (0.27 + i * 0.22), -hh * 0.6, hh * 0.5, NOSPEC);
+    ctx.beginPath(); circ(ctx, -hw * 0.45, -hh * 0.7, hh * 0.6); F(ctx, rgba(c2, 0.35)); ctx.fill(); S(ctx, '#ffffff', 1.2); ctx.stroke();
+    evoChevron(ctx, -hw * 0.85, -hh - 2, 3.6);
+  };
+  // A sponge with a kraken's eyes and purple tentacles curling off it.
+  EVO_ART.kraken_sponge = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    for (let i = 0; i < 4; i++) {
+      const x = -hw * 0.6 + i * hw * 0.4;
+      ctx.beginPath(); ctx.moveTo(x, hh * 0.2); ctx.quadraticCurveTo(x + (i % 2 ? 5 : -5), hh * 1.1, x + (i % 2 ? -2 : 2), hh * 1.25);
+      S(ctx, INK, 5); ctx.stroke(); S(ctx, c2, 3); ctx.stroke();
+    }
+    tone(ctx, c => rrect(c, -hw * 0.9, -hh * 0.85, hw * 1.8, hh * 1.3, 4), c1, 0, -hh * 0.2, hw * 0.6, { dark: -0.2 });
+    F(ctx, rgba('#8a5a12', 0.45)); ctx.beginPath(); for (let i = 0; i < 7; i++) circ(ctx, -hw * 0.7 + legH(i, 40) * hw * 1.4, -hh * 0.7 + legH(i, 41) * hh * 1.1, 1.2); ctx.fill();
+    eye(ctx, -hw * 0.3, -hh * 0.25, hh * 0.28, 0.3, 0.2); eye(ctx, hw * 0.3, -hh * 0.25, hh * 0.28, -0.2, 0.2);
+    evoChevron(ctx, hw * 0.8, -hh - 2.5, 3.6);
+  };
+  // A pipe wrench whose jaw is a toothed gear.
+  EVO_ART.gear_grinder = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh * 0.4, hw * 1.35, hh * 0.8, 3), c1, -hw * 0.3, 0, hw * 0.5, { dark: -0.25 });
+    F(ctx, rgba('#000000', 0.25)); for (let i = 0; i < 4; i++) ctx.fillRect(-hw * 0.9 + i * 6, -hh * 0.4, 2, hh * 0.8);
+    const gx = hw * 0.55, gr = hh * 1.05;
+    tone(ctx, c => star(c, gx, 0, gr, 10, 0.78), c2, gx, 0, gr, { dark: -0.25 });
+    F(ctx, INK); ctx.beginPath(); circ(ctx, gx, 0, gr * 0.3); ctx.fill();
+    evoChevron(ctx, -hw * 0.6, -hh - 3, 3.6);
+  };
+  // A spring coiled round a cyan rail, crackling.
+  EVO_ART.railgun_coil = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2;
+    tone(ctx, c => rrect(c, -r, -r * 0.18, r * 2, r * 0.36, r * 0.1), c1, 0, 0, r, { dark: -0.2 });
+    for (let i = 0; i < 5; i++) { const x = -r * 0.72 + i * r * 0.36; ctx.beginPath(); ell(ctx, x, 0, r * 0.14, r * 0.62, 0.25); S(ctx, INK, 3.4); ctx.stroke(); S(ctx, c2, 2); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(-r * 0.9, -r * 0.8); ctx.lineTo(-r * 0.5, -r * 0.55); ctx.lineTo(-r * 0.3, -r * 0.85); S(ctx, '#e8fbff', 1.4); ctx.stroke();
+    evoChevron(ctx, r * 0.72, -r * 0.75, 3.6);
+  };
+  // A black poker chip with a gold rim and a spade, three more stacked under it.
+  EVO_ART.all_in_chip = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2 * 0.95;
+    for (let i = 3; i >= 1; i--) { ctx.beginPath(); ell(ctx, r * 0.05 * i, r * 0.16 * i, r * 0.9, r * 0.9, 0); F(ctx, ['#ff2e4a', '#3b6fd6', '#3ddc84'][i - 1]); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke(); }
+    tone(ctx, c => circ(c, 0, 0, r * 0.9), c1, 0, 0, r, { dark: -0.2 });
+    ctx.beginPath(); circ(ctx, 0, 0, r * 0.72); S(ctx, c2, r * 0.14); ctx.setLineDash([r * 0.22, r * 0.18]); ctx.stroke(); ctx.setLineDash([]);
+    txt(ctx, '♠', 0, r * 0.04, Math.max(8, r * 0.9), c2, true, 'center');
+    evoChevron(ctx, -r * 0.75, -r * 0.72, 3.6);
+  };
+  // A card fanned over two more, a big gold star in the middle.
+  EVO_ART.showstopper = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    for (const a of [-0.35, 0.35]) { ctx.save(); ctx.rotate(a); ctx.beginPath(); rrect(ctx, -hw * 0.7, -hh * 0.85, hw * 1.4, hh * 1.7, 3); F(ctx, '#ffffff'); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke(); ctx.restore(); }
+    tone(ctx, c => rrect(c, -hw * 0.8, -hh * 0.95, hw * 1.6, hh * 1.9, 3.5), c1, 0, 0, hw * 0.8, { dark: -0.15 });
+    ctx.beginPath(); star(ctx, 0, 0, hw * 0.55, 5, 0.45); F(ctx, c2); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+    evoChevron(ctx, hw * 0.55, -hh - 2, 3.6);
+  };
+  // Two curved blades crossed into a boomerang, pink streaks behind.
+  EVO_ART.boomerang_blades = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    for (const s of [-1, 1]) {
+      tone(ctx, c => { c.moveTo(0, hh * 0.3); c.quadraticCurveTo(s * hw * 0.5, -hh * 1.4, s * hw, -hh * 0.2); c.quadraticCurveTo(s * hw * 0.5, -hh * 0.5, 0, hh * 0.9); c.closePath(); }, c1, s * hw * 0.5, -hh * 0.2, hw * 0.4, { dark: -0.2 });
+    }
+    tone(ctx, c => circ(c, 0, hh * 0.45, hh * 0.45), c2, 0, hh * 0.45, hh * 0.45, NOSPEC);
+    line(ctx, -hw * 0.9, hh * 0.9, -hw * 0.4, hh * 0.9, rgba(c2, 0.8), 1.4);
+    evoChevron(ctx, hw * 0.1, -hh - 3.5, 3.6);
+  };
+  // A magician's top hat with a wand across it and sparkles.
+  EVO_ART.vanishing_act = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2;
+    tone(ctx, c => ell(c, 0, r * 0.55, r, r * 0.28, 0), c1, 0, r * 0.55, r, NOSPEC);
+    tone(ctx, c => rrect(c, -r * 0.6, -r * 0.8, r * 1.2, r * 1.35, r * 0.12), c1, 0, -r * 0.1, r * 0.7, { dark: -0.2 });
+    ctx.beginPath(); ctx.rect(-r * 0.6, r * 0.18, r * 1.2, r * 0.2); F(ctx, c2); ctx.fill();
+    line(ctx, -r * 0.95, -r * 0.2, r * 0.9, -r * 0.95, INK, 3.4); line(ctx, -r * 0.95, -r * 0.2, r * 0.9, -r * 0.95, '#ffffff', 1.8);
+    F(ctx, '#ffe066'); ctx.beginPath(); star(ctx, r * 0.72, r * 0.05, r * 0.16, 4, 0.4); star(ctx, -r * 0.75, -r * 0.6, r * 0.12, 4, 0.4); ctx.fill();
+    evoChevron(ctx, -r * 0.75, -r * 0.95, 3.6);
+  };
+  // An ornate gold key: a claw-shaped bit and a ruby in the bow.
+  EVO_ART.master_key = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw * 0.35, -hh * 0.22, hw * 1.25, hh * 0.44, 2), c1, hw * 0.2, 0, hw * 0.6, { dark: -0.25 });
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(hw * (0.55 + i * 0.14), hh * 0.2); ctx.quadraticCurveTo(hw * (0.62 + i * 0.14), hh * 0.9, hw * (0.5 + i * 0.14), hh * 1.05); S(ctx, INK, 3.2); ctx.stroke(); S(ctx, c1, 1.8); ctx.stroke(); }
+    tone(ctx, c => circ(c, -hw * 0.62, 0, hh * 0.95), c1, -hw * 0.62, 0, hh, { dark: -0.25 });
+    tone(ctx, c => circ(c, -hw * 0.62, 0, hh * 0.42), '#ff2e4a', -hw * 0.62, 0, hh * 0.42, { ol: 1.2 });
+    evoChevron(ctx, hw * 0.1, -hh - 3.5, 3.6);
+  };
+  // A black orb in a tilted purple accretion ring, lit at the rim.
+  EVO_ART.singularity = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2 * 0.9;
+    ctx.beginPath(); ell(ctx, 0, 0, r * 1.05, r * 0.32, -0.3); S(ctx, INK, 5); ctx.stroke(); S(ctx, c2, 3); ctx.stroke();
+    tone(ctx, c => circ(c, 0, 0, r * 0.72), c1, 0, 0, r * 0.72, NOSPEC);
+    ctx.beginPath(); circ(ctx, 0, 0, r * 0.72); S(ctx, '#ffe066', 1.4); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.rect(-r * 1.2, -r * 0.05, r * 2.4, r); ctx.clip();
+    ctx.beginPath(); ell(ctx, 0, 0, r * 1.05, r * 0.32, -0.3); S(ctx, c2, 3); ctx.stroke(); ctx.restore();
+    evoChevron(ctx, -r * 0.7, -r * 0.8, 3.6);
+  };
+  const LEG_R = { SKIN_ANIM: LEG_SKIN_ANIM, STILL: LEG_STILL, stats: LEG_STAT, animOf: legAnimOf, anim: legSkinAnim, framePat: legFramePat, panelPat: legPanelPat,
+    crest: legCrest, hype: legHype, peek: legPeek, vortex: legVortex, gold: legGoldSparkle };
+  /* ============================================================ /LEG */
+
   return {
+    // LEG (round 12): the legendary relics' crest, the new evolved art, the Hype plate, the Monocle's peek, the black hole, the animated cabinets
+    leg: LEG_R,
     // SCHOOL (round 11): Claw School and the Practice Cabinet: the chalkboard, Professor Pincher, stars, the scoreboard, the report card and the diploma
     sch: SCH_R,
     // DUO (round 11): pass and play: the hand-off card, the coin toss, the claw-off's board, sabotage cards, the podium

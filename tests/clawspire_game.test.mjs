@@ -1539,6 +1539,9 @@ h.test('loot: jackpots stream tickets out of the cabinet into the HUD counter', 
   h.eq(Gt.loot.tix.arrived, T.DATA.LOOT.TICKETS.jackpot, 'every ticket of the jackpot lands');
   h.eq(Gt.loot.tixShown(), 5 + T.DATA.LOOT.TICKETS.jackpot, 'the counter shows them');
   h.eq(Gt.run.tickets, 5, 'but they are paid by the reward, not the stream');
+  // round 12: the bonus capsule is a LOOT.BONUS_P chance, no longer a sure thing; force it here
+  h.ok(T.DATA.LOOT.BONUS_P > 0 && T.DATA.LOOT.BONUS_P < 1, 'a jackpot bonus capsule is a chance, not a given');
+  T.DATA.LOOT.BONUS_P = 1;
   Gt.endFight('win', true);
   h.ok(Gt.fs.outro, 'the victory outro plays');
   stepFor(Gt, 3);
@@ -1810,7 +1813,7 @@ h.test('loot: old saves without loot fields load with defaults; highlights on th
 
   h.test('a real grab over the material pile finishes cleanly', () => {
     const F = mkFight(BIN, 19);
-    const g0 = F.player.grabs;
+    const g0 = F.player.grabsUsed;   // (grabsUsed: a delivered combo may hand a grab back, as it does once the round 12 rat lives through it)
     GM.steer(200);
     settle(GM, 2);
     stepFor(GM, 0.6);
@@ -1818,7 +1821,7 @@ h.test('loot: old saves without loot fields load with defaults; highlights on th
     h.ok(settle(GM, 30), 'the grab finishes');
     // (a lucky grab can win the fight outright, which tears the cabinet down)
     if (GM.screen === 'fight' && GM.world) {
-      h.eq(F.player.grabs, g0 - 1, 'one grab spent');
+      h.eq(F.player.grabsUsed, g0 + 1, 'one grab spent');
       h.ok(GM.world.bodies.every(b => Number.isFinite(b.x) && Number.isFinite(b.y)), 'no NaN in the world');
     }
   });
@@ -5803,7 +5806,7 @@ h.test('secret: the Back Room: elites with the strongest affixes, the service co
   h.eq(G.screen, 'shop', 'the service counter');
   const shop = G.S.sd.shop;
   h.ok(shop.sec && shop.items.length >= 3 && shop.items.every(it => T.DATA.ITEMS[it.id].rarity === 'l'), 'legendary stock only');
-  h.ok(!shop.relic || T.DATA.RELICS[shop.relic.id].rarity === 'boss', 'and a boss relic');
+  h.ok(!shop.relic || T.DATA.RELICS[shop.relic.id].rarity === 'l', 'and a legendary relic (round 12; a boss relic once they are all owned)');
   h.ok(secWalk(T._nodes.shopBody).some(n => /SERVICE COUNTER/.test(n.textContent || '')), 'it says so');
   G.run.gold = 9999;
   const buy = G.S.ui.buttons.findIndex(b => b.label === T.DATA.ITEMS[shop.items[0].id].name);
@@ -6723,7 +6726,7 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     h.ok(SG.S.ui.buttons.some(b => /Winter Wonderclaw/.test(b.label)), 'the winter banner in December');
     const wr = SG.newRun('alchemist', 9);
     h.eq(wr.season, 'winter', 'a winter run');
-    h.eq(doorsOf(SG).length, 0, 'winter has no doors (the skeleton)');
+    h.eq(doorsOf(SG).length, 0, 'winter has no trick-or-treat doors (advent presents instead: WIN)');
     SG.toMap(); SG.draw();
     SG.startFight(['rat'], 'normal'); SG.draw();
     const c0 = ((SG.meta.sea.wallet || {}).flakes) | 0;
@@ -6749,6 +6752,279 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     h.eq(B.fight.enemies.map(e => e.id).join(), 'rat,slime', 'an old run stays out of the season even in October');
     const C = bootS({ clawspire_meta: JSON.stringify(Object.assign({}, meta, { sea: { preview: 42, wallet: 'x', knocks: -3 } })) }).GAME;
     h.ok(C.meta.sea.preview === '' && JSON.stringify(C.meta.sea.wallet) === '{}' && C.meta.sea.knocks === 0, 'junk is repaired');
+  });
+}
+
+// ---------------------------------------------------------------- WIN (round 12): Winter Wonderclaw
+{
+  const bootW = (store) => boot(store ? { store } : undefined);
+  const advOf = (G) => Object.values(G.run.map.tiles).filter(t => t.type === 'advent');
+  const flakes = (G) => ((G.meta.sea || {}).wallet || {}).flakes | 0;
+  const vsOffW = (G) => { if (G.boss.vs) { G.boss.vsSkip(); G.boss.vsSkip(); } stepFor(G, 0.05); };
+  h.test('winter: advent presents on a winter run\'s maps, none out of season or on an old save; the run keeps its season into January', () => {
+    const SG = bootW().GAME, MP = CS.MAP;
+    SG.season.setDate('2026-12-15');
+    for (const seed of [3, 17, 81]) {
+      const run = SG.newRun('knight', seed), M = run.map, gifts = advOf(SG);
+      h.eq(run.season, 'winter', `seed ${seed}: a winter run`);
+      h.ok(gifts.length >= 3 && gifts.length <= 4, `seed ${seed}: ${gifts.length} advent presents`);
+      h.ok(gifts.every(t => t.known && MP.isLand(t) && !t.done && t.content.sea && !(t.q === M.start.q && t.r === M.start.r)), `seed ${seed}: known land presents off the start`);
+      h.ok(gifts.every(a => gifts.every(b => a === b || MP.hexDist(a.q, a.r, b.q, b.r) >= 2)), `seed ${seed}: apart`);
+      h.eq(Object.values(M.tiles).filter(t => t.type === 'treat').length, 0, `seed ${seed}: no trick-or-treat door in winter`);
+      SG.newRun('knight', seed);
+      h.eq(advOf(SG).map(t => t.q + ',' + t.r).join(' '), gifts.map(t => t.q + ',' + t.r).join(' '), `seed ${seed}: the same presents for the same seed`);
+    }
+    SG.season.setDate('2027-01-20');
+    const plain = SG.newRun('knight', 3);
+    h.ok(plain.season === null && advOf(SG).length === 0, 'out of season: no presents');
+    SG.season.setDate('2027-01-06');
+    const run = SG.newRun('rogue', 9);
+    SG.season.setDate('2027-01-12');
+    h.ok(run.season === 'winter' && SG.season.run() === 'winter' && SG.season.now() === null, 'a run started on the last day stays wintry after it ends');
+    const n0 = advOf(SG).length;
+    for (const t of advOf(SG)) { t.type = 'empty'; delete t.content.sea; }
+    h.eq(SG.season.newMap(run), n0, 'its next maps still get their presents');
+    const old = SG.newRun('knight', 5);
+    delete old.season; delete old.sea;
+    h.eq(SG.season.newMap(old), 0, 'an old save gets none');
+  });
+  h.test('winter: the reindeer, the snowman and the elf, Krampus and the winter hats, in season only', () => {
+    const SG = bootW().GAME, D = CS.DATA;
+    SG.season.setDate('2026-12-20');
+    const run = SG.newRun('knight', 12);
+    let cos = 0, plainN = 0, kr = 0;
+    const seen = new Set();
+    for (let f = 0; f < 60; f++) {
+      run.fights = f;
+      const ids = SG.season.enemies(['rat', 'slime', 'goblin'], 'normal', {});
+      ids.forEach(x => { if (D.ENEMIES[x].costume) { cos++; seen.add(x); } else plainN++; });
+      if (SG.season.enemies(['mimic'], 'elite', {})[0] === 'krampus') kr++;
+    }
+    h.ok(cos > 40 && plainN > 40, `costumes about half the time (${cos} in costume, ${plainN} not)`);
+    h.eq([...seen].sort().join(), 'goblin_elf,rat_reindeer,slime_snowman', 'the winter costumes, never Claw-o-ween\'s');
+    h.ok(kr > 10 && kr < 45, `Krampus takes some act 1 elite fights (${kr} of 60)`);
+    h.eq(SG.season.enemies(['mimic'], 'elite', { then: { tower: {} } }).join(), 'mimic', 'never a tower keeper');
+    run.act = 2;
+    let k2 = 0;
+    for (let f = 0; f < 40; f++) { run.fights = f; if (SG.season.enemies(['ironjaw'], 'elite', {})[0] === 'krampus') k2++; }
+    h.eq(k2, 0, 'Krampus keeps to act 1');
+    run.act = 1;
+    SG.startFight(['bat', 'bat', 'bat'], 'normal', { then: { sea: 'trick' } });
+    h.ok(SG.fight.enemies.every(e => ['santa', 'elf', 'antlers'].includes(e.def.seaHat)), 'the hats are winter hats');
+    SG.draw();
+    // the costumes' twists in a real fight
+    SG.startFight(['rat_reindeer', 'slime_snowman', 'goblin_elf'], 'normal');
+    h.ok(SG.fight.enemies[1].status.armor >= 1, 'the snowman is packed hard (Armor)');
+    SG.draw();
+    const B = bootW().GAME;
+    B.season.setDate('2026-11-28');
+    B.newRun('knight', 12);
+    let any = 0;
+    for (let f = 0; f < 30; f++) { B.run.fights = f; any += B.season.enemies(['rat', 'slime', 'goblin'], 'normal', {}).filter(x => D.ENEMIES[x].season).length + (B.season.enemies(['mimic'], 'elite', {})[0] === 'krampus' ? 1 : 0); }
+    h.eq(any, 0, 'out of season: no costume, no Krampus');
+  });
+  h.test('winter: Krampus: his card, his coal, his phase two, his snowflakes and his relic', () => {
+    const SG = bootW().GAME, D = CS.DATA;
+    SG.season.setDate('2026-12-20');
+    SG.newRun('knight', 70);
+    SG.startFight(['krampus'], 'elite');
+    const e = SG.fight.enemies[0];
+    h.ok(e.id === 'krampus' && SG.boss.vs && SG.boss.vs.taunt === D.ENEMIES.krampus.taunt, 'the versus card with his taunt');
+    vsOffW(SG); settle(SG);
+    e.sigForce = true;
+    const b0 = SG.fight.bin.filter(i => i.id === 'win_coal').length;
+    SG.endTurn(); settle(SG); stepFor(SG, 1.2);
+    h.ok(SG.fight.bin.filter(i => i.id === 'win_coal').length >= b0 + 2, 'a sack of coal lands in the bin');
+    h.ok(SG.win.log.some(x => x.k === 'coal'), 'his own coal show (not the Hoard\'s coins)');
+    h.ok(SG.fs.items.some(b => b.data.def.id === 'win_coal'), 'the coal is real, heavy bodies');
+    SG.draw();
+    CS.COMBAT.damage(SG.fight, SG.fight.player, e, Math.ceil(e.hp * 0.6), { pierce: true });
+    for (const ev of SG.fight.events.splice(0)) SG.fs.queue.push({ ev, beat: 0.02 });
+    stepFor(SG, 0.5);
+    h.ok(e.enraged, 'NAUGHTY OR NICE: his phase two at half hp');
+    SG.draw();
+    const c0 = flakes(SG), r0 = SG.run.relics.length;
+    SG.endFight('win');
+    h.eq(flakes(SG), c0 + D.seaEarn('elite', 0, true), 'he drops the elite\'s snowflakes and the season elite\'s bonus');
+    h.ok(SG.run.relics.length === r0 + 1 && D.SEASONS.winter.relics.includes(SG.run.relics[SG.run.relics.length - 1]), 'and one of the winter relics you lack');
+  });
+  h.test('winter: the advent present: unwrap, the lid pops, paid once across reloads; the calendar grows door by door', () => {
+    const A = bootW(), SG = A.GAME;
+    SG.season.setDate('2026-12-12');
+    SG.newRun('knight', 21);
+    const [g1, g2] = advOf(SG);
+    SG.enterTile(g1);
+    h.eq(SG.screen, 'sea', 'a present opens the advent screen');
+    h.ok(SG.S.ui.buttons.some(b => b.label === 'Unwrap') && SG.S.ui.buttons.some(b => b.label === 'Leave'), 'Unwrap and Leave');
+    h.ok(SG.season.door.adv, 'the advent scene, not the haunted house');
+    SG.draw();
+    SG.season.leave();
+    h.ok(SG.screen === 'map' && !g1.done && !g1.content.sea.out, 'Leave: back to the map, still wrapped');
+    h.eq(SG.win.nextDay(), 1, 'the calendar starts on door 1');
+    const w0 = flakes(SG), k0 = SG.meta.sea.knocks;
+    SG.enterTile(g1);
+    const out = SG.season.knock();
+    h.ok(out && out.kind === 'treat' && out.day === 1 && g1.content.sea.out === out && g1.content.sea.day === 1 && !g1.content.sea.paid, 'the first tug rolls and saves door 1\'s gift');
+    h.ok(SG.meta.sea.adv.n === 1 && SG.meta.sea.adv.y === '2026' && SG.meta.sea.knocks === k0, 'counted on the calendar (not as a trick-or-treat knock)');
+    h.eq(SG.season.knock(), null, 'a second tug does nothing');
+    stepFor(SG, 0.5);
+    h.eq(SG.season.door.ph, 'knock', 'tug, tug...');
+    SG.draw();
+    h.eq(flakes(SG), w0, 'nothing paid before the lid pops');
+    const B = bootW(A._store), G2 = B.GAME;
+    G2.season.setDate('2026-12-12');
+    h.ok(G2.load() && G2.screen === 'sea' && G2.season.door.adv, 'a reload mid-unwrap lands on the present');
+    const d2 = advOf(G2).find(t => t.q === g1.q && t.r === g1.r);
+    h.eq(JSON.stringify(d2.content.sea.out), JSON.stringify(out), 'the same gift');
+    stepFor(G2, 4);
+    h.ok(G2.season.door.ph === 'done' && d2.content.sea.paid && d2.done, 'the lid pops and it is paid');
+    h.eq(flakes(G2), w0 + out.candy, 'the snowflakes paid exactly once');
+    h.ok(/^Door 1/.test(d2.content.sea.lines[0]), 'the card names the door');
+    G2.draw();
+    G2.save();
+    const C3 = bootW(B._store).GAME;
+    C3.season.setDate('2026-12-12');
+    h.ok(C3.load() && C3.screen === 'sea' && C3.season.door.ph === 'done', 'a reload after it shows the result');
+    stepFor(C3, 2);
+    h.eq(flakes(C3), w0 + out.candy, 'and never pays twice');
+    C3.season.cont();
+    h.ok(C3.screen === 'map' || C3.screen === 'capsule', 'Continue moves on');
+    // the next present is door 2; a new winter starts the calendar again
+    const g2c = advOf(C3).find(t => t.q === g2.q && t.r === g2.r);
+    C3.enterTile(g2c);
+    h.eq(C3.season.knock().day, 2, 'the next present is door 2');
+    C3.season.hurry(); C3.season.hurry();
+    h.eq(C3.meta.sea.adv.n, 2, 'two doors open');
+    C3.season.setDate('2027-12-11');
+    h.ok(C3.win.nextDay() === 1 && C3.meta.sea.adv.y === '2027', 'next winter the calendar starts over');
+  });
+  h.test('winter: every advent gift pays what it says, once', () => {
+    const SG = bootW().GAME;
+    SG.season.setDate('2026-12-18');
+    const kinds = { flakes: { kind: 'treat', k: 'flakes', day: 4, candy: 11 }, gold: { kind: 'treat', k: 'gold', day: 5, candy: 6, gold: 12 },
+      item: { kind: 'treat', k: 'item', day: 6, big: true, candy: 12, id: 'hot_cocoa' }, capsule: { kind: 'treat', k: 'capsule', day: 9, candy: 7, tier: 'c' },
+      relic: { kind: 'treat', k: 'relic', day: 17, candy: 9, id: 'mistletoe' } };
+    for (const k in kinds) {
+      const run = SG.newRun('knight', 30), t = advOf(SG)[0];
+      t.content.sea.out = kinds[k];
+      const g0 = run.gold, b0 = run.bin.length, c0 = flakes(SG), caps0 = (run.caps || []).length;
+      SG.enterTile(t);
+      SG.season.hurry();
+      h.ok(t.content.sea.paid && t.done, k + ': paid at the reveal');
+      h.eq(flakes(SG), c0 + kinds[k].candy, k + ': the snowflakes');
+      h.ok(/^Door /.test(t.content.sea.lines[0]) && (k !== 'item' || /BIG/.test(t.content.sea.lines[0])), k + ': the door\'s line first');
+      if (k === 'gold') h.eq(run.gold, g0 + 12, 'gold: the gold');
+      if (k === 'capsule') h.eq(run.caps.length, caps0 + 1, 'capsule: banked');
+      if (k === 'item') h.ok(run.bin.length === b0 + 1 && run.bin[run.bin.length - 1].id === 'hot_cocoa', 'item: in the bin');
+      if (k === 'relic') h.ok(run.relics.includes('mistletoe'), 'relic: gained');
+      SG.draw();
+      SG.season.hurry();
+      SG.season.cont();
+      h.ok(SG.screen === (k === 'capsule' ? 'capsule' : 'map'), k + ': continue goes on (' + SG.screen + ')');
+      SG.season.pay();
+      h.eq(flakes(SG), c0 + kinds[k].candy, k + ': never paid twice');
+    }
+  });
+  h.test('winter: snowflakes for fights and Packed Snowballs, the Present Box unwraps, the pools; nothing out of season', () => {
+    const SG = bootW().GAME, D = CS.DATA;
+    SG.season.setDate('2026-12-24');
+    SG.newRun('knight', 40);
+    let c0 = flakes(SG);
+    SG.startFight(['rat_reindeer', 'rat'], 'normal');
+    const nc = SG.fight.enemies.filter(e => e.def.costume).length;
+    SG.endFight('win');
+    h.ok(nc >= 1, 'the fight has its costumes (' + nc + ')');
+    h.eq(flakes(SG), c0 + D.seaEarn('normal', nc, false), 'a won fight: normal + a snowflake bonus per costume');
+    SG.gainRelic('win_stocking');
+    c0 = flakes(SG);
+    SG.startFight(['rat'], 'normal');
+    SG.endFight('win');
+    h.eq(flakes(SG), c0 + D.seaEarn('normal', 0, false) + 2, 'the Stocking adds two');
+    SG.startFight(['rat'], 'normal');
+    c0 = flakes(SG);
+    SG.season.event({ t: 'play', def: D.ITEMS.win_snowball, inst: { uid: 'x', id: 'win_snowball' } });
+    h.eq(flakes(SG), c0 + 1, 'a Packed Snowball landed is a snowflake');
+    stepFor(SG, 1);
+    const n0 = SG.fight.bin.length;
+    const got = SG.season.event({ t: 'play', def: D.ITEMS.present_box, inst: { uid: 'pb1', id: 'present_box' } });
+    const added = SG.fight.bin.slice(n0);
+    h.ok(added.length === 1 && added[0].temp && added[0].id !== 'present_box' && D.ITEMS[added[0].id] && ['c', 'u'].includes(D.ITEMS[added[0].id].rarity), `the Present Box unwraps into a ${added[0] && added[0].id}`);
+    h.ok(SG.win.log.some(x => x.k === 'gift'), 'logged');
+    stepFor(SG, 1.5);
+    h.ok(SG.fs.items.some(b => b.data.inst === added[0]), 'it arcs out of the chute into the bin');
+    SG.draw();
+    SG.endFight('lose');
+    SG.newRun('knight', 41);
+    let hits = 0;
+    for (let i = 0; i < 60; i++) { SG.run.nonce = i; if (SG.season.rewardItems(['rusty_sword', 'pot_lid', 'shiv']).some(x => D.ITEMS[x].season === 'winter')) hits++; }
+    h.ok(hits > 8 && hits < 40, `a winter item on about a third of reward screens (${hits} of 60)`);
+    h.ok(D.SEASONS.winter.relics.every(r => SG.season.relicAdd([], null, []).includes(r)) && !SG.season.relicAdd([], null, []).some(r => D.RELICS[r].season === 'halloween'), 'the winter relics join the pools, never Claw-o-ween\'s');
+    SG.season.setDate('2027-02-02');
+    SG.newRun('knight', 42);
+    c0 = flakes(SG);
+    SG.startFight(['rat'], 'normal'); SG.endFight('win');
+    h.eq(flakes(SG), c0, 'out of season a fight drops no snowflakes');
+    SG.startFight(['rat'], 'normal');
+    const n1 = SG.fight.bin.length;
+    SG.season.event({ t: 'play', def: D.ITEMS.present_box, inst: { uid: 'pb2', id: 'present_box' } });
+    h.eq(SG.fight.bin.length, n1, 'nor does a present unwrap');
+    let none = 0;
+    for (let i = 0; i < 40; i++) { SG.run.nonce = i; none += SG.season.rewardItems(['rusty_sword', 'pot_lid', 'shiv']).filter(x => D.ITEMS[x].season).length; }
+    h.eq(none, 0, 'no winter items in rewards');
+  });
+  h.test('winter: the Snowflake Stand sells the winter cosmetics for snowflakes; owned for good, worn in a real fight', () => {
+    const A = bootW(), SG = A.GAME;
+    SG.season.setDate('2026-12-26');
+    SG.season.give(100, 'winter');
+    SG.vault.show('skin');
+    h.eq(SG.season.shelf('sea', []).length, 12, 'the stand stocks twelve winter prizes');
+    h.ok(!SG.season.shelf('sea', []).some(id => CS.DATA.COSMETICS[id].season === 'halloween'), 'none of Claw-o-ween\'s');
+    h.eq(SG.vault.buy('skin_sea_ginger'), false, 'tickets never buy it');
+    h.ok(!SG.season.buy('skin_sea_ginger'), 'too few snowflakes (100 of 120): refused');
+    SG.season.give(400, 'winter');
+    for (const id of ['skin_sea_ginger', 'mq_sea_festive', 'paint_sea_cane', 'trail_sea_flakes', 'fit_knight_scarf']) h.ok(SG.season.buy(id), 'bought ' + id);
+    const V = SG.meta.vault;
+    h.ok(V.eq.skin === 'skin_sea_ginger' && V.eq.marquee === 'mq_sea_festive' && V.eq.paint === 'paint_sea_cane' && V.eq.trail === 'trail_sea_flakes' && V.eq.outfit.knight === 'fit_knight_scarf', 'each worn at once');
+    h.eq(flakes(SG), 500 - 120 - 100 - 80 - 90 - 60, 'the prices come off the snowflakes');
+    h.eq(SG.meta.sea.spent.flakes, 450, 'and count as spent');
+    h.eq(SG.meta.sea.wallet.candy | 0, 0, 'the candy wallet is untouched');
+    SG.draw();
+    SG.season.setDate('2027-01-15');
+    h.eq(SG.season.shelf('sea', []).length, 0, 'the stand is gone after the event');
+    h.ok(SG.season.shelf('skin', ['skin_classic']).includes('skin_sea_ginger') && SG.season.shelf('marquee', []).includes('mq_sea_festive') && SG.season.shelf('trail', []).includes('trail_sea_flakes'), 'on their normal shelves');
+    const B = bootW(A._store).GAME;
+    h.ok(B.meta.vault.owned.skin_sea_ginger && B.meta.vault.eq.paint === 'paint_sea_cane', 'a reload keeps them');
+    B.newRun('knight', 3);
+    B.startFight(['rat', 'bat'], 'normal');
+    stepFor(B, 0.5);
+    B.draw();
+    h.ok(B.screen === 'fight', 'a real fight in the Gingerbread House out of season');
+    B.toMap(); B.draw();
+  });
+  h.test('winter: the title, the music, drawing in and out of season, old saves', () => {
+    const A = bootW(), SG = A.GAME;
+    SG.season.setDate(new Date(2026, 11, 28, 18));
+    SG.showTitle(); SG.draw();
+    h.ok(SG.S.ui.buttons.some(b => /Winter Wonderclaw/.test(b.label)), 'the winter banner');
+    h.ok(/^ends in 9d/.test(SG.season.countdown('winter')), 'counting down across the new year (' + SG.season.countdown('winter') + ')');
+    h.eq(SG.season.musicId(), 'winter', 'the title plays the jingle');
+    SG.newRun('bubbler', 8);
+    SG.toMap(); SG.draw();
+    h.eq(SG.season.musicId(), 'winter', 'so does the map');
+    SG.startFight(['krampus'], 'elite'); SG.draw(); stepFor(SG, 0.5); SG.draw();
+    SG.endFight('lose');
+    SG.season.setDate('2027-01-30');
+    SG.showTitle(); SG.draw();
+    h.ok(!SG.S.ui.buttons.some(b => /Winter Wonderclaw/.test(b.label)) && SG.season.musicId() === null, 'nothing after it');
+    // an old save in December: no season, no presents; an old profile: an empty calendar
+    const P = bootW(), G0 = P.GAME;
+    G0.newRun('knight', 5); G0.save();
+    const raw = JSON.parse(P._store.clawspire_run); delete raw.run.season; delete raw.run.sea;
+    const meta = JSON.parse(P._store.clawspire_meta); if (meta.sea) delete meta.sea.adv;
+    const Q = bootW({ clawspire_run: JSON.stringify(raw), clawspire_meta: JSON.stringify(meta) }).GAME;
+    Q.season.setDate('2026-12-20');
+    h.ok(Q.load() && Q.season.run() === null && advOf(Q).length === 0, 'an old run stays out of winter');
+    h.ok(Q.meta.sea.adv && Q.meta.sea.adv.n === 0 && Q.win.nextDay() === 1, 'an old profile gets an empty calendar');
   });
 }
 
@@ -7308,10 +7584,13 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     // a prize set down on the floor, clear of the pile, rides away from the chute
     const top = GK.fs.items.slice().sort((a, b) => a.y - b.y)[0];
     const clear = Math.max(...GK.fs.items.filter(b => b !== top).map(b => b.box.x1)) + 30;
-    K.PHYS.setPose(top, Math.min(clear, cb.chuteX - (cb.slopeW || 0) - 20), cb.floorY - (top.br || 14) - 2, 0);
+    const tx = Math.min(clear, cb.chuteX - (cb.slopeW || 0) - 20);
+    // (round 12: the harder hits shake the pile wider; lift whatever sits in the strip by the chute out of the way)
+    GK.fs.items.filter(b => b !== top && b.box.x1 > tx - (top.br || 14) - 30 && !GK.cabinet.inChute(b)).forEach((b, i) => { K.PHYS.setPose(b, 40 + 30 * i, 120, 0); b.vx = b.vy = b.av = 0; b.sl = false; });
+    K.PHYS.setPose(top, tx, cb.floorY - (top.br || 14) - 2, 0);
     top.vx = top.vy = top.av = 0; top.sl = false;
     const x0 = top.x;
-    stepFor(GK, 0.8);
+    stepFor(GK, 0.4);
     h.ok(top.x < x0 - 15, `a prize by the chute rides toward the far wall (${Math.round(x0)} -> ${Math.round(top.x)})`);
     GK.draw();
     GK.fight.enemies[0].acts = 2;   // (its next Belt Drive is due on its fourth action)
@@ -8264,7 +8543,8 @@ h.test('rush: a whole rush: the kit, NEXT CHALLENGER, every boss once, rush hit 
     h.near(e.maxHp, rushHpOf(T, id, i) * Math.pow(1.05, (e.affix || []).length), 3, `boss ${i + 1}: rush hit points (${(e.affix || []).length} affixes)`);
     h.ok(!e.def.onDeath || D.ENEMIES[e.def.onDeath.id].tier !== 'boss', `boss ${i + 1}: nobody steps out of it`);
     const atk = (D.ENEMIES[id].moves || []).find((m) => m.k === 'attack'), mine = e.def.moves.find((m) => m.id === (atk && atk.id));
-    if (atk && mine) h.ok(mine.v < Math.round(atk.v * D.DIFFICULTY.dmg * (1 + Math.floor(i / 3) * D.DIFFICULTY.ramp.dmg)) || mine.v === 1, `boss ${i + 1}: rush hits (${mine.v})`);
+    // (round 12: bosses carry DIFFICULTY.tierDmg on top of the dial)
+    if (atk && mine) h.ok(mine.v < Math.round(atk.v * D.DIFFICULTY.dmg * ((D.DIFFICULTY.tierDmg || {}).boss || 1) * (1 + Math.floor(i / 3) * D.DIFFICULTY.ramp.dmg)) || mine.v === 1, `boss ${i + 1}: rush hits (${mine.v})`);
     h.eq(D.ENEMIES[id].moves.find((m) => m.k === 'attack') ? D.ENEMIES[id].moves.find((m) => m.k === 'attack').v : 0, atk ? atk.v : 0, 'the data is never touched');
     h.eq(G.boss.vs && G.boss.vs.title, id === 'prizemaster' ? 'FINAL BOSS' : `BOSS ${i + 1} OF 7`, `boss ${i + 1}: the versus card's title`);
     // the clock waits under the card, then runs
@@ -8455,6 +8735,58 @@ h.test('qa11: Give up reads "gave up at boss n", and the first challenger never 
   G.rush.pick(0);
   G.draw();
   h.ok(/^last split /.test(G.rush.K.cst.split), 'boss 2: the last split');
+});
+
+h.test('qa11: the parrot drops its catch on the pile the moment the claw goes to work (never a tug of war)', () => {
+  const T = petBoot(), G = T.GAME;
+  G.newRun('knight', 5252);
+  const P = petFight(G, 'parrot', 0, 801);
+  h.ok(petUntilFx(G, 3) >= 0 && P.hold && P.hold.beak, 'PECK: the parrot flies off with its catch in its beak');
+  const b = P.hold.b;
+  // the player drops mid flight
+  G.steer(150);
+  h.ok(G.dropClaw(), 'a grab while the parrot carries');
+  let n = 0;
+  while (n++ < 120 && (G.rig.phase === 'idle' || G.rig.phase === 'moving')) G.update(DT);
+  G.update(DT);
+  h.ok(G.rig.phase !== 'idle' && !P.hold, 'the claw goes to work: the parrot lets go (' + G.rig.phase + ')');
+  const y0 = b.y;
+  stepFor(G, 0.4);
+  h.ok(b.y > y0 || G.fs.items.indexOf(b) < 0 || b.held > 0, 'its catch falls back to the pile (or into the claw), no longer welded under the parrot');
+  // with the claw left alone the parrot still carries it all the way (the trick is unchanged)
+  const Q = petFight(G, 'parrot', 0, 802);
+  petUntilFx(G, 3);
+  const c = Q.hold && Q.hold.b;
+  stepFor(G, 0.2);
+  h.ok(c && Q.hold && Q.hold.b === c, 'no grab: it keeps its catch through the flight');
+});
+
+h.test('qa12: the round 12 balance dials (ECONOMY.goldK, ECONOMY.shopK, LOOT.BONUS_P) do what they say', () => {
+  const T = boot(), G = T.GAME, E = T.DATA.ECONOMY, L = T.DATA.LOOT;
+  const k0 = { g: E.goldK, s: E.shopK, b: L.BONUS_P };
+  h.ok(k0.g > 0 && k0.g < 1 && k0.s > 1 && k0.b > 0 && k0.b < 1, `shipped: less fight gold (x${k0.g}), dearer shops (x${k0.s}), a bonus capsule ${k0.b} of the time`);
+  // the shop: the same shelf, every price scaled by shopK
+  const shopAt = (k) => { E.shopK = k; G.newRun('knight', 77); return G.rollShop({ q: 2, r: 3 }); };
+  const a = shopAt(1), b = shopAt(2);
+  h.eq(b.items.map(i => i.id).join(), a.items.map(i => i.id).join(), 'shopK: the same items on the shelf');
+  b.items.forEach((x, i) => h.near(x.price, 2 * a.items[i].price, 1, `shopK x2: ${x.id} costs double (${a.items[i].price} -> ${x.price})`));
+  if (a.relic) h.eq(b.relic.price, 2 * a.relic.price, 'shopK x2: the relic too');
+  // the fight gold: the base payout line scales by goldK
+  const baseGold = (k, bonusP) => {
+    E.goldK = k; L.BONUS_P = bonusP;
+    G.newRun('knight', 78);
+    G.startFight(['rat'], 'normal');
+    stepFor(G, 0.2);
+    G.run.jackpots += 1;   // a jackpot: the fight could earn a bonus capsule
+    G.endFight('win');
+    const rw = G.S.sd.reward;
+    return { base: rw.pay.find(l => l.id === 'base').gold, bonus: rw.caps.filter(c => c.src === 'bonus').length };
+  };
+  const g1 = baseGold(1, 1), g2 = baseGold(0.5, 0);
+  E.goldK = k0.g; E.shopK = k0.s; L.BONUS_P = k0.b;
+  h.near(g2.base, g1.base / 2, 1, `goldK x0.5: half the fight gold (${g1.base} -> ${g2.base})`);
+  h.eq(g1.bonus, 1, 'BONUS_P 1: the jackpot earns its bonus capsule');
+  h.eq(g2.bonus, 0, 'BONUS_P 0: never');
 });
 
 h.test('ghost: a daily keeps checkpoints, the next attempt races them by day, the chip, GHOST PASSED!, the end panel, a new ghost', () => {
@@ -9661,6 +9993,152 @@ h.test('mix: the run-end numbers count up from zero and land exactly', () => {
     T._listeners.keydown && T._listeners.keydown({ key: 'Escape', preventDefault() {} });
     h.eq(G.screen, 'title', 'Escape: the title');
     h.eq(T._store[G.RUN_KEY], undefined, 'no run was ever saved');
+  });
+}
+
+// ---------------------------------------------------------------- LEG (round 12): legends
+// DESIGN.md "Legends (round 12)": where the legendary relics come from, their
+// looks and tricks in a real fight, a new evolution's ceremony, the animated cabinets.
+{
+  const LEG_META = JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true, rogue: true, gambler: true, engineer: true, bubbler: true } });
+  const legBoot = (store) => boot({ store: Object.assign({ clawspire_meta: LEG_META }, store || {}) });
+  const legFight = (G, relics, seed, o) => {
+    o = o || {};
+    G.newRun(o.char || 'knight', seed || 1212);
+    for (const r of relics) G.gainRelic(r);
+    for (const x of o.bin || []) G.run.bin.push(x);
+    G.startFight(o.enc || ['slime'], o.tier || 'normal', { seed: o.fs || 5151 });
+    if (G.boss && G.boss.vs) { G.boss.vsSkip(); G.boss.vsSkip(); }
+    for (let i = 0; i < 40; i++) G.update(DT);
+    return G.fight;
+  };
+  const legBody = (G, uid) => G.fs.items.find(b => b.data.inst && b.data.inst.uid === uid) || null;
+  const legBodyOf = (G, id) => G.fs.items.find(b => b.data.inst && b.data.inst.id === id) || null;
+
+  h.test('LEG: the act boss relic is now and then a legendary (its own stream), never twice, never in a common pool', () => {
+    const T = legBoot(), G = T.GAME, D = T.DATA, K = D.LEG.K;
+    let leg = 0;
+    const N = 200;
+    for (let s = 0; s < N; s++) {
+      G.newRun('knight', 9000 + s);
+      const n0 = G.run.nonce;
+      const id = G.leg.bossRelic('token_stack');
+      h.eq(G.run.nonce, n0, 'the draw never moves the run\'s own streams');
+      if (D.RELICS[id].rarity === 'l') leg++; else h.eq(id, 'token_stack', 'else the boss relic stands');
+    }
+    h.ok(Math.abs(leg / N - K.bossP) < 0.08, `a legendary ${Math.round(leg * 100 / N)}% of the time (about ${K.bossP * 100}%)`);
+    G.newRun('knight', 9001);
+    G.run.relics.push(...D.LEG.RELICS);
+    let same = 0;
+    for (let a = 1; a <= 3; a++) { G.run.act = a; if (G.leg.bossRelic('token_stack') === 'token_stack') same++; }
+    h.eq(same, 3, 'every legendary owned: the boss relic stands');
+    // a real act transition hands one over for some seeds
+    let got = null;
+    for (let s = 0; s < 40 && !got; s++) {
+      G.newRun('knight', 3100 + s);
+      G.startFight(D.ENCOUNTERS[1].boss[0], 'boss');
+      if (G.boss && G.boss.vs) { G.boss.vsSkip(); G.boss.vsSkip(); }
+      stepFor(G, 0.1);
+      G.endFight('win');
+      G.choose(3);
+      if (G.screen === 'parts') G.choose(0);
+      const td = G.S.sd && G.S.sd.treasure;
+      if (G.screen === 'treasure' && td && td.relic && D.RELICS[td.relic].rarity === 'l') got = td.relic;
+    }
+    h.ok(!!got, 'an act boss left a legendary for one of 40 seeds (' + got + ')');
+  });
+
+  h.test('LEG: the Back Room counter sells a legendary; capsules and pools', () => {
+    const T = legBoot(), G = T.GAME, D = T.DATA;
+    G.newRun('knight', 777);
+    const shop = G.rollShop({ q: 1, r: 1, content: { sec: true } });
+    h.ok(shop.relic && D.RELICS[shop.relic.id].rarity === 'l' && shop.relic.price === D.LEG.K.price, 'the service counter: a legendary for ' + D.LEG.K.price);
+    const plain = G.rollShop({ q: 2, r: 2, content: {} });
+    h.ok(!plain.relic || D.RELICS[plain.relic.id].rarity !== 'l', 'a normal shop never');
+  });
+
+  h.test('LEG: The Golden Claw in a real fight: the 5th grab is golden, grips hard, wears gold, then lets go', () => {
+    const T = legBoot(), G = T.GAME;
+    const F = legFight(G, ['leg_golden_claw'], 1301);
+    const grip0 = G.rig.cfg.grip;
+    for (let g = 0; g < 4; g++) {
+      if (!ready(G)) settle(G, 20);
+      if (G.fight.player.grabs <= 0) { G.endTurn(); settle(G, 30); }
+      G.steer(160); stepFor(G, 0.3); G.dropClaw(); settle(G, 20);
+      if (G.screen !== 'fight') return h.ok(false, 'the fight ended early');
+    }
+    if (G.fight.player.grabs <= 0) { G.endTurn(); settle(G, 30); }
+    h.ok(G.leg.goldLive(), 'the golden grab is next: the claw is gold');
+    const cfg = {}; G.leg.clawCfg(cfg);
+    h.eq(cfg.paint, 'paint_gold', 'gold paint');
+    G.steer(200); stepFor(G, 0.3);
+    h.ok(G.dropClaw(), 'the golden drop');
+    h.ok(G.leg.gold && G.rig.cfg.grip > grip0 + 0.5, 'it grips far harder (' + G.rig.cfg.grip.toFixed(2) + ')');
+    G.draw();
+    settle(G, 20);
+    h.ok(!G.leg.gold && Math.abs(G.rig.cfg.grip - (grip0 + (G.fs.luckyOn ? 0.6 : 0))) < 1e-6, 'after the grab the grip lets go');
+    h.ok(F === G.fight, 'the same fight');
+  });
+
+  h.test('LEG: Perpetual Motion bounces a delivered prize back into the cabinet; the Black Hole swallows a Rock', () => {
+    const T = legBoot(), G = T.GAME;
+    legFight(G, ['leg_perpetual', 'leg_black_hole'], 1302);
+    const sw = legBodyOf(G, 'rusty_sword'), inst = sw.data.inst;
+    G.playDelivered([sw]);
+    settle(G, 6);
+    h.ok(G.fight.bin.includes(inst) && !!legBody(G, inst.uid), 'the sword is back in the cabinet as a body');
+    h.ok(G.leg.fx.some(o => o.k === 'bounce'), 'BOING');
+    const rock = legBodyOf(G, 'rock');
+    h.ok(!!rock, 'the black hole\'s Rock is in the bin');
+    G.playDelivered([rock]);
+    settle(G, 6);
+    h.ok(G.leg.fx.some(o => o.k === 'void'), 'it spirals into the black hole');
+    for (let i = 0; i < 20; i++) { G.update(DT); G.draw(); }
+  });
+
+  h.test('LEG: Glass Heart makes every body glass; every legendary draws in a real fight; the Monocle peeks', () => {
+    const T = legBoot(), G = T.GAME, D = T.DATA;
+    legFight(G, ['leg_glass_heart'], 1303);
+    h.ok(G.fs.items.every(b => !b.data.mat || b.data.mat.traits.glass), 'every prize is glass');
+    const T2 = legBoot(), G2 = T2.GAME;
+    legFight(G2, D.LEG.RELICS.slice(), 1304, { enc: ['slime', 'goblin'], char: 'engineer', bin: [{ uid: 'lg1', id: 'singularity' }, { uid: 'lg2', id: 'all_in_chip' }] });
+    let bad = null;
+    try { for (let i = 0; i < 90; i++) { G2.update(DT); G2.draw(); } } catch (e) { bad = e; }
+    h.ok(!bad, 'every legendary together draws and updates ' + (bad && bad.stack || ''));
+    h.ok(G2.fight.leg && G2.fight.leg.peek > 0 && T2.COMBAT.legPeek(G2.fight, G2.fight.enemies[0]), 'the Monocle peeks at the slime');
+    G2.steer(180); stepFor(G2, 0.3); G2.dropClaw(); settle(G2, 20);
+    h.ok(G2.screen !== 'fight' || G2.fight.hookErrors.length === 0, 'a real grab: no hook errors ' + (G2.fight && G2.fight.hookErrors[0] || ''));
+  });
+
+  h.test('LEG: a new evolution (Poker Chip+ and the Fate Engine) evolves on delivery with its ceremony', () => {
+    const T = legBoot(), G = T.GAME;
+    legFight(G, ['leg_fate_engine'], 1305, { char: 'gambler' });
+    const chip = G.run.bin.find(i => i.id === 'poker_chip');
+    chip.plus = true;
+    G.startFight(['slime'], 'normal', { seed: 5252 });
+    for (let i = 0; i < 40; i++) G.update(DT);
+    G.playDelivered([legBody(G, chip.uid)]);
+    h.ok(G.evo.fs && G.evo.fs.r.to === 'all_in_chip', 'the ceremony: All-In Chip');
+    h.eq(chip.id, 'all_in_chip', 'the run keeps it');
+    h.ok(G.fight.evos.includes('evo:all_in_chip'), 'Poker Face is live');
+    for (let i = 0; i < 200 && G.evo.fs; i++) { G.update(DT); if (i % 10 === 0) G.draw(); }
+    h.ok(!G.evo.fs, 'the ceremony ends');
+  });
+
+  h.test('LEG: the animated cabinets on the Vault shelf, bought, equipped and in a fight', () => {
+    const T = legBoot(), G = T.GAME, D = T.DATA;
+    G.meta.vault = Object.assign(G.meta.vault || {}, { tix: 5000 });
+    G.vault.show('skin');
+    for (const id of D.LEG.SKINS) { G.vault.select(id); G.draw(); }
+    const buyable = D.LEG.SKINS.filter(id => D.vaultHow(id) === 'buy');
+    for (const id of buyable) h.ok(G.vault.buy(id) !== false && G.meta.vault.owned[id], id + ': bought');
+    G.vault.equip(buyable[0]);
+    h.eq(G.meta.vault.eq.skin, buyable[0], 'and equipped');
+    G.vault.leave();
+    legFight(G, [], 1306);
+    let bad = null;
+    try { for (let i = 0; i < 30; i++) { G.update(DT); G.draw(); } } catch (e) { bad = e; }
+    h.ok(!bad, 'a fight in ' + buyable[0] + ' draws');
   });
 }
 

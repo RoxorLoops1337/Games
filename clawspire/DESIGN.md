@@ -3505,7 +3505,7 @@ whole machine up, bring their own content into every run, and pay out in
 their own currency for cosmetics you keep forever. The first is
 **Claw-o-ween** (1 October to 3 November); **Winter Wonderclaw** (10
 December to 6 January) is the skeleton that proves the system with a
-second season. Data in `data.js` (the SEASON block), the flow in `game.js`
+second season (completed in round 12: see "Winter Wonderclaw (round 12)"). Data in `data.js` (the SEASON block), the flow in `game.js`
 (the SEASON block, reached through one-line hooks), the looks in
 `render.js` (the SEASON block, `RENDER.sea`), the tunes and sounds in
 `audio.js` (the SEASON block), the frame in `index.html`
@@ -5252,6 +5252,523 @@ enemies, no rewards. What the school keeps lives on the profile.
   70%, Free Prize 50%, Twin Trouble 80%, Clean Sweep 70%, the rest 90-100%),
   so the 3-star thresholds are where a steady hand has to work. Screenshots:
   scratchpad `r11/shots.mjs` (`r11_sch_*.png`).
+
+## Legends (round 12): legendary relics, ten more evolutions, animated cabinets
+
+Twelve relics of a new rarity, `'l'` (legendary), each a build of its own with
+a catch, reaching into the systems the later rounds added; ten more item +
+relic evolutions for the crawlers that had few; and the rarer Prize Vault
+cabinets come alive. Everything sits in `LEG` blocks: data (`data.js`, the LEG
+block before `return`: `LEG_K`, the relics pushed onto `RELIC_LIST`, the
+evolutions through `legEvoAdd`, the skins pushed onto `COSMETIC_LIST`,
+exported as `DATA.LEG = {K, RELICS, EVOS, SKINS, goldNow}`), the rules
+(`combat.js`, the LEG block: `legFight`, `legDmgOut`, `legAfterPlay`,
+`COMBAT.legShot / legGolden / legPeek / legOf`), the flow and the looks in a
+fight (`game.js`, the LEG block, `GAME.leg`), the art (`render.js`, the LEG
+block, `RENDER.leg`), all reached through one-line hooks. Ids are new; no id
+was renamed; no save field was added (a legendary is an ordinary relic id on
+`run.relics`, an evolved item an ordinary id in `run.bin`).
+
+**Where they come from (and never).** Only three places, so they stay rare:
+the act boss's relic (after acts 1 and 2 and every Endless loop) is a
+legendary `LEG_K.bossP` (25%) of the time, drawn from its own seeded stream
+(`legBossRelic`: the run's nonce and every other stream stay put); a
+legendary capsule's relic prize may be one (`LOOT.RELIC_RAR.l` adds `'l'`,
+`capCtx` passes the unowned ones); the Back Room's service counter keeps one
+back for `LEG_K.price` (250) gold (`legSecRelic`, a boss relic once every
+legendary is owned). `DATA.relicPool()` / the game's `relicPool(null)` leave
+them out, so no reward, shop, event, rush draft or boon ever lists one.
+
+**The relics.** A relic's `leg` object is merged into `F.leg` by `newFight`
+(numbers add; `F.leg` is null without one, so every other fight is bit for bit
+the old one). Hooks are ordinary relic hooks plus one new name, `onBubble(F,
+where 'chute' | 'bin', n)` (fired by `COMBAT.rosPop` after the pops paid).
+
+| relic | the build | the catch | where |
+| --- | --- | --- | --- |
+| 🏆 The Golden Claw | every 5th grab is GOLDEN: the claw wears gold paint and sparkles, grips +0.7 (`legGrabStart` / `legGrabEnd`), and a golden grab of 2+ prizes deals 4 per prize to ALL and gives 2 Block per prize | every grab grips 0.15 looser (`mods.grip`) | `leg.golden`, `COMBAT.legGolden`, pips on the bottom frame |
+| ♾ Infinite Coin Slot | every 3rd prize delivered in a turn gives a grab (2 a turn at most) | -12 Max HP | a SLOT chip with its count |
+| 🧐 Prize Master's Monocle | every enemy's move two turns ahead (a THEN chip over its bubble, `COMBAT.legPeek`: a charge's unleash, a cycling enemy's next step, `?` for a random one); the first enemy hit each turn while winding up an attack takes 6 more (EXPOSED) | the claw 15% slower | `leg.peek` |
+| 🕳 Black Hole Bin | a Rock at the bell; junk grabbed out falls in for good this fight (`legGo 'void'`: slag and cans no longer cycle back) and hits the target for 8, +2 per 3 swallowed | a turn with nothing for it, the hole eats a random item of your used pile for the fight | a vortex in the chute's prize slot, junk spiralling in |
+| ⚙ Perpetual Motion Machine | the first 2 prizes delivered each turn bounce back into the cabinet after they play (`legGo 'bounce'`, each prize once a fight): grab them again | 1 HP a bounce | BOING: a fresh body flies back over the divider |
+| 📣 The Crowd | every combo +1 Hype (10 at most); your hits +10% per Hype (`legDmgOut`) | a combo-less turn halves it; at 0 they boo: 1 Weak | the Hype plate (cheering heads) on the bottom frame |
+| 🫧 Crown of Foam | anyone blows 2 bubbles a turn (`rules.bubbles` + `bub.n`; Ms. Bubbles 4); a Bubble Combo gives 1 Strength | a bubble left to burst in the bin stings you for 2 | `onBubble` |
+| 🔋 Overclocked Core | anyone builds the turret, Lv 2 at the bell; every metal prize fires one shot on the spot (`COMBAT.legShot`) | no turn-end volley (`leg.noVolley`) | Mama's turret |
+| 🌠 Fate Engine | anyone fills the Luck meter (`rules.luck`), whiffs +1 more; at 10 Luck FATE: 25 to ALL and the meter empties | Luck never cashes out (`leg.noCash`) | Lou's meter |
+| 🐺 Alpha Collar | one more pet trick a turn, 50% stronger (`pet`), every trick hits ALL for 3; no pet: a stray bites a random enemy for 3 a turn | 1 HP a trick | |
+| 💠 Glass Heart | everything in the cabinet is glass (`leg.glass`: the game gives every body the glass trait, `legMat`); a crack hits a random enemy for 4, a shatter ALL for 6 | a second crack shatters a prize for the fight | the materials' cracks |
+| 👑 Giant Slayer's Crown | +30% on elites and bosses; one enraging gives 3 Strength | -20% on normal enemies | `leg.slay` |
+
+Every legendary wears the rainbow medallion plus a breathing gold flame
+crown (`RENDER.leg.crest`, drawn by `relicIcon` for a `leg` relic of rarity
+`l`), keyword chips, a Prizedex card (the relics tab lists them), a proc
+label and an `ART_PROMPTS.md` row. The relic reveal, cards and holo foil treat
+`'l'` as legendary (`RARITY_NAME`).
+
+**Ten more evolutions** (the round 7 mechanism exactly: `legEvoAdd` builds the
+non-enumerable `ITEMS[id]`, `EVOLVED`, `EVOLUTIONS`, `EVO_FX` aura and pushes
+onto `EVO_LIST` / `EVO_IDS`; the ceremony, hints and the Evolve tab need
+nothing new). Each has its own drawing (`RENDER.evo.ART`) and aura; an aura
+may carry `bub` / `tur` numbers.
+
+| evolved item | base + relic | when played | aura |
+| --- | --- | --- | --- |
+| Calliope Pipe | Bubble Pipe + Squeaky Toy | 5 to ALL, two bubbles | Steam Organ: Bubble Combos +2 per bubble (`bub.combo`); no bubbles, a 2+ grab hits ALL for 2 |
+| Kraken Sponge | Sponge + Crown of Foam | heal 6, 6 Block, a bubble | Deep Soak: a bin burst heals 2 (the Crown's sting soothed) |
+| Gear Grinder | Pipe Wrench + Overclocked Core | 12, 4 turret parts | Flywheel: a turret shot at every turn start (no turret: a zap for 3) |
+| Railgun Coil | Spring Coil + Armor-Piercing Rounds | 5 x3 | Magnetic Rail: turret shots +1 (`tur.amp`) |
+| All-In Chip | Poker Chip (Lou's starter) + Fate Engine | 9 Block, 3 Luck | Poker Face: an empty grab gives 2 Block +1 per Luck |
+| Showstopper Deck | Marked Deck + The Crowd | +1 grab, 3 Luck, 4 Block | Standing Ovation: combos give 1 Luck (and 1 Hype) |
+| Boomerang Blades | Twin Daggers + Perpetual Motion | 5 x3 at random | Return Flight: a bouncing prize hits a random enemy for 3 |
+| Vanishing Act | Smoke Bomb + the Monocle | 2 Dodge, 2 Weak and 1 Vulnerable to ALL | Now You See Me: 1 Dodge at the bell, attackers Weakened each turn |
+| Master Key | Skeleton Key + The Golden Claw | +1 grab, 6 Block | Open Sesame: a golden grab that lands gives a grab back |
+| Singularity | Rubble Bomb + Black Hole Bin | 14 to ALL, 2 Rocks | Accretion: junk grabbed out hits ALL for 3 |
+
+**Animated cabinets.** The cached static back stays as it was (`cabLayer`,
+keyed by the skin id, capped at 8 layers), and `RENDER.leg.anim` draws a few
+live sprites over it every frame, between the back and the bulbs (so the pile
+and the bulbs stay on top): Deep Space (drifting stars, a slow two-glow nebula,
+a shooting star every 7 s), Molten Core (lava blobs flowing round the frame,
+embers), Haunted House (green wisps, a ghost peeking in from the left edge
+every 9 s), Jungle Bash (leaves swaying from the rail, fireflies), Gold Jackpot
+(coins tumbling down the side posts, a glint running round), Rainbow Riot (a
+hue sweep round the frame). Three new skins (Vault shelf, capsule pool):
+**Aquarium** (u, 90 tickets: fish, bubbles, weed), **Neon Tokyo** (r, 180: a
+skyline, rain, blinking windows, a scrolling sign) and **Retro CRT** (l,
+capsule only: scanlines, a rolling phosphor band, INSERT COIN). The new ones
+name their live layer in `look.anim` and their static frame and panel with
+`leg_*` patterns (`legFramePat` / `legPanelPat`); the older ones map by id
+(`LEG_SKIN_ANIM`). Reduced motion holds one still pose (`LEG_STILL`), reduced
+flashing drops the flicker; the classic and the plain skins never move.
+
+Tests: data (the twelve: fields, a catch, pools, the legendary capsule's
+share, the hooks through a recording COMBAT; the ten recipes; the skins on the
+shelf, sold or capsule-only), combat (F.leg, every legendary's rule and its
+catch, the Monocle's peek against the real next pick, the evolutions only
+with their pieces and their auras, a 30 turn fuzz holding all of them), render
+(each animated skin moves, holds still under reduced motion, draws distinct,
+the cache never rebuilds per frame; the crest, the Hype plate, the peek chip,
+the vortex, the ten drawings), game (the boss relic's rate and stream, the
+Back Room's legendary, a real golden grab, a bounce and the black hole, the
+Glass Heart's bodies, every legendary drawn in a real fight, a new
+evolution's ceremony, the new skins bought, equipped and in a fight).
+Screenshots: scratchpad `r12_leg_shots.mjs` (`r12_leg_*.png`).
+
+## Winter Wonderclaw (round 12)
+
+The winter event (10 December to 6 January, wrapping the new year) brought
+up to Claw-o-ween's depth on the round 7 season system: everything rides its
+hooks (`run.season`, the non-enumerable content, the currency, the counter,
+the preview picker, `?season=winter`) and is invisible out of season. Data in
+`data.js` (the WIN block after /SEASON, plus the winter def and one field in
+`seaFix`), the flow in `game.js` (the WIN block after /SEASON, one-line hooks
+in the SEASON code and `bossEvent`), the looks in `render.js` (the WIN block
+after the SEASON block; the SEASON block's winter branches and the VAULT
+renderers call in), the tunes and sounds in `audio.js` (the WIN block after
+the SEASON sounds, one line in `seaFlavor`, the MIX tables), the frame in
+`index.html` (the WIN rules after /SEASON in `season-css`).
+
+### Content (only in a winter run)
+
+- **Items (8, plus a filler and a junk)**, one reward screen in three swaps
+  its last slot for one (the SEASON rule): Snowball Sack (c, three Packed
+  Snowballs: 2 and 1 Chill, and every one landed is a snowflake), Candy Cane
+  (u, 4 twice and heal 1), Hot Cocoa (c, potion: heal 5 and cleanse), Present
+  Box (u, 3 Block, then it **unwraps** into a random common item, an uncommon
+  one in five, that arcs out of the chute into the bin for the fight; never
+  another box), Glass Ornament (u, glass and magic: 5 and 1 Vulnerable to
+  ALL, it floats down), Fruitcake (c, heavy as an anvil: heal 3 and 3 Block),
+  Jingle Bell (r, magic and light: 2 Weak and 2 Chill to ALL), Yule Log (r, 4
+  Burn to ALL and 4 Block). Krampus's junk: a Lump of Coal (heavy, useless).
+  Each has its own drawing (`RENDER.sea.win.SIL`, non-enumerable on
+  `POL_SIL`).
+- **Relics (4)** join the relic pools by rarity: Stocking (c, a food item
+  heals 2; +2 snowflakes a won fight), Mistletoe (u, 1 Weak to ALL at the
+  bell), Sleigh Bells (u, 1 Chill to a random enemy each turn), Warm Scarf
+  (r, a heal also gives that much Block, 12 at most).
+- **Costumes** (`costumeP`, the same rule): Red-Nosed Rat (antlers, a
+  harness of bells, a glowing nose: Antler Butt 5, Sleigh Dash 2 x3, Nose
+  Glow fogs your glass for a turn), Snowman Slime (a top hat with holly, a
+  carrot, coal buttons, stick arms: 1 Armor, Snowball 6, Cold Hug 2 Chill,
+  Snow Drift an Ice Block into the bin, splits like a slime), Elf Goblin (a
+  floppy elf hat with a bell, a scalloped collar, a present in hand: Candy
+  Cane Jab 5, Regift a heavy Fruitcake into your bin, Holiday Cheer +1
+  Strength, Wind Up 14). Party hats in winter: Santa, elf, antlers.
+- **Krampus** (act 1 elite, `look: 'krampus'` on the goat's art, his own
+  drawing: a hunched shaggy goat devil, long ribbed horns, burning eyes, a
+  lolling tongue, chains with a bell across the chest, a birch switch, a sack
+  of coal on his back), 64 to 70 hp, takes an act 1 elite fight `kingP` of the
+  time (never a tower keeper). Every move says its number: Birch Switch 4 x3,
+  Rattle Chains (Vulnerable 2), Hoof Kick 10, Open the Sack (20 next turn),
+  Check the List (+2 Strength), Frost Breath (2 Chill). **Signature: Sack of
+  Coal** (the Hoard's `spill` with `item: 'win_coal'`, first on his third
+  action, every third after, two lumps, four enraged): the cabinet sign warns
+  a turn ahead ("COAL"), NAUGHTY!, and heavy coal arcs from his sack into the
+  bin (`winBossEvent`, soot and a ring instead of the Hoard's coins). Phase
+  two **NAUGHTY OR NICE** (+2 Strength, a meaner loop). He drops the season
+  elite's 12 extra snowflakes and one of the winter relics you lack (the
+  SEASON rule; no new relic source).
+
+### The advent calendar (tile type `advent`)
+
+- 3 per map (4 on the 16 x 22 world), placed by the SEASON rule (empty land
+  off the start and the boss, apart, known from the start). Entering one opens
+  the `sea` screen as an **advent present** (`Dd.adv`): a cosy room at night,
+  a snowy window, the advent calendar on the wall (24 numbered doors: the
+  ones you opened before stand open with a star, today's glows), a big
+  wrapped present on the rug with a numbered gift tag. Unwrap: three ribbon
+  tugs (the bow shrinks, the ribbon trails off, TUG!), the lid pops (POP!,
+  light pouring out), confetti and snowflakes burst, the gift rises out of
+  the box under MERRY CLAWMAS! (BIG PRESENT! every sixth door). A tap hurries
+  it; Leave before unwrapping keeps it for later.
+- **The calendar** (`meta.sea.adv {y, n}`): the winter's year (a January day
+  counts for the December before; a new winter starts it over) and the doors
+  opened. A present opens door `n + 1` (at most 24), so the gifts grow door by
+  door across runs: bigger if you opened the previous ones.
+- **The gift** (`DATA.winAdventRoll(rng, day, act, {items, relics})`, rolled
+  and saved on the tile at the first tug with its door number, `content.sea
+  {seed, out, day, paid, lines}`; paid once at the reveal, across reloads).
+  Modest on purpose (the balance pass: runs were too easy): every door holds
+  4 to 7 snowflakes (+1 per 3 doors before it, at most +6; +6 on every sixth
+  door), then by weight snowflakes 44 (+4), gold 28 (8 to 14, +1 per 2 doors
+  before, +4 an act), a common item 20 (the season's commons or the shared
+  pool), a common capsule 5 (never before door 8), a winter relic 3 (never
+  before door 16, only one you lack). The result card names the door first.
+
+### Snowflakes and the Snowflake Stand
+
+The currency (`flakes`) banks like candy: a won fight `seaEarn` (3 / 8 / 15,
++2 a costume, +12 Krampus), the Stocking's 2, a Packed Snowball landed, an
+advent door. The Snowflake Stand (the Vault's season tab, its own cyan
+colours; the wallet pill shows the flakes) sells 12 cosmetics, owned for good
+and on their normal shelves after the event: Frosted Cabinet (120) and
+Hollyberry (80) from round 7, **Gingerbread House** (120: a gingerbread
+frame piped with icing, gumdrops on the rails, candy canes in the top
+corners, an icing lattice and a waving gingerbread man on the back panel),
+**Peppermint Swirl** (80: red stripes and a mint pinstripe down every prong,
+a sugar sparkle at the tips; not the year-round Candy Cane), **MERRY CLAWMAS**
+(100: a marquee of red and green letters with snow on top, holly at both
+ends, bulbs twinkling at random, `sea_twinkle`), **Snowflake Trail** (90:
+six-armed crystal flakes twirl up out of every step; not the old Snowfall),
+**Scarf & Earmuffs** for each of the six crawlers (60: a knitted scarf with a
+swinging tail, fluffy earmuffs on a band). A buy says MERRY! on the marquee.
+
+### The looks
+
+Title: a cold blue wash and an aurora rippling behind the tower, snow on the
+tiers and the ground, a garland of fairy lights swagging under the event
+ribbon (red, green and gold, twinkling at random, glows in one additive
+pass), a Santa hat on the title claw, the banner with icicles and holly, a
+snowman with a top hat on the logo's shoulder and a lit pine on the other,
+big soft flakes in front, frost ferns creeping from the corners. Map:
+snowfall, a frosty rim with ferns, and on lit empty hexes a snowman, a
+cottage with a warm window and chimney smoke, or a snowy pine with lights.
+Arena: snow, a garland over the fight, drifts at the floor's edges. Cabinet:
+twinkling red, green and gold bulbs (stepping aside for a skin, the party
+lights or the alarm), snow on the roof, icicles under the rail, a cold haze
+and frost ferns on the glass, holly on the marquee band.
+
+### Music and sounds
+
+The winter title and map tunes carry **the jingle**: a sleigh bell hook in the
+old three-three-six rhythm (three on one note, three again, a run of four,
+a long one) on the chord's own tones, bars 1 to 4 of each half, answered by
+the rest of the tune; it draws nothing from the composer's rng. Fights keep
+their tunes. Both still sit under the sfx (title -34.4 / -28.4 dB, map -32.7
+/ -30.4, integrated / loudest 400 ms). Sounds, calibrated into the tiers:
+`winRibbon` (soft, +6.5), `winPop` (mid, untrimmed), `winGift` (big, +8.5),
+`winCoal` (soft, -8.5).
+
+### Save fields, API, tests
+
+- Meta `sea.adv {y, n}` (`winAdvFix`; old profiles get an empty calendar).
+  Run `sea.adv` (presents opened this run). An advent tile: `type: 'advent'`,
+  `content.sea {seed, out, day, paid, lines}`. No key renamed; no sticker
+  (the board stays at 60).
+- `GAME.win = {cal, year, nextDay, knock, gift, bossEvent, log}`; `DATA` adds
+  `WIN_K, WIN_ITEMS, WIN_RELICS, WIN_ENEMIES, WIN_COSMETIC_IDS, winAdvFix,
+  winAdventRoll, winGiftPool`; `RENDER.sea` adds `gift` (the unwrapping),
+  `advent` (the tile) and `win` (the parts: `title, map, prop, sky, cab,
+  costume, hat, present, garland, twinkle, flake, holly, ferns, snowman,
+  cottage, pine, aurora, framePat, panelPat, marquee, trailMark, scarf,
+  SIL`); `AUDIO` adds the four sounds.
+- Tests: data (the winter edges to the second and across the new year, the
+  shared span; the content never listed or pooled year-round over 200
+  rewards; the items, relics, costumes and Krampus; the advent gifts over
+  4000 rolls: modest, never early, growing door by door; the calendar's
+  repair; the stand), game (presents per map and seed, none out of season or
+  on an old save, the run keeps its season into January; the costumes,
+  Krampus and the winter hats in season only; Krampus's card, coal, phase two,
+  snowflakes and relic; the unwrapping: Leave, the tug, a reload mid way,
+  paid once, the next door, a new winter; every gift; snowflakes per fight,
+  the Stocking, the snowball, the Present Box unwrapping; the stand: tickets
+  refused, too few flakes, bought and worn, owned after the event and across
+  a reload, a real fight in the Gingerbread House; the title, the music,
+  drawing in and out of season, old saves), render (every overlay at several
+  times, the lights stepping aside, the twinkle, the props, the costumes,
+  the hats, Krampus in every state and on his card, the tile, the unwrapping
+  at every beat and gift, junk state, every item's own drawing, every stand
+  thumbnail, the cabinet, marquee, scarves, trail and paint), audio (the
+  jingle's rhythm on one note, the room it leaves, none on Claw-o-ween,
+  fights untouched, determinism; the four sounds in their tiers). Screenshots:
+  scratchpad `win_shots.mjs`, `r12_win_*.png`.
+
+## Balance snapshot and QA pass 4 (round 11)
+
+Owner of this section: the balance and QA pass. The snapshot is the game as it stood at the end of
+round 10 (before the round 12 balance pass below); it is kept as the BEFORE picture.
+
+### Difficulty snapshot (round 11)
+
+The round 5 bot, extended (scratchpad `r11/bal.mjs`; raw lines `r11/balp_w*.jsonl`, tables
+`r11/bal_report_paced.txt`): six crawlers, eight claws, Tilt 0 / 3 / 6 / 10, boons, stories and
+Grabby Gary forced on as in a browser, a pet from the pet shop or a boon, sets and evolutions as they
+come, arcade cabinets skipped, one elite an act above 60% hp, 9 normal fights an act, the secret
+door walked away from. New this round: a human's pace (1.2 s to read a turn, 0.6 s to aim a drop).
+The round 5 bot dropped the instant the claw was home, and then the turn pets never act and Ms.
+Bubbles blows almost no bubbles (a 488-run batch without the pace, kept in `r11/unpaced/`, is the
+proof: pets changed nothing there). 597 runs, 7412 fights, every config its own seed.
+
+| crawler | win | deaths act 1 / 2 / 3 | hp lost / fight, act 1 / 2 / 3 | elites won | bosses won, act 1 · 2 · 3 | turns / fight, normal / elite / boss |
+| --- | --- | --- | --- | --- | --- | --- |
+| Knight | 5% | 72 / 23 / 4 | 14.4 / 11.1 / 5.5% | 66% | 32/42 · 9/12 · 5/5 | 2.7 / 5.8 / 3.8 |
+| Alchemist | 13% | 74 / 13 / 2 | 14.5 / 4.8 / 1.1% | 82% | 29/39 · 16/19 · 13/13 | 3.3 / 5.5 / 5.3 |
+| Rogue | 16% | 68 / 14 / 2 | 15.7 / 7.1 / 0.7% | 76% | 32/36 · 18/18 · 16/16 | 2.2 / 4.7 / 4.2 |
+| Lucky Lou | 12% | 53 / 28 / 5 | 10.1 / 10.6 / 4.0% | 80% | 45/59 · 17/18 · 12/14 | 2.0 / 4.0 / 3.8 |
+| Mama Mech | 3% | 47 / 37 / 9 | 8.6 / 12.2 / 15.3% | 80% | 49/67 · 12/15 · 3/4 | 2.3 / 3.8 / 3.9 |
+| Ms. Bubbles | 8% | 68 / 14 / 6 | 12.2 / 6.5 / 3.6% | 64% | 28/41 · 14/14 · 8/8 | 3.5 / 8.5 / 6.6 |
+| all (597) | 10% (+-2) | 382 / 129 / 28 | 12.1 / 8.9 / 3.5% | 75% | 215/284 · 86/96 · 57/60 | 2.6 / 5.3 / 4.5 |
+
+| claw | classic | tri | scoop | hand | magnet | hook | vacuum | twin |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| win | 28% | 21% | 28% | 0% | 0% | 0% | 2% | 2% |
+| act 1 deaths / runs | 11 / 64 | 35 / 86 | 9 / 64 | 82 / 86 | 45 / 63 | 75 / 86 | 49 / 63 | 76 / 85 |
+| items per drop (no pace) | 2.25 | 1.85 | 2.82 | 0.85 | 1.95 | 0.88 | 1.63 | 1.51 |
+
+| Tilt | 0 | 3 | 6 | 10 |
+| --- | --- | --- | --- | --- |
+| win | 17% | 7% | 9% | 3% |
+| deaths act 1 / 2 / 3 | 93 / 39 / 8 | 103 / 42 / 11 | 89 / 31 / 7 | 97 / 17 / 2 |
+| hp lost per normal / elite / boss fight | 4.7 / 28 / 14% | 6.1 / 39 / 20% | 5.7 / 42 / 16% | 8.3 / 43 / 42% |
+
+- **The killers** (the fight a lost run ended in): Ironjaw 52 (10%), the Plushie Queen 52 (10%), the Brood
+  Mother 42, the Carnival Barker 42, the Prize Mimic 41, the Claw Crab 24, spore cap + bat 24, spider +
+  rat 22, the Band 18, the Hoard 17. Deaths by tier: elite 42%, normal 43%, boss 15%. Ironjaw is won
+  21% of the time (81.7% of max hp lost per fight, 2.5 turns: the Gape), the Plushie Queen 63% (the bot
+  never grabs her plush out), every other elite 73 to 85%, act 2 and 3 bosses 87 to 97%.
+- **Per act**: hp lost per normal / elite / boss fight act 1 7.6 / 36.8 / 26.4%, act 2 4.0 / 39.9 / 7.7%,
+  act 3 -0.2 / 25.8 / 6.2% (act 3 normal fights heal more than they hurt). Turns per fight 2.8 / 6.0 /
+  4.5 in act 1, 2.2 / 3.8 / 4.6 in act 2, 2.2 / 4.2 / 4.8 in act 3.
+- **The pile** at the start of act 1 / 2 / 3: 19.5 / 40.4 / 66.7 items, 1.6 / 10.8 / 22.2 relics, 92 /
+  567 / 923 gold carried; a won run ends with 94 items and 32 relics and 1297 gold unspent.
+- **Outliers.** Strongest: Rogue + scoop 55%, Rogue + classic 45%, Lucky Lou + classic 45%, the
+  Alchemist + classic or scoop 36%. Weakest: every crawler with the hand, the hook and the magnet (0%),
+  the vacuum and the twins (0 to 10%); among the good claws the Knight (9 to 18%) and Mama Mech (0 to
+  20%). Mama Mech against Ironjaw is the worst matchup in the game: her bin is all metal, which Ironjaw
+  swallows for Armor and Strength (18 of her 93 deaths, 85% of max hp lost per fight).
+- **A Tilt level** costs about 2 to 3 points of win rate on average (17% at Tilt 0, 3% at Tilt 10); the
+  big step is Tilt 3's Bent Prong (elites +1 affix: elites won 81% -> 72%), and Tilt 10's Rigged makes
+  the act 1 boss a killer (act 1 bosses won 75/92 -> 23/45).
+- **The new systems in these runs**: a pet by the end in 39% of runs (with a pet at act 2, 30% win;
+  without, 6%), a set complete in 15%, an evolution in 2%, a story in 53%, Gary 72 claw-offs (40 won),
+  an alternate boss in 29%, three keys never.
+- **The pets, measured** (scratchpad `r11/petcheck.mjs`: the same seeded act 1 fights, the knight's
+  classic claw, the human pace, 100 fights each, Lv 3): no pet 5.1 turns, 1.63 items per drop, 20% hp lost,
+  9 losses; the Octopus 4.1 / 1.83 / 12% / 5, the Mole Rat 4.3 / 1.70 / 15% / 2, the Magnet Mouse
+  4.5 / 1.74 / 16% / 5, the Trash Raccoon 4.9 / 1.61 / 17% / 3, the Firefly and the Golden Goose
+  neutral (gold), the Parrot 5.9 / 1.47 / 23% / 13 (fixed, below: 5.3 / 1.59 / 20% / 7) and the Penguin
+  5.8 / 1.41 / 27% / 18 (its slide heaps the low prizes against the divider; left for the owner).
+
+### Suggestions (round 11; the round 12 pass below acted on the first three)
+
+1. **Enemy damage and hit points** (`DATA.DIFFICULTY`): a skilled hand kills act 1 fights before the
+   enemies act twice; raise `hp` and `dmg` together so a normal fight lasts two or three turns.
+2. **Loot volume** (`LOOT.WEIGHTS`, `LOOT.PRIZES`, the bonus capsule on every jackpot): a winning run ends
+   with 32 relics and 94 items; fewer relics and rare items out of capsules, and fewer capsules.
+3. **Ironjaw** (`ENEMIES.ironjaw` Gape 46, Bite 22, hp 136-148): the single deadliest fight at every Tilt
+   (79% of the bot's Ironjaw fights end the run, most in 2 or 3 turns); a smaller Gape keeps it the act 2
+   wall without the one-shot.
+4. **The single-prize claws** (`hand`, `hook`): under one prize per drop against 2.25 for the classic
+   claw, and no wins in 172 runs; they need a payoff per prize (for instance a lone delivery plays for
+   +50%, the cracked-glass rule) or a fourth grab.
+5. **The magnet, the vacuum and the twins** (0 to 2%): the magnet for a non-metal crawler and the twins
+   for big items are traps on the picker; a line on the claw card, or a starting relic that fits.
+6. **The Penguin** (`ROSK` slide, `rosPetDo`): stop its slide short of the divider (`binWidth() - 90`) so
+   the prizes it shoves stay under the claw.
+7. **Mama Mech against gulpers** (Ironjaw's Swallow likes metal): let a gulper take one metal item a
+   fight from her, or give the Socket Set a bite guard.
+8. **Tilt 3** (Bent Prong): the steepest single step; it could move to Tilt 5 and Junk Drawer to Tilt 3.
+
+### QA pass 4 (round 11)
+
+Scripted Playwright runs (scratchpad `r11/qa.mjs`, one Chromium at a time, screenshots `r11_qa_*.png`)
+and headless fuzzers:
+- **Boss Rush**: all six crawlers (half in god mode, the Machine in the lineup for two), a reload on
+  every NEXT CHALLENGER, every draft, turn 2 of every boss fight and under every outro: 151 reloads,
+  each one back where it should be with the lineup, splits, time, bin, relics, claw and hp unchanged
+  (paid once). Four clears, Lou fell to The Machine, Ms. Bubbles to Glacius's wisps.
+- **The ghost race**: four daily and three weekly attempts on one profile with a reload mid race each;
+  a ghost replaced only when beaten, passes counted once per attempt, the end panel every time. A daily
+  won into Endless (headless): the race ends at the win, no chip or ghost in Endless, the Endless death
+  never books it again; an abandoned weekly leaves no ghost.
+- **Ms. Bubbles with all eight claws** (two real fights each): bubbles blown, caught and popped with every
+  claw (the magnet catches the fewest: 16 of 62).
+- **The 20 mutators** one at a time in a real fight, and 10 random clean triples; **the 11 pets** in real
+  fights, every trick in the log (the Firefly in a Blackout too).
+- **Audio**: all 220 voices through the real graph in Chromium (none refused), every tune on every act and
+  season, the stings' ducks (music to 0.30, minor sfx to 0.50, back to 1), and over the sessions about
+  90,000 sfx and 500 huge stings: every one ducked, no voice over its tier's cap, no audio error.
+- **A fight fuzzer** (`r11/fuzz.mjs`): 162 random fights (crawler, claw, 0 to 3 mutators, a pet, Tilt,
+  any encounter, the rush bosses) with invariants on every step (no exception, finite numbers, bodies in
+  the cabinet, one body per bin item, no item in two piles, no orphan body at a quiet turn, the rig never
+  stuck): clean. Every claw type through a real claw-off with Gary: each finishes in 31 to 41 s and pays
+  once.
+- **The round 10 screens** at 360 x 780 and 390 x 844, normal and XL text (the rush menu, NEXT
+  CHALLENGER, a rush fight, the draft, the result, the ghost chip and its end panel, the weekly): no
+  overlap, no button off stage or covered, no bad text.
+
+Found and fixed (regressions in `tests/clawspire_game.test.mjs`, `qa11:` tests):
+1. **The Parrot fought the claw.** Its PECK carries a prize in its beak under a velocity weld for the
+   whole trick; a player who dropped during it had the prize dragged through the prongs (and the pile
+   stirred), about 10% fewer prizes per drop and nearly twice the losses. It now drops its catch on the
+   pile the moment the claw goes to work (`petFightTick`); left alone it still carries it all the way.
+2. **Give up read "Sir Grabsworth fell to walking away at boss 2 of 7."** It says "gave up" now.
+3. **The first challenger said "the clock starts at the bell" twice** (the canvas line and the DOM hint
+   under it). The canvas line names the rush's size instead ("7 bosses, back to back").
+
+By design, noted: a turn pet needs a quiet moment (0.9 s into the turn, 0.55 s after a grab) and a
+player who drops at once never sees its trick; the claw-off has no buttons mid play; Ms. Bubbles' all
+four-damage starting bin stalls against Armor stackers (the Claw Crab's Harden) with a weak claw.
+
+### Load check (round 11)
+
+The round 9 method (scratchpad `r11/load.mjs`: Chromium with a 4x CPU throttle, files served gzipped like
+Pages, the median of 3 cold and 3 warm loads), run on round 9, round 10 and the round 12 working tree:
+
+| | round 9 | round 10 | now |
+| --- | --- | --- | --- |
+| payload, gzipped (index.html + js) | 858 KB | 919 KB | 1027 KB |
+| slow 4G, cold: first paint / first frame / load (ms) | 812 / 6173 / 6730 | 840 / 6514 / 7121 | 840 / 7133 / 7803 |
+| slow 4G, warm: first frame (ms) | 2361 | 2266 | 2368 |
+| no network throttle, cold: first paint / scripts done / first frame (ms) | 248 / 92 / 297 | 220 / 129 / 368 | 244 / 107 / 333 |
+
+The cold first frame on slow 4G is about 1 s later than in round 9 (+16%), and all of it is bytes: +169 KB
+gzipped since round 9 (game.js +73, render.js +44, data.js +32, audio.js +9, index.html +6), and at 180 KB/s
+that is the whole delta. The boot itself did not grow (unthrottled network: 297 -> 333 ms to the first frame,
+scripts done in 107 ms, within noise) and a warm load is flat, so there is no cheap boot fix to make. The
+real lever is the bytes: minify `dist/clawspire/js` in `build.js` (the files ship unminified), or load the
+modes a first session never opens (Duo, Claw School, Boss Rush, the season) after the first frame.
+
+## Balance pass (round 12, owner request)
+
+Owner of this section: the balance and QA pass. The request: enemies never kill and the loot is overpowered;
+a skilled player should lose about 70% of runs, weaker play noticeably more, with the deaths spread over the
+three acts, elites and bosses dangerous but readable, far less loot, and a good relic or capsule costing a few
+fights' gold.
+
+**Is enemy damage getting through?** Checked first, with an audit mode on the bot (scratchpad
+`r11/bal.mjs`, `AUDIT=1`): every enemy action's shown threat (`COMBAT.qaThreat`) against the hp and Block the
+player actually lost, through Block and blockKeep, the sets, the pets, the turret, Ms. Bubbles' bubbles, the
+auras and the telegraphed charges. Predicted and actual loss matched. There is no immunity bug: the enemies
+rarely hit because a good hand ended the fight first (1.2 turns a normal fight, 2.1 an elite, 2.0 a boss).
+
+**The skilled bot** (`PRO=2` in `r11/bal.mjs`, snapshots built by `r11/mktune.py`, batches by `r11/cal.sh`,
+tables by `r11/cal_agg.mjs`, raw lines `r11/cal_*.jsonl`): the round 11 bot at a human's pace, plus a perfect
+hand (every grab lands where it aims, and the prizes it picks go down the chute: 2 for the classic, the tri,
+the twins and the magnet, 3 for the scoop and the vacuum, 1 for the hand and the hook; about 3.4 prizes a
+drop), and sensible play: an elite whenever it is at 70% hp or better (up to 2 an act), relics first in the
+shop (legendaries included, the Back Room counter too), capsules opened, rests below 60% hp. Six crawlers x
+classic / tri / scoop / twins, 2 seeds each, 48 runs a batch; the weaker bot is the round 11 snapshot bot
+(`PRO=0`, about 1.9 prizes a drop).
+
+### Before and after
+
+| skilled bot, Tilt 0 (48 runs each) | before | after |
+| --- | --- | --- |
+| win | 48% | 31% |
+| deaths act 1 / 2 / 3 | 0 / 25 / 0 | 12 / 16 / 5 |
+| win: Knight / Alchemist / Rogue / Lucky Lou / Mama Mech / Ms. Bubbles | 63 / 50 / 38 / 50 / 63 / 25% | 38 / 38 / 38 / 13 / 25 / 38% |
+| win: classic / tri / scoop / twins | 42 / 58 / 75 / 17% | 42 / 25 / 50 / 8% |
+| turns a fight, normal / elite / boss | 1.2 / 2.1 / 2.0 | 1.7 / 3.0 / 3.2 |
+| hp lost a fight, act 1 / 2 / 3 | 0.6 / 6.9 / -0.3% | 4.0 / 6.2 / 2.1% |
+| elites won / bosses won | 89 / 100% | 92 / 91% |
+| the killers | Ironjaw 22, the Lodestone 2, Tin Knight 1 | the Plushie Queen 6, Ironjaw 4, the Prize Mimic 3, the Dozer 3, then 2 each: Tin Knight, oil slick + drone, High Cultist, the Collector |
+
+| Tilt (after) | 0 | 3 | 10 |
+| --- | --- | --- | --- |
+| skilled bot win | 31% | 8% | 4% |
+| deaths act 1 / 2 / 3 | 12 / 16 / 5 | 7 / 13 / 2 | 14 / 7 / 2 |
+
+| weaker bot (round 11 pace, no perfect hand) | before (round 11 snapshot, 597 runs) | after (24 runs, Tilt 0) |
+| --- | --- | --- |
+| win at Tilt 0 | 17% | 8% |
+| deaths act 1 / 2 / 3 | 71 / 24 / 5% of losses (all Tilts) | 19 / 2 / 1 |
+
+Before, the skilled bot took no damage outside act 2 and only Ironjaw ever killed it; after, the deaths are
+36 / 48 / 15% by act and eight different fights did the killing. Tilt still stacks hard (Tilt 3 at 8%).
+
+| the pile, skilled bot, at the start of act 1 / 2 / 3 | before | after |
+| --- | --- | --- |
+| gold on arrival | 103 / 648 / 1298 | 103 / 419 / 720 |
+| payout gold earned so far | 0 / 889 / 2074 | 0 / 534 / 1225 |
+| tickets earned so far | 0 / 479 / 1133 | 1 / 246 / 759 |
+| relics | 1.6 / 11.5 / 23.0 | 1.6 / 9.0 / 16.9 |
+| bin items (rare or better) | 19 / 41.9 (4.0) / 67.8 (11.5) | 19 / 37.7 (1.2) / 58.3 (5.3) |
+| a won run ends with | 33.4 relics, 96 items, 2009 gold unspent | 23.9 relics, 81 items, 1128 gold unspent |
+
+| capsules | before | after |
+| --- | --- | --- |
+| a run | 43.1 | 21.7 |
+| tiers c / u / r / l | 30 / 38 / 26 / 6% | 40 / 33 / 21 / 6% |
+| contents | gold 17%, uncommon relic 12, uncommon item 12, tickets 8, common relic 7, common item 7, rare item 6, max hp 6, rare relic 6, tool 6, bulbs 6, claw part 3, legendary item 1, legendary relic 1 | gold 22%, tickets 14, common item 11, common relic 11, uncommon item 9, uncommon relic 9, bulbs 6, tool 5, rare relic 4, max hp 3, rare item 2, claw part 2, legendary relic 1 |
+
+A shop's uncommon relic now costs 208 gold (was 160): about three normal fights and an elite of act 2
+payout.
+
+### The dials (old -> new)
+
+| dial | where | old | new |
+| --- | --- | --- | --- |
+| enemy hp | `data.js` `DIFFICULTY.hp` | 2.0 | 3.1 |
+| enemy damage | `DIFFICULTY.dmg` | 1.8 | 2.6 |
+| hidden ramp | `DIFFICULTY.ramp` every / hp / dmg / max | 3 / 0.12 / 0.12 / 8 | 4 / 0.10 / 0.10 / 10 |
+| elite and boss damage on top (new) | `DIFFICULTY.tierDmg`, read in `combat.js` `makeEnemy` | none | elite 1.5, boss 1.5 |
+| Ironjaw | `ENEMIES` ironjaw hp / Bite / Gape / Thorns | 136-148 / 22 / 46 / 4 | 88-98 / 11 / 20 / 2 |
+| fight reward rarity, act 1 / 2 / 3 (c / u / r / l) | `RARITY_WEIGHTS` | 70/25/5/0, 55/33/11/1, 40/38/18/4 | 76/22/2/0, 64/29/6.5/0.5, 52/35/11.5/1.5 |
+| fight gold (new) | `ECONOMY.goldK`, read in `game.js` `endFight` | 1 | 0.7 |
+| shop prices (new) | `ECONOMY.shopK`, read in `game.js` `rollShop` and the reroll shelf | 1 | 1.3 (relics c / u / r 156 / 208 / 286) |
+| capsule tiers by source (c / u / r / l) | `LOOT.WEIGHTS` normal / bonus / elite / boss / treasure | 62/28/9/1, 45/37/15/3, 20/46/27/7, 0/20/58/22, 34/40/22/4 | 72/22/5.5/0.5, 60/30/9/1, 36/44/17/3, 0/34/56/10, 46/38/14/2 |
+| mid-open upgrade c / u / r | `LOOT.UP` | 0.16 / 0.11 / 0.07 | 0.12 / 0.08 / 0.05 |
+| pity (capsules below rare) | `LOOT.PITY` | 5 | 8 |
+| common capsule prizes | `LOOT.PRIZES.c` gold / item / tickets / bulbs / tool | 34 / 26 / 20 / 12 / 8 | 36 / 26 / 22 / 10 / 6 |
+| uncommon capsule prizes | `LOOT.PRIZES.u` item / gold / tickets / relic / tool / max hp / bulbs | 30 / 16 / 10 / 16 / 12 / 10 / 6 | 30 / 24 / 18 / 6 / 10 / 6 / 6 |
+| rare capsule prizes | `LOOT.PRIZES.r` item / gold / relic / tickets / item+ / max hp / claw | 28 / 10 / 34 / 0 / 10 / 10 / 8 | 26 / 24 / 16 / 14 / 8 / 6 / 6 |
+| legendary capsule prizes (its relic can be a legendary) | `LOOT.PRIZES.l` relic / item / gold / claw / max hp | 32 / 26 / 0 / 24 / 18 | 24 / 22 / 20 / 18 / 16 |
+| an item prize's rarity | `LOOT.ITEM_RAR` | its own tier | its tier or the one below |
+| capsule gold c / u / r / l | `LOOT.GOLD` | 12-25 / 30-50 / 70-100 / 120-160 | 8-16 / 15-28 / 30-45 / 50-80 |
+| tickets a fight | `LOOT.TICKETS` normal / elite / boss / jackpot / combo / flawless / speedy / overkill | 4 / 8 / 15 / 3 / 1 / 5 / 3 / 1 per 5 up to 4 | 3 / 6 / 12 / 1 / 0 / 3 / 2 / 1 per 6 up to 2 |
+| payout bonus gold | `LOOT.BONUS_GOLD` jackpot / combo / flawless / speedy / overkill | 4 / 2 / 8 / 5 / 1 per 3 up to 8 | 1 / 1 / 3 / 2 / 1 per 4 up to 3 |
+| bonus capsule on a jackpot or tier 3 combo (new) | `LOOT.BONUS_P`, read in `game.js` `lootReward` | always | 35% |
+| DOUBLE REWARD | `LOOT.DOUBLE` | 1/20 | 1/30 |
+| prize counter, tickets | `LOOT.PRICE` capsule c/u/r/l, item c/u/r/l, max hp, bulbs, tool | 12/28/55/110, 14/24/40/70, 30, 10, 18 | 30/70/130/260, 24/44/75/130, 45, 16, 28 |
+| a boss relic is a legendary | `LEG.K.bossP` | 0.25 | 0.15 |
+
+Rest healing and the Back Room's 250-gold legendary were left alone. `tierDmg` also reaches the Boss Rush and
+the Duo co-op boss (their own `DMGK` shares apply on top); if the rush should stay as round 10 tuned it, divide
+it back out there.
+
+### What is left for the owner
+
+- **The weaker bot** now dies in act 1 (19 of 22 losses, 8% wins). The balance suite's floor (a starting
+  bin beats every normal fight at least sometimes) sits right at the current `DIFFICULTY` (2.8 damage already
+  walls the Rogue against the act 1 band), which is why the rest of the push went into `tierDmg`.
+- **The twins** (8%) and the tri claw (25%) trail; the scoop (50%) leads. Lucky Lou is the weakest crawler for
+  the skilled bot (13%).
+- **The Plushie Queen** is now the top killer (6 of 33), mostly for bots that leave her plush in the pile.
+- **Tilt 3** takes the skilled bot from 31% to 8%; moving Bent Prong later (suggestion 8 above) would smooth it.
+- Tests: the pinned numbers moved with the dials (`DIFFICULTY` pins, the rarity shares, the boss capsule
+  share, the shop cap now `150 x shopK`, the forced bonus capsule), and `qa12:` in the game suite checks the
+  three new economy dials; the balance suite checks `tierDmg`.
 
 ## Quality bar (Game of the Year, mobile)
 
