@@ -506,6 +506,7 @@ const COMBAT = (() => {
     if (arng) secFight(F, run, arng);   // the Back Room's elites: the strongest affixes (SECRET block)
     F.digested = [];   // items enemies swallowed and digested: gone for this fight only
     for (const e of F.enemies) api.pickIntent(F, e);
+    famFight(F);   // enemy families: the Crescendo, the choir's lockstep (FAMILY block)
     cr8Fight(F, run);   // Mama Mech's turret (CR8 block)
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
     api.startTurn(F);
@@ -748,6 +749,7 @@ const COMBAT = (() => {
     // Everything it swallowed bursts out and rains back into the bin.
     if (e.belly && e.belly.length) spit(F, e, e.belly.length, 'burst');
     bestDeath(F, e);   // a Mole's buried items pop back up (BESTIARY block)
+    famDeath(F, e);   // the band loses the beat, the choir gets angry, the Change Machine pays out (FAMILY block)
     stoDeath(F, e);   // the Arctic Arcade's ice block melts open, the King's belt stops (STORY block)
     // Explosive affix: a parting blast (it never finishes the player off).
     if (hasAffix(e, 'explosive') && F.player.hp > 1) {
@@ -829,7 +831,7 @@ const COMBAT = (() => {
   api.intentDmg = function (F, e) {
     const m = e && e.intent;
     if (!m || m.k !== 'attack') return null;
-    const v = m.charged ? e.charged : num(m.v, 0);
+    const v = m.charged ? e.charged : F ? famHitV(F, e, m) : num(m.v, 0);   // (FAMILY: harmony)
     const vuln = F && F.player ? st(F.player, 'vuln') > 0 : false;
     const armor = F && F.player ? st(F.player, 'armor') : 0;
     return { v: calcHit(v, st(e, 'str'), st(e, 'weak') > 0, vuln, armor), n: Math.max(1, num(m.n, 1) | 0) };
@@ -856,6 +858,7 @@ const COMBAT = (() => {
       case 'attack': {
         const v = calcHit(m.charged ? e.charged : num(m.v, 0), st(e, 'str'), st(e, 'weak') > 0, false, 0);
         if (m.charged) return `Unleashes ${v}`;
+        if (m.fam) return famText(e, m, v);   // a SOLO, a hum (FAMILY block)
         return n > 1 ? `Attacks for ${v}x${n}` : `Attacks for ${v}`;
       }
       case 'charge': return `Charging (${num(m.v, 0)} next turn)`;
@@ -884,7 +887,7 @@ const COMBAT = (() => {
       case 'jam': return 'Jams your claw rail';
       case 'eggs': return `Lays ${Math.max(1, num(m.n, 1) | 0)} eggs in your bin`;
       case 'none': return 'Waits';
-      default: return bestIntent(e, m) || m.txt || m.name || '???';
+      default: return famText(e, m) || bestIntent(e, m) || m.txt || m.name || '???';   // (FAMILY: restock, cans, change, lost the beat)
     }
   }
 
@@ -1515,8 +1518,9 @@ const COMBAT = (() => {
     switch (m.k) {
       case 'attack': {
         const n = Math.max(1, num(m.n, 1) | 0);
-        const v = m.charged ? e.charged : num(m.v, 0);
+        const v = m.charged ? e.charged : famHitV(F, e, m);   // (FAMILY: a SOLO or a hum swells with harmony)
         if (m.charged) e.charged = 0;
+        if (m.fam) famBefore(F, e, m);   // the SOLO's spotlight, the choir's shake (FAMILY block)
         for (let i = 0; i < n && e.alive && p.hp > 0; i++) api.damage(F, e, p, v);
         break;
       }
@@ -1578,7 +1582,7 @@ const COMBAT = (() => {
         checkOver(F);
         break;
       }
-      default: bestMove(F, e, m); break;   // the bestiary's machine tricks (BESTIARY block)
+      default: if (!famMove(F, e, m)) bestMove(F, e, m); break;   // the families' moves (FAMILY block), the bestiary's machine tricks (BESTIARY block)   // the bestiary's machine tricks (BESTIARY block)
     }
   }
 
@@ -1618,6 +1622,7 @@ const COMBAT = (() => {
     tickDmg(F, e, 'bleed');
     if (!e.alive || F.phase === 'over') return;
     actMove(F, e);
+    famActed(F, e);   // the band's Crescendo builds (FAMILY block)
     bestAfterAct(F, e);   // the Claw Collector's rival claw (BESTIARY block)
     if (e.alive && F.phase !== 'over') api.pickIntent(F, e);
     decayTurns(e);
@@ -2213,12 +2218,14 @@ const COMBAT = (() => {
     F.dry = !F.playedThisTurn;
     F.phase = 'enemy';
     bossTurnEnd(F);
+    famPhaseStart(F);   // who plays the SOLO, who hums (FAMILY block)
     for (const e of F.enemies.slice()) {
       if (!e.alive || F.enemies.indexOf(e) < 0) continue;
       enemyAct(F, e);
       sanitize(F);
       if (checkOver(F)) break;
     }
+    famPhaseEnd(F);   // the choir's anger, a full Crescendo turns into a SOLO, the choir in step (FAMILY block)
     // After the enemies acted: lit bombs left in the bin burn down, eggs
     // left alone hatch (the hatchlings act from next round).
     if (F.phase === 'enemy') { binTimers(F); sanitize(F); checkOver(F); }
@@ -2572,7 +2579,8 @@ const COMBAT = (() => {
     out.skip = st(e, 'freeze') > 0 || st(e, 'stun') > 0 || st(e, 'poison') + st(e, 'burn') >= e.hp;
     if (m.k === 'attack') {
       out.n = Math.max(1, num(m.n, 1) | 0);
-      out.hit = calcHit(m.charged ? e.charged : num(m.v, 0), str, weak, vuln, armor);
+      out.hit = calcHit(m.charged ? e.charged : famHitV(F, e, m), str, weak, vuln, armor);   // (FAMILY: a SOLO or a hum with its harmony)
+      if (m.fam) { out.fam = m.fam; out.band = famIn(F, e, m.fam); }
       if (api.hasteNext(e)) out.jab = calcHit(Math.max(1, Math.round(num(m.v, 0) / 2)), str, weak, vuln, armor);
       out.total = (out.hit + out.jab) * out.n;
     } else if (m.k === 'charge') {
@@ -2899,6 +2907,229 @@ const COMBAT = (() => {
   api.turretFire = function (F) { const c = begin(F); if (F && F.tur) { cr8TurnEnd(F); checkOver(F); } return end(F, c); };
   api.turretOf = (F) => (F && F.tur ? F.tur : null);
   /* ================= /CR8 ================= */
+
+  /* ================= FAMILY (round 9: enemy families) =================
+     DESIGN.md "Enemy families (round 9)". Members carry def.fam, the numbers
+     live in DATA.FAM. F.fam is the fight's family state (null without a
+     family, so every other fight is bit for bit the same; no rng is drawn).
+     - The Band: each member that takes its action adds Crescendo (a
+       frozen or stunned one does not). At full Crescendo, as the enemy phase
+       ends, every member's intent becomes a SOLO (its pattern resumes after).
+       A member knocked out on your turn cancels a telegraphed SOLO: the rest
+       lose the beat ('fumble'). Otherwise a loss drops the meter.
+     - A SOLO and the Choir's hum are attacks that swell with harmony: v x
+       (1 + harm x the other members in it). Who is in it is read the way the
+       telegraph reads it (alive, the same move, not frozen or stunned, not
+       about to fall to its own Poison and Burn) and snapshotted as the enemy
+       phase starts, so COMBAT.qaIntent / qaThreat stay exact.
+     - The Vending Gang: restock, cans, change (FAM_KINDS). The Change
+       Machine banks the gold it takes and pays it back when it breaks.
+     - The Choir: the first hum of a phase scrambles the pile (the game
+       shuffles the bodies); the choir is resynced to one pattern step after
+       every phase; a globe that shatters makes the rest angry at once on
+       your turn, at the end of the phase during theirs (no hit in flight changes). */
+  const FAM_KINDS = ['restock', 'cans', 'change'];
+  const famCfg = (id) => { const T = D().FAM; return T && id && T[id] ? T[id] : null; };
+  const famId = (e) => (e && e.def && e.def.fam && famCfg(e.def.fam) ? e.def.fam : null);
+  const famMates = (F, fam) => F.enemies.filter((x) => x && x.alive && famId(x) === fam);
+  const famIdx = (F, e) => F.enemies.indexOf(e);
+  // Would it sit this phase out? (exactly the telegraph's skip)
+  const famSits = (e) => st(e, 'freeze') > 0 || st(e, 'stun') > 0 || st(e, 'poison') + st(e, 'burn') >= e.hp;
+  // The members of e's family whose intent is the same family move (kind), and who will play it.
+  function famIn(F, e, kind) {
+    let n = 0;
+    for (const x of F.enemies) if (x && x.alive && famId(x) === famId(e) && x.intent && x.intent.fam === kind && !famSits(x)) n++;
+    return n;
+  }
+  function famFight(F) {
+    F.fam = null;
+    const ids = [];
+    for (const e of F.enemies) { const f = famId(e); if (f && ids.indexOf(f) < 0) ids.push(f); }
+    if (!ids.length) return;
+    const band = famCfg('band');
+    F.fam = { ids, cres: 0, max: Math.max(1, num(band && band.max, 8)), snap: {}, soloOn: false, humOn: false, angry: 0, solos: 0, hums: 0, cancels: 0, taken: 0, paid: 0 };
+  }
+  // The hit a family move deals (before Strength, Weak, Vulnerable and Armor).
+  function famHitV(F, e, m) {
+    const v = num(m && m.v, 0);
+    const fam = famId(e), cfg = famCfg(fam);
+    if (!m || !m.fam || !cfg || !F) return v;
+    const key = fam + ':' + m.fam;
+    const n = F.phase === 'enemy' && F.fam && F.fam.snap[key] != null ? F.fam.snap[key] : famIn(F, e, m.fam);
+    return Math.max(1, Math.round(v * (1 + num(cfg.harm, 0) * Math.max(0, n - 1))));
+  }
+  // A band member's SOLO (its value scaled like its attacks).
+  function famSoloMove(e) {
+    const cfg = famCfg('band') || {};
+    const base = num((cfg.solo || {})[e.id], 4);
+    return { id: 'solo', name: 'SOLO', k: 'attack', v: Math.max(1, Math.round(base * num(e.dmgMul, 1))), n: 1, fam: 'solo',
+      txt: 'Plays a SOLO with the band. Every bandmate in it makes it louder.' };
+  }
+  const FAM_FUMBLE = { id: 'fumble', name: 'Lost the Beat', k: 'fumble', txt: 'Lost the beat: the solo is off.' };
+  // As the enemy phase starts: who plays the SOLO and who hums (the telegraph's count, kept for the phase).
+  function famPhaseStart(F) {
+    if (!F.fam) return;
+    F.fam.snap = {}; F.fam.soloOn = false; F.fam.humOn = false;
+    for (const e of F.enemies) {
+      if (!e || !e.alive || !e.intent || !e.intent.fam || !famId(e)) continue;
+      const key = famId(e) + ':' + e.intent.fam;
+      if (F.fam.snap[key] == null) F.fam.snap[key] = famIn(F, e, e.intent.fam);
+    }
+  }
+  // Just before a family attack lands: the SOLO's spotlight, the choir's shake (once a phase).
+  function famBefore(F, e, m) {
+    if (!F.fam || !m || !m.fam) return;
+    const idx = famIdx(F, e), n = F.fam.snap[famId(e) + ':' + m.fam] || 1;
+    if (m.fam === 'solo') {
+      if (!F.fam.soloOn) { F.fam.soloOn = true; F.fam.solos++; emit(F, { t: 'fam', k: 'solo', fam: 'band', idx, n }); }
+      text(F, e, 'SOLO!');
+    } else if (m.fam === 'chorus') {
+      if (!F.fam.humOn) { F.fam.humOn = true; F.fam.hums++; emit(F, { t: 'fam', k: 'scramble', fam: 'choir', idx, n }); }
+      emit(F, { t: 'fam', k: 'hum', fam: 'choir', idx, n });
+    }
+  }
+  // The Vending Gang's moves (and a band member that lost the beat). True when handled.
+  function famMove(F, e, m) {
+    if (!m) return false;
+    const idx = famIdx(F, e), fam = famId(e);
+    switch (m.k) {
+      case 'restock': {
+        // the most dented member (another one when there is one), healed, and half as much Block
+        const mates = fam ? famMates(F, fam) : [e];
+        let to = e, worst = 9;
+        for (const a of mates) {
+          const k = a.hp / Math.max(1, a.maxHp) + (a === e && mates.length > 1 ? 0.5 : 0);
+          if (k < worst) { worst = k; to = a; }
+        }
+        const v = Math.max(1, Math.round(num(m.v, 8)));
+        emit(F, { t: 'fam', k: 'restock', fam: fam || 'vending', idx, to: famIdx(F, to), v });
+        api.heal(F, to, v);
+        gainBlock(F, to, Math.max(1, Math.round(v / 2)));
+        return true;
+      }
+      case 'cans': {
+        const n = clamp(Math.round(num(m.n, 1)), 1, 5), c = [];
+        for (let i = 0; i < n && F.bin.length + F.used.length < MAX_ITEMS; i++) {
+          const inst = { uid: newUid(), id: 'fam_can', plus: false, frozen: false, junk: true, temp: true };
+          F.bin.push(inst);
+          c.push(inst);
+        }
+        if (!c.length) { text(F, e, 'NO ROOM'); return true; }
+        emit(F, { t: 'fam', k: 'cans', fam: fam || 'vending', idx, items: c });
+        hook(F, 'onJunk', c.length, c);
+        return true;
+      }
+      case 'change': {
+        const cfg = famCfg(fam || 'vending') || {};
+        const take = Math.min(Math.max(1, Math.round(num(m.v, num(cfg.take, 12)))), api.gold(F));
+        if (take <= 0) { text(F, e, 'NO CHANGE?'); gainBlock(F, e, 6); return true; }
+        const arm = Math.max(1, Math.floor(take / Math.max(1, num(cfg.per, 4))));
+        F.gain.gold -= take;
+        e.bank = num(e.bank, 0) + take;
+        if (F.fam) F.fam.taken += take;
+        emit(F, { t: 'fam', k: 'change', fam: fam || 'vending', idx, gold: take, armor: arm });
+        text(F, F.player, `-${take} gold`);
+        for (const a of (fam ? famMates(F, fam) : [e])) api.status(F, a, 'armor', arm);
+        return true;
+      }
+      case 'fumble': {
+        text(F, e, 'LOST THE BEAT');
+        emit(F, { t: 'fam', k: 'fumble', fam: fam || 'band', idx });
+        return true;
+      }
+      default: return false;
+    }
+  }
+  // After a member took its action (not when frozen or stunned): the band's Crescendo.
+  function famActed(F, e) {
+    if (!F.fam || famId(e) !== 'band' || !e.intent || e.intent.fam === 'solo') return;
+    const cfg = famCfg('band');
+    const add = Math.max(0, num((cfg.beat || {})[e.id], num(cfg.per, 1)));
+    const was = F.fam.cres;
+    F.fam.cres = Math.min(F.fam.max, was + add);
+    if (F.fam.cres !== was) emit(F, { t: 'fam', k: 'cres', fam: 'band', idx: famIdx(F, e), v: F.fam.cres, max: F.fam.max, add: F.fam.cres - was });
+  }
+  // As the enemy phase ends: the choir's anger lands, a full Crescendo turns into SOLO intents
+  // (or a SOLO just played empties the meter), and the choir steps back into one pattern step.
+  function famPhaseEnd(F) {
+    const S = F.fam;
+    if (!S || F.phase !== 'enemy') return;
+    if (S.angry > 0) { famAnger(F, S.angry); S.angry = 0; }
+    const band = famMates(F, 'band');
+    if (S.soloOn) {
+      S.cres = 0;
+      emit(F, { t: 'fam', k: 'cres', fam: 'band', idx: -1, v: 0, max: S.max, reset: true });
+      // one that sat the SOLO out (frozen) does not keep it for later
+      for (const a of band) if (a.intent && a.intent.fam === 'solo') api.pickIntent(F, a);
+    } else if (S.cres >= S.max && band.length) {
+      for (const a of band) {
+        if (a.charged > 0) continue;
+        if ((a.def.ai || 'cycle') === 'cycle') a.cyc = Math.max(0, num(a.cyc, 0) - 1);   // the pattern resumes after the SOLO
+        a.intent = famSoloMove(a);
+        emit(F, { t: 'intent', idx: famIdx(F, a), fam: true });
+      }
+      emit(F, { t: 'fam', k: 'soloReady', fam: 'band', idx: famIdx(F, band[0]), n: band.length });
+    }
+    const ch = famMates(F, 'choir');
+    if (ch.length > 1) {
+      let top = 0;
+      for (const a of ch) top = Math.max(top, num(a.cyc, 0));
+      for (const a of ch) if (num(a.cyc, 0) !== top && !(a.charged > 0)) { a.cyc = Math.max(0, top - 1); api.pickIntent(F, a); }
+    }
+    S.snap = {}; S.soloOn = false; S.humOn = false;
+  }
+  // The choir gets angry: every globe left gains Strength (n shattered globes' worth).
+  function famAnger(F, n) {
+    const cfg = famCfg('choir') || {}, left = famMates(F, 'choir');
+    if (!left.length) return;
+    for (const a of left) { a.famAngry = num(a.famAngry, 0) + n; api.status(F, a, 'str', Math.max(1, Math.round(num(cfg.angry, 3) * n))); }
+    emit(F, { t: 'fam', k: 'angry', fam: 'choir', idx: famIdx(F, left[0]), n: left.length });
+  }
+  // A member falls (kill): the band loses the beat, the choir gets angry, the Change Machine pays out.
+  function famDeath(F, e) {
+    const fam = famId(e);
+    if (!fam || !F.fam) return;
+    const idx = famIdx(F, e);
+    if (fam === 'band') {
+      const rest = famMates(F, 'band');
+      const pending = rest.filter((a) => a.intent && a.intent.fam === 'solo');
+      if (pending.length && F.phase !== 'enemy') {
+        for (const a of pending) a.intent = Object.assign({}, FAM_FUMBLE);
+        F.fam.cres = 0; F.fam.cancels++;
+        emit(F, { t: 'fam', k: 'cancel', fam, idx, n: pending.length });
+      } else if (!pending.length && F.fam.cres > 0) {
+        F.fam.cres = Math.max(0, F.fam.cres - Math.max(0, num((famCfg('band') || {}).drop, 3)));
+        emit(F, { t: 'fam', k: 'cres', fam, idx, v: F.fam.cres, max: F.fam.max, lost: true });
+      }
+    } else if (fam === 'choir') {
+      emit(F, { t: 'fam', k: 'shatter', fam, idx });
+      if (famMates(F, 'choir').length) { if (F.phase === 'enemy') F.fam.angry++; else famAnger(F, 1); }
+    } else if (fam === 'vending' && num(e.bank, 0) > 0) {
+      const g = num(e.bank, 0);
+      e.bank = 0; F.fam.paid += g;
+      emit(F, { t: 'fam', k: 'payout', fam, idx, gold: g });
+      api.gainGold(F, g);
+    }
+  }
+  // The telegraph's words for the family moves ('' for anything else).
+  function famText(e, m, v) {
+    if (!m) return '';
+    if (m.k === 'attack' && m.fam === 'solo') return `SOLO: ${v} each, louder with every bandmate in it`;
+    if (m.k === 'attack' && m.fam === 'chorus') return `Hums in harmony: ${v}, louder with every globe humming, and shakes your pile`;
+    switch (m.k) {
+      case 'restock': return `Restocks a friend: heals ${Math.round(num(m.v, 8))}, ${Math.max(1, Math.round(num(m.v, 8) / 2))} Block`;
+      case 'cans': return `Lobs ${Math.max(1, num(m.n, 1) | 0)} empty cans into your bin`;
+      case 'change': return `Makes change: takes up to ${Math.round(num(m.v, 12))} of your gold as Armor for the gang`;
+      case 'fumble': return 'Lost the beat';
+      default: return '';
+    }
+  }
+  api.FAM_KINDS = FAM_KINDS;
+  api.famHit = (F, e, m) => famHitV(F, unit(F, e) || e, m || (e && e.intent));
+  api.famIn = (F, e, kind) => famIn(F, unit(F, e) || e, kind);
+  api.famState = (F) => (F && F.fam ? F.fam : null);
+  api.famOf = (e) => famId(e);
+  /* ================= /FAMILY ================= */
 
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).

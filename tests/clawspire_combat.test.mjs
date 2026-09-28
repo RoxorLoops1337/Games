@@ -743,7 +743,7 @@ else {
         h.ok(!invariants(F, id), `enemy ${id} onDeath resolves`);
       }
     }
-    const known = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'].concat(C.BEST_KINDS || []);
+    const known = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'].concat(C.BEST_KINDS || [], C.FAM_KINDS || []);
     for (const k of kinds) h.ok(known.includes(k), `enemy move kind ${k} is one the engine implements`);
   });
 
@@ -3116,6 +3116,237 @@ if (hasData) {
       }
     });
   }
+}
+
+// ---------- round 9: enemy families (DESIGN.md "Enemy families (round 9)") ----------
+if (hasData) {
+  const LF = boot({ only: ['util', 'data', 'combat'] });
+  const C = LF.COMBAT, D = LF.DATA, UF = LF.U;
+  const FB = ['rusty_sword', 'rusty_sword', 'dented_shield', 'dented_shield', 'apple', 'rusty_sword', 'dented_shield', 'apple'];
+  const frun = (extra) => Object.assign({ hp: 900, maxHp: 900, act: 1, relics: [], claw: { grabs: 3 }, gold: 40, bin: FB.map((id, i) => ({ uid: 'f' + i, id: D.ITEMS[id] ? id : 'rock', plus: false })) }, extra || {});
+  // a family fight with tough members (their own numbers otherwise) and no affixes
+  const ffight = (ids, extra, seed) => {
+    const F = C.newFight(frun(Object.assign({ act: D.ENEMIES[ids[0]].act }, extra)), ids, UF.rng(seed || 5));
+    for (const e of F.enemies) { e.hp = e.maxHp = 900; e.affix = []; e.status = {}; }
+    F.events.length = 0;
+    return F;
+  };
+  const ev = (F, k) => F.events.filter(x => x.t === 'fam' && x.k === k);
+  const lossOf = (F) => { const T = C.qaThreat(F), hp0 = F.player.hp; C.endTurn(F); return [T.loss, hp0 - F.player.hp]; };
+
+  h.test('families: the data and the bond state', () => {
+    h.eq(D.FAM_IDS.join(','), 'band,vending,choir', 'three families');
+    for (const f of D.FAM_IDS) {
+      const c = D.FAM[f];
+      h.eq(c.members.length, 3, `${f}: three members`);
+      h.ok(c.members.every(id => D.ENEMIES[id] && D.ENEMIES[id].fam === f && D.ENEMIES[id].act === c.act), `${f}: members of act ${c.act}`);
+      h.ok(D.ENCOUNTERS[c.act].normal.some(enc => enc.length === 3 && c.members.every(id => enc.includes(id))), `${f}: the whole family is an encounter`);
+      h.eq(D.famsIn(c.members).join(','), f, `${f}: famsIn`);
+    }
+    const F = ffight(D.FAM.band.members);
+    h.ok(F.fam && F.fam.ids.join() === 'band' && F.fam.cres === 0 && F.fam.max === D.FAM.band.max, 'a band fight carries the Crescendo');
+    const P = C.newFight(frun(), ['rat', 'rat'], UF.rng(5));
+    h.eq(P.fam, null, 'a fight without a family has no family state');
+    h.eq(C.famState(P), null, 'famState null');
+  });
+
+  h.test('families: the band builds a Crescendo, then plays a SOLO', () => {
+    const F = ffight(D.FAM.band.members);
+    const [dr, bs, sg] = F.enemies;
+    let r = lossOf(F);
+    h.eq(r[0], r[1], 'turn 1: the preview is exact');
+    h.eq(F.fam.cres, 4, 'turn 1: drummer 2 + bassist 1 + singer 1');
+    h.ok(ev(F, 'cres').length >= 1 || F.fam.cres === 4, 'cres events');
+    F.events.length = 0;
+    r = lossOf(F);
+    h.eq(r[0], r[1], 'turn 2: exact');
+    // the move each pattern would have played next (the SOLO cut in front of it)
+    const next = [dr, bs, sg].map(e => e.def.moves[e.def.pattern[e.cyc % e.def.pattern.length]].id);
+    h.eq(F.fam.cres, 8, 'turn 2: full');
+    h.ok([dr, bs, sg].every(e => e.intent.fam === 'solo' && e.intent.k === 'attack'), 'every member telegraphs its SOLO');
+    h.ok(ev(F, 'soloReady').length === 1, 'soloReady event');
+    const q = C.qaIntent(F, dr);
+    h.eq(q.fam, 'solo', 'qaIntent knows the SOLO');
+    h.eq(q.band, 3, 'three in it');
+    const base = Math.round(D.FAM.band.solo.fam_drummer * dr.dmgMul);
+    h.eq(C.famHit(F, dr), Math.round(base * 1.5), 'harmony: +25% per bandmate (two)');
+    h.ok(/SOLO/.test(C.intentText(dr)), 'the intent text says SOLO: ' + C.intentText(dr));
+    const T = C.qaThreat(F);
+    F.events.length = 0;
+    const hp0 = F.player.hp;
+    C.endTurn(F);
+    h.eq(hp0 - F.player.hp, T.loss, 'the SOLO lands exactly as previewed (' + T.loss + ')');
+    h.ok(T.loss >= 3 * Math.round(base * 1.5) - 3, 'a big shared attack');
+    h.eq(ev(F, 'solo').length, 1, 'one spotlight for the whole SOLO');
+    h.eq(F.fam.cres, 0, 'the meter empties after the SOLO');
+    h.eq([dr, bs, sg].map(e => e.intent.id).join(), next.join(), 'each pattern resumes where the SOLO cut in');
+    h.eq(F.fam.solos, 1, 'one SOLO played');
+    // a frozen member keeps no beat
+    const G = ffight(D.FAM.band.members);
+    G.enemies[0].status.freeze = 1;
+    C.endTurn(G);
+    h.eq(G.fam.cres, 2, 'a frozen drummer adds nothing (bassist + singer)');
+    // a duo builds slower
+    const H = ffight(['fam_bassist', 'fam_singer']);
+    C.endTurn(H); C.endTurn(H); C.endTurn(H);
+    h.eq(H.fam.cres, 6, 'a duo without the drummer: 2 a turn');
+  });
+
+  h.test('families: knock one out and the SOLO is off', () => {
+    const F = ffight(D.FAM.band.members);
+    C.endTurn(F); C.endTurn(F);
+    h.ok(F.enemies.every(e => e.intent.fam === 'solo'), 'the SOLO is telegraphed');
+    F.events.length = 0;
+    C.damage(F, F.player, F.enemies[2], 9999, { pierce: true });
+    h.ok(!F.enemies[2].alive, 'the singer is down');
+    h.ok(F.enemies[0].intent.k === 'fumble' && F.enemies[1].intent.k === 'fumble', 'the rest lose the beat');
+    h.eq(ev(F, 'cancel').length, 1, 'a cancel event');
+    h.eq(F.fam.cres, 0, 'the meter empties');
+    h.eq(C.qaThreat(F).raw, 0, 'the preview says nothing is coming');
+    h.eq(C.intentText(F.enemies[0]), 'Lost the beat', 'the text says so');
+    const hp0 = F.player.hp;
+    C.endTurn(F);
+    h.eq(F.player.hp, hp0, 'no SOLO lands');
+    h.ok(F.enemies.filter(e => e.alive).every(e => e.intent.fam !== 'solo' && e.intent.k !== 'fumble'), 'they go back to their patterns');
+    // a loss with no SOLO pending drops the meter
+    const G = ffight(D.FAM.band.members);
+    C.endTurn(G);
+    h.eq(G.fam.cres, 4, '4 after a turn');
+    C.damage(G, G.player, G.enemies[1], 9999, { pierce: true });
+    h.eq(G.fam.cres, 4 - D.FAM.band.drop, 'a member lost drops the meter by ' + D.FAM.band.drop);
+  });
+
+  h.test('families: the Vending Gang restocks, lobs cans, makes change', () => {
+    const F = ffight(D.FAM.vending.members, { gold: 30 });
+    const [pop, snack, chg] = F.enemies;
+    pop.hp = 500; chg.hp = 800;
+    snack.intent = D.ENEMIES.fam_snack.moves.find(m => m.k === 'restock');
+    pop.intent = D.ENEMIES.fam_pop.moves.find(m => m.k === 'cans');
+    chg.intent = D.ENEMIES.fam_change.moves.find(m => m.k === 'change');
+    const bin0 = F.bin.length;
+    for (const e of F.enemies) h.ok(!/undefined|NaN/.test(C.intentText(e)), 'intent text: ' + C.intentText(e));
+    const r = lossOf(F);
+    h.eq(r[0], r[1], 'the preview is exact (no hits)');
+    const re = ev(F, 'restock')[0];
+    h.ok(re && re.to === 0, 'the snack machine restocks the most dented friend (Pop Top)');
+    h.eq(pop.hp, 512, 'healed 12');
+    const cans = ev(F, 'cans')[0];
+    h.ok(cans && cans.items.length === 2 && cans.items.every(i => i.id === 'fam_can' && i.junk), 'two empty cans');
+    h.ok(F.bin.length >= bin0 + 2 - 1 && F.bin.concat(F.used).filter(i => i.id === 'fam_can').length === 2, 'they land in your bin');
+    h.ok(D.ITEMS.fam_can && D.ITEMS.fam_can.rarity === 'junk' && Object.keys(D.ITEMS).indexOf('fam_can') < 0, 'the can is junk nobody lists');
+    const ch = ev(F, 'change')[0];
+    h.ok(ch && ch.gold === 12 && ch.armor === 3, 'the Change Machine takes 12 gold for 3 Armor');
+    h.eq(C.gold(F), 18, 'your gold is 12 lighter');
+    h.ok(F.enemies.every(e => e.status.armor >= 3), 'Armor for the whole gang');
+    h.eq(chg.bank, 12, 'banked');
+    const g0 = C.gold(F);
+    C.damage(F, F.player, chg, 99999, { pierce: true });
+    h.eq(C.gold(F), g0 + 12, 'break it and it pays out');
+    h.eq(ev(F, 'payout').length, 1, 'a payout event');
+    // broke: no change, a little Block
+    const G = ffight(D.FAM.vending.members, { gold: 0 });
+    G.enemies[2].intent = D.ENEMIES.fam_change.moves.find(m => m.k === 'change');
+    C.endTurn(G);
+    h.eq(C.gold(G), 0, 'nothing to take');
+    h.ok(G.enemies[2].status.armor == null, 'no Armor from nothing');
+  });
+
+  h.test('families: the choir hums in sync, scrambles the pile, and gets angry', () => {
+    const F = ffight(D.FAM.choir.members);
+    let r = lossOf(F); h.eq(r[0], r[1], 'turn 1 exact');
+    r = lossOf(F); h.eq(r[0], r[1], 'turn 2 exact');
+    h.ok(F.enemies.every(e => e.intent.fam === 'chorus'), 'all three hum on the same step');
+    const q = C.qaIntent(F, F.enemies[0]);
+    h.eq(q.band, 3, 'three globes humming');
+    h.eq(C.famHit(F, F.enemies[0]), Math.round(Math.round(6 * F.enemies[0].dmgMul) * 1.5), 'harmony x1.5');
+    F.events.length = 0;
+    r = lossOf(F); h.eq(r[0], r[1], 'the hum lands exactly');
+    h.eq(ev(F, 'scramble').length, 1, 'one scramble for the whole choir');
+    h.eq(ev(F, 'hum').length, 3, 'every globe hums');
+    // a frozen globe falls out of step, then back in
+    const G = ffight(D.FAM.choir.members);
+    G.enemies[1].status.freeze = 1;
+    C.endTurn(G);
+    h.ok(G.enemies.every(e => e.cyc === G.enemies[0].cyc) && G.enemies.every(e => e.moveIdx === G.enemies[0].moveIdx), 'resynced after the phase');
+    C.endTurn(G);
+    h.ok(G.enemies.every(e => e.intent.fam === 'chorus'), 'and they hum together on the next step');
+    // frozen on the hum turn: two globes hum, for less
+    const H = ffight(D.FAM.choir.members);
+    C.endTurn(H); C.endTurn(H);
+    H.enemies[2].status.freeze = 1;
+    h.eq(C.qaIntent(H, H.enemies[0]).band, 2, 'a frozen globe does not hum');
+    r = lossOf(H); h.eq(r[0], r[1], 'two-globe hum exact');
+    // a globe shattered on your turn: the rest get angry at once
+    const A = ffight(D.FAM.choir.members);
+    const s0 = C.qaIntent(A, A.enemies[1]).hit;
+    C.damage(A, A.player, A.enemies[0], 99999, { pierce: true });
+    h.ok(A.enemies[1].status.str === D.FAM.choir.angry && A.enemies[2].status.str === D.FAM.choir.angry, 'the rest gain Strength');
+    h.ok(A.enemies[1].famAngry === 1, 'marked angry');
+    h.eq(ev(A, 'shatter').length, 1, 'a shatter event');
+    h.eq(ev(A, 'angry').length, 1, 'an angry event');
+    h.ok(C.qaIntent(A, A.enemies[1]).hit > s0, 'the telegraph shows the angrier hit');
+    r = lossOf(A); h.eq(r[0], r[1], 'exact after the anger');
+    // a globe that falls to its own Poison on their turn: the anger waits for the phase to end
+    const B = ffight(D.FAM.choir.members);
+    B.enemies[0].status.poison = 5; B.enemies[0].hp = 3;
+    r = lossOf(B);
+    h.eq(r[0], r[1], 'the phase a globe shatters in stays exact');
+    h.ok(!B.enemies[0].alive && B.enemies[1].status.str === D.FAM.choir.angry, 'the anger lands as the phase ends');
+  });
+
+  h.test('families: every preview exact over every family encounter (seeds, freezes, kills, Vulnerable)', () => {
+    let same = 0, n = 0;
+    const miss = [];
+    const encs = [];
+    for (const act of [1, 2, 3]) for (const enc of D.ENCOUNTERS[act].normal) if (enc.some(id => D.ENEMIES[id].fam)) encs.push(enc);
+    h.ok(encs.length === 9, 'nine family encounters');
+    for (const enc of encs) {
+      for (const seed of [2, 7, 13, 21]) {
+        const F = C.newFight(frun({ act: D.ENEMIES[enc[0]].act }), enc, UF.rng(seed));
+        const rng = UF.rng(seed * 31);
+        for (const e of F.enemies) { e.affix = e.affix.filter(a => a !== 'explosive'); e.hp = e.maxHp = e.maxHp * 4; }
+        for (let turn = 0; turn < 12 && F.phase === 'player'; turn++) {
+          if (turn % 3 === 1) F.player.block = 9;
+          if (turn === 4) F.player.status.vuln = 2;
+          const live = F.enemies.filter(e => e.alive);
+          if (rng() < 0.25 && live.length) live[Math.floor(rng() * live.length)].status.freeze = 1;
+          if (turn === 6 && live.length > 1) C.damage(F, F.player, live[live.length - 1], 99999, { pierce: true });
+          if (turn === 8 && live.length) { const v = live[0]; v.status.poison = 3; }
+          const odd = F.enemies.some(e => e.alive && (C.greedNext(e) || (e.intent && e.intent.k === 'gulp')));
+          const T = C.qaThreat(F), hp0 = F.player.hp;
+          C.endTurn(F);
+          if (odd || F.phase === 'over') continue;
+          n++;
+          if (hp0 - F.player.hp === T.loss) same++;
+          else if (miss.length < 6) miss.push(`${enc.join('+')} s${seed} t${turn}: ${T.loss} vs ${hp0 - F.player.hp}`);
+          if (F.player.hp < 400) F.player.hp = 900;
+        }
+      }
+    }
+    h.ok(n > 250 && same === n, `exact on ${same} of ${n} family turns ${miss.join('; ')}`);
+  });
+
+  h.test('families: 30 turns of random play stay clean (fuzz)', () => {
+    const IDS = Object.keys(D.ITEMS).filter(id => D.ITEMS[id].rarity !== 'junk').slice(0, 60);
+    for (const f of D.FAM_IDS) {
+      for (const seed of [1, 4]) {
+        const run = { hp: 120, maxHp: 120, act: D.FAM[f].act, relics: [], claw: { grabs: 3 }, gold: 50, bin: IDS.slice(seed * 7, seed * 7 + 16).map((id, i) => ({ uid: 'z' + i, id, plus: false })) };
+        const F = C.newFight(run, D.FAM[f].members, UF.rng(seed));
+        const rng = UF.rng(seed + 99);
+        let ok = true;
+        for (let t = 0; t < 30 && F.phase !== 'over'; t++) {
+          while (F.phase === 'player' && F.player.grabs > 0 && C.useGrab(F)) {
+            const k = rng.int(0, 2);
+            for (let j = 0; j < k && F.bin.length && F.phase === 'player'; j++) C.play(F, F.bin[rng.int(0, F.bin.length - 1)], rng.int(0, F.enemies.length - 1));
+            C.grabDone(F, k);
+          }
+          if (F.phase === 'player') C.endTurn(F);
+          if (!Number.isFinite(F.player.hp) || F.enemies.some(e => !Number.isFinite(e.hp) || e.hp < 0) || (F.fam && !(F.fam.cres >= 0 && F.fam.cres <= F.fam.max))) { ok = false; break; }
+        }
+        h.ok(ok && !F.hookErrors.length, `${f} seed ${seed}: clean`);
+      }
+    }
+  });
 }
 
 h.done();

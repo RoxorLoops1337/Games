@@ -7505,4 +7505,677 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
   });
 }
 
+// ---- LABELS (round 9): the crowded moment. A boss (and a trio), the story crab, relic procs on both
+// sides, a combo, four damage numbers (a crit), a status and the INCOMING telegraph all at once.
+h.test('labels r9: a boss, an ally, procs, combos, numbers and the telegraph at once never overlap', () => {
+  const T = boot(), G = T.GAME, fx = T.RENDER.fx;
+  G.sto.force = true;
+  for (const [tag, enc, tier] of [['boss', ['hoard'], 'boss'], ['trio', ['rat', 'slime', 'bat'], 'normal']]) {
+    G.newRun('knight', 4242);
+    if (G.run.relics.indexOf('squire_gauntlet') < 0) G.run.relics.push('squire_gauntlet');
+    G.run.sto.calls.push({ k: 'ally', id: 'crab', stage: -1, pow: 1 });
+    G.toMap();
+    G.startFight(enc, tier);
+    if (G.boss.vs) { G.boss.vsSkip(); G.boss.vsSkip(); }
+    h.ok(settle(G, 40), tag + ': the fight settles');
+    const F = G.fight;
+    for (const e of F.enemies) { const m = e.def.moves.find((mv) => mv.k === 'attack'); if (m) e.intent = m; }
+    G.qa.refresh();
+    G.draw(); G.update(DT); G.draw(); G.update(DT);   // a draw records the wall sign, the next update reads it
+    const Z = () => fx.zones(), has = (id) => Z().some((z) => z.id === id);
+    h.ok(has('qa'), tag + ': the INCOMING pill holds its slot');
+    h.ok(has('q9b0') && has('q9h0'), tag + ': the intent bubbles and the hp bars reserve their rects');
+    if (tier === 'boss') h.ok(has('q9c0'), tag + ': the boss chip reserves its rect');
+    h.ok(has('q9sign'), tag + ': the arena sign reserves its rect');
+    const slot = G.q9.SLOT, sign = Z().find((z) => z.id === 'q9sign');
+    h.ok(sign && sign.x0 >= slot.x1, tag + ': the wall sign stands right of the INCOMING slot');
+    const hit = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+    F.enemies.forEach((e, i) => {
+      const p = G.q9.enemyPos(i), tip = G.q9.intentY(p);
+      h.ok(!hit(slot, { x0: p.x - p.w / 2, y0: p.y - p.h, x1: p.x + p.w / 2, y1: p.y }), `${tag}: the slot never covers ${e.id}'s art`);
+      h.ok(!hit(slot, { x0: p.x - 30, y0: tip - 42, x1: p.x + 30, y1: tip }), `${tag}: ...nor its intent bubble`);
+    });
+    // the storm
+    const q = (x) => G.fs.queue.push({ ev: x, beat: 0.02 });
+    const last = F.enemies.length - 1;
+    q({ t: 'sto', k: 'ally', id: 'crab', idx: 0, v: 6, n: 2, pow: 1 });
+    q({ t: 'text', who: 'e', idx: 0, str: 'PINCH!' });
+    q({ t: 'dmg', who: 'e', idx: 0, amt: 18, blocked: 0 });
+    q({ t: 'proc', src: 'relic', id: 'squire_gauntlet', name: "Squire's Gauntlet", text: 'GAUNTLET', who: 'player' });
+    q({ t: 'proc', src: 'relic', id: 'squire_gauntlet', name: "Squire's Gauntlet", text: 'GAUNTLET', who: 'enemy', idx: 0 });
+    q({ t: 'dmg', who: 'e', idx: 0, amt: 11, blocked: 0 });
+    q({ t: 'combo', id: 'hat', name: 'Hat Trick', text: '4 damage to ALL', color: '#ffc94d', n: 1, tier: 2 });
+    q({ t: 'dmg', who: 'e', idx: last, amt: 7, blocked: 2 });
+    q({ t: 'status', who: 'e', idx: 0, s: 'poison', v: 3 });
+    q({ t: 'dmg', who: 'e', idx: 0, amt: 24, blocked: 0, crit: true });
+    G.fs.beatT = 0;
+    let over = 0, hard = 0, far = 0, maxN = 0, maxL = 0, ally = false;
+    const why = [];
+    for (let f = 0; f < 150; f++) {
+      G.update(DT); G.draw();
+      ally = ally || has('q9ally');
+      const RR = fx.rects(), L = RR.labels, N = RR.nums, all = N.concat(L);
+      maxN = Math.max(maxN, N.length); maxL = Math.max(maxL, L.length);
+      for (let i = 0; i < all.length; i++) {
+        const a = all[i];
+        if (a.num && a.nudge > 185) far++;   // numMax x 1.6 up or down and two short steps aside at most
+        for (const z of Z()) if (!z.soft && hit(a, z)) { hard++; why.push(a.str + '@' + z.id); }
+        for (let j = i + 1; j < all.length; j++) if (hit(a, all[j])) { over++; why.push(a.str + '/' + all[j].str); }
+      }
+    }
+    h.ok(maxN >= 3 && maxL >= 4, `${tag}: the moment really was crowded (${maxN} numbers, ${maxL} labels at once)`);
+    h.ok(ally, tag + ': the ally reserved its rect while it ran across');
+    h.eq(over, 0, `${tag}: no two labels or numbers ever overlap ${why.slice(0, 4).join(' ')}`);
+    h.eq(hard, 0, `${tag}: nothing sits in a hard keep-out zone ${why.slice(0, 4).join(' ')}`);
+    h.eq(far, 0, tag + ': every number stays close to its own flight');
+  }
+  // the numbers draw last, on top of every label and badge
+  fx.clear();
+  fx.text(270, 300, 'LABEL', '#fff'); fx.badge(270, 300, '*', 'BADGE', '#fff'); fx.num(270, 300, '-18', '#fff');
+  const said = [];
+  const rec = new Proxy({}, { get(o, p) { if (p === 'fillText') return (s) => said.push(String(s)); if (p === 'measureText') return () => ({ width: 40 }); if (p === 'canvas') return { width: 540, height: 960 }; if (typeof p !== 'string' || p in o) return o[p]; return () => {}; }, set(o, p, v) { o[p] = v; return true; } });
+  fx.update(0.05); fx.draw(rec);
+  h.ok(said.lastIndexOf('-18') > said.lastIndexOf('LABEL') && said.lastIndexOf('-18') > said.lastIndexOf('BADGE'), 'the damage number is painted after the labels');
+  fx.clear();
+  // the pill steps down under a discovery toast in the fight's corner lane, and back up
+  const el = { classList: { contains: (c) => c === 'mDex' }, offsetHeight: 50 };
+  G.S.mcur = { el, t: 2 };
+  h.eq(G.q9.pillTop(), 74 + 50 + 6, 'a discovery toast up top: the pill steps under it');
+  G.S.mcur = null;
+  h.eq(G.q9.pillTop(), G.q9.SLOT.y0, '...and back to its slot when it goes');
+  G.toMap(); G.update(DT);
+  h.ok(!fx.zones().some((z) => /^q9/.test(z.id)), 'off the fight the arena zones are gone');
+});
+
+// ---- QA (round 9): the run card said "1 turns"; the test-hook logs had no cap
+h.test('qa r9: run cards count in words ("1 turn"), the long-session logs are capped', () => {
+  const T = boot(), G = T.GAME, D = T.DATA;
+  h.eq(G.q9.n(1, 'turn'), '1 turn', 'one turn');
+  h.eq(G.q9.n(3, 'kill'), '3 kills', 'three kills');
+  h.eq(G.q9.n(0, 'fight'), '0 fights', 'no fights');
+  const rec = D.hisRecFix({ id: 'q9one', d: 1790000000, c: 'knight', r: 'loss', a: 1, kl: 1, tu: 1, f: 1, s: 40, k: 'Rat', kk: 'hit' });
+  G.meta.his.runs.push(rec);
+  const walk = (el, out) => { if (!el) return out; out.push(el); for (const c of el.children || []) walk(c, out); return out; };
+  const textOf = (el) => walk(el, []).map((e) => e.textContent || '').join('|');
+  G.his.show();
+  const list = textOf(T._nodes.historyBody);
+  h.ok(/1 kill\b/.test(list) && /1 turn\b/.test(list) && !/1 turns|1 kills/.test(list), 'the run card: "1 kill · 1 turn"');
+  G.his.show({ open: 'q9one' });
+  const full = textOf(T._nodes.historyBody);
+  h.ok(/1 kill in 1 fight\b/.test(full) && !/1 turns|1 fights|1 kills/.test(full), 'the run in full: "1 kill in 1 fight", "1 turn"');
+  for (let i = 0; i < G.q9.LOG + 100; i++) G.sto.log.push({ k: 'x', i });
+  G.q9.trim();
+  h.eq(G.sto.log.length, G.q9.LOG, 'the story log keeps its newest entries only');
+  h.eq(G.sto.log[G.sto.log.length - 1].i, G.q9.LOG + 99, '...the newest');
+});
+
+// ---- TITLE (round 9): the subtitle ran under NEW RUN once the menu grew; the logo now sits above the menu
+h.test('title r9: the logo, its subtitle and the season ribbon clear the menu; a menu too tall scrolls; indices hold', () => {
+  const T = boot(), G = T.GAME, K = G.q9.TITLE, fs = Math.min(540 * 0.16, 92);
+  for (const sea of [false, true]) for (const first of [700, 540, 486, 420, 300]) {
+    const L = G.q9.titleLayout({ first, fs, sea });
+    h.ok(L.ly <= 480 && L.top >= (sea ? K.ribbon : K.bare) - 0.01, `sea ${sea}, first button at ${first}: the logo block stays under the ribbon and never drops below the middle`);
+    if (L.fit) h.ok(L.bottom + K.gap <= first + 0.01, `sea ${sea}, first button at ${first}: the subtitle ends above the first button`);
+    else h.ok(L.firstMin > L.bottom && L.firstMin <= 400, `sea ${sea}, first button at ${first}: no room, the menu is held back to ${Math.round(L.firstMin)}`);
+  }
+  h.ok(G.q9.titleLayout({ first: 800, fs, sea: false }).ly === 480, 'a short menu leaves the logo where it always was');
+  G.showTitle();
+  const labels0 = G.S.ui.buttons.map((b) => b.label).join('|');
+  // a menu that would start at y 104 (a large text size, every button on): held back and scrolling
+  G.q9.T.measure = () => ({ natH: 900, padTop: 60, zoom: 1, bottom: 944 });
+  G.showTitle();
+  const m = T._nodes.titleMenu, L = G.q9.T.last;
+  h.ok(L && !L.fit && m.style.maxHeight && m.style.overflowY === 'auto', 'a menu too tall for the stage scrolls');
+  h.eq(Math.round(944 - parseFloat(m.style.maxHeight) + 60), Math.round(L.firstMin), 'its first button starts under the logo block');
+  h.eq(T.RENDER.q9.title.ly, L.ly, 'the renderer draws the logo where the layout put it');
+  h.eq(G.S.ui.buttons.map((b) => b.label).join('|'), labels0, 'the buttons and their order are unchanged');
+  // a short menu again: no limit, the logo back in place
+  G.q9.T.measure = () => ({ natH: 380, padTop: 60, zoom: 1, bottom: 944 });
+  G.showTitle();
+  h.ok(G.q9.T.last.fit && m.style.maxHeight === '' && T.RENDER.q9.title.ly === 480, 'a menu that fits lets go of the limit');
+  G.draw();
+  G.showChars(); G.update(DT);
+  h.eq(T.RENDER.q9.title.ly, 0, 'off the title the renderer is back to its own layout');
+  G.q9.T.measure = null;
+});
+
+// ---------------- round 9: enemy families in a fight, holo cards, the shop reroll
+// (DESIGN.md "Enemy families (round 9)", "Holo cards (round 9)", "Shop reroll (round 9)")
+function famQueue(G) { const F = G.fight; for (const e of F.events.splice(0)) G.fs.queue.push({ ev: e, beat: 0.2 }); G.fs.beatT = 0; }
+h.test('families: a family fight stages its bond (banner, plate, staff, SOLO, cans as bodies, change, the scramble, anger)', () => {
+  const T = boot();
+  const G = T.GAME, D = T.DATA, C = T.COMBAT;
+  G.newRun('knight', 31);
+  G.run.hp = G.run.maxHp = 900;
+  G.startFight(D.FAM.band.members.slice(), 'normal');
+  h.eq(G.S.bannerStr, 'THE BAND', 'the fight banner names the family');
+  const Z = G.fam.fs;
+  h.ok(Z && Z.ids.join() === 'band' && Z.plate === 0, 'the fight carries its family look state');
+  for (const e of G.fight.enemies) { e.hp = e.maxHp = 900; e.affix = []; }
+  stepFor(G, 0.5);
+  G.draw();
+  h.ok(Z.plate > 0.3, 'the plate runs on its own clock');
+  const box = G.fam.staffBox();
+  h.ok(box && box.x0 >= G.fam.STAFF.x0 && box.x1 <= 524 && box.x1 - box.x0 >= 170, 'the Crescendo staff sits over the band, clear of the INCOMING slot');
+  h.eq(G.fam.beatOf({ ev: { t: 'fam', k: 'cres' }, beat: 0.45 }), 0.14, 'a meter tick is a quick beat');
+  h.eq(G.fam.beatOf({ ev: { t: 'intent', idx: 0, fam: true }, beat: 0.45 }), 0.02, 'a SOLO intent swap is quicker still');
+  h.eq(G.fam.beatOf({ ev: { t: 'dmg' }, beat: 0.45 }), null, 'everything else keeps its beat');
+  settle(G, 10);
+  G.endTurn(); settle(G, 30);
+  h.eq(Z.cres, 4, 'the shown meter follows the Crescendo (4)');
+  h.ok(Z.log.includes('cres'), 'cres events played');
+  G.endTurn(); settle(G, 30);
+  h.ok(G.fight.enemies.every(e => e.intent.fam === 'solo'), 'the whole band telegraphs its SOLO');
+  h.ok(Z.log.includes('soloReady'), 'SOLO NEXT TURN');
+  G.draw();
+  const T0 = C.qaThreat(G.fight), hp0 = G.fight.player.hp;
+  G.endTurn(); settle(G, 30);
+  h.ok(Z.log.includes('solo'), 'the SOLO played');
+  h.eq(hp0 - G.fight.player.hp, T0.loss, 'and took exactly the telegraphed ' + T0.loss);
+  h.eq(Z.cres, 0, 'the staff empties');
+  // the Vending Gang: cans arc in and become bodies, the Change Machine takes gold and pays it back
+  G.run.act = 2; G.run.gold = 50;
+  G.startFight(D.FAM.vending.members.slice(), 'normal');
+  const F2 = G.fight;
+  for (const e of F2.enemies) { e.hp = e.maxHp = 900; e.affix = []; }
+  settle(G, 10);
+  F2.enemies[0].intent = D.ENEMIES.fam_pop.moves.find(m => m.k === 'cans');
+  F2.enemies[2].intent = D.ENEMIES.fam_change.moves.find(m => m.k === 'change');
+  G.endTurn(); settle(G, 30);
+  stepFor(G, 1);
+  const cans = G.fs.items.filter(b => b.data.inst.id === 'fam_can');
+  h.eq(cans.length, 2, 'two empty cans landed in the cabinet as bodies');
+  h.ok(G.fam.fs.log.includes('cans') && G.fam.fs.log.includes('change'), 'cans and change were staged');
+  h.eq(C.gold(F2), 38, 'the gold counter shows 12 gone');
+  C.damage(F2, F2.player, F2.enemies[2], 99999, { pierce: true });
+  famQueue(G); settle(G, 10);
+  h.ok(G.fam.fs.log.includes('payout'), 'the broken Change Machine pays out');
+  h.eq(C.gold(F2), 50, 'every coin back');
+  G.draw();
+  // the Choir: the scramble moves the pile, a shattered globe angers the rest
+  G.run.act = 3;
+  G.startFight(D.FAM.choir.members.slice(), 'normal');
+  const F3 = G.fight;
+  for (const e of F3.enemies) { e.hp = e.maxHp = 900; e.affix = []; }
+  settle(G, 10);
+  G.endTurn(); settle(G, 30); G.endTurn(); settle(G, 30);
+  h.ok(F3.enemies.every(e => e.intent.fam === 'chorus'), 'the choir hums together next');
+  const pos0 = G.fs.items.map(b => b.x + ',' + b.y).join('|');
+  G.endTurn();
+  let shook = false;
+  for (let i = 0; i < 600 && !ready(G); i++) { G.update(DT); if (G.fam.fs.shakeT > 0 && G.fam.shakeX(0, 0.2) !== 0) shook = true; }
+  h.ok(G.fam.fs.log.includes('scramble') && G.fam.fs.log.filter(k => k === 'hum').length === 3, 'one scramble, three hums');
+  h.ok(shook, 'the globes wobble together');
+  h.ok(G.fs.items.map(b => b.x + ',' + b.y).join('|') !== pos0, 'the pile was scrambled');
+  C.damage(F3, F3.player, F3.enemies[0], 99999, { pierce: true });
+  famQueue(G); settle(G, 10);
+  h.ok(G.fam.fs.log.includes('shatter') && G.fam.fs.log.includes('angry'), 'a shattered globe, an angry choir');
+  h.ok(F3.enemies[1].famAngry && F3.enemies[2].famAngry, 'the rest are marked angry (drawn red)');
+  G.draw();
+  // a fight without a family has no family state and keeps its FIGHT banner
+  G.startFight(['rat'], 'normal');
+  h.eq(G.fam.fs, null, 'no family, no family state');
+  h.eq(G.S.bannerStr, 'FIGHT', 'FIGHT as ever');
+});
+
+h.test('holo: reward, shop, treasure and capsule cards carry the holo layers; the look lands on the CSS', () => {
+  const T = boot();
+  const G = T.GAME, D = T.DATA;
+  G.newRun('knight', 12);
+  const by = (r) => Object.keys(D.ITEMS).find(id => D.ITEMS[id].rarity === r);
+  G.showReward({ tier: 'normal', gold: 5, items: [by('c'), by('r'), by('l')], taken: true });
+  h.eq(G.S.ui.buttons.length, 4, 'three cards and Skip, as ever');
+  const cards = G.S.ui.buttons.slice(0, 3).map(b => b.el);
+  h.eq(cards.map(c => c._holo && c._holo.rar).join(), 'c,r,l', 'every card is holo in its rarity');
+  const kids = (c) => c.children.map(k => k.className);
+  h.ok(cards.every(c => kids(c).includes('holoFoil') && kids(c).includes('holoGlare')), 'a foil and a glare on every card');
+  h.eq(kids(cards[2]).filter(k => k === 'holoSpark').length, T.RENDER.holo.SPARKS.length, 'sparkles on the legendary');
+  h.eq(kids(cards[1]).filter(k => k === 'holoSpark').length, 0, 'none on the rare');
+  h.eq(G.holo.live.length, 0, 'headless: nothing on the live list');
+  G.holo.tick(1);
+  // the look copied onto the card: a tilt (the CSS rotate), the foil's place, the glare, the shadow
+  const L = cards[2];
+  let o = G.holo.apply(L, L._holo, 1.3, false, false);
+  h.ok(o && /deg$/.test(L.style.rotate) && L.style['--foil'] && L.style['--hx'] && L.style['--sx'], 'an idle wobble and sweep on the CSS');
+  L._h.pointermove({ clientX: 500, clientY: 20 });
+  h.ok(L._holo.on && L._holo.px > 0.9 && L._holo.py < 0.05, 'the pointer is tracked on the card');
+  o = G.holo.apply(L, L._holo, 1.3, false, false);
+  h.ok(o.ry > 0 && +L.style['--hx'] > 90, 'it tilts toward the pointer, the foil under it');
+  L._h.pointerleave();
+  h.ok(!L._holo.on, 'and lets go');
+  o = G.holo.apply(L, L._holo, 1.3, true, false);
+  h.eq(L.style.rotate, '', 'reduced motion: no tilt');
+  o = G.holo.apply(L, L._holo, 1.3, false, true);
+  h.ok(+L.style['--foil'] < T.RENDER.holo.RAR.l.foil, 'reduced flashing: a dimmer foil');
+  // the shop's cards and relic, the treasure reveal, a capsule prize card
+  G.run.gold = 999;
+  const shop = G.rollShop({ q: 1, r: 1 });
+  G.showShop(shop);
+  h.ok(G.S.ui.buttons.slice(0, 5).every(b => b.el._holo) && G.S.ui.buttons[5].el._holo, 'the shop\'s items and its relic are holo');
+  const rid = Object.keys(D.RELICS).find(id => D.RELICS[id].rarity === 'r');
+  G.showTreasure({ relic: rid, title: 'T' });
+  const tb = T._document.getElementById('treasureBody');
+  h.ok(tb.children.some(c => c._holo && c._holo.rar === 'r'), 'the treasure reveal is holo');
+  const cap = G.loot.makeCapsule('elite', { tier: 'l' });
+  G.loot.showCapsule({ cap, then: { k: 'map' } });
+  G.loot.skipCapsule(); stepFor(G, 3);
+  const cb = T._document.getElementById('capsuleBody');
+  const card = cb.children.find(c => c._holo);
+  h.ok(!!card && card._holo.rar === cap.tier, 'the capsule\'s prize card is holo in its tier');
+});
+
+h.test('reroll: the shop lever pays a rising price, spins reel by reel, never sells a spinning card, pays once across a reload', () => {
+  const T = boot();
+  const G = T.GAME;
+  G.newRun('knight', 44);
+  G.run.gold = 200;
+  const shop = G.rollShop({ q: 3, r: 3 });
+  G.showShop(shop);
+  let labels = G.S.ui.buttons.map(b => b.label);
+  h.ok(labels[labels.length - 1] === 'Prize counter' && labels[labels.length - 2] === 'Compactor' && labels[labels.length - 3] === 'Reroll', 'the lever sits before the Compactor and the counter: ' + labels.slice(-4).join(', '));
+  h.ok(labels.indexOf('Reroll') > labels.indexOf('Leave'), 'after every old entry');
+  h.eq(G.rr.cost(shop, 'shop'), G.rr.RR.gold, 'the first pull costs ' + G.rr.RR.gold);
+  const want = G.rr.shelf(shop, 'shop', 1).map(i => i.id).join();
+  G.choose(labels.indexOf('Reroll'));
+  h.eq(G.run.gold, 200 - G.rr.RR.gold, 'paid');
+  h.eq(shop.rrN, 1, 'one pull on the shop');
+  h.eq(shop.items.map(i => i.id).join(), want, 'the shelf its own seeded stream rolls (' + want + ')');
+  h.ok(shop.items.every(i => !i.sold && i.price >= 20), 'a fresh priced shelf');
+  const S0 = G.rr.state;
+  h.ok(S0 && S0.done.every(d => !d) && S0.els.length === 5, 'every reel spins');
+  h.eq(G.rr.cost(shop, 'shop'), G.rr.RR.gold + G.rr.RR.goldStep, 'the next pull costs more');
+  // reel by reel
+  stepFor(G, G.rr.RR.spin0 + 0.05);
+  h.ok(G.rr.state.done[0] && !G.rr.state.done[4], 'the first reel stopped, the last still spins');
+  // a spinning card is not for sale: a tap hurries the reels instead
+  const g1 = G.run.gold;
+  G.choose(4);
+  h.ok(G.run.gold === g1 && !shop.items[4].sold, 'no sale mid-spin');
+  h.ok(!G.rr.state || G.rr.state.done.every(Boolean), 'the tap brought every reel home');
+  stepFor(G, 1);
+  h.eq(G.rr.state, null, 'the animation completes');
+  G.choose(4);
+  h.ok(shop.items[4].sold, 'then the card sells');
+  // a second pull: the whole spin completes on its own
+  G.run.gold = 200;
+  h.ok(G.rr.pull(shop, 'shop'), 'a second pull');
+  h.eq(G.run.gold, 200 - G.rr.RR.gold - G.rr.RR.goldStep, 'at the higher price');
+  for (let i = 0; i < 300 && G.rr.state; i++) G.update(DT);
+  h.eq(G.rr.state, null, 'the reels all stop by themselves');
+  // too poor
+  G.run.gold = 3;
+  h.eq(G.rr.pull(shop, 'shop'), false, 'too poor: refused');
+  h.ok(G.run.gold === 3 && shop.rrN === 2, 'nothing paid, nothing rolled');
+  // pay once across a reload (mid-spin)
+  G.run.gold = 300;
+  G.rr.pull(shop, 'shop');
+  const ids = shop.items.map(i => i.id).join(), gold = G.run.gold;
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  T2.GAME.choose(T2.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.eq(T2.GAME.screen, 'shop', 'the reload opens the shop');
+  const s2 = T2.GAME.S.sd.shop;
+  h.ok(s2.rrN === 3 && s2.items.map(i => i.id).join() === ids, 'with the rerolled shelf');
+  h.eq(T2.GAME.run.gold, gold, 'and the gold paid once');
+  h.eq(T2.GAME.rr.cost(s2, 'shop'), G.rr.RR.gold + 3 * G.rr.RR.goldStep, 'the price remembers the pulls');
+  // an old shop (no pull count) is at the first price
+  h.eq(G.rr.cost({ items: [] }, 'shop'), G.rr.RR.gold, 'an old shop starts at the first price');
+});
+
+h.test('reroll: the prize counter rerolls its case for tickets', () => {
+  const T = boot();
+  const G = T.GAME;
+  G.newRun('knight', 45);
+  const shop = G.rollShop({ q: 2, r: 5 });
+  G.run.tickets = 30;
+  G.loot.showCounter(shop);
+  const labels = G.S.ui.buttons.map(b => b.label);
+  h.eq(labels[labels.length - 1], 'Reroll', 'the counter\'s lever is its last entry');
+  h.ok(labels.indexOf('Back to the shop') === shop.counter.length, 'the slots and Back keep their places');
+  const want = G.rr.shelf(shop, 'counter', 1).map(s => s.k + (s.tier || s.id || s.n)).join();
+  G.choose(labels.length - 1);
+  h.eq(G.run.tickets, 30 - G.rr.RR.tix, 'paid in tickets');
+  h.eq(shop.ctrN, 1, 'one pull on the counter');
+  h.ok(shop.counter.length === 6 && shop.counter.every(s => !s.sold), 'a fresh case of six');
+  h.eq(shop.counter.map(s => s.k + (s.tier || s.id || s.n)).join(), want, 'seeded');
+  h.ok(G.rr.state && G.rr.state.kind === 'counter', 'the case spins');
+  const t1 = G.run.tickets;
+  G.choose(0);
+  h.eq(G.run.tickets, t1, 'a spinning prize is not for sale');
+  for (let i = 0; i < 300 && G.rr.state; i++) G.update(DT);
+  h.eq(G.rr.state, null, 'the reels stop');
+  h.eq(G.rr.cost(shop, 'counter'), G.rr.RR.tix + G.rr.RR.tixStep, 'the next pull costs more tickets');
+  G.run.tickets = 1;
+  h.eq(G.rr.pull(shop, 'counter'), false, 'too few tickets: refused');
+  G.save();
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  T2.GAME.choose(T2.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.ok(T2.GAME.screen === 'counter' && T2.GAME.S.sd.counter.ctrN === 1, 'the pull count reloads with the case');
+});
+
+// ---------------------------------------------------------------- LORE (round 9): the Codex, landmarks, act intros, the weekly
+const loreKeys = (T) => (key) => { const fn = T._listeners.keydown; if (fn) fn({ key, preventDefault() {} }); };
+const loreLbl = (G) => G.S.ui.buttons.map((b) => b.label);
+
+h.test('lore: fresh, old and junk profiles get the Codex and the weekly fields; an old profile catches up quietly', () => {
+  const { G, saved } = metaBoot({});
+  h.eq(JSON.stringify(G.meta.lore), JSON.stringify({ got: {}, new: {}, kills: {}, intros: {} }), 'a fresh profile: an empty book');
+  h.eq(JSON.stringify(G.meta.wk), JSON.stringify({ best: {}, medal: {}, runs: 0 }), 'and an empty medal cabinet');
+  // a profile from before the Codex: what it already earned is there, NEW, with no toast storm
+  const { G: G2 } = metaBoot({ stats: { runs: 3, wins: 1, fights: 12, bestAct: 3 }, seen: { enemies: { prizemaster: 1 } } });
+  const L2 = G2.meta.lore;
+  h.ok(L2.got.spire_tower && L2.got.pm_wall && L2.got.pm_host, 'pages it had earned: ' + Object.keys(L2.got).join());
+  h.ok(Object.keys(L2.got).every((id) => L2.new[id]), 'each one NEW');
+  h.ok(!G2.prog.queue.some((q) => q.k === 'lore'), 'and no toast');
+  // junk
+  const { G: G3 } = metaBoot({ lore: 'x', wk: [1, 2] });
+  h.ok(G3.meta.lore && G3.meta.lore.got && !Array.isArray(G3.meta.wk) && G3.meta.wk.best && G3.meta.wk.medal, 'junk is repaired');
+  G.meta.lore.kills.rat = 5;
+  G.lore.check();
+  h.ok(saved().lore && saved().lore.got.be_rat && saved().wk, 'the fields are saved with the profile');
+});
+
+h.test('lore: kills count per enemy, pages unlock as you play, a forced toast lands in the corner lane', () => {
+  const { T, G, saved } = metaBoot({});
+  G.newRun('knight', 9101);
+  G.startFight(['rat', 'rat'], 'normal', { seed: 5 });
+  h.ok(settle(G, 20), 'the fight waits for the player');
+  const push = (ev) => { G.fs.queue.push({ ev, beat: 0.01 }); G.fs.beatT = Math.min(G.fs.beatT, 0); };
+  G.fight.enemies.forEach((e, i) => { e.hp = 0; e.alive = false; push({ t: 'die', idx: i }); });
+  stepFor(G, 0.3);
+  h.eq(G.meta.lore.kills.rat, 2, 'two rats down, two kills in the book');
+  stepFor(G, 1);
+  h.eq((saved().lore.kills || {}).rat, 2, 'the kills are saved');
+  // headless: a page is recorded with no toast
+  G.meta.lore.kills.rat = 5;
+  const got = G.lore.check();
+  h.ok(got.includes('be_rat'), 'five rats: their page');
+  h.ok(G.meta.lore.got.be_rat && G.meta.lore.new.be_rat, 'recorded, NEW');
+  h.ok(!G.prog.queue.some((q) => q.k === 'lore'), 'headless: no toast');
+  h.eq(G.lore.check().length, 0, 'a page unlocks once');
+  // forced: the toast shares the corner lane
+  G.lore.force = true;
+  G.meta.lore.kills.slime = 5;
+  G.meta.lore.kills.hoard = 1;
+  const got2 = G.lore.check();
+  h.ok(got2.includes('be_slime') && got2.includes('bo_hoard'), 'two more pages');
+  const q = G.prog.queue.find((x) => x.k === 'lore');
+  h.ok(q && q.list.length === got2.length && q.list.every((x) => x.tab === 'lore'), 'one toast carries them');
+  const el = G.lore.toastEl(q.list);
+  h.ok(el && /NEW CODEX PAGES/.test(el.children[0].textContent), 'the toast says how many');
+  h.eq(T.DATA.loreCount(G.meta), Object.keys(G.meta.lore.got).length, 'the count matches');
+  // 25 pages: the Lorekeeper sticker
+  const B = T.DATA.loreBook();
+  for (const e of B.entries.slice(0, 25)) G.meta.lore.got[e.id] = 1;
+  G.meta.lore.kills.tickler = 5;
+  G.lore.check();
+  h.ok(G.meta.ach.lorekeeper, 'Lorekeeper');
+});
+
+h.test('lore: the Codex opens from the title and the Prizedex, walks chapters and pages, and keeps its spoilers shut', () => {
+  const { T, G, saved } = metaBoot({ stats: { runs: 2, wins: 1, fights: 3 } });
+  G.meta.lore.kills.rat = 5;
+  G.showTitle();
+  const tl = loreLbl(G);
+  h.eq(tl[tl.length - 1], 'History', 'History stays the last title button');
+  h.ok(tl.indexOf('Codex') >= 0 && tl.indexOf('Codex') < tl.indexOf('History'), 'the Codex button comes before it');
+  G.choose(tl.indexOf('Codex'));
+  h.eq(G.screen, 'codex', 'the Codex opens');
+  h.eq(G.lore.ui.from, 'title', 'from the title');
+  const B = T.DATA.loreBook();
+  const ch = loreLbl(G).filter((l) => l !== 'Back');
+  h.eq(ch.length, B.chapters.length, 'one entry per chapter');
+  h.ok(ch.includes('???') && !ch.includes('The Machine'), 'The Machine is shut until it is met');
+  G.draw();
+  // a shut chapter only says so
+  G.choose(loreLbl(G).indexOf('???'));
+  h.eq(G.lore.ui.ch, null, 'a shut chapter stays shut');
+  // The Spire: found pages and dark ones
+  G.choose(loreLbl(G).indexOf('The Clawspire'));
+  h.eq(G.lore.ui.ch, 'spire', 'the chapter opens');
+  const pl = loreLbl(G).filter((l) => l !== 'Back');
+  h.eq(pl.length, B.ch.spire.length, 'one row per page');
+  h.ok(pl.includes(B.byId.spire_tower.name) && pl.includes('???'), 'found pages by name, the rest dark');
+  h.ok(G.meta.lore.new.spire_tower, 'the first page is NEW');
+  G.choose(pl.indexOf(B.byId.spire_tower.name) + 1);
+  h.eq(G.lore.ui.id, 'spire_tower', 'the page opens');
+  h.ok(!G.meta.lore.new.spire_tower && !(saved().lore.new || {}).spire_tower, 'reading it clears NEW (and saves)');
+  h.ok(T._nodes.codexBody.children.some((c) => /lorePage/.test(c.className)), 'the words are on the page');
+  h.ok(G.lore.live && G.lore.live.kind === 'page', 'the picture is live');
+  G.draw();
+  // Prev / Next through the chapter's found pages
+  G.meta.lore.got.spire_dark = 1;
+  G.lore.show({ ch: 'spire', id: 'spire_tower' });
+  const nx = loreLbl(G).findIndex((l) => /Next/.test(l));
+  h.ok(nx >= 0, 'Next');
+  G.choose(nx);
+  h.eq(G.lore.ui.id, 'spire_dark', 'the next found page');
+  // Escape backs out one level at a time
+  const key = loreKeys(T);
+  key('Escape');
+  h.ok(G.screen === 'codex' && G.lore.ui.ch === 'spire' && !G.lore.ui.id, 'Escape: the chapter');
+  key('Escape');
+  h.ok(G.screen === 'codex' && !G.lore.ui.ch, 'Escape: the book');
+  key('Escape');
+  h.eq(G.screen, 'title', 'Escape: the title');
+  // meeting the Machine opens its chapter
+  G.meta.seen.enemies.machine = 1;
+  G.lore.show({ ch: null, id: null });
+  h.ok(loreLbl(G).includes('The Machine'), 'The Machine opens once met');
+  h.ok(G.meta.lore.got.mc_machine, 'with its first page');
+  // the Prizedex door; Back returns there
+  G.showCollection();
+  const cl = loreLbl(G);
+  h.eq(cl[cl.length - 1], 'Codex', 'the Prizedex\'s Codex door is its last entry');
+  G.choose(cl.length - 1);
+  h.ok(G.screen === 'codex' && G.lore.ui.from === 'collection', 'the Codex from the Prizedex');
+  G.lore.back();
+  h.eq(G.screen, 'collection', 'Back returns to the Prizedex');
+});
+
+function loreRun(G, seed) {
+  G.newRun('knight', seed);
+  const M = G.run.map;
+  return { M, marks: G.lore.marks(M) };
+}
+
+h.test('lore: landmarks stand on the map, speak when tapped or stepped on, and the high score board opens underfoot', () => {
+  const { T, G } = metaBoot({});
+  const { M, marks } = loreRun(G, 9201);
+  h.eq(marks.length, 3, 'three landmarks');
+  h.eq(marks.map((m) => m.k).sort().join(), 'hiscore,jukebox,tickets', 'a jukebox, lost tickets and the high score board');
+  h.eq(JSON.stringify(M.lore), JSON.stringify(T.MAP.lorePlace(M)), 'placed from the map seed');
+  const tileOf = (mk) => T.MAP.tileAt(M, mk.q, mk.r);
+  const juke = marks.find((m) => m.k === 'jukebox'), hs = marks.find((m) => m.k === 'hiscore');
+  const tj = tileOf(juke);
+  h.eq(tj.type, 'empty', 'on empty land');
+  // headless without force: nothing pops
+  tj.revealed = true;
+  h.eq(G.lore.tap(tj), false, 'headless: no bubble');
+  h.eq(G.lore.snip, null, 'no bubble');
+  G.lore.force = true;
+  h.eq(G.lore.tap(tj), false, 'a tap on a landmark still walks');
+  h.ok(G.lore.snip && G.lore.snip.kind === 'jukebox' && G.lore.snip.text === T.DATA.loreSnippet('jukebox', M.seed, tj.q, tj.r), 'the jukebox speaks its line');
+  G.draw();
+  stepFor(G, G.lore.K.SNIP + 0.2);
+  h.eq(G.lore.snip, null, 'the bubble fades');
+  // a tower speaks too, a dark hex does not
+  const tw = Object.values(M.tiles).find((t) => t.type === 'tower');
+  if (tw) { tw.revealed = true; G.lore.tap(tw); h.ok(G.lore.snip && G.lore.snip.kind === 'tower', 'a tower has lines'); }
+  const dark = Object.values(M.tiles).find((t) => t.type === 'empty' && !t.revealed && !G.lore.at(t.q, t.r));
+  G.S.loreSnip = null;
+  if (dark) { G.lore.tap(dark); h.eq(G.lore.snip, null, 'plain land says nothing'); }
+  // stepping on one
+  G.S.loreSnip = null;
+  const tt = tileOf(marks.find((m) => m.k === 'tickets'));
+  G.enterTile(tt);
+  h.ok(G.lore.snip && G.lore.snip.kind === 'tickets' && tt.seenToast, 'stepping on the lost tickets');
+  // the high score board: your best runs among the regulars
+  G.meta.his.hof.push({ id: 'r1', c: 'knight', s: 123456, r: 'win', d: 1 }, { id: 'r2', c: 'rogue', s: 2500, r: 'loss', d: 2 });
+  const th = tileOf(hs);
+  th.revealed = true;
+  M.pos = { q: th.q, r: th.r };
+  h.eq(G.lore.tap(th), true, 'the board underfoot opens');
+  const Bd = G.lore.boardState;
+  h.ok(Bd && Bd.rows.length === G.lore.K.BOARD_N, 'eight rows');
+  h.eq(Bd.rows.filter((r) => r.you).length, 2, 'your two runs are on it');
+  h.ok(Bd.rows.some((r) => r.house && r.ini === 'P.M'), 'among the regulars');
+  G.draw();
+  G.pointer('up', 270, 500, { pointerId: 1 });
+  h.ok(G.lore.boardState, 'a stray release does not close it at once');
+  stepFor(G, 0.3);
+  G.pointer('down', 270, 500, { pointerId: 1 });
+  G.pointer('up', 270, 500, { pointerId: 1 });
+  h.eq(G.lore.boardState, null, 'a tap closes it');
+  G.lore.board();
+  h.eq(G.screen, 'map', 'still on the map');
+  loreKeys(T)('Escape');
+  h.eq(G.lore.boardState, null, 'so does Escape');
+  // through the real tap path
+  const p = G.hexToStage(tj.q, tj.r);
+  G.S.loreSnip = null;
+  G.mapTap(p.x, p.y);
+  h.ok(G.lore.snip && G.lore.snip.kind === 'jukebox', 'mapTap: the jukebox speaks');
+  // an old map without landmarks gets the same ones
+  const want = JSON.stringify(M.lore);
+  delete M.lore;
+  h.eq(JSON.stringify(G.lore.marks()), want, 'an old map: the same landmarks');
+  G.save();
+  const s = JSON.parse(T._store.clawspire_run);
+  h.eq(JSON.stringify(s.run.map.lore), want, 'and they save with the map');
+  const G2 = boot({ store: Object.assign({}, T._store) }).GAME;
+  G2.choose(G2.S.ui.buttons.findIndex((b) => /continue/i.test(b.label)));
+  h.eq(JSON.stringify(G2.lore.marks()), want, 'and reload');
+  G2.draw();
+});
+
+h.test('lore: act intros open each floor once, skip on a tap after a beat, run fast on repeat, and stay out of old saves', () => {
+  const { T, G, saved } = metaBoot({});
+  // headless: no card, but the map is marked as introduced
+  G.newRun('knight', 9301);
+  h.eq(G.run.lore.intro, 'a1', 'the run knows Act 1 was entered');
+  h.eq(G.lore.introState, null, 'headless: no card');
+  // forced: the card
+  G.lore.force = true;
+  G.newRun('knight', 9302);
+  let I = G.lore.introState;
+  h.ok(I && I.key === 'a1' && !I.fast && I.def.lines.length === 2, 'Act 1: its card, two lines');
+  h.eq(I.dur, G.lore.K.INTRO.dur, 'the first time runs full length');
+  const pos0 = JSON.stringify(G.run.map.pos);
+  G.pointer('down', 270, 500, { pointerId: 1 });
+  h.ok(G.lore.introState, 'a tap in the first beat does not skip');
+  G.pointer('up', 270, 500, { pointerId: 1 });
+  h.eq(JSON.stringify(G.run.map.pos), pos0, 'the map takes no input under the card');
+  stepFor(G, 0.6);
+  h.ok(G.lore.introState.typed > 0, 'the lines type out');
+  G.draw();
+  G.pointer('down', 270, 500, { pointerId: 1 });
+  h.eq(G.lore.introState, null, 'a tap skips');
+  h.eq(G.lore.log[G.lore.log.length - 1].k, 'skip', 'logged as a skip');
+  h.eq(G.meta.lore.intros.a1, 1, 'seen once');
+  h.eq(saved().lore.intros.a1, 1, 'saved');
+  // repeat: fast, ends on its own
+  G.newRun('knight', 9303);
+  I = G.lore.introState;
+  h.ok(I && I.fast && I.dur === G.lore.K.INTRO.fast, 'the second time is quick');
+  stepFor(G, G.lore.K.INTRO.fast + 0.1);
+  h.eq(G.lore.introState, null, 'and ends on its own');
+  h.eq(G.lore.log[G.lore.log.length - 1].k, 'introEnd', 'logged');
+  // the same map again: no card (leaving and returning)
+  G.toMap();
+  h.eq(G.lore.introState, null, 'a map already entered: no card');
+  // Act 2
+  G.run.act = 2;
+  G.toMap();
+  I = G.lore.introState;
+  h.ok(I && I.key === 'a2' && /Foundry/.test(I.def.name), 'Act 2: the Foundry');
+  loreKeys(T)(' ');
+  h.eq(G.lore.introState, null, 'Space skips');
+  // keys for loops and the Back Room
+  const r = { act: 2, map: {}, endless: { loop: 2 } };
+  h.eq(G.lore.mapKey(r), 'L2', 'an Endless loop');
+  h.eq(G.lore.mapKey({ act: 3, map: { room: true } }), 'room', 'the Back Room');
+  h.eq(G.lore.mapKey({ act: 9, map: {} }), 'a3', 'clamped');
+  const dL = T.DATA.loreIntro('L2', 2), dR = T.DATA.loreIntro('room', 3);
+  h.ok(dL && dL.lines.length === 2 && dR && dR.name === 'The Back Room', 'their cards');
+  // an old save: Continue shows no card
+  G.run.act = 1;
+  G.save();
+  const st = JSON.parse(T._store.clawspire_run);
+  delete st.run.lore;
+  const G2 = boot({ store: Object.assign({}, T._store, { clawspire_run: JSON.stringify(st) }) }).GAME;
+  G2.lore.force = true;
+  G2.choose(G2.S.ui.buttons.findIndex((b) => /continue/i.test(b.label)));
+  h.eq(G2.screen, 'map', 'the old save continues');
+  h.ok(G2.lore.introState === null && G2.run.lore && G2.run.lore.intro === 'a1', 'with no card');
+});
+
+h.test('lore: the weekly challenge by ISO week, its title card, its screen, its run, its medal and its cabinet', () => {
+  const { T, G, saved } = metaBoot({});
+  h.eq(G.wk.setDate('2027-01-01'), '2026-W53', 'Jan 1 2027 is in 2026\'s week 53');
+  h.eq(G.wk.setDate('2027-01-04'), '2027-W01', 'Jan 4 2027 starts week 1');
+  h.eq(G.wk.setDate(new Date(2026, 8, 30, 12, 0, 0)), '2026-W40', 'a Wednesday at noon');
+  h.ok(/^ends in 4d 1\dh$/.test(G.wk.left()), 'time left: ' + G.wk.left());
+  const key = G.wk.key(), def = G.wk.def();
+  h.ok(def && def.key === key && def.muts.length >= 2 && def.muts.length <= 3, 'this week: ' + def.name);
+  // the title card, before History
+  G.showTitle();
+  const tl = loreLbl(G);
+  h.eq(tl[tl.length - 1], 'History', 'History stays last');
+  h.ok(tl.indexOf('Weekly challenge') > tl.indexOf('Codex'), 'the weekly card after the Codex');
+  h.ok(/left$/.test(G.S.wkLeftEl.textContent), 'the card counts down');
+  G.draw();
+  G.choose(tl.indexOf('Weekly challenge'));
+  h.eq(G.screen, 'weekly', 'the weekly screen');
+  const body = T._nodes.weeklyBody.children.map((c) => c.className);
+  h.ok(['wkBan', 'wkRules panel', 'wkTargets', 'wkBest', 'wkCab'].every((k) => body.includes(k)), 'banner, rules, targets, best, cabinet');
+  h.eq(T._nodes.weeklyBody.children.find((c) => c.className === 'wkTargets').children.length, 4, 'four medal targets');
+  G.draw();
+  loreKeys(T)('Escape');
+  h.eq(G.screen, 'title', 'Escape leaves');
+  G.wk.show();
+  G.choose(loreLbl(G).indexOf('Play the weekly'));
+  h.eq(G.screen, 'map', 'the weekly starts');
+  // hand the act stat a parent (the stub DOM has no tree) so the HUD badge has somewhere to live
+  T._nodes.actTxt.parentNode = { children: [], appendChild(c) { this.children.push(c); c.parentNode = this; return c; } };
+  G.update(0.2); G.toMap();
+  const R = G.run;
+  h.ok(R.weekly === key && R.seed === def.seed && R.char === def.char && R.clawType === def.claw, 'the week\'s seed, crawler and claw');
+  h.ok(R.tilt === 0 && R.daily === null, 'Tilt 0, not a daily');
+  h.eq(R.muts.slice().sort().join(), def.muts.slice().sort().join(), 'the week\'s mutators');
+  h.eq(G.S.tiltEl.textContent, 'WEEKLY', 'the HUD says so');
+  // everyone climbs the same seed
+  const G2 = metaBoot({}).G;
+  G2.wk.setDate('2026-09-28');
+  G2.wk.start();
+  h.eq(JSON.stringify(G2.run.map.tiles), JSON.stringify(R.map.tiles), 'the same map for everyone that week');
+  // a gold-worthy win
+  R.scoreTop = def.targets.gold + 10;
+  R.act = 3;
+  G.showWin();
+  const w = G.run.metaEnd.weekly;
+  h.ok(w && w.key === key && w.best >= def.targets.gold && w.newBest, 'the best is recorded: ' + (w && w.best));
+  h.eq(w.medal, T.DATA.wkMedal(w.best, def.targets), 'the medal it earns');
+  h.ok(T.DATA.wkRank(w.medal) >= T.DATA.wkRank('gold') && w.newMedal === w.medal, 'gold or better, new');
+  h.ok(G.meta.ach.podium, 'Podium Finish');
+  h.eq(saved().wk.best[key], w.best, 'saved');
+  h.eq(G.meta.wk.runs, 1, 'one weekly climb');
+  // a worse run keeps the best and the medal
+  G.wk.start(key);
+  G.run.scoreTop = 10;
+  G.showGameOver();
+  h.ok(G.meta.wk.best[key] === w.best && G.meta.wk.medal[key] === w.medal && !G.run.metaEnd.weekly.newBest, 'a worse run keeps both');
+  // a plain run is not weekly
+  G.newRun('knight', 77);
+  h.ok(!G.run.weekly, 'a plain run');
+  G.showGameOver();
+  h.eq(G.meta.wk.runs, 2, 'and does not count');
+  // the cabinet and a reload
+  G.wk.show();
+  h.ok(T._nodes.weeklyBody.children.find((c) => c.className === 'wkCab').children.some((c) => /wkCell/.test(c.className)), 'the medal in the cabinet');
+  const G3 = boot({ store: Object.assign({}, T._store) }).GAME;
+  h.ok(G3.meta.wk.best[key] === w.best && G3.meta.wk.medal[key] === w.medal, 'medals survive a reload');
+  G3.wk.setDate('2026-10-05');
+  h.ok(G3.wk.key() === '2026-W41' && !(G3.meta.wk.best['2026-W41']), 'next week starts fresh');
+});
+
 h.done();

@@ -172,11 +172,29 @@ const RENDER = (() => {
   // (colour, radius) on an offscreen canvas. Returns null when there is
   // no document or the canvas cannot be built (headless), and callers skip.
   const glowCache = new Map();
-  function glowSprite(col, r) {
+  /* MEMORY (round 9): every caller draws the sprite at its own size, and a
+     soft radial gradient scales without a visible change, so radii past 24
+     share a sprite per 10% step and none is built past GLOW_MAXR (drawn
+     larger). The cache used to keep one canvas per colour and whole-pixel
+     radius: 295 of them and 17 MB after 16 fights, still growing. A total
+     past GLOW_BUDGET pixels starts it over (they rebuild on demand). */
+  const GLOW_MAXR = 128, GLOW_BUDGET = 1600000;
+  let glowPx = 0;
+  function glowKey(r) {
     r = Math.max(4, Math.round(r));
+    if (r <= 24) return r;
+    return Math.min(GLOW_MAXR, Math.round(24 * Math.pow(1.1, Math.round(Math.log(r / 24) / Math.log(1.1)))));
+  }
+  function glowSprite(col, r) {
+    r = glowKey(r);
     let m = glowCache.get(col);
-    if (!m) { m = {}; glowCache.set(col, m); }
+    if (!m) {
+      if (glowPx > GLOW_BUDGET) { glowCache.clear(); glowPx = 0; }
+      m = {}; glowCache.set(col, m);
+    }
     if (m[r] !== undefined) return m[r];
+    if (glowPx > GLOW_BUDGET) { glowCache.clear(); glowPx = 0; m = {}; glowCache.set(col, m); }
+    glowPx += (r * 2 + 2) * (r * 2 + 2);
     let cv = null;
     try {
       if (typeof document !== 'undefined' && document && document.createElement) {
@@ -3921,6 +3939,13 @@ const RENDER = (() => {
   // The arena is the top band of the stage (y 70..340 at 540x960), so the
   // backdrop composes around a floor line near y 330 rather than the canvas
   // bottom; everything below it is covered by the rig anyway.
+  /* LABELS (round 9): where the arena's own words were last drawn (stage px,
+     with the ctx they went to), so the game can keep the floating labels and
+     numbers off them. bg records its wall sign, bossSign the cabinet's
+     warning sign; the game consumes each record once a frame. slotX is the
+     right edge of the INCOMING slot the wall sign keeps clear of. */
+  const Q9A = { slotX: 110, sign: null, signR: { ctx: null, x0: 0, y0: 0, x1: 0, y1: 0 }, bs: null, bsR: { ctx: null, x0: 0, y0: 0, x1: 0, y1: 0 } };
+  function q9Rec(r, ctx, x0, y0, x1, y1) { r.ctx = ctx; r.x0 = x0; r.y0 = y0; r.x1 = x1; r.y1 = y1; return r; }
   function bg(ctx, w, h, act, t) {
     ctx.save();
     try {
@@ -3974,10 +3999,13 @@ const RENDER = (() => {
         deadCabinet(ctx, w * 0.16, fy - fy * 0.52, 54, fy * 0.52, true, t);
         deadCabinet(ctx, w * 0.84, fy - fy * 0.56, 60, fy * 0.56, false, t);
         cobweb(ctx, 0, 0, 60, false); cobweb(ctx, w, 0, 80, true);
-        // small flickering neon sign high on the wall, clear of the enemies
+        // small flickering neon sign high on the wall, clear of the enemies and (LABELS, round 9)
+        // right of the INCOMING slot at the arena's left edge (Q9A.slotX), which it used to run under
         const on = Math.sin(t * 7) + Math.sin(t * 13) > -1.2;
-        txt(ctx, 'ARCADE', w * 0.27, fy * 0.3, Math.max(14, w * 0.045), on ? PAL.pink : shade(PAL.pink, -0.7), true, 'center', on ? rgba(PAL.pink, 0.35) : INK);
-        if (on) glow(ctx, w * 0.27, fy * 0.3, w * 0.12, PAL.pink, 0.3);
+        const ssz = Math.max(14, w * 0.045), shw = ssz * 0.62 * 3 + 4, sx = Math.max(w * 0.27, Q9A.slotX + 8 + shw), sy = fy * 0.3;
+        txt(ctx, 'ARCADE', sx, sy, ssz, on ? PAL.pink : shade(PAL.pink, -0.7), true, 'center', on ? rgba(PAL.pink, 0.35) : INK);
+        if (on) glow(ctx, sx, sy, w * 0.12, PAL.pink, 0.3);
+        q9Rec(Q9A.signR, ctx, sx - shw, sy - ssz * 0.6, sx + shw, sy + ssz * 0.6); Q9A.sign = Q9A.signR;   // the fight's label zone reads it
         ctx.beginPath(); ctx.moveTo(w * 0.6, 0); ctx.lineTo(w * 0.6 + Math.sin(t) * 4, 34); S(ctx, '#3a3f4a', 2); ctx.stroke();
         glow(ctx, w * 0.6 + Math.sin(t) * 4, 40, 40, PAL.gold, 0.5);
         tone(ctx, c => circ(c, w * 0.6 + Math.sin(t) * 4, 40, 7), '#fff6c0', w * 0.6, 40, 7, { ol: 2 });
@@ -4107,7 +4135,8 @@ const RENDER = (() => {
       const shakeX = k in BIN_KINDS ? Math.sin(t * 30) * 1.5 : 0;
       switch (k) {
         case 'attack': {
-          ctx.save(); ctx.translate(-bw / 2 + 12, cy); ctx.rotate(-0.8); IA.sword(ctx, 22, 6, '#c9d3e0', '#8a5a2b'); ctx.restore();
+          if (it.fam) famIntentGlyph(ctx, it.fam, -bw / 2 + 12, cy, t);   // a SOLO's note, a hum's snowflake (FAMILY block)
+          else { ctx.save(); ctx.translate(-bw / 2 + 12, cy); ctx.rotate(-0.8); IA.sword(ctx, 22, 6, '#c9d3e0', '#8a5a2b'); ctx.restore(); }
           if (qn) {
             const col = hot ? accC(PAL.blood) : '#fff';
             if (two) {
@@ -4187,6 +4216,7 @@ const RENDER = (() => {
           break;
         }
         default: {
+          if (famIntentIcon(ctx, k, it, cy, t, shakeX)) break;   // the families' moves (FAMILY block)
           if (bestIntentIcon(ctx, k, it, cy, t, shakeX)) break;   // the bestiary's machine tricks (BESTIARY block)
           // shaking box for bin attacks
           ctx.save(); ctx.translate(shakeX - 2, cy); ctx.rotate(Math.sin(t * 30) * 0.08);
@@ -4229,6 +4259,7 @@ const RENDER = (() => {
         ctx.restore();
       }
       bestIntentRide(ctx, enemy, bw, cy, t);   // the Claw Collector's claw chip (BESTIARY block)
+      famIntentRide(ctx, enemy, bw, cy, t, qa);   // a SOLO or a hum: its ribbon and harmony count (FAMILY block)
     } catch (e) { /* */ }
     ctx.restore();
   }
@@ -4322,6 +4353,75 @@ const RENDER = (() => {
 
   /* ============================================================ TITLE */
   let titlePrizes = null;
+  /* PERF (round 9): the title is the first thing a page draws, and it drew
+     36 falling prizes (a slot machine's emoji among them) and a five pass
+     92 px logo with clips from scratch every frame. Both are static art, so
+     each is drawn once into an offscreen sprite per device scale bucket and
+     blitted after. No canvas (headless, the stub ctx) or a FLAT pass: null,
+     and the caller draws live as before. */
+  const Q9_TSPR = new Map();
+  function q9TitleSpr(ctx, k) {
+    if (FLAT || typeof document === 'undefined' || !document || !document.createElement || !IA[k] || !ITEM_DEFAULT[k]) return null;
+    const ds = devScale(ctx);
+    if (!(ds > 0) || ds > 5) return null;
+    const q = Math.ceil(ds * 4) / 4, key = k + ':' + q;
+    let sp = Q9_TSPR.get(key);
+    if (sp !== undefined) return sp;
+    sp = null;
+    if (Q9_TSPR.size < 200) {
+      const n = Math.ceil(50 * q) + 2;   // the 30 px art box plus 10 px for the outline all round
+      try {
+        const cv = document.createElement('canvas'); cv.width = n; cv.height = n;
+        const g = cv.getContext && cv.getContext('2d');
+        if (g && typeof g.getTransform === 'function') {
+          g.translate(n / 2, n / 2); g.scale(q, q); g.lineJoin = 'round'; g.lineCap = 'round';
+          IA[k](g, 30, 30, ITEM_DEFAULT[k][0], ITEM_DEFAULT[k][1]);
+          sp = { cv, s: n / q };
+        }
+      } catch (e) { sp = null; }
+    }
+    Q9_TSPR.set(key, sp);
+    return sp;
+  }
+  // The drawn CLAWSPIRE word (five passes), centred on (cx, ly) at fs px.
+  function q9LogoArt(ctx, w, cx, ly, fs) {
+    ctx.font = '900 ' + fs + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = rgba(PAL.pink, 0.35); ctx.lineWidth = fs * 0.3; ctx.strokeText('CLAWSPIRE', cx, ly);
+    ctx.strokeStyle = INK; ctx.lineWidth = fs * 0.16; ctx.strokeText('CLAWSPIRE', cx, ly);
+    ctx.fillStyle = CHROME; ctx.fillText('CLAWSPIRE', cx, ly);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, ly - fs * 0.5, w, fs * 0.42); ctx.clip();
+    ctx.fillStyle = '#ffffff'; ctx.fillText('CLAWSPIRE', cx, ly); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(0, ly + fs * 0.05, w, fs * 0.5); ctx.clip();
+    ctx.fillStyle = PAL.pink; ctx.fillText('CLAWSPIRE', cx, ly); ctx.restore();
+    ctx.strokeStyle = rgba('#ffffff', 0.6); ctx.lineWidth = 1.5; ctx.strokeText('CLAWSPIRE', cx, ly);
+  }
+  const Q9_LOGO = { key: '', cv: null, y0: 0, lw: 0, lh: 0 };
+  const Q9_TL = { ly: 0 };   // TITLE (round 9): the logo's centre y when the game sets one (0: the stage's middle)
+  const Q9_FIT = new WeakMap();   // ctx -> the logo's fitted size for a stage width
+  // Blit the cached logo; false when there is no real canvas (draw it live).
+  function q9Logo(ctx, w, cx, ly, fs) {
+    if (FLAT || typeof document === 'undefined' || !document || !document.createElement) return false;
+    const ds = devScale(ctx);
+    if (!(ds > 0) || ds > 5) return false;
+    const q = Math.ceil(ds * 4) / 4, key = w + ':' + cx + ':' + fs + ':' + q;
+    if (Q9_LOGO.key !== key) {
+      Q9_LOGO.key = key; Q9_LOGO.cv = null;
+      const lh = fs * 1.7, y0 = ly - lh / 2;
+      try {
+        const cv = document.createElement('canvas'); cv.width = Math.ceil(w * q) + 2; cv.height = Math.ceil(lh * q) + 2;
+        const g = cv.getContext && cv.getContext('2d');
+        if (g && typeof g.getTransform === 'function') {
+          g.scale(q, q); g.translate(0, -y0);
+          q9LogoArt(g, w, cx, ly, fs);
+          Q9_LOGO.cv = cv; Q9_LOGO.y0 = y0 - ly; Q9_LOGO.lw = cv.width / q; Q9_LOGO.lh = cv.height / q;   // y0 relative to the logo's centre (it may move)
+        }
+      } catch (e) { Q9_LOGO.cv = null; }
+    }
+    if (!Q9_LOGO.cv) return false;
+    ctx.drawImage(Q9_LOGO.cv, 0, ly + Q9_LOGO.y0, Q9_LOGO.lw, Q9_LOGO.lh);
+    return true;
+  }
   function title(ctx, w, h, t) {
     ctx.save();
     try {
@@ -4360,7 +4460,9 @@ const RENDER = (() => {
         for (const p of titlePrizes) {
           const py = ((p.ph + t * p.sp) % 1) * h * 1.1 - h * 0.05;
           ctx.save(); ctx.translate(p.x * w, py); ctx.rotate(p.rot + t * 0.8); ctx.scale(p.s, p.s); ctx.globalAlpha = 0.75;
-          IA[p.k](ctx, 30, 30, ITEM_DEFAULT[p.k][0], ITEM_DEFAULT[p.k][1]);
+          const sp = q9TitleSpr(ctx, p.k);   // PERF (round 9): the prize's cached sprite
+          if (sp) ctx.drawImage(sp.cv, -sp.s / 2, -sp.s / 2, sp.s, sp.s);
+          else IA[p.k](ctx, 30, 30, ITEM_DEFAULT[p.k][0], ITEM_DEFAULT[p.k][1]);
           ctx.restore();
         }
         // giant claw descending
@@ -4377,8 +4479,8 @@ const RENDER = (() => {
         tone(ctx, c => circ(c, 0, 2, 5), '#8e98a8', 0, 2, 5, { dark: -0.4, ol: 2 });
         ctx.restore();
       }
-      // logo
-      const ly = h * 0.5;
+      // logo (TITLE, round 9: the game lifts it clear of a tall menu through Q9_TL.ly)
+      const ly = Q9_TL.ly > 0 ? Q9_TL.ly : h * 0.5;
       let fs = Math.min(w * 0.16, 92);
       let subY = ly + fs * 0.72;
       if (limg) {
@@ -4389,20 +4491,18 @@ const RENDER = (() => {
         // fit the word, its outer glow stroke (fs x 0.3) included, inside the stage with a
         // margin: at 92 px bold it ran past both edges, cutting the C and the E (QA round 7)
         const LOGO_M = 14;
-        ctx.font = '900 ' + fs + 'px ' + FONT;
-        let tw0 = 0;
-        try { const m = ctx.measureText('CLAWSPIRE'); tw0 = m && m.width > 0 ? m.width : 0; } catch (e) { tw0 = 0; }
-        if (tw0 > 0 && tw0 + fs * 0.3 > w - LOGO_M * 2) { fs = Math.max(24, Math.floor(fs * (w - LOGO_M * 2) / (tw0 + fs * 0.3))); subY = ly + fs * 0.72; }
-        ctx.font = '900 ' + fs + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.lineJoin = 'round';
-        ctx.strokeStyle = rgba(PAL.pink, 0.35); ctx.lineWidth = fs * 0.3; ctx.strokeText('CLAWSPIRE', cx, ly);
-        ctx.strokeStyle = INK; ctx.lineWidth = fs * 0.16; ctx.strokeText('CLAWSPIRE', cx, ly);
-        ctx.fillStyle = CHROME; ctx.fillText('CLAWSPIRE', cx, ly);
-        ctx.save(); ctx.beginPath(); ctx.rect(0, ly - fs * 0.5, w, fs * 0.42); ctx.clip();
-        ctx.fillStyle = '#ffffff'; ctx.fillText('CLAWSPIRE', cx, ly); ctx.restore();
-        ctx.save(); ctx.beginPath(); ctx.rect(0, ly + fs * 0.05, w, fs * 0.5); ctx.clip();
-        ctx.fillStyle = PAL.pink; ctx.fillText('CLAWSPIRE', cx, ly); ctx.restore();
-        ctx.strokeStyle = rgba('#ffffff', 0.6); ctx.lineWidth = 1.5; ctx.strokeText('CLAWSPIRE', cx, ly);
+        // PERF (round 9): measured once per stage width (setting ctx.font every frame was the title's top cost)
+        let fit = null;
+        try { fit = Q9_FIT.get(ctx) || null; } catch (e) { fit = null; }
+        if (!fit || fit.w !== w || fit.fs0 !== fs) {
+          ctx.font = '900 ' + fs + 'px ' + FONT;
+          let tw0 = 0;
+          try { const m = ctx.measureText('CLAWSPIRE'); tw0 = m && m.width > 0 ? m.width : 0; } catch (e) { tw0 = 0; }
+          fit = { w: tw0 > 0 ? w : -1, fs0: fs, fs: tw0 > 0 && tw0 + fs * 0.3 > w - LOGO_M * 2 ? Math.max(24, Math.floor(fs * (w - LOGO_M * 2) / (tw0 + fs * 0.3))) : fs };
+          try { Q9_FIT.set(ctx, fit); } catch (e) { /* a ctx that cannot be a key: measure every time */ }
+        }
+        if (fit.fs !== fs) { fs = fit.fs; subY = ly + fs * 0.72; }
+        if (!q9Logo(ctx, w, cx, ly, fs)) q9LogoArt(ctx, w, cx, ly, fs);   // PERF (round 9): a cached sprite when there is a real canvas
       }
       txt(ctx, 'a claw machine roguelike', cx, subY, Math.max(12, fs * 0.2), PAL.cyan, true, 'center', INK);
     } catch (e) { /* */ }
@@ -4426,7 +4526,7 @@ const RENDER = (() => {
     const ADD = [false, false, true, true, false, false, false, false, false, false, true, false];
     const parts = []; for (let i = 0; i < MAXP; i++) parts.push({ x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, size: 3, col: '#fff', g: 0, drag: 1, kind: 0, rot: 0, vr: 0, grow: 0 });
     const texts = []; for (let i = 0; i < MAXT; i++) texts.push({ x: 0, y: 0, str: '', col: '#fff', life: 0, max: 1, size: 20, dy: -40, mode: 0, vx: 0, vy: 0, g: 0, crit: false, icon: '', ox: 0, oy: 0,
-      lay: false, lx: 0, ly: 0, n: 1, base: '', born: 0, born0: 0, pop: 0, w: 0, h: 0, ms: '', mm: -1, hide: false });
+      lay: false, lx: 0, ly: 0, n: 1, base: '', born: 0, born0: 0, pop: 0, w: 0, h: 0, ms: '', mm: -1, hide: false, nlay: false });
     const trails = []; for (let i = 0; i < MAXR; i++) trails.push({ x: 0, y: 0, x2: 0, y2: 0, col: '#fff', life: 0, max: 1, w: 3 });
     const rings = []; for (let i = 0; i < MAXRING; i++) rings.push({ x: 0, y: 0, r0: 0, r1: 40, col: '#fff', life: 0, max: 1, w: 4, delay: 0 });
     const slashes = []; for (let i = 0; i < MAXSL; i++) slashes.push({ x: 0, y: 0, a: 0, len: 60, col: '#fff', life: 0, max: 1, w: 12, claw: false });
@@ -4572,6 +4672,7 @@ const RENDER = (() => {
       p.mode = o.phys ? 1 : 0; p.crit = !!o.crit; p.icon = ''; p.ox = p.oy = 0;
       p.vx = o.vx == null ? (rnd() - 0.5) * 120 : o.vx; p.vy = o.vy == null ? -300 - rnd() * 80 : o.vy; p.g = o.gravity == null ? 900 : o.gravity;
       p.lay = lay; p.lx = 0; p.ly = 0; p.n = 1; p.base = str; p.born = clock; p.born0 = ++seq; p.pop = 0; p.ms = ''; p.mm = -1; p.hide = false;
+      p.nlay = !!o.phys && !o.free && api.layout;   // LABELS (round 9): a damage number keeps its flight but reserves its rect
       if (lay) {
         // a long label lives longer (there is more to read) and shrinks to fit the screen
         p.life = p.max = Math.min(LAYOUT.lifeMax, Math.max(p.max, LAYOUT.life0 + str.length * LAYOUT.lifeK));
@@ -4579,7 +4680,7 @@ const RENDER = (() => {
         if (w > LAYOUT.maxW) p.size *= LAYOUT.maxW / w;
         if (o.badge) { p.mode = 2; p.icon = o.icon == null ? '' : String(o.icon); }
         layoutPass();
-      }
+      } else if (p.nlay) layoutPass();   // LABELS (round 9): a new number clears its spot before its first frame
       return p;
     };
     // A damage number: size by magnitude, a crit pops bigger and wobbles.
@@ -4604,16 +4705,23 @@ const RENDER = (() => {
        path when that frees up. The same label again within LAYOUT.merge s
        merges into the live one ("x2"); long labels shrink to fit the width
        and live longer. o.free opts a label out. */
-    const LAYOUT = { merge: 0.5, mergeR: 120, maxW: 516, life0: 0.55, lifeK: 0.055, lifeMax: 2.8, pad: 3, edge: 6, back: 0.9, sw: 540, sh: 960 };
+    const LAYOUT = { merge: 0.5, mergeR: 120, maxW: 516, life0: 0.55, lifeK: 0.055, lifeMax: 2.8, pad: 3, edge: 6, back: 0.9, sw: 540, sh: 960, far: 110, numMax: 80 };
     api.layout = true;
     api.LAYOUT = LAYOUT;
     let clock = 0, seq = 0;
     const zones = [];
     /* A keep-out rect for labels (stage px): zone(id, x0, y0, x1, y1);
        zone(id) removes it. */
-    api.zone = (id, x0, y0, x1, y1) => {
-      for (let i = zones.length - 1; i >= 0; i--) if (zones[i].id === id) zones.splice(i, 1);
-      if (x1 > x0 && y1 > y0) zones.push({ id, x0, y0, x1, y1 });
+    api.zone = (id, x0, y0, x1, y1, soft) => {
+      // LABELS (round 9): an existing zone moves in place (the fight sets a few every frame), no
+      // allocation; soft: kept clear only while there is room close by (see freeNear)
+      const ok = x1 > x0 && y1 > y0;
+      for (let i = zones.length - 1; i >= 0; i--) {
+        if (zones[i].id !== id) continue;
+        if (ok) { const z = zones[i]; z.x0 = x0; z.y0 = y0; z.x1 = x1; z.y1 = y1; z.soft = !!soft; return; }
+        zones.splice(i, 1);
+      }
+      if (ok) zones.push({ id, x0, y0, x1, y1, soft: !!soft });
     };
     api.zones = () => zones.slice();
     // Estimated drawn width of a label (bold system font, ~0.62 em per glyph).
@@ -4638,8 +4746,24 @@ const RENDER = (() => {
     function blocked(x0, y0, x1, y1) {
       const pd = LAYOUT.pad;
       for (let i = 0; i < np; i++) { const r = placed[i]; if (x0 < r.x1 + pd && x1 > r.x0 - pd && y0 < r.y1 + pd && y1 > r.y0 - pd) return true; }
-      for (const z of zones) if (x0 < z.x1 && x1 > z.x0 && y0 < z.y1 && y1 > z.y0) return true;
+      for (const z of zones) if (!(zHard && z.soft) && x0 < z.x1 && x1 > z.x0 && y0 < z.y1 && y1 > z.y0) return true;
       return y0 < LAYOUT.edge || y1 > LAYOUT.sh - LAYOUT.edge;
+    }
+    /* LABELS (round 9): soft zones (the arena's bubbles, chips, ally and signs)
+       are avoided when there is room close by; a label that would have to go
+       further than LAYOUT.far (a number further than LAYOUT.numMax) looks
+       again with the hard zones only (the HUD, a banner, the marquee...), so
+       it never lands far from what it belongs to. */
+    let zHard = false;
+    function freeNear(x0, x1, h, top, nat, maxD) {
+      zHard = false;
+      const a = freeTop(x0, x1, h, top);
+      if (a === a && Math.abs(a - nat) <= maxD) return a;
+      zHard = true;
+      const b = freeTop(x0, x1, h, top);
+      zHard = false;
+      if (b === b && (Math.abs(b - nat) <= maxD || !(a === a))) return b;
+      return a;
     }
     // The nearest free top for a label of height h across [x0, x1], from top0.
     function freeTop(x0, x1, h, top0) {
@@ -4647,7 +4771,7 @@ const RENDER = (() => {
       let n = 0;
       const add = (lo, hi) => { if (n < ivs.length) { ivs[n].lo = lo; ivs[n].hi = hi; n++; } };
       for (let i = 0; i < np; i++) { const r = placed[i]; if (x0 < r.x1 + pd && x1 > r.x0 - pd) add(r.y0 - pd - h, r.y1 + pd); }
-      for (const z of zones) if (x0 < z.x1 && x1 > z.x0) add(z.y0 - h, z.y1);
+      for (const z of zones) if (!(zHard && z.soft) && x0 < z.x1 && x1 > z.x0) add(z.y0 - h, z.y1);
       const lo0 = LAYOUT.edge, hi0 = LAYOUT.sh - LAYOUT.edge - h;
       // walk the forbidden intervals that chain through top0, both ways
       let up = top0, down = top0, moved = true, guard = 0;
@@ -4666,28 +4790,75 @@ const RENDER = (() => {
       if (downOk) return down;
       return NaN;   // no room anywhere in this column
     }
+    /* LABELS (round 9): the damage numbers join the layout. They go first,
+       oldest first, and keep their physics flight: each is only nudged up or
+       down (and eased back, like a label) as far as it takes to clear the
+       keep-out zones and the older numbers, never hidden. Their rects then
+       count as taken for the labels, which flow around them, and fx.draw
+       paints them last, so a big number always reads on top. */
+    const nums = [];
+    let nNum = 0;
+    const onScreenX = (x, w) => (x < LAYOUT.edge ? LAYOUT.edge : x + w > LAYOUT.sw - LAYOUT.edge ? LAYOUT.sw - LAYOUT.edge - w : x);
+    /* The nearest free spot within maxD of a w x h rect whose own left is bx
+       and own top nat: straight up or down, or a step or two to either side
+       (a step is a little over half its width; sideways costs 0.8 a px).
+       Sets SPOT and says whether it found one. */
+    const SPOT = { x0: 0, top: 0 };
+    function sideSpot(w, h, bx, nat, maxD) {
+      const d = Math.min(64, w * 0.55 + 6);
+      let best = Infinity;
+      for (let s = 0; s < 5; s++) {
+        const c0 = onScreenX(bx + (s === 0 ? 0 : (s & 1 ? -1 : 1) * Math.ceil(s / 2) * d), w);
+        const ft = freeNear(c0, c0 + w, h, nat, nat, maxD);
+        if (!(ft === ft) || Math.abs(ft - nat) > maxD) continue;
+        const cost = Math.abs(ft - nat) + Math.abs(c0 - bx) * 0.8;
+        if (cost < best) { best = cost; SPOT.x0 = c0; SPOT.top = ft; }
+      }
+      return best < Infinity;
+    }
+    function placeNums() {
+      nums.length = 0;
+      for (let i = 0; i < tn; i++) if (texts[i].nlay && texts[i].life > 0) nums.push(texts[i]);
+      nums.sort((a, b) => a.born0 - b.born0);
+      for (const p of nums) {
+        dims(p);
+        const w = p.w, h = p.h, cx = p.x + p.ox, cy = p.y + p.oy;
+        const bx = cx - w / 2, nat = cy - h / 2;
+        let x0 = onScreenX(bx + p.lx, w), top = nat + p.ly;
+        if (!blocked(x0, top, x0 + w, top + h)) {
+          // free where it is: ease back toward its own flight while that stays free
+          if (p.lx !== 0 || p.ly !== 0) {
+            const k = Math.abs(p.lx) + Math.abs(p.ly) < 0.8 ? 0 : LAYOUT.back, bx0 = onScreenX(bx + p.lx * k, w), bt = nat + p.ly * k;
+            if (!blocked(bx0, bt, bx0 + w, bt + h)) { x0 = bx0; top = bt; }
+          }
+        } else if (sideSpot(w, h, bx, nat, LAYOUT.numMax) || sideSpot(w, h, bx, nat, LAYOUT.numMax * 1.6)) { x0 = SPOT.x0; top = SPOT.top; }
+        // (no room anywhere near: it stays where it flies)
+        p.lx = x0 - bx; p.ly = top - nat;
+        if (np < placed.length) { const r = placed[np++]; r.x0 = x0; r.y0 = top; r.x1 = x0 + w; r.y1 = top + h; r.str = p.str; r.ly = Math.hypot(p.lx, p.ly); }
+      }
+      nNum = np;
+    }
     /* Place every live label, oldest first (see above). */
     function layoutPass() {
       order.length = 0;
       for (let i = 0; i < tn; i++) if (texts[i].lay && texts[i].life > 0) order.push(texts[i]);
       order.sort((a, b) => a.born0 - b.born0);
       np = 0;
+      placeNums();
       for (const p of order) {
         dims(p);
         const w = p.w, h = p.h, cy = natY(p);
-        // keep it on the screen sideways
-        let x0 = p.x - w / 2;
-        p.lx = x0 < LAYOUT.edge ? LAYOUT.edge - x0 : x0 + w > LAYOUT.sw - LAYOUT.edge ? LAYOUT.sw - LAYOUT.edge - (x0 + w) : 0;
-        x0 += p.lx;
-        const x1 = x0 + w, nat = cy - h / 2;
-        let top = nat + p.ly;
-        if (!blocked(x0, top, x1, top + h)) {
+        const bx = p.x - w / 2, nat = cy - h / 2;
+        // keep it on the screen sideways (LABELS, round 9: lx also holds a sideways step, see sideSpot)
+        let x0 = onScreenX(bx + p.lx, w), top = nat + p.ly;
+        if (!blocked(x0, top, x0 + w, top + h)) {
           // free where it is: drift back toward its own path while that stays free
-          if (p.ly !== 0) {
-            const back = nat + p.ly * LAYOUT.back;
-            if (!blocked(x0, back, x1, back + h)) top = Math.abs(p.ly) < 0.5 && !blocked(x0, nat, x1, nat + h) ? nat : back;
+          if (p.ly !== 0 || x0 !== onScreenX(bx, w)) {
+            const k = Math.abs(p.ly) < 0.5 && Math.abs(x0 - onScreenX(bx, w)) < 0.5 ? 0 : LAYOUT.back, bx0 = onScreenX(bx + p.lx * k, w), bt = nat + p.ly * k;
+            if (!blocked(bx0, bt, bx0 + w, bt + h)) { x0 = bx0; top = bt; }
           }
-        } else top = freeTop(x0, x1, h, top);
+        } else if (sideSpot(w, h, bx, nat, LAYOUT.far)) { x0 = SPOT.x0; top = SPOT.top; }
+        else { x0 = onScreenX(bx, w); top = freeNear(x0, x0 + w, h, top, nat, LAYOUT.far); }
         if (!(top === top)) {
           // the screen is full: this one waits (hidden) while the oldest label hurries off
           p.hide = true;
@@ -4695,16 +4866,33 @@ const RENDER = (() => {
           continue;
         }
         p.hide = false;
-        p.ly = top - nat;
-        if (np < placed.length) { const r = placed[np++]; r.x0 = x0; r.y0 = top; r.x1 = x1; r.y1 = top + h; r.str = p.str; }
+        p.lx = x0 - bx; p.ly = top - nat;
+        if (np < placed.length) { const r = placed[np++]; r.x0 = x0; r.y0 = top; r.x1 = x0 + w; r.y1 = top + h; r.str = p.str; }
       }
     }
     // The laid-out rects of the live labels (tests and debug): [{x0, y0, x1, y1, str}]
     api.labels = () => {
       layoutPass();
       const out = [];
-      for (let i = 0; i < np; i++) out.push({ x0: placed[i].x0, y0: placed[i].y0, x1: placed[i].x1, y1: placed[i].y1, str: placed[i].str || '' });
+      for (let i = nNum; i < np; i++) out.push({ x0: placed[i].x0, y0: placed[i].y0, x1: placed[i].x1, y1: placed[i].y1, str: placed[i].str || '' });
       return out;
+    };
+    // LABELS (round 9): the laid-out rects of the live damage numbers (tests and debug), same shape
+    api.numRects = () => {
+      layoutPass();
+      const out = [];
+      for (let i = 0; i < nNum; i++) out.push({ x0: placed[i].x0, y0: placed[i].y0, x1: placed[i].x1, y1: placed[i].y1, str: placed[i].str || '', num: true, nudge: placed[i].ly || 0 });
+      return out;
+    };
+    // Both from one layout pass (each pass eases the nudges on a step): {nums, labels}
+    api.rects = () => {
+      layoutPass();
+      const nums1 = [], labs = [];
+      for (let i = 0; i < np; i++) {
+        const r = placed[i], o = { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, str: r.str || '' };
+        if (i < nNum) { o.num = true; o.nudge = r.ly || 0; nums1.push(o); } else labs.push(o);
+      }
+      return { nums: nums1, labels: labs };
     };
     api.trail = (x, y, col, o) => {
       o = o || 0;
@@ -4965,14 +5153,16 @@ const RENDER = (() => {
         }
         ctx.globalAlpha = 1;
         ctx.font = 'bold 20px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-        for (let i = 0; i < tn; i++) {
+        // LABELS (round 9): two passes, the labels and badges first, then the damage numbers on top
+        for (let pass = 0; pass < 2; pass++) for (let i = 0; i < tn; i++) {
           const p = texts[i], u = 1 - p.life / p.max;
+          if ((p.mode === 1) !== (pass === 1)) continue;
           if (p.lay && p.hide) continue;   // waiting for room (the layout manager)
           ctx.save();
           ctx.globalAlpha = u > 0.7 ? (1 - u) / 0.3 : 1;
           if (p.mode === 1) {
             const sc = popScale(u) * (p.size / 20);
-            ctx.translate(p.x + p.ox, p.y + p.oy);
+            ctx.translate(p.x + p.ox + (p.nlay ? p.lx : 0), p.y + p.oy + (p.nlay ? p.ly : 0));   // (the layout's nudge)
             if (p.crit) ctx.rotate(Math.sin(u * 40) * 0.12 * (1 - u));
             ctx.scale(sc, sc);
             if (p.crit) { ctx.strokeStyle = PAL.pink; ctx.lineWidth = 9; ctx.strokeText(p.str, 1.5, 2); }
@@ -5530,6 +5720,7 @@ const RENDER = (() => {
       try { const m = ctx.measureText(label); if (m && m.width > 0) tw = m.width; } catch (e) { /* stub */ }
       const pw = Math.max(150, tw + 58), ph = 32;
       const drop = (1 - U.ease.outBack(k)) * -60;
+      q9Rec(Q9A.bsR, ctx, x - pw / 2 - 4, y + drop - ph / 2 - 14, x + pw / 2 + 4, y + drop + ph / 2 + 4); Q9A.bs = Q9A.bsR;   // LABELS (round 9)
       ctx.translate(x, y + drop);
       ctx.rotate(Math.sin(t * 2.2) * 0.035 + (1 - k) * 0.3);
       // chains
@@ -9948,8 +10139,8 @@ const RENDER = (() => {
         seaSpider(ctx, 58, 0, 60, t, 4);
         // the tower's windows glow orange, a pumpkin on every other tier
         for (const i of SEA_TIERS) { const tw = w * (0.62 - i * 0.06), ty = base - (i + 1) * th; seaPumpkin(ctx, cx + tw / 2 - 4, ty - 7, 9 - i * 0.6, t, true, i); }
-        // a banner over the logo
-        const ly = h * 0.5, by = ly - Math.min(w * 0.16, 92) * 0.86;
+        // a banner over the logo (which the game may lift: Q9_TL, round 9)
+        const ly = Q9_TL.ly > 0 ? Q9_TL.ly : h * 0.5, by = ly - Math.min(w * 0.16, 92) * 0.86;
         glow(ctx, cx, by, 120, SEA_OR, 0.25 + 0.08 * Math.sin(t * 3));
         const wob = Math.sin(t * 2) * 2;
         txt(ctx, 'CLAW-O-WEEN', cx, by + wob, 30, SEA_OR, true, 'center', '#2a0a3a');
@@ -9965,7 +10156,7 @@ const RENDER = (() => {
         for (const i of SEA_TIERS) { const tw = w * (0.62 - i * 0.06), ty = base - (i + 1) * th; seaSnowCap(ctx, cx - tw / 2 - 2, ty, tw + 4, 8); }
         seaSnowCap(ctx, 0, base - 6, w, 14);
         seaSnow(ctx, 0, 0, w, h, t, 90, 0.8);
-        const ly = h * 0.5, by = ly - Math.min(w * 0.16, 92) * 0.86;
+        const ly = Q9_TL.ly > 0 ? Q9_TL.ly : h * 0.5, by = ly - Math.min(w * 0.16, 92) * 0.86;
         glow(ctx, cx, by, 120, '#8dfff5', 0.25);
         txt(ctx, 'WINTER WONDERCLAW', cx, by, 24, '#e8fbff', true, 'center', '#1a3a5a');
         seaIcicles(ctx, cx - 150, by + 14, 300, 16, t);
@@ -11715,7 +11906,1083 @@ const RENDER = (() => {
     foe: hisFoe, hero: hisHero, photo: hisPhoto, photoRect: hisPhotoRect, sticker: hisSticker, viewfinder: hisViewfinder, fmt: hisFmt };
   /* ============================================================ end HISTORY */
 
+  /* ============================================================ LORE (round 9) */
+  /* The Codex's vignettes, the map's landmark props and their one-line
+     bubbles, the old high score board, the act intro card, the weekly
+     challenge's banner and its medals (DESIGN.md "Lore and the weekly
+     challenge (round 9)"). Pure drawing from what the game hands over (defs,
+     poses, rows); every call saves, restores and never throws. */
+  const LORE_BIOME = {
+    cellar: { col: '#a6ff5e', col2: '#ff2e88', bg: '#12091f' }, foundry: { col: '#ffb347', col2: '#ff5a4a', bg: '#1a0d12' },
+    vault: { col: '#8dfff5', col2: '#b388ff', bg: '#0b1426' }, machine: { col: '#ff2e30', col2: '#3ad6a0', bg: '#040b09' },
+  };
+  const LORE_MEDAL = { bronze: ['#d08a4a', '#5a2f0e'], silver: ['#e4ebf5', '#5d6780'], gold: ['#ffc94d', '#6e4a06'], platinum: ['#c9fdff', '#1f6f80'] };
+  const LORE_KINDS_R = ['tower', 'rig', 'dark', 'tickets', 'cabinet', 'key', 'loop', 'enemy', 'prizes', 'tilt', 'chair', 'act', 'room', 'char', 'gary', 'dawn'];
+  // a steady 0..1 from two numbers (no rng state: the same frame always draws the same)
+  const loreR = (a, b) => { const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return x - Math.floor(x); };
+  // Words wrapped to maxW at a bold size (the stub context measures everything as 40 px wide).
+  function loreWrap(ctx, s, maxW, size) {
+    ctx.font = 'bold ' + size + 'px ' + FONT;
+    const words = String(s || '').split(/\s+/).filter(Boolean), out = [];
+    let cur = '';
+    for (const wd of words) {
+      const tr = cur ? cur + ' ' + wd : wd;
+      if ((ctx.measureText(tr).width || tr.length * size * 0.55) > maxW && cur) { out.push(cur); cur = wd; } else cur = tr;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+  // A bold line shrunk to fit maxW.
+  function loreFit(ctx, s, x, y, size, maxW, col, ol, align) {
+    ctx.font = 'bold ' + size + 'px ' + FONT;
+    const mw = ctx.measureText(String(s)).width || 0;
+    const sz = mw > maxW && mw > 0 ? Math.max(10, size * maxW / mw) : size;
+    txt(ctx, String(s), x, y, sz, col, true, align || 'center', ol);
+  }
+  // An enemy standing on the floor line of a box, scaled to fit.
+  function loreFoe(ctx, def, cx, fy, bw, bh, t, st) {
+    if (!def) return;
+    const b = enemyBox(def, 1);
+    const k = U.clamp(Math.min(bw / Math.max(1, b.w), bh / Math.max(1, b.h)), 0.25, 2.4);
+    glow(ctx, cx, fy - b.h * k * 0.45, Math.max(b.w, b.h) * k * 0.75, st.col || PAL.pink, 0.3);
+    F(ctx, 'rgba(0,0,0,0.4)'); ctx.beginPath(); ell(ctx, cx, fy + 2, b.w * k * 0.42, 6); ctx.fill();
+    enemy(ctx, def, cx, fy, k, t, st.foe || {});
+  }
+  // A cartoon claw hanging on a cable from (x, y0) with its hub at (x, y).
+  function loreClaw(ctx, x, y0, y, s, open, col) {
+    line(ctx, x, y0, x, y - s * 0.6, '#8d97a8', Math.max(1.5, s * 0.12));
+    tone(ctx, c => circ(c, x, y, s * 0.55), col || PAL.chrome, x, y, s * 0.55, { ol: 2 });
+    for (const d of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(x + d * s * 0.3, y + s * 0.3);
+      ctx.quadraticCurveTo(x + d * s * (1 + open * 0.6), y + s * 1.1, x + d * s * (0.35 + open * 0.3), y + s * 2);
+      S(ctx, INK, s * 0.36); ctx.lineCap = 'round'; ctx.stroke();
+      S(ctx, col || PAL.chrome, s * 0.2); ctx.stroke();
+    }
+  }
+  // The scene behind a Codex page, by its art kind (the game passes the defs and poses).
+  function loreScene(ctx, art, w, h, st, t) {
+    const k = art.k, fy = h * 0.82, cx = w / 2, col = st.col || PAL.pink;
+    if (k === 'act') {
+      const act = U.clamp(art.act | 0, 1, 3);
+      bg(ctx, w, h, act, t);
+      // the floor's locals, small, at the edges of the room
+      (st.defs || []).slice(0, 2).forEach((d, i) => { if (d) loreFoe(ctx, d, i ? w * 0.8 : w * 0.2, fy, w * 0.2, h * 0.42, t + i * 1.7, { col }); });
+      // an elevator's floor dial over the room, the needle on this floor
+      const dx = cx, dy = h * 0.3, r = 42;
+      ctx.beginPath(); ctx.arc(dx, dy, r + 8, Math.PI, 0); ctx.closePath(); F(ctx, '#2a1d44'); ctx.fill(); S(ctx, PAL.gold, 3); ctx.stroke();
+      ['1', '2', '3'].forEach((s, i) => { const a = Math.PI + (i + 0.5) * Math.PI / 3; txt(ctx, s, dx + Math.cos(a) * r * 0.72, dy + Math.sin(a) * r * 0.72 + 2, 13, i + 1 === act ? PAL.gold : '#8d7fb3', true); });
+      const na = Math.PI + (act - 0.5) * Math.PI / 3 + Math.sin(t * 3) * 0.04;
+      line(ctx, dx, dy, dx + Math.cos(na) * r * 0.9, dy + Math.sin(na) * r * 0.9, PAL.pink, 3);
+      ctx.beginPath(); circ(ctx, dx, dy, 5); F(ctx, PAL.gold); ctx.fill();
+      glow(ctx, dx, dy - r * 0.4, r * 1.4, PAL.gold, 0.18);
+      return;
+    }
+    if (k === 'enemy' || k === 'gary') {
+      const def = st.def || null, mach = !!(def && (def.look === 'machine' || def.id === 'machine'));
+      if (mach) secMapBg(ctx, w, h, t); else bg(ctx, w, h, art.act || 1, t);
+      F(ctx, 'rgba(10,5,20,0.35)'); ctx.fillRect(0, 0, w, h);
+      if (k === 'gary') {
+        const g0 = STO_G.gear;
+        STO_G.gear = U.clamp(art.gear | 0, 0, 4);
+        try { loreFoe(ctx, def, cx, fy, w * 0.42, h * 0.7, t, { col }); } finally { STO_G.gear = g0; }
+      } else loreFoe(ctx, def, cx, fy, w * 0.46, h * 0.72, t, { col, foe: art.sleep ? { dead: 0.15 } : {} });
+      if (art.sleep) {
+        F(ctx, 'rgba(4,2,10,0.55)'); ctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 3; i++) { const u = (t * 0.4 + i / 3) % 1; txt(ctx, 'z', cx + 40 + u * 40, h * 0.42 - u * 60, 14 + i * 5, rgba('#ffffff', 0.8 * (1 - u)), true); }
+      }
+      return;
+    }
+    if (k === 'char') {
+      try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#1d1036'); g.addColorStop(1, '#0a0514'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#140a26'; }
+      ctx.fillRect(0, 0, w, h);
+      // a spotlight cone and its pool
+      ctx.beginPath(); ctx.moveTo(cx - 30, 0); ctx.lineTo(cx + 30, 0); ctx.lineTo(cx + 130, fy); ctx.lineTo(cx - 130, fy); ctx.closePath(); F(ctx, rgba(col, 0.1)); ctx.fill();
+      F(ctx, rgba(col, 0.18)); ctx.beginPath(); ell(ctx, cx, fy + 4, 140, 16); ctx.fill();
+      const items = (st.items || []).slice(0, 6);
+      items.forEach((d, i) => {
+        const a = t * 0.35 + i * TAU / Math.max(1, items.length), x = cx + Math.cos(a) * Math.min(w * 0.38, 170), y = h * 0.48 + Math.sin(a) * h * 0.3;
+        item(ctx, d, x, y, a * 0.5, 1.25, {});
+      });
+      glow(ctx, cx, h * 0.46, h * 0.5, col, 0.35);
+      portrait(ctx, art.id || 'knight', cx, h * 0.46, h * 0.66, t);
+      return;
+    }
+    if (k === 'tower' || k === 'dawn') {
+      const dawn = k === 'dawn';
+      try {
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        if (dawn) { g.addColorStop(0, '#2a1a5a'); g.addColorStop(0.55, '#ff6bb0'); g.addColorStop(1, '#ffc94d'); } else { g.addColorStop(0, '#07040f'); g.addColorStop(1, '#2a1240'); }
+        ctx.fillStyle = g;
+      } catch (e) { ctx.fillStyle = dawn ? '#ff6bb0' : '#140a26'; }
+      ctx.fillRect(0, 0, w, h);
+      if (dawn) { glow(ctx, w * 0.7, fy, h * 0.7, '#fff3c4', 0.8); F(ctx, '#fff3c4'); ctx.beginPath(); ctx.arc(w * 0.7, fy, h * 0.16, Math.PI, 0); ctx.fill(); }
+      else {
+        F(ctx, '#ffffff');
+        for (let i = 0; i < 40; i++) { const tw = 0.4 + 0.6 * Math.abs(Math.sin(t * 1.3 + i)); ctx.globalAlpha = tw * 0.8; ctx.fillRect(loreR(i, 1) * w, loreR(i, 2) * h * 0.7, 1.6, 1.6); }
+        ctx.globalAlpha = 1;
+        tone(ctx, c => circ(c, w * 0.82, h * 0.2, 16), '#fff6d8', w * 0.82, h * 0.2, 16, { ol: 0, spec: false });
+      }
+      // the tower: cabinets stacked on cabinets, narrower as they climb
+      const lv = 5, base = Math.min(w * 0.4, 190), lh = (fy - 72) / lv;
+      for (let i = 0; i < lv; i++) {
+        const bw = base * (1 - i * 0.12), x = cx - bw / 2, y = fy - (i + 1) * lh;
+        ctx.beginPath(); rrect(ctx, x, y, bw, lh - 2, 5); F(ctx, dawn ? '#2a1838' : '#1d1233'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        for (let j = 0; j < 4; j++) {
+          const on = !dawn && loreR(i, j) > 0.45 && Math.sin(t * (2 + j) + i * 3) > -0.8;
+          ctx.beginPath(); ctx.rect(x + 6 + j * (bw - 12) / 4, y + lh * 0.25, (bw - 12) / 4 - 4, lh * 0.4);
+          F(ctx, on ? rgba([PAL.cyan, PAL.pink, PAL.gold, PAL.lime][(i + j) % 4], 0.75) : '#0a0614'); ctx.fill();
+        }
+      }
+      if (!dawn) {
+        const top = fy - lv * lh;
+        const on = Math.sin(t * 6) > -0.7;
+        txt(ctx, 'CLAWSPIRE', cx, top - 10, 13, on ? PAL.pink : shade(PAL.pink, -0.6), true, 'center', INK);
+        if (on) glow(ctx, cx, top - 10, 50, PAL.pink, 0.3);
+        loreClaw(ctx, cx + Math.sin(t * 0.8) * 5, 0, top - 52, 9, 0.5 + 0.3 * Math.sin(t), PAL.chrome);
+      } else {
+        // the crawler walks out along the road
+        F(ctx, '#3a2440'); ctx.beginPath(); ctx.moveTo(cx - 20, fy); ctx.lineTo(cx + 20, fy); ctx.lineTo(w * 0.62, h); ctx.lineTo(w * 0.38, h); ctx.closePath(); ctx.fill();
+        crawler(ctx, cx + 8 + (t * 6) % 30, fy + 10, 16, t);
+      }
+      F(ctx, dawn ? '#1a0f24' : '#0b0616'); ctx.fillRect(0, fy, w, h - fy);
+      return;
+    }
+    if (k === 'room') {
+      secMapBg(ctx, w, h, t);
+      const dw = 86, dh = h * 0.7, dx = cx - dw / 2, dy = fy - dh;
+      glow(ctx, cx, fy - dh * 0.4, dh * 0.8, SEC_COL.trace, 0.35 + 0.15 * Math.sin(t * 3));
+      ctx.beginPath(); rrect(ctx, dx, dy, dw, dh, 6); F(ctx, '#1a2420'); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+      // the door is ajar: a green blade of light down one side
+      ctx.beginPath(); ctx.rect(dx + dw - 12, dy + 4, 8, dh - 8); F(ctx, rgba(SEC_COL.trace, 0.55 + 0.25 * Math.sin(t * 5))); ctx.fill();
+      ctx.beginPath(); rrect(ctx, dx + 10, dy + 16, dw - 20, 22, 4); F(ctx, '#e9dcc4'); ctx.fill();
+      txt(ctx, 'STAFF ONLY', cx, dy + 27, 10, '#3a0a0a', true);
+      tone(ctx, c => circ(c, dx + dw - 20, dy + dh * 0.55, 5), PAL.gold, dx + dw - 20, dy + dh * 0.55, 5, { ol: 1.5 });
+      return;
+    }
+    if (k === 'key') {
+      try { const g = ctx.createRadialGradient(cx, h * 0.45, 4, cx, h * 0.45, w * 0.6); g.addColorStop(0, '#3a2a10'); g.addColorStop(1, '#0d0718'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#1d1233'; }
+      ctx.fillRect(0, 0, w, h);
+      // three keyholes on a dark door behind
+      ctx.beginPath(); rrect(ctx, cx - 120, h * 0.1, 240, h * 0.82, 10); F(ctx, '#1d1233'); ctx.fill(); S(ctx, '#3d2a63', 3); ctx.stroke();
+      for (let i = 0; i < 3; i++) { const x = cx - 70 + i * 70, y = h * 0.28; F(ctx, '#050208'); ctx.beginPath(); circ(ctx, x, y, 7); ctx.fill(); ctx.beginPath(); poly(ctx, [x - 4, y + 2, x + 4, y + 2, x + 6, y + 18, x - 6, y + 18]); ctx.fill(); }
+      secKey(ctx, cx, h * 0.62, 1.9, t, { rot: -0.5 + Math.sin(t * 1.2) * 0.12 });
+      for (let i = 0; i < 4; i++) secGlint(ctx, cx - 90 + loreR(i, 4) * 180, h * 0.2 + loreR(i, 5) * h * 0.6, 8, t + i, 0.8);
+      return;
+    }
+    if (k === 'loop') {
+      F(ctx, '#050208'); ctx.fillRect(0, 0, w, h);
+      ctx.beginPath(); rrect(ctx, 20, 14, w - 40, h - 28, 26);
+      try { const g = ctx.createRadialGradient(cx, h / 2, 10, cx, h / 2, w * 0.55); g.addColorStop(0, '#0f3a34'); g.addColorStop(1, '#03110f'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#0b2a26'; }
+      ctx.fill(); S(ctx, '#2a1d44', 6); ctx.stroke();
+      const L = ['BIOS v4.0 ........ OK', 'MONSTER FIRMWARE ... OK', 'MERCY ............ NOT FOUND', 'INSERT COIN TO CONTINUE'];
+      const n = Math.min(L.length, Math.floor(t * 1.5) % (L.length + 2));
+      for (let i = 0; i < L.length; i++) txt(ctx, L[i], 44, 38 + i * 20, 12, i < n ? '#7dffc9' : 'rgba(125,255,201,0.18)', true, 'left');
+      chrome(ctx, 'LOOP', cx + 110, h * 0.66, 34, PAL.cyan, PAL.pink);
+      S(ctx, 'rgba(0,0,0,0.25)', 1); ctx.beginPath(); for (let y = 16; y < h - 14; y += 3) { ctx.moveTo(22, y); ctx.lineTo(w - 22, y); } ctx.stroke();
+      return;
+    }
+    if (k === 'dark') {
+      F(ctx, '#0c0616'); ctx.fillRect(0, 0, w, h);
+      const r = 22, dx = r * 1.5, dy = r * Math.sqrt(3);
+      for (let c = -1; c < w / dx + 1; c++) for (let row = -1; row < h / dy + 1; row++) {
+        const x = c * dx, y = row * dy + (c % 2 ? dy / 2 : 0), d = Math.hypot(x - cx, (y - h * 0.55) * 1.3);
+        const lit = d < 70, near = d < 115;
+        ctx.beginPath(); hexPath(ctx, x, y, r - 1.5, true);
+        F(ctx, lit ? mix('#4a6a34', '#12091f', 0.2 + d / 400) : near ? '#1c1030' : '#140a24'); ctx.fill();
+        S(ctx, lit ? rgba(PAL.gold, 0.55) : 'rgba(90,63,143,0.3)', lit ? 1.6 : 1); ctx.stroke();
+        if (!lit && near && loreR(c, row) > 0.7) txt(ctx, '?', x, y + 1, 12, 'rgba(179,164,214,0.35)', true);
+      }
+      for (let i = 0; i < 3; i++) bulb(ctx, cx - 60 + i * 60, h * 0.2, 9, t + i, Math.sin(t * 2 + i * 2) > -0.4);
+      glow(ctx, cx, h * 0.55, 80, PAL.gold, 0.35);
+      crawler(ctx, cx, h * 0.55, 18, t);
+      return;
+    }
+    if (k === 'tickets') {
+      try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#1b1030'); g.addColorStop(1, '#2c1428'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#1b1030'; }
+      ctx.fillRect(0, 0, w, h);
+      const cols = ['#ff9ec7', '#ffb347', '#ffc94d', '#8dfff5'];
+      for (let i = 0; i < 46; i++) {
+        const u = loreR(i, 7), v = loreR(i, 8), x = cx + (u - 0.5) * w * 0.8 * (1 - v * 0.6), y = fy + 4 - v * h * 0.42 * (1 - Math.abs(u - 0.5));
+        ticket(ctx, x, y, 30, 14, (loreR(i, 9) - 0.5) * 1.6, cols[i % 4]);
+      }
+      for (let i = 0; i < 4; i++) { const u = (t * 0.25 + i / 4) % 1; ticket(ctx, w * (0.2 + i * 0.2) + Math.sin(t * 2 + i) * 14, -10 + u * h * 0.8, 26, 12, Math.sin(t * 3 + i) * 0.8, cols[(i + 1) % 4]); }
+      capsule(ctx, cx, fy - h * 0.42, 22, { tier: 'r', t, glow: 0.6 });
+      return;
+    }
+    if (k === 'cabinet') {
+      F(ctx, '#12091f'); ctx.fillRect(0, 0, w, h);
+      const types = ['plinko', 'wheel', 'slots'];
+      for (let i = 0; i < 3; i++) {
+        const bw = 104, bh = h * 0.76, x = cx - 170 + i * 120, y = fy - bh, on = Math.sin(t * (3 + i) + i) > -0.6;
+        deadCabinet(ctx, x, y, bw, bh, on, t);
+        ctx.save(); ctx.translate(x + bw / 2, y + bh * 0.3); arcIcon(ctx, types[i], 22, t + i); ctx.restore();
+        glow(ctx, x + bw / 2, y + bh * 0.3, 60, [PAL.cyan, PAL.gold, PAL.lime][i], on ? 0.3 : 0.08);
+      }
+      F(ctx, rgba(PAL.pink, 0.14)); ctx.beginPath(); ell(ctx, cx, fy + 8, w * 0.4, 8); ctx.fill();
+      return;
+    }
+    if (k === 'prizes' || k === 'chair' || k === 'tilt') {
+      F(ctx, '#170d2a'); ctx.fillRect(0, 0, w, h);
+      if (k === 'prizes') {
+        const items = st.items || [];
+        for (let s = 0; s < 3; s++) {
+          const y = 40 + s * (h - 40) / 3;
+          F(ctx, '#3a2560'); ctx.fillRect(14, y + 18, w - 28, 6);
+          for (let i = 0; i < 7; i++) {
+            const d = items[(s * 7 + i) % Math.max(1, items.length)];
+            const x = 40 + i * (w - 80) / 6, turn = Math.sin(t * 0.8 + s * 2 + i) > 0.92 ? 0.35 : 0;
+            if (d) item(ctx, d, x, y + 4, turn, 0.62, {});
+            else { ctx.beginPath(); star(ctx, x, y + 4, 10, 5, 0.45); F(ctx, PAL.gold); ctx.fill(); }
+          }
+        }
+        glow(ctx, cx, 0, w * 0.5, PAL.gold, 0.25);
+        return;
+      }
+      if (k === 'tilt') {
+        ctx.save(); ctx.translate(cx - 40, h * 0.54); ctx.rotate(-0.2);
+        ctx.beginPath(); rrect(ctx, -70, -70, 140, 140, 12); F(ctx, '#241441'); ctx.fill(); S(ctx, PAL.pink, 3); ctx.stroke();
+        ctx.beginPath(); rrect(ctx, -56, -52, 112, 104, 8); F(ctx, '#0f0820'); ctx.fill();
+        for (let i = 0; i < 6; i++) { ctx.beginPath(); circ(ctx, -34 + (i % 3) * 34, -24 + Math.floor(i / 3) * 34 + Math.sin(t * 2 + i) * 3, 7); F(ctx, [PAL.cyan, PAL.gold, PAL.lime][i % 3]); ctx.fill(); }
+        loreClaw(ctx, 10 + Math.sin(t * 1.4) * 20, -52, -30, 7, 0.4, PAL.chrome);
+        ctx.restore();
+        const on = Math.sin(t * 5) > -0.3;
+        txt(ctx, 'TILT', w * 0.72, h * 0.46, 52, on ? PAL.pink : shade(PAL.pink, -0.6), true, 'center', on ? rgba(PAL.pink, 0.4) : INK);
+        if (on) glow(ctx, w * 0.72, h * 0.46, 90, PAL.pink, 0.4);
+        return;
+      }
+      // the empty chair behind the counter, the host's hat on the counter
+      glow(ctx, cx, h * 0.35, h * 0.6, PAL.gold, 0.2);
+      F(ctx, '#3a2440'); ctx.fillRect(cx - 34, h * 0.2, 68, h * 0.34); S(ctx, INK, 3); ctx.strokeRect(cx - 34, h * 0.2, 68, h * 0.34);
+      F(ctx, '#4a2e55'); ctx.fillRect(cx - 40, h * 0.52, 80, 12);
+      ctx.beginPath(); rrect(ctx, cx - 20, h * 0.28, 40, 16, 3); F(ctx, '#e9dcc4'); ctx.fill();
+      txt(ctx, 'YOU', cx, h * 0.28 + 8, 11, '#3a0a0a', true);
+      ctx.beginPath(); rrect(ctx, 14, fy - 30, w - 28, 46, 8); F(ctx, '#5a3a2a'); ctx.fill(); S(ctx, PAL.gold, 3); ctx.stroke();
+      F(ctx, '#12091f'); ctx.fillRect(cx + 90, fy - 64, 44, 34); F(ctx, PAL.pink); ctx.fillRect(cx + 90, fy - 42, 44, 7);
+      ctx.beginPath(); ell(ctx, cx + 112, fy - 30, 36, 7); F(ctx, '#12091f'); ctx.fill();
+      tone(ctx, c => { c.moveTo(cx - 130, fy - 30); c.arc(cx - 110, fy - 30, 20, Math.PI, 0); c.closePath(); }, PAL.gold, cx - 110, fy - 40, 20, { ol: 2 });
+      return;
+    }
+    if (k === 'rig') {
+      F(ctx, '#12091f'); ctx.fillRect(0, 0, w, h);
+      const cfg = { w: 210, h: 118, chuteW: 40, dividerH: 0.45, frame: 14, railY: 22 }, ox = cx - 105, oy = h - 128;
+      const cst = { t, act: 1, party: 0 };
+      cabinetBack(ctx, ox, oy, cfg, cst);
+      ctx.save(); ctx.beginPath(); ctx.rect(ox, oy, cfg.w, cfg.h); ctx.clip();
+      const items = (st.items || []).slice(0, 7);
+      items.forEach((d, i) => item(ctx, d, ox + 22 + i * 22, oy + cfg.h - 14 - (i % 2) * 10, (i - 3) * 0.3, 0.7, {}));
+      if (st.pose) claw(ctx, st.pose, ox, oy, { juice: { t, mood: 'happy' } });
+      ctx.restore();
+      cabinetFront(ctx, ox, oy, cfg, cst);
+      return;
+    }
+    F(ctx, '#170d2a'); ctx.fillRect(0, 0, w, h);
+  }
+  /* A Codex page's picture: art {k, id?, act?, gear?, sleep?} (DATA.LORE_ART),
+     st {t, col (the chapter's colour), def (the enemy), items (defs), pose (a
+     claw pose for the Rig), locked}. A locked page is the same picture under
+     the dark with a question mark. */
+  function loreVignette(ctx, art, w, h, st) {
+    ctx.save();
+    try {
+      art = art || {}; st = st || {};
+      w = w || 480; h = h || 200;
+      const t = st.t || 0, col = st.col || PAL.pink;
+      ctx.beginPath(); rrect(ctx, 0, 0, w, h, 14); ctx.clip();
+      F(ctx, '#0d0718'); ctx.fillRect(0, 0, w, h);
+      // every scene is laid out 200 high (a thumbnail or the toast's chip is the same picture, smaller)
+      const k = h / 200;
+      ctx.save();
+      ctx.scale(k, k);
+      try { loreScene(ctx, art, w / k, 200, st, t); } catch (e) { /* a scene never takes the page down */ }
+      ctx.restore();
+      // the edge falls into shadow, faint scanlines over it
+      try { const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.62); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); } catch (e) { /* stub */ }
+      S(ctx, 'rgba(0,0,0,0.16)', 1); ctx.beginPath(); for (let y = 2; y < h; y += 4) { ctx.moveTo(0, y); ctx.lineTo(w, y); } ctx.stroke();
+      if (st.locked) {
+        F(ctx, 'rgba(12,6,24,0.86)'); ctx.fillRect(0, 0, w, h);
+        txt(ctx, '?', w / 2, h / 2 + 2, Math.min(h * 0.55, 96), rgba(col, 0.85), true, 'center', INK);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+    ctx.save();
+    try { ctx.beginPath(); rrect(ctx, 1.5, 1.5, (w || 480) - 3, (h || 200) - 3, 13); S(ctx, rgba((st && st.col) || PAL.pink, st && st.locked ? 0.35 : 0.85), 3); ctx.stroke(); } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* A landmark on the map (kind: jukebox, tickets, hiscore), centred on its hex
+     at the camera's hex size. Lit hexes only; the game decides that. */
+  function loreMark(ctx, kind, x, y, size, t) {
+    ctx.save();
+    try {
+      const s = (size || 46) * 0.6;
+      t = t || 0;
+      ctx.translate(x || 0, (y || 0) + s * 0.15);
+      F(ctx, 'rgba(0,0,0,0.35)'); ctx.beginPath(); ell(ctx, 0, s * 0.95, s * 0.95, s * 0.26); ctx.fill();
+      if (kind === 'jukebox') {
+        const flick = Math.sin(t * 11) * Math.sin(t * 7.3) > -0.35;
+        glow(ctx, 0, 0, s * 1.6, '#ff6bb0', flick ? 0.35 : 0.1);
+        tone(ctx, c => { c.moveTo(-s * 0.72, s * 0.95); c.lineTo(-s * 0.72, -s * 0.15); c.arc(0, -s * 0.15, s * 0.72, Math.PI, 0); c.lineTo(s * 0.72, s * 0.95); c.closePath(); }, '#7a2a5a', 0, 0, s, { ol: 2 });
+        ctx.beginPath(); ctx.arc(0, -s * 0.15, s * 0.52, Math.PI, 0); S(ctx, flick ? PAL.gold : shade(PAL.gold, -0.55), s * 0.14); ctx.stroke();
+        ctx.beginPath(); rrect(ctx, -s * 0.42, s * 0.12, s * 0.84, s * 0.46, s * 0.1); F(ctx, '#2a0f24'); ctx.fill();
+        S(ctx, '#ff9ad0', 1.2); ctx.beginPath(); for (let i = 0; i < 3; i++) { ctx.moveTo(-s * 0.34, s * (0.22 + i * 0.13)); ctx.lineTo(s * 0.34, s * (0.22 + i * 0.13)); } ctx.stroke();
+        // the crack down its glass
+        S(ctx, INK, 1.4); ctx.beginPath(); ctx.moveTo(s * 0.1, -s * 0.8); ctx.lineTo(-s * 0.05, -s * 0.5); ctx.lineTo(s * 0.12, -s * 0.3); ctx.lineTo(0, -s * 0.05); ctx.stroke();
+        for (let i = 0; i < 2; i++) { const u = (t * 0.45 + i * 0.5) % 1; txt(ctx, i ? '♫' : '♪', s * (0.5 + u * 0.4) * (i ? -1 : 1), -s * (0.9 + u * 1.1), s * 0.62, rgba('#ff9ad0', (1 - u) * 0.9), true, 'center'); }
+      } else if (kind === 'tickets') {
+        const cols = ['#ff9ec7', '#ffb347', '#ffc94d'];
+        glow(ctx, 0, s * 0.3, s * 1.4, '#ffb347', 0.22);
+        for (let i = 0; i < 9; i++) ticket(ctx, (loreR(i, 11) - 0.5) * s * 1.5, s * (0.75 - loreR(i, 12) * 0.7 * (1 - Math.abs(loreR(i, 11) - 0.5))), s * 0.9, s * 0.42, (loreR(i, 13) - 0.5) * 1.8, cols[i % 3]);
+        const u = (t * 0.3) % 1;
+        ticket(ctx, Math.sin(t * 2.2) * s * 0.6, -s * (1.6 - u * 1.2), s * 0.8, s * 0.36, Math.sin(t * 3) * 0.9, cols[1]);
+      } else if (kind === 'hiscore') {
+        glow(ctx, 0, -s * 0.3, s * 1.5, PAL.cyan, 0.3);
+        line(ctx, -s * 0.5, -s * 0.1, -s * 0.55, s * 0.95, '#5a6373', s * 0.16);
+        line(ctx, s * 0.5, -s * 0.1, s * 0.55, s * 0.95, '#5a6373', s * 0.16);
+        ctx.beginPath(); rrect(ctx, -s * 0.95, -s * 1.1, s * 1.9, s * 1.25, s * 0.14); F(ctx, '#0a1a24'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        ctx.beginPath(); rrect(ctx, -s * 0.95, -s * 1.1, s * 1.9, s * 1.25, s * 0.14); S(ctx, rgba(PAL.cyan, 0.8), 1.4); ctx.stroke();
+        txt(ctx, 'HI', 0, -s * 0.88, s * 0.34, PAL.pink, true);
+        const rowsC = [PAL.gold, PAL.cyan, PAL.cyan];
+        for (let i = 0; i < 3; i++) { F(ctx, rgba(rowsC[i], 0.85)); ctx.fillRect(-s * 0.72, -s * (0.62 - i * 0.24), s * (1.44 - i * 0.2 - (i === 0 ? 0 : loreR(i, 3) * 0.3)), s * 0.12); }
+        if (Math.floor(t * 2) % 2 === 0) { F(ctx, PAL.lime); ctx.fillRect(s * 0.52, -s * 0.14, s * 0.14, s * 0.12); }
+      } else {
+        txt(ctx, '?', 0, 0, s, PAL.cyan, true, 'center', INK);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* A landmark's one line in a speech bubble pointing down at (x, y): st {icon,
+     name, col, t (seconds since it opened), a (alpha)}. Clamped to the stage. */
+  function loreSnippet(ctx, x, y, text, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const col = st.col || PAL.cyan, a = U.clamp(st.a == null ? 1 : st.a, 0, 1), age = st.t || 0;
+      const lines = loreWrap(ctx, text, 290, 13).slice(0, 3);
+      ctx.font = 'bold 13px ' + FONT;
+      let tw = 0;
+      for (const l of lines) tw = Math.max(tw, ctx.measureText(l).width || l.length * 7);
+      const head = (st.icon ? st.icon + ' ' : '') + (st.name || '');
+      ctx.font = 'bold 12px ' + FONT;
+      tw = Math.max(tw, ctx.measureText(head).width || head.length * 7, 120);
+      const bw = Math.min(316, tw + 26), bh = 26 + lines.length * 17 + 6;
+      const bx = U.clamp(x - bw / 2, 8, 540 - 8 - bw), by = Math.max(178, y - bh - 18);
+      const pop = age < 0.18 ? 0.85 + (age / 0.18) * 0.15 : 1;
+      ctx.globalAlpha = a;
+      ctx.translate(x, y); ctx.scale(pop, pop); ctx.translate(-x, -y);
+      ctx.beginPath(); rrect(ctx, bx, by, bw, bh, 12);
+      const tx = U.clamp(x, bx + 16, bx + bw - 16);
+      ctx.moveTo(tx - 9, by + bh - 1); ctx.lineTo(x, Math.max(by + bh + 4, y - 4)); ctx.lineTo(tx + 9, by + bh - 1);
+      F(ctx, 'rgba(18,9,31,0.94)'); ctx.fill(); S(ctx, col, 2.5); ctx.stroke();
+      txt(ctx, head, bx + 12, by + 14, 12, col, true, 'left');
+      lines.forEach((l, i) => txt(ctx, l, bx + 12, by + 33 + i * 17, 13, '#f3ecff', true, 'left'));
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The old high score board over the map: rows from DATA.loreBoard ({rank,
+     ini, s, you, house, who}), st {t, a, title, foot}. The house's rows are
+     dim, yours gold with a blinking arrow, the Prize Master's pink. */
+  function loreBoardDraw(ctx, rows, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 440; h = h || 520;
+      const t = st.t || 0, a = U.clamp(st.a == null ? 1 : st.a, 0, 1);
+      ctx.globalAlpha = a;
+      ctx.beginPath(); rrect(ctx, 0, 0, w, h, 26); F(ctx, '#241441'); ctx.fill(); S(ctx, INK, 4); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, 5, 5, w - 10, h - 10, 22); S(ctx, rgba(PAL.cyan, 0.5 + 0.2 * Math.sin(t * 3)), 3); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, 22, 70, w - 44, h - 130, 14);
+      try { const g = ctx.createRadialGradient(w / 2, h / 2, 20, w / 2, h / 2, w * 0.7); g.addColorStop(0, '#0f2a3a'); g.addColorStop(1, '#050d14'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#081820'; }
+      ctx.fill(); S(ctx, '#0a0514', 3); ctx.stroke();
+      chrome(ctx, st.title || 'HIGH SCORES', w / 2, 38, 28, PAL.cyan, PAL.pink);
+      txt(ctx, 'RANK', 52, 92, 12, '#8dfff5', true, 'left');
+      txt(ctx, 'NAME', w * 0.42, 92, 12, '#8dfff5', true, 'center');
+      txt(ctx, 'SCORE', w - 52, 92, 12, '#8dfff5', true, 'right');
+      const list = (rows || []).slice(0, 10), rh = Math.min(44, (h - 196) / Math.max(1, list.length));
+      const ORD = ['1ST', '2ND', '3RD'];
+      list.forEach((r, i) => {
+        const y = 122 + i * rh;
+        const c = r.who === 'prizemaster' ? PAL.pink : r.you ? PAL.gold : r.house ? '#7fb8c8' : '#f3ecff';
+        if (r.you) { F(ctx, rgba(PAL.gold, 0.1 + 0.06 * Math.sin(t * 4))); ctx.fillRect(28, y - rh / 2 + 2, w - 56, rh - 4); }
+        txt(ctx, ORD[(r.rank | 0) - 1] || ((r.rank | 0) + 'TH'), 52, y, 17, c, true, 'left');
+        txt(ctx, String(r.ini || '???'), w * 0.42, y, 20, c, true, 'center');
+        txt(ctx, hisFmt(r.s), w - 52, y, 18, c, true, 'right');
+        if (r.who === 'prizemaster') { ctx.beginPath(); star(ctx, w * 0.42 - 40, y, 7, 5, 0.45); F(ctx, PAL.gold); ctx.fill(); }
+        if (r.you && Math.floor(t * 2.5) % 2 === 0) txt(ctx, '◀', w - 36, y, 12, PAL.gold, true, 'center');
+      });
+      if (!list.some((r) => r.you)) txt(ctx, 'Finish a climb to get your initials up here.', w / 2, h - 88, 13, '#b3a4d6', true);
+      S(ctx, 'rgba(0,0,0,0.25)', 1); ctx.beginPath(); for (let y = 72; y < h - 60; y += 3) { ctx.moveTo(24, y); ctx.lineTo(w - 24, y); } ctx.stroke();
+      if (Math.floor(t * 1.6) % 2 === 0) txt(ctx, st.foot || 'INSERT COIN TO CONTINUE', w / 2, h - 38, 14, PAL.gold, true, 'center', INK);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The act intro card over the whole stage: st {title, name, lines, typed
+     (characters of the lines shown so far), u (0..1 through the card), a
+     (alpha), biome, t, reduced, skip (the hint)}. */
+  function loreIntroCard(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const B = LORE_BIOME[st.biome] || LORE_BIOME.cellar, t = st.t || 0, u = U.clamp(st.u || 0, 0, 1), a = U.clamp(st.a == null ? 1 : st.a, 0, 1);
+      ctx.globalAlpha = a;
+      F(ctx, rgba(B.bg, 0.9)); ctx.fillRect(0, 0, w, h);
+      try { const g = ctx.createRadialGradient(w / 2, h * 0.47, 10, w / 2, h * 0.47, w * 0.8); g.addColorStop(0, rgba(B.col, 0.22)); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, w, h); } catch (e) { /* stub */ }
+      // the biome's motes drift through it
+      for (let i = 0; i < 26; i++) {
+        const fx0 = loreR(i, 21), sp = 0.3 + loreR(i, 22) * 0.6;
+        let x = fx0 * w, y;
+        if (st.biome === 'foundry') y = h - ((t * 60 * sp + loreR(i, 23) * h) % h);
+        else if (st.biome === 'vault') { y = (t * 45 * sp + loreR(i, 23) * h) % h; x += Math.sin(t + i) * 12; }
+        else if (st.biome === 'machine') { y = loreR(i, 23) * h; x = (fx0 * w + t * 120 * sp) % w; }
+        else { y = loreR(i, 23) * h + Math.sin(t * sp + i) * 20; x += Math.cos(t * sp * 0.8 + i) * 16; }
+        F(ctx, rgba(i % 3 ? B.col : B.col2, 0.25 + 0.35 * Math.abs(Math.sin(t * 2 + i)))); ctx.beginPath(); circ(ctx, x, y, st.biome === 'vault' ? 2 : 1.6); ctx.fill();
+      }
+      // letterbox bars
+      const bar = st.reduced ? 110 : 110 * Math.min(1, u * 6);
+      F(ctx, '#000000'); ctx.fillRect(0, 0, w, bar); ctx.fillRect(0, h - bar, w, bar);
+      line(ctx, 0, bar, w, bar, rgba(B.col, 0.5), 2); line(ctx, 0, h - bar, w, h - bar, rgba(B.col, 0.5), 2);
+      const cy = h * 0.44;
+      // the title, the name (slams in), the lines typed under it
+      const tIn = st.reduced ? 1 : U.clamp((u - 0.04) / 0.12, 0, 1);
+      txt(ctx, String(st.title || ''), w / 2, cy - 64, 20, rgba(B.col, tIn), true, 'center', INK);
+      line(ctx, w / 2 - 90 * tIn, cy - 46, w / 2 + 90 * tIn, cy - 46, rgba(B.col, 0.8 * tIn), 2);
+      const nIn = st.reduced ? 1 : U.clamp((u - 0.1) / 0.12, 0, 1);
+      if (nIn > 0) {
+        const k = st.reduced ? 1 : 1 + (1 - nIn) * 0.5;
+        ctx.save(); ctx.translate(w / 2, cy); ctx.scale(k, k); ctx.globalAlpha = a * nIn;
+        glow(ctx, 0, 0, 170, B.col2, 0.35 * nIn);
+        ctx.font = 'bold 38px ' + FONT;
+        const nm = String(st.name || ''), mw = ctx.measureText(nm).width || 0, sz = mw > w - 60 && mw > 0 ? 38 * (w - 60) / mw : 38;
+        chrome(ctx, nm, 0, 0, Math.max(18, sz), B.col2, B.col);
+        ctx.restore();
+      }
+      let left = Math.max(0, st.typed == null ? 999 : st.typed | 0);
+      const lines = st.lines || [];
+      lines.forEach((l, i) => {
+        const s = String(l), show = s.slice(0, Math.max(0, left));
+        left -= s.length;
+        const y = cy + 58 + i * 30;
+        if (show) txt(ctx, show, w / 2, y, 17, '#f3ecff', true, 'center', INK);
+        if (left < 0 && left > -s.length - 1 && Math.floor(t * 4) % 2 === 0) {
+          ctx.font = 'bold 17px ' + FONT;
+          const sw = ctx.measureText(show).width || show.length * 9;
+          F(ctx, B.col); ctx.fillRect(w / 2 + sw / 2 + 3, y - 9, 8, 18);
+        }
+      });
+      // how far through the beat, and the skip
+      F(ctx, rgba(B.col, 0.8)); ctx.fillRect(w * 0.2, h - bar - 14, w * 0.6 * u, 3);
+      txt(ctx, st.skip || 'TAP TO SKIP', w / 2, h - bar / 2, 12, rgba('#b3a4d6', 0.8), true, 'center');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A medal (tier '' draws an empty dashed slot): a ribbon, a disc, a star, a shine.
+  function loreMedal(ctx, tier, x, y, r, t) {
+    ctx.save();
+    try {
+      r = r || 20; t = t || 0;
+      ctx.translate(x || 0, y || 0);
+      const M = LORE_MEDAL[tier];
+      if (!M) {
+        ctx.save(); ctx.setLineDash([4, 4]); ctx.beginPath(); circ(ctx, 0, 0, r * 0.9); S(ctx, 'rgba(179,164,214,0.5)', 2); ctx.stroke(); ctx.restore();
+        txt(ctx, '?', 0, 1, r * 0.8, 'rgba(179,164,214,0.6)', true);
+        ctx.restore();
+        return;
+      }
+      for (const [d, c] of [[-1, PAL.pink], [1, PAL.cyan]]) {
+        ctx.beginPath(); poly(ctx, [d * r * 0.1, -r * 0.6, d * r * 0.62, -r * 1.9, d * r * 0.16, -r * 1.9, -d * r * 0.3, -r * 0.6]); F(ctx, c); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+      }
+      if (tier === 'gold' || tier === 'platinum') glow(ctx, 0, 0, r * 2, M[0], 0.35 + 0.15 * Math.sin(t * 3));
+      tone(ctx, c => circ(c, 0, 0, r), M[0], 0, 0, r, { ol: 2.5, olc: M[1] });
+      ctx.beginPath(); circ(ctx, 0, 0, r * 0.76); S(ctx, rgba(M[1], 0.6), Math.max(1, r * 0.08)); ctx.stroke();
+      ctx.beginPath(); star(ctx, 0, 0, r * 0.5, 5, 0.46); F(ctx, shade(M[0], 0.4)); ctx.fill(); S(ctx, M[1], Math.max(1, r * 0.06)); ctx.stroke();
+      // a shine sweeping across now and then
+      const u = (t * 0.45) % 1.6;
+      if (u < 1) { ctx.save(); ctx.beginPath(); circ(ctx, 0, 0, r); ctx.clip(); ctx.rotate(0.6); F(ctx, 'rgba(255,255,255,0.45)'); ctx.fillRect(-r * 1.4 + u * r * 2.8, -r * 1.5, r * 0.3, r * 3); ctx.restore(); }
+      if (tier === 'platinum') for (let i = 0; i < 3; i++) { const aa = t * 1.6 + i * 2.1; ctx.beginPath(); star(ctx, Math.cos(aa) * r * 1.25, Math.sin(aa) * r * 1.25, r * 0.16, 4, 0.4); F(ctx, '#ffffff'); ctx.fill(); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The weekly challenge's banner: st {name, icon, col, week, left, blurb,
+     char, claw, medal, best, t}. The theme and its week, the time left, the
+     crawler of the week and the best medal so far. */
+  function loreWkBanner(ctx, st, w, h) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 508; h = h || 170;
+      const t = st.t || 0, col = st.col || PAL.cyan;
+      ctx.beginPath(); rrect(ctx, 2, 2, w - 4, h - 4, 16);
+      try { const g = ctx.createLinearGradient(0, 0, w, h); g.addColorStop(0, mix(col, '#12091f', 0.62)); g.addColorStop(1, '#140a26'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#22163a'; }
+      ctx.fill(); S(ctx, rgba(col, 0.9), 3); ctx.stroke();
+      ctx.save(); ctx.beginPath(); rrect(ctx, 4, 4, w - 8, h - 8, 14); ctx.clip();
+      for (let i = 0; i < 7; i++) { ctx.beginPath(); ctx.moveTo(-40 + i * 90 + (t * 20) % 90, h); ctx.lineTo(10 + i * 90 + (t * 20) % 90, 0); S(ctx, rgba(col, 0.07), 22); ctx.stroke(); }
+      ctx.restore();
+      txt(ctx, 'WEEKLY CHALLENGE', 20, 22, 12, col, true, 'left');
+      txt(ctx, String(st.week || ''), 20, 40, 12, '#b3a4d6', true, 'left');
+      ctx.font = '44px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; F(ctx, '#ffffff'); ctx.fillText(String(st.icon || '★'), 50, 84);
+      loreFit(ctx, st.name || '', 88, 72, 26, w - 250, '#ffffff', INK, 'left');
+      const bl = loreWrap(ctx, st.blurb || '', w - 250, 13).slice(0, 2);
+      bl.forEach((l, i) => txt(ctx, l, 88, 97 + i * 16, 13, '#e6dcff', true, 'left'));
+      // time left
+      ctx.beginPath(); rrect(ctx, 20, h - 36, 150, 24, 12); F(ctx, 'rgba(0,0,0,0.4)'); ctx.fill(); S(ctx, rgba(col, 0.7), 1.5); ctx.stroke();
+      txt(ctx, String(st.left || ''), 95, h - 24, 12, '#ffffff', true, 'center');
+      // the crawler of the week with the claw of the week
+      glow(ctx, w - 78, 70, 70, col, 0.3);
+      portrait(ctx, st.char || 'knight', w - 78, 70, 92, t);
+      ctx.beginPath(); rrect(ctx, w - 146, 118, 136, 22, 11); F(ctx, 'rgba(0,0,0,0.45)'); ctx.fill();
+      loreFit(ctx, st.claw || '', w - 78, 129, 12, 128, PAL.cyan);
+      // the best so far, beside the clock
+      if (st.medal) loreMedal(ctx, st.medal, 194, h - 22, 11, t);
+      if (st.best > 0) txt(ctx, 'best ' + hisFmt(st.best), st.medal ? 212 : 184, h - 24, 13, PAL.gold, true, 'left', INK);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const LORE_R = { BIOME: LORE_BIOME, MEDAL: LORE_MEDAL, KINDS: LORE_KINDS_R, vignette: loreVignette, scene: loreScene, mark: loreMark, snippet: loreSnippet,
+    board: loreBoardDraw, intro: loreIntroCard, medal: loreMedal, wkBanner: loreWkBanner, wrap: loreWrap };
+  /* ============================================================ end LORE */
+
+  /* ============================================================ FAMILY (round 9) */
+  /* Enemy families (DESIGN.md "Enemy families (round 9)"): the nine members'
+     own drawings (def.look keys; the Band bounces on one shared beat, so
+     three of them in a fight move together), the family intent icons and
+     ribbons (SOLO, HUM, restock, cans, change, lost the beat), the bond line
+     between members, the Band's Crescendo staff, the SOLO spotlight, the
+     choir's anger and the fight-start banner plate. Pure drawing from the
+     inputs, saved and restored, never throws. */
+  const FAM_BPM = 116;
+  const FAM_COL = { band: '#ff2e88', vending: '#2ee6d6', choir: '#8dfff5' };
+  const FAM_COL2 = { band: '#ffc94d', vending: '#ff5a4a', choir: '#b8a4ff' };
+  const FAM_ICON = { band: '♫', vending: '\u{1F964}', choir: '❄' };
+  const FAMB = { ph: 0, hit: 0, bob: 0, n: 0, odd: 0 };
+  // The shared beat: phase 0..1 within a beat, a hit that decays after it, a bounce, the beat count.
+  function famBeat(t) {
+    const u = (t || 0) * FAM_BPM / 60, n = Math.floor(u), ph = u - n;
+    FAMB.ph = ph; FAMB.n = n; FAMB.odd = n & 1;
+    FAMB.hit = FLAT ? 0 : Math.pow(1 - ph, 4);
+    FAMB.bob = -Math.abs(Math.sin(ph * Math.PI));
+    return FAMB;
+  }
+  // A quarter note (head at x, y), for the staff and the rising notes.
+  function famNote(ctx, x, y, r, col, beam) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(-0.35);
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 1.25, r * 0.9, 0, 0, TAU); F(ctx, col); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); ctx.moveTo(x + r * 1.05, y - r * 0.2); ctx.lineTo(x + r * 1.05, y - r * 4.2);
+    if (beam) ctx.quadraticCurveTo(x + r * 2.6, y - r * 3.4, x + r * 2.2, y - r * 2.2);
+    S(ctx, INK, Math.max(1.6, r * 0.55)); ctx.stroke();
+    S(ctx, col, Math.max(0.8, r * 0.3)); ctx.stroke();
+  }
+  // Snow inside a globe: seeded flakes swirling around (cx, cy) in radius R.
+  function famSnow(ctx, cx, cy, R, t, n, col, fast) {
+    F(ctx, col || '#ffffff');
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.399 + t * (fast ? 2.6 : 0.5) * (i % 2 ? 1 : -0.7), rr = R * (0.25 + ((i * 37) % 70) / 100);
+      const x = cx + Math.cos(a) * rr * 0.9, y = cy + Math.sin(a) * rr * 0.55 + ((t * (fast ? 40 : 9) + i * 13) % (R * 1.2)) * 0.25;
+      circ(ctx, x, y, 1.1 + (i % 3) * 0.5);
+    }
+    ctx.fill();
+  }
+  // A glass globe on a base (feet at the origin): the figure is drawn by fig(ctx) inside the dome.
+  function famGlobe(ctx, t, p, R, fig, snowCol) {
+    const cy = -18 - R, wob = FLAT ? 0 : Math.sin(t * 1.7) * 0.02;
+    shadow(ctx, R * 2.2);
+    // the base: a turned wooden plinth with a gold band and a little plaque
+    tone(ctx, q => { q.moveTo(-R * 0.95, -18); q.lineTo(-R * 1.05, 0); q.lineTo(R * 1.05, 0); q.lineTo(R * 0.95, -18); q.closePath(); }, p.b === '#e8fdff' ? '#8a5a2b' : shade(p.a, -0.45), 0, -9, R * 0.7, { dark: -0.35, spec: false });
+    if (!FLAT) { F(ctx, PAL.gold); ctx.fillRect(-R * 0.98, -13, R * 1.96, 4); F(ctx, '#f1e2c6'); ctx.beginPath(); rrect(ctx, -9, -8, 18, 6, 2); ctx.fill(); }
+    ctx.save(); ctx.translate(0, cy); ctx.rotate(wob);
+    // the dome: back glass, the figure, snow, front glass with a shine
+    ctx.beginPath(); circ(ctx, 0, 0, R); F(ctx, FLAT || rgba(p.a, 0.22)); ctx.fill();
+    ctx.save(); ctx.beginPath(); circ(ctx, 0, 0, R - 1); ctx.clip();
+    if (!FLAT) { F(ctx, rgba('#ffffff', 0.55)); ctx.beginPath(); ell(ctx, 0, R * 0.78, R * 0.9, R * 0.3, 0); ctx.fill(); }
+    fig(ctx);
+    if (!FLAT) famSnow(ctx, 0, 0, R, t, 14, snowCol, false);
+    ctx.restore();
+    ctx.beginPath(); circ(ctx, 0, 0, R); S(ctx, INK, OL); ctx.stroke();
+    if (!FLAT) {
+      S(ctx, rgba('#ffffff', 0.7), 3); ctx.beginPath(); ctx.arc(0, 0, R * 0.78, -2.6, -1.9); ctx.stroke();
+      S(ctx, rgba('#ffffff', 0.45), 2); ctx.beginPath(); ctx.arc(0, 0, R * 0.62, -2.5, -2.2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // ---- act 1: The Band
+  // Buster Beats: an orange critter behind a bin-lid kit, sticks on the beat, a cymbal that shivers.
+  EA.fam_drummer = { w: 90, h: 98, draw(ctx, t, p) {
+    const B = famBeat(t), bob = B.bob * 3, hitL = B.odd ? B.hit * 0.3 : B.hit, hitR = B.odd ? B.hit : B.hit * 0.3;
+    shadow(ctx, 92);
+    limb(ctx, -40, -2, -40, -60, 2.5, '#8e98a8');
+    ctx.save(); ctx.translate(-40, -62); ctx.rotate(-0.28 + hitR * 0.22);
+    tone(ctx, q => ell(q, 0, 0, 17, 4.5, 0), PAL.gold, 0, 0, 10, { dark: -0.25 });
+    ctx.restore();
+    tone(ctx, q => ell(q, 8, -50 + bob, 21, 19, 0), p.a, 8, -50, 19, { dark: -0.3 });
+    const ear = (d) => tone(ctx, q => { q.moveTo(4 + d * 10, -84 + bob); q.lineTo(4 + d * 24, -98 + bob); q.lineTo(4 + d * 16, -76 + bob); q.closePath(); }, p.a, 4 + d * 16, -86, 8, { dark: -0.3, spec: false });
+    ear(-1); ear(1);
+    tone(ctx, q => circ(q, 4, -74 + bob, 17), p.a, 4, -74, 17, { dark: -0.3 });
+    if (!FLAT) { F(ctx, p.c); ctx.fillRect(-12, -86 + bob, 32, 5); F(ctx, PAL.pink); ctx.beginPath(); poly(ctx, [18, -86 + bob, 26, -92 + bob, 24, -82 + bob]); ctx.fill(); }
+    eye(ctx, -4, -76 + bob, 5, -0.7, 0.2); eye(ctx, 10, -77 + bob, 5, -0.7, 0.2);
+    ctx.beginPath(); ctx.moveTo(-6, -65 + bob); ctx.quadraticCurveTo(3, -58 + bob, 12, -66 + bob); ctx.closePath(); F(ctx, '#5a1030'); ctx.fill(); S(ctx, INK, 1.6); ctx.stroke();
+    // the snare (right, behind) and the bass drum (front)
+    tone(ctx, q => ell(q, 26, -46, 14, 5, 0), '#f4f8ff', 26, -46, 10, NOSPEC);
+    tone(ctx, q => circ(q, 0, -27, 25), p.b, 0, -27, 25, { dark: -0.3 });
+    tone(ctx, q => circ(q, 0, -27, 19), '#f4f8ff', 0, -27, 19, NOSPEC);
+    if (!FLAT) {
+      ctx.save(); ctx.translate(0, -27); ctx.scale(1 + B.hit * 0.06, 1 + B.hit * 0.06);
+      famNote(ctx, -4, 6, 4.2, p.a, true);
+      ctx.restore();
+    }
+    // arms and sticks: the left one strikes on even beats, the right on odd ones
+    const stick = (sx, sy, a) => { ctx.save(); ctx.translate(sx, sy); ctx.rotate(a); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-26, 0); S(ctx, INK, 5); ctx.stroke(); S(ctx, '#e9c48a', 3); ctx.stroke(); ctx.restore(); };
+    limb(ctx, -6, -54 + bob, -12, -46, 5, p.a); limb(ctx, 20, -54 + bob, 24, -48, 5, p.a);
+    stick(-12, -46, -0.5 + hitL * 0.75); stick(24, -48, 0.35 - hitR * 0.75 + Math.PI * 0.18);
+  } };
+  // Low-Note Lenny: a violet slime in shades with a bass slung across, nodding on the beat.
+  EA.fam_bassist = { w: 76, h: 74, draw(ctx, t, p) {
+    const B = famBeat(t), nod = B.hit * 0.08;
+    shadow(ctx, 76);
+    ctx.save(); ctx.scale(1 + nod, 1 - nod);
+    tone(ctx, q => { q.moveTo(-34, 0); q.quadraticCurveTo(-37, -48, -6, -56); q.quadraticCurveTo(24, -60, 33, -34); q.quadraticCurveTo(40, -8, 34, 0); q.closePath(); }, rgba(p.a, 0.95), 0, -26, 32, { dark: -0.32 });
+    // the shades
+    if (!FLAT) {
+      F(ctx, INK); ctx.beginPath(); rrect(ctx, -24, -40, 15, 9, 3); rrect(ctx, -6, -41, 15, 9, 3); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-9, -37); ctx.lineTo(-6, -37); S(ctx, INK, 2); ctx.stroke();
+      F(ctx, rgba(PAL.pink, 0.7)); ctx.fillRect(-21, -38, 5, 2); ctx.fillRect(-3, -39, 5, 2);
+    }
+    ctx.beginPath(); ctx.moveTo(-18, -24); ctx.quadraticCurveTo(-10, -18, -2, -25); S(ctx, INK, 2); ctx.stroke();
+    ctx.restore();
+    // the bass: body at the right hip, the neck up and to the left, four strings
+    ctx.save(); ctx.translate(4, -16); ctx.rotate(0.62 + B.hit * 0.05); ctx.scale(0.82, 0.82);
+    tone(ctx, q => { q.moveTo(8, -10); q.quadraticCurveTo(26, -16, 26, 0); q.quadraticCurveTo(26, 14, 8, 11); q.quadraticCurveTo(12, 0, 8, -10); q.closePath(); }, p.b, 16, 0, 12, { dark: -0.3 });
+    tone(ctx, q => rrect(q, -44, -3, 54, 6, 2), '#8a5a2b', -17, 0, 6, NOSPEC);
+    tone(ctx, q => rrect(q, -54, -5, 12, 10, 3), '#6b3f1f', -48, 0, 5, NOSPEC);
+    if (!FLAT) { S(ctx, rgba('#ffffff', 0.7), 0.8); ctx.beginPath(); for (let k = -1.5; k <= 1.5; k++) { ctx.moveTo(-44, k * 1.2); ctx.lineTo(18, k * 1.2); } ctx.stroke(); }
+    ctx.restore();
+    limb(ctx, -20, -18, -30, -34, 4, p.a);
+    limb(ctx, 22, -20, 18, -12 + B.hit * 3, 4, p.a);
+  } };
+  // Mic Drop Mimi: a pink bat singing into a mic on a stand, swaying on the beat, notes drifting up.
+  EA.fam_singer = { w: 84, h: 92, draw(ctx, t, p) {
+    const B = famBeat(t), sway = Math.sin((B.n + B.ph) * Math.PI) * 0.08, fl = Math.sin(t * 5);
+    shadow(ctx, 50, 0.25);
+    // the stand and the mic
+    limb(ctx, -30, -2, -30, -58, 2.5, '#8e98a8');
+    tone(ctx, q => ell(q, -30, -1, 12, 3, 0), '#5a6373', -30, -1, 6, NOSPEC);
+    ctx.save(); ctx.translate(0, -52); ctx.rotate(sway);
+    const wing = (dir) => tone(ctx, q => { q.moveTo(dir * 10, -6); q.quadraticCurveTo(dir * 26, -26 + fl * 6, dir * 44, -12 + fl * 8); q.quadraticCurveTo(dir * 36, -2 + fl * 5, dir * 28, 2 + fl * 4); q.quadraticCurveTo(dir * 20, 6, dir * 12, 6); q.closePath(); }, p.a, dir * 26, -8, 20, { dark: -0.35, spec: false });
+    wing(-1); wing(1);
+    tone(ctx, q => ell(q, 0, 0, 15, 18, 0), shade(p.a, -0.15), 0, 0, 15, { dark: -0.3 });
+    tone(ctx, q => { q.moveTo(-10, -12); q.lineTo(-15, -30); q.lineTo(-2, -16); q.closePath(); q.moveTo(10, -12); q.lineTo(15, -30); q.lineTo(2, -16); q.closePath(); }, shade(p.a, -0.15), 0, -18, 10, { spec: false, dark: -0.3 });
+    // a gold star clip and lashes, eyes shut in the high note
+    if (!FLAT) { F(ctx, p.b); ctx.beginPath(); star(ctx, 9, -14, 5, 5, 0.45); ctx.fill(); }
+    ctx.beginPath(); ctx.moveTo(-10, -4); ctx.quadraticCurveTo(-6, -8, -2, -4); ctx.moveTo(3, -4); ctx.quadraticCurveTo(7, -8, 11, -4); S(ctx, INK, 2); ctx.stroke();
+    const open = 4 + B.hit * 4;
+    ctx.beginPath(); ctx.ellipse(0, 6, 5, open, 0, 0, TAU); F(ctx, '#5a1030'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+    ctx.restore();
+    ctx.save(); ctx.translate(-30, -60); ctx.rotate(-0.4);
+    tone(ctx, q => circ(q, 0, 0, 6), '#c9d3e0', 0, 0, 6, NOSPEC);
+    if (!FLAT) { S(ctx, rgba(INK, 0.5), 1); ctx.beginPath(); for (let k = -1; k <= 1; k++) { ctx.moveTo(-5, k * 2.5); ctx.lineTo(5, k * 2.5); } ctx.stroke(); }
+    ctx.restore();
+    if (!FLAT) for (let i = 0; i < 2; i++) {
+      const u = ((t * 0.55 + i * 0.5) % 1);
+      ctx.globalAlpha = alphaOf(ctx) * (1 - u);
+      famNote(ctx, -14 - u * 20 + i * 10, -70 - u * 34, 3.4, i ? p.b : PAL.cyan, !!i);
+      ctx.globalAlpha = 1;
+    }
+  } };
+  // ---- act 2: The Vending Gang
+  // A machine face in a display window (x, y, w, h): two LED eyes and a mouth.
+  function famScreen(ctx, x, y, w, h, t, col, mood) {
+    ctx.beginPath(); rrect(ctx, x, y, w, h, 3); F(ctx, '#0d0718'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    if (FLAT) return;
+    const bl = LIFE.blink > 0.45;
+    F(ctx, col);
+    ctx.beginPath();
+    if (bl) { ctx.rect(x + w * 0.2, y + h * 0.42, w * 0.2, 2); ctx.rect(x + w * 0.6, y + h * 0.42, w * 0.2, 2); }
+    else { rrect(ctx, x + w * 0.2, y + h * 0.22, w * 0.18, h * 0.38, 2); rrect(ctx, x + w * 0.6, y + h * 0.22, w * 0.18, h * 0.38, 2); }
+    ctx.fill();
+    if (mood === 'grin') { ctx.beginPath(); ctx.moveTo(x + w * 0.28, y + h * 0.72); ctx.quadraticCurveTo(x + w * 0.5, y + h * 0.95, x + w * 0.72, y + h * 0.72); S(ctx, col, 2); ctx.stroke(); }
+    else { ctx.fillRect(x + w * 0.3, y + h * 0.74, w * 0.4, 2); }
+  }
+  // Pop Top: a red soda machine with a big POP logo, can buttons, and a pitching arm winding up a can.
+  EA.fam_pop = { w: 72, h: 118, draw(ctx, t, p) {
+    const wind = Math.sin(t * 2.2);
+    shadow(ctx, 76);
+    // the pitching arm (behind), holding a can
+    ctx.save(); ctx.translate(30, -84); ctx.rotate(-0.6 + wind * 0.5);
+    limb(ctx, 0, 0, 22, -14, 4, '#8e98a8');
+    tone(ctx, q => rrect(q, 18, -26, 10, 16, 3), p.a, 23, -18, 6, NOSPEC);
+    ctx.restore();
+    tone(ctx, q => rrect(q, -32, -114, 64, 112, 7), p.a, 0, -60, 34, { dark: -0.3 });
+    if (!FLAT) {
+      F(ctx, shade(p.a, -0.35)); ctx.fillRect(-32, -10, 64, 8);
+      tone(ctx, q => circ(q, -6, -80, 17), p.b, -6, -80, 17, NOSPEC);
+      txt(ctx, 'POP', -6, -80, 12, p.a, true, 'center', false);
+      // can buttons down the right edge
+      for (let i = 0; i < 5; i++) { F(ctx, i === (Math.floor(t * 2) % 5) ? PAL.gold : p.c); ctx.beginPath(); rrect(ctx, 18, -104 + i * 13, 9, 9, 2); ctx.fill(); }
+      F(ctx, '#0d0718'); ctx.beginPath(); rrect(ctx, -24, -30, 36, 14, 3); ctx.fill();
+    }
+    famScreen(ctx, -24, -58, 36, 18, t, PAL.cyan, 'grin');
+  } };
+  // Snackatron: a blue snack machine, spiral coils holding bags behind the glass, one bag stuck at B4.
+  EA.fam_snack = { w: 78, h: 122, draw(ctx, t, p) {
+    shadow(ctx, 80);
+    tone(ctx, q => rrect(q, -36, -120, 72, 118, 7), p.a, 0, -62, 36, { dark: -0.3 });
+    ctx.beginPath(); rrect(ctx, -30, -112, 46, 76, 4); F(ctx, FLAT || rgba('#bfe8ff', 0.25)); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    if (!FLAT) {
+      const bagC = [PAL.gold, PAL.pink, PAL.lime, '#ff8a2e'];
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+        const x = -24 + c * 14, y = -104 + r * 24, stuck = r === 1 && c === 2, dy = stuck ? Math.sin(t * 6) * 1.2 + 6 : 0;
+        S(ctx, '#8e98a8', 1.2); ctx.beginPath(); for (let k = 0; k < 4; k++) ctx.arc(x + 4, y + 16, 3, k * 1.6, k * 1.6 + 1.2); ctx.stroke();
+        tone(ctx, q => rrect(q, x, y + dy, 9, 13, 2), bagC[(r + c) % 4], x + 4, y + 6, 5, NOSPEC);
+      }
+      // the keypad and the coin slot
+      for (let i = 0; i < 6; i++) { F(ctx, '#e8e8f0'); ctx.beginPath(); rrect(ctx, 20 + (i % 2) * 7, -106 + Math.floor(i / 2) * 9, 5, 6, 1); ctx.fill(); }
+      F(ctx, p.b); ctx.fillRect(22, -76, 10, 3);
+      F(ctx, '#0d0718'); ctx.beginPath(); rrect(ctx, -28, -26, 44, 14, 3); ctx.fill();
+    }
+    famScreen(ctx, 18, -66, 14, 12, t, p.c, 'flat');
+    // a face on the glass
+    if (!FLAT) { eye(ctx, -16, -52, 5, -0.7, 0.1, p.a); eye(ctx, 0, -52, 5, -0.7, 0.1, p.a); ctx.beginPath(); ctx.moveTo(-14, -42); ctx.quadraticCurveTo(-8, -38, -2, -42); S(ctx, INK, 2); ctx.stroke(); }
+  } };
+  // The Change Machine: a squat gold box, a bill-slot mouth, coin eyes and a cup overflowing with coins.
+  EA.fam_change = { w: 64, h: 96, draw(ctx, t, p) {
+    shadow(ctx, 66);
+    tone(ctx, q => rrect(q, -28, -92, 56, 90, 8), p.b, 0, -48, 30, { dark: -0.3 });
+    tone(ctx, q => rrect(q, -24, -88, 48, 30, 5), p.a, 0, -73, 22, { dark: -0.25 });
+    txt(ctx, 'CHANGE', 0, -64, 8, INK, true, 'center', false);
+    // coin eyes that spin now and then
+    const sp = Math.cos(t * 3);
+    for (const ex of [-10, 10]) { ctx.save(); ctx.translate(ex, -79); ctx.scale(Math.max(0.2, Math.abs(sp)), 1); tone(ctx, q => circ(q, 0, 0, 6), PAL.gold, 0, 0, 6, NOSPEC); if (!FLAT) txt(ctx, '$', 0, 0.5, 8, shade(PAL.gold, -0.5), true, 'center', false); ctx.restore(); }
+    // the bill-slot mouth
+    ctx.beginPath(); rrect(ctx, -16, -52, 32, 8, 3); F(ctx, '#0d0718'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    if (!FLAT) { F(ctx, p.c); ctx.fillRect(-12, -49, 24, 2); }
+    // the coin cup
+    tone(ctx, q => { q.moveTo(-14, -30); q.lineTo(14, -30); q.lineTo(11, -12); q.lineTo(-11, -12); q.closePath(); }, '#5a6373', 0, -21, 10, NOSPEC);
+    if (!FLAT) for (let i = 0; i < 4; i++) tone(ctx, q => ell(q, -8 + i * 5.5, -31 - (i % 2) * 3, 4, 2.2, 0), PAL.gold, -8 + i * 5.5, -31, 3, NOSPEC);
+  } };
+  // ---- act 3: The Snow Globe Choir
+  EA.fam_soprano = { w: 72, h: 96, draw(ctx, t, p) {
+    const R = 30, br = Math.sin(t * 2.4) * 1.5;
+    famGlobe(ctx, t, p, R, (c) => {
+      const w1 = Math.sin(t * 6) * 0.3;
+      tone(c, q => { q.moveTo(-4, 4); q.quadraticCurveTo(-20, -8 + w1 * 10, -18, 10); q.closePath(); q.moveTo(4, 4); q.quadraticCurveTo(20, -8 + w1 * 10, 18, 10); q.closePath(); }, '#ffffff', 0, 4, 10, { spec: false, ol: 1.5 });
+      tone(c, q => { q.moveTo(-9, 24); q.lineTo(-5, 2 + br); q.lineTo(5, 2 + br); q.lineTo(9, 24); q.closePath(); }, p.a, 0, 14, 8, { dark: -0.25, ol: 1.5 });
+      tone(c, q => circ(q, 0, -4 + br, 7), '#ffe3cf', 0, -4, 7, { spec: false, ol: 1.5 });
+      if (!FLAT) { S(c, PAL.gold, 2); c.beginPath(); c.ellipse(0, -14 + br, 7, 2.2, 0, 0, TAU); c.stroke(); }
+      F(c, INK); c.beginPath(); circ(c, -2.5, -5 + br, 1.1); circ(c, 2.5, -5 + br, 1.1); c.fill();
+      c.beginPath(); c.ellipse(0, -1 + br, 1.6, 2, 0, 0, TAU); F(c, '#5a1030'); c.fill();
+    }, '#ffffff');
+  } };
+  EA.fam_alto = { w: 76, h: 100, draw(ctx, t, p) {
+    const R = 32, wd = Math.sin(t * 3) * 0.12;
+    famGlobe(ctx, t, p, R, (c) => {
+      c.save(); c.translate(0, 8); c.rotate(wd);
+      tone(c, q => ell(q, 0, 4, 12, 16, 0), '#1d1233', 0, 4, 12, { dark: -0.2, ol: 1.5 });
+      tone(c, q => ell(q, -2, 7, 8, 12, 0), '#ffffff', -2, 7, 8, { spec: false, ol: 0 });
+      tone(c, q => { q.moveTo(-8, -6); q.lineTo(-17, -4); q.lineTo(-8, -1); q.closePath(); }, p.c, -12, -4, 4, { spec: false, ol: 1.2 });
+      eye(c, -4, -8, 2.6, -0.6, 0);
+      tone(c, q => { rrect(q, -9, 18, 7, 4, 2); rrect(q, 2, 18, 7, 4, 2); }, p.c, 0, 20, 4, { spec: false, ol: 1.2 });
+      if (!FLAT) { S(c, p.a, 3); c.beginPath(); c.moveTo(-9, -2); c.lineTo(9, -2); c.stroke(); }
+      c.restore();
+    }, '#ffffff');
+  } };
+  EA.fam_baritone = { w: 80, h: 106, draw(ctx, t, p) {
+    const R = 34;
+    famGlobe(ctx, t, p, R, (c) => {
+      tone(c, q => circ(q, 0, 16, 13), '#ffffff', 0, 16, 13, { dark: -0.15, ol: 1.5 });
+      tone(c, q => circ(q, 0, -4, 9.5), '#ffffff', 0, -4, 9.5, { dark: -0.15, ol: 1.5 });
+      tone(c, q => { rrect(q, -9, -22, 18, 11, 1); rrect(q, -13, -13, 26, 3, 1); }, '#1d1233', 0, -16, 8, { spec: false, ol: 1.2 });
+      if (!FLAT) { F(c, PAL.pink); c.fillRect(-9, -15, 18, 2); }
+      F(c, INK); c.beginPath(); circ(c, -3.5, -6, 1.4); circ(c, 3.5, -6, 1.4); circ(c, 0, 12, 1.4); circ(c, 0, 17, 1.4); c.fill();
+      tone(c, q => { q.moveTo(-1, -3); q.lineTo(-9, -1.5); q.lineTo(-1, 0); q.closePath(); }, p.b, -4, -2, 3, { spec: false, ol: 1 });
+      c.beginPath(); c.ellipse(1.5, 2, 3.2, 2 + Math.abs(Math.sin(t * 2)) * 1.5, 0, 0, TAU); F(c, '#5a1030'); c.fill();
+      if (!FLAT) { S(c, p.b, 3.5); c.beginPath(); c.moveTo(-10, 5); c.quadraticCurveTo(0, 9, 10, 5); c.stroke(); }
+    }, '#ffffff');
+  } };
+  Object.assign(FIDGET, { fam_drummer: 'rattle', fam_bassist: 'jiggle', fam_singer: 'sway', fam_pop: 'rattle', fam_snack: 'buzz', fam_change: 'rattle', fam_soprano: 'sway', fam_alto: 'sway', fam_baritone: 'shrug' });
+  // The empty can (junk fam_can) on the item sprite: a dented red can with a pull tab.
+  Object.defineProperty(POL_SIL, 'fam_can', { value: (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, q => { q.moveTo(-hw, -hh + 3); q.lineTo(hw, -hh + 3); q.lineTo(hw, -hh * 0.1); q.lineTo(hw - 2.5, hh * 0.05); q.lineTo(hw, hh * 0.2); q.lineTo(hw, hh - 3); q.lineTo(-hw, hh - 3); q.closePath(); }, '#ff5a4a', 0, 0, hw, { dark: -0.3 });
+    tone(ctx, q => { ell(q, 0, -hh + 3, hw, 3, 0); }, '#e8e8f0', 0, -hh + 3, hw * 0.5, NOSPEC);
+    F(ctx, '#f4f8ff'); ctx.fillRect(-hw + 1.5, -hh * 0.35, w - 3, hh * 0.5);
+    txt(ctx, 'POP', 0, -hh * 0.1, Math.max(6, w * 0.34), '#ff5a4a', true, 'center', false);
+    S(ctx, INK, 1.2); ctx.beginPath(); ctx.moveTo(-2, -hh + 2); ctx.lineTo(3, -hh + 4); ctx.stroke();
+  }, enumerable: false, configurable: true, writable: true });
+  // ---- intent icons (the default branch of RENDER.intent) and the ribbons over a SOLO or a hum
+  function famIntentIcon(ctx, k, it, cy, t, shakeX) {
+    switch (k) {
+      case 'restock': {
+        ctx.save(); ctx.translate(-4, cy + Math.sin(t * 5) * 1.5);
+        tone(ctx, q => rrect(q, -5, -9, 10, 18, 3), PAL.blood, 0, 0, 6, NOSPEC);
+        F(ctx, '#f4f8ff'); ctx.fillRect(-4, -3, 8, 5);
+        ctx.restore();
+        txt(ctx, '+', 9, cy - 5, 13, PAL.lime, true, 'center', INK);
+        return true;
+      }
+      case 'cans': {
+        for (let i = 0; i < 2; i++) {
+          const u = ((t * 1.2 + i * 0.5) % 1);
+          ctx.save(); ctx.translate(-6 + i * 10 + shakeX, cy - 4 + u * 8); ctx.rotate(u * 3 + i);
+          tone(ctx, q => rrect(q, -3.5, -6, 7, 12, 2), PAL.blood, 0, 0, 4, NOSPEC);
+          ctx.restore();
+        }
+        txt(ctx, 'x' + Math.max(1, it.n | 0), 12, cy - 8, 11, PAL.gold, true, 'center', INK);
+        return true;
+      }
+      case 'change': {
+        const sp = Math.cos(t * 5);
+        ctx.save(); ctx.translate(-4, cy); ctx.scale(Math.max(0.2, Math.abs(sp)), 1);
+        tone(ctx, q => circ(q, 0, 0, 8), PAL.gold, 0, 0, 8, NOSPEC);
+        txt(ctx, '$', 0, 0.5, 10, shade(PAL.gold, -0.5), true, 'center', false);
+        ctx.restore();
+        txt(ctx, '>', 8, cy + 0.5, 11, '#aab3bd', true, 'center', INK);
+        return true;
+      }
+      case 'fumble': {
+        famNote(ctx, -3, cy + 4, 3.6, '#8d7fb3', false);
+        ctx.beginPath(); ctx.moveTo(-10, cy - 8); ctx.lineTo(10, cy + 8); S(ctx, INK, 4.5); ctx.stroke(); S(ctx, PAL.blood, 2.5); ctx.stroke();
+        return true;
+      }
+      default: return false;
+    }
+  }
+  // The icon of a family attack in its bubble: a SOLO's note, a hum's snowflake.
+  function famIntentGlyph(ctx, fam, x, y, t) {
+    if (fam === 'solo') { glow(ctx, x, y, 14, PAL.pink, 0.45 + famBeat(t).hit * 0.4); famNote(ctx, x - 2, y + 5, 3.8, PAL.gold, true); }
+    else { glow(ctx, x, y, 14, '#8dfff5', 0.45); F(ctx, '#e8fdff'); ctx.beginPath(); star(ctx, x, y, 8, 6, 0.3); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke(); }
+  }
+  // Over a SOLO or a hum: a pulsing rim on the beat and a chip on the bubble's top-left corner with the harmony count (x3).
+  function famIntentRide(ctx, e, bw, cy, t, qa) {
+    const it = e && e.intent;
+    if (!it || !it.fam) return;
+    const solo = it.fam === 'solo', col = solo ? PAL.pink : '#8dfff5', n = qa && qa.band > 1 ? qa.band : 0;
+    const k = famBeat(t).hit, bh = -cy * 2;
+    ctx.beginPath(); rrect(ctx, -bw / 2 - 3, -bh - 3, bw + 6, bh + 6, 10); S(ctx, rgba(col, 0.35 + k * 0.5), 2 + k * 2); ctx.stroke();
+    if (!n) return;
+    const pul = 1 + k * 0.15;
+    ctx.save(); ctx.translate(-bw / 2 + 1, -bh + 1); ctx.scale(pul, pul);
+    ctx.beginPath(); ctx.arc(0, 0, 10, 0, TAU); F(ctx, shade(col, -0.6)); ctx.fill(); S(ctx, col, 2); ctx.stroke();
+    txt(ctx, 'x' + n, 0, 0.5, 10, col, true, 'center', INK);
+    ctx.restore();
+  }
+  // ---- the arena layer (the game passes stage points)
+  /* The bond: a glowing line through the members' chests (pts [{x, y}],
+     left to right, living ones only), a ribbon that pulses on the Band's
+     beat, carries sliding cans for the Vending Gang, frost for the Choir.
+     st {t, k (fade), angry, reduced}. */
+  function famBond(ctx, pts, fam, t, st) {
+    if (!pts || pts.length < 2) return;
+    st = st || {};
+    ctx.save();
+    try {
+      const col = FAM_COL[fam] || PAL.pink, col2 = FAM_COL2[fam] || PAL.gold, k = st.k == null ? 1 : clamp01(+st.k || 0);
+      const B = famBeat(t), pulse = st.reduced ? 0.5 : (fam === 'band' ? B.hit : 0.5 + Math.sin(t * 3) * 0.3);
+      ctx.globalAlpha = 0.55 * k;
+      ctx.lineCap = 'round';
+      const path = () => {
+        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i], mx = (a.x + b.x) / 2, my = Math.min(a.y, b.y) - 18;
+          ctx.quadraticCurveTo(mx, my, b.x, b.y);
+        }
+      };
+      path(); S(ctx, rgba(col, 0.35), 10 + pulse * 6); ctx.stroke();
+      ctx.globalAlpha = 0.9 * k;
+      ctx.setLineDash(fam === 'vending' ? [8, 6] : fam === 'choir' ? [2, 7] : [14, 5]);
+      ctx.lineDashOffset = st.reduced ? 0 : -t * (fam === 'band' ? 60 : 30);
+      path(); S(ctx, st.angry ? PAL.blood : col, 3 + pulse * 1.5); ctx.stroke();
+      ctx.setLineDash(NODASH);
+      // the travellers: notes, cans or snowflakes riding the line
+      if (!st.reduced) {
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i], mx = (a.x + b.x) / 2, my = Math.min(a.y, b.y) - 18;
+          for (let j = 0; j < 2; j++) {
+            const u = ((t * 0.35 + j * 0.5 + i * 0.21) % 1), iu = 1 - u;
+            const x = iu * iu * a.x + 2 * iu * u * mx + u * u * b.x, y = iu * iu * a.y + 2 * iu * u * my + u * u * b.y;
+            if (fam === 'band') famNote(ctx, x, y + 4, 3, j ? col2 : '#ffffff', false);
+            else if (fam === 'vending') { ctx.save(); ctx.translate(x, y); ctx.rotate(u * 6); tone(ctx, q => rrect(q, -3, -5, 6, 10, 2), j ? col2 : col, 0, 0, 3, { spec: false, ol: 1 }); ctx.restore(); }
+            else { F(ctx, j ? col2 : '#ffffff'); ctx.beginPath(); star(ctx, x, y, 4, 6, 0.35); ctx.fill(); }
+          }
+        }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The Band's Crescendo on a music staff over the members (x0..x1 at y):
+     five lines, a clef, `max` note slots that fill as it builds (the new one
+     pops), the whole staff glows and reads SOLO! when full.
+     st {t, pop (0..1 on the newest note), solo (the SOLO is telegraphed), k (fade), reduced}. */
+  function famStaff(ctx, x0, x1, y, cres, max, t, st) {
+    st = st || {};
+    ctx.save();
+    try {
+      const k = st.k == null ? 1 : clamp01(+st.k || 0), full = cres >= max || !!st.solo;
+      const B = famBeat(t), w = x1 - x0, gap = 4.2, top = y - gap * 2;
+      ctx.globalAlpha = k;
+      ctx.beginPath(); rrect(ctx, x0 - 10, top - 16, w + 20, gap * 4 + 30, 10);
+      F(ctx, rgba('#12091f', 0.9)); ctx.fill(); S(ctx, full ? PAL.gold : rgba(PAL.pink, 0.7), full ? 2.5 : 1.5); ctx.stroke();
+      if (full && !st.reduced) glow(ctx, x0 + w / 2, y, w * 0.55, PAL.gold, 0.25 + B.hit * 0.35);
+      S(ctx, rgba('#e9dcc4', 0.55), 1);
+      ctx.beginPath(); for (let i = 0; i < 5; i++) { ctx.moveTo(x0 + 4, top + i * gap); ctx.lineTo(x1 - 4, top + i * gap); } ctx.stroke();
+      // a little treble clef: a loop and a stem
+      S(ctx, full ? PAL.gold : PAL.pink, 2); ctx.beginPath(); ctx.moveTo(x0 + 10, top + gap * 5); ctx.lineTo(x0 + 10, top - 5); ctx.quadraticCurveTo(x0 + 17, top + 2, x0 + 8, top + gap * 2.4); ctx.arc(x0 + 11, top + gap * 2.8, 4, Math.PI, TAU * 0.95); ctx.stroke();
+      const n = Math.max(1, max | 0), sx = (w - 34) / n;
+      for (let i = 0; i < n; i++) {
+        const on = i < cres, x = x0 + 26 + sx * (i + 0.5), line = [4, 3, 2, 3, 1, 2, 0, 1][i % 8];
+        const pop = on && i === cres - 1 ? clamp01(+st.pop || 0) : 0;
+        const ny = top + line * gap - (on && !st.reduced ? B.bob * 1.6 : 0) - pop * 6;
+        if (on) famNote(ctx, x, ny, 3.1 * (1 + pop * 0.5), full ? PAL.gold : i % 2 ? PAL.cyan : PAL.pink, i % 2 === 1);
+        else { ctx.beginPath(); ctx.ellipse(x, top + line * gap, 3.2, 2.4, -0.35, 0, TAU); S(ctx, rgba('#e9dcc4', 0.35), 1); ctx.stroke(); }
+      }
+      txt(ctx, full ? 'SOLO!' : 'CRESCENDO', x0 + w / 2, top - 8, full ? 12 : 9, full ? PAL.gold : '#ff9ec7', true, 'center', INK);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The SOLO's spotlight: a cone of light down onto a member (x, y feet, h tall), k 0..1.
+  function famSpot(ctx, x, y, h, t, col, k) {
+    if (!(k > 0.01)) return;
+    ctx.save();
+    try {
+      ctx.globalAlpha = clamp01(k) * 0.5;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.beginPath(); ctx.moveTo(x - 10, y - h - 90); ctx.lineTo(x + 10, y - h - 90); ctx.lineTo(x + h * 0.55, y + 6); ctx.lineTo(x - h * 0.55, y + 6); ctx.closePath();
+      F(ctx, rgba(col || PAL.gold, 0.35)); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, y + 2, h * 0.55, 10, 0, 0, TAU); F(ctx, rgba(col || PAL.gold, 0.5)); ctx.fill();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // Notes (the Band) or snowflakes (the Choir) rising from a point: k 0..1 is the burst's life.
+  function famBurst(ctx, x, y, fam, t, k) {
+    if (!(k > 0.01)) return;
+    ctx.save();
+    try {
+      const u = 1 - clamp01(k), col = FAM_COL[fam] || PAL.pink, col2 = FAM_COL2[fam] || PAL.gold;
+      ctx.globalAlpha = clamp01(k);
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + (i - 2) * 0.45, d = 18 + u * 60, px = x + Math.cos(a) * d, py = y + Math.sin(a) * d - u * 20;
+        if (fam === 'choir') { F(ctx, i % 2 ? col2 : '#ffffff'); ctx.beginPath(); star(ctx, px, py, 5, 6, 0.35); ctx.fill(); }
+        else famNote(ctx, px, py, 3.4, i % 2 ? col2 : col, i % 2 === 0);
+      }
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The choir's anger around a globe (feet at x, y; w x h): red flurries whipping round, steam puffs, a scowl mark.
+  function famAngry(ctx, x, y, w, h, t, k) {
+    if (!(k > 0.01)) return;
+    ctx.save();
+    try {
+      const a = clamp01(k), cy = y - h * 0.6;
+      glow(ctx, x, cy, Math.max(w, h) * 0.7, PAL.blood, 0.35 * a);
+      F(ctx, rgba('#ff9a9a', 0.9 * a));
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) { const an = t * 4 + i * 0.63, r = w * 0.5 + (i % 3) * 4; circ(ctx, x + Math.cos(an) * r, cy + Math.sin(an) * r * 0.6, 1.8); }
+      ctx.fill();
+      for (let i = 0; i < 2; i++) {
+        const u = (t * 1.3 + i * 0.5) % 1, sx = x + (i ? 1 : -1) * w * 0.36;
+        ctx.beginPath(); circ(ctx, sx, y - h - 4 - u * 16, 3 + u * 5); F(ctx, rgba('#e8e8f0', 0.6 * (1 - u) * a)); ctx.fill();
+      }
+      ctx.beginPath(); ctx.moveTo(x + w * 0.32, y - h - 2); ctx.lineTo(x + w * 0.42, y - h - 10); ctx.moveTo(x + w * 0.38, y - h + 2); ctx.lineTo(x + w * 0.48, y - h - 6);
+      S(ctx, PAL.blood, 3); ctx.stroke();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  /* The fight-start banner: a marquee plate over the arena, sliding in from the
+     top, the family's name in its colours, its tag line and the members as
+     little icons, then sliding away (k 0..1 over its life).
+     st {fam, name, tag, n (members), t, reduced}. */
+  function famPlate(ctx, st) {
+    st = st || {};
+    const k = clamp01(+st.k || 0);
+    if (!(k > 0) || k >= 1) return;
+    ctx.save();
+    try {
+      const fam = st.fam || 'band', col = FAM_COL[fam] || PAL.pink, col2 = FAM_COL2[fam] || PAL.gold, t = st.t || 0;
+      const inK = st.reduced ? 1 : U.ease.outBack ? U.ease.outBack(clamp01(k / 0.18)) : clamp01(k / 0.18);
+      const outK = k > 0.82 ? (k - 0.82) / 0.18 : 0;
+      const w = 360, h = 86, x = 270 - w / 2, y = 92 + (st.reduced ? 0 : (1 - inK) * -140 - outK * 150);
+      ctx.globalAlpha = 1 - outK * 0.6;
+      glow(ctx, 270, y + h / 2, 210, col, 0.35);
+      ctx.beginPath(); rrect(ctx, x, y, w, h, 16); F(ctx, rgba('#12091f', 0.9)); ctx.fill(); S(ctx, col, 3); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, x + 5, y + 5, w - 10, h - 10, 12); S(ctx, rgba(col2, 0.6), 1.5); ctx.stroke();
+      // chasing bulbs along the rim
+      const nb = 22;
+      for (let i = 0; i < nb; i++) {
+        const u = i / nb, on = st.reduced ? i % 2 === 0 : ((i + Math.floor(t * 10)) % 3) === 0;
+        const bx = x + 10 + u * (w - 20), by = i % 2 ? y + 2 : y + h - 2;
+        ctx.beginPath(); circ(ctx, bx, by, 2.4); F(ctx, on ? col2 : rgba(col2, 0.25)); ctx.fill();
+      }
+      txt(ctx, 'FAMILY FIGHT', 270, y + 16, 11, col2, true, 'center', INK);
+      txt(ctx, String(st.name || '').toUpperCase(), 270, y + 40, 24, '#ffffff', true, 'center', col);
+      txt(ctx, String(st.tag || ''), 270, y + 64, 11, col, true, 'center', INK);
+      const icon = FAM_ICON[fam] || '♫';
+      txt(ctx, icon, x + 26, y + 43, 22, col, true, 'center', INK);
+      txt(ctx, icon, x + w - 26, y + 43, 22, col, true, 'center', INK);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const FAM_R = { BPM: FAM_BPM, COL: FAM_COL, COL2: FAM_COL2, ICON: FAM_ICON, beat: famBeat, note: famNote, globe: famGlobe, snow: famSnow,
+    bond: famBond, staff: famStaff, spot: famSpot, burst: famBurst, angry: famAngry, plate: famPlate, intentIcon: famIntentIcon, intentRide: famIntentRide, glyph: famIntentGlyph,
+    KEYS: ['fam_drummer', 'fam_bassist', 'fam_singer', 'fam_pop', 'fam_snack', 'fam_change', 'fam_soprano', 'fam_alto', 'fam_baritone'] };
+  /* ============================================================ end FAMILY */
+
+  /* ============================================================ HOLO (round 9) */
+  /* Holo item cards (DESIGN.md "Holo cards (round 9)"): the numbers a card's
+     foil, glare, tilt and shadow take this frame, a pure function of the
+     rarity and the inputs, so the game only copies them onto the DOM (CSS
+     does the painting) and the suite can pin them. Every card tilts toward
+     the pointer (else an idle wobble, else still under reduced motion); a
+     rare card's rainbow foil follows the pointer or sweeps slowly; a
+     legendary's foil turns its hue and it sparkles. Reduced motion: the foil
+     rests at a fixed angle, nothing wobbles. Reduced flashing: the foil and
+     the glare are dimmer and the sparkles hold still.
+     st {t, ph (the card's own phase), on (pointer over it), px, py (0..1 on
+     the card), gx, gy (device tilt, -1..1), reduced, noFlash}. */
+  const HOLO_RAR = {
+    c: { tilt: 7, foil: 0, glare: 0.22, spark: 0, hue: 0, wob: 1.2 },
+    u: { tilt: 8, foil: 0.16, glare: 0.26, spark: 0, hue: 0, wob: 1.3 },
+    r: { tilt: 10, foil: 0.34, glare: 0.34, spark: 0, hue: 0, wob: 1.6 },
+    l: { tilt: 12, foil: 0.44, glare: 0.42, spark: 6, hue: 40, wob: 1.9 },
+  };
+  function holoLook(rar, st, out) {
+    out = out || {};
+    st = st || {};
+    const R = HOLO_RAR[rar === 'boss' ? 'l' : rar] || HOLO_RAR.c, t = +st.t || 0, ph = +st.ph || 0;
+    let px = 0.5, py = 0.5, tiltK = 0;
+    if (st.on) { px = clamp01(+st.px || 0); py = clamp01(+st.py || 0); tiltK = 1; }
+    else if (!st.reduced && (st.gx || st.gy)) { px = clamp01(0.5 + (+st.gx || 0) * 0.5); py = clamp01(0.5 + (+st.gy || 0) * 0.5); tiltK = 0.6; }
+    // tilt: a rotation about the axis at right angles to the pointer's offset (deg)
+    let rx = -(py - 0.5) * 2 * R.tilt * tiltK, ry = (px - 0.5) * 2 * R.tilt * tiltK;
+    if (!st.on && !st.reduced) { rx += Math.sin(t * 0.9 + ph * 7) * R.wob; ry += Math.cos(t * 0.7 + ph * 5) * R.wob; }
+    if (st.reduced) { rx = 0; ry = 0; }
+    out.rx = rx; out.ry = ry;
+    out.deg = Math.sqrt(rx * rx + ry * ry);
+    out.ax = out.deg > 1e-4 ? rx / out.deg : 1; out.ay = out.deg > 1e-4 ? ry / out.deg : 0;
+    // the foil: under the pointer, a slow sweep, or still (0..100 across the card)
+    if (st.on) { out.hx = px * 100; out.hy = py * 100; }
+    else if (st.reduced) { out.hx = 30; out.hy = 25; }
+    else { out.hx = 50 + Math.sin(t * 0.45 + ph * 3) * 50; out.hy = 50 + Math.cos(t * 0.33 + ph * 2) * 30; }
+    const dim = st.noFlash ? 0.55 : 1;
+    out.foil = R.foil * dim;
+    out.glare = R.glare * dim * (st.on ? 1.25 : 0.7);
+    out.hue = st.reduced ? 0 : (R.hue ? (t * R.hue + ph * 90) % 360 : 0);
+    out.spark = R.spark;
+    out.twinkle = !(st.reduced || st.noFlash);
+    // the shadow falls away from the tilt
+    out.sx = -ry * 0.7; out.sy = 6 + rx * 0.5;
+    out.scale = 1;
+    return out;
+  }
+  // The sparkles' spots on a legendary card (x, y in %, delay in s), fixed so a card never jumps.
+  const HOLO_SPARKS = [[16, 14, 0], [82, 22, 0.5], [70, 62, 1.1], [22, 70, 0.8], [52, 40, 1.5], [88, 84, 0.3]];
+  const HOLO_R = { RAR: HOLO_RAR, SPARKS: HOLO_SPARKS, look: holoLook };
+  /* ============================================================ end HOLO */
+
   return {
+    // LORE (round 9): Codex vignettes, landmark props and bubbles, the high score board, act intros, the weekly banner and medals
+    lore: LORE_R,
+    // FAMILY (round 9): the family members' art, intent icons, bond lines, the Crescendo staff, the banner plate
+    fam: FAM_R,
+    // HOLO (round 9): holo card foil, glare, tilt and shadow numbers
+    holo: HOLO_R,
     // HISTORY (round 8): run history cards and charts, the death recap, photo mode's filters and frames
     his: HIS_R,
     // STORY (round 8): Grabby Gary, the Card Shark, the alternate bosses, their junk, the rival tile, the claw-off's board and bubble, the reverse belt, the ice glaze, a friend's cameo
@@ -11728,6 +12995,8 @@ const RENDER = (() => {
     boonBack, cmpScene, sets: SETS_R,
     item, itemFx, shard, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, clawHead, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
     vsCard, bossSign, bossCab, hotItem, eliteBadge, finale, SIG_COL, VS,
+    q9: { arena: Q9A, titleSprites: Q9_TSPR, logo: Q9_LOGO, title: Q9_TL,   // LABELS / PERF / TITLE (round 9): the arena's word rects, the title's caches and layout
+      glowStats: () => { let n = 0, px = 0; for (const m of glowCache.values()) for (const r in m) if (m[r]) { n++; px += (r * 2 + 2) * (r * 2 + 2); } return { cols: glowCache.size, n, mb: +(px * 4 / 1048576).toFixed(2) }; } },   // MEMORY (round 9)
     terrainHex, terrainFill, biomePal, groundOf, lightRim, bulb, mapCompass, mapHeader, mapArrow, BIOME_PAL, DARK,
     portrait, relicIcon, title, fx, flames, glint, enemyAura, RARITY_COL,
     belly, affixAura, affixBadges, binMark, wrench, rageCrown,

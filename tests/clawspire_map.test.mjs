@@ -1560,4 +1560,49 @@ h.test('secret: the Back Room map (5 to 8 hexes inside the machine)', () => {
   h.eq(JSON.stringify(MAP.secRoom({ rng: U.rng(5) })), JSON.stringify(MAP.secRoom({ rng: U.rng(5) })), 'deterministic by the rng');
 });
 
+/* ---------------------------------------------------------------- LORE (round 9): the decorative landmarks */
+h.test('lore: a jukebox, lost tickets and the old high score board on every map, off the road, the map untouched', () => {
+  h.eq(JSON.stringify(MAP.LORE_KINDS), JSON.stringify(['jukebox', 'tickets', 'hiscore']), 'three kinds');
+  const near = [];
+  for (let s = 1; s <= 100; s++) {
+    const M = world(s, { act: 1 + (s % 3) });
+    const before = JSON.stringify(M);
+    const L = MAP.lorePlace(M);
+    h.eq(JSON.stringify(M), before, `seed ${s}: placing reads the map and changes nothing`);
+    h.eq(JSON.stringify(MAP.lorePlace(M)), JSON.stringify(L), `seed ${s}: the same every time`);
+    h.eq(L.map(x => x.k).join(), 'jukebox,tickets,hiscore', `seed ${s}: one of each, listed by kind`);
+    const keys = new Set(L.map(x => MAP.key(x.q, x.r)));
+    h.eq(keys.size, 3, `seed ${s}: three different hexes`);
+    for (const x of L) {
+      const t = M.tiles[MAP.key(x.q, x.r)];
+      h.ok(t && t.type === 'empty' && t.terrain === 'land' && MAP.isLand(t) && !t.road, `seed ${s}: ${x.k} on empty land off the road`);
+      h.ok(MAP.hexDist(x.q, x.r, M.start.q, M.start.r) >= 2 && MAP.hexDist(x.q, x.r, M.boss.q, M.boss.r) >= 2, `seed ${s}: ${x.k} clear of the start and the boss`);
+      h.ok(!(M.roam || []).some(m => m.q === x.q && m.r === x.r), `seed ${s}: ${x.k} not under a sleeping monster`);
+      h.ok(MAP.loreAt(Object.assign({}, M, { lore: L }), x.q, x.r) === x, `seed ${s}: loreAt finds the ${x.k}`);
+      let d = Infinity;
+      for (const [q, r] of M.road) d = Math.min(d, MAP.hexDist(x.q, x.r, q, r));
+      near.push(d);
+    }
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) h.ok(MAP.hexDist(L[i].q, L[i].r, L[j].q, L[j].r) >= 2, `seed ${s}: landmarks apart`);
+    // a golden key in the dark is never under a landmark
+    const Mk = world(s);
+    if (MAP.secKeys) {
+      MAP.secKeys(Mk, 'dark');
+      if (Mk.sec && Mk.sec.q != null) h.ok(!MAP.lorePlace(Mk).some(x => x.q === Mk.sec.q && x.r === Mk.sec.r), `seed ${s}: the golden key's hex keeps its secret`);
+    }
+  }
+  h.ok(near.filter(d => d <= 3).length / near.length > 0.9, 'nearly all stand within three hexes of the road, where a walk passes them');
+  // small maps relax the rules, the Back Room has none, the save keeps them
+  let small = 0;
+  for (let s = 1; s <= 60; s++) { const M = gen(s); const L = MAP.lorePlace(M); if (L.length >= 2) small++; h.ok(L.every(x => M.tiles[MAP.key(x.q, x.r)].type === 'empty'), `small seed ${s}: empty hexes only`); }
+  h.ok(small >= 55, `small maps still get two or three (${small} of 60)`);
+  h.eq(MAP.lorePlace(MAP.secRoom({ rng: U.rng(3) })).length, 0, 'none in the Back Room');
+  h.eq(MAP.lorePlace(null).length, 0, 'no map, none');
+  const M = world(9);
+  M.lore = MAP.lorePlace(M);
+  const O = MAP.deserialize(MAP.serialize(M));
+  h.eq(JSON.stringify(O.lore), JSON.stringify(M.lore), 'the save round trip keeps them');
+  h.eq(MAP.loreAt(world(9), 0, 0), null, 'a map from before the landmarks has none until the game places them');
+});
+
 h.done();

@@ -832,6 +832,54 @@ if (HAS_DATA) {
   fx.zone('marquee'); fx.zone('hud');
   h.eq(fx.zones().length, 0, 'zones are removed by id');
   fx.clear();
+  // LABELS (round 9): the damage numbers reserve their rects (they keep their flight, nudged aside),
+  // the labels flow around them, soft zones give way only when there is no room close by
+  fx.zone('hud', 0, 0, 540, 68);
+  fx.zone('bub', 230, 120, 310, 180, true);
+  const z0 = fx.zones().find((z) => z.id === 'bub');
+  fx.zone('bub', 232, 120, 310, 180, true);
+  h.ok(fx.zones().find((z) => z.id === 'bub') === z0 && z0.x0 === 232 && z0.soft, 'a zone set again moves in place and keeps its soft flag');
+  const ns = [];
+  for (let i = 0; i < 5; i++) ns.push(fx.num(270, 230, String(9 + i * 7), '#fff', { vx: 0, vy: -300, crit: i === 4 }));
+  h.ok(ns.every((n) => !n.lay && n.nlay), 'numbers keep their flight but join the layout');
+  const lab = fx.text(270, 230, 'PINCH!', '#ffc94d');
+  const hitR = (a, b) => a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+  let nOver = 0, nHard = 0, nFar = 0, inSoft = 0;
+  for (let f = 0; f < 70; f++) {
+    fx.update(1 / 60);
+    const RR = fx.rects(), all = RR.nums.concat(RR.labels);
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].num && all[i].nudge > 185) nFar++;
+      for (const z of fx.zones()) if (hitR(all[i], z)) { if (z.soft) inSoft++; else nHard++; }
+      for (let j = i + 1; j < all.length; j++) if (hitR(all[i], all[j])) nOver++;
+    }
+    if (f === 0) h.ok(RR.nums.length === 5 && RR.labels.length === 1, 'five numbers and a label on one spot');
+  }
+  h.eq(nOver, 0, 'five numbers and a label born on one spot never overlap');
+  h.eq(nHard, 0, '...never sit in a hard zone');
+  h.eq(nFar, 0, '...and stay close to where they fly');
+  h.ok(inSoft < 70 * 6, 'a soft zone is kept clear most of the time');
+  h.ok(lab.life > 0 || lab.hide === false, 'the label lives on beside them');
+  fx.clear();
+  const lone = fx.num(100, 500, '5', '#fff', { vx: 0, vy: 0, gravity: 0 });
+  fx.update(1 / 60);
+  h.ok(lone.lx === 0 && lone.ly === 0, 'a number with room flies untouched');
+  fx.layout = false;
+  const off = fx.num(270, 230, '12', '#fff');
+  h.ok(!off.nlay, 'layout off: numbers are not laid out');
+  fx.layout = true;
+  fx.zone('hud'); fx.zone('bub');
+  fx.clear();
+  // MEMORY (round 9): the glow sprite cache kept a canvas per colour and whole-pixel radius (17 MB after 16 fights)
+  const g0 = R.q9.glowStats();
+  for (let r = 4; r <= 600; r++) R.glowSprite('#123457', r);
+  const g1 = R.q9.glowStats();
+  h.ok(g1.n - g0.n <= 45, `597 radii share ${g1.n - g0.n} sprites`);
+  const big = R.glowSprite('#123457', 600);
+  h.ok(big && big.width <= 2 * 128 + 2, 'no glow sprite is built past radius 128 (it is drawn larger)');
+  h.eq(R.glowSprite('#123457', 12), R.glowSprite('#123457', 12.2), 'small radii keep their own sprite per pixel');
+  for (let c = 0; c < 120; c++) for (const r of [60, 90, 128]) R.glowSprite('#' + (0x100000 + c * 977).toString(16), r);
+  h.ok(R.q9.glowStats().mb <= 8, `a flood of colours stays under the budget (${R.q9.glowStats().mb} MB)`);
 }
 
 // ---- Polish and QA: the versus card keeps the crawler's words in its own panel
@@ -2122,6 +2170,208 @@ h.test('CR8: Mama Mech, her turret at every level, the vacuum\'s canister, the t
   for (const id of Object.keys(D.ITEMS).filter(id => D.ITEMS[id].char === 'engineer')) its.set(id, fingerprint(drawCheck('item ' + id, c => R.item(c, D.ITEMS[id], 100, 100, 0.3, 1, {}))));
   h.ok(its.size >= 10 && uniqueRatio(its).ratio === 1, `her ${its.size} items all look different`);
   for (const id of ['thunder_bolt', 'mech_plating']) drawCheck('evolved ' + id, c => R.item(c, D.ITEMS[id], 100, 100, 0, 1, {}));
+});
+
+// ---------------- FAMILY (round 9): the nine members, their icons, bond lines, the Crescendo staff, the plate
+h.test('FAMILY: every member draws its own look, the band bounces on one beat, the family layers draw', () => {
+  const api = boot({ only: ['util', 'data', 'combat', 'render'] });
+  const R = api.RENDER, D = api.DATA, C = api.COMBAT;
+  h.ok(R.fam && typeof R.fam.bond === 'function' && R.fam.KEYS.length === 9, 'RENDER.fam');
+  const looks = new Map();
+  for (const id of R.fam.KEYS) {
+    const def = D.ENEMIES[id];
+    h.ok(!!def && def.look === id, id + ' has its look');
+    const st = drawCheck('member ' + id, c => R.enemy(c, def, 200, 280, 1, 1.3, {}));
+    looks.set(id, fingerprint(st));
+    for (const s of [{ hurt: 1 }, { attack: 0.6 }, { dead: 0.5 }, { frozen: true }, { windup: 1 }, { hpk: 0.1 }, { burning: true, poisoned: true }]) drawCheck(id + ' ' + JSON.stringify(s), c => R.enemy(c, def, 200, 280, 1, 2.2, s));
+    // its own drawing, not its art key's
+    const base = fingerprint(drawCheck('base ' + def.art, c => R.enemy(c, Object.assign({}, def, { look: null }), 200, 280, 1, 1.3, {})));
+    h.ok(base !== looks.get(id), id + ' differs from its fallback art (' + def.art + ')');
+    h.ok(R.enemyBox(def, 1).h > 20, id + ' has a body box');
+  }
+  h.eq(uniqueRatio(looks).ratio, 1, 'all nine look different ' + uniqueRatio(looks).dupes.join(' '));
+  // the Band's beat is shared: two draws of the drummer at the same t match, at another t they move
+  const beat = (t) => fingerprint(drawCheck('drummer t' + t, c => R.enemy(c, D.ENEMIES.fam_drummer, 200, 280, 1, t, { still: true })));
+  h.eq(beat(0.2), beat(0.2), 'the same beat draws the same');
+  const b0 = R.fam.beat(0.2), n0 = b0.n, h0 = b0.hit;
+  h.ok(h0 >= 0 && h0 <= 1 && Number.isInteger(n0), 'beat(t): a hit 0..1 and a count');
+  h.eq(R.fam.beat(60 / R.fam.BPM * 3).n, 3, 'three beats in at the tempo');
+  // the family intents: new kinds, a SOLO and a hum with their harmony chips
+  const run = { hp: 90, maxHp: 90, act: 1, relics: [], claw: { grabs: 3 }, bin: [] };
+  const F = C.newFight(run, D.FAM.band.members, api.U.rng(3));
+  const moves = [{ k: 'restock', v: 10, id: 'r' }, { k: 'cans', n: 2, id: 'c' }, { k: 'change', v: 12, id: 'g' }, { k: 'fumble', id: 'f' }];
+  const ic = new Map();
+  for (const m of moves) {
+    const e = Object.assign({}, F.enemies[0], { intent: m });
+    ic.set(m.k, fingerprint(drawCheck('intent ' + m.k, c => R.intent(c, 200, 150, e, 0.7))));
+  }
+  const solo = Object.assign({}, F.enemies[0], { intent: { id: 'solo', k: 'attack', v: 9, n: 1, fam: 'solo' } });
+  const hum = Object.assign({}, F.enemies[0], { intent: { id: 'hum', k: 'attack', v: 11, n: 1, fam: 'chorus' } });
+  ic.set('solo', fingerprint(drawCheck('intent SOLO x3', c => R.intent(c, 200, 150, solo, 0.7, { hit: 14, n: 1, jab: 0, total: 14, band: 3, fam: 'solo' }))));
+  ic.set('hum', fingerprint(drawCheck('intent hum x2', c => R.intent(c, 200, 150, hum, 0.7, { hit: 16, n: 1, jab: 0, total: 16, band: 2, fam: 'chorus' }))));
+  drawCheck('intent SOLO alone (no chip)', c => R.intent(c, 200, 150, solo, 0.7, { hit: 9, n: 1, jab: 0, total: 9, band: 1, fam: 'solo' }));
+  drawCheck('intent SOLO without qa', c => R.intent(c, 200, 150, solo, 0.7));
+  h.eq(uniqueRatio(ic).ratio, 1, 'every family intent has its own icon');
+  // the arena layers
+  const pts = [{ x: 150, y: 230 }, { x: 270, y: 225 }, { x: 390, y: 232 }];
+  const bonds = new Map();
+  for (const f of D.FAM_IDS) {
+    bonds.set(f, fingerprint(drawCheck('bond ' + f, c => R.fam.bond(c, pts, f, 1.1, { k: 1 }))));
+    drawCheck('bond ' + f + ' angry reduced', c => R.fam.bond(c, pts.slice(0, 2), f, 1.1, { k: 0.5, angry: true, reduced: true }));
+    drawCheck('burst ' + f, c => R.fam.burst(c, 200, 200, f, 1, 0.6));
+    drawCheck('plate ' + f, c => R.fam.plate(c, { fam: f, name: D.FAM[f].name, tag: D.FAM[f].tag, k: 0.4, t: 1 }));
+    drawCheck('plate ' + f + ' reduced', c => R.fam.plate(c, { fam: f, name: D.FAM[f].name, tag: D.FAM[f].tag, k: 0.1, t: 1, reduced: true }));
+  }
+  h.eq(uniqueRatio(bonds).ratio, 1, 'each family has its own bond line');
+  const staffs = new Map();
+  for (const [k, cres, st] of [['empty', 0, {}], ['half', 4, { pop: 1 }], ['full', 8, {}], ['solo', 8, { solo: true }], ['reduced', 6, { reduced: true }]]) {
+    staffs.set(k, fingerprint(drawCheck('staff ' + k, c => R.fam.staff(c, 130, 420, 106, cres, 8, 1.4, st))));
+  }
+  h.ok(uniqueRatio(staffs).ratio >= 0.8, 'the staff shows the meter, the pop, full and SOLO');
+  drawCheck('spot', c => R.fam.spot(c, 270, 300, 120, 1, '#ff2e88', 0.8));
+  drawCheck('angry', c => R.fam.angry(c, 270, 300, 80, 110, 1, 1));
+  drawCheck('can item', c => R.item(c, D.ITEMS.fam_can, 100, 100, 0.3, 1, {}));
+  // nothing painted where there is nothing to show (and nothing throws on junk input)
+  const quiet = (fn) => { const calls = []; const ctx = new Proxy({ canvas: { width: 540, height: 960 } }, { get(t, k) { if (k in t) return t[k]; if (k === 'measureText') return () => ({ width: 40 }); return () => calls.push(k); }, set(t, k, v) { t[k] = v; return true; } }); fn(ctx); return calls; };
+  for (const fn of [c => R.fam.bond(c, [], 'band', 1, {}), c => R.fam.bond(c, null, 'band', 1), c => R.fam.plate(c, { k: 0 }), c => R.fam.plate(c, null), c => R.fam.spot(c, 0, 0, 0, 0, null, 0), c => R.fam.angry(c, 0, 0, 1, 1, 0, 0)]) {
+    let threw = null, calls = null;
+    try { calls = quiet(fn); } catch (e) { threw = e; }
+    h.ok(!threw && !calls.some(k => k === 'fill' || k === 'stroke' || k === 'fillText'), 'an empty family layer paints nothing and does not throw');
+  }
+});
+
+// ---------------- HOLO (round 9): the holo card numbers
+h.test('HOLO: every rarity, the pointer, the idle sweep, reduced motion and reduced flashing', () => {
+  const api = boot({ only: ['util', 'render'] });
+  const H = api.RENDER.holo;
+  h.ok(H && typeof H.look === 'function' && H.SPARKS.length >= 4, 'RENDER.holo');
+  const fin = (o) => ['rx', 'ry', 'deg', 'ax', 'ay', 'hx', 'hy', 'foil', 'glare', 'hue', 'sx', 'sy'].every(k => Number.isFinite(o[k]));
+  for (const rar of ['c', 'u', 'r', 'l', 'boss', 'junk', undefined]) {
+    for (const st of [{ t: 1.3, ph: 0.2 }, { t: 1.3, on: true, px: 0.9, py: 0.1 }, { t: 5, reduced: true }, { t: 2, noFlash: true }, { t: 0, gx: 0.5, gy: -0.3 }, {}, null]) {
+      const o = H.look(rar, st, {});
+      h.ok(fin(o), `look ${rar} ${JSON.stringify(st)}: finite`);
+      h.ok(o.hx >= 0 && o.hx <= 100 && o.hy >= 0 && o.hy <= 100 && o.foil >= 0 && o.foil <= 1 && o.glare >= 0 && o.glare <= 1, `look ${rar}: in range`);
+    }
+  }
+  // rarity: common has no foil, rare a foil, legendary more foil, a turning hue and sparkles
+  const L = (r, st) => H.look(r, Object.assign({ t: 2, ph: 0.3 }, st), {});
+  h.eq(L('c').foil, 0, 'common: no foil');
+  h.ok(L('r').foil > L('u').foil && L('l').foil > L('r').foil, 'the foil grows with rarity');
+  h.ok(L('l').spark > 0 && L('r').spark === 0, 'only a legendary sparkles');
+  h.ok(L('l').hue !== L('l', { t: 3 }).hue && L('r').hue === 0, 'a legendary foil turns its hue');
+  h.eq(L('boss').foil, L('l').foil, 'a boss relic shines like a legendary');
+  // the pointer: the tilt leans toward it, the foil and glare sit under it
+  const on = L('r', { on: true, px: 1, py: 0 });
+  h.ok(on.ry > 0 && on.rx > 0 && on.hx === 100 && on.hy === 0, 'tilts toward the pointer (top right) and the foil follows');
+  const on2 = L('r', { on: true, px: 0, py: 1 });
+  h.ok(on2.ry < 0 && on2.rx < 0, 'the other way at the bottom left');
+  h.ok(on.glare > L('r').glare, 'the glare brightens under a finger');
+  h.ok(on.sx < 0, 'the shadow falls away from the tilt');
+  // idle: a wobble and a slow sweep that change with time, differently per card
+  h.ok(L('r', { t: 1 }).hx !== L('r', { t: 2 }).hx && L('r', { t: 1 }).deg !== L('r', { t: 1, ph: 0.8 }).deg, 'an idle wobble and sweep, each card its own');
+  // reduced motion: still, the foil at rest; reduced flashing: dimmer
+  const rm = L('l', { reduced: true }), rm2 = L('l', { reduced: true, t: 9 });
+  h.ok(rm.deg === 0 && rm.hue === 0 && rm.hx === rm2.hx && rm.hy === rm2.hy && !rm.twinkle, 'reduced motion: no tilt, a still foil, no twinkle');
+  h.ok(L('r', { reduced: true, on: true, px: 1, py: 0 }).deg === 0, 'reduced motion: no tilt under a finger either');
+  const nf = L('l', { noFlash: true });
+  h.ok(nf.foil < L('l').foil && nf.glare < L('l').glare && !nf.twinkle, 'reduced flashing: dimmer foil and glare, still sparkles');
+  // pure: the same inputs, the same numbers, and the out object is reused
+  const out = {};
+  h.ok(H.look('l', { t: 1, ph: 0.5 }, out) === out, 'writes into the given object');
+  h.eq(JSON.stringify(H.look('l', { t: 1, ph: 0.5 }, {})), JSON.stringify(H.look('l', { t: 1, ph: 0.5 }, {})), 'deterministic');
+});
+
+/* ---------------------------------------------------------------- LORE (round 9) */
+h.test('LORE: every Codex picture, locked and found, the landmarks, the bubble, the board, the act cards, medals, the weekly banner', () => {
+  const api = boot({ only: ['util', 'art', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, P = api.PHYS, L = R.lore;
+  // a print that also sees the colours and the words (a card or a medal differs by its palette and its text)
+  const lp = (fn) => {
+    const out = [], o = { canvas: { width: 540, height: 960 }, fillStyle: '#000', strokeStyle: '#000' };
+    const ctx = new Proxy(o, {
+      get(t, k) {
+        if (typeof k !== 'string' || k === 'then') return t[k];
+        if (k in t) return t[k];
+        if (k === 'measureText') return () => ({ width: 40 });
+        if (k.startsWith('create')) return () => ({ addColorStop() {} });
+        return (...a) => out.push(k + '(' + a.map(v => (typeof v === 'number' ? Math.round(v) : String(v))).join(',') + ')' + (/^fill/.test(k) ? t.fillStyle : /^stroke/.test(k) ? t.strokeStyle : ''));
+      },
+      set(t, k, v) { t[k] = v; return true; },
+    });
+    fn(ctx);
+    return out.join(';');
+  };
+  h.ok(L && ['vignette', 'scene', 'mark', 'snippet', 'board', 'intro', 'medal', 'wkBanner', 'wrap'].every(k => typeof L[k] === 'function'), 'RENDER.lore');
+  h.eq(JSON.stringify(L.KINDS.slice().sort()), JSON.stringify(D.LORE_ART.slice().sort()), 'the renderer draws every picture kind the book uses');
+  const B = D.loreBook(), col = (e) => B.chapters.find(c => c.id === e.ch).col;
+  // what the game hands over (game.js loreArtSt): the enemy, a crawler's prizes, the Rig's claw
+  const stOf = (e, o) => {
+    const a = e.art, st = Object.assign({ t: 1.3, col: col(e) }, o || {});
+    if (a.k === 'enemy') st.def = D.ENEMIES[a.id];
+    if (a.k === 'gary') st.def = D.ENEMIES.gary;
+    if (a.k === 'char') st.items = D.CHARACTERS[a.id].bin.slice(0, 6).map(id => D.ITEMS[id]);
+    if (a.k === 'prizes' || a.k === 'rig') st.items = ['rusty_sword', 'dented_shield', 'prize_marble', 'crisp_apple'].map(id => D.ITEMS[id]);
+    if (a.k === 'act') st.defs = [D.ENEMIES.rat, D.ENEMIES.slime];
+    if (a.k === 'rig') st.pose = P.clawPose('classic', { x: 120, y: 42, open: 0.55, cable: 22 });
+    return st;
+  };
+  const pages = new Map();
+  for (const e of B.entries) {
+    const fp = fingerprint(drawCheck('page ' + e.id, c => L.vignette(c, e.art, 480, 200, stOf(e))));
+    pages.set(e.id, fp);
+    const lk = fingerprint(drawCheck('page ' + e.id + ' locked', c => L.vignette(c, e.art, 120, 72, stOf(e, { locked: true }))));
+    h.ok(lk !== fp, `${e.id}: a locked page is darkened`);
+    drawCheck('page ' + e.id + ' thumbnail', c => L.vignette(c, e.art, 120, 72, stOf(e)));
+    drawCheck('page ' + e.id + ' toast chip', c => L.vignette(c, e.art, 60, 40, stOf(e)));
+  }
+  const ur = uniqueRatio(pages);
+  h.eq(ur.ratio, 1, 'every page has its own picture ' + JSON.stringify(ur.dupes));
+  const tw = B.byId.spire_tower;
+  h.ok(fingerprint(drawCheck('tower later', c => L.vignette(c, tw.art, 480, 200, stOf(tw, { t: 4.2 })))) !== pages.get('spire_tower'), 'the picture moves with time');
+  h.ok(fingerprint(drawCheck('gary gear 0', c => L.vignette(c, { k: 'gary', gear: 0 }, 480, 200, stOf(B.byId.gy_meet)))) !== fingerprint(drawCheck('gary gear 4', c => L.vignette(c, { k: 'gary', gear: 4 }, 480, 200, stOf(B.byId.gy_meet)))), 'Gary wears his gear');
+  drawCheck('vignette with nothing', c => { L.vignette(c, null, 0, 0, null); c.fillRect(0, 0, 1, 1); });
+  drawCheck('vignette of an unknown kind', c => L.vignette(c, { k: 'nope' }, 200, 100, { t: 1 }));
+  drawCheck('an enemy page without its def', c => L.vignette(c, { k: 'enemy', id: 'nope' }, 200, 100, { t: 1 }));
+  // the landmarks on the map
+  const marks = new Map();
+  for (const k of ['jukebox', 'tickets', 'hiscore']) {
+    marks.set(k, fingerprint(drawCheck('mark ' + k, c => L.mark(c, k, 200, 400, 46, 1.2))));
+    drawCheck('mark ' + k + ' zoomed out', c => L.mark(c, k, 200, 400, 46 * 0.6, 7));
+  }
+  h.eq(uniqueRatio(marks).ratio, 1, 'the three landmarks look different');
+  drawCheck('mark unknown', c => L.mark(c, 'nope', 0, 0, 46, 0));
+  // the bubble: short, long, at the stage's edges, fading
+  const long = D.LORE_SNIPS.petshop[0] + ' ' + D.LORE_SNIPS.tickets[1];
+  for (const [x, y] of [[270, 500], [4, 190], [536, 940]]) drawCheck(`snippet at ${x},${y}`, c => L.snippet(c, x, y, long, { icon: '♪', name: 'Broken Jukebox', col: '#ff6bb0', t: 0.05, a: 0.5 }));
+  drawCheck('snippet with nothing', c => { L.snippet(c, 10, 10, '', null); c.fillRect(0, 0, 1, 1); });
+  // the high score board: yours in gold, an empty history the house's
+  const hof = [{ id: 'a', c: 'knight', s: 12000 }, { id: 'b', c: 'rogue', s: 30000 }];
+  const bFull = fingerprint(drawCheck('board with runs', c => L.board(c, D.loreBoard(hof, 8), 440, 560, { t: 1 })));
+  const bEmpty = fingerprint(drawCheck('board empty', c => L.board(c, D.loreBoard([], 8), 440, 560, { t: 1 })));
+  h.ok(bFull !== bEmpty, 'your climbs show on the board');
+  drawCheck('board junk', c => L.board(c, null, 0, 0, null));
+  // the act cards: every floor its own, the typing and the beat show, reduced motion holds still
+  const cards = new Map();
+  for (const k of ['a1', 'a2', 'a3', 'room', 'L2']) {
+    const I = D.loreIntro(k, 2);
+    for (const u of [0, 0.05, 0.3, 0.7, 1]) drawCheck(`intro ${k} at ${u}`, c => L.intro(c, 540, 960, Object.assign({ u, typed: Math.round(u * 60), t: u * 2.8, a: 1 }, I)));
+    cards.set(k, lp(c => L.intro(c, 540, 960, Object.assign({ u: 0.5, typed: 20, t: 1.4, a: 1 }, I))));
+  }
+  h.eq(uniqueRatio(cards).ratio, 1, 'every floor has its own card');
+  const I1 = D.loreIntro('a1');
+  h.ok(fingerprint(drawCheck('intro typed 5', c => L.intro(c, 540, 960, Object.assign({ u: 0.5, typed: 5, t: 1 }, I1)))) !== fingerprint(drawCheck('intro typed all', c => L.intro(c, 540, 960, Object.assign({ u: 0.5, typed: 999, t: 1 }, I1)))), 'the lines type out');
+  const rA = fingerprint(drawCheck('intro reduced early', c => L.intro(c, 540, 960, Object.assign({ u: 0.02, typed: 0, t: 0.1, reduced: true }, I1))));
+  const rB = fingerprint(drawCheck('intro reduced later', c => L.intro(c, 540, 960, Object.assign({ u: 0.2, typed: 0, t: 0.1, reduced: true }, I1))));
+  h.ok(rA.replace(/\d+(\.\d+)?/g, '') === rB.replace(/\d+(\.\d+)?/g, ''), 'reduced motion: no slam, the bars do not slide');
+  drawCheck('intro with nothing', c => L.intro(c, 0, 0, null));
+  // medals and the weekly banner
+  const med = new Map();
+  for (const m of ['', 'bronze', 'silver', 'gold', 'platinum']) { drawCheck('medal ' + (m || 'none'), c => L.medal(c, m, 40, 40, 20, 1)); med.set(m || 'none', lp(c => L.medal(c, m, 40, 40, 20, 1))); }
+  h.eq(uniqueRatio(med).ratio, 1, 'every medal (and the empty slot) differs');
+  const wk = D.wkDef('2026-W40');
+  const ban = (o) => fingerprint(drawCheck('banner ' + JSON.stringify(o), c => L.wkBanner(c, Object.assign({ name: wk.name, icon: wk.icon, col: wk.col, week: 'WEEK 40 · 2026', left: 'ENDS IN 5D 00H', blurb: wk.blurb, char: wk.char, claw: 'Scoop', t: 1 }, o), 508, 170)));
+  h.ok(ban({}) !== ban({ medal: 'gold', best: 6100 }), 'the banner shows the best medal');
+  drawCheck('banner with nothing', c => L.wkBanner(c, null, 0, 0));
 });
 
 h.done();
