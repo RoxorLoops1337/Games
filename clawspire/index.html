@@ -1039,6 +1039,261 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 .petPen.got .t{border-color:var(--ac)}
 /* ================= /PETS ================= */
 </style>
+<style id="acc-css">
+/* ================= ACCESS (round 6): the Settings panel, colour-blind signals, text size, reduced flashing, one-handed, the zoom iris ================= */
+#accSet{position:absolute;inset:0;z-index:70;display:none;background:rgba(12,6,22,.5);pointer-events:auto}
+#accSet.show{display:flex;flex-direction:column;justify-content:flex-end}
+.accSheet{margin:0 8px 8px;max-height:calc(100% - 84px);display:flex;flex-direction:column;border-color:var(--cyan);overflow:hidden;
+  animation:accUp .28s cubic-bezier(.2,1.2,.4,1) both}
+@keyframes accUp{0%{transform:translateY(60px);opacity:0}100%{transform:none;opacity:1}}
+.calm .accSheet{animation:none}
+.accHead{display:flex;align-items:center;gap:10px;padding:10px 12px 6px}
+.accHead h2{flex:1;font-size:20px}
+.accPrev{display:block;width:500px;max-width:calc(100% - 20px);height:auto;aspect-ratio:5/1;margin:0 auto 4px;border-radius:10px;border:1px solid var(--line)}
+.accBody{flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px 12px 14px;display:flex;flex-direction:column;gap:8px;overscroll-behavior:contain;scrollbar-width:thin}
+.accSec{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.22);border:1px solid var(--line)}
+.accRow{display:flex;align-items:center;gap:10px;min-height:44px;flex-wrap:wrap}
+.accRow .accL{flex:1;min-width:140px}
+.accRow.wide .accL{flex-basis:100%}
+.accRow.slide{flex-wrap:nowrap}
+.accRow.slide .accL{flex:0 0 auto;min-width:76px}
+.accN{font-size:15px;font-weight:900;color:#fff;letter-spacing:.03em}
+.accSub{font-size:12px;color:var(--dim);line-height:1.35}
+.accSeg{display:flex;gap:6px;flex-wrap:wrap;width:100%}
+.accSeg .btn{flex:1 1 0;min-width:84px;padding:6px 8px}
+.btn.accOpt.sel{border-color:var(--lime);color:var(--lime);box-shadow:0 0 12px rgba(166,255,94,.35)}
+.btn.accTog{min-width:132px}
+.accRange{flex:1;min-width:150px;height:44px;margin:0;accent-color:var(--cyan)}
+.accVal{min-width:48px;text-align:right;font-weight:900;color:var(--cyan2)}
+.btn.accBottom{align-self:center;min-width:200px;margin-top:4px}
+/* the fight's pause button and the one-handed thumb buttons on the map */
+.btn.accPauseBtn{min-width:48px;padding:6px 10px;font-size:22px;flex:0 0 auto}
+html.hand-left .ctrlRow{flex-direction:row-reverse}
+html.hand-left #hint{text-align:right}
+html[class*="hand-"] #endTurn{min-width:180px;height:60px;font-size:18px}
+#accThumb{position:absolute;bottom:120px;z-index:22;display:none;flex-direction:column;gap:12px;pointer-events:auto}
+#accThumb.on{display:flex}
+html.hand-left #accThumb{left:12px}
+html.hand-right #accThumb{right:12px}
+#accThumb .btn{width:62px;height:62px;min-width:0;border-radius:50%;padding:0;font-size:17px;box-shadow:0 4px 0 #120a22,0 0 16px rgba(46,230,214,.3)}
+/* colour-blind modes: the DOM's signal colours follow RENDER.acc's palette */
+html.cb-deutan{--acc-dmg:#ff9e1f;--acc-heal:#3fa9ff;--acc-cyan:#c4f1ff;--acc-pink:#e46cff;--acc-gold:#ffe14d}
+html.cb-protan{--acc-dmg:#ffb31a;--acc-heal:#3fa9ff;--acc-cyan:#c4f1ff;--acc-pink:#f08cff;--acc-gold:#fff06a}
+html.cb-tritan{--acc-dmg:#ff4040;--acc-heal:#48e060;--acc-cyan:#f2f2f2;--acc-pink:#b04dff;--acc-gold:#ffd24d}
+html[class*="cb-"] .stat.hp .v{color:var(--acc-dmg)}
+html[class*="cb-"] .stat.hp .blk{color:var(--acc-cyan)}
+html[class*="cb-"] .card .rar.u{color:var(--acc-cyan)}
+html[class*="cb-"] .card .rar.r{color:var(--acc-gold)}
+html[class*="cb-"] .card .rar.l{color:var(--acc-pink)}
+html[class*="cb-"] .card .rar.junk{color:var(--acc-dmg)}
+html[class*="cb-"] .card.rr-u,html[class*="cb-"] .chip.rr-u{border-color:var(--acc-cyan)}
+html[class*="cb-"] .card.rr-r,html[class*="cb-"] .chip.rr-r{border-color:var(--acc-gold)}
+html[class*="cb-"] .card.rr-l,html[class*="cb-"] .chip.rr-l{border-color:var(--acc-pink)}
+/* buffs and debuffs never differ by colour alone: a triangle and a dashed rim */
+html[class*="cb-"] .pip.buff{border-color:var(--acc-heal)}
+html[class*="cb-"] .pip.debuff{border-color:var(--acc-dmg);border-style:dashed}
+html[class*="cb-"] .pip.buff::after{content:'\25B2';font-size:10px;color:var(--acc-heal);margin-left:1px}
+html[class*="cb-"] .pip.debuff::after{content:'\25BC';font-size:10px;color:var(--acc-dmg);margin-left:1px}
+/* text size: the full-screen bodies scale as a whole (and reflow in a narrower box), the HUD's words grow */
+html.txt-l{--accK:1.15}
+html.txt-xl{--accK:1.3}
+html[class*="txt-"] :is(#charsBody,#rewardBody,#shopBody,#eventBody,#restBody,#forgeBody,#treasureBody,#partsBody,#binBody,#gameoverBody,#winBody,#helpBody,#collectionBody,#stickersBody,#tipsBody,#counterBody,.accSheet){zoom:var(--accK)}
+html[class*="txt-"] .accSheet{max-height:calc((100% - 84px) / var(--accK))}
+/* the title menu grows half as much and gives up its top fade, so the logo stays clear */
+html[class*="txt-"] #titleMenu{zoom:calc(1 + (var(--accK) - 1) * .5);padding-top:24px;gap:7px}
+html[class*="txt-"] #titleMenu .row{gap:7px}
+html[class*="txt-"] #titleMenu .row .btn{min-width:0;padding:6px 11px}
+/* the HUD's stats keep their 54 px boxes: they grow half as much */
+html[class*="txt-"] .stat .k{font-size:calc(12px * (1 + (var(--accK) - 1) * .5))}
+html[class*="txt-"] .stat .v{font-size:calc(17px * (1 + (var(--accK) - 1) * .5))}
+html[class*="txt-"] .stat.act .v{font-size:calc(13px * (1 + (var(--accK) - 1) * .5))}
+html[class*="txt-"] #hint{font-size:calc(14px * var(--accK))}
+html[class*="txt-"] #toast{font-size:calc(15px * var(--accK))}
+html[class*="txt-"] #pop{font-size:calc(13px * var(--accK));max-width:calc(300px * var(--accK))}
+html[class*="txt-"] #banner span{font-size:calc(34px * var(--accK))}
+html[class*="txt-"] .mh .l2 .hint{font-size:calc(12px * var(--accK))}
+html[class*="txt-"] .brush{font-size:calc(13px * var(--accK))}
+html[class*="txt-"] .chip .n{font-size:calc(13px * var(--accK))}
+html[class*="txt-"] .chip .t{font-size:calc(12px * var(--accK))}
+html[class*="txt-"] #tipCard .t{font-size:calc(13px * var(--accK))}
+html[class*="txt-"] .pip{font-size:calc(13px * var(--accK))}
+/* reduced flashing: no strobes, no brightness spikes */
+.noflash #banner.jackpot.show span{animation:pop .5s ease both}
+.noflash #banner span{filter:none!important}
+.noflash .arcMsg.jp span{animation:none}
+.noflash .attract .mq i{animation-duration:3.2s}
+.noflash .attract .ins{animation:none}
+.noflash .counterHead h1{animation:none}
+.noflash .crt .tube::before{animation:none}
+.noflash .crt .tube,.noflash .crt .loopN,.noflash .ptot.slam,.noflash .capTier.up,.noflash .slot.won{filter:none!important}
+.noflash #wipe.bleed{animation-duration:1.8s}
+/* map -> fight: the iris closes on the tile (the canvas zooms into it), then opens on the fight */
+#wipe.irisz{display:block}
+#wipe.irisz::before{content:'';position:absolute;left:var(--ix,50%);top:var(--iy,48%);width:1500px;height:1500px;border-radius:50%;transform:translate(-50%,-50%);
+  box-shadow:0 0 0 1400px rgba(18,9,31,0),inset 0 0 26px 8px rgba(255,46,136,0);animation:irisz .8s cubic-bezier(.45,0,.35,1) forwards}
+@keyframes irisz{
+  0%{left:var(--ix,50%);top:var(--iy,48%);width:1200px;height:1200px;box-shadow:0 0 0 1400px rgba(18,9,31,0),inset 0 0 26px 8px rgba(255,46,136,0)}
+  34%{left:var(--ix,50%);top:var(--iy,48%);width:0;height:0;box-shadow:0 0 0 1400px #12091f,inset 0 0 26px 8px rgba(255,46,136,.9)}
+  38%{left:50%;top:48%;width:0;height:0;box-shadow:0 0 0 1400px #12091f,inset 0 0 26px 8px rgba(255,46,136,.9)}
+  100%{left:50%;top:48%;width:1500px;height:1500px;box-shadow:0 0 0 1400px rgba(18,9,31,0),inset 0 0 26px 8px rgba(255,46,136,0)}}
+.calm #wipe.irisz::before{animation-duration:.01s}
+#stage.accIrisOn #playerRow,#stage.accIrisOn #ctrl,#stage.accIrisOn #combo{visibility:hidden}
+/* ================= /ACCESS ================= */
+</style>
+<style id="sets-css">
+/* ================= SETS (round 6): relic sets, the boon draft, the Compactor ================= */
+/* the relic strip: set members chained together behind a badge */
+.relic.inSet{position:relative}
+.relic.inSet::after{content:'';position:absolute;right:-2px;top:-2px;width:0;height:0;border-left:11px solid transparent;border-top:11px solid var(--sc,#ffc94d);border-top-right-radius:8px}
+.setLink{position:relative;display:flex;align-items:center;gap:6px;flex:0 0 auto;padding:2px 4px 2px 2px;border-radius:13px;
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(0,0,0,.25));box-shadow:inset 0 0 0 2px var(--sc),0 0 10px var(--sc)}
+.setLink .relic{position:relative;z-index:1;border-color:var(--sc)}
+.setLink .setChain{position:absolute;left:24px;right:14px;top:50%;height:6px;margin-top:-3px;z-index:0;border-radius:3px;
+  background:repeating-linear-gradient(90deg,var(--sc) 0 9px,transparent 9px 12px);box-shadow:0 0 8px var(--sc);opacity:.9}
+.setLink.full{animation:setGlow 1.6s ease-in-out infinite}
+.setLink.full .setChain{animation:setChain 1.1s linear infinite;background:repeating-linear-gradient(90deg,#fff 0 3px,var(--sc) 3px 9px,transparent 9px 12px);background-size:24px 6px}
+.setBadge{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;width:28px;height:44px;padding:0;
+  border-radius:9px;border:2px solid var(--sc);background:#12091f;color:#fff;cursor:pointer;font:inherit;line-height:1}
+.setBadge .ic{font-size:14px}
+.setBadge b{font-size:11px;color:var(--sc);font-weight:900;margin-top:2px}
+.setBadge.proc{animation:proc .55s cubic-bezier(.2,1.8,.4,1)}
+@keyframes setGlow{0%,100%{box-shadow:inset 0 0 0 2px var(--sc),0 0 8px var(--sc)}50%{box-shadow:inset 0 0 0 2px #fff,0 0 20px var(--sc)}}
+@keyframes setChain{to{background-position:24px 0}}
+/* "2/3 Poisoner's Kit" on relic cards */
+.setTag{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px;padding:3px 8px;border-radius:9px;
+  border:2px solid var(--sc);background:rgba(18,9,31,.8);font-size:12px;font-weight:900;color:var(--sc);max-width:100%}
+.setTag .ic{font-size:13px}
+.setTag b{flex-basis:100%;text-align:center;font-size:12px;color:#fff;text-shadow:0 0 8px var(--sc);animation:setDoneTag 1s ease-in-out infinite}
+.setTag.done{box-shadow:0 0 14px var(--sc)}
+@keyframes setDoneTag{50%{color:var(--sc)}}
+/* the set fanfare (through the announcer) */
+#setFan{position:absolute;left:30px;right:30px;top:170px;display:none;flex-direction:column;align-items:center;gap:6px;z-index:32;pointer-events:none;
+  padding:14px 12px 16px;border-radius:18px;border:3px solid var(--sc,#ffc94d);background:rgba(18,9,31,.92);box-shadow:0 0 30px var(--sc),inset 0 0 30px rgba(0,0,0,.6)}
+#setFan.show{display:flex;animation:sfIn .5s cubic-bezier(.2,1.5,.4,1) both}
+#setFan.out{animation:cOut .12s ease-in both!important}
+#setFan .sfTop{font-size:14px;font-weight:900;letter-spacing:.3em;color:#fff;text-shadow:0 0 10px var(--sc)}
+#setFan.full .sfTop{font-size:20px;color:var(--gold);text-shadow:0 0 16px var(--gold),0 3px 0 #4d3608}
+#setFan .sfIcons{display:flex;align-items:center;gap:0}
+#setFan .sfIc{width:56px;height:56px;animation:sfPop .45s cubic-bezier(.2,1.8,.4,1) both}
+#setFan .sfIc.off{opacity:.25;filter:grayscale(1)}
+#setFan .sfLink,.setc .sfLink{display:block;width:26px;height:6px;border-radius:3px;background:repeating-linear-gradient(90deg,var(--sc) 0 7px,transparent 7px 10px);opacity:.45}
+#setFan .sfLink.on,.setc .sfLink.on{opacity:1;box-shadow:0 0 10px var(--sc);animation:sfSnap .4s ease .45s both}
+#setFan .sfName{font-size:26px;font-weight:900;color:#fff;letter-spacing:.04em;text-align:center;text-shadow:0 0 18px var(--sc),0 3px 0 #12091f,-2px 0 0 rgba(255,46,136,.6),2px 0 0 rgba(46,230,214,.6)}
+#setFan .sfBon{font-size:13px;font-weight:900;color:var(--sc);text-align:center;max-width:440px;line-height:1.35}
+@keyframes sfIn{0%{transform:scale(2.2) rotate(-6deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes sfPop{0%{transform:scale(0) rotate(-40deg)}100%{transform:none}}
+@keyframes sfSnap{0%{transform:scaleX(0)}100%{transform:none}}
+/* the Prizedex's Sets tab */
+.dexTabs{grid-template-columns:repeat(5,1fr)}
+.setGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.setc{border-color:var(--sc);gap:4px}
+.setc.locked{border-color:var(--line2)}
+.setc.done{box-shadow:0 0 14px var(--sc)}
+.setc .setIcons{display:flex;align-items:center}
+.setc .setIcons canvas{width:44px;height:44px}
+.setc .name{font-size:13px;color:var(--sc)}
+.setc.locked .name{color:var(--dimmer)}
+.setc .text{font-size:12px;text-align:left;width:100%}
+.setc .setDone{font-size:12px;font-weight:900;color:var(--gold);letter-spacing:.12em}
+/* the boon draft: three cards out of the machine's chute */
+.screen.boonScr{background:transparent;padding:0}
+.boonBody{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:30px 12px 18px;gap:6px}
+.bnHead{font-size:25px;font-weight:900;letter-spacing:.08em;color:#fff;text-align:center;text-shadow:0 0 18px var(--pink),0 3px 0 #12091f;animation:sfIn .6s cubic-bezier(.2,1.5,.4,1) both}
+.bnSub{font-size:13px;color:var(--dim);text-align:center;font-weight:700;max-width:460px}
+.bnCards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;margin-top:auto;perspective:900px}
+.bnCard{position:relative;height:300px;cursor:pointer;animation:bnDeal .55s cubic-bezier(.2,1.3,.4,1) backwards;transition:transform .25s,opacity .3s}
+.bnIn{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.3,1.4,.5,1)}
+.bnCard.up .bnIn{transform:rotateY(180deg)}
+.bnBack,.bnFront{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:14px;border:3px solid var(--bc);
+  display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 7px;overflow:hidden}
+.bnBack{background:repeating-linear-gradient(45deg,#2a1440 0 10px,#1c0d2e 10px 20px);justify-content:center;border-color:#ff2e88;box-shadow:0 0 16px rgba(255,46,136,.5)}
+.bnBack .bnLogo{width:74px;height:74px;border-radius:50%;border:4px solid var(--gold);display:flex;align-items:center;justify-content:center;
+  font-size:44px;font-weight:900;color:var(--gold);background:#12091f;text-shadow:0 0 12px var(--gold);animation:bnWob 1.4s ease-in-out infinite}
+.bnFront{transform:rotateY(180deg);background:linear-gradient(180deg,#2c1d4a,#140b24);box-shadow:0 0 18px var(--bc);text-align:center}
+.bnKind{font-size:12px;font-weight:900;letter-spacing:.25em;color:var(--bc)}
+.bnBack .bnKind{color:#ff9ec7;margin-top:10px}
+.bn-trade .bnFront{background:linear-gradient(180deg,#3a1020,#1a0610)}
+.bnIcon{font-size:40px;line-height:1.1;filter:drop-shadow(0 0 8px var(--bc))}
+.bnFront .name{font-size:15px;font-weight:900;color:#fff;line-height:1.15}
+.bnFront .text{font-size:12px;color:var(--dim);line-height:1.3}
+.bnCost{font-size:12px;font-weight:900;color:#ff8a7a;line-height:1.25;padding:2px 6px;border-radius:7px;background:rgba(255,90,74,.14)}
+.bnRelic{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:900;color:#fff}
+.bnRelic canvas{width:30px;height:30px}
+.bnFront .setTag{font-size:12px;padding:2px 5px}
+.bnFront .setTag .ic{display:none}
+.bnCard.chosen{transform:translateY(-26px) scale(1.07);z-index:2}
+.bnCard.chosen .bnFront{box-shadow:0 0 40px var(--bc),0 0 0 3px #fff}
+.bnCard.gone{opacity:0;transform:translateY(60px) rotate(8deg)}
+.bnSkip{margin-top:8px}
+@keyframes bnDeal{0%{transform:translateY(-240px) scale(.4) rotate(-10deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes bnWob{50%{transform:rotate(-8deg) scale(1.06)}}
+/* the Compactor: the canvas draws the press behind the transparent window */
+.screen.cmpScr{background:transparent;padding:0;overflow:hidden}
+.cmpBody{position:absolute;inset:0;display:flex;flex-direction:column}
+.cmpTop{flex:0 0 70px;padding:8px 16px 0;background:linear-gradient(180deg,rgba(18,9,31,.96),rgba(18,9,31,.6))}
+.cmpTop h1{margin:0;font-size:24px}
+.cmpTop .sub{font-size:12px}
+.cmpWin{flex:0 0 350px;cursor:pointer}
+.cmpPanel{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;display:flex;flex-direction:column;gap:8px;padding:10px 14px 16px;
+  background:linear-gradient(180deg,rgba(18,9,31,.9),rgba(18,9,31,.97) 30px);border-top:3px solid #ffc94d}
+.cmpPanel::-webkit-scrollbar{display:none}
+.cmpSlots{display:flex;gap:10px;justify-content:center}
+.cmpSlotBox{width:60px;height:60px;border-radius:12px;border:2px dashed var(--line2);background:#140c24;color:var(--dimmer);font:inherit;font-size:18px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.cmpSlotBox.on{border:2px solid #ffc94d;box-shadow:0 0 12px rgba(255,201,77,.5)}
+.cmpSlotBox canvas{width:44px;height:44px}
+.cmpRule{font-size:13px;font-weight:900;color:#ffe9a8;text-align:center;min-height:18px}
+.cmpRow{justify-content:center}
+.cmpGo{min-width:150px}
+.cmpGrid .card canvas{width:56px;height:56px}
+.cmpGrid .card .text{display:none}
+.cmpGrid .card .name{font-size:12px}
+.cmpSlot .cmpIc{font-size:32px;width:48px;text-align:center;flex:0 0 auto}
+.cmpRes{display:none;flex-direction:column;align-items:center;gap:6px}
+.cmpRes.show{display:flex;animation:sfIn .45s cubic-bezier(.2,1.5,.4,1) both}
+.cmpRes .cmpCard{width:220px}
+.cmpStamp{font-size:26px;font-weight:900;letter-spacing:.12em;color:var(--gold);text-shadow:0 0 16px var(--gold),0 3px 0 #4d3608;transform:rotate(-4deg)}
+.calm .setLink.full,.calm .setLink.full .setChain,.calm .bnBack .bnLogo{animation:none}
+.calm #setFan.show,.calm .bnCard,.calm .cmpRes.show{animation-duration:.01s}
+@media (prefers-reduced-motion:reduce){.setLink.full,.setLink.full .setChain,.bnBack .bnLogo{animation:none}.bnIn{transition:none}}
+/* ================= /SETS ================= */
+</style>
+<style id="secret-css">
+/* ================= SECRET (round 6): the golden keys, the hidden door, the true ending (DESIGN.md "Secret act (round 6)") ================= */
+.mh .secKeys{display:inline-flex;align-items:center;gap:1px;height:32px;padding:0 6px 0 2px;border-radius:9px;flex:0 0 auto;cursor:pointer;
+  border:1.5px solid #8a6210;background:#241a08;color:var(--gold);font-size:13px;font-weight:900;white-space:nowrap;line-height:1}
+.mh .secKeys canvas{width:17px;height:17px}
+.mh .secKeys.full{border-color:var(--gold);box-shadow:0 0 14px rgba(255,201,77,.55);animation:secPulse 1.6s ease-in-out infinite}
+@keyframes secPulse{50%{box-shadow:0 0 22px rgba(255,201,77,.9)}}
+.screen.secret{background:transparent;padding:0;justify-content:flex-end}
+#secretBody{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:14px;padding:0 22px 64px;pointer-events:auto}
+.secTitle{text-align:center;opacity:0;transform:scale(1.6);transition:opacity .35s,transform .45s cubic-bezier(.3,1.6,.5,1)}
+.secTitle small{display:block;font-size:14px;letter-spacing:.4em;color:var(--gold);text-shadow:0 0 10px rgba(255,201,77,.8)}
+.secTitle .n{font-size:52px;font-weight:900;letter-spacing:.05em;line-height:1;color:#fff;
+  text-shadow:-3px 0 0 rgba(255,46,136,.9),3px 0 0 rgba(46,230,214,.9),0 0 30px rgba(46,230,214,.8),0 5px 0 #06231c}
+.secTitle .sub{margin-top:10px;font-size:15px;line-height:1.35;color:var(--text);max-width:440px;margin-left:auto;margin-right:auto;text-shadow:0 2px 6px #000}
+.secRow{display:flex;gap:10px;opacity:0;transition:opacity .4s .25s}
+#secretBody.on .secTitle{opacity:1;transform:none}
+#secretBody.on .secRow,#secretBody.on .secGo{opacity:1}
+.secGo{opacity:0;transition:opacity .4s}
+.secEpi{position:absolute;left:22px;right:22px;top:92px;display:flex;flex-direction:column;gap:8px;text-align:center}
+.secEpi p{margin:0;font-size:16px;line-height:1.35;color:#fff;opacity:0;text-shadow:0 2px 6px rgba(20,8,40,.9);animation:secFade 1.1s forwards}
+@keyframes secFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.secRoll{position:absolute;left:0;right:0;top:360px;bottom:150px;overflow:hidden;
+  mask-image:linear-gradient(180deg,transparent,#000 18%,#000 82%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,#000 18%,#000 82%,transparent)}
+.secRollIn{position:absolute;left:0;right:0;top:100%;text-align:center;animation:secRoll 16s linear 6.5s forwards}
+.secRollIn div{font-size:16px;line-height:1.7;color:#fff;min-height:12px;text-shadow:0 2px 6px rgba(20,8,40,.9)}
+.secRollIn .big{font-size:30px;font-weight:900;letter-spacing:.08em;color:var(--gold);text-shadow:0 0 18px rgba(255,201,77,.8),0 3px 0 #4d3608}
+.secRollIn .k{font-size:13px;letter-spacing:.4em;color:var(--pink2)}
+.secRollIn .who{font-size:26px;font-weight:900;color:var(--cyan2);text-shadow:0 0 16px rgba(46,230,214,.8)}
+@keyframes secRoll{to{transform:translateY(calc(-100% - 260px))}}
+#secretBody.fast .secEpi p{animation-delay:0s!important;animation-duration:.2s}
+#secretBody.fast .secRollIn{animation-delay:0s;animation-duration:9s}
+.secNote{font-size:14px;font-weight:900;letter-spacing:.04em;color:var(--cyan2);text-align:center;padding:6px 10px;border:2px dashed #1f4a3e;border-radius:10px;background:#06231c}
+.calm .mh .secKeys.full{animation:none}
+@media (prefers-reduced-motion:reduce){.mh .secKeys.full{animation:none}}
+/* ================= /SECRET ================= */
+</style>
 </head>
 <body>
 <div id="wrap"><div id="stage">
@@ -1107,6 +1362,12 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   <div id="scr-loop" class="screen loop"><div id="loopBody"></div></div>
   <!-- VAULT: the Prize Vault (the canvas paints the prize wall and the preview window under this frame) -->
   <div id="scr-vault" class="screen vault"><div id="vaultBody" class="vaultBody"></div></div>
+  <!-- SECRET: the hidden door and the true ending (the canvas paints the scene under this frame) -->
+  <div id="scr-secret" class="screen secret"><div id="secretBody"></div></div>
+  <!-- SETS (round 6): the boon draft (the canvas draws the machine) and the Compactor (the canvas draws the press), the set fanfare -->
+  <div id="scr-boon" class="screen boonScr"><div id="boonBody" class="boonBody"></div></div>
+  <div id="scr-compactor" class="screen cmpScr"><div id="cmpBody" class="cmpBody"></div></div>
+  <div id="setFan"></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>
 </div></div>

@@ -1474,4 +1474,90 @@ h.test('round 5 tiles: save round trip, old saves, the arcade session carried', 
   h.ok(O2 && !tilesOf(O2).some(t => R5.includes(t.type)) && tilesOf(O2).every(t => t.known === LANDMARK.includes(t.type)), 'an old save without them loads, landmarks intact');
 });
 
+// ---------------------------------------------------------------- SECRET (round 6): the golden keys and the Back Room
+h.test('secret: a golden key per map, hidden three ways, never touching the map', () => {
+  const all = (M) => Object.values(M.tiles);
+  let roamN = 0, arcN = 0, darkN = 0;
+  for (let s = 1; s <= 24; s++) {
+    const act = 1 + (s % 3);
+    const M = MAP.generate({ act, rng: U.rng(s * 131 + 7), cols: 16, rows: 22 });
+    const before = JSON.stringify(M.tiles), roamB = JSON.stringify(M.roam);
+    const R = MAP.secKeys(M, 'roam');
+    h.ok(R && R.kind === 'roam' && M.roam.some(m => m.id === R.id) && !R.got, `seed ${s}: the key is in a roaming monster`);
+    const far = Math.max(...M.roam.map(m => MAP.hexDist(m.q, m.r, M.start.q, M.start.r)));
+    const km = M.roam.find(m => m.id === R.id);
+    h.eq(MAP.hexDist(km.q, km.r, M.start.q, M.start.r), far, `seed ${s}: the monster farthest from the start swallowed it`);
+    roamN++;
+    const A = MAP.secKeys(M, 'arcade');
+    h.ok(A && A.kind === 'arcade' && all(M).some(t => MAP.isArcade(t) && t.type !== MAP.PET_TILE), `seed ${s}: an arcade jackpot pays it`);
+    arcN++;
+    const K = MAP.secKeys(M, 'dark');
+    const t = M.tiles[MAP.key(K.q, K.r)];
+    h.ok(K.kind === 'dark' && t && t.type === 'empty' && MAP.isLand(t) && !t.road && !t.revealed && !M.roam.some(m => m.q === K.q && m.r === K.r), `seed ${s}: a dark empty land hex off the road`);
+    const roadD = (x) => Math.min(...M.road.map(([q, r]) => MAP.hexDist(x.q, x.r, q, r)));
+    const best = Math.max(...all(M).filter(x => x.type === 'empty' && MAP.isLand(x) && !x.road && !x.revealed && !M.roam.some(m => m.q === x.q && m.r === x.r)).map(roadD));
+    h.eq(roadD(t), best, `seed ${s}: as far from the road as it gets (${best})`);
+    h.ok(roadD(t) >= 3, `seed ${s}: well off the road`);
+    darkN++;
+    h.ok(MAP.secKeyAt(M, K.q, K.r) && !MAP.secKeyAt(M, M.start.q, M.start.r), 'secKeyAt: only on its own hex');
+    h.eq(JSON.stringify(MAP.secKeys(M, 'dark')), JSON.stringify(K), 'deterministic');
+    h.eq(JSON.stringify(M.tiles), before, `seed ${s}: placing a key never changes a tile`);
+    h.eq(JSON.stringify(M.roam), roamB, `seed ${s}: nor a monster`);
+    M.sec.got = true;
+    h.ok(!MAP.secKeyAt(M, K.q, K.r), 'a taken key is gone');
+    const O = MAP.deserialize(MAP.serialize(M));
+    h.ok(O.sec && O.sec.kind === 'dark' && O.sec.got === true && O.sec.q === K.q, 'the key survives the save round trip');
+  }
+  h.ok(roamN && arcN && darkN, 'all three kinds placed');
+  // a map that cannot hold the kind falls back to the dark corner
+  const M = MAP.generate({ act: 1, rng: U.rng(99), cols: 16, rows: 22 });
+  M.roam = [];
+  h.eq(MAP.secKeys(M, 'roam').kind, 'dark', 'no monsters: the dark corner instead');
+  for (const k in M.tiles) if (MAP.isArcade(M.tiles[k])) M.tiles[k].type = 'empty';
+  const F = MAP.secKeys(M, 'arcade');
+  h.ok(F.kind === 'dark' && F.want === 'arcade', 'no cabinets: the dark corner instead (it remembers what it wanted)');
+  const old = MAP.deserialize(JSON.parse(JSON.stringify(Object.assign({}, M, { sec: undefined }))));
+  h.ok(old && !old.sec && !MAP.secKeyAt(old, 0, 0), 'a map from before the keys has none');
+});
+
+h.test('secret: the Back Room map (5 to 8 hexes inside the machine)', () => {
+  const lens = new Set();
+  for (let s = 1; s <= 200; s++) {
+    const M = MAP.secRoom({ rng: U.rng(s), elites: [['frostknight'], ['collector']], ink: 4 });
+    const T = Object.values(M.tiles), land = T.filter(t => MAP.isLand(t));
+    lens.add(land.length);
+    h.ok(land.length >= 5 && land.length <= 8, `seed ${s}: ${land.length} walkable hexes`);
+    h.ok(M.biome === 'machine' && T.every(t => t.biome === 'machine'), `seed ${s}: the machine biome`);
+    h.ok(T.filter(t => !MAP.isLand(t)).every(t => t.terrain === 'sea' && t.ground === 'sea' && t.type === 'empty' && !t.known), `seed ${s}: the rest is the machine's dark void`);
+    const st = M.tiles[MAP.key(M.start.q, M.start.r)], bs = M.tiles[MAP.key(M.boss.q, M.boss.r)];
+    h.ok(st.type === 'start' && st.visited && st.revealed && bs.type === 'boss' && bs.revealed, `seed ${s}: start and boss`);
+    h.eq(JSON.stringify(bs.content.enc), '["machine"]', `seed ${s}: The Machine waits on the boss hex`);
+    // the lit catwalk: start to boss, every step adjacent, land, lit, no repeats
+    const road = M.road;
+    h.ok(road.length >= 6 && road.length <= 7 && road[0][0] === M.start.q && road[0][1] === M.start.r && road[road.length - 1][0] === M.boss.q, `seed ${s}: the road runs start -> boss (${road.length})`);
+    let ok = true;
+    for (let i = 1; i < road.length; i++) if (!MAP.isAdjacent(road[i - 1][0], road[i - 1][1], road[i][0], road[i][1])) ok = false;
+    h.ok(ok && new Set(road.map(p => p.join())).size === road.length, `seed ${s}: a connected road, no tile twice`);
+    h.ok(road.every(([q, r]) => { const t = M.tiles[MAP.key(q, r)]; return t.road && t.revealed && MAP.isLand(t); }), `seed ${s}: lit land`);
+    const types = land.map(t => t.type);
+    h.eq(types.filter(x => x === 'elite').length, 2, `seed ${s}: two elites`);
+    h.ok(types.includes('shop') && types.includes('rest') && types.includes('forge'), `seed ${s}: the service counter, a rest, a forge`);
+    h.ok(land.filter(t => t.type === 'elite').every(t => t.content.sec && Array.isArray(t.content.enc) && t.content.enc.length), `seed ${s}: the elites carry their encounter`);
+    h.ok(land.find(t => t.type === 'shop').content.sec, `seed ${s}: the shop is the service counter`);
+    h.ok(land.every(t => t.known === MAP.isLandmark(t)), `seed ${s}: landmarks known`);
+    h.ok(MAP.pathExists(M, M.start, M.boss, { ink: 0 }) && MAP.walkCost(M, M.start, M.boss) === 0, `seed ${s}: the boss is a free walk`);
+    const wp = MAP.walkPath(M, road[1][0], road[1][1]);
+    h.ok(wp && wp.length === 1, `seed ${s}: click to travel works in there`);
+    h.ok(land.every(t => t === st || MAP.walkCost(M, M.start, t, { any: true, land: true }) >= 0), `seed ${s}: every hex reachable`);
+    h.eq(M.ink, 4, 'the bulbs carry in');
+    h.ok(M.revealedCount === T.filter(t => t.revealed && t.terrain !== 'sea').length, 'the lit count leaves the void out');
+    const O = MAP.deserialize(MAP.serialize(M));
+    h.ok(O && O.biome === 'machine' && O.room === true && JSON.stringify(O.road) === JSON.stringify(M.road) && Object.keys(O.tiles).length === T.length, `seed ${s}: save round trip`);
+    const b = MAP.bounds(M, MAP.HEX, 'v');
+    h.ok(b.w < 540 && b.h < 768, 'it fits the map area');
+  }
+  h.ok(lens.has(7) && lens.has(8), 'seven or eight hexes, both happen');
+  h.eq(JSON.stringify(MAP.secRoom({ rng: U.rng(5) })), JSON.stringify(MAP.secRoom({ rng: U.rng(5) })), 'deterministic by the rng');
+});
+
 h.done();

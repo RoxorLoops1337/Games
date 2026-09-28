@@ -1514,6 +1514,123 @@ const MAP = (() => {
   }
   // ================================================================ /ARCADE
 
+  // ================================================================ SECRET (round 6)
+  /* The secret act (DESIGN.md "Secret act (round 6)"). secKeys places an
+     act's golden key after generate (the game calls it; generate itself is
+     untouched, so every seed's map is exactly what it was): 'roam' puts it
+     in the roaming monster farthest from the start, 'arcade' makes it the
+     jackpot of any cabinet on the map, 'dark' drops it on the empty dark
+     land hex farthest from the road (the start breaks ties, then a hash of
+     the seed). A kind the map cannot hold (no monsters, no cabinets) falls
+     back to 'dark'. M.sec = {kind, want, got, q, r | id}. secRoom builds THE
+     BACK ROOM: a 6 x 3 slice of the machine's insides in the 'machine'
+     biome, a lit catwalk (the road) start -> boss that zigzags through the
+     rows (6 or 7 hexes), one side hex off it, everything else the dark void
+     of the cabinet (sea terrain: seen, never walked). 7 or 8 walkable hexes:
+     elites with the strongest affixes, the service counter (a legendary
+     shop), a treasure on the longer walk, a rest, a forge on the side, and
+     THE MACHINE on the boss hex. */
+  const SEC_BIOME = 'machine';
+  const SEC_ROOM = { cols: 6, rows: 3, maxRoad: 7 };
+  function secKeys(M, kind) {
+    if (!M || !M.tiles) return null;
+    const T = M.tiles, road = M.road || [];
+    const want = kind;
+    if (kind === 'roam' && M.roam && M.roam.length) {
+      let best = null, bd = -1;
+      for (const m of M.roam) { const d = hexDist(m.q, m.r, M.start.q, M.start.r); if (d > bd || (d === bd && best && m.id < best.id)) { bd = d; best = m; } }
+      return (M.sec = { kind: 'roam', want, id: best.id, got: false });
+    }
+    if (kind === 'arcade' && Object.keys(T).some((k) => isArcade(T[k]) && T[k].type !== PET_TILE)) return (M.sec = { kind: 'arcade', want, got: false });
+    const roam = {};
+    for (const m of M.roam || []) roam[key(m.q, m.r)] = 1;
+    let best = null, bs = -Infinity;
+    for (const k in T) {
+      const t = T[k];
+      if (t.type !== 'empty' || !isLand(t) || t.road || roam[k]) continue;
+      let d = road.length ? Infinity : hexDist(t.q, t.r, M.start.q, M.start.r);
+      for (const s of road) { const x = hexDist(t.q, t.r, s[0], s[1]); if (x < d) d = x; }
+      const sc = (t.revealed ? -1000 : 0) + d * 100 + hexDist(t.q, t.r, M.start.q, M.start.r) + (hashN((M.seed >>> 0) + ':key:' + k) % 97) / 100;
+      if (sc > bs) { bs = sc; best = t; }
+    }
+    if (!best) return (M.sec = null);
+    return (M.sec = { kind: 'dark', want, q: best.q, r: best.r, got: false });
+  }
+  // The dark key's hex (null when this map has none, or it was taken).
+  function secKeyAt(M, q, r) {
+    const s = M && M.sec;
+    return !!(s && s.kind === 'dark' && !s.got && s.q === q && s.r === r);
+  }
+  function secRoom(opts) {
+    opts = opts || {};
+    const rng = opts.rng || U.rng(7);
+    const { cols, rows } = SEC_ROOM;
+    const seed = Math.floor(rng() * 4294967296);
+    const start = { q: 0, r: 1 }, boss = { q: cols - 1, r: 1 };
+    const M = {
+      act: 3, biome: SEC_BIOME, cols, rows, seed, tiles: {}, start, boss, pos: { q: start.q, r: start.r },
+      ink: opts.ink != null ? opts.ink : START_INK, brushes: (opts.brushes || []).map(normalizeTool),
+      revealedCount: 0, islands: 0, water: 0, road: [], roam: [], room: true,
+    };
+    const cells = [];
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const q = c - Math.floor(r / 2);
+      M.tiles[key(q, r)] = { q, r, type: 'empty', terrain: 'sea', ground: 'sea', elev: 0.5, coast: false, biome: SEC_BIOME, revealed: false, visited: false, road: false, known: false, content: {} };
+      cells.push([q, r]);
+    }
+    // the catwalk: the cheapest walk over random weights (a zigzag), never longer than maxRoad
+    let path = null;
+    for (let tries = 0; tries < 12 && !path; tries++) {
+      const w = {};
+      for (const [q, r] of cells) w[key(q, r)] = 1 + rng() * 3;
+      const dist = {}, prev = {}, open = [[start.q, start.r]];
+      dist[key(start.q, start.r)] = 0;
+      while (open.length) {
+        open.sort((a, b) => dist[key(a[0], a[1])] - dist[key(b[0], b[1])]);
+        const [q, r] = open.shift(), k0 = key(q, r);
+        if (q === boss.q && r === boss.r) break;
+        for (const [nq, nr] of neighbors(M, q, r)) {
+          const k = key(nq, nr), d = dist[k0] + w[k];
+          if (dist[k] == null || d < dist[k]) { dist[k] = d; prev[k] = k0; open.push([nq, nr]); }
+        }
+      }
+      const out = [];
+      for (let k = key(boss.q, boss.r); k; k = prev[k]) { const t = M.tiles[k]; out.unshift([t.q, t.r]); if (k === key(start.q, start.r)) break; }
+      if (out.length >= 6 && out.length <= SEC_ROOM.maxRoad && out[0][0] === start.q && out[0][1] === start.r) path = out;
+    }
+    if (!path) { path = []; for (let c = 0; c < cols; c++) path.push([c, 1]); }
+    const land = (t, type) => { t.terrain = 'land'; t.ground = 'grass'; t.elev = 0.3; t.type = type; };
+    const inner = path.length - 2;
+    const plan = inner >= 5 ? ['elite', 'shop', 'elite', 'treasure', 'rest'] : ['elite', 'shop', 'elite', 'rest'];
+    const elites = (opts.elites || []).filter((x) => Array.isArray(x) && x.length);
+    let ei = 0;
+    path.forEach(([q, r], i) => {
+      const t = M.tiles[key(q, r)];
+      const type = i === 0 ? 'start' : i === path.length - 1 ? 'boss' : plan[Math.min(plan.length - 1, i - 1)];
+      land(t, type);
+      t.road = true; t.revealed = true;
+      if (type === 'elite') t.content = { enc: (elites[ei++ % Math.max(1, elites.length)] || ['frostknight']).slice(), diff: 1, sec: true };
+      else if (type === 'shop') t.content = { sec: true };
+      else if (type === 'treasure') t.content = { gold: 40 };
+      else if (type === 'boss') t.content = { enc: ['machine'], sec: true };
+      M.road.push([q, r]);
+    });
+    // one side hex off the catwalk: the service bench (a forge)
+    const onRoad = {};
+    for (const [q, r] of path) onRoad[key(q, r)] = 1;
+    const side = [];
+    for (let i = 1; i < path.length - 2; i++) for (const [nq, nr] of neighbors(M, path[i][0], path[i][1])) if (!onRoad[key(nq, nr)] && !side.some((s) => s[0] === nq && s[1] === nr)) side.push([nq, nr]);
+    if (side.length) { const [q, r] = side[Math.floor(rng() * side.length)]; land(M.tiles[key(q, r)], 'forge'); }
+    for (const k in M.tiles) M.tiles[k].known = isLandmark(M.tiles[k]);
+    const st = M.tiles[key(start.q, start.r)];
+    st.visited = true;
+    vision(M, start.q, start.r);
+    M.tiles[key(boss.q, boss.r)].revealed = true;
+    M.revealedCount = countRevealed(M);
+    return M;
+  }
+  // ================================================================ /SECRET
+
   // Charted hexes: lit tiles that are not sea (lit sea is seen, not charted).
   function countRevealed(M) {
     let n = 0;
@@ -1721,5 +1838,7 @@ const MAP = (() => {
     isArcade, placeArcade, roamAt, roamOk, roamDist, roamNext, roamStep, roamPlan, roamRemove,
     // PETS (round 5): whack-a-mole, skee-ball, the pet shop
     ARC_R5, PET_TILE, placeR5,
+    // SECRET (round 6): the golden keys and the Back Room
+    SEC_BIOME, SEC_ROOM, secKeys, secKeyAt, secRoom,
   };
 })();

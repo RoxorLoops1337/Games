@@ -114,7 +114,7 @@ const GAME = (() => {
     return (plus && def.plus && def.plus.text) || def.text || '';
   };
   const snd = (name, opts) => { if (X.AUDIO && X.AUDIO.sfx) { try { X.AUDIO.sfx(name, opts); } catch (e) { /* audio is optional */ } } };
-  const music = (mode) => { if (X.AUDIO && X.AUDIO.music) { try { X.AUDIO.music(mode); } catch (e) { /* optional */ } } };
+  const music = (mode) => { if (X.AUDIO && X.AUDIO.music) { try { accMusicAct(); X.AUDIO.music(secMusic(mode)); } catch (e) { /* optional */ } } };   // ACCESS: the act's own tune (SECRET: the Back Room's own)
   const haptic = (k) => feelHaptic(k);   // patterns, the Buzz setting and reduced motion (FEEL block)
 
   // Seeded stream for a named purpose; the run's nonce makes every call fresh
@@ -611,8 +611,10 @@ const GAME = (() => {
           endlessMetaFix(S.meta, o);   // scores, Endless bests, the mutator pick (ENDLESS block)
           feelFix(S.meta, o);   // seen tips, the Buzz setting (FEEL block)
           vaultFix(S.meta, o);   // the Prize Vault's wallet and cosmetics (VAULT block)
+          setMetaFix(S.meta, o);   // completed relic sets (SETS block)
           if (o.arc && typeof o.arc === 'object' && !Array.isArray(o.arc)) S.meta.arc = Object.assign({}, o.arc);   // ARCADE play counts (were dropped on load)
           if (o.pets && typeof o.pets === 'object' && !Array.isArray(o.pets)) S.meta.pets = Object.assign({}, o.pets);   // PETS: the album
+          secMetaFix(S.meta, o);   // SECRET: golden keys found, back rooms entered, true endings seen
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -622,6 +624,7 @@ const GAME = (() => {
     vaultFix(S.meta);   // defaults, sticker prizes, and the equipped cosmetics to the renderer (VAULT block)
     if (fx()) fx().reduced = !S.meta.settings.shake;
     applyCalm();
+    accApply();   // the accessibility settings, volumes and palettes (ACCESS block)
     return S.meta;
   }
   // Shake off also calms the heavy CSS motion (html.calm).
@@ -669,7 +672,8 @@ const GAME = (() => {
     const o = { ver: SAVE_VER, screen: S.screen, run: S.run, sd: S.sd, pendingFight: S.pendingFight, after: S.after };
     // A fight in progress restarts from its opening bell on load; a won
     // fight playing its outro is already the reward screen.
-    if (S.screen === 'fight' && FS && FS.outro) { o.screen = 'reward'; o.sd = { reward: FS.outro.reward }; o.pendingFight = null; }
+    if (S.screen === 'fight' && FS && FS.outro && FS.outro.sec) { o.screen = 'secret'; o.sd = { secret: FS.outro.sec }; o.pendingFight = null; }   // The Machine's power down is the true ending (SECRET)
+    else if (S.screen === 'fight' && FS && FS.outro) { o.screen = 'reward'; o.sd = { reward: FS.outro.reward }; o.pendingFight = null; }
     else if (S.screen === 'fight' && FS) o.pendingFight = FS.start;
     try { localStorage.setItem(RUN_KEY, JSON.stringify(o)); } catch (e) { /* ignore */ }
   }
@@ -721,6 +725,9 @@ const GAME = (() => {
       else if (sc === 'counter' && S.sd && S.sd.counter) showCounter(S.sd.counter);
       else if (sc === 'arcade' && S.sd && S.sd.arcade) arcShow(S.sd.arcade);   // ARCADE
       else if (sc === 'loop' && S.sd && S.sd.loop) showLoop(S.sd.loop);   // ENDLESS: the reboot screen
+      else if (sc === 'secret' && S.sd && S.sd.secret) secShow(S.sd.secret);   // SECRET: the hidden door, the true ending
+      else if (sc === 'boon' && run.boon) showBoon();   // SETS: the boon draft (a pick already made moves on)
+      else if (sc === 'compactor' && S.sd && S.sd.compactor) cmpShow(S.sd.compactor);   // SETS: the Compactor
       else if (sc === 'win' && run.winDone && !run.endless) showWin();   // ENDLESS: the offer is still open
       else toMap();
       return true;
@@ -757,13 +764,14 @@ const GAME = (() => {
     newMap(run);
     S.meta.stats.runs++;
     saveMeta();
-    toMap();
+    if (!boonStart(run)) toMap();   // the machine offers a deal first (SETS block; headless: straight to the map)
     return run;
   }
   function newMap(run) {
     if (!X.MAP) return null;
     const rng = U.rng(U.hashStr(run.seed + ':map:' + run.act + endlessMapTag(run)));   // a new map every Endless loop (ENDLESS block)
     run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes });
+    secNewMap(run);   // this act's golden key (SECRET)
     run.floor = 0;
     S.brushSel = null;
     S.preview = null;
@@ -777,6 +785,7 @@ const GAME = (() => {
     else run.relics.push(id);
     seeRelic(id);
     S.lastRelics = '';
+    setOnGain(id);   // a set's second or third piece: the bonus and its fanfare (SETS block)
   }
   function addInk(n) { const run = S.run; run.ink = Math.max(0, run.ink + n); if (run.map) run.map.ink = run.ink; }
   // The map must never dead-end. The cheapest thing that still leads
@@ -865,16 +874,17 @@ const GAME = (() => {
   }
 
   // ---------------------------------------------------------------- screens
-  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection', 'capsule', 'counter', 'stickers', 'arcade', 'loop', 'tips', 'vault'];
+  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection', 'capsule', 'counter', 'stickers', 'arcade', 'loop', 'tips', 'vault', 'secret'];
   /* Screen transitions: an iris opening onto a fight, a diagonal wipe
      between the map and the tile screens, a quick fade for the rest (DOM
      #wipe, CSS only, never blocks input). */
   const WIPE_SCREENS = { map: 1, fight: 1, reward: 1, shop: 1, event: 1, rest: 1, forge: 1, treasure: 1, parts: 1, gameover: 1, win: 1, counter: 1, arcade: 1 };
   function transition(from, to) {
+    const irisZ = accIrisPlan(from, to);   // ACCESS (round 6): map -> fight zooms into the tile first
     if (S.headless || from === to || from === 'intro') return;
     const el = $('wipe');
     if (!el) return;
-    const kind = to === 'fight' ? 'iris' : to === 'gameover' ? 'bleed' : (WIPE_SCREENS[from] && WIPE_SCREENS[to]) ? 'swipe' : 'fade';
+    const kind = to === 'fight' ? (irisZ ? 'irisz' : 'iris') : to === 'gameover' ? 'bleed' : (WIPE_SCREENS[from] && WIPE_SCREENS[to]) ? 'swipe' : 'fade';
     el.className = '';
     replay(el, kind);
   }
@@ -936,9 +946,8 @@ const GAME = (() => {
     const sOn = A ? A.sfxOn : true, mOn = A ? A.musicOn : true;
     row2.appendChild(btn('Sound ' + (sOn ? 'on' : 'off'), () => { if (A && A.toggleSfx) A.toggleSfx(); showTitle(); }, 'sm toggle ' + (sOn ? 'on' : '')));
     row2.appendChild(btn('Music ' + (mOn ? 'on' : 'off'), () => { if (A && A.toggleMusic) A.toggleMusic(); showTitle(); }, 'sm toggle ' + (mOn ? 'on' : '')));
-    row2.appendChild(btn('Shake ' + (S.meta.settings.shake ? 'on' : 'off'), () => { S.meta.settings.shake = !S.meta.settings.shake; fx().reduced = !S.meta.settings.shake; applyCalm(); saveMeta(); showTitle(); }, 'sm toggle ' + (S.meta.settings.shake ? 'on' : '')));
-    const bOn = S.meta.settings.haptics !== false;   // phone buzz (FEEL block); reduced motion keeps it off either way
-    row2.appendChild(btn('Buzz ' + (bOn ? 'on' : 'off'), () => { feelSetHaptics(!bOn); showTitle(); }, 'sm toggle ' + (bOn ? 'on' : '')));
+    // Shake, Buzz and the rest live on the Settings panel (ACCESS block)
+    row2.appendChild(btn('⚙ Settings', () => accOpen(), 'sm accTitleBtn'));
     m.appendChild(row2);
     metaTitle(m);   // the stats marquee and the attract mode (META block)
   }
@@ -1510,7 +1519,11 @@ const GAME = (() => {
       if (!R) return;
       if (tab === 'items' && R.item) R.item(ctx, def, p / 2, p / 2, 0, Math.min(1, (p * 0.8) / shapeLong(def.shape)), {});
       else if (tab === 'relics' && R.relicIcon) R.relicIcon(ctx, def, p / 2, p / 2, p * 0.8);
-      else if (tab === 'enemies' && R.enemy) {
+      else if (tab === 'enemies' && sil && def.secret) {
+        // a secret boss (SECRET): not even its silhouette until it is met
+        ctx.strokeStyle = PAL0.cyan; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p / 2, p / 2, p * 0.44, 0, Math.PI * 2); ctx.stroke();
+        ctx.font = 'bold ' + Math.round(p * 0.5) + 'px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = PAL0.cyan; ctx.fillText('?', p / 2, p / 2 + 2);
+      } else if (tab === 'enemies' && R.enemy) {
         const bx = R.enemyBox ? R.enemyBox(def, 1) : { w: 80, h: 80 };
         const k = Math.min((p * 0.86) / Math.max(1, bx.h), (p * 0.92) / Math.max(1, bx.w));
         R.enemy(ctx, def, p / 2, p / 2 + (bx.h * k) / 2, k, 0.4, {});
@@ -1553,7 +1566,7 @@ const GAME = (() => {
     const rar = RARITY_NAME[def.rarity] || (def.rarity === 'boss' ? 'boss' : 'mystery');
     if (tab === 'items') { text = `<i>${rar}</i><br>` + itemText(def, false); hintTxt = `A ${rar} prize still in the machine.`; }
     else if (tab === 'relics') { text = `<i>${rar} relic</i><br>` + (def.text || ''); hintTxt = `A ${rar} relic nobody has handed you yet.`; }
-    else if (tab === 'enemies') { tag = def.tier === 'boss' ? 'BOSS' : def.tier === 'elite' ? 'ELITE' : ''; text = `<i>act ${def.act || '?'} ${TIER_NAME[def.tier] || ''}</i>` + (def.desc ? '<br>' + def.desc : ''); hintTxt = `Something lurks in act ${def.act || '?'}.`; }
+    else if (tab === 'enemies') { tag = def.tier === 'boss' ? 'BOSS' : def.tier === 'elite' ? 'ELITE' : ''; text = `<i>act ${def.act || '?'} ${TIER_NAME[def.tier] || ''}</i>` + (def.desc ? '<br>' + def.desc : ''); hintTxt = `Something lurks in act ${def.act || '?'}.`; if (def.secret) { tag = 'SECRET BOSS'; hintTxt = 'Nobody has seen it. Three golden keys, they say, and a door behind the Prize Master.'; } }
     else { tag = '★'.repeat(U.clamp(def.tier | 0, 1, 3)) + (def.secret ? ' SECRET' : ''); text = def.text || ''; hintTxt = def.secret ? 'Recipe: ???. A secret combo: fire it once to learn it.' : `Recipe: ${String(def.text || '').split(':')[0] || '???'}.`; }
     if (tag) card.appendChild(h('div', 'rar ' + (tab === 'enemies' ? (def.tier === 'boss' ? 'r' : 'l') : 'l'), tag));
     if (ok && (tab === 'items' || tab === 'relics')) { const kw = kwChips(def, 'sm'); if (kw) card.appendChild(kw); }
@@ -1565,7 +1578,7 @@ const GAME = (() => {
     setScreen('collection');
     metaFix(S.meta);
     const tabs = dexTabs();
-    tab = (typeof tab === 'string' && tabs.some((t) => t.id === tab)) ? tab : (S.dexTab || 'items');
+    tab = (typeof tab === 'string' && (tabs.some((t) => t.id === tab) || tab === 'sets')) ? tab : (S.dexTab || 'items');   // 'sets': the SETS block's tab
     S.dexTab = tab;
     const b = $('collectionBody');
     clear(b);
@@ -1582,7 +1595,9 @@ const GAME = (() => {
       if (fresh) bt.appendChild(h('i', 'dot', String(fresh)));
       row.appendChild(bt);
     }
+    setDexTab(row, tab);   // the relic sets (SETS block)
     b.appendChild(row);
+    if (tab === 'sets') setDexGrid(b);
     const grid = h('div', 'grid4 dex');
     const ids = E[tab] || [];
     for (const id of ids) grid.appendChild(dexCard(tab, id));
@@ -2062,7 +2077,7 @@ const GAME = (() => {
   // A new map per loop: act 1's biome again, but never act 1's map (outside Endless the seed is unchanged).
   const endlessMapTag = (run) => (run && run.endless && run.endless.loop > 0 ? ':loop' + run.endless.loop : '');
   const endlessBossTitle = (run) => (run && run.endless && run.endless.loop > 0 ? 'LOOP ' + run.endless.loop + ' BOSS' : 'ACT ' + ((run && run.act) || 1) + ' BOSS');
-  const endlessHudAct = (run) => (run.endless && run.endless.loop > 0 ? 'Loop ' + run.endless.loop : `${run.act} of 3`);
+  const endlessHudAct = (run) => (run.endless && run.endless.loop > 0 ? 'Loop ' + run.endless.loop : secIn(run) ? 'Back Rm' : `${run.act} of 3`);   // (SECRET: the Back Room)
   // The act stat turns into the Loop stat in Endless.
   function endlessHud(run) {
     const st = S.actStat || (S.actStat = ($('actTxt') || {}).parentNode || null);
@@ -3244,7 +3259,7 @@ const GAME = (() => {
     const l1 = h('div', 'l1');
     // just the act here: the name (which never fit beside the buttons, "ACT 1: T...")
     // is on the map's own plate at the bottom left
-    const h2 = h('h2', null, run.endless && run.endless.loop > 0 ? `Loop ${run.endless.loop}` : `Act ${run.act}`);   // ENDLESS
+    const h2 = h('h2', null, run.endless && run.endless.loop > 0 ? `Loop ${run.endless.loop}` : secActName(run) || `Act ${run.act}`);   // ENDLESS, SECRET
     h2.title = a.name || '';
     l1.appendChild(h2);
     const pill = h('span', 'mhInk');
@@ -3281,7 +3296,12 @@ const GAME = (() => {
       : pv ? (M.ink >= pv.cost ? `Light the way: ${bulbs(pv.cost)}. Tap that hex again to light it and walk there.` : `Light the way: ${bulbs(pv.cost)}, you have ${M.ink}. Elites, towers and boxes of ${TERM('inkPlural')} give more.`)
       : `Tap a lit hex to walk: it lights around you. Tap a dark hex to light the way there (1 ${TERM('ink')} each, fords 2). The road leads to the boss.`;
     lootMapChip(l2);   // banked capsules, waiting to be cracked
+    secHeadChip(l2);   // the golden keys counter (SECRET)
     l2.appendChild(h('div', 'hint', hintTxt));
+    const gear = btn('⚙', () => accOpen(), 'sm ghost accGear');   // the Settings panel (ACCESS block)
+    gear.title = 'Settings';
+    gear.setAttribute('aria-label', 'Settings');
+    l2.appendChild(gear);
     head.appendChild(l2);
     refreshHud(true);
   }
@@ -3372,6 +3392,7 @@ const GAME = (() => {
   }
   function locate() { const M = S.run && S.run.map; if (M) lookAt(M.pos.q, M.pos.r, true); }
   function camStep(dt) {
+    if (accCamStep(dt)) return;   // ACCESS (round 6): a swoop or a tower pan has the camera
     if (!S.camTo || !mapLayout()) return;
     const c = cam();
     const k = 1 - Math.exp(-CAM_EASE * dt);
@@ -3594,6 +3615,7 @@ const GAME = (() => {
   function startWalk(path) {
     if (!path || !path.length) return false;
     S.walk = { path: path.map(([q, r]) => [q, r]), i: 0, t: 0, from: null, done: false };
+    accSwoop(S.walk.path);   // ACCESS (round 6): a far walk swoops the camera
     const ok = walkStep();
     if (S.screen === 'map') buildMapHead();   // the step may have opened a fight or a shop
     return ok;
@@ -3725,10 +3747,12 @@ const GAME = (() => {
       n++;
     }
     if (!n) return;
+    const accSrc = S.bloomSrc;
     S.bloomSrc = null;
     S.chimes = [];
     for (let d = 0; d <= Math.min(far, 7); d++) S.chimes.push({ at: S.t + d * BLOOM_STEP, p: 1 + d * 0.06 });
     if (S.beamPending) { S.beam = { q: S.beamPending.q, r: S.beamPending.r, t0: S.t }; S.beamPending = null; }
+    accBloom(accSrc, P);   // ACCESS (round 6): a zoom punch toward a hand-lit hex, the tower's pan
   }
   function chimeTick() {
     const C = S.chimes;
@@ -3801,6 +3825,7 @@ const GAME = (() => {
     const run = S.run;
     if (!t) return;
     run.tile = { q: t.q, r: t.r };
+    secEnterTile(t);   // a golden key glinting on this hex (SECRET)
     const c = t.content || {};
     // A cleared tile: nothing to do (no toast for one merely crossed mid-walk).
     if (t.done) { if (!(S.walk && !S.walk.done && S.walk.i < S.walk.path.length)) toast('Already cleared.'); save(); return; }
@@ -3984,7 +4009,7 @@ const GAME = (() => {
     const b = FS.cabinet.bounds;
     FS.rig = P.clawRig(FS.world, {
       cabinet: FS.cabinet, homeX: (b.chuteX || CAB.w - CAB.chuteW) * 0.5, chuteX: (b.chuteX || CAB.w - CAB.chuteW) + CAB.chuteW * 0.5,
-      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip + (FS.luckyOn ? MAT.luckyGrip : 0), speed: c.speed, rubber: c.rubber, magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
+      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip + (FS.luckyOn ? MAT.luckyGrip : 0), speed: c.speed * accClawK(), rubber: c.rubber,   // ACCESS: the slow claw assist magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
       type: runClawType(),
       rand: U.rng(FS.seed ^ 0x1234567),
     });
@@ -4510,7 +4535,7 @@ const GAME = (() => {
   // The Gacha Charm (relic.loot.capUp): extra upgrade chance per capsule step.
   function capUp(run) {
     let up = 0;
-    for (const id of (run && run.relics) || []) { const r = tbl('RELICS')[id]; if (r && r.loot) up += +r.loot.capUp || 0; }
+    for (const id of ((run && run.relics) || []).concat(setFxFor(run))) { const r = tbl('RELICS')[id] || setFxDef(id); if (r && r.loot) up += +r.loot.capUp || 0; }   // + Owner's Cut (SETS block)
     return up;
   }
   // ================================================================ /CONTENT
@@ -4765,6 +4790,7 @@ const GAME = (() => {
           snd('victory');
           if (X.AUDIO && X.AUDIO.victory) { try { X.AUDIO.victory(); } catch (e2) { /* optional */ } }   // the music's victory sting (CONTENT block)
         }
+        secKill(ev, e, last && !ev.escaped);   // a golden key pops out, The Machine powers down (SECRET)
         bossDie(ev, e, a, last && !ev.escaped);   // an elite or boss blows apart (the boss arena)
         break;
       }
@@ -5642,7 +5668,7 @@ const GAME = (() => {
     if (!e || !bigOne(e)) return false;
     const boss = tierOf(e) === 'boss', run = S.run, A = tbl('AFFIXES');
     const seen = (vsSeen()[e.id] | 0) > 0;
-    const title = (kind === 'final' || e.id === 'prizemaster') ? 'FINAL BOSS' : boss ? endlessBossTitle(run) : (FS.then && FS.then.tower) ? 'TOWER KEEPER' : 'ELITE';
+    const title = secVsTitle(e) || ((kind === 'final' || e.id === 'prizemaster') ? 'FINAL BOSS' : boss ? endlessBossTitle(run) : (FS.then && FS.then.tower) ? 'TOWER KEEPER' : 'ELITE');   // (SECRET BOSS: The Machine)
     FS.vs = {
       t: 0, dur: boss ? VS_DUR.boss : VS_DUR.elite, rate: (seen ? VS_FAST : 1) * (fx().reduced ? 1.3 : 1), idx, id: e.id, boss, seen, kind: kind || (boss ? 'boss' : 'elite'),
       title, name: e.def.name || e.id, taunt: e.def.taunt || '', color: e.def.color || '#ff2e88', def: e.def,
@@ -5748,6 +5774,7 @@ const GAME = (() => {
 
   // ---- signature events ({t:'boss', k, idx, ...} from COMBAT)
   function bossEvent(ev) {
+    if (secBossEvent(ev)) return;   // The Machine's cabinet events (SECRET)
     const bs = BS(), reduced = !!fx().reduced;
     const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
     const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
@@ -5977,7 +6004,7 @@ const GAME = (() => {
     if (!canSteer()) return;
     if (!bs.hj) {
       bs.hj = { t: 0, x: FS.rig.x, goal: null, re: 0, finger: null };
-      fx().text(270, 470, 'THE PRIZE MASTER TAKES THE CLAW!', '#ff2e88', { size: 17 });
+      fx().text(270, 470, F.rigged && F.rigged.secret ? 'THE MACHINE TAKES THE CLAW!' : 'THE PRIZE MASTER TAKES THE CLAW!', '#ff2e88', { size: 17 });
       hint('it pulls! steer against it, release to drop');
       snd('hijack');
     }
@@ -6013,6 +6040,7 @@ const GAME = (() => {
   // ---- the death finale
   function bossDie(ev, e, a, last) {
     if (!e || !bigOne(e) || ev.escaped) return false;
+    if (e.def && e.def.secret) { a.dead = 0.001; return false; }   // The Machine powers down instead (SECRET)
     const boss = tierOf(e) === 'boss', kind = last ? (boss ? 'boss' : 'elite') : 'mid', P = FIN[kind], p = enemyPos(ev.idx);
     BS().fin = { kind, idx: ev.idx, t: 0, boss, last, x: p.x, y: p.y, w: p.w, h: p.h, n: 0, P, col: e.def.color || '#ffc94d',
       name: e.def.name || e.id, sub: EPITAPH[e.id] || ((e.def.name || e.id) + ' is down.'), booms: fx().reduced ? Math.ceil(P.booms / 2) : P.booms,
@@ -6084,6 +6112,8 @@ const GAME = (() => {
   // ---- the per-frame tick (update) and the drawing hooks
   function signLabel() {
     const bs = FS.bs;
+    const sl = secSign();   // The Machine's cabinet events hold the sign (SECRET)
+    if (sl) return sl;
     if (F.rigged || (bs && bs.hj)) return ['RIGGED', 'rig'];
     if (F.ice) return [F.ice.part === 'rail' ? 'RAIL FROZEN' : 'CHUTE FROZEN', 'ice'];
     if (F.heat) return ['HOT METAL', 'heat'];
@@ -6091,7 +6121,7 @@ const GAME = (() => {
       for (const e of F.enemies) {
         if (!e.alive || !X.COMBAT.sigNext(e)) continue;
         const si = X.COMBAT.sigInfo(e);
-        return [(si.part === 'lid' ? 'CHUTE FREEZE' : si.part === 'rail' ? 'RAIL FREEZE' : si.sign) + ' NEXT TURN', e.def.sig.id];
+        return [(si.id === 'machine' ? si.sign : si.part === 'lid' ? 'CHUTE FREEZE' : si.part === 'rail' ? 'RAIL FREEZE' : si.sign) + ' NEXT TURN', e.def.sig.id];   // (The Machine signs its own: SECRET)
       }
     }
     return null;
@@ -6156,7 +6186,7 @@ const GAME = (() => {
     if (S.screen !== 'fight' || !FS || !FS.bs || !FS.bs.fin || !X.RENDER || !X.RENDER.finale) return;
     const fin = FS.bs.fin, P = fin.P;
     let wh = 0;
-    if (!top && P.white > 0) { const u = fin.t - P.white; wh = u < 0 ? 0 : u < 0.1 ? u / 0.1 : u < 0.3 ? 1 : Math.max(0, 1 - (u - 0.3) / 0.7); if (fx().reduced) wh *= 0.3; }
+    if (!top && P.white > 0) { const u = fin.t - P.white; wh = u < 0 ? 0 : u < 0.1 ? u / 0.1 : u < 0.3 ? 1 : Math.max(0, 1 - (u - 0.3) / 0.7); if (fx().reduced) wh *= 0.3; wh = accWhite(wh); }   // ACCESS: reduced flashing caps the whiteout
     FINV.white = wh; FINV.card = top && P.card >= 0 && fin.t >= P.card ? fin.t - P.card : -1;
     if (FINV.white <= 0 && FINV.card < 0) return;
     FINV.boss = fin.boss; FINV.title = fin.boss ? 'BOSS DEFEATED' : 'ELITE DOWN'; FINV.sub = fin.sub; FINV.color = fin.boss ? '#ffc94d' : fin.col;
@@ -6212,6 +6242,7 @@ const GAME = (() => {
   function dropClaw() {
     if (!canDrop()) return false;
     if (!X.COMBAT.useGrab(F)) return false;
+    secDrop();   // the live rail shocks you (SECRET)
     if (rigArrived()) {
       if (!FS.rig.drop()) { F.player.grabs++; F.player.grabsUsed--; return false; }
       FS.pendingDrop = false;
@@ -6373,6 +6404,7 @@ const GAME = (() => {
     const inst = b.data.inst;
     const pos = { x: CAB.x + b.x, y: CAB.y + b.y };
     bossDeliver(b);   // a heavy prize smashes an iced rail (boss arena)
+    secDeliver(b);   // a metal prize grounds the live rail (SECRET)
     // the claw never touched it this grab: shaken, blasted or knocked in
     const free = b.data.clawG !== FS.grabN;
     const ms = FS.mst[inst.uid];
@@ -6790,6 +6822,7 @@ const GAME = (() => {
     metaFightEnd(result);   // won-fight stickers (META block)
     endlessFightEnd(result, tier);   // score counters: bosses, combos (ENDLESS block)
     petFightEnd(result, tier);   // pet XP for a win (PETS block)
+    setFightEnd(result);   // the boon's warm-up grabs run out, Chew Toy xp (SETS block)
     hint('');
     if (result === 'lose') {
       run.killer = FS.killer || 'the Clawspire';
@@ -6798,6 +6831,7 @@ const GAME = (() => {
       showGameOver();
       return;
     }
+    if (secFightEnd(tier, outro)) return;   // The Machine: the power down, then the true ending (SECRET)
     snd('win');
     // a boss or elite finale shows its own title card instead (boss arena)
     if (!(outro && FS.bs && FS.bs.fin && FS.bs.fin.last)) banner('VICTORY', 'victory', outro ? 1.6 : 1.2);
@@ -6812,6 +6846,7 @@ const GAME = (() => {
     const reward = { items: rollItems(rng, 3), gold, ink, brush, tier, then };
     lootReward(reward);   // payout lines, tickets, the lucky double, capsules, highlights
     arcRoamBounty(reward, then);   // ARCADE: a roaming monster drops a bounty capsule
+    secFightWin(reward, then);   // ...and maybe the golden key it swallowed (SECRET)
     if (outro) {
       // a veteran (OUTRO_FAST fights on the profile) gets the quick version
       FS.outro = { t: fx().reduced ? 0.7 : quickOutro() ? 1.0 : 1.5, reward };
@@ -6829,6 +6864,7 @@ const GAME = (() => {
   function quickOutro() { return !!(S.meta && S.meta.stats && (S.meta.stats.fights | 0) >= OUTRO_FAST); }
   function finishOutro() {
     if (!FS || !FS.outro) return;
+    if (secOutroEnd()) return;   // The Machine's power down goes to the true ending (SECRET)
     const rw = FS.outro.reward;
     FS.outro = null;
     showReward(rw);
@@ -7112,6 +7148,7 @@ const GAME = (() => {
     const run = S.run;
     if (run.endless) { endlessNext(); return; }   // Endless: the next loop instead (ENDLESS block)
     if (run.act >= 2) { const u = checkUnlocks('act2'); if (u.length) toast('Unlocked: ' + u.map((id) => (charDef(id) || {}).name || id).join(', '), 3); }
+    if (secNextAct()) return;   // three golden keys: the hidden door (SECRET)
     if (run.act >= 3) { showWin(); return; }
     run.act++;
     S.meta.stats.bestAct = Math.max(S.meta.stats.bestAct, run.act);
@@ -7189,6 +7226,7 @@ const GAME = (() => {
       card.appendChild(h('div', 'text', def.text || ''));
       const kw = kwChips(def);
       if (kw) card.appendChild(kw);
+      setTagOn(card, td.relic);   // "2/3 Poisoner's Kit" (SETS block)
       b.appendChild(card);
       if (!S.headless) setTimeout(() => snd('relic'), 120);
       b.appendChild(btn('Take it', () => {
@@ -7368,6 +7406,7 @@ const GAME = (() => {
       card.appendChild(h('div', 'pn', info.name));
       card.appendChild(h('div', 'pt', p.fallback ? `You had that already: ${p.fallback} gold instead.` : info.text));
       if (p.k === 'item' || p.k === 'relic') { const kw = kwChips(p.k === 'item' ? itemDef(p.id) : relicDef(p.id)); if (kw) card.appendChild(kw); }
+      if (p.k === 'relic' && !p.fallback) setTagOn(card, p.id);   // its set progress (SETS block)
       card.appendChild(btn('Collect', () => collectCapsule(), 'gold'));
       b.appendChild(card);
     } else {
@@ -8567,6 +8606,7 @@ const GAME = (() => {
     A.pend = null;
     A.used++;
     for (const pay of res.pays) arcPay(pay);
+    secArcSettle(res);   // a jackpot on the key's map pays a golden key (SECRET)
     A.res.push({ label: res.label, tier: res.tier });
     if (A.res.length > 40) A.res.shift();
     const am = arcMeta();
@@ -8773,6 +8813,7 @@ const GAME = (() => {
       V.near = !!(C.win && C.win.near); V.cost = ARC.slotCost; V.free = A.tokens; V.tix = (S.run && S.run.tickets) || 0;
       R.arcSlots(ctx, V);
     }
+    secArcDraw(ctx, t);   // a golden key over the jackpot on the key's map (SECRET)
   }
 
   // ---- roaming monsters (MAP.roamStep does the moves; this is the feel)
@@ -9684,7 +9725,7 @@ const GAME = (() => {
     if (FS.vs && P.mood !== 'scared') petMood(P, 'scared', 0.6);
     // your turn: the uses refill
     const mine = F.phase === 'player' && !FS.enemyTurn && !FS.done && !FS.vs && !FS.outro;
-    if (mine && P.turn !== F.turn) { P.turn = F.turn; P.uses = D().petUses ? D().petUses(P.lv) : 1; P.acted = 0; P.turnT = 0; P.grabN0 = FS.grabN; P.glowUid = null; P.waitT = 0; }
+    if (mine && P.turn !== F.turn) { P.turn = F.turn; P.uses = (D().petUses ? D().petUses(P.lv) : 1) + setPetStat('uses'); P.acted = 0; P.turnT = 0; P.grabN0 = FS.grabN; P.glowUid = null; P.waitT = 0; }
     if (mine) P.turnT += dt;
     if (P.act) petActTick(P, dt);
     else if (def && def.when === 'turn' && mine && P.uses > 0 && petCanAct()) {
@@ -9853,7 +9894,8 @@ const GAME = (() => {
   function petWake(b) { b.sl = false; b.slT = 0; }
   // The trick itself, on the body where it is now.
   function petEffect(P) {
-    const A = P.act, b = A.b, ok = petAlive(b), lv = P.lv, pow = D().petPow ? D().petPow(lv) : 1;
+    const A = P.act, b = A.b, ok = petAlive(b), lv = P.lv, pow = (D().petPow ? D().petPow(lv) : 1) * (1 + setPetStat('pow'));
+    setPetTrick(P);   // Treat Jar, Dog Whistle, The Hungry Pack (SETS block)
     const def = petDefOf(P.id), col = (X.RENDER && X.RENDER.pets && X.RENDER.pets.COL[P.id] || ['#ffc94d'])[0];
     const sx = ok ? CAB.x + b.x : P.x, sy = ok ? CAB.y + b.y : P.y;
     const label = (s) => fx().text(sx, sy - 34, s, col, { size: 15 });
@@ -10830,8 +10872,669 @@ const GAME = (() => {
   }
   // ================================================================ /PETS
 
+  // ================================================================ SECRET (round 6)
+  /* The secret act (DESIGN.md "Secret act (round 6)"). Three golden keys a
+     run, one per act, each hidden its own way (DATA.secKinds: a seeded
+     order of 'roam' inside a prowling monster, 'arcade' the jackpot of any
+     cabinet on the map, 'dark' a glint on the dark hex farthest from the
+     road); MAP.secKeys places the act's key on each new map (never in
+     Endless). All three before the Prize Master falls: after the finale and
+     the reward the hidden door opens (screen 'secret', k 'door'), and
+     stepping through is THE BACK ROOM (MAP.secRoom: a short act 4 inside the
+     machine, elites with the strongest affixes, the service counter's
+     legendary stock) and its boss THE MACHINE (combat.js SECRET: a cabinet
+     event every action). Beaten, the cabinet powers down in a long sequence
+     (the fight's outro), then the true ending (screen 'secret', k 'ending':
+     an epilogue at dawn and the credits), then the usual win screen with its
+     score, stickers and the Endless offer. Reached through one-line hooks
+     (the list is in DESIGN.md). Run field run.sec (DATA.secFix defaults it,
+     so older saves load): {keys {act: how}, kinds {act: kind}, door '' |
+     'open' | 'skip', room, beat, ended, done}; map field M.sec; meta
+     sec {keys, rooms, ends}; screen 'secret' (sd {secret: {k}}). Fight state
+     FS.sec is never saved (a reload restarts the fight at its bell). */
+  const SEC = { keyFly: 1.1, doorKeys0: 0.9, doorKey: 0.5, doorOpen0: 2.7, doorOpenT: 1.5, doorUi: 3.4,
+    pdDur: 6.6, pdSkip: 1.4, pdSlump: 3.4, endDawn: 7, endWalk: 8, tiltK: 1.8, crackStep: 0.15 };
+  const SEC_HOW = { roam: 'a prowling monster swallowed it', arcade: 'an arcade jackpot on this map pays it', dark: 'it glints in a dark corner, far from the road' };
+  ANN.PRI.secret = 85; ANN.WAIT.secret = 3;
+  const secD = () => D().SECRET || { keys: 3, heal: 0.3, roomElites: [['frostknight'], ['collector']] };
+  // The run's secret state (created on first use: an old save has none).
+  function secOf(run) {
+    run = run || S.run;
+    if (!run) return null;
+    if (!run.sec || !run.sec.kinds || !run.sec.keys) run.sec = D().secFix ? D().secFix(run.sec, run.seed) : { keys: {}, kinds: { 1: 'dark', 2: 'dark', 3: 'dark' }, door: '', room: false, beat: false, ended: false, done: false };
+    return run.sec;
+  }
+  const secKeyCount = (run) => (D().secKeyN ? D().secKeyN(run || S.run) : 0);
+  // In the Back Room right now (from the door to the true ending).
+  const secIn = (run) => { run = run || S.run; return !!(run && run.sec && run.sec.room && !run.sec.done && !run.endless); };
+  function secMetaFix(m, o) {
+    if (!m) return null;
+    const src = o && o.sec && typeof o.sec === 'object' ? o.sec : (m.sec && typeof m.sec === 'object' ? m.sec : {});
+    m.sec = { keys: Math.max(0, src.keys | 0), rooms: Math.max(0, src.rooms | 0), ends: Math.max(0, src.ends | 0) };
+    return m.sec;
+  }
+  function secMeta() {
+    if (!S.meta) S.meta = freshMeta();
+    return S.meta.sec && typeof S.meta.sec === 'object' ? S.meta.sec : secMetaFix(S.meta);
+  }
+  const secMachineE = () => (F ? F.enemies.find((e) => e && e.def && e.def.secret) || null : null);
+  function SECF() {
+    return FS.sec || (FS.sec = { phase: -1, railK: 0, gravK: 0, shutK: 0, seg: null, crack: 0, crackTo: 0, crackLv: 0, zapT: 0, pd: null, clang: 0, seed: (FS.seed ^ 0x5ec) >>> 0 });
+  }
+
+  // ---- the music: the Back Room hums, The Machine has its own fight
+  function secMusic(mode) {
+    if (!secIn()) return mode;
+    if (mode === 'map') return 'backroom';
+    if (mode === 'boss' && secMachineE()) return 'machine';
+    return mode;
+  }
+
+  // ---- the keys: placed with each map, found three ways
+  function secNewMap(run) {
+    const M = run && run.map, sc = secOf(run);
+    if (!M || !X.MAP || !X.MAP.secKeys || run.endless || !sc || sc.room) return null;
+    const a = run.act | 0;
+    if (a < 1 || a > 3 || sc.keys[a]) return null;
+    return X.MAP.secKeys(M, sc.kinds[a]);
+  }
+  // A key found: counted on the run and the profile, saved at once, celebrated where it was found.
+  function secGrant(how, at) {
+    const run = S.run, M = run && run.map, sc = secOf(run);
+    if (!M || !M.sec || M.sec.got || run.endless) return false;
+    const a = run.act | 0;
+    if (a < 1 || a > 3 || sc.keys[a]) return false;
+    M.sec.got = true;
+    sc.keys[a] = how || M.sec.kind;
+    const m = secMeta();
+    m.keys = (m.keys | 0) + 1;
+    saveMeta();
+    const n = secKeyCount(run);
+    S.secKeyFx = { t: 0, n, how, x: at ? at.x : 270, y: at ? at.y : 480 };
+    snd('keyGet'); haptic('jackpot');
+    fx().emit('confetti', S.secKeyFx.x, S.secKeyFx.y, { col: '#ffc94d', n: 1 });
+    fx().ring(S.secKeyFx.x, S.secKeyFx.y, '#ffc94d', { r0: 10, r1: 150, w: 8, life: 0.6 });
+    toast(n >= 3 ? 'GOLDEN KEY 3 of 3! Something behind the Prize Master just unlocked.' : `GOLDEN KEY ${n} of 3! ${3 - n} more hide${3 - n === 1 ? 's' : ''} in the Clawspire.`, 3);
+    if (S.screen === 'map') buildMapHead();
+    achRun('tick');   // Keymaster
+    save();
+    return true;
+  }
+  // The dark key: stepping on its hex picks it up (walks and one-step moves alike).
+  function secEnterTile(t) {
+    const M = S.run && S.run.map;
+    if (!t || !M || !X.MAP || !X.MAP.secKeyAt || !X.MAP.secKeyAt(M, t.q, t.r)) return false;
+    const p = mapLayout() ? hexToStage(t.q, t.r) : { x: 270, y: 480 };
+    fx().emit('glint', p.x, p.y, { col: '#ffc94d', n: 2 });
+    t.seenToast = true;   // the key's toast, not the empty hex's
+    return secGrant('dark', p);
+  }
+  // The arcade key: any cabinet's top tier (a jackpot, MOLE MASTER, SKEE JACKPOT) on the key's map.
+  function secArcSettle(res) {
+    const M = S.run && S.run.map;
+    if (!res || !(res.tier >= 3) || !M || !M.sec || M.sec.kind !== 'arcade' || M.sec.got) return false;
+    const at = S.arc ? arcPrizeAt() : { x: 270, y: 480 };
+    if (!secGrant('arcade', at)) return false;
+    res.sub = (res.sub ? res.sub + ' ' : '') + 'And a GOLDEN KEY!';
+    return true;
+  }
+  // The roaming monster that swallowed this map's key (the fight it started).
+  function secRoamKey() {
+    const M = S.run && S.run.map, then = FS && FS.then;
+    return !!(M && M.sec && M.sec.kind === 'roam' && !M.sec.got && then && then.roam && then.roam === M.sec.id);
+  }
+  // A kill (applyEvent's die): the key pops out of the monster; The Machine starts powering down.
+  function secKill(ev, e, last) {
+    if (!F || !FS || !e || ev.escaped) return;
+    if (e.def && e.def.secret) { if (last) secPowerStart(ev.idx); return; }
+    if (!last || !secRoamKey()) return;
+    const p = enemyPos(ev.idx), Q = SECF();
+    Q.drop = { t: 0, x: p.x, y: p.y - p.h * 0.5 };
+    banner('GOLDEN KEY!', 'jackpot', 1.8, 'secret');
+    snd('keyGet');
+    fx().emit('confetti', Q.drop.x, Q.drop.y, { col: '#ffc94d', n: 1.2 });
+    fx().ring(Q.drop.x, Q.drop.y, '#ffc94d', { r0: 10, r1: 160, w: 8, life: 0.6 });
+  }
+  // endFight (a win): the roaming monster's key is paid with the fight.
+  function secFightWin(reward, then) {
+    if (!secRoamKey()) return false;
+    const got = secGrant('roam', FS.sec && FS.sec.drop ? FS.sec.drop : { x: 270, y: 200 });
+    if (got && reward) reward.key = true;
+    return got;
+  }
+
+  // ---- the map: the counter on the head, the glints, the Back Room's look
+  function secHeadChip(l1) {
+    const run = S.run;
+    if (!run || run.endless || !l1) return null;
+    const n = secKeyCount(run);
+    if (!(n > 0 || secIn(run))) return null;   // a compact chip on the hint row, only once this run holds a key (row 1 keeps "Act N" whole)
+    const chip = h('button', 'secKeys' + (n >= 3 ? ' full' : ''));
+    chip.id = 'secKeys';
+    chip.setAttribute('aria-label', `Golden keys ${n} of 3`);
+    chip.appendChild(canvasEl(17,(ctx, p) => { const R = X.RENDER && X.RENDER.sec; if (R) R.key(ctx, p / 2, p / 2, 0.44, 1, { rot: -0.6, glow: false }); }));
+    chip.appendChild(h('span', null, `${n}/3`));
+    chip.onclick = (ev) => {
+      const sc = secOf(run), a = run.act | 0, M = run.map;
+      const here = secIn(run) ? 'You found all three. This is where they lead.' : sc.keys[a] ? `This act's key is yours.` : (M && M.sec ? `This act's key: ${SEC_HOW[M.sec.kind] || 'somewhere on this map'}.` : 'No key on this map.');
+      popover(`<b>Golden keys ${n} of 3</b><br>${here}`, 270, 120);
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+    };
+    l1.appendChild(chip);
+    return chip;
+  }
+  const secActName = (run) => (secIn(run) ? 'Act 4' : '');   // short, so it never truncates; the map plate names the Back Room
+  function secMapBg(ctx, t) {
+    if (!secIn() || !X.RENDER || !X.RENDER.sec) return;
+    X.RENDER.sec.mapBg(ctx, W, H, t);
+    // the whole room fits the map area: frame it once per map (a fresh room or a reload)
+    const M = S.run.map, L = mapLayout();
+    if (L && M && S.secCam !== M) { S.secCam = M; const c = cam(); c.zoom = 1; c.x = L.w / 2; c.y = L.h / 2; S.camTo = null; }
+  }
+  // Over the pickups: the dark key's glint (lit hexes only), the monster
+  // with the key in its belly, a key over the cabinets of an arcade-key map.
+  function secMapDraw(ctx, t, size, z, ox, oy) {
+    const M = S.run && S.run.map, R = X.RENDER && X.RENDER.sec;
+    if (!M || !M.sec || M.sec.got || !R) return;
+    const s = M.sec, pos = (q, r) => { const w = worldOf(q, r); return { x: w.x * z + ox, y: w.y * z + oy }; };
+    if (s.kind === 'dark') {
+      const tile = X.MAP.tileAt(M, s.q, s.r);
+      if (!tile || !tile.revealed) return;
+      const p = pos(s.q, s.r);
+      R.glint(ctx, p.x + size * 0.18, p.y - size * 0.12, size * 0.28, t, 0.85);
+    } else if (s.kind === 'roam') {
+      const m = X.MAP.roamAt ? (M.roam || []).find((x) => x.id === s.id) : null;
+      if (!m) return;
+      const tile = X.MAP.tileAt(M, m.q, m.r);
+      if (!tile || !tile.revealed) return;
+      const p = pos(m.q, m.r);
+      R.glint(ctx, p.x - size * 0.05, p.y + size * 0.05, size * 0.24, t * 1.3, 1);   // a glint in its belly
+    } else if (s.kind === 'arcade') {
+      for (const k in M.tiles) {
+        const tile = M.tiles[k];
+        if (!tile.revealed || tile.done || !arcIsCab(tile) || tile.type === 'petshop') continue;
+        const p = pos(tile.q, tile.r);
+        if (p.x < -size || p.x > W + size || p.y < MAP_AREA.y - size || p.y > H + size) continue;
+        R.glint(ctx, p.x + size * 0.45, p.y - size * 0.45, size * 0.14, t + tile.q, 0.7);
+      }
+    }
+  }
+  // The machine on an arcade-key map shows a little key over its jackpot.
+  function secArcDraw(ctx, t) {
+    const M = S.run && S.run.map, R = X.RENDER && X.RENDER.sec;
+    if (!R || !S.arc || !M || !M.sec || M.sec.kind !== 'arcade' || M.sec.got || S.arc.g === 'petshop') return;
+    R.key(ctx, 470, 128, 0.8, t, { rot: -0.4 + Math.sin(t * 2) * 0.15 });
+  }
+  // A key celebration over any screen: it spins up out of where it was found.
+  function secOver(ctx, t) {
+    const K = S.secKeyFx, R = X.RENDER && X.RENDER.sec;
+    if (!K || !R) return;
+    const u = U.clamp(K.t / SEC.keyFly, 0, 1), e = U.ease.outBack ? U.ease.outBack(Math.min(1, u * 1.4)) : u;
+    const x = U.lerp(K.x, 270, u * u), y = U.lerp(K.y, 260, u) - Math.sin(u * Math.PI) * 60;
+    R.key(ctx, x, y, 0.6 + e * 1.2, t, { rot: u * Math.PI * 2, alpha: 1 - Math.max(0, (K.t - SEC.keyFly) / 0.6) });
+  }
+
+  // ---- the hidden door and the Back Room
+  // nextAct (after the Prize Master's reward): three keys open the door; false otherwise.
+  function secNextAct() {
+    const run = S.run;
+    if (!run || run.endless) return false;
+    const sc = secOf(run);
+    if (run.act >= 3 && !sc.room && !sc.door && secKeyCount(run) >= (secD().keys || 3)) { secShow({ k: 'door' }); return true; }
+    return false;
+  }
+  function secEnter() {
+    const run = S.run, sc = secOf(run);
+    if (!run || !X.MAP || !X.MAP.secRoom || sc.room) return false;
+    sc.door = 'open'; sc.room = true;
+    const m = secMeta(); m.rooms = (m.rooms | 0) + 1; saveMeta();
+    healRun(run.maxHp * (secD().heal || 0.3));
+    const rng = U.rng(U.hashStr(run.seed + ':backroom'));
+    const elites = rng.shuffle((secD().roomElites || [['frostknight']]).slice()).slice(0, 2);
+    run.map = X.MAP.secRoom({ rng, ink: run.ink, brushes: run.brushes, elites });
+    run.floor = 0;
+    S.brushSel = null; S.preview = null; S.mapLayout = null; S.mapPaint = null; S.camMap = null; S.camTo = null;
+    S.sd = null; S.secScr = null;
+    achRun('tick');   // The Back Room
+    toMap();
+    toast('THE BACK ROOM. The inside of the machine. It knows you are here.', 3.2);
+    snd('secHum');
+    return true;
+  }
+  // The door: take the win now instead (the door stays shut for this run).
+  function secWalkAway() {
+    const run = S.run, sc = secOf(run);
+    if (!run) return;
+    sc.door = 'skip';
+    S.sd = null; S.secScr = null;
+    showWin();
+  }
+  const SEC_EPILOGUE = [
+    'The last bulb in the marquee goes out with a sigh.',
+    'The claw drops, limp, onto a heap of tickets nobody will ever cash.',
+    'You push the back door open. It is morning.',
+    'Behind you the Clawspire goes quiet, one dead cabinet at a time.',
+    'Ahead: grass, birds, a sky with no glass in front of it.',
+  ];
+  const SEC_CREDITS = [['CLAWSPIRE', 'big'], ['a claw machine roguelike', ''], ['', ''], ['MADE BY', 'k'], ['RoxorLoops & Jasmin', 'who'], ['', ''],
+    ['Every sprite drawn in code,', ''], ['every sound synthesised live.', ''], ['', ''], ['THANKS FOR PLAYING!', 'big']];
+  // The screen: the door (k 'door') or the true ending (k 'ending'). A tap hurries the animation along.
+  function secShow(o) {
+    o = o && o.k ? o : { k: 'door' };
+    const run = S.run, sc = secOf(run);
+    S.sd = { secret: { k: o.k } };
+    S.secScr = { k: o.k, t: 0, keys: 0, opened: false, ui: false, walk: 0 };
+    F = null; FS = null;
+    setScreen('secret');
+    const scr = $('scr-secret'), b = $('secretBody');
+    clear(b);
+    S.ui.buttons = [];
+    if (o.k === 'ending') {
+      if (sc && !sc.ended) { sc.ended = true; const m = secMeta(); m.ends = (m.ends | 0) + 1; saveMeta(); }
+      const ep = h('div', 'secEpi');
+      SEC_EPILOGUE.forEach((ln, i) => { const d = h('p', null, ln); try { d.style.animationDelay = (0.8 + i * 1.3).toFixed(2) + 's'; } catch (e) { /* stub */ } ep.appendChild(d); });
+      b.appendChild(ep);
+      const roll = h('div', 'secRoll');
+      const inner = h('div', 'secRollIn');
+      for (const [ln, cls] of SEC_CREDITS) inner.appendChild(h('div', cls || null, ln));
+      roll.appendChild(inner);
+      b.appendChild(roll);
+      const go = btn('Continue', () => secEndDone(), 'gold secGo');
+      b.appendChild(go);
+      music('title');
+      snd('creditsChime');
+      achRun('tick');   // True Ending
+    } else {
+      const top = h('div', 'secTitle');
+      top.appendChild(h('small', null, 'THREE KEYS. ONE DOOR.'));
+      top.appendChild(h('div', 'n', 'THE BACK ROOM'));
+      top.appendChild(h('div', 'sub', 'Behind the Prize Master\'s throne, a door marked STAFF ONLY. Inside: the machine itself, and whatever keeps it running.'));
+      b.appendChild(top);
+      const row = h('div', 'secRow');
+      row.appendChild(btn('Step inside', () => secEnter(), 'gold secGo'));
+      row.appendChild(btn('Take the win', () => secWalkAway(), 'ghost'));
+      b.appendChild(row);
+      music('off');
+      snd('secHum');
+    }
+    if (scr) scr.onpointerdown = () => secHurry();
+    save();
+    return true;
+  }
+  function secHurry() {
+    const C = S.secScr;
+    if (!C) return;
+    const end = C.k === 'door' ? SEC.doorUi + 0.1 : SEC.endWalk;
+    if (C.t < end) C.t = end;
+    const el = $('secretBody');
+    if (el && el.classList) el.classList.add('fast');
+  }
+  function secScrTick(real) {
+    const C = S.secScr;
+    if (!C) return;
+    C.t += real;
+    if (C.k === 'door') {
+      const n = U.clamp((C.t - SEC.doorKeys0) / SEC.doorKey, 0, 3);
+      if (Math.floor(n) > C.keys) { C.keys = Math.floor(n); snd('keyGet', { pitch: 0.8 + C.keys * 0.15 }); fx().shake(4); haptic('tap'); }
+      if (!C.opened && C.t >= SEC.doorOpen0) { C.opened = true; snd('doorOpen'); fx().shake(10); haptic('boss'); }
+      if (!C.ui && C.t >= SEC.doorUi) { C.ui = true; const el = $('secretBody'); if (el && el.classList) el.classList.add('on'); music('backroom'); }
+    } else if (!C.ui && C.t >= 1) { C.ui = true; const el = $('secretBody'); if (el && el.classList) el.classList.add('on'); }
+  }
+  const SDV = { t: 0, keys: 0, open: 0 };
+  const SEV = { t: 0, dawn: 0, walk: 0, charId: 'knight' };
+  function secDraw(ctx, t) {
+    const R = X.RENDER && X.RENDER.sec, C = S.secScr;
+    if (!R || !C) { ctx.fillStyle = '#07030f'; ctx.fillRect(0, 0, W, H); return; }
+    if (C.k === 'door') {
+      SDV.t = t; SDV.keys = U.clamp((C.t - SEC.doorKeys0) / SEC.doorKey, 0, 3);
+      SDV.open = U.ease.inOut(U.clamp((C.t - SEC.doorOpen0) / SEC.doorOpenT, 0, 1));
+      R.door(ctx, W, H, SDV);
+    } else {
+      SEV.t = t; SEV.dawn = U.clamp(C.t / SEC.endDawn, 0, 1); SEV.walk = U.clamp((C.t - 1) / SEC.endWalk, 0, 1); SEV.charId = (S.run && S.run.char) || 'knight';
+      R.ending(ctx, W, H, SEV);
+    }
+  }
+  // The true ending's Continue: out of the Back Room, into the win screen.
+  function secEndDone() {
+    const run = S.run, sc = secOf(run);
+    if (!run) { showTitle(); return; }
+    sc.done = true; sc.room = false;
+    S.sd = null; S.secScr = null;
+    showWin();
+  }
+  const secWinTitle = () => { const s = S.run && S.run.sec; return s && s.beat ? 'The Machine powers down' : ''; };
+  const secWinSub = () => { const s = S.run && S.run.sec; return s && s.beat ? 'Three keys, one door, and the machine itself switched off at the wall. You walked out at dawn. True ending.' : ''; };
+
+  // ---- the service counter: legendary stock and a boss relic
+  function secShop(tile) {
+    const run = S.run, rng = U.rng(U.hashStr(run.seed + ':secshop:' + tile.q + ',' + tile.r));
+    const st = D().secShopStock ? D().secShopStock(rng) : { items: [], relicPrice: 200 };
+    for (const it of st.items) seeItem(it.id);
+    const rid = rollRelic(rng, ['boss']);
+    return { items: st.items, relic: rid ? { id: rid, price: st.relicPrice || 200, sold: false } : null, removeUsed: false, sec: true };
+  }
+  function secShopNote(b, shop) {
+    if (!shop || !shop.sec || !b) return;
+    b.appendChild(h('div', 'secNote', 'THE SERVICE COUNTER: legendary stock only. The machine keeps its best prizes back here.'));
+  }
+
+  // ---- The Machine's fight: the versus card, its cabinet events, the face, the power down
+  const secVsTitle = (e) => (e && e.def && e.def.secret ? 'SECRET BOSS' : '');
+  const SEC_EV = { mTilt: 1, mFlood: 1, mClaw: 1, mGrav: 1, mRail: 1, mShutter: 1, mZap: 1, mEnd: 1 };
+  function secBossEvent(ev) {
+    if (!ev || !SEC_EV[ev.k] || !F || !FS) return false;
+    const Q = SECF(), reduced = !!fx().reduced;
+    const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
+    const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
+    switch (ev.k) {
+      case 'mTilt': {
+        // the tilt on steroids: the whole cabinet heels over hard
+        if (FS.world) FS.world.setGravity((ev.dir || 1) * TILT_G * SEC.tiltK, GRAVITY - 220);
+        for (const b of FS.items) if (!(b.held > 0)) { b.vx += (ev.dir || 1) * (220 + FS.rng() * 140); b.vy -= 160; }
+        if (FS.world && FS.world.wakeAll) FS.world.wakeAll();
+        fx().text(270, 430, (ev.dir || 1) < 0 ? '<< BIG TILT <<' : '>> BIG TILT >>', '#2ee6d6', { big: true });
+        fx().shake(14); fx().kick((ev.dir || 1) * 10, 2);
+        snd('thud'); snd('shake');
+        break;
+      }
+      case 'mFlood': {
+        let k = 0;
+        for (const inst of ev.items || []) {
+          if (F.bin.indexOf(inst) < 0 || bodyOf(inst)) continue;
+          const q = FS.spawnQ.indexOf(inst);
+          if (q >= 0) FS.spawnQ.splice(q, 1);
+          const spot = { x: 40 + ((hashOf(inst) % 1000) / 1000) * Math.max(40, binW() - 60), y: 30 + (k % 3) * 14 };
+          arcItem(inst, 270, CAB.y - 20, CAB.x + spot.x, CAB.y + spot.y, 0.35, () => { dropIn(inst, spot); }, k * 0.08);
+          k++;
+        }
+        fx().emit('dust', 270, CAB.y + 20, { n: 1.4, power: 1.2 });
+        fx().text(270, 430, 'JUNK FLOOD!', '#ff5a4a', { big: true });
+        fx().shake(10);
+        FS.party = Math.max(FS.party || 0, 0.6); FS.marquee = 'OUT OF ORDER';
+        if (has) anim(ev.idx).spitT = S.t;
+        snd('secFlood'); snd('shake');
+        break;
+      }
+      case 'mClaw': {
+        const n = shuffleBin();
+        fx().text(270, 470, 'THE MACHINE WANTS ITS CLAW BACK', '#ff2e88', { size: 17, life: 1.4 });
+        if (n) fx().text(270, 505, 'SHUFFLED!', '#ffc94d', { size: 16 });
+        if (!reduced) fx().flash('#ff2e88', 0.2);
+        fx().shake(6);
+        snd('hijack'); snd('secVoice');
+        break;
+      }
+      case 'mGrav': {
+        const B = BST();
+        B.ceil = true; B.ceilT = S.t;
+        for (const inst of ev.insts || []) { const b = bodyOf(inst); if (b) { b.data.bestHang = 1; b.vy -= 200; } }
+        bestSlots();
+        if (FS.world && FS.world.wakeAll) FS.world.wakeAll();
+        fx().text(270, 430, 'ZERO G! Grab them mid-air', '#b08cff', { big: true });
+        fx().ring(270, CAB.y + 120, '#b08cff', { r0: 20, r1: 260, w: 6, life: 0.6 });
+        fx().shake(5);
+        snd('secGrav');
+        break;
+      }
+      case 'mRail': {
+        Q.zapT = 0.6;
+        fx().text(270, 430, 'LIVE RAIL! Each drop shocks you', '#2ee6d6', { big: true });
+        fx().text(270, 468, 'Deliver something metal to ground it', '#8dfff5', { size: 15, life: 1.6 });
+        if (!reduced) fx().flash('#bff8ff', 0.25);
+        fx().emit('shock', 270, CAB.y + 26, { n: 1.4 });
+        snd('secZap');
+        break;
+      }
+      case 'mShutter': {
+        secShutAdd();
+        fx().text(270, 430, 'SHUTTER DOWN! Knock it open', '#ffc94d', { big: true });
+        fx().text(270, 468, 'Only something heavy dents it', '#ffe066', { size: 15, life: 1.6 });
+        fx().shake(8);
+        snd('secShutter');
+        break;
+      }
+      case 'mZap': {
+        Q.zapT = 0.5;
+        const hx = CAB.x + (FS.rig ? FS.rig.x : CAB.w / 2);
+        fx().emit('shock', hx, CAB.y + 26, { n: 1.6 });
+        fx().emit('sparks', hx, CAB.y + 30, { col: '#8dfff5', n: 1 });
+        fx().text(PLAYER_FX.x + 60, PLAYER_FX.y - 30, 'ZAP! -' + (ev.v | 0), '#2ee6d6', { size: 18 });
+        fx().shake(7); haptic('hurt');
+        snd('secZap', { pitch: 1.2 });
+        break;
+      }
+      case 'mEnd': {
+        if (Q.seg) secShutRemove();
+        break;
+      }
+      default: break;
+    }
+    return true;
+  }
+  // The cabinet's warning sign while a cabinet event holds (the telegraph is signLabel's).
+  function secSign() {
+    if (!F) return null;
+    if (FS && FS.sec && FS.sec.pd) return ['', 'machine'];   // the power down: the sign goes dark with the rest
+    if (F.secShut) return ['SHUTTER: HEAVY ONLY', 'secShut'];
+    if (F.secZap) return ['LIVE RAIL', 'secZap'];
+    if (F.secGrav) return ['ZERO G', 'secGrav'];
+    if (F.rigged && F.rigged.secret) return ['HIJACKED', 'rig'];
+    return null;
+  }
+  // A drop on the live rail shocks the crawler (COMBAT decides; the events play on their beat).
+  function secDrop() {
+    if (!F || !F.secZap || !X.COMBAT || !X.COMBAT.secDrop) return;
+    X.COMBAT.secDrop(F);
+    drainF(PLAY_BEAT);
+  }
+  // A metal prize delivered grounds the live rail.
+  function secDeliver(b) {
+    if (!F || !F.secZap || !b || !b.data) return;
+    const metal = (b.data.tags || []).indexOf('metal') >= 0 || !!(b.data.mat && b.data.mat.traits && b.data.mat.traits.metal);
+    if (!metal || !X.COMBAT.secGround || !X.COMBAT.secGround(F)) return;
+    fx().text(270, 470, 'GROUNDED! The rail is safe', '#a6ff5e', { size: 17 });
+    fx().emit('sparks', CAB.x + CAB.w - 30, CAB.y + 26, { col: '#a6ff5e', n: 1 });
+    snd('clank');
+  }
+  // The shutter: a static wall across the chute mouth that slopes back into the bin.
+  function secShutAdd() {
+    const Q = SECF(), Wd = FS.world, b = FS.cabinet && FS.cabinet.bounds;
+    if (Q.seg || !Wd || !Wd.segs || !b) return;
+    Q.seg = { ax: b.chuteX - 6, ay: b.dividerTop - 8, bx: CAB.w + 4, by: b.dividerTop - 30, r: 7, own: 9, vx: 0, vy: 0, om: 0, hx: 0, hy: 0, wall: 'shutter' };
+    Wd.segs.push(Q.seg);
+    if (Wd.wakeAll) Wd.wakeAll();
+  }
+  function secShutRemove() {
+    const Q = SECF(), Wd = FS.world;
+    if (!Q.seg) return;
+    const i = Wd && Wd.segs ? Wd.segs.indexOf(Q.seg) : -1;
+    if (i >= 0) Wd.segs.splice(i, 1);
+    Q.seg = null;
+    if (Wd && Wd.wakeAll) Wd.wakeAll();
+  }
+  // Per frame: keep the wall in step with COMBAT's shutter, and read the landings on it.
+  function secShutTick() {
+    const Q = SECF();
+    if (F.secShut && (!Q.seg || !FS.world || FS.world.segs.indexOf(Q.seg) < 0)) { Q.seg = null; secShutAdd(); }
+    else if (!F.secShut && Q.seg) secShutRemove();
+    const L = Q.seg;
+    if (!L) return;
+    for (const b of FS.items) {
+      const d = b.data, lvy = d.svy || 0;
+      d.svy = b.vy;
+      if (b.x < L.ax - 4) { d.onShut = false; continue; }
+      const u = U.clamp((b.x - L.ax) / (L.bx - L.ax), 0, 1), ly = L.ay + (L.by - L.ay) * u;
+      const on = b.y < ly && ly - b.y < (b.br || 12) + L.r + 6;
+      if (on && !d.onShut && lvy > 120) {
+        d.onShut = true;
+        const heavy = isHeavy(b), x = CAB.x + b.x, y = CAB.y + ly;
+        const left = X.COMBAT.secShutHit ? X.COMBAT.secShutHit(F, heavy) : null;
+        if (!left) {
+          secShutRemove();
+          fx().emit('sparks', x, y, { col: '#ffc94d', n: 1.4 });
+          fx().ring(x, y, '#ffc94d', { r0: 8, r1: 90, w: 7, life: 0.4 });
+          fx().text(x - 70, y - 30, 'BASHED OPEN!', '#ffc94d', { size: 18 });
+          snd('secClang', { pitch: 0.8 }); snd('thud'); fx().shake(9);
+          FS.hitStop = Math.max(FS.hitStop, 0.06);
+          return;
+        }
+        fx().emit('sparks', x, y, { col: heavy ? '#ffc94d' : '#c9d3e0', n: heavy ? 1 : 0.4 });
+        if (heavy) { fx().text(x - 50, y - 24, 'DENT!', '#ffc94d', { size: 16 }); snd('secClang'); fx().shake(5); }
+        else if (S.t - Q.clang > 0.8) { Q.clang = S.t; fx().text(x - 60, y - 24, 'CLANG! HEAVY ONLY', '#c9d3e0', { size: 13 }); snd('secClang', { pitch: 1.6, vol: 0.5 }); }
+      } else if (!on) d.onShut = false;
+    }
+  }
+  // The power down: the last kill of The Machine. The outro waits for it.
+  function secPowerStart(idx) {
+    const Q = SECF();
+    if (Q.pd) return;
+    Q.pd = { t: 0, idx, said: 0 };
+    Q.crackTo = 1;
+    // the power dies: the siren fades, whatever floated in zero g drops, the rail and the shutter go dead
+    F.final = false; F.secGrav = 0; F.secZap = null;
+    const B = FS.best;
+    if (B && B.ceil) { B.ceil = false; for (const b of FS.items) { if (b.data.bestHang === 1) { b.sl = false; b.slT = 0; } b.data.bestHang = null; } }
+    slowmo(0.35, 1.2);
+    fx().shake(16); haptic('boss');
+    if (!fx().reduced) fx().flash('#ffffff', 0.5);
+    snd('powerDown'); snd('glassCrack');
+    music('off');
+  }
+  const SEC_PD_LINES = [[0.4, 'SYSTEM FAILURE', '#ff3b3b'], [2.0, 'POWERING DOWN...', '#8dfff5'], [3.6, 'GOODNIGHT, CONTESTANT.', '#ffc94d']];
+  // Per frame in a fight with The Machine (or a Back Room fight): phases, visuals, the shutter, the cracks, the power down.
+  // Per frame on every screen: the key celebration, the door and the ending.
+  function secTickAll(real) {
+    const K = S.secKeyFx;
+    if (K) { K.t += real; if (K.t > SEC.keyFly + 0.6) S.secKeyFx = null; }
+    if (S.screen === 'secret') secScrTick(real);
+  }
+  function secTick(dt, real) {
+    if (!F || !FS || S.screen !== 'fight') return;
+    const e = secMachineE();
+    if (!e && !FS.sec && !F.secShut) return;
+    const Q = SECF(), ease = (v, to, k) => v + (to - v) * Math.min(1, real * k);
+    if (e) {
+      const ph = X.COMBAT && X.COMBAT.secPhase ? X.COMBAT.secPhase(e) : 0;
+      if (ph !== Q.phase) {
+        if (Q.phase >= 0 && ph > Q.phase) {
+          // the light show steps up: a strobe, a hum, (the banner is the phase's own)
+          if (!fx().reduced) fx().flash(ph === 2 ? '#ff3b3b' : '#ff2e88', 0.3);
+          fx().shake(10); snd('secHum', { pitch: 1 + ph * 0.25 }); snd('secVoice', { pitch: 0.9 });
+          FS.party = Math.max(FS.party || 0, 1.2);
+        }
+        Q.phase = ph;
+      }
+      if (X.RENDER && X.RENDER.sec) X.RENDER.sec.V.phase = Q.phase;
+      // the meltdown: the glass cracks as its last quarter drains
+      if (e.final && e.alive) Q.crackTo = Math.max(Q.crackTo, U.clamp(1 - e.hp / Math.max(1, e.maxHp * 0.25), 0.1, 1));
+      const lv = Math.floor(Q.crackTo / SEC.crackStep);
+      if (lv > Q.crackLv) {
+        Q.crackLv = lv;
+        snd('glassCrack', { pitch: 0.9 + FS.rng() * 0.3 });
+        fx().emit('shatter', CAB.x + 60 + FS.rng() * (CAB.w - 120), CAB.y + 40 + FS.rng() * 200, { col: '#e8f4ff', n: 0.5 });
+        fx().shake(4);
+      }
+      Q.crack = ease(Q.crack, Q.crackTo, 3);
+    }
+    Q.railK = ease(Q.railK, F.secZap ? 1 : 0, 6);
+    Q.gravK = ease(Q.gravK, F.secGrav ? 1 : 0, 3);
+    Q.shutK = ease(Q.shutK, F.secShut ? 1 : 0, 9);
+    if (Q.zapT > 0) Q.zapT = Math.max(0, Q.zapT - real);
+    if (Q.drop) { Q.drop.t += real; if (Q.drop.t > 1.4) Q.drop = null; }
+    if (!FS.done) secShutTick();
+    const P = Q.pd;
+    if (P) {
+      P.t += real;
+      const a = FS.anim[P.idx];
+      // the body is held, flickering, then slumps as the lights go
+      if (a && a.dead > 0 && P.t < SEC.pdSlump) a.dead = Math.min(a.dead, 0.02);
+      if (a && P.t >= SEC.pdSlump && a.dead > 0 && a.dead < 1) a.dead = Math.min(1, a.dead + real * 0.25);
+      while (P.said < SEC_PD_LINES.length && P.t >= SEC_PD_LINES[P.said][0]) {
+        const L = SEC_PD_LINES[P.said++];
+        fx().text(270, 210, L[1], L[2], { big: true, life: 1.6 });
+        snd(P.said === 1 ? 'alarm' : 'secVoice', { pitch: 1.1 - P.said * 0.15 });
+      }
+      if (FS.rig && P.t > 1.2 && FS.rig.cfg && FS.rig.phase === 'idle') { /* the claw hangs limp: the carriage lamp dies with the rest (drawn) */ }
+      if (FS.outro && FS.outro.sec) FS.outro.t = Math.max(FS.outro.t, SEC.pdDur - P.t);
+    }
+  }
+  // endFight hook: The Machine beaten skips the reward; the outro is the power down, then the true ending.
+  function secFightEnd(tier, outro) {
+    if (!F || !F.enemies.some((e) => e && e.def && e.def.secret)) return false;
+    const run = S.run, sc = secOf(run);
+    sc.beat = true;
+    const Q = SECF();
+    if (!Q.pd) secPowerStart(F.enemies.findIndex((e) => e && e.def && e.def.secret));
+    FS.outro = { t: outro ? SEC.pdDur - (Q.pd ? Q.pd.t : 0) : 0, reward: null, sec: { k: 'ending' } };
+    S.sd = { secret: { k: 'ending' } };
+    save();
+    if (!outro) { finishOutro(); return true; }
+    return true;
+  }
+  // The outro of The Machine: a tap skips only once the power down has had its first beat.
+  function secOutroEnd() {
+    const o = FS && FS.outro;
+    if (!o || !o.sec) return false;
+    const Q = FS.sec;
+    if (Q && Q.pd && Q.pd.t < SEC.pdSkip && o.t > 0) return true;   // held: not yet
+    const k = o.sec;
+    FS.outro = null;
+    secShow(k);
+    return true;
+  }
+  // The back room's arena behind every fight in it (The Machine's own, with its screen).
+  function secBg(ctx, t) {
+    if (!secIn() || !X.RENDER || !X.RENDER.sec) return;
+    const Q = FS && FS.sec;
+    X.RENDER.sec.arena(ctx, W, H, t, Q ? Math.max(0, Q.phase) : 0, !!secMachineE(), Q && Q.pd ? U.clamp((Q.pd.t - 1.5) / 3, 0, 1) : 0);
+  }
+  const secNoBar = (e) => !!(e && e.def && e.def.secret);   // its HP bar is the marquee lights
+  const SCB = { x: CAB.x, y: CAB.y, w: CAB.w, h: CAB.h, frame: CAB.frame, chuteX: CAB.w - CAB.chuteW, chuteW: CAB.chuteW, dividerTop: 214 };
+  const SHV = { hp: 2, max: 2, k: 0 };
+  const SCS = { t: 0, phase: 0, rail: 0, hx: null, shut: SHV, grav: 0, crack: 0, seed: 7, pd: 0 };
+  const SFC = { t: 0, phase: 0, hpk: 1, atk: 0, hurt: 0, look: 0, blink: 0, pd: 0 };
+  function secCabDraw(ctx, t, layer) {
+    const R = X.RENDER && X.RENDER.sec;
+    if (!R || !F || !FS) return;
+    const Q = FS.sec, e = secMachineE();
+    if (!Q && !e) return;
+    if (layer === 'front') secFightTop(ctx, t);
+    const b = FS.cabinet && FS.cabinet.bounds;
+    if (b) { SCB.chuteX = b.chuteX; SCB.dividerTop = b.dividerTop; }
+    SCS.t = t; SCS.phase = Q ? Math.max(0, Q.phase) : 0; SCS.rail = Q ? Q.railK : 0; SCS.hx = FS.rig ? FS.rig.x : null;
+    SHV.hp = F.secShut ? F.secShut.hp : 0; SHV.max = F.secShut ? F.secShut.max : (Q && Q.shutK > 0.01 ? SHV.max : 2); SHV.k = Q ? Q.shutK : 0;
+    SCS.grav = Q ? Q.gravK : 0; SCS.crack = Q ? Q.crack : 0; SCS.seed = Q ? Q.seed : 7;
+    SCS.pd = Q && Q.pd ? U.clamp((Q.pd.t - 1) / (SEC.pdDur - 1.4), 0, 1) : 0;
+    R.cab(ctx, SCB, SCS, layer);
+    if (layer !== 'front' || !e) return;
+    const i = F.enemies.indexOf(e), a = FS.anim[i] || {};
+    SFC.t = t; SFC.phase = SCS.phase; SFC.hpk = e.maxHp > 0 ? U.clamp((FS.queue.length && FS.shown.e[i] ? FS.shown.e[i].hp : e.hp) / e.maxHp, 0, 1) : 0;
+    SFC.atk = a.attack || 0; SFC.hurt = a.hurt || 0; SFC.look = FS.rig ? U.clamp(FS.rig.x / CAB.w * 2 - 1, -1, 1) : 0;
+    SFC.blink = Math.sin(t * 0.83 + 1.3) > 0.992 ? 1 : 0;
+    SFC.pd = Q && Q.pd ? U.clamp(Q.pd.t / (SEC.pdDur - 1.8), 0, 1) : 0;
+    R.face(ctx, SCB, SFC);
+    // the number, small, under its feet where a health bar would be
+    if (!(Q && Q.pd) && e.alive) {
+      const p = enemyPos(i);
+      ctx.save(); ctx.font = 'bold 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 3; ctx.strokeStyle = '#12091f'; ctx.fillStyle = (X.RENDER.sec.PH || [])[SFC.phase] || '#8dfff5';
+      const s = Math.max(0, Math.round(SFC.hpk * e.maxHp)) + ' / ' + e.maxHp + (e.block > 0 ? '  +' + e.block : '');
+      ctx.strokeText(s, p.x, p.y + 16); ctx.fillText(s, p.x, p.y + 16);
+      ctx.restore();
+    }
+  }
+  // The golden key dropping out of a beaten roaming monster (over the arena).
+  function secFightTop(ctx, t) {
+    const Q = FS && FS.sec, R = X.RENDER && X.RENDER.sec;
+    if (!Q || !Q.drop || !R) return;
+    const u = U.clamp(Q.drop.t / 1.2, 0, 1);
+    R.key(ctx, Q.drop.x - u * 60, Q.drop.y - Math.sin(u * Math.PI) * 90 - u * 30, 1.3 + u * 0.9, t, { rot: -0.4 + Math.sin(u * 9) * 0.5, alpha: 1 - Math.max(0, (u - 0.85) * 6) });
+  }
+  // ================================================================ /SECRET
+
   // ---------------------------------------------------------------- shop
   function rollShop(tile) {
+    if (tile && tile.content && tile.content.sec) return secShop(tile);   // the Back Room's service counter (SECRET)
     const run = S.run;
     const rng = U.rng(U.hashStr(run.seed + ':shop:' + run.act + ':' + (tile ? tile.q + ',' + tile.r : run.floor)));
     const items = rollItems(rng, 5).map((id) => ({ id, price: Math.max(20, Math.round((itemDef(id).cost || 60) * (0.9 + rng() * 0.3))), sold: false }));
@@ -10871,6 +11574,7 @@ const GAME = (() => {
     const run = S.run;
     const sold = S.justSold; S.justSold = null;
     feelShopScene(b, shop);   // the neon SHOP sign and Chester the shopkeeper (FEEL block)
+    secShopNote(b, shop);   // the Back Room's service counter (SECRET)
     const top = h('div', 'row');
     const goldTag = h('span', 'tag gold big', `${run.gold} gold`);
     goldTag.id = 'shopGold';
@@ -10904,6 +11608,7 @@ const GAME = (() => {
       card.appendChild(h('div', 'text', def.text || ''));
       const kw = kwChips(def);
       if (kw) card.appendChild(kw);
+      if (!shop.relic.sold) setTagOn(card, shop.relic.id);   // the set it belongs to (SETS block)
       card.appendChild(h('div', 'price', shop.relic.sold ? 'SOLD' : shop.relic.price + ' gold'));
       if (shop.relic.sold) card.appendChild(h('div', 'stamp' + (sold === 'relic' ? ' slam' : ''), 'SOLD'));
       const fn = () => {
@@ -10946,6 +11651,7 @@ const GAME = (() => {
     pcol.appendChild(h('div', 'c2', `${lootRun().tickets} tickets to spend. Capsules, hearts and prizes behind glass.`));
     pc.appendChild(pcol);
     counterRow.appendChild(pc);
+    cmpShopSlot(counterRow, shop);   // the Compactor, registered after the counter (SETS block)
     save();
   }
   // Coins arc from the gold tag into the card being bought, then the stamp.
@@ -10962,6 +11668,608 @@ const GAME = (() => {
     if (i < 0) i = bin.findIndex((x) => x.uid === inst.uid);
     if (i >= 0) bin.splice(i, 1);
   }
+
+  /* ================================================================ SETS
+     Round 6 (DESIGN.md "Sets, boons and the Compactor"): relic sets in the
+     HUD (linked by a glowing chain, a badge per set, a progress popover), the
+     "n/3 Set" tag on relic cards, the set fanfare through the announcer, the
+     Prizedex's Sets tab; the boon draft after character select (screen
+     'boon'); the Compactor in shops and at rest stops (screen 'compactor').
+     Reached through one-line hooks; state on the run (run.boon, shop.cmpUsed,
+     sd.compactor) and the profile (meta.sets), all optional for old saves. */
+  SCREENS.push('boon', 'compactor');
+  const setD = () => D().SETS || {};
+  const setFxDef = (id) => tbl('SET_FX')[id] || null;
+  function setFxFor(run) { run = run || S.run; try { return run && D().setFxIds ? D().setFxIds(run) : []; } catch (e) { return []; } }
+  // A pet stat from the relics and live set bonuses (relic.pet {xp, uses, pow}).
+  function setPetStat(k) {
+    const run = S.run;
+    if (!run) return 0;
+    let v = 0;
+    for (const id of (run.relics || []).concat(setFxFor(run))) { const r = tbl('RELICS')[id] || setFxDef(id); if (r && r.pet) v += +r.pet[k] || 0; }
+    return v;
+  }
+  // meta.sets {setId: completions}; kept by loadMeta, repaired here.
+  function setMetaFix(m, o) {
+    if (!m) return m;
+    const src = o && typeof o === 'object' ? o.sets : m.sets;
+    const out = {};
+    if (src && typeof src === 'object' && !Array.isArray(src)) for (const k in src) { const n = Math.floor(+src[k]); if (setD()[k] && n > 0) out[k] = n; }
+    m.sets = out;
+    return m;
+  }
+  // The set progress popover: pieces with ticks, both bonuses, the live ones lit.
+  function setPopHtml(sid) {
+    const s = setD()[sid], run = S.run;
+    if (!s) return '';
+    const have = run ? run.relics : [];
+    const n = D().setCount ? D().setCount(have, sid) : 0;
+    const seen = (S.meta && S.meta.seen && S.meta.seen.relics) || {};
+    const pcs = s.pieces.map((id) => { const d = relicDef(id), got = have.indexOf(id) >= 0; return `${got ? '✅' : '▫'} ${d.icon || ''} ${got || seen[id] ? d.name : '???'}`; }).join('<br>');
+    const bon = (k, t) => `<span style="color:${n >= k ? s.color : '#8d7fb3'}"><b>${k}/3 ${t.name}:</b> ${t.text}</span>`;
+    return `<b style="color:${s.color}">${s.icon} ${s.name} ${n}/3</b><br>${pcs}<br>${bon(2, s.two)}<br>${bon(3, s.three)}`;
+  }
+  // Called after the relic strip is built: set members move next to each
+  // other inside a glowing chain with the set's badge (2+ pieces); a lone
+  // piece gets a corner pip in its set colour. Every piece's popover shows
+  // the set; the badge answers for the set's proc events.
+  function setBarLink(el) {
+    const run = S.run;
+    if (!el || !run || !D().setProgress || !S.relicEls) return;
+    // the linked sets lead the strip (complete ones first), right after the mutator badges
+    const first = run.relics.map((id) => S.relicEls[id]).find(Boolean);
+    if (!first) return;
+    const mark = h('i', 'setMark');
+    el.insertBefore(mark, first);
+    const groups = [];
+    for (const p of D().setProgress(run.relics)) {
+      const s = setD()[p.id];
+      if (!s) continue;
+      const els = [];
+      for (const id of p.have) {
+        const r = S.relicEls[id];
+        if (!r) continue;
+        els.push(r);
+        const def = relicDef(id);
+        try { r.style.setProperty('--sc', s.color); } catch (e) { /* stub */ }
+        if (!/\binSet\b/.test(r.className || '')) r.className = (r.className || '') + ' inSet';
+        r.onclick = (ev) => { popover(`<b>${def.name}</b><br>${def.text || ''}<br>${setPopHtml(p.id)}`, 400, 70); if (ev && ev.stopPropagation) ev.stopPropagation(); };
+      }
+      if (p.n < 2 || els.length < 2) continue;
+      const wrap = h('div', 'setLink' + (p.n >= 3 ? ' full' : ''));
+      try { wrap.style.setProperty('--sc', s.color); } catch (e) { /* stub */ }
+      wrap.appendChild(h('i', 'setChain'));
+      const badge = h('button', 'setBadge');
+      badge.appendChild(h('span', 'ic', s.icon));
+      badge.appendChild(h('b', null, `${p.n}/3`));
+      badge.onclick = (ev) => { popover(setPopHtml(p.id), 400, 70); if (ev && ev.stopPropagation) ev.stopPropagation(); };
+      wrap.appendChild(badge);
+      groups.push({ wrap, els, n: p.n });
+      S.relicEls[`set:${p.id}:2`] = badge;
+      if (p.n >= 3) S.relicEls[`set:${p.id}:3`] = badge;
+    }
+    groups.sort((a, b) => b.n - a.n);
+    for (const g of groups) { el.insertBefore(g.wrap, mark); for (const r of g.els) g.wrap.appendChild(r); }
+    el.removeChild(mark);
+  }
+  // "2/3 Poisoner's Kit" on a relic card (the count once you take it).
+  function setTagOn(card, relicId) {
+    if (!card || !D().setTagOf) return null;
+    const t = D().setTagOf(relicId, S.run ? S.run.relics : []);
+    if (!t) return null;
+    const el = h('div', 'setTag' + (t.completes ? ' done' : ''));
+    try { el.style.setProperty('--sc', t.color); } catch (e) { /* stub */ }
+    el.appendChild(h('span', 'ic', t.icon));
+    el.appendChild(h('span', 'tx', t.text));
+    if (t.completes) el.appendChild(h('b', null, 'COMPLETES THE SET!'));
+    card.appendChild(el);
+    return el;
+  }
+  // gainRelic: a second piece turns the small bonus on, the third the big one
+  // (queued: it plays once the screen settles, never over a capsule or a fight).
+  function setOnGain(id) {
+    const run = S.run, sid = D().setOf ? D().setOf(id) : null;
+    if (!run || !sid) return;
+    const n = D().setCount(run.relics, sid);
+    if (n < 2) { snd('setPiece', { n: 1 }); return; }
+    (S.setQ || (S.setQ = [])).push({ id: sid, n, t: 0 });
+    if (n >= 3 && S.meta) { setMetaFix(S.meta); S.meta.sets[sid] = (S.meta.sets[sid] | 0) + 1; saveMeta(); }
+  }
+  const SET_WAIT = { fight: 1, capsule: 1, treasure: 1, boon: 1, bin: 1, intro: 1, vault: 1 };
+  function setTick(real) {
+    boonTick(real);
+    cmpTick(real);
+    const Q = S.setQ;
+    if (!Q || !Q.length || SET_WAIT[S.screen]) return;
+    Q[0].t += real;
+    if (Q[0].t < 0.4) return;
+    setFanfare(Q.shift());
+  }
+  // The fanfare, through the announcer (class 'set': a full set outranks a combo).
+  function setFanfare(q) {
+    const s = setD()[q.id];
+    if (!s) return null;
+    const full = q.n >= 3;
+    (S.setLog || (S.setLog = [])).push({ id: q.id, n: q.n });
+    return announce({ key: `set:${q.id}:${q.n}`, cls: 'set', pri: full ? 75 : 45, wait: 8, dur: full ? 2.8 : 1.9, q, show: setFanOn, hide: setFanOff });
+  }
+  function setFanOn(a) {
+    const q = a.q, s = setD()[q.id], full = q.n >= 3, el = $('setFan');
+    if (!s) return;
+    const bon = full ? s.three : s.two;
+    if (el) {
+      clear(el);
+      el.className = '';
+      try { el.style.setProperty('--sc', s.color); } catch (e) { /* stub */ }
+      el.appendChild(h('div', 'sfTop', full ? 'SET COMPLETE!' : 'SET BONUS'));
+      const row = h('div', 'sfIcons');
+      s.pieces.forEach((id, i) => {
+        const got = S.run && S.run.relics.indexOf(id) >= 0;
+        const c = relicCanvas(relicDef(id), 56);
+        c.className = 'sfIc' + (got ? '' : ' off');
+        try { c.style.animationDelay = (i * 0.12).toFixed(2) + 's'; } catch (e) { /* stub */ }
+        row.appendChild(c);
+        if (i < s.pieces.length - 1) row.appendChild(h('i', 'sfLink' + (got && full ? ' on' : '')));
+      });
+      el.appendChild(row);
+      el.appendChild(h('div', 'sfName', `${s.icon} ${s.name}`));
+      el.appendChild(h('div', 'sfBon', `${q.n}/3 ${bon.name}: ${bon.text}`));
+      replay(el, 'show');
+      if (full) el.classList.add('full');
+    }
+    if (a.back) return;
+    snd(full ? 'setDone' : 'setPiece', { n: q.n });
+    haptic(full ? 'jackpot' : 'hit');
+    const cx = 270, cy = 300;
+    fx().ring(cx, cy, s.color, { r0: 20, r1: full ? 260 : 150, w: full ? 10 : 6, life: 0.6 });
+    if (full) {
+      fx().ring(cx, cy, PAL0.gold, { r0: 10, r1: 320, w: 8, life: 0.8, delay: 0.1 });
+      fx().emit('confetti', 270, 240, { power: 1.1 });
+      fx().emit('sparks', cx, cy, { col: s.color, n: 2 });
+      if (!fx().reduced) fx().flash(s.color, 0.25);
+      fx().shake(6);
+    }
+  }
+  function setFanOff(a, quick) {
+    const el = $('setFan');
+    if (!el || !el.classList) return;
+    if (quick) el.classList.add('out');
+    else el.classList.remove('show');
+  }
+  // ---- the Prizedex's Sets tab (after the four DATA tabs)
+  function setDexTab(row, tab) {
+    const ids = D().SET_IDS || [];
+    if (!ids.length || !row) return;
+    setMetaFix(S.meta);
+    const done = ids.filter((id) => S.meta.sets[id]).length;
+    const bt = btn('Sets', () => showCollection('sets'), 'sm dexTab' + (tab === 'sets' ? ' on' : ''));
+    bt.appendChild(h('small', null, `${done}/${ids.length}`));
+    row.appendChild(bt);
+  }
+  function setDexGrid(b) {
+    const ids = D().SET_IDS || [], seen = (S.meta.seen && S.meta.seen.relics) || {};
+    setMetaFix(S.meta);
+    const done = ids.filter((id) => S.meta.sets[id]).length;
+    b.appendChild(metaBar(done, ids.length, `${done} of ${ids.length} sets completed`, 'gold'));
+    const grid = h('div', 'setGrid');
+    for (const id of ids) {
+      const s = setD()[id], met = s.pieces.some((r) => seen[r]), n = S.meta.sets[id] | 0;
+      const card = h('div', 'card setc' + (met ? ' got' : ' locked') + (n ? ' done' : ''));
+      try { card.style.setProperty('--sc', s.color); } catch (e) { /* stub */ }
+      const row = h('div', 'setIcons');
+      s.pieces.forEach((r, i) => { row.appendChild(dexArt('relics', relicDef(r), 44, !seen[r])); if (i < 2) row.appendChild(h('i', 'sfLink' + (n ? ' on' : ''))); });
+      card.appendChild(row);
+      card.appendChild(h('div', 'name', met ? `${s.icon} ${s.name}` : '???'));
+      card.appendChild(h('div', 'text', met ? `2: ${s.two.text}` : 'Find a piece of this set to learn its bonuses.'));
+      if (met) card.appendChild(h('div', 'text', `3: ${s.three.text}`));
+      if (n) card.appendChild(h('div', 'setDone', n > 1 ? `COMPLETED x${n}` : 'COMPLETED'));
+      card.onclick = () => popover(met ? setPopHtml(id) : '<b>???</b><br>A relic set nobody has shown you yet.', 270, 300);
+      grid.appendChild(card);
+    }
+    b.appendChild(grid);
+  }
+
+  /* ---- the boon draft: "the machine offers a deal". After character
+     select the machine deals three face-down cards (a gift, a boost, a
+     trade, rolled from the run's seed and Tilt: DATA.boonOffer); they flip
+     one by one (a tap flips one early), a tap on a face-up card takes it.
+     The offer and the pick live on run.boon, so a reload shows the same
+     three cards and never pays twice. Headless (the suites) the run goes
+     straight to the map as before; GAME.boon.force opts in. */
+  const BOON = { force: false, flipAt: [0.55, 0.9, 1.25], leave: 1.0 };
+  const BOON_SLOT = { gift: 'GIFT', boost: 'BOOST', trade: 'TRADE' };
+  function boonCtx() {
+    const relics = {};
+    for (const r of ['c', 'u', 'r', 'boss']) relics[r] = relicPool([r]);
+    return { relics, pets: (D().PET_IDS || Object.keys(tbl('PETS'))).slice() };
+  }
+  function boonStart(run) {
+    run = run || S.run;
+    if (!run || run.boon || !D().boonOffer || (S.headless && !BOON.force)) return false;
+    run.boon = { offers: D().boonOffer(U.hashStr(String(run.seed) + ':boon'), run.tilt | 0, boonCtx()), pick: -1, done: false };
+    showBoon();
+    return true;
+  }
+  function showBoon() {
+    const run = S.run, B = run && run.boon;
+    if (!B || !Array.isArray(B.offers)) { toMap(); return; }
+    if (B.done) { boonNext(); return; }
+    S.sd = { boon: 1 };
+    setScreen('boon');
+    music('elite');
+    S.boon = { t: 0, up: B.offers.map(() => !!S.headless), cards: [], leave: 0, then: null };
+    const b = $('boonBody');
+    clear(b);
+    b.appendChild(h('div', 'bnHead', 'THE MACHINE OFFERS A DEAL'));
+    b.appendChild(h('div', 'bnSub', 'Three cards slide out of the prize chute. Take one.' + ((run.tilt | 0) >= 3 ? ` Tilt ${run.tilt}: the deals bite back.` : '')));
+    const row = h('div', 'bnCards');
+    B.offers.forEach((o, i) => row.appendChild(boonCard(o, i)));
+    b.appendChild(row);
+    b.appendChild(btn('Walk away', () => boonPick(-1), 'ghost bnSkip'));
+    if (!S.headless) snd('boonDeal');
+  }
+  function boonCard(o, i) {
+    const d = tbl('BOONS')[o.id] || { name: o.id, icon: '?', text: '', color: PAL0.gold };
+    const card = h('div', 'bnCard bn-' + o.slot);
+    try { card.style.setProperty('--bc', d.color || PAL0.gold); card.style.animationDelay = (i * 0.12).toFixed(2) + 's'; } catch (e) { /* stub */ }
+    const inner = h('div', 'bnIn');
+    const back = h('div', 'bnBack');
+    back.appendChild(h('div', 'bnLogo', '?'));
+    back.appendChild(h('div', 'bnKind', BOON_SLOT[o.slot] || ''));
+    const front = h('div', 'bnFront');
+    front.appendChild(h('div', 'bnKind', BOON_SLOT[o.slot] || ''));
+    front.appendChild(h('div', 'bnIcon', d.icon || '?'));
+    front.appendChild(h('div', 'name', d.name));
+    if (d.cost) front.appendChild(h('div', 'bnCost', d.cost));
+    front.appendChild(h('div', 'text', d.text || ''));
+    for (const rid of o.relics || []) {
+      const rd = relicDef(rid), line = h('div', 'bnRelic');
+      line.appendChild(relicCanvas(rd, 30));
+      line.appendChild(h('span', null, rd.name));
+      front.appendChild(line);
+      setTagOn(front, rid);
+    }
+    if (o.id === 'pet' && o.pet) { const pd = tbl('PETS')[o.pet]; if (pd) front.appendChild(h('div', 'bnRelic', `${pd.icon || '🐾'} ${pd.name || o.pet}`)); }
+    inner.appendChild(back);
+    inner.appendChild(front);
+    card.appendChild(inner);
+    if (S.boon.up[i]) card.classList.add('up');
+    S.boon.cards[i] = card;
+    card.onclick = () => { if (S.boon && !S.boon.up[i]) { boonFlip(i); return; } boonPick(i); };
+    S.ui.buttons.push({ el: card, fn: () => boonPick(i), label: d.name });
+    return card;
+  }
+  function boonFlip(i) {
+    const Bs = S.boon;
+    if (!Bs || Bs.up[i]) return;
+    Bs.up[i] = true;
+    const c = Bs.cards[i];
+    if (c && c.classList) c.classList.add('up');
+    snd('boonFlip', { pitch: 1 + i * 0.08 });
+    const o = S.run && S.run.boon && S.run.boon.offers[i];
+    const p = hudPoint(c, 100 + i * 170, 560);
+    fx().ring(p.x, p.y, o && o.slot === 'trade' ? PAL0.blood : PAL0.gold, { r0: 10, r1: 90, w: 5, life: 0.45 });
+    fx().emit('glint', p.x, p.y, { col: PAL0.gold });
+  }
+  function boonTick(real) {
+    const Bs = S.boon;
+    if (!Bs || S.screen !== 'boon') return;
+    Bs.t += real;
+    if (Bs.then) { Bs.leave -= real; if (Bs.leave <= 0) { const fn = Bs.then; Bs.then = null; fn(); } return; }
+    BOON.flipAt.forEach((at, i) => { if (!Bs.up[i] && Bs.t >= (fx().reduced ? 0.3 : at)) boonFlip(i); });
+  }
+  // Take card i (-1: walk away). Applied and saved at once; the flourish plays after.
+  function boonPick(i) {
+    const run = S.run, B = run && run.boon;
+    if (!B || B.done || S.screen !== 'boon') return false;
+    const o = i >= 0 ? B.offers[i] : null;
+    if (i >= 0 && !o) return false;
+    B.done = true; B.pick = i;
+    const lines = o ? boonApply(o) : [];
+    save();
+    const Bs = S.boon;
+    if (o) {
+      const d = tbl('BOONS')[o.id] || {};
+      snd('boonPick');
+      toast(lines.length ? lines.join(' ') : d.name || 'Deal.', 2.6);
+      if (Bs) Bs.cards.forEach((c, k) => { if (c && c.classList) c.classList.add(k === i ? 'chosen' : 'gone'); });
+      const p = hudPoint(Bs && Bs.cards[i], 270, 560);
+      fx().ring(p.x, p.y, d.color || PAL0.gold, { r0: 20, r1: 200, w: 8, life: 0.6 });
+      fx().emit('confetti', p.x, p.y - 40, { n: 0.7, power: 0.8 });
+      if (o.slot === 'trade') fx().shake(8);
+    } else { snd('click'); toast('No deal. The machine sulks.', 1.8); }
+    if (S.headless || !Bs) { boonNext(); return true; }
+    Bs.leave = o ? BOON.leave : 0.2; Bs.then = boonNext;
+    return true;
+  }
+  // After the pick: a capsule to crack, items to throw out, or the map.
+  function boonNext() {
+    const run = S.run, B = run && run.boon;
+    if (!B) { toMap(); return; }
+    if (B.cap && !B.cap.opened) { showCapsule({ cap: B.cap, then: { k: 'map' } }); return; }
+    if (B.trim > 0) { boonTrim(); return; }
+    toMap();
+  }
+  function boonLoseMax(v) {
+    const run = S.run;
+    run.maxHp = Math.max(1, run.maxHp - Math.max(0, Math.round(v)));
+    run.hp = U.clamp(run.hp, 1, run.maxHp);
+  }
+  // What a card does to the run; returns the toast lines.
+  function boonApply(o) {
+    const run = S.run, B = run.boon, out = [];
+    const relics = () => { for (const id of o.relics || []) { if (!id || !tbl('RELICS')[id]) continue; if (run.relics.indexOf(id) >= 0) { addGold(40); out.push('+40 gold.'); continue; } gainRelic(id); out.push(`Relic: ${relicDef(id).name}.`); } };
+    switch (o.id) {
+      case 'gold': addGold(100); snd('coin'); out.push('+100 gold.'); break;
+      case 'capsule': B.cap = makeCapsule('treasure', { tier: 'u' }); out.push('A prize capsule!'); break;
+      case 'grabs': B.grabs = 2; out.push('+2 grabs a turn in your first fight.'); break;
+      case 'pet': {
+        const ids = D().PET_IDS || Object.keys(tbl('PETS'));
+        const id = o.pet && tbl('PETS')[o.pet] ? o.pet : (ids.length ? rngFor('boonpet').pick(ids) : null);
+        const xp = ((D().PET_XP || [0, 12])[1]) || 12;
+        const p = id ? petGive(id, xp) : null;
+        if (p) out.push(`${p.name} joins you (Lv ${p.lv}).`);
+        break;
+      }
+      case 'trim': B.trim = 3; break;
+      case 'polish': {
+        const rng = rngFor('boonpolish');
+        const cand = rng.shuffle(run.bin.filter((i) => !i.plus && itemDef(i.id).plus && itemDef(i.id).rarity !== 'junk'));
+        for (const inst of cand.slice(0, 3)) { inst.plus = true; out.push(`${itemName(itemDef(inst.id), true)}!`); }
+        snd('upgrade');
+        break;
+      }
+      case 'bulbs': addInk(5); addBrush('lantern'); out.push(`+${bulbs(5)} and a lantern.`); break;
+      case 'pact': boonLoseMax(10); relics(); break;
+      case 'pockets': addItem('rock'); addItem('rock'); addGold(50); relics(); out.push('+50 gold. Two Rocks in the bin.'); break;
+      case 'shark': addGold(-run.gold); relics(); out.push('Your wallet is empty.'); break;
+      case 'glassjaw': boonLoseMax(15); relics(); break;
+      case 'devil': boonLoseMax(run.maxHp * 0.2); addItem('slag'); relics(); out.push('A Slag joins the bin.'); break;
+      default: relics(); break;   // favor, setpiece
+    }
+    S.lastRelics = '';
+    return out;
+  }
+  // Spring Cleaning: three trips to the bin picker (Cancel keeps the rest).
+  function boonTrim() {
+    const run = S.run, B = run && run.boon;
+    if (!B || !(B.trim > 0) || run.bin.length <= BIN_FLOOR) { if (B) B.trim = 0; toMap(); return; }
+    openBin({ mode: 'remove', title: `Spring Cleaning: remove an item (${4 - B.trim} of 3)`, back: () => { B.trim = 0; toMap(); }, onPick: (inst) => {
+      removeInst(inst); B.trim--; snd('cmpCrunch', { vol: 0.6 }); toast(`${itemDef(inst.id).name} thrown out.`); boonTrim();
+    } });
+  }
+  // The first fight's warm-up grabs run out when it ends; Chew Toy xp on a win.
+  function setFightEnd(result) {
+    const run = S.run;
+    if (!run) return;
+    if (run.boon && run.boon.grabs) run.boon.grabs = 0;
+    const xp = result === 'win' ? setPetStat('xp') : 0;
+    if (xp > 0 && petOf()) petGain(xp);
+  }
+  // The pet did a trick: Treat Jar, Dog Whistle, The Hungry Pack hear it.
+  function setPetTrick(P) {
+    if (!F || !FS || !X.COMBAT || !X.COMBAT.petTrick || F.phase === 'over') return;
+    const evs = X.COMBAT.petTrick(F, P && P.id);
+    if (evs && evs.length) enqueue(evs, PROC_BEAT);
+  }
+
+  /* ---- the Compactor: feed it three items, it crushes them into one.
+     cd (sd.compactor) = {from: 'shop' | 'rest', shop?, pick: [uids], res}.
+     The crush is paid, rolled (DATA.cmpRoll), applied and saved in one beat
+     (res), then the press plays it: the items drop in, the plate slams down
+     (sparks, a crunch, a shake), grinds, lifts off a glowing bale that pops
+     into the new item. A reload shows the result, never a second crush. */
+  const CMPK = { feed: 0.55, slam: 0.95, lift: 1.7, pop: 2.2 };
+  const cmpPrice = () => { const k = (D().CMP && D().CMP.price) || 30; const m = tiltRun(); return Math.round(k * (m && m.shop > 0 ? 1 + m.shop : 1)); };
+  // The shop's slot (registered after Leave and before the prize counter: the shop's own buttons keep their indices).
+  function cmpShopSlot(b, shop) {
+    if (!b || !shop || !D().cmpRoll) return;
+    const used = !!shop.cmpUsed;
+    const el = h('button', 'capslot cmpSlot' + (used ? ' done' : ''));
+    try { el.style.setProperty('--cc', '#9fb4ff'); } catch (e) { /* stub */ }
+    el.appendChild(h('span', 'cmpIc', '🗜'));
+    const col = h('div', 'col');
+    col.appendChild(h('div', 'c1', used ? 'The Compactor (used)' : `The Compactor · ${cmpPrice()} gold`));
+    col.appendChild(h('div', 'c2', 'Feed it 3 items, get 1 better one. Three of a kind comes out upgraded.'));
+    el.appendChild(col);
+    const fn = () => { if (shop.cmpUsed) { toast('It is still cooling down.'); return; } cmpShow({ from: 'shop', shop, pick: [], res: null }); };
+    el.onclick = fn;
+    // just before the prize counter, which stays the last entry
+    const at = S.ui.buttons.findIndex((x) => x.label === 'Prize counter');
+    S.ui.buttons.splice(at >= 0 ? at : S.ui.buttons.length, 0, { el, fn, label: 'Compactor' });
+    b.appendChild(el);
+  }
+  // The rest stop's third choice (free, instead of resting).
+  function cmpRestChoice(list) {
+    if (!list || !D().cmpRoll) return;
+    const c = btn('', () => { if (FE.beat) return; cmpShow({ from: 'rest', pick: [], res: null }); }, 'choice');
+    c.textContent = '';
+    c.appendChild(h('div', 'c1', 'Compact'));
+    c.appendChild(h('div', 'c2', 'Crush 3 items into 1 better one (a plus copy for three of a kind).'));
+    list.appendChild(c);
+  }
+  function cmpShow(cd) {
+    const run = S.run;
+    if (!run || !cd) { toMap(); return; }
+    cd.pick = (cd.pick || []).filter((uid) => run.bin.some((i) => i.uid === uid)).slice(0, 3);
+    S.sd = { compactor: cd };
+    if (!S.cmp || S.cmp.cd !== cd) S.cmp = { cd, t: 0, phase: cd.res ? 'done' : 'idle', shake: 0, fired: {} };
+    setScreen('compactor');
+    cmpDom();
+  }
+  function cmpInsts(cd) { const run = S.run; return (cd.pick || []).map((uid) => run.bin.find((i) => i.uid === uid)).filter(Boolean); }
+  function cmpRuleText(insts) {
+    if (!D().cmpRule) return '';
+    const R = D().cmpRule(insts);
+    if (!R.ok) return `Pick ${3 - insts.length} more.`;
+    if (R.kind === 'plus') return `Three of a kind: out comes ${itemName(itemDef(R.id), true)}.`;
+    const A = D().ARCHETYPES || {};
+    const kws = R.kw.slice(0, 3).map((k) => A[k] ? `${A[k].icon} ${A[k].label}` : k).join(', ');
+    return `Out comes ${/^[aeiou]/i.test(RARITY_NAME[R.rar] || '') ? 'an' : 'a'} ${RARITY_NAME[R.rar] || R.rar} item` + (kws ? ` sharing ${kws}.` : '.');
+  }
+  function cmpDom() {
+    const C = S.cmp, cd = C.cd, run = S.run;
+    const b = $('cmpBody');
+    clear(b);
+    const top = h('div', 'cmpTop');
+    top.appendChild(h('h1', null, 'The Compactor'));
+    top.appendChild(h('div', 'sub', cd.from === 'shop' ? `Three in, one out. ${cmpPrice()} gold a crush.` : 'Three in, one out. Free, instead of resting.'));
+    b.appendChild(top);
+    const win = h('div', 'cmpWin');
+    win.onclick = () => cmpHurry();
+    b.appendChild(win);
+    const panel = h('div', 'cmpPanel');
+    b.appendChild(panel);
+    if (cd.res) {
+      const def = itemDef(cd.res.id);
+      const res = h('div', 'cmpRes' + (C.phase === 'done' ? ' show' : ''));
+      res.appendChild(h('div', 'cmpStamp', 'COMPACTED!'));
+      res.appendChild(itemCard(def, !!cd.res.plus, { cls: 'cmpCard' }));
+      res.appendChild(btn('Continue', () => cmpLeave(), 'pri'));
+      panel.appendChild(res);
+      if (C.phase !== 'done') panel.appendChild(h('div', 'cmpRule cmpWait', 'CRUNCH... tap the press to hurry it.'));
+      S.cmp.resEl = res;
+      return;
+    }
+    const insts = cmpInsts(cd);
+    const slots = h('div', 'cmpSlots');
+    for (let i = 0; i < 3; i++) {
+      const inst = insts[i], s = h('button', 'cmpSlotBox' + (inst ? ' on' : ''));
+      if (inst) { s.appendChild(itemCanvas(itemDef(inst.id), inst.plus, 40)); s.onclick = () => cmpUnpick(inst.uid); } else s.appendChild(h('span', null, String(i + 1)));
+      slots.appendChild(s);
+    }
+    panel.appendChild(slots);
+    panel.appendChild(h('div', 'cmpRule', cmpRuleText(insts)));
+    const row = h('div', 'row cmpRow');
+    const crush = btn(cd.from === 'shop' ? `CRUSH (${cmpPrice()})` : 'CRUSH', () => cmpCrush(), 'pri cmpGo');
+    if (insts.length < 3) crush.disabled = true;
+    row.appendChild(crush);
+    row.appendChild(btn(cd.from === 'shop' ? 'Back to the shop' : 'Back', () => cmpLeave(), 'ghost'));
+    panel.appendChild(row);
+    // the bin, grouped: a tap feeds one more of that item
+    const groups = {}, order = [];
+    for (const inst of run.bin) {
+      const k = inst.id + (inst.plus ? '+' : '');
+      if (!groups[k]) { groups[k] = { inst, left: [] }; order.push(k); }
+      if (cd.pick.indexOf(inst.uid) < 0) groups[k].left.push(inst);
+    }
+    const grid = h('div', 'cards cmpGrid');
+    for (const k of order) {
+      const g = groups[k], def = itemDef(g.inst.id);
+      grid.appendChild(itemCard(def, g.inst.plus, { count: g.left.length, cls: g.left.length ? '' : 'sold', disabled: !g.left.length, onPick: () => { if (g.left.length) cmpPick(g.left[0].uid); } }));
+    }
+    panel.appendChild(grid);
+  }
+  function cmpPick(uid) {
+    const C = S.cmp, run = S.run;
+    if (!C || C.cd.res || C.cd.pick.length >= 3 || C.cd.pick.indexOf(uid) >= 0 || !run.bin.some((i) => i.uid === uid)) return false;
+    C.cd.pick.push(uid);
+    snd('cmpFeed', { pitch: 0.9 + C.cd.pick.length * 0.1, vol: 0.5 });
+    cmpDom();
+    return true;
+  }
+  function cmpUnpick(uid) {
+    const C = S.cmp;
+    if (!C || C.cd.res) return false;
+    const i = C.cd.pick.indexOf(uid);
+    if (i < 0) return false;
+    C.cd.pick.splice(i, 1);
+    snd('click');
+    cmpDom();
+    return true;
+  }
+  function cmpCrush() {
+    const C = S.cmp, run = S.run;
+    if (!C || C.cd.res || !D().cmpRoll) return null;
+    const cd = C.cd, insts = cmpInsts(cd);
+    if (insts.length !== 3) { toast('Feed it three items.'); return null; }
+    if (run.bin.length - 2 < BIN_FLOOR) { toast('The bin is as light as it gets.'); return null; }
+    const price = cd.from === 'shop' ? cmpPrice() : 0;
+    if (cd.from === 'shop' && (cd.shop && cd.shop.cmpUsed)) { toast('It is still cooling down.'); return null; }
+    if (run.gold < price) { toast('Not enough gold.'); return null; }
+    const res = D().cmpRoll(rngFor('compactor'), insts, run.char);
+    if (!res || !tbl('ITEMS')[res.id]) { toast('The Compactor jams. Try other items.'); return null; }
+    if (price) addGold(-price);
+    if (cd.shop) cd.shop.cmpUsed = true;
+    for (const i of insts) removeInst(i);
+    const inst = addItem(res.id, !!res.plus);
+    cd.res = { id: res.id, plus: !!res.plus, ins: insts.map((i) => ({ id: i.id, plus: !!i.plus })), uid: inst && inst.uid };
+    cd.pick = [];
+    run.cmpN = (run.cmpN | 0) + 1;
+    C.phase = S.headless ? 'done' : 'feed'; C.t = 0; C.fired = {};
+    save();
+    cmpDom();
+    return cd.res;
+  }
+  // A tap on the press hurries the animation to the result.
+  function cmpHurry() {
+    const C = S.cmp;
+    if (!C || C.phase === 'idle' || C.phase === 'done') return false;
+    if (!C.fired.slam) cmpSlam();
+    cmpPop();
+    return true;
+  }
+  function cmpSlam() {
+    const C = S.cmp;
+    C.fired.slam = true;
+    snd('cmpCrunch');
+    haptic('bigHit');
+    fx().shake(12);
+    if (!fx().reduced) fx().flash('#ffffff', 0.18);
+    fx().emit('sparks', 270, 318, { col: PAL0.gold, n: 3, power: 1.2 });
+    fx().emit('sparks', 170, 318, { col: '#ffe8a0', n: 2, power: 1 });
+    fx().emit('sparks', 370, 318, { col: '#ffe8a0', n: 2, power: 1 });
+    fx().emit('smoke', 270, 330, { n: 0.6 });
+    C.shake = 1;
+  }
+  function cmpPop() {
+    const C = S.cmp;
+    C.phase = 'done'; C.fired.pop = true;
+    snd('cmpPop');
+    const def = C.cd.res ? itemDef(C.cd.res.id) : null;
+    const col = (def && ({ u: PAL0.cyan, r: PAL0.gold, l: PAL0.pink })[def.rarity]) || '#9fb4ff';
+    fx().ring(270, 300, col, { r0: 20, r1: 180, w: 8, life: 0.6 });
+    fx().emit('confetti', 270, 260, { n: 0.8, power: 0.9 });
+    if (S.screen === 'compactor') cmpDom();   // the result card stamps in
+  }
+  function cmpTick(real) {
+    const C = S.cmp;
+    if (!C || S.screen !== 'compactor') return;
+    C.shake = Math.max(0, C.shake - real * 2.5);
+    if (C.phase === 'idle' || C.phase === 'done') { C.t += real; return; }
+    C.t += real;
+    const t = C.t;
+    [0.08, 0.22, 0.36].forEach((at, i) => { if (t >= at && !C.fired['f' + i]) { C.fired['f' + i] = true; snd('cmpFeed', { pitch: 0.85 + i * 0.12 }); } });
+    if (t >= CMPK.feed && !C.fired.press) { C.fired.press = true; C.phase = 'press'; snd('cmpPress'); }
+    if (t >= CMPK.slam && !C.fired.slam) { C.phase = 'grind'; cmpSlam(); }
+    if (C.phase === 'grind' && ((t * 20) | 0) % 3 === 0) fx().emit('sparks', 200 + ((t * 977) % 140), 322, { col: '#ffd27a', n: 0.3, power: 0.6 });
+    if (t >= CMPK.lift && C.phase === 'grind') { C.phase = 'lift'; snd('cmpPress', { pitch: 1.3, vol: 0.6 }); }
+    if (t >= CMPK.pop && !C.fired.pop) cmpPop();
+  }
+  // Back to the shop, or from the rest stop to the map (a crush was the rest).
+  function cmpLeave() {
+    const C = S.cmp, cd = C && C.cd;
+    if (C && C.phase !== 'idle' && C.phase !== 'done') { cmpHurry(); return; }
+    S.cmp = null; S.sd = null;
+    if (cd && cd.from === 'shop' && cd.shop) { showShop(cd.shop); return; }
+    if (cd && cd.from === 'rest' && !cd.res) { showRest(); return; }
+    toMap();
+  }
+  // The canvas under the two screens: the machine's backdrop, the press.
+  function setDraw(ctx, t) {
+    const R = X.RENDER;
+    if (!R) return;
+    if (S.screen === 'boon' && R.boonBack) {
+      const Bs = S.boon, B = S.run && S.run.boon;
+      R.boonBack(ctx, { t, w: W, h: H, up: Bs ? Bs.up : [], pick: B ? B.pick : -1, done: !!(B && B.done), tilt: S.run ? S.run.tilt | 0 : 0 });
+    } else if (S.screen === 'compactor' && R.cmpScene && S.cmp) {
+      const C = S.cmp, cd = C.cd;
+      const ins = (cd.res ? cd.res.ins : cmpInsts(cd)).map((i) => ({ def: itemDef(i.id), plus: !!i.plus }));
+      const res = cd.res ? { def: itemDef(cd.res.id), plus: !!cd.res.plus } : null;
+      R.cmpScene(ctx, { t, x: 0, y: 70, w: W, h: 350, phase: C.phase, k: C.t, K: CMPK, ins, res, shake: C.shake, reduced: !!fx().reduced });
+    }
+  }
+  // ================================================================ /SETS
 
   // ---------------------------------------------------------------- bin viewer / picker
   function openBin(o) {
@@ -11132,6 +12440,7 @@ const GAME = (() => {
     const c3 = btn('', () => openBin({ mode: 'upgrade', title: 'Upgrade which item?', back: () => showRest(), onPick: (inst) => { inst.plus = true; snd('upgrade'); toast(`${itemName(itemDef(inst.id), true)}!`); toMap(); } }), 'choice');
     c3.textContent = ''; c3.appendChild(h('div', 'c1', 'Sharpen an item')); c3.appendChild(h('div', 'c2', 'Upgrade one item to its plus version.'));
     list.appendChild(c3);
+    cmpRestChoice(list);   // the Compactor instead of resting (SETS block)
     b.appendChild(list);
     save();
   }
@@ -11181,6 +12490,7 @@ const GAME = (() => {
     kv('Items played', run.played);
     kv('Jackpots', run.jackpots);
     kv('Gold', run.gold);
+    accStats(kv, run);   // ACCESS: the slow claw assist, noted
     kv('Seed', run.seed);
     return list;
   }
@@ -11225,8 +12535,8 @@ const GAME = (() => {
     setScreen('win');
     const b = $('winBody');
     clear(b);
-    b.appendChild(h('h1', null, 'The Prize Master falls'));
-    b.appendChild(h('div', 'sub', 'The claw goes quiet. The cabinets flicker off, one by one. You walk out with a bin full of junk and every ticket in the building.'));
+    b.appendChild(h('h1', null, secWinTitle() || 'The Prize Master falls'));   // (SECRET: the true ending)
+    b.appendChild(h('div', 'sub', secWinSub() || 'The claw goes quiet. The cabinets flicker off, one by one. You walk out with a bin full of junk and every ticket in the building.'));
     const sc = endlessScore(run, true);   // the run score, recorded before the run-end stickers are listed (ENDLESS block)
     endlessScorePanel(b, sc);
     endlessChoice(b);   // CASH OUT (the first choice) or KEEP PLAYING: ENDLESS (ENDLESS block)
@@ -11290,6 +12600,7 @@ const GAME = (() => {
         r.onclick = (ev) => { popover(`<b>${def.name}</b><br>${def.text || ''}`, 400, 70); if (ev && ev.stopPropagation) ev.stopPropagation(); };
         el.appendChild(r);
       }
+      setBarLink(el);   // set members chained together behind their badge (SETS block)
     }
     if (F && FS) {
       const st = F.player.status;
@@ -11405,6 +12716,7 @@ const GAME = (() => {
   }
   function onKey(ev, down) {
     const k = ev.key;
+    if (accKey(ev, down)) return;   // ACCESS: the Settings panel takes the keys (Escape closes it)
     if (down && k === 'Escape') { popover(null); return; }
     if (S.screen === 'intro') { if (down && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'capsule') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); capsuleTap(); } return; }
@@ -11433,7 +12745,8 @@ const GAME = (() => {
     ctx.translate(off.x || 0, off.y || 0);
     if (off.r) { ctx.translate(W / 2, H / 2); ctx.rotate(off.r); ctx.translate(-W / 2, -H / 2); }
     const run = S.run;
-    if (S.screen === 'vault') vaultDraw(ctx, t);   // the Prize Vault: the wall, the preview, the capsule (VAULT block)
+    if (S.screen === 'secret') secDraw(ctx, t);   // the hidden door, the true ending (SECRET)
+    else if (S.screen === 'vault') vaultDraw(ctx, t);   // the Prize Vault: the wall, the preview, the capsule (VAULT block)
     else if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection' || S.screen === 'stickers' || S.screen === 'tips') {
       if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
     } else if (S.screen === 'map' || (run && S.screen !== 'fight' && S.screen !== 'gameover' && S.screen !== 'win')) {
@@ -11446,9 +12759,12 @@ const GAME = (() => {
     drawBossUnder(ctx, t);   // the death finale's whiteout and title card (boss arena)
     drawLoot(ctx, t);   // the ticket stream / the capsule scene, under the particles
     arcDraw(ctx, t);    // ARCADE: the mini-game machine, the event vignette
+    secOver(ctx, t);    // SECRET: a golden key spinning up out of where it was found
     feelDraw(t);        // FEEL: the tip card art, the shopkeeper, the campfire, the forge
+    setDraw(ctx, t);    // SETS: the boon draft's machine, the Compactor's press
     fx().draw(ctx);
     drawBossTop(ctx, t);     // the versus card, over everything
+    accIrisDraw(ctx);        // ACCESS (round 6): the map zooming into the fight's tile under the closing iris
     ctx.restore();
   }
   const DIRS6 = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
@@ -11507,6 +12823,7 @@ const GAME = (() => {
   function drawMap(ctx, t) {
     const R = X.RENDER, run = S.run, M = run && run.map;
     if (R && R.mapBg) R.mapBg(ctx, W, H, run ? run.act : 1, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
+    secMapBg(ctx, t);   // the Back Room's circuit board (SECRET)
     if (!M || !X.MAP) return;
     const L = mapLayout(), P = mapPaint(), c = cam();
     if (!L || !P) return;
@@ -11529,6 +12846,7 @@ const GAME = (() => {
     const st = P.st;
     ctx.save();
     ctx.beginPath(); ctx.rect(A.x, A.y, A.w, A.h); ctx.clip();
+    accMapPunch(ctx, A);   // ACCESS (round 6): the zoom punch toward a hex just lit (a draw transform, inside the area)
     // Pass 1: the ground (water, fords, land) under every hex in view.
     st.t = t; st.orient = L.orient; st.biome = P.biome; st.ink = M.ink;
     for (const it of P.items) {
@@ -11586,18 +12904,21 @@ const GAME = (() => {
     }
     // The start-boss axis shows through the dark so the direction is obvious.
     if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
-    if (R && R.best) R.best.sky(ctx, A.x, A.y, A.w, run.act, t);   // the act 3 aurora on the sky edge (BESTIARY)
+    if (R && R.best && !secIn(run)) R.best.sky(ctx, A.x, A.y, A.w, run.act, t);   // the act 3 aurora on the sky edge (BESTIARY; none inside the machine: SECRET)
     // The crawler and the portrait: on the current hex, or easing between
     // hexes while a walk plays (hex() left the crawler out then).
     drawBossPulse(ctx, t, size);
     drawBeam(ctx, t, size);
     drawAmbient(ctx);
     arcDrawRoam(ctx, t, size, z, ox, oy);   // ARCADE: roaming monsters and their next step
+    secMapDraw(ctx, t, size, z, ox, oy);   // SECRET: a golden key's glint
     vaultTrailDraw(ctx, t, z, ox, oy, size);   // the Prize Vault trail behind the crawler (VAULT block)
     const meXY = wxy || curXY;
+    const hop = meXY ? accHopBegin(ctx, meXY, size) : false;   // ACCESS (round 6): the crawler hops hex to hex
     if (meXY && R && R.crawler) R.crawler(ctx, meXY.x, meXY.y, size, t);
     if (meXY && R && R.portrait) R.portrait(ctx, run.char, meXY.x, meXY.y, size * 1.2, t);
     if (meXY) petMapDraw(ctx, meXY.x, meXY.y, size, t);   // the pet on its bed (PETS block)
+    if (hop) ctx.restore();
     if (pv && R && R.mapPath) {
       if (pv.tool) {
         // the flare: a line from the player through the hexes it would light
@@ -11622,7 +12943,7 @@ const GAME = (() => {
     if (ba && R && R.mapArrow) R.mapArrow(ctx, ba.x, ba.y, ba.a, 16, t, 'Boss');
     if (R && R.mapCompass) R.mapCompass(ctx, A.x + A.w - 42, A.y + A.h - 42, 28, t);
     if (R && R.mapHeader) {
-      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, actDef(run.act).name, MC.prog, t);
+      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, secIn(run) ? 'The Back Room' : actDef(run.act).name, MC.prog, t);   // (SECRET)
     }
   }
   // Reused per-frame objects for the fight draw (no allocation per enemy).
@@ -11642,6 +12963,7 @@ const GAME = (() => {
     // instead of filling the whole stage twice (Polish and QA perf)
     ctx.save(); ctx.beginPath(); ctx.rect(-30, -30, W + 60, CAB.y - CAB.frame + 30 + 24); ctx.clip();
     if (R && R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
+    secBg(ctx, t);   // the Back Room: the machine's insides (SECRET)
     ctx.restore();
     drawAmbient(ctx);
     // Enemies.
@@ -11682,7 +13004,7 @@ const GAME = (() => {
       const g = FS.ghost[i];
       HPO.ghost = g ? g.v : 0; HPO.flash = a.barFlash || 0; HPO.shield = sh.block > 0 ? t * 0.6 : 0;
       const bs = a.barShake > 0 ? Math.sin(t * 90) * a.barShake * 3 : 0;
-      if (R && R.hpBar) R.hpBar(ctx, p.x - bw / 2 + bs, p.y + 10, bw, 12, sh.hp, e.maxHp, sh.block, HPO);
+      if (R && R.hpBar && !secNoBar(e)) R.hpBar(ctx, p.x - bw / 2 + bs, p.y + 10, bw, 12, sh.hp, e.maxHp, sh.block, HPO);   // (The Machine's bar is the marquee: SECRET)
       // centred and cut to one row that stops short of the next enemy's chips
       // ("+N" for the rest; a tap on the enemy lists them all) (Polish and QA)
       let near = 99;   // index distance to the nearest living neighbour (enemyPos slots are even)
@@ -11702,6 +13024,7 @@ const GAME = (() => {
     else if (R && R.cabinet) R.cabinet(ctx, CAB.x, CAB.y, cfg, cabSt);
     else { ctx.fillStyle = '#0d0718'; ctx.fillRect(CAB.x - CAB.frame, CAB.y - CAB.frame, CAB.w + CAB.frame * 2, CAB.h + CAB.frame * 2); ctx.fillStyle = '#1b1030'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
     bossCabDraw(ctx, t, cfg, 'back');
+    secCabDraw(ctx, t, 'back');   // zero g, the light show (SECRET)
     ctx.save();
     ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
     mutCabDraw(ctx, t, 'back');   // the Conveyor Belt under the pile (ENDLESS block)
@@ -11748,7 +13071,7 @@ const GAME = (() => {
         if (sp2 > 67600) { const va = Math.atan2(b.vy, b.vx), k = U.clamp((Math.sqrt(sp2) - 260) / 1100, 0, 0.32); ctx.rotate(va); ctx.scale(1 + k, 1 - k * 0.7); ctx.rotate(-va); }
         ctx.translate(-x, -yy);
       }
-      if (R && R.item) R.item(ctx, d.def, x, yy, b.a, melt, { plus: inst.plus, frozen: inst.frozen, glow: glowC, glowA });
+      if (R && R.item) R.item(ctx, d.def, x, yy, b.a, melt, { plus: inst.plus, frozen: inst.frozen, glow: glowC, glowA, hc: accHc() });   // ACCESS: high-contrast outlines
       else { ctx.fillStyle = d.def.color || '#888'; ctx.beginPath(); ctx.arc(x, yy, 12, 0, Math.PI * 2); ctx.fill(); }
       if (fxOn) R.itemFx(ctx, d.def, x, yy, b.a, melt, MST, 'front');
       if (xf) ctx.restore();
@@ -11786,6 +13109,7 @@ const GAME = (() => {
     clawSlotDraw(ctx, t);   // the coin slot (CLAW TYPES block)
     luckDraw(ctx, t);   // Lucky Lou's Luck meter (CONTENT block)
     bossCabDraw(ctx, t, cfg, 'front');
+    secCabDraw(ctx, t, 'front');   // The Machine's face, the rail, the shutter, the cracks, the power down (SECRET)
     bestCabTop(ctx, t);   // the prize wheel sign, the trick's warning sign (BESTIARY)
     petDraw(ctx, t);   // the companion pet on the frame, or at work in the cabinet (PETS block)
     drawMonsterFx(ctx, t);
@@ -11802,6 +13126,8 @@ const GAME = (() => {
   function update(dt) {
     dt = dt > 0 ? Math.min(dt, 0.1) : STEP;
     const real = dt;
+    if (accPaused(real)) return;   // ACCESS (round 6): the Settings panel pauses a run
+    accTick(real);
     // slow motion (the last kill, a tier 3 combo) runs on real time
     if (S.slowT > 0) { S.slowT = Math.max(0, S.slowT - real); dt *= S.slowK || 1; }
     S.t += dt;
@@ -11817,6 +13143,8 @@ const GAME = (() => {
     petTick(dt, real);   // the companion pet, its tips (PETS block)
     vaultTick(real);     // VAULT (round 5): the wallet's save, the map trail, the vault preview and capsule
     polTick(real);       // POLISH (round 5): relic badges shine
+    secTickAll(real);    // SECRET (round 6): a key celebration, the hidden door, the true ending
+    setTick(real);       // SETS (round 6): the set fanfare queue, the boon cards, the Compactor's press
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.screen === 'map') {
       walkTick(dt); camStep(dt); bloomTick(); chimeTick();
@@ -11826,6 +13154,7 @@ const GAME = (() => {
       updateFight(dt);
       if (FS) bossTick(dt, real);   // the versus card, signatures, finales (boss arena)
       if (FS) bestTick(dt, real);   // the bestiary's machine tricks (BESTIARY)
+      if (FS) secTick(dt, real);   // The Machine: phases, the shutter, the cracks, the power down (SECRET)
       if (FS && FS.outro) { FS.outro.t -= real; if (FS.outro.t <= 0) finishOutro(); }
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
     }
@@ -11912,6 +13241,7 @@ const GAME = (() => {
     } catch (e) { /* headless */ }
     const e = $('endTurn');
     if (e) e.onclick = () => endTurn();
+    try { accDom(); } catch (err) { /* ACCESS: the pause and thumb buttons are optional */ }
     const stage = $('stage');
     // Any tap outside the popover closes it, except the tap that just opened it.
     if (stage && stage.addEventListener) stage.addEventListener('pointerdown', (ev) => { if (S.popover && ev.target && ev.target.id !== 'pop' && performance.now() - (S.popStamp || 0) > 60) popover(null); });
@@ -11934,6 +13264,547 @@ const GAME = (() => {
     if (!S.meta.introSeen && !renderMode) playIntro(true);
   }
 
+  // ================================================================ ACCESS (round 6)
+  /* Accessibility, the map camera's travel juice and the per-act music
+     hand-off (DESIGN.md "Accessibility, camera and music (round 6)").
+     The settings live on meta.settings (accFix defaults and repairs every
+     field, so an old profile loads as it played) and apply at once
+     (accApply): the renderer's colour-blind palette, label size, reduced
+     flashing and item outlines (RENDER.acc), the master / music / effects
+     volumes (AUDIO), Shake and Buzz as before, and classes on <html> for
+     the CSS (cb-*, txt-l / txt-xl, noflash, hand-left / hand-right, hc).
+     The Settings panel (#accSet) is a modal over any screen: the title's
+     Settings button, the map head's gear, the fight's pause button. It
+     pauses a run while open (update() skips everything but the toast),
+     previews every change live (a sample strip in the panel, and the game
+     behind it), registers its own buttons for GAME.choose and hands the
+     screen's buttons back on close. */
+  const ACC_DEF = { shake: true, haptics: true, volMaster: 1, volMusic: 1, volSfx: 1, noFlash: false, cb: 'off', text: 'n', hc: false, hand: 'off', slowClaw: false };
+  const ACC_CB = ['off', 'deutan', 'protan', 'tritan'];
+  const ACC_CB_NAME = { off: 'Standard', deutan: 'Deutan', protan: 'Protan', tritan: 'Tritan' };
+  const ACC_CB_SUB = { off: 'The game\'s own colours.', deutan: 'Red-green (green-weak): orange and blue signals.', protan: 'Red-green (red-weak): brighter orange and blue.', tritan: 'Blue-yellow: red, green and silver signals.' };
+  const ACC_TXT = ['n', 'l', 'xl'];
+  const ACC_TXT_NAME = { n: 'Normal', l: 'Large', xl: 'Extra large' };
+  const ACC_TXT_K = { n: 1, l: 1.15, xl: 1.3 };
+  const ACC_HAND = ['off', 'left', 'right'];
+  const ACC_HAND_NAME = { off: 'Both hands', left: 'Left hand', right: 'Right hand' };
+  const ACC_CLS = ['cb-deutan', 'cb-protan', 'cb-tritan', 'txt-l', 'txt-xl', 'noflash', 'hand-left', 'hand-right', 'hc'];
+  const ACC_SLOW = 0.55;   // the slow claw assist: carriage and carry speed x0.55
+  const ACC_VOL = { sfx: 0.8, music: 0.5 };   // the audio's own bus levels at 100%
+  function accFix(m) {
+    if (!m) return m;
+    if (!m.settings || typeof m.settings !== 'object' || Array.isArray(m.settings)) m.settings = {};
+    const s = m.settings;
+    for (const k in ACC_DEF) {
+      const d = ACC_DEF[k];
+      if (typeof d === 'boolean') { if (typeof s[k] !== 'boolean') s[k] = d; }
+      else if (typeof d === 'number') s[k] = typeof s[k] === 'number' && isFinite(s[k]) ? U.clamp(s[k], 0, 1) : d;
+      else {
+        const opts = k === 'cb' ? ACC_CB : k === 'text' ? ACC_TXT : ACC_HAND;
+        if (opts.indexOf(s[k]) < 0) s[k] = d;
+      }
+    }
+    return m;
+  }
+  function accS() { if (!S.meta) S.meta = freshMeta(); return accFix(S.meta).settings; }
+  // The <html> classes for a settings object (pure: the tests read it).
+  function accClasses(s) {
+    const out = [];
+    if (s.cb && s.cb !== 'off') out.push('cb-' + s.cb);
+    if (s.text === 'l' || s.text === 'xl') out.push('txt-' + s.text);
+    if (s.noFlash) out.push('noflash');
+    if (s.hand === 'left' || s.hand === 'right') out.push('hand-' + s.hand);
+    if (s.hc) out.push('hc');
+    return out;
+  }
+  function accApply() {
+    if (!S.meta) return null;
+    const s = accS();
+    if (fx()) fx().reduced = !s.shake;
+    applyCalm();
+    const R = X.RENDER;
+    if (R && R.acc && R.acc.set) { try { R.acc.set({ mode: s.cb, text: s.text, noFlash: s.noFlash, hc: s.hc }); } catch (e) { /* optional */ } }
+    const A = X.AUDIO;
+    if (A) { try { if (A.setVolume) A.setVolume(ACC_VOL.sfx * s.volSfx, ACC_VOL.music * s.volMusic); if (A.setMaster) A.setMaster(s.volMaster); } catch (e) { /* optional */ } }
+    S.accCls = accClasses(s);
+    try {
+      const cl = document.documentElement.classList;
+      for (const c of ACC_CLS) cl.remove(c);
+      for (const c of S.accCls) cl.add(c);
+    } catch (e) { /* headless */ }
+    // the slow claw applies to a live rig at once (never over the iced rail's own slow down)
+    if (FS && FS.rig && FS.rig.setConfig && !(F && F.ice && F.ice.part === 'rail')) { try { FS.rig.setConfig({ speed: clawFor().speed * accClawK() }); } catch (e) { /* optional */ } }
+    return s;
+  }
+  // Change one setting (the panel and the tests): repaired, applied, saved.
+  function accSet(k, v) {
+    const s = accS();
+    if (!(k in ACC_DEF)) return undefined;
+    s[k] = v;
+    accFix(S.meta);
+    accApply();
+    saveMeta();
+    return s[k];
+  }
+  function accHc() { return !!(S.meta && S.meta.settings && S.meta.settings.hc); }
+  // Reduced flashing: a boss finale's whiteout becomes a soft pale wash.
+  const ACC_WHITE = 0.22;
+  function accWhite(wh) { return S.meta && S.meta.settings && S.meta.settings.noFlash ? Math.min(wh, ACC_WHITE) : wh; }
+  // The claw speed factor; a run played with the slow claw is tagged (the stats list shows it).
+  function accClawK() {
+    if (!(S.meta && S.meta.settings && S.meta.settings.slowClaw)) return 1;
+    if (S.run) { S.run.assist = S.run.assist && typeof S.run.assist === 'object' ? S.run.assist : {}; S.run.assist.slowClaw = 1; }
+    return ACC_SLOW;
+  }
+  function accStats(kv, run) { if (run && run.assist && run.assist.slowClaw) kv('Assist', 'Slow claw'); }
+  // Reduced motion for the camera juice: Shake off or the OS setting.
+  function accCalm() { return feelReduced(); }
+  // The per-act music: tell the audio which act biome the run is in before a mode starts.
+  function accMusicAct() {
+    const A = X.AUDIO;
+    if (!A || !A.setAct) return 0;
+    return A.setAct(S.run && S.screen !== 'title' && S.screen !== 'chars' ? (S.run.act | 0) : 0);
+  }
+
+  // ---- the Settings panel (a modal over any screen)
+  function accPanel() {
+    let el = $('accSet');
+    if (el && el.accReady) return el;
+    const stage = $('stage');
+    if (!el) {
+      if (!stage || !document.createElement) return null;
+      el = h('div', null);
+      el.id = 'accSet';
+      stage.appendChild(el);
+    }
+    clear(el);
+    const sheet = h('div', 'accSheet panel');
+    const head = h('div', 'accHead');
+    head.appendChild(h('h2', null, 'Settings'));
+    const x = h('button', 'btn go sm accDone', 'Done');
+    x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); accClose(); };
+    head.appendChild(x);
+    sheet.appendChild(head);
+    const pv = document.createElement('canvas');
+    pv.className = 'accPrev'; pv.width = 1000; pv.height = 200;
+    sheet.appendChild(pv);
+    const body = h('div', 'accBody');
+    sheet.appendChild(body);
+    el.appendChild(sheet);
+    // a tap on the dimmed game around the sheet closes it
+    el.onclick = (ev) => { if (ev && ev.target === el) accClose(); };
+    el.accReady = true; el.accBody = body; el.accPrev = pv;
+    return el;
+  }
+  function accOpen() {
+    if (S.accOpen) return true;
+    const el = accPanel();
+    if (!el) return false;
+    popover(null);
+    if (FS) { FS.steering = false; FS.keyDir = 0; }
+    S.accOpen = { screen: S.screen, buttons: S.ui.buttons };
+    accBuild();
+    el.classList.add('show');
+    snd('click');
+    return true;
+  }
+  function accClose() {
+    const o = S.accOpen;
+    if (!o) return false;
+    S.accOpen = null;
+    const el = $('accSet');
+    if (el) el.classList.remove('show');
+    saveMeta();
+    S.ui.buttons = o.buttons || [];
+    // the screen behind rebuilds its own buttons (the title's toggles, the map head)
+    if (S.screen === 'title' && o.screen === 'title') showTitle();
+    else if (S.screen === 'map' && S.run && S.run.map) buildMapHead();
+    return true;
+  }
+  // (Re)builds the panel body; the scroll position stays where it was.
+  function accBuild() {
+    const el = accPanel();
+    if (!el || !S.accOpen) return;
+    const body = el.accBody, keep = body.scrollTop || 0;
+    clear(body);
+    S.ui.buttons = [];
+    const s = accS(), A = X.AUDIO;
+    const sec = (title) => { const d = h('div', 'accSec'); d.appendChild(h('h3', null, title)); body.appendChild(d); return d; };
+    const row = (parent, label, sub) => {
+      const r = h('div', 'accRow');
+      const l = h('div', 'accL');
+      l.appendChild(h('div', 'accN', label));
+      if (sub) l.appendChild(h('div', 'accSub', sub));
+      r.appendChild(l);
+      parent.appendChild(r);
+      return r;
+    };
+    const tog = (parent, label, on, fn, sub) => {
+      const r = row(parent, label, sub);
+      const b = btn(label + (on ? ' on' : ' off'), () => { fn(!on); accBuild(); }, 'sm toggle accTog ' + (on ? 'on' : ''));
+      b.textContent = on ? 'On' : 'Off';   // the row says what it is; GAME.choose keeps the full label
+      b.setAttribute('aria-label', label + (on ? ' on' : ' off'));
+      r.appendChild(b);
+      return r;
+    };
+    const seg = (parent, label, key, opts, names, sub) => {
+      const r = row(parent, label, sub);
+      const g = h('div', 'accSeg');
+      for (const o of opts) g.appendChild(btn(names[o], () => { accSet(key, o); accBuild(); }, 'sm accOpt' + (s[key] === o ? ' sel' : '')));
+      r.appendChild(g);
+      r.classList.add('wide');
+      return r;
+    };
+    const slider = (parent, label, key) => {
+      const r = row(parent, label);
+      const val = h('span', 'accVal mono', Math.round(s[key] * 100) + '%');
+      const inp = document.createElement('input');
+      inp.type = 'range'; inp.min = '0'; inp.max = '100'; inp.step = '5'; inp.value = String(Math.round(s[key] * 100));
+      inp.className = 'accRange';
+      inp.setAttribute('aria-label', label);
+      inp.oninput = () => { accSet(key, (+inp.value || 0) / 100); val.textContent = Math.round(accS()[key] * 100) + '%'; };
+      inp.onchange = () => snd('tick');
+      r.appendChild(inp); r.appendChild(val);
+      r.classList.add('slide');
+      S.ui.buttons.push({ el: inp, fn: () => {}, label: label + ' volume', range: true });
+      return r;
+    };
+    const snd0 = sec('Sound');
+    slider(snd0, 'Master', 'volMaster');
+    slider(snd0, 'Music', 'volMusic');
+    slider(snd0, 'Effects', 'volSfx');
+    const sOn = A ? A.sfxOn : true, mOn = A ? A.musicOn : true;
+    tog(snd0, 'Sound', sOn, () => { if (A && A.toggleSfx) A.toggleSfx(); });
+    tog(snd0, 'Music', mOn, () => { if (A && A.toggleMusic) A.toggleMusic(); });
+    const feel = sec('Motion and feel');
+    tog(feel, 'Shake', s.shake, (v) => accSet('shake', v), 'Off also calms the camera, the zooms and the heavy animations.');
+    tog(feel, 'Buzz', s.haptics !== false, (v) => { feelSetHaptics(v); accApply(); }, 'Phone vibration on hits, grabs and prizes.');
+    tog(feel, 'Reduced flashing', s.noFlash, (v) => accSet('noFlash', v), 'Caps screen flashes and whiteouts, slows strobing bulbs and party lights.');
+    const vis = sec('Vision');
+    seg(vis, 'Colours', 'cb', ACC_CB, ACC_CB_NAME, ACC_CB_SUB[s.cb]);
+    seg(vis, 'Text size', 'text', ACC_TXT, ACC_TXT_NAME, 'Menus, cards, banners and the floating numbers.');
+    tog(vis, 'Item outlines', s.hc, (v) => accSet('hc', v), 'A thick dark rim round every item in the cabinet.');
+    const ctl = sec('Controls');
+    seg(ctl, 'One-handed', 'hand', ACC_HAND, ACC_HAND_NAME, 'END TURN and the map buttons move to the thumb on that side.');
+    tog(ctl, 'Slow claw', s.slowClaw, (v) => accSet('slowClaw', v), 'The claw moves slower for precise grabs. The run summary notes it.');
+    const tips = sec('Tips');
+    const tr = row(tips, 'Tip cards', `${Object.keys((S.meta && S.meta.tips) || {}).length} met. Reset to see them again.`);
+    tr.appendChild(btn('Reset tips', () => { feelTipsReset(); accBuild(); }, 'sm'));   // the row's count says it (a toast would sit under the sheet)
+    body.appendChild(btn('Done', () => accClose(), 'go accBottom'));
+    body.scrollTop = keep;
+    accPreview(el.accPrev);
+  }
+  // The live sample strip at the top of the panel: numbers, status chips,
+  // rarity rims, the map's danger and pickup marks, in the current palette
+  // and text size.
+  function accPreview(cv) {
+    let ctx = null;
+    try { ctx = cv && cv.getContext ? cv.getContext('2d') : null; } catch (e) { ctx = null; }
+    const R = X.RENDER;
+    if (!ctx || !R) return false;
+    try {
+      ctx.setTransform(2, 0, 0, 2, 0, 0);
+      ctx.clearRect(0, 0, 500, 100);
+      ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, 500, 100);
+      const col = (c) => (R.acc ? R.acc.col(c) : c), k = R.acc ? R.acc.textK : 1;
+      // the numbers laid out left to right at the current text size
+      let nx = 16;
+      const num = (str, c) => {
+        ctx.font = `900 ${Math.round(22 * k)}px "Trebuchet MS",system-ui,sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.lineWidth = 4; ctx.strokeStyle = '#12091f'; ctx.strokeText(str, nx, 28); ctx.fillStyle = col(c); ctx.fillText(str, nx, 28);
+        let w = 22 * k * 0.6 * str.length;
+        try { const m = ctx.measureText(str); if (m && m.width > 0) w = m.width; } catch (e) { /* stub */ }
+        nx += w + 14;
+      };
+      num('−12', '#ff5a4a'); num('+6', '#a6ff5e'); num('+5 block', '#2ee6d6');
+      if (R.statusPips) R.statusPips(ctx, Math.max(nx, 250), 18, { poison: 3, str: 2, weak: 1 }, 18);
+      const RC = R.RARITY_COL || {};
+      ['c', 'u', 'r', 'l'].forEach((r, i) => {
+        const x = 40 + i * 50, y = 74;
+        ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fillStyle = '#22163a'; ctx.fill();
+        ctx.lineWidth = 4; ctx.strokeStyle = RC[r] || '#fff'; ctx.stroke();
+        ctx.font = '900 13px "Trebuchet MS",system-ui,sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(r.toUpperCase(), x, y + 1);
+      });
+      if (R.acc && R.acc.mark) {
+        R.acc.mark(ctx, 'danger', 250, 74, 10); R.acc.mark(ctx, 'pickup', 286, 74, 10);
+        R.acc.mark(ctx, 'up', 320, 74, 8, col('#2ee6d6')); R.acc.mark(ctx, 'down', 346, 74, 8, col('#ff2e88'));
+      }
+      // two prizes as the cabinet draws them (rarity rim, the outline when it is on)
+      const IT = tbl('ITEMS'), ids = Object.keys(IT);
+      const pick = (r) => IT[ids.find((id) => IT[id].rarity === r && !IT[id].char)];
+      const a = pick('r'), b = pick('l'), hc = accHc();
+      if (R.item && a) R.item(ctx, a, 404, 72, -0.4, 0.8, { hc, glow: RC.r, glowA: 0.35 });
+      if (R.item && b) R.item(ctx, b, 458, 72, 0.3, 0.8, { hc, glow: RC.l, glowA: 0.45 });
+      return true;
+    } catch (e) { return false; }
+  }
+  // While the panel is open a run holds still; only the toast runs down.
+  function accPaused(dt) {
+    if (!S.accOpen || S.screen === 'title') return false;
+    if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
+    return true;
+  }
+  function accKey(ev, down) {
+    if (!S.accOpen) return false;
+    if (down && ev && ev.key === 'Escape') accClose();
+    return true;
+  }
+  // The fight's pause button and the one-handed thumb buttons on the map.
+  function accDom() {
+    const row = document.querySelector ? document.querySelector('#ctrl .ctrlRow') : null;
+    if (row && !$('accPause') && row.insertBefore) {
+      const b = h('button', 'btn ghost sm accPauseBtn', '⚙');
+      b.id = 'accPause';
+      b.title = 'Settings (pauses the fight)';
+      b.setAttribute('aria-label', 'Settings');
+      b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); accOpen(); };
+      row.insertBefore(b, row.firstChild || null);
+    }
+    const stage = $('stage');
+    if (stage && !$('accThumb') && stage.appendChild) {
+      const t = h('div', null);
+      t.id = 'accThumb';
+      const mk = (label, aria, fn) => { const b = h('button', 'btn sm', label); b.setAttribute('aria-label', aria); b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); fn(); }; t.appendChild(b); return b; };
+      mk('⚙', 'Settings', () => accOpen());
+      mk('Bin', 'Bin', () => { if (S.run && S.screen === 'map') openBin({ mode: 'view', back: () => toMap() }); });
+      mk('◎', 'Recentre on you', () => locate());
+      stage.appendChild(t);
+    }
+  }
+  // Per frame (cheap): the thumb cluster follows the map screen, the camera juice clocks run.
+  function accTick(real) {
+    const hand = S.meta && S.meta.settings ? S.meta.settings.hand : 'off';
+    const want = S.screen === 'map' && hand !== 'off' && !S.accOpen;
+    if (S.accThumbOn !== want) {
+      S.accThumbOn = want;
+      const t = $('accThumb');
+      if (t && t.classList) t.classList[want ? 'add' : 'remove']('on');
+    }
+    if (S.accCam && S.screen !== 'map') accCamCancel(true);   // a walk into a fight (or any tile screen): the zoom comes back for the return
+    if (S.accPunch) { S.accPunch.t += real; if (S.accPunch.t >= ACC_CAM.punchT) S.accPunch = null; }
+    if (S.accIris) { S.accIris.t += real; if (S.accIris.t >= S.accIris.dur + 0.6 || S.screen !== 'fight') { S.accIris = null; accIrisDom(false); } }
+  }
+
+  // ---- the map camera's travel juice
+  /* A far tap (a walk of ACC_CAM.far steps or more) swoops: the camera
+     leads toward the destination, zooms out a little as the walk gets going
+     and eases back in on arrival, following the crawler's eased position
+     (not the hex it steps to). The crawler hops hex to hex with a squash at
+     take-off and landing. Lighting a hex by hand or with a tool gives a
+     small zoom punch toward it (a draw transform about a point inside the
+     map area, so it only ever shows less of the map). A taken tower pans
+     the camera over its newly lit view (the blooms and the beam wait for
+     it) and back to the crawler. Entering a fight from the map zooms into
+     the tile under a closing iris, then the fight's iris opens. Everything
+     goes through clampCam (the zoom and the view centre stay in their
+     bounds), any drag, pinch, wheel or snap cancels it, and reduced motion
+     (Shake off or the OS setting) keeps the old instant behaviour. */
+  const ACC_CAM = { far: 3, dip: 0.14, dipIn: 0.4, dipOut: 0.55, lead: 0.35, leadMax: 170, follow: 6,
+    punch: 0.06, punchT: 0.42, tower: { go: 0.85, hold: 1.3, back: 0.75, dip: 0.2 }, iris: 0.3, hop: 0.3 };
+  const accSmooth = (u) => { u = U.clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+  const accInOut = (u) => { u = U.clamp(u, 0, 1); return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+  function accCamMark(c) { S.accCamSet = { x: c.x, y: c.y, zoom: c.zoom }; }
+  function accCamTouched(c) { const m = S.accCamSet; return !m || Math.abs(m.x - c.x) > 0.01 || Math.abs(m.y - c.y) > 0.01 || Math.abs(m.zoom - c.zoom) > 1e-6; }
+  function accCamCancel(restore) {
+    const J = S.accCam;
+    S.accCam = null; S.accCamSet = null;
+    if (restore && J && J.z0 && mapLayout()) { const c = cam(); c.zoom = J.z0; clampCam(c); }
+  }
+  function accSwoop(path) {
+    const M = S.run && S.run.map;
+    if (!M || !path || path.length < ACC_CAM.far || !mapLayout() || accCalm()) return false;
+    const c = cam(), end = path[path.length - 1];
+    S.accCam = { k: 'walk', t: 0, z0: c.zoom, end: worldOf(end[0], end[1]), out: -1 };
+    accCamMark(c);
+    return true;
+  }
+  // The crawler's eased world position (walkXY in world coordinates).
+  function accCrawlerWorld() {
+    const M = S.run.map, w = S.walk;
+    const b = worldOf(M.pos.q, M.pos.r);
+    if (!w || !w.from) return b;
+    const k = accSmooth(Math.min(1, w.t / WALK_STEP));
+    const a = worldOf(w.from.q, w.from.r);
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+  }
+  // One frame of the camera juice; true when it moved the camera (camStep then does nothing).
+  function accCamStep(dt) {
+    const J = S.accCam;
+    if (!J) return false;
+    if (!mapLayout() || !S.run || !S.run.map) { accCamCancel(false); return false; }
+    const c = cam();
+    if ((S.mapDrag && S.mapDrag.moved) || S.mapPinch) { accCamCancel(false); return false; }   // the player took the camera
+    if (accCamTouched(c)) { accCamCancel(true); return false; }   // a snap (lookAt): the zoom goes back
+    J.t += dt;
+    if (J.k === 'walk') {
+      const on = !!(S.walk && !S.walk.done);
+      if (!on && J.out < 0) J.out = 0;
+      if (J.out >= 0) J.out += dt;
+      const env = accSmooth(J.t / ACC_CAM.dipIn) * (J.out < 0 ? 1 : 1 - accSmooth(J.out / ACC_CAM.dipOut));
+      const cw = accCrawlerWorld();
+      let lx = J.end.x - cw.x, ly = J.end.y - cw.y;
+      const ll = Math.hypot(lx, ly), cap = ACC_CAM.leadMax / Math.max(1e-6, ACC_CAM.lead);
+      if (ll > cap) { lx *= cap / ll; ly *= cap / ll; }
+      const tx = cw.x + lx * ACC_CAM.lead * env, ty = cw.y + ly * ACC_CAM.lead * env;
+      const k = 1 - Math.exp(-ACC_CAM.follow * dt);
+      c.x += (tx - c.x) * k; c.y += (ty - c.y) * k;
+      c.zoom = U.clamp(J.z0 * (1 - ACC_CAM.dip * env), CAM_MIN, CAM_MAX);
+      clampCam(c);
+      accCamMark(c);
+      if (J.out >= ACC_CAM.dipOut) {
+        accCamCancel(false);
+        c.zoom = J.z0; clampCam(c);
+        const M = S.run.map;
+        lookAt(M.pos.q, M.pos.r, true);   // the last bit eases as ever
+      }
+      return true;
+    }
+    if (J.k === 'path') {
+      let leg = J.legs[J.i];
+      if (!leg) { accCamCancel(false); return false; }
+      J.lt += dt;
+      if (leg.hold != null) {
+        if (J.lt >= leg.hold) { J.i++; J.lt = 0; J.from = { x: c.x, y: c.y, zoom: c.zoom }; }
+        accCamMark(c);
+        return true;
+      }
+      if (!leg.to) leg.to = clampCam({ x: leg.x, y: leg.y, zoom: U.clamp(leg.zoom, CAM_MIN, CAM_MAX) });
+      const e = accInOut(J.lt / leg.dur), f = J.from;
+      c.x = f.x + (leg.to.x - f.x) * e; c.y = f.y + (leg.to.y - f.y) * e;
+      c.zoom = U.clamp(f.zoom + (leg.to.zoom - f.zoom) * e, CAM_MIN, CAM_MAX);
+      clampCam(c);
+      accCamMark(c);
+      if (J.lt >= leg.dur) {
+        if (leg.beam) { S.beam = { q: leg.beam.q, r: leg.beam.r, t0: S.t }; }   // the tower's beam sweeps once the camera is there
+        J.i++; J.lt = 0; J.from = { x: c.x, y: c.y, zoom: c.zoom };
+        if (J.i >= J.legs.length) accCamCancel(false);
+      }
+      return true;
+    }
+    accCamCancel(false);
+    return false;
+  }
+  // A tower taken: pan over the newly lit view and back. Returns the delay the blooms wait.
+  function accTowerPan(q, r) {
+    const M = S.run && S.run.map;
+    if (!M || !mapLayout() || accCalm()) return 0;
+    const c = cam(), w = worldOf(q, r), me = worldOf(M.pos.q, M.pos.r), T = ACC_CAM.tower;
+    S.accCam = { k: 'path', t: 0, i: 0, lt: 0, z0: c.zoom, from: { x: c.x, y: c.y, zoom: c.zoom }, legs: [
+      { x: w.x, y: w.y, zoom: c.zoom * (1 - T.dip), dur: T.go, beam: { q, r } },
+      { hold: T.hold },
+      { x: me.x, y: me.y, zoom: c.zoom, dur: T.back },
+    ] };
+    S.camTo = null;
+    accCamMark(c);
+    return T.go;
+  }
+  // A hex lit by hand or a tool (bloomTick): a small zoom punch toward it;
+  // a tower's view: the pan (the blooms, the chimes and the beam wait for it).
+  function accBloom(src, P) {
+    if (!src && !S.beam) return;
+    if (S.beam && S.beam.t0 === S.t) {
+      const d = accTowerPan(S.beam.q, S.beam.r);
+      if (d > 0) {
+        for (const it of P.items) if (it.bloomAt && it.bloomAt >= S.t - 1e-9) it.bloomAt += d;
+        for (const ch of S.chimes || []) ch.at += d;
+        S.beam = null;   // it starts when the camera arrives (accCamStep)
+      }
+      return;
+    }
+    if (src && mapLayout() && !accCalm()) S.accPunch = { t: 0, q: src.q, r: src.r };
+  }
+  // The punch's zoom factor now (1 when there is none).
+  function accPunchK() {
+    const P = S.accPunch;
+    if (!P) return 1;
+    const u = P.t / ACC_CAM.punchT;
+    if (u >= 1) return 1;
+    const f = u < 0.25 ? accSmooth(u / 0.25) : 1 - accSmooth((u - 0.25) / 0.75);
+    return 1 + ACC_CAM.punch * f;
+  }
+  // Applies the punch to the map draw: a zoom in about the lit hex, pinned inside the map area.
+  function accMapPunch(ctx, A) {
+    const P = S.accPunch;
+    if (!P) return null;
+    const k = accPunchK();
+    if (!(k > 1.0001)) return null;
+    const p = hexToStage(P.q, P.r);
+    const px = U.clamp(p.x, A.x, A.x + A.w), py = U.clamp(p.y, A.y, A.y + A.h);
+    ctx.translate(px, py); ctx.scale(k, k); ctx.translate(-px, -py);
+    return { k, px, py };
+  }
+  // The crawler's hop between hexes: lifted on a sine, stretched in the air, squashed at take-off and landing.
+  function accHopBegin(ctx, p, size) {
+    const w = S.walk;
+    if (!w || !w.from || accCalm()) return false;
+    const e = Math.min(1, w.t / WALK_STEP);
+    if (e >= 1) return false;
+    const up = Math.sin(Math.PI * e);
+    const ends = Math.max(0, 1 - Math.min(e, 1 - e) / 0.14);
+    const sy = 1 + 0.12 * up - 0.16 * ends, sx = 1 / Math.max(0.6, sy);
+    const fx0 = p.x, fy0 = p.y + size * 0.32;
+    ctx.save();
+    ctx.translate(fx0, fy0 - up * size * ACC_CAM.hop); ctx.scale(sx, sy); ctx.translate(-fx0, -fy0);
+    return true;
+  }
+  function accHopInfo() {
+    const w = S.walk;
+    if (!w || !w.from || accCalm()) return null;
+    const e = Math.min(1, w.t / WALK_STEP);
+    if (e >= 1) return null;
+    const up = Math.sin(Math.PI * e), ends = Math.max(0, 1 - Math.min(e, 1 - e) / 0.14);
+    return { e, lift: up * ACC_CAM.hop, sy: 1 + 0.12 * up - 0.16 * ends };
+  }
+  // Map -> fight: a zoom into the tile under a closing iris (#wipe.irisz),
+  // then the fight's iris opens. A snapshot of the last map frame is drawn
+  // scaling toward the tile while the iris closes.
+  function accIrisPlan(from, to) {
+    S.accIris = null;
+    if (from !== 'map' || to !== 'fight' || !S.run || !S.run.map || !mapLayout() || accCalm()) return false;
+    const M = S.run.map, tl = S.run.tile || M.pos;
+    const p = hexToStage(tl.q, tl.r);
+    const x = U.clamp(p.x, 0, W), y = U.clamp(p.y, MAP_AREA.y, H);
+    S.accIris = { x, y, t: 0, dur: ACC_CAM.iris, snap: accSnap() };
+    const el = $('wipe');
+    if (!S.headless && el && el.style && el.style.setProperty) { el.style.setProperty('--ix', x.toFixed(1) + 'px'); el.style.setProperty('--iy', y.toFixed(1) + 'px'); }
+    accIrisDom(!!S.accIris.snap);
+    return true;
+  }
+  // The fight's DOM rows stay hidden while the map zooms in (they would show through the iris).
+  function accIrisDom(on) {
+    if (S.headless || S.accIrisDom === on) return;
+    S.accIrisDom = on;
+    const st = $('stage');
+    if (st && st.classList) st.classList[on ? 'add' : 'remove']('accIrisOn');
+  }
+  function accSnap() {
+    if (S.headless || !S.cv || !document.createElement) return null;
+    try {
+      const c = S.accSnapCv || (S.accSnapCv = document.createElement('canvas'));
+      if (c.width !== S.cv.width || c.height !== S.cv.height) { c.width = S.cv.width; c.height = S.cv.height; }
+      const g = c.getContext('2d');
+      g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.drawImage(S.cv, 0, 0);
+      return c;
+    } catch (e) { return null; }
+  }
+  function accIrisDraw(ctx) {
+    const I = S.accIris;
+    if (!I || S.screen !== 'fight') return false;
+    // on the wall clock from the first frame drawn (the CSS iris starts then too;
+    // the loop's catch-up after the heavy fight set-up frame would run ahead)
+    let u = I.t / I.dur;
+    try { const now = performance.now(); if (I.t0 == null) I.t0 = now; u = (now - I.t0) / 1000 / I.dur; } catch (e) { /* headless: the tick clock */ }
+    if (u >= 1 || !I.snap) { accIrisDom(false); return false; }
+    const k = 1 + 1.4 * u * u;
+    ctx.save();
+    ctx.setTransform(S.px, 0, 0, S.px, 0, 0);
+    ctx.translate(I.x, I.y); ctx.scale(k, k); ctx.translate(-I.x, -I.y);
+    try { ctx.drawImage(I.snap, 0, 0, W, H); } catch (e) { /* stub */ }
+    ctx.restore();
+    return true;
+  }
+  // ================================================================ /ACCESS
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -11946,6 +13817,13 @@ const GAME = (() => {
     showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, playIntro, resolveFx, gainRelic, applyClawUpgrade, rollShop,
     // meta progression (DESIGN.md "Meta"): Tilt, the Prizedex, stickers, the daily run, the attract mode
     showStickers,
+    // relic sets, the boon draft, the Compactor (DESIGN.md "Sets, boons and the Compactor")
+    sets: { barLink: setBarLink, tagOn: setTagOn, onGain: setOnGain, fanfare: setFanfare, popHtml: setPopHtml, petStat: setPetStat, metaFix: setMetaFix, fxFor: setFxFor,
+      get queue() { return S.setQ || []; }, get log() { return S.setLog || []; } },
+    boon: { BOON, start: boonStart, show: showBoon, pick: boonPick, flip: boonFlip, apply: boonApply, next: boonNext, ctx: boonCtx,
+      get force() { return BOON.force; }, set force(v) { BOON.force = !!v; }, get state() { return S.boon; } },
+    cmp: { K: CMPK, show: cmpShow, pick: cmpPick, unpick: cmpUnpick, crush: cmpCrush, hurry: cmpHurry, leave: cmpLeave, rule: cmpRuleText, price: cmpPrice,
+      get state() { return S.cmp; } },
     prog: { startRun, startDaily, setTilt: pickTilt, tiltCap, tiltMax, dexSee, dexProg, achUnlock, achRun, runEnd: metaRunEnd, insertCoin, metaFix,
       get queue() { return S.mq || []; }, get log() { return S.mlog || []; }, get current() { return S.mcur; } },
     // loot (DESIGN.md "Loot"): capsules, tickets, the payout tally, the prize counter
@@ -12026,6 +13904,22 @@ const GAME = (() => {
       capsule: vaultCapBuy, open: vaultCapOpen, tap: vaultCapTap, skip: vaultCapSkip, close: vaultCapClose, preview: vaultPreview, draw: vaultDraw,
       shareCard: vaultShareCard, shareInfo: vaultShareInfo, share: vaultShare, onSticker: vaultOnSticker, tick: vaultTick, URL: VLT_URL, WIN: VLT_WIN,
       get state() { return vaultM(); }, get ui() { return S.vault || null; }, get cap() { return S.vcap || null; }, get trail() { return S.vtrail || null; }, get card() { return S.vaultCard || null; },
+    },
+    // ACCESS (round 6): settings, accessibility, the map camera's travel juice, the per-act music
+    acc: {
+      DEF: ACC_DEF, CB: ACC_CB, TXT: ACC_TXT, TXT_K: ACC_TXT_K, HAND: ACC_HAND, CLS: ACC_CLS, SLOW: ACC_SLOW, VOL: ACC_VOL, CAM: ACC_CAM,
+      fix: accFix, apply: accApply, set: accSet, get: (k) => accS()[k], classes: accClasses, open: accOpen, close: accClose, build: accBuild, preview: accPreview,
+      clawK: accClawK, musicAct: accMusicAct, swoop: accSwoop, towerPan: accTowerPan, punchK: accPunchK, hop: accHopInfo, camStep: accCamStep,
+      irisDraw: accIrisDraw, calm: accCalm, stats: accStats, white: accWhite, key: accKey, mapPunch: accMapPunch, crawlerWorld: () => (S.run && S.run.map ? accCrawlerWorld() : null),
+      get isOpen() { return !!S.accOpen; }, get cam() { return S.accCam; }, get punch() { return S.accPunch; }, get iris() { return S.accIris; },
+      get cls() { return (S.accCls || []).slice(); },
+    },
+    // SECRET (round 6, DESIGN.md "Secret act (round 6)"): the golden keys, the hidden door, the Back Room, The Machine, the true ending.
+    sec: {
+      SEC, of: secOf, keys: secKeyCount, grant: secGrant, newMap: secNewMap, enterTile: secEnterTile, arcSettle: secArcSettle, nextAct: secNextAct,
+      show: secShow, enter: secEnter, walkAway: secWalkAway, hurry: secHurry, endDone: secEndDone, inRoom: secIn, meta: secMeta, music: secMusic,
+      power: (i) => (FS ? secPowerStart(i) : null), drop: secDrop, sign: () => (F ? secSign() : null), shutTick: () => (FS ? secShutTick() : null),
+      get fs() { return FS ? FS.sec || null : null; }, get scr() { return S.secScr || null; }, get keyFx() { return S.secKeyFx || null; },
     },
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },

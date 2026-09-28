@@ -712,7 +712,9 @@ const INTRO = (() => {
       if (t >= hit2) bigNumber(ctx, GX + 10, floorY - 260, '7', seg(t, hit2, c1), CYAN);
       // full-frame flashes: pink at the cut, cyan at the hit
       ctx.restore(); ctx.save();
-      const fp = impact(t, c0, 0.5, 16), fc = impact(t, hit2, 0.45, 18);
+      // (the settings' reduced flashing caps them: RENDER.acc, round 6)
+      const fcap = X.R && X.R.acc && X.R.acc.noFlash ? 0.12 : 1;
+      const fp = Math.min(fcap, impact(t, c0, 0.5, 16)), fc = Math.min(fcap, impact(t, hit2, 0.45, 18));
       if (fp > 0.02) { ctx.globalAlpha = fp; ctx.fillStyle = PINK; ctx.fillRect(0, 0, W, H); }
       if (fc > 0.02) { ctx.globalAlpha = fc; ctx.fillStyle = CYAN; ctx.fillRect(0, 0, W, H); }
     }

@@ -802,6 +802,8 @@ else {
     o = o || {};
     const run = Object.assign(mkRun(bin, relics, 1), { hp: o.hp || 200, maxHp: o.maxHp || 200, gold: o.gold || 0 });
     if (o.grabs) run.claw = { grabs: o.grabs };
+    // these pin each relic's own numbers; the round 6 set bonuses have their own block
+    if (!o.sets) run.noSets = true;
     const F = C.newFight(run, enemies || ['rat'], U.rng(o.seed || 3));
     for (const e of F.enemies) { e.hp = 300; e.maxHp = 300; }
     return F;
@@ -2175,6 +2177,322 @@ if (hasData) {
         if (!Number.isFinite(F.player.hp) || F.enemies.some(e => !Number.isFinite(e.hp))) { ok = false; h.ok(false, id + ': NaN hp'); break; }
       }
       h.ok(ok, `${id}: 16 turns clean, every item accounted for`);
+    }
+  });
+}
+
+// ---------- round 6: relic sets and the boon's warm-up grabs ----------
+if (hasData) {
+  const R6 = boot({ only: ['util', 'data', 'combat'] });
+  const D6 = R6.DATA, C6 = R6.COMBAT;
+  // A fight with these relics; o.noSets opts out (the control), o.run merges run fields.
+  const SF = (bin, relics, enemies, o) => {
+    o = o || {};
+    const run = Object.assign({ hp: 200, maxHp: 200, act: 1, gold: o.gold || 0, relics, claw: { grabs: o.grabs || 3 },
+      bin: bin.map((id, i) => ({ uid: 's' + i, id, plus: false })) }, o.run || {});
+    if (o.noSets) run.noSets = true;
+    const F = C6.newFight(run, enemies || ['rat'], R6.U.rng(o.seed || 5));
+    for (const e of F.enemies) { e.hp = 300; e.maxHp = 300; e.block = 0; }
+    return F;
+  };
+  const pl = (F, id, t) => { const i = F.bin.find(x => x.id === id); if (!i) throw new Error('not in bin: ' + id); return C6.play(F, i, t); };
+  const procOf = (F, id) => F.events.filter(e => e.t === 'proc' && e.id === id);
+  const BIN = ['rusty_sword', 'dented_shield', 'crisp_apple', 'rusty_sword'];
+
+  h.test('sets: the bonuses switch on at 2 and 3 pieces, never at 1', () => {
+    for (const id of D6.SET_IDS) {
+      const p = D6.SETS[id].pieces;
+      const F1 = SF(BIN, [p[0]]), F2 = SF(BIN, [p[0], p[2]]), F3 = SF(BIN, p.slice());
+      h.eq(F1.sets.join(), '', `${id}: one piece, no bonus`);
+      h.eq(F2.sets.join(), `set:${id}:2`, `${id}: two pieces, the small bonus`);
+      h.eq(F3.sets.join(), `set:${id}:2,set:${id}:3`, `${id}: three, both`);
+      h.eq(F3.relics.join(), p.join(), `${id}: F.relics keeps only the real relics`);
+      h.eq(F3.hookErrors.length, 0, `${id}: no hook errors`);
+    }
+    h.eq(C6.rulesOf(['set:circus:2']).rules.amp.magic, 2, 'rulesOf reads a set bonus');
+    h.eq(C6.relicMods(['set:fortress:2']).startBlock, 6, 'relicMods reads a set bonus');
+  });
+
+  h.test('sets: Poisoner\'s Kit, Pyromaniac and Cold Storage', () => {
+    let F = SF(BIN, ['venom_gland', 'contagion'], ['rat', 'rat']);
+    C6.status(F, F.enemies[0], 'poison', 3);
+    h.eq(F.enemies[0].status.poison, 4, 'Toxic Touch: 3 Poison lands as 4');
+    F = SF(BIN, ['venom_gland']);
+    C6.status(F, F.enemies[0], 'poison', 3);
+    h.eq(F.enemies[0].status.poison, 3, 'one piece: 3 stays 3');
+    // Plague Doctor: the poison ticks at your turn end too
+    const plague = (o) => { const G = SF(BIN, ['venom_gland', 'contagion', 'festering_jar'], ['rat'], o); G.enemies[0].status.poison = 6; const h0 = G.enemies[0].hp; C6.endTurn(G); return { G, drop: h0 - G.enemies[0].hp }; };
+    const on = plague(), off = plague({ noSets: true });
+    h.eq(on.drop - off.drop, 6, 'Plague Doctor: 6 Poison hits for 6 more at your turn end');
+    h.ok(procOf(on.G, 'set:poison:3').length >= 1, 'PLAGUE proc credits the set');
+    // Pyromaniac
+    F = SF(BIN, ['flint_striker', 'bellows'], ['rat']);
+    C6.status(F, F.enemies[0], 'burn', 2);
+    h.eq(F.enemies[0].status.burn, 3, 'Kindling: 2 Burn lands as 3');
+    F = SF(BIN, ['flint_striker', 'bellows', 'powder_keg'], ['rat', 'rat']);
+    h.ok(F.enemies.every(e => e.status.burn >= 2), 'Wildfire: every enemy starts the turn burning');
+    F.enemies[0].status.burn = 5;
+    C6.damage(F, F.player, F.enemies[0], 999, { pierce: true });
+    h.ok(!F.enemies[0].alive && F.enemies[1].status.burn >= 2 + 5, 'Wildfire: a burning death spreads its Burn');
+    // Cold Storage
+    F = SF(BIN, ['snow_globe', 'cold_snap'], ['rat', 'rat']);
+    const b0 = F.player.block;
+    C6.status(F, F.enemies[0], 'freeze', 1);
+    h.eq(F.player.block - b0, 5, 'Ice Box: a freeze gives 5 Block');
+    F = SF(BIN, ['snow_globe', 'cold_snap', 'permafrost_core'], ['rat', 'rat', 'rat']);
+    for (const e of F.enemies) e.status = {};
+    const hp1 = F.enemies[1].hp;
+    C6.status(F, F.enemies[0], 'freeze', 1);
+    h.ok(F.enemies[1].status.chill === 2 && F.enemies[2].status.chill === 2, 'Flash Freeze: the others gain 2 Chill');
+    h.eq(F.enemies[0].hp, 300 - 6 - 8, 'the frozen one takes 8 (and the Cold Snap 6)');
+    h.eq(F.enemies[1].hp, hp1 - 6, 'the others only the Cold Snap');
+    const hp0 = F.enemies[0].hp;
+    C6.status(F, F.enemies[1], 'freeze', 1);
+    h.eq(F.enemies[1].hp, hp1 - 6 - 6, 'the second freeze this turn: no Flash Freeze');
+    h.eq(F.enemies[0].hp, hp0 - 6, 'only the Cold Snap');
+  });
+
+  h.test('sets: Iron Fortress, Junkyard Dogs and High Rollers', () => {
+    const on = SF(BIN, ['kettle_helm', 'battering_ram']), off = SF(BIN, ['kettle_helm', 'battering_ram'], null, { noSets: true });
+    h.eq(on.player.block - off.player.block, 6, 'Reinforced: 6 more Block at the bell');
+    let F = SF(BIN, ['kettle_helm', 'battering_ram', 'castle_walls'], ['rat', 'rat']);
+    C6.status(F, F.player, 'block', 4);
+    h.ok(F.enemies.every(e => e.hp === 300), 'Siege Engine: 4 Block does nothing');
+    C6.status(F, F.player, 'block', 5);
+    h.ok(F.enemies.every(e => e.hp === 297), 'Siege Engine: 5 Block hits ALL for 3');
+    // Junkyard Dogs
+    const junk = (relics, o) => { const G = SF(BIN, relics, ['rat'], o); C6.addJunk(G, 'rock', 1); const b = G.player.block, hp = G.enemies[0].hp; C6.play(G, G.bin.find(i => i.junk), 0); return { G, block: G.player.block - b, hit: hp - G.enemies[0].hp }; };
+    const j2 = junk(['dumpster_lid', 'recycling_bin']), j0 = junk(['dumpster_lid', 'recycling_bin'], { noSets: true });
+    h.eq(j2.block - j0.block, 3, 'Scrap Armor: junk grabbed out gives 3 more Block');
+    F = SF(BIN, ['dumpster_lid', 'recycling_bin', 'junkyard_king']);
+    h.eq(F.bin.filter(i => i.junk && i.id === 'rock').length, 2, 'Wrecking Crew: two Rocks in the bin at the bell');
+    const j3 = junk(['dumpster_lid', 'recycling_bin', 'junkyard_king']), j3off = junk(['dumpster_lid', 'recycling_bin', 'junkyard_king'], { noSets: true });
+    h.eq(j3.hit - j3off.hit, 8, 'Wrecking Crew: junk grabbed out hits for 8 more');
+    // High Rollers
+    const l2 = SF(BIN, ['dealers_visor', 'lucky_cat']), l0 = SF(BIN, ['dealers_visor', 'lucky_cat'], null, { noSets: true });
+    h.eq(C6.luckOf(l2) - C6.luckOf(l0), 1, 'Hot Hand: 1 more Luck at the turn start');
+    F = SF(BIN, ['dealers_visor', 'lucky_cat', 'high_roller']);
+    F.player.status.luck = 8;
+    C6.cashOut(F, 2);
+    h.eq(C6.luckOf(F), 4, 'House Money: a cash out of 8 hands back 4');
+  });
+
+  h.test('sets: The Arcade Owner, Glassworks, The Hungry Pack, Midnight Circus', () => {
+    const jack = (relics, o) => {
+      const G = SF(['rusty_sword', 'rusty_sword', 'dented_shield', 'crisp_apple', 'crisp_apple', 'dented_shield'], relics, ['rat'], Object.assign({ grabs: 6 }, o || {}));
+      const t0 = G.stats.tix, b0 = G.player.block, g0 = G.player.grabs;
+      C6.useGrab(G); pl(G, 'rusty_sword'); pl(G, 'crisp_apple'); pl(G, 'dented_shield');
+      C6.grabDone(G, 3);
+      return { G, tix: G.stats.tix - t0, grabs: G.player.grabs - (g0 - 1) };
+    };
+    const a2 = jack(['prize_counter', 'ticket_roll']), a0 = jack(['prize_counter', 'ticket_roll'], { noSets: true });
+    h.ok(a2.tix > a0.tix, `Frequent Player: more tickets (${a0.tix} -> ${a2.tix})`);
+    const a3 = jack(['prize_counter', 'ticket_roll', 'gacha_charm']), a30 = jack(['prize_counter', 'ticket_roll', 'gacha_charm'], { noSets: true });
+    h.eq(a3.grabs - a30.grabs, 1, "Owner's Cut: a jackpot gives a grab back");
+    C6.useGrab(a3.G); pl(a3.G, 'rusty_sword'); pl(a3.G, 'crisp_apple'); pl(a3.G, 'dented_shield');
+    const gA = a3.G.player.grabs;
+    C6.grabDone(a3.G, 3);
+    h.eq(a3.G.player.grabs, gA, 'only once a turn');
+    h.eq(D6.SET_FX['set:arcade:3'].loot.capUp, 0.25, 'and capsules upgrade more often (read by the game)');
+    // Glassworks
+    let F = SF(['toxic_vial', 'crystal_shard', 'rusty_sword'], ['bottle_deposit', 'sharp_shards'], ['rat']);
+    let hp = F.enemies[0].hp;
+    C6.material(F, 'shatter', F.bin.find(i => i.id === 'toxic_vial'));
+    h.eq(hp - F.enemies[0].hp, 4 + 3, 'Tempered: a shatter cuts for 3 more (and the shards 4)');
+    F = SF(['toxic_vial', 'crystal_shard', 'rusty_sword'], ['bottle_deposit', 'sharp_shards', 'glass_cannon'], ['rat']);
+    const n0 = F.bin.length;
+    C6.material(F, 'shatter', F.bin.find(i => i.id === 'toxic_vial'));
+    h.ok(F.player.status.str === 1 && F.bin.length === n0 + 1 && F.bin.some(i => i.temp && D6.ITEMS[i.id].tags.includes('glass')), 'Glassblower: +1 Strength and a glass copy');
+    C6.material(F, 'shatter', F.bin.find(i => i.id === 'crystal_shard'));
+    h.ok(F.player.status.str === 2 && F.bin.length === n0 + 1, 'the copy once a turn, the Strength every time');
+    // The Hungry Pack (the game calls petTrick on every trick)
+    F = SF(BIN, ['treat_jar'], ['rat'], { run: { hp: 150 } });
+    let ev = C6.petTrick(F, 'cat');
+    h.ok(F.player.hp === 152 && F.player.block >= 2 && ev.some(e => e.t === 'proc' && e.id === 'treat_jar'), 'Treat Jar: a trick heals 2 and blocks 2');
+    F = SF(BIN, ['dog_whistle'], ['rat']);
+    C6.petTrick(F, 'cat');
+    h.eq(F.enemies[0].hp, 297, 'Dog Whistle: a trick hits the target for 3');
+    F = SF(BIN, ['chew_toy', 'treat_jar'], ['rat']);
+    hp = F.enemies[0].hp;
+    ev = C6.petTrick(F, 'hamster');
+    h.ok(hp - F.enemies[0].hp === 3 && ev.some(e => e.t === 'proc' && e.id === 'set:pack:2'), 'Pack Tactics: 3 to a random enemy, credited to the set');
+    F = SF(BIN, ['chew_toy', 'treat_jar', 'dog_whistle'], ['rat']);
+    ev = C6.petTrick(F, 'hamster');
+    h.ok(ev.some(e => e.t === 'proc' && e.id === 'set:pack:3' && e.text === 'TOP DOG'), 'Top Dog proc (its extra trick and power live in the game)');
+    F.phase = 'over';
+    h.eq(C6.petTrick(F, 'cat').length, 0, 'no tricks after the fight');
+    // Midnight Circus
+    const book = (relics, o) => { const G = SF(['rulebook', 'rulebook', 'rulebook', 'rusty_sword'], relics, ['rat'], Object.assign({ grabs: 9 }, o || {})); const bs = G.bin.filter(i => i.id === 'rulebook' && !i.temp); const b0 = G.player.block; C6.play(G, bs[0]); const one = G.player.block - b0; C6.play(G, bs[1]); return { G, one, two: G.player.block - b0 }; };
+    const c2 = book(['crystal_focus', 'wizard_hat']), c0 = book(['crystal_focus', 'wizard_hat'], { noSets: true });
+    h.eq(c2.one - c0.one, 2, 'Sleight of Hand: +2 on a magic item');
+    const c3 = book(['crystal_focus', 'wizard_hat', 'echo_chamber']);
+    h.eq(c3.two, c3.one * 3, 'Grand Illusion: the 2nd magic item resolves twice');
+    h.eq(c3.G.bin.filter(i => i.temp).length, 2, 'and a second magic copy at the bell');
+  });
+
+  h.test('boon: the warm-up grabs ride the first fight', () => {
+    const F = SF(BIN, [], ['rat'], { run: { boon: { grabs: 2 } } });
+    h.ok(F.player.grabsMax === 5 && F.sets.includes('boon:grabs'), '+2 grabs every turn');
+    C6.endTurn(F);
+    h.eq(F.player.grabsMax, 5, 'still there next turn');
+    h.eq(SF(BIN, [], ['rat'], { run: { boon: { grabs: 0 } } }).player.grabsMax, 3, 'gone once spent');
+  });
+
+  h.test('sets: a 30 turn fuzz holding every set piece stays clean', () => {
+    const all = [];
+    for (const id of D6.SET_IDS) all.push(...D6.SETS[id].pieces);
+    const pool = Object.keys(D6.ITEMS).filter(id => D6.ITEMS[id].rarity !== 'junk').slice(0, 40);
+    const F = SF(pool.slice(0, 16), all, ['rat', 'slime'], { grabs: 4, gold: 200, seed: 11 });
+    const r = R6.U.rng(99);
+    for (let t = 0; t < 30 && F.phase !== 'over'; t++) {
+      for (let g = 0; g < 3 && F.phase === 'player' && F.bin.length; g++) {
+        C6.useGrab(F);
+        for (let k = 0; k < 1 + (g % 3) && F.bin.length && F.phase === 'player'; k++) C6.play(F, F.bin[Math.floor(r() * F.bin.length)], 0);
+        if (F.phase === 'player') C6.grabDone(F, 1 + (g % 3));
+        if (F.phase === 'player' && g === 1) { C6.petTrick(F, 'cat'); C6.material(F, 'shatter', F.bin[0]); }
+      }
+      for (const e of F.enemies) if (e.alive && e.hp < 50) e.hp = 300;   // keep it going
+      if (F.phase === 'player') C6.endTurn(F);
+      if (!Number.isFinite(F.player.hp) || F.enemies.some(e => !Number.isFinite(e.hp))) break;
+    }
+    h.eq(F.hookErrors.length, 0, 'no hook errors ' + F.hookErrors.slice(0, 2).join(' | '));
+    h.ok(Number.isFinite(F.player.hp) && F.enemies.every(e => Number.isFinite(e.hp)), 'no NaN hp');
+    h.ok(F.sets.length === 20, 'all twenty bonuses live');
+  });
+}
+
+// ---------- SECRET (round 6, DESIGN.md "Secret act (round 6)"): The Machine and the Back Room's elites ----------
+if (hasData) {
+  const S6 = boot({ only: ['util', 'data', 'combat'] });
+  const SD = S6.DATA, SC = S6.COMBAT, SU = S6.U;
+  const IDS = Object.keys(SD.ITEMS).filter(id => SD.ITEMS[id].rarity !== 'junk' && !SD.ITEMS[id].bag);
+  const run6 = (extra) => Object.assign({ hp: 999, maxHp: 999, act: 3, relics: [], claw: { grabs: 3 }, gold: 50, bin: IDS.slice(0, 14).map((id, i) => ({ uid: 's' + i, id, plus: false })) }, extra || {});
+  const calm = (e) => { e.intent = { id: 'calm', name: 'Calm', k: 'block', v: 1, txt: 'calm' }; e.charged = 0; };
+  const evK = (evs, k) => evs.filter(x => x.t === 'boss' && x.k === k);
+  // Makes The Machine's next action carry the phase's part `part`.
+  const aim = (e, part) => { const s = e.def.sig, ph = SC.secPhase(e), set = s.phases[ph]; e.sigN = set.indexOf(part); calm(e); return e.sigN >= 0; };
+  h.test('secret: The Machine is a secret boss with a cabinet event every action', () => {
+    const d = SD.ENEMIES.machine;
+    h.ok(d && d.tier === 'boss' && d.secret && d.look === 'machine' && d.sig && d.sig.id === 'machine' && d.sig.first === 0 && d.sig.every === 1, 'a secret boss, a signature every action');
+    h.ok(d.sig.phases.length === 3 && d.sig.phases.every(p => p.length >= 3), 'three phases, three tricks or more each');
+    for (const p of ['tilt', 'flood', 'claw', 'grav', 'rail', 'shutter']) h.ok(d.sig.phases.some(set => set.includes(p)) && d.sig.texts[p] && d.sig.signs[p], `the ${p} event is used, telegraphed and signed`);
+    h.ok(!SD.ENCOUNTERS[3].boss.some(enc => enc.includes('machine')), 'never met in a normal act');
+    for (let s = 1; s <= 60; s++) for (const a of [1, 2, 3]) h.ok(SD.endlessMix(SU.rng(s), a) !== 'machine', 'an Endless boss never borrows its tricks');
+  });
+  h.test('secret: its phases (half hp OVERCLOCKED, the last quarter MELTDOWN) pick their own events', () => {
+    const F = SC.newFight(run6(), ['machine'], SU.rng(3));
+    const e = F.enemies[0];
+    h.eq(SC.secPhase(e), 0, 'phase one');
+    const seen0 = new Set();
+    for (let i = 0; i < 6; i++) { e.sigN = i; seen0.add(SC.sigInfo(e).part); }
+    h.eq([...seen0].sort().join(), [...SD.ENEMIES.machine.sig.phases[0]].sort().join(), 'phase one cycles its set');
+    const info = SC.sigInfo(e);
+    h.ok(info.sign === SD.ENEMIES.machine.sig.signs[info.part] && /then /.test(SC.intentText(e)), 'the telegraph names the event: ' + SC.intentText(e));
+    SC.damage(F, F.player, e, Math.ceil(e.maxHp * 0.55), { pierce: true });
+    h.ok(e.enraged && SC.secPhase(e) === 1 && F.events.some(x => x.t === 'enrage' && x.name === 'OVERCLOCKED'), 'OVERCLOCKED at half hp');
+    SC.endTurn(F);
+    SC.damage(F, F.player, e, e.hp - Math.floor(e.maxHp * 0.2), { pierce: true });
+    for (let k = 0; k < 3 && !e.final; k++) SC.endTurn(F);
+    h.ok(e.final && F.final && SC.secPhase(e) === 2, 'the final quarter');
+    const F2 = SC.newFight(run6(), ['machine'], SU.rng(4));
+    const e2 = F2.enemies[0];
+    SC.damage(F2, F2.player, e2, Math.ceil(e2.maxHp * 0.55), { pierce: true });
+    F2.events.length = 0;
+    SC.damage(F2, F2.player, e2, e2.hp - Math.floor(e2.maxHp * 0.2), { pierce: true });
+    const fin = evK(F2.events, 'final')[0];
+    h.ok(fin && fin.name === 'MELTDOWN', 'the final phase is called MELTDOWN');
+  });
+  h.test('secret: every cabinet event, what it leaves for your turn, and its end', () => {
+    for (const [part, ph] of [['tilt', 0], ['flood', 0], ['claw', 0], ['grav', 1], ['rail', 1], ['shutter', 1], ['claw', 2], ['flood', 2], ['rail', 2]]) {
+      const F = SC.newFight(run6(), ['machine'], SU.rng(11 + part.length + ph));
+      const e = F.enemies[0];
+      if (ph >= 1) e.enraged = true;
+      if (ph >= 2) e.final = true;
+      h.ok(aim(e, part), `${part}: in phase ${ph}'s set`);
+      const bin0 = F.bin.length, hp0 = F.player.hp;
+      F.events.length = 0;
+      SC.endTurn(F);
+      const evs = F.events;
+      const W = `${part} (phase ${ph})`;
+      if (part === 'tilt') h.ok(Math.abs(F.tilt) === 1 && evs.some(x => x.t === 'binTilt') && evK(evs, 'mTilt').length === 1, W + ': the cabinet tilts');
+      if (part === 'flood') {
+        const want = SD.ENEMIES.machine.sig.flood[ph], it = evK(evs, 'mFlood')[0];
+        h.ok(it && it.items.length === want && it.items.every(i => i.junk && F.bin.indexOf(i) >= 0), `${W}: ${want} junk pour in`);
+        h.ok(F.bin.length >= bin0 + want - 2, W + ': into the bin');
+      }
+      if (part === 'claw') h.ok(F.rigged && F.rigged.secret && F.rigged.drops === (ph === 2 ? 2 : 1) && evK(evs, 'mClaw').length === 1, W + ': it takes the claw (' + (F.rigged && F.rigged.drops) + ' drops)');
+      if (part === 'grav') {
+        const g = evK(evs, 'mGrav')[0];
+        h.ok(F.secGrav === 1 && g && g.insts.length > 0 && g.insts.length <= SD.ENEMIES.machine.sig.float[ph] && g.insts.every(i => F.bin.indexOf(i) >= 0), W + ': zero g, the pile floats up');
+      }
+      if (part === 'rail') {
+        h.ok(F.secZap && F.secZap.v === SD.ENEMIES.machine.sig.zap[ph] && evK(evs, 'mRail').length === 1, W + ': a live rail');
+        F.player.block = 0;
+        const hpA = F.player.hp;
+        const zap = SC.secDrop(F);
+        h.eq(F.player.hp, hpA - F.secZap.v, W + ': a drop shocks you');
+        h.ok(evK(zap, 'mZap').length === 1, W + ': the zap event');
+        F.player.block = 50;
+        SC.secDrop(F);
+        h.ok(F.player.block < 50, W + ': Block soaks the shock');
+        h.ok(SC.secGround(F) && !F.secZap && !SC.secGround(F), W + ': a metal prize grounds it');
+        h.eq(SC.secDrop(F).length, 0, W + ': a grounded rail is safe');
+      }
+      if (part === 'shutter') {
+        h.ok(F.secShut && F.secShut.hp === 2 && evK(evs, 'mShutter').length === 1, W + ': the shutter comes down');
+        h.eq(SC.secShutHit(F, false).hp, 2, W + ': a light prize bounces off');
+        h.eq(SC.secShutHit(F, true).hp, 1, W + ': a heavy one dents it');
+        h.eq(SC.secShutHit(F, true), null, W + ': the second dent knocks it open');
+        h.ok(!F.secShut && SC.secShutHit(F, true) === null, W + ': open stays open');
+        F.secShut = { hp: 2, max: 2 };
+      }
+      // it all clears as your next turn ends
+      F.events.length = 0;
+      calm(e); e.sigN = 0;
+      const had = !!(F.secGrav || F.secZap || F.secShut);
+      if (e.def.sig) e.sigForce = false;
+      const sig0 = e.def.sig; e.def = Object.assign({}, e.def, { sig: null });
+      SC.endTurn(F);
+      e.def = Object.assign({}, e.def, { sig: sig0 });
+      h.ok(!F.secGrav && !F.secZap && !F.secShut && !F.rigged && !F.tilt, W + ': gone when your turn ends');
+      if (had) h.ok(evK(F.events, 'mEnd').length === 1, W + ': the end is announced');
+      h.ok(Number.isFinite(F.player.hp) && F.player.hp <= hp0, W + ': no NaN');
+    }
+  });
+  h.test('secret: the Back Room\'s elites stack the strongest affixes', () => {
+    const pool = SD.SECRET.affixPool;
+    for (const id of ['frostknight', 'collector', 'ironjaw', 'dozer']) {
+      const inRoom = SC.newFight(run6({ sec: { room: true } }), [id], SU.rng(21)).enemies[0];
+      h.ok(inRoom.affix.length >= SD.SECRET.eliteAffix && inRoom.affix.filter(a => pool.includes(a)).length >= SD.SECRET.eliteAffix - 1, `${id}: ${inRoom.affix.join(',')}`);
+      const outside = SC.newFight(run6(), [id], SU.rng(21)).enemies[0];
+      h.ok(outside.affix.length < inRoom.affix.length, `${id}: fewer outside the Back Room`);
+    }
+    const m = SC.newFight(run6({ sec: { room: true } }), ['machine'], SU.rng(2)).enemies[0];
+    h.eq(m.affix.length, 0, 'The Machine carries no affix');
+  });
+  h.test('secret: 40 clean turns with The Machine (any claw, every event)', () => {
+    for (const seed of [1, 2, 3]) {
+      const F = SC.newFight(run6(), ['machine'], SU.rng(seed));
+      let bad = 0;
+      const parts = new Set();
+      for (let turn = 0; turn < 40 && F.phase !== 'over'; turn++) {
+        try {
+          if (F.bin.length) SC.play(F, F.bin[0], 0);
+          if (F.secZap && turn % 3 === 0) SC.secDrop(F);
+          if (F.secShut) SC.secShutHit(F, turn % 2 === 0);
+          for (const x of F.events) if (x.t === 'boss' && /^m[A-Z]/.test(x.k)) parts.add(x.k);
+          F.events.length = 0;
+          const e = F.enemies[0];
+          if (turn === 12 && e.alive) SC.damage(F, F.player, e, Math.ceil(e.hp * 0.6), { pierce: true });
+          if (turn === 24 && e.alive) SC.damage(F, F.player, e, Math.ceil(e.hp * 0.6), { pierce: true });
+          if (F.player.hp < 100) F.player.hp = 900;
+          SC.endTurn(F);
+          for (const x of F.events) if (x.t === 'boss' && /^m[A-Z]/.test(x.k)) parts.add(x.k);
+        } catch (err) { bad++; }
+        if (!Number.isFinite(F.player.hp) || F.enemies.some(x => !Number.isFinite(x.hp))) bad++;
+      }
+      h.eq(bad, 0, `seed ${seed}: 40 clean turns`);
+      h.ok(parts.size >= 6, `seed ${seed}: the events it ran: ${[...parts].join(',')}`);
     }
   });
 }

@@ -754,7 +754,7 @@ const RENDER = (() => {
     if (!m || !(Math.abs(m.a) + Math.abs(m.b) > 0)) return null;
     const q = Math.ceil(Math.hypot(m.a, m.b) * s * 4) / 4;
     if (!(q > 0) || q > 5) return null;
-    const vk = (opts.plus ? 1 : 0) + (opts.frozen ? 2 : 0) + (img ? 4 : 0) + q * 32;
+    const vk = (opts.plus ? 1 : 0) + (opts.frozen ? 2 : 0) + (img ? 4 : 0) + q * 32 + (opts.hc && !img ? 1000 : 0);   // ACCESS: the high-contrast rim is its own sprite
     let V = ITEM_SPR.get(def);
     if (!V) { V = {}; ITEM_SPR.set(def, V); }
     let sp = V[vk];
@@ -800,6 +800,7 @@ const RENDER = (() => {
         else if (fn) fn(ctx, w, h, c1, c2);
         else IA.crate(ctx, w, h, def.color, def.color2, key || def.id || '?');
       };
+      if (opts.hc && !img) accRim(ctx, body);   // ACCESS: a thick dark rim and a light halo (items in the bin)
       if (pi && pi.rim) polRim(ctx, pi, body);
       ctx.save();
       if (img) itemImage(ctx, img, def.shape, w, h);
@@ -2148,7 +2149,7 @@ const RENDER = (() => {
   // nominal {w, h} of an enemy's body at the given scale (for bubbles/bars)
   function enemyBox(def, scale) {
     def = def || {};
-    const art = EA[def.art] || EA.blob;
+    const art = EA[def.look] || EA[def.art] || EA.blob;   // (def.look: The Machine's own drawing, SECRET)
     const s = (def.size || 1) * (scale == null ? 1 : scale) * (def.tier === 'boss' ? 1.6 : 1);
     dimsTmp.w = art.w * s; dimsTmp.h = art.h * s;
     return dimsTmp;
@@ -2169,7 +2170,7 @@ const RENDER = (() => {
     ctx.save();
     try {
       def = def || {}; st = st || {}; t = t || 0;
-      const key = def.art;
+      const key = (def.look && EA[def.look]) ? def.look : def.art;   // SECRET: The Machine has its own drawing (def.look)
       const art = EA[key] && key !== 'blob' ? EA[key] : EA.blob;
       const boss = def.tier === 'boss';
       const s = (def.size || 1) * (scale == null ? 1 : scale) * (boss ? 1.6 : 1);
@@ -2618,7 +2619,7 @@ const RENDER = (() => {
       for (let i = 0; i * step < h; i++) BULB.pts.push(-f + 8, h - i * step - 8);
     }
     const P = BULB.pts, n = P.length / 2;
-    const chase = Math.floor(t * (8 + 26 * party)), mod = party > 0.05 ? 2 : 3, pty = party > 0.05;
+    const chase = Math.floor(accStrobe(t) * (8 + 26 * party)), mod = party > 0.05 ? 2 : 3, pty = party > 0.05;   // ACCESS: reduced flashing slows the strobe
     const r = 3.2 + party * 1.2;
     // a Prize Vault marquee's bulb pattern and a skin's bulb colours (VAULT block); the party and the alarm win
     const vp = !pty && !alarm && pat ? pat : '';
@@ -3391,6 +3392,8 @@ const RENDER = (() => {
           ctx.save(); ctx.translate(0, -r * 0.08);
           if (himg) blitContain(ctx, himg, 0, 0, r * 1.3, r * 1.3); else hexIcon(ctx, type, r, t);
           ctx.restore();
+          // ACCESS: a fight to come wears a warning triangle, a pickup a round plus (colour is never the only cue)
+          if (ACC.mode !== 'off') { const ak = accTileKind(type); if (ak) accMark(ctx, ak, r * 0.5, -r * 0.46, Math.max(4, r * 0.19)); }
         }
       }
       if (st.path) {
@@ -3679,6 +3682,7 @@ const RENDER = (() => {
   // drifting ripples (lava with a hot core) and a ford with stepping
   // stones. st: { fill, seed, biome, orient, t }.
   function terrainHex(ctx, x, y, size, tile, st) {
+    if ((st && st.biome === 'machine') || (tile && tile.biome === 'machine')) return secTerrain(ctx, x, y, size, tile, st);   // the Back Room (SECRET)
     ctx.save();
     try {
       tile = tile || {}; st = st || {};
@@ -4050,13 +4054,14 @@ const RENDER = (() => {
         k++;
         const d = hasData && DATA.STATUS[id];
         const fb = STATUS_FALLBACK[id] || ['?', '#8e98a8', 'debuff'];
-        const icon = (d && d.icon) || fb[0], col = (d && d.color) || fb[1], kind = (d && d.kind) || fb[2];
+        const icon = (d && d.icon) || fb[0], col = accC((d && d.color) || fb[1]), kind = (d && d.kind) || fb[2];
         const pw = size * 2.1;
         const pk = pop && pop[id] > 0 ? pop[id] : 0;
         if (pk) { const sc = 1 + Math.sin(pk * Math.PI) * 0.45; ctx.save(); ctx.translate(dx + pw / 2, size / 2 - Math.sin(pk * Math.PI) * 5); ctx.scale(sc, sc); ctx.translate(-dx - pw / 2, -size / 2); glow(ctx, dx + pw / 2, size / 2, size * 1.4, col, pk); }
-        ctx.beginPath(); rrect(ctx, dx, 0, pw, size, size / 2);
+        ctx.beginPath(); accChip(ctx, dx, 0, pw, size, kind);   // ACCESS: a debuff is angular in a colour-blind mode
         F(ctx, shade(col, -0.55)); ctx.fill();
-        S(ctx, kind === 'buff' ? PAL.cyan : PAL.pink, 2); ctx.stroke();
+        S(ctx, accC(kind === 'buff' ? PAL.cyan : PAL.pink), 2); ctx.stroke();
+        if (ACC.mode !== 'off') accMark(ctx, kind === 'buff' ? 'up' : 'down', dx + pw - size * 0.2, size * 0.12, size * 0.2, accC(kind === 'buff' ? PAL.cyan : PAL.pink));
         const simg = artImg('status', id);
         if (simg) blitContain(ctx, simg, dx + size * 0.55, size / 2, size * 0.86, size * 0.86);
         else txt(ctx, String(icon), dx + size * 0.55, size / 2 + 0.5, size * 0.7, col, true, 'center', INK);
@@ -4080,14 +4085,14 @@ const RENDER = (() => {
       const wide = k === 'attack' || k === 'charge' || k === 'block' || k === 'heal';
       const bw = wide ? 52 : 34, bh = 30;
       ctx.beginPath(); rrect(ctx, -bw / 2, -bh, bw, bh, 8); ctx.moveTo(-6, 0); ctx.lineTo(0, 6); ctx.lineTo(6, 0);
-      F(ctx, enemy.charged ? '#5a1030' : '#1d1233'); ctx.fill(); S(ctx, enemy.charged ? PAL.blood : INK, 2.5); ctx.stroke();
+      F(ctx, enemy.charged ? '#5a1030' : '#1d1233'); ctx.fill(); S(ctx, enemy.charged ? accC(PAL.blood) : INK, 2.5); ctx.stroke();
       const cy = -bh / 2;
       const shakeX = k in BIN_KINDS ? Math.sin(t * 30) * 1.5 : 0;
       switch (k) {
         case 'attack': {
           ctx.save(); ctx.translate(-bw / 2 + 12, cy); ctx.rotate(-0.8); IA.sword(ctx, 22, 6, '#c9d3e0', '#8a5a2b'); ctx.restore();
           const v = enemy.charged && it.v != null ? it.v : it.v;
-          txt(ctx, String(v == null ? '' : v) + (it.n > 1 ? 'x' + it.n : ''), 8, cy + 0.5, 14, enemy.charged ? PAL.blood : '#fff', true, 'center', INK);
+          txt(ctx, String(v == null ? '' : v) + (it.n > 1 ? 'x' + it.n : ''), 8, cy + 0.5, 14, enemy.charged ? accC(PAL.blood) : '#fff', true, 'center', INK);
           break;
         }
         case 'block': {
@@ -4098,19 +4103,19 @@ const RENDER = (() => {
           break;
         }
         case 'buff': case 'debuff': {
-          const up = k === 'buff', col = up ? PAL.lime : PAL.pink, simg = artImg('status', it.s);
+          const up = k === 'buff', col = accC(up ? PAL.lime : PAL.pink), simg = artImg('status', it.s);
           if (simg) blitContain(ctx, simg, 0, cy, 22, 22);
           else tone(ctx, c => poly(c, up ? [0, cy - 9, 8, cy, 3, cy, 3, cy + 9, -3, cy + 9, -3, cy, -8, cy] : [0, cy + 9, 8, cy, 3, cy, 3, cy - 9, -3, cy - 9, -3, cy, -8, cy]), col, 0, cy, 8, { ol: 2, dark: -0.3 });
           break;
         }
         case 'heal': {
-          tone(ctx, c => poly(c, [-3, cy - 9, 3, cy - 9, 3, cy - 3, 9, cy - 3, 9, cy + 3, 3, cy + 3, 3, cy + 9, -3, cy + 9, -3, cy + 3, -9, cy + 3, -9, cy - 3, -3, cy - 3]), PAL.lime, -8, cy, 9, { ol: 2, dark: -0.3 });
+          tone(ctx, c => poly(c, [-3, cy - 9, 3, cy - 9, 3, cy - 3, 9, cy - 3, 9, cy + 3, 3, cy + 3, 3, cy + 9, -3, cy + 9, -3, cy + 3, -9, cy + 3, -9, cy - 3, -3, cy - 3]), accC(PAL.lime), -8, cy, 9, { ol: 2, dark: -0.3 });
           txt(ctx, String(it.v == null ? '' : it.v), 10, cy + 0.5, 14, '#fff', true, 'center', INK);
           break;
         }
         case 'charge': {
-          glow(ctx, 0, cy, 18, PAL.blood, 0.6 + Math.sin(t * 8) * 0.3);
-          txt(ctx, '!', 0, cy + 1, 22, PAL.blood, true, 'center', INK);
+          glow(ctx, 0, cy, 18, accC(PAL.blood), 0.6 + Math.sin(t * 8) * 0.3);
+          txt(ctx, '!', 0, cy + 1, 22, accC(PAL.blood), true, 'center', INK);
           break;
         }
         case 'summon': {
@@ -4181,7 +4186,7 @@ const RENDER = (() => {
       // A boss signature rides on this action: a pulsing ribbon over the bubble.
       if (C && C.sigNext && enemy.def && enemy.def.sig && C.sigNext(enemy)) {
         const si = C.sigInfo ? C.sigInfo(enemy) : null;
-        const label = si ? (si.part === 'lid' ? 'CHUTE ICE' : si.part === 'rail' ? 'RAIL ICE' : si.sign) : 'SPECIAL';
+        const label = si ? (si.id === 'machine' ? si.sign : si.part === 'lid' ? 'CHUTE ICE' : si.part === 'rail' ? 'RAIL ICE' : si.sign) : 'SPECIAL';   // (The Machine signs its own: SECRET)
         const col = SIG_COL[enemy.def.sig.id] || PAL.gold, pul = 1 + Math.abs(Math.sin(t * 5)) * 0.08;
         const lw = Math.max(60, String(label).length * 8 + 26);
         // left of the bubble (the affix chips ride on its right; above it is the top bar)
@@ -4508,7 +4513,7 @@ const RENDER = (() => {
        damage numbers) pops with an overshoot, flies up and falls with gravity. */
     api.text = (x, y, str, col, o) => {
       o = o || 0;
-      str = String(str); col = col || '#fff';
+      str = String(str); col = accC(col || '#fff');   // ACCESS: the colour-blind palette
       const lay = !o.phys && !o.free && api.layout;
       // the same label again within a moment merges into the live one ("x2")
       if (lay && !o.noMerge) {
@@ -4522,7 +4527,7 @@ const RENDER = (() => {
         }
       }
       const p = tn < MAXT ? texts[tn++] : texts[0];
-      p.x = x; p.y = y; p.str = str; p.col = col; p.life = p.max = o.life || 1; p.size = o.size || (o.big ? 28 : 20); p.dy = o.dy == null ? -46 : o.dy;
+      p.x = x; p.y = y; p.str = str; p.col = col; p.life = p.max = o.life || 1; p.size = (o.size || (o.big ? 28 : 20)) * ACC.textK; p.dy = o.dy == null ? -46 : o.dy;   // ACCESS: the text size
       p.mode = o.phys ? 1 : 0; p.crit = !!o.crit; p.icon = ''; p.ox = p.oy = 0;
       p.vx = o.vx == null ? (rnd() - 0.5) * 120 : o.vx; p.vy = o.vy == null ? -300 - rnd() * 80 : o.vy; p.g = o.gravity == null ? 900 : o.gravity;
       p.lay = lay; p.lx = 0; p.ly = 0; p.n = 1; p.base = str; p.born = clock; p.born0 = ++seq; p.pop = 0; p.ms = ''; p.mm = -1; p.hide = false;
@@ -4669,7 +4674,7 @@ const RENDER = (() => {
     api.ring = (x, y, col, o) => {
       o = o || 0;
       const p = gn < MAXRING ? rings[gn++] : rings[(gn + 7) % MAXRING];
-      p.x = x; p.y = y; p.col = col || '#fff'; p.r0 = o.r0 == null ? 6 : o.r0; p.r1 = o.r1 == null ? 60 : o.r1;
+      p.x = x; p.y = y; p.col = accC(col || '#fff'); p.r0 = o.r0 == null ? 6 : o.r0; p.r1 = o.r1 == null ? 60 : o.r1;
       p.life = p.max = o.life || 0.45; p.w = o.w || 5; p.delay = o.delay || 0;
     };
     /* A crescent slash arc across (x, y) at angle a, len px wide; o.claw
@@ -4697,9 +4702,9 @@ const RENDER = (() => {
     api.trauma = () => trauma;
     // A one-off directional nudge (the claw thunking the floor).
     api.kick = (dx, dy) => { if (api.reduced) return; kx += dx || 0; ky += dy || 0; };
-    api.flash = (col, a) => { a = a == null ? 0.5 : a; if (api.reduced) a = Math.min(a, 0.12); flashCol = col || '#fff'; flashA = Math.max(flashA, a); };
+    api.flash = (col, a) => { a = a == null ? 0.5 : a; if (api.reduced) a = Math.min(a, 0.12); if (ACC.noFlash) a = Math.min(a, ACC_FLASH); flashCol = col || '#fff'; flashA = Math.max(flashA, a); };   // ACCESS: reduced flashing caps it too
     // A pulse of colour on the screen edges (a hit on the player).
-    api.vignette = (col, a) => { vigCol = col || '#ff2e30'; vigA = Math.max(vigA, a == null ? 0.6 : a); };
+    api.vignette = (col, a) => { vigCol = col || '#ff2e30'; a = a == null ? 0.6 : a; if (ACC.noFlash) a = Math.min(a, ACC_VIG); vigA = Math.max(vigA, a); };
     // A standing edge glow the game sets every frame (low hp heartbeat); 0 clears.
     api.hold = (a, col) => { vigHold = a > 0 ? a : 0; if (col) vigHoldCol = col; };
     api.update = (dt) => {
@@ -6528,8 +6533,8 @@ const RENDER = (() => {
       const n = 48, per = 2 * (w - 24 + h - 24);
       for (let i = 0; i < n; i++) {
         const p = periAt(x + 12, y + 12, w - 24, h - 24, (i / n) * per);
-        const on = party > 0 ? ((i + Math.floor(t * 14)) % 2 === 0) : ((i + Math.floor(t * 7)) % 4 === 0);
-        const bc = party > 0 ? ARC_RAINBOW[(i + Math.floor(t * 10)) % 5] : col;
+        const on = party > 0 ? ((i + Math.floor(accStrobe(t) * 14)) % 2 === 0) : ((i + Math.floor(t * 7)) % 4 === 0);
+        const bc = party > 0 ? ARC_RAINBOW[(i + Math.floor(accStrobe(t) * 10)) % 5] : col;
         ctx.beginPath(); circ(ctx, p.x, p.y, 4.2); F(ctx, on ? bc : rgba(bc, 0.22)); ctx.fill();
         if (on) glow(ctx, p.x, p.y, 13, bc, 0.55);
       }
@@ -6625,8 +6630,8 @@ const RENDER = (() => {
       ctx.beginPath(); circ(ctx, cx, cy, r + 20); S(ctx, PAL.gold, 4); ctx.stroke();
       for (let i = 0; i < 24; i++) {
         const a = i / 24 * TAU, bx = cx + Math.cos(a) * (r + 10), by = cy + Math.sin(a) * (r + 10);
-        const on = party > 0 ? (i + Math.floor(t * 16)) % 2 === 0 : st.spinning ? (i + Math.floor(t * 12)) % 3 === 0 : (i + Math.floor(t * 4)) % 6 === 0;
-        const bc = party > 0 ? ARC_RAINBOW[(i + Math.floor(t * 10)) % 5] : PAL.gold;
+        const on = party > 0 ? (i + Math.floor(accStrobe(t) * 16)) % 2 === 0 : st.spinning ? (i + Math.floor(accStrobe(t) * 12)) % 3 === 0 : (i + Math.floor(t * 4)) % 6 === 0;
+        const bc = party > 0 ? ARC_RAINBOW[(i + Math.floor(accStrobe(t) * 10)) % 5] : PAL.gold;
         ctx.beginPath(); circ(ctx, bx, by, 3.6); F(ctx, on ? '#fff6c0' : rgba(bc, 0.35)); ctx.fill();
         if (on) glow(ctx, bx, by, 11, bc, 0.6);
       }
@@ -6713,8 +6718,8 @@ const RENDER = (() => {
       for (let i = 0; i < 3; i++) chrome(ctx, '7', G.x + G.w / 2 + (i - 1) * 46, G.y - 50, 34, PAL.blood, party > 0 ? ARC_RAINBOW[(i + Math.floor(t * 10)) % 5] : PAL.gold);
       for (let i = 0; i < 14; i++) {
         const side = i < 7 ? 0 : 1, j = i % 7, bx = side ? G.x + G.w + 12 : G.x - 12, by = G.y + 10 + j * (G.h - 20) / 6;
-        const on = party > 0 || st.tease ? (i + Math.floor(t * 14)) % 2 === 0 : (j + Math.floor(t * 5)) % 3 === 0;
-        const bc = party > 0 ? ARC_RAINBOW[(i + Math.floor(t * 10)) % 5] : st.tease ? PAL.pink : PAL.gold;
+        const on = party > 0 || st.tease ? (i + Math.floor(accStrobe(t) * 14)) % 2 === 0 : (j + Math.floor(t * 5)) % 3 === 0;
+        const bc = party > 0 ? ARC_RAINBOW[(i + Math.floor(accStrobe(t) * 10)) % 5] : st.tease ? PAL.pink : PAL.gold;
         ctx.beginPath(); circ(ctx, bx, by, 4.5); F(ctx, on ? bc : rgba(bc, 0.25)); ctx.fill();
         if (on) glow(ctx, bx, by, 12, bc, 0.6);
       }
@@ -8530,7 +8535,902 @@ const RENDER = (() => {
   const PETS_R = { COL: PET_COL, KEYS: PET_KEYS, SCARF: PET_SCARF, ART: PET_ART, tipArt: petTipArt, TIPS: PET_TIPS };
   /* ============================================================ end PETS */
 
+  /* ============================================================ SECRET (round 6) */
+  /* The secret act's look (DESIGN.md "Secret act (round 6)"): the golden
+     key and its glint, the Back Room's biome (the inside of the machine:
+     circuit-board catwalks over a dark void of gears, coin hoppers, cable
+     runs and flickering service lights), its map and arena backdrops, The
+     Machine itself (EA.machine, def.look 'machine': the claw cabinet as a
+     boss), its face on the Rig (big bulb eyes in the marquee, the HP bar as
+     the marquee's lights, a mouth in a giant coin slot), its cabinet events
+     (the live rail, the steel shutter, zero g, the cracking glass, the light
+     show per phase), the long power down, the hidden door and the true
+     ending. Pure functions of their arguments (the game sets SECV.phase for
+     the enemy art before it draws) and they never throw. */
+  const SEC_COL = { key: '#ffc94d', cyan: '#2ee6d6', pink: '#ff2e88', red: '#ff3b3b', steel: '#8e98a8', board: '#123a30', trace: '#3ad6a0', amber: '#ffb347' };
+  const SEC_PH = ['#2ee6d6', '#ff2e88', '#ff3b3b'];
+  const SECV = { phase: 0, t: 0 };
+  // the cabinet's warning sign in The Machine's colours (bossSign)
+  Object.assign(SIG_COL, { machine: SEC_COL.cyan, secShut: SEC_COL.key, secZap: SEC_COL.cyan, secGrav: '#b08cff' });
+  BIOME_PAL.machine = {
+    low: '#1a3a32', high: '#2f5a4e',
+    grass: '#1c3b33', grass2: '#12291f', flower: SEC_COL.amber,
+    forest: '#1c3b33', tree: '#2f5a4e', tree2: '#12291f', trunk: '#0b1a15',
+    dirt: '#1c3b33', dirt2: '#12291f', pebble: '#6b7686',
+    sand: '#1c3b33', sand2: '#12291f', hill: '#24463d', hill2: '#12291f',
+    mtn: '#3a4450', mtn2: '#1f252e', cap: '#8e98a8',
+    sea: '#0b1512', deep: '#050a08', shallow: '#1c3b33', foam: '#3ad6a0', coast: '#050a08', hatch: '#12291f', ripple: '#3ad6a0',
+    tint: 'rgba(46,230,214,0.05)', accent: 'machine', name: 'inside the machine',
+  };
+  // A four point twinkle with a soft glow (a golden key's glint in the dark).
+  function secGlint(ctx, x, y, r, t, a) {
+    ctx.save();
+    try {
+      const k = (0.72 + 0.28 * Math.sin(t * 3.1)) * (a == null ? 1 : a), rr = r * (0.85 + 0.3 * Math.sin(t * 5.3));
+      glow(ctx, x, y, r * 2.2, SEC_COL.key, 0.6 * k);
+      ctx.globalAlpha = U.clamp(k, 0, 1);
+      ctx.translate(x, y); ctx.rotate(t * 0.4);
+      ctx.beginPath(); star(ctx, 0, 0, rr, 4, 0.18); F(ctx, '#fff6c0'); ctx.fill();
+      ctx.rotate(Math.PI / 4); ctx.beginPath(); star(ctx, 0, 0, rr * 0.55, 4, 0.2); F(ctx, SEC_COL.key); ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The golden key (centred, about 40 x 20 at s 1). o: {rot, alpha, glow}.
+  function secKey(ctx, x, y, s, t, o) {
+    o = o || {};
+    ctx.save();
+    try {
+      t = t || 0;
+      ctx.translate(x || 0, y || 0); ctx.rotate(o.rot || 0); ctx.scale(s || 1, s || 1);
+      if (o.alpha != null) ctx.globalAlpha = U.clamp(o.alpha, 0, 1);
+      if (o.glow !== false) glow(ctx, 0, 0, 34, SEC_COL.key, 0.5 + Math.sin(t * 4) * 0.15);
+      ctx.lineJoin = 'round';
+      tone(ctx, c => { circ(c, -11, 0, 9.5); }, SEC_COL.key, -11, 0, 9.5, { dark: -0.35 });
+      ctx.beginPath(); circ(ctx, -11, 0, 4); F(ctx, INK); ctx.fill();
+      tone(ctx, c => rrect(c, -2, -3, 22, 6, 2), SEC_COL.key, 9, 0, 11, { dark: -0.35, spec: false });
+      tone(ctx, c => { c.moveTo(12, 2); c.lineTo(12, 9); c.lineTo(15, 9); c.lineTo(15, 6); c.lineTo(18, 6); c.lineTo(18, 10); c.lineTo(20, 10); c.lineTo(20, 2); c.closePath(); }, SEC_COL.key, 16, 6, 4, NOSPEC);
+      const tw = 0.5 + 0.5 * Math.sin(t * 6);
+      ctx.globalAlpha *= tw;
+      ctx.beginPath(); star(ctx, -16, -7, 5, 4, 0.2); F(ctx, '#ffffff'); ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The Back Room's tiles: circuit-board catwalks, the void full of machinery.
+  function secTerrain(ctx, x, y, size, tile, st) {
+    ctx.save();
+    try {
+      tile = tile || {}; st = st || {};
+      const r = size || 30, t = st.t || 0, flat = st.orient === 'v', seed = (st.seed || 0) >>> 0, P = BIOME_PAL.machine;
+      const lw = Math.max(1, r * 0.05);
+      ctx.translate(x || 0, y || 0);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); hexPath(ctx, 0, 0, r * 1.02, flat);
+      const sea = (tile.terrain || 'land') === 'sea';
+      F(ctx, sea ? P.sea : P.grass); ctx.fill();
+      ctx.save(); ctx.beginPath(); hexPath(ctx, 0, 0, r * 1.02, flat); ctx.clip();
+      const px = (j) => ((((seed >>> (j * 5)) & 31) / 31) - 0.5) * r * 0.8;
+      const py = (j) => ((((seed >>> (j * 5 + 3)) & 31) / 31) - 0.5) * r * 0.7;
+      if (sea) {
+        const k = seed % 4, dir = (seed & 16) ? 1 : -1;
+        if (k === 0) {
+          gear(ctx, px(0) * 0.6, py(0) * 0.6, r * 0.5, 9, t * 0.5 * dir, '#39424e');
+          gear(ctx, px(0) * 0.6 + r * 0.62, py(0) * 0.6 - r * 0.3, r * 0.3, 7, -t * 0.75 * dir, '#2c343e');
+        } else if (k === 1) {
+          // a coin hopper: a funnel of coins
+          tone(ctx, c => { c.moveTo(-r * 0.5, -r * 0.35); c.lineTo(r * 0.5, -r * 0.35); c.lineTo(r * 0.14, r * 0.3); c.lineTo(-r * 0.14, r * 0.3); c.closePath(); }, '#3a4450', 0, -r * 0.05, r * 0.4, { dark: -0.4, spec: false, ol: lw });
+          F(ctx, rgba(PAL.gold, 0.8));
+          ctx.beginPath(); for (let i = 0; i < 5; i++) ell(ctx, -r * 0.3 + i * r * 0.15, -r * 0.34 - (i % 2) * r * 0.05, r * 0.08, r * 0.035, 0); ctx.fill();
+          const drop = (t * 0.9 + (seed & 7) * 0.13) % 1;
+          ctx.beginPath(); ell(ctx, 0, r * 0.3 + drop * r * 0.5, r * 0.05, r * 0.03, 0); ctx.fill();
+        } else if (k === 2) {
+          // a run of cables
+          const cols = ['#ff2e88', '#2ee6d6', '#ffc94d'];
+          for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(-r, py(i) * 0.5 - r * 0.2 + i * r * 0.18); ctx.bezierCurveTo(-r * 0.3, py(i + 1) + r * 0.3, r * 0.3, py(i + 2) - r * 0.3, r, py(i) * 0.5 + i * r * 0.12); S(ctx, shade(cols[i], -0.45), Math.max(1.5, r * 0.09)); ctx.stroke(); }
+        } else {
+          // a caged service light, flickering
+          const fl = Math.sin(t * 13 + seed) * Math.sin(t * 7.3 + seed * 0.3) > -0.55 ? 1 : 0.15;
+          glow(ctx, px(1) * 0.5, py(1) * 0.5, r * 0.9, SEC_COL.amber, 0.35 * fl);
+          tone(ctx, c => circ(c, px(1) * 0.5, py(1) * 0.5, r * 0.14), fl > 0.5 ? '#ffe2a6' : '#5a4a30', px(1) * 0.5, py(1) * 0.5, r * 0.14, NOSPEC);
+          ctx.beginPath(); for (let i = -1; i <= 1; i++) { ctx.moveTo(px(1) * 0.5 + i * r * 0.1, py(1) * 0.5 - r * 0.16); ctx.lineTo(px(1) * 0.5 + i * r * 0.1, py(1) * 0.5 + r * 0.16); } S(ctx, '#39424e', lw); ctx.stroke();
+        }
+        F(ctx, 'rgba(0,0,0,0.25)'); ctx.fillRect(-r, -r, r * 2, r * 2);
+      } else {
+        // a circuit board plate: traces with pads, a chip on some, a pulse running along a trace
+        S(ctx, rgba(SEC_COL.trace, 0.55), lw);
+        ctx.beginPath();
+        for (let i = 0; i < 3; i++) { const a = px(i), b = py(i); ctx.moveTo(-r, b); ctx.lineTo(a, b); ctx.lineTo(a + r * 0.25, b - r * 0.25); ctx.lineTo(r, b - r * 0.25); }
+        ctx.stroke();
+        F(ctx, rgba(SEC_COL.trace, 0.8));
+        ctx.beginPath(); for (let i = 0; i < 3; i++) circ(ctx, px(i), py(i), r * 0.05); ctx.fill();
+        if (seed & 2) {
+          tone(ctx, c => rrect(c, px(3) * 0.4 - r * 0.2, py(3) * 0.4 - r * 0.14, r * 0.4, r * 0.28, 2), '#1b1f26', px(3) * 0.4, py(3) * 0.4, r * 0.2, { dark: -0.3, spec: false, ol: lw });
+          S(ctx, '#8e98a8', Math.max(1, r * 0.03)); ctx.beginPath();
+          for (let i = 0; i < 4; i++) { const cx = px(3) * 0.4 - r * 0.15 + i * r * 0.1, cy = py(3) * 0.4; ctx.moveTo(cx, cy - r * 0.14); ctx.lineTo(cx, cy - r * 0.2); ctx.moveTo(cx, cy + r * 0.14); ctx.lineTo(cx, cy + r * 0.2); }
+          ctx.stroke();
+        }
+        const u = (t * 0.6 + (seed & 15) / 15) % 1, b0 = py(0);
+        glow(ctx, -r + u * (px(0) + r), b0, r * 0.22, SEC_COL.trace, 0.9);
+        // rivets and a steel rim
+        F(ctx, '#6b7686'); ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = (flat ? 0 : -Math.PI / 2) + i * Math.PI / 3; circ(ctx, Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78, r * 0.04); } ctx.fill();
+      }
+      ctx.restore();
+      ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); S(ctx, sea ? 'rgba(0,0,0,0.5)' : '#4a5664', sea ? 1 : lw * 1.4); ctx.stroke();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The Back Room map's backdrop: a dark circuit board with service lights.
+  function secMapBg(ctx, w, h, t) {
+    ctx.save();
+    try {
+      w = w || 540; h = h || 960; t = t || 0;
+      F(ctx, '#040b09'); ctx.fillRect(0, 0, w, h);
+      S(ctx, 'rgba(58,214,160,0.13)', 2);
+      ctx.beginPath();
+      for (let i = 0; i < 14; i++) { const y = 40 + i * 68, x = (i * 97) % w; ctx.moveTo(0, y); ctx.lineTo(x, y); ctx.lineTo(x + 40, y + 40); ctx.lineTo(w, y + 40); }
+      for (let i = 0; i < 8; i++) { const x = 30 + i * 70; ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+      ctx.stroke();
+      for (let i = 0; i < 18; i++) {
+        const x = (i * 131 + 40) % w, y = (i * 211 + 90) % h, u = (t * 0.35 + i * 0.17) % 1;
+        glow(ctx, x, y, 14, SEC_COL.trace, 0.25 + 0.5 * Math.max(0, Math.sin(u * TAU)));
+      }
+      for (let i = 0; i < 5; i++) {
+        const x = 60 + i * 105, y = 110 + (i % 2) * 720, fl = Math.sin(t * 9 + i * 2) * Math.sin(t * 4.1 + i) > -0.6 ? 1 : 0.1;
+        glow(ctx, x, y, 90, SEC_COL.amber, 0.22 * fl);
+      }
+      gear(ctx, -30, 300, 110, 14, t * 0.08, '#0f1a17');
+      gear(ctx, w + 20, 640, 130, 16, -t * 0.06, '#0f1a17');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The arena of a Back Room fight: the machine's insides behind the fight
+  // (big gears, a coin hopper pouring, cable runs, service lights). machine:
+  // The Machine's own fight (its screen glows on the back wall per phase).
+  function secArena(ctx, w, h, t, phase, machine, pd) {
+    ctx.save();
+    try {
+      w = w || 540; t = t || 0; phase = phase | 0; pd = U.clamp(+pd || 0, 0, 1);
+      const top = 70, floor = 318;
+      const g = ctx.createLinearGradient(0, top, 0, floor);
+      g.addColorStop(0, '#040b09'); g.addColorStop(1, '#0d1f1a');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, floor + 90);
+      gear(ctx, 70, 150, 90, 12, t * 0.25, '#16261f');
+      gear(ctx, 190, 110, 50, 9, -t * 0.45, '#1a2c25');
+      gear(ctx, w - 60, 170, 110, 14, -t * 0.2, '#16261f');
+      // the coin hopper, pouring
+      tone(ctx, c => { c.moveTo(330, 80); c.lineTo(430, 80); c.lineTo(395, 150); c.lineTo(365, 150); c.closePath(); }, '#2c343e', 380, 110, 40, { dark: -0.35, spec: false });
+      F(ctx, PAL.gold);
+      for (let i = 0; i < 6; i++) { const u = (t * 1.3 + i / 6) % 1; ctx.beginPath(); ell(ctx, 380 + Math.sin(i * 2.1) * 6, 150 + u * (floor - 150), 5, 2.5, u * 3); ctx.fill(); }
+      // cable runs
+      const cols = ['#ff2e88', '#2ee6d6', '#ffc94d'];
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(0, 90 + i * 14); ctx.bezierCurveTo(160, 200 + i * 10, 330, 60 + i * 12, w, 130 + i * 16); S(ctx, shade(cols[i], -0.55), 6); ctx.stroke(); }
+      if (machine) {
+        // its glow floods the back wall in the phase's colour, scanlines over it
+        const col = SEC_PH[Math.min(2, phase)];
+        glow(ctx, w / 2, 190, 230, col, 0.35 + 0.1 * Math.sin(t * 2) + phase * 0.1);
+        F(ctx, rgba('#000000', 0.18)); for (let y = top; y < floor; y += 6) ctx.fillRect(0, y, w, 2);
+        if (phase >= 1) {
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 2; i++) {
+            const a = -Math.PI / 2 + Math.sin(t * (1.3 + i * 0.4) + i * 2) * 0.9, x0 = 150 + i * 240, y0 = 70;
+            ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 + Math.cos(a - 0.12) * 600, y0 - Math.sin(a - 0.12) * -600); ctx.lineTo(x0 + Math.cos(a + 0.12) * 600, y0 - Math.sin(a + 0.12) * -600); ctx.closePath();
+            F(ctx, rgba(col, 0.09)); ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+      // service lights along the ceiling
+      for (let i = 0; i < 4; i++) {
+        const x = 60 + i * 140, fl = Math.sin(t * 11 + i * 3) * Math.sin(t * 5.3 + i) > -0.5 ? 1 : 0.12;
+        glow(ctx, x, top + 6, 70, SEC_COL.amber, 0.28 * fl);
+        tone(ctx, c => rrect(c, x - 10, top - 2, 20, 8, 3), fl > 0.5 ? '#ffe2a6' : '#4a3a20', x, top + 2, 10, NOSPEC);
+      }
+      // the catwalk floor: steel grating
+      F(ctx, '#1b232b'); ctx.fillRect(0, floor, w, 90);
+      S(ctx, '#2c3640', 2); ctx.beginPath();
+      for (let x = 0; x < w; x += 18) { ctx.moveTo(x, floor); ctx.lineTo(x - 30, floor + 90); }
+      ctx.stroke();
+      F(ctx, '#ffc94d'); for (let x = -((t * 20) % 40); x < w; x += 40) { ctx.beginPath(); ctx.moveTo(x, floor); ctx.lineTo(x + 20, floor); ctx.lineTo(x + 14, floor + 6); ctx.lineTo(x - 6, floor + 6); ctx.closePath(); ctx.fill(); }
+      // the power down: the machine's insides go dark with it
+      if (pd > 0) { F(ctx, rgba('#020106', pd * 0.88)); ctx.fillRect(0, 0, w, floor + 90); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The Machine: the claw cabinet itself as a boss (feet on the origin,
+  // facing -x). Its bulb eyes and its coin slot mouth burn in the phase's
+  // colour (SECV.phase); claw arms on cables sway either side.
+  EA.machine = { w: 150, h: 196, draw(ctx, t, p) {
+    const ph = Math.min(2, SECV.phase | 0), col = SEC_PH[ph], sw = Math.sin(t * 1.3) * 5, bob = Math.sin(t * 1.9) * 2;
+    shadow(ctx, 150);
+    // the cable arms and their claws (behind the body)
+    for (const s of [-1, 1]) {
+      const ax = s * 58, ay = -150 + bob, hx = s * (84 + sw * s), hy = -70 + Math.sin(t * 2 + s) * 8;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(s * 100, -150, hx, hy - 12); S(ctx, INK, 7); ctx.stroke(); S(ctx, '#39424e', 4); ctx.stroke();
+      ctx.save(); ctx.translate(hx, hy); ctx.rotate(Math.sin(t * 2.4 + s) * 0.25);
+      tone(ctx, c => rrect(c, -9, -14, 18, 12, 4), CHROME, 0, -8, 9, { dark: -0.35 });
+      for (const d of [-1, 1]) tone(ctx, c => { c.moveTo(d * 4, -3); c.lineTo(d * 8, -3); c.quadraticCurveTo(d * 14, 8, d * 6, 18); c.lineTo(d * 4, 16); c.quadraticCurveTo(d * 8, 8, d * 4, -3); c.closePath(); }, CHROME, d * 8, 6, 8, { dark: -0.35, spec: false });
+      ctx.restore();
+    }
+    // the cabinet body: a tall trapezoid with chrome trim and pink side art
+    tone(ctx, c => { c.moveTo(-62, 0); c.lineTo(62, 0); c.lineTo(54, -152 + bob); c.lineTo(-54, -152 + bob); c.closePath(); }, '#241640', 0, -76, 60, { dark: -0.35 });
+    ctx.beginPath(); for (let i = 0; i < 4; i++) { ctx.moveTo(-60 + i * 7, -10); ctx.lineTo(-52 + i * 7, -140 + bob); ctx.moveTo(60 - i * 7, -10); ctx.lineTo(52 - i * 7, -140 + bob); } S(ctx, rgba(p.b, 0.5), 2.5); ctx.stroke();
+    // the glass window with a little claw inside (cracked in the meltdown)
+    ctx.beginPath(); rrect(ctx, -40, -134 + bob, 80, 70, 6); F(ctx, rgba(col, 0.16)); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, -134 + bob); ctx.lineTo(0, -112 + bob + Math.sin(t * 2) * 5); S(ctx, CHROME, 1.5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-6, -104 + bob); ctx.lineTo(0, -112 + bob); ctx.lineTo(6, -104 + bob); S(ctx, CHROME, 2.5); ctx.stroke();
+    F(ctx, rgba('#ffffff', 0.18)); ctx.beginPath(); ctx.moveTo(-34, -130 + bob); ctx.lineTo(-20, -130 + bob); ctx.lineTo(-36, -76 + bob); ctx.closePath(); ctx.fill();
+    if (ph >= 2) { ctx.beginPath(); ctx.moveTo(-30, -126 + bob); ctx.lineTo(-8, -100 + bob); ctx.lineTo(12, -118 + bob); ctx.moveTo(-8, -100 + bob); ctx.lineTo(-2, -72 + bob); ctx.moveTo(-8, -100 + bob); ctx.lineTo(30, -84 + bob); S(ctx, rgba('#ffffff', 0.85), 1.5); ctx.stroke(); }
+    // the coin slot mouth: chrome lips, teeth, the phase's glow inside
+    const open = 5 + (0.5 + 0.5 * Math.sin(t * 3.2)) * 7 + ph * 2;
+    tone(ctx, c => rrect(c, -34, -52 - open / 2, 68, open + 12, 7), CHROME, 0, -46, 34, { dark: -0.35 });
+    ctx.beginPath(); rrect(ctx, -28, -46 - open / 2, 56, open, 4); F(ctx, '#0a0414'); ctx.fill();
+    glow(ctx, 0, -46, 30, col, 0.5);
+    F(ctx, '#f4f8ff'); ctx.beginPath();
+    for (let i = 0; i < 6; i++) { const x = -24 + i * 9.6; ctx.moveTo(x, -46 - open / 2); ctx.lineTo(x + 7, -46 - open / 2); ctx.lineTo(x + 3.5, -46 - open / 2 + 5); ctx.closePath(); ctx.moveTo(x, -46 + open / 2); ctx.lineTo(x + 7, -46 + open / 2); ctx.lineTo(x + 3.5, -46 + open / 2 - 5); ctx.closePath(); }
+    ctx.fill();
+    // overclocked: exhaust vents on its flanks spit steam and sparks
+    if (ph >= 1) {
+      for (const s of [-1, 1]) {
+        const vx = s * 50, vy = -96 + bob;
+        ctx.beginPath(); rrect(ctx, vx - 6, vy - 14, 12, 28, 3); F(ctx, '#0a0414'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        glow(ctx, vx, vy, 18, col, 0.6 + 0.3 * Math.sin(t * 9 + s));
+        for (let i = 0; i < 3; i++) { const u = (t * 1.6 + i / 3 + (s > 0 ? 0.5 : 0)) % 1; ctx.beginPath(); circ(ctx, vx + s * (8 + u * 26), vy - 6 + i * 6 - u * 18, 2 + u * 6); F(ctx, rgba('#e8e8f0', 0.45 * (1 - u))); ctx.fill(); }
+      }
+      if (ph >= 2) { S(ctx, '#ffe066', 2); ctx.beginPath(); for (let i = 0; i < 4; i++) { const a = t * 11 + i * 1.7, r0 = 58 + (i % 2) * 8; ctx.moveTo(Math.cos(a) * r0 * 0.5, -120 + Math.sin(a) * 20); ctx.lineTo(Math.cos(a) * r0 * 0.5 + 6, -126 + Math.sin(a) * 20); } ctx.stroke(); }
+    }
+    // the prize door at the foot
+    ctx.beginPath(); rrect(ctx, -22, -24, 44, 18, 4); F(ctx, '#0a0414'); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke();
+    txt(ctx, 'PRIZE', 0, -15, 9, rgba(PAL.gold, 0.8 + 0.2 * Math.sin(t * 4)), true);
+    // the marquee head: bulbs all round, two big bulb eyes
+    tone(ctx, c => rrect(c, -64, -196 + bob, 128, 46, 10), '#1a0f2e', 0, -173, 60, { dark: -0.3 });
+    for (let i = 0; i < 16; i++) {
+      const u = i / 15, x = -58 + u * 116, on = ((i + Math.floor(t * (6 + ph * 4))) % 3) === 0;
+      ctx.beginPath(); circ(ctx, x, -193 + bob, 2.6); circ(ctx, x, -153 + bob, 2.6); F(ctx, on ? '#fff6c0' : shade(col, -0.35)); ctx.fill();
+    }
+    for (const s of [-1, 1]) {
+      const ex = s * 26, ey = -173 + bob, lk = -0.35;
+      glow(ctx, ex, ey, 30, col, 0.7);
+      ctx.beginPath(); circ(ctx, ex, ey, 15); F(ctx, INK); ctx.fill();
+      for (let i = 0; i < 10; i++) { const a = i / 10 * TAU + t * (ph ? 2 : 0.6) * s; ctx.beginPath(); circ(ctx, ex + Math.cos(a) * 12, ey + Math.sin(a) * 12, 2.3); F(ctx, i % 2 ? col : '#fff6c0'); ctx.fill(); }
+      tone(ctx, c => circ(c, ex + lk * 5, ey + 1, 6.5), col, ex + lk * 5, ey + 1, 6.5, NOSPEC);
+      ctx.beginPath(); circ(ctx, ex + lk * 6, ey + 1, 2.6); F(ctx, '#ffffff'); ctx.fill();
+      // the brow: level, then angry, then furious
+      const tilt = [0.1, 0.35, 0.55][ph];
+      ctx.beginPath(); ctx.moveTo(ex - 16, ey - 16 - s * tilt * 10); ctx.lineTo(ex + 16, ey - 16 + s * tilt * 10); S(ctx, INK, 5); ctx.stroke();
+    }
+  } };
+  // The Machine's face on the Rig (drawn over the cabinet front): two big
+  // bulb eyes in the marquee that follow the claw, the HP bar as the
+  // marquee's lights (a bulb per 1/24 of its hp, going dark as it drops),
+  // a mouth in a giant coin slot on the bottom rail that bites on its
+  // attacks. c: {x, y, w, h, frame}; st: {t, phase, hpk, atk, hurt, look, blink, pd (power down 0..1)}.
+  const SEC_BULBS = 24;
+  function secFace(ctx, c, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, ph = Math.min(2, st.phase | 0), pd = U.clamp(st.pd || 0, 0, 1), live = 1 - pd;
+      const col = SEC_PH[ph], fr = c.frame || 30, top = c.y - fr, my = c.y - fr / 2;
+      const flick = pd > 0 ? (Math.sin(t * 37) * Math.sin(t * 23) > 0.2 - pd * 0.8 ? 1 : 0.25) : 1;
+      // the marquee lights: the HP bar
+      const n = SEC_BULBS, lit = Math.ceil(U.clamp(st.hpk == null ? 1 : st.hpk, 0, 1) * n - 1e-6);
+      const ex0 = c.x + c.w * 0.17, ex1 = c.x + c.w * 0.83, er = 22;   // wide apart: the cabinet's warning sign hangs between them
+      for (let i = 0; i < n; i++) {
+        const x = c.x + 8 + (i + 0.5) * (c.w - 16) / n;
+        if (Math.abs(x - ex0) < er + 6 || Math.abs(x - ex1) < er + 6) continue;
+        const on = i < lit && pd < 1 - i / n;
+        ctx.beginPath(); circ(ctx, x, top + 5, 3.4);
+        F(ctx, on ? (ph === 1 && (i + Math.floor(t * 12)) % 4 === 0 ? '#ffffff' : col) : '#1d1233'); ctx.fill();
+        S(ctx, INK, 1); ctx.stroke();
+        if (on) glow(ctx, x, top + 5, 9, col, 0.55 * flick);
+      }
+      // the eyes
+      const look = U.clamp(st.look || 0, -1, 1), blink = U.clamp(st.blink || 0, 0, 1), hurt = U.clamp(st.hurt || 0, 0, 1);
+      for (const ex of [ex0, ex1]) {
+        const ey = my + 1;
+        if (live > 0.02) glow(ctx, ex, ey, er * 2.4, col, 0.55 * live * flick + hurt * 0.4);
+        ctx.beginPath(); circ(ctx, ex, ey, er + 4); F(ctx, INK); ctx.fill(); S(ctx, CHROME, 2); ctx.stroke();
+        for (let i = 0; i < 12; i++) {
+          const a = i / 12 * TAU + t * (ph ? 1.6 : 0.5), on = live > 0.02 && ((i + Math.floor(t * (4 + ph * 5))) % 2 === 0 || ph === 2);
+          ctx.beginPath(); circ(ctx, ex + Math.cos(a) * er, ey + Math.sin(a) * er, 2.6);
+          F(ctx, on ? (i % 3 ? col : '#fff6c0') : '#2a1f40'); ctx.fill();
+        }
+        const pr = er * (0.46 - hurt * 0.12) * (0.4 + live * 0.6);
+        tone(ctx, q => circ(q, ex + look * 7, ey + 2, pr), live > 0.05 ? col : '#2a1f40', ex + look * 7, ey + 2, pr, NOSPEC);
+        if (live > 0.05) { ctx.beginPath(); circ(ctx, ex + look * 8 - 2, ey, pr * 0.35); F(ctx, '#ffffff'); ctx.fill(); }
+        // the lid: blinks, droops shut as it powers down
+        const shut = Math.max(blink, pd * 0.95);
+        if (shut > 0.02) { ctx.beginPath(); ctx.rect(ex - er - 5, ey - er - 5, (er + 5) * 2, (er + 5) * 2 * shut); ctx.save(); ctx.beginPath(); circ(ctx, ex, ey, er + 4); ctx.clip(); F(ctx, '#140b24'); ctx.fillRect(ex - er - 5, ey - er - 5, (er + 5) * 2, (er + 5) * 2 * shut); ctx.restore(); }
+        // the brow over each eye: level, angry, furious
+        const s = ex < c.x + c.w / 2 ? 1 : -1, tilt = [0.12, 0.3, 0.5][ph] * live;
+        ctx.beginPath(); ctx.moveTo(ex - er, ey - er - 5 - s * tilt * 14); ctx.lineTo(ex + er, ey - er - 5 + s * tilt * 14); S(ctx, INK, 6); ctx.stroke(); S(ctx, rgba(col, 0.6 * live), 2); ctx.stroke();
+      }
+      // the mouth: a giant coin slot on the bottom rail
+      const mx = c.x + c.w / 2, mY = c.y + c.h + fr / 2, open = (4 + U.clamp(st.atk || 0, 0, 1) * 14 + (ph === 2 ? Math.abs(Math.sin(t * 9)) * 3 : 0)) * (1 - pd * 0.8);
+      tone(ctx, q => rrect(q, mx - 62, mY - open / 2 - 7, 124, open + 14, 8), CHROME, mx, mY, 60, { dark: -0.4 });
+      ctx.beginPath(); rrect(ctx, mx - 54, mY - open / 2, 108, open, 4); F(ctx, '#07030f'); ctx.fill();
+      if (live > 0.05) glow(ctx, mx, mY, 44, col, 0.5 * live * flick);
+      F(ctx, '#f4f8ff'); ctx.beginPath();
+      for (let i = 0; i < 9; i++) {
+        const x = mx - 50 + i * 11.2, th = Math.min(5, open * 0.45);
+        ctx.moveTo(x, mY - open / 2); ctx.lineTo(x + 8, mY - open / 2); ctx.lineTo(x + 4, mY - open / 2 + th); ctx.closePath();
+        ctx.moveTo(x + 2, mY + open / 2); ctx.lineTo(x + 10, mY + open / 2); ctx.lineTo(x + 6, mY + open / 2 - th); ctx.closePath();
+      }
+      ctx.fill();
+      // a bite: chomp lines burst off the lips
+      const atk = U.clamp(st.atk || 0, 0, 1);
+      if (atk > 0.2 && live > 0.05) {
+        glow(ctx, mx, mY, 70, col, atk * 0.8);
+        ctx.beginPath();
+        for (const s of [-1, 1]) for (let i = 0; i < 3; i++) { const a = (i - 1) * 0.45; ctx.moveTo(mx + s * (70 + i * 2), mY + a * 20); ctx.lineTo(mx + s * (86 + atk * 12), mY + a * 30); }
+        S(ctx, rgba('#ffffff', atk), 3); ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The Machine's cabinet events and light show over the Rig. c: {x, y, w,
+  // h, frame, chuteX, chuteW, dividerTop}; st: {t, phase, rail, hx, shut
+  // {hp, max, k}, grav, crack, seed, pd, flash}; layer 'back' (inside the
+  // glass, under the pile) or 'front' (over it).
+  function secCab(ctx, c, st, layer) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, ph = Math.min(2, st.phase | 0), col = SEC_PH[ph];
+      if (layer === 'back') {
+        ctx.beginPath(); ctx.rect(c.x, c.y, c.w, c.h); ctx.clip();
+        if (st.grav > 0.01) {
+          // zero g: motes and chevrons drift up the back panel
+          ctx.globalAlpha = U.clamp(st.grav, 0, 1);
+          F(ctx, rgba(SEC_COL.cyan, 0.5));
+          for (let i = 0; i < 26; i++) { const x = c.x + ((i * 83) % c.w), y = c.y + c.h - ((t * (40 + (i % 5) * 12) + i * 57) % c.h); ctx.beginPath(); circ(ctx, x, y, 1.6 + (i % 3)); ctx.fill(); }
+          S(ctx, rgba(SEC_COL.cyan, 0.22), 3); ctx.beginPath();
+          for (let i = 0; i < 5; i++) { const x = c.x + 50 + i * 90, y = c.y + c.h - ((t * 60 + i * 70) % (c.h - 40)); ctx.moveTo(x - 12, y + 8); ctx.lineTo(x, y - 4); ctx.lineTo(x + 12, y + 8); }
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        if (ph >= 1) {
+          // the light show: beams sweep the glass from the eyes
+          ctx.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 2; i++) {
+            const x0 = c.x + c.w * (0.3 + i * 0.4), a = Math.PI / 2 + Math.sin(t * (1.1 + i * 0.35) + i * 1.7) * 0.7;
+            ctx.beginPath(); ctx.moveTo(x0, c.y - 10); ctx.lineTo(x0 + Math.cos(a - 0.13) * 520, c.y + Math.sin(a - 0.13) * 520); ctx.lineTo(x0 + Math.cos(a + 0.13) * 520, c.y + Math.sin(a + 0.13) * 520); ctx.closePath();
+            F(ctx, rgba(col, ph === 2 ? 0.1 : 0.07)); ctx.fill();
+          }
+        }
+      } else {
+        // the live rail: arcs crawl along it, a spark shower at the carriage
+        if (st.rail > 0.01) {
+          const y = c.y + 26, x0 = c.x + 8, x1 = c.x + (c.chuteX || c.w - 64) + (c.chuteW || 64) - 8;
+          ctx.globalCompositeOperation = 'lighter';
+          for (let k = 0; k < 2; k++) {
+            ctx.beginPath(); ctx.moveTo(x0, y);
+            for (let x = x0; x <= x1; x += 14) ctx.lineTo(x, y + Math.sin(x * 0.7 + t * 60 + k * 9) * Math.sin(t * 31 + x) * 7);
+            S(ctx, rgba(k ? '#ffffff' : SEC_COL.cyan, 0.75 * st.rail), k ? 1.4 : 3.5); ctx.stroke();
+          }
+          if (st.hx != null) glow(ctx, c.x + st.hx, y, 30 + Math.sin(t * 40) * 6, SEC_COL.cyan, 0.8 * st.rail);
+          ctx.globalCompositeOperation = 'source-over';
+          txt(ctx, 'LIVE RAIL', c.x + 60, y + 16, 11, rgba(SEC_COL.cyan, 0.9 * st.rail), true, 'center', INK);
+        }
+        // the shutter over the chute mouth: steel slats, dents, hazard stripes
+        const sh = st.shut;
+        if (sh && sh.k > 0.01) {
+          const x0 = c.x + (c.chuteX || c.w - 64) - 4, w = c.x + c.w + 2 - x0, dt = c.y + (c.dividerTop || 214);
+          const h = 46 * U.clamp(sh.k, 0, 1), y0 = dt - 46;
+          ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, w, h + 2); ctx.clip();
+          tone(ctx, q => rrect(q, x0, y0, w, h, 3), '#6b7686', x0 + w / 2, y0 + h / 2, w / 2, { dark: -0.35, spec: false });
+          S(ctx, rgba(INK, 0.6), 2); ctx.beginPath(); for (let y = y0 + 9; y < y0 + h; y += 9) { ctx.moveTo(x0 + 2, y); ctx.lineTo(x0 + w - 2, y); } ctx.stroke();
+          const dents = Math.max(0, (sh.max || 2) - (sh.hp || 0));
+          for (let i = 0; i < dents; i++) { const dx = x0 + w * (0.3 + i * 0.35), dy = y0 + h * 0.5; ctx.beginPath(); ell(ctx, dx, dy, 9, 6, 0.3); F(ctx, rgba(INK, 0.45)); ctx.fill(); S(ctx, '#c9d3e0', 1.5); ctx.stroke(); }
+          ctx.restore();
+          ctx.save(); ctx.beginPath(); ctx.rect(x0, y0 + h - 7, w, 7); ctx.clip();
+          F(ctx, '#ffc94d'); ctx.fillRect(x0, y0 + h - 7, w, 7);
+          F(ctx, INK); for (let x = x0 - 10; x < x0 + w; x += 12) { ctx.beginPath(); ctx.moveTo(x, y0 + h); ctx.lineTo(x + 6, y0 + h - 7); ctx.lineTo(x + 12, y0 + h - 7); ctx.lineTo(x + 6, y0 + h); ctx.closePath(); ctx.fill(); }
+          ctx.restore();
+          if (sh.k > 0.9) txt(ctx, 'HEAVY ONLY', x0 + w / 2, y0 - 9, 10, '#ffc94d', true, 'center', INK);
+        }
+        // the cracking glass (the meltdown): impact stars that spread with st.crack
+        const ck = U.clamp(st.crack || 0, 0, 1);
+        if (ck > 0.01) {
+          const seed = (st.seed || 7) >>> 0, pts = 2 + Math.round(ck * 4);
+          ctx.save();
+          ctx.beginPath(); ctx.rect(c.x, c.y, c.w, c.h); ctx.clip();
+          for (let i = 0; i < pts; i++) {
+            const hx = c.x + 40 + (((seed * (i + 3) * 2654435761) >>> 8) % 1000) / 1000 * (c.w - 80);
+            const hy = c.y + 30 + (((seed * (i + 7) * 40503) >>> 6) % 1000) / 1000 * (c.h - 120);
+            const R = (40 + ck * 130) * (0.6 + (i % 3) * 0.2), rays = 6 + (i % 3);
+            ctx.beginPath();
+            for (let k = 0; k < rays; k++) {
+              const a = k / rays * TAU + i, r1 = R * (0.55 + ((k * 37 + i * 11) % 10) / 22);
+              ctx.moveTo(hx, hy); ctx.lineTo(hx + Math.cos(a) * r1 * 0.5, hy + Math.sin(a) * r1 * 0.5 + 4); ctx.lineTo(hx + Math.cos(a + 0.08) * r1, hy + Math.sin(a + 0.08) * r1);
+            }
+            if (ck > 0.4) for (let ring = 1; ring <= 2; ring++) { const rr = R * 0.22 * ring; ctx.moveTo(hx + rr, hy); for (let k = 1; k <= rays; k++) { const a = k / rays * TAU; ctx.lineTo(hx + Math.cos(a) * rr * (0.85 + (k % 2) * 0.2), hy + Math.sin(a) * rr); } }
+            S(ctx, 'rgba(10,4,20,0.35)', 3); ctx.stroke();
+            S(ctx, 'rgba(235,245,255,0.8)', 1.3); ctx.stroke();
+            glow(ctx, hx, hy, 14, '#ffffff', 0.5);
+          }
+          ctx.restore();
+        }
+        // the meltdown: sparks rain from the top frame
+        if (ph === 2 && !(st.pd > 0.6)) {
+          F(ctx, '#ffe066');
+          for (let i = 0; i < 14; i++) {
+            const u = (t * 0.9 + i * 0.137) % 1, x = c.x + ((i * 97) % c.w), y = c.y - 10 + u * u * 220;
+            ctx.beginPath(); circ(ctx, x + Math.sin(i + t) * 6, y, 2 - u); ctx.fill();
+          }
+        }
+        // the power down: the cabinet goes dark, the tube collapses to a line, then a dot
+        const pd = U.clamp(st.pd || 0, 0, 1);
+        if (pd > 0) {
+          ctx.globalCompositeOperation = 'source-over';
+          F(ctx, rgba('#05020b', Math.min(0.92, pd * 1.1))); ctx.fillRect(c.x - (c.frame || 30), c.y - (c.frame || 30), c.w + 2 * (c.frame || 30), c.h + 2 * (c.frame || 30));
+          if (pd > 0.72) {
+            const u = (pd - 0.72) / 0.28, cx = c.x + c.w / 2, cy = c.y + c.h / 2;
+            const lw = c.w * Math.max(0.02, 1 - u * 1.4), lh = Math.max(2, 10 * (1 - u));
+            ctx.globalCompositeOperation = 'lighter';
+            if (u < 0.95) { glow(ctx, cx, cy, Math.max(20, lw * 0.35), '#bfe8ff', 0.9 * (1 - u)); F(ctx, rgba('#e8fbff', 1 - u * 0.7)); ctx.fillRect(cx - lw / 2, cy - lh / 2, lw, lh); }
+          }
+        }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The hidden door (the full screen after the Prize Master falls): the dead
+     arcade, the back wall's STAFF ONLY panel with three keyholes; the keys
+     fly in and turn (st.keys 0..3, fractional while one flies), the door
+     splits open (st.open 0..1) and light pours out of the machine. */
+  function secDoor(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = st.t || 0, keys = U.clamp(st.keys || 0, 0, 3), open = U.clamp(st.open || 0, 0, 1);
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#0a0616'); g.addColorStop(1, '#16092a');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      // cables sag from the dark ceiling; a dying neon sign over the door
+      const cols = ['#ff2e88', '#2ee6d6', '#ffc94d', '#6a4a9a'];
+      for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.moveTo(-10, 80 + i * 26); ctx.quadraticCurveTo(w / 2, 170 + i * 34 + Math.sin(t * 0.7 + i) * 4, w + 10, 70 + i * 22); S(ctx, shade(cols[i], -0.55), 5); ctx.stroke(); }
+      const fl = Math.sin(t * 17) * Math.sin(t * 5.3) > -0.6 ? 1 : 0.2;
+      glow(ctx, w / 2, 212, 150, PAL.pink, 0.3 * fl);
+      txt(ctx, 'NO PLAYERS BEYOND', w / 2, 200, 22, fl > 0.5 ? '#ffd0e6' : '#5a2a44', true, 'center', PAL.pink);
+      txt(ctx, 'THIS POINT', w / 2, 228, 22, fl > 0.5 ? '#ffd0e6' : '#5a2a44', true, 'center', PAL.pink);
+      // dead cabinets either side
+      for (let i = 0; i < 3; i++) { deadCabinet(ctx, 12 + i * 34, 430 + i * 30, 70, 200, false, t); deadCabinet(ctx, w - 82 - i * 34, 430 + i * 30, 70, 200, i === 1 && Math.sin(t * 7) > 0.6, t); }
+      // the floor
+      F(ctx, '#0d0718'); ctx.fillRect(0, 700, w, h - 700);
+      S(ctx, 'rgba(255,255,255,0.04)', 2); ctx.beginPath(); for (let i = -8; i < 9; i++) { ctx.moveTo(w / 2 + i * 20, 700); ctx.lineTo(w / 2 + i * 120, h); } ctx.stroke();
+      // the doorway: light pours out as it opens
+      const dx = w / 2, dy = 420, dw = 220, dh = 300;
+      if (open > 0) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const lg = ctx.createLinearGradient(0, dy - dh / 2, 0, h);
+        lg.addColorStop(0, rgba(SEC_COL.cyan, 0.35 * open)); lg.addColorStop(1, rgba(SEC_COL.cyan, 0));
+        ctx.fillStyle = lg;
+        ctx.beginPath(); ctx.moveTo(dx - dw / 2 * open, dy - dh / 2); ctx.lineTo(dx + dw / 2 * open, dy - dh / 2); ctx.lineTo(dx + dw * 1.3 * open, h); ctx.lineTo(dx - dw * 1.3 * open, h); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        // the machine's insides behind the door
+        ctx.save(); ctx.beginPath(); ctx.rect(dx - dw / 2, dy - dh / 2, dw, dh); ctx.clip();
+        F(ctx, '#06231c'); ctx.fillRect(dx - dw / 2, dy - dh / 2, dw, dh);
+        gear(ctx, dx - 50, dy - 60, 70, 12, t * 0.6, '#1f4a3e'); gear(ctx, dx + 60, dy + 40, 55, 10, -t * 0.8, '#1f4a3e');
+        glow(ctx, dx, dy, 160, SEC_COL.cyan, 0.6 * open);
+        S(ctx, rgba(SEC_COL.trace, 0.6), 2); ctx.beginPath(); for (let i = 0; i < 6; i++) { ctx.moveTo(dx - dw / 2, dy - 120 + i * 45); ctx.lineTo(dx - 20 + i * 8, dy - 120 + i * 45); ctx.lineTo(dx + 10 + i * 8, dy - 90 + i * 45); ctx.lineTo(dx + dw / 2, dy - 90 + i * 45); } ctx.stroke();
+        ctx.restore();
+      }
+      // the two door halves slide apart
+      for (const s of [-1, 1]) {
+        const hw = dw / 2, off = open * hw * 1.02;
+        const x0 = s < 0 ? dx - hw - off : dx + off;
+        ctx.save(); ctx.beginPath(); ctx.rect(dx - dw / 2 - 4, dy - dh / 2 - 4, dw + 8, dh + 8); ctx.clip();
+        tone(ctx, q => rrect(q, x0, dy - dh / 2, hw, dh, 4), '#3a4450', x0 + hw / 2, dy, hw / 2, { dark: -0.35, spec: false });
+        S(ctx, rgba(INK, 0.5), 2); ctx.beginPath(); for (let y = dy - dh / 2 + 30; y < dy + dh / 2; y += 30) { ctx.moveTo(x0 + 6, y); ctx.lineTo(x0 + hw - 6, y); } ctx.stroke();
+        ctx.restore();
+      }
+      // the frame, the stencil and the keyholes
+      ctx.beginPath(); rrect(ctx, dx - dw / 2 - 12, dy - dh / 2 - 12, dw + 24, dh + 24, 8); S(ctx, '#1b232b', 14); ctx.stroke(); S(ctx, '#ffc94d', 2); ctx.stroke();
+      if (open < 0.2) txt(ctx, 'STAFF ONLY', dx, dy - dh / 2 + 34, 22, rgba('#ffc94d', 0.85 * (1 - open * 5)), true, 'center', INK);
+      // (the keyholes ride the door halves apart and fade as it opens)
+      const hk = 1 - U.clamp(open * 1.6, 0, 1);
+      for (let i = 0; i < 3 && hk > 0.01; i++) {
+        const kx = dx - 60 + i * 60 + (i - 1) * open * 120, ky = dy + 40, has = keys >= i + 1, fly = keys > i && keys < i + 1 ? keys - i : 0;
+        ctx.save(); ctx.globalAlpha = hk;
+        ctx.beginPath(); circ(ctx, kx, ky, 18); F(ctx, '#140b24'); ctx.fill(); S(ctx, has ? '#ffc94d' : '#5a4a30', 3); ctx.stroke();
+        glow(ctx, kx, ky, 34, SEC_COL.key, has ? 0.9 : 0.25 + 0.15 * Math.sin(t * 3 + i));
+        ctx.beginPath(); circ(ctx, kx, ky - 4, 5); ctx.moveTo(kx - 3, ky); ctx.lineTo(kx + 3, ky); ctx.lineTo(kx + 4, ky + 10); ctx.lineTo(kx - 4, ky + 10); ctx.closePath(); F(ctx, INK); ctx.fill();
+        if (has) secKey(ctx, kx + 8, ky, 0.8, t, { rot: Math.PI / 2, glow: false, alpha: hk });
+        else if (fly > 0) { const u = U.ease.outCubic(fly); secKey(ctx, U.lerp(w / 2, kx + 6, u), U.lerp(h - 120, ky, u), 1.4 - u * 0.6, t, { rot: (1 - u) * 5 }); }
+        ctx.restore();
+      }
+      // dust motes in the light
+      F(ctx, rgba('#e8fbff', 0.5 * open));
+      for (let i = 0; i < 30; i++) { const x = dx + Math.sin(i * 12.9 + t * 0.3) * 200 * open, y = dy + ((i * 71 + t * 20) % 420) - 140; ctx.beginPath(); circ(ctx, x, y, 1.4); ctx.fill(); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The true ending: dawn over the Clawspire, the crawler walking out of the
+     arcade into daylight. st: {t, dawn 0..1, walk 0..1, charId}. */
+  function secEnding(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = st.t || 0, dawn = U.clamp(st.dawn == null ? 1 : st.dawn, 0, 1), walk = U.clamp(st.walk || 0, 0, 1);
+      const g = ctx.createLinearGradient(0, 0, 0, h * 0.62);
+      g.addColorStop(0, dawn > 0.5 ? '#3a5aa8' : '#140b2e');
+      g.addColorStop(0.55, dawn > 0.3 ? '#ff9ec7' : '#3a1a4a');
+      g.addColorStop(1, dawn > 0.15 ? '#ffd27a' : '#5a2a3a');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      // the sun rising behind the tower
+      const sy = h * 0.6 - dawn * 190;
+      glow(ctx, w * 0.62, sy, 260, '#ffe08a', 0.9 * dawn);
+      tone(ctx, q => circ(q, w * 0.62, sy, 58), '#fff2c0', w * 0.62, sy, 58, { ol: 0, spec: false, dark: -0.05 });
+      // the Clawspire: a dark tower of cabinets, its lights going out
+      F(ctx, '#2a1838');
+      ctx.beginPath(); ctx.moveTo(w * 0.22, h * 0.6); ctx.lineTo(w * 0.27, h * 0.2); ctx.lineTo(w * 0.33, h * 0.14); ctx.lineTo(w * 0.39, h * 0.2); ctx.lineTo(w * 0.44, h * 0.6); ctx.closePath(); ctx.fill();
+      for (let i = 0; i < 12; i++) { const on = (i * 7) % 12 > dawn * 12; ctx.beginPath(); ctx.rect(w * 0.285 + (i % 3) * 18, h * 0.24 + Math.floor(i / 3) * 60, 8, 12); F(ctx, on ? '#ff2e88' : '#3a2448'); ctx.fill(); }
+      // the hills and the path into the light
+      F(ctx, '#4a7a5a'); ctx.beginPath(); ctx.moveTo(0, h * 0.62); ctx.quadraticCurveTo(w * 0.3, h * 0.55, w * 0.55, h * 0.61); ctx.quadraticCurveTo(w * 0.8, h * 0.66, w, h * 0.58); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+      F(ctx, '#3a6048'); ctx.beginPath(); ctx.moveTo(0, h * 0.72); ctx.quadraticCurveTo(w * 0.5, h * 0.66, w, h * 0.74); ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+      F(ctx, '#e8c890'); ctx.beginPath(); ctx.moveTo(w * 0.08, h); ctx.quadraticCurveTo(w * 0.4, h * 0.8, w * 0.62, h * 0.66); ctx.lineTo(w * 0.66, h * 0.665); ctx.quadraticCurveTo(w * 0.5, h * 0.82, w * 0.34, h); ctx.closePath(); ctx.fill();
+      // the arcade door behind, dark now
+      tone(ctx, q => rrect(q, 20, h * 0.6, 110, 170, 6), '#1d1233', 75, h * 0.68, 55, { dark: -0.35, spec: false });
+      ctx.beginPath(); rrect(ctx, 38, h * 0.63, 74, 140, 4); F(ctx, '#07030f'); ctx.fill();
+      txt(ctx, 'CLAWSPIRE', 75, h * 0.6 - 16, 16, '#3a2448', true, 'center', INK);
+      // the crawler walks out along the path, a long shadow behind
+      const u = U.ease.inOut(walk), cx = U.lerp(75, w * 0.56, u), cy = U.lerp(h * 0.8, h * 0.675, u), k = U.lerp(2.4, 1.1, u);
+      ctx.beginPath(); ctx.ellipse(cx - 30 * k, cy + 4, 40 * k, 6 * k, -0.2, 0, TAU); F(ctx, 'rgba(20,10,30,0.25)'); ctx.fill();
+      crawler(ctx, cx, cy, 30 * k, t * (walk < 1 ? 1.6 : 0.3));
+      // birds over the dawn
+      S(ctx, rgba('#2a1838', 0.8 * dawn), 2);
+      for (let i = 0; i < 5; i++) { const bx = ((t * 30 + i * 120) % (w + 80)) - 40, by = h * 0.18 + i * 26 + Math.sin(t * 2 + i) * 6, f = Math.sin(t * 8 + i) * 5; ctx.beginPath(); ctx.moveTo(bx - 8, by - f); ctx.quadraticCurveTo(bx - 3, by - 3, bx, by); ctx.quadraticCurveTo(bx + 3, by - 3, bx + 8, by - f); ctx.stroke(); }
+      // warm light over everything
+      F(ctx, rgba('#ffe08a', 0.08 * dawn)); ctx.fillRect(0, 0, w, h);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const SEC_R = { COL: SEC_COL, PH: SEC_PH, V: SECV, BULBS: SEC_BULBS, key: secKey, glint: secGlint, terrain: secTerrain, mapBg: secMapBg, arena: secArena, face: secFace, cab: secCab, door: secDoor, ending: secEnding };
+  /* ============================================================ end SECRET */
+
+  /* ============================================================ ACCESS (round 6)
+     Accessibility looks, every one off by default (the defaults draw the
+     old art exactly). The game sets them from its Settings screen through
+     RENDER.acc.set({mode, text, noFlash, hc}):
+      - mode: a colour-blind palette ('deutan', 'protan', 'tritan') for the
+        signal colours. The game's canonical signal hexes map to a role
+        (damage red, the lime of heal / poison / buffs, the cyan of block /
+        uncommon, the pink of crits / debuffs / legendary, gold, burn) and
+        each mode gives every role a colour that mode can tell apart. It
+        reaches the floating numbers and labels (fx.text / num / badge /
+        ring), the status chips, the intent bubbles, the rarity colours
+        (RARITY_COL and the item rim light, which re-keys the item sprites)
+        and the map. Colour is never the only cue: numbers carry their sign
+        (a minus for damage, a plus for healing, "block" in words), status
+        chips have their own icons and, in a colour-blind mode, buffs are a
+        round pill with an up triangle, debuffs an angular pill with a down
+        triangle; map hexes that start a fight wear a warning triangle,
+        pickups a round plus badge.
+      - text: the scale of the canvas labels (1, 1.15, 1.3).
+      - noFlash: reduced flashing. fx.flash is capped (0.08) and fades in
+        instead of popping; the strobing bulbs (the cabinet's party chase,
+        the arcade machines) run at a fifth of their rate (accStrobe).
+      - hc: a thick dark rim with a thin light halo round every item the
+        game draws with opts.hc (the items in the bin), cached in the sprite. */
+  const ACC = { mode: 'off', textK: 1, noFlash: false, hc: false, v: 0, key: 'off:false' };
+  const ACC_MODES = ['off', 'deutan', 'protan', 'tritan'];
+  const ACC_TEXT = { n: 1, l: 1.15, xl: 1.3 };
+  const ACC_ROLE = {
+    '#ff5a4a': 'dmg', '#ff2e30': 'dmg', '#d81f3a': 'dmg',
+    '#a6ff5e': 'lime', '#5ab82e': 'lime', '#c6ff8e': 'lime',
+    '#2ee6d6': 'cyan', '#8dfff5': 'cyan', '#bfe8ff': 'cyan',
+    '#3b6fd6': 'block', '#8fb6ff': 'block',
+    '#ff2e88': 'pink', '#ff6bb0': 'pink',
+    '#ffc94d': 'gold',
+    '#ff8a2b': 'burn',
+  };
+  // Per mode, a colour per role (blue / orange for the red-green modes,
+  // red / green on white-silver for the blue-yellow one).
+  const ACC_PAL = {
+    deutan: { dmg: '#ff9e1f', lime: '#3fa9ff', cyan: '#c4f1ff', block: '#8fb4ff', pink: '#e46cff', gold: '#ffe14d', burn: '#ff7a00' },
+    protan: { dmg: '#ffb31a', lime: '#3fa9ff', cyan: '#c4f1ff', block: '#8fb4ff', pink: '#f08cff', gold: '#fff06a', burn: '#ff8f00' },
+    tritan: { dmg: '#ff4040', lime: '#48e060', cyan: '#f2f2f2', block: '#c9c9d6', pink: '#b04dff', gold: '#ffd24d', burn: '#ff7a1a' },
+  };
+  const ACC_RAR0 = Object.assign({}, RARITY_COL);
+  const ACC_RIM0 = { u: POL_RIM.u.slice(), r: POL_RIM.r.slice(), l: POL_RIM.l.slice() };
+  // The signal colour c in the current palette (anything else passes through).
+  function accC(c) {
+    if (ACC.mode === 'off' || typeof c !== 'string') return c;
+    const r = ACC_ROLE[c.length === 7 ? c.toLowerCase() : c];
+    return r ? ACC_PAL[ACC.mode][r] : c;
+  }
+  // Time for strobing lights: a fifth of the rate under reduced flashing.
+  function accStrobe(t) { return ACC.noFlash ? t * 0.2 : t; }
+  const ACC_FLASH = 0.08, ACC_VIG = 0.4;   // reduced flashing: the screen flash and the edge pulse caps
+  function accSet(o) {
+    o = o || {};
+    if (o.mode != null) ACC.mode = ACC_MODES.indexOf(o.mode) >= 0 ? o.mode : 'off';
+    if (o.text != null) ACC.textK = ACC_TEXT[o.text] || (+o.text >= 1 && +o.text <= 1.6 ? +o.text : 1);
+    if (o.noFlash != null) ACC.noFlash = !!o.noFlash;
+    if (o.hc != null) ACC.hc = !!o.hc;
+    // rarity: the shared table the game reads too, and the item rim light
+    for (const k in ACC_RAR0) RARITY_COL[k] = k === 'c' ? ACC_RAR0.c : accC(ACC_RAR0[k]);
+    for (const k in ACC_RIM0) POL_RIM[k] = ACC_RIM0[k].map(accC);
+    const key = ACC.mode + ':' + ACC.hc;
+    if (ACC.key !== key) { ACC.key = key; POL.v++; ACC.v++; }   // re-keys the item sprites
+    return accState();
+  }
+  function accState() { return { mode: ACC.mode, textK: ACC.textK, noFlash: ACC.noFlash, hc: ACC.hc, v: ACC.v }; }
+  // A status chip's cue besides colour: 'round' + an up triangle for a buff,
+  // 'angular' + a down triangle for a debuff.
+  function accShape(kind) { return kind === 'buff' ? { outline: 'round', mark: 'up' } : { outline: 'angular', mark: 'down' }; }
+  // The chip outline: a pill, or (debuffs in a colour-blind mode) a pill with pointed ends.
+  function accChip(ctx, x, y, w, h, kind) {
+    if (ACC.mode === 'off' || kind === 'buff') { rrect(ctx, x, y, w, h, h / 2); return; }
+    const p = h * 0.34;
+    poly(ctx, [x + p, y, x + w - p, y, x + w, y + h / 2, x + w - p, y + h, x + p, y + h, x, y + h / 2]);
+  }
+  /* A small shape marker at (x, y), s its half size: 'up' / 'down'
+     triangles (buff / debuff), 'danger' (a warning triangle with a bang),
+     'pickup' (a round badge with a plus). */
+  function accMark(ctx, kind, x, y, s, col) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.lineJoin = 'round';
+      if (kind === 'up' || kind === 'down') {
+        const d = kind === 'up' ? -1 : 1;
+        ctx.beginPath(); poly(ctx, [0, d * s, s, -d * s * 0.8, -s, -d * s * 0.8]);
+        F(ctx, col || '#fff'); ctx.fill(); S(ctx, INK, Math.max(1, s * 0.35)); ctx.stroke();
+      } else if (kind === 'danger') {
+        ctx.beginPath(); poly(ctx, [0, -s * 1.1, s * 1.15, s * 0.85, -s * 1.15, s * 0.85]);
+        F(ctx, col || accC(PAL.blood)); ctx.fill(); S(ctx, INK, Math.max(1.5, s * 0.3)); ctx.stroke();
+        txt(ctx, '!', 0, s * 0.18, s * 1.3, INK, true);
+      } else {
+        ctx.beginPath(); circ(ctx, 0, 0, s);
+        F(ctx, col || accC(PAL.lime)); ctx.fill(); S(ctx, INK, Math.max(1.5, s * 0.3)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-s * 0.5, 0); ctx.lineTo(s * 0.5, 0); ctx.moveTo(0, -s * 0.5); ctx.lineTo(0, s * 0.5); S(ctx, INK, Math.max(1.5, s * 0.32)); ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Map tiles that start a fight (a warning) vs the ones that give (a plus).
+  const ACC_DANGER = { fight: 1, elite: 1, boss: 1, tower: 1 };
+  const ACC_PICKUP = { treasure: 1, gem: 1, ink: 1, brush: 1, shop: 1, rest: 1, forge: 1, petshop: 1 };
+  function accTileKind(type) { return ACC_DANGER[type] ? 'danger' : ACC_PICKUP[type] ? 'pickup' : null; }
+  // The high-contrast rim: the item's silhouette as a light halo, then a
+  // thick dark rim, behind the art (drawn into the item sprite).
+  function accRim(ctx, body) {
+    const prev = FLAT;
+    try {
+      const ring = (col, r, n) => {
+        FLAT = col;
+        for (let i = 0; i < n; i++) {
+          const a = i / n * TAU;
+          ctx.save(); ctx.translate(Math.cos(a) * r, Math.sin(a) * r);
+          try { body(); } catch (e) { /* art never throws */ }
+          ctx.restore();
+        }
+      };
+      ring('rgba(255,255,255,0.92)', 3.6, 10);
+      ring(INK, 2.2, 8);
+    } finally { FLAT = prev; }
+  }
+  const ACC_R = {
+    set: accSet, get state() { return accState(); }, col: accC, strobe: accStrobe, shape: accShape, mark: accMark, chip: accChip,
+    tileKind: accTileKind, MODES: ACC_MODES, TEXT: ACC_TEXT, ROLE: ACC_ROLE, PAL: ACC_PAL, RAR0: ACC_RAR0,
+    get textK() { return ACC.textK; }, get noFlash() { return ACC.noFlash; }, get hc() { return ACC.hc; }, get mode() { return ACC.mode; },
+  };
+  /* ============================================================ end ACCESS */
+
+  /* ============================================================ SETS (round 6)
+     The boon draft's backdrop (the machine offering a deal) and the
+     Compactor's hydraulic press. Pure functions of their state; the game's
+     DOM carries the cards, the buttons and the words on top. */
+  // A deterministic 0..1 from two numbers (no rng state: the same frame draws the same).
+  const setH = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+  // st {t, w, h, up: [bool], pick, done, tilt}
+  function boonBack(ctx, st) {
+    ctx.save();
+    try {
+      st = st || NOEST;
+      const t = st.t || 0, w = st.w || 540, h = st.h || 960, tilt = st.tilt | 0, cx = w / 2;
+      const spicy = tilt >= 5;
+      // the back room
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#0b0514'); g.addColorStop(0.45, '#1a0b2c'); g.addColorStop(1, '#07030d');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      // the arcade floor: a neon grid running to the horizon
+      const hz = 560;
+      ctx.save(); ctx.globalAlpha = 0.55;
+      for (let i = -8; i <= 8; i++) line(ctx, cx + i * 22, hz, cx + i * 150, h, spicy ? '#5a1030' : '#3a1860', 2);
+      for (let j = 0; j < 9; j++) { const y = hz + Math.pow(j / 8, 1.8) * (h - hz) + ((t * 18) % 12) * (j / 8); line(ctx, 0, y, w, y, spicy ? '#5a1030' : '#3a1860', 1.5); }
+      ctx.restore();
+      // the spotlight
+      ctx.save(); ctx.globalAlpha = 0.16 + 0.04 * Math.sin(t * 1.3); ctx.globalCompositeOperation = 'lighter';
+      ctx.beginPath(); ctx.moveTo(cx - 40, 0); ctx.lineTo(cx + 40, 0); ctx.lineTo(cx + 260, h * 0.86); ctx.lineTo(cx - 260, h * 0.86); ctx.closePath();
+      F(ctx, spicy ? '#ff2e30' : '#ffc94d'); ctx.fill(); ctx.restore();
+      // THE MACHINE: a giant cabinet leaning out of the dark
+      const mx = cx - 175, my = 128, mw = 350, mh = 370;
+      glow(ctx, cx, my + mh * 0.5, 260, spicy ? '#ff2e30' : '#ff2e88', 0.22);
+      ctx.beginPath(); rrect(ctx, mx, my, mw, mh, 26); F(ctx, '#241238'); ctx.fill(); S(ctx, INK, 5); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, mx + 10, my + 10, mw - 20, mh - 20, 18); S(ctx, spicy ? '#ff5a4a' : '#ff2e88', 3); ctx.stroke();
+      // the marquee and its chasing bulbs
+      ctx.beginPath(); rrect(ctx, mx + 24, my + 20, mw - 48, 54, 12); F(ctx, '#12091f'); ctx.fill(); S(ctx, PAL.gold, 3); ctx.stroke();
+      const word = spicy ? 'NO REFUNDS' : "LET'S DEAL";
+      glow(ctx, cx, my + 47, 90, spicy ? '#ff2e30' : PAL.gold, 0.35 + 0.1 * Math.sin(t * 6));
+      txt(ctx, word, cx, my + 48, 30, spicy ? '#ff8a7a' : '#ffe9a8', true, 'center', INK);
+      for (let i = 0; i < 18; i++) {
+        const u = i / 17, bx = mx + 30 + u * (mw - 60), on = ((i + Math.floor(t * 8)) % 3) === 0;
+        ctx.beginPath(); circ(ctx, bx, my + 84, 4); F(ctx, on ? PAL.gold : '#4a3310'); ctx.fill();
+        if (on) glow(ctx, bx, my + 84, 10, PAL.gold, 0.6);
+      }
+      // the glass, dark inside, and the thing looking out of it
+      const gx = mx + 34, gy = my + 100, gw = mw - 68, gh = 190;
+      ctx.beginPath(); rrect(ctx, gx, gy, gw, gh, 12); F(ctx, '#07030d'); ctx.fill(); S(ctx, '#5a3f8f', 3); ctx.stroke();
+      // the claw inside, swaying on its cable
+      const sw = Math.sin(t * 0.9) * 0.08, hx = cx + Math.sin(t * 0.9) * 18, hy = gy + 70;
+      line(ctx, cx, gy + 4, hx, hy - 14, '#8d7fb3', 3);
+      ctx.save(); ctx.translate(hx, hy); ctx.rotate(sw);
+      ctx.beginPath(); circ(ctx, 0, 0, 12); F(ctx, '#c9d3e0'); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * 7, 6); ctx.quadraticCurveTo(s * 26, 22, s * 12, 44); S(ctx, INK, 8); ctx.stroke(); S(ctx, '#c9d3e0', 4); ctx.stroke(); }
+      ctx.restore();
+      // the eyes: they blink, they watch the cards, they smile (or sulk) at the pick
+      const blink = (t % 4.2) > 4.05, ey = gy + 128, er = spicy ? 16 : 13;
+      const look = st.done ? 0 : Math.sin(t * 0.7) * 6;
+      for (const s of [-1, 1]) {
+        const ex = cx + s * 58 + look;
+        glow(ctx, ex, ey, 40, spicy ? '#ff2e30' : '#ff2e88', 0.7);
+        if (blink) { line(ctx, ex - er, ey, ex + er, ey, '#ff6b6b', 4); continue; }
+        if (st.done && st.pick >= 0) { ctx.beginPath(); ctx.arc(ex, ey + 4, er, Math.PI * 1.15, Math.PI * 1.85); S(ctx, '#ffd0e0', 5); ctx.stroke(); continue; }
+        if (st.done) {   // walked away: a sulk under a scowling brow
+          ctx.beginPath(); ctx.arc(ex, ey - 8, er, Math.PI * 0.15, Math.PI * 0.85); S(ctx, '#ffd0e0', 5); ctx.stroke();
+          line(ctx, ex - s * er * 1.1, ey - er - 10, ex + s * er * 0.9, ey - er - 2, '#ff6b6b', 4);
+          continue;
+        }
+        ctx.beginPath(); ctx.ellipse(ex, ey, er, er * 0.62, 0, 0, TAU); F(ctx, spicy ? '#ff3b30' : '#ff2e88'); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(ex + look * 0.3, ey, er * 0.28, er * 0.5, 0, 0, TAU); F(ctx, INK); ctx.fill();
+      }
+      if (spicy) { // cracked glass at high Tilt
+        ctx.save(); ctx.globalAlpha = 0.6;
+        line(ctx, gx + gw - 60, gy + 10, gx + gw - 90, gy + 60, '#d8f0ff', 1.5); line(ctx, gx + gw - 90, gy + 60, gx + gw - 70, gy + 100, '#d8f0ff', 1.5); line(ctx, gx + gw - 90, gy + 60, gx + gw - 130, gy + 80, '#d8f0ff', 1.5);
+        ctx.restore();
+      }
+      // glass sheen
+      ctx.save(); ctx.globalAlpha = 0.08; ctx.beginPath(); ctx.moveTo(gx + 20, gy); ctx.lineTo(gx + 90, gy); ctx.lineTo(gx + 40, gy + gh); ctx.lineTo(gx - 30, gy + gh); ctx.closePath(); F(ctx, '#ffffff'); ctx.fill(); ctx.restore();
+      // the prize chute: where the cards come out
+      const cy0 = my + mh - 58;
+      ctx.beginPath(); rrect(ctx, cx - 90, cy0, 180, 34, 10); F(ctx, '#07030d'); ctx.fill(); S(ctx, PAL.gold, 3); ctx.stroke();
+      glow(ctx, cx, cy0 + 17, 110, PAL.pink, 0.3 + 0.15 * Math.sin(t * 3));
+      txt(ctx, 'PUSH', mx + 44, cy0 + 17, 12, '#8d7fb3', true, 'center');
+      txt(ctx, 'TO WIN', mx + mw - 46, cy0 + 17, 12, '#8d7fb3', true, 'center');
+      // drifting dust in the light
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 26; i++) {
+        const px = (setH(i, 1) * w + t * (6 + setH(i, 2) * 10)) % w, py = (setH(i, 3) * h * 0.85 + Math.sin(t * 0.6 + i) * 20);
+        ctx.globalAlpha = 0.25 + 0.25 * Math.sin(t * 2 + i);
+        ctx.beginPath(); circ(ctx, px, py, 1.2 + setH(i, 4) * 1.6); F(ctx, '#ffe9c4'); ctx.fill();
+      }
+      ctx.restore();
+    } finally { ctx.restore(); }
+  }
+
+  // Where the press plate is (0 up .. 1 down) at k seconds into a crush.
+  function cmpPlate(phase, k, K) {
+    K = K || { feed: 0.55, slam: 0.95, lift: 1.7, pop: 2.2 };
+    if (phase === 'press' || (phase === 'feed' && k >= K.feed)) { const u = clamp01((k - K.feed) / (K.slam - K.feed)); return u * u * u; }
+    if (phase === 'grind') return 1;
+    if (phase === 'lift') { const u = clamp01((k - K.lift) / (K.pop - K.lift)); return 1 - (1 - (1 - u) * (1 - u)); }
+    return 0;
+  }
+  // st {t, x, y, w, h, phase: idle|feed|press|grind|lift|done, k, K, ins: [{def, plus}], res: {def, plus}, shake, reduced}
+  function cmpScene(ctx, st) {
+    ctx.save();
+    try {
+      st = st || NOEST;
+      const t = st.t || 0, X0 = st.x || 0, Y0 = st.y == null ? 70 : st.y, w = st.w || 540, h = st.h || 350;
+      const ph = st.phase || 'idle', k = st.k || 0, K = st.K || { feed: 0.55, slam: 0.95, lift: 1.7, pop: 2.2 };
+      // the workshop wall behind everything
+      ctx.fillStyle = '#140a1f'; ctx.fillRect(0, 0, 540, 960);
+      for (let r = 0; r < 12; r++) for (let c = 0; c < 6; c++) {
+        const px = c * 92 - (r % 2) * 46, py = r * 82;
+        ctx.beginPath(); rrect(ctx, px + 3, py + 3, 86, 76, 6); F(ctx, (r + c) % 2 ? '#1e1230' : '#22153a'); ctx.fill();
+        F(ctx, '#3d2a63'); for (const [a, b] of [[10, 10], [79, 10], [10, 69], [79, 69]]) { ctx.beginPath(); circ(ctx, px + a, py + b, 2); ctx.fill(); }
+      }
+      const sh = st.reduced ? 0 : (st.shake || 0) * 6;
+      ctx.translate(X0 + (sh ? (setH(t * 60, 1) - 0.5) * sh : 0), Y0 + (sh ? (setH(t * 60, 2) - 0.5) * sh : 0));
+      const cx = w / 2, bedY = h - 70, pw = 290, travel = 150;
+      // the warning lamp spins while the press works
+      const busy = ph === 'press' || ph === 'grind' || ph === 'lift';
+      glow(ctx, cx, 40, 180, busy ? '#ff5a4a' : '#9fb4ff', busy ? 0.25 + 0.15 * Math.sin(t * 14) : 0.12);
+      // the frame: two columns and the crossbeam
+      for (const s of [-1, 1]) {
+        const colX = cx + s * (pw / 2 + 26);
+        tone(ctx, c => rrect(c, colX - 16, 18, 32, bedY + 30, 6), '#5a6478', colX, bedY / 2, 30, NOSPEC);
+        for (let i = 0; i < 6; i++) { ctx.beginPath(); circ(ctx, colX, 44 + i * 40, 3); F(ctx, '#2a303c'); ctx.fill(); }
+      }
+      tone(ctx, c => rrect(c, cx - pw / 2 - 50, 8, pw + 100, 52, 10), '#6d7888', cx, 34, 60, NOSPEC);
+      ctx.beginPath(); rrect(ctx, cx - 92, 20, 184, 28, 6); F(ctx, '#12091f'); ctx.fill();
+      txt(ctx, 'COMPACTOR', cx, 35, 18, busy ? '#ffb0a0' : '#c9d3e0', true, 'center');
+      // the lamp
+      const lx = cx + pw / 2 + 26, lit = busy && Math.sin(t * 14) > 0;
+      ctx.beginPath(); circ(ctx, lx, 10, 9); F(ctx, lit ? '#ff5a4a' : '#5a1a1a'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+      if (lit) glow(ctx, lx, 10, 34, '#ff5a4a', 0.9);
+      // the ram and the plate
+      const p = cmpPlate(ph, k, K), jit = ph === 'grind' && !st.reduced ? Math.sin(t * 70) * 1.6 : 0;
+      const plateY = 70 + p * travel + jit, plateB = plateY + 28;
+      tone(ctx, c => rrect(c, cx - 22, 58, 44, 20, 4), '#8a96a8', cx, 66, 20, NOSPEC);
+      ctx.beginPath(); rrect(ctx, cx - 10, 60, 20, plateY - 58, 3); F(ctx, '#c9d3e0'); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke();
+      ctx.beginPath(); ctx.rect(cx - 6, 62, 4, Math.max(0, plateY - 62)); F(ctx, 'rgba(255,255,255,0.5)'); ctx.fill();
+      tone(ctx, c => rrect(c, cx - pw / 2, plateY, pw, 28, 5), '#7a8494', cx, plateY + 14, 60, NOSPEC);
+      // hazard stripes along the plate's edge
+      ctx.save(); ctx.beginPath(); ctx.rect(cx - pw / 2 + 4, plateY + 16, pw - 8, 9); ctx.clip();
+      F(ctx, '#ffc94d'); ctx.fillRect(cx - pw / 2, plateY + 16, pw, 9);
+      F(ctx, INK); for (let i = -2; i < pw / 14 + 2; i++) { const sx = cx - pw / 2 + i * 14; ctx.beginPath(); ctx.moveTo(sx, plateY + 25); ctx.lineTo(sx + 7, plateY + 16); ctx.lineTo(sx + 14, plateY + 16); ctx.lineTo(sx + 7, plateY + 25); ctx.closePath(); ctx.fill(); }
+      ctx.restore();
+      // the bed
+      tone(ctx, c => rrect(c, cx - pw / 2 - 20, bedY, pw + 40, 30, 6), '#4a5262', cx, bedY + 15, 60, NOSPEC);
+      ctx.beginPath(); ctx.rect(cx - pw / 2 - 14, bedY + 30, pw + 28, 34); F(ctx, '#1a1426'); ctx.fill();
+      ctx.save(); ctx.globalAlpha = 0.5; for (let i = 0; i < 9; i++) line(ctx, cx - pw / 2 + i * 36, bedY + 36, cx - pw / 2 + i * 36 + 18, bedY + 60, '#ffc94d', 3); ctx.restore();
+      // what is in the chamber
+      const ins = st.ins || [], xs = [cx - 82, cx, cx + 82];
+      const crushed = ph === 'grind' || ph === 'lift' || ph === 'done';
+      if (!crushed) {
+        ins.forEach((it, i) => {
+          if (!it || !it.def) return;
+          const d = shapeDims(it.def.shape), sc = feelItemK(it.def, 64), ih = Math.max(d.w, d.h) * sc;
+          let y = bedY - ih / 2 - 2;
+          if (ph === 'feed' || ph === 'press') {
+            const t0 = 0.02 + i * 0.14, u = clamp01((k - t0) / 0.24);
+            if (k < t0) return;
+            const drop = 1 - u;
+            y = bedY - ih / 2 - 2 - drop * drop * 190;
+          }
+          // squeeze under the plate
+          const room = bedY - plateB, sy = clamp01(room / Math.max(8, ih + 2));
+          ctx.save();
+          ctx.translate(xs[i], bedY - 2);
+          if (sy < 1) ctx.scale(1 + (1 - sy) * 0.5, Math.max(0.15, sy));
+          item(ctx, it.def, 0, y - (bedY - 2), (i - 1) * 0.2, sc, { plus: it.plus });
+          ctx.restore();
+        });
+      } else {
+        // the bale: everything pressed into one striped block, glowing as it lifts
+        const lift = ph === 'lift' ? clamp01((k - K.lift) / (K.pop - K.lift)) : ph === 'done' ? 1 : 0;
+        const res = st.res && st.res.def;
+        const rc = res ? (RARITY_COL[res.rarity] || '#9fb4ff') : '#9fb4ff';
+        if (ph !== 'done') {
+          const bh = 30, bw = 170;
+          if (lift > 0) glow(ctx, cx, bedY - bh / 2, 90 + lift * 60, rc, 0.4 + lift * 0.5);
+          ctx.beginPath(); rrect(ctx, cx - bw / 2, bedY - bh, bw, bh, 4); F(ctx, '#3a2e48'); ctx.fill();
+          ctx.save(); ctx.beginPath(); rrect(ctx, cx - bw / 2, bedY - bh, bw, bh, 4); ctx.clip();
+          ins.forEach((it, i) => { if (!it || !it.def) return; F(ctx, it.def.color || '#888'); ctx.fillRect(cx - bw / 2 + i * (bw / 3), bedY - bh, bw / 3 + 1, bh); });
+          ctx.globalAlpha = 0.5; for (let i = 0; i < 7; i++) line(ctx, cx - bw / 2 + i * 26, bedY - bh, cx - bw / 2 + i * 26 + 14, bedY, INK, 2);
+          ctx.restore();
+          ctx.beginPath(); rrect(ctx, cx - bw / 2, bedY - bh, bw, bh, 4); S(ctx, INK, 3); ctx.stroke();
+          if (lift > 0) { ctx.save(); ctx.globalAlpha = lift * 0.8; ctx.globalCompositeOperation = 'lighter'; ctx.beginPath(); rrect(ctx, cx - bw / 2, bedY - bh, bw, bh, 4); F(ctx, rc); ctx.fill(); ctx.restore(); }
+        } else if (res) {
+          // the new item, floating over the bed with rays behind it
+          const bob = Math.sin(t * 2.4) * 5, iy = bedY - 60 + bob;
+          ctx.save(); ctx.translate(cx, iy); ctx.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 12; i++) { ctx.rotate(TAU / 12); ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -150); ctx.lineTo(10, -150); ctx.closePath(); F(ctx, rc); ctx.fill(); }
+          ctx.restore();
+          glow(ctx, cx, iy, 90, rc, 0.8);
+          item(ctx, res, cx, iy, Math.sin(t * 1.3) * 0.12, feelItemK(res, 86), { plus: st.res.plus, glow: rc });
+        }
+      }
+      // the steel guard rails in front
+      ctx.save(); ctx.globalAlpha = 0.9;
+      for (const s of [-1, 1]) line(ctx, cx + s * (pw / 2 + 8), 70, cx + s * (pw / 2 + 8), bedY, '#ffc94d', 3);
+      ctx.restore();
+      if (ph === 'idle') {
+        const n = ins.filter(Boolean).length;
+        txt(ctx, n >= 3 ? 'READY' : `FEED ME ${3 - n}`, cx, bedY + 48, 16, n >= 3 ? PAL.lime : '#c9d3e0', true, 'center', INK);
+      }
+    } finally { ctx.restore(); }
+  }
+  const SETS_R = { boonBack, cmpScene, cmpPlate };
+  /* ============================================================ end SETS */
+
   return {
+    // SETS (round 6): the boon draft's machine, the Compactor's press
+    boonBack, cmpScene, sets: SETS_R,
     item, itemFx, shard, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, clawHead, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
     vsCard, bossSign, bossCab, hotItem, eliteBadge, finale, SIG_COL, VS,
     terrainHex, terrainFill, biomePal, groundOf, lightRim, bulb, mapCompass, mapHeader, mapArrow, BIOME_PAL, DARK,
@@ -8551,8 +9451,12 @@ const RENDER = (() => {
     pet, petTag, petBed, petIcon, arcMoles, arcSkee, pets: PETS_R,
     // VAULT (round 5): the Prize Vault's cosmetics (equip, looks, thumbnails, trails, outfits, the wall, the share card)
     vault: VAULT_R,
+    // SECRET (round 6): the golden keys, the Back Room, The Machine, the door and the true ending
+    sec: SEC_R,
     // POLISH (round 5): item identity (decals, silhouettes, rim light) and the relic medallions
     relicLive,
+    // ACCESS (round 6): colour-blind palettes, label size, reduced flashing, high-contrast items
+    acc: ACC_R,
     pol: {
       get on() { return POL.on; }, set on(v) { POL.on = !!v; },
       stats: POL.stats, SIL: POL_SIL, DECAL: POL_DECAL, BADGE: POL_BADGE, SHINE: POL_SHINE,

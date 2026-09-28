@@ -22,7 +22,9 @@ const PER = 'block junk metal grabsUsed poison burn small streak gold luck'.spli
 const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
 const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBlock startStr'.split(' ');
-const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial'.split(' ');
+const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial onPet'.split(' ');
+// Round 6 (sets): The Hungry Pack's three pet relics, left out of the build pass's counts.
+const R6_RELICS = 'chew_toy treat_jar dog_whistle'.split(' ');
 const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo luck cashAmp'.split(' ');
 const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo luck'.split(' ');
 const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor streak luck'.split(' ');
@@ -462,6 +464,7 @@ function runHooks(r, F) {
   if (h.onCashOut) h.onCashOut(F, 6, 2);
   if (h.onEat) h.onEat(F, F.enemies[0], { uid: 'p', id: 'poison_pill' }, ITEMS.poison_pill);
   if (h.onMaterial) for (const k of ['crack', 'shatter', 'fuse', 'blast']) h.onMaterial(F, k, { uid: 'q', id: 'firecracker' }, ITEMS.firecracker);
+  if (h.onPet) h.onPet(F, 'cat');
   if (h.onTurnEnd) h.onTurnEnd(F);
 }
 
@@ -838,7 +841,7 @@ t.test('archetypes and keywords', () => {
 
 t.test('new content sits in the pools', () => {
   const OLD_RELICS = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
-  const fresh = Object.keys(RELICS).filter(id => !OLD_RELICS.includes(id) && !R3_RELICS.includes(id));
+  const fresh = Object.keys(RELICS).filter(id => !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id));
   t.ok(fresh.length >= 20 && fresh.length <= 32, `20..32 new relics [${fresh.length}]`);
   for (const id of fresh) {
     const r = RELICS[id];
@@ -1621,6 +1624,194 @@ t.test('pets: the table, levels, the shop offer, repairs and card lines', () => 
   t.ok(DATA.petText('firefly', 1).includes(DATA.petGlow(1) + ' bonus gold'), 'the firefly card names its bonus');
   t.ok(!/Twice/.test(DATA.petText('hamster', 1)), 'one use at Lv 1');
   t.ok(!SRC.slice(SRC.indexOf('PETS (companion pets'), SRC.indexOf('/PETS')).includes('Math.random'), 'no Math.random in the pets block');
+});
+
+// ---------------------------------------------------------------- round 6: relic sets, the boon draft, the Compactor
+t.test('sets: ten sets of three pool relics, one set per relic, two bonuses each', () => {
+  const S = DATA.SETS, ids = DATA.SET_IDS;
+  t.ok(ids.length >= 8 && ids.length <= 10, `8..10 sets [${ids.length}]`);
+  const seen = {};
+  for (const id of ids) {
+    const s = S[id], W = `set ${id}`;
+    t.eq(s.id, id, `${W}: key`);
+    t.ok(typeof s.name === 'string' && s.name.length > 3 && Array.from(s.icon).length <= 2 && isHex(s.color), `${W}: name, icon, colour`);
+    t.eq(s.pieces.length, 3, `${W}: three pieces`);
+    for (const r of s.pieces) {
+      t.ok(!!RELICS[r] && !RELICS[r].starter && ['c', 'u', 'r'].includes(RELICS[r].rarity), `${W}: ${r} is a pool relic`);
+      t.ok(!seen[r], `${W}: ${r} sits in one set only`);
+      seen[r] = id;
+      t.eq(DATA.setOf(r), id, `${W}: setOf(${r})`);
+    }
+    t.ok(ARCHS.includes(s.kw), `${W}: an archetype`);
+    for (const n of [2, 3]) {
+      const fx = DATA.SET_FX[`set:${id}:${n}`], W2 = `${W} ${n}/3`;
+      t.ok(fx && fx.set === id && fx.n === n && fx.name && fx.text.length > 12, `${W2}: a bonus with words`);
+      t.ok(!!(fx.hooks || fx.rules || fx.mods || fx.loot || fx.pet), `${W2}: does something`);
+      t.ok(fx.proc && fx.proc === fx.proc.toUpperCase() && fx.proc.length <= 16, `${W2}: proc label [${fx.proc}]`);
+      for (const k in fx.hooks || {}) t.ok(HOOKS.includes(k) && typeof fx.hooks[k] === 'function', `${W2}: hook ${k}`);
+      for (const k in fx.rules || {}) t.ok(RULES.includes(k), `${W2}: rule ${k}`);
+      for (const k in fx.mods || {}) t.ok(MODS.includes(k), `${W2}: mod ${k}`);
+      t.ok(!RELICS[fx.id], `${W2}: not a relic of its own (never in a pool or the Prizedex relics)`);
+    }
+    t.ok(JSON.stringify([s.name, s.two, s.three]).indexOf(String.fromCharCode(0x2014)) < 0, `${W}: no em dashes`);
+  }
+  t.eq(DATA.setOf('grip_tape'), null, 'a relic outside every set');
+  // the new pet relics are pool relics in The Hungry Pack
+  for (const id of R6_RELICS) t.ok(RELICS[id] && DATA.relicPool(RELICS[id].rarity).includes(id) && DATA.setOf(id) === 'pack', `${id}: in the pool and the Hungry Pack`);
+  t.ok(RELICS.dog_whistle.pet.uses === 1 && RELICS.chew_toy.pet.xp > 0, 'the pet relics carry their pet stats');
+});
+
+t.test('sets: counts, live bonuses at 2 and 3 (not 1), the card tag and the pull', () => {
+  const run = (relics, o) => Object.assign({ relics }, o || {});
+  t.eq(DATA.setFxIds(run(['venom_gland'])).join(), '', '1 piece: no bonus');
+  t.eq(DATA.setFxIds(run(['venom_gland', 'grip_tape', 'contagion'])).join(), 'set:poison:2', '2 pieces: the small bonus');
+  t.eq(DATA.setFxIds(run(['festering_jar', 'venom_gland', 'contagion'])).join(), 'set:poison:2,set:poison:3', '3 pieces: both');
+  t.eq(DATA.setFxIds(['venom_gland', 'contagion', 'venom_gland']).join(), 'set:poison:2', 'a duplicate counts once; a bare list works');
+  t.eq(DATA.setFxIds(run(['venom_gland', 'contagion'], { noSets: true })).join(), '', 'noSets opts out');
+  t.eq(DATA.setFxIds(run([], { boon: { grabs: 2 } })).join(), 'boon:grabs', 'the boon warm-up rides along');
+  t.eq(DATA.setFxIds(run([], { boon: { grabs: 0 } })).join(), '', 'and runs out');
+  t.eq(DATA.setFxIds(null).join(), '', 'null is empty');
+  const P = DATA.setProgress(['kettle_helm', 'castle_walls', 'snow_globe']);
+  t.eq(P.map(p => p.id + ':' + p.n + ':' + p.missing.join('+')).join(), 'frost:1:cold_snap+permafrost_core,fortress:2:battering_ram', 'progress lists the sets held and what is missing');
+  const tg = DATA.setTagOf('castle_walls', ['kettle_helm', 'battering_ram']);
+  t.ok(tg.n === 3 && tg.completes && tg.text === '3/3 Iron Fortress', 'the card tag counts the piece you would take: ' + tg.text);
+  t.ok(DATA.setTagOf('castle_walls', []).text === '1/3 Iron Fortress' && !DATA.setTagOf('castle_walls', []).completes, 'a first piece');
+  t.eq(DATA.setTagOf('castle_walls', ['castle_walls']).n, 1, 'an owned piece is not counted twice');
+  t.eq(DATA.setTagOf('grip_tape', []), null, 'no tag outside a set');
+  t.eq(DATA.setWant(run(['venom_gland']), ['contagion', 'grip_tape', 'festering_jar', 'venom_gland']).join(), 'contagion,festering_jar', 'setWant: the missing pieces of a started set');
+  t.eq(DATA.setWant(run(['venom_gland', 'contagion', 'festering_jar']), ['snow_globe']).join(), '', 'nothing for a set not started');
+  // the pull: a run with one piece meets its set's other pieces more often
+  const pool = DATA.relicPool();
+  const one = run(['kettle_helm']);
+  let plain = 0, pulled = 0;
+  for (let s = 1; s <= 1500; s++) {
+    if (['battering_ram', 'castle_walls'].includes(DATA.pickRelic(U.rng(s), pool))) plain++;
+    if (['battering_ram', 'castle_walls'].includes(DATA.pickRelic(U.rng(s), pool, one))) pulled++;
+  }
+  t.ok(pulled > plain * 4, `the set pull finds the missing pieces (${plain} -> ${pulled} of 1500)`);
+  t.eq(DATA.pickRelic(U.rng(9), pool, one), DATA.pickRelic(U.rng(9), pool, one), 'deterministic');
+  const none = run(['grip_tape']);
+  let same = 0;
+  for (let s = 1; s <= 200; s++) if (DATA.pickRelic(U.rng(s), pool, none) === DATA.pickRelic(U.rng(s), pool, Object.assign({}, none))) same++;
+  t.eq(same, 200, 'a run without set pieces draws as before');
+  t.ok(DATA.SET_PULL > 0 && DATA.SET_PULL < 0.5, 'a gentle pull');
+});
+
+t.test('sets: bonus hooks survive without COMBAT and go through its helpers with it', () => {
+  const calls = [];
+  for (const id of Object.keys(DATA.SET_FX)) {
+    const F = mockF(), before = JSON.stringify(F);
+    let threw = null;
+    try { runHooks(DATA.SET_FX[id], F); } catch (e) { threw = e; }
+    t.ok(!threw, `${id}: no COMBAT, no throw ${threw || ''}`);
+    t.eq(JSON.stringify({ ...F, rs: undefined }), JSON.stringify({ ...JSON.parse(before), rs: undefined }), `${id}: no mutation without COMBAT`);
+  }
+  globalThis.COMBAT = {
+    damage: (F, src, e, v) => { calls.push(['damage', src, v]); return v; },
+    status: (F, who, s, v) => { calls.push(['status', s, v]); return v; },
+    heal: (F, who, v) => { calls.push(['heal', v]); return v; },
+    addJunk: (F, id, n) => { calls.push(['addJunk', id, n]); return []; },
+    copy: (F, tag) => { calls.push(['copy', tag]); return null; },
+    tickets: (F, v) => { calls.push(['tickets', v]); return v; },
+    gainGold: () => 0, gold: () => 100, emit: (F, ev) => { calls.push(['emit', ev.t, ev.id]); return ev; },
+  };
+  try {
+    for (const id of Object.keys(DATA.SET_FX)) {
+      const fx = DATA.SET_FX[id];
+      if (!fx.hooks) continue;
+      calls.length = 0;
+      const F = mockF(), g0 = F.player.grabs;
+      let threw = null;
+      try { runHooks(fx, F); if (fx.hooks.onStatus) fx.hooks.onStatus(F, F.enemies[0], 'poison', 2); } catch (e) { threw = e; }
+      t.ok(!threw, `${id}: hooks run with COMBAT ${threw || ''}`);
+      t.ok(calls.length > 0 || F.player.grabs !== g0, `${id}: hooks do something`);
+      t.ok(calls.every(c => c[0] !== 'damage' || c[1] === null), `${id}: set damage has no attacker`);
+      t.ok(calls.every(c => c[0] !== 'status' || STATUS[c[1]]), `${id}: statuses exist`);
+      t.ok(calls.every(c => c[0] !== 'addJunk' || ITEMS[c[1]].rarity === 'junk'), `${id}: junk exists`);
+      t.ok(calls.every(c => c[0] !== 'emit' || ((c[1] === 'proc' && c[2] === id) || c[1] === 'grab')), `${id}: its procs name the bonus`);
+    }
+  } finally { delete globalThis.COMBAT; }
+  t.ok(!SRC.slice(SRC.indexOf('SETS (relic sets'), SRC.indexOf('/SETS')).includes('Math.random'), 'no Math.random in the sets block');
+});
+
+t.test('boons: three cards, one per slot, deterministic by seed and Tilt, spicier with Tilt', () => {
+  const B = DATA.BOONS;
+  t.ok(DATA.BOON_IDS.length >= 12, 'a dozen boons or more');
+  for (const id of DATA.BOON_IDS) {
+    const b = B[id];
+    t.ok(b.id === id && DATA.BOON_SLOTS.includes(b.slot) && b.name && b.text && isHex(b.color) && b.tilt[0] <= b.tilt[1], `boon ${id}: fields`);
+    t.ok(b.slot !== 'trade' || (typeof b.cost === 'string' && b.cost.length > 5), `boon ${id}: a trade says its cost`);
+    t.ok(JSON.stringify(b).indexOf(String.fromCharCode(0x2014)) < 0, `boon ${id}: no em dashes`);
+  }
+  const ctx = { relics: { c: DATA.relicPool('c'), u: DATA.relicPool('u'), r: DATA.relicPool('r'), boss: DATA.relicPool('boss') }, pets: DATA.PET_IDS.slice() };
+  const a = DATA.boonOffer(1234, 0, ctx), b = DATA.boonOffer(1234, 0, ctx);
+  t.eq(JSON.stringify(a), JSON.stringify(b), 'the same seed and Tilt deal the same cards');
+  t.eq(a.map(o => o.slot).join(), 'gift,boost,trade', 'a gift, a boost and a trade');
+  const tiltOf = {};
+  let differ = 0, seedsDiffer = new Set();
+  for (let s = 1; s <= 300; s++) {
+    for (const tl of [0, 3, 6, 9]) {
+      const o = DATA.boonOffer(s, tl, ctx);
+      for (const x of o) {
+        t.ok(B[x.id] && tl >= B[x.id].tilt[0] && tl <= B[x.id].tilt[1], `seed ${s} Tilt ${tl}: ${x.id} is allowed`);
+        (tiltOf[tl] = tiltOf[tl] || new Set()).add(x.id);
+        for (const r of x.relics || []) t.ok(!!RELICS[r], `seed ${s}: ${x.id} rolls a real relic`);
+        if (x.id === 'setpiece') t.ok(x.relics.length === 1 && DATA.setOf(x.relics[0]) && ['c', 'u'].includes(RELICS[x.relics[0]].rarity), 'Starter Set is a c/u set piece');
+        if (x.id === 'favor' || x.id === 'pact') t.ok(RELICS[x.relics[0]].rarity === 'r', `${x.id}: a rare`);
+        if (x.id === 'shark' || x.id === 'devil') t.eq(RELICS[x.relics[0]].rarity, 'boss', `${x.id}: a boss relic`);
+        if (x.id === 'glassjaw') t.ok(x.relics.length === 2 && x.relics[0] !== x.relics[1], 'Glass Jaw: two different rares');
+        if (x.id === 'pet') t.ok(DATA.PETS[x.pet], 'Pet Pal names its pet');
+      }
+      seedsDiffer.add(o.map(x => x.id).join());
+    }
+    if (JSON.stringify(DATA.boonOffer(s, 0, ctx)) !== JSON.stringify(DATA.boonOffer(s, 9, ctx))) differ++;
+  }
+  t.ok(seedsDiffer.size >= 20, `many different deals over the seeds [${seedsDiffer.size}]`);
+  t.ok(differ > 280, `the Tilt changes the deal [${differ}/300]`);
+  const trades = (tl) => [...tiltOf[tl]].filter(id => B[id].slot === 'trade').sort().join();
+  t.eq(trades(0), 'pact,pockets', 'Tilt 0 trades: Blood Pact, Heavy Pockets');
+  t.eq(trades(9), 'devil,glassjaw,shark', 'Tilt 9 trades: the spicy ones only');
+  t.ok(tiltOf[0].has('favor') && !tiltOf[3].has('favor') && !tiltOf[9].has('favor'), 'a free rare only at low Tilt');
+  const empty = DATA.boonOffer(5, 9, { relics: {}, pets: [] });
+  t.ok(empty.length === 3 && empty.every(o => !o.relics || Array.isArray(o.relics)), 'empty pools deal empty relic lists, never undefined ids');
+});
+
+t.test('compactor: the recipe rules', () => {
+  const I = (id, plus) => ({ id, plus: !!plus });
+  const rare = DATA.pool('r'), unc = DATA.pool('u'), com = DATA.pool('c');
+  t.eq(DATA.cmpRule([I('rusty_sword'), I('rusty_sword')]).ok, false, 'two items: refused');
+  t.eq(DATA.cmpRule([I('rusty_sword'), I('rusty_sword'), I('nope')]).ok, false, 'an unknown item: refused');
+  const same = DATA.cmpRule([I('rusty_sword'), I('rusty_sword'), I('rusty_sword', true)]);
+  t.ok(same.ok && same.kind === 'plus' && same.id === 'rusty_sword', 'three of a kind: its plus copy');
+  t.eq(DATA.cmpRoll(U.rng(1), [I('rusty_sword'), I('rusty_sword'), I('rusty_sword')], 'knight').plus, true, 'rolled as the upgraded copy');
+  t.eq(DATA.cmpRule([I('rusty_sword', true), I('rusty_sword', true), I('rusty_sword', true)]).kind, 'rarity', 'three plus copies: the rarity rule instead');
+  const rr = (ids) => DATA.cmpRule(ids.map(x => I(x))).rar;
+  t.eq(rr([com[0], com[1], com[2]]), 'u', 'c c c -> uncommon');
+  t.eq(rr([com[0], com[1], unc[0]]), 'u', 'c c u -> uncommon (the middle one, one step up)');
+  t.eq(rr([com[0], unc[0], unc[1]]), 'r', 'c u u -> rare');
+  t.eq(rr(['rock', 'slag', rare[0]]), 'c', 'junk junk r -> common (no cheap legendaries)');
+  t.eq(rr([rare[0], rare[1], unc[0]]), 'l', 'r r u -> legendary');
+  const L = DATA.pool('l');
+  t.eq(rr([L[0], L[1], L[2]]), 'l', 'legendaries stay legendary');
+  // rolls: the next rarity, a shared keyword, never an input, never junk / starter / bag / small
+  let shared = 0, n = 0;
+  for (let s = 1; s <= 400; s++) {
+    const r = U.rng(s);
+    const pick = [com[s % com.length], com[(s * 7) % com.length], unc[(s * 3) % unc.length]].map(x => I(x));
+    if (new Set(pick.map(p => p.id)).size < 3) continue;
+    const res = DATA.cmpRoll(r, pick, ['knight', 'alchemist', 'rogue', 'gambler'][s % 4]);
+    const d = ITEMS[res.id];
+    n++;
+    t.ok(res && d && d.rarity === 'u' && !res.plus, `seed ${s}: an uncommon comes out`);
+    t.ok(!d.starter && !d.bag && d.rarity !== 'junk' && !d.tags.includes('small'), `seed ${s}: a real reward item`);
+    t.ok(!pick.some(p => p.id === res.id), `seed ${s}: not one of the inputs`);
+    const kws = new Set(pick.flatMap(p => DATA.kwIds(ITEMS[p.id])));
+    if (DATA.kwIds(d).some(k => kws.has(k))) shared++;
+  }
+  t.ok(shared >= n * 0.95, `the result shares a keyword with the inputs (${shared}/${n})`);
+  const p3 = [I('toxic_vial'), I('venom_dart'), I('rusty_sword')];
+  t.eq(JSON.stringify(DATA.cmpRoll(U.rng(77), p3, 'alchemist')), JSON.stringify(DATA.cmpRoll(U.rng(77), p3, 'alchemist')), 'deterministic by rng');
+  t.eq(DATA.cmpRoll(U.rng(1), [I('rusty_sword')], 'knight'), null, 'a refused rule rolls nothing');
 });
 
 t.done();

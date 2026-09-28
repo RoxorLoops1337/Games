@@ -42,7 +42,9 @@ const DATA = (() => {
     // round 3: Luck cashed out (F, luck, items), an enemy swallowed one of your
     // items (F, e, inst, def), a cabinet material reacted (F, kind 'crack' |
     // 'shatter' | 'fuse' | 'blast', inst, def)
-    'onCashOut', 'onEat', 'onMaterial'];
+    'onCashOut', 'onEat', 'onMaterial',
+    // round 6: the companion pet did a trick in the fight (F, petId)
+    'onPet'];
   // Engine rules a build-defining relic can bend (relic.rules, merged into
   // F.rules by COMBAT.newFight). See DESIGN.md "Builds and synergies".
   // luck: empty grabs and near misses fill the Luck meter (Lucky Lou's gift);
@@ -1695,6 +1697,19 @@ const DATA = (() => {
         },
       } },
 
+    // ---- Round 6 (DESIGN.md "Sets, boons and the Compactor"): The Hungry
+    // Pack, three pet relics. `pet` is read by the game's pet code (xp after
+    // a won fight, extra tricks a turn); onPet(F, petId) fires on every trick.
+    { id: 'chew_toy', name: 'Chew Toy', icon: '🦴', rarity: 'c', kw: ['fortress'], proc: 'CHEW',
+      text: 'Start each fight with 3 Block. Your pet gains 2 more xp for every fight you win.',
+      pet: { xp: 2 }, hooks: { onFightStart(F) { gainBlock(F, 3); } } },
+    { id: 'treat_jar', name: 'Treat Jar', icon: '🍪', rarity: 'u', kw: ['feast'], proc: 'GOOD PET',
+      text: 'Whenever your pet does a trick in a fight, heal 2 HP and gain 2 Block.',
+      hooks: { onPet(F) { healP(F, 2); gainBlock(F, 2); } } },
+    { id: 'dog_whistle', name: 'Dog Whistle', icon: '🦮', rarity: 'r', kw: ['brawler'], proc: 'SIC EM',
+      text: 'Your pet does one more trick every turn, and every trick deals 3 damage to the targeted enemy.',
+      pet: { uses: 1 }, hooks: { onPet(F) { zap(F, focus(F), 3); } } },
+
     // boss
     { id: 'token_stack', name: 'Stack of Tokens', icon: '🪙', rarity: 'boss', kw: ['jackpot', 'junk'], proc: 'TOKENS',
       text: '+1 grab every turn. Start each fight with 2 Rocks in your bin.',
@@ -2403,6 +2418,10 @@ const DATA = (() => {
       const cand = arch ? ids.filter(id => (RELICS[id].kw || []).indexOf(arch) >= 0) : [];
       if (cand.length) return pickFrom(cand);
     }
+    // Set pull (round 6): a missing piece of a set the run holds 1 or 2 of.
+    // Only draws when there is such a piece, so a run without sets rolls as before.
+    const want = run ? setWant(run, ids) : [];
+    if (want.length && rng() < SET_PULL) return pickFrom(want);
     return pickFrom(ids);
   }
 
@@ -2714,6 +2733,10 @@ const DATA = (() => {
     A_('loop6', 'Groundhog Claw', '♾', '#ff2e88', 'Reach Loop 6 in Endless mode.', (c) => endlessBest(c) >= 6, { goal: 6, val: endlessBest }),
     A_('mad_science', 'Mad Science', '\u{1F9EA}', '#a6ff5e', 'Win a run with 2 or more mutators on.', (c) => c.kind === 'win' && mutClean(RUNS(c).muts).length >= 2),
     A_('high_score', 'High Score', '\u{1F947}', '#2ee6d6', 'Score 25,000 points in one run.', (c) => (RUNS(c).scoreTop | 0) >= 25000),
+    // round 6: the secret act (the SECRET block below)
+    A_('keymaster', 'Keymaster', '\u{1F5DD}', '#ffc94d', 'Find all three golden keys in one run.', (c) => secKeyN(RUNS(c)) >= 3),
+    A_('back_room', 'The Back Room', '\u{1F6AA}', '#2ee6d6', 'Step through the hidden door.', (c) => !!(RUNS(c).sec && RUNS(c).sec.room)),
+    A_('true_ending', 'True Ending', '\u{1F305}', '#ff2e88', 'Power down The Machine and see the true ending.', (c) => !!(RUNS(c).sec && RUNS(c).sec.ended)),
   ];
   function winCount(c) { const w = (c && c.meta && c.meta.winsBy) || {}; return Object.keys(w).filter((k) => w[k] > 0).length; }
   function maxTilt(c) { const t = (c && c.meta && c.meta.tilt) || {}; let m = 0; for (const k in t) m = Math.max(m, t[k] | 0); return m; }
@@ -2939,7 +2962,7 @@ const DATA = (() => {
   // The boss whose signature this loop's boss borrows (never its own).
   function endlessMix(rng, act) {
     const own = ((ENCOUNTERS[act] || {}).boss || [[]])[0] || [];
-    const ids = Object.keys(ENEMIES).filter((id) => ENEMIES[id].tier === 'boss' && ENEMIES[id].sig && own.indexOf(id) < 0);
+    const ids = Object.keys(ENEMIES).filter((id) => ENEMIES[id].tier === 'boss' && ENEMIES[id].sig && !ENEMIES[id].secret && own.indexOf(id) < 0);   // (never the secret boss's tricks)
     return ids.length ? ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))] : null;
   }
 
@@ -2965,6 +2988,7 @@ const DATA = (() => {
     add('combos', 'Combos', sc.combos | 0, SCORE.combo);
     add('loops', 'Endless loops', loops, SCORE.loop);
     if (won) lines.push({ k: 'win', label: 'Prize Master down', n: 1, v: SCORE.win });
+    if (run.sec && run.sec.beat) lines.push({ k: 'machine', label: 'The Machine powered down', n: 1, v: SECRET.score });   // SECRET: the true ending
     const base = lines.reduce((s, l) => s + l.v, 0);
     const tiltM = Math.round((1 + SCORE.tilt * Math.max(0, run.tilt | 0)) * 100) / 100;
     const mutM = mutMult(run.muts);
@@ -3212,7 +3236,378 @@ const DATA = (() => {
   }
   // ================================================================ /PETS
 
+  // ================================================================ SECRET (round 6: the Back Room and The Machine)
+  /* Three golden keys per run (one per act), each hidden a different way:
+     inside a roaming monster, as the jackpot of any arcade cabinet on the
+     map, or on a dark hex far from the road. All three before the Prize
+     Master falls open a hidden door: THE BACK ROOM, a short secret act 4
+     inside the machine, and its boss THE MACHINE (the claw cabinet itself).
+     Pure data here; the flow is game.js' SECRET block, the map map.js',
+     the fight combat.js' and the look render.js'. See DESIGN.md "Secret act". */
+  const SECRET = {
+    keys: 3, kinds: ['roam', 'arcade', 'dark'], score: 5000, heal: 0.3,
+    // the back room's elites: the meanest of every act, with the strongest affixes stacked on
+    eliteAffix: 3, affixPool: ['vampiric', 'hasty', 'armored', 'spiky', 'regen', 'explosive'],
+    roomElites: [['frostknight'], ['highcultist'], ['collector'], ['ironjaw'], ['dozer'], ['lodestone']],
+    // the service counter: legendary stock, a boss relic
+    shop: { items: 5, rarity: 'l', price: [150, 230], relicPrice: 200 },
+  };
+  // Which act hides its key which way: a seeded order of the three kinds.
+  function secKinds(seed) {
+    const r = U.rng(U.hashStr('clawspire:secret:' + (seed >>> 0)));
+    const k = r.shuffle(SECRET.kinds.slice());
+    return { 1: k[0], 2: k[1], 3: k[2] };
+  }
+  // The run's secret state as it is today (old or junk saves default).
+  function secFix(o, seed) {
+    const src = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    const keys = {};
+    for (const a of [1, 2, 3]) if (src.keys && src.keys[a]) keys[a] = typeof src.keys[a] === 'string' ? src.keys[a] : 'key';
+    const kinds = src.kinds && SECRET.kinds.indexOf(src.kinds[1]) >= 0 && SECRET.kinds.indexOf(src.kinds[2]) >= 0 && SECRET.kinds.indexOf(src.kinds[3]) >= 0
+      ? { 1: src.kinds[1], 2: src.kinds[2], 3: src.kinds[3] } : secKinds(seed);
+    const door = src.door === 'open' || src.door === 'skip' ? src.door : '';
+    // room: in the Back Room; beat: The Machine is down; ended: the true ending was shown; done: back out (the win screen)
+    return { keys, kinds, door, room: !!src.room && door === 'open', beat: !!src.beat, ended: !!src.ended, done: !!src.done };
+  }
+  // Golden keys found this run (acts 1..3).
+  function secKeyN(run) {
+    const k = run && run.sec && run.sec.keys;
+    if (!k || typeof k !== 'object') return 0;
+    let n = 0;
+    for (const a of [1, 2, 3]) if (k[a]) n++;
+    return n;
+  }
+  // The Machine: the claw cabinet itself, awake. Its signature is a cabinet
+  // event every action (combat.js SECRET block), a different set per phase:
+  // the half hp transformation (OVERCLOCKED) and a final quarter (MELTDOWN,
+  // the glass cracks). art stays a data art key; `look` is its own drawing.
+  ENEMIES.machine = {
+    id: 'machine', name: 'The Machine', act: 3, tier: 'boss', hp: [330, 330], art: 'prizemaster', look: 'machine', size: 1, secret: true, noAffix: true,
+    color: '#2ee6d6', color2: '#ff2e88', color3: '#ffc94d',
+    desc: 'The claw cabinet itself, awake. The Prize Master never owned the machine. The machine owned the Prize Master.',
+    taunt: 'INSERT COIN. INSERT COIN. INSERT YOU.',
+    ai: 'cycle', pattern: [0, 2, 1, 3, 4, 5, 6, 1, 7, 8, 0, 4, 5],
+    enrage: { name: 'OVERCLOCKED', text: 'Every bulb in the cabinet burns at once', str: 2 },
+    sig: { id: 'machine', name: 'Cabinet Event', sign: 'CABINET EVENT', shout: 'MALFUNCTION!', text: 'runs a cabinet event',
+      first: 0, every: 1, final: true, finalName: 'MELTDOWN', finalText: 'The glass is cracking. So is it.',
+      phases: [['tilt', 'flood', 'claw'], ['grav', 'rail', 'shutter'], ['shutter', 'claw', 'grav', 'rail', 'flood', 'tilt']],
+      texts: { tilt: 'tilts the whole cabinet', flood: 'floods your bin with junk', claw: 'takes your claw for a drop', grav: 'flips the gravity for a turn', rail: 'electrifies the claw rail', shutter: 'shutters the prize chute' },
+      signs: { tilt: 'BIG TILT', flood: 'JUNK FLOOD', claw: 'HIJACK', grav: 'ZERO G', rail: 'LIVE RAIL', shutter: 'SHUTTER' },
+      shouts: { tilt: 'TILT! TILT! TILT!', flood: 'OUT OF ORDER!', claw: 'MY CLAW NOW', grav: 'GRAVITY OFF', rail: 'HIGH VOLTAGE', shutter: 'CLOSED FOR SERVICE' },
+      junk: ['rock', 'slag', 'iceblock'], flood: [5, 6, 8], zap: [3, 4, 6], shut: 2, float: [8, 10, 12] },
+    moves: [atk('chomp', 'Coin Slot Chomp', 16, 1, 'Chomps with the coin slot for 16'),
+      atk('bulbs', 'Bulb Barrage', 5, 4, 'Bulb barrage: 5 x4'),
+      blk('glass', 'Tempered Glass', 26, 'Tempers its glass (Block 26)'),
+      debuff('static', 'Static Shock', 'weak', 2, 'Static shock (Weak 2)'),
+      mv('motor', 'Big Motor', 'charge', 'Winding the big motor (44 next turn)', { v: 44 }),
+      atk('slam', 'Cabinet Slam', 24, 1, 'Slams the whole cabinet into you for 24'),
+      buff('overclock', 'Overclock', 'str', 2, 'Overclocks (+2 Strength)'),
+      buff('service', 'Service Mode', 'shield_up', 2, 'Service mode (Block persists 2 turns)'),
+      debuff('glare', 'Marquee Glare', 'vuln', 2, 'Blinds you with the marquee (Vulnerable 2)')],
+  };
+  // The service counter's stock (legendary items, a boss relic), seeded.
+  function secShopStock(rng) {
+    const S0 = SECRET.shop, have = {};
+    let ids = pool(S0.rarity).filter((id) => ITEMS[id] && !ITEMS[id].bag);
+    ids = rng.shuffle(ids).filter((id) => (have[id] ? false : (have[id] = 1))).slice(0, S0.items);
+    const items = ids.map((id) => ({ id, price: Math.round(S0.price[0] + rng() * (S0.price[1] - S0.price[0])), sold: false }));
+    return { items, relicPrice: S0.relicPrice };
+  }
+  // ================================================================ /SECRET
+
+  // ================================================================ SETS (relic sets, the boon draft, the Compactor: round 6)
+  /* Relic sets (DESIGN.md "Sets, boons and the Compactor"). Ten themed sets
+     of three relics; every relic sits in at most one set. Owning 2 pieces
+     turns on the set's small bonus, all 3 the big one as well. A bonus is a
+     relic-shaped def in SET_FX (hooks / rules / mods / loot / pet, the same
+     fields a relic has) that COMBAT runs next to the real relics
+     (setFxIds(run) lists the live ones). Nothing about a set is saved: it is
+     read off run.relics, so an old save simply has whatever sets it owns. */
+  const SETS = {
+    poison: { name: "Poisoner's Kit", icon: '🧪', color: '#a6ff5e', kw: 'poison', pieces: ['venom_gland', 'contagion', 'festering_jar'],
+      two: { name: 'Toxic Touch', proc: 'TOXIC TOUCH', text: 'Whenever an enemy gains Poison, it gains 1 more.' },
+      three: { name: 'Plague Doctor', proc: 'PLAGUE', text: 'At the end of your turn, every poisoned enemy takes its Poison as damage. It ticks twice.' } },
+    burn: { name: 'Pyromaniac', icon: '🔥', color: '#ff8a2e', kw: 'burn', pieces: ['flint_striker', 'bellows', 'powder_keg'],
+      two: { name: 'Kindling', proc: 'KINDLING', text: 'Whenever an enemy gains Burn, it gains 1 more.' },
+      three: { name: 'Wildfire', proc: 'WILDFIRE', text: 'At the start of your turn every enemy gains 2 Burn. A burning enemy that dies spreads its Burn to the rest.' } },
+    frost: { name: 'Cold Storage', icon: '🧊', color: '#9fd8ff', kw: 'frost', pieces: ['snow_globe', 'cold_snap', 'permafrost_core'],
+      two: { name: 'Ice Box', proc: 'ICE BOX', text: 'Whenever an enemy is Frozen, gain 5 Block.' },
+      three: { name: 'Flash Freeze', proc: 'FLASH FREEZE', text: 'The first freeze each turn deals 8 damage to it and gives every other enemy 2 Chill.' } },
+    fortress: { name: 'Iron Fortress', icon: '🛡', color: '#7fb2ff', kw: 'fortress', pieces: ['kettle_helm', 'battering_ram', 'castle_walls'],
+      two: { name: 'Reinforced', proc: 'REINFORCED', text: 'Start each fight with 6 more Block.' },
+      three: { name: 'Siege Engine', proc: 'SIEGE', text: 'Whenever you gain 5 or more Block at once, deal 3 damage to ALL enemies.' } },
+    junk: { name: 'Junkyard Dogs', icon: '🔩', color: '#c8a040', kw: 'junk', pieces: ['dumpster_lid', 'recycling_bin', 'junkyard_king'],
+      two: { name: 'Scrap Armor', proc: 'SCRAP ARMOR', text: 'Whenever you grab out junk, gain 3 more Block.' },
+      three: { name: 'Wrecking Crew', proc: 'WRECKED', text: 'Start each fight with 2 Rocks in your bin. Grabbing out junk deals 8 damage to the targeted enemy.' } },
+    luck: { name: 'High Rollers', icon: '🎲', color: '#3ddc84', kw: 'luck', pieces: ['dealers_visor', 'lucky_cat', 'high_roller'],
+      two: { name: 'Hot Hand', proc: 'HOT HAND', text: 'Start each turn with 1 more Luck.' },
+      three: { name: 'House Money', proc: 'HOUSE MONEY', text: 'Every cash out hands back half the Luck it spent.' } },
+    arcade: { name: 'The Arcade Owner', icon: '🕹', color: '#ffc94d', kw: 'jackpot', pieces: ['prize_counter', 'ticket_roll', 'gacha_charm'],
+      two: { name: 'Frequent Player', proc: 'REGULAR', text: 'Every jackpot and every grab combo prints 1 more ticket and gives 2 Block.' },
+      three: { name: "Owner's Cut", proc: "OWNER'S CUT", text: 'A jackpot gives 1 extra grab (once a turn). Prize capsules upgrade 25% more often.' } },
+    glass: { name: 'Glassworks', icon: '🏺', color: '#d8f0ff', kw: 'glass', pieces: ['bottle_deposit', 'sharp_shards', 'glass_cannon'],
+      two: { name: 'Tempered', proc: 'TEMPERED', text: 'Whenever a glass item shatters, deal 3 damage to a random enemy.' },
+      three: { name: 'Glassblower', proc: 'GLASSBLOWER', text: 'Whenever a glass item shatters, gain 1 Strength and blow a copy of a glass item into your bin (once a turn).' } },
+    pack: { name: 'The Hungry Pack', icon: '🐾', color: '#ffb347', kw: 'feast', pieces: ['chew_toy', 'treat_jar', 'dog_whistle'],
+      two: { name: 'Pack Tactics', proc: 'PACK TACTICS', text: 'Every trick your pet does deals 3 damage to a random enemy.' },
+      three: { name: 'Top Dog', proc: 'TOP DOG', text: 'Your pet does one more trick every turn and its tricks are 50% stronger.' } },
+    circus: { name: 'Midnight Circus', icon: '🎪', color: '#b08cff', kw: 'echo', pieces: ['crystal_focus', 'wizard_hat', 'echo_chamber'],
+      two: { name: 'Sleight of Hand', proc: 'SLEIGHT', text: 'Magic items get +2 damage, Block and healing, and +1 to the statuses they apply.' },
+      three: { name: 'Grand Illusion', proc: 'ILLUSION', text: 'Every 2nd magic item resolves twice (not every 3rd). Start each fight by copying a magic item.' } },
+  };
+  const SET_IDS = ['poison', 'burn', 'frost', 'fortress', 'junk', 'luck', 'arcade', 'glass', 'pack', 'circus'];
+  for (const id of SET_IDS) SETS[id].id = id;
+  // A relic id -> its set id (a relic belongs to one set at most).
+  const SET_OF = {};
+  for (const id of SET_IDS) for (const r of SETS[id].pieces) SET_OF[r] = id;
+  // Reward screens redraw toward a missing piece of a set the run holds 1 or
+  // 2 of this share of the time (after the build pull, only with a run).
+  const SET_PULL = 0.3;
+
+  // The bonuses, as relic-shaped defs. Their hooks use the relic helpers.
+  const setOnce = (F, k) => { const m = mem(F); if (m[k] === F.turn) return false; m[k] = F.turn; return true; };
+  // A set bonus's own proc label (the relic helper `proc` only knows RELICS).
+  const setProc = (F, id, text) => {
+    const r = SET_FX[id];
+    if (!r || !CB()) return;
+    emitE(F, { t: 'proc', src: 'relic', id, name: r.name, icon: r.icon, color: r.color, text: text || r.proc, who: 'player', idx: -1 });
+  };
+  const SET_BONUS = {
+    poison: {
+      two: { hooks: { onStatus(F, u, s, v) { if (s === 'poison' && u && u !== F.player && v > 0) foeStatus(F, u, 'poison', 1); } } },
+      three: { hooks: { onTurnEnd(F) {
+        const hit = aliveOf(F).filter(e => ((e.status && e.status.poison) || 0) > 0);
+        if (!hit.length || !CB()) return;
+        setProc(F, 'set:poison:3', 'PLAGUE');
+        hit.forEach(e => zap(F, e, e.status.poison));
+      } } },
+    },
+    burn: {
+      two: { hooks: { onStatus(F, u, s, v) { if (s === 'burn' && u && u !== F.player && v > 0) foeStatus(F, u, 'burn', 1); } } },
+      three: { hooks: {
+        onTurnStart(F) { allStatus(F, 'burn', 2); },
+        onKill(F, e) {
+          const b = (e && e.status && e.status.burn) || 0;
+          const rest = aliveOf(F).filter(x => x !== e);
+          if (!b || !rest.length || !CB()) return;
+          setProc(F, 'set:burn:3', 'WILDFIRE ' + b);
+          rest.forEach(x => foeStatus(F, x, 'burn', b));
+        },
+      } },
+    },
+    frost: {
+      two: { hooks: { onStatus(F, u, s, v) { if (s === 'freeze' && u && u !== F.player && v > 0) gainBlock(F, 5); } } },
+      three: { hooks: { onStatus(F, u, s, v) {
+        if (s !== 'freeze' || !u || u === F.player || !(v > 0) || !CB() || !setOnce(F, 'setFlash')) return;
+        zap(F, u, 8);
+        aliveOf(F).filter(x => x !== u).forEach(x => foeStatus(F, x, 'chill', 2));
+      } } },
+    },
+    fortress: {
+      two: { mods: { startBlock: 6 } },
+      three: { hooks: { onBlock(F, amt) { if (amt >= 5) zapAll(F, 3); } } },
+    },
+    junk: {
+      two: { hooks: { onPlay(F, inst, def) { if (isJunkPlay(inst, def)) gainBlock(F, 3); } } },
+      three: { hooks: {
+        onFightStart(F) { const c = CB(); if (c) c.addJunk(F, 'rock', 2); },
+        onPlay(F, inst, def) { if (isJunkPlay(inst, def)) zap(F, focus(F), 8); },
+      } },
+    },
+    luck: {
+      two: { hooks: { onTurnStart(F) { luckUp(F, 1); } } },
+      three: { hooks: { onCashOut(F, luck) { const v = Math.floor((luck | 0) / 2); if (v > 0) luckUp(F, v); } } },
+    },
+    arcade: {
+      two: { hooks: { onJackpot(F) { tix(F, 1); gainBlock(F, 2); }, onCombo(F) { tix(F, 1); gainBlock(F, 2); } } },
+      three: { loot: { capUp: 0.25 }, hooks: { onJackpot(F) { if (CB() && setOnce(F, 'setCut')) moreGrabs(F, 1); } } },
+    },
+    glass: {
+      two: { hooks: { onShatter(F) { zap(F, randomFoe(F), 3); } } },
+      three: { hooks: { onShatter(F) {
+        selfStatus(F, 'str', 1);
+        const c = CB();
+        if (c && c.copy && setOnce(F, 'setBlow')) c.copy(F, 'glass');
+      } } },
+    },
+    pack: {
+      two: { hooks: { onPet(F) { zap(F, randomFoe(F), 3); } } },
+      three: { pet: { uses: 1, pow: 0.5 }, hooks: { onPet(F) { setProc(F, 'set:pack:3', 'TOP DOG'); } } },
+    },
+    circus: {
+      two: { rules: { amp: { magic: 2 } } },
+      // echo adds up with the Echo Chamber's 3: every 2nd magic item echoes
+      three: { rules: { echo: -1 }, hooks: { onFightStart(F) { const c = CB(); if (c && c.copy) c.copy(F, 'magic'); } } },
+    },
+  };
+  // SET_FX['set:<id>:2' | 'set:<id>:3'] and the boon's first fight grabs.
+  const SET_FX = {};
+  for (const id of SET_IDS) {
+    const s = SETS[id];
+    for (const n of [2, 3]) {
+      const txt = n === 2 ? s.two : s.three, b = SET_BONUS[id][n === 2 ? 'two' : 'three'];
+      SET_FX[`set:${id}:${n}`] = Object.assign({ id: `set:${id}:${n}`, name: txt.name, icon: s.icon, rarity: 'set', kw: [s.kw],
+        proc: txt.proc, text: txt.text, set: id, n, color: s.color }, b);
+    }
+  }
+  SET_FX['boon:grabs'] = { id: 'boon:grabs', name: 'Warm-Up Tokens', icon: '🪙', rarity: 'boon', kw: ['jackpot'], proc: 'WARM-UP',
+    text: '+2 grabs every turn of this fight.', mods: { grabs: 2 }, color: '#ffc94d' };
+
+  const relicIdsOf = (x) => (Array.isArray(x) ? x : (x && Array.isArray(x.relics) ? x.relics : []));
+  // The set a relic belongs to, or null.
+  function setOf(relicId) { return SET_OF[relicId] || null; }
+  // How many distinct pieces of a set a relic list (or a run) holds.
+  function setCount(relics, id) {
+    const s = SETS[id], have = relicIdsOf(relics);
+    return s ? s.pieces.filter(r => have.indexOf(r) >= 0).length : 0;
+  }
+  // Every set the list holds at least one piece of: [{id, n, have, missing}].
+  function setProgress(relics) {
+    const have = relicIdsOf(relics), out = [];
+    for (const id of SET_IDS) {
+      const s = SETS[id], got = s.pieces.filter(r => have.indexOf(r) >= 0);
+      if (got.length) out.push({ id, n: got.length, have: got, missing: s.pieces.filter(r => got.indexOf(r) < 0) });
+    }
+    return out;
+  }
+  // The live bonus ids for a run (or a relic list): 'set:x:2' from 2 pieces,
+  // 'set:x:3' too at 3, and the boon's warm-up grabs while they last.
+  function setFxIds(run) {
+    const have = relicIdsOf(run), out = [];
+    // run.noSets: a test pinning one relic's own numbers opts out of the bonuses
+    if (!(run && run.noSets)) for (const id of SET_IDS) {
+      const n = setCount(have, id);
+      if (n >= 2) out.push(`set:${id}:2`);
+      if (n >= 3) out.push(`set:${id}:3`);
+    }
+    if (run && !Array.isArray(run) && run.boon && run.boon.grabs > 0) out.push('boon:grabs');
+    return out;
+  }
+  // The pieces in `ids` that a run holding 1 or 2 of their set is missing.
+  function setWant(run, ids) {
+    const have = relicIdsOf(run);
+    return (ids || []).filter(r => { const s = SET_OF[r]; if (!s || have.indexOf(r) >= 0) return false; const n = setCount(have, s); return n >= 1 && n <= 2; });
+  }
+  // A card line for a relic that belongs to a set: the count once you take it.
+  function setTagOf(relicId, relics) {
+    const id = SET_OF[relicId];
+    if (!id) return null;
+    const have = relicIdsOf(relics), s = SETS[id];
+    const n = setCount(have, id) + (have.indexOf(relicId) >= 0 ? 0 : 1);
+    return { id, name: s.name, icon: s.icon, color: s.color, n, total: s.pieces.length, completes: n === s.pieces.length && have.indexOf(relicId) < 0,
+      text: `${n}/${s.pieces.length} ${s.name}` };
+  }
+
+  /* The boon draft (Neow's deal): after character select the machine offers
+     three face-down cards, a gift, a boost and a trade, picked by the run's
+     seed and its Tilt (higher Tilt: spicier trades, no free rare). */
+  const BOONS = {
+    // gifts
+    gold: { slot: 'gift', name: 'Pocket Change', icon: '🪙', color: '#ffc94d', tilt: [0, 10], text: 'Gain 100 gold.' },
+    capsule: { slot: 'gift', name: 'Mystery Capsule', icon: '🔮', color: '#ff9ec7', tilt: [0, 10], text: 'An uncommon or better prize capsule. Crack it right now.' },
+    grabs: { slot: 'gift', name: 'Warm-Up Tokens', icon: '🎟', color: '#2ee6d6', tilt: [0, 10], text: '+2 grabs every turn of your first fight.' },
+    pet: { slot: 'gift', name: 'Pet Pal', icon: '🐾', color: '#ffb347', tilt: [0, 10], text: 'A buddy jumps out of the prize chute and joins you, already Lv 2.' },
+    favor: { slot: 'gift', name: "Prize Master's Favor", icon: '👑', color: '#ffc94d', tilt: [0, 2], text: 'A rare relic, no strings attached. This time.' },
+    // boosts
+    setpiece: { slot: 'boost', name: 'Starter Set', icon: '⛓', color: '#b08cff', tilt: [0, 10], text: 'A common or uncommon relic that belongs to a set.' },
+    trim: { slot: 'boost', name: 'Spring Cleaning', icon: '🧹', color: '#a6ff5e', tilt: [0, 10], text: 'Remove 3 items from your bin (you pick).' },
+    polish: { slot: 'boost', name: 'Polish', icon: '✨', color: '#d8f0ff', tilt: [0, 10], text: 'Upgrade 3 random items in your bin.' },
+    bulbs: { slot: 'boost', name: 'Bright Idea', icon: '💡', color: '#ffe066', tilt: [0, 10], text: 'Gain 5 bulbs and a lantern.' },
+    // trades (the curse-for-power deals)
+    pact: { slot: 'trade', name: 'Blood Pact', icon: '🩸', color: '#ff5a4a', tilt: [0, 4], cost: 'Lose 10 Max HP.', text: 'Gain a rare relic.' },
+    pockets: { slot: 'trade', name: 'Heavy Pockets', icon: '🪨', color: '#c8a040', tilt: [0, 6], cost: '2 Rocks join your bin for good.', text: 'Gain an uncommon relic and 50 gold.' },
+    shark: { slot: 'trade', name: 'Loan Shark', icon: '🦈', color: '#7fb2ff', tilt: [3, 10], cost: 'Lose all your gold.', text: 'Gain a boss relic.' },
+    glassjaw: { slot: 'trade', name: 'Glass Jaw', icon: '🥊', color: '#ff2e88', tilt: [5, 10], cost: 'Lose 15 Max HP.', text: 'Gain two rare relics.' },
+    devil: { slot: 'trade', name: "Devil's Bargain", icon: '😈', color: '#ff2e30', tilt: [8, 10], cost: 'Lose 20% of your Max HP and a Slag joins your bin.', text: 'Gain a boss relic and a rare relic.' },
+  };
+  const BOON_IDS = Object.keys(BOONS);
+  for (const id of BOON_IDS) BOONS[id].id = id;
+  const BOON_SLOTS = ['gift', 'boost', 'trade'];
+  // What each boon's relics are rolled from (the rarity pools in ctx.relics).
+  const BOON_RELICS = { favor: ['r'], pact: ['r'], pockets: ['u'], shark: ['boss'], glassjaw: ['r', 'r'], devil: ['boss', 'r'] };
+  // seed, tilt, ctx {relics: {c, u, r, boss: [ids not owned]}, pets: [ids]}
+  // -> three offers [{id, slot, relics?, pet?}], one per slot, the same for the
+  // same seed, Tilt and pools.
+  function boonOffer(seed, tilt, ctx) {
+    ctx = ctx || {};
+    tilt = Math.max(0, Math.min(10, tilt | 0));
+    const rng = U.rng(((seed >>> 0) ^ Math.imul(tilt + 1, 0x9e3779b1)) >>> 0);
+    const pick = (a) => a[Math.floor(rng() * a.length)];
+    const pools = ctx.relics || {};
+    const out = [];
+    for (const slot of BOON_SLOTS) {
+      const ids = BOON_IDS.filter(id => BOONS[id].slot === slot && tilt >= BOONS[id].tilt[0] && tilt <= BOONS[id].tilt[1]);
+      // the trade slot leans to the spiciest deal the Tilt allows
+      let id = pick(ids);
+      if (slot === 'trade' && tilt >= 3 && rng() < 0.5) id = ids.slice().sort((a, b) => BOONS[b].tilt[0] - BOONS[a].tilt[0])[0];
+      const o = { id, slot };
+      const want = BOON_RELICS[id];
+      if (want) {
+        const got = [];
+        for (const r of want) {
+          const cand = (pools[r] || []).filter(x => got.indexOf(x) < 0);
+          if (cand.length) got.push(pick(cand));
+        }
+        o.relics = got;
+      }
+      if (id === 'setpiece') {
+        const cand = [].concat(pools.c || [], pools.u || []).filter(x => SET_OF[x]);
+        o.relics = cand.length ? [pick(cand)] : [];
+      }
+      if (id === 'pet') { const p = ctx.pets || []; o.pet = p.length ? pick(p) : null; }
+      out.push(o);
+    }
+    return out;
+  }
+
+  /* The Compactor: three items go in, one comes out. Three of the same item
+     (not all upgraded already) make its plus copy; anything else makes an
+     item one rarity above the middle one of the three (junk < common <
+     uncommon < rare < legendary) that shares a keyword with the inputs,
+     leaning to the keywords most of them share. */
+  const CMP = { n: 3, price: 30, RANK: { junk: 0, c: 1, u: 2, r: 3, l: 4 }, RAR: ['junk', 'c', 'u', 'r', 'l'] };
+  // insts [{id, plus}] -> {ok, why?, kind: 'plus' | 'rarity', id?, rar?, kw: [ids by count]}
+  function cmpRule(insts) {
+    const list = (insts || []).filter(i => i && ITEMS[i.id]);
+    if (list.length !== CMP.n) return { ok: false, why: `Feed it ${CMP.n} items.`, kw: [] };
+    const defs = list.map(i => ITEMS[i.id]);
+    const cnt = {};
+    for (const d of defs) for (const k of kwIds(d)) cnt[k] = (cnt[k] || 0) + 1;
+    const kw = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || ARCH_ORDER.indexOf(a) - ARCH_ORDER.indexOf(b));
+    const same = list.every(i => i.id === list[0].id);
+    if (same && defs[0].rarity !== 'junk' && defs[0].plus && !list.every(i => i.plus)) return { ok: true, kind: 'plus', id: list[0].id, kw };
+    const ranks = defs.map(d => CMP.RANK[d.rarity] || 0).sort((a, b) => a - b);
+    const rar = CMP.RAR[Math.min(4, ranks[1] + 1)];
+    return { ok: true, kind: 'rarity', rar, kw, cnt };
+  }
+  // rng, insts, char -> {id, plus} (null when the rule refuses)
+  function cmpRoll(rng, insts, char) {
+    const R = cmpRule(insts);
+    if (!R.ok) return null;
+    if (R.kind === 'plus') return { id: R.id, plus: true };
+    const ins = insts.map(i => i.id);
+    let rar = R.rar, cand = [];
+    // a crawler's own pool may run dry at a rarity: step down until it does not
+    while (!cand.length && CMP.RANK[rar] >= 1) {
+      const all = pool(rar, char).filter(id => ins.indexOf(id) < 0);
+      cand = all.filter(id => kwIds(ITEMS[id]).some(k => R.cnt[k]));
+      if (!cand.length) cand = all;
+      if (!cand.length) rar = CMP.RAR[CMP.RANK[rar] - 1];
+    }
+    if (!cand.length) return null;
+    // weight: how many inputs share each of the candidate's keywords
+    const w = cand.map(id => 1 + kwIds(ITEMS[id]).reduce((s, k) => s + (R.cnt[k] || 0) * 2, 0));
+    let x = rng() * w.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < cand.length; i++) { x -= w[i]; if (x < 0) return { id: cand[i], plus: false }; }
+    return { id: cand[cand.length - 1], plus: false };
+  }
+  // ================================================================ /SETS
+
   return {
+    // the secret act (DESIGN.md "Secret act (round 6)")
+    SECRET, secKinds, secFix, secKeyN, secShopStock,
+    // relic sets, the boon draft, the Compactor (DESIGN.md "Sets, boons and the Compactor")
+    SETS, SET_IDS, SET_FX, SET_PULL, setOf, setCount, setProgress, setFxIds, setWant, setTagOf, BOONS, BOON_IDS, BOON_SLOTS, boonOffer, CMP, cmpRule, cmpRoll,
     // companion pets (DESIGN.md "Pets")
     PETS, PET_IDS, PET_XP, PET_MAX, PET_GAIN, PET_SHOP, petLevel, petNext, petPow, petUses, petLook, petEgg, petGlow, petName, petNew, petFix, petOffer, petText,
     // the Prize Vault (DESIGN.md "Prize Vault"): cosmetics, prices, the Vault Capsule

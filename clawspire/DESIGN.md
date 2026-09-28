@@ -809,7 +809,8 @@ boss → next act (new map, +heal 30%) → after act 3 boss: win screen (stats, 
 Death → game over with stats and "what killed you". Save on every screen change; a saved run
 offers CONTINUE on the title. Help screen explains the rig, statuses and the map.
 Tutorial: first fight of a fresh profile shows 3 short coach-marks (steer, release, chute).
-Settings: sound toggle, music toggle, reduced shake, debug outlines (`?debug=1`).
+Settings: sound toggle, music toggle, reduced shake, debug outlines (`?debug=1`); since round 6 the
+Settings panel holds them all (see "Accessibility, camera and music (round 6)").
 
 Tests (`tests/clawspire_game.test.mjs`, written by the integrator): full headless run through
 `window.CS`: new run → move on map → fight → drive the rig by calling `GAME.steer/dropClaw`
@@ -2861,6 +2862,460 @@ hp; runs that reach act 3 carry 80-100 items and 23-36 relics, mostly
 from capsules and payouts). The bot
 walks into elites at 60% hp, so the real elite danger for a careful player is
 lower; the ranking (Ironjaw first) is the signal.
+
+## Accessibility, camera and music (round 6)
+
+Everyone should be able to play it, and the world map should feel like a
+place you travel through. Presentation only: no rule, no balance and no
+save key changed. The flow lives in `game.js` (the ACCESS block, reached
+through one-line hooks), the looks in `render.js` (the ACCESS block,
+`RENDER.acc`), the tunes in `audio.js` (per-act music), the CSS in
+`index.html` (`<style id="acc-css">`).
+
+### The Settings panel
+
+One place for every option (the old title toggles for Shake and Buzz moved
+in; Sound and Music stay on the title as quick toggles too). A bottom sheet
+over any screen (`#accSet`, built by `accPanel` / `accBuild`): the title's
+**Settings** button, a gear on the map head's hint row, and a gear at the
+left of the fight's control bar (`#accPause`, it **pauses** the fight:
+`update()` skips everything but the toast while it is open). A tap on the
+dimmed game around it, **Done**, or Escape closes it. Its buttons register
+with `GAME.choose` while it is open and hand the screen's back on close; a
+toggle row reads On / Off and keeps a full label (`Buzz off`) for choose.
+At the top a live sample strip (`accPreview`) draws the damage / heal /
+block numbers, three status chips, the four rarity rims, the map's danger
+and pickup marks and two prizes in the current palette, text size and
+outline, so every change previews at once (the game behind it too).
+
+| section | setting (`meta.settings`) | default |
+| --- | --- | --- |
+| Sound | `volMaster`, `volMusic`, `volSfx` sliders 0..1 (`AUDIO.setMaster`, `setVolume`: 100% is the old level); Sound, Music toggles (`clawspire_audio`, as before) | 1, 1, 1 |
+| Motion and feel | `shake` (Shake off is reduced motion, as before), `haptics` (Buzz), `noFlash` (reduced flashing) | true, true, false |
+| Vision | `cb` colours: `off`, `deutan`, `protan`, `tritan`; `text` size: `n`, `l` (x1.15), `xl` (x1.3); `hc` item outlines | off, n, false |
+| Controls | `hand` one-handed: `off`, `left`, `right`; `slowClaw` assist | off, false |
+| Tips | Reset tips (the FEEL block's `feelTipsReset`) | |
+
+`accFix` defaults and repairs every field (a junk value becomes its default,
+an old profile keeps what it had), `accApply` pushes them to the renderer
+(`RENDER.acc.set`), the audio, `fx().reduced` and `<html>` classes (`cb-*`,
+`txt-l` / `txt-xl`, `noflash`, `hand-left` / `hand-right`, `hc`). It runs at
+boot (`loadMeta`) and on every change (`accSet(k, v)` saves at once).
+
+### Accessibility
+
+- **Colour-blind palettes** (`RENDER.acc`, `ACC_ROLE`, `ACC_PAL`). The game's
+  canonical signal hexes map to a role (damage red, the lime of heal /
+  poison / buffs, the cyan of block / uncommon, the pink of crits / debuffs /
+  legendary, gold, burn, block blue) and each mode gives every role a colour
+  it can tell apart: orange / blue / pale ice / violet / yellow for the
+  red-green modes (protan brighter), red / green / silver / purple for
+  tritan. `accC(c)` maps a colour (anything else passes through); it is
+  applied in `fx.text / num / badge / ring` (every floating number and
+  label), the status chips, the intent bubbles, `RARITY_COL` and the item
+  rim light (the item sprites re-key through `POL.v`), and the DOM through
+  CSS variables (`--acc-dmg` ...: the HP stat, card rarity words and rims,
+  tray chips, the player's status chips). Off restores the table exactly.
+- **Colour is never the only cue.** Numbers carry their sign (a minus for
+  damage, a plus for healing, "block" in words). Every status has its own
+  icon (the render suite pins 21 distinct); in a colour-blind mode a buff
+  chip is a round pill with an up triangle and a debuff chip an angular pill
+  with a down triangle (canvas `accChip` / `accMark`; the DOM chips get a
+  dashed rim and a triangle). On the map a hex that starts a fight (fight,
+  elite, boss, tower) wears a warning triangle with a bang, a pickup
+  (treasure, gem, bulbs, tool, shop, rest, forge, pet shop) a round plus.
+  Rarity also has its words on every card and a star on a legendary.
+- **Text size** (normal / large x1.15 / extra large x1.3). The canvas labels
+  scale in `fx.text` (numbers, badges, banners' floating words). The DOM:
+  every full-screen body (character select, reward, shop, event, rest,
+  forge, treasure, parts, bin, game over, win, help, Prizedex, stickers,
+  tips, the prize counter), the title menu and the Settings sheet scale as a
+  whole with CSS `zoom` and reflow in a box 1/k as wide, so the layout holds
+  at the 540 stage and therefore at 360 px (the Playwright audit found no box
+  past the stage at either size); the HUD's words (stats at half the step,
+  so the 54 px boxes hold), the hint, toasts, the popover, the turn banner,
+  the map head's hint, tool chips, tray chips, tip cards and status chips
+  grow by k.
+- **Reduced flashing** (independent of Shake off): `fx.flash` is capped at
+  0.08 and the red edge pulse at 0.4, a boss finale's whiteout becomes a
+  soft 0.22 wash (`accWhite`), the intro's full-frame flashes cap at 0.12,
+  the cabinet's party chase and the arcade machines' strobing bulbs run at a
+  fifth of their rate (`RENDER.acc.strobe(t)`), and the CSS drops the
+  brightness spikes and strobes (the JACKPOT glow, the arcade's jackpot sign,
+  the attract bulbs and INSERT COIN, the CRT power-on and LOOP slam, the
+  payout TOTAL, capsule upgrades, slot wins).
+- **High-contrast outlines**: every item in the cabinet is drawn with
+  `opts.hc`: its silhouette as a light halo and then a thick dark rim behind
+  the art, cached as its own item sprite (key + 1000).
+- **One-handed mode**: END TURN grows (180 x 60) and moves to the chosen
+  thumb (the control row reverses for the left hand, the pause gear goes to
+  the other side); on the map a column of three round thumb buttons (gear,
+  Bin, recentre) sits low on that side (`#accThumb`, shown while the map is
+  up, `S.accThumbOn`).
+- **Slow claw assist**: the claw's carriage and carry speed x`ACC_SLOW`
+  (0.55), applied to a live claw at once and to every claw built after. A
+  run played with it is tagged (`run.assist.slowClaw`, optional; old saves
+  have none) and the run summary lists "Assist: Slow claw". No score change.
+
+### Map camera juice
+
+All of it goes through `clampCam` (the zoom stays in 0.6..1.4 and the view
+centre on the map), a drag or a pinch takes the camera back at once, a snap
+(`lookAt`) cancels it and restores the zoom, leaving the map mid-swoop (a
+walk into a fight) restores the zoom, and reduced motion (Shake off or the
+OS setting) keeps the old instant behaviour. `ACC_CAM` holds the dials.
+- **Swoop**: a walk of 3+ steps (`accSwoop` from `startWalk`) follows the
+  crawler's eased position (not the hex it steps to) with a lead toward the
+  destination (35% of the way, at most 170 px) and a slight zoom out (x0.86
+  eased in over 0.4 s) that eases back in over 0.55 s on arrival; then the
+  last bit eases as ever (`S.camTo`).
+- **Hop**: the crawler, its portrait and its pet hop hex to hex: lifted on a
+  sine (0.3 hex), stretched in the air, squashed at take-off and landing.
+- **Zoom punch**: lighting a hex by hand, a light-the-way chain or a tool
+  (`S.bloomSrc`) punches the map 6% toward it over 0.42 s. It is a draw
+  transform about a point pinned inside the map area, so it only ever shows
+  less of the map.
+- **Tower pan**: a taken tower pans the camera to the tower (0.85 s, zooming
+  out to x0.8), holds 1.3 s while its view blooms (the blooms, the chimes and
+  the beam wait for the camera) and pans back to the crawler (0.75 s).
+- **Fight iris**: entering a fight from the map closes an iris on the tile
+  (`#wipe.irisz`, CSS vars `--ix / --iy`) while a snapshot of the last map
+  frame zooms into it on the canvas (0.3 s, wall clock; the fight's player
+  row, control bar and combo banner stay hidden meanwhile, `#stage.accIrisOn`),
+  then the fight's iris opens from the middle.
+
+### Per-act music (audio.js)
+
+`AUDIO.setAct(a)` (the game calls it before every mode change, `accMusicAct`:
+the run's act on run screens, 0 on the title) picks the act's variant of the
+map, fight, elite and boss tunes (`ACT_CFG[act][mode]` over `CFG[mode]`,
+`ACT_CFG[act].all` over every mode of the act); 0 (the title, the tests)
+plays the base tunes, bit for bit the old ones. Act 1, the cellar arcade:
+**synthpop** (112 bpm dorian, a bouncing octave bass, four on the floor, a
+filtered 16th arpeggio). Act 2, the foundry: an **industrial furnace groove**
+(96 bpm phrygian, a sawtooth pedal bass, anvil clanks on the offbeats and a
+steam hiss closing each phrase). Act 3, the vault: an **icy music box** (84
+bpm lydian lullaby on struck tines with an octave overtone, bell sparkles a
+twelfth up, no drums). The fights keep their tempo, key and the round 3 hype
+/ tense layers (composed per variant, `_layerSong(mode, act)`) and borrow the
+act's timbre (the arpeggio, the clanks, the bells). A new act crossfades the
+live tune into its variant (`ACT_XFADE` 1.6 s); screen changes crossfade as
+before (1 s). The music toggle, the volumes and the master volume apply as
+ever; before init everything is remembered. New voices: `arp, clank, steam,
+bell`. Test hooks: `_songFor(mode, act)`, `_actOf`, `_liveActs`.
+
+`GAME.acc` = `{DEF, CB, TXT, TXT_K, HAND, CLS, SLOW, VOL, CAM, fix, apply, set,
+get, classes, open, close, build, preview, key, clawK, musicAct, swoop,
+towerPan, punchK, hop, camStep, irisDraw, calm, stats, white, mapPunch,
+crawlerWorld, isOpen, cam, punch, iris, cls}`; `RENDER.acc` = `{set, state,
+col, strobe, shape, mark, chip, tileKind, MODES, TEXT, ROLE, PAL, RAR0,
+textK, noFlash, hc, mode}`.
+
+Tests: render (every signal colour changes per mode and the roles stay
+apart, the rarity table recolours and comes back exactly, the numbers take
+the palette and keep their signs, intents and chips draw clean in every
+mode, 21 distinct status icons, buff and debuff chips differ in outline and
+mark, the map's danger and pickup marks only in a colour-blind mode, text
+scale 1.15 / 1.3 on labels and numbers, the flash cap, the strobe rate, the
+outline sprite), audio (three act map themes with their own tempo, mode and
+voices, fight / elite / boss variants with fitting layers, the base tunes
+unchanged, determinism, the act crossfade with a fake AudioContext, layers
+on a variant, the victory sting, master volume, music off), game (defaults,
+junk repair and old profiles, every setting saved and applied at boot, the
+panel from the title, the map and a paused fight, live preview, reset tips,
+Escape, the thumb zone and the page classes, the slow claw on a live and a
+new claw and in the run summary, every option on in a fight, the whiteout
+cap, the text size rules cover every full-screen body and fit the stage, a
+swoop fuzz over 12 seeds and 5 walks each (zoom 0.6..1.4, a snap mid-swoop)
+with every frame inside the clamp, the zoom restored, a hop, a drag
+cancelling, reduced motion, a short walk, a walk into a fight, the punch's
+size and pivot, the tower pan over 6 seeds with the delayed blooms and beam,
+the fight iris on the tile and reduced motion, the act handed to the audio on
+the map, in fights and on the title).
+
+## Sets, boons and the Compactor (round 6)
+
+Late runs carry 80 to 100 items and 20 to 36 relics (the round 5 snapshot).
+This round gives that pile a shape: relics that belong together, a first
+choice that bends the run from the start, and a machine that turns three
+items into one better one. Data in `data.js` (the SETS block, plus The
+Hungry Pack's three relics in `RELIC_LIST`), the fight side in `combat.js`
+(the SETS block), the flow and the UI in `game.js` (the SETS block, reached
+through one-line hooks), the art in `render.js` (the SETS block), the CSS in
+`index.html` (`<style id="sets-css">`), the sounds in `audio.js`.
+
+### Relic sets (`DATA.SETS`, `SET_IDS`, `SET_FX`)
+
+Ten sets of three pool relics; every relic sits in one set at most. Owning 2
+pieces turns on the set's small bonus, all 3 the big build-defining one as
+well. A bonus is a relic-shaped def in `DATA.SET_FX` (`'set:<id>:2'`,
+`'set:<id>:3'`) with the same fields a relic has (`hooks`, `rules`, `mods`,
+`loot`, `pet`). `DATA.setFxIds(run)` lists the live ones; `COMBAT.newFight`
+puts them on `F.sets` (F.relics keeps the real relics only), adds their mods
+and rules to the relics' and runs their hooks right after the relics' hooks
+(`relicDef` resolves both). Their proc events carry the bonus id, so the HUD
+pops the set's badge. Nothing is saved: a set is read off `run.relics`.
+
+| set | pieces | 2 pieces | 3 pieces |
+| --- | --- | --- | --- |
+| 🧪 Poisoner's Kit | Venom Gland, Contagion, Festering Jar | Toxic Touch: an enemy gaining Poison gains 1 more | Plague Doctor: at your turn end every poisoned enemy takes its Poison (it ticks twice) |
+| 🔥 Pyromaniac | Flint Striker, Bellows, Powder Keg | Kindling: an enemy gaining Burn gains 1 more | Wildfire: every enemy gains 2 Burn at your turn start; a burning death spreads its Burn |
+| 🧊 Cold Storage | Snow Globe, Cold Snap, Permafrost Core | Ice Box: a freeze gives 5 Block | Flash Freeze: the first freeze each turn deals 8 to it and 2 Chill to every other enemy |
+| 🛡 Iron Fortress | Kettle Helm, Battering Ram, Castle Walls | Reinforced: 6 more Block at the bell (`mods.startBlock`) | Siege Engine: gaining 5+ Block at once hits ALL for 3 |
+| 🔩 Junkyard Dogs | Dumpster Lid, Recycling Bin, Junkyard King | Scrap Armor: junk grabbed out gives 3 more Block | Wrecking Crew: 2 Rocks in the bin at the bell; junk grabbed out hits the target for 8 |
+| 🎲 High Rollers | Dealer's Visor, Lucky Cat, High Roller | Hot Hand: 1 more Luck every turn start | House Money: a cash out hands back half the Luck it spent |
+| 🕹 The Arcade Owner | Prize Counter, Ticket Roll, Gacha Charm | Frequent Player: every jackpot and combo prints a ticket and gives 2 Block | Owner's Cut: a jackpot gives 1 grab (once a turn); capsules upgrade 25% more often (`loot.capUp`) |
+| 🏺 Glassworks | Bottle Deposit, Sharp Shards, Glass Cannon | Tempered: a shatter cuts a random enemy for 3 | Glassblower: a shatter gives 1 Strength and copies a glass item into the bin (once a turn) |
+| 🐾 The Hungry Pack | Chew Toy, Treat Jar, Dog Whistle (new) | Pack Tactics: every pet trick hits a random enemy for 3 | Top Dog: one more trick a turn, tricks 50% stronger (`pet {uses, pow}`) |
+| 🎪 Midnight Circus | Crystal Focus, Wizard Hat, Echo Chamber | Sleight of Hand: magic items +2 (`rules.amp.magic`) | Grand Illusion: every 2nd magic item echoes (`rules.echo -1` on the Chamber's 3); a second magic copy at the bell |
+
+**The Hungry Pack's relics** (the pets get a build): Chew Toy (c, 3 Block at
+the bell, +2 pet xp per won fight, `pet.xp`), Treat Jar (u, every trick heals
+2 and blocks 2), Dog Whistle (r, one more trick a turn, `pet.uses`, and every
+trick hits the target for 3). A new hook, `onPet(F, petId)`, fires on every
+trick: the game calls `COMBAT.petTrick(F, id)` from `petEffect` and queues
+the events. `setPetStat(k)` sums `pet.{xp, uses, pow}` over the relics and
+the live bonuses; the pet code reads it for its uses a turn and its power.
+
+**The pull.** `DATA.pickRelic(rng, pool, run)`: after the build pull, when
+the pool holds a missing piece of a set the run owns 1 or 2 of, `SET_PULL`
+(30%) of the time the pick is one of those (`DATA.setWant`). A run with no
+set started draws exactly as before (no extra rng draw).
+
+**The look.** The relic strip (`setBarLink`, after the strip is built):
+every set with 2+ pieces moves its members together to the front of the
+strip (complete sets first) inside a frame in the set's colour, joined by a
+chain line (it runs while the set is complete), led by a badge (the set's
+icon and `n/3`); the badge is the HUD target for the bonus procs, and a tap
+on it or on any piece opens the set popover (the pieces with ticks, both
+bonuses, the live ones lit). A lone piece gets a corner pip in its colour.
+Relic cards (the treasure reveal, the shop, a capsule's prize, the boon
+cards) carry a tag like "2/3 Poisoner's Kit" (the count once you take it:
+`DATA.setTagOf`), with COMPLETES THE SET! when it would. The second piece
+queues SET BONUS and the third SET COMPLETE! through the announcer (class
+`set`: 45, under a combo; 75 complete, over one): a card over the stage with
+the three medallions snapping into a chain, the set's name in chrome, the
+bonus in words; rings, and for a full set confetti, sparks, a flash and a
+shake; sounds `setPiece`, `setDone`. The queue waits out fights, capsules,
+the treasure reveal, the boon draft and the bin picker, so it plays on the
+screen you land on. `meta.sets {id: completions}` feeds the Prizedex.
+
+**The Prizedex's Sets tab** (after the four DATA tabs; `DATA.DEX_TABS` is
+unchanged, so the completion bar and its counts are too): "n of 10 sets
+completed", a card per set with its three medallions (silhouettes until
+seen) chained, its name and both bonuses once any piece has been seen
+("???" before), and COMPLETED xN.
+
+### The boon draft (`DATA.BOONS`, `boonOffer`)
+
+Right after character select the machine offers a deal (screen `boon`): a
+giant cabinet in a spotlight (`RENDER.boonBack`: LET'S DEAL on its marquee,
+chasing bulbs, a claw swaying behind the glass and two eyes that follow the
+cards, smile at a deal and scowl at a walk-away; at Tilt 5+ it goes red,
+cracks its glass and reads NO REFUNDS) deals three face-down cards out of
+its chute. They flip one by one (0.55 / 0.9 / 1.25 s; a tap flips one
+early), then a tap takes one; Walk away takes nothing. One card per slot,
+rolled by `DATA.boonOffer(seed, tilt, ctx)` from `hash(run.seed + ':boon')`
+and the run's Tilt, with the relics named on the card (the pools of relics
+not owned):
+
+| slot | boons (Tilt range) |
+| --- | --- |
+| gift | Pocket Change (+100 gold), Mystery Capsule (an uncommon or better, cracked at once), Warm-Up Tokens (+2 grabs every turn of the first fight: `run.boon.grabs`, the `boon:grabs` effect, spent when that fight ends), Pet Pal (a named pet at Lv 2), Prize Master's Favor (a rare relic, Tilt 0-2 only) |
+| boost | Starter Set (a common or uncommon set piece), Spring Cleaning (remove 3 items, you pick), Polish (upgrade 3 random items), Bright Idea (5 bulbs and a lantern) |
+| trade | Blood Pact (-10 Max HP: a rare, 0-4), Heavy Pockets (2 Rocks for good: an uncommon and 50 gold, 0-6), Loan Shark (all your gold: a boss relic, 3+), Glass Jaw (-15 Max HP: two rares, 5+), Devil's Bargain (-20% Max HP and a Slag: a boss relic and a rare, 8+) |
+
+From Tilt 3 the trade slot leans (half the time) to the spiciest deal the
+Tilt allows. The pick is applied and saved at once (`run.boon = {offers,
+pick, done, grabs?, cap?, trim?}`): a reload before it shows the same three
+cards, after it goes on (a capsule not yet cracked reopens as the same
+capsule, Spring Cleaning resumes its picker); a second pick is refused.
+Sounds `boonDeal`, `boonFlip`, `boonPick`. Headless (the suites, the
+balance bot) a new run goes straight to the map as before; `GAME.boon.force`
+opts in. A save from before this round has no `run.boon` and plays on.
+
+### The Compactor (`DATA.CMP`, `cmpRule`, `cmpRoll`)
+
+Three items in, one out (screen `compactor`, `sd.compactor = {from, shop?,
+pick: [uids], res}`). In every shop a slot under the prize counter (30 gold
+x the Tilt's Price Hike, once a shop: `shop.cmpUsed`; registered after Leave
+and before the prize counter, so the shop's indices hold), and at every rest
+stop a third choice, Compact (free, instead of resting).
+
+Rules (`DATA.cmpRule`, pure): three of the same item (not all upgraded
+already) make its plus copy; anything else makes an item one rarity above
+the **middle** rarity of the three (junk < common < uncommon < rare <
+legendary, capped at legendary), so it takes two of a rarity to climb and
+junk never buys a legendary. `DATA.cmpRoll(rng, insts, char)` draws from the
+crawler's reward pool at that rarity (never an input, never junk, a starter,
+a bag or a filler; a dry pool steps down), weighted toward items sharing the
+keywords most of the inputs share. The bin never drops below `BIN_FLOOR`.
+
+The screen: the press drawn on the canvas behind a transparent window
+(`RENDER.cmpScene`: a steel frame, a hydraulic ram, a hazard-striped plate,
+the bed; the picked items sit in the chamber, READY when there are three),
+three slots, the rule line ("Out comes an uncommon item sharing ☠ Poison,
+🧲 Magnet"), CRUSH and the bin grouped by item. CRUSH pays, rolls, swaps the
+items and saves in one beat (`cd.res`), then the press plays it (`CMPK`):
+the items drop in (clonks), the ram comes down (hiss), SLAM at 0.95 s (the
+crunch, a big shake, a flash, sparks and smoke), the plate grinds with
+sparks, lifts off a glowing striped bale, which pops into the new item
+floating in rays of its rarity colour, and COMPACTED! stamps in with the
+item card. A tap on the press hurries it (the slam still lands). A reload
+shows the result, never a second crush. Sounds `cmpFeed`, `cmpPress`,
+`cmpCrunch`, `cmpPop`.
+
+**Save fields.** Run: `boon` (above), `cmpN` (crushes). Shop: `cmpUsed`.
+Screens `boon` and `compactor` (sd). Meta: `sets {id: n}` (`setMetaFix`
+repairs junk). No key was renamed; old saves and profiles load unchanged.
+
+`GAME.sets = {barLink, tagOn, onGain, fanfare, popHtml, petStat, metaFix,
+fxFor, queue, log}`, `GAME.boon = {BOON, start, show, pick, flip, apply, next,
+ctx, force, state}`, `GAME.cmp = {K, show, pick, unpick, crush, hurry, leave,
+rule, price, state}`; `COMBAT.petTrick`, `COMBAT.setFxOf`; `RENDER.boonBack`,
+`cmpScene`, `sets.cmpPlate`. `run.noSets` opts a run out of the set bonuses
+(the build tests that pin one relic's own numbers). Tests: data (ten sets,
+one set per relic, the bonus defs, counts and live ids at 2 and 3 and never
+1, the card tag, `setWant` and the pull's rate, hooks with and without a
+recording COMBAT, the boon table, offers deterministic by seed and Tilt, the
+Tilt's trades, relic pools, the Compactor's rarity ladder, keywords and
+determinism), combat (every set's 2 and 3 bonus against a control fight,
+F.sets, the pet trick hook, the warm-up grabs, a 30 turn fuzz holding all 30
+pieces), game (the chained strip, badges and popovers, the fanfare through
+the announcer and its wait, meta.sets saved and repaired, the card tags, the
+Sets tab, the boon screen and its reloads, every boon's effect, the capsule
+and Spring Cleaning across reloads, the Compactor at the rest and in the
+shop with its price, refusals and reloads before and after a crush, the
+press animation and the hurry, the pet relics in a real fight), render (the
+machine at every Tilt and pick, the press in every phase, determinism),
+audio (every new voice, throttles).
+
+## Secret act (round 6): golden keys, the Back Room, The Machine
+
+A hidden fourth act for players who look closely. Nothing here is required
+to win, nothing is announced up front, and a run that never finds a key plays
+exactly as before.
+
+### Golden keys (one per act)
+
+- Every act map hides one golden key. Which source each act uses is a seeded
+  permutation of the three kinds (`DATA.secKinds(seed)`), so a run sees each
+  kind once:
+  - **roam**: the roaming monster farthest from the start carries it (a faint
+    glint on its token). Killing it drops the key with a `GOLDEN KEY!`
+    banner (announcer class `secret`, priority 85).
+  - **arcade**: a jackpot tier (3 and up) on a slot, plinko or wheel
+    cabinet, or a perfect whack-a-mole score. If the map has no arcade
+    cabinet it falls back to dark.
+  - **dark**: an empty land hex off the road, not under a roamer, as far from
+    the road as possible (dark tiles preferred). The glint is drawn only when
+    the tile is lit (visited or next to the path), so you find it by
+    exploring corners. Stepping on it grants the key.
+- `MAP.secKeys(M, kind)` places it (`M.sec = {kind, want, got, q, r | id}`),
+  `MAP.secKeyAt` answers a hex lookup. A key flies to the map head chip
+  (`secOver`), plays `keyGet` and saves.
+- The map head shows a compact key chip (a small key glyph and `n/3`, 32 px
+  tall) on the hint row, only once this run holds a key (so new players are
+  not told there is a secret, and row 1 keeps "Act N" or "Loop N" whole at
+  360 px); it pulses at 3/3 and its popover gives a hint. In the Back Room the
+  map head reads "Act 4" and the map plate names the room.
+
+### The door and the Back Room
+
+- With 3 keys when the Prize Master falls, the finale does not go straight
+  to the win: `secNextAct` shows the door screen (`scr-secret`, key `door`).
+  The keys fly into three keyholes, the neon sign flickers, the door splits
+  open. ENTER leads in, WALK AWAY takes the normal win. Fewer than 3 keys:
+  no door, no hint.
+- `MAP.secRoom` builds the Back Room: 6x3 hexes in the `machine` biome
+  (circuit boards on the catwalk, gears, coin hoppers, cables and flickering
+  service lights in the void), a 6 to 7 tile road: elite, secret shop,
+  elite, maybe treasure, rest, then The Machine. No roamers. Entering heals
+  30% (`SECRET.heal`), reframes the camera and switches music to `backroom`.
+- Back Room elites come from the late pools and carry 3 affixes from the
+  strongest pool (vampiric, hasty, armored, spiky, regen, explosive).
+- The secret shop stocks 5 legendary items at 150 to 230 gold plus a relic at
+  200 (`DATA.secShopStock`).
+
+### SECRET BOSS: The Machine
+
+- `ENEMIES.machine` (secret, noAffix, 330 hp, excluded from the endless mix).
+  It is the Rig itself: bulb eyes in the marquee, a coin-slot mouth that
+  chomps when it attacks, and its HP bar is a row of 24 marquee bulbs going
+  dark (the normal bar is hidden, the number sits under the feet).
+- Signature every turn (`sig.id = 'machine'`), cycling a per-phase list:
+  - **tilt**: the rig tilts (gravity x1.8 sideways for the turn).
+  - **junk flood**: 5 / 6 / 8 junk items (rock, slag, ice block) dumped in.
+  - **claw hijack**: the Machine takes the claw and drops 1 (2 in the final
+    phase) of your items back into the pile.
+  - **gravity flip**: zero g; loose items float to the ceiling (reuses the
+    bestiary ceiling hang) and fall when the turn ends.
+  - **electrified rail**: each drop through the rail zaps you 3 / 4 / 6 unless
+    a metal item grounds it.
+  - **chute shutter**: a slatted shutter closes the chute; only heavy items
+    dent it open (2 hits), light items bounce.
+- Three phases: normal (tilt, flood, claw), OVERCLOCKED at enrage (grav,
+  rail, shutter, red beams, exhaust vents), MELTDOWN at a quarter hp (all six,
+  sparks, strobing bulbs). The cabinet glass cracks progressively with hp in
+  MELTDOWN, and the rig glass cracks with it.
+- Death: a long power-down (`SEC.pdDur` 6.6 s, not skippable for the first
+  1.4 s): the alarm and zero g stop, floating items drop, bulbs die one by
+  one, lines `SYSTEM FAILURE`, `POWERING DOWN...`, `GOODNIGHT, CONTESTANT.`,
+  a CRT collapse to a line and a dot.
+- Then the TRUE ENDING screen (`scr-secret`, key `ending`): dawn over the
+  dead Clawspire, the crawler walks out along a path, a five-line epilogue,
+  a credit roll ("RoxorLoops & Jasmin", thanks for playing), CONTINUE. Then
+  the normal win flow: title "THE MACHINE POWERS DOWN", +5000 score line,
+  stickers, and the endless offer (endless shows the act as `Back Rm`).
+
+### Save fields (all optional, defaults on load)
+
+- `run.sec = {keys, kinds, door: '' | 'open' | 'skip', room, beat, ended, done}`
+  via `DATA.secFix` (a missing or broken object becomes a fresh one).
+- `M.sec` on the map (key placement), `M.room = true` on the Back Room map.
+- `meta.sec = {keys, rooms, ends}` lifetime counters (`secMetaFix`).
+- A save taken during the Machine's outro stores screen `secret` with the
+  `ending` screen, so a reload lands on the true ending, not the fight.
+- Old saves (no `sec` anywhere) load unchanged and simply have 0 keys.
+
+### Stickers and Prizedex
+
+- Keymaster (3 keys in a run), The Back Room (enter it), True Ending
+  (power down The Machine).
+- The Machine has a Prizedex card tagged SECRET BOSS that shows `?` and a
+  hint until it has been met.
+
+### Code map
+
+- data.js: SECRET block (constants, `secKinds`, `secFix`, `secKeyN`,
+  `ENEMIES.machine`, `secShopStock`), three ACH_LIST stickers, a score line.
+- combat.js: SECRET block (`secSig`, `secTurnEnd`, `secDrop`, `secGround`,
+  `secShutHit`, `secFight` affixes, `secInfo`, `secPhase`) plus one-line hooks
+  in sigInfo, bossSig, bossTurnEnd, bossFinal and newFight.
+- map.js: SECRET block (`secKeys`, `secKeyAt`, `secRoom`).
+- render.js: SECRET block exported as `RENDER.sec` (key, glint, terrain,
+  map background, arena, `EA.machine`, face, cab overlays, door, ending).
+- audio.js: keyGet, doorOpen, secZap, secShutter, secClang, secGrav,
+  secFlood, glassCrack, secVoice, secHum, powerDown, creditsChime; music
+  modes `backroom` and `machine` (layered).
+- game.js: SECRET block (state, keys, door, room, shop, fight events,
+  power-down, outro, drawing) exported as `GAME.sec`, one-line hooks in the
+  map, fight, shop, save/load, win and Prizedex code.
+- index.html: `#secret-css` and `#scr-secret`.
+
+### Tests
+
+- map: a key per map for each kind on many seeds, the dark key off the road
+  and lit only when near, the Back Room map (size, road 5 to 8 tiles, elites,
+  shop, boss, biome, no roamers).
+- combat: the Machine definition, phases and MELTDOWN, every signature event
+  and its clear, Back Room elite affixes, a 40-turn fuzz.
+- render: every Machine look (phases, cracks, power-down, door, ending,
+  terrain) draws and differs.
+- game: keys three ways and the counter, the door only with 3 keys and the
+  walk away, the room, every fight event, phases to power-down to ending to
+  win to endless, save and reload at every step, and old saves and the
+  Prizedex.
 
 ## Quality bar (Game of the Year, mobile)
 

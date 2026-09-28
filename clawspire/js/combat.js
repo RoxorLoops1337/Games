@@ -70,7 +70,8 @@ const COMBAT = (() => {
     return d || { id, name: String(id), act: 1, tier: 'normal', hp: [10, 10], moves: [{ id: 'hit', name: 'Hit', k: 'attack', v: 5 }], ai: 'cycle' };
   }
   const statusDef = (id) => tbl('STATUS')[id] || null;
-  const relicDef = (id) => tbl('RELICS')[id] || null;
+  // A relic, or a set bonus / boon effect riding next to the relics (SETS block).
+  const relicDef = (id) => tbl('RELICS')[id] || tbl('SET_FX')[id] || null;
 
   // ---------- small helpers ----------
   const num = (v, d) => { const n = +v; return Number.isFinite(n) ? n : (d || 0); };
@@ -220,7 +221,7 @@ const COMBAT = (() => {
     if (act.has(name)) return;
     act.add(name);
     try {
-      for (const id of F.relics) {
+      for (const id of setHookIds(F)) {   // the relics, then the live set bonuses (SETS block)
         const r = relicDef(id);
         const fn = r && r.hooks && r.hooks[name];
         if (typeof fn !== 'function') continue;
@@ -438,7 +439,8 @@ const COMBAT = (() => {
       const seed = num(rng, num(run.seed, 1) + num(run.turns, 0) * 7919);
       rng = (typeof U !== 'undefined') ? U.rng(seed) : null;
     }
-    const mods = api.relicMods(run.relics);
+    const setIds = setFxOf(run);   // live set bonuses and boon effects (SETS block)
+    const mods = api.relicMods((run.relics || []).concat(setIds));
     const claw = Object.assign({}, CLAW0, run.claw || {});
     for (const k of ['grabs', 'width', 'grip', 'speed', 'rubber', 'magnet']) claw[k] = num(claw[k], CLAW0[k]) + num(mods[k], 0);
     if (num(mods.prongs, 0)) claw.prongs = mods.prongs >= 2 ? Math.max(claw.prongs, mods.prongs) : claw.prongs + mods.prongs;
@@ -469,7 +471,8 @@ const COMBAT = (() => {
       grab: { insts: [], defs: [] }, streak: 0, rules: {}, ruleSrc: {}, gold0: Math.max(0, num(run.gold, 0)),
       echoN: 0, lastPlay: null, comboTurn: {}, combos: {},
     };
-    const rs = api.rulesOf(F.relics);
+    F.sets = setIds;
+    const rs = api.rulesOf(F.relics.concat(setIds));
     F.rules = rs.rules; F.ruleSrc = rs.src;
     // Round 3: who is fighting with which claw (relics read F.clawType), and
     // the Luck meter: the gambler's gift, doubled by the Rabbit's Foot, or
@@ -498,6 +501,7 @@ const COMBAT = (() => {
     if (arng) F.enemies.forEach(e => rollAffixes(F, e, arng));
     if (arng) tiltFight(F, arng);   // meta: Tilt's extra elite affix and boss rage (TILT block)
     if (arng) endlessFight(F, arng);   // Endless: extra affixes, a borrowed trick, rage from the bell (ENDLESS block)
+    if (arng) secFight(F, run, arng);   // the Back Room's elites: the strongest affixes (SECRET block)
     F.digested = [];   // items enemies swallowed and digested: gone for this fight only
     for (const e of F.enemies) api.pickIntent(F, e);
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
@@ -1263,6 +1267,7 @@ const COMBAT = (() => {
   api.sigInfo = function (e) {
     const s = sigOf(e);
     if (!s) return null;
+    if (s.id === 'machine') return secInfo(e, s);   // The Machine: a cabinet event per phase (SECRET block)
     const parts = Array.isArray(s.parts) && s.parts.length ? s.parts : null;
     const part = parts ? parts[num(e.sigN, 0) % parts.length] : null;
     const text = (part && s.texts && s.texts[part]) || s.text || '';
@@ -1321,6 +1326,7 @@ const COMBAT = (() => {
         emit(F, { t: 'boss', k: 'rig', idx, stage: F.rigged.stage, name: info.name });
         break;
       }
+      case 'machine': secSig(F, e, s, info, idx); break;   // The Machine's cabinet events (SECRET block)
       default: break;
     }
     log(F, `${e.def.name || e.id}: ${info.name}.`);
@@ -1341,7 +1347,7 @@ const COMBAT = (() => {
     e.final = true;
     F.final = true;
     if (s.rephase) e.sigForce = true;
-    emit(F, { t: 'boss', k: 'final', idx: F.enemies.indexOf(e), name: 'FINAL PHASE', text: s.finalText || '' });
+    emit(F, { t: 'boss', k: 'final', idx: F.enemies.indexOf(e), name: s.finalName || 'FINAL PHASE', text: s.finalText || '' });
     api.status(F, e, 'str', 1);
     log(F, `${e.def.name || e.id} enters its final phase.`);
   }
@@ -1361,6 +1367,7 @@ const COMBAT = (() => {
     if (F.heat || cooled) { F.heat = 0; emit(F, { t: 'boss', k: 'cool', idx: -1 }); }
     if (F.ice) { F.ice = null; emit(F, { t: 'boss', k: 'thaw', idx: -1 }); }
     F.rigged = null;
+    secTurnEnd(F);   // The Machine: zero g, the live rail, the shutter (SECRET block)
   }
   // Game hooks: a prize lands on the iced chute lip (a heavy one smashes it),
   // the ice is shattered outright, a rigged drop is spent. Return the new state.
@@ -1379,6 +1386,119 @@ const COMBAT = (() => {
   };
   api.HOT_DMG = HOT_DMG;
   api.ICE_HP = ICE_HP;
+
+  // ================= SECRET (round 6: The Machine, DESIGN.md "Secret act (round 6)") =================
+  /* The Machine's signature (sig.id 'machine'): a cabinet event on every
+     action, drawn from its phase's set (sig.phases[0] the opening, [1] once
+     OVERCLOCKED at half hp, [2] in the MELTDOWN quarter), telegraphed a turn
+     ahead like any signature (secInfo feeds sigInfo). What it leaves lasts
+     the player's next turn and clears as that turn ends (secTurnEnd):
+     tilt (F.tilt via binTilt: the game leans the whole cabinet), flood (junk
+     poured in, it stays like any junk), claw (F.rigged: the Prize Master's
+     hijack, two drops in the meltdown), grav (F.secGrav: zero g, the pile
+     floats up under the lid, grabbable mid-air), rail (F.secZap: every drop
+     shocks you through Block until a metal prize grounds the rail) and
+     shutter (F.secShut: a steel shutter over the chute; only heavy prizes
+     dent it, sig.shut dents knock it open). The Back Room's elites
+     (run.sec.room) get the strongest affixes stacked on (secFight). */
+  const secPhase = (e) => (e && e.final ? 2 : e && e.enraged ? 1 : 0);
+  function secPart(e, s) {
+    const ph = Array.isArray(s.phases) && s.phases.length ? s.phases : [['tilt']];
+    const set = ph[Math.min(ph.length - 1, secPhase(e))] || ph[0];
+    return (set && set.length ? set[num(e.sigN, 0) % set.length] : 'tilt') || 'tilt';
+  }
+  function secInfo(e, s) {
+    const part = secPart(e, s);
+    const pick = (o, d) => (o && o[part]) || d;
+    return { id: s.id, name: s.name || s.id, sign: pick(s.signs, s.sign || 'CABINET EVENT'), shout: pick(s.shouts, s.shout || 'MALFUNCTION'), text: pick(s.texts, s.text || ''), part };
+  }
+  // The phase's number from a per-phase list (the flood, the shock, the float).
+  const secN = (arr, e, d) => { const a = Array.isArray(arr) && arr.length ? arr : [d]; return num(a[Math.min(a.length - 1, secPhase(e))], d); };
+  function secSig(F, e, s, info, idx) {
+    const name = info.sign;
+    switch (info.part) {
+      case 'flood': {
+        const ids = (Array.isArray(s.junk) && s.junk.length ? s.junk : ['rock']).filter(id => !!tbl('ITEMS')[id]);
+        const n = clamp(Math.round(secN(s.flood, e, 5)), 1, 12);
+        const items = [];
+        for (let i = 0; i < n; i++) { const got = bossJunk(F, ids.length ? ids[i % ids.length] : 'rock', 1); if (!got.length) break; items.push(got[0]); }
+        emit(F, { t: 'boss', k: 'mFlood', idx, items, name });
+        if (!items.length) text(F, e, 'NO ROOM');
+        break;
+      }
+      case 'claw': {
+        F.rigged = { drops: e.final ? 2 : 1, stage: e.final ? 3 : e.enraged ? 2 : 1, by: e.uid, secret: true };
+        emit(F, { t: 'boss', k: 'mClaw', idx, stage: F.rigged.stage, drops: F.rigged.drops, name });
+        break;
+      }
+      case 'grav': {
+        const src = F.bin.filter(i => i && !i.frozen), insts = [];
+        const n = clamp(Math.round(secN(s.float, e, 8)), 1, 20);
+        while (insts.length < n && src.length) insts.push(src.splice(Math.floor(F.rng() * src.length), 1)[0]);
+        F.secGrav = 1;
+        emit(F, { t: 'boss', k: 'mGrav', idx, insts, name });
+        break;
+      }
+      case 'rail': {
+        F.secZap = { v: Math.max(1, Math.round(secN(s.zap, e, 3))), by: e.uid };
+        emit(F, { t: 'boss', k: 'mRail', idx, v: F.secZap.v, name });
+        break;
+      }
+      case 'shutter': {
+        const hp = Math.max(1, Math.round(num(s.shut, 2)));
+        F.secShut = { hp, max: hp, by: e.uid };
+        emit(F, { t: 'boss', k: 'mShutter', idx, hp, name });
+        break;
+      }
+      default: {   // 'tilt': the whole cabinet heels over for the turn
+        const dir = F.rng() < 0.5 ? -1 : 1;
+        F.tilt = dir;
+        emit(F, { t: 'binTilt', dir });
+        emit(F, { t: 'boss', k: 'mTilt', idx, dir, name });
+        break;
+      }
+    }
+  }
+  function secTurnEnd(F) {
+    const had = !!(F.secGrav || F.secZap || F.secShut);
+    F.secGrav = 0; F.secZap = null; F.secShut = null;
+    if (had) emit(F, { t: 'boss', k: 'mEnd', idx: -1 });
+  }
+  // A drop on the live rail: the shock goes through Block. Returns the events.
+  api.secDrop = function (F) {
+    const c = begin(F);
+    if (F && F.secZap && F.phase === 'player' && F.player.hp > 0) {
+      const v = Math.max(1, Math.round(num(F.secZap.v, 3)));
+      emit(F, { t: 'boss', k: 'mZap', idx: -1, v });
+      api.damage(F, null, F.player, v);
+      checkOver(F);
+    }
+    return end(F, c);
+  };
+  // A metal prize delivered grounds the rail for the rest of the turn.
+  api.secGround = function (F) { if (!F || !F.secZap) return false; F.secZap = null; return true; };
+  // A prize lands on the shutter: only a heavy one dents it; the last dent knocks it open. Returns what is left (null: open).
+  api.secShutHit = function (F, heavy) {
+    if (!F || !F.secShut) return null;
+    if (heavy) F.secShut.hp--;
+    if (F.secShut.hp <= 0) F.secShut = null;
+    return F.secShut;
+  };
+  function secFight(F, run, rng) {
+    const sc = run && run.sec;
+    if (!sc || !sc.room) return;
+    F.secRoom = true;
+    const S0 = D().SECRET || {}, A = D().AFFIXES || {};
+    const want = Math.max(0, num(S0.eliteAffix, 3));
+    for (const e of F.enemies) {
+      if (!e.def || e.def.tier !== 'elite') continue;
+      const ids = (Array.isArray(S0.affixPool) ? S0.affixPool : []).filter(id => !!A[id] && !hasAffix(e, id));
+      while ((e.affix || []).length < want && ids.length) giveAffix(F, e, ids.splice(Math.floor(rng() * ids.length), 1)[0]);
+    }
+  }
+  api.secInfo = (e) => { const s = sigOf(e); return s && s.id === 'machine' ? secInfo(e, s) : null; };
+  api.secPhase = secPhase;
+  // ================= /SECRET =================
 
   // ---------- enemy moves ----------
   function doMove(F, e, m) {
@@ -1702,6 +1822,28 @@ const COMBAT = (() => {
     checkOver(F);
     return end(F, c);
   };
+
+  // ================= SETS (relic sets and boons, round 6) =================
+  // A set bonus (DATA.SET_FX, 'set:<id>:2' / ':3') is a relic-shaped def
+  // that runs next to the real relics: its mods, rules and hooks join theirs.
+  // F.relics keeps the real relics only; F.sets the live bonus ids.
+  function setFxOf(run) {
+    const f = D().setFxIds;
+    if (typeof f !== 'function') return [];
+    try { return (f(run) || []).filter(id => tbl('SET_FX')[id]); } catch (e) { return []; }
+  }
+  function setHookIds(F) { return F.sets && F.sets.length ? F.relics.concat(F.sets) : F.relics; }
+  // The game's companion pet did a trick (Treat Jar, Dog Whistle, The Hungry Pack).
+  api.petTrick = function (F, petId) {
+    const c = begin(F);
+    if (!F || F.phase === 'over') return end(F, c);
+    hook(F, 'onPet', petId || null);
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  api.setFxOf = setFxOf;
+  // ================= /SETS =================
   // Bait (def.eaten, per plus): what a swallowed Poison Pill or Hot Potato
   // does to its eater instead of feeding it.
   function eatenOf(def, plus) {
