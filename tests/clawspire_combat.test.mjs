@@ -1013,6 +1013,7 @@ else {
     for (const id of Object.keys(DATA.COMBOS || {})) {
       const c = DATA.COMBOS[id];
       const F = C.newFight(mkRun(c.example.concat(['rock', 'femur']), [], 1), firstEnc, U.rng(U.hashStr(id)));
+      if (c.ctx && c.ctx.luck) F.player.status.luck = c.ctx.luck;   // a recipe that reads the grab state (Lucky Seven)
       C.useGrab(F);
       for (const x of c.example) { const i = F.bin.find(b => b.id === x && F.grab.insts.indexOf(b) < 0); if (i && F.phase === 'player') C.play(F, i); }
       const ev = C.grabDone(F, c.example.length);
@@ -1243,6 +1244,20 @@ h.test('bin trickle: 2 a turn, floor of 6, cabinet cap, immediate refill mid-tur
     while (F.bin.length < MC.MAX_CABINET) F.bin.push({ uid: 'f' + F.bin.length, id: 'gem', plus: false });
     MC.damage(F, F.player, F.enemies[0], 9999, { pierce: true });
     h.ok(F.bin.length <= MC.MAX_CABINET && F.used.length >= 4, 'overflow lands in the used pile');
+    // Polish and QA: digestion never takes the player's last real items (a
+    // gulper that ate the bin down to nothing made an unwinnable fight)
+    h.eq(MC.DIGEST_FLOOR, 4, 'the floor is four real items');
+    F = mfight(['metaleater'], ['sword', 'gem', 'gem']);
+    const mm = F.enemies[0];
+    MC.endTurn(F);
+    const gulped = mm.belly[0] && mm.belly[0].inst;
+    h.ok(!!gulped, 'it swallows one');
+    F.events.length = 0;
+    let back = [];
+    for (let k = 0; k < MC.DIGEST; k++) back = back.concat(evs(MC.endTurn(F), 'binReturn'));
+    h.ok(!(F.digested || []).includes(gulped), 'with only two real items left it is not digested');
+    h.ok(F.bin.includes(gulped) || F.used.includes(gulped) || mm.belly.some((b) => b.inst === gulped), 'it comes back (or is still held after a re-gulp)');
+    h.ok(back.some((x) => x.why === 'burst' && x.insts.includes(gulped)), 'coughed up with a binReturn');
   });
 
   h.test('monsters: what it ate matters (bomb, potion, poison, glass, plate)', () => {
@@ -1688,6 +1703,204 @@ if (hasData) {
         }
       } catch (e) { err = e.stack; }
       h.ok(!err, `${id}: clean (${err || 'ok'})`);
+    }
+  });
+}
+
+// ---------- round 3: Lucky Lou's Luck, bait, hot items, materials, tickets
+// (DESIGN.md "Lucky Lou and the synergy pass")
+if (hasData) {
+  const L3 = boot({ only: ['util', 'data', 'combat'] });
+  const C = L3.COMBAT, D = L3.DATA, U3 = L3.U;
+  const lrun = (bin, relics, extra) => Object.assign({ hp: 70, maxHp: 70, act: 1, char: 'gambler', relics: relics || [], claw: { grabs: 3 },
+    bin: bin.map((id, i) => ({ uid: 'l' + i, id })) }, extra || {});
+  const lfight = (bin, relics, extra, enc, seed) => {
+    const F = C.newFight(lrun(bin, relics, extra), enc || ['rat'], U3.rng(seed || 7));
+    for (const e of F.enemies) { e.hp = e.maxHp = 500; e.status = {}; e.block = 0; }
+    F.events.length = 0;
+    return F;
+  };
+  const grabOf = (F, ids) => {
+    C.useGrab(F);
+    for (const id of ids) { const i = F.bin.find(b => b.id === id && F.grab.insts.indexOf(b) < 0); if (i && F.phase === 'player') C.play(F, i); }
+    return C.grabDone(F, ids.length);
+  };
+  const luck = (F) => F.player.status.luck | 0;
+  const BIN = ['femur', 'femur', 'femur', 'crisp_apple', 'bone_dice', 'bone_dice', 'pocket_die', 'poker_chip', 'stale_bread'];
+
+  h.test('round 3: the meter is Lucky Lou\'s gift (or the Rabbit\'s Foot)', () => {
+    h.eq(lfight(BIN).luckK, 1, 'the gambler has the meter');
+    h.eq(lfight(BIN, [], { char: 'knight' }).luckK, 0, 'the knight does not');
+    h.eq(lfight(BIN, ['rabbits_foot'], { char: 'knight' }).luckK, 1, 'the Rabbit\'s Foot gives it to anyone');
+    h.eq(lfight(BIN, ['rabbits_foot']).luckK, 2, 'and doubles it for Lou');
+    h.eq(lfight(BIN, [], { clawType: 'hook' }).clawType, 'hook', 'F.clawType comes from the run');
+    h.eq(lfight(BIN).clawType, 'classic', 'the classic claw by default');
+  });
+
+  h.test('round 3: an empty grab fills the meter, a double grab cashes it out', () => {
+    const F = lfight(BIN);
+    const ev = grabOf(F, []);
+    h.eq(luck(F), 2, 'an empty grab: +2 Luck (BAD BEAT)');
+    h.ok(ev.some(e => e.t === 'text' && e.str === 'BAD BEAT') && ev.some(e => e.t === 'status' && e.s === 'luck' && e.v === 2), 'with its label and a status event');
+    grabOf(F, []);
+    h.eq(luck(F), 4, 'another whiff: 4');
+    const hp0 = F.enemies[0].hp;
+    const ev2 = grabOf(F, ['femur', 'crisp_apple']);
+    const cash = ev2.find(e => e.t === 'luck' && e.k === 'cash');
+    h.ok(cash && cash.v === 4 && cash.dmg === 8 && !cash.jackpot, `a double grab cashes out 4 Luck for 8 [${JSON.stringify(cash)}]`);
+    h.eq(luck(F), 0, 'the meter is empty after');
+    h.eq(F.enemies[0].hp, hp0 - 7 - 8, 'the femur hit for 7, the cash out for 8');
+    h.eq(F.stats.cash, 4, 'the best cash out is kept for stats');
+    const K = lfight(BIN, [], { char: 'knight' });
+    grabOf(K, []);
+    h.eq(luck(K), 0, 'the knight\'s whiffs are just whiffs');
+    // a jackpot (3+ items) pays x1.5
+    const J = lfight(BIN);
+    C.addLuck(J, 6);
+    const ev3 = grabOf(J, ['femur', 'femur', 'crisp_apple']);
+    const c3 = ev3.find(e => e.t === 'luck' && e.k === 'cash');
+    h.ok(c3 && c3.jackpot && c3.dmg === 18, `a jackpot pays 6 x 2 x 1.5 = 18 [${c3 && c3.dmg}]`);
+    // High Roller: 3 per Luck
+    const HR = lfight(BIN, ['high_roller']);
+    C.addLuck(HR, 5);
+    const ev4 = grabOf(HR, ['femur', 'crisp_apple']);
+    h.ok(ev4.some(e => e.t === 'luck' && e.k === 'cash' && e.dmg === 15), 'High Roller: 5 Luck for 15');
+    h.ok(ev4.some(e => e.t === 'proc' && e.id === 'high_roller'), 'with its proc');
+    // the cap
+    const M = lfight(BIN);
+    C.addLuck(M, 25);
+    h.eq(luck(M), C.LUCK.max, 'Luck caps at ' + C.LUCK.max);
+    C.addLuck(M, 1);
+    h.eq(luck(M), C.LUCK.max, 'and stays there (MAX LUCK)');
+    const P = lfight(['lucky_clover', 'lucky_clover', 'femur']);
+    P.player.status.luck = 9;
+    C.play(P, P.bin.find(b => b.id === 'lucky_clover'));
+    C.play(P, P.bin.find(b => b.id === 'lucky_clover'));
+    h.eq(luck(P), C.LUCK.max, 'item Luck respects the cap too');
+  });
+
+  h.test('round 3: near misses, Snake Eyes and the Pity Timer', () => {
+    const F = lfight(BIN);
+    C.nearMiss(F);
+    h.eq(luck(F), 1, 'a near miss: +1 Luck');
+    const K = lfight(BIN, [], { char: 'knight' });
+    C.nearMiss(K);
+    h.eq(luck(K), 0, 'nothing for the knight');
+    const S = lfight(BIN, ['snake_eyes', 'pity_timer']);
+    const g0 = S.player.grabs;
+    const ev = grabOf(S, []);
+    const roll = ev.find(e => e.t === 'proc' && e.id === 'snake_eyes');
+    h.ok(roll && /\d\+\d/.test(roll.text), `Snake Eyes rolls the dice on the first whiff [${roll && roll.text}]`);
+    h.ok(S.enemies.some(e => e.hp < 500), 'and someone takes the total');
+    h.eq(luck(S), 3, 'Lou\'s 2 plus the Pity Timer\'s 1');
+    const ev2 = grabOf(S, []);
+    h.ok(!ev2.some(e => e.t === 'proc' && e.id === 'snake_eyes'), 'only the first whiff each turn');
+    h.ok(S.player.grabs <= g0, 'grabs never go up past the start (doubles only refund the one spent)');
+  });
+
+  h.test('round 3: dice roll twice with Luck, the bandit reads it', () => {
+    let lucky = 0, plain = 0;
+    for (let s = 1; s <= 150; s++) {
+      for (const withLuck of [false, true]) {
+        const F = lfight(['bone_dice', 'femur'], [], null, null, s);
+        if (withLuck) F.player.status.luck = 3;
+        const hp0 = F.enemies[0].hp;
+        const ev = C.play(F, F.bin.find(b => b.id === 'bone_dice'));
+        const d = hp0 - F.enemies[0].hp;
+        if (withLuck) { lucky += d; if (s === 1) h.ok(ev.some(e => e.t === 'text' && e.str === 'LUCKY ROLL'), 'LUCKY ROLL shows'); } else plain += d;
+      }
+    }
+    h.ok(lucky > plain * 1.12, `Luck lifts the dice average (${(plain / 150).toFixed(2)} -> ${(lucky / 150).toFixed(2)})`);
+    const B = lfight(['one_armed_bandit', 'femur'], [], null, ['dummy']);
+    B.player.status.luck = 5;
+    h.eq(C.previewDamage(B, 'one_armed_bandit'), 4 + 15, 'the One-Armed Bandit previews 4 + 3 per Luck');
+    const hp0 = B.enemies[0].hp;
+    C.play(B, B.bin.find(b => b.id === 'one_armed_bandit'));
+    h.eq(hp0 - B.enemies[0].hp, 19, 'and deals it');
+    h.eq(luck(B), 5, 'the Luck stays put');
+  });
+
+  h.test('round 3: bait hurts whoever swallows it', () => {
+    const F = lfight(['femur', 'crisp_apple', 'poison_pill', 'stale_bread', 'bone_dice'], ['heartburn'], null, ['trashpanda']);
+    const e = F.enemies[0];
+    const ev = C.gulp(F, e, 1, 'shiny');
+    h.ok(ev.some(x => x.t === 'binEat' && x.inst.id === 'poison_pill'), 'the monster goes straight for the pill (lure)');
+    h.ok((e.status.poison | 0) >= 8 + 2, `the eater is poisoned (${e.status.poison})`);
+    h.eq(e.hp, 500 - 6, 'and takes 6');
+    h.ok((e.status.burn | 0) >= 4 && ev.some(x => x.t === 'proc' && x.id === 'heartburn'), 'Heartburn: every meal burns');
+    h.ok(F.used.some(i => i.id === 'poison_pill') && !e.belly.length, 'the pill is spent, not held');
+    const P = lfight(['femur', 'hot_potato', 'stale_bread'], [], null, ['trashpanda']);
+    C.gulp(P, P.enemies[0], 1);
+    h.ok((P.enemies[0].status.burn | 0) >= 10, 'a swallowed Hot Potato: 10 Burn');
+  });
+
+  h.test('round 3: a Hot Potato left in the bin burns its holder', () => {
+    const F = lfight(['hot_potato', 'femur', 'femur']);
+    const hp0 = F.player.hp;
+    const ev = C.endTurn(F);
+    h.ok(ev.some(e => e.t === 'text' && e.str === 'HOT POTATO!'), 'HOT POTATO!');
+    h.ok(F.player.hp <= hp0 - 2, 'the burn ticks at once');
+    const G = lfight(['femur', 'hot_potato', 'femur']);
+    C.useGrab(G); C.play(G, G.bin.find(b => b.id === 'hot_potato')); C.grabDone(G, 1);
+    const ev2 = C.endTurn(G);
+    h.ok(!ev2.some(e => e.t === 'text' && e.str === 'HOT POTATO!'), 'grabbed out in time: no burn');
+  });
+
+  h.test('round 3: materials, tickets and claw relics reach the relics', () => {
+    const F = lfight(BIN, ['blasting_cap', 'broken_mirror', 'sharp_shards']);
+    const ev = C.material(F, 'blast', { uid: 'x', id: 'firecracker' });
+    h.ok(F.enemies.every(e => (e.status.burn | 0) >= 3) && F.player.block >= 5, 'a bomb in the bin: Burn on ALL and Block');
+    h.ok(ev.some(e => e.t === 'proc' && e.id === 'blasting_cap'), 'with the relic\'s proc');
+    const s0 = F.stats.shattered;
+    C.material(F, 'crack', { uid: 'y', id: 'crystal_dice' });
+    h.eq(luck(F), 1, 'a crack: the Broken Mirror gives Luck');
+    const hp0 = F.enemies[0].hp;
+    C.material(F, 'shatter', { uid: 'z', id: 'crystal_dice' });
+    h.eq(F.stats.shattered, s0 + 1, 'a shatter in the bin counts as a shatter');
+    h.ok(F.enemies[0].hp < hp0 && luck(F) === 2, 'onShatter relics fire (Sharp Shards, the Mirror)');
+    const T = lfight(['femur', 'rusty_sword', 'crisp_apple'], ['ticket_roll']);
+    grabOf(T, ['femur', 'rusty_sword']);   // Crossed Blades
+    h.ok(T.stats.tix >= 2, `Ticket Roll prints tickets on a combo (${T.stats.tix})`);
+    const M = lfight(['rusty_sword', 'femur'], ['lodestone'], { clawType: 'magnet' });
+    const b0 = M.player.block;
+    grabOf(M, ['rusty_sword']);
+    h.ok(M.player.block >= b0 + 3, 'the Lodestone pays one metal item on the Magnet Crane');
+  });
+
+  h.test('round 3: Lucky Seven and a secret combo fire in a real fight', () => {
+    const F = lfight(['bone_dice', 'femur', 'crisp_apple']);
+    F.player.status.luck = 7;
+    const ev = grabOf(F, ['bone_dice', 'femur']);
+    h.ok(ev.some(e => e.t === 'combo' && e.id === 'lucky_seven' && e.tier === 3), 'Lucky Seven on exactly 7 Luck');
+    h.ok(ev.some(e => e.t === 'luck' && e.k === 'cash' && e.v === 7), 'and the 7 Luck cash out after it');
+    const G = lfight(['lucky_coin', 'lucky_penny', 'arcade_token', 'femur']);
+    const ev2 = grabOf(G, ['lucky_coin', 'lucky_penny', 'arcade_token']);
+    h.ok(ev2.some(e => e.t === 'combo' && e.id === 'midas_touch'), 'Midas Touch');
+  });
+
+  h.test('round 3: 30 turns of Lucky Lou with every new relic stay clean', () => {
+    const R3 = ['snake_eyes', 'pity_timer', 'dealers_visor', 'lucky_ticket', 'lucky_cat', 'wheel_of_fortune', 'rabbits_foot', 'high_roller', 'ticket_roll', 'gacha_charm', 'heartburn', 'broken_mirror', 'blasting_cap', 'lodestone', 'sand_pail', 'big_catch'];
+    const bin = D.CHARACTERS.gambler.bin.concat(['poison_pill', 'hot_potato', 'golden_dice', 'one_armed_bandit', 'roulette_wheel', 'marked_deck']);
+    for (const claw of ['classic', 'magnet', 'scoop', 'hook']) {
+      const F = C.newFight(lrun(bin, R3, { clawType: claw, hp: 200, maxHp: 200 }), ['trashpanda', 'rat'], U3.rng(U3.hashStr(claw)));
+      const r = U3.rng(3);
+      let err = null;
+      try {
+        for (let turn = 0; turn < 30 && F.phase !== 'over'; turn++) {
+          while (F.phase === 'player' && F.player.grabs > 0 && C.useGrab(F)) {
+            const n = r.int(0, 3);
+            for (let k = 0; k < n && F.bin.length && F.phase === 'player'; k++) C.play(F, F.bin[r.int(0, F.bin.length - 1)], 0);
+            if (r() < 0.2) C.nearMiss(F);
+            if (r() < 0.1) C.material(F, ['crack', 'shatter', 'fuse', 'blast'][r.int(0, 3)], F.bin[0]);
+            C.grabDone(F, n);
+          }
+          if (F.phase === 'player') C.endTurn(F);
+          F.player.hp = Math.max(F.player.hp, 60);
+          if ((F.player.status.luck | 0) > C.LUCK.max) { err = 'luck over the cap'; break; }
+          if ([F.player, ...F.enemies].some(u => !Number.isFinite(u.hp) || u.hp < 0)) { err = 'bad hp'; break; }
+        }
+      } catch (e) { err = e.stack; }
+      h.ok(!err && !F.hookErrors.length, `${claw}: clean (${err || F.hookErrors.join(' | ') || 'ok'})`);
     }
   });
 }

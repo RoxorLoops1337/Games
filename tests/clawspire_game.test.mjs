@@ -1241,7 +1241,7 @@ h.test('juice: proc, combo, keywords, unknown events, throws, crits, the outro, 
   // named combos queue and chain; tier 3 holds a hit stop and slows time
   push({ t: 'combo', id: 'a', name: 'First', text: 'one', color: '#ff2e88', n: 2, tier: 1 });
   push({ t: 'combo', id: 'b', name: 'Big One', text: 'three', color: '#ffc94d', n: 4, tier: 3 });
-  stepFor(Gt, 0.05);
+  stepFor(Gt, 0.25);   // any live turn banner steps out first (the announcer's quick exit)
   h.eq(Gt.S.lastCombo && Gt.S.lastCombo.id, 'a', 'the first combo shows first');
   h.eq(T._nodes.comboName.textContent, 'First x2', 'the banner names it with its count');
   h.eq(T._nodes.comboText.textContent, 'one', 'and its text underneath');
@@ -2604,6 +2604,762 @@ h.test('claw juice: coin clunk and spin-up each turn, a jackpot twirl, idle anti
   G.toMap();
   h.ok(!T.RENDER.fx.zones().some(z => z.id === 'marquee'), 'off the fight screen the marquee zone is gone');
   T.AUDIO.sfx = sfx0;
+});
+
+// ---- Polish and QA: the announcer (one big banner at a time)
+h.test('announcer: a burst of 10 never overlaps, priorities, stale drop, merge, interrupt, block, tap', () => {
+  const T = boot();
+  const G = T.GAME, A = G.ann, P = A.ANN.PRI;
+  G.newRun('knight', 31);
+  G.startFight(['rat'], 'normal');
+  h.ok(settle(G, 10), 'fight ready');
+  stepFor(G, 2);
+  h.eq(A.visible(), 0, 'the opening banner is gone');
+  const pri = (e) => P[e.cls] || 0;
+  // ten at once: turn banners, a jackpot, five combos, phase two, the final phase, victory
+  const logStart = A.log.length;
+  G.ann.banner('YOUR TURN', 'turn', 0.9);
+  G.ann.banner('JACKPOT', 'jackpot', 1.4);
+  for (let i = 0; i < 5; i++) G.ann.combo({ id: 'c' + i, name: 'Combo ' + i, text: 't', color: '#ff2e88', n: 1, tier: 1 + (i % 3) });
+  G.ann.banner('MAD', 'enemy', 1.4);
+  G.ann.banner('FINAL PHASE', 'enemy', 1.6, 'final');
+  G.ann.banner('TURN 2', 'turn', 0.9);
+  let worst = 0, both = 0;
+  for (let i = 0; i < 60 * 14; i++) {
+    G.update(1 / 60);
+    worst = Math.max(worst, A.visible());
+    if (A.cur && A.exiting) both++;
+  }
+  h.ok(worst <= 1, 'never two big banners on screen (' + worst + ')');
+  h.eq(both, 0, 'the live one and one stepping out never overlap');
+  const shows = A.log.slice(logStart).filter((e) => e.k === 'show');
+  const firsts = [];
+  for (const e of shows) if (!firsts.some((f) => f.key === e.key)) firsts.push(e);
+  // once the burst has landed, the rest come out biggest first
+  const afterBurst = firsts.slice(1);
+  let sorted = true;
+  for (let i = 1; i < afterBurst.length; i++) if (pri(afterBurst[i]) > pri(afterBurst[i - 1])) sorted = false;
+  h.ok(sorted, 'bigger first: ' + afterBurst.map((e) => e.key).join(' > '));
+  h.eq(afterBurst[0] && afterBurst[0].key, 'final', 'the final phase takes the stage from the burst');
+  const comboOrder = firsts.filter((e) => e.cls === 'combo').map((e) => e.key);
+  h.ok(comboOrder.every((k, i) => i === 0 || +k.slice(7) > +comboOrder[i - 1].slice(7)), 'combos keep their order: ' + comboOrder.join(','));
+  h.ok(A.log.slice(logStart).some((e) => e.k === 'stale'), 'stale ones are dropped rather than shown late');
+  h.ok(!firsts.some((e) => e.key === 'turn' && e !== firsts[0]), 'a turn banner that waited too long never shows');
+  h.ok(!A.cur && !A.queue.length && A.visible() === 0, 'and the lane drains');
+  // stale drop, exactly: a turn banner behind the victory sweep
+  const l1 = A.log.length;
+  G.ann.banner('VICTORY', 'victory', 1.6);
+  G.ann.banner('TURN 3', 'turn', 0.9);
+  h.eq(A.queue.length, 1, 'the turn banner waits behind the victory');
+  stepFor(G, 1);
+  h.eq(A.queue.length, 0, 'and is dropped once stale (' + A.ANN.WAIT.turn + ' s)');
+  h.ok(A.log.slice(l1).some((e) => e.k === 'stale' && e.key === 'turn'), 'logged as stale');
+  stepFor(G, 2);
+  // merge: the same combo twice is one banner with the newer count
+  G.ann.combo({ id: 'm', name: 'Merge', text: '', n: 1, tier: 1 });
+  G.ann.combo({ id: 'm', name: 'Merge', text: '', n: 2, tier: 1 });
+  h.ok(A.cur && A.cur.key === 'combo:m' && A.cur.ev.n === 2 && !A.queue.length, 'the same key merges into the live one');
+  h.eq(T._nodes.comboName.textContent, 'Merge x2', 'and shows the newer words');
+  stepFor(G, 2);
+  // interrupt: a turn banner is cut by a combo with a quick exit
+  G.ann.banner('YOUR TURN', 'turn', 0.9);
+  stepFor(G, 0.1);
+  const l2 = A.log.length;
+  G.ann.combo({ id: 'i', name: 'Cutter', text: '', n: 1, tier: 2 });
+  h.ok(A.exiting && A.exiting.key === 'turn' && !A.cur, 'the smaller one steps out');
+  stepFor(G, A.ANN.EXIT + 0.05);
+  h.ok(A.cur && A.cur.key === 'combo:i', 'and the bigger one follows within the quick exit');
+  h.ok(A.log.slice(l2).some((e) => e.k === 'cut' && e.key === 'turn'), 'logged as cut');
+  // an early-interrupted combo comes back after the bigger one
+  G.ann.banner('RAGE', 'enemy', 1.0);
+  stepFor(G, A.ANN.EXIT + 0.05);
+  h.ok(A.cur && A.cur.cls === 'rage', 'phase two interrupts a combo');
+  h.ok(A.queue.some((a) => a.key === 'combo:i' && a.back), 'the combo waits to come back');
+  stepFor(G, 1.4);
+  h.ok(A.cur && A.cur.key === 'combo:i', 'and it comes back');
+  // a tap cuts the live one short
+  stepFor(G, 0.4);
+  h.ok(G.ann.tap(), 'a tap cuts it');
+  stepFor(G, 0.2);
+  h.ok(!A.cur && A.visible() === 0, 'gone');
+  // the versus card holds the lane
+  G.startFight(['goblin_king'].filter((id) => T.DATA.ENEMIES[id]).concat(Object.keys(T.DATA.ENEMIES).filter((id) => T.DATA.ENEMIES[id].tier === 'elite')).slice(0, 1), 'elite');
+  if (G.boss.vs) {
+    h.ok(A.blocked(), 'the versus card blocks the lane');
+    G.ann.combo({ id: 'v', name: 'Under', text: '', n: 1, tier: 1 });
+    stepFor(G, 0.3);
+    h.ok(!A.cur && A.visible() === 0, 'nothing shows over the card');
+    stepFor(G, G.boss.vs ? G.boss.vs.dur / G.boss.vs.rate + 0.2 : 0);
+    h.ok(!G.boss.vs, 'the card ends');
+  }
+  // leaving the fight clears it all
+  G.ann.banner('JACKPOT', 'jackpot', 1.4);
+  G.toMap();
+  h.ok(!A.cur && !A.queue.length && A.visible() === 0, 'leaving the fight clears the lane');
+});
+
+h.test('feel: the victory outro fast-forwards for a veteran, and a tap still skips it', () => {
+  const T = boot();
+  const G = T.GAME;
+  const outroFor = (fights) => {
+    G.newRun('knight', 41);
+    G.meta.stats.fights = fights;
+    G.startFight(['rat'], 'normal');
+    settle(G, 6);
+    const F = G.fight;
+    for (const e of F.enemies) { e.hp = 0; e.alive = false; }
+    G.endFight('win', true);
+    const t = G.fs && G.fs.outro ? G.fs.outro.t : -1;
+    return t;
+  };
+  const fresh = outroFor(0), vet = outroFor(50);
+  h.ok(fresh >= 1.5, 'a new profile gets the full victory beat (' + fresh + ')');
+  h.ok(vet > 0 && vet < fresh, 'a veteran gets the quick one (' + vet + ')');
+  G.tap(270, 600);
+  h.eq(G.screen, 'reward', 'a tap skips to the reward');
+});
+
+h.test('feel: a tap on an enemy lists every status in words (the chips may be cut to one row)', () => {
+  const T = boot();
+  const G = T.GAME;
+  G.newRun('knight', 43);
+  G.startFight(['rat', 'slime', 'goblin'].filter((id) => T.DATA.ENEMIES[id]), 'normal');
+  settle(G, 6);
+  const e = G.fight.enemies[1];
+  Object.assign(e.status, { poison: 7, burn: 3, vuln: 2, weak: 1, thorns: 2, bleed: 1 });
+  G.S.ctx = T._ctx; G.S.px = 1;
+  let threw = null;
+  try { G.draw(); } catch (err) { threw = err; }
+  h.ok(!threw, 'a crowded enemy draws ' + (threw ? threw.stack : ''));
+  G.tap(270, 250);
+  const html = (G.S.popover && G.S.popover.html) || '';
+  const SD = T.DATA.STATUS;
+  h.ok(['poison', 'burn', 'bleed'].every((id) => html.includes((SD[id] && SD[id].name) || id)), 'the popover names them: ' + html.replace(/<[^>]+>/g, ' ').slice(0, 160));
+});
+
+h.test('perf: the frame governor thins particles on a slow device and lets go when it recovers', () => {
+  const T = boot();
+  const G = T.GAME, fx = T.RENDER.fx, P = G.perf;
+  h.ok(!fx.lite, 'full quality to start');
+  for (let i = 0; i < 20; i++) P.tick(16.7);
+  h.ok(!fx.lite, 'a 60 fps device stays full');
+  P.tick(400); P.tick(16.7);
+  h.ok(!fx.lite, 'one hitch (a tab switch) is ignored');
+  for (let i = 0; i < 40; i++) P.tick(45);
+  h.ok(fx.lite && P.state.lite, 'sustained slow frames switch to lite');
+  // lite halves the preset counts and the pool
+  fx.clear && fx.clear();
+  fx.emit('confetti', 270, 400);
+  const lite = fx.count ? fx.count() : null;
+  for (let i = 0; i < 30; i++) P.tick(22);
+  h.ok(fx.lite, 'in between the two thresholds it holds');
+  for (let i = 0; i < 300; i++) P.tick(12);
+  h.ok(!fx.lite, 'fast frames for long enough let go');
+  if (lite != null) { fx.clear(); fx.emit('confetti', 270, 400); h.ok(fx.count() > lite, 'lite made fewer particles (' + lite + ' vs ' + fx.count() + ')'); }
+  for (let i = 0; i < 40; i++) P.tick(45);
+  h.ok(fx.lite, 'back to lite');
+  for (let i = 0; i < 200; i++) P.tick(12);
+  h.ok(fx.lite, 'the second time it waits longer before letting go');
+  for (let i = 0; i < 300; i++) P.tick(12);
+  h.ok(!fx.lite, 'but it does let go');
+});
+
+h.test('perf: the map caches its reachable ring and progress line, and still draws', () => {
+  const T = boot();
+  const G = T.GAME;
+  G.newRun('knight', 33);
+  if (G.screen !== 'map') G.toMap();
+  G.S.ctx = T._ctx; G.S.px = 1;
+  let threw = null;
+  try { for (let i = 0; i < 5; i++) { G.update(1 / 60); G.draw(); } } catch (e) { threw = e; }
+  h.ok(!threw, 'the map draws with the caches ' + (threw ? threw.stack : ''));
+  const M = G.run.map, MAP = T.MAP;
+  const r0 = MAP.reachable;
+  let calls = 0;
+  MAP.reachable = (m) => { calls++; return r0(m); };
+  for (let i = 0; i < 10; i++) G.draw();
+  h.ok(calls <= 1, 'ten frames on a still map ask MAP.reachable at most once (' + calls + ')');
+  M.ink += 1; G.draw();
+  h.ok(calls >= 1, 'spending or gaining a bulb refreshes it');
+  MAP.reachable = r0;
+});
+
+// ---- round 3: Lucky Lou, the Gambler (DESIGN.md "Lucky Lou and the synergy pass")
+function louBoot(unlocks) {
+  const T = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: unlocks || { knight: true, alchemist: true } }) } });
+  return { T, G: T.GAME };
+}
+h.test('Lucky Lou: his card on character select, the unlock, a new run', () => {
+  const { T, G } = louBoot();
+  G.showChars();
+  const i = G.S.ui.buttons.findIndex(b => b.label === 'Lucky Lou');
+  h.ok(i >= 0, 'his card is on character select');
+  h.ok(i >= 0 && !G.S.ui.buttons[i].disabled, 'open for a profile that already reached act 2 (the alchemist\'s rule)');
+  h.eq(G.S.ui.buttons[0].label, T.DATA.CHARACTERS.knight.name, 'the knight is still the first card');
+  G.choose(i);
+  h.eq(G.run.char, 'gambler', 'the run is Lucky Lou\'s');
+  h.eq(G.run.bin.length, 19, 'with his 19 item bin');
+  h.ok(G.run.relics.includes('snake_eyes'), 'and Snake Eyes');
+  h.eq(G.run.maxHp, 70, '70 hp');
+  const fresh = louBoot({ knight: true }).G;
+  fresh.showChars();
+  const j = fresh.S.ui.buttons.findIndex(b => b.label === 'Lucky Lou');
+  h.ok(j >= 0 && fresh.S.ui.buttons[j].disabled, 'a fresh profile has to reach act 2 first');
+  // Tilt is per crawler, like the others
+  const { G: G2 } = louBoot();
+  G2.meta.tilt = { gambler: 2 };
+  h.eq(G2.prog.tiltCap('gambler'), 2, 'his own Tilt ladder');
+  h.eq(G2.prog.tiltCap('knight'), 0, 'separate from the knight\'s');
+});
+
+h.test('Lucky Lou: a real fight with every claw type, the meter on the cabinet', () => {
+  const { T, G } = louBoot();
+  const drawn = [];
+  const lm0 = T.RENDER.luckMeter;
+  T.RENDER.luckMeter = (...a) => { drawn.push(a[4]); return lm0(...a); };
+  for (const type of G.claws.ids()) {
+    G.claws.pick(type);
+    G.newRun('gambler', 4242);
+    G.startFight(['slime'], 'normal', { seed: 77 });
+    for (const e of G.fight.enemies) { e.hp = e.maxHp = 999; }
+    stepFor(G, 3.5);
+    h.eq(G.fight.luckK, 1, type + ': Lou\'s meter is on');
+    h.eq(G.fight.clawType, type, type + ': the fight knows the claw');
+    let grabs = 0, checked = 0;
+    while (grabs < 3 && G.fight.phase === 'player' && G.fight.player.grabs > 0) {
+      grabs++;
+      const luck0 = G.fight.player.status.luck | 0;
+      const x = G.rig.aimAt(type === 'magnet' ? (b) => b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0 : null);
+      G.steer(x == null ? 200 : x);
+      stepFor(G, 0.6);
+      if (!G.dropClaw()) break;
+      let n = 0;
+      while (G.state().grabInFlight && n < 60 * 25) { G.update(DT); n++; }
+      h.ok(!G.state().grabInFlight, `${type} grab ${grabs} finished`);
+      settle(G, 10);
+      const got = G.fs.delivered, luck = G.fight.player.status.luck | 0;
+      if (got === 0) { h.ok(luck >= Math.min(10, luck0 + 2), `${type}: a whiff filled the meter (${luck0} -> ${luck})`); checked++; }
+      else if (got >= 2 && luck0 > 0) { h.ok(luck < luck0 + 2, `${type}: a double grab cashed out (${luck0} -> ${luck})`); checked++; }
+      G.draw();
+    }
+    h.ok(grabs >= 1, `${type}: Lou grabbed`);
+    // force the two halves of the mechanic through the game's own queue
+    const F = G.fight;
+    T.COMBAT.addLuck(F, 5);
+    G.draw();
+    const cash = T.COMBAT.cashOut(F, 2);
+    h.ok(cash.some(e => e.t === 'luck' && e.k === 'cash' && e.v >= 5), `${type}: a cash out event`);
+    G.content.luckFx(cash.find(e => e.t === 'luck'));
+    h.ok(G.content.luckM && G.content.luckM.cash > 0, `${type}: the meter runs its CASH OUT chase`);
+    G.draw();
+  }
+  h.ok(drawn.length > 0 && drawn.some(st => st.on && st.luck >= 5), 'the Luck meter is drawn on the cabinet');
+  T.RENDER.luckMeter = lm0;
+});
+
+h.test('Lucky Lou: near misses, bomb blasts and cracks reach COMBAT; the music layers follow the fight', () => {
+  const { T, G } = louBoot();
+  G.claws.pick('classic');
+  G.newRun('gambler', 99);
+  G.run.relics.push('blasting_cap', 'broken_mirror');
+  G.startFight(['slime'], 'normal', { seed: 12 });
+  for (const e of G.fight.enemies) { e.hp = e.maxHp = 999; }
+  stepFor(G, 3.5);
+  const F = G.fight;
+  G.fs.grabN = (G.fs.grabN | 0) + 1;
+  G.toys.soClose(200, 600);
+  settle(G, 3);
+  h.eq(F.player.status.luck | 0, 1, 'SO CLOSE gives Lou 1 Luck');
+  const b = G.fs.items[0];
+  G.content.matHook('blast', b.data.inst);
+  settle(G, 3);
+  h.ok(F.enemies.every(e => !e.alive || (e.status.burn | 0) >= 3), 'a blast in the bin: the Blasting Cap burns them');
+  G.content.matHook('crack', b.data.inst);
+  settle(G, 3);
+  h.eq(F.player.status.luck | 0, 2, 'a crack: the Broken Mirror adds Luck');
+  // music layers: a streak and low hp switch them, the last kill plays the sting
+  const states = [];
+  const ms0 = T.AUDIO.musicState, vic0 = T.AUDIO.victory;
+  let stung = 0;
+  T.AUDIO.musicState = (o) => { states.push(JSON.stringify(o)); return ms0(o); };
+  T.AUDIO.victory = () => { stung++; return vic0(); };
+  F.streak = 4;
+  stepFor(G, 0.2);
+  h.ok(states.some(s => s === '{"hype":true,"tense":false}'), 'a streak of 3+ brings in the hype layer');
+  F.streak = 0; F.player.hp = 5;
+  stepFor(G, 0.2);
+  h.ok(states.some(s => /"tense":true/.test(s)), 'under 30% hp the tense layer comes in');
+  F.player.hp = F.player.maxHp;
+  for (const e of F.enemies) T.COMBAT.damage(F, F.player, e, 99999, { pierce: true });
+  G.fs.queue.push(...F.events.splice(0).map(ev => ({ ev, beat: 0.05 })));
+  stepFor(G, 3);
+  h.ok(stung >= 1, 'the last kill plays the victory sting');
+  T.AUDIO.musicState = ms0; T.AUDIO.victory = vic0;
+});
+
+h.test('Lucky Lou: secret combos stay ??? in the Prizedex until found, ticket relics pay out, the Gacha Charm', () => {
+  const { T, G } = louBoot();
+  const walk = (el, out) => { if (!el) return out; out.push(el); for (const c of el.children || []) walk(c, out); return out; };
+  const secrets = Object.keys(T.DATA.COMBOS).filter(id => T.DATA.COMBOS[id].secret);
+  h.ok(secrets.length >= 3, 'secret recipes exist');
+  // cards in DATA.dexEntries order: find the Midas Touch card by position
+  const cardFor = (id) => {
+    const cards = walk(T._nodes.collectionBody, []).filter(e => /\bdexc\b/.test(e.className || ''));
+    return cards[T.DATA.dexEntries().combos.indexOf(id)] || null;
+  };
+  const textOf = (el) => walk(el, []).map(e => e.textContent || '').join('|');
+  G.showCollection('combos');
+  const hidden = cardFor('midas_touch');
+  h.ok(hidden && /locked/.test(hidden.className) && /\?\?\?/.test(textOf(hidden)) && !/Midas/.test(textOf(hidden)), 'an undiscovered secret is ??? on its card');
+  hidden.onclick();
+  const pop = T._nodes.pop ? T._nodes.pop.innerHTML : '';
+  h.ok(/\?\?\?/.test(pop) && !/coin/i.test(pop), 'and its hint hides the recipe [' + pop + ']');
+  const open = cardFor('molotov');
+  open.onclick();
+  h.ok(/Recipe: Glass meets fire/.test(T._nodes.pop.innerHTML), 'a normal recipe still hints its recipe');
+  G.prog.dexSee('combos', 'midas_touch', true);
+  h.ok(G.meta.seen.combos.midas_touch, 'firing one records it');
+  G.showCollection('combos');
+  const found = cardFor('midas_touch');
+  h.ok(found && /Midas Touch/.test(textOf(found)), 'then the card shows its name');
+  found.onclick();
+  h.ok(/Three different coins/.test(T._nodes.pop.innerHTML), 'and the recipe');
+  G.draw();
+  // payout: relic tickets land on the receipt
+  G.newRun('gambler', 5);
+  G.run.relics.push('ticket_roll', 'gacha_charm');
+  h.ok(G.content.capUp() >= 0.2, 'the Gacha Charm lifts capsule upgrades');
+  const cap = G.loot.makeCapsule('normal');
+  h.ok(cap && cap.tier, 'capsules still roll with it');
+  G.startFight(['slime'], 'normal', { seed: 3 });
+  stepFor(G, 3.5);
+  G.fight.stats.tix = 4;
+  const rw = G.loot.lootReward({ tier: 'normal', gold: 10 });
+  h.ok(rw.pay && rw.pay.some(l => l.id === 'relictix' && l.tix === 4), 'the ticket relics get their payout line');
+});
+
+// ---------------------------------------------------------------- ARCADE (DESIGN.md "Arcade")
+// A cabinet of the given game on the current map (an empty land hex turned
+// into one when the map rolled none), fresh, with the given plays.
+function arcCab(Gt, type, tokens) {
+  const M = Gt.run.map;
+  let t = Object.values(M.tiles).find(x => x.type === type);
+  if (!t) { t = Object.values(M.tiles).find(x => x.type === 'empty' && x.terrain === 'land' && x.ground !== 'mountain' && !x.road); t.type = type; t.content = { seed: 321, tokens, game: type }; }
+  t.content.tokens = tokens; delete t.content.arc; t.done = false;
+  return t;
+}
+// Plays until the machine is idle again (or the screen changes); true when it landed.
+function arcFinish(Gt, secs) {
+  const n = Math.round((secs || 12) / DT);
+  for (let i = 0; i < n; i++) {
+    const C = Gt.arc.state;
+    if (Gt.screen !== 'arcade' || !C || C.phase === 'idle') return true;
+    Gt.update(DT);
+  }
+  return false;
+}
+const payOf = (res, k) => res.pays.filter(p => p.k === k).reduce((a, p) => a + (p.n || 0), 0);
+
+h.test('arcade: every cabinet opens from its tile, plays, pays and closes once spent', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 808);
+  Gt.run.tickets = 0;
+  for (const type of ['plinko', 'wheel', 'slots']) {
+    Gt.toMap();
+    const t = arcCab(Gt, type, 1);
+    Gt.enterTile(t);
+    h.eq(Gt.screen, 'arcade', type + ': the arcade screen');
+    h.ok(Gt.S.ui.buttons.length === 2 && Gt.S.ui.buttons[1].label === 'Leave', type + ': play and Leave buttons');
+    h.ok(/1/.test(Gt.arc.info), type + ': the plays are shown (' + Gt.arc.info + ')');
+    const res0 = Gt.arc.state.A.res.length;
+    h.ok(Gt.choose(0), type + ': the big button plays');
+    h.eq(Gt.arc.state.phase, 'play', type + ': a play in flight');
+    h.eq(Gt.arc.state.A.tokens, 0, type + ': a play spent the moment it starts');
+    h.ok(arcFinish(Gt, 12), type + ': lands and celebrates within 12 s');
+    if (Gt.screen === 'capsule') { Gt.loot.skipCapsule(); stepFor(Gt, 0.8); Gt.loot.collectCapsule(); }
+    h.eq(Gt.screen, 'arcade', type + ': back at the machine');
+    const A = Gt.arc.state.A;
+    h.eq(A.res.length, res0 + 1, type + ': one result recorded');
+    h.ok(!A.pend, type + ': nothing pending');
+    if (type === 'wheel' && A.tokens > 0) { Gt.arc.act(); arcFinish(Gt, 12); }   // an x2 SPIN gave a respin
+    stepFor(Gt, 1.5);
+    if (Gt.screen === 'capsule') { Gt.loot.skipCapsule(); stepFor(Gt, 0.8); Gt.loot.collectCapsule(); }
+    if (type !== 'slots') { const before = Gt.arc.state.A.used; Gt.arc.act(); h.eq(Gt.arc.state.A.used, before, type + ': no plays left, nothing happens'); }
+    else { const tix = Gt.run.tickets; Gt.run.tickets = 0; Gt.arc.act(); h.ok(!Gt.arc.state.A.pend && Gt.arc.state.phase === 'idle', 'slots: no free pull and no tickets: refused'); Gt.run.tickets = tix; }
+    Gt.choose(1);
+    h.eq(Gt.screen, 'map', type + ': Leave goes back to the map');
+    h.ok(t.done, type + ': spent and left: the cabinet is cleared');
+    Gt.enterTile(t);
+    h.eq(Gt.screen, 'map', type + ': a cleared cabinet does not reopen');
+    Gt.draw();
+  }
+});
+
+h.test('arcade: PLINKO drops land where the physics says, pay once, and replay the same after a reload', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 909);
+  // the drop is a pure function of where you let go and the play count
+  const a = Gt.arc.plkSim(233, 77), b = Gt.arc.plkSim(233, 77);
+  h.ok(a.slot === b.slot && a.path.length === b.path.length && a.hits.length === b.hits.length, 'plkSim is deterministic');
+  h.ok(a.path.length / 2 < 60 * 12 && a.hits.length > 3, 'a drop bounces off pegs and lands in time');
+  const hist = new Array(9).fill(0);
+  for (let i = 0; i < 400; i++) hist[Gt.arc.plkSim(262 + (i % 9) - 4, 1000 + i).slot]++;
+  h.ok(hist[4] > 8 && hist[4] < 90, `aimed at the middle, the jackpot is possible but rare (${hist[4]}/400)`);
+  h.ok(hist.filter(n => n > 0).length >= 6, 'the pegs spread drops over the slots');
+  const edges = Gt.arc.plkEdges();
+  h.ok(edges.length === 10 && edges[5] - edges[4] < edges[1] - edges[0], 'the jackpot slot is the narrow one');
+  const t = arcCab(Gt, 'plinko', 2);
+  Gt.enterTile(t);
+  const g0 = Gt.run.gold, x0 = Gt.run.tickets, i0 = Gt.run.ink;
+  Gt.arc.act(180);
+  const pend = JSON.parse(JSON.stringify(Gt.arc.state.A.pend));
+  h.ok(pend && pend.x === 180, 'the drop is pending, saved where it was let go');
+  stepFor(Gt, 0.3);
+  // reload mid-drop: the same token drops again from the same spot
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  const G2 = T2.GAME;
+  h.ok(G2.load(), 'reloads');
+  h.eq(G2.screen, 'arcade', 'back at the machine');
+  h.eq(G2.arc.state.phase, 'play', 'the drop plays again');
+  h.eq(JSON.stringify(G2.arc.state.A.pend), JSON.stringify(pend), 'the same drop');
+  h.eq(G2.arc.state.A.tokens, 1, 'the token is not handed back');
+  const slot = G2.arc.plkSim(pend.x, pend.seed).slot, res = G2.arc.plkPays(slot);
+  arcFinish(G2, 12);
+  h.eq(G2.run.gold - g0, payOf(res, 'gold'), 'gold paid exactly once (' + res.label + ')');
+  h.eq(G2.run.tickets - x0, payOf(res, 'tix'), 'tickets paid exactly once');
+  h.eq(G2.run.ink - i0, payOf(res, 'ink'), 'bulbs paid exactly once');
+  const caps = res.pays.filter(p => p.k === 'cap').length;
+  if (caps) { stepFor(G2, 1.5); h.eq(G2.screen, 'capsule', 'a capsule prize goes to the capsule ritual'); }
+  else h.ok(G2.arc.state && G2.arc.state.A.caps.length === 0, 'no capsule prize, no capsule');
+  // a second reload after the landing pays nothing more
+  const T3 = boot({ store: Object.assign({}, T2._store) });
+  const G3 = T3.GAME;
+  G3.load();
+  stepFor(G3, 3);
+  h.eq(G3.run.gold, G2.run.gold, 'a reload after the landing pays nothing again');
+});
+
+h.test('arcade: the PRIZE WHEEL (jackpot, double or nothing, curse, near misses, ticks)', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 1001);
+  const W = Gt.arc.WHEEL, n = W.length;
+  h.eq(n, 12, 'twelve wedges');
+  let near = 0, rolls = 0;
+  const rng = U.rng(5);
+  for (let i = 0; i < 2000; i++) {
+    const r = Gt.arc.wheelRoll(rng);
+    rolls++;
+    h.ok(r.i >= 0 && r.i < n && r.f > 0 && r.f < 1, 'roll in range');
+    if (r.near) { near++; const big = (j) => ['jackpot', 'cap'].includes(W[(j + n) % n].k); h.ok(big(r.i - 1) ? r.f < 0.1 : r.f > 0.9, 'a near miss stops at the big wedge\'s peg'); }
+  }
+  h.ok(near > 100, 'near misses happen (' + near + '/' + rolls + ')');
+  // the landing angle puts the rolled wedge under the pointer
+  for (const p of [{ i: 0, f: 0.5, rot0: 1.3, turns: 4 }, { i: 7, f: 0.04, rot0: 5, turns: 5 }, { i: 11, f: 0.96, rot0: 0, turns: 4 }]) {
+    const rot = Gt.arc.whTarget(p), wd = Math.PI * 2 / n;
+    let phi = (-rot) % (Math.PI * 2); if (phi < 0) phi += Math.PI * 2;
+    h.eq(Math.floor(phi / wd), p.i, 'wedge ' + p.i + ' under the pointer');
+    h.ok(rot - p.rot0 >= p.turns * Math.PI * 2, 'a few full turns first');
+  }
+  const t = arcCab(Gt, 'wheel', 1);
+  Gt.enterTile(t);
+  const force = (i) => { const C = Gt.arc.state; C.A.pend.i = i; C.A.pend.f = 0.5; C.wh.rot1 = Gt.arc.whTarget(C.A.pend); };
+  // x2 SPIN: a free respin and the next prize doubled
+  Gt.arc.act(); force(8);
+  arcFinish(Gt, 10);
+  let A = Gt.arc.state.A;
+  h.ok(A.mult === 2 && A.tokens === 1, 'x2 SPIN: double or nothing, one more spin');
+  h.ok(/x2/.test(Gt.arc.info), 'the next prize x2 is shown');
+  const g0 = Gt.run.gold;
+  Gt.arc.act(); force(0);
+  arcFinish(Gt, 10);
+  h.eq(Gt.run.gold - g0, 30, 'the next 15 gold pays 30');
+  h.eq(Gt.arc.state.A.mult, 1, 'the double is spent');
+  // CURSE: junk in the bin, the double gone
+  A = Gt.arc.state.A; A.tokens = 2; A.mult = 2;
+  const bin0 = Gt.run.bin.length;
+  Gt.arc.act(); force(6);
+  arcFinish(Gt, 10);
+  h.eq(Gt.run.bin.length, bin0 + 1, 'CURSE: a junk item lands in the bin');
+  h.ok(DATA.ITEMS[Gt.run.bin[Gt.run.bin.length - 1].id].rarity === 'junk', 'it is junk');
+  h.eq(Gt.arc.state.A.mult, 1, 'and the double is gone');
+  // JACKPOT: gold, tickets and a capsule, cracked at once, then back here
+  const gold = Gt.run.gold, tix = Gt.run.tickets;
+  Gt.arc.act(); force(11);
+  arcFinish(Gt, 10);
+  h.ok(Gt.run.gold - gold >= 60 && Gt.run.tickets - tix === 15, 'JACKPOT pays gold and tickets');
+  h.eq(Gt.arc.msg, '', 'the celebration ran its course');
+  stepFor(Gt, 1);
+  h.eq(Gt.screen, 'capsule', 'the jackpot capsule is cracked right away');
+  h.ok(Gt.S.sd.capsule.then.k === 'arcade', 'the ritual comes back to the machine');
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T2.GAME.load() && T2.GAME.screen === 'capsule', 'a reload mid ritual keeps the capsule');
+  T2.GAME.loot.skipCapsule(); stepFor(T2.GAME, 0.8); T2.GAME.loot.collectCapsule();
+  h.eq(T2.GAME.screen, 'arcade', 'collect: back at the wheel');
+  h.eq(T2.GAME.arc.state.A.caps.length, 0, 'the capsule is not handed out twice');
+  // ticks: the flapper clicks every peg, slower toward the end
+  T2.GAME.arc.state.A.tokens = 1;
+  T2.GAME.arc.act();
+  const C = T2.GAME.arc.state;
+  let clicks = 0, prev = C.flapV;
+  for (let i = 0; i < 60 * 5 && C.phase === 'play'; i++) { T2.GAME.update(DT); if (C.flapV < prev - 5) clicks++; prev = C.flapV; }
+  h.ok(clicks > 20, 'the flapper clicks over the pegs (' + clicks + ')');
+});
+
+h.test('arcade: LUCKY SLOTS (free pulls, ticket pulls, three of a kind, your items upgrade, near misses)', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 1102);
+  const t = arcCab(Gt, 'slots', 1);
+  Gt.enterTile(t);
+  const A = Gt.arc.state.A;
+  h.ok(A.items.length === 3 && A.items.every(id => DATA.ITEMS[id] && DATA.ITEMS[id].rarity !== 'junk'), 'three item symbols');
+  h.ok(A.items.filter(id => Gt.run.bin.some(i => i.id === id)).length >= 2, 'the reels show items from your own bin');
+  h.ok(A.strips.length === 3 && A.strips.every(s => s.length === Gt.arc.REEL.length), 'three reels');
+  // odds: a loose check over many rolls
+  const rng = U.rng(9), cats = {};
+  let nearOk = 0, nears = 0;
+  for (let i = 0; i < 3000; i++) {
+    const r = Gt.arc.slotRoll(A, rng), ev = Gt.arc.slotEval(A, r.stops);
+    cats[ev.cat] = (cats[ev.cat] || 0) + 1;
+    if (r.near) {
+      nears++;
+      const L = Gt.arc.REEL.length, s = r.stops.map((x, k) => A.strips[k][x]);
+      const up = A.strips[2][(r.stops[2] + 1) % L], dn = A.strips[2][(r.stops[2] + L - 1) % L];
+      if (s[0] === r.near && s[1] === r.near && s[2] !== r.near && (up === r.near || dn === r.near)) nearOk++;
+    }
+  }
+  h.ok(cats.lose > 1200 && cats.lose < 2100, 'about half the pulls lose (' + cats.lose + ')');
+  h.ok(cats.seven > 30 && cats.seven < 200, 'three sevens are rare (' + cats.seven + ')');
+  h.ok(cats.item > 150 && cats.pair > 200, 'item triples and cherry pairs happen');
+  h.ok(nears > 200 && nearOk === nears, 'near misses: two alike and the third one step off the line (' + nearOk + '/' + nears + ')');
+  // the free pull, then tickets
+  Gt.run.tickets = 4;
+  Gt.arc.act();
+  h.eq(Gt.run.tickets, 4, 'the free pull costs nothing');
+  arcFinish(Gt, 12);
+  if (Gt.screen === 'capsule') { Gt.loot.skipCapsule(); stepFor(Gt, 0.8); Gt.loot.collectCapsule(); }
+  stepFor(Gt, 1.5);
+  if (Gt.screen === 'capsule') { Gt.loot.skipCapsule(); stepFor(Gt, 0.8); Gt.loot.collectCapsule(); }
+  Gt.run.tickets = 4;
+  Gt.arc.act();
+  h.eq(Gt.run.tickets, 4 - Gt.arc.ARC.slotCost, 'then a pull costs tickets');
+  Gt.arc.skip(); Gt.arc.skip();
+  stepFor(Gt, 1.5);
+  if (Gt.screen === 'capsule') { Gt.loot.skipCapsule(); stepFor(Gt, 0.8); Gt.loot.collectCapsule(); }
+  Gt.run.tickets = 1;
+  const used = Gt.arc.state.A.used;
+  Gt.arc.act();
+  h.ok(Gt.arc.state.A.used === used && !Gt.arc.state.A.pend && Gt.run.tickets === 1, 'short of tickets: refused, nothing spent');
+  // three of one of your items: that item upgrades, exactly once
+  Gt.run.tickets = 10;
+  const B = Gt.arc.state.A;
+  const id = B.items[0];
+  const plus0 = Gt.run.bin.filter(i => i.id === id && i.plus).length, n0 = Gt.run.bin.filter(i => i.id === id).length;
+  Gt.arc.act();
+  B.pend.stops = B.strips.map(s => s.indexOf('A'));
+  arcFinish(Gt, 12);
+  const plus1 = Gt.run.bin.filter(i => i.id === id && i.plus).length;
+  h.eq(plus1, plus0 + 1, 'three of an item: one copy upgraded');
+  h.eq(Gt.run.bin.filter(i => i.id === id).length, n0 + (n0 === plus0 ? 1 : 0), 'no copy made unless all were plus already');
+  // three sevens: the jackpot (gold, tickets, a rare capsule), reload safe
+  const g0 = Gt.run.gold, x0 = Gt.run.tickets;
+  Gt.arc.act();
+  B.pend.stops = B.strips.map(s => s.indexOf('seven'));
+  Gt.save();
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  const G2 = T2.GAME;
+  G2.load();
+  h.eq(G2.screen, 'arcade', 'a reload mid pull: back at the machine');
+  arcFinish(G2, 12);
+  h.eq(G2.run.gold - g0, 40, 'JACKPOT gold, once');
+  h.eq(G2.run.tickets - x0, 12 - Gt.arc.ARC.slotCost, 'JACKPOT tickets, once (less the pull)');
+  stepFor(G2, 1.5);
+  h.eq(G2.screen, 'capsule', 'and a capsule to crack');
+  h.ok(['r', 'l'].includes(G2.S.sd.capsule.cap.tier), 'a rare one (or better)');
+});
+
+h.test('arcade: Leave mid play pays first, banks capsules; plays left keep the cabinet open', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 1203);
+  const t = arcCab(Gt, 'plinko', 3);
+  Gt.enterTile(t);
+  const g0 = Gt.run.gold;
+  Gt.arc.act(270);
+  const C = Gt.arc.state, slot = Gt.arc.plkSim(C.A.pend.x, C.A.pend.seed).slot;
+  const res = Gt.arc.plkPays(slot), caps0 = Gt.run.caps.length;
+  Gt.arc.leave();
+  h.eq(Gt.screen, 'map', 'left');
+  h.eq(Gt.run.gold - g0, payOf(res, 'gold'), 'the drop in flight landed and paid');
+  h.eq(Gt.run.caps.length - caps0, res.pays.filter(p => p.k === 'cap').length, 'its capsule waits on the map');
+  h.ok(!t.done && t.content.arc.tokens === 2, 'two tokens left: the cabinet stays open');
+  Gt.enterTile(t);
+  h.eq(Gt.screen, 'arcade', 'and reopens with them');
+  h.eq(Gt.arc.state.A.tokens, 2, 'same tokens');
+  h.ok(G.arc.fxChips([{ k: 'hp', v: -3 }, { k: 'item', id: 'random' }, { k: 'fight', enc: ['rat'] }]).map(c => c.c).join() === 'bad,rnd,fight', 'outcome chips');
+});
+
+h.test('roaming monsters: jump one to fight it (a bounty capsule), get ambushed, the tile under it resolves, saves', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 1304);
+  const M = Gt.run.map;
+  const land = (t) => t && t.terrain === 'land' && t.ground !== 'mountain' && t.type !== 'boss' && t.type !== 'start';
+  const P = M.tiles[MAP.key(M.pos.q, M.pos.r)];
+  const nbs = MAP.neighbors(M, P.q, P.r).map(([q, r]) => M.tiles[MAP.key(q, r)]).filter(land);
+  const A = nbs[0];
+  A.revealed = true; A.type = 'empty'; A.content = {}; A.done = false;
+  M.roam = [{ id: 'mx', q: A.q, r: A.r, awake: true, enc: ['rat'] }];
+  Gt.toMap();
+  Gt.draw();
+  h.ok(Gt.startWalk([[A.q, A.r]]), 'a step onto the monster');
+  h.eq(Gt.screen, 'fight', 'is a fight');
+  h.eq(Gt.fs.start.then.roam, 'mx', 'with the monster');
+  h.eq(Gt.fs.tier, 'normal', 'a normal fight');
+  h.eq(M.roam.length, 0, 'it is off the map');
+  stepFor(Gt, 0.2);
+  Gt.endFight('win');
+  const rw = Gt.S.sd.reward;
+  h.ok(rw.caps.some(c => c.src === 'roam'), 'the reward has a Monster bounty capsule');
+  Gt.choose(3);
+  h.eq(Gt.screen, 'map', 'back on the map');
+  // an ambush: a monster steps onto you as you step
+  const here = M.tiles[MAP.key(M.pos.q, M.pos.r)];
+  let step = null, lair = null;
+  for (const [q, r] of MAP.neighbors(M, here.q, here.r)) {
+    const s = M.tiles[MAP.key(q, r)];
+    if (!land(s)) continue;
+    for (const [q2, r2] of MAP.neighbors(M, s.q, s.r)) { const l = M.tiles[MAP.key(q2, r2)]; if (land(l) && MAP.hexDist(l.q, l.r, here.q, here.r) === 2) { step = s; lair = l; break; } }
+    if (step) break;
+  }
+  for (const x of [step, lair]) { x.revealed = true; x.type = 'empty'; x.content = {}; x.done = false; }
+  M.roam = [{ id: 'my', q: lair.q, r: lair.r, awake: true, enc: ['slime'] }];
+  Gt.startWalk([[step.q, step.r]]);
+  h.eq(Gt.screen, 'fight', 'it jumps you: a fight');
+  h.ok(Gt.fs.start.then.ambush === true && Gt.fs.start.then.roam === 'my', 'an AMBUSH');
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  T2.GAME.load();
+  h.eq(T2.GAME.screen, 'fight', 'a reload restarts that fight');
+  h.eq(T2.GAME.run.map.roam.length, 0, 'and the monster does not come back');
+  stepFor(Gt, 0.2);
+  Gt.endFight('win');
+  Gt.choose(3);
+  // a monster standing on a gem: beat it, then the gem is yours
+  const cur = M.tiles[MAP.key(M.pos.q, M.pos.r)];
+  const gem = MAP.neighbors(M, cur.q, cur.r).map(([q, r]) => M.tiles[MAP.key(q, r)]).find(land);
+  gem.revealed = true; gem.type = 'gem'; gem.content = { gold: 11 }; gem.done = false;
+  M.roam = [{ id: 'mz', q: gem.q, r: gem.r, awake: false, enc: ['rat'] }];
+  Gt.startWalk([[gem.q, gem.r]]);
+  h.eq(Gt.screen, 'fight', 'the monster on the gem fights first');
+  stepFor(Gt, 0.2);
+  Gt.endFight('win');
+  const g0 = Gt.run.gold;
+  Gt.choose(3);
+  h.ok(gem.done && Gt.run.gold - g0 >= 11, 'then the gem resolves');
+  // save / load keeps where they are and who is awake
+  M.roam = [{ id: 'ma', q: gem.q, r: gem.r, awake: true, enc: ['rat'] }, { id: 'mb', q: A.q, r: A.r, awake: false, enc: null }];
+  Gt.save();
+  const T3 = boot({ store: Object.assign({}, T._store) });
+  T3.GAME.load();
+  h.eq(JSON.stringify(T3.GAME.run.map.roam), JSON.stringify(M.roam), 'monsters saved and loaded');
+  T3.GAME.draw();
+});
+
+h.test('roaming monsters: walking wakes the lit ones in sight and they close in, drawn with the stub', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 1405);
+  const M = Gt.run.map;
+  for (const t of Object.values(M.tiles)) if (t.terrain !== 'sea') t.revealed = true;
+  let moved = 0, woke = 0;
+  for (let i = 0; i < 40 && Gt.screen === 'map'; i++) {
+    const nb = MAP.neighbors(M, M.pos.q, M.pos.r).map(([q, r]) => M.tiles[MAP.key(q, r)]).filter(t => t.terrain === 'land' && t.ground !== 'mountain' && t.type !== 'boss');
+    if (!M.roam.length) break;
+    // head for the nearest monster
+    const goal = M.roam.slice().sort((a, b) => MAP.hexDist(a.q, a.r, M.pos.q, M.pos.r) - MAP.hexDist(b.q, b.r, M.pos.q, M.pos.r))[0];
+    const t = nb.sort((a, b) => MAP.hexDist(a.q, a.r, goal.q, goal.r) - MAP.hexDist(b.q, b.r, goal.q, goal.r))[0];
+    const before = JSON.stringify(M.roam);
+    if (t.type !== 'empty') { t.type = 'empty'; t.content = {}; }
+    Gt.startWalk([[t.q, t.r]]);
+    stepFor(Gt, 0.4);
+    Gt.draw();
+    if (JSON.stringify(M.roam) !== before) { moved++; if (M.roam.some(m => m.awake)) woke++; }
+  }
+  h.ok(woke > 0 && moved > 0, `walking across the lit map wakes and moves monsters (moved ${moved})`);
+  h.ok(Gt.screen === 'fight' || M.roam.every(m => MAP.roamOk(M.tiles[MAP.key(m.q, m.r)])), 'every monster where it may stand');
+});
+
+h.test('event scenes: chips, the dice, the outcome reveal (paid once, reload safe); headless stays instant', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 1506);
+  for (const id in DATA.EVENTS) for (const ch of DATA.EVENTS[id].choices) {
+    const chips = Gt.arc.fxChips(ch.fx);
+    h.ok(chips.length >= 1 && chips.every(c => c.t && ['good', 'bad', 'rnd', 'fight', 'neutral'].includes(c.c)), `${id}: "${ch.txt}" has outcome chips`);
+  }
+  Gt.arc.force = true;
+  Gt.showEvent({ id: 'out_of_order' });
+  h.ok(Gt.arc.ev && Gt.arc.ev.cv, 'the scene canvas');
+  for (let i = 0; i < 10; i++) { Gt.update(DT); Gt.draw(); }
+  const hp0 = Gt.run.hp, bin0 = Gt.run.bin.length;
+  Gt.choose(0);
+  h.eq(Gt.screen, 'event', 'a choice stays on the scene for its reveal');
+  const out = Gt.S.sd.event.out;
+  h.ok(out && out.rnd && out.lines.length >= 2, 'the outcome: a dice roll and its lines');
+  h.ok(out.lines.some(l => l.t === '-6 HP' && l.c === 'bad') && out.lines.some(l => l.item), 'lines: the HP and the item');
+  h.eq(Gt.run.hp, hp0 - 6, 'paid');
+  h.eq(Gt.S.ui.buttons.length, 1, 'only Continue');
+  const E = Gt.arc.ev;
+  h.ok(E.roll > 0 && !E.landed, 'the die is rolling');
+  for (let i = 0; i < 60 * 3; i++) { Gt.update(DT); Gt.draw(); }
+  h.ok(E.landed && E.shown === out.lines.length, 'the die lands and every line stamps in');
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  const G2 = T2.GAME;
+  G2.load();
+  h.eq(G2.screen, 'event', 'a reload shows the outcome');
+  h.ok(G2.S.sd.event.out && G2.S.ui.buttons.length === 1, 'not the choices again');
+  h.eq(G2.run.hp, hp0 - 6, 'nothing paid twice');
+  h.eq(G2.run.bin.length, bin0 + 1, 'one item, once');
+  G2.choose(0);
+  h.eq(G2.screen, 'map', 'Continue: the map');
+  // a plain choice reveals too, without dice; a fight choice goes straight to the fight
+  Gt.toMap();
+  Gt.showEvent({ id: 'steam_vent' });
+  Gt.choose(0);
+  h.ok(Gt.S.sd.event.out && !Gt.S.sd.event.out.rnd, 'no dice for a plain choice');
+  Gt.toMap();
+  Gt.showEvent({ id: 'goblin_toll' });
+  Gt.choose(1);
+  h.eq(Gt.screen, 'fight', 'a fight choice fights');
+  Gt.arc.force = false;
+});
+
+h.test('arcade: old saves (no monsters, no cabinets, old events) load and play', () => {
+  const T = boot();
+  const Gt = T.GAME;
+  Gt.newRun('knight', 1607);
+  Gt.save();
+  const raw = JSON.parse(T._store[Gt.RUN_KEY]);
+  delete raw.run.map.roam;
+  for (const k in raw.run.map.tiles) { const t = raw.run.map.tiles[k]; if (['plinko', 'wheel', 'slots'].includes(t.type)) { t.type = 'empty'; t.content = {}; t.known = false; } }
+  const T2 = boot({ store: { [Gt.RUN_KEY]: JSON.stringify(raw) } });
+  const G2 = T2.GAME;
+  h.ok(G2.load(), 'loads');
+  h.ok(Array.isArray(G2.run.map.roam) && G2.run.map.roam.length === 0, 'no monsters');
+  const M = G2.run.map;
+  const nb = MAP.neighbors(M, M.pos.q, M.pos.r).map(([q, r]) => M.tiles[MAP.key(q, r)]).find(t => t.revealed && t.terrain === 'land' && t.ground !== 'mountain');
+  G2.startWalk([[nb.q, nb.r]]);
+  h.ok(['map', 'fight', 'event', 'shop', 'rest', 'forge', 'capsule', 'treasure'].includes(G2.screen), 'a step works');
+  // a cabinet tile from an old save without a session still opens
+  G2.toMap();
+  const t = arcCab(G2, 'wheel', 1);
+  delete t.content.tokens;
+  G2.enterTile(t);
+  h.ok(G2.screen === 'arcade' && G2.arc.state.A.tokens === 1, 'a cabinet without tokens gets one spin');
+  G2.draw();
 });
 
 h.done();

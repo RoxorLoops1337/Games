@@ -37,6 +37,12 @@ const AUDIO = (() => {
     ends: [],                 // end times of live sfx voices
     timer: null,
     r: U.rng(0xC1A5),         // tiny per-call variation (detune, noise offsets), deterministic
+    // round 3, dynamic fight music: the layers the game wants on (musicState),
+    // the clock time a switched-off layer stops being scheduled (its fade
+    // tail), and the per-mode layer tunes.
+    lay: { hype: false, tense: false },
+    layT: { hype: -1, tense: -1 },
+    lsongs: {},
   };
 
   // ---------------------------------------------------------------- prefs
@@ -1029,6 +1035,124 @@ const AUDIO = (() => {
   Object.assign(GAP, { clawCoin: 0.2, clawSpin: 0.4, clawTap: 0.3, clawCheer: 0.5, magHum: 0.5, magZap: 0.06, magDrop: 0.3, scoopSlosh: 0.12, handSquish: 0.12, hookFire: 0.15, hookThunk: 0.1 });
   NAMES.push('clawCoin', 'clawSpin', 'clawTap', 'clawCheer', 'magHum', 'magZap', 'magDrop', 'scoopSlosh', 'handSquish', 'hookFire', 'hookThunk');
 
+  // ---------------------------------------------------------------- arcade
+  // The map's arcade (DESIGN.md "Arcade"): plinko pegs and drops, the prize
+  // wheel's clicker, the slot machine's lever / reels / thunks, the drumroll
+  // of suspense, win jingles, the jackpot fanfare, the sad trombone, the
+  // event dice, and the roaming monsters (spotted you, a step, an ambush).
+  Object.assign(BANK, {
+    // A token rattles into the top of the board.
+    plinkDrop(out, t, o, p) {
+      for (let i = 0; i < 3; i++) blip(out, t, { at: i * 0.05, w: 'triangle', f: (1800 - i * 300) * p, to: 1200 * p, dur: 0.04, v: 0.08 });
+      blip(out, t, { at: 0.14, w: 'sine', f: 330 * p, to: 180, dur: 0.1, v: 0.18 });
+      return 0.26;
+    },
+    // A peg ding: a bright bell partial, pitch rising down the board (opts.pitch).
+    peg(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 1320 * p, dur: 0.16, v: 0.1 });
+      blip(out, t, { w: 'triangle', f: 2640 * p, dur: 0.06, v: 0.04 });
+      return 0.18;
+    },
+    // The big wheel heaves into motion: a ratchet and a rising whoosh.
+    wheelSpin(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 400, to: 2400, q: 1.2, dur: 0.5, v: 0.14 });
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: i * 0.05, type: 'bandpass', f: 3000, q: 8, dur: 0.015, v: 0.1 });
+      return 0.52;
+    },
+    // The flapper clicking over a peg.
+    wheelTick(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 3400 * p, q: 6, dur: 0.018, v: 0.2 });
+      blip(out, t, { w: 'square', f: 900 * p, dur: 0.02, v: 0.04, lp: 3000 });
+      return 0.04;
+    },
+    // The slot lever: a spring stretch and a clunk.
+    lever(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 220 * p, to: 90, dur: 0.18, v: 0.06, lp: 1400 });
+      blip(out, t, { at: 0.16, w: 'sine', f: 140 * p, to: 55, dur: 0.12, v: 0.35 });
+      hiss(out, t, { at: 0.16, type: 'lowpass', f: 1200, dur: 0.06, v: 0.2, crunch: true });
+      return 0.32;
+    },
+    // The reels whirring up.
+    reelSpin(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 70 * p, to: 180 * p, dur: 0.9, v: 0.05, lp: 900, vib: [22, 8] });
+      for (let i = 0; i < 12; i++) hiss(out, t, { at: 0.1 + i * 0.065, type: 'bandpass', f: 2600, q: 7, dur: 0.012, v: 0.06 });
+      return 0.95;
+    },
+    // A reel stops: a thunk and a latch.
+    reelStop(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 180 * p, to: 70, dur: 0.12, v: 0.4 });
+      hiss(out, t, { type: 'bandpass', f: 1800, q: 3, dur: 0.03, v: 0.16 });
+      blip(out, t, { at: 0.03, w: 'square', f: 1200 * p, dur: 0.025, v: 0.04, lp: 4000 });
+      return 0.16;
+    },
+    // Suspense: a snare roll swelling.
+    drumroll(out, t, o, p) {
+      for (let i = 0; i < 18; i++) hiss(out, t, { at: i * 0.045, type: 'bandpass', f: 1900, q: 1.5, dur: 0.03, v: 0.04 + i * 0.006 });
+      blip(out, t, { w: 'sine', f: 70, dur: 0.85, v: 0.08, a: 0.5 });
+      return 0.9;
+    },
+    // A win: a quick rising arpeggio.
+    arcWin(out, t, o, p) {
+      [72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.14, v: 0.07, lp: 5000 }));
+      blip(out, t, { at: 0.28, w: 'triangle', f: mtof(88) * p, dur: 0.3, v: 0.08, vib: [7, 8] });
+      return 0.62;
+    },
+    // THE JACKPOT: bells, a fanfare and a shower of coin pings.
+    arcJackpot(out, t, o, p) {
+      [60, 64, 67, 72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: i * 0.06, w: 'square', f: mtof(n) * p, dur: 0.18, v: 0.07, lp: 5200 }));
+      [72, 76, 79].forEach((n) => blip(out, t, { at: 0.5, w: 'sawtooth', f: mtof(n) * p, dur: 0.8, v: 0.05, lp: 3200, vib: [6, 6] }));
+      for (let i = 0; i < 10; i++) blip(out, t, { at: 0.55 + i * 0.07, w: 'triangle', f: (2000 + (i % 3) * 400) * p, dur: 0.06, v: 0.05 });
+      blip(out, t, { at: 0.5, w: 'sine', f: 110, to: 55, dur: 0.5, v: 0.3 });
+      return 1.4;
+    },
+    // Nothing: a little wah-wah.
+    arcLose(out, t, o, p) {
+      [0, 1, 2].forEach((i) => blip(out, t, { at: i * 0.22, w: 'sawtooth', f: mtof(58 - i) * p, to: mtof(57 - i) * p, dur: 0.2, v: 0.05, lp: 1200, lin: true }));
+      blip(out, t, { at: 0.66, w: 'sawtooth', f: mtof(55) * p, to: mtof(52) * p, dur: 0.5, v: 0.05, lp: 1000, vib: [6, 10], lin: true });
+      return 1.2;
+    },
+    // Walking up to a cabinet: its attract jingle.
+    arcIn(out, t, o, p) {
+      [79, 76, 79, 84].forEach((n, i) => blip(out, t, { at: i * 0.09, w: 'square', f: mtof(n) * p, dur: 0.08, v: 0.05, lp: 4200 }));
+      return 0.45;
+    },
+    // A die rattling across the floor.
+    diceRoll(out, t, o, p) {
+      for (let i = 0; i < 9; i++) hiss(out, t, { at: i * 0.1 + (i % 2) * 0.02, type: 'bandpass', f: 2400 + (i % 3) * 500, q: 5, dur: 0.02, v: 0.14 - i * 0.008 });
+      return 1.0;
+    },
+    // The die lands: a clack and a ta-da.
+    diceLand(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 2000, q: 4, dur: 0.04, v: 0.25 });
+      blip(out, t, { w: 'sine', f: 260 * p, to: 120, dur: 0.08, v: 0.25 });
+      [76, 81].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.08, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.06, lp: 4200 }));
+      return 0.34;
+    },
+    // A monster spots you: a sharp alarm sting.
+    roamWake(out, t, o, p) {
+      blip(out, t, { w: 'square', f: mtof(81) * p, dur: 0.07, v: 0.08, lp: 4000 });
+      blip(out, t, { at: 0.08, w: 'square', f: mtof(86) * p, dur: 0.12, v: 0.08, lp: 4000 });
+      blip(out, t, { w: 'sawtooth', f: 90 * p, to: 60, dur: 0.2, v: 0.08, lp: 600 });
+      return 0.24;
+    },
+    // A monster hop on the map.
+    roamStep(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 120 * p, to: 60, dur: 0.1, v: 0.22 });
+      hiss(out, t, { type: 'lowpass', f: 600, dur: 0.05, v: 0.12, crunch: true });
+      return 0.12;
+    },
+    // AMBUSH: a stab and a snarl.
+    ambush(out, t, o, p) {
+      [0, 6, 1].forEach((d, i) => blip(out, t, { at: i * 0.06, w: 'sawtooth', f: mtof(52 + d) * p, dur: 0.22, v: 0.08, lp: 2400 }));
+      hiss(out, t, { type: 'bandpass', f: 500, to: 180, q: 2, dur: 0.4, v: 0.22, crunch: true });
+      blip(out, t, { w: 'sine', f: 90, to: 45, dur: 0.35, v: 0.3 });
+      return 0.45;
+    },
+  });
+  Object.assign(GAP, { peg: 0.03, wheelTick: 0.02, reelStop: 0.05, drumroll: 0.8, arcWin: 0.2, arcJackpot: 1.2, arcLose: 0.6, diceRoll: 0.5, roamWake: 0.3, roamStep: 0.08, ambush: 0.5, plinkDrop: 0.1, lever: 0.2, reelSpin: 0.4, wheelSpin: 0.4, arcIn: 0.4, diceLand: 0.2 });
+  Object.assign(LEVEL, { arcJackpot: 1.15, peg: 0.8, wheelTick: 0.85 });
+  NAMES.push('plinkDrop', 'peg', 'wheelSpin', 'wheelTick', 'lever', 'reelSpin', 'reelStop', 'drumroll', 'arcWin', 'arcJackpot', 'arcLose', 'arcIn', 'diceRoll', 'diceLand', 'roamWake', 'roamStep', 'ambush');
+
   /* Plays a named effect. opts: {vol, pitch, mass (itemLand), vel (itemLand
      impact 0..1), amt (hit damage)}. Returns true when something was queued. */
   function sfx(name, opts) {
@@ -1318,10 +1442,128 @@ const AUDIO = (() => {
 
   function startMode(mode) {
     fadeAll(XFADE);
+    if (!LAYERED[mode]) { S.lay.hype = false; S.lay.tense = false; }
     if (!S.ac || mode === 'off' || !CFG[mode]) return;
     const t = now() + 0.05;
-    S.seqs.push({ mode, song: song(mode), layer: newLayer(t), step: 0, next: t, fadeEnd: null });
+    const q = { mode, song: song(mode), layer: newLayer(t), step: 0, next: t, fadeEnd: null };
+    // Fight modes carry two extra layers on their own gains under the
+    // mode's layer (so the mode crossfade still fades them): hype
+    // (percussion on a streak or combo) and tense (low hp, phase two).
+    if (LAYERED[mode]) {
+      q.lay = layerSong(mode);
+      q.lg = {}; q.lt = {};
+      for (const k of LAYER_NAMES) {
+        const g = S.ac.createGain();
+        setP(g.gain, S.lay[k] ? 1 : 0.0001);
+        g.connect(q.layer);
+        q.lg[k] = g; q.lt[k] = S.lay[k] ? 1 : 0;
+      }
+    }
+    S.seqs.push(q);
     tick();
+  }
+
+  // ---------------------------------------------------------------- dynamic fight music (round 3)
+  /* The fight, elite and boss tunes layer up with the game's state: the base
+     loop always, a hype layer (shaker 16ths, claps, tom fills closing each
+     phrase) while the player is on a streak or just fired a combo, and a
+     tense layer (a low pulsing drone, a heartbeat kick, a high tremolo
+     minor second) under 30% hp or while a boss or elite is in phase two.
+     musicState({hype, tense}) switches them with smooth setTargetAtTime
+     crossfades; victory() plays a sting and fades the fight out. Layers
+     ride the music bus, so the music toggle and volume apply. Each mode's
+     layer tune is built once from its own seed (the base song is untouched). */
+  const LAYERED = { fight: 1, elite: 1, boss: 1 };
+  const LAYER_NAMES = ['hype', 'tense'];
+  const LAYER_FADE = 0.45;   // setTargetAtTime time constant (about 1.4 s to settle)
+  const LAYER_TAIL = 2.5;    // a switched-off layer keeps playing this long while it fades
+  function composeLayers(mode) {
+    const base = song(mode);
+    if (!base) return null;
+    const c = base.cfg, rng = U.rng(U.hashStr('clawspire:layers:' + mode));
+    const hype = [], tense = [];
+    for (let i = 0; i < base.len; i++) { hype.push([]); tense.push([]); }
+    const hi = c.root + 36;
+    for (let b = 0; b < base.bars; b++) {
+      const s0 = b * BAR, fill = b % PHRASE === PHRASE - 1;
+      for (let s = 0; s < BAR; s++) {
+        push(hype, s0 + s, { v: 'shaker', g: s % 4 === 0 ? 0.9 : s % 2 === 0 ? 0.55 : 0.35 });
+        if (s === 4 || s === 12) push(hype, s0 + s, { v: 'clap', g: 1 });
+        if (!fill && (s === 3 || s === 11) && rng.chance(0.45)) push(hype, s0 + s, { v: 'kick', g: 0.45 });
+        if (fill && s >= 8 && s % 2 === 0) push(hype, s0 + s, { v: 'tom', n: c.root + 19 - (s - 8), g: 0.75 + (s - 8) * 0.04 });
+        if (s % 2 === 0) push(tense, s0 + s, { v: 'trem', n: hi + (Math.floor(s / 4) % 2), d: 2, g: s % 4 === 0 ? 0.8 : 0.55 });
+      }
+      push(tense, s0, { v: 'drone', n: c.root, d: BAR, g: 1 });
+      push(tense, s0, { v: 'hbeat', g: 1 });
+      push(tense, s0 + 3, { v: 'hbeat', g: 0.65 });
+      if (rng.chance(0.5)) push(tense, s0 + 8, { v: 'hbeat', g: 0.8 });
+    }
+    return { mode, hype, tense };
+  }
+  function layerSong(mode) {
+    if (!LAYERED[mode] || !CFG[mode]) return null;
+    return S.lsongs[mode] || (S.lsongs[mode] = composeLayers(mode));
+  }
+  function playLayerEvent(q, ev, t, dest) {
+    const c = q.song.cfg, sd = q.song.stepDur, g = (ev.g || 1) * c.vol;
+    switch (ev.v) {
+      case 'shaker': hiss(dest, t, { type: 'highpass', f: 9000, q: 0.8, dur: 0.03, v: 0.07 * g }); break;
+      case 'clap':
+        for (let i = 0; i < 3; i++) hiss(dest, t, { at: i * 0.011, type: 'bandpass', f: 1300, q: 1.1, dur: i === 2 ? 0.11 : 0.02, v: 0.16 * g, crunch: i === 2 });
+        break;
+      case 'kick': blip(dest, t, { w: 'sine', f: 140, to: 45, dur: 0.14, v: 0.4 * g, a: 0.002 }); break;
+      case 'tom': blip(dest, t, { w: 'triangle', f: mtof(ev.n), to: mtof(ev.n) * 0.6, dur: 0.16, v: 0.28 * g, a: 0.002 }); break;
+      case 'drone': blip(dest, t, { w: 'sawtooth', f: mtof(ev.n), dur: ev.d * sd, v: 0.11 * g, a: 0.25, lp: 420, q: 4, vib: [0.5, mtof(ev.n) * 0.012] }); break;
+      case 'hbeat': blip(dest, t, { w: 'sine', f: 62, to: 38, dur: 0.16, v: 0.5 * g, a: 0.003 }); break;
+      case 'trem': blip(dest, t, { w: 'square', f: mtof(ev.n), dur: ev.d * sd * 0.8, v: 0.03 * g, a: 0.01, lp: 3200, vib: [11, mtof(ev.n) * 0.02] }); break;
+      default: break;
+    }
+  }
+  // The game says what the fight feels like (called every frame; only a
+  // change does anything). Returns the layers now on.
+  function musicState(o) {
+    o = o || {};
+    const t = now();
+    let changed = false;
+    for (const k of LAYER_NAMES) {
+      const want = !!o[k];
+      if (S.lay[k] === want) continue;
+      S.lay[k] = want; changed = true;
+      if (!want) S.layT[k] = t + LAYER_TAIL;
+      for (const q of S.seqs) {
+        if (!q.lg || !q.lg[k] || q.fadeEnd != null) continue;
+        q.lt[k] = want ? 1 : 0;
+        try {
+          const gp = q.lg[k].gain;
+          if (gp.cancelScheduledValues) gp.cancelScheduledValues(t);
+          gp.setTargetAtTime(want ? 1 : 0.0001, t, LAYER_FADE);
+        } catch (e) { /* a minimal fake */ }
+      }
+    }
+    return { hype: S.lay.hype, tense: S.lay.tense, changed };
+  }
+  // The last enemy fell: fade the fight out under a short major-key sting in
+  // the fight tune's key, on the music bus. False when music is off.
+  function victory() {
+    S.lay.hype = false; S.lay.tense = false;
+    if (!S.ac || !prefs().music) return false;
+    const q = S.seqs.find((x) => x.fadeEnd == null && LAYERED[x.mode]);
+    const c = (q && q.song.cfg) || CFG.fight;
+    fadeAll(0.6);
+    S.want = 'off';
+    try {
+      const t = now() + 0.04, sd = 60 / c.bpm / 4;
+      const out = S.ac.createGain();
+      setP(out.gain, 0.9 * c.vol);
+      out.connect(S.musBus);
+      const r = c.root + 24;
+      [0, 4, 7, 12].forEach((n, i) => blip(out, t, { at: i * sd, w: 'square', f: mtof(r + n), dur: sd * 1.1, v: 0.1, lp: 4200 }));
+      const hold = t + sd * 4;
+      for (const n of [0, 4, 7, 12, 16]) blip(out, hold, { w: n === 0 ? 'triangle' : 'square', f: mtof(r + n - (n === 0 ? 12 : 0)), dur: 1.1, v: n === 0 ? 0.22 : 0.055, a: 0.01, lp: 3000, vib: [5.5, mtof(r + n) * 0.01] });
+      blip(out, hold, { w: 'sine', f: 150, to: 40, dur: 0.25, v: 0.5, a: 0.002 });
+      hiss(out, hold, { type: 'highpass', f: 5000, q: 0.5, dur: 0.9, v: 0.12 });
+      return true;
+    } catch (e) { return false; }
   }
 
   // Scheduler: queue every step due within LOOKAHEAD, drop faded-out layers.
@@ -1344,6 +1586,12 @@ const AUDIO = (() => {
         const at = q.next + (q.step % 2 === 1 ? q.song.swing * sd : 0);
         for (const ev of q.song.steps[q.step]) {
           try { playEvent(q, ev, at); queued++; } catch (e) { /* one bad note never kills the loop */ }
+        }
+        // the dynamic fight layers: scheduled while on, and through their fade tail
+        if (q.lay) for (const k of LAYER_NAMES) {
+          if (!S.lay[k] && t > S.layT[k]) continue;
+          const evs = q.lay[k][q.step];
+          if (evs) for (const ev of evs) { try { playLayerEvent(q, ev, at, q.lg[k]); queued++; } catch (e) { /* never kills the loop */ } }
         }
         q.step = (q.step + 1) % q.song.len;
         q.next += sd;
@@ -1589,6 +1837,10 @@ const AUDIO = (() => {
 
   return {
     init, sfx, music, setVolume, duck, haptic, intro, renderIntroWav,
+    musicState, victory,   // round 3: the dynamic fight layers and the victory sting
+    get layers() { return { hype: S.lay.hype, tense: S.lay.tense }; },
+    _layerSong: layerSong,
+    _liveLayers: () => S.seqs.filter((q) => q.lg).map((q) => ({ mode: q.mode, hype: q.lt.hype, tense: q.lt.tense, fading: q.fadeEnd != null })),
     names: NAMES.slice(), modes: MODES.slice(),
     get ready() { return !!S.ac; },
     get mode() { return S.want; },

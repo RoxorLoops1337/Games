@@ -49,7 +49,7 @@ function inkTo(M, t) {
   return Infinity;
 }
 const SPECIAL = ['shop', 'rest', 'forge', 'elite', 'treasure', 'tower'];
-const LANDMARK = ['shop', 'rest', 'forge', 'elite', 'treasure', 'boss', 'tower'];
+const LANDMARK = ['shop', 'rest', 'forge', 'elite', 'treasure', 'boss', 'tower', 'plinko', 'wheel', 'slots'];   // the arcade cabinets are landmarks too
 const inB = (M, q, r) => r >= 0 && r < M.rows && colOf(q, r) >= 0 && colOf(q, r) < M.cols;
 const snapshot = (M) => JSON.stringify(M);
 const revealedSet = (M) => new Set(tilesOf(M).filter(t => t.revealed).map(t => MAP.key(t.q, t.r)));
@@ -1218,5 +1218,163 @@ if (fs.existsSync(dataPath)) {
     toolCase(M, 'kite', far, disc(M, far.q, far.r, 1), 'DATA kite', R.MAP);
   });
 }
+
+// ---------------------------------------------------------------- ARCADE (DESIGN.md "Arcade")
+const ARC = ['plinko', 'wheel', 'slots'];
+h.test('arcade cabinets: 2-3 per map, off the road, landmarks, reachable, deterministic', () => {
+  const seen = {};
+  let far = 0, total = 0;
+  for (let s = 1; s <= 60; s++) {
+    const M = world(s, { act: 1 + (s % 3) });
+    const cabs = tilesOf(M).filter(t => ARC.includes(t.type));
+    total += cabs.length;
+    h.ok(cabs.length >= 2 && cabs.length <= 3, `world ${s}: 2-3 cabinets (${cabs.length})`);
+    h.eq(new Set(cabs.map(t => t.type)).size, cabs.length, `world ${s}: no cabinet twice`);
+    const roadSet = new Set(M.road.map(([q, r]) => MAP.key(q, r)));
+    for (const t of cabs) {
+      seen[t.type] = 1;
+      const L = `world ${s} ${t.type}`;
+      h.ok(MAP.isArcade(t) && isLand(t) && !t.road && !roadSet.has(MAP.key(t.q, t.r)), L + ' on land, off the road');
+      const d = Math.min(...M.road.map(([q, r]) => hexDist(t, { q, r })));
+      if (d >= MAP.ARC_ROAD_GAP) far++;
+      h.ok(d >= 1, L + ' never on the road');
+      h.ok(t.known && MAP.isLandmark(t), L + ' is a landmark (known in the dark)');
+      h.ok(hexDist(t, M.start) >= 3 && hexDist(t, M.boss) >= 2, L + ' away from the start and the boss');
+      h.ok(!MAP.neighbors(M, t.q, t.r).some(([q, r]) => M.tiles[MAP.key(q, r)].type === 'tower'), L + ' not on a tower doorstep');
+      const tok = t.content.tokens;
+      h.ok(t.type === 'plinko' ? tok >= 1 && tok <= 3 : tok >= 1 && tok <= 2, L + ' plays in range (' + tok + ')');
+      h.ok(MAP.pathExists(M, M.start, t, { any: true }), L + ' reachable');
+    }
+    for (const a of cabs) for (const b of cabs) if (a !== b) h.ok(hexDist(a, b) >= 2, `world ${s}: cabinets spread`);
+  }
+  h.ok(ARC.every(g => seen[g]), 'all three games appear across seeds');
+  h.ok(far / total > 0.95, `cabinets sit >= ${MAP.ARC_ROAD_GAP} off the road on the world (${far}/${total})`);
+  const A = world(9), B = world(9);
+  h.eq(JSON.stringify(tilesOf(A).filter(t => ARC.includes(t.type)).map(t => [t.q, t.r, t.type, t.content])), JSON.stringify(tilesOf(B).filter(t => ARC.includes(t.type)).map(t => [t.q, t.r, t.type, t.content])), 'same seed, same cabinets');
+  h.eq(JSON.stringify(A.roam), JSON.stringify(B.roam), 'same seed, same monsters');
+  // small maps still place them (relaxed) and keep every rule above
+  for (let s = 1; s <= 30; s++) { const M = gen(s); h.ok(tilesOf(M).filter(t => ARC.includes(t.type)).every(t => isLand(t) && !t.road && t.known), `10x7 ${s}: cabinets on land off the road`); }
+});
+
+h.test('roaming monsters: placed asleep on empty mainland away from the start and the boss', () => {
+  for (let s = 1; s <= 40; s++) {
+    const act = 1 + (s % 3), M = world(s, { act });
+    const main = new Set(MAP.islandsOf(M).flat());
+    h.ok(Array.isArray(M.roam) && M.roam.length >= 2 && M.roam.length <= MAP.ROAM_N[act], `world ${s}: ${M.roam.length} monsters (act ${act})`);
+    for (const m of M.roam) {
+      const t = M.tiles[MAP.key(m.q, m.r)];
+      h.ok(t && t.type === 'empty' && isLand(t) && !main.has(MAP.key(m.q, m.r)), `world ${s} ${m.id}: empty mainland land`);
+      h.ok(hexDist(m, M.start) >= MAP.ROAM_START && hexDist(m, M.boss) >= MAP.ROAM_BOSS, `world ${s} ${m.id}: away from the start and the boss`);
+      h.eq(m.awake, false, `world ${s} ${m.id}: asleep`);
+    }
+    for (const a of M.roam) for (const b of M.roam) if (a !== b) h.ok(hexDist(a, b) >= 4, `world ${s}: monsters spread`);
+    h.eq(new Set(M.roam.map(m => m.id)).size, M.roam.length, `world ${s}: unique ids`);
+  }
+});
+
+/* A dry 10x7 map, all lit, every tile empty but the start and the boss,
+   with one monster at (q, r): the movement-rule playground. */
+function roamLab(seed, mq, mr, pq, pr) {
+  const M = genL(seed);
+  for (const t of tilesOf(M)) { t.revealed = true; if (t.type !== 'start' && t.type !== 'boss') { t.type = 'empty'; t.content = {}; t.done = false; } }
+  M.roam = [{ id: 'm0', q: mq, r: mr, awake: false, enc: null }];
+  M.pos = { q: pq, r: pr };
+  return M;
+}
+h.test('roaming monsters: wake in sight when lit, then one step toward you per step', () => {
+  const M = roamLab(3, 5, 2, 0, 5);
+  const m = M.roam[0];
+  const d0 = hexDist(m, M.pos);
+  h.ok(d0 > MAP.ROAM_SIGHT, 'starts out of sight (' + d0 + ')');
+  let out = MAP.roamStep(M);
+  h.ok(!m.awake && !out.woke.length && m.q === 5 && m.r === 2, 'out of sight: asleep, still');
+  M.pos = { q: 2, r: 4 };
+  const d1 = hexDist(m, M.pos);
+  h.ok(d1 >= 2 && d1 <= MAP.ROAM_SIGHT, 'now in sight, a few hexes off (' + d1 + ')');
+  M.tiles[MAP.key(m.q, m.r)].revealed = false;
+  out = MAP.roamStep(M);
+  h.ok(!m.awake, 'in range but its hex is dark: it cannot see you');
+  M.tiles[MAP.key(m.q, m.r)].revealed = true;
+  out = MAP.roamStep(M);
+  h.ok(m.awake && out.woke[0] === m && !out.moved.length, 'lit and in sight: it wakes, and holds still that turn (the telegraph)');
+  const plan = MAP.roamPlan(M);
+  h.ok(plan.length === 1 && plan[0].next && hexDist({ q: plan[0].next[0], r: plan[0].next[1] }, M.pos) === d1 - 1, 'the telegraph points one hex closer');
+  out = MAP.roamStep(M);
+  h.ok(out.moved.length === 1 && hexDist(m, M.pos) === d1 - 1, 'awake: one step closer');
+  h.ok(m.q === plan[0].next[0] && m.r === plan[0].next[1], 'it went where the arrow said');
+  // walk it right up to the player: the step onto you is the ambush
+  let guard = 0;
+  while (hexDist(m, M.pos) > 1 && guard++ < 10) MAP.roamStep(M);
+  h.eq(hexDist(m, M.pos), 1, 'adjacent');
+  out = MAP.roamStep(M, { hold: true });
+  h.ok(!out.ambush && hexDist(m, M.pos) === 1, 'hold (your hex is busy): it waits beside you');
+  out = MAP.roamStep(M);
+  h.ok(out.ambush === m, 'then it jumps you: an ambush');
+  h.ok(MAP.roamRemove(M, 'm0') === m && M.roam.length === 0, 'roamRemove takes it off the map');
+});
+
+h.test('roaming monsters: only lit walkable land, never the start or the boss, never blocking the road', () => {
+  const M = roamLab(5, 4, 3, 0, 3);
+  const m = M.roam[0];
+  m.awake = true;
+  // stand on the start: it comes, but never steps onto the start itself
+  M.pos = { q: M.start.q, r: M.start.r };
+  for (let i = 0; i < 12; i++) { const o = MAP.roamStep(M); h.ok(!o.ambush, 'no ambush on the start hex'); }
+  h.eq(hexDist(m, M.start), 1, 'it waits beside the start');
+  // a dark ring around it: stuck, never onto dark
+  const N = roamLab(6, 5, 3, 1, 3);
+  const n = N.roam[0]; n.awake = true;
+  for (const [q, r] of MAP.neighbors(N, n.q, n.r)) N.tiles[MAP.key(q, r)].revealed = false;
+  MAP.roamStep(N);
+  h.ok(n.q === 5 && n.r === 3, 'dark all round: it cannot move');
+  // content landmarks are off limits, pickups are not
+  const P = roamLab(7, 5, 3, 1, 3);
+  const p = P.roam[0]; p.awake = true;
+  const next = MAP.roamPlan(P)[0].next;
+  P.tiles[MAP.key(next[0], next[1])].type = 'shop';
+  const alt = MAP.roamPlan(P)[0].next;
+  h.ok(!alt || alt[0] !== next[0] || alt[1] !== next[1], 'a shop is off limits');
+  P.tiles[MAP.key(next[0], next[1])].type = 'gem';
+  const back = MAP.roamPlan(P)[0].next;
+  h.ok(back && back[0] === next[0] && back[1] === next[1], 'a gem it prowls over');
+  // fuzz on the world: monsters only ever stand where they may, and the boss stays reachable
+  for (let s = 1; s <= 12; s++) {
+    const W = world(s, { act: 1 + (s % 3) });
+    for (const t of tilesOf(W)) if (t.terrain !== 'sea') t.revealed = true;
+    for (const x of W.roam) x.awake = true;
+    const rng = U.rng(s * 7);
+    const land = tilesOf(W).filter(isLand);
+    for (let i = 0; i < 60 && W.roam.length; i++) {
+      const t = rng.pick(land);
+      W.pos = { q: t.q, r: t.r };
+      const o = MAP.roamStep(W, { hold: rng() < 0.3 });
+      if (o.ambush) MAP.roamRemove(W, o.ambush.id);
+      const keys = W.roam.map(x => MAP.key(x.q, x.r));
+      h.eq(new Set(keys).size, keys.length, `world ${s} step ${i}: never two on one hex`);
+      h.ok(W.roam.every(x => MAP.roamOk(W.tiles[MAP.key(x.q, x.r)])), `world ${s} step ${i}: every monster on lit walkable land (no boss, start, water, mountain)`);
+    }
+    h.ok(MAP.pathExists(W, W.start, W.boss, { any: true, land: true }), `world ${s}: the boss is still reachable`);
+    W.pos = { q: W.start.q, r: W.start.r };
+    const road = MAP.walkPath(W, W.road[W.road.length - 2][0], W.road[W.road.length - 2][1]);
+    h.ok(Array.isArray(road) && road.length > 0, `world ${s}: the walk up the road to the boss's door never routes around monsters (they block nothing)`);
+  }
+});
+
+h.test('roaming monsters and cabinets survive the save; old saves load', () => {
+  const M = world(4);
+  M.roam[0].awake = true; M.roam[0].q += 0;
+  const D = MAP.deserialize(JSON.parse(JSON.stringify(MAP.serialize(M))));
+  h.eq(JSON.stringify(D.roam), JSON.stringify(M.roam), 'monsters round trip (positions, awake, fights)');
+  const cab = tilesOf(D).find(t => ARC.includes(t.type));
+  h.ok(cab && cab.known && cab.content.tokens >= 1, 'a cabinet round trips');
+  const O = JSON.parse(JSON.stringify(M));
+  delete O.roam;
+  const L = MAP.deserialize(O);
+  h.ok(Array.isArray(L.roam) && L.roam.length === 0, 'a save from before the monsters has none');
+  h.eq(MAP.roamStep(L).moved.length, 0, 'and roamStep is a no-op there');
+  const bad = JSON.parse(JSON.stringify(M));
+  bad.roam.push({ id: 'zz', q: 99, r: 99 }, null);
+  h.eq(MAP.deserialize(bad).roam.length, M.roam.length, 'broken monsters are dropped');
+});
 
 h.done();

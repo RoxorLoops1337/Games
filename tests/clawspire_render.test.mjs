@@ -50,7 +50,8 @@ function seqCtx() {
   return { ctx, stat };
 }
 
-const ITEM_KEYS = ['sword', 'dagger', 'axe', 'hammer', 'anvil', 'shield', 'buckler', 'potion', 'flask', 'bomb', 'torch', 'iceshard', 'snowball', 'coin', 'gem', 'rock', 'slag', 'iceblock', 'apple', 'bread', 'book', 'scroll', 'orb', 'ring', 'key', 'chain', 'horn', 'whetstone', 'feather', 'skull', 'star', 'boot', 'bone', 'bottle', 'heart', 'lantern', 'wand', 'mask', 'egg', 'dice'];
+const ITEM_KEYS = ['sword', 'dagger', 'axe', 'hammer', 'anvil', 'shield', 'buckler', 'potion', 'flask', 'bomb', 'torch', 'iceshard', 'snowball', 'coin', 'gem', 'rock', 'slag', 'iceblock', 'apple', 'bread', 'book', 'scroll', 'orb', 'ring', 'key', 'chain', 'horn', 'whetstone', 'feather', 'skull', 'star', 'boot', 'bone', 'bottle', 'heart', 'lantern', 'wand', 'mask', 'egg', 'dice',
+  'chip', 'card', 'horseshoe', 'clover', 'slot', 'potato', 'pill', 'cookie'];
 const ENEMY_KEYS = ['rat', 'slime', 'bat', 'gremlin', 'mimic', 'spider', 'goblin', 'hoard', 'imp', 'clockwork', 'golem', 'furnace', 'magnet', 'ironjaw', 'wraith', 'yeti', 'frostmage', 'icemimic', 'prizemaster', 'mushroom', 'knight', 'wisp', 'crab', 'drone', 'tinker', 'cultist', 'raccoon', 'goat', 'magpie'];
 const TILE_TYPES = ['empty', 'fight', 'elite', 'treasure', 'gem', 'ink', 'brush', 'event', 'shop', 'rest', 'forge', 'boss', 'start'];
 const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'];
@@ -310,8 +311,19 @@ function uniqueRatio(map) {
   drawCheck('intent none', c => R.intent(c, 0, 0, {}, 0));
   drawCheck('intent null', c => R.intent(c, 0, 0, null));
   const pfp = new Map();
-  for (const id of ['knight', 'alchemist', 'rogue', 'nobody']) pfp.set(id, fingerprint(drawCheck('portrait ' + id, c => R.portrait(c, id, 40, 40, 64, 1))));
+  for (const id of ['knight', 'alchemist', 'rogue', 'gambler', 'nobody']) pfp.set(id, fingerprint(drawCheck('portrait ' + id, c => R.portrait(c, id, 40, 40, 64, 1))));
   h.ok(pfp.get('knight') !== pfp.get('alchemist') && pfp.get('alchemist') !== pfp.get('rogue') && pfp.get('knight') !== pfp.get('rogue'), 'portraits differ per character');
+  h.ok(['knight', 'alchemist', 'rogue', 'nobody'].every(id => pfp.get(id) !== pfp.get('gambler')), 'Lucky Lou has a face of his own');
+  balanced('portrait gambler', c => R.portrait(c, 'gambler', 40, 40, 64, 1));
+  // round 3: the Luck meter on the cabinet frame, every state
+  h.eq(typeof R.luckMeter, 'function', 'RENDER.luckMeter exists');
+  const lfp = new Set();
+  for (const st of [{ luck: 0, on: true }, { luck: 4, on: true }, { luck: 10, on: true }, { luck: 5, pop: 1 }, { luck: 7, cash: 0.6 }, { luck: 99, max: 10 }, {}]) {
+    lfp.add(fingerprint(drawCheck('luckMeter ' + JSON.stringify(st), c => R.luckMeter(c, 15, 420, 790, Object.assign({ t: 1 }, st)))));
+    balanced('luckMeter ' + JSON.stringify(st), c => R.luckMeter(c, 15, 420, 790, st));
+  }
+  h.ok(lfp.size >= 5, 'the meter looks different as it fills, pops and pays (' + lfp.size + ')');
+  drawCheck('luckMeter null', c => R.luckMeter(c, 15, 420, 790, null));
   for (const r of ['c', 'u', 'r', 'l', 'boss', 'event', 'zz']) drawCheck('relicIcon ' + r, c => R.relicIcon(c, { icon: 'X', rarity: r }, 0, 0, 32));
   drawCheck('relicIcon null', c => R.relicIcon(c, null, 0, 0, 32));
   drawCheck('title', c => R.title(c, 540, 960, 1));
@@ -673,6 +685,15 @@ if (HAS_DATA) {
   R.vsCard(a.ctx, 540, 960, { t: 1.2, dur: 3, boss: true, title: 'ACT 2 BOSS', name: 'The Smelter', def: D.ENEMIES.smelter, charId: 'knight', now: 1 });
   R.vsCard(b.ctx, 540, 960, { t: 1.2, dur: 3, boss: false, title: 'ELITE', name: 'Ironjaw', def: D.ENEMIES.ironjaw, charId: 'knight', now: 1 });
   h.ok(fingerprint(a.stat) !== fingerprint(b.stat), 'a boss card and an elite card look different');
+  // round 3: the crawler answers back on the card (DATA.CHARACTERS[id].vsLine)
+  for (const t of [0.3, 0.7, 1.4, 3.2]) drawCheck('vsCard gambler t' + t, c => R.vsCard(c, 540, 960, { t, dur: 3.3, boss: true, title: 'ACT 1 BOSS', name: 'The Hoard', def: D.ENEMIES.hoard, charId: 'gambler', charName: 'LUCKY LOU', now: t }));
+  const g1 = seqCtx(), g2 = seqCtx();
+  R.vsCard(g1.ctx, 540, 960, { t: 1.4, dur: 3, title: 'ELITE', name: 'Ironjaw', def: D.ENEMIES.ironjaw, charId: 'gambler', charName: 'LUCKY LOU', now: 1 });
+  const keepLine = D.CHARACTERS.gambler.vsLine;
+  D.CHARACTERS.gambler.vsLine = '';
+  R.vsCard(g2.ctx, 540, 960, { t: 1.4, dur: 3, title: 'ELITE', name: 'Ironjaw', def: D.ENEMIES.ironjaw, charId: 'gambler', charName: 'LUCKY LOU', now: 1 });
+  D.CHARACTERS.gambler.vsLine = keepLine;
+  h.ok(fingerprint(g1.stat) !== fingerprint(g2.stat) && D.CHARACTERS.gambler.vsLine.length > 0, 'Lucky Lou has his own line on the versus card');
   // Cabinet signs and the signature looks inside the machine.
   for (const [id, col] of Object.entries(R.SIG_COL)) {
     for (const k of [0.2, 1]) drawCheck(`bossSign ${id} k${k}`, c => R.bossSign(c, 270, 398, id.toUpperCase() + ' NEXT TURN', col, 1.3, k));
@@ -810,5 +831,188 @@ if (HAS_DATA) {
   h.eq(fx.zones().length, 0, 'zones are removed by id');
   fx.clear();
 }
+
+// ---- Polish and QA: the versus card keeps the crawler's words in its own panel
+h.test('vs card: a long crawler name and its comeback stay left of the seam', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER;
+  const texts = [];
+  const st0 = { font: '10px sans-serif', textAlign: 'left', tx: 0, stack: [] };
+  const size = () => { const m = /(\d+(?:\.\d+)?)px/.exec(st0.font); return m ? +m[1] : 10; };
+  const ctx = new Proxy(st0, {
+    get(o, p) {
+      if (p === 'measureText') return (s) => ({ width: String(s).length * size() * 0.62 });
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (p === 'translate') return (x) => { o.tx += x; };
+      if (p === 'save') return () => { o.stack.push(o.tx); };
+      if (p === 'restore') return () => { if (o.stack.length) o.tx = o.stack.pop(); };
+      if (p === 'fillText') return (s, x, y) => { texts.push({ s: String(s), x: x + o.tx, y, w: String(s).length * size() * 0.62, align: o.textAlign }); };
+      if (p in o) return o[p];
+      if (typeof p !== 'string' || p === 'then') return undefined;
+      return () => {};
+    },
+    set(o, p, v) { o[p] = v; return true; },
+  });
+  const def = api.DATA.ENEMIES.prizemaster || Object.values(api.DATA.ENEMIES)[0];
+  // the seam runs from (340, 250) to (200, 700)
+  const seam = (y) => 340 + (200 - 340) * (y - 250) / 450;
+  const cases = Object.values(api.DATA.CHARACTERS).map((c) => [String(c.name).toUpperCase(), c.vsLine || 'Hi.', c.id]);
+  cases.push(['SIR GRABSWORTH THE UNREASONABLY LONG', 'Have at thee, prize! And another thing, too!', 'knight']);
+  for (const [cn, vl, id] of cases) {
+    texts.length = 0;
+    R.vsCard(ctx, 540, 960, { t: 2.2, dur: 3.3, boss: true, title: 'FINAL BOSS', name: 'THE PRIZE MASTER', taunt: 'x', def, charId: id, charName: cn, charLine: vl, now: 2.2 });
+    const name = texts.find((x) => x.s === cn);
+    const line = texts.find((x) => x.s === vl);
+    h.ok(name && name.x + name.w / 2 <= seam(name.y) - 6 && name.x - name.w / 2 >= 0, `${cn}: the name sits between the edge and the seam (${name && Math.round(name.x - name.w / 2)}..${name && Math.round(name.x + name.w / 2)})`);
+    h.ok(line && line.x >= 0 && line.x + line.w <= seam(596), `${cn}: the comeback ends before the seam (${line && Math.round(line.x + line.w)} <= ${Math.round(seam(596))})`);
+  }
+});
+
+// ---- Polish and QA: enemy status chips stop short of the next enemy
+h.test('status pips: maxW cuts the row, the rest is one +N chip, centred on x', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER;
+  const rects = [], texts = [];
+  let tx = 0, ty = 0;
+  const stack = [];
+  const ctx = new Proxy({}, {
+    get(o, p) {
+      if (p === 'measureText') return (s) => ({ width: String(s).length * 7 });
+      if (p === 'translate') return (x, y) => { tx += x; ty += y; };
+      if (p === 'save') return () => stack.push([tx, ty]);
+      if (p === 'restore') return () => { const s = stack.pop(); if (s) { tx = s[0]; ty = s[1]; } };
+      if (p === 'arcTo' || p === 'moveTo' || p === 'lineTo') return (x, y) => { rects.push([x + tx, y + ty]); };
+      if (p === 'fillText') return (s) => texts.push(String(s));
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (typeof p !== 'string' || p === 'then' || p in o) return o[p];
+      return () => {};
+    },
+    set(o, p, v) { o[p] = v; return true; },
+  });
+  const status = { poison: 22, burn: 13, chill: 2, vuln: 3, weak: 2, str: 5, thorns: 3, bleed: 4 };
+  R.statusPips(ctx, 270, 330, status, 14, null, { maxW: 108, center: true, rows: 1 });
+  const xs = rects.map((r) => r[0]), ys = rects.map((r) => r[1]);
+  h.ok(Math.min(...xs) >= 270 - 54 - 1 && Math.max(...xs) <= 270 + 54 + 1, 'the row stays inside maxW around x (' + Math.round(Math.min(...xs)) + '..' + Math.round(Math.max(...xs)) + ')');
+  h.ok(Math.max(...ys) - Math.min(...ys) <= 15, 'one row');
+  h.ok(texts.includes('+6'), 'the rest is a +N chip (' + texts.join(' ') + ')');
+  // without options: the old left-aligned run of every chip
+  rects.length = 0; texts.length = 0;
+  R.statusPips(ctx, 100, 330, status, 14);
+  h.ok(Math.min(...rects.map((r) => r[0])) >= 99 && !texts.some((s) => s[0] === '+'), 'no options: every chip, left-aligned as before');
+});
+
+// ---- Polish and QA: item sprites (the art is drawn once, then blitted)
+h.test('item sprites: built once per def / look / scale bucket, blitted after, live when headless', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  // a recording context with a real-looking transform
+  const mk = (k) => {
+    const calls = [];
+    const t = { k, calls, canvas: { width: 100, height: 100 } };
+    return new Proxy(t, { get(o, p) {
+      if (p === 'calls') return calls;
+      if (p === 'canvas') return o.canvas;
+      if (p === 'getTransform') return () => ({ a: o.k, b: 0, c: 0, d: o.k, e: 0, f: 0 });
+      if (p === 'scale') return (x) => { o.k *= x; calls.push('scale'); };
+      if (p === 'save') return () => { (o.st || (o.st = [])).push(o.k); calls.push('save'); };
+      if (p === 'restore') return () => { if (o.st && o.st.length) o.k = o.st.pop(); calls.push('restore'); };
+      if (p === 'measureText') return () => ({ width: 10 });
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (typeof p !== 'string' || p === 'then') return o[p];
+      return (...a) => { calls.push(p); };
+    }, set(o, p, v) { o[p] = v; return true; } });
+  };
+  const made = [];
+  // item sprites (not glow sprites, which are one gradient fillRect)
+  const built = { get length() { return made.filter((g) => g.calls.includes('fill') || g.calls.includes('stroke')).length; }, get 0() { return made.find((g) => g.calls.includes('fill')); } };
+  const doc = api._document, ce0 = doc.createElement;
+  doc.createElement = (tag) => { const c = { width: 0, height: 0, getContext: () => { const g = mk(1); made.push(g); return g; } }; return c; };
+  const def = D.ITEMS.rusty_sword || Object.values(D.ITEMS)[0];
+  const main = mk(1.5);
+  R.item(main, def, 100, 100, 0.3, 1, {});
+  h.eq(built.length, 1, 'the first draw renders the sprite once');
+  h.ok(built[0].calls.filter((c) => c === 'fill' || c === 'stroke').length > 2, 'on the offscreen canvas, with the real art');
+  const n0 = main.calls.length;
+  R.item(main, def, 120, 140, 1.2, 1, {});
+  const again = main.calls.slice(n0);
+  h.eq(built.length, 1, 'the second draw builds nothing');
+  h.eq(again.filter((c) => c === 'drawImage').length, 1, 'and is one blit');
+  h.ok(!again.includes('fill') && !again.includes('clip'), 'with no path work on the main canvas');
+  R.item(main, def, 120, 140, 0, 1, { plus: true });
+  R.item(main, def, 120, 140, 0, 1, { frozen: true });
+  R.item(main, def, 120, 140, 0, 1.9, {});
+  h.eq(built.length, 4, 'plus, frozen and a bigger scale each get their own sprite');
+  R.item(main, def, 120, 140, 0, 0.95, {});
+  h.eq(built.length, 4, 'a scale in the same quarter bucket reuses one');
+  R.item(main, def, 120, 140, 0, 1, { glow: '#ffc94d', alpha: 0.5 });
+  h.eq(built.length, 4, 'glow and alpha are live, the art is still the sprite');
+  // a recoloured def (same object) rebuilds
+  const d2 = Object.assign({}, def);
+  R.item(main, d2, 0, 0, 0, 1, {});
+  h.eq(built.length, 5, 'another def object has its own sprite');
+  d2.color = '#123456';
+  R.item(main, d2, 0, 0, 0, 1, {});
+  h.eq(built.length, 6, 'a changed colour rebuilds it');
+  doc.createElement = ce0;
+  // the loader's stub context has no transform: every draw is the live art
+  const st = api._ctx;
+  api._resetCounts();
+  R.item(st, def, 50, 50, 0, 1, {});
+  R.item(st, def, 50, 50, 0, 1, {});
+  h.ok((api._counts.fill || 0) + (api._counts.stroke || 0) > 4 && !(api._counts.drawImage > 0), 'headless draws stay live (the art suites keep testing the art)');
+});
+
+// ---------------------------------------------------------------- ARCADE (DESIGN.md "Arcade")
+h.test('arcade: cabinet icons on the map, the three machines, monsters, scenes and dice', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, DATA = api.DATA;
+  const fps = new Map();
+  for (const type of ['plinko', 'wheel', 'slots']) {
+    for (const [lbl, tile] of [['lit', { type, revealed: true, q: 1, r: 2 }], ['landmark', { type, revealed: false, known: true, q: 1, r: 2 }], ['done', { type, revealed: true, done: true }]]) {
+      const s = drawCheck(`hex ${type} ${lbl}`, c => R.hex(c, 60, 60, 30, tile, { t: 0.4, orient: 'v', fill: '#445544' }));
+      if (lbl === 'lit') fps.set(type, fingerprint(s));
+    }
+    drawCheck('arcIcon ' + type, c => R.arcIcon(c, type, 20, 1.2));
+  }
+  h.eq(uniqueRatio(fps).ratio, 1, 'the three cabinets draw distinctly');
+  const pegs = [];
+  for (let i = 0; i < 9; i++) for (let j = 0; j < (i % 2 ? 8 : 9); j++) pegs.push({ x: 90 + j * 46, y: 290 + i * 44, row: i, wall: 0 });
+  const slots = [{ k: 'gold', label: '8', col: '#ffc94d' }, { k: 'tix', label: '3 TIX', col: '#ff9ec7' }, { k: 'cap', tier: 'u', label: 'CAPSULE', col: '#ff2e88' }, { k: 'ink', label: '2 BULBS', col: '#8dfff5' }, { k: 'jackpot', label: 'JACKPOT', col: '#fff' }];
+  const base = { t: 1.3, col: '#2ee6d6', title: 'PLINKO', party: 0, flash: 0 };
+  for (const party of [0, 2]) drawCheck('arcCabinet party ' + party, c => R.arcCabinet(c, 20, 96, 500, 740, Object.assign({}, base, { party, flash: party ? 0.5 : 0 })));
+  const pl = Object.assign({}, base, { pegs, slots, lit: { 3: 1, 10: 0.4 }, x0: 50, x1: 490, top: 214, divTop: 682, floor: 760, ballR: 12, pegR: 6, edges: null });
+  const a = drawCheck('arcPlinko aiming', c => R.arcPlinko(c, Object.assign({}, pl, { aim: 250, ball: null, win: -1 })));
+  const b = drawCheck('arcPlinko dropping', c => R.arcPlinko(c, Object.assign({}, pl, { aim: -1, ball: { x: 250, y: 400 }, win: -1 })));
+  drawCheck('arcPlinko won', c => R.arcPlinko(c, Object.assign({}, pl, { aim: -1, ball: null, win: 4, edges: [50, 150, 250, 284, 384, 490] })));
+  h.ok(fingerprint(a) !== fingerprint(b), 'aiming and dropping look different');
+  const wedges = [{ k: 'gold', label: '15', col: '#ffc94d' }, { k: 'cap', tier: 'r', label: 'CAPSULE', col: '#ff2e88' }, { k: 'curse', label: 'CURSE', col: '#4a3a5a' }, { k: 'double', label: 'x2 SPIN', col: '#2ee6d6' }, { k: 'heal', label: '+10 HP', col: '#a6ff5e' }, { k: 'jackpot', label: 'JACKPOT', col: '#fff' }];
+  const w0 = drawCheck('arcWheel still', c => R.arcWheel(c, Object.assign({}, base, { cx: 270, cy: 476, r: 196, rot: 0, flap: 0, wedges, win: -1, mult: 1, spinning: false })));
+  const w1 = drawCheck('arcWheel spinning x2', c => R.arcWheel(c, Object.assign({}, base, { cx: 270, cy: 476, r: 196, rot: 2.1, flap: 0.8, wedges, win: 5, mult: 2, spinning: true, party: 2 })));
+  h.ok(fingerprint(w0) !== fingerprint(w1), 'the wheel turns');
+  const strips = [0, 1, 2].map(() => ['cherry', 'A', 'bell', 'bulb', 'cherry', 'B', 'seven', 'bell', 'cherry', 'C', 'bulb', 'A']);
+  const items = Object.keys(DATA.ITEMS).slice(0, 3);
+  for (const [lbl, extra] of [['idle', { lever: 0, reels: [{ pos: 0 }, { pos: 3 }, { pos: 6 }], free: 1 }], ['spin', { lever: 1, reels: [{ pos: 2.4, blur: 1 }, { pos: 7.7, blur: 1, flash: 0.5 }, { pos: 11.2, blur: 0.8 }], tease: 1 }],
+    ['won', { lever: 0.1, reels: [{ pos: 6 }, { pos: 6 }, { pos: 6 }], winTier: 3, party: 2 }], ['bare', { strips: null, items: null, reels: null }]]) {
+    drawCheck('arcSlots ' + lbl, c => R.arcSlots(c, Object.assign({ strips, items, cost: 3, tix: 5 }, base, extra)));
+  }
+  const syms = new Map();
+  for (const s of ['cherry', 'bell', 'bulb', 'seven', 'A', 'B', 'C', 'nope']) syms.set(s, fingerprint(drawCheck('arcSym ' + s, c => R.arcSym(c, s, 50, 50, 58, items, 0.3))));
+  h.ok(uniqueRatio(syms).ratio >= 0.85, 'slot symbols draw distinctly');
+  const rat = DATA.ENEMIES.rat || Object.values(DATA.ENEMIES)[0];
+  const r0 = drawCheck('arcRoamer asleep', c => R.arcRoamer(c, 100, 100, 40, { def: rat, awake: false, t: 1, hop: 0, seed: 3, woke: 0 }));
+  const r1 = drawCheck('arcRoamer awake with its arrow', c => R.arcRoamer(c, 100, 100, 40, { def: rat, awake: true, t: 1, hop: 0.5, seed: 3, woke: 1.2, arrow: { x: 160, y: 100, a: 0 } }));
+  drawCheck('arcRoamer no def', c => R.arcRoamer(c, 100, 100, 40, null));
+  h.ok(fingerprint(r0) !== fingerprint(r1), 'asleep and awake look different');
+  const scenes = new Map();
+  for (const id of Object.keys(DATA.EVENTS)) {
+    const def = DATA.EVENTS[id], enemy = DATA.ENEMIES[def.art] || null;
+    const item = enemy ? null : (Object.values(DATA.ITEMS).find(x => x.art === def.art) || null);
+    scenes.set(id, fingerprint(drawCheck('arcScene ' + id, c => R.arcScene(c, 508, 190, { id, def, t: 0.7, act: 1, enemy, item, roll: -1, face: 3 }))));
+  }
+  h.ok(uniqueRatio(scenes).ratio > 0.8, 'the event vignettes differ');
+  for (const roll of [0, 0.4, 1]) for (const act of [1, 2, 3]) drawCheck(`arcScene dice ${roll} act ${act}`, c => R.arcScene(c, 508, 190, { id: 'ring_toss', t: 1, act, roll, face: 5 }));
+  drawCheck('arcScene empty', c => R.arcScene(c, 508, 190, null));
+  for (let f = 1; f <= 6; f++) drawCheck('arcDice ' + f, c => R.arcDice(c, 30, 30, 30, 0.3, f));
+});
 
 h.done();
