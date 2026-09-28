@@ -622,6 +622,7 @@ const GAME = (() => {
           stoMetaFix(S.meta, o);   // STORY: Grabby Gary's record, stories told
           hisMetaFix(S.meta, o);   // HISTORY: the run records and the Hall of Fame
           loreMetaFix(S.meta, o);   // LORE: the Codex's pages and kills, the weekly medals
+          rushMetaFix(S.meta, o); ghoMetaFix(S.meta, o);   // RUSH (round 10): the Boss Rush's bests; the ghosts of the day and the week
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -740,6 +741,7 @@ const GAME = (() => {
       else if (sc === 'compactor' && S.sd && S.sd.compactor) cmpShow(S.sd.compactor);   // SETS: the Compactor
       else if (sc === 'sea' && S.sd && S.sd.sea) seaShow(S.sd.sea);   // SEASON: a trick-or-treat door
       else if (sc === 'rival' && S.sd && S.sd.rival) stoRivalShow(S.sd.rival);   // STORY: Grabby Gary
+      else if (sc === 'rush' && rushOf(run)) rushShow(S.sd && S.sd.rush);   // RUSH (round 10): NEXT CHALLENGER, the draft, the result
       else if (sc === 'win' && run.winDone && !run.endless) showWin();   // ENDLESS: the offer is still open
       else toMap();
       return true;
@@ -768,6 +770,7 @@ const GAME = (() => {
     metaNewRun(run);   // Tilt level, daily flag, Tilt junk and bulbs (META block)
     endlessNewRun(run);   // the run's mutators (ENDLESS block)
     wkNewRun(run);   // LORE: the weekly challenge's own setup (its mutators, claw, Tilt 0)
+    rushNewRun(run); ghoNewRun(run);   // RUSH (round 10): a Boss Rush's lineup; a daily or weekly run's ghost race
     seaNewRun(run);   // the season the run starts in, kept for good (SEASON block)
     stoNewRun(run);   // stories, callbacks, Gary on or off (STORY)
     hisNewRun(run);   // the run's own id for its history record (HISTORY block)
@@ -781,7 +784,7 @@ const GAME = (() => {
     newMap(run);
     S.meta.stats.runs++;
     saveMeta();
-    if (!boonStart(run)) toMap();   // the machine offers a deal first (SETS block; headless: straight to the map)
+    if (!rushGo(run) && !boonStart(run)) toMap();   // the machine offers a deal first (SETS block; headless: straight to the map) (RUSH: a rush goes to its first challenger)
     return run;
   }
   function newMap(run) {
@@ -912,6 +915,7 @@ const GAME = (() => {
   }
   function setScreen(name) {
     transition(S.screen, name);
+    mixScreen(S.screen, name);   // MIX (round 10): the content rises in, the lists stagger, the HUD slides back, the run-end numbers count
     S.screen = name;
     labelZones(name);   // float labels keep out of the marquee and the HUD (CLAW TYPES block)
     S.ui.buttons = [];
@@ -942,7 +946,7 @@ const GAME = (() => {
     else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward' || name === 'capsule' || name === 'counter' || name === 'arcade') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
-    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault', 'history', 'codex', 'weekly'].indexOf(name) < 0) save();   // (LORE: the Codex and the weekly screen never save a run)
+    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault', 'history', 'codex', 'weekly', 'rushmenu'].indexOf(name) < 0) save();   // (LORE: the Codex and the weekly screen never save a run) (RUSH: nor the rush menu)
   }
 
   // ---- title
@@ -974,6 +978,7 @@ const GAME = (() => {
     m.appendChild(row2);
     metaTitle(m);   // the stats marquee and the attract mode (META block)
     loreTitle(m, row);   // LORE: the Codex button and the weekly challenge card (before History, which stays last)
+    rushTitleBtn(m);   // RUSH (round 10): the Boss Rush card beside the Prize Vault (before History, which stays last)
     hisTitleBtn(row);   // HISTORY: registered last, shown in the first row
     q9TitleFit(-1);   // TITLE (round 9): lift the logo clear of the menu, scroll the menu if it cannot fit
   }
@@ -1256,7 +1261,7 @@ const GAME = (() => {
     p = h('p'); p.innerHTML = `The Clawspire is dark. <b>Tap a dark hex next to the light to light it for 1 ${TERM('ink')}</b>, or tap a far one to light the whole way there. Walking lights the ring around you (two rings from a hill), a taken tower lights everything in view, and ${TERM('brushPlural')} light for free: a flare shoots a line, a lantern rings a lit hex, a kite scouts a patch. Tap a lit hex to walk there; the road leads to the boss. Fights give loot, elites give ${TERM('inkPlural')}, the boss is at the top. Three acts, then the Prize Master.`; b.appendChild(p);
     b.appendChild(h('h3', null, 'Keys'));
     p = h('p'); p.innerHTML = 'Arrows steer, Space or Enter drops, E ends the turn, Esc closes popups.'; b.appendChild(p);
-    b.appendChild(btn('Back', () => { if (back === 'map') toMap(); else showTitle(); }, 'pri'));
+    b.appendChild(btn('Back', () => { if (back === 'map') toMap(); else showTitle(); }, 'pri mixStick'));   // MIX: the way out stays on screen
   }
   // ================================================================ META
   /* Meta progression (DESIGN.md "Meta"): Tilt levels, the Prizedex, the
@@ -1355,8 +1360,8 @@ const GAME = (() => {
     if (!st || !run) return;
     let el = S.tiltEl;
     if (!el || el.parentNode !== st) { el = S.tiltEl = h('span', 'tiltBadge'); st.appendChild(el); }
-    const lv = run.tilt | 0, txt = run.daily ? 'DAILY' : run.weekly ? 'WEEKLY' : lv > 0 ? 'T' + lv : '';   // (LORE: the weekly challenge's own badge)
-    if (el.textContent !== txt) { el.textContent = txt; el.className = 'tiltBadge' + (txt ? ' on' : '') + (run.daily || run.weekly ? ' daily' : ''); }
+    const lv = run.tilt | 0, txt = run.rush ? 'RUSH' : run.daily ? 'DAILY' : run.weekly ? 'WEEKLY' : lv > 0 ? 'T' + lv : '';   // (LORE: the weekly challenge's own badge) (RUSH: the Boss Rush's)
+    if (el.textContent !== txt) { el.textContent = txt; el.className = 'tiltBadge' + (txt ? ' on' : '') + (run.daily || run.weekly ? ' daily' : '') + (run.rush ? ' daily rush' : ''); }
   }
 
   // ---- Prizedex discoveries
@@ -1449,6 +1454,7 @@ const GAME = (() => {
       info.daily = { key: run.daily, score, best: d.best, newBest: best };
     }
     wkRunEnd(run, !!won, info);   // LORE: the weekly challenge's score, best and medal
+    ghoRunEnd(run, !!won, info);   // RUSH (round 10): the ghost race's result, and maybe a new ghost
     run.metaEnd = info;
     if (won) achRun('win');
     achRun('end');
@@ -1642,7 +1648,7 @@ const GAME = (() => {
     // the NEW! marks show once
     for (const id of ids) delete S.meta.dexNew[tab + ':' + id];
     saveMeta();
-    b.appendChild(btn('Back', () => showTitle(), 'pri'));
+    b.appendChild(btn('Back', () => showTitle(), 'pri mixStick'));   // MIX: the way out stays on screen
     loreDexBtn(b);   // LORE: the Codex (registered last, shown under the title)
   }
 
@@ -1679,7 +1685,7 @@ const GAME = (() => {
     b.appendChild(grid);
     m.achNew = {};
     saveMeta();
-    b.appendChild(btn('Back', () => showTitle(), 'pri'));
+    b.appendChild(btn('Back', () => showTitle(), 'pri mixStick'));   // MIX: the way out stays on screen
   }
 
   // ---- title: the stats marquee, the daily run and the attract mode
@@ -1876,6 +1882,7 @@ const GAME = (() => {
       box.appendChild(d);
     }
     wkEndPanel(box, info);   // LORE: the weekly challenge's score and medal
+    ghoEndPanel(box, info);   // RUSH (round 10): you against your ghost
     if (info.stickers && info.stickers.length) {
       box.appendChild(h('h3', null, 'Stickers this run'));
       const row = h('div', 'stRow');
@@ -4008,6 +4015,7 @@ const GAME = (() => {
     F = X.COMBAT.newFight(run, enemyIds, U.rng(seed));
     seaDress(F, seed, opts);   // party hats in season (SEASON block)
     stoFightStart(F, tier, opts, seed);   // a friend from a story, a sabotaged boss, Gary's gear (STORY)
+    rushFightStart(F, opts);   // RUSH (round 10): a rush boss's hit points, and nobody steps out of it
     FS = {
       start: { enemyIds, tier, seed, then: opts.then || null }, tier, seed, rng: U.rng(seed ^ 0x5bd1e995),
       world: null, cabinet: null, rig: null, items: [], spawnQ: [], spawnT: 0,
@@ -4122,6 +4130,7 @@ const GAME = (() => {
     const mat = !inst.frozen && X.PHYS.materialOf ? X.PHYS.materialOf(def) : null;
     if (mat && X.PHYS.applyMaterial) X.PHYS.applyMaterial(b, mat);
     matInit(b, mutBody(b, mat));   // Low Gravity, Slippery Floor, Everything Is Glass (ENDLESS block)
+    rosBody(b);   // Moon Bounce (ROS block)
     b.vx = (r() - 0.5) * 60; b.av = (r() - 0.5) * 2;
     FS.world.add(b);
     FS.items.push(b);
@@ -5085,6 +5094,7 @@ const GAME = (() => {
       case 'proc': procFx(ev, base, enemy); break;
       case 'luck': luckFx(ev); break;   // Lucky Lou's cash out (CONTENT block)
       case 'turret': cr8TurretEv(ev); break;   // Mama Mech's turret (CR8 block)
+      case 'ros': rosEvent(ev); break;   // Ms. Bubbles' soap, pops and Bubble Combos (ROS block)
       case 'combo': queueCombo(ev); break;
       case 'over': break;
       default: break;
@@ -5901,7 +5911,7 @@ const GAME = (() => {
     if (!e || !bigOne(e)) return false;
     const boss = tierOf(e) === 'boss', run = S.run, A = tbl('AFFIXES');
     const seen = (vsSeen()[e.id] | 0) > 0;
-    const title = secVsTitle(e) || ((kind === 'final' || e.id === 'prizemaster') ? 'FINAL BOSS' : boss ? endlessBossTitle(run) : (FS.then && FS.then.tower) ? 'TOWER KEEPER' : 'ELITE');   // (SECRET BOSS: The Machine)
+    const title = rushVsTitle(e) || secVsTitle(e) || ((kind === 'final' || e.id === 'prizemaster') ? 'FINAL BOSS' : boss ? endlessBossTitle(run) : (FS.then && FS.then.tower) ? 'TOWER KEEPER' : 'ELITE');   // (SECRET BOSS: The Machine)
     FS.vs = {
       t: 0, dur: boss ? VS_DUR.boss : VS_DUR.elite, rate: (seen ? VS_FAST : 1) * (fx().reduced ? 1.3 : 1), idx, id: e.id, boss, seen, kind: kind || (boss ? 'boss' : 'elite'),
       title, name: e.def.name || e.id, taunt: e.def.taunt || '', color: e.def.color || '#ff2e88', def: e.def,
@@ -6517,6 +6527,7 @@ const GAME = (() => {
     const rig = FS.rig;
     const cj = FS.claw;
     petRig(ev);   // the pet watches the claw; the octopus holds on (PETS block)
+    rosRig(ev);   // bubbles ride the claw and pop over the chute, Sticky Fingers (ROS block)
     if (clawTypeEvent(ev)) return;   // per claw type sounds and sparks (CLAW TYPES block)
     switch (ev) {
       case 'drop': cj.bendV += (FS.rng() - 0.5) * 160; cj.sq = -0.5; setMood('focus', 1.2); break;
@@ -6686,6 +6697,7 @@ const GAME = (() => {
     else if (free) freePrize(chuteMid, CAB.y + CAB.h - 105);
     if (S.coachStep === 2) coachNext();
     petDeliver(inst);   // hearts, XP, the firefly's spotlight (PETS block)
+    rosDeliver(inst);   // a popped bubble's prize landed (ROS block)
   }
   function playInst(inst) {
     if (!F || F.phase !== 'player') return;
@@ -6719,6 +6731,7 @@ const GAME = (() => {
   function grabFinished() {
     FS.grabInFlight = false;
     FS.watch = false;
+    rosGrabDone();   // the grab's popped bubbles pay out, a Bubble Combo (ROS block)
     petGrab(FS.delivered);   // the pet cheers or sulks; the goose lays on a big one (PETS block)
     luckAfterGrab();
     nearMissAfterGrab();
@@ -7012,6 +7025,7 @@ const GAME = (() => {
     if (FS.grease > 0) { FS.grease--; if (!FS.grease) clearGrease(); }
     if (FS.fog > 0) FS.fog--;
     bestTurnEnd();   // the tickle, the goo and the magnetic lid wear off (BESTIARY)
+    rosTurnEnd();   // floating bubbles burst in the bin (ROS block)
     FS.actors = F.enemies.map((e, i) => (e.alive ? i : -1)).filter((i) => i >= 0);
     FS.actor = FS.actors.length ? FS.actors[0] : -1;
     hisTurnEnd();   // HISTORY: the recap's snapshot of the telegraphs and your Block
@@ -7063,6 +7077,7 @@ const GAME = (() => {
     setFightEnd(result);   // the boon's warm-up grabs run out, Chew Toy xp (SETS block)
     seaFightEnd(result, tier);   // the season's currency for a win (SEASON block)
     stoFightEnd(result);   // Gary's showdown on his record (STORY)
+    ghoFightEnd(result);   // RUSH (round 10): a won fight is a checkpoint in the ghost race
     hint('');
     if (result === 'lose') {
       run.killer = FS.killer || 'the Clawspire';
@@ -7071,6 +7086,7 @@ const GAME = (() => {
       showGameOver();
       return;
     }
+    if (rushFightWin(tier, then, outro)) return;   // RUSH (round 10): a rush boss down: the split, the outro, then the draft
     if (secFightEnd(tier, outro)) return;   // The Machine: the power down, then the true ending (SECRET)
     snd('win');
     // a boss or elite finale shows its own title card instead (boss arena)
@@ -7122,7 +7138,7 @@ const GAME = (() => {
       while (FS.spawnQ.length && FS.spawnT <= 0) { spawnBody(FS.spawnQ.shift()); FS.spawnT += SPAWN_GAP; }
     }
     // Keyboard steering.
-    if (FS.keyDir && canSteer()) rig.setTarget(clampBinX(rig.targetX + FS.keyDir * 260 * dt));
+    if (FS.keyDir && canSteer()) rig.setTarget(clampBinX(rig.targetX + FS.keyDir * rosMirK() * 260 * dt));   // (ROS: the Mirror Machine)
     // A committed drop fires once the carriage has arrived.
     if (FS.pendingDrop && rigArrived()) { FS.pendingDrop = false; if (!rig.drop()) { FS.grabInFlight = false; afterAction(); if (!FS) return; } }
     // Hit-stop: a big hit freezes the physics for a frame or two, but never
@@ -7130,9 +7146,10 @@ const GAME = (() => {
     FS.frameN++;
     if (FS.chuteFlash > 0) FS.chuteFlash = Math.max(0, FS.chuteFlash - dt);
     let stop = false;
+    mixHsTick(dt);   // MIX (round 10): the hit stop budget refills
     if (FS.hitStop > 0) {
       const carrying = rig && (rig.phase === 'lifting' || rig.phase === 'carrying');
-      if (carrying || fx().reduced) FS.hitStop = 0;
+      if (carrying || fx().reduced || !mixHsSpend(dt)) FS.hitStop = 0;   // MIX: a spent budget lets the physics run
       else { FS.hitStop -= dt; stop = true; }
     }
     // Physics.
@@ -7272,6 +7289,7 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- reward / treasure / act flow
   function showReward(rw) {
+    if (rushReward(rw)) return;   // RUSH (round 10): a rush fight's reward is the draft (or the result)
     S.sd = { reward: rw };
     S.pay = null;
     if (!rw.taken) {
@@ -8264,7 +8282,7 @@ const GAME = (() => {
     });
     caseEl.appendChild(shelf);
     b.appendChild(caseEl);
-    b.appendChild(btn('Back to the shop', () => { S.sd = null; showShop(shop); }, 'pri'));
+    b.appendChild(btn('Back to the shop', () => { S.sd = null; showShop(shop); }, 'ghost'));   // MIX: a way out is a ghost button
     rrCounterSlot(b, shop, caseEl);   // REROLL (round 9): the same lever for tickets (registered last)
     save();
   }
@@ -9551,7 +9569,7 @@ const GAME = (() => {
       list.appendChild(row);
     }
     b.appendChild(list);
-    const row = h('div', 'row center');
+    const row = h('div', 'row center mixStick');   // MIX: the way out stays on screen
     row.appendChild(btn('Reset tips', () => { feelTipsReset(); toast('Tips reset. They will pop up again.'); showTips(); }, 'sm'));
     row.appendChild(btn('Back', () => (S.tipsBack === 'help' ? showHelp('title') : showTitle()), 'pri'));
     b.appendChild(row);
@@ -10008,6 +10026,7 @@ const GAME = (() => {
     const list = petItems();
     if (!list.length && k !== 'eat') return null;
     const floor = (FS.cabinet && FS.cabinet.bounds.floorY != null ? FS.cabinet.bounds.floorY : CAB.h) - 60;
+    const rp = rosPetPick(P, k, list); if (rp !== undefined) return rp;   // ROS: the new pets
     if (k === 'nudge') {
       // the free item (nothing resting on it) lowest in the pile and farthest from the chute
       const cand = petTops(list).filter((b) => b.x < binWidth() - 120), low = cand.filter((b) => b.y > floor - 30);
@@ -10043,6 +10062,7 @@ const GAME = (() => {
   // Where the pet stands for its job (stage px), from the target now (it may have rolled).
   function petSpot(P) {
     const A = P.act, b = A.b, k = A.k;
+    const rs = rosPetSpot(P); if (rs) return rs;   // ROS: the new pets
     if (k === 'hold') { const r = FS.rig; return { x: CAB.x + (r ? r.x : 200), y: CAB.y + (r ? r.y : 40) - 6 }; }
     if (k === 'pull') { const r = FS.rig; return { x: CAB.x + U.clamp(r ? r.targetX : 200, 40, binWidth() - 40), y: petFloorY() }; }
     const bx = CAB.x + (b && petAlive(b) ? b.x : A.x), by = CAB.y + (b && petAlive(b) ? b.y : A.y), br = b ? (b.br || 14) : 14;
@@ -10083,6 +10103,7 @@ const GAME = (() => {
     if (k === 'eat') { P.act.dur = 0.8; P.act.fxAt = 0.3; }
     if (k === 'glow') P.act.dur = 0.7;
     if (k === 'peck') { P.act.dur = 1.05; P.act.fxAt = 0.3; }
+    rosPetStart(P, tg);   // ROS: the new pets' timings
     snd('petHop', { pitch: PET_PITCH[P.id] || 1 });
     if (P.act.legs.length === 0) petDoStart(P);
     return true;
@@ -10115,6 +10136,7 @@ const GAME = (() => {
       if (Math.abs(A.tx - A.sx) > 2) P.dir = A.tx >= A.sx ? 1 : -1;
     } else if (A.k === 'hold' || A.style === 'fly' || A.k === 'glow') { const s = petSpot(P); P.x += (s.x - P.x) * Math.min(1, dt * 12); P.y += (s.y - P.y) * Math.min(1, dt * 12); }
     if (A.k === 'pull' && A.b && petAlive(A.b)) P.dir = CAB.x + A.b.x >= P.x ? 1 : -1;
+    rosPetDo(P, A, dt);   // ROS: the penguin's slide, the robot vacuum's run
     if (!A.fx && A.t >= A.fxAt) { A.fx = true; petEffect(P); }
     if (A.k === 'hold') { if (!P.hold && A.t > 0.2) petBackStart(P); return; }
     if (A.t >= A.dur) petBackStart(P);
@@ -10246,7 +10268,7 @@ const GAME = (() => {
         petQuip(P, 'HONK!', 1);
         break;
       }
-      default: break;
+      default: rosPetEffect(P, A, ok, b, pow, label); break;   // ROS: the penguin, the mole rat, the robot vacuum
     }
     evoPetEffect(P, A, ok, pow);   // the pet's synergy with the build (EVOLVE block)
     if (def) P.log.push({ k: A.k, fx: true, turn: F.turn, uid: A.uid });
@@ -10642,7 +10664,7 @@ const GAME = (() => {
     ctx.fillStyle = '#e8f4ff'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText(`PET ALBUM ${met}/${ids.length}`, 270, 734);
     ids.forEach((id, i) => {
-      const x = 270 + (i - (ids.length - 1) / 2) * 54, y = 790;
+      const x = 270 + (i - (ids.length - 1) / 2) * Math.min(54, 470 / Math.max(1, ids.length - 1)), y = 790;   // (ROS: 11 pets fit the stage)
       if (al[id]) { PSV.t = t + i; PSV.lv = Math.max(1, al[id].lv | 0); PSV.mood = ''; PSV.pose = 'sit'; PSV.air = false; PSV.blink = 0; R.pet(ctx, id, x, y, 0.95, PSV); }
       else { ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(x, y - 16, 16, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillText('?', x, y - 15); }
     });
@@ -11893,7 +11915,7 @@ const GAME = (() => {
       if (!S.headless) { const gp = hudPoint($('shopGold'), 100, 80); for (let i = 0; i < 5; i++) domFly(h('div', 'dcoin'), 270 + (i - 2) * 14, 520, gp.x, gp.y, 480, i * 60); }
     } }), 'sm'));
     b.appendChild(row);
-    b.appendChild(btn('Leave', () => toMap(), 'pri'));
+    b.appendChild(btn('Leave', () => toMap(), 'ghost'));   // MIX: a way out is a ghost button everywhere (the forge, the arcade, character select)
     const pc = h('button', 'capslot');
     const pcFn = () => showCounter(shop);
     pc.onclick = pcFn;
@@ -14027,6 +14049,7 @@ const GAME = (() => {
   function showGameOver() {
     const run = S.run;
     if (!run) { showTitle(); return; }
+    if (rushOver()) return;   // RUSH (round 10): a rush that fell goes to its result
     S.meta.stats.bestAct = Math.max(S.meta.stats.bestAct, run.act);
     const unl = run.act >= 2 ? checkUnlocks('act2') : [];
     saveMeta();
@@ -14117,6 +14140,7 @@ const GAME = (() => {
     lootHud(force);   // the ticket counter
     metaHud(run);     // the Tilt badge (META block)
     endlessHud(run);  // the Loop stat (ENDLESS block)
+    rushHud(run);     // RUSH (round 10): the boss count and the clock
     const rk = run.relics.join(',') + mutKey(run);
     if (force || rk !== S.lastRelics) {
       S.lastRelics = rk;
@@ -14194,7 +14218,7 @@ const GAME = (() => {
       if (y >= ARENA.y0 && y < ARENA.y1) { tapEnemy(x, y); return; }
       if (inCabinet(x, y) && canSteer()) {
         FS.steering = true;
-        steer(stageToCab(x, y).x);
+        steer(rosMirX(stageToCab(x, y).x));   // (ROS: the Mirror Machine)
         if (S.coachStep === 0) coachNext();
         return;
       }
@@ -14202,14 +14226,14 @@ const GAME = (() => {
     }
     if (pid !== null && S.ptrId != null && pid !== S.ptrId) return;
     if (type === 'move') {
-      if (FS.steering && canSteer()) steer(stageToCab(x, y).x);
+      if (FS.steering && canSteer()) steer(rosMirX(stageToCab(x, y).x));
       return;
     }
     if (type === 'up' || type === 'cancel') {
       S.ptrId = null;
       if (FS.steering) {
         FS.steering = false;
-        if (type === 'up') { steer(stageToCab(x, y).x); dropClaw(); }
+        if (type === 'up') { steer(rosMirX(stageToCab(x, y).x)); dropClaw(); }
       }
     }
   }
@@ -14255,6 +14279,7 @@ const GAME = (() => {
     if (accKey(ev, down)) return;   // ACCESS: the Settings panel takes the keys (Escape closes it)
     if (hisKey(ev, down)) return;   // HISTORY: photo mode, the recap, the History screen's Escape
     if (loreKey(ev, down)) return;   // LORE: skip the act card, close the board, Escape out of the Codex and the weekly screen
+    if (rushKey(ev, down)) return;   // RUSH (round 10): skip the slam, FIGHT!, Escape out of the rush menu
     if (down && k === 'Escape') { popover(null); return; }
     if (S.screen === 'intro') { if (down && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'capsule') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); capsuleTap(); } return; }
@@ -14290,6 +14315,8 @@ const GAME = (() => {
     else if (S.screen === 'vault') vaultDraw(ctx, t);   // the Prize Vault: the wall, the preview, the capsule (VAULT block)
     else if (S.screen === 'history') hisDraw(ctx, t);   // HISTORY: the title's art behind the run cards
     else if (S.screen === 'codex' || S.screen === 'weekly') loreBgDraw(ctx, t);   // LORE: the title's art behind the Codex and the weekly screen
+    else if (S.screen === 'rushmenu') loreBgDraw(ctx, t);   // RUSH (round 10): the title's art behind the rush menu
+    else if (S.screen === 'rush') rushDraw(ctx, t);   // RUSH (round 10): NEXT CHALLENGER, the stage behind the draft and the result
     else if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection' || S.screen === 'stickers' || S.screen === 'tips') {
       if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
       seaTitleDraw(ctx, t);   // SEASON: the spooky dusk or the snowfall over the title
@@ -14461,6 +14488,7 @@ const GAME = (() => {
     arcDrawRoam(ctx, t, size, z, ox, oy);   // ARCADE: roaming monsters and their next step
     secMapDraw(ctx, t, size, z, ox, oy);   // SECRET: a golden key's glint
     loreMapDraw(ctx, t, size, z, ox, oy);   // LORE: the jukebox, the lost tickets, the old high score board on lit hexes
+    ghoMapDraw(ctx, t, size, z, ox, oy);   // RUSH (round 10): the ghost of your best attempt today, GHOST PASSED!
     vaultTrailDraw(ctx, t, z, ox, oy, size);   // the Prize Vault trail behind the crawler (VAULT block)
     const meXY = wxy || curXY;
     const hop = meXY ? accHopBegin(ctx, meXY, size) : false;   // ACCESS (round 6): the crawler hops hex to hex
@@ -14657,6 +14685,7 @@ const GAME = (() => {
     clawJuiceFill();   // spin, glass tap, squish, what it holds (CLAW TYPES block)
     cfg.juice = CLAWJ;
     mutCabDraw(ctx, t, 'front');   // Blackout: the dark, and the flashlight on the claw (ENDLESS block)
+    rosCabDraw(ctx, t, 'front');   // bubbles, the flood, glue, the mirror and quake signs (ROS block)
     stoCabDraw(ctx, t, 'front');   // the prizes frozen in the Arctic Arcade's ice block (STORY)
     if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
     bestCabDraw(ctx, t);   // goo, the magnetic lid, mounds, the plow, feathers, the rival claw (BESTIARY)
@@ -14666,6 +14695,7 @@ const GAME = (() => {
     clawSlotDraw(ctx, t);   // the coin slot (CLAW TYPES block)
     luckDraw(ctx, t);   // Lucky Lou's Luck meter (CONTENT block)
     cr8Draw(ctx, t);   // Mama Mech's turret on the frame, its shots (CR8 block)
+    rosDraw(ctx, t);   // Ms. Bubbles' bubble gauge on the frame (ROS block)
     bossCabDraw(ctx, t, cfg, 'front');
     seaCabDraw(ctx, t, cfg, cabSt);   // SEASON: cobwebs, jack-o'-lanterns, orange and purple bulbs (or snow and icicles)
     secCabDraw(ctx, t, 'front');   // The Machine's face, the rail, the shutter, the cracks, the power down (SECRET)
@@ -15116,6 +15146,7 @@ const GAME = (() => {
     endlessTick(real);   // the score count-up, the reboot's beeps (ENDLESS block)
     petTick(dt, real);   // the companion pet, its tips (PETS block)
     cr8Tick(dt);   // CR8 (round 8): Mama Mech's turret, the player row beside it
+    rosTick(dt);   // ROS (round 10): bubbles, quakes, the flood, the robot vacuum's dump
     vaultTick(real);     // VAULT (round 5): the wallet's save, the map trail, the vault preview and capsule
     polTick(real);       // POLISH (round 5): relic badges shine
     secTickAll(real);    // SECRET (round 6): a key celebration, the hidden door, the true ending
@@ -15125,7 +15156,9 @@ const GAME = (() => {
     famTick(real); holoTick(real); rrTick(real);   // ROUND 9: families in a fight, holo cards, the shop's reroll reels
     qaTick(real);        // QA (round 7): the incoming-damage telegraph, safe spots for the corner lane and the toast
     evoTickAll(real);    // EVOLVE (round 7): the evolution ceremony, the pet synergy badge
+    mixTick(real);       // MIX (round 10): the screen entrances come off, the run-end numbers count up
     loreTick(real);      // LORE (round 9): new Codex pages, the act intro card, landmark bubbles, the board, the live pictures
+    rushTick(real); ghoTick(real);   // RUSH (round 10): the slam, the fight's clock; the ghost race's clock, chip and GHOST PASSED!
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.screen === 'map') {
       walkTick(dt); camStep(dt); bloomTick(); chimeTick();
@@ -18009,6 +18042,850 @@ const GAME = (() => {
   }
   // ================================================================ /LORE
 
+  // ================================================================ RUSH (round 10)
+  /* The Boss Rush (DESIGN.md "Boss Rush and the ghost race (round 10)"):
+     every boss, back to back. The title's Boss Rush card opens the rush
+     menu (screen 'rushmenu', never saves a run: the lineup, a crawler, its
+     starting kit, the best times); it is locked until the first win and
+     says so. A rush is a run with run.rush: DATA.rushOrder's lineup (the
+     six act bosses shuffled, the Prize Master, The Machine once met), the
+     kit on top of the starter bin, Tilt 0, no mutators, no map, no boon, no
+     history card. Between fights the screen 'rush' (sd {rush: {k}}) is
+     NEXT CHALLENGER (k 'next': the slam, the gallery filling up, FIGHT!),
+     the draft (k 'draft': 1 of 3, rolled once and saved with the run) or
+     the result (k 'end': the time, the score, the splits, the bests; the run
+     save goes). Each rush fight is seeded by its index, so a reload replays
+     the same fight from the bell; its clock (FS.rushT) runs while you fight
+     (never under the versus card, an evolution or the outro) and is booked
+     on the win. run.rush = {order, i, t, splits, hp, beat, draft, done, won,
+     score, rec, killer, dead}; meta.rush = DATA.rushFix. Reached through
+     one-line hooks: newRun, startFight, endFight, showReward, showGameOver,
+     load, loadMeta, the title, the HUD, the versus card's title, the keys,
+     update and draw. */
+  const RSH = { force: false, log: [], clkT: 0, liveT: 0, SLAM: 1.6, POP: 0.9, BREATHER: 0 };
+  SCREENS.push('rush', 'rushmenu');
+  // the corner lane and the toast keep off the slam's plate and its label band (QA's canvas signs)
+  QA_SIGNS.rush = () => (S.rushUi && S.rushUi.k === 'next' ? [[14, 30, W - 14, 80], [0, 136, W, 204], [30, 650, W - 30, 730]] : []);
+  const rushLog = (o) => { RSH.log.push(o); if (RSH.log.length > 60) RSH.log.shift(); };
+  const RUSHD = () => D().RUSH || null;
+  function rushMetaFix(m, o) {
+    if (!m) return null;
+    const src = o && typeof o === 'object' ? o : m;
+    m.rush = D().rushFix ? D().rushFix(src.rush) : { runs: 0, clears: 0, score: 0, best: {}, beat: {}, pick: '' };
+    return m.rush;
+  }
+  function rushM() {
+    if (!S.meta) S.meta = freshMeta();
+    const R0 = S.meta.rush;
+    if (!R0 || typeof R0 !== 'object' || !R0.best || !R0.beat) rushMetaFix(S.meta);
+    return S.meta.rush;
+  }
+  const rushOf = (run) => { run = run || S.run; return run && run.rush && typeof run.rush === 'object' && Array.isArray(run.rush.order) ? run.rush : null; };
+  // Open after the first win (RSH.force opens it for the drivers).
+  const rushOpen = () => RSH.force || ((S.meta && S.meta.stats && S.meta.stats.wins) | 0) > 0;
+  // The Machine joins the lineup once it has been met (seen in a fight, or powered down).
+  const rushMet = () => !!(S.meta && ((S.meta.seen && S.meta.seen.enemies && S.meta.seen.enemies.machine) || (S.meta.sec && (S.meta.sec.ends | 0) > 0)));
+  // The rush index of the fight on screen (-1: not a rush fight).
+  const rushIdx = () => (FS && FS.start && FS.start.then && FS.start.then.rush != null ? FS.start.then.rush | 0 : -1);
+  const rushFmtT = (t) => (D().rushFmt ? D().rushFmt(t) : (Math.round((+t || 0) * 10) / 10) + 's');
+  const rushChars = () => Object.keys(tbl('CHARACTERS')).filter((id) => unlocked(id));
+  function rushPickChar() {
+    const M = rushM(), list = rushChars();
+    return list.indexOf(M.pick) >= 0 ? M.pick : (list[0] || 'knight');
+  }
+  // Every boss a rush can hold, in the menu's order (act by act, the Prize Master, The Machine).
+  function rushLineupAll() {
+    const K = RUSHD();
+    if (!K) return [];
+    return [].concat(K.ACTS[1], K.ACTS[2], K.ACTS[3], [K.FINAL, K.SECRET]).filter((id) => !!tbl('ENEMIES')[id]);
+  }
+
+  // ---- the title card (beside the Prize Vault; registered after the weekly card, before History)
+  function rushTitleBtn(menu) {
+    if (!menu || !D().rushOrder) return null;
+    const M = rushM(), open = rushOpen(), top = D().rushBoard ? D().rushBoard(M)[0] : null;
+    const b = btn('Boss Rush', () => showRushMenu(), 'rushCard' + (open ? '' : ' locked'));
+    b.textContent = '';
+    b.appendChild(h('span', 'r1', (open ? '\u{1F94A} ' : '\u{1F512} ') + 'Boss Rush'));
+    b.appendChild(h('span', 'r2', !open ? 'Win a run to open it' : top && top.t ? `best ${rushFmtT(top.t)}` : 'every boss, back to back'));
+    const vault = menu.querySelector ? menu.querySelector('.btn.vaultBtn') : null;
+    if (vault && vault.parentNode === menu && menu.insertBefore) {
+      const row = h('div', 'vrRow');
+      menu.insertBefore(row, vault);
+      row.appendChild(vault);
+      row.appendChild(b);
+    } else menu.appendChild(b);
+    return b;
+  }
+
+  // ---- the rush menu (screen 'rushmenu'): the lineup, a crawler, its kit, the best times
+  function showRushMenu() {
+    if (S.screen !== 'rushmenu') setScreen('rushmenu');
+    else S.ui.buttons = [];
+    popover(null);
+    const b = $('rushMenuBody');
+    if (!b) return false;
+    clear(b);
+    try { const scr = $('scr-rushmenu'); if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
+    const M = rushM(), open = rushOpen(), R = X.RENDER, all = rushLineupAll(), K = RUSHD();
+    loreHead(b, 'Boss Rush', () => showTitle());
+    const best = D().rushBoard ? D().rushBoard(M)[0] : null;
+    const st = { t: S.t, defs: all.map(enemyDef), got: M.beat, locked: !open, best: best && best.t ? rushFmtT(best.t) : '', secret: K ? all.indexOf(K.SECRET) : -1, met: rushMet() };
+    const ban = hisCanvas(508, 200, (ctx) => { if (R && R.rush) R.rush.banner(ctx, 508, 200, st); });
+    ban.className = 'rushBan';
+    b.appendChild(ban);
+    RSH.live = { cv: ban, kind: 'banner', st, w: 508, h: 200 };
+    if (!open) b.appendChild(h('div', 'rushLock', '\u{1F512} Locked: win a run to open the Boss Rush. The whole lineup is waiting, back to back.'));
+    const rules = h('div', 'rushRules panel');
+    rules.appendChild(h('div', 'sub', `Every boss, back to back: the six act bosses in a random order, then the Prize Master${rushMet() ? ', then The Machine' : ''}. After each one you pick 1 of 3: an item, a relic, a heal or a claw part. The clock runs while you fight.`));
+    b.appendChild(rules);
+    // the crawler
+    const pick = rushPickChar();
+    b.appendChild(h('h3', null, 'Your crawler'));
+    const row = h('div', 'rushChars');
+    for (const id of rushChars()) {
+      const c = charDef(id) || { name: id }, mb = M.best[id];
+      const bt = btn(c.name, () => { rushM().pick = id; saveMeta(); snd('click'); showRushMenu(); }, 'rushChar' + (id === pick ? ' on' : ''));
+      bt.textContent = '';
+      bt.appendChild(portraitCanvas(id, 44));
+      const tx = h('span', 'rcTx');
+      tx.appendChild(h('b', null, c.name));
+      tx.appendChild(h('span', null, mb && mb.t ? rushFmtT(mb.t) : mb && mb.n ? `${mb.n} bosses` : 'no rush yet'));
+      bt.appendChild(tx);
+      row.appendChild(bt);
+    }
+    b.appendChild(row);
+    b.appendChild(rushKitPanel(pick));
+    const go = btn(open ? 'Start the rush' : 'Locked', () => { if (!rushOpen()) { toast('Win a run to open the Boss Rush.'); return; } rushStart(pick); }, 'pri rushGo');
+    if (!open) go.disabled = true;
+    b.appendChild(go);
+    b.appendChild(h('h3', null, 'Best times'));
+    b.appendChild(rushBoardEl(M, pick));
+    return true;
+  }
+  // What a crawler brings to a rush: its kit on top of its starter bin and relic.
+  function rushKitPanel(charId) {
+    const box = h('div', 'rushKit panel');
+    const K = D().rushKit ? D().rushKit(charId) : { items: [], relics: [], claw: [], hp: 0 };
+    box.appendChild(h('div', 'rkH', `Starting kit · on top of ${(charDef(charId) || { name: charId }).name}'s own bin`));
+    const row = h('div', 'rkRow');
+    for (const id of K.items) {
+      const d = itemDef(id), c = h('div', 'rkIt rr-' + (d.rarity || 'c'));
+      c.appendChild(itemCanvas(d, false, 40));
+      c.appendChild(h('span', null, d.name));
+      row.appendChild(c);
+    }
+    for (const id of K.relics) {
+      const d = relicDef(id), c = h('div', 'rkIt rkRel');
+      c.appendChild(relicCanvas(d, 40));
+      c.appendChild(h('span', null, d.name));
+      c.onclick = () => popover(`<b>${d.name}</b><br>${d.text || ''}`, 270, 520);
+      row.appendChild(c);
+    }
+    box.appendChild(row);
+    const tags = h('div', 'rkTags');
+    if (K.hp) tags.appendChild(h('span', 'tag pink', `+${K.hp} max HP`));
+    for (const id of K.claw) { const u = tbl('CLAW_UPGRADES')[id]; if (u) tags.appendChild(h('span', 'tag cyan', `${u.icon || ''} ${u.name}`.trim())); }
+    box.appendChild(tags);
+    return box;
+  }
+  // The leaderboard: your best clear per crawler (fastest first), then the most bosses.
+  function rushBoardEl(M, mark) {
+    const list = D().rushBoard ? D().rushBoard(M) : [];
+    const el = h('div', 'rushBoard');
+    if (!list.length) { el.appendChild(h('div', 'hisEmpty', 'No rushes on the board yet. The first clear sets the time to beat.')); return el; }
+    list.forEach((r, i) => {
+      const c = charDef(r.c) || { name: r.c }, row = h('div', 'rbRow' + (r.c === mark ? ' me' : '') + (r.t ? ' clear' : ''));
+      row.appendChild(h('b', 'rbN', String(i + 1)));
+      row.appendChild(portraitCanvas(r.c, 32));
+      row.appendChild(h('span', 'rbC', c.name));
+      row.appendChild(h('span', 'rbT mono', r.t ? rushFmtT(r.t) : `${r.n} bosses`));
+      row.appendChild(h('span', 'rbS mono', fmtNum(r.s)));
+      el.appendChild(row);
+    });
+    return el;
+  }
+
+  // ---- a rush: the run, the kit, the lineup
+  function rushStart(charId, seed) {
+    if (!D().rushOrder) return null;
+    charId = charId && charDef(charId) ? charId : rushPickChar();
+    S.rushPick = { char: charId };
+    S.tiltPick = 0; S.dailyPick = null; S.wkPick = null;
+    rushLog({ k: 'start', char: charId });
+    return newRun(charId, seed);
+  }
+  // newRun: a rush run (Tilt 0, no mutators, not a daily or a weekly, no history card) with its lineup.
+  function rushNewRun(run) {
+    const P = S.rushPick;
+    S.rushPick = null;
+    if (!P || !run || !D().rushOrder) return;
+    run.tilt = 0; run.daily = null; run.weekly = null; run.muts = [];
+    run.hisDone = 'rush';
+    run.rush = { v: 1, order: D().rushOrder(run.seed, { machine: rushMet() }), i: 0, t: 0, splits: [], hp: [], beat: [], draft: null, done: false, won: false, score: 0, rec: null, killer: '', dead: -1, kit: false };
+  }
+  // newRun, after the starter relic and the map: the kit goes on, and the first challenger steps up.
+  function rushGo(run) {
+    const R = rushOf(run);
+    if (!R) return false;
+    if (!R.kit) {
+      R.kit = true;
+      run.season = null;   // a rush is seven bosses in ten minutes: it pays no seasonal currency (and dresses nobody up)
+      const K = D().rushKit(run.char);
+      for (const id of K.items) addItem(id, false);
+      for (const id of K.relics) if (run.relics.indexOf(id) < 0) gainRelic(id);
+      for (const id of K.claw) applyClawUpgrade(id);
+      if (K.hp) { run.maxHp += K.hp; run.hp = run.maxHp; }
+    }
+    rushShow({ k: 'next' });
+    return true;
+  }
+  // FIGHT!: the next boss in the lineup, seeded by its index (a reload replays the same fight).
+  function rushFight() {
+    const run = S.run, R = rushOf(run);
+    if (!R || R.done) return null;
+    const i = R.i, id = R.order[i];
+    if (!id) { rushEnd(true); return null; }
+    run.act = D().rushActOf ? D().rushActOf(id) : 3;
+    run.fights = ((RUSHD() && RUSHD().RAMP) || 1) * i;
+    S.meta.stats.fights++;
+    S.sd = null; S.rushUi = null;
+    rushLog({ k: 'fight', i, id });
+    return startFight([id], 'boss', { seed: (U.hashStr(run.seed + ':rush:' + i) >>> 0) || 1, then: { rush: i } });
+  }
+  // startFight: a rush boss has its rush hit points, and no second boss steps out of it (Glacius, the Arctic Arcade).
+  function rushFightStart(Fi, opts) {
+    const th = opts && opts.then;
+    if (!Fi || !th || th.rush == null || !rushOf()) return;
+    for (const e of Fi.enemies) {
+      if (!e || !e.def) continue;
+      const k = D().rushHpK ? D().rushHpK(e.id) : 1, dk = D().rushDmgK ? D().rushDmgK(e.id) : 1;
+      if (k > 0 && k !== 1) { e.maxHp = Math.max(1, Math.round(e.maxHp * k)); e.hp = e.maxHp; }
+      const od = e.def.onDeath;
+      if (od && od.k === 'summon' && enemyDef(od.id).tier === 'boss') e.def = Object.assign({}, e.def, { onDeath: null });
+      // its hits, on the fight's copy of the def (the data is never touched)
+      if (dk > 0 && dk !== 1 && Array.isArray(e.def.moves)) {
+        e.def = Object.assign({}, e.def, { moves: e.def.moves.map((m) => (m && (m.k === 'attack' || m.k === 'charge') && m.v != null ? Object.assign({}, m, { v: Math.max(1, Math.round(m.v * dk)) }) : m)) });
+        e.dmgMul = (e.dmgMul || 1) * dk;
+      }
+    }
+  }
+  // The versus card's title in a rush: BOSS 3 OF 8 (the Prize Master and The Machine keep theirs).
+  function rushVsTitle(e) {
+    const i = rushIdx(), R = rushOf();
+    if (i < 0 || !R || !e) return '';
+    const K = RUSHD();
+    if (K && (e.id === K.FINAL || e.id === K.SECRET)) return '';
+    return `BOSS ${i + 1} OF ${R.order.length}`;
+  }
+  // endFight: a rush fight won. The clock stops, the split is booked, the gallery fills; the outro (and the finale) plays, then the draft.
+  function rushFightWin(tier, then, outro) {
+    const run = S.run, R = rushOf(run);
+    if (!R || !then || then.rush == null || !F || !FS) return false;
+    const i = then.rush | 0, id = R.order[i];
+    if (i === R.i && !R.done) {
+      const secs = Math.max(0, FS.rushT || 0);
+      R.t = Math.round((R.t + secs) * 1000) / 1000;
+      R.splits[i] = Math.round(secs * 1000) / 1000;
+      R.hp[i] = run.hp;
+      R.beat.push(id);
+      R.i = i + 1;
+      // a breath between bosses (not after the last one)
+      const br = R.i < R.order.length ? Math.min(run.maxHp - run.hp, Math.round(run.maxHp * ((RUSHD() && RUSHD().BREATHER) || 0))) : 0;
+      if (br > 0) { run.hp += br; R.br = br; } else R.br = 0;
+      const M = rushM();
+      M.beat[id] = (M.beat[id] | 0) + 1;
+      saveMeta();
+      rushLog({ k: 'win', i, id, secs: R.splits[i], t: R.t });
+    }
+    snd('win');
+    if (!(outro && FS.bs && FS.bs.fin && FS.bs.fin.last)) banner('VICTORY', 'victory', outro ? 1.6 : 1.2);
+    const reward = { rush: i, tier: tier || 'boss', items: [], gold: 0, then };
+    if (outro) {
+      FS.outro = { t: secMachineE() ? SEC.pdDur : fx().reduced ? 0.7 : quickOutro() ? 1.0 : 1.5, reward };
+      S.sd = { reward };
+      save();
+      return true;
+    }
+    showReward(reward);
+    return true;
+  }
+  // showReward: a rush fight's reward is the draft (or, after the last boss, the result).
+  function rushReward(rw) {
+    if (!rw || rw.rush == null || !rushOf()) return false;
+    const R = rushOf();
+    if (R.i >= R.order.length) rushEnd(true);
+    else rushShow({ k: 'draft' });
+    return true;
+  }
+  // showGameOver: a rush that fell is a result, not a game over.
+  function rushOver() {
+    const run = S.run, R = rushOf(run);
+    if (!R) return false;
+    F = null; FS = null;
+    if (!R.done) { R.killer = run.killer || R.killer || 'the Clawspire'; R.dead = R.i; }
+    rushEnd(false);
+    return true;
+  }
+  function rushGiveUp() {
+    const R = rushOf();
+    if (!R || R.done) return false;
+    R.killer = 'walking away'; R.dead = R.i;
+    rushEnd(false);
+    return true;
+  }
+  // The result: the time and the score are booked once (the bests, the sticker), the run save goes.
+  function rushEnd(won) {
+    const run = S.run, R = rushOf(run);
+    if (!R) return false;
+    if (!R.done) {
+      R.done = true; R.won = !!won;
+      if (won) R.dead = -1;
+      const sc = D().rushScore({ n: R.beat.length, total: R.order.length, won: R.won, t: R.t, hp: run.hp });
+      R.score = sc.total; R.lines = sc.lines;
+      R.rec = D().rushRecord(rushM(), { char: run.char, t: R.t, n: R.beat.length, won: R.won, score: sc.total, at: Math.floor(Date.now() / 1000) });
+      rushLog({ k: 'end', won: R.won, t: R.t, n: R.beat.length, score: R.score });
+      achRun('end');
+      achRun('meta');
+      saveMeta();
+      if (!S.headless) setTimeout(() => snd(R.won ? 'fanfare' : 'lose'), 250);
+    }
+    rushShow({ k: 'end' });
+    try { localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ }
+    return true;
+  }
+
+  // ---- the rush screen (screen 'rush'): NEXT CHALLENGER, the draft, the result
+  function rushShow(sd) {
+    const run = S.run, R = rushOf(run);
+    if (!R) { showTitle(); return false; }
+    let k = sd && sd.k;
+    if (R.done) k = 'end';
+    else if (k === 'draft' && R.draft && R.draft.i === R.i && R.draft.done) k = 'next';
+    else if (k !== 'draft' && k !== 'next') k = 'next';
+    S.sd = { rush: { k } };
+    F = null; FS = null;
+    if (S.screen !== 'rush') setScreen('rush');
+    else { S.ui.buttons = []; save(); }
+    popover(null);
+    const scr = $('scr-rush');
+    if (scr && scr.classList) { for (const c of ['rk-next', 'rk-draft', 'rk-end']) scr.classList.remove(c); scr.classList.add('rk-' + k); }
+    try { if (scr) scr.scrollTop = 0; } catch (e) { /* stub */ }
+    if (scr) scr.onpointerdown = k === 'next' ? () => rushSkipSlam() : null;
+    const b = $('rushBody');
+    if (!b) return false;
+    clear(b);
+    RSH.live = null;
+    S.rushUi = { k, t: 0, i: R.i, snd: 0, pop: k === 'draft' ? R.i - 1 : -1, popK: 0 };
+    if (k === 'next') rushNextView(b, R);
+    else if (k === 'draft') rushDraftView(b, run, R);
+    else rushEndView(b, run, R);
+    music(k === 'next' ? 'boss' : k === 'draft' ? 'map' : R.won ? 'win' : 'off');   // the challenger's tension carries into its fight
+    refreshHud(true);
+    return true;
+  }
+  // NEXT CHALLENGER: the canvas plays the slam; the DOM holds FIGHT! and Give up.
+  function rushNextView(b, R) {
+    const dock = h('div', 'rushDock');
+    dock.appendChild(btn('Give up', () => rushGiveUp(), 'ghost sm rushQuit'));
+    dock.appendChild(btn('Fight!', () => rushFight(), 'pri rushFight'));
+    b.appendChild(dock);
+    RSH.tap = h('div', 'rushTap', R.i ? `${R.order.length - R.i} to go · tap to skip` : 'tap to skip');
+    b.appendChild(RSH.tap);
+  }
+  const RUSH_LBL = (R) => (R.i === 0 ? 'FIRST CHALLENGER' : R.i >= R.order.length - 1 ? 'FINAL CHALLENGER' : 'NEXT CHALLENGER');
+  // A tap skips to the end of the slam.
+  function rushSkipSlam() {
+    const U0 = S.rushUi;
+    if (!U0 || U0.k !== 'next' || U0.t >= RSH.SLAM) return false;
+    U0.t = RSH.SLAM; U0.snd = 9;
+    return true;
+  }
+  // The draft: rolled once for this boss (saved with the run), 1 of 3 (an item, a relic, a heal, a claw part).
+  function rushDraftRoll(run, R) {
+    if (R.draft && R.draft.i === R.i) return R.draft;
+    const rng = U.rng(U.hashStr(run.seed + ':rushdraft:' + R.i) || 1), K = RUSHD();
+    const open = openClawUpgrades();
+    const kinds = D().rushDraftKinds(run.seed, R.i, { hp: run.hp / Math.max(1, run.maxHp), claw: open.length > 0 });
+    const offers = [];
+    for (const k of kinds) {
+      if (k === 'item') {
+        let ids = [];
+        try { ids = D().rewardItems ? D().rewardItems(rng, 3, run.char, 1, run) || [] : []; } catch (e) { ids = []; }
+        const id = ids[0] || 'rusty_sword';
+        seeItem(id);
+        offers.push({ k, id, plus: rng() < (K.PLUS || 0) });
+      } else if (k === 'relic') {
+        const id = rollRelic(rng, ['u', 'r']);
+        if (id) offers.push({ k, id }); else offers.push({ k: 'heal', v: Math.max(1, Math.round(run.maxHp * K.HEAL)) });
+      } else if (k === 'heal') offers.push({ k, v: Math.max(1, Math.round(run.maxHp * K.HEAL)) });
+      else if (k === 'claw' && open.length) offers.push({ k, id: rng.pick(open) });
+    }
+    R.draft = { i: R.i, offers, done: false, pick: -1 };
+    return R.draft;
+  }
+  function rushDraftPick(n) {
+    const run = S.run, R = rushOf(run);
+    if (!R || R.done || !R.draft || R.draft.done) return false;
+    const o = R.draft.offers[n];
+    if (!o) return false;
+    if (o.k === 'item') { addItem(o.id, !!o.plus); toast(`${itemName(itemDef(o.id), o.plus)} added to the bin.`); snd('buy'); }
+    else if (o.k === 'relic') { gainRelic(o.id); toast(`${relicDef(o.id).name}!`); snd('relic'); }
+    else if (o.k === 'heal') { healRun(o.v); toast(`Healed ${o.v}.`); snd('heal'); }
+    else if (o.k === 'claw') { if (!applyClawUpgrade(o.id)) { toast('That part does not fit.'); return false; } toast(`Claw upgraded: ${tbl('CLAW_UPGRADES')[o.id].name}.`); snd('upgrade'); }
+    R.draft.done = true; R.draft.pick = n;
+    rushLog({ k: 'pick', i: R.i, o: o.k });
+    rushShow({ k: 'next' });
+    return true;
+  }
+  function rushGalleryCanvas(R, dead, pop) {
+    const Rd = X.RENDER, defs = R.order.map(enemyDef), K = RUSHD();
+    const st = { defs, beat: R.beat.length, cur: R.done ? -1 : R.i, dead, t: S.t, secret: K ? R.order.indexOf(K.SECRET) : -1, pop, popK: pop >= 0 && !S.headless ? 0 : 1 };
+    const cv = hisCanvas(508, 92, (ctx) => { if (Rd && Rd.rush) Rd.rush.gallery(ctx, 4, 4, 500, 72, st); });
+    cv.className = 'rushGal';
+    RSH.live = { cv, kind: 'gallery', st, w: 508, h: 92 };
+    return cv;
+  }
+  function rushDraftView(b, run, R) {
+    const D0 = rushDraftRoll(run, R), last = R.order[R.i - 1], ld = enemyDef(last);
+    b.appendChild(h('h1', null, `${ld.name || last} down!`));
+    b.appendChild(h('div', 'rushSplit', `Split ${rushFmtT(R.splits[R.i - 1] || 0)} · Total ${rushFmtT(R.t)} · ${R.i} of ${R.order.length}`));
+    b.appendChild(rushGalleryCanvas(R, -1, R.i - 1));
+    b.appendChild(h('div', 'sub center', `Pick one for the fight ahead. HP ${run.hp}/${run.maxHp}` + (R.br ? ` (a breather: +${R.br}).` : '.')));
+    const cards = h('div', 'cards rushCards');
+    D0.offers.forEach((o, n) => {
+      let card = null;
+      if (o.k === 'item') card = itemCard(itemDef(o.id), !!o.plus, { deal: n, onPick: () => rushDraftPick(n) });
+      else {
+        const K = RUSHD();
+        if (o.k === 'relic') {
+          const d = relicDef(o.id);
+          card = h('div', 'card rr-' + (d.rarity === 'boss' ? 'l' : d.rarity || 'c'));
+          card.appendChild(h('div', 'rar ' + (d.rarity || 'c'), 'RELIC'));
+          card.appendChild(relicCanvas(d, 84));
+          card.appendChild(h('div', 'name', d.name));
+          card.appendChild(h('div', 'text', d.text || ''));
+          const kw = kwChips(d);
+          if (kw) card.appendChild(kw);
+          setTagOn(card, o.id);
+          holoOn(card, d.rarity);
+        } else if (o.k === 'heal') {
+          card = h('div', 'card rushHeal');
+          card.appendChild(h('div', 'rar', 'HEAL'));
+          card.appendChild(h('div', 'rhIc', '❤'));
+          card.appendChild(h('div', 'name', `Heal ${o.v}`));
+          card.appendChild(h('div', 'text', `Patch up: ${Math.round((K ? K.HEAL : 0.35) * 100)}% of your max HP.`));
+        } else {
+          const u = tbl('CLAW_UPGRADES')[o.id] || { name: o.id, icon: '', text: '' };
+          card = h('div', 'card rr-r rushClaw');
+          card.appendChild(h('div', 'rar', 'CLAW PART'));
+          card.appendChild(h('div', 'big', u.icon || '⚙'));
+          card.appendChild(h('div', 'name', u.name));
+          card.appendChild(h('div', 'text', u.text || ''));
+        }
+        dealIn(card, n);
+        const fn = () => rushDraftPick(n);
+        card.onclick = fn;
+        const lab = o.k === 'relic' ? relicDef(o.id).name : o.k === 'heal' ? `Heal ${o.v}` : ((tbl('CLAW_UPGRADES')[o.id] || {}).name || o.id);
+        S.ui.buttons.push({ el: card, fn, label: lab });
+      }
+      cards.appendChild(card);
+    });
+    b.appendChild(cards);
+    const up = h('div', 'rushUp', `Up next: ${R.i >= R.order.length - 1 ? 'the last one' : 'a mystery'} · ${R.order.length - R.i} to go`);
+    b.appendChild(up);
+    save();
+  }
+  function rushEndView(b, run, R) {
+    const K = RUSHD(), M = rushM(), rec = R.rec || {}, n = R.beat.length, N = R.order.length;
+    b.appendChild(h('h1', null, R.won ? 'Rush cleared!' : 'Rush over'));
+    const who = (charDef(run.char) || { name: run.char }).name;
+    b.appendChild(h('div', 'sub center', R.won ? `${who} beat all ${N} bosses back to back.` : `${who} fell to ${R.killer || 'the Clawspire'} at boss ${Math.min(N, R.dead + 1)} of ${N}.`));
+    b.appendChild(rushGalleryCanvas(R, R.won ? -1 : R.dead, -1));
+    // the time and the score
+    const top = h('div', 'rushRes');
+    const tb = h('div', 'rrBox time' + (rec.newTime ? ' best' : ''));
+    tb.appendChild(h('span', 'k', R.won ? 'FINAL TIME' : 'TIME'));
+    tb.appendChild(h('b', 'mono', rushFmtT(R.t)));
+    tb.appendChild(h('span', 's', rec.newTime ? (rec.prevT ? `NEW BEST! was ${rushFmtT(rec.prevT)}` : 'NEW BEST!') : M.best[run.char] && M.best[run.char].t ? `best ${rushFmtT(M.best[run.char].t)}` : `${n} of ${N} bosses`));
+    top.appendChild(tb);
+    const sb = h('div', 'rrBox score' + (rec.newScore ? ' best' : ''));
+    sb.appendChild(h('span', 'k', 'SCORE'));
+    sb.appendChild(h('b', 'mono', fmtNum(R.score | 0)));
+    sb.appendChild(h('span', 's', rec.newTop ? 'TOP SCORE!' : rec.newScore ? 'NEW BEST!' : `best ${fmtNum((M.best[run.char] || {}).s | 0)}`));
+    top.appendChild(sb);
+    b.appendChild(top);
+    const ln = h('div', 'rushLines');
+    for (const l of R.lines || []) { const r = h('div', 'rl'); r.appendChild(h('span', null, l.label)); r.appendChild(h('b', 'mono', '+' + fmtNum(l.v))); ln.appendChild(r); }
+    b.appendChild(ln);
+    // the splits
+    b.appendChild(h('h3', null, 'Splits'));
+    const sp = h('div', 'rushSplits');
+    R.order.forEach((id, i) => {
+      const d = enemyDef(id), done = i < n, lost = i === R.dead;
+      if (!done && !lost) return;
+      const r = h('div', 'rsRow' + (lost ? ' lost' : ''));
+      r.appendChild(h('b', 'n', String(i + 1)));
+      r.appendChild(h('span', 'nm', d.name || id));
+      r.appendChild(h('span', 'mono', done ? rushFmtT(R.splits[i] || 0) : 'KO'));
+      r.appendChild(h('span', 'hp', done ? `${R.hp[i] | 0} hp` : ''));
+      sp.appendChild(r);
+    });
+    b.appendChild(sp);
+    b.appendChild(h('h3', null, 'Best times'));
+    b.appendChild(rushBoardEl(M, run.char));
+    const stk = (run.achNew || []).filter((id) => (D().ACHIEVEMENTS || {})[id]);
+    if (stk.length) {
+      b.appendChild(h('h3', null, 'Stickers this rush'));
+      const row = h('div', 'stRow');
+      for (const id of stk) { const a = D().ACHIEVEMENTS[id], s = h('div', 'mini'); try { s.style.setProperty('--sc', a.color || PAL0.gold); } catch (e) { /* stub */ } s.appendChild(h('span', 'ic', a.icon)); s.appendChild(h('span', 'nm', a.name)); row.appendChild(s); }
+      b.appendChild(row);
+    }
+    const row = h('div', 'row center rushEndBtns');
+    const ch = run.char;
+    row.appendChild(btn('Rush again', () => { S.run = null; rushStart(ch); }, 'pri'));
+    row.appendChild(btn('Back to title', () => { S.run = null; save(); showTitle(); }, 'ghost'));
+    b.appendChild(row);
+  }
+  // The canvas under the rush screens: the slam (next), the stage (draft, result).
+  function rushDraw(ctx, t) {
+    const Rd = X.RENDER && X.RENDER.rush, run = S.run, R = rushOf(run), U0 = S.rushUi;
+    if (!Rd) { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); return; }
+    if (!R || !U0 || U0.k !== 'next') { Rd.back(ctx, W, H, t, {}); return; }
+    const id = R.order[R.i], def = enemyDef(id), K = RUSHD();
+    const st = RSH.cst || (RSH.cst = {});
+    st.t = U0.t; st.now = t; st.label = RUSH_LBL(R); st.def = def; st.i = R.i; st.n = R.order.length; st.clock = rushFmtT(R.t);
+    st.split = R.i > 0 ? `last split ${rushFmtT(R.splits[R.i - 1] || 0)}` : 'the clock starts at the bell';
+    if (!st.defs || st.defsKey !== R.order.join()) { st.defs = R.order.map(enemyDef); st.defsKey = R.order.join(); }
+    st.beat = R.beat.length; st.secret = K ? R.order.indexOf(K.SECRET) : -1; st.reduced = !!fx().reduced; st.pop = -1; st.popK = 1;
+    Rd.challenger(ctx, W, H, st);
+  }
+  // Per frame: the slam's beats and sounds, the live gallery or banner, the fight's clock.
+  function rushTick(real) {
+    const run = S.run, R = rushOf(run), U0 = S.rushUi;
+    if (S.screen === 'rush' && U0) {
+      if (U0.k === 'next' && U0.t < RSH.SLAM) {
+        U0.t += real * (fx().reduced ? 3 : (rushM().runs > 2 ? 1.6 : 1));
+        const T = (X.RENDER && X.RENDER.rush && X.RENDER.rush.T) || { title: 0.3, sil: 0.55, reveal: 1.0, name: 1.12 };
+        if (U0.snd < 1 && U0.t >= T.title) { U0.snd = 1; snd('vsSlam'); fx().shake(9); haptic('hit'); }
+        if (U0.snd < 2 && U0.t >= T.sil) { U0.snd = 2; snd('whoosh', { pitch: 0.7 }); }
+        if (U0.snd < 3 && U0.t >= T.reveal) { U0.snd = 3; snd('stingBoss'); fx().shake(12); haptic('boss'); }
+        if (U0.snd < 4 && U0.t >= T.name) { U0.snd = 4; snd('stamp'); }
+      }
+      // nothing left to skip: the hint says what is left instead
+      if (U0.k === 'next' && U0.t >= RSH.SLAM && RSH.tap && R && / skip$/.test(RSH.tap.textContent || '')) RSH.tap.textContent = R.i ? `${R.order.length - R.i} to go` : 'the clock starts at the bell';
+      if (U0.pop >= 0 && U0.popK < 1) {
+        U0.popK = Math.min(1, U0.popK + real / 0.35);
+        if (U0.popK >= 1 && !U0.popSnd) { U0.popSnd = true; snd('stamp', { pitch: 1.2 }); fx().shake(4); }
+      }
+    }
+    rushLive(real);
+    if (!R || R.done) return;
+    if (S.screen === 'fight' && F && FS && !FS.done && !FS.vs && !FS.outro && !FS.evo && rushIdx() === R.i) FS.rushT = (FS.rushT || 0) + real;
+    if (S.screen === 'fight') { RSH.clkT -= real; if (RSH.clkT <= 0) { RSH.clkT = 0.1; rushClock(); } }
+  }
+  // The live canvas on the rush screens (the gallery's KO stamp, the menu's banner), about 24 times a second in a browser.
+  function rushLive(real) {
+    const Lv = RSH.live;
+    if (!Lv || S.headless) return;
+    if ((S.screen !== 'rush' && S.screen !== 'rushmenu') || (Lv.cv && Lv.cv.isConnected === false)) { RSH.live = null; return; }
+    RSH.liveT += real;
+    if (RSH.liveT < 1 / 24) return;
+    RSH.liveT = 0;
+    const Rd = X.RENDER && X.RENDER.rush;
+    let ctx = null;
+    try { ctx = Lv.cv.getContext('2d'); } catch (e) { ctx = null; }
+    if (!ctx || !Rd) return;
+    try {
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, Lv.cv.width, Lv.cv.height); ctx.scale(2, 2);
+      Lv.st.t = S.t;
+      if (Lv.kind === 'banner') Rd.banner(ctx, Lv.w, Lv.h, Lv.st);
+      else { const U0 = S.rushUi; if (U0 && U0.pop >= 0) { Lv.st.pop = U0.pop; Lv.st.popK = U0.popK; } Rd.gallery(ctx, 4, 4, Lv.w - 8, 72, Lv.st); }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    } catch (e) { /* art is optional */ }
+  }
+  // The HUD in a rush: the act stat reads the boss count, the clock takes the bulbs' and the tickets' place.
+  function rushHud(run) {
+    const top = $('top'), R = rushOf(run), on = !!R;
+    if (top && top.classList) top.classList[on ? 'add' : 'remove']('rushOn');
+    const act = $('actTxt'), st = act && act.parentNode;
+    if (on) {
+      if (act) act.textContent = `${Math.min(R.order.length, R.i + 1)}/${R.order.length}`;
+      const k = st && st.querySelector ? st.querySelector('.k') : null;
+      if (k && k.textContent !== 'Boss') k.textContent = 'Boss';
+      if (top && (!RSH.clk || RSH.clk.parentNode !== top)) {
+        const el = h('div', 'stat rushClk');
+        el.appendChild(h('span', 'k', 'Time'));
+        const v = h('span', 'v mono', '0:00.0');
+        el.appendChild(v);
+        RSH.clk = el; RSH.clkV = v;
+        if (st && st.parentNode === top && top.insertBefore) top.insertBefore(el, st); else top.appendChild(el);
+      }
+      RSH.hudOn = true;
+      rushClock();
+    } else if (RSH.hudOn) {
+      RSH.hudOn = false;
+      const k = st && st.querySelector ? st.querySelector('.k') : null;
+      if (k && k.textContent === 'Boss') k.textContent = S.loopHud ? 'Endless' : 'Act';
+    }
+  }
+  function rushClock() {
+    const R = rushOf();
+    if (!R || !RSH.clkV) return '';
+    const s = rushFmtT(R.t + (rushIdx() === R.i && FS ? FS.rushT || 0 : 0));
+    if (RSH.clkV.textContent !== s) RSH.clkV.textContent = s;
+    return s;
+  }
+  // Keys: Space / Enter skip the slam then FIGHT!; Escape leaves the menu.
+  function rushKey(ev, down) {
+    if (!down || ev.repeat) return false;
+    const k = ev.key;
+    if (S.screen === 'rushmenu' && k === 'Escape') { showTitle(); return true; }
+    if (S.screen !== 'rush' || !S.rushUi) return false;
+    if (S.rushUi.k === 'next' && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); if (!rushSkipSlam()) rushFight(); return true; }
+    return false;
+  }
+  // ================================================================ /RUSH
+
+  // ================================================================ GHOST (round 10)
+  /* The daily ghost race (DESIGN.md "Boss Rush and the ghost race (round
+     10)"). A daily run races the best attempt of its own day, a weekly run
+     the best of its week: run.gho = {k 'd' | 'w', key, cps (DATA.ghoCp, one
+     per fight won), t (seconds played), lead, passed, passN, done, passQ};
+     meta.gho = DATA.ghoFix {d, w, passes}. Each fight won books a
+     checkpoint (ghoFightEnd); on the map the ghost stands where it stood
+     after as many fights (a translucent crawler with a sheet, gliding to its
+     new spot), and the delta chip (#ghoChip: "+120 vs ghost", lime ahead,
+     red behind) pops when it changes; the checkpoint that takes the lead
+     queues GHOST PASSED!, slammed over the map when you land on it. At the
+     run's end (metaRunEnd) the attempt becomes the ghost when it scored
+     more, and the end panel compares the two: a race chart and the numbers
+     side by side. The ghost is hidden once the attempt is over (a daily won
+     into Endless no longer races itself). */
+  const GHX = { log: [], GLIDE: 1.1 };
+  const ghoLog = (o) => { GHX.log.push(o); if (GHX.log.length > 60) GHX.log.shift(); };
+  function ghoMetaFix(m, o) {
+    if (!m) return null;
+    const src = o && typeof o === 'object' ? o : m;
+    m.gho = D().ghoFix ? D().ghoFix(src.gho) : { d: null, w: null, passes: 0 };
+    return m.gho;
+  }
+  function ghoM() {
+    if (!S.meta) S.meta = freshMeta();
+    const G = S.meta.gho;
+    if (!G || typeof G !== 'object' || !('d' in G) || !('w' in G)) ghoMetaFix(S.meta);
+    return S.meta.gho;
+  }
+  const ghoOf = (run) => { run = run || S.run; return run && run.gho && typeof run.gho === 'object' && Array.isArray(run.gho.cps) ? run.gho : null; };
+  // The ghost this run races: the best attempt of its day (week), never itself.
+  function ghoGhost(run) {
+    const G0 = ghoOf(run);
+    if (!G0) return null;
+    if (G0.vs !== undefined) return G0.vs;   // frozen at the run's end (the record may be this run now)
+    const rec = ghoM()[G0.k];
+    return rec && rec.key === G0.key ? rec : null;
+  }
+  // newRun: a daily or a weekly run keeps checkpoints (a rush never).
+  function ghoNewRun(run) {
+    if (!run) return;
+    run.gho = null;
+    if (rushOf(run)) return;
+    const k = run.daily ? 'd' : run.weekly ? 'w' : '';
+    if (!k) return;
+    run.gho = { k, key: String(run.daily || run.weekly), cps: [], t: 0, lead: 0, passed: false, passN: 0, done: false, passQ: 0 };
+  }
+  // The live score the race compares: the daily's own score, the weekly's run score.
+  function ghoScore(run, won) {
+    run = run || S.run;
+    if (!run) return 0;
+    try {
+      if (run.daily && D().dailyScore) return D().dailyScore(run, !!won) | 0;
+      if (D().runScore) return Math.max(D().runScore(run, !!won).total | 0, won ? run.scoreTop | 0 : 0);
+    } catch (e) { /* no score */ }
+    return 0;
+  }
+  // Which map the run is on: the act, 4 in the Back Room, 4 + the loop in Endless.
+  const ghoStage = (run) => (!run ? 0 : secIn(run) ? 4 : run.endless && run.endless.loop > 0 ? 4 + (run.endless.loop | 0) : run.act | 0);
+  // endFight: a fight won books a checkpoint and moves the race on.
+  function ghoFightEnd(result) {
+    const run = S.run, G0 = ghoOf(run);
+    if (!G0 || G0.done || result !== 'win' || !D().ghoCp) return null;
+    const M = run.map, pos = (M && M.pos) || { q: 0, r: 0 };
+    const cp = D().ghoCp({ n: G0.cps.length + 1, a: ghoStage(run), q: pos.q, r: pos.r, hp: run.hp, g: run.gold, s: ghoScore(run, false), tu: run.turns, t: G0.t });
+    if (G0.cps.length < ((D().GHO && D().GHO.MAX) || 90)) G0.cps.push(cp);
+    const rec = ghoGhost(run), res = D().ghoDelta(G0.cps, rec);
+    if (!res) return null;
+    const prev = G0.lead | 0;
+    G0.lead = res.d;
+    if (D().ghoPassed(prev, res.d)) {
+      G0.passN = (G0.passN | 0) + 1; G0.passQ = 1;
+      if (!G0.passed) { G0.passed = true; const Gm = ghoM(); Gm.passes = (Gm.passes | 0) + 1; saveMeta(); }
+    }
+    ghoLog({ k: 'cp', n: G0.cps.length, d: res.d, pass: !!G0.passQ });
+    return res;
+  }
+  // Where the ghost stands on this map now: {q, r, sad} or null.
+  function ghoSpot(run, n) {
+    run = run || S.run;
+    const G0 = ghoOf(run), rec = ghoGhost(run), M = run && run.map;
+    if (!G0 || !rec || G0.done || !M || !D().ghoAt) return null;
+    n = n == null ? G0.cps.length : n;
+    const st = ghoStage(run);
+    if (n === 0) return st === 1 && M.start ? { q: M.start.q, r: M.start.r, sad: false } : null;
+    const g = D().ghoAt(rec, n);
+    if (g) return g.a === st ? { q: g.q, r: g.r, sad: false } : null;
+    // its climb ended before this step: a grey ghost where it fell (on this map)
+    const e = rec.e;
+    return e && e[0] === st ? { q: e[1], r: e[2], sad: true } : null;
+  }
+  const GHO_ST = { charId: 'knight', t: 0, a: 0.6, tag: 'GHOST', sad: false };
+  // On the map, over the landmarks and under the crawler: the ghost (gliding to its new spot) and GHOST PASSED!.
+  function ghoMapDraw(ctx, t, size, z, ox, oy) {
+    const run = S.run, G0 = ghoOf(run), Rg = X.RENDER && X.RENDER.gho;
+    if (!G0 || !Rg || !run.map || !X.MAP) return;
+    const rec = ghoGhost(run), sp = ghoSpot(run);
+    if (sp && rec) {
+      const n = G0.cps.length;
+      let gl = S.ghoGlide;
+      if (!gl || gl.n !== n || gl.key !== G0.key) {
+        const from = gl && gl.key === G0.key && gl.n === n - 1 ? { q: gl.q, r: gl.r } : null;
+        gl = S.ghoGlide = { n, key: G0.key, q: sp.q, r: sp.r, from, t0: t };
+      }
+      const w1 = worldOf(sp.q, sp.r);
+      let x = w1.x * z + ox, y = w1.y * z + oy;
+      const k = gl.from ? U.clamp((t - gl.t0) / GHX.GLIDE, 0, 1) : 1;
+      if (k < 1) { const w0 = worldOf(gl.from.q, gl.from.r), e = U.ease.inOut(k); x = U.lerp(w0.x * z + ox, x, e); y = U.lerp(w0.y * z + oy, y, e); }
+      // sharing your hex: it stands a little aside
+      const M = run.map;
+      if (k >= 1 && sp.q === M.pos.q && sp.r === M.pos.r) x += size * 0.62;
+      if (!(x < -size || x > W + size || y < MAP_AREA.y - size * 2 || y > H + size)) {
+        const tile = X.MAP.tileAt ? X.MAP.tileAt(M, sp.q, sp.r) : null;
+        GHO_ST.charId = rec.c || run.char; GHO_ST.t = t; GHO_ST.sad = !!sp.sad;
+        GHO_ST.a = (tile && !tile.revealed ? 0.5 : 0.8) * (sp.sad ? 0.8 : 1);
+        GHO_ST.tag = sp.sad ? 'GHOST OUT' : 'GHOST';
+        Rg.marker(ctx, x, y - size * 0.1, size, GHO_ST);
+      }
+    }
+    const P = S.ghoPass;
+    if (P && S.screen === 'map') {
+      const A = MAP_AREA;
+      Rg.pass(ctx, W / 2, A.y + 150, { t: P.t, dur: P.dur, charId: P.charId, reduced: !!fx().reduced, sub: P.sub });   // above the crawler (the camera keeps it mid map)
+    }
+  }
+  // Per frame: the play clock, the chip, the GHOST PASSED! beat.
+  function ghoTick(real) {
+    const run = S.run, G0 = ghoOf(run);
+    const live = !!(G0 && !G0.done && (S.screen === 'map' || S.screen === 'fight' || S.screen === 'reward' || S.screen === 'shop' || S.screen === 'event' || S.screen === 'rest' || S.screen === 'forge' || S.screen === 'treasure' || S.screen === 'arcade' || S.screen === 'capsule' || S.screen === 'counter'));
+    if (live) G0.t += real;
+    const P = S.ghoPass;
+    if (P) { P.t += real; if (P.t >= P.dur || S.screen !== 'map') S.ghoPass = null; }
+    GHX.mapT = S.screen === 'map' ? (GHX.mapT || 0) + real : 0;   // (the wipe onto the map plays first)
+    if (G0 && G0.passQ && S.screen === 'map' && GHX.mapT >= 0.55 && !S.walk && !S.loreIntro && !S.ghoPass && ghoGhost(run)) {
+      G0.passQ = 0;
+      const rec = ghoGhost(run), dur = (X.RENDER && X.RENDER.gho && X.RENDER.gho.PASS && X.RENDER.gho.PASS.dur) || 2.2;
+      S.ghoPass = { t: 0, dur, charId: (rec && rec.c) || run.char, sub: `+${fmtNum(Math.max(0, G0.lead))} ahead after ${G0.cps.length} ${G0.cps.length === 1 ? 'fight' : 'fights'}` };
+      ghoLog({ k: 'pass', n: G0.cps.length, d: G0.lead });
+      snd('fanfare'); snd('whoosh', { pitch: 1.2 }); haptic('jackpot');
+      fx().emit && fx().emit('confetti', W / 2, MAP_AREA.y + 120, { power: 1 });
+      if (fx().flash) fx().flash('#a6ff5e', fx().reduced ? 0.06 : 0.2);
+    }
+    ghoChipSync();
+  }
+  // The delta chip on the map: "+120 vs ghost" (lime ahead, red behind, level before the first fight).
+  function ghoChipSync() {
+    const run = S.run, G0 = ghoOf(run), rec = G0 ? ghoGhost(run) : null;
+    const show = !!(G0 && !G0.done && S.screen === 'map');
+    let el = S.ghoChip;
+    if (!show) { if (el && el.classList && GHX.shown) { el.classList.remove('show'); GHX.shown = false; } return null; }
+    if (!el || (el.isConnected === false)) {
+      const st = $('stage');
+      if (!st || !st.appendChild) return null;
+      el = S.ghoChip = h('div', 'ghoChip');
+      el.appendChild(h('i', 'gi', '\u{1F47B}'));
+      GHX.v = h('b', 'mono', '');
+      el.appendChild(GHX.v);
+      GHX.gs = h('span', 'gs', 'vs ghost');
+      el.appendChild(GHX.gs);
+      el.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); ghoChipTap(); };
+      st.appendChild(el);
+    }
+    // no ghost yet (the first climb of the day or the week): this one becomes it
+    const d = rec && G0.cps.length ? G0.lead | 0 : 0;
+    const txt = !rec ? 'NEW' : d > 0 ? '+' + fmtNum(d) : d < 0 ? '-' + fmtNum(-d) : '±0';
+    const cls = 'ghoChip show ' + (!rec ? 'even first' : d > 0 ? 'up' : d < 0 ? 'down' : 'even');
+    if (GHX.gs) { const w = rec ? 'vs ghost' : 'ghost'; if (GHX.gs.textContent !== w) GHX.gs.textContent = w; }
+    if (GHX.v && GHX.v.textContent !== txt) {
+      GHX.v.textContent = txt;
+      if (GHX.lastN != null && GHX.lastN !== G0.cps.length) replay(el, 'pop');
+    }
+    GHX.lastN = G0.cps.length;
+    if ((el.className || '').replace(/ pop/g, '') !== cls) el.className = cls + (/ pop/.test(el.className || '') ? ' pop' : '');
+    GHX.shown = true;
+    return txt;
+  }
+  function ghoChipTap() {
+    const run = S.run, G0 = ghoOf(run), rec = ghoGhost(run);
+    if (!G0) return false;
+    const when = G0.k === 'd' ? 'today' : 'this week';
+    if (!rec) { popover(`<b>\u{1F47B} The ghost race</b><br>Your first climb ${when}. When it ends it becomes your ghost, and your next attempt ${when} races it fight by fight.`, 270, 820); return true; }
+    const g = D().ghoAt(rec, G0.cps.length);
+    popover(`<b>\u{1F47B} Your ghost</b><br>Your best climb ${when}: ${fmtNum(rec.s)} points${rec.won ? ', a win' : ''}.<br>` +
+      (G0.cps.length ? (g ? `After ${G0.cps.length} fights it had ${fmtNum(g.s)}. You have ${fmtNum(G0.cps.length ? D().ghoRead(G0.cps[G0.cps.length - 1]).s : 0)}.` : `Its climb ended after ${rec.cps.length} fights.`) : 'Win a fight to see where you stand.'), 270, 820);
+    return true;
+  }
+  // metaRunEnd: the race's result; this attempt becomes the ghost when it scored more.
+  function ghoRunEnd(run, won, info) {
+    const G0 = ghoOf(run);
+    if (!G0 || G0.done) return null;
+    const rec = ghoGhost(run);
+    G0.vs = rec || null;   // the one it raced, frozen before the record may change
+    G0.done = true;
+    const fin = ghoScore(run, won), M = run.map, pos = (M && M.pos) || { q: 0, r: 0 };
+    const res = {
+      k: G0.k, key: G0.key, beat: !rec || fin > rec.s, d: fin - (rec ? rec.s : 0), first: !rec, saved: false,
+      me: { s: fin, n: G0.cps.length, tu: run.turns | 0, t: Math.round(G0.t), a: ghoStage(run), won: !!won },
+      ghost: rec ? { s: rec.s, n: rec.cps.length, tu: rec.tu, t: rec.t, a: rec.a, won: !!rec.won, c: rec.c } : null,
+      mine: D().ghoSeries(G0.cps, fin), theirs: rec ? D().ghoSeries(rec.cps, rec.s) : [],
+    };
+    if (!rec || fin > rec.s) {
+      ghoM()[G0.k] = D().ghoRecFix({ key: G0.key, cps: G0.cps, s: fin, won: !!won, c: run.char, n: G0.cps.length, tu: run.turns | 0, t: Math.round(G0.t), a: ghoStage(run),
+        at: Math.floor(Date.now() / 1000), e: [ghoStage(run), pos.q, pos.r] });
+      res.saved = true;
+    }
+    if (info) info.gho = res;
+    ghoLog(Object.assign({ k: 'end' }, { beat: res.beat, d: res.d, saved: res.saved }));
+    return res;
+  }
+  // The run-end panel's race: the verdict, the chart, the two climbs side by side.
+  function ghoEndPanel(box, info) {
+    const g = info && info.gho;
+    if (!g || !box) return null;
+    const el = h('div', 'ghoEnd' + (g.beat && !g.first ? ' win' : g.first ? ' first' : ' lose'));
+    el.appendChild(h('span', 'k', `\u{1F47B} GHOST RACE · ${g.k === 'd' ? 'DAILY' : 'WEEKLY'} ${g.key}`));
+    el.appendChild(h('b', 'v', g.first ? 'You are the ghost now' : g.beat ? `You beat your ghost by ${fmtNum(g.d)}!` : g.d === 0 ? 'A dead heat with your ghost' : `Your ghost holds by ${fmtNum(-g.d)}`));
+    if (!g.first) {
+      const R = X.RENDER, st = { me: g.mine, ghost: g.theirs, t: S.t };
+      const cv = hisCanvas(480, 150, (ctx) => { if (R && R.gho) R.gho.chart(ctx, 480, 150, st); });
+      cv.className = 'ghoChart';
+      el.appendChild(cv);
+      const tb = h('div', 'ghoTbl');
+      const row = (k, a, b2, better) => { const r = h('div', 'gr'); r.appendChild(h('span', 'gk', k)); r.appendChild(h('b', 'ga' + (better === 1 ? ' up' : ''), a)); r.appendChild(h('b', 'gb' + (better === -1 ? ' up' : ''), b2)); tb.appendChild(r); };
+      const cmp = (a, b2, low) => (a === b2 ? 0 : (low ? a < b2 : a > b2) ? 1 : -1);
+      const hd = h('div', 'gr gh'); hd.appendChild(h('span', 'gk', '')); hd.appendChild(h('b', 'ga', 'YOU')); hd.appendChild(h('b', 'gb', 'GHOST')); tb.appendChild(hd);
+      const me = g.me, gh = g.ghost, where = (a) => (a >= 5 ? `Loop ${a - 4}` : a === 4 ? 'Back Room' : `Act ${a || 1}`);
+      row('Score', fmtNum(me.s), fmtNum(gh.s), cmp(me.s, gh.s));
+      row('Fights won', String(me.n), String(gh.n), cmp(me.n, gh.n));
+      row('Reached', where(me.a) + (me.won ? ' ✔' : ''), where(gh.a) + (gh.won ? ' ✔' : ''), cmp(me.a + (me.won ? 0.5 : 0), gh.a + (gh.won ? 0.5 : 0)));
+      row('Turns', String(me.tu), String(gh.tu | 0), 0);
+      row('Time', rushFmtT(me.t).replace(/\.\d$/, ''), rushFmtT(gh.t | 0).replace(/\.\d$/, ''), 0);
+      el.appendChild(tb);
+    }
+    el.appendChild(h('span', 's', g.saved ? (g.first ? `Your next attempt ${g.k === 'd' ? 'today' : 'this week'} races this climb.` : 'New ghost saved: the next attempt races this one.') : 'Your ghost keeps its crown. Beat it next time.'));
+    box.appendChild(el);
+    return el;
+  }
+  // ================================================================ /GHOST
+
   // ================================================================ FAMILY (round 9)
   /* Enemy families in a fight (DESIGN.md "Enemy families (round 9)"). COMBAT
      runs the bond (its FAMILY block); this stages it: the family's name on
@@ -18498,6 +19375,651 @@ const GAME = (() => {
   }
   // ================================================================ /REROLL
 
+  // ================================================================ MIX (round 10)
+  /* The mix and juice pass 2 (DESIGN.md "Mix and juice pass 2 (round 10)").
+     The hit stop budget: hit stops (FS.hitStop, set with Math.max by every
+     big hit, crit, blast and stomp) draw frozen time from MIX_HS.cap that
+     refills at MIX_HS.refill a second; once it is spent the physics runs on,
+     so a volley of crits never turns into a stutter. The camera's trauma
+     budget lives in RENDER.fx (fx.budget). */
+  const MIX_HS = { cap: 0.3, refill: 0.3 };
+  function mixHsTick(dt) {
+    const b = S.mixHs == null ? MIX_HS.cap : S.mixHs;
+    if (b < MIX_HS.cap) S.mixHs = Math.min(MIX_HS.cap, b + Math.max(0, dt || 0) * MIX_HS.refill);
+  }
+  // Spends dt of frozen time; false once the budget cannot cover it.
+  function mixHsSpend(dt) {
+    const b = S.mixHs == null ? MIX_HS.cap : S.mixHs;
+    if (b < dt) { S.mixHs = 0; return false; }
+    S.mixHs = b - dt;
+    return true;
+  }
+
+  /* Screen entrances (juice pass 2). setScreen (one line) marks the new
+     screen .mixIn for MIX_IN.secs: its content rises in and its lists
+     stagger (the mix-css block in index.html, zero specificity, so a
+     screen's own entrance always wins), the HUD slides back in when it
+     returns (.mixHud), and the run-end numbers count up from zero. Nothing
+     here ever blocks input: the classes only animate and come off again.
+     Reduced motion (Shake off, or the OS setting) skips the classes; the
+     suites (headless) keep the timers and never touch a number. */
+  const MIX_IN = { secs: 0.8, hud: 0.55, count: 0.6, gap: 0.05, countMax: 24, tickGap: 0.07 };
+  const MIX_SCR = { chars: 1, rest: 1, forge: 1, event: 1, help: 1, tips: 1, collection: 1, stickers: 1, history: 1, codex: 1, weekly: 1,
+    shop: 1, counter: 1, parts: 1, bin: 1, treasure: 1, win: 1, gameover: 1, map: 1, compactor: 1, rushmenu: 1 };
+  const MIX_HUD = { map: 1, fight: 1, arcade: 1 };
+  const MIX_COUNT = { win: '.kv > b, .hlt .v', gameover: '.kv > b, .hlt .v', history: '.hisScore' };
+  const MIX_RE = { collection: 1, history: 1, codex: 1 };   // their tabs and filters rebuild the screen in place
+  function mixUi() { return S.mixUi || (S.mixUi = { screen: null, t: 0, hud: 0, n: 0, el: null, hudEls: [], counts: [], want: null, tickT: 0, calm: false }); }
+  function mixCalm() {
+    if (fx().reduced) return true;
+    try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
+  }
+  function mixClassOff(u, which) {
+    if (which !== 'hud' && u.el) { try { u.el.classList.remove('mixIn'); } catch (e) { /* a stub */ } u.el = null; }
+    if (which !== 'in') { for (const e of u.hudEls) { try { e.classList.remove('mixHud'); } catch (err) { /* a stub */ } } u.hudEls.length = 0; }
+    if (!which && u.re) { try { u.re.classList.remove('mixRe'); } catch (e) { /* a stub */ } u.re = null; u.reT = 0; }
+  }
+  function mixScreen(from, to) {
+    const u = mixUi();
+    if (from === to) {
+      // a screen rebuilding itself never replays its entrance; a tab or a
+      // filter on a list screen deals its new list in (.mixRe)
+      if (MIX_RE[to] && !u.calm && !mixCalm()) {
+        const el = $('scr-' + to);
+        if (el && el.classList) { el.classList.add('mixRe'); u.re = el; u.reT = MIX_IN.secs; }
+      }
+      return;
+    }
+    mixClassOff(u);
+    u.screen = to; u.n++;
+    u.t = MIX_SCR[to] ? MIX_IN.secs : 0;
+    u.hud = MIX_HUD[to] && !MIX_HUD[from] ? MIX_IN.hud : 0;
+    u.counts.length = 0; u.want = MIX_COUNT[to] || null;
+    u.calm = mixCalm();
+    if (u.calm) return;
+    const el = u.t ? $('scr-' + to) : null;
+    if (el && el.classList) { el.classList.add('mixIn'); u.el = el; }
+    if (u.hud) {
+      for (const id of to === 'fight' ? ['top', 'playerRow', 'ctrl'] : ['top']) {
+        const e = $(id);
+        if (e && e.classList) { e.classList.add('mixHud'); u.hudEls.push(e); }
+      }
+    }
+  }
+  // The run-end numbers (the stats, the highlights, the history scores) count up from zero.
+  function mixCountStart(sel) {
+    const u = mixUi(), root = $('scr-' + S.screen);
+    if (!root || !root.querySelectorAll) return 0;
+    let els = [];
+    try { els = [...root.querySelectorAll(sel)]; } catch (e) { els = []; }
+    for (const el of els) {
+      if (u.counts.length >= MIX_IN.countMax) break;
+      const s = String(el.textContent || '').trim();
+      if (!/^\d{1,3}(,\d{3})*$|^\d+$/.test(s)) continue;
+      const lab = el.previousElementSibling ? String(el.previousElementSibling.textContent || '') : '';
+      if (/seed/i.test(lab)) continue;   // a seed is a name, not a tally
+      const to = +s.replace(/,/g, '');
+      if (!(to > 1)) continue;
+      u.counts.push({ el, to, comma: s.indexOf(',') >= 0 || to >= 10000, t: -u.counts.length * MIX_IN.gap });
+      el.textContent = '0';
+    }
+    return u.counts.length;
+  }
+  function mixCountStep(dt) {
+    const u = mixUi();
+    let live = 0, k0 = 1;
+    for (let i = u.counts.length - 1; i >= 0; i--) {
+      const c = u.counts[i];
+      c.t += dt;
+      const k = U.clamp(c.t / MIX_IN.count, 0, 1), e = 1 - Math.pow(1 - k, 3);
+      const v = Math.round(c.to * e);
+      c.el.textContent = c.comma ? v.toLocaleString('en-US') : String(v);
+      if (k >= 1) u.counts.splice(i, 1); else { live++; if (k > 0) k0 = Math.min(k0, k); }
+    }
+    if (live && (u.tickT -= dt) <= 0) { u.tickT = MIX_IN.tickGap; snd('tick', { pitch: 0.9 + k0 * 0.7, vol: 0.7 }); }
+  }
+  function mixTick(dt) {
+    const u = S.mixUi;
+    if (!u) return;
+    if (u.t > 0 && (u.t -= dt) <= 0) { u.t = 0; mixClassOff(u, 'in'); }
+    if (u.hud > 0 && (u.hud -= dt) <= 0) { u.hud = 0; mixClassOff(u, 'hud'); }
+    if (u.reT > 0 && (u.reT -= dt) <= 0) { u.reT = 0; if (u.re) { try { u.re.classList.remove('mixRe'); } catch (e) { /* a stub */ } u.re = null; } }
+    if (u.want && !S.headless && S.screen === u.screen && !(S.screen === 'gameover' && S.hisRecap)) {   // the game over counts once its recap is put away
+      const sel = u.want;
+      u.want = null;
+      mixCountStart(sel);
+    }
+    if (u.counts.length) mixCountStep(dt);
+  }
+  // ================================================================ /MIX
+
+  // ================================================================ ROS (round 10)
+  /* Ms. Bubbles, the mutator pack and three pets (DESIGN.md "Ms. Bubbles, the
+     mutator pack and three pets (round 10)"). Fight-only state in FS.ros
+     (never saved: a mid-fight reload restarts the fight from its seed, as
+     ever) with its own rng off the fight seed, so a fight without bubbles,
+     the new mutators or the new pets is bit for bit the old one.
+     - Bubbles: COMBAT says how many a turn (rosBlowN) and when soap blows more
+       ({t:'ros', k:'blow'}); once the pile settles they are blown one by one
+       around the prize picked (the most buried, far from the chute; now and
+       then a double bubble around two touching prizes). A world pre-hook
+       floats them up to a band under the rail (PHYS.rosFloat) where they drift
+       together into a foam cluster. A claw that lifts with a bubble touched
+       carries it welded under the hub (no slip, whatever the claw type); at
+       the release it pops over the chute. The grab's pops go to COMBAT.rosPop
+       (Block, the Bubble Combo); what still floats when the turn ends bursts
+       in the bin (rosPop 'bin').
+     - Mutators: Moon Bounce (rosBody), Earthquake (rosQuake: a warning, then a
+       jolt), Mirror Machine (the pointer and the keys: rosMirX / rosMirK; the
+       GAME.steer API stays literal), Sticky Fingers (the claw glues its catch;
+       over the chute a glued prize may ride home), Rising Water
+       (PHYS.rosFlood, the level rises each turn). Tiny Claw is COMBAT's.
+     - Pets: the Penguin's belly slide, the Mole Rat's dig, the Robot Vacuum's
+       sweep and dump, reached from the PETS block (rosPetPick, rosPetSpot,
+       rosPetStart, rosPetDo, rosPetEffect).
+     Hooks: onRigEvent (rosRig), deliver (rosDeliver), grabFinished
+     (rosGrabDone), endTurn (rosTurnEnd), spawnBody (rosBody), applyEvent
+     (rosEvent), drawFight (rosCabDraw, rosDraw), update (rosTick), pointer and
+     the keys (rosMirX, rosMirK). */
+  const ROSK = {
+    floatY: 150, floatDy: 15, maxFloat: 6, blowGap: 0.32, firstAt: 0.7, form: 0.28, pad: 8, popT: 0.45,
+    drift: 10, wobble: 8, grab: 0.8,
+    glueMax: 3,
+    tremorMin: 1.6, tremorMax: 7.5, tremorWarn: 0.8, tremorV: 320,
+    flood0: 0.12, floodStep: 0.08, floodMax: 0.42, floodRise: 36, rho: 0.95,
+    sweepCap: [1, 1, 2, 2, 3], sweepGap: 0.3,
+  };
+  const ROSF = { k: 26, c: 9, vmax: 240 };
+  Object.assign(ANN.PRI, { bubble: 53 });
+  Object.assign(ANN.WAIT, { bubble: 2 });
+  Object.assign(PET_PITCH, { penguin: 1.3, molerat: 1.05, roomba: 1.6 });
+  Object.assign(PET_MOVE, { penguin: 'ground', molerat: 'ground', roomba: 'ground' });
+  Object.assign(PET_BED, { penguin: '#8dfff5', molerat: '#c8a070', roomba: '#a6ff5e' });
+  const ROS_PETS = { slide: 1, dig: 1, sweep: 1 };
+  function rosFS() {
+    if (!FS || !F) return null;
+    if (!FS.ros) {
+      FS.ros = {
+        rng: U.rng((((FS.seed >>> 0) ^ 0xb0bb1e) >>> 0) || 11), bubs: [], nid: 0, want: 0, turn: -1, turnT: 0, blowT: 0, hookW: null,
+        glue: [], flood: null, floodW: null, level: CAB.h, levelTo: CAB.h, quakes: [], warn: 0, grab: [], log: [], dump: [], dumpT: 0,
+        finger: null, fingerT: -9, combo: 0,
+      };
+    }
+    return FS.ros;
+  }
+  const rosLive = (b) => !!(b && FS && FS.items.indexOf(b) >= 0);
+  function rosBubOf(b) {
+    const R0 = FS && FS.ros;
+    if (!R0) return null;
+    for (const B of R0.bubs) if (B.ph !== 'popped' && B.bodies.indexOf(b) >= 0) return B;
+    return null;
+  }
+  const rosFloating = () => { const R0 = FS && FS.ros; let n = 0; if (R0) for (const B of R0.bubs) if (B.ph === 'form' || B.ph === 'float') n++; return n; };
+  function rosGlued(b) { const R0 = FS && FS.ros; return !!(R0 && R0.glue.some((G) => G.b === b)); }
+  // Add the world pre-hook once per world (the bubbles and the glue).
+  function rosHookOn(R0) {
+    if (!FS.world || R0.hookW === FS.world) return;
+    FS.world.addHook(rosHook);
+    R0.hookW = FS.world;
+  }
+  // A velocity weld under the hub that moves with it (the hub's own velocity fed forward), like the octopus's.
+  function rosWeld(b, tx, ty, h, H, i) {
+    const px = H.px[i], py = H.py[i];
+    const fvx = px == null || !(h > 0) ? 0 : (tx - px) / h, fvy = py == null || !(h > 0) ? 0 : (ty - py) / h;
+    H.px[i] = tx; H.py[i] = ty;
+    let vx = U.clamp(fvx, -600, 600) + (tx - b.x) * 16, vy = U.clamp(fvy, -600, 600) + (ty - b.y) * 16;
+    const sp = Math.hypot(vx, vy);
+    if (sp > 900) { vx *= 900 / sp; vy *= 900 / sp; }
+    b.vx = vx; b.vy = vy - GRAVITY * (b.gs == null ? 1 : b.gs) * h;
+    b.av *= 0.8; b.sl = false; b.slT = 0;
+  }
+  function rosHook(h) {
+    const R0 = FS && FS.ros, rig = FS && FS.rig;
+    if (!R0 || !F || !X.PHYS || !X.PHYS.rosFloat) return;
+    let stuck = null;
+    const K = rig && rig.ctl, geo = rig && rig.geo;
+    for (const B of R0.bubs) {
+      if (B.ph === 'popped') continue;
+      const held = B.ph === 'held';
+      // a dropping claw that reaches a floating bubble stops there and closes on it (a mid-air catch, like the magnetic lid's)
+      if (!held && K && K.st === 'drop' && geo) {
+        const reach = Math.max(30, geo.reach || 0), span = Math.max(40, geo.span || 0);
+        for (const b of B.bodies) { const dy = b.y - K.y; if (dy > 4 && dy < reach * 0.95 + B.r * 0.3 && Math.abs(b.x - K.x) < span * 0.35 + B.r * 0.5) { K.touch = true; if (K.tw && K.tw.done) K.tw.done[0] = K.tw.done[1] = true; break; } }   // (the twin heads stop together)
+      }
+      if (held && !stuck) stuck = rig && rig.stuck ? rig.stuck() : [];
+      for (let i = 0; i < B.bodies.length; i++) {
+        const b = B.bodies[i];
+        if (b.tube || !rosLive(b)) continue;
+        if (held) {
+          if (!rig || stuck.indexOf(b) >= 0) continue;
+          const tx = rig.x + B.hold.dx + B.off[i].dx, ty = rig.y + B.hold.dy + B.off[i].dy;
+          // a soft bubble slips in between the fingers while it is drawn to its spot (then the claw holds it)
+          if (Math.abs(b.x - tx) + Math.abs(b.y - ty) > 12) b.passClaw = Math.max(b.passClaw || 0, 1 / 120);
+          rosWeld(b, tx, ty, h, B.hold, i);
+        }
+        else if (B.ph === 'float' || B.t > ROSK.form) X.PHYS.rosFloat(b, B.gx + B.off[i].dx, B.gy + B.off[i].dy, h, GRAVITY, ROSF);
+      }
+    }
+    if (R0.glue.length && rig) {
+      if (!stuck) stuck = rig.stuck ? rig.stuck() : [];
+      for (const G of R0.glue) if (rosLive(G.b) && !G.b.tube && stuck.indexOf(G.b) < 0) rosWeld(G.b, rig.x + G.dx, rig.y + G.dy, h, G, 0);
+    }
+  }
+  // The claw is free and the pile has settled: a bubble can be blown.
+  function rosCanBlow() {
+    const rig = FS.rig;
+    if (!rig || FS.grabInFlight || FS.pendingDrop || FS.queue.length || FS.playQ.length || FS.spawnQ.length || FS.vs || FS.evo) return false;
+    for (const th of FS.throws) if (!th.landed) return false;
+    for (const b of FS.items) if (b.vx * b.vx + b.vy * b.vy > 40000 && !rosBubOf(b)) return false;
+    return (rig.phase === 'idle' || rig.phase === 'moving') && rosFloating() < ROSK.maxFloat;
+  }
+  // Blow one bubble around the prize it picks (the most buried, far from the chute; now and then two touching ones).
+  function rosBlow(R0) {
+    if (!FS.world) return false;
+    const list = FS.items.filter((b) => b.data && b.data.inst && !b.tube && !(b.held > 0) && !rosBubOf(b) && !rosGlued(b) && !b.data.bestHang &&
+      !(FS.cabinet && FS.cabinet.inChute(b)) && b.y > ROSK.floatY + 24);
+    if (!list.length) return false;
+    const bw = binWidth();
+    let best = null, bs = -1e9;
+    for (const b of list) { const s = petBuried(b, list) * 2 + (bw - b.x) / 120 + R0.rng() * 1.5; if (s > bs) { bs = s; best = b; } }
+    const bodies = [best];
+    if (R0.rng() < 0.3) {
+      let nb = null, nd = 1e9;
+      for (const o of list) { if (o === best) continue; const d = Math.hypot(o.x - best.x, o.y - best.y); if (d < (o.br + best.br) * 1.25 && d < nd) { nd = d; nb = o; } }
+      if (nb) bodies.push(nb);
+    }
+    let cx = 0, cy = 0;
+    for (const b of bodies) { cx += b.x / bodies.length; cy += b.y / bodies.length; }
+    const off = bodies.map((b) => (bodies.length > 1 ? { dx: U.clamp(b.x - cx, -18, 18), dy: U.clamp(b.y - cy, -12, 12) } : { dx: 0, dy: 0 }));
+    let r = 0;
+    bodies.forEach((b, i) => { r = Math.max(r, Math.hypot(off[i].dx, off[i].dy) + (b.br || 12)); });
+    r += ROSK.pad;
+    const id = ++R0.nid;
+    const B = { id, bodies, off, uids: bodies.map((b) => b.data.inst.uid), r, x: cx, y: cy, tx: U.clamp(cx, r + 6, bw - r - 6), ty: ROSK.floatY + ((id % 3) - 1) * ROSK.floatDy,
+      gx: cx, gy: cy, ph: 'form', t: 0, seed: R0.rng() * 10, hold: null, got: false, popT: 0 };
+    B.gx = B.tx; B.gy = B.ty;
+    R0.bubs.push(B);
+    for (const b of bodies) { b.sl = false; b.slT = 0; }
+    if (X.COMBAT.rosBlown) X.COMBAT.rosBlown(F, 1);
+    const sx = CAB.x + cx, sy = CAB.y + cy;
+    fx().ring(sx, sy, '#bff4ff', { r0: 4, r1: r + 10, w: 3, life: 0.35 });
+    fx().burst(sx, sy, '#dffbff', fx().reduced ? 3 : 8, { kind: 'bubble', speed: 60, size: 3, life: 0.6, gravity: -80 });
+    if (bodies.length > 1) fx().text(sx, sy - r - 12, 'DOUBLE BUBBLE!', '#8dfff5', { size: 14, life: 0.9 });
+    snd('rosBlow', { pitch: 0.9 + R0.rng() * 0.3 });
+    R0.log.push({ k: 'blow', id, uids: B.uids.slice(), turn: F.turn });
+    return true;
+  }
+  // Per frame: the bubbles' centres, the band targets drifting into a cluster, pops fading.
+  function rosDrift(R0, dt) {
+    const bw = binWidth();
+    let mx = 0, n = 0;
+    for (const B of R0.bubs) {
+      if (B.ph === 'popped') { B.popT += dt; continue; }
+      let x = 0, y = 0, k = 0;
+      B.bodies.forEach((b, i) => { if (rosLive(b)) { x += b.x - B.off[i].dx; y += b.y - B.off[i].dy; k++; } });
+      if (!k) { B.ph = 'popped'; B.popT = 0; continue; }
+      B.x = x / k; B.y = y / k;
+      if (B.ph === 'form' && B.t > ROSK.form + 0.15) B.ph = 'float';
+      if (B.ph === 'float' || B.ph === 'form') { mx += B.tx; n++; }
+    }
+    if (n) mx /= n;
+    const fl = R0.bubs.filter((B) => B.ph === 'float' || B.ph === 'form');
+    for (const B of fl) {
+      B.tx += U.clamp(mx - B.tx, -1, 1) * ROSK.drift * dt;
+      for (const O of fl) {
+        if (O === B) continue;
+        const d = B.tx - O.tx, need = (B.r + O.r) * 0.92;
+        if (Math.abs(d) < need) B.tx += (d >= 0 ? 1 : -1) * Math.min(need - Math.abs(d), 60 * dt);
+      }
+      B.tx = U.clamp(B.tx, B.r + 6, bw - B.r - 6);
+      B.gx = U.clamp(B.tx + Math.sin(S.t * 0.9 + B.seed) * ROSK.wobble, B.r + 4, bw - B.r - 4);
+      B.gy = B.ty + Math.sin(S.t * 1.6 + B.seed * 2) * 4;
+    }
+    for (let i = R0.bubs.length - 1; i >= 0; i--) if (R0.bubs[i].ph === 'popped' && R0.bubs[i].popT > ROSK.popT && R0.grab.indexOf(R0.bubs[i]) < 0) R0.bubs.splice(i, 1);
+  }
+  // Pop a bubble where it is (the chute or the bin): a ring, droplets, a sound.
+  function rosPopFx(B, where) {
+    const x = CAB.x + B.x, y = CAB.y + B.y;
+    fx().ring(x, y, '#dffbff', { r0: B.r * 0.8, r1: B.r * 1.9, w: 3, life: 0.3 });
+    fx().burst(x, y, '#bff4ff', fx().reduced ? 4 : 12, { kind: 'bubble', speed: 150, size: 2.5, life: 0.45, gravity: 300 });
+    fx().text(x, y - B.r - 8, where === 'bin' ? 'SPLASH' : 'POP!', where === 'bin' ? '#9fd8ff' : '#8dfff5', { size: where === 'bin' ? 13 : 16, life: 0.8 });
+    snd('rosPop', { pitch: 0.9 + ((B.id * 37) % 10) / 20 });
+  }
+  function rosRig(ev) {
+    const R0 = FS && FS.ros, rig = FS && FS.rig;
+    if (!R0 || !rig || !F) return;
+    const m = mutF();
+    if (ev === 'lift') {
+      // a bubble the claw touched rides along, welded under the hub
+      const reach = rig.geo ? rig.geo.reach : 40;
+      let got = 0;
+      for (const B of R0.bubs) {
+        if (B.ph !== 'float' && B.ph !== 'form') continue;
+        const touched = B.bodies.some((b) => { if (!rosLive(b)) return false; const d = Math.hypot(b.x - rig.x, b.y - (rig.y + reach * 0.55)); return b.tube || (d < reach * 1.3 + B.r && (b.held > 0 || d < reach * ROSK.grab + B.r)); });
+        if (!touched) continue;
+        B.ph = 'held';
+        // (the vacuum holds a bubble under its nozzle's mouth; the other claws between their fingers)
+        const my = rig.type === 'vacuum' && rig.vac && rig.vac.mouthY != null ? rig.vac.mouthY - rig.y + B.r : null;
+        B.hold = { dx: U.clamp(B.x - rig.x, -14, 14), dy: my != null ? my : U.clamp(B.y - rig.y, Math.max(14, reach * 0.65), reach * 0.9 + 10), px: [], py: [] };
+        got++;
+        R0.log.push({ k: 'catch', id: B.id, turn: F.turn });
+      }
+      // two or more at once hang side by side (sorted as they lay), never on top of each other
+      const held = R0.bubs.filter((B) => B.ph === 'held' && B.hold && !B.hold.set).sort((p, q) => p.x - q.x);
+      if (held.length > 1) held.forEach((B, i) => { B.hold.dx = (i - (held.length - 1) / 2) * Math.min(30, 70 / (held.length - 1)); B.hold.dy += (i % 2) * 8; B.hold.set = true; });
+      if (got) { fx().text(CAB.x + rig.x, CAB.y + rig.y + reach + 30, got > 1 ? 'BUBBLES x' + got + '!' : 'BUBBLE CATCH!', '#8dfff5', { size: 15, life: 0.8 }); snd('rosBlow', { pitch: 1.5 }); }
+      // Sticky Fingers: the catch is glued on (never a bubble, a pet's hold or a weld of the rig's own)
+      if (m && m.sticky > 0) {
+        const stuck = rig.stuck ? rig.stuck() : [], P = FS.pet;
+        for (const b of carried()) {
+          if (R0.glue.length >= ROSK.glueMax) break;
+          if (!b.data || !b.data.inst || b.tube || rosBubOf(b) || rosGlued(b) || stuck.indexOf(b) >= 0 || (P && P.hold && P.hold.b === b)) continue;
+          R0.glue.push({ b, dx: U.clamp(b.x - rig.x, -26, 26), dy: U.clamp(b.y - rig.y, 12, reach + 12), px: [], py: [], stay: false });
+        }
+        if (R0.glue.length) { fx().text(CAB.x + rig.x + 40, CAB.y + rig.y + reach, 'STICKY!', '#ffc94d', { size: 14, life: 0.7 }); snd('gooSplat', { pitch: 1.3 }); }
+      }
+    } else if (ev === 'release') {
+      // (the drops are nudged to the chute's middle, so a bubble held off-centre never lands on the divider)
+      const cmid = binWidth() + CAB.chuteW / 2;
+      for (const B of R0.bubs) if (B.ph === 'held') { B.ph = 'popped'; B.popT = 0; R0.grab.push(B); rosPopFx(B, 'chute'); for (const b of B.bodies) if (rosLive(b) && !b.tube) { b.vy = Math.max(b.vy, 80); b.vx = U.clamp((cmid - b.x) * 5, -160, 160); b.passClaw = Math.max(b.passClaw || 0, 0.35); } }
+      // a glued prize may not let go over the chute: it rides home and drops there
+      if (R0.glue.length) {
+        const keep = [];
+        for (const G of R0.glue) if (m && R0.rng() < m.sticky) { G.stay = true; keep.push(G); }
+        R0.glue = keep;
+        if (keep.length) { fx().text(CAB.x + rig.x, CAB.y + rig.y + 70, 'STUCK!', '#ffc94d', { size: 17, life: 1 }); snd('gooSplat'); setMood('sad', 1.2); }
+      }
+    } else if (ev === 'home') {
+      if (R0.glue.length) { for (const G of R0.glue) if (rosLive(G.b)) { G.b.vy = 60; fx().text(CAB.x + G.b.x, CAB.y + G.b.y - 20, 'PLOP', '#ffc94d', { size: 13 }); } R0.glue = []; }
+      for (const B of R0.bubs) if (B.ph === 'held') { B.ph = 'popped'; B.popT = 0; rosPopFx(B, 'bin'); }
+    }
+  }
+  // A delivery: it came out of a popped bubble of this grab.
+  function rosDeliver(inst) {
+    const R0 = FS && FS.ros;
+    if (!R0 || !inst) return;
+    for (const B of R0.grab) if (B.uids.indexOf(inst.uid) >= 0) B.got = true;
+  }
+  // The grab settled: its bubbles that delivered pay out (COMBAT: Block, the Bubble Combo).
+  function rosGrabDone() {
+    const R0 = FS && FS.ros;
+    if (!R0 || !R0.grab.length) return;
+    const n = R0.grab.filter((B) => B.got).length;
+    R0.grab.length = 0;
+    if (n > 0 && F && X.COMBAT.rosPop) { R0.log.push({ k: 'pop', n, turn: F.turn }); enqueue(X.COMBAT.rosPop(F, n, 'chute'), PLAY_BEAT); }
+  }
+  // The turn ends: what still floats bursts in the bin; bubbles not yet blown are lost; glue lets go.
+  function rosTurnEnd() {
+    const R0 = FS && FS.ros;
+    if (!R0 || !F) return;
+    let n = 0;
+    for (const B of R0.bubs) if (B.ph === 'float' || B.ph === 'form' || B.ph === 'held') { B.ph = 'popped'; B.popT = 0; n++; rosPopFx(B, 'bin'); }
+    R0.want = 0; R0.glue = []; R0.quakes = []; R0.warn = 0;
+    if (n > 0) { R0.log.push({ k: 'burst', n, turn: F.turn }); if (X.COMBAT.rosPop) enqueue(X.COMBAT.rosPop(F, n, 'bin'), BEAT); }
+  }
+  // Moon Bounce on every body.
+  function rosBody(b) {
+    const m = mutF();
+    if (b && m && m.bounce > 0 && X.PHYS && X.PHYS.rosBounce) X.PHYS.rosBounce(b, m.bounce);
+  }
+  function rosEvent(ev) {
+    const R0 = rosFS();
+    if (!R0 || !ev) return;
+    if (ev.k === 'blow') { R0.want += ev.n | 0; fx().text(270, 470, 'SOAP! +' + (ev.n | 0) + ' BUBBLE' + ((ev.n | 0) > 1 ? 'S' : ''), '#8dfff5', { size: 16 }); }
+    else if (ev.k === 'pop') { if ((ev.block | 0) > 0) fx().text(CAB.x + CAB.w - 130, CAB.y + CAB.h - 150, 'POP x' + (ev.n | 0), '#8dfff5', { size: 16 }); }
+    else if (ev.k === 'combo') {
+      R0.combo = 1.2;
+      banner('BUBBLE COMBO x' + (ev.n | 0), 'jackpot', 1.3, 'bubble');
+      const cx = CAB.x + CAB.w / 2, cy = CAB.y + CAB.h * 0.4;
+      fx().burst(cx, cy, '#bff4ff', fx().reduced ? 10 : 30, { kind: 'bubble', speed: 220, size: 4, life: 0.9, gravity: -60 });
+      fx().ring(cx, cy, '#8dfff5', { r0: 10, r1: 240, w: 6, life: 0.55 });
+      fx().shake(5 + Math.min(8, ev.n * 2));
+      FS.party = Math.max(FS.party, 1.2); FS.marquee = 'FOAM PARTY!';
+      snd('rosCombo', { n: ev.n }); haptic('jackpot');
+    } else if (ev.k === 'burst') snd('rosPop', { pitch: 0.7 });
+  }
+
+  // ---- the mutator pack in the cabinet
+  // Mirror Machine: the finger's x in the bin, wired backwards (the claw goes the other way).
+  function rosMirX(x) {
+    const m = mutF();
+    if (!m || !m.mirror) return x;
+    const R0 = rosFS();
+    if (R0) { R0.finger = x; R0.fingerT = S.t; }
+    return binWidth() - x;
+  }
+  const rosMirK = () => { const m = mutF(); return m && m.mirror ? -1 : 1; };
+  // Earthquake: this turn's tremors at seeded times, each with a warning rattle first.
+  function rosTurnStart(R0, m) {
+    R0.quakes = [];
+    if (m && m.tremor > 0) {
+      for (let i = 0; i < m.tremor; i++) R0.quakes.push(ROSK.tremorMin + R0.rng() * (ROSK.tremorMax - ROSK.tremorMin));
+      R0.quakes.sort((a, b) => a - b);
+    }
+  }
+  function rosQuake(R0) {
+    if (!FS.world) return;
+    FS.world.wakeAll();
+    for (const b of FS.items) {
+      if (b.tube || (b.held > 0 && FS.rig && FS.rig.phase !== 'idle') || rosGlued(b)) continue;
+      b.vy -= 160 + R0.rng() * ROSK.tremorV * 0.6;
+      b.vx += (R0.rng() - 0.5) * 260;
+      b.av += (R0.rng() - 0.5) * 6;
+    }
+    fx().shake(fx().reduced ? 3 : 11); fx().kick(0, 6);
+    fx().text(CAB.x + CAB.w / 2 - 30, CAB.y + 60, 'EARTHQUAKE!', '#ff8a2e', { size: 22, life: 1 });
+    fx().emit('dust', CAB.x + CAB.w * 0.3, CAB.y + CAB.h - 6, { n: 1, power: 1 });
+    fx().emit('dust', CAB.x + CAB.w * 0.7, CAB.y + CAB.h - 6, { n: 1, power: 1 });
+    snd('rumble'); snd('rosQuake');
+    haptic('bigHit');
+    R0.log.push({ k: 'quake', turn: F.turn });
+  }
+  function rosQuakeTick(R0, dt, mine) {
+    R0.warn = 0;
+    if (!mine || !R0.quakes.length) return;
+    const q = R0.quakes[0];
+    if (R0.turnT >= q - ROSK.tremorWarn) R0.warn = U.clamp((R0.turnT - (q - ROSK.tremorWarn)) / ROSK.tremorWarn, 0, 1);
+    if (R0.warn > 0 && !fx().reduced && (FS.frameN & 3) === 0) fx().shake(0.6);
+    if (R0.turnT >= q) { R0.quakes.shift(); rosQuake(R0); }
+  }
+  // Rising Water: the level for this turn, eased in; the physics hook does the floating and sinking.
+  function rosFloodTick(R0, m, dt) {
+    if (!m || !(m.flood > 0) || !FS.world || !X.PHYS || !X.PHYS.rosFlood) return;
+    if (R0.floodW !== FS.world) {
+      if (R0.flood && R0.flood.remove) R0.flood.remove();
+      R0.flood = X.PHYS.rosFlood(FS.world, { y: R0.level, xMax: binWidth() - 2, g: GRAVITY, rho: ROSK.rho });
+      R0.floodW = FS.world;
+    }
+    const f = Math.min(ROSK.floodMax, ROSK.flood0 + ROSK.floodStep * Math.max(0, (F.turn | 0) - 1) * m.flood);
+    R0.levelTo = CAB.h - f * CAB.h;
+    if (R0.level > R0.levelTo) R0.level = Math.max(R0.levelTo, R0.level - ROSK.floodRise * dt);
+    R0.flood.set(R0.level);
+  }
+  // The Robot Vacuum's catch drops down the chute one prize at a time (each on its own: never a DOUBLE).
+  function rosDumpTick(R0, dt) {
+    if (!R0.dump.length) return;
+    R0.dumpT -= dt;
+    // the next one drops once the last is delivered, and never into a grab in flight (its DOUBLE count is its own)
+    if (R0.dumpT > 0 || rosLive(R0.dumpB) || FS.grabInFlight) return;
+    R0.dumpT = ROSK.sweepGap;
+    const inst = R0.dump.shift();
+    if (!inst || F.bin.indexOf(inst) < 0 || bodyOf(inst)) return;
+    const cb = FS.cabinet ? FS.cabinet.bounds : null, cx = (cb ? cb.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW / 2;
+    FS.delivered = 0;
+    const b = spawnBody(inst, { x: cx, y: (cb && cb.dividerTop != null ? cb.dividerTop : CAB.h * 0.55) - 24, a: 0 });
+    R0.dumpB = b;
+    if (b) { b.vx = 0; b.vy = 140; b.data.clawG = -1; }
+    fx().text(CAB.x + cx - 40, CAB.y + CAB.h * 0.45, 'DUMP!', '#2ee6d6', { size: 14, life: 0.7 });
+    snd('rosSweep', { pitch: 1.3 });
+  }
+  function rosTick(dt) {
+    if (S.screen !== 'fight' || !F || !FS || FS.done || !FS.world) return;
+    const m = mutF(), p = petOf();
+    if (!F.bub && !FS.ros && !(m && (m.bounce || m.tremor || m.mirror || m.sticky || m.flood)) && !(p && ROS_PETS[(petDefOf(p.id) || {}).act])) return;
+    const R0 = rosFS();
+    if (FS.evo) return;
+    rosHookOn(R0);
+    const mine = F.phase === 'player' && !FS.enemyTurn && !FS.vs && !FS.outro;
+    if (mine && R0.turn !== F.turn) { R0.turn = F.turn; R0.turnT = 0; R0.want += X.COMBAT.rosBlowN ? X.COMBAT.rosBlowN(F) : 0; rosTurnStart(R0, m); }
+    if (mine) R0.turnT += dt;
+    if (R0.want > 0 && mine && R0.turnT >= ROSK.firstAt && rosCanBlow()) {
+      R0.blowT -= dt;
+      if (R0.blowT <= 0) { R0.blowT = ROSK.blowGap; rosBlow(R0); R0.want--; }
+    }
+    for (const B of R0.bubs) B.t += dt;
+    rosDrift(R0, dt);
+    rosQuakeTick(R0, dt, mine);
+    rosFloodTick(R0, m, dt);
+    rosDumpTick(R0, dt);
+    if (R0.combo > 0) R0.combo = Math.max(0, R0.combo - dt);
+  }
+  // Drawn in the cabinet (inside its clip), over the pile and under the claw.
+  const ROS_BST = { t: 0, k: 1, held: false, seed: 0, pop: 0, n: 1 };
+  function rosCabDraw(ctx, t, layer) {
+    const R0 = FS && FS.ros, R = X.RENDER, RR = R && R.ros;
+    if (!R0 || !RR || layer !== 'front') return;
+    const m = mutF(), bw = binWidth();
+    if (R0.flood && R0.level < CAB.h - 1) RR.water(ctx, CAB.x, CAB.x + bw, CAB.y + R0.level, CAB.y + CAB.h, t);
+    for (const G of R0.glue) if (rosLive(G.b) && FS.rig) RR.goo(ctx, CAB.x + FS.rig.x, CAB.y + FS.rig.y + 10, CAB.x + G.b.x, CAB.y + G.b.y, t, G.stay);
+    for (const B of R0.bubs) {
+      ROS_BST.t = t; ROS_BST.seed = B.seed; ROS_BST.held = B.ph === 'held'; ROS_BST.n = B.bodies.length;
+      ROS_BST.k = U.clamp(B.t / ROSK.form, 0, 1); ROS_BST.pop = B.ph === 'popped' ? U.clamp(B.popT / ROSK.popT, 0, 1) : 0;
+      if (ROS_BST.pop >= 1) continue;
+      RR.bubble(ctx, CAB.x + B.x, CAB.y + B.y, B.r, ROS_BST);
+    }
+    if (m && m.mirror) {
+      RR.mirrorSign(ctx, CAB.x + 12, CAB.y + 8, t);
+      if (R0.finger != null && S.t - R0.fingerT < 0.4 && FS.rig) RR.mirrorFinger(ctx, CAB.x + R0.finger, CAB.x + FS.rig.targetX, CAB.y + 118, t);   // (under the parked claw, over the pile)
+    }
+    if (R0.warn > 0) RR.quakeSign(ctx, CAB.x + CAB.w / 2 - 20, CAB.y + CAB.h * 0.5, t, R0.warn);   // (mid-glass, clear of the claw and the marquee)
+  }
+  // Over the frame: the bubble gauge on the right post while bubbles are in play.
+  const ROS_MST = { n: 0, want: 0, popped: 0, t: 0, combo: 0 };
+  function rosDraw(ctx, t) {
+    const R0 = FS && FS.ros, R = X.RENDER;
+    if (!R0 || !F || !F.bub || !R || !R.ros) return;
+    ROS_MST.n = rosFloating(); ROS_MST.want = R0.want; ROS_MST.popped = F.bub.popped | 0; ROS_MST.t = t; ROS_MST.combo = R0.combo;
+    R.ros.meter(ctx, CAB.x + CAB.w + 12, CAB.y + 40, ROS_MST);
+  }
+
+  // ---- the three new pets (reached from the PETS block)
+  function rosPetPick(P, k, list) {
+    if (!ROS_PETS[k]) return undefined;
+    if (k === 'slide' || k === 'sweep') return { x: 26, y: CAB.h - 20 };
+    // dig: a Cinder Mole's mound first, else the bottom prize (the one farthest from the claw's aim on a tie)
+    const B = FS.best;
+    if (B && B.mounds && B.mounds.length) return { x: B.mounds[0].x, y: CAB.h - 10, mound: B.mounds[0] };
+    const aim = FS.rig ? FS.rig.targetX : binWidth() / 2;
+    let best = null;
+    for (const b of list) {
+      if (!best) { best = b; continue; }
+      const lo = b.y + (b.br || 12), lb = best.y + (best.br || 12);
+      if (lo > lb + 2 || (Math.abs(lo - lb) <= 2 && Math.abs(b.x - aim) > Math.abs(best.x - aim))) best = b;
+    }
+    return best ? { b: best } : null;
+  }
+  function rosPetSpot(P) {
+    const A = P.act;
+    if (!A || !ROS_PETS[A.k]) return null;
+    if (A.k === 'dig') { const b = A.b; return { x: CAB.x + U.clamp(b && petAlive(b) ? b.x : A.x, 20, binWidth() - 20), y: petFloorY() }; }
+    return { x: CAB.x + 26, y: petFloorY() };
+  }
+  function rosPetStart(P, tg) {
+    const A = P.act;
+    if (!A || !ROS_PETS[A.k]) return;
+    const lv = P.lv | 0;
+    A.x0 = CAB.x + 26; A.x1 = CAB.x + binWidth() - 26;
+    // the slide and the sweep: the trick lands at the start (fxAt), the run ends at A.run (rosPetFinish)
+    if (A.k === 'slide') { A.run = 0.95; A.dur = 1.0; A.fxAt = 0.2; A.pushed = {}; A.n = 0; }
+    if (A.k === 'dig') { A.dur = 1.2; A.fxAt = 0.5; A.mound = (tg && tg.mound) || null; }
+    if (A.k === 'sweep') { A.run = 1.15; A.dur = 1.2; A.fxAt = 0.2; A.bag = []; A.cap = ROSK.sweepCap[U.clamp(lv, 1, 5) - 1] + (evoSyn() ? 2 : 0); }
+  }
+  // The trick while it runs: the penguin slides and shoves, the vacuum drives and sucks up.
+  function rosPetDo(P, A, dt) {
+    if (!A || !ROS_PETS[A.k] || A.ph !== 'do') return;
+    const lv = P.lv | 0, pow = (D().petPow ? D().petPow(lv) : 1) * (1 + setPetStat('pow'));
+    if (A.k === 'slide' || A.k === 'sweep') {
+      const u = U.clamp(A.t / Math.max(0.1, A.run - 0.1), 0, 1);
+      if (u >= 1 && !A.fin) { A.fin = true; rosPetFinish(P, A); }
+      P.x = A.x0 + (A.x1 - A.x0) * (A.k === 'slide' ? 1 - (1 - u) * (1 - u) : u); P.y = petFloorY(); P.dir = 1;
+      const px = P.x - CAB.x;
+      for (const b of petItems()) {
+        const low = b.y + (b.br || 12) > CAB.h - (A.k === 'slide' ? 48 : 36);
+        if (!low || Math.abs(b.x - px) > (b.br || 12) + 14) continue;
+        const uid = b.data.inst.uid;
+        if (A.k === 'slide') {
+          if (A.pushed[uid]) continue;
+          A.pushed[uid] = 1; A.n++;
+          petWake(b); if (FS.world) FS.world.wakeAll();
+          b.vx = Math.max(b.vx, (300 + 30 * lv) * Math.min(1.6, pow)); b.vy = Math.min(b.vy, -70);
+          fx().emit('dust', CAB.x + b.x, CAB.y + b.y + 8, { n: 0.4, power: 0.4 });
+        } else if (A.bag.length < A.cap) {
+          const d = itemDef(b.data.inst.id);
+          if (!(b.data.inst.junk || d.rarity === 'junk' || (d.tags || []).indexOf('small') >= 0 || (b.br || 20) <= 13)) continue;
+          A.bag.push(b.data.inst);
+          removeBody(b);
+          fx().text(CAB.x + b.x, CAB.y + b.y - 24, 'SLURP', '#2ee6d6', { size: 12, life: 0.6 });
+          snd('rosSweep');
+        }
+      }
+      if (A.k === 'slide' && (FS.frameN & 3) === 0) fx().burst(P.x - 10, P.y - 3, '#dffbff', 1, { kind: 'snow', speed: 30, size: 2, life: 0.4, gravity: 60 });
+    } else if (A.k === 'dig' && (FS.frameN & 3) === 0 && !A.fx) fx().emit('dust', P.x, P.y - 4, { n: 0.3, power: 0.5 });
+  }
+  // A new pet's synergy through COMBAT (its proc and effect), counted for the Best Buds sticker.
+  function rosPetFire(P, k, o) {
+    if (!F || !FS || !X.COMBAT || !X.COMBAT.rosPetSyn || F.phase === 'over') return false;
+    enqueue(X.COMBAT.rosPetSyn(F, P.id, k, o), PROC_BEAT);
+    const mm = evoMeta();
+    mm.syn = (mm.syn | 0) + 1;
+    if (mm.syn === 1) { saveMeta(); achRun('meta'); }
+    S.evoSynFl = 1.2;
+    P.log.push({ k: 'syn', syn: P.id, turn: F.turn });
+    snd('petSyn', { pitch: PET_PITCH[P.id] || 1 });
+    return true;
+  }
+  // The trick lands (from petEffect's switch).
+  function rosPetEffect(P, A, ok, b, pow, label) {
+    if (!A || !ROS_PETS[A.k]) return;
+    const lv = P.lv | 0, syn = evoSyn();
+    if (A.k === 'slide') { fx().text(P.x, P.y - 40, 'SLIDE!', '#8dfff5', { size: 15 }); snd('rosSlide'); petSay(P); }
+    else if (A.k === 'sweep') { fx().text(P.x, P.y - 40, 'SWEEP!', '#2ee6d6', { size: 15 }); snd('rosSweep', { pitch: 0.8 }); }
+    else if (A.k === 'dig') {
+      if (A.mound && FS.best && FS.best.mounds.indexOf(A.mound) >= 0) { bestDig(A.mound); fx().text(P.x, P.y - 40, 'DUG UP!', '#c8a070', { size: 15 }); }
+      else if (ok && b && FS.world) {
+        const aim = U.clamp(FS.rig ? FS.rig.targetX : binWidth() / 2, (b.br || 12) + 8, binWidth() - (b.br || 12) - 8);
+        let top = CAB.h;
+        for (const o of FS.items) if (o !== b && Math.abs(o.x - aim) < (o.br || 12) + (b.br || 12)) top = Math.min(top, o.y - (o.br || 12));
+        fx().emit('dust', CAB.x + b.x, CAB.y + b.y, { n: 1, power: 0.8 });
+        b.x = aim; b.y = Math.max((b.br || 12) + 60, top - (b.br || 12) - 4); b.vx = 0; b.vy = -260; b.av = 3;
+        if (X.PHYS && X.PHYS.sync) X.PHYS.sync(b);
+        FS.world.wakeAll(); petWake(b);
+        fx().emit('dust', CAB.x + b.x, CAB.y + b.y + 10, { n: 1.2, power: 0.9 });
+        fx().ring(CAB.x + b.x, CAB.y + b.y, '#c8a070', { r0: 6, r1: 40, w: 3, life: 0.3 });
+        P.x = CAB.x + U.clamp(b.x - 22, 20, binWidth() - 20);
+        label('DIG!');
+      } else fx().text(P.x, P.y - 40, 'Nothing down here...', '#c8a070', { size: 13 });
+      snd('dig', { pitch: 1.2 });
+      if (syn) rosPetFire(P, 'gold', { v: 2 + lv, label: 'GOLD DIGGER!' });
+    }
+  }
+  // The end of the run: the penguin counts its shoves, the vacuum dumps its catch; the synergies fire.
+  function rosPetFinish(P, A) {
+    const syn = evoSyn();
+    if (A.k === 'slide') {
+      fx().text(P.x - 30, P.y - 40, A.n ? 'SLIDE x' + A.n + '!' : 'WHEEE!', '#8dfff5', { size: 15 });
+      P.log.push({ k: 'slid', n: A.n, turn: F.turn });
+      if (syn) rosPetFire(P, 'chill', { v: A.n >= 3 ? 2 : 1, label: 'SNOWBALL FIGHT!' });
+    } else if (A.k === 'sweep') {
+      const n = A.bag.length, R0 = rosFS();
+      if (R0) for (const inst of A.bag) R0.dump.push(inst);
+      A.bag = [];
+      fx().text(P.x - 30, P.y - 40, n ? 'SWEEP x' + n + '!' : 'ALL CLEAN.', '#2ee6d6', { size: 15 });
+      P.log.push({ k: 'swept', n, turn: F.turn });
+      if (syn) rosPetFire(P, 'block', { v: 3, label: 'TURBO SUCTION!' });
+    }
+  }
+  // ================================================================ /ROS
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -18548,6 +20070,15 @@ const GAME = (() => {
     cr8: {
       K: CR8T, get tur() { return FS && F && F.tur ? cr8S() : null; }, draw: (ctx, t) => { if (FS) cr8Draw(ctx, t); },
       event: (ev) => { if (FS && ev) cr8TurretEv(ev); }, clawEvent: (ev) => (FS && FS.rig ? clawTypeEvent(ev) : false), tick: (dt) => cr8Tick(dt || 1 / 60),
+    },
+    // ROS (round 10, DESIGN.md "Ms. Bubbles, the mutator pack and three pets"): the bubbles, the mutator pack's cabinet, the new pets
+    ros: {
+      K: ROSK, fs: () => rosFS(), get state() { return FS ? FS.ros || null : null; }, floating: () => (FS ? rosFloating() : 0),
+      // blow n bubbles now (tests and screenshot drivers), whatever the timing
+      blow: (n) => { const R0 = rosFS(); let k = 0; if (R0) { rosHookOn(R0); for (let i = 0; i < (n || 1); i++) if (rosBlow(R0)) k++; } return k; },
+      bubbleOf: (b) => (FS ? rosBubOf(b) : null), mirX: (x) => (FS ? rosMirX(x) : x), quake: () => { const R0 = rosFS(); if (R0) rosQuake(R0); },
+      turnEnd: () => { if (FS) rosTurnEnd(); }, tick: (dt) => rosTick(dt || 1 / 60), draw: (ctx, t) => { if (FS) { rosCabDraw(ctx, t, 'front'); rosDraw(ctx, t); } },
+      event: (ev) => { if (FS && ev) rosEvent(ev); },
     },
     // Claw types (DESIGN.md "Claw types"): the picker, the run's claw, the claw juice.
     claws: {
@@ -18686,6 +20217,19 @@ const GAME = (() => {
       left: wkLeftText, show: showWeekly, start: wkStart, newRun: wkNewRun, runEnd: wkRunEnd, endPanel: wkEndPanel, titleCard: wkTitleCard,
       get meta() { return wkM(); }, get date() { return LORE.date; },
     },
+    // RUSH (round 10, DESIGN.md "Boss Rush and the ghost race (round 10)"): the Boss Rush (tests and the screenshot drivers)
+    rush: {
+      K: RSH, start: rushStart, menu: showRushMenu, show: rushShow, fight: rushFight, pick: rushDraftPick, giveUp: rushGiveUp, end: rushEnd, skip: rushSkipSlam,
+      of: rushOf, meta: rushM, metaFix: rushMetaFix, open: rushOpen, met: rushMet, idx: rushIdx, lineup: rushLineupAll, clock: rushClock, tick: rushTick, hud: rushHud, titleBtn: rushTitleBtn,
+      get force() { return RSH.force; }, set force(v) { RSH.force = !!v; }, get ui() { return S.rushUi || null; }, get log() { return RSH.log; }, get live() { return RSH.live || null; },
+      get clockEl() { return RSH.clk || null; },
+    },
+    // RUSH (round 10): the daily (and weekly) ghost race
+    gho: {
+      K: GHX, of: ghoOf, ghost: ghoGhost, meta: ghoM, metaFix: ghoMetaFix, score: ghoScore, stage: ghoStage, spot: ghoSpot, fightEnd: ghoFightEnd, runEnd: ghoRunEnd,
+      endPanel: ghoEndPanel, chip: ghoChipSync, tap: ghoChipTap, tick: ghoTick, draw: ghoMapDraw,
+      get chipEl() { return S.ghoChip || null; }, get pass() { return S.ghoPass || null; }, get log() { return GHX.log; },
+    },
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },
@@ -18694,6 +20238,9 @@ const GAME = (() => {
     CAB, BEAT, DELIVER_HOLD, AUTO_END, WATCHDOG, RUN_KEY, META_KEY, WALK_STEP,
     q9: { SLOT: Q9_SLOT, L: Q9L, zones: q9LabelZones, pillTop: q9PillTop, enemyPos: (i) => enemyPos(i), intentY: (p) => intentY(p), artLater: q9ArtLater, n: q9n, trim: q9Trim, LOG: Q9_LOG,
       TITLE: Q9_TITLE, T: Q9T, titleLayout: q9TitleLayout, titleFit: q9TitleFit },   // round 9: labels, load, QA, memory, the title's fit
+    // MIX (round 10): the hit stop budget, the screen entrances, the run-end count-ups (DESIGN.md "Mix and juice pass 2 (round 10)")
+    mix: { HS: MIX_HS, IN: MIX_IN, SCR: MIX_SCR, HUD: MIX_HUD, COUNT: MIX_COUNT, hsTick: mixHsTick, hsSpend: mixHsSpend, screen: mixScreen, tick: mixTick,
+      countStart: mixCountStart, calm: mixCalm, get ui() { return mixUi(); }, get hs() { return S.mixHs == null ? MIX_HS.cap : S.mixHs; }, set hs(v) { S.mixHs = v; } },
   };
 })();
 

@@ -273,7 +273,8 @@ T.test('sfx throttling, voice cap, and sfx toggle', () => {
   T.eq(played, 100, 'spaced landings all play');
   played = 0;
   for (let i = 0; i < 100; i++) { ac.currentTime += 0.02; if (AUDIO.sfx('lose')) played++; }
-  T.ok(played > 20 && played <= 40, `voice cap limits a flood of long voices (${played})`);
+  // MIX (round 10): the cap is per loudness tier now (lose is a big sting: 6 at once)
+  T.ok(played >= 4 && played <= 12, `voice cap limits a flood of long voices (${played})`);
   ac.currentTime += 5;
   AUDIO.toggleSfx();
   const before = fake.count.total;
@@ -808,6 +809,353 @@ T.test('round 9: every family voice and the reroll shine play after init and no-
   T.ok(AUDIO.sfx('famSolo') && !AUDIO.sfx('famSolo'), 'one SOLO at a time');
   // the reels reuse the arcade's lever and reel sounds
   for (const n of ['lever', 'reelSpin', 'reelStop']) T.ok(AUDIO.names.includes(n), n + ' is there for the reroll');
+});
+
+/* ---------------------------------------------------------------- MIX (round 10)
+   A tiny offline WebAudio in plain JS: just what audio.js builds (oscillators,
+   gains, biquads with the spec's dB Q for low and high pass, looping noise
+   buffers, audio-rate param inputs, the set / linear / exponential / target /
+   cancel timeline). Compressors pass through (the measurements are pre-bus).
+   Each node only holds the samples it is live for. Against Chromium's
+   OfflineAudioContext it lands within 0.1 dB on the median voice and 2.5 dB
+   at worst (its square and saw waves are not band-limited). */
+function mixRenderAC(SR, secs) {
+  const N = Math.round(SR * secs);
+  const at = (t) => Math.max(0, Math.min(N, Math.ceil(t * SR)));
+  // adds node n's buffer into o, which covers [a, z)
+  const mixIn = (o, a, z, n) => { const r = n.rng(), x = n.buf(); const lo = Math.max(a, r[0]), hi = Math.min(z, r[1]); for (let i = lo; i < hi; i++) o[i - a] += x[i - r[0]]; };
+  class Param {
+    constructor(v) { this.value = v; this.ev = []; this.ins = []; }
+    setValueAtTime(v, t) { this.ev.push({ k: 's', v, t }); return this; }
+    linearRampToValueAtTime(v, t) { this.ev.push({ k: 'l', v, t }); return this; }
+    exponentialRampToValueAtTime(v, t) { this.ev.push({ k: 'e', v, t }); return this; }
+    setTargetAtTime(v, t, c) { this.ev.push({ k: 'g', v, t, c }); return this; }
+    cancelScheduledValues(t) { this.ev = this.ev.filter((e) => e.t < t); return this; }
+    // the value over [a, z): the timeline (set, linear, exponential, target) plus audio-rate inputs
+    buf(a, z) {
+      const o = new Float32Array(Math.max(0, z - a));
+      const ev = this.ev.map((e, i) => Object.assign({ i }, e)).sort((x, y) => x.t - y.t || x.i - y.i);
+      let s = a, pv = this.value, pt = 0, tg = null;   // s: the next sample to write
+      const cur = (i) => (tg ? tg.v + (tg.v0 - tg.v) * Math.exp(-(i / SR - tg.t) / tg.c) : pv);
+      const hold = (to) => { for (to = Math.min(to, z); s < to; s++) o[s - a] = cur(s); };
+      for (const e of ev) {
+        const e0 = at(e.t);
+        if (e.k === 's') { hold(e0); pv = e.v; pt = e.t; tg = null; }
+        else if (e.k === 'l' || e.k === 'e') {
+          const v0 = tg ? cur(s) : pv, t0 = tg ? s / SR : pt, span = e.t - t0, ex = e.k === 'e' && v0 * e.v > 0;
+          tg = null;
+          for (const to = Math.min(e0, z); s < to; s++) {
+            const u = span > 0 ? Math.min(1, Math.max(0, (s / SR - t0) / span)) : 1;
+            o[s - a] = ex ? v0 * Math.pow(e.v / v0, u) : e.k === 'e' ? v0 : v0 + (e.v - v0) * u;
+          }
+          pv = e.v; pt = e.t;
+        } else if (e.k === 'g') { hold(e0); const v0 = cur(e0); tg = { v: e.v, t: e.t, c: Math.max(1e-4, e.c), v0 }; pt = e.t; }
+      }
+      hold(z);
+      for (const n of this.ins) mixIn(o, a, z, n);
+      return o;
+    }
+  }
+  class Node {
+    constructor() { this.ins = []; this.b = null; this.r = null; }
+    connect(d) { d.ins.push(this); return d; }
+    disconnect() {}
+    rng() {
+      if (this.r) return this.r;
+      let a = N, z = 0;
+      for (const n of this.ins) { const r = n.rng(); if (r[1] > r[0]) { a = Math.min(a, r[0]); z = Math.max(z, r[1]); } }
+      if (z > a && this.tail) z = Math.min(N, z + Math.round(this.tail * SR));
+      return (this.r = z > a ? [a, z] : [0, 0]);
+    }
+    sum() { const [a, z] = this.rng(), o = new Float32Array(z - a); for (const n of this.ins) mixIn(o, a, z, n); return o; }
+    buf() { return this.b || (this.b = this.sum()); }
+  }
+  class Gain extends Node {
+    constructor() { super(); this.gain = new Param(1); }
+    buf() { if (this.b) return this.b; const [a, z] = this.rng(), o = this.sum(), g = this.gain.buf(a, z); for (let i = 0; i < o.length; i++) o[i] *= g[i]; return (this.b = o); }
+  }
+  class Osc extends Node {
+    constructor() { super(); this.type = 'sine'; this.frequency = new Param(440); this.detune = new Param(0); this.t0 = Infinity; this.t1 = Infinity; }
+    start(t) { this.t0 = t || 0; } stop(t) { this.t1 = t; }
+    rng() { if (!this.r) { const a = at(this.t0), z = this.t1 === Infinity ? N : at(this.t1); this.r = z > a ? [a, z] : [0, 0]; } return this.r; }
+    buf() {
+      if (this.b) return this.b;
+      const [a, z] = this.rng(), o = new Float32Array(z - a), f = this.frequency.buf(a, z), d = this.detune.buf(a, z);
+      let ph = 0;
+      for (let j = 0; j < o.length; j++) {
+        const fr = ph - Math.floor(ph);
+        switch (this.type) {
+          case 'square': o[j] = fr < 0.5 ? 1 : -1; break;
+          case 'sawtooth': o[j] = 2 * fr - 1; break;
+          case 'triangle': o[j] = fr < 0.25 ? 4 * fr : fr < 0.75 ? 2 - 4 * fr : 4 * fr - 4; break;
+          default: o[j] = Math.sin(2 * Math.PI * fr);
+        }
+        ph += f[j] * (d[j] ? Math.pow(2, d[j] / 1200) : 1) / SR;
+      }
+      return (this.b = o);
+    }
+  }
+  class Biquad extends Node {
+    constructor() { super(); this.type = 'lowpass'; this.frequency = new Param(350); this.Q = new Param(1); this.gain = new Param(0); this.tail = 0.08; }
+    buf() {
+      if (this.b) return this.b;
+      const [a, z] = this.rng(), x = this.sum(), o = new Float32Array(z - a), F = this.frequency.buf(a, z), Q = this.Q.buf(a, z);
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0, lf = -1, lq = -1, b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
+      for (let i = 0; i < o.length; i++) {
+        const f = Math.min(F[i], SR / 2 - 1), q = Q[i];
+        if (f !== lf || q !== lq) {
+          lf = f; lq = q;
+          const w = 2 * Math.PI * Math.max(1, f) / SR, c = Math.cos(w), s = Math.sin(w);
+          let n0, n1, n2, al;
+          if (this.type === 'bandpass') { al = s / (2 * Math.max(1e-4, q)); n0 = al; n1 = 0; n2 = -al; }
+          else {
+            al = s / (2 * Math.pow(10, q / 20));
+            if (this.type === 'highpass') { n0 = (1 + c) / 2; n1 = -(1 + c); n2 = (1 + c) / 2; } else { n0 = (1 - c) / 2; n1 = 1 - c; n2 = (1 - c) / 2; }
+          }
+          const d0 = 1 + al;
+          b0 = n0 / d0; b1 = n1 / d0; b2 = n2 / d0; a1 = -2 * c / d0; a2 = (1 - al) / d0;
+        }
+        const y = b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = x[i]; y2 = y1; y1 = y; o[i] = y;
+      }
+      return (this.b = o);
+    }
+  }
+  class Src extends Node {
+    constructor() { super(); this.buffer = null; this.loop = false; this.playbackRate = new Param(1); this.t0 = Infinity; this.t1 = Infinity; this.off = 0; }
+    start(t, off) { this.t0 = t || 0; this.off = off || 0; } stop(t) { this.t1 = t; }
+    rng() { if (!this.r) { const a = at(this.t0), z = this.t1 === Infinity ? N : at(this.t1); this.r = z > a && this.buffer ? [a, z] : [0, 0]; } return this.r; }
+    buf() {
+      if (this.b) return this.b;
+      const [a, z] = this.rng(), o = new Float32Array(z - a);
+      if (!this.buffer) return (this.b = o);
+      const d = this.buffer.getChannelData(0), L = d.length, r = this.playbackRate.buf(a, z), bs = (this.buffer.sampleRate || SR) / SR;
+      let p = this.off * (this.buffer.sampleRate || SR);
+      for (let j = 0; j < o.length; j++) { let k = Math.floor(p); if (k >= L) { if (!this.loop) break; k %= L; } o[j] = d[k]; p += r[j] * bs; }
+      return (this.b = o);
+    }
+  }
+  class Comp extends Node {
+    constructor() { super(); for (const k of ['threshold', 'knee', 'ratio', 'attack', 'release']) this[k] = new Param(0); }
+  }
+  const dest = new Node();
+  dest.rng = () => [0, N];
+  return {
+    sampleRate: SR, currentTime: 0, state: 'running', length: N, destination: dest,
+    createGain: () => new Gain(), createOscillator: () => new Osc(), createBiquadFilter: () => new Biquad(),
+    createBufferSource: () => new Src(), createDynamicsCompressor: () => new Comp(),
+    createBuffer: (ch, len, sr) => { const d = new Float32Array(len); return { length: len, sampleRate: sr, numberOfChannels: 1, getChannelData: () => d }; },
+    render: () => dest.buf(),
+  };
+}
+/* The measuring page's numbers: K-weighted (a +4 dB shelf at 1.5 kHz and a
+   38 Hz high pass), the loudest 100 ms window (st) and 400 ms window (m), the
+   whole (int), all in dB, and the peak in dBFS. */
+function mixMeasure(x, SR) {
+  const biq = (x, hs, f, q, gdb) => {
+    const w = 2 * Math.PI * f / SR, c = Math.cos(w), s = Math.sin(w), al = s / (2 * q), A = Math.pow(10, gdb / 40);
+    let b0, b1, b2, a0, a1, a2;
+    if (!hs) { b0 = (1 + c) / 2; b1 = -(1 + c); b2 = (1 + c) / 2; a0 = 1 + al; a1 = -2 * c; a2 = 1 - al; }
+    else { const sq = 2 * Math.sqrt(A) * al; b0 = A * ((A + 1) + (A - 1) * c + sq); b1 = -2 * A * ((A - 1) + (A + 1) * c); b2 = A * ((A + 1) + (A - 1) * c - sq); a0 = (A + 1) - (A - 1) * c + sq; a1 = 2 * ((A - 1) - (A + 1) * c); a2 = (A + 1) - (A - 1) * c - sq; }
+    const y = new Float32Array(x.length); let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < x.length; i++) { const v = (b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0; x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v; }
+    return y;
+  };
+  let pk = 0, all = 0;
+  for (let i = 0; i < x.length; i++) pk = Math.max(pk, Math.abs(x[i]));
+  const k = biq(biq(x, true, 1500, 0.71, 4), false, 38, 0.5, 0);
+  for (let i = 0; i < k.length; i++) all += k[i] * k[i];
+  const win = (ms) => {
+    const n = Math.round(SR * ms / 1000), hop = Math.round(SR * 0.01);
+    let best = 0, acc = 0;
+    for (let i = 0; i < k.length; i++) { acc += k[i] * k[i]; if (i >= n) acc -= k[i - n] * k[i - n]; if (i >= n - 1 && i % hop === 0) best = Math.max(best, acc / n); }
+    if (k.length < n) best = all / n;
+    return best > 0 ? 10 * Math.log10(best) : -120;
+  };
+  return { peak: 20 * Math.log10(pk || 1e-6), st: win(100), m: win(400), int: all > 0 ? 10 * Math.log10(all / k.length) : -120 };
+}
+// The options each voice was calibrated with (the rest play with none).
+const MIX_OPTS = { itemLand: { mass: 1, vel: 1 }, hit: { amt: 6 }, combo: { tier: 2 }, capBurst: { tier: 3 }, capCrack: { n: 2 }, proc: { tier: 1 } };
+const MIX_SR = 44100;
+function mixRenderSfx(AUDIO, n, o) {
+  const opts = o || MIX_OPTS[n] || {};
+  const len = AUDIO.mix.offline(mixRenderAC(MIX_SR, 0.01), { sfx: n, opts }) || 0.5;
+  const ac = mixRenderAC(MIX_SR, Math.min(6, len + 0.35));
+  AUDIO.mix.offline(ac, { sfx: n, opts });
+  return mixMeasure(ac.render(), MIX_SR);
+}
+
+const MIX_LOUD = {};
+T.test('mix: every sound renders inside its loudness tier, and nothing is jarring', () => {
+  const { AUDIO } = boot({ only: ['util', 'audio'] });
+  const M = AUDIO.mix;
+  T.eq(M.TIERS.join(), 'tick,ui,soft,mid,big,huge', 'six tiers, quiet to loud');
+  for (let i = 1; i < M.TIERS.length; i++) T.ok(M.TARGET[M.TIERS[i]] >= M.TARGET[M.TIERS[i - 1]] + 3.5, `${M.TIERS[i]} sits at least 3.5 dB over ${M.TIERS[i - 1]}`);
+  const listed = new Set(Object.keys(M.TIER).concat(Object.keys(M.TRIM)));
+  for (const n of AUDIO.names) {
+    const t = M.tier(n);
+    T.ok(M.TIERS.includes(t), `${n} has a tier (${t})`);
+    const r = mixRenderSfx(AUDIO, n);
+    MIX_LOUD[n] = r;
+    T.ok(Number.isFinite(r.st) && r.st > -80, `${n} makes a sound (${r.st.toFixed(1)} dB)`);
+    // the renderer runs up to 2.5 dB hot on raw square waves, so the window leans up
+    const lo = M.TARGET[t] - M.WIN - 1, hi = M.TARGET[t] + M.WIN + 2.5;
+    if (listed.has(n)) T.ok(r.st >= lo && r.st <= hi, `${n} sits in its ${t} tier: ${r.st.toFixed(1)} dB in ${lo}..${hi}`);
+    else T.ok(r.st <= hi, `${n} (not calibrated, ${t}) is not jarring: ${r.st.toFixed(1)} <= ${hi}`);
+    T.ok(r.peak < 0, `${n} never clips before the bus (${r.peak.toFixed(1)} dBFS)`);
+  }
+  // the tiers' medians land on their targets, in order
+  let last = -Infinity;
+  for (const t of M.TIERS) {
+    const v = AUDIO.names.filter((n) => M.tier(n) === t).map((n) => MIX_LOUD[n].st).sort((a, b) => a - b);
+    const med = v[v.length >> 1];
+    T.ok(v.length > 0 && Math.abs(med - M.TARGET[t]) <= 1.5, `${t} median ${med.toFixed(1)} on its target ${M.TARGET[t]}`);
+    T.ok(med > last, `${t} is louder than the tier under it`);
+    last = med;
+  }
+  // the ones the owner named: UI ticks quiet, hits medium, jackpots and bosses loud
+  for (const [n, t] of [['tick', 'tick'], ['click', 'ui'], ['hit', 'mid'], ['block', 'mid'], ['hitBig', 'big'], ['crit', 'big'], ['jackpot', 'huge'], ['bossDown', 'huge'], ['evoBurst', 'huge'], ['capBurst', 'huge']]) T.eq(M.tier(n), t, `${n} is ${t}`);
+  T.ok(MIX_LOUD.jackpot.st > MIX_LOUD.hit.st + 6 && MIX_LOUD.hit.st > MIX_LOUD.click.st + 6 && MIX_LOUD.click.st > MIX_LOUD.tick.st + 3, 'jackpot > hit > click > tick, by a margin');
+  // opts still scale inside a voice: a legendary burst over a common one, a tier 3 combo over a tier 1
+  T.ok(mixRenderSfx(AUDIO, 'capBurst', { tier: 3 }).st > mixRenderSfx(AUDIO, 'capBurst', { tier: 0 }).st, 'a legendary capsule bursts louder than a common one');
+  T.ok(mixRenderSfx(AUDIO, 'combo', { tier: 3 }).st > mixRenderSfx(AUDIO, 'combo', { tier: 1 }).st + 4, 'a tier 3 combo is well over a tier 1');
+  // the untrimmed level is still there for the before / after table
+  const raw = mixRenderAC(MIX_SR, 1.5);
+  AUDIO.mix.offline(raw, { sfx: 'boom', raw: true });
+  T.ok(mixMeasure(raw.render(), MIX_SR).st > MIX_LOUD.boom.st + 8, 'boom was 12 dB too hot before the trim');
+});
+
+T.test('mix: the music and its layers sit under the sfx', () => {
+  const { AUDIO } = boot({ only: ['util', 'audio'] });
+  const M = AUDIO.mix;
+  // as heard: the sfx bus is at 0.8 of the sfx level, the tune already carries the music bus's 0.5
+  const midHeard = M.TARGET.mid + 20 * Math.log10(0.8);
+  for (const [mode, act, season, layers] of [['fight', 0], ['fight', 0, null, ['hype', 'tense']], ['boss', 3, null, ['hype', 'tense']], ['map', 1], ['map', 3], ['title', 0], ['map', 0, 'halloween'], ['title', 0, 'winter'], ['machine', 0]]) {
+    const ac = mixRenderAC(22050, 6.1);
+    T.ok(M.offline(ac, { music: mode, act, season, layers, secs: 6 }) > 0, `${mode} ${season || act} renders`);
+    const r = mixMeasure(ac.render(), 22050);
+    const tag = `${mode}:${season || act}${layers ? '+layers' : ''}`;
+    T.ok(r.int <= midHeard - 5, `${tag} sits 5 dB or more under a hit (${r.int.toFixed(1)} vs ${midHeard.toFixed(1)})`);
+    T.ok(r.m <= midHeard + 0.5, `${tag}'s loudest moment stays under a hit (${r.m.toFixed(1)})`);
+  }
+  T.ok(M.musK('map', 3) < 1 && M.musK('map', 2) > 1 && M.musK('boss', 1) === 1, 'the per-tune levels are read per act');
+});
+
+T.test('mix: a sting ducks the music and the minor sfx, and both come back', () => {
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  const M = AUDIO.mix;
+  ac.currentTime = 10;
+  T.eq(M.duckAt(10).music, 1, 'no duck at rest');
+  T.eq(AUDIO.sfx('jackpot'), true, 'a jackpot');
+  let d = M.duckAt(10.2);
+  T.ok(d.music <= 0.35, `the music dips under it (${d.music})`);
+  T.ok(d.minor <= 0.55 && d.minor > 0, `the minor sfx step back (${d.minor})`);
+  T.ok(M.duckAt(10.03).music < 1 && M.duckAt(10.03).music > d.music, 'the dip ramps in, it does not click');
+  d = M.duckAt(13);
+  T.eq(d.music, 1, 'the music is back 3 s later'); T.eq(d.minor, 1, 'the minor sfx too');
+  // a hit-sized duck is a short shallow dip, the minor sfx untouched
+  ac.currentTime = 20;
+  AUDIO.sfx('hitBig');
+  d = M.duckAt(20.2);
+  T.ok(d.music >= 0.55 && d.music < 1, `a big hit only dips the music (${d.music})`);
+  T.eq(d.minor, 1, 'and leaves the minor sfx alone');
+  T.eq(M.duckAt(21).music, 1, 'back within a second');
+  ac.currentTime = 25;
+  AUDIO.sfx('hit');
+  T.eq(M.duckAt(25.1).music, 1, 'a plain hit ducks nothing');
+  // ducks merge: a big hit right after a jackpot never cuts the jackpot's duck short
+  ac.currentTime = 30;
+  AUDIO.sfx('jackpot');
+  ac.currentTime = 30.3;
+  AUDIO.sfx('hitBig');
+  T.ok(M.duckAt(31).music <= 0.35, 'the jackpot keeps the music down through the hit');
+  T.eq(M.duckAt(33).music, 1, 'and lets it back');
+  // every sting ducks: the list
+  for (const n of ['win', 'victory', 'bossDown', 'evoBurst', 'capBurst', 'setDone', 'arcJackpot']) {
+    ac.currentTime += 10;
+    T.eq(AUDIO.sfx(n, { tier: 3 }), true, n + ' plays');
+    const x = M.duckAt(ac.currentTime + 0.15);
+    T.ok(x.music < 0.5 && x.minor < 0.6, `${n} ducks the music and the minor sfx (${x.music.toFixed(2)}, ${x.minor.toFixed(2)})`);
+  }
+  // the game's own duck (no voice) keeps its shape
+  ac.currentTime += 10;
+  AUDIO.duck(1.2);
+  T.ok(M.duckAt(ac.currentTime + 1).music <= 0.31, 'AUDIO.duck(1.2) holds the music at 0.3');
+  T.eq(M.duckAt(ac.currentTime + 1).minor, 1, 'and is music only');
+});
+
+T.test('mix: voices are capped per tier, and the tiers do not starve each other', () => {
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  const M = AUDIO.mix;
+  T.ok(M.CAP.tick + M.CAP.ui + M.CAP.soft + M.CAP.mid + M.CAP.big < 32, 'the capped tiers can never fill the global 32 on their own');
+  ac.currentTime = 5;
+  let played = 0, most = 0;
+  for (let i = 0; i < 60; i++) { ac.currentTime += 0.072; if (AUDIO.sfx('bloom')) played++; most = Math.max(most, M.voices().ui); }
+  T.ok(most <= M.CAP.ui && most >= 3, `at most ${M.CAP.ui} ui voices at once (${most})`);
+  T.ok(played < 60 && played > 20, `a flood of blooms is thinned, not silenced (${played})`);
+  ac.currentTime += 5;
+  let wins = 0;
+  for (let i = 0; i < 8; i++) { ac.currentTime += 0.02; if (AUDIO.sfx('win')) wins++; }
+  T.eq(wins, M.CAP.huge, `at most ${M.CAP.huge} stings at once`);
+  T.eq(AUDIO.sfx('hit'), true, 'a hit still plays under three stings');
+  T.eq(M.voices().huge, M.CAP.huge, 'the voice counter sees them');
+  ac.currentTime += 2;
+  T.eq(AUDIO.sfx('win'), true, 'a sting plays again once they have rung out');
+  ac.currentTime += 5;
+  let ticks = 0;
+  for (let i = 0; i < 40; i++) { ac.currentTime += 0.036; if (AUDIO.sfx('tick')) ticks++; }
+  T.eq(ticks, 40, 'spaced counter ticks all play (they are short)');
+});
+
+T.test('mix: repeated sounds vary a little, never the same twice in a row, deterministic under a seed', () => {
+  const seq = (seed) => {
+    const { AUDIO, fake } = bootFake();
+    AUDIO.init();
+    const ac = fake.ctxs[0];
+    AUDIO.mix.seed(seed);
+    const out = [];
+    ac.currentTime = 3;
+    for (let i = 0; i < 16; i++) { ac.currentTime += 0.1; AUDIO.sfx('footstep'); out.push(AUDIO.mix.last); }
+    ac.currentTime += 1;
+    AUDIO.sfx('jackpot');
+    return { out, after: AUDIO.mix.last, AUDIO };
+  };
+  const a = seq(7), b = seq(7), c = seq(8);
+  T.eq(JSON.stringify(a.out), JSON.stringify(b.out), 'the same seed gives the same spread');
+  T.ok(JSON.stringify(a.out) !== JSON.stringify(c.out), 'another seed another');
+  const sp = a.AUDIO.mix.VARY.footstep;
+  T.ok(a.out.every((x) => x.name === 'footstep' && Math.abs(x.p - 1) <= sp[0] + 1e-9), `pitch within +-${sp[0] * 100}%`);
+  T.ok(a.out.every((x) => Math.abs(20 * Math.log10(x.v)) <= sp[1] + 1e-9), `level within +-${sp[1]} dB`);
+  let minStep = Infinity;
+  for (let i = 1; i < a.out.length; i++) minStep = Math.min(minStep, Math.abs(a.out[i].p - a.out[i - 1].p));
+  T.ok(minStep >= sp[0] * 0.3, `no two footsteps in a row on the same pitch (smallest step ${(minStep * 100).toFixed(2)}%)`);
+  T.ok(new Set(a.out.map((x) => x.p.toFixed(4))).size >= 12, 'a walk is not a machine gun');
+  T.eq(a.after.name, 'footstep', 'a sting is never spread (it keeps its pitch)');
+  for (const n of ['footstep', 'step', 'tick', 'hit', 'itemLand', 'click', 'peg']) T.ok(a.AUDIO.mix.VARY[n], n + ' is spread');
+  for (const n of ['jackpot', 'bossDown', 'combo', 'heal']) T.ok(!a.AUDIO.mix.VARY[n], n + ' is not');
+});
+
+T.test('mix: the graph has a limiter after the master, and the offline renderer leaves the live graph alone', () => {
+  const { AUDIO, fake } = bootFake();
+  T.eq(AUDIO.mix.limiter, null, 'no limiter before init');
+  AUDIO.init();
+  T.ok(fake.count.comp >= 2, `the glue compressor and the limiter (${fake.count.comp})`);
+  const lim = AUDIO.mix.limiter;
+  T.ok(lim && lim.threshold.value === AUDIO.mix.LIM.threshold && lim.ratio.value >= 12, 'the limiter is a brick wall');
+  const ac = fake.ctxs[0];
+  ac.currentTime = 4;
+  AUDIO.sfx('jackpot');
+  const before = AUDIO.mix.duckAt(4.2).music;
+  const off = mixRenderAC(8000, 0.5);
+  AUDIO.mix.offline(off, { sfx: 'bossDown', bus: true });
+  T.eq(AUDIO.mix.limiter, lim, 'the live limiter is back');
+  T.eq(AUDIO.mix.duckAt(4.2).music, before, 'an offline sting never ducks the live music');
+  T.eq(AUDIO.mix.offline(off, { sfx: 'nope' }), 0, 'an unknown voice renders nothing');
+  T.eq(AUDIO.mix.tier('nope'), 'mid', 'an unknown voice is mid');
 });
 
 T.done();

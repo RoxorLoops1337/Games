@@ -1552,6 +1552,57 @@ const PHYS = (() => {
     return R;
   }
 
+  // ---- ROS (round 10, DESIGN.md "Ms. Bubbles, the mutator pack and three pets")
+  /* A soap bubble's lift, for a world pre-hook (every substep h): drives b
+     toward (tx, ty) as a damped spring in zero g (gravity is cancelled for the
+     substep before the step integrates it), speed capped. o: {k, c, vmax}. */
+  function rosFloat(b, tx, ty, h, g, o) {
+    if (!b || !(h > 0) || b.type !== 'dynamic') return;
+    const k = (o && o.k) || 26, c = (o && o.c) || 9, vmax = (o && o.vmax) || 320;
+    b.vx += ((tx - b.x) * k - b.vx * c) * h;
+    b.vy += ((ty - b.y) * k - b.vy * c) * h - (g || 0) * (b.gs == null ? 1 : b.gs) * h;
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp > vmax) { b.vx *= vmax / sp; b.vy *= vmax / sp; }
+    b.av *= 1 - Math.min(1, 3 * h);
+    b.sl = false; b.slT = 0;
+  }
+  /* Moon Bounce: a body's restitution floor and a low bounce threshold. */
+  function rosBounce(b, e) {
+    if (!b || !(e > 0)) return b;
+    b.restitution = Math.max(b.restitution, Math.min(0.95, e));
+    b.bounceV = Math.min(b.bounceV || PH.bounceV, 28);
+    return b;
+  }
+  /* Rising Water: a pre hook on W. Under the waterline y (for x < xMax, the
+     bin, not the chute) a body gets buoyancy by its density (rho / density of
+     gravity, times how deep it sits: lighter than water floats, heavier sinks
+     slowly) and water drag. Returns {y, xMax, rho, drag, on, set(y), remove()}. */
+  function rosFlood(W, o) {
+    o = o || {};
+    const S = { y: o.y == null ? 1e9 : o.y, xMax: o.xMax == null ? 1e9 : o.xMax, rho: o.rho || 1, drag: o.drag || 2.2, g: o.g || 1150, on: true, t: 0 };
+    S.hook = (h) => {
+      if (!S.on || !(h > 0)) return;
+      S.t += h;
+      for (const b of W.bodies) {
+        if (b.type !== 'dynamic' || b.tube || b.x > S.xMax) continue;
+        const r = b.br || 10, wy = S.y + Math.sin(S.t * 2.2 + b.x * 0.035) * 2.5;
+        const frac = (b.y + r - wy) / (2 * r);
+        if (frac <= 0) continue;
+        const f = Math.min(1, frac), dens = Math.max(0.2, b.density || 1);
+        if (b.sl && dens < S.rho) { b.sl = false; b.slT = 0; }
+        if (b.sl) continue;
+        b.vy -= S.g * (S.rho / dens) * f * h;
+        const dk = Math.exp(-S.drag * f * h);
+        b.vx *= dk; b.vy *= dk; b.av *= dk;
+      }
+    };
+    S.set = (y) => { S.y = y; for (const b of W.bodies) if (b.type === 'dynamic' && b.sl && b.y + (b.br || 10) > y && (b.density || 1) < S.rho) { b.sl = false; b.slT = 0; } };
+    S.remove = () => { S.on = false; W.removeHook(S.hook); };
+    W.addHook(S.hook);
+    return S;
+  }
+
   return { box, body, world, cabinet, clawRig, setPose, sync, partSpec, RIG, PH, SHAPE, PRONG, PHI_OPEN, PHI_CLOSED, H,
-    MATERIALS, materialOf, applyMaterial, scaleShape, blast, hop, CLAW_TYPES, clawPose };
+    MATERIALS, materialOf, applyMaterial, scaleShape, blast, hop, CLAW_TYPES, clawPose,
+    rosFloat, rosBounce, rosFlood };   // ROS (round 10)
 })();

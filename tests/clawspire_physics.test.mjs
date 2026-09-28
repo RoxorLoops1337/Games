@@ -1086,4 +1086,56 @@ h.test('CR8 new claws: upgrades apply sensibly, the auto-steer drives them, a re
   }
 });
 
+// ---------------------------------------------------------------- ROS (round 10): bubbles, Moon Bounce, Rising Water
+h.test('ROS: a bubble floats a prize up to its spot in zero g, deterministic', () => {
+  const run = () => {
+    const { W } = mkWorld();
+    const b = PHYS.body({ type: 'dynamic', shape: { kind: 'box', w: 30, h: 16 }, x: 200, y: 360, density: 0.9 });
+    W.add(b);
+    W.addHook((hh) => PHYS.rosFloat(b, 180, 150, hh, G));
+    let top = 999;
+    for (let i = 0; i < 240; i++) { W.step(DT); top = Math.min(top, b.y); }
+    return { x: b.x, y: b.y, top };
+  };
+  const a = run();
+  h.ok(Math.abs(a.x - 180) < 3 && Math.abs(a.y - 150) < 3, `it hangs on its spot (${a.x.toFixed(1)}, ${a.y.toFixed(1)})`);
+  h.ok(a.top > 120, 'a gentle rise that barely overshoots');
+  h.eq(JSON.stringify(run()), JSON.stringify(a), 'the same float twice');
+  const b = PHYS.body({ type: 'static', shape: { kind: 'circle', r: 10 }, x: 0, y: 0 });
+  PHYS.rosFloat(b, 50, 50, 1 / 240, G);
+  h.ok(b.x === 0 && b.vx === 0, 'a static body is never floated');
+});
+h.test('ROS: Moon Bounce makes a prize spring off the floor', () => {
+  const drop = (bounce) => {
+    const { W } = mkWorld();
+    const b = PHYS.body({ type: 'dynamic', shape: { kind: 'box', w: 30, h: 16 }, x: 200, y: 120, restitution: 0.1 });
+    if (bounce) PHYS.rosBounce(b, 0.72);
+    W.add(b);
+    let hit = false, peak = 999;
+    for (let i = 0; i < 180; i++) { W.step(DT); if (b.vy < -40) hit = true; if (hit) peak = Math.min(peak, b.y); }
+    return { peak, e: b.restitution };
+  };
+  const plain = drop(false), moon = drop(true);
+  h.ok(moon.e >= 0.72 && plain.e < 0.2, 'the restitution floor');
+  h.ok(moon.peak < 300 && moon.peak < plain.peak, `it bounces high (${moon.peak.toFixed(0)} vs ${plain.peak.toFixed(0)})`);
+  h.eq(PHYS.rosBounce(null, 1), null, 'nothing to bounce: harmless');
+});
+h.test('ROS: Rising Water floats light prizes and sinks heavy ones, all inside the glass', () => {
+  const { W } = mkWorld();
+  const light = PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r: 13 }, x: 120, y: 360, density: 0.5 });
+  const heavy = PHYS.body({ type: 'dynamic', shape: { kind: 'box', w: 36, h: 20 }, x: 260, y: 200, density: 2.4 });
+  W.add(light); W.add(heavy);
+  const S = PHYS.rosFlood(W, { y: 230, xMax: 410, g: G, rho: 0.95 });
+  for (let i = 0; i < 360; i++) W.step(DT);
+  h.ok(light.y < 260 && light.y > 200, `the duck floats at the surface (${light.y.toFixed(0)})`);
+  h.ok(heavy.y > 340, `the heavy thing sinks to the floor (${heavy.y.toFixed(0)})`);
+  S.set(300);
+  for (let i = 0; i < 240; i++) W.step(DT);
+  h.ok(light.y > 260 && light.y < 330, `the water drops and the float goes with it (${light.y.toFixed(0)})`);
+  S.remove();
+  for (let i = 0; i < 240; i++) W.step(DT);
+  h.ok(light.y > 350, 'drained: it falls to the floor');
+  h.ok([light, heavy].every(b => b.x > 0 && b.x < 480 && b.y < 390 && Number.isFinite(b.y)), 'nothing leaves the glass');
+});
+
 h.done();
