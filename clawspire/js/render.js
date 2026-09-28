@@ -13732,7 +13732,575 @@ const RENDER = (() => {
   const HOLO_R = { RAR: HOLO_RAR, SPARKS: HOLO_SPARKS, look: holoLook };
   /* ============================================================ end HOLO */
 
+  /* ============================================================ DUO (round 11) */
+  /* Pass and play for two (DESIGN.md "Duo: pass and play (round 11)"): the
+     PASS THE PHONE hand-off card (it flips over, a spotlight on the next
+     player, the countdown ring, the taunt the last player sent), the coin
+     toss, the claw-off's scoreboard with a spotlight on whoever drops, a
+     sabotage card, the podium, a player's tag and the co-op target pill.
+     Pure drawing from the inputs; saved and restored, never throws. */
+  const DUO_T = { flip: 0.6, pop: 0.3 };
+  // A draw that fell over is counted (the suites pin it at zero), never thrown.
+  const DUO_E = { n: 0, last: '' };
+  const duoErr = (e) => { DUO_E.n++; DUO_E.last = String((e && e.message) || e); };
+  const duoCol = (c, d) => (typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c) ? c : d || PAL.pink);
+  const duoNm = (s) => String(s == null ? '' : s).toUpperCase().slice(0, 12);
+  // A spotlight cone from above onto (x, y): a soft beam and a pool of light on the floor.
+  function duoSpot(ctx, x, y, r, col, a) {
+    ctx.save();
+    try {
+      col = duoCol(col, '#ffffff'); a = a == null ? 0.22 : a;
+      const top = Math.max(-40, y - 520);
+      const g = ctx.createLinearGradient(x, top, x, y + r * 0.4);
+      g.addColorStop(0, rgba(col, 0)); g.addColorStop(0.6, rgba(col, a * 0.6)); g.addColorStop(1, rgba(col, a));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(x - 16, top); ctx.lineTo(x + 16, top); ctx.lineTo(x + r, y + r * 0.35); ctx.lineTo(x - r, y + r * 0.35); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = Math.min(1, a * 2.2);
+      glow(ctx, x, y + r * 0.35, r * 1.1, col, 0.5);
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  // A pill with a player's name in their colour (lit: the active player, with a glow).
+  function duoTag(ctx, x, y, text, col, lit, size) {
+    ctx.save();
+    try {
+      size = size || 14; col = duoCol(col);
+      ctx.font = 'bold ' + size + 'px ' + FONT;
+      const s = String(text || ''), tw = (ctx.measureText(s).width || s.length * size * 0.6) + size * 1.4, h = size * 1.8;
+      if (lit) glow(ctx, x, y, tw * 0.7, col, 0.35);
+      ctx.beginPath(); rrect(ctx, x - tw / 2, y - h / 2, tw, h, h / 2);
+      F(ctx, lit ? col : rgba(INK, 0.85)); ctx.fill(); S(ctx, lit ? INK : col, 2.5); ctx.stroke();
+      txt(ctx, s, x, y + 1, size, lit ? INK : col, true);
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  // The co-op target: a "vs NAME" pill beside the boss's intent, so both know who the hit is for.
+  function duoTarget(ctx, x, y, name, col, t) {
+    ctx.save();
+    try {
+      const bob = Math.sin((+t || 0) * 4) * 2;
+      duoTag(ctx, x, y + bob, '\u{1F3AF} ' + duoNm(name), col, true, 13);
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  // A playing card: the sabotage card's face (icon, name, a line of text) or its back.
+  function duoCard(ctx, x, y, w, h, card, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      card = card || {};
+      const col = duoCol(card.col, PAL.pink), rot = +st.rot || 0, k = st.k == null ? 1 : +st.k;
+      ctx.translate(x, y); ctx.rotate(rot); ctx.scale(k, k);
+      if (st.glow) glow(ctx, 0, 0, Math.max(w, h) * 0.75, col, 0.4);
+      ctx.beginPath(); rrect(ctx, -w / 2, -h / 2, w, h, Math.min(w, h) * 0.1);
+      F(ctx, st.back ? '#2a1446' : '#fff8ec'); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+      if (st.back) {
+        ctx.beginPath(); rrect(ctx, -w / 2 + 7, -h / 2 + 7, w - 14, h - 14, Math.min(w, h) * 0.07);
+        S(ctx, PAL.pink, 2); ctx.stroke();
+        txt(ctx, '?', 0, 2, Math.min(w, h) * 0.5, PAL.gold, true, 'center', true);
+      } else if (st.mini) {
+        // a thumbnail: the colour and the icon, no words
+        ctx.beginPath(); rrect(ctx, -w / 2 + 5, -h / 2 + 5, w - 10, h - 10, Math.min(w, h) * 0.08);
+        F(ctx, col); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        txt(ctx, card.icon || '!', 0, 2, Math.min(w * 0.6, h * 0.45), '#ffffff', false);
+      } else {
+        ctx.beginPath(); rrect(ctx, -w / 2 + 6, -h / 2 + 6, w - 12, h * 0.52, Math.min(w, h) * 0.07);
+        F(ctx, col); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        txt(ctx, card.icon || '!', 0, -h / 2 + 6 + h * 0.26, Math.min(w * 0.5, h * 0.3), '#ffffff', false);
+        const nm = String(card.name || '').toUpperCase(), ns = Math.max(9, Math.min(h * 0.1, (w - 12) / Math.max(4, nm.length * 0.62)));
+        txt(ctx, nm, 0, h * 0.14, ns, INK, true);
+        if (st.text && card.text && h > 150) {
+          ctx.font = 'bold ' + Math.round(h * 0.055) + 'px ' + FONT;
+          const words = String(card.text).split(/\s+/), lines = [];
+          let cur = '';
+          for (const wd of words) { const tl = cur ? cur + ' ' + wd : wd; if ((ctx.measureText(tl).width || tl.length * 6) > w - 22 && cur) { lines.push(cur); cur = wd; } else cur = tl; }
+          if (cur) lines.push(cur);
+          lines.slice(0, 3).forEach((ln, i) => txt(ctx, ln, 0, h * 0.26 + i * h * 0.075, Math.round(h * 0.055), '#3a2a50', true));
+        }
+      }
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  /* The hand-off: PASS THE PHONE TO <name>. st {t (s since it began),
+     name, col, char, count (s left), total, from, fromCol, fromChar, msg
+     {text, icon}, msgT, label, sub, reduced}. The card turns over from the
+     last player's colour to the next one's (DUO_T.flip), a spotlight finds
+     the crawler, the countdown ring runs out, then READY? pulses. */
+  function duoHandoff(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = +st.t || 0, col = duoCol(st.col, PAL.cyan), fromCol = duoCol(st.fromCol, PAL.pink), now = +st.now || t;
+      rushBack(ctx, w, h, now, { col, band: false });
+      stripes(ctx, 0, 0, w, 12, '#1a0c10', rgba(col, 0.75), now);
+      const cx = w / 2, cy = 398, cw = Math.min(430, w - 60), ch = 520;
+      // the flip: edge-on, the back in the last player's colour, then the front
+      const u = st.reduced ? 1 : clamp01(t / DUO_T.flip), ang = Math.PI * (1 - U.ease.inOut(u)), sx = Math.abs(Math.cos(ang)), front = Math.cos(ang) >= 0;
+      ctx.save();
+      ctx.translate(cx, cy); ctx.scale(Math.max(0.02, sx), 1); ctx.translate(-cx, -cy);
+      ctx.beginPath(); rrect(ctx, cx - cw / 2, cy - ch / 2, cw, ch, 26);
+      F(ctx, front ? '#1b1030' : shade(fromCol, -0.55)); ctx.fill(); S(ctx, front ? col : fromCol, 5); ctx.stroke();
+      if (!front) {
+        stripes(ctx, cx - cw / 2 + 14, cy - ch / 2 + 14, cw - 28, ch - 28, shade(fromCol, -0.6), rgba(fromCol, 0.35), 0);
+        txt(ctx, duoNm(st.from || ''), cx, cy, 44, '#ffffff', true, 'center', true);
+      } else {
+        txt(ctx, 'PASS THE PHONE TO', cx, cy - ch / 2 + 46, 22, '#fff6c0', true, 'center', true);
+        const nm = duoNm(st.name || 'P2'), size = Math.max(34, Math.min(72, (cw - 40) / Math.max(3, nm.length * 0.72)));
+        chrome(ctx, nm, cx, cy - ch / 2 + 112, size, col, col);
+        duoSpot(ctx, cx, cy + 24, 104, col, 0.3);
+        const pr = 164, pop = st.reduced ? 1 : 1 + Math.max(0, 0.25 - Math.max(0, t - DUO_T.flip)) * 0.8;
+        portrait(ctx, st.char || 'knight', cx, cy + 6, pr * pop, now);
+        if (st.label) txt(ctx, String(st.label).toUpperCase(), cx, cy + 116, 16, '#e8dcff', true, 'center', true);
+        if (st.sub) txt(ctx, String(st.sub), cx, cy + 140, 14, rgba('#ffffff', 0.8), true, 'center', true);
+        // the countdown ring, then READY?
+        const total = Math.max(0.1, +st.total || 3), left = Math.max(0, +st.count || 0), ry = cy + ch / 2 - 56;
+        if (left > 0) {
+          ctx.beginPath(); ctx.arc(cx, ry, 34, 0, TAU); F(ctx, rgba(INK, 0.9)); ctx.fill(); S(ctx, rgba(col, 0.3), 7); ctx.stroke();
+          ctx.beginPath(); ctx.arc(cx, ry, 34, -Math.PI / 2, -Math.PI / 2 + TAU * (left / total)); S(ctx, col, 7); ctx.lineCap = 'round'; ctx.stroke();
+          const n = Math.ceil(left - 1e-6), fr = 1 - (left - Math.floor(left - 1e-6));
+          txt(ctx, String(n), cx, ry + 2, 40 * (1 + (st.reduced ? 0 : Math.max(0, 0.2 - fr) * 2)), '#ffffff', true, 'center', true);
+        } else {
+          const p = 1 + Math.sin(now * 6) * (st.reduced ? 0 : 0.05);
+          txt(ctx, 'READY?', cx, ry, 34 * p, col, true, 'center', true);
+        }
+      }
+      ctx.restore();
+      // the last player's taunt, in a bubble from their corner
+      if (st.msg && st.msg.text) {
+        portrait(ctx, st.fromChar || 'knight', 58, 88, 64, now);
+        duoTag(ctx, 58, 132, duoNm(st.from || ''), fromCol, false, 11);
+        if (typeof stoBubble === 'function') stoBubble(ctx, 310, 78, 400, (st.msg.icon ? st.msg.icon + ' ' : '') + st.msg.text, +st.msgT || 1, 96, 92);
+      }
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  /* The coin toss: st {t, dur, w (0 / 1: who starts), flips (half turns),
+     names, cols, chars, reduced}. The coin spins up and falls; each face is
+     a player's colour and initial; it lands on the winner, who gets the
+     spotlight and NAME STARTS!. */
+  function duoCoin(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = +st.t || 0, dur = Math.max(0.2, +st.dur || 2), win = st.w === 1 ? 1 : 0, names = st.names || ['P1', 'P2'], cols = [duoCol((st.cols || [])[0], PAL.pink), duoCol((st.cols || [])[1], PAL.cyan)];
+      const chars = st.chars || ['knight', 'knight'], u = st.reduced ? 1 : clamp01(t / dur), done = u >= 1;
+      rushBack(ctx, w, h, t, { col: done ? cols[win] : PAL.gold, band: false });
+      txt(ctx, 'COIN TOSS', w / 2, 120, 34, '#fff6c0', true, 'center', true);
+      txt(ctx, 'who drops first?', w / 2, 158, 16, rgba('#ffffff', 0.8), true, 'center', true);
+      // the two players on either side (the winner under a spotlight once it lands)
+      for (let i = 0; i < 2; i++) {
+        const x = i ? w * 0.8 : w * 0.2, y = 700, lit = done && i === win;
+        if (lit) duoSpot(ctx, x, y, 80, cols[i], 0.32);
+        ctx.save(); ctx.globalAlpha = done && !lit ? 0.55 : 1;
+        portrait(ctx, chars[i] || 'knight', x, y - 20, lit ? 120 : 100, t);
+        ctx.restore();
+        duoTag(ctx, x, y + 58, duoNm(names[i]), cols[i], lit, 15);
+      }
+      // the coin: up and down on a parabola, turning over flips half turns, landing on its winner's face
+      const flips = Math.max(1, st.flips | 0 || 9), e = U.ease.outCubic(u), ang = flips * Math.PI * e;
+      const face = Math.floor(ang / Math.PI + 1e-6) % 2, cy = 470 - Math.sin(u * Math.PI) * 190, sy = Math.max(0.06, Math.abs(Math.cos(ang)));
+      const fc = done ? win : face, r = 70;
+      ctx.save(); ctx.translate(w / 2, cy); ctx.scale(1, sy);
+      glow(ctx, 0, 0, r * 1.7, cols[fc], 0.3);
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 4); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, r - 10, 0, TAU); F(ctx, cols[fc]); ctx.fill(); S(ctx, shade(PAL.gold, -0.3), 3); ctx.stroke();
+      txt(ctx, (duoNm(names[fc]) || 'P')[0] || 'P', 0, 3, 64, '#ffffff', true, 'center', true);
+      ctx.restore();
+      // its shadow on the floor
+      ctx.save(); ctx.globalAlpha = 0.35; F(ctx, '#000000'); ctx.beginPath(); ell(ctx, w / 2, 610, 60 * (0.6 + 0.4 * (1 - Math.sin(u * Math.PI))), 10, 0); ctx.fill(); ctx.restore();
+      if (done) chrome(ctx, duoNm(names[win]) + ' STARTS!', w / 2, 830, Math.max(30, Math.min(52, 470 / Math.max(6, (duoNm(names[win]).length + 8) * 0.7))), cols[win], cols[win]);
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  /* The claw-off's scoreboard: st {x, y, w, t, names, cols, sc: [a, b],
+     wins: [a, b] (rounds), drops (a round's drops each), used: [a, b],
+     who (0 / 1: whose drop), flash: [a, b], round, label}. The player
+     dropping gets the spotlight and a pulsing rim; round stars under each. */
+  function duoBoard(ctx, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const x = st.x == null ? 270 : st.x, y = st.y == null ? 150 : st.y, w = st.w || 500, bh = 100, t = +st.t || 0;
+      const cols = [duoCol((st.cols || [])[0], PAL.pink), duoCol((st.cols || [])[1], PAL.cyan)], names = st.names || ['P1', 'P2'];
+      tone(ctx, q => rrect(q, x - w / 2, y - bh / 2, w, bh, 16), '#1b1030', x, y, w * 0.3, { dark: -0.2, spec: false });
+      for (let i = 0; i < 30; i++) {
+        const bx = x - w / 2 + 12 + i * ((w - 24) / 29), on = (Math.floor(t * 8) + i) % 3 === 0;
+        F(ctx, on ? PAL.gold : '#3a2a50'); ctx.beginPath(); circ(ctx, bx, y - bh / 2 + 6, 2.4); circ(ctx, bx, y + bh / 2 - 6, 2.4); ctx.fill();
+      }
+      for (let i = 0; i < 2; i++) {
+        const cx = x + (i ? 1 : -1) * w * 0.28, col = cols[i], live = st.who === i, fl = (st.flash || [])[i] || 0;
+        if (live) { glow(ctx, cx, y, 90, col, 0.28 + Math.sin(t * 5) * 0.08); ctx.beginPath(); rrect(ctx, cx - w * 0.2, y - bh / 2 + 12, w * 0.4, bh - 24, 12); S(ctx, rgba(col, 0.7 + Math.sin(t * 6) * 0.3), 3); ctx.stroke(); }
+        txt(ctx, duoNm(names[i]), cx, y - 26, 15, live ? col : rgba(col, 0.7), true, 'center', true);
+        txt(ctx, String((st.sc || [])[i] | 0), cx, y + 6, 32 + fl * 10, fl > 0 ? PAL.gold : '#ffffff', true, 'center', true);
+        // drops left this round
+        const dn = Math.max(1, st.drops | 0 || 3), used = (st.used || [])[i] | 0;
+        for (let k = 0; k < dn; k++) { ctx.beginPath(); circ(ctx, cx + (k - (dn - 1) / 2) * 13, y + 34, 4.5); F(ctx, k < used ? rgba(col, 0.22) : col); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke(); }
+        // rounds won: two stars
+        for (let k = 0; k < 2; k++) {
+          const sx = cx + (i ? 1 : -1) * (w * 0.16 + k * 16), won = k < ((st.wins || [])[i] | 0);
+          ctx.beginPath(); star(ctx, sx, y - 26, 7, 5, 0.45); F(ctx, won ? PAL.gold : '#3a2a50'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+        }
+      }
+      txt(ctx, 'VS', x, y + 2, 24, PAL.pink, true, 'center', true);
+      if (st.round) txt(ctx, 'ROUND ' + (st.round | 0), x, y - 30, 12, '#fff6c0', true, 'center', true);
+      if (st.label) txt(ctx, String(st.label), x, y + bh / 2 + 15, 14, '#fff6c0', true, 'center', true);
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  /* The podium: st {t, names, cols, chars, win (0 / 1, -1 a draw), coop,
+     won (co-op), sc: [a, b], label, reduced}. The winner on the tall step
+     under a spotlight with a crown, the other one step down; a draw or a
+     co-op team stands side by side on one wide step (a team that lost
+     sits there dim with stars around their heads). */
+  function duoPodium(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = +st.t || 0, names = st.names || ['P1', 'P2'], cols = [duoCol((st.cols || [])[0], PAL.pink), duoCol((st.cols || [])[1], PAL.cyan)], chars = st.chars || ['knight', 'knight'];
+      const win = st.coop ? -1 : (st.win === 0 || st.win === 1 ? st.win : -1), lost = st.coop && !st.won;
+      rushBack(ctx, w, h, t, { col: win >= 0 ? cols[win] : st.coop && st.won ? PAL.gold : PAL.pink, band: false });
+      const floor = 700, pos = [];
+      if (win >= 0) {
+        // the winner's step in the middle-left, the other one lower on the right
+        pos[win] = { x: w * 0.38, top: floor - 190, sw: 170, n: '1' };
+        pos[1 - win] = { x: w * 0.74, top: floor - 110, sw: 140, n: '2' };
+      } else {
+        pos[0] = { x: w * 0.32, top: floor - 150, sw: 170, n: st.coop ? '' : '=' };
+        pos[1] = { x: w * 0.68, top: floor - 150, sw: 170, n: st.coop ? '' : '=' };
+      }
+      for (let i = 0; i < 2; i++) {
+        const p = pos[i], lit = win === i || (st.coop && st.won) || win < 0;
+        if (lit && !lost) duoSpot(ctx, p.x, p.top - 70, 90, cols[i], win === i ? 0.4 : 0.22);
+        tone(ctx, q => rrect(q, p.x - p.sw / 2, p.top, p.sw, floor - p.top + 40, 10), shade(cols[i], -0.45), p.x, p.top + 60, p.sw * 0.4, { dark: -0.25, spec: false });
+        ctx.beginPath(); ctx.rect(p.x - p.sw / 2, p.top, p.sw, 8); F(ctx, cols[i]); ctx.fill();
+        if (p.n) txt(ctx, p.n, p.x, p.top + 52, 52, '#ffffff', true, 'center', true);
+        duoTag(ctx, p.x, p.top + 100, duoNm(names[i]), cols[i], lit && !lost, 15);
+        // the crawler on the step: bouncing when they won, slumped when they lost
+        const bounce = lost ? 0 : Math.abs(Math.sin(t * 4 + i)) * (win === i || (st.coop && st.won) ? 14 : 4);
+        ctx.save();
+        ctx.translate(p.x, p.top - 62 - bounce);
+        if (lost || (win >= 0 && i !== win)) ctx.rotate(lost ? (i ? 0.25 : -0.25) : 0.12);
+        ctx.globalAlpha = lost ? 0.7 : 1;
+        portrait(ctx, chars[i] || 'knight', 0, 0, win === i ? 128 : 112, t);
+        ctx.restore();
+        if (win === i || (st.coop && st.won)) {
+          ctx.save(); ctx.translate(p.x, p.top - 142 - bounce); ctx.rotate(Math.sin(t * 3) * 0.08);
+          ctx.beginPath(); poly(ctx, [-26, 12, -30, -14, -14, -2, 0, -20, 14, -2, 30, -14, 26, 12]); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+          ctx.restore();
+        }
+        if (lost) for (let k = 0; k < 3; k++) { const a = t * 3 + k * 2.1; ctx.beginPath(); star(ctx, p.x + Math.cos(a) * 42, p.top - 118 + Math.sin(a) * 10, 8, 5, 0.45); F(ctx, PAL.gold); ctx.fill(); }
+      }
+      const head = st.coop ? (st.won ? 'TEAM WIN!' : 'KNOCKED OUT') : win >= 0 ? duoNm(names[win]) + ' WINS!' : 'A DRAW!';
+      chrome(ctx, head, w / 2, 150, Math.max(30, Math.min(62, 480 / Math.max(6, head.length * 0.68))), win >= 0 ? cols[win] : st.coop && st.won ? PAL.gold : PAL.pink, win >= 0 ? cols[win] : PAL.gold);
+      if (st.label) txt(ctx, String(st.label), w / 2, 212, 18, '#fff6c0', true, 'center', true);
+      if (st.sc && !st.coop) txt(ctx, `${st.sc[0] | 0}  :  ${st.sc[1] | 0}`, w / 2, 250, 26, '#ffffff', true, 'center', true);
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  const DUO_R = { T: DUO_T, E: DUO_E, spot: duoSpot, tag: duoTag, target: duoTarget, card: duoCard, handoff: duoHandoff, coin: duoCoin, board: duoBoard, podium: duoPodium };
+  /* ============================================================ end DUO */
+
+  /* ============================================================ SCHOOL (round 11)
+     Claw School and the Practice Cabinet (DESIGN.md "Claw School and the
+     Practice Cabinet (round 11)"): the chalkboard (a challenge's goal, the
+     lesson titles), Professor Pincher (a classic claw in a mortarboard), the
+     result card's stars, the practice cabinet's LED scoreboard, the target
+     marker, the classroom behind the school's pages, the report card and
+     the diploma. Pure draws of their inputs; every one restores the ctx and
+     never throws. */
+  const SCH_C = { board: '#1f4a3a', board2: '#123026', wood: '#8a5a2e', wood2: '#5a3a1a', chalk: '#f4f1e6', chalkY: '#ffe98a', chalkP: '#ffb3d9', chalkC: '#9ff5ec',
+    paper: '#f6efdc', paper2: '#e6d9b8', ink2: '#2a2140', red: '#d8433a', wall: '#2a1c44', wall2: '#1a1030' };
+  const SCH_E = { n: 0, last: '' };
+  const schErr = (e) => { SCH_E.n++; SCH_E.last = String((e && e.message) || e); };
+  // Chalk words: a faint double stroke gives them grain.
+  function schChalk(ctx, s, x, y, size, col, align) {
+    ctx.font = 'bold ' + size + 'px ' + FONT; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+    ctx.globalAlpha = 0.35; F(ctx, col || SCH_C.chalk); ctx.fillText(s, x + 0.8, y + 0.6);
+    ctx.globalAlpha = 1; ctx.fillText(s, x, y);
+  }
+  // Words wrapped into lines that fit maxW at this size (the stub ctx measures every string alike).
+  function schWrap(ctx, s, maxW, size) {
+    ctx.font = 'bold ' + size + 'px ' + FONT;
+    const words = String(s || '').split(' '), out = [];
+    let line = '';
+    for (const w of words) {
+      const tryL = line ? line + ' ' + w : w;
+      let wd = 0;
+      try { wd = ctx.measureText(tryL).width; } catch (e) { wd = tryL.length * size * 0.55; }
+      if (line && wd > maxW) { out.push(line); line = w; } else line = tryL;
+    }
+    if (line) out.push(line);
+    return out;
+  }
+  /* A chalkboard: a wooden frame, the slate with smudges, a chalk tray.
+     st: {title, tcol, lines: [{s, size, col}], pad (side room, default 14), t}. Lines wrap to the board. */
+  function schBoard(ctx, x, y, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      ctx.beginPath(); rrect(ctx, x - 8, y - 8, w + 16, h + 16, 10); F(ctx, SCH_C.wood); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, x - 3, y - 3, w + 6, h + 6, 6); S(ctx, SCH_C.wood2, 3); ctx.stroke();
+      let g = SCH_C.board;
+      try { const gr = ctx.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, SCH_C.board); gr.addColorStop(1, SCH_C.board2); g = gr; } catch (e) { /* stub */ }
+      ctx.beginPath(); rrect(ctx, x, y, w, h, 4); ctx.fillStyle = FLAT || g; ctx.fill();
+      // old smudges: wiped chalk the teacher never cleaned off
+      ctx.globalAlpha = 0.07; F(ctx, SCH_C.chalk);
+      for (let i = 0; i < 6; i++) { ctx.beginPath(); ell(ctx, x + w * h01(i, 3), y + h * h01(i, 7), 30 + h01(i, 9) * 50, 8 + h01(i, 11) * 10, h01(i, 5) - 0.5); ctx.fill(); }
+      ctx.globalAlpha = 1;
+      // the tray and two sticks of chalk
+      ctx.beginPath(); rrect(ctx, x + w * 0.1, y + h + 2, w * 0.8, 6, 3); F(ctx, SCH_C.wood2); ctx.fill();
+      ctx.beginPath(); rrect(ctx, x + w * 0.22, y + h, 18, 5, 2); F(ctx, SCH_C.chalk); ctx.fill();
+      ctx.beginPath(); rrect(ctx, x + w * 0.3, y + h, 12, 5, 2); F(ctx, SCH_C.chalkP); ctx.fill();
+      let yy = y + 18;
+      if (st.title) { schChalk(ctx, st.title, x + w / 2, yy + 4, 24, st.tcol || SCH_C.chalkY); yy += 34; }
+      for (const L of st.lines || []) {
+        if (!L || !L.s) { yy += 8; continue; }
+        const size = L.size || 17;
+        for (const ln of schWrap(ctx, L.s, w - 2 * (st.pad || 14), size)) {
+          if (yy > y + h - 6) break;
+          schChalk(ctx, ln, L.align === 'left' ? x + 14 : x + w / 2, yy + size * 0.5, size, L.col || SCH_C.chalk, L.align === 'left' ? 'left' : 'center');
+          yy += size * 1.28;
+        }
+      }
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  // A mortarboard: the square top seen at an angle, the cap, a tassel that swings with t.
+  function schCap(ctx, x, y, s, col, t) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.scale(s, s);
+      ctx.beginPath(); ctx.moveTo(-13, 2); ctx.quadraticCurveTo(0, 10, 13, 2); ctx.lineTo(12, -4); ctx.lineTo(-12, -4); ctx.closePath();
+      F(ctx, shade(col || INK, 0.12)); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+      ctx.beginPath(); poly(ctx, [0, -14, 24, -6, 0, 2, -24, -6]); F(ctx, col || '#241a3a'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+      ctx.beginPath(); circ(ctx, 0, -6, 2.4); F(ctx, PAL.gold); ctx.fill();
+      const sw = Math.sin((t || 0) * 2.2) * 3;
+      ctx.beginPath(); ctx.moveTo(0, -6); ctx.quadraticCurveTo(10, -5, 14 + sw * 0.3, 4); S(ctx, PAL.gold, 1.8); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, 12 + sw * 0.3, 3, 4, 8, 2); F(ctx, PAL.gold); ctx.fill();
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  /* Professor Pincher: a classic claw on a short cable with a mortarboard
+     over its head. (x, y) the hub, s its scale, mood the claw face's mood. */
+  const SCH_J = { t: 0, mood: 'happy', idle: 1 };
+  function schProf(ctx, x, y, s, t, mood) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.scale(s, s);
+      const P = typeof PHYS !== 'undefined' ? PHYS : null;
+      if (P && P.clawPose) {
+        const pose = P.clawPose('classic', { x: 0, y: Math.sin((t || 0) * 1.6) * 2, open: 0.45 + Math.sin((t || 0) * 0.9) * 0.1, cable: 26, width: 1 });
+        SCH_J.t = t || 0; SCH_J.mood = mood || 'happy';
+        claw(ctx, pose, 0, 0, { juice: SCH_J });
+        const hb = pose.bodies && pose.bodies.hub ? pose.bodies.hub : { x: 0, y: 0, r: 12 };
+        schCap(ctx, hb.x, hb.y - hb.r * 1.15, 0.9, '#241a3a', t);
+      } else schCap(ctx, 0, -14, 1, '#241a3a', t);
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  /* A star: gold and shining when earned, a dark dashed slot when not.
+     st: {pop 0..1 (scale in, overshoot), t, col}. */
+  function schStar(ctx, x, y, r, on, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const pop = st.pop == null ? 1 : clamp01(st.pop);
+      const k = on ? (pop < 1 ? U.ease.outBack ? U.ease.outBack(pop) : pop : 1) : 1;
+      ctx.translate(x, y); ctx.scale(k, k);
+      if (on) {
+        glow(ctx, 0, 0, r * 2.2, st.col || PAL.gold, 0.35);
+        ctx.beginPath(); star(ctx, 0, 0, r, 5, 0.48); F(ctx, st.col || PAL.gold); ctx.fill(); S(ctx, INK, Math.max(2, r * 0.14)); ctx.stroke();
+        ctx.beginPath(); star(ctx, -r * 0.08, -r * 0.1, r * 0.55, 5, 0.48); F(ctx, rgba('#fff6c0', 0.7)); ctx.fill();
+      } else {
+        ctx.beginPath(); star(ctx, 0, 0, r, 5, 0.48); F(ctx, rgba(INK, 0.55)); ctx.fill();
+        ctx.setLineDash([3, 3]); S(ctx, rgba('#b9a8e0', 0.8), 2); ctx.stroke(); ctx.setLineDash([]);
+      }
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  // Three stars in a row about (x, y): n earned, pops [0..1] per star (the result card's reveal).
+  function schStarRow(ctx, x, y, r, n, gap, pops, t) {
+    for (let i = 0; i < 3; i++) schStar(ctx, x + (i - 1) * (r * 2 + (gap || 6)), y - (i === 1 ? r * 0.25 : 0), r, i < n, { pop: pops ? pops[i] : 1, t });
+  }
+  /* The practice cabinet's LED scoreboard. st: {t, cells: [{k (label), v, col, flash 0..1}]}. */
+  function schScore(ctx, x, y, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      ctx.beginPath(); rrect(ctx, x, y, w, h, 12); F(ctx, '#0b0616'); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, x + 3, y + 3, w - 6, h - 6, 9); S(ctx, rgba(PAL.cyan, 0.35), 2); ctx.stroke();
+      const cells = st.cells || [], n = Math.max(1, cells.length), cw = (w - 16) / n;
+      cells.forEach((c, i) => {
+        const cx = x + 8 + cw * i + cw / 2, col = c.col || PAL.cyan;
+        if (i) { ctx.beginPath(); ctx.moveTo(x + 8 + cw * i, y + 12); ctx.lineTo(x + 8 + cw * i, y + h - 12); S(ctx, rgba('#ffffff', 0.08), 1.5); ctx.stroke(); }
+        if (c.flash > 0) glow(ctx, cx, y + h * 0.42, cw * 0.55, col, Math.min(1, c.flash) * 0.6);
+        txt(ctx, String(c.v == null ? 0 : c.v), cx, y + h * 0.42, Math.min(34, h * 0.46) * (1 + (c.flash > 0 ? Math.min(1, c.flash) * 0.15 : 0)), col, true, 'center', INK);
+        txt(ctx, String(c.k || ''), cx, y + h - 13, 12, rgba('#e8dcff', 0.85), true, 'center');
+      });
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  // "THIS ONE": a dashed ring turning about a target prize and an arrow bobbing over it.
+  function schTarget(ctx, x, y, r, t, col) {
+    ctx.save();
+    try {
+      col = col || PAL.gold;
+      const k = 1 + Math.sin((t || 0) * 5) * 0.08;
+      ctx.lineDashOffset = -(t || 0) * 24; ctx.setLineDash([7, 5]);
+      ctx.beginPath(); circ(ctx, x, y, (r + 7) * k); S(ctx, col, 3); ctx.stroke(); ctx.setLineDash([]);
+      const ay = y - r - 22 - Math.abs(Math.sin((t || 0) * 4)) * 7;
+      ctx.beginPath(); poly(ctx, [x, ay + 12, x - 9, ay, x - 4, ay, x - 4, ay - 10, x + 4, ay - 10, x + 4, ay, x + 9, ay]); F(ctx, col); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  /* The classroom behind the school's pages: a wall, a big chalkboard with
+     the page's title in chalk, pennants, and Professor Pincher on his cable.
+     st: {t, title, sub, prof (show him), mood, flags (false: no pennants)}. */
+  function schRoom(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0;
+      let g = SCH_C.wall;
+      try { const gr = ctx.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, SCH_C.wall); gr.addColorStop(1, SCH_C.wall2); g = gr; } catch (e) { /* stub */ }
+      ctx.fillStyle = FLAT || g; ctx.fillRect(0, 0, w, h);
+      // wallpaper stripes and a wainscot
+      ctx.globalAlpha = 0.06; F(ctx, '#ffffff');
+      for (let xx = 0; xx < w; xx += 36) ctx.fillRect(xx, 0, 14, h * 0.72);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = FLAT || '#3a2418'; ctx.fillRect(0, h * 0.72, w, h * 0.28);
+      ctx.fillStyle = FLAT || '#4a3020'; ctx.fillRect(0, h * 0.72, w, 8);
+      // pennants on a string, strung between the page's top buttons (st.flags false: none)
+      if (st.flags !== false) {
+        const x0 = 128, x1 = w - 128;
+        ctx.beginPath(); ctx.moveTo(x0, 6); ctx.quadraticCurveTo(w / 2, 30, x1, 6); S(ctx, rgba('#e8dcff', 0.4), 1.5); ctx.stroke();
+        const pc = [PAL.pink, PAL.cyan, PAL.gold, PAL.lime];
+        for (let i = 0; i < 7; i++) {
+          const u = (i + 0.5) / 7, px = x0 + u * (x1 - x0), py = 6 + Math.sin(u * Math.PI) * 12, sw = Math.sin(t * 1.5 + i) * 2;
+          ctx.beginPath(); poly(ctx, [px - 9, py, px + 9, py, px + sw, py + 17]); F(ctx, pc[i % 4]); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+        }
+      }
+      if (st.title) {
+        schBoard(ctx, 40, 58, w - 80, 108, { title: st.title, tcol: st.tcol, lines: st.sub ? [{ s: st.sub, size: 16, col: SCH_C.chalkC }] : [] });
+        if (st.prof !== false) schProf(ctx, w - 62, 64, 0.95, t, st.mood || 'happy');
+      }
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  /* The result card over the cabinet. st: {t (s since it opened), win,
+     stars, title, sub, tix, best (a new best)}. The stars pop in one by one. */
+  function schResult(ctx, cx, cy, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, w = 400, h = 200, x = cx - w / 2, y = cy - h / 2;
+      const inK = st.reduced ? 1 : clamp01(t / 0.25);
+      ctx.globalAlpha = inK;
+      ctx.beginPath(); rrect(ctx, x, y, w, h, 18); F(ctx, rgba(INK, 0.94)); ctx.fill(); S(ctx, st.win ? PAL.gold : '#9b7bff', 4); ctx.stroke();
+      schChalk(ctx, st.title || (st.win ? 'CLEARED!' : 'TRY AGAIN'), cx, y + 30, 28, st.win ? SCH_C.chalkY : SCH_C.chalkP);
+      if (st.win) {
+        const pops = [0, 1, 2].map((i) => (st.reduced ? 1 : clamp01((t - 0.3 - i * 0.28) / 0.3)));
+        schStarRow(ctx, cx, y + 92, 30, st.stars | 0, 16, pops, t);
+      } else schProf(ctx, cx, y + 70, 0.9, t, 'sad');
+      if (st.sub) txt(ctx, st.sub, cx, y + 150, 16, '#e8dcff', true, 'center', INK);
+      if (st.tix > 0) txt(ctx, '+' + st.tix + ' vault tickets', cx, y + 176, 16, PAL.gold, true, 'center', INK);
+      else if (st.best) txt(ctx, 'NEW BEST!', cx, y + 176, 16, PAL.cyan, true, 'center', INK);
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  // A grade stamp: a tilted ring of ink with the letter.
+  function schGradeStamp(ctx, x, y, r, g, t) {
+    ctx.save();
+    try {
+      const col = g === 'A+' || g === 'A' ? '#2e9c4a' : g === 'B' ? '#2b6cd8' : g === 'C' ? '#d88a1a' : g === '-' ? '#9a8fb0' : SCH_C.red;
+      ctx.translate(x, y); ctx.rotate(-0.18);
+      ctx.beginPath(); circ(ctx, 0, 0, r); S(ctx, col, 3); ctx.stroke();
+      ctx.beginPath(); circ(ctx, 0, 0, r - 5); S(ctx, rgba(col, 0.5), 1.5); ctx.stroke();
+      txt(ctx, g, 0, 1, r * 0.95, col, true, 'center');
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  /* The report card: a paper card with a row per lesson (its icon, name,
+     stars and a grade stamp) and the total. st: {name, rows: [{name, icon,
+     got, max, grade, col, locked}], got, max, t}. */
+  function schReport(ctx, x, y, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      ctx.beginPath(); rrect(ctx, x + 6, y + 8, w, h, 10); F(ctx, rgba(INK, 0.5)); ctx.fill();
+      ctx.beginPath(); rrect(ctx, x, y, w, h, 10); F(ctx, SCH_C.paper); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+      // ruled lines and a red margin
+      S(ctx, rgba('#6aa0d8', 0.35), 1);
+      for (let yy = y + 96; yy < y + h - 10; yy += 26) { ctx.beginPath(); ctx.moveTo(x + 10, yy); ctx.lineTo(x + w - 10, yy); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(x + 44, y + 70); ctx.lineTo(x + 44, y + h - 8); S(ctx, rgba(SCH_C.red, 0.5), 1.5); ctx.stroke();
+      txt(ctx, 'REPORT CARD', x + w / 2, y + 26, 24, SCH_C.ink2, true, 'center');
+      txt(ctx, 'Claw School · ' + (st.name || 'Student'), x + w / 2, y + 52, 14, '#6a5a80', true, 'center');
+      const rows = st.rows || [], rh = Math.min(52, (h - 150) / Math.max(1, rows.length));
+      rows.forEach((r, i) => {
+        const ry = y + 86 + i * rh + rh / 2;
+        txt(ctx, r.icon || '', x + 26, ry, 18, SCH_C.ink2, false, 'center');
+        txt(ctx, r.name || '', x + 56, ry - 8, 16, r.locked ? '#9a8fb0' : SCH_C.ink2, true, 'left');
+        const bw = w - 200, bx = x + 56, by = ry + 6, k = r.max > 0 ? clamp01(r.got / r.max) : 0;
+        ctx.beginPath(); rrect(ctx, bx, by, bw, 9, 4.5); F(ctx, rgba(SCH_C.ink2, 0.12)); ctx.fill();
+        if (k > 0) { ctx.beginPath(); rrect(ctx, bx, by, Math.max(9, bw * k), 9, 4.5); F(ctx, r.col || PAL.gold); ctx.fill(); }
+        txt(ctx, (r.got | 0) + '/' + (r.max | 0) + ' ★', x + w - 94, ry, 14, SCH_C.ink2, true, 'right');
+        schGradeStamp(ctx, x + w - 48, ry, Math.min(20, rh * 0.42), r.locked ? '-' : r.grade || '-', st.t);
+      });
+      // the total, big
+      const ty = y + h - 40;
+      schStar(ctx, x + w / 2 - 70, ty, 20, true, { t: st.t });
+      txt(ctx, (st.got | 0) + ' / ' + (st.max | 0), x + w / 2 + 16, ty, 32, SCH_C.ink2, true, 'center');
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  /* The diploma: a parchment scroll, DIPLOMA in gold, the student's name,
+     a gold seal on red ribbons and Professor Pincher's signature. st: {name,
+     locked (a faint preview with the stars still to earn), left, t}. */
+  function schDiploma(ctx, x, y, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0;
+      if (st.locked) ctx.globalAlpha = 0.45;
+      if (!st.locked && !st.reduced) glow(ctx, x + w / 2, y + h / 2, w * 0.6, PAL.gold, 0.25 + Math.sin(t * 2) * 0.08);
+      let g = SCH_C.paper;
+      try { const gr = ctx.createLinearGradient(x, y, x, y + h); gr.addColorStop(0, '#fbf5e4'); gr.addColorStop(1, SCH_C.paper2); g = gr; } catch (e) { /* stub */ }
+      ctx.beginPath(); rrect(ctx, x, y + 10, w, h - 20, 6); ctx.fillStyle = FLAT || g; ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+      // the rolled ends
+      for (const yy of [y + 10, y + h - 10]) { ctx.beginPath(); ell(ctx, x + w / 2, yy, w / 2 + 6, 9, 0); F(ctx, SCH_C.paper2); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke(); }
+      ctx.beginPath(); rrect(ctx, x + 12, y + 24, w - 24, h - 48, 4); S(ctx, rgba('#b8860b', 0.8), 2); ctx.stroke();
+      txt(ctx, 'DIPLOMA', x + w / 2, y + 52, 30, '#b8860b', true, 'center', '#5a3a0a');
+      txt(ctx, 'CLAW SCHOOL', x + w / 2, y + 80, 14, '#6a5a80', true, 'center');
+      txt(ctx, 'awarded to', x + w / 2, y + 106, 13, '#6a5a80', false, 'center');
+      txt(ctx, st.name || 'You', x + w / 2, y + 132, 24, SCH_C.ink2, true, 'center');
+      txt(ctx, st.locked ? (st.left | 0) + ' stars to go' : 'for earning every single star', x + w / 2, y + 158, 13, '#6a5a80', false, 'center');
+      // the seal and its ribbons
+      const sx = x + w - 62, sy = y + h - 58;
+      ctx.beginPath(); poly(ctx, [sx - 10, sy + 6, sx - 22, sy + 40, sx - 10, sy + 34, sx - 2, sy + 44, sx - 2, sy + 8]); F(ctx, SCH_C.red); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+      ctx.beginPath(); poly(ctx, [sx + 10, sy + 6, sx + 22, sy + 40, sx + 10, sy + 34, sx + 2, sy + 44, sx + 2, sy + 8]); F(ctx, SCH_C.red); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+      ctx.beginPath(); star(ctx, sx, sy, 24, 12, 0.82); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+      ctx.beginPath(); circ(ctx, sx, sy, 14); S(ctx, '#b8860b', 2); ctx.stroke();
+      txt(ctx, '★', sx, sy + 1, 14, '#b8860b', true, 'center');
+      // the signature
+      ctx.beginPath(); ctx.moveTo(x + 40, y + h - 44); ctx.bezierCurveTo(x + 60, y + h - 64, x + 70, y + h - 30, x + 92, y + h - 50);
+      ctx.bezierCurveTo(x + 104, y + h - 60, x + 112, y + h - 38, x + 140, y + h - 48); S(ctx, SCH_C.ink2, 2); ctx.stroke();
+      txt(ctx, 'Prof. Pincher', x + 90, y + h - 30, 11, '#6a5a80', false, 'center');
+      if (!st.locked) schCap(ctx, x + 50, y + 44, 1.1, '#241a3a', t);
+    } catch (e) { schErr(e); }
+    ctx.restore();
+  }
+  const SCH_R = { C: SCH_C, E: SCH_E, chalk: schChalk, wrap: schWrap, board: schBoard, cap: schCap, prof: schProf, star: schStar, stars: schStarRow,
+    score: schScore, target: schTarget, room: schRoom, result: schResult, stamp: schGradeStamp, report: schReport, diploma: schDiploma };
+  /* ============================================================ end SCHOOL */
+
   return {
+    // SCHOOL (round 11): Claw School and the Practice Cabinet: the chalkboard, Professor Pincher, stars, the scoreboard, the report card and the diploma
+    sch: SCH_R,
+    // DUO (round 11): pass and play: the hand-off card, the coin toss, the claw-off's board, sabotage cards, the podium
+    duo: DUO_R,
     // RUSH (round 10): the Boss Rush's NEXT CHALLENGER slam, gallery, banner and backdrop; the ghost race's marker, chart and GHOST PASSED!
     rush: RUSH_R, gho: GHO_R,
     // LORE (round 9): Codex vignettes, landmark props and bubbles, the high score board, act intros, the weekly banner and medals

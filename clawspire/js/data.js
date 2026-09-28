@@ -3325,7 +3325,7 @@ const DATA = (() => {
   function vaultHow(id) {
     const c = COSMETICS[id];
     if (!c) return null;
-    return c.free ? 'own' : c.season ? 'event' : c.ach ? 'sticker' : c.rarity === 'l' ? 'capsule' : 'buy';   // (SEASON: 'event' = the season's counter)
+    return c.free ? 'own' : c.season ? 'event' : c.school ? 'school' : c.ach ? 'sticker' : c.rarity === 'l' ? 'capsule' : 'buy';   // (SEASON: 'event' = the season's counter)
   }
   // The sticker prizes an achievement id unlocks.
   function vaultForSticker(achId) { return COSMETIC_IDS.filter((id) => COSMETICS[id].ach === achId); }
@@ -5754,7 +5754,465 @@ const DATA = (() => {
   ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
   // ================================================================ /RUSH
 
+  // ================================================================ DUO (round 11)
+  /* Pass-and-play for two on one phone (DESIGN.md "Duo: pass and play
+     (round 11)"): the tables and the pure rules of both modes. CO-OP BOSS:
+     two crawlers share one boss fight, turn about. VERSUS CLAW-OFF: a
+     shared bin of prizes, drops turn about, sabotage cards between them,
+     best of three rounds. The game (GAME.duo) owns the flow; nothing here
+     touches a run. */
+  const DUO = {
+    NAME_MAX: 10,
+    // a player's colour: the HUD accent, the name, and the claw's team paint
+    COLORS: [
+      { id: 'pink', col: '#ff2e88', paint: 'paint_bubblegum', name: 'Hot Pink' },
+      { id: 'cyan', col: '#2ee6d6', paint: 'paint_frost', name: 'Arcade Cyan' },
+      { id: 'gold', col: '#ffc94d', paint: 'paint_gold', name: 'Prize Gold' },
+      { id: 'lime', col: '#a6ff5e', paint: 'paint_glow', name: 'Slime Lime' },
+      { id: 'orange', col: '#ff8a2b', paint: 'paint_copper', name: 'Hot Copper' },
+      { id: 'red', col: '#ff5a4a', paint: 'paint_candy', name: 'Candy Red' },
+    ],
+    DEF: [{ name: 'P1', color: 'pink' }, { name: 'P2', color: 'cyan' }],
+    // the claw-off: prize values on the glass, the pile per round, the bonuses
+    VAL: { junk: 0, c: 1, u: 2, r: 4, l: 7 },
+    PILE: { c: 5, u: 4, r: 2, l: 1, junk: 2 },
+    PILE_MORE: { c: 1, u: 1 },   // per drop each above 3: a longer round gets a fuller bin
+    BONUS: { double: 1, jackpot: 3, comboTier: 1, golden: 2 },
+    DROPS: [3, 4, 5], DROPS_DEF: 3,
+    WIN_ROUNDS: 2, MAX_ROUNDS: 5,
+    HAND: { start: 2, max: 3 },
+    // sabotage cards: played on the rival's next drop
+    CARDS: {
+      shake: { id: 'shake', name: 'Shake Up', icon: '\u{1F4A5}', col: '#ff8a2b', text: 'Their bin gets a big shake right before they drop.' },
+      grease: { id: 'grease', name: 'Butter Fingers', icon: '\u{1F9C8}', col: '#ffe066', text: 'Their claw is greasy for the drop: prizes slip out.' },
+      fog: { id: 'fog', name: 'Fog Machine', icon: '\u{1F32B}\u{FE0F}', col: '#bfe8ff', text: 'The glass fogs up and the prize tags vanish.' },
+      tilt: { id: 'tilt', name: 'Tilt!', icon: '\u{1F4D0}', col: '#b98cff', text: 'The whole bin leans to one side while they drop.' },
+      mirror: { id: 'mirror', name: 'Mirror Mirror', icon: '\u{1FA9E}', col: '#2ee6d6', text: 'Their steering runs backwards.' },
+      tiny: { id: 'tiny', name: 'Tiny Claw', icon: '\u{1F90F}', col: '#a6ff5e', text: 'Their claw shrinks for the drop.' },
+      turbo: { id: 'turbo', name: 'Too Much Coffee', icon: '\u{2615}', col: '#ff5a4a', text: 'Their claw zooms twice as fast. Good luck aiming.' },
+    },
+    CARD_IDS: ['shake', 'grease', 'fog', 'tilt', 'mirror', 'tiny', 'turbo'],
+    COPIES: 2,
+    // canned taunts (versus) and cheers (co-op), each with its own voice (AUDIO duoTaunt {v})
+    TAUNTS: [
+      { id: 'nyah', short: 'Nyah', text: 'Nyah nyah!', icon: '\u{1F61B}', v: 'kazoo' },
+      { id: 'spoon', short: 'Spoon', text: 'Is that a claw or a spoon?', icon: '\u{1F944}', v: 'boing' },
+      { id: 'trombone', short: 'Wah wah', text: 'Wah wah waaah.', icon: '\u{1F3BA}', v: 'trombone' },
+      { id: 'horn', short: 'Air horn', text: 'AIR HORN!', icon: '\u{1F4E2}', v: 'horn' },
+      { id: 'beatbox', short: 'Boots', text: 'Boots and cats and boots and cats.', icon: '\u{1F941}', v: 'beatbox' },
+      { id: 'mic', short: 'Mic drop', text: 'Mic drop.', icon: '\u{1F3A4}', v: 'mic' },
+    ],
+    CHEERS: [
+      { id: 'hype', short: 'Let\'s go', text: 'Let\'s gooo!', icon: '\u{1F525}', v: 'horn' },
+      { id: 'sing', short: 'Sing', text: 'La la la, we got this!', icon: '\u{1F3B6}', v: 'sing' },
+      { id: 'beatbox', short: 'Boots', text: 'Boots and cats, partner!', icon: '\u{1F941}', v: 'beatbox' },
+      { id: 'hug', short: 'Hug', text: 'Team hug!', icon: '\u{1F917}', v: 'cheer' },
+    ],
+    // the hand-off: seconds on the countdown before READY lights up
+    HANDOFF: 3,
+    // co-op: the boss's hit points on top of the Boss Rush's share (two crawlers hit it)
+    COOP: { hpK: 1.8 },
+    VOICES: ['kazoo', 'boing', 'trombone', 'horn', 'beatbox', 'mic', 'sing', 'cheer'],
+  };
+  const duoInt = (v, lo, hi, d) => { const n = Math.floor(+v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+  // A player's name: printable, trimmed, one space between words, at most NAME_MAX letters; empty is P1 / P2.
+  function duoName(s, i) {
+    // control characters and the long dash go (the dash is built from its code: this file never holds one)
+    let t = String(s == null ? '' : s).split(String.fromCharCode(0x2014)).join(' ').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim();
+    t = Array.from(t).slice(0, DUO.NAME_MAX).join('').trim();
+    return t || ('P' + ((i | 0) === 1 ? 2 : 1));
+  }
+  // The record's key for a name (case and spaces do not make a new player).
+  const duoKey = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const duoColor = (id) => DUO.COLORS.find((c) => c.id === id) || DUO.COLORS[0];
+  const duoCard = (id) => DUO.CARDS[id] || null;
+  const duoTaunt = (id, coop) => (coop ? DUO.CHEERS : DUO.TAUNTS).find((x) => x.id === id) || null;
+  // Two players: a name, a colour (never both the same), a crawler, a claw and a paint ('' is the team colour).
+  function duoPlayers(list, chars, claws) {
+    const out = [];
+    chars = chars && chars.length ? chars : ['knight'];
+    for (let i = 0; i < 2; i++) {
+      const p = (list && list[i] && typeof list[i] === 'object') ? list[i] : {};
+      let color = duoColor(p.color).id;
+      if (!DUO.COLORS.some((c) => c.id === p.color)) color = DUO.DEF[i].color;
+      if (i === 1 && color === out[0].color) color = DUO.COLORS.find((c) => c.id !== out[0].color).id;
+      out.push({ name: duoName(p.name, i), color, char: chars.indexOf(p.char) >= 0 ? p.char : chars[Math.min(i, chars.length - 1)],
+        claw: claws && claws.indexOf(p.claw) >= 0 ? p.claw : 'classic', paint: typeof p.paint === 'string' ? p.paint : '' });
+    }
+    return out;
+  }
+  // The claw-off's bin for a round: the prizes (value on the glass), two rocks, and one golden prize (double value); more drops, a fuller bin.
+  function duoPile(rng, round, drops) {
+    const out = [], more = Math.max(0, Math.min(2, ((drops | 0) || 3) - 3));
+    for (const r of ['l', 'r', 'u', 'c']) {
+      let ids = pool(r).filter((id) => ITEMS[id] && !ITEMS[id].bag && !ITEMS[id].char);
+      if (!ids.length) ids = pool(r);
+      const n = (DUO.PILE[r] | 0) + more * ((DUO.PILE_MORE[r] | 0));
+      for (let k = 0; k < n && ids.length; k++) {
+        const id = ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))];
+        out.push({ id, v: DUO.VAL[r] });
+      }
+    }
+    for (let k = 0; k < DUO.PILE.junk; k++) out.push({ id: 'rock', v: 0 });
+    // the golden prize: a common or uncommon one, so it is worth a look but never the whole round
+    const cand = out.map((p, i) => (p.v > 0 && p.v <= 2 ? i : -1)).filter((i) => i >= 0);
+    if (cand.length) out[cand[Math.floor(rng() * cand.length) % cand.length]].gold = 1;
+    for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = out[i]; out[i] = out[j]; out[j] = t; }
+    return out;
+  }
+  /* One drop's score. got: [{id, v, gold}] in the order they fell. Returns
+     {pts, lines: [{k, label, v}], combos: [ids], n}: each prize's value
+     (golden x2), DOUBLE for two, JACKPOT for three or more, and every named
+     grab combo the drop makes (the fight's own recipes) for 2 per tier. */
+  function duoDropScore(got) {
+    const list = (got || []).filter((g) => g && ITEMS[g.id]);
+    const lines = [];
+    let pts = 0;
+    for (const g of list) {
+      const base = Math.max(0, g.v == null ? (DUO.VAL[ITEMS[g.id].rarity] | 0) : (g.v | 0));
+      const v = g.gold ? base * DUO.BONUS.golden : base;
+      pts += v;
+      lines.push({ k: g.gold ? 'golden' : 'prize', label: (g.gold ? 'GOLDEN ' : '') + ITEMS[g.id].name, v });
+    }
+    const n = list.length;
+    if (n === 2) { pts += DUO.BONUS.double; lines.push({ k: 'double', label: 'DOUBLE', v: DUO.BONUS.double }); }
+    if (n >= 3) { pts += DUO.BONUS.jackpot; lines.push({ k: 'jackpot', label: 'JACKPOT!', v: DUO.BONUS.jackpot }); }
+    const combos = combosFor(list.map((g) => ITEMS[g.id]));
+    for (const c of combos) { const v = DUO.BONUS.comboTier * (c.tier || 1); pts += v; lines.push({ k: 'combo', label: c.name, v, id: c.id, color: c.color }); }
+    return { pts, lines, combos: combos.map((c) => c.id), n };
+  }
+  // The sabotage deck: COPIES of every card, shuffled by the round's seed.
+  function duoDeck(rng) {
+    const d = [];
+    for (const id of DUO.CARD_IDS) for (let k = 0; k < DUO.COPIES; k++) d.push(id);
+    for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = d[i]; d[i] = d[j]; d[j] = t; }
+    return d;
+  }
+  // Draw from the deck (the top is the end) into a hand, up to n cards and never past HAND.max. Mutates both; returns what was drawn.
+  function duoDrawCards(deck, hand, n) {
+    const got = [];
+    for (let k = 0; k < (n | 0) && deck.length && hand.length < DUO.HAND.max; k++) { const c = deck.pop(); hand.push(c); got.push(c); }
+    return got;
+  }
+  // Who takes a round: 0 or 1, -1 for a tie.
+  const duoRoundWin = (s) => ((s[0] | 0) > (s[1] | 0) ? 0 : (s[1] | 0) > (s[0] | 0) ? 1 : -1);
+  /* The match over the rounds so far: {wins: [a, b], pts: [a, b], w}: w is
+     0 or 1 once someone has WIN_ROUNDS; after MAX_ROUNDS (ties do not count)
+     the most rounds, then the most points, win, else -1 (a draw); null while
+     it goes on. */
+  function duoMatch(rounds) {
+    const wins = [0, 0], pts = [0, 0];
+    for (const r of rounds || []) {
+      if (!r || !r.s) continue;
+      pts[0] += r.s[0] | 0; pts[1] += r.s[1] | 0;
+      const w = duoRoundWin(r.s);
+      if (w >= 0) wins[w]++;
+    }
+    let w = null;
+    if (wins[0] >= DUO.WIN_ROUNDS) w = 0;
+    else if (wins[1] >= DUO.WIN_ROUNDS) w = 1;
+    else if ((rounds || []).length >= DUO.MAX_ROUNDS) w = wins[0] !== wins[1] ? (wins[0] > wins[1] ? 0 : 1) : pts[0] !== pts[1] ? (pts[0] > pts[1] ? 0 : 1) : -1;
+    return { wins, pts, w };
+  }
+  // Who starts a round: the coin toss for the first, then whoever lost the last one (a tie: the other one starts).
+  function duoStarter(first, rounds) {
+    const n = (rounds || []).length;
+    if (!n) return first | 0;
+    const last = rounds[n - 1], w = last && last.s ? duoRoundWin(last.s) : -1;
+    return w >= 0 ? 1 - w : ((first | 0) + n) % 2;
+  }
+  // The coin toss: who starts (0 / 1) and how many half turns the coin makes, from the duel's seed.
+  function duoToss(seed) {
+    let x = 2166136261 >>> 0;
+    for (const ch of 'duo-toss:' + seed) { x ^= ch.charCodeAt(0); x = Math.imul(x, 16777619) >>> 0; }
+    const w = x & 1;
+    return { w, flips: 8 + ((x >>> 3) % 4) * 2 + w };
+  }
+  // The co-op bosses: the six act bosses and the Prize Master; beaten ones come from the Codex's kills and the rush.
+  function duoBosses(kills, beat) {
+    const out = [];
+    for (const a of [1, 2, 3]) for (const id of RUSH.ACTS[a]) if (ENEMIES[id]) out.push(id);
+    if (ENEMIES[RUSH.FINAL]) out.push(RUSH.FINAL);
+    return out.map((id) => ({ id, beaten: ((kills && kills[id]) | 0) > 0 || ((beat && beat[id]) | 0) > 0 }));
+  }
+  // The profile's duel record, repaired: wins per name for the claw-off, team wins for co-op.
+  function duoFix(o) {
+    const d = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    const n = (v) => Math.max(0, Math.floor(+v) || 0);
+    const names = {};
+    const src = d.names && typeof d.names === 'object' && !Array.isArray(d.names) ? d.names : {};
+    for (const k in src) {
+      const r = src[k];
+      if (!r || typeof r !== 'object') continue;
+      const nm = duoName(r.n || k, 0), key = duoKey(nm);
+      if (!key) continue;
+      names[key] = { n: nm, w: n(r.w), l: n(r.l), t: n(r.t), cg: n(r.cg), cw: n(r.cw) };
+    }
+    const last = d.last && typeof d.last === 'object' && !Array.isArray(d.last) ? d.last : {};
+    return {
+      games: n(d.games), vs: n(d.vs), coop: n(d.coop), coopWins: n(d.coopWins), names,
+      last: { p: Array.isArray(last.p) ? last.p.slice(0, 2).filter((p) => p && typeof p === 'object') : [], drops: duoInt(last.drops, 3, 5, DUO.DROPS_DEF), boss: typeof last.boss === 'string' ? last.boss : '', mode: last.mode === 'coop' ? 'coop' : 'vs' },
+    };
+  }
+  /* A finished duel on the record. o {mode: 'vs' | 'coop', names: [a, b],
+     w: 0 | 1 | -1 (versus), won (co-op)}. Returns the record (mutated). */
+  function duoRecord(m, o) {
+    m = m && m.names ? m : duoFix(m);
+    o = o || {};
+    const nm = (o.names || []).slice(0, 2).map((s, i) => duoName(s, i));
+    const row = (s) => { const k = duoKey(s); return m.names[k] || (m.names[k] = { n: s, w: 0, l: 0, t: 0, cg: 0, cw: 0 }); };
+    m.games++;
+    if (o.mode === 'coop') {
+      m.coop++;
+      if (o.won) m.coopWins++;
+      const seen = {};
+      for (const s of nm) { const k = duoKey(s); if (seen[k]) continue; seen[k] = 1; const r = row(s); r.n = s; r.cg++; if (o.won) r.cw++; }
+    } else {
+      m.vs++;
+      nm.forEach((s, i) => { const r = row(s); r.n = s; if (o.w === -1 || nm.length < 2) r.t++; else if (o.w === i) r.w++; else r.l++; });
+    }
+    return m;
+  }
+  // The board: every name, most claw-off wins first, then team wins, then fewest losses.
+  function duoBoard(m) {
+    const rows = [];
+    const names = (m && m.names) || {};
+    for (const k in names) rows.push(Object.assign({ key: k }, names[k]));
+    rows.sort((a, b) => (b.w - a.w) || (b.cw - a.cw) || (a.l - b.l) || (a.key < b.key ? -1 : 1));
+    return rows;
+  }
+  // ================================================================ /DUO
+
+  // ================================================================ SCHOOL (round 11)
+  /* Claw School and the Practice Cabinet (DESIGN.md "Claw School and the
+     Practice Cabinet (round 11)"). Pure tables and rules: five lessons of
+     bite-size challenges (a fixed scripted pile, a goal, a drop or time
+     limit), the star rules, the one-time vault ticket pay per star, the
+     lesson unlocks, the report card grades, the practice presets, and the
+     Valedictorian marquee the diploma pays (a non-enumerable cosmetic, like
+     the event ones, so the Vault's shelves, counts and capsules are as
+     before). The game runs the cabinet and feeds schEval its state. */
+  const SCH = {
+    TIX: 6,                          // vault tickets for every star, paid the first time it is earned
+    NEED: [0, 6, 14, 24, 34],        // stars to open each lesson
+    FUSE: 8,                         // seconds a bomb lit in the practice cabinet burns
+    DIPLOMA: 'mq_valedictorian',     // the cosmetic the diploma pays
+    PILE_MAX: 30,                    // bodies the practice cabinet holds
+    // the practice cabinet's pile presets (spawned at random across the bin)
+    PILES: [
+      { id: 'starter', name: 'Starter bin', icon: '\u{1F392}', ids: [] },   // (the ids come from a crawler's starting bin)
+      { id: 'junk', name: 'Junk heap', icon: '\u{1FAA8}', ids: ['rock', 'rock', 'rock', 'slag', 'slag', 'iceblock', 'hoardcoin', 'hoardcoin', 'broodegg', 'crisp_apple', 'prize_marble', 'lucky_coin'] },
+      { id: 'glass', name: 'All glass', icon: '\u{1F48E}', ids: ['crystal_ball', 'empty_bottle', 'glass_shield', 'crystal_dice', 'gumball_jar', 'bubble_flask', 'toxic_vial', 'alembic', 'crystal_dice', 'empty_bottle'] },
+      { id: 'bombs', name: 'All bombs', icon: '\u{1F4A3}', ids: ['cherry_bomb', 'cherry_bomb', 'firecracker', 'firecracker', 'firebomb', 'smoke_bomb', 'rubble_bomb', 'firecracker'] },
+      { id: 'balls', name: 'Balls only', icon: '\u{1F3B1}', ids: ['prize_marble', 'prize_marble', 'bouncy_ball', 'bouncy_ball', 'glass_bead', 'crisp_apple', 'blood_orange', 'pot_lid', 'rubber_duck', 'crystal_ball', 'lucky_penny', 'peppermint'] },
+    ],
+    // the mutators the practice cabinet can play with (the machine's physics; the fight-only ones stay off)
+    MUTS: ['lowgrav', 'glass', 'bombs', 'magnet', 'tiny', 'giant', 'slippery', 'blackout', 'conveyor', 'quake', 'moon', 'tinyclaw', 'earthquake', 'mirror', 'flood'],
+    GRADES: [[1, 'A+'], [0.85, 'A'], [0.7, 'B'], [0.5, 'C'], [0.0001, 'D']],
+  };
+  // A pile entry: an item id, x across the bin (0 left .. 1 the divider), y where it is dropped from (interior px), o: {t: 1 (a target), lit: seconds (a lit bomb)}.
+  const sp = (id, x, y, o) => Object.assign({ id, x, y }, o || {});
+  const spRow = (ids, x0, x1, y) => ids.map((id, i) => sp(id, x0 + (ids.length > 1 ? (x1 - x0) * i / (ids.length - 1) : 0), y));
+  /* A challenge: {id, name, goal (the words on the board), tip, claw (a claw
+     type, default classic), drops (0: no limit), time (seconds, 0: none),
+     win {k: total|grab|target|free|all, n, of}, never (a match that fails
+     it when delivered), noCrack (a crack fails it), stars {k: drops|time|items,
+     s3, s2}, pile [sp], muts [mutator ids]}. of / never: {id} | {tag} |
+     {trait: glass|circle} | {not: of}. */
+  const SCH_LESSONS = [
+    { id: 'basics', name: 'Basics', icon: '✏', color: '#2ee6d6', blurb: 'Steer, drop, deliver. Claw 101.', ch: [
+      { id: 'b1', name: 'First Grab', goal: 'Deliver any prize to the chute.', tip: 'Drag on the glass to steer. Let go to drop.',
+        drops: 5, win: { k: 'total', n: 1 }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: [sp('crisp_apple', 0.22, 320), sp('blood_orange', 0.42, 320), sp('bouncy_ball', 0.62, 320), sp('crisp_apple', 0.8, 320)] },
+      { id: 'b2', name: 'That One', goal: 'Deliver the glowing apple.', tip: 'Line the claw up right over it before you let go.',
+        drops: 5, win: { k: 'target' }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: [sp('rock', 0.18, 320), sp('rock', 0.34, 320), sp('crisp_apple', 0.5, 320, { t: 1 }), sp('rock', 0.66, 320), sp('rock', 0.82, 320)] },
+      { id: 'b3', name: 'Double Up', goal: 'Deliver 2 prizes in one grab.', tip: 'Drop into the middle of a clump.',
+        drops: 5, win: { k: 'grab', n: 2 }, stars: { k: 'drops', s3: 1, s2: 3 },
+        pile: spRow(['prize_marble', 'glass_bead', 'prize_marble', 'peppermint'], 0.42, 0.6, 300).concat(spRow(['glass_bead', 'prize_marble', 'peppermint', 'prize_marble'], 0.44, 0.58, 240)) },
+      { id: 'b4', name: 'Jackpot!', goal: 'Deliver 3 prizes in one grab: a JACKPOT.', tip: 'Small things in a heap. Aim for the middle of it.',
+        drops: 6, win: { k: 'grab', n: 3 }, stars: { k: 'drops', s3: 2, s2: 4 },
+        pile: spRow(['prize_marble', 'glass_bead', 'sour_drop', 'peppermint', 'prize_marble'], 0.4, 0.62, 320)
+          .concat(spRow(['lucky_penny', 'prize_marble', 'glass_bead', 'sour_drop', 'peppermint'], 0.42, 0.6, 260))
+          .concat(spRow(['prize_marble', 'glass_bead', 'peppermint', 'prize_marble'], 0.45, 0.58, 200)) },
+      { id: 'b5', name: 'Beat the Clock', goal: 'Deliver 4 prizes in 30 seconds.', tip: 'No drop limit. Keep the claw busy!',
+        drops: 0, time: 30, win: { k: 'total', n: 4 }, stars: { k: 'time', s3: 16, s2: 23 },
+        pile: spRow(['crisp_apple', 'bouncy_ball', 'blood_orange', 'prize_marble', 'crisp_apple'], 0.15, 0.85, 320).concat(spRow(['prize_marble', 'bouncy_ball', 'crisp_apple', 'glass_bead', 'blood_orange'], 0.2, 0.8, 250)) },
+    ] },
+    { id: 'materials', name: 'Materials', icon: '\u{1F9EA}', color: '#a6ff5e', blurb: 'Glass cracks, soap slips, bombs go boom.', ch: [
+      { id: 'm1', name: 'Handle With Care', goal: 'Deliver the crystal ball without cracking it.', tip: 'Glass cracks on a hard landing. Do not let it slip.',
+        drops: 4, noCrack: true, win: { k: 'target' }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: [sp('sponge', 0.3, 330), sp('crystal_ball', 0.5, 320, { t: 1 }), sp('loofah', 0.68, 330), sp('sponge', 0.82, 330)] },
+      { id: 'm2', name: 'Heavy Metal', goal: 'Deliver the tower shield.', tip: 'Heavy things need a clean, centred grab.',
+        drops: 4, win: { k: 'target' }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: [sp('prize_marble', 0.25, 330), sp('tower_shield', 0.5, 300, { t: 1 }), sp('prize_marble', 0.72, 330)] },
+      { id: 'm3', name: 'Soap Opera', goal: 'Deliver 2 soap bars.', tip: 'Soap squirts out of a lazy grip. Grab it in the middle.',
+        drops: 6, win: { k: 'total', n: 2, of: { id: 'soap_bar' } }, stars: { k: 'drops', s3: 2, s2: 4 },
+        pile: [sp('soap_bar', 0.25, 320), sp('sponge', 0.4, 330), sp('soap_bar', 0.52, 320), sp('sponge', 0.66, 330), sp('soap_bar', 0.8, 320)] },
+      { id: 'm4', name: 'Bouncy Castle', goal: 'Deliver 3 bouncy balls.', tip: 'Rubber bounces. Wait for them to settle.',
+        drops: 6, win: { k: 'total', n: 3, of: { id: 'bouncy_ball' } }, stars: { k: 'drops', s3: 2, s2: 4 },
+        pile: spRow(['bouncy_ball', 'bouncy_ball', 'bouncy_ball', 'bouncy_ball', 'bouncy_ball'], 0.2, 0.8, 300) },
+      { id: 'm5', name: 'Hot Potato', goal: 'The bomb is lit! Deliver it before it blows.', tip: 'A lit fuse counts down. Grab it out, fast.',
+        drops: 0, win: { k: 'target' }, stars: { k: 'time', s3: 8, s2: 14 },
+        pile: [sp('crisp_apple', 0.2, 320), sp('cherry_bomb', 0.4, 320, { t: 1, lit: 20 }), sp('crisp_apple', 0.6, 320), sp('blood_orange', 0.8, 320)] },
+    ] },
+    { id: 'claws', name: 'Claw Types', icon: '\u{1F9F2}', color: '#ff9ad0', blurb: 'Eight claws, eight ways to grab.', ch: [
+      { id: 'c1', name: 'Magnet Class', goal: 'Magnet Crane: deliver 3 metal things, nothing else.', tip: 'The magnet only sticks to metal.', claw: 'magnet',
+        drops: 5, win: { k: 'total', n: 3, of: { tag: 'metal' } }, never: { not: { tag: 'metal' } }, stars: { k: 'drops', s3: 2, s2: 3 },
+        pile: [sp('iron_nut', 0.18, 320), sp('crisp_apple', 0.3, 320), sp('lucky_coin', 0.42, 320), sp('stale_bread', 0.52, 320), sp('pot_lid', 0.62, 320),
+          sp('glass_bead', 0.72, 320), sp('skeleton_key', 0.82, 320), sp('iron_nut', 0.5, 260)] },
+      { id: 'c2', name: 'Scoop Troop', goal: 'The Scoop: deliver 5 marbles.', tip: 'The scoop digs in and lifts a handful.', claw: 'scoop',
+        drops: 4, win: { k: 'total', n: 5 }, stars: { k: 'drops', s3: 2, s2: 3 },
+        pile: spRow(['prize_marble', 'prize_marble', 'prize_marble', 'prize_marble', 'prize_marble', 'prize_marble'], 0.35, 0.65, 320)
+          .concat(spRow(['prize_marble', 'prize_marble', 'prize_marble', 'prize_marble', 'prize_marble', 'prize_marble'], 0.37, 0.63, 260)) },
+      { id: 'c3', name: 'Harpoon Hero', goal: 'The Harpoon: spear the lit bomb out from under the rocks.', tip: 'The harpoon drops through the pile and spears the first thing it hits.', claw: 'hook',
+        drops: 0, win: { k: 'target' }, stars: { k: 'time', s3: 7, s2: 12 },
+        pile: [sp('cherry_bomb', 0.5, 360, { t: 1, lit: 18 }), sp('rock', 0.42, 280), sp('rock', 0.58, 280), sp('crisp_apple', 0.2, 320), sp('crisp_apple', 0.8, 320)] },
+      { id: 'c4', name: 'Big Hand', goal: 'The Glove: deliver the anvil.', tip: 'The glove holds the heaviest thing it touches.', claw: 'hand',
+        drops: 3, win: { k: 'target' }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: [sp('prize_marble', 0.25, 330), sp('family_anvil', 0.5, 300, { t: 1 }), sp('prize_marble', 0.75, 330)] },
+      { id: 'c5', name: 'Suck It Up', goal: 'The Vacuum: 3 prizes in one grab.', tip: 'Hover over small light things and it sucks them up.', claw: 'vacuum',
+        drops: 4, win: { k: 'grab', n: 3 }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: spRow(['prize_marble', 'peppermint', 'lucky_penny', 'sour_drop', 'prize_marble'], 0.36, 0.62, 330).concat(spRow(['peppermint', 'bouncy_ball', 'prize_marble', 'sour_drop'], 0.4, 0.6, 270)) },
+      { id: 'c6', name: 'Tri Hard', goal: 'The Tri-Claw: 3 round things in one grab.', tip: 'Three curled prongs cup a ball.', claw: 'tri',
+        drops: 4, win: { k: 'grab', n: 3, of: { trait: 'circle' } }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: spRow(['prize_marble', 'bouncy_ball', 'crisp_apple', 'prize_marble', 'blood_orange'], 0.36, 0.62, 320).concat(spRow(['bouncy_ball', 'prize_marble', 'glass_bead', 'prize_marble'], 0.4, 0.58, 260)) },
+    ] },
+    { id: 'tricks', name: 'Tricks', icon: '\u{1F3A9}', color: '#ffc94d', blurb: 'Buried prizes, free prizes, one shot.', ch: [
+      { id: 't1', name: 'Buried Treasure', goal: 'Dig the golden duck out from under the pile.', tip: 'Drop right on top of it. The rocks will move.',
+        drops: 5, win: { k: 'target' }, stars: { k: 'drops', s3: 2, s2: 3 },
+        pile: [sp('golden_duck', 0.5, 370, { t: 1 }), sp('rock', 0.42, 300), sp('rock', 0.58, 300), sp('slag', 0.5, 240), sp('rock', 0.35, 200), sp('rock', 0.65, 200), sp('crisp_apple', 0.15, 330)] },
+      { id: 't2', name: 'Free Prize', goal: 'Get a FREE PRIZE: one the claw never touched.', tip: 'Prizes riding on top of what you grab count. So does a blast.', claw: 'scoop',
+        drops: 6, win: { k: 'free', n: 1 }, stars: { k: 'drops', s3: 1, s2: 3 },
+        pile: spRow(['prize_marble', 'glass_bead', 'prize_marble', 'peppermint', 'prize_marble', 'glass_bead'], 0.36, 0.64, 330)
+          .concat(spRow(['peppermint', 'prize_marble', 'sour_drop', 'glass_bead', 'prize_marble', 'peppermint'], 0.38, 0.62, 270))
+          .concat(spRow(['prize_marble', 'glass_bead', 'prize_marble', 'sour_drop'], 0.42, 0.58, 210)) },
+      { id: 't3', name: 'One Shot', goal: 'One drop only. Deliver 2 in it.', tip: 'Take your time lining it up.',
+        drops: 1, win: { k: 'grab', n: 2 }, stars: { k: 'items', s3: 4, s2: 3 },
+        pile: spRow(['prize_marble', 'glass_bead', 'peppermint', 'prize_marble', 'sour_drop'], 0.4, 0.62, 320).concat(spRow(['glass_bead', 'prize_marble', 'peppermint', 'prize_marble'], 0.42, 0.6, 260)) },
+      { id: 't4', name: 'Picky Eater', goal: 'Deliver the gem. Deliver a rock and you fail.', tip: 'Grab the gem alone, from the side away from the rocks.',
+        drops: 4, win: { k: 'target' }, never: { id: 'rock' }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: [sp('rock', 0.16, 320), sp('rock', 0.3, 320), sp('stolen_gem', 0.56, 320, { t: 1 }), sp('rock', 0.86, 320)] },
+      { id: 't5', name: 'Twin Trouble', goal: 'The Twin Claws: 2 prizes in one grab.', tip: 'Each head grabs its own prize.', claw: 'twin',
+        drops: 4, win: { k: 'grab', n: 2 }, stars: { k: 'drops', s3: 1, s2: 2 },
+        pile: spRow(['prize_marble', 'crisp_apple', 'glass_bead', 'peppermint', 'lucky_coin', 'bouncy_ball'], 0.2, 0.8, 320) },
+    ] },
+    { id: 'mastery', name: 'Mastery', icon: '\u{1F393}', color: '#ff5a4a', blurb: 'Everything at once. Graduate!', ch: [
+      { id: 'x1', name: 'Glass Jackpot', goal: '2 glass things in one grab. No cracks.', tip: 'A clean grab and a smooth carry.',
+        drops: 5, noCrack: true, win: { k: 'grab', n: 2, of: { trait: 'glass' } }, stars: { k: 'drops', s3: 2, s2: 3 },
+        pile: [sp('sponge', 0.2, 330), sp('crystal_ball', 0.4, 320), sp('crystal_dice', 0.5, 320), sp('empty_bottle', 0.6, 320), sp('crystal_dice', 0.47, 250), sp('loofah', 0.8, 330)] },
+      { id: 'x2', name: 'Lights Out', goal: 'Blackout! Deliver the golden duck.', tip: 'The claw carries a flashlight.', muts: ['blackout'],
+        drops: 5, win: { k: 'target' }, stars: { k: 'drops', s3: 1, s2: 3 },
+        pile: [sp('rock', 0.15, 320), sp('crisp_apple', 0.3, 320), sp('golden_duck', 0.7, 320, { t: 1 }), sp('rock', 0.45, 320), sp('bouncy_ball', 0.58, 320), sp('rock', 0.85, 320)] },
+      { id: 'x3', name: 'Moon Walk', goal: 'Low Gravity: deliver 4 prizes in 40 seconds.', tip: 'Everything floats down slowly. So does the claw\'s catch.', muts: ['lowgrav'],
+        drops: 0, time: 40, win: { k: 'total', n: 4 }, stars: { k: 'time', s3: 22, s2: 31 },
+        pile: spRow(['crisp_apple', 'bouncy_ball', 'blood_orange', 'prize_marble', 'crisp_apple'], 0.15, 0.85, 320).concat(spRow(['prize_marble', 'bouncy_ball', 'crisp_apple', 'glass_bead', 'blood_orange'], 0.2, 0.8, 250)) },
+      { id: 'x4', name: 'Mirror Mirror', goal: 'Mirror Machine: deliver 3 prizes.', tip: 'Steering is backwards. Your finger goes left, the claw goes right.', muts: ['mirror'],
+        drops: 5, win: { k: 'total', n: 3 }, stars: { k: 'drops', s3: 2, s2: 3 },
+        pile: spRow(['crisp_apple', 'prize_marble', 'blood_orange', 'bouncy_ball', 'crisp_apple', 'glass_bead'], 0.2, 0.8, 320) },
+      { id: 'x5', name: 'Clean Sweep', goal: 'Empty the bin: every prize down the chute.', tip: 'Six prizes, six drops. Doubles save drops.',
+        drops: 6, win: { k: 'all' }, stars: { k: 'drops', s3: 4, s2: 5 },
+        pile: spRow(['crisp_apple', 'prize_marble', 'blood_orange', 'bouncy_ball', 'crisp_apple', 'prize_marble'], 0.3, 0.72, 320) },
+    ] },
+  ];
+  const SCH_CH = {};
+  SCH_LESSONS.forEach((L, li) => L.ch.forEach((c, i) => { c.lesson = li; c.idx = i; c.claw = c.claw || 'classic'; c.time = c.time || 0; c.muts = c.muts || []; SCH_CH[c.id] = c; }));
+  const SCH_IDS = Object.keys(SCH_CH);
+  SCH.MAX_STARS = SCH_IDS.length * 3;
+  // Does a delivered prize d ({id, tags, glass, circle}) match a filter?
+  function schMatch(o, d) {
+    if (!o) return true;
+    if (!d) return false;
+    if (o.not) return !schMatch(o.not, d);
+    if (o.id) return d.id === o.id;
+    if (o.tag) return (d.tags || []).indexOf(o.tag) >= 0;
+    if (o.trait) return !!d[o.trait];
+    return true;
+  }
+  /* Judges a challenge (pure). st: {dl: [{id, tags, glass, circle, t (a
+     target), free, g (the grab it came in)}], drops (used), t (seconds),
+     cracked, blew, left (prizes still in the bin), targets (in the pile),
+     busy (a grab in flight)}. -> {res: 'win' | 'fail' | null, why}. A
+     failure outranks a win in the same beat (a rock with the gem is a fail). */
+  function schEval(ch, st) {
+    if (!ch || !st) return { res: null, why: '' };
+    const dl = st.dl || [], w = ch.win || {};
+    if (ch.noCrack && st.cracked) return { res: 'fail', why: 'cracked' };
+    if (st.blew) return { res: 'fail', why: 'blew' };
+    if (ch.never && dl.some((d) => schMatch(ch.never, d))) return { res: 'fail', why: 'never' };
+    const n = Math.max(1, w.n | 0);
+    let won = false;
+    if (w.k === 'total') won = dl.filter((d) => schMatch(w.of, d)).length >= n;
+    else if (w.k === 'grab') { const per = {}; for (const d of dl) if (schMatch(w.of, d)) per[d.g] = (per[d.g] | 0) + 1; won = Object.keys(per).some((g) => per[g] >= n); }
+    else if (w.k === 'target') { const need = w.n > 0 ? w.n : Math.max(1, st.targets | 0); won = dl.filter((d) => d.t).length >= need; }
+    else if (w.k === 'free') won = dl.filter((d) => d.free && schMatch(w.of, d)).length >= n;
+    else if (w.k === 'all') won = (st.left | 0) === 0 && dl.length > 0;
+    if (won) return { res: 'win', why: '' };
+    if (!st.busy && ch.drops > 0 && (st.drops | 0) >= ch.drops) return { res: 'fail', why: 'drops' };
+    if (!st.busy && ch.time > 0 && (+st.t || 0) >= ch.time) return { res: 'fail', why: 'time' };
+    return { res: null, why: '' };
+  }
+  // Stars for a clear (1..3): r {drops, t, items (the best grab's prizes)}.
+  function schStars(ch, r) {
+    const s = (ch && ch.stars) || { k: 'drops', s3: 1, s2: 2 };
+    r = r || {};
+    if (s.k === 'items') { const v = r.items | 0; return v >= s.s3 ? 3 : v >= s.s2 ? 2 : 1; }
+    const v = s.k === 'time' ? +r.t || 0 : r.drops | 0;
+    return v <= s.s3 ? 3 : v <= s.s2 ? 2 : 1;
+  }
+  // The three rows under a goal ("★★★ in 1 drop" ...).
+  function schStarText(ch) {
+    const s = (ch && ch.stars) || {};
+    const u = (v) => (s.k === 'time' ? v + 's' : s.k === 'items' ? v + ' prizes' : v + (v === 1 ? ' drop' : ' drops'));
+    if (s.k === 'items') return ['3 stars: ' + u(s.s3) + ' in the grab', '2 stars: ' + u(s.s2), '1 star: clear it'];
+    return ['3 stars: ' + (s.k === 'time' ? 'under ' : 'in ') + u(s.s3), '2 stars: ' + (s.k === 'time' ? 'under ' : 'in ') + u(s.s2), '1 star: clear it'];
+  }
+  // Vault tickets for a new best: only the stars never earned before pay.
+  const schPay = (prev, now) => Math.max(0, (Math.min(3, now | 0) - Math.min(3, prev | 0))) * SCH.TIX;
+  // Every star earned (stars {id: 0..3}), only known challenges.
+  function schTotal(stars) {
+    let n = 0;
+    for (const id of SCH_IDS) n += Math.max(0, Math.min(3, (stars && stars[id]) | 0));
+    return n;
+  }
+  const schLessonStars = (li, stars) => (SCH_LESSONS[li] ? SCH_LESSONS[li].ch.reduce((n, c) => n + Math.max(0, Math.min(3, (stars && stars[c.id]) | 0)), 0) : 0);
+  const schOpen = (li, total) => li >= 0 && li < SCH_LESSONS.length && (total | 0) >= (SCH.NEED[li] | 0);
+  // A challenge opens once the one before it in the lesson has a star.
+  const schChOpen = (li, i, stars) => i === 0 || !!(SCH_LESSONS[li] && SCH_LESSONS[li].ch[i - 1] && ((stars || {})[SCH_LESSONS[li].ch[i - 1].id] | 0) > 0);
+  function schGrade(got, max) {
+    const k = max > 0 ? got / max : 0;
+    for (const [v, g] of SCH.GRADES) if (k >= v) return g;
+    return '-';
+  }
+  // The school's record on the profile, repaired (junk and old profiles get an empty one).
+  function schFix(o) {
+    o = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    const num = (v) => Math.max(0, Math.floor(+v || 0));
+    const out = { stars: {}, best: {}, tix: num(o.tix), dip: o.dip ? 1 : 0, seen: o.seen ? 1 : 0, plays: num(o.plays), pr: {} };
+    const st = o.stars && typeof o.stars === 'object' ? o.stars : {};
+    for (const id of SCH_IDS) { const v = Math.min(3, num(st[id])); if (v) out.stars[id] = v; }
+    const bs = o.best && typeof o.best === 'object' ? o.best : {};
+    for (const id of SCH_IDS) {
+      const b = bs[id];
+      if (b && typeof b === 'object') out.best[id] = { drops: num(b.drops), t: Math.max(0, Math.round((+b.t || 0) * 10) / 10), items: num(b.items) };
+    }
+    const pr = o.pr && typeof o.pr === 'object' && !Array.isArray(o.pr) ? o.pr : {};
+    out.pr = { claw: typeof pr.claw === 'string' ? pr.claw : '', paint: typeof pr.paint === 'string' ? pr.paint : '',
+      muts: Array.isArray(pr.muts) ? pr.muts.filter((m) => SCH.MUTS.indexOf(m) >= 0).slice(0, 3) : [],
+      pet: typeof pr.pet === 'string' && PETS[pr.pet] ? pr.pet : '', slow: !!pr.slow, pile: typeof pr.pile === 'string' ? pr.pile : 'starter' };
+    return out;
+  }
+  // The diploma's prize: a marquee, found by id like any cosmetic but never listed, pooled or sold (like the event ones).
+  const SCH_COSMETIC = V_('mq_valedictorian', 'marquee', 'Valedictorian', 'l', 'Gold letters over a rainbow wave. The Claw School diploma, every star earned.',
+    { text: 'VALEDICTORIAN', style: 'gold', bulbs: 'wave', col: '#ffc94d' }, { school: true });
+  Object.defineProperty(COSMETICS, SCH_COSMETIC.id, { value: SCH_COSMETIC, enumerable: false, configurable: true, writable: true });
+  // ================================================================ /SCHOOL
+
   return {
+    // SCHOOL (round 11): Claw School and the Practice Cabinet (DESIGN.md "Claw School and the Practice Cabinet (round 11)")
+    SCH, SCH_LESSONS, SCH_CH, SCH_IDS, schMatch, schEval, schStars, schStarText, schPay, schTotal, schLessonStars, schOpen, schChOpen, schGrade, schFix,
+    // DUO (round 11): pass and play for two (DESIGN.md "Duo: pass and play (round 11)")
+    DUO, duoName, duoKey, duoColor, duoCard, duoTaunt, duoPlayers, duoPile, duoDropScore, duoDeck, duoDrawCards, duoRoundWin, duoMatch, duoStarter, duoToss, duoBosses, duoFix, duoRecord, duoBoard,
     // the Boss Rush and the ghost race (DESIGN.md "Boss Rush and the ghost race (round 10)")
     RUSH, rushOrder, rushActOf, rushHpK, rushDmgK, rushKit, rushDraftKinds, rushScore, rushFmt, rushFix, rushRecord, rushBoard,
     GHO, ghoCp, ghoRead, ghoRecFix, ghoFix, ghoAt, ghoDelta, ghoPassed, ghoSeries,

@@ -2534,4 +2534,161 @@ h.test('ROS: Ms. Bubbles, her outfits and items, the bubbles, water, goo, the si
   }
 });
 
+// ---- DUO (round 11): the hand-off card, the coin toss, the claw-off's board, sabotage cards, the podium
+h.test('DUO: the hand-off at every beat, the coin toss, the board, every sabotage card, the podium in every result', () => {
+  const api = boot({ only: ['util', 'art', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, Rd = R.duo;
+  h.ok(Rd && ['spot', 'tag', 'target', 'card', 'handoff', 'coin', 'board', 'podium'].every(k => typeof Rd[k] === 'function') && Rd.T.flip > 0, 'RENDER.duo');
+  const e0 = Rd.E.n;
+  // colours and words are not in the call fingerprint: this one keeps every fill colour and every word painted
+  const ink = (fn) => {
+    const out = [];
+    const ctx = new Proxy({ canvas: { width: 540, height: 960 } }, {
+      get(t, k) {
+        if (k in t) return t[k];
+        if (k === 'measureText') return () => ({ width: 40 });
+        if (k === 'createLinearGradient' || k === 'createRadialGradient' || k === 'createPattern') return () => ({ addColorStop() {} });
+        if (k === 'fillText' || k === 'strokeText') return (s) => out.push('T:' + s);
+        return () => {};
+      },
+      set(t, k, v) { if (k === 'fillStyle' || k === 'strokeStyle') out.push(k[0] + ':' + v); t[k] = v; return true; },
+    });
+    fn(ctx);
+    return out.join('|');
+  };
+  // the hand-off: the back of the card (edge on), the front, the countdown, READY?, a taunt; each beat looks different
+  const st = (t, o) => Object.assign({ t, now: t, name: 'Jasmin', col: '#2ee6d6', char: 'alchemist', count: Math.max(0, 3 - Math.max(0, t - 0.6)), total: 3, from: 'Roxor', fromCol: '#ff2e88', fromChar: 'knight', label: 'Round 1 · drop 2 of 6', sub: 'Roxor 3 : 0 Jasmin' }, o || {});
+  const beats = new Map();
+  for (const t of [0.05, 0.2, 0.45, 0.7, 1.9, 3.8]) beats.set(String(t), fingerprint(drawCheck('hand-off at ' + t, c => Rd.handoff(c, 540, 960, st(t)))));
+  h.ok(new Set(beats.values()).size >= 5, 'the card turns over, then counts 3, 2, 1, then READY?');
+  const back = fingerprint(drawCheck('hand-off back', c => Rd.handoff(c, 540, 960, st(0.1)))), front = fingerprint(drawCheck('hand-off front', c => Rd.handoff(c, 540, 960, st(0.9))));
+  h.ok(back !== front, 'the back of the card is not its front');
+  const plain = fingerprint(drawCheck('hand-off ready', c => Rd.handoff(c, 540, 960, st(4))));
+  const taunt = fingerprint(drawCheck('hand-off with a taunt', c => Rd.handoff(c, 540, 960, st(4, { msg: { text: 'Nyah nyah!', icon: 'x' }, msgT: 0.5 }))));
+  h.ok(plain !== taunt, 'a taunt shows in its bubble');
+  const cols = new Map();
+  for (const c of D.DUO.COLORS) { drawCheck('hand-off in ' + c.id, (x) => Rd.handoff(x, 540, 960, st(4, { col: c.col }))); cols.set(c.id, ink((x) => Rd.handoff(x, 540, 960, st(4, { col: c.col })))); }
+  h.eq(new Set(cols.values()).size, D.DUO.COLORS.length, 'every player colour shows on the card');
+  h.ok(ink((x) => Rd.handoff(x, 540, 960, st(4))).includes('T:JASMIN') && ink((x) => Rd.handoff(x, 540, 960, st(1))).includes('T:3'), 'the name and the count are on it');
+  const red = fingerprint(drawCheck('hand-off reduced', c => Rd.handoff(c, 540, 960, st(0, { reduced: true, now: 1 }))));
+  h.ok(red !== fingerprint(drawCheck('hand-off t0', c => Rd.handoff(c, 540, 960, st(0, { now: 1 })))), 'reduced motion: no flip, the front at once');
+  drawCheck('hand-off with nothing', c => Rd.handoff(c, 0, 0, null));
+  // the coin toss: it spins (the faces change), lands on the winner, who gets the spotlight
+  const cs = (t, w, o) => Object.assign({ t, dur: 2, w, flips: D.duoToss(w ? 2 : 1).flips, names: ['Roxor', 'Jasmin'], cols: ['#ff2e88', '#2ee6d6'], chars: ['knight', 'rogue'] }, o || {});
+  const spin = new Map();
+  for (const t of [0.1, 0.4, 0.8, 1.2, 1.6]) spin.set(String(t), fingerprint(drawCheck('coin at ' + t, c => Rd.coin(c, 540, 960, cs(t, 1)))));
+  h.ok(new Set(spin.values()).size >= 4, 'the coin turns over as it flies');
+  const l0 = fingerprint(drawCheck('coin lands on P1', c => Rd.coin(c, 540, 960, Object.assign(cs(3, 0), { flips: D.duoToss(1).w === 0 ? D.duoToss(1).flips : 10 })))), l1 = fingerprint(drawCheck('coin lands on P2', c => Rd.coin(c, 540, 960, cs(3, 1))));
+  h.ok(l0 !== l1, 'who starts shows');
+  drawCheck('coin reduced', c => Rd.coin(c, 540, 960, cs(0, 1, { reduced: true })));
+  drawCheck('coin with nothing', c => Rd.coin(c, 0, 0, null));
+  // the board: whose drop, the scores, rounds won, drops left, a flash
+  const bd = (o) => { const s = Object.assign({ t: 1, names: ['Roxor', 'Jasmin'], cols: ['#ff2e88', '#2ee6d6'], sc: [3, 5], wins: [1, 0], drops: 4, used: [1, 2], who: 0, round: 2 }, o); return fingerprint(drawCheck('board ' + JSON.stringify(o), c => Rd.board(c, s))) + '#' + ink((c) => Rd.board(c, s)); };
+  const boards = [bd({}), bd({ who: 1 }), bd({ sc: [9, 5] }), bd({ wins: [1, 1] }), bd({ used: [3, 2] }), bd({ flash: [1, 0] })];
+  h.eq(new Set(boards).size, boards.length, 'the board shows whose drop, the scores, the rounds, the drops left and a scoring flash');
+  drawCheck('board with nothing', c => Rd.board(c, null));
+  // every sabotage card, its back and its thumbnail
+  const cards = new Map();
+  for (const id of D.DUO.CARD_IDS) cards.set(id, fingerprint(drawCheck('card ' + id, c => Rd.card(c, 100, 150, 150, 214, D.DUO.CARDS[id], { text: true, glow: true }))) + '#' + ink((c) => Rd.card(c, 100, 150, 150, 214, D.DUO.CARDS[id], { text: true })));
+  h.eq(new Set(cards.values()).size, D.DUO.CARD_IDS.length, 'every sabotage card looks its own');
+  const bk = fingerprint(drawCheck('card back', c => Rd.card(c, 100, 150, 150, 214, D.DUO.CARDS.fog, { back: true })));
+  const mini = fingerprint(drawCheck('card thumb', c => Rd.card(c, 30, 45, 60, 86, D.DUO.CARDS.fog, { mini: true })));
+  h.ok(bk !== cards.get('fog') && mini !== cards.get('fog'), 'a card back and a thumbnail differ from the face');
+  drawCheck('card with nothing', c => Rd.card(c, 100, 150, 150, 214, null, null));
+  // the podium: either winner, a draw, a team win, a knock out
+  const pd = (o) => fingerprint(drawCheck('podium ' + JSON.stringify(o), c => Rd.podium(c, 540, 960, Object.assign({ t: 1, names: ['Roxor', 'Jasmin'], cols: ['#ff2e88', '#2ee6d6'], chars: ['knight', 'alchemist'], sc: [2, 1] }, o))));
+  const pods = [pd({ win: 0 }), pd({ win: 1, sc: [1, 2] }), pd({ win: -1, sc: [1, 1] }), pd({ coop: true, won: true }), pd({ coop: true, won: false })];
+  h.eq(new Set(pods).size, pods.length, 'the podium: either winner up top, a draw, a team win, a knock out');
+  drawCheck('podium with nothing', c => Rd.podium(c, 0, 0, null));
+  drawCheck('tag', c => Rd.tag(c, 100, 100, 'ROXOR', '#ff2e88', true));
+  drawCheck('tag unlit', c => Rd.tag(c, 100, 100, 'ROXOR', 'not a colour', false));
+  drawCheck('target', c => Rd.target(c, 300, 120, 'Jasmin', '#2ee6d6', 2));
+  drawCheck('spot', c => Rd.spot(c, 300, 500, 80, '#ffc94d', 0.3));
+  h.eq(Rd.E.n - e0, 0, 'no duo draw fell over inside its try ' + Rd.E.last);
+});
+
+// ---- SCHOOL (round 11): Claw School and the Practice Cabinet
+h.test('SCHOOL: the chalkboard, Professor Pincher, stars, the scoreboard, the target, the classroom, the result card, the report card and the diploma', () => {
+  const api = boot({ only: ['util', 'art', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, Rs = R.sch;
+  h.ok(Rs && ['chalk', 'wrap', 'board', 'cap', 'prof', 'star', 'stars', 'score', 'target', 'room', 'result', 'stamp', 'report', 'diploma'].every(k => typeof Rs[k] === 'function'), 'RENDER.sch');
+  const e0 = Rs.E.n;
+  // words and colours are not in the call fingerprint: this ctx keeps every fill colour and word painted
+  const ink = (fn) => {
+    const out = [];
+    const ctx = new Proxy({ canvas: { width: 540, height: 960 } }, {
+      get(t, k) {
+        if (k in t) return t[k];
+        if (k === 'measureText') return (s) => ({ width: String(s).length * 9 });
+        if (k === 'createLinearGradient' || k === 'createRadialGradient' || k === 'createPattern') return () => ({ addColorStop() {} });
+        if (k === 'fillText' || k === 'strokeText') return (s) => out.push('T:' + s);
+        return () => {};
+      },
+      set(t, k, v) { if (k === 'fillStyle' || k === 'strokeStyle') out.push(k[0] + ':' + v); t[k] = v; return true; },
+    });
+    fn(ctx);
+    return out.join('|');
+  };
+  const both = (label, fn) => fingerprint(drawCheck(label, fn)) + '#' + ink(fn);
+  // the board: a title and wrapped lines, never past its bottom; the side room narrows the lines
+  const wctx = { measureText: (s) => ({ width: String(s).length * 10 }), set font(v) { this.f = v; } };
+  const lines = Rs.wrap(wctx, 'Dig the golden duck out from under the pile of rocks and slag', 200, 17);
+  h.ok(lines.length > 1 && lines.every(l => l.length * 10 <= 200 || !l.includes(' ')), 'the words wrap inside the board: ' + lines.join(' / '));
+  h.eq(lines.join(' '), 'Dig the golden duck out from under the pile of rocks and slag', 'no word is lost to the wrap');
+  const b1 = both('board', c => Rs.board(c, 24, 60, 492, 248, { title: 'Buried Treasure', lines: [{ s: 'Dig it out', size: 21 }, null, { s: '3 stars: in 2 drops', size: 15 }] }));
+  const b2 = both('board narrow', c => Rs.board(c, 24, 60, 492, 248, { title: 'Buried Treasure', pad: 76, lines: [{ s: 'Dig the golden duck out from under the whole pile of rocks', size: 21 }] }));
+  h.ok(b1 !== b2, 'a different goal draws a different board');
+  let painted = 0;
+  const tall = new Proxy({}, { get(t, k) { if (k === 'measureText') return (s) => ({ width: String(s).length * 11 }); if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop() {} }); if (k === 'fillText') return (s, x, y) => { if (y > 60 + 100 + 1) painted++; }; return () => {}; }, set() { return true; } });
+  Rs.board(tall, 24, 60, 300, 100, { title: 'T', lines: Array.from({ length: 12 }, () => ({ s: 'a line of chalk that goes on and on', size: 17 })) });
+  h.eq(painted, 0, 'lines past the bottom of the board are never painted');
+  drawCheck('board with nothing', c => Rs.board(c, 0, 0, 100, 60, null));
+  // Professor Pincher in every mood, the cap alone
+  const moods = new Map();
+  for (const m of ['happy', 'sad', 'focus', '']) moods.set(m || 'none', fingerprint(drawCheck('prof ' + m, c => Rs.prof(c, 470, 96, 0.72, 1.3, m))));
+  h.ok(new Set(moods.values()).size >= 3, 'the professor\'s face shows his mood');
+  drawCheck('cap', c => Rs.cap(c, 100, 100, 1, '#241a3a', 2));
+  // stars: on, off, popping in, a row of 0..3
+  const on = both('star on', c => Rs.star(c, 50, 50, 20, true, { t: 1 })), off = both('star off', c => Rs.star(c, 50, 50, 20, false, { t: 1 }));
+  const half = fingerprint(drawCheck('star popping', c => Rs.star(c, 50, 50, 20, true, { pop: 0.5 })));
+  h.ok(on !== off && half.split('#')[0] !== on.split('#')[0], 'an earned star, an empty slot and a star popping in all differ');
+  const rows = [0, 1, 2, 3].map(n => both('stars ' + n, c => Rs.stars(c, 270, 100, 20, n, 8, null, 1)));
+  h.eq(new Set(rows).size, 4, 'zero to three stars in a row all differ');
+  drawCheck('star with nothing', c => Rs.star(c, 0, 0, 10, true, null));
+  // the scoreboard: the numbers show, a flash shows
+  const sc = (o) => both('score ' + JSON.stringify(o), c => Rs.score(c, 20, 58, 500, 80, Object.assign({ t: 1, cells: [{ k: 'DELIVERED', v: 3, col: '#ffc94d' }, { k: 'THIS GRAB', v: 1 }, { k: 'BEST GRAB', v: 2 }, { k: 'GRABS', v: 4 }] }, o)));
+  const s0 = sc({}), s1 = sc({ cells: [{ k: 'DELIVERED', v: 4, col: '#ffc94d' }, { k: 'THIS GRAB', v: 1 }, { k: 'BEST GRAB', v: 2 }, { k: 'GRABS', v: 4 }] }), s2 = sc({ cells: [{ k: 'DELIVERED', v: 3, col: '#ffc94d', flash: 1 }, { k: 'THIS GRAB', v: 1 }, { k: 'BEST GRAB', v: 2 }, { k: 'GRABS', v: 4 }] });
+  h.ok(s0 !== s1 && s0 !== s2, 'the scoreboard shows its numbers and flashes a change');
+  drawCheck('score with nothing', c => Rs.score(c, 0, 0, 100, 40, null));
+  for (const t of [0, 0.3]) drawCheck('target ' + t, c => Rs.target(c, 200, 300, 14, t));
+  const geo = (t) => { const out = []; Rs.target(new Proxy({}, { get(o, k) { if (k === 'arc' || k === 'moveTo') return (...a) => out.push(a.map(v => Math.round(v * 10) / 10).join(',')); return () => {}; }, set() { return true; } }), 200, 300, 14, t); return out.join('|'); };
+  h.ok(geo(0) !== geo(0.3), 'the target marker pulses and its arrow bobs');
+  // the classroom: bare, with a board and the professor, without the pennants
+  const rm = [both('room', c => Rs.room(c, 540, 960, { t: 1 })), both('room titled', c => Rs.room(c, 540, 960, { t: 1, title: 'CLAW SCHOOL', sub: 'Learn the claw.' })),
+    both('room no flags', c => Rs.room(c, 540, 960, { t: 1, flags: false })), both('room no prof', c => Rs.room(c, 540, 960, { t: 1, title: 'X', prof: false }))];
+  h.eq(new Set(rm).size, 4, 'the classroom with and without its board, the professor and the pennants');
+  drawCheck('room with nothing', c => Rs.room(c, 540, 960, null));
+  // the result card: a pass with 1..3 stars (they pop in), a fail, tickets, a new best, reduced motion
+  const rs = (o) => both('result ' + JSON.stringify(o), c => Rs.result(c, 270, 560, Object.assign({ t: 2, win: true, stars: 3, title: 'PERFECT!', sub: '1 drop' }, o)));
+  const res = [rs({}), rs({ stars: 2, title: 'CLEARED!' }), rs({ stars: 1, title: 'CLEARED!' }), rs({ win: false, title: 'TRY AGAIN', sub: 'Out of drops.' }), rs({ tix: 18 }), rs({ best: true })];
+  h.eq(new Set(res).size, res.length, 'every result card reads differently');
+  const early = fingerprint(drawCheck('result early', c => Rs.result(c, 270, 560, { t: 0.35, win: true, stars: 3 }))), late = fingerprint(drawCheck('result late', c => Rs.result(c, 270, 560, { t: 3, win: true, stars: 3 })));
+  h.ok(early !== late, 'the stars pop in one by one');
+  h.eq(fingerprint(drawCheck('result reduced early', c => Rs.result(c, 270, 560, { t: 0.05, win: true, stars: 3, reduced: true }))), fingerprint(drawCheck('result reduced late', c => Rs.result(c, 270, 560, { t: 3, win: true, stars: 3, reduced: true }))), 'reduced motion: the card is all there at once');
+  drawCheck('result with nothing', c => Rs.result(c, 270, 560, null));
+  // grades, the report card, the diploma
+  const stamps = ['A+', 'A', 'B', 'C', 'D', '-'].map(g => both('stamp ' + g, c => Rs.stamp(c, 100, 100, 20, g, 1)));
+  h.eq(new Set(stamps).size, 6, 'every grade stamps its own');
+  const rows0 = D.SCH_LESSONS.map((L, i) => ({ name: L.name, icon: L.icon, got: i * 3, max: L.ch.length * 3, grade: D.schGrade(i * 3, L.ch.length * 3), col: L.color, locked: i > 2 }));
+  const rp = [both('report', c => Rs.report(c, 26, 66, 488, 430, { name: 'Sir Grabsworth', rows: rows0, got: 30, max: D.SCH.MAX_STARS, t: 1 })),
+    both('report full', c => Rs.report(c, 26, 66, 488, 430, { name: 'Sir Grabsworth', rows: rows0.map(r => Object.assign({}, r, { got: r.max, grade: 'A+', locked: false })), got: D.SCH.MAX_STARS, max: D.SCH.MAX_STARS, t: 1 }))];
+  h.ok(rp[0] !== rp[1], 'the report card shows the grades');
+  drawCheck('report with nothing', c => Rs.report(c, 0, 0, 300, 300, null));
+  const dp = [both('diploma', c => Rs.diploma(c, 50, 516, 440, 250, { name: 'Sir Grabsworth', t: 1 })), both('diploma locked', c => Rs.diploma(c, 50, 516, 440, 250, { name: 'Sir Grabsworth', locked: true, left: 12, t: 1 }))];
+  h.ok(dp[0] !== dp[1], 'the diploma is a faint preview until every star is in');
+  drawCheck('diploma reduced', c => Rs.diploma(c, 50, 516, 440, 250, { name: 'X', t: 1, reduced: true }));
+  drawCheck('diploma with nothing', c => Rs.diploma(c, 0, 0, 200, 120, null));
+  h.eq(Rs.E.n - e0, 0, 'no school draw fell over inside its try ' + Rs.E.last);
+});
+
 h.done();

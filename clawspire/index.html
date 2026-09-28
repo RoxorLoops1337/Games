@@ -1859,6 +1859,207 @@ html[class*="txt-"] :is(#codexBody,#weeklyBody){zoom:var(--accK)}
 html[class*="txt-"] :is(#rushMenuBody,#rushBody){zoom:var(--accK)}
 /* ================= /RUSH ================= */
 </style>
+<style id="duo-css">
+/* ================= DUO (round 11): pass and play for two ================= */
+/* the title: DUO shares the NEW RUN row */
+#titleMenu .duoRow{display:flex;gap:8px;width:430px;max-width:100%}
+#titleMenu .duoRow .btn{width:auto;min-width:0}
+#titleMenu .duoRow>.btn:first-child{flex:1.7 1 0}
+.btn.duoBtn{flex:1 1 0;flex-direction:column;gap:0;line-height:1.1;padding:4px 8px;border-color:var(--cyan);
+  background:linear-gradient(180deg,#1a4a6a,#0c2238);box-shadow:0 4px 0 #061420,0 0 18px rgba(46,230,214,.3)}
+.btn.duoBtn .d1{font-size:15px;white-space:nowrap}
+.btn.duoBtn .d2{font-size:12px;letter-spacing:.02em;text-transform:none;color:#bff4ff;font-weight:700;white-space:nowrap}
+/* the duo screen: a scrolling page for the menu and the setup, a frame over the canvas for the rest */
+.screen.duoScr{padding:14px 16px 18px}
+#duoBody{display:flex;flex-direction:column;gap:10px;flex:1 0 auto}
+.duoScr.dp-canvas{background:transparent;pointer-events:none;overflow:hidden}
+.duoScr.dp-canvas #duoBody{justify-content:flex-end}
+.duoScr.dp-canvas .btn,.duoScr.dp-canvas .panel,.duoScr.dp-canvas input{pointer-events:auto}
+.duoHead{display:flex;align-items:center;gap:12px}
+.duoHead h1{font-size:26px}
+.duoSub{text-align:left}
+.btn.duoResume{flex-direction:column;gap:2px;line-height:1.15;min-height:58px}
+.btn.duoResume .d1{font-size:17px}
+.btn.duoResume .d2{font-size:12px;text-transform:none;letter-spacing:.02em;color:#bff4ff;font-weight:700}
+.duoModes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn.duoMode{flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;padding:12px 10px;min-height:180px;text-align:center}
+.btn.duoMode .mi{font-size:40px;line-height:1.1}
+.btn.duoMode .mn{font-size:17px;color:#fff}
+.btn.duoMode .mt{font-size:13px;line-height:1.35;text-transform:none;letter-spacing:0;font-weight:700;color:var(--dim)}
+.btn.duoMode.dm-coop{border-color:var(--lime);background:linear-gradient(180deg,#2c4a14,#14240a);box-shadow:0 4px 0 #0a1404,0 0 18px rgba(166,255,94,.25)}
+.btn.duoMode.dm-vs{border-color:var(--pink);background:linear-gradient(180deg,#6a1a44,#34081e);box-shadow:0 4px 0 #22040e,0 0 18px rgba(255,46,136,.3)}
+.duoRec{padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.duoRecRow{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;font-size:14px;padding:4px 8px;border-radius:10px;background:#1b1030}
+.duoRecRow b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.duoRecRow .w{color:var(--gold);font-weight:900}
+.duoRecRow .l{color:var(--dim)}
+.duoRecRow .c{color:var(--lime);font-weight:700}
+/* setup: one panel per player in their colour */
+.duoP{--dc:#ff2e88;padding:10px 12px;display:flex;flex-direction:column;gap:8px;border-color:var(--dc);box-shadow:0 0 16px color-mix(in srgb,var(--dc) 30%,transparent)}
+.duoPTop{display:flex;align-items:center;gap:10px}
+.duoPTop canvas{width:44px;height:44px;flex:0 0 auto}
+.duoPN{font-size:13px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--dc);white-space:nowrap}
+input.duoName{flex:1;min-width:0;height:44px;border-radius:12px;border:2px solid var(--dc);background:#120a22;color:#fff;font-size:18px;font-weight:900;
+  padding:0 12px;letter-spacing:.06em;font-family:inherit;outline:none}
+input.duoName:focus{box-shadow:0 0 12px var(--dc)}
+.duoSw{display:flex;gap:8px;flex-wrap:wrap}
+.btn.duoCol{width:44px;min-width:44px;height:44px;padding:0;border-radius:50%;border:3px solid #12091f;box-shadow:0 3px 0 #0a0514}
+.btn.duoCol.on{border-color:#fff;box-shadow:0 0 0 3px var(--dc),0 0 14px var(--dc)}
+.duoChips{display:flex;gap:6px;flex-wrap:wrap}
+.btn.duoChip{padding:4px 9px;min-height:44px;font-size:12px;letter-spacing:.02em;text-transform:none;gap:5px}
+.btn.duoChip canvas{width:30px;height:30px}
+.btn.duoChip.on{border-color:var(--dc,var(--pink));background:linear-gradient(180deg,#4a2a70,#2a1648);box-shadow:0 0 12px var(--dc,var(--pink));color:#fff}
+.btn.duoChip.locked{border-style:dashed;opacity:.6}
+.btn.duoChip.num{min-width:54px;font-size:16px}
+.btn.duoLook{align-self:flex-start;text-transform:none;letter-spacing:.02em}
+.duoOpt{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.btn.duoGo{align-self:center;min-width:280px;min-height:56px;font-size:19px;margin-bottom:8px;position:sticky;bottom:8px;z-index:2}
+/* the hand-off dock: taunts, READY, pause */
+.duoDock{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+.duoTh{font-size:13px;font-weight:900;letter-spacing:.06em;color:#fff6c0;text-align:center;text-shadow:0 2px 3px #000}
+.duoTaunts{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:520px}
+.btn.duoTaunt{padding:4px 8px;font-size:12px;text-transform:none;letter-spacing:0;gap:4px}
+.btn.duoReady{min-width:300px;min-height:60px;font-size:20px;animation:duoRdy 1.1s ease-in-out infinite}
+.btn.duoReady:disabled{animation:none}
+@keyframes duoRdy{50%{box-shadow:0 4px 0 #3a0a22,0 0 34px rgba(255,46,136,.75)}}
+.btn.duoPause{min-width:120px}
+.duoHint{--dc:#2ee6d6;align-self:center;font-size:15px;font-weight:900;color:#fff;background:rgba(18,9,31,.88);padding:8px 16px;border-radius:14px;border:2px solid var(--dc);
+  box-shadow:0 0 14px var(--dc);text-align:center;margin-bottom:6px}
+.dp-toss .duoHint{--dc:#ffc94d;margin-bottom:30px}
+/* after a drop, a round, the podium: a sheet at the bottom */
+.duoSheet{--dc:#ff2e88;padding:12px 14px;display:flex;flex-direction:column;gap:8px;border-color:var(--dc);box-shadow:0 0 22px color-mix(in srgb,var(--dc) 40%,transparent);background:rgba(18,9,31,.94)}
+.duoSheet.center{align-items:center;text-align:center}
+.duoSc{font-size:20px;font-weight:900;letter-spacing:.06em;color:#fff;text-transform:uppercase}
+.duoK{font-size:14px;font-weight:900;letter-spacing:.2em;color:var(--dc)}
+.duoBig{font-size:40px;font-weight:900;color:var(--gold);text-shadow:0 3px 0 #12091f}
+.duoLines{display:flex;flex-wrap:wrap;gap:6px}
+.duoLines .ln{font-size:13px;font-weight:900;padding:3px 9px;border-radius:9px;background:#1b1030;border:1.5px solid var(--line2);color:#fff}
+.duoLines .ln.k-golden{border-color:var(--gold);color:var(--gold)}
+.duoLines .ln.k-double,.duoLines .ln.k-jackpot{border-color:var(--cyan);color:var(--cyan2)}
+.duoLines .ln.k-combo{border-color:var(--pink);color:#ffd1e6}
+.duoLines .ln.k-none{color:var(--dim)}
+.duoCards{display:flex;flex-direction:column;gap:6px}
+.btn.duoCardBtn{justify-content:flex-start;gap:10px;padding:4px 10px 4px 4px;text-transform:none;letter-spacing:0;text-align:left;min-height:64px}
+.btn.duoCardBtn canvas{width:44px;height:62px;flex:0 0 auto}
+.btn.duoCardBtn .col{gap:1px}
+.btn.duoCardBtn b{font-size:15px;color:#fff}
+.btn.duoCardBtn span{font-size:12px;font-weight:700;color:var(--dim);line-height:1.3}
+/* the HUD in co-op: both players side by side where the gold, bulbs, tickets and act sit */
+#duoBar{display:none}
+#top.duoOn #duoBar{display:flex;gap:5px;flex:0 0 auto}
+#top.duoOn .stat.gold,#top.duoOn .stat.ink,#top.duoOn .stat.tix,#top.duoOn .stat.act{display:none}
+.duoChipH{--dc:#ff2e88;display:flex;flex-direction:column;justify-content:center;min-width:86px;height:54px;padding:0 8px;border-radius:12px;border:2px solid var(--line);
+  background:rgba(18,9,31,.6);opacity:.62;line-height:1.15}
+.duoChipH b{font-size:13px;color:var(--dc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px}
+.duoChipH span{font-size:13px;font-weight:900;color:#fff;white-space:nowrap}
+.duoChipH.on{opacity:1;border-color:var(--dc);box-shadow:0 0 14px var(--dc),inset 0 -18px 22px -14px var(--dc)}
+.duoChipH.down{opacity:.45;border-style:dashed}
+.duoChipH.down span{color:var(--blood)}
+.calm .btn.duoReady{animation:none}
+@media (prefers-reduced-motion:reduce){.btn.duoReady{animation:none}}
+/* ================= /DUO ================= */
+</style>
+<style id="sch-css">
+/* ================= SCHOOL (round 11): Claw School and the Practice Cabinet ================= */
+/* the title: the School button in the small row (its star count), a "New here?" line under New run for a fresh profile */
+#titleMenu .schTitleBtn{border-color:#2e9c4a;color:#c8ffd8}
+#titleMenu .schTitleBtn[data-n]::after{content:attr(data-n);margin-left:2px;height:20px;padding:0 6px;border-radius:10px;background:#1f4a3a;color:var(--gold);font-size:12px;display:inline-flex;align-items:center}
+#titleMenu .schTitleBtn.grad{border-color:var(--gold);box-shadow:0 4px 0 #120a22,0 0 14px rgba(255,201,77,.35)}
+#titleMenu .schTip{display:flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:4px 16px;border-radius:12px;border:2px dashed #3ddc84;
+  background:rgba(31,74,58,.6);color:#dfffe8;font-size:14px;font-weight:700;cursor:pointer;align-self:center;max-width:100%;animation:schTipP 1.8s ease-in-out infinite}
+#titleMenu .schTip b{color:#ffe98a}
+#titleMenu .schTip .ar{font-size:20px;font-weight:900;color:#3ddc84;line-height:1}
+@keyframes schTipP{50%{box-shadow:0 0 16px rgba(61,220,132,.55)}}
+/* the claw picker's way in */
+.btn.schPracBtn{margin-top:6px;align-self:flex-start;border-color:#2e9c4a;color:#c8ffd8;text-transform:none;letter-spacing:.02em}
+/* the screen: the canvas paints the classroom, the board, the cabinet; this frame holds the controls */
+.screen.schScr{background:transparent;padding:0;pointer-events:none;overflow:hidden}
+#schoolBody{position:absolute;inset:0;display:flex;flex-direction:column;align-items:stretch;padding:8px 16px 14px;gap:8px;pointer-events:none}
+#schoolBody .btn,#schoolBody .schChip,#schoolBody .schTab,#schoolBody .schPanel,#schoolBody .schLessons,#schoolBody .schPath{pointer-events:auto}
+.schTop{display:flex;align-items:center;gap:8px;min-height:44px}
+.schTop .btn.ghost{background:rgba(18,9,31,.88)}
+.schTopTag{flex:1;text-align:center;font-size:14px;font-weight:900;letter-spacing:.08em;color:#dfffe8;text-transform:uppercase;text-shadow:0 2px 3px #000;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.schTopTag.pr{color:var(--cyan2);letter-spacing:.16em}
+.schGap{flex:0 0 118px}
+.schTotRow{display:flex;align-items:center;justify-content:center;gap:10px}
+.schTot{padding:4px 16px;border-radius:14px;background:rgba(18,9,31,.85);border:2px solid var(--gold);color:#fff3cf;font-size:15px;font-weight:700;box-shadow:0 0 16px rgba(255,201,77,.25)}
+.schTot b{font-size:26px;color:var(--gold)}
+.btn.schPrac{flex-direction:column;gap:2px;min-height:64px;border-color:var(--cyan);background:linear-gradient(180deg,#0f5a58,#0a3538);box-shadow:0 4px 0 #062224,0 0 22px rgba(46,230,214,.3)}
+.btn.schPrac .p1{font-size:18px}
+.btn.schPrac .p2{font-size:12px;text-transform:none;letter-spacing:.02em;color:#bff4ff;font-weight:700}
+.schLessons{display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1 1 auto;min-height:0;padding-bottom:6px;scrollbar-width:none}
+.btn.schLes{justify-content:flex-start;gap:12px;min-height:72px;padding:8px 14px;text-transform:none;letter-spacing:0;border-color:var(--lc,#3ddc84);
+  background:linear-gradient(180deg,rgba(31,74,58,.96),rgba(18,48,38,.96))}
+.schLes .li{font-size:30px;flex:0 0 auto}
+.schLes .lc,.schNode .nc{display:flex;flex-direction:column;align-items:flex-start;flex:1;min-width:0;text-align:left;gap:1px}
+.schLes .ln{font-size:17px;font-weight:900;color:#fff}
+.schLes .lb{font-size:13px;color:#d6f5e4;font-weight:700}
+.schLes .ls{font-size:16px;font-weight:900;color:var(--gold);white-space:nowrap}
+.btn.schLes.locked{filter:saturate(.25);opacity:.72;border-style:dashed}
+.btn.schLes.full{box-shadow:0 4px 0 #0a2014,0 0 18px rgba(255,201,77,.4)}
+.schGrad{text-align:center;font-size:15px;font-weight:900;color:var(--gold);text-shadow:0 2px 3px #000}
+/* the lesson map: the challenges down a dashed chalk path */
+.schPath{position:relative;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:0 1 auto;min-height:0;padding:4px 0 10px;scrollbar-width:none}
+.schPath::before{content:'';position:absolute;left:50%;top:14px;bottom:14px;border-left:4px dashed rgba(244,241,230,.3);transform:translateX(-2px);pointer-events:none}
+.btn.schNode{position:relative;justify-content:flex-start;gap:10px;min-height:70px;padding:8px 12px;width:88%;text-transform:none;letter-spacing:0;
+  border-color:var(--lc,#3ddc84);background:linear-gradient(180deg,#1f4a3a,#123026)}
+.btn.schNode.l{align-self:flex-start}
+.btn.schNode.r{align-self:flex-end}
+.schNode .nb{flex:0 0 auto;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--lc,#3ddc84);color:#12091f;
+  font-size:18px;font-weight:900;border:2px solid #12091f}
+.schNode .nn{font-size:16px;font-weight:900;color:#fff}
+.schNode .ng{font-size:13px;color:#d6f5e4;font-weight:700;line-height:1.2}
+.schNode .nt{font-size:12px;color:var(--cyan2);font-weight:700}
+.schNode .ns{font-size:17px;color:var(--gold);letter-spacing:1px;white-space:nowrap;text-shadow:0 0 8px rgba(255,201,77,.5)}
+.btn.schNode.locked{opacity:.6;filter:saturate(.2)}
+.btn.schNode.done .nb{box-shadow:0 0 12px var(--gold)}
+/* play: a challenge (the canvas has the board and the result card; the buttons sit under the card) */
+.schHint{align-self:center;max-width:480px;text-align:center;font-size:14px;font-weight:700;color:#fff;background:rgba(18,9,31,.86);border:2px solid #2e9c4a;border-radius:12px;padding:6px 12px}
+.btn.schRetry{border-color:#2e9c4a}
+.schResBtns{position:absolute;left:0;right:0;top:676px;display:flex;justify-content:center;gap:10px;pointer-events:auto}
+/* play: the Practice Cabinet (the canvas has the scoreboard at the top) */
+.schScoreGap{flex:0 0 80px}
+.schDrawer{display:flex;flex-direction:column;gap:4px;height:224px;flex:0 0 auto}
+.schTabs{display:flex;gap:4px}
+.schTab{flex:1 1 0;min-width:0;min-height:36px;border-radius:10px 10px 4px 4px;border:2px solid var(--line2);background:#241a40;color:var(--dim);font-weight:900;font-size:12px;
+  letter-spacing:.02em;cursor:pointer;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.schTab.on{background:#1f4a3a;border-color:#3ddc84;color:#fff}
+.schPanel{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;background:rgba(18,9,31,.9);border:2px solid var(--line);border-radius:10px;padding:6px 8px;
+  display:flex;flex-direction:column;gap:6px;overscroll-behavior:contain;scrollbar-width:thin;touch-action:pan-y}
+.schPh{font-size:12px;color:var(--dim);font-weight:700;line-height:1.25}
+.schRow{display:flex;flex-wrap:wrap;gap:6px}
+.schChip{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:44px;min-height:44px;padding:4px 6px;border-radius:10px;
+  border:2px solid var(--line);background:#1b1030;cursor:pointer;transition:scale .08s,box-shadow .12s}
+.schChip:active{scale:.94}
+.schChip.on{border-color:#3ddc84;background:#173a2c;box-shadow:0 0 10px rgba(61,220,132,.4)}
+.schChip .n{font-size:12px;font-weight:700;color:var(--text);text-align:center;line-height:1.1}
+.schChip.claw{width:calc(25% - 5px)}
+.schChip.claw canvas{width:40px;height:40px}
+.schChip.paint,.schChip.pile,.schChip.mut,.schChip.pet{flex-direction:row;gap:6px;padding:4px 10px}
+.schChip .sw{width:20px;height:20px;border-radius:50%;border:2px solid #12091f;flex:0 0 auto}
+.schChip .pi{font-size:18px;line-height:1}
+.schChip .k{font-size:12px;color:var(--dim)}
+.schChip.mut.on{border-color:var(--mc,#3ddc84);box-shadow:0 0 10px var(--mc,#3ddc84)}
+.schItems{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.schChip.item{position:relative;min-width:0;padding:2px}
+.schChip.item canvas{width:36px;height:36px}
+.schChip.item.r-u{border-color:#1a6a64}
+.schChip.item.r-r{border-color:#7a1a4c}
+.schChip.item.r-l{border-color:#7a5a1a}
+.schChip.item.locked{background:#120a22}
+.schChip.item.locked canvas{filter:brightness(0) opacity(.45)}
+.schChip.item .lk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:900;color:var(--dimmer);font-size:16px}
+.schPracBot{display:flex;justify-content:center;gap:10px}
+.btn.schSlow.on{border-color:var(--cyan);color:var(--cyan2);box-shadow:0 4px 0 #120a22,0 0 12px rgba(46,230,214,.35)}
+/* the report card: the canvas paints the card and the diploma */
+.schRepBot{display:flex;justify-content:center;padding-bottom:26px}
+.schHow,.schOn{text-align:center;font-size:14px;font-weight:700;color:#fff3cf;background:rgba(18,9,31,.86);border:2px dashed var(--gold);border-radius:12px;padding:8px 14px;max-width:460px}
+.schOn{border-style:solid;color:var(--gold)}
+.calm #titleMenu .schTip{animation:none}
+@media (prefers-reduced-motion:reduce){#titleMenu .schTip{animation:none}}
+/* ================= /SCHOOL ================= */
+</style>
 <style id="mix-css">
 /* ================= MIX (round 10): juice pass 2 (DESIGN.md "Mix and juice pass 2 (round 10)") =================
    Screen entrances are zero specificity (:where), so any screen's own entrance or loop wins, and they move with
@@ -2046,6 +2247,10 @@ html[class*="txt-"] :is(#rushMenuBody,#rushBody){zoom:var(--accK)}
   <!-- RUSH (round 10): the Boss Rush's menu, and its NEXT CHALLENGER / draft / result screen (the canvas paints the stage under it) -->
   <div id="scr-rushmenu" class="screen rushMenuScr"><div id="rushMenuBody" class="col rushM"></div></div>
   <div id="scr-rush" class="screen rushScr"><div id="rushBody" class="col rushB"></div></div>
+  <!-- SCHOOL (round 11): Claw School and the Practice Cabinet (the canvas paints the classroom, the board and the cabinet under it) -->
+  <div id="scr-school" class="screen schScr"><div id="schoolBody" class="sch"></div></div>
+  <!-- DUO (round 11): pass and play (the canvas paints the coin, the hand-off card, the claw-off and the podium under it) -->
+  <div id="scr-duo" class="screen duoScr"><div id="duoBody"></div></div>
   <div id="setFan"></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>
