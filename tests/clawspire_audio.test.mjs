@@ -1158,4 +1158,31 @@ T.test('mix: the graph has a limiter after the master, and the offline renderer 
   T.eq(AUDIO.mix.tier('nope'), 'mid', 'an unknown voice is mid');
 });
 
+// DUO (round 11): the hand-off, the coin, the countdown, sabotage, the crowd and every taunt's own voice
+T.test('duo: every new voice plays after init and no-ops before; every taunt voice sounds different', () => {
+  const { AUDIO, fake } = bootFake();
+  const DUO_SFX = ['duoFlip', 'duoCoin', 'duoCount', 'duoReady', 'duoSabo', 'duoCrowd', 'duoTaunt'];
+  for (const n of DUO_SFX) { T.ok(AUDIO.names.includes(n), n + ' is a known sound'); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of DUO_SFX) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    T.ok(AUDIO.sfx(n, { n: 2 }) && fake.count.total - before >= 2, n + ' plays');
+  }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('duoCoin', { land: true }), 'the coin lands with a clink');
+  const nodes = new Set();
+  for (const v of ['kazoo', 'boing', 'trombone', 'horn', 'beatbox', 'mic', 'sing', 'cheer']) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    T.ok(AUDIO.sfx('duoTaunt', { v }), v + ': a taunt voice plays');
+    nodes.add(fake.count.total - before);
+  }
+  T.ok(nodes.size >= 4, `the taunt voices are built differently (${[...nodes].join(', ')} nodes)`);
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('duoTaunt', { v: 'nope' }), 'an unknown voice falls back to the kazoo');
+  T.ok(!AUDIO.sfx('duoTaunt', { v: 'horn' }), 'one taunt at a time (the gap)');
+});
+
 T.done();

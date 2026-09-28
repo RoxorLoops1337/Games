@@ -623,6 +623,8 @@ const GAME = (() => {
           hisMetaFix(S.meta, o);   // HISTORY: the run records and the Hall of Fame
           loreMetaFix(S.meta, o);   // LORE: the Codex's pages and kills, the weekly medals
           rushMetaFix(S.meta, o); ghoMetaFix(S.meta, o);   // RUSH (round 10): the Boss Rush's bests; the ghosts of the day and the week
+          schMetaFix(S.meta, o);   // SCHOOL (round 11): Claw School's stars, bests and diploma, the practice cabinet's setup
+          duoMetaFix(S.meta, o);   // DUO (round 11): the duel record, wins per name
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -672,6 +674,7 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- save / load
   function save() {
+    if (duoSave()) return;   // DUO (round 11): a duel saves itself, never over the run save
     // A finished run (dead or won) is never a CONTINUE; a bin picker saves
     // nothing because the last save on the shop/rest/event screen is the
     // state to come back to.
@@ -946,7 +949,7 @@ const GAME = (() => {
     else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward' || name === 'capsule' || name === 'counter' || name === 'arcade') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
-    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault', 'history', 'codex', 'weekly', 'rushmenu'].indexOf(name) < 0) save();   // (LORE: the Codex and the weekly screen never save a run) (RUSH: nor the rush menu)
+    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault', 'history', 'codex', 'weekly', 'rushmenu', 'school'].indexOf(name) < 0) save();   // (LORE: the Codex and the weekly screen never save a run) (RUSH: nor the rush menu) (SCHOOL: nor Claw School)
   }
 
   // ---- title
@@ -979,7 +982,9 @@ const GAME = (() => {
     metaTitle(m);   // the stats marquee and the attract mode (META block)
     loreTitle(m, row);   // LORE: the Codex button and the weekly challenge card (before History, which stays last)
     rushTitleBtn(m);   // RUSH (round 10): the Boss Rush card beside the Prize Vault (before History, which stays last)
+    schTitleTip(m); schTitleBtn(row);   // SCHOOL (round 11): "New here?" under New run, the Claw School button (before History)
     hisTitleBtn(row);   // HISTORY: registered last, shown in the first row
+    duoTitleBtn(m);   // DUO (round 11): pass and play, beside New run (registered after History)
     q9TitleFit(-1);   // TITLE (round 9): lift the logo clear of the menu, scroll the menu if it cannot fit
   }
 
@@ -1110,6 +1115,7 @@ const GAME = (() => {
       if (c.bad) mt.appendChild(h('span', 'tag pink', '- ' + c.bad));
       tx.appendChild(mt);
       tx.appendChild(h('div', 'joke', c.joke || ''));
+      schPracticeBtn(tx, id);   // SCHOOL (round 11): try this claw in the Practice Cabinet
       info.appendChild(tx);
       clawDemoStart(demo, id);
     };
@@ -2670,7 +2676,7 @@ const GAME = (() => {
     b.appendChild(tabs);
     // the shelf: a glowing slot per prize
     const shelf = h('div', 'vShelf');
-    const list = seaShelf(Vs.tab, D().vaultList ? D().vaultList(Vs.tab) : []);   // (SEASON: the counter's stock, the event cosmetics you own)
+    const list = schShelf(Vs.tab, seaShelf(Vs.tab, D().vaultList ? D().vaultList(Vs.tab) : []));   // (SEASON: the counter's stock, the event cosmetics you own) (SCHOOL: the diploma's marquee once it is yours)
     for (const id of list) shelf.appendChild(vaultCard(id));
     b.appendChild(shelf);
     try { if (scroll) shelf.scrollTop = scroll; } catch (e) { /* stub */ }
@@ -4012,7 +4018,7 @@ const GAME = (() => {
     enemyIds = seaEnemies(enemyIds, tier, opts);   // costumes and the season's elite (SEASON block)
     [enemyIds, tier] = stoFightIds(enemyIds, tier, opts);   // the act's alternate boss, a hunting Card Shark is an elite (STORY)
     const seed = opts.seed != null ? opts.seed : U.hashStr(run.seed + ':fight:' + run.act + ':' + run.floor + ':' + (run.nonce = (run.nonce || 0) + 1));
-    F = X.COMBAT.newFight(run, enemyIds, U.rng(seed));
+    F = opts.duoF || X.COMBAT.newFight(run, enemyIds, U.rng(seed));   // DUO: a co-op seat's own fight comes back in
     seaDress(F, seed, opts);   // party hats in season (SEASON block)
     stoFightStart(F, tier, opts, seed);   // a friend from a story, a sabotaged boss, Gary's gear (STORY)
     rushFightStart(F, opts);   // RUSH (round 10): a rush boss's hit points, and nobody steps out of it
@@ -4045,7 +4051,7 @@ const GAME = (() => {
     music(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight');
     annClear();   // nothing from the last fight carries over (ANNOUNCER)
     // Elites and bosses open with the versus card (the boss arena block).
-    if (!(tier !== 'normal' && vsStart())) {
+    if (!(tier !== 'normal' && !opts.duoF && vsStart())) {   // (DUO: the versus card only at a co-op fight's bell)
       if (tier === 'boss') { snd('boss'); haptic('boss'); }
       banner(tier === 'boss' ? 'BOSS' : tier === 'elite' ? 'ELITE' : (famTitle() || 'FIGHT'), tier === 'boss' ? 'enemy' : 'turn', 1.2, 'fight');   // (FAMILY: a family's name)
     }
@@ -7042,6 +7048,7 @@ const GAME = (() => {
     FS.actor = -1;
     const over = F.phase === 'over' ? F.result : X.COMBAT.isOver(F);
     if (over) { endFight(over, true); return; }
+    if (duoTurnPass()) return;   // DUO (round 11): co-op passes the phone to the other seat
     syncBodies();
     banner('YOUR TURN', 'turn', 0.9);
     clawTurnStart();   // coin clunk and spin-up (CLAW TYPES block)
@@ -7057,6 +7064,7 @@ const GAME = (() => {
      on it. A tap skips. */
   function endFight(result, outro) {
     if (FS && FS.outro && FS.done) { finishOutro(); return; }
+    if (duoFightEnd(result)) return;   // DUO (round 11): co-op: a seat down, both down, or a team win (never the run's rewards)
     if (!F || !FS || FS.done) return;
     FS.done = true;
     FS.watch = false;
@@ -7121,6 +7129,7 @@ const GAME = (() => {
   function quickOutro() { return !!(S.meta && S.meta.stats && (S.meta.stats.fights | 0) >= OUTRO_FAST); }
   function finishOutro() {
     if (!FS || !FS.outro) return;
+    if (duoOutroEnd()) return;   // DUO (round 11): the co-op result goes to the podium
     if (secOutroEnd()) return;   // The Machine's power down goes to the true ending (SECRET)
     const rw = FS.outro.reward;
     FS.outro = null;
@@ -14202,6 +14211,8 @@ const GAME = (() => {
     if (S.screen === 'map') { mapPointer(type, x, y, ev); return; }
     if (S.screen === 'arcade') { arcPointer(type, x, y); return; }   // ARCADE
     if (S.screen === 'rival') { stoPointer(type, x, y); return; }   // STORY: the claw-off
+    if (S.screen === 'school') { schPointer(type, x, y, ev); return; }   // SCHOOL (round 11): the practice cabinet and the challenges
+    if (S.screen === 'duo') { duoPointer(type, x, y); return; }   // DUO (round 11): the coin, the hand-off, the claw-off's glass
     if (S.screen === 'title') return;
     if (S.screen !== 'fight' || !F || !FS) return;
     if (FS.outro) { if (type === 'down') finishOutro(); return; }
@@ -14280,12 +14291,14 @@ const GAME = (() => {
     if (hisKey(ev, down)) return;   // HISTORY: photo mode, the recap, the History screen's Escape
     if (loreKey(ev, down)) return;   // LORE: skip the act card, close the board, Escape out of the Codex and the weekly screen
     if (rushKey(ev, down)) return;   // RUSH (round 10): skip the slam, FIGHT!, Escape out of the rush menu
+    if (S.screen === 'school') { schKey(ev, down); return; }   // SCHOOL (round 11): steer, drop, retry, Escape goes back
     if (down && k === 'Escape') { popover(null); return; }
     if (S.screen === 'intro') { if (down && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'capsule') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); capsuleTap(); } return; }
     if (S.screen === 'vault') { vaultKey(ev, down); return; }   // VAULT: crack a capsule, Escape leaves
     if (S.screen === 'arcade') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); arcKey(); } return; }   // ARCADE
     if (S.screen === 'rival') { stoKey(ev, down); return; }   // STORY: the claw-off
+    if (S.screen === 'duo') { duoKey(ev, down); return; }   // DUO (round 11)
     if (S.screen === 'reward' && S.pay && !S.pay.done) { if (down && (k === ' ' || k === 'Enter')) finishPay(); return; }
     if (S.screen !== 'fight' || !FS) return;
     if (FS.vs) { if (down && !ev.repeat) vsSkip(); return; }
@@ -14311,12 +14324,14 @@ const GAME = (() => {
     ctx.translate(off.x || 0, off.y || 0);
     if (off.r) { ctx.translate(W / 2, H / 2); ctx.rotate(off.r); ctx.translate(-W / 2, -H / 2); }
     const run = S.run;
-    if (S.screen === 'secret') secDraw(ctx, t);   // the hidden door, the true ending (SECRET)
+    if (S.screen === 'duo') duoDraw(ctx, t);   // DUO (round 11): the coin, the hand-off, the claw-off, the podium
+    else if (S.screen === 'secret') secDraw(ctx, t);   // the hidden door, the true ending (SECRET)
     else if (S.screen === 'vault') vaultDraw(ctx, t);   // the Prize Vault: the wall, the preview, the capsule (VAULT block)
     else if (S.screen === 'history') hisDraw(ctx, t);   // HISTORY: the title's art behind the run cards
     else if (S.screen === 'codex' || S.screen === 'weekly') loreBgDraw(ctx, t);   // LORE: the title's art behind the Codex and the weekly screen
     else if (S.screen === 'rushmenu') loreBgDraw(ctx, t);   // RUSH (round 10): the title's art behind the rush menu
     else if (S.screen === 'rush') rushDraw(ctx, t);   // RUSH (round 10): NEXT CHALLENGER, the stage behind the draft and the result
+    else if (S.screen === 'school') schDraw(ctx, t);   // SCHOOL (round 11): the classroom, the practice cabinet, a challenge, the report card
     else if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection' || S.screen === 'stickers' || S.screen === 'tips') {
       if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
       seaTitleDraw(ctx, t);   // SEASON: the spooky dusk or the snowfall over the title
@@ -14337,6 +14352,7 @@ const GAME = (() => {
     setDraw(ctx, t);    // SETS: the boon draft's machine, the Compactor's press
     evoDraw(ctx);       // EVOLVE: the evolution ceremony over the fight (its bursts are fx, drawn over it)
     loreDraw(ctx, t);   // LORE: a landmark's lore line, the old high score board, the act intro card
+    duoOver(ctx, t);    // DUO (round 11): co-op's cabinet rim and the boss's target
     fx().draw(ctx);
     drawBossTop(ctx, t);     // the versus card, over everything
     accIrisDraw(ctx);        // ACCESS (round 6): the map zooming into the fight's tile under the closing iris
@@ -15159,6 +15175,8 @@ const GAME = (() => {
     mixTick(real);       // MIX (round 10): the screen entrances come off, the run-end numbers count up
     loreTick(real);      // LORE (round 9): new Codex pages, the act intro card, landmark bubbles, the board, the live pictures
     rushTick(real); ghoTick(real);   // RUSH (round 10): the slam, the fight's clock; the ghost race's clock, chip and GHOST PASSED!
+    schTick(dt, real);   // SCHOOL (round 11): the practice cabinet or a challenge, the result card's stars
+    duoTick(real);   // DUO (round 11): the coin, the countdown, the claw-off, co-op's pass
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.screen === 'map') {
       walkTick(dt); camStep(dt); bloomTick(); chimeTick();
@@ -18500,7 +18518,9 @@ const GAME = (() => {
     const K = RUSHD(), M = rushM(), rec = R.rec || {}, n = R.beat.length, N = R.order.length;
     b.appendChild(h('h1', null, R.won ? 'Rush cleared!' : 'Rush over'));
     const who = (charDef(run.char) || { name: run.char }).name;
-    b.appendChild(h('div', 'sub center', R.won ? `${who} beat all ${N} bosses back to back.` : `${who} fell to ${R.killer || 'the Clawspire'} at boss ${Math.min(N, R.dead + 1)} of ${N}.`));
+    // (QA round 11: Give up read "fell to walking away"; it says so plainly now)
+    const quit = R.killer === 'walking away', at = `at boss ${Math.min(N, R.dead + 1)} of ${N}.`;
+    b.appendChild(h('div', 'sub center', R.won ? `${who} beat all ${N} bosses back to back.` : quit ? `${who} gave up ${at}` : `${who} fell to ${R.killer || 'the Clawspire'} ${at}`));
     b.appendChild(rushGalleryCanvas(R, R.won ? -1 : R.dead, -1));
     // the time and the score
     const top = h('div', 'rushRes');
@@ -18555,7 +18575,8 @@ const GAME = (() => {
     const id = R.order[R.i], def = enemyDef(id), K = RUSHD();
     const st = RSH.cst || (RSH.cst = {});
     st.t = U0.t; st.now = t; st.label = RUSH_LBL(R); st.def = def; st.i = R.i; st.n = R.order.length; st.clock = rushFmtT(R.t);
-    st.split = R.i > 0 ? `last split ${rushFmtT(R.splits[R.i - 1] || 0)}` : 'the clock starts at the bell';
+    // (QA round 11: the first challenger's line said "the clock starts at the bell" twice, here and in the DOM hint under it)
+    st.split = R.i > 0 ? `last split ${rushFmtT(R.splits[R.i - 1] || 0)}` : `${R.order.length} bosses, back to back`;
     if (!st.defs || st.defsKey !== R.order.join()) { st.defs = R.order.map(enemyDef); st.defsKey = R.order.join(); }
     st.beat = R.beat.length; st.secret = K ? R.order.indexOf(K.SECRET) : -1; st.reduced = !!fx().reduced; st.pop = -1; st.popK = 1;
     Rd.challenger(ctx, W, H, st);
@@ -20020,6 +20041,2285 @@ const GAME = (() => {
   }
   // ================================================================ /ROS
 
+  // ================================================================ SCHOOL (round 11)
+  /* Claw School and the Practice Cabinet (DESIGN.md "Claw School and the
+     Practice Cabinet (round 11)"). One screen, 'school', that never saves
+     the run (setScreen's no-save list), with four views: the hub (the star
+     count, the Practice Cabinet, the five lessons), a lesson map (its
+     challenges on a chalk path), play (a cabinet of its own: the sandbox or
+     a challenge) and the report card (the grades and the diploma). The
+     cabinet is a session of its own (SCHX.G: a physics world, the rig, the
+     pile), like the claw-off's: no F, no FS, no enemies, no rewards, no run.
+     What the school keeps lives on the profile (meta.school, DATA.schFix):
+     stars, bests, tickets paid, the diploma and the practice cabinet's last
+     setup. A star pays vault tickets the first time it is earned
+     (DATA.schPay); stars open lessons (DATA.SCH.NEED); all of them pay the
+     diploma, the Valedictorian marquee. Hooks, one line each: loadMeta
+     (schMetaFix), setScreen (no save), showTitle (schTitleTip, schTitleBtn),
+     clawPickerRow (schPracticeBtn), update (schTick), draw (schDraw),
+     pointer (schPointer), onKey (schKey), the vault's shelf (schShelf). */
+  SCREENS.push('school');
+  const SCHK = { armT: 1.2, crackV: 520, fuseV: 430, blastR: 150, blastV: 950, thudV: 300, settle: 150, hold: 0.3, grabMax: 18, slowK: 0.4,
+    hop: 0.45, doT: 0.3, trickCd: 1.2, quakeEvery: 7, tremorEvery: 6.5, tremorWarn: 0.8, bombEvery: 10, flood: 0.3, resDelay: 0.9, perchX: 64, perchY: 848,
+    tabs: [['claw', '\u{1F9F2} Claw'], ['items', '\u{1F381} Items'], ['pile', '\u{1F5C3} Pile'], ['muts', '\u{1F300} Mutators'], ['pet', '\u{1F43E} Pet']] };
+  const SCHX = { view: 'hub', li: 0, ci: 0, from: 'title', direct: false, G: null, drawer: 'claw', n: 0, log: [], t: 0 };
+  const schD = () => D().SCH || null;
+  const schLs = () => D().SCH_LESSONS || [];
+  // The school's record on the profile (junk and old profiles are repaired; a profile from before the school has an empty one).
+  function schMetaFix(m, o) {
+    if (!m) return m;
+    m.school = D().schFix ? D().schFix(o && typeof o === 'object' ? o.school : m.school) : { stars: {}, best: {}, tix: 0, dip: 0, seen: 0, plays: 0, pr: {} };
+    return m;
+  }
+  function schM() {
+    if (!S.meta) S.meta = freshMeta();
+    const M = S.meta.school;
+    if (!M || typeof M !== 'object' || !M.stars || !M.best || !M.pr) schMetaFix(S.meta, null);
+    return S.meta.school;
+  }
+  const schTotal = () => (D().schTotal ? D().schTotal(schM().stars) : 0);
+  const schMax = () => ((schD() && schD().MAX_STARS) | 0);
+
+  // ---- the title and the claw picker's way in
+  // The title's Claw School button (in the small row, before History, which stays last).
+  function schTitleBtn(row) {
+    if (!row || !row.appendChild || !schD()) return null;
+    const tot = schTotal();
+    const b = btn('Claw School', () => showSchool('hub', { from: 'title' }), 'schTitleBtn' + (tot >= schMax() && tot ? ' grad' : ''));
+    b.textContent = '\u{1F393} School';
+    if (tot) b.setAttribute('data-n', tot + '★');
+    row.appendChild(b);
+    return b;
+  }
+  // New here? A line under New run points a fresh player at the school (a plain tap, so the menu keeps its GAME.choose indices).
+  function schTitleTip(menu) {
+    if (!menu || !menu.appendChild || !schD() || !S.meta) return null;
+    const st = S.meta.stats || {};
+    if ((st.runs | 0) >= 3 || (st.fights | 0) >= 6 || schTotal() > 0) return null;
+    const tip = h('div', 'schTip');
+    tip.appendChild(h('span', 'i', '\u{1F393}'));
+    tip.appendChild(h('span', null, 'New here? '));
+    tip.appendChild(h('b', null, 'Try Claw School'));
+    tip.appendChild(h('span', 'ar', '›'));
+    tip.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); showSchool('hub', { from: 'title' }); };
+    const nr = menu.querySelector ? menu.querySelector('.btn.pri') : null;
+    if (nr && nr.parentNode === menu && menu.insertBefore) menu.insertBefore(tip, nr.nextSibling || null); else menu.appendChild(tip);
+    SCHX.tip = tip;
+    return tip;
+  }
+  // "Practice this claw" on the claw picker's panel (a plain tap: the crawler cards keep their indices).
+  function schPracticeBtn(box, id) {
+    if (!box || !box.appendChild || !schD()) return null;
+    const b = h('button', 'btn sm ghost schPracBtn', '▶ Practice this claw');
+    b.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); schPractice({ claw: id }); };
+    box.appendChild(b);
+    return b;
+  }
+  // The Prize Vault's shelf: the diploma's marquee sits on its shelf once it is yours.
+  function schShelf(tab, list) {
+    const K = schD(), id = K && K.DIPLOMA, d = id ? vaultDef(id) : null;
+    if (!d || d.cat !== tab || !vaultM().owned[id] || (list || []).indexOf(id) >= 0) return list;
+    return (list || []).concat([id]);
+  }
+
+  // ---- views
+  function showSchool(view, o) {
+    o = o || {};
+    const was = S.screen === 'school';
+    if (!was) { SCHX.from = o.from || (S.screen === 'chars' ? 'chars' : 'title'); SCHX.direct = false; }
+    SCHX.view = view || 'hub';
+    if (o.li != null) SCHX.li = o.li;
+    if (o.ci != null) SCHX.ci = o.ci;
+    if (SCHX.view !== 'play') SCHX.G = null;
+    const M = schM();
+    if (!M.seen) { M.seen = 1; saveMeta(); }
+    if (!was) { setScreen('school'); music('title'); }
+    if (SCHX.view === 'report' && SCHX.gradFx) { SCHX.gradFx = false; fx().emit('confetti', 60, 520, { n: 1.4, dir: -Math.PI / 2 + 0.5 }); fx().emit('confetti', 480, 520, { n: 1.4, dir: -Math.PI / 2 - 0.5 }); snd('fanfare'); }
+    schDom();
+    return SCHX.view;
+  }
+  // Back: a challenge goes to its lesson, a page to the hub, the hub (or a practice opened from the claw picker) back where it came from.
+  function schBack() {
+    const v = SCHX.view, G = SCHX.G;
+    if (v === 'play' && G && G.mode === 'lesson') return showSchool('lesson');
+    if (v !== 'hub' && !(v === 'play' && SCHX.direct)) return showSchool('hub');
+    SCHX.G = null;
+    if (SCHX.from === 'chars') showChars(); else showTitle();
+    return SCHX.from;
+  }
+  function schDom() {
+    const b = $('schoolBody');
+    S.ui.buttons = [];
+    if (!b) return null;
+    let keep = 0;
+    try { const p = SCHX.panel; if (p && p.isConnected !== false) keep = p.scrollTop || 0; } catch (e) { keep = 0; }
+    clear(b);
+    b.className = 'sch v-' + SCHX.view;
+    const v = SCHX.view, G = SCHX.G;
+    if (v === 'hub') schHubDom(b);
+    else if (v === 'lesson') schLessonDom(b);
+    else if (v === 'report') schReportDom(b);
+    else if (v === 'play' && G && G.mode === 'practice') schPracDom(b, keep);
+    else if (v === 'play' && G) schPlayDom(b, G);
+    return b;
+  }
+  const schTop = (b, extra) => { const top = h('div', 'schTop'); top.appendChild(btn('Back', () => schBack(), 'ghost sm')); if (extra) extra(top); b.appendChild(top); return top; };
+  function schHubDom(b) {
+    const K = schD(), M = schM(), tot = schTotal();
+    schTop(b);
+    b.appendChild(h('div', 'schGap'));
+    const row = h('div', 'schTotRow');
+    const pill = h('div', 'schTot');
+    pill.appendChild(h('b', null, '★ ' + tot));
+    pill.appendChild(h('span', null, ' / ' + K.MAX_STARS + ' stars'));
+    row.appendChild(pill);
+    row.appendChild(btn('Report card', () => showSchool('report'), 'gold sm schRepBtn'));
+    b.appendChild(row);
+    const pc = btn('Practice Cabinet', () => schPractice({}), 'schPrac');
+    pc.textContent = '';
+    pc.appendChild(h('span', 'p1', '\u{1F579} Practice Cabinet'));
+    pc.appendChild(h('span', 'p2', 'Free play: any claw, any prize. No enemies.'));
+    b.appendChild(pc);
+    const list = h('div', 'schLessons');
+    schLs().forEach((L, li) => {
+      const open = D().schOpen(li, tot), got = D().schLessonStars(li, M.stars), mx = L.ch.length * 3;
+      const c = btn(L.name, () => { if (open) showSchool('lesson', { li }); else { toast(`Earn ${K.NEED[li]} stars to open ${L.name}.`); snd('schFail'); } },
+        'schLes' + (open ? '' : ' locked') + (got >= mx ? ' full' : ''));
+      c.textContent = '';
+      try { c.style.setProperty('--lc', L.color); } catch (e) { /* stub */ }
+      c.appendChild(h('span', 'li', L.icon));
+      const col = h('span', 'lc');
+      col.appendChild(h('span', 'ln', `Lesson ${li + 1}: ${L.name}`));
+      col.appendChild(h('span', 'lb', L.blurb));
+      c.appendChild(col);
+      c.appendChild(h('span', 'ls', open ? `${got}/${mx} ★` : `\u{1F512} ${K.NEED[li]} ★`));
+      list.appendChild(c);
+    });
+    b.appendChild(list);
+    if (M.dip) b.appendChild(h('div', 'schGrad', '\u{1F393} Graduated! Every star is yours.'));
+  }
+  function schLessonDom(b) {
+    const L = schLs()[SCHX.li], M = schM();
+    if (!L) return showSchool('hub');
+    schTop(b, (top) => top.appendChild(h('div', 'schTopTag', `${D().schLessonStars(SCHX.li, M.stars)}/${L.ch.length * 3} ★`)));
+    b.appendChild(h('div', 'schGap'));
+    const path = h('div', 'schPath');
+    try { path.style.setProperty('--lc', L.color); } catch (e) { /* stub */ }
+    L.ch.forEach((ch, i) => {
+      const open = D().schChOpen(SCHX.li, i, M.stars), got = M.stars[ch.id] | 0;
+      const n = btn(ch.name, () => { if (open) schStart(SCHX.li, i); else { toast('Clear the one before it first.'); snd('schFail'); } },
+        'schNode' + (open ? '' : ' locked') + (got ? ' done' : '') + (i % 2 ? ' r' : ' l'));
+      n.textContent = '';
+      n.appendChild(h('span', 'nb', open ? String(i + 1) : '\u{1F512}'));
+      const col = h('span', 'nc');
+      col.appendChild(h('span', 'nn', ch.name));
+      col.appendChild(h('span', 'ng', ch.goal));
+      const tags = [];
+      if (ch.claw !== 'classic') tags.push(clawInfo(ch.claw).name);
+      if (ch.drops) tags.push(`${ch.drops} drop${ch.drops > 1 ? 's' : ''}`);
+      if (ch.time) tags.push(`${ch.time}s`);
+      for (const mid of ch.muts || []) { const md = (D().MUTATORS || {})[mid]; if (md) tags.push(`${md.icon} ${md.name}`); }
+      if (tags.length) col.appendChild(h('span', 'nt', tags.join(' · ')));
+      n.appendChild(col);
+      n.appendChild(h('span', 'ns', '★'.repeat(got) + '☆'.repeat(3 - got)));
+      path.appendChild(n);
+    });
+    b.appendChild(path);
+  }
+  function schReportDom(b) {
+    const K = schD(), V = vaultM(), id = K.DIPLOMA;
+    schTop(b);
+    b.appendChild(h('div', 'grow'));
+    const bot = h('div', 'schRepBot');
+    if (V.owned[id]) {
+      const on = V.eq.marquee === id;
+      bot.appendChild(on ? h('div', 'schOn', '★ Valedictorian marquee on') : btn('Put up the Valedictorian marquee', () => { vaultEquip(id); snd('vaultEquip'); schDom(); }, 'gold'));
+    } else bot.appendChild(h('div', 'schHow', `Earn all ${K.MAX_STARS} stars for the diploma and the Valedictorian marquee.`));
+    b.appendChild(bot);
+  }
+  // A challenge: Back and Retry on top, the tip at the bottom, the result's buttons under its card.
+  function schPlayDom(b, G) {
+    const L = schLs()[G.ch.lesson];
+    schTop(b, (top) => {
+      top.appendChild(h('div', 'schTopTag', `${L ? L.name : ''} · ${G.ch.idx + 1} of ${L ? L.ch.length : 1}`));
+      top.appendChild(btn('Retry', () => schRetry(), 'sm schRetry'));
+    });
+    b.appendChild(h('div', 'grow'));
+    if (G.res && G.resT >= SCHK.resDelay) {
+      const r = h('div', 'schResBtns');
+      const nx = schNext(G);
+      if (G.res.win && G.res.grad) r.appendChild(btn('See your diploma', () => showSchool('report'), 'gold'));
+      else if (G.res.win && nx) r.appendChild(btn('Next ▶', () => schStart(nx[0], nx[1]), 'go'));
+      r.appendChild(btn('Retry', () => schRetry(), G.res.win ? 'ghost' : 'pri'));
+      r.appendChild(btn('Lessons', () => showSchool('lesson', { li: G.ch.lesson }), 'ghost'));
+      b.appendChild(r);
+    }
+    b.appendChild(h('div', 'schHint', G.ch.tip || ''));
+  }
+  // The next challenge that is open (this lesson first, then the next lesson), or null.
+  function schNext(G) {
+    const Ls = schLs(), M = schM(), tot = schTotal();
+    let li = G.ch.lesson, ci = G.ch.idx + 1;
+    if (!Ls[li] || ci >= Ls[li].ch.length) { li++; ci = 0; }
+    if (!Ls[li] || !D().schOpen(li, tot) || !D().schChOpen(li, ci, M.stars)) return null;
+    return [li, ci];
+  }
+  // The Practice Cabinet: Back, Reset on top; the drawer (claw, items, pile, mutators, pet); slow motion and the pet's trick at the bottom.
+  function schPracDom(b, keep) {
+    const G = SCHX.G;
+    schTop(b, (top) => {
+      top.appendChild(h('div', 'schTopTag pr', 'PRACTICE CABINET'));
+      top.appendChild(btn('Reset pile', () => schReset(), 'sm schRetry'));
+    });
+    b.appendChild(h('div', 'schScoreGap'));
+    const dr = h('div', 'schDrawer');
+    const tabs = h('div', 'schTabs');
+    for (const [id, label] of SCHK.tabs) {
+      const tb = h('button', 'schTab' + (SCHX.drawer === id ? ' on' : ''), label);
+      tb.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); SCHX.drawer = id; SCHX.panel = null; snd('cardFlip'); schDom(); };
+      tabs.appendChild(tb);
+    }
+    dr.appendChild(tabs);
+    const panel = h('div', 'schPanel');
+    SCHX.panel = panel;
+    const tab = SCHX.drawer;
+    if (tab === 'items') schItemsPanel(panel);
+    else if (tab === 'pile') schPilePanel(panel);
+    else if (tab === 'muts') schMutsPanel(panel);
+    else if (tab === 'pet') schPetPanel(panel);
+    else schClawPanel(panel);
+    dr.appendChild(panel);
+    b.appendChild(dr);
+    try { if (keep) panel.scrollTop = keep; } catch (e) { /* stub */ }
+    b.appendChild(h('div', 'grow'));
+    const bot = h('div', 'schPracBot');
+    bot.appendChild(btn(G && G.slow ? '\u{1F422} Slow-mo on' : '\u{1F422} Slow-mo off', () => schSetSlow(!(SCHX.G && SCHX.G.slow)), 'sm schSlow' + (G && G.slow ? ' on' : '')));
+    const tr = btn('\u{1F43E} Pet trick', () => schTrick(), 'sm schTrickBtn');
+    if (!G || !G.pet) tr.disabled = true;
+    bot.appendChild(tr);
+    b.appendChild(bot);
+    b.appendChild(h('div', 'schHint', 'Drag on the glass to steer, let go to drop.'));
+  }
+  // A plain chip for the drawer (not a GAME.choose entry: the API drives them in tests).
+  function schChip(cls, on, fn) {
+    const c = h('div', 'schChip ' + (cls || '') + (on ? ' on' : ''));
+    c.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); fn(); };
+    return c;
+  }
+  function schClawPanel(p) {
+    const G = SCHX.G;
+    p.appendChild(h('div', 'schPh', 'Any claw, any time. Paint: the ones you own.'));
+    const row = h('div', 'schRow');
+    for (const id of clawIds()) {
+      const c = schChip('claw', G && G.claw === id, () => { schSetClaw(id); });
+      c.appendChild(clawCanvas(id, 44));
+      c.appendChild(h('span', 'n', clawInfo(id).name));
+      row.appendChild(c);
+    }
+    p.appendChild(row);
+    const pr = h('div', 'schRow paints');
+    for (const id of schPaints()) {
+      const d = vaultDef(id);
+      if (!d) continue;
+      const c = schChip('paint', G && (G.paint || vaultM().eq.paint) === id, () => { schSetPaint(id); });
+      const sw = h('span', 'sw');
+      try { sw.style.background = `linear-gradient(135deg, ${d.look.c1}, ${d.look.c2})`; } catch (e) { /* stub */ }
+      c.appendChild(sw);
+      c.appendChild(h('span', 'n', d.name));
+      pr.appendChild(c);
+    }
+    p.appendChild(pr);
+  }
+  // Every item the profile has found (the Prizedex's own sightings); the rest are dark and locked.
+  function schItemIds() { return Object.keys(tbl('ITEMS')).filter((id) => !(itemDef(id).bag)); }
+  const schSeen = (id) => !!(S.meta && S.meta.seen && S.meta.seen.items && S.meta.seen.items[id]);
+  function schItemsPanel(p) {
+    const ids = schItemIds(), n = ids.filter(schSeen).length;
+    p.appendChild(h('div', 'schPh', `${n} of ${ids.length} prizes found. Tap one to drop it in. The rest turn up in your runs.`));
+    const grid = h('div', 'schItems');
+    for (const id of ids) {
+      const seen = schSeen(id), def = itemDef(id);
+      const c = schChip('item r-' + (def.rarity || 'c') + (seen ? '' : ' locked'), false, () => { if (seen) schSpawnItem(id); else { toast('Not found yet. Meet it in a run to unlock it here.'); snd('schFail'); } });
+      c.appendChild(itemCanvas(def, false, 38));
+      if (!seen) c.appendChild(h('i', 'lk', '?'));
+      grid.appendChild(c);
+    }
+    p.appendChild(grid);
+  }
+  function schPilePanel(p) {
+    const K = schD(), M = schM();
+    p.appendChild(h('div', 'schPh', 'A fresh pile. The readout starts over.'));
+    const row = h('div', 'schRow piles');
+    for (const P0 of K.PILES) {
+      const c = schChip('pile', M.pr.pile === P0.id, () => schPile(P0.id));
+      c.appendChild(h('span', 'pi', P0.icon));
+      c.appendChild(h('span', 'n', P0.name));
+      c.appendChild(h('span', 'k', `${schPileIds(P0.id).length} prizes`));
+      row.appendChild(c);
+    }
+    const e = schChip('pile', M.pr.pile === 'empty', () => schPile('empty'));
+    e.appendChild(h('span', 'pi', '\u{1F9F9}'));
+    e.appendChild(h('span', 'n', 'Empty bin'));
+    e.appendChild(h('span', 'k', 'fill it yourself'));
+    row.appendChild(e);
+    p.appendChild(row);
+  }
+  function schMutsPanel(p) {
+    const K = schD(), G = SCHX.G, MU = D().MUTATORS || {};
+    p.appendChild(h('div', 'schPh', `Up to ${D().MUT_MAX || 3} at once. Only the ones that bend the machine work here.`));
+    const row = h('div', 'schRow muts');
+    for (const id of K.MUTS) {
+      const md = MU[id];
+      if (!md) continue;
+      const c = schChip('mut', G && G.muts.indexOf(id) >= 0, () => schToggleMut(id));
+      try { c.style.setProperty('--mc', md.color || '#ff2e88'); } catch (e) { /* stub */ }
+      c.appendChild(h('span', 'pi', md.icon || ''));
+      c.appendChild(h('span', 'n', md.name));
+      row.appendChild(c);
+    }
+    p.appendChild(row);
+  }
+  function schPetPanel(p) {
+    const G = SCHX.G, cur = G && G.pet ? G.pet.id : '';
+    const pd = cur ? petDefOf(cur) : null;
+    p.appendChild(h('div', 'schPh', pd ? `${pd.icon} ${pd.name}: ${pd.text}` : 'A buddy on the frame. Tap Pet trick to watch it work.'));
+    const row = h('div', 'schRow pets');
+    const none = schChip('pet', !cur, () => schSetPet(''));
+    none.appendChild(h('span', 'pi', '✖'));
+    none.appendChild(h('span', 'n', 'No pet'));
+    row.appendChild(none);
+    for (const id of D().PET_IDS || []) {
+      const d = petDefOf(id);
+      if (!d) continue;
+      const c = schChip('pet', cur === id, () => schSetPet(id));
+      c.appendChild(h('span', 'pi', d.icon));
+      c.appendChild(h('span', 'n', d.name));
+      row.appendChild(c);
+    }
+    p.appendChild(row);
+  }
+  // The paints the profile owns (the event ones too), the default first.
+  function schPaints() {
+    const V = vaultM(), all = (D().vaultList ? D().vaultList('paint') : []).concat(D().SEA_COSMETIC_IDS || []);
+    return all.filter((id) => { const d = vaultDef(id); return d && d.cat === 'paint' && V.owned[id]; });
+  }
+
+  // ---- the session: a world, a cabinet, the rig and the pile
+  function schBuild(o) {
+    const P = X.PHYS;
+    if (!P || !P.world || !P.clawRig) return null;
+    const MU = D().MUTATORS || {}, K = schD() || { MUTS: [] };
+    const muts = (o.muts || []).filter((id) => MU[id] && (o.mode === 'lesson' || K.MUTS.indexOf(id) >= 0)).slice(0, 3);
+    const m = D().mutMods ? D().mutMods(muts) : { gs: 1, drag: 0, scale: 1, slick: 1, temp: [], clawK: 1 };
+    const seed = (o.seed >>> 0) || 1;
+    const Wd = P.world({ gravity: { x: 0, y: GRAVITY }, w: CAB.w, h: CAB.h });
+    const Cb = P.cabinet(Wd, { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, wallThick: CAB.wallThick, slopeW: CAB.slopeW, slopeH: CAB.slopeH });
+    const G = { mode: o.mode === 'lesson' ? 'lesson' : 'practice', ch: o.ch || null, claw: clawTypeOk(o.claw) ? o.claw : 'classic', paint: o.paint || '', muts, m, seed, rng: U.rng(seed),
+      W: Wd, C: Cb, rig: null, items: [], debris: [], sid: 0, clock: 0, t: 0, go: o.mode !== 'lesson',
+      grabN: 0, busy: false, dropAt: 0, relAt: -1, cur: 0, looseN: 0, steer: false, keyDir: 0, impN: 0,
+      st: { dl: [], drops: 0, cracked: 0, blew: 0, targets: 0 }, stats: { delivered: 0, grab: 0, best: 0, grabs: 0, free: 0 }, fl: { d: 0, g: 0, b: 0, n: 0 },
+      party: 0, marquee: '', tilt: 0, quakeT: SCHK.quakeEvery, tremT: SCHK.tremorEvery, warn: 0, bombT: SCHK.bombEvery, flood: null, level: CAB.h,
+      pet: null, slow: !!o.slow && o.mode !== 'lesson', res: null, resT: 0, pend: null, mood: '', moodT: 0, hx: 0, hy: 0, hvx: 0, hvy: 0, finger: null, fingerT: -9, starN: 0 };
+    schRig(G);
+    if (m.drift > 0 || m.belt > 0) Wd.addHook((hh) => schPush(G, hh));
+    if (m.flood > 0 && P.rosFlood) { G.level = CAB.h * (1 - SCHK.flood); G.flood = P.rosFlood(Wd, { y: G.level, xMax: Cb.bounds.chuteX - 2, g: GRAVITY, rho: 0.95 }); }
+    if (m.quake) schWobble(G);
+    if (o.pet && petDefOf(o.pet)) G.pet = schPetNew(o.pet);
+    return G;
+  }
+  // The claw: any type, the practice's neutral config (the slow claw assist applies; Tiny Claw shrinks it).
+  function schRig(G) {
+    const P = X.PHYS, bd = G.C.bounds, chuteX = bd.chuteX || CAB.w - CAB.chuteW, old = G.rig;
+    if (old && old.destroy) { try { old.destroy(); } catch (e) { /* gone */ } }
+    const slow = S.meta && S.meta.settings && S.meta.settings.slowClaw ? ACC_SLOW : 1;
+    G.rig = P.clawRig(G.W, { cabinet: G.C, homeX: chuteX * 0.5, chuteX: chuteX + CAB.chuteW * 0.5, railY: 26, type: G.claw, prongs: 2,
+      width: G.m.clawK > 0 ? G.m.clawK : 1, grip: 1.1, speed: slow, rubber: 0, magnet: 0, rand: U.rng(((G.seed ^ 0x1234567) >>> 0) || 1) });
+    if (old && G.rig.setTarget) G.rig.setTarget(old.targetX);
+    G.hx = G.rig.x; G.hy = G.rig.y;
+    return G.rig;
+  }
+  // One prize in the cabinet, with its material (and the mutators' physics).
+  function schSpawn(G, id, x, y, a, o) {
+    const P = X.PHYS, def = tbl('ITEMS')[id];
+    if (!def || !P || !G) return null;
+    o = o || {};
+    const m = G.m;
+    let shape = shapeFor(def);
+    if (m.scale > 0 && m.scale !== 1 && P.scaleShape) shape = P.scaleShape(shape, m.scale);
+    const b = P.body({ type: 'dynamic', shape, x, y, angle: a || 0, density: def.density == null ? 1 : def.density, friction: def.friction == null ? 0.5 : def.friction,
+      restitution: def.restitution == null ? 0.12 : def.restitution, group: 'item',
+      data: { def, tags: def.tags || [], sid: ++G.sid, t: !!o.t, lit: o.lit > 0 ? +o.lit : 0, crack: 0, clawG: -1, age: 0, cd: 0, pvx: null, pvy: null, sq: 0, seed: (G.sid * 0.37) % 10 } });
+    let mat = P.materialOf ? P.materialOf(def) : null;
+    if (mat && P.applyMaterial) P.applyMaterial(b, mat);
+    if (m.gs > 0 && m.gs !== 1) b.gs = (b.gs == null ? 1 : b.gs) * m.gs;
+    if (m.drag) b.drag = (b.drag || 0) + m.drag;
+    if (m.slick > 0 && m.slick !== 1) b.slick = (b.slick == null ? 1 : b.slick) * m.slick;
+    if (m.glass && mat && mat.traits && !mat.traits.glass) mat = Object.assign({}, mat, { traits: Object.assign({}, mat.traits, { glass: true }) });
+    if (m.bounce > 0 && P.rosBounce) P.rosBounce(b, m.bounce);
+    b.data.mat = mat;
+    G.W.add(b);
+    G.items.push(b);
+    return b;
+  }
+  function schRemove(G, b) {
+    const i = G.items.indexOf(b);
+    if (i >= 0) G.items.splice(i, 1);
+    if (G.W.bodies.indexOf(b) >= 0) G.W.remove(b);
+  }
+  // The pile settles before the first frame (a lesson's pile is the same every time: its seed is the challenge's).
+  function schSettle(G) {
+    for (let i = 0; i < SCHK.settle; i++) G.W.step(1 / 60);
+    for (const b of G.items) { b.data.age = 0; b.data.pvx = null; b.data.pvy = null; }
+  }
+  function schLessonPile(G) {
+    const bw = G.C.bounds.chuteX || CAB.w - CAB.chuteW;
+    for (const p of G.ch.pile) {
+      const b = schSpawn(G, p.id, 18 + p.x * (bw - 36), p.y, (G.rng() - 0.5) * 0.8, { t: p.t, lit: p.lit });
+      if (b && p.t) G.st.targets++;
+    }
+    schSettle(G);
+  }
+  // A preset's ids: the starter bin is a crawler's (the run's, else the knight's).
+  function schPileIds(id) {
+    const K = schD(), P0 = K && K.PILES.find((x) => x.id === id);
+    if (!P0) return [];
+    if (id !== 'starter') return P0.ids.slice();
+    const c = charDef((S.run && S.run.char) || 'knight') || charDef('knight');
+    return ((c && c.bin) || []).filter((x) => tbl('ITEMS')[x] && !itemDef(x).bag).slice(0, 16);
+  }
+  function schPileSpawn(G, id) {
+    if (!G) return 0;
+    const ids = id === 'empty' ? [] : schPileIds(id), bw = G.C.bounds.chuteX || CAB.w - CAB.chuteW;
+    ids.forEach((iid, i) => schSpawn(G, iid, 30 + G.rng() * (bw - 60), 130 + (i % 4) * 30 + G.rng() * 30, (G.rng() - 0.5) * 1.4));
+    for (const t of G.m.temp || []) for (let k = 0; k < (t.n | 0); k++) schSpawn(G, t.id, 40 + G.rng() * (bw - 80), 120 + G.rng() * 60, 0);
+    schSettle(G);
+    return G.items.length;
+  }
+
+  // ---- opening the practice cabinet and a challenge
+  function schPractice(o) {
+    o = o || {};
+    const M = schM(), pr = M.pr;
+    if (o.claw && clawTypeOk(o.claw)) pr.claw = o.claw;
+    const direct = S.screen !== 'school';
+    if (direct) { SCHX.from = S.screen === 'chars' ? 'chars' : 'title'; }
+    SCHX.n++;
+    const G = schBuild({ mode: 'practice', claw: clawTypeOk(pr.claw) ? pr.claw : pickedClaw(), paint: schPaints().indexOf(pr.paint) >= 0 ? pr.paint : '',
+      muts: pr.muts, pet: pr.pet, slow: pr.slow, seed: U.hashStr('practice:' + SCHX.n + ':' + (M.plays | 0)) });
+    if (!G) return null;
+    schPileSpawn(G, pr.pile || 'starter');
+    SCHX.G = G;
+    SCHX.drawer = o.drawer || (o.claw ? 'claw' : SCHX.drawer || 'claw');
+    SCHX.panel = null;
+    saveMeta();
+    if (direct) { SCHX.view = 'play'; SCHX.direct = true; setScreen('school'); music('title'); schDom(); }
+    else { SCHX.direct = false; showSchool('play'); }
+    snd('clawCoin');
+    return G;
+  }
+  function schStart(li, ci) {
+    const L = schLs()[li], ch = L && L.ch[ci], M = schM();
+    if (!ch) return null;
+    if (!D().schOpen(li, schTotal()) || !D().schChOpen(li, ci, M.stars)) { toast('Locked. Earn more stars first.'); return null; }
+    SCHX.li = li; SCHX.ci = ci;
+    const G = schBuild({ mode: 'lesson', ch, claw: ch.claw, muts: ch.muts, seed: U.hashStr('school:' + ch.id) });
+    if (!G) return null;
+    schLessonPile(G);
+    SCHX.G = G;
+    if (S.screen !== 'school') { SCHX.from = 'title'; setScreen('school'); }
+    SCHX.view = 'play';
+    schDom();
+    snd('schBell');
+    SCHX.log.push({ k: 'start', id: ch.id });
+    return G;
+  }
+  function schRetry() {
+    const G = SCHX.G;
+    if (!G || G.mode !== 'lesson') return schReset();
+    return schStart(G.ch.lesson, G.ch.idx);
+  }
+
+  // ---- the practice cabinet's controls (all of them profile-only: never the run, never its save)
+  function schPr() { return schM().pr; }
+  function schSetClaw(id) {
+    const G = SCHX.G;
+    if (!G || G.mode !== 'practice' || !clawTypeOk(id)) return false;
+    if (G.busy) { toast('Wait for the claw to come home.'); return false; }
+    G.claw = id;
+    schRig(G);
+    schPr().claw = id; saveMeta();
+    snd('clawCoin');
+    schDom();
+    return true;
+  }
+  function schSetPaint(id) {
+    const G = SCHX.G;
+    if (!G || schPaints().indexOf(id) < 0) return false;
+    G.paint = id;
+    schPr().paint = id; saveMeta();
+    snd('vaultEquip');
+    schDom();
+    return true;
+  }
+  const schCap = () => (schD() ? schD().PILE_MAX : 30);
+  // Drops a found item in from the top, over where the claw is aiming.
+  function schSpawnItem(id) {
+    const G = SCHX.G;
+    if (!G || G.mode !== 'practice' || !tbl('ITEMS')[id] || !schSeen(id)) return null;
+    if (G.items.length >= schCap()) { toast('The cabinet is full. Reset the pile or grab some out.'); return null; }
+    const bw = G.C.bounds.chuteX, x = U.clamp((G.rig ? G.rig.targetX : bw / 2) + (G.rng() - 0.5) * 60, 30, bw - 30);
+    const b = schSpawn(G, id, x, 110, (G.rng() - 0.5) * 1.2);
+    if (b) { b.vy = 60; fx().text(CAB.x + x, CAB.y + 90, itemDef(id).name, '#e8dcff', { size: 14, life: 0.9 }); snd('whoosh'); }
+    return b;
+  }
+  function schPile(id) {
+    const G = SCHX.G;
+    if (!G || G.mode !== 'practice') return false;
+    if (id !== 'empty' && !schPileIds(id).length) return false;
+    schPr().pile = id; saveMeta();
+    return schReset();
+  }
+  // Reset: a fresh session with the same claw, paint, mutators and pet, the preset's pile, the readout at zero.
+  function schReset() {
+    const G = SCHX.G;
+    if (!G) return false;
+    if (G.mode === 'lesson') return !!schRetry();
+    const pr = schPr();
+    SCHX.n++;
+    const N = schBuild({ mode: 'practice', claw: G.claw, paint: G.paint, muts: G.muts, pet: G.pet ? G.pet.id : '', slow: G.slow, seed: U.hashStr('practice:' + SCHX.n) });
+    if (!N) return false;
+    schPileSpawn(N, pr.pile || 'starter');
+    if (G.rig && N.rig) N.rig.setTarget(G.rig.targetX);
+    SCHX.G = N;
+    snd('shuffle');
+    schDom();
+    return true;
+  }
+  // A mutator on or off (a clash swaps: Giant switches Tiny off); the session is rebuilt around the same prizes where they lie.
+  function schToggleMut(id) {
+    const G = SCHX.G, K = schD();
+    if (!G || G.mode !== 'practice' || K.MUTS.indexOf(id) < 0) return false;
+    if (G.busy) { toast('Wait for the claw to come home.'); return false; }
+    let list = G.muts.slice();
+    const i = list.indexOf(id), max = D().MUT_MAX || 3;
+    if (i >= 0) list.splice(i, 1);
+    else {
+      if (D().mutClash) list = list.filter((x) => !D().mutClash(x, id));
+      if (list.length >= max) { toast(`Up to ${max} mutators at once.`); return false; }
+      list.push(id);
+    }
+    schRebuild(G, { muts: list });
+    schPr().muts = list.slice(); saveMeta();
+    snd(i >= 0 ? 'click' : 'tiltUp');
+    schDom();
+    return true;
+  }
+  // The same prizes where they lie, in a new session (new mutators).
+  function schRebuild(G, o) {
+    const N = schBuild({ mode: 'practice', claw: G.claw, paint: G.paint, muts: o.muts, pet: G.pet ? G.pet.id : '', slow: G.slow, seed: G.seed });
+    if (!N) return null;
+    for (const b of G.items) schSpawn(N, b.data.def.id, b.x, Math.min(b.y, CAB.h - 20), b.a, { lit: b.data.lit });
+    N.stats = Object.assign({}, G.stats);
+    if (G.rig && N.rig) N.rig.setTarget(G.rig.targetX);
+    SCHX.G = N;
+    return N;
+  }
+  function schSetPet(id) {
+    const G = SCHX.G;
+    if (!G || G.mode !== 'practice') return false;
+    G.pet = id && petDefOf(id) ? schPetNew(id) : null;
+    schPr().pet = G.pet ? id : ''; saveMeta();
+    if (G.pet) snd('petChirp', { pitch: PET_PITCH[id] || 1 });
+    schDom();
+    return true;
+  }
+  function schSetSlow(on) {
+    const G = SCHX.G;
+    if (!G || G.mode !== 'practice') return false;
+    G.slow = !!on;
+    schPr().slow = G.slow; saveMeta();
+    snd(G.slow ? 'whoosh' : 'click');
+    schDom();
+    return true;
+  }
+
+  // ---- the claw: steering and dropping
+  const schBinW = (G) => (G && G.C ? G.C.bounds.chuteX : CAB.w - CAB.chuteW);
+  const schClampX = (G, x) => U.clamp(x, 20, schBinW(G) - 20);
+  function schSteer(x) {
+    const G = SCHX.G;
+    if (!G || G.res || !G.rig || G.busy) return false;
+    G.rig.setTarget(schClampX(G, x));
+    G.go = true;
+    return true;
+  }
+  function schDrop(x) {
+    const G = SCHX.G;
+    if (!G || G.res || SCHX.view !== 'play' || G.busy || !G.rig) return false;
+    const rig = G.rig;
+    if (rig.phase !== 'idle' && rig.phase !== 'moving') return false;
+    if (G.ch && G.ch.drops > 0 && G.st.drops >= G.ch.drops) return false;
+    if (x != null) rig.setTarget(schClampX(G, x));
+    if (rig.drop() === false) return false;
+    G.busy = true; G.grabN++; G.cur = 0; G.dropAt = G.clock; G.relAt = -1; G.st.drops++; G.go = true;
+    G.stats.grab = 0;
+    snd('clawDrop');
+    return true;
+  }
+
+  // ---- the frame
+  function schTick(dt, real) {
+    if (S.screen !== 'school') return;
+    SCHX.t += real;
+    const G = SCHX.G;
+    if (SCHX.view !== 'play' || !G) return;
+    const k = G.slow ? SCHK.slowK : 1;
+    schStep(G, Math.min(dt, 1 / 30) * k);
+    if (G.res) {
+      const was = G.resT;
+      G.resT += real;
+      if (was < SCHK.resDelay && G.resT >= SCHK.resDelay) schDom();
+      // the stars pop onto the card one by one
+      const n = G.res.win ? G.res.stars : 0;
+      while (G.starN < n && G.resT >= SCHK.resDelay + 0.3 + G.starN * 0.28) { G.starN++; snd('schStar', { n: G.starN }); }
+    }
+  }
+  function schStep(G, dt) {
+    const rig = G.rig, Wd = G.W, bd = G.C.bounds;
+    G.clock += dt;
+    if (G.go && !G.res && !G.pend) G.t += dt;
+    for (const kk in G.fl) if (G.fl[kk] > 0) G.fl[kk] = Math.max(0, G.fl[kk] - dt * 2.2);
+    G.party = Math.max(0, G.party - dt * 0.9);
+    if (G.moodT > 0 && (G.moodT -= dt) <= 0) G.mood = '';
+    if (G.keyDir && !G.busy && !G.res) { rig.setTarget(schClampX(G, rig.targetX + G.keyDir * (G.m.mirror ? -1 : 1) * 260 * dt)); G.go = true; }
+    schMutTick(G, dt);
+    const evs = rig.update(dt);
+    Wd.step(dt);
+    // the hub's velocity (the octopus holds on with it)
+    G.hvx = (rig.x - G.hx) / Math.max(1e-4, dt); G.hvy = (rig.y - G.hy) / Math.max(1e-4, dt); G.hx = rig.x; G.hy = rig.y;
+    for (const ev of evs) schRigEv(G, ev);
+    G.impN = 0;
+    for (const b of G.items.slice()) schBody(G, b, dt);
+    // the chute has no floor: whatever falls through it is delivered
+    for (const b of G.items.slice()) if (!b.tube && G.C.inChute(b) && b.y > (bd.floorY || CAB.h) + 4) schDeliver(G, b);
+    for (let i = G.debris.length - 1; i >= 0; i--) {
+      const s = G.debris[i];
+      if (G.C.inChute(s) && s.y > bd.dividerTop + 10) { Wd.remove(s); G.debris.splice(i, 1); }
+    }
+    schPetTick(G, dt);
+    if (G.busy) {
+      const home = rig.phase === 'idle' && (G.relAt < 0 || G.clock - G.relAt >= SCHK.hold) && rig.held().length === 0;
+      if (home && G.clock - G.dropAt > 0.3) schGrabEnd(G);
+      else if (G.clock - G.dropAt > SCHK.grabMax) { if (rig.open && rig.phase !== 'returning' && rig.phase !== 'idle') rig.open(); if (G.clock - G.dropAt > SCHK.grabMax + 3) schGrabEnd(G); }
+    }
+    if (G.ch && !G.res && !G.busy && G.ch.time > 0 && G.t >= G.ch.time) schJudge(G);
+  }
+  // One prize's frame: who the claw touched this grab, landings (glass cracks, a bomb's fuse, heavy thuds), a lit fuse burning down.
+  function schBody(G, b, dt) {
+    const d = b.data;
+    if (b.held > 0) d.clawG = G.grabN;
+    const pvx = d.pvx == null ? b.vx : d.pvx, pvy = d.pvy == null ? b.vy : d.pvy;
+    d.pvx = b.vx; d.pvy = b.vy;
+    d.age += dt;
+    if (d.cd > 0) d.cd -= dt;
+    if (d.sq > 0) d.sq = Math.max(0, d.sq - dt * 5);
+    if (d.lit > 0 && G.go && !G.res) { d.lit -= dt; if (d.lit <= 0) { schBoom(G, b); return; } }
+    const T = d.mat && d.mat.traits;
+    if (!T || b.tube) return;
+    const dvx = b.vx - pvx, dvy = b.vy - pvy - GRAVITY * (b.gs == null ? 1 : b.gs) * dt;
+    const imp = Math.hypot(dvx, dvy);
+    if (imp < 150 || d.cd > 0 || G.impN >= 4) return;
+    G.impN++;
+    d.cd = 0.12;
+    const armed = d.age > SCHK.armT, vel = U.clamp(imp / 700, 0.2, 1.4), sx = CAB.x + b.x, sy = CAB.y + b.y;
+    if (imp > 260) { d.sq = Math.max(d.sq, U.clamp(imp / 900, 0.2, 0.9)); snd('itemLand', { mass: b.m, vel: imp }); }
+    if (T.glass) { if (armed && imp > SCHK.crackV) schCrack(G, b); else snd('tinkle', { vel }); }
+    if (G.items.indexOf(b) < 0) return;
+    if (T.fuse && armed && imp > SCHK.fuseV && !(d.lit > 0) && d.def.rarity !== 'junk') schLight(G, b, (schD() && schD().FUSE) || 8);
+    if (T.heavy && armed && imp > SCHK.thudV) { fx().emit('dust', sx, sy + (b.br || 12) * 0.6, { power: 1, n: 1 }); fx().shake(2); snd('thud', { vel }); if (X.PHYS.hop) X.PHYS.hop(G.W, b.x, b.y, 130, 150, b); }
+    if (T.metal && imp > 240) snd('clank', { vel });
+    if (T.rubber) snd('boing', { vel });
+  }
+  function schCrack(G, b) {
+    const d = b.data, sx = CAB.x + b.x, sy = CAB.y + b.y;
+    d.crack++;
+    G.st.cracked++;
+    if (d.crack >= 2) {
+      schRemove(G, b);
+      fx().emit('shatter', sx, sy, { col: d.def.color || '#bfe8ff' });
+      fx().text(sx, sy - 26, 'SHATTERED', '#ff5a4a', { size: 17, life: 1 });
+      snd('shatter');
+      for (let i = 0; i < 4 && X.PHYS; i++) {
+        const a = -Math.PI / 2 + (G.rng() - 0.5) * 2.4, v = 180 + G.rng() * 200;
+        const s = X.PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r: 4 + G.rng() * 1.5 }, x: b.x, y: Math.min(b.y, CAB.h - 8), angle: 0, density: 0.8, friction: 0.35, restitution: 0.2, group: 'debris', data: { debris: true, col: d.def.color || '#bfe8ff' } });
+        s.vx = Math.cos(a) * v; s.vy = Math.sin(a) * v;
+        G.W.add(s); G.debris.push(s);
+        while (G.debris.length > 12) { const o = G.debris.shift(); G.W.remove(o); }
+      }
+    } else {
+      fx().emit('shatter', sx, sy, { col: '#ffffff', n: 0.25 });
+      fx().text(sx, sy - 24, 'CRACK!', '#bfe8ff', { size: 16, life: 0.9 });
+      snd('crack');
+    }
+    G.mood = 'sad'; G.moodT = 1.4;
+    schJudge(G);
+  }
+  function schLight(G, b, secs) {
+    b.data.lit = secs;
+    fx().text(CAB.x + b.x, CAB.y + b.y - 30, 'FUSE LIT!', '#ff8a2b', { size: 16, life: 1.1 });
+    snd('fuse');
+  }
+  function schBoom(G, b) {
+    const d = b.data, x = b.x, y = b.y, sx = CAB.x + x, sy = CAB.y + y;
+    schRemove(G, b);
+    if (X.PHYS.blast) X.PHYS.blast(G.W, x, y, SCHK.blastR, SCHK.blastV);
+    fx().emit('blast', sx, sy, { power: 1 });
+    fx().ring(sx, sy, '#ffe066', { r0: 10, r1: SCHK.blastR + 30, w: 10, life: 0.4 });
+    if (!fx().reduced) fx().flash('#ff8a2b', 0.3);
+    fx().shake(12);
+    fx().text(sx, sy - 30, 'KABOOM!', '#ffc94d', { size: 26, life: 1.1 });
+    snd('boom'); haptic('hurt');
+    G.mood = 'wow'; G.moodT = 1.4;
+    if (d.t) G.st.blew++;
+    schJudge(G);
+  }
+  function schRigEv(G, ev) {
+    const rig = G.rig;
+    switch (ev) {
+      case 'touch': snd('clawTouch'); fx().emit('dust', CAB.x + rig.x, CAB.y + rig.y + 30, { power: 0.5 }); break;
+      case 'close': snd('clawClose'); haptic('clamp'); fx().ring(CAB.x + rig.x, CAB.y + rig.y + 34, '#fff6c0', { r0: 4, r1: 28, w: 3, life: 0.2 }); break;
+      case 'lift': {
+        snd('clawLift');
+        const got = rig.locked ? rig.locked().length : 0;
+        G.mood = got ? 'happy' : 'sad'; G.moodT = got ? 6 : 1.4;
+        if (G.pet && G.pet.hold) { G.pet.holding = true; G.pet.hold = false; }
+        break;
+      }
+      case 'release': snd('clawRelease'); G.relAt = G.clock; break;
+      case 'slip': snd('itemSlip'); G.mood = 'sad'; G.moodT = 1.2; break;
+      case 'home': if (G.pet) G.pet.holding = false; break;
+      default: break;
+    }
+  }
+  // A prize fell through the chute: it counts for this grab (a prize the claw never touched is a FREE PRIZE).
+  function schDeliver(G, b) {
+    const d = b.data, def = d.def, T = (d.mat && d.mat.traits) || {};
+    const free = !G.busy || d.clawG !== G.grabN;
+    const rec = { id: def.id, tags: def.tags || [], glass: !!T.glass, circle: !!(def.shape && def.shape.kind === 'circle'), t: !!d.t, free, g: G.busy ? G.grabN : -(++G.looseN) };
+    const pos = { x: CAB.x + b.x, y: CAB.y + b.y };
+    schRemove(G, b);
+    G.st.dl.push(rec);
+    if (G.busy) { G.cur++; G.stats.grab = G.cur; G.fl.g = 1; }
+    G.stats.delivered++; G.fl.d = 1;
+    const cx = CAB.x + schBinW(G) + CAB.chuteW / 2, cy = CAB.y + CAB.h - 60;
+    fx().burst(pos.x, pos.y, '#ffc94d', fx().reduced ? 6 : 14);
+    fx().ring(pos.x, pos.y, '#ffc94d', { r0: 8, r1: 44, w: 4 });
+    if (d.lit > 0) fx().text(cx - 70, cy - 60, 'DEFUSED!', '#a6ff5e', { size: 18, life: 1.1 });
+    if (G.busy && G.cur === 2) { fx().text(cx - 66, cy - 20, 'DOUBLE', '#2ee6d6', { size: 20, life: 0.9 }); G.party = Math.max(G.party, 0.7); G.marquee = 'DOUBLE!'; snd('coin', { pitch: 1.2 }); }
+    if (G.busy && G.cur === 3) { fx().text(cx - 90, cy - 50, 'JACKPOT!', '#ffc94d', { size: 26, life: 1.2 }); fx().emit('confetti', CAB.x + 10, CAB.y, { dir: -Math.PI / 2 + 0.55, spread: 1 }); G.party = 2; G.marquee = 'JACKPOT!'; snd('jackpot'); }
+    if (free) { G.stats.free++; fx().text(cx - 80, cy - 90, 'FREE PRIZE!', '#a6ff5e', { size: 19, life: 1.2 }); snd('fanfare', { pitch: 1.25, vol: 0.7 }); G.party = Math.max(G.party, 0.6); G.marquee = 'FREE PRIZE!'; }
+    else fx().text(cx - 60, cy, '+1', '#ffc94d', { size: 16, life: 0.8 });
+    if (d.t) fx().ring(pos.x, pos.y, '#a6ff5e', { r0: 10, r1: 70, w: 6, life: 0.5 });
+    snd('chute');
+    haptic('deliver');
+    schJudge(G);
+    return rec;
+  }
+  // A grab is over: the readout, the goose's egg, then the judge (a win waits for its grab so every prize in it counts).
+  function schGrabEnd(G) {
+    G.busy = false;
+    G.stats.grabs++;
+    G.stats.grab = G.cur;
+    if (G.cur > G.stats.best) { G.stats.best = G.cur; G.fl.b = 1; }
+    G.fl.n = 1;
+    if (G.pet && petDefOf(G.pet.id) && petDefOf(G.pet.id).act === 'egg' && G.cur >= 3) { fx().text(CAB.x + 80, CAB.y + 40, 'GOLDEN EGG!', '#ffc94d', { size: 18 }); fx().emit('coins', CAB.x + SCHK.perchX, CAB.y - 20, { n: 0.6 }); snd('petHonk'); }
+    if (G.pet) G.pet.holding = false;
+    SCHX.log.push({ k: 'grab', n: G.cur, g: G.grabN });
+    if (G.ch && !G.res) { if (G.pend) schFinish(G, true); else schJudge(G); }
+  }
+  function schJudge(G) {
+    if (!G.ch || G.res || !D().schEval) return null;
+    const r = D().schEval(G.ch, { dl: G.st.dl, drops: G.st.drops, t: G.t, cracked: G.st.cracked, blew: G.st.blew, left: G.items.length, targets: G.st.targets, busy: G.busy });
+    if (r.res === 'fail') schFinish(G, false, r.why);
+    else if (r.res === 'win') { if (G.busy) { if (!G.pend) G.pend = { t: G.t, drops: G.st.drops }; } else schFinish(G, true); }
+    return r;
+  }
+  /* The end of a challenge: the stars (DATA.schStars on the drops, the time
+     or the best grab), the best record, the tickets for stars never earned
+     before (DATA.schPay, banked in the vault at once), the diploma when the
+     last star lands. Saved on the profile in the same beat. */
+  function schFinish(G, win, why) {
+    if (G.res) return G.res;
+    const ch = G.ch, M = schM(), id = ch.id, at = G.pend || { t: G.t, drops: G.st.drops };
+    const per = {};
+    for (const d of G.st.dl) per[d.g] = (per[d.g] | 0) + 1;
+    let items = 0;
+    for (const g in per) items = Math.max(items, per[g]);
+    const res = { id, win: !!win, why: why || '', t: Math.round(at.t * 10) / 10, drops: at.drops | 0, items, stars: 0, prev: M.stars[id] | 0, tix: 0, best: false, grad: false };
+    if (win) {
+      res.stars = D().schStars(ch, res);
+      res.tix = D().schPay(res.prev, res.stars);
+      if (res.stars > res.prev) M.stars[id] = res.stars;
+      const b0 = M.best[id];
+      res.best = !!b0 && (res.drops < b0.drops || res.t < b0.t || res.items > b0.items);
+      M.best[id] = b0 ? { drops: Math.min(b0.drops, res.drops), t: Math.min(b0.t, res.t), items: Math.max(b0.items, res.items) } : { drops: res.drops, t: res.t, items };
+      if (res.tix > 0) schBank(res.tix);
+      res.grad = schGrad();
+      snd('schPass'); haptic('jackpot');
+      fx().emit('confetti', 140, 470, { n: 1, dir: -Math.PI / 2 + 0.4 });
+      fx().emit('confetti', 400, 470, { n: 1, dir: -Math.PI / 2 - 0.4 });
+      G.party = 2.4; G.marquee = 'CLEARED!'; G.mood = 'happy'; G.moodT = 9;
+    } else { snd('schFail'); G.mood = 'sad'; G.moodT = 9; }
+    M.plays = (M.plays | 0) + 1;
+    saveMeta();
+    G.res = res; G.resT = 0; G.starN = 0; G.busy = false;
+    SCHX.log.push({ k: 'res', id, win: res.win, stars: res.stars, tix: res.tix, why: res.why });
+    schDom();
+    return res;
+  }
+  // Vault tickets for new stars: straight into the lifetime wallet (and the school's own count).
+  function schBank(n) {
+    n = Math.max(0, Math.floor(+n || 0));
+    if (!n) return 0;
+    const V = vaultM(), M = schM();
+    V.tix += n; V.earned += n; M.tix += n;
+    S.vaultDirty = true;
+    return n;
+  }
+  // Every star earned: the diploma, once. The Valedictorian marquee lands in the vault (NEW).
+  function schGrad() {
+    const K = schD(), M = schM();
+    if (!K || M.dip || schTotal() < K.MAX_STARS) return false;
+    M.dip = 1;
+    const V = vaultM(), id = K.DIPLOMA;
+    if (vaultDef(id) && !V.owned[id]) { V.owned[id] = 1; V.news[id] = 1; }
+    S.vaultDirty = true;
+    snd('fanfare');
+    toast('GRADUATED! The Valedictorian marquee is in your Prize Vault.', 3);
+    SCHX.log.push({ k: 'grad' });
+    SCHX.gradFx = true;
+    return true;
+  }
+
+  // ---- mutators in the practice cabinet (and a lesson's): the machine's physics only
+  function schPush(G, hh) {
+    const m = G.m, rig = G.rig, cb = G.C.bounds;
+    const pull = m.drift > 0 && (rig.phase === 'idle' || rig.phase === 'moving' || rig.phase === 'dropping' || rig.phase === 'closing');
+    for (const b of G.items) {
+      if (b.held > 0 || b.type !== 'dynamic') continue;
+      let push = false;
+      if (pull) { const dx = rig.x - b.x, ad = Math.abs(dx); if (ad > 16) { b.vx += (dx > 0 ? 1 : -1) * m.drift * hh * Math.min(1, ad / 90); push = true; } }
+      if (m.belt > 0 && b.x < cb.chuteX - 8 && b.box && b.box.y1 >= cb.floorY - 5) { b.vx += U.clamp(m.belt - b.vx, -1500 * hh, 1500 * hh); push = true; }
+      if (push && b.sl) { b.sl = false; b.slT = 0; }
+    }
+  }
+  function schWobble(G) {
+    const dir = G.tilt > 0 ? -1 : G.tilt < 0 ? 1 : (G.rng() < 0.5 ? -1 : 1);
+    G.tilt = dir;
+    G.W.setGravity(dir * TILT_G, GRAVITY - 120);
+    fx().text(CAB.x + CAB.w / 2, CAB.y + 30, dir < 0 ? '<< WOBBLE' : 'WOBBLE >>', '#ff9ad0', { size: 18 });
+  }
+  function schMutTick(G, dt) {
+    const m = G.m;
+    if (!G.go || G.res) return;
+    if (m.quake && (G.quakeT -= dt) <= 0) { G.quakeT = SCHK.quakeEvery; schWobble(G); snd('shake'); }
+    G.warn = 0;
+    if (m.tremor > 0) {
+      G.tremT -= dt;
+      if (G.tremT <= SCHK.tremorWarn) G.warn = U.clamp(1 - G.tremT / SCHK.tremorWarn, 0, 1);
+      if (G.tremT <= 0) {
+        G.tremT = SCHK.tremorEvery;
+        G.W.wakeAll();
+        for (const b of G.items) { if (b.tube || (b.held > 0 && G.rig.phase !== 'idle')) continue; b.vy -= 160 + G.rng() * 300; b.vx += (G.rng() - 0.5) * 260; b.av += (G.rng() - 0.5) * 6; }
+        fx().shake(fx().reduced ? 3 : 10);
+        fx().text(CAB.x + CAB.w / 2 - 30, CAB.y + 60, 'EARTHQUAKE!', '#ff8a2e', { size: 20, life: 1 });
+        snd('rumble');
+      }
+    }
+    if (G.mode === 'practice' && (m.temp || []).length && (G.bombT -= dt) <= 0) {
+      G.bombT = SCHK.bombEvery;
+      for (const t of m.temp) {
+        const have = G.items.filter((b) => b.data.def.id === t.id).length;
+        if (have < (t.max || 5) && G.items.length < schCap()) { schSpawn(G, t.id, 40 + G.rng() * (schBinW(G) - 80), 90, 0); fx().text(270, 430, 'BOMB PARTY!', '#ff5a4a', { size: 18 }); snd('fuse'); }
+      }
+    }
+  }
+
+  // ---- a pet in the practice cabinet: it sits on the frame and does a quick version of its trick when asked
+  function schPetNew(id) { return { id, lv: 3, x: SCHK.perchX, y: SCHK.perchY, ph: 'sit', k: 0, from: null, to: null, tgt: null, cd: 0, hold: false, holding: false, glowB: null, glowT: 0 }; }
+  function schTrick() {
+    const G = SCHX.G, P = G && G.pet, def = P && petDefOf(P.id);
+    if (!P || !def || P.ph !== 'sit' || P.cd > 0 || G.res) return false;
+    const act = def.act, at = CAB.x;
+    if (act === 'hold') { P.hold = true; P.cd = SCHK.trickCd; fx().text(at + SCHK.perchX, SCHK.perchY - 40, 'READY TO HOLD ON!', '#c77dff', { size: 14 }); snd('petChirp', { pitch: PET_PITCH[P.id] || 1 }); return true; }
+    if (act === 'egg') { P.cd = SCHK.trickCd; fx().text(at + SCHK.perchX + 40, SCHK.perchY - 40, 'HONK! (a 3-prize grab lays an egg)', '#ffc94d', { size: 13 }); snd('petHonk'); return true; }
+    const tgt = schPetTarget(G, act);
+    if (!tgt) { P.cd = 0.6; fx().text(at + SCHK.perchX + 20, SCHK.perchY - 40, 'Nothing to do...', '#e8dcff', { size: 13 }); return false; }
+    P.ph = 'go'; P.k = 0; P.from = { x: P.x, y: P.y }; P.to = { x: CAB.x + tgt.x, y: CAB.y + tgt.y }; P.tgt = tgt; P.act = act;
+    snd('petHop');
+    SCHX.log.push({ k: 'trick', pet: P.id, act });
+    return true;
+  }
+  // Where the trick happens (cabinet px) and on what.
+  function schPetTarget(G, act) {
+    const list = G.items.filter((b) => !b.tube && !(b.held > 0)), bw = schBinW(G), floorY = G.C.bounds.floorY;
+    if (!list.length && act !== 'slide') return null;
+    const low = list.filter((b) => b.y > floorY - 60);
+    const pick = (arr, f) => arr.reduce((a, b) => (a && f(a) >= f(b) ? a : b), null);
+    switch (act) {
+      case 'nudge': { const b = pick(low.length ? low : list, (x) => -x.x); return b ? { x: b.x - 16, y: floorY - 12, b } : null; }
+      case 'slide': return { x: 26, y: floorY - 12, b: null };
+      case 'peck': case 'dig': { const b = pick(list, (x) => x.y); return b ? { x: b.x, y: b.y - 20, b } : null; }
+      case 'bat': { const b = pick(list.filter((x) => !(x.data.mat && x.data.mat.traits.heavy)), (x) => -x.y); return b ? { x: b.x - 18, y: b.y - 10, b } : null; }
+      case 'pull': { const metal = list.filter((x) => (x.data.tags || []).indexOf('metal') >= 0), aim = G.rig.targetX; const b = pick(metal.length ? metal : list, (x) => Math.abs(x.x - aim)); return b ? { x: b.x, y: floorY - 12, b } : null; }
+      case 'eat': { const junk = list.filter((x) => x.data.def.rarity === 'junk'); const b = junk[0] || null; return { x: b ? b.x : bw / 2, y: floorY - 12, b }; }
+      case 'glow': { const b = pick(list, (x) => x.x - x.y * 0.3); return b ? { x: b.x, y: b.y - 40, b } : null; }
+      case 'sweep': { const small = list.filter((x) => (x.data.tags || []).indexOf('small') >= 0 || x.data.def.rarity === 'junk'); const b = pick(small, (x) => x.x); return b ? { x: b.x, y: floorY - 12, b } : null; }
+      default: return null;
+    }
+  }
+  // The trick lands: a shove, a peck to the top, a bat at the chute, a pull, a meal, a spotlight, a sweep down the chute.
+  function schPetDo(G, P) {
+    const tg = P.tgt || {}, b = tg.b && G.items.indexOf(tg.b) >= 0 ? tg.b : null, bw = schBinW(G), cb = G.C.bounds, def = petDefOf(P.id);
+    const chuteMid = bw + CAB.chuteW / 2;
+    const wake = (x) => { x.sl = false; x.slT = 0; };
+    G.W.wakeAll();
+    switch (P.act) {
+      case 'nudge': if (b) { b.vx += 380; b.vy -= 60; wake(b); } break;
+      case 'slide': for (const x of G.items) if (x.y > cb.floorY - 60 && !(x.held > 0)) { x.vx += 320; wake(x); } break;
+      case 'peck': case 'dig': if (b) { let top = cb.floorY; for (const x of G.items) top = Math.min(top, x.y - (x.br || 12)); X.PHYS.setPose(b, U.clamp(G.rig.targetX, 30, bw - 30), Math.max(70, top - 26), 0); b.vx = 0; b.vy = 0; wake(b); } break;
+      case 'bat': if (b) { const tt = 0.8; b.vx = (chuteMid - b.x) / tt * (0.88 + G.rng() * 0.2); b.vy = -560; wake(b); } break;
+      case 'pull': if (b) { b.vx += (G.rig.targetX > b.x ? 1 : -1) * 420; wake(b); } break;
+      case 'eat': if (b) { schRemove(G, b); fx().text(CAB.x + b.x, CAB.y + b.y - 20, 'CHOMP!', '#8e8a9a', { size: 16 }); snd('petCrunch'); } else if (X.PHYS.hop) X.PHYS.hop(G.W, bw / 2, cb.floorY - 10, 200, 180, null); break;
+      case 'glow': if (b) { P.glowB = b; P.glowT = 6; } break;
+      case 'sweep': {
+        const small = G.items.filter((x) => !x.tube && !(x.held > 0) && ((x.data.tags || []).indexOf('small') >= 0 || x.data.def.rarity === 'junk')).slice(0, 2);
+        small.forEach((x, i) => { X.PHYS.setPose(x, chuteMid, cb.dividerTop - 30 - i * 26, 0); x.vx = 0; x.vy = 120; wake(x); });
+        break;
+      }
+      default: break;
+    }
+    fx().text(CAB.x + (tg.x || 60), CAB.y + (tg.y || 300) - 30, (def && def.verb ? def.verb : 'TRICK') + '!', (def && def.col) || '#ff9ec7', { size: 16, life: 0.9 });
+    snd('petAct');
+  }
+  function schPetTick(G, dt) {
+    const P = G.pet;
+    if (!P) return;
+    if (P.cd > 0) P.cd -= dt;
+    if (P.glowT > 0 && (P.glowT -= dt) <= 0) P.glowB = null;
+    if (P.ph === 'go' || P.ph === 'back') {
+      P.k += dt / SCHK.hop;
+      const u = U.clamp(P.k, 0, 1), e = U.ease.inOut(u);
+      P.x = P.from.x + (P.to.x - P.from.x) * e; P.y = P.from.y + (P.to.y - P.from.y) * e - Math.sin(u * Math.PI) * 60;
+      if (u >= 1) {
+        if (P.ph === 'go') { P.ph = 'do'; P.k = 0; schPetDo(G, P); }
+        else { P.ph = 'sit'; P.x = SCHK.perchX; P.y = SCHK.perchY; P.cd = SCHK.trickCd; }
+      }
+    } else if (P.ph === 'do') {
+      P.k += dt / SCHK.doT;
+      if (P.k >= 1) { P.ph = 'back'; P.k = 0; P.from = { x: P.x, y: P.y }; P.to = { x: SCHK.perchX, y: SCHK.perchY }; }
+    }
+    // the octopus holds the lowest prize under the hub on the way up and over
+    if (P.holding && G.rig && (G.rig.phase === 'lifting' || G.rig.phase === 'carrying') && G.rig.locked) {
+      let low = null;
+      for (const b of G.rig.locked()) if (!low || b.y > low.y) low = b;
+      if (low) { const ty = G.rig.y + 44; low.vx = G.hvx + (G.rig.x - low.x) * 6; low.vy = G.hvy + (ty - low.y) * 6; }
+    }
+  }
+
+  // ---- input
+  function schPointer(type, x, y, ev) {
+    const G = SCHX.G;
+    if (SCHX.view !== 'play' || !G || G.res) return;
+    const bw = schBinW(G), cx = (xx) => { const c = xx - CAB.x; return schClampX(G, G.m.mirror ? bw - c : c); };
+    if (type === 'down') {
+      if (!inCabinet(x, y) || G.busy) return;
+      G.steer = true; G.go = true;
+      G.rig.setTarget(cx(x)); G.finger = x - CAB.x; G.fingerT = G.clock;
+    } else if (type === 'move' && G.steer) { G.rig.setTarget(cx(x)); G.finger = x - CAB.x; G.fingerT = G.clock; }
+    else if ((type === 'up' || type === 'cancel') && G.steer) { G.steer = false; if (type === 'up') schDrop(cx(x)); }
+  }
+  function schKey(ev, down) {
+    const k = ev.key, G = SCHX.G;
+    if (down && k === 'Escape') { if (S.popover) popover(null); else schBack(); return; }
+    if (SCHX.view !== 'play' || !G) return;
+    if (k === 'ArrowLeft') G.keyDir = down ? -1 : (G.keyDir === -1 ? 0 : G.keyDir);
+    else if (k === 'ArrowRight') G.keyDir = down ? 1 : (G.keyDir === 1 ? 0 : G.keyDir);
+    else if (down && (k === ' ' || k === 'Enter') && !ev.repeat) { if (ev.preventDefault) ev.preventDefault(); if (!G.res) schDrop(null); }
+    else if (down && (k === 'r' || k === 'R') && !ev.repeat) { if (G.mode === 'lesson') schRetry(); else schReset(); }
+  }
+
+  // ---- drawing
+  const SCH_CFG = { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: CAB.w - CAB.chuteW };
+  const SCH_CJ = { t: 0, mood: '', blink: 0, idle: 1, look: 0, chase: 0, lucky: 0, bend: 0, squash: 0, speed: 0, glow: 0, hold: [], holdN: 0, pull: [], pullN: 0 };
+  const SCH_MST = { mat: null, t: 0, seed: 0, crack: 0, slosh: 0, fuse: 0, golden: false, mag: 0, melt: 0 };
+  const SCH_PST = { t: 0, lv: 3, mood: '', pose: 'sit', dir: 1, k: 0, air: false };
+  function schDraw(ctx, t) {
+    const R = X.RENDER, RS = R && R.sch;
+    if (!RS) { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); return false; }
+    const v = SCHX.view, G = SCHX.G, M = schM(), K = schD();
+    try {
+      if (v === 'hub') RS.room(ctx, W, H, { t, title: 'CLAW SCHOOL', sub: 'Learn the claw. Earn stars. Graduate.' });
+      else if (v === 'lesson') { const L = schLs()[SCHX.li] || {}; RS.room(ctx, W, H, { t, title: `Lesson ${SCHX.li + 1}: ${L.name || ''}`, sub: L.blurb, tcol: L.color }); }
+      else if (v === 'report') {
+        RS.room(ctx, W, H, { t, prof: false });
+        const rows = schLs().map((L, li) => { const got = D().schLessonStars(li, M.stars), mx = L.ch.length * 3; return { name: L.name, icon: L.icon, got, max: mx, grade: D().schGrade(got, mx), col: L.color, locked: !D().schOpen(li, schTotal()) }; });
+        RS.report(ctx, 26, 66, 488, 430, { name: schName(), rows, got: schTotal(), max: K.MAX_STARS, t });
+        RS.diploma(ctx, 50, 516, 440, 250, { name: schName(), locked: !M.dip, left: K.MAX_STARS - schTotal(), t, reduced: !!fx().reduced });
+      } else if (v === 'play' && G) schDrawPlay(ctx, t, G, RS);
+      else RS.room(ctx, W, H, { t });
+    } catch (e) { /* the art is optional */ }
+    return true;
+  }
+  const schName = () => { const c = charDef((S.run && S.run.char) || 'knight'); return c ? String(c.name) : 'You'; };
+  function schDrawPlay(ctx, t, G, RS) {
+    const R = X.RENDER;
+    RS.room(ctx, W, H, { t, prof: false, flags: false });
+    if (G.mode === 'lesson') schDrawBoard(ctx, t, G, RS);
+    else RS.score(ctx, 20, 58, 500, 80, { t, cells: [
+      { k: 'DELIVERED', v: G.stats.delivered, col: '#ffc94d', flash: G.fl.d },
+      { k: 'THIS GRAB', v: G.busy ? G.cur : G.stats.grab, col: '#2ee6d6', flash: G.fl.g },
+      { k: 'BEST GRAB', v: G.stats.best, col: '#ff2e88', flash: G.fl.b },
+      { k: 'GRABS', v: G.stats.grabs, col: '#a6ff5e', flash: G.fl.n }] });
+    SCH_CFG.chuteX = schBinW(G);
+    const cst = { t, act: 1, party: Math.min(1, G.party), marquee: G.marquee, tilt: G.tilt };
+    if (R.cabinetBack) R.cabinetBack(ctx, CAB.x, CAB.y, SCH_CFG, cst);
+    ctx.save(); ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
+    if (G.m.belt > 0) mutBelt(ctx, t, G.m.belt);
+    const RC = R.RARITY_COL || {};
+    for (const b of G.items) {
+      const d = b.data, def = d.def, mat = d.mat, x = CAB.x + b.x, y = CAB.y + b.y, rar = def.rarity;
+      const glowC = b.held > 0 && G.busy ? '#2ee6d6' : RARE_A[rar] ? RC[rar] : 0;
+      const sc = (G.m.scale > 0 ? G.m.scale : 1) * (b.tubeK || 1);
+      if (R.itemFx && mat) { SCH_MST.mat = mat; SCH_MST.t = t; SCH_MST.seed = d.seed; SCH_MST.crack = d.crack; SCH_MST.fuse = d.lit > 0 ? Math.max(1, Math.ceil(d.lit)) : 0; SCH_MST.mag = 0; R.itemFx(ctx, def, x, y, b.a, sc, SCH_MST, 'back'); }
+      if (d.sq) { ctx.save(); ctx.translate(x, y); ctx.scale(1 + d.sq * 0.22, 1 - d.sq * 0.22); ctx.translate(-x, -y); }
+      if (R.item) R.item(ctx, def, x, y, b.a, sc, { glow: glowC, glowA: glowC ? RARE_A[rar] || 0.5 : null, hc: accHc() });
+      if (d.sq) ctx.restore();
+      if (R.itemFx && mat) R.itemFx(ctx, def, x, y, b.a, sc, SCH_MST, 'front');
+    }
+    for (const b of G.items) {
+      const d = b.data;
+      if (d.lit > 0 && R.itemFx && d.mat) { SCH_MST.mat = d.mat; SCH_MST.fuse = Math.max(1, Math.ceil(d.lit)); SCH_MST.t = t; R.itemFx(ctx, d.def, CAB.x + b.x, CAB.y + b.y, b.a, 1, SCH_MST, 'top'); }
+      if (d.t && !G.res) RS.target(ctx, CAB.x + b.x, CAB.y + b.y, b.br || 14, t, '#a6ff5e');
+    }
+    if (G.pet && G.pet.glowB && G.items.indexOf(G.pet.glowB) >= 0) RS.target(ctx, CAB.x + G.pet.glowB.x, CAB.y + G.pet.glowB.y, G.pet.glowB.br || 14, t, '#ffe066');
+    if (R.shard) for (const s2 of G.debris) R.shard(ctx, CAB.x + s2.x, CAB.y + s2.y, s2.a, 5.5, s2.data.col);
+    if (G.m.dark) schDark(ctx, t, G);
+    if (G.flood && R.ros && R.ros.water && G.level < CAB.h - 1) R.ros.water(ctx, CAB.x, CAB.x + schBinW(G), CAB.y + G.level, CAB.y + CAB.h, t);
+    if (G.m.mirror && R.ros && R.ros.mirrorSign) { R.ros.mirrorSign(ctx, CAB.x + 12, CAB.y + 8, t); if (G.finger != null && G.clock - G.fingerT < 0.4 && R.ros.mirrorFinger) R.ros.mirrorFinger(ctx, CAB.x + G.finger, CAB.x + G.rig.targetX, CAB.y + 118, t); }
+    if (G.warn > 0 && R.ros && R.ros.quakeSign) R.ros.quakeSign(ctx, CAB.x + CAB.w / 2 - 20, CAB.y + CAB.h * 0.5, t, G.warn);
+    if (G.rig && R.claw) {
+      const busy = G.rig.phase !== 'idle' && G.rig.phase !== 'moving';
+      SCH_CJ.t = t; SCH_CJ.mood = G.mood || (busy ? 'focus' : ''); SCH_CJ.idle = busy || fx().reduced ? 0 : 1; SCH_CJ.look = U.clamp((G.rig.targetX - G.rig.x) / 120, -1, 1);
+      SCH_CJ.holdN = 0;
+      for (const b of (G.rig.stuck ? G.rig.stuck() : [])) { if (SCH_CJ.holdN >= 6) break; if (!SCH_CJ.hold[SCH_CJ.holdN]) SCH_CJ.hold[SCH_CJ.holdN] = { x: 0, y: 0 }; const p = SCH_CJ.hold[SCH_CJ.holdN++]; p.x = b.x; p.y = b.y; }
+      R.claw(ctx, G.rig, CAB.x, CAB.y, { juice: SCH_CJ, paint: G.paint || undefined });
+    }
+    ctx.restore();
+    if (R.cabinetFront) R.cabinetFront(ctx, CAB.x, CAB.y, SCH_CFG, cst);
+    if (G.pet && R.pet) {
+      const P = G.pet, def = petDefOf(P.id);
+      SCH_PST.t = t; SCH_PST.pose = P.ph === 'sit' ? 'sit' : 'act'; SCH_PST.dir = P.ph === 'back' ? -1 : 1; SCH_PST.mood = P.ph === 'do' || P.holding ? 'focus' : G.mood === 'happy' ? 'happy' : '';
+      SCH_PST.k = P.ph === 'do' ? P.k : 0; SCH_PST.air = P.ph === 'go' || P.ph === 'back';
+      R.pet(ctx, P.id, P.x, P.y, 1.22, SCH_PST);
+      if (R.petTag && def) R.petTag(ctx, SCHK.perchX, SCHK.perchY + 18, { name: def.name, lv: P.lv, col: def.col, xpK: 1, t });
+    }
+    if (G.res && G.resT >= SCHK.resDelay) RS.result(ctx, W / 2, 560, { t: G.resT - SCHK.resDelay, win: G.res.win, stars: G.res.stars, tix: G.res.tix, best: G.res.best, reduced: !!fx().reduced,
+      title: G.res.win ? (G.res.stars >= 3 ? 'PERFECT!' : 'CLEARED!') : 'TRY AGAIN', sub: G.res.win ? schResLine(G.res) : SCH_WHY[G.res.why] || 'So close.' });
+  }
+  const SCH_WHY = { cracked: 'It cracked! Glass hates a hard landing.', blew: 'KABOOM. Grab the bomb out before its fuse runs out.', never: 'Oops, that one was not allowed.',
+    drops: 'Out of drops.', time: 'Out of time.' };
+  const schResLine = (r) => `${r.drops} drop${r.drops === 1 ? '' : 's'} · ${r.t.toFixed(1)}s · best grab ${r.items}`;
+  const schTxt = (ctx, s, x, y, size, col, align) => { ctx.font = 'bold ' + size + 'px sans-serif'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = col; ctx.fillText(s, x, y); };
+  // The challenge's board: its name, the goal, the star rules, the drops left and the clock (or the fuse), Professor Pincher.
+  function schDrawBoard(ctx, t, G, RS) {
+    const ch = G.ch, rules = D().schStarText ? D().schStarText(ch) : [], got = schM().stars[ch.id] | 0;
+    RS.board(ctx, 24, 60, 492, 248, { title: ch.name, pad: 76, lines: [{ s: ch.goal, size: 21 }, null].concat(rules.map((s) => ({ s, size: 15, col: RS.C.chalkC }))) });
+    RS.prof(ctx, 476, 96, 0.72, t, G.res ? (G.res.win ? 'happy' : 'sad') : G.mood || '');
+    RS.stars(ctx, 76, 90, 11, got, 3, null, t);
+    const y = 60 + 248 - 22;
+    if (ch.drops > 0) {
+      schTxt(ctx, 'DROPS', 40, y, 13, RS.C.chalk, 'left');
+      for (let i = 0; i < ch.drops; i++) { const on = i >= G.st.drops; ctx.beginPath(); ctx.arc(106 + i * 22, y, 7, 0, Math.PI * 2); ctx.fillStyle = on ? '#ffc94d' : 'rgba(244,241,230,0.18)'; ctx.fill(); ctx.strokeStyle = '#12091f'; ctx.lineWidth = 2; ctx.stroke(); }
+    }
+    let fuse = 0;
+    for (const b of G.items) if (b.data.lit > 0 && b.data.t) fuse = Math.max(fuse, b.data.lit);
+    const clock = ch.time > 0 ? Math.max(0, ch.time - G.t) : G.t;
+    const s = fuse > 0 ? `FUSE ${Math.ceil(fuse)}s` : `${ch.time > 0 ? '' : 'TIME '}${Math.floor(clock / 60)}:${String(Math.floor(clock % 60)).padStart(2, '0')}`;
+    schTxt(ctx, s, 500, y, fuse > 0 || (ch.time > 0 && clock < 6) ? 18 : 15, fuse > 0 && fuse < 5 ? '#ff5a4a' : fuse > 0 ? '#ff8a2b' : ch.time > 0 ? '#ffe98a' : RS.C.chalk, 'right');
+    if (!G.go && !G.res) schTxt(ctx, 'The clock starts when you move the claw', 280, y - 26, 12, RS.C.chalkC, 'center');
+  }
+  // Blackout: dark but for the flashlight under the claw and a faint glow at the chute.
+  function schDark(ctx, t, G) {
+    const rig = G.rig, hx = CAB.x + (rig ? rig.x : CAB.w / 2), hy = CAB.y + (rig ? rig.y : 40), fy = CAB.y + CAB.h - 48;
+    const flick = Math.sin(t * 31) > 0.985 ? 0.55 : 1, r1 = 150 * flick;
+    ctx.save();
+    try {
+      const g = ctx.createRadialGradient(hx, fy, 12, hx, fy, r1);
+      g.addColorStop(0, 'rgba(4,2,10,0)'); g.addColorStop(0.55, 'rgba(4,2,10,0.28)'); g.addColorStop(1, 'rgba(4,2,10,0.96)');
+      ctx.fillStyle = g; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h);
+      ctx.globalCompositeOperation = 'lighter';
+      const cg = ctx.createLinearGradient(hx, hy, hx, fy + 40);
+      cg.addColorStop(0, 'rgba(255,244,200,' + (0.22 * flick).toFixed(3) + ')'); cg.addColorStop(1, 'rgba(255,244,200,0.02)');
+      ctx.fillStyle = cg;
+      const spread = Math.max(40, Math.min(110, (fy - hy) * 0.35));
+      ctx.beginPath(); ctx.moveTo(hx - 9, hy + 8); ctx.lineTo(hx + 9, hy + 8); ctx.lineTo(hx + spread, fy + 40); ctx.lineTo(hx - spread, fy + 40); ctx.closePath(); ctx.fill();
+    } catch (e) { /* stub */ }
+    ctx.restore();
+  }
+  const SCH_API = () => ({
+    K: SCHK, X: SCHX, show: showSchool, back: schBack, practice: schPractice, start: schStart, retry: schRetry, reset: schReset, next: schNext,
+    setClaw: schSetClaw, setPaint: schSetPaint, spawn: schSpawnItem, pile: schPile, pileIds: schPileIds, toggleMut: schToggleMut, setPet: schSetPet, setSlow: schSetSlow, trick: schTrick,
+    steer: schSteer, drop: schDrop, tick: schTick, step: schStep, deliver: schDeliver, finish: schFinish, judge: schJudge, grad: schGrad, bank: schBank, crack: schCrack, boom: schBoom,
+    meta: schM, metaFix: schMetaFix, total: schTotal, paints: schPaints, items: schItemIds, seen: schSeen, titleBtn: schTitleBtn, titleTip: schTitleTip, practiceBtn: schPracticeBtn,
+    shelf: schShelf, draw: schDraw, pointer: schPointer, key: schKey, dom: schDom,
+    get G() { return SCHX.G; }, get view() { return SCHX.view; }, get log() { return SCHX.log; },
+  });
+  // ================================================================ /SCHOOL
+
+  // ================================================================ DUO (round 11)
+  /* Pass and play for two on one phone (DESIGN.md "Duo: pass and play
+     (round 11)"). The title's DUO button opens screen 'duo': the menu, the
+     setup (names, colours, crawlers, claws, looks), the coin toss, the
+     PASS THE PHONE hand-off, the claw-off and the podium. CO-OP BOSS plays
+     on the real fight screen, one seat at a time.
+     - The duel is S.duo and saves itself under DUO_KEY at every step
+       (save() hands over to duoSave while one is on): the solo run's save
+       is never read, written or removed by a duel.
+     - CO-OP: each seat is a run of its own (the crawler's bin and relic,
+       its Boss Rush kit, its claw) and a COMBAT fight of its own; the two
+       fights share one enemy list. A seat's turn ends with the boss acting
+       on that seat (its telegraph says whom), then the phone passes
+       (finishEnemyTurn hook) and the other seat's fight comes back in
+       through startFight({duoF}). A seat that falls is skipped; both down
+       is a loss; the boss down is a team win. A reload restarts the boss
+       from its bell, like a solo fight.
+     - VERSUS: a claw-off in a cabinet of its own (Grabby Gary's model): a
+       shared pile per round, drops turn about (3 to 5 each), each drop
+       scored by DATA.duoDropScore, a sabotage card between drops, best of
+       three rounds (DATA.duoMatch). Every drop saves; a result is booked
+       once (paid). */
+  const DUO_KEY = 'clawspire_duo';
+  const DUOX = { log: [], seed: null };
+  SCREENS.push('duo');
+  const DUOC = { settle: 0.5, grabMax: 16, tossDur: 2.2, tossHold: 1.3, outro: 2.2, pass: 1.1, down: 1.8, slam: 1.3, tiltK: 0.6 };
+  const DUO0 = { NAME_MAX: 10, COLORS: [{ id: 'pink', col: '#ff2e88', paint: '' }, { id: 'cyan', col: '#2ee6d6', paint: '' }], DEF: [{ name: 'P1', color: 'pink' }, { name: 'P2', color: 'cyan' }],
+    HANDOFF: 3, DROPS: [3, 4, 5], DROPS_DEF: 3, CARDS: {}, CARD_IDS: [], TAUNTS: [], CHEERS: [], COOP: { hpK: 1.6 }, HAND: { start: 2, max: 3 } };
+  const DK = () => D().DUO || DUO0;
+  const DUO_CJ = { t: 0, mood: '', blink: 0, idle: 1, look: 0, chase: 0, lucky: 0, bend: 0, squash: 0, speed: 0, glow: 0, hold: [], holdN: 0, pull: [], pullN: 0 };
+  const DUO_CFG = { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, frame: CAB.frame, railY: 26, slopeW: CAB.slopeW, slopeH: CAB.slopeH, chuteX: CAB.w - CAB.chuteW };
+  function duoLog(o) { DUOX.log.push(o); if (DUOX.log.length > 400) DUOX.log.splice(0, 100); }
+  // ---- the record on the profile (meta.duo): loadMeta copies it through here
+  function duoMetaFix(m, o) {
+    if (!m) return m;
+    const src = o && typeof o === 'object' ? o : m;
+    m.duo = D().duoFix ? D().duoFix(src.duo) : { games: 0, vs: 0, coop: 0, coopWins: 0, names: {}, last: { p: [], drops: 3, boss: '', mode: 'vs' } };
+    return m;
+  }
+  function duoM() {
+    if (!S.meta) S.meta = freshMeta();
+    if (!S.meta.duo || !S.meta.duo.names || !S.meta.duo.last) duoMetaFix(S.meta);
+    return S.meta.duo;
+  }
+  const duoCol = (i) => { const Dd = S.duo, p = Dd && Dd.p[i]; return (D().duoColor ? D().duoColor(p && p.color) : DK().COLORS[0]).col; };
+  const duoNameOf = (i) => { const p = S.duo && S.duo.p[i]; return p ? p.name : 'P' + (i + 1); };
+  const duoUp = (i) => String(duoNameOf(i)).toUpperCase();
+  // A player's claw paint: their own pick from the vault, else their colour's team paint.
+  function duoPaint(i) {
+    const p = S.duo && S.duo.p[i];
+    if (!p) return '';
+    if (p.paint) return p.paint;
+    const c = D().duoColor ? D().duoColor(p.color) : null;
+    return (c && c.paint) || '';
+  }
+  // ---- the duel's own save (never the run's)
+  function duoSaveState() {
+    if (!S.duo) return false;
+    try { localStorage.setItem(DUO_KEY, JSON.stringify(S.duo)); } catch (e) { /* storage may be blocked */ }
+    return true;
+  }
+  /* save() hands over here while a duel is on, or while the duo screen is
+     up: the duel is written, the run save is left alone (a run kept in
+     memory from before the duel is stashed in S.duoStash and comes back
+     when the duel is left or paused). */
+  function duoSave() {
+    if (!S.duo && S.screen !== 'duo') return false;
+    if (S.duo) duoSaveState();
+    return true;
+  }
+  // Entering the duo area from anywhere else: the run in memory is set aside (a seat's run takes S.run in co-op).
+  function duoStashRun() { if (!S.duoStash) S.duoStash = { run: S.run }; }
+  function duoSaved() {
+    try {
+      const raw = localStorage.getItem(DUO_KEY);
+      if (!raw) return null;
+      const o = JSON.parse(raw);
+      if (!o || o.v !== 1 || (o.mode !== 'vs' && o.mode !== 'coop') || !Array.isArray(o.p) || o.p.length !== 2 || !(o.seed > 0)) return null;
+      return o;
+    } catch (e) { return null; }
+  }
+  function duoClear() { try { localStorage.removeItem(DUO_KEY); } catch (e) { /* ignore */ } }
+  const duoChars = () => { const ids = Object.keys(tbl('CHARACTERS')).filter(unlocked); return ids.length ? ids : ['knight']; };
+  // The paints a player can show: the team colour ('') and every claw paint the profile owns.
+  function duoPaints() {
+    const V = vaultM(), out = [''];
+    for (const id of (D().COSMETIC_IDS || [])) { const c = (D().COSMETICS || {})[id]; if (c && c.cat === 'paint' && V.owned[id]) out.push(id); }
+    return out;
+  }
+  // ---- the title: DUO shares the NEW RUN row (registered last, so every index stays put)
+  function duoTitleBtn(menu) {
+    // the title is outside the duo area: a duel still in memory is parked (saved) and the run set aside comes back
+    if (S.duo || S.duoStash) { if (S.duo) duoSaveState(); S.duo = null; S.duoLive = null; S.duoV = null; duoRestore(true); }
+    if (!menu || !D().DUO) return null;
+    const saved = duoSaved();
+    const b = btn('Duo', () => duoMenu(), 'duoBtn');
+    b.textContent = '';
+    b.appendChild(h('span', 'd1', '\u{1F46B} Duo'));
+    b.appendChild(h('span', 'd2', saved && saved.ph !== 'end' ? 'resume' : '2 players'));
+    const nr = S.ui.buttons.find((x) => x.label === 'New run');
+    const el = nr && nr.el;
+    if (el && el.parentNode === menu && menu.insertBefore) {
+      const row = h('div', 'duoRow');
+      menu.insertBefore(row, el);
+      row.appendChild(el);
+      row.appendChild(b);
+    } else menu.appendChild(b);
+    return b;
+  }
+  // ---- screen 'duo': one DOM body, rebuilt per phase; the canvas paints the phase under it
+  function duoBody(cls) {
+    if (S.screen !== 'duo') setScreen('duo');
+    else S.ui.buttons = [];
+    popover(null);
+    const scr = $('scr-duo');
+    if (scr) { scr.className = 'screen duoScr show ' + (cls || ''); try { scr.scrollTop = 0; } catch (e) { /* stub */ } }
+    const b = $('duoBody');
+    clear(b);
+    return b;
+  }
+  function duoMenu() {
+    duoStashRun();
+    S.duoUi = { ph: 'menu' };
+    if (S.duo && S.duo.ph !== 'end') duoPark();
+    else if (S.duo) duoDone();
+    const b = duoBody('dp-menu');
+    if (!b) return false;
+    const head = h('div', 'duoHead');
+    head.appendChild(btn('Back', () => duoLeave(), 'ghost sm'));
+    head.appendChild(h('h1', null, 'Duo'));
+    b.appendChild(head);
+    b.appendChild(h('div', 'sub duoSub', 'Two players, one phone. Take turns, pass it over, talk trash.'));
+    const saved = duoSaved();
+    if (saved && saved.ph !== 'end') {
+      const r = btn('Resume duel', () => duoResume(), 'go duoResume');
+      r.textContent = '';
+      r.appendChild(h('span', 'd1', '▶ Resume duel'));
+      r.appendChild(h('span', 'd2', `${saved.mode === 'coop' ? 'Co-op boss' : 'Claw-off, round ' + (saved.round || 1)}: ${saved.p.map((p) => p.name).join(' + ')}`));
+      b.appendChild(r);
+    }
+    const modes = h('div', 'duoModes');
+    for (const [mode, name, icon, text] of [['coop', 'Co-op Boss', '\u{1F91D}', 'Two crawlers, one boss. Take turns grabbing; the boss hits whoever just went. Win together.'],
+      ['vs', 'Versus Claw-off', '\u{1F94A}', 'One bin of prizes, drops turn about, sabotage cards in between. Best of three rounds.']]) {
+      const c = btn(name, () => duoSetup(mode), 'duoMode dm-' + mode);
+      c.textContent = '';
+      c.appendChild(h('span', 'mi', icon));
+      c.appendChild(h('span', 'mn', name));
+      c.appendChild(h('span', 'mt', text));
+      modes.appendChild(c);
+    }
+    b.appendChild(modes);
+    const board = D().duoBoard ? D().duoBoard(duoM()) : [];
+    const rec = h('div', 'duoRec panel');
+    rec.appendChild(h('div', 'rkH', 'Duel record'));
+    if (!board.length) rec.appendChild(h('div', 'sub', 'No duels yet. Every name keeps its own wins.'));
+    for (const r of board.slice(0, 6)) {
+      const row = h('div', 'duoRecRow');
+      row.appendChild(h('b', null, r.n));
+      row.appendChild(h('span', 'w', `${r.w} won`));
+      row.appendChild(h('span', 'l', `${r.l} lost`));
+      row.appendChild(h('span', 'c', `${r.cw} team win${r.cw === 1 ? '' : 's'}`));
+      rec.appendChild(row);
+    }
+    b.appendChild(rec);
+    music('title');
+    return true;
+  }
+  // ---- setup: names, colours, crawlers, claws, looks; the mode's own options
+  function duoSetup(mode) {
+    const M = duoM(), last = M.last || {};
+    const chars = duoChars(), claws = clawIds();
+    const P = D().duoPlayers ? D().duoPlayers(last.p, chars, claws) : [{ name: 'P1', color: 'pink', char: 'knight', claw: 'classic', paint: '' }, { name: 'P2', color: 'cyan', char: 'knight', claw: 'classic', paint: '' }];
+    for (const p of P) if (duoPaints().indexOf(p.paint) < 0) p.paint = '';
+    S.duoSet = { mode: mode === 'coop' ? 'coop' : 'vs', p: P, drops: last.drops || DK().DROPS_DEF, boss: last.boss && (last.boss === 'random' || duoBossList().some((x) => x.id === last.boss && x.beaten)) ? last.boss : 'random' };
+    duoSetupDom();
+    return S.duoSet;
+  }
+  function duoBossList() {
+    const L = S.meta && S.meta.lore, R = S.meta && S.meta.rush;
+    return D().duoBosses ? D().duoBosses(L && L.kills, R && R.beat) : [];
+  }
+  // One field of the setup (tests and the DOM): name, color, char, claw, paint; drops; boss.
+  function duoSet(i, k, v) {
+    const St = S.duoSet;
+    if (!St) return false;
+    if (i === -1) {
+      if (k === 'drops' && DK().DROPS.indexOf(v | 0) >= 0) St.drops = v | 0;
+      else if (k === 'boss' && (v === 'random' || duoBossList().some((x) => x.id === v && x.beaten))) St.boss = v;
+      else return false;
+      return true;
+    }
+    const p = St.p[i];
+    if (!p) return false;
+    if (k === 'name') p.name = String(v == null ? '' : v).slice(0, 24);
+    else if (k === 'color') { if (!DK().COLORS.some((c) => c.id === v)) return false; if (St.p[1 - i].color === v) St.p[1 - i].color = p.color; p.color = v; }
+    else if (k === 'char') { if (duoChars().indexOf(v) < 0) return false; p.char = v; }
+    else if (k === 'claw') { if (clawIds().indexOf(v) < 0) return false; p.claw = v; }
+    else if (k === 'paint') { if (duoPaints().indexOf(v) < 0) return false; p.paint = v; }
+    else return false;
+    return true;
+  }
+  function duoSetupDom() {
+    const St = S.duoSet;
+    if (!St) return;
+    S.duoUi = { ph: 'setup' };
+    const b = duoBody('dp-setup');
+    if (!b) return;
+    const head = h('div', 'duoHead');
+    head.appendChild(btn('Back', () => duoMenu(), 'ghost sm'));
+    head.appendChild(h('h1', null, St.mode === 'coop' ? 'Co-op Boss' : 'Versus Claw-off'));
+    b.appendChild(head);
+    b.appendChild(h('div', 'sub duoSub', St.mode === 'coop'
+      ? 'Each crawler brings its own bin, HP and claw (plus its Boss Rush kit). Player 1 grabs, then Player 2; the boss strikes whoever just went.'
+      : 'A shared bin of prizes: rarer is worth more, two at once is a DOUBLE, three a JACKPOT, named combos pay extra. Play a sabotage card on your rival after each drop.'));
+    const COL = DK().COLORS, chars = duoChars(), claws = clawIds(), paints = duoPaints();
+    St.p.forEach((p, i) => {
+      const col = (COL.find((c) => c.id === p.color) || COL[0]).col;
+      const pan = h('div', 'duoP panel');
+      try { if (pan.style && pan.style.setProperty) pan.style.setProperty('--dc', col); } catch (e) { /* stub */ }
+      const top = h('div', 'duoPTop');
+      top.appendChild(portraitCanvas(p.char, 44));
+      top.appendChild(h('span', 'duoPN', 'Player ' + (i + 1)));
+      const inp = h('input', 'duoName');
+      try { inp.type = 'text'; inp.maxLength = (DK().NAME_MAX || 10); inp.placeholder = 'P' + (i + 1); inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Player ' + (i + 1) + ' name'); } catch (e) { /* stub */ }
+      inp.value = p.name === 'P' + (i + 1) ? '' : p.name;
+      inp.oninput = () => { p.name = inp.value; };
+      inp.onchange = () => { p.name = inp.value; };
+      top.appendChild(inp);
+      pan.appendChild(top);
+      const cr = h('div', 'duoSw');
+      for (const c of COL) {
+        const s = btn('P' + (i + 1) + ' ' + c.id, () => { duoSet(i, 'color', c.id); duoSetupDom(); }, 'duoCol' + (p.color === c.id ? ' on' : ''));
+        s.textContent = '';
+        try { s.style.background = c.col; s.setAttribute('aria-label', c.name || c.id); } catch (e) { /* stub */ }
+        cr.appendChild(s);
+      }
+      pan.appendChild(cr);
+      const ch = h('div', 'duoChips');
+      for (const id of chars) {
+        const c = btn('P' + (i + 1) + ' ' + id, () => { duoSet(i, 'char', id); duoSetupDom(); }, 'duoChip' + (p.char === id ? ' on' : ''));
+        c.textContent = '';
+        c.appendChild(portraitCanvas(id, 30));
+        c.appendChild(h('span', null, String((charDef(id) || {}).name || id).split(' ')[0]));
+        ch.appendChild(c);
+      }
+      pan.appendChild(ch);
+      const cl = h('div', 'duoChips claws');
+      for (const id of claws) {
+        const inf = clawInfo(id);
+        const c = btn('P' + (i + 1) + ' claw ' + id, () => { duoSet(i, 'claw', id); duoSetupDom(); }, 'duoChip' + (p.claw === id ? ' on' : ''));
+        c.textContent = (inf.icon ? inf.icon + ' ' : '') + String(inf.name || id).replace(/ Claws?$/, '');
+        cl.appendChild(c);
+      }
+      pan.appendChild(cl);
+      const k = paints.indexOf(p.paint), nm = p.paint ? ((D().COSMETICS || {})[p.paint] || {}).name || p.paint : 'Team colour';
+      pan.appendChild(btn('P' + (i + 1) + ' look', () => { duoSet(i, 'paint', paints[(k + 1) % paints.length]); duoSetupDom(); }, 'sm duoLook')).textContent = '\u{1F3A8} Claw paint: ' + nm + (paints.length > 1 ? '  ↻' : '');
+      b.appendChild(pan);
+    });
+    const opt = h('div', 'duoOpt panel');
+    if (St.mode === 'vs') {
+      opt.appendChild(h('div', 'rkH', 'Drops each per round'));
+      const row = h('div', 'duoChips');
+      for (const n of DK().DROPS) row.appendChild(btn(String(n), () => { duoSet(-1, 'drops', n); duoSetupDom(); }, 'duoChip num' + (St.drops === n ? ' on' : '')));
+      opt.appendChild(row);
+    } else {
+      opt.appendChild(h('div', 'rkH', 'The boss (the ones you have beaten, or a surprise)'));
+      const row = h('div', 'duoChips');
+      row.appendChild(btn('random', () => { duoSet(-1, 'boss', 'random'); duoSetupDom(); }, 'duoChip' + (St.boss === 'random' ? ' on' : ''))).textContent = '\u{1F3B2} Random';
+      for (const x of duoBossList()) {
+        const c = btn(x.id, () => { if (x.beaten) { duoSet(-1, 'boss', x.id); duoSetupDom(); } else toast('Beat ' + (enemyDef(x.id).name || x.id) + ' in a run first. Random can still pick it.'); }, 'duoChip' + (St.boss === x.id ? ' on' : '') + (x.beaten ? '' : ' locked'));
+        c.textContent = x.beaten ? (enemyDef(x.id).name || x.id) : '\u{1F512} ???';
+        row.appendChild(c);
+      }
+      opt.appendChild(row);
+    }
+    b.appendChild(opt);
+    b.appendChild(btn('Toss the coin!', () => duoStart(), 'pri duoGo'));
+  }
+  // Setup done: the duel is made (players repaired, the seed), remembered on the profile, and the coin goes up.
+  function duoStart() {
+    const St = S.duoSet;
+    if (!St) return null;
+    const P = D().duoPlayers ? D().duoPlayers(St.p, duoChars(), clawIds()) : St.p;
+    const seed = DUOX.seed != null ? (DUOX.seed >>> 0) || 1 : ((Date.now() ^ Math.floor((typeof performance !== 'undefined' ? performance.now() : 0) * 1000)) >>> 0) || 1;
+    return duoBegin(St.mode, P, seed, { drops: St.drops, boss: St.boss });
+  }
+  function duoBegin(mode, P, seed, o) {
+    o = o || {};
+    duoStashRun();
+    const toss = D().duoToss ? D().duoToss(seed) : { w: 0, flips: 9 };
+    const Dd = { v: 1, mode, seed, p: P.map((p) => Object.assign({}, p)), first: toss.w, flips: toss.flips, ph: 'toss', turn: toss.w, from: 1 - toss.w, msg: null, res: null, paid: false };
+    if (mode === 'vs') Object.assign(Dd, { drops: DK().DROPS.indexOf(o.drops | 0) >= 0 ? o.drops | 0 : DK().DROPS_DEF, round: 0, rounds: [], k: 0, used: [0, 0], taken: [], score: [0, 0], deck: [], hands: [[], []], pend: null, last: null });
+    else {
+      const all = duoBossList().map((x) => x.id);
+      let boss = o.boss && o.boss !== 'random' && all.indexOf(o.boss) >= 0 ? o.boss : '';
+      if (!boss) boss = all.length ? all[U.rng((seed ^ 0xb055) >>> 0 || 1).int(0, all.length - 1)] : 'hoard';
+      Object.assign(Dd, { boss, pick: o.boss || 'random', fseed: (U.hashStr(seed + ':coop:' + boss) >>> 0) || 1, down: [0, 0], turns: 0 });
+    }
+    S.duo = Dd;
+    S.duoLive = null; S.duoV = null;
+    S.duoT = { t: 0, now: 0 };
+    const M = duoM();
+    M.last = { p: P.map((p) => Object.assign({}, p)), drops: Dd.drops || M.last.drops || DK().DROPS_DEF, boss: mode === 'coop' ? (o.boss || 'random') : M.last.boss, mode };
+    saveMeta();
+    duoLog({ k: 'begin', mode, seed, first: Dd.first });
+    duoShow();
+    return Dd;
+  }
+  // ---- the phases
+  function duoShow() {
+    const Dd = S.duo;
+    if (!Dd) { duoMenu(); return; }
+    const ph = Dd.ph;
+    if (ph === 'toss') { duoBody('dp-canvas dp-toss').appendChild(h('div', 'duoHint', 'Tap to catch the coin')); snd('duoCoin'); music('elite'); }
+    else if (ph === 'hand') duoHandDom();
+    else if (ph === 'play') duoPlayDom();
+    else if (ph === 'sabo') duoSaboDom();
+    else if (ph === 'round') duoRoundDom();
+    else if (ph === 'end') duoEndDom();
+    duoSaveState();
+  }
+  function duoAfterToss() {
+    const Dd = S.duo;
+    if (!Dd || Dd.ph !== 'toss') return false;
+    if (Dd.mode === 'vs') duoRoundStart(1);
+    duoHand(Dd.mode === 'vs' ? Dd.turn : Dd.first, { from: 1 - (Dd.mode === 'vs' ? Dd.turn : Dd.first) });
+    return true;
+  }
+  /* PASS THE PHONE TO <name>: the card flips over to the next player, a
+     spotlight, a countdown; READY lights up when it runs out. The one
+     still holding the phone can send a taunt (or a cheer) first. */
+  function duoHand(nx, o) {
+    const Dd = S.duo;
+    if (!Dd) return false;
+    o = o || {};
+    Dd.turn = nx | 0;
+    Dd.from = o.from != null ? o.from | 0 : 1 - Dd.turn;
+    Dd.ph = 'hand';
+    Dd.msg = null;
+    const T = S.duoT || (S.duoT = { t: 0, now: 0 });
+    T.t = 0; T.count = DK().HANDOFF || 3; T.cnt = Math.ceil(T.count); T.passT = 0; T.msgT = null; T.readyOn = false;
+    snd('duoFlip'); haptic('tap');
+    duoLog({ k: 'hand', to: Dd.turn, from: Dd.from });
+    duoShow();
+    return true;
+  }
+  function duoTaunts() { const Dd = S.duo; return (Dd && Dd.mode === 'coop' ? DK().CHEERS : DK().TAUNTS) || []; }
+  function duoHandDom() {
+    const Dd = S.duo, b = duoBody('dp-canvas dp-hand');
+    if (!b) return;
+    const T = S.duoT || {};
+    const dock = h('div', 'duoDock');
+    const tl = duoTaunts();
+    if (tl.length) {
+      dock.appendChild(h('div', 'duoTh', `${duoUp(Dd.from)}: ${Dd.mode === 'coop' ? 'cheer them on' : 'send a taunt'} before you pass it`));
+      const row = h('div', 'duoTaunts');
+      for (const x of tl) { const tb = btn('taunt ' + x.id, () => duoTaunt(x.id), 'sm duoTaunt'); tb.textContent = x.icon + ' ' + (x.short || x.text.split(/[ ,!.?]/)[0]); row.appendChild(tb); }
+      dock.appendChild(row);
+    }
+    const go = btn('Ready', () => duoReady(), 'pri duoReady');
+    go.textContent = `I'm ${duoUp(Dd.turn)}. Go!`;
+    go.disabled = !T.readyOn;
+    S.duoReadyEl = go;
+    dock.appendChild(go);
+    dock.appendChild(btn('Pause', () => duoMenu(), 'ghost sm duoPause'));
+    b.appendChild(dock);
+  }
+  // A canned taunt (or a cheer in co-op): its voice now, its bubble on the hand-off card for the next player.
+  function duoTaunt(id) {
+    const Dd = S.duo;
+    if (!Dd) return false;
+    const x = (D().duoTaunt ? D().duoTaunt(id, Dd.mode === 'coop') : null) || duoTaunts().find((y) => y.id === id);
+    if (!x) return false;
+    const from = Dd.ph === 'end' && Dd.res && (Dd.res.w === 0 || Dd.res.w === 1) ? Dd.res.w : Dd.from;
+    Dd.msg = { id: x.id, from, text: x.text, icon: x.icon };
+    if (S.duoT) S.duoT.msgT = 0;
+    snd('duoTaunt', { v: x.v });
+    haptic('tap');
+    duoLog({ k: 'taunt', id: x.id, from });
+    duoSaveState();
+    return true;
+  }
+  function duoReady() {
+    const Dd = S.duo, T = S.duoT;
+    if (!Dd || Dd.ph !== 'hand' || !T || T.count > 0) return false;
+    snd('duoReady');
+    Dd.msg = null;
+    duoLog({ k: 'ready', who: Dd.turn });
+    if (Dd.mode === 'vs') return duoVsPlay();
+    return duoCoopEnter(Dd.turn);
+  }
+  // Pause: the duel is saved as it stands (Resume on the duo menu picks it up); co-op restarts its boss from the bell then.
+  function duoPark() {
+    const Dd = S.duo;
+    if (!Dd) return;
+    duoSaveState();
+    S.duo = null; S.duoLive = null; S.duoV = null;
+    duoRestore(false);
+  }
+  // A finished duel is let go (its save too): New duo, or the menu after the podium.
+  function duoDone() {
+    duoClear();
+    S.duo = null; S.duoLive = null; S.duoV = null;
+    duoRestore(false);
+  }
+  // Out of a duel: the run in memory before it comes back (and leaves the stash when the duo area is left), the looks go back, the duo bar hides.
+  function duoRestore(leave) {
+    if (S.duoStash) { S.run = S.duoStash.run || null; if (leave) S.duoStash = null; }
+    F = null; FS = null;
+    const top = $('top');
+    if (top && top.classList) top.classList.remove('duoOn');
+    vaultApply();
+    S.lastHud = ''; S.lastRelics = '';
+  }
+  function duoLeave() {
+    const Dd = S.duo;
+    if (Dd && Dd.ph === 'end') duoClear();
+    else if (Dd) duoSaveState();
+    S.duo = null; S.duoLive = null; S.duoV = null; S.duoSet = null;
+    duoRestore(true);
+    showTitle();
+    return true;
+  }
+  // The duo menu's Resume: the saved duel at its last safe beat (a claw-off at its next drop, co-op at the bell).
+  function duoResume() {
+    const o = duoSaved();
+    if (!o) { toast('That duel was lost. Start a new one.'); return false; }
+    duoStashRun();
+    S.duo = o; S.duoLive = null; S.duoV = null; S.duoT = { t: 0, now: 0 };
+    if (!o.msg || typeof o.msg !== 'object') o.msg = null;
+    duoLog({ k: 'resume', ph: o.ph, mode: o.mode });
+    if (o.ph === 'toss') { duoShow(); return true; }
+    if (o.ph === 'end') { duoShow(); return true; }
+    if (o.mode === 'coop') {
+      o.down = [0, 0]; o.turns = 0;
+      duoHand(o.first | 0, { from: 1 - (o.first | 0) });
+      return true;
+    }
+    if (!(o.round > 0)) { duoRoundStart(1); duoHand(o.turn, { from: 1 - o.turn }); return true; }
+    duoVsBuild();
+    if (o.ph === 'sabo' || o.ph === 'round') { duoShow(); return true; }
+    duoHand(o.turn | 0, { from: o.from == null ? 1 - (o.turn | 0) : o.from });
+    return true;
+  }
+  function duoRematch() {
+    const Dd = S.duo;
+    if (!Dd) return null;
+    const seed = (U.hashStr(Dd.seed + ':again') >>> 0) || 1;
+    duoLog({ k: 'rematch' });
+    return duoBegin(Dd.mode, Dd.p, DUOX.seed != null ? ((DUOX.seed + 1) >>> 0) || 1 : seed, { drops: Dd.drops, boss: Dd.mode === 'coop' ? Dd.pick : '' });
+  }
+
+  // ---- CO-OP BOSS
+  // A seat's run: the crawler's bin and relic, its Boss Rush kit, its claw type. Never saved, never the solo run.
+  function duoSeatRun(i) {
+    const Dd = S.duo, p = Dd.p[i], c = charDef(p.char) || charDef('knight') || { hp: 70, gold: 0, bin: [], claw: {} };
+    const act = D().rushActOf ? D().rushActOf(Dd.boss) : 1;
+    const run = {
+      ver: SAVE_VER, seed: ((Dd.seed + (i + 1) * 7919) >>> 0) || 1, char: p.char, act, hp: c.hp || 70, maxHp: c.hp || 70, gold: c.gold || 0,
+      ink: 0, brushes: [], bin: [], relics: [], claw: Object.assign({ grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 }, c.claw || {}),
+      map: null, floor: 0, kills: 0, turns: 0, grabs: 0, jackpots: 0, delivered: 0, played: 0, fights: 0, history: [],
+      nonce: 0, seenEvents: {}, killer: null, tile: null, clawType: clawTypeOk(p.claw) ? p.claw : 'classic', tilt: 0, muts: [], daily: null, duo: { seat: i },
+    };
+    const prev = S.run;
+    S.run = run;
+    try {
+      for (const id of (c.bin || [])) run.bin.push({ uid: U.uid(), id, plus: false });
+      lootRun(run); endlessRunFix(run); petRunFix(run); stoRunFix(run); loreRunFix(run);
+      if (c.relic) gainRelic(c.relic);
+      const K = D().rushKit ? D().rushKit(p.char) : null;
+      if (K) {
+        for (const id of K.items) addItem(id, false);
+        for (const id of K.relics) if (run.relics.indexOf(id) < 0) gainRelic(id);
+        for (const id of K.claw) applyClawUpgrade(id);
+        if (K.hp) { run.maxHp += K.hp; run.hp = run.maxHp; }
+      }
+    } finally { S.run = prev; }
+    return run;
+  }
+  // The shared boss: its Boss Rush share of hp and hits, times COOP.hpK for two crawlers; nobody steps out of it.
+  function duoCoopScale(Fi) {
+    const K = DK().COOP || { hpK: 1.6 };
+    for (const e of Fi.enemies) {
+      if (!e || !e.def) continue;
+      const k = (D().rushHpK ? D().rushHpK(e.id) : 1) * (K.hpK || 1), dk = D().rushDmgK ? D().rushDmgK(e.id) : 1;
+      e.maxHp = Math.max(1, Math.round(e.maxHp * k)); e.hp = e.maxHp;
+      const od = e.def.onDeath;
+      if (od && od.k === 'summon' && enemyDef(od.id).tier === 'boss') e.def = Object.assign({}, e.def, { onDeath: null });
+      if (dk > 0 && dk !== 1 && Array.isArray(e.def.moves)) {
+        e.def = Object.assign({}, e.def, { moves: e.def.moves.map((m) => (m && (m.k === 'attack' || m.k === 'charge') && m.v != null ? Object.assign({}, m, { v: Math.max(1, Math.round(m.v * dk)) }) : m)) });
+        e.dmgMul = (e.dmgMul || 1) * dk;
+      }
+    }
+  }
+  /* READY in co-op: the first time both seats' fights are made (the first
+     seat's through startFight, with the versus card; the other's with
+     COMBAT.newFight, sharing the first one's enemies); after that the
+     seat's own fight comes back in through startFight({duoF}). */
+  function duoCoopEnter(seat) {
+    const Dd = S.duo;
+    if (!Dd || Dd.mode !== 'coop' || !X.COMBAT) return false;
+    seat = seat | 0;
+    Dd.turn = seat;
+    Dd.ph = 'fight';
+    let L = S.duoLive;
+    if (!L) {
+      const runs = [duoSeatRun(0), duoSeatRun(1)];
+      L = S.duoLive = { runs, F: [null, null], gold: [null, null], n: [0, 0] };
+      S.run = runs[seat];
+      const F0 = startFight([Dd.boss], 'boss', { seed: Dd.fseed });
+      if (!F0) { S.duoLive = null; duoMenu(); return false; }
+      duoCoopScale(F0);
+      syncShown();
+      FS.ghost = {};
+      syncShown();
+      const o = 1 - seat;
+      const Fo = X.COMBAT.newFight(runs[o], [Dd.boss], U.rng((Dd.fseed ^ 0x2f00d) >>> 0 || 1));
+      Fo.enemies = F0.enemies; Fo.target = 0; Fo.events.length = 0;
+      L.F[seat] = F0; L.F[o] = Fo;
+      L.gold[seat] = FS.golden;
+    } else {
+      S.run = L.runs[seat];
+      startFight([Dd.boss], 'boss', { seed: Dd.fseed, duoF: L.F[seat] });
+      // one Golden Prize a seat per fight: a fresh pick on every turn would upgrade the whole bin
+      const g = FS.golden;
+      if (g && !g.was) { const inst = F.bin.find((x) => x.uid === g.uid); if (inst) inst.plus = false; }
+      FS.golden = L.gold[seat] && F.bin.some((x) => x.uid === L.gold[seat].uid) ? L.gold[seat] : null;
+      L.gold[seat] = FS.golden;
+    }
+    L.n[seat]++;
+    duoSeatOn(seat);
+    duoSaveState();
+    return true;
+  }
+  // A seat takes the cabinet: its name on the marquee, its paint on the claw, its name in the banner, the HUD's duo bar.
+  function duoSeatOn(seat) {
+    const Dd = S.duo;
+    if (!FS) return;
+    FS.party = Math.max(FS.party || 0, 1.1); FS.marquee = duoUp(seat);
+    const R = X.RENDER, V = S.meta && S.meta.vault;
+    if (R && R.vault && R.vault.equip && V && V.eq) { try { R.vault.equip(Object.assign({}, V.eq, { paint: duoPaint(seat) || V.eq.paint })); } catch (e) { /* art is optional */ } }
+    banner(`${duoUp(seat)}'S TURN`, 'turn', 1.3, 'fight');
+    S.lastHud = ''; S.lastRelics = ''; S.lastStatus = ''; S.lastGrabs = '';
+    duoHud(true);
+    duoLog({ k: 'seat', seat, turn: F ? F.turn : 0, down: Dd.down.slice() });
+  }
+  // The HUD's duo bar: both players side by side (name, crawler colour, HP), the one grabbing under the spotlight.
+  function duoHud(force) {
+    const Dd = S.duo, L = S.duoLive, top = $('top');
+    if (!Dd || Dd.mode !== 'coop' || !L || !top) return;
+    if (top.classList) top.classList.add('duoOn');
+    let bar = $('duoBar');
+    if (bar && !bar.parentNode && top.appendChild) top.appendChild(bar);
+    if (!bar || !bar.parentNode) { bar = h('div'); bar.id = 'duoBar'; const rl = $('relics'); if (rl && rl.parentNode === top && top.insertBefore) top.insertBefore(bar, rl); else top.appendChild(bar); }
+    const key = [0, 1].map((i) => { const Fi = L.F[i]; return Fi ? Fi.player.hp + '/' + Fi.player.maxHp : '-'; }).join('|') + '|' + Dd.turn + '|' + Dd.down.join('');
+    if (!force && key === S.duoHudK) return;
+    S.duoHudK = key;
+    clear(bar);
+    for (let i = 0; i < 2; i++) {
+      const Fi = L.F[i], on = i === Dd.turn, down = !!Dd.down[i];
+      const c = h('div', 'duoChipH' + (on ? ' on' : '') + (down ? ' down' : ''));
+      try { if (c.style && c.style.setProperty) c.style.setProperty('--dc', duoCol(i)); } catch (e) { /* stub */ }
+      c.appendChild(h('b', null, duoUp(i)));
+      c.appendChild(h('span', null, down ? 'DOWN' : Fi ? `♥ ${Fi.player.hp}/${Fi.player.maxHp}` : ''));
+      bar.appendChild(c);
+    }
+  }
+  /* The boss acts once per seat turn, turn about, so a boss whose move
+     cycle has an even length would show each seat only half of it (a
+     two-step boss would hit one player and only ever block the other).
+     After every full round such a boss steps its cycle on by one more, so
+     over a fight both seats meet every move. Odd cycles mix on their own. */
+  function duoCycShift() {
+    if (!F || !X.COMBAT || !X.COMBAT.pickIntent) return 0;
+    let n = 0;
+    for (const e of F.enemies) {
+      if (!e || !e.alive || e.charged > 0 || (e.def.ai && e.def.ai !== 'cycle')) continue;
+      const moves = (e.def.moves || []).filter(Boolean);
+      const pat = Array.isArray(e.def.pattern) && e.def.pattern.length ? e.def.pattern.filter((p) => p >= 0 && p < moves.length) : null;
+      const len = pat && pat.length ? pat.length : moves.length;
+      if (len < 2 || len % 2) continue;
+      X.COMBAT.pickIntent(F, e);
+      n++;
+    }
+    if (n) duoLog({ k: 'cyc', n });
+    return n;
+  }
+  /* finishEnemyTurn hook: the boss has hit this seat. The phone passes to
+     the other one (after a beat to read the hit) unless that one is down,
+     then this seat simply goes again. */
+  function duoTurnPass() {
+    const Dd = S.duo;
+    if (!Dd || Dd.mode !== 'coop' || !S.duoLive || !F || !FS) return false;
+    Dd.turns++;
+    const cur = Dd.turn, nx = 1 - cur;
+    if (Dd.down[nx]) { duoHud(true); duoSaveState(); return false; }
+    if (cur !== Dd.first) duoCycShift();   // a round is over (both seats went)
+    FS.enemyTurn = true;   // hold the input through the beat
+    const T = S.duoT || (S.duoT = { t: 0, now: 0 });
+    T.passT = DUOC.pass; T.passTo = nx; T.passFrom = cur;
+    banner('PASS THE PHONE!', 'turn', DUOC.pass, 'turn');
+    duoSaveState();
+    return true;
+  }
+  /* endFight hook in co-op: a seat that falls leaves the other to fight on
+     (both down: KNOCKED OUT); the boss down is a team win. Either way the
+     result is booked once and the podium follows the victory beat. */
+  function duoFightEnd(result) {
+    const Dd = S.duo;
+    if (!Dd || Dd.mode !== 'coop' || !S.duoLive || !F || !FS || FS.done) return false;
+    if (result === 'lose') {
+      const cur = Dd.turn;
+      Dd.down[cur] = 1;
+      fx().flash('#ff2e30', fx().reduced ? 0.2 : 0.45); fx().shake(10);
+      snd('playerHurt'); haptic('hurt');
+      duoHud(true);
+      duoLog({ k: 'down', seat: cur });
+      if (!Dd.down[1 - cur]) {
+        banner(`${duoUp(cur)} IS DOWN!`, 'enemy', DUOC.down, 'rage');
+        FS.enemyTurn = true;
+        const T = S.duoT || (S.duoT = { t: 0, now: 0 });
+        T.passT = DUOC.down; T.passTo = 1 - cur; T.passFrom = cur;
+        duoSaveState();
+        return true;
+      }
+      FS.done = true; FS.watch = false;
+      snd('lose');
+      banner('KNOCKED OUT', 'enemy', DUOC.outro, 'victory');
+      duoCoopBook(false);
+      FS.outro = { t: fx().reduced ? 0.8 : DUOC.outro, reward: null, duo: true };
+      return true;
+    }
+    FS.done = true; FS.watch = false;
+    snd('win');
+    if (!(FS.bs && FS.bs.fin && FS.bs.fin.last)) banner('TEAM WIN!', 'victory', 1.8);
+    const lk = FS.lastKill || { x: 270, y: 200 };
+    fx().emit('confetti', lk.x, lk.y + 40, { power: 1 });
+    duoCoopBook(true);
+    FS.outro = { t: fx().reduced ? 0.8 : DUOC.outro, reward: null, duo: true };
+    return true;
+  }
+  function duoCoopBook(won) {
+    const Dd = S.duo;
+    if (!Dd || Dd.paid) return false;
+    Dd.res = { won: !!won, turns: Dd.turns | 0, boss: Dd.boss };
+    Dd.paid = true;
+    if (D().duoRecord) D().duoRecord(duoM(), { mode: 'coop', names: Dd.p.map((p) => p.name), won: !!won });
+    saveMeta();
+    duoLog({ k: 'book', mode: 'coop', won: !!won });
+    duoSaveState();
+    return true;
+  }
+  // finishOutro hook: the co-op victory (or knock-out) beat is over: the podium.
+  function duoOutroEnd() {
+    if (!FS || !FS.outro || !FS.outro.duo || !S.duo) return false;
+    FS.outro = null;
+    S.duo.ph = 'end';
+    const top = $('top');
+    if (top && top.classList) top.classList.remove('duoOn');
+    vaultApply();
+    duoShow();
+    return true;
+  }
+  // The fight screen in co-op: the pass beat, the duo bar's numbers.
+  function duoFightTick(real) {
+    const T = S.duoT;
+    if (T && T.passT > 0) {
+      T.passT -= real;
+      if (T.passT <= 0) { T.passT = 0; duoHand(T.passTo, { from: T.passFrom }); return; }
+    }
+    S.duoHudT = (S.duoHudT || 0) - real;
+    if (S.duoHudT <= 0) { S.duoHudT = 0.2; duoHud(false); }
+  }
+  // Over the co-op fight: the cabinet rim in the grabbing player's colour, and whom the boss's next hit is for.
+  function duoOver(ctx, t) {
+    const Dd = S.duo, R = X.RENDER;
+    if (!Dd || Dd.mode !== 'coop' || S.screen !== 'fight' || !F || !FS || !R || !R.duo || FS.vs) return;
+    const col = duoCol(Dd.turn);
+    ctx.save();
+    try {
+      ctx.globalAlpha = 0.55 + Math.sin(t * 3) * 0.2;
+      ctx.strokeStyle = col; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.rect(CAB.x - CAB.frame - 3, CAB.y - CAB.frame - 3, CAB.w + CAB.frame * 2 + 6, CAB.h + CAB.frame * 2 + 6); ctx.stroke();
+      ctx.globalAlpha = 1;
+      if (!FS.enemyTurn && !FS.done) {
+        F.enemies.forEach((e, i) => {
+          if (!e || !e.alive || !e.intent) return;
+          const p = enemyPos(i), tip = intentY(p);
+          R.duo.target(ctx, U.clamp(p.x + 92, 80, W - 70), tip - 18, duoNameOf(Dd.turn), col, t);
+        });
+      }
+    } catch (e) { /* optional */ }
+    ctx.restore();
+  }
+
+  // ---- VERSUS CLAW-OFF
+  function duoRoundStart(r) {
+    const Dd = S.duo;
+    if (!Dd || Dd.mode !== 'vs') return false;
+    Dd.round = r | 0;
+    Dd.k = 0; Dd.used = [0, 0]; Dd.taken = []; Dd.score = [0, 0]; Dd.pend = null; Dd.last = null;
+    Dd.turn = D().duoStarter ? D().duoStarter(Dd.first, Dd.rounds) : Dd.first;
+    Dd.starter = Dd.turn;
+    const rng = U.rng((U.hashStr(Dd.seed + ':deck:' + r) >>> 0) || 1);
+    Dd.deck = D().duoDeck ? D().duoDeck(rng) : [];
+    Dd.hands = [[], []];
+    const n = (DK().HAND || {}).start || 2;
+    if (D().duoDrawCards) for (let k = 0; k < n; k++) { D().duoDrawCards(Dd.deck, Dd.hands[Dd.turn], 1); D().duoDrawCards(Dd.deck, Dd.hands[1 - Dd.turn], 1); }
+    duoVsBuild();
+    duoLog({ k: 'round', r: Dd.round, starter: Dd.turn });
+    return true;
+  }
+  // The round's pile: rolled from the duel's seed, less what was already won, settled into the bin.
+  function duoPileOf(Dd) { return D().duoPile ? D().duoPile(U.rng((U.hashStr(Dd.seed + ':pile:' + Dd.round) >>> 0) || 1), Dd.round, Dd.drops) : []; }
+  function duoVsBuild() {
+    const Dd = S.duo, P = X.PHYS;
+    const V = S.duoV = { W: null, C: null, rig: null, pile: duoPileOf(Dd), sub: 'wait', grabT: 0, settle: 0, cur: null, steer: false, keyDir: 0, flash: [0, 0], party: 0, fog: 0, mirror: false, tilt: 0, card: null, slam: null, lines: null, linesT: 0 };
+    if (!P || !P.world || !P.clawRig) return V;
+    const Wd = P.world({ gravity: { x: 0, y: GRAVITY }, w: CAB.w, h: CAB.h });
+    const Cb = P.cabinet(Wd, { w: CAB.w, h: CAB.h, chuteW: CAB.chuteW, dividerH: CAB.dividerH, wallThick: CAB.wallThick, slopeW: CAB.slopeW, slopeH: CAB.slopeH });
+    V.W = Wd; V.C = Cb;
+    const chuteX = Cb.bounds.chuteX || CAB.w - CAB.chuteW;
+    const taken = {};
+    for (const i of Dd.taken || []) taken[i] = 1;
+    const rng = U.rng((U.hashStr(Dd.seed + ':spill:' + Dd.round + ':' + (Dd.k | 0)) >>> 0) || 1);
+    V.pile.forEach((p, i) => {
+      if (taken[i]) return;
+      const def = itemDef(p.id);
+      const body = P.body({ type: 'dynamic', shape: shapeFor(def), x: 30 + rng() * Math.max(20, chuteX - 60), y: 60 + rng() * 150, angle: (rng() - 0.5) * 1.2,
+        density: def.density == null ? 1 : def.density, friction: def.friction == null ? 0.5 : def.friction, restitution: def.restitution == null ? 0.12 : def.restitution,
+        group: 'item', data: { def, pile: i, v: p.v | 0, gold: !!p.gold, tags: def.tags || [] } });
+      const mat = P.materialOf ? P.materialOf(def) : null;
+      if (mat && P.applyMaterial) P.applyMaterial(body, mat);
+      Wd.add(body);
+    });
+    for (let i = 0; i < 150; i++) Wd.step(1 / 60);
+    return V;
+  }
+  // A player's claw for a drop: their crawler's claw and claw type, bent by a sabotage card.
+  function duoVsClaw(i, card) {
+    const p = S.duo.p[i], c = charDef(p.char) || {};
+    const cl = Object.assign({ grabs: 3, width: 1, grip: 1, speed: 1, prongs: 2, rubber: 0, magnet: 0 }, c.claw || {});
+    const o = { type: clawTypeOk(p.claw) ? p.claw : 'classic', prongs: cl.prongs, width: cl.width, grip: cl.grip, speed: cl.speed * accClawK(), rubber: cl.rubber, magnet: cl.magnet, grease: 0 };
+    if (card === 'grease') o.grease = 1;
+    if (card === 'tiny') o.width *= 0.72;
+    if (card === 'turbo') o.speed *= 1.9;
+    return o;
+  }
+  const duoLeft = (Dd) => { let n = 0; if (S.duoV && S.duoV.W) for (const b of S.duoV.W.bodies) if (b.type === 'dynamic' && b.data && b.data.pile != null && b.data.v > 0) n++; return n; };
+  // READY in the claw-off: the dropper's claw goes on, a sabotage card waiting for them goes off.
+  function duoVsPlay() {
+    const Dd = S.duo;
+    if (!Dd || Dd.mode !== 'vs') return false;
+    if (!S.duoV || !S.duoV.pile.length) duoVsBuild();
+    const V = S.duoV, P = X.PHYS, who = Dd.turn;
+    Dd.ph = 'play';
+    const card = Dd.pend && Dd.pend.on === who ? Dd.pend.id : null;
+    V.card = card; V.fog = card === 'fog' ? 1 : 0; V.mirror = card === 'mirror'; V.tilt = 0;
+    if (V.W && P && P.clawRig) {
+      if (V.rig && V.rig.destroy) { try { V.rig.destroy(); } catch (e) { /* ignore */ } }
+      const chuteX = V.C.bounds.chuteX || CAB.w - CAB.chuteW;
+      V.rig = P.clawRig(V.W, Object.assign({ cabinet: V.C, homeX: chuteX * 0.5, chuteX: chuteX + CAB.chuteW * 0.5, railY: 26, rand: U.rng((U.hashStr(Dd.seed + ':rig:' + Dd.round + ':' + Dd.k) >>> 0) || 1) }, duoVsClaw(who, card)));
+      const r = U.rng((U.hashStr(Dd.seed + ':sab:' + Dd.round + ':' + Dd.k) >>> 0) || 1);
+      if (card === 'shake') {
+        V.W.wakeAll();
+        for (const b of V.W.bodies) if (b.type === 'dynamic') { b.vx += (r() - 0.5) * 700; b.vy -= 250 + r() * 500; b.av += (r() - 0.5) * 10; }
+        fx().shake(9); snd('shake');
+      }
+      if (card === 'tilt') { V.tilt = r() < 0.5 ? -1 : 1; V.W.setGravity(V.tilt * TILT_G * DUOC.tiltK, GRAVITY - 100); fx().shake(5); }
+    }
+    if (card) { V.slam = { id: card, t: 0 }; snd('duoSabo'); haptic('hit'); fx().text(270, 380, 'SABOTAGE!', '#ff5a4a', { size: 26, life: 1.4, dy: -30 }); }
+    V.sub = 'aim'; V.grabT = 0; V.settle = 0; V.steer = false; V.cur = { who, got: [], pts: 0 };
+    V.party = 0.8;
+    duoLog({ k: 'play', who, card, round: Dd.round, k2: Dd.k });
+    duoShow();
+    return true;
+  }
+  function duoPlayDom() {
+    const Dd = S.duo, b = duoBody('dp-canvas dp-play');
+    if (!b) return;
+    const V = S.duoV, cd = V && V.card ? (DK().CARDS || {})[V.card] : null;
+    const el = h('div', 'duoHint');
+    el.textContent = `${duoUp(Dd.turn)}: drag on the glass, let go to drop` + (cd ? ` (${cd.name}!)` : '');
+    try { if (el.style && el.style.setProperty) el.style.setProperty('--dc', duoCol(Dd.turn)); } catch (e) { /* stub */ }
+    b.appendChild(el);
+  }
+  // A drop (a release on the glass, Space, or the test driver).
+  function duoVsDrop(x) {
+    const Dd = S.duo, V = S.duoV, rig = V && V.rig;
+    if (!Dd || Dd.ph !== 'play' || !V || V.sub !== 'aim' || !rig) return false;
+    if (rig.phase !== 'idle' && rig.phase !== 'moving') return false;
+    if (x != null) rig.setTarget(U.clamp(x, 20, CAB.w - CAB.chuteW - 20));
+    rig.drop();
+    V.sub = 'grab'; V.grabT = 0; V.settle = 0; V.steer = false;
+    snd('clawDrop');
+    return true;
+  }
+  // The claw-off's glass: steer with a finger (backwards under Mirror Mirror), let go to drop.
+  function duoPointer(type, x, y) {
+    const Dd = S.duo;
+    if (!Dd) return;
+    if (Dd.ph === 'toss') { if (type === 'down') duoTossTap(); return; }
+    if (Dd.ph === 'hand' && type === 'down' && S.duoT && S.duoT.t < DUO_T0()) { S.duoT.t = DUO_T0(); return; }
+    const V = S.duoV;
+    if (Dd.ph !== 'play' || !V || V.sub !== 'aim' || !V.rig) return;
+    const bw = (V.C && V.C.bounds.chuteX) || CAB.w - CAB.chuteW;
+    let cx = U.clamp(x - CAB.x, 20, bw - 20);
+    if (V.mirror) cx = U.clamp(bw - cx, 20, bw - 20);
+    if (type === 'down' && inCabinet(x, y)) { V.steer = true; V.rig.setTarget(cx); }
+    else if (type === 'move' && V.steer) V.rig.setTarget(cx);
+    else if ((type === 'up' || type === 'cancel') && V.steer) { V.steer = false; if (type === 'up') duoVsDrop(cx); }
+  }
+  const DUO_T0 = () => ((X.RENDER && X.RENDER.duo && X.RENDER.duo.T && X.RENDER.duo.T.flip) || 0.5);
+  function duoTossTap() {
+    const T = S.duoT;
+    if (!T) return;
+    if (T.t < DUOC.tossDur) T.t = DUOC.tossDur;
+    else duoAfterToss();
+  }
+  function duoKey(ev, down) {
+    const Dd = S.duo, k = ev.key;
+    if (down && k === 'Escape') { if (!Dd) duoMenu(); else if (Dd.ph === 'hand' || Dd.ph === 'end') duoMenu(); return; }
+    if (!Dd) return;
+    if (Dd.ph === 'toss') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); duoTossTap(); } return; }
+    if (Dd.ph === 'hand') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); duoReady(); } return; }
+    const V = S.duoV;
+    if (Dd.ph !== 'play' || !V) return;
+    const m = V.mirror ? -1 : 1;
+    if (k === 'ArrowLeft') V.keyDir = down ? -m : (V.keyDir === -m ? 0 : V.keyDir);
+    else if (k === 'ArrowRight') V.keyDir = down ? m : (V.keyDir === m ? 0 : V.keyDir);
+    else if (down && (k === ' ' || k === 'Enter') && !ev.repeat) { if (ev.preventDefault) ev.preventDefault(); duoVsDrop(null); }
+  }
+  // A prize fell through the chute: it counts for whoever is dropping.
+  function duoVsCredit(body) {
+    const V = S.duoV, Dd = S.duo;
+    V.W.remove(body);
+    const d = body.data, v = d.v | 0;
+    V.cur.got.push({ i: d.pile, id: d.def.id, v, gold: d.gold ? 1 : 0 });
+    V.flash[Dd.turn] = 1;
+    V.party = Math.max(V.party, v >= 4 || d.gold ? 1.2 : 0.6);
+    const x = CAB.x + CAB.w - CAB.chuteW / 2, y = CAB.y + CAB.h - 40;
+    fx().text(x - 36, y - 30, v ? (d.gold ? 'GOLDEN +' + v * 2 : '+' + v) : 'A ROCK!', d.gold || v >= 4 ? '#ffc94d' : v ? '#ffffff' : '#b3a4d6', { size: v >= 4 || d.gold ? 22 : 17 });
+    if (v > 0) fx().emit('coins', x, y, { n: 0.4 + Math.min(1, v / 5) });
+    snd(v >= 4 || d.gold ? 'arcWin' : v ? 'coin' : 'thud');
+    duoLog({ k: 'credit', who: Dd.turn, i: d.pile, v });
+  }
+  function duoVsTick(real) {
+    const V = S.duoV, Dd = S.duo;
+    V.flash[0] = Math.max(0, V.flash[0] - real * 2.5); V.flash[1] = Math.max(0, V.flash[1] - real * 2.5); V.party = Math.max(0, V.party - real * 1.1);
+    if (V.slam) { V.slam.t += real; if (V.slam.t > DUOC.slam) V.slam = null; }
+    if (!V.W || !V.rig || V.sub === 'wait') return;
+    const rig = V.rig, bd = V.C.bounds;
+    if (V.sub === 'aim' && V.keyDir) rig.setTarget(U.clamp(rig.targetX + V.keyDir * 300 * real, 20, CAB.w - CAB.chuteW - 20));
+    const evs = rig.update(real);
+    V.W.step(real);
+    for (const ev of evs) stoOffRig(null, ev);
+    for (const body of V.W.bodies.slice()) {
+      if (body.type !== 'dynamic' || !body.data || body.data.pile == null) continue;
+      if (V.C.inChute(body) && body.y > (bd.floorY || CAB.h) + 4) duoVsCredit(body);
+    }
+    if (V.sub === 'grab') {
+      V.grabT += real;
+      const home = rig.phase === 'idle' || (rig.phase === 'moving' && !rig.auto);
+      if (home && V.grabT > 0.5) { V.settle += real; if (V.settle >= DUOC.settle) duoVsDropEnd(); } else V.settle = 0;
+      if (V.sub === 'grab' && V.grabT > DUOC.grabMax) { if (rig.open && rig.phase !== 'returning' && rig.phase !== 'idle') rig.open(); if (V.grabT > DUOC.grabMax + 3) duoVsDropEnd(); }
+    }
+  }
+  /* A drop is over: it is scored (the prizes, DOUBLE, JACKPOT, combos), the
+     card it suffered is spent, the dropper draws a card, and it saves. Then
+     the sabotage choice, or the round's end. */
+  function duoVsDropEnd() {
+    const Dd = S.duo, V = S.duoV;
+    if (!Dd || !V || V.sub === 'done') return false;
+    const who = Dd.turn, got = (V.cur && V.cur.got) || [];
+    const sc = D().duoDropScore ? D().duoDropScore(got) : { pts: got.reduce((a, g) => a + (g.v | 0), 0), lines: [], combos: [], n: got.length };
+    Dd.score[who] = (Dd.score[who] | 0) + sc.pts;
+    for (const g of got) Dd.taken.push(g.i);
+    Dd.k++; Dd.used[who] = (Dd.used[who] | 0) + 1;
+    Dd.last = { who, got: got.map((g) => g.i), pts: sc.pts, lines: sc.lines, combos: sc.combos };
+    if (Dd.pend && Dd.pend.on === who) Dd.pend = null;
+    V.sub = 'done'; V.cur = null; V.card = null; V.fog = 0; V.mirror = false; V.keyDir = 0;
+    if (V.tilt && V.W) { V.W.setGravity(0, GRAVITY); V.tilt = 0; }
+    V.lines = sc.lines; V.linesT = 0;
+    if (sc.pts > 0) { V.flash[who] = 1.4; fx().text(who ? 400 : 140, 190, '+' + sc.pts, '#ffc94d', { size: 30, life: 1.4, dy: -40 }); }
+    if (sc.n >= 3) { snd('jackpot'); fx().emit('confetti', 270, 420, { n: 1.2 }); banner('JACKPOT', 'jackpot', 1.3); }
+    for (const ln of sc.lines) if (ln.k === 'combo') fx().text(270, 470, ln.label.toUpperCase() + ' +' + ln.v, ln.color || '#ff9ad0', { size: 20, life: 1.6, dy: -50 });
+    if (D().duoDrawCards) D().duoDrawCards(Dd.deck, Dd.hands[who], 1);
+    duoLog({ k: 'drop', who, pts: sc.pts, n: sc.n, round: Dd.round, k2: Dd.k });
+    const total = 2 * (Dd.drops | 0);
+    if (Dd.k >= total || duoLeft(Dd) === 0) return duoRoundEnd();
+    Dd.turn = 1 - who;
+    Dd.from = who;
+    Dd.ph = 'sabo';
+    duoShow();
+    return true;
+  }
+  // After your drop: your score, then play a sabotage card on your rival's next drop (or keep your hand).
+  function duoSaboDom() {
+    const Dd = S.duo, b = duoBody('dp-canvas dp-sabo');
+    if (!b) return;
+    const who = Dd.from, rival = 1 - who, L = Dd.last || { pts: 0, lines: [] };
+    const sheet = h('div', 'duoSheet panel');
+    try { if (sheet.style && sheet.style.setProperty) sheet.style.setProperty('--dc', duoCol(who)); } catch (e) { /* stub */ }
+    sheet.appendChild(h('div', 'duoSc', `${duoUp(who)} +${L.pts | 0}`));
+    const ls = h('div', 'duoLines');
+    if (!L.lines || !L.lines.length) ls.appendChild(h('span', 'ln k-none', 'Nothing in the chute. Ouch.'));
+    for (const ln of L.lines || []) ls.appendChild(h('span', 'ln k-' + ln.k, `${ln.label} +${ln.v}`));
+    sheet.appendChild(ls);
+    const hand = Dd.hands[who] || [];
+    if (hand.length) {
+      sheet.appendChild(h('div', 'duoTh', `Sabotage ${duoUp(rival)}'s next drop?`));
+      const row = h('div', 'duoCards');
+      hand.forEach((id, i) => {
+        const cd = (DK().CARDS || {})[id] || { name: id, icon: '?', col: '#ff2e88', text: '' };
+        const c = btn('card ' + id, () => duoSaboPlay(i), 'duoCardBtn');
+        c.textContent = '';
+        c.appendChild(hisCanvas(64, 90, (ctx) => { if (X.RENDER && X.RENDER.duo) X.RENDER.duo.card(ctx, 32, 45, 60, 86, cd, { mini: true }); }));
+        const tx = h('div', 'col');
+        tx.appendChild(h('b', null, cd.name));
+        tx.appendChild(h('span', null, cd.text));
+        c.appendChild(tx);
+        row.appendChild(c);
+      });
+      sheet.appendChild(row);
+      sheet.appendChild(btn('Keep my cards', () => duoSaboKeep(), 'ghost sm'));
+    } else sheet.appendChild(btn('Pass the phone', () => duoSaboKeep(), 'go'));
+    b.appendChild(sheet);
+  }
+  function duoSaboPlay(i) {
+    const Dd = S.duo;
+    if (!Dd || Dd.ph !== 'sabo') return false;
+    const who = Dd.from, hand = Dd.hands[who] || [];
+    const id = hand[i | 0];
+    if (!id) return false;
+    hand.splice(i | 0, 1);
+    Dd.pend = { id, on: 1 - who, by: who };
+    snd('duoSabo');
+    duoLog({ k: 'sabo', id, by: who });
+    duoHand(1 - who, { from: who });
+    return true;
+  }
+  function duoSaboKeep() {
+    const Dd = S.duo;
+    if (!Dd || Dd.ph !== 'sabo') return false;
+    duoHand(1 - Dd.from, { from: Dd.from });
+    return true;
+  }
+  // The round is over: who took it; the match goes on, or it is decided and booked once.
+  function duoRoundEnd() {
+    const Dd = S.duo;
+    const s = Dd.score.slice(), w = D().duoRoundWin ? D().duoRoundWin(s) : (s[0] > s[1] ? 0 : s[1] > s[0] ? 1 : -1);
+    Dd.rounds.push({ s, w });
+    const m = D().duoMatch ? D().duoMatch(Dd.rounds) : { w: null, wins: [0, 0], pts: [0, 0] };
+    duoLog({ k: 'roundEnd', r: Dd.round, s, w, match: m.w });
+    if (w >= 0) { snd('arcJackpot'); fx().emit('confetti', 270, 300, { n: 1 }); } else snd('arcWin');
+    if (m.w !== null) { duoVsBook(m); Dd.ph = 'end'; }
+    else Dd.ph = 'round';
+    duoShow();
+    return true;
+  }
+  function duoVsBook(m) {
+    const Dd = S.duo;
+    if (!Dd || Dd.paid) return false;
+    Dd.res = { w: m.w, wins: m.wins.slice(), pts: m.pts.slice() };
+    Dd.paid = true;
+    if (D().duoRecord) D().duoRecord(duoM(), { mode: 'vs', names: Dd.p.map((p) => p.name), w: m.w });
+    saveMeta();
+    duoLog({ k: 'book', mode: 'vs', w: m.w });
+    return true;
+  }
+  function duoRoundDom() {
+    const Dd = S.duo, b = duoBody('dp-canvas dp-round');
+    if (!b) return;
+    const r = Dd.rounds[Dd.rounds.length - 1] || { s: [0, 0], w: -1 };
+    const card = h('div', 'duoSheet panel center');
+    try { if (card.style && card.style.setProperty) card.style.setProperty('--dc', r.w >= 0 ? duoCol(r.w) : '#ffc94d'); } catch (e) { /* stub */ }
+    card.appendChild(h('div', 'duoK', 'ROUND ' + Dd.round));
+    card.appendChild(h('div', 'duoSc', r.w >= 0 ? `${duoUp(r.w)} TAKES IT` : 'A TIE: NOBODY SCORES THE ROUND'));
+    card.appendChild(h('div', 'duoBig', `${r.s[0]} : ${r.s[1]}`));
+    const m = D().duoMatch ? D().duoMatch(Dd.rounds) : { wins: [0, 0] };
+    card.appendChild(h('div', 'sub', `Rounds: ${duoUp(0)} ${m.wins[0]}, ${duoUp(1)} ${m.wins[1]}. First to 2.`));
+    card.appendChild(btn('Next round', () => duoNextRound(), 'pri'));
+    b.appendChild(card);
+  }
+  function duoNextRound() {
+    const Dd = S.duo;
+    if (!Dd || Dd.ph !== 'round') return false;
+    duoRoundStart((Dd.round | 0) + 1);
+    duoHand(Dd.turn, { from: 1 - Dd.turn });
+    return true;
+  }
+  // The podium: the result, the record per name, taunts for the winner, Rematch.
+  function duoEndDom() {
+    const Dd = S.duo, b = duoBody('dp-canvas dp-end');
+    if (!b) return;
+    const res = Dd.res || {};
+    const card = h('div', 'duoSheet panel center');
+    const M = duoM();
+    const rec = (i) => { const r = M.names[D().duoKey ? D().duoKey(Dd.p[i].name) : Dd.p[i].name.toLowerCase()] || { w: 0, l: 0, cw: 0 }; return r; };
+    if (Dd.mode === 'coop') {
+      card.appendChild(h('div', 'duoSc', res.won ? `${enemyDef(Dd.boss).name || Dd.boss} is down in ${res.turns | 0} turns!` : `${enemyDef(Dd.boss).name || Dd.boss} knocked you both out.`));
+      card.appendChild(h('div', 'sub', `Team wins: ${duoUp(0)} ${rec(0).cw}, ${duoUp(1)} ${rec(1).cw}`));
+    } else {
+      card.appendChild(h('div', 'duoSc', res.w === 0 || res.w === 1 ? `${duoUp(res.w)} wins the claw-off!` : 'A draw!'));
+      card.appendChild(h('div', 'sub', `Rounds ${(res.wins || [0, 0]).join(' : ')} · points ${(res.pts || [0, 0]).join(' : ')}`));
+      card.appendChild(h('div', 'sub', `Record: ${duoUp(0)} ${rec(0).w} won, ${duoUp(1)} ${rec(1).w} won`));
+    }
+    const tl = duoTaunts();
+    if (tl.length) {
+      const row = h('div', 'duoTaunts');
+      for (const x of tl) { const tb = btn('taunt ' + x.id, () => duoTaunt(x.id), 'sm duoTaunt'); tb.textContent = x.icon; row.appendChild(tb); }
+      card.appendChild(row);
+    }
+    const bt = h('div', 'row center');
+    bt.appendChild(btn('Rematch', () => duoRematch(), 'pri'));
+    bt.appendChild(btn('New duo', () => { duoDone(); duoMenu(); }, 'go'));
+    bt.appendChild(btn('Title', () => duoLeave(), 'ghost'));
+    card.appendChild(bt);
+    b.appendChild(card);
+    if (!S.duoT || !S.duoT.crowd) { snd('duoCrowd'); fx().emit('confetti', 270, 300, { n: 1.4 }); if (S.duoT) S.duoT.crowd = 1; }
+    music('win');
+  }
+
+  // ---- the frame: phase clocks, the countdown, the claw-off's world, the fight's pass
+  function duoTick(real) {
+    const Dd = S.duo;
+    if (!Dd) return;
+    const T = S.duoT || (S.duoT = { t: 0, now: 0 });
+    T.now += real;
+    if (T.msgT != null) T.msgT += real;
+    if (S.screen === 'fight') { duoFightTick(real); return; }
+    if (S.screen !== 'duo') return;
+    const t0 = T.t;
+    T.t += real;
+    if (Dd.ph === 'toss') {
+      if (t0 < DUOC.tossDur && T.t >= DUOC.tossDur) { snd('duoCoin', { land: true }); haptic('tap'); }
+      if (T.t >= DUOC.tossDur + DUOC.tossHold) duoAfterToss();
+    } else if (Dd.ph === 'hand') {
+      if (T.count > 0 && T.t > DUO_T0()) {
+        T.count = Math.max(0, T.count - real);
+        const n = Math.ceil(T.count - 1e-6);
+        if (n !== T.cnt) { T.cnt = n; if (n > 0) snd('duoCount', { n }); }
+        if (T.count <= 0 && !T.readyOn) { T.readyOn = true; snd('duoReady'); const el = S.duoReadyEl; if (el) el.disabled = false; const b = S.ui.buttons.find((x) => x.el === el); if (b) b.disabled = false; }
+      }
+    } else if ((Dd.ph === 'play' || Dd.ph === 'sabo' || Dd.ph === 'round') && S.duoV) duoVsTick(real);
+  }
+  // ---- the canvas under screen 'duo'
+  function duoDraw(ctx, t) {
+    const Dd = S.duo, R = X.RENDER, T = S.duoT || { t: 0, now: 0 };
+    if (!R) return;
+    if (!Dd) {
+      if (R.title) R.title(ctx, W, H, t);
+      ctx.fillStyle = 'rgba(18,9,31,0.55)'; ctx.fillRect(0, 0, W, H);
+      return;
+    }
+    const RD = R.duo;
+    const names = [duoNameOf(0), duoNameOf(1)], cols = [duoCol(0), duoCol(1)], chars = [Dd.p[0].char, Dd.p[1].char];
+    if (Dd.ph === 'toss' && RD) RD.coin(ctx, W, H, { t: T.t, dur: DUOC.tossDur, w: Dd.first, flips: Dd.flips, names, cols, chars, reduced: !!fx().reduced });
+    else if (Dd.ph === 'hand' && RD) {
+      const nx = Dd.turn, fr = Dd.from;
+      let label = '', sub = '';
+      if (Dd.mode === 'vs') { label = `Round ${Dd.round} · drop ${Math.min(2 * Dd.drops, (Dd.k | 0) + 1)} of ${2 * Dd.drops}`; sub = `${names[0]} ${Dd.score[0] | 0} : ${Dd.score[1] | 0} ${names[1]}`; }
+      else { label = `Co-op · vs ${enemyDef(Dd.boss).name || Dd.boss}`; const L = S.duoLive, e = L && L.F[0] ? L.F[0].enemies[0] : null; sub = e ? `Boss ${Math.max(0, e.hp)}/${e.maxHp} hp` : 'Fresh from the bell'; }
+      RD.handoff(ctx, W, H, { t: T.t, now: T.now, name: names[nx], col: cols[nx], char: chars[nx], count: T.count, total: DK().HANDOFF || 3, from: names[fr], fromCol: cols[fr], fromChar: chars[fr],
+        msg: Dd.msg, msgT: T.msgT, label, sub, reduced: !!fx().reduced });
+    } else if ((Dd.ph === 'play' || Dd.ph === 'sabo' || Dd.ph === 'round') && Dd.mode === 'vs') duoVsDraw(ctx, t);
+    else if (Dd.ph === 'end' && RD) {
+      const res = Dd.res || {};
+      RD.podium(ctx, W, H, { t: T.now, names, cols, chars, coop: Dd.mode === 'coop', won: !!res.won, win: res.w, sc: res.wins, label: Dd.mode === 'coop' ? `vs ${enemyDef(Dd.boss).name || Dd.boss}` : 'rounds won', reduced: !!fx().reduced });
+      // the last taunt, from whoever sent it (the winner's tall step, or their side of a shared one)
+      const fi = Dd.msg && (Dd.msg.from === 1 ? 1 : 0), tx = Dd.mode === 'vs' && (res.w === 0 || res.w === 1) ? (fi === res.w ? W * 0.38 : W * 0.74) : (fi ? W * 0.68 : W * 0.32);
+      if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble) R.sto.bubble(ctx, 270, 292, 400, Dd.msg.icon + ' ' + Dd.msg.text, T.msgT || 1, tx, 380);
+    } else {
+      if (R.title) R.title(ctx, W, H, t);
+      ctx.fillStyle = 'rgba(18,9,31,0.55)'; ctx.fillRect(0, 0, W, H);
+    }
+  }
+  const DUO_BOARD = { x: 270, y: 150, w: 500, t: 0, names: null, cols: null, sc: [0, 0], wins: [0, 0], drops: 3, used: [0, 0], who: 0, flash: [0, 0], round: 1, label: '' };
+  function duoVsDraw(ctx, t) {
+    const Dd = S.duo, V = S.duoV, R = X.RENDER;
+    if (!V || !R) return;
+    const who = Dd.ph === 'play' ? Dd.turn : (Dd.from != null ? Dd.from : Dd.turn);
+    if (R.bg) R.bg(ctx, W, H, U.clamp(Dd.round | 0, 1, 3), t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
+    ctx.fillStyle = 'rgba(18,9,31,0.35)'; ctx.fillRect(0, 0, W, CAB.y - CAB.frame);
+    const m = D().duoMatch ? D().duoMatch(Dd.rounds) : { wins: [0, 0] };
+    const B = DUO_BOARD;
+    B.t = t; B.names = [duoNameOf(0), duoNameOf(1)]; B.cols = [duoCol(0), duoCol(1)]; B.sc = Dd.score; B.wins = m.wins; B.drops = Dd.drops; B.used = Dd.used; B.who = who; B.flash = V.flash; B.round = Dd.round;
+    B.label = Dd.ph === 'play' ? `${duoUp(who)}'S DROP` : '';
+    if (R.duo) R.duo.board(ctx, B);
+    // both crawlers beside the machine: the one dropping under the spotlight
+    for (let i = 0; i < 2; i++) {
+      const x = i ? 470 : 70, y = 300, lit = i === who;
+      if (lit && R.duo) R.duo.spot(ctx, x, y + 20, 56, B.cols[i], 0.3);
+      ctx.save(); ctx.globalAlpha = lit ? 1 : 0.6;
+      if (R.portrait) R.portrait(ctx, Dd.p[i].char, x, y, lit ? 92 : 72, t);
+      ctx.restore();
+    }
+    const cst = { t, act: U.clamp(Dd.round | 0, 1, 3), party: Math.min(1, V.party), marquee: V.party > 0.5 ? 'SCORE!' : '', fog: V.fog, grease: V.card === 'grease' ? 1 : 0, tilt: V.tilt ? V.tilt * 0.8 : 0 };
+    DUO_CFG.chuteX = V.C ? V.C.bounds.chuteX : CAB.w - CAB.chuteW;
+    if (R.cabinetBack) R.cabinetBack(ctx, CAB.x, CAB.y, DUO_CFG, cst);
+    ctx.save(); ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
+    const RC = R.RARITY_COL || {};
+    if (V.W) {
+      for (const b of V.W.bodies) {
+        if (b.type !== 'dynamic' || !b.data || !b.data.def) continue;
+        const d = b.data.def, rar = d.rarity;
+        if (R.item) R.item(ctx, d, CAB.x + b.x, CAB.y + b.y, b.a, 1, { glow: b.data.gold ? '#ffc94d' : rar === 'u' || rar === 'r' || rar === 'l' ? RC[rar] : 0, glowA: b.data.gold || rar === 'l' ? 0.85 : 0.5 });
+      }
+      // the prize tags (the fog hides them)
+      if (!(V.fog > 0)) {
+        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (const b of V.W.bodies) {
+          if (!b.data || b.data.pile == null || !(b.data.v >= 2 || b.data.gold)) continue;
+          const x = CAB.x + b.x, y = CAB.y + b.y - (b.br || 14) - 9, v = b.data.gold ? b.data.v * 2 : b.data.v;
+          ctx.fillStyle = b.data.gold ? '#ffe066' : v >= 4 ? '#ffc94d' : '#2ee6d6'; ctx.beginPath(); ctx.arc(x, y, b.data.gold ? 10 : 8, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#12091f'; ctx.lineWidth = 2; ctx.stroke();
+          ctx.fillStyle = '#12091f'; ctx.fillText(String(v), x, y + 0.5);
+        }
+      }
+    }
+    if (V.rig && R.claw) {
+      const busy = V.rig.phase !== 'idle' && V.rig.phase !== 'moving';
+      DUO_CJ.t = t; DUO_CJ.mood = busy ? 'focus' : ''; DUO_CJ.idle = busy ? 0 : 1;
+      R.claw(ctx, V.rig, CAB.x, CAB.y, { juice: DUO_CJ, paint: duoPaint(who) || undefined });
+    }
+    ctx.restore();
+    if (R.cabinetFront) R.cabinetFront(ctx, CAB.x, CAB.y, DUO_CFG, cst);
+    // the colour of whoever drops, round the machine; the card they are under on its top
+    ctx.save();
+    ctx.globalAlpha = 0.55 + Math.sin(t * 3) * 0.2; ctx.strokeStyle = B.cols[who]; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.rect(CAB.x - CAB.frame - 3, CAB.y - CAB.frame - 3, CAB.w + CAB.frame * 2 + 6, CAB.h + CAB.frame * 2 + 6); ctx.stroke();
+    ctx.restore();
+    const cd = V.card ? (DK().CARDS || {})[V.card] : null;
+    if (cd && R.duo) R.duo.tag(ctx, 270, CAB.y - CAB.frame - 22, cd.icon + ' ' + cd.name.toUpperCase(), cd.col, true, 14);
+    if (V.slam && R.duo) {
+      const cs = (DK().CARDS || {})[V.slam.id], u = V.slam.t / DUOC.slam, k = u < 0.18 ? 2.4 - (u / 0.18) * 1.4 : 1, a = u > 0.8 ? 1 - (u - 0.8) / 0.2 : 1;
+      ctx.save(); ctx.globalAlpha = Math.max(0, a);
+      R.duo.card(ctx, 270, 600, 150, 214, cs, { rot: -0.08 + Math.sin(u * 9) * 0.02, k: fx().reduced ? 1 : k, glow: true, text: true });
+      ctx.restore();
+    }
+  }
+  // ================================================================ /DUO
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -20230,6 +22530,19 @@ const GAME = (() => {
       endPanel: ghoEndPanel, chip: ghoChipSync, tap: ghoChipTap, tick: ghoTick, draw: ghoMapDraw,
       get chipEl() { return S.ghoChip || null; }, get pass() { return S.ghoPass || null; }, get log() { return GHX.log; },
     },
+    // DUO (round 11, DESIGN.md "Duo: pass and play (round 11)"): pass and play, co-op boss and the versus claw-off (tests and the screenshot drivers)
+    duo: {
+      C: DUOC, KEY: DUO_KEY, menu: duoMenu, setup: duoSetup, set: duoSet, start: duoStart, begin: duoBegin, toss: duoTossTap, afterToss: duoAfterToss,
+      hand: duoHand, ready: duoReady, taunt: duoTaunt, drop: duoVsDrop, card: duoSaboPlay, keep: duoSaboKeep, next: duoNextRound, rematch: duoRematch,
+      leave: duoLeave, park: duoPark, done: duoDone, resume: duoResume, saved: duoSaved, meta: duoM, metaFix: duoMetaFix, titleBtn: duoTitleBtn, hud: duoHud,
+      seatRun: duoSeatRun, paint: duoPaint, bosses: duoBossList, dropEnd: duoVsDropEnd, pointer: duoPointer, key: duoKey, tick: duoTick, draw: duoDraw,
+      // the x over the best prize left (value first, then how high it sits): the test driver's aim
+      aim: () => { const V = S.duoV; if (!V || !V.W) return null; let best = null, bs = -1e9; const cx = (V.C && V.C.bounds.chuteX) || CAB.w - CAB.chuteW; for (const b of V.W.bodies) { if (b.type !== 'dynamic' || !b.data || b.data.pile == null || b.x > cx - 10) continue; const s = (b.data.v | 0) * 10 + (CAB.h - b.y) * 0.15; if (s > bs) { bs = s; best = b; } } return best ? U.clamp(best.x, 24, cx - 24) : cx * 0.5; },
+      get state() { return S.duo || null; }, get v() { return S.duoV || null; }, get live() { return S.duoLive || null; }, get t() { return S.duoT || null; },
+      get setupState() { return S.duoSet || null; }, get log() { return DUOX.log; }, get seed() { return DUOX.seed; }, set seed(v) { DUOX.seed = v == null ? null : v >>> 0; },
+    },
+    // SCHOOL (round 11, DESIGN.md "Claw School and the Practice Cabinet (round 11)"): the practice cabinet, the lessons, the report card
+    sch: SCH_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

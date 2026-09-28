@@ -2946,4 +2946,230 @@ t.test('round 10: three new pets, their synergies', () => {
   t.ok(['penguin', 'molerat', 'roomba'].every(id => seen.has(id)), 'the pet shop offers them');
 });
 
+// ---- DUO (round 11): pass and play (DESIGN.md "Duo: pass and play (round 11)")
+t.test('DUO: the tables (colours, cards, taunts, voices), names and players', () => {
+  const K = DATA.DUO;
+  t.ok(K && K.COLORS.length >= 6 && new Set(K.COLORS.map(c => c.id)).size === K.COLORS.length, 'six player colours, each its own');
+  for (const c of K.COLORS) {
+    t.ok(/^#[0-9a-f]{6}$/i.test(c.col), c.id + ': a real colour');
+    t.ok(DATA.COSMETICS[c.paint] && DATA.COSMETICS[c.paint].cat === 'paint', c.id + ': its team paint is a claw paint in the vault');
+  }
+  t.ok(K.DEF[0].color !== K.DEF[1].color, 'the two default colours differ');
+  t.eq(K.CARD_IDS.length, Object.keys(K.CARDS).length, 'every card is in the deck list');
+  for (const id of K.CARD_IDS) { const c = K.CARDS[id]; t.ok(c && c.id === id && c.name && c.icon && c.text && c.text.length <= 70 && /^#[0-9a-f]{6}$/i.test(c.col), id + ': a whole card'); }
+  for (const x of K.TAUNTS.concat(K.CHEERS)) t.ok(x.id && x.text && x.short && x.short.length <= 9 && x.icon && K.VOICES.includes(x.v), x.id + ': a taunt with a short label and a known voice');
+  t.ok(K.TAUNTS.length >= 4 && K.CHEERS.length >= 3, 'a few taunts, a few cheers');
+  t.ok(JSON.stringify(K).indexOf(String.fromCharCode(0x2014)) < 0, 'no em dash in the duo copy');
+  // names: printable, trimmed, capped, P1 / P2 when empty; an em dash typed in is taken out
+  t.eq(DATA.duoName('  Jasmin  ', 0), 'Jasmin', 'trimmed');
+  t.eq(DATA.duoName('', 0), 'P1', 'empty is P1'); t.eq(DATA.duoName(null, 1), 'P2', '...or P2');
+  t.eq(DATA.duoName('a very long name indeed', 0).length <= K.NAME_MAX, true, 'at most NAME_MAX letters');
+  t.ok(DATA.duoName('Rox' + String.fromCharCode(0x2014) + 'or\n', 0).indexOf(String.fromCharCode(0x2014)) < 0, 'no em dash in a name');
+  t.eq(DATA.duoKey(' ROXOR  '), 'roxor', 'the record key ignores case and spaces');
+  // players: junk repaired, two colours never the same, only real crawlers and claws
+  const P = DATA.duoPlayers([{ name: ' Rox ', color: 'lime', char: 'nobody', claw: 'spoon', paint: 5 }, { name: '', color: 'lime' }], ['knight', 'rogue'], ['classic', 'tri']);
+  t.ok(P.length === 2 && P[0].name === 'Rox' && P[1].name === 'P2', 'names');
+  t.ok(P[0].color === 'lime' && P[1].color !== 'lime', 'a clash of colours is split');
+  t.ok(P[0].char === 'knight' && P[0].claw === 'classic' && P[0].paint === '', 'unknown crawler, claw and paint fall back');
+  const P0 = DATA.duoPlayers(null, ['knight', 'rogue'], ['classic']);
+  t.ok(P0[0].color === K.DEF[0].color && P0[1].color === K.DEF[1].color && P0[1].char === 'rogue', 'no setup yet: the defaults');
+});
+
+t.test('DUO: the claw-off pile, a drop\'s score, the sabotage deck, best of three, the toss', () => {
+  const K = DATA.DUO;
+  for (const [drops, n] of [[3, 14], [4, 16], [5, 18]]) {
+    for (let s = 1; s <= 30; s++) {
+      const p = DATA.duoPile(U.rng(s), 1, drops);
+      if (s === 1) t.eq(p.length, n, `${drops} drops each: ${n} prizes in the bin`);
+      if (p.length !== n || p.filter(x => x.gold).length !== 1 || p.filter(x => x.id === 'rock').length !== K.PILE.junk) { t.ok(false, `pile ${s}/${drops}: size, one golden prize, two rocks`); break; }
+      if (!p.every(x => DATA.ITEMS[x.id] && x.v === K.VAL[DATA.ITEMS[x.id].rarity])) { t.ok(false, `pile ${s}: values by rarity`); break; }
+      if (!p.every(x => !x.gold || (x.v > 0 && x.v <= 2))) { t.ok(false, `pile ${s}: the golden prize is a common or uncommon`); break; }
+    }
+  }
+  t.eq(JSON.stringify(DATA.duoPile(U.rng(9), 2, 3)), JSON.stringify(DATA.duoPile(U.rng(9), 2, 3)), 'the same seed, the same pile');
+  // the score: values, golden x2, DOUBLE, JACKPOT, the fight's own combos
+  t.eq(DATA.duoDropScore([]).pts, 0, 'an empty drop scores 0');
+  t.eq(DATA.duoDropScore([{ id: 'rock', v: 0 }]).pts, 0, 'a rock is worth nothing');
+  t.eq(DATA.duoDropScore([{ id: 'rusty_sword', v: 1 }]).pts, 1, 'one common: 1');
+  t.eq(DATA.duoDropScore([{ id: 'rusty_sword', v: 1, gold: 1 }]).pts, K.BONUS.golden, 'the golden prize: double');
+  const two = DATA.duoDropScore([{ id: 'rusty_sword', v: 1 }, { id: 'longsword', v: 2 }]);
+  t.ok(two.lines.some(l => l.k === 'double') && two.combos.includes('crossed_blades') && two.pts === 1 + 2 + K.BONUS.double + K.BONUS.comboTier, 'two weapons: DOUBLE and Crossed Blades');
+  const three = DATA.duoDropScore([{ id: 'rusty_sword', v: 1 }, { id: 'longsword', v: 2 }, { id: 'rock', v: 0 }]);
+  t.ok(three.lines.some(l => l.k === 'jackpot') && !three.lines.some(l => l.k === 'double') && three.n === 3, 'three: a JACKPOT, not a DOUBLE');
+  t.eq(three.pts, three.lines.reduce((a, l) => a + l.v, 0), 'the lines add up to the score');
+  // the deck: two of every card, shuffled by seed; a hand never passes HAND.max
+  const d1 = DATA.duoDeck(U.rng(4)), d2 = DATA.duoDeck(U.rng(4)), d3 = DATA.duoDeck(U.rng(5));
+  t.ok(d1.length === K.CARD_IDS.length * K.COPIES && K.CARD_IDS.every(id => d1.filter(x => x === id).length === K.COPIES), 'two of every card');
+  t.ok(d1.join() === d2.join() && d1.join() !== d3.join(), 'shuffled by the seed');
+  const hand = [];
+  t.eq(DATA.duoDrawCards(d1, hand, 5).length, K.HAND.max, 'a hand holds HAND.max cards');
+  t.eq(d1.length, K.CARD_IDS.length * K.COPIES - K.HAND.max, 'drawn cards leave the deck');
+  t.eq(DATA.duoDrawCards([], [], 2).length, 0, 'an empty deck draws nothing');
+  // best of three: first to two; a tie round counts for nobody; after five, rounds then points, else a draw
+  t.eq(DATA.duoMatch([]).w, null, 'no rounds: it goes on');
+  t.eq(DATA.duoMatch([{ s: [5, 3] }, { s: [2, 4] }]).w, null, '1 : 1 goes on');
+  t.eq(DATA.duoMatch([{ s: [5, 3] }, { s: [2, 4] }, { s: [6, 1] }]).w, 0, '2 : 1 wins');
+  t.eq(DATA.duoMatch([{ s: [1, 3] }, { s: [2, 4] }]).w, 1, 'two straight');
+  t.eq(DATA.duoMatch([{ s: [3, 3] }, { s: [5, 3] }, { s: [3, 3] }]).w, null, 'ties do not count');
+  t.eq(DATA.duoMatch([{ s: [3, 3] }, { s: [5, 3] }, { s: [3, 3] }, { s: [3, 3] }, { s: [3, 3] }]).w, 0, 'five rounds: the most rounds');
+  t.eq(DATA.duoMatch([{ s: [3, 3] }, { s: [5, 3] }, { s: [3, 4] }, { s: [3, 3] }, { s: [3, 3] }]).w, 0, '...then the most points');
+  t.eq(DATA.duoMatch([{ s: [3, 3] }, { s: [4, 3] }, { s: [3, 4] }, { s: [3, 3] }, { s: [3, 3] }]).w, -1, '...else a draw');
+  t.eq(DATA.duoRoundWin([2, 2]), -1, 'a tied round');
+  t.eq(DATA.duoStarter(1, []), 1, 'the toss starts round 1');
+  t.eq(DATA.duoStarter(1, [{ s: [5, 3] }]), 1, 'the loser of a round starts the next');
+  t.eq(DATA.duoStarter(0, [{ s: [5, 3] }, { s: [1, 3] }]), 0, '...every time');
+  t.eq(DATA.duoStarter(0, [{ s: [3, 3] }]), 1, 'after a tie the other one starts');
+  // the toss: a fair coin by seed; the coin lands on the side it says (the half turns' parity)
+  const ws = [0, 0];
+  for (let s = 1; s <= 200; s++) { const o = DATA.duoToss(s); ws[o.w]++; if (o.flips % 2 !== o.w || o.flips < 8) t.ok(false, 'toss ' + s + ': lands on its winner'); }
+  t.ok(ws[0] > 60 && ws[1] > 60, `both players win tosses (${ws.join(' / ')})`);
+  t.eq(DATA.duoToss(77).w, DATA.duoToss(77).w, 'the same seed, the same toss');
+});
+
+t.test('DUO: the co-op bosses, the record per name, old and junk profiles', () => {
+  const L = DATA.duoBosses({ hoard: 2 }, { smelter: 1 });
+  t.ok(L.length === 7 && L.every(x => DATA.ENEMIES[x.id] && DATA.ENEMIES[x.id].tier === 'boss'), 'the six act bosses and the Prize Master');
+  t.ok(L.find(x => x.id === 'hoard').beaten && L.find(x => x.id === 'smelter').beaten && !L.find(x => x.id === 'glacius').beaten, 'beaten from the Codex kills and the rush');
+  t.ok(DATA.duoBosses(null, null).every(x => !x.beaten), 'a fresh profile has beaten none');
+  const f = DATA.duoFix(undefined);
+  t.ok(f.games === 0 && Object.keys(f.names).length === 0 && f.last.drops === K3() && f.last.mode === 'vs', 'an old profile: an empty record');
+  function K3() { return DATA.DUO.DROPS_DEF; }
+  const junk = DATA.duoFix({ games: 'x', vs: -4, names: { ' RoXor ': { n: 'RoXor', w: '3', l: null }, bad: 7, '': { w: 1 } }, last: { p: 'no', drops: 99, mode: 'coop' } });
+  t.ok(junk.games === 0 && junk.vs === 0 && junk.names.roxor && junk.names.roxor.w === 3 && junk.names.roxor.l === 0 && !junk.names.bad, 'a junk record is repaired');
+  t.ok(Array.isArray(junk.last.p) && junk.last.drops === 5 && junk.last.mode === 'coop', '...its setup too');
+  const m = DATA.duoFix(null);
+  DATA.duoRecord(m, { mode: 'vs', names: ['Roxor', 'Jasmin'], w: 0 });
+  DATA.duoRecord(m, { mode: 'vs', names: ['roxor', 'JASMIN'], w: 0 });
+  DATA.duoRecord(m, { mode: 'vs', names: ['Roxor', 'Jasmin'], w: -1 });
+  DATA.duoRecord(m, { mode: 'coop', names: ['Roxor', 'Jasmin'], won: true });
+  DATA.duoRecord(m, { mode: 'coop', names: ['Roxor', 'Roxor'], won: false });
+  t.ok(m.games === 5 && m.vs === 3 && m.coop === 2 && m.coopWins === 1, 'games, claw-offs, co-op and team wins counted');
+  t.ok(m.names.roxor.w === 2 && m.names.roxor.t === 1 && m.names.jasmin.l === 2, 'wins per name, whatever the case');
+  t.ok(m.names.roxor.cg === 2 && m.names.roxor.cw === 1 && m.names.jasmin.cw === 1, 'team games per name, once even when both share it');
+  const b = DATA.duoBoard(m);
+  t.ok(b[0].key === 'roxor' && b[1].key === 'jasmin', 'the board: most wins first');
+  t.eq(JSON.stringify(DATA.duoFix(JSON.parse(JSON.stringify(m)))), JSON.stringify(m), 'the record survives a save and a load');
+});
+
+// ---- SCHOOL (round 11): Claw School's lessons, the star rules, the pay, the unlocks, the diploma's marquee
+t.test('SCHOOL: five lessons of bite-size challenges, every one well formed', () => {
+  const L = DATA.SCH_LESSONS, K = DATA.SCH;
+  t.ok(L.length >= 4 && L.length <= 5, `4 or 5 lessons (${L.length})`);
+  t.eq(L.map(x => x.name).join(), 'Basics,Materials,Claw Types,Tricks,Mastery', 'Basics, Materials, Claw Types, Tricks, Mastery');
+  const ids = DATA.SCH_IDS;
+  t.ok(ids.length >= 20 && ids.length <= 30, `20 to 30 challenges (${ids.length})`);
+  t.eq(new Set(ids).size, ids.length, 'challenge ids are unique');
+  t.eq(K.MAX_STARS, ids.length * 3, 'three stars a challenge');
+  t.eq(K.NEED.length, L.length, 'a star count to open every lesson');
+  t.ok(K.NEED[0] === 0 && K.NEED.every((n, i) => i === 0 || n > K.NEED[i - 1]) && K.NEED[L.length - 1] < K.MAX_STARS - 3 * L[L.length - 1].ch.length + 1, 'lesson 1 is open, each lesson needs more stars, and the last opens before every other star is in');
+  const WIN = ['total', 'grab', 'target', 'free', 'all'], STARS = ['drops', 'time', 'items'];
+  const okOf = (o) => !o || (o.not ? okOf(o.not) : (o.id ? !!ITEMS[o.id] : o.tag ? TAGS.includes(o.tag) : o.trait === 'glass' || o.trait === 'circle'));
+  const nameSet = new Set();
+  L.forEach((les, li) => {
+    t.ok(les.ch.length >= 4 && les.ch.length <= 7, `${les.name}: 4 to 7 challenges`);
+    t.ok(typeof les.icon === 'string' && /^#[0-9a-f]{6}$/i.test(les.color) && les.blurb.length <= 50, `${les.name}: icon, colour, a short blurb`);
+    les.ch.forEach((c, i) => {
+      const w = `${c.id} ${c.name}`;
+      t.ok(c.lesson === li && c.idx === i && DATA.SCH_CH[c.id] === c, `${w}: indexed`);
+      nameSet.add(c.name);
+      t.ok(c.goal.length >= 10 && c.goal.length <= 60 && c.tip.length <= 72 && c.name.length <= 18, `${w}: a short name, goal and tip`);
+      t.ok(!(c.name + c.goal + c.tip).split('').some(ch => ch.charCodeAt(0) === 0x2013 || ch.charCodeAt(0) === 0x2014), `${w}: no dashes`);
+      t.ok(!!DATA.CLAWS[c.claw], `${w}: a real claw (${c.claw})`);
+      t.ok(c.drops >= 0 && c.time >= 0 && (c.drops > 0 || c.time > 0 || c.pile.some(p => p.lit > 0)), `${w}: a drop limit, a clock or a fuse`);
+      t.ok(WIN.includes(c.win.k) && okOf(c.win.of) && okOf(c.never), `${w}: a known goal and filters`);
+      t.ok(STARS.includes(c.stars.k) && (c.stars.k === 'items' ? c.stars.s3 > c.stars.s2 : c.stars.s3 < c.stars.s2), `${w}: 3 stars are harder than 2`);
+      if (c.stars.k === 'drops' && c.drops) t.ok(c.stars.s2 <= c.drops, `${w}: 2 stars within the drops`);
+      if (c.stars.k === 'time' && c.time) t.ok(c.stars.s2 < c.time, `${w}: 2 stars within the clock`);
+      t.ok(c.muts.every(m => DATA.MUTATORS[m]), `${w}: known mutators`);
+      t.ok(c.pile.length >= 3 && c.pile.length <= 18, `${w}: a pile of 3 to 18 (${c.pile.length})`);
+      for (const p of c.pile) {
+        t.ok(!!ITEMS[p.id] && !ITEMS[p.id].bag, `${w}: ${p.id} is a real prize`);
+        t.ok(p.x >= 0 && p.x <= 1 && p.y >= 60 && p.y <= 380, `${w}: ${p.id} drops inside the bin`);
+        if (p.lit) t.ok(ITEMS[p.id].art === 'bomb' && p.t, `${w}: only a target bomb is lit`);
+      }
+      if (c.win.k === 'target') t.ok(c.pile.some(p => p.t), `${w}: a target to aim for`);
+      if (c.win.k === 'grab' || c.win.k === 'total') t.ok(c.pile.filter(p => DATA.schMatch(c.win.of, { id: p.id, tags: ITEMS[p.id].tags, circle: ITEMS[p.id].shape.kind === 'circle', glass: (ITEMS[p.id].tags || []).includes('glass') })).length >= (c.win.n || 1), `${w}: enough prizes for the goal`);
+      if (c.stars.k === 'items') t.eq(c.drops, 1, `${w}: best-grab stars only on a one-drop challenge`);
+    });
+  });
+  t.eq(nameSet.size, ids.length, 'challenge names are unique');
+  // the practice cabinet's presets and mutators
+  for (const P of K.PILES) t.ok(P.id === 'starter' || (P.ids.length >= 6 && P.ids.every(id => ITEMS[id])), `preset ${P.id}: real prizes`);
+  t.ok(K.MUTS.every(m => DATA.MUT_IDS.includes(m)), 'the practice mutators are real');
+  for (const m of ['double', 'hungry', 'fever', 'crowd', 'sticky']) t.ok(!K.MUTS.includes(m), `${m} is fight only, off in practice`);
+});
+
+t.test('SCHOOL: schEval judges every goal, a failure beats a win, the drops and the clock wait for the grab', () => {
+  const E = DATA.schEval, C = DATA.SCH_CH;
+  const d = (id, o) => Object.assign({ id, tags: ITEMS[id].tags || [], glass: (ITEMS[id].tags || []).includes('glass'), circle: ITEMS[id].shape.kind === 'circle', t: false, free: false, g: 1 }, o || {});
+  const st = (o) => Object.assign({ dl: [], drops: 1, t: 3, cracked: 0, blew: 0, left: 3, targets: 1, busy: false }, o);
+  t.eq(E(C.b1, st({})).res, null, 'nothing delivered: still going');
+  t.eq(E(C.b1, st({ dl: [d('crisp_apple')] })).res, 'win', 'total: any prize');
+  t.eq(E(C.b2, st({ dl: [d('rock')] })).res, null, 'target: a rock is not the apple');
+  t.eq(E(C.b2, st({ dl: [d('rock'), d('crisp_apple', { t: true })] })).res, 'win', 'target: the apple');
+  t.eq(E(C.b3, st({ dl: [d('prize_marble', { g: 1 }), d('glass_bead', { g: 2 })] })).res, null, 'grab: two prizes in two grabs is not a double');
+  t.eq(E(C.b3, st({ dl: [d('prize_marble', { g: 2 }), d('glass_bead', { g: 2 })] })).res, 'win', 'grab: two in one grab');
+  t.eq(E(C.m3, st({ dl: [d('soap_bar'), d('sponge'), d('sponge')] })).res, null, 'total of: sponges are not soap');
+  t.eq(E(C.m3, st({ dl: [d('soap_bar', { g: 1 }), d('soap_bar', { g: 3 })] })).res, 'win', 'total of: two soap bars, any grabs');
+  t.eq(E(C.c6, st({ dl: [d('prize_marble'), d('bouncy_ball'), d('rusty_sword')] })).res, null, 'grab of a trait: a sword is not round');
+  t.eq(E(C.c6, st({ dl: [d('prize_marble'), d('bouncy_ball'), d('crisp_apple')] })).res, 'win', 'grab of a trait: three round things');
+  t.eq(E(C.t2, st({ dl: [d('prize_marble'), d('glass_bead')] })).res, null, 'free: the claw touched them');
+  t.eq(E(C.t2, st({ dl: [d('prize_marble', { free: true })] })).res, 'win', 'free: one it never touched');
+  t.eq(E(C.x5, st({ dl: [d('crisp_apple')], left: 2 })).res, null, 'all: prizes still in the bin');
+  t.eq(E(C.x5, st({ dl: [d('crisp_apple')], left: 0 })).res, 'win', 'all: the bin is empty');
+  t.eq(E(C.x5, st({ dl: [], left: 0 })).res, null, 'all: an empty bin with nothing delivered is not a clear');
+  // failures
+  const f = E(C.t4, st({ dl: [d('stolen_gem', { t: true }), d('rock')] }));
+  t.ok(f.res === 'fail' && f.why === 'never', 'never: a rock with the gem fails');
+  t.eq(E(C.c1, st({ dl: [d('iron_nut'), d('lucky_coin'), d('crisp_apple')] })).why, 'never', 'the magnet class: a non-metal prize fails');
+  t.eq(E(C.m1, st({ dl: [d('crystal_ball', { t: true })], cracked: 1 })).why, 'cracked', 'no cracks: a crack fails even with the ball in');
+  t.eq(E(C.b1, st({ cracked: 1, dl: [d('crisp_apple')] })).res, 'win', 'a crack only fails a no-crack challenge');
+  t.eq(E(C.m5, st({ blew: 1 })).why, 'blew', 'the lit bomb blew');
+  t.eq(E(C.b1, st({ drops: 5 })).why, 'drops', 'out of drops');
+  t.eq(E(C.b1, st({ drops: 5, busy: true })).res, null, 'the last grab plays out before it is out of drops');
+  t.eq(E(C.b1, st({ drops: 5, dl: [d('crisp_apple')] })).res, 'win', 'a win on the last drop');
+  t.eq(E(C.b5, st({ t: 30, drops: 9 })).why, 'time', 'out of time');
+  t.eq(E(C.b5, st({ t: 31, busy: true })).res, null, 'a buzzer beater: the grab in flight still counts');
+  t.eq(E(C.b5, st({ t: 20, drops: 40 })).res, null, 'no drop limit on a timed challenge');
+  t.eq(E(null, st({})).res, null, 'junk is no result');
+});
+
+t.test('SCHOOL: stars by drops, time or the best grab; the tickets are paid once per star; totals, unlocks, grades', () => {
+  const C = DATA.SCH_CH, S = DATA.schStars;
+  t.eq(S(C.b1, { drops: 1 }), 3, 'b1: 1 drop, 3 stars'); t.eq(S(C.b1, { drops: 2 }), 2, '2 drops, 2 stars'); t.eq(S(C.b1, { drops: 5 }), 1, '5 drops, 1 star');
+  t.eq(S(C.b5, { t: 10 }), 3, 'b5: fast, 3 stars'); t.eq(S(C.b5, { t: 20 }), 2, '20 s, 2 stars'); t.eq(S(C.b5, { t: 29 }), 1, '29 s, 1 star');
+  t.eq(S(C.t3, { items: 4 }), 3, 't3: a grab of 4, 3 stars'); t.eq(S(C.t3, { items: 3 }), 2, '3, 2 stars'); t.eq(S(C.t3, { items: 2 }), 1, '2, 1 star');
+  for (const id of DATA.SCH_IDS) {
+    const c = C[id], s = [1, 2, 3].map(n => S(c, n === 3 ? { drops: 99, t: 999, items: 0 } : n === 2 ? { drops: c.stars.s2, t: c.stars.s2, items: c.stars.s2 } : { drops: c.stars.s3, t: c.stars.s3, items: c.stars.s3 }));
+    t.ok(s[0] === 3 && s[1] >= 2 && s[2] === 1, `${id}: every star count can be earned`);
+    t.eq(DATA.schStarText(c).length, 3, `${id}: three star rules in words`);
+  }
+  t.eq(DATA.schPay(0, 3), 3 * DATA.SCH.TIX, 'a first 3-star clear pays three stars');
+  t.eq(DATA.schPay(3, 3), 0, 'the same stars again pay nothing');
+  t.eq(DATA.schPay(1, 3), 2 * DATA.SCH.TIX, 'a better clear pays only the new stars');
+  t.eq(DATA.schPay(3, 1), 0, 'a worse clear pays nothing');
+  t.eq(DATA.schPay(0, 9), 3 * DATA.SCH.TIX, 'never more than three stars');
+  t.eq(DATA.schTotal({ b1: 3, b2: 2, nope: 3, b3: 7, b4: -2 }), 8, 'total: known challenges, 0..3 each');
+  t.eq(DATA.schLessonStars(0, { b1: 3, b2: 2, m1: 3 }), 5, 'a lesson\'s own stars');
+  t.ok(DATA.schOpen(0, 0) && !DATA.schOpen(1, DATA.SCH.NEED[1] - 1) && DATA.schOpen(1, DATA.SCH.NEED[1]) && !DATA.schOpen(9, 999), 'lessons open by the stars');
+  t.ok(DATA.schChOpen(0, 0, {}) && !DATA.schChOpen(0, 1, {}) && DATA.schChOpen(0, 1, { b1: 1 }), 'a challenge opens once the one before it has a star');
+  t.eq([78, 70, 58, 45, 10, 0].map(n => DATA.schGrade(n, 78)).join(), 'A+,A,B,C,D,-', 'grades');
+});
+
+t.test('SCHOOL: the record is repaired, old profiles get an empty one; the diploma\'s marquee is found but never listed', () => {
+  const e = DATA.schFix(undefined);
+  t.ok(e.tix === 0 && e.dip === 0 && !Object.keys(e.stars).length && e.pr.pile === 'starter' && e.pr.muts.length === 0, 'an old profile: an empty record');
+  const j = DATA.schFix({ stars: { b1: 9, b2: '2', zz: 3, b3: -1 }, best: { b1: { drops: '2', t: 'x', items: 3 }, zz: {} }, tix: -5, dip: 'yes', pr: { claw: 5, muts: ['lowgrav', 'double', 'nope', 'moon', 'glass', 'mirror'], pet: 'dragon', slow: 1 } });
+  t.ok(j.stars.b1 === 3 && j.stars.b2 === 2 && !('zz' in j.stars) && !('b3' in j.stars), 'stars: clamped, known ids only');
+  t.ok(j.best.b1.drops === 2 && j.best.b1.t === 0 && !j.best.zz, 'bests repaired');
+  t.ok(j.tix === 0 && j.dip === 1 && j.pr.claw === '' && j.pr.pet === '' && j.pr.slow === true, 'numbers, flags and the practice setup repaired');
+  t.eq(j.pr.muts.join(), 'lowgrav,moon,glass', 'practice mutators: known, practice ones, three at most');
+  t.eq(JSON.stringify(DATA.schFix(JSON.parse(JSON.stringify(j)))), JSON.stringify(j), 'the record survives a save and a load');
+  const id = DATA.SCH.DIPLOMA, c = DATA.COSMETICS[id];
+  t.ok(c && c.cat === 'marquee' && c.rarity === 'l' && c.school && c.look.text, 'the Valedictorian marquee');
+  t.ok(!Object.keys(DATA.COSMETICS).includes(id) && !DATA.COSMETIC_IDS.includes(id) && !DATA.vaultList('marquee').includes(id), 'never on a shelf list or in the counts');
+  t.ok(!DATA.vaultPool().includes(id) && !DATA.vaultPool('l').includes(id), 'never in a Vault Capsule');
+  t.ok(DATA.vaultHow(id) === 'school' && DATA.vaultPrice(id) === 0, 'not for sale: the diploma pays it');
+});
+
 t.done();

@@ -1168,6 +1168,43 @@ const AUDIO = (() => {
   NAMES.push('rosBlow', 'rosPop', 'rosCombo', 'rosQuake', 'rosSlide', 'rosSweep');
   // ---------------------------------------------------------------- /ROS
 
+  // ---------------------------------------------------------------- SCHOOL (round 11)
+  // Claw School (DESIGN.md "Claw School and the Practice Cabinet"): the school
+  // bell as a lesson starts, a star popping onto the result card (opts.n 1..3
+  // climbs), the pass jingle, a kind two-note "try again", chalk on the board.
+  Object.assign(BANK, {
+    schBell(out, t, o, p) {
+      for (let i = 0; i < 9; i++) blip(out, t, { at: i * 0.045, w: 'triangle', f: 1480 * p, dur: 0.04, v: 0.1 });
+      blip(out, t, { w: 'sine', f: 2960 * p, dur: 0.42, v: 0.03, vib: [22, 30] });
+      return 0.5;
+    },
+    schStar(out, t, o, p) {
+      const n = Math.max(1, Math.min(3, (o && o.n) | 0 || 1));
+      blip(out, t, { w: 'triangle', f: mtof(76 + n * 4) * p, dur: 0.22, v: 0.12 });
+      blip(out, t, { at: 0.05, w: 'sine', f: mtof(88 + n * 4) * p, dur: 0.3, v: 0.05 });
+      hiss(out, t, { type: 'highpass', f: 6000, dur: 0.12, v: 0.05 });
+      return 0.36;
+    },
+    schPass(out, t, o, p) {
+      [72, 76, 79, 84].forEach((m, i) => blip(out, t, { at: i * 0.08, w: 'square', f: mtof(m) * p, dur: i === 3 ? 0.34 : 0.1, v: 0.05, lp: 3200 }));
+      blip(out, t, { at: 0.24, w: 'triangle', f: mtof(60) * p, dur: 0.4, v: 0.1 });
+      return 0.62;
+    },
+    schFail(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: mtof(67) * p, to: mtof(66) * p, dur: 0.22, v: 0.13 });
+      blip(out, t, { at: 0.24, w: 'triangle', f: mtof(62) * p, to: mtof(58) * p, dur: 0.42, v: 0.13, vib: [6, 8] });
+      return 0.7;
+    },
+    schChalk(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 3200 * p, to: 2400 * p, q: 3, dur: 0.14, v: 0.1 });
+      hiss(out, t, { at: 0.09, type: 'bandpass', f: 2800 * p, q: 3, dur: 0.08, v: 0.07 });
+      return 0.2;
+    },
+  });
+  Object.assign(GAP, { schBell: 0.8, schStar: 0.06, schPass: 0.5, schFail: 0.5, schChalk: 0.08 });
+  NAMES.push('schBell', 'schStar', 'schPass', 'schFail', 'schChalk');
+  // ---------------------------------------------------------------- /SCHOOL
+
   // ---------------------------------------------------------------- arcade
   // The map's arcade (DESIGN.md "Arcade"): plinko pegs and drops, the prize
   // wheel's clicker, the slot machine's lever / reels / thunks, the drumroll
@@ -2222,6 +2259,124 @@ const AUDIO = (() => {
   NAMES.push('stoPage', 'stoCallback', 'garyTaunt', 'clawOffBell', 'plushSqueak', 'beltRun', 'iceGrow', 'crabSnip', 'hunted');
   /* ---------------------------------------------------------------- /STORY */
 
+  /* ---------------------------------------------------------------- DUO (round 11)
+     DESIGN.md "Duo: pass and play (round 11)": the hand-off card flipping
+     over, the coin toss, the countdown and READY, a sabotage card slapped
+     down, the crowd at the podium, and the taunts, each with its own voice
+     (opts.v: kazoo, boing, trombone, horn, beatbox, mic, sing, cheer). */
+  const DUO_V = {
+    // "nyah nyah": a buzzy kazoo, two notes bouncing
+    kazoo(out, t, p) {
+      [[74, 0], [71, 0.16], [74, 0.3], [71, 0.44]].forEach(([n, at]) => blip(out, t, { at, w: 'sawtooth', f: mtof(n) * p, to: mtof(n - 1) * p, dur: 0.13, v: 0.07, lp: 1900, q: 7, vib: [22, 16] }));
+      return 0.65;
+    },
+    // a cartoon spring: a boing sliding up and wobbling
+    boing(out, t, p) {
+      blip(out, t, { w: 'sine', f: 180 * p, to: 720 * p, dur: 0.45, v: 0.14, vib: [18, 60] });
+      blip(out, t, { at: 0.02, w: 'triangle', f: 360 * p, to: 1400 * p, dur: 0.3, v: 0.04, vib: [18, 90] });
+      return 0.5;
+    },
+    // the sad trombone: wah wah wah waaah, down a semitone each time
+    trombone(out, t, p) {
+      [[63, 0, 0.26], [62, 0.3, 0.26], [61, 0.6, 0.26], [60, 0.9, 0.8]].forEach(([n, at, dur]) => blip(out, t, { at, w: 'sawtooth', f: mtof(n - 12) * p, dur, v: 0.09, a: 0.04, lp: 900, q: 3, vib: at > 0.8 ? [6, 12] : null }));
+      return 1.75;
+    },
+    // an air horn: three fat blasts, the last one long
+    horn(out, t, p) {
+      for (const [at, dur] of [[0, 0.16], [0.2, 0.16], [0.4, 0.55]]) {
+        blip(out, t, { at, w: 'sawtooth', f: 466 * p, dur, v: 0.06, lp: 3200 });
+        blip(out, t, { at, w: 'sawtooth', f: 587 * p, dur, v: 0.05, lp: 3200 });
+        blip(out, t, { at, w: 'square', f: 233 * p, dur, v: 0.04, lp: 1800 });
+      }
+      return 0.95;
+    },
+    // boots and cats: kick, hat, snare, hat (the owners' own beat)
+    beatbox(out, t, p) {
+      const step = 0.13;
+      for (let i = 0; i < 8; i++) {
+        const at = i * step, k = i % 4;
+        if (k === 0) blip(out, t, { at, w: 'sine', f: 140 * p, to: 42, dur: 0.14, v: 0.35 });
+        else if (k === 2) { hiss(out, t, { at, type: 'bandpass', f: 1900, q: 0.9, dur: 0.1, v: 0.2 }); blip(out, t, { at, w: 'triangle', f: 210 * p, to: 150, dur: 0.07, v: 0.08 }); }
+        else hiss(out, t, { at, type: 'highpass', f: 7000, dur: 0.035, v: 0.09 });
+      }
+      return 1.1;
+    },
+    // a mic drop: a thud, a clatter and a squeal of feedback
+    mic(out, t, p) {
+      blip(out, t, { w: 'sine', f: 110 * p, to: 40, dur: 0.22, v: 0.4 });
+      hiss(out, t, { at: 0.02, type: 'bandpass', f: 900, q: 1.5, dur: 0.16, v: 0.15, crunch: true });
+      blip(out, t, { at: 0.18, w: 'sine', f: 2900 * p, to: 3300 * p, dur: 0.6, v: 0.025, a: 0.15, vib: [5, 30] });
+      return 0.85;
+    },
+    // a little sung line: la la la LA
+    sing(out, t, p) {
+      [[72, 0], [74, 0.16], [76, 0.32], [79, 0.5]].forEach(([n, at], i) => {
+        blip(out, t, { at, w: 'triangle', f: mtof(n) * p, dur: i === 3 ? 0.5 : 0.15, v: 0.08, a: 0.02, vib: [6, 9] });
+        blip(out, t, { at, w: 'sine', f: mtof(n + 12) * p, dur: i === 3 ? 0.4 : 0.12, v: 0.02 });
+      });
+      return 1.05;
+    },
+    // a cheer: a rising whoop and two claps
+    cheer(out, t, p) {
+      blip(out, t, { w: 'triangle', f: 380 * p, to: 820 * p, dur: 0.35, v: 0.08, vib: [9, 20] });
+      for (const at of [0.34, 0.5]) hiss(out, t, { at, type: 'bandpass', f: 1500, q: 1.2, dur: 0.06, v: 0.22, crunch: true });
+      return 0.65;
+    },
+  };
+  Object.assign(BANK, {
+    // The hand-off card flips over: a paper swish and a click.
+    duoFlip(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 1600 * p, q: 0.8, dur: 0.22, v: 0.14, a: 0.06 });
+      blip(out, t, { at: 0.2, w: 'triangle', f: 1400 * p, dur: 0.05, v: 0.08 });
+      return 0.35;
+    },
+    // The coin toss: a thumb flick, the ring of the spin, a clink on landing (opts.land).
+    duoCoin(out, t, o, p) {
+      if (o && o.land) {
+        blip(out, t, { w: 'sine', f: 2200 * p, dur: 0.35, v: 0.08 });
+        blip(out, t, { at: 0.08, w: 'sine', f: 2750 * p, dur: 0.3, v: 0.05 });
+        hiss(out, t, { type: 'highpass', f: 6000, dur: 0.03, v: 0.12 });
+        return 0.45;
+      }
+      hiss(out, t, { type: 'highpass', f: 4000, dur: 0.03, v: 0.14 });
+      for (let i = 0; i < 6; i++) blip(out, t, { at: 0.05 + i * 0.09, w: 'sine', f: (1800 + i * 90) * p, dur: 0.06, v: 0.035 });
+      return 0.65;
+    },
+    // A countdown beep (opts.n: 3, 2, 1 climb).
+    duoCount(out, t, o, p) {
+      const n = Math.max(0, Math.min(5, (o && o.n) | 0));
+      blip(out, t, { w: 'square', f: mtof(76 + (3 - n) * 2) * p, dur: 0.1, v: 0.06, lp: 3000 });
+      return 0.15;
+    },
+    // READY: a bright arpeggio up.
+    duoReady(out, t, o, p) {
+      [76, 79, 84, 88].forEach((n, i) => blip(out, t, { at: i * 0.05, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.06, lp: 5000 }));
+      return 0.4;
+    },
+    // A sabotage card slapped down: a card slap and a sneaky villain chord.
+    duoSabo(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 2400, q: 1.1, dur: 0.05, v: 0.3, crunch: true });
+      [60, 63, 66].forEach((n) => blip(out, t, { at: 0.06, w: 'sawtooth', f: mtof(n - 12) * p, dur: 0.5, v: 0.05, lp: 1300 }));
+      blip(out, t, { at: 0.06, w: 'square', f: mtof(81) * p, to: mtof(78) * p, dur: 0.35, v: 0.03, lp: 2400 });
+      return 0.65;
+    },
+    // The crowd at the podium: a swell of cheering and a few claps.
+    duoCrowd(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 1100, q: 0.6, dur: 1.4, v: 0.12, a: 0.35 });
+      for (let i = 0; i < 7; i++) hiss(out, t, { at: 0.2 + i * 0.13 + (i % 3) * 0.02, type: 'bandpass', f: 1500 + (i % 3) * 300, q: 1.2, dur: 0.05, v: 0.14, crunch: true });
+      blip(out, t, { at: 0.1, w: 'triangle', f: 520 * p, to: 900 * p, dur: 0.4, v: 0.04, vib: [8, 20] });
+      return 1.45;
+    },
+    // A taunt or a cheer in its own voice (opts.v, the kazoo when unknown).
+    duoTaunt(out, t, o, p) {
+      const v = DUO_V[o && o.v] || DUO_V.kazoo;
+      return v(out, t, p);
+    },
+  });
+  Object.assign(GAP, { duoFlip: 0.2, duoCoin: 0.1, duoCount: 0.08, duoReady: 0.2, duoSabo: 0.3, duoCrowd: 1.0, duoTaunt: 0.4 });
+  NAMES.push('duoFlip', 'duoCoin', 'duoCount', 'duoReady', 'duoSabo', 'duoCrowd', 'duoTaunt');
+  /* ---------------------------------------------------------------- /DUO */
+
   /* ---------------------------------------------------------------- FAMILY + REROLL (round 9)
      DESIGN.md "Enemy families (round 9)" and "Shop reroll (round 9)": a
      family walks on (a band count-in, a vending jingle, a choir chord), the
@@ -2890,14 +3045,14 @@ const AUDIO = (() => {
   const MIX_STING = { huge: 1 };
   const MIX_LIST = {
     tick: 'tick wheelTick loreType roulette ticket diceRoll',
-    ui: 'click cardFlip tally peg boonFlip stoPage footstep step bloom roamStep petHop cmpFeed vaultEquip twinSeek famBeat candy beep wheelSpin shuffle rosPop',
+    ui: 'click cardFlip tally peg boonFlip stoPage footstep step bloom roamStep petHop cmpFeed vaultEquip twinSeek famBeat candy beep wheelSpin shuffle rosPop schChalk',
     soft: 'clawMove clawDrop clawTouch clawClose clawLift clawRelease itemLand itemSlip whoosh tinkle squish slosh chime boing fuse ' +
       'magHum magDrop scoopSlosh handSquish hookFire twinClick vacWhoosh vacSlurp vacBlow turBuild clawCoin clawSpin clawTap ' +
       'plinkDrop lever reelSpin reelStop skeeRoll skeeHop drip sizzle petChirp petAct petLove giggle dig magLift ' +
       'beltRun iceGrow secHum secGrav glassCrack creak knock molePop diceLand famCan famHum plushSqueak rrShine ' +
       'arcLose arcIn petHonk moleCombo ticketSpray boonDeal petSyn secVoice crabSnip famReady famChange groan rosBlow rosSlide rosSweep',
     big: 'hitBig crit combo upgrade relic capUpgrade slam boom roar vsSlam kaboom turMega arcWin ambush famSolo ' +
-      'cmpCrunch doorOpen loreSting wkMedal fanfare lucky lose stingBoss rosCombo',
+      'cmpCrunch doorOpen loreSting wkMedal fanfare lucky lose stingBoss rosCombo schPass',
     huge: 'jackpot win victory capBurst double bossDown arcJackpot setDone evoBurst powerDown boss',
   };
   // mid (the default): hits, blocks, statuses, pickups, the stingElite, clawCheer, petLevel, setPiece, evoRise ...
@@ -2928,6 +3083,8 @@ const AUDIO = (() => {
     wkMedal: 7,
     // round 10 (ROS): Ms. Bubbles and the new pets
     rosBlow: -3, rosPop: -3.5, rosCombo: 8, rosQuake: 1.5, rosSlide: 5, rosSweep: 7.5,
+    // round 11 (SCHOOL): the bell, a star, the pass, a try again, chalk
+    schBell: 6, schStar: 4, schPass: 7.5, schFail: 4, schChalk: 10,
   };
   // [pitch spread (fraction), level spread (dB)] for the sounds that repeat back to back
   const MIX_VARY = {};

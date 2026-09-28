@@ -6845,8 +6845,9 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     const { T, G } = metaBoot();
     G.showTitle();
     const tl = G.S.ui.buttons.map((b) => b.label);
-    h.eq(tl[tl.length - 1], 'History', 'History is the last title button, so the others keep their indices');
-    G.choose(tl.length - 1);
+    // (round 11: newer title buttons, like DUO, register after History, so it and every older one keep their indices)
+    h.ok(tl.indexOf('History') > tl.indexOf('Boss Rush') && tl.indexOf('Boss Rush') > tl.indexOf('Codex'), 'History comes after every older title button');
+    G.choose(tl.indexOf('History'));
     h.ok(G.screen === 'history' && T._nodes.historyBody.children.some((c) => c.className === 'hisList' && c.children.some((x) => /No runs yet/.test(x.textContent))), 'an empty history says how to fill it');
     G.draw();
     G.newRun('knight', 8301);
@@ -7916,7 +7917,7 @@ h.test('lore: the Codex opens from the title and the Prizedex, walks chapters an
   G.meta.lore.kills.rat = 5;
   G.showTitle();
   const tl = loreLbl(G);
-  h.eq(tl[tl.length - 1], 'History', 'History stays the last title button');
+  h.ok(tl.indexOf('History') > tl.indexOf('Boss Rush'), 'History comes after every older title button (round 11: DUO registers after it)');
   h.ok(tl.indexOf('Codex') >= 0 && tl.indexOf('Codex') < tl.indexOf('History'), 'the Codex button comes before it');
   G.choose(tl.indexOf('Codex'));
   h.eq(G.screen, 'codex', 'the Codex opens');
@@ -8120,7 +8121,7 @@ h.test('lore: the weekly challenge by ISO week, its title card, its screen, its 
   // the title card, before History
   G.showTitle();
   const tl = loreLbl(G);
-  h.eq(tl[tl.length - 1], 'History', 'History stays last');
+  h.ok(tl.indexOf('History') > tl.indexOf('Weekly challenge'), 'History comes after every older title button (round 11: DUO registers after it)');
   h.ok(tl.indexOf('Weekly challenge') > tl.indexOf('Codex'), 'the weekly card after the Codex');
   h.ok(/left$/.test(G.S.wkLeftEl.textContent), 'the card counts down');
   G.draw();
@@ -8192,7 +8193,7 @@ h.test('rush: the title card sits before History, locked until the first win; th
   const { T, G, saved } = metaBoot({});
   G.showTitle();
   let tl = rushLbl(G);
-  h.eq(tl[tl.length - 1], 'History', 'History stays the last title button');
+  h.ok(tl.indexOf('History') > tl.indexOf('Boss Rush'), 'History comes after every older title button (round 11: DUO registers after it)');
   const i = tl.indexOf('Boss Rush');
   h.ok(i > tl.indexOf('Weekly challenge') && i < tl.indexOf('History'), 'Boss Rush after the weekly card, before History: ' + tl.join(', '));
   h.ok(!G.rush.open(), 'locked on a profile without a win');
@@ -8430,6 +8431,30 @@ h.test('rush: The Machine only once met, a fall, giving up, the killer on the re
   h.ok(unmet.G.screen === 'title' && !unmet.G.run, 'back to the title');
   unmet.G.showTitle();
   h.ok(unmet.T._nodes.titleMenu.children.some((c) => /rushCard/.test(c.className || '') && /every boss|best/.test(secWalk(c).map((n) => n.textContent).join(' '))), 'the title card');
+});
+
+/* ---------------------------------------------------------------- QA pass 4 (round 11): regressions */
+h.test('qa11: Give up reads "gave up at boss n", and the first challenger never says the clock line twice', () => {
+  const { T, G } = metaBoot({ stats: { wins: 1 }, unlocks: { knight: true } });
+  G.rush.start('knight', 13);
+  G.draw();
+  stepFor(G, 4);   // the slam is over: the DOM hint has its after-slam words
+  G.draw();
+  const K = G.rush.K;
+  h.ok(K.cst && K.cst.split && K.tap && K.cst.split !== K.tap.textContent, `the canvas line (${K.cst && K.cst.split}) and the hint under it (${K.tap && K.tap.textContent}) differ`);
+  h.eq(K.cst.split, '7 bosses, back to back', 'the first challenger: the size of the rush');
+  G.choose(rushLbl(G).indexOf('Give up'));
+  h.ok(secFind(T._nodes.rushBody, /Sir Grabsworth gave up at boss 1 of 7\./), 'a give up says so');
+  h.ok(!secFind(T._nodes.rushBody, /fell to walking away/), 'never "fell to walking away"');
+  // after a win, the next challenger shows the last split
+  G.choose(rushLbl(G).indexOf('Rush again'));
+  G.rush.fight();
+  rushVs(G);
+  stepFor(G, 0.5);
+  G.endFight('win');
+  G.rush.pick(0);
+  G.draw();
+  h.ok(/^last split /.test(G.rush.K.cst.split), 'boss 2: the last split');
 });
 
 h.test('ghost: a daily keeps checkpoints, the next attempt races them by day, the chip, GHOST PASSED!, the end panel, a new ghost', () => {
@@ -8944,6 +8969,698 @@ h.test('mix: the run-end numbers count up from zero and land exactly', () => {
       if (id === 'molerat') h.ok(require0(G) > gold0, 'Gold Digger pays');
       G.endFight('win'); G.toMap();
     }
+  });
+}
+
+// ---------------- DUO (round 11): pass and play (DESIGN.md "Duo: pass and play (round 11)")
+{
+  const duoStep = (G, s) => { for (let i = 0, n = Math.round(s / DT); i < n; i++) G.update(DT); };
+  // a duel with two named players, from the title's button, the toss caught at once
+  function duoNew(G, mode, seed, o) {
+    o = o || {};
+    G.duo.seed = seed;
+    G.duo.menu();
+    G.duo.setup(mode);
+    G.duo.set(0, 'name', o.a || 'Roxor'); G.duo.set(1, 'name', o.b || 'Jasmin');
+    if (o.char1) G.duo.set(1, 'char', o.char1);
+    if (o.boss) G.duo.set(-1, 'boss', o.boss);
+    if (o.drops) G.duo.set(-1, 'drops', o.drops);
+    const D = G.duo.start();
+    G.duo.afterToss();
+    return D;
+  }
+  const duoReady = (G) => { duoStep(G, G.duo.C ? 3.8 : 4); return G.duo.ready(); };
+  // one claw-off drop at the best prize, played out to its end
+  function duoDropOut(G) {
+    const D = G.duo.state;
+    if (D.ph === 'hand') duoReady(G);
+    if (D.ph !== 'play') return false;
+    G.duo.drop(G.duo.aim());
+    for (let i = 0; i < 60 * 25 && D.ph === 'play'; i++) G.update(DT);
+    return D.ph !== 'play';
+  }
+  const fightReady = (G) => { const s = G.state(); return s.screen === 'fight' && s.fight && s.fight.phase === 'player' && !s.grabInFlight && !s.enemyTurn && s.queue === 0 && s.rigPhase === 'idle'; };
+  const fightSettle = (G, secs) => { for (let i = 0; i < (secs || 30) * 60; i++) { if (G.screen !== 'fight' || fightReady(G)) return true; G.update(DT); } return false; };
+
+  h.test('duo: the title button (registered last, beside New run), the menu and the record', () => {
+    const T = boot(), G = T.GAME;
+    const labels = G.S.ui.buttons.map((b) => b.label);
+    h.ok(labels.indexOf('Duo') > labels.indexOf('History') && labels.indexOf('History') > labels.indexOf('Boss Rush'), 'DUO registers after History (every older index holds)');
+    const nr = G.S.ui.buttons.find((b) => b.label === 'New run'), du = G.S.ui.buttons.find((b) => b.label === 'Duo');
+    h.ok(nr.el.parentNode && nr.el.parentNode === du.el.parentNode && /duoRow/.test(nr.el.parentNode.className), 'it shares the NEW RUN row (the menu is no taller)');
+    h.ok(!/resume/.test(JSON.stringify(du.el.children.map((c) => c.textContent))), 'no duel saved: "2 players"');
+    G.choose(labels.length - 1);
+    h.eq(G.screen, 'duo', 'the duo screen');
+    const ml = G.S.ui.buttons.map((b) => b.label);
+    h.ok(ml.includes('Co-op Boss') && ml.includes('Versus Claw-off') && ml.includes('Back'), 'both modes and Back');
+    G.draw();
+    G.choose(ml.indexOf('Back'));
+    h.eq(G.screen, 'title', 'Back to the title');
+    // with a run saved, CONTINUE leads and DUO still comes last
+    G.newRun('knight', 5); G.save(); G.showTitle();
+    const l2 = G.S.ui.buttons.map((b) => b.label);
+    h.ok(l2[0] === 'Continue' && l2.slice(1).join() === labels.join(), 'CONTINUE first, the rest (DUO too) in their order');
+  });
+
+  h.test('duo: setup (names, colours, crawlers, claws, looks, drops, bosses), the coin toss and the hand-off countdown', () => {
+    const T = boot(), G = T.GAME, DD = T.DATA.DUO;
+    G.duo.menu();
+    const St = G.duo.setup('vs');
+    h.ok(St.p[0].name === 'P1' && St.p[1].name === 'P2' && St.p[0].color !== St.p[1].color, 'a fresh profile: P1 and P2 in two colours');
+    h.ok(G.duo.set(0, 'color', St.p[1].color) && St.p[0].color !== St.p[1].color, 'taking the other one\'s colour swaps them');
+    h.ok(!G.duo.set(0, 'char', 'rogue') && G.duo.set(0, 'char', 'knight'), 'only an unlocked crawler');
+    h.ok(G.duo.set(1, 'claw', 'magnet') && !G.duo.set(1, 'claw', 'spoon'), 'only a real claw');
+    h.ok(!G.duo.set(0, 'paint', 'paint_rainbow') && G.duo.set(0, 'paint', ''), 'only an owned paint (or the team colour)');
+    h.ok(G.duo.set(-1, 'drops', 5) && !G.duo.set(-1, 'drops', 9), 'three to five drops');
+    G.duo.set(0, 'name', '  Roxor  '); G.duo.set(1, 'name', '');
+    h.ok(G.S.ui.buttons.some((b) => b.label === 'Toss the coin!'), 'the toss button');
+    G.draw();
+    G.duo.seed = 321;
+    const D = G.duo.start();
+    h.ok(D.p[0].name === 'Roxor' && D.p[1].name === 'P2', 'names trimmed, an empty one is P2');
+    h.eq(D.first, T.DATA.duoToss(321).w, 'the toss is the seed\'s');
+    h.eq(G.meta.duo.last.p[0].name, 'Roxor', 'the setup is remembered on the profile');
+    h.eq(D.ph, 'toss', 'the coin goes up');
+    duoStep(G, 0.5); G.draw();
+    G.duo.toss();
+    h.eq(D.ph, 'toss', 'a tap catches the coin: it lands');
+    G.duo.toss();
+    h.eq(D.ph, 'hand', 'a second tap: the hand-off');
+    h.eq(D.turn, D.first, 'the toss winner drops first');
+    h.eq(D.from, 1 - D.first, '...the other one holds the phone');
+    h.ok(!G.duo.ready(), 'READY waits for the countdown');
+    const rb = G.S.ui.buttons.find((b) => b.label === 'Ready');
+    h.ok(rb && rb.el.disabled, 'the READY button is dark');
+    duoStep(G, 1.5);
+    h.ok(G.duo.t.count > 0 && !G.duo.ready(), 'still counting');
+    duoStep(G, 2.5); G.draw();
+    h.ok(G.duo.t.count === 0 && !rb.el.disabled, 'the countdown ran out: READY lights up');
+    // a taunt: its voice, its bubble on the card, the log
+    h.ok(G.duo.taunt('spoon') && D.msg && D.msg.id === 'spoon' && D.msg.from === D.from, 'a taunt from the one holding the phone');
+    h.ok(!G.duo.taunt('nope'), 'an unknown taunt is refused');
+    G.draw();
+    h.ok(G.duo.ready() && D.ph === 'play' && !D.msg, 'READY: the drop, the bubble goes');
+  });
+
+  h.test('duo: a versus claw-off (drops score, sabotage cards between drops, best of three, booked once, rematch)', () => {
+    const T = boot(), G = T.GAME, DD = T.DATA.DUO;
+    T._store.clawspire_run = 'SOLO';
+    const D = duoNew(G, 'vs', 4242, { drops: 3 });
+    h.eq(D.round, 1, 'round 1');
+    h.ok(D.hands[0].length === DD.HAND.start && D.hands[1].length === DD.HAND.start, 'two cards each');
+    const V0 = G.duo.v;
+    h.eq(V0.W.bodies.filter((b) => b.type === 'dynamic' && b.data && b.data.pile != null).length, 14, 'the shared bin: 14 prizes');
+    // drop 1: scored, the dropper draws a card, the sabotage choice
+    const who = D.turn, s0 = D.score[who];
+    h.ok(duoDropOut(G), 'a drop plays out');
+    h.eq(D.ph, 'sabo', 'after a drop: the sabotage choice');
+    h.ok(D.last && D.last.who === who && D.score[who] === s0 + D.last.pts, 'the drop is scored for its dropper');
+    h.eq(D.last.pts, T.DATA.duoDropScore(D.last.got.map((i) => ({ i, id: G.duo.v.pile[i].id, v: G.duo.v.pile[i].v, gold: G.duo.v.pile[i].gold }))).pts, '...by DATA.duoDropScore');
+    h.eq(D.hands[who].length, DD.HAND.start + 1, 'the dropper draws a card');
+    h.eq(D.taken.length, D.last.got.length, 'what fell in is gone from the bin');
+    G.draw();
+    const card = D.hands[who][0];
+    h.ok(G.duo.card(0) && D.pend && D.pend.id === card && D.pend.on === 1 - who, 'a card played on the rival\'s next drop');
+    h.ok(D.ph === 'hand' && D.turn === 1 - who, 'the phone passes');
+    duoReady(G);
+    h.eq(G.duo.v.card, card, 'the card bites on their drop');
+    h.ok(duoDropOut(G) && !D.pend, 'spent with the drop');
+    G.duo.keep();
+    h.ok(D.ph === 'hand' && D.turn === who, 'keeping the cards passes the phone too');
+    // every card does what it says
+    const bw = G.duo.v.C.bounds.chuteX;
+    for (const id of DD.CARD_IDS) {
+      D.pend = { id, on: D.turn, by: 1 - D.turn };
+      duoReady(G);
+      const V = G.duo.v, rig = V.rig;
+      if (id === 'fog') h.ok(V.fog === 1, 'Fog Machine: the glass fogs');
+      if (id === 'mirror') { G.duo.pointer('down', T.GAME.CAB.x + 120, 600); h.ok(V.mirror && Math.abs(rig.targetX - (bw - 120)) < 1, 'Mirror Mirror: the finger steers backwards'); G.duo.pointer('cancel', 0, 0); }
+      if (id === 'tilt') h.ok(V.tilt !== 0 && Math.abs(V.W.gravity ? V.W.gravity.x : V.tilt) > 0, 'Tilt!: the bin leans');
+      if (id === 'grease') h.ok(rig.cfg && rig.cfg.grease === 1, 'Butter Fingers: a greasy claw');
+      if (id === 'tiny') h.ok(rig.cfg && rig.cfg.width < 1, 'Tiny Claw: a smaller claw');
+      if (id === 'turbo') h.ok(rig.cfg && rig.cfg.speed > 1.5, 'Too Much Coffee: a fast claw');
+      if (id === 'shake') h.ok(V.W.bodies.some((b) => b.type === 'dynamic' && Math.abs(b.vy) > 100), 'Shake Up: the pile jumps');
+      h.ok(V.slam && V.slam.id === id, id + ': the card slams onto the glass');
+      G.draw();
+      D.k = 0; D.used = [0, 0];   // keep the round going while every card is tried
+      duoDropOut(G);
+      if (id === 'tilt') h.eq(G.duo.v.tilt, 0, 'the lean ends with the drop');
+      if (D.ph === 'sabo') G.duo.keep();
+      if (D.ph === 'round' || D.ph === 'end') break;
+    }
+    // play the match out: best of three
+    let guard = 0;
+    while (D.ph !== 'end' && guard++ < 60) {
+      if (D.ph === 'hand' || D.ph === 'play') duoDropOut(G);
+      else if (D.ph === 'sabo') { if (D.hands[D.from].length) G.duo.card(0); else G.duo.keep(); }
+      else if (D.ph === 'round') { h.ok(D.rounds.length >= 1 && G.S.ui.buttons.some((b) => b.label === 'Next round'), 'a round result'); G.draw(); G.duo.next(); h.eq(D.turn, T.DATA.duoStarter(D.first, D.rounds), 'the loser of the last round starts'); }
+    }
+    h.eq(D.ph, 'end', 'the match is decided');
+    const m = T.DATA.duoMatch(D.rounds);
+    h.ok(m.w !== null && D.res && D.res.w === m.w && D.paid, 'booked with the match\'s winner');
+    const rec = G.meta.duo;
+    h.ok(rec.vs === 1 && rec.games === 1, 'one claw-off on the record');
+    if (m.w >= 0) h.ok(rec.names[D.p[m.w].name.toLowerCase()].w === 1 && rec.names[D.p[1 - m.w].name.toLowerCase()].l === 1, 'a win and a loss per name');
+    G.draw();
+    h.ok(G.S.ui.buttons.some((b) => b.label === 'Rematch'), 'Rematch on the podium');
+    // a reload on the podium never books it twice
+    G.duo.park(); G.duo.resume();
+    h.ok(G.duo.state.ph === 'end' && G.meta.duo.vs === 1, 'resumed on the podium, booked once');
+    const R2 = G.duo.rematch();
+    h.ok(R2 && R2.ph === 'toss' && R2.p[0].name === 'Roxor' && R2.drops === 3 && !R2.paid && R2.seed !== 4242, 'Rematch: the same two, a fresh toss');
+    h.eq(T._store.clawspire_run, 'SOLO', 'the solo run save was never touched');
+    G.duo.leave();
+    h.eq(G.screen, 'title', 'out to the title');
+  });
+
+  h.test('duo: a claw-off saves every drop and resumes at the next one (the pile less what was won); the run save untouched', () => {
+    const T = boot(), G = T.GAME;
+    G.newRun('knight', 77); G.save();
+    const solo = T._store.clawspire_run, run = G.run;
+    const D = duoNew(G, 'vs', 999, { drops: 4 });
+    h.ok(D.drops === 4 && G.duo.v.pile.length === 16, 'four drops each: a fuller bin');
+    duoDropOut(G);
+    G.duo.keep();
+    duoDropOut(G);
+    const saved = JSON.parse(T._store.clawspire_duo);
+    h.ok(saved.ph === 'sabo' && saved.k === 2 && saved.taken.length === D.taken.length && saved.score.join() === D.score.join(), 'every drop saves: scores, what was won, the hands');
+    const left = G.duo.v.W.bodies.filter((b) => b.type === 'dynamic' && b.data && b.data.pile != null).length;
+    // a reload: a new page, the duo menu's Resume
+    const T2 = boot({ store: Object.assign({}, T._store) }), G2 = T2.GAME;
+    h.ok(G2.duo.saved() && G2.S.ui.buttons.find((b) => b.label === 'Duo').el.children.some((c) => /resume/.test(c.textContent)), 'the title says resume');
+    G2.duo.menu();
+    h.ok(G2.S.ui.buttons.some((b) => b.label === 'Resume duel'), 'Resume duel on the menu');
+    h.ok(G2.duo.resume(), 'resumed');
+    const D2 = G2.duo.state;
+    h.ok(D2.ph === 'sabo' && D2.k === 2 && D2.score.join() === D.score.join(), 'at the sabotage choice after drop 2');
+    h.eq(G2.duo.v.W.bodies.filter((b) => b.type === 'dynamic' && b.data && b.data.pile != null).length, left, 'the bin holds exactly what was left');
+    G2.duo.keep();
+    h.ok(D2.ph === 'hand' && D2.turn === 1 - D2.from, 'and on to the next drop');
+    // a pause from the hand-off, then resume: the same player's hand-off
+    const turn = D2.turn;
+    G2.choose(G2.S.ui.buttons.findIndex((b) => b.label === 'Pause'));
+    h.ok(G2.screen === 'duo' && !G2.duo.state, 'paused to the duo menu');
+    G2.duo.resume();
+    h.ok(G2.duo.state.ph === 'hand' && G2.duo.state.turn === turn, 'back at the same hand-off');
+    h.eq(T._store.clawspire_run, solo, 'the solo save is exactly as it was');
+    G.duo.leave();
+    h.ok(G.run === run && G.screen === 'title', 'leaving hands the solo run back');
+    G2.duo.leave();
+    h.ok(T2._store.clawspire_duo, 'left mid duel: still saved for later');
+  });
+
+  h.test('duo: co-op boss (turn order, a shared boss that hits whoever just went, a seat down, a team win booked once, the podium)', () => {
+    const T = boot(), G = T.GAME, C = T.COMBAT;
+    T._store.clawspire_run = 'SOLO';
+    const D = duoNew(G, 'coop', 4243, { char1: 'knight' });
+    h.ok(T.DATA.duoBosses().some((x) => x.id === D.boss), 'a boss from the lineup (random)');
+    h.eq(D.ph, 'hand', 'the phone goes to the toss winner');
+    const first = D.turn;
+    duoReady(G);
+    h.eq(G.screen, 'fight', 'the fight');
+    for (let i = 0; i < 4 && G.fs && G.fs.vs; i++) G.pointer('down', 270, 500);
+    fightSettle(G);
+    const L = G.duo.live;
+    h.ok(L && L.F[0] && L.F[1] && L.F[0] !== L.F[1], 'a fight per seat');
+    h.ok(L.F[0].enemies === L.F[1].enemies, 'one shared boss');
+    h.ok(G.fight === L.F[first] && G.run === L.runs[first] && G.run.char === D.p[first].char, 'the first seat plays its own run');
+    const e = G.fight.enemies[0];
+    const solo = C.newFight(L.runs[first], [D.boss], T.U.rng(D.fseed)).enemies[0];
+    h.eq(e.maxHp, Math.round(solo.maxHp * T.DATA.rushHpK(D.boss) * T.DATA.DUO.COOP.hpK), 'the boss: its Boss Rush hit points, times COOP.hpK for two');
+    h.ok(L.runs[first].bin.length > (T.DATA.CHARACTERS[D.p[first].char].bin || []).length, 'each seat brings its Boss Rush kit');
+    G.draw();
+    // the boss acts on the seat that just went: pin an attack, check only that seat takes it
+    const atk = (e.def.moves || []).find((m) => m && m.k === 'attack');
+    const other = 1 - first, hpO = L.F[other].player.hp;
+    e.intent = Object.assign({}, atk, { v: 30, n: 1 }); e.charged = 0;
+    G.fight.player.block = 0;
+    const hp0 = G.fight.player.hp;
+    G.endTurn();
+    for (let i = 0; i < 60 * 20 && G.screen === 'fight'; i++) G.update(DT);
+    h.ok(L.F[first].player.hp < hp0, 'the boss hit the seat that just went');
+    h.eq(L.F[other].player.hp, hpO, '...and not the other one');
+    h.ok(G.screen === 'duo' && D.ph === 'hand' && D.turn === other && D.from === first, 'the phone passes to the other seat');
+    G.draw();
+    duoReady(G);
+    fightSettle(G);
+    h.ok(G.fight === L.F[other] && G.run === L.runs[other], 'the other seat\'s own fight comes back in');
+    h.ok(!G.fs.vs, 'no versus card on a hand-back');
+    h.ok(G.duo.log.filter((l) => l.k === 'seat').map((l) => l.seat).join() === [first, other].join(), 'seat order: first, then the other');
+    // damage by this seat shows for both (the shared boss)
+    const bhp = e.hp;
+    C.damage(G.fight, G.fight.player, e, 5);
+    h.ok(e.hp < bhp && L.F[first].enemies[0].hp === e.hp, 'the boss\'s hp is one for both');
+    G.draw();
+    // this seat falls: the other fights on alone (no more hand-offs)
+    G.fight.player.hp = 1; G.fight.player.block = 0;
+    e.intent = Object.assign({}, atk, { v: 999, n: 1 }); e.charged = 0;
+    G.endTurn();
+    for (let i = 0; i < 60 * 20 && D.ph === 'fight' && G.screen === 'fight'; i++) G.update(DT);
+    h.ok(D.down[other] === 1 && D.ph === 'hand' && D.turn === first, 'a seat down: the phone goes to the partner');
+    duoReady(G);
+    fightSettle(G);
+    const hands = G.duo.log.filter((l) => l.k === 'hand').length;
+    e.intent = (e.def.moves || []).find((m) => m && m.k === 'block') || e.intent; e.charged = 0;
+    G.endTurn();
+    for (let i = 0; i < 60 * 20 && G.screen === 'fight' && !fightReady(G); i++) G.update(DT);
+    h.ok(G.screen === 'fight' && G.fight === L.F[first] && G.duo.log.filter((l) => l.k === 'hand').length === hands, 'with the partner down, the same seat simply goes again');
+    // the boss falls: a team win, the victory beat, the podium, booked once
+    G.endFight('win', true);
+    h.ok(D.paid && D.res && D.res.won && G.meta.duo.coopWins === 1 && G.meta.duo.coop === 1, 'a team win on the record');
+    h.ok(G.meta.duo.names.roxor.cw === 1 && G.meta.duo.names.jasmin.cw === 1, 'team wins per name');
+    duoStep(G, 5);
+    h.ok(G.screen === 'duo' && D.ph === 'end', 'the podium');
+    G.draw();
+    G.duo.park(); G.duo.resume();
+    h.ok(G.duo.state.ph === 'end' && G.meta.duo.coopWins === 1, 'a reload on the podium: booked once');
+    h.eq(T._store.clawspire_run, 'SOLO', 'the solo run save was never touched');
+    G.duo.leave();
+    h.ok(G.run === null && !/duoOn/.test(String(T._nodes.top && T._nodes.top.className || '')), 'out: no seat run left behind');
+  });
+
+  h.test('duo: co-op knock out (both down), a reload restarts the boss at its bell, the cycle turns for even bosses', () => {
+    const T = boot(), G = T.GAME;
+    const D = duoNew(G, 'coop', 5151, { boss: 'random' });
+    D.boss = 'plushqueen';   // an 8-step cycle: turn about would show each seat half of it
+    duoReady(G);
+    for (let i = 0; i < 4 && G.fs && G.fs.vs; i++) G.pointer('down', 270, 500);
+    fightSettle(G);
+    const L = G.duo.live, e = G.fight.enemies[0];
+    h.eq(e.id, 'plushqueen', 'the Plushie Queen');
+    const cyc0 = e.cyc;
+    for (let k = 0; k < 2; k++) {
+      G.endTurn();
+      for (let i = 0; i < 60 * 20 && G.screen === 'fight'; i++) G.update(DT);
+      duoReady(G); fightSettle(G);
+    }
+    h.ok(G.duo.log.some((l) => l.k === 'cyc'), 'after a full round the even cycle steps on');
+    h.eq(e.cyc - cyc0, 3, 'two actions and one step: each seat meets every move over a fight');
+    // a reload mid fight: the boss again from its bell, the first seat again
+    const T2 = boot({ store: Object.assign({}, T._store) }), G2 = T2.GAME;
+    G2.duo.menu(); G2.duo.resume();
+    const D2 = G2.duo.state;
+    h.ok(D2.mode === 'coop' && D2.ph === 'hand' && D2.turn === D2.first && D2.down.join() === '0,0' && !G2.duo.live, 'resumed at the bell');
+    // both seats fall: knocked out, booked once
+    const atk = (e.def.moves || []).find((m) => m && m.k === 'attack');
+    for (let k = 0; k < 2; k++) {
+      G.fight.player.hp = 1; G.fight.player.block = 0; G.fight.player.status = {};
+      e.intent = Object.assign({}, atk, { v: 999, n: 1 }); e.charged = 0;
+      G.endTurn();
+      for (let i = 0; i < 60 * 20 && G.screen === 'fight'; i++) G.update(DT);
+      if (k === 0) { h.ok(D.ph === 'hand', 'one down, the partner up'); duoReady(G); fightSettle(G); }
+    }
+    for (let i = 0; i < 60 * 6 && D.ph !== 'end'; i++) G.update(DT);
+    h.ok(D.ph === 'end' && D.res && !D.res.won && D.down.join() === '1,1', 'both down: KNOCKED OUT');
+    h.ok(G.meta.duo.coop === 1 && G.meta.duo.coopWins === 0, 'a co-op loss on the record');
+    G.draw();
+  });
+
+  h.test('duo: old and junk profiles load; the record and the setup survive a reload', () => {
+    const T = boot({ store: { clawspire_meta: JSON.stringify({ unlocks: { knight: true }, stats: { runs: 3 } }) } }), G = T.GAME;
+    h.ok(G.meta.duo && G.meta.duo.games === 0 && Object.keys(G.meta.duo.names).length === 0, 'an old profile: an empty duel record');
+    const T2 = boot({ store: { clawspire_meta: JSON.stringify({ duo: { games: 'lots', names: { x: 5, ' Jas ': { w: 2 } }, last: 7 } }), clawspire_duo: '{broken' } }), G2 = T2.GAME;
+    h.ok(G2.meta.duo.games === 0 && G2.meta.duo.names.jas && G2.meta.duo.names.jas.w === 2 && !G2.meta.duo.names.x, 'a junk record is repaired');
+    h.eq(G2.duo.saved(), null, 'a broken duel save is ignored');
+    G2.duo.menu();
+    h.ok(!G2.S.ui.buttons.some((b) => b.label === 'Resume duel'), '...and offers no resume');
+    G2.meta.duo.names.roxor = { n: 'Roxor', w: 4, l: 1, t: 0, cg: 2, cw: 1 };
+    G2.duo.setup('coop'); G2.duo.set(0, 'name', 'Roxor');
+    G2.duo.seed = 5; G2.duo.start();
+    const T3 = boot({ store: Object.assign({}, T2._store) }), G3 = T3.GAME;
+    h.ok(G3.meta.duo.names.roxor.w === 4 && G3.meta.duo.last.p[0].name === 'Roxor' && G3.meta.duo.last.mode === 'coop', 'the record and the last setup come back');
+    G3.duo.menu();
+    const St = G3.duo.setup('coop');
+    h.eq(St.p[0].name, 'Roxor', 'the setup starts from the last one');
+  });
+}
+
+// ---- SCHOOL (round 11): Claw School and the Practice Cabinet
+{
+  const schBoot = (meta) => boot({ store: meta === undefined ? {} : { clawspire_meta: JSON.stringify(Object.assign({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }, meta || {})) } });
+  const schStep = (G, secs) => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) G.update(1 / 60); };
+  // the middle of the widest empty stretch of the bin floor (a drop there grabs nothing)
+  const schFreeX = (g) => { const bw = g.C.bounds.chuteX, xs = [0].concat(g.items.map(b => b.x).sort((a, b) => a - b), [bw]); let best = 20, gap = -1; for (let i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] > gap) { gap = xs[i] - xs[i - 1]; best = (xs[i] + xs[i - 1]) / 2; } return Math.max(20, Math.min(bw - 20, best)); };
+  // A scripted grab: the claw drops at a free spot and, while it is busy, the picked prizes are dropped down the chute; runs until the grab is over.
+  const schGrab = (T, pick, x) => {
+    const G = T.GAME, SC = G.sch, g = SC.G;
+    SC.steer(x == null ? schFreeX(g) : x); schStep(G, 0.9);
+    const ok = SC.drop();
+    const cb = g.C.bounds, list = pick ? pick(g) : [];
+    list.forEach((b, i) => { T.PHYS.setPose(b, cb.chuteX + 32, cb.dividerTop + 20 + i * 34, 0); b.vx = 0; b.vy = 0; b.av = 0; b.sl = false; });
+    let k = 0; while (g.busy && k < 40 * 60) { G.update(1 / 60); k++; }
+    schStep(G, 0.3);
+    return ok;
+  };
+  const schMatchB = (T, o, b) => { const d = b.data.def, Tr = (b.data.mat && b.data.mat.traits) || {}; return T.DATA.schMatch(o, { id: d.id, tags: d.tags || [], glass: !!Tr.glass, circle: d.shape.kind === 'circle' }); };
+  // What a challenge needs down the chute to be cleared in one grab.
+  const schNeed = (T, g) => {
+    const ch = g.ch, w = ch.win, ok = (b) => !ch.never || !schMatchB(T, ch.never, b);
+    if (w.k === 'target') return g.items.filter(b => b.data.t);
+    if (w.k === 'all') return g.items.slice();
+    if (w.k === 'free') return g.items.slice(0, 1);
+    const n = ch.stars.k === 'items' ? ch.stars.s3 : (w.n || 1);
+    return g.items.filter(b => ok(b) && schMatchB(T, w.of, b)).slice(0, n);
+  };
+  const schAll = (T, v) => { const M = T.GAME.sch.meta(); for (const id of T.DATA.SCH_IDS) M.stars[id] = v; return M; };
+
+  h.test('SCHOOL: an old profile loads with an empty school record, a junk one is repaired, the record saves and reloads', () => {
+    const T = schBoot({ stats: { runs: 4, wins: 1 } });
+    const M = T.GAME.sch.meta();
+    h.ok(M && !Object.keys(M.stars).length && M.tix === 0 && M.dip === 0 && M.pr.pile === 'starter', 'a profile from before the school gets an empty record');
+    h.eq(T.GAME.meta.stats.runs, 4, 'the rest of the old profile is untouched');
+    const J = schBoot({ school: { stars: { b1: 9, qq: 2 }, tix: 'lots', pr: { muts: ['double', 'moon'], pet: 'dragon' } } });
+    const MJ = J.GAME.sch.meta();
+    h.ok(MJ.stars.b1 === 3 && !('qq' in MJ.stars) && MJ.tix === 0 && MJ.pr.muts.join() === 'moon' && MJ.pr.pet === '', 'a junk record is repaired on load');
+    const g = T.GAME.sch.start(0, 0);
+    h.ok(g && T.GAME.screen === 'school', 'a challenge from a fresh boot');
+    g.st.drops = 1; T.GAME.sch.finish(g, true);
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    h.eq(T2.GAME.sch.meta().stars.b1, 3, 'the stars survive a reload');
+    h.eq(T2.GAME.sch.meta().tix, 3 * T.DATA.SCH.TIX, 'so do the tickets the school paid');
+    h.ok(T2.GAME.meta.vault.tix >= 3 * T.DATA.SCH.TIX, 'and they sit in the vault wallet');
+  });
+
+  h.test('SCHOOL: the title: Claw School shares the small row before History; a fresh profile gets "New here? Try Claw School", a veteran does not', () => {
+    const T = schBoot({});
+    const G = T.GAME;
+    G.sch.X.tip = null;
+    G.showTitle();
+    const L = G.S.ui.buttons.map(b => b.label), i = L.indexOf('Claw School'), hi = L.indexOf('History');
+    h.ok(i >= 0 && hi > i, 'Claw School is registered before History: ' + L.join(', '));
+    h.ok(L.indexOf('New run') === 0, 'New run keeps its index');
+    const sb = G.S.ui.buttons[i], hb = G.S.ui.buttons[hi];
+    h.ok(sb.el.parentNode && sb.el.parentNode === hb.el.parentNode, 'it shares the small row with History (the menu gets no new row)');
+    h.ok(G.sch.X.tip && /Try Claw School/.test(G.sch.X.tip.children.map(c => c.textContent).join('')), 'a fresh profile: the "New here?" line');
+    h.ok(!L.some(l => /New here/.test(l)), 'the tip is a plain tap, not a GAME.choose entry');
+    G.sch.X.tip.onclick({});
+    h.eq(G.screen, 'school', 'the tip opens the school');
+    h.eq(G.sch.view, 'hub', 'on the hub');
+    const V = schBoot({ stats: { runs: 7, fights: 30 } });
+    V.GAME.sch.X.tip = null;
+    V.GAME.showTitle();
+    h.ok(!V.GAME.sch.X.tip, 'a veteran gets no "New here?" line');
+    h.ok(V.GAME.choose(V.GAME.S.ui.buttons.findIndex(b => b.label === 'Claw School')), 'the button works');
+    h.eq(V.GAME.screen, 'school', 'the school opens from the title');
+    V.GAME.draw();
+  });
+
+  h.test('SCHOOL: the practice cabinet: spawning, piles, mutators, pets, claws, slow motion, reset and grabs never touch the run or its save', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch;
+    G.newRun('knight', 4242);
+    G.toMap();
+    const run0 = T._store[G.RUN_KEY], live0 = JSON.stringify(G.run);
+    h.ok(typeof run0 === 'string' && run0.length > 100, 'a run is saved');
+    G.showTitle();
+    SC.practice({});
+    h.eq(G.screen, 'school', 'the practice cabinet is up');
+    h.ok(SC.G.mode === 'practice' && SC.G.items.length > 0, 'a starter pile');
+    for (const p of T.DATA.SCH.PILES) { h.ok(SC.pile(p.id), 'preset ' + p.id); h.ok(SC.G.items.length >= 6, p.id + ' spawns a pile (' + SC.G.items.length + ')'); schStep(G, 0.3); G.draw(); }
+    SC.pile('empty'); h.eq(SC.G.items.length, 0, 'the empty bin');
+    h.ok(SC.spawn('rusty_sword'), 'a found item drops in');
+    h.eq(SC.spawn('family_anvil'), null, 'an item not yet found stays locked');
+    SC.pile('balls');
+    for (const m of ['lowgrav', 'moon', 'mirror']) SC.toggleMut(m);
+    for (const p of ['cat', 'hamster', 'parrot']) { SC.setPet(p); SC.trick(); schStep(G, 1.3); }
+    SC.setSlow(true); schGrab(T, null, 200); SC.setSlow(false);
+    for (const id of ['magnet', 'hook', 'vacuum']) { SC.setClaw(id); schGrab(T, null, 150); }
+    SC.reset(); schStep(G, 0.5); G.draw();
+    h.eq(T._store[G.RUN_KEY], run0, 'the run save is byte for byte the same');
+    h.eq(JSON.stringify(G.run), live0, 'the live run is untouched');
+    h.eq(SC.back(), 'title', 'Back goes to the title');
+    h.eq(T._store[G.RUN_KEY], run0, 'still the same after leaving');
+    h.ok(G.load(), 'Continue still loads the run');
+    h.eq(G.screen, 'map', 'back on its map');
+  });
+
+  h.test('SCHOOL: a real grab in the practice cabinet delivers, and the readout counts it', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch;
+    SC.practice({});
+    SC.setClaw('classic');
+    SC.G.muts.slice().forEach(m => SC.toggleMut(m));
+    SC.pile('balls');
+    let grabs = 0;
+    while (SC.G.stats.delivered === 0 && grabs < 5) {
+      const g = SC.G, xs = g.items.map(b => b.x).sort((a, b) => a - b);
+      schGrab(T, null, xs[Math.floor(xs.length / 2)] + grabs * 17);
+      grabs++;
+    }
+    const s = SC.G.stats;
+    h.ok(s.delivered > 0, `a real grab delivered (${s.delivered} in ${grabs})`);
+    h.eq(s.grabs, grabs, 'every grab counted');
+    h.ok(s.best >= s.grab && s.best > 0, 'the best grab');
+    h.ok(SC.log.some(l => l.k === 'grab' && l.n > 0), 'the grab is logged with its prizes');
+    G.draw();
+  });
+
+  h.test('SCHOOL: any claw, only paints you own, only prizes you have found, the cabinet holds 30', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch;
+    SC.practice({});
+    for (const id of Object.keys(T.PHYS.CLAW_TYPES)) { h.ok(SC.setClaw(id), 'claw ' + id); h.eq(SC.G.rig.type, id, id + ' is on the rig'); h.eq(SC.meta().pr.claw, id, 'remembered'); }
+    h.ok(!SC.setPaint('paint_gold'), 'a paint you do not own is refused');
+    G.vault.state.owned.paint_gold = 1;
+    h.ok(SC.setPaint('paint_gold') && SC.G.paint === 'paint_gold', 'an owned paint goes on');
+    SC.pile('empty');
+    G.meta.seen.items.prize_marble = 1;
+    let got = 0;
+    for (let i = 0; i < 40; i++) if (SC.spawn('prize_marble')) got++;
+    h.eq(got, T.DATA.SCH.PILE_MAX, 'the cabinet holds ' + T.DATA.SCH.PILE_MAX);
+    h.eq(SC.G.items.length, T.DATA.SCH.PILE_MAX, 'and no more');
+    SC.drop(200);
+    h.ok(!SC.setClaw('tri'), 'no claw swap mid grab');
+    h.ok(!SC.toggleMut('moon'), 'no mutator swap mid grab');
+  });
+
+  h.test('SCHOOL: mutators in the practice cabinet: on and off, a clash swaps, three at most, the fight-only ones stay off, the pile stays where it lay', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch;
+    SC.practice({});
+    SC.pile('balls');
+    const n0 = SC.G.items.length, x0 = SC.G.items.map(b => Math.round(b.x)).join();
+    h.ok(SC.toggleMut('lowgrav'), 'Low Gravity on');
+    h.ok(SC.G.muts.includes('lowgrav') && SC.G.items.every(b => b.gs < 0.5), 'the prizes float');
+    h.eq(SC.G.items.length, n0, 'the same prizes');
+    h.eq(SC.G.items.map(b => Math.round(b.x)).join(), x0, 'where they lay');
+    SC.toggleMut('tiny'); SC.toggleMut('giant');
+    h.ok(SC.G.muts.includes('giant') && !SC.G.muts.includes('tiny'), 'Giant switches Tiny off');
+    SC.toggleMut('moon');
+    h.ok(!SC.toggleMut('mirror') && SC.G.muts.length === 3, 'three at most');
+    h.ok(!SC.toggleMut('double') && !SC.toggleMut('hungry'), 'fight-only mutators are refused');
+    SC.toggleMut('lowgrav'); SC.toggleMut('giant'); SC.toggleMut('moon');
+    h.eq(SC.G.muts.length, 0, 'all off again');
+    for (const m of T.DATA.SCH.MUTS) { SC.toggleMut(m); schStep(G, 0.4); G.draw(); SC.toggleMut(m); }
+    SC.toggleMut('mirror');
+    SC.pointer('down', G.CAB.x + 100, 600, { pointerId: 1 });
+    h.ok(Math.abs(SC.G.rig.targetX - (SC.G.C.bounds.chuteX - 100)) < 2, 'the Mirror Machine steers backwards');
+    SC.pointer('cancel', G.CAB.x + 100, 600, { pointerId: 1 });
+    SC.toggleMut('mirror'); SC.toggleMut('flood');
+    h.ok(SC.G.flood && SC.G.level < G.CAB.h, 'Rising Water floods the bin');
+    SC.toggleMut('flood'); SC.toggleMut('earthquake');
+    schStep(G, 7.5);
+    h.ok(SC.G.tremT < T.GAME.sch.K.tremorEvery, 'the earthquake rumbles on its own clock');
+    h.eq(SC.meta().pr.muts.join(), 'earthquake', 'the setup is remembered');
+  });
+
+  h.test('SCHOOL: every pet does its trick in the practice cabinet and hops back to its perch', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch;
+    SC.practice({});
+    for (const id of T.DATA.PET_IDS) {
+      SC.pile(id === 'raccoon' || id === 'roomba' ? 'junk' : 'balls');
+      h.ok(SC.setPet(id) && SC.G.pet.id === id, id + ' on the frame');
+      const n0 = SC.G.items.length, d0 = SC.G.stats.delivered;
+      const ok = SC.trick();
+      h.ok(ok, id + ' does its trick');
+      schStep(G, 2);
+      G.draw();
+      h.eq(SC.G.pet.ph, 'sit', id + ' is back on its perch');
+      if (id === 'raccoon') h.eq(SC.G.items.length, n0 - 1, 'the raccoon eats a junk item');
+      if (id === 'roomba') h.ok(SC.G.stats.delivered > d0 && SC.G.stats.free > 0, 'the robot vacuum sweeps a prize down the chute: a free prize');
+      if (id === 'octopus') h.ok(SC.G.pet.hold, 'the octopus is ready to hold on');
+    }
+    h.ok(SC.log.filter(l => l.k === 'trick').length >= 9, 'the tricks are logged');
+    SC.setPet('');
+    h.ok(!SC.G.pet && !SC.trick(), 'no pet, no trick');
+  });
+
+  h.test('SCHOOL: every challenge is cleared by a scripted grab: its goal is detected and it earns its stars', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch, D = T.DATA;
+    schAll(T, 1);
+    for (const id of D.SCH_IDS) {
+      const ch = D.SCH_CH[id];
+      SC.meta().stars[id] = 0;
+      const g = SC.start(ch.lesson, ch.idx);
+      h.ok(g && g.ch === ch && g.claw === ch.claw, `${id}: starts with its claw (${ch.claw})`);
+      h.eq(g.items.length, ch.pile.length, `${id}: its scripted pile`);
+      h.eq(g.muts.join(), ch.muts.join(), `${id}: its mutators`);
+      schGrab(T, (gg) => schNeed(T, gg));
+      h.ok(g.res && g.res.win, `${id} ${ch.name}: cleared (${g.res ? g.res.why : 'no result'})`);
+      h.eq(g.res && g.res.stars, 3, `${id}: 3 stars for a one-drop clear`);
+      h.eq(SC.meta().stars[id], 3, `${id}: the stars are on the profile`);
+      schStep(G, 1.2);
+      G.draw();
+    }
+  });
+
+  h.test('SCHOOL: a crack, a blast, a forbidden prize, the last drop and the clock each fail a challenge (and pay nothing)', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch, D = T.DATA;
+    schAll(T, 2);
+    const tix0 = () => G.vault.state.tix;
+    const at = (id) => { const c = D.SCH_CH[id]; SC.meta().stars[id] = 0; return SC.start(c.lesson, c.idx); };
+    let g = at('m1'), t0 = tix0();
+    SC.crack(g, g.items.find(b => b.data.t));
+    h.ok(g.res && !g.res.win && g.res.why === 'cracked', 'a crack fails Handle With Care');
+    h.ok(SC.meta().stars.m1 === 0 && tix0() === t0, 'no stars, no tickets');
+    schStep(G, 1.2); G.draw();
+    g = at('m5'); g.go = true;
+    schStep(G, 21);
+    h.ok(g.res && g.res.why === 'blew', 'the lit bomb blows up: KABOOM');
+    g = at('t4');
+    schGrab(T, (gg) => [gg.items.find(b => b.data.t), gg.items.find(b => b.data.def.id === 'rock')]);
+    h.ok(g.res && g.res.why === 'never', 'a rock with the gem fails Picky Eater');
+    g = at('b1');
+    h.ok(schGrab(T, null) && !g.res, 'an empty grab: still going');
+    g.st.drops = D.SCH_CH.b1.drops;
+    h.ok(!SC.drop(), 'no drops left: the claw stays put');
+    SC.judge(g);
+    h.ok(g.res && g.res.why === 'drops', 'out of drops');
+    g = at('b5'); g.go = true;
+    schStep(G, 31);
+    h.ok(g.res && g.res.why === 'time', 'out of time');
+    g = at('b5');
+    schStep(G, 5);
+    h.eq(g.t, 0, 'the clock waits for the claw to move');
+    h.ok(!g.res, 'and nothing fails meanwhile');
+  });
+
+  h.test('SCHOOL: stars pay vault tickets once; a better clear pays only the new stars; a worse one keeps the best', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch, K = T.DATA.SCH;
+    const tix = () => G.vault.state.tix;
+    const run = (drops) => { const g = SC.start(0, 0); g.st.drops = drops; return SC.finish(g, true); };
+    const t0 = tix();
+    let r = run(5);
+    h.ok(r.stars === 1 && r.tix === K.TIX && tix() - t0 === K.TIX, 'a 1-star clear pays one star');
+    r = run(1);
+    h.ok(r.stars === 3 && r.tix === 2 * K.TIX && tix() - t0 === 3 * K.TIX, 'a 3-star clear pays the two new stars');
+    r = run(1);
+    h.ok(r.tix === 0 && tix() - t0 === 3 * K.TIX, 'the same stars again pay nothing');
+    r = run(2);
+    h.ok(r.stars === 2 && r.tix === 0 && SC.meta().stars.b1 === 3, 'a worse clear pays nothing and keeps the 3 stars');
+    h.eq(SC.meta().tix, 3 * K.TIX, 'the school counts what it paid');
+    h.ok(SC.meta().best.b1.drops === 1, 'the best clear is kept');
+  });
+
+  h.test('SCHOOL: lessons open by the stars, challenges one after another; Next goes on', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch, K = T.DATA.SCH;
+    h.eq(SC.start(1, 0), null, 'lesson 2 is locked on a fresh profile');
+    h.eq(SC.start(0, 1), null, 'challenge 2 waits for challenge 1');
+    let g = SC.start(0, 0);
+    g.st.drops = 1; SC.finish(g, true);
+    h.eq(JSON.stringify(SC.next(g)), '[0,1]', 'Next: the next challenge');
+    schStep(G, 1.2);
+    h.ok(G.S.ui.buttons.some(b => b.label === 'Next ▶'), 'the result offers Next');
+    h.ok(SC.start(0, 1), 'challenge 2 opens with a star on challenge 1');
+    SC.show('hub');
+    const i2 = G.S.ui.buttons.findIndex(b => b.label === 'Materials');
+    h.ok(i2 >= 0 && G.choose(i2) && SC.view === 'hub', 'a locked lesson stays shut');
+    SC.meta().stars.b2 = 3;
+    h.ok(SC.total() >= K.NEED[1], 'six stars');
+    SC.show('hub');
+    G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Materials'));
+    h.eq(SC.view, 'lesson', 'lesson 2 opens');
+    h.ok(SC.start(1, 0), 'its first challenge starts');
+    g = SC.G; g.st.drops = 1; SC.finish(g, true);
+    const L = T.DATA.SCH_LESSONS;
+    const last = SC.start(0, 0); SC.meta().stars = { b1: 3, b2: 3, b3: 3, b4: 3, b5: 3 };
+    const gl = SC.start(0, L[0].ch.length - 1);
+    gl.st.drops = 1; SC.finish(gl, true);
+    h.eq(JSON.stringify(SC.next(gl)), '[1,0]', 'the last of a lesson leads to the next lesson');
+    h.ok(last, 'retries always start');
+  });
+
+  h.test('SCHOOL: the diploma: the last star pays the Valedictorian marquee once; it goes on the shelf and up on the cabinet', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch, K = T.DATA.SCH, id = K.DIPLOMA;
+    schAll(T, 3);
+    SC.meta().stars.x5 = 0;
+    const g = SC.start(4, 4);
+    g.st.drops = 1;
+    const r = SC.finish(g, true);
+    h.ok(r.grad && SC.meta().dip === 1, 'the last star: graduated');
+    h.eq(SC.total(), K.MAX_STARS, 'every star is in');
+    const V = G.vault.state;
+    h.ok(V.owned[id] && V.news[id], 'the Valedictorian marquee is yours (NEW in the vault)');
+    schStep(G, 1.2);
+    h.ok(G.S.ui.buttons.some(b => b.label === 'See your diploma'), 'the result leads to the diploma');
+    const g2 = SC.start(4, 4); g2.st.drops = 1;
+    h.ok(!SC.finish(g2, true).grad, 'graduated once');
+    h.ok(SC.shelf('marquee', ['mq_classic']).includes(id) && !SC.shelf('skin', []).includes(id), 'on the marquee shelf');
+    SC.show('report');
+    G.draw();
+    const bi = G.S.ui.buttons.findIndex(b => /Valedictorian/.test(b.label));
+    h.ok(bi >= 0 && G.choose(bi), 'the report card puts it up');
+    h.eq(V.eq.marquee, id, 'equipped');
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    h.ok(T2.GAME.vault.state.owned[id] && T2.GAME.vault.state.eq.marquee === id && T2.GAME.sch.meta().dip === 1, 'owned, on and graduated after a reload');
+    G.vault.show('marquee'); G.draw();
+  });
+
+  h.test('SCHOOL: "Practice this claw" on the claw picker opens the cabinet with that claw; Back returns to the picker', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch;
+    G.showChars();
+    const labels0 = G.S.ui.buttons.map(b => b.label).join();
+    const find = (el, cls) => { if (!el) return null; if (String(el.className || '').indexOf(cls) >= 0) return el; for (const c of el.children || []) { const f = find(c, cls); if (f) return f; } return null; };
+    const pb = find(T._nodes.charsBody, 'schPracBtn');
+    h.ok(pb, 'the claw panel has a Practice this claw button');
+    h.ok(!G.S.ui.buttons.some(b => /Practice/.test(b.label)), 'a plain tap: the crawler cards keep their indices');
+    G.claws.pick('hook');
+    G.showChars();
+    h.eq(G.S.ui.buttons.map(b => b.label).join(), labels0, 'the same entries');
+    find(T._nodes.charsBody, 'schPracBtn').onclick({});
+    h.eq(G.screen, 'school', 'the practice cabinet opens');
+    h.eq(SC.G.claw, 'hook', 'with the picked claw');
+    h.eq(SC.back(), 'chars', 'Back returns to the picker');
+    h.eq(G.screen, 'chars', 'on character select');
+  });
+
+  h.test('SCHOOL: every view draws; the keys and the pointer drive the claw; Escape walks back out', () => {
+    const T = schBoot({});
+    const G = T.GAME, SC = G.sch;
+    SC.show('hub'); G.draw();
+    SC.show('lesson', { li: 0 }); G.draw();
+    SC.show('report'); G.draw();
+    schAll(T, 2);
+    const g = SC.start(4, 4); G.draw();
+    const x0 = g.rig.targetX;
+    G.S.keys = {};
+    T._listeners.keydown && T._listeners.keydown({ key: 'ArrowLeft', preventDefault() {} });
+    schStep(G, 0.4);
+    T._listeners.keyup && T._listeners.keyup({ key: 'ArrowLeft', preventDefault() {} });
+    h.ok(g.rig.targetX < x0, 'the left arrow steers');
+    T._listeners.keydown && T._listeners.keydown({ key: ' ', preventDefault() {} });
+    h.ok(g.busy && g.st.drops === 1, 'Space drops');
+    let k = 0; while (g.busy && k < 1800) { G.update(1 / 60); k++; }
+    SC.pointer('down', G.CAB.x + 150, 600, { pointerId: 1 });
+    SC.pointer('move', G.CAB.x + 160, 600, { pointerId: 1 });
+    h.ok(Math.abs(g.rig.targetX - 160) < 2, 'a finger on the glass steers');
+    SC.pointer('up', G.CAB.x + 160, 600, { pointerId: 1 });
+    h.ok(g.busy || g.res, 'and a lift drops');
+    k = 0; while (g.busy && k < 1800) { G.update(1 / 60); k++; }
+    G.draw();
+    T._listeners.keydown && T._listeners.keydown({ key: 'Escape', preventDefault() {} });
+    h.eq(SC.view, 'lesson', 'Escape: the lesson');
+    T._listeners.keydown && T._listeners.keydown({ key: 'Escape', preventDefault() {} });
+    h.eq(SC.view, 'hub', 'Escape: the hub');
+    T._listeners.keydown && T._listeners.keydown({ key: 'Escape', preventDefault() {} });
+    h.eq(G.screen, 'title', 'Escape: the title');
+    h.eq(T._store[G.RUN_KEY], undefined, 'no run was ever saved');
   });
 }
 

@@ -4977,6 +4977,282 @@ popping bubbles, bin bursts, soap, determinism, save and reload, every
 mutator in the cabinet and gone after, every pet trick and synergy in a real
 fight). Screenshots: scratchpad `r10/shots.mjs` (`r10_ros_*.png`).
 
+## Duo: pass and play (round 11)
+
+Two players, one phone. The title's DUO button (it shares the NEW RUN row,
+registered after History so every older `GAME.choose` index holds) opens
+screen `duo`: CO-OP BOSS or VERSUS CLAW-OFF, a setup, a coin toss, and a
+PASS THE PHONE hand-off between every turn. Data in `data.js` (the DUO block:
+`DUO`, `duoName`, `duoKey`, `duoColor`, `duoCard`, `duoTaunt`, `duoPlayers`,
+`duoPile`, `duoDropScore`, `duoDeck`, `duoDrawCards`, `duoRoundWin`,
+`duoMatch`, `duoStarter`, `duoToss`, `duoBosses`, `duoFix`, `duoRecord`,
+`duoBoard`), the flow in `game.js` (the DUO block after ROS, `GAME.duo`), the
+art in `render.js` (the DUO block, `RENDER.duo`), the sounds in `audio.js`
+(the DUO block), the frame in `index.html` (`#scr-duo`, `<style id="duo-css">`,
+the HUD's `#duoBar`), all reached through one-line hooks.
+
+### The setup, the toss, the hand-off
+
+- **Setup** (both modes): per player a name (an input, at most 10 letters;
+  empty is P1 / P2; `duoName` strips control characters and the long dash), a
+  colour from six (`DUO.COLORS`: the HUD accent, the name, the claw's team
+  paint; the two never match, picking the other's swaps them), a crawler (only
+  unlocked ones), a claw type (every one) and a claw paint (the team colour, or
+  any paint the profile owns in the Prize Vault: each player shows their own
+  look; outfits come with the crawler as ever). Versus picks 3, 4 or 5 drops
+  each per round; co-op picks a boss the profile has beaten (the Codex's kills
+  or the rush's) or Random (any of the seven). The last setup is remembered
+  (`meta.duo.last`).
+- **The coin toss** (`duoToss(seed)`: who starts and an odd or even number of
+  half turns, so the coin really lands on that face): the coin spins up and
+  falls between the two crawlers, the winner gets the spotlight and NAME
+  STARTS!. A tap catches it early.
+- **PASS THE PHONE TO <name>** (`RENDER.duo.handoff`): the card turns over from
+  the last player's colour to the next one's, a spotlight finds their crawler,
+  a label (the round and drop, or the boss and its hp) and a 3 s countdown ring
+  (`DUO.HANDOFF`, a beep a second); then READY? pulses and the big "I'm NAME.
+  Go!" button lights up. Meanwhile the one still holding the phone can send a
+  canned taunt (versus: Nyah, Spoon, Wah wah, Air horn, Boots and cats, Mic
+  drop) or a cheer (co-op: Let's go, Sing, Boots, Hug); each has its own voice
+  (`AUDIO.sfx('duoTaunt', {v})`: a kazoo, a boing, the sad trombone, an air
+  horn, a beatbox, a mic drop, a sung line, a cheer) and shows in a bubble from
+  the sender's corner of the card. Pause goes to the duo menu (Resume there).
+
+### CO-OP BOSS
+
+- Each seat is a run of its own (`duoSeatRun`: the crawler's hp, bin and
+  starter relic, its Boss Rush kit `DATA.rushKit`, its claw type) and a COMBAT
+  fight of its own; the two fights share one enemy list. The boss has its
+  Boss Rush share of hit points and hits (`rushHpK`, `rushDmgK`) times
+  `DUO.COOP.hpK` (1.8) for two crawlers, and nobody steps out of it.
+- Turns go seat about: the toss winner grabs, ends the turn, the boss acts on
+  that seat (COMBAT's own enemy phase), then the phone passes (the
+  `finishEnemyTurn` hook, after a PASS THE PHONE! beat) and the other seat's
+  fight comes back in through `startFight(ids, 'boss', {seed, duoF})` (no
+  versus card after the first). So the boss hits whoever just went, and its
+  telegraph always shows whom: a "target NAME" pill beside its intent. A boss
+  with an even move cycle steps it on once more after every full round
+  (`duoCycShift`), so both seats meet every move. One Golden Prize per seat per
+  fight (a fresh pick every turn would upgrade the whole bin).
+- A seat that falls is DOWN (the other fights on alone, turn after turn, no
+  more hand-offs); both down is KNOCKED OUT; the boss down is TEAM WIN! (the
+  finale, the victory beat, then the podium). Never the run's rewards, stickers
+  of a run end, gold or the reward screen (the `endFight` and `finishOutro`
+  hooks take over).
+- The HUD: the gold, bulbs, tickets and act stats step aside for `#duoBar`,
+  both players side by side (name, hp or DOWN), the one grabbing lit in their
+  colour; the cabinet gets a rim in that colour, the marquee their name, the
+  claw their paint, the banner NAME'S TURN.
+
+### VERSUS CLAW-OFF
+
+- Grabby Gary's model: a cabinet of its own, one shared pile per round
+  (`duoPile(rng, round, drops)`: 5 common, 4 uncommon, 2 rare, 1 legendary, 2
+  rocks, one more common and uncommon per drop each above 3; one common or
+  uncommon is the golden prize), the values on the glass (junk 0, c 1, u 2, r
+  4, l 7, golden x2). Drops go turn about with each player's own crawler claw
+  and claw type (their paint on it), 3 to 5 each; the round ends when they are
+  all dropped or no prize worth a point is left.
+- **Scoring** (`duoDropScore`): every prize's value, DOUBLE (+1) for two in one
+  drop, JACKPOT (+3) for three or more, and every named grab combo the drop
+  makes (the fight's own recipes, `combosFor`) for 1 per tier. The drop's lines
+  show on a sheet and float over the machine.
+- **Sabotage cards** (`DUO.CARDS`, a deck of two of each shuffled per round,
+  two in hand to start, one drawn after each of your drops, at most three):
+  after your drop you may play one on your rival's next drop, or keep them.
+  Shake Up (the pile jumps before they drop), Butter Fingers (a greasy claw),
+  Fog Machine (the glass fogs and the tags vanish), Tilt! (the bin leans while
+  they drop), Mirror Mirror (steering runs backwards), Tiny Claw (x0.72), Too
+  Much Coffee (the claw at x1.9). The card slams onto the glass as their drop
+  starts (`duoSabo`) and its tag sits on the cabinet's top.
+- **Best of three** (`duoMatch`): first to two rounds; a tied round counts for
+  nobody; after five rounds the most rounds, then the most points, else a
+  draw. The loser of a round starts the next (`duoStarter`). The board
+  (`RENDER.duo.board`) shows both names, the scores, rounds won as stars, drops
+  left, and the spotlight on whoever drops (the crawlers stand either side, the
+  dropper lit).
+- **The podium** (`RENDER.duo.podium`): the winner on the tall step with a
+  crown under a spotlight, the other a step down; a draw side by side; a co-op
+  team side by side, crowned or knocked dizzy. Taunts for the winner, the
+  record per name, Rematch (the same two, a fresh toss), New duo, Title.
+
+### Save, meta, API
+
+- The duel is `S.duo` and saves under `clawspire_duo` at every step (`save()`
+  hands over to `duoSave` while a duel is on or the duo screen is up): the
+  solo run's save (`clawspire_run`) is never read, written or removed by a
+  duel, and a run in memory from before is set aside and handed back
+  (`S.duoStash`). Resume (the title button says "resume", the duo menu has
+  Resume duel): a claw-off at its next drop with the pile less what was won
+  (every drop saved: scores, taken prizes, hands, the deck, a pending card), a
+  co-op fight from its boss's bell (like a solo fight), the podium as it was. A
+  result is booked once (`paid`).
+- Meta `duo` (`duoFix` repairs old and junk profiles; `loadMeta` copies it
+  through `duoMetaFix`): `games, vs, coop, coopWins, names {key: {n, w, l, t,
+  cg, cw}}` (wins, losses, draws, team games and team wins per name, case and
+  spaces ignored), `last {p, drops, boss, mode}`. No key was renamed; no
+  sticker was added (the board stays at 60).
+- Sounds: `duoFlip, duoCoin (opts.land), duoCount (opts.n), duoReady, duoSabo,
+  duoCrowd, duoTaunt (opts.v)`.
+- `GAME.duo = {C, KEY, menu, setup, set, start, begin, toss, afterToss, hand,
+  ready, taunt, drop, card, keep, next, rematch, leave, park, done, resume,
+  saved, meta, metaFix, titleBtn, hud, seatRun, paint, bosses, dropEnd,
+  pointer, key, tick, draw, aim, state, v, live, t, setupState, log, seed}`;
+  `RENDER.duo = {T, E, spot, tag, target, card, handoff, coin, board, podium}`.
+- Tests: data (the tables, names and players, the pile over 30 seeds and three
+  drop counts, the score, the deck and hands, best of three, the starter, the
+  toss's fairness and landing, the bosses, the record and junk repair), render
+  (the hand-off at every beat and in every colour, reduced motion, the toss,
+  the board, every card, the podium in every result, no draw falls over),
+  audio (every voice, every taunt voice), game (the title button and its
+  index, the menu, the setup's rules, the toss and the countdown, a whole
+  claw-off with every sabotage card's effect, a reload after every drop, co-op
+  turn order and the shared boss hitting only the seat that went, a seat
+  down, the team win and the knock out booked once, the even cycle, the solo
+  save untouched, old and junk profiles). Screenshots: scratchpad
+  `r11duo/shots.mjs` (`r11_duo_*.png`).
+
+## Claw School and the Practice Cabinet (round 11)
+
+A way in for new players and a gym for old ones: a sandbox cabinet with no
+enemies, and a school of bite-size claw challenges that pays stars. Pure
+tables and rules in `data.js` (the SCHOOL block: `SCH`, `SCH_LESSONS`,
+`SCH_CH`, `SCH_IDS`, `schEval` ...), the flow in `game.js` (the SCHOOL block,
+`GAME.sch`), the art in `render.js` (the SCHOOL block, `RENDER.sch`), the
+sounds in `audio.js` (`schBell`, `schStar`, `schPass`, `schFail`,
+`schChalk`, calibrated into their mix tiers), the frame in `index.html`
+(`#scr-school`, `<style id="sch-css">`), all reached through one-line hooks.
+Nothing here touches a run: the screen `school` is on `setScreen`'s no-save
+list, the cabinet is a session of its own (`SCHX.G`: a physics world, the
+rig and the pile, like the claw-off's), and there is no F, no FS, no
+enemies, no rewards. What the school keeps lives on the profile.
+
+### The Practice Cabinet
+
+- **The way in.** The school hub's big Practice Cabinet card, and a
+  **Practice this claw** button on the claw picker's panel on character select
+  (a plain tap, so the crawler cards keep their `GAME.choose` indices; Back
+  returns to the picker).
+- **The screen.** The classroom wall, an LED scoreboard on top (DELIVERED,
+  THIS GRAB, BEST GRAB, GRABS, each flashing when it changes), a drawer with
+  five tabs, the cabinet in its usual place (the equipped skin and marquee),
+  and Slow-mo and Pet trick under it. Drag on the glass, let go to drop, the
+  arrows and Space as ever; Reset pile starts the pile and the readout over.
+- **The drawer.** *Claw*: all eight claw types, any time, and every paint you
+  own. *Items*: a chip for every prize, the ones the profile has found
+  (`meta.seen.items`) in colour, the rest dark and locked with a `?` (a tap
+  says to meet it in a run); a tap drops it in over the claw's aim (30 prizes
+  at most, `SCH.PILE_MAX`). *Pile*: the presets (`SCH.PILES`): Starter bin (the
+  crawler's), Junk heap, All glass, All bombs, Balls only, and an empty bin.
+  *Mutators*: the fifteen that bend the machine (`SCH.MUTS`: gravity, glass,
+  bomb party, magnet storm, tiny and giant, slippery, blackout, conveyor,
+  wobbly legs, moon bounce, tiny claw, earthquake, mirror, rising water), up
+  to three, a clash swaps; the fight-only ones stay off; the session is
+  rebuilt around the same prizes where they lie. *Pet*: any of the eleven or
+  none.
+- **The pet** sits on the cabinet's bottom left corner and, on Pet trick, hops
+  in and does a quick version of its trick: the hamster and the penguin
+  shove, the parrot and the mole rat bring the most buried prize up under the
+  claw, the cat bats one at the chute, the mouse pulls metal under the aim,
+  the raccoon eats junk, the firefly spotlights a prize, the robot vacuum
+  sweeps two small ones down the chute (FREE PRIZES), the octopus holds the
+  next lift, the goose lays an egg on a 3-prize grab.
+- **The cabinet** keeps the materials' feel: glass cracks and shatters on
+  hard landings, a bomb landing hard lights an 8 second fuse (`SCH.FUSE`) and
+  blows, heavy things thud and the pile hops, a prize the claw never touched
+  that grab is a FREE PRIZE, a double and a jackpot light the marquee. Slow-mo
+  runs the physics at 0.4.
+- **Saved** on the profile (`meta.school.pr`): the claw, the paint, the
+  mutators, the pet, slow motion and the preset, so it opens the way you left
+  it.
+
+### Claw School
+
+- **Five lessons, 26 challenges** (`SCH_LESSONS`), each a fixed scripted pile
+  (the same every time: its seed is the challenge id), a claw, maybe a
+  mutator, a goal on a chalkboard, a drop limit, a clock or a lit fuse:
+
+| lesson | challenges |
+| --- | --- |
+| 1 Basics | First Grab (any prize), That One (the glowing apple among rocks), Double Up (2 in a grab), Jackpot! (3 in a grab), Beat the Clock (4 in 30 s) |
+| 2 Materials | Handle With Care (the crystal ball, no cracks), Heavy Metal (the tower shield), Soap Opera (2 soap bars), Bouncy Castle (3 bouncy balls), Hot Potato (a lit bomb out before it blows) |
+| 3 Claw Types | Magnet Class (the Magnet Crane: 3 metal, nothing else), Scoop Troop (the Scoop: 5 marbles), Harpoon Hero (the Harpoon: spear the lit bomb from under the rocks), Big Hand (the Glove: the anvil), Suck It Up (the Vacuum: 3 in a grab), Tri Hard (the Tri-Claw: 3 round things in a grab) |
+| 4 Tricks | Buried Treasure (the golden duck under the pile), Free Prize (a prize the claw never touched), One Shot (one drop, 2 in it), Picky Eater (the gem, and a rock fails it), Twin Trouble (the Twin Claws: 2 in a grab) |
+| 5 Mastery | Glass Jackpot (2 glass in a grab, no cracks), Lights Out (Blackout: the golden duck), Moon Walk (Low Gravity: 4 in 40 s), Mirror Mirror (Mirror Machine: 3 prizes), Clean Sweep (empty the bin in 6 drops) |
+
+- **Goals** (`win`): `total` (n prizes, optionally matching `of`: an id, a
+  tag, a trait: glass or round), `grab` (n in one grab), `target` (the glowing
+  prizes: a dashed ring and a bobbing arrow), `free` (FREE PRIZES), `all` (the
+  bin empty). **Failures**: `never` (a forbidden prize delivered: a rock, a
+  non-metal thing), `noCrack` (any crack), a lit target bomb blowing, the last
+  drop spent, the clock out. `DATA.schEval(ch, st)` is the judge (pure): a
+  failure outranks a win in the same beat; the drop and time limits wait for
+  a grab in flight (a buzzer beater counts); a win waits for its grab to end
+  so every prize in it counts for the stars. The clock and the fuses start
+  when the claw first moves.
+- **Stars** (`DATA.schStars`): by drops (fewest), by time (fastest) or, for a
+  one-drop challenge, by the best grab's prizes; 1 star for any clear. The
+  board lists the three rules; the result card (PERFECT! / CLEARED! / TRY
+  AGAIN with the reason) pops the stars in one by one with `schStar` rising,
+  then Next, Retry and Lessons.
+- **Tickets.** Every star pays `SCH.TIX` (6) vault tickets the first time it
+  is earned (`DATA.schPay`): a better clear pays only its new stars, a worse
+  one keeps the best. Banked into the Prize Vault's wallet at once
+  (`meta.vault.tix`, `earned`) and counted on `meta.school.tix`.
+- **Unlocks.** A lesson opens at its star count (`SCH.NEED` 0, 6, 14, 24, 34
+  of 78); inside a lesson a challenge opens once the one before it has a star.
+- **The report card** (view `report`): a lined paper card with a row per
+  lesson (its stars as a bar, `n/m`, a grade stamp: A+ at every star, A 85%,
+  B 70%, C 50%, D), the total big, and the **diploma** under it: a faint
+  preview with the stars still to go, then at 78 of 78 a gold-sealed diploma
+  in the crawler's name signed by Professor Pincher (the school's mascot: a
+  classic claw in a mortarboard). The last star graduates you once
+  (`meta.school.dip`): **the Valedictorian marquee** (`mq_valedictorian`,
+  gold VALEDICTORIAN letters over a wave of bulbs) lands in the Prize Vault,
+  NEW, on the marquee shelf; the report card puts it up. It is a
+  non-enumerable cosmetic like the event ones (`vaultHow` 'school', never
+  sold, never in a capsule), so the Vault's shelves, counts and capsules are
+  as before.
+- **The title.** A 🎓 School button in the small row (before History, which
+  stays last; the menu gets no new row; its star count on a badge), and for a
+  fresh profile (under 3 runs, no star yet) a pulsing "New here? Try Claw
+  School" line under New run (a plain tap, not a `GAME.choose` entry). It
+  fits at 360 and 390 px (Playwright: no overlap, nothing off stage).
+
+### Save fields, API, tests
+
+- Meta `school` (`DATA.schFix`, `schMetaFix` from `loadMeta`; an old or junk
+  profile gets an empty record): `stars {id: 0..3}`, `best {id: {drops, t,
+  items}}`, `tix`, `dip`, `seen`, `plays`, `pr {claw, paint, muts, pet, slow,
+  pile}`. The run save is never written by the school. No key was renamed; no
+  sticker was added (the board stays at 60).
+- `GAME.sch = {K, X, show, back, practice, start, retry, reset, next, setClaw,
+  setPaint, spawn, pile, pileIds, toggleMut, setPet, setSlow, trick, steer,
+  drop, tick, step, deliver, finish, judge, grad, bank, crack, boom, meta,
+  metaFix, total, paints, items, seen, titleBtn, titleTip, practiceBtn, shelf,
+  draw, pointer, key, dom, G, view, log}`; `DATA` adds `SCH, SCH_LESSONS,
+  SCH_CH, SCH_IDS, schMatch, schEval, schStars, schStarText, schPay, schTotal,
+  schLessonStars, schOpen, schChOpen, schGrade, schFix`; `RENDER.sch = {C, E,
+  chalk, wrap, board, cap, prof, star, stars, score, target, room, result,
+  stamp, report, diploma}`.
+- Tests: data (the lessons, every challenge well formed, every goal and
+  failure judged, the limits waiting for a grab, stars by drops, time and
+  items, the pay once, totals, unlocks, grades, the repair, the marquee found
+  but never listed), render (the board and its wrap, the professor's moods,
+  stars, the scoreboard, the target, the classroom, every result card and the
+  pop-in, grades, the report card, the diploma locked and earned), game (old
+  and junk profiles, the title button and the tip, the practice cabinet never
+  touching the run or its save through every control, a real grab and the
+  readout, claws, paints, found prizes and the cap, mutators, every pet's
+  trick, every challenge cleared by a scripted grab with 3 stars, every
+  failure, the pay once, unlocks and Next, the diploma and its marquee across
+  a reload, Practice this claw, keys, the pointer and Escape).
+- Feasibility (scratchpad `r11/bot.mjs`: a perfect-aim bot, 10 tries each
+  with a jittered aim): every challenge clears (Magnet Class 80%, Tri Hard
+  70%, Free Prize 50%, Twin Trouble 80%, Clean Sweep 70%, the rest 90-100%),
+  so the 3-star thresholds are where a steady hand has to work. Screenshots:
+  scratchpad `r11/shots.mjs` (`r11_sch_*.png`).
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the
