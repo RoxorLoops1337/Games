@@ -758,4 +758,36 @@ T.test('season: setSeason crossfades a live title or map tune, before init it is
   T.ok(AUDIO._live().some(x => x.mode === 'map' && !x.fading), 'the map plays');
 });
 
+// STORY (round 8): story pages, callbacks, Grabby Gary, the alternate bosses' tricks.
+T.test('story: every new voice plays after init and no-ops before', () => {
+  const { AUDIO, fake } = bootFake();
+  const STO_SFX = ['stoPage', 'stoCallback', 'garyTaunt', 'clawOffBell', 'plushSqueak', 'beltRun', 'iceGrow', 'crabSnip', 'hunted'];
+  for (const n of STO_SFX) { T.ok(AUDIO.names.includes(n), n + ' is a known sound'); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of STO_SFX) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    T.ok(AUDIO.sfx(n) && fake.count.total - before >= 2, n + ' plays');
+  }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('stoCallback') && !AUDIO.sfx('stoCallback'), 'one callback chime at a time');
+});
+
+T.test('CR8: the vacuum, the twin claws and Mama Mech\'s turret have their sounds', () => {
+  const { AUDIO, fake } = bootFake();
+  const CR8_SFX = ['vacWhoosh', 'vacSlurp', 'vacClog', 'vacBlow', 'twinSeek', 'twinClick', 'turBuild', 'turUp', 'turFire', 'turMega'];
+  for (const n of CR8_SFX) { T.ok(AUDIO.names.includes(n), n + ' is a known sound'); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of CR8_SFX) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    T.ok(AUDIO.sfx(n, { lv: 3, pitch: 1.1 }) && fake.count.total - before >= 2, n + ' plays');
+  }
+  for (const lv of [0, 1, 5, 99]) { ac.currentTime += 3; T.ok(AUDIO.sfx('turUp', { lv }), 'turUp at lv ' + lv); }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('turFire') && !AUDIO.sfx('turFire'), 'a volley is rate-limited');
+});
+
 T.done();

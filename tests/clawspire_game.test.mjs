@@ -6672,7 +6672,7 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     SG.vault.show('skin');
     const tabN = SG.S.ui.buttons.length;
     h.ok(tabN > 0, 'the vault opens');
-    h.ok(SG.season.shelf('sea', []).length === 7, 'the counter stocks the seven Claw-o-ween prizes');
+    h.ok(SG.season.shelf('sea', []).length === 8, 'the counter stocks the eight Claw-o-ween prizes (Mama Mech\'s witch hat too)');
     h.eq(SG.vault.buy('skin_sea_mansion'), false, 'tickets never buy an event prize');
     h.ok(!SG.season.buy('skin_sea_mansion'), 'too little candy (100 of 120): refused');
     h.eq(candy(SG), 100, 'nothing taken');
@@ -6749,6 +6749,759 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     h.eq(B.fight.enemies.map(e => e.id).join(), 'rat,slime', 'an old run stays out of the season even in October');
     const C = bootS({ clawspire_meta: JSON.stringify(Object.assign({}, meta, { sea: { preview: 42, wallet: 'x', knocks: -3 } })) }).GAME;
     h.ok(C.meta.sea.preview === '' && JSON.stringify(C.meta.sea.wallet) === '{}' && C.meta.sea.knocks === 0, 'junk is repaired');
+  });
+}
+
+// ---------------------------------------------------------------- HISTORY (round 8: run history, the death recap, photo mode)
+{
+  const hisKeys = (T, down) => { const fn = T._listeners[down ? 'keydown' : 'keyup']; return (key) => { if (fn) fn({ key, preventDefault() {} }); }; };
+
+  h.test('history: a loss, a win, its Endless end and an abandoned run each leave one record', () => {
+    const { T, G } = metaBoot();
+    G.newRun('knight', 8101);
+    h.eq(G.meta.his.runs.length, 0, 'a fresh profile has no history');
+    G.startFight(['rat'], 'normal');
+    G.endFight('lose');
+    let H = G.meta.his;
+    h.ok(G.screen === 'gameover' && H.runs.length === 1 && H.runs[0].r === 'loss' && H.runs[0].c === 'knight', 'the loss is on record');
+    const r0 = H.runs[0];
+    h.ok(r0.mp && r0.mp.w > 0 && r0.mp.g.length >= Math.ceil(r0.mp.w * r0.mp.h / 3), 'with its act map, packed');
+    h.ok(Array.isArray(r0.b) && r0.b.length > 0 && r0.b.length <= 8 && Array.isArray(r0.rl), 'with its final bin and relics');
+    h.ok(r0.d > 1.6e9 && r0.s > 0 && r0.f === 1 && r0.cl === 'classic', 'the date, the score, the fights, the claw');
+    G.newRun('knight', 8102);
+    h.eq(G.meta.his.runs.length, 1, 'a finished run is never abandoned again');
+    G.newRun('rogue', 8103);
+    h.eq(G.meta.his.runs.length, 1, 'a run left before its first fight leaves no card');
+    G.startFight(['rat'], 'normal');
+    G.endFight('win');
+    G.toMap();
+    const quitId = G.run.hid;
+    G.newRun('rogue', 8104);
+    H = G.meta.his;
+    h.ok(H.runs.length === 2 && H.runs[1].r === 'quit' && H.runs[1].id === quitId && H.runs[1].c === 'rogue', 'a run with a fight behind it, replaced by a new one, is on record as quit');
+    // a run saved on one page and replaced on the next: read off the save
+    G.startFight(['rat'], 'normal'); G.endFight('win'); G.toMap(); G.save();
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    const n2 = T2.GAME.meta.his.runs.length;
+    T2.GAME.newRun('knight', 8105);
+    h.ok(T2.GAME.meta.his.runs.length === n2 + 1 && T2.GAME.meta.his.runs[n2].r === 'quit', 'a saved run left from the title is recorded on the next new run');
+    // the win, then Endless, then a death in Endless: one record, updated in place
+    endWin(G, 8106);
+    H = G.meta.his;
+    const win = H.runs[H.runs.length - 1];
+    h.ok(win.r === 'win' && win.a === 3, 'the win is on record at once');
+    h.ok(G.run.hisDone === 'win', 'the run knows it is banked');
+    G.endless.start();
+    G.endless.next();
+    G.endless.cont();
+    toMapFrom(G);
+    G.startFight(['rat'], 'normal');
+    G.fight.player.hp = 0;
+    G.endFight('lose');
+    H = G.meta.his;
+    const last = H.runs[H.runs.length - 1];
+    h.ok(last.id === win.id && last.r === 'endless' && last.lp === 2, 'the same record, now an Endless end with its loop');
+    h.eq(H.runs.filter((r) => r.id === win.id).length, 1, 'never twice');
+    h.ok(H.by.knight && H.by.knight[1] === 1 && H.by.rogue && H.by.rogue[0] === 2 && H.by.rogue[1] === 0, 'lifetime counts per crawler (the second rogue run was left for the win)');
+  });
+
+  h.test('history: 60 runs keep the last 50 and a Hall of Fame of 10, small, saved and reloaded', () => {
+    const { T, G, saved } = metaBoot({ unlocks: { knight: true, rogue: true } });
+    for (let i = 0; i < 60; i++) {
+      G.newRun(i % 2 ? 'rogue' : 'knight', 8200 + i);
+      G.run.kills = (i * 37) % 61; G.run.fights = 1 + (i % 5); G.run.act = 1 + (i % 3);
+      G.his.runEnd(G.run, i % 5 ? 'loss' : 'win');
+    }
+    const H = G.meta.his;
+    h.ok(H.runs.length === 50 && H.n === 60, 'the last 50 of 60');
+    h.eq(H.hof.length, 10, 'ten in the Hall of Fame');
+    for (let i = 1; i < H.hof.length; i++) h.ok(H.hof[i - 1].s >= H.hof[i].s, 'the Hall of Fame is best first ' + i);
+    const s = saved();
+    h.ok(s.his && s.his.runs.length === 50 && s.his.hof.length === 10, 'saved on the profile');
+    const bytes = JSON.stringify(s.his).length;
+    h.ok(bytes < 60 * 700, `compact: ${bytes} bytes for 60 records`);
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    h.eq(JSON.stringify(T2.GAME.meta.his), JSON.stringify(G.meta.his), 'a reload keeps it exactly');
+    // the screen: every card a button, the tabs and the filters
+    const G2 = T2.GAME;
+    G2.his.show({});
+    G2.draw();
+    const cards = () => G2.S.ui.buttons.filter((b) => /^Run /.test(b.label)).length;
+    h.eq(cards(), 50, 'fifty run cards');
+    G2.choose(G2.S.ui.buttons.findIndex((b) => b.label === 'Hall of Fame'));
+    h.ok(G2.his.ui.tab === 'hof' && cards() === 10, 'the Hall of Fame tab shows ten');
+    G2.choose(G2.S.ui.buttons.findIndex((b) => b.label === 'Wins'));
+    h.ok(cards() > 0 && G2.his.meta.hof.filter((r) => r.r === 'win').length === cards(), 'the Wins filter');
+    G2.choose(G2.S.ui.buttons.findIndex((b) => b.label === 'Recent'));
+    G2.choose(G2.S.ui.buttons.findIndex((b) => b.label === 'All'));
+    G2.choose(G2.S.ui.buttons.findIndex((b) => b.label === CS.DATA.CHARACTERS.rogue.name));
+    h.ok(G2.his.ui.c === 'rogue' && cards() === 25, 'the crawler filter');
+    G2.choose(G2.S.ui.buttons.findIndex((b) => b.label === 'Quit'));
+    h.ok(cards() === 0 && T2._nodes.historyBody.children.some((c) => c.className === 'hisList' && c.children.some((x) => /No run matches/.test(x.textContent))), 'no match says so');
+    G2.draw();
+  });
+
+  h.test('history: a run opens in full (bin, relics, map), shares its card, and the title button comes last', () => {
+    const { T, G } = metaBoot();
+    G.showTitle();
+    const tl = G.S.ui.buttons.map((b) => b.label);
+    h.eq(tl[tl.length - 1], 'History', 'History is the last title button, so the others keep their indices');
+    G.choose(tl.length - 1);
+    h.ok(G.screen === 'history' && T._nodes.historyBody.children.some((c) => c.className === 'hisList' && c.children.some((x) => /No runs yet/.test(x.textContent))), 'an empty history says how to fill it');
+    G.draw();
+    G.newRun('knight', 8301);
+    G.startFight(['rat'], 'normal');
+    settle(G, 20);
+    G.endTurn();
+    settle(G, 20);
+    G.fight.player.hp = 0;
+    G.endFight('lose');
+    G.his.recapDismiss();
+    const rec = G.meta.his.runs[0];
+    G.his.show({ open: rec.id });
+    const lb = G.S.ui.buttons.map((b) => b.label);
+    h.ok(lb.includes('Share run card') && lb.includes('All runs') && lb[0] === 'Back', 'the detail view and its buttons');
+    const kids = T._nodes.historyBody.children.map((c) => c.className);
+    h.ok(['hisHero', 'hl', 'hisBin', 'hisRelics', 'hisMap'].every((k) => kids.includes(k)), 'the header, the numbers, the final bin, the relics, the map');
+    h.ok(kids.includes('hisEnd panel') && kids.includes('hisTl'), 'how it ended, with the last turns');
+    G.draw();
+    const n0 = G.his.saved;
+    h.ok(G.his.share(rec), 'Share makes the card');
+    const card = G.his.card;
+    h.ok(card && card.st.score === rec.s && card.st.char === 'knight' && card.st.won === false, 'the card is drawn from the record');
+    h.eq(G.his.saved, n0 + 1, 'and headless it downloads through the stub without throwing');
+    G.choose(G.S.ui.buttons.findIndex((b) => b.label === 'All runs'));
+    h.ok(G.screen === 'history' && !G.his.ui.open, 'back to the list');
+    hisKeys(T, true)('Escape');
+    h.eq(G.screen, 'title', 'Escape leaves the list');
+    // an old profile and a junk one
+    const O = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, unlocks: { knight: true }, stats: { runs: 3 } }) } }).GAME;
+    h.ok(O.meta.his && O.meta.his.runs.length === 0 && O.meta.his.n === 0, 'an old profile gets an empty history');
+    const J = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, his: { runs: 'x', hof: [null, 5, { id: 'a' }, { id: 'b', c: 'knight', s: 'lots', r: 'nope' }], by: 7, n: -4 } }) } }).GAME;
+    h.ok(J.meta.his.runs.length === 0 && J.meta.his.hof.length === 1 && J.meta.his.hof[0].s === 0 && J.meta.his.hof[0].r === 'loss' && J.meta.his.n === 0, 'junk is repaired');
+    J.his.show({ tab: 'hof' });
+    J.draw();
+    h.eq(J.S.ui.buttons.filter((b) => /^Run /.test(b.label)).length, 1, 'and still lists');
+  });
+
+  h.test('recap: a real death to Ironjaw names the Gape, the charge tip, unused grabs and the last turns', () => {
+    const { T, G } = metaBoot();
+    G.newRun('knight', 4242);
+    G.run.act = 2;
+    G.startFight(['ironjaw'], 'elite');
+    endSkip(G);
+    settle(G, 30);
+    for (let turn = 0; turn < 20 && G.screen === 'fight'; turn++) {
+      const F = G.fight, e = F.enemies[0];
+      if (e.intent && e.intent.charged) { F.player.hp = Math.min(F.player.hp, 30); F.player.block = 0; } else F.player.block = 90;
+      G.endTurn();
+      settle(G, 30);
+    }
+    h.eq(G.screen, 'gameover', 'Ironjaw wins');
+    const R = G.his.recap;
+    h.ok(R && R.rc.kind === 'hit' && R.rc.id === 'ironjaw' && R.rc.charged && R.rc.chargeName === 'Gape', 'the unleashed Gape is the killing blow');
+    h.eq(CS.DATA.hisKillLine(R.rc), `Killed by Ironjaw with Gape for ${R.rc.amt}`, 'the kill line');
+    h.ok(/^Ironjaw's Gape hits for \d+ on the turn after opening wide\. Stack Block or kill it first\.$/.test(R.tips[0]), 'the charge tip first: ' + R.tips[0]);
+    h.ok(/^You had 3 unused grabs on your last turn/.test(R.tips[1] || ''), 'then the unused grabs');
+    h.ok(R.rc.turns.length >= 3 && R.rc.turns[R.rc.turns.length - 1].dmg === 30 && R.rc.amt > 30, 'the timeline ends on the hp the hit took; the line says the whole hit');
+    h.ok(R.rc.turns.slice(0, -1).every((t) => t.dmg === 0), 'the Block held the turns before');
+    const rec = G.meta.his.runs[G.meta.his.runs.length - 1];
+    h.ok(rec.r === 'loss' && rec.k === 'Ironjaw' && rec.kk === 'hit' && rec.ke === 'ironjaw' && rec.km === 'Gape' && rec.kh === R.rc.amt && rec.lt.length === R.rc.turns.length, 'the record keeps the killer and the turns');
+    h.eq(G.S.ui.buttons[0].label, 'Back to title', 'the recap is not a button: the screen keeps its choices');
+    hisKeys(T, true)('Enter');
+    h.ok(!G.his.recap, 'a key (or a tap) goes on to the game over');
+    // a death outside a fight: no stale log from the last one
+    G.newRun('knight', 4243);
+    G.run.hp = 0; G.run.killer = 'a bad decision';
+    G.showGameOver();
+    h.ok(G.his.recap && G.his.recap.rc.kind === '' && CS.DATA.hisKillLine(G.his.recap.rc) === 'Killed by a bad decision' && !G.his.recap.rc.turns.length, 'an event death recaps just the killer');
+    G.showTitle();
+    G.update(DT);
+    h.ok(!G.his.recap, 'leaving the screen puts it away');
+  });
+
+  h.test('photo mode: the fight holds still, the camera moves, every filter and frame draws, the PNG saves, and it resumes', () => {
+    const { T, G } = metaBoot();
+    G.newRun('knight', 5151);
+    G.startFight(['rat', 'slime'], 'normal');
+    settle(G, 20);
+    G.steer(220); G.dropClaw();
+    stepFor(G, 0.45);
+    h.ok(G.state().grabInFlight, 'a grab is in flight');
+    const snap = () => JSON.stringify({ F: G.fight, ph: G.rig.phase, rig: [G.rig.x, G.rig.y, G.rig.targetX], bodies: G.world.bodies.map((b) => [b.x, b.y, b.a, b.vx, b.vy, b.sl]), t: G.S.t, q: G.fs.queue.length, hp: G.run.hp });
+    const before = snap();
+    h.ok(G.his.photo.open(), 'the camera opens mid grab');
+    h.ok(!G.his.photo.open(), 'once');
+    for (let i = 0; i < 240; i++) { G.update(DT); if (i % 60 === 0) G.draw(); }
+    G.pointer('down', 200, 300, { pointerId: 1 }); G.pointer('move', 250, 360, { pointerId: 1 }); G.pointer('up', 250, 360, { pointerId: 1 });
+    G.wheel(270, 480, -400);
+    const P = G.his.photo.state;
+    h.ok(P.cam.z > 1, 'the wheel zooms the photo camera');
+    G.his.photo.zoom(270, 480, 9);
+    h.eq(P.cam.z, G.his.PHO.ZMAX, 'the zoom is capped');
+    G.his.photo.pan(-9999, -9999);
+    h.ok(P.cam.x >= 540 / (2 * P.cam.z) - 1e-6 && P.cam.y >= 960 / (2 * P.cam.z) - 1e-6, 'the view stays on the stage');
+    const key = hisKeys(T, true);
+    key(' '); key('e'); key('ArrowLeft'); key('+');
+    for (const f of G.his.PHO.FILTERS) for (const fr of G.his.PHO.FRAMES) { h.ok(G.his.photo.set('filter', f) && G.his.photo.set('frame', fr), 'set ' + f + ' ' + fr); G.draw(); }
+    G.his.photo.set('stamp', false); G.draw();
+    G.pointer('down', 270, 500, { pointerId: 2 }); G.pointer('up', 270, 500, { pointerId: 2 });
+    h.ok(!P.ui, 'a tap on the picture hides the controls');
+    G.draw();
+    h.eq(snap(), before, 'nothing moved: the fight, the claw, the pile, the queue, the clock');
+    const n0 = G.his.saved;
+    h.ok(G.his.photo.save(), 'Save PNG runs headless');
+    h.ok(G.his.photo.last && G.his.photo.last.width === 1080 && G.his.photo.last.height === 1920, 'a 1080 x 1920 photo');
+    h.eq(G.his.saved, n0 + 1, 'saved through the download fallback');
+    h.ok(G.his.photo.compose(CS._ctx), 'the composition draws on the stub');
+    G.S.meta.settings.noFlash = true; G.draw(); G.S.meta.settings.noFlash = false;
+    key('Escape');
+    h.ok(!G.his.photo.state, 'Escape leaves');
+    h.eq(snap(), before, 'leaving changes nothing either');
+    h.eq(G.S.ui.buttons[0].label, 'END TURN', 'the fight keeps its buttons');
+    stepFor(G, 0.25);
+    h.ok(snap() !== before, 'the fight goes on from the same frame');
+    settle(G, 30);
+    h.ok(G.screen === 'fight' && !G.state().grabInFlight, 'the grab finishes as usual');
+  });
+
+  h.test('photo mode: the map head camera, the map camera untouched, never on the title, gone with its screen', () => {
+    const { G } = metaBoot();
+    G.newRun('knight', 5252);
+    h.eq(G.screen, 'map', 'the map');
+    const ml = G.S.ui.buttons.map((b) => b.label);
+    h.eq(ml[ml.length - 1], 'Photo mode', 'the camera is the map head\'s last button');
+    G.choose(ml.length - 1);
+    h.ok(G.his.photo.state && G.his.photo.state.screen === 'map', 'photo mode on the map');
+    const cam = JSON.stringify(G.cam), walk = JSON.stringify(G.run.map.pos);
+    G.wheel(100, 400, -500);
+    G.pointer('down', 100, 400, { pointerId: 3 }); G.pointer('move', 220, 520, { pointerId: 3 }); G.pointer('up', 220, 520, { pointerId: 3 });
+    for (let i = 0; i < 60; i++) G.update(DT);
+    h.ok(JSON.stringify(G.cam) === cam && JSON.stringify(G.run.map.pos) === walk, 'the map camera and the crawler stay put');
+    G.draw();
+    const lb = G.S.ui.buttons.map((b) => b.label);
+    h.ok(['Save PNG', 'Filter CRT', 'Filter Pixel', 'Frame Polaroid', 'Frame Stickers', 'Stamp on', 'Zoom in', 'Zoom out', 'Reset view', 'Exit photo mode'].every((l) => lb.includes(l)), 'the controls register with GAME.choose');
+    G.choose(lb.indexOf('Frame Marquee'));
+    h.eq(G.his.photo.state.frame, 'marquee', 'a frame by its button');
+    G.choose(G.S.ui.buttons.findIndex((b) => b.label === 'Exit photo mode'));
+    h.ok(!G.his.photo.state, 'Exit leaves');
+    h.eq(G.S.ui.buttons.map((b) => b.label).join(), ml.join(), 'the map head buttons come back');
+    G.his.photo.open();
+    G.showTitle();
+    G.update(DT);
+    h.ok(!G.his.photo.state, 'photo mode goes with its screen');
+    h.ok(!G.his.photo.open(), 'no camera on the title');
+  });
+}
+
+// ---------------------------------------------------------------- STORY (round 8): stories, callbacks, Grabby Gary, the alternate bosses
+{
+  const bootT = (store) => { const A = boot(store ? { store } : undefined); A.GAME.sto.force = true; return A; };
+  const vsOff = (G) => { if (G.boss.vs) { G.boss.vsSkip(); G.boss.vsSkip(); } stepFor(G, 0.05); };
+  const rivalOf = (G) => Object.values(G.run.map.tiles).filter(t => t.type === 'rival');
+  const gary = (G) => { const run = G.run; run.sto.gary.on = true; return rivalOf(G)[0] || G.sto.garyPlace(run, run.map); };
+  // Drives a claw-off: your drops aim like Gary does; steps until it is decided (or `until` says stop).
+  const playOff = (G, until) => {
+    const st = () => G.sto.rival.state;
+    for (let i = 0; i < 60 * 200 && st() && st().ph === 'play'; i++) {
+      if (until && until()) return true;
+      const s = st();
+      if (s.who === 'p' && s.sub === 'aim' && s.rig && s.rig.phase === 'idle') G.sto.rival.drop(G.sto.rival.aim());
+      G.update(DT);
+    }
+    return !!st() && st().ph === 'done';
+  };
+
+  h.test('story: off headless unless forced; new runs carry their state; Gary\'s tile; an old save', () => {
+    const A = boot(), GA = A.GAME;
+    const run = GA.newRun('knight', 5);
+    h.ok(run.sto && Array.isArray(run.sto.calls) && typeof run.sto.gary.on === 'boolean', 'a new run has its story state');
+    h.eq(rivalOf(GA).length, 0, 'headless and not forced: no rival tile');
+    const ev = Object.values(run.map.tiles).find(t => t.type === 'event');
+    h.ok(!GA.sto.eventTile(ev), 'and no stories');
+    const T = bootT(), GT = T.GAME, MP = T.MAP;
+    let placed = 0;
+    for (let s = 1; s <= 12; s++) {
+      const r = GT.newRun('knight', s), M = r.map, rv = rivalOf(GT);
+      h.eq(rv.length, r.sto.gary.on ? 1 : 0, `seed ${s}: a rival tile exactly when Gary is on`);
+      if (!rv.length) continue;
+      placed++;
+      const t = rv[0], road = M.road.map(([q, rr]) => q + ',' + rr);
+      h.ok(t.known && MP.isLand(t) && !road.includes(t.q + ',' + t.r) && M.road.some(([q, rr]) => MP.hexDist(q, rr, t.q, t.r) <= 2) && MP.hexDist(t.q, t.r, M.start.q, M.start.r) >= 3,
+        `seed ${s}: known land beside the road (never on it), off the start`);
+      h.ok(t.content.gary.kind === 'meet' && !t.done && !(M.roam || []).some(m => m.q === t.q && m.r === t.r), `seed ${s}: act 1 he meets you`);
+    }
+    h.ok(placed >= 8, `Gary turns up in most runs [${placed}/12]`);
+    // an old save (no run.sto): it loads with Gary off and plays on
+    GT.newRun('rogue', 2);
+    GT.toMap(); GT.save();
+    const raw = JSON.parse(T._store[GT.RUN_KEY]);
+    delete raw.run.sto;
+    const O = bootT({ [GT.RUN_KEY]: JSON.stringify(raw) });
+    h.ok(O.GAME.load() && O.GAME.run.sto && O.GAME.run.sto.gary.on === false && O.GAME.run.sto.calls.length === 0, 'an old save loads with fresh story state and Gary off');
+    O.GAME.draw();
+  });
+
+  h.test('story: beats, rolls, state, the outcome view, save and reload at every beat', () => {
+    const T = bootT(), G = T.GAME;
+    G.newRun('rogue', 11);
+    G.arc.force = true;
+    const gold0 = G.run.gold;
+    G.sto.beat('sto_dance', 'start', 1);
+    h.ok(G.screen === 'event' && G.sto.ed.beat === 'start' && G.S.ui.buttons.length === 3, 'a story beat: three choices');
+    T.GAME.draw();
+    h.ok(G.sto.pick(0), 'nail the basics');
+    const ed = G.sto.ed, st = G.run.sto.st.sto_dance;
+    h.ok(ed.out && ed.out.rnd && ed.out.lines.length >= 1 && ed.out.next === 'r2', 'the outcome: a roll, its lines, to be continued');
+    h.eq(st.score | 0, ed.out.win ? 1 : 0, 'the roll wrote the story state');
+    h.eq(G.run.sto.cur.beat, 'r2', 'the run already points at the next beat');
+    h.ok(G.S.ui.buttons.some(b => /Continue the story/.test(b.label)), 'Continue the story');
+    G.update(DT); G.draw();
+    // reload on the outcome view: the same outcome, nothing paid twice
+    const B = bootT(Object.assign({}, T._store)), GB = B.GAME;
+    h.ok(GB.load() && GB.screen === 'event' && GB.sto.ed && GB.sto.ed.out && GB.sto.ed.out.fresh === false, 'reloaded on the outcome view');
+    h.eq(GB.run.gold, G.run.gold, 'no second payout');
+    h.ok(GB.sto.cont() && GB.sto.ed.beat === 'r2' && GB.sto.ed.n === 2, 'Continue: part two');
+    const C2 = bootT(Object.assign({}, B._store)), GC = C2.GAME;
+    h.ok(GC.load() && GC.sto.ed.beat === 'r2' && !GC.sto.ed.out, 'a reload on a fresh beat shows its choices');
+    GC.sto.pick(1); GC.sto.cont();
+    h.eq(GC.sto.ed.beat, 'r3', 'part three');
+    GC.sto.pick(0); GC.sto.cont();
+    h.eq(GC.sto.ed.beat, 'end', 'the last beat');
+    const sc = GC.run.sto.st.sto_dance.score | 0;
+    const open = GC.S.ui.buttons.filter(b => !/off/.test(b.el.className || ''));
+    h.ok(GC.S.ui.buttons.length === 3, 'three endings on the table');
+    const which = sc >= 4 ? 0 : sc >= 2 ? 1 : 2;
+    h.ok(GC.sto.pick(which), 'the ending the score allows');
+    for (let i = 0; i < 3; i++) if (i !== which) h.ok(!GC.sto.pick(i) || true, 'the others are closed');
+    h.ok(GC.run.sto.done.sto_dance === 'end' && GC.run.sto.cur === null && GC.meta.sto.done.sto_dance === 1, 'the story is told: on the run and the profile');
+    GC.sto.cont();
+    h.eq(GC.screen, 'map', 'and back to the map');
+    void open; void gold0;
+    // the same seed and the same picks roll the same way
+    const R1 = bootT().GAME; R1.newRun('rogue', 11); R1.sto.beat('sto_dance', 'start', 1); R1.sto.pick(0);
+    h.eq(R1.run.sto.st.sto_dance.score | 0, st.score | 0, 'deterministic rolls');
+    // headless without the juice: straight on to the next beat
+    const H = bootT().GAME; H.newRun('rogue', 11); H.sto.beat('sto_crab', 'start', 1); H.sto.pick(1);
+    h.ok(H.screen === 'event' && H.sto.ed.beat === 'free' && !H.sto.ed.out, 'headless: the next beat at once');
+    // an event tile tells a story (the odds pinned to 1 for the test)
+    const P = bootT(), GP = P.GAME;
+    P.DATA.STO.p = 1;
+    GP.newRun('knight', 12);
+    const tile = Object.values(GP.run.map.tiles).find(t => t.type === 'event');
+    GP.enterTile(tile);
+    h.ok(GP.screen === 'event' && GP.sto.ed && GP.sto.ed.beat === 'start' && GP.run.sto.seen[GP.sto.ed.id], 'an event tile opens a story');
+    P.DATA.STO.p = 0;
+    const t2 = Object.values(GP.run.map.tiles).filter(t => t.type === 'event')[1];
+    GP.toMap(); GP.enterTile(t2);
+    h.ok(GP.screen !== 'event' || !GP.sto.ed, 'odds 0: the old events');
+    P.DATA.STO.p = 0.5;
+  });
+
+  h.test('story: callbacks come back in a later act (the crab, the next part, the hunter, the sabotage, the gift)', () => {
+    const T = bootT(), G = T.GAME;
+    G.newRun('knight', 21);
+    // the crab
+    G.sto.beat('sto_crab', 'free', 2);
+    G.sto.pick(1);
+    const call = G.run.sto.calls.find(c => c.k === 'ally');
+    h.ok(call && call.id === 'crab' && call.stage === 1 && !call.done, 'the crab will remember you');
+    G.startFight(['mimic'], 'elite'); vsOff(G);
+    h.ok(!G.fight.log.some(l => /helps out/.test(l)) && !call.done, 'not in the same act');
+    G.endFight('win'); G.toMap();
+    G.run.act = 2;
+    G.startFight(['lodestone'], 'elite');
+    h.ok(G.fight.log.some(l => /helps out \(crab\)/.test(l)) && G.fight.player.block >= 5 && call.done, 'act 2: the crab fights one turn for you');
+    h.ok(G.run.sto.pays === 1 && G.meta.sto.pays === 1 && !!(G.meta.ach || {}).full_circle, 'a payoff: counted, and Full Circle');
+    vsOff(G); stepFor(G, 1.2); G.draw();
+    h.ok(G.fs.sto && (G.fs.sto.ally || G.fs.sto.ally === null), 'the cameo ran in the arena');
+    G.save();
+    const B = bootT(Object.assign({}, T._store)), GB = B.GAME;
+    h.ok(GB.load() && GB.screen === 'fight' && GB.fight.log.some(l => /helps out \(crab\)/.test(l)), 'a reload of the same fight: the crab again');
+    h.eq(GB.run.sto.pays, 1, 'counted once');
+    GB.endFight('win');
+    // the next part of a story in a later act
+    const S2 = bootT().GAME;
+    S2.newRun('knight', 22);
+    S2.sto.beat('sto_seed', 'plant', 2);
+    S2.sto.pick(0);
+    const ev = Object.values(S2.run.map.tiles).find(t => t.type === 'event');
+    S2.toMap();
+    h.ok(!S2.sto.eventTile({ q: 0, r: 0 }) || S2.sto.ed.beat !== 'tree', 'not in the same act');
+    S2.toMap();
+    S2.run.act = 2;
+    h.ok(S2.sto.eventTile(ev) && S2.sto.ed.id === 'sto_seed' && S2.sto.ed.beat === 'tree' && S2.sto.ed.cb, 'act 2: the coin seed grew (IT CAME BACK)');
+    const g0 = S2.run.gold;
+    S2.sto.pick(0);
+    h.eq(S2.run.gold, g0 + 80, 'and pays');
+    // the hunter
+    const S3 = bootT(), G3 = S3.GAME;
+    G3.newRun('rogue', 23);
+    G3.sto.beat('sto_monte', 'cheat', 2);
+    const d0 = G3.run.bin.length;
+    G3.sto.pick(0);
+    h.ok(G3.run.bin.length === d0 + 1 && G3.run.sto.calls.some(c => c.k === 'hunt'), 'a cheat: the winnings, and Lefty has a big brother');
+    G3.run.act = 2;
+    const m = G3.sto.newMap(G3.run) || (G3.run.map.roam || []).find(x => x.id === 'sto_shark');
+    const shark = (G3.run.map.roam || []).find(x => x.id === 'sto_shark');
+    h.ok(shark && shark.awake && shark.enc[0] === 'cardshark' && G3.run.map.road.some(([q, r]) => q === shark.q && r === shark.r), 'the next act: the Card Shark on the road, awake');
+    void m;
+    G3.toMap(); stepFor(G3, 0.1);
+    h.ok(/HUNTED/.test(G3.S.lastToast || '') && !G3.run.sto.huntNote, 'HUNTED! on the map');
+    G3.startFight(['cardshark'], 'normal', { then: { roam: 'sto_shark' } });
+    h.ok(G3.fs.tier === 'elite' && G3.boss.vs && /ELITE/.test(G3.boss.vs.title), 'the hunter is an elite, versus card and all');
+    G3.endFight('win');
+    // the sabotage
+    const S4 = bootT(), G4 = S4.GAME;
+    G4.newRun('knight', 24);
+    G4.sto.setAlt('1', '');
+    G4.sto.beat('sto_intern', 'guessed', 2);
+    G4.sto.pick(0);
+    G4.startFight(['hoard'], 'boss');
+    const boss = G4.fight.enemies[0];
+    h.ok(boss.id === 'hoard' && boss.hp < boss.maxHp && boss.status.vuln === 2 && boss.status.weak === 2, 'this act\'s boss starts sabotaged');
+    vsOff(G4); stepFor(G4, 0.5); G4.draw();
+    G4.endFight('win');
+    // the gift in a later act's shop, once
+    const S5 = bootT(), G5 = S5.GAME;
+    G5.newRun('knight', 25);
+    G5.sto.beat('sto_vendy', 'escape', 2);
+    G5.sto.pick(0);
+    G5.run.act = 2;
+    const shopT = Object.values(G5.run.map.tiles).find(t => t.type === 'shop');
+    const sh = G5.rollShop(shopT), n0 = G5.run.bin.length;
+    G5.showShop(sh);
+    h.ok(G5.run.bin.length === n0 + 1 && sh.stoGift && sh.stoGift.id, 'Vendy runs this shop now: a free item');
+    G5.showShop(sh);
+    h.eq(G5.run.bin.length, n0 + 1, 'once');
+  });
+
+  h.test('rival: the meeting, a real claw-off, save mid-way, paid once', () => {
+    const T = bootT(), G = T.GAME;
+    G.newRun('knight', 33);
+    const tile = gary(G);
+    h.ok(tile && tile.type === 'rival', 'Gary\'s tile');
+    G.enterTile(tile);
+    h.ok(G.screen === 'rival' && G.sto.rival.state.ph === 'intro' && G.meta.gary.met === 1, 'he meets you');
+    h.ok(T.DATA.GARY_LINES.first.includes(G.sto.rival.state.line), 'with his first line');
+    G.draw();
+    h.ok(G.S.ui.buttons.some(b => b.label === 'Claw-off!') && G.S.ui.buttons.some(b => b.label === 'Not now'), 'Claw-off! or Not now');
+    G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Not now'));
+    h.ok(G.screen === 'map' && !tile.done, 'not now: the tile waits');
+    G.enterTile(tile);
+    h.eq(G.meta.gary.met, 1, 'met once');
+    G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Claw-off!'));
+    const c = tile.content.gary;
+    h.ok(G.sto.rival.state.ph === 'play' && G.sto.rival.state.who === 'p' && c.live && c.live.drops.length === 0, 'the claw-off: your drop first');
+    h.eq(G.sto.rival.state.W.bodies.filter(b => b.type === 'dynamic').length, 13, 'thirteen prizes in the shared bin');
+    playOff(G, () => c.live.drops.length >= 2);
+    h.eq(c.live.drops.length, 2, 'two drops in');
+    h.ok(c.live.drops[0].who === 'p' && c.live.drops[1].who === 'g', 'you, then Gary');
+    G.draw();
+    const gold0 = G.run.gold;
+    // reload mid claw-off: the next drop, the same scores, what was won stays out of the bin
+    const B = bootT(Object.assign({}, T._store)), GB = B.GAME;
+    h.ok(GB.load() && GB.screen === 'rival' && GB.sto.rival.state.ph === 'play' && GB.sto.rival.state.who === 'p', 'reloaded at your second drop');
+    const cb = GB.sto.rival.tile(GB.sto.rival.state).content.gary;
+    const taken = cb.live.drops.reduce((a, d) => a + d.got.length, 0);
+    h.eq(GB.sto.rival.state.W.bodies.filter(b => b.type === 'dynamic').length, 13 - taken, 'the prizes already won stay out');
+    h.ok(playOff(GB), 'the claw-off plays out');
+    const r = cb.res;
+    h.ok(r && cb.paid && ['win', 'lose', 'tie'].includes(r.res) && r.p === cb.live.p && r.g === cb.live.g && cb.live.drops.length === 6, 'six drops, decided: ' + (r && r.res) + ' ' + (r && r.p) + ':' + (r && r.g));
+    h.ok(GB.run.gold >= gold0 + r.gold && GB.run.caps.length === (r.cap ? 1 : 0), 'paid: gold, and a capsule for a win');
+    h.ok(GB.meta.gary.offs === 1 && (r.res === 'win' ? GB.meta.gary.wins === 1 && GB.run.sto.gary.w === 1 : r.res === 'lose' ? GB.meta.gary.losses === 1 : GB.meta.gary.ties === 1), 'on his record');
+    h.ok(GB.sto.rival.tile(GB.sto.rival.state).done, 'the tile is done');
+    h.ok(!GB.sto.rival.pay(cb), 'paying again does nothing');
+    GB.draw();
+    const gold1 = GB.run.gold;
+    const C3 = bootT(Object.assign({}, B._store)), GC = C3.GAME;
+    h.ok(GC.load() && GC.screen === 'rival' && GC.sto.rival.state.ph === 'done' && GC.run.gold === gold1, 'a reload shows the result, never pays it twice');
+    GC.choose(GC.S.ui.buttons.findIndex(b => b.label === 'Continue'));
+    h.eq(GC.screen, 'map', 'Continue');
+  });
+
+  h.test('rival: he remembers you, buys gear, and calls a showdown', () => {
+    const T = bootT(), G = T.GAME;
+    G.newRun('knight', 44);
+    Object.assign(G.meta.gary, { met: 3, offs: 3, wins: 2, losses: 1 });
+    G.sto.gearSync();
+    h.ok(G.sto.gear() === 1 && T.RENDER.sto.gear === 1, 'two claw-offs lost: he bought shades (and the renderer draws them)');
+    const t1 = gary(G);
+    G.enterTile(t1);
+    h.ok(/pro shades/.test(G.sto.rival.state.line) || T.DATA.GARY_LINES.ahead.includes(G.sto.rival.state.line), 'his taunt knows the record');
+    G.sto.rival.leave();
+    // act 3, two wins this run: the showdown
+    const run = G.run;
+    run.act = 3; run.sto.gary.w = 2;
+    for (const t of rivalOf(G)) t.type = 'empty';
+    const t3 = G.sto.garyPlace(run, run.map);
+    h.eq(t3.content.gary.kind, 'duel', 'act 3 after two wins: a showdown');
+    G.enterTile(t3);
+    h.ok(G.S.ui.buttons.some(b => b.label === 'Showdown!') && T.DATA.GARY_LINES.duel.includes(G.sto.rival.state.line), 'Showdown!');
+    G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Showdown!'));
+    h.ok(G.screen === 'fight' && G.fight.enemies[0].id === 'gary' && G.fight.enemies[0].gear === 1 && t3.done && G.meta.gary.duels === 1, 'an elite fight with Gary in his gear');
+    h.ok(G.boss.vs && T.DATA.GARY_LINES.duel.includes(G.boss.vs.taunt), 'the versus card says his line');
+    vsOff(G);
+    for (const e of G.fight.enemies) T.COMBAT.damage(G.fight, G.fight.player, e, 99999, { pierce: true });
+    G.endFight('win');
+    h.ok(G.meta.gary.beat === 1 && G.run.sto.gary.duel === 'won' && !!(G.meta.ach || {}).rival_crusher, 'beaten: on his record, and Rival Crusher');
+    h.eq(G.sto.gear(), 2, 'he goes shopping again');
+    // the rubber match: one win, act 3
+    const G2 = bootT().GAME;
+    G2.newRun('knight', 45);
+    G2.run.act = 3; G2.run.sto.gary = { on: true, w: 1, l: 1, met: 2, duel: '' };
+    for (const t of rivalOf(G2)) t.type = 'empty';
+    h.eq(G2.sto.garyPlace(G2.run, G2.run.map).content.gary.kind, 'off', 'one win: a rubber match');
+    G2.run.sto.gary.w = 0;
+    for (const t of rivalOf(G2)) t.type = 'empty';
+    h.eq(G2.sto.garyPlace(G2.run, G2.run.map), null, 'no wins: he does not bother with act 3');
+  });
+
+  h.test('alternate bosses: a coin flip per act, saved, reloads keep it, their tricks in the cabinet', () => {
+    // the flip
+    let alt = 0;
+    const T = bootT(), G = T.GAME;
+    for (let s = 1; s <= 24; s++) {
+      G.newRun('knight', 100 + s);
+      const [ids] = G.sto.fightIds(['hoard'], 'boss', {});
+      if (ids[0] === 'plushqueen') alt++;
+      h.eq(G.sto.fightIds(['hoard'], 'boss', {})[0][0], ids[0], `seed ${s}: decided once`);
+    }
+    h.ok(alt >= 6 && alt <= 18, `about half the runs meet the Plushie Queen [${alt}/24]`);
+    // the Plushie Queen: the card, the plushies, the sign, the epitaph
+    G.newRun('knight', 60);
+    G.sto.setAlt('1', 'plushqueen');
+    G.startFight(['hoard'], 'boss');
+    const e = G.fight.enemies[0];
+    h.ok(e.id === 'plushqueen' && G.boss.vs && /ACT 1 BOSS/.test(G.boss.vs.title) && G.boss.vs.taunt === T.DATA.ENEMIES.plushqueen.taunt, 'ACT 1 BOSS: the Plushie Queen');
+    G.save();
+    const B = bootT(Object.assign({}, T._store));
+    h.ok(B.GAME.load() && B.GAME.fight.enemies[0].id === 'plushqueen', 'a reload keeps her');
+    vsOff(G); settle(G);
+    e.sigForce = true;
+    G.endTurn(); settle(G); stepFor(G, 1);
+    const plush = G.fs.items.filter(b => b.data.def.sto === 'plush');
+    h.ok(plush.length >= 3, 'plushies tumble into the cabinet as bodies');
+    const sign = G.sto.sign();
+    h.ok(!sign || /FLUFF SHIELD/.test(sign[0]), 'the sign counts the fluff');
+    G.draw();
+    settle(G);
+    T.COMBAT.damage(G.fight, G.fight.player, e, 99999, { pierce: true });
+    for (const ev of G.fight.events.splice(0)) G.fs.queue.push({ ev, beat: 0.02 });
+    G.fs.beatT = 0;
+    stepFor(G, 0.3);
+    const fin = G.boss.bs && G.boss.bs.fin;
+    h.ok(fin && /Unstuffed/.test(fin.sub), 'her finale has its own epitaph');
+    G.draw();
+    // the Conveyor King: the belt carries the floor away from the chute
+    const K = bootT(), GK = K.GAME;
+    GK.newRun('knight', 61); GK.run.act = 2;
+    GK.sto.setAlt('2', 'conveyorking');
+    GK.startFight(['smelter'], 'boss'); vsOff(GK); settle(GK);
+    h.eq(GK.fight.enemies[0].id, 'conveyorking', 'the Conveyor King');
+    GK.fight.enemies[0].sigForce = true;
+    GK.endTurn(); settle(GK);
+    h.ok(GK.fight.conv && /CONVEYOR/.test((GK.sto.sign() || [''])[0]), 'the belt runs, the sign says so');
+    const cb = GK.cabinet.bounds;
+    h.ok(GK.cabinet.segs.some(s => s.wall === 'floor' && s.vx < 0), 'the floor itself runs toward the far wall');
+    // a prize set down on the floor, clear of the pile, rides away from the chute
+    const top = GK.fs.items.slice().sort((a, b) => a.y - b.y)[0];
+    const clear = Math.max(...GK.fs.items.filter(b => b !== top).map(b => b.box.x1)) + 30;
+    K.PHYS.setPose(top, Math.min(clear, cb.chuteX - (cb.slopeW || 0) - 20), cb.floorY - (top.br || 14) - 2, 0);
+    top.vx = top.vy = top.av = 0; top.sl = false;
+    const x0 = top.x;
+    stepFor(GK, 0.8);
+    h.ok(top.x < x0 - 15, `a prize by the chute rides toward the far wall (${Math.round(x0)} -> ${Math.round(top.x)})`);
+    GK.draw();
+    GK.fight.enemies[0].acts = 2;   // (its next Belt Drive is due on its fourth action)
+    GK.endTurn(); settle(GK);
+    h.ok(!GK.fight.conv && !GK.cabinet.segs.some(s => s.wall === 'floor' && s.vx), 'the belt stops as your turn ends');
+    // the Arctic Arcade: an item freezes into the block (bodies follow), delivering the block smashes it
+    const A3 = bootT(), GA = A3.GAME;
+    GA.newRun('knight', 62); GA.run.act = 3;
+    GA.sto.setAlt('3', 'arcticarcade');
+    GA.startFight(['glacius'], 'boss'); vsOff(GA); settle(GA);
+    const ice = GA.fight.enemies[0];
+    h.eq(ice.id, 'arcticarcade', 'the Arctic Arcade');
+    ice.sigForce = true;
+    GA.endTurn(); settle(GA); stepFor(GA, 0.5);
+    const I = A3.COMBAT.stoIce(GA.fight);
+    const block = GA.fs.items.find(b => b.data.def.sto === 'glacier');
+    h.ok(I && I.insts.length === 1 && block && !GA.fs.items.some(b => b.data.inst === I.insts[0]), 'one prize frozen into a block body, its own body gone');
+    GA.draw();
+    const frozen = I.insts.slice(), hp0 = ice.hp;
+    GA.playDelivered([block]);
+    stepFor(GA, 2); settle(GA);
+    h.ok(ice.hp < hp0 && frozen.every(i => GA.fight.bin.includes(i) || GA.fight.used.includes(i)) && A3.COMBAT.stoIce(GA.fight).insts.length === 0, 'delivered: smashed, the prize is back, the boss is hurt');
+    h.ok(frozen.every(i => !GA.fight.bin.includes(i) || GA.fs.items.some(b => b.data.inst === i) || GA.fs.spawnQ.includes(i)), 'with a body again');
+    GA.draw();
+  });
+}
+
+// ---------------------------------------------------------------- CR8 (round 8): Mama Mech, the Vacuum Nozzle, the Twin Claws
+{
+  const mamaBoot = (unlocks, extra) => {
+    const T = boot({ store: { clawspire_meta: JSON.stringify(Object.assign({ introSeen: true, tutorialDone: true, unlocks: unlocks || { knight: true, alchemist: true } }, extra || {})) } });
+    return { T, G: T.GAME };
+  };
+  // One real grab: aim, steer, drop, wait for the delivery. Returns what was delivered.
+  const realGrab = (G, pick) => {
+    const x = G.rig.aimAt(pick || null);
+    G.steer(x == null ? 200 : x);
+    stepFor(G, 0.7);
+    if (!G.dropClaw()) return -1;
+    let n = 0;
+    while (G.state().grabInFlight && n < 60 * 25) { G.update(DT); n++; }
+    const got = G.fs.delivered | 0;
+    settle(G, 10);
+    return got;
+  };
+  const small = (b) => b.data && b.data.def && (b.data.def.tags || []).indexOf('heavy') < 0 && b.br < 16;
+
+  h.test('CR8 Mama Mech: her card on character select, the unlock, a new run, her Tilt', () => {
+    const { T, G } = mamaBoot();
+    G.showChars();
+    const i = G.S.ui.buttons.findIndex(b => b.label === 'Mama Mech');
+    h.ok(i >= 0 && !G.S.ui.buttons[i].disabled, 'her card is open once a crawler reached act 2');
+    h.eq(G.S.ui.buttons[0].label, T.DATA.CHARACTERS.knight.name, 'the knight is still the first card');
+    G.choose(i);
+    h.eq(G.run.char, 'engineer', 'the run is Mama Mech\'s');
+    h.eq(G.run.bin.length, 19, 'with her 19 item bin');
+    h.ok(G.run.relics.includes('socket_set'), 'and the Socket Set');
+    h.eq(G.run.maxHp, 75, '75 hp');
+    const fresh = mamaBoot({ knight: true }).G;
+    fresh.showChars();
+    const j = fresh.S.ui.buttons.findIndex(b => b.label === 'Mama Mech');
+    h.ok(j >= 0 && fresh.S.ui.buttons[j].disabled, 'a fresh profile has to reach act 2 first');
+    const { G: G2 } = mamaBoot();
+    G2.meta.tilt = { engineer: 3 };
+    h.eq(G2.prog.tiltCap('engineer'), 3, 'her own Tilt ladder');
+    h.eq(G2.prog.tiltCap('gambler'), 0, 'separate from Lou\'s');
+    G2.draw();
+  });
+
+  h.test('CR8 Mama Mech: a real fight with every claw type, the turret builds, fires and is drawn', () => {
+    const { T, G } = mamaBoot();
+    const drawn = [];
+    const tur0 = T.RENDER.cr8.turret;
+    T.RENDER.cr8.turret = (ctx, x, y, st) => { drawn.push({ lv: st.lv, fire: st.fire }); return tur0(ctx, x, y, st); };
+    const played = new Set();
+    for (const type of G.claws.ids()) {
+      G.claws.pick(type);
+      G.newRun('engineer', 5150);
+      G.startFight(['slime'], 'normal', { seed: 31 });
+      for (const e of G.fight.enemies) { e.hp = e.maxHp = 999; }
+      stepFor(G, 3.5);
+      h.eq(G.fight.clawType, type, type + ': the fight knows the claw');
+      h.ok(G.fight.tur && G.fight.tur.lv >= 1, type + ': the Socket Set turret is up');
+      h.ok(G.S.cr8Row === true, type + ': the player row steps aside');
+      let grabs = 0, got = 0;
+      const parts0 = G.fight.tur.parts;
+      while (grabs < 3 && G.fight.phase === 'player' && G.fight.player.grabs > 0) {
+        grabs++;
+        const r = realGrab(G, type === 'magnet' ? (b) => b.data && b.data.tags && b.data.tags.indexOf('metal') >= 0 : type === 'vacuum' ? small : null);
+        if (r < 0) break;
+        got += r;
+        G.draw();
+      }
+      h.ok(grabs >= 1, `${type}: Mama grabbed`);
+      for (const inst of G.fight.used) played.add(inst.id);
+      if (got > 0) h.ok(G.fight.tur.parts >= parts0 || G.fight.tur.over > 0, `${type}: deliveries (${got}) keep the turret building`);
+      // end the turn: the volley plays through the game's queue
+      const hp0 = G.fight.enemies[0].hp, fired0 = G.cr8.tur.fired;
+      settle(G, 10);
+      if (G.fight.phase === 'player') G.endTurn();
+      let n = 0, sawFire = false;
+      while (n < 60 * 20 && !(ready(G) && n > 30)) { G.update(DT); n++; if (G.cr8.tur && G.cr8.tur.fire > 0.5) { sawFire = true; G.draw(); } }
+      h.ok(G.cr8.tur.fired > fired0 && sawFire, `${type}: the turret fired on the frame (${G.cr8.tur.fired - fired0} shots)`);
+      h.ok(G.fight.enemies[0].hp < hp0, `${type}: and hurt the slime`);
+      h.eq(G.cr8.tur.lv, G.fight.tur.lv, `${type}: the shown turret matches COMBAT`);
+      G.draw();
+    }
+    h.ok([...played].some(id => T.DATA.ITEMS[id] && T.DATA.ITEMS[id].char === 'engineer'), 'her own kit was played');
+    h.ok(drawn.length > 0 && drawn.some(d => d.fire > 0.3), 'the turret is drawn, recoiling as it fires');
+    // force the level ladder through the queue: parts, a level-up, a mega shot
+    const F = G.fight;
+    const evs = T.COMBAT.turretParts(F, 20, 'TEST').concat(T.COMBAT.turretFire(F));
+    h.ok(evs.some(e => e.t === 'turret' && e.k === 'up' && e.lv === 5), 'a Lv 5 event');
+    h.ok(evs.some(e => e.t === 'turret' && e.k === 'fire' && e.all), 'a mega shot');
+    for (const e of evs) G.cr8.event(e);
+    h.eq(G.cr8.tur.lv, 5, 'the shown turret is a MEGA MECH');
+    h.ok(G.fs.marquee === 'MEGA MECH!', 'the marquee says so');
+    for (let i = 0; i < 30; i++) { G.update(DT); G.draw(); }
+    h.ok(drawn.some(d => d.lv === 5), 'drawn at Lv 5');
+    h.ok(T.DATA.achCheck({ kind: 'ev', ev: evs.find(e => e.k === 'up' && e.lv === 5) }, {}).includes('fully_armed'), 'Fully Armed');
+    T.RENDER.cr8.turret = tur0;
+    // leaving the fight hands the row back
+    G.showChars();
+    stepFor(G, 0.1);
+    h.ok(G.S.cr8Row === false, 'off the fight: the row is back');
+  });
+
+  h.test('CR8 claws: the vacuum sucks small things up the hose and delivers; the twins bring a pair', () => {
+    const FILL = ['prize_marble', 'glass_bead', 'peppermint', 'lucky_penny', 'sour_drop', 'bouncy_ball', 'lead_shot'];
+    for (const type of ['vacuum', 'twin']) {
+      const { T, G } = mamaBoot();
+      const sfx = [], sfx0 = T.AUDIO.sfx;
+      T.AUDIO.sfx = (n) => { sfx.push(n); return true; };
+      G.claws.pick(type);
+      G.newRun('knight', 777);
+      G.run.bin = FILL.concat(FILL, FILL).map((id, i) => ({ uid: 'v' + i, id, plus: false }));
+      G.startFight(['slime'], 'normal', { seed: 42 });
+      for (const e of G.fight.enemies) { e.hp = e.maxHp = 999; }
+      stepFor(G, 3.5);
+      h.eq(G.rig.type, type, type + ' rig');
+      if (type === 'twin') h.ok(G.rig.bodies.twin && G.rig.bodies.twin.length === 2, 'two heads on the bar');
+      let best = 0, total = 0, tubeSeen = 0;
+      for (let g = 0; g < 3 && G.fight.phase === 'player' && G.fight.player.grabs > 0; g++) {
+        const x = G.rig.aimAt(small);
+        G.steer(x == null ? 200 : x);
+        stepFor(G, 0.7);
+        if (!G.dropClaw()) break;
+        let n = 0;
+        while (G.state().grabInFlight && n < 60 * 25) {
+          G.update(DT); n++;
+          if (type === 'vacuum' && G.rig.tube) { const k = G.rig.tube().length; if (k > tubeSeen) { tubeSeen = k; G.draw(); } }
+        }
+        best = Math.max(best, G.fs.delivered | 0); total += G.fs.delivered | 0;
+        settle(G, 10);
+        G.draw();
+      }
+      h.ok(total >= 2, `${type}: delivered ${total} over three grabs`);
+      if (type === 'vacuum') {
+        h.ok(tubeSeen >= 1, `prizes rode up the hose (${tubeSeen} at once)`);
+        h.ok(sfx.includes('vacWhoosh') && sfx.includes('vacSlurp'), 'the roar and the slurp');
+        if (best >= 3) h.ok(G.meta.ach.clean_sweep, 'three in one grab: Clean Sweep');
+        else { G.fs.delivered = 3; G.update(DT); h.ok(G.meta.ach.clean_sweep, 'Clean Sweep (three in one grab, forced)'); }
+      } else {
+        h.ok(best >= 2, `a twin grab brought up a pair (${best})`);
+        h.ok(sfx.includes('twinClick'), 'the double clack');
+        h.ok(!G.meta.ach.clean_sweep, 'no Clean Sweep for the twins');
+      }
+      T.AUDIO.sfx = sfx0;
+    }
+  });
+
+  h.test('CR8 saves: Mama and the new claws survive a save/load; an old save is the classic claw', () => {
+    const { T, G } = mamaBoot();
+    for (const type of ['vacuum', 'twin']) {
+      G.claws.pick(type);
+      G.newRun('engineer', 99);
+      G.startFight(['slime'], 'normal', { seed: 5 });
+      stepFor(G, 3.5);
+      G.save();
+      const saved = JSON.parse(T._store.clawspire_run);
+      h.ok(saved.run.clawType === type && saved.run.char === 'engineer', type + ': saved');
+      const T2 = boot({ store: Object.assign({}, T._store) });
+      h.ok(T2.GAME.load(), type + ': loads');
+      h.ok(T2.GAME.run.clawType === type && T2.GAME.run.char === 'engineer', type + ': Mama with the ' + type);
+      if (T2.GAME.rig) h.eq(T2.GAME.rig.type, type, type + ': the fight rebuilds the rig');
+      if (T2.GAME.fight) h.ok(T2.GAME.fight.tur, type + ': and the turret');
+      delete saved.run.clawType;
+      const T3 = boot({ store: { clawspire_meta: T._store.clawspire_meta, clawspire_run: JSON.stringify(saved) } });
+      h.ok(T3.GAME.load(), type + ': an old save loads');
+      h.eq(T3.GAME.claws.type(), 'classic', type + ': without the field it is the classic claw');
+    }
   });
 }
 

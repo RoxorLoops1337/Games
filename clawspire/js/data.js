@@ -49,7 +49,8 @@ const DATA = (() => {
   // F.rules by COMBAT.newFight). See DESIGN.md "Builds and synergies".
   // luck: empty grabs and near misses fill the Luck meter (Lucky Lou's gift);
   // cashAmp: +1 damage per Luck on every cash out.
-  const RELIC_RULES = ['poisonKeep', 'blockKeep', 'shatter', 'glassBreak', 'amp', 'comboTwice', 'echo', 'luck', 'cashAmp'];
+  // turret (CR8, round 8): any crawler builds Mama Mech's turret (Blueprints).
+  const RELIC_RULES = ['poisonKeep', 'blockKeep', 'shatter', 'glassBreak', 'amp', 'comboTwice', 'echo', 'luck', 'cashAmp', 'turret'];
   const RARITY_WEIGHTS = {
     1: { c: 70, u: 25, r: 5, l: 0 },
     2: { c: 55, u: 33, r: 11, l: 1 },
@@ -703,6 +704,61 @@ const DATA = (() => {
       fx: [status('luck', 1, 'self')], plus: { fx: [status('luck', 2, 'self')] },
       text: 'Gain {v} Luck. Four leaves, no waiting.' },
 
+    // ---- CR8 (round 8, DESIGN.md "Mama Mech and two new claws"): Mama Mech's
+    // workshop. Every metal item she delivers is a part for the turret on
+    // her cabinet (COMBAT's CR8 block); `part` says how many parts an item
+    // is worth instead of one. ----
+    { id: 'hex_bolt', name: 'Hex Bolt', rarity: 'c', cost: 40, char: 'engineer', starter: true,
+      tags: ['metal', 'weapon'], shape: box(28, 12), density: 1.6, friction: 0.45, restitution: 0.12,
+      color: '#aab3bd', color2: '#5a6068', art: 'key',
+      fx: [dmg(4)], plus: { fx: [dmg(6)] },
+      text: 'Deal {v} damage. A turret part: it goes up on the cabinet after it hits.' },
+    { id: 'tin_plate', name: 'Tin Plate', rarity: 'c', cost: 40, char: 'engineer', starter: true,
+      tags: ['metal'], shape: box(32, 10), density: 1.4, friction: 0.35, restitution: 0.1,
+      color: '#c9d3e0', color2: '#ff8a2e', art: 'buckler', target: 'self',
+      fx: [block(5)], plus: { fx: [block(7)] },
+      text: 'Gain {v} Block. A turret part. Flat, so it slides out of a lazy grip.' },
+    { id: 'pipe_wrench', name: 'Pipe Wrench', rarity: 'c', cost: 50, char: 'engineer', part: 2,
+      tags: ['metal', 'weapon', 'tool', 'heavy'], shape: box(44, 14), density: 1.8, friction: 0.5,
+      color: '#d8343a', color2: '#8e98a8', art: 'hammer',
+      fx: [dmg(7)], plus: { fx: [dmg(10)] },
+      text: 'Deal {v} damage. Counts as 2 turret parts.' },
+    { id: 'spring_coil', name: 'Spring Coil', rarity: 'c', cost: 45, char: 'engineer',
+      tags: ['metal'], shape: circle(12), density: 1.1, friction: 0.4, restitution: 0.55,
+      color: '#ffc94d', color2: '#8a5a12', art: 'ring',
+      fx: [dmg(3, 2)], plus: { fx: [dmg(4, 2)] },
+      text: 'Deal {v} damage twice. Boing. A turret part.' },
+    { id: 'oil_can', name: 'Oil Can', rarity: 'c', cost: 45, char: 'engineer',
+      tags: ['metal', 'tool'], shape: box(22, 28), density: 1.2, friction: 0.5,
+      color: '#2e9e5a', color2: '#ffc94d', art: 'lantern', target: 'self',
+      fx: [heal(3), cleanse()], plus: { fx: [heal(5), cleanse()] },
+      text: 'Heal {v} HP and oil every debuff away. A turret part.' },
+    { id: 'rivet_gun', name: 'Rivet Gun', rarity: 'u', cost: 70, char: 'engineer',
+      tags: ['metal', 'weapon', 'tool'], shape: box(38, 22), density: 1.5, friction: 0.5,
+      color: '#ff8a2e', color2: '#3a3f4a', art: 'horn',
+      fx: [dmg(3, 3)], plus: { fx: [dmg(4, 3)] },
+      text: 'Fire {v} damage three times. Pop, pop, pop.' },
+    { id: 'toolbox', name: 'Toolbox', rarity: 'u', cost: 65, char: 'engineer', part: 3,
+      tags: ['metal', 'heavy', 'tool'], shape: box(38, 26), density: 2.0, friction: 0.55,
+      color: '#d8343a', color2: '#ffc94d', art: 'book', target: 'self',
+      fx: [block(6)], plus: { fx: [block(9)] },
+      text: 'Gain {v} Block. Full of spare parts: counts as 3 turret parts.' },
+    { id: 'tesla_coil', name: 'Tesla Coil', rarity: 'r', cost: 100, char: 'engineer',
+      tags: ['metal', 'magic'], shape: box(20, 42), density: 1.3, friction: 0.5,
+      color: '#2ee6d6', color2: '#b08cff', art: 'wand', target: 'all',
+      fx: [dmg(5), status('weak', 1, 'all')], plus: { fx: [dmg(7), status('weak', 2, 'all')] },
+      text: 'Zap ALL enemies for {v} damage and {v2} Weak. It hums in the bin.' },
+    { id: 'mech_arm', name: 'Mech Arm', rarity: 'r', cost: 110, char: 'engineer',
+      tags: ['metal', 'heavy', 'weapon'], shape: box(52, 16), density: 1.9, friction: 0.55,
+      color: '#8e98a8', color2: '#ff8a2e', art: 'sword',
+      fx: [dmgPer(2, 'metal')], plus: { fx: [dmgPer(3, 'metal')] },
+      text: 'Deal {v} damage for every metal item in the cabinet. Hydraulic.' },
+    { id: 'mech_core', name: 'Mech Core', rarity: 'l', cost: 140, char: 'engineer', part: 6,
+      tags: ['metal', 'magic', 'heavy'], shape: circle(17), density: 1.8, friction: 0.45, restitution: 0.15,
+      color: '#ff8a2e', color2: '#2ee6d6', art: 'orb', target: 'all',
+      fx: [dmg(8)], plus: { fx: [dmg(12)] },
+      text: 'Deal {v} damage to ALL enemies. Its reactor counts as 6 turret parts.' },
+
     // ---- Small fillers: marbles, beads and sweets. Circles r 9-11 so the
     // claw's cradle scoops two or three at once; each does a little. Tagged
     // 'small', they stay out of the single-item reward and shop pools and
@@ -1324,6 +1380,8 @@ const DATA = (() => {
   const tix = (F, v) => { const c = CB(); if (c && c.tickets) c.tickets(F, v); };
   const clawIs = (F, type) => !!F && F.clawType === type;
   const d6 = (F) => 1 + Math.floor((typeof F.rng === 'function' ? F.rng() : 0.5) * 6);
+  // CR8: feed Mama Mech's turret (a fight without one, or no COMBAT: nothing).
+  const turParts = (F, v, label) => { const c = CB(); if (c && c.turretParts && F && F.tur) c.turretParts(F, v, label); };
 
   const RELIC_LIST = [
     // starters (not in random pools)
@@ -1350,6 +1408,13 @@ const DATA = (() => {
           zap(F, randomFoe(F), a + b);
           if (a === b) moreGrabs(F, 1);
         },
+      } },
+    // Mama Mech's (CR8): the turret starts half built, and junk is scrap for it.
+    { id: 'socket_set', name: 'Socket Set', icon: '🔧', rarity: 'event', kw: ['metal'], proc: 'SOCKET SET', starter: true,
+      text: 'Start each fight with 2 turret parts (Lv 1) and 3 Block. Junk you grab out is a turret part too.',
+      hooks: {
+        onFightStart(F) { turParts(F, 2, 'SOCKET SET'); gainBlock(F, 3); },
+        onPlay(F, inst, def) { if (isJunkPlay(inst, def)) turParts(F, 1, 'SCRAP'); },
       } },
 
     // common
@@ -1710,6 +1775,26 @@ const DATA = (() => {
       text: 'Your pet does one more trick every turn, and every trick deals 3 damage to the targeted enemy.',
       pet: { uses: 1 }, hooks: { onPet(F) { zap(F, focus(F), 3); } } },
 
+    // ---- CR8 (round 8): the turret build. rules.turret builds Mama Mech's
+    // turret for any crawler (and gives her 3 more parts at the bell); a
+    // relic's `tur: {amp}` adds damage to every turret shot (COMBAT's CR8 block).
+    { id: 'blueprints', name: 'Blueprints', icon: '📐', rarity: 'r', kw: ['metal'], proc: 'BLUEPRINTS',
+      text: "Any crawler builds Mama Mech's turret on the cabinet: every metal item delivered is a part. Mama starts each fight with 3 more parts.",
+      rules: { turret: 1 } },
+    { id: 'armor_piercing', name: 'Armor-Piercing Rounds', icon: '🎯', rarity: 'u', kw: ['metal', 'brawler'], proc: 'AP ROUNDS',
+      text: 'Every turret shot deals 2 more damage. No turret: every grab that brings up 2+ metal items deals 3 damage to the targeted enemy.',
+      tur: { amp: 2 }, hooks: { onGrab(F) { if (!F.tur && grabDefs(F).filter(d => tagged(d, 'metal')).length >= 2) zap(F, focus(F), 3); } } },
+    { id: 'grease_gun', name: 'Grease Gun', icon: '🛢', rarity: 'c', kw: ['metal', 'fortress'], proc: 'GREASED',
+      text: 'At the end of your turn, gain 2 Block per turret level. No turret: gain 2 Block per metal item delivered this turn (up to 6).',
+      hooks: {
+        onPlay(F, inst, def) { if (tagged(def, 'metal')) { const m = mem(F); if (m.gg !== F.turn) { m.gg = F.turn; m.ggN = 0; } m.ggN++; } },
+        onTurnEnd(F) {
+          const lv = F.tur ? F.tur.lv | 0 : 0, m = mem(F);
+          const v = lv > 0 ? 2 * lv : m.gg === F.turn ? Math.min(6, 2 * (m.ggN | 0)) : 0;
+          if (v > 0) gainBlock(F, v);
+        },
+      } },
+
     // boss
     { id: 'token_stack', name: 'Stack of Tokens', icon: '🪙', rarity: 'boss', kw: ['jackpot', 'junk'], proc: 'TOKENS',
       text: '+1 grab every turn. Start each fight with 2 Rocks in your bin.',
@@ -1806,6 +1891,17 @@ const DATA = (() => {
       joke: 'Technically fishing. Technically legal.',
       stats: { grip: 3, reach: 1, speed: 5 }, good: 'Sniping one item fast', bad: 'Heavy things tear off the barb',
       ups: { prongs: 'A second barb: easier to hit.', width: 'A bigger barb.', grip: 'A tougher rope: heavy things hold.' } },
+    // CR8 (round 8): the vacuum nozzle and the twin claws
+    vacuum: { id: 'vacuum', name: 'Vacuum Nozzle', icon: '🌪', color: '#9b7bff', order: 6,
+      text: 'Hovers over the pile and sucks small, light things up its wand into a canister, three at a time. Heavy things resist; a big light thing jams the nozzle.',
+      joke: 'Found a sock in there once. Nobody owns up to the sock.',
+      stats: { grip: 2, reach: 4, speed: 3 }, good: 'Small light things, fillers', bad: 'Heavy things, daggers and swords jam it',
+      ups: { width: 'A wider nozzle: bigger things fit, and the canister holds one more.', prongs: 'A second intake: 25% more reach and one more in the canister.', grip: 'A stronger motor: more suction, heavier things.' } },
+    twin: { id: 'twin', name: 'Twin Claws', icon: '♊', color: '#ff5a9a', order: 7,
+      text: 'Two small claws on one bar. Each slides to the prize nearest it and closes on its own, so one drop brings up a pair.',
+      joke: 'Twins. One is five minutes older and never lets the other forget it.',
+      stats: { grip: 2, reach: 4, speed: 3 }, good: 'Pairs, doubles, combos', bad: 'Big heavy things, swords',
+      ups: { width: 'Bigger heads, spread further apart.', prongs: 'Grippier fingertips on both heads.' } },
   };
   /* The claw type def for an id (a missing or unknown id is the classic). */
   function clawType(id) { return CLAWS[id] || CLAWS.classic; }
@@ -2005,11 +2101,24 @@ const DATA = (() => {
         'poker_chip', 'poker_chip', 'poker_chip', 'poker_chip', 'poker_chip',
         'scratch_card', 'fortune_cookie', 'crisp_apple',
         'lucky_clover', 'lucky_clover', 'lucky_clover', 'pocket_die', 'pocket_die', 'pocket_die'] },
+    // Round 8 (CR8): the Engineer. `turret` is her gift (COMBAT's CR8 block):
+    // every metal item she delivers bolts a part onto the turret on her
+    // cabinet, and the turret fires at the end of every turn, bigger each level.
+    engineer: { id: 'engineer', name: 'Mama Mech', title: 'The Engineer', color: '#ff8a2e',
+      blurb: 'Bolts, plates and a wrench. Every metal thing she delivers builds the turret on her cabinet, and it fires every turn.',
+      hp: 75, gold: 95, unlock: 'act2', unlockText: 'Reach Act 2 with any Crawler.',
+      claw: { grabs: 3, width: 1, grip: 1.1, speed: 0.95, prongs: 2, rubber: 0, magnet: 0 },
+      relic: 'socket_set', turret: true,
+      bin: ['hex_bolt', 'hex_bolt', 'hex_bolt', 'hex_bolt', 'hex_bolt',
+        'tin_plate', 'tin_plate', 'tin_plate', 'tin_plate',
+        'pipe_wrench', 'spring_coil', 'oil_can', 'crisp_apple',
+        'iron_nut', 'iron_nut', 'iron_nut', 'bouncy_ball', 'bouncy_ball', 'bouncy_ball'] },
   };
   // The crawler's line on the versus card before an elite or boss (RENDER.vsCard).
   const VS_LINES = {
     knight: 'Have at thee, prize!', alchemist: 'Hold still, this might fizz.',
     rogue: 'Your wallet looks heavy.', gambler: 'Double or nothing, pal.',
+    engineer: 'Hold still. Measuring you.',
   };
   for (const id in CHARACTERS) CHARACTERS[id].vsLine = VS_LINES[id] || '';
 
@@ -3070,6 +3179,9 @@ const DATA = (() => {
     V_('fit_rogue_stars', 'outfit', 'Star Shades', 'c', 'Pink star glasses. Very subtle.', { kind: 'shades', style: 'star', c1: '#ff2e88', c2: '#ffffff' }, { char: 'rogue' }),
     V_('fit_lou_cowboy', 'outfit', 'Ten Gallon Hat', 'u', 'Lou bets it holds ten gallons. It does not.', { kind: 'hat', style: 'cowboy', c1: '#a8703a', c2: '#ffc94d' }, { char: 'gambler' }),
     V_('fit_lou_cape', 'outfit', 'High Roller Cape', 'r', 'Gold lamé and a lucky clover pin.', { kind: 'cape', c1: '#ffc94d', c2: '#3ddc84' }, { char: 'gambler' }),
+    // CR8 (round 8): Mama Mech's two
+    V_('fit_mama_welder', 'outfit', 'Welding Mask', 'u', 'Flipped up, sparks and all. Mama welds with her eyes closed anyway.', { kind: 'hat', style: 'welder', c1: '#3a3f4a', c2: '#2ee6d6' }, { char: 'engineer' }),
+    V_('fit_mama_hardhat', 'outfit', 'Hard Hat', 'r', 'A yellow hard hat with a headlamp. Safety third.', { kind: 'hat', style: 'hardhat', c1: '#ffc94d', c2: '#fff6c0' }, { char: 'engineer' }),
     // ---- map trails: what the crawler's footsteps leave behind
     V_('trail_dust', 'trail', 'Dust', 'c', 'Plain old footprints in the dust.', { art: 'dust', col: '#b3a4d6' }, { free: true }),
     V_('trail_sparkle', 'trail', 'Sparkles', 'c', 'A little glitter with every step.', { art: 'sparkle', col: '#fff6c0' }),
@@ -3686,6 +3798,17 @@ const DATA = (() => {
       tags: ['light', 'weapon'], shape: box(14, 50), density: 0.8, friction: 0.5, color: '#ffb347', color2: '#8a2b2b', art: 'torch',
       fx: [dmg(7), status('burn', 6, 'all')], text: 'Deal {v} damage and apply {v2} Burn to ALL enemies. It never goes out.',
       aura: { name: 'Rebirth', proc: 'REBIRTH', text: 'Whenever a burning enemy dies, heal 4 HP.', hooks: { onKill(F, e) { if (e && e.status && e.status.burn > 0) healP(F, 4); } } } },
+    // CR8 (round 8): Mama Mech's two
+    { id: 'thunder_bolt', name: 'Thunder Bolt', from: 'hex_bolt', relic: 'dynamo', icon: '⚡', glow: '#7ff7ff',
+      tags: ['metal', 'weapon', 'magic'], shape: box(34, 14), density: 1.5, friction: 0.45, color: '#dff6ff', color2: '#2ee6d6', art: 'key',
+      fx: [dmg(8), dmgPer(1, 'metal')], text: 'Deal {v} damage, then {v2} more for each metal item in the cabinet. A turret part.',
+      aura: { name: 'Live Wire', proc: 'LIVE WIRE', text: 'At the start of your turn the turret gets a free part. No turret: zap a random enemy for 3.',
+        hooks: { onTurnStart(F) { if (F.tur) turParts(F, 1, 'LIVE WIRE'); else zap(F, randomFoe(F), 3); } } } },
+    { id: 'mech_plating', name: 'Mech Plating', from: 'tin_plate', relic: 'blueprints', icon: '🛡', glow: '#ffb347',
+      tags: ['metal', 'heavy'], shape: box(40, 14), density: 2.0, friction: 0.4, color: '#ffc94d', color2: '#3a3f4a', art: 'buckler', target: 'self',
+      fx: [block(10), status('thorns', 2, 'self')], text: 'Gain {v} Block and {v2} Thorns. Riveted to the frame.',
+      aura: { name: 'Armor Up', proc: 'ARMOR UP', text: 'At the end of your turn, gain 2 Block per turret level (4 Block without a turret).',
+        hooks: { onTurnEnd(F) { gainBlock(F, F.tur ? 2 * (F.tur.lv | 0) || 2 : 4); } } } },
   ];
   const EVOLVED = {}, EVOLUTIONS = {}, EVO_OF = {}, EVO_FX = {};
   for (const d of EVO_LIST) {
@@ -3813,7 +3936,7 @@ const DATA = (() => {
       items: ['candy_corn', 'bag_candycorn', 'pumpkin_bomb', 'cursed_lollipop', 'haunted_teddy', 'witch_broom', 'skull_candle'],
       relics: ['candy_bucket', 'jack_o_lantern', 'witch_brew', 'ghost_sheet'],
       costumes: { rat: 'rat_vamp', slime: 'slime_ghost', goblin: 'goblin_witch' }, elite: 'pumpking', tile: 'treat',
-      cosmetics: ['skin_sea_mansion', 'paint_sea_pumpkin', 'fit_knight_witch', 'fit_alch_witch', 'fit_rogue_witch', 'fit_lou_witch', 'trail_sea_bats'],
+      cosmetics: ['skin_sea_mansion', 'paint_sea_pumpkin', 'fit_knight_witch', 'fit_alch_witch', 'fit_rogue_witch', 'fit_lou_witch', 'fit_mama_witch', 'trail_sea_bats'],
       hats: ['witch', 'pumpkin', 'horns'],
     },
     winter: {
@@ -4013,6 +4136,7 @@ const DATA = (() => {
     V_('fit_alch_witch', 'outfit', 'Witch Hat', 'u', 'A crooked hat with a buckle. Finally, the right uniform.', { kind: 'hat', style: 'witch', c1: '#3a1a5a', c2: '#a6ff5e' }, { char: 'alchemist', season: 'halloween', price: 60 }),
     V_('fit_rogue_witch', 'outfit', 'Witch Hat', 'u', 'A black hat, a purple band. Very sneaky, very spooky.', { kind: 'hat', style: 'witch', c1: '#1b1320', c2: '#9b4dff' }, { char: 'rogue', season: 'halloween', price: 60 }),
     V_('fit_lou_witch', 'outfit', 'Witch Hat', 'u', 'Lou bets the hat is lucky. A spider lives in it.', { kind: 'hat', style: 'witch', c1: '#241a2e', c2: '#3ddc84' }, { char: 'gambler', season: 'halloween', price: 60 }),
+    V_('fit_mama_witch', 'outfit', 'Witch Hat', 'u', 'Riveted, of course. The brim folds out into a spanner.', { kind: 'hat', style: 'witch', c1: '#2a2230', c2: '#ff8a2e' }, { char: 'engineer', season: 'halloween', price: 60 }),   // (CR8)
     V_('trail_sea_bats', 'trail', 'Bat Trail', 'r', 'Little bats flap up out of every step you take.', { art: 'bats', col: '#2a1a3a' }, { season: 'halloween', price: 90 }),
     V_('skin_sea_frost', 'skin', 'Frosted Cabinet', 'r', 'Snow on the roof, icicles on the frame, a cosy frost on the glass.',
       { frame: '#dfeaf5', trim: '#ff2e4a', fp: 'sea_icicles', panel: '#0c1a2a', pp: 'sea_snow', bulb: '#ffffff', glow: '#8dfff5', neon: '#ff2e4a' }, { season: 'winter', price: 120 }),
@@ -4039,7 +4163,635 @@ const DATA = (() => {
   ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
   // ================================================================ /SEASON
 
+  // ================================================================ CR8 (round 8: Mama Mech and two new claws)
+  // DESIGN.md "Mama Mech and two new claws". The crawler, her items, relics,
+  // outfits and evolutions sit in their tables above (search CR8); here are
+  // the two stickers (the board's cap is shared) and the turret's words.
+  for (const a of [
+    A_('fully_armed', 'Fully Armed', '\u{1F52B}', '#ff8a2e', "Build Mama Mech's turret up to Lv 5 in a fight.",
+      (c) => c.kind === 'ev' && !!c.ev && c.ev.t === 'turret' && c.ev.k === 'up' && (c.ev.lv | 0) >= 5),
+    A_('clean_sweep', 'Clean Sweep', '\u{1F32A}', '#9b7bff', 'Suck three prizes up the Vacuum Nozzle and deliver them in one grab.',
+      (c) => c.kind === 'tick' && !!c.f && (c.f.grab | 0) >= 3 && RUNS(c).clawType === 'vacuum'),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  // The turret's levels as the game shows them (the numbers live in COMBAT.TUR).
+  const CR8 = {
+    TUR_NAMES: ['Bare Mount', 'Pea Shooter', 'Bolt Gun', 'Rivet Cannon', 'Gatling', 'Mega Mech'],
+    TUR_TIP: 'Every metal item you deliver bolts a part onto the turret. It fires at the end of your turn, harder each level.',
+  };
+  // ================================================================ /CR8
+
+  // ================================================================ STORY (round 8: branching stories, the rival, alternate bosses)
+  /* DESIGN.md "Stories, the rival and alternate bosses (round 8)". Pure data
+     and pure helpers; the flow is game.js' STORY block, the fight side
+     combat.js', the looks render.js'.
+     - STORIES: events told in beats (2 to 4 per visit). A beat is {text, art?,
+       choices}; a choice is {txt, sub, fx?, go?, set?, add?, call?, cond?,
+       roll?} where fx are the event fx kinds (plus 'pet'), go the next beat
+       (none: the story ends), set / add write the story's own state (read
+       by a later beat's text or a choice's cond(run, st)), call a callback
+       that pays off later in the run, and roll {p, win, lose} a dice roll
+       whose branches carry their own {go, fx, set, add, call}.
+     - Callbacks (run.sto.calls): ally (a friend fights one turn for you in a
+       later elite or boss fight), hunt (a Card Shark prowls the next act's
+       map, awake), later (the story goes on at an event tile of a later act),
+       boss (this act's boss starts sabotaged), shop (a shop of a later act
+       hands you a gift).
+     - The rival: Grabby Gary (GARY, garyTaunt, garyGear, garyPile, garyPrize)
+       and his elite; the alternate bosses: STO.alt (one per act, a coin flip
+       against the act's own boss), each with a signature (combat.js). */
+  const STO = {
+    p: 0.5,            // an event tile tells a story this often (while one fits)
+    garyP: 0.85,       // the runs Gary turns up in
+    altP: 0.5,         // an act's boss is its alternate this often
+    alt: { 1: 'plushqueen', 2: 'conveyorking', 3: 'arcticarcade' },
+    own: { 1: 'hoard', 2: 'smelter', 3: 'glacius' },
+    ally: { crab: { dmg: 6, perAct: 3, hits: 2, block: 5 }, ghost: { weak: 2, dodge: 1 } },
+    sabotage: { hp: 0.12 },
+    hunt: ['cardshark'],
+    vendy: 'u',
+    maxCalls: 12,
+  };
+  // Bits of fx the stories share.
+  const G_ = (v) => ({ k: 'gold', v }), HP_ = (v) => ({ k: 'hp', v }), IT_ = (id) => ({ k: 'item', id });
+  const STORY_LIST = [
+    { id: 'sto_crab', title: 'The Caged Crab', art: 'crab', acts: [1, 2],
+      beats: {
+        start: { text: 'A Claw Crab sits in a prize cage. The sign says DO NOT FEED, DO NOT FREE, DO NOT MAKE EYE CONTACT. It is making eye contact.',
+          choices: [
+            { txt: 'Pick the lock.', sub: 'Roll the dice. Free it, or get pinched.', roll: { p: 0.6, win: { go: 'free' }, lose: { go: 'pinch' } } },
+            { txt: 'Buy it out (35 gold).', sub: 'Lose 35 gold. It is free.', fx: [G_(-35)], go: 'free', cond: hasGold(35) },
+            { txt: 'Walk away.', sub: 'It watches you go. Sadly.' },
+          ] },
+        pinch: { text: 'SNAP. The lock holds. The crab does not: it pinches you, then looks deeply sorry about it.',
+          choices: [
+            { txt: 'Try again.', sub: 'Lose 6 HP. This time it opens.', fx: [HP_(-6)], go: 'free' },
+            { txt: 'Leave it be.', sub: 'It salutes you with one claw.' },
+          ] },
+        free: { text: 'The cage pops open. The crab clicks its claws at you twice. You are fairly sure that means "I owe you one."',
+          choices: [
+            { txt: 'Share your snack.', sub: 'Lose 4 HP. It will remember this. Fondly.', fx: [HP_(-4)], set: { fed: 1 }, call: { k: 'ally', id: 'crab', pow: 2 } },
+            { txt: 'Wave goodbye.', sub: 'It scuttles into the dark. See you around?', call: { k: 'ally', id: 'crab', pow: 1 } },
+          ] },
+      } },
+    { id: 'sto_monte', title: 'Three-Card Monte', art: 'goblin', acts: [1, 2],
+      beats: {
+        start: { text: 'A goblin in a tiny vest shuffles three cards on an upturned crate. "Find the lady, win the pot. Easy money. For me."',
+          choices: [
+            { txt: 'Play fair (15 gold).', sub: 'Lose 15 gold. Roll for the lady.', fx: [G_(-15)], cond: hasGold(15), roll: { p: 0.34, win: { go: 'won' }, lose: { go: 'lost' } } },
+            { txt: 'Cheat.', sub: 'Peek under the cards while he blinks.', go: 'cheat' },
+            { txt: 'Walk away.', sub: 'Your wallet thanks you.' },
+          ] },
+        won: { text: 'You point. It is the lady. The goblin stares at the card like it betrayed him personally.',
+          choices: [{ txt: 'Take the pot.', sub: 'Gain 50 gold.', fx: [G_(50)] }] },
+        lost: { text: 'It is a two of clubs. It is always a two of clubs.',
+          choices: [
+            { txt: 'One more go (15 gold).', sub: 'He is getting sloppy. Probably.', fx: [G_(-15)], cond: hasGold(15), roll: { p: 0.5, win: { go: 'won' }, lose: { go: 'broke' } } },
+            { txt: 'Fair enough.', sub: 'Leave poorer and wiser.' },
+          ] },
+        broke: { text: 'Two of clubs. Again. The goblin tips his hat. You could swear there were only two cards on the table.',
+          choices: [{ txt: 'Lesson learned.', sub: 'Nothing happens.' }] },
+        cheat: { text: 'You flip a corner while he blinks. The lady winks at you. You win. The goblin does NOT blink. "Nobody cheats Lefty," he says, very quietly.',
+          choices: [
+            { txt: 'Take the pot and run.', sub: 'Gain 60 gold and a Marked Deck. Lefty has a big brother.', fx: [G_(60), IT_('marked_deck')], set: { cheat: 1 }, call: { k: 'hunt', id: 'shark' } },
+            { txt: 'Give it back.', sub: 'He respects that. Gain a Poker Chip.', fx: [IT_('poker_chip')], set: { honest: 1 } },
+          ] },
+      } },
+    { id: 'sto_seed', title: 'The Coin Seed', art: 'coin', acts: [1, 2],
+      beats: {
+        start: { text: 'A gumball machine full of seeds. The label reads MONEY TREE, 1 PER CUSTOMER, RESULTS MAY VARY.',
+          choices: [
+            { txt: 'Buy a seed (20 gold).', sub: 'Lose 20 gold. Plant it somewhere.', fx: [G_(-20)], cond: hasGold(20), go: 'plant' },
+            { txt: 'Shake the machine.', sub: 'Roll: 15 gold falls out, or a spider (3 HP) and 5 gold.', roll: { p: 0.5, win: { fx: [G_(15)] }, lose: { fx: [HP_(-3), G_(5)] } } },
+            { txt: 'Walk away.', sub: 'Money does not grow on trees. Usually.' },
+          ] },
+        plant: { text: 'The seed is warm and buzzes like a phone on silent. Where does it go?',
+          choices: [
+            { txt: 'A flower pot by the ticket booth.', sub: 'Come back next act. It might grow.', set: { where: 'pot' }, call: { k: 'later', beat: 'tree' } },
+            { txt: 'Swallow it. Safest place.', sub: 'Lose 5 HP. You will be jingling for a while.', fx: [HP_(-5)], set: { where: 'belly' }, call: { k: 'later', beat: 'belly' } },
+          ] },
+        tree: { text: 'Remember the coin seed? It grew. A tree of gold coins hums over the machines, taller than all of them. A goblin guards it with a rake.',
+          choices: [
+            { txt: 'Shake the tree.', sub: 'Gain 80 gold. The goblin does not approve.', fx: [G_(80)] },
+            { txt: 'Pick one golden fruit.', sub: 'Gain a rare item.', fx: [IT_('rare')] },
+          ] },
+        belly: { text: 'Your stomach has been jingling since the last act. Something in there is ready to come out. It is, legally, a tree.',
+          choices: [
+            { txt: 'Cough it up.', sub: 'Lose 6 HP. Gain 110 gold.', fx: [HP_(-6), G_(110)] },
+            { txt: 'Keep it. It is family now.', sub: 'Gain 8 Max HP. You rattle when you walk.', fx: [{ k: 'maxhp', v: 8 }] },
+          ] },
+      } },
+    { id: 'sto_intern', title: 'The Nervous Intern', art: 'tinker', acts: [1, 2, 3],
+      beats: {
+        start: { text: 'An intern in a Prize Master lanyard is crying into a clipboard. "I have to reset the boss\'s cabinet and I forgot the password."',
+          choices: [
+            { txt: 'Help him guess it.', sub: 'Roll the dice.', roll: { p: 0.5, win: { go: 'guessed' }, lose: { go: 'wrong' } } },
+            { txt: 'Bribe him (30 gold).', sub: 'Lose 30 gold. Ask about the boss\'s weak spots.', fx: [G_(-30)], cond: hasGold(30), go: 'bribe' },
+            { txt: 'Report him to management.', sub: 'Gain 25 gold. Management gives out gold stars.', fx: [G_(25)] },
+          ] },
+        guessed: { text: 'It was PASSWORD1. It is always PASSWORD1. He is so grateful he offers to "lose" a few screws in this act\'s boss.',
+          choices: [
+            { txt: 'Loosen the screws.', sub: 'This act\'s boss starts weakened.', set: { saboteur: 1 }, call: { k: 'boss', id: 'intern', s: { weak: 2, vuln: 2 } } },
+            { txt: 'Just take a tip.', sub: 'Gain 30 gold.', fx: [G_(30)] },
+          ] },
+        wrong: { text: 'Wrong. The cabinet locks for an hour. The intern blames you, loudly, on the radio.',
+          choices: [{ txt: 'Run.', sub: 'Lose 4 HP on the way out.', fx: [HP_(-4)] }] },
+        bribe: { text: 'He pockets the gold and whispers: "The boss hates Vulnerable. Also its left side. Also stairs."',
+          choices: [
+            { txt: 'Sabotage it together.', sub: 'This act\'s boss starts badly weakened.', set: { saboteur: 2 }, call: { k: 'boss', id: 'intern', s: { weak: 2, vuln: 3 } } },
+            { txt: 'Ask for his lunch instead.', sub: 'Heal 12 HP. It is a very good sandwich.', fx: [HP_(12)] },
+          ] },
+      } },
+    { id: 'sto_dance', title: 'Dance-Off', art: 'trashpanda', acts: [1, 2, 3],
+      beats: {
+        start: { text: 'A raccoon in a sweatband runs a dance machine. "Three rounds, 4 points to beat me. Win and my stash is yours. Lose and you mop." Round one: LEFT, LEFT, SPIN, CLAW?!',
+          choices: [
+            { txt: 'Nail the basics.', sub: 'A safe roll for 1 point.', roll: { p: 0.75, win: { add: { score: 1 }, go: 'r2' }, lose: { go: 'r2' } } },
+            { txt: 'The claw spin.', sub: 'A risky roll for 2 points (or 3 HP).', roll: { p: 0.45, win: { add: { score: 2 }, go: 'r2' }, lose: { fx: [HP_(-3)], go: 'r2' } } },
+            { txt: 'Walk away.', sub: 'The raccoon calls you a chicken. In three languages.' },
+          ] },
+        r2: { text: (st) => `Round two. Faster. The raccoon is sweating right through the sweatband. Score: ${st.score | 0}.`,
+          choices: [
+            { txt: 'Nail the basics.', sub: 'A safe roll for 1 point.', roll: { p: 0.7, win: { add: { score: 1 }, go: 'r3' }, lose: { go: 'r3' } } },
+            { txt: 'The claw spin.', sub: 'A risky roll for 2 points (or 3 HP).', roll: { p: 0.45, win: { add: { score: 2 }, go: 'r3' }, lose: { fx: [HP_(-3)], go: 'r3' } } },
+          ] },
+        r3: { text: (st) => `Final round. The machine plays your song. You do not know how it knows. Score: ${st.score | 0}.`,
+          choices: [
+            { txt: 'Nail the basics.', sub: 'A safe roll for 1 point.', roll: { p: 0.65, win: { add: { score: 1 }, go: 'end' }, lose: { go: 'end' } } },
+            { txt: 'The claw spin.', sub: 'A risky roll for 2 points (or 3 HP).', roll: { p: 0.45, win: { add: { score: 2 }, go: 'end' }, lose: { fx: [HP_(-3)], go: 'end' } } },
+          ] },
+        end: { text: (st) => ((st.score | 0) >= 4 ? `Final score: ${st.score}. The raccoon throws its sweatband into the crowd. The crowd is two rats. They go wild.`
+          : `Final score: ${st.score | 0}. The raccoon needed 4. It hands you a mop without a word.`),
+          choices: [
+            { txt: 'Claim the stash.', sub: 'Gain 40 gold and a rare item.', fx: [G_(40), IT_('rare')], cond: (run, st) => ((st && st.score) | 0) >= 4 },
+            { txt: 'Take a bow.', sub: 'Gain 25 gold. Second place still pays.', fx: [G_(25)], cond: (run, st) => { const s = (st && st.score) | 0; return s >= 2 && s < 4; } },
+            { txt: 'Grab the mop.', sub: 'Gain 5 gold. It was a nice mop.', fx: [G_(5)], cond: (run, st) => ((st && st.score) | 0) < 2 },
+          ] },
+      } },
+    { id: 'sto_egg', title: 'The Warm Egg', art: 'egg', acts: [1, 2],
+      beats: {
+        start: { text: 'In a prize bin full of rubber ducks sits one real egg. It is warm. It is ticking. No, that is your heart. It is cute.',
+          choices: [
+            { txt: 'Keep it warm in your Rig.', sub: 'Lose 3 Max HP. It takes up room. Check on it next act.', fx: [{ k: 'maxhp', v: -3 }], set: { kept: 1 }, call: { k: 'later', beat: 'hatch' },
+              cond: (run) => (run && run.maxHp || 0) > 20 },
+            { txt: 'Sell it to a passing chef.', sub: 'Gain 30 gold. The chef is thrilled. The egg is not.', fx: [G_(30)] },
+            { txt: 'Leave it with the ducks.', sub: 'They will raise it as their own.' },
+          ] },
+        hatch: { text: 'Your Rig squeaks. The egg has hatched! Something tiny climbs onto your shoulder, blinks at you, and refuses to leave.',
+          choices: [
+            { txt: 'Keep it.', sub: 'A new pet (or 30 XP for the one you have).', fx: [{ k: 'pet' }] },
+            { txt: 'Feed it your snacks.', sub: 'Heal 10 HP and gain 6 Max HP. It shares.', fx: [HP_(10), { k: 'maxhp', v: 6 }] },
+          ] },
+      } },
+    { id: 'sto_booth', title: 'The Photo Booth', art: 'ghost', acts: [2, 3],
+      beats: {
+        start: { text: 'A photo booth flashes on its own. The strip slides out: you, smiling. And behind you, a ghost, also smiling.',
+          choices: [
+            { txt: 'Take another photo.', sub: 'Surely it was a smudge.', go: 'flash' },
+            { txt: 'Keep the strip.', sub: 'Gain 2 Bulbs. It glows faintly.', fx: [{ k: 'ink', v: 2 }] },
+            { txt: 'Leave. Quickly.', sub: 'Do not look back. Do not look back.' },
+          ] },
+        flash: { text: 'FLASH. The ghost is closer. It is holding up two fingers behind your head.',
+          choices: [
+            { txt: 'Say cheese.', sub: 'Be a good sport.', go: 'friend' },
+            { txt: 'Punch the booth.', sub: 'Lose 5 HP. Gain 25 gold. The ghost looks offended.', fx: [HP_(-5), G_(25)] },
+          ] },
+        friend: { text: 'The ghost floats out of the strip. "Nobody ever poses WITH me," it sniffles. It would like to tag along.',
+          choices: [
+            { txt: 'Sure, buddy.', sub: 'It will haunt your next big fight (for you).', set: { pal: 1 }, call: { k: 'ally', id: 'ghost', pow: 1 } },
+            { txt: 'Ask where the lights are.', sub: 'Gain 4 Bulbs. Ghosts know.', fx: [{ k: 'ink', v: 4 }] },
+          ] },
+      } },
+    { id: 'sto_vendy', title: 'The Runaway Vending Machine', art: 'slot', acts: [1, 2],
+      beats: {
+        start: { text: 'A vending machine shuffles down the aisle on stubby legs. Its screen scrolls: PLEASE. THEY WANT TO TURN ME INTO A CLAW MACHINE.',
+          choices: [
+            { txt: 'Help it escape.', sub: 'Distract the guard.', go: 'escape' },
+            { txt: 'Loot it while it is distracted.', sub: 'Gain a random item. And a Rock.', fx: [IT_('random'), { k: 'junk', id: 'rock', n: 1 }], go: 'looted' },
+            { txt: 'Call security.', sub: 'Gain 20 gold. You monster.', fx: [G_(20)] },
+          ] },
+        escape: { text: 'You make a very convincing chicken noise. The guard runs off to find the chicken. The machine waddles into the dark. I WILL NOT FORGET THIS. EXACT CHANGE ONLY.',
+          choices: [{ txt: 'Good luck, Vendy.', sub: 'You get the feeling it will pay you back.', set: { saved: 1 }, call: { k: 'shop', id: 'vendy' } }] },
+        looted: { text: 'A bag of chips drops out with the prize. The screen reads :( and the machine wobbles away.',
+          choices: [{ txt: 'Eat the chips.', sub: 'Heal 8 HP. They taste like guilt.', fx: [HP_(8)] }] },
+      } },
+    { id: 'sto_oracle', title: 'The Magpie Oracle', art: 'magpie', acts: [1, 2, 3],
+      beats: {
+        start: { text: 'A magpie in a tiny turban perches on a crystal ball. "Three questions," it croaks. "Shiny ones only."',
+          choices: [
+            { txt: 'Ask about the road ahead.', sub: 'Gain 2 Bulbs. Then another question?', fx: [{ k: 'ink', v: 2 }], go: 'more' },
+            { txt: 'Ask about treasure.', sub: 'Upgrade an item.', fx: [{ k: 'upgrade' }] },
+            { txt: 'Offer it a shiny (10 gold).', sub: 'Lose 10 gold. Hear your fortune.', fx: [G_(-10)], cond: hasGold(10), go: 'fortune' },
+          ] },
+        more: { text: '"The dark is only a room with the lights off," it croaks, very pleased with itself. "One more? Shinier."',
+          choices: [
+            { txt: 'Pay 15 gold.', sub: 'Lose 15 gold. Gain a rare item.', fx: [G_(-15), IT_('rare')], cond: hasGold(15) },
+            { txt: 'No thanks.', sub: 'It pecks your hat on the way out.' },
+          ] },
+        fortune: { text: 'It stares into the ball. "You will meet a tall, dark... claw machine." Then it pecks the gold and pushes something toward you.',
+          choices: [{ txt: 'Take it.', sub: 'Gain a random relic.', fx: [{ k: 'relic', id: 'random' }] }] },
+      } },
+  ];
+  const STORIES = {};
+  for (const s of STORY_LIST) STORIES[s.id] = s;
+  const STORY_IDS = STORY_LIST.map((s) => s.id);
+  const stoBeatText = (beat, st) => (beat ? (typeof beat.text === 'function' ? String(beat.text(st || {})) : String(beat.text || '')) : '');
+  // A choice is open when its cond (run, story state) holds; a throwing cond is closed.
+  function stoOk(ch, run, st) {
+    if (!ch) return false;
+    if (typeof ch.cond !== 'function') return true;
+    try { return !!ch.cond(run, st || {}); } catch (e) { return false; }
+  }
+  /* Resolve a choice (pure; rng only for a roll) -> {fx, next, set, add,
+     calls, win, txt} or null (unknown or closed). The game applies it. */
+  function stoChoose(story, beatId, idx, st, run, rng) {
+    const S0 = typeof story === 'string' ? STORIES[story] : story;
+    const beat = S0 && S0.beats && S0.beats[beatId];
+    const ch = beat && beat.choices && beat.choices[idx];
+    if (!ch || !stoOk(ch, run, st)) return null;
+    let br = null, win = null;
+    if (ch.roll) { win = (rng ? rng() : 0) < ch.roll.p; br = (win ? ch.roll.win : ch.roll.lose) || {}; }
+    const fx = (ch.fx || []).concat(br ? (br.fx || []) : []);
+    const calls = [];
+    for (const c of [ch.call, br && br.call]) if (c) calls.push(Object.assign({}, c));
+    const next = br ? (br.go || null) : (ch.go || null);
+    return { fx, next: next && S0.beats[next] ? next : null, set: Object.assign({}, ch.set || {}, (br && br.set) || {}),
+      add: Object.assign({}, ch.add || {}, (br && br.add) || {}), calls, win, txt: ch.txt };
+  }
+  // The run's progress through the acts (Endless loops count on).
+  const stoStage = (run) => (run ? ((run.endless && run.endless.loop) | 0) * 3 + ((run.act | 0) || 1) : 1);
+  // A callback is due: a boss call in its own act (or later), the rest from the next act on.
+  function stoDue(call, run) {
+    if (!call || call.done) return false;
+    const now = stoStage(run), at = call.stage | 0;
+    return call.k === 'boss' ? now >= at : now > at;
+  }
+  // A story that can start now: unseen this run, told in this act.
+  function stoPick(rng, run) {
+    const seen = (run && run.sto && run.sto.seen) || {}, act = (run && run.act) || 1;
+    const ids = STORY_IDS.filter((id) => !seen[id] && STORIES[id].acts.indexOf(act) >= 0);
+    return ids.length ? ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))] : null;
+  }
+  // The run's story state as it is today (an old or junk save gets a fresh one; `gary` is off for a save from before).
+  function stoFix(o, seed) {
+    const src = o && typeof o === 'object' && !Array.isArray(o) ? o : null;
+    const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+    const out = { st: {}, seen: {}, done: {}, cur: null, calls: [], alt: {}, pays: 0, gary: { on: false, w: 0, l: 0, met: 0, duel: '' } };
+    if (!src) { out.gary.on = U.rng(U.hashStr('clawspire:gary:' + ((seed >>> 0) || 1)))() < STO.garyP; return out; }
+    for (const id in obj(src.st)) if (STORIES[id]) out.st[id] = Object.assign({}, obj(src.st[id]));
+    for (const id in obj(src.seen)) if (STORIES[id]) out.seen[id] = 1;
+    for (const id in obj(src.done)) if (STORIES[id]) out.done[id] = String(src.done[id]);
+    const c = src.cur;
+    if (c && STORIES[c.id] && STORIES[c.id].beats[c.beat]) out.cur = { id: c.id, beat: c.beat, n: Math.max(1, c.n | 0) };
+    for (const k of Array.isArray(src.calls) ? src.calls : []) {
+      if (!k || typeof k !== 'object' || ['ally', 'hunt', 'later', 'boss', 'shop'].indexOf(k.k) < 0 || out.calls.length >= STO.maxCalls) continue;
+      out.calls.push(Object.assign({}, k, { stage: Math.max(1, k.stage | 0), done: !!k.done }));
+    }
+    for (const a in obj(src.alt)) { const v = src.alt[a]; if (/^\d{1,3}$/.test(a) && (v === '' || (typeof v === 'string' && ENEMIES[v]))) out.alt[a] = v; }
+    out.pays = Math.max(0, src.pays | 0);
+    if (src.huntNote) out.huntNote = 1;
+    const g = obj(src.gary);
+    out.gary = { on: !!g.on, w: Math.max(0, g.w | 0), l: Math.max(0, g.l | 0), met: Math.max(0, g.met | 0), duel: g.duel === 'won' || g.duel === 'lost' ? g.duel : '' };
+    return out;
+  }
+  // The alternate boss of an act (null when it has none).
+  const stoAltOf = (act) => (STO.alt[act] && ENEMIES[STO.alt[act]] ? STO.alt[act] : null);
+
+  // ---- Grabby Gary, the rival claw champion
+  /* He meets you on a map tile (act 1), races you in a claw-off (acts 1 and
+     2: three drops each from a shared bin), and if you beat him twice in a
+     run he calls you out to a showdown in act 3 (an elite fight with his own
+     claw). The profile remembers him (meta.gary: met, offs, wins, losses,
+     duels, beat): his taunts follow the record and he buys new gear every
+     time you beat him. */
+  const GARY = {
+    gear: ['Rookie Cap', 'Pro Shades', 'Gold Chain', 'Champion Jacket', 'Turbo Claw'],
+    drops: 3,
+    val: { junk: 0, c: 1, u: 2, r: 4, l: 7 },
+    pile: { c: 5, u: 3, r: 2, l: 1, junk: 2 },
+    prize: { gold: 30, perAct: 15, lose: 10, tix: 6, loseTix: 2 },
+    aim: [34, 28, 22, 17, 12],       // his aim error (px) by gear
+    grip: [1.1, 1.18, 1.26, 1.34, 1.42],
+    duel: { hpPerGear: 0.06, strAt: 3, gold: 60 },
+  };
+  // His gear level: every claw-off you won and every showdown (twice) sends him shopping.
+  function garyGear(g) {
+    g = g || {};
+    return Math.max(0, Math.min(GARY.gear.length - 1, Math.floor(((g.wins | 0) + 2 * (g.beat | 0)) / 2)));
+  }
+  const GARY_LINES = {
+    first: ['Name\'s Gary. Grabby Gary. Undefeated claw-off champion, three arcades running. You look like a Tuesday.',
+      'Nice claw. Did it come with training wheels? I am Gary. Grabby Gary. Remember it.'],
+    ahead: ['Oh. It is YOU. I have been practising. Like the new {gear}? Bought them with YOUR tickets. Eventually.',
+      'You got lucky last time. Luck is not a strategy. I have a spreadsheet.'],
+    behind: ['Back for another lesson? I will go easy on you. That is a lie.', 'My trophy shelf has a spot with your name on it. Two spots.'],
+    even: ['Tied record, huh? Not for long.', 'We keep meeting like this. I am starting to think you like losing to me.'],
+    rematch: ['Round two. My claw has been oiled. My ego has been polished.', 'Rematch! This time I am not holding back. I was not before either.'],
+    duel: ['Two losses in one run? Nobody does that to Gary. SHOWDOWN. Now.', 'You beat me twice. The third time I bring my REAL claw.'],
+    win: ['HA! Put it on my shelf. Next to the others.', 'Easy. Did you even warm up?', 'And THAT is why they call me Grabby.'],
+    lose: ['Rigged! That claw was rigged! Rematch next act!', 'I let you win. For morale. Yours.', 'Enjoy it. I am going shopping.'],
+    tie: ['A tie? Unacceptable. We settle this later.'],
+  };
+  // A taunt for the moment: kind 'meet' | 'off' | 'duel' | 'win' | 'lose' | 'tie'; g = meta.gary.
+  function garyTaunt(g, kind, rng) {
+    g = g || {};
+    const pick = (a) => a[Math.min(a.length - 1, Math.floor((rng ? rng() : 0) * a.length))];
+    let list;
+    if (kind === 'duel' || kind === 'win' || kind === 'lose' || kind === 'tie') list = GARY_LINES[kind];
+    else if (!(g.offs | 0) && !(g.met | 0)) list = GARY_LINES.first;
+    else if (kind === 'off') list = GARY_LINES.rematch;
+    else list = (g.wins | 0) > (g.losses | 0) ? GARY_LINES.ahead : (g.wins | 0) < (g.losses | 0) ? GARY_LINES.behind : GARY_LINES.even;
+    return pick(list).replace('{gear}', GARY.gear[garyGear(g)].toLowerCase());
+  }
+  const garyVal = (def) => (def ? (GARY.val[def.rarity] == null ? 1 : GARY.val[def.rarity]) : 0);
+  // The shared bin of a claw-off: [{id, v}], seeded. Every rarity is there, and two rocks.
+  function garyPile(rng, act) {
+    const out = [];
+    for (const r of ['l', 'r', 'u', 'c']) {
+      let ids = pool(r).filter((id) => ITEMS[id] && !ITEMS[id].bag && !ITEMS[id].char);
+      if (!ids.length) ids = pool(r);
+      for (let k = 0; k < (GARY.pile[r] | 0) && ids.length; k++) {
+        const id = ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))];
+        out.push({ id, v: garyVal(ITEMS[id]) });
+      }
+    }
+    for (let k = 0; k < GARY.pile.junk; k++) out.push({ id: 'rock', v: 0 });
+    return rng.shuffle ? rng.shuffle(out) : out;
+  }
+  // What a claw-off pays: a win gold, tickets and a capsule; a loss a little gold.
+  function garyPrize(act, res) {
+    const P = GARY.prize, a = Math.max(1, act | 0);
+    if (res === 'win') return { gold: P.gold + P.perAct * (a - 1), tix: P.tix, cap: 'elite' };
+    if (res === 'tie') return { gold: Math.round((P.gold + P.perAct * (a - 1)) / 2), tix: P.loseTix, cap: '' };
+    return { gold: P.lose, tix: P.loseTix, cap: '' };
+  }
+  // The profile's rival record, repaired (old or junk profiles start fresh).
+  function garyFix(o) {
+    const g = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    const n = (v) => Math.max(0, Math.floor(+v) || 0);
+    return { met: n(g.met), offs: n(g.offs), wins: n(g.wins), losses: n(g.losses), ties: n(g.ties), duels: n(g.duels), beat: n(g.beat) };
+  }
+
+  // ---- the new monsters: the Card Shark, Grabby Gary, the alternate bosses
+  const STO_ENEMIES = [
+    { id: 'cardshark', name: 'The Card Shark', act: 2, tier: 'elite', hp: [118, 130], art: 'goblin', look: 'cardshark', size: 1.1, color: '#4a8ab8', color2: '#2b3a5a', color3: '#ffc94d',
+      desc: 'Lefty\'s big brother. A shark in a dealer\'s visor who never forgets a cheat, and never deals fair.', ai: 'cycle', pattern: [0, 1, 2, 3, 4, 5],
+      taunt: 'You cheated my little brother. Now we play MY game.',
+      enrage: { name: 'ALL IN', text: 'It pushes every chip to the middle', str: 2 },
+      moves: [atk('deal', 'Deal', 5, 4, 'Deals cards like knives: 5 x4'), debuff('mark', 'Mark the Card', 'vuln', 2, 'Marks you (Vulnerable 2)'),
+        mv('palm', 'Palm a Prize', 'steal', 'Palms an item from your bin'), atk('bite', 'Big Bite', 18, 1, 'Bites for 18'),
+        mv('stack', 'Stack the Deck', 'charge', 'Stacking the deck (30 next turn)', { v: 30 }), blk('fold', 'Fold', 16, 'Folds behind its cards (Block 16)')] },
+    { id: 'gary', name: 'Grabby Gary', act: 3, tier: 'elite', hp: [168, 180], art: 'tinker', look: 'gary', size: 1.1, color: '#3ddc84', color2: '#ffc94d', color3: '#ff2e88',
+      desc: 'Undefeated claw-off champion (he says). He brings his own claw to the showdown and grabs your best prize every turn.', ai: 'cycle', pattern: [0, 1, 2, 3, 4, 5],
+      taunt: 'Name\'s Gary. Grabby Gary. Undefeated.', rival: true, digest: 99, noAffix: ['greedy'],
+      enrage: { name: 'TURBO MODE', text: 'His claw goes back for seconds', str: 2 },
+      moves: [atk('jab', 'Joystick Jab', 10, 2, 'Joystick jab: 10 x2'), debuff('trash', 'Trash Talk', 'weak', 2, 'Trash talks you (Weak 2)'),
+        blk('trophy', 'Trophy Shield', 22, 'Hides behind a trophy (Block 22)'), atk('slam', 'Champion Slam', 26, 1, 'Champion slam for 26'),
+        buff('hype', 'Hype Up', 'str', 2, 'Hypes himself up (+2 Strength)'), mv('wind', 'Wind Up', 'charge', 'Winding up the big grab (44 next turn)', { v: 44 })] },
+    { id: 'plushqueen', name: 'The Plushie Queen', act: 1, tier: 'boss', hp: [100, 100], art: 'slime', look: 'plushqueen', size: 1, color: '#ff9ec7', color2: '#ffd1e6', color3: '#ffc94d',
+      desc: 'Every unclaimed plush in the tower pledged itself to her. Every one of them is a pillow between you and her.', ai: 'cycle',
+      taunt: 'Hugs are mandatory. Resistance is fluffy.',
+      // Boss signature: a parade of plush toys into your bin; each one soaks a point of every hit on her until you grab it out.
+      sig: { id: 'plush', name: 'Plush Parade', sign: 'PLUSH PARADE', shout: 'HUG TIME!', text: 'fills your bin with plushies (each soaks 1 off every hit on her)',
+        first: 1, every: 3, n: 3, soak: 1, max: 6, item: 'sto_plush' },
+      pattern: [0, 1, 2, 3, 4, 5, 1, 6],
+      enrage: { name: 'ROYAL CUDDLE', text: 'Every plush in the kingdom answers the call', str: 2, pattern: [1, 5, 0, 3, 1, 6] },
+      moves: [atk('bonk', 'Scepter Bonk', 9, 1, 'Scepter bonk for 9'), atk('pillow', 'Pillow Fight', 4, 3, 'Pillow fight: 4 x3'),
+        blk('fluff', 'Fluff Up', 12, 'Fluffs up (Block 12)'), mv('decree', 'Royal Decree', 'junk', 'Knights a Plush into your bin', { item: 'sto_plush', n: 1 }),
+        debuff('hug', 'Bear Hug', 'weak', 2, 'A bear hug (Weak 2)'), mv('nap', 'Royal Nap', 'charge', 'Settling in for a big squeeze (22 next turn)', { v: 22 }),
+        mv('wobble', 'Tantrum', 'shake', 'Throws a tantrum. Your bin rattles.')] },
+    { id: 'conveyorking', name: 'The Conveyor King', act: 2, tier: 'boss', hp: [165, 165], art: 'clockwork', look: 'conveyorking', size: 1, color: '#ffb347', color2: '#5a6373', color3: '#2ee6d6',
+      desc: 'The foundry\'s shipping department, crowned. Everything moves on his line. Away from you.', ai: 'cycle',
+      taunt: 'Everything moves. Away from YOU.',
+      // Boss signature: the bin floor turns into a conveyor running away from the chute for your next turn, and crates ride in on it.
+      sig: { id: 'belt', name: 'Belt Drive', sign: 'CONVEYOR', shout: 'KEEP IT MOVING!', text: 'turns your bin floor into a conveyor away from the chute',
+        first: 1, every: 3, v: 70, crates: 2, item: 'sto_crate' },
+      pattern: [0, 1, 2, 3, 4, 6, 5, 1],
+      enrage: { name: 'OVERTIME', text: 'The belt runs a double shift', str: 2, pattern: [1, 5, 0, 6, 4, 1] },
+      moves: [atk('grind', 'Gear Grind', 7, 3, 'Gear grind: 7 x3'), mv('box', 'Box It', 'junk', 'Ships 2 Crates into your bin', { item: 'sto_crate', n: 2 }),
+        blk('wrap', 'Shrink Wrap', 20, 'Shrink wraps himself (Block 20)'), mv('oil', 'Oil the Line', 'grease', 'Oils the line (slippery 2 turns)', { v: 2 }),
+        atk('press', 'Hydraulic Press', 24, 1, 'Hydraulic press for 24'), mv('rush', 'Rush Order', 'charge', 'Rush order (34 next turn)', { v: 34 }),
+        mv('lurch', 'Lurch', 'tilt', 'The line lurches (tilt)')] },
+    { id: 'arcticarcade', name: 'The Arctic Arcade', act: 3, tier: 'boss', hp: [115, 115], art: 'icemimic', look: 'arcticarcade', size: 1, color: '#8dfff5', color2: '#3a6fb8', color3: '#ffffff',
+      desc: 'A whole arcade frozen into one cabinet, still running. It freezes your prizes into its growing block of ice.', ai: 'cycle',
+      taunt: 'Welcome to the coolest arcade in the tower. Please remain frozen.',
+      // Boss signature: one of your items (two once enraged) freezes into a growing ice block in your bin; deliver the block to smash it open.
+      sig: { id: 'glacier', name: 'Ice Block', sign: 'ICE BLOCK', shout: 'CHILL OUT!', text: 'freezes one of your items into a growing ice block',
+        first: 1, every: 2, n: 1, cap: 6, dmg: 5 },
+      pattern: [0, 1, 2, 3, 4, 5, 6],
+      enrage: { name: 'DEEP FREEZE MODE', text: 'The compressor roars', str: 2 },
+      moves: [mv('blizzard', 'Blizzard', 'fog', 'Blizzard on the glass (fog 2 turns)', { v: 2 }), atk('hail', 'Hail', 7, 4, 'Hail: 7 x4'),
+        debuff('frost', 'Frostbite', 'chill', 3, 'Frostbite (3 Chill)'), blk('iceWall', 'Ice Wall', 25, 'Ice wall (Block 25)'),
+        mv('snow', 'Snow Machine', 'junk', 'Dumps 2 Ice Blocks into your bin', { item: 'iceblock', n: 2 }),
+        mv('gather', 'Gather Cold', 'charge', 'Gathering cold (36 next turn)', { v: 36 }), atk('slam', 'Cabinet Slam', 16, 1, 'Cabinet slam for 16')],
+      onDeath: { k: 'summon', id: 'prizemaster' } },
+  ];
+  for (const e of STO_ENEMIES) ENEMIES[e.id] = Object.assign({ size: 1 }, e);
+  // The bosses' junk: reachable as ITEMS[id], never listed (no pool, shop or Prizedex sees them).
+  const stoItem = (d) => Object.defineProperty(ITEMS, d.id, { value: Object.assign({ density: 1, friction: 0.5, restitution: 0.1, target: 'none', tags: ['junk'], rarity: 'junk', cost: 0, exhaust: true, fx: [] }, d),
+    enumerable: false, configurable: true, writable: true });
+  stoItem({ id: 'sto_plush', name: 'Royal Plush', tags: ['junk', 'light'], shape: circle(19), density: 0.5, friction: 0.8, restitution: 0.35,
+    color: '#ff9ec7', color2: '#ffd1e6', art: 'heart', target: 'self', fx: [{ k: 'block', v: 2 }], sto: 'plush',
+    text: 'Soaks a point of every hit on the Plushie Queen while it sits in your bin. Grab it out for {v} Block. It is very huggable.' });
+  stoItem({ id: 'sto_crate', name: 'Shipping Crate', tags: ['junk', 'heavy'], shape: box(46, 32), density: 1.3, friction: 0.8,
+    color: '#c89a5a', color2: '#8a5a2b', art: 'rock', target: 'self', fx: [{ k: 'block', v: 3 }], sto: 'crate',
+    text: 'Rides in on the Conveyor King\'s belt. Grab it out for {v} Block of cardboard armour.' });
+  // The Arctic Arcade's block grows a size per frozen item (the physics body is rebuilt from the bigger def).
+  const STO_ICE = [];
+  for (let n = 1; n <= 6; n++) {
+    const w = 34 + n * 8, hh = 28 + n * 6, id = 'sto_glacier' + n;
+    stoItem({ id, name: 'Ice Block', tags: ['junk', 'heavy'], density: 1.4, friction: 0.2, restitution: 0.05, color: '#bff4ff', color2: '#5ab4e6', art: 'rock', sto: 'glacier', ice: n,
+      shape: { kind: 'poly', verts: [{ x: -w / 2, y: -hh / 2 }, { x: w / 2, y: -hh / 2 }, { x: w / 2, y: hh / 2 }, { x: -w / 2, y: hh / 2 }] },
+      text: `${n} of your item${n > 1 ? 's' : ''}, frozen solid. Deliver the block to smash it: they come back, and the boss takes 5 per item.` });
+    STO_ICE.push(id);
+  }
+  // Two stickers (the board is shared with the round's other work).
+  for (const a of [
+    A_('rival_crusher', 'Rival Crusher', '\u{1F3C6}', '#3ddc84', 'Beat Grabby Gary in his act 3 showdown.', (c) => (((c.meta && c.meta.gary) || {}).beat | 0) >= 1),
+    A_('full_circle', 'Full Circle', '\u{1F501}', '#ff9ec7', 'See a story from an earlier act come back around.', (c) => (((c.meta && c.meta.sto) || {}).pays | 0) >= 1),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  // ================================================================ /STORY
+
+  // ================================================================ HISTORY (round 8: run history and the death recap)
+  /* Every finished run leaves a compact record on the profile (meta.his,
+     DESIGN.md "Run history, the death recap and photo mode (round 8)"): the
+     last HIS.CAP runs (oldest first) plus a Hall of Fame of the best HIS.HOF
+     by score. Short keys keep a record near 400 bytes:
+       id  unique run id        d   date (epoch seconds)   c   crawler
+       cl  claw type            o   outfit (absent: none)  tl  Tilt
+       mu  mutators             se  season (absent: none)  dl  daily key
+       m   mode                 s   score                  r   win | loss | endless | quit
+       a   act reached          lp  Endless loop           tu  turns
+       kl  kills                f   fights                 bs  bosses down
+       bh  biggest hit          bc  best combo {n, t}      jp  jackpots
+       ev  evolutions           st  sets completed [ids]   rl  relics [ids]
+       b   the final bin, the top HIS.BIN by rarity ['id' | 'id+']
+       k / kk / ke / km / kh    the killer's name, how (hit | burn | poison | bomb | self),
+                                its enemy id, its move and the killing hit
+       mp  the act's map {w, h, g, p, b, s}: 2 bits a hex (0 dark, 1 water,
+           2 lit, 3 walked) packed three to a character, and the crawler,
+           boss and start as cell indices
+       lt  a loss's last turns [[hp lost, blocked, Block held]]
+     Pure: the game builds the record, these repair, store, rank and read it. */
+  const HIS = { CAP: 50, HOF: 10, BIN: 8, RELICS: 16, TURNS: 5, RESULTS: ['win', 'loss', 'endless', 'quit'], MODES: ['classic', 'daily', 'endless'] };
+  const HIS_B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const hisStr = (v, n) => (typeof v === 'string' && v ? v.slice(0, n || 40) : '');
+  const hisInt = (v, lo, hi) => { const n = Math.floor(+v); return isFinite(n) ? Math.max(lo, Math.min(hi, n)) : lo; };
+  const hisIds = (a, n, len) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string' && x).slice(0, n).map((x) => x.slice(0, len || 40)) : []);
+  const hisWon = (r) => !!r && (r.r === 'win' || r.r === 'endless');
+  // One record, repaired: unknown fields dropped, numbers clamped, null when it is not a record.
+  function hisRecFix(r) {
+    if (!r || typeof r !== 'object' || Array.isArray(r)) return null;
+    const id = hisStr(r.id, 40), c = hisStr(r.c, 24);
+    if (!id || !c) return null;
+    const o = {
+      id, d: hisInt(r.d, 0, 4e9), c, cl: hisStr(r.cl, 16) || 'classic', tl: hisInt(r.tl, 0, 99), m: HIS.MODES.indexOf(r.m) >= 0 ? r.m : 'classic',
+      s: hisInt(r.s, 0, 1e9), r: HIS.RESULTS.indexOf(r.r) >= 0 ? r.r : 'loss', a: hisInt(r.a, 1, 9), lp: hisInt(r.lp, 0, 9999),
+      tu: hisInt(r.tu, 0, 1e6), kl: hisInt(r.kl, 0, 1e6), f: hisInt(r.f, 0, 1e5), bs: hisInt(r.bs, 0, 9999), bh: hisInt(r.bh, 0, 1e7),
+      jp: hisInt(r.jp, 0, 1e6), ev: hisInt(r.ev, 0, 9999), b: hisIds(r.b, HIS.BIN, 41), rl: hisIds(r.rl, HIS.RELICS),
+    };
+    const mu = hisIds(r.mu, 6), st = hisIds(r.st, 12);
+    if (mu.length) o.mu = mu;
+    if (st.length) o.st = st;
+    for (const k of ['o', 'se', 'dl', 'k', 'kk', 'ke', 'km']) { const s = hisStr(r[k], 40); if (s) o[k] = s; }
+    if (r.kh > 0) o.kh = hisInt(r.kh, 0, 1e7);
+    if (r.bc && typeof r.bc === 'object' && hisStr(r.bc.n, 40)) o.bc = { n: hisStr(r.bc.n, 40), t: hisInt(r.bc.t, 1, 3) };
+    const mp = r.mp;
+    if (mp && typeof mp === 'object' && hisMapCells(mp)) o.mp = { w: mp.w | 0, h: mp.h | 0, g: mp.g, p: hisInt(mp.p, -1, 1e4), b: hisInt(mp.b, -1, 1e4), s: hisInt(mp.s, -1, 1e4) };
+    if (Array.isArray(r.lt)) {
+      const lt = r.lt.filter((x) => Array.isArray(x)).slice(-HIS.TURNS).map((x) => [hisInt(x[0], 0, 1e6), hisInt(x[1], 0, 1e6), hisInt(x[2], 0, 1e6)]);
+      if (lt.length) o.lt = lt;
+    }
+    return o;
+  }
+  // Best first; a tie goes to the older run.
+  function hisRank(list) { return list.slice().sort((a, b) => b.s - a.s || a.d - b.d || (a.id < b.id ? -1 : 1)); }
+  // The profile's history, repaired (an old profile, or junk, is an empty one).
+  function hisFix(h) {
+    const o = h && typeof h === 'object' && !Array.isArray(h) ? h : {};
+    const fixList = (a) => { const out = [], seen = {}; for (const r of Array.isArray(a) ? a : []) { const x = hisRecFix(r); if (x && !seen[x.id]) { seen[x.id] = 1; out.push(x); } } return out; };
+    const runs = fixList(o.runs).slice(-HIS.CAP);
+    const hof = hisRank(fixList(o.hof)).slice(0, HIS.HOF);
+    const by = {};
+    if (o.by && typeof o.by === 'object' && !Array.isArray(o.by)) {
+      for (const c in o.by) {
+        const v = o.by[c];
+        if (!Array.isArray(v) || !hisStr(c, 24)) continue;
+        const n = hisInt(v[0], 0, 1e7);
+        if (n > 0) by[c] = [n, hisInt(v[1], 0, n)];
+      }
+    }
+    return { runs, hof, by, n: Math.max(hisInt(o.n, 0, 1e7), runs.length) };
+  }
+  /* Adds a record to a repaired history h (in place). The same id again
+     updates it where it stands (a banked win that goes on into Endless);
+     'quit' never overwrites a finished run. Lifetime counts per crawler
+     (h.by: [runs, wins]) count a run once. Returns {rec, fresh, hof} (hof:
+     the Hall of Fame place, 1-based, 0 when out) or null. */
+  function hisPush(h, rec) {
+    const r = hisRecFix(rec);
+    if (!h || !r || !Array.isArray(h.runs) || !Array.isArray(h.hof)) return null;
+    if (!h.by || typeof h.by !== 'object') h.by = {};
+    const i = h.runs.findIndex((x) => x.id === r.id);
+    const old = i >= 0 ? h.runs[i] : h.hof.find((x) => x.id === r.id) || null;
+    const place = (id) => h.hof.findIndex((x) => x.id === id) + 1;
+    if (old && r.r === 'quit') return { rec: old, fresh: false, hof: place(old.id), kept: true };
+    if (i >= 0) h.runs[i] = r;
+    else { h.runs.push(r); if (h.runs.length > HIS.CAP) h.runs.splice(0, h.runs.length - HIS.CAP); }
+    const b = h.by[r.c] || (h.by[r.c] = [0, 0]);
+    if (!old) { h.n = (h.n | 0) + 1; b[0]++; if (hisWon(r)) b[1]++; }
+    else if (!hisWon(old) && hisWon(r)) b[1] = Math.min(b[0], b[1] + 1);
+    const hof = h.hof.filter((x) => x.id !== r.id);
+    hof.push(r);
+    h.hof = hisRank(hof).slice(0, HIS.HOF);
+    return { rec: r, fresh: !old, hof: place(r.id) };
+  }
+  // The list screen's filters: f {c: crawler | 'all', r: 'win' (Endless too) | 'loss' | 'endless' | 'quit' | 'all'}.
+  function hisFilter(list, f) {
+    f = f || {};
+    return (list || []).filter((r) => (!f.c || f.c === 'all' || r.c === f.c)
+      && (!f.r || f.r === 'all' || (f.r === 'win' ? hisWon(r) : r.r === f.r)));
+  }
+  // The lifetime charts: the score line over the runs given (oldest first) and win rate per crawler.
+  function hisChart(list, by) {
+    list = list || [];
+    const pts = list.map((r) => ({ s: r.s | 0, r: r.r, id: r.id }));
+    let max = 0, best = -1, sum = 0;
+    pts.forEach((p, i) => { sum += p.s; if (p.s > max) { max = p.s; best = i; } });
+    const per = [];
+    for (const c in by || {}) { const v = by[c]; if (Array.isArray(v) && v[0] > 0) per.push({ c, n: v[0], w: Math.min(v[0], v[1] | 0), rate: Math.min(v[0], v[1] | 0) / v[0] }); }
+    per.sort((a, b) => b.n - a.n || (a.c < b.c ? -1 : 1));
+    const wins = list.filter(hisWon).length;
+    return { pts, max, best, avg: pts.length ? Math.round(sum / pts.length) : 0, per, n: list.length, wins, rate: list.length ? wins / list.length : 0 };
+  }
+  // The act's map in 2 bits a hex (see the key above); null for no map.
+  function hisMapPack(M) {
+    if (!M || !M.tiles || !(M.cols > 0) || !(M.rows > 0) || M.cols * M.rows > 1500) return null;
+    const w = M.cols | 0, h = M.rows | 0;
+    const idx = (p) => (p && typeof p.q === 'number' && typeof p.r === 'number' && p.r >= 0 && p.r < h ? p.r * w + p.q + Math.floor(p.r / 2) : -1);
+    let g = '', acc = 0, k = 0;
+    for (let r = 0; r < h; r++) {
+      for (let c = 0; c < w; c++) {
+        const t = M.tiles[(c - Math.floor(r / 2)) + ',' + r];
+        const v = !t ? 0 : t.terrain === 'sea' ? 1 : (t.visited || t.done) ? 3 : t.revealed ? 2 : 0;
+        acc += v << (2 * k);
+        if (++k === 3) { g += HIS_B64[acc]; acc = 0; k = 0; }
+      }
+    }
+    if (k) g += HIS_B64[acc];
+    return { w, h, g, p: idx(M.pos), b: idx(M.boss), s: idx(M.start) };
+  }
+  // The packed map back to one value per cell (row-major, column c is axial q = c - floor(r / 2)); null when broken.
+  function hisMapCells(mp) {
+    if (!mp || !(mp.w > 0) || !(mp.h > 0) || typeof mp.g !== 'string') return null;
+    const n = (mp.w | 0) * (mp.h | 0);
+    if (n > 1500 || mp.g.length < Math.ceil(n / 3)) return null;
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) { const v = HIS_B64.indexOf(mp.g[(i / 3) | 0]); out[i] = v < 0 ? 0 : (v >> (2 * (i % 3))) & 3; }
+    return out;
+  }
+  /* The death recap's words. rc: {kind: 'hit' | 'burn' | 'poison' | 'bomb' |
+     'self' | '', name, mv, amt, charged, chargeName, verb, hits, grabsLeft,
+     lethal, need, bare (turns in a row hit with no Block), maxHp, tier}. */
+  function hisKillLine(rc) {
+    rc = rc || {};
+    const amt = Math.max(0, rc.amt | 0);
+    switch (rc.kind) {
+      case 'hit': return `Killed by ${rc.name || 'a monster'} with ${rc.charged && rc.chargeName ? rc.chargeName : rc.mv || 'a hit'} for ${amt}`;
+      case 'burn': return `Burned down: your own Burn did the last ${amt}`;
+      case 'poison': return `Poison finished you for ${amt}`;
+      case 'bomb': return `A bomb in the bin went off for ${amt}`;
+      case 'self': return `Your own bin hit you for ${amt}`;
+      default: return `Killed by ${rc.name || 'the Clawspire'}`;
+    }
+  }
+  // One or two tips from what happened, the most useful first.
+  function hisTips(rc) {
+    rc = rc || {};
+    const out = [];
+    const add = (s) => { if (s && out.length < 2 && out.indexOf(s) < 0) out.push(s); };
+    const name = rc.name || 'It', amt = Math.max(0, rc.amt | 0), g = Math.max(0, rc.grabsLeft | 0);
+    if (rc.kind === 'hit' && rc.charged && rc.chargeName) add(`${name}'s ${rc.chargeName} hits for ${amt} on the turn after ${rc.verb || 'winding up'}. Stack Block or kill it first.`);
+    if (g > 0) add(`You had ${g} unused grab${g === 1 ? '' : 's'} on your last turn. Every grab is a shield or a hit you did not play.`);
+    if (rc.lethal && rc.need > 0) add(`The INCOMING pill read LETHAL: ${rc.need} more Block would have kept you standing. When it pulses red, grab shields first.`);
+    if (rc.kind === 'burn' || rc.kind === 'poison') add(`${rc.kind === 'burn' ? 'Burn' : 'Poison'} ticks through Block. A potion or a cleanse clears it; end fights fast while it stacks.`);
+    if (rc.kind === 'bomb') add('A lit bomb went off in the bin. Grab it and play it before its fuse runs down.');
+    if (rc.kind === 'hit' && (rc.hits | 0) > 1) add(`${name} hit you ${rc.hits | 0} times in one turn. Block soaks every hit, so one big shield covers the whole flurry.`);
+    if ((rc.bare | 0) >= 2) add(`You took hits on ${rc.bare | 0} turns in a row with no Block up. One shield a turn keeps the chip damage off.`);
+    if (rc.maxHp > 0 && amt >= rc.maxHp * 0.4) add(`That hit took ${Math.round(amt / rc.maxHp * 100)}% of your max HP. A red bubble over an enemy warns you a turn ahead.`);
+    if (rc.tier === 'boss') add('Bosses change their pattern at half HP. Save a strong grab for the turn it transforms.');
+    else if (rc.tier === 'elite') add('Elites hit harder than the rest of their act. A rest stop before one gives you room to learn it.');
+    add('The INCOMING pill at the arena\'s left edge adds up the whole enemy turn before you end yours.');
+    return out;
+  }
+  // ================================================================ /HISTORY
+
   return {
+    // Mama Mech and two new claws (DESIGN.md "Mama Mech and two new claws (round 8)")
+    CR8,
+    // run history and the death recap (DESIGN.md "Run history, the death recap and photo mode (round 8)")
+    HIS, hisRecFix, hisFix, hisPush, hisRank, hisFilter, hisChart, hisMapPack, hisMapCells, hisKillLine, hisTips, hisWon,
+    // stories, the rival, alternate bosses (DESIGN.md "Stories, the rival and alternate bosses (round 8)")
+    STO, STORIES, STORY_IDS, STO_ENEMIES, STO_ICE, stoBeatText, stoOk, stoChoose, stoStage, stoDue, stoPick, stoFix, stoAltOf, GARY, GARY_LINES, garyGear, garyTaunt, garyVal, garyPile, garyPrize, garyFix,
     // seasonal events (DESIGN.md "Seasonal events (round 7)")
     SEASONS, SEASON_IDS, SEA_K, SEA_ITEMS, SEA_RELICS, SEA_ENEMIES, SEA_COSMETIC_IDS, seasonAt, seasonWindow, seasonLeft, seaFix, seaEarn, seaTreatRoll, seaCosmetics, seaCostumeOf,
     // item evolutions and pet synergies (DESIGN.md "Evolutions and pet synergies (round 7)")

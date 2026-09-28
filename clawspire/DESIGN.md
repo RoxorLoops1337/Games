@@ -3816,6 +3816,398 @@ hold, the toast clear of the corner item, the Compactor's layout, the Back
 Room HUD), render (the bubble's numbers in every mode, the logo fits), data
 (the sticker cap and unique names).
 
+## Run history, the death recap and photo mode (round 8)
+
+A run used to vanish at the game over. Now every run leaves a card, a death
+explains itself, and any moment can be framed and saved. Pure data in
+`data.js` (the HISTORY block), the flow in `game.js` (the HISTORY block,
+reached through one-line hooks), the art in `render.js` (the HISTORY block,
+`RENDER.his`), the frame in `index.html` (`#scr-history`, `<style
+id="his-css">`). No new sound names (`click, whoosh, vaultShare`).
+
+### Run history
+
+- **What is recorded.** Every finished run: a win (`showWin`, at once, so a
+  win left on the Endless offer counts), a loss (`showGameOver`), an Endless
+  end (the same record as its win, updated in place: result `endless`, the
+  loop, the new score) and an abandoned run (`newRun` while a run with at
+  least one fight is in progress or saved: result `quit`; a run left before
+  its first fight leaves no card, a finished one is never recorded twice:
+  `run.hisDone`). A new run gets its own id (`run.hid`; the daily shares its
+  seed with everyone, so the seed will not do; an old save falls back to
+  seed + crawler).
+- **The record** (`DATA.hisRecFix` repairs one, short keys, about 400 bytes):
+  `id`, `d` (epoch seconds), `c` crawler, `cl` claw, `o` outfit, `tl` Tilt,
+  `mu` mutators, `se` season, `dl` daily key, `m` mode, `s` score (the run's
+  best on record or `runScore`), `r` win | loss | endless | quit, `a` act, `lp`
+  loop, `tu` turns, `kl` kills, `f` fights, `bs` bosses, `bh` biggest hit, `bc`
+  best combo `{n, t}`, `jp` jackpots, `ev` evolutions, `st` sets completed, `b`
+  the final bin (the 8 rarest, one of each, `'id'` or `'id+'`), `rl` relics (16
+  at most), `mp` the act's map (`DATA.hisMapPack`: 2 bits a hex, 0 dark, 1
+  water, 2 lit, 3 walked, three hexes to a character of a URL-safe base64, so
+  a 16 x 22 map is 118 characters, plus the crawler, boss and start as cell
+  indices), and for a death `k` the killer, `kk` how (hit, burn, poison, bomb,
+  self), `ke` its enemy id, `km` the move, `kh` the hit, `lt` the last turns
+  `[[hp lost, blocked, Block held]]`.
+- **The profile** (`meta.his`, `DATA.hisFix` repairs it; an old or junk
+  profile gets an empty one): `runs` (the last `HIS.CAP` 50, oldest first),
+  `hof` (the Hall of Fame: the best `HIS.HOF` 10 by score of every run ever
+  recorded, a tie to the older run, full copies so a famous run outlives the
+  50), `by {crawler: [runs, wins]}` (lifetime, from the first record on; a
+  run counts once, a win once) and `n` (runs on record). `DATA.hisPush(h,
+  rec)` adds or updates (`quit` never overwrites a finished run) and returns
+  `{rec, fresh, hof}`; a fresh record in the Hall of Fame puts a gold "Hall of
+  Fame #n" tag on the game over or win screen. 60 records are under 42 KB.
+- **The screen** (`history`, the title's History button with the run count,
+  registered last so the menu keeps its `GAME.choose` indices; never saves the
+  run). Back and a title; a summary line; the lifetime charts (one canvas,
+  `RENDER.his.chart`: the score per run as a line with a dot per run in its
+  result's colour, a star on the best, the average dashed; wins by crawler as
+  bars with their portraits; the crawler filter narrows the line); Recent or
+  Hall of Fame; filter chips by crawler (with a portrait) and by result (All,
+  Wins (Endless too), Losses, Endless, Quit, `DATA.hisFilter`); the run cards
+  (the crawler in the run's outfit, name and date, where it ended, Tilt,
+  kills, turns, how it ended, DAILY / ENDLESS and mutator tags, the result as
+  a tilted rubber stamp, the score; a rank badge in the Hall of Fame).
+- **A run in full** (a tap on a card): the header (`his.hero`: the portrait,
+  the score, the date, the stamp, the Tilt), the claw, season and mutator
+  tags, the numbers as the run end's highlight tiles, how it ended (the
+  killer's portrait and the kill line, then the last turns), the final bin in
+  a little glass case (`his.bin`) with the names in rarity colours, the relics
+  (a tap explains), the act's map (`his.map`: the fog, the water, the lit
+  hexes, the walked road warm with gold dots, the start, the boss skull, the
+  crawler where it ended), then **Share run card** (the Prize Vault's share
+  card drawn from the record: its own outfit, date and score; share sheet with
+  the PNG, else a download) and All runs. Escape goes back.
+
+### The death recap
+
+A fight keeps a log of its enemy turns (`HISR`, the run's own): `hisTurnEnd`
+(before `COMBAT.endTurn`) snapshots your hp, Block and grabs left, the
+`COMBAT.qaThreat` preview (lethal or not) and every enemy's telegraph from
+`COMBAT.qaIntent` (the move, its real hit, a charge); `hisEvent` (the top of
+`applyEvent`) books every hit on you to its source in the engine's order:
+your Burn first, then the acting enemy (`FS.actor`), then lit bombs, then
+your Poison as your turn starts; a hit outside the enemy phase is your own
+bin. The game over (and an Endless end) opens with the recap panel over the
+screen: WHAT GOT YOU, the killer's portrait (`his.foe`), "Killed by Ironjaw
+with Gape for 129" (`DATA.hisKillLine`; an unleash is named by its charge,
+the number is the hit's full strength), the last five turns (`his.timeline`:
+hp lost in red over Block's soak in cyan, the Block held as a dashed tick, a
+skull on the last) and one or two tips (`DATA.hisTips`, the most useful first:
+the charge ("Ironjaw's Gape hits for 129 on the turn after opening wide.
+Stack Block or kill it first."), unused grabs, a LETHAL preview and the
+Block it needed, Burn or Poison, a bomb, a flurry of hits, turns in a row with
+no Block, a hit over 40% of max hp, bosses and elites, else the INCOMING
+pill). A tap (after 0.5 s, so a tap meant for the fight does not skip it),
+Space, Enter or Escape goes on to the game over as before; it is not a
+`GAME.choose` button, the screen keeps its choices. A death outside a fight
+recaps just the killer.
+
+### Photo mode
+
+- **In.** A camera button next to the pause gear on the fight's control row
+  (`#hisCam`) and the last button of the map head. It freezes the game:
+  `update()` returns at once (`hisPhotoPaused`, after the Settings panel's
+  pause), so no physics, no timers, no clock; the HUD and every DOM layer hide
+  (`#stage.hisPhotoOn`), the keys and the pointer belong to the camera. Leaving
+  (the X, Escape) hands the screen's buttons back and the game resumes on the
+  very same frame.
+- **The camera.** The frozen scene is painted once into a buffer through
+  `draw()` itself (`hisPhotoCam` applies the pan and zoom while it paints) and
+  again only when the camera moves. One finger pans, two pinch, the wheel
+  zooms about the cursor, the arrows pan, + and - zoom, Reset; the zoom is
+  1..3 and the view stays on the stage. With the controls up the photo sits in
+  a viewfinder between the top bar and the bottom sheet (corner brackets, a
+  record dot, `his.viewfinder`); a tap on the picture hides the controls and
+  the photo eases to full screen.
+- **Filters** (`his.photo`): none, CRT (a phosphor tint, scanlines, a rolling
+  band, the tube's glass and round corners), Neon (bloom from a small copy
+  added back, pushed colour, pink and cyan edges), Sepia (the scene's own light
+  in sepia, a warm wash, a vignette, film grain and scratches), Pixel (a fifth
+  of the resolution, nearest neighbour, a faint grid). **Frames**: none,
+  Marquee (the cabinet frame with the CLAWSPIRE plate and chasing bulbs),
+  Polaroid (paper, tape and a caption: the crawler, the act or loop, the
+  date), Stickers (a candy stripe and die-cut stickers). **Stamp**: the
+  crawler's portrait in their outfit in the corner with the name.
+  Reduced flashing: the bulbs, the band and the grain hold still, the bloom
+  and the shutter flash are soft.
+- **Save PNG** paints the scene again at 2x (1080 x 1920) into its own buffer,
+  composes the photo and hands it to the share sheet with the file, else a
+  download ("Photo saved!"). Headless the canvases are stubs and nothing
+  throws.
+
+`GAME.his` = `{K, PHO, show, find, build, runEnd, quit, metaFix, idOf, verb,
+recapData, recapShow, recapDismiss, share, saveCanvas, turnEnd, event, photo:
+{open, close, set, pan, zoom, reset, save, export, pointer, wheel, can, draw,
+compose, state, last}, meta, ui, recap, log, last, card, saved}`; `DATA` adds
+`HIS, hisRecFix, hisFix, hisPush, hisRank, hisFilter, hisChart, hisMapPack,
+hisMapCells, hisKillLine, hisTips, hisWon`; `RENDER.his = {STAMP, FILTERS,
+FRAMES, stamp, chart, bin, map, timeline, foe, hero, photo, photoRect,
+sticker, viewfinder, fmt}`. Save fields: meta `his` (above); run `hid`,
+`hisDone` (optional; old saves have neither). No key was renamed.
+
+Tests: data (records repaired and small, junk, the cap of 50 over 70 runs, the
+Hall of Fame across all of them and ties, one record per run and quit never
+overwriting, lifetime counts, the filters, the charts, the map packed and back,
+the kill line and the tips for sample deaths), render (the four stamps, charts
+full, single and empty, the bin, the map in every biome and none, the
+timeline, the killer for many enemies, the header, every filter with every
+frame distinct, the stamp, reduced flashing holding still, the viewfinder,
+every frame's picture box), game (a loss, a win and its Endless end in place,
+an abandoned run live and from a save, none before a fight; 60 runs to 50 and
+10, small, saved and reloaded; the screen, its tabs and filters, a run in
+full and Share, the title button last, Escape; old and junk profiles; a real
+death to Ironjaw's Gape with its kill line, the charge and grabs tips and the
+turns; an event death; photo mode mid grab: nothing moves through updates,
+drags, the wheel, keys, every filter and frame and the save, then the grab
+finishes; the 1080 x 1920 PNG headless; the map's camera untouched, the
+controls as `GAME.choose` buttons, gone with its screen, never on the title).
+Screenshots: scratchpad `r8/his_shots.mjs` (`r8_his_*.png`).
+
+## Mama Mech and two new claws (round 8)
+
+A fifth crawler who builds her own weapon out of the prizes, and two claws
+that grab in ways the others cannot. Everything sits in `CR8` blocks: data
+(`data.js`: her items after the Lucky Lou block, the relics, `CLAWS.vacuum`
+and `CLAWS.twin`, her outfits, two evolutions, two stickers and `DATA.CR8`),
+the turret rules (`combat.js`, the CR8 block: `COMBAT.TUR`, `turretParts`,
+`turretFire`, `turretOf`), the rigs (`physics.js`: `CLAW_TYPES.vacuum/twin`,
+their poses and the rig's vacuum and twin helpers), the art (`render.js`,
+`RENDER.cr8`), the sounds (`audio.js`) and the flow (`game.js`, `GAME.cr8`),
+all reached through one-line hooks. Ids are new; nothing was renamed, old
+saves load unchanged (no `clawType`: the classic claw; no `char: engineer`:
+nothing changes).
+
+### Mama Mech, The Engineer
+
+- **The kit.** `CHARACTERS.engineer`: 75 hp, 95 gold, 3 grabs, grip 1.1,
+  speed 0.95, starter relic **Socket Set**, unlocked like Mira and Lou by
+  reaching act 2 with anyone. 19 item bin: 5 Hex Bolts, 4 Tin Plates, a
+  Pipe Wrench, a Spring Coil, an Oil Can (all new, all metal), plus an apple,
+  3 iron nuts and 3 bouncy balls. Versus line: "Hold still. Measuring you."
+  Tilt, the daily rotation, pets, sets and every claw type work for her the
+  way they do for everyone (nothing crawler-specific in those systems).
+- **Her items** (`char: 'engineer'`, drawn silhouettes in `RENDER.cr8.SIL`,
+  optional PNGs in ART_PROMPTS.md): hex_bolt, tin_plate (starters),
+  pipe_wrench (2 parts), spring_coil, oil_can (commons), rivet_gun, toolbox
+  (3 parts), tesla_coil, mech_arm and mech_core (legendary, 6 parts). An
+  item's `part` field says how many turret parts it is worth; any other
+  metal item is one.
+- **The gift: a scrap turret** on the cabinet's top right corner
+  (`turret: true`). Every metal item she plays bolts parts on; parts climb
+  the levels at `TUR.need = [0, 2, 4, 7, 11, 16]` (Bare Mount, Pea Shooter,
+  Bolt Gun, Rivet Cannon, Gatling, Mega Mech). At the end of each player
+  turn, before the enemies act, it fires `TUR.shots[lv] = [0,1,2,2,3,4]`
+  shots of `TUR.dmg[lv] = [0,3,3,5,5,6]` at the target; at Lv 5 the last
+  shot hits ALL. Parts past 16 are OVERCLOCK shots, fired on the spot.
+  Turret damage has no attacker (no Strength, no Thorns), like a relic's.
+  The Socket Set starts every fight at Lv 1 (2 parts) with 3 Block and turns
+  junk into scrap parts.
+- **Relics.** Blueprints (rare, `rules.turret`): any crawler builds the
+  turret; Mama starts with 3 more parts. Armor-Piercing Rounds (uncommon,
+  `tur: {amp: 2}`): +2 a shot; without a turret, a grab with 2+ metal items
+  zaps for 3. Grease Gun (common): 2 Block per turret level at the end of
+  the turn; without one, 2 per metal item delivered that turn (max 6).
+- **Evolutions.** Hex Bolt + Dynamo = Thunder Bolt (Live Wire: a free part
+  every turn, or a 3 zap with no turret); Tin Plate + Blueprints = Mech
+  Plating (Armor Up: 2 Block per level at the end of the turn, 4 without).
+- **Vault.** Two outfits: Welding Mask (uncommon) and Hard Hat (rare, with a
+  headlamp), plus her Claw-o-ween Witch Hat. **Stickers** (two more on the
+  board, still inside its cap of 60): Fully Armed (turret Lv 5 in a fight) and Clean Sweep (three
+  prizes up the Vacuum Nozzle in one grab).
+- **On screen.** `GAME.cr8`: the turret drawn at `CR8T` (scale 1.7) with a
+  parts meter, a dome that grows each level, a barrel that swings to the
+  target and recoils, bolts that streak to the enemy (the Lv 5 shot bursts
+  on everyone), `+N PARTS` flying up from the chute, `TURRET LV n: NAME` on
+  a level-up, MEGA MECH! on the marquee. Turret events get short beats so a
+  Gatling volley does not drag. The player row pads right (`#playerRow.cr8Tur`)
+  and the label zones keep off the turret.
+
+### The Vacuum Nozzle (`clawType: 'vacuum'`)
+
+- **How it grabs.** A flared nozzle on a clear wand, a canister above it and
+  a ribbed hose to the carriage. It drops until it hovers just over the pile
+  (it never plows in), then sucks: bodies within `suckR` are pulled toward
+  the mouth, weaker the heavier they are (heavy-tagged things x0.3, anything
+  wider than the bore x0.35). A prize that reaches the mouth, fits the
+  bore, is not heavy and is light enough flies up the wand into the
+  canister (visibly, shrinking into a swirling slot; `b.tube`, no
+  collisions). Three fit (a Wider Palm and the Third Prong add one each).
+  Full: it stops sucking and lifts.
+- **Clogs.** A big thing yanked into the mouth at full suction jams it: it
+  hangs welded to the nozzle, nothing else goes up, the rig travels 30%
+  slower and a red CLOG light blinks. It is let go at the chute (or tears
+  off); then the suction comes back.
+- **Upgrades.** Wider Palm: a bigger bore, more reach, one more slot. Third
+  Prong: a second intake (25% more reach, one more slot). Grip: a stronger
+  motor (more pull, heavier things). Claw paint recolours the hose and nozzle.
+- **Sounds and juice.** A whoosh on the drop and the suck, a slurp per prize
+  (SLURP xN), FULL!, CLOGGED! with smoke and a sad claw, the blow at the
+  chute (one prize every 0.07 s).
+- **Numbers** (40 single grabs from a fresh bin, items per grab): knight
+  1.9, alchemist 1.6, rogue 1.5 (her daggers clog it about half the time),
+  Lou 2.8, Mama 2.8; the classic claw is 2.5 / 1.7 / 2.4 / 2.8 / 2.6.
+
+### The Twin Claws (`clawType: 'twin'`)
+
+- **How it grabs.** Two small claws (0.72 size, a little less grip) on one
+  crossbar, each on its own cable. At the drop each head slides to a prize:
+  the prize nearest the aim is the main one; a small one goes to the head on
+  its side and the other head picks the nearest prize on its own side; a
+  big one is hugged by both heads. The bar comes down until one head lands;
+  the other keeps reeling out on its own cable until it lands too (a head
+  landing on a pile it merely shoves, or pushing something too big into the
+  floor, also counts). Then both close; each head holds its own prize, and
+  they slide together a little on the way to the chute.
+- **Upgrades.** Wider Palm: bigger heads further apart. Third Prong:
+  grippier fingertips. Claw paint recolours the bar.
+- **Juice.** A servo whirr on the drop, a double clack with a pink and a
+  cyan ring on the close; the heads have a pink and a cyan LED eye.
+- **Numbers** (as above): knight 1.5, alchemist 1.1 (her big flasks are
+  not its thing), rogue 1.6, Lou 2.4, Mama 1.8. Weaker per head, great with
+  pairs of small things.
+
+### Tests and screenshots
+
+physics (the vacuum lifts small light things and not heavy ones, clogs on
+a big light thing and lets it go, holds three; the twins grab two prizes
+separately, reel out independently to a raised prize; upgrades, auto-steer,
+a rebuild empties the hose, determinism), data (her block, relics, outfits,
+stickers, evolutions, both claws), combat (the Socket Set turret, Blueprints
+for anyone and +3 for Mama, parts and `part` counts, volleys through
+`endTurn`, the Lv 5 ALL shot and overclock, AP rounds and the Grease Gun
+with and without a turret, the evolutions, a 40 turn fuzz), render (her
+face, every hat, six distinct turret levels plus firing, level-up and mood,
+the canister at every fill, clog and suction, the twin heads open, closed
+and apart, all her items distinct), audio (every new sound), game (her card
+and unlock, a new run, her Tilt; a real fight with every claw type where
+the turret builds, fires on the frame and is drawn; real vacuum and twin
+grabs in the game with their sounds and Clean Sweep; save/load with both
+claws and an old save as the classic claw). Screenshots: scratchpad
+`r8/shots.mjs` (`r8_cr_*.png`).
+
+## Stories, the rival and alternate bosses (round 8)
+
+Events used to be one screen and gone. Now some of them are stories that
+come back, a rival keeps score across runs, and each act's boss has an
+understudy. Data in `data.js` (the STORY block: `STO`, `STORIES`, `GARY`,
+`STO_ENEMIES`), the rules in `combat.js` (the STORY block: the three boss
+signatures, the ally, the sabotage, Gary's gear), the flow in `game.js` (the
+STORY block, reached through one-line hooks), the art in `render.js` (the
+STORY block, `RENDER.sto`), the frame in `index.html` (`#scr-rival`, `<style
+id="sto-css">`). All of it is off headless unless `GAME.sto.force` is set,
+so the bots, the balance sims and the older suites play exactly as before.
+
+### Branching stories
+
+- **Where they come from.** An event tile rolls `STO.p` (0.5): a hit opens a
+  story not yet seen this run that is allowed in this act (`stoPick`), a miss
+  is the old one-screen event. A story that is waiting to come back (a
+  `later` callback, see below) takes the next event tile first.
+- **Nine stories**, 2 to 4 beats each: The Caged Crab, Three-Card Monte, The
+  Coin Seed, The Nervous Intern, Dance-Off, The Warm Egg, The Photo Booth,
+  The Runaway Vending Machine, The Magpie Oracle. A beat is a text, a
+  vignette and choices. A choice can pay (`fx`), go to another beat (`go`),
+  set or add story state (`set`, `add`: the dance-off's score, the oracle's
+  questions left), need something (`cond`: gold, HP, the state), or roll the
+  dice (`roll {p, win, lose}`). Beat text can read the state (`{score}`).
+  `stoChoose` resolves a choice from the story, the beat, the state and a
+  seeded rng, and returns what to pay and where to go, so the suites test
+  every branch without a DOM.
+- **The screen** is the event screen with a STORY and PART tag (IT CAME
+  BACK for a callback), the drawn vignette (or `art/events/<story id>.png`)
+  and big choices with outcome chips. A roll throws the die first, then
+  stamps THE DICE SAY YES or NO before the outcome lines.
+- **Callbacks** (`run.sto.calls`, due from the next act on: `stoDue`):
+  `ally` (the crab you freed pinches the biggest enemy at the start of an
+  elite or boss fight: 6 + 3 per act, x2, times how kindly you treated it,
+  and gives you 5 Block; the photo booth ghost Weakens them and gives you a
+  Dodge), `hunt` (cheat at Monte and the Card Shark, Lefty's big brother,
+  roams the next act's road as an awake elite: `sto_shark`), `later` (the
+  coin seed you planted is a tree next act, the one you swallowed comes out
+  of your belly; the egg hatches), `boss` (help the intern and this act's
+  boss starts sabotaged: 12% HP off plus Weak and Vulnerable) and `shop`
+  (Vendy, the vending machine you saved, runs a later shop and leaves you a
+  free item there, once: `shop.stoGift`). Each callback pays once
+  (`stoPay`, `meta.sto.pays`) and is capped at `STO.maxCalls`.
+- **Save-safe at every beat.** A beat saves as `sd.event = {id, sto: 1,
+  beat, n, cb, out}`; the result is paid and saved in the same step as the
+  outcome, so a reload shows the outcome and never pays twice.
+
+### The rival: Grabby Gary
+
+- **Who.** A smug teen claw champion. Most profiles meet him (`STO.garyP`,
+  0.85 of new profiles; an old profile rolls once). He has a special map tile
+  (`rival`, placed beside the road a quarter to three fifths of the way up,
+  never on it) in each act: act 1 he meets you and challenges you, act 2 a
+  claw-off, act 3 a claw-off, or the showdown if you beat him twice this run.
+- **The claw-off.** A shared bin (`garyPile`: 5 common, 3 uncommon, 2 rare,
+  1 legendary, 2 rocks), three drops each, turns
+  alternate. The prize values are tagged on the glass (junk 0, common 1,
+  uncommon 2, rare 4, legendary 7). Gary's claw is the real rig driven by
+  `rig.autoSteer`: he aims at the best prize he can see with a wobble that
+  shrinks as his gear grows (`GARY.aim`) and grips harder (`GARY.grip`). A
+  scoreboard, a turn stamp, his taunts in a bubble and the chute credits
+  each drop. Win: 30 gold + 15 per act after the first, 6 tickets, an elite
+  capsule and the best thing you grabbed; a tie: half the gold, 2 tickets;
+  lose: 10 gold, 2 tickets. Every finished drop saves
+  (`content.gary.live`), the result pays once (`paid`).
+- **Memory across runs** (`meta.gary {met, offs, wins, losses, ties, duels,
+  beat}`). His lines change with the record (`GARY_LINES`: first, ahead,
+  behind, even, rematch, duel, win, lose, tie). His gear goes up as you beat
+  him (`garyGear`: Rookie Cap, Pro Shades, Gold Chain, Champion Jacket,
+  Turbo Claw), drawn on him and sharpening his aim.
+- **The showdown** (act 3, two claw-off wins this run): an elite fight
+  against Gary with the existing rival claw (`def.rival`, it grabs your
+  rarest item each turn), +6% HP per gear piece and Strength from the
+  jacket on. Beating him counts `meta.gary.beat` and the Rival Crusher
+  sticker.
+
+### Alternate bosses
+
+Each act's boss has a 50% (`STO.altP`) understudy, decided once per act and
+saved (`run.sto.alt`), so the map and a reload agree. Each has a VS card
+title and taunt, a finale epitaph, a Prizedex entry and a signature:
+
+- **The Plushie Queen** (act 1, for The Hoard): Plush Parade drops 3 plush
+  into your bin; each plush in the bin soaks 1 off every hit on her (at most
+  6). Grab them out to open her up.
+- **The Conveyor King** (act 2, for The Smelter): Belt Drive turns the bin
+  floor into a conveyor running away from the chute for a turn (the floor
+  and slope segments get a surface speed, 70), and ships crates in on it.
+- **The Arctic Arcade** (act 3, for Glacius): Ice Block freezes one of your
+  items (two enraged) into a growing ice block in the bin (6 sizes). Deliver
+  the block and it smashes: the items come back and she takes 5 per item; her
+  death thaws it. The Prize Master still comes after her.
+
+The new bosses are ordinary enemies with ordinary `sig`s, so Endless can
+borrow their signatures; the secret act and Endless never swap bosses.
+
+### Stickers, sounds, save fields
+
+- Stickers: Rival Crusher (beat Gary's showdown), Full Circle (a callback
+  paid off). Sounds: `stoPage, stoCallback, garyTaunt, clawOffBell,
+  plushSqueak, beltRun, iceGrow, crabSnip, hunted`.
+- Save: `run.sto {st, seen, done, cur, calls, alt, pays, gary {on, w, l,
+  met, duel}, huntNote}`, the `rival` tile's `content.gary {seed, kind,
+  said, met, live, res, paid, duel}`, the roamer `sto_shark`,
+  `shop.stoGift`, `meta.gary`, `meta.sto {done, pays}`, the `rival` screen
+  (`sd.rival {q, r}`). `stoRunFix` / `stoMetaFix` / `DATA.stoFix` repair
+  old and junk saves; an old save loads with Gary rolled and no stories in
+  flight.
+- Tests: data (the stories' structure, every choice resolving, rolls, state,
+  due and repair; Gary's data, taunts, pile and prizes; the new enemies,
+  junk and stickers), combat (the plush soak and cap, the belt, the ice block
+  growing and smashing, a 24-turn fuzz on the five new enemies, the ally and
+  sabotage), render (the looks, the gear levels, the junk silhouettes, the
+  vignettes, the tile, the board, the bubble, the belt, the glaze, the ally),
+  audio (the nine voices), game (off headless; tile placement; an old save;
+  beats, rolls, outcomes and reloads; every callback; a claw-off with a
+  reload mid-way and paid once; memory, gear and the showdown; every
+  alternate boss's VS card, signature and finale). Screenshots: scratchpad
+  `r8_sto_shots.mjs` (`r8_sto_*.png`).
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the

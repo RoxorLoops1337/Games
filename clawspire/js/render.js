@@ -2788,7 +2788,7 @@ const RENDER = (() => {
     ctx.restore();
   }
   /* ---- claw types (DESIGN.md "Claw types"): each has its own body art. */
-  const CLAW_DRAW = { classic: 1, tri: 1, scoop: 1, hand: 1, magnet: 1, hook: 1 };
+  const CLAW_DRAW = { classic: 1, tri: 1, scoop: 1, hand: 1, magnet: 1, hook: 1, vacuum: 1, twin: 1 };   // (CR8: the vacuum and the twin claws)
   /* The cabinet's coin slot (centred at x, y, stage px): a chrome plate with
      a slot, a coin-return button and an INSERT COIN lamp. st: {t, coin 0..1
      (a coin sliding into the slot, 1 = just dropped in), flash 0..1 (the
@@ -2825,6 +2825,7 @@ const RENDER = (() => {
     if (!hub) return out;
     if (type === 'magnet') { for (let i = -1; i <= 1; i++) out.push({ x: hub.x + i * hub.r * 0.7, y: hub.y + hub.r * 0.75 }); return out; }
     if (type === 'hook') { const tp = rig.bodies && rig.bodies.tip; out.push(tp || { x: hub.x, y: hub.y + 28 * s }); return out; }
+    if (type === 'vacuum') { for (let i = -1; i <= 1; i++) out.push({ x: hub.x + i * hub.r * 0.8, y: hub.y + hub.r * 0.62 }); return out; }   // (CR8: the nozzle's lip)
     for (const p of prongs) if (p && p.length) out.push(p[p.length - 1]);
     return out;
   }
@@ -3031,7 +3032,7 @@ const RENDER = (() => {
         ctx.translate(ox + top.x, oy + top.y); ctx.rotate(a); ctx.translate(-(ox + top.x), -(oy + top.y));
       }
       // cable (the top end sways, the hub does not); a wobble bows it
-      if (hub) {
+      if (hub && type !== 'vacuum') {   // (CR8: the vacuum draws its own hose)
         const mx = (top.x + hub.x) / 2 + (J.bend || 0), my = (top.y + hub.y) / 2;
         const endY = hub.y - hub.r * (type === 'hook' ? 1 : type === 'magnet' ? 0.8 : 0.6);
         ctx.beginPath(); ctx.moveTo(ox + top.x, oy + top.y); ctx.quadraticCurveTo(ox + mx, oy + my, ox + hub.x, oy + endY);
@@ -3104,6 +3105,8 @@ const RENDER = (() => {
       else if (type === 'hook') harpoon(ctx, rig, hub, s, ox, oy, J, t);
       else if (type === 'scoop') { for (const p of prongs) scoopJaw(ctx, p, s, ox, oy, !!flags.rubber); }
       else if (type === 'hand') glove(ctx, rig, hub, prongs, s, ox, oy, J, t);
+      else if (type === 'vacuum') cr8Vacuum(ctx, rig, hub, s, ox, oy, J, t, top);   // CR8: hose, canister, wand, nozzle
+      else if (type === 'twin') cr8Twin(ctx, rig, hub, prongs, s, ox, oy, J, t, flags);   // CR8: the bar and two small claws
       else {
         if (ghost) prongChain(ctx, ghost, s, ox, oy, { ghost: type !== 'tri', tri: type === 'tri' });
         for (const p of prongs) prongChain(ctx, p, s, ox, oy, { rubber: !!flags.rubber, tri: type === 'tri' });
@@ -3139,6 +3142,8 @@ const RENDER = (() => {
         } else if (type === 'magnet') { headR = r * 0.62; headY = hy - r * 0.86 - headR * 0.55; }
         else if (type === 'hand') { headR = Math.max(r * 0.8, 9); headY = hy - r * 1.55 - headR * 0.3; }
         else if (type === 'hook') { headR = Math.max(9.5 * s + 3, r); headY = hy - headR * 1.05; }
+        else if (type === 'vacuum') { const V = rig.vac; headR = Math.max(7, r * 0.62); headY = V ? oy + V.cy - V.cr - headR * 0.35 : hy - r * 5.6; }   // (CR8: the face rides the canister's lid)
+        else if (type === 'twin') { headR = Math.max(7, 9 * s + 3); headY = hy - headR * 1.05; }
         clawHead(ctx, hx, headY, headR, J, t);
         if (sq) ctx.restore();
       }
@@ -3314,6 +3319,7 @@ const RENDER = (() => {
       // PETS (round 5): whack-a-mole, skee-ball, the pet shop
       case 'moles': case 'skee': case 'petshop': petIcon(ctx, type, s, t); break;
       case 'treat': seaTreatIcon(ctx, r, t); break;   // SEASON: a trick-or-treat door
+      case 'rival': stoTileIcon(ctx, s, t); break;   // STORY: Grabby Gary's tile
       default:
         F(ctx, rgba('#f4ecd6', 0.45)); ctx.beginPath(); ctx.arc(0, 0, s * 0.25, 0, TAU); ctx.fill();
     }
@@ -4226,7 +4232,7 @@ const RENDER = (() => {
     } catch (e) { /* */ }
     ctx.restore();
   }
-  const CHAR_COL = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c' };
+  const CHAR_COL = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e' };
   function portrait(ctx, charId, x, y, size, t) {
     ctx.save();
     try {
@@ -4272,7 +4278,8 @@ const RENDER = (() => {
           ctx.beginPath(); ctx.moveTo(-6, 3.5); ctx.quadraticCurveTo(0, 2, 6, 3.5); S(ctx, '#2a1a12', 1.8); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(-5, 6); ctx.quadraticCurveTo(0, 10, 6, 5.5); S(ctx, INK, 1.5); ctx.stroke();
           F(ctx, PAL.gold); ctx.beginPath(); rrect(ctx, 1.2, 6.3, 2.4, 2.2, 0.6); ctx.fill();
-        } else {
+        } else if (charId === 'engineer') cr8Portrait(ctx);   // CR8: Mama Mech
+        else {
           tone(ctx, c => { c.moveTo(-15, 6); c.quadraticCurveTo(-16, -26, 0, -26); c.quadraticCurveTo(16, -26, 15, 6); c.closePath(); }, '#4a2a6a', 0, -8, 15, { dark: -0.35, spec: false });
           ctx.beginPath(); ctx.moveTo(-10, -4); ctx.quadraticCurveTo(0, 6, 10, -4); ctx.quadraticCurveTo(0, -18, -10, -4); ctx.closePath(); F(ctx, INK); ctx.fill();
           F(ctx, PAL.gold); ctx.beginPath(); ell(ctx, -4, -6, 2.5, 1.5, 0.2); ell(ctx, 4, -6, 2.5, 1.5, -0.2); ctx.fill();
@@ -7026,7 +7033,7 @@ const RENDER = (() => {
      state the game hands over (st.t in seconds); every function saves,
      restores and never throws. Deterministic: no random calls, particles are
      placed from t and their index. */
-  const FEEL_CHAR = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c' };
+  const FEEL_CHAR = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e' };
   const FEEL_TIERS = ['c', 'u', 'r', 'l'];
   const FEEL_BADGES = ['armored', 'hasty', 'vampiric'];
   const FEEL_TOWER = { type: 'tower', revealed: true, terrain: 'land', ground: 'hill', biome: 'cellar', elev: 0.7 };
@@ -7694,7 +7701,8 @@ const RENDER = (() => {
 
   // ---- crawler outfits, drawn over the portrait (portrait-local, r = the disc radius)
   const VHEAD = { knight: { top: -0.6, eye: 0.0, w: 0.56, ex: 0.21 }, alchemist: { top: -0.74, eye: -0.04, w: 0.62, ex: 0.21 },
-    rogue: { top: -0.82, eye: 0.0, w: 0.6, ex: 0.18 }, gambler: { top: -0.62, eye: 0.2, w: 0.56, ex: 0.2 } };
+    rogue: { top: -0.82, eye: 0.0, w: 0.6, ex: 0.18 }, gambler: { top: -0.62, eye: 0.2, w: 0.56, ex: 0.2 },
+    engineer: { top: -0.66, eye: 0.14, w: 0.58, ex: 0.19 } };   // (CR8: Mama Mech)
   function vOutfit(ctx, charId, r, t) {
     const id = VFORCE.on ? VFORCE.outfit : (VEQ.outfit || {})[charId];
     const d = id ? vDef(id) : null;
@@ -7757,6 +7765,7 @@ const RENDER = (() => {
           ctx.beginPath(); rrect(ctx, -hw * 0.64, top - r * 0.08, hw * 1.28, r * 0.1, r * 0.03); F(ctx, L.c2); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
           tone(ctx, q => { q.moveTo(-hw * 1.5, top - r * 0.02); q.quadraticCurveTo(-hw * 1.2, top + r * 0.22, 0, top + r * 0.14); q.quadraticCurveTo(hw * 1.2, top + r * 0.22, hw * 1.5, top - r * 0.02); q.quadraticCurveTo(0, top + r * 0.3, -hw * 1.5, top - r * 0.02); q.closePath(); }, shade(L.c1, -0.1), 0, top + r * 0.1, hw, NOSPEC);
         } else if (L.style === 'witch') seaWitchHat(ctx, L, top, hw, r, t);   // SEASON: the Claw-o-ween witch hats
+        else if (L.style === 'welder' || L.style === 'hardhat') cr8Hat(ctx, L, top, hw, r, t);   // CR8: Mama Mech's hats
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -10410,7 +10419,1307 @@ const RENDER = (() => {
     trailMark: seaTrailMark, ids: ['halloween', 'winter'] };
   /* ============================================================ end SEASON */
 
+  /* ============================================================ CR8 (round 8)
+     Mama Mech and two new claws (DESIGN.md "Mama Mech and two new claws
+     (round 8)"): the Vacuum Nozzle (a ribbed hose, a clear canister where the
+     catch swirls, a wand and a flared nozzle that roars when it sucks and
+     flashes red when a big thing plugs it), the Twin Claws (a crossbar with
+     two small claws on their own cables), Mama Mech's portrait and her two
+     outfits, the scrap turret on the cabinet frame (six levels), and the
+     drawings of her items. Every piece draws with the claw's paint (CHROME,
+     PAINT) and never throws. */
+  const CR8_HOSE = '#6b4fb8', CR8_NOZ = '#ffc94d';
+  /* The vacuum. rig.vac (PHYS: mouthY, topY, cy, cr, n, cap, clog, full,
+     suck) or, for a pose without one, the same laid out around the hub. */
+  function cr8Vacuum(ctx, rig, hub, s, ox, oy, J, t, top) {
+    if (!hub) return;
+    const T = typeof PHYS !== 'undefined' && PHYS.CLAW_TYPES ? PHYS.CLAW_TYPES.vacuum : null;
+    const V = rig.vac || (T ? { r: T.hubR * s, mouthY: hub.y + T.hubR * s * 0.55, topY: hub.y - T.wand * s, cr: T.can * s, cy: hub.y - T.wand * s - T.can * s * 0.72, n: 0, cap: 3, clog: false, full: false, suck: 0 } : null);
+    if (!V) return;
+    const x = ox + hub.x, y = oy + hub.y, r = Math.max(6, V.r || hub.r), suck = U.clamp(V.suck || rig.field || 0, 0, 1);
+    const cy = oy + V.cy, cr = Math.max(8, V.cr), topY = oy + V.topY, mouthY = oy + V.mouthY;
+    const hoseC = PAINT.on ? PAINT.c2 : CR8_HOSE, steel = CHROME, noz = PAINT.on ? CHROME : CR8_NOZ;
+    // the hose: a ribbed purple tube from the carriage down to the canister's lid
+    if (top) {
+      const x0 = ox + top.x, y0 = oy + top.y, y1 = cy - cr * 0.92, mx = (x0 + x) / 2 + (J.bend || 0), my = (y0 + y1) / 2;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(mx, my, x, y1);
+      S(ctx, INK, 11 + OL); ctx.stroke(); S(ctx, hoseC, 10); ctx.stroke();
+      // ribs, running up the hose while it sucks
+      ctx.setLineDash([2.5, 3.5]); ctx.lineDashOffset = -(t * 40 * suck) - hub.y * 0.3;
+      S(ctx, shade(hoseC, -0.35), 10); ctx.stroke(); ctx.setLineDash([]);
+      S(ctx, rgba('#ffffff', 0.25), 2); ctx.beginPath(); ctx.moveTo(x0 - 2, y0); ctx.quadraticCurveTo(mx - 2, my, x - 2, y1); ctx.stroke();
+    }
+    // the wand: a clear tube from the nozzle up to the canister (the catch flies up it)
+    const ww = Math.max(6, r * 1.05);
+    ctx.beginPath(); rrect(ctx, x - ww / 2, topY - 2, ww, y - r * 0.8 - topY + 2, ww * 0.35);
+    F(ctx, rgba('#bfe8ff', 0.14)); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    S(ctx, rgba('#ffffff', 0.45), 1.4); ctx.beginPath(); ctx.moveTo(x - ww * 0.28, topY + 2); ctx.lineTo(x - ww * 0.28, y - r); ctx.stroke();
+    if (suck > 0.05 && !V.clog) {
+      // air streaks racing up the wand
+      ctx.save(); ctx.globalAlpha = 0.35 + 0.5 * suck; S(ctx, '#e8f8ff', 1.3);
+      for (let i = 0; i < 3; i++) {
+        const u = (t * 3.2 + i / 3) % 1, sy = y - r - u * (y - r - topY), sx = x + (i - 1) * ww * 0.22;
+        ctx.beginPath(); ctx.moveTo(sx, sy + 7); ctx.lineTo(sx, sy); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    // the canister: a clear dome with a steel cap and band, a load gauge
+    ctx.beginPath(); ell(ctx, x, cy, cr, cr * 0.92, 0);
+    F(ctx, rgba('#9fe8ff', V.clog ? 0.14 : 0.24)); ctx.fill();
+    ctx.beginPath(); ell(ctx, x + cr * 0.1, cy + cr * 0.12, cr * 0.78, cr * 0.66, 0); F(ctx, rgba('#e8fbff', 0.1)); ctx.fill();
+    if (suck > 0.05 && V.n > 0) {
+      // the cyclone: a swirl of air around the catch
+      ctx.save(); ctx.globalAlpha = 0.25 + 0.35 * suck; S(ctx, '#ffffff', 1.2);
+      for (let k = 0; k < 2; k++) { ctx.beginPath(); ctx.ellipse(x, cy + cr * 0.1, cr * (0.55 + k * 0.2), cr * 0.25, 0, t * 6 + k, t * 6 + k + 2.2); ctx.stroke(); }
+      ctx.restore();
+    }
+    ctx.beginPath(); ell(ctx, x, cy, cr, cr * 0.92, 0); S(ctx, INK, OL + 0.5); ctx.stroke();
+    ctx.beginPath(); ell(ctx, x, cy, cr - 1.6, cr * 0.92 - 1.6, 0); S(ctx, rgba('#bfe8ff', 0.75), 1.4); ctx.stroke();
+    F(ctx, rgba('#ffffff', 0.55)); ctx.beginPath(); ell(ctx, x - cr * 0.45, cy - cr * 0.35, cr * 0.16, cr * 0.34, 0.5); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, cy, cr * 0.8, 0.2, 0.9); S(ctx, rgba('#ffffff', 0.4), 1.5); ctx.stroke();
+    tone(ctx, q => rrect(q, x - cr * 0.62, cy - cr * 1.08, cr * 1.24, cr * 0.34, cr * 0.12), steel, x, cy - cr * 0.95, cr * 0.5, { dark: -0.4 });
+    tone(ctx, q => rrect(q, x - cr * 0.72, cy + cr * 0.72, cr * 1.44, cr * 0.3, cr * 0.1), noz, x, cy + cr * 0.85, cr * 0.5, { dark: -0.35, spec: false });
+    // the gauge: a lamp per slot, and FULL / CLOG in red
+    const cap = Math.max(1, V.cap | 0), n = Math.min(cap, V.n | 0);
+    for (let i = 0; i < cap; i++) {
+      const lx = x + (i - (cap - 1) / 2) * cr * 0.34, ly = cy + cr * 0.87;
+      ctx.beginPath(); circ(ctx, lx, ly, Math.max(1.3, cr * 0.08)); F(ctx, i < n ? (V.full ? '#ff5a4a' : PAL.lime) : '#1a2230'); ctx.fill(); S(ctx, INK, 0.8); ctx.stroke();
+    }
+    if (V.full || V.clog) {
+      const on = Math.floor(t * 6) % 2 === 0;
+      glow(ctx, x + cr * 0.85, cy - cr * 0.55, cr * 0.9, '#ff5a4a', on ? 0.8 : 0.3);
+      tone(ctx, q => circ(q, x + cr * 0.85, cy - cr * 0.55, Math.max(2, cr * 0.16)), on ? '#ff5a4a' : '#7a1a1a', x + cr * 0.85, cy - cr * 0.55, 3, { ol: 1.2, spec: false });
+    }
+    // the nozzle: a collar and a flared yellow mouth with a rubber lip
+    tone(ctx, q => rrect(q, x - r * 0.62, y - r * 1.05, r * 1.24, r * 0.5, r * 0.15), steel, x, y - r * 0.8, r * 0.6, { dark: -0.4 });
+    tone(ctx, q => poly(q, [x - r * 0.62, y - r * 0.6, x + r * 0.62, y - r * 0.6, x + r * 1.08, y + r * 0.62, x - r * 1.08, y + r * 0.62]), noz, x, y, r, { dark: -0.35 });
+    // hazard chevrons on the flare
+    ctx.save(); ctx.beginPath(); poly(ctx, [x - r * 0.62, y - r * 0.6, x + r * 0.62, y - r * 0.6, x + r * 1.08, y + r * 0.62, x - r * 1.08, y + r * 0.62]); ctx.clip();
+    F(ctx, rgba(INK, 0.55)); ctx.beginPath();
+    for (let i = -3; i < 4; i++) { const bx = x + i * r * 0.5; ctx.moveTo(bx, y - r * 0.15); ctx.lineTo(bx + r * 0.22, y - r * 0.15); ctx.lineTo(bx + r * 0.05, y + r * 0.15); ctx.lineTo(bx - r * 0.17, y + r * 0.15); ctx.closePath(); }
+    ctx.fill(); ctx.restore();
+    ctx.beginPath(); ell(ctx, x, y + r * 0.62, r * 1.1, r * 0.26, 0); F(ctx, '#140c22'); ctx.fill(); S(ctx, INK, 2.2); ctx.stroke();
+    ctx.beginPath(); ell(ctx, x, y + r * 0.62, r * 1.1, r * 0.26, 0); S(ctx, PAINT.on ? shade(CHROME, -0.4) : '#3a2a4a', 1.4); ctx.stroke();
+    if (suck > 0.05 && !V.clog) {
+      // the pull: air lines curling in toward the mouth, and a hum ring
+      const my = y + r * 0.62;
+      ctx.save(); ctx.globalAlpha = 0.25 + 0.55 * suck; S(ctx, '#e8f8ff', 1.4);
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI * (0.15 + i * 0.14), u = (t * 2.6 + i * 0.37) % 1, rr = r * (3.4 - u * 2.4);
+        const px = x + Math.cos(a) * rr * (i % 2 ? 1 : -1), py = my + Math.sin(a) * rr * 0.9;
+        ctx.beginPath(); ctx.moveTo(px, py); ctx.quadraticCurveTo((px + x) / 2, py, x + (px - x) * 0.25, my + r * 0.2); ctx.stroke();
+      }
+      ctx.restore();
+      const u = (t * 2.4) % 1;
+      ctx.beginPath(); ell(ctx, x, my + 2, r * (1.2 + u * 1.6), r * (0.3 + u * 0.4), 0);
+      ctx.globalAlpha = suck * (1 - u) * 0.6; S(ctx, '#bfe8ff', 1.6); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    if (V.clog) {
+      // plugged: puffs of choked air from the collar and a red CLOG light
+      F(ctx, rgba('#d8d0e8', 0.55));
+      for (let i = 0; i < 3; i++) { const u = (t * 1.4 + i / 3) % 1; ctx.beginPath(); circ(ctx, x + (i - 1) * r * 0.7 + u * r * 0.4 * (i - 1), y - r * 1.1 - u * r * 1.4, r * (0.18 + u * 0.3)); ctx.fill(); }
+    }
+  }
+  /* The twin claws: a crossbar on the cable, a short cable to each head, a
+     small chrome hub with one LED eye (the left one pink, the right one
+     cyan) and two prongs each (prongs 0-1 the left head, 2-3 the right). */
+  function cr8Twin(ctx, rig, hub, prongs, s, ox, oy, J, t, flags) {
+    if (!hub) return;
+    const heads = rig.bodies && rig.bodies.twin;
+    if (!heads || heads.length < 2) return;
+    const bx = ox + hub.x, by = oy + hub.y;
+    const x0 = ox + Math.min(heads[0].x, heads[1].x) - 6 * s - 4, x1 = ox + Math.max(heads[0].x, heads[1].x) + 6 * s + 4;
+    // short cables from the bar to each head
+    for (const hd of heads) {
+      const hx = ox + hd.x, hy = oy + hd.y - hd.r;
+      ctx.beginPath(); ctx.moveTo(hx, by); ctx.lineTo(hx, hy);
+      S(ctx, INK, 4); ctx.stroke(); S(ctx, '#8e98a8', 1.8); ctx.stroke();
+    }
+    // the crossbar with its hazard stripe and end caps
+    const bh = Math.max(4, 5 * s + 2.5);
+    tone(ctx, q => rrect(q, x0, by - bh / 2, x1 - x0, bh, bh * 0.45), CHROME, bx, by, (x1 - x0) / 2, { dark: -0.35 });
+    ctx.save(); ctx.beginPath(); rrect(ctx, x0 + bh, by - bh * 0.3, x1 - x0 - bh * 2, bh * 0.6, 1); ctx.clip();
+    F(ctx, PAINT.on ? PAINT.c2 : PAL.gold); ctx.fillRect(x0, by - bh, x1 - x0, bh * 2);
+    F(ctx, INK); ctx.beginPath();
+    for (let xx = x0; xx < x1; xx += bh * 1.4) { ctx.moveTo(xx, by + bh); ctx.lineTo(xx + bh * 0.5, by + bh); ctx.lineTo(xx + bh * 1.2, by - bh); ctx.lineTo(xx + bh * 0.7, by - bh); ctx.closePath(); }
+    ctx.fill(); ctx.restore();
+    for (const ex of [x0 + bh * 0.5, x1 - bh * 0.5]) tone(ctx, q => circ(q, ex, by, bh * 0.55), '#8e98a8', ex, by, bh * 0.55, NOSPEC);
+    // each head: the prongs, then the hub and its eye
+    for (let i = 0; i < 2; i++) {
+      const hd = heads[i], hx = ox + hd.x, hy = oy + hd.y, hr = Math.max(3, hd.r);
+      for (const p of [prongs[i * 2], prongs[i * 2 + 1]]) prongChain(ctx, p, s, ox, oy, { rubber: !!flags.rubber });
+      tone(ctx, q => circ(q, hx, hy, hr * 1.15), CHROME, hx, hy, hr, { dark: -0.45 });
+      const col = i ? PAL.cyan : PAL.pink, look = U.clamp(J.look || 0, -1, 1) * hr * 0.25;
+      const blink = (J.blink || 0) > 0 && i === (Math.floor(t * 0.7) & 1);
+      ctx.beginPath(); rrect(ctx, hx - hr * 0.7, hy - hr * 0.42, hr * 1.4, hr * 0.84, hr * 0.4); F(ctx, '#0b0616'); ctx.fill();
+      if (blink) line(ctx, hx - hr * 0.35 + look, hy, hx + hr * 0.35 + look, hy, col, 1.4);
+      else { glow(ctx, hx + look, hy, hr * 1.4, col, 0.4); F(ctx, col); ctx.beginPath(); circ(ctx, hx + look, hy, Math.max(1.1, hr * 0.28)); ctx.fill(); }
+    }
+  }
+  /* Mama Mech's portrait (portrait-local, the 48 px face space): a red
+     polka dot bandana, brass goggles pushed up, dark curls, a grease
+     smudge, a big grin, overalls straps and a tiny wrench earring. */
+  function cr8Portrait(ctx) {
+    // overall straps with brass buttons over the shoulders
+    for (const sd of [-1, 1]) tone(ctx, c => rrect(c, sd * 11 - 3, 8, 6, 20, 2), '#3b6fd6', sd * 11, 16, 4, { ol: 1.4, spec: false });
+    F(ctx, PAL.gold); ctx.beginPath(); circ(ctx, -11, 12, 1.6); circ(ctx, 11, 12, 1.6); ctx.fill();
+    // curls behind the head
+    tone(ctx, c => { circ(c, -12, -6, 5.5); circ(c, 12, -6, 5.5); circ(c, -9, 2, 4.5); circ(c, 9, 2, 4.5); }, '#2a1a12', 0, -3, 12, { dark: -0.2, spec: false });
+    tone(ctx, c => circ(c, 0, -4, 12.5), '#c98a5e', 0, -4, 12.5, { dark: -0.25 });
+    // the bandana: a red cap with white polka dots and a knot on top
+    tone(ctx, c => { c.moveTo(-13, -6); c.quadraticCurveTo(-14, -21, 0, -21); c.quadraticCurveTo(14, -21, 13, -6); c.quadraticCurveTo(0, -12, -13, -6); c.closePath(); }, '#d8343a', 0, -14, 12, { dark: -0.25, spec: false });
+    F(ctx, '#ffffff'); ctx.beginPath(); for (const [dx, dy] of [[-8, -12], [-2, -17], [5, -13], [9, -17], [-6, -18]]) circ(ctx, dx, dy, 1.3); ctx.fill();
+    tone(ctx, c => { c.moveTo(6, -20); c.quadraticCurveTo(12, -28, 15, -22); c.quadraticCurveTo(12, -21, 9, -18); c.closePath(); c.moveTo(6, -20); c.quadraticCurveTo(4, -29, 0, -25); c.quadraticCurveTo(2, -22, 4, -19); c.closePath(); }, '#d8343a', 8, -22, 5, { ol: 1.4, spec: false });
+    // brass goggles pushed up over the bandana
+    ctx.beginPath(); ctx.moveTo(-13, -12); ctx.lineTo(13, -12); S(ctx, INK, 3.4); ctx.stroke(); S(ctx, '#5a3a20', 2); ctx.stroke();
+    for (const sd of [-1, 1]) {
+      tone(ctx, c => circ(c, sd * 5, -13, 3.7), PAL.gold, sd * 5, -13, 3.7, { dark: -0.35, ol: 1.6 });
+      ctx.beginPath(); circ(ctx, sd * 5, -13, 2.3); F(ctx, '#2ee6d6'); ctx.fill();
+      F(ctx, rgba('#ffffff', 0.8)); ctx.beginPath(); circ(ctx, sd * 5 - 0.8, -13.8, 0.8); ctx.fill();
+    }
+    // eyes, a grin, freckles and a grease smudge
+    F(ctx, INK); ctx.beginPath(); ell(ctx, -4.5, -2, 1.5, 2, 0); ell(ctx, 4.5, -2, 1.5, 2, 0); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-6, 3); ctx.quadraticCurveTo(0, 9.5, 6, 3); ctx.closePath(); F(ctx, '#ffffff'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+    F(ctx, rgba('#7a3a1a', 0.55)); ctx.beginPath(); for (const [dx, dy] of [[-8, 1], [-7, 2.5], [8, 1], [7.2, 2.6]]) circ(ctx, dx, dy, 0.7); ctx.fill();
+    F(ctx, rgba('#2a2a3a', 0.55)); ctx.beginPath(); ell(ctx, 7.5, 5, 3, 1.4, -0.3); ctx.fill();
+    // a tiny wrench earring
+    line(ctx, -12.5, 0, -12.5, 5, '#aab3bd', 1.4); ctx.beginPath(); ctx.arc(-12.5, 5.8, 1.4, 0.3, Math.PI * 2 - 0.3); S(ctx, '#aab3bd', 1.2); ctx.stroke();
+  }
+  /* Her two outfit hats (vOutfit hands over the portrait-local layout). */
+  function cr8Hat(ctx, L, top, hw, r, t) {
+    if (L.style === 'welder') {
+      // a welding mask flipped up on the head: a dark shell, a visor window, a strap and a spark
+      ctx.save(); ctx.translate(0, top - r * 0.12); ctx.rotate(-0.12);
+      tone(ctx, q => { q.moveTo(-hw * 1.05, r * 0.12); q.quadraticCurveTo(-hw * 1.1, -r * 0.55, 0, -r * 0.6); q.quadraticCurveTo(hw * 1.1, -r * 0.55, hw * 1.05, r * 0.12); q.quadraticCurveTo(0, r * 0.26, -hw * 1.05, r * 0.12); q.closePath(); }, L.c1, 0, -r * 0.2, r * 0.5, { dark: -0.3 });
+      ctx.beginPath(); rrect(ctx, -hw * 0.6, -r * 0.34, hw * 1.2, r * 0.24, r * 0.06); F(ctx, '#0b0616'); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+      F(ctx, rgba(L.c2, 0.85)); ctx.beginPath(); rrect(ctx, -hw * 0.5, -r * 0.3, hw * 0.35, r * 0.08, r * 0.03); ctx.fill();
+      glint(ctx, hw * 0.1, -r * 0.24, r * 0.3, t, 3, L.c2);
+      ctx.restore();
+      const u = (t * 1.7) % 1;
+      if (u < 0.35) { F(ctx, '#fff6c0'); ctx.beginPath(); star(ctx, hw * 0.95, top - r * 0.5 - u * r * 0.4, r * 0.08, 4, 0.35); ctx.fill(); }
+    } else if (L.style === 'hardhat') {
+      // a yellow hard hat with a ridge, a brim and a headlamp
+      tone(ctx, q => { q.moveTo(-hw * 1.02, top + r * 0.08); q.quadraticCurveTo(-hw * 1.05, top - r * 0.6, 0, top - r * 0.62); q.quadraticCurveTo(hw * 1.05, top - r * 0.6, hw * 1.02, top + r * 0.08); q.closePath(); }, L.c1, 0, top - r * 0.25, r * 0.5, { dark: -0.3 });
+      ctx.beginPath(); ctx.moveTo(0, top - r * 0.6); ctx.lineTo(0, top + r * 0.02); S(ctx, shade(L.c1, -0.35), Math.max(1.4, r * 0.08)); ctx.stroke();
+      tone(ctx, q => rrect(q, -hw * 1.35, top + r * 0.02, hw * 2.7, r * 0.13, r * 0.06), shade(L.c1, -0.1), 0, top + r * 0.08, hw, NOSPEC);
+      tone(ctx, q => circ(q, 0, top - r * 0.22, r * 0.13), '#8e98a8', 0, top - r * 0.22, r * 0.13, NOSPEC);
+      glow(ctx, 0, top - r * 0.22, r * (0.45 + 0.05 * Math.sin(t * 5)), L.c2, 0.8);
+      F(ctx, L.c2); ctx.beginPath(); circ(ctx, 0, top - r * 0.22, r * 0.07); ctx.fill();
+    }
+  }
+  /* Mama Mech's scrap turret on the cabinet frame (stage px, the base at
+     (x, y)). st: {lv 0..5, parts, need (parts for the next level), t, aim
+     (rad, the barrel's angle: -PI/2 is straight up), fire 0..1 (recoil and
+     muzzle flash), up 0..1 (a fresh level: a pop and rays), spin (the
+     gatling's barrels), mood ''|'happy'|'focus'}. Every level looks
+     different; nothing is drawn for a null st. */
+  const TUR_COL = ['#8e98a8', '#aab3bd', '#aab3bd', '#ff8a2e', '#ff8a2e', '#ffc94d'];
+  function cr8Turret(ctx, x, y, st) {
+    if (!st) return;
+    ctx.save();
+    try {
+      const lv = U.clamp(st.lv | 0, 0, 5), t = st.t || 0, fire = U.clamp(st.fire || 0, 0, 1), up = U.clamp(st.up || 0, 0, 1);
+      const aim = st.aim == null ? -Math.PI * 0.72 : st.aim;
+      ctx.translate(x, y);
+      const k = st.k > 0 ? st.k : 1;   // the game draws it at CR8T.k (the frame is a big stage)
+      if (k !== 1) ctx.scale(k, k);
+      if (up > 0) {
+        // a fresh level: rays and a pop
+        ctx.save(); ctx.globalAlpha = up * 0.7; F(ctx, PAL.gold); ctx.beginPath();
+        for (let i = 0; i < 10; i++) { const a = i * TAU / 10 + t * 1.5; ctx.moveTo(0, -12); ctx.lineTo(Math.cos(a) * 46, -12 + Math.sin(a) * 46); ctx.lineTo(Math.cos(a + 0.12) * 46, -12 + Math.sin(a + 0.12) * 46); ctx.closePath(); }
+        ctx.fill(); ctx.restore();
+        const k = 1 + up * 0.25; ctx.scale(k, k);
+      }
+      if (lv >= 5) glow(ctx, 0, -14, 34, '#ff8a2e', 0.35 + 0.15 * Math.sin(t * 4));
+      // the mount: a bolted plate with hazard stripes
+      tone(ctx, c => poly(c, [-17, 0, 17, 0, 12, -7, -12, -7]), '#3a3f4a', 0, -3, 15, { dark: -0.3, spec: false });
+      ctx.save(); ctx.beginPath(); poly(ctx, [-17, 0, 17, 0, 12, -7, -12, -7]); ctx.clip();
+      F(ctx, PAL.gold); ctx.beginPath(); for (let i = -4; i < 5; i++) { ctx.moveTo(i * 6, 0); ctx.lineTo(i * 6 + 3, 0); ctx.lineTo(i * 6 + 6, -7); ctx.lineTo(i * 6 + 3, -7); ctx.closePath(); } ctx.fill();
+      ctx.restore();
+      F(ctx, '#cfd6df'); ctx.beginPath(); circ(ctx, -13, -2.5, 1.3); circ(ctx, 13, -2.5, 1.3); ctx.fill();
+      // the parts meter under the mount: pips toward the next level
+      const need = Math.max(1, st.need | 0), parts = Math.max(0, st.parts | 0);
+      if (lv < 5) {
+        const prev = [0, 2, 4, 7, 11, 16][lv], span = Math.max(1, need - prev), got = U.clamp(parts - prev, 0, span);
+        for (let i = 0; i < span; i++) { ctx.beginPath(); circ(ctx, (i - (span - 1) / 2) * 5, 4.5, 1.7); F(ctx, i < got ? PAL.lime : '#1a2230'); ctx.fill(); S(ctx, INK, 0.8); ctx.stroke(); }
+      } else { txt(ctx, 'MAX', 0, 5, 6, PAL.gold, true, 'center', INK); }
+      if (lv === 0) {
+        // a bare swivel ring with loose bolts: build me
+        ctx.beginPath(); ell(ctx, 0, -9, 9, 3.5, 0); S(ctx, INK, 3); ctx.stroke(); S(ctx, '#8e98a8', 1.6); ctx.stroke();
+        for (const [dx, a] of [[-5, 0.6], [4, -0.4]]) { ctx.save(); ctx.translate(dx, -10); ctx.rotate(a); tone(ctx, c => rrect(c, -3, -1.2, 6, 2.4, 0.8), '#aab3bd', 0, 0, 3, { ol: 1, spec: false }); ctx.restore(); }
+        txt(ctx, 'BUILD', 0, -19, 6, '#ffe066', true, 'center', INK);
+        ctx.restore();
+        return;
+      }
+      const body = TUR_COL[lv], dr = 7 + lv;   // the dome grows with the level
+      // the barrel(s), recoiling along the aim
+      ctx.save(); ctx.translate(0, -9); ctx.rotate(aim);
+      const back = fire * 4, L = 12 + lv * 2.4;
+      if (lv === 1) limb(ctx, dr * 0.3 - back, 0, L - back, 0, 3, '#8e98a8');
+      else if (lv === 2) { limb(ctx, dr * 0.3 - back, -2.4, L - back, -2.4, 2.6, '#8e98a8'); limb(ctx, dr * 0.3 - back, 2.4, L - back, 2.4, 2.6, '#8e98a8'); }
+      else if (lv === 3) {
+        limb(ctx, dr * 0.3 - back, 0, L - back, 0, 6, '#6a717c');
+        F(ctx, PAL.gold); ctx.beginPath(); for (const u of [0.5, 0.75, 0.95]) { circ(ctx, L * u - back, -2.4, 0.9); circ(ctx, L * u - back, 2.4, 0.9); } ctx.fill();
+      } else if (lv === 4) {
+        const sp = st.spin || t * 3;
+        for (let k = 0; k < 3; k++) { const o = Math.sin(sp + k * TAU / 3) * 3.2; limb(ctx, dr * 0.3 - back, o, L - back, o, 2.2, k ? '#8e98a8' : '#cfd6df'); }
+        tone(ctx, c => rrect(c, L * 0.55 - back, -4.8, 3, 9.6, 1), '#3a3f4a', L * 0.55, 0, 3, NOSPEC);
+      } else {
+        limb(ctx, dr * 0.3 - back, 0, L - back, 0, 7.5, '#3a3f4a');
+        ctx.save(); ctx.beginPath(); rrect(ctx, L * 0.4 - back, -3.6, L * 0.35, 7.2, 1); ctx.clip();
+        F(ctx, PAL.gold); ctx.fillRect(L * 0.4 - back, -3.6, L * 0.35, 7.2);
+        F(ctx, INK); ctx.beginPath(); for (let k = 0; k < 4; k++) { const bx = L * 0.4 - back + k * 4; ctx.moveTo(bx, 3.6); ctx.lineTo(bx + 2, 3.6); ctx.lineTo(bx + 4, -3.6); ctx.lineTo(bx + 2, -3.6); ctx.closePath(); } ctx.fill();
+        ctx.restore();
+        tone(ctx, c => rrect(c, L - 3 - back, -5, 5, 10, 1.5), '#6a717c', L - back, 0, 4, NOSPEC);
+      }
+      if (fire > 0.3) {
+        // the muzzle flash
+        const mx = L - back + 3;
+        glow(ctx, mx + 4, 0, 14 + lv * 2, '#ffe066', fire);
+        F(ctx, '#fff6c0'); ctx.beginPath(); star(ctx, mx + 4, 0, 5 + lv, 6, 0.4); ctx.fill();
+      }
+      ctx.restore();
+      // the dome: grows and gets fancier each level
+      tone(ctx, c => { c.moveTo(-dr, -7); c.quadraticCurveTo(-dr, -9 - dr * 1.3, 0, -9 - dr * 1.3); c.quadraticCurveTo(dr, -9 - dr * 1.3, dr, -7); c.closePath(); }, body, 0, -9 - dr * 0.5, dr, { dark: -0.35 });
+      if (lv >= 3) { F(ctx, '#3a3f4a'); ctx.beginPath(); for (let k = -1; k <= 1; k++) circ(ctx, k * dr * 0.55, -8.5, 1); ctx.fill(); }
+      if (lv >= 5) {
+        // the reactor core and an antenna with a blinking light
+        glow(ctx, 0, -9 - dr * 0.75, 10, '#2ee6d6', 0.55 + 0.3 * Math.sin(t * 6));
+        line(ctx, dr * 0.5, -9 - dr * 1.15, dr * 0.85, -9 - dr * 1.9, INK, 1.6);
+        F(ctx, Math.floor(t * 3) % 2 ? '#ff5a4a' : '#7a1a1a'); ctx.beginPath(); circ(ctx, dr * 0.85, -9 - dr * 1.95, 1.8); ctx.fill();
+      }
+      // the visor and its LED eye, looking along the barrel
+      const ey = -9 - dr * 0.72, lk = Math.cos(aim) * 2;
+      ctx.beginPath(); rrect(ctx, -dr * 0.62, ey - 2.6, dr * 1.24, 5.2, 2.4); F(ctx, '#0b0616'); ctx.fill();
+      const ec = st.mood === 'happy' ? PAL.gold : lv >= 5 ? '#ff8a2e' : PAL.cyan;
+      glow(ctx, lk, ey, 7, ec, 0.5);
+      if (st.mood === 'happy') { ctx.beginPath(); ctx.arc(lk, ey + 1, 2, Math.PI * 1.15, Math.PI * 1.85); S(ctx, ec, 1.4); ctx.stroke(); }
+      else { F(ctx, ec); ctx.beginPath(); circ(ctx, lk, ey, 1.7); ctx.fill(); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* A turret shot flying to its target (stage px, u 0..1 of the way). */
+  function cr8Bolt(ctx, x0, y0, x1, y1, u, lv) {
+    const x = x0 + (x1 - x0) * u, y = y0 + (y1 - y0) * u, a = Math.atan2(y1 - y0, x1 - x0);
+    ctx.save();
+    try {
+      ctx.globalAlpha = 0.5; S(ctx, lv >= 5 ? '#ff8a2e' : '#ffe066', 2.4);
+      ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * 22, y - Math.sin(a) * 22); ctx.lineTo(x, y); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.translate(x, y); ctx.rotate(a);
+      tone(ctx, c => rrect(c, -5, -2, 10, 4, 1.5), lv >= 5 ? '#ff8a2e' : '#cfd6df', 0, 0, 5, { ol: 1.2, spec: false });
+      glow(ctx, 0, 0, 10, '#ffe066', 0.6);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- her items' own drawings (non-enumerable silhouettes, like the season's) and her two evolutions
+  const CR8_SIL = {};
+  const cr8Hex = (c, x, y, r) => { for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; if (i) c.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); else c.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } c.closePath(); };
+  // A hex bolt: a six-sided head and a threaded shank.
+  CR8_SIL.hex_bolt = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw * 0.35, -hh * 0.5, hw * 1.35, hh, hh * 0.3), c1, hw * 0.3, 0, hh, { dark: -0.35 });
+    S(ctx, rgba(INK, 0.55), 1); ctx.beginPath(); for (let i = 0; i < 6; i++) { const x = -hw * 0.2 + i * hw * 0.22; ctx.moveTo(x, -hh * 0.5); ctx.lineTo(x + hw * 0.1, hh * 0.5); } ctx.stroke();
+    tone(ctx, c => cr8Hex(c, -hw * 0.62, 0, hh * 1.02), c2, -hw * 0.62, 0, hh, { dark: -0.35 });
+    ctx.beginPath(); cr8Hex(ctx, -hw * 0.62, 0, hh * 0.5); S(ctx, rgba('#ffffff', 0.5), 1); ctx.stroke();
+  };
+  // A tin plate: a flat steel sheet with four rivets and an orange stripe.
+  CR8_SIL.tin_plate = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh, w, h, hh * 0.4), c1, 0, 0, hw * 0.5, { dark: -0.3 });
+    F(ctx, c2); ctx.fillRect(-hw * 0.2, -hh, hw * 0.4, h);
+    F(ctx, shade(c1, -0.45)); ctx.beginPath(); for (const sx of [-1, 1]) for (const sy of [-1, 1]) circ(ctx, sx * hw * 0.8, sy * hh * 0.45, 1.3); ctx.fill();
+    ctx.beginPath(); rrect(ctx, -hw, -hh, w, h, hh * 0.4); S(ctx, INK, 1.6); ctx.stroke();
+  };
+  // A pipe wrench: a red handle, the hook jaw and the knurled nut.
+  CR8_SIL.pipe_wrench = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh * 0.42, w * 0.72, hh * 0.84, hh * 0.35), c1, -hw * 0.3, 0, hh, { dark: -0.3 });
+    tone(ctx, c => poly(c, [hw * 0.36, -hh * 0.5, hw, -hh, hw, -hh * 0.3, hw * 0.62, -hh * 0.3, hw * 0.62, hh * 0.5, hw * 0.36, hh * 0.5]), c2, hw * 0.7, -hh * 0.3, hh, { dark: -0.35 });
+    tone(ctx, c => poly(c, [hw * 0.46, hh * 0.1, hw * 0.95, hh * 0.1, hw * 0.95, hh, hw * 0.46, hh]), shade(c2, -0.1), hw * 0.7, hh * 0.5, hh * 0.5, { dark: -0.35, spec: false });
+    S(ctx, rgba(INK, 0.6), 1); ctx.beginPath(); for (let i = 0; i < 4; i++) { const x = hw * 0.4 + i * 3; ctx.moveTo(x, -hh * 0.45); ctx.lineTo(x, hh * 0.45); } ctx.stroke();
+    F(ctx, rgba('#ffffff', 0.35)); ctx.fillRect(-hw * 0.9, -hh * 0.3, w * 0.5, 1.4);
+  };
+  // A spring coil: loops of gold wire seen from the side.
+  CR8_SIL.spring_coil = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2;
+    const path = () => { ctx.beginPath(); for (let i = 0; i <= 5; i++) { const y = -r * 0.8 + i * r * 0.32; ctx.moveTo(-r * 0.85, y); ctx.bezierCurveTo(-r * 0.85, y - r * 0.28, r * 0.85, y - r * 0.28, r * 0.85, y + r * 0.16); } };
+    path(); S(ctx, INK, 4.6); ctx.stroke();
+    path(); S(ctx, c1, 2.6); ctx.stroke();
+    path(); S(ctx, rgba('#ffffff', 0.45), 0.9); ctx.stroke();
+    tone(ctx, c => rrect(c, -r * 0.9, r * 0.72, r * 1.8, r * 0.26, r * 0.1), c2, 0, r * 0.85, r * 0.4, NOSPEC);
+  };
+  // An oil can: a green can, a long spout, a thumb pump and a drop.
+  CR8_SIL.oil_can = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); ctx.moveTo(hw * 0.1, -hh * 0.2); ctx.lineTo(hw * 0.95, -hh); S(ctx, INK, 4.2); ctx.stroke(); S(ctx, c2, 2.2); ctx.stroke();
+    tone(ctx, c => { c.moveTo(-hw * 0.85, hh); c.lineTo(-hw * 0.85, -hh * 0.05); c.quadraticCurveTo(-hw * 0.85, -hh * 0.45, 0, -hh * 0.45); c.quadraticCurveTo(hw * 0.85, -hh * 0.45, hw * 0.85, -hh * 0.05); c.lineTo(hw * 0.85, hh); c.closePath(); }, c1, 0, hh * 0.3, hw, { dark: -0.3 });
+    F(ctx, c2); ctx.fillRect(-hw * 0.85, hh * 0.2, hw * 1.7, hh * 0.22);
+    tone(ctx, c => rrect(c, -hw * 0.5, -hh * 0.75, hw * 0.45, hh * 0.35, 1.5), '#aab3bd', -hw * 0.3, -hh * 0.6, hw * 0.3, NOSPEC);
+    F(ctx, '#2a2a3a'); ctx.beginPath(); ell(ctx, hw * 0.95, -hh * 0.72, 1.4, 2, 0); ctx.fill();
+  };
+  // A rivet gun: an orange pistol body, a grip, a nozzle and a rivet in it.
+  CR8_SIL.rivet_gun = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => poly(c, [-hw * 0.55, -hh * 0.1, -hw * 0.2, -hh * 0.1, -hw * 0.3, hh, -hw * 0.8, hh]), c2, -hw * 0.5, hh * 0.45, hh * 0.5, { dark: -0.3, spec: false });
+    tone(ctx, c => rrect(c, -hw, -hh, w * 0.72, hh * 1.05, hh * 0.35), c1, -hw * 0.3, -hh * 0.45, hh, { dark: -0.3 });
+    tone(ctx, c => rrect(c, hw * 0.4, -hh * 0.72, hw * 0.45, hh * 0.5, 1.5), '#8e98a8', hw * 0.6, -hh * 0.5, hh * 0.3, NOSPEC);
+    tone(ctx, c => circ(c, hw * 0.92, -hh * 0.47, hh * 0.2), PAL.gold, hw * 0.92, -hh * 0.47, hh * 0.2, { ol: 1.2, spec: false });
+    F(ctx, INK); ctx.fillRect(-hw * 0.5, -hh * 0.55, hw * 0.55, 1.5);
+  };
+  // A red toolbox: the lid, a handle, a gold latch, a wrench poking out.
+  CR8_SIL.toolbox = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); ctx.moveTo(-hw * 0.3, -hh * 0.55); ctx.lineTo(-hw * 0.3, -hh * 0.95); ctx.lineTo(hw * 0.3, -hh * 0.95); ctx.lineTo(hw * 0.3, -hh * 0.55); S(ctx, INK, 4); ctx.stroke(); S(ctx, '#3a3f4a', 2); ctx.stroke();
+    line(ctx, hw * 0.45, -hh * 0.45, hw * 0.9, -hh * 1.05, '#aab3bd', 2.4);
+    tone(ctx, c => rrect(c, -hw, -hh * 0.55, w, hh * 1.55, hh * 0.2), c1, 0, hh * 0.2, hw * 0.6, { dark: -0.3 });
+    F(ctx, shade(c1, -0.3)); ctx.fillRect(-hw, -hh * 0.18, w, 2);
+    tone(ctx, c => rrect(c, -hw * 0.14, -hh * 0.3, hw * 0.28, hh * 0.38, 1.2), c2, 0, -hh * 0.12, hw * 0.15, NOSPEC);
+  };
+  // A tesla coil: a base, copper windings, a steel sphere and a crackle.
+  CR8_SIL.tesla_coil = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2, r = hw * 0.78;
+    tone(ctx, c => rrect(c, -hw, hh * 0.72, w, hh * 0.28, 2), '#3a3f4a', 0, hh * 0.85, hw, NOSPEC);
+    tone(ctx, c => rrect(c, -hw * 0.45, -hh * 0.35, hw * 0.9, hh * 1.1, 2), '#c8783a', 0, hh * 0.2, hw * 0.5, { dark: -0.3, spec: false });
+    S(ctx, rgba(INK, 0.55), 1); ctx.beginPath(); for (let i = 0; i < 7; i++) { const y = -hh * 0.3 + i * hh * 0.15; ctx.moveTo(-hw * 0.45, y); ctx.lineTo(hw * 0.45, y + 1); } ctx.stroke();
+    tone(ctx, c => circ(c, 0, -hh + r, r), c1, 0, -hh + r, r, { dark: -0.35 });
+    ctx.beginPath(); ctx.moveTo(r * 0.7, -hh + r * 0.6); ctx.lineTo(hw * 1.05, -hh * 0.9); ctx.lineTo(hw * 0.75, -hh * 0.75); ctx.lineTo(hw * 1.1, -hh * 0.55); S(ctx, c2, 1.4); ctx.stroke();
+  };
+  // A mech arm: two hydraulic segments, joints and a three-finger claw hand.
+  CR8_SIL.mech_arm = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh * 0.5, w * 0.45, hh, hh * 0.35), c1, -hw * 0.55, 0, hh, { dark: -0.35 });
+    tone(ctx, c => rrect(c, -hw * 0.12, -hh * 0.4, w * 0.4, hh * 0.8, hh * 0.3), shade(c1, 0.1), hw * 0.1, 0, hh, { dark: -0.35 });
+    line(ctx, -hw * 0.7, -hh * 0.1, -hw * 0.2, -hh * 0.1, c2, 1.6);
+    for (const [jx, jr] of [[-hw * 0.12, hh * 0.55], [hw * 0.66, hh * 0.45]]) tone(ctx, c => circ(c, jx, 0, jr), c2, jx, 0, jr, { ol: 1.4, spec: false });
+    for (const sd of [-1, 0, 1]) { ctx.beginPath(); ctx.moveTo(hw * 0.7, sd * hh * 0.25); ctx.quadraticCurveTo(hw * 0.95, sd * hh * 0.7, hw, sd * hh * 0.35); S(ctx, INK, 3.4); ctx.stroke(); S(ctx, '#cfd6df', 1.6); ctx.stroke(); }
+  };
+  // The mech core: an orange reactor in a steel cage, cyan light leaking out.
+  CR8_SIL.mech_core = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2;
+    tone(ctx, c => circ(c, 0, 0, r * 0.95), '#3a3f4a', 0, 0, r, { dark: -0.3 });
+    tone(ctx, c => circ(c, 0, 0, r * 0.62), c1, 0, 0, r * 0.62, { dark: -0.25 });
+    F(ctx, c2); ctx.beginPath(); circ(ctx, 0, 0, r * 0.26); ctx.fill();
+    S(ctx, '#aab3bd', 2); ctx.beginPath(); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 4; ctx.moveTo(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62); ctx.lineTo(Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.95); ctx.moveTo(-Math.cos(a) * r * 0.62, -Math.sin(a) * r * 0.62); ctx.lineTo(-Math.cos(a) * r * 0.95, -Math.sin(a) * r * 0.95); } ctx.stroke();
+    ctx.beginPath(); circ(ctx, 0, 0, r * 0.95); S(ctx, INK, 1.8); ctx.stroke();
+  };
+  for (const k in CR8_SIL) Object.defineProperty(POL_SIL, k, { value: CR8_SIL[k], enumerable: false, configurable: true, writable: true });
+  Object.assign(POL_ORIENT, { tesla_coil: 'v', oil_can: 'v', toolbox: 'h', hex_bolt: 'h', pipe_wrench: 'h', mech_arm: 'h', tin_plate: 'h', rivet_gun: 'h' });
+  // A bolt crackling with lightning (Thunder Bolt, the Hex Bolt + Dynamo).
+  EVO_ART.thunder_bolt = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    glow(ctx, 0, 0, hw, c2, 0.5);
+    tone(ctx, c => rrect(c, -hw * 0.35, -hh * 0.45, hw * 1.3, hh * 0.9, hh * 0.3), c1, hw * 0.3, 0, hh, { dark: -0.25 });
+    tone(ctx, c => cr8Hex(c, -hw * 0.62, 0, hh * 1.02), c2, -hw * 0.62, 0, hh, { dark: -0.35 });
+    ctx.beginPath(); ctx.moveTo(-hw * 0.3, -hh * 0.9); ctx.lineTo(hw * 0.05, -hh * 0.1); ctx.lineTo(-hw * 0.05, 0); ctx.lineTo(hw * 0.45, hh * 0.95);
+    S(ctx, INK, 3.4); ctx.stroke(); S(ctx, '#fff6a0', 1.8); ctx.stroke();
+    evoChevron(ctx, hw * 0.55, -hh - 3.5, 4);
+  };
+  // Riveted armour plating with a gold hazard band (Mech Plating, the Tin Plate + Blueprints).
+  EVO_ART.mech_plating = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => poly(c, [-hw, -hh * 0.4, -hw * 0.8, -hh, hw * 0.8, -hh, hw, -hh * 0.4, hw, hh * 0.4, hw * 0.8, hh, -hw * 0.8, hh, -hw, hh * 0.4]), c1, 0, 0, hw * 0.5, { dark: -0.3 });
+    ctx.save(); ctx.beginPath(); ctx.rect(-hw * 0.5, -hh, hw, h); ctx.clip();
+    F(ctx, c2); ctx.beginPath(); for (let i = -4; i < 5; i++) { ctx.moveTo(i * 5, hh); ctx.lineTo(i * 5 + 2.5, hh); ctx.lineTo(i * 5 + 5, -hh); ctx.lineTo(i * 5 + 2.5, -hh); ctx.closePath(); } ctx.fill();
+    ctx.restore();
+    F(ctx, '#fff6c0'); ctx.beginPath(); for (const sx of [-0.78, 0.78]) for (const sy of [-0.5, 0.5]) circ(ctx, sx * hw, sy * hh, 1.4); ctx.fill();
+    evoChevron(ctx, -hw * 0.62, -hh - 3.5, 4);
+  };
+  const CR8_R = { vacuum: cr8Vacuum, twin: cr8Twin, portrait: cr8Portrait, hat: cr8Hat, turret: cr8Turret, bolt: cr8Bolt, SIL: CR8_SIL, TUR_COL };
+  /* ============================================================ end CR8 */
+
+  /* ============================================================ STORY (round 8) */
+  /* Stories, the rival and alternate bosses (DESIGN.md "Stories, the rival
+     and alternate bosses (round 8)"): Grabby Gary (his gear is drawn on:
+     STO_G.gear, set by the game from the profile), the Card Shark, the
+     Plushie Queen, the Conveyor King, the Arctic Arcade (def.look keys), the
+     bosses' junk (a Royal Plush, a Shipping Crate, the growing ice block:
+     POL_SIL, non-enumerable), the rival tile, the claw-off's scoreboard and
+     Gary's speech bubble, the reverse conveyor, the ice glaze over frozen
+     prizes and a friend's cameo in the arena. Pure drawing from the inputs,
+     saved and restored, never throws. */
+  const STO_G = { gear: 0 };
+  const STO_GREEN = '#3ddc84', STO_PINK = '#ff9ec7';
+  // Grabby Gary: backwards cap, varsity jacket, a smug grin with a gold tooth,
+  // a little gold claw held up like a trophy. Gear: 1 shades, 2 a gold chain,
+  // 3 the champion jacket (gold trim, a G patch), 4 a turbo claw backpack.
+  EA.gary = { w: 76, h: 116, draw(ctx, t, p) {
+    const g = STO_G.gear | 0, bob = Math.sin(t * 3.3) * 1.5, brow = Math.sin(t * 1.1) > 0.6 ? 2 : 0;
+    shadow(ctx, 62);
+    if (g >= 4) {
+      // the turbo claw pack: two jets and a gold claw over the shoulder
+      for (const jx of [14, 24]) {
+        tone(ctx, q => rrect(q, jx - 4, -70 + bob, 8, 26, 3), '#8e98a8', jx, -57, 6, NOSPEC);
+        if (!FLAT) { const fl = 6 + Math.sin(t * 30 + jx) * 3; F(ctx, '#ffb347'); ctx.beginPath(); poly(ctx, [jx - 3, -44 + bob, jx + 3, -44 + bob, jx, -44 + bob + fl]); ctx.fill(); }
+      }
+      limb(ctx, 22, -72 + bob, 30, -98 + bob, 3, PAL.gold);
+      ctx.beginPath(); ctx.moveTo(30, -98 + bob); ctx.quadraticCurveTo(22, -104 + bob, 24, -112 + bob); ctx.moveTo(30, -98 + bob); ctx.quadraticCurveTo(38, -104 + bob, 36, -112 + bob);
+      S(ctx, INK, 6); ctx.stroke(); S(ctx, PAL.gold, 3); ctx.stroke();
+    }
+    // legs and high-top sneakers
+    limb(ctx, -8, -32, -10, -5, 8, '#2b3a6a'); limb(ctx, 8, -32, 11, -5, 8, '#2b3a6a');
+    tone(ctx, q => { rrect(q, -24, -9, 18, 8, 3); rrect(q, 3, -9, 18, 8, 3); }, '#ffffff', 0, -5, 10, NOSPEC);
+    if (!FLAT) { F(ctx, p.a); ctx.fillRect(-22, -6, 14, 2); ctx.fillRect(5, -6, 14, 2); }
+    // the back arm on the hip
+    limb(ctx, 16, -62 + bob, 23, -46 + bob, 6, p.a);
+    // the jacket
+    tone(ctx, q => rrect(q, -19, -74 + bob, 38, 46, 10), p.a, 0, -52, 22, { dark: -0.3 });
+    if (!FLAT) {
+      F(ctx, '#f4ecd6'); ctx.fillRect(-4, -72 + bob, 8, 42);
+      F(ctx, shade(p.a, -0.35)); ctx.fillRect(-19, -34 + bob, 38, 5);
+      if (g >= 3) {
+        ctx.beginPath(); rrect(ctx, -17, -72 + bob, 34, 42, 9); S(ctx, PAL.gold, 2.5); ctx.stroke();
+        tone(ctx, q => circ(q, -11, -60 + bob, 5.5), PAL.gold, -11, -60, 5, { ol: 1.5, spec: false });
+        txt(ctx, 'G', -11, -59.5 + bob, 7, INK, true);
+      }
+    }
+    ctx.beginPath(); rrect(ctx, -19, -74 + bob, 38, 46, 10); S(ctx, INK, OL); ctx.stroke();
+    if (g >= 2) {
+      // the gold chain with a claw medallion
+      ctx.beginPath(); ctx.moveTo(-9, -72 + bob); ctx.quadraticCurveTo(0, -56 + bob, 9, -72 + bob); S(ctx, INK, 4); ctx.stroke(); S(ctx, PAL.gold, 2.2); ctx.stroke();
+      tone(ctx, q => circ(q, 0, -58 + bob, 4.5), PAL.gold, 0, -58, 4, { ol: 1.5 });
+    }
+    // the front arm holds a little gold claw up like a trophy
+    limb(ctx, -15, -64 + bob, -27, -80 + bob, 6, p.a);
+    tone(ctx, q => circ(q, -28, -82 + bob, 4.5), '#f1c6a0', -28, -82, 4, NOSPEC);
+    limb(ctx, -29, -86 + bob, -30, -98 + bob, 2.5, PAL.gold);
+    ctx.beginPath(); ctx.moveTo(-30, -98 + bob); ctx.quadraticCurveTo(-38, -102 + bob, -37, -110 + bob); ctx.moveTo(-30, -98 + bob); ctx.quadraticCurveTo(-23, -102 + bob, -24, -110 + bob);
+    S(ctx, INK, 5.5); ctx.stroke(); S(ctx, PAL.gold, 2.8); ctx.stroke();
+    if (!FLAT) glow(ctx, -30, -102 + bob, 14, PAL.gold, 0.35 + Math.sin(t * 4) * 0.12);
+    // the head
+    const hy = -90 + bob;
+    tone(ctx, q => circ(q, -2, hy, 15), '#f1c6a0', -2, hy, 15, { dark: -0.25 });
+    // a smug grin with a gold tooth
+    ctx.beginPath(); ctx.moveTo(-14, hy + 5); ctx.quadraticCurveTo(-6, hy + 12, 2, hy + 6); ctx.closePath(); F(ctx, '#fff'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    F(ctx, PAL.gold); ctx.fillRect(-7, hy + 6.5, 3, 3);
+    if (g >= 1) {
+      // pro shades: two dark lenses with a pink glint
+      tone(ctx, q => { rrect(q, -16, hy - 7, 10, 7, 2); rrect(q, -4, hy - 7, 10, 7, 2); }, '#12091f', -6, hy - 4, 6, NOSPEC);
+      line(ctx, -6, hy - 5, -4, hy - 5, INK, 2);
+      if (!FLAT) { F(ctx, rgba(PAL.pink, 0.8)); ctx.fillRect(-14 + (t * 6 % 6), hy - 6, 2, 2); }
+    } else {
+      eye(ctx, -11, hy - 3, 3.6, -0.7, 0); eye(ctx, -1, hy - 4, 3.6, -0.7, 0);
+      line(ctx, -14, hy - 9 - brow, -8, hy - 10 - brow, INK, 2);
+    }
+    // the cap, on backwards: the brim sticks out the back
+    tone(ctx, q => { q.moveTo(-17, hy - 5); q.quadraticCurveTo(-16, hy - 21, -1, hy - 21); q.quadraticCurveTo(14, hy - 20, 13, hy - 6); q.closePath(); }, p.a, -2, hy - 13, 12, { dark: -0.3 });
+    tone(ctx, q => rrect(q, 9, hy - 11, 15, 5, 2), shade(p.a, -0.2), 16, hy - 9, 6, NOSPEC);
+    F(ctx, PAL.gold); ctx.beginPath(); circ(ctx, -2, hy - 21, 2.2); ctx.fill();
+  } };
+  // The Card Shark: a shark on its tail in a dealer's visor and a red vest, fanning three cards.
+  EA.cardshark = { w: 92, h: 106, draw(ctx, t, p) {
+    const bob = Math.sin(t * 2.8) * 1.5, sw = Math.sin(t * 3.4) * 5;
+    shadow(ctx, 74);
+    // the tail fin on the floor behind
+    tone(ctx, q => { q.moveTo(8, -6); q.quadraticCurveTo(30, -10, 44, -30 + sw); q.lineTo(40, -8); q.quadraticCurveTo(46, 0, 50, 2); q.quadraticCurveTo(26, 4, 8, -2); q.closePath(); }, p.b, 30, -10, 14, { dark: -0.3 });
+    // the body: blue back, white belly
+    tone(ctx, q => { q.moveTo(-22, -4); q.quadraticCurveTo(-30, -50, -12, -78 + bob); q.quadraticCurveTo(10, -90 + bob, 22, -70 + bob); q.quadraticCurveTo(30, -36, 16, -4); q.closePath(); }, p.a, 0, -44, 26, { dark: -0.3 });
+    tone(ctx, q => { q.moveTo(-18, -8); q.quadraticCurveTo(-24, -44, -10, -66 + bob); q.quadraticCurveTo(0, -46, 2, -8); q.closePath(); }, '#eef4ff', -10, -36, 12, { ol: 0, spec: false });
+    // the red vest with gold buttons
+    tone(ctx, q => { q.moveTo(-20, -60 + bob); q.lineTo(-8, -64 + bob); q.lineTo(-4, -20); q.lineTo(-21, -18); q.closePath(); }, '#c8283a', -12, -40, 10, NOSPEC);
+    tone(ctx, q => { q.moveTo(6, -66 + bob); q.lineTo(20, -60 + bob); q.lineTo(20, -20); q.lineTo(4, -18); q.closePath(); }, '#c8283a', 12, -40, 10, NOSPEC);
+    F(ctx, PAL.gold); ctx.beginPath(); circ(ctx, -9, -48 + bob * 0.5, 2); circ(ctx, -8, -36, 2); ctx.fill();
+    // the dorsal fin behind the visor
+    tone(ctx, q => poly(q, [4, -84 + bob, 18, -106 + bob, 20, -80 + bob]), p.a, 14, -90, 8, { dark: -0.3 });
+    // the head: a blunt snout to the left, a grin full of teeth
+    const hy = -76 + bob;
+    tone(ctx, q => { q.moveTo(-6, hy - 10); q.quadraticCurveTo(-38, hy - 8, -40, hy + 4); q.quadraticCurveTo(-30, hy + 12, -6, hy + 10); q.closePath(); }, p.a, -20, hy, 14, { dark: -0.25 });
+    ctx.beginPath(); ctx.moveTo(-38, hy + 4); ctx.quadraticCurveTo(-22, hy + 12, -4, hy + 6); S(ctx, INK, 2.2); ctx.stroke();
+    fangs(ctx, -24, hy + 5, 6, 3.2, '#ffffff');
+    eye(ctx, -22, hy - 6, 3.4, -0.6, 0);
+    if (!FLAT) { S(ctx, shade(p.a, -0.4), 1.5); ctx.beginPath(); for (let i = 0; i < 3; i++) { ctx.moveTo(-2 + i * 4, hy + 2); ctx.lineTo(0 + i * 4, hy + 10); } ctx.stroke(); }
+    // the dealer's visor: a green see-through band
+    tone(ctx, q => { q.moveTo(-26, hy - 12); q.lineTo(8, hy - 16); q.lineTo(8, hy - 10); q.lineTo(-24, hy - 6); q.closePath(); }, rgba('#3ddc84', FLAT ? 1 : 0.75), -8, hy - 11, 8, { ol: 2, spec: false });
+    // the front fin fans three cards
+    limb(ctx, -12, -54 + bob, -30, -46 + bob, 7, p.a);
+    for (let i = -1; i <= 1; i++) {
+      ctx.save(); ctx.translate(-34, -48 + bob); ctx.rotate(-0.4 + i * 0.3);
+      tone(ctx, q => rrect(q, -6, -20, 12, 18, 2), '#ffffff', 0, -11, 7, NOSPEC);
+      if (!FLAT) { F(ctx, i ? PAL.blood : INK); ctx.beginPath(); circ(ctx, 0, -11, 2.4); ctx.fill(); }
+      ctx.restore();
+    }
+  } };
+  // The Plushie Queen: a giant pink teddy in a velvet cape and a crown, a lollipop sceptre, two plush guards at her feet.
+  EA.plushqueen = { w: 116, h: 120, draw(ctx, t, p) {
+    const sq = Math.sin(t * 2.2) * 0.03, bob = Math.sin(t * 2.2) * 2;
+    shadow(ctx, 110);
+    // the cape
+    tone(ctx, q => { q.moveTo(-34, -84 + bob); q.quadraticCurveTo(-56, -30, -50, -2); q.lineTo(50, -2); q.quadraticCurveTo(56, -30, 34, -84 + bob); q.closePath(); }, '#7a2a9c', 0, -40, 44, { dark: -0.35 });
+    if (!FLAT) { F(ctx, '#ffffff'); ctx.fillRect(-52, -8, 104, 7); F(ctx, INK); for (let i = 0; i < 8; i++) { ctx.beginPath(); circ(ctx, -46 + i * 13, -4, 1.4); ctx.fill(); } }
+    ctx.save(); ctx.scale(1 + sq, 1 - sq);
+    // the body and tummy patch
+    tone(ctx, q => ell(q, 0, -36, 34, 32, 0), p.a, 0, -38, 32, { dark: -0.28 });
+    tone(ctx, q => ell(q, 0, -30, 20, 18, 0), p.b, 0, -30, 18, { ol: 1.5, spec: false });
+    if (!FLAT) { S(ctx, shade(p.a, -0.35), 1.4); ctx.setLineDash([3, 3]); ctx.beginPath(); ell(ctx, 0, -30, 20, 18, 0); ctx.stroke(); ctx.setLineDash([]); }
+    tone(ctx, q => { q.moveTo(0, -24); q.bezierCurveTo(-10, -32, -6, -42, 0, -36); q.bezierCurveTo(6, -42, 10, -32, 0, -24); q.closePath(); }, '#ff2e88', 0, -32, 6, { ol: 1.5, spec: false });
+    // stubby feet with paw pads
+    for (const sd of [-1, 1]) {
+      tone(ctx, q => ell(q, sd * 20, -6, 13, 8, 0), p.a, sd * 20, -6, 10, NOSPEC);
+      if (!FLAT) { F(ctx, p.b); ctx.beginPath(); ell(ctx, sd * 20, -6, 6, 4, 0); ctx.fill(); }
+    }
+    // the arm with the lollipop sceptre
+    limb(ctx, -28, -50, -46, -64, 11, p.a);
+    limb(ctx, -48, -60, -50, -104, 3, '#f4ecd6');
+    tone(ctx, q => circ(q, -50, -110, 11), '#ffe066', -50, -110, 11, { ol: 2 });
+    if (!FLAT) { S(ctx, PAL.pink, 3); ctx.beginPath(); for (let a = 0; a < 5; a += 0.3) { const r = a * 1.9; ctx.lineTo(-50 + Math.cos(a * 3 + t) * r, -110 + Math.sin(a * 3 + t) * r); } ctx.stroke(); }
+    limb(ctx, 28, -50, 38, -36, 11, p.a);
+    // the head: round ears, button eyes, a stitched smile
+    const hy = -80 + bob;
+    for (const sd of [-1, 1]) {
+      tone(ctx, q => circ(q, sd * 22, hy - 18, 10), p.a, sd * 22, hy - 18, 10, NOSPEC);
+      if (!FLAT) { F(ctx, p.b); ctx.beginPath(); circ(ctx, sd * 22, hy - 18, 5); ctx.fill(); }
+    }
+    tone(ctx, q => ell(q, 0, hy, 28, 24, 0), p.a, 0, hy, 26, { dark: -0.25 });
+    tone(ctx, q => ell(q, -3, hy + 8, 12, 9, 0), p.b, -3, hy + 8, 10, NOSPEC);
+    tone(ctx, q => ell(q, -3, hy + 4, 4.5, 3.2, 0), INK, -3, hy + 4, 4, NOSPEC);
+    for (const [ex, ey] of [[-13, hy - 5], [7, hy - 6]]) {
+      tone(ctx, q => circ(q, ex, ey, 5), '#2b2340', ex, ey, 5, { ol: 1.5, spec: false });
+      if (!FLAT) { F(ctx, '#ffffff'); ctx.beginPath(); circ(ctx, ex - 1.5, ey - 1.5, 1.4); ctx.fill(); S(ctx, rgba('#ffffff', 0.6), 1); ctx.beginPath(); ctx.moveTo(ex - 2, ey); ctx.lineTo(ex + 2, ey); ctx.moveTo(ex, ey - 2); ctx.lineTo(ex, ey + 2); ctx.stroke(); }
+    }
+    ctx.beginPath(); ctx.moveTo(-10, hy + 14); ctx.quadraticCurveTo(-3, hy + 19, 4, hy + 14); S(ctx, INK, 2); ctx.stroke();
+    if (!FLAT) { S(ctx, INK, 1.2); ctx.beginPath(); for (let i = 0; i < 4; i++) { const x = -8 + i * 4; ctx.moveTo(x, hy + 14); ctx.lineTo(x, hy + 18); } ctx.stroke(); }
+    // blush and the crown
+    if (!FLAT) { glow(ctx, -18, hy + 6, 7, '#ff2e88', 0.4); glow(ctx, 14, hy + 5, 7, '#ff2e88', 0.4); }
+    tone(ctx, q => { q.moveTo(-16, hy - 20); q.lineTo(-18, hy - 38); q.lineTo(-8, hy - 28); q.lineTo(0, hy - 42); q.lineTo(8, hy - 28); q.lineTo(18, hy - 38); q.lineTo(16, hy - 20); q.closePath(); }, '#ffc94d', 0, hy - 30, 15, { dark: -0.3, ol: 2 });
+    F(ctx, FLAT || '#ff2e88'); ctx.beginPath(); circ(ctx, 0, hy - 27, 2.8); circ(ctx, -11, hy - 25, 2); circ(ctx, 11, hy - 25, 2); ctx.fill();
+    ctx.restore();
+    // two plush guards: a bunny and a bear, bobbing out of step
+    for (const [gx, ph, col] of [[-44, 0, '#bfe8ff'], [44, 1.7, '#fff3a0']]) {
+      const gb = Math.abs(Math.sin(t * 4 + ph)) * 4;
+      tone(ctx, q => ell(q, gx, -10 - gb, 9, 9, 0), col, gx, -10, 8, NOSPEC);
+      tone(ctx, q => circ(q, gx, -24 - gb, 8), col, gx, -24, 7, NOSPEC);
+      tone(ctx, q => { ell(q, gx - 4, -34 - gb, 2.5, gx < 0 ? 7 : 3, 0); ell(q, gx + 4, -34 - gb, 2.5, gx < 0 ? 7 : 3, 0); }, col, gx, -34, 3, NOSPEC);
+      if (!FLAT) { F(ctx, INK); ctx.beginPath(); circ(ctx, gx - 3, -25 - gb, 1.3); circ(ctx, gx + 3, -25 - gb, 1.3); ctx.fill(); }
+    }
+  } };
+  // The Conveyor King: crates stacked on a tank tread, conveyor arms, a crate head with LED eyes, a crown of gears.
+  EA.conveyorking = { w: 112, h: 118, draw(ctx, t, p) {
+    const bob = Math.sin(t * 2.6) * 1.2, roll = t * 3;
+    shadow(ctx, 112);
+    // the tread
+    tone(ctx, q => rrect(q, -46, -20, 92, 20, 10), '#2b2340', 0, -10, 40, NOSPEC);
+    for (let i = 0; i < 5; i++) {
+      const rx = -34 + i * 17;
+      tone(ctx, q => circ(q, rx, -10, 6.5), '#5a6373', rx, -10, 6, NOSPEC);
+      if (!FLAT) { S(ctx, p.a, 1.5); ctx.beginPath(); ctx.moveTo(rx + Math.cos(roll) * 5, -10 + Math.sin(roll) * 5); ctx.lineTo(rx - Math.cos(roll) * 5, -10 - Math.sin(roll) * 5); ctx.stroke(); }
+    }
+    if (!FLAT) { S(ctx, p.a, 2); ctx.beginPath(); const off = (t * 20) % 10; for (let x = -42 + off; x < 42; x += 10) { ctx.moveTo(x, -20); ctx.lineTo(x - 3, -16); } ctx.stroke(); }
+    // the crate body: two boxes and the tape
+    for (const [bx, by, bw, bh, a] of [[-30, -58 + bob, 60, 38, 0], [-24, -86 + bob, 48, 28, -0.04]]) {
+      ctx.save(); ctx.rotate(a);
+      tone(ctx, q => rrect(q, bx, by, bw, bh, 3), '#c89a5a', bx + bw / 2, by + bh / 2, bw * 0.4, { dark: -0.25, spec: false });
+      if (!FLAT) {
+        F(ctx, rgba('#e8d3a0', 0.9)); ctx.fillRect(bx + bw / 2 - 5, by, 10, bh);
+        S(ctx, rgba('#6b3f1f', 0.7), 1.2); ctx.beginPath(); ctx.moveTo(bx + 4, by + bh - 6); ctx.lineTo(bx + 14, by + bh - 6); ctx.moveTo(bx + 9, by + bh - 11); ctx.lineTo(bx + 9, by + bh - 3); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (!FLAT) txt(ctx, 'THIS WAY UP', 0, -30 + bob, 6.5, '#6b3f1f', true);
+    // conveyor arms with rollers; the front one holds a SHIPPED stamp
+    for (const sd of [-1, 1]) {
+      const ay = -66 + bob, hx = sd * 50, hy2 = -54 + bob + Math.sin(t * 3 + sd) * 4;
+      ctx.beginPath(); ctx.moveTo(sd * 28, ay); ctx.lineTo(hx, hy2); S(ctx, INK, 12); ctx.stroke(); S(ctx, '#5a6373', 8); ctx.stroke();
+      if (!FLAT) { S(ctx, p.a, 1.5); ctx.beginPath(); for (let k = 0; k < 4; k++) { const u = ((k / 4 + t * 0.8) % 1), x = sd * 28 + (hx - sd * 28) * u, y = ay + (hy2 - ay) * u; ctx.moveTo(x, y - 3); ctx.lineTo(x, y + 3); } ctx.stroke(); }
+      if (sd < 0) {
+        tone(ctx, q => rrect(q, hx - 10, hy2 - 4, 16, 12, 2), '#8a5a2b', hx - 2, hy2 + 2, 7, NOSPEC);
+        tone(ctx, q => rrect(q, hx - 14, hy2 + 8, 22, 6, 1.5), PAL.blood, hx - 3, hy2 + 11, 8, NOSPEC);
+      } else tone(ctx, q => circ(q, hx, hy2, 7), '#8e98a8', hx, hy2, 6, NOSPEC);
+    }
+    // the head: a small crate with a screen face
+    const hy = -104 + bob;
+    tone(ctx, q => rrect(q, -20, hy - 14, 40, 30, 4), '#b8864a', 0, hy, 18, { dark: -0.25, spec: false });
+    tone(ctx, q => rrect(q, -15, hy - 9, 30, 18, 3), '#12091f', 0, hy, 14, { ol: 1.5, spec: false });
+    if (!FLAT) {
+      const bl = Math.sin(t * 1.7) > 0.95 ? 0.3 : 1;
+      F(ctx, PAL.cyan); ctx.fillRect(-11, hy - 4, 7, 5 * bl); ctx.fillRect(4, hy - 4, 7, 5 * bl);
+      F(ctx, PAL.gold); ctx.fillRect(-7, hy + 4, 14, 2);
+    }
+    // the crown of turning gears
+    for (const [cx, cr, sp] of [[-12, 7, 1], [0, 9, -1], [12, 7, 1]]) {
+      ctx.save(); ctx.translate(cx, hy - 20 - (cr === 9 ? 4 : 0)); ctx.rotate(t * sp * 1.2);
+      tone(ctx, q => star(q, 0, 0, cr, 8, 0.72), '#ffc94d', 0, 0, cr, { dark: -0.3, ol: 1.8 });
+      F(ctx, FLAT || '#8a5a2b'); ctx.beginPath(); circ(ctx, 0, 0, cr * 0.3); ctx.fill();
+      ctx.restore();
+    }
+  } };
+  // The Arctic Arcade: an arcade cabinet frozen inside an ice shell, a frosty face on the screen, icicle teeth, snow on top.
+  EA.arcticarcade = { w: 96, h: 128, draw(ctx, t, p) {
+    const bob = Math.sin(t * 1.9) * 1.2, br = (t * 0.7) % 1;
+    shadow(ctx, 96);
+    // the cabinet
+    tone(ctx, q => { q.moveTo(-30, 0); q.lineTo(-30, -100 + bob); q.lineTo(30, -106 + bob); q.lineTo(30, 0); q.closePath(); }, p.b, 0, -50, 36, { dark: -0.35 });
+    // the marquee: BRRR in cold neon
+    tone(ctx, q => rrect(q, -32, -120 + bob, 64, 18, 3), '#12091f', 0, -111, 20, { ol: 2, spec: false });
+    const on = Math.sin(t * 17) > -0.7;
+    if (!FLAT) txt(ctx, 'BRRR', 0, -111 + bob, 11, on ? PAL.cyan : rgba(PAL.cyan, 0.3), true);
+    // the screen face
+    tone(ctx, q => rrect(q, -22, -94 + bob, 44, 34, 4), '#0e2a3a', 0, -77, 18, { ol: 2, spec: false });
+    if (!FLAT) {
+      glow(ctx, 0, -77 + bob, 30, PAL.cyan, 0.25);
+      F(ctx, '#bff4ff'); ctx.beginPath(); ell(ctx, -9, -82 + bob, 5, 6, 0); ell(ctx, 9, -82 + bob, 5, 6, 0); ctx.fill();
+      F(ctx, INK); ctx.beginPath(); circ(ctx, -10, -81 + bob, 2.2); circ(ctx, 8, -81 + bob, 2.2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-12, -70 + bob); ctx.quadraticCurveTo(0, -64 + bob, 12, -70 + bob); S(ctx, '#bff4ff', 2.5); ctx.stroke();
+    }
+    // the control panel with a joystick and buttons
+    tone(ctx, q => { q.moveTo(-34, -50); q.lineTo(34, -54); q.lineTo(38, -40); q.lineTo(-38, -36); q.closePath(); }, '#3a6fb8', 0, -45, 20, { dark: -0.3, spec: false });
+    limb(ctx, -18, -46, -20 + Math.sin(t * 2) * 3, -58, 3, '#c9d3e0');
+    tone(ctx, q => circ(q, -20 + Math.sin(t * 2) * 3, -60, 4.5), PAL.blood, -20, -60, 4, { ol: 1.5 });
+    F(ctx, FLAT || PAL.gold); ctx.beginPath(); circ(ctx, 4, -47, 3); circ(ctx, 14, -48, 3); ctx.fill();
+    // the ice shell over everything, with facets and a shine
+    ctx.beginPath(); ctx.moveTo(-40, 2); ctx.lineTo(-42, -70); ctx.lineTo(-36, -126 + bob); ctx.lineTo(10, -132 + bob); ctx.lineTo(40, -118 + bob); ctx.lineTo(42, -40); ctx.lineTo(38, 2); ctx.closePath();
+    F(ctx, FLAT || rgba('#bff4ff', 0.28)); ctx.fill(); S(ctx, FLAT ? INK : rgba('#e8fdff', 0.9), 2.5); ctx.stroke();
+    if (!FLAT) {
+      S(ctx, rgba('#ffffff', 0.55), 2); ctx.beginPath(); ctx.moveTo(-34, -110 + bob); ctx.lineTo(-30, -60); ctx.moveTo(-26, -118 + bob); ctx.lineTo(-24, -96); ctx.stroke();
+      S(ctx, rgba('#8dfff5', 0.5), 1.2); ctx.beginPath(); ctx.moveTo(-42, -70); ctx.lineTo(-8, -40); ctx.lineTo(42, -40); ctx.stroke();
+    }
+    // snow on top and icicle teeth under the marquee
+    tone(ctx, q => { q.moveTo(-38, -124 + bob); q.quadraticCurveTo(-20, -140 + bob, 0, -132 + bob); q.quadraticCurveTo(20, -142 + bob, 40, -120 + bob); q.lineTo(38, -116 + bob); q.lineTo(-36, -120 + bob); q.closePath(); }, '#ffffff', 0, -128, 20, { ol: 2, spec: false });
+    F(ctx, FLAT || '#e8fdff'); ctx.beginPath();
+    for (let i = 0; i < 7; i++) { const x = -26 + i * 9, l = 6 + ((i * 7) % 5) * 2; ctx.moveTo(x - 3, -102 + bob); ctx.lineTo(x + 3, -102 + bob); ctx.lineTo(x, -102 + bob + l); ctx.closePath(); }
+    ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+    // cold breath curling out of the coin slot
+    if (!FLAT) for (let i = 0; i < 3; i++) { const u = (br + i / 3) % 1; ctx.beginPath(); circ(ctx, -44 - u * 18, -30 - u * 10, 3 + u * 5); F(ctx, rgba('#e8fdff', 0.5 * (1 - u))); ctx.fill(); }
+  } };
+
+  // ---- the bosses' junk (silhouettes on the item sprite; the physics box is w x h)
+  const STO_SIL = {};
+  STO_SIL.sto_plush = (ctx, w, h) => {
+    const r = Math.min(w, h) / 2;
+    tone(ctx, q => { circ(q, -r * 0.62, -r * 0.62, r * 0.32); circ(q, r * 0.62, -r * 0.62, r * 0.32); }, STO_PINK, 0, -r * 0.6, r * 0.3, NOSPEC);
+    tone(ctx, q => circ(q, 0, r * 0.05, r * 0.88), STO_PINK, 0, 0, r * 0.85, { dark: -0.22 });
+    tone(ctx, q => ell(q, 0, r * 0.3, r * 0.34, r * 0.24, 0), '#ffd1e6', 0, r * 0.3, r * 0.3, NOSPEC);
+    F(ctx, INK); ctx.beginPath(); circ(ctx, -r * 0.3, -r * 0.1, r * 0.11); circ(ctx, r * 0.3, -r * 0.1, r * 0.11); ell(ctx, 0, r * 0.2, r * 0.1, r * 0.07, 0); ctx.fill();
+    tone(ctx, q => { q.moveTo(-r * 0.3, -r * 0.8); q.lineTo(-r * 0.36, -r * 1.08); q.lineTo(-r * 0.12, -r * 0.92); q.lineTo(0, -r * 1.12); q.lineTo(r * 0.12, -r * 0.92); q.lineTo(r * 0.36, -r * 1.08); q.lineTo(r * 0.3, -r * 0.8); q.closePath(); }, PAL.gold, 0, -r * 0.95, r * 0.2, { ol: 1.2, spec: false });
+  };
+  STO_SIL.sto_crate = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, q => rrect(q, -hw, -hh, w, h, 3), '#c89a5a', 0, 0, Math.max(hw, hh) * 0.7, { dark: -0.25, spec: false });
+    F(ctx, rgba('#e8d3a0', 0.95)); ctx.fillRect(-4, -hh, 8, h);
+    S(ctx, rgba('#6b3f1f', 0.75), 1.4); ctx.beginPath(); ctx.moveTo(-hw + 3, -hh + 3); ctx.lineTo(hw - 3, hh - 3); ctx.moveTo(hw * 0.45, -hh * 0.5); ctx.lineTo(hw * 0.45, hh * 0.1); ctx.moveTo(hw * 0.3, -hh * 0.3); ctx.lineTo(hw * 0.45, -hh * 0.5); ctx.lineTo(hw * 0.6, -hh * 0.3); ctx.stroke();
+    ctx.beginPath(); rrect(ctx, -hw, -hh, w, h, 3); S(ctx, INK, OL); ctx.stroke();
+  };
+  // The ice block: a bevelled cube of ice, see-through enough to show what is frozen inside (the game draws those on top, then the glaze).
+  const stoIceSil = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2, b = Math.min(hw, hh) * 0.28;
+    ctx.beginPath(); rrect(ctx, -hw, -hh, w, h, b); F(ctx, FLAT || rgba('#bff4ff', 0.78)); ctx.fill();
+    F(ctx, FLAT || rgba('#e8fdff', 0.6)); ctx.beginPath(); ctx.moveTo(-hw + b, -hh); ctx.lineTo(hw - b, -hh); ctx.lineTo(hw - b * 2, -hh + b); ctx.lineTo(-hw + b * 2, -hh + b); ctx.closePath(); ctx.fill();
+    F(ctx, FLAT || rgba('#5ab4e6', 0.45)); ctx.beginPath(); ctx.moveTo(-hw + b, hh); ctx.lineTo(hw - b, hh); ctx.lineTo(hw - b * 2, hh - b); ctx.lineTo(-hw + b * 2, hh - b); ctx.closePath(); ctx.fill();
+    S(ctx, rgba('#ffffff', 0.85), 1.6); ctx.beginPath(); ctx.moveTo(-hw * 0.7, -hh * 0.45); ctx.lineTo(-hw * 0.35, -hh * 0.62); ctx.moveTo(-hw * 0.72, -hh * 0.15); ctx.lineTo(-hw * 0.55, -hh * 0.25); ctx.stroke();
+    ctx.beginPath(); rrect(ctx, -hw, -hh, w, h, b); S(ctx, INK, OL); ctx.stroke();
+  };
+  for (let n = 1; n <= 6; n++) STO_SIL['sto_glacier' + n] = stoIceSil;
+  for (const k in STO_SIL) Object.defineProperty(POL_SIL, k, { value: STO_SIL[k], enumerable: false, configurable: true, writable: true });
+  // the event vignettes' props and the new signatures' sign colours
+  Object.assign(EV_PROPS, { sto_crab: 'crates', sto_monte: 'booth', sto_seed: 'fountain', sto_intern: 'tools', sto_dance: 'cab', sto_egg: 'shelf', sto_booth: 'cab', sto_vendy: 'slot', sto_oracle: 'bowl' });
+  Object.assign(SIG_COL, { plush: STO_PINK, belt: '#ffb347', glacier: '#8dfff5' });
+
+  // ---- the rival tile on the map: Gary's green cap over a gold trophy
+  function stoTileIcon(ctx, s, t) {
+    t = t || 0;
+    const b = Math.sin(t * 3) * s * 0.05;
+    glow(ctx, 0, 0, s * 1.5, STO_GREEN, 0.22 + Math.sin(t * 3.5) * 0.08);
+    tone(ctx, q => { q.moveTo(-s * 0.55, -s * 0.2 + b); q.lineTo(s * 0.55, -s * 0.2 + b); q.quadraticCurveTo(s * 0.5, s * 0.45 + b, 0, s * 0.5 + b); q.quadraticCurveTo(-s * 0.5, s * 0.45 + b, -s * 0.55, -s * 0.2 + b); q.closePath(); }, PAL.gold, 0, s * 0.1, s * 0.5, { dark: -0.3 });
+    tone(ctx, q => rrect(q, -s * 0.35, s * 0.5 + b, s * 0.7, s * 0.28, 2), '#8a5a2b', 0, s * 0.64, s * 0.3, NOSPEC);
+    tone(ctx, q => { q.moveTo(-s * 0.62, -s * 0.2 + b); q.quadraticCurveTo(-s * 0.6, -s * 0.95 + b, 0, -s * 0.95 + b); q.quadraticCurveTo(s * 0.6, -s * 0.95 + b, s * 0.62, -s * 0.2 + b); q.closePath(); }, STO_GREEN, 0, -s * 0.55, s * 0.5, { dark: -0.3 });
+    tone(ctx, q => rrect(q, -s * 1.05, -s * 0.34 + b, s * 0.6, s * 0.18, 2), shade(STO_GREEN, -0.25), -s * 0.75, -s * 0.25, s * 0.25, NOSPEC);
+    txt(ctx, 'G', 0, -s * 0.55 + b, Math.max(7, s * 0.55), PAL.gold, true, 'center', true);
+  }
+  // ---- the claw-off scoreboard: YOU vs GARY, three drop pips each, the side at the claw lit
+  const STOB = { x: 270, y: 96, w: 500 };
+  function stoBoard(ctx, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const x = st.x == null ? STOB.x : st.x, y = st.y == null ? STOB.y : st.y, w = st.w || STOB.w, h = 74, t = st.t || 0;
+      tone(ctx, q => rrect(q, x - w / 2, y - h / 2, w, h, 14), '#1b1030', x, y, w * 0.3, { dark: -0.2, spec: false });
+      for (let i = 0; i < 26; i++) {
+        const bx = x - w / 2 + 10 + i * ((w - 20) / 25), on = (Math.floor(t * 8) + i) % 3 === 0;
+        F(ctx, on ? PAL.gold : '#3a2a50'); ctx.beginPath(); circ(ctx, bx, y - h / 2 + 6, 2.4); circ(ctx, bx, y + h / 2 - 6, 2.4); ctx.fill();
+      }
+      const sides = [['p', x - w * 0.27, st.name || 'YOU', st.p | 0, st.pd | 0, PAL.cyan], ['g', x + w * 0.27, 'GARY', st.g | 0, st.gd | 0, STO_GREEN]];
+      for (const [id, cx, name, sc, used, col] of sides) {
+        const live = st.who === id, fl = id === 'p' ? (st.flashP || 0) : (st.flashG || 0);
+        if (live) glow(ctx, cx, y, 70, col, 0.25 + Math.sin(t * 5) * 0.08);
+        txt(ctx, String(name).toUpperCase().slice(0, 12), cx, y - 18, 14, live ? col : rgba(col, 0.7), true, 'center', true);
+        txt(ctx, String(sc), cx, y + 8, 30 + fl * 10, fl > 0 ? PAL.gold : '#ffffff', true, 'center', true);
+        for (let k = 0; k < (st.drops || 3); k++) {
+          ctx.beginPath(); circ(ctx, cx + (k - 1) * 14 + (id === 'p' ? -60 : 60), y + 8, 4.5);
+          F(ctx, k < used ? rgba(col, 0.25) : col); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+        }
+      }
+      txt(ctx, 'VS', x, y + 4, 22, PAL.pink, true, 'center', true);
+      if (st.label) txt(ctx, st.label, x, y + h / 2 + 14, 13, '#fff6c0', true, 'center', true);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // ---- a speech bubble with a tail pointing at (tx, ty): up to five lines of text, wrapped to w
+  function stoBubble(ctx, x, y, w, text, t, tx, ty) {
+    ctx.save();
+    try {
+      const size = 14, lh = 17, words = String(text || '').split(/\s+/), lines = [];
+      ctx.font = 'bold ' + size + 'px ' + FONT;
+      let cur = '';
+      for (const wd of words) {
+        const tryL = cur ? cur + ' ' + wd : wd;
+        if ((ctx.measureText(tryL).width || tryL.length * 7) > w - 24 && cur) { lines.push(cur); cur = wd; } else cur = tryL;
+      }
+      if (cur) lines.push(cur);
+      const n = Math.min(lines.length, 5), h = n * lh + 18, pop = 1 + Math.max(0, 0.25 - (t || 0)) * 1.2;
+      ctx.translate(x, y); ctx.scale(pop, pop); ctx.translate(-x, -y);
+      ctx.beginPath(); rrect(ctx, x - w / 2, y - h / 2, w, h, 12);
+      if (tx != null) { ctx.moveTo(x + w * 0.18, y + h / 2 - 1); ctx.lineTo(tx, ty); ctx.lineTo(x + w * 0.32, y + h / 2 - 1); }
+      F(ctx, '#fff8ec'); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke();
+      for (let i = 0; i < n; i++) txt(ctx, lines[i], x, y - h / 2 + 9 + lh / 2 + i * lh, size, INK, true);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // ---- the Conveyor King's belt: the floor running away from the chute (chevrons pointing left, hazard ends)
+  function stoBelt(ctx, x0, x1, y, t, v, k) {
+    ctx.save();
+    try {
+      k = k == null ? 1 : U.clamp(k, 0, 1);
+      ctx.globalAlpha = k;
+      F(ctx, '#17111f'); ctx.fillRect(x0, y, x1 - x0, 12);
+      F(ctx, '#2a2233'); ctx.fillRect(x0, y, x1 - x0, 2);
+      S(ctx, 'rgba(255,90,74,0.85)', 2.5); ctx.lineCap = 'round';
+      const gap = 24, off = (t * (v || 70)) % gap;
+      ctx.beginPath();
+      for (let x = x1 + gap - off; x > x0 + 4; x -= gap) { if (x > x1 - 2) continue; ctx.moveTo(x, y + 3); ctx.lineTo(x - 5, y + 6.5); ctx.lineTo(x, y + 10); }
+      ctx.stroke();
+      for (const rx of [x0 + 7, x1 - 7]) {
+        F(ctx, '#3d2a63'); ctx.beginPath(); ctx.arc(rx, y + 6, 6, 0, TAU); ctx.fill();
+        const a = -t * (v || 70) / 6;
+        S(ctx, '#ffb347', 1.5); ctx.beginPath(); ctx.moveTo(rx + Math.cos(a) * 5, y + 6 + Math.sin(a) * 5); ctx.lineTo(rx - Math.cos(a) * 5, y + 6 - Math.sin(a) * 5); ctx.stroke();
+      }
+      // hazard stripes on the end plate by the far wall
+      for (let i = 0; i < 4; i++) { F(ctx, i % 2 ? INK : '#ffc94d'); ctx.fillRect(x0 + i * 5, y - 8, 5, 8); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // ---- the glaze drawn over the prizes frozen inside an ice block (a frosty film and a shine)
+  function stoGlaze(ctx, x, y, w, h, a, t) {
+    ctx.save();
+    try {
+      ctx.translate(x, y); ctx.rotate(a || 0);
+      const b = Math.min(w, h) * 0.14;
+      ctx.beginPath(); rrect(ctx, -w / 2, -h / 2, w, h, b);
+      F(ctx, 'rgba(210,248,255,0.42)'); ctx.fill();
+      S(ctx, 'rgba(255,255,255,0.9)', 2); ctx.stroke();
+      const sx = ((t || 0) * 0.35 % 1) * w * 1.6 - w * 0.8;
+      ctx.clip();
+      F(ctx, 'rgba(255,255,255,0.35)'); ctx.beginPath(); poly(ctx, [sx - 6, -h / 2, sx + 6, -h / 2, sx - 8, h / 2, sx - 20, h / 2]); ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // ---- a friend from a story in the arena (facing the enemies): the crab or the ghost
+  const STO_ALLY_DEF = { crab: { id: 'crab', art: 'crab', tier: 'normal', size: 1, color: '#ff5a4a', color2: '#ff8a2b' }, ghost: { id: 'ghost', art: 'ghost', tier: 'normal', size: 1, color: '#e8f4ff', color2: '#9fd8ff' } };
+  const STO_AST = { hurt: 0, attack: 0, dead: 0 };
+  function stoAlly(ctx, id, x, y, s, t, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const d = STO_ALLY_DEF[id] || STO_ALLY_DEF.crab;
+      glow(ctx, x, y - 30 * s, 60 * s, id === 'ghost' ? '#bfe8ff' : PAL.gold, 0.35);
+      ctx.translate(x, y); ctx.scale(-1, 1);
+      STO_AST.attack = U.clamp(+st.attack || 0, 0, 1);
+      enemy(ctx, d, 0, 0, s, t, STO_AST);
+      ctx.scale(-1, 1);
+      // a heart over its head: a friend
+      const hb = Math.sin(t * 5) * 3;
+      tone(ctx, q => { q.moveTo(0, -70 * s + hb); q.bezierCurveTo(-9, -80 * s + hb, -4, -90 * s + hb, 0, -83 * s + hb); q.bezierCurveTo(4, -90 * s + hb, 9, -80 * s + hb, 0, -70 * s + hb); q.closePath(); }, PAL.pink, 0, -80 * s, 6, { ol: 1.5, spec: false });
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const STO_R = {
+    G: STO_G, SIL: STO_SIL, LOOKS: ['gary', 'cardshark', 'plushqueen', 'conveyorking', 'arcticarcade'],
+    get gear() { return STO_G.gear; }, set gear(v) { STO_G.gear = Math.max(0, Math.min(4, (+v) | 0)); },
+    tile: stoTileIcon, board: stoBoard, bubble: stoBubble, belt: stoBelt, glaze: stoGlaze, ally: stoAlly,
+  };
+  /* ============================================================ end STORY */
+
+  /* ============================================================ HISTORY (round 8) */
+  /* Run history, the death recap and photo mode (DESIGN.md "Run history, the
+     death recap and photo mode (round 8)"): the result stamp, the lifetime
+     charts, a run's final bin, its map and last turns, the killer's portrait,
+     the detail header, and the photo filters, frames and portrait stamp.
+     Pure drawing from what the game hands over; every call saves, restores
+     and never throws. */
+  const HIS_STAMP = {
+    win: { word: 'VICTORY', col: '#ffc94d', ink: '#4d3608' },
+    loss: { word: 'K.O.', col: '#ff5a4a', ink: '#3a0a0a' },
+    endless: { word: 'ENDLESS', col: '#2ee6d6', ink: '#062224' },
+    quit: { word: 'QUIT', col: '#b3a4d6', ink: '#241a40' },
+  };
+  const HIS_FILTERS = ['none', 'crt', 'neon', 'sepia', 'pixel'];
+  const HIS_FRAMES = ['none', 'marquee', 'polaroid', 'stickers'];
+  const hisFmt = (n) => String(Math.max(0, Math.round(+n || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  // A rubber stamp: a double rim and the word, tilted, a little worn.
+  function hisStamp(ctx, result, x, y, size, rot) {
+    ctx.save();
+    try {
+      const S0 = HIS_STAMP[result] || HIS_STAMP.loss, s = size || 30;
+      ctx.translate(x || 0, y || 0); ctx.rotate(rot == null ? -0.16 : rot);
+      ctx.font = 'bold ' + s + 'px ' + FONT;
+      const tw = Math.max(s * 1.6, (ctx.measureText(S0.word).width || s * S0.word.length * 0.62)), bw = tw + s * 0.9, bh = s * 1.45;
+      ctx.beginPath(); rrect(ctx, -bw / 2, -bh / 2, bw, bh, s * 0.22); F(ctx, rgba(S0.ink, 0.55)); ctx.fill();
+      S(ctx, S0.col, Math.max(2, s * 0.12)); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, -bw / 2 + s * 0.16, -bh / 2 + s * 0.16, bw - s * 0.32, bh - s * 0.32, s * 0.14); S(ctx, rgba(S0.col, 0.7), Math.max(1, s * 0.05)); ctx.stroke();
+      txt(ctx, S0.word, 0, s * 0.04, s, S0.col, true, 'center');
+      // worn ink: a few gaps punched out of the letters
+      F(ctx, rgba(S0.ink, 0.5));
+      for (let i = 0; i < 5; i++) { ctx.beginPath(); circ(ctx, -tw * 0.4 + i * tw * 0.21, ((i * 7) % 5 - 2) * s * 0.12, s * 0.05); ctx.fill(); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The lifetime charts. d: DATA.hisChart (pts oldest first, max, best, avg,
+     per [{c, n, w, rate}]); st {t, names: {char: name}}. The score line on the
+     left (a dot per run in its result's colour, a star on the best, the
+     average dashed), the win rate per crawler on the right. */
+  function hisChart(ctx, d, w, h, st) {
+    ctx.save();
+    try {
+      d = d || {}; st = st || {};
+      const t = st.t || 0, pts = d.pts || [], per = d.per || [];
+      ctx.beginPath(); rrect(ctx, 1, 1, w - 2, h - 2, 14); F(ctx, '#170d2a'); ctx.fill(); S(ctx, '#3d2a63', 2); ctx.stroke();
+      const lx = 14, lw = Math.round(w * 0.58), top = 34, bot = h - 20;
+      txt(ctx, 'SCORE PER RUN', lx, 18, 12, PAL.cyan, true, 'left');
+      if (d.max > 0) txt(ctx, 'best ' + hisFmt(d.max), lx + lw - 6, 18, 12, PAL.gold, true, 'right');
+      // the grid
+      for (let i = 0; i <= 2; i++) { const yy = top + (bot - top) * i / 2; line(ctx, lx, yy, lx + lw - 6, yy, 'rgba(141,127,179,0.18)', 1); }
+      if (pts.length >= 1 && d.max > 0) {
+        const n = pts.length, sx = n > 1 ? (lw - 20) / (n - 1) : 0;
+        const px = (i) => lx + 8 + (n > 1 ? i * sx : (lw - 20) / 2), py = (s) => bot - (bot - top) * U.clamp(s / d.max, 0, 1);
+        if (d.avg > 0) { ctx.save(); ctx.setLineDash([4, 4]); line(ctx, lx, py(d.avg), lx + lw - 6, py(d.avg), 'rgba(255,201,77,0.4)', 1.5); ctx.restore(); }
+        // the area under the line, then the line
+        ctx.beginPath(); ctx.moveTo(px(0), bot);
+        for (let i = 0; i < n; i++) ctx.lineTo(px(i), py(pts[i].s));
+        ctx.lineTo(px(n - 1), bot); ctx.closePath();
+        try { const g = ctx.createLinearGradient(0, top, 0, bot); g.addColorStop(0, 'rgba(255,46,136,0.35)'); g.addColorStop(1, 'rgba(255,46,136,0)'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = 'rgba(255,46,136,0.2)'; }
+        ctx.fill();
+        ctx.beginPath();
+        for (let i = 0; i < n; i++) { if (i) ctx.lineTo(px(i), py(pts[i].s)); else ctx.moveTo(px(i), py(pts[i].s)); }
+        ctx.lineJoin = 'round'; S(ctx, PAL.pink, 2.5); ctx.stroke();
+        for (let i = 0; i < n; i++) {
+          const c = (HIS_STAMP[pts[i].r] || HIS_STAMP.loss).col, last = i === n - 1;
+          ctx.beginPath(); circ(ctx, px(i), py(pts[i].s), last ? 4.5 : 3); F(ctx, c); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+        }
+        if (d.best >= 0 && d.best < n) {
+          const bx = px(d.best), by = py(pts[d.best].s) - 11;
+          glow(ctx, bx, by, 14, PAL.gold, 0.6 + 0.2 * Math.sin(t * 3));
+          ctx.beginPath(); star(ctx, bx, by, 8, 5, 0.45); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+        }
+      } else txt(ctx, 'Finish a run to start the line.', lx + lw / 2, (top + bot) / 2, 13, '#8d7fb3', true, 'center');
+      txt(ctx, (d.n | 0) + ' runs', lx, h - 9, 12, '#8d7fb3', true, 'left');
+      if (d.n > 0) txt(ctx, 'win rate ' + Math.round((d.rate || 0) * 100) + '%', lx + lw - 6, h - 9, 12, '#a6ff5e', true, 'right');
+      // the win rate per crawler
+      const rx = lx + lw + 8, rw = w - rx - 12;
+      line(ctx, rx - 6, 12, rx - 6, h - 12, 'rgba(141,127,179,0.25)', 1);
+      txt(ctx, 'WINS BY CRAWLER', rx, 18, 12, PAL.cyan, true, 'left');
+      const rows = per.slice(0, 5), rh = Math.min(34, (h - 36) / Math.max(1, rows.length));
+      rows.forEach((p, i) => {
+        const y = 34 + i * rh + rh / 2, ps = Math.min(24, rh - 6);
+        portrait(ctx, p.c, rx + ps / 2, y, ps, t);
+        const bx = rx + ps + 6, bw = Math.max(10, rw - ps - 6);
+        ctx.beginPath(); rrect(ctx, bx, y - 1, bw, 8, 4); F(ctx, '#2c1d4a'); ctx.fill();
+        if (p.rate > 0) { ctx.beginPath(); rrect(ctx, bx, y - 1, Math.max(8, bw * U.clamp(p.rate, 0, 1)), 8, 4); F(ctx, PAL.lime); ctx.fill(); }
+        txt(ctx, ((st.names && st.names[p.c]) || p.c).split(' ')[0], bx, y - 8, 12, '#f3ecff', true, 'left');
+        txt(ctx, p.w + '/' + p.n, bx + bw, y - 8, 12, '#a6ff5e', true, 'right');
+      });
+      if (!rows.length) txt(ctx, 'No runs yet', rx + rw / 2, h / 2, 12, '#8d7fb3', true, 'center');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A run's final bin in a little glass case: up to 8 prizes on a shelf, rarity glows under them.
+  function hisBin(ctx, defs, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0;
+      ctx.beginPath(); rrect(ctx, 2, 2, w - 4, h - 4, 14);
+      try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#241640'); g.addColorStop(1, '#0f0820'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#1b1030'; }
+      ctx.fill(); S(ctx, '#5a3f8f', 3); ctx.stroke();
+      // the floor and the glass
+      F(ctx, '#2c1d4a'); ctx.fillRect(10, h - 22, w - 20, 12);
+      line(ctx, 10, h - 22, w - 10, h - 22, '#5a3f8f', 2);
+      const list = (defs || []).filter(Boolean).slice(0, 8), n = list.length;
+      if (!n) txt(ctx, 'Nothing left in the bin', w / 2, h / 2, 13, '#8d7fb3', true, 'center');
+      const cols = n > 4 ? Math.ceil(n / 2) : n, rowsN = n > 4 ? 2 : 1, cw = (w - 24) / Math.max(1, cols), ch = (h - 34) / rowsN;
+      list.forEach((d, i) => {
+        const def = d.def || d, r = Math.floor(i / cols), c = i % cols;
+        const x = 12 + cw * (c + 0.5) + (r % 2 ? cw * 0.12 : 0), y = 12 + ch * (r + 0.55);
+        const sh = def.shape || {};
+        let big = Math.max(sh.r ? sh.r * 2 : 0, sh.w || 0, sh.h || 0, 24);
+        if (sh.verts) for (const v of sh.verts) big = Math.max(big, Math.abs(v.x) * 2, Math.abs(v.y) * 2);
+        const k = U.clamp(Math.min(cw, ch) * 0.72 / big, 0.4, 1.5);
+        glow(ctx, x, y + 4, Math.min(cw, ch) * 0.55, RARITY_COL[def.rarity] || '#8e98a8', 0.45);
+        item(ctx, def, x, y, ((i * 37) % 9 - 4) * 0.08 + Math.sin(t * 1.5 + i) * 0.03, k, { plus: !!d.plus });
+      });
+      // a glint across the glass
+      ctx.beginPath(); ctx.moveTo(w * 0.62, 6); ctx.lineTo(w * 0.7, 6); ctx.lineTo(w * 0.52, h - 26); ctx.lineTo(w * 0.44, h - 26); ctx.closePath(); F(ctx, 'rgba(255,255,255,0.05)'); ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The act's map from a history record: cells (DATA.hisMapCells: 0 dark,
+     1 water, 2 lit, 3 walked), mp {w, h, p, b, s} (cell indices), st {biome,
+     t}. Drawn in the game's portrait orientation (start at the bottom, the
+     boss at the top), fitted and centred. */
+  function hisMap(ctx, cells, mp, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, pal = biomePal(st.biome);
+      ctx.beginPath(); rrect(ctx, 2, 2, w - 4, h - 4, 14); F(ctx, '#0d0718'); ctx.fill(); S(ctx, '#3d2a63', 2); ctx.stroke();
+      if (!cells || !mp || !(mp.w > 0) || !(mp.h > 0)) { txt(ctx, 'No map for this run', w / 2, h / 2, 13, '#8d7fb3', true, 'center'); ctx.restore(); return; }
+      const cols = mp.w, rows = mp.h, R3 = Math.sqrt(3);
+      // hex (q, r) at (1.5 s r, -R3 s (q + r / 2)) in the flat-top portrait layout
+      const spanX = 1.5 * (rows - 1) + 2, spanY = R3 * (cols + 0.5) + 0.3;
+      const s = Math.max(2, Math.min((w - 24) / spanX, (h - 24) / spanY));
+      let minY = Infinity, maxY = -Infinity;
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const q = c - Math.floor(r / 2), y = -R3 * s * (q + r / 2); if (y < minY) minY = y; if (y > maxY) maxY = y; }
+      const ox = (w - (1.5 * s * (rows - 1))) / 2, oy = (h - (maxY - minY)) / 2 - minY;
+      const at = (i) => { const r = Math.floor(i / cols), c = i % cols, q = c - Math.floor(r / 2); return { x: ox + 1.5 * s * r, y: oy - R3 * s * (q + r / 2) }; };
+      // dark fog, water (dim), lit ground, the walked road warmed toward gold
+      const lit = pal.grass || '#6f8f4a';
+      const COL = ['#1a1030', mix(pal.sea || '#163a68', INK, 0.45), mix(lit, INK, 0.12), mix(lit, PAL.gold, 0.55)];
+      for (let i = 0; i < cells.length; i++) {
+        const v = cells[i], p = at(i);
+        ctx.beginPath(); hexPath(ctx, p.x, p.y, s * 0.96, true);
+        F(ctx, COL[v] || COL[0]); ctx.fill();
+        if (v === 0) { S(ctx, 'rgba(90,63,143,0.35)', 0.8); ctx.stroke(); }
+        else if (v >= 2) { S(ctx, v === 3 ? 'rgba(77,54,8,0.8)' : 'rgba(18,9,31,0.45)', v === 3 ? 1.4 : 0.8); ctx.stroke(); }
+        if (v === 3) { F(ctx, '#fff3c4'); ctx.beginPath(); circ(ctx, p.x, p.y, Math.max(1.2, s * 0.2)); ctx.fill(); }
+      }
+      if (mp.s >= 0 && mp.s < cells.length) { const p = at(mp.s); ctx.beginPath(); hexPath(ctx, p.x, p.y, s * 0.9, true); S(ctx, PAL.cyan, 2); ctx.stroke(); }
+      if (mp.b >= 0 && mp.b < cells.length) {
+        const p = at(mp.b);
+        glow(ctx, p.x, p.y, s * 2.4, PAL.blood, 0.6);
+        ctx.beginPath(); hexPath(ctx, p.x, p.y, s * 1.02, true); F(ctx, '#4a0f1a'); ctx.fill(); S(ctx, PAL.blood, 2); ctx.stroke();
+        txt(ctx, '☠', p.x, p.y + 1, Math.max(10, s * 1.3), '#ffd6d0', true, 'center');
+      }
+      if (mp.p >= 0 && mp.p < cells.length) {
+        const p = at(mp.p), pr = Math.max(6, s * 1.1);
+        glow(ctx, p.x, p.y, pr * 2.2, PAL.pink, 0.55 + 0.15 * Math.sin(t * 4));
+        crawler(ctx, p.x, p.y - pr * 0.2, pr * 1.3, t);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The last turns before a death: turns [{n, dmg, bl, blk}] (oldest first,
+     at most 5). A bar per turn: hp lost in red over what Block soaked in
+     cyan, the Block held as a dashed tick, a skull over the last one. */
+  function hisTimeline(ctx, turns, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const list = (turns || []).slice(-5), n = list.length;
+      ctx.beginPath(); rrect(ctx, 1, 1, w - 2, h - 2, 12); F(ctx, '#170d2a'); ctx.fill(); S(ctx, '#3d2a63', 2); ctx.stroke();
+      txt(ctx, 'LAST TURNS', 12, 15, 12, PAL.cyan, true, 'left');
+      txt(ctx, '■ hp lost', w - 96, 15, 12, PAL.blood, true, 'right');
+      txt(ctx, '■ blocked', w - 12, 15, 12, PAL.cyan, true, 'right');
+      if (!n) { txt(ctx, 'It was over in a flash', w / 2, h / 2 + 6, 13, '#8d7fb3', true, 'center'); ctx.restore(); return; }
+      let max = 1;
+      for (const T of list) max = Math.max(max, (T.dmg | 0) + (T.bl | 0), T.blk | 0);
+      const top = 40, bot = h - 20, cw = (w - 24) / 5, bw = Math.min(40, cw * 0.5);
+      const x0 = 12 + (5 - n) * cw / 2;
+      line(ctx, 10, bot, w - 10, bot, '#5a3f8f', 2);
+      list.forEach((T, i) => {
+        const x = x0 + cw * (i + 0.5), last = i === n - 1;
+        const hd = (bot - top) * (T.dmg | 0) / max, hb = (bot - top) * (T.bl | 0) / max;
+        if (hb > 0) { ctx.beginPath(); rrect(ctx, x - bw / 2, bot - hb, bw, hb, 4); F(ctx, rgba(PAL.cyan, 0.8)); ctx.fill(); }
+        if (hd > 0) { ctx.beginPath(); rrect(ctx, x - bw / 2, bot - hb - hd, bw, hd, 4); F(ctx, last ? '#ff2e30' : PAL.blood); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke(); }
+        let yb = bot;
+        if ((T.blk | 0) > 0) { yb = bot - (bot - top) * (T.blk | 0) / max; ctx.save(); ctx.setLineDash([3, 3]); line(ctx, x - bw / 2 - 5, yb, x + bw / 2 + 5, yb, '#bfe8ff', 2); ctx.restore(); }
+        const lab = (T.dmg | 0) > 0 ? '−' + (T.dmg | 0) : (T.bl | 0) > 0 ? 'blocked' : 'no hit';
+        txt(ctx, lab, x, Math.max(top - 8, Math.min(bot - hb - hd, yb) - 10), 12, (T.dmg | 0) > 0 ? '#ffb3aa' : (T.bl | 0) > 0 ? '#bfe8ff' : '#8d7fb3', true, 'center', INK);
+        txt(ctx, 'T' + (T.n | 0), x, h - 9, 12, last ? '#ff9ec7' : '#b3a4d6', true, 'center');
+        if (last) txt(ctx, '☠', x + bw / 2 + 10, h - 10, 12, '#ff5a4a', true, 'center');
+      });
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The killer's portrait: the monster in a red-rimmed spotlight with claw marks (no def: a skull).
+  function hisFoe(ctx, def, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, cx = w / 2;
+      ctx.beginPath(); rrect(ctx, 2, 2, w - 4, h - 4, 16);
+      try { const g = ctx.createRadialGradient(cx, h * 0.55, 4, cx, h * 0.55, w * 0.7); g.addColorStop(0, '#4a1030'); g.addColorStop(1, '#12091f'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#2a0f22'; }
+      ctx.fill(); S(ctx, PAL.blood, 3); ctx.stroke();
+      glow(ctx, cx, h * 0.6, w * 0.45, PAL.blood, 0.35);
+      ctx.save(); ctx.beginPath(); rrect(ctx, 4, 4, w - 8, h - 8, 14); ctx.clip();
+      if (def) {
+        const b = enemyBox(def, 1), bw = b.w, bh = b.h;
+        const k = U.clamp(Math.min((w - 30) / Math.max(1, bw), (h - 34) / Math.max(1, bh)), 0.3, 3);
+        enemy(ctx, def, cx, h - 16, k, t, { attack: 0.35 + 0.15 * Math.sin(t * 3) });
+      } else txt(ctx, '☠', cx, h / 2, h * 0.45, '#ffd6d0', true, 'center', INK);
+      // three claw scratches in the top corner, tapering
+      for (let i = 0; i < 3; i++) {
+        const x0 = w * 0.62 + i * 12, y0 = h * 0.1;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(x0 + 10, y0 + h * 0.2, x0 + 4, y0 + h * 0.36);
+        S(ctx, 'rgba(255,46,48,0.7)', 4 - i * 0.6); ctx.lineCap = 'round'; ctx.stroke();
+      }
+      ctx.restore();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The detail header: st {char, outfit, name, date, result, score, where,
+     mode, tilt, t}. The crawler in their outfit, the score, the stamp. */
+  function hisHero(ctx, st, w, h) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, S0 = HIS_STAMP[st.result] || HIS_STAMP.loss;
+      ctx.beginPath(); rrect(ctx, 2, 2, w - 4, h - 4, 16);
+      try { const g = ctx.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#2c1450'); g.addColorStop(1, '#140a26'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#22163a'; }
+      ctx.fill(); S(ctx, rgba(S0.col, 0.8), 3); ctx.stroke();
+      glow(ctx, 82, h / 2, 80, PAL.cyan, 0.3);
+      VFORCE.on = true; VFORCE.outfit = st.outfit || null;
+      try { portrait(ctx, st.char || 'knight', 82, h / 2, Math.min(118, h - 30), t); } finally { VFORCE.on = false; VFORCE.outfit = null; }
+      txt(ctx, st.name || 'Crawler', 160, 30, 20, '#ffffff', true, 'left', INK);
+      txt(ctx, st.date || '', 160, 52, 12, '#b3a4d6', true, 'left');
+      txt(ctx, 'SCORE', 160, h * 0.5 - 2, 12, PAL.cyan, true, 'left');
+      txt(ctx, hisFmt(st.score), 160, h * 0.5 + 24, 32, PAL.gold, true, 'left', INK);
+      txt(ctx, st.where || '', 160, h - 16, 13, '#f3ecff', true, 'left');
+      hisStamp(ctx, st.result, w - 86, 50, 24, 0.14);
+      if ((st.tilt | 0) > 0) { ctx.beginPath(); rrect(ctx, w - 128, h - 48, 84, 30, 10); F(ctx, '#a0165c'); ctx.fill(); S(ctx, INK, 2); ctx.stroke(); txt(ctx, 'TILT ' + (st.tilt | 0), w - 86, h - 33, 15, '#ffd6ea', true, 'center'); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- photo mode: filters, frames, the portrait stamp
+  // A scratch canvas kept on the state (null headless or without a document).
+  function hisScratch(st, key, w, h) {
+    try {
+      const sc = st.scratch || (st.scratch = {});
+      let c = sc[key];
+      if (!c || c.width !== w || c.height !== h) {
+        if (typeof document === 'undefined' || !document || !document.createElement) return null;
+        c = document.createElement('canvas'); c.width = w; c.height = h;
+        if (!c.getContext || !c.getContext('2d')) return null;
+        sc[key] = c;
+      }
+      return c;
+    } catch (e) { return null; }
+  }
+  // The picture's box inside a frame, on the w x h stage.
+  function hisPhotoRect(frame, w, h) {
+    if (frame === 'marquee') return { x: 26, y: 74, w: w - 52, h: h - 104 };
+    if (frame === 'polaroid') return { x: 30, y: 34, w: w - 60, h: h - 200 };
+    if (frame === 'stickers') return { x: 14, y: 14, w: w - 28, h: h - 28 };
+    return { x: 0, y: 0, w, h };
+  }
+  // The frozen scene (src: the stage drawn at any pixel ratio) through a filter, cover-fitted to r.
+  function hisPhotoFilter(ctx, src, r, st) {
+    const w = st.w || 540, h = st.h || 960, t = st.t || 0, calm = !!st.noFlash, f = st.filter || 'none';
+    const k = Math.max(r.w / w, r.h / h), dw = w * k, dh = h * k, dx = r.x + (r.w - dw) / 2, dy = r.y + (r.h - dh) / 2;
+    const blit = (im, x, y, ww, hh) => { if (!im) return; try { ctx.drawImage(im, x, y, ww, hh); } catch (e) { /* stub canvas */ } };
+    if (f === 'pixel') {
+      const sc = hisScratch(st, 'px', Math.ceil(w / 5), Math.ceil(h / 5)), g = sc ? sc.getContext('2d') : null;
+      if (g && src) { try { g.imageSmoothingEnabled = true; g.clearRect(0, 0, sc.width, sc.height); g.drawImage(src, 0, 0, sc.width, sc.height); } catch (e) { /* stub */ } }
+      ctx.imageSmoothingEnabled = false;
+      blit(sc || src, dx, dy, dw, dh);
+      ctx.imageSmoothingEnabled = true;
+      // a faint pixel grid so it reads as sprites, not a blur
+      ctx.globalAlpha = 0.08; F(ctx, INK);
+      for (let x = dx; x < dx + dw; x += 5 * k) ctx.fillRect(x, dy, 1, dh);
+      for (let y = dy; y < dy + dh; y += 5 * k) ctx.fillRect(dx, y, dw, 1);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    blit(src, dx, dy, dw, dh);
+    if (f === 'crt') {
+      // a green-cyan phosphor tint, scanlines, a rolling band, the tube's glass and corners
+      ctx.save(); ctx.globalCompositeOperation = 'soft-light'; F(ctx, '#2ee6d6'); ctx.globalAlpha = 0.35; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.restore();
+      ctx.save(); F(ctx, 'rgba(0,0,0,0.28)');
+      for (let y = r.y; y < r.y + r.h; y += 4) ctx.fillRect(r.x, y + 2, r.w, 2);
+      ctx.restore();
+      const band = calm ? 0.35 : (t * 0.18) % 1.2 - 0.1, by = r.y + r.h * band;
+      try { const g = ctx.createLinearGradient(0, by - 40, 0, by + 40); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, calm ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.09)'); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(r.x, by - 40, r.w, 80); } catch (e) { /* stub */ }
+      try { const g = ctx.createRadialGradient(r.x + r.w / 2, r.y + r.h / 2, r.h * 0.3, r.x + r.w / 2, r.y + r.h / 2, r.h * 0.72); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.7)'); ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h); } catch (e) { /* stub */ }
+      ctx.beginPath(); ctx.ellipse(r.x + r.w * 0.3, r.y + r.h * 0.16, r.w * 0.34, r.h * 0.07, -0.35, 0, TAU); F(ctx, 'rgba(255,255,255,0.05)'); ctx.fill();
+      // the rounded tube: ink in the corners
+      ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); rrect(ctx, r.x + 4, r.y + 4, r.w - 8, r.h - 8, 46); F(ctx, INK);
+      try { ctx.fill('evenodd'); } catch (e) { ctx.fill(); }
+    } else if (f === 'neon') {
+      // bloom: the scene small and soft, added back over itself; then the colours pushed and neon edges
+      const sc = hisScratch(st, 'bloom', Math.ceil(w / 6), Math.ceil(h / 6)), g = sc ? sc.getContext('2d') : null;
+      if (g && src) { try { g.imageSmoothingEnabled = true; g.clearRect(0, 0, sc.width, sc.height); g.drawImage(src, 0, 0, sc.width, sc.height); } catch (e) { /* stub */ } }
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = calm ? 0.28 : 0.5; blit(sc, dx, dy, dw, dh); ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.3; F(ctx, '#ff00aa'); ctx.fillRect(r.x, r.y, r.w, r.h); ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'screen';
+      try {
+        const gl = ctx.createLinearGradient(r.x, 0, r.x + r.w * 0.35, 0); gl.addColorStop(0, rgba(PAL.pink, calm ? 0.3 : 0.45)); gl.addColorStop(1, rgba(PAL.pink, 0)); ctx.fillStyle = gl; ctx.fillRect(r.x, r.y, r.w * 0.35, r.h);
+        const gr = ctx.createLinearGradient(r.x + r.w, 0, r.x + r.w * 0.65, 0); gr.addColorStop(0, rgba(PAL.cyan, calm ? 0.3 : 0.45)); gr.addColorStop(1, rgba(PAL.cyan, 0)); ctx.fillStyle = gr; ctx.fillRect(r.x + r.w * 0.65, r.y, r.w * 0.35, r.h);
+      } catch (e) { /* stub */ }
+      ctx.restore();
+      ctx.save(); ctx.globalAlpha = 0.9; S(ctx, PAL.pink, 3); ctx.strokeRect(r.x + 5, r.y + 5, r.w - 10, r.h - 10); S(ctx, PAL.cyan, 1.5); ctx.strokeRect(r.x + 10, r.y + 10, r.w - 20, r.h - 20); ctx.restore();
+    } else if (f === 'sepia') {
+      // hue and saturation from a sepia brown, the scene's own light; a warm wash, a vignette, film grain
+      ctx.save(); ctx.globalCompositeOperation = 'color'; F(ctx, '#a0703c'); ctx.fillRect(r.x, r.y, r.w, r.h); ctx.restore();
+      ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.globalAlpha = 0.35; F(ctx, '#f3dcb2'); ctx.fillRect(r.x, r.y, r.w, r.h); ctx.restore();
+      try { const g = ctx.createRadialGradient(r.x + r.w / 2, r.y + r.h / 2, r.h * 0.25, r.x + r.w / 2, r.y + r.h / 2, r.h * 0.7); g.addColorStop(0, 'rgba(40,20,5,0)'); g.addColorStop(1, 'rgba(40,20,5,0.65)'); ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h); } catch (e) { /* stub */ }
+      let seed = 97 + (calm ? 0 : Math.floor(t * 8) % 4) * 131;
+      const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+      F(ctx, 'rgba(60,35,10,0.35)');
+      for (let i = 0; i < 260; i++) ctx.fillRect(r.x + rnd() * r.w, r.y + rnd() * r.h, 1.4, 1.4);
+      F(ctx, 'rgba(255,240,210,0.25)');
+      for (let i = 0; i < 90; i++) ctx.fillRect(r.x + rnd() * r.w, r.y + rnd() * r.h, 1.2, 1.2);
+      for (let i = 0; i < 3; i++) { const x = r.x + rnd() * r.w; line(ctx, x, r.y, x + (rnd() - 0.5) * 12, r.y + r.h, 'rgba(255,240,210,0.12)', 1); }
+    }
+  }
+  // The crawler's portrait stamp in the corner: st.stamp {char, outfit, name}.
+  function hisPhotoStamp(ctx, r, st) {
+    const s = st.stamp, t = st.t || 0;
+    if (!s) return;
+    const x = r.x + 62, y = r.y + r.h - 78, rad = 42;
+    ctx.save();
+    glow(ctx, x, y, rad * 1.8, PAL.pink, 0.4);
+    ctx.beginPath(); circ(ctx, x, y, rad + 6); F(ctx, INK); ctx.fill(); S(ctx, PAL.gold, 4); ctx.stroke();
+    VFORCE.on = true; VFORCE.outfit = s.outfit || null;
+    try { portrait(ctx, s.char || 'knight', x, y, rad * 2, t); } finally { VFORCE.on = false; VFORCE.outfit = null; }
+    ctx.beginPath(); rrect(ctx, x - 50, y + rad - 4, 100, 22, 8); F(ctx, PAL.pink); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    txt(ctx, 'CLAWSPIRE', x, y + rad + 7, 12, '#ffffff', true, 'center');
+    if (s.name) txt(ctx, s.name, x + rad + 12, y - 4, 14, '#ffffff', true, 'left', INK);
+    ctx.restore();
+  }
+  // A die-cut sticker: a white rim, then the shape (star, heart, coin, bolt, claw, crown, word).
+  function hisSticker(ctx, kind, x, y, s, rot, col) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(rot || 0);
+    const shape = (c, pad) => {
+      const q = s + pad;
+      if (kind === 'star') star(c, 0, 0, q, 5, 0.48);
+      else if (kind === 'heart') { c.moveTo(0, q * 0.7); c.bezierCurveTo(-q * 1.3, -q * 0.1, -q * 0.55, -q * 1.05, 0, -q * 0.35); c.bezierCurveTo(q * 0.55, -q * 1.05, q * 1.3, -q * 0.1, 0, q * 0.7); c.closePath(); }
+      else if (kind === 'bolt') poly(c, [-q * 0.2, -q, q * 0.55, -q, q * 0.1, -q * 0.15, q * 0.6, -q * 0.15, -q * 0.35, q, 0, q * 0.05, -q * 0.55, q * 0.05]);
+      else if (kind === 'crown') poly(c, [-q, q * 0.55, -q, -q * 0.5, -q * 0.5, 0, 0, -q * 0.8, q * 0.5, 0, q, -q * 0.5, q, q * 0.55]);
+      else if (kind === 'word') rrect(c, -q * 1.9, -q * 0.62, q * 3.8, q * 1.24, q * 0.4);
+      else circ(c, 0, 0, q);
+    };
+    ctx.beginPath(); shape(ctx, 5); F(ctx, '#ffffff'); ctx.fill(); S(ctx, 'rgba(0,0,0,0.25)', 1.5); ctx.stroke();
+    ctx.beginPath(); shape(ctx, 0); F(ctx, col || PAL.pink); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    if (kind === 'coin') { txt(ctx, '$', 0, 1, s * 1.1, '#7a5a10', true, 'center'); ctx.beginPath(); circ(ctx, 0, 0, s * 0.72); S(ctx, 'rgba(122,90,16,0.6)', 2); ctx.stroke(); }
+    else if (kind === 'claw') {
+      line(ctx, 0, -s * 0.9, 0, -s * 0.25, INK, 3);
+      ctx.beginPath(); circ(ctx, 0, -s * 0.2, s * 0.28); F(ctx, '#c9d3e0'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+      for (const sd of [-1, 1]) { ctx.beginPath(); ctx.moveTo(sd * s * 0.15, -s * 0.05); ctx.quadraticCurveTo(sd * s * 0.75, s * 0.3, sd * s * 0.25, s * 0.75); S(ctx, INK, 5); ctx.stroke(); S(ctx, '#c9d3e0', 3); ctx.stroke(); }
+    } else if (kind === 'word') txt(ctx, 'JACKPOT!', 0, 1, s * 0.62, '#ffffff', true, 'center', INK);
+    ctx.restore();
+  }
+  // The frame around the picture's box r.
+  function hisPhotoFrame(ctx, r, st) {
+    const w = st.w || 540, h = st.h || 960, t = st.t || 0, calm = !!st.noFlash, fr = st.frame;
+    if (fr === 'marquee') {
+      // the cabinet frame, the neon plate on top, a chase of bulbs all round
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, 0, w, h); rrect(ctx, r.x, r.y, r.w, r.h, 10);
+      try { const g = ctx.createLinearGradient(0, 0, w, h); g.addColorStop(0, '#5a1a6a'); g.addColorStop(0.5, '#2a0f4a'); g.addColorStop(1, '#6a1040'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#3a1450'; }
+      try { ctx.fill('evenodd'); } catch (e) { ctx.fill(); }
+      ctx.beginPath(); rrect(ctx, r.x - 4, r.y - 4, r.w + 8, r.h + 8, 12); S(ctx, INK, 6); ctx.stroke(); S(ctx, PAL.pink, 2); ctx.stroke();
+      ctx.beginPath(); rrect(ctx, w / 2 - 170, 10, 340, 52, 16); F(ctx, INK); ctx.fill(); S(ctx, PAL.pink, 3); ctx.stroke();
+      glow(ctx, w / 2, 36, 150, PAL.pink, calm ? 0.25 : 0.4);
+      txt(ctx, 'CLAWSPIRE', w / 2, 37, 32, '#ffe0f0', true, 'center', PAL.pink);
+      const step = Math.floor(t * 7), bulbs = [];
+      for (let x = 14; x <= w - 14; x += 29) { bulbs.push([x, 7 + 3]); bulbs.push([x, h - 13]); }
+      for (let y = 72; y <= h - 40; y += 29) { bulbs.push([10, y]); bulbs.push([w - 10, y]); }
+      bulbs.forEach(([x, y], i) => {
+        const on = calm ? i % 4 < 2 : (i + step) % 3 === 0;
+        ctx.beginPath(); circ(ctx, x, y, 4.5); F(ctx, on ? '#fff6c0' : '#4a2f5a'); ctx.fill();
+        if (on) glow(ctx, x, y, 12, PAL.gold, 0.7);
+      });
+      ctx.restore();
+    } else if (fr === 'polaroid') {
+      // the caption in marker on the paper, two strips of tape
+      ctx.save();
+      ctx.beginPath(); rrect(ctx, r.x, r.y, r.w, r.h, 2); S(ctx, 'rgba(0,0,0,0.25)', 2); ctx.stroke();
+      txt(ctx, st.caption || 'CLAWSPIRE', w / 2, h - 108, 30, '#2a1d3a', true, 'center');
+      if (st.sub) txt(ctx, st.sub, w / 2, h - 68, 16, '#6b5a7a', true, 'center');
+      for (const [x, rot] of [[w * 0.24, -0.2], [w * 0.76, 0.18]]) {
+        ctx.save(); ctx.translate(x, 22); ctx.rotate(rot);
+        F(ctx, 'rgba(255,240,180,0.55)'); ctx.fillRect(-46, -14, 92, 28);
+        S(ctx, 'rgba(160,130,60,0.3)', 1); ctx.strokeRect(-46, -14, 92, 28);
+        ctx.restore();
+      }
+      ctx.restore();
+    } else if (fr === 'stickers') {
+      // a candy stripe round the edge, then die-cut stickers slapped on the corners
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.rect(r.x, r.y, r.w, r.h); F(ctx, PAL.pink);
+      try { ctx.fill('evenodd'); } catch (e) { ctx.fill(); }
+      F(ctx, '#ffffff');
+      for (let i = -h; i < w + h; i += 28) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + 12, 0); ctx.lineTo(i + 12 - 14, 14); ctx.lineTo(i - 14, 14); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(i, h - 14); ctx.lineTo(i + 12, h - 14); ctx.lineTo(i - 2, h); ctx.lineTo(i - 14, h); ctx.closePath(); ctx.fill(); }
+      const sway = calm ? 0 : Math.sin(t * 2) * 0.04;
+      hisSticker(ctx, 'star', 46, 52, 30, -0.3 + sway, PAL.gold);
+      hisSticker(ctx, 'word', w - 96, 48, 26, 0.18, PAL.pink);
+      hisSticker(ctx, 'heart', w - 50, h * 0.42, 22, 0.35 - sway, '#ff5a8a');
+      hisSticker(ctx, 'claw', 44, h * 0.34, 26, -0.15, PAL.cyan);
+      hisSticker(ctx, 'coin', w - 56, h - 150, 24, 0.2, PAL.gold);
+      hisSticker(ctx, 'bolt', 40, h - 200, 26, -0.25 + sway, PAL.lime);
+      hisSticker(ctx, 'crown', w / 2 + 120, h - 46, 24, 0.12, PAL.gold);
+      ctx.restore();
+    }
+  }
+  /* RENDER.his.photo(ctx, src, st): the photo on a w x h stage. src is the
+     frozen scene (any canvas), st {w, h, filter, frame, t, noFlash, stamp:
+     {char, outfit, name} | null, caption, sub, scratch}. */
+  function hisPhoto(ctx, src, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const w = st.w || 540, h = st.h || 960, fr = HIS_FRAMES.indexOf(st.frame) >= 0 ? st.frame : 'none';
+      const s2 = Object.assign({}, st, { frame: fr, filter: HIS_FILTERS.indexOf(st.filter) >= 0 ? st.filter : 'none' });
+      s2.scratch = st.scratch || (st.scratch = {});
+      F(ctx, fr === 'polaroid' ? '#f4efe4' : INK); ctx.fillRect(0, 0, w, h);
+      if (fr === 'polaroid') { F(ctx, 'rgba(0,0,0,0.06)'); for (let y = 0; y < h; y += 6) ctx.fillRect(0, y, w, 1); }
+      const r = hisPhotoRect(fr, w, h);
+      ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+      F(ctx, INK); ctx.fillRect(r.x, r.y, r.w, r.h);
+      hisPhotoFilter(ctx, src, r, s2);
+      hisPhotoStamp(ctx, r, s2);
+      ctx.restore();
+      hisPhotoFrame(ctx, r, s2);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The camera's viewfinder around the photo (x, y, w, h) on a sw x sh
+     stage: phase 'back' dims the stage behind it, 'front' draws the corner
+     brackets and a blinking record dot (steady with reduced flashing). */
+  function hisViewfinder(ctx, phase, x, y, w, h, sw, sh, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0;
+      if (phase === 'back') {
+        F(ctx, '#07030d'); ctx.fillRect(0, 0, sw, sh);
+        S(ctx, 'rgba(90,63,143,0.18)', 1);
+        ctx.beginPath();
+        for (let gx = 12; gx < sw; gx += 24) { ctx.moveTo(gx, 0); ctx.lineTo(gx, sh); }
+        for (let gy = 12; gy < sh; gy += 24) { ctx.moveTo(0, gy); ctx.lineTo(sw, gy); }
+        ctx.stroke();
+      } else {
+        const L = 22, o = 7;
+        S(ctx, 'rgba(255,255,255,0.85)', 3);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (const [cx, cy, dx, dy] of [[x - o, y - o, 1, 1], [x + w + o, y - o, -1, 1], [x - o, y + h + o, 1, -1], [x + w + o, y + h + o, -1, -1]]) {
+          ctx.moveTo(cx, cy + dy * L); ctx.lineTo(cx, cy); ctx.lineTo(cx + dx * L, cy);
+        }
+        ctx.stroke();
+        const on = st.noFlash || Math.floor(t * 1.6) % 2 === 0;
+        ctx.beginPath(); circ(ctx, x + w - 10, y + 14, 5); F(ctx, on ? '#ff2e30' : 'rgba(255,46,48,0.3)'); ctx.fill();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const HIS_R = { STAMP: HIS_STAMP, FILTERS: HIS_FILTERS, FRAMES: HIS_FRAMES, stamp: hisStamp, chart: hisChart, bin: hisBin, map: hisMap, timeline: hisTimeline,
+    foe: hisFoe, hero: hisHero, photo: hisPhoto, photoRect: hisPhotoRect, sticker: hisSticker, viewfinder: hisViewfinder, fmt: hisFmt };
+  /* ============================================================ end HISTORY */
+
   return {
+    // HISTORY (round 8): run history cards and charts, the death recap, photo mode's filters and frames
+    his: HIS_R,
+    // STORY (round 8): Grabby Gary, the Card Shark, the alternate bosses, their junk, the rival tile, the claw-off's board and bubble, the reverse belt, the ice glaze, a friend's cameo
+    sto: STO_R,
     // SEASON (round 7): the seasonal overlays, costumes, the Pumpkin King, the door scene, the event cosmetics
     sea: SEA_R,
     // EVOLVE (round 7): evolved item art, the evolution ceremony, the pet synergy badge
@@ -10439,6 +11748,8 @@ const RENDER = (() => {
     vault: VAULT_R,
     // SECRET (round 6): the golden keys, the Back Room, The Machine, the door and the true ending
     sec: SEC_R,
+    // CR8 (round 8): the vacuum and twin claws, Mama Mech's portrait, outfits, turret and items
+    cr8: CR8_R,
     // POLISH (round 5): item identity (decals, silhouettes, rim light) and the relic medallions
     relicLive,
     // ACCESS (round 6): colour-blind palettes, label size, reduced flashing, high-contrast items

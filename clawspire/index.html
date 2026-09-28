@@ -1028,6 +1028,7 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 /* ================= PETS (round 5): the pet on the frame, the pet shop ================= */
 /* the player row leaves the frame's top-left corner to the pet */
 #playerRow.hasPet{padding-left:98px}
+#playerRow.cr8Tur{padding-right:64px}/* CR8: Mama Mech's turret stands on the frame's right corner */
 #banner.pet span{color:#ffe0f0;text-shadow:0 0 22px var(--pink),0 0 40px #ffc94d,0 4px 0 #3a0a22;animation:pop .5s ease both}
 .petPens{position:absolute;left:24px;right:24px;top:354px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;pointer-events:none}
 .petPen{display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;min-width:0}
@@ -1412,6 +1413,142 @@ html[class*="cb-"] .qaThreat.hurt b{color:var(--acc-dmg)}
 @media (prefers-reduced-motion:reduce){.card.evo,.evoTap{animation:none}}
 /* ================= /EVOLVE ================= */
 </style>
+<style id="sto-css">
+/* ================= STORY (round 8): story beats, Grabby Gary's screen and claw-off, Vendy's note ================= */
+.stoTags{display:flex;justify-content:center;gap:6px;margin-top:-4px}
+.stoTag{font-size:12px;font-weight:900;letter-spacing:.14em;padding:2px 8px;border-radius:8px;border:1.5px solid var(--gold);color:var(--gold);background:rgba(255,201,77,.08)}
+.stoTag.part{border-color:var(--cyan);color:var(--cyan2);background:rgba(46,230,214,.08)}
+.stoTag.back{border-color:#ff9ec7;color:#ffd1e6;background:rgba(255,46,136,.14);animation:stoBack 1.4s ease-in-out infinite}
+@keyframes stoBack{50%{box-shadow:0 0 14px rgba(255,46,136,.6)}}
+.evChip.stoMem{color:#ffd1e6;background:rgba(255,46,136,.12);border-color:#ff9ec7}
+/* Grabby Gary: the canvas paints him, the cabinet and the scoreboard under this frame */
+.screen.rivalScr{background:transparent;padding:0;pointer-events:none;overflow:hidden}
+#rivalBody{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:18px 16px 22px;gap:8px;pointer-events:none;--ac:#3ddc84}
+#rivalBody .btn{pointer-events:auto}
+#rivalBody .arcMsg{top:430px}
+.stoTop{text-align:center;padding-top:4px}
+.stoK{font-size:32px;font-weight:900;letter-spacing:.14em;color:#b8ffcf;text-shadow:0 0 16px rgba(61,220,132,.8),0 3px 0 #0a2a14}
+.stoSub{font-size:14px;font-weight:900;color:#e8dcff;margin-top:3px;text-shadow:0 2px 3px #000}
+.stoSub.gear{color:var(--gold)}
+.stoBot{display:flex;flex-direction:column;align-items:center;gap:9px;width:100%}
+.stoBot .btn{width:260px}
+.stoHow,.stoHint{font-size:14px;font-weight:700;color:#fff;text-align:center;max-width:460px;background:rgba(18,9,31,.85);padding:6px 12px;border-radius:12px;border:2px solid var(--line2)}
+.stoHint{font-weight:900;letter-spacing:.04em;border-color:#3ddc84}
+.btn.stoGo{font-size:20px;min-height:58px;border-color:#3ddc84;background:linear-gradient(180deg,#1f7a45,#0c3a20);box-shadow:0 4px 0 #062010,0 0 22px rgba(61,220,132,.45)}
+.stoCard{width:100%;max-width:420px;border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:3px;align-items:center;
+  background:linear-gradient(180deg,rgba(14,50,30,.95),rgba(18,9,31,.95));border:2px solid #3ddc84;box-shadow:0 0 22px rgba(61,220,132,.35)}
+.stoCard.win{border-color:var(--gold);box-shadow:0 0 26px rgba(255,201,77,.5);background:linear-gradient(180deg,rgba(70,50,8,.95),rgba(18,9,31,.95))}
+.stoCard .big{font-size:22px;font-weight:900;letter-spacing:.08em;color:#fff}
+.stoCard.win .big{color:var(--gold)}
+.stoCard .sc{font-size:16px;font-weight:900;color:#dff6ff}
+.stoCard .ln{font-size:15px;font-weight:900;color:#eaffd8}
+/* Vendy's note in the shop */
+.stoNote{border-radius:12px;padding:6px 12px;border:2px solid #ff9ec7;background:rgba(255,46,136,.1);box-shadow:0 0 14px rgba(255,46,136,.25)}
+.stoNote .k{font-size:13px;font-weight:900;letter-spacing:.12em;color:#ffd1e6}
+.stoNote .s{font-size:13px;color:#fff}
+.calm .stoTag.back{animation:none}
+@media (prefers-reduced-motion:reduce){.stoTag.back{animation:none}}
+/* ================= /STORY ================= */
+</style>
+<style id="his-css">
+/* ================= HISTORY (round 8): run history, the death recap, photo mode ================= */
+.his canvas{max-width:100%;height:auto;display:block}
+.hisHead{display:flex;align-items:center;gap:10px}
+.hisHead h1{flex:1;min-width:0;font-size:26px}
+.hisChart,.hisHero,.hisBin,.hisMap,.hisTl{margin:0 auto;border-radius:14px}
+.hisTabs{display:flex;gap:8px}
+.hisTabs .btn{flex:1}
+.hisTab.on{border-color:var(--cyan);color:var(--cyan2);box-shadow:0 4px 0 #062224,0 0 16px rgba(46,230,214,.35)}
+.hisFilt{display:flex;gap:6px;flex-wrap:wrap}
+.btn.hisChip{padding:4px 10px;gap:5px;font-size:12px;letter-spacing:.04em;box-shadow:none;background:#17102a;border-color:var(--line)}
+.btn.hisChip canvas{width:26px;height:26px;flex:0 0 auto}
+.btn.hisChip.on{border-color:var(--lime);color:var(--lime);background:#1d2a1a;box-shadow:0 0 12px rgba(166,255,94,.35)}
+.btn.hisChip.r-win.on{border-color:var(--gold);color:var(--gold);background:#2a2210}
+.btn.hisChip.r-loss.on{border-color:var(--blood);color:#ffb3aa;background:#2a1014}
+.btn.hisChip.r-endless.on{border-color:var(--cyan);color:var(--cyan2);background:#0f2628}
+.hisList{display:flex;flex-direction:column;gap:9px;padding-bottom:10px}
+.hisEmpty{color:var(--dim);font-size:14px;text-align:center;padding:26px 10px;border:2px dashed var(--line);border-radius:14px}
+.hisCard{position:relative;display:flex;align-items:center;gap:10px;padding:8px 10px;min-height:78px;border-radius:14px;cursor:pointer;
+  border:2px solid var(--line2);background:linear-gradient(180deg,#2c1d4a,#180f2c);box-shadow:0 4px 0 #120a22;transition:transform .08s}
+.hisCard:active{transform:translateY(3px);box-shadow:none}
+.hisCard.r-win{border-color:#8a6a1a;background:linear-gradient(180deg,#34264a,#1c1228)}
+.hisCard.r-endless{border-color:#1a7a74}
+.hisCard.r-loss{border-color:#6a2a3a}
+.hisCard.r-quit{opacity:.78;border-style:dashed}
+.hisCard .hisPort{width:58px;height:58px;flex:0 0 auto}
+.hisCm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.hisCn{display:flex;align-items:baseline;gap:8px}
+.hisCn b{font-size:15px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hisDate{font-size:12px;color:var(--dimmer);white-space:nowrap}
+.hisCs{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hisCh{font-size:12px;color:var(--pink2);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hisCard.r-win .hisCh{color:var(--gold)} .hisCard.r-endless .hisCh{color:var(--cyan2)} .hisCard.r-quit .hisCh{color:var(--dimmer)}
+.hisTags{display:flex;gap:4px;flex-wrap:wrap}
+.hisTags .tag{font-size:12px;padding:2px 7px}
+.hisCr{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto}
+.hisStamp{font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;padding:2px 8px;border:2px solid;border-radius:6px;transform:rotate(-7deg);
+  color:var(--blood);border-color:var(--blood);background:rgba(58,10,10,.5)}
+.hisStamp.r-win{color:var(--gold);border-color:var(--gold);background:rgba(77,54,8,.5)}
+.hisStamp.r-endless{color:var(--cyan2);border-color:var(--cyan);background:rgba(6,34,36,.5)}
+.hisStamp.r-quit{color:var(--dim);border-color:var(--dimmer);background:rgba(36,26,64,.5)}
+.hisScore{font-size:20px;font-weight:900;color:var(--gold);line-height:1}
+.hisRank{position:absolute;left:-6px;top:-8px;min-width:30px;height:24px;padding:0 6px;border-radius:12px;background:var(--gold);color:#2a1d04;
+  font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 0 #4d3608;z-index:1}
+.hisEnd{display:flex;align-items:center;gap:12px;padding:10px 12px;border-color:#6a2a3a}
+.hisEnd .hisEndFoe{width:96px;flex:0 0 auto}
+.hisEnd b{color:#fff;font-size:15px;line-height:1.3}
+.hisNames{display:flex;flex-wrap:wrap;gap:5px}
+.hisName{font-size:12px;font-weight:900;padding:3px 8px;border-radius:8px;background:#17102a;border:1px solid var(--line);color:#c8d0dc}
+.hisName.r-u{color:var(--cyan2);border-color:#1a6a64} .hisName.r-r{color:var(--gold);border-color:#7a5a1a} .hisName.r-l{color:var(--pink2);border-color:#7a1a4c}
+.hisRelics{display:flex;flex-wrap:wrap;gap:6px}
+.hisHofTag{align-self:center;padding:6px 16px;border-radius:12px;font-size:15px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#2a1d04;
+  background:linear-gradient(180deg,#ffe08a,#ffc94d);box-shadow:0 4px 0 #4d3608,0 0 22px rgba(255,201,77,.55);animation:hisHof .6s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes hisHof{0%{transform:scale(.3) rotate(-10deg);opacity:0}100%{transform:rotate(-2deg);opacity:1}}
+#titleMenu .hisTitleBtn[data-n]::after{content:attr(data-n);margin-left:2px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--line2);
+  color:var(--text);font-size:12px;line-height:20px;letter-spacing:0}
+/* the death recap: over the game over, a tap goes on */
+.hisRecap{position:absolute;inset:0;z-index:38;display:flex;align-items:center;justify-content:center;padding:16px;
+  background:radial-gradient(ellipse at 50% 40%,rgba(58,10,24,.9),rgba(10,4,18,.96));animation:hisIn .35s ease both;cursor:pointer}
+.hisRecap.out{opacity:0;transition:opacity .25s}
+@keyframes hisIn{0%{opacity:0}100%{opacity:1}}
+.hisRcCard{width:100%;max-width:500px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px;border-color:#8a2a3a;
+  animation:hisSlam .45s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes hisSlam{0%{transform:translateY(-40px) scale(.9);opacity:0}100%{transform:none;opacity:1}}
+.hisRcK{font-size:13px;font-weight:900;letter-spacing:.3em;text-transform:uppercase;color:var(--blood)}
+.hisRcFoe{width:240px;max-width:100%}
+.hisRcLine{font-size:20px;font-weight:900;color:#fff;text-align:center;line-height:1.25;text-shadow:0 0 14px rgba(255,90,74,.5)}
+.hisRcTl{width:460px;max-width:100%}
+.hisTip{display:flex;gap:8px;align-items:flex-start;width:100%;padding:8px 10px;border-radius:10px;background:rgba(0,0,0,.32);border:1px solid var(--line2);
+  font-size:14px;line-height:1.4;color:var(--text)}
+.hisTip .ic{font-size:18px;line-height:1.2}
+.hisRcTap{font-size:13px;font-weight:900;letter-spacing:.3em;text-transform:uppercase;color:var(--cyan2);animation:hisBlink 1.2s ease-in-out infinite}
+@keyframes hisBlink{50%{opacity:.35}}
+.noflash .hisRcTap,.calm .hisRcTap{animation:none}
+html[class*="txt-"] :is(#historyBody,.hisRcCard){zoom:var(--accK)}
+/* photo mode: only the canvas and the camera's controls stay up */
+#stage.hisPhotoOn > :not(#cv):not(#hisPhoto){visibility:hidden!important}
+#hisPhoto{position:absolute;inset:0;z-index:60;pointer-events:none;display:none}
+#hisPhoto.show{display:block}
+.phTop{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:8px;padding:8px 10px 18px;pointer-events:auto;
+  background:linear-gradient(180deg,rgba(18,9,31,.92),rgba(18,9,31,0))}
+.phTitle{font-size:15px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--pink2);white-space:nowrap}
+.phHint{flex:1;min-width:0;font-size:12px;color:var(--dim);line-height:1.3}
+.btn.phX{min-width:48px;font-size:18px}
+.phSheet{position:absolute;left:8px;right:8px;bottom:8px;display:flex;flex-direction:column;gap:8px;padding:10px;pointer-events:auto;
+  background:linear-gradient(180deg,rgba(44,29,74,.94),rgba(34,22,58,.96))}
+.phRow{display:flex;gap:6px;align-items:center}
+.phK{width:46px;flex:0 0 auto;font-size:12px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--dimmer)}
+.btn.phChip{flex:1;min-width:0;padding:6px 4px;font-size:12px;letter-spacing:.04em;box-shadow:none;background:#17102a;border-color:var(--line)}
+.btn.phChip.on{border-color:var(--lime);color:var(--lime);background:#1d2a1a;box-shadow:0 0 12px rgba(166,255,94,.35)}
+.phAct .btn.phChip{flex:0 0 auto;padding:6px 10px}
+.btn.phZ{min-width:48px;padding:6px 8px;font-size:18px;box-shadow:none}
+.btn.phSave{flex:1;min-width:0}
+#hisPhoto.bare .phTop,#hisPhoto.bare .phSheet{display:none}
+.phBare{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);padding:6px 14px;border-radius:14px;background:rgba(18,9,31,.7);
+  border:1px solid var(--line2);font-size:12px;font-weight:900;letter-spacing:.08em;color:var(--dim);white-space:nowrap}
+.btn.hisCamBtn{font-size:20px}
+/* ================= /HISTORY ================= */
+</style>
 </head>
 <body>
 <div id="wrap"><div id="stage">
@@ -1487,6 +1624,10 @@ html[class*="cb-"] .qaThreat.hurt b{color:var(--acc-dmg)}
   <div id="scr-compactor" class="screen cmpScr"><div id="cmpBody" class="cmpBody"></div></div>
   <!-- SEASON (round 7): a trick-or-treat door (the canvas paints the haunted house under this frame) -->
   <div id="scr-sea" class="screen seaScr"><div id="seaBody"></div></div>
+  <!-- STORY (round 8): Grabby Gary and the claw-off (the canvas paints him, the scoreboard and the cabinet under this frame) -->
+  <div id="scr-rival" class="screen rivalScr"><div id="rivalBody"></div></div>
+  <!-- HISTORY (round 8): run history (the death recap and photo mode build their own layers) -->
+  <div id="scr-history" class="screen hisScr"><div id="historyBody" class="col his"></div></div>
   <div id="setFan"></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>
