@@ -4263,7 +4263,7 @@ const RENDER = (() => {
     } catch (e) { /* */ }
     ctx.restore();
   }
-  const CHAR_COL = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e' };
+  const CHAR_COL = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e', bubbler: '#2ea8c8' };   // (ROS: Ms. Bubbles)
   function portrait(ctx, charId, x, y, size, t) {
     ctx.save();
     try {
@@ -4310,6 +4310,7 @@ const RENDER = (() => {
           ctx.beginPath(); ctx.moveTo(-5, 6); ctx.quadraticCurveTo(0, 10, 6, 5.5); S(ctx, INK, 1.5); ctx.stroke();
           F(ctx, PAL.gold); ctx.beginPath(); rrect(ctx, 1.2, 6.3, 2.4, 2.2, 0.6); ctx.fill();
         } else if (charId === 'engineer') cr8Portrait(ctx);   // CR8: Mama Mech
+        else if (charId === 'bubbler') rosPortrait(ctx);   // ROS: Ms. Bubbles
         else {
           tone(ctx, c => { c.moveTo(-15, 6); c.quadraticCurveTo(-16, -26, 0, -26); c.quadraticCurveTo(16, -26, 15, 6); c.closePath(); }, '#4a2a6a', 0, -8, 15, { dark: -0.35, spec: false });
           ctx.beginPath(); ctx.moveTo(-10, -4); ctx.quadraticCurveTo(0, 6, 10, -4); ctx.quadraticCurveTo(0, -18, -10, -4); ctx.closePath(); F(ctx, INK); ctx.fill();
@@ -4926,11 +4927,26 @@ const RENDER = (() => {
       p.t = 0; p.dur = o.dur || 0.6; p.delay = o.delay || 0; p.kind = K[o.kind] != null ? K[o.kind] : K.coin;
       p.col = o.col || PAL.gold; p.size = o.size || 6; p.cb = o.cb || null; p.px = x0; p.py = y0;
     };
-    // Trauma shake: amt 6 is a solid hit, 20+ is the ceiling.
-    api.shake = (amt) => { trauma = Math.min(1, trauma + (amt == null ? 6 : amt) / 20); };
+    /* Trauma shake: amt 6 is a solid hit, 20+ is the ceiling. MIX (round
+       10): a trauma budget. Every shake draws on MIX_TB.cap of budget that
+       refills at MIX_TB.refill a second; a shake the budget cannot cover
+       keeps only MIX_TB.floor of the rest, and trauma never passes
+       MIX_TB.max, so a chain of hits (a Gatling volley, ten finale blasts, a
+       combo on a crit) reads as one big shake, never a long nauseous wobble. */
+    const MIX_TB = { cap: 1, refill: 0.8, floor: 0.25, max: 0.85, kick: 12 };
+    let mixBudget = MIX_TB.cap;
+    api.shake = (amt) => {
+      const want = Math.max(0, (amt == null ? 6 : +amt || 0) / 20);
+      if (!(want > 0)) return;
+      const add = want * (MIX_TB.floor + (1 - MIX_TB.floor) * Math.min(1, mixBudget / want));
+      mixBudget = Math.max(0, mixBudget - add);
+      trauma = Math.min(MIX_TB.max, trauma + add);
+    };
     api.trauma = () => trauma;
-    // A one-off directional nudge (the claw thunking the floor).
-    api.kick = (dx, dy) => { if (api.reduced) return; kx += dx || 0; ky += dy || 0; };
+    api.budget = () => mixBudget;
+    api.TB = MIX_TB;
+    // A one-off directional nudge (the claw thunking the floor); kicks add up to MIX_TB.kick px at most.
+    api.kick = (dx, dy) => { if (api.reduced) return; kx = U.clamp(kx + (dx || 0), -MIX_TB.kick, MIX_TB.kick); ky = U.clamp(ky + (dy || 0), -MIX_TB.kick, MIX_TB.kick); };
     api.flash = (col, a) => { a = a == null ? 0.5 : a; if (api.reduced) a = Math.min(a, 0.12); if (ACC.noFlash) a = Math.min(a, ACC_FLASH); flashCol = col || '#fff'; flashA = Math.max(flashA, a); };   // ACCESS: reduced flashing caps it too
     // A pulse of colour on the screen edges (a hit on the player).
     api.vignette = (col, a) => { vigCol = col || '#ff2e30'; a = a == null ? 0.6 : a; if (ACC.noFlash) a = Math.min(a, ACC_VIG); vigA = Math.max(vigA, a); };
@@ -4976,6 +4992,7 @@ const RENDER = (() => {
         i++;
       }
       if (trauma > 0) { trauma = Math.max(0, trauma - dt * 1.4); shakeT += dt; }
+      if (mixBudget < MIX_TB.cap) mixBudget = Math.min(MIX_TB.cap, mixBudget + dt * MIX_TB.refill);   // MIX: the trauma budget refills
       const kd = Math.exp(-dt * 14); kx *= kd; ky *= kd;
       if (Math.abs(kx) < 0.01) kx = 0; if (Math.abs(ky) < 0.01) ky = 0;
       if (flashA > 0) flashA = Math.max(0, flashA - dt * 2.2);
@@ -5209,6 +5226,7 @@ const RENDER = (() => {
     api.clear = () => {
       for (let i = 0; i < fn; i++) flyers[i].cb = null;
       pn = tn = rn = gn = sn = fn = 0; trauma = 0; kx = ky = 0; flashA = 0; vigA = 0; vigHold = 0;
+      mixBudget = MIX_TB.cap;
     };
     return api;
   })();
@@ -7224,7 +7242,7 @@ const RENDER = (() => {
      state the game hands over (st.t in seconds); every function saves,
      restores and never throws. Deterministic: no random calls, particles are
      placed from t and their index. */
-  const FEEL_CHAR = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e' };
+  const FEEL_CHAR = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e', bubbler: '#2ea8c8' };   // (ROS)
   const FEEL_TIERS = ['c', 'u', 'r', 'l'];
   const FEEL_BADGES = ['armored', 'hasty', 'vampiric'];
   const FEEL_TOWER = { type: 'tower', revealed: true, terrain: 'land', ground: 'hill', biome: 'cellar', elev: 0.7 };
@@ -7893,7 +7911,8 @@ const RENDER = (() => {
   // ---- crawler outfits, drawn over the portrait (portrait-local, r = the disc radius)
   const VHEAD = { knight: { top: -0.6, eye: 0.0, w: 0.56, ex: 0.21 }, alchemist: { top: -0.74, eye: -0.04, w: 0.62, ex: 0.21 },
     rogue: { top: -0.82, eye: 0.0, w: 0.6, ex: 0.18 }, gambler: { top: -0.62, eye: 0.2, w: 0.56, ex: 0.2 },
-    engineer: { top: -0.66, eye: 0.14, w: 0.58, ex: 0.19 } };   // (CR8: Mama Mech)
+    engineer: { top: -0.66, eye: 0.14, w: 0.58, ex: 0.19 },   // (CR8: Mama Mech)
+    bubbler: { top: -0.7, eye: -0.08, w: 0.6, ex: 0.21 } };   // (ROS: Ms. Bubbles)
   function vOutfit(ctx, charId, r, t) {
     const id = VFORCE.on ? VFORCE.outfit : (VEQ.outfit || {})[charId];
     const d = id ? vDef(id) : null;
@@ -7915,7 +7934,8 @@ const RENDER = (() => {
         ctx.restore();
       } else if (L.kind === 'shades') {
         const y = Hd.eye * r, ex = Hd.ex * r, lr = r * 0.16;
-        if (L.style === 'star') {
+        if (L.style === 'snorkel') rosSnorkel(ctx, L, y, ex, lr, r, t);   // ROS: Ms. Bubbles' snorkel mask
+        else if (L.style === 'star') {
           for (const sd of [-1, 1]) { tone(ctx, q => star(q, sd * ex, y, lr * 1.35, 5, 0.5), L.c1, sd * ex, y, lr, { ol: 1.6, spec: false }); }
           F(ctx, rgba(L.c2, 0.8)); ctx.beginPath(); circ(ctx, -ex - lr * 0.3, y - lr * 0.4, lr * 0.22); circ(ctx, ex - lr * 0.3, y - lr * 0.4, lr * 0.22); ctx.fill();
         } else {
@@ -7957,6 +7977,7 @@ const RENDER = (() => {
           tone(ctx, q => { q.moveTo(-hw * 1.5, top - r * 0.02); q.quadraticCurveTo(-hw * 1.2, top + r * 0.22, 0, top + r * 0.14); q.quadraticCurveTo(hw * 1.2, top + r * 0.22, hw * 1.5, top - r * 0.02); q.quadraticCurveTo(0, top + r * 0.3, -hw * 1.5, top - r * 0.02); q.closePath(); }, shade(L.c1, -0.1), 0, top + r * 0.1, hw, NOSPEC);
         } else if (L.style === 'witch') seaWitchHat(ctx, L, top, hw, r, t);   // SEASON: the Claw-o-ween witch hats
         else if (L.style === 'welder' || L.style === 'hardhat') cr8Hat(ctx, L, top, hw, r, t);   // CR8: Mama Mech's hats
+        else if (L.style === 'showercap') rosHat(ctx, L, top, hw, r, t);   // ROS: Ms. Bubbles' shower cap
       }
     } catch (e) { /* never throws */ }
     ctx.restore();
@@ -11019,6 +11040,397 @@ const RENDER = (() => {
   const CR8_R = { vacuum: cr8Vacuum, twin: cr8Twin, portrait: cr8Portrait, hat: cr8Hat, turret: cr8Turret, bolt: cr8Bolt, SIL: CR8_SIL, TUR_COL };
   /* ============================================================ end CR8 */
 
+  /* ============================================================ ROS (round 10)
+     Ms. Bubbles, the mutator pack and three pets (DESIGN.md "Ms. Bubbles, the
+     mutator pack and three pets (round 10)"): her portrait and two outfits,
+     her items' drawings and two evolutions, the soap bubbles in the cabinet,
+     the Rising Water, Sticky Fingers' goo, the Mirror Machine and Earthquake
+     signs, the bubble gauge on the frame, and the Penguin, the Mole Rat and
+     the Robot Vacuum in every pose. Pure drawing, never throws. */
+  const ROS_BUB = ['#8dfff5', '#ff9ad0', '#ffe066', '#b08cff'];
+  // Ms. Bubbles (portrait-local, the 48 px face space): a cloud of curls with bubbles in it, cat-eye glasses, a big smile.
+  function rosPortrait(ctx) {
+    // a smock collar with a duck pin
+    tone(ctx, c => { c.moveTo(-14, 9); c.lineTo(0, 16); c.lineTo(14, 9); c.lineTo(14, 13); c.lineTo(0, 20); c.lineTo(-14, 13); c.closePath(); }, '#ffffff', 0, 13, 10, { ol: 1.4, spec: false });
+    tone(ctx, c => circ(c, 8, 15, 2.4), '#ffd23f', 8, 15, 2.4, { ol: 1, spec: false });
+    // the curls: a lavender cloud, bubbles caught in it
+    tone(ctx, c => { for (const [dx, dy, r] of [[-12, -10, 6.5], [-7, -17, 6.5], [0, -20, 7], [7, -17, 6.5], [12, -10, 6.5], [-13, -2, 5], [13, -2, 5]]) circ(c, dx, dy, r); }, '#c9a6ff', 0, -12, 14, { dark: -0.25, spec: false });
+    tone(ctx, c => circ(c, 0, -4, 11.5), '#f5c9a8', 0, -4, 11.5, { dark: -0.22 });
+    tone(ctx, c => { circ(c, -6, -13, 4.5); circ(c, 0, -15, 4.5); circ(c, 6, -13, 4.5); }, '#c9a6ff', 0, -14, 7, { dark: -0.15, spec: false });
+    for (const [dx, dy, r] of [[-10, -19, 2.4], [9, -21, 1.8], [14, -15, 1.5]]) {
+      ctx.beginPath(); circ(ctx, dx, dy, r); F(ctx, rgba('#dffbff', 0.55)); ctx.fill(); S(ctx, rgba('#ffffff', 0.9), 0.8); ctx.stroke();
+      F(ctx, '#ffffff'); ctx.beginPath(); circ(ctx, dx - r * 0.35, dy - r * 0.35, r * 0.28); ctx.fill();
+    }
+    // cat-eye glasses in pink
+    for (const sd of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(sd * 1.5, -4); ctx.quadraticCurveTo(sd * 5, -8.5, sd * 10, -7); ctx.quadraticCurveTo(sd * 9, -1, sd * 5, -1); ctx.quadraticCurveTo(sd * 1.5, -1, sd * 1.5, -4); ctx.closePath();
+      F(ctx, rgba('#ffffff', 0.55)); ctx.fill(); S(ctx, '#ff4fa3', 1.6); ctx.stroke();
+      F(ctx, INK); ctx.beginPath(); ell(ctx, sd * 5.3, -4.3, 1.3, 1.7, 0); ctx.fill();
+    }
+    // rosy cheeks and a wide smile with a bubble blown from it
+    F(ctx, rgba('#ff6b8b', 0.45)); ctx.beginPath(); circ(ctx, -7.5, 1.5, 2.2); circ(ctx, 7.5, 1.5, 2.2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-5, 3); ctx.quadraticCurveTo(0, 8.5, 5, 3); ctx.closePath(); F(ctx, '#ff6b8b'); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
+    ctx.beginPath(); circ(ctx, 9, 5, 3.2); F(ctx, rgba('#bff4ff', 0.45)); ctx.fill(); S(ctx, rgba('#ffffff', 0.9), 0.9); ctx.stroke();
+  }
+  // Her hats: a frilly shower cap with ducks (outfit shades: the snorkel mask is rosSnorkel).
+  function rosHat(ctx, L, top, hw, r, t) {
+    if (L.style !== 'showercap') return;
+    tone(ctx, q => { q.moveTo(-hw * 1.2, top + r * 0.14); q.quadraticCurveTo(-hw * 1.3, top - r * 0.62, 0, top - r * 0.66); q.quadraticCurveTo(hw * 1.3, top - r * 0.62, hw * 1.2, top + r * 0.14); q.closePath(); }, L.c1, 0, top - r * 0.25, r * 0.5, { dark: -0.25 });
+    // the frill
+    F(ctx, shade(L.c1, 0.3)); ctx.beginPath();
+    for (let i = 0; i <= 8; i++) circ(ctx, -hw * 1.2 + i * hw * 0.3, top + r * 0.12, r * 0.07);
+    ctx.fill();
+    // three little ducks on it
+    for (const [dx, dy] of [[-0.5, -0.32], [0.15, -0.46], [0.65, -0.22]]) {
+      const x = dx * hw, y = top + dy * r;
+      F(ctx, L.c2); ctx.beginPath(); ell(ctx, x, y, r * 0.07, r * 0.05, 0); circ(ctx, x + r * 0.05, y - r * 0.05, r * 0.035); ctx.fill();
+      F(ctx, '#ff8a2e'); ctx.beginPath(); poly(ctx, [x + r * 0.08, y - r * 0.06, x + r * 0.12, y - r * 0.045, x + r * 0.08, y - r * 0.03]); ctx.fill();
+    }
+    const u = (t * 0.6) % 1;
+    ctx.beginPath(); circ(ctx, hw * 0.9, top - r * 0.6 - u * r * 0.5, r * 0.06); S(ctx, rgba('#ffffff', 0.8 * (1 - u)), 1); ctx.stroke();
+  }
+  // The snorkel mask: a big oval goggle, a strap and a snorkel tube (outfit kind 'shades', style 'snorkel').
+  function rosSnorkel(ctx, L, y, ex, lr, r, t) {
+    line(ctx, -r * 0.9, y - lr * 0.2, r * 0.9, y - lr * 0.2, INK, Math.max(2, r * 0.09));
+    line(ctx, -r * 0.9, y - lr * 0.2, r * 0.9, y - lr * 0.2, L.c1, Math.max(1.2, r * 0.05));
+    ctx.beginPath(); rrect(ctx, -ex - lr * 1.3, y - lr * 1.05, (ex + lr * 1.3) * 2, lr * 2.1, lr * 0.9);
+    F(ctx, rgba('#bff4ff', 0.45)); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    S(ctx, L.c1, 1.4); ctx.stroke();
+    S(ctx, rgba('#ffffff', 0.8), 1); ctx.beginPath(); ctx.moveTo(-ex - lr * 0.6, y - lr * 0.5); ctx.lineTo(-ex + lr * 0.2, y - lr * 0.8); ctx.stroke();
+    // the snorkel up the side, a bubble rising off it
+    ctx.beginPath(); ctx.moveTo(ex + lr * 1.4, y + lr * 0.4); ctx.lineTo(ex + lr * 1.9, y + lr * 0.2); ctx.lineTo(ex + lr * 2.1, y - r * 0.75);
+    S(ctx, INK, Math.max(3, r * 0.14)); ctx.stroke(); S(ctx, L.c2, Math.max(1.8, r * 0.08)); ctx.stroke();
+    const u = (t * 0.8) % 1;
+    ctx.beginPath(); circ(ctx, ex + lr * 2.1, y - r * 0.8 - u * r * 0.4, r * 0.05 + u * r * 0.03); S(ctx, rgba('#ffffff', 0.9 * (1 - u)), 1); ctx.stroke();
+  }
+
+  // ---- her items' own drawings (non-enumerable silhouettes, like the CR8 ones) and her two evolutions
+  const ROS_SIL = {};
+  function rosDuck(ctx, r, c1, c2, crown) {
+    tone(ctx, c => ell(c, -r * 0.05, r * 0.25, r * 0.9, r * 0.62, 0), c1, 0, r * 0.2, r * 0.8);
+    tone(ctx, c => circ(c, r * 0.35, -r * 0.35, r * 0.5), c1, r * 0.35, -r * 0.35, r * 0.5);
+    tone(ctx, c => { c.moveTo(r * 0.72, -r * 0.4); c.quadraticCurveTo(r * 1.1, -r * 0.35, r * 0.98, -r * 0.15); c.quadraticCurveTo(r * 0.8, -r * 0.12, r * 0.7, -r * 0.2); c.closePath(); }, c2, r * 0.9, -r * 0.28, r * 0.2, NOSPEC);
+    F(ctx, INK); ctx.beginPath(); circ(ctx, r * 0.45, -r * 0.48, r * 0.09); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-r * 0.55, r * 0.1); ctx.quadraticCurveTo(-r * 0.1, r * 0.45, r * 0.25, r * 0.12); S(ctx, rgba(INK, 0.45), Math.max(1, r * 0.08)); ctx.stroke();
+    if (crown) { tone(ctx, c => poly(c, [r * 0.1, -r * 0.78, r * 0.18, -r * 1.05, r * 0.3, -r * 0.88, r * 0.42, -r * 1.1, r * 0.54, -r * 0.88, r * 0.66, -r * 1.05, r * 0.7, -r * 0.78]), '#ffc94d', r * 0.4, -r * 0.9, r * 0.2, { ol: 1.2, spec: false }); }
+  }
+  ROS_SIL.rubber_duck = (ctx, w, h, c1, c2) => rosDuck(ctx, Math.min(w, h) / 2, c1, c2, false);
+  ROS_SIL.golden_duck = (ctx, w, h, c1, c2) => { glow(ctx, 0, 0, w * 0.6, c1, 0.35); rosDuck(ctx, Math.min(w, h) / 2, c1, '#ff8a2e', true); };
+  // A soap bar: a rounded pink bar with an embossed swirl and two little bubbles.
+  ROS_SIL.soap_bar = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh, w, h, hh * 0.8), c1, 0, 0, hw * 0.6, { dark: -0.2 });
+    ctx.beginPath(); rrect(ctx, -hw * 0.7, -hh * 0.55, hw * 1.4, hh * 1.1, hh * 0.5); S(ctx, shade(c1, -0.2), 1.2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, hh * 0.35, 0, Math.PI * 1.5); S(ctx, shade(c1, -0.25), 1.2); ctx.stroke();
+    for (const [dx, dy, rr] of [[hw * 0.85, -hh * 0.9, 2.6], [hw * 0.55, -hh * 1.25, 1.8]]) { ctx.beginPath(); circ(ctx, dx, dy, rr); F(ctx, rgba(c2, 0.6)); ctx.fill(); S(ctx, rgba(INK, 0.5), 0.8); ctx.stroke(); }
+  };
+  // A bubble pipe: a wooden bowl, a curved stem, a bubble off the bowl.
+  ROS_SIL.bubble_pipe = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); ctx.moveTo(-hw, hh * 0.1); ctx.quadraticCurveTo(0, hh * 0.6, hw * 0.35, hh * 0.1); S(ctx, INK, 5); ctx.stroke(); S(ctx, shade(c1, 0.15), 3); ctx.stroke();
+    tone(ctx, c => rrect(c, hw * 0.25, -hh, hw * 0.55, h * 0.95, hh * 0.35), c1, hw * 0.5, 0, hh, { dark: -0.3 });
+    ctx.beginPath(); ell(ctx, hw * 0.52, -hh * 0.85, hw * 0.25, hh * 0.22, 0); F(ctx, '#3a2010'); ctx.fill();
+    ctx.beginPath(); circ(ctx, hw * 0.85, -hh * 0.4, hh * 0.55); F(ctx, rgba(c2, 0.45)); ctx.fill(); S(ctx, rgba('#ffffff', 0.9), 1); ctx.stroke();
+  };
+  // A sponge: yellow with a green scrub top and holes.
+  ROS_SIL.sponge = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh * 0.4, w, hh * 1.4, 3), c1, 0, hh * 0.3, hw * 0.6, { dark: -0.25 });
+    tone(ctx, c => rrect(c, -hw, -hh, w, hh * 0.65, 2.5), c2, 0, -hh * 0.7, hw * 0.6, { dark: -0.25, spec: false });
+    F(ctx, shade(c1, -0.3)); ctx.beginPath();
+    for (const [dx, dy, rr] of [[-0.6, 0.1, 1.6], [-0.1, 0.5, 1.3], [0.4, 0.05, 1.8], [0.7, 0.6, 1.2], [-0.45, 0.7, 1.1]]) circ(ctx, dx * hw, dy * hh, rr);
+    ctx.fill();
+  };
+  // A scrub brush: a wooden back and a row of bristles.
+  ROS_SIL.scrub_brush = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    ctx.beginPath(); for (let i = 0; i < 9; i++) { const x = -hw * 0.85 + i * hw * 0.21; ctx.moveTo(x, hh * 0.05); ctx.lineTo(x + 0.5, hh); } S(ctx, INK, 2.6); ctx.stroke(); S(ctx, c2, 1.4); ctx.stroke();
+    tone(ctx, c => { c.moveTo(-hw, hh * 0.1); c.quadraticCurveTo(-hw, -hh, -hw * 0.4, -hh); c.lineTo(hw * 0.6, -hh); c.quadraticCurveTo(hw, -hh, hw, hh * 0.1); c.closePath(); }, c1, 0, -hh * 0.4, hw * 0.5, { dark: -0.3 });
+    ctx.beginPath(); ctx.moveTo(-hw * 0.5, -hh * 0.45); ctx.lineTo(hw * 0.5, -hh * 0.45); S(ctx, shade(c1, -0.35), 1); ctx.stroke();
+  };
+  // A bath bomb: a fizzy pink sphere with specks and a fizz of bubbles.
+  ROS_SIL.bath_bomb = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2;
+    tone(ctx, c => circ(c, 0, 0, r * 0.92), c1, 0, 0, r * 0.9, { dark: -0.25 });
+    ctx.beginPath(); ctx.moveTo(-r * 0.9, 0); ctx.quadraticCurveTo(0, r * 0.25, r * 0.9, 0); S(ctx, shade(c1, -0.25), 1.2); ctx.stroke();
+    F(ctx, c2); ctx.beginPath(); for (const [dx, dy] of [[-0.4, -0.4], [0.2, -0.55], [0.45, -0.1], [-0.2, 0.35], [0.3, 0.5], [-0.6, 0.15]]) circ(ctx, dx * r, dy * r, r * 0.08); ctx.fill();
+    for (const [dx, dy, rr] of [[0.7, -0.85, 0.16], [0.95, -1.15, 0.1]]) { ctx.beginPath(); circ(ctx, dx * r, dy * r, rr * r); S(ctx, rgba('#ffffff', 0.9), 1); ctx.stroke(); }
+  };
+  // A foam cannon: a cyan toy blaster, a tank on top, foam at the nozzle.
+  ROS_SIL.foam_cannon = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => poly(c, [-hw * 0.5, 0, -hw * 0.15, 0, -hw * 0.3, hh, -hw * 0.75, hh]), shade(c1, -0.2), -hw * 0.45, hh * 0.5, hh * 0.5, { dark: -0.3, spec: false });
+    tone(ctx, c => rrect(c, -hw, -hh * 0.3, w * 0.8, hh * 0.9, hh * 0.3), c1, -hw * 0.2, 0, hh, { dark: -0.3 });
+    tone(ctx, c => circ(c, -hw * 0.25, -hh * 0.55, hh * 0.42), '#ff9ad0', -hw * 0.25, -hh * 0.55, hh * 0.42, { ol: 1.3 });
+    tone(ctx, c => { circ(c, hw * 0.72, 0, hh * 0.38); circ(c, hw * 0.88, -hh * 0.3, hh * 0.3); circ(c, hw * 0.9, hh * 0.28, hh * 0.28); }, c2, hw * 0.8, 0, hh * 0.4, NOSPEC);
+  };
+  // A loofah: a beige mesh oval on a string.
+  ROS_SIL.loofah = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => ell(c, 0, 0, hw * 0.95, hh * 0.92, 0), c1, 0, 0, hw * 0.6, { dark: -0.25 });
+    ctx.save(); ctx.beginPath(); ell(ctx, 0, 0, hw * 0.9, hh * 0.86, 0); ctx.clip();
+    S(ctx, rgba(c2, 0.7), 1); ctx.beginPath();
+    for (let i = -6; i <= 6; i++) { ctx.moveTo(i * 5, -hh); ctx.lineTo(i * 5 + hh * 1.2, hh); ctx.moveTo(i * 5, -hh); ctx.lineTo(i * 5 - hh * 1.2, hh); }
+    ctx.stroke(); ctx.restore();
+    ctx.beginPath(); ctx.moveTo(hw * 0.8, -hh * 0.5); ctx.quadraticCurveTo(hw * 1.1, -hh * 1.1, hw * 0.6, -hh * 1.05); S(ctx, '#ff4fa3', 1.3); ctx.stroke();
+  };
+  // Bubble bath: a tall bottle, foam spilling over the neck.
+  ROS_SIL.bubble_bath = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => { c.moveTo(-hw * 0.9, hh); c.lineTo(-hw * 0.9, -hh * 0.2); c.quadraticCurveTo(-hw * 0.9, -hh * 0.5, -hw * 0.35, -hh * 0.55); c.lineTo(-hw * 0.35, -hh * 0.75); c.lineTo(hw * 0.35, -hh * 0.75); c.lineTo(hw * 0.35, -hh * 0.55); c.quadraticCurveTo(hw * 0.9, -hh * 0.5, hw * 0.9, -hh * 0.2); c.lineTo(hw * 0.9, hh); c.closePath(); }, c1, 0, hh * 0.2, hw * 0.7, { dark: -0.25 });
+    tone(ctx, c => rrect(c, -hw * 0.7, -hh * 0.05, hw * 1.4, hh * 0.55, 2), c2, 0, hh * 0.2, hw * 0.5, NOSPEC);
+    tone(ctx, c => { circ(c, -hw * 0.3, -hh * 0.82, hw * 0.35); circ(c, hw * 0.2, -hh * 0.9, hw * 0.4); circ(c, hw * 0.55, -hh * 0.72, hw * 0.28); }, '#ffffff', 0, -hh * 0.85, hw * 0.4, NOSPEC);
+  };
+  for (const k in ROS_SIL) Object.defineProperty(POL_SIL, k, { value: ROS_SIL[k], enumerable: false, configurable: true, writable: true });
+  Object.assign(POL_ORIENT, { soap_bar: 'h', bubble_pipe: 'h', sponge: 'h', scrub_brush: 'h', foam_cannon: 'h', loofah: 'h', bubble_bath: 'v' });
+  // A duck in a captain's hat saluting from a bubble (Captain Quack, the Rubber Duck + Foam Machine).
+  EVO_ART.captain_quack = (ctx, w, h, c1, c2) => {
+    const r = Math.min(w, h) / 2;
+    rosDuck(ctx, r * 0.95, c1, '#ff8a2e', false);
+    tone(ctx, c => { c.moveTo(r * 0.02, -r * 0.72); c.quadraticCurveTo(r * 0.35, -r * 1.15, r * 0.75, -r * 0.75); c.closePath(); }, c2, r * 0.38, -r * 0.85, r * 0.3, { ol: 1.2, spec: false });
+    ctx.beginPath(); rrect(ctx, -r * 0.02, -r * 0.8, r * 0.85, r * 0.12, r * 0.05); F(ctx, '#ffffff'); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+    F(ctx, PAL.gold); ctx.beginPath(); star(ctx, r * 0.38, -r * 0.93, r * 0.1, 5, 0.45); ctx.fill();
+    evoChevron(ctx, -r * 0.75, -r - 2.5, 4);
+  };
+  // A soap bar sealed in a shining bubble (Bubble Shield, the Soap Bar + Soap Dish).
+  EVO_ART.bubble_shield = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw * 0.7, -hh * 0.45, hw * 1.4, hh * 0.9, hh * 0.35), c2, 0, 0, hw * 0.4, { dark: -0.2 });
+    ctx.beginPath(); ell(ctx, 0, 0, hw * 0.98, hh * 0.98, 0); F(ctx, rgba(c1, 0.35)); ctx.fill(); S(ctx, rgba('#ffffff', 0.9), 1.4); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, Math.min(hw, hh) * 0.8, Math.PI * 1.1, Math.PI * 1.45); S(ctx, '#ffffff', 1.6); ctx.stroke();
+    evoChevron(ctx, -hw * 0.7, -hh - 3, 4);
+  };
+
+  /* A soap bubble around its prize. st: {t, k (formed 0..1), held, seed, pop 0..1 (bursting), n (prizes)}. */
+  function rosBubble(ctx, x, y, r, st) {
+    ctx.save();
+    try {
+      st = st || NOPET;
+      const t = st.t || 0, k = st.k == null ? 1 : st.k, pop = st.pop || 0, seed = st.seed || 0;
+      if (pop > 0) {
+        // bursting: a thin ring flying out and fading, droplets
+        const rr = r * (1 + pop * 0.8);
+        ctx.globalAlpha = Math.max(0, 1 - pop);
+        ctx.beginPath(); circ(ctx, x, y, rr); S(ctx, '#dffbff', 2 * (1 - pop) + 0.5); ctx.stroke();
+        F(ctx, '#bff4ff'); ctx.beginPath();
+        for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + seed; circ(ctx, x + Math.cos(a) * rr * 1.1, y + Math.sin(a) * rr * 1.1, 1.8); }
+        ctx.fill();
+      } else rosBubbleBody(ctx, x, y, r, st);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  function rosBubbleBody(ctx, x, y, r, st) {
+    {
+      const t = st.t || 0, k = st.k == null ? 1 : st.k, seed = st.seed || 0;
+      const grow = k < 1 ? U.ease.outCubic(k) * (1 + Math.sin(k * Math.PI) * 0.12) : 1;
+      const wob = Math.sin(t * 4 + seed) * 0.035;
+      const rx = r * grow * (1 + wob + (st.held ? 0.05 : 0)), ry = r * grow * (1 - wob - (st.held ? 0.05 : 0));
+      if (rx < 1) return;
+      const g = ctx.createRadialGradient(x - rx * 0.3, y - ry * 0.35, rx * 0.1, x, y, rx);
+      g.addColorStop(0, 'rgba(255,255,255,0.02)');
+      g.addColorStop(0.7, 'rgba(191,244,255,0.10)');
+      g.addColorStop(0.92, 'rgba(191,244,255,0.32)');
+      g.addColorStop(1, 'rgba(255,255,255,0.55)');
+      ctx.fillStyle = FLAT || g;
+      ctx.beginPath(); ell(ctx, x, y, rx, ry, 0); ctx.fill();
+      // the rainbow sheen sliding round the film
+      const a0 = t * 0.8 + seed;
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath(); ctx.ellipse(x, y, rx * 0.93, ry * 0.93, 0, a0 + i * 1.5, a0 + i * 1.5 + 0.9);
+        S(ctx, rgba(ROS_BUB[i], 0.55), 2); ctx.stroke();
+      }
+      ctx.beginPath(); ell(ctx, x, y, rx, ry, 0); S(ctx, rgba('#ffffff', st.held ? 0.95 : 0.7), st.held ? 2 : 1.4); ctx.stroke();
+      // the window highlight
+      ctx.beginPath(); ctx.ellipse(x - rx * 0.38, y - ry * 0.42, rx * 0.26, ry * 0.13, -0.6, 0, TAU); F(ctx, 'rgba(255,255,255,0.75)'); ctx.fill();
+      ctx.beginPath(); circ(ctx, x + rx * 0.42, y + ry * 0.4, Math.max(1, rx * 0.06)); F(ctx, 'rgba(255,255,255,0.6)'); ctx.fill();
+      if (st.held) glow(ctx, x, y, rx * 1.3, '#8dfff5', 0.25);
+      // still forming: a shimmer of soap closing round the prize
+      if (k < 1) { ctx.beginPath(); ctx.arc(x, y, rx * 1.12, -Math.PI / 2, -Math.PI / 2 + TAU * k); S(ctx, rgba('#ffffff', 0.8 * (1 - k)), 2); ctx.stroke(); }
+    }
+  }
+  // Rising Water: a translucent blue body from y down to the floor, a rolling surface, bubbles rising.
+  function rosWater(ctx, x0, x1, y, yb, t) {
+    ctx.save();
+    try {
+      if (yb - y < 1) return;
+      const g = ctx.createLinearGradient(0, y, 0, yb);
+      g.addColorStop(0, 'rgba(74,168,255,0.26)'); g.addColorStop(1, 'rgba(30,70,160,0.46)');
+      ctx.fillStyle = FLAT || g;
+      ctx.beginPath(); ctx.moveTo(x0, yb);
+      for (let x = x0; x <= x1; x += 12) ctx.lineTo(x, y + Math.sin(t * 2.2 + x * 0.035) * 2.5);
+      ctx.lineTo(x1, y + Math.sin(t * 2.2 + x1 * 0.035) * 2.5); ctx.lineTo(x1, yb); ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      for (let x = x0; x <= x1; x += 12) { const yy = y + Math.sin(t * 2.2 + x * 0.035) * 2.5; if (x === x0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy); }
+      S(ctx, 'rgba(223,251,255,0.85)', 2); ctx.stroke();
+      F(ctx, 'rgba(223,251,255,0.55)'); ctx.beginPath();
+      for (let i = 0; i < 9; i++) {
+        const u = (t * 0.35 + i * 0.137) % 1, bx = x0 + ((i * 97.3) % (x1 - x0)), by = yb - u * (yb - y);
+        circ(ctx, bx + Math.sin(t * 3 + i) * 3, by, 1.5 + (i % 3));
+      }
+      ctx.fill();
+      txt(ctx, 'WATER', x0 + 6, y + 10, 10, 'rgba(223,251,255,0.8)', true, 'left');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Sticky Fingers: a strand of goo from the claw to its catch (stay: it will not let go).
+  function rosGoo(ctx, x0, y0, x1, y1, t, stay) {
+    ctx.save();
+    try {
+      const mx = (x0 + x1) / 2 + Math.sin(t * 5) * 3, my = (y0 + y1) / 2 + 8;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo(mx, my, x1, y1);
+      S(ctx, 'rgba(90,50,0,0.55)', stay ? 6 : 4.5); ctx.stroke();
+      S(ctx, stay ? '#ffb347' : '#ffc94d', stay ? 3.5 : 2.5); ctx.stroke();
+      const u = (t * 1.3) % 1;
+      F(ctx, '#ffc94d'); ctx.beginPath(); ell(ctx, mx, my + u * 10, 2.2, 2.8 + u * 2, 0); ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Mirror Machine: a plate in the cabinet's top corner, its word backwards, and arrows.
+  function rosMirrorSign(ctx, x, y, t) {
+    ctx.save();
+    try {
+      const a = 0.75 + 0.25 * Math.sin(t * 4);
+      ctx.beginPath(); rrect(ctx, x, y, 104, 22, 8); F(ctx, rgba('#12091f', 0.85)); ctx.fill(); S(ctx, rgba('#ff2e88', a), 2); ctx.stroke();
+      ctx.save(); ctx.translate(x + 62, y + 11); ctx.scale(-1, 1);
+      txt(ctx, 'MIRROR', 0, 0, 12, rgba('#ff9ad0', a), true, 'center');
+      ctx.restore();
+      txt(ctx, '⇄', x + 14, y + 11, 15, '#ffffff', true, 'center');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Where the finger is and where the claw goes: a ghost dot, a dashed arrow across the middle.
+  function rosMirrorFinger(ctx, fx0, cx, y, t) {
+    ctx.save();
+    try {
+      ctx.globalAlpha = 0.8;
+      ctx.setLineDash([6, 5]); ctx.lineDashOffset = -t * 30;
+      ctx.beginPath(); ctx.moveTo(fx0, y); ctx.lineTo(cx, y); S(ctx, '#ff9ad0', 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); circ(ctx, fx0, y, 7); F(ctx, rgba('#ffffff', 0.35)); ctx.fill(); S(ctx, '#ff9ad0', 2); ctx.stroke();
+      const d = cx >= fx0 ? 1 : -1;
+      ctx.beginPath(); poly(ctx, [cx, y, cx - d * 9, y - 6, cx - d * 9, y + 6]); F(ctx, '#ff2e88'); ctx.fill();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Earthquake's warning: a shaking RUMBLE plate, stronger as the quake nears.
+  function rosQuakeSign(ctx, x, y, t, k) {
+    ctx.save();
+    try {
+      k = U.clamp(k || 0, 0, 1);
+      ctx.translate(x + Math.sin(t * 70) * 3 * k, y + Math.cos(t * 55) * 2 * k);
+      ctx.globalAlpha = 0.4 + 0.6 * k;
+      ctx.beginPath(); rrect(ctx, -62, -13, 124, 26, 9); F(ctx, rgba('#2a1206', 0.9)); ctx.fill(); S(ctx, '#ff8a2e', 2.5); ctx.stroke();
+      txt(ctx, 'RUMBLE...', 0, 0, 15, '#ffb347', true, 'center');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The bubble gauge on the cabinet's right post: floating bubbles (full), bubbles to come (outlined), pops.
+  function rosMeter(ctx, x, y, st) {
+    ctx.save();
+    try {
+      st = st || NOPET;
+      const n = Math.min(6, st.n | 0), w = Math.min(6 - n, st.want | 0), t = st.t || 0, rows = 6;
+      ctx.beginPath(); rrect(ctx, x - 12, y - 10, 24, rows * 22 + 34, 11); F(ctx, rgba('#12091f', 0.82)); ctx.fill(); S(ctx, rgba('#8dfff5', 0.7 + 0.3 * (st.combo > 0 ? 1 : 0)), 2); ctx.stroke();
+      for (let i = 0; i < rows; i++) {
+        const cy = y + 6 + i * 22 + Math.sin(t * 2 + i) * 1.2;
+        ctx.beginPath(); circ(ctx, x, cy, 7.5);
+        if (i < n) { F(ctx, rgba('#bff4ff', 0.5)); ctx.fill(); S(ctx, '#ffffff', 1.4); ctx.stroke(); F(ctx, '#ffffff'); ctx.beginPath(); circ(ctx, x - 2.5, cy - 2.5, 1.6); ctx.fill(); }
+        else if (i < n + w) { S(ctx, rgba('#8dfff5', 0.8), 1.2); ctx.setLineDash([3, 3]); ctx.stroke(); ctx.setLineDash([]); }
+        else { S(ctx, rgba('#ffffff', 0.12), 1); ctx.stroke(); }
+      }
+      txt(ctx, String(st.popped | 0), x, y + rows * 22 + 14, 12, '#8dfff5', true, 'center');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- the three new pets (pet units: about 38 tall, the feet at the origin, facing right)
+  function petPenguin(ctx, st, c1, c2, t) {
+    const act = st.pose === 'act', run = st.pose === 'run';
+    if (act) {
+      // on its belly, sliding: lying along the floor, flippers back, a spray of snow
+      ctx.save(); ctx.translate(0, -7);
+      tone(ctx, c => ell(c, 0, 0, 17, 8, 0), c1, 0, 0, 14);
+      F(ctx, c2); ctx.beginPath(); ell(ctx, 1, 3, 13, 4.5, 0); ctx.fill();
+      tone(ctx, c => ell(c, -12, -4, 6, 2.2, 0.3), shade(c1, 0.1), -12, -4, 5, NOSPEC);
+      tone(ctx, c => circ(c, 14, -3, 6.5), c1, 14, -3, 6.5);
+      F(ctx, '#ff9a3c'); ctx.beginPath(); poly(ctx, [19, -4, 25, -2.5, 19, -1]); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+      petEye(ctx, 16, -5, 1.4, st, 1);
+      F(ctx, '#ff9a3c'); ctx.beginPath(); ell(ctx, -17, 2, 3.4, 1.6, 0.3); ctx.fill();
+      ctx.restore();
+      PA.nx = 10; PA.ny = -6; PA.nw = 10; PA.hx = 14; PA.hy = -15;
+      return;
+    }
+    const wad = run ? Math.sin(t * 16) * 0.18 : Math.sin(t * 2) * 0.03;
+    ctx.rotate(wad);
+    F(ctx, '#ff9a3c'); ctx.beginPath(); ell(ctx, -4, -1, 4, 1.8, 0); ell(ctx, 5, -1, 4, 1.8, 0); ctx.fill();
+    tone(ctx, c => ell(c, 0, -15, 11, 14, 0), c1, 0, -15, 12);
+    F(ctx, c2); ctx.beginPath(); ell(ctx, 2, -12, 7.5, 10.5, 0); ctx.fill();
+    for (const sd of [-1, 1]) { ctx.save(); ctx.translate(sd * 10, -16); ctx.rotate(sd * (0.3 + (run ? Math.sin(t * 16) * 0.3 : 0))); tone(ctx, c => ell(c, 0, 5, 3, 7.5, 0), shade(c1, 0.12), 0, 5, 5, NOSPEC); ctx.restore(); }
+    petEyes(ctx, -1, 6, -21, 1.7, st);
+    F(ctx, rgba('#ff9ad0', 0.5)); ctx.beginPath(); circ(ctx, -3.5, -17, 1.8); circ(ctx, 8.5, -17, 1.6); ctx.fill();
+    F(ctx, '#ff9a3c'); ctx.beginPath(); poly(ctx, [1, -18.5, 7, -17, 1, -15.5]); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+    PA.nx = 1; PA.ny = -8; PA.nw = 18; PA.hx = 1; PA.hy = -29;
+  }
+  function petMoleRat(ctx, st, c1, c2, t) {
+    const act = st.pose === 'act', run = st.pose === 'run', k = st.k || 0;
+    ctx.translate(0, run ? -Math.abs(Math.sin(t * 17)) * 2.5 : 0);
+    // the tail
+    ctx.beginPath(); ctx.moveTo(-12, -6); ctx.quadraticCurveTo(-20, -5, -22, 0); S(ctx, INK, 3.4); ctx.stroke(); S(ctx, c1, 1.8); ctx.stroke();
+    tone(ctx, c => ell(c, -1, -9, 13, 9, 0), c1, -1, -9, 11);
+    // wrinkles
+    S(ctx, rgba(c2, 0.55), 1); ctx.beginPath();
+    for (let i = 0; i < 4; i++) { ctx.moveTo(-9 + i * 4, -15); ctx.quadraticCurveTo(-7 + i * 4, -9, -9 + i * 4, -3); }
+    ctx.stroke();
+    // digging paws in a blur, dirt flying
+    const dig = act ? Math.sin(t * 40) * 3 : 0;
+    F(ctx, shade(c1, -0.1)); ctx.beginPath(); ell(ctx, 9 + dig, -2, 3.2, 2, 0.3); ell(ctx, 6 - dig, -1.5, 3.2, 2, -0.3); ctx.fill();
+    if (act && k < 0.55) { F(ctx, '#8a5a3a'); ctx.beginPath(); for (let i = 0; i < 4; i++) { const u = (t * 3 + i * 0.25) % 1; circ(ctx, -4 - u * 14, -2 - Math.sin(u * Math.PI) * 12, 1.5); } ctx.fill(); }
+    tone(ctx, c => ell(c, 9, -13, 8, 7, 0.1), c1, 9, -13, 7);
+    // squinty eyes, tiny ears, a pink nose and the famous teeth
+    F(ctx, shade(c1, -0.25)); ctx.beginPath(); circ(ctx, 4, -19, 2); ctx.fill();
+    if (st.mood) petEye(ctx, 10, -16, 1.2, st, 1);
+    else { ctx.beginPath(); ctx.moveTo(8.8, -16.2); ctx.lineTo(11.6, -16.4); S(ctx, INK, 1.2); ctx.stroke(); }
+    F(ctx, '#ff7aa2'); ctx.beginPath(); ell(ctx, 16.5, -13, 1.8, 1.4, 0); ctx.fill();
+    tone(ctx, c => rrect(c, 13.2, -10.5, 3.6, 4.8, 0.8), '#fff6c0', 15, -8, 2, { ol: 1, spec: false });
+    ctx.beginPath(); ctx.moveTo(15, -10.4); ctx.lineTo(15, -5.8); S(ctx, rgba(INK, 0.6), 0.7); ctx.stroke();
+    PA.nx = 6; PA.ny = -8; PA.nw = 12; PA.hx = 8; PA.hy = -20;
+  }
+  function petRoomba(ctx, st, c1, c2, t) {
+    const act = st.pose === 'act', run = st.pose === 'run';
+    const bump = act || run ? Math.abs(Math.sin(t * 20)) * 0.8 : 0;
+    ctx.translate(0, -bump);
+    // on the move: dust puffs behind it
+    if (run) { F(ctx, rgba('#d8d0e8', 0.6)); ctx.beginPath(); for (let i = 0; i < 3; i++) { const u = (t * 2.5 + i / 3) % 1; circ(ctx, -18 - u * 10, -3 - u * 4, 1.5 + u * 2); } ctx.fill(); }
+    // the side brush spinning
+    const sp = act ? t * 30 : t * 2;
+    ctx.save(); ctx.translate(12, -2);
+    S(ctx, rgba('#e8f4ff', 0.9), 1.2); ctx.beginPath();
+    for (let i = 0; i < 3; i++) { const a = sp + i * TAU / 3; ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 6, Math.sin(a) * 2); }
+    ctx.stroke(); ctx.restore();
+    // the disc body, a bumper, the lid
+    tone(ctx, c => ell(c, 0, -6, 17, 6.5, 0), shade(c1, -0.2), 0, -5, 14, NOSPEC);
+    tone(ctx, c => ell(c, 0, -9, 16, 6, 0), c1, 0, -10, 14);
+    ctx.beginPath(); ctx.ellipse(0, -8, 16.5, 6.2, 0, 0.1, Math.PI - 0.1); S(ctx, '#8e98a8', 2); ctx.stroke();
+    // the light ring (cyan, spinning while it cleans) and a little face
+    ctx.beginPath(); ctx.ellipse(0, -10, 9, 3.2, 0, 0, TAU); S(ctx, rgba(c2, 0.4), 1.6); ctx.stroke();
+    const a0 = act ? t * 8 : t * 1.5;
+    ctx.beginPath(); ctx.ellipse(0, -10, 9, 3.2, 0, a0, a0 + 1.4); S(ctx, c2, 2); ctx.stroke();
+    if (st.mood === 'happy' || st.mood === 'cheer') { ctx.beginPath(); ctx.moveTo(4, -11); ctx.quadraticCurveTo(6, -13, 8, -11); ctx.moveTo(10, -11); ctx.quadraticCurveTo(12, -13, 14, -11); S(ctx, c2, 1.2); ctx.stroke(); }
+    else if (st.mood === 'sleep' || st.blink) { ctx.beginPath(); ctx.moveTo(4, -11); ctx.lineTo(8, -11); ctx.moveTo(10, -11); ctx.lineTo(14, -11); S(ctx, c2, 1.2); ctx.stroke(); }
+    else { F(ctx, c2); ctx.beginPath(); rrect(ctx, 5 + (st.look || 0), -12.5, 2.4, 3, 1); rrect(ctx, 11 + (st.look || 0), -12.5, 2.4, 3, 1); ctx.fill(); }
+    // the antenna blinking
+    line(ctx, -8, -13, -10, -19, '#8e98a8', 1.2);
+    F(ctx, Math.sin(t * 6) > 0 ? '#ff5a4a' : '#5a2020'); ctx.beginPath(); circ(ctx, -10, -19.5, 1.5); ctx.fill();
+    PA.nx = 0; PA.ny = -4; PA.nw = 26; PA.hx = -2; PA.hy = -15;
+  }
+  Object.assign(PET_COL, { penguin: ['#2a3348', '#ffffff'], molerat: ['#f2b8a8', '#8a5a4a'], roomba: ['#3a3f4a', '#2ee6d6'] });
+  Object.assign(PET_SCARF, { penguin: '#ff2e88', molerat: '#2ee6d6', roomba: '#ffc94d' });
+  Object.assign(PET_ART, { penguin: petPenguin, molerat: petMoleRat, roomba: petRoomba });
+  for (const k of ['penguin', 'molerat', 'roomba']) if (PET_KEYS.indexOf(k) < 0) PET_KEYS.push(k);
+  const ROS_R = { bubble: rosBubble, water: rosWater, goo: rosGoo, mirrorSign: rosMirrorSign, mirrorFinger: rosMirrorFinger, quakeSign: rosQuakeSign, meter: rosMeter,
+    portrait: rosPortrait, hat: rosHat, snorkel: rosSnorkel, SIL: ROS_SIL, pets: { penguin: petPenguin, molerat: petMoleRat, roomba: petRoomba } };
+  /* ============================================================ end ROS */
+
   /* ============================================================ STORY (round 8) */
   /* Stories, the rival and alternate bosses (DESIGN.md "Stories, the rival
      and alternate bosses (round 8)"): Grabby Gary (his gear is drawn on:
@@ -12440,6 +12852,350 @@ const RENDER = (() => {
     board: loreBoardDraw, intro: loreIntroCard, medal: loreMedal, wkBanner: loreWkBanner, wrap: loreWrap };
   /* ============================================================ end LORE */
 
+  /* ============================================================ RUSH (round 10) */
+  /* The Boss Rush and the ghost race (DESIGN.md "Boss Rush and the ghost
+     race (round 10)"): the NEXT CHALLENGER slam, the boss portrait gallery,
+     the rush's banner and backdrop, the ghost on the map, its race chart and
+     the GHOST PASSED! slam. Pure drawing from the inputs, saved and restored,
+     never throws. */
+  const RUSH_T = { band: 0.05, title: 0.3, sil: 0.55, reveal: 1.0, name: 1.12, gallery: 1.28, idle: 1.6 };
+  const RUSH_SIL = new Map();   // a boss def as a plain silhouette (no boss aura), one copy per def
+  const rushSilDef = (def) => { let d = RUSH_SIL.get(def); if (!d) { d = Object.assign({}, def, { tier: 'elite', size: (def.size || 1) * 1.6 }); RUSH_SIL.set(def, d); } return d; };
+  const RUSH_EST = { hurt: 0, attack: 0, dead: 0, enraged: false };
+  // A boss standing on (x, y), fitted into bw x bh; dark: a silhouette in col (the ones still to come).
+  function rushBoss(ctx, def, x, y, bw, bh, t, dark, col) {
+    if (!def) return;
+    const d = dark ? rushSilDef(def) : def, b = enemyBox(d, 1), fit = Math.min(bh / Math.max(1, b.h), bw / Math.max(1, b.w));
+    RUSH_EST.attack = 0; RUSH_EST.hurt = 0;
+    if (dark) { FLAT = col || '#1d1233'; try { enemy(ctx, d, x, y, fit, t, RUSH_EST); } finally { FLAT = null; } }
+    else enemy(ctx, d, x, y, fit, t, RUSH_EST);
+  }
+  // The stage behind the rush's screens: a dark hall, two sweeping spotlights, a hazard band up top.
+  function rushBack(ctx, w, h, t, st) {
+    ctx.save();
+    try {
+      w = w || 540; h = h || 960; t = +t || 0; st = st || {};
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#12081f'); g.addColorStop(0.55, '#1c0b24'); g.addColorStop(1, '#07030d');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      // the spotlights: two cones swinging from the rig above the stage
+      for (let i = 0; i < 2; i++) {
+        const sx = i ? w * 0.82 : w * 0.18, a = Math.sin(t * 0.6 + i * 2.1) * 0.35 + (i ? -0.35 : 0.35), len = h * 0.9;
+        ctx.save(); ctx.globalAlpha = 0.1; ctx.translate(sx, -10); ctx.rotate(a);
+        ctx.beginPath(); ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.lineTo(120, len); ctx.lineTo(-120, len); ctx.closePath();
+        F(ctx, i ? PAL.cyan : PAL.pink); ctx.fill();
+        ctx.restore();
+      }
+      glow(ctx, w / 2, h * 0.62, 260, st.col || PAL.pink, 0.18);
+      // a floor with a checker line (the arcade's lino) and the hazard band on top
+      ctx.save(); ctx.globalAlpha = 0.5;
+      for (let i = 0; i < 12; i++) { const yy = h * 0.7 + i * i * 2.2; S(ctx, rgba(PAL.pink, 0.16 - i * 0.01), 1.5); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(w, yy); ctx.stroke(); }
+      ctx.restore();
+      if (st.band !== false) {
+        stripes(ctx, 0, 0, w, 14, '#1a0c10', rgba(PAL.blood, 0.8), t);
+        stripes(ctx, 0, h - 10, w, 10, '#1a0c10', rgba(PAL.gold, 0.6), -t);
+      }
+      // drifting sparks
+      for (let i = 0; i < 14; i++) {
+        const ph = (t * (0.05 + (i % 5) * 0.012) + i * 0.137) % 1, x = ((i * 97) % 520) + 10 + Math.sin(t + i) * 8, y = h - ph * h;
+        F(ctx, rgba(i % 3 ? PAL.gold : PAL.pink, 0.35 * (1 - ph))); ctx.beginPath(); ctx.arc(x, y, 1.6 + (i % 3) * 0.6, 0, TAU); ctx.fill();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The boss portrait gallery: a row of frames, one per boss in the lineup.
+     st {defs, beat (how many are down, in order), cur (the next one, -1 for
+     none), dead (the one that beat you, -1), t, pop (a frame whose KO stamp
+     is slamming in, with popK 0..1), secret (index of The Machine: a '?'
+     until reached)}. Beaten frames are in colour with a KO stamp, the next
+     one pulses gold, the rest are silhouettes with a question mark. */
+  function rushGallery(ctx, x, y, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const defs = st.defs || [], n = defs.length;
+      if (!n) { ctx.restore(); return; }
+      const t = +st.t || 0, gap = n > 6 ? 5 : 8, sw = Math.max(20, (w - gap * (n - 1)) / n), beat = Math.max(0, st.beat | 0);
+      const cur = st.cur == null ? beat : st.cur, dead = st.dead == null ? -1 : st.dead;
+      for (let i = 0; i < n; i++) {
+        const def = defs[i], sx = x + i * (sw + gap), done = i < beat, now = i === cur && !done, lost = i === dead;
+        const col = (def && def.color) || PAL.pink;
+        ctx.save();
+        // the frame
+        ctx.beginPath(); rrect(ctx, sx, y, sw, h, 8);
+        F(ctx, done ? shade(col, -0.62) : now ? '#2a1742' : '#140c22'); ctx.fill();
+        const pulse = now ? 0.6 + Math.sin(t * 5) * 0.4 : 1;
+        S(ctx, lost ? PAL.blood : done ? col : now ? rgba(PAL.gold, pulse) : '#3a2a58', now || lost ? 3 : 2); ctx.stroke();
+        ctx.beginPath(); rrect(ctx, sx + 2, y + 2, sw - 4, h - 4, 6); ctx.clip();
+        if (now) glow(ctx, sx + sw / 2, y + h * 0.55, sw * 0.8, PAL.gold, 0.25 + 0.15 * pulse);
+        const secretHid = i === st.secret && !done && !now;
+        if (def && !secretHid) rushBoss(ctx, def, sx + sw / 2, y + h - 4, sw * 0.92, h * 0.86, t + i * 0.7, !(done || now || lost), '#2c1d4a');
+        if (!done && !now && !lost) txt(ctx, '?', sx + sw / 2, y + h * 0.48, Math.min(28, sw * 0.5), rgba('#b3a4d6', 0.8), true, 'center', INK);
+        ctx.restore();
+        // the KO stamp (it slams in on the frame that just fell) or the LOST one
+        if (done || lost) {
+          const pk = i === st.pop ? U.clamp(+st.popK || 0, 0, 1) : 1;
+          if (pk > 0) {
+            const sc = 1 + (1 - U.ease.outBack(pk)) * 1.6;
+            ctx.save(); ctx.globalAlpha = Math.min(1, pk * 1.6); ctx.translate(sx + sw / 2, y + h * 0.62); ctx.rotate(-0.28); ctx.scale(sc, sc);
+            const fw = Math.min(sw - 6, 46), fh = Math.min(20, sw * 0.4);
+            ctx.beginPath(); rrect(ctx, -fw / 2, -fh / 2, fw, fh, 4); F(ctx, rgba(lost ? '#1a0c10' : '#2a0610', 0.85)); ctx.fill(); S(ctx, PAL.blood, 2.2); ctx.stroke();
+            txt(ctx, lost ? 'LOST' : 'KO', 0, 1, Math.min(fh * 0.72, 14), lost ? '#ffd0cc' : PAL.blood, true, 'center');
+            ctx.restore();
+          }
+        }
+        // the slot number under the frame
+        txt(ctx, String(i + 1), sx + sw / 2, y + h + 9, 10, done ? rgba(col, 0.9) : '#7d6aa6', true, 'center');
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The NEXT CHALLENGER slam between bosses (screen 'rush', k 'next').
+     st {t (the slam's clock), label, def, i, n, clock, split, defs, beat,
+     secret, reduced, now}. Timeline RUSH_T: the band slides (0.05), the
+     label slams from 3x (0.3), the boss slides in as a silhouette (0.55),
+     a white flash reveals it (1.0), its name slams (1.12), the gallery
+     pops (1.28), then it idles under the spotlights. */
+  function rushChallenger(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = +st.t || 0, now = +st.now || t, red = !!st.reduced, def = st.def || null, col = (def && def.color) || PAL.pink;
+      rushBack(ctx, w, h, now, { col });
+      // the top plate: the rush, the boss count, the clock
+      ctx.save();
+      ctx.beginPath(); rrect(ctx, 14, 30, w - 28, 50, 14); F(ctx, rgba('#12081f', 0.92)); ctx.fill(); S(ctx, rgba(PAL.blood, 0.8), 2.5); ctx.stroke();
+      txt(ctx, 'BOSS RUSH', 34, 55, 18, PAL.blood, true, 'left', INK);
+      txt(ctx, `BOSS ${(st.i | 0) + 1} OF ${st.n | 0}`, w / 2, 55, 16, '#fff', true, 'center', INK);
+      txt(ctx, '⏱ ' + String(st.clock || '0:00.0'), w - 34, 55, 18, PAL.gold, true, 'right', INK);
+      ctx.restore();
+      // the hazard band and the label, slamming in
+      const bu = red ? 1 : U.ease.outCubic(clamp01((t - RUSH_T.band) / 0.22));
+      const by = 170;
+      ctx.save(); ctx.translate((1 - bu) * -w, 0);
+      stripes(ctx, 0, by - 34, w, 68, '#1a0c10', rgba(PAL.blood, 0.9), now);
+      ctx.beginPath(); ctx.rect(0, by - 34, w, 68); S(ctx, INK, 3); ctx.stroke();
+      ctx.restore();
+      if (t >= RUSH_T.title - 0.12 || red) {
+        const u = red ? 1 : clamp01((t - (RUSH_T.title - 0.12)) / 0.12);
+        const sc = red ? 1 : (u < 1 ? 3 - 2 * U.ease.inCubic(u) : 1 + Math.sin(clamp01((t - RUSH_T.title) / 0.3) * Math.PI) * 0.1);
+        // a chrome glyph is about 0.72 x its size wide: the label keeps 35 px clear of each edge
+        const lb = String(st.label || 'NEXT CHALLENGER'), size = Math.min(46, (w - 70) / (Math.max(6, lb.length) * 0.72));
+        ctx.save(); ctx.globalAlpha = u; ctx.translate(w / 2, by); ctx.rotate(-0.04); ctx.scale(sc, sc);
+        chrome(ctx, lb, 0, 0, size, PAL.gold, PAL.blood);
+        ctx.restore();
+        const fk = clamp01(1 - (t - RUSH_T.title) / 0.16);
+        if (fk > 0 && t >= RUSH_T.title && !red) { ctx.save(); ctx.globalAlpha = fk * 0.35; F(ctx, '#ffffff'); ctx.fillRect(0, 0, w, h); ctx.restore(); }
+      }
+      // the challenger: a silhouette sliding in, revealed with a flash
+      if (def && (t >= RUSH_T.sil || red)) {
+        const su = red ? 1 : U.ease.outCubic(clamp01((t - RUSH_T.sil) / 0.4));
+        const shown = red || t >= RUSH_T.reveal;
+        const bx = w / 2 + (1 - su) * (w * 0.7), fy = 610;
+        glow(ctx, bx, fy - 150, 230, col, shown ? 0.45 + Math.sin(now * 2.4) * 0.08 : 0.2);
+        // a floor ring under it
+        ctx.save(); ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.ellipse(bx, fy + 4, 150, 26, 0, 0, TAU); F(ctx, rgba('#000000', 0.45)); ctx.fill(); S(ctx, rgba(col, 0.7), 3); ctx.stroke(); ctx.restore();
+        rushBoss(ctx, def, bx, fy, 330, 330, now, !shown, '#0a0612');
+        if (!shown) txt(ctx, '?', bx, fy - 170, 90, rgba('#ffffff', 0.8), true, 'center', INK);
+        const fk = red ? 0 : clamp01(1 - (t - RUSH_T.reveal) / 0.22);
+        if (fk > 0 && shown) { ctx.save(); ctx.globalAlpha = fk * 0.85; F(ctx, '#ffffff'); ctx.fillRect(0, 0, w, h); ctx.restore(); }
+      }
+      // the name slams in chrome
+      if (def && (t >= RUSH_T.name || red)) {
+        const u = red ? 1 : clamp01((t - RUSH_T.name) / 0.18), sc = red ? 1 : 1.7 - 0.7 * U.ease.outBack(u);
+        const nm = String(def.name || '').toUpperCase(), size = Math.min(40, (w - 60) / (Math.max(4, nm.length) * 0.72));
+        ctx.save(); ctx.globalAlpha = u; ctx.translate(w / 2, 680); ctx.scale(sc, sc);
+        chrome(ctx, nm, 0, 0, size, PAL.gold, PAL.blood);
+        ctx.restore();
+        if (st.split) txt(ctx, String(st.split), w / 2, 722, 15, '#d8c8ff', true, 'center', INK);
+      }
+      // the gallery pops up under it
+      if (t >= RUSH_T.gallery || red) {
+        const u = red ? 1 : U.ease.outBack(clamp01((t - RUSH_T.gallery) / 0.3));
+        ctx.save(); ctx.globalAlpha = clamp01(u); ctx.translate(0, (1 - u) * 40);
+        rushGallery(ctx, 22, 748, w - 44, 70, { defs: st.defs, beat: st.beat, cur: st.i, t: now, secret: st.secret, pop: st.pop, popK: st.popK });
+        ctx.restore();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The rush's banner (the rush menu): BOSS RUSH in chrome over the whole
+     lineup, the bosses you have beaten in a rush in colour, the rest as
+     silhouettes; a padlock while it is locked. st {t, defs, got {id: n},
+     locked, best (a time string), secret (index of The Machine: '?' until met)}. */
+  function rushBanner(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 508; h = h || 200;
+      const t = +st.t || 0;
+      ctx.beginPath(); rrect(ctx, 2, 2, w - 4, h - 4, 18);
+      const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#2a0c1c'); g.addColorStop(1, '#10061a');
+      ctx.fillStyle = g; ctx.fill();
+      ctx.save(); ctx.clip();
+      stripes(ctx, 0, 0, w, 10, '#1a0c10', rgba(PAL.blood, 0.85), t);
+      stripes(ctx, 0, h - 10, w, 10, '#1a0c10', rgba(PAL.blood, 0.85), -t);
+      glow(ctx, w / 2, 58, 200, PAL.blood, 0.3);
+      ctx.restore();
+      ctx.beginPath(); rrect(ctx, 2, 2, w - 4, h - 4, 18); S(ctx, st.locked ? '#5a4a78' : PAL.blood, 3); ctx.stroke();
+      chrome(ctx, 'BOSS RUSH', w / 2, 52, 50, PAL.gold, PAL.blood);
+      const defs = st.defs || [], got = st.got || {};
+      const n = Math.max(1, defs.length), gap = 6, sw = Math.min(56, (w - 40 - gap * (n - 1)) / n), x0 = w / 2 - (n * sw + (n - 1) * gap) / 2;
+      defs.forEach((def, i) => {
+        const x = x0 + i * (sw + gap), y = 94, have = !!(def && got[def.id]);
+        ctx.save();
+        ctx.beginPath(); rrect(ctx, x, y, sw, 70, 8); F(ctx, have ? shade((def && def.color) || PAL.pink, -0.62) : '#140c22'); ctx.fill();
+        S(ctx, have ? (def.color || PAL.pink) : '#3a2a58', 2); ctx.stroke();
+        ctx.clip();
+        const hid = i === st.secret && !have && !st.met;
+        if (def && !hid) rushBoss(ctx, def, x + sw / 2, y + 66, sw * 0.95, 60, t + i, !have, '#2c1d4a');
+        if (!have) txt(ctx, '?', x + sw / 2, y + 34, 22, rgba('#b3a4d6', 0.75), true, 'center', INK);
+        ctx.restore();
+      });
+      txt(ctx, st.locked ? 'LOCKED' : st.best ? 'BEST CLEAR ' + st.best : 'NO CLEAR YET', w / 2, h - 22, 15, st.locked ? '#b3a4d6' : PAL.gold, true, 'center', INK);
+      if (st.locked) {
+        // a padlock over the lineup
+        ctx.save(); ctx.translate(w / 2, 128);
+        ctx.fillStyle = rgba('#07030d', 0.55); ctx.fillRect(-w / 2 + 6, -40, w - 12, 80);
+        ctx.beginPath(); ctx.arc(0, -8, 14, Math.PI, 0); S(ctx, '#c9d3e0', 6); ctx.stroke();
+        ctx.beginPath(); rrect(ctx, -20, -8, 40, 30, 6); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+        F(ctx, INK); ctx.beginPath(); ctx.arc(0, 4, 4, 0, TAU); ctx.fill();
+        ctx.restore();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The ghost race. The ghost is your own best attempt of the day (the
+     week): a translucent crawler with a sheet for legs. st {charId, t, a
+     (alpha), tag (the pill over it, '' for none), sad (its climb ended: a
+     droopy grey ghost)}. */
+  function ghoSheet(ctx, r, t, col) {
+    ctx.beginPath();
+    ctx.moveTo(-r, -r * 0.2);
+    ctx.quadraticCurveTo(-r, -r * 1.25, 0, -r * 1.25);
+    ctx.quadraticCurveTo(r, -r * 1.25, r, -r * 0.2);
+    const n = 4, wv = Math.sin(t * 5) * r * 0.08;
+    ctx.lineTo(r, r * 0.55);
+    for (let i = n; i > 0; i--) {
+      const x1 = -r + (2 * r) * (i - 0.5) / n, x0 = -r + (2 * r) * (i - 1) / n;
+      ctx.quadraticCurveTo(x1, r * (i % 2 ? 0.95 : 0.8) + wv * (i % 2 ? 1 : -1), x0, r * 0.55);
+    }
+    ctx.closePath();
+    F(ctx, col); ctx.fill();
+  }
+  function ghoMarker(ctx, x, y, size, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const r = (size || 30) * 0.6, t = +st.t || 0, a = st.a == null ? 0.6 : U.clamp(+st.a, 0, 1), sad = !!st.sad;
+      const bob = Math.sin(t * 2.6) * r * 0.12;
+      ctx.translate(x || 0, (y || 0) + bob);
+      ctx.globalAlpha = a;
+      glow(ctx, 0, -r * 0.2, r * 2.4, sad ? '#8e98a8' : PAL.cyan, 0.65);
+      ghoSheet(ctx, r, t, rgba(sad ? '#9aa3b5' : '#dff8ff', 0.62));
+      S(ctx, rgba(INK, 0.55), 4.5); ctx.stroke();
+      S(ctx, rgba(sad ? '#c9d3e0' : PAL.cyan, 0.95), 2.5); ctx.stroke();
+      // the crawler's face on the sheet, washed out
+      ctx.save(); ctx.globalAlpha = a * (sad ? 0.4 : 0.75);
+      portrait(ctx, st.charId, 0, -r * 0.3, r * 1.45, t);
+      ctx.restore();
+      ctx.save(); ctx.globalAlpha = a * 0.3; ctx.beginPath(); ctx.arc(0, -r * 0.3, r * 0.74, 0, TAU); F(ctx, sad ? '#9aa3b5' : '#bff4ff'); ctx.fill(); ctx.restore();
+      // hollow eyes
+      F(ctx, rgba(INK, 0.7)); ctx.beginPath(); ctx.ellipse(-r * 0.28, -r * 0.34, r * 0.1, r * (sad ? 0.06 : 0.14), 0, 0, TAU); ctx.ellipse(r * 0.28, -r * 0.34, r * 0.1, r * (sad ? 0.06 : 0.14), 0, 0, TAU); ctx.fill();
+      if (st.tag) {
+        ctx.globalAlpha = Math.min(1, a + 0.25);
+        const s = String(st.tag), fw = Math.max(40, s.length * 6.6 + 14);
+        ctx.beginPath(); rrect(ctx, -fw / 2, -r * 1.25 - 20, fw, 16, 8); F(ctx, rgba('#0b2a38', 0.9)); ctx.fill(); S(ctx, sad ? '#9aa3b5' : PAL.cyan, 1.5); ctx.stroke();
+        txt(ctx, s, 0, -r * 1.25 - 12, 10, sad ? '#c9d3e0' : '#bff4ff', true, 'center');
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The race chart on the run's end: your score after every fight won
+     (pink, solid) against the ghost's (cyan, dashed), the lead shaded.
+     st {me: [scores], ghost: [scores], t, labels: true}. */
+  function ghoChart(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 480; h = h || 150;
+      const me = (st.me || []).filter((v) => Number.isFinite(+v)), gh = (st.ghost || []).filter((v) => Number.isFinite(+v));
+      ctx.beginPath(); rrect(ctx, 1, 1, w - 2, h - 2, 12); F(ctx, '#140c24'); ctx.fill(); S(ctx, '#3a2a58', 2); ctx.stroke();
+      const L = 36, R = 14, T = 14, B = 24, pw = w - L - R, ph = h - T - B;
+      const n = Math.max(2, me.length, gh.length), top = Math.max(100, ...me, ...gh) * 1.08;
+      const px = (i) => L + (i / (n - 1)) * pw, py = (v) => T + ph - (Math.max(0, +v) / top) * ph;
+      // the grid
+      for (let k = 0; k <= 3; k++) {
+        const y = T + (ph * k) / 3;
+        S(ctx, rgba('#b3a4d6', 0.12), 1); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke();
+        txt(ctx, String(Math.round(top * (1 - k / 3))), L - 4, y, 9, '#7d6aa6', false, 'right');
+      }
+      txt(ctx, 'fights won', L + pw / 2, h - 9, 10, '#7d6aa6', true, 'center');
+      const line = (arr, col, dash, dots) => {
+        if (arr.length < 1) return;
+        ctx.save();
+        if (dash) ctx.setLineDash([7, 5]);
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.beginPath(); arr.forEach((v, i) => (i ? ctx.lineTo(px(i), py(v)) : ctx.moveTo(px(i), py(v))));
+        S(ctx, rgba(col, dash ? 0.75 : 1), dash ? 2.5 : 3.2); ctx.stroke();
+        ctx.restore();
+        if (dots) arr.forEach((v, i) => { F(ctx, col); ctx.beginPath(); ctx.arc(px(i), py(v), 3.2, 0, TAU); ctx.fill(); });
+      };
+      // the lead: shaded where you were ahead
+      const m = Math.min(me.length, gh.length);
+      for (let i = 1; i < m; i++) {
+        const ahead = me[i] >= gh[i];
+        ctx.beginPath(); ctx.moveTo(px(i - 1), py(me[i - 1])); ctx.lineTo(px(i), py(me[i])); ctx.lineTo(px(i), py(gh[i])); ctx.lineTo(px(i - 1), py(gh[i - 1])); ctx.closePath();
+        F(ctx, rgba(ahead ? PAL.lime : PAL.blood, 0.14)); ctx.fill();
+      }
+      line(gh, PAL.cyan, true, false);
+      line(me, PAL.pink, false, true);
+      if (st.labels !== false) {
+        if (me.length) txt(ctx, 'YOU', Math.min(L + pw - 14, px(me.length - 1)), py(me[me.length - 1]) - 11, 11, PAL.pink, true, 'center', INK);
+        if (gh.length) txt(ctx, 'GHOST', Math.min(L + pw - 20, px(gh.length - 1)), py(gh[gh.length - 1]) + 12, 11, PAL.cyan, true, 'center', INK);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* GHOST PASSED! over the map: the words slam in chrome while the ghost
+     is left behind, streaking off to the left and fading. st {t (seconds
+     into it), dur, charId, reduced}. */
+  const GHO_PASS = { dur: 2.2, slam: 0.12, out: 0.35 };
+  function ghoPass(ctx, cx, cy, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const t = +st.t || 0, dur = +st.dur || GHO_PASS.dur, red = !!st.reduced;
+      const out = clamp01((t - (dur - GHO_PASS.out)) / GHO_PASS.out), vis = 1 - out;
+      // speed lines streaking left (you blew past it)
+      if (!red) {
+        ctx.save(); ctx.globalAlpha = 0.5 * vis;
+        for (let i = 0; i < 10; i++) {
+          const yy = cy - 90 + i * 20, sx = cx + 260 - ((t * (700 + i * 60) + i * 53) % 600);
+          S(ctx, i % 2 ? PAL.cyan : '#ffffff', 2); ctx.beginPath(); ctx.moveTo(sx, yy); ctx.lineTo(sx + 70, yy); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      // the ghost, left behind
+      const gk = clamp01(t / 1.4);
+      ghoMarker(ctx, cx - 40 - gk * 170, cy + 34 + gk * 20, 60 - gk * 20, { charId: st.charId, t: t * 3, a: 0.7 * (1 - gk) * vis, tag: '' });
+      // the words
+      const u = red ? 1 : clamp01(t / GHO_PASS.slam), sc = red ? 1 : (u < 1 ? 2.6 - 1.6 * U.ease.inCubic(u) : 1 + Math.sin(clamp01((t - GHO_PASS.slam) / 0.3) * Math.PI) * 0.12);
+      ctx.save(); ctx.globalAlpha = vis * u; ctx.translate(cx, cy); ctx.rotate(-0.06); ctx.scale(sc, sc);
+      glow(ctx, 0, 0, 150, PAL.lime, 0.5);
+      chrome(ctx, 'GHOST PASSED!', 0, 0, 44, PAL.lime, PAL.cyan);
+      ctx.restore();
+      if (t > 0.3) txt(ctx, String(st.sub || ''), cx, cy + 40, 16, '#eaffd6', true, 'center', INK);
+      const fk = red ? 0 : clamp01(1 - (t - GHO_PASS.slam) / 0.2);
+      if (fk > 0 && t >= GHO_PASS.slam) { ctx.save(); ctx.globalAlpha = fk * 0.3; F(ctx, '#ffffff'); ctx.fillRect(cx - 400, cy - 600, 800, 1200); ctx.restore(); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const RUSH_R = { T: RUSH_T, back: rushBack, boss: rushBoss, gallery: rushGallery, challenger: rushChallenger, banner: rushBanner };
+  const GHO_R = { PASS: GHO_PASS, marker: ghoMarker, sheet: ghoSheet, chart: ghoChart, pass: ghoPass };
+  /* ============================================================ end RUSH */
+
   /* ============================================================ FAMILY (round 9) */
   /* Enemy families (DESIGN.md "Enemy families (round 9)"): the nine members'
      own drawings (def.look keys; the Band bounces on one shared beat, so
@@ -12977,6 +13733,8 @@ const RENDER = (() => {
   /* ============================================================ end HOLO */
 
   return {
+    // RUSH (round 10): the Boss Rush's NEXT CHALLENGER slam, gallery, banner and backdrop; the ghost race's marker, chart and GHOST PASSED!
+    rush: RUSH_R, gho: GHO_R,
     // LORE (round 9): Codex vignettes, landmark props and bubbles, the high score board, act intros, the weekly banner and medals
     lore: LORE_R,
     // FAMILY (round 9): the family members' art, intent icons, bond lines, the Crescendo staff, the banner plate
@@ -13019,6 +13777,8 @@ const RENDER = (() => {
     sec: SEC_R,
     // CR8 (round 8): the vacuum and twin claws, Mama Mech's portrait, outfits, turret and items
     cr8: CR8_R,
+    // ROS (round 10): Ms. Bubbles (portrait, outfits, items, bubbles), the mutator pack's looks, the new pets
+    ros: ROS_R,
     // POLISH (round 5): item identity (decals, silhouettes, rim light) and the relic medallions
     relicLive,
     // ACCESS (round 6): colour-blind palettes, label size, reduced flashing, high-contrast items

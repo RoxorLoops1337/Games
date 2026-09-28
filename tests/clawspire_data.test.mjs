@@ -25,10 +25,13 @@ const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBl
 const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial onPet'.split(' ');
 // Round 6 (sets): The Hungry Pack's three pet relics, left out of the build pass's counts.
 const R6_RELICS = 'chew_toy treat_jar dog_whistle'.split(' ');
-const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo luck cashAmp turret'.split(' ');
+const RULES = 'poisonKeep blockKeep shatter glassBreak amp comboTwice echo luck cashAmp turret bubbles'.split(' ');
 const ARCHS = 'poison burn frost fortress brawler metal junk jackpot swarm glass feast greed echo luck'.split(' ');
 const STATUSES = 'block str weak vuln poison burn chill freeze regen thorns dodge bleed stun grease fog shield_up enrage armor streak luck'.split(' ');
-const CHARS = 'knight alchemist rogue gambler engineer'.split(' ');
+const CHARS = 'knight alchemist rogue gambler engineer bubbler'.split(' ');
+// Round 10 (ROS, Ms. Bubbles): checked in its own block below, left out of the build pass's counts.
+const R10_ITEMS = 'rubber_duck soap_bar bubble_pipe sponge scrub_brush bath_bomb foam_cannon loofah bubble_bath golden_duck'.split(' ');
+const R10_RELICS = 'bubble_wand foam_machine soap_dish squeaky_toy'.split(' ');
 // Round 8 (CR8, Mama Mech): checked in its own block below, left out of the build pass's counts.
 const R8_ITEMS = 'hex_bolt tin_plate pipe_wrench spring_coil oil_can rivet_gun toolbox tesla_coil mech_arm mech_core'.split(' ');
 const R8_RELICS = 'socket_set blueprints armor_piercing grease_gun'.split(' ');
@@ -660,8 +663,8 @@ t.test('tools, terms and the light copy', () => {
 
 // ------------------------------------------------------------- characters
 t.test('characters', () => {
-  t.eq(Object.keys(CHARACTERS).sort().join(), 'alchemist,engineer,gambler,knight,rogue', 'five characters');
-  const hp = { knight: 80, alchemist: 60, rogue: 65, gambler: 70, engineer: 75 };
+  t.eq(Object.keys(CHARACTERS).sort().join(), 'alchemist,bubbler,engineer,gambler,knight,rogue', 'six characters');
+  const hp = { knight: 80, alchemist: 60, rogue: 65, gambler: 70, engineer: 75, bubbler: 68 };
   for (const id in CHARACTERS) {
     const c = CHARACTERS[id], W = `char ${id}`;
     t.eq(c.id, id, `${W}: key`);
@@ -844,7 +847,7 @@ t.test('archetypes and keywords', () => {
 
 t.test('new content sits in the pools', () => {
   const OLD_RELICS = 'squire_gauntlet bubbling_satchel pickpocket_glove grip_tape oiled_rails golden_ticket inkwell heart_locket kettle_helm consolation_prize sore_loser blood_bag hot_coffee wide_palm rubber_thimbles protein_bar jackpot_bell thorn_mail venom_gland flint_striker snow_globe trophy_rack egg_timer grudge_journal recycling_bin potion_belt fridge_magnet cracked_hourglass big_knuckles four_leaf_clover vampire_dentures second_wind token_stack third_hand golden_crane cursed_quarter friendship_bracelet cursed_plush'.split(' ');
-  const fresh = Object.keys(RELICS).filter(id => !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id));
+  const fresh = Object.keys(RELICS).filter(id => !OLD_RELICS.includes(id) && !R3_RELICS.includes(id) && !R6_RELICS.includes(id) && !R8_RELICS.includes(id) && !R10_RELICS.includes(id));
   t.ok(fresh.length >= 20 && fresh.length <= 32, `20..32 new relics [${fresh.length}]`);
   for (const id of fresh) {
     const r = RELICS[id];
@@ -852,7 +855,7 @@ t.test('new content sits in the pools', () => {
     t.ok(DATA.relicPool(r.rarity).includes(id), `${id}: in relicPool('${r.rarity}')`);
   }
   const OLD_ITEMS = OLD_ITEM_IDS;
-  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id) && !R8_ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece
+  const newItems = Object.keys(ITEMS).filter(id => !OLD_ITEMS.includes(id) && id !== 'hoardcoin' && !R3_ITEMS.includes(id) && !R8_ITEMS.includes(id) && !R10_ITEMS.includes(id));   // the Hoard's coins are boss junk, not a build piece
   t.ok(newItems.length >= 20 && newItems.length <= 32, `20..32 new items [${newItems.length}]`);
   const pooled = new Set(DATA.pool());
   for (const id of newItems) {
@@ -1336,10 +1339,11 @@ t.test('round 3: combos, secret recipes and the loot hooks', () => {
 });
 
 // ================================================================ ENDLESS (DESIGN.md "Endless and mutators")
-const MUT_FX = ['gs', 'drag', 'scale', 'slick', 'glass', 'drift', 'belt', 'quake', 'dark', 'temp', 'grabs', 'dmgOut', 'affix', 'rules', 'extra'];
+const MUT_FX = ['gs', 'drag', 'scale', 'slick', 'glass', 'drift', 'belt', 'quake', 'dark', 'temp', 'grabs', 'dmgOut', 'affix', 'rules', 'extra',
+  'bounce', 'clawK', 'tremor', 'mirror', 'sticky', 'flood'];   // (ROS, round 10: the mutator pack)
 t.test('endless: the mutators are well formed and the engine reads every effect', () => {
   const M = DATA.MUTATORS, ids = DATA.MUT_IDS;
-  t.ok(ids.length >= 10 && ids.length <= 14, `10 to 14 mutators (${ids.length})`);
+  t.ok(ids.length >= 10 && ids.length <= 20, `10 to 20 mutators (${ids.length})`);
   t.eq(new Set(ids).size, ids.length, 'unique ids');
   t.eq(DATA.MUT_MAX, 3, 'up to 3 at once');
   for (const id of ids) {
@@ -1574,7 +1578,7 @@ t.test('vault: the Vault Capsule odds, dupes and the pity', () => {
 t.test('pets: the table, levels, the shop offer, repairs and card lines', () => {
   const { PETS, PET_IDS, PET_XP, PET_MAX, PET_GAIN, PET_SHOP } = DATA;
   t.ok(PETS && Array.isArray(PET_IDS), 'DATA.PETS and PET_IDS exist');
-  t.eq(PET_IDS.length, 8, 'eight pets');
+  t.eq(PET_IDS.length, 11, 'eleven pets (round 10 added three)');
   t.eq(JSON.stringify(PET_IDS.slice().sort()), JSON.stringify(Object.keys(PETS).sort()), 'PET_IDS lists every pet');
   const acts = new Set();
   for (const id of PET_IDS) {
@@ -1614,7 +1618,7 @@ t.test('pets: the table, levels, the shop offer, repairs and card lines', () => 
     t.eq(JSON.stringify(o), JSON.stringify(o2), `offer ${s}: deterministic`);
   }
   const seen = new Set(); for (let s = 1; s <= 60; s++) DATA.petOffer(U.rng(s), null, 3).forEach(id => seen.add(id));
-  t.eq(seen.size, 8, 'every pet shows up in some shop');
+  t.eq(seen.size, PET_IDS.length, 'every pet shows up in some shop');
   // names, a new pet, repairs
   for (const id of PET_IDS) t.ok(PETS[id].names.includes(DATA.petName(id, 12345)), id + ': a name from its list');
   t.eq(DATA.petName('hamster', 7), DATA.petName('hamster', 7), 'names are stable by seed');
@@ -1826,7 +1830,7 @@ t.test('compactor: the recipe rules', () => {
 // synergies, the new combos and the two stickers.
 t.test('round 7: evolution recipes and the evolved items', () => {
   const ids = DATA.EVO_IDS, EV = DATA.EVOLVED, REC = DATA.EVOLUTIONS;
-  t.ok(ids.length >= 12 && ids.length <= 16, `12 to 16 recipes [${ids.length}]`);
+  t.ok(ids.length >= 12 && ids.length <= 20, `12 to 20 recipes [${ids.length}]`);
   const froms = new Set(), relics = new Set(), names = new Set(Object.keys(ITEMS).map(id => ITEMS[id].name));
   const pooled = new Set(DATA.pool()), dexItems = new Set(DATA.dexEntries().items);
   for (const id of ids) {
@@ -2050,7 +2054,7 @@ t.test('season: the Claw-o-ween content stays out of every year-round table and 
 });
 t.test('season: the event cosmetics, the wallet, the currency, the doors, the sticker', () => {
   const ids = DATA.SEA_COSMETIC_IDS, C = DATA.COSMETICS;
-  t.ok(ids.length === 10, 'ten event cosmetics (eight Claw-o-ween with Mama Mech\'s witch hat, two winter)');
+  t.ok(ids.length === 11, 'eleven event cosmetics (nine Claw-o-ween with Mama Mech\'s and Ms. Bubbles\' witch hats, two winter)');
   for (const id of ids) {
     const c = C[id], W = 'event cosmetic ' + id;
     t.ok(!!c && c.id === id && DATA.SEASONS[c.season] && c.price > 0, W + ': a season and a price');
@@ -2688,6 +2692,258 @@ t.test('lore: the two stickers (a gold weekly medal, 25 Codex pages), inside the
   t.ok(DATA.achCheck({ kind: 'meta', meta: { lore: { got } } }, {}).includes('lorekeeper'), '25 are');
   t.ok(A.lorekeeper.goal === 25 && A.lorekeeper.val({ meta: { lore: { got } } }) === 25, 'its progress bar');
   t.ok(!DATA.achCheck({ kind: 'meta', meta: {} }, {}).some(id => id === 'podium' || id === 'lorekeeper'), 'an empty profile earns neither');
+});
+
+/* ---------------------------------------------------------------- RUSH (round 10): the Boss Rush and the ghost race */
+t.test('rush: the lineup, every boss once in a seeded order, then the Prize Master, The Machine only once met', () => {
+  const K = DATA.RUSH;
+  const six = [].concat(K.ACTS[1], K.ACTS[2], K.ACTS[3]);
+  t.eq(six.length, 6, 'three acts, a boss and its understudy each');
+  for (const a of [1, 2, 3]) for (const id of K.ACTS[a]) t.ok(ENEMIES[id] && ENEMIES[id].tier === 'boss' && DATA.rushActOf(id) === a, `${id}: an act ${a} boss`);
+  t.ok(ENEMIES[K.FINAL].tier === 'boss' && ENEMIES[K.SECRET].tier === 'boss' && ENEMIES[K.SECRET].secret, 'the Prize Master and The Machine');
+  t.ok(six.includes('plushqueen') && six.includes('conveyorking') && six.includes('arcticarcade'), 'the alternates are in');
+  const firsts = new Set(), orders = new Set();
+  for (let s = 1; s <= 60; s++) {
+    const o = DATA.rushOrder(s), m = DATA.rushOrder(s, { machine: true });
+    t.eq(o.length, 7, `seed ${s}: seven bosses`);
+    t.eq(o.slice(0, 6).slice().sort().join(), six.slice().sort().join(), `seed ${s}: every act boss once`);
+    t.eq(o[6], K.FINAL, `seed ${s}: the Prize Master comes last`);
+    t.ok(!o.includes(K.SECRET), `seed ${s}: no Machine unless met`);
+    t.ok(m.length === 8 && m[7] === K.SECRET && m.slice(0, 7).join() === o.join(), `seed ${s}: The Machine closes the lineup once met`);
+    firsts.add(o[0]); orders.add(o.join());
+  }
+  t.ok(orders.size >= 40 && firsts.size === 6, `a random order (${orders.size} orders, ${firsts.size} openers)`);
+  t.eq(DATA.rushOrder(4242).join(), DATA.rushOrder(4242).join(), 'the same seed, the same lineup');
+  t.ok(DATA.rushActOf(K.SECRET) === 3 && DATA.rushActOf('nope') === 3, 'The Machine and junk fight in act 3');
+  for (const id of six.concat([K.FINAL, K.SECRET])) {
+    const hk = DATA.rushHpK(id), dk = DATA.rushDmgK(id);
+    t.ok(hk > 0.2 && hk <= 1 && dk > 0.2 && dk <= 1, `${id}: rush hp x${hk}, hits x${dk}`);
+  }
+  t.eq(DATA.rushHpK(K.FINAL), K.HPK.final, 'the Prize Master has its own share');
+  t.eq(DATA.rushDmgK(K.SECRET), K.DMGK.secret, 'so does The Machine');
+});
+
+t.test('rush: a starting kit per crawler (real items, pool relics, claw parts, max hp), and one for a crawler without its own', () => {
+  for (const c in CHARACTERS) {
+    const k = DATA.rushKit(c);
+    t.ok(k.items.length >= 3 && k.items.every(id => ITEMS[id] && ITEMS[id].rarity !== 'junk'), `${c}: kit items (${k.items.join(', ')})`);
+    t.ok(k.relics.length >= 1 && k.relics.every(id => RELICS[id] && !RELICS[id].starter && RELICS[id].rarity !== 'boss'), `${c}: kit relics`);
+    t.ok(k.claw.every(id => CLAW_UPGRADES[id]) && k.hp > 0, `${c}: a claw part and max hp`);
+    t.ok(!k.relics.includes(CHARACTERS[c].relic), `${c}: never its own starter relic`);
+    // a per-fight relic, never a per-kill one: a rush fight has one enemy
+    t.ok(!k.relics.includes('trophy_rack') && !k.relics.includes('contagion') && !k.relics.includes('blood_bag'), `${c}: no relic that waits for a second kill`);
+  }
+  for (const c of ['knight', 'alchemist', 'rogue', 'gambler', 'engineer'].concat(CHARACTERS.bubbler ? ['bubbler'] : [])) {
+    t.ok(DATA.rushKit(c).own, `${c} has a kit of its own`);
+    for (const id of DATA.rushKit(c).items) t.ok(!ITEMS[id].char || ITEMS[id].char === c, `${c}: ${id} is its own or shared`);
+  }
+  // every crawler on the roster brings its own kit (a new crawler needs a line in RUSH.KIT)
+  for (const c in CHARACTERS) t.ok(DATA.rushKit(c).own, `${c}: an entry in RUSH.KIT`);
+  if (CHARACTERS.bubbler) {
+    const kb = DATA.rushKit('bubbler');
+    t.ok(kb.items.some(id => ITEMS[id].char === 'bubbler') && kb.items.every(id => ITEMS[id].rarity !== 'c'), 'Ms. Bubbles brings her own uncommons and better');
+    t.ok(kb.items.some(id => (ITEMS[id].fx || []).some(f => f.k === 'dmg')), 'and something that hits');
+  }
+  const any = DATA.rushKit('nobody');
+  t.ok(!any.own && any.items.length === DATA.RUSH.KIT_ANY.n && any.items.every(id => ITEMS[id]) && any.relics.length === 2, 'a crawler without a kit gets the spare one');
+  t.eq(JSON.stringify(DATA.rushKit('knight')), JSON.stringify(DATA.rushKit('knight')), 'the same kit every time');
+});
+
+t.test('rush: the draft (1 of 3 kinds, a heal when hurt, no claw part when maxed), the score, the clock', () => {
+  const K = DATA.RUSH;
+  let heals = 0, claws = 0;
+  for (let s = 1; s <= 80; s++) for (let i = 1; i <= 7; i++) {
+    const k = DATA.rushDraftKinds(s, i, { hp: 0.9 });
+    t.ok(k.length === 3 && new Set(k).size === 3 && k.every(x => K.KINDS.includes(x)), `seed ${s} boss ${i}: three kinds (${k.join()})`);
+    if (k.includes('heal')) heals++;
+    if (k.includes('claw')) claws++;
+    t.ok(DATA.rushDraftKinds(s, i, { hp: 0.3 }).includes('heal'), `seed ${s} boss ${i}: hurt, a heal is offered`);
+    t.ok(!DATA.rushDraftKinds(s, i, { hp: 0.9, claw: false }).includes('claw'), `seed ${s} boss ${i}: a maxed claw gets no part`);
+  }
+  t.ok(heals > 300 && heals < 560 && claws > 300 && claws < 560, `each kind turns up about 3 times in 4 (${heals}, ${claws} of 560)`);
+  t.eq(DATA.rushDraftKinds(9, 3, { hp: 0.9 }).join(), DATA.rushDraftKinds(9, 3, { hp: 0.9 }).join(), 'the same seed and boss, the same cards');
+  // the score: bosses, the clear, hp left, seconds under par
+  const fall = DATA.rushScore({ n: 3, total: 7, won: false, t: 200, hp: 0 });
+  t.ok(fall.total === 3 * K.SCORE.boss && fall.lines.length === 1, 'a fall scores its bosses: ' + fall.total);
+  const par = K.PAR * 7;
+  const win = DATA.rushScore({ n: 7, total: 7, won: true, t: par - 100, hp: 40 });
+  t.eq(win.total, 7 * K.SCORE.boss + K.SCORE.clear + 40 * K.SCORE.hp + 100 * K.SCORE.sec, 'a clear: bosses, the clear, hp, the seconds under par');
+  t.ok(['boss', 'clear', 'hp', 'time'].every(k => win.lines.some(l => l.k === k && l.v > 0 && l.label)), 'every line has its words');
+  t.ok(DATA.rushScore({ n: 7, total: 7, won: true, t: par - 200, hp: 40 }).total > win.total, 'faster scores more');
+  t.eq(DATA.rushScore({ n: 7, total: 7, won: true, t: par + 500, hp: 0 }).total, 7 * K.SCORE.boss + K.SCORE.clear, 'over par: no time bonus, never negative');
+  t.eq(DATA.rushScore(null).total, 0, 'junk scores nothing');
+  // the clock
+  t.eq(DATA.rushFmt(83.46), '1:23.4', 'm:ss.d');
+  t.eq(DATA.rushFmt(0), '0:00.0', 'zero');
+  t.eq(DATA.rushFmt(59.99), '0:59.9', 'never rounds up past the second');
+  t.eq(DATA.rushFmt(3725), '1:02:05', 'an hour or more');
+  t.eq(DATA.rushFmt('junk'), '0:00.0', 'junk');
+  t.eq(DATA.rushFmt(-4), '0:00.0', 'never negative');
+});
+
+t.test('rush: the bests per crawler, the leaderboard, junk profiles', () => {
+  for (const junk of [null, 5, [], { best: [], beat: 'x', runs: -3 }, { best: { knight: { t: 'x', n: -1 } } }]) {
+    const f = DATA.rushFix(junk);
+    t.ok(f && f.best && f.beat && f.runs >= 0 && f.clears >= 0 && f.score >= 0 && typeof f.pick === 'string', 'junk repairs: ' + JSON.stringify(junk));
+  }
+  const kept = DATA.rushFix({ runs: 4, clears: 1, score: 12000, best: { knight: { t: 612.5, n: 7, s: 12000, at: 5 } }, beat: { hoard: 3, nope: 2 }, pick: 'rogue' });
+  t.ok(kept.runs === 4 && kept.best.knight.t === 612.5 && kept.beat.hoard === 3 && !kept.beat.nope && kept.pick === 'rogue', 'a good record is kept, unknown bosses dropped');
+  const M = DATA.rushFix(null);
+  let r = DATA.rushRecord(M, { char: 'knight', t: 300, n: 2, won: false, score: 2000 });
+  t.ok(!r.newTime && r.newN && M.best.knight.t === 0 && M.best.knight.n === 2 && M.runs === 1 && M.clears === 0, 'a fall books its bosses, no time');
+  r = DATA.rushRecord(M, { char: 'knight', t: 700, n: 7, won: true, score: 14000 });
+  t.ok(r.newTime && r.newScore && r.newTop && M.best.knight.t === 700 && M.clears === 1 && M.score === 14000, 'the first clear sets the time');
+  r = DATA.rushRecord(M, { char: 'knight', t: 800, n: 7, won: true, score: 13000 });
+  t.ok(!r.newTime && !r.newScore && M.best.knight.t === 700 && r.prevT === 700, 'a slower clear keeps the best');
+  r = DATA.rushRecord(M, { char: 'knight', t: 650.25, n: 7, won: true, score: 15000 });
+  t.ok(r.newTime && M.best.knight.t === 650.25, 'a faster one takes it');
+  DATA.rushRecord(M, { char: 'rogue', t: 500, n: 7, won: true, score: 9000 });
+  DATA.rushRecord(M, { char: 'gambler', t: 900, n: 4, won: false, score: 4000 });
+  DATA.rushRecord(M, { char: 'alchemist', t: 100, n: 5, won: false, score: 5000 });
+  const B = DATA.rushBoard(M);
+  t.eq(B.map(x => x.c).join(), 'rogue,knight,alchemist,gambler', 'the board: clears fastest first, then the most bosses');
+  t.eq(DATA.rushBoard(null).length, 0, 'an empty board');
+  t.ok(JSON.stringify(DATA.rushFix(M)) === JSON.stringify(M), 'a record survives its own repair');
+});
+
+t.test('ghost: compact checkpoints, a record repaired, the delta at the same step, the pass, the chart', () => {
+  const cp = DATA.ghoCp({ n: 3, a: 2, q: -4, r: 9, hp: 51.6, g: 120, s: 2345, tu: 14, t: 301.7 });
+  t.eq(JSON.stringify(cp), '[3,2,-4,9,52,120,2345,14,302]', 'nine whole numbers');
+  t.ok(JSON.stringify(cp).length < 50, 'about 40 bytes a checkpoint');
+  t.eq(JSON.stringify(DATA.ghoRead(cp)), JSON.stringify({ n: 3, a: 2, q: -4, r: 9, hp: 52, g: 120, s: 2345, tu: 14, t: 302 }), 'read back');
+  t.ok(DATA.ghoRead(null) === null && DATA.ghoRead([1, 2]) === null && DATA.ghoRead([1, 2, 3, 4, 5, 6, 'x', 8, 9]) === null, 'junk checkpoints read as nothing');
+  t.eq(JSON.stringify(DATA.ghoCp({ s: NaN, hp: -5 })), '[0,0,0,0,0,0,0,0,0]', 'junk numbers are zeros');
+  // records
+  for (const junk of [null, 3, [], { d: 'x', w: [], passes: -2 }, { d: { key: 5, cps: [] } }]) {
+    const f = DATA.ghoFix(junk);
+    t.ok(f && f.d === null && f.w === null && f.passes === 0, 'junk repairs: ' + JSON.stringify(junk));
+  }
+  const rec = DATA.ghoRecFix({ key: '2026-09-28', cps: [DATA.ghoCp({ n: 1, s: 600 }), 'junk', DATA.ghoCp({ n: 2, s: 900 })], s: 1500, won: false, c: 'rogue', e: [1, 3, 4] });
+  t.ok(rec.cps.length === 2 && rec.s === 1500 && rec.c === 'rogue' && rec.n === 2 && rec.e.join() === '1,3,4', 'a record keeps its good checkpoints and where it ended');
+  const many = DATA.ghoRecFix({ key: 'k', cps: Array.from({ length: 200 }, (_, i) => DATA.ghoCp({ n: i + 1, s: i })) });
+  t.eq(many.cps.length, DATA.GHO.MAX, 'a record keeps at most GHO.MAX checkpoints');
+  t.ok(JSON.stringify(DATA.ghoFix({ d: many })).length < 5000, 'a long day stays small');
+  // the delta at the same step
+  const ghost = { cps: [DATA.ghoCp({ n: 1, s: 500 }), DATA.ghoCp({ n: 2, s: 1000 })], s: 1300 };
+  const me = [DATA.ghoCp({ n: 1, s: 450 })];
+  let d = DATA.ghoDelta(me, ghost);
+  t.ok(d.n === 1 && d.d === -50 && d.have && !d.ahead && d.g.s === 500, 'behind at fight 1: -50');
+  me.push(DATA.ghoCp({ n: 2, s: 1100 }));
+  d = DATA.ghoDelta(me, ghost);
+  t.ok(d.d === 100 && d.ahead, 'ahead at fight 2: +100');
+  me.push(DATA.ghoCp({ n: 3, s: 1250 }));
+  d = DATA.ghoDelta(me, ghost);
+  t.ok(d.d === -50 && !d.have && d.g === null, 'its climb ended at 1300: you race its final score');
+  t.ok(DATA.ghoDelta([], ghost).d === 0 && DATA.ghoDelta([], ghost).have, 'level at the start');
+  t.eq(DATA.ghoDelta(me, null), null, 'no ghost, no race');
+  t.ok(DATA.ghoPassed(-50, 100) && DATA.ghoPassed(0, 1) && !DATA.ghoPassed(10, 100) && !DATA.ghoPassed(-5, 0) && !DATA.ghoPassed(-5, -1), 'passing is going from behind or level to ahead');
+  t.eq(JSON.stringify(DATA.ghoAt(ghost, 2)), JSON.stringify(DATA.ghoRead(ghost.cps[1])), 'where it stood after 2 fights');
+  t.ok(DATA.ghoAt(ghost, 0) === null && DATA.ghoAt(ghost, 3) === null && DATA.ghoAt(null, 1) === null, 'nothing at the start, past its end, or with no ghost');
+  t.eq(DATA.ghoSeries(ghost.cps, 1300).join(), '0,500,1000,1300', 'the chart series: from 0, a point a fight, the final');
+  t.eq(DATA.ghoSeries(null).join(), '0', 'an empty series');
+});
+
+t.test('rush: two stickers (a cleared rush, an overtaken ghost), inside the cap', () => {
+  const A = DATA.ACHIEVEMENTS;
+  t.ok(A.rush_clear && A.photo_finish, 'Rush Hour and Photo Finish');
+  t.ok(DATA.ACH_IDS.length <= 60, `the board holds ${DATA.ACH_IDS.length} of 60`);
+  t.ok(new Set(DATA.ACH_IDS.map(id => A[id].name)).size === DATA.ACH_IDS.length, 'the names stay unique');
+  t.ok(!DATA.achCheck({ kind: 'end', run: { rush: { won: false } } }, {}).includes('rush_clear'), 'a fall is not a clear');
+  t.ok(!DATA.achCheck({ kind: 'tick', run: { rush: { won: true } } }, {}).includes('rush_clear'), 'only at the rush\'s end');
+  t.ok(DATA.achCheck({ kind: 'end', run: { rush: { won: true } } }, {}).includes('rush_clear'), 'a clear earns it');
+  t.ok(!DATA.achCheck({ kind: 'tick', run: { gho: { passed: false } }, meta: {} }, {}).includes('photo_finish'), 'no pass, no sticker');
+  t.ok(DATA.achCheck({ kind: 'tick', run: { gho: { passed: true } }, meta: {} }, {}).includes('photo_finish'), 'a pass in the run');
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { gho: { passes: 1 } } }, {}).includes('photo_finish'), 'or one on the profile (an old run caught up)');
+  for (const id of ['rush_clear', 'photo_finish']) t.ok((A[id].name + A[id].text).indexOf(String.fromCharCode(0x2014)) < 0 && A[id].text.length < 80, id + ': short, no em dash');
+});
+
+// ------------------------------------------------ round 10 (ROS): Ms. Bubbles, the mutator pack, three pets
+// DESIGN.md "Ms. Bubbles, the mutator pack and three pets (round 10)".
+const ROS_DASH = new RegExp(String.fromCharCode(0x2014));
+t.test('round 10: Ms. Bubbles, the Foam Chemist', () => {
+  const c = CHARACTERS.bubbler;
+  t.ok(c && c.name === 'Ms. Bubbles' && c.title === 'The Foam Chemist', 'Ms. Bubbles, The Foam Chemist');
+  t.eq(c.bin.length, 19, 'a 19 item starting bin');
+  t.ok(c.bin.filter(id => ITEMS[id].char === 'bubbler').length >= 10 && c.bin.every(id => R10_ITEMS.includes(id) || !ITEMS[id].char), 'the bin is mostly her new kit');
+  t.ok(c.bubbles === true && c.relic === 'bubble_wand' && RELICS.bubble_wand.starter && RELICS.bubble_wand.rarity === 'event', 'her gift: bubbles; her starter: the Bubble Wand');
+  t.ok(c.hp === 68 && c.claw.grabs === 3 && c.claw.grip < 1, 'hp, grabs, a slippery grip (the bubbles make up for it)');
+  t.eq(c.unlock, 'win', 'unlocked by winning a run');
+  t.eq(c.vsLine, 'Hold your breath, sweetie.', 'her versus line');
+  const seen = new Set();
+  for (let d = 0; d < 200; d++) seen.add(DATA.dailyChar('2026-12-' + d));
+  t.ok(seen.has('bubbler'), 'the daily rotation deals her in');
+  const wk = new Set();
+  for (let w = 1; w <= 52; w++) wk.add(DATA.wkDef('2027-W' + String(w).padStart(2, '0')).char);
+  t.ok(wk.has('bubbler'), 'so does the weekly challenge');
+  for (const r of ['c', 'u', 'r', 'l']) t.ok(DATA.pool(r, 'bubbler').length >= 1, `pool ${r}/bubbler has choices`);
+  for (let seed = 1; seed <= 200; seed++) {
+    const r = DATA.rewardItems(U.rng(seed), 1 + (seed % 3), 'bubbler');
+    if (r.length !== 3 || !r.every(id => ITEMS[id] && !ITEMS[id].starter && (!ITEMS[id].char || ITEMS[id].char === 'bubbler'))) { t.ok(false, `bubbler rewards seed ${seed} [${r}]`); break; }
+  }
+  t.ok(true, 'her reward screens only offer shared and bubbler items');
+  let soap = 0;
+  for (const id of R10_ITEMS) {
+    const d = ITEMS[id];
+    t.ok(d && d.char === 'bubbler' && !ROS_DASH.test(d.name + d.text), `${id}: hers, no em dash`);
+    t.ok(d.soap == null || (Number.isInteger(d.soap) && d.soap >= 1 && d.soap <= 3), `${id}: a sane soap count`);
+    if (d.soap) soap++;
+  }
+  t.ok(soap >= 4, `soap items blow bubbles (${soap})`);
+  t.ok(R10_ITEMS.some(id => ITEMS[id].rarity === 'l'), 'a legendary of her own');
+  t.ok(ITEMS.rubber_duck.density < 1 && ITEMS.soap_bar.friction < 0.2, 'the duck floats, the soap slips');
+  t.ok(DATA.loreHint && /Ms\. Bubbles/.test(DATA.loreHint('cr_bubbler', {})), 'a Codex page for her');
+});
+t.test('round 10: her relics, outfits, stickers and evolutions', () => {
+  for (const id of R10_RELICS) t.ok(RELICS[id] && RELICS[id].text && !ROS_DASH.test(RELICS[id].text), `${id} exists`);
+  t.ok(!RELICS.foam_machine.starter && RELICS.foam_machine.rules.bubbles === 1 && DATA.relicPool('r').includes('foam_machine'), 'the Foam Machine: a pool rare, a rule');
+  t.ok(RELICS.soap_dish.bub.block === 2 && RELICS.squeaky_toy.bub.combo === 3, 'bub numbers');
+  const fits = DATA.vaultList('outfit', 'bubbler');
+  t.eq(fits.join(), 'fit_bub_showercap,fit_bub_snorkel', 'two outfits of hers');
+  t.ok(fits.every(id => DATA.vaultPrice(id) > 0), 'both for sale');
+  t.ok(DATA.COSMETICS.fit_bub_witch && DATA.COSMETICS.fit_bub_witch.season === 'halloween', 'and a Claw-o-ween witch hat');
+  for (const id of ['foam_party', 'squeaky_clean']) t.ok(DATA.ACHIEVEMENTS[id] && DATA.ACH_IDS.includes(id), `sticker ${id}`);
+  const ev = (n) => DATA.achCheck({ kind: 'ev', ev: { t: 'ros', k: 'combo', n } }, {});
+  t.ok(ev(3).includes('foam_party') && !ev(2).includes('foam_party'), 'Foam Party: three bubbles in one grab');
+  t.ok(DATA.achCheck({ kind: 'win', run: { char: 'bubbler' } }, {}).includes('squeaky_clean') && !DATA.achCheck({ kind: 'win', run: { char: 'knight' } }, {}).includes('squeaky_clean'), 'Squeaky Clean: a win as her');
+  for (const [evo, from, relic] of [['captain_quack', 'rubber_duck', 'foam_machine'], ['bubble_shield', 'soap_bar', 'soap_dish']]) {
+    t.ok(DATA.evoOf(from) && DATA.evoOf(from).to === evo && DATA.evoOf(from).relic === relic, `${from} + ${relic} evolves into ${evo}`);
+    t.ok(ITEMS[evo] && ITEMS[evo].evolved && DATA.EVO_FX['evo:' + evo] && DATA.EVO_FX['evo:' + evo].bub, `${evo}: an evolved item with a bubble aura`);
+  }
+  t.ok(CHARACTERS.bubbler.bin.some(x => DATA.evoOf(x)), 'a starter item can evolve');
+  t.ok(DATA.ROS && DATA.ROS.BUB_TIP.length > 20, 'the bubbles\' words');
+});
+t.test('round 10: the mutator pack merges, clashes nowhere, joins every pool', () => {
+  const PACK = ['moon', 'tinyclaw', 'earthquake', 'mirror', 'sticky', 'flood'];
+  for (const id of PACK) t.ok(DATA.MUTATORS[id] && DATA.MUT_IDS.includes(id) && !ROS_DASH.test(DATA.MUTATORS[id].text), `${id} is in the panel`);
+  const m = DATA.mutMods(PACK.slice(0, 3)), n = DATA.mutMods(PACK.slice(3));
+  t.ok(m.bounce === 0.72 && Math.abs(m.clawK - 0.7) < 1e-9 && m.dmgOut === 1.5 && m.tremor === 2, 'Moon Bounce, Tiny Claw, Earthquake');
+  t.ok(n.mirror === true && n.sticky === 0.35 && n.flood === 1, 'Mirror, Sticky, Flood');
+  const none = DATA.mutMods([]);
+  t.ok(none.bounce === 0 && none.clawK === 1 && none.tremor === 0 && !none.mirror && none.sticky === 0 && none.flood === 0, 'neutral without them');
+  t.eq(DATA.rosMutMerge(null, {}), null, 'merge: junk in, junk out');
+  t.ok(DATA.mutMods(['double', 'tinyclaw']).dmgOut === 0.75, 'Half Damage and Big Prizes multiply');
+  const daily = new Set(), loop = new Set();
+  for (let d = 1; d <= 400; d++) for (const id of DATA.dailyMutators('2027-' + String(1 + (d % 12)).padStart(2, '0') + '-' + String(1 + (d % 28)).padStart(2, '0') + ':' + d)) daily.add(id);
+  for (let s = 1; s <= 300; s++) loop.add(DATA.mutPick(U.rng(s), []));
+  t.ok(PACK.every(id => daily.has(id)), 'the daily draws them');
+  t.ok(PACK.every(id => loop.has(id)), 'an Endless loop draws them');
+  const wk = new Set();
+  for (let w = 1; w <= 53; w++) { const d = DATA.wkDef('2026-W' + String(w).padStart(2, '0')); if (d) d.muts.forEach(id => wk.add(id)); }
+  t.ok(PACK.some(id => wk.has(id)), 'the weekly draws them as extras');
+});
+t.test('round 10: three new pets, their synergies', () => {
+  for (const id of ['penguin', 'molerat', 'roomba']) {
+    const p = DATA.PETS[id];
+    t.ok(p && DATA.PET_IDS.includes(id) && p.when === 'turn', `${id}: a turn pet`);
+    t.ok(DATA.PET_SYN[id] && DATA.petSynOn(id, { bin: [], relics: [], clawType: 'classic' }) === null, `${id}: a synergy, off on a bare run`);
+  }
+  const on = (id, run) => !!DATA.petSynOn(id, Object.assign({ bin: [], relics: [], clawType: 'classic' }, run));
+  t.ok(on('penguin', { bin: [{ id: 'frost_pearl' }] }) && !on('penguin', { bin: [{ id: 'torch' }] }), 'penguin: a Frost item in the bin');
+  t.ok(on('molerat', { relics: ['money_bags'] }) && !on('molerat', { relics: ['beehive'] }), 'mole rat: a Greed relic');
+  t.ok(on('roomba', { clawType: 'vacuum' }) && !on('roomba', { clawType: 'twin' }), 'robot vacuum: the Vacuum Nozzle');
+  const seen = new Set();
+  for (let s = 1; s <= 120; s++) DATA.petOffer(U.rng(s), 'hamster', 3).forEach(id => seen.add(id));
+  t.ok(['penguin', 'molerat', 'roomba'].every(id => seen.has(id)), 'the pet shop offers them');
 });
 
 t.done();

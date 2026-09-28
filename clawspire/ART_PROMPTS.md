@@ -633,6 +633,26 @@ Every file is optional: the drawn art (`RENDER.fam`, the nine `EA.fam_*` drawing
 | `art/enemies/fam_baritone.png` | 386x512 | 1:1.33, vertical | 80x106 | fam_baritone (act 3, The Snow Globe Choir) | Snowman Baritone: a big snow globe on a dark base, inside it a snowman in a black top hat with a pink band and an orange scarf, mouth open on a low note, snow swirling around. Full body, facing left, feet on the bottom edge. |
 | `art/items/id/fam_can.png` | 308x512 | 1:1.67, vertical | 18x30 | fam_can (the Vending Gang's empty can, junk) | an empty red soda can standing upright, a white label band reading POP, a dent in its side and the pull tab bent open |
 
+## Ms. Bubbles (round 10)
+
+Ms. Bubbles' own art (DESIGN.md "Ms. Bubbles, the mutator pack and three pets (round 10)"). Every file is optional: the drawn art is the fallback (`RENDER.ros`: her portrait, her items' silhouettes, the evolutions). Her kit is a bathroom shelf: pastel pink (#ff9ad0), foam cyan (#8dfff5), rubber-duck yellow (#ffd23f), a little lavender (#c9a6ff), glossy and clean with soap-film rainbow highlights. The bubbles, the Rising Water, the mutator signs and the three new pets (the Penguin, the Mole Rat, the Robot Vacuum) are drawn in code and take no files.
+
+| File | Gen size (px) | Aspect, orientation | In game (px) | Used by | Prompt |
+| --- | --- | --- | --- | --- | --- |
+| `art/portraits/bubbler.png` | 512x512 | 1:1, square | 96x96 | the Foam Chemist | Ms. Bubbles, The Foam Chemist: a cheerful laundromat auntie with a big cloud of curly lavender hair with soap bubbles caught in it, pink cat-eye glasses, rosy cheeks, a wide smile blowing a small bubble, a white smock collar with a rubber duck pin, flat teal background (#12303a) |
+| `art/items/id/rubber_duck.png` | 512x512 | 1:1, square | 26x26 | rubber_duck | a classic yellow rubber duck seen from the side, orange beak, a shiny highlight on its head, glossy toy plastic |
+| `art/items/id/soap_bar.png` | 512x273 | 1.88:1, horizontal | 30x16 | soap_bar | a rounded pink bar of soap lying flat, an embossed swirl on top, two tiny soap bubbles floating off one corner, glossy |
+| `art/items/id/bubble_pipe.png` | 512x171 | 3:1, horizontal | 36x12 | bubble_pipe | a small wooden bubble pipe lying sideways, a curved stem, a round bowl with a soap film, a clear bubble growing from the bowl |
+| `art/items/id/sponge.png` | 512x394 | 1.3:1, horizontal | 26x20 | sponge | a yellow kitchen sponge with a green scrubby top layer, little holes in the foam, slightly squashed |
+| `art/items/id/scrub_brush.png` | 512x179 | 2.86:1, horizontal | 40x14 | scrub_brush | a wooden scrub brush seen from the side, a curved wooden back, a row of cream bristles underneath |
+| `art/items/id/bath_bomb.png` | 512x512 | 1:1, square | 28x28 | bath_bomb | a round pink bath bomb with cyan speckles and a seam around its middle, fizzing, a few tiny bubbles rising off it |
+| `art/items/id/foam_cannon.png` | 512x244 | 2.1:1, horizontal | 42x20 | foam_cannon | a cyan toy foam blaster pointing right, a pink tank on top, a chunky grip, puffs of white foam at the nozzle |
+| `art/items/id/loofah.png` | 512x241 | 2.13:1, horizontal | 34x16 | loofah | a natural beige loofah sponge, an oval of woven mesh fibres, a pink loop of string on one end |
+| `art/items/id/bubble_bath.png` | 282x512 | 1:1.82, vertical | 22x40 | bubble_bath | a tall cyan bottle of bubble bath standing upright, a pink label band, thick white foam spilling over the neck |
+| `art/items/id/golden_duck.png` | 512x512 | 1:1, square | 32x32 | golden_duck | a solid gold rubber duck wearing a tiny crown, gleaming, a soft golden glow, a sparkle on its head |
+| `art/items/id/captain_quack.png` | 512x512 | 1:1, square | 30x30 | captain_quack | Captain Quack (evolved): a yellow rubber duck in a navy captain's hat with a gold star, saluting, a proud chest out |
+| `art/items/id/bubble_shield.png` | 512x301 | 1.7:1, horizontal | 34x20 | bubble_shield | Bubble Shield (evolved): a pink bar of soap sealed inside a big shining soap bubble, rainbow film highlights, a white window glint |
+
 ---
 
-320 prompts in total. Sizes in this book come from `ART.paths()` in `js/art.js`; if an item or enemy changes size in `js/data.js`, the in-game size changes with it and the game still fits whatever PNG is there.
+333 prompts in total. Sizes in this book come from `ART.paths()` in `js/art.js`; if an item or enemy changes size in `js/data.js`, the in-game size changes with it and the game still fits whatever PNG is there.

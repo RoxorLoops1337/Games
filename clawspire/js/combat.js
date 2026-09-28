@@ -508,6 +508,7 @@ const COMBAT = (() => {
     for (const e of F.enemies) api.pickIntent(F, e);
     famFight(F);   // enemy families: the Crescendo, the choir's lockstep (FAMILY block)
     cr8Fight(F, run);   // Mama Mech's turret (CR8 block)
+    rosFight(F, run);   // Ms. Bubbles' bubbles, Tiny Claw's size (ROS block)
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
     api.startTurn(F);
     if (num(mods.startStr, 0)) api.status(F, F.player, 'str', mods.startStr);
@@ -2160,6 +2161,7 @@ const COMBAT = (() => {
       if (inst.rust && fxOf(def, plus).length) text(F, F.player, 'RUSTY');
       resolveFx(F, ctx, plus);
       if (F.phase === 'player') cr8Play(F, inst, def);   // metal feeds Mama Mech's turret (CR8 block)
+      rosPlay(F, inst, def);   // soap blows bubbles (ROS block)
       // A lit bomb grabbed out flies back at whoever lit it.
       if (inst.fuse != null) throwBack(F, inst);
       // Echo rule: every nth magic item played resolves twice.
@@ -2907,6 +2909,99 @@ const COMBAT = (() => {
   api.turretFire = function (F) { const c = begin(F); if (F && F.tur) { cr8TurnEnd(F); checkOver(F); } return end(F, c); };
   api.turretOf = (F) => (F && F.tur ? F.tur : null);
   /* ================= /CR8 ================= */
+
+  /* ================= ROS (round 10): Ms. Bubbles' bubbles, the mutator pack's claw, the new pets ================= */
+  // DESIGN.md "Ms. Bubbles, the mutator pack and three pets". Ms. Bubbles
+  // (CHARACTERS.bubbler, `bubbles: true`) blows ROS.gift bubbles into the
+  // cabinet every turn (rules.bubbles, the Foam Machine, blows ROS.rule for
+  // anyone, and one more for her); an item's `soap` blows that many more when
+  // it is played ({t:'ros', k:'blow', n}). The game floats them and reports
+  // the pops: api.rosPop(F, n, 'chute' | 'bin'). A bubble popped in the chute
+  // pays the relics' `bub.block` Block and `bub.dmg` to a random enemy; two
+  // or more in one grab is a BUBBLE COMBO: n x combo damage to ALL. A bubble
+  // that bursts in the bin at the turn's end pays `bub.bin` Block. Pop damage
+  // has no attacker, like a relic's. F.bub = {n, first, block, dmg, combo,
+  // bin, blown, popped, combos, best} or null.
+  const ROS = { gift: 2, rule: 1, combo: 4, max: 6 };
+  // A relic-shaped def's bubble numbers (relics, set bonuses, evolved auras).
+  function rosSum(F) {
+    const s = { n: 0, first: 0, block: 0, dmg: 0, combo: 0, bin: 0 };
+    for (const id of F.relics.concat(F.sets || [], F.evos || [])) {
+      const r = relicDef(id), b = r && r.bub;
+      if (!b || typeof b !== 'object') continue;
+      for (const k in s) s[k] += Math.max(0, num(b[k], 0));
+    }
+    return s;
+  }
+  function rosState(F, n) {
+    const s = rosSum(F);
+    return { n: clamp(Math.round(n + s.n), 0, ROS.max), first: s.first, block: s.block, dmg: s.dmg, combo: ROS.combo + s.combo, bin: s.bin,
+      blown: 0, popped: 0, combos: 0, best: 0 };
+  }
+  // newFight: who blows bubbles, and the mutator pack's claw size.
+  function rosFight(F, run) {
+    const cd = run.char ? (tbl('CHARACTERS')[run.char] || null) : null;
+    const gift = !!(cd && cd.bubbles), rule = num(F.rules && F.rules.bubbles, 0) > 0;
+    F.bub = gift || rule ? rosState(F, (gift ? ROS.gift : 0) + (rule ? ROS.rule : 0)) : null;
+    if (F.bub && rule) ruleProc(F, 'bubbles', gift ? 'FOAM MACHINE +1' : 'BUBBLES ON');
+    // Tiny Claw, Big Prizes: the claw's size (the game builds the rig from F.claw)
+    const k = F.mut ? num(F.mut.clawK, 1) : 1;
+    if (k > 0 && k !== 1) F.claw.width = clamp(num(F.claw.width, 1) * k, 0.35, 2.5);
+  }
+  // A played item with `soap` blows that many bubbles (the game floats them).
+  function rosPlay(F, inst, def) {
+    const n = def ? Math.round(num(def.soap, 0)) : 0;
+    if (n <= 0 || F.phase !== 'player') return;
+    if (!F.bub) F.bub = rosState(F, 0);   // soap in anyone's hands still bubbles
+    emit(F, { t: 'ros', k: 'blow', n, src: def.id });
+  }
+  // How many bubbles the game blows at the start of this turn.
+  api.rosBlowN = (F) => (F && F.bub ? F.bub.n + (F.turn === 1 ? F.bub.first : 0) : 0);
+  // The game popped n bubbles: 'chute' (delivered) or 'bin' (burst at the turn's end).
+  api.rosPop = function (F, n, where) {
+    const c = begin(F);
+    n = Math.round(num(n, 0));
+    if (!F || !F.bub || n <= 0 || F.phase === 'over') return end(F, c);
+    const B = F.bub, p = F.player;
+    if (where === 'bin') {
+      emit(F, { t: 'ros', k: 'burst', n });
+      if (B.bin > 0) gainBlock(F, p, B.bin * n);
+    } else {
+      B.popped += n;
+      emit(F, { t: 'ros', k: 'pop', n, block: B.block * n });
+      if (B.block > 0) gainBlock(F, p, B.block * n);
+      for (let i = 0; i < n && B.dmg > 0 && F.phase !== 'over'; i++) { const e = hitTargets(F, 'random')[0]; if (e) api.damage(F, null, e, B.dmg); }
+      if (n >= 2 && F.phase !== 'over') {
+        const dmg = n * B.combo;
+        B.combos++; B.best = Math.max(B.best, n);
+        emit(F, { t: 'ros', k: 'combo', n, dmg });
+        log(F, `Bubble Combo x${n}.`);
+        for (const e of alive(F)) { if (F.phase === 'over') break; api.damage(F, null, e, dmg); }
+      }
+    }
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  api.rosBlown = (F, n) => { if (F && F.bub) F.bub.blown += Math.max(0, Math.round(num(n, 0))); };
+  // A new pet's synergy (DATA.PET_SYN): its proc, then chill {v} ALL, gold {v}, block {v}.
+  api.rosPetSyn = function (F, petId, k, o) {
+    const c = begin(F);
+    if (!F || F.phase === 'over') return end(F, c);
+    o = o || {};
+    const s = tbl('PET_SYN')[petId] || {};
+    emit(F, procEv('pet', 'pet:' + petId, s.name || petId, s.icon || '', s.color || '#ff9ec7', o.label || String(s.name || 'PET').toUpperCase(), F.player, F));
+    const v = Math.max(1, Math.round(num(o.v, 1)));
+    if (k === 'chill') alive(F).forEach(e => api.status(F, e, 'chill', v));
+    else if (k === 'gold') api.gainGold(F, v);
+    else if (k === 'block') gainBlock(F, F.player, v);
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  api.ROS = ROS;
+  api.rosOf = (F) => (F && F.bub ? F.bub : null);
+  /* ================= /ROS ================= */
 
   /* ================= FAMILY (round 9: enemy families) =================
      DESIGN.md "Enemy families (round 9)". Members carry def.fam, the numbers

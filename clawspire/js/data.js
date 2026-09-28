@@ -50,7 +50,8 @@ const DATA = (() => {
   // luck: empty grabs and near misses fill the Luck meter (Lucky Lou's gift);
   // cashAmp: +1 damage per Luck on every cash out.
   // turret (CR8, round 8): any crawler builds Mama Mech's turret (Blueprints).
-  const RELIC_RULES = ['poisonKeep', 'blockKeep', 'shatter', 'glassBreak', 'amp', 'comboTwice', 'echo', 'luck', 'cashAmp', 'turret'];
+  // bubbles (ROS, round 10): any crawler blows Ms. Bubbles' bubbles (the Foam Machine).
+  const RELIC_RULES = ['poisonKeep', 'blockKeep', 'shatter', 'glassBreak', 'amp', 'comboTwice', 'echo', 'luck', 'cashAmp', 'turret', 'bubbles'];
   const RARITY_WEIGHTS = {
     1: { c: 70, u: 25, r: 5, l: 0 },
     2: { c: 55, u: 33, r: 11, l: 1 },
@@ -759,6 +760,60 @@ const DATA = (() => {
       fx: [dmg(8)], plus: { fx: [dmg(12)] },
       text: 'Deal {v} damage to ALL enemies. Its reactor counts as 6 turret parts.' },
 
+    // ---- ROS (round 10, DESIGN.md "Ms. Bubbles, the mutator pack and three
+    // pets"): Ms. Bubbles' bath kit. `soap` is how many bubbles an item blows
+    // into the cabinet when it is played (COMBAT's ROS block, the game floats them). ----
+    { id: 'rubber_duck', name: 'Rubber Duck', rarity: 'c', cost: 40, char: 'bubbler', starter: true,
+      tags: ['light'], shape: circle(13), density: 0.5, friction: 0.5, restitution: 0.32,
+      color: '#ffd23f', color2: '#ff8a2e', art: 'horn',
+      fx: [dmg(4)], plus: { fx: [dmg(6)] },
+      text: 'Deal {v} damage. Squeak. Light enough to float on anything.' },
+    { id: 'soap_bar', name: 'Soap Bar', rarity: 'c', cost: 40, char: 'bubbler', starter: true,
+      tags: [], shape: box(30, 16), density: 0.9, friction: 0.12, restitution: 0.1,
+      color: '#ffb3de', color2: '#ffffff', art: 'bread', target: 'self',
+      fx: [block(5)], plus: { fx: [block(7)] },
+      text: 'Gain {v} Block. It squirts out of a lazy grip. In a bubble it cannot.' },
+    { id: 'bubble_pipe', name: 'Bubble Pipe', rarity: 'c', cost: 45, char: 'bubbler', soap: 1,
+      tags: ['light'], shape: box(36, 12), density: 0.7, friction: 0.5,
+      color: '#b0763a', color2: '#bfefff', art: 'horn',
+      fx: [dmg(5)], plus: { fx: [dmg(7)] },
+      text: 'Deal {v} damage and blow a bubble into the cabinet.' },
+    { id: 'sponge', name: 'Sponge', rarity: 'c', cost: 45, char: 'bubbler',
+      tags: ['light'], shape: box(26, 20), density: 0.4, friction: 0.9, restitution: 0.2,
+      color: '#ffe066', color2: '#3ddc84', art: 'bread', target: 'self',
+      fx: [heal(3), block(2)], plus: { fx: [heal(5), block(3)] },
+      text: 'Heal {v} HP and gain {v2} Block. Soaks up the hits.' },
+    { id: 'scrub_brush', name: 'Scrub Brush', rarity: 'c', cost: 50, char: 'bubbler',
+      tags: ['weapon', 'tool'], shape: box(40, 14), density: 1.1, friction: 0.6,
+      color: '#8a5a2b', color2: '#ffe9a8', art: 'hammer',
+      fx: [dmg(6)], plus: { fx: [dmg(9)] },
+      text: 'Deal {v} damage. Scrubs the grin right off.' },
+    { id: 'bath_bomb', name: 'Bath Bomb', rarity: 'u', cost: 70, char: 'bubbler', soap: 2,
+      tags: ['light', 'magic'], shape: circle(14), density: 0.8, friction: 0.5, restitution: 0.15,
+      color: '#ff9ad0', color2: '#8dfff5', art: 'gem', target: 'all',
+      fx: [dmg(4), status('weak', 1, 'all')], plus: { fx: [dmg(6), status('weak', 2, 'all')] },
+      text: 'Fizz: {v} damage and {v2} Weak to ALL enemies, and two bubbles float up.' },
+    { id: 'foam_cannon', name: 'Foam Cannon', rarity: 'u', cost: 75, char: 'bubbler', soap: 1,
+      tags: ['weapon', 'tool'], shape: box(42, 20), density: 1.2, friction: 0.5,
+      color: '#2ee6d6', color2: '#ffffff', art: 'horn',
+      fx: [dmg(3, 3)], plus: { fx: [dmg(4, 3)] },
+      text: 'Spray {v} damage three times and blow a bubble.' },
+    { id: 'loofah', name: 'Loofah', rarity: 'u', cost: 65, char: 'bubbler',
+      tags: ['light', 'food'], shape: box(34, 16), density: 0.5, friction: 0.8,
+      color: '#e9d8a6', color2: '#b08a4a', art: 'bread',
+      fx: [lifesteal(5)], plus: { fx: [lifesteal(7)] },
+      text: 'Deal {v} damage and heal as much. Exfoliating.' },
+    { id: 'bubble_bath', name: 'Bubble Bath', rarity: 'r', cost: 100, char: 'bubbler', soap: 2,
+      tags: ['potion'], shape: box(22, 40), density: 1.1, friction: 0.45,
+      color: '#8dfff5', color2: '#ff9ad0', art: 'bottle', target: 'self',
+      fx: [block(10)], plus: { fx: [block(14)] },
+      text: 'Gain {v} Block and pour two bubbles into the cabinet.' },
+    { id: 'golden_duck', name: 'Golden Duck', rarity: 'l', cost: 140, char: 'bubbler', soap: 3,
+      tags: ['light', 'magic'], shape: circle(16), density: 0.6, friction: 0.5, restitution: 0.3,
+      color: '#ffc94d', color2: '#fff6c0', art: 'star', target: 'all',
+      fx: [dmg(9)], plus: { fx: [dmg(13)] },
+      text: 'Deal {v} damage to ALL enemies and blow three bubbles. Pure gold, still squeaks.' },
+
     // ---- Small fillers: marbles, beads and sweets. Circles r 9-11 so the
     // claw's cradle scoops two or three at once; each does a little. Tagged
     // 'small', they stay out of the single-item reward and shop pools and
@@ -1416,6 +1471,12 @@ const DATA = (() => {
         onFightStart(F) { turParts(F, 2, 'SOCKET SET'); gainBlock(F, 3); },
         onPlay(F, inst, def) { if (isJunkPlay(inst, def)) turParts(F, 1, 'SCRAP'); },
       } },
+    // Ms. Bubbles' (ROS, round 10): one more bubble on the opening turn, and pops give Block.
+    // `bub` is read by COMBAT's ROS block: {n: bubbles a turn, first: more on turn 1,
+    // block / dmg: per bubble popped in the chute, combo: per bubble of a Bubble Combo, bin: per bubble that bursts in the bin}.
+    { id: 'bubble_wand', name: 'Bubble Wand', icon: '\u{1F9FC}', rarity: 'event', kw: ['fortress'], proc: 'BUBBLE WAND', starter: true,
+      text: 'Start each fight with 2 Block and one more bubble. Every bubble you pop in the chute gives 2 Block.',
+      bub: { first: 1, block: 2 }, hooks: { onFightStart(F) { gainBlock(F, 2); } } },
 
     // common
     { id: 'grip_tape', name: 'Grip Tape', icon: '🩹', rarity: 'c', kw: [], text: 'Your claw grips 25% harder. Sticky, in a good way.',
@@ -1795,6 +1856,21 @@ const DATA = (() => {
         },
       } },
 
+    // ---- ROS (round 10): the bubble build. rules.bubbles blows Ms. Bubbles'
+    // bubbles for any crawler (and one more for her); `bub` adds to every pop
+    // (COMBAT's ROS block). Each has a use without bubbles too.
+    { id: 'foam_machine', name: 'Foam Machine', icon: '\u{1F6C1}', rarity: 'r', kw: ['jackpot'], proc: 'FOAM MACHINE',
+      text: "Any crawler blows a bubble into the cabinet every turn: a bubbled prize never slips. Ms. Bubbles blows one more.",
+      rules: { bubbles: 1 } },
+    { id: 'soap_dish', name: 'Soap Dish', icon: '\u{1F9F4}', rarity: 'c', kw: ['fortress'], proc: 'SOAP DISH',
+      text: 'Every bubble you pop in the chute gives 2 Block. No bubbles: the first item you deliver each turn gives 2 Block.',
+      bub: { block: 2 },
+      hooks: { onPlay(F) { if (F.bub) return; const m = mem(F); if (m.sd === F.turn) return; m.sd = F.turn; gainBlock(F, 2); } } },
+    { id: 'squeaky_toy', name: 'Squeaky Toy', icon: '\u{1F986}', rarity: 'u', kw: ['jackpot'], proc: 'SQUEAK',
+      text: 'A Bubble Combo hits 3 harder for every bubble in it. No bubbles: a grab of 2+ items deals 2 damage to ALL enemies.',
+      bub: { combo: 3 },
+      hooks: { onGrab(F, n) { if (!F.bub && (n | 0) >= 2) zapAll(F, 2); } } },
+
     // boss
     { id: 'token_stack', name: 'Stack of Tokens', icon: '🪙', rarity: 'boss', kw: ['jackpot', 'junk'], proc: 'TOKENS',
       text: '+1 grab every turn. Start each fight with 2 Rocks in your bin.',
@@ -2113,12 +2189,26 @@ const DATA = (() => {
         'tin_plate', 'tin_plate', 'tin_plate', 'tin_plate',
         'pipe_wrench', 'spring_coil', 'oil_can', 'crisp_apple',
         'iron_nut', 'iron_nut', 'iron_nut', 'bouncy_ball', 'bouncy_ball', 'bouncy_ball'] },
+    // Round 10 (ROS): the Foam Chemist. `bubbles` is her gift (COMBAT's ROS
+    // block): every turn she blows bubbles into the cabinet that trap prizes
+    // and float them up; a bubbled prize never slips, and popping it in the
+    // chute pays. Two or more popped in one grab is a Bubble Combo.
+    bubbler: { id: 'bubbler', name: 'Ms. Bubbles', title: 'The Foam Chemist', color: '#8dfff5',
+      blurb: 'Soap, sponges and a squeaky duck. She blows bubbles that float prizes up to the claw: a bubbled prize never slips, and popping bubbles in the chute pays.',
+      hp: 68, gold: 100, unlock: 'win', unlockText: 'Win a run with any Crawler.',
+      claw: { grabs: 3, width: 1, grip: 0.85, speed: 1.05, prongs: 2, rubber: 0, magnet: 0 },
+      relic: 'bubble_wand', bubbles: true,
+      bin: ['rubber_duck', 'rubber_duck', 'rubber_duck', 'rubber_duck', 'rubber_duck',
+        'soap_bar', 'soap_bar', 'soap_bar', 'soap_bar',
+        'bubble_pipe', 'sponge', 'scrub_brush', 'crisp_apple',
+        'glass_bead', 'glass_bead', 'glass_bead', 'peppermint', 'peppermint', 'peppermint'] },
   };
   // The crawler's line on the versus card before an elite or boss (RENDER.vsCard).
   const VS_LINES = {
     knight: 'Have at thee, prize!', alchemist: 'Hold still, this might fizz.',
     rogue: 'Your wallet looks heavy.', gambler: 'Double or nothing, pal.',
     engineer: 'Hold still. Measuring you.',
+    bubbler: 'Hold your breath, sweetie.',
   };
   for (const id in CHARACTERS) CHARACTERS[id].vsLine = VS_LINES[id] || '';
 
@@ -2972,6 +3062,23 @@ const DATA = (() => {
       text: 'The cabinet lurches to one side every turn. Everything slides.', fx: { quake: true } },
     { id: 'crowd', name: 'Double Trouble', icon: '\u{1F46F}', color: '#ff2e88', mult: 1.35,
       text: 'Every normal fight brings one more monster.', fx: { extra: 1 } },
+    // ROS (round 10): the mutator pack, rules for the machine itself. The new
+    // fx (ROS_MUT below): bounce (every prize's restitution floor), clawK (the
+    // claw's size, x), tremor (quakes a turn), mirror (the steering is wired
+    // backwards), sticky (the claw glues its catch; the chance one will not
+    // let go over the chute), flood (the bin fills with water turn by turn).
+    { id: 'moon', name: 'Moon Bounce', icon: '\u{1F319}', color: '#d6c8ff', mult: 1.15,
+      text: 'Every prize is a bouncy ball. They spring off the floor, the walls and each other.', fx: { bounce: 0.72 } },
+    { id: 'tinyclaw', name: 'Tiny Claw, Big Prizes', icon: '\u{1F90F}', color: '#ffb347', mult: 1.1,
+      text: 'The claw shrinks to 70%. Every prize you land hits 50% harder.', fx: { clawK: 0.7, dmgOut: 1.5 } },
+    { id: 'earthquake', name: 'Earthquake', icon: '\u{1F30B}', color: '#ff8a2e', mult: 1.2,
+      text: 'The ground rumbles twice a turn: the whole pile jumps, even in the middle of a grab.', fx: { tremor: 2 } },
+    { id: 'mirror', name: 'Mirror Machine', icon: '\u{1F500}', color: '#ff2e88', mult: 1.25,
+      text: 'The controls are wired backwards: steer left and the claw goes right.', fx: { mirror: true } },
+    { id: 'sticky', name: 'Sticky Fingers', icon: '\u{1F36F}', color: '#ffc94d', mult: 1.05,
+      text: 'Prizes glue to the claw: nothing slips, but now and then one will not let go over the chute.', fx: { sticky: 0.35 } },
+    { id: 'flood', name: 'Rising Water', icon: '\u{1F30A}', color: '#4aa8ff', mult: 1.2,
+      text: 'The bin floods a little more every turn. Heavy prizes sink, light ones float up.', fx: { flood: 1 } },
   ];
   const MUTATORS = {};
   for (const m of MUT_LIST) MUTATORS[m.id] = m;
@@ -2994,11 +3101,13 @@ const DATA = (() => {
   // The merged effects of a set of mutators (neutral for none).
   function mutMods(ids) {
     const m = { ids: [], gs: 1, drag: 0, scale: 1, slick: 1, glass: false, drift: 0, belt: 0, quake: false, dark: false,
-      temp: [], grabs: 1, dmgOut: 1, affix: [], rules: {}, extra: 0, mult: 1 };
+      temp: [], grabs: 1, dmgOut: 1, affix: [], rules: {}, extra: 0, mult: 1,
+      bounce: 0, clawK: 1, tremor: 0, mirror: false, sticky: 0, flood: 0 };   // (ROS: the mutator pack)
     for (const id of mutClean(ids)) {
       const M = MUTATORS[id], f = M.fx || {};
       m.ids.push(id);
       m.mult *= M.mult || 1;
+      rosMutMerge(m, f);   // ROS (round 10): bounce, clawK, tremor, mirror, sticky, flood
       if (f.gs != null) m.gs *= f.gs;
       if (f.drag) m.drag += f.drag;
       if (f.scale) m.scale *= f.scale;
@@ -3182,6 +3291,9 @@ const DATA = (() => {
     // CR8 (round 8): Mama Mech's two
     V_('fit_mama_welder', 'outfit', 'Welding Mask', 'u', 'Flipped up, sparks and all. Mama welds with her eyes closed anyway.', { kind: 'hat', style: 'welder', c1: '#3a3f4a', c2: '#2ee6d6' }, { char: 'engineer' }),
     V_('fit_mama_hardhat', 'outfit', 'Hard Hat', 'r', 'A yellow hard hat with a headlamp. Safety third.', { kind: 'hat', style: 'hardhat', c1: '#ffc94d', c2: '#fff6c0' }, { char: 'engineer' }),
+    // ROS (round 10): Ms. Bubbles' two
+    V_('fit_bub_showercap', 'outfit', 'Shower Cap', 'c', 'Frilly, pink, and covered in little ducks. Rain or shine.', { kind: 'hat', style: 'showercap', c1: '#ff9ad0', c2: '#ffd23f' }, { char: 'bubbler' }),
+    V_('fit_bub_snorkel', 'outfit', 'Snorkel Mask', 'r', 'Diving goggles and a snorkel. For when the bin floods.', { kind: 'shades', style: 'snorkel', c1: '#2ee6d6', c2: '#ffc94d' }, { char: 'bubbler' }),
     // ---- map trails: what the crawler's footsteps leave behind
     V_('trail_dust', 'trail', 'Dust', 'c', 'Plain old footprints in the dust.', { art: 'dust', col: '#b3a4d6' }, { free: true }),
     V_('trail_sparkle', 'trail', 'Sparkles', 'c', 'A little glitter with every step.', { art: 'sparkle', col: '#fff6c0' }),
@@ -3278,8 +3390,18 @@ const DATA = (() => {
     goose: { id: 'goose', name: 'Golden Goose', icon: '\u{1F9A2}', col: '#fff6d6', col2: '#ffc94d', when: 'grab', act: 'egg', verb: 'EGG',
       names: ['Goldie', 'Honk', 'Duchess', 'Nugget'], text: 'Lays a golden egg on a jackpot (a double from Lv 3): gold and tickets.',
       quips: ['HONK!', 'HONK HONK!', 'Golden!'] },
+    // ROS (round 10): three more (the game's ROS block runs their tricks)
+    penguin: { id: 'penguin', name: 'Penguin', icon: '\u{1F427}', col: '#2a3348', col2: '#ffffff', when: 'turn', act: 'slide', verb: 'SLIDE',
+      names: ['Pebble', 'Tux', 'Waddles', 'Skipper'], text: 'Belly-slides along the floor and sweeps every low prize in its path toward the chute.',
+      quips: ['Wheeee!', 'Belly slide!', 'Coming through!'] },
+    molerat: { id: 'molerat', name: 'Mole Rat', icon: '\u{1F401}', col: '#f2b8a8', col2: '#8a5a4a', when: 'turn', act: 'dig', verb: 'DIG',
+      names: ['Digby', 'Nubs', 'Tater', 'Wrinkles'], text: 'Tunnels under the pile and pops the bottom prize up right under the claw. Digs up buried things.',
+      quips: ['Dig dig dig!', 'Found one!', 'Tunnel time.'] },
+    roomba: { id: 'roomba', name: 'Robot Vacuum', icon: '\u{1F916}', col: '#3a3f4a', col2: '#2ee6d6', when: 'turn', act: 'sweep', verb: 'SWEEP',
+      names: ['Dusty', 'Beep', 'Zoomer', 'R-2 Clean'], text: 'Drives along the floor, sucks up junk and small prizes, and dumps them down the chute.',
+      quips: ['BEEP BOOP.', 'Cleaning...', 'Dust detected.'] },
   };
-  const PET_IDS = ['hamster', 'parrot', 'cat', 'octopus', 'firefly', 'mouse', 'raccoon', 'goose'];
+  const PET_IDS = ['hamster', 'parrot', 'cat', 'octopus', 'firefly', 'mouse', 'raccoon', 'goose', 'penguin', 'molerat', 'roomba'];
   // XP to reach Lv 1..5: one per item delivered, more for a won fight, a treat.
   const PET_XP = [0, 12, 30, 60, 100];
   const PET_MAX = 5;
@@ -3809,6 +3931,17 @@ const DATA = (() => {
       fx: [block(10), status('thorns', 2, 'self')], text: 'Gain {v} Block and {v2} Thorns. Riveted to the frame.',
       aura: { name: 'Armor Up', proc: 'ARMOR UP', text: 'At the end of your turn, gain 2 Block per turret level (4 Block without a turret).',
         hooks: { onTurnEnd(F) { gainBlock(F, F.tur ? 2 * (F.tur.lv | 0) || 2 : 4); } } } },
+    // ROS (round 10): Ms. Bubbles' two (their auras' `bub` is set in the ROS block below)
+    { id: 'captain_quack', name: 'Captain Quack', from: 'rubber_duck', relic: 'foam_machine', icon: '\u{1F986}', glow: '#ffd23f', soap: 2,
+      tags: ['light', 'magic'], shape: circle(15), density: 0.5, friction: 0.5, restitution: 0.32, color: '#ffd23f', color2: '#2e6bd6', art: 'horn',
+      fx: [dmg(8), status('weak', 1, 'enemy')], text: 'Deal {v} damage, apply {v2} Weak and blow two bubbles. Aye aye.',
+      aura: { name: 'Duck Patrol', proc: 'DUCK PATROL', text: 'Every bubble you pop in the chute deals 3 damage to a random enemy. No bubbles: a grab of 2+ items does.',
+        hooks: { onGrab(F, n) { if (!F.bub && (n | 0) >= 2) zap(F, randomFoe(F), 3); } } } },
+    { id: 'bubble_shield', name: 'Bubble Shield', from: 'soap_bar', relic: 'soap_dish', icon: '\u{1F6E1}', glow: '#8dfff5', soap: 1,
+      tags: ['magic'], shape: box(34, 20), density: 0.8, friction: 0.12, color: '#bff4ff', color2: '#ff9ad0', art: 'bread', target: 'self',
+      fx: [block(12)], text: 'Gain {v} Block and blow a bubble. It wobbles, it holds.',
+      aura: { name: 'Suds Armor', proc: 'SUDS ARMOR', text: 'A bubble that bursts in the bin at the end of your turn gives 3 Block. No bubbles: gain 2 Block at the end of your turn.',
+        hooks: { onTurnEnd(F) { if (!F.bub) gainBlock(F, 2); } } } },
   ];
   const EVOLVED = {}, EVOLUTIONS = {}, EVO_OF = {}, EVO_FX = {};
   for (const d of EVO_LIST) {
@@ -3875,6 +4008,13 @@ const DATA = (() => {
       text: 'Every junk it eats gives 1 Strength and 3 Block.', on: (run) => relicIdsOf(run).indexOf('junkyard_king') >= 0 },
     goose: { name: 'Golden Clutch', icon: '🥚', color: '#ffe066', need: '2 pieces of High Rollers',
       text: 'It lays two golden eggs at once, and every clutch gives 1 Luck.', on: (run) => setCount(run, 'luck') >= 2 },
+    // ROS (round 10): the new three (COMBAT.rosPetSyn runs the effect)
+    penguin: { name: 'Snowball Fight', icon: '❄', color: '#9fd8ff', need: 'a Frost item in your bin',
+      text: 'Every slide chills the room: 1 Chill to ALL enemies, 2 if it swept three or more prizes.', on: (run) => binHas(run, (d) => kwIds(d).indexOf('frost') >= 0) },
+    molerat: { name: 'Gold Digger', icon: '\u{1FA99}', color: '#ffc94d', need: 'a Greed relic',
+      text: 'Every dig turns up buried coins: 3 gold, 1 more per level.', on: (run) => relicKw(run, 'greed') },
+    roomba: { name: 'Turbo Suction', icon: '\u{1F300}', color: '#2ee6d6', need: 'the Vacuum Nozzle',
+      text: 'On the Vacuum Nozzle it carries two more, and every sweep gives 3 Block.', on: (run) => !!run && run.clawType === 'vacuum' },
   };
   for (const id in PET_SYN) PET_SYN[id].id = id;
   // The pet's synergy when the run has switched it on, else null.
@@ -3936,7 +4076,7 @@ const DATA = (() => {
       items: ['candy_corn', 'bag_candycorn', 'pumpkin_bomb', 'cursed_lollipop', 'haunted_teddy', 'witch_broom', 'skull_candle'],
       relics: ['candy_bucket', 'jack_o_lantern', 'witch_brew', 'ghost_sheet'],
       costumes: { rat: 'rat_vamp', slime: 'slime_ghost', goblin: 'goblin_witch' }, elite: 'pumpking', tile: 'treat',
-      cosmetics: ['skin_sea_mansion', 'paint_sea_pumpkin', 'fit_knight_witch', 'fit_alch_witch', 'fit_rogue_witch', 'fit_lou_witch', 'fit_mama_witch', 'trail_sea_bats'],
+      cosmetics: ['skin_sea_mansion', 'paint_sea_pumpkin', 'fit_knight_witch', 'fit_alch_witch', 'fit_rogue_witch', 'fit_lou_witch', 'fit_mama_witch', 'fit_bub_witch', 'trail_sea_bats'],
       hats: ['witch', 'pumpkin', 'horns'],
     },
     winter: {
@@ -4137,6 +4277,7 @@ const DATA = (() => {
     V_('fit_rogue_witch', 'outfit', 'Witch Hat', 'u', 'A black hat, a purple band. Very sneaky, very spooky.', { kind: 'hat', style: 'witch', c1: '#1b1320', c2: '#9b4dff' }, { char: 'rogue', season: 'halloween', price: 60 }),
     V_('fit_lou_witch', 'outfit', 'Witch Hat', 'u', 'Lou bets the hat is lucky. A spider lives in it.', { kind: 'hat', style: 'witch', c1: '#241a2e', c2: '#3ddc84' }, { char: 'gambler', season: 'halloween', price: 60 }),
     V_('fit_mama_witch', 'outfit', 'Witch Hat', 'u', 'Riveted, of course. The brim folds out into a spanner.', { kind: 'hat', style: 'witch', c1: '#2a2230', c2: '#ff8a2e' }, { char: 'engineer', season: 'halloween', price: 60 }),   // (CR8)
+    V_('fit_bub_witch', 'outfit', 'Witch Hat', 'u', 'A cauldron of foam on top. It bubbles over at midnight.', { kind: 'hat', style: 'witch', c1: '#3a2a5a', c2: '#8dfff5' }, { char: 'bubbler', season: 'halloween', price: 60 }),   // (ROS)
     V_('trail_sea_bats', 'trail', 'Bat Trail', 'r', 'Little bats flap up out of every step you take.', { art: 'bats', col: '#2a1a3a' }, { season: 'halloween', price: 90 }),
     V_('skin_sea_frost', 'skin', 'Frosted Cabinet', 'r', 'Snow on the roof, icicles on the frame, a cosy frost on the glass.',
       { frame: '#dfeaf5', trim: '#ff2e4a', fp: 'sea_icicles', panel: '#0c1a2a', pp: 'sea_snow', bulb: '#ffffff', glow: '#8dfff5', neon: '#ff2e4a' }, { season: 'winter', price: 120 }),
@@ -4179,6 +4320,39 @@ const DATA = (() => {
     TUR_TIP: 'Every metal item you deliver bolts a part onto the turret. It fires at the end of your turn, harder each level.',
   };
   // ================================================================ /CR8
+
+  // ================================================================ ROS (round 10: Ms. Bubbles, the mutator pack, three pets)
+  // DESIGN.md "Ms. Bubbles, the mutator pack and three pets (round 10)". The
+  // crawler, her items, relics, outfits, evolutions, the six mutators and the
+  // three pets sit in their tables above (search ROS); here are the merge of
+  // the new mutator fx, the evolved auras' bubble numbers, two stickers and
+  // the words the game shows.
+  /* The mutator pack's fx on top of mutMods' own: bounce keeps the bounciest,
+     clawK multiplies, tremor and flood add, mirror is on if any is, sticky
+     keeps the stickiest. (A declaration: mutMods calls it.) */
+  function rosMutMerge(m, f) {
+    if (!m || !f) return m;
+    if (f.bounce != null) m.bounce = Math.max(m.bounce || 0, +f.bounce || 0);
+    if (f.clawK != null && +f.clawK > 0) m.clawK = (m.clawK || 1) * +f.clawK;
+    if (f.tremor) m.tremor = (m.tremor || 0) + (+f.tremor || 0);
+    if (f.mirror) m.mirror = true;
+    if (f.sticky != null) m.sticky = Math.max(m.sticky || 0, +f.sticky || 0);
+    if (f.flood) m.flood = (m.flood || 0) + (+f.flood || 0);
+    return m;
+  }
+  // The evolved auras' bubble numbers (read by COMBAT's ROS block like a relic's `bub`).
+  if (EVO_FX['evo:captain_quack']) EVO_FX['evo:captain_quack'].bub = { dmg: 3 };
+  if (EVO_FX['evo:bubble_shield']) EVO_FX['evo:bubble_shield'].bub = { bin: 3 };
+  for (const a of [
+    A_('foam_party', 'Foam Party', '\u{1F6BF}', '#8dfff5', 'Pop three bubbles in the chute with one grab.',
+      (c) => c.kind === 'ev' && !!c.ev && c.ev.t === 'ros' && c.ev.k === 'combo' && (c.ev.n | 0) >= 3),
+    A_('squeaky_clean', 'Squeaky Clean', '\u{1F986}', '#ffd23f', 'Win a run as Ms. Bubbles.', (c) => c.kind === 'win' && RUNS(c).char === 'bubbler'),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  const ROS = {
+    BUB_TIP: 'Bubbles float prizes up to the claw. A bubbled prize never slips; pop it in the chute for Block, two or more in one grab for a Bubble Combo.',
+    MUT_TIP: { mirror: 'MIRROR MODE: steer left, the claw goes right.', sticky: 'STICKY: nothing slips, but it might not let go.', flood: 'RISING WATER: heavy sinks, light floats.' },
+  };
+  // ================================================================ /ROS
 
   // ================================================================ STORY (round 8: branching stories, the rival, alternate bosses)
   /* DESIGN.md "Stories, the rival and alternate bosses (round 8)". Pure data
@@ -4944,6 +5118,8 @@ const DATA = (() => {
         text: 'Lucky Lou has never won a thing in his life on purpose. He loses so well, so reliably and with such style that his luck has nowhere to go but up, and it piles up behind him like a debt coming due. Every whiff is a deposit. Every double is a withdrawal. He climbs the Clawspire because the Prize Master owes him a rematch from a card game in the car park. The Prize Master says that was a different Lou.' },
       { id: 'cr_engineer', ch: 'crawlers', name: 'Mama Mech', art: { k: 'char', id: 'engineer' }, r: ['win', 'engineer'],
         text: 'Mama Mech repaired every machine in the Damp Arcade for thirty years and never got a single thank you, only more quarters stuck in more slots. When the tower started taking Crawlers, she stopped fixing and started building. Everything metal she wins goes into the turret on her Rig, bolt by bolt, until it has opinions of its own. She climbs to have a word with the management. Not an angry word. A long word, with a clipboard.' },
+      { id: 'cr_bubbler', ch: 'crawlers', name: 'Ms. Bubbles', art: { k: 'char', id: 'bubbler' }, r: ['win', 'bubbler'],
+        text: 'Ms. Bubbles ran the laundromat next door to the Damp Arcade, and every kid who ever lost a quarter in a claw machine came to her to cry about it. She gave them soap bubbles instead. One day she noticed the bubbles could lift a prize, if you blew them right. Now she climbs the Clawspire with a wand, a duck and a very firm opinion that nobody should ever lose a prize to a slippery grip again.' },   // (ROS, round 10)
       // ---- the bosses
       { id: 'bo_hoard', ch: 'bosses', name: 'The Hoard', art: { k: 'enemy', id: 'hoard', act: 1 }, r: ['kills', 'hoard', 1],
         text: 'Every prize nobody ever won, piled up in the basement and angry about it. The Hoard started as a heap of lost plush behind the coin return and grew a mouth out of sheer resentment. It flings coins it never earned and sulks when you take them back. It is not evil, just jealous: it watched a thousand kids walk past to the good machines. Beat it and the heap falls apart into ordinary junk, and for a moment it looks almost relieved.' },
@@ -5168,7 +5344,7 @@ const DATA = (() => {
      then your best climbs from the Hall of Fame (their own fake arcade
      initials) and a few old regulars, highest first. hof: DATA.hisFix(...).hof. */
   const LORE_INI = {
-    knight: ['SIR', 'GRB', 'KNT'], alchemist: ['MRA', 'FZZ', 'POP'], rogue: ['PIP', 'QIK', 'YNK'], gambler: ['LOU', 'DBL', 'ACE'], engineer: ['MCH', 'BLT', 'WRN'],
+    knight: ['SIR', 'GRB', 'KNT'], alchemist: ['MRA', 'FZZ', 'POP'], rogue: ['PIP', 'QIK', 'YNK'], gambler: ['LOU', 'DBL', 'ACE'], engineer: ['MCH', 'BLT', 'WRN'], bubbler: ['BUB', 'SUD', 'FOM'],
     _: ['YOU', 'CRW', 'ME!'],
   };
   const LORE_HOUSE = [['P.M', 999990, 'prizemaster'], ['GRY', 42000, 'gary'], ['AAA', 25000, ''], ['JAZ', 15000, ''], ['RXR', 9000, ''], ['DAD', 4000, ''], ['ZZZ', 1000, ''], ['CPU', 500, '']];
@@ -5358,7 +5534,230 @@ const DATA = (() => {
   ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
   // ================================================================ /LORE
 
+  // ================================================================ RUSH (round 10): the Boss Rush and the ghost race
+  /* DESIGN.md "Boss Rush and the ghost race (round 10)". Pure data and pure
+     helpers; the flow is game.js's RUSH and GHOST blocks, the art
+     RENDER.rush and RENDER.gho.
+     - The Boss Rush: every act boss and its understudy in a seeded order,
+       then the Prize Master, then The Machine once it has been met; a
+       starting kit per crawler; a draft of 1 of 3 between fights (an item,
+       a relic, a heal, a claw part); a clock that runs while you fight; a
+       score; the best times per crawler in meta.rush.
+     - The ghost race: a daily (or weekly) climb keeps a compact checkpoint
+       per fight won; the best attempt of the day (the week) is kept in
+       meta.gho and the next attempt races it. */
+  const RUSH = {
+    ACTS: { 1: ['hoard', 'plushqueen'], 2: ['smelter', 'conveyorking'], 3: ['glacius', 'arcticarcade'] },
+    FINAL: 'prizemaster', SECRET: 'machine',
+    // a boss's hit points and hits in a rush, by act: a starter kit and a few picks, not a whole run's bin
+    // (the balance model through whole rushes, scratchpad r10/rushsim.mjs: 18-98% clears by crawler, 4.5-6 turns a boss)
+    HPK: { 1: 0.65, 2: 0.5, 3: 0.55, final: 0.55, secret: 0.5 },
+    DMGK: { 1: 0.8, 2: 0.7, 3: 0.75, final: 0.75, secret: 0.7 },
+    RAMP: 1,   // run.fights per boss beaten (DIFFICULTY's hidden escalation)
+    BREATHER: 0.1,   // a breath between bosses: this share of max hp comes back on every win
+    HEAL: 0.35, CUT: 0.5,   // a heal card mends 35% of max hp; under half hp one is always on the table
+    KINDS: ['item', 'relic', 'heal', 'claw'],
+    PLUS: 0.35,   // an item card comes upgraded this often
+    PAR: 100,   // seconds a boss: a clear scores the seconds it saved under par
+    SCORE: { boss: 1000, clear: 5000, hp: 25, sec: 20 },
+    // one boss at a time: relics that pay per fight or per hit, never per kill
+    KIT: {
+      knight: { items: ['longsword', 'battle_axe', 'war_hammer', 'tower_shield'], relics: ['protein_bar', 'big_knuckles'], claw: ['grip'], hp: 15 },
+      alchemist: { items: ['liquid_fire', 'frost_phial', 'acid_bottle', 'volatile_egg'], relics: ['kettle_helm', 'venom_gland'], claw: ['width'], hp: 15 },
+      rogue: { items: ['stolen_gem', 'loaded_dice', 'venom_dart', 'harlequin_mask'], relics: ['protein_bar', 'four_leaf_clover'], claw: ['grip'], hp: 15 },
+      gambler: { items: ['double_or_nothing', 'one_armed_bandit', 'roulette_wheel', 'lucky_horseshoe'], relics: ['dealers_visor', 'high_roller'], claw: ['grip'], hp: 15 },
+      engineer: { items: ['rivet_gun', 'toolbox', 'spring_coil', 'oil_can'], relics: ['kettle_helm', 'grease_gun'], claw: ['grip'], hp: 15 },
+      // her starter bin is soft (ducks, soap, fillers): her kit brings the punch, the Golden Duck and a Strength relic
+      bubbler: { items: ['golden_duck', 'foam_cannon', 'bath_bomb', 'loofah'], relics: ['protein_bar', 'squeaky_toy'], claw: ['grip'], hp: 15 },
+    },
+    // a crawler with no kit of its own: its own uncommons and rares, else these
+    KIT_ANY: { items: ['firebomb', 'frozen_heart', 'thorn_ring', 'rage_potion'], relics: ['kettle_helm', 'protein_bar'], claw: ['grip'], hp: 15, n: 4 },
+  };
+  function rushHash(s) {
+    let x = 2166136261 >>> 0;
+    s = String(s);
+    for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0; }
+    return (x >>> 0) || 1;
+  }
+  // A little seeded stream (an LCG), so the order is the same everywhere for a seed.
+  function rushRng(seed) {
+    let x = rushHash('clawspire-rush:' + seed);
+    return () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; };
+  }
+  // The lineup: the six act bosses shuffled, then the Prize Master, then The Machine (o.machine: met it).
+  function rushOrder(seed, o) {
+    o = o || {};
+    const r = rushRng(seed), all = [];
+    for (const a of [1, 2, 3]) for (const id of RUSH.ACTS[a]) if (ENEMIES[id]) all.push(id);
+    for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = all[i]; all[i] = all[j]; all[j] = t; }
+    if (ENEMIES[RUSH.FINAL]) all.push(RUSH.FINAL);
+    if (o.machine && ENEMIES[RUSH.SECRET]) all.push(RUSH.SECRET);
+    return all;
+  }
+  // The act a boss belongs to (its arena, its music, its escalation).
+  const rushActOf = (id) => Math.max(1, Math.min(3, ((ENEMIES[id] && ENEMIES[id].act) | 0) || 3));
+  // Its hit points in a rush (tab: RUSH.HPK), or its hits (RUSH.DMGK).
+  function rushHpK(id, tab) {
+    const T = tab || RUSH.HPK;
+    if (id === RUSH.SECRET) return T.secret;
+    if (id === RUSH.FINAL) return T.final;
+    return T[rushActOf(id)] || 1;
+  }
+  const rushDmgK = (id) => rushHpK(id, RUSH.DMGK);
+  // A crawler's starting kit {items, relics, claw, hp}: its own, else its best cards and the spare relics. Only real ids.
+  function rushKit(charId) {
+    const k = RUSH.KIT[charId], A = RUSH.KIT_ANY;
+    let items = k ? k.items.slice() : [];
+    if (!k) {
+      const RK = { l: 0, r: 1, u: 2 };
+      const own = Object.keys(ITEMS).filter((id) => ITEMS[id].char === charId && RK[ITEMS[id].rarity] != null)
+        .sort((a, b) => (RK[ITEMS[b].rarity] - RK[ITEMS[a].rarity]) || (a < b ? -1 : 1));
+      items = own.slice(0, A.n);
+      for (const id of A.items) if (items.length < A.n && items.indexOf(id) < 0) items.push(id);
+    }
+    const src = k || A;
+    return {
+      items: items.filter((id) => !!ITEMS[id]), relics: src.relics.filter((id) => !!RELICS[id]),
+      claw: src.claw.filter((id) => !!CLAW_UPGRADES[id]), hp: Math.max(0, src.hp | 0), own: !!k,
+    };
+  }
+  // The three kinds of card after boss i: a heal for sure when hurt (under CUT), no claw part when the claw is maxed.
+  function rushDraftKinds(seed, i, o) {
+    o = o || {};
+    const r = rushRng(seed + ':draft:' + i);
+    let kinds = RUSH.KINDS.filter((k) => k !== 'claw' || o.claw !== false);
+    for (let n = kinds.length - 1; n > 0; n--) { const j = Math.floor(r() * (n + 1)); const t = kinds[n]; kinds[n] = kinds[j]; kinds[j] = t; }
+    if ((o.hp != null ? +o.hp : 1) < RUSH.CUT && kinds.indexOf('heal') > 2) kinds = ['heal'].concat(kinds.filter((k) => k !== 'heal'));
+    return kinds.slice(0, 3);
+  }
+  // The rush's score: {total, lines}. o {n bosses beaten, total in the lineup, won, t seconds, hp left}.
+  function rushScore(o) {
+    o = o || {};
+    const n = Math.max(0, o.n | 0), tot = Math.max(n, o.total | 0), won = !!o.won, K = RUSH.SCORE, lines = [];
+    lines.push({ k: 'boss', label: `Bosses beaten x${n}`, v: n * K.boss });
+    if (won) {
+      lines.push({ k: 'clear', label: 'Rush cleared', v: K.clear });
+      const hp = Math.max(0, Math.round(+o.hp || 0));
+      if (hp) lines.push({ k: 'hp', label: `HP left x${hp}`, v: hp * K.hp });
+      const save = Math.max(0, Math.floor(RUSH.PAR * tot - Math.max(0, +o.t || 0)));
+      if (save) lines.push({ k: 'time', label: `${save}s under par`, v: save * K.sec });
+    }
+    let total = 0;
+    for (const l of lines) total += l.v;
+    return { total, lines };
+  }
+  // 83.46 -> '1:23.4'; an hour or more -> '1:02:03'.
+  function rushFmt(t) {
+    t = Math.max(0, +t || 0);
+    const p = (n) => (n < 10 ? '0' : '') + n;
+    if (t >= 3600) { const s = Math.floor(t); return `${Math.floor(s / 3600)}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`; }
+    const d = Math.floor(t * 10), m = Math.floor(d / 600), s = Math.floor((d % 600) / 10);
+    return `${m}:${p(s)}.${d % 10}`;
+  }
+  const rushObj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
+  const rushN = (x) => (Number.isFinite(+x) && +x > 0 ? Math.floor(+x) : 0);
+  // meta.rush repaired: {runs, clears, score (best), best {crawler: {t, n, s, at}}, beat {boss: times}, pick}.
+  function rushFix(o) {
+    const src = rushObj(o) || {}, bs = rushObj(src.best) || {}, bt = rushObj(src.beat) || {};
+    const best = {}, beat = {};
+    for (const c in bs) {
+      const b = rushObj(bs[c]);
+      if (!b || !/^[a-z0-9_]{1,24}$/.test(c)) continue;
+      const t = Number.isFinite(+b.t) && +b.t > 0 ? Math.round(+b.t * 1000) / 1000 : 0;
+      best[c] = { t, n: rushN(b.n), s: rushN(b.s), at: rushN(b.at) };
+    }
+    for (const id in bt) if (ENEMIES[id] && rushN(bt[id])) beat[id] = rushN(bt[id]);
+    return { runs: rushN(src.runs), clears: rushN(src.clears), score: rushN(src.score), best, beat, pick: typeof src.pick === 'string' ? src.pick.slice(0, 24) : '' };
+  }
+  // Books a finished rush on meta.rush (repaired in place). res {char, t, n, won, score, at} -> what it beat.
+  function rushRecord(m, res) {
+    res = res || {};
+    const c = String(res.char || 'knight'), b = m.best[c] || (m.best[c] = { t: 0, n: 0, s: 0, at: 0 });
+    const out = { prevT: b.t, prevN: b.n, prevS: b.s, prevScore: m.score, newTime: false, newN: false, newScore: false, newTop: false };
+    m.runs = (m.runs | 0) + 1;
+    const t = Math.max(0, Math.round((+res.t || 0) * 1000) / 1000), n = rushN(res.n), s = rushN(res.score);
+    if (res.won) {
+      m.clears = (m.clears | 0) + 1;
+      if (t > 0 && (!b.t || t < b.t)) { b.t = t; out.newTime = true; }
+    }
+    if (n > b.n) { b.n = n; out.newN = true; }
+    if (s > b.s) { b.s = s; out.newScore = true; b.at = rushN(res.at); }
+    if (s > m.score) { m.score = s; out.newTop = true; }
+    return out;
+  }
+  // The leaderboard: every crawler with a best, cleared times first (fastest), then the most bosses.
+  function rushBoard(m) {
+    const B = (rushObj(m) && rushObj(m.best)) || {};
+    return Object.keys(B).map((c) => Object.assign({ c }, B[c])).filter((r) => r.t > 0 || r.n > 0)
+      .sort((a, b) => ((a.t > 0 ? 0 : 1) - (b.t > 0 ? 0 : 1)) || (a.t > 0 && b.t > 0 ? a.t - b.t : b.n - a.n) || (b.s - a.s) || (a.c < b.c ? -1 : 1));
+  }
+
+  /* The ghost race. A checkpoint is [n (fights won), stage (act, 4 the Back
+     Room, 4 + loop in Endless), q, r (the fight's hex), hp, gold, score,
+     turns, seconds]: nine numbers, about 40 bytes. meta.gho = {d, w, passes}:
+     the day's best attempt and the week's, each {key, cps, s (final score),
+     won, c (crawler), n, tu, t, a, at}. */
+  const GHO = { MAX: 90, KEYS: ['d', 'w'], F: ['n', 'a', 'q', 'r', 'hp', 'g', 's', 'tu', 't'] };
+  const ghoNum = (x, lo) => (Number.isFinite(+x) ? Math.max(lo == null ? -1e6 : lo, Math.min(1e9, Math.round(+x))) : 0);
+  // o {n, a, q, r, hp, g, s, tu, t} -> a compact checkpoint
+  function ghoCp(o) {
+    o = o || {};
+    return [ghoNum(o.n, 0), ghoNum(o.a, 0), ghoNum(o.q), ghoNum(o.r), ghoNum(o.hp, 0), ghoNum(o.g, 0), ghoNum(o.s, 0), ghoNum(o.tu, 0), ghoNum(o.t, 0)];
+  }
+  // A checkpoint read back as {n, a, q, r, hp, g, s, tu, t} (junk: null).
+  function ghoRead(cp) {
+    if (!Array.isArray(cp) || cp.length < GHO.F.length) return null;
+    const o = {};
+    for (let i = 0; i < GHO.F.length; i++) { if (!Number.isFinite(+cp[i])) return null; o[GHO.F[i]] = +cp[i]; }
+    return o;
+  }
+  function ghoRecFix(r) {
+    const o = rushObj(r);
+    if (!o || typeof o.key !== 'string' || !o.key || !Array.isArray(o.cps)) return null;
+    const cps = o.cps.filter((c) => !!ghoRead(c)).slice(0, GHO.MAX).map((c) => ghoCp(ghoRead(c)));
+    // e: where its climb ended [stage, q, r] (a fallen ghost stays there, grey)
+    const e = Array.isArray(o.e) && o.e.length >= 3 && o.e.slice(0, 3).every((v) => Number.isFinite(+v)) ? o.e.slice(0, 3).map((v) => Math.round(+v)) : null;
+    return { key: o.key.slice(0, 16), cps, s: rushN(o.s), won: !!o.won, c: typeof o.c === 'string' ? o.c.slice(0, 24) : '', n: rushN(o.n) || cps.length,
+      tu: rushN(o.tu), t: rushN(o.t), a: rushN(o.a), at: rushN(o.at), e };
+  }
+  function ghoFix(o) {
+    const src = rushObj(o) || {};
+    return { d: ghoRecFix(src.d), w: ghoRecFix(src.w), passes: rushN(src.passes) };
+  }
+  // Where the ghost stood after n fights: its checkpoint, or null at the start (n 0) or once its climb had ended.
+  function ghoAt(rec, n) {
+    if (!rec || !rec.cps || n < 1 || n > rec.cps.length) return null;
+    return ghoRead(rec.cps[n - 1]);
+  }
+  /* The race after my latest checkpoint: {n, d (my score minus the ghost's at
+     the same step, or its final score once its climb had ended), have (the
+     ghost reached this step), ahead, g (its checkpoint)}. No ghost: null. */
+  function ghoDelta(cps, rec) {
+    if (!rec) return null;
+    const n = (cps || []).length, me = n ? ghoRead(cps[n - 1]) : null, g = ghoAt(rec, n);
+    const mine = me ? me.s : 0, theirs = n === 0 ? 0 : g ? g.s : rec.s;
+    const d = Math.round(mine - theirs);
+    return { n, d, have: !!g || n === 0, ahead: d > 0, g };
+  }
+  // The moment you overtake it: behind or level before this checkpoint, ahead after it.
+  const ghoPassed = (prev, d) => (+prev || 0) <= 0 && (+d || 0) > 0;
+  // The chart's series: the score after every checkpoint (from 0), plus a final score when given.
+  function ghoSeries(cps, fin) {
+    const out = [0];
+    for (const c of cps || []) { const o = ghoRead(c); if (o) out.push(o.s); }
+    if (fin != null && Number.isFinite(+fin)) out.push(Math.max(0, Math.round(+fin)));
+    return out;
+  }
+  for (const a of [
+    A_('rush_clear', 'Rush Hour', '⏱', '#ff5a4a', 'Clear the Boss Rush: every boss, back to back.', (c) => c.kind === 'end' && !!(RUNS(c).rush && RUNS(c).rush.won)),
+    A_('photo_finish', 'Photo Finish', '\u{1F47B}', '#bff4ff', 'Overtake your own ghost in a daily or weekly run.', (c) => !!(RUNS(c).gho && RUNS(c).gho.passed) || (((c.meta && c.meta.gho) || {}).passes | 0) >= 1),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  // ================================================================ /RUSH
+
   return {
+    // the Boss Rush and the ghost race (DESIGN.md "Boss Rush and the ghost race (round 10)")
+    RUSH, rushOrder, rushActOf, rushHpK, rushDmgK, rushKit, rushDraftKinds, rushScore, rushFmt, rushFix, rushRecord, rushBoard,
+    GHO, ghoCp, ghoRead, ghoRecFix, ghoFix, ghoAt, ghoDelta, ghoPassed, ghoSeries,
     // lore and the weekly challenge (DESIGN.md "Lore and the weekly challenge (round 9)")
     LORE_CH, LORE_RULES, LORE_ART, LORE_MARKS, LORE_SNIPS, LORE_ACTS, loreBook, loreVal, loreOk, loreCheck, loreChOpen, loreHint, loreFix, loreCount, loreProgress,
     loreSnippet, loreInitials, loreBoard, loreIntro,
@@ -5367,6 +5766,8 @@ const DATA = (() => {
     FAM, FAM_IDS, FAM_KINDS, FAM_ENEMIES, famOf, famsIn,
     // Mama Mech and two new claws (DESIGN.md "Mama Mech and two new claws (round 8)")
     CR8,
+    // ROS (round 10): Ms. Bubbles, the mutator pack, three pets (DESIGN.md "Ms. Bubbles, the mutator pack and three pets (round 10)")
+    ROS, rosMutMerge,
     // run history and the death recap (DESIGN.md "Run history, the death recap and photo mode (round 8)")
     HIS, hisRecFix, hisFix, hisPush, hisRank, hisFilter, hisChart, hisMapPack, hisMapCells, hisKillLine, hisTips, hisWon,
     // stories, the rival, alternate bosses (DESIGN.md "Stories, the rival and alternate bosses (round 8)")

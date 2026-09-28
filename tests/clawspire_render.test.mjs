@@ -2374,4 +2374,164 @@ h.test('LORE: every Codex picture, locked and found, the landmarks, the bubble, 
   drawCheck('banner with nothing', c => L.wkBanner(c, null, 0, 0));
 });
 
+/* ---------------------------------------------------------------- RUSH (round 10) */
+h.test('RUSH: NEXT CHALLENGER at every beat, the gallery in every state, the banner, the stage; the ghost, its race chart, GHOST PASSED!', () => {
+  const api = boot({ only: ['util', 'art', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, Rr = R.rush, Rg = R.gho;
+  h.ok(Rr && ['back', 'boss', 'gallery', 'challenger', 'banner'].every(k => typeof Rr[k] === 'function') && Rr.T && Rr.T.reveal > Rr.T.sil, 'RENDER.rush');
+  h.ok(Rg && ['marker', 'sheet', 'chart', 'pass'].every(k => typeof Rg[k] === 'function') && Rg.PASS.dur > 1, 'RENDER.gho');
+  const order = D.rushOrder(7, { machine: true }), defs = order.map(id => D.ENEMIES[id]);
+  // the slam: every beat draws, and the beats differ (the label slams, the silhouette slides, the reveal, the name, the gallery)
+  const st = (t, o) => Object.assign({ t, now: t, label: 'NEXT CHALLENGER', def: defs[2], i: 2, n: order.length, clock: '3:21.4', split: 'last split 1:02.3', defs, beat: 2, secret: 7 }, o || {});
+  const beats = new Map();
+  for (const t of [0, 0.1, 0.35, 0.7, 1.02, 1.2, 1.4, 2, 6]) beats.set(String(t), fingerprint(drawCheck('slam at ' + t, c => Rr.challenger(c, 540, 960, st(t)))));
+  h.ok(new Set(beats.values()).size >= 7, 'the slam moves on at every beat');
+  const hid = fingerprint(drawCheck('the silhouette', c => Rr.challenger(c, 540, 960, st(0.8))));
+  const shown = fingerprint(drawCheck('revealed', c => Rr.challenger(c, 540, 960, st(1.5))));
+  h.ok(hid !== shown, 'a silhouette, then the boss');
+  const bosses = new Map();
+  for (const d of defs) bosses.set(d.id, fingerprint(drawCheck('challenger ' + d.id, c => Rr.challenger(c, 540, 960, st(2, { def: d })))));
+  h.ok(new Set(bosses.values()).size === defs.length, 'every challenger draws its own boss');
+  const red = (t) => fingerprint(drawCheck('reduced at ' + t, c => Rr.challenger(c, 540, 960, st(t, { reduced: true, now: 1 }))));
+  h.ok(red(0.1) === red(0.9), 'reduced motion: no slam, no slide, no flash (the whole card at once)');
+  h.ok(red(0.1) !== fingerprint(drawCheck('full at 0.1', c => Rr.challenger(c, 540, 960, st(0.1, { now: 1 })))), 'the full slam starts from an empty stage');
+  drawCheck('challenger with nothing', c => Rr.challenger(c, 0, 0, null));
+  // the gallery: beaten in colour with a KO, the next pulsing, the rest dark, the one that beat you, the Machine a '?'
+  const gal = (o) => fingerprint(drawCheck('gallery ' + JSON.stringify(o), c => Rr.gallery(c, 10, 10, 500, 72, Object.assign({ defs, t: 1, secret: 7 }, o))));
+  const g0 = gal({ beat: 0, cur: 0 }), g3 = gal({ beat: 3, cur: 3 }), gAll = gal({ beat: 8, cur: -1 }), gDead = gal({ beat: 3, cur: -1, dead: 3 });
+  h.ok(new Set([g0, g3, gAll, gDead]).size === 4, 'the gallery fills as you go, and marks the fall');
+  h.ok(gal({ beat: 3, cur: 3, pop: 2, popK: 0.2 }) !== gal({ beat: 3, cur: 3, pop: 2, popK: 1 }), 'the KO stamp slams in');
+  h.ok(gal({ beat: 6, cur: 6, secret: 7 }) !== gal({ beat: 6, cur: 6, secret: -1 }), 'The Machine hides until it is reached');
+  drawCheck('gallery of one', c => Rr.gallery(c, 0, 0, 80, 60, { defs: [defs[0]], beat: 1 }));
+  const { ctx: c0, stat: s0 } = seqCtx();
+  Rr.gallery(c0, 0, 0, 100, 60, null);
+  h.eq(s0.save, s0.restore, 'an empty gallery stays balanced');
+  // the banner and the stage
+  const all = [].concat(D.RUSH.ACTS[1], D.RUSH.ACTS[2], D.RUSH.ACTS[3], [D.RUSH.FINAL, D.RUSH.SECRET]).map(id => D.ENEMIES[id]);
+  const bn = (o) => fingerprint(drawCheck('banner ' + JSON.stringify(o).slice(0, 40), c => Rr.banner(c, 508, 200, Object.assign({ t: 1, defs: all, got: {}, secret: 7 }, o))));
+  h.ok(new Set([bn({}), bn({ locked: true }), bn({ got: { hoard: 1, smelter: 2 }, best: '9:12.3' }), bn({ met: true })]).size === 4, 'the banner: locked, beaten in colour, the best time, The Machine once met');
+  drawCheck('banner with nothing', c => Rr.banner(c, 0, 0, null));
+  const b1 = fingerprint(drawCheck('stage t1', c => Rr.back(c, 540, 960, 1, {}))), b2 = fingerprint(drawCheck('stage t3', c => Rr.back(c, 540, 960, 3, { col: '#2ee6d6' })));
+  h.ok(b1 !== b2, 'the stage lights sweep');
+  drawCheck('boss silhouette', c => Rr.boss(c, D.ENEMIES.hoard, 100, 200, 80, 80, 1, true));
+  // the ghost: its look per crawler, sad once its climb ended, a tag, never a leak of the flat colour
+  const gm = new Map();
+  for (const id of Object.keys(D.CHARACTERS)) gm.set(id, fingerprint(drawCheck('ghost ' + id, c => Rg.marker(c, 200, 300, 46, { charId: id, t: 1, a: 0.6, tag: 'GHOST' }))));
+  h.ok(new Set(gm.values()).size === gm.size, 'every crawler has its own ghost');
+  h.ok(fingerprint(drawCheck('ghost sad', c => Rg.marker(c, 200, 300, 46, { charId: 'knight', t: 1, sad: true, tag: 'GHOST OUT' }))) !== gm.get('knight'), 'a fallen ghost is grey');
+  h.ok(fingerprint(drawCheck('ghost t1', c => Rg.marker(c, 200, 300, 46, { charId: 'knight', t: 1 }))) !== fingerprint(drawCheck('ghost t2', c => Rg.marker(c, 200, 300, 46, { charId: 'knight', t: 2 }))), 'it bobs and its sheet ripples');
+  drawCheck('ghost with nothing', c => Rg.marker(c, 0, 0, 0, null));
+  const after = fingerprint(drawCheck('a hoard after the ghost', c => { Rg.marker(c, 100, 100, 40, { charId: 'rogue', t: 1 }); R.enemy(c, D.ENEMIES.hoard, 300, 300, 1, 1, {}); }));
+  const alone = fingerprint(drawCheck('a hoard alone', c => { Rg.marker(c, 100, 100, 40, { charId: 'rogue', t: 1 }); }));
+  h.ok(after.length > alone.length, 'the art after a ghost draws as ever');
+  // the chart: ahead, behind, a lone attempt, junk
+  const ch = (o) => fingerprint(drawCheck('chart ' + JSON.stringify(o), c => Rg.chart(c, 480, 150, o)));
+  h.ok(new Set([ch({ me: [0, 600, 1200, 2000], ghost: [0, 500, 900, 1300] }), ch({ me: [0, 300, 500], ghost: [0, 500, 900, 1300] }), ch({ me: [0, 300], ghost: [] })]).size === 3, 'the race chart shows who led');
+  drawCheck('chart with nothing', c => Rg.chart(c, 0, 0, null));
+  drawCheck('chart with junk', c => Rg.chart(c, 480, 150, { me: [NaN, 'x', 5], ghost: [Infinity] }));
+  // GHOST PASSED!: the slam, the ghost left behind, the fade out
+  const ps = new Map();
+  for (const t of [0, 0.06, 0.3, 1, 2.1]) ps.set(String(t), fingerprint(drawCheck('pass at ' + t, c => Rg.pass(c, 270, 400, { t, charId: 'knight', sub: '+120 ahead after 3 fights' }))));
+  h.ok(new Set(ps.values()).size === ps.size, 'GHOST PASSED! slams in, the ghost falls behind, it fades');
+  h.ok(fingerprint(drawCheck('pass reduced', c => Rg.pass(c, 270, 400, { t: 0.05, reduced: true }))) !== ps.get('0.06'), 'reduced motion: no slam, no streaks');
+  drawCheck('pass with nothing', c => Rg.pass(c, 0, 0, null));
+});
+
+// MIX (round 10): the trauma budget (DESIGN.md "Mix and juice pass 2 (round 10)")
+h.test('mix: the trauma budget keeps a chain of shakes from stacking into nausea', () => {
+  const { RENDER } = boot({ only: ['util', 'data', 'render'] });
+  const fx = RENDER.fx, TB = fx.TB;
+  fx.clear(); fx.reduced = false;
+  h.eq(fx.budget(), TB.cap, 'a full budget to start');
+  fx.shake(12);
+  h.near(fx.trauma(), 0.6, 1e-9, 'one big hit still lands in full');
+  for (let i = 0; i < 40; i++) fx.shake(20);
+  h.ok(fx.trauma() <= TB.max + 1e-9, `forty crushing hits never pass the ceiling (${fx.trauma().toFixed(2)})`);
+  let maxOff = 0;
+  for (let i = 0; i < 90; i++) { fx.update(1 / 60); const o = fx.offset(); maxOff = Math.max(maxOff, Math.abs(o.x), Math.abs(o.y)); }
+  h.ok(maxOff <= TB.max * TB.max * 16 + 0.01, `the camera moves at most ${(TB.max * TB.max * 16).toFixed(1)} px (${maxOff.toFixed(1)})`);
+  // a volley at a steady rate: what it adds per second is held near the refill
+  fx.clear();
+  let spent = 0, heldHi = 0;
+  for (let i = 0; i < 180; i++) {
+    if (i % 6 === 0) { const b = fx.budget(), t0 = fx.trauma(); fx.shake(8); spent += Math.max(0, fx.trauma() - t0); heldHi = Math.max(heldHi, fx.trauma()); if (b > 0) h.ok(fx.budget() <= b, 'a shake spends the budget'); }
+    fx.update(1 / 60);
+  }
+  const want = 30 * 8 / 20;
+  h.ok(spent < want * 0.6, `a 3 s volley of 30 hits adds ${spent.toFixed(2)} trauma, not ${want} (the budget and the ceiling)`);
+  h.ok(heldHi <= TB.max + 1e-9, 'and never passes the ceiling');
+  h.ok(spent > TB.cap, 'but every hit still gives a little (the floor)');
+  // it refills
+  for (let i = 0; i < 40; i++) fx.update(0.1);
+  h.near(fx.budget(), TB.cap, 1e-9, 'the budget refills when the hits stop');
+  h.eq(fx.trauma(), 0, 'and the shake has died away');
+  // a tiny shake after a quiet spell is a tiny shake
+  fx.shake(2);
+  h.near(fx.trauma(), 0.1, 1e-9, 'a small bump is still small');
+  fx.shake(0); fx.shake(-5); fx.shake('x');
+  h.near(fx.trauma(), 0.1, 1e-9, 'zero, negative and junk amounts add nothing');
+  // kicks add up to a cap
+  fx.clear();
+  for (let i = 0; i < 10; i++) fx.kick(0, 8);
+  h.ok(fx.offset().y <= TB.kick + 1e-9 && fx.offset().y > 8, `ten kicks nudge ${fx.offset().y.toFixed(1)} px, capped at ${TB.kick}`);
+  fx.reduced = true; fx.clear(); fx.shake(20);
+  let redOff = 0;
+  for (let i = 0; i < 30; i++) { fx.update(1 / 60); const o = fx.offset(); redOff = Math.max(redOff, Math.abs(o.x), Math.abs(o.y)); }
+  h.ok(redOff <= TB.max * TB.max * 16 * 0.2 + 0.01, 'reduced motion keeps its fifth');
+  fx.reduced = false; fx.clear();
+  h.eq(fx.budget(), TB.cap, 'clear refills the budget');
+});
+
+// ---------------- ROS (round 10): Ms. Bubbles' face, outfits and items, the bubbles, the mutator pack's looks, the new pets
+h.test('ROS: Ms. Bubbles, her outfits and items, the bubbles, water, goo, the signs, the gauge and three new pets', () => {
+  const api = boot({ only: ['util', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  h.ok(R.ros && ['bubble', 'water', 'goo', 'mirrorSign', 'mirrorFinger', 'quakeSign', 'meter', 'portrait', 'hat', 'snorkel'].every(k => typeof R.ros[k] === 'function'), 'RENDER.ros');
+  const pfp = new Map();
+  for (const id of Object.keys(D.CHARACTERS)) pfp.set(id, fingerprint(drawCheck('portrait ' + id, c => R.portrait(c, id, 40, 40, 64, 1))));
+  h.eq(uniqueRatio(pfp).ratio, 1, 'Ms. Bubbles has a face of her own');
+  const bare = pfp.get('bubbler'), fits = new Map();
+  for (const fit of ['fit_bub_showercap', 'fit_bub_snorkel', 'fit_bub_witch']) {
+    R.vault.equip({ outfit: { bubbler: fit } });
+    fits.set(fit, fingerprint(drawCheck('portrait bubbler ' + fit, c => R.portrait(c, 'bubbler', 40, 40, 64, 1.3))));
+    drawCheck('thumb ' + fit, c => R.vault.thumb(c, fit, 50, 50, 100, 0.5));
+  }
+  R.vault.equip({ outfit: {} });
+  h.ok([...fits.values()].every(fp => fp !== bare), 'every outfit shows on her');
+  h.eq(uniqueRatio(fits).ratio, 1, 'and they differ');
+  const its = new Map();
+  for (const id of Object.keys(D.ITEMS).filter(id => D.ITEMS[id].char === 'bubbler')) its.set(id, fingerprint(drawCheck('item ' + id, c => R.item(c, D.ITEMS[id], 100, 100, 0.3, 1, {}))));
+  h.ok(its.size === 10 && uniqueRatio(its).ratio === 1, `her ${its.size} items all look different`);
+  const evo = new Map();
+  for (const id of ['captain_quack', 'bubble_shield']) evo.set(id, fingerprint(drawCheck('evolved ' + id, c => R.item(c, D.ITEMS[id], 100, 100, 0, 1, {}))));
+  h.ok(evo.get('captain_quack') !== its.get('rubber_duck') && evo.get('bubble_shield') !== its.get('soap_bar'), 'the evolutions look new');
+  // a bubble forming, floating, held and popping all look different
+  const bub = new Map();
+  for (const [k, st] of [['form', { t: 1, k: 0.4 }], ['float', { t: 1, k: 1 }], ['held', { t: 1, k: 1, held: true }], ['pop', { t: 1, k: 1, pop: 0.5 }]]) bub.set(k, fingerprint(drawCheck('bubble ' + k, c => R.ros.bubble(c, 200, 300, 24, st))));
+  h.eq(uniqueRatio(bub).ratio, 1, 'every bubble state shows');
+  drawCheck('bubble null state', c => { R.ros.bubble(c, 200, 300, 24, null); c.fillRect(0, 0, 1, 1); });
+  drawCheck('water', c => R.ros.water(c, 30, 446, 600, 800, 1.2));
+  drawCheck('goo', c => R.ros.goo(c, 200, 450, 220, 500, 1, false));
+  drawCheck('goo stuck', c => R.ros.goo(c, 200, 450, 220, 500, 1, true));
+  drawCheck('mirror sign', c => R.ros.mirrorSign(c, 42, 418, 1));
+  drawCheck('mirror finger', c => R.ros.mirrorFinger(c, 100, 380, 770, 1));
+  drawCheck('quake sign', c => R.ros.quakeSign(c, 270, 450, 1, 0.7));
+  const g = new Map();
+  for (const [k, st] of [['empty', { n: 0, want: 3 }], ['two', { n: 2, want: 1, popped: 3 }], ['full', { n: 6, want: 0, popped: 9, combo: 1 }]]) g.set(k, fingerprint(drawCheck('gauge ' + k, c => R.ros.meter(c, 522, 450, Object.assign({ t: 1 }, st)))));
+  h.eq(uniqueRatio(g).ratio, 1, 'the gauge counts');
+  // the new pets: in DATA and in RENDER, every pose and mood, all distinct from the old ones
+  h.ok(['penguin', 'molerat', 'roomba'].every(id => R.pets.KEYS.includes(id) && R.pets.ART[id]), 'drawn by the pets table');
+  const pets = new Map();
+  for (const id of D.PET_IDS) pets.set(id, fingerprint(drawCheck('pet ' + id, c => R.pet(c, id, 100, 100, 1.2, { t: 1, lv: 1 }))));
+  h.eq(uniqueRatio(pets).ratio, 1, 'eleven different pets');
+  for (const id of ['penguin', 'molerat', 'roomba']) {
+    const poses = new Map();
+    for (const pose of ['sit', 'run', 'act']) poses.set(pose, fingerprint(drawCheck(`${id} ${pose}`, c => R.pet(c, id, 100, 100, 1.2, { t: 1.3, lv: 1, pose, k: 0.3 }))));
+    h.eq(uniqueRatio(poses).ratio, 1, id + ': sitting, running and at work look different');
+    for (const mood of ['happy', 'cheer', 'scared', 'sleep', 'sad', 'focus']) drawCheck(`${id} ${mood}`, c => R.pet(c, id, 100, 100, 1, { t: 1, lv: 5, mood, look: 0.5, dir: -1 }));
+    const lv1 = fingerprint(drawCheck(id + ' lv1', c => R.pet(c, id, 100, 100, 1, { t: 1, lv: 1 }))), lv4 = fingerprint(drawCheck(id + ' lv4', c => R.pet(c, id, 100, 100, 1, { t: 1, lv: 4 })));
+    h.ok(lv1 !== lv4, id + ': the level looks show');
+  }
+});
+
 h.done();

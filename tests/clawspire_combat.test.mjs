@@ -3349,4 +3349,111 @@ if (hasData) {
   });
 }
 
+// ---------- round 10 (ROS): Ms. Bubbles' bubbles, the mutator pack's claw, the new pets' synergies
+{
+  const LB = boot({ only: ['util', 'data', 'combat'] });
+  const C = LB.COMBAT, D = LB.DATA, UB = LB.U;
+  if (D && D.CHARACTERS && D.CHARACTERS.bubbler) {
+    const BBIN = D.CHARACTERS.bubbler.bin;
+    const brun = (extra, bin) => Object.assign({ hp: 400, maxHp: 400, act: 1, char: 'bubbler', relics: ['bubble_wand'], claw: { grabs: 3, width: 1 }, gold: 40,
+      bin: (bin || BBIN).map((id, i) => ({ uid: 'b' + i, id, plus: false })) }, extra || {});
+    const bfight = (extra, bin, seed) => {
+      const F = C.newFight(brun(extra, bin), ['rat', 'slime'], UB.rng(seed || 7));
+      for (const e of F.enemies) { e.hp = e.maxHp = 500; e.block = 0; e.status = {}; }
+      return F;
+    };
+    h.test('round 10: Ms. Bubbles blows two bubbles a turn (three on the first with the Bubble Wand); nobody else does', () => {
+      const F = bfight();
+      h.ok(F.bub && F.bub.n === 2 && F.bub.first === 1 && F.bub.block === 2, 'the gift and the wand');
+      h.eq(C.rosBlowN(F), 3, 'three on turn 1');
+      F.turn = 2;
+      h.eq(C.rosBlowN(F), 2, 'two after');
+      h.eq(F.player.block, 2, 'the wand\'s 2 Block at the bell');
+      const K = bfight({ char: 'knight', relics: [] });
+      h.eq(K.bub, null, 'the Knight blows none');
+      h.eq(C.rosBlowN(K), 0, 'nothing to blow');
+      const M = bfight({ char: 'knight', relics: ['foam_machine'] }), MB = bfight({ relics: ['bubble_wand', 'foam_machine'] });
+      h.ok(M.bub && M.bub.n === 1, 'the Foam Machine: one a turn for anyone');
+      h.ok(MB.bub.n === 3, 'and one more for her');
+      h.ok(M.events.some(e => e.t === 'proc' && /BUBBLES/.test(e.text)) && MB.events.some(e => e.t === 'proc' && /FOAM MACHINE/.test(e.text)), 'the rule procs');
+    });
+    h.test('round 10: pops pay Block, two or more in a grab are a Bubble Combo on ALL, bin bursts pay the aura', () => {
+      const F = bfight();
+      const b0 = F.player.block, hp = F.enemies.map(e => e.hp);
+      const one = C.rosPop(F, 1, 'chute');
+      h.ok(one.some(e => e.t === 'ros' && e.k === 'pop' && e.n === 1) && F.player.block === b0 + 2, 'one pop: 2 Block');
+      h.ok(!one.some(e => e.k === 'combo') && F.enemies.every((e, i) => e.hp === hp[i]), 'no combo for one');
+      const three = C.rosPop(F, 3, 'chute');
+      const cb = three.find(e => e.t === 'ros' && e.k === 'combo');
+      h.ok(cb && cb.n === 3 && cb.dmg === 3 * C.ROS.combo, 'three: a Bubble Combo of 3 x ' + C.ROS.combo);
+      h.ok(F.enemies.every((e, i) => e.hp === hp[i] - cb.dmg), 'on ALL, no attacker');
+      h.ok(F.bub.popped === 4 && F.bub.combos === 1 && F.bub.best === 3, 'counted');
+      const S = bfight({ relics: ['bubble_wand', 'squeaky_toy', 'soap_dish'] });
+      h.ok(S.bub.combo === C.ROS.combo + 3 && S.bub.block === 4, 'the Squeaky Toy and the Soap Dish add up');
+      const blk = F.player.block;
+      h.ok(C.rosPop(F, 2, 'bin').some(e => e.k === 'burst') && F.player.block === blk, 'a burst in the bin pays nothing without the aura');
+      const Q = bfight({}, BBIN.concat(['bubble_shield']));
+      Q.relics.length = 0;
+      const A = C.newFight(brun({ bin: BBIN.concat(['bubble_shield']).map((id, i) => ({ uid: 'q' + i, id })) }), ['rat'], UB.rng(3));
+      h.ok(A.evos.includes('evo:bubble_shield') && A.bub.bin === 3, 'Suds Armor: 3 Block a burst');
+      const qb = A.player.block;
+      C.rosPop(A, 2, 'bin');
+      h.eq(A.player.block, qb + 6, 'two bursts, 6 Block');
+      const Dk = C.newFight(brun({ bin: BBIN.concat(['captain_quack']).map((id, i) => ({ uid: 'd' + i, id })) }), ['rat'], UB.rng(3));
+      Dk.enemies[0].hp = Dk.enemies[0].maxHp = 300;
+      C.rosPop(Dk, 2, 'chute');
+      h.eq(Dk.enemies[0].hp, 300 - 3 * 2 - 2 * C.ROS.combo, 'Duck Patrol: 3 a pop to a random enemy, then the combo');
+      h.eq(C.rosPop(bfight({ char: 'knight', relics: [] }), 2, 'chute').length, 0, 'no bubbles: pops do nothing');
+    });
+    h.test('round 10: soap blows bubbles when played (for anyone), a turn of her kit never NaNs', () => {
+      const F = bfight();
+      const i = F.bin.find(x => x.id === 'bubble_pipe');
+      const ev = C.play(F, i);
+      h.ok(ev.some(e => e.t === 'ros' && e.k === 'blow' && e.n === 1 && e.src === 'bubble_pipe'), 'the Bubble Pipe blows one');
+      const K = bfight({ char: 'knight', relics: [] }, ['bath_bomb', 'rusty_sword']);
+      const kv = C.play(K, K.bin[0]);
+      h.ok(kv.some(e => e.t === 'ros' && e.k === 'blow' && e.n === 2) && K.bub && K.bub.n === 0, 'a Bath Bomb bubbles in the Knight\'s hands (no bubbles a turn)');
+      const Z = C.newFight(brun({ relics: ['bubble_wand', 'soap_dish', 'squeaky_toy', 'foam_machine'] }, BBIN.concat(['golden_duck', 'bubble_bath', 'foam_cannon', 'loofah', 'bath_bomb'])), ['rat', 'slime', 'bat'], UB.rng(11));
+      const r = UB.rng(5);
+      let bad = 0;
+      for (let t = 0; t < 30 && Z.phase !== 'over'; t++) {
+        for (let g = 0; g < 3 && Z.phase === 'player'; g++) {
+          C.useGrab(Z);
+          const n = Math.floor(r() * 3);
+          for (let k = 0; k < n && Z.bin.length && Z.phase === 'player'; k++) C.play(Z, Z.bin[Math.floor(r() * Z.bin.length)]);
+          C.grabDone(Z, n);
+          if (Z.phase === 'player' && r() < 0.5) C.rosPop(Z, 1 + Math.floor(r() * 3), 'chute');
+        }
+        if (Z.phase === 'player') { C.rosPop(Z, Math.floor(r() * 2), 'bin'); C.endTurn(Z); }
+        if (!Number.isFinite(Z.player.hp) || Z.enemies.some(e => !Number.isFinite(e.hp))) bad++;
+      }
+      h.eq(bad, 0, 'a 30 turn fuzz with every bubble piece stays finite');
+    });
+    h.test('round 10: Tiny Claw, Big Prizes shrinks the claw and hits harder; the other new mutators leave COMBAT alone', () => {
+      const F = bfight({ muts: ['tinyclaw'] }), P = bfight();
+      h.ok(Math.abs(F.claw.width - P.claw.width * 0.7) < 1e-9, 'the claw at 70%');
+      const e = F.enemies[0], hp0 = e.hp;
+      C.damage(F, F.player, e, 10);
+      h.eq(hp0 - e.hp, 15, 'a 10 hit lands for 15');
+      const M = bfight({ muts: ['moon', 'earthquake', 'mirror', 'sticky', 'flood'] });
+      h.ok(M.mut && M.mut.bounce === 0.72 && M.mut.tremor === 2 && M.mut.mirror && M.mut.sticky === 0.35 && M.mut.flood === 1, 'the fx reach F.mut for the game');
+      h.ok(M.claw.width === P.claw.width && M.player.grabsMax === P.player.grabsMax, 'nothing else changes in the fight');
+    });
+    h.test('round 10: the new pets\' synergies (chill, gold, block) and their procs', () => {
+      const F = bfight({ pet: { id: 'penguin' } });
+      const ev = C.rosPetSyn(F, 'penguin', 'chill', { v: 2, label: 'SNOWBALL FIGHT!' });
+      h.ok(ev[0].t === 'proc' && ev[0].id === 'pet:penguin' && ev[0].text === 'SNOWBALL FIGHT!', 'the proc first');
+      h.ok(F.enemies.every(e => (e.status.chill | 0) === 2), '2 Chill on ALL');
+      const g0 = C.gold(F);
+      C.rosPetSyn(F, 'molerat', 'gold', { v: 5 });
+      h.eq(C.gold(F), g0 + 5, 'Gold Digger: 5 gold');
+      const b0 = F.player.block;
+      C.rosPetSyn(F, 'roomba', 'block', { v: 3 });
+      h.eq(F.player.block, b0 + 3, 'Turbo Suction: 3 Block');
+      F.phase = 'over';
+      h.eq(C.rosPetSyn(F, 'roomba', 'block', { v: 3 }).length, 0, 'never after the fight');
+    });
+  }
+}
+
 h.done();

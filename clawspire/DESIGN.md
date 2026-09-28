@@ -4528,6 +4528,455 @@ The test-hook logs without a cap (tips, season, stories) keep their newest
 LOG, TITLE, T, titleLayout, titleFit}`; `RENDER.q9 = {arena, titleSprites,
 logo, title, glowStats}`; `RENDER.fx.rects / numRects`.
 
+## Mix and juice pass 2 (round 10)
+
+Nine rounds added about 215 sounds, a dozen music variants and a lot of
+motion. This pass makes them sit together. Presentation only: no rule,
+balance number or save field changed. Code: audio.js (the MIX block at the
+end, plus one-line changes in `build`, `sfx`, `duck`, `newLayer`,
+`withContext`), render.js (the trauma budget in `RENDER.fx`), game.js (the MIX
+block before `state()`, one-line hooks in `setScreen`, `update` and the hit
+stop), index.html (`<style id="mix-css">`, last in the head).
+
+### The mix (audio.js)
+
+- **Loudness tiers.** Every sfx sits in one of six tiers (`AUDIO.mix.TIER`,
+  unknown names are `mid`): `tick` (counter ticks, rattles: -38), `ui` (clicks,
+  footsteps, blooms: -32), `soft` (the claw's own clatter, landings, pets: -28),
+  `mid` (hits, blocks, statuses, pickups: -24), `big` (crushing hits, crits,
+  bombs, combos, the versus slam, the boss sting: -19.5), `huge` (jackpot, boss
+  down, the evolution burst, capsule burst, win, victory, set complete, arcade
+  jackpot, power down: -15.5). The number is K-weighted loudness (a +4 dB shelf
+  at 1.5 kHz, a 38 Hz high pass) of the loudest 100 ms window, dB, pre-bus.
+  `MIX_TRIM` is the dB per voice (on top of the old `LEVEL`) that lands it on
+  its target +-`MIX_WIN` (2.5), measured by rendering every voice on an
+  `OfflineAudioContext` in Chromium (scratchpad `r10/loud.mjs`); trims are held
+  to -14..+12 dB. Opts still scale inside a voice (a legendary capsule over a
+  common one, a tier 3 combo over a tier 1).
+- **Before / after** (pre-bus, dB; the spread inside every tier went from
+  10-23 dB to under 0.5 dB, and nothing clips before the bus any more):
+
+| tier | target | voices | before: range (median) | after: range (median) | loudest peak before -> after |
+| --- | --- | --- | --- | --- | --- |
+| tick | -38 | 6 | -47.8 .. -37.7 (-42.4) | -38.2 .. -37.8 (-37.9) | -19.0 -> -19.2 dBFS |
+| ui | -32 | 19 | -40.6 .. -27.6 (-32.1) | -32.2 .. -31.8 (-32.1) | -12.7 -> -15.8 |
+| soft | -28 | 67 | -38.7 .. -16.8 (-30.3) | -28.2 .. -27.8 (-28.0) | -6.4 -> -8.7 |
+| mid | -24 | 87 | -33.0 .. -15.0 (-26.1) | -24.2 .. -23.8 (-24.0) | 0.0 -> -1.9 |
+| big | -19.5 | 23 | -29.6 .. -7.0 (-23.1) | -19.7 .. -19.3 (-19.5) | +4.4 -> -4.9 |
+| huge | -15.5 | 11 | -20.3 .. -13.4 (-17.7) | -15.7 .. -15.3 (-15.5) | -0.2 -> -1.7 |
+
+  The worst offenders: `boom` -7.0 -> -19.5 (a bomb in the bin was louder than
+  the jackpot), `vsSlam` -9.1, `crit` -11.0, `hitBig` -11.9 (all big now);
+  `stingBoss` -27.7 and `lose` -27.6 were buried (both big now), `diceRoll`
+  -47.8 and `wheelSpin` -40.6 were inaudible, `petHonk` -38.7. Through the real
+  buses and the limiter the tiers hold within a dB or two (`r10/loud_afterbus`).
+  Round 10's own new voices (Ms. Bubbles' `rosBlow`, `rosPop`, `rosCombo`,
+  `rosQuake`, the pets' `rosSlide`, `rosSweep`) are calibrated the same way; a
+  voice added later without a trim plays as `mid` at its own level, and the
+  audio suite fails it only if it would be jarring (over its tier's ceiling).
+- **Voice caps per tier** (`MIX_CAP`: tick 3, ui 4, soft 8, mid 10, big 6, huge
+  3). The capped tiers add up to under the global 32, so a flood of one kind
+  never starves another, and the global cap never stops a sting.
+- **Ducking.** The tick, ui, soft and mid voices ride their own gain
+  (`S.minorG`) into the sfx bus. A `huge` voice (`mixSting`) ducks them to 0.5
+  for up to 1.1 s and the music to 0.35 for up to 2.5 s, then both ramp back in
+  0.5 s. Ducks merge (`mixRamp`): the deeper depth and the later end win, so a
+  big hit right after a jackpot never cuts the jackpot's duck short (it used
+  to restart it). A duck asked for from inside a hit-sized voice (`hitBig`,
+  `crit`, a combo, the relic reveal) is a short shallow dip (0.6 for at most
+  0.4 s) instead of a hole in the music; `AUDIO.duck()` from the game keeps its
+  shape. `AUDIO.mix.duckAt(t)` reads the curve the AudioParams follow.
+- **No machine gun.** The repeated sounds (`MIX_VARY`: footsteps, steps, hits,
+  blocks, landings, clanks, thuds, bonks, pegs, ticks, clicks, reel stops...)
+  get a seeded pitch spread (+-4.5%, +-2% for the ticks) and level spread
+  (+-1.5 dB, +-1 dB) on top of the old 1.5% detune, never within a third of
+  the spread of the last one. `AUDIO.mix.seed(n)` reseeds it; `mix.last` is the
+  last spread.
+- **The limiter.** A brick wall (`MIX_LIM`: -2 dB, ratio 20, 2 ms attack) after
+  the master gain; the glue compressor stays where it was.
+- **Music under the sfx.** Every tune and act variant was measured the same way
+  (`MIX_MUS`, dB per `accSongKey`: the act maps, the fights, the seasonal title
+  and map tunes); each now sits about -33 dB integrated as heard and under
+  -28.5 dB in its loudest 400 ms, 5 dB or more under a hit and 9 under a big
+  one. The hype and tense layers ride inside their tune's level. Before: the
+  act 3 map ran at -29.8 / -24.0 (hotter than a hit), the fights at -30.6.
+- **Offline rendering** (`AUDIO.mix.offline(ac, o)`): one voice (`o.sfx`,
+  `o.opts`, `o.raw` without the trim) or a stretch of a tune (`o.music`,
+  `o.act`, `o.season`, `o.layers`) on any context, straight to its destination
+  or through the real buses (`o.bus`); the live graph, its ducks and voices are
+  untouched. Chrome's compressors start clamped, so a bus render starts half a
+  second in.
+
+### Juice pass 2
+
+A Playwright tour of every screen (scratchpad `r10/tour.mjs`: 36 steps, an
+audit of entry motion, press feedback, button styles, fonts and whether a
+button is covered, two shots each, `r10_mix_*.png`) found these dead moments,
+all fixed:
+
+1. Eighteen screens cut straight in under the wipe (character select, rest,
+   forge, event, help, tips, the Prizedex, stickers, history, Codex, weekly,
+   shop, prize counter, spare parts, bin, treasure, Compactor, the rush menu):
+   their content now rises in block by block (`.mixIn`, `MIX_SCR`).
+2. Long lists appeared all at once (the sticker board, the Prizedex grid, the
+   history runs, the Codex chapters and pages, tips, the help's status list,
+   the run stats, the highlights, sets, evolutions, the Compactor's bin): they
+   deal in one by one.
+3. A Prizedex tab, a history filter or a Codex page snapped its new list in:
+   it re-deals (`.mixRe`), without replaying the screen's entrance.
+4. The map head popped in: it drops.
+5. The top bar, the player row and the control bar snapped back when a fight
+   or the map came up from the menus: they slide in (`.mixHud`).
+6. The run stats and highlights on the game over and the win, and the history
+   scores, snapped: they count up from zero with ticks rising in pitch (the
+   game over waits for its recap to be put away).
+7. Stickers, the vault's tabs, switches and wallet, the Compactor's slots, the
+   boon cards, the mutator header, the HUD relics, capsule and tool chips and
+   the rush menu's items had no press state: they press in (the `scale`
+   property, so tilted stickers and holo cards keep their transforms) and glow
+   on hover.
+8. END TURN and other buttons snapped from disabled to enabled: they fade.
+9. Toasts only faded: they pop.
+10. The title's way in sat still: Continue / New run breathe.
+11. A volley of crits (a Gatling turret, a finale's ten blasts, a combo on a
+    crit) stacked camera shake into a long wobble: the trauma budget.
+12. The same volley stuttered the physics with back-to-back hit stops: the hit
+    stop budget.
+13. Footsteps, pegs, ticks and landings played the same note like a machine
+    gun: the spread.
+14. Chests, capsules and boss downs fought the pile and the pets for the ear:
+    the stings duck the minor sfx.
+15. A bomb in the bin was louder than the jackpot, and the boss sting was
+    buried: the tiers.
+16. The act 3 map music sat over the hit sounds: the tune levels.
+17. The shop's Leave and the prize counter's Back were loud pink primaries
+    while every other way out is a ghost button: ghost now.
+18. On help, the Prizedex, the sticker board and tips the only way out sat at
+    the bottom of a long scroll (the Prizedex's under 150 cards): it stays on
+    screen (`.mixStick`, sticky; the Codex and the history keep theirs top
+    left). No button moved in the registration order.
+
+**The trauma budget** (`RENDER.fx`, `fx.TB`: cap 1, refill 0.8 a second,
+floor 0.25, ceiling 0.85, kicks 12 px): every shake draws on the budget; a
+shake it cannot cover keeps only the floor of the rest, trauma never passes the
+ceiling (at most 11.6 px of shake), kicks add up to 12 px. One big hit still
+lands in full; a 3 s volley of 30 hits adds under 60% of what it asked for.
+`fx.budget()`, `fx.clear()` refills it. **The hit stop budget** (game.js
+`MIX_HS`: 0.3 s, refilling 0.3 s a second): a hit stop spends frozen time;
+when it is out the physics runs on, so crits for two seconds freeze the pile
+for about 0.45 s in all.
+
+**Entrances never hold input.** The classes are zero specificity (`:where`),
+so every screen's own entrance or loop wins; they animate `translate`,
+`scale`, `opacity` and `filter` only (never `transform`, never
+`pointer-events`) and come off after 0.8 s (`MIX_IN`); the buttons are
+registered and live at once. Reduced motion (Shake off, or the OS setting)
+skips them; the breathing and the toast pop stop under `.calm` and
+`prefers-reduced-motion`. Headless (the suites) the timers run and no number
+is touched. The tour's check: after every entrance the centre of every button
+is the button (only the game over's recap covers its buttons, by design).
+
+**Consistency.** Fonts: one family everywhere (Trebuchet; the reboot's BIOS log
+is Courier on purpose). Buttons: every tappable element is a `.btn` variant
+or has its own press state; a way out is a ghost button, except the lone
+Back of a long list screen, which is a sticky primary. Headings: 30 px, 26 px
+beside a top-left Back (the Codex, the history, the weekly, the rush menu),
+the event's gold and the counter's neon on purpose.
+
+`AUDIO.mix = {TIERS, TARGET, WIN, CAP, TIER, TRIM, VARY, DUCK, LIM, MUS, MINOR,
+STING, tier, level, musK, offline, seed, last, duckAt, voices, limiter}`;
+`RENDER.fx.budget / TB`; `GAME.mix = {HS, IN, SCR, HUD, COUNT, hsTick,
+hsSpend, screen, tick, countStart, calm, ui, hs}`.
+
+Tests: audio (a small offline WebAudio in plain JS renders every voice: each
+calibrated one inside its tier, nothing uncalibrated over its tier's ceiling,
+no clipping pre-bus, the tier medians on target and in order, the owner's
+named sounds in their tiers and a margin apart, opts still scaling; the music
+and its layers, the act maps and the seasonal tunes under a hit; a sting's
+duck on the music and the minor sfx and its release, a big hit's shallow dip,
+ducks merging, every sting ducking, the game's own duck; voice caps per tier;
+the spread seeded, bounded, never repeating a pitch; the limiter and an offline
+render leaving the live graph alone; the Node renderer lands within 0.1 dB of
+Chromium on the median voice and 2.5 dB at worst, its squares are not
+band-limited), render (the trauma budget: one hit in full, the ceiling, a
+volley held, the floor, the refill, junk amounts, kicks, reduced motion,
+clear), game (the hit stop budget through real frames; entrances, list
+re-deals and the HUD slide on and off for every screen with input live at
+once, reduced motion, the CSS never touching pointer-events or transform;
+press states for every tappable class and every registered button; the
+count-ups landing exactly).
+
+## Boss Rush and the ghost race (round 10)
+
+Two modes for the player who has seen it all: every boss back to back
+against the clock, and a race against your own best climb of the day. Data
+in `data.js` (the RUSH block: `RUSH`, `rushOrder`, `rushKit`,
+`rushDraftKinds`, `rushScore`, `rushFmt`, `rushFix`, `rushRecord`,
+`rushBoard`, `GHO`, `ghoCp` ... `ghoSeries`), the flow in `game.js` (the
+RUSH and GHOST blocks after LORE, `GAME.rush`, `GAME.gho`), the art in
+`render.js` (the RUSH block: `RENDER.rush`, `RENDER.gho`), the frame in
+`index.html` (`#scr-rushmenu`, `#scr-rush`, `<style id="rush-css">`), all
+reached through one-line hooks. No new sound names (`vsSlam, whoosh,
+stingBoss, stamp, fanfare, win, lose`).
+
+### The Boss Rush
+
+- **The door.** The title's Boss Rush card sits beside the Prize Vault (one
+  row, so the menu is no taller; registered after the weekly card and before
+  History, which stays last). It shows the best clear, or "Win a run to open
+  it" with a padlock: the rush opens after the first win. The rush menu
+  (screen `rushmenu`, never saves a run) has the banner (BOSS RUSH over the
+  whole lineup, the bosses beaten in a rush in colour, the rest silhouettes,
+  The Machine a `?` until met), the rules, a crawler pick (remembered as
+  `meta.rush.pick`), the crawler's kit, Start (disabled while locked) and the
+  board: your best clear per crawler, fastest first, then the most bosses.
+- **The lineup** (`DATA.rushOrder(seed, {machine})`): the three act bosses
+  and their understudies (the Hoard, the Plushie Queen, the Smelter, the
+  Conveyor King, Glacius, the Arctic Arcade) shuffled by the run's seed,
+  then the Prize Master, then The Machine once it has been met (seen in a
+  fight or powered down). Each fight is seeded by its index, so a reload
+  replays the same fight from its bell.
+- **The run.** A rush is a run with `run.rush` (Tilt 0, no mutators, not a
+  daily or a weekly, no map fights, no boon, no history card: `hisDone:
+  'rush'`). The crawler's starting bin and relic plus its kit
+  (`DATA.RUSH.KIT`: four items, two relics that pay per fight or per hit,
+  never per kill, a claw part and +15 max HP; a crawler without a kit gets
+  its own best cards and two spare relics).
+- **A boss in a rush** plays its own arena, music and act (`run.act` is the
+  boss's act), with the act's share of its hit points and hits
+  (`RUSH.HPK`, `RUSH.DMGK`, on the fight's copy of the def; the data is
+  never touched; the telegraph stays exact), and nobody steps out of it
+  (Glacius and the Arctic Arcade lose their Prize Master summon; the Prize
+  Master comes on its own). The hidden escalation counts one step per boss
+  (`RAMP`). The versus card reads BOSS 3 OF 7 (the Prize Master keeps FINAL
+  BOSS, The Machine SECRET BOSS). A win breathes 10% of max hp back
+  (`BREATHER`).
+- **NEXT CHALLENGER** (screen `rush`, sd `{rush: {k: 'next'}}`): the stage
+  darkens, the hazard band slides in, FIRST / NEXT / FINAL CHALLENGER slams
+  from 3x (`vsSlam`, a shake), the boss slides in as a black silhouette with
+  a `?`, a white flash reveals it (`stingBoss`), its name slams in chrome
+  (`stamp`), the gallery pops up: one frame per boss, the beaten ones in
+  colour under a KO stamp, the next one pulsing gold, the rest silhouettes
+  with a `?`. A plate on top shows BOSS n OF m and the clock. A tap skips
+  to the end (faster for a veteran, reduced motion shows it all at once);
+  FIGHT! (Space, Enter) or Give up. The corner lane keeps off the plate and
+  the label (`QA_SIGNS.rush`).
+- **The clock** (`FS.rushT`) runs while you fight: never under the versus
+  card, an evolution ceremony or the outro, never while the Settings panel
+  or photo mode pause the game. It is booked on the win (`run.rush.t`, the
+  split in `splits`), so a reload mid fight restarts that fight's clock with
+  the fight. The HUD swaps the bulbs and tickets for a TIME stat, the act
+  stat reads Boss 3/7 and the badge RUSH.
+- **The draft** (sd `{rush: {k: 'draft'}}`): THE SMELTER DOWN!, the split
+  and the total, the gallery with the new KO slamming in, then 1 of 3 cards
+  (`DATA.rushDraftKinds`: three of item, relic, heal, claw part; a heal for
+  sure under half hp, no claw part once the claw is maxed): an item of the
+  crawler's pool at act 3 odds (upgraded 35% of the time), an uncommon or
+  rare relic (with its set tag), a heal of 35% max hp, a claw part. Rolled
+  once and saved with the run (`run.rush.draft`); a pick pays and saves in
+  the same beat.
+- **The result** (sd `{rush: {k: 'end'}}`): RUSH CLEARED! or RUSH OVER (who
+  got you, at which boss), the gallery (LOST on the one that beat you), the
+  final time (NEW BEST! and the old one) and the score (`DATA.rushScore`:
+  1000 a boss, 5000 for the clear, 25 per hp left, 20 per second under par,
+  `PAR` 100 s a boss), the lines, the splits with the hp after each, the
+  board, the stickers, Rush again and Back to title. The run save goes. A
+  fall comes here too (never the game over), and Give up does.
+
+### The ghost race
+
+- **Checkpoints.** A daily run (and a weekly) keeps `run.gho = {k 'd' |
+  'w', key, cps, t, lead, passed, passN, done, passQ}`. Every fight won
+  books a checkpoint (`DATA.ghoCp`: nine whole numbers, about 40 bytes: the
+  fights won, the stage (the act, 4 the Back Room, 4 + the loop in
+  Endless), the fight's hex, hp, gold, the live score (the daily's own, the
+  weekly's run score), turns, seconds played).
+- **The ghost** is the best attempt of that same day (week): `meta.gho = {d,
+  w, passes}`, one record each, replaced when an attempt scores more
+  (`ghoRunEnd` from `metaRunEnd`). A new day's key starts a fresh race.
+- **On the map** the ghost stands where it stood after as many fights as
+  you have won (`ghoSpot`; the start before the first fight, a step aside
+  when it shares your hex): a translucent crawler with a sheet for legs, a
+  GHOST tag, gliding from its last spot to its new one; once its climb had
+  ended, a grey GHOST OUT where it fell (on the same map only). The delta
+  chip at the bottom of the map (`#ghoChip`, between the plate and the
+  compass) reads "+120 vs ghost" in lime, "-45" in red, "±0" level, or NEW
+  on the day's first climb; it pops when it changes, and a tap explains.
+- **GHOST PASSED!** The checkpoint that takes the lead from behind or level
+  (`ghoPassed`) queues the moment; landing on the map (after the wipe) it
+  slams in chrome with speed lines while the ghost is left behind, fading
+  (a fanfare, confetti, a buzz). The first pass counts on the profile and
+  earns the sticker.
+- **The end panel** (game over, win) shows GHOST RACE with the verdict (you
+  beat your ghost by N, your ghost holds by N, or you are the ghost now), a
+  race chart (`RENDER.gho.chart`: your score per fight solid pink against
+  the ghost's dashed cyan, the lead shaded), the two climbs side by side
+  (score, fights won, where each reached, turns, time) and whether a new
+  ghost was saved. Once the attempt is over the ghost is hidden (a daily won
+  into Endless no longer races itself).
+
+### Stickers, save fields, API
+
+- Stickers (the board is at its cap of 60): **Rush Hour** (clear the Boss
+  Rush) and **Photo Finish** (overtake your own ghost).
+- Meta: `rush {runs, clears, score, best {crawler: {t, n, s, at}}, beat
+  {boss: n}, pick}` (`DATA.rushFix`), `gho {d, w, passes}` (`DATA.ghoFix`).
+  Run: `rush {v, order, i, t, splits, hp, beat, draft, done, won, score,
+  lines, rec, killer, dead, kit, br}`, `gho` (above). Screens `rush` (saved,
+  sd `{rush: {k}}`) and `rushmenu` (never saves). Old and junk profiles and
+  saves load (empty records, no race, no rush).
+- `GAME.rush = {K, start, menu, show, fight, pick, giveUp, end, skip, of,
+  meta, metaFix, open, met, idx, lineup, clock, tick, hud, titleBtn, force,
+  ui, log, live, clockEl}`, `GAME.gho = {K, of, ghost, meta, metaFix, score,
+  stage, spot, fightEnd, runEnd, endPanel, chip, tap, tick, draw, chipEl,
+  pass, log}`; `RENDER.rush = {T, back, boss, gallery, challenger,
+  banner}`, `RENDER.gho = {PASS, marker, sheet, chart, pass}`.
+- Balance (scratchpad `r10/rushsim.mjs`, the balance suite's average-grab
+  model through whole rushes, 60 each): clears knight 68%, alchemist 88%,
+  rogue 18%, Lucky Lou 37%, Mama Mech 98% (the model's rogue is its weakest
+  everywhere, and it never grabs the Plushie Queen's plush out), 4.5 to 6
+  turns a boss; The Machine at the end is a real wall (about half fall
+  there). Ms. Bubbles (round 10's sixth crawler) gets the Golden Duck and a
+  Strength relic in her kit because her starter bin is soft; the model
+  cannot see her bubbles (prizes that never slip), so it rates her far
+  lower than a hand will. Every crawler needs a line in `RUSH.KIT` (the
+  data suite checks the roster); an unknown one falls back to its own best
+  cards. Balance is loose on purpose.
+- Tests: data (the lineup over 60 seeds, the Machine only when met, the
+  kits, the draft kinds, the score, the clock, the bests and the board, the
+  checkpoints, records, the delta, the pass, the series, the stickers),
+  render (the slam at every beat and for every boss, reduced motion, the
+  gallery in every state and the KO stamp, the banner, the stage; the ghost
+  for every crawler, sad, bobbing, no leak; the chart; GHOST PASSED! at
+  every beat), game (the title card and its lock, the menu, the kit and the
+  pick; a whole rush with rush hit points, the card, the clock, splits,
+  every kind of card paid, the result, the bests, the sticker, Rush again;
+  save and reload at every step paid once; The Machine only once met, a
+  fall, giving up; the ghost race by day and by week, the chip, the spot,
+  the pass, the end panel, a new ghost, a worse attempt, a reload, old
+  profiles). Screenshots: scratchpad `r10/mode_shots.mjs` (`r10_mode_*.png`).
+
+## Ms. Bubbles, the mutator pack and three pets (round 10)
+
+A sixth crawler whose gift plays with the claw itself, six mutators that
+change the machine, and three more pets. Everything sits in `ROS` blocks:
+data (`data.js`: her items after Mama Mech's, her relics, the character,
+outfits, evolutions, the mutators in `MUT_LIST`, the pets in `PETS` and
+`PET_SYN`, and the ROS block with `rosMutMerge`, two stickers and `DATA.ROS`),
+the rules (`combat.js`, the ROS block), the physics helpers (`physics.js`:
+`rosFloat`, `rosBounce`, `rosFlood`), the art (`render.js`, `RENDER.ros`), the
+sounds (`audio.js`) and the flow (`game.js`, `GAME.ros`), all reached through
+one-line hooks. Ids are new, nothing was renamed, no save field was added
+(bubbles, water and glue are fight-only state in `FS.ros`, rebuilt from the
+fight seed), and a fight with none of it is bit for bit the old one.
+
+### Ms. Bubbles, The Foam Chemist (`CHARACTERS.bubbler`)
+
+- **The kit.** 68 hp, 100 gold, 3 grabs, a slippery grip (0.85), speed 1.05,
+  unlocked like the Rogue by winning a run (`unlock: 'win'`). Starter relic
+  **Bubble Wand** (2 Block at the bell, one more bubble on turn 1, 2 Block for
+  every bubble popped in the chute). 19 item bin: 5 Rubber Ducks (4 damage,
+  light: they float), 4 Soap Bars (5 Block, friction 0.12: they squirt out of
+  a lazy grip), a Bubble Pipe, a Sponge, a Scrub Brush, an apple, 3 glass
+  beads and 3 peppermints. Versus line: "Hold your breath, sweetie." Her own
+  pool: Bubble Pipe, Sponge, Scrub Brush (c), Bath Bomb, Foam Cannon, Loofah
+  (u), Bubble Bath (r), Golden Duck (l). An item's `soap` field blows that
+  many bubbles when it is played (for anyone who holds it).
+- **The gift: bubbles.** Every player turn she blows `ROS.gift` (2) bubbles
+  (`COMBAT.rosBlowN`: the gift, `rules.bubbles` and the relics' `bub.n`, plus
+  `bub.first` on turn 1). Once the pile settles (0.7 s into the turn, the claw
+  free, nothing flying) the game blows them one every 0.32 s around the prize
+  it picks from its own rng stream (the most buried, far from the chute; 30%
+  of the time a double bubble around two touching prizes). A world pre-hook
+  floats each bubbled prize up to a band under the rail (`PHYS.rosFloat`: a
+  damped spring in zero g), where the bubbles drift together into a foam
+  cluster and bob.
+- **The catch.** A dropping claw that reaches a floating bubble stops there
+  and closes on it (a mid-air catch, like the magnetic lid's; the twin heads
+  stop together). On the lift every bubble the claw touched (or that sits in
+  its reach) is welded under the hub (a velocity weld fed the hub's motion,
+  like the octopus's; it slips in between the fingers while it is drawn in,
+  two or more hang side by side), so a bubbled prize never slips, whatever
+  the claw type: the magnet, the hook and the hand carry non-metal bubbles
+  too, the vacuum holds one under its mouth and sucks small ones up the hose.
+  At the release the bubble pops over the chute and its prize drops straight
+  through the opening fingers to the chute's middle.
+- **The pay.** At the grab's end the bubbles whose prize was delivered go to
+  `COMBAT.rosPop(F, n, 'chute')`: each pays the relics' `bub.block` Block and
+  `bub.dmg` to a random enemy; two or more in one grab is a **BUBBLE COMBO**:
+  `n x combo` (4, +3 per bubble with the Squeaky Toy) damage to ALL, no
+  attacker, the banner (announcer class `bubble`, 53), bubbles, a ring, FOAM
+  PARTY! on the marquee. What still floats when the turn ends bursts in the
+  bin (`rosPop(F, n, 'bin')`: `bub.bin` Block each, the Suds Armor aura);
+  bubbles not yet blown are lost.
+- **Relics.** Foam Machine (r, `rules.bubbles`): any crawler blows a bubble
+  a turn, Ms. Bubbles one more. Soap Dish (c, `bub.block` 2; no bubbles: the
+  first delivery each turn gives 2 Block). Squeaky Toy (u, `bub.combo` 3; no
+  bubbles: a grab of 2+ items zaps ALL for 2).
+- **Evolutions.** Rubber Duck + Foam Machine = Captain Quack (8, 1 Weak, two
+  bubbles; Duck Patrol: 3 to a random enemy per pop). Soap Bar + Soap Dish =
+  Bubble Shield (12 Block and a bubble; Suds Armor: 3 Block per bin burst).
+  The auras carry `bub` (set in the ROS block) and a no-bubbles hook.
+- **Vault.** Shower Cap (c, frilly with ducks) and Snorkel Mask (r, outfit kind
+  `shades`, style `snorkel`), plus her Claw-o-ween Witch Hat. **Stickers**
+  (the board is at 60 with the round's others): Foam Party (three bubbles in
+  one grab) and Squeaky Clean (win as her). A Codex page (`cr_bubbler`), the
+  history initials BUB / SUD / FOM, the daily and weekly rotations (both read
+  `CHARACTERS`).
+- **On screen.** A soap-film bubble around each prize (a radial film, a
+  sliding rainbow sheen, a window glint; it grows in, glows when held and
+  bursts in a ring of droplets), BUBBLE CATCH!, POP!, SPLASH, and a gauge on
+  the cabinet's right post: floating bubbles full, bubbles to come dashed, the
+  pops under it. Sounds `rosBlow`, `rosPop`, `rosCombo`.
+
+### The mutator pack (`MUT_LIST`, `rosMutMerge`)
+
+Six more mutators on the panel (20), in the daily, weekly and Endless pools
+(`mutPick` reads `MUT_IDS`). New fx keys, merged by `rosMutMerge` inside
+`mutMods` (neutral for none):
+
+| mutator | x | fx | where |
+| --- | --- | --- | --- |
+| Moon Bounce | 1.15 | `bounce` 0.72 | every body's restitution floor and a 28 px/s bounce threshold (`PHYS.rosBounce` from `spawnBody`) |
+| Tiny Claw, Big Prizes | 1.1 | `clawK` 0.7, `dmgOut` 1.5 | `F.claw.width` (COMBAT's `rosFight`), the player's hits |
+| Earthquake | 1.2 | `tremor` 2 | two quakes a turn at seeded times 1.6 to 7.5 s in, each after a 0.8 s RUMBLE sign: the pile jumps, even mid grab |
+| Mirror Machine | 1.25 | `mirror` | the pointer and the arrow keys steer backwards (`rosMirX`, `rosMirK`); `GAME.steer` stays literal for bots and tests; a backwards MIRROR plate and a finger-to-claw arrow mark it |
+| Sticky Fingers | 1.05 | `sticky` 0.35 | on the lift the catch is glued to the claw (goo strands, no slips); at the release each glued prize stays stuck 35% of the time and rides home (STUCK!, PLOP) |
+| Rising Water | 1.2 | `flood` 1 | `PHYS.rosFlood`: the bin (not the chute) fills to 12% of its height and 8% more each turn, up to 42%; under the waterline a body gets buoyancy by its density (water 0.95: ducks float, anvils sink) and drag |
+
+### Three new pets (`PETS`, `PET_SYN`)
+
+| pet | trick | synergy |
+| --- | --- | --- |
+| Penguin (`slide`) | leaps to the floor and belly-slides from the far wall to the divider, shoving every low prize it passes toward the chute (SLIDE xN) | Snowball Fight (a Frost item in the bin): 1 Chill to ALL, 2 after three shoves |
+| Mole Rat (`dig`) | tunnels under the bottom prize and pops it up on top of the pile right under the claw's aim; digs up a Cinder Mole's mound first | Gold Digger (a Greed relic): 2 + level gold |
+| Robot Vacuum (`sweep`) | drives the floor sucking up junk and small prizes (1, 2 from Lv 3, 3 at Lv 5) and dumps them down the chute one at a time: each is delivered on its own (never a DOUBLE) | Turbo Suction (the Vacuum Nozzle): 2 more and 3 Block a sweep |
+
+They are turn pets with the usual uses, levels, looks, reactions, badge and
+tap line; the PETS block reaches them through `rosPetPick`, `rosPetSpot`,
+`rosPetStart`, `rosPetDo`, `rosPetEffect` and `rosPetFinish`, their
+synergies through `COMBAT.rosPetSyn` (a proc, then chill / gold / block). The
+pet shop offers them (`PET_IDS`, 11; the album spaces to fit).
+
+### Code map and tests
+
+`COMBAT`: `ROS`, `rosBlowN`, `rosPop`, `rosBlown`, `rosPetSyn`, `rosOf`
+(`newFight` runs `rosFight`, `play` runs `rosPlay`). `PHYS`: `rosFloat`,
+`rosBounce`, `rosFlood`. `RENDER.ros`: `bubble, water, goo, mirrorSign,
+mirrorFinger, quakeSign, meter, portrait, hat, snorkel, SIL, pets`.
+`GAME.ros`: `K, fs, state, floating, blow, bubbleOf, mirX, quake, turnEnd,
+tick, draw, event`. Tests: physics (a float settles on its spot, Moon Bounce,
+water floats light and sinks heavy and drains), data (her kit and pools, the
+daily and weekly deal her in, relics, outfits, stickers, evolutions, the
+mutator merge and pools, the pets and their switches), combat (bubbles per
+turn and owner, pops, combos, auras, soap for anyone, Tiny Claw, the pet
+synergies, a 30 turn fuzz), render (her face, outfits, items, evolutions,
+every bubble state, water, goo, signs, the gauge, the pets in every pose),
+game (her card and unlock, real grabs with all eight claws catching and
+popping bubbles, bin bursts, soap, determinism, save and reload, every
+mutator in the cabinet and gone after, every pet trick and synergy in a real
+fight). Screenshots: scratchpad `r10/shots.mjs` (`r10_ros_*.png`).
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the

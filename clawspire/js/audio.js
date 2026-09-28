@@ -107,8 +107,15 @@ const AUDIO = (() => {
     const musBus = ac.createGain(); setP(musBus.gain, S.vMus);
     const duckG = ac.createGain(); setP(duckG.gain, 1);
     sfxBus.connect(comp); musBus.connect(duckG); duckG.connect(comp);
-    comp.connect(master); master.connect(ac.destination);
-    Object.assign(S, { comp, master, sfxBus, musBus, duckG });
+    // MIX (round 10): the minor sfx (ui, soft, mid tiers) ride their own
+    // gain into the sfx bus so a big sting can duck them, and a brick-wall
+    // limiter after the master gain catches whatever still stacks up.
+    const minorG = ac.createGain(); setP(minorG.gain, 1);
+    minorG.connect(sfxBus);
+    const lim = mixLimiter(ac);
+    comp.connect(master);
+    if (lim) { master.connect(lim); lim.connect(ac.destination); } else master.connect(ac.destination);
+    Object.assign(S, { comp, master, sfxBus, musBus, duckG, minorG, lim });
     // One second of white noise, plus a sample-and-hold "crunch" copy that
     // sounds bitcrushed: hits use it for grit without a WaveShaper.
     const sr = ac.sampleRate || 44100;
@@ -1116,6 +1123,51 @@ const AUDIO = (() => {
   NAMES.push('vacWhoosh', 'vacSlurp', 'vacClog', 'vacBlow', 'twinSeek', 'twinClick', 'turBuild', 'turUp', 'turFire', 'turMega');
   // ---------------------------------------------------------------- /CR8
 
+  // ---------------------------------------------------------------- ROS (round 10)
+  // Ms. Bubbles, the mutator pack and three pets (DESIGN.md "Ms. Bubbles, the
+  // mutator pack and three pets"): a bubble blown (a soft rising blub), a pop,
+  // the Bubble Combo (a cascade of pops up a major arpeggio), the earthquake's
+  // groan, the penguin's belly slide, the robot vacuum's whirr and beep.
+  Object.assign(BANK, {
+    rosBlow(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 260 * p, to: 620 * p, dur: 0.22, v: 0.16, a: 0.03 });
+      blip(out, t, { at: 0.06, w: 'sine', f: 520 * p, to: 900 * p, dur: 0.12, v: 0.06 });
+      return 0.26;
+    },
+    rosPop(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 1300 * p, to: 500 * p, dur: 0.05, v: 0.2 });
+      hiss(out, t, { type: 'highpass', f: 3000, dur: 0.03, v: 0.12 });
+      return 0.08;
+    },
+    rosCombo(out, t, o, p) {
+      const n = Math.max(2, Math.min(6, (o && o.n) | 0 || 2));
+      [72, 76, 79, 84, 88, 91].slice(0, n + 1).forEach((m, i) => {
+        blip(out, t, { at: i * 0.06, w: 'sine', f: mtof(m) * p, to: mtof(m) * p * 0.6, dur: 0.07, v: 0.16 });
+        hiss(out, t, { at: i * 0.06, type: 'highpass', f: 3500, dur: 0.02, v: 0.08 });
+      });
+      blip(out, t, { at: (n + 1) * 0.06, w: 'triangle', f: mtof(96) * p, dur: 0.25, v: 0.07 });
+      return 0.2 + n * 0.06;
+    },
+    rosQuake(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 48 * p, to: 32, dur: 0.7, v: 0.12, lp: 300 });
+      hiss(out, t, { type: 'lowpass', f: 400, to: 120, dur: 0.6, v: 0.25, crunch: true });
+      return 0.72;
+    },
+    rosSlide(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 2600 * p, to: 1200 * p, q: 2, dur: 0.45, v: 0.14 });
+      blip(out, t, { w: 'triangle', f: 900 * p, to: 1400 * p, dur: 0.18, v: 0.05 });
+      return 0.46;
+    },
+    rosSweep(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 180 * p, to: 240 * p, dur: 0.2, v: 0.04, lp: 1200 });
+      blip(out, t, { at: 0.14, w: 'square', f: 1400 * p, dur: 0.05, v: 0.05, lp: 5000 });
+      return 0.22;
+    },
+  });
+  Object.assign(GAP, { rosBlow: 0.08, rosPop: 0.04, rosCombo: 0.4, rosQuake: 0.5, rosSlide: 0.3, rosSweep: 0.08 });
+  NAMES.push('rosBlow', 'rosPop', 'rosCombo', 'rosQuake', 'rosSlide', 'rosSweep');
+  // ---------------------------------------------------------------- /ROS
+
   // ---------------------------------------------------------------- arcade
   // The map's arcade (DESIGN.md "Arcade"): plinko pegs and drops, the prize
   // wheel's clicker, the slot machine's lever / reels / thunks, the drumroll
@@ -1668,35 +1720,40 @@ const AUDIO = (() => {
     const t = now() + 0.005;
     const gap = GAP[name] || 0.015;
     if (S.last[name] != null && t - S.last[name] < gap) return false;
-    // Prune finished voices, then refuse if we are at the cap.
-    S.ends = S.ends.filter((e) => e > t);
-    if (S.ends.length >= MAX_VOICES) return false;
+    // Prune finished voices, then refuse if we are at the cap (MIX round 10:
+    // per tier, and the global cap never stops a sting).
+    const tier = mixTier(name);
+    if (!mixVoiceOk(tier, t)) return false;
     S.last[name] = t;
     try {
       const out = S.ac.createGain();
-      setP(out.gain, (LEVEL[name] || 1) * U.clamp(o.vol == null ? 1 : +o.vol || 0, 0, 2));
-      out.connect(S.sfxBus);
-      const p = U.clamp(o.pitch == null ? 1 : +o.pitch || 1, 0.25, 4) * (1 + (S.r() - 0.5) * 0.03);
-      const len = fn(out, t, o, p) || 0.3;
-      S.ends.push(t + len);
+      const vary = mixVary(name, t);   // MIX: subtle pitch and level spread on the repeated sounds
+      setP(out.gain, mixLevel(name) * vary.v * U.clamp(o.vol == null ? 1 : +o.vol || 0, 0, 2));
+      out.connect(MIX_MINOR[tier] && S.minorG ? S.minorG : S.sfxBus);
+      const p = U.clamp(o.pitch == null ? 1 : +o.pitch || 1, 0.25, 4) * (1 + (S.r() - 0.5) * 0.03) * vary.p;
+      S.cur = tier;
+      let len;
+      try { len = fn(out, t, o, p) || 0.3; } finally { S.cur = null; }
+      if (MIX_STING[tier]) mixSting(name, len);   // MIX: a big sting ducks the music and the minor sfx
+      mixVoiceAdd(tier, t + len, out);
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  // Dips the music under a big moment and brings it back.
+  /* Dips the music under a big moment and brings it back. MIX (round 10):
+     ducks merge instead of cutting each other short (the deeper depth and
+     the later end win), and a duck asked for by a hit-sized voice is a short
+     shallow dip, not a hole in the music (mixDuckShape). */
   function duck(seconds, depth) {
     if (!S.ac || !S.duckG) return;
-    const t = now(), g = S.duckG.gain;
+    const t = now();
     const hold = U.clamp(+seconds || 0.5, 0.05, 10);
-    try {
-      if (g.cancelScheduledValues) g.cancelScheduledValues(t);
-      g.setValueAtTime(g.value == null ? 1 : g.value, t);
-      g.linearRampToValueAtTime(U.clamp(depth == null ? 0.3 : depth, 0, 1), t + 0.05);
-      g.setValueAtTime(U.clamp(depth == null ? 0.3 : depth, 0, 1), t + hold);
-      g.linearRampToValueAtTime(1, t + hold + 0.5);
-    } catch (e) { /* ignore */ }
+    let d = U.clamp(depth == null ? 0.3 : +depth, 0, 1);
+    if (!isFinite(d)) d = 0.3;
+    const sh = mixDuckShape(hold, d);
+    mixRamp(S.duckG.gain, S.dk.mus, t, sh.hold, sh.depth);
   }
 
   // ---------------------------------------------------------------- composer
@@ -2379,10 +2436,10 @@ const AUDIO = (() => {
   }
 
   // ---------------------------------------------------------------- sequencer
-  function newLayer(t, xf) {
+  function newLayer(t, xf, k) {
     const g = S.ac.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(1, t + (xf || XFADE));
+    g.gain.linearRampToValueAtTime(k || 1, t + (xf || XFADE));   // MIX: k is the mode's level (mixMusK)
     g.connect(S.musBus);
     return g;
   }
@@ -2408,7 +2465,7 @@ const AUDIO = (() => {
     if (!S.ac || mode === 'off' || !CFG[mode]) return;
     const t = now() + 0.05;
     const act = accActOf(mode);   // round 6: the act's variant of the tune
-    const q = { mode, act, song: song(mode, act), layer: newLayer(t, xf), step: 0, next: t, fadeEnd: null };
+    const q = { mode, act, song: song(mode, act), layer: newLayer(t, xf, mixMusK(mode, act)), step: 0, next: t, fadeEnd: null };
     // Fight modes carry two extra layers on their own gains under the
     // mode's layer (so the mode crossfade still fades them): hype
     // (percussion on a streak or combo) and tense (low hp, phase two).
@@ -2763,10 +2820,10 @@ const AUDIO = (() => {
   // Runs fn with the graph temporarily built on another context (the
   // offline renderer), then puts the live graph back.
   function withContext(ac, fn) {
-    const keys = ['ac', 'comp', 'master', 'sfxBus', 'musBus', 'duckG', 'white', 'crunch'];
+    const keys = ['ac', 'comp', 'master', 'sfxBus', 'musBus', 'duckG', 'white', 'crunch', 'minorG', 'lim', 'dk', 'vox'];   // MIX: the minor bus, the limiter, the duck and voice state stay the live graph's
     const saved = {};
     for (const k of keys) saved[k] = S[k];
-    try { build(ac); return fn(); } finally { for (const k of keys) S[k] = saved[k]; }
+    try { S.dk = mixDuckFresh(); S.vox = []; build(ac); return fn(); } finally { for (const k of keys) S[k] = saved[k]; }
   }
   // AudioBuffer -> 16-bit PCM WAV (RIFF) ArrayBuffer.
   function encodeWav(buf) {
@@ -2808,7 +2865,243 @@ const AUDIO = (() => {
     return Promise.resolve(p).then((buf) => encodeWav(buf));
   }
 
+  /* ================================================================ MIX (round 10)
+     The mix pass (DESIGN.md "Mix and juice pass 2"). Every sfx sits in a
+     loudness tier: ui ticks quiet, soft for the machine's own clatter, mid
+     for hits and pickups, big for crushing moments, huge for the stings
+     (jackpot, boss down, evolution, a legendary capsule, win and lose).
+     Each voice was rendered offline (an OfflineAudioContext, K-weighted,
+     the loudest 100 ms window) and MIX_TRIM holds the dB that lands it on
+     its tier's target (MIX_TARGET, +-MIX_WIN). A tier is also a voice
+     category with its own cap (MIX_CAP; the global MAX_VOICES never stops
+     a sting). The ui, soft and mid voices ride S.minorG so a sting ducks
+     them with the music (mixSting); ducks merge instead of cutting each
+     other short (mixRamp); a hit-sized voice only dips the music
+     (mixDuckShape). The repeated sounds (footsteps, ticks, hits, landings)
+     get a seeded pitch and level spread that never repeats the same note
+     twice in a row (mixVary). A limiter after the master gain is the last
+     word (mixLimiter). */
+  const MIX_TIERS = ['tick', 'ui', 'soft', 'mid', 'big', 'huge'];
+  const MIX_TARGET = { tick: -38, ui: -32, soft: -28, mid: -24, big: -19.5, huge: -15.5 };   // dB, K-weighted, loudest 100 ms, pre-bus
+  const MIX_WIN = 2.5;                  // +- dB a trimmed voice may sit from its target
+  const MIX_TRIM_MAX = [-14, 12];       // how far a trim may pull or push a voice
+  const MIX_CAP = { tick: 3, ui: 4, soft: 8, mid: 10, big: 6, huge: 3 };
+  const MIX_MINOR = { tick: 1, ui: 1, soft: 1, mid: 1 };   // the tiers a sting ducks
+  const MIX_STING = { huge: 1 };
+  const MIX_LIST = {
+    tick: 'tick wheelTick loreType roulette ticket diceRoll',
+    ui: 'click cardFlip tally peg boonFlip stoPage footstep step bloom roamStep petHop cmpFeed vaultEquip twinSeek famBeat candy beep wheelSpin shuffle rosPop',
+    soft: 'clawMove clawDrop clawTouch clawClose clawLift clawRelease itemLand itemSlip whoosh tinkle squish slosh chime boing fuse ' +
+      'magHum magDrop scoopSlosh handSquish hookFire twinClick vacWhoosh vacSlurp vacBlow turBuild clawCoin clawSpin clawTap ' +
+      'plinkDrop lever reelSpin reelStop skeeRoll skeeHop drip sizzle petChirp petAct petLove giggle dig magLift ' +
+      'beltRun iceGrow secHum secGrav glassCrack creak knock molePop diceLand famCan famHum plushSqueak rrShine ' +
+      'arcLose arcIn petHonk moleCombo ticketSpray boonDeal petSyn secVoice crabSnip famReady famChange groan rosBlow rosSlide rosSweep',
+    big: 'hitBig crit combo upgrade relic capUpgrade slam boom roar vsSlam kaboom turMega arcWin ambush famSolo ' +
+      'cmpCrunch doorOpen loreSting wkMedal fanfare lucky lose stingBoss rosCombo',
+    huge: 'jackpot win victory capBurst double bossDown arcJackpot setDone evoBurst powerDown boss',
+  };
+  // mid (the default): hits, blocks, statuses, pickups, the stingElite, clawCheer, petLevel, setPiece, evoRise ...
+  const MIX_TIER = {};
+  for (const k in MIX_LIST) for (const n of MIX_LIST[k].split(' ')) if (n) MIX_TIER[n] = k;
+  // dB per voice on top of LEVEL (measured, see DESIGN.md); a voice not listed plays at its LEVEL
+  const MIX_TRIM = {
+    clawMove: 5.5, clawDrop: -1, clawTouch: -0.5, clawClose: -6, clawLift: -2, clawRelease: -6, itemLand: -3.5, itemSlip: -3.5, chute: -6.5,
+    jackpot: 2, hit: -1.5, hitBig: -7.5, block: -0.5, heal: 0.5, poison: 4, burn: 5, freeze: -2.5, shake: -5.5, enemyDie: -1.5, win: 2, lose: 8,
+    click: 1, buy: 2, reveal: -1, brush: -1.5, step: -2.5, coin: 4.5, upgrade: 7.5, turn: 4, boss: 5, proc: 3, combo: 4.5, crit: -8.5, shatter: -1.5,
+    tick: 4.5, cardFlip: 2.5, relic: 5, footstep: 4.5, bloom: 0.5, heartbeat: 0.5, whoosh: 8, stamp: -2.5, victory: 2.5, capDrop: -2.5, capCrack: -3,
+    capUpgrade: 3.5, capBurst: -1.5, ticket: 1.5, tally: -3.5, slam: -2, roulette: -0.5, double: 2, clank: 0.5, tinkle: -0.5, crack: -4, thud: -4,
+    boing: -4.5, squish: 3, slosh: 4.5, fuse: -3, beep: -0.5, boom: -12.5, groan: 5, fanfare: 6, ding: 0.5, lucky: 6.5, gulp: -4.5, burp: 1,
+    roar: -3.5, sticker: 3.5, discover: 5.5, tiltUp: 5.5, vsSlam: -10.5, rumble: -6, stomp: -7.5, coinSpill: -3.5, sizzle: -11, drip: -4.5,
+    freezeOver: 6, iceBreak: -7.5, hijack: 8, shuffle: 5.5, alarm: 7, kaboom: -8.5, bossDown: 3, stingBoss: 8, stingElite: 8, clawCoin: -6,
+    clawSpin: 4, clawTap: 4, clawCheer: 7.5, magHum: 1.5, magZap: -1, magDrop: 5.5, scoopSlosh: -2.5, hookFire: -1.5, hookThunk: -2, vacWhoosh: 3,
+    vacSlurp: -2, vacClog: -1.5, vacBlow: 0.5, twinSeek: 2, twinClick: 1.5, turBuild: 3.5, turUp: 7, turFire: 5.5, turMega: -3.5, plinkDrop: 1,
+    wheelSpin: 8.5, wheelTick: 5.5, lever: -5.5, reelSpin: 8, reelStop: -6, drumroll: 4, arcWin: 10, arcJackpot: 2.5, arcLose: 8.5, arcIn: 7,
+    diceRoll: 10, diceLand: -1.5, roamWake: 5.5, roamStep: -4.5, ambush: 1.5, giggle: 6.5, gooSplat: 5.5, magLift: 2.5, boo: -6.5, dozer: 3.5,
+    rivalClaw: 8.5, petChirp: 2.5, petHop: 2, petAct: 1, petCrunch: 3.5, petHonk: 10.5, petLevel: 7.5, petLove: 3, molePop: 3, bonk: -1.5,
+    moleBomb: -9, moleCombo: 7.5, whistle: 2, skeeRoll: 6.5, skeeHop: -3, skeeRing: -0.5, ticketSpray: 6, vaultOpen: 5.5, vaultBuy: 1,
+    vaultEquip: -1.5, vaultNew: 7, vaultDupe: 9, vaultShare: 1, setPiece: 6, boonDeal: 5, boonFlip: -0.5, boonPick: -3.5, cmpFeed: -2.5,
+    cmpPress: 6.5, cmpCrunch: -8.5, cmpPop: 0.5, evoRise: 5.5, evoBurst: -2, petSyn: 5.5, keyGet: 4, doorOpen: 0.5, secZap: 1, secShutter: -6,
+    secClang: -3.5, secGrav: -5.5, secFlood: 2.5, glassCrack: -4.5, secVoice: 8, secHum: 2.5, powerDown: 2.5, creditsChime: 3.5, knock: -6,
+    creak: 2.5, treat: 5.5, cackle: 9, candy: -2.5, stoPage: 0.5, stoCallback: 4.5, garyTaunt: 9, clawOffBell: -2, plushSqueak: 4, beltRun: 4.5,
+    iceGrow: 2.5, crabSnip: 6, hunted: 1, famIntro: 2, famBeat: -3, famReady: 8, famSolo: 4, famCancel: 8, famRestock: 4.5, famCan: 7.5,
+    famChange: 5.5, famPayout: 3.5, famHum: -1, famShatter: 5.5, famAngry: 5, rrShine: 1, loreSting: 8.5, loreType: 5.5, loreUnlock: 8, loreBoard: 3,
+    wkMedal: 7,
+    // round 10 (ROS): Ms. Bubbles and the new pets
+    rosBlow: -3, rosPop: -3.5, rosCombo: 8, rosQuake: 1.5, rosSlide: 5, rosSweep: 7.5,
+  };
+  // [pitch spread (fraction), level spread (dB)] for the sounds that repeat back to back
+  const MIX_VARY = {};
+  for (const n of ['footstep', 'step', 'roamStep', 'petHop', 'itemLand', 'clank', 'thud', 'tinkle', 'hit', 'block', 'bonk', 'molePop', 'knock',
+    'hookThunk', 'magZap', 'famCan', 'secClang', 'glassCrack', 'skeeHop', 'turFire', 'vacSlurp', 'coin', 'candy', 'plushSqueak', 'cmpFeed', 'rosPop']) MIX_VARY[n] = [0.045, 1.5];
+  for (const n of ['tick', 'click', 'peg', 'wheelTick', 'reelStop', 'ticket', 'loreType', 'cardFlip', 'roulette', 'famBeat', 'twinClick']) MIX_VARY[n] = [0.02, 1];
+  const MIX_SEED = 0x313;
+  const MIX_DUCK = { att: 0.05, rel: 0.5, musBig: 0.6, holdBig: 0.4, minor: 0.5, minorHold: 1.1, stingMus: 0.35 };
+  const MIX_LIM = { threshold: -2, knee: 0, ratio: 20, attack: 0.002, release: 0.12 };
+  S.dk = mixDuckFresh(); S.vox = []; S.mr = U.rng(MIX_SEED); S.rep = {}; S.vary = { p: 1, v: 1 }; S.lastVary = null;
+
+  function mixTier(name) { return MIX_TIER[name] || 'mid'; }
+  function mixLevel(name) { const tr = MIX_TRIM[name]; return (LEVEL[name] || 1) * (tr ? Math.pow(10, tr / 20) : 1); }
+  // The brick wall after the master gain; null on a context without compressors.
+  function mixLimiter(ac) {
+    if (!ac || !ac.createDynamicsCompressor) return null;
+    try {
+      const l = ac.createDynamicsCompressor();
+      setP(l.threshold, MIX_LIM.threshold); setP(l.knee, MIX_LIM.knee); setP(l.ratio, MIX_LIM.ratio);
+      setP(l.attack, MIX_LIM.attack); setP(l.release, MIX_LIM.release);
+      return l;
+    } catch (e) { return null; }
+  }
+  // Room for one more voice of this tier at t (finished voices are pruned).
+  function mixVoiceOk(tier, t) {
+    const v = S.vox;
+    let n = 0, all = 0;
+    for (let i = v.length - 1; i >= 0; i--) {
+      if (v[i].end <= t) { v.splice(i, 1); continue; }
+      all++; if (v[i].tier === tier) n++;
+    }
+    if (n >= (MIX_CAP[tier] || 8)) return false;
+    return !!MIX_STING[tier] || all < MAX_VOICES;
+  }
+  function mixVoiceAdd(tier, end) { S.vox.push({ tier, end }); }
+  /* The spread for a repeated sound: a seeded pitch and level offset, never
+     within a third of the spread of the last one (no machine gun). One
+     reused object; S.lastVary is what the tests read. */
+  function mixVary(name, t) {
+    const r = S.vary;
+    r.p = 1; r.v = 1;
+    const sp = MIX_VARY[name];
+    if (!sp) return r;
+    const last = S.rep[name];
+    let dp = (S.mr() * 2 - 1) * sp[0];
+    if (last && Math.abs(dp - last.dp) < sp[0] * 0.35) {
+      // too close to the last one: step half the spread away, the way that stays in range
+      const up = dp >= last.dp ? 1 : -1;
+      dp = last.dp + up * sp[0] * 0.5;
+      if (Math.abs(dp) > sp[0]) dp = last.dp - up * sp[0] * 0.5;
+    }
+    const dv = (S.mr() * 2 - 1) * sp[1];
+    if (last) { last.dp = dp; last.t = t; } else S.rep[name] = { dp, t };
+    r.p = 1 + dp; r.v = Math.pow(10, dv / 20);
+    S.lastVary = { name, p: r.p, v: r.v };
+    return r;
+  }
+  function mixDuckFresh() { return { mus: { t0: null, from: 1, depth: 1, until: -1, end: -1 }, minor: { t0: null, from: 1, depth: 1, until: -1, end: -1 } }; }
+  // A duck asked for from inside a hit-sized voice is a short shallow dip.
+  function mixDuckShape(hold, depth) {
+    const sh = S.dsh || (S.dsh = { hold: 0, depth: 1 });
+    if (S.cur && !MIX_STING[S.cur]) { sh.hold = Math.min(hold, MIX_DUCK.holdBig); sh.depth = Math.max(depth, MIX_DUCK.musBig); }
+    else { sh.hold = hold; sh.depth = depth; }
+    return sh;
+  }
+  // The duck's gain at time t from the model (the AudioParam follows the same curve).
+  function mixDuckAt(st, t) {
+    if (st.t0 == null || t >= st.end) return 1;
+    if (t < st.t0) return 1;
+    if (t < st.t0 + MIX_DUCK.att) return st.from + (st.depth - st.from) * (t - st.t0) / MIX_DUCK.att;
+    if (t < st.until) return st.depth;
+    return st.depth + (1 - st.depth) * (t - st.until) / MIX_DUCK.rel;
+  }
+  // Ducks a gain to depth for hold s, merging with a duck already under way.
+  function mixRamp(g, st, t, hold, depth) {
+    const cur = mixDuckAt(st, t);
+    const on = st.t0 != null && t < st.until;
+    const d = on ? Math.min(depth, st.depth) : depth;
+    const until = Math.max(t + Math.max(hold, MIX_DUCK.att + 0.01), on ? st.until : -1);
+    st.t0 = t; st.from = cur; st.depth = d; st.until = until; st.end = until + MIX_DUCK.rel;
+    if (!g) return;
+    try {
+      if (g.cancelScheduledValues) g.cancelScheduledValues(t);
+      g.setValueAtTime(cur, t);
+      g.linearRampToValueAtTime(d, t + MIX_DUCK.att);
+      g.setValueAtTime(d, until);
+      g.linearRampToValueAtTime(1, until + MIX_DUCK.rel);
+    } catch (e) { /* a minimal fake */ }
+  }
+  // A sting: the minor sfx step back for a moment and the music with them.
+  function mixSting(name, len) {
+    if (!S.ac) return;
+    const t = now();
+    mixRamp(S.minorG && S.minorG.gain, S.dk.minor, t, U.clamp(len * 0.6, 0.3, MIX_DUCK.minorHold), MIX_DUCK.minor);
+    if (S.duckG) mixRamp(S.duckG.gain, S.dk.mus, t, U.clamp(len * 0.8, 0.6, 2.5), MIX_DUCK.stingMus);
+  }
+  /* Offline rendering for the measuring page and the suites: builds the
+     graph on ac for the call (withContext) and schedules one sfx voice
+     (o.sfx, o.opts, o.pitch; o.raw: without the trim) or o.secs of a tune
+     (o.music, o.act, o.season, o.layers: ['hype', 'tense']) straight into
+     ac.destination, or through the real buses and the limiter with o.bus.
+     o.gain scales it. Returns the voice's length in seconds. */
+  function mixOffline(ac, o) {
+    o = o || {};
+    return withContext(ac, () => {
+      const t0 = o.t0 == null ? 0.02 : +o.t0;
+      const savedR = S.r;
+      S.r = U.rng(0xC1A5);
+      try {
+        if (o.sfx) {
+          const fn = BANK[o.sfx];
+          if (!fn) return 0;
+          const tier = mixTier(o.sfx);
+          const g = ac.createGain();
+          setP(g.gain, (o.raw ? (LEVEL[o.sfx] || 1) : mixLevel(o.sfx)) * (o.gain == null ? 1 : +o.gain));
+          g.connect(o.bus ? (MIX_MINOR[tier] ? S.minorG : S.sfxBus) : ac.destination);
+          S.cur = tier;
+          let len;
+          try { len = fn(g, t0, o.opts || {}, o.pitch || 1) || 0.3; } finally { S.cur = null; }
+          if (o.bus && MIX_STING[tier]) mixSting(o.sfx, len);
+          return len;
+        }
+        if (o.music) {
+          const sv = S.sea, sa = S.act;
+          S.sea = o.season || null; S.act = o.act || 0;
+          try {
+            const a = accActOf(o.music, o.act || 0);
+            const sg = song(o.music, a);
+            if (!sg) return 0;
+            const layer = ac.createGain();
+            setP(layer.gain, (o.gain == null ? 1 : +o.gain) * (o.bus ? 1 : S.vMus) * mixMusK(o.music, a));
+            layer.connect(o.bus ? S.musBus : ac.destination);
+            const inst = { mode: o.music, act: a, song: sg, layer };
+            const lay = o.layers && o.layers.length ? layerSong(o.music, a) : null;
+            const secs = o.secs || 8, sd = sg.stepDur;
+            for (let i = 0, tt = t0; tt < t0 + secs; i++, tt += sd) {
+              const st = i % sg.len, at = tt + (st % 2 === 1 ? sg.swing * sd : 0);
+              for (const ev of sg.steps[st]) { try { playEvent(inst, ev, at); } catch (e) { /* one bad note */ } }
+              if (lay) for (const k of o.layers) { const evs = lay[k] && lay[k][st]; if (evs) for (const ev of evs) { try { playLayerEvent(inst, ev, at, layer); } catch (e) { /* */ } } }
+            }
+            return secs;
+          } finally { S.sea = sv; S.act = sa; }
+        }
+        return 0;
+      } finally { S.r = savedR; }
+    });
+  }
+  // The music's level per mode (1 unless the measurements said a tune sits too hot under the sfx).
+  // dB per tune (accSongKey), so every tune sits about -33 dB integrated and
+  // under -28.5 dB in its loudest 400 ms as heard: 5 dB or more under a mid sfx.
+  const MIX_MUS = {
+    title: -1.5, win: -1.5, backroom: 2.5, machine: -2, map: 1.5, 'map:act1': -2.5, 'map:act2': 1, 'map:act3': -4.5,
+    fight: -2.5, 'fight:act1': -2, 'fight:act2': -0.5, 'fight:act3': -2, elite: -1, 'elite:act1': -1, 'elite:act2': -1, 'elite:act3': -1,
+    'title:sea:halloween': 2, 'map:sea:halloween': 2, 'title:sea:winter': -2, 'map:sea:winter': -1.5,
+  };
+  function mixMusK(mode, act) { const d = MIX_MUS[accSongKey(mode, act)]; return d ? Math.pow(10, d / 20) : 1; }
+  const mixApi = {
+    TIERS: MIX_TIERS, TARGET: MIX_TARGET, WIN: MIX_WIN, CAP: MIX_CAP, TIER: MIX_TIER, TRIM: MIX_TRIM, VARY: MIX_VARY,
+    DUCK: MIX_DUCK, LIM: MIX_LIM, MUS: MIX_MUS, MINOR: MIX_MINOR, STING: MIX_STING,
+    tier: mixTier, level: mixLevel, musK: mixMusK, offline: mixOffline,
+    seed(n) { S.mr = U.rng(n == null ? MIX_SEED : n); S.rep = {}; S.lastVary = null; },
+    get last() { return S.lastVary; },
+    duckAt(t) { const tt = t == null ? now() : +t; return { music: mixDuckAt(S.dk.mus, tt), minor: mixDuckAt(S.dk.minor, tt) }; },
+    voices(t) {
+      const tt = t == null ? now() : +t, c = { all: 0 };
+      for (const k of MIX_TIERS) c[k] = 0;
+      for (const v of S.vox) if (v.end > tt) { c[v.tier]++; c.all++; }
+      return c;
+    },
+    get limiter() { return S.lim || null; },
+  };
+
   return {
+    mix: mixApi,   // MIX (round 10): tiers, trims, caps, ducks, the spread and the offline renderer
     init, sfx, music, setVolume, duck, haptic, intro, renderIntroWav,
     musicState, victory,   // round 3: the dynamic fight layers and the victory sting
     get layers() { return { hype: S.lay.hype, tense: S.lay.tense }; },
