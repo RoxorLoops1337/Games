@@ -1016,6 +1016,7 @@ else {
       const c = DATA.COMBOS[id];
       const F = C.newFight(mkRun(c.example.concat(['rock', 'femur']), [], 1), firstEnc, U.rng(U.hashStr(id)));
       if (c.ctx && c.ctx.luck) F.player.status.luck = c.ctx.luck;   // a recipe that reads the grab state (Lucky Seven)
+      if (c.ctx && c.ctx.pet) F.petId = c.ctx.pet;   // a pet combo needs its pet along (round 7, EVOLVE)
       C.useGrab(F);
       for (const x of c.example) { const i = F.bin.find(b => b.id === x && F.grab.insts.indexOf(b) < 0); if (i && F.phase === 'player') C.play(F, i); }
       const ev = C.grabDone(F, c.example.length);
@@ -2494,6 +2495,331 @@ if (hasData) {
       h.eq(bad, 0, `seed ${seed}: 40 clean turns`);
       h.ok(parts.size >= 6, `seed ${seed}: the events it ran: ${[...parts].join(',')}`);
     }
+  });
+}
+
+// ---------- QA (round 7): the incoming-damage telegraph (COMBAT.qaIntent / qaThreat) ----------
+{
+  const Q = boot({ only: ['util', 'combat'] });
+  const QC = Q.COMBAT;
+  const QE = Object.assign({}, ENEMIES, {
+    qa_vuln: E('qa_vuln', [{ id: 'hex', k: 'debuff', s: 'vuln', v: 1 }], { hp: [60, 60] }),
+    qa_big: E('qa_big', [{ id: 'gape', name: 'Gape', k: 'charge', v: 30 }, { id: 'bite', k: 'attack', v: 6 }], { hp: [90, 90] }),
+  });
+  QC.useDefs(Object.assign({}, STUB, { ENEMIES: QE }));
+  const qfight = (ids, o) => {
+    o = o || {};
+    const run = { hp: o.hp == null ? 70 : o.hp, maxHp: 70, act: 1, relics: [], claw: { grabs: 3 }, bin: ['sword', 'shield', 'potion', 'sword', 'shield', 'sword'].map((id, i) => ({ uid: 'q' + i, id, plus: false })) };
+    return QC.newFight(run, ids, Q.U.rng(o.seed || 5));
+  };
+  // The preview must be what the engine then does: end the turn and compare.
+  const check = (F, msg) => {
+    const T = QC.qaThreat(F), hp0 = F.player.hp;
+    QC.endTurn(F);
+    h.eq(hp0 - F.player.hp, T.loss, `${msg}: previewed ${T.loss}, the enemy phase took ${hp0 - F.player.hp}`);
+    return T;
+  };
+  h.test('qa: a plain hit, Strength, Vulnerable and Armor, as the engine hits', () => {
+    let F = qfight(['hitter']);
+    let q = QC.qaIntent(F, F.enemies[0]);
+    h.ok(q.k === 'attack' && q.hit === 5 && q.n === 1 && q.total === 5, 'a plain 5');
+    check(F, 'plain');
+    F = qfight(['hitter']);
+    F.enemies[0].status.str = 2; F.player.status.vuln = 1; F.player.status.armor = 1;
+    q = QC.qaIntent(F, F.enemies[0]);
+    h.eq(q.hit, Math.floor((5 + 2) * 1.5) - 1, 'Strength, then Vulnerable, then Armor: 9');
+    check(F, 'str vuln armor');
+    F = qfight(['hitter']);
+    F.enemies[0].status.enrage = 2;
+    h.eq(QC.qaIntent(F, F.enemies[0]).hit, 7, 'Enrage lands before it acts');
+    check(F, 'enrage');
+    F = qfight(['hitter']); F.enemies[0].status.weak = 1;
+    h.eq(QC.qaIntent(F, F.enemies[0]).hit, 3, 'a Weak enemy hits for less');
+    check(F, 'weak');
+  });
+  h.test('qa: multi-hits show the total; Block soaks and Dodge eats whole hits', () => {
+    let F = qfight(['multi']);
+    let q = QC.qaIntent(F, F.enemies[0]);
+    h.ok(q.hit === 3 && q.n === 3 && q.total === 9, `3 x3 = 9 (${q.hit}x${q.n}=${q.total})`);
+    F.player.block = 4;
+    let T = check(F, 'multi vs 4 Block');
+    h.ok(T.raw === 9 && T.blocked === 4 && T.loss === 5, 'raw 9, blocked 4, lost 5');
+    F = qfight(['multi']); F.player.status.dodge = 1;
+    T = check(F, 'multi vs 1 Dodge');
+    h.ok(T.dodged === 3 && T.loss === 6, 'the first hit misses');
+    F = qfight(['multi', 'hitter']); F.player.block = 10;
+    T = check(F, 'two attackers share the Block');
+    h.eq(T.loss, 4, '9 + 5 - 10');
+  });
+  h.test('qa: a Hasty jab counts; a frozen or stunned enemy skips', () => {
+    const F = qfight(['hitter']);
+    const e = F.enemies[0];
+    e.affix = ['hasty']; e.acts = 2;
+    const q = QC.qaIntent(F, e);
+    h.ok(q.jab === 3 && q.total === 8, `5 and a jab of 3 (${q.total})`);
+    check(F, 'hasty');
+    for (const s of ['freeze', 'stun']) {
+      const G = qfight(['hitter']);
+      G.enemies[0].status[s] = 1;
+      const T = check(G, s);
+      h.ok(T.per[0].skip && T.loss === 0, `${s}: nothing comes`);
+    }
+    const P = qfight(['hitter']);
+    P.enemies[0].status.poison = 99;
+    h.ok(QC.qaThreat(P).per[0].skip, 'an enemy its own Poison kills first skips');
+  });
+  h.test('qa: a charge previews its unleash a turn ahead, then the unleash hits for it', () => {
+    const F = qfight(['qa_big']);
+    const e = F.enemies[0];
+    e.status.str = 2;
+    let q = QC.qaIntent(F, e);
+    h.ok(q.k === 'charge' && q.next === 32 && q.total === 0, `charging: 30 + 2 Strength next turn (${q.next})`);
+    let T = check(F, 'the charge turn');
+    h.eq(T.loss, 0, 'nothing lands while it winds up');
+    q = QC.qaIntent(F, e);
+    h.ok(q.charged && q.hit === 32 && q.total === 32, `the unleash: ${q.hit}`);
+    T = check(F, 'the unleash');
+    h.eq(T.loss, 32, 'and it hits for exactly that');
+    const G = qfight(['qa_big']);
+    G.enemies[0].status.enrage = 1; G.player.status.vuln = 2;
+    h.eq(QC.qaIntent(G, G.enemies[0]).next, Math.floor((30 + 2) * 1.5), 'two Enrage ticks by then, a 2-stack Vulnerable still on');
+    G.player.status.vuln = 1;
+    h.eq(QC.qaIntent(G, G.enemies[0]).next, 32, 'a 1-stack Vulnerable has worn off by then');
+  });
+  h.test('qa: lethal, Burn, Poison and bombs; a Vulnerable debuff lands for the next enemy', () => {
+    let F = qfight(['hitter'], { hp: 5 });
+    let T = QC.qaThreat(F);
+    h.ok(T.lethal && T.left <= 0, 'hp 5 vs a 5: lethal');
+    QC.endTurn(F);
+    h.ok(F.player.hp <= 0 && F.phase === 'over', 'and it was');
+    F = qfight(['multi'], { hp: 5 });
+    T = QC.qaThreat(F);
+    h.ok(T.net === 9 && T.loss === 5 && T.left === -4 && T.lethal, `the net runs past the hp (net ${T.net}, loss ${T.loss}, left ${T.left}): 5 more Block would save you`);
+    F.player.block = 5;
+    h.ok(!QC.qaThreat(F).lethal && QC.qaThreat(F).left === 1, 'and with 5 Block it does');
+    F = qfight(['hitter'], { hp: 6 });
+    h.ok(!QC.qaThreat(F).lethal, 'hp 6 vs a 5: not lethal');
+    F.player.block = 2; F.player.status.burn = 3;
+    T = check(F, 'burn through block');
+    h.ok(T.burn === 3 && T.loss === 3 + 3, 'Burn ticks through Block first, then 5 - 2');
+    F = qfight(['dummy']); F.player.status.poison = 4;
+    T = QC.qaThreat(F);
+    h.ok(T.poison === 4 && T.loss === 4, 'the player\'s Poison as the next turn starts');
+    F = qfight(['qa_vuln', 'hitter']);
+    T = check(F, 'vuln then a hit');
+    h.eq(T.loss, 7, 'the second enemy hits a Vulnerable player: floor(5 x 1.5)');
+    F = qfight(['dummy']);
+    F.bin.push({ uid: 'bomb1', id: 'rock', junk: true, fuse: 1, boom: 9, lit: 0 });
+    F.player.block = 4;
+    T = check(F, 'a lit bomb');
+    h.ok(T.bomb === 9 && T.loss === 5, 'a lit bomb on its last turn goes off through Block');
+    F = qfight(['dummy']);
+    F.bin.push({ uid: 'bomb2', id: 'rock', junk: true, fuse: 1, boom: 9, lit: F.turn });
+    h.eq(QC.qaThreat(F).bomb, 0, 'one lit this turn waits');
+  });
+  h.test('qa: the preview is pure (nothing in the fight changes)', () => {
+    const F = qfight(['multi', 'qa_big', 'hitter']);
+    F.player.status.dodge = 1; F.player.block = 3; F.player.status.burn = 2;
+    const before = JSON.stringify({ p: F.player, e: F.enemies.map(e => [e.hp, e.status, e.charged, e.acts, e.intent && e.intent.id]), ev: F.events.length, bin: F.bin.length });
+    for (let i = 0; i < 5; i++) { QC.qaThreat(F); QC.qaIntent(F, F.enemies[1]); }
+    h.eq(JSON.stringify({ p: F.player, e: F.enemies.map(e => [e.hp, e.status, e.charged, e.acts, e.intent && e.intent.id]), ev: F.events.length, bin: F.bin.length }), before, 'unchanged');
+    h.eq(QC.qaThreat(null).loss, 0, 'no fight: nothing');
+  });
+  if (hasData) {
+    const QD = boot({ only: ['util', 'data', 'combat'] });
+    const D7 = QD.DATA, C7 = QD.COMBAT;
+    h.test('qa: over every real enemy and 8 turns, the preview matches the enemy phase', () => {
+      const IDS = Object.keys(D7.ITEMS).filter(id => D7.ITEMS[id].rarity !== 'junk' && !D7.ITEMS[id].bag && !D7.ITEMS[id].hot);
+      let same = 0, n = 0;
+      const miss = [];
+      for (const id of Object.keys(D7.ENEMIES)) {
+        const d = D7.ENEMIES[id];
+        for (const seed of [3, 11]) {
+          const run = { hp: 400, maxHp: 400, act: d.act || 1, relics: [], claw: { grabs: 3 }, gold: 40, bin: IDS.slice(seed, seed + 14).map((x, i) => ({ uid: 'r' + i, id: x, plus: false })) };
+          const F = C7.newFight(run, [id], QD.U.rng(seed));
+          for (let turn = 0; turn < 8 && F.phase === 'player'; turn++) {
+            if (turn % 2) F.player.block = 7;
+            if (turn === 3) F.player.status.vuln = 2;
+            // what the preview leaves out by design: a Greedy gulp's lent Strength, a boss trick, the wheel's wedge
+            const odd = F.enemies.some(e => e.alive && (C7.greedNext(e) || (C7.sigNext && C7.sigNext(e)) || (e.intent && (e.intent.k === 'wheel' || e.intent.k === 'gulp'))));
+            const T = C7.qaThreat(F), hp0 = F.player.hp;
+            C7.endTurn(F);
+            if (odd) continue;
+            n++;
+            if (hp0 - F.player.hp === T.loss) same++;
+            else if (miss.length < 6) miss.push(`${id} t${turn}: ${T.loss} vs ${hp0 - F.player.hp}`);
+            if (F.player.hp < 150) F.player.hp = 400;
+          }
+        }
+      }
+      h.ok(n > 200 && same === n, `exact on ${same} of ${n} turns ${miss.join('; ')}`);
+    });
+  }
+}
+
+// ---------- round 7: item evolutions and pet synergies (DESIGN.md "Evolutions and pet synergies (round 7)")
+if (hasData) {
+  const L7 = boot({ only: ['util', 'data', 'combat'] });
+  const C = L7.COMBAT, D = L7.DATA, U7 = L7.U;
+  const erun = (bin, relics, extra) => Object.assign({ hp: 70, maxHp: 70, act: 1, char: 'knight', relics: relics || [], claw: { grabs: 3 },
+    bin: bin.map((x, i) => (typeof x === 'string' ? { uid: 'v' + i, id: x, plus: false } : Object.assign({ uid: 'v' + i }, x))) }, extra || {});
+  const efight = (bin, relics, extra, enc, seed) => {
+    const F = C.newFight(erun(bin, relics, extra), enc || ['rat', 'rat'], U7.rng(seed || 11));
+    for (const e of F.enemies) { e.hp = e.maxHp = 400; e.status = {}; e.block = 0; }
+    F.events.length = 0;
+    return F;
+  };
+  const playId = (F, id) => { const i = F.bin.find(b => b.id === id); return i ? C.play(F, i) : []; };
+  const bad = (F) => { for (const u of [F.player, ...F.enemies]) { if (!Number.isFinite(u.hp) || u.hp < 0 || u.hp > u.maxHp) return 'hp'; for (const k in u.status) if (!Number.isFinite(u.status[k])) return k; } return F.hookErrors.length ? F.hookErrors[0] : null; };
+
+  h.test('evolve: a recipe triggers only with the right item, plus and relic', () => {
+    const F = efight([{ id: 'rusty_sword', plus: true }, { id: 'rusty_sword' }, { id: 'longsword', plus: true }, { id: 'venom_dart', plus: true }], ['trophy_rack']);
+    const [sw, plain, other, dart] = F.bin;
+    h.eq(C.evoCheck(F, sw) && C.evoCheck(F, sw).to, 'excalibur_claw', 'Rusty Sword+ with the Trophy Rack is ready');
+    h.eq(C.evoCheck(F, plain), null, 'not upgraded: not ready');
+    h.eq(C.evoCheck(F, other), null, 'another item: not ready');
+    h.eq(C.evoCheck(F, dart), null, 'Venom Dart+ without the Festering Jar: not ready');
+    h.eq(C.evolve(F, plain), null, 'evolve refuses what is not ready');
+    h.eq(plain.id, 'rusty_sword', 'and leaves it alone');
+    const r = C.evolve(F, sw);
+    h.ok(r && sw.id === 'excalibur_claw' && sw.plus === false, 'evolve turns the fight instance');
+    h.ok(F.evos.includes('evo:excalibur_claw'), 'its aura joins the fight at once');
+    h.eq(F.evolved.length, 1, 'F.evolved records it');
+    h.eq(C.evoCheck(F, sw), null, 'an evolved item never evolves again');
+    for (const id of D.EVO_IDS) {
+      const R0 = D.EVOLUTIONS[id];
+      const G = efight([{ id: R0.from, plus: true }], [R0.relic]);
+      h.eq(C.evolve(G, G.bin[0]) && G.bin[0].id, id, `${id}: ${R0.from}+ and ${R0.relic} evolve`);
+      const W = efight([{ id: R0.from, plus: true }], []);
+      h.eq(C.evolve(W, W.bin[0]), null, `${id}: not without the relic`);
+    }
+  });
+
+  h.test('evolve: evolved effects and auras in a fight', () => {
+    // Excalibur Claw: 18 and a Strength; King's Oath: 5 Block per kill
+    let F = efight(['excalibur_claw', 'femur'], []);
+    h.ok(F.evos.includes('evo:excalibur_claw'), 'an evolved item in the run bin brings its aura');
+    const hp0 = F.enemies[0].hp;
+    C.useGrab(F); playId(F, 'excalibur_claw'); C.grabDone(F, 1);
+    h.eq(hp0 - F.enemies[0].hp, 18, 'Excalibur Claw deals 18');
+    h.eq(F.player.status.str, 1, 'and gives 1 Strength');
+    F.enemies[1].hp = 3; F.target = 1;
+    const b0 = F.player.block;
+    C.useGrab(F); const ev = playId(F, 'femur'); C.grabDone(F, 1);
+    h.ok(!F.enemies[1].alive && F.player.block - b0 === 5, `King's Oath: a kill gives 5 Block (${F.player.block - b0})`);
+    h.ok(ev.some(e => e.t === 'proc' && e.id === 'evo:excalibur_claw'), 'the aura fires a proc');
+    // Plague Needle: Epidemic spreads Poison to the others
+    F = efight(['plague_needle'], []);
+    C.useGrab(F); playId(F, 'plague_needle'); C.grabDone(F, 1);
+    h.ok(F.enemies[0].status.poison >= 7 && F.enemies[1].status.poison >= 1, `Plague Needle poisons, Epidemic spreads (${F.enemies[0].status.poison}/${F.enemies[1].status.poison})`);
+    // Tower Aegis: Battlements at the end of the turn
+    F = efight(['tower_aegis'], []);
+    C.useGrab(F); playId(F, 'tower_aegis'); C.grabDone(F, 1);
+    h.ok(F.player.block >= 15 && F.player.status.thorns === 2, 'Tower Aegis: 15 Block and 2 Thorns');
+    const e0 = F.enemies.map(e => e.hp);
+    C.endTurn(F);
+    h.ok(F.enemies.every((e, i) => e0[i] - e.hp >= 3), 'Battlements hit ALL at the end of the turn');
+    // Midas Coin: gold gives Block
+    F = efight(['midas_coin'], []);
+    C.useGrab(F); playId(F, 'midas_coin'); C.grabDone(F, 1);
+    h.ok(F.gain.gold === 8 && F.player.block === 8, `Midas Coin: 8 gold, Golden Touch gives 8 Block (${F.player.block})`);
+    // Prism Lance: three beams, never shatters with the Glass Cannon; Refraction on a shatter
+    F = efight(['prism_lance', 'empty_bottle'], ['glass_cannon']);
+    const tot0 = F.enemies.reduce((a, e) => a + e.hp, 0);
+    C.useGrab(F); playId(F, 'prism_lance'); C.grabDone(F, 1);
+    h.eq(tot0 - F.enemies.reduce((a, e) => a + e.hp, 0), 18, 'Prism Lance: 3 beams of 6');
+    h.ok(F.used.some(i => i.id === 'prism_lance') && !F.exhausted.some(i => i.id === 'prism_lance'), 'it never shatters');
+    const t1 = F.enemies.map(e => e.hp);
+    C.useGrab(F); playId(F, 'empty_bottle'); C.grabDone(F, 1);
+    h.ok(F.enemies.every((e, i) => t1[i] - e.hp >= 5), 'Refraction: a shatter hits ALL for 5');
+    // Loaded Fate / Absolute Zero / Echo Grimoire: rules from the aura
+    h.eq(efight(['loaded_fate'], []).rules.cashAmp, 1, 'Loaded Fate: House Edge adds cashAmp');
+    h.eq(efight(['absolute_zero'], ['permafrost_core']).rules.shatter, 0.75, 'Absolute Zero: Deep Cold adds to SHATTER');
+    h.eq(efight(['echo_grimoire'], ['echo_chamber']).rules.echo, 2, 'Echo Grimoire: every 2nd magic item echoes');
+    F = efight(['absolute_zero'], []);
+    C.useGrab(F); playId(F, 'absolute_zero'); C.grabDone(F, 1);
+    h.ok(F.enemies[0].status.freeze >= 1 && F.enemies[1].status.chill >= 1, 'Absolute Zero freezes the target and chills the rest');
+    // an evolved item mid fight: its rules land at once
+    F = efight([{ id: 'frost_pearl', plus: true }], ['permafrost_core']);
+    const sh0 = F.rules.shatter;
+    C.evolve(F, F.bin[0]);
+    h.eq(F.rules.shatter, sh0 + 0.25, 'an evolution mid fight merges its aura rules');
+    // Scrap Titan: a Rock at the bell, junk out hits ALL
+    F = C.newFight(erun(['scrap_titan'], []), ['rat', 'rat'], U7.rng(3));
+    h.ok(F.bin.some(i => i.id === 'rock'), 'Scrap Heap: a Rock in the bin at the bell');
+  });
+
+  h.test('evolve: pet synergies through COMBAT.evoPet', () => {
+    let F = efight(['prize_marble', 'prize_marble', 'lucky_penny', 'femur'], [], { pet: { id: 'hamster', lv: 1, xp: 0 } });
+    h.eq(F.petId, 'hamster', 'F.petId is the pet along');
+    const tot = () => F.enemies.reduce((a, e) => a + e.hp, 0);
+    let t0 = tot();
+    let ev = C.evoPet(F, 'hamster', 'marbles');
+    h.eq(t0 - tot(), 6, 'Marble Run: 2 per small item in the bin');
+    h.ok(ev[0] && ev[0].t === 'proc' && ev[0].src === 'pet' && ev[0].id === 'pet:hamster', 'a pet proc first');
+    F = efight(['torch'], []);
+    C.evoPet(F, 'cat', 'burn', { v: 2 });
+    h.ok(F.enemies.every(e => e.status.burn === 2), 'Fire Cat: 2 Burn on ALL');
+    F = efight(['femur'], []);
+    const n0 = F.bin.length;
+    ev = C.evoPet(F, 'parrot', 'copy', { id: 'femur' });
+    h.ok(F.bin.length === n0 + 1 && F.bin[F.bin.length - 1].temp && ev.some(e => e.t === 'binCopy'), 'Mimic: a fight copy of the carried item');
+    C.evoPet(F, 'raccoon', 'feast');
+    h.ok(F.player.status.str === 1 && F.player.block === 3, "King's Feast: 1 Strength and 3 Block");
+    C.evoPet(F, 'goose', 'luck');
+    h.eq(F.player.status.luck, 1, 'Golden Clutch: 1 Luck');
+    ev = C.evoPet(F, 'octopus', 'proc', { label: 'TWO ARMS!' });
+    h.ok(ev.length === 1 && ev[0].text === 'TWO ARMS!', 'a proc only kind');
+    // Frost Light: a spotlit item on a Frozen target resolves twice
+    F = efight(['femur', 'femur'], []);
+    F.enemies[0].status.freeze = 2;
+    const a = F.bin[0]; a.spot = 1;
+    let h0 = F.enemies[0].hp;
+    C.useGrab(F); ev = C.play(F, a); C.grabDone(F, 1);
+    const twice = h0 - F.enemies[0].hp;
+    h.ok(ev.some(e => e.t === 'proc' && e.id === 'pet:firefly'), 'Frost Light fires its proc');
+    const b = F.bin.find(x => x.id === 'femur');
+    F.enemies[0].status.freeze = 2; h0 = F.enemies[0].hp;
+    C.useGrab(F); C.play(F, b); C.grabDone(F, 1);
+    h.eq(twice, (h0 - F.enemies[0].hp) * 2, 'twice the damage of an unlit one');
+    F = efight(['femur'], []);
+    F.bin[0].spot = 1; h0 = F.enemies[0].hp;
+    C.useGrab(F); ev = C.play(F, F.bin[0]); C.grabDone(F, 1);
+    h.ok(!ev.some(e => e.t === 'proc' && e.id === 'pet:firefly'), 'not Frozen: no Frost Light');
+  });
+
+  h.test('evolve: the new combos fire in a fight', () => {
+    const grab = (F, ids) => { C.useGrab(F); for (const id of ids) { const i = F.bin.find(b => b.id === id && F.grab.insts.indexOf(b) < 0); if (i) C.play(F, i); } return C.grabDone(F, ids.length); };
+    let F = efight(['excalibur_claw', 'femur', 'crisp_apple'], []);
+    h.ok(grab(F, ['excalibur_claw', 'femur', 'crisp_apple']).some(e => e.t === 'combo' && e.id === 'legend_rising'), 'Legend Rising');
+    F = efight(['excalibur_claw', 'plague_needle'], []);
+    h.ok(grab(F, ['excalibur_claw', 'plague_needle']).some(e => e.t === 'combo' && e.id === 'twin_legends'), 'Twin Legends');
+    F = efight(['femur', 'bouncy_ball'], [], { pet: { id: 'cat' } });
+    h.ok(grab(F, ['femur', 'bouncy_ball']).some(e => e.t === 'combo' && e.id === 'fetch'), 'Fetch! with a pet');
+    F = efight(['femur', 'bouncy_ball'], []);
+    h.ok(!grab(F, ['femur', 'bouncy_ball']).some(e => e.t === 'combo' && e.id === 'fetch'), 'no Fetch! without one');
+    F = efight(['quail_egg', 'lucky_penny'], [], { pet: { id: 'goose' } });
+    h.ok(grab(F, ['quail_egg', 'lucky_penny']).some(e => e.t === 'combo' && e.id === 'nest_egg'), 'Nest Egg with the goose');
+  });
+
+  h.test('evolve: a 30 turn fuzz with every evolved item and the recipe relics', () => {
+    const relics = D.EVO_IDS.map(id => D.EVOLUTIONS[id].relic);
+    const F = C.newFight(erun(D.EVO_IDS.concat(['rock', 'femur', 'prize_marble']), relics, { hp: 300, maxHp: 300, pet: { id: 'goose' } }), ['rat', 'slime', 'rat'], U7.rng(71));
+    h.eq(F.evos.length, D.EVO_IDS.length, 'every aura in the fight');
+    const rng = U7.rng(9);
+    for (let t = 0; t < 30 && F.phase !== 'over'; t++) {
+      while (F.phase === 'player' && F.player.grabs > 0 && C.useGrab(F)) {
+        const n = rng.int(0, 3);
+        for (let k = 0; k < n && F.bin.length && F.phase === 'player'; k++) C.play(F, F.bin[rng.int(0, F.bin.length - 1)], rng.int(0, F.enemies.length - 1));
+        C.grabDone(F, n);
+      }
+      if (F.phase === 'player') C.endTurn(F);
+      for (const e of F.enemies) if (e.alive && e.hp < 50) e.hp = e.maxHp;
+      if (F.player.hp < 100) F.player.hp = 300;
+      const b = bad(F);
+      if (b) { h.ok(false, `turn ${t}: ${b}`); break; }
+    }
+    h.ok(!bad(F), 'clean after 30 turns');
   });
 }
 

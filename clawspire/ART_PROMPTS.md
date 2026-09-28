@@ -200,6 +200,27 @@ Use these when an item should look different from the others that share its key 
 | `art/items/id/firecracker.png` | 512x512 | 1:1, square | 26x26 | bomb | Firecracker: a round red firecracker bomb (#ff2e4a) with gold bands (#ffe066) and a short curly fuse with a spark |
 | `art/items/id/lucky_clover.png` | 512x512 | 1:1, square | 18x18 | clover | Lucky Clover: a four-leaf clover, bright green leaves (#3ddc84) with darker veins (#1a6b3a), a curled stem |
 
+### Evolved items (round 7)
+
+An upgraded item delivered while the run holds its relic evolves into one of these (DESIGN.md "Evolutions and pet synergies (round 7)"). They are legends: a touch more ornate than any other prize, a soft glow in their colour, and a small gold up-chevron badge somewhere near a corner (the game adds the pulsing aura and rays around them live, so keep the background transparent and the glow tight). An evolved item only ever uses its own file below, never the shared art key, so the drawn fallback stays unique until the PNG exists.
+
+| File | Gen size (px) | Aspect, orientation | In game (px) | Art key | Prompt |
+| --- | --- | --- | --- | --- | --- |
+| `art/items/id/excalibur_claw.png` | 512x110 | 4.67:1, horizontal | 56x12 | sword | Excalibur Claw: a legendary sword lying flat, blade pointing right, pale gold-white blade (#fff3c4) with a glowing cyan rune line, the crossguard is a three-pronged golden arcade claw gripping the blade, blue wrapped grip (#3b6fd6), a cyan gem pommel on the left |
+| `art/items/id/plague_needle.png` | 512x102 | 5:1, horizontal | 50x10 | dagger | Plague Needle: a syringe dart lying flat, a long steel needle pointing right, a glass barrel of glowing toxic lime venom (#c6ff8a) with tick marks and a tiny skull, a dark purple plunger and cap on the left (#3a2f5a) |
+| `art/items/id/nuke_pop.png` | 512x512 | 1:1, square | 34x34 | bomb | Nuke Pop: one huge glossy cherry bomb (#ff3b3b) with a yellow radiation trefoil (#ffe066) on its face, a cherry stem with a leaf for a fuse, sparking at the tip |
+| `art/items/id/prism_lance.png` | 512x114 | 4.5:1, horizontal | 54x12 | iceshard | Prism Lance: a long faceted crystal lance lying flat, point to the right, clear icy glass (#d8f8ff) with rainbow bands of refracted light running across it, a bright white core line |
+| `art/items/id/loaded_fate.png` | 512x512 | 1:1, square | 28x28 | dice | Loaded Fate: a golden die seen face on (#ffe8a0), rounded corners, a gold inner rim, the centre pip is a glowing green eye (#3ddc84), two small ink pips in opposite corners |
+| `art/items/id/absolute_zero.png` | 512x512 | 1:1, square | 28x28 | snowball | Absolute Zero: a pale ice orb (#e8f8ff) with a six-pointed snowflake frozen inside it in deep ice blue (#4aa8ff), a white spark at its heart, frost on the rim |
+| `art/items/id/tower_aegis.png` | 408x512 | 1:1.25, vertical | 40x50 | shield | Tower Aegis: a shield shaped like a castle tower, three battlements across the top, stone courses on a steel-blue face (#9fb4d8), a dark arched gate in the middle, a pointed base trimmed in gold (#ffc94d) |
+| `art/items/id/scrap_titan.png` | 512x488 | 1.05:1, square | 42x40 | buckler | Scrap Titan: a robot head bolted together from scrap metal (#b89a6a), rivets in the corners, two glowing red eyes (#ff5a4a), a grille mouth, a hex nut on an antenna |
+| `art/items/id/black_death.png` | 480x512 | 1:1.07, square | 28x30 | flask | Black Death Vial: a dark smoky conical flask (#2b1f3a) full of glowing toxic green brew (#7dff5e) with bubbles, a bone-white skull for a cork |
+| `art/items/id/midas_coin.png` | 512x512 | 1:1, square | 32x32 | coin | Midas Coin: a fat solid gold coin seen face on (#ffd84a), a beaded rim of darker gold dots (#b8860b), a raised crown embossed in the middle |
+| `art/items/id/swarm_queen.png` | 512x512 | 1:1, square | 26x26 | orb | Swarm Queen: a golden marble in black bee stripes (#ffcf3f, #3a2a10), two small glassy wings on top and a tiny gold crown |
+| `art/items/id/echo_grimoire.png` | 432x512 | 1:1.18, vertical | 34x40 | book | Echo Grimoire: a thick purple grimoire standing upright (#5a2b9c), gold corner caps, a glowing cyan eye on the cover (#9ff6ff) with three echo rings rippling out around it |
+| `art/items/id/streak_stiletto.png` | 512x112 | 4.6:1, horizontal | 46x10 | dagger | Streak Stiletto: a slim needle-thin stiletto lying flat, point to the right, silver-white blade (#e8fbff) with a pink edge line, a gold crossguard, three hot pink speed streaks trailing off the left end (#ff2e88) |
+| `art/items/id/phoenix_torch.png` | 144x512 | 1:3.57, vertical | 14x50 | torch | Phoenix Torch: a torch standing upright, a dark red wooden handle (#8a2b2b) with a gold band, its flame is a small phoenix with orange wings spread (#ff8a2e) and a golden body (#ffb347) |
+
 ## Enemies
 
 Full body, **facing left**, feet on the bottom edge, filling the canvas height, transparent background. The game sets the drawn height to the enemy's body box and keeps the width from your aspect ratio, so the listed aspect is a guide, not a hard rule. Bosses are drawn 1.6 times larger and the game adds a dashed aura ring around them, so give them a thin rim light in their accent colour but no big glow or background.
@@ -528,6 +549,25 @@ Chrome machine parts, transparent background, flat side view. The palm and carri
 | `art/events/under_the_machine.png` | 768x512 | Under the Machine | The dark gap under a claw machine, something shiny wedged in the shadow, two glowing eyes behind it, inside the haunted arcade tower, storybook scene, landscape, full-bleed |
 | `art/events/goblin_toll.png` | 768x512 | Goblin Toll Booth | A goblin in a paper hat sitting in a cardboard toll booth with a striped barrier arm, a coin tray, deadpan expression, inside the haunted arcade tower, storybook scene, landscape, full-bleed |
 
+## Seasonal events (round 7)
+
+Claw-o-ween's own art. Every file is optional: the drawn art (`RENDER.sea`) is the fallback, and a costumed monster's PNG replaces the whole drawing, costume included (draw the costume in). Items use the per-item path (`art/items/id/<id>.png`) so they never replace the year-round art key they share. Same global style anchor as the rest of the book, plus "Halloween night, orange and violet".
+
+| File | Gen size (px) | Aspect, orientation | In game (px) | Used by | Prompt |
+| --- | --- | --- | --- | --- | --- |
+| `art/items/id/candy_corn.png` | 512x512 | 1:1, square | 20x20 | candy_corn | a single piece of candy corn standing upright, white tip, orange middle, yellow base, glossy, chunky outline |
+| `art/items/id/bag_candycorn.png` | 512x512 | 1:1, square | 28x28 | bag_candycorn | a small purple drawstring pouch with three pieces of candy corn peeking out of the top |
+| `art/items/id/pumpkin_bomb.png` | 512x512 | 1:1, square | 30x30 | pumpkin_bomb | a round carved jack-o'-lantern with a short sparking fuse coming out of its stem, dark carved eyes and grin, orange and green |
+| `art/items/id/cursed_lollipop.png` | 512x180 | 2.86:1, horizontal | 40x14 | cursed_lollipop | a lollipop lying flat, white stick on the left, a round purple swirl candy on the right with a tiny skull face in the swirl |
+| `art/items/id/haunted_teddy.png` | 424x512 | 1:1.21, vertical | 28x34 | haunted_teddy | a worn brown teddy bear sitting upright, one glowing green button eye, one stitched X eye, a zigzag stitched mouth, faint ghostly glow |
+| `art/items/id/witch_broom.png` | 512x92 | 5.6:1, horizontal | 56x10 | witch_broom | a witch's broom lying flat, crooked wooden handle on the left, a bushy straw bundle tied with a purple band on the right |
+| `art/items/id/skull_candle.png` | 480x512 | 1:1.07, square | 28x30 | skull_candle | a cartoon skull facing the viewer with a white candle stuck on top, wax dripping down the skull, a small orange flame |
+| `art/enemies/rat_vamp.png` | 512x288 | 1.77:1, horizontal | 66x37 | rat_vamp | a coin rat in a vampire cape with a high spiky collar and red lining, little fangs, facing left, feet on the bottom edge |
+| `art/enemies/slime_ghost.png` | 512x400 | 1.28:1, horizontal | 64x50 | slime_ghost | a green slime hiding under a white bedsheet ghost costume with two cut-out eye holes, the hem rippling on the floor, facing left |
+| `art/enemies/goblin_witch.png` | 400x512 | 1:1.28, vertical | 62x80 | goblin_witch | a green goblin in a pointed witch hat with an orange band, holding a straw broom, grinning, facing left, feet on the bottom edge |
+| `art/enemies/pumpking.png` | 400x512 | 1:1.28, vertical | 133x173 | pumpking | the Pumpkin King: a crowned glowing jack-o'-lantern head on a big ribbed pumpkin body, curling green vine arms with leaf hands, a leafy collar, facing left, menacing but fun |
+| `art/hex/treat.png` | 512x512 | 1:1, square | 60x60 | the trick-or-treat tile | map icon: a carved jack-o'-lantern candy pail with a wire handle, sweets peeking over the rim, glowing from inside |
+
 ---
 
-264 prompts in total. Sizes in this book come from `ART.paths()` in `js/art.js`; if an item or enemy changes size in `js/data.js`, the in-game size changes with it and the game still fits whatever PNG is there.
+276 prompts in total. Sizes in this book come from `ART.paths()` in `js/art.js`; if an item or enemy changes size in `js/data.js`, the in-game size changes with it and the game still fits whatever PNG is there.

@@ -1233,15 +1233,25 @@ html[class*="txt-"] .pip{font-size:calc(13px * var(--accK))}
 .cmpTop{flex:0 0 70px;padding:8px 16px 0;background:linear-gradient(180deg,rgba(18,9,31,.96),rgba(18,9,31,.6))}
 .cmpTop h1{margin:0;font-size:24px}
 .cmpTop .sub{font-size:12px}
-.cmpWin{flex:0 0 350px;cursor:pointer}
+.cmpWin{flex:0 0 282px;cursor:pointer;transition:flex-basis .3s ease}
+.cmpBody.res .cmpWin{flex-basis:350px}
 .cmpPanel{flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;display:flex;flex-direction:column;gap:8px;padding:10px 14px 16px;
   background:linear-gradient(180deg,rgba(18,9,31,.9),rgba(18,9,31,.97) 30px);border-top:3px solid #ffc94d}
 .cmpPanel::-webkit-scrollbar{display:none}
-.cmpSlots{display:flex;gap:10px;justify-content:center}
-.cmpSlotBox{width:60px;height:60px;border-radius:12px;border:2px dashed var(--line2);background:#140c24;color:var(--dimmer);font:inherit;font-size:18px;font-weight:900;
+/* QA round 7: the dock in the thumb zone (the chosen items, the rule, CRUSH / Back, or Continue) */
+.cmpDock{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 14px 16px;min-height:84px;justify-content:center;
+  background:linear-gradient(180deg,#1d1233,#12091f);border-top:2px solid var(--line2);box-shadow:0 -8px 18px rgba(0,0,0,.45)}
+.cmpDock .cmpGo{min-width:200px;min-height:52px;font-size:18px}
+.cmpHead{font-size:12px;font-weight:900;letter-spacing:.08em;color:var(--dim);text-align:center}
+.cmpRecipe{display:flex;align-items:center;justify-content:center;gap:6px;padding:4px 10px;border-radius:12px;background:#140c24;border:2px solid var(--line2)}
+.cmpRecipe canvas{width:40px;height:40px}.cmpRecipe canvas:last-child{width:48px;height:48px}
+.cmpArrow{font-size:22px;font-weight:900;color:var(--gold);padding:0 4px}
+.cmpBody.res .cmpRes.show{margin:auto 0}
+.cmpSlots{display:flex;gap:12px;justify-content:center}
+.cmpSlotBox{width:68px;height:68px;border-radius:12px;border:2px dashed var(--line2);background:#140c24;color:var(--dimmer);font:inherit;font-size:18px;font-weight:900;
   display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
 .cmpSlotBox.on{border:2px solid #ffc94d;box-shadow:0 0 12px rgba(255,201,77,.5)}
-.cmpSlotBox canvas{width:44px;height:44px}
+.cmpSlotBox canvas{width:48px;height:48px}
 .cmpRule{font-size:13px;font-weight:900;color:#ffe9a8;text-align:center;min-height:18px}
 .cmpRow{justify-content:center}
 .cmpGo{min-width:150px}
@@ -1276,23 +1286,131 @@ html[class*="txt-"] .pip{font-size:calc(13px * var(--accK))}
 #secretBody.on .secTitle{opacity:1;transform:none}
 #secretBody.on .secRow,#secretBody.on .secGo{opacity:1}
 .secGo{opacity:0;transition:opacity .4s}
-.secEpi{position:absolute;left:22px;right:22px;top:92px;display:flex;flex-direction:column;gap:8px;text-align:center}
-.secEpi p{margin:0;font-size:16px;line-height:1.35;color:#fff;opacity:0;text-shadow:0 2px 6px rgba(20,8,40,.9);animation:secFade 1.1s forwards}
+/* the epilogue and the credits sit on soft dark panels over the dawn sky and the tower (QA round 7: readable) */
+.secEpi{position:absolute;left:18px;right:18px;top:88px;display:flex;flex-direction:column;gap:8px;text-align:center;padding:14px 14px;border-radius:18px;
+  background:rgba(14,6,30,.58);box-shadow:0 0 36px 8px rgba(14,6,30,.4);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);opacity:0;animation:secFade .9s .4s forwards}
+.secEpi p{margin:0;font-size:16px;line-height:1.35;color:#fff;opacity:0;text-shadow:0 0 2px #140828,0 2px 6px rgba(20,8,40,.95);animation:secFade 1.1s forwards}
 @keyframes secFade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.secRoll{position:absolute;left:0;right:0;top:360px;bottom:150px;overflow:hidden;
-  mask-image:linear-gradient(180deg,transparent,#000 18%,#000 82%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,#000 18%,#000 82%,transparent)}
+.secRoll{position:absolute;left:26px;right:26px;top:360px;bottom:150px;overflow:hidden;border-radius:22px;
+  background:radial-gradient(ellipse 60% 50% at 50% 50%,rgba(14,6,30,.62),rgba(14,6,30,.34) 70%,rgba(14,6,30,.12));opacity:0;animation:secFade 1s 6s forwards;
+  mask-image:linear-gradient(180deg,transparent,#000 14%,#000 86%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,#000 14%,#000 86%,transparent)}
 .secRollIn{position:absolute;left:0;right:0;top:100%;text-align:center;animation:secRoll 16s linear 6.5s forwards}
-.secRollIn div{font-size:16px;line-height:1.7;color:#fff;min-height:12px;text-shadow:0 2px 6px rgba(20,8,40,.9)}
-.secRollIn .big{font-size:30px;font-weight:900;letter-spacing:.08em;color:var(--gold);text-shadow:0 0 18px rgba(255,201,77,.8),0 3px 0 #4d3608}
-.secRollIn .k{font-size:13px;letter-spacing:.4em;color:var(--pink2)}
-.secRollIn .who{font-size:26px;font-weight:900;color:var(--cyan2);text-shadow:0 0 16px rgba(46,230,214,.8)}
+.secRollIn div{font-size:16px;line-height:1.7;color:#fff;min-height:12px;text-shadow:0 0 2px #140828,0 2px 6px rgba(20,8,40,.95)}
+.secRollIn .big{font-size:30px;font-weight:900;letter-spacing:.08em;color:var(--gold);text-shadow:0 0 2px #2a1a04,0 0 18px rgba(255,201,77,.8),0 3px 0 #4d3608}
+.secRollIn .k{font-size:13px;letter-spacing:.4em;color:#ff9fd0;text-shadow:0 0 2px #140828,0 2px 4px #140828}
+.secRollIn .who{font-size:26px;font-weight:900;color:var(--cyan2);text-shadow:0 0 2px #021a15,0 2px 0 #06231c,0 0 16px rgba(46,230,214,.8)}
 @keyframes secRoll{to{transform:translateY(calc(-100% - 260px))}}
+#secretBody.fast .secEpi,#secretBody.fast .secRoll{animation-delay:0s!important;animation-duration:.2s}
 #secretBody.fast .secEpi p{animation-delay:0s!important;animation-duration:.2s}
 #secretBody.fast .secRollIn{animation-delay:0s;animation-duration:9s}
 .secNote{font-size:14px;font-weight:900;letter-spacing:.04em;color:var(--cyan2);text-align:center;padding:6px 10px;border:2px dashed #1f4a3e;border-radius:10px;background:#06231c}
 .calm .mh .secKeys.full{animation:none}
 @media (prefers-reduced-motion:reduce){.mh .secKeys.full{animation:none}}
 /* ================= /SECRET ================= */
+</style>
+<style id="season-css">
+/* ================= SEASON (round 7): seasonal events ================= */
+/* the title's event banner (countdown), the hidden Event preview zone over the logo and its picker */
+.btn.seaBan{position:absolute;top:14px;left:92px;right:92px;z-index:2;pointer-events:auto;justify-content:flex-start;gap:10px;min-height:54px;padding:6px 12px;text-transform:none;letter-spacing:.02em;
+  border-color:#ff8a1f;background:linear-gradient(135deg,#5a2a08,#2a0f3a 70%);box-shadow:0 4px 0 #1a0820,0 0 22px rgba(255,138,31,.45);
+  animation:seaGlow 2.4s ease-in-out infinite}
+.btn.seaBan.s-winter{border-color:#8dfff5;background:linear-gradient(135deg,#0f3a5a,#1a1030 70%);box-shadow:0 4px 0 #061a2a,0 0 22px rgba(141,255,245,.4)}
+.seaBan .sb0{font-size:26px;line-height:1}
+.seaBan .sbc{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;line-height:1.15}
+.seaBan .sb1{font-size:15px;font-weight:900;color:#ffd08a;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.seaBan.s-winter .sb1{color:#dff6ff}
+.seaBan .sb2{font-size:12px;font-weight:900;color:#fff;letter-spacing:.1em;text-transform:uppercase;opacity:.9;white-space:nowrap}
+#scr-title.attracting .seaBan{visibility:hidden}
+.seaBan .sb3{font-size:15px;font-weight:900;color:#fff;background:rgba(0,0,0,.35);border-radius:10px;padding:3px 8px}
+@keyframes seaGlow{50%{box-shadow:0 4px 0 #1a0820,0 0 34px rgba(155,77,255,.55)}}
+.seaLogo{position:absolute;left:60px;right:60px;top:420px;height:80px;pointer-events:auto;z-index:1}
+#scr-title.attracting .seaLogo{display:none}
+.seaPick{position:absolute;left:50%;top:96px;transform:translateX(-50%);width:320px;z-index:80;display:none;flex-direction:column;gap:8px;padding:16px;align-items:stretch}
+.seaPick.show{display:flex}
+.seaPick .btn{width:100%}
+/* the trick-or-treat door (the canvas paints the house) */
+.screen.seaScr{background:transparent;padding:0;overflow:hidden}
+#seaBody{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:18px 16px 22px;gap:8px}
+.seaTop{text-align:center;padding-top:6px}
+.seaK{font-size:30px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#ffb347;text-shadow:0 0 16px rgba(255,138,31,.7),0 3px 0 #2a0a3a}
+.seaSub{font-size:14px;color:#e8dcff;margin-top:4px;min-height:18px;text-shadow:0 2px 3px #000}
+.seaBot{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+.seaBot .btn{width:260px}
+.btn.seaKnock{font-size:20px;min-height:58px;border-color:#ff8a1f;background:linear-gradient(180deg,#8a3a08,#4a1a04);box-shadow:0 4px 0 #2a0a02,0 0 22px rgba(255,138,31,.5)}
+.seaCard{width:100%;max-width:420px;border-radius:14px;padding:10px 14px;display:flex;flex-direction:column;gap:4px;
+  background:linear-gradient(180deg,rgba(60,30,10,.95),rgba(30,12,40,.95));border:2px solid #ff8a1f;box-shadow:0 0 22px rgba(255,138,31,.4)}
+.seaCard.trick{border-color:#9b4dff;box-shadow:0 0 22px rgba(155,77,255,.45);background:linear-gradient(180deg,rgba(40,16,70,.95),rgba(18,9,31,.95))}
+.seaCard .ln{font-size:16px;font-weight:900;color:#fff;text-align:center}
+.seaTap{font-size:13px;color:var(--dim);letter-spacing:.2em;text-transform:uppercase}
+/* the map head's currency chip, the counter's tab and prices in the Prize Vault */
+.mh .seaChip{flex:0 0 auto;height:32px;padding:0 9px;border-radius:10px;border:2px solid #ff8a1f;background:#2a1208;color:#ffd08a;font:inherit;font-size:13px;font-weight:900;cursor:pointer}
+.mh .seaChip.s-winter{border-color:#8dfff5;background:#0f2a3a;color:#dff6ff}
+.vTab.seaTab{border-color:#ff8a1f;color:#ffd08a}
+.vTab.seaTab.on{border-color:#ff8a1f;background:linear-gradient(180deg,#8a3a08,#3a1204);box-shadow:0 0 14px rgba(255,138,31,.5)}
+.vCard:has(.seaTg) canvas{filter:drop-shadow(0 0 6px rgba(255,138,31,.6))}
+.vCard .tg.seaTg{color:#ffd08a}
+.calm .btn.seaBan{animation:none}
+@media (prefers-reduced-motion:reduce){.btn.seaBan{animation:none}}
+/* ================= /SEASON ================= */
+</style>
+<style id="qa-css">
+/* ================= QA (round 7): the incoming-damage telegraph, the Back Room's act stat ================= */
+.qaThreat{position:absolute;left:6px;top:74px;z-index:30;display:none;flex-direction:column;align-items:flex-start;min-width:84px;max-width:116px;padding:3px 9px 4px;
+  border-radius:10px;pointer-events:none;background:rgba(18,9,31,.92);border:2px solid var(--blood);color:#fff;font-size:12px;font-weight:900;letter-spacing:.08em;
+  white-space:nowrap;line-height:1.2;transform-origin:0 0}
+.qaThreat.show{display:flex}
+.qaThreat b{font-weight:900}
+.qaThreat .num{font-size:21px;letter-spacing:.02em;line-height:1.05;color:#fff}
+.qaThreat .num:empty,.qaThreat small:empty{display:none}
+.qaThreat small{font-size:12px;font-weight:900;color:var(--cyan2);letter-spacing:.02em}
+.qaThreat.hurt b,.qaThreat.hurt .num{color:#ffb0a0}
+.qaThreat.safe{border-color:var(--cyan)}.qaThreat.safe b{color:var(--cyan2)}
+.qaThreat.lethal{background:#5a1030;border-color:#ff5a4a;animation:qaLethal .8s ease-in-out infinite}
+.qaThreat.lethal small{color:#ffd9e0}
+@keyframes qaLethal{50%{box-shadow:0 0 16px rgba(255,90,74,.9);transform:scale(1.05)}}
+.hpbar .qaIn{left:0;width:0;z-index:1;background:repeating-linear-gradient(90deg,#ff5a4a 0 4px,#ffe0da 4px 8px);animation:qaIn .9s ease-in-out infinite;transition:none}
+@keyframes qaIn{50%{opacity:.4}}
+#hpStat.qaWarn .hpbar{height:6px;bottom:2px}
+#hpStat.qaLethal{border-color:var(--blood);box-shadow:0 0 12px rgba(255,90,74,.8)}
+.stat.act.secret{border-color:var(--gold);box-shadow:0 0 10px rgba(255,201,77,.45)}
+.stat.act.secret .v{color:var(--gold)}
+html[class*="txt-"] .qaThreat{font-size:calc(13px * var(--accK))}
+html[class*="cb-"] .qaThreat.hurt b{color:var(--acc-dmg)}
+.calm .qaThreat.lethal,.calm .hpbar .qaIn{animation:none}
+@media (prefers-reduced-motion:reduce){.qaThreat.lethal,.hpbar .qaIn{animation:none}}
+/* ================= /QA ================= */
+</style>
+<style id="evo-css">
+/* ================= EVOLVE (round 7): evolved item cards, the recipe hints, the Evolutions tab, the ceremony overlay ================= */
+.card.evo{border-color:#ffe27a;background:linear-gradient(180deg,#3d2a14,#1c1030);box-shadow:0 4px 0 #120a22,0 0 16px rgba(255,226,122,.45);animation:evoCard 2.4s ease-in-out infinite}
+@keyframes evoCard{50%{box-shadow:0 4px 0 #120a22,0 0 26px rgba(255,226,122,.8)}}
+.card .evoBadge{position:absolute;top:6px;left:50%;transform:translateX(-50%);padding:1px 7px;border-radius:8px;background:linear-gradient(180deg,#fff2a8,#ffc94d);color:#2a1d04;
+  font-size:12px;font-weight:900;letter-spacing:.1em;box-shadow:0 0 10px rgba(255,201,77,.7);white-space:nowrap}
+.card.evo .rar{display:none}
+.card .evoAura{font-size:12px;line-height:1.3;color:#ffe27a;font-weight:700}
+.card .evoHint{font-size:12px;line-height:1.3;font-weight:900;color:#d9c6ff;padding:2px 6px;border-radius:8px;border:1px dashed #6b4fb0;margin-bottom:12px}
+.card .evoHint.have{color:#ffe27a;border-color:#ffc94d;background:rgba(255,201,77,.08)}
+.card.evoReady{border-color:#ffe27a;box-shadow:0 0 18px rgba(255,226,122,.6)}
+.card.evoReady::before{content:'EVOLVE';position:absolute;top:6px;left:8px;padding:0 6px;border-radius:7px;background:#ffc94d;color:#2a1d04;font-size:12px;font-weight:900;letter-spacing:.1em}
+.choice.evoChoice{border-color:#ffc94d;box-shadow:0 0 14px rgba(255,201,77,.45)}
+.choice.evoChoice .c1{color:#ffe27a}
+.evoGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.evoc{border-color:var(--ec);gap:4px}
+.evoc.locked{border-color:var(--line2);opacity:1}
+.evoc.got{box-shadow:0 0 12px var(--ec)}
+.evoc .evoRow{display:flex;align-items:center;justify-content:center;gap:2px}
+.evoc .evoOp{font-style:normal;font-weight:900;font-size:14px;color:var(--dim)}
+.evoc .name{font-size:13px;color:var(--ec)}
+.evoc.locked .name{color:var(--dimmer)}
+.evoc .text{font-size:12px;width:100%}
+.evoOver{position:absolute;left:0;top:0;width:540px;height:960px;z-index:90;cursor:pointer}
+.evoOver canvas{position:absolute;left:0;top:0;width:540px;height:960px}
+.evoTap{position:absolute;left:0;right:0;bottom:120px;text-align:center;font-size:14px;font-weight:900;letter-spacing:.14em;color:#ffe27a;
+  text-shadow:0 2px 4px #12091f;animation:evoTap 1.2s ease-in-out infinite}
+@keyframes evoTap{50%{opacity:.35}}
+.calm .card.evo,.calm .evoTap{animation:none}
+@media (prefers-reduced-motion:reduce){.card.evo,.evoTap{animation:none}}
+/* ================= /EVOLVE ================= */
 </style>
 </head>
 <body>
@@ -1367,6 +1485,8 @@ html[class*="txt-"] .pip{font-size:calc(13px * var(--accK))}
   <!-- SETS (round 6): the boon draft (the canvas draws the machine) and the Compactor (the canvas draws the press), the set fanfare -->
   <div id="scr-boon" class="screen boonScr"><div id="boonBody" class="boonBody"></div></div>
   <div id="scr-compactor" class="screen cmpScr"><div id="cmpBody" class="cmpBody"></div></div>
+  <!-- SEASON (round 7): a trick-or-treat door (the canvas paints the haunted house under this frame) -->
+  <div id="scr-sea" class="screen seaScr"><div id="seaBody"></div></div>
   <div id="setFan"></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>

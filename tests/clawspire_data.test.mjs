@@ -1097,8 +1097,11 @@ t.test('meta: Tilt levels 0..10, named, each one adds its own twist', () => {
 
 t.test('meta: achievements are well formed and checked safely', () => {
   const ids = DATA.ACH_IDS;
-  t.ok(ids.length >= 25 && ids.length <= 50, `25 to 50 stickers (${ids.length})`);
+  // The board is a 3-column grid on a phone: room for the seasonal and evolution
+  // stickers of round 7, but a runaway list still fails here (round 7 QA: 50 -> 60).
+  t.ok(ids.length >= 25 && ids.length <= 60, `25 to 60 stickers (${ids.length})`);
   t.eq(new Set(ids).size, ids.length, 'unique ids');
+  t.eq(new Set(ids.map(id => DATA.ACHIEVEMENTS[id] && DATA.ACHIEVEMENTS[id].name)).size, ids.length, 'unique sticker names (the board and the slap tell them apart)');
   for (const id of ids) {
     const a = DATA.ACHIEVEMENTS[id];
     t.ok(a && a.name && a.icon && a.text && a.color && typeof a.check === 'function', `${id} has name, icon, text, colour, check`);
@@ -1812,6 +1815,292 @@ t.test('compactor: the recipe rules', () => {
   const p3 = [I('toxic_vial'), I('venom_dart'), I('rusty_sword')];
   t.eq(JSON.stringify(DATA.cmpRoll(U.rng(77), p3, 'alchemist')), JSON.stringify(DATA.cmpRoll(U.rng(77), p3, 'alchemist')), 'deterministic by rng');
   t.eq(DATA.cmpRoll(U.rng(1), [I('rusty_sword')], 'knight'), null, 'a refused rule rolls nothing');
+});
+
+// ---------------------------------------------------------------- round 7: evolutions and pet synergies
+// DESIGN.md "Evolutions and pet synergies (round 7)": item + relic recipes,
+// the evolved defs (hidden from every pool), their auras, the pet
+// synergies, the new combos and the two stickers.
+t.test('round 7: evolution recipes and the evolved items', () => {
+  const ids = DATA.EVO_IDS, EV = DATA.EVOLVED, REC = DATA.EVOLUTIONS;
+  t.ok(ids.length >= 12 && ids.length <= 16, `12 to 16 recipes [${ids.length}]`);
+  const froms = new Set(), relics = new Set(), names = new Set(Object.keys(ITEMS).map(id => ITEMS[id].name));
+  const pooled = new Set(DATA.pool()), dexItems = new Set(DATA.dexEntries().items);
+  for (const id of ids) {
+    const r = REC[id], d = EV[id], W = `evo ${id}`;
+    t.ok(r && r.id === id && r.to === id && d && d.id === id, `${W}: recipe and def`);
+    const base = ITEMS[r.from];
+    t.ok(base && Object.keys(ITEMS).includes(r.from) && base.rarity !== 'junk' && base.plus, `${W}: its base ${r.from} is a real item with a plus`);
+    t.ok(RELICS[r.relic] && !RELICS[r.relic].starter && ['c', 'u', 'r'].includes(RELICS[r.relic].rarity), `${W}: its relic ${r.relic} is a pool relic`);
+    t.ok(!froms.has(r.from), `${W}: one recipe per base item`);
+    froms.add(r.from); relics.add(r.relic);
+    t.eq(DATA.evoOf(r.from), r, `${W}: evoOf(base) finds it`);
+    // the def: an item like any other, reachable by id, never listed
+    t.ok(ITEMS[id] === d && !Object.keys(ITEMS).includes(id) && !DATA.ITEM_IDS, `${W}: ITEMS[id] finds it, Object.keys(ITEMS) does not list it`);
+    t.ok(!pooled.has(id) && !dexItems.has(id), `${W}: never in a reward pool or the item Prizedex`);
+    t.ok(d.evolved === true && d.rarity === 'l' && !d.plus && d.cost === 0, `${W}: evolved, legendary, no plus`);
+    t.ok(typeof d.name === 'string' && d.name.length > 3 && !names.has(d.name), `${W}: its own name`);
+    names.add(d.name);
+    t.ok(ITEM_ART.includes(d.art) && isHex(d.color) && isHex(d.color2) && isHex(d.glow), `${W}: art key and colours`);
+    t.ok(d.tags.every(x => TAGS.includes(x)) && !d.tags.includes('junk'), `${W}: tags allowed`);
+    t.ok(['enemy', 'all', 'self', 'random', 'none'].includes(d.target), `${W}: target`);
+    checkShape(d.shape, W, false);
+    checkFx(d.fx, W);
+    t.ok(d.fx.length >= 1, `${W}: has effects`);
+    const s = DATA.itemText(d, false);
+    t.ok(!/[{}]/.test(s) && s.length > 10, `${W}: text fully substituted [${s}]`);
+    t.ok(DATA.keywords(d).length >= 1, `${W}: keyword chips`);
+    // the aura: a relic-shaped def
+    const a = DATA.EVO_FX[d.auraId];
+    t.ok(a && a.id === 'evo:' + id && a.name === d.auraName && a.text === d.auraText && a.proc && a.icon && isHex(a.color), `${W}: its aura def`);
+    t.ok(!!(a.hooks || a.rules), `${W}: the aura does something`);
+    for (const k of Object.keys(a.hooks || {})) t.ok(HOOKS.includes(k), `${W}: aura hook ${k} is a known hook`);
+    for (const k of Object.keys(a.rules || {})) t.ok(RULES.includes(k), `${W}: aura rule ${k} is a known rule`);
+    t.ok(JSON.stringify([r, d.text, d.auraText, d.name]).indexOf(String.fromCharCode(0x2014)) < 0, `${W}: no em dashes`);
+  }
+  t.ok(relics.size >= 12, `the recipes use many different relics [${relics.size}]`);
+  for (const ch of ['knight', 'alchemist', 'rogue', 'gambler']) t.ok(DATA.CHARACTERS[ch].bin.some(x => DATA.evoOf(x)), `${ch}: a starter item can evolve`);
+  // evoReady: only the right item, plus, relic, and a real bin item
+  const r0 = REC.excalibur_claw;
+  const inst = (o) => Object.assign({ uid: 'e1', id: 'rusty_sword', plus: true }, o || {});
+  t.eq(DATA.evoReady(inst(), ['trophy_rack']), r0, 'Rusty Sword+ and the Trophy Rack: ready');
+  t.eq(DATA.evoReady(inst({ plus: false }), ['trophy_rack']), null, 'not upgraded: not ready');
+  t.eq(DATA.evoReady(inst(), ['festering_jar']), null, 'the wrong relic: not ready');
+  t.eq(DATA.evoReady(inst({ id: 'longsword' }), ['trophy_rack']), null, 'the wrong item: not ready');
+  t.eq(DATA.evoReady(inst({ temp: true }), ['trophy_rack']), null, 'a fight copy: not ready');
+  t.eq(DATA.evoReady(inst(), { relics: ['trophy_rack'] }), r0, 'a run works as the relic list');
+  t.eq(DATA.evoReady(inst({ id: 'excalibur_claw' }), ['trophy_rack']), null, 'an evolved item never evolves again');
+  for (const id of ids) {
+    const r = REC[id];
+    for (const other of ids.filter(x => x !== id).slice(0, 3)) t.eq(DATA.evoReady({ uid: 'q', id: r.from, plus: true }, [REC[other].relic].filter(x => x !== r.relic)), null, `${id}: another recipe's relic does not evolve it`);
+    t.eq(DATA.evoReady({ uid: 'q', id: r.from, plus: true }, [r.relic]), r, `${id}: its own relic does`);
+  }
+  // auras ride the run's bin (unique, never a fight copy)
+  const run = { bin: [{ id: 'excalibur_claw' }, { id: 'excalibur_claw' }, { id: 'nuke_pop', temp: true }, { id: 'rusty_sword' }, { id: 'midas_coin' }] };
+  t.eq(DATA.evoAuraIds(run).join(), 'evo:excalibur_claw,evo:midas_coin', 'one aura per evolved id in the bin');
+  t.eq(DATA.evoAuraIds(null).length, 0, 'null safe');
+  // meta repair
+  const fx0 = DATA.evoMetaFix({ seen: { excalibur_claw: 1, bogus: 1 }, made: '3', syn: -2, new: { excalibur_claw: 1, nuke_pop: 1 } });
+  t.eq(JSON.stringify(fx0), JSON.stringify({ seen: { excalibur_claw: 1 }, made: 3, syn: 0, new: { excalibur_claw: 1 } }), 'meta.evo repaired: unknown ids and junk dropped');
+  t.eq(JSON.stringify(DATA.evoMetaFix('junk')), JSON.stringify({ seen: {}, made: 0, syn: 0, new: {} }), 'a junk meta.evo is fresh');
+});
+
+t.test('round 7: the evolved auras with and without COMBAT', () => {
+  const calls = [];
+  for (const id of DATA.EVO_IDS) {
+    const a = DATA.EVO_FX['evo:' + id];
+    if (!a.hooks) continue;
+    const F = mockF(), before = JSON.stringify(F);
+    let threw = null;
+    try { runHooks(a, F); } catch (e) { threw = e; }
+    t.ok(!threw, `${id}: aura hooks, no COMBAT, no throw ${threw || ''}`);
+    t.eq(JSON.stringify({ ...F, rs: undefined }), JSON.stringify({ ...JSON.parse(before), rs: undefined }), `${id}: no mutation without COMBAT`);
+  }
+  globalThis.COMBAT = {
+    damage: (F, src, e, v) => { calls.push(['damage', src, v]); return v; },
+    status: (F, who, s, v) => { calls.push(['status', s, v]); return v; },
+    heal: (F, who, v) => { calls.push(['heal', v]); return v; },
+    addJunk: (F, id, n) => { calls.push(['addJunk', id, n]); return []; },
+    copy: (F, tag) => { calls.push(['copy', tag]); return null; },
+    tickets: () => 0, gainGold: () => 0, gold: () => 100, emit: (F, ev) => { calls.push(['emit', ev.t, ev.id]); return ev; },
+  };
+  try {
+    for (const id of DATA.EVO_IDS) {
+      const a = DATA.EVO_FX['evo:' + id];
+      if (!a.hooks) continue;
+      calls.length = 0;
+      const F = mockF();
+      F.streak = 6;
+      F.enemies.push({ uid: 'c', hp: 10, maxHp: 10, block: 0, status: {}, alive: true });
+      F.enemies[1].status.burn = 3;
+      let threw = null;
+      try { runHooks(a, F); if (a.hooks.onStatus) a.hooks.onStatus(F, F.enemies[0], 'poison', 2); } catch (e) { threw = e; }
+      t.ok(!threw, `${id}: aura hooks run with COMBAT ${threw || ''}`);
+      t.ok(calls.length > 0, `${id}: the aura does something [${calls.map(c => c[0]).join(',')}]`);
+      t.ok(calls.every(c => c[0] !== 'damage' || c[1] === null), `${id}: aura damage has no attacker`);
+      t.ok(calls.every(c => c[0] !== 'status' || STATUS[c[1]]), `${id}: statuses exist`);
+    }
+    // the proc helper names the aura
+    calls.length = 0;
+    DATA.evoProc(mockF(), 'evo:nuke_pop', 'BOOM');
+    t.ok(calls.some(c => c[0] === 'emit' && c[1] === 'proc' && c[2] === 'evo:nuke_pop'), 'evoProc emits a proc for the aura');
+  } finally { delete globalThis.COMBAT; }
+  const SRC7 = SRC.slice(SRC.indexOf('EVOLVE (round 7'), SRC.indexOf('/EVOLVE'));
+  t.ok(SRC7.length > 1000 && !SRC7.includes('Math.random'), 'no Math.random in the evolve block');
+});
+
+t.test('round 7: pet synergies, the new combos and stickers', () => {
+  const PS = DATA.PET_SYN;
+  t.eq(Object.keys(PS).sort().join(), DATA.PET_IDS.slice().sort().join(), 'a synergy for every pet');
+  for (const id of DATA.PET_IDS) {
+    const s = PS[id];
+    t.ok(s.id === id && s.name && s.icon && isHex(s.color) && s.need && s.text.length > 20 && typeof s.on === 'function', `${id}: synergy fields`);
+    t.eq(DATA.petSynOn(id, { bin: [], relics: [], clawType: 'classic' }), null, `${id}: off on a bare run`);
+    t.ok(JSON.stringify([s.name, s.text, s.need]).indexOf(String.fromCharCode(0x2014)) < 0, `${id}: no em dashes`);
+  }
+  const on = (id, run) => !!DATA.petSynOn(id, Object.assign({ bin: [], relics: [], clawType: 'classic' }, run));
+  t.ok(on('hamster', { relics: ['beehive'] }) && !on('hamster', { relics: ['wizard_hat'] }), 'hamster: a Swarm relic');
+  t.ok(on('parrot', { relics: ['wizard_hat'] }) && !on('parrot', { relics: ['beehive'] }), 'parrot: an Echo relic');
+  t.ok(on('cat', { bin: [{ id: 'torch' }] }) && !on('cat', { bin: [{ id: 'femur' }] }), 'cat: a Pyro item in the bin');
+  t.ok(on('octopus', { clawType: 'tri' }) && !on('octopus', { clawType: 'magnet' }), 'octopus: the Tri-Claw');
+  t.ok(on('firefly', { relics: ['snow_globe'] }) && !on('firefly', { relics: ['bellows'] }), 'firefly: a Frost relic');
+  t.ok(on('mouse', { clawType: 'magnet' }) && !on('mouse', { clawType: 'tri' }), 'mouse: the Magnet Crane');
+  t.ok(on('raccoon', { relics: ['junkyard_king'] }) && !on('raccoon', { relics: ['recycling_bin'] }), 'raccoon: Junkyard King');
+  t.ok(on('goose', { relics: ['dealers_visor', 'lucky_cat'] }) && !on('goose', { relics: ['dealers_visor'] }), 'goose: two High Rollers pieces');
+  t.eq(DATA.petSynOn('nobody', {}), null, 'an unknown pet has none');
+  // combos
+  t.eq(DATA.EVO_COMBOS.length, 4, 'four new combos');
+  const defs = (l) => l.map(id => ITEMS[id]);
+  const fire = (l, ctx) => DATA.combosFor(defs(l), ctx).map(c => c.id);
+  t.ok(fire(['excalibur_claw', 'femur', 'crisp_apple']).includes('legend_rising'), 'Legend Rising: an evolved item and two more');
+  t.ok(!fire(['excalibur_claw', 'femur']).includes('legend_rising'), 'not with only two items');
+  const two = fire(['excalibur_claw', 'plague_needle', 'femur']);
+  t.ok(two.includes('twin_legends') && !two.includes('legend_rising'), `Twin Legends replaces Legend Rising (one family) [${two}]`);
+  t.ok(DATA.COMBOS.twin_legends.secret && DATA.COMBOS.twin_legends.tier === 3, 'Twin Legends is a secret tier 3 recipe');
+  t.ok(fire(['femur', 'bouncy_ball'], { pet: 'cat' }).includes('fetch') && !fire(['femur', 'bouncy_ball'], {}).includes('fetch') && !fire(['femur', 'bouncy_ball']).includes('fetch'), 'Fetch! needs a pet along');
+  t.ok(fire(['quail_egg', 'lucky_penny'], { pet: 'goose' }).includes('nest_egg') && !fire(['quail_egg', 'lucky_penny'], { pet: 'cat' }).includes('nest_egg'), 'Nest Egg needs the Golden Goose');
+  // stickers
+  for (const id of ['evolved', 'best_buds']) t.ok(DATA.ACHIEVEMENTS[id] && DATA.ACH_IDS.includes(id), `${id} is on the board`);
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { evo: { made: 1 } } }, {}).includes('evolved'), 'It Evolved! after the first evolution');
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { evo: { syn: 2 } } }, {}).includes('best_buds'), 'Best Buds after a pet synergy');
+  t.ok(!DATA.achCheck({ kind: 'meta', meta: { evo: { made: 0, syn: 0 } } }, {}).some(x => x === 'evolved' || x === 'best_buds'), 'neither before');
+});
+
+// SEASON (round 7): seasonal events (DESIGN.md "Seasonal events (round 7)").
+t.test('season: seasonAt by date, its edges and the new year', () => {
+  const at = (d) => (DATA.seasonAt(d) || {}).id || null;
+  t.ok(DATA.SEASONS && DATA.SEASONS.halloween && DATA.SEASONS.winter && DATA.SEASON_IDS.join() === 'halloween,winter', 'two seasons: halloween, winter');
+  const cases = [['2026-09-30', null], ['2026-10-01', 'halloween'], ['2026-10-31', 'halloween'], ['2026-11-03', 'halloween'], ['2026-11-04', null],
+    ['2026-12-09', null], ['2026-12-10', 'winter'], ['2026-12-31', 'winter'], ['2027-01-01', 'winter'], ['2027-01-06', 'winter'], ['2027-01-07', null], ['2027-07-04', null], ['2031-10-15', 'halloween']];
+  for (const [d, want] of cases) t.eq(at(d), want, `seasonAt(${d})`);
+  t.eq(at(new Date(2026, 9, 1, 0, 0, 1)), 'halloween', 'a Date reads its own calendar day (the first second)');
+  t.eq(at(new Date(2026, 10, 3, 23, 59, 59)), 'halloween', '...and the last second');
+  t.eq(at(new Date(2027, 0, 6, 12).getTime()), 'winter', 'a timestamp works too');
+  t.eq(at(null), null, 'no date, no season');
+  t.eq(at('junk'), null, 'an unreadable date, no season');
+  // the countdown: the last day still has until midnight; a winter span that began last year
+  const day = (y, m, d) => new Date(y, m - 1, d).getTime();
+  t.eq(DATA.seasonLeft('halloween', '2026-11-03'), day(2026, 11, 4) - day(2026, 11, 3), 'the last day has a day left');
+  t.eq(DATA.seasonLeft('halloween', new Date(2026, 10, 3, 18)), day(2026, 11, 4) - new Date(2026, 10, 3, 18).getTime(), 'the hours count down');
+  t.eq(DATA.seasonLeft('halloween', '2026-11-04'), 0, 'nothing left after it');
+  t.eq(DATA.seasonLeft('winter', '2026-12-31'), day(2027, 1, 7) - day(2026, 12, 31), 'winter on New Year\'s Eve ends on 7 January');
+  t.eq(DATA.seasonLeft('winter', '2026-10-15'), 0, 'not winter in October');
+  const w = DATA.seasonWindow('winter', '2027-01-02');
+  t.eq(w.start, day(2026, 12, 10), 'a January day belongs to the span that began in December');
+  t.eq(w.end, day(2027, 1, 7), '...and ends after 6 January');
+  const nx = DATA.seasonWindow('halloween', '2026-12-01');
+  t.eq(nx.start, day(2027, 10, 1), 'after the span, the window is next year\'s');
+  t.eq(DATA.seasonWindow('nope', '2026-10-01'), null, 'an unknown season has none');
+});
+t.test('season: the Claw-o-ween content stays out of every year-round table and pool', () => {
+  const H = DATA.SEASONS.halloween;
+  t.ok(H.items.length >= 6 && H.items.length <= 8, `6 to 8 items (${H.items.length})`);
+  t.eq(H.relics.length, 4, 'four relics');
+  const keys = Object.keys(ITEMS), rkeys = Object.keys(RELICS), ekeys = Object.keys(ENEMIES);
+  const pooled = new Set(DATA.pool().concat(DATA.pool('c', null, ['small'])));
+  for (const id of H.items) {
+    const d = ITEMS[id], W = 'season item ' + id;
+    t.ok(!!d && d.id === id && d.season === 'halloween', W + ': looked up by id');
+    t.ok(keys.indexOf(id) < 0 && !pooled.has(id), W + ': never listed or pooled year-round');
+    t.ok(ITEM_ART.includes(d.art) && ['c', 'u', 'r'].includes(d.rarity) && d.cost >= 10, W + ': art, rarity, cost');
+    t.ok(typeof d.name === 'string' && d.name.length > 2 && d.text.length > 10, W + ': a name and a line');
+    if (d.bag) { t.ok(d.bag.every(x => ITEMS[x] && ITEMS[x].tags.includes('small')), W + ': a bag of small fillers'); continue; }
+    checkFx(d.fx, W);
+    checkFx(d.plus.fx, W + '+');
+    checkShape(d.shape, W, d.tags.includes('small'));
+    t.ok(JSON.stringify(d.plus.fx) !== JSON.stringify(d.fx), W + ': the plus differs');
+    for (const plus of [false, true]) t.ok(!/[{}]/.test(DATA.itemText(d, plus)), W + ': text fully substituted');
+  }
+  t.ok(H.items.some(id => ITEMS[id].art === 'bomb'), 'a Pumpkin Bomb (a real bomb: its fuse lights)');
+  t.ok(H.items.some(id => ITEMS[id].tags.includes('magic') && ITEMS[id].tags.includes('light')), 'a Haunted Teddy that floats like magic');
+  t.ok(H.items.some(id => ITEMS[id].sea && ITEMS[id].sea.sweep), 'a Witch Broom that sweeps the pile');
+  t.ok(ITEMS.candy_corn.sea.candy === 1 && ITEMS.bag_candycorn.bag.length === 3, 'Candy Corn pays candy, its bag holds three');
+  for (let s = 1; s <= 200; s++) {
+    const got = DATA.rewardItems(U.rng(s), 1 + (s % 3), ['knight', 'alchemist', 'rogue'][s % 3], 3, { bin: [], relics: [] });
+    if (got.some(id => ITEMS[id] && ITEMS[id].season)) { t.ok(false, 'a year-round reward held a seasonal item (seed ' + s + ')'); break; }
+  }
+  for (const id of H.relics) {
+    const r = RELICS[id], W = 'season relic ' + id;
+    t.ok(!!r && r.season === 'halloween' && rkeys.indexOf(id) < 0 && DATA.relicPool().indexOf(id) < 0, W + ': looked up, never pooled year-round');
+    t.ok(['c', 'u', 'r'].includes(r.rarity) && Array.from(r.icon).length <= 2 && r.kw.every(k => ARCHS.includes(k)) && r.hooks, W + ': rarity, icon, archetypes, hooks');
+    for (const k in r.hooks) t.ok(HOOKS.includes(k), W + ': hook ' + k);
+    const F = mockF();
+    let threw = null;
+    try { runHooks(r, F); } catch (e) { threw = e; }
+    t.ok(!threw, W + ': hooks survive without COMBAT');
+  }
+  // costumed monsters and the Pumpkin King
+  for (const [base, id] of Object.entries(H.costumes)) {
+    const e = ENEMIES[id], b = ENEMIES[base], W = 'costume ' + id;
+    t.ok(!!e && ekeys.indexOf(id) < 0 && e.season === 'halloween', W + ': looked up, never listed');
+    t.ok(e.act === b.act && e.tier === b.tier && e.art === b.art && e.base === base && !!e.costume, W + ': the base monster in a costume');
+    t.ok(Math.abs((e.hp[0] + e.hp[1]) - (b.hp[0] + b.hp[1])) <= 4, W + ': about the base monster\'s hp');
+    t.ok(e.moves.every(m => MOVES.includes(m.k) && m.txt && m.name) && JSON.stringify(e.moves) !== JSON.stringify(b.moves), W + ': its own twist');
+    t.eq(DATA.seaCostumeOf('halloween', base), id, W + ': seaCostumeOf');
+    t.eq(DATA.seaCostumeOf('winter', base), null, W + ': not in winter');
+  }
+  t.ok(ENEMIES.slime_ghost.status.dodge === 1, 'the ghost sheet lets the first hit through');
+  const K = ENEMIES.pumpking;
+  t.ok(K && K.tier === 'elite' && K.act === 1 && K.look === 'pumpking' && ENEMY_ART.includes(K.art) && K.taunt && K.enrage && ekeys.indexOf('pumpking') < 0, 'the Pumpkin King: an act 1 elite with its own look, a taunt, a phase two');
+  t.ok(K.moves.some(m => m.k === 'bomb'), 'he lobs lit pumpkins into the bin');
+  for (const act of [1, 2, 3]) for (const tier of ['normal', 'elite', 'boss']) t.ok(ENCOUNTERS[act][tier].every(enc => enc.every(id => !ENEMIES[id].season)), `act ${act} ${tier}: no seasonal monster in the year-round encounters`);
+});
+t.test('season: the event cosmetics, the wallet, the currency, the doors, the sticker', () => {
+  const ids = DATA.SEA_COSMETIC_IDS, C = DATA.COSMETICS;
+  t.ok(ids.length === 9, 'nine event cosmetics (seven Claw-o-ween, two winter)');
+  for (const id of ids) {
+    const c = C[id], W = 'event cosmetic ' + id;
+    t.ok(!!c && c.id === id && DATA.SEASONS[c.season] && c.price > 0, W + ': a season and a price');
+    t.ok(DATA.COSMETIC_IDS.indexOf(id) < 0 && Object.keys(C).indexOf(id) < 0 && DATA.vaultPool().indexOf(id) < 0 && DATA.vaultList(c.cat).indexOf(id) < 0, W + ': never on a shelf, in a capsule or listed');
+    t.eq(DATA.vaultHow(id), 'event', W + ': bought at the event counter');
+    t.eq(DATA.vaultPrice(id), 0, W + ': never for tickets');
+    t.ok(c.name.length >= 3 && c.name.length <= 20 && c.text.length >= 12 && c.text.length <= 80 && c.look, W + ': fits a card');
+    t.ok(JSON.stringify(c).indexOf(String.fromCharCode(0x2014)) < 0, W + ': no em dashes');
+  }
+  for (const ch of CHARS) t.eq(DATA.seaCosmetics('halloween', 'outfit', ch).length, 1, `a witch hat for ${ch}`);
+  t.ok(['skin', 'paint', 'trail'].every(cat => DATA.seaCosmetics('halloween', cat).length === 1), 'a Haunted Mansion cabinet, a pumpkin paint, a bat trail');
+  t.eq(DATA.seaCosmetics('winter').length, 2, 'winter: two cosmetics');
+  t.eq(C.skin_sea_mansion.look.fp, 'sea_pumpkins', 'the mansion frame has its own pattern');
+  // the wallet
+  const f = DATA.seaFix(null);
+  t.ok(f.preview === '' && f.knocks === 0 && JSON.stringify(f.wallet) === '{}', 'a fresh profile: no preview, an empty wallet');
+  const g = DATA.seaFix({ preview: 'winter', wallet: { candy: 12.7, flakes: -3, x: 'junk' }, knocks: '4', king: {} });
+  t.ok(g.preview === 'winter' && g.wallet.candy === 12 && g.wallet.flakes === 0 && g.wallet.x === 0 && g.knocks === 4 && g.king === 0, 'numbers repaired, the preview kept');
+  t.eq(DATA.seaFix({ preview: 'easter' }).preview, '', 'an unknown preview is dropped');
+  t.eq(DATA.seaFix({ preview: 'off' }).preview, 'off', 'off is kept');
+  // the currency a won fight drops
+  const E = DATA.SEA_K.earn;
+  t.eq(DATA.seaEarn('normal', 0, false), E.normal, 'a normal fight');
+  t.eq(DATA.seaEarn('elite', 0, true), E.elite + E.king, 'the Pumpkin King');
+  t.eq(DATA.seaEarn('normal', 2, false), E.normal + 2 * E.costume, 'two costumes');
+  t.ok(DATA.seaEarn('boss', 0, false) > DATA.seaEarn('elite', 0, false) && DATA.seaEarn('elite', 0, false) > DATA.seaEarn('normal', 0, false), 'bosses drop the most');
+  // the doors
+  const a = DATA.seaTreatRoll(U.rng(7), 1, { relics: ['ghost_sheet'] }), b = DATA.seaTreatRoll(U.rng(7), 1, { relics: ['ghost_sheet'] });
+  t.eq(JSON.stringify(a), JSON.stringify(b), 'a door rolls the same for the same rng');
+  const cnt = {}, rng = U.rng(99);
+  let bad = 0;
+  for (let i = 0; i < 4000; i++) {
+    const o = DATA.seaTreatRoll(rng, 2, { relics: ['jack_o_lantern'] });
+    cnt[o.kind] = (cnt[o.kind] || 0) + 1; cnt[o.k] = (cnt[o.k] || 0) + 1;
+    if (o.kind === 'treat' && !(o.candy >= E.treat[0])) bad++;
+    if (o.kind === 'trick' && o.candy) bad++;
+    if (o.k === 'relic' && o.id !== 'jack_o_lantern') bad++;
+    if (o.k === 'item' && !(ITEMS[o.id] && ITEMS[o.id].season)) bad++;
+    if (o.k === 'curse' && !(ITEMS[o.id] && ITEMS[o.id].rarity === 'junk')) bad++;
+    if (o.k === 'gold' && !(o.gold > 0)) bad++;
+  }
+  t.eq(bad, 0, 'every door pays what it says (treats carry candy, tricks none)');
+  t.near(cnt.treat / 4000, 0.7, 0.04, `about 70% treats (${Math.round(cnt.treat / 40)}%)`);
+  t.ok(cnt.fight > 0 && cnt.curse > 0 && cnt.capsule > 0 && cnt.relic > 0 && cnt.item > 0 && cnt.gold > 0 && cnt.candy > 0, 'every outcome turns up');
+  let rel = 0;
+  for (let i = 0; i < 500; i++) if (DATA.seaTreatRoll(rng, 1, { relics: [] }).k === 'relic') rel++;
+  t.eq(rel, 0, 'no relic treat when none is left to win');
+  // one sticker
+  const A = DATA.ACHIEVEMENTS.trick_or_treat;
+  t.ok(A && DATA.ACH_IDS.includes('trick_or_treat') && A.goal === 5, 'Trick or Treat! is on the board with a goal of 5');
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { sea: { knocks: 5 } } }, {}).includes('trick_or_treat'), 'five doors earn it');
+  t.ok(!DATA.achCheck({ kind: 'meta', meta: { sea: { knocks: 4 } } }, {}).includes('trick_or_treat'), 'four do not');
+  t.ok(JSON.stringify(DATA.SEASONS).indexOf(String.fromCharCode(0x2014)) < 0, 'no em dashes in the seasons');
 });
 
 t.done();

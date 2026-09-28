@@ -682,4 +682,80 @@ T.test('round 6 sets: the set, boon and Compactor voices play, no-op cold, and a
   T.ok(AUDIO.sfx('cmpCrunch') && !AUDIO.sfx('cmpCrunch'), 'one crunch at a time');
 });
 
+T.test('round 7 evolve: the evolution and pet synergy voices play, no-op cold, and are throttled', () => {
+  const EVO_NAMES = ['evoRise', 'evoBurst', 'petSyn'];
+  const { AUDIO, fake } = bootFake();
+  for (const n of EVO_NAMES) { T.ok(AUDIO.names.includes(n), 'sfx name listed: ' + n); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of EVO_NAMES) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    let r = false;
+    try { r = AUDIO.sfx(n, { pitch: 1.2 }); } catch (e) { T.ok(false, n + ' threw ' + e); }
+    T.ok(r && fake.count.total - before >= 2, 'evolve sfx ' + n + ' plays');
+  }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('evoBurst') && !AUDIO.sfx('evoBurst'), 'one evolution burst at a time');
+});
+
+// SEASON (round 7): the seasonal tunes and the trick-or-treat door's sounds.
+T.test('season: the door and candy sounds play after init and no-op before', () => {
+  const { AUDIO, fake } = bootFake();
+  const SEA_SFX = ['knock', 'creak', 'treat', 'boo', 'cackle', 'candy'];
+  for (const n of SEA_SFX) { T.ok(AUDIO.names.includes(n), n + ' is a known sound'); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of SEA_SFX) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    T.ok(AUDIO.sfx(n) && fake.count.total - before >= 2, n + ' plays');
+  }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('creak') && !AUDIO.sfx('creak'), 'one creak at a time');
+});
+T.test('season: Claw-o-ween and winter have their own title and map tunes; the base tunes are untouched', () => {
+  const { AUDIO } = bootFake();
+  const base = JSON.stringify(AUDIO._song('title').steps), baseMap = JSON.stringify(AUDIO._song('map').steps);
+  const ht = AUDIO._seaSong('title', 'halloween'), hm = AUDIO._seaSong('map', 'halloween'), wt = AUDIO._seaSong('title', 'winter'), wm = AUDIO._seaSong('map', 'winter');
+  T.ok(ht.cfg.seaKey === 'halloween' && ht.cfg.scale === 'harm' && ht.bpm !== AUDIO._song('title').bpm, 'the spooky title: harmonic minor, its own tempo');
+  const has = (s, v) => s.steps.some(st => st.some(e => e.v === v));
+  T.ok(has(ht, 'organ') && has(hm, 'organ') && has(ht, 'bell'), 'an organ pad and a tolling bell');
+  T.ok(has(wt, 'sleigh') && has(wm, 'sleigh') && wm.cfg.scale === 'major', 'sleigh bells in a major key for winter');
+  T.ok(!has(AUDIO._song('title'), 'organ') && !has(AUDIO._song('map'), 'sleigh'), 'the base tunes have neither');
+  T.eq(JSON.stringify(AUDIO._seaSong('title', 'halloween').steps), JSON.stringify(ht.steps), 'deterministic');
+  T.eq(JSON.stringify(AUDIO._song('title').steps), base, 'the base title is unchanged after');
+  T.eq(JSON.stringify(AUDIO._song('map').steps), baseMap, 'and the base map');
+  T.eq(AUDIO._seaSong('title', null), AUDIO._song('title'), 'no season plays the base tune');
+  T.eq(AUDIO._seaSong('fight', 'halloween'), AUDIO._song('fight'), 'fights keep their own tunes (and layers)');
+  T.ok(AUDIO.SEA_CFG.halloween && AUDIO.SEA_CFG.winter && AUDIO.SEA_NAMES.halloween, 'the configs and their names are exposed');
+});
+T.test('season: setSeason crossfades a live title or map tune, before init it is remembered', () => {
+  const { AUDIO, fake } = bootFake();
+  T.eq(AUDIO.setSeason('halloween'), 'halloween', 'remembered before init');
+  T.eq(AUDIO.setSeason('easter'), null, 'an unknown season is none');
+  T.eq(AUDIO.season, null, 'none');
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  const run = (secs) => { for (let i = 0; i < secs / 0.025; i++) { ac.currentTime += 0.025; AUDIO._tick(); } };
+  AUDIO.music('title');
+  run(0.5);
+  T.eq(AUDIO._live().length, 1, 'the base title plays');
+  AUDIO.setSeason('halloween');
+  let L = AUDIO._live();
+  T.ok(L.length === 2 && L.filter(x => x.fading).length === 1, 'the season crossfades the title into its tune');
+  run(2);
+  T.eq(AUDIO._live().length, 1, 'the old one drops after the fade');
+  AUDIO.setSeason('halloween');
+  T.eq(AUDIO._live().length, 1, 'the same season again does nothing');
+  AUDIO.music('fight');
+  run(1.5);
+  const n = AUDIO._live().filter(x => !x.fading).length;
+  AUDIO.setSeason(null);
+  T.eq(AUDIO._live().filter(x => !x.fading).length, n, 'a fight is not restarted by the season');
+  AUDIO.music('map');
+  run(0.3);
+  T.ok(AUDIO._live().some(x => x.mode === 'map' && !x.fading), 'the map plays');
+});
+
 T.done();

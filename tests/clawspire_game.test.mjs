@@ -5771,7 +5771,7 @@ h.test('secret: the hidden door opens only with three keys, reloads, and either 
   h.eq(G.screen, 'map', 'step inside: the Back Room\'s map');
   h.ok(G.run.map.biome === 'machine' && G.run.sec.room && G.run.sec.door === 'open', 'the machine biome, in the room');
   h.ok(G.run.hp >= hp0, 'patched up at the door');
-  h.eq(T._nodes.actTxt.textContent, 'Back Rm', 'the HUD says the Back Room');
+  h.eq(T._nodes.actTxt.textContent, '4 \u{1F511}', 'the HUD says Act 4 with a key, like the map head (round 7: was "Back Rm")');
   h.ok(secWalk(T._nodes.mapHead).some(n => n.tagName === 'H2' && n.textContent === 'Act 4'), 'the map head: a short "Act 4" that never truncates');
   h.ok(G.meta.ach.back_room && G.meta.ach.keymaster, 'the Back Room and Keymaster stickers');
   h.eq(T.AUDIO.mode, 'backroom', 'its own music');
@@ -5965,5 +5965,791 @@ h.test('secret: old saves and profiles load, and the Prizedex hides the boss unt
   const got = secWalk(T4._nodes.collectionBody).find(n => /dexc/.test(n.className || '') && secWalk(n).some(x => x.textContent === 'The Machine'));
   h.ok(got && /got/.test(got.className), 'met, it shows its name');
 });
+
+// ---------------------------------------------------------------- EVOLVE (round 7): item evolutions and pet synergies
+// DESIGN.md "Evolutions and pet synergies (round 7)".
+const EVO_META = JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } });
+function evoBoot(store) { return boot({ store: Object.assign({ clawspire_meta: EVO_META }, store || {}) }); }
+// A knight fight with the Trophy Rack and an upgraded Rusty Sword; returns {sw: the run's instance}.
+function evoFight(G, seed, o) {
+  o = o || {};
+  G.newRun('knight', seed || 7070);
+  if (o.relic !== false) G.run.relics.push(o.relic || 'trophy_rack');
+  const sw = G.run.bin.find(i => i.id === 'rusty_sword');
+  sw.plus = o.plus !== false;
+  G.startFight(o.enc || ['rat'], 'normal', { seed: 4040 });
+  for (let i = 0; i < 40; i++) G.update(DT);
+  return { sw };
+}
+const evoBody = (G, uid) => G.fs.items.find(b => b.data.inst && b.data.inst.uid === uid) || null;
+
+h.test('evolve: a delivered Rusty Sword+ with the Trophy Rack evolves, with the ceremony, and plays', () => {
+  const T = evoBoot(), G = T.GAME, D = T.DATA;
+  const { sw } = evoFight(G, 7071);
+  const b = evoBody(G, sw.uid);
+  h.ok(b, 'the sword is in the cabinet');
+  const hp0 = G.fight.enemies[0].hp;
+  G.playDelivered([b]);
+  const E = G.evo.fs;
+  h.ok(E && E.r.to === 'excalibur_claw', 'the ceremony starts on delivery');
+  h.eq(sw.id, 'excalibur_claw', "the run's bin already holds the evolved item");
+  h.eq(sw.plus, false, 'an evolved item has no plus');
+  h.ok(G.fight.evos.includes('evo:excalibur_claw'), 'its aura is live in the fight');
+  h.ok(G.meta.evo.seen.excalibur_claw && G.meta.evo.made === 1 && G.meta.evo.new.excalibur_claw, 'the book remembers it');
+  h.ok(G.meta.ach.evolved, 'the It Evolved! sticker');
+  h.eq(G.run.evoN, 1, 'the run counts it');
+  // the fight holds its breath: nothing plays while the item evolves
+  const q0 = G.state().queue;
+  for (let i = 0; i < 30; i++) { G.update(DT); G.draw(); }
+  h.eq(G.fight.enemies[0].hp, hp0, 'nothing resolves during the ceremony');
+  h.ok(G.state().queue >= q0 && G.evo.fs && !G.evo.fs.burst, 'still charging');
+  // a tap jumps to the reveal, the next one (after a beat) ends it
+  G.tap(270, 600);
+  h.ok(G.evo.fs && G.evo.fs.burst, 'a tap: the new form bursts in');
+  G.tap(270, 600);
+  h.ok(G.evo.fs, 'a second tap right away does not skip the reveal');
+  for (let i = 0; i < 25; i++) { G.update(DT); G.draw(); }
+  G.tap(270, 600);
+  h.eq(G.evo.fs, null, 'the next tap ends it');
+  h.ok(G.fs.throws.some(t => t.inst === G.fight.bin.concat(G.fight.used).find(x => x.uid === sw.uid) || t.def.id === 'excalibur_claw'), 'the evolved item flies to its target');
+  settle(G, 6);
+  h.ok(hp0 - G.fight.enemies[0].hp >= 18, `Excalibur Claw hit for 18+ (${hp0 - G.fight.enemies[0].hp})`);
+  h.eq(G.fight.player.status.str, 1, 'and gave 1 Strength');
+  // left alone the ceremony ends by itself
+  const T2 = evoBoot(), G2 = T2.GAME;
+  const s2 = evoFight(G2, 7072).sw;
+  G2.playDelivered([evoBody(G2, s2.uid)]);
+  let n = 0;
+  while (G2.evo.fs && n++ < 400) { G2.update(DT); if (n % 10 === 0) G2.draw(); }
+  h.ok(!G2.evo.fs && n < 400, `it ends on its own (${(n * DT).toFixed(2)} s)`);
+  h.ok(n * DT <= G2.evo.EVO.dur + 0.1, 'within its duration');
+});
+
+h.test('evolve: only the right item, plus and relic; a golden prize plus does not count', () => {
+  let T = evoBoot(), G = T.GAME;
+  let { sw } = evoFight(G, 7073, { relic: 'festering_jar' });
+  G.playDelivered([evoBody(G, sw.uid)]);
+  h.eq(G.evo.fs, null, 'the wrong relic: no ceremony');
+  h.eq(sw.id, 'rusty_sword', 'and no evolution');
+  h.ok(G.fs.throws.length === 1, 'the item is thrown as ever');
+  T = evoBoot(); G = T.GAME;
+  ({ sw } = evoFight(G, 7074, { plus: false }));
+  const fi = G.fight.bin.find(i => i.uid === sw.uid);
+  fi.plus = true;   // a golden prize's fight-only plus
+  G.playDelivered([evoBody(G, sw.uid)]);
+  h.eq(G.evo.fs, null, "the run's copy is not upgraded: no evolution");
+  h.eq(sw.id, 'rusty_sword', 'the run keeps its Rusty Sword');
+  T = evoBoot(); G = T.GAME;
+  ({ sw } = evoFight(G, 7075, { relic: false }));
+  G.playDelivered([evoBody(G, sw.uid)]);
+  h.ok(!G.evo.fs && sw.id === 'rusty_sword' && !(G.meta.evo && G.meta.evo.made), 'no relic: nothing');
+});
+
+h.test('evolve: two in one grab queue up; a save mid ceremony reloads the fight with the evolved item', () => {
+  const T = evoBoot(), G = T.GAME;
+  const { sw } = evoFight(G, 7076);
+  // a second recipe in the same grab
+  G.run.relics.push('money_bags');
+  G.run.bin.push({ uid: 'evoC1', id: 'lucky_coin', plus: true });
+  G.startFight(['rat'], 'normal', { seed: 4141 });
+  for (let i = 0; i < 60; i++) G.update(DT);
+  const bs = [evoBody(G, sw.uid), evoBody(G, 'evoC1')];
+  h.ok(bs[0] && bs[1], 'both are in the cabinet');
+  G.playDelivered(bs);
+  h.ok(G.evo.fs && G.evo.queue.length === 1, 'the second waits for the first');
+  h.ok(G.run.bin.some(i => i.id === 'midas_coin') && G.run.bin.some(i => i.id === 'excalibur_claw'), 'both evolved in the run at once');
+  // save now (mid ceremony) and reload
+  G.save();
+  const T2 = boot({ store: Object.assign({}, T._store) }), G2 = T2.GAME;
+  h.ok(G2.load(), 'the save loads');
+  h.eq(G2.screen, 'fight', 'back in the fight (from its opening bell)');
+  h.ok(G2.run.bin.filter(i => i.id === 'excalibur_claw').length === 1 && !G2.run.bin.some(i => i.id === 'rusty_sword' && i.plus), 'the run has the evolved item, not the old one');
+  h.ok(G2.fight.bin.concat(G2.fight.used).some(i => i.id === 'excalibur_claw') && G2.fight.evos.includes('evo:excalibur_claw'), 'the fight starts with it and its aura');
+  h.eq(G2.evo.fs, null, 'no ceremony on the reload');
+  h.eq(G2.meta.evo.made, 2, 'the book kept both and counts nothing twice');
+  for (let i = 0; i < 60; i++) G2.update(DT);
+  const b2 = G2.fs.items.find(b => b.data.inst.id === 'excalibur_claw');
+  if (b2) G2.playDelivered([b2]);
+  h.eq(G2.evo.fs, null, 'delivering the evolved item never evolves it again');
+  // the first game plays both ceremonies through
+  let n = 0;
+  while ((G.evo.fs || G.evo.queue.length) && n++ < 900) G.update(DT);
+  h.ok(!G.evo.fs && n < 900, 'both ceremonies play, one after the other');
+});
+
+h.test('evolve: hints after discovery, the EVOLVED badge, the forge and the rest', () => {
+  const T = evoBoot(), G = T.GAME, D = T.DATA, doc = T._document;
+  G.newRun('knight', 7077);
+  const card = (id, plus) => { const el = doc.createElement('div'); G.evo.cardTag(el, D.ITEMS[id], plus); return secWalk(el).map(x => (x.className || '') + '|' + (x.textContent || '')); };
+  h.ok(!card('rusty_sword', false).some(s => /evoHint/.test(s)), 'no hint before the recipe is known');
+  G.meta.evo.seen.excalibur_claw = 1;
+  const hint = card('rusty_sword', false).find(s => /evoHint/.test(s));
+  h.ok(hint && /Evolves with: .*Trophy Rack/.test(hint), `the hint names the relic once seen [${hint}]`);
+  G.run.relics.push('trophy_rack');
+  h.ok(/ready!/.test(card('rusty_sword', true).find(s => /evoHint/.test(s))), 'holding the relic with a plus: ready!');
+  h.ok(card('excalibur_claw', false).some(s => /evoBadge\|EVOLVED/.test(s)) && card('excalibur_claw', false).some(s => /evoAura/.test(s)), 'an evolved card wears the EVOLVED badge and its aura');
+  h.ok(!card('longsword', false).some(s => /evo/.test(s)), 'an item with no recipe has neither');
+  // the forge: upgrading the Rusty Sword completes the recipe, it evolves on the spot
+  G.showForge();
+  const up = G.S.ui.buttons.findIndex(b => b.label === 'Rusty Sword');
+  h.ok(up >= 0, 'the forge offers the Rusty Sword');
+  G.choose(up);
+  h.ok(G.run.bin.some(i => i.id === 'excalibur_claw'), 'the upgrade evolved it');
+  h.ok(G.evo.ui && G.evo.ui.r.to === 'excalibur_claw', 'the overlay ceremony is up');
+  for (let i = 0; i < 120; i++) { G.update(DT); G.draw(); }
+  h.ok(G.evo.ui.burst, 'it bursts on its own');
+  for (let i = 0; i < 240; i++) G.update(DT);
+  h.ok(G.evo.ui, 'and waits on the reveal for a tap');
+  G.evo.uiTap();
+  h.eq(G.evo.ui, null, 'a tap closes it');
+  // a ready plus item gets an EVOLVE card at the forge
+  G.run.bin.push({ uid: 'evoF1', id: 'venom_dart', plus: true });
+  G.run.relics.push('festering_jar');
+  G.showForge();
+  const ev = G.S.ui.buttons.findIndex(b => b.label === 'Venom Dart+');
+  h.ok(ev >= 0 && G.S.ui.buttons[G.S.ui.buttons.length - 1].label === 'Leave', 'an EVOLVE card, Leave still last');
+  G.choose(ev);
+  h.ok(G.run.bin.find(i => i.uid === 'evoF1').id === 'plague_needle', 'picked at the forge: it evolves');
+  G.evo.uiClose();
+  // the rest stop: an Evolve choice only when something is ready
+  G.showRest();
+  h.ok(!G.S.ui.buttons.some(b => b.el && /evoChoice/.test(b.el.className)), 'nothing ready: no Evolve choice');
+  G.run.bin.push({ uid: 'evoR1', id: 'pot_lid', plus: true });
+  G.run.relics.push('castle_walls');
+  G.showRest();
+  const ri = G.S.ui.buttons.findIndex(b => b.el && /evoChoice/.test(b.el.className));
+  h.ok(ri >= 2, 'a ready item: Evolve an item, after the old choices');
+  G.choose(ri);
+  h.eq(G.screen, 'bin', 'it opens the picker');
+  const pi = G.S.ui.buttons.findIndex(b => b.label === 'Pot Lid+' && !b.disabled);
+  h.ok(pi >= 0 && G.S.ui.buttons.filter(b => !b.disabled && b.label !== 'Cancel').length === 1, 'only the ready item can be picked');
+  G.choose(pi);
+  h.ok(G.run.bin.find(i => i.uid === 'evoR1').id === 'tower_aegis' && G.screen === 'map', 'it evolves and the map follows');
+  G.evo.uiClose();
+  // the sharpen and forge lists skip evolved items (they have no plus)
+  G.showForge();
+  h.ok(!G.S.ui.buttons.some(b => /Excalibur|Plague|Tower Aegis/.test(b.label)), 'the forge never offers an evolved item');
+});
+
+h.test('evolve: the Prizedex Evolutions tab, old and junk profiles', () => {
+  const T = evoBoot(), G = T.GAME, D = T.DATA;
+  G.showCollection('evo');
+  h.eq(G.S.dexTab, 'evo', 'the Evolutions tab opens');
+  const body = T._nodes.collectionBody;
+  const cards = secWalk(body).filter(n => /evoc/.test(n.className || ''));
+  h.eq(cards.length, D.EVO_IDS.length, 'a card per recipe');
+  h.ok(cards.every(c => /locked/.test(c.className)) && secWalk(body).some(n => n.textContent === '???'), 'silhouettes and ??? until found');
+  h.ok(G.S.ui.buttons.some(b => b.label === 'Evolve'), 'the tab button');
+  G.meta.evo.seen.nuke_pop = 1; G.meta.evo.new.nuke_pop = 1;
+  G.showCollection('evo');
+  const got = secWalk(T._nodes.collectionBody).filter(n => /evoc/.test(n.className || '') && /got/.test(n.className));
+  h.eq(got.length, 1, 'a found recipe shows');
+  h.ok(secWalk(T._nodes.collectionBody).some(n => n.textContent === 'Nuke Pop'), 'with its name');
+  h.eq(Object.keys(G.meta.evo.new).length, 0, 'NEW! clears once shown');
+  G.showCollection('items');
+  h.eq(G.S.dexTab, 'items', 'the DATA tabs are unchanged');
+  // an old profile has no evo; a junk one is repaired
+  const T2 = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, unlocks: { knight: true } }) } });
+  h.eq(JSON.stringify(T2.GAME.evo.meta()), JSON.stringify({ seen: {}, made: 0, syn: 0, new: {} }), 'an old profile starts an empty book');
+  const T3 = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, evo: { seen: { nuke_pop: 1, junk: 1 }, made: 'x', syn: 4 } }) } });
+  h.eq(JSON.stringify(T3.GAME.meta.evo), JSON.stringify({ seen: { nuke_pop: 1 }, made: 0, syn: 4, new: {} }), 'a junk book is repaired on load');
+  // an old run save without evoN loads and fights
+  const T4 = evoBoot(), G4 = T4.GAME;
+  G4.newRun('knight', 7078);
+  delete G4.run.evoN;
+  G4.save();
+  const G5 = boot({ store: Object.assign({}, T4._store) }).GAME;
+  h.ok(G5.load() && G5.run && !G5.run.evoN, 'an old run loads');
+});
+
+h.test('evolve: pet synergies switch on with the build, fire their procs and badge the tag', () => {
+  const T = evoBoot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 7080);
+  const procOf = (id) => G.fs.queue.some(q => q.ev && q.ev.t === 'proc' && q.ev.src === 'pet' && q.ev.id === 'pet:' + id);
+  // off without the build
+  let P = petFight(G, 'hamster', 0, 801);
+  h.eq(G.evo.syn(), null, 'hamster: off on a plain run');
+  h.ok(/Needs a Swarm relic/.test(G.evo.tapLine(G.pet.of())), 'the tap says what switches it on');
+  G.endFight('win'); G.toMap();
+  // hamster + Beehive: Marble Run
+  G.run.relics.push('beehive');
+  G.run.bin.push({ uid: 'pm1', id: 'prize_marble', plus: false }, { uid: 'pm2', id: 'prize_marble', plus: false });
+  P = petFight(G, 'hamster', 0, 802);
+  h.ok(G.evo.syn() && G.evo.syn().name === 'Marble Run', 'hamster: on with a Swarm relic');
+  h.ok(/\(ON\)/.test(G.evo.tapLine(G.pet.of())), 'the tap says ON');
+  G.draw();
+  const syn0 = G.meta.evo.syn;
+  petUntilFx(G, 3);
+  h.ok(P.log.some(e => e.k === 'syn' && e.syn === 'hamster'), 'hamster: its trick fired the synergy');
+  h.ok(procOf('hamster') || G.meta.evo.syn > syn0, 'a pet proc for the badge');
+  h.ok(G.meta.ach.best_buds, 'the Best Buds sticker');
+  G.endFight('win'); G.toMap();
+  // raccoon + Junkyard King: King's Feast
+  G.run.relics.push('junkyard_king');
+  P = petFight(G, 'raccoon', 0, 804, ['rock']);
+  petUntilFx(G, 3);
+  stepFor(G, 0.5);
+  h.ok(P.log.some(e => e.k === 'syn' && e.syn === 'raccoon') && G.fight.player.status.str >= 1, "raccoon: King's Feast gives Strength");
+  G.endFight('win'); G.toMap();
+  // cat + a Pyro item: it bats the Pyro item and sets ALL on fire
+  G.run.bin.push({ uid: 'tc1', id: 'torch', plus: false });
+  P = petFight(G, 'cat', 0, 806);
+  h.ok(G.evo.syn(), 'cat: on with a Pyro item in the bin');
+  petUntilFx(G, 3);
+  const batted = G.fight.bin.concat(G.fight.used).find(i => i.uid === (P.log.find(e => e.fx && e.k === 'bat') || {}).uid);
+  h.ok(batted && batted.id === 'torch', 'cat: it batted the Pyro item');
+  stepFor(G, 0.6);
+  h.ok(G.fight.enemies.filter(e => e.alive).every(e => (e.status.burn || 0) >= 2), 'cat: Fire Cat gave ALL Burn');
+  G.endFight('win'); G.toMap();
+  // parrot + an Echo relic: Mimic copies what it carries
+  G.run.relics.push('wizard_hat');
+  P = petFight(G, 'parrot', 0, 807);
+  const n0 = G.fight.bin.length;
+  petUntilFx(G, 3);
+  stepFor(G, 0.3);
+  h.ok(G.fight.bin.length === n0 + 1 && G.fight.bin.some(i => i.temp), 'parrot: Mimic copied the item into the bin');
+  G.endFight('win'); G.toMap();
+  // mouse + the Magnet Crane: a second metal item comes along
+  G.run.clawType = 'magnet';
+  P = petFight(G, 'mouse', 0, 808);
+  G.steer(260);
+  petUntilFx(G, 3);
+  h.ok(P.log.some(e => e.k === 'syn' && e.syn === 'mouse'), 'mouse: Double Pull');
+  G.endFight('win'); G.toMap();
+  G.run.clawType = 'classic';
+  // firefly + a Frost relic: the spotlit item carries the mark into COMBAT
+  G.run.relics.push('snow_globe');
+  P = petFight(G, 'firefly', 0, 809);
+  petUntilFx(G, 3);
+  const lit = petBody(G, P.glowUid);
+  h.ok(lit, 'firefly: an item in the spotlight');
+  G.playDelivered([lit]);
+  h.eq(lit.data.inst.spot, 1, 'firefly: Frost Light marks the delivered item');
+  G.endFight('win'); G.toMap();
+  // goose + two High Rollers pieces: two eggs and a Luck
+  G.run.relics.push('dealers_visor', 'lucky_cat');
+  P = petFight(G, 'goose', 0, 810);
+  P.turn = G.fight.turn; P.uses = 1;
+  const gg = G.fight.gain.gold, egg = D.petEgg(1), l0 = G.fight.player.status.luck || 0;
+  G.pet.grab(3);
+  stepFor(G, 1.5);
+  h.eq(G.fight.gain.gold - gg, egg.gold * 2, 'goose: Golden Clutch lays two eggs');
+  h.eq((G.fight.player.status.luck || 0) - l0, 1, 'goose: and a Luck');
+  // the pet combo reads the pet along
+  h.eq(G.fight.petId, 'goose', 'the fight knows the pet along (Nest Egg, Fetch!)');
+  G.endFight('win'); G.toMap();
+  // octopus: on with the Tri-Claw, a second arm on a real lift
+  G.run.clawType = 'tri';
+  petFight(G, 'octopus', 0, 811);
+  h.ok(G.evo.syn() && G.evo.syn().name === 'Two Arms', 'octopus: on with the Tri-Claw');
+  G.draw();
+  G.endFight('win'); G.toMap();
+  let two = 0, clean = 0;
+  for (const seed of [900, 901, 902, 903]) {
+    P = petFight(G, 'octopus', 0, seed);
+    stepFor(G, 1);
+    const xs = G.fs.items.map(b => b.x).sort((a, b) => a - b);
+    G.steer(xs[Math.floor(xs.length / 2)]); stepFor(G, 0.7);
+    G.dropClaw();
+    let seen = false;
+    for (let i = 0; i < 600; i++) { G.update(DT); if (P.hold2) seen = true; }
+    if (seen && P.log.some(e => e.syn === 'octopus')) two++;
+    if (!P.hold2 && !P.hookW2) clean++;
+    G.endFight('win'); G.toMap();
+  }
+  h.ok(two >= 2, `octopus: Two Arms holds a second prize on real lifts (${two} of 4)`);
+  h.eq(clean, 4, 'octopus: and lets go of it every time');
+});
+
+// ---------------------------------------------------------------- QA (round 7): elite telegraphs, safe spots, the Compactor's layout
+{
+  const Q7 = boot();
+  const QG = Q7.GAME, QD = Q7.DATA, QC = Q7.COMBAT, QR = Q7.RENDER;
+  const qaFight = (ids, tier, seed) => {
+    QG.newRun('knight', seed || 707);
+    QG.run.act = 2;
+    QG.startFight(ids, tier);
+    QG.boss.vsSkip(); QG.boss.vsSkip(); stepFor(QG, 0.05);
+    settle(QG, 20);
+    return QG.fight;
+  };
+  // capture an argument RENDER is drawn with
+  const spy = (name, argI) => { const orig = QR[name], got = []; QR[name] = function (...a) { got.push(a[argI]); return orig.apply(this, a); }; return { got, done: () => { QR[name] = orig; } }; };
+  h.test('qa: the Gape: its exact unleash in the bubble a turn ahead, the danger ring and the cabinet sign', () => {
+    const F = qaFight(['ironjaw'], 'elite');
+    const e = F.enemies[0], gape = e.def.moves.find(m => m.k === 'charge');
+    e.intent = gape; e.status.str = 3; F.player.status.vuln = 2;
+    QG.qa.refresh();
+    const q = QG.qa.by[0];
+    h.ok(q && q.k === 'charge' && q.big, 'a charge is a big one');
+    h.eq(q.next, Math.floor((gape.v + 3) * 1.5), `the unleash next turn: (${gape.v} + 3 Strength) x1.5 Vulnerable`);
+    stepFor(QG, 0.6);
+    h.eq(QG.qa.sign, `GAPE NEXT TURN: ${q.next}`, 'the cabinet sign names it with the number, a turn ahead');
+    const bub = spy('intent', 5), sign = spy('bossSign', 3);
+    Q7._resetCounts(); QG.draw(); const rings = Q7._counts.ellipse || 0;
+    bub.done(); sign.done();
+    h.ok(bub.got[0] && bub.got[0].next === q.next, 'the bubble is drawn with the unleash');
+    h.ok(sign.got.includes(`GAPE NEXT TURN: ${q.next}`), 'the sign is drawn on the cabinet');
+    e.intent = { id: 'calm', name: 'Calm', k: 'block', v: 1 }; QG.qa.refresh();
+    Q7._resetCounts(); QG.draw();
+    h.ok(rings >= (Q7._counts.ellipse || 0) + 1, `the danger ring (an ellipse more, two with motion: ${rings} vs ${Q7._counts.ellipse || 0})`);
+    // the unleash: the same number lands, the sign says it is coming
+    e.intent = gape; QG.qa.refresh();
+    e.charged = gape.v; QC.pickIntent(F, e); QG.qa.refresh(); stepFor(QG, 0.3);
+    const u = QG.qa.by[0];
+    h.ok(u.charged && u.total === q.next, `the unleash hits for what was shown (${u.total})`);
+    h.eq(QG.qa.sign, `GAPE: ${u.total} INCOMING`, 'the sign as it lands');
+  });
+  h.test('qa: the HP ghost and the pill: INCOMING, ALL BLOCKED, LETHAL! with the Block that saves you; gone in the enemy turn', () => {
+    const F = qaFight(['ironjaw'], 'elite', 708);
+    const e = F.enemies[0], bite = e.def.moves.find(m => m.k === 'attack');
+    e.intent = bite; e.status = {}; e.affix = []; F.player.status = {};
+    F.player.hp = F.player.maxHp; F.player.block = 0;
+    QG.qa.refresh();
+    const d = QG.qa.QA.dom, T = QG.qa.threat;
+    h.ok(d && T && T.net === bite.v, `the phase takes the bite (${T && T.net})`);
+    const lethal = T.net >= F.player.hp;
+    h.eq(d.main.textContent, lethal ? 'LETHAL!' : 'INCOMING', 'the word');
+    h.eq(d.num.textContent, `-${T.net}`, 'the number');
+    h.eq(d.gh.style.width, (Math.min(F.player.hp, T.net) / F.player.maxHp * 100).toFixed(1) + '%', 'the ghost in the HP bar is the loss');
+    F.player.block = 999; QG.qa.refresh();
+    h.ok(d.main.textContent === 'ALL BLOCKED' && d.num.textContent === '' && d.gh.style.width === '0.0%', 'all of it blocked');
+    F.player.block = 5; F.player.hp = 10; QG.qa.refresh();
+    h.ok(QG.qa.threat.lethal && d.main.textContent === 'LETHAL!' && d.sub.textContent === `need ${bite.v - 5 - 10 + 1} Block`, `lethal, with the Block that would save you: ${d.sub.textContent}`);
+    h.ok(/lethal/.test(d.pill.className), 'the pill turns red');
+    F.player.hp = F.player.maxHp; F.player.block = 0;
+    QG.endTurn(); stepFor(QG, 0.2);
+    h.ok(!QG.qa.threat && !/show/.test(d.pill.className), 'hidden while the enemies act');
+    settle(QG, 20);
+    QG.qa.refresh();
+    h.ok(QG.screen !== 'fight' || QG.fight.phase !== 'player' || QG.qa.threat, 'back on your turn');
+    QG.toMap(); QG.qa.refresh();
+    h.ok(!/show/.test(d.pill.className), 'gone off the fight screen');
+  });
+  h.test('qa: a multi-hit shows its total; bubbles carry the real numbers for every enemy', () => {
+    const F = qaFight(['lodestone', 'rat'], 'elite', 709);
+    const e = F.enemies[0], zap = e.def.moves.find(m => m.k === 'attack' && m.n > 1);
+    e.intent = zap; e.status = {}; e.affix = [];
+    QG.qa.refresh();
+    const q = QG.qa.by[0];
+    h.ok(q.n === zap.n && q.hit === zap.v && q.total === zap.v * zap.n, `${q.hit}x${q.n} = ${q.total}`);
+    const bub = spy('intent', 5);
+    QG.draw(); bub.done();
+    h.ok(bub.got.length === 2 && bub.got[0].total === q.total && bub.got[1] && bub.got[1].k === F.enemies[1].intent.k, 'both bubbles get their numbers');
+    let popped = '';
+    for (let x = 100; x < 260 && !popped; x += 20) { QG.tap(x, 240); const pop = Q7._nodes.pop && Q7._nodes.pop.innerHTML || ''; if (/Hits you for/.test(pop) && /Lodestone/.test(pop)) popped = pop; }
+    h.ok(popped.includes(`Hits you for ${q.total}</b> (${q.hit} x${q.n})`), 'a tap on it says the same in words');
+    // the real draw with every mode of the numbers (no throw)
+    for (const qa of [{ k: 'attack', hit: 9, n: 3, jab: 2, total: 33, big: true }, { k: 'charge', next: 120, big: true }, null]) QR.intent(Q7._ctx, 100, 100, e, 1, qa);
+    h.ok(true, 'drawn');
+  });
+  h.test('qa: safe spots: the first clear, else the least covered; buttons and signs weigh most', () => {
+    const { spot, cands } = QG.qa;
+    const c = cands(250, 60);
+    h.ok(c[0][0] === 540 - 250 - 6 && c[0][1] === 6 && c[1][0] === 6, 'the top strip right, then left');
+    h.eq(JSON.stringify(spot(c, 250, 60, [])), JSON.stringify({ x: 284, y: 6, o: 0, hard: 0 }), 'nothing to dodge: top right');
+    let s = spot(c, 250, 60, [{ x0: 16, y0: 8, x1: 420, y1: 60, w: 3 }]);
+    h.ok(s.o === 0 && s.x === 284 && s.y === 78, `a long title across the top: under it on the right (${s.x},${s.y})`);
+    const walls = c.map(([x, y]) => ({ x0: x, y0: y, x1: x + 250, y1: y + 60, w: 10 }));
+    s = spot(c, 250, 60, walls);
+    h.ok(s.hard > 0, 'every spot on a button: it says so');
+    // every spot on a button but the bottom left, which has only text on it
+    s = spot(c, 250, 60, walls.filter((r, i) => i !== 5 && i !== 6).concat([Object.assign({}, walls[5], { w: 1 })]));
+    h.ok(s.x === c[5][0] && s.y === c[5][1] && s.hard === 0 && s.o > 0, `text over a button: the spot on text wins (${s.x},${s.y})`);
+  });
+  h.test('qa: the discovery toast keeps off the Compactor\'s sign and its buttons; the vault toast off the Endless button', () => {
+    QG.newRun('alchemist', 44);
+    QG.qa.size = (el, tight) => (tight ? { w: 250, h: 56 } : { w: 280, h: 84 });
+    QG.cmp.show({ from: 'rest', pick: [], res: null });
+    // the dock's buttons at the bottom, the grid in the middle (as the browser lays it out)
+    QG.qa.measure = (scr) => (scr === 'compactor' ? [{ x0: 110, y0: 890, x1: 300, y1: 945, w: 10 }, { x0: 316, y0: 890, x1: 420, y1: 945, w: 10 }, { x0: 16, y0: 8, x1: 290, y1: 40, w: 3 }, { x0: 14, y0: 360, x1: 526, y1: 780, w: 1 }] : []);
+    const ids = Object.keys(QD.ITEMS).filter(id => !QG.meta.seen.items[id]).slice(0, 5);
+    for (const id of ids) QG.prog.dexSee('items', id);
+    stepFor(QG, 0.5);
+    const cur = QG.S.mcur;
+    h.ok(cur && cur.k === 'dex' && cur.el, 'five discoveries: one toast');
+    const x = parseFloat(cur.el.style.left), y = parseFloat(cur.el.style.top), w = cur.qaTight ? 250 : 280, hh = cur.qaTight ? 56 : 84;
+    const over = (r) => x < r[2] && x + w > r[0] && y < r[3] && y + hh > r[1];
+    h.ok(QG.qa.signs('compactor').every(r => !over(r)), `off the press's sign at ${x},${y} (${w}x${hh})`);
+    h.ok(cur.qa && cur.qa.hard === 0 && !cur.hold, 'and off the buttons, shown at once');
+    // a plain toast while it is up never lands on it (nor it on the toast)
+    QG.qa.size = (el, tight) => (el === Q7._nodes.toast ? { w: 300, h: 44 } : tight ? { w: 250, h: 56 } : { w: 280, h: 84 });
+    QG.cmp.crush();   // refused with "Feed it three items."
+    const tt = parseFloat(Q7._nodes.toast.style.top), cr = cur.rect;
+    h.ok(/three items/.test(Q7._nodes.toast.textContent) && cr && (tt + 44 <= cr.y0 || tt >= cr.y1), `the toast (top ${tt}) clear of the corner item (${cr && cr.y0}..${cr && cr.y1})`);
+    // the win screen: CASH OUT and KEEP PLAYING: ENDLESS where the plain toast used to sit
+    QG.qa.size = () => ({ w: 420, h: 44 });
+    QG.qa.measure = (scr) => (scr === 'win' ? [{ x0: 16, y0: 320, x1: 524, y1: 366, w: 10 }, { x0: 16, y0: 376, x1: 524, y1: 432, w: 10 }] : []);
+    QG.run.act = 3; QG.showWin();
+    const toastEl = Q7._nodes.toast;
+    const withPrize = QD.ACH_IDS.find(a => QD.vaultForSticker(a).length && !(QG.meta.ach && QG.meta.ach[a]));
+    h.ok(withPrize && QG.prog.achUnlock(withPrize), `a sticker with a Prize Vault prize (${withPrize})`);
+    h.ok(/Prize Vault/.test(toastEl.textContent), `its toast: ${toastEl.textContent}`);
+    const ty = parseFloat(toastEl.style.top);
+    h.ok(Number.isFinite(ty) && (ty + 44 <= 320 || ty >= 432), `the toast sits off both buttons (top ${ty})`);
+    h.ok(ty !== 400, 'not at its old 400');
+    // a screen with every spot on a button: the sticker waits (its clock paused), then shows anyway
+    QG.qa.size = () => ({ w: 250, h: 60 });
+    QG.qa.measure = () => [{ x0: 0, y0: 0, x1: 540, y1: 960, w: 10 }];
+    QG.showStickers();
+    QG.S.mq = []; QG.S.mcur = null;   // an empty lane (the win screen queued its own stickers)
+    QG.prog.achUnlock('high_score');
+    stepFor(QG, 0.3);
+    const st = QG.S.mcur;
+    h.ok(st && st.k === 'ach' && st.hold && st.el.style.visibility === 'hidden', 'no clear spot: the sticker waits hidden');
+    const t0 = st.t;
+    stepFor(QG, 1);
+    h.ok(QG.S.mcur === st && st.t === t0, 'its clock waits too');
+    stepFor(QG, QG.qa.HOLD);
+    h.ok(QG.S.mcur === st && !st.hold && st.el.style.visibility === '', 'after the hold it shows at the least covered spot');
+    stepFor(QG, 3.2);
+    h.ok(QG.S.mcur !== st, 'and peels off on its own clock');
+    // the fight keeps its own corner: no inline spot
+    QG.qa.measure = null; QG.qa.size = null;
+  });
+  h.test('qa: the Compactor on a phone: a smaller press to pick, the chosen items and CRUSH in the dock, the recipe with the result', () => {
+    QG.newRun('knight', 45);
+    const walk = (n, f, out) => { out = out || []; if (!n) return out; if (f(n)) out.push(n); for (const c of n.children || []) walk(c, f, out); return out; };
+    QG.cmp.show({ from: 'rest', pick: [], res: null });
+    const body = Q7._nodes.cmpBody;
+    const cls = body.children.map(c => c.className.split(' ')[0]);
+    h.eq(cls.join(','), 'cmpTop,cmpWin,cmpPanel,cmpDock', 'the title, the press, the bin, the dock');
+    h.ok(/qaKeep/.test(body.children[3].className), 'the dock is kept clear of the corner lane (Continue lands there)');
+    const dock = body.children[3];
+    h.ok(walk(dock, n => /cmpSlotBox/.test(n.className)).length === 3 && walk(dock, n => n.textContent === 'CRUSH').length === 1 && walk(dock, n => n.textContent === 'Back').length === 1, 'the three slots, CRUSH and Back sit in the dock (the thumb zone)');
+    h.eq(QG.qa.cmpPressK(QG.cmp.state), 0.8, 'the press is drawn smaller while you pick');
+    const sc = spy('cmpScene', 1);
+    QG.draw(); sc.done();
+    h.ok(sc.got[0] && sc.got[0].s === 0.8 && Math.abs(sc.got[0].x - 54) < 0.01, 'centred at 0.8');
+    for (const i of QG.run.bin.slice(0, 3)) QG.cmp.pick(i.uid);
+    QG.cmp.crush();
+    h.eq(QG.qa.cmpPressK(QG.cmp.state), 1, 'full size for the crush');
+    const b2 = Q7._nodes.cmpBody;
+    const rec = walk(b2, n => n.className === 'cmpRecipe')[0];
+    h.ok(rec && rec.children.length === 5, 'the recipe: three in, an arrow, one out');
+    h.ok(walk(b2.children[3], n => n.textContent === 'Continue').length === 1, 'Continue in the dock');
+    QG.cmp.leave();
+    h.eq(QG.screen, 'map', 'and back to the map');
+  });
+}
+
+// ---------------------------------------------------------------- SEASON (round 7): seasonal events
+{
+  const bootS = (store) => boot(store ? { store } : undefined);
+  const doorsOf = (G) => Object.values(G.run.map.tiles).filter(t => t.type === 'treat');
+  const candy = (G) => ((G.meta.sea || {}).wallet || {}).candy | 0;
+  h.test('season: headless has no season unless a date, the URL or the preview says so', () => {
+    const A = bootS(), SG = A.GAME;
+    h.eq(SG.season.now(), null, 'no season headless without a date (the wall clock is never read)');
+    h.eq(SG.season.setDate('2026-10-15'), 'halloween', 'a date in October is Claw-o-ween');
+    h.ok(!SG.season.previewing(), 'the calendar, not a preview');
+    h.eq(SG.season.setDate('2026-12-24'), 'winter', 'Christmas Eve is winter');
+    h.eq(SG.season.setDate('2027-01-06'), 'winter', 'the last day of winter');
+    h.eq(SG.season.setDate('2027-01-07'), null, 'and the day after, nothing');
+    h.eq(SG.season.setDate(null), null, 'no date, no season');
+    A._window.location.search = '?season=halloween';
+    h.eq(SG.season.readUrl(), 'halloween', '?season=halloween is read');
+    h.eq(SG.season.now(), 'halloween', '...and turns the season on any day');
+    h.ok(SG.season.previewing(), '...as a preview');
+    SG.season.setDate('2026-12-24');
+    h.eq(SG.season.now(), 'halloween', 'the URL wins over the calendar');
+    A._window.location.search = '?season=off';
+    SG.season.readUrl();
+    h.eq(SG.season.now(), null, '?season=off turns it off, even at Christmas');
+    A._window.location.search = '?season=easter';
+    SG.season.readUrl();
+    h.eq(SG.season.now(), 'winter', 'an unknown ?season= is ignored');
+    A._window.location.search = '';
+    SG.season.readUrl();
+    // the hidden preview: five taps on the logo, a pick saved on the profile
+    SG.season.setDate(null);
+    SG.showTitle();
+    for (let i = 0; i < 4; i++) h.ok(!SG.season.logoTap(), 'tap ' + (i + 1) + ' does nothing yet');
+    h.ok(SG.season.logoTap(), 'the fifth tap opens the Event preview');
+    h.ok(SG.S.seaPickOn && SG.S.ui.buttons.some(b => /Claw-o-ween/.test(b.label)) && SG.S.ui.buttons.some(b => /No event/.test(b.label)), 'the picker lists the seasons, the calendar and no event');
+    h.eq(SG.season.preview('winter'), 'winter', 'pick winter');
+    h.ok(SG.season.previewing() && JSON.parse(A._store.clawspire_meta).sea.preview === 'winter', 'saved on the profile');
+    const B = bootS(A._store);
+    h.eq(B.GAME.season.now(), 'winter', 'the preview survives a reload');
+    h.eq(B.GAME.season.preview(''), null, 'back to the calendar: nothing on a headless day');
+    SG.season.preview('off'); SG.season.setDate('2026-10-15');
+    h.eq(SG.season.now(), null, 'the preview "no event" beats the calendar');
+    SG.season.preview('');
+  });
+  h.test('season: a run started in season keeps it; doors on its maps, none out of season or on an old save', () => {
+    const SG = bootS().GAME, MP = CS.MAP;
+    SG.season.setDate('2026-10-20');
+    for (const seed of [3, 17, 81]) {
+      const run = SG.newRun('knight', seed);
+      h.eq(run.season, 'halloween', `seed ${seed}: the run takes the season`);
+      const doors = doorsOf(SG), M = run.map;
+      h.ok(doors.length >= 3 && doors.length <= 4, `seed ${seed}: ${doors.length} trick-or-treat doors`);
+      h.ok(doors.every(t => t.known && MP.isLand(t) && !t.done && t.content.sea && t.content.sea.seed > 0 && !(t.q === M.start.q && t.r === M.start.r)), `seed ${seed}: known land doors off the start`);
+      h.ok(doors.every(a => doors.every(b => a === b || MP.hexDist(a.q, a.r, b.q, b.r) >= 2)), `seed ${seed}: apart`);
+      h.ok(doors.every(t => !(M.roam || []).some(m => m.q === t.q && m.r === t.r)), `seed ${seed}: never under a roaming monster`);
+      const again = SG.newRun('knight', seed);
+      h.eq(doorsOf(SG).map(t => t.q + ',' + t.r).join(' '), doors.map(t => t.q + ',' + t.r).join(' '), `seed ${seed}: the same doors for the same seed`);
+    }
+    SG.season.setDate('2026-11-20');
+    const plain = SG.newRun('knight', 3);
+    h.ok(plain.season === null && doorsOf(SG).length === 0, 'out of season: no season, no doors');
+    // a run keeps its season after the calendar moves on (the next act's map too)
+    SG.season.setDate('2026-10-31');
+    const run = SG.newRun('rogue', 9);
+    SG.season.setDate('2026-11-10');
+    h.ok(run.season === 'halloween' && SG.season.run() === 'halloween' && SG.season.now() === null, 'a run started on Halloween stays spooky after the event ends');
+    const n0 = doorsOf(SG).length;
+    for (const t of doorsOf(SG)) { t.type = 'empty'; delete t.content.sea; }
+    h.eq(SG.season.newMap(run), n0, 'its next maps still get their doors');
+    // an old save (no season field) plays as ever
+    const old = SG.newRun('knight', 5);
+    delete old.season; delete old.sea;
+    h.eq(SG.season.run(), null, 'a run without a season has none');
+    h.eq(SG.season.newMap(old), 0, 'and gets no doors');
+  });
+  h.test('season: costumes, the Pumpkin King and party hats in season only', () => {
+    const SG = bootS().GAME, D = CS.DATA;
+    SG.season.setDate('2026-10-08');
+    const run = SG.newRun('knight', 12);
+    let cos = 0, plainN = 0, king = 0, hats = 0;
+    for (let f = 0; f < 60; f++) {
+      run.fights = f;
+      const ids = SG.season.enemies(['rat', 'slime', 'goblin'], 'normal', {});
+      cos += ids.filter(x => D.ENEMIES[x].costume).length; plainN += ids.filter(x => !D.ENEMIES[x].costume).length;
+      if (SG.season.enemies(['mimic'], 'elite', {})[0] === 'pumpking') king++;
+    }
+    h.ok(cos > 40 && plainN > 40, `costumes about half the time (${cos} in costume, ${plainN} not)`);
+    h.ok(king > 10 && king < 45, `the Pumpkin King takes some act 1 elite fights (${king} of 60)`);
+    h.eq(SG.season.enemies(['mimic'], 'elite', { then: { tower: {} } }).join(), 'mimic', 'never a tower keeper');
+    h.eq(SG.season.enemies(['rat', 'rat'], 'normal', { seed: 5 }).join(), 'rat,rat', 'a reloaded fight keeps its saved monsters');
+    h.ok(SG.season.enemies(['rat', 'slime'], 'normal', { sea: 'trick' }).every(x => D.ENEMIES[x].costume), 'a trick fight: everyone in costume');
+    run.act = 2;
+    let k2 = 0;
+    for (let f = 0; f < 40; f++) { run.fights = f; if (SG.season.enemies(['ironjaw'], 'elite', {})[0] === 'pumpking') k2++; }
+    h.eq(k2, 0, 'the Pumpkin King keeps to act 1');
+    run.act = 1;
+    // a real fight in costume, with hats on the others
+    for (let s = 0; s < 8 && !hats; s++) { SG.startFight(['bat', 'rat_vamp', 'bat'], 'normal', { seed: 100 + s }); hats = SG.fight.enemies.filter(e => e.def.seaHat).length; SG.S.run.hp = 80; }
+    h.ok(hats > 0, 'some monsters turn up in a party hat');
+    h.ok(SG.fight.enemies[1].def.costume === 'vampire' && !SG.fight.enemies[1].def.seaHat, 'a costumed monster keeps its costume, no hat on top');
+    h.ok(CS.DATA.ENEMIES.bat.seaHat === undefined, 'the hat is on the fight\'s copy, never the data');
+    SG.draw();
+    SG.startFight(['bat', 'bat'], 'normal', { then: { sea: 'trick' } });
+    h.ok(SG.fight.enemies.every(e => e.def.seaHat), 'a trick fight: everyone hatted');
+    // out of season: nothing
+    const B = bootS().GAME;
+    B.season.setDate('2026-11-20');
+    B.newRun('knight', 12);
+    let any = 0;
+    for (let f = 0; f < 30; f++) { B.run.fights = f; any += B.season.enemies(['rat', 'slime', 'goblin'], 'normal', {}).filter(x => x !== 'rat' && x !== 'slime' && x !== 'goblin').length + (B.season.enemies(['mimic'], 'elite', {})[0] !== 'mimic' ? 1 : 0); }
+    h.eq(any, 0, 'out of season: no costume, no Pumpkin King');
+    B.startFight(['bat', 'bat', 'bat'], 'normal');
+    h.ok(B.fight.enemies.every(e => !e.def.seaHat), 'and no hats');
+  });
+  h.test('season: a trick-or-treat door: knock, the door opens, paid once across reloads', () => {
+    const A = bootS(), SG = A.GAME;
+    SG.season.setDate('2026-10-12');
+    SG.newRun('knight', 21);
+    const door = doorsOf(SG)[0];
+    SG.enterTile(door);
+    h.eq(SG.screen, 'sea', 'a door opens the door screen');
+    h.ok(SG.S.ui.buttons.some(b => b.label === 'Knock') && SG.S.ui.buttons.some(b => b.label === 'Leave'), 'Knock and Leave');
+    SG.season.leave();
+    h.ok(SG.screen === 'map' && !door.done && !door.content.sea.out, 'Leave: back to the map, the door still closed');
+    const w0 = candy(SG), k0 = SG.meta.sea.knocks;
+    SG.enterTile(door);
+    const out = SG.season.knock();
+    h.ok(out && (out.kind === 'treat' || out.kind === 'trick') && door.content.sea.out === out && !door.content.sea.paid, 'the knock rolls and saves the outcome');
+    h.eq(SG.meta.sea.knocks, k0 + 1, 'a knock counts on the profile');
+    h.eq(SG.season.knock(), null, 'a second knock does nothing');
+    stepFor(SG, 0.5);
+    h.eq(SG.season.door.ph, 'knock', 'knock, knock...');
+    h.eq(candy(SG), w0, 'nothing paid before the door opens');
+    // a reload with the door half open: the same outcome plays again
+    const B = bootS(A._store), G2 = B.GAME;
+    h.ok(G2.load() && G2.screen === 'sea', 'a reload mid-knock lands on the door');
+    const d2 = doorsOf(G2).find(t => t.q === door.q && t.r === door.r);
+    h.eq(JSON.stringify(d2.content.sea.out), JSON.stringify(out), 'the same outcome');
+    stepFor(G2, 4);
+    h.ok(G2.season.door.ph === 'done' && d2.content.sea.paid && d2.done, 'the door opens and it is paid');
+    const paid = candy(G2);
+    h.eq(paid, w0 + (out.candy | 0), 'the candy paid exactly once');
+    h.ok(d2.content.sea.lines.length >= 1, 'the result card has its lines');
+    G2.save();
+    const C3 = bootS(B._store).GAME;
+    h.ok(C3.load() && C3.screen === 'sea' && C3.season.door.ph === 'done', 'a reload after it shows the result');
+    stepFor(C3, 2);
+    h.eq(candy(C3), paid, 'and never pays twice');
+    C3.season.cont();
+    h.ok(C3.screen === 'map' || C3.screen === 'fight' || C3.screen === 'capsule', 'Continue moves on');
+    C3.draw();
+  });
+  h.test('season: every kind of door outcome pays what it says', () => {
+    const SG = bootS().GAME;
+    SG.season.setDate('2026-10-12');
+    const kinds = { candy: { kind: 'treat', k: 'candy', candy: 16 }, gold: { kind: 'treat', k: 'gold', candy: 9, gold: 30 },
+      capsule: { kind: 'treat', k: 'capsule', candy: 9, tier: 'u' }, item: { kind: 'treat', k: 'item', candy: 9, id: 'witch_broom' },
+      relic: { kind: 'treat', k: 'relic', candy: 9, id: 'ghost_sheet' }, curse: { kind: 'trick', k: 'curse', candy: 0, id: 'slag' },
+      fight: { kind: 'trick', k: 'fight', candy: 0, enc: ['rat_vamp', 'slime_ghost'] } };
+    for (const k in kinds) {
+      const run = SG.newRun('knight', 30);
+      const t = doorsOf(SG)[0];
+      t.content.sea.out = kinds[k];
+      const g0 = run.gold, b0 = run.bin.length, c0 = candy(SG), caps0 = (run.caps || []).length;
+      SG.enterTile(t);
+      SG.season.hurry();
+      h.ok(t.content.sea.paid && t.done, k + ': paid at the reveal');
+      h.eq(candy(SG), c0 + kinds[k].candy, k + ': the candy');
+      if (k === 'gold') h.eq(run.gold, g0 + 30, 'gold: the gold');
+      if (k === 'capsule') h.eq(run.caps.length, caps0 + 1, 'capsule: a capsule in the bank');
+      if (k === 'item') h.ok(run.bin.length === b0 + 1 && run.bin[run.bin.length - 1].id === 'witch_broom', 'item: in the bin');
+      if (k === 'relic') h.ok(run.relics.includes('ghost_sheet'), 'relic: gained');
+      if (k === 'curse') h.ok(run.bin.length === b0 + 1 && run.bin[run.bin.length - 1].id === 'slag', 'curse: a slag in the bin for good');
+      SG.season.hurry();
+      if (k === 'fight') {
+        h.ok(SG.S.ui.buttons.some(b => b.label === 'Fight!'), 'fight: a Fight! button');
+        SG.season.cont();
+        h.ok(SG.screen === 'fight' && SG.fight.enemies.map(e => e.id).join() === 'rat_vamp,slime_ghost' && t.content.sea.fought, 'fight: the costumed fight starts, once');
+        h.ok(SG.fight.enemies.every(e => e.def.costume), 'fight: everyone in costume');
+      } else {
+        SG.season.cont();
+        h.ok(SG.screen === (k === 'capsule' ? 'capsule' : 'map'), k + ': continue goes on (' + SG.screen + ')');
+      }
+    }
+  });
+  h.test('season: candy for won fights and landed Candy Corn, in season only; the reward and relic pools', () => {
+    const SG = bootS().GAME, D = CS.DATA;
+    SG.season.setDate('2026-10-25');
+    SG.newRun('knight', 40);
+    let c0 = candy(SG);
+    SG.startFight(['rat_vamp', 'rat'], 'normal');
+    const nc = SG.fight.enemies.filter(e => e.def.costume).length;
+    h.ok(nc >= 1, 'the fight has its costumes (' + nc + ')');
+    SG.endFight('win');
+    h.eq(candy(SG), c0 + D.seaEarn('normal', nc, false), 'a won fight: normal + a candy bonus per costume');
+    h.eq(SG.run.sea.cur, D.seaEarn('normal', nc, false), 'the run keeps its tally');
+    c0 = candy(SG);
+    SG.startFight(['pumpking'], 'elite');
+    SG.endFight('win');
+    h.eq(candy(SG), c0 + D.seaEarn('elite', 0, true), 'the Pumpkin King drops the most');
+    h.ok(SG.run.relics.some(r => D.RELICS[r] && D.RELICS[r].season), 'and one of his relics');
+    SG.startFight(['rat'], 'normal');
+    c0 = candy(SG);
+    SG.season.event({ t: 'play', def: D.ITEMS.candy_corn, inst: { uid: 'x', id: 'candy_corn' } });
+    h.eq(candy(SG), c0 + 1, 'a Candy Corn landed is a candy');
+    // the broom sweeps the floor toward the chute
+    stepFor(SG, 3);
+    const low = SG.fs.items.filter(b => b.y > 200 && !SG.cabinet.inChute(b));
+    low.forEach(b => { b.vx = 0; });
+    const n = SG.season.sweep();
+    h.ok(n > 0 && low.every(b => b.vx > 0), `the Witch Broom sweeps ${n} items toward the chute`);
+    SG.endFight('lose');
+    // rewards and relic pools
+    SG.newRun('knight', 41);
+    let hits = 0;
+    for (let i = 0; i < 60; i++) { SG.run.nonce = i; if (SG.season.rewardItems(['rusty_sword', 'pot_lid', 'shiv']).some(x => D.ITEMS[x].season)) hits++; }
+    h.ok(hits > 8 && hits < 40, `a seasonal item on about a third of reward screens (${hits} of 60)`);
+    h.ok(D.SEASONS.halloween.relics.every(r => SG.season.relicAdd([], null, []).includes(r)), 'the season\'s relics join the relic pools');
+    h.ok(SG.season.relicAdd([], ['c'], []).every(r => D.RELICS[r].rarity === 'c'), '...by rarity');
+    // out of season: nothing
+    SG.season.setDate('2026-11-25');
+    SG.newRun('knight', 42);
+    c0 = candy(SG);
+    SG.startFight(['rat'], 'normal'); SG.endFight('win');
+    h.eq(candy(SG), c0, 'out of season a fight drops no candy');
+    let none = 0;
+    for (let i = 0; i < 40; i++) { SG.run.nonce = i; none += SG.season.rewardItems(['rusty_sword', 'pot_lid', 'shiv']).filter(x => D.ITEMS[x].season).length; }
+    h.eq(none, 0, 'no seasonal items in rewards');
+    h.eq(SG.season.relicAdd([], null, []).length, 0, 'no seasonal relics in the pools');
+    SG.startFight(['rat'], 'normal');
+    SG.season.event({ t: 'play', def: D.ITEMS.candy_corn });
+    h.eq(candy(SG), c0, 'a Candy Corn out of season is only a snack');
+  });
+  h.test('season: the Candy Counter sells the event cosmetics for candy; they stay owned after the event', () => {
+    const A = bootS(), SG = A.GAME;
+    SG.season.setDate('2026-10-25');
+    SG.season.give(100, 'halloween');
+    SG.vault.show('skin');
+    const tabN = SG.S.ui.buttons.length;
+    h.ok(tabN > 0, 'the vault opens');
+    h.ok(SG.season.shelf('sea', []).length === 7, 'the counter stocks the seven Claw-o-ween prizes');
+    h.eq(SG.vault.buy('skin_sea_mansion'), false, 'tickets never buy an event prize');
+    h.ok(!SG.season.buy('skin_sea_mansion'), 'too little candy (100 of 120): refused');
+    h.eq(candy(SG), 100, 'nothing taken');
+    SG.season.give(50, 'halloween');
+    h.ok(SG.season.buy('skin_sea_mansion'), 'bought with 150 candy');
+    h.ok(candy(SG) === 30 && SG.meta.sea.spent.candy === 120, 'the price comes off the wallet');
+    h.ok(SG.meta.vault.owned.skin_sea_mansion && SG.meta.vault.eq.skin === 'skin_sea_mansion', 'owned and put on');
+    h.ok(!SG.season.buy('skin_sea_mansion'), 'never bought twice');
+    SG.season.give(60, 'halloween');
+    h.ok(SG.season.buy('fit_rogue_witch') && SG.meta.vault.eq.outfit.rogue === 'fit_rogue_witch', 'a witch hat, worn by its crawler');
+    SG.draw();
+    // after the event: no counter, still owned, on the normal shelf, survives a reload
+    SG.season.setDate('2026-11-25');
+    h.eq(SG.season.shelf('sea', []).length, 0, 'the counter is gone after the event');
+    h.ok(!SG.season.buy('paint_sea_pumpkin'), 'and nothing sells');
+    h.ok(SG.season.shelf('skin', ['skin_classic']).includes('skin_sea_mansion'), 'the mansion sits on the Cabinets shelf');
+    h.ok(SG.season.shelf('outfit', []).includes('fit_rogue_witch'), 'the hat on the Outfits shelf');
+    SG.vault.show('skin');
+    SG.draw();
+    const B = bootS(A._store).GAME;
+    h.ok(B.meta.vault.owned.skin_sea_mansion && B.meta.vault.eq.skin === 'skin_sea_mansion' && B.meta.vault.eq.outfit.rogue === 'fit_rogue_witch', 'a reload keeps them owned and equipped');
+    h.eq(candy(B), 30, 'and the wallet');
+    B.newRun('rogue', 3);
+    B.startFight(['rat', 'bat'], 'normal');
+    B.draw();
+    h.ok(B.screen === 'fight', 'a real fight in the Haunted Mansion out of season');
+  });
+  h.test('season: the title banner and countdown, the map chip, the music, drawing in and out of season', () => {
+    const A = bootS(), SG = A.GAME;
+    SG.showTitle();
+    h.ok(!SG.S.ui.buttons.some(b => /Claw-o-ween/.test(b.label)), 'no banner out of season');
+    SG.season.setDate(new Date(2026, 9, 21, 12));
+    SG.showTitle();
+    h.ok(SG.S.ui.buttons.some(b => /Claw-o-ween/.test(b.label)), 'the Claw-o-ween banner on the title');
+    const left = new Date(2026, 10, 4).getTime() - new Date(2026, 9, 21, 12).getTime();   // (any timezone: a DST change is in it)
+    h.eq(SG.season.countdown('halloween'), 'ends in ' + SG.season.fmt(left), 'with its countdown (' + SG.season.countdown('halloween') + ')');
+    h.ok(/^ends in 13d 1[23]h$/.test(SG.season.countdown('halloween')), 'thirteen and a half days to go');
+    h.eq(SG.season.fmt(3 * 3600e3 + 125e3), '3h 02m', 'hours and minutes on the last day');
+    h.eq(SG.season.musicId(), 'halloween', 'the title plays the season\'s tune');
+    SG.draw();
+    const run = SG.newRun('knight', 8);
+    h.eq(SG.season.musicId(), 'halloween', 'so does the run');
+    SG.toMap(); SG.draw();
+    SG.startFight(['rat_vamp', 'goblin_witch', 'slime_ghost'], 'normal'); SG.draw();
+    SG.endFight('lose');
+    SG.season.setDate(new Date(2026, 11, 20));
+    SG.showTitle(); SG.draw();
+    h.ok(SG.S.ui.buttons.some(b => /Winter Wonderclaw/.test(b.label)), 'the winter banner in December');
+    const wr = SG.newRun('alchemist', 9);
+    h.eq(wr.season, 'winter', 'a winter run');
+    h.eq(doorsOf(SG).length, 0, 'winter has no doors (the skeleton)');
+    SG.toMap(); SG.draw();
+    SG.startFight(['rat'], 'normal'); SG.draw();
+    const c0 = ((SG.meta.sea.wallet || {}).flakes) | 0;
+    SG.endFight('win');
+    h.ok((SG.meta.sea.wallet.flakes | 0) > c0, 'winter fights drop snowflakes');
+    SG.season.setDate('2026-11-20');
+    SG.showTitle(); SG.draw();
+    h.eq(SG.season.musicId(), null, 'no season on the title after it ends');
+  });
+  h.test('season: old saves and junk profiles load', () => {
+    const A = bootS(), SG = A.GAME;
+    SG.newRun('knight', 5);
+    SG.save();
+    const raw = JSON.parse(A._store.clawspire_run);
+    delete raw.run.season; delete raw.run.sea;
+    const meta = JSON.parse(A._store.clawspire_meta);
+    delete meta.sea;
+    const B = bootS({ clawspire_run: JSON.stringify(raw), clawspire_meta: JSON.stringify(meta) }).GAME;
+    h.ok(B.meta.sea && B.meta.sea.preview === '' && B.meta.sea.knocks === 0, 'a profile from before gets an empty season record');
+    h.ok(B.load() && B.screen === 'map' && B.season.run() === null, 'a run from before loads, with no season');
+    B.season.setDate('2026-10-15');
+    B.startFight(['rat', 'slime'], 'normal');
+    h.eq(B.fight.enemies.map(e => e.id).join(), 'rat,slime', 'an old run stays out of the season even in October');
+    const C = bootS({ clawspire_meta: JSON.stringify(Object.assign({}, meta, { sea: { preview: 42, wallet: 'x', knocks: -3 } })) }).GAME;
+    h.ok(C.meta.sea.preview === '' && JSON.stringify(C.meta.sea.wallet) === '{}' && C.meta.sea.knocks === 0, 'junk is repaired');
+  });
+}
 
 h.done();
