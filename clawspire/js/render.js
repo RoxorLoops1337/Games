@@ -160,8 +160,11 @@ const RENDER = (() => {
     F(ctx, col || INK); ctx.beginPath(); ctx.arc(x + lx * r * 0.35, y + ly * r * 0.35, r * 0.5, 0, TAU); ctx.fill();
     if (!FLAT) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + lx * r * 0.35 - r * 0.18, y + ly * r * 0.35 - r * 0.2, r * 0.16, 0, TAU); ctx.fill(); }
   }
+  // I18N (round 13): canvas words in the current language (js/i18n.js; English passes through)
+  const i18nTr = (s) => (typeof I18N !== 'undefined' && I18N && I18N.get() !== 'en' && typeof s === 'string' ? I18N.tr(s) : s);
   function txt(ctx, s, x, y, size, col, bold, align, ol) {
-    ctx.font = (bold === false ? '' : 'bold ') + size + 'px ' + FONT;
+    s = i18nTr(s);
+    ctx.font =(bold === false ? '' : 'bold ') + size + 'px ' + FONT;
     ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
     if (ol) { S(ctx, ol === true ? INK : ol, Math.max(2, size * 0.18)); ctx.lineJoin = 'round'; ctx.strokeText(s, x, y); }
     F(ctx, col); ctx.fillText(s, x, y);
@@ -2784,7 +2787,7 @@ const RENDER = (() => {
       // the plate: LUCK (or CASH OUT while it pays)
       tone(ctx, q => rrect(q, x - 13, y0, 26, 20, 5), cash > 0 ? PAL.gold : '#1a6b3a', x, y0 + 10, 12, { dark: -0.35, spec: false, ol: 2 });
       ctx.font = 'bold 7px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      F(ctx, cash > 0 ? INK : '#c8ffd8'); ctx.fillText(cash > 0 ? 'CASH' : 'LUCK', x, y0 + 7, 24);
+      F(ctx, cash > 0 ? INK : '#c8ffd8'); ctx.fillText(i18nTr(cash > 0 ? 'CASH' : 'LUCK'), x, y0 + 7, 24);
       F(ctx, cash > 0 ? INK : '#ffffff'); ctx.font = 'bold 8px ' + FONT; ctx.fillText(cash > 0 ? 'OUT!' : String(luck), x, y0 + 15, 24);
       // the tube behind the lamps
       ctx.beginPath(); rrect(ctx, x - 11, top - 4, 22, y1 - top + 6, 10); F(ctx, '#0c1a12'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
@@ -2824,7 +2827,7 @@ const RENDER = (() => {
       const on = fl > 0.05 || Math.floor(t * 2) % 2 === 0;
       F(ctx, on ? '#fff6c0' : shade(PAL.gold, -0.5));
       ctx.font = 'bold 6px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('INSERT COIN', x, y - 5.3, 40);
+      ctx.fillText(i18nTr('INSERT COIN'), x, y - 5.3, 40);
       // the slot, lit gold on the clunk, and the coin-return button
       ctx.beginPath(); rrect(ctx, x - 14, y + 3, 15, 4, 2); F(ctx, fl > 0.05 ? PAL.gold : INK); ctx.fill();
       if (fl > 0.05) glow(ctx, x - 6.5, y + 5, 18, PAL.gold, fl);
@@ -4659,7 +4662,7 @@ const RENDER = (() => {
        damage numbers) pops with an overshoot, flies up and falls with gravity. */
     api.text = (x, y, str, col, o) => {
       o = o || 0;
-      str = String(str); col = accC(col || '#fff');   // ACCESS: the colour-blind palette
+      str = i18nTr(String(str)); col = accC(col || '#fff');   // ACCESS: the colour-blind palette (I18N: the words)
       const lay = !o.phys && !o.free && api.layout;
       // the same label again within a moment merges into the live one ("x2")
       if (lay && !o.noMerge) {
@@ -5499,7 +5502,8 @@ const RENDER = (() => {
   }
   // Chrome lettering (the logo's look): pink under-glow, ink rim, a white top half, a coloured bottom half.
   function chrome(ctx, s, x, y, size, low, glowCol) {
-    const sp = chromeSprite(ctx, s, size, low, glowCol);
+    s = i18nTr(s);   // I18N
+    const sp =chromeSprite(ctx, s, size, low, glowCol);
     if (sp) { try { ctx.drawImage(sp.cv, x - sp.cx / sp.q, y - sp.cy / sp.q, sp.cv.width / sp.q, sp.cv.height / sp.q); return; } catch (e) { /* stub canvas: draw it live */ } }
     chromeLive(ctx, s, x, y, size, low, glowCol);
   }
@@ -5641,7 +5645,7 @@ const RENDER = (() => {
       // the name slams; drawn over both panels and kept left of the seam, so
       // the enemy's panel never cuts the end of the line off
       const cdef = typeof DATA !== 'undefined' && DATA.CHARACTERS ? DATA.CHARACTERS[st.charId] : null;
-      const vl = String(st.charLine || (cdef && cdef.vsLine) || '');
+      const vl = i18nTr(String(st.charLine || (cdef && cdef.vsLine) || ''));   // (I18N: whole, before it is typed)
       if (vl && t >= VS.name) {
         const n = red ? vl.length : Math.min(vl.length, Math.floor((t - VS.name) * 40));
         const bx1 = seamAt(596) - 12;
@@ -14778,6 +14782,7 @@ const RENDER = (() => {
   const schErr = (e) => { SCH_E.n++; SCH_E.last = String((e && e.message) || e); };
   // Chalk words: a faint double stroke gives them grain.
   function schChalk(ctx, s, x, y, size, col, align) {
+    s = i18nTr(s);   // I18N
     ctx.font = 'bold ' + size + 'px ' + FONT; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
     ctx.globalAlpha = 0.35; F(ctx, col || SCH_C.chalk); ctx.fillText(s, x + 0.8, y + 0.6);
     ctx.globalAlpha = 1; ctx.fillText(s, x, y);

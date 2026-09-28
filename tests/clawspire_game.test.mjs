@@ -10142,4 +10142,152 @@ h.test('mix: the run-end numbers count up from zero and land exactly', () => {
   });
 }
 
+// ---------------------------------------------------------------- POLISH (round 13): the corner lane keeps off the newer screens' titles
+{
+  const P13 = boot(), G = P13.GAME, D = P13.DATA;
+  const over = (a, r) => Math.min(a.x1, r[2]) - Math.max(a.x0, r[0]) > 1 && Math.min(a.y1, r[3]) - Math.max(a.y0, r[1]) > 1;
+  const R = (a) => ({ x0: a[0], y0: a[1], x1: a[2], y1: a[3], w: a[4] || 10 });
+  // what the browser measures on each screen at 390 x 844 (stage px: the .qaKeep titles, the buttons)
+  let DOM = [];
+  G.qa.measure = () => DOM.map(R);
+  G.qa.size = (el, tight) => (/mSticker/.test(el.className || '') ? (tight ? { w: 237, h: 56 } : { w: 250, h: 97 }) : tight ? { w: 250, h: 56 } : { w: 280, h: 84 });
+  // a fresh corner item: a discovery toast ('dex') or a sticker ('ach')
+  const push = (kind) => {
+    const S = G.S;
+    if (S.mcur && S.mcur.el && S.mcur.el.remove) S.mcur.el.remove();
+    S.mcur = null; S.mq = [];
+    if (kind === 'dex') { for (const id of Object.keys(D.ITEMS).filter(i => !G.meta.seen.items[i]).slice(0, 3)) G.prog.dexSee('items', id); }
+    else G.prog.achUnlock(D.ACH_IDS.find(a => !G.meta.ach[a]));
+    stepFor(G, 0.3);
+    return S.mcur;
+  };
+  // both corner items land clear of the title (keep), the canvas signs and every button, shown at once
+  const clear = (scr, keep, tag) => {
+    h.eq(G.screen, scr, `${tag}: on screen ${scr}`);
+    for (const kind of ['dex', 'ach']) {
+      const cur = push(kind);
+      if (!cur || !cur.rect) { h.ok(false, `${tag}: no ${kind} corner item`); continue; }
+      const hit = G.qa.signs(scr).concat(keep).filter(r => over(cur.rect, r));
+      h.ok(!hit.length && !cur.hold && cur.qa && cur.qa.hard === 0, `${tag}: the ${kind} at ${Math.round(cur.rect.x0)},${Math.round(cur.rect.y0)} keeps off the title and the signs${hit.length ? ' (over ' + JSON.stringify(hit) + ')' : ''}`);
+    }
+  };
+  const cls = (id, re) => { const n = P13._nodes[id]; const out = []; const walk = (x) => { if (!x) return; if (re.test(x.className || '')) out.push(x); for (const c of x.children || []) walk(c); }; walk(n); return out; };
+
+  h.test('pol13: the advent calendar and the haunted house: the title is kept, the calendar, the door and the words are signs', () => {
+    G.season.setDate('2026-12-12');
+    G.newRun('knight', 21);
+    const gift = Object.values(G.run.map.tiles).find(t => t.type === 'advent');
+    G.enterTile(gift);
+    h.ok(G.season.door && G.season.door.adv, 'the advent screen');
+    h.ok(cls('seaBody', /seaTop/)[0] && /qaKeep/.test(cls('seaBody', /seaTop/)[0].className), 'its title is .qaKeep');
+    h.ok(G.qa.signs('sea').some(r => r[1] <= 126 && r[3] >= 362 && r[0] <= 80 && r[2] >= 460), 'the calendar on the wall is a sign');
+    // the r12 screenshot: NEW PRIZE DISCOVERED sat top right, over ADVENT CALENDAR
+    const title = [52, 18, 488, 81];
+    DOM = [title, [140, 826, 400, 884], [140, 894, 400, 938]];
+    clear('sea', [title], 'advent, wrapped');
+    G.season.knock();
+    stepFor(G, 6);
+    h.eq(G.season.door.ph, 'done', 'unwrapped');
+    h.ok(G.qa.signs('sea').some(r => r[1] <= 380 && r[3] >= 410), 'MERRY CLAWMAS! / BIG PRESENT! is a sign too');
+    h.ok(cls('seaBody', /seaCard/).every(n => /qaKeep/.test(n.className)), 'and the result card is kept');
+    DOM = [title, [60, 821, 480, 884], [140, 894, 400, 938]];
+    clear('sea', [title], 'advent, the gift');
+    G.season.setDate('2026-10-15');
+    G.newRun('knight', 22);
+    const door = Object.values(G.run.map.tiles).find(t => t.type === 'treat');
+    G.enterTile(door);
+    h.ok(G.season.door && !G.season.door.adv, 'the haunted house');
+    h.ok(G.qa.signs('sea').some(r => r[1] <= 360 && r[3] >= 630), 'its door is a sign');
+    const t2 = [75, 18, 465, 81];
+    DOM = [t2, [140, 826, 400, 884], [140, 894, 400, 938]];
+    clear('sea', [t2], 'trick or treat, the door');
+    G.season.knock();
+    stepFor(G, 6);
+    DOM = [t2, [60, 818, 480, 884], [140, 894, 400, 938]];
+    clear('sea', [t2], 'trick or treat, opened');
+    G.season.setDate(null);
+  });
+
+  h.test('pol13: the Claw School, the practice cabinet, the vault, the rush and the arcade keep their titles', () => {
+    G.newRun('knight', 31);
+    G.sch.show('hub', { from: 'title' });
+    DOM = [[16, 8, 87, 52], [291, 186, 430, 230], [16, 238, 524, 302], [16, 310, 524, 382], [16, 390, 524, 462], [16, 470, 524, 542], [16, 550, 524, 622], [16, 630, 524, 702]];
+    clear('school', [], 'the school hub (CLAW SCHOOL on its chalkboard)');
+    G.sch.show('report');
+    DOM = [[16, 8, 87, 52]];
+    clear('school', [], 'the report card');
+    G.sch.start(0, 0);
+    h.ok(cls('schoolBody', /schTopTag/).some(n => /qaKeep/.test(n.className)), 'a challenge\'s name on top is .qaKeep');
+    const tag = [95, 22, 438, 38];
+    DOM = [[16, 8, 87, 52], tag, [446, 8, 524, 52]];
+    clear('school', [tag], 'a lesson\'s challenge (its chalkboard)');
+    G.sch.show('hub');
+    G.sch.practice({});
+    const pr = cls('schoolBody', /schTopTag pr/)[0];
+    h.ok(pr && /qaKeep/.test(pr.className), 'PRACTICE CABINET is .qaKeep');
+    const ptag = [95, 22, 398, 38];
+    DOM = [[16, 8, 87, 52], ptag, [406, 8, 524, 52], [16, 148, 114, 184], [118, 148, 217, 184], [221, 148, 319, 184], [323, 148, 422, 184], [426, 148, 524, 184], [117, 862, 281, 906], [291, 862, 423, 906]];
+    clear('school', [ptag], 'the practice cabinet');
+    G.sch.back && G.sch.back();
+    G.vault.show();
+    h.ok(cls('vaultBody', /vWallet/).every(n => /qaKeep/.test(n.className)), 'the vault\'s wallet is .qaKeep');
+    const wal = [415, 15, 530, 59];
+    DOM = [[10, 15, 94, 59], wal, [22, 296, 148, 332], [372, 296, 518, 332], [8, 450, 110, 498], [114, 450, 215, 498], [219, 450, 321, 498], [325, 450, 426, 498], [430, 450, 532, 498],
+      [40, 521, 110, 591, 1], [170, 524, 240, 594, 1], [300, 524, 370, 594, 1], [430, 524, 500, 594, 1], [40, 660, 110, 730, 1], [170, 660, 240, 730, 1], [300, 660, 370, 730, 1], [430, 660, 500, 730, 1], [80, 862, 460, 926]];
+    clear('vault', [wal], 'the Prize Vault (its neon sign, its counter window)');
+    G.vault.leave();
+    G.rush.start('knight', 4242);
+    DOM = [[99, 866, 191, 910], [201, 858, 441, 918]];
+    stepFor(G, 2.5);
+    clear('rush', [], 'the Boss Rush challenger (at once: no 4 s wait)');
+    G.newRun('knight', 32);
+    for (const g of ['plinko', 'wheel', 'slots', 'moles', 'skee']) {
+      const M = G.run.map;
+      const t = Object.values(M.tiles).find(x => x.type === 'empty' && x.terrain === 'land' && x.ground !== 'mountain' && !x.done);
+      t.type = g; t.content = { seed: 99, tokens: 3, game: g };
+      G.arc.show({ q: t.q, r: t.r });
+      DOM = [[0, 0, 540, 70], [112, 906, 322, 950], [332, 906, 428, 950]];
+      h.ok(G.qa.signs('arcade').some(r => r[1] <= 110 && r[3] >= 160), `${g}: the marquee is a sign`);
+      clear('arcade', [], `the ${g} cabinet`);
+      G.arc.leave();
+      t.type = 'empty'; t.done = true;
+    }
+    G.qa.measure = null; G.qa.size = null;
+  });
+
+  h.test('pol13: the Boss Rush and the co-op boss hit as rounds 10 and 11 tuned them (RUSH.TIERK, DUO.COOP.tierK); a run\'s boss keeps tierDmg', () => {
+    const T = boot(), G2 = T.GAME, D2 = T.DATA, C = T.COMBAT, td = D2.DIFFICULTY.tierDmg.boss;
+    h.ok(td > 1 && Math.abs(D2.RUSH.TIERK * td - 1) < 1e-9 && Math.abs(D2.DUO.COOP.tierK * td - 1) < 1e-9, `both dials default to 1 / tierDmg.boss (${D2.RUSH.TIERK.toFixed(3)})`);
+    h.ok(D2.rushTierK('rat') === 1 && D2.rushTierK('prizemaster') === D2.RUSH.TIERK && D2.rushTierK('hoard', 1) === 1 && D2.rushTierK('hoard', 0.5) === 0.5, 'a normal enemy is left alone; a number passed in wins');
+    const atkV = (id, e) => { const a = D2.ENEMIES[id].moves.find(m => m.k === 'attack'); const m = a && e.def.moves.find(x => x.id === a.id); return a && m ? [a.v, m.v] : null; };
+    // a run's boss: the dial, then tierDmg on top (the main run is untouched)
+    G2.newRun('knight', 51);
+    G2.startFight(['plushqueen'], 'boss');
+    const boss = G2.fight.enemies[0];
+    h.near(boss.dmgMul, D2.DIFFICULTY.dmg * td, 1e-9, `a run's boss hits x${D2.DIFFICULTY.dmg} x${td}`);
+    // the rush: the fight's multiplier is the round 10 one (the dial, the ramp, DMGK), tierDmg taken back out
+    G2.rush.start('knight', 4242);
+    const R = G2.rush.of();
+    for (const i of [0, 4, R.order.length - 1]) {
+      R.i = i;
+      const id = R.order[i];
+      G2.rush.fight();
+      const e = G2.fight.enemies[0], solo = C.newFight(G2.run, [id], T.U.rng(9)).enemies[0], want = solo.dmgMul / td * D2.rushDmgK(id);
+      h.near(e.dmgMul, want, 1e-9, `rush boss ${i + 1} (${id}): x${e.dmgMul.toFixed(3)}, as round 10 (x${(solo.dmgMul / td).toFixed(2)} x${D2.rushDmgK(id)})`);
+      const v = atkV(id, e);
+      if (v) h.ok(Math.abs(v[1] - Math.max(1, Math.round(v[0] * want))) <= 1, `rush boss ${i + 1}: hits ${v[1]} (round 10: ${Math.max(1, Math.round(v[0] * want))})`);
+    }
+    // the co-op boss: the rush's share and COOP.tierK
+    const B = boot(), G3 = B.GAME, D3 = B.DATA;
+    G3.duo.seed = 4243; G3.duo.menu(); G3.duo.setup('coop');
+    const Du = G3.duo.start(); G3.duo.afterToss();
+    stepFor(G3, 4); G3.duo.ready();
+    h.eq(G3.screen, 'fight', 'the co-op fight');
+    const L = G3.duo.live, e3 = G3.fight.enemies[0];
+    const solo3 = B.COMBAT.newFight(G3.run, [Du.boss], B.U.rng(Du.fseed)).enemies[0];
+    h.ok(L && L.runs.indexOf(G3.run) >= 0, 'a seat\'s own run');
+    h.near(e3.dmgMul, solo3.dmgMul / td * D3.rushDmgK(Du.boss), 1e-9, `the co-op boss (${Du.boss}) hits as round 11 tuned it (x${e3.dmgMul.toFixed(3)})`);
+  });
+}
+
 h.done();

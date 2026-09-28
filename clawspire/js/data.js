@@ -5751,6 +5751,9 @@ const DATA = (() => {
     // (the balance model through whole rushes, scratchpad r10/rushsim.mjs: 18-98% clears by crawler, 4.5-6 turns a boss)
     HPK: { 1: 0.65, 2: 0.5, 3: 0.55, final: 0.55, secret: 0.5 },
     DMGK: { 1: 0.8, 2: 0.7, 3: 0.75, final: 0.75, secret: 0.7 },
+    // ROUND 13: DIFFICULTY.tierDmg (round 12: bosses x1.5) came after this tuning. A rush boss's hits are multiplied
+    // by TIERK on top of DMGK (rushTierK): 1 / tierDmg.boss takes the lift back out, so the round 10 numbers hold; 1 keeps it
+    TIERK: 1 / ((DIFFICULTY.tierDmg && DIFFICULTY.tierDmg.boss) || 1),
     RAMP: 1,   // run.fights per boss beaten (DIFFICULTY's hidden escalation)
     BREATHER: 0.1,   // a breath between bosses: this share of max hp comes back on every win
     HEAL: 0.35, CUT: 0.5,   // a heal card mends 35% of max hp; under half hp one is always on the table
@@ -5802,6 +5805,11 @@ const DATA = (() => {
     return T[rushActOf(id)] || 1;
   }
   const rushDmgK = (id) => rushHpK(id, RUSH.DMGK);
+  // ROUND 13: the factor on a rush (or co-op, k = DUO.COOP.tierK) boss's hits that undoes DIFFICULTY.tierDmg; 1 for a tier it leaves alone.
+  function rushTierK(id, k) {
+    const e = ENEMIES[id], td = e && DIFFICULTY.tierDmg ? +DIFFICULTY.tierDmg[e.tier || 'normal'] : NaN, v = +(k == null ? RUSH.TIERK : k);
+    return td > 0 && td !== 1 && v > 0 ? v : 1;
+  }
   // A crawler's starting kit {items, relics, claw, hp}: its own, else its best cards and the spare relics. Only real ids.
   function rushKit(charId) {
     const k = RUSH.KIT[charId], A = RUSH.KIT_ANY;
@@ -6008,8 +6016,9 @@ const DATA = (() => {
     ],
     // the hand-off: seconds on the countdown before READY lights up
     HANDOFF: 3,
-    // co-op: the boss's hit points on top of the Boss Rush's share (two crawlers hit it)
-    COOP: { hpK: 1.8 },
+    // co-op: the boss's hit points on top of the Boss Rush's share (two crawlers hit it); tierK (ROUND 13): its hits
+    // times this on top of the rush's DMGK (rushTierK): 1 / tierDmg.boss keeps the round 11 tuning, 1 the round 12 lift
+    COOP: { hpK: 1.8, tierK: 1 / ((DIFFICULTY.tierDmg && DIFFICULTY.tierDmg.boss) || 1) },
     VOICES: ['kazoo', 'boing', 'trombone', 'horn', 'beatbox', 'mic', 'sing', 'cheer'],
   };
   const duoInt = (v, lo, hi, d) => { const n = Math.floor(+v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
@@ -6715,7 +6724,7 @@ const DATA = (() => {
     // DUO (round 11): pass and play for two (DESIGN.md "Duo: pass and play (round 11)")
     DUO, duoName, duoKey, duoColor, duoCard, duoTaunt, duoPlayers, duoPile, duoDropScore, duoDeck, duoDrawCards, duoRoundWin, duoMatch, duoStarter, duoToss, duoBosses, duoFix, duoRecord, duoBoard,
     // the Boss Rush and the ghost race (DESIGN.md "Boss Rush and the ghost race (round 10)")
-    RUSH, rushOrder, rushActOf, rushHpK, rushDmgK, rushKit, rushDraftKinds, rushScore, rushFmt, rushFix, rushRecord, rushBoard,
+    RUSH, rushOrder, rushActOf, rushHpK, rushDmgK, rushTierK, rushKit, rushDraftKinds, rushScore, rushFmt, rushFix, rushRecord, rushBoard,
     GHO, ghoCp, ghoRead, ghoRecFix, ghoFix, ghoAt, ghoDelta, ghoPassed, ghoSeries,
     // lore and the weekly challenge (DESIGN.md "Lore and the weekly challenge (round 9)")
     LORE_CH, LORE_RULES, LORE_ART, LORE_MARKS, LORE_SNIPS, LORE_ACTS, loreBook, loreVal, loreOk, loreCheck, loreChOpen, loreHint, loreFix, loreCount, loreProgress,

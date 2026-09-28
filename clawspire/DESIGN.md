@@ -35,7 +35,8 @@ hot pink `#ff2e88`, arcade cyan `#2ee6d6`, prize gold `#ffc94d`, slime lime
   no libraries, no fetch.** All art is drawn on canvas with code, all audio is
   WebAudio synthesis. Nothing from the network.
 - **Classic scripts, shared global scope.** `index.html` loads, in this exact
-  order: `js/util.js`, `js/art.js`, `js/physics.js`, `js/data.js`, `js/combat.js`,
+  order: `js/util.js`, `js/art.js`, `js/i18n.js`, `js/lang_nl.js` (round 13, see
+  "Localization"), `js/physics.js`, `js/data.js`, `js/combat.js`,
   `js/map.js`, `js/audio.js`, `js/render.js`, `js/intro.js`, `js/game.js`. Each
   file declares ONE top-level `const` namespace (`U`, `ART`, `PHYS`, `DATA`,
   `COMBAT`, `MAP`, `AUDIO`, `RENDER`, `INTRO`, `GAME`) and may use every
@@ -5752,10 +5753,17 @@ payout.
 | DOUBLE REWARD | `LOOT.DOUBLE` | 1/20 | 1/30 |
 | prize counter, tickets | `LOOT.PRICE` capsule c/u/r/l, item c/u/r/l, max hp, bulbs, tool | 12/28/55/110, 14/24/40/70, 30, 10, 18 | 30/70/130/260, 24/44/75/130, 45, 16, 28 |
 | a boss relic is a legendary | `LEG.K.bossP` | 0.25 | 0.15 |
+| (round 13) a Boss Rush boss's hits, on top of `DMGK` | `RUSH.TIERK`, read by `DATA.rushTierK` in `game.js` `rushFightStart` | x1.5 (tierDmg) | 1 / `tierDmg.boss` (x0.667: tierDmg taken back out) |
+| (round 13) the Duo co-op boss's hits, on top of `DMGK` | `DUO.COOP.tierK`, read by `rushTierK` in `game.js` `duoCoopScale` | x1.5 (tierDmg) | 1 / `tierDmg.boss` (x0.667) |
 
-Rest healing and the Back Room's 250-gold legendary were left alone. `tierDmg` also reaches the Boss Rush and
-the Duo co-op boss (their own `DMGK` shares apply on top); if the rush should stay as round 10 tuned it, divide
-it back out there.
+Rest healing and the Back Room's 250-gold legendary were left alone. `tierDmg` also reached the Boss Rush and
+the Duo co-op boss (their own `DMGK` shares apply on top), which rounds 10 and 11 had tuned without it. Round 13
+takes it back out there with two dials of their own: `RUSH.TIERK` and `DUO.COOP.tierK` multiply a boss's hits
+(only a tier `tierDmg` lifts, so a normal minion is left alone) and default to `1 / tierDmg.boss`, written from
+`DIFFICULTY` in `data.js`, so the rush and the co-op boss hit exactly as rounds 10 and 11 tuned them whatever
+`tierDmg` becomes. Set either to 1 to give that mode the round 12 lift. The main run is untouched. Test:
+`pol13:` in the game suite (a run's boss x dmg x tierDmg; three rush bosses and a co-op boss at the round 10 / 11
+multiplier, their hits within 1 of it).
 
 ### What is left for the owner
 
@@ -5769,6 +5777,154 @@ it back out there.
 - Tests: the pinned numbers moved with the dials (`DIFFICULTY` pins, the rarity shares, the boss capsule
   share, the shop cap now `150 x shopK`, the forced bonus capsule), and `qa12:` in the game suite checks the
   three new economy dials; the balance suite checks `tierDmg`.
+
+## Polish (round 13): the corner lane off the newer screens' titles
+
+The discovery toast sat on the winter ADVENT CALENDAR title: the round 7 safe spots (`qaKeys`) measure buttons,
+headings and a short list of text classes, and the newer screens draw their titles on the canvas or in a div
+the measure skips. A sweep of every newer screen at 390 and 360 px with a discovery toast and a sticker forced
+on (scratchpad `r13/sweep.mjs`, screenshots `r13_pol_*`) found the same on the Halloween door, the Claw School
+hub (CLAW SCHOOL on its chalkboard), a lesson's challenge (its chalkboard), the report card, the practice
+cabinet (the sticker on PRACTICE CABINET), the Prize Vault (its neon sign and the wallet) and every arcade
+cabinet (the marquee). The Duo screens, the Boss Rush menu and result, the weekly and the Codex were clear.
+
+- **Kept (`.qaKeep`)**: the door screen's title block `.seaTop` and its result card, a challenge's name and
+  PRACTICE CABINET on the school's top bar, the vault's wallet.
+- **Signs (`QA_SIGNS`, stage px, game.js POLISH round 13 block)**: `sea` the advent calendar with its garland,
+  MERRY CLAWMAS! / BIG PRESENT! once it is said, the haunted house's door and TREAT! / TRICK! / CURSED!;
+  `school` the hub's and a lesson page's chalkboard, a challenge's chalkboard, the report card's heading;
+  `vault` the PRIZE VAULT sign and the counter window (the live preview); `arcade` the marquee, plus the
+  slots' 777 sign, the wheel's pointer, and skee-ball's TOTAL, 100 cups and ring values.
+- **Extra spots (`POL13_SPOTS`, tried after `qaCands`' eight, so every other screen places as before)**: on
+  the door screens the top strip is all title and the bottom all buttons, so the lane sits above the result
+  card (y 712); the arcade just under the marquee (skee-ball beside its rings at y 238, the moles under their
+  holes at y 766); the vault over its shelf (y 700, on a card's name at worst: text, not a button); the Boss
+  Rush challenger between its plate and its band (y 80, compact), where the lane used to wait hidden 4 s.
+- By design: the practice cabinet's compact toast still sits on the BEST GRAB / GRABS readout under the top
+  bar (its title, tabs and buttons are all measured; the cabinet below is play space), and the Duo setup's
+  compact toast on its blurb (the least covered spot of a full screen).
+- Tests: `pol13:` in the game suite (both corner items on the advent screen wrapped and unwrapped, the
+  haunted house closed and open, the school hub, report card, a challenge, the practice cabinet, the vault,
+  the rush challenger and all five cabinets: clear of the title, every sign and every button, shown at once).
+
+## Localization (round 13): English and Nederlands
+
+The owners speak Dutch, so the whole game speaks it too, with a language
+switch at the top of the Settings sheet. English stays the source of truth:
+the game keeps passing its own English strings around (labels, toasts,
+`GAME.choose` labels, `S.hint`, `S.lastToast`, the announcer's keys, the
+saves) and only what is shown changes.
+
+### Architecture (`js/i18n.js` -> `I18N`, `js/lang_nl.js`)
+
+- Load order: `util`, `art`, **`i18n`, `lang_nl`**, `physics` ... (`art` must
+  stay right after `util`, the art suite pins it). `tests/clawspire_lib.mjs`
+  lists `i18n` (namespace `I18N`, `lang_nl` rides along with it) and passes
+  `opts.language` to the stub navigator. `window.CS.I18N` for the console.
+  Besides `I18N` the file declares the three short globals the brief asked
+  for, `T`, `TP` and `TC` (aliases of `I18N.T / TP / TC`); game.js and
+  render.js call `i18nTr` / `i18nT`, their own guarded wrappers, because many
+  of their functions use a local `T`.
+- **A key is the English string itself** (`'END TURN'`, `'Act {n}'`). The
+  Dutch table maps it to Dutch; a key that is not in the table shows its own
+  English, so a raw key can never reach the screen.
+  - `T(key, vars)`: the key in the current language with `{var}` filled in
+    (a var the caller did not pass leaves nothing, never `{var}`);
+    `{n|een|twee}` picks a word by the number (`{n} {n|lampje|lampjes}`).
+  - `TP(n, one, many, vars)`: the plural helper (`TP(3, '{n} bulb', '{n} bulbs')`).
+  - `TC(kind, id, field)`: DATA content (`item`, `relic`, `status`, `enemy`,
+    `char`, `combo`, `kw`, `claw`, `pet`, `set`, `boon`, `act`, `mut`, `evo`, and
+    `move` as `'enemy.move'`) with the DATA English as the fallback.
+  - `I18N.tr(str)`: an English string the game built at run time back through
+    the table: an exact key, a content name (every translated DATA field is
+    indexed by its English, so "Rusty Sword" anywhere becomes "Roestig
+    Zwaard"; "Rusty Sword+" keeps its plus; a name in CAPITALS on the versus
+    card works too), then the `{var}` patterns ("Deal {n} damage"). In a
+    pattern `{n}`, `{n2}` ... match a number and anything else matches words,
+    which are looked up again ("Light the way: {s}" with "3 bulbs"). Glued
+    sentences, `a, b` lists of known words, a word plus a number and an icon
+    in front are split and redone. English returns its input at once; the
+    Dutch results are cached (6000 entries).
+  - `I18N.itemText(def, plus, DATA.itemText)`: the Dutch rules template with
+    DATA's own numbers (`{v}` tokens are kept in the Dutch), the appended
+    " Exhaust." becomes "Eenmalig.".
+- **Where it is applied** (one-line hooks, no screen code rewritten):
+  game.js `h()` (every DOM text the game builds; the element keeps its English
+  in `__i18nSrc`), `toast`, `hint`, the banner (sized by the Dutch words),
+  the popover, the tutorial coach marks, the Help page's paragraphs, the act
+  title cards (translated before they are typed), `itemText`, the Settings
+  preview; render.js `txt()`, `chrome()`, `fx.text` (every floating word),
+  `schChalk`, two coin-slot labels. In a browser a `MutationObserver`
+  (`I18N.watch`, only while Dutch is on) translates whatever the game sets by
+  hand (`textContent`, `innerHTML`, `title` / `aria-label`, index.html's own
+  words) and remembers the English so a switch back restores it.
+- **The setting**: `meta.settings.lang` = `'en'` | `'nl'`, absent until the
+  player picks one. Absent means the browser decides (`navigator.languages[0]`
+  or `language`: `nl*` is Dutch, anything else English), so old profiles load
+  unchanged; a junk value is dropped. `accApply` calls `i18nApply` (boot and
+  every settings change); the Settings sheet's first section "Language / Taal"
+  has English / Nederlands, each named in its own language. A switch applies
+  live: `I18N.set` sets `<html lang>`, `I18N.dom` redoes the stage in place,
+  the sheet, the title and the map head rebuild, the HUD refreshes, the canvas
+  follows on the next frame. `GAME.setLang(code)` / `GAME.lang()` for tests.
+- **Layout**: the stage is 540 wide and scales, so 360 and 390 px look the
+  same. Dutch fixes live in `<style id="i18n-css">` and only apply under
+  `html[lang="nl"]`: long compound claw names carry soft hyphens and wrap in
+  the claw chips, the claw stat labels size to their words. Long strings were
+  shortened where they sit in a fixed box (the Boss Rush card, the chalkboard
+  subtitles, the canvas signs keep to about the English length).
+
+### The words (a glossary kept by `lang_nl.js`)
+
+Natural, playful Dutch in the "je" form. claw: grijper, grab: greep / grepen,
+bin: bak, chute: goot, cabinet: kast, prong: klauwtje, bulb: lampje, tool:
+gereedschap (flare: lichtkogel, lantern: lantaarn, kite: vlieger), hex: vakje,
+relic: relikwie, item: voorwerp, junk: rommel, Block: Blok, Exhaust:
+Eenmalig, act: akte, loop: ronde, Endless: Eindeloos, the Prize Master: de
+Prijzenmeester, Prizedex: Prijzendex, Prize Vault: Prijzenkluis, the
+Compactor: de Pers, Claw School: Grijperschool, END TURN: EINDE BEURT, ENEMY
+TURN: VIJAND AAN ZET, VICTORY: GEWONNEN. Crawler, Tilt, Boss Rush, Duo,
+JACKPOT and the characters' own names stay as they are.
+
+### Coverage
+
+- **Phase 1 (UI chrome), all of it**: title and its cards, character and claw
+  select, the HUD, banners and floating words, map head hints and tool toasts,
+  fights (intents, the INCOMING pill, the enemy popover, statuses), rewards,
+  the payout, shop, prize counter, capsules, the Compactor, rest, forge,
+  events, treasure, spare parts, bin, boons, sets, evolutions, pets, the
+  arcade mini-games, the Prize Vault, stickers, Prizedex, tips, Help,
+  Settings, game over, win, the death recap and its tips, run history and
+  photo mode, the Codex screens, daily / weekly / ghost race, the Boss Rush,
+  Claw School (every lesson, challenge title, goal and tip, the star rules),
+  Duo, Endless and the loop reboot, the secret act, seasonal screens.
+- **Phase 2 (content), done**: all 142 items and 108 relics (names and texts),
+  all statuses, keyword chips, combos, the 62 enemies (names and
+  descriptions), enemy intents, characters (titles, blurbs, unlock text),
+  claws (names, texts, jokes, good / bad), claw upgrades, tools, acts and their
+  title cards, Tilt levels, mutators, elite affixes, all 20 events, boons,
+  pets (species, tricks, quips), relic sets and their bonuses, stickers, vault
+  categories and cosmetics, weekly themes, Codex chapter names and blurbs.
+- **Still English (the structure takes them, add rows to `lang_nl.js`)**: the
+  Codex pages themselves (about 45 long lore texts in `loreEntries`), the
+  branching stories (`STORY_LIST`) and Grabby Gary's lines, the 30 evolved
+  items (`EVO_LIST`: names, texts, auras), pet synergies (`PET_SYN`), the
+  seasonal items, relics and enemies (Claw-o-ween, Winter Wonderclaw), enemy
+  move names (the intents themselves are translated), the lore snippets on the
+  map, the 10 s intro video's tagline (baked into the video and the canvas
+  intro), the loading screen (it runs before the game's scripts).
+
+### Adding a language or a line
+
+A new table is `I18N.add(code, { ui: {English: words}, content: {kind: {id:
+{field: words}}} })` in its own `js/lang_xx.js` plus the code in
+`I18N.LANGS` / `NAMES`. A new English string needs nothing: it shows in
+English until a row is added. Tests: `tests/clawspire_i18n.test.mjs`
+(T interpolation, plurals, fallback, patterns, the table's keys against the
+game's words, content against DATA with the same `{v}` tokens, no em dashes,
+browser default, saved override, old and junk profiles, the live switch, every
+main screen rendered in Dutch with no raw keys, the canvas words, English
+untouched).
 
 ## Quality bar (Game of the Year, mobile)
 
