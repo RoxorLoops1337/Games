@@ -1081,7 +1081,7 @@ h.test('shop, rest, forge, treasure and bin screens', () => {
   h.eq(Gt.run.bin.length, bin2 - 1, 'item removed');
   h.eq(Gt.screen, 'shop', 'back in the shop');
   Gt.showRest();
-  h.eq(Gt.S.ui.buttons.length, 2, 'rest offers exactly two choices');
+  h.eq(Gt.S.ui.buttons.length, 3, 'rest offers exactly three choices (round 6: the Compactor is the third)');
   const restLabels = Gt.S.ui.buttons.map(b => b.el && b.el.children ? b.el.children.map(c => c.textContent).join(' ') : b.label);
   h.ok(/heal/i.test(restLabels[0]) && /upgrade/i.test(restLabels[1]), 'heal, then upgrade an item (' + restLabels.join(' | ') + ')');
   Gt.choose(1);
@@ -3558,9 +3558,11 @@ h.test('feel: haptics buzz in patterns and respect Buzz and reduced motion', () 
   h.ok(!Fe.haptic('jackpot') && calls.length === n, 'Buzz off: still');
   h.eq(JSON.parse(T._store[Gt.META_KEY]).settings.haptics, false, 'the switch is saved');
   Gt.showTitle();
-  h.ok(Gt.S.ui.buttons.some(b => b.label === 'Buzz off'), 'the title shows Buzz off');
+  Gt.acc.open();   // round 6: Buzz moved to the Settings panel (the title's Settings button)
+  h.ok(Gt.S.ui.buttons.some(b => b.label === 'Buzz off'), 'the Settings panel shows Buzz off');
   Gt.choose(Gt.S.ui.buttons.findIndex(b => b.label === 'Buzz off'));
   h.ok(Gt.meta.settings.haptics && Gt.S.ui.buttons.some(b => b.label === 'Buzz on'), 'and turns it back on');
+  Gt.acc.close();
   Gt.meta.settings.shake = false;
   h.ok(!Fe.haptic('hurt'), 'reduced motion (Shake off): still');
   Gt.meta.settings.shake = true;
@@ -4923,6 +4925,1045 @@ h.test('skee-ball: the rolls, the rings, five balls paid once', () => {
     h.eq(G.run.tickets - tx, Math.floor(s1 / 10), 'Leave mid-game pays the balls rolled');
     h.ok(t.done, 'both games spent: the lane is cleared');
   }
+});
+
+// ---------------------------------------------------------------- round 6: relic sets, the boon draft, the Compactor
+const S6_META = JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } });
+function s6Boot(store) { return boot({ store: Object.assign({ clawspire_meta: S6_META }, store || {}) }); }
+// Every DOM node under el with a class (the stub DOM keeps children arrays).
+function s6Find(el, cls, out) {
+  out = out || [];
+  if (!el) return out;
+  if (typeof el.className === 'string' && el.className.split(' ').includes(cls)) out.push(el);
+  for (const c of el.children || []) s6Find(c, cls, out);
+  return out;
+}
+const s6Text = (el) => (el ? (el.textContent || '') + (el.children || []).map(s6Text).join(' ') : '');
+
+h.test('sets: the relic strip chains set members behind a badge; procs pop it; the popover shows the set', () => {
+  const T = s6Boot(), G = T.GAME;
+  G.newRun('knight', 6601);
+  h.eq(G.screen, 'map', 'headless: straight to the map (no boon draft)');
+  G.run.relics = ['squire_gauntlet', 'venom_gland', 'grip_tape', 'contagion', 'kettle_helm', 'festering_jar', 'battering_ram', 'snow_globe'];
+  G.S.lastRelics = '';
+  stepFor(G, 0.3);
+  const bar = T._nodes.relics;
+  const links = s6Find(bar, 'setLink');
+  h.eq(links.length, 2, 'two linked sets (Poisoner\'s Kit 3/3, Iron Fortress 2/3), the lone Snow Globe unlinked');
+  const full = links.find(l => l.className.includes('full')), part = links.find(l => !l.className.includes('full'));
+  const relicsIn = (l) => (l.children || []).filter(c => /\brelic\b/.test(c.className || ''));
+  h.ok(full && relicsIn(full).length === 3 && relicsIn(full).every(r => /inSet/.test(r.className)), 'the complete set glows, chained, with its three relics');
+  h.ok(part && relicsIn(part).length === 2 && s6Text(part).includes('2/3'), 'Iron Fortress with its badge 2/3');
+  h.ok(G.S.relicEls['set:poison:3'] && G.S.relicEls['set:poison:2'] && G.S.relicEls['set:fortress:2'] && !G.S.relicEls['set:frost:2'], 'badges answer for the set procs');
+  h.ok(G.run.relics.every(id => G.S.relicEls[id]), 'every relic still has its slot');
+  h.ok(!s6Find(bar, 'setMark').length, 'the placeholder is gone');
+  h.ok(G.S.relicEls.snow_globe.className.includes('inSet') && !G.S.relicEls.grip_tape.className.includes('inSet'), 'a lone piece gets its set pip, a relic outside every set none');
+  G.S.relicEls.snow_globe.onclick({});
+  h.ok(/Cold Storage 1\/3/.test(T._nodes.pop.innerHTML) && /Ice Box/.test(T._nodes.pop.innerHTML), 'its popover shows the set progress and the bonuses');
+  full.children.find(c => /setBadge/.test(c.className)).onclick({});
+  h.ok(/Poisoner's Kit 3\/3/.test(T._nodes.pop.innerHTML), 'the badge opens the set popover');
+  G.draw();
+});
+
+h.test('sets: the second and third pieces queue a fanfare through the announcer; the Prizedex remembers', () => {
+  const T = s6Boot(), G = T.GAME;
+  G.newRun('knight', 6602);
+  G.gainRelic('venom_gland');
+  h.eq(G.sets.queue.length, 0, 'a first piece: no fanfare');
+  G.gainRelic('contagion');
+  h.ok(G.sets.queue.length === 1 && G.sets.queue[0].n === 2, 'the second piece queues SET BONUS');
+  stepFor(G, 0.6);
+  h.ok(G.ann.log.some(a => a.key === 'set:poison:2' && a.k === 'show'), 'shown through the announcer');
+  h.ok(/SET BONUS/.test(s6Text(T._nodes.setFan)) && /Toxic Touch/.test(s6Text(T._nodes.setFan)), 'the fanfare names the bonus');
+  // the third piece, bought in a shop: the fanfare waits for nothing on the shop screen
+  const shop = G.rollShop({ q: 1, r: 1 });
+  shop.relic = { id: 'festering_jar', price: 10, sold: false };
+  G.run.gold = 50;
+  G.showShop(shop);
+  const tag = s6Find(T._nodes.shopBody, 'setTag')[0];
+  h.ok(tag && /3\/3 Poisoner's Kit/.test(s6Text(tag)) && /COMPLETES THE SET/.test(s6Text(tag)), 'the shop card says it completes the set');
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Festering Jar'));
+  h.ok(G.sets.queue.some(q => q.id === 'poison' && q.n === 3), 'SET COMPLETE queued');
+  h.eq(G.meta.sets.poison, 1, 'the Prizedex counts the completion');
+  h.eq(JSON.parse(T._store.clawspire_meta).sets.poison, 1, 'and saves it');
+  stepFor(G, 3);
+  h.ok(G.ann.log.some(a => a.key === 'set:poison:3' && a.k === 'show'), 'SET COMPLETE plays');
+  h.ok(G.sets.log.some(l => l.id === 'poison' && l.n === 3), 'logged');
+  // a fight never shows it (a relic is never gained in one, but the queue waits)
+  G.gainRelic('snow_globe'); G.gainRelic('cold_snap');
+  G.startFight(['rat'], 'normal', { seed: 5 });
+  stepFor(G, 1);
+  h.ok(G.sets.queue.some(q => q.id === 'frost'), 'the queue waits out the fight');
+  G.endFight('win');
+  // the profile keeps its sets
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.eq(T2.GAME.meta.sets.poison, 1, 'meta.sets survives a reload');
+  const T3 = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, unlocks: { knight: true }, sets: { poison: 'x', nope: 3, frost: -2, luck: 2 } }) } });
+  h.eq(JSON.stringify(T3.GAME.meta.sets), '{"luck":2}', 'junk in meta.sets is repaired');
+});
+
+h.test('sets: relic cards show the set count; the Prizedex has a Sets tab', () => {
+  const T = s6Boot(), G = T.GAME;
+  G.newRun('knight', 6603);
+  G.run.relics.push('kettle_helm');
+  G.showTreasure({ relic: 'battering_ram', gold: 0, title: 'Treasure' });
+  const tag = s6Find(T._nodes.treasureBody, 'setTag')[0];
+  h.ok(tag && /2\/3 Iron Fortress/.test(s6Text(tag)) && !/COMPLETES/.test(s6Text(tag)), 'the reveal reads 2/3 Iron Fortress');
+  G.showTreasure({ relic: 'grip_tape', gold: 0 });
+  h.eq(s6Find(T._nodes.treasureBody, 'setTag').length, 0, 'no tag outside a set');
+  // the capsule's prize card
+  const cap = G.loot.makeCapsule('treasure', { tier: 'r' });
+  cap.prize = { k: 'relic', id: 'castle_walls' };
+  G.loot.showCapsule({ cap, then: { k: 'map' } });
+  crackOpen(G);
+  h.ok(/2\/3 Iron Fortress/.test(s6Text(T._nodes.capsuleBody)), 'the capsule card too, once the relic is yours');
+  G.loot.collectCapsule();
+  // the Prizedex
+  G.meta.seen.relics.venom_gland = 1;
+  G.meta.sets = { fortress: 1 };
+  G.showTitle();
+  G.showCollection();
+  const i = G.S.ui.buttons.findIndex(b => b.label === 'Sets');
+  h.ok(i >= 4, 'a Sets tab after the four DATA tabs');
+  G.choose(i);
+  h.ok(G.screen === 'collection' && G.S.dexTab === 'sets', 'the Sets tab');
+  const cards = s6Find(T._nodes.collectionBody, 'setc');
+  h.eq(cards.length, T.DATA.SET_IDS.length, 'a card per set');
+  h.ok(/Poisoner's Kit/.test(s6Text(cards[0])) && /COMPLETED/.test(s6Text(cards.find(c => /Iron Fortress/.test(s6Text(c))))), 'met sets named, completed ones stamped');
+  h.ok(cards.some(c => /\?\?\?/.test(s6Text(c))), 'unmet sets stay ???');
+  G.showCollection('relics');
+  h.eq(G.S.dexTab, 'relics', 'back to a DATA tab');
+  G.draw();
+});
+
+h.test('boon draft: the machine deals three cards by seed and Tilt; a reload shows the same deal; a pick pays once', () => {
+  const T = s6Boot(), G = T.GAME;
+  G.boon.force = true;
+  G.newRun('knight', 6604);
+  h.eq(G.screen, 'boon', 'after character select: the deal');
+  const B = G.run.boon;
+  h.ok(B && B.offers.length === 3 && B.offers.map(o => o.slot).join() === 'gift,boost,trade' && !B.done, 'a gift, a boost, a trade, face down');
+  h.eq(G.S.ui.buttons.length, 4, 'three cards and Walk away');
+  const T2 = s6Boot(), G2 = T2.GAME;
+  G2.boon.force = true;
+  G2.newRun('knight', 6604);
+  h.eq(JSON.stringify(G2.run.boon.offers), JSON.stringify(B.offers), 'the same seed deals the same cards');
+  // a reload on the deal
+  const T3 = s6Boot(Object.assign({}, T._store)), G3 = T3.GAME;
+  G3.boon.force = true;
+  G3.choose(G3.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.ok(G3.screen === 'boon' && JSON.stringify(G3.run.boon.offers) === JSON.stringify(B.offers), 'a reload shows the same three cards');
+  // walk away
+  const gold0 = G3.run.gold;
+  h.ok(G3.boon.pick(-1) && G3.screen === 'map' && G3.run.gold === gold0 && G3.run.boon.done, 'Walk away: nothing, then the map');
+  h.eq(G3.boon.pick(0), false, 'never a second pick');
+  const T4 = s6Boot(Object.assign({}, T3._store)), G4 = T4.GAME;
+  G4.boon.force = true;
+  G4.choose(G4.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.eq(G4.screen, 'map', 'a reload after the pick is the map');
+  // the Tilt changes the deal
+  const T5 = s6Boot(), G5 = T5.GAME;
+  G5.boon.force = true;
+  G5.meta.tilt.knight = 9;
+  G5.prog.startRun('knight', 9);
+  h.eq(G5.run.tilt, 9, 'a Tilt 9 run');
+  h.ok(['shark', 'glassjaw', 'devil'].includes(G5.run.boon.offers[2].id), 'Tilt 9 deals a spicy trade: ' + G5.run.boon.offers[2].id);
+  G5.boon.show();
+  G.draw();
+});
+
+h.test('boon draft: every card does what it says', () => {
+  const T = s6Boot(), G = T.GAME, D = T.DATA;
+  G.boon.force = true;
+  const deal = (o, seed) => {
+    G.newRun('knight', seed || 6605);
+    G.run.boon.offers[0] = Object.assign({ slot: D.BOONS[o.id].slot }, o);
+    G.boon.show();
+    return { gold: G.run.gold, max: G.run.maxHp, hp: G.run.hp, bin: G.run.bin.length, rel: G.run.relics.length, ink: G.run.ink };
+  };
+  let b = deal({ id: 'gold' });
+  G.boon.pick(0);
+  h.ok(G.run.gold === b.gold + 100 && G.screen === 'map', 'Pocket Change: +100 gold');
+  b = deal({ id: 'grabs' });
+  G.boon.pick(0);
+  G.startFight(['rat'], 'normal', { seed: 3 });
+  h.eq(G.fight.player.grabsMax, 5, 'Warm-Up Tokens: +2 grabs in the first fight');
+  G.save();
+  const Tr = s6Boot(Object.assign({}, T._store));
+  Tr.GAME.choose(Tr.GAME.S.ui.buttons.findIndex(x => /continue/i.test(x.label)));
+  h.eq(Tr.GAME.fight && Tr.GAME.fight.player.grabsMax, 5, 'a reload mid fight keeps them');
+  G.endFight('win');
+  h.eq(G.run.boon.grabs, 0, 'spent when it ends');
+  G.startFight(['rat'], 'normal', { seed: 4 });
+  h.eq(G.fight.player.grabsMax, 3, 'the next fight is back to 3');
+  G.endFight('win');
+  b = deal({ id: 'pet', pet: 'cat' });
+  G.boon.pick(0);
+  h.ok(G.run.pet && G.run.pet.id === 'cat' && G.run.pet.lv === 2, 'Pet Pal: a Lv 2 cat');
+  b = deal({ id: 'favor', relics: ['festering_jar'] });
+  G.boon.pick(0);
+  h.ok(G.run.relics.includes('festering_jar') && G.run.relics.length === b.rel + 1, "Prize Master's Favor: the rare relic");
+  b = deal({ id: 'setpiece', relics: ['kettle_helm'] });
+  G.boon.pick(0);
+  h.ok(G.run.relics.includes('kettle_helm'), 'Starter Set: the set piece');
+  b = deal({ id: 'polish' });
+  G.boon.pick(0);
+  h.eq(G.run.bin.filter(i => i.plus).length, 3, 'Polish: three items upgraded');
+  b = deal({ id: 'bulbs' });
+  G.boon.pick(0);
+  h.ok(G.run.ink === b.ink + 5 && G.run.brushes.includes('lantern'), 'Bright Idea: 5 bulbs and a lantern');
+  b = deal({ id: 'pact', relics: ['festering_jar'] });
+  G.boon.pick(0);
+  h.ok(G.run.maxHp === b.max - 10 && G.run.hp <= G.run.maxHp && G.run.relics.includes('festering_jar'), 'Blood Pact: -10 Max HP, a rare');
+  b = deal({ id: 'pockets', relics: ['contagion'] });
+  G.boon.pick(0);
+  h.ok(G.run.bin.filter(i => i.id === 'rock').length === 2 && G.run.gold === b.gold + 50 && G.run.relics.includes('contagion'), 'Heavy Pockets: 2 Rocks, 50 gold, an uncommon');
+  b = deal({ id: 'shark', relics: ['third_hand'] });
+  G.boon.pick(0);
+  h.ok(G.run.gold === 0 && G.run.relics.includes('third_hand'), 'Loan Shark: broke, a boss relic');
+  b = deal({ id: 'glassjaw', relics: ['festering_jar', 'castle_walls'] });
+  G.boon.pick(0);
+  h.ok(G.run.maxHp === b.max - 15 && G.run.relics.includes('festering_jar') && G.run.relics.includes('castle_walls'), 'Glass Jaw: -15 Max HP, two rares');
+  b = deal({ id: 'devil', relics: ['cursed_quarter', 'powder_keg'] });
+  G.boon.pick(0);
+  h.ok(G.run.maxHp === b.max - Math.round(b.max * 0.2) - 10 && G.run.bin.some(i => i.id === 'slag') && G.run.relics.includes('powder_keg'), "Devil's Bargain: -20% Max HP (the Quarter's 10 too), a Slag, two relics");
+  b = deal({ id: 'favor', relics: ['squire_gauntlet'] });
+  G.boon.pick(0);
+  h.eq(G.run.gold, b.gold + 40, 'a relic already owned pays 40 gold instead');
+  // the capsule: cracked right away, a reload never deals a second one
+  b = deal({ id: 'capsule' });
+  G.boon.pick(0);
+  h.ok(G.screen === 'capsule' && G.run.boon.cap && ['u', 'r', 'l'].includes(G.run.boon.cap.tier0), 'Mystery Capsule: an uncommon or better, opened now');
+  const Tc = s6Boot(Object.assign({}, T._store)), Gc = Tc.GAME;
+  Gc.choose(Gc.S.ui.buttons.findIndex(x => /continue/i.test(x.label)));
+  h.ok(Gc.screen === 'capsule' && JSON.stringify(Gc.run.boon.cap.prize) === JSON.stringify(G.run.boon.cap.prize), 'a reload: the same capsule');
+  crackOpen(G); G.loot.collectCapsule();
+  h.eq(G.screen, 'map', 'then the map');
+  // Spring Cleaning: three trips to the bin, a reload keeps the count
+  b = deal({ id: 'trim' });
+  G.boon.pick(0);
+  h.ok(G.screen === 'bin' && G.run.boon.trim === 3, 'Spring Cleaning: the bin picker');
+  G.choose(0);
+  h.ok(G.screen === 'bin' && G.run.boon.trim === 2 && G.run.bin.length === b.bin - 1, 'one gone, two to go');
+  G.choose(0); G.choose(0);
+  h.ok(G.screen === 'map' && G.run.bin.length === b.bin - 3 && G.run.boon.trim === 0, 'three thrown out, then the map');
+  b = deal({ id: 'trim' });
+  G.boon.pick(0); G.choose(0);
+  G.choose(G.S.ui.buttons.findIndex(x => /cancel/i.test(x.label)));
+  h.ok(G.screen === 'map' && G.run.bin.length === b.bin - 1 && G.run.boon.trim === 0, 'Cancel keeps the rest');
+});
+
+h.test('compactor: three in, one out, at the rest stop and in the shop; saves at every step', () => {
+  const T = s6Boot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 6606);
+  G.run.bin.push({ uid: 'k1', id: 'rusty_sword', plus: false }, { uid: 'k2', id: 'rusty_sword', plus: false }, { uid: 'k3', id: 'rusty_sword', plus: false });
+  G.showRest();
+  const ci = G.S.ui.buttons.findIndex(b => b.el && /Compact/.test(s6Text(b.el)));
+  h.eq(ci, 2, 'the rest stop offers Compact third');
+  G.choose(ci);
+  h.eq(G.screen, 'compactor', 'the Compactor');
+  const n0 = G.run.bin.length;
+  h.eq(G.cmp.crush(), null, 'nothing picked: refused');
+  h.ok(G.cmp.pick('k1') && G.cmp.pick('k2') && !G.cmp.pick('k2'), 'pick two (never the same one twice)');
+  h.ok(G.cmp.unpick('k2') && G.cmp.pick('k2') && G.cmp.pick('k3') && !G.cmp.pick(G.run.bin[0].uid), 'unpick, pick, three at most');
+  h.ok(/Three of a kind/.test(G.cmp.rule(G.cmp.state.cd.pick.map(u => G.run.bin.find(i => i.uid === u)))), 'the rule line says what comes out');
+  // a reload with the picks made
+  G.save();
+  let T2 = s6Boot(Object.assign({}, T._store)), G2 = T2.GAME;
+  G2.choose(G2.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.ok(G2.screen === 'compactor' && G2.cmp.state.cd.pick.join() === 'k1,k2,k3' && G2.run.bin.length === n0, 'a reload keeps the picks, nothing crushed');
+  const res = G.cmp.crush();
+  h.ok(res && res.id === 'rusty_sword' && res.plus, 'three Rusty Swords: a Rusty Sword+');
+  h.eq(G.run.bin.length, n0 - 2, 'the bin is two lighter');
+  h.ok(!G.run.bin.some(i => ['k1', 'k2', 'k3'].includes(i.uid)) && G.run.bin.some(i => i.uid === res.uid && i.plus), 'the three are gone, the plus copy is in');
+  h.eq(G.cmp.crush(), null, 'never twice');
+  T2 = s6Boot(Object.assign({}, T._store)); G2 = T2.GAME;
+  G2.choose(G2.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+  h.ok(G2.screen === 'compactor' && G2.cmp.state.cd.res && G2.run.bin.length === n0 - 2, 'a reload after the crush shows the result, nothing crushed again');
+  G2.cmp.leave();
+  h.eq(G2.screen, 'map', 'a crush at the rest stop was the rest: on to the map');
+  G.cmp.leave();
+  // the shop: the slot sits before the prize counter, costs gold, once a shop
+  G.run.gold = 100;
+  const shop = G.rollShop({ q: 5, r: 5 });
+  G.showShop(shop);
+  const labels = G.S.ui.buttons.map(b => b.label);
+  h.ok(labels.indexOf('Compactor') === labels.length - 2 && labels[labels.length - 1] === 'Prize counter', 'the Compactor sits just before the prize counter');
+  G.choose(labels.indexOf('Compactor'));
+  const com = D.pool('c').filter(id => !G.run.bin.some(i => i.id === id)).slice(0, 3);
+  for (const [i, id] of com.entries()) G.run.bin.push({ uid: 'c' + i, id, plus: false });
+  for (let i = 0; i < 3; i++) G.cmp.pick('c' + i);
+  G.run.gold = 5;
+  h.eq(G.cmp.crush(), null, 'too poor: refused');
+  G.run.gold = 100;
+  const n1 = G.run.bin.length;
+  const r2 = G.cmp.crush();
+  h.ok(r2 && D.ITEMS[r2.id].rarity === 'u' && !r2.plus, 'three commons: an uncommon');
+  h.ok(G.run.gold === 100 - G.cmp.price() && shop.cmpUsed && G.run.bin.length === n1 - 2, 'paid, used, two lighter');
+  G.cmp.leave();
+  h.eq(G.screen, 'shop', 'back to the shop');
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Compactor'));
+  h.eq(G.screen, 'shop', 'once a shop');
+  // too small a bin
+  G.run.bin = G.run.bin.slice(0, 4);
+  G.cmp.show({ from: 'rest', pick: G.run.bin.slice(0, 3).map(i => i.uid), res: null });
+  h.eq(G.cmp.crush(), null, 'a bin of 4 cannot be crushed below the floor');
+  G.draw();
+});
+
+h.test('compactor: the press plays the crush (feed, slam, grind, lift, pop) and a tap hurries it', () => {
+  const T = s6Boot(), G = T.GAME;
+  G.newRun('knight', 6607);
+  G.run.bin.push({ uid: 'q1', id: 'toxic_vial', plus: false }, { uid: 'q2', id: 'venom_dart', plus: false }, { uid: 'q3', id: 'rusty_sword', plus: false });
+  G.cmp.show({ from: 'rest', pick: ['q1', 'q2', 'q3'], res: null });
+  G.S.headless = false;   // the animation path (the stub DOM still draws)
+  const res = G.cmp.crush();
+  G.S.headless = true;
+  const C = G.cmp.state;
+  h.ok(res && C.phase === 'feed', 'the crush starts feeding');
+  const seen = new Set();
+  for (let i = 0; i < 180 && C.phase !== 'done'; i++) { G.update(DT); seen.add(C.phase); G.draw(); }
+  h.ok(['feed', 'press', 'grind', 'lift'].every(p => seen.has(p)) && C.phase === 'done', 'feed, press, grind, lift, done: ' + [...seen].join(','));
+  h.ok(C.fired.slam && C.fired.pop, 'the slam and the pop fired');
+  G.cmp.show({ from: 'rest', pick: [], res: null });
+  G.run.bin.push({ uid: 'w1', id: 'rusty_sword', plus: false }, { uid: 'w2', id: 'rusty_sword', plus: false }, { uid: 'w3', id: 'rusty_sword', plus: false });
+  for (const u of ['w1', 'w2', 'w3']) G.cmp.pick(u);
+  G.S.headless = false; G.cmp.crush(); G.S.headless = true;
+  G.update(DT);
+  h.ok(G.cmp.hurry() && G.cmp.state.phase === 'done' && G.cmp.state.fired.slam, 'a tap: straight to the result (the slam still lands)');
+});
+
+h.test('sets: pets hear the Hungry Pack (extra tricks, stronger tricks, Chew Toy xp)', () => {
+  const T = s6Boot(), G = T.GAME;
+  G.newRun('knight', 6608);
+  h.eq(G.sets.petStat('uses'), 0, 'no pet relics: no extra trick');
+  G.run.relics.push('dog_whistle');
+  h.eq(G.sets.petStat('uses'), 1, 'Dog Whistle: one more trick');
+  G.run.relics.push('chew_toy', 'treat_jar');
+  h.ok(G.sets.petStat('uses') === 2 && G.sets.petStat('pow') === 0.5 && G.sets.petStat('xp') === 2, 'Top Dog: another trick and +50% power; Chew Toy: +2 xp');
+  G.pet.give('hamster', 0);
+  const calls = [], real = T.COMBAT.petTrick;
+  T.COMBAT.petTrick = (F, id) => { const ev = real(F, id); calls.push({ id, ev }); return ev; };
+  G.startFight(['rat', 'slime'], 'normal', { seed: 4242 });
+  stepFor(G, 0.5);
+  const P = G.pet.fs();
+  h.eq(P.uses, 1 + 2, 'the pet gets three tricks at Lv 1');
+  const f = petUntilFx(G, 4);
+  h.ok(f >= 0 && calls.length === 1 && calls[0].id === 'hamster', 'its trick reaches COMBAT.petTrick');
+  h.ok(['treat_jar', 'dog_whistle', 'set:pack:2', 'set:pack:3'].every(id => calls[0].ev.some(e => e.t === 'proc' && e.id === id)), 'Treat Jar, Dog Whistle, Pack Tactics and Top Dog all answer');
+  T.COMBAT.petTrick = real;
+  const xp0 = G.run.pet.xp;
+  G.endFight('win');
+  h.ok(G.run.pet.xp >= xp0 + 2 + 2, 'a win: the fight xp and the Chew Toy\'s 2');
+});
+
+/* ================================================================ ACCESS (round 6) */
+// the camera's clamp (game.js clampCam), recomputed: zoom in 0.6..1.4, the view centre on the map
+function accCamOk(Gx, MAPx) {
+  const M = Gx.run.map, b = MAPx.bounds(M, MAPx.HEX || 46, 'v'), c = Gx.cam, z = c.zoom;
+  if (!(z >= 0.6 - 1e-9 && z <= 1.4 + 1e-9)) return 'zoom ' + z;
+  const hw = 540 / 2 / z, hh = 768 / 2 / z;
+  const x0 = Math.min(hw - 80, 0), x1 = Math.max(b.w + 80 - hw, b.w), y0 = Math.min(hh - 80, 0), y1 = Math.max(b.h + 80 - hh, b.h);
+  const ok = (v, a0, a1, mid) => (a0 > a1 ? Math.abs(v - mid) < 1e-6 : v >= a0 - 1e-6 && v <= a1 + 1e-6);
+  if (!ok(c.x, x0, x1, b.w / 2)) return 'x ' + c.x.toFixed(1) + ' not in ' + x0.toFixed(1) + '..' + x1.toFixed(1);
+  if (!ok(c.y, y0, y1, b.h / 2)) return 'y ' + c.y.toFixed(1) + ' not in ' + y0.toFixed(1) + '..' + y1.toFixed(1);
+  return '';
+}
+function accKids(el, out) { out = out || []; if (!el) return out; if (el.textContent) out.push(el.textContent); for (const k of el.children || []) accKids(k, out); return out; }
+// A map with its road walkable end to end (nothing on it resolves).
+function accRoadRun(Gx, seed) {
+  Gx.newRun('knight', seed);
+  if (Gx.screen !== 'map') Gx.toMap();
+  const M = Gx.run.map;
+  for (const [q, r] of M.road) { const t = M.tiles[CS.MAP.key(q, r)]; if (t.type !== 'boss') t.done = true; }
+  for (const k in M.tiles) if (M.tiles[k].terrain === 'shallow') M.tiles[k].revealed = false;
+  M.roam = [];   // no roaming monster jumps the walk
+  return M;
+}
+
+h.test('access: settings default and repair on old profiles, persist, and apply at boot', () => {
+  const old = metaBoot({ settings: { shake: false } });
+  const s = old.G.meta.settings;
+  h.ok(s.shake === false && s.haptics === true, 'an old profile keeps its Shake off and gets Buzz on');
+  for (const [k, v] of Object.entries(old.G.acc.DEF)) if (k !== 'shake') h.eq(s[k], v, 'default ' + k);
+  const junk = metaBoot({ settings: { cb: 'purple', text: 7, volMusic: 'loud', volSfx: 3, hand: null, hc: 'yes', slowClaw: 1, noFlash: 'x' } }).G.meta.settings;
+  h.ok(junk.cb === 'off' && junk.text === 'n' && junk.volMusic === 1 && junk.volSfx === 1 && junk.hand === 'off' && junk.hc === false && junk.slowClaw === false && junk.noFlash === false, 'junk values are repaired (' + JSON.stringify(junk) + ')');
+  h.eq(metaBoot({ settings: 'nope' }).G.meta.settings.cb, 'off', 'a broken settings field is a fresh one');
+  const { T, G: Gs, saved } = metaBoot({});
+  h.eq(Gs.acc.set('cb', 'deutan'), 'deutan', 'set a colour-blind mode');
+  h.eq(T.RENDER.acc.mode, 'deutan', 'the renderer takes it at once');
+  h.ok(Gs.acc.cls.includes('cb-deutan'), 'and the page class');
+  Gs.acc.set('text', 'xl'); Gs.acc.set('noFlash', true); Gs.acc.set('hc', true); Gs.acc.set('hand', 'left'); Gs.acc.set('slowClaw', true);
+  Gs.acc.set('volMaster', 0.3); Gs.acc.set('volMusic', 0.5); Gs.acc.set('volSfx', 0.25); Gs.acc.set('shake', false);
+  h.near(T.RENDER.acc.textK, 1.3, 1e-9, 'extra large text');
+  h.ok(T.RENDER.acc.noFlash && T.RENDER.acc.hc && T.RENDER.fx.reduced, 'reduced flashing, outlines and Shake off applied');
+  h.near(T.AUDIO.master, 0.3, 1e-9, 'master volume');
+  h.near(T.AUDIO.volume.music, 0.25, 1e-9, 'music volume (100% is the old level)');
+  h.near(T.AUDIO.volume.sfx, 0.2, 1e-9, 'effects volume');
+  h.eq(JSON.stringify(Gs.acc.cls), JSON.stringify(['cb-deutan', 'txt-xl', 'noflash', 'hand-left', 'hc']), 'every page class');
+  h.eq(Gs.acc.set('volMusic', 5), 1, 'a volume is clamped');
+  h.eq(Gs.acc.set('bogus', 1), undefined, 'an unknown setting is refused');
+  const st = saved().settings;
+  h.ok(st.cb === 'deutan' && st.text === 'xl' && st.noFlash && st.hc && st.hand === 'left' && st.slowClaw && st.volMaster === 0.3 && st.shake === false, 'every setting is saved on the profile');
+  const again = boot({ store: Object.assign({}, T._store) });
+  h.ok(again.RENDER.acc.mode === 'deutan' && again.RENDER.acc.textK === 1.3 && again.RENDER.acc.noFlash && again.RENDER.fx.reduced, 'a reload applies them at boot');
+  h.near(again.AUDIO.master, 0.3, 1e-9, 'the master volume too');
+  h.ok(again.GAME.acc.cls.includes('hand-left'), 'and the page classes');
+});
+
+h.test('access: the Settings panel from the title, the map and a paused fight', () => {
+  const { T, G: Gs } = metaBoot({});
+  Gs.showTitle();
+  const bi = Gs.S.ui.buttons.findIndex(b => /Settings/.test(b.label));
+  h.ok(bi >= 0, 'the title has a Settings button');
+  h.ok(!Gs.S.ui.buttons.some(b => /^(Shake|Buzz) /.test(b.label)), 'Shake and Buzz moved into it');
+  Gs.choose(bi);
+  h.ok(Gs.acc.isOpen, 'it opens the panel');
+  const labels = Gs.S.ui.buttons.map(b => b.label);
+  for (const l of ['Master volume', 'Music volume', 'Effects volume', 'Sound on', 'Music on', 'Shake on', 'Buzz on', 'Reduced flashing off', 'Standard', 'Deutan', 'Protan', 'Tritan', 'Normal', 'Large', 'Extra large',
+    'Item outlines off', 'Both hands', 'Left hand', 'Right hand', 'Slow claw off', 'Reset tips', 'Done']) h.ok(labels.includes(l), 'the panel has ' + l);
+  Gs.choose(Gs.S.ui.buttons.findIndex(b => b.label === 'Tritan'));
+  h.ok(T.RENDER.acc.mode === 'tritan' && Gs.acc.isOpen, 'a colour mode previews live, the panel stays');
+  Gs.choose(Gs.S.ui.buttons.findIndex(b => b.label === 'Reduced flashing off'));
+  h.ok(Gs.meta.settings.noFlash && Gs.S.ui.buttons.some(b => b.label === 'Reduced flashing on'), 'a toggle flips and relabels');
+  T._meta = null;
+  const n0 = T._counts.fillText || 0;
+  h.ok(Gs.acc.preview(T._document.createElement('canvas')), 'the sample strip draws');
+  h.ok((T._counts.fillText || 0) > n0, 'with its numbers');
+  Gs.meta.tips = { map: 1, combo: 1 };
+  Gs.choose(Gs.S.ui.buttons.findIndex(b => b.label === 'Reset tips'));
+  h.eq(Object.keys(Gs.meta.tips).length, 0, 'Reset tips clears them');
+  Gs.choose(Gs.S.ui.buttons.findIndex(b => b.label === 'Done'));
+  h.ok(!Gs.acc.isOpen && Gs.S.ui.buttons.some(b => /new run/i.test(b.label)), 'Done closes it and the title is back');
+  // the map head's gear, Escape closes
+  Gs.newRun('knight', 6101);
+  if (Gs.screen !== 'map') Gs.toMap();
+  const gi = Gs.S.ui.buttons.findIndex(b => b.label === '⚙');
+  h.ok(gi >= 0, 'the map head has the gear');
+  Gs.choose(gi);
+  h.ok(Gs.acc.isOpen, 'it opens the panel on the map');
+  h.ok(Gs.acc.key({ key: 'Escape' }, true) && !Gs.acc.isOpen, 'Escape closes it');
+  h.ok(Gs.S.ui.buttons.some(b => b.label === 'Bin'), 'the map head is back');
+  // a fight holds still while it is open
+  Gs.startFight(['rat'], 'normal');
+  settle(Gs, 20);
+  const F = Gs.fight, t0 = Gs.S.t, turn = F.turn, grabs = F.player.grabs;
+  Gs.acc.open();
+  Gs.steer(40); Gs.dropClaw();
+  stepFor(Gs, 2);
+  h.eq(Gs.S.t, t0, 'the clock stops');
+  h.ok(Gs.rig.phase === 'idle' || Gs.rig.phase === 'moving', 'the claw waits');
+  h.ok(F.turn === turn, 'the turn holds');
+  Gs.acc.close();
+  stepFor(Gs, 0.2);
+  h.ok(Gs.S.t > t0, 'closing lets it run again');
+  h.ok(Gs.S.ui.buttons.some(b => b.label === 'END TURN'), 'the fight buttons are back');
+  void grabs;
+});
+
+h.test('access: one-handed thumb zone, the slow claw noted in the summary, outlines and flashes', () => {
+  const { T, G: Gs } = metaBoot({});
+  Gs.newRun('knight', 6102);
+  if (Gs.screen !== 'map') Gs.toMap();
+  Gs.acc.set('hand', 'right');
+  stepFor(Gs, 0.05);
+  h.ok(Gs.S.accThumbOn, 'the thumb buttons show on the map');
+  h.ok(Gs.acc.cls.includes('hand-right'), 'END TURN goes to the right thumb (page class)');
+  Gs.acc.set('hand', 'left');
+  h.ok(Gs.acc.cls.includes('hand-left') && !Gs.acc.cls.includes('hand-right'), 'and to the left');
+  Gs.startFight(['rat'], 'normal');
+  stepFor(Gs, 0.05);
+  h.ok(!Gs.S.accThumbOn, 'the map buttons hide in a fight');
+  Gs.acc.set('hand', 'off');
+  settle(Gs, 20);
+  const sp0 = Gs.rig.cfg.speed;
+  h.ok(!(Gs.run.assist && Gs.run.assist.slowClaw), 'no assist yet');
+  Gs.acc.set('slowClaw', true);
+  h.near(Gs.rig.cfg.speed, sp0 * Gs.acc.SLOW, 1e-9, 'the slow claw slows the live claw at once');
+  h.ok(Gs.run.assist && Gs.run.assist.slowClaw, 'and tags the run');
+  Gs.acc.set('hc', true); Gs.acc.set('noFlash', true); Gs.acc.set('cb', 'protan'); Gs.acc.set('text', 'l');
+  let threw = null;
+  try { stepFor(Gs, 0.5); Gs.draw(); Gs.fs.party = 1; T.RENDER.fx.flash('#fff', 0.8); stepFor(Gs, 0.1); Gs.draw(); } catch (e) { threw = e; }
+  h.ok(!threw, 'a fight draws with every option on ' + (threw ? threw.stack : ''));
+  h.near(Gs.acc.white(1), 0.22, 1e-9, 'the boss whiteout is a soft wash');
+  Gs.acc.set('noFlash', false);
+  h.eq(Gs.acc.white(1), 1, 'and full again');
+  Gs.startFight(['rat'], 'normal');
+  settle(Gs, 20);
+  h.near(Gs.rig.cfg.speed, Gs.fight.claw.speed * Gs.acc.SLOW, 1e-9, 'a new fight builds the slow claw');
+  Gs.run.hp = 0;
+  Gs.showGameOver();
+  h.ok(accKids(T._nodes.gameoverBody).some(s => s === 'Slow claw'), 'the run summary notes the assist');
+});
+
+h.test('access: text sizes scale every full-screen body and hold the 540 stage (so 360 px phones)', () => {
+  const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  const rule = /html\[class\*="txt-"\] :is\(([^)]*)\)\{zoom:var\(--accK\)\}/.exec(html);
+  h.ok(rule, 'one zoom rule for the text size');
+  const zoomed = rule ? rule[1].split(',').map(s => s.trim()) : [];
+  const bodies = [...html.matchAll(/<div id="scr-(\w+)" class="screen"><div id="(\w+)" class="col[^"]*">/g)].map(m => '#' + m[2]);
+  h.ok(bodies.length >= 12, 'the plain full-screen bodies (' + bodies.length + ')');
+  const miss = bodies.filter(b => !zoomed.includes(b) && b !== '#bossBody');
+  h.eq(miss.join(','), '', 'every one of them scales');
+  h.ok(zoomed.includes('.accSheet'), 'the Settings panel too');
+  h.ok(/html\[class\*="txt-"\] #titleMenu\{zoom:calc\(1 \+ \(var\(--accK\) - 1\) \* \.5\)/.test(html), 'the title menu half as much (the logo stays clear)');
+  const ks = [...html.matchAll(/html\.txt-(l|xl)\{--accK:([\d.]+)\}/g)].map(m => +m[2]);
+  h.eq(JSON.stringify(ks), JSON.stringify([1.15, 1.3]), 'large 1.15, extra large 1.3');
+  // the widest fixed box inside a scaled body (the title's buttons, 280 px) still fits the stage at x1.3
+  const menuW = +(/\.menu \.btn\{width:(\d+)px\}/.exec(html) || [0, 999])[1];
+  h.ok(menuW * 1.3 <= 540 - 32, 'the title buttons fit at extra large (' + menuW * 1.3 + ' px of 508)');
+  h.ok(/\.accSheet\{max-height:calc\(\(100% - 84px\) \/ var\(--accK\)\)\}/.test(html.replace(/html\[class\*="txt-"\] /g, '')), 'the scaled Settings sheet still fits the stage height');
+  const { G: Gs } = metaBoot({});
+  for (const t of ['n', 'l', 'xl']) { Gs.acc.set('text', t); h.eq(Gs.acc.cls.filter(c => /^txt-/.test(c)).join(), t === 'n' ? '' : 'txt-' + t, 'text ' + t + ' class'); }
+});
+
+h.test('access: the far-tap swoop, the hop and the punch keep the camera in its bounds (fuzz)', () => {
+  const T = boot();
+  const Gs = T.GAME, MAPx = T.MAP;
+  let walks = 0, dipped = 0, bad = '', frames = 0;
+  for (let seed = 6200; seed < 6212; seed++) {
+    const M = accRoadRun(Gs, seed);
+    const rng = T.U.rng(seed);
+    for (let w = 0; w < 5; w++) {
+      const road = M.road, i0 = road.findIndex(([q, r]) => q === M.pos.q && r === M.pos.r);
+      const j = Math.min(road.length - 2, Math.max(0, i0) + 3 + Math.floor(rng() * 6));
+      const path = j > i0 ? MAPx.walkPath(M, road[j][0], road[j][1]) : null;
+      if (!path || path.length < 3) break;
+      const z0 = [0.6, 1.4, 1, 0.75, 1.2][w];
+      Gs.S.cam.zoom = z0;
+      Gs.lookAt(M.pos.q, M.pos.r, false);
+      Gs.startWalk(path);
+      h.ok(Gs.acc.cam && Gs.acc.cam.k === 'walk', 'a far tap swoops (' + path.length + ' steps)');
+      walks++;
+      let minZ = 9, hopSeen = false;
+      const interrupt = w === 3 ? 20 + Math.floor(rng() * 30) : -1;
+      for (let f = 0; f < 400 && (Gs.acc.cam || Gs.S.walk); f++) {
+        if (f === interrupt) Gs.lookAt(M.pos.q, M.pos.r, false);   // a snap mid-swoop
+        Gs.update(DT); frames++;
+        const e = accCamOk(Gs, MAPx);
+        if (e && !bad) bad = 'seed ' + seed + ' walk ' + w + ' frame ' + f + ': ' + e;
+        minZ = Math.min(minZ, Gs.cam.zoom);
+        const hp = Gs.acc.hop(); if (hp && hp.lift > 0.1) hopSeen = true;
+      }
+      if (minZ < z0 - 0.02) dipped++;
+      h.ok(!Gs.acc.cam, 'the swoop ends');
+      h.near(Gs.cam.zoom, z0, 1e-6, 'the zoom is back where it was (' + z0 + ')');
+      h.ok(hopSeen, 'the crawler hopped');
+      stepFor(Gs, 1);
+      const me = Gs.hexToStage(M.pos.q, M.pos.r), ok = accCamOk(Gs, MAPx);
+      h.ok(!ok, 'the camera rests in bounds');
+      void me;
+    }
+  }
+  h.eq(bad, '', 'no frame of any swoop leaves the clamp (' + frames + ' frames, ' + walks + ' walks)');
+  h.ok(walks >= 30 && dipped >= walks * 0.6, 'the camera zooms out a little on most (' + dipped + ' of ' + walks + '; not at the 0.6 floor)');
+  // a drag takes the camera back at once
+  const M = accRoadRun(Gs, 6230);
+  Gs.lookAt(M.pos.q, M.pos.r, false);
+  const path = MAPx.walkPath(M, M.road[6][0], M.road[6][1]);
+  Gs.startWalk(path);
+  stepFor(Gs, 0.2);
+  Gs.pointer('down', 270, 600, { pointerId: 1 }); Gs.pointer('move', 300, 640, { pointerId: 1 });
+  stepFor(Gs, 0.02);
+  h.ok(!Gs.acc.cam, 'a drag cancels the swoop');
+  Gs.pointer('up', 300, 640, { pointerId: 1 });
+  // reduced motion: the old behaviour
+  Gs.meta.settings.shake = false;
+  const M2 = accRoadRun(Gs, 6231);
+  Gs.lookAt(M2.pos.q, M2.pos.r, false);
+  Gs.startWalk(MAPx.walkPath(M2, M2.road[6][0], M2.road[6][1]));
+  h.ok(!Gs.acc.cam && Gs.S.camTo, 'Shake off: no swoop, the plain ease');
+  stepFor(Gs, 0.1);
+  h.eq(Gs.acc.hop(), null, 'and no hop');
+  Gs.meta.settings.shake = true;
+  // a short walk does not swoop
+  const M3 = accRoadRun(Gs, 6232);
+  Gs.startWalk(MAPx.walkPath(M3, M3.road[2][0], M3.road[2][1]));
+  h.ok(!Gs.acc.cam, 'a two-step walk just eases');
+  // a walk that ends in a fight: the zoom is back for the return
+  const M5 = accRoadRun(Gs, 6234);
+  const ft = M5.tiles[MAPx.key(M5.road[5][0], M5.road[5][1])];
+  ft.type = 'fight'; ft.done = false; ft.content = { diff: 0 };
+  Gs.S.cam.zoom = 1.2; Gs.lookAt(M5.pos.q, M5.pos.r, false);
+  Gs.startWalk(MAPx.walkPath(M5, M5.road[7][0], M5.road[7][1]));
+  for (let f = 0; f < 200 && Gs.screen === 'map'; f++) Gs.update(DT);
+  h.eq(Gs.screen, 'fight', 'the walk ran into the fight');
+  Gs.update(DT);
+  h.ok(!Gs.acc.cam && Math.abs(Gs.cam.zoom - 1.2) < 1e-9, 'the swoop let go and the zoom is back (' + Gs.cam.zoom + ')');
+  // lighting a hex by hand: a punch toward it, a zoom in about a point inside the map area
+  const M4 = accRoadRun(Gs, 6233);
+  stepFor(Gs, 0.1);
+  let dark = null;
+  for (const k in M4.tiles) { const t = M4.tiles[k]; if (!t.revealed && MAPx.canReveal(M4, t.q, t.r)) { dark = t; break; } }
+  h.ok(dark, 'a dark hex beside the light');
+  Gs.lookAt(dark.q, dark.r, false);
+  const p = Gs.hexToStage(dark.q, dark.r);
+  Gs.tap(p.x, p.y);
+  h.ok(dark.revealed, 'lit');
+  Gs.update(DT);
+  h.ok(Gs.acc.punch && Gs.acc.punch.q === dark.q, 'the punch aims at it');
+  let kMax = 1, pivotOk = true;
+  const rec = { translate() {}, scale() {} };
+  for (let f = 0; f < 40; f++) {
+    Gs.update(DT);
+    kMax = Math.max(kMax, Gs.acc.punchK());
+    const r = Gs.acc.mapPunch(rec, { x: 0, y: 172, w: 540, h: 768 });
+    if (r && (r.px < 0 || r.px > 540 || r.py < 172 || r.py > 940 || r.k < 1)) pivotOk = false;
+  }
+  h.ok(kMax > 1.03 && kMax <= 1 + Gs.acc.CAM.punch + 1e-9, 'a small zoom in (' + kMax.toFixed(3) + ')');
+  h.ok(pivotOk, 'about a point inside the map area (it only ever shows less of the map)');
+  h.eq(Gs.acc.punch, null, 'and it settles');
+});
+
+h.test('access: a taken tower pans over its view and back, the blooms wait for it; the fight iris', () => {
+  const T = boot();
+  const Gs = T.GAME, MAPx = T.MAP;
+  for (let seed = 6300; seed < 6306; seed++) {
+    Gs.newRun('knight', seed);
+    if (Gs.screen !== 'map') Gs.toMap();
+    const M = Gs.run.map;
+    stepFor(Gs, 0.1);
+    const tw = Object.values(M.tiles).filter(t => t.type === 'tower').sort((a, b) => MAPx.hexDist(a.q, a.r, M.pos.q, M.pos.r) - MAPx.hexDist(b.q, b.r, M.pos.q, M.pos.r))[0];
+    tw.done = true; tw.revealed = true;
+    Gs.towerPrize({ bonus: { k: 'ink', n: 2 }, q: tw.q, r: tw.r });
+    Gs.toMap();
+    Gs.update(DT);
+    h.ok(Gs.acc.cam && Gs.acc.cam.k === 'path', 'the camera pans to the tower');
+    h.eq(Gs.S.beam, null, 'the beam waits for the camera');
+    const early = Gs.S.mapPaint.items.filter(it => it.bloomAt > Gs.S.t + 0.6).length;
+    h.ok(early > 20, 'the blooms wait too (' + early + ')');
+    let bad = '', beamSeen = false, near = 1e9;
+    const tp = () => { const a = Gs.hexToStage(tw.q, tw.r); return Math.hypot(a.x - 270, a.y - 556); };
+    for (let f = 0; f < 300 && Gs.acc.cam; f++) {
+      Gs.update(DT);
+      const e = accCamOk(Gs, MAPx); if (e && !bad) bad = e;
+      if (Gs.S.beam) beamSeen = true;
+      near = Math.min(near, tp());
+    }
+    h.eq(bad, '', 'seed ' + seed + ': every frame in bounds');
+    h.ok(beamSeen, 'the beam sweeps once the camera is there');
+    h.ok(near < 120, 'the tower came to the middle of the view (' + near.toFixed(0) + ' px)');
+    h.ok(!Gs.acc.cam, 'and the pan ends');
+    const me = Gs.hexToStage(M.pos.q, M.pos.r);
+    h.ok(Math.hypot(me.x - 270, me.y - 556) < 160 || accCamOk(Gs, MAPx) === '', 'back on the crawler');
+  }
+  // a fight tile zooms in under an iris (reduced motion: the old iris)
+  const s = seedWithFightNeighbour(Gs, MAPx);
+  if (Gs.screen !== 'map') Gs.toMap();
+  Gs.lookAt(s.tile.q, s.tile.r, false);
+  const p = Gs.hexToStage(s.tile.q, s.tile.r);
+  Gs.tap(p.x, p.y);
+  h.eq(Gs.screen, 'fight', 'the fight starts at once');
+  const I = Gs.acc.iris;
+  h.ok(I && Math.abs(I.x - p.x) < 1 && Math.abs(I.y - p.y) < 1, 'the iris closes on the tile');
+  let threw = null;
+  try { Gs.draw(); stepFor(Gs, 0.2); Gs.draw(); } catch (e) { threw = e; }
+  h.ok(!threw, 'the fight draws under it');
+  stepFor(Gs, 1);
+  h.eq(Gs.acc.iris, null, 'and it is gone');
+  Gs.meta.settings.shake = false;
+  const s2 = seedWithFightNeighbour(Gs, MAPx);
+  if (Gs.screen !== 'map') Gs.toMap();
+  Gs.lookAt(s2.tile.q, s2.tile.r, false);
+  const p2 = Gs.hexToStage(s2.tile.q, s2.tile.r);
+  Gs.tap(p2.x, p2.y);
+  h.ok(Gs.screen === 'fight' && !Gs.acc.iris, 'Shake off: the plain iris');
+  Gs.meta.settings.shake = true;
+});
+
+h.test('access: each act plays its own tunes, handed to the audio before a mode starts', () => {
+  const T = boot();
+  const Gs = T.GAME, A = T.AUDIO;
+  Gs.showTitle();
+  h.eq(A.act, 0, 'the title plays the base tunes');
+  Gs.newRun('knight', 6401);
+  if (Gs.screen !== 'map') Gs.toMap();
+  h.ok(A.act === 1 && A.mode === 'map', 'act 1 map theme');
+  Gs.startFight(['rat'], 'normal');
+  h.ok(A.act === 1 && A.mode === 'fight', 'act 1 fight variant');
+  Gs.run.act = 2;
+  Gs.toMap();
+  h.ok(A.act === 2 && A.mode === 'map' && A._actOf('map') === 2, 'act 2: the foundry groove');
+  Gs.run.act = 3;
+  Gs.startFight(['rat'], 'boss');
+  h.ok(A.act === 3 && A.mode === 'boss' && A._actOf('boss') === 3, 'act 3: the boss borrows the music box');
+  Gs.showTitle();
+  h.eq(A.act, 0, 'back on the title: no act');
+});
+
+// ---------------------------------------------------------------- SECRET (round 6): the golden keys, the Back Room, The Machine
+function secBoot(meta, extra) { return metaBoot(Object.assign({ unlocks: { knight: true, rogue: true } }, meta || {}), extra); }
+const secVs = (G) => { if (G.boss.vs) { G.boss.vsSkip(); G.boss.vsSkip(); } stepFor(G, 0.05); };
+const secFlush = (G) => { const F = G.fight, FS = G.fs; const list = F.events.splice(0); for (const ev of list) FS.queue.push({ ev, beat: 0.02 }); FS.beatT = 0; };
+// Every DOM node under el (the stub DOM keeps children arrays).
+function secWalk(el, out) { out = out || []; if (!el) return out; out.push(el); for (const c of el.children || []) secWalk(c, out); return out; }
+const secFind = (el, re) => secWalk(el).find(n => re.test(n.className || '') || re.test(n.textContent || ''));
+function secRoom(G, seed) {
+  G.newRun('knight', seed);
+  G.run.act = 3;
+  G.run.sec.keys = { 1: 'dark', 2: 'roam', 3: 'arcade' };
+  G.sec.show({ k: 'door' });
+  G.sec.enter();
+  return G.run.map;
+}
+// Starts The Machine's fight in the Back Room with a crawler that will not die.
+function secMachine(G, seed) {
+  secRoom(G, seed);
+  const bt = G.run.map.tiles[G.run.map.boss.q + ',' + G.run.map.boss.r];
+  G.enterTile(bt);
+  secVs(G);
+  settle(G, 20);
+  const F = G.fight;
+  F.player.hp = F.player.maxHp = 9999;
+  return F;
+}
+
+h.test('secret: three golden keys a run, one per act, each hidden its own way, found, counted and saved', () => {
+  const { T, G, saved } = secBoot();
+  const MAP = T.MAP, U = T.U;
+  G.newRun('knight', 3301);
+  const sc = G.sec.of();
+  h.eq(Object.values(sc.kinds).sort().join(), 'arcade,dark,roam', 'each act hides its key a different way: ' + JSON.stringify(sc.kinds));
+  h.ok(G.run.map.sec && !G.run.map.sec.got, 'the act 1 map carries its key (' + G.run.map.sec.kind + ')');
+  h.ok(!secFind(T._nodes.mapHead, /secKeys/), 'no counter on a profile that never found a key');
+  // the dark corner: a glint on a far dark hex, picked up by stepping on it
+  let M = G.run.map;
+  MAP.secKeys(M, 'dark');
+  const t = M.tiles[M.sec.q + ',' + M.sec.r];
+  h.ok(!t.revealed && !t.road, 'the dark key sits in the dark, off the road');
+  G.draw();
+  t.revealed = true; G.draw();
+  G.enterTile(t);
+  h.eq(G.sec.keys(), 1, 'stepping on it: one key');
+  h.ok(M.sec.got && sc.keys[1] === 'dark', 'taken, on the run');
+  h.eq(saved().sec.keys, 1, 'the profile counts it');
+  h.ok(G.sec.keyFx, 'it spins up out of the hex');
+  G.draw();
+  G.enterTile(t);
+  h.eq(G.sec.keys(), 1, 'never twice');
+  stepFor(G, 2);
+  h.ok(!G.sec.keyFx, 'the celebration ends');
+  G.toMap();
+  const chip = secFind(T._nodes.mapHead, /secKeys/);
+  h.ok(chip && secWalk(chip).some(n => n.textContent === '1/3'), 'the counter shows 1/3 on the map head');
+  h.eq(G.sec.newMap(G.run), null, 'an act whose key is taken places no other');
+  G.save();
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T2.GAME.load() && T2.GAME.sec.keys() === 1 && T2.GAME.run.map.sec.got, 'a reload keeps the key');
+  // the roaming monster: the key pops out when it falls
+  G.run.act = 2;
+  G.run.map = MAP.generate({ act: 2, rng: U.rng(5), cols: 16, rows: 22 });
+  M = G.run.map;
+  MAP.secKeys(M, 'roam');
+  G.toMap();
+  const mon = M.roam.find(m => m.id === M.sec.id);
+  const tt = M.tiles[mon.q + ',' + mon.r]; tt.revealed = true; G.draw();
+  G.arc.roamFight(mon, false);
+  secVs(G); settle(G, 10);
+  const F = G.fight;
+  for (const e of F.enemies) T.COMBAT.damage(F, F.player, e, e.hp + 50, { pierce: true });
+  secFlush(G);
+  stepFor(G, 0.6);
+  h.ok(G.fs && G.fs.sec && G.fs.sec.drop, 'the key drops out of the beaten monster');
+  h.ok(G.ann.log.some(x => x.cls === 'secret'), 'GOLDEN KEY! through the announcer');
+  G.draw();
+  stepFor(G, 5);
+  h.eq(G.sec.keys(), 2, 'paid with the fight: two keys');
+  h.ok(sc.keys[2] === 'roam' && M.sec.got, 'on the run, the monster\'s key taken');
+  // the arcade: a plinko jackpot on the key's map
+  G.run.act = 3;
+  let pk = null;
+  for (let s = 1; s < 60 && !pk; s++) { const M3 = MAP.generate({ act: 3, rng: U.rng(s), cols: 16, rows: 22 }); const p = Object.values(M3.tiles).find(x => x.type === 'plinko'); if (p) { G.run.map = M3; pk = p; } }
+  M = G.run.map;
+  MAP.secKeys(M, 'arcade');
+  G.toMap();
+  pk.revealed = true; G.draw();
+  let jp = 1;
+  while (G.arc.plkSim(270, jp).slot !== 4 && jp < 5000) jp++;
+  const A = G.arc.session(pk);
+  A.tokens = Math.max(0, A.tokens - 1); A.pend = { x: 270, seed: jp };   // a drop in flight that lands in the JACKPOT
+  G.arc.show({ q: pk.q, r: pk.r });
+  stepFor(G, 0.3); G.draw();
+  G.arc.skip();
+  h.eq(G.sec.keys(), 3, 'the jackpot pays the third key');
+  h.ok(sc.keys[3] === 'arcade', 'on the run');
+  h.ok(G.meta.ach.keymaster, 'the Keymaster sticker');
+  G.arc.leave();
+  G.toMap();
+  const chip3 = secFind(T._nodes.mapHead, /secKeys/);
+  h.ok(chip3 && /full/.test(chip3.className), 'a full counter glows');
+  // Endless loop maps hold no keys
+  G.run.endless = { loop: 1, mix: null, since: 0, adds: [], over: false };
+  G.run.sec.keys = {};
+  G.run.map = MAP.generate({ act: 1, rng: U.rng(9), cols: 16, rows: 22 });
+  h.eq(G.sec.newMap(G.run), null, 'no key in Endless');
+});
+
+h.test('secret: the key counter is compact, on the hint row, only with a key in hand, and "Act N" stays whole', () => {
+  const { T, G } = secBoot({ sec: { keys: 4, rooms: 1, ends: 0 } });
+  const head = () => T._nodes.mapHead;
+  const row = (cls) => secWalk(head()).find(n => n.className === cls);
+  const title = () => secWalk(head()).find(n => n.tagName === 'H2');
+  G.newRun('rogue', 4411);
+  G.toMap();
+  h.ok(!secFind(head(), /secKeys/), 'no key this run: no chip, even on a profile that has found keys before');
+  h.eq(title().textContent, 'Act 1', 'row 1: the act in full');
+  G.run.sec.keys = { 1: 'dark' };
+  G.toMap();
+  const chip = secFind(head(), /secKeys/);
+  h.ok(chip && secWalk(chip).some(n => n.textContent === '1/3'), 'one key: 1/3');
+  h.ok(chip && chip.parentNode === row('l2'), 'on the hint row');
+  h.ok(!secWalk(row('l1')).some(n => /secKeys/.test(n.className || '')), 'never on row 1, beside the act and the bulb pill');
+  h.ok(/chip\.setAttribute\('aria-label', `Golden keys \$\{n\} of 3`\)/.test(fs.readFileSync(path.join(DIR, 'js', 'game.js'), 'utf8')), 'a spoken label');
+  const css = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+  const px = (re) => { const m = css.match(re); return m ? +m[1] : 999; };
+  h.ok(px(/\.mh \.secKeys\{[^}]*?height:(\d+)px/) <= 32, 'compact: at most 32 px tall');
+  h.ok(px(/\.mh \.secKeys canvas\{width:(\d+)px/) <= 18, 'a small key glyph');
+  G.run.sec.keys = { 1: 'dark', 2: 'roam', 3: 'arcade' };
+  G.run.act = 3;
+  G.sec.enter();
+  h.eq(title().textContent, 'Act 4', 'the Back Room: "Act 4", short enough never to truncate');
+  h.ok(secFind(head(), /secKeys/).parentNode === row('l2'), 'the full counter stays on the hint row');
+  G.run.endless = { loop: 12, mix: null, since: 0, adds: [], over: false };
+  G.run.sec.room = false;
+  G.toMap();
+  h.eq(title().textContent, 'Loop 12', 'Endless: the loop, whole');
+  h.ok(!secFind(head(), /secKeys/), 'no counter in Endless');
+});
+
+h.test('secret: the hidden door opens only with three keys, reloads, and either choice holds', () => {
+  const { T, G } = secBoot();
+  G.newRun('knight', 3302);
+  G.run.act = 3;
+  G.run.sec.keys = { 1: 'dark', 2: 'roam' };
+  h.ok(!G.sec.nextAct(), 'two keys: no door');
+  G.startFight(['prizemaster'], 'boss'); secVs(G); G.endFight('win');
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Skip'));
+  h.eq(G.screen, 'win', 'two keys: the Prize Master\'s reward goes straight to the win');
+  G.newRun('knight', 3303);
+  G.run.act = 3;
+  G.run.sec.keys = { 1: 'dark', 2: 'roam', 3: 'arcade' };
+  G.startFight(['prizemaster'], 'boss'); secVs(G); G.endFight('win');
+  h.eq(G.screen, 'reward', 'the finale and the reward first');
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Skip'));
+  h.eq(G.screen, 'secret', 'three keys: the hidden door');
+  h.eq(G.sec.scr.k, 'door', 'the door scene');
+  h.eq(G.S.ui.buttons.map(b => b.label).join(), 'Step inside,Take the win', 'step inside, or take the win');
+  G.draw();
+  stepFor(G, 1.6); G.draw();
+  h.ok(G.sec.scr.keys >= 1 && !G.sec.scr.opened, 'the keys fly into their keyholes');
+  stepFor(G, 3);
+  h.ok(G.sec.scr.keys === 3 && G.sec.scr.opened && G.sec.scr.ui, 'the door opens, THE BACK ROOM');
+  h.eq(T.AUDIO.mode, 'backroom', 'the Back Room hums through the door');
+  G.draw();
+  G.save();
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  const G2 = T2.GAME;
+  h.ok(G2.load() && G2.screen === 'secret' && G2.sec.scr.k === 'door', 'a reload on the door comes back to the door');
+  h.eq(G2.S.ui.buttons.map(b => b.label).join(), 'Step inside,Take the win', 'the same choice');
+  G2.sec.hurry(); stepFor(G2, 0.2); G2.draw();
+  G2.choose(1);
+  h.eq(G2.screen, 'win', 'take the win');
+  h.ok(G2.run.sec.door === 'skip' && !G2.run.sec.room, 'the door stays shut for this run');
+  h.ok(secWalk(T2._nodes.winBody).some(n => n.textContent === 'The Prize Master falls'), 'the usual win');
+  const hp0 = G.run.hp;
+  G.choose(0);
+  h.eq(G.screen, 'map', 'step inside: the Back Room\'s map');
+  h.ok(G.run.map.biome === 'machine' && G.run.sec.room && G.run.sec.door === 'open', 'the machine biome, in the room');
+  h.ok(G.run.hp >= hp0, 'patched up at the door');
+  h.eq(T._nodes.actTxt.textContent, 'Back Rm', 'the HUD says the Back Room');
+  h.ok(secWalk(T._nodes.mapHead).some(n => n.tagName === 'H2' && n.textContent === 'Act 4'), 'the map head: a short "Act 4" that never truncates');
+  h.ok(G.meta.ach.back_room && G.meta.ach.keymaster, 'the Back Room and Keymaster stickers');
+  h.eq(T.AUDIO.mode, 'backroom', 'its own music');
+  G.draw();
+  G.save();
+  const T3 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T3.GAME.load() && T3.GAME.screen === 'map' && T3.GAME.run.map.biome === 'machine' && T3.GAME.run.sec.room, 'a reload in the Back Room');
+  T3.GAME.draw();
+});
+
+h.test('secret: the Back Room: elites with the strongest affixes, the service counter, The Machine\'s card', () => {
+  const { T, G } = secBoot();
+  const M = secRoom(G, 3304);
+  const land = Object.values(M.tiles).filter(t => T.MAP.isLand(t));
+  h.ok(land.length >= 5 && land.length <= 8, land.length + ' hexes');
+  const el = land.find(t => t.type === 'elite');
+  el.revealed = true;
+  G.enterTile(el);
+  h.eq(G.screen, 'fight', 'an elite fight');
+  h.ok(G.fight.enemies[0].affix.length >= T.DATA.SECRET.eliteAffix, 'with the strongest affixes: ' + G.fight.enemies[0].affix.join(','));
+  G.draw();
+  secVs(G); G.draw();
+  G.endFight('win');
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Skip'));
+  h.eq(G.screen, 'map', 'back on the Back Room map');
+  const sh = land.find(t => t.type === 'shop');
+  sh.revealed = true;
+  G.enterTile(sh);
+  h.eq(G.screen, 'shop', 'the service counter');
+  const shop = G.S.sd.shop;
+  h.ok(shop.sec && shop.items.length >= 3 && shop.items.every(it => T.DATA.ITEMS[it.id].rarity === 'l'), 'legendary stock only');
+  h.ok(!shop.relic || T.DATA.RELICS[shop.relic.id].rarity === 'boss', 'and a boss relic');
+  h.ok(secWalk(T._nodes.shopBody).some(n => /SERVICE COUNTER/.test(n.textContent || '')), 'it says so');
+  G.run.gold = 9999;
+  const buy = G.S.ui.buttons.findIndex(b => b.label === T.DATA.ITEMS[shop.items[0].id].name);
+  const n0 = G.run.bin.length;
+  G.choose(buy);
+  h.eq(G.run.bin.length, n0 + (T.DATA.ITEMS[shop.items[0].id].bag ? T.DATA.ITEMS[shop.items[0].id].bag.length : 1), 'a legendary bought');
+  G.choose(G.S.ui.buttons.findIndex(b => b.label === 'Leave'));
+  const bt = M.tiles[M.boss.q + ',' + M.boss.r];
+  G.enterTile(bt);
+  h.eq(G.fight.enemies[0].id, 'machine', 'The Machine on the boss hex');
+  h.eq(G.boss.vs && G.boss.vs.title, 'SECRET BOSS', 'the versus card: SECRET BOSS');
+  h.eq(T.AUDIO.mode, 'machine', 'its own fight music');
+  stepFor(G, 0.4); G.draw();
+  secVs(G); stepFor(G, 0.5); G.draw();
+  h.ok(G.meta.seen.enemies.machine, 'met: it joins the Prizedex');
+  h.ok(G.sec.sign() === null || Array.isArray(G.sec.sign()), 'the sign reads');
+});
+
+h.test('secret: The Machine\'s cabinet events play in the cabinet', () => {
+  const { T, G } = secBoot();
+  const F = secMachine(G, 3305), C = T.COMBAT, e = F.enemies[0];
+  const calm = { id: 'calm', name: 'Calm', k: 'block', v: 1, txt: 'calm' };
+  const ev = (part, ph) => {
+    e.enraged = ph >= 1; e.final = ph >= 2;
+    const set = e.def.sig.phases[C.secPhase(e)];
+    e.sigN = set.indexOf(part); e.intent = Object.assign({}, calm);
+    G.endTurn();
+    settle(G, 20);
+    stepFor(G, 0.4);
+    G.draw();
+  };
+  ev('tilt', 0);
+  h.ok(Math.abs(G.world.gravity.x) > 510 * 1.5, 'the big tilt heels the whole cabinet over (' + Math.round(G.world.gravity.x) + ')');
+  const junk0 = F.bin.filter(i => i.junk).length;
+  ev('flood', 0);
+  stepFor(G, 1.2);
+  const junk = F.bin.filter(i => i.junk);
+  h.ok(junk.length >= junk0 + 4, 'a flood of junk pours in');
+  h.ok(junk.every(i => G.toys.bodyOf(i)), 'every piece lands in the cabinet');
+  ev('claw', 0);
+  h.ok(F.rigged && F.rigged.secret, 'it takes the claw');
+  h.eq((G.sec.sign() || [])[0], 'HIJACKED', 'the sign says so');
+  stepFor(G, 0.5);
+  h.ok(G.boss.bs.hj, 'the claw is on its strings');
+  stepFor(G, 4); settle(G, 20);
+  h.ok(!F.rigged, 'one drop, then it lets go');
+  ev('grav', 1);
+  h.ok(F.secGrav && G.best.state && G.best.state.ceil, 'zero g');
+  stepFor(G, 1.5);
+  const up = G.fs.items.filter(b => b.data.bestHang === 1);
+  h.ok(up.length >= 3 && up.every(b => b.y < 220), up.length + ' items float up under the lid');
+  h.eq((G.sec.sign() || [])[0], 'ZERO G', 'the sign');
+  G.endTurn(); settle(G, 20); stepFor(G, 0.8);
+  h.ok(!F.secGrav && !G.best.state.ceil, 'gravity back as your turn ends');
+  ev('rail', 1);
+  h.ok(F.secZap && F.secZap.v === T.DATA.ENEMIES.machine.sig.zap[1], 'the rail is live');
+  F.player.block = 0;
+  const hp0 = F.player.hp;
+  h.ok(G.dropClaw(), 'a drop');
+  stepFor(G, 0.3);
+  h.eq(F.player.hp, hp0 - F.secZap.v, 'shocks you');
+  settle(G, 20);
+  const metal = G.fs.items.find(b => (b.data.tags || []).includes('metal'));
+  if (metal) { G.playDelivered([metal]); h.ok(!F.secZap, 'a metal prize grounds the rail'); }
+  else h.ok(true, 'no metal in the bin to ground it');
+  settle(G, 20);
+  ev('shutter', 1);
+  h.ok(F.secShut && G.sec.fs.seg && G.world.segs.includes(G.sec.fs.seg), 'the shutter is a wall over the chute');
+  h.eq((G.sec.sign() || [])[0], 'SHUTTER: HEAVY ONLY', 'the sign');
+  stepFor(G, 0.5); G.draw();
+  const rock = G.fs.items.find(b => (b.data.tags || []).includes('heavy'));
+  let dent = false;
+  for (let k = 0; k < 3 && rock && !dent; k++) {
+    const L = G.sec.fs.seg;
+    if (!L) { dent = true; break; }
+    rock.x = L.ax + 30; rock.y = L.ay - 90; rock.vx = 0; rock.vy = 350; rock.sl = false; rock.av = 0;
+    stepFor(G, 0.5);
+    dent = !F.secShut || F.secShut.hp < 2;
+  }
+  h.ok(dent, 'a heavy prize dents it (' + JSON.stringify(F.secShut) + ')');
+  G.endTurn(); settle(G, 20); stepFor(G, 0.3);
+  h.ok(!F.secShut && !G.sec.fs.seg, 'the shutter lifts as your turn ends');
+  G.draw();
+});
+
+h.test('secret: phases and cracks, the power down, the true ending, the win and Endless, saved at every step', () => {
+  const { T, G } = secBoot();
+  const F = secMachine(G, 3306), C = T.COMBAT, e = F.enemies[0];
+  G.draw();
+  C.damage(F, F.player, e, Math.ceil(e.maxHp * 0.55), { pierce: true });
+  secFlush(G); settle(G, 20); stepFor(G, 0.5);
+  h.eq(G.sec.fs.phase, 1, 'OVERCLOCKED: phase two, its light show');
+  G.draw();
+  C.damage(F, F.player, e, e.hp - Math.floor(e.maxHp * 0.12), { pierce: true });
+  secFlush(G); settle(G, 20); stepFor(G, 1.5);
+  h.ok(e.final && G.sec.fs.phase === 2, 'MELTDOWN: the final phase');
+  h.ok(G.sec.fs.crack > 0.3, 'the glass cracks as it drains (' + G.sec.fs.crack.toFixed(2) + ')');
+  G.draw();
+  C.damage(F, F.player, e, e.hp + 10, { pierce: true });
+  secFlush(G);
+  stepFor(G, 0.8);
+  h.ok(G.screen === 'fight' && G.sec.fs.pd, 'it powers down on the fight screen');
+  h.ok(G.fs.outro && G.fs.outro.sec && G.fs.outro.sec.k === 'ending' && !G.fs.outro.reward, 'no reward screen: the outro is the power down');
+  h.ok(G.run.sec.beat, 'The Machine is down');
+  G.draw();
+  const saved = JSON.parse(T._store.clawspire_run);
+  h.ok(saved.screen === 'secret' && saved.sd.secret.k === 'ending', 'a save during the power down is the true ending');
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T2.GAME.load() && T2.GAME.screen === 'secret' && T2.GAME.sec.scr.k === 'ending', 'and a reload there shows it');
+  G.endFight('win');
+  h.eq(G.screen, 'fight', 'a tap cannot skip its first beat');
+  stepFor(G, 7.5);
+  h.eq(G.screen, 'secret', 'the true ending');
+  h.eq(G.sec.scr.k, 'ending', 'at dawn');
+  h.eq(G.S.ui.buttons.map(b => b.label).join(), 'Continue', 'then Continue');
+  h.ok(secWalk(T._nodes.secretBody).some(n => n.textContent === 'RoxorLoops & Jasmin') && secWalk(T._nodes.secretBody).some(n => n.textContent === 'THANKS FOR PLAYING!'), 'the credits name the owners and thank you');
+  h.ok(G.meta.ach.true_ending && G.meta.sec.ends === 1, 'the True Ending sticker');
+  stepFor(G, 3); G.draw();
+  G.sec.hurry(); stepFor(G, 0.3); G.draw();
+  G.choose(0);
+  h.eq(G.screen, 'win', 'then the usual win screen');
+  h.ok(secWalk(T._nodes.winBody).some(n => n.textContent === 'The Machine powers down'), 'with the true ending\'s words');
+  const rec = G.run.scoreRec && G.run.scoreRec.classic;
+  h.ok(rec && rec.lines.some(l => l.k === 'machine' && l.v === T.DATA.SECRET.score), 'the score counts The Machine');
+  h.ok(G.run.sec.done && !G.run.sec.room, 'out of the Back Room');
+  h.eq(G.S.ui.buttons[1].label, 'Keep playing: Endless', 'the Endless offer');
+  G.save();
+  const T3 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T3.GAME.load() && T3.GAME.screen === 'win', 'a reload on the win screen');
+  G.choose(1);
+  h.eq(G.screen, 'loop', 'Endless reboots');
+  G.endless.cont(); toMapFrom(G);
+  h.ok(G.screen === 'map' && G.run.map.biome !== 'machine' && !G.run.map.sec, 'a loop map: no machine, no key');
+  h.eq(T._nodes.actTxt.textContent, 'Loop 1', 'the HUD says Loop 1');
+  G.draw();
+});
+
+h.test('secret: old saves and profiles load, and the Prizedex hides the boss until it is met', () => {
+  const { T, G } = secBoot();
+  G.newRun('knight', 3307);
+  delete G.run.sec; delete G.run.map.sec;
+  G.save();
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T2.GAME.load() && T2.GAME.screen === 'map', 'a save from before the keys loads');
+  h.eq(T2.GAME.sec.keys(), 0, 'no keys');
+  h.ok(T2.GAME.sec.of().kinds[1] && !T2.GAME.run.map.sec, 'the run gets its defaults; the old map has no key');
+  T2.GAME.draw();
+  h.ok(!T2.GAME.sec.nextAct(), 'and no door');
+  G.run.sec = 'junk';
+  h.ok(G.sec.of().keys && G.sec.keys() === 0, 'junk is repaired');
+  h.ok(G.meta.sec && G.meta.sec.keys === 0, 'an old profile gets the counters');
+  const { T: T4, G: G4 } = secBoot({ sec: { keys: 'x', rooms: -3 } });
+  h.ok(G4.meta.sec.keys === 0 && G4.meta.sec.rooms === 0, 'a junk profile is repaired');
+  G4.showCollection('enemies');
+  const card = secWalk(T4._nodes.collectionBody).find(n => /dexc/.test(n.className || '') && secWalk(n).some(x => x.textContent === 'SECRET BOSS'));
+  h.ok(card && secWalk(card).some(x => x.textContent === '???') && /locked/.test(card.className), 'a locked ??? card: SECRET BOSS');
+  G4.prog.dexSee('enemies', 'machine', true);
+  G4.showCollection('enemies');
+  const got = secWalk(T4._nodes.collectionBody).find(n => /dexc/.test(n.className || '') && secWalk(n).some(x => x.textContent === 'The Machine'));
+  h.ok(got && /got/.test(got.className), 'met, it shows its name');
 });
 
 h.done();

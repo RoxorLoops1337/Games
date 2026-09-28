@@ -43,6 +43,9 @@ const AUDIO = (() => {
     lay: { hype: false, tense: false },
     layT: { hype: -1, tense: -1 },
     lsongs: {},
+    // round 6, per-act music: the act biome the game is in (0 = none: the
+    // base tunes), which picks the map and fight variants (ACT_CFG).
+    act: 0,
   };
 
   // ---------------------------------------------------------------- prefs
@@ -99,7 +102,7 @@ const AUDIO = (() => {
     const comp = ac.createDynamicsCompressor();
     setP(comp.threshold, -16); setP(comp.knee, 20); setP(comp.ratio, 4);
     setP(comp.attack, 0.004); setP(comp.release, 0.2);
-    const master = ac.createGain(); setP(master.gain, 0.9);
+    const master = ac.createGain(); setP(master.gain, 0.9 * (S.vMaster == null ? 1 : S.vMaster));   // round 6: the settings' master volume
     const sfxBus = ac.createGain(); setP(sfxBus.gain, prefs().sfx ? S.vSfx : 0);
     const musBus = ac.createGain(); setP(musBus.gain, S.vMus);
     const duckG = ac.createGain(); setP(duckG.gain, 1);
@@ -1367,6 +1370,183 @@ const AUDIO = (() => {
   Object.assign(GAP, { vaultOpen: 0.4, vaultBuy: 0.2, vaultEquip: 0.1, vaultNew: 0.4, vaultDupe: 0.4, vaultShare: 0.3 });
   NAMES.push('vaultOpen', 'vaultBuy', 'vaultEquip', 'vaultNew', 'vaultDupe', 'vaultShare');
 
+  // ---------------------------------------------------------------- SETS (round 6)
+  // Relic sets (a piece clicking into place, the set complete fanfare), the
+  // boon draft (cards sliding out of the chute, a flip, the deal struck) and
+  // the Compactor (an item dropping in, the hydraulic hiss, the crunch, the
+  // new item popping out).
+  Object.assign(BANK, {
+    // A second piece: a chain link snapping shut and a bright two-note chime.
+    setPiece(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 3200, q: 4, dur: 0.03, v: 0.18 });
+      blip(out, t, { at: 0.01, w: 'square', f: 900 * p, to: 600 * p, dur: 0.04, v: 0.08, lp: 3000 });
+      blip(out, t, { at: 0.06, w: 'triangle', f: mtof(79) * p, dur: 0.18, v: 0.1 });
+      blip(out, t, { at: 0.14, w: 'triangle', f: mtof(86) * p, dur: 0.3, v: 0.09, vib: [6, 6] });
+      return 0.46;
+    },
+    // A set complete: three chain links, a brass fanfare, a sub hit and sparkles.
+    setDone(out, t, o, p) {
+      duck(1.6);
+      for (let i = 0; i < 3; i++) {
+        hiss(out, t, { at: i * 0.09, type: 'bandpass', f: 2800 + i * 400, q: 4, dur: 0.03, v: 0.2 });
+        blip(out, t, { at: i * 0.09, w: 'square', f: (700 + i * 150) * p, dur: 0.035, v: 0.07, lp: 3200 });
+      }
+      [60, 64, 67, 72].forEach((n, i) => blip(out, t, { at: 0.3 + i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.14, v: 0.08, lp: 4200 }));
+      [72, 76, 79, 84].forEach((n) => blip(out, t, { at: 0.6, w: setWave(n), f: mtof(n) * p, dur: 0.9, v: 0.055, lp: 3800, vib: [5, 5] }));
+      blip(out, t, { at: 0.6, w: 'sine', f: 110, to: 40, dur: 0.5, v: 0.4 });
+      for (let i = 0; i < 8; i++) blip(out, t, { at: 0.7 + i * 0.06, w: 'sine', f: mtof(91 + (i % 4) * 3) * p, dur: 0.1, v: 0.045 });
+      return 1.55;
+    },
+    // Three cards sliding out of the chute: a paper shuffle over a low drone.
+    boonDeal(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 55 * p, dur: 1.1, v: 0.06, lp: 400, a: 0.2 });
+      for (let i = 0; i < 3; i++) hiss(out, t, { at: 0.12 + i * 0.13, type: 'bandpass', f: 2400, to: 900, q: 1.2, dur: 0.1, v: 0.16 });
+      return 1.2;
+    },
+    // A card flips face up: a whoosh and a bright tick.
+    boonFlip(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 1200, to: 4200, q: 1.4, dur: 0.12, v: 0.16 });
+      blip(out, t, { at: 0.1, w: 'triangle', f: 1500 * p, to: 1900 * p, dur: 0.07, v: 0.1 });
+      blip(out, t, { at: 0.12, w: 'sine', f: mtof(84) * p, dur: 0.2, v: 0.06 });
+      return 0.34;
+    },
+    // A deal struck: a gavel knock and a sly minor-to-major sting.
+    boonPick(out, t, o, p) {
+      duck(1.0);
+      blip(out, t, { w: 'sine', f: 180 * p, to: 70, dur: 0.12, v: 0.45 });
+      hiss(out, t, { type: 'lowpass', f: 1600, dur: 0.06, v: 0.2, crunch: true });
+      [[57, 60, 64], [60, 64, 67, 72]].forEach((ch, j) => ch.forEach((n) => blip(out, t, { at: 0.14 + j * 0.2, w: 'square', f: mtof(n) * p, dur: j ? 0.7 : 0.18, v: 0.05, lp: 3600, vib: j ? [6, 5] : null })));
+      return 1.0;
+    },
+    // An item dropped into the chamber: a hollow metal clonk.
+    cmpFeed(out, t, o, p) {
+      blip(out, t, { w: 'triangle', f: 320 * p, to: 180 * p, dur: 0.09, v: 0.22 });
+      hiss(out, t, { type: 'bandpass', f: 1800 * p, q: 3, dur: 0.04, v: 0.12 });
+      return 0.14;
+    },
+    // The hydraulics: a rising hiss and a motor whine.
+    cmpPress(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 500 * p, to: 2400 * p, q: 0.8, dur: 0.42, v: 0.22, a: 0.08 });
+      blip(out, t, { w: 'sawtooth', f: 70 * p, to: 140 * p, dur: 0.42, v: 0.08, lp: 900, lin: true });
+      return 0.48;
+    },
+    // The crunch: a heavy slam, splintering noise, metal groans.
+    cmpCrunch(out, t, o, p) {
+      duck(0.8);
+      blip(out, t, { w: 'sine', f: 120 * p, to: 30, dur: 0.35, v: 0.6 });
+      hiss(out, t, { type: 'lowpass', f: 3200, to: 300, dur: 0.3, v: 0.45, crunch: true });
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: 0.03 + i * 0.045, type: 'highpass', f: 2600 + (i % 3) * 900, dur: 0.03, v: 0.1, crunch: true });
+      blip(out, t, { at: 0.12, w: 'sawtooth', f: 90 * p, to: 60 * p, dur: 0.4, v: 0.06, lp: 600 });
+      return 0.6;
+    },
+    // The new item pops out of the bale: a cork pop and a shimmer.
+    cmpPop(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 380 * p, to: 900 * p, dur: 0.08, v: 0.3 });
+      hiss(out, t, { type: 'highpass', f: 3000, dur: 0.05, v: 0.12 });
+      [76, 79, 84, 88].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.05, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.05, lp: 5000 }));
+      return 0.45;
+    },
+  });
+  // (the chord of the set fanfare alternates two waves for a little shimmer)
+  function setWave(n) { return n % 2 ? 'triangle' : 'square'; }
+  Object.assign(GAP, { setPiece: 0.3, setDone: 0.8, boonDeal: 0.6, boonFlip: 0.08, boonPick: 0.4, cmpFeed: 0.05, cmpPress: 0.2, cmpCrunch: 0.2, cmpPop: 0.3 });
+  Object.assign(LEVEL, { setDone: 1.1, cmpCrunch: 1.1 });
+  NAMES.push('setPiece', 'setDone', 'boonDeal', 'boonFlip', 'boonPick', 'cmpFeed', 'cmpPress', 'cmpCrunch', 'cmpPop');
+
+  // ---------------------------------------------------------------- SECRET (round 6)
+  // The secret act (DESIGN.md "Secret act (round 6)"): a golden key found
+  // (a jingle and a sparkle run), the hidden door grinding open, and The
+  // Machine's cabinet events (the live rail's zap, the steel shutter and its
+  // dents, zero g, the junk flood), the glass cracking, its voice, the long
+  // power down and the credits' chime. The music modes 'backroom' and
+  // 'machine' are added next to CFG below.
+  Object.assign(BANK, {
+    // A golden key: a bright jingle of key teeth, then a rising sparkle run.
+    keyGet(out, t, o, p) {
+      for (let i = 0; i < 4; i++) blip(out, t, { at: i * 0.03, w: 'triangle', f: (2600 + i * 420) * p, dur: 0.08, v: 0.08 });
+      [76, 79, 83, 88, 91].forEach((n, i) => blip(out, t, { at: 0.12 + i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.16, v: 0.07, lp: 5200 }));
+      blip(out, t, { at: 0.5, w: 'sine', f: mtof(95) * p, dur: 0.6, v: 0.06, vib: [7, 12] });
+      return 1.1;
+    },
+    // The hidden door: a low creak with a wobble, a stone rumble, a hiss of cold air.
+    doorOpen(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 90 * p, to: 55 * p, dur: 1.6, v: 0.12, a: 0.2, lp: 520, vib: [5, 9] });
+      hiss(out, t, { type: 'lowpass', f: 240, dur: 1.8, v: 0.22, a: 0.3, crunch: true });
+      hiss(out, t, { at: 0.9, type: 'bandpass', f: 1800, to: 500, q: 0.6, dur: 1.2, v: 0.08, a: 0.2 });
+      blip(out, t, { at: 1.5, w: 'sine', f: 55 * p, to: 32, dur: 0.5, v: 0.4 });
+      return 2.1;
+    },
+    // The live rail: a buzzing arc and a crackle.
+    secZap(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 180 * p, to: 90 * p, dur: 0.28, v: 0.14, lp: 3200, vib: [60, 70] });
+      blip(out, t, { w: 'square', f: 1400 * p, to: 300 * p, dur: 0.12, v: 0.06 });
+      for (let i = 0; i < 5; i++) hiss(out, t, { at: i * 0.045, type: 'highpass', f: 3000, dur: 0.03, v: 0.18 });
+      return 0.32;
+    },
+    // The steel shutter slamming down over the chute.
+    secShutter(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 700, to: 200, q: 1, dur: 0.35, v: 0.2 });
+      blip(out, t, { at: 0.3, w: 'sine', f: 90 * p, to: 40, dur: 0.3, v: 0.5 });
+      blip(out, t, { at: 0.3, w: 'square', f: 420 * p, to: 380 * p, dur: 0.2, v: 0.05, lp: 1800 });
+      return 0.65;
+    },
+    // A heavy prize dents the shutter: a hard metal clang.
+    secClang(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 523 * p, dur: 0.35, v: 0.07, lp: 2400 });
+      blip(out, t, { w: 'triangle', f: 1310 * p, dur: 0.4, v: 0.06 });
+      blip(out, t, { w: 'sine', f: 110 * p, to: 60, dur: 0.18, v: 0.35 });
+      hiss(out, t, { type: 'highpass', f: 2600, dur: 0.06, v: 0.2 });
+      return 0.45;
+    },
+    // Zero g: a rising, wobbling whoosh.
+    secGrav(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 120 * p, to: 700 * p, dur: 0.9, v: 0.16, vib: [8, 30] });
+      hiss(out, t, { type: 'bandpass', f: 400, to: 3000, q: 1.5, dur: 0.9, v: 0.1 });
+      return 1.0;
+    },
+    // The junk flood: a heavy clattering pour.
+    secFlood(out, t, o, p) {
+      for (let i = 0; i < 9; i++) {
+        hiss(out, t, { at: i * 0.06, type: 'bandpass', f: 500 + (i % 4) * 300, q: 2, dur: 0.07, v: 0.16, crunch: true });
+        if (i % 3 === 0) blip(out, t, { at: i * 0.06, w: 'sine', f: 120 * p, to: 70, dur: 0.1, v: 0.25 });
+      }
+      return 0.7;
+    },
+    // The glass cracking: a sharp snap and a spray of tinkles.
+    glassCrack(out, t, o, p) {
+      hiss(out, t, { type: 'highpass', f: 2200, dur: 0.05, v: 0.35 });
+      blip(out, t, { w: 'triangle', f: 3100 * p, to: 2400 * p, dur: 0.08, v: 0.06 });
+      for (let i = 0; i < 4; i++) blip(out, t, { at: 0.04 + i * 0.05, w: 'sine', f: (3800 + i * 500) * p, dur: 0.06, v: 0.035 });
+      return 0.3;
+    },
+    // The Machine's voice: a vocoder-ish three note bleep.
+    secVoice(out, t, o, p) {
+      [45, 43, 40].forEach((n, i) => blip(out, t, { at: i * 0.11, w: 'sawtooth', f: mtof(n) * p, dur: 0.1, v: 0.1, lp: 1200, q: 6, vib: [30, 8] }));
+      return 0.4;
+    },
+    // A low machine hum (a phase change, the service lights).
+    secHum(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 55 * p, dur: 1.0, v: 0.08, a: 0.1, lp: 300 });
+      blip(out, t, { w: 'sine', f: 110 * p, dur: 1.0, v: 0.06, a: 0.1, vib: [4, 2] });
+      return 1.05;
+    },
+    // The cabinet powers down: a long falling whine, the relays clunking off.
+    powerDown(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 880 * p, to: 30, dur: 2.6, v: 0.12, a: 0.02, lp: 2400 });
+      blip(out, t, { w: 'sine', f: 220 * p, to: 25, dur: 2.8, v: 0.18 });
+      for (let i = 0; i < 4; i++) blip(out, t, { at: 0.5 + i * 0.55, w: 'sine', f: 70 * p, to: 40, dur: 0.12, v: 0.35 });
+      hiss(out, t, { at: 2.4, type: 'lowpass', f: 900, to: 80, dur: 0.8, v: 0.1 });
+      return 3.2;
+    },
+    // The credits: a warm major chord that blooms.
+    creditsChime(out, t, o, p) {
+      [60, 64, 67, 72, 76].forEach((n, i) => blip(out, t, { at: i * 0.06, w: 'triangle', f: mtof(n) * p, dur: 1.6, v: 0.05, a: 0.05 }));
+      return 1.8;
+    },
+  });
+  Object.assign(GAP, { keyGet: 0.5, doorOpen: 1, secZap: 0.12, secShutter: 0.3, secClang: 0.06, secGrav: 0.5, secFlood: 0.4, glassCrack: 0.05, secVoice: 0.3, secHum: 0.6, powerDown: 2, creditsChime: 1 });
+  NAMES.push('keyGet', 'doorOpen', 'secZap', 'secShutter', 'secClang', 'secGrav', 'secFlood', 'glassCrack', 'secVoice', 'secHum', 'powerDown', 'creditsChime');
+
   /* Plays a named effect. opts: {vol, pitch, mass (itemLand), vel (itemLand
      impact 0..1), amt (hit damage)}. Returns true when something was queued. */
   function sfx(name, opts) {
@@ -1435,6 +1615,16 @@ const AUDIO = (() => {
       wave: 'square', bassWave: 'triangle', stab: 0.5, swing: 0, vol: 0.85, leadUp: 24,
       prog: [[0, 3, 4, 0], [0, 5, 3, 4], [3, 4, 0, 0], [0, 4, 5, 3]] },
   };
+  // SECRET (round 6): the Back Room's hum and The Machine's fight.
+  Object.assign(CFG, {
+    backroom: { bpm: 88, root: 38, scale: 'phrygian', bass: 'pedal', lead: 'tense', hat: 'soft', drums: 'light',
+      wave: 'triangle', bassWave: 'sawtooth', stab: 0.25, swing: 0, vol: 0.75, leadUp: 24,
+      prog: [[0, 1, 0, 6], [0, 5, 1, 0], [0, 3, 1, 6], [0, 1, 5, 4]] },
+    machine: { bpm: 160, root: 33, scale: 'harm', bass: 'drive', lead: 'riff', hat: '16', drums: 'four',
+      wave: 'sawtooth', bassWave: 'square', stab: 0.6, swing: 0, vol: 0.8, leadUp: 24, drop: true,
+      prog: [[0, 1, 5, 4], [0, 6, 1, 4], [0, 5, 6, 4], [0, 1, 0, 4]] },
+  });
+  MODES.push('backroom', 'machine');
   const BAR = 16;              // 16th-note steps per bar
   const PHRASE = 4;            // bars per phrase (one progression)
 
@@ -1489,9 +1679,9 @@ const AUDIO = (() => {
 
   /* Builds a whole tune for a mode: 2 sections x 2 phrases x 4 bars = 16 bars.
      For boss, the second section is a half-time drop. */
-  function compose(mode) {
-    const c = CFG[mode];
-    const rng = U.rng(U.hashStr('clawspire:' + mode));
+  function compose(mode, act) {
+    const c = accCfg(mode, act);
+    const rng = U.rng(U.hashStr('clawspire:' + mode + (c.actKey ? ':act' + c.actKey : '')));
     const scale = SCALES[c.scale];
     const bars = 16, len = bars * BAR;
     const steps = [];
@@ -1591,14 +1781,98 @@ const AUDIO = (() => {
         const at = half ? 0 : rng.pick([0, 6, 10, 14]);
         push(steps, base + at, { v: 'stab', ns: [tone(0, 12), tone(2, 12), tone(4, 12)], d: half ? 6 : 2, g: half ? 1.2 : 1 });
       }
+      accFlavor(c, steps, base, b, tone, rng, half);   // the act's own colour (round 6); the base tunes have none
     }
-    return { mode, bpm: c.bpm, stepDur: 60 / c.bpm / 4, swing: c.swing, len, bars, steps, cfg: c };
+    return { mode, act: c.actKey || 0, bpm: c.bpm, stepDur: 60 / c.bpm / 4, swing: c.swing, len, bars, steps, cfg: c };
   }
 
-  function song(mode) {
+  function song(mode, act) {
     if (!CFG[mode]) return null;
-    return S.songs[mode] || (S.songs[mode] = compose(mode));
+    const key = accSongKey(mode, act);
+    return S.songs[key] || (S.songs[key] = compose(mode, act));
   }
+
+  /* ---------------------------------------------------------------- per-act music (round 6)
+     Each act biome gets its own map theme and its own fight colour, on top
+     of the same composer: act 1 (the cellar arcade) is synthpop, a bouncing
+     octave bass, four on the floor and a filtered 16th arpeggio; act 2 (the
+     foundry) an industrial furnace groove, a phrygian pedal bass, anvil
+     clanks on the offbeats and a hissing steam hat; act 3 (the vault) an
+     icy music box, a lydian lullaby on bell tones with a sparkle an octave
+     up and a slow sub. The fight, elite and boss tunes keep their own
+     tempo and key (and the round 3 hype / tense layers) and borrow the
+     act's timbre. S.act 0 (the title, the tests) plays the base tunes, so
+     every base song is unchanged. ACT_CFG[act][mode] overrides CFG[mode];
+     ACT_CFG[act].all is merged into every mode of that act. */
+  const ACT_CFG = {
+    1: {
+      all: { arp: 0.55 },
+      map: { bpm: 112, root: 45, scale: 'dorian', bass: 'bounce', lead: 'pluck', hat: '8', drums: 'four', wave: 'square', bassWave: 'square',
+        stab: 0.35, swing: 0, vol: 0.8, leadUp: 24, arp: 1, prog: [[0, 5, 3, 4], [0, 3, 5, 4], [5, 3, 0, 4], [0, 6, 5, 4]] },
+    },
+    2: {
+      all: { clank: 1 },
+      map: { bpm: 96, root: 40, scale: 'phrygian', bass: 'pedal', lead: 'heavy', hat: 'off', drums: 'rock', wave: 'sawtooth', bassWave: 'sawtooth',
+        stab: 0.5, swing: 0.12, vol: 0.8, leadUp: 12, clank: 1, steam: 1, prog: [[0, 1, 0, 6], [0, 0, 1, 5], [0, 6, 5, 1], [0, 3, 1, 0]] },
+      fight: { scale: 'phrygian', bassWave: 'sawtooth', steam: 1 },
+    },
+    3: {
+      all: { box: 1 },
+      map: { bpm: 84, root: 50, scale: 'lydian', bass: 'long', lead: 'dreamy', hat: 'soft', drums: 'none', wave: 'triangle', bassWave: 'sine',
+        stab: 0.2, swing: 0.08, vol: 0.85, leadUp: 36, box: 1, prog: [[0, 4, 5, 3], [0, 1, 4, 3], [5, 3, 0, 4], [0, 2, 1, 4]] },
+      fight: { scale: 'harm', wave: 'triangle' },
+    },
+  };
+  const ACT_NAMES = { 1: 'arcade synthpop', 2: 'industrial furnace groove', 3: 'icy music box' };
+  // The act a mode varies by: title, win and off never do.
+  const ACT_MODES = { map: 1, fight: 1, elite: 1, boss: 1 };
+  function accActOf(mode, act) {
+    const a = act == null ? S.act : act;
+    return ACT_MODES[mode] && ACT_CFG[a] ? a : 0;
+  }
+  function accSongKey(mode, act) {
+    const a = accActOf(mode, act);
+    return a ? mode + ':act' + a : mode;
+  }
+  // The mode's config for an act: the base, the act's all, the act's own.
+  function accCfg(mode, act) {
+    const a = accActOf(mode, act);
+    if (!a) return CFG[mode];
+    return Object.assign({}, CFG[mode], ACT_CFG[a].all || {}, ACT_CFG[a][mode] || {}, { actKey: a });
+  }
+  // The act's extra voices for one bar: the synthpop arpeggio, the foundry's
+  // anvil clanks and steam, the vault's bell sparkles. Only a config that
+  // asks for them draws from the rng, so the base tunes stay bit for bit.
+  function accFlavor(c, steps, base, b, tone, rng, half) {
+    if (!c.actKey) return;
+    if (c.arp) {
+      const pat = [0, 2, 4, 7, 4, 2];
+      for (let s = 0; s < BAR; s += 2) {
+        if (c.arp < 1 && s % 4 !== 0 && !rng.chance(c.arp)) continue;
+        push(steps, base + s, { v: 'arp', n: tone(pat[(s / 2 + b) % pat.length], 24), g: s % 8 === 0 ? 1 : 0.7 });
+      }
+    }
+    if (c.clank) {
+      push(steps, base + 6, { v: 'clank', n: tone(0, 36), g: 0.9 });
+      if (b % 2 === 1 || rng.chance(0.4)) push(steps, base + 14, { v: 'clank', n: tone(1, 36), g: 0.7 });
+    }
+    if (c.steam && (b % 4 === 3)) push(steps, base + 8, { v: 'steam', g: half ? 1.2 : 1 });
+    if (c.box) {
+      // bells: the chord tones a twelfth up, sparse and ringing
+      for (const s of [0, 6, 10]) if (s === 0 || rng.chance(0.5)) push(steps, base + s, { v: 'bell', n: tone(rng.pick([0, 2, 4, 7]), 36), g: s === 0 ? 1 : 0.7 });
+    }
+  }
+  /* Tells the music which act biome the player is in (1..3; 0 = none).
+     A live map or fight tune of another act crossfades into this act's
+     (a little slower than a screen change). Returns the act. */
+  function setAct(a) {
+    a = ACT_CFG[a] ? a | 0 : 0;
+    if (a === S.act) return S.act;
+    S.act = a;
+    if (S.ac && prefs().music && ACT_MODES[S.want] && S.seqs.some((q) => q.mode === S.want && q.fadeEnd == null && (q.act || 0) !== accActOf(S.want))) startMode(S.want, ACT_XFADE);
+    return S.act;
+  }
+  const ACT_XFADE = 1.6;
 
   // ---------------------------------------------------------------- music voices
   function playEvent(inst, ev, t) {
@@ -1609,6 +1883,12 @@ const AUDIO = (() => {
         blip(dest, t, { w: c.bassWave, f: mtof(ev.n), dur: ev.d * sd, v: 0.3 * g, a: 0.006, lp: c.bassWave === 'triangle' ? 3000 : 700, q: 3 });
         break;
       case 'lead':
+        if (c.box && inst.mode === 'map') {
+          // the vault's music box: a struck tine that rings out, a quiet octave overtone
+          blip(dest, t, { w: 'sine', f: mtof(ev.n), dur: Math.max(0.5, ev.d * sd * 1.6), v: 0.17 * g, a: 0.003 });
+          blip(dest, t, { w: 'sine', f: mtof(ev.n + 12), dur: 0.35, v: 0.045 * g, a: 0.002 });
+          break;
+        }
         blip(dest, t, { w: c.wave, f: mtof(ev.n), dur: ev.d * sd * 0.95, v: (c.wave === 'triangle' ? 0.15 : 0.08) * g,
           a: c.lead === 'dreamy' ? 0.06 : 0.006, lp: c.wave === 'sawtooth' ? 2600 : 5000,
           vib: ev.d * sd > 0.3 ? [5.5, mtof(ev.n) * 0.008] : null });
@@ -1626,15 +1906,32 @@ const AUDIO = (() => {
       case 'stab':
         for (const n of ev.ns) blip(dest, t, { w: 'square', f: mtof(n), dur: ev.d * sd, v: 0.045 * g, a: 0.004, lp: 1800 });
         break;
+      // round 6, the acts' colour (ACT_CFG / accFlavor)
+      case 'arp':
+        blip(dest, t, { w: 'sawtooth', f: mtof(ev.n), dur: sd * 0.9, v: 0.035 * g, a: 0.003, lp: 2400, q: 6 });
+        break;
+      case 'clank':
+        // an anvil: two inharmonic square partials through a band pass and a metal tick
+        blip(dest, t, { w: 'square', f: mtof(ev.n), dur: 0.22, v: 0.05 * g, a: 0.001, bp: 2600, q: 9 });
+        blip(dest, t, { w: 'square', f: mtof(ev.n) * 2.76, dur: 0.12, v: 0.03 * g, a: 0.001, bp: 5200, q: 9 });
+        hiss(dest, t, { type: 'highpass', f: 6000, q: 0.7, dur: 0.03, v: 0.08 * g, crunch: true });
+        break;
+      case 'steam':
+        hiss(dest, t, { type: 'bandpass', f: 3000, to: 900, q: 0.6, dur: sd * 6, v: 0.05 * g, a: 0.05 });
+        break;
+      case 'bell':
+        blip(dest, t, { w: 'sine', f: mtof(ev.n), dur: 0.9, v: 0.05 * g, a: 0.002 });
+        blip(dest, t, { w: 'triangle', f: mtof(ev.n) * 3.01, dur: 0.25, v: 0.012 * g, a: 0.001 });
+        break;
       default: break;
     }
   }
 
   // ---------------------------------------------------------------- sequencer
-  function newLayer(t) {
+  function newLayer(t, xf) {
     const g = S.ac.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(1, t + XFADE);
+    g.gain.linearRampToValueAtTime(1, t + (xf || XFADE));
     g.connect(S.musBus);
     return g;
   }
@@ -1654,17 +1951,18 @@ const AUDIO = (() => {
     }
   }
 
-  function startMode(mode) {
-    fadeAll(XFADE);
+  function startMode(mode, xf) {
+    fadeAll(xf || XFADE);
     if (!LAYERED[mode]) { S.lay.hype = false; S.lay.tense = false; }
     if (!S.ac || mode === 'off' || !CFG[mode]) return;
     const t = now() + 0.05;
-    const q = { mode, song: song(mode), layer: newLayer(t), step: 0, next: t, fadeEnd: null };
+    const act = accActOf(mode);   // round 6: the act's variant of the tune
+    const q = { mode, act, song: song(mode, act), layer: newLayer(t, xf), step: 0, next: t, fadeEnd: null };
     // Fight modes carry two extra layers on their own gains under the
     // mode's layer (so the mode crossfade still fades them): hype
     // (percussion on a streak or combo) and tense (low hp, phase two).
     if (LAYERED[mode]) {
-      q.lay = layerSong(mode);
+      q.lay = layerSong(mode, act);
       q.lg = {}; q.lt = {};
       for (const k of LAYER_NAMES) {
         const g = S.ac.createGain();
@@ -1688,13 +1986,14 @@ const AUDIO = (() => {
      ride the music bus, so the music toggle and volume apply. Each mode's
      layer tune is built once from its own seed (the base song is untouched). */
   const LAYERED = { fight: 1, elite: 1, boss: 1 };
+  LAYERED.machine = 1;   // SECRET (round 6): The Machine's fight layers up like a boss
   const LAYER_NAMES = ['hype', 'tense'];
   const LAYER_FADE = 0.45;   // setTargetAtTime time constant (about 1.4 s to settle)
   const LAYER_TAIL = 2.5;    // a switched-off layer keeps playing this long while it fades
-  function composeLayers(mode) {
-    const base = song(mode);
+  function composeLayers(mode, act) {
+    const base = song(mode, act);
     if (!base) return null;
-    const c = base.cfg, rng = U.rng(U.hashStr('clawspire:layers:' + mode));
+    const c = base.cfg, rng = U.rng(U.hashStr('clawspire:layers:' + mode + (base.act ? ':act' + base.act : '')));
     const hype = [], tense = [];
     for (let i = 0; i < base.len; i++) { hype.push([]); tense.push([]); }
     const hi = c.root + 36;
@@ -1714,9 +2013,10 @@ const AUDIO = (() => {
     }
     return { mode, hype, tense };
   }
-  function layerSong(mode) {
+  function layerSong(mode, act) {
     if (!LAYERED[mode] || !CFG[mode]) return null;
-    return S.lsongs[mode] || (S.lsongs[mode] = composeLayers(mode));
+    const key = accSongKey(mode, act == null ? 0 : act);
+    return S.lsongs[key] || (S.lsongs[key] = composeLayers(mode, act == null ? 0 : act));
   }
   function playLayerEvent(q, ev, t, dest) {
     const c = q.song.cfg, sd = q.song.stepDur, g = (ev.g || 1) * c.vol;
@@ -1818,7 +2118,7 @@ const AUDIO = (() => {
      toggled off) the request is remembered and starts when possible. */
   function music(mode) {
     if (MODES.indexOf(mode) < 0) mode = 'off';
-    if (mode === S.want && (mode === 'off' || S.seqs.some((q) => q.mode === mode && q.fadeEnd == null))) return;
+    if (mode === S.want && (mode === 'off' || S.seqs.some((q) => q.mode === mode && q.fadeEnd == null && (q.act || 0) === accActOf(mode)))) return;
     S.want = mode;
     if (!S.ac || !prefs().music) return;
     startMode(mode);
@@ -1838,7 +2138,15 @@ const AUDIO = (() => {
     try {
       S.sfxBus.gain.setTargetAtTime(prefs().sfx ? S.vSfx : 0, t, 0.02);
       S.musBus.gain.setTargetAtTime(S.vMus, t, 0.05);
+      if (S.master) S.master.gain.setTargetAtTime(0.9 * (S.vMaster == null ? 1 : S.vMaster), t, 0.03);
     } catch (e) { /* ignore */ }
+  }
+  // Round 6: the settings' master volume (0..1) over both buses; the sound
+  // and music toggles still mute their own bus. Remembered before init.
+  function setMaster(v) {
+    if (v != null && isFinite(+v)) S.vMaster = U.clamp(+v, 0, 1);
+    applyVol();
+    return S.vMaster == null ? 1 : S.vMaster;
   }
 
   function setSfx(on) {
@@ -2066,9 +2374,14 @@ const AUDIO = (() => {
     // true when both channels are off; assigning sets both.
     get muted() { return !prefs().sfx && !prefs().music; },
     set muted(v) { setSfx(!v); setMusic(!v); },
+    // round 6: per-act music (the act biome picks the map and fight variants)
+    setAct, get act() { return S.act; }, ACT_CFG, ACT_NAMES, setMaster, get master() { return S.vMaster == null ? 1 : S.vMaster; },
+    _songFor: (m, a) => song(m, a == null ? S.act : a),
+    _actOf: (m, a) => accActOf(m, a),
+    _liveActs: () => S.seqs.map((q) => ({ mode: q.mode, act: q.act || 0, fading: q.fadeEnd != null })),
     // test hooks
     _tick: tick,
-    _song: song,
+    _song: (m, a) => song(m, a == null ? 0 : a),
     _live: () => S.seqs.map((q) => ({ mode: q.mode, fading: q.fadeEnd != null })),
   };
 })();

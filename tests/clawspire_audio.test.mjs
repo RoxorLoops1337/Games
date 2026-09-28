@@ -587,4 +587,99 @@ T.test('dynamic music: layers switch on state changes, crossfade and respect the
   T.eq(AUDIO._liveLayers().filter(x => !x.fading).length, 0, 'music off: nothing layers up');
 });
 
+/* ---------------------------------------------------------------- round 6: per-act music */
+T.test('round 6: every act has its own map theme and fight colour, the base tunes unchanged', () => {
+  const { AUDIO } = boot({ only: ['util', 'audio'] });
+  const base = JSON.stringify(boot({ only: ['util', 'audio'] }).AUDIO._song('map').steps);
+  T.eq(AUDIO.act, 0, 'no act before the game says so');
+  T.eq(AUDIO._actOf('map'), 0, 'act 0 plays the base map tune');
+  for (const m of ['title', 'win', 'off']) T.eq(AUDIO._actOf(m, 2), 0, `${m} never varies by act`);
+  const maps = [1, 2, 3].map(a => AUDIO._songFor('map', a));
+  T.ok(maps.every(s => s && s.act >= 1), 'three act map themes');
+  T.ok(maps[0].bpm !== maps[1].bpm && maps[1].bpm !== maps[2].bpm && maps[0].bpm !== maps[2].bpm, 'each at its own tempo (' + maps.map(s => s.bpm).join(', ') + ')');
+  T.ok(new Set(maps.map(s => s.cfg.scale)).size === 3, 'and in its own mode (' + maps.map(s => s.cfg.scale).join(', ') + ')');
+  const voices = (s) => new Set(s.steps.flat().map(e => e.v));
+  T.ok(voices(maps[0]).has('arp'), 'act 1: the synthpop arpeggio');
+  T.ok(voices(maps[1]).has('clank') && voices(maps[1]).has('steam'), 'act 2: anvil clanks and steam');
+  T.ok(voices(maps[2]).has('bell') && maps[2].cfg.box, 'act 3: music box bells');
+  for (const m of ['fight', 'elite', 'boss']) {
+    const b = AUDIO._song(m);
+    for (const a of [1, 2, 3]) {
+      const s = AUDIO._songFor(m, a);
+      T.ok(s && s.act === a && JSON.stringify(s.steps) !== JSON.stringify(b.steps), `${m} act ${a}: its own variant`);
+      const L = AUDIO._layerSong(m, a);
+      T.ok(L && L.hype.length === s.len && L.tense.length === s.len, `${m} act ${a}: hype and tense layers fit it`);
+    }
+  }
+  T.ok(voices(AUDIO._songFor('fight', 2)).has('clank') && voices(AUDIO._songFor('boss', 3)).has('bell'), 'the fights borrow the act timbre');
+  T.eq(JSON.stringify(AUDIO._song('map').steps), base, 'the base map tune is bit for bit the old one');
+  T.eq(JSON.stringify(AUDIO._songFor('map', 2).steps), JSON.stringify(boot({ only: ['util', 'audio'] }).AUDIO._songFor('map', 2).steps), 'an act theme is deterministic');
+  T.eq(AUDIO.setAct(7), 0, 'an unknown act plays the base tunes');
+  T.eq(AUDIO.setAct(2), 2, 'setAct remembers the act before init');
+  AUDIO.music('map');
+  T.eq(AUDIO.mode, 'map', 'and music still remembers the mode');
+});
+
+T.test('round 6: the act switches crossfade the live tune, fights keep their layers, volume and mute hold', () => {
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  const run = (secs) => { let n = 0; for (let i = 0; i < secs / 0.025; i++) { ac.currentTime += 0.025; n += AUDIO._tick(); } return n; };
+  AUDIO.setAct(1);
+  AUDIO.music('map');
+  run(0.5);
+  T.eq(JSON.stringify(AUDIO._liveActs()), '[{"mode":"map","act":1,"fading":false}]', 'act 1 map theme live');
+  AUDIO.setAct(2);
+  let L = AUDIO._liveActs();
+  T.ok(L.length === 2 && L.some(x => x.act === 1 && x.fading) && L.some(x => x.act === 2 && !x.fading), 'a new act crossfades into its theme');
+  run(2.2);
+  T.eq(JSON.stringify(AUDIO._liveActs()), '[{"mode":"map","act":2,"fading":false}]', 'the old act drops after the fade');
+  AUDIO.music('map');
+  T.eq(AUDIO._liveActs().length, 1, 'the same mode and act again does not restart');
+  AUDIO.music('fight');
+  run(0.3);
+  T.ok(AUDIO._liveActs().some(x => x.mode === 'fight' && x.act === 2 && !x.fading), 'the fight plays the act 2 variant');
+  AUDIO.musicState({ hype: true, tense: true });
+  const lay = AUDIO._liveLayers().find(x => !x.fading);
+  T.ok(lay && lay.hype === 1 && lay.tense === 1, 'the hype and tense layers still switch on');
+  let queued = 0, threw = false;
+  try { queued = run(3); } catch (e) { threw = true; }
+  T.ok(!threw && queued > 0, 'the act variants play without throwing (' + queued + ' notes)');
+  T.eq(AUDIO.victory(), true, 'the victory sting over an act variant');
+  run(1);
+  AUDIO.setAct(3);
+  AUDIO.music('boss');
+  run(0.5);
+  T.ok(AUDIO._liveActs().some(x => x.mode === 'boss' && x.act === 3 && !x.fading), 'act 3 boss variant');
+  T.eq(AUDIO.setMaster(0.5), 0.5, 'master volume set');
+  T.eq(AUDIO.setMaster(3), 1, 'and clamped');
+  T.eq(AUDIO.master, 1, 'the getter reads it');
+  AUDIO.toggleMusic();
+  run(1);
+  T.eq(AUDIO._liveActs().filter(x => !x.fading).length, 0, 'music off: nothing plays');
+  AUDIO.setAct(1);
+  T.eq(AUDIO._liveActs().filter(x => !x.fading).length, 0, 'an act change with music off stays silent');
+  AUDIO.toggleMusic();
+  T.ok(AUDIO._liveActs().some(x => x.mode === 'boss' && x.act === 1 && !x.fading), 'music on resumes the mode in the current act');
+});
+
+T.test('round 6 sets: the set, boon and Compactor voices play, no-op cold, and are throttled', () => {
+  const SET_NAMES = ['setPiece', 'setDone', 'boonDeal', 'boonFlip', 'boonPick', 'cmpFeed', 'cmpPress', 'cmpCrunch', 'cmpPop'];
+  const { AUDIO, fake } = bootFake();
+  for (const n of SET_NAMES) { T.ok(AUDIO.names.includes(n), 'sfx name listed: ' + n); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of SET_NAMES) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    let r = false;
+    try { r = AUDIO.sfx(n, { pitch: 1.1, n: 3 }); } catch (e) { T.ok(false, n + ' threw ' + e); }
+    T.ok(r && fake.count.total - before >= 2, 'set sfx ' + n + ' plays');
+  }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('setDone') && !AUDIO.sfx('setDone'), 'one set fanfare at a time');
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('cmpCrunch') && !AUDIO.sfx('cmpCrunch'), 'one crunch at a time');
+});
+
 T.done();

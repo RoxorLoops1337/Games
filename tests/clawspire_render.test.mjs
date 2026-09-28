@@ -1511,4 +1511,200 @@ h.test('pets: the whack-a-mole and skee-ball machines, the tip pictures', () => 
   h.eq(uniqueRatio(tips).ratio, 1, 'the round 5 tips have their own pictures');
 });
 
+/* ------------------------------------------------- ACCESS (round 6) */
+h.test('round 6: colour-blind palettes change every signal colour and keep the roles apart', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, A = R.acc, D = api.DATA;
+  h.ok(A && typeof A.set === 'function', 'RENDER.acc exists');
+  h.eq(A.mode, 'off', 'off by default');
+  const SIG = ['#ff5a4a', '#a6ff5e', '#2ee6d6', '#ff2e88', '#ffc94d', '#ff8a2b', '#3b6fd6'];
+  h.ok(SIG.every(c => A.col(c) === c), 'off: every colour passes through');
+  const rar0 = JSON.stringify(R.RARITY_COL);
+  const key0 = R.pol.key(D.ITEMS[Object.keys(D.ITEMS).find(id => D.ITEMS[id].rarity === 'r')]);
+  for (const mode of ['deutan', 'protan', 'tritan']) {
+    A.set({ mode });
+    h.eq(A.mode, mode, mode + ' set');
+    const out = SIG.map(A.col);
+    h.ok(out.every((c, i) => c !== SIG[i]), mode + ': every signal colour changes (' + out.join(' ') + ')');
+    h.eq(new Set(out).size, out.length, mode + ': the roles stay apart');
+    h.ok(A.col('#FF5A4A') === out[0] && A.col('rgba(255,0,0,1)') === 'rgba(255,0,0,1)', mode + ': any case, other colours untouched');
+    for (const r of ['u', 'r', 'l']) h.ok(R.RARITY_COL[r] !== JSON.parse(rar0)[r], mode + ': rarity ' + r + ' recoloured');
+    h.eq(R.RARITY_COL.c, JSON.parse(rar0).c, mode + ': common stays grey');
+    h.eq(new Set(['c', 'u', 'r', 'l'].map(r => R.RARITY_COL[r])).size, 4, mode + ': four distinct rarity colours');
+    // damage vs heal vs block numbers: their own colours, and signs or words besides
+    const dn = R.fx.num(100, 100, '−5', '#ff5a4a'), hn = R.fx.num(200, 100, '+5', '#a6ff5e'), bn = R.fx.text(300, 100, '+5 block', '#2ee6d6');
+    h.ok(dn.col === out[0] && hn.col === out[1] && bn.col === out[2], mode + ': the numbers take the palette');
+    h.ok(dn.col !== hn.col && hn.col !== bn.col && dn.col !== bn.col, mode + ': damage, heal and block differ');
+    h.ok(/^−/.test(dn.str) && /^\+/.test(hn.str) && /block/.test(bn.str), mode + ': and never by colour alone (sign, words)');
+    R.fx.clear();
+    // the intent bubbles and the status chips draw clean in every mode
+    for (const k of ['attack', 'buff', 'debuff', 'heal', 'charge']) drawCheck(mode + ' intent ' + k, c => R.intent(c, 200, 120, { intent: { k, v: 6, s: 'str' }, charged: k === 'charge' }, 0.5));
+    drawCheck(mode + ' status chips', c => R.statusPips(c, 20, 20, { poison: 3, str: 2, weak: 1 }, 18));
+  }
+  h.ok(R.pol.key(D.ITEMS[Object.keys(D.ITEMS).find(id => D.ITEMS[id].rarity === 'r')]) !== key0, 'the item sprites re-key (their rim light recolours)');
+  A.set({ mode: 'off' });
+  h.eq(JSON.stringify(R.RARITY_COL), rar0, 'off again: the rarity table is the old one exactly');
+  h.ok(SIG.every(c => A.col(c) === c), 'off again: colours pass through');
+  A.set({ mode: 'nonsense' });
+  h.eq(A.mode, 'off', 'an unknown mode is off');
+});
+
+h.test('round 6: statuses keep distinct shapes, the map marks dangers and pickups', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, A = R.acc, D = api.DATA;
+  const icons = Object.values(D.STATUS).map(s => s.icon);
+  h.eq(new Set(icons).size, icons.length, 'every status has its own icon (' + icons.length + ')');
+  const sb = A.shape('buff'), sd = A.shape('debuff');
+  h.ok(sb.outline !== sd.outline && sb.mark !== sd.mark, 'a buff and a debuff differ in outline and mark');
+  const chip = (st) => fingerprint(drawCheck('chip ' + Object.keys(st)[0], c => R.statusPips(c, 20, 20, st, 18)));
+  const offB = chip({ str: 2 }), offD = chip({ weak: 2 });
+  A.set({ mode: 'deutan' });
+  const onB = chip({ str: 2 }), onD = chip({ weak: 2 });
+  h.ok(onB !== offB && onD !== offD, 'a colour-blind mode adds the marks');
+  h.ok(onB.split(',').filter(s => s === 'lineTo').length !== onD.split(',').filter(s => s === 'lineTo').length, 'the debuff chip is angular, the buff chip round');
+  for (const k of ['up', 'down', 'danger', 'pickup']) drawCheck('mark ' + k, c => A.mark(c, k, 20, 20, 8));
+  h.eq(A.tileKind('fight'), 'danger', 'a fight is a danger'); h.eq(A.tileKind('elite'), 'danger', 'an elite too'); h.eq(A.tileKind('boss'), 'danger', 'the boss too');
+  h.eq(A.tileKind('treasure'), 'pickup', 'a treasure is a pickup'); h.eq(A.tileKind('gem'), 'pickup', 'a gem too'); h.eq(A.tileKind('empty'), null, 'an empty hex neither');
+  const hexFp = (type) => fingerprint(drawCheck('hex ' + type, c => R.hex(c, 60, 60, 30, { type, revealed: true, q: 1, r: 1 }, { t: 0.3, orient: 'v' })));
+  const fOn = hexFp('fight'), tOn = hexFp('treasure');
+  A.set({ mode: 'off' });
+  const fOff = hexFp('fight'), tOff = hexFp('treasure');
+  h.ok(fOn !== fOff && tOn !== tOff, 'the marks show only in a colour-blind mode');
+  h.ok(fOn.includes('fillText') && fOn.split('fillText').length > fOff.split('fillText').length, 'the danger mark carries a bang');
+});
+
+h.test('round 6: text size, reduced flashing and the high-contrast items', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, A = R.acc, fx = R.fx, D = api.DATA;
+  const size = () => { const p = fx.text(100, 100, 'HELLO', '#fff', { size: 20, free: true }); fx.clear(); return p.size; };
+  h.eq(size(), 20, 'normal text');
+  A.set({ text: 'l' }); h.near(size(), 23, 1e-9, 'large text x1.15');
+  A.set({ text: 'xl' }); h.near(size(), 26, 1e-9, 'extra large x1.3');
+  const n = fx.num(100, 100, '−12', '#fff'); h.ok(n.size >= 20 * 1.3, 'damage numbers scale too (' + n.size.toFixed(1) + ')');
+  A.set({ text: 'n' }); fx.clear();
+  // reduced flashing: the screen flash is capped (the stroke of white never pops)
+  const flashAlpha = () => { const { ctx, stat } = seqCtx(); fx.flash('#ffffff', 0.6); fx.draw(ctx); fx.clear(); const a = stat.seq.filter(s => s.startsWith('set:globalAlpha=')).map(s => +s.split('=')[1]); return Math.max(...a.filter(v => v < 1), 0); };
+  h.near(flashAlpha(), 0.6, 1e-9, 'a flash at full strength');
+  A.set({ noFlash: true });
+  h.ok(flashAlpha() <= 0.08 + 1e-9, 'reduced flashing caps it (' + flashAlpha() + ')');
+  h.eq(A.strobe(10), 2, 'strobing bulbs run at a fifth of the rate');
+  drawCheck('party bulbs, reduced flashing', c => R.cabinetBack ? R.cabinetBack(c, 30, 410, { w: 480, h: 390, chuteW: 64, dividerH: 0.45, frame: 30, railY: 26, chuteX: 416 }, { t: 3, party: 1, marquee: 'JACKPOT!' }) : R.cabinet(c, 30, 410, { w: 480, h: 390 }, { t: 3 }));
+  A.set({ noFlash: false });
+  h.eq(A.strobe(10), 10, 'and full speed again');
+  // high contrast: the bin items get a rim (their own sprite key), the same art otherwise
+  const def = D.ITEMS[Object.keys(D.ITEMS)[0]];
+  const plain = drawCheck('item plain', c => R.item(c, def, 50, 50, 0, 1, {}));
+  const hc = drawCheck('item high contrast', c => R.item(c, def, 50, 50, 0, 1, { hc: true }));
+  h.ok(hc.paints > plain.paints * 2, 'the outline paints the silhouette round the art (' + plain.paints + ' -> ' + hc.paints + ')');
+});
+
+// ---------------------------------------------------------------- SECRET (round 6): keys, the Back Room, The Machine, the door, the ending
+h.test('secret: every look draws, balanced, without NaN, and each state reads differently', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, X = R.sec;
+  h.ok(X && ['key', 'glint', 'terrain', 'mapBg', 'arena', 'face', 'cab', 'door', 'ending'].every(k => typeof X[k] === 'function'), 'RENDER.sec has every piece');
+  const keys = new Map();
+  for (const t of [0, 0.4, 1.3]) keys.set('key' + t, fingerprint(drawCheck('golden key t' + t, c => X.key(c, 100, 100, 1, t, { rot: t }))));
+  drawCheck('golden key, faded, no glow', c => X.key(c, 100, 100, 0.5, 1, { alpha: 0.3, glow: false }));
+  drawCheck('key glint', c => X.glint(c, 100, 100, 10, 2, 0.8));
+  // the Back Room's tiles: catwalks and the void, both orientations, and they are not the cellar's
+  const tiles = new Map();
+  for (const terrain of ['land', 'sea']) for (const seed of [4, 5, 6, 7]) for (const orient of ['v', 'h']) {
+    const tile = { q: 0, r: 0, terrain, ground: terrain === 'sea' ? 'sea' : 'grass', biome: 'machine', elev: 0.3 };
+    tiles.set(terrain + seed + orient, fingerprint(drawCheck(`machine ${terrain} ${seed} ${orient}`, c => R.terrainHex(c, 100, 100, 40, tile, { t: 1.2, orient, seed, biome: 'machine' }))));
+  }
+  const kinds = (tr) => new Set([...tiles].filter(([k]) => k.startsWith(tr)).map(([, v]) => v)).size;
+  h.ok(kinds('sea') >= 4 && kinds('land') >= 2, `the machine tiles vary with their seed (void ${kinds('sea')}, catwalk ${kinds('land')})`);
+  const cellar = fingerprint(drawCheck('cellar land', c => R.terrainHex(c, 100, 100, 40, { terrain: 'land', ground: 'grass', biome: 'cellar' }, { t: 1, orient: 'v', seed: 3, biome: 'cellar' })));
+  h.ok(cellar !== tiles.get("land4v"), 'the machine biome draws its own tiles');
+  h.ok(R.BIOME_PAL.machine && R.terrainFill('machine', 'sea', 0.5, 'sea') !== R.terrainFill('cellar', 'sea', 0.5, 'sea'), 'the machine palette');
+  drawCheck('back room map bg', c => X.mapBg(c, 540, 960, 2));
+  const arena = new Map();
+  for (const ph of [0, 1, 2]) for (const m of [false, true]) arena.set(ph + ':' + m, fingerprint(drawCheck(`arena phase ${ph} machine ${m}`, c => X.arena(c, 540, 960, 1.5, ph, m))));
+  h.ok(arena.get('0:false') !== arena.get('0:true') && arena.get('0:true') !== arena.get('1:true'), 'The Machine\'s arena shows its screen and its light show');
+  // The Machine: its own drawing (def.look), distinct from the Prize Master, per phase
+  const md = D.ENEMIES.machine;
+  const faces = new Map();
+  for (const ph of [0, 1, 2]) { X.V.phase = ph; faces.set(ph, fingerprint(drawCheck('The Machine phase ' + ph, c => R.enemy(c, md, 200, 280, 1, 1.1, {})))); }
+  X.V.phase = 0;
+  h.eq(uniqueRatio(faces).ratio, 1, 'every phase looks different');
+  const pm = fingerprint(drawCheck('the Prize Master', c => R.enemy(c, D.ENEMIES.prizemaster, 200, 280, 1, 1.1, {})));
+  h.ok(pm !== faces.get(0), 'The Machine is not the Prize Master');
+  for (const st of [{ hurt: 0.6 }, { attack: 0.7 }, { dead: 0.5 }, { enraged: true, rage: 0.4 }]) drawCheck('The Machine ' + JSON.stringify(st), c => R.enemy(c, md, 200, 280, 1, 1, st));
+  h.ok(R.enemyBox(md, 1).h > R.enemyBox(D.ENEMIES.prizemaster, 1).h, 'its box is its own');
+  // its face on the Rig: eyes, the marquee lights as its hp, the coin slot mouth
+  const cab = { x: 30, y: 410, w: 480, h: 390, frame: 30, chuteX: 416, chuteW: 64, dividerTop: 214 };
+  const face = new Map();
+  for (const hpk of [1, 0.5, 0.1]) face.set('hp' + hpk, fingerprint(drawCheck('face hp ' + hpk, c => X.face(c, cab, { t: 1, phase: 0, hpk }))));
+  h.eq(uniqueRatio(face).ratio, 1, 'the marquee lights go dark as its hp drops');
+  for (const st of [{ phase: 1, hpk: 0.5, atk: 1 }, { phase: 2, hpk: 0.2, hurt: 1, look: -1, blink: 1 }, { phase: 2, hpk: 0, pd: 0.5 }, { phase: 2, hpk: 0, pd: 1 }]) drawCheck('face ' + JSON.stringify(st), c => X.face(c, cab, Object.assign({ t: 2 }, st)));
+  const f0 = fingerprint(drawCheck('face open mouth', c => X.face(c, cab, { t: 1, phase: 0, hpk: 1, atk: 1 })));
+  h.ok(f0 !== face.get('hp1'), 'the mouth bites on its attacks');
+  // the cabinet events, each on its own and all at once, both layers
+  const ev = new Map();
+  const base = { t: 1.3, phase: 0, rail: 0, hx: 200, shut: { hp: 2, max: 2, k: 0 }, grav: 0, crack: 0, seed: 7, pd: 0 };
+  const states = { rail: { rail: 1 }, shut: { shut: { hp: 1, max: 2, k: 1 } }, grav: { grav: 1 }, crack: { crack: 0.6 }, melt: { phase: 2, crack: 1 }, pd: { pd: 0.9 }, show: { phase: 1 } };
+  for (const k in states) for (const layer of ['back', 'front']) {
+    const st = drawCheck(`cab ${k} ${layer}`, c => { c.fillRect(0, 0, 1, 1); X.cab(c, cab, Object.assign({}, base, states[k]), layer); });
+    ev.set(k + layer, fingerprint(st));
+  }
+  const none = { back: fingerprint(drawCheck('cab calm back', c => { c.fillRect(0, 0, 1, 1); X.cab(c, cab, base, 'back'); })), front: fingerprint(drawCheck('cab calm front', c => { c.fillRect(0, 0, 1, 1); X.cab(c, cab, base, 'front'); })) };
+  for (const [k, layer] of [['rail', 'front'], ['shut', 'front'], ['grav', 'back'], ['crack', 'front'], ['melt', 'front'], ['pd', 'front'], ['show', 'back']]) h.ok(ev.get(k + layer) !== none[layer], `${k} shows on the ${layer} layer`);
+  const c1 = fingerprint(drawCheck('crack a little', c => X.cab(c, cab, Object.assign({}, base, { crack: 0.2 }), 'front')));
+  const c2 = fingerprint(drawCheck('crack a lot', c => X.cab(c, cab, Object.assign({}, base, { crack: 0.9 }), 'front')));
+  h.ok(c1 !== c2 && c2.length > c1.length, 'the glass cracks progressively');
+  const s1 = fingerprint(drawCheck('shutter 2 left', c => X.cab(c, cab, Object.assign({}, base, { shut: { hp: 2, max: 2, k: 1 } }), 'front')));
+  const s2 = fingerprint(drawCheck('shutter 1 left', c => X.cab(c, cab, Object.assign({}, base, { shut: { hp: 1, max: 2, k: 1 } }), 'front')));
+  h.ok(s1 !== s2, 'a dent shows on the shutter');
+  // the hidden door at every beat, the true ending at dawn
+  const door = new Map();
+  for (const [keys, open] of [[0, 0], [1.5, 0], [3, 0], [3, 0.5], [3, 1]]) door.set(keys + ':' + open, fingerprint(drawCheck(`door keys ${keys} open ${open}`, c => X.door(c, 540, 960, { t: 2, keys, open }))));
+  h.eq(uniqueRatio(door).ratio, 1, 'the keys fly in and the door opens');
+  const end = new Map();
+  for (const [dawn, walk] of [[0, 0], [0.5, 0.3], [1, 1]]) end.set(dawn + ':' + walk, fingerprint(drawCheck(`ending dawn ${dawn} walk ${walk}`, c => X.ending(c, 540, 960, { t: 3, dawn, walk, charId: 'rogue' }))));
+  h.eq(uniqueRatio(end).ratio, 1, 'dawn breaks, the crawler walks out');
+  drawCheck('door with nothing', c => { c.fillRect(0, 0, 1, 1); X.door(c); });
+  drawCheck('ending with nothing', c => { c.fillRect(0, 0, 1, 1); X.ending(c); });
+  const sg = drawCheck('the ZERO G sign', c => R.bossSign(c, 270, 398, 'ZERO G', R.SIG_COL.secGrav, 1, 1));
+  h.ok(sg.paints > 0 && R.SIG_COL.machine && R.SIG_COL.secShut && R.SIG_COL.secZap, 'the cabinet signs have their colours');
+});
+
+/* ------------------------------------------------- round 6: the boon machine, the Compactor */
+h.test('sets: the boon draft machine draws for every Tilt, flip and pick', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER;
+  h.ok(typeof R.boonBack === 'function' && typeof R.cmpScene === 'function' && R.sets && typeof R.sets.cmpPlate === 'function', 'RENDER.boonBack, cmpScene, sets.cmpPlate');
+  const fp = new Map();
+  for (const tilt of [0, 5, 9]) for (const [k, st] of Object.entries({ down: { up: [false, false, false] }, flip: { up: [true, false, false] }, picked: { up: [true, true, true], done: true, pick: 1 }, walked: { up: [true, true, true], done: true, pick: -1 } })) {
+    fp.set(tilt + k, fingerprint(drawCheck(`boonBack T${tilt} ${k}`, (c) => R.boonBack(c, Object.assign({ t: 1.3, w: 540, h: 960, tilt }, st)))));
+  }
+  h.ok(fp.get('0down') !== fp.get('9down'), 'high Tilt looks spicier (red, cracked glass, NO REFUNDS)');
+  h.ok(fp.get('0picked') !== fp.get('0walked'), 'the machine smiles at a deal and sulks at a walk-away');
+  drawCheck('boonBack null state', (c) => R.boonBack(c, null));
+  // a pure function of its state: the same frame twice is the same picture
+  h.eq(fingerprint(drawCheck('boonBack again', (c) => R.boonBack(c, { t: 2.2, tilt: 3 }))), fingerprint(drawCheck('boonBack again 2', (c) => R.boonBack(c, { t: 2.2, tilt: 3 }))), 'deterministic');
+});
+
+h.test('sets: the Compactor press draws every phase of a crush', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, I = api.DATA.ITEMS;
+  const ins = ['toxic_vial', 'venom_dart', 'rusty_sword'].map((id) => ({ def: I[id], plus: false }));
+  const res = { def: I.morning_flail || I.longsword || I.rusty_sword, plus: true };
+  const K = { feed: 0.55, slam: 0.95, lift: 1.7, pop: 2.2 };
+  const P = R.sets.cmpPlate;
+  h.ok(P('idle', 0, K) === 0 && P('feed', 0.3, K) === 0 && P('press', 0.75, K) > 0 && P('press', 0.75, K) < 1 && P('grind', 1.2, K) === 1 && P('lift', 1.95, K) < 1 && P('done', 3, K) === 0, 'the plate: up, coming down, down, lifting, up');
+  let prev = -1, mono = true;
+  for (let k = K.feed; k <= K.slam; k += 0.05) { const p = P('press', k, K); if (p < prev) mono = false; prev = p; }
+  h.ok(mono, 'the ram only comes down while pressing');
+  const fp = new Map();
+  const phases = { empty: ['idle', 0, [], null], two: ['idle', 0, ins.slice(0, 2), null], ready: ['idle', 0, ins, null], feed: ['feed', 0.2, ins, res], press: ['press', 0.8, ins, res],
+    grind: ['grind', 1.2, ins, res], lift: ['lift', 1.95, ins, res], done: ['done', 2.5, ins, res] };
+  for (const [name, [phase, k, list, r]] of Object.entries(phases)) {
+    fp.set(name, fingerprint(drawCheck('cmpScene ' + name, (c) => R.cmpScene(c, { t: 1 + k, x: 0, y: 70, w: 540, h: 350, phase, k, K, ins: list, res: r, shake: phase === 'grind' ? 0.6 : 0 }))));
+  }
+  h.eq(uniqueRatio(fp).ratio, 1, 'every phase draws differently');
+  drawCheck('cmpScene reduced', (c) => R.cmpScene(c, { t: 1, phase: 'grind', k: 1.2, K, ins, res, shake: 1, reduced: true }));
+  drawCheck('cmpScene null state', (c) => R.cmpScene(c, null));
+});
+
 h.done();
