@@ -2165,6 +2165,166 @@ const AUDIO = (() => {
   NAMES.push('stoPage', 'stoCallback', 'garyTaunt', 'clawOffBell', 'plushSqueak', 'beltRun', 'iceGrow', 'crabSnip', 'hunted');
   /* ---------------------------------------------------------------- /STORY */
 
+  /* ---------------------------------------------------------------- FAMILY + REROLL (round 9)
+     DESIGN.md "Enemy families (round 9)" and "Shop reroll (round 9)": a
+     family walks on (a band count-in, a vending jingle, a choir chord), the
+     Crescendo ticks up the scale, the SOLO's power chord, a cancelled SOLO's
+     record scratch, cans and coins and a restock, the choir's hum, a
+     shattered globe, the angry choir; the reroll's rare-card shine. */
+  Object.assign(BANK, {
+    // A family walks on: opts.fam band | vending | choir.
+    famIntro(out, t, o, p) {
+      const f = o && o.fam;
+      if (f === 'vending') { [72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.09, v: 0.05, lp: 3000 })); return 0.5; }
+      if (f === 'choir') { [60, 64, 67, 71].forEach((n) => blip(out, t, { w: 'sine', f: mtof(n) * p, dur: 0.9, v: 0.035, a: 0.12, vib: [5, 4] })); return 1.0; }
+      // the band: stick clicks counting in, then a kick
+      for (let i = 0; i < 3; i++) hiss(out, t, { at: i * 0.13, type: 'highpass', f: 5200, dur: 0.025, v: 0.14 });
+      blip(out, t, { at: 0.39, w: 'sine', f: 120 * p, to: 45 * p, dur: 0.18, v: 0.22 });
+      return 0.6;
+    },
+    // A Crescendo beat: a tom and a note climbing with the meter (opts.n 1..8).
+    famBeat(out, t, o, p) {
+      const n = Math.max(1, Math.min(8, (o && o.n) | 0 || 1));
+      blip(out, t, { w: 'sine', f: 160 * p, to: 70 * p, dur: 0.12, v: 0.16 });
+      blip(out, t, { at: 0.02, w: 'triangle', f: mtof([60, 62, 64, 65, 67, 69, 71, 72][n - 1]) * p, dur: 0.16, v: 0.07 });
+      return 0.2;
+    },
+    // The SOLO is coming: a snare roll into a sustained bend.
+    famReady(out, t, o, p) {
+      for (let i = 0; i < 8; i++) hiss(out, t, { at: i * 0.045, type: 'bandpass', f: 1800, q: 1.2, dur: 0.04, v: 0.08 + i * 0.012 });
+      blip(out, t, { at: 0.36, w: 'sawtooth', f: mtof(64) * p, to: mtof(66) * p, dur: 0.45, v: 0.05, lp: 2200, vib: [7, 12] });
+      return 0.85;
+    },
+    // The SOLO: a distorted power chord and a cymbal.
+    famSolo(out, t, o, p) {
+      for (const n of [40, 47, 52]) blip(out, t, { w: 'sawtooth', f: mtof(n) * p, dur: 0.7, v: 0.07, lp: 1600, q: 3, det: n === 47 ? 8 : 0 });
+      blip(out, t, { at: 0.18, w: 'square', f: mtof(76) * p, to: mtof(79) * p, dur: 0.4, v: 0.04, lp: 2600, vib: [6, 18] });
+      hiss(out, t, { type: 'highpass', f: 6500, dur: 0.6, v: 0.1 });
+      return 0.9;
+    },
+    // A SOLO knocked off: a record scratch and a deflating note.
+    famCancel(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 900, to: 2600, q: 3, dur: 0.14, v: 0.16, crunch: true });
+      hiss(out, t, { at: 0.15, type: 'bandpass', f: 2600, to: 700, q: 3, dur: 0.12, v: 0.14, crunch: true });
+      blip(out, t, { at: 0.3, w: 'square', f: mtof(67) * p, to: mtof(55) * p, dur: 0.4, v: 0.05, lp: 1400 });
+      return 0.75;
+    },
+    // A restock: the machine's clunk and a can's fizz.
+    famRestock(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 150 * p, to: 80 * p, dur: 0.08, v: 0.12, lp: 900 });
+      hiss(out, t, { at: 0.08, type: 'highpass', f: 3800, dur: 0.35, v: 0.08 });
+      return 0.45;
+    },
+    // An empty can clattering in.
+    famCan(out, t, o, p) {
+      const k = o && o.i ? 1.2 : 1;
+      blip(out, t, { w: 'triangle', f: 1400 * p * k, to: 900 * p * k, dur: 0.06, v: 0.08 });
+      blip(out, t, { at: 0.07, w: 'triangle', f: 1100 * p * k, to: 700 * p * k, dur: 0.05, v: 0.06 });
+      hiss(out, t, { type: 'bandpass', f: 3000, q: 4, dur: 0.05, v: 0.07, crunch: true });
+      return 0.2;
+    },
+    // The Change Machine: a register's clunk and the coins sliding in.
+    famChange(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 220 * p, to: 110 * p, dur: 0.06, v: 0.1, lp: 1200 });
+      for (let i = 0; i < 4; i++) blip(out, t, { at: 0.08 + i * 0.05, w: 'triangle', f: (1900 - i * 120) * p, dur: 0.05, v: 0.05 });
+      return 0.4;
+    },
+    // It breaks and pays out: a bell and a coin cascade.
+    famPayout(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: mtof(88) * p, dur: 0.5, v: 0.08 });
+      for (let i = 0; i < 8; i++) blip(out, t, { at: 0.05 + i * 0.045, w: 'triangle', f: (1500 + (i % 3) * 300) * p, dur: 0.05, v: 0.05 });
+      return 0.6;
+    },
+    // The choir hums together: a soft "ooh" chord with a slow swell.
+    famHum(out, t, o, p) {
+      for (const n of [57, 64, 69, 72]) blip(out, t, { w: 'triangle', f: mtof(n) * p, dur: 0.8, v: 0.045, a: 0.15, lp: 1800, vib: [5, 5] });
+      hiss(out, t, { at: 0.1, type: 'bandpass', f: 1200, q: 0.8, dur: 0.6, v: 0.04 });
+      return 0.9;
+    },
+    // A globe shatters: glass and a falling chime.
+    famShatter(out, t, o, p) {
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: i * 0.025, type: 'highpass', f: 4000 + i * 500, dur: 0.05, v: 0.14, crunch: true });
+      [84, 79, 76, 72].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.07, w: 'sine', f: mtof(n) * p, dur: 0.25, v: 0.05 }));
+      return 0.5;
+    },
+    // The choir gets angry: a low minor cluster and a growl.
+    famAngry(out, t, o, p) {
+      for (const n of [45, 48, 51]) blip(out, t, { w: 'sawtooth', f: mtof(n) * p, dur: 0.6, v: 0.05, lp: 700 });
+      hiss(out, t, { type: 'lowpass', f: 400, dur: 0.5, v: 0.1, crunch: true });
+      return 0.7;
+    },
+    // A rare prize lands on the rerolled shelf: a bright two-note sparkle.
+    rrShine(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: mtof(88) * p, dur: 0.18, v: 0.07 });
+      blip(out, t, { at: 0.07, w: 'sine', f: mtof(95) * p, dur: 0.3, v: 0.06, vib: [9, 14] });
+      hiss(out, t, { type: 'highpass', f: 8000, dur: 0.12, v: 0.05 });
+      return 0.4;
+    },
+  });
+  Object.assign(GAP, { famIntro: 0.8, famBeat: 0.05, famReady: 0.6, famSolo: 0.6, famCancel: 0.5, famRestock: 0.2, famCan: 0.05, famChange: 0.3, famPayout: 0.4, famHum: 0.5, famShatter: 0.2, famAngry: 0.5, rrShine: 0.08 });
+  NAMES.push('famIntro', 'famBeat', 'famReady', 'famSolo', 'famCancel', 'famRestock', 'famCan', 'famChange', 'famPayout', 'famHum', 'famShatter', 'famAngry', 'rrShine');
+  /* ---------------------------------------------------------------- /FAMILY + REROLL */
+
+  /* ---------------------------------------------------------------- LORE (round 9)
+     DESIGN.md "Lore and the weekly challenge (round 9)": the act intro's
+     music sting in the floor's own voice (opts.biome: cellar synth arpeggio,
+     foundry anvil and brass, vault music box, machine glitch; a loop gets a
+     CRT boot), the typewriter under its lines, a Codex page turning up, the
+     old high score board flickering on and a medal clinking onto the ribbon. */
+  Object.assign(BANK, {
+    loreSting(out, t, o, p) {
+      duck(1.8, 0.35);
+      const b = (o && o.biome) || 'cellar';
+      if (b === 'foundry') {
+        for (const at of [0, 0.3]) { hiss(out, t, { at, type: 'bandpass', f: 3200 * p, q: 6, dur: 0.05, v: 0.2, crunch: true }); blip(out, t, { at, w: 'triangle', f: 1480 * p, to: 1100 * p, dur: 0.25, v: 0.08 }); }
+        [[43, 0.1], [46, 0.4], [50, 0.7]].forEach(([n, at]) => blip(out, t, { at, w: 'sawtooth', f: mtof(n) * p, dur: 0.9, v: 0.08, a: 0.04, lp: 900 }));
+        hiss(out, t, { at: 1.0, type: 'highpass', f: 3000, dur: 0.5, v: 0.06, a: 0.1 });
+      } else if (b === 'vault') {
+        [79, 83, 86, 91, 86, 95].forEach((n, i) => { blip(out, t, { at: i * 0.16, w: 'sine', f: mtof(n) * p, dur: 0.8, v: 0.07 }); blip(out, t, { at: i * 0.16, w: 'sine', f: mtof(n + 12) * p, dur: 0.3, v: 0.02 }); });
+      } else if (b === 'machine') {
+        for (let i = 0; i < 8; i++) blip(out, t, { at: i * 0.07, w: 'square', f: mtof(40 + ((i * 7) % 12)) * p, dur: 0.06, v: 0.06, lp: 2200 });
+        blip(out, t, { at: 0.6, w: 'sawtooth', f: 55 * p, dur: 1.1, v: 0.12, a: 0.05, lp: 500, vib: [6, 3] });
+      } else if (b === 'loop') {
+        blip(out, t, { w: 'sine', f: 1000 * p, dur: 0.12, v: 0.08 });
+        blip(out, t, { at: 0.18, w: 'square', f: 2000 * p, dur: 0.05, v: 0.04, lp: 3000 });
+        [60, 67, 72].forEach((n, i) => blip(out, t, { at: 0.35 + i * 0.12, w: 'triangle', f: mtof(n) * p, dur: 0.6, v: 0.06 }));
+      } else {
+        [60, 63, 67, 70, 72, 75].forEach((n, i) => blip(out, t, { at: i * 0.09, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.05, lp: 2600 }));
+        blip(out, t, { at: 0.56, w: 'sawtooth', f: mtof(48) * p, dur: 1.0, v: 0.08, a: 0.03, lp: 800 });
+        blip(out, t, { at: 0.56, w: 'triangle', f: mtof(72) * p, dur: 1.0, v: 0.05, a: 0.05, vib: [5, 4] });
+      }
+      return 1.6;
+    },
+    // One key of a typewriter on a very old terminal.
+    loreType(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 4200 * p, q: 3, dur: 0.018, v: 0.1, crunch: true });
+      blip(out, t, { w: 'square', f: 1800 * p, dur: 0.012, v: 0.02, lp: 3000 });
+      return 0.05;
+    },
+    // A new Codex page: a page flick and a rising three-note chime.
+    loreUnlock(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 2200 * p, q: 0.8, dur: 0.14, v: 0.1 });
+      [72, 76, 83].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.08, w: 'triangle', f: mtof(n) * p, dur: 0.4, v: 0.06 }));
+      return 0.7;
+    },
+    // The old high score board flickers on: a CRT thunk and a buzz.
+    loreBoard(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 160 * p, to: 60, dur: 0.12, v: 0.2 });
+      blip(out, t, { at: 0.05, w: 'sawtooth', f: 60 * p, dur: 0.4, v: 0.05, lp: 400 });
+      hiss(out, t, { at: 0.03, type: 'highpass', f: 7000, dur: 0.25, v: 0.05 });
+      return 0.5;
+    },
+    // A medal clinks onto its ribbon: a bright double chime over a major chord.
+    wkMedal(out, t, o, p) {
+      for (const at of [0, 0.12]) blip(out, t, { at, w: 'sine', f: 2100 * p, dur: 0.5, v: 0.08 });
+      [67, 71, 74, 79].forEach((n, i) => blip(out, t, { at: 0.2 + i * 0.05, w: 'triangle', f: mtof(n) * p, dur: 1.1, v: 0.05, a: 0.02 }));
+      return 1.3;
+    },
+  });
+  Object.assign(GAP, { loreSting: 1.2, loreType: 0.035, loreUnlock: 0.5, loreBoard: 0.4, wkMedal: 0.8 });
+  NAMES.push('loreSting', 'loreType', 'loreUnlock', 'loreBoard', 'wkMedal');
+  /* ---------------------------------------------------------------- /LORE */
+
   // ---------------------------------------------------------------- music voices
   function playEvent(inst, ev, t) {
     const c = inst.song.cfg, sd = inst.song.stepDur, dest = inst.layer;

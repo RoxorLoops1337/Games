@@ -790,4 +790,24 @@ T.test('CR8: the vacuum, the twin claws and Mama Mech\'s turret have their sound
   T.ok(AUDIO.sfx('turFire') && !AUDIO.sfx('turFire'), 'a volley is rate-limited');
 });
 
+// FAMILY + REROLL (round 9): the families' voices and the reroll's rare shine.
+T.test('round 9: every family voice and the reroll shine play after init and no-op before', () => {
+  const { AUDIO, fake } = bootFake();
+  const R9_SFX = ['famIntro', 'famBeat', 'famReady', 'famSolo', 'famCancel', 'famRestock', 'famCan', 'famChange', 'famPayout', 'famHum', 'famShatter', 'famAngry', 'rrShine'];
+  for (const n of R9_SFX) { T.ok(AUDIO.names.includes(n), n + ' is a known sound'); T.eq(AUDIO.sfx(n), false, n + ' no-ops before init'); }
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n of R9_SFX) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    T.ok(AUDIO.sfx(n) && fake.count.total - before >= 2, n + ' plays');
+  }
+  for (const fam of ['band', 'vending', 'choir', 'nope']) { ac.currentTime += 3; T.ok(AUDIO.sfx('famIntro', { fam }), 'famIntro for ' + fam); }
+  for (const n of [0, 1, 4, 8, 99]) { ac.currentTime += 3; T.ok(AUDIO.sfx('famBeat', { n }), 'famBeat at ' + n); }
+  ac.currentTime += 3;
+  T.ok(AUDIO.sfx('famSolo') && !AUDIO.sfx('famSolo'), 'one SOLO at a time');
+  // the reels reuse the arcade's lever and reel sounds
+  for (const n of ['lever', 'reelSpin', 'reelStop']) T.ok(AUDIO.names.includes(n), n + ' is there for the reroll');
+});
+
 T.done();

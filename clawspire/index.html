@@ -6,6 +6,28 @@
 <meta name="theme-color" content="#12091f">
 <title>CLAWSPIRE -- a claw machine roguelike</title>
 <meta name="description" content="Strap a cursed arcade claw to your back and climb the Clawspire. Your deck is a bin of real objects, your turn is a handful of claw drops.">
+<style id="boot-css">
+/* ================= LOADER (round 9): painted from the HTML while the scripts download, gone on the first game frame ================= */
+#csBoot{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;
+  background:radial-gradient(ellipse at 50% 44%,#2c1450 0%,#12091f 64%);font-family:"Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;
+  transition:opacity .35s ease}
+#csBoot.out{opacity:0;pointer-events:none}
+#csBoot .bm{width:min(100%,420px);padding:18px 18px 14px;border-radius:18px;border:4px solid #ff2e88;text-align:center;
+  background:linear-gradient(180deg,#22163a,#150c28);box-shadow:0 0 0 3px #12091f,0 0 26px rgba(255,46,136,.45),inset 0 0 18px rgba(255,46,136,.22)}
+#csBoot .bmT{font-size:clamp(34px,11vw,54px);font-weight:900;line-height:1.05;letter-spacing:.04em;color:#fff;
+  text-shadow:0 3px 0 #12091f,0 0 14px rgba(255,46,136,.75)}
+#csBoot .bmT b{color:#ff6bb0}
+#csBoot .bmB{display:flex;justify-content:center;gap:clamp(4px,1.6vw,8px);margin:14px 0 12px}
+#csBoot .bmB i{width:clamp(12px,3.6vw,18px);height:clamp(12px,3.6vw,18px);border-radius:50%;background:#3a2a55;box-shadow:inset 0 -2px 0 rgba(0,0,0,.4)}
+#csBoot .bmB i.on{background:#ffc94d;box-shadow:0 0 10px #ffc94d,inset 0 -2px 0 rgba(160,90,0,.45)}
+#csBoot .bmB i.nx{animation:csBootNx .5s ease-in-out infinite alternate}
+@keyframes csBootNx{from{background:#3a2a55}to{background:#8a6a2a;box-shadow:0 0 6px rgba(255,201,77,.6)}}
+#csBoot .bmS{font-size:13px;font-weight:900;letter-spacing:.24em;text-transform:uppercase;color:#8dfff5}
+#csBoot .bmR{display:none;margin-top:12px;min-height:44px;padding:8px 18px;border-radius:12px;border:2px solid #2ee6d6;
+  background:#0f5a58;color:#fff;font:inherit;font-size:15px;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+#csBoot.slow .bmR{display:inline-block}
+@media (prefers-reduced-motion:reduce){#csBoot .bmB i.nx{animation:none}#csBoot{transition:none}}
+</style>
 <style>
 :root{
   --ink:#12091f; --ink2:#1b1030; --panel:#22163a; --panel2:#2c1d4a;
@@ -1356,14 +1378,16 @@ html[class*="txt-"] .pip{font-size:calc(13px * var(--accK))}
 </style>
 <style id="qa-css">
 /* ================= QA (round 7): the incoming-damage telegraph, the Back Room's act stat ================= */
-.qaThreat{position:absolute;left:6px;top:74px;z-index:30;display:none;flex-direction:column;align-items:flex-start;min-width:84px;max-width:116px;padding:3px 9px 4px;
+.qaThreat{position:absolute;left:4px;top:72px;z-index:30;display:none;flex-direction:column;align-items:flex-start;min-width:84px;max-width:106px;padding:3px 8px 4px;
   border-radius:10px;pointer-events:none;background:rgba(18,9,31,.92);border:2px solid var(--blood);color:#fff;font-size:12px;font-weight:900;letter-spacing:.08em;
   white-space:nowrap;line-height:1.2;transform-origin:0 0}
 .qaThreat.show{display:flex}
 .qaThreat b{font-weight:900}
 .qaThreat .num{font-size:21px;letter-spacing:.02em;line-height:1.05;color:#fff}
 .qaThreat .num:empty,.qaThreat small:empty{display:none}
-.qaThreat small{font-size:12px;font-weight:900;color:var(--cyan2);letter-spacing:.02em}
+.qaThreat small{font-size:12px;font-weight:900;color:var(--cyan2);letter-spacing:.02em;white-space:normal}
+/* LABELS (round 9): the pill keeps to its slot (x 4..110): the word packs tighter, the Block line wraps */
+.qaThreat b{letter-spacing:.05em}
 .qaThreat.hurt b,.qaThreat.hurt .num{color:#ffb0a0}
 .qaThreat.safe{border-color:var(--cyan)}.qaThreat.safe b{color:var(--cyan2)}
 .qaThreat.lethal{background:#5a1030;border-color:#ff5a4a;animation:qaLethal .8s ease-in-out infinite}
@@ -1549,8 +1573,212 @@ html[class*="txt-"] :is(#historyBody,.hisRcCard){zoom:var(--accK)}
 .btn.hisCamBtn{font-size:20px}
 /* ================= /HISTORY ================= */
 </style>
+<style id="holo-css">
+/* ================= HOLO + REROLL (round 9): holo item cards, the shop's reroll reels =================
+   The game copies RENDER.holo.look onto each card's --hx/--hy (foil and glare 0..100 across the card),
+   --foil/--glare (opacity), --hue (a legendary's turning foil), --sx/--sy (shadow) and the CSS rotate
+   (the tilt, which composes with the deal-in animation's transform). */
+.cards{perspective:900px}
+.holo{isolation:isolate}
+.holo>.holoFoil,.holo>.holoGlare,.holo>.holoSpark{position:absolute;pointer-events:none;display:block}
+/* the foil: a rainbow band (plus a fine holo grain) under the words, sliding with --hx/--hy */
+.holo>.holoFoil{inset:0;border-radius:inherit;overflow:hidden;z-index:-1;opacity:var(--foil,0)}
+.holo>.holoFoil::before{content:'';position:absolute;left:-60%;top:-60%;width:220%;height:220%;will-change:transform;mix-blend-mode:screen;
+  background:linear-gradient(115deg,transparent 38%,rgba(255,46,136,.8) 42%,rgba(255,201,77,.8) 45%,rgba(166,255,94,.75) 48%,rgba(46,230,214,.8) 51%,rgba(122,92,255,.8) 54%,transparent 59%),
+    repeating-linear-gradient(115deg,rgba(255,46,136,.12) 0 3%,rgba(46,230,214,.12) 3% 6%,rgba(255,201,77,.12) 6% 9%);
+  transform:translate(calc((var(--hx,50) - 50) * .5%),calc((var(--hy,50) - 50) * .3%));filter:hue-rotate(var(--hue,0deg))}
+.holo>.holoFoil::after{content:'';position:absolute;inset:0;mix-blend-mode:overlay;opacity:.8;
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.12) 0 2px,transparent 2px 7px)}
+.holo>.holoGlare{inset:0;border-radius:inherit;z-index:3;opacity:var(--glare,0);mix-blend-mode:screen;
+  background:radial-gradient(circle at calc(var(--hx,50) * 1%) calc(var(--hy,50) * 1%),rgba(255,255,255,.5),rgba(255,255,255,.12) 30%,rgba(255,255,255,0) 60%)}
+/* the shadow falls away from the tilt (a rare or legendary card keeps its pulsing glow instead) */
+.card.holo:not(.rr-r):not(.rr-l):not(.sel){box-shadow:0 4px 0 #120a22,var(--sx,0px) calc(var(--sy,6px) + 4px) 14px rgba(0,0,0,.5)}
+.holo.holo-c>.holoFoil{display:none}
+.holo.holo-u>.holoFoil::before{background:linear-gradient(115deg,transparent 34%,rgba(46,230,214,.55) 44%,rgba(191,232,255,.6) 50%,rgba(46,230,214,.55) 56%,transparent 66%)}
+.holo.holo-l>.holoFoil::before{background:linear-gradient(115deg,transparent 34%,rgba(255,46,136,.85) 39%,rgba(255,201,77,.85) 43%,rgba(255,246,192,.9) 46%,rgba(166,255,94,.8) 49%,rgba(46,230,214,.85) 53%,rgba(122,92,255,.85) 57%,rgba(255,46,136,.8) 61%,transparent 66%),
+    repeating-linear-gradient(115deg,rgba(255,46,136,.16) 0 2.5%,rgba(255,201,77,.16) 2.5% 5%,rgba(46,230,214,.16) 5% 7.5%,rgba(122,92,255,.16) 7.5% 10%)}
+.holo-r>.name,.holo-r>.text,.holo-l>.name,.holo-l>.text,.holo-r>.price,.holo-l>.price{text-shadow:0 1px 2px rgba(18,9,31,.95),0 0 6px rgba(18,9,31,.8)}
+.holo>.holoSpark{width:18px;height:18px;margin:-9px 0 0 -9px;z-index:4;opacity:0;
+  background:radial-gradient(circle,#fff 0 18%,rgba(255,246,192,.9) 22%,transparent 60%);
+  clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);animation:holoTw 1.8s ease-in-out infinite}
+@keyframes holoTw{0%,100%{opacity:0;transform:scale(.3) rotate(0)}45%{opacity:1;transform:scale(1.15) rotate(35deg)}70%{opacity:.2;transform:scale(.6) rotate(60deg)}}
+@media (hover:hover){
+  .card.holo:not(.locked):not(.sold):hover{transform:translateY(-4px);scale:1.05;box-shadow:0 12px 24px rgba(0,0,0,.5),0 0 20px rgba(255,255,255,.14)}
+  .prize.holo:hover{scale:1.03}
+}
+.card.holo:not(.locked):not(.sold):active{scale:.95}
+.holo{transition:scale .14s cubic-bezier(.3,1.6,.5,1)}
+/* reduced motion: still cards, the foil at rest; reduced flashing: still sparkles */
+.calm .holo{rotate:none!important}
+.calm .holo>.holoSpark,.noflash .holo>.holoSpark{animation:none;opacity:.55;transform:scale(.8)}
+@media (prefers-reduced-motion:reduce){.holo{rotate:none!important}.holo>.holoSpark{animation:none;opacity:.55}}
+/* the reroll lever under the shelf (and under the prize counter's case) */
+.rrBtn{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;margin:8px 0 2px;padding:8px 14px;border-radius:14px;cursor:pointer;
+  border:3px solid #ffc94d;background:linear-gradient(180deg,#5a1030,#2a0c22);color:#fff;font:inherit;text-align:left;
+  box-shadow:0 4px 0 #120a22,0 0 18px rgba(255,46,136,.35);transition:transform .1s}
+.rrBtn:active{transform:translateY(3px) scale(.98);box-shadow:0 1px 0 #120a22}
+.rrBtn.poor{filter:saturate(.45) brightness(.8)}
+.rrBtn.tix{border-color:#ff9ec7}
+.rrLever{position:relative;width:14px;height:34px;flex:none;border-radius:7px;background:linear-gradient(90deg,#8e98a8,#e8e8f0,#8e98a8)}
+.rrLever::before{content:'';position:absolute;left:-5px;top:-10px;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ff9ec7,#ff2e88 55%,#8a0f4a);box-shadow:0 0 10px #ff2e88}
+.rrBtn:active .rrLever{transform:scaleY(.6) translateY(10px)}
+.rrCol{display:flex;flex-direction:column;gap:1px}
+.rrCol .r1{font-size:16px;font-weight:900;letter-spacing:.08em;color:#ffc94d}
+.rrCol .r2{font-size:13px;font-weight:900;color:#ff9ec7}
+.rrSpin>canvas:not(.rrReel),.rrSpin>.big{display:none!important}
+.rrSpin>*:not(.rrReel):not(.holoFoil):not(.holoGlare):not(.holoSpark){visibility:hidden}
+.rrSpin{border-color:#ffc94d!important;box-shadow:0 0 16px rgba(255,201,77,.45)!important}
+canvas.rrReel{display:block;border-radius:10px;box-shadow:inset 0 0 0 2px #ffc94d}
+.card canvas.rrReel{width:84px;height:84px}
+.slot canvas.rrReel{width:64px;height:64px}
+.rrLand{animation:rrLand .34s cubic-bezier(.3,1.7,.5,1)}
+@keyframes rrLand{0%{translate:0 -10px;scale:1.08 .9}60%{translate:0 2px;scale:.97 1.04}100%{translate:0 0;scale:1}}
+.rrLand>.name,.rrLand>.text,.rrLand>.price,.rrLand>.sn,.rrLand>.ptag{animation:rrWord .3s ease both}
+@keyframes rrWord{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+.rrRare{box-shadow:0 0 24px rgba(255,201,77,.8)}
+.rrSpark{position:absolute;width:16px;height:16px;margin:-8px 0 0 -8px;pointer-events:none;z-index:5;
+  background:radial-gradient(circle,#fff 0 18%,rgba(255,201,77,.9) 24%,transparent 62%);
+  clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%);animation:rrSpark .8s ease-out both}
+@keyframes rrSpark{0%{opacity:0;transform:scale(.2) rotate(0)}30%{opacity:1;transform:scale(1.4) rotate(40deg)}100%{opacity:0;transform:scale(.4) rotate(90deg)}}
+.calm .rrLand,.calm .rrSpark{animation-duration:.01s!important}
+.noflash .rrSpark{animation:none;opacity:0}
+/* ================= /HOLO + REROLL ================= */
+</style>
+<style id="lore-css">
+/* ================= LORE (round 9): the Codex, landmark lore, act intros, the weekly challenge ================= */
+.lore canvas{max-width:100%;height:auto;display:block}
+.loreChs{display:flex;flex-direction:column;gap:9px;padding-bottom:10px}
+.loreCh{--lc:var(--pink);position:relative;display:flex;align-items:center;gap:12px;padding:10px 12px;min-height:78px;border-radius:14px;cursor:pointer;
+  border:2px solid var(--line2);border-left:6px solid var(--lc);background:linear-gradient(180deg,#2c1d4a,#180f2c);box-shadow:0 4px 0 #120a22;transition:transform .08s}
+.loreCh:active{transform:translateY(3px);box-shadow:none}
+.loreCh.full{box-shadow:0 4px 0 #120a22,0 0 16px color-mix(in srgb,var(--lc) 45%,transparent)}
+.loreCh.shut{opacity:.7;border-style:dashed;border-left-style:solid;cursor:default}
+.lcIc{flex:0 0 auto;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:var(--lc);
+  background:#140c24;border:2px solid var(--lc);box-shadow:0 0 14px color-mix(in srgb,var(--lc) 40%,transparent)}
+.lcM{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.lcM b{font-size:16px;color:#fff;letter-spacing:.04em}
+.lcB{font-size:12px;color:var(--dim);line-height:1.3}
+.loreCh .newb,.loreRow .newb{left:auto;right:10px;top:-8px}
+.lorePages{--lc:var(--pink);display:flex;flex-direction:column;gap:8px;padding-bottom:10px}
+.loreRow{position:relative;display:flex;align-items:center;gap:10px;padding:6px 10px 6px 6px;min-height:86px;border-radius:12px;cursor:pointer;
+  border:2px solid var(--line2);background:linear-gradient(180deg,#241640,#150c26);box-shadow:0 3px 0 #120a22}
+.loreRow:active{transform:translateY(2px);box-shadow:none}
+.loreRow.got{border-color:color-mix(in srgb,var(--lc) 55%,var(--line2))}
+.loreRow.locked{border-style:dashed;background:#150c26}
+.loreRow canvas.lrVig{width:120px;height:72px;flex:0 0 auto;border-radius:10px}
+.lrM{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.lrM b{font-size:15px;color:#fff}
+.loreRow.locked .lrM b{color:var(--dimmer);letter-spacing:.2em}
+.lrT{font-size:12px;color:var(--dim);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lrH{font-size:12px;color:var(--gold);line-height:1.35}
+canvas.loreVig{width:508px;max-width:100%;border-radius:14px;margin:0 auto;animation:loreIn .45s ease both}
+.lorePage{--lc:var(--pink);padding:14px 16px 16px;border-color:color-mix(in srgb,var(--lc) 60%,var(--line));display:flex;flex-direction:column;gap:6px}
+.lpK{font-size:12px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;color:var(--lc)}
+.lpN{font-size:22px;letter-spacing:.04em;color:#fff;text-transform:none}
+.lpT{margin:0;font-size:15px;line-height:1.6;color:#efe6d6;text-shadow:0 1px 0 rgba(0,0,0,.5)}
+.loreNav{gap:12px}
+.lpNum{font-size:12px;color:var(--dim);font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+#titleMenu .loreTitleBtn[data-n]::after{content:attr(data-n);margin-left:2px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--pink);
+  color:#fff;font-size:12px;line-height:20px;letter-spacing:0}
+.btn.loreDexBtn{align-self:flex-end;margin-top:-50px;min-width:0}
+/* a new page in the corner lane: a gold discovery toast with the page's picture */
+.mDex.mLore{background:linear-gradient(180deg,#3a2a12,#1e1408);border-color:var(--gold);box-shadow:0 0 18px rgba(255,201,77,.55),0 5px 0 rgba(0,0,0,.4)}
+.mDex.mLore .k{color:var(--gold)}
+.mDex.mLore canvas.mLoreVig{width:60px;height:40px;border-radius:6px}
+.mDex.mLore.tight canvas.mLoreVig{width:45px;height:30px}
+/* the act intro card owns the stage: the map's chrome steps aside */
+#stage.loreIntroOn #scr-map,#stage.loreIntroOn #top,#stage.loreIntroOn #tipCard,#stage.loreIntroOn #toast,#stage.loreIntroOn>.mSticker,#stage.loreIntroOn>.mDex{visibility:hidden}
+/* the weekly card on the title, side by side with the daily run (the menu stays as tall as it was) */
+#titleMenu .dwRow{display:flex;gap:8px;width:430px;max-width:100%}
+#titleMenu .dwRow .btn{flex:1 1 0;width:auto;min-width:0}
+#titleMenu .dwRow .btn.daily{padding:6px 8px}
+#titleMenu .dwRow .btn.daily .d2{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.btn.wkCard{flex-direction:row;gap:6px;padding:6px 8px;line-height:1.1;text-transform:none;letter-spacing:.02em;border-color:var(--cyan);
+  background:linear-gradient(180deg,#155061,#0b2a38);box-shadow:0 4px 0 #062224,0 0 18px rgba(46,230,214,.3)}
+.btn.wkCard canvas.wkMed{width:34px;height:34px;flex:0 0 auto}
+.wkTx{display:flex;flex-direction:column;align-items:flex-start;min-width:0}
+.wkTx .d1{font-size:15px;text-transform:uppercase;letter-spacing:.06em}
+.wkTx .d2{font-size:12px;color:#bff4ff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.wkTx .d3{font-size:12px;color:#8dfff5;font-weight:700;white-space:nowrap}
+/* the weekly screen */
+canvas.wkBan{width:508px;max-width:100%;border-radius:16px;margin:0 auto}
+.wkRules{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.wkMuts{display:flex;flex-wrap:wrap;gap:6px}
+.tag.wkMut{--mc:var(--cyan);border-color:var(--mc);color:#fff;font-weight:700}
+.wkTargets{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.wkT{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:12px;background:#1b1030;border:2px solid var(--line2)}
+.wkT canvas{width:40px;height:40px;flex:0 0 auto}
+.wkT b{flex:1;font-size:14px}
+.wkT .mono{font-size:15px;font-weight:900;color:var(--gold)}
+.wkT .ok{width:16px;color:var(--lime);font-weight:900}
+.wkT.got{border-color:var(--gold);box-shadow:0 0 12px rgba(255,201,77,.3)}
+.wkBest{text-align:center;font-size:14px;color:var(--text);font-weight:700}
+.btn.wkPlay{align-self:center;min-width:260px;min-height:52px;font-size:17px}
+.wkCounts{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.wkCnt{display:flex;align-items:center;gap:4px;padding:4px 10px 4px 4px;border-radius:12px;background:#17102a;border:1px solid var(--line)}
+.wkCnt canvas{width:30px;height:30px}
+.wkCnt b{font-size:14px;color:#fff}
+.wkCab{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-bottom:12px}
+.wkCab .hisEmpty{grid-column:1/-1}
+.wkCell{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px 8px;border-radius:12px;background:#1b1030;border:2px solid var(--line2);text-align:center}
+.wkCell.now{border-color:var(--cyan);box-shadow:0 0 12px rgba(46,230,214,.3)}
+.wkCell canvas{width:44px;height:44px}
+.wkCell b{font-size:12px;color:#fff;line-height:1.15}
+.wkCell span{font-size:12px;color:var(--dim)}
+/* the run end's weekly line */
+.wkEnd{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:14px;background:linear-gradient(180deg,#123c3a,#0b2224);border:2px solid var(--cyan)}
+.wkEnd canvas{width:56px;height:56px;flex:0 0 auto}
+.wkEnd .col{gap:2px}
+.wkEnd .k{font-size:12px;font-weight:900;letter-spacing:.12em;color:var(--cyan2)}
+.wkEnd b{font-size:22px;color:#fff;line-height:1.1}
+.wkEnd .s{font-size:13px;color:var(--gold);font-weight:900}
+.wkEnd.up{border-color:var(--gold);box-shadow:0 0 22px rgba(255,201,77,.5);animation:wkUp .6s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes wkUp{0%{transform:scale(.4);opacity:0}100%{transform:none;opacity:1}}
+@keyframes loreIn{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:none}}
+.calm canvas.loreVig,.calm .wkEnd.up{animation:none}
+html[class*="txt-"] :is(#codexBody,#weeklyBody){zoom:var(--accK)}
+/* ================= /LORE ================= */
+</style>
 </head>
 <body>
+<div id="csBoot" role="status" aria-live="polite" aria-label="Loading CLAWSPIRE">
+  <div class="bm"><div class="bmT">CLAW<b>SPIRE</b></div><div class="bmB" id="csBootB"></div><div class="bmS" id="csBootS">Warming up the claw</div><button class="bmR" id="csBootR" type="button" onclick="location.reload()">Reload</button></div>
+</div>
+<script id="csBootJs">
+/* LOADER (round 9): the first paint while the game's scripts download. One bulb
+   lights per share of the bytes that have landed (resource timing, weighted by
+   each script's rough gzip size), and the screen fades one frame after GAME.boot
+   has drawn its first frame. A script that fails, or a page still loading after
+   30 s, offers a reload. Plain ES5 on purpose: it runs before anything else. */
+(function () {
+  var el = document.getElementById('csBoot'), bar = document.getElementById('csBootB'), say = document.getElementById('csBootS');
+  if (!el || !bar || !window.requestAnimationFrame) return;
+  var N = 12, bulbs = [], lit = -1, seen = 0, t0 = Date.now(), shown = 0, i, k, TOT = 0;
+  var WT = { util: 1, art: 4, physics: 26, data: 110, combat: 42, map: 26, audio: 37, render: 210, intro: 17, game: 293 };
+  for (k in WT) TOT += WT[k];
+  for (i = 0; i < N; i++) bulbs.push(bar.appendChild(document.createElement('i')));
+  function landed() {
+    var d = 0, l = performance.getEntriesByType ? performance.getEntriesByType('resource') : [], j, m;
+    for (j = 0; j < l.length; j++) { m = /\/js\/(\w+)\.js/.exec(l[j].name); if (m && WT[m[1]]) d += WT[m[1]]; }
+    return d / TOT;
+  }
+  function booted() { try { return typeof GAME !== 'undefined' && !!GAME && !!GAME.S && !!GAME.S.booted; } catch (e) { return false; } }
+  function slow(msg) { if (el.className === 'out') return; el.className = 'slow'; if (say) say.textContent = msg; }
+  window.addEventListener('error', function (e) { if (e && e.target && e.target.tagName === 'SCRIPT') slow('A piece went missing'); }, true);
+  function tick() {
+    var up = booted(), n, j;
+    // the big scripts land last, so a slow creep keeps the bar moving between landings
+    shown = Math.max(shown, up ? 1 : Math.min(0.96, Math.max(landed(), 0.85 * (1 - Math.exp((t0 - Date.now()) / 6000)))));
+    n = Math.floor(shown * N + 0.001);
+    if (n !== lit) { lit = n; for (j = 0; j < N; j++) bulbs[j].className = j < n ? 'on' : j === n ? 'nx' : ''; }
+    if (up) {
+      if (++seen >= 2) { el.className = 'out'; setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 400); return; }
+    } else if (Date.now() - t0 > 30000 && el.className !== 'slow') slow('Slow line, still loading');
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
 <div id="wrap"><div id="stage">
   <canvas id="cv" width="540" height="960"></canvas>
 
@@ -1628,6 +1856,9 @@ html[class*="txt-"] :is(#historyBody,.hisRcCard){zoom:var(--accK)}
   <div id="scr-rival" class="screen rivalScr"><div id="rivalBody"></div></div>
   <!-- HISTORY (round 8): run history (the death recap and photo mode build their own layers) -->
   <div id="scr-history" class="screen hisScr"><div id="historyBody" class="col his"></div></div>
+  <!-- LORE (round 9): the Codex and the weekly challenge (the canvas paints the title's art under them) -->
+  <div id="scr-codex" class="screen loreScr"><div id="codexBody" class="col lore"></div></div>
+  <div id="scr-weekly" class="screen loreScr"><div id="weeklyBody" class="col lore wk"></div></div>
   <div id="setFan"></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>

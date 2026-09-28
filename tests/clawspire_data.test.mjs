@@ -19,7 +19,7 @@ const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork
 const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
 const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again'.split(' ');
 const PER = 'block junk metal grabsUsed poison burn small streak gold luck'.split(' ');
-const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish'.split(' ');
+const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish restock cans change'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
 const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBlock startStr'.split(' ');
 const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial onPet'.split(' ');
@@ -2404,6 +2404,290 @@ t.test('round 8: the Vacuum Nozzle and the Twin Claws', () => {
   }
   t.ok(DATA.CLAWS.vacuum.order !== DATA.CLAWS.twin.order, 'their own places in the picker');
   t.eq(DATA.clawType('nope'), DATA.CLAWS.classic, 'an unknown claw is the classic');
+});
+
+// FAMILY (round 9): three enemy families, one per act, and the Vending Gang's cans.
+t.test('round 9: the enemy families', () => {
+  const { FAM, FAM_IDS, FAM_KINDS, FAM_ENEMIES } = DATA;
+  t.ok(FAM && Array.isArray(FAM_IDS) && FAM_IDS.length === 3, 'DATA.FAM and three family ids');
+  t.eq(FAM_KINDS.join(','), 'restock,cans,change', 'the new move kinds');
+  const acts = new Set();
+  for (const f of FAM_IDS) {
+    const c = FAM[f], W = 'family ' + f;
+    t.ok(c && c.id === f && c.name && c.icon && isHex(c.color) && isHex(c.color2) && c.tag && c.bond.length > 30, `${W}: named, coloured, a tag and a bond line`);
+    acts.add(c.act);
+    t.eq(c.members.length, 3, `${W}: three members`);
+    for (const id of c.members) {
+      const e = ENEMIES[id];
+      t.ok(!!e && e.fam === f && e.act === c.act && e.tier === 'normal' && !e.minion, `${W}: ${id} is an act ${c.act} normal of the family`);
+      t.ok(e && typeof e.look === 'string' && e.look === id && ENEMY_ART.includes(e.art), `${W}: ${id} has its own look over a drawable art key`);
+      t.ok(e && JSON.stringify(e).indexOf(String.fromCharCode(0x2014)) < 0, `${W}: ${id} no em dashes`);
+    }
+    // encounter pools: two duos and the whole family, in the act's normal list
+    const pools = ENCOUNTERS[c.act].normal.filter(enc => enc.some(id => ENEMIES[id].fam === f));
+    t.ok(pools.length >= 3 && pools.some(enc => enc.length === 3) && pools.every(enc => enc.every(id => ENEMIES[id].fam === f)), `${W}: its own encounters (${pools.length})`);
+    t.eq(DATA.famsIn(c.members).join(), f, `${W}: famsIn`);
+    t.eq(DATA.famOf(c.members[0]), f, `${W}: famOf`);
+  }
+  t.eq([...acts].sort().join(), '1,2,3', 'one family per act');
+  t.eq(DATA.famOf('rat'), null, 'a rat has no family');
+  t.eq(FAM_ENEMIES.length, 9, 'nine members');
+  // the Band: a SOLO value for every member, the drummer's double beat
+  const B = FAM.band;
+  t.ok(B.max >= 4 && B.per >= 1 && B.beat.fam_drummer === 2 && B.harm > 0 && B.drop > 0, 'the Band: meter, beat, harmony and drop');
+  t.ok(B.members.every(id => B.solo[id] > 0), 'every bandmate has a SOLO value');
+  // the Vending Gang's moves and the can
+  const kinds = new Set();
+  for (const id of FAM.vending.members) for (const m of ENEMIES[id].moves) kinds.add(m.k);
+  t.ok(['restock', 'cans', 'change'].every(k => kinds.has(k)), 'the gang restocks, lobs cans and makes change');
+  t.ok(ENEMIES.fam_change.moves.some(m => m.k === 'change' && m.v > 0), 'the Change Machine takes gold');
+  const can = ITEMS.fam_can;
+  t.ok(can && can.rarity === 'junk' && can.tags.includes('junk') && can.exhaust && can.fx.length, 'the Empty Can is junk you can grab out');
+  t.ok(Object.keys(ITEMS).indexOf('fam_can') < 0, 'the can is never listed (no pool, shop or Prizedex)');
+  t.ok(DATA.itemText(can, false).indexOf('{v}') < 0 && /1 HP/.test(DATA.itemText(can, false)), 'its text fills in: ' + DATA.itemText(can, false));
+  // the Choir hums on the same pattern step: equal pattern lengths, the hum at the same index, an attack with fam 'chorus'
+  const C = FAM.choir.members.map(id => ENEMIES[id]);
+  const at = C.map(e => e.pattern.findIndex(i => e.moves[i].fam === 'chorus'));
+  t.ok(C.every(e => e.ai === 'cycle' && e.pattern.length === C[0].pattern.length), 'the choir share one pattern length');
+  t.ok(at.every(i => i >= 0 && i === at[0]), 'the hum sits on the same step for every globe');
+  t.ok(C.every(e => e.moves.some(m => m.fam === 'chorus' && m.k === 'attack' && m.v > 0)), 'the hum is an attack');
+  t.ok(FAM.choir.angry > 0 && FAM.choir.harm > 0, 'the choir: anger and harmony');
+});
+
+/* ---------------------------------------------------------------- LORE (round 9): the Codex, landmark lore, act intros, the weekly challenge */
+const LORE_DASH = new RegExp('[' + String.fromCharCode(0x2013, 0x2014) + ']');   // en and em dashes, spelled without typing them
+t.test('lore: the Codex book, its chapters and pages, the words', () => {
+  const B = DATA.loreBook();
+  t.ok(B === DATA.loreBook(), 'the book is built once and kept');
+  t.eq(B.chapters.length, 8, 'eight chapters');
+  t.eq(JSON.stringify(B.chapters.map(c => c.id)), JSON.stringify(['spire', 'master', 'floors', 'crawlers', 'bosses', 'bestiary', 'gary', 'machine']), 'in reading order');
+  t.ok(B.entries.length >= 40, `at least 40 pages (${B.entries.length})`);
+  t.eq(new Set(B.ids).size, B.ids.length, 'page ids are unique');
+  t.eq(new Set(B.entries.map(e => e.name)).size, B.ids.length, 'page names are unique');
+  for (const c of B.chapters) t.ok((B.ch[c.id] || []).length >= 3, `${c.id}: three pages or more`);
+  t.ok(B.chapters.filter(c => c.spoiler).map(c => c.id).join() === 'machine', 'The Machine is the one spoiler chapter');
+  t.eq(B.ch.crawlers.length, Object.keys(CHARACTERS).length, 'one page per crawler');
+  for (const id of Object.keys(CHARACTERS)) t.ok(B.entries.some(e => e.ch === 'crawlers' && e.r[0] === 'win' && e.r[1] === id), `${id} has a page, earned by a win`);
+  for (const id of ['hoard', 'smelter', 'glacius', 'plushqueen', 'conveyorking', 'arcticarcade']) t.ok(B.entries.some(e => e.ch === 'bosses' && e.r[0] === 'kills' && e.r[1] === id && e.r[2] === 1), `the boss ${id} has a page, earned by beating it`);
+  for (const e of B.entries) {
+    const W = 'page ' + e.id;
+    const words = e.text.split(/\s+/).filter(Boolean).length;
+    t.ok(words >= 60 && words <= 120, `${W}: 60 to 120 words (${words})`);
+    t.ok(B.chapters.some(c => c.id === e.ch), `${W}: a known chapter`);
+    t.ok(DATA.LORE_ART.includes(e.art.k), `${W}: a known picture (${e.art.k})`);
+    t.ok(DATA.LORE_RULES.includes(e.r[0]), `${W}: a known unlock rule (${e.r[0]})`);
+    if (e.art.k === 'enemy') t.ok(!!ENEMIES[e.art.id], `${W}: its enemy exists (${e.art.id})`);
+    if (e.art.k === 'char') t.ok(!!CHARACTERS[e.art.id], `${W}: its crawler exists`);
+    if (e.r[0] === 'kills' || e.r[0] === 'seen') t.ok(!!ENEMIES[e.r[1]], `${W}: its rule names a real enemy (${e.r[1]})`);
+    const s = JSON.stringify([e.name, e.text, e.hint || '']);
+    t.ok(!LORE_DASH.test(s), `${W}: no em or en dashes`);
+    t.ok(!/\bink/i.test(s), `${W}: never says ink`);
+    t.ok(/[.!?]$/.test(e.text), `${W}: ends a sentence`);
+  }
+  for (const c of B.chapters) t.ok(c.name && c.icon && /^#[0-9a-f]{6}$/i.test(c.col) && c.blurb && !LORE_DASH.test(c.blurb), `${c.id}: a name, an icon, a colour and a blurb`);
+});
+
+t.test('lore: unlock rules read the profile (kills, bosses, acts, wins per crawler, keys, Gary, loops, Tilt)', () => {
+  const none = DATA.loreCheck({}, {});
+  t.eq(none.length, 0, 'a blank profile has earned nothing');
+  t.eq(DATA.loreCheck(null, null).length, 0, 'no profile at all: nothing, no throw');
+  const has = (m, id) => DATA.loreOk(id, m);
+  t.ok(has({ stats: { runs: 1 } }, 'spire_tower') && !has({ stats: { runs: 0 } }, 'spire_tower'), 'the first climb opens The Tower');
+  t.ok(has({ stats: { fights: 1 } }, 'fl_cellar'), 'the first fight opens the Damp Arcade');
+  t.ok(!has({ stats: { bestAct: 1 } }, 'fl_foundry') && has({ stats: { bestAct: 2 } }, 'fl_foundry') && has({ stats: { bestAct: 3 } }, 'fl_vault'), 'reaching an act opens its floor');
+  t.ok(has({ stats: { played: 25 } }, 'spire_rig') && !has({ stats: { played: 24 } }, 'spire_rig'), 'deliveries count up to the Rig');
+  t.ok(!has({ lore: { kills: { rat: 4 } } }, 'be_rat') && has({ lore: { kills: { rat: 5 } } }, 'be_rat'), 'five Coin Rats and not four');
+  t.ok(!has({ lore: { kills: { mimic: 2 } } }, 'be_mimic') && has({ lore: { kills: { mimic: 3 } } }, 'be_mimic'), 'an elite takes three');
+  t.ok(has({ lore: { kills: { hoard: 1 } } }, 'bo_hoard') && !has({ lore: { kills: { smelter: 0 } } }, 'bo_smelter'), 'a boss opens on its first defeat');
+  t.ok(has({ winsBy: { rogue: 1 } }, 'cr_rogue') && !has({ winsBy: { rogue: 1 } }, 'cr_knight'), 'a win opens that crawler only');
+  t.ok(has({ stats: { wins: 1 } }, 'pm_wall') && !has({ stats: { wins: 4 } }, 'pm_chair') && has({ stats: { wins: 5 } }, 'pm_chair'), 'wins open the Prize Master\'s pages');
+  t.ok(has({ seen: { enemies: { prizemaster: 1 } } }, 'pm_host'), 'meeting the host opens The Host');
+  t.ok(!has({ bestTilt: {} }, 'pm_tilt') && !has({ bestTilt: { knight: 2 } }, 'pm_tilt') && has({ bestTilt: { rogue: 3 } }, 'pm_tilt'), 'a win at Tilt 3 opens Tilt');
+  t.ok(has({ loot: { caps: 5 } }, 'spire_tickets') && has({ arc: { plays: 5 } }, 'spire_cabinets'), 'capsules and cabinets');
+  t.ok(has({ sec: { keys: 1 } }, 'spire_keys') && has({ sec: { rooms: 1 } }, 'fl_room'), 'a golden key and the Back Room');
+  t.ok(has({ endless: { best: 1 } }, 'spire_loop'), 'a loop of Endless');
+  t.ok(has({ gary: { met: 1 } }, 'gy_meet') && has({ gary: { wins: 1 } }, 'gy_beat') && has({ gary: { beat: 1 } }, 'gy_duel') && !has({ gary: { met: 1 } }, 'gy_duel'), 'Grabby Gary\'s three pages');
+  const v = DATA.loreVal(['kills', 'rat', 5], { lore: { kills: { rat: 3 } } });
+  t.ok(v.v === 3 && v.goal === 5, 'progress reads 3 of 5');
+  t.eq(JSON.stringify(DATA.loreVal(['nope'], {})), JSON.stringify({ v: 0, goal: 1 }), 'an unknown rule reads nothing');
+  // loreCheck: new ones only, in book order, and never mutating the profile
+  const m = { stats: { runs: 3, fights: 12, played: 40, bestAct: 2 }, lore: { kills: { rat: 9 } } };
+  const snap = JSON.stringify(m);
+  const got = DATA.loreCheck(m, {});
+  t.ok(['spire_tower', 'spire_rig', 'spire_dark', 'fl_cellar', 'fl_foundry', 'be_rat'].every(id => got.includes(id)), 'every earned page: ' + got.join(','));
+  t.eq(JSON.stringify(m), snap, 'checking never changes the profile');
+  const idx = got.map(id => DATA.loreBook().ids.indexOf(id));
+  t.ok(idx.every((x, i) => i === 0 || x > idx[i - 1]), 'in book order');
+  t.eq(DATA.loreCheck(m, { spire_tower: 1 }).includes('spire_tower'), false, 'owned pages are not earned twice');
+});
+
+t.test('lore: The Machine stays a secret until it is met; spoiler pages keep their hints vague', () => {
+  const B = DATA.loreBook();
+  t.ok(!DATA.loreChOpen('machine', {}) && DATA.loreChOpen('machine', { seen: { enemies: { machine: 1 } } }), 'the chapter opens when it has been met');
+  t.ok(DATA.loreChOpen('spire', {}), 'every other chapter is open');
+  t.ok(!DATA.loreOk('mc_down', { sec: { ends: 3 } }), 'no Machine page while the chapter is shut, whatever the counters say');
+  t.ok(DATA.loreOk('mc_down', { sec: { ends: 1 }, seen: { enemies: { machine: 1 } } }), 'met and powered down: the page opens');
+  for (const e of B.entries) {
+    const h = DATA.loreHint(e, {});
+    t.ok(typeof h === 'string' && h.length > 5 && !LORE_DASH.test(h) && !/\bink/i.test(h), `${e.id}: a hint (${h})`);
+    if (e.spoiler || e.ch === 'machine') t.ok(!/machine|key|back room|door/i.test(h), `${e.id}: the hint gives nothing away`);
+  }
+  t.ok(/Coin Rat/.test(DATA.loreHint('be_rat', {})) && /5/.test(DATA.loreHint('be_rat', {})), 'a bestiary hint names the monster and the count');
+  t.ok(/Lucky Lou/.test(DATA.loreHint('cr_gambler', {})), 'a crawler hint names the crawler');
+});
+
+t.test('lore: chapter progress, the count and the repaired profile', () => {
+  const B = DATA.loreBook();
+  const got = { spire_tower: 1, spire_rig: 1, be_rat: 1, nope: 1 };
+  const P = DATA.loreProgress({ lore: { got, new: { be_rat: 1, spire_tower: 1 } } });
+  t.eq(P.n, 3, 'three real pages owned (an unknown id does not count)');
+  t.eq(P.total, B.entries.length, 'out of every page');
+  t.ok(P.per.spire.n === 2 && P.per.spire.total === B.ch.spire.length && P.per.spire.fresh === 1, 'the Clawspire: 2 found, 1 NEW');
+  t.ok(P.per.bestiary.n === 1 && P.per.bestiary.fresh === 1 && P.per.gary.n === 0, 'per chapter');
+  t.eq(DATA.loreCount({ lore: { got } }), 3, 'loreCount');
+  t.eq(DATA.loreCount({}), 0, 'no lore, no pages');
+  const F = DATA.loreFix({ got: { spire_tower: 1, junk: 1, be_rat: 0 }, new: { spire_tower: 1, be_rat: 1 }, kills: { rat: '7', slime: -2, bat: 'x', ['x'.repeat(50)]: 3 }, intros: { a1: 2, a9: 1, L12: 1, room: 1, zz: 4 } });
+  t.eq(JSON.stringify(F.got), JSON.stringify({ spire_tower: 1 }), 'got keeps known pages that are set');
+  t.eq(JSON.stringify(F.new), JSON.stringify({ spire_tower: 1 }), 'NEW only on pages owned');
+  t.eq(JSON.stringify(F.kills), JSON.stringify({ rat: 7 }), 'kills: whole positive numbers, sane ids');
+  t.eq(JSON.stringify(F.intros), JSON.stringify({ a1: 2, L12: 1, room: 1 }), 'intros: known keys only');
+  for (const junk of [null, 5, 'x', [], { got: [], kills: 'no' }]) { const f = DATA.loreFix(junk); t.ok(f && f.got && f.new && f.kills && f.intros, 'junk repairs: ' + JSON.stringify(junk)); }
+});
+
+t.test('lore: landmark snippets, the old high score board, act intros', () => {
+  for (const k of ['tower', 'plinko', 'wheel', 'slots', 'moles', 'skee', 'petshop', 'jukebox', 'tickets', 'hiscore']) {
+    const L = DATA.LORE_SNIPS[k];
+    t.ok(Array.isArray(L) && L.length >= 3, `${k}: three lines or more`);
+    t.ok(DATA.LORE_MARKS[k] && DATA.LORE_MARKS[k].name && DATA.LORE_MARKS[k].icon, `${k}: a name and an icon`);
+    for (const s of L) t.ok(s.length <= 96 && /[.!?]$/.test(s) && !LORE_DASH.test(s) && !/\bink/i.test(s), `${k}: one short line: ${s}`);
+    const a = DATA.loreSnippet(k, 77, 3, 4);
+    t.ok(L.includes(a) && a === DATA.loreSnippet(k, 77, 3, 4), `${k}: a line, the same every time for a hex`);
+    const seen = new Set();
+    for (let q = 0; q < 12; q++) seen.add(DATA.loreSnippet(k, 77, q, 2));
+    t.ok(seen.size >= 2, `${k}: different hexes say different things`);
+  }
+  t.eq(DATA.loreSnippet('nope', 1, 0, 0), '', 'an unknown landmark says nothing');
+  // the board: the Prize Master on top for good, your best climbs with arcade initials, the regulars fill in
+  const hof = [{ id: 'a', c: 'knight', s: 12000, d: 5 }, { id: 'b', c: 'rogue', s: 50000, d: 6 }, { id: 'c', c: 'gambler', s: 3000, d: 7 }, { id: 'd', c: 'alchemist', s: 1200000, d: 8 }, { id: 'e', c: 'engineer', s: 9000, d: 1 }];
+  const rows = DATA.loreBoard(hof, 8);
+  t.eq(rows.length, 8, 'eight rows');
+  t.ok(rows.every((r, i) => r.rank === i + 1), 'ranked 1..8');
+  t.ok(rows.every((r, i) => i === 0 || r.s <= rows[i - 1].s), 'highest first');
+  t.ok(rows[0].you && rows[0].s === 1200000 && rows[1].who === 'prizemaster', 'a run over the Prize Master\'s mark tops it; he is second');
+  t.ok(rows.every(r => /^[A-Z.!]{3}$/.test(r.ini)), 'three-letter arcade initials: ' + rows.map(r => r.ini).join(' '));
+  t.ok(rows.filter(r => r.you).length === 3 && rows.find(r => r.id === 'b').ini === DATA.loreInitials(hof[1]), 'your three climbs that make the cut, each with its own initials');
+  t.eq(DATA.loreBoard(hof, 20).filter(r => r.you).length, 5, 'a longer board lists all five');
+  t.eq(rows.find(r => r.s === 9000 && r.you) ? 'you' : 'house', 'house', 'a tie goes to the regulars (they were here first)');
+  const empty = DATA.loreBoard([], 8);
+  t.ok(empty.length === 8 && empty.every(r => r.house) && empty[0].who === 'prizemaster' && empty[0].s === 999990, 'no history: the house\'s board, the Prize Master on top');
+  t.eq(JSON.stringify(DATA.loreBoard(hof, 8)), JSON.stringify(rows), 'deterministic');
+  t.ok(DATA.loreBoard([null, 5, { s: 'x' }, { id: 'z', c: 'knight', s: 100 }], 3).length === 3, 'junk records are skipped');
+  // act intros
+  for (const k of ['a1', 'a2', 'a3', 'room']) {
+    const I = DATA.loreIntro(k);
+    t.ok(I && I.title && I.name && I.lines.length === 2 && I.lines.every(l => l.length <= 52 && !LORE_DASH.test(l)) && ['cellar', 'foundry', 'vault', 'machine'].includes(I.biome), `${k}: a card (${I && I.name})`);
+  }
+  t.ok(DATA.loreIntro('a2').name === ACTS[2].name && DATA.loreIntro('a3').name === ACTS[3].name && DATA.loreIntro('a1').name === ACTS[1].name, 'the acts\' own names');
+  const L4 = DATA.loreIntro('L4', 1), L2 = DATA.loreIntro('L2', 2);
+  t.ok(L4.title === 'LOOP 4' && L4.biome === 'cellar' && L4.loop === 4 && L2.biome === 'foundry', 'a loop is its biome, again');
+  t.ok(L4.lines.join() !== DATA.loreIntro('L5', 2).lines.join(), 'loops rotate their lines');
+  t.eq(DATA.loreIntro('nope'), null, 'an unknown key has no card');
+});
+
+t.test('weekly: ISO weeks (year boundaries included), dates in every form, the time left', () => {
+  const W = [
+    ['2026-01-01', '2026-W01'], ['2027-01-01', '2026-W53'], ['2024-12-30', '2025-W01'], ['2021-01-03', '2020-W53'], ['2020-12-31', '2020-W53'],
+    ['2026-09-28', '2026-W40'], ['2026-10-04', '2026-W40'], ['2026-10-05', '2026-W41'], ['2015-12-31', '2015-W53'], ['2016-01-03', '2015-W53'],
+    ['2016-01-04', '2016-W01'], ['2018-12-31', '2019-W01'], ['2019-12-30', '2020-W01'], ['2022-01-02', '2021-W52'], ['2023-01-01', '2022-W52'],
+  ];
+  for (const [d, k] of W) t.eq(DATA.wkKey(d), k, `${d} is ${k}`);
+  t.eq(DATA.wkKey(new Date(2027, 0, 1, 12)), '2026-W53', 'a Date');
+  t.eq(DATA.wkKey(new Date(2026, 8, 30, 23, 59).getTime()), '2026-W40', 'a timestamp');
+  t.eq(DATA.wkKey('junk'), '', 'junk has no week');
+  t.eq(DATA.wkKey(null), '', 'nothing has no week');
+  t.eq(DATA.wkIso('2026-10-04').dow, 6, 'Sunday is the last day of the week');
+  // (a week with no clock change anywhere the suite might run)
+  t.eq(DATA.wkLeft('2026-03-09'), 7 * 86400000, 'a Monday has the whole week left');
+  t.eq(DATA.wkLeft('2026-03-15'), 86400000, 'a Sunday has a day left');
+  t.eq(DATA.wkLeft(new Date(2026, 2, 15, 23, 0)), 3600000, 'Sunday 23:00: an hour left');
+  t.eq(DATA.wkLeft(new Date(2026, 11, 31, 12, 0)), 3.5 * 86400000, 'across the new year it counts to Monday the 4th');
+  t.ok(DATA.wkParse('2026-W53') && !DATA.wkParse('2025-W53') && !DATA.wkParse('2026-W00') && !DATA.wkParse('2026-W99') && !DATA.wkParse('x'), 'only real weeks parse (2026 has a W53, 2025 does not)');
+  t.eq(DATA.wkParse('2026-W41').idx - DATA.wkParse('2026-W40').idx, 1, 'week indices count on');
+  t.eq(DATA.wkParse('2021-W01').idx - DATA.wkParse('2020-W53').idx, 1, 'and across a W53');
+  const l0 = SRC.indexOf('LORE (round 9'), l1 = SRC.indexOf('/LORE', l0);
+  t.ok(l0 > 0 && l1 > l0 && !/Date\.now|new Date\(\)/.test(SRC.slice(l0, l1)), 'the lore and weekly code never reads the clock');
+});
+
+t.test('weekly: the seed, the theme and its mutators, the crawler and the claw, the medal targets', () => {
+  const d = DATA.wkDef('2026-W40');
+  t.ok(d && d.key === '2026-W40' && d.y === 2026 && d.w === 40, 'the week');
+  t.eq(JSON.stringify(DATA.wkDef('2026-W40')), JSON.stringify(d), 'deterministic by the week');
+  t.eq(d.seed, DATA.wkSeed('2026-W40'), 'its seed');
+  t.eq(DATA.wkDef('nope'), null, 'no week, no challenge');
+  const themes = new Set(), seeds = new Set();
+  let prev = null, repeats = 0;
+  for (let i = 0; i < 120; i++) {
+    const key = DATA.wkKey(new Date(2025, 0, 6 + i * 7));
+    const w = DATA.wkDef(key), T = DATA.WK.THEMES.find(x => x.id === w.theme);
+    themes.add(w.theme); seeds.add(w.seed);
+    t.ok(T && w.name === T.name && w.icon === T.icon, `${key}: a theme (${w.name})`);
+    t.ok(w.muts.length >= 2 && w.muts.length <= 3 && w.muts[0] === T.lead, `${key}: the theme's own mutator and 1 or 2 more (${w.muts.join('+')})`);
+    t.eq(JSON.stringify(DATA.mutClean(w.muts)), JSON.stringify(w.muts), `${key}: known, unique, no clash`);
+    t.ok(!!CHARACTERS[w.char] && !!DATA.CLAWS[w.claw], `${key}: a crawler (${w.char}) and a claw (${w.claw})`);
+    if (T.claws) t.ok(T.claws.includes(w.claw), `${key}: the theme's claw`);
+    const tg = w.targets;
+    t.ok(tg.bronze < tg.silver && tg.silver < tg.gold && tg.gold < tg.platinum && tg.bronze >= 50, `${key}: four rising targets`);
+    t.eq(tg.gold, Math.max(50, Math.round(DATA.WK.BASE.gold * DATA.mutMult(w.muts) / 50) * 50), `${key}: scaled by the mutators' multiplier`);
+    if (prev && prev === w.theme) repeats++;
+    prev = w.theme;
+  }
+  t.eq(repeats, 0, 'a theme never comes two weeks running');
+  t.eq(themes.size, DATA.WK.THEMES.length, 'every theme comes around');
+  t.eq(seeds.size, 120, 'a seed of its own every week');
+  t.ok(DATA.WK.THEMES.every(T => DATA.MUTATORS[T.lead] && T.blurb && !LORE_DASH.test(T.name + T.blurb)), 'every theme leads with a real mutator');
+  // across the new year: consecutive weeks, still different
+  const a = DATA.wkDef('2026-W53'), b = DATA.wkDef(DATA.wkKey('2027-01-04'));
+  t.ok(a && b && b.key === '2027-W01' && a.theme !== b.theme && a.seed !== b.seed, 'W53 into W01');
+});
+
+t.test('weekly: medals, the cabinet and the repaired record', () => {
+  const tg = { bronze: 1000, silver: 2000, gold: 4000, platinum: 6000 };
+  t.eq(DATA.wkMedal(999, tg), '', 'under bronze: none');
+  t.eq(DATA.wkMedal(1000, tg), 'bronze', 'bronze at the mark');
+  t.eq(DATA.wkMedal(4100, tg), 'gold', 'gold');
+  t.eq(DATA.wkMedal(99999, tg), 'platinum', 'platinum');
+  t.ok(DATA.wkRank('gold') > DATA.wkRank('silver') && DATA.wkRank('') < 0, 'medals rank');
+  const F = DATA.wkFix({ best: { '2026-W40': 4210, '2026-W39': '7450', 'nope': 5, '2026-W38': -3 }, medal: { '2026-W40': 'silver', '2026-W39': 'gold', '2026-W37': 'tin' }, runs: '4' });
+  t.eq(JSON.stringify(F.best), JSON.stringify({ '2026-W40': 4210, '2026-W39': 7450 }), 'best scores: real weeks, numbers');
+  t.eq(JSON.stringify(F.medal), JSON.stringify({ '2026-W40': 'silver', '2026-W39': 'gold' }), 'medals: real medals');
+  t.eq(F.runs, 4, 'runs');
+  for (const junk of [null, 5, [], { best: [], medal: 'x' }]) { const f = DATA.wkFix(junk); t.ok(f && f.best && f.medal && f.runs === 0, 'junk repairs: ' + JSON.stringify(junk)); }
+  const big = { best: {}, medal: {} };
+  for (let i = 0; i < 200; i++) { const k = DATA.wkKey(new Date(2020, 0, 6 + i * 7)); big.best[k] = i; big.medal[k] = 'bronze'; }
+  const Fb = DATA.wkFix(big);
+  t.eq(Object.keys(Fb.best).length, DATA.WK.KEEP, 'the newest weeks are kept');
+  t.ok(Fb.best[DATA.wkKey(new Date(2020, 0, 6 + 199 * 7))] === 199 && !Fb.best['2020-W02'], 'the oldest go first');
+  const C = DATA.wkCabinet(F);
+  t.ok(C.list.length === 2 && C.list[0].key === '2026-W40' && C.list[1].medal === 'gold', 'the cabinet, newest first');
+  t.ok(C.counts.gold === 1 && C.counts.silver === 1 && C.counts.bronze === 0, 'medal counts');
+  t.eq(DATA.wkMedalCount({ wk: { medal: { a: 'gold', b: 'platinum', c: 'silver' } } }, 'gold'), 2, 'a platinum counts as a gold too');
+  t.eq(DATA.wkMedalCount({}, 'gold'), 0, 'no record, no medals');
+});
+
+t.test('lore: the two stickers (a gold weekly medal, 25 Codex pages), inside the board\'s cap', () => {
+  const A = DATA.ACHIEVEMENTS;
+  t.ok(A.podium && A.lorekeeper, 'Podium Finish and Lorekeeper');
+  t.ok(DATA.ACH_IDS.length <= 60, `the board holds ${DATA.ACH_IDS.length} of 60`);
+  t.ok(!DATA.achCheck({ kind: 'meta', meta: { wk: { medal: { '2026-W40': 'silver' } } } }, {}).includes('podium'), 'silver is not the podium');
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { wk: { medal: { '2026-W40': 'gold' } } } }, {}).includes('podium'), 'gold is');
+  t.ok(DATA.achCheck({ kind: 'end', meta: { wk: { medal: { '2026-W40': 'platinum' } } } }, {}).includes('podium'), 'platinum too');
+  const got = {};
+  DATA.loreBook().ids.slice(0, 24).forEach(id => { got[id] = 1; });
+  t.ok(!DATA.achCheck({ kind: 'meta', meta: { lore: { got } } }, {}).includes('lorekeeper'), '24 pages are not enough');
+  got[DATA.loreBook().ids[30]] = 1;
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { lore: { got } } }, {}).includes('lorekeeper'), '25 are');
+  t.ok(A.lorekeeper.goal === 25 && A.lorekeeper.val({ meta: { lore: { got } } }) === 25, 'its progress bar');
+  t.ok(!DATA.achCheck({ kind: 'meta', meta: {} }, {}).some(id => id === 'podium' || id === 'lorekeeper'), 'an empty profile earns neither');
 });
 
 t.done();

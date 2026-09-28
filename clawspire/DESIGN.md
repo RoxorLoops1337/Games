@@ -420,7 +420,8 @@ Event objects (renderer/game consume these; keep this list exact):
 (`items` / `insts` / `part` / `dir` / `stage` / `name` / `text` / `v` by kind), and the bestiary (see Enemies):
 `{t:'binTickle', idx, turns}`, `{t:'binGlue', idx, turns}`, `{t:'binCeiling', idx, turns, insts}`, `{t:'binPlow', idx, dir}`,
 `{t:'binVanish', idx, insts}`, `{t:'binBury', idx, inst}`, `{t:'binUnbury', idx, insts}`, `{t:'binWheel', idx, w, who, label}`,
-`{t:'binRival', idx, inst}`.
+`{t:'binRival', idx, inst}`, and the enemy families (see "Enemy families (round 9)"): `{t:'fam', k, fam, idx, ...}`
+(k `cres | soloReady | solo | cancel | fumble | restock | cans | change | payout | scramble | hum | shatter | angry`).
 COMBAT also has `sigNext(e)`, `sigInfo(e)`, `crackIce(F, heavy)`, `breakIce(F)`, `unrig(F)`.
 
 Damage formula: `base + str` per hit, ×0.75 if weak, ×1.5 if vuln on target, −armor, then block
@@ -4207,6 +4208,325 @@ borrow their signatures; the secret act and Endless never swap bosses.
   reload mid-way and paid once; memory, gear and the showdown; every
   alternate boss's VS card, signature and finale). Screenshots: scratchpad
   `r8_sto_shots.mjs` (`r8_sto_*.png`).
+
+## Enemy families (round 9)
+
+Monsters that come as a family fight better together, and the fight shows
+it. Three families, one per act, three members each; a family is a set of
+ordinary normal enemies with `fam` (the family id) and `look` (their own
+drawing), so affixes, Tilt, Endless scaling, the telegraph and the bestiary
+all apply as ever. Data in `data.js` (the FAMILY block: `DATA.FAM`,
+`FAM_IDS`, `FAM_KINDS`, `FAM_ENEMIES`, `famOf`, `famsIn`), the rules in
+`combat.js` (the FAMILY block), the staging in `game.js` (the FAMILY block,
+`GAME.fam`), the art in `render.js` (the FAMILY block, `RENDER.fam`), the
+sounds in `audio.js`. A fight without a family is bit for bit the same (no
+rng is drawn, `F.fam` is null).
+
+| family | act | members | the bond |
+| --- | --- | --- | --- |
+| **The Band** | 1 | Buster Beats (drummer), Low-Note Lenny (bass), Mic Drop Mimi (singer) | every member that takes its action adds 1 **Crescendo** (the drummer 2; a frozen or stunned one adds nothing); at 8, as the enemy phase ends, every member's intent turns into a **SOLO** (its pattern resumes after it). Knock one out on your turn while the SOLO is telegraphed and the rest **lose the beat** (`fumble`, no action, the meter empties); a member lost otherwise drops the meter by 3 |
+| **The Vending Gang** | 2 | Pop Top, Snackatron, The Change Machine | `restock {v}` heals the most dented member (another one first) and gives it half as much Block; `cans {n}` lobs n Empty Cans (junk `fam_can`, grab one out for 1 HP) into your bin; `change {v}` takes up to v of your gold and gives every member 1 Armor per 4 gold (capped as ever); the Change Machine banks it and **pays it all back** when it breaks |
+| **The Snow Globe Choir** | 3 | Soprano Globe, Penguin Alto, Snowman Baritone | the globes share one pattern and **hum** on the same step (the choir is put back in step after every enemy phase, so a frozen globe rejoins); the first hum of a phase **scrambles the pile** (the Prize Master's shuffle plus a shake); **shatter one globe and the rest get angry**: 3 Strength each (at once on your turn, as the phase ends during theirs) |
+
+**Harmony.** A SOLO (`{k:'attack', fam:'solo'}`, each member's value in
+`FAM.band.solo`, scaled like any attack) and a hum (`{fam:'chorus'}`) hit
+for `v x (1 + 0.25 x the other members in it)`. Who is in it is read the
+way the telegraph reads it (alive, the same family move, not frozen or
+stunned, not about to fall to its own Poison and Burn) and snapshotted as
+the enemy phase starts (`famPhaseStart`), so nothing in flight changes a
+hit: the preview stays exact. `COMBAT.qaIntent` adds `fam` and `band` (the
+members in it) and uses the harmony hit; `qaThreat` is unchanged in shape and
+exact over every family encounter (the combat suite drives 4 seeds x 12
+turns of every one of the nine encounters with random freezes, Vulnerable,
+Block, a kill mid-fight and Poison). Anything that would change a hit mid
+phase waits for the phase to end (the choir's anger) or only acts on your
+turn (a cancelled SOLO).
+
+**Encounters.** Each act's normal list ends with two duos and the whole
+family (the lists run easy to hard, so the map puts them in the later
+columns). HP sits in the act bands (act 1 15-24, act 2 36-50, act 3 44-58
+per member); act 1 hits stay within 12.
+
+**On screen (`GAME.fam`, `RENDER.fam`).** The FIGHT banner says the
+family's name (THE BAND) and a marquee plate drops over the arena (FAMILY
+FIGHT, the name, the tag line: THEY PLAY BETTER TOGETHER, THEY RESTOCK EACH
+OTHER, THEY SING AS ONE) for 2.6 s. A **bond line** runs through the
+members' chests behind them (the Band's pulses on the beat and carries
+notes, the gang's carries cans, the choir's frost; red once angry). The
+Band's **Crescendo** is a music staff over them (clear of the INCOMING
+pill's slot, a label keep-out zone): a note pops in per beat played, the
+staff turns gold and reads SOLO! when full. The Band bounce on **one shared
+beat** (116 bpm: the drummer's sticks alternate, the bass nods, the singer
+sways), so the three move together. A SOLO's bubble shows a note instead of
+a sword, a hum's a snowflake, both with a rim pulsing on the beat and an
+`x3` chip for the members in it; restock (a can and a plus), cans (two
+tumbling cans), change (a spinning coin) and lost the beat (a struck-out
+note) have their own icons. The SOLO: spotlights on the members, notes
+bursting from each, SOLO!, a shake, a pink flash (reduced flashing caps
+it). Cans arc from Pop Top's mouth into the bin and land as bodies; a
+restock can flies between machines; your coins fly from the gold counter
+into the Change Machine and back out at the payout. The choir's globes
+wobble together while the pile scrambles; a shattered globe bursts glass;
+angry globes glow red with flurries whipping round and steam puffs. The
+family events keep short beats (`FAM_BEAT`: a meter tick 0.14 s, a SOLO
+0.8 s). Sounds: `famIntro` (a count-in, a vending jingle, a choir chord),
+`famBeat` (a tom and a note climbing with the meter), `famReady`,
+`famSolo`, `famCancel` (a record scratch), `famRestock`, `famCan`,
+`famChange`, `famPayout`, `famHum`, `famShatter`, `famAngry`.
+
+`GAME.fam = {BEAT, PLATE, STAFF, title, start, event, tick, staffBox,
+beatOf, back, front, shakeX, fs}`; `COMBAT.FAM_KINDS, famHit, famIn,
+famState, famOf`; `RENDER.fam = {BPM, COL, COL2, ICON, beat, note, globe,
+snow, bond, staff, spot, burst, angry, plate, intentIcon, intentRide, glyph,
+KEYS}`. Fight-only state (`F.fam`, `FS.fam`, `e.bank`, `e.famAngry`); no
+save field. Tests: data (the table, members, looks, encounters, the can,
+the choir's shared step), combat (the Crescendo and the SOLO, the pattern
+resuming, a frozen drummer, a duo, the cancel and the drop, restock / cans /
+change / the payout / broke, the hum and its scramble, the resync, anger on
+your turn and at the phase end, the exact preview sweep, a 30 turn fuzz),
+render (nine distinct drawings over their fallbacks, the shared beat, every
+intent icon, bonds, the staff, the plate, the spot, empty layers paint
+nothing), game (the banner and plate, the staff box, beats, a real SOLO
+landing exactly as telegraphed, cans as bodies, change and payout, the
+scramble and the wobble, anger drawn, no family state elsewhere), audio
+(every voice). Screenshots: scratchpad `r9_fam_shots.mjs` (`r9_fam_*.png`).
+
+## Holo cards (round 9)
+
+Item and relic cards shine like foil trading cards (Balatro's holo). Every
+item card (`itemCard`: the reward, the shop, the forge, the bin), the shop's
+relic, the treasure reveal, a capsule's prize card and a found item or relic
+in the Prizedex get the holo layers (`holoOn(card, rarity, {quiet})`): a
+rainbow foil under the words (a band plus a fine holo grain, `screen`
+blended), a glare over them, and on a legendary six sparkles that twinkle.
+Common cards have no foil, uncommon a faint cyan one, rare a rainbow one,
+legendary (and boss relics) a stronger one whose hue turns. Every card tilts
+toward the pointer or finger (up to 7-12 degrees by rarity) with the foil
+and glare under it and its shadow falling away, or wobbles gently on its own
+phase with the foil sweeping slowly; on a phone the device tilt steers an
+idle card's foil. Hover scales a card up, a press down.
+
+`RENDER.holo.look(rarity, st, out)` is the pure function of it all (st {t,
+ph, on, px, py, gx, gy, reduced, noFlash} -> {rx, ry, deg, ax, ay, hx, hy,
+foil, glare, hue, spark, twinkle, sx, sy}); `holoTick` copies it onto the
+live cards' CSS about 30 times a second: the tilt as the independent CSS
+`rotate` (so the deal-in animation's `transform` is untouched), `--hx/--hy`,
+`--foil`, `--glare`, `--hue`, `--sx/--sy`; the CSS (`<style id="holo-css">`)
+paints. Quiet cards (the Prizedex grid, the bin, the Compactor) only move
+while a pointer is on them. Reduced motion (Shake off, `prefers-reduced-motion`):
+no tilt, no wobble, the foil at rest. Reduced flashing: a dimmer foil and
+glare, still sparkles. Headless: the classes and `card._holo` only. No
+button was added or moved; `GAME.holo = {HOLO, on, tick, apply, rar, live}`.
+Tests: render (every rarity and junk input finite and in range, foil by
+rarity, the pointer, the idle sweep, reduced motion and flashing,
+determinism), game (the reward's three cards and their layers, sparkles on
+the legendary only, the look on the CSS, the pointer, reduced motion and
+flashing, the shop, the treasure and the capsule card).
+
+## Shop reroll (round 9)
+
+A slot-machine lever under the shop's shelf: **REROLL THE SHELF**, 10 gold,
+10 more for every pull in that shop (Price Hike applies). A pull pays, rolls
+a fresh shelf of five from its own seeded stream (`shop.rrSeed`, the pull
+count: the same pull always gives the same shelf) and saves in the same beat
+(`shop.rrN`, the new items), so a reload never charges twice and shows the
+new shelf even mid-spin. Then the shelf spins like reels: every card's
+picture turns into a reel of prizes scrolling past a gold payline, its words
+hidden, and the reels stop one by one left to right (0.6 s, then every 0.3 s)
+with a thunk (`reelStop`, rising), the card bouncing back in, a gold
+sparkle burst and the `rrShine` chime on a rare or legendary. A spinning card
+is not for sale: a tap on it (or a second pull) brings every reel home at
+once. The prize counter has the same lever, **REROLL THE CASE**, for tickets
+(4, +4 a pull; `shop.ctrN`) over its six prizes. The shop's lever registers
+just before the Compactor (the Compactor and the Prize counter stay the last
+two entries), the counter's after Back to the shop, so every old
+`GAME.choose` index holds. `S.rr` is the animation (never saved); a shop
+from an older save has no pull count and starts at the first price.
+`GAME.rr = {RR, cost, shelf, pull, hurry, tick, busy, pool, land, state}`.
+Tests (game): the button order, the price and its rise, the seeded shelf,
+reel by reel, no sale mid-spin and the hurry, the animation completing on
+its own, too poor, pay once across a reload mid-spin, an old shop, the
+counter's pull for tickets with its reload.
+
+## Lore and the weekly challenge (round 9)
+
+The Clawspire gets a memory and a reason to come back on Monday. Voice:
+short, funny, a little melancholy. Everything here lives in `LORE` blocks
+(data.js, map.js, render.js, audio.js, game.js, the `lore-css` style) and
+reaches the game through one-line hooks.
+
+**The Codex** (screen `codex`; the title's Codex button just before History,
+and a Codex door at the end of the Prizedex, so every old `GAME.choose`
+index holds). Eight chapters, 42 pages of 60 to 120 words: The Spire, The
+Prizemaster, The Floors, The Crawlers, The Bosses, Bestiary, Gary, and The
+Machine, which stays a shut `???` card until the Machine has been met. Each
+page has an unlock rule read from the profile (runs, fights, grabs, acts
+reached, wins with a crawler, kills of an enemy, sightings, capsules, arcade
+plays, golden keys, Back Room visits, Gary's record, Tilt, Endless loops);
+two pages are spoilers whose hints stay vague (`LORE_SPOIL`). The book shows
+a progress bar per chapter and a NEW badge; a chapter lists found pages with
+their first sentence and dark ones with how to earn them (a counter when the
+goal is a number); a page has a big animated vignette drawn in code
+(`RENDER.lore.vignette`, one scene per page: the enemy or crawler, the tower,
+the rig, the floor with its locals, the Machine), its words, and Prev/Next
+through the chapter's found pages. Reading a page clears NEW. Kills per enemy
+are counted from the fight's `die` events (`meta.lore.kills`); new pages are
+checked every half second off the fight and share the corner lane as one
+toast with a thumbnail. 25 pages earn the **Lorekeeper** sticker. A profile
+from before the Codex gets what it already earned silently, marked NEW.
+
+**Landmarks.** Towers, cabinets and the pet shop have lines, and every world
+map gets three new landmarks on empty land off the road (`MAP.lorePlace`,
+its own stream from the map seed, never on the start, the boss, the golden
+key's hex or a roamer, spaced apart): a **jukebox**, **lost tickets**, and
+the **old high score board**. A tap on one in sight shows a speech bubble
+(the tap still walks), stepping on one does too, and a walk that ends on the
+board opens it: your Hall of Fame runs (initials from the crawler and run)
+among the regulars (P.M, GRY, DAD, ZZZ, CPU and friends; ties go to the
+house). An old map gets the same three on first use.
+
+**Act intros.** The first time a run enters a map (`a1`..`a3`, an Endless
+loop `L<n>`, the Back Room `room`) a title card plays: the act, its name, two
+typed lines, the biome's sting (`loreSting`). 2.8 s the first time, 1.3 s on
+every later one (`meta.lore.intros`); a tap after a quarter second or Space,
+Enter or Escape skips it, and the map takes no input under it. `run.lore.intro`
+remembers the map, so Continue never replays it (an old save is marked on load).
+
+**The weekly challenge** (screen `weekly`; the title card sits beside the
+Daily run and counts down). The key is the ISO week of a local date
+(`2026-W40`; 2027-01-01 is `2026-W53`). Each week draws a theme (14, a
+seeded order per cycle, never the same twice in a row) with its lead mutator
+and one or two more, a fixed crawler and claw, Tilt 0 and a seed everyone
+shares. Medal targets are bronze 1200, silver 2600, gold 5500, platinum 8000
+times the mutators' score multiplier. The run's final score is the week's
+best if higher; the best medal is kept (`meta.wk = {best, medal, runs}`, the
+newest 156 weeks). The end panel shows the score, the medal (a new one pops)
+and the next target; the weekly screen has the banner, rules, targets, your
+best, Play, and the medal cabinet. Gold earns the **Podium Finish** sticker.
+Nothing reads the clock under test: `GAME.wk.setDate` injects the date
+(headless default 2026-03-02).
+
+Headless, the popups (toasts, bubbles, the board, the intro card) stay off
+unless `GAME.lore.force`; the counting and saving still run.
+`GAME.lore = {show, back, check, marks, tap, enter, board, intro, mapKey, ...}`,
+`GAME.wk = {setDate, key, def, left, show, start, runEnd, endPanel, meta}`.
+Tests: data (the book's shape, words, dashes, rules, hints, fixes, snippets,
+the board, intros, ISO weeks and their edges, 120 weekly defs, medals and the
+cabinet, the stickers), map (landmarks over 100 seeds), render (every
+vignette distinct, locked and moving, marks, bubbles, board, intro cards,
+medals, the banner), game (profiles, kills and unlocks, the Codex walk,
+landmarks through the real tap path, intros, the weekly start to medal to
+reload).
+
+## Load, labels, QA sweep 3 and memory (round 9)
+
+Presentation and plumbing only: no rule, balance number or save field
+changed. Owner: the QA pass. Code sits in `q9*` helpers (render.js next to
+what they touch, game.js in the LABELS / TITLE / MEMORY blocks after the QA
+block), `index.html` (`#boot-css`, `#csBoot`, `#csBootJs`).
+
+### Startup and load
+
+Measured in headless Chromium at 390 x 844 DPR 2, 4x CPU throttle, served
+gzipped (as Cloudflare does) under DevTools' slow 4G (562 ms, 180 KB/s),
+median of three cold loads (scratchpad `r9/load.mjs`).
+- **A loader** (`#csBoot`): a CLAWSPIRE marquee with twelve bulbs, painted by
+  the HTML itself while the scripts download. Bulbs light by the bytes of the
+  scripts that have landed (resource timing, weighted by each file's rough
+  gzip size, plus a slow creep between landings) and it fades one frame after
+  `GAME.boot` has drawn. A script that fails, or a page still loading after
+  30 s, offers Reload. Its script has an `id`, so the suites never run it.
+  First paint 6.1 s -> 0.8 s (the page used to be blank until every script
+  had landed).
+- **The art manifest and the PNG probes** start after the first frame
+  (`q9ArtLater`), not inside `boot`. Without a manifest (dev servers) the
+  hundreds of probe requests used to hold DOMContentLoaded to 2.6 s.
+- **The title** draws its 36 falling prizes from cached sprites
+  (`q9TitleSpr`, one per art key and device scale; a slot machine's text
+  among them was the top cost) and the five-pass logo from one cached sprite
+  (`q9Logo`); the logo's fit is measured once per stage width instead of
+  setting `ctx.font` every frame. Unthrottled network, 4x CPU: the first
+  frame finished 1.44 s -> 0.40 s after navigation; the title's frame 134 ->
+  51 ms (attract) and 88 -> 58 ms (menu).
+- Still network bound: first frame at ~5.7 s on slow 4G for 797 KB gz (6.2 s
+  for this round's 879 KB). Not done (a build change): a whitespace-and-syntax
+  minify of `js/` in `dist` only would cut the scripts ~31% gz (about 1.3 s
+  on slow 4G), and `_headers` with hashed script URLs would save the warm
+  load's revalidation round trips (~1 s).
+
+### Crowded labels (the layout manager, extended)
+
+- **Damage numbers join the layout** (`p.nlay`; `o.free` opts out). They go
+  first, oldest first, keep their physics flight and are only nudged (up,
+  down or a step or two sideways, `sideSpot`) as far as needed to clear the
+  zones and the older numbers, at most `LAYOUT.numMax` (80) px, then 1.6x
+  that, else they stay; never hidden. Labels are laid after them (so they
+  flow around the numbers) and got the same sideways candidates. `fx.draw`
+  paints the labels first and the numbers last, on top.
+- **Soft zones** (`fx.zone(id, x0, y0, x1, y1, true)`): kept clear while there
+  is room within `LAYOUT.far` (110) px, else ignored, so nothing is thrown far
+  from what it belongs to. A zone set again moves in place (no allocation).
+- **The arena reserves its space** (`q9LabelZones`, every frame of a fight,
+  soft): each enemy's intent bubble (`q9b*`), its elite / boss chip right of
+  the hp bar (`q9c*`), its hp bar and status chips (`q9h*`), a story ally
+  while it runs across (`q9ally`), the wall sign the backdrop drew
+  (`q9sign`, recorded by `RENDER.bg`); the cabinet's warning sign
+  (`q9bsign`, recorded by `bossSign`) is hard.
+- **The INCOMING pill owns a slot** at the arena's left edge (`Q9_SLOT`, x
+  4..110 from y 72, its hard `qa` zone as tall as the pill really is): no
+  enemy stands there, the wall sign now draws right of it
+  (`Q9A.slotX`), and while the fight's corner lane shows a discovery toast
+  there the pill steps down under it (`q9PillTop`).
+- Stress tests: render (five numbers and a label on one spot, soft zones,
+  layout off) and game (a boss and a trio with the crab ally, relic procs
+  on both sides, a combo, four numbers with a crit, a status and the
+  telegraph: 150 frames, no overlap, nothing in a hard zone).
+  `fx.rects()` returns both sets from one pass, `fx.numRects()` the numbers.
+
+### QA sweep 3
+
+24 bot runs (scratchpad `r9/bot.mjs`: five crawlers x eight claws, Tilt
+0-10, mutators, pets, `?season=halloween` and `?season=winter`, stories and
+Grabby Gary on, alternate bosses forced on half, evolution recipes primed on
+half, 191 reloads) plus a scripted tour (`r9/tour.mjs`: an evolution
+delivered and a reload mid ceremony, a forge; both seasons' title, map, door
+(reload mid knock, paid once) and fights; all nine stories down three branches
+with a reload at every beat; a claw-off with a reload after every drop, paid
+once; the three alternate bosses with a reload and their finales; Mama's
+turret with all eight claws; the vacuum and the twins with all five crawlers;
+photo mode through every filter and frame and Save; a death, its recap, the
+history list and a run in full). No page or console error. Fixed: the run
+cards said "1 turns" / "1 kills" (`q9n`); the title's subtitle ran under the
+first button (below). By design: a claw-off has no buttons mid play (the
+glass is the control), a reload during the map's fight iris lands in that
+fight, a run card is gone from the save after the game over.
+
+### The title
+
+The menu grew until its first button covered "a claw machine roguelike" at
+360 x 780 and 390 x 844. `q9TitleFit` measures the menu (every 0.2 s on the
+title and when it is built) and `q9TitleLayout` (pure) lifts the logo block
+(the word, the subtitle, a season's banner over it) above the first button,
+never below the stage's middle and never under the season ribbon; the
+renderer reads `RENDER.q9.title.ly`. A menu that still cannot fit (a large
+text size with every button on) gets a max height and scrolls. Buttons and
+their indices are untouched.
+
+### Memory
+
+A 20-fight session with the map and screens between (`r9/mem.mjs`, heap
+after a forced GC, DOM counters): DOM nodes and canvases plateau in a steady
+run; the JS heap grows ~0.15 MB a fight, almost all of it compiled code. The
+leak was the glow sprite cache: one canvas per colour and whole-pixel radius,
+295 canvases and 17 MB after 16 fights and still climbing. Radii past 24 now
+share a sprite per 10% step, none is built past radius 128 (drawn larger),
+and past 1.6 M pixels (6 MB) the cache starts over (`glowKey`, `GLOW_BUDGET`).
+The test-hook logs without a cap (tips, season, stories) keep their newest
+400 (`q9Trim`).
+
+`GAME.q9 = {SLOT, L, zones, pillTop, enemyPos, intentY, artLater, n, trim,
+LOG, TITLE, T, titleLayout, titleFit}`; `RENDER.q9 = {arena, titleSprites,
+logo, title, glowStats}`; `RENDER.fx.rects / numRects`.
 
 ## Quality bar (Game of the Year, mobile)
 

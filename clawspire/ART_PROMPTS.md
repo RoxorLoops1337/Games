@@ -616,6 +616,23 @@ Every file is optional: the drawn art (`RENDER.sto`, the story vignettes of `REN
 | `art/items/id/sto_plush.png` | 512x512 | 1:1, square | 38x38 | sto_plush (the Plushie Queen's plush) | a small round pink teddy bear plush sitting upright, button eyes, a tiny gold paper crown, soft and squishy |
 | `art/items/id/sto_crate.png` | 512x360 | 1.42:1, horizontal | 46x32 | sto_crate (the Conveyor King's crate) | a small cardboard shipping crate taped shut, a black arrow printed on the side, a hazard stripe label, slightly dented |
 
+## Enemy families (round 9)
+
+Every file is optional: the drawn art (`RENDER.fam`, the nine `EA.fam_*` drawings) is the fallback. The drawn Band bounces on one shared beat (the drummer's sticks, the bass player's nod, the singer's sway) and the snow in the globes swirls; a PNG replaces the body only, so the bond line, the Crescendo staff, the spotlights, the notes and snowflakes, the angry red flurries and the intent icons still draw over it. Same global style anchor as the rest of the book.
+
+| File | Gen size (px) | Aspect, orientation | In game (px) | Used by | Prompt |
+| --- | --- | --- | --- | --- | --- |
+| `art/enemies/fam_drummer.png` | 470x512 | 1:1.09, vertical | 90x98 | fam_drummer (act 1, The Band) | Buster Beats: an orange gremlin drummer in a teal headband behind a tiny drum kit made of trash-can lids, a bass drum with a music note logo, a gold cymbal on a stand, two drumsticks mid-hit, a big toothy grin. Full body, facing left, feet on the bottom edge. |
+| `art/enemies/fam_bassist.png` | 512x498 | 1.03:1, square | 76x74 | fam_bassist (act 1, The Band) | Low-Note Lenny: a chill violet slime blob in black sunglasses, a gold electric bass guitar slung across its body, nodding to the beat. Full body, facing left, feet on the bottom edge. |
+| `art/enemies/fam_singer.png` | 468x512 | 1:1.1, vertical | 84x92 | fam_singer (act 1, The Band) | Mic Drop Mimi: a hot pink bat diva with a gold star hair clip, eyes shut, belting a high note into a chrome microphone on a stand, wings spread, music notes floating up. Full body, facing left, feet on the bottom edge. |
+| `art/enemies/fam_pop.png` | 312x512 | 1:1.64, vertical | 72x118 | fam_pop (act 2, The Vending Gang) | Pop Top: a red soda vending machine with a big round POP logo, a column of glowing selection buttons, a smiling face in its display window, and a mechanical pitching arm on the side winding up an empty soda can. Full body, facing left, feet on the bottom edge. |
+| `art/enemies/fam_snack.png` | 328x512 | 1:1.56, vertical | 78x122 | fam_snack (act 2, The Vending Gang) | Snackatron: a blue snack vending machine, spiral coils holding colourful chip bags behind the glass (one bag stuck halfway), a keypad, a pair of cartoon eyes on the glass. Full body, facing left, feet on the bottom edge. |
+| `art/enemies/fam_change.png` | 344x512 | 1:1.5, vertical | 64x96 | fam_change (act 2, The Vending Gang) | The Change Machine: a squat gold and grey coin changer with two spinning gold coins for eyes, a dark bill slot for a mouth, CHANGE on its front plate, a coin cup overflowing with gold coins. Full body, facing left, feet on the bottom edge. |
+| `art/enemies/fam_soprano.png` | 384x512 | 1:1.33, vertical | 72x96 | fam_soprano (act 3, The Snow Globe Choir) | Soprano Globe: a snow globe on a turned wooden base with a gold band, inside it a tiny lavender-robed angel with a gold halo and white wings singing, snow swirling around her. Full body, facing left, feet on the bottom edge. |
+| `art/enemies/fam_alto.png` | 390x512 | 1:1.31, vertical | 76x100 | fam_alto (act 3, The Snow Globe Choir) | Penguin Alto: a snow globe on a wooden base, inside it a round penguin in a teal scarf waddling in circles and singing, snow swirling around. Full body, facing left, feet on the bottom edge. |
+| `art/enemies/fam_baritone.png` | 386x512 | 1:1.33, vertical | 80x106 | fam_baritone (act 3, The Snow Globe Choir) | Snowman Baritone: a big snow globe on a dark base, inside it a snowman in a black top hat with a pink band and an orange scarf, mouth open on a low note, snow swirling around. Full body, facing left, feet on the bottom edge. |
+| `art/items/id/fam_can.png` | 308x512 | 1:1.67, vertical | 18x30 | fam_can (the Vending Gang's empty can, junk) | an empty red soda can standing upright, a white label band reading POP, a dent in its side and the pull tab bent open |
+
 ---
 
-310 prompts in total. Sizes in this book come from `ART.paths()` in `js/art.js`; if an item or enemy changes size in `js/data.js`, the in-game size changes with it and the game still fits whatever PNG is there.
+320 prompts in total. Sizes in this book come from `ART.paths()` in `js/art.js`; if an item or enemy changes size in `js/data.js`, the in-game size changes with it and the game still fits whatever PNG is there.

@@ -4611,6 +4611,96 @@ const DATA = (() => {
   ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
   // ================================================================ /STORY
 
+  // ================================================================ FAMILY (round 9: enemy families)
+  /* Three families, one per act, three members each, that fight better
+     together (DESIGN.md "Enemy families (round 9)"). A member carries `fam`
+     (the family id) and `look` (its own drawing, RENDER's FAMILY block);
+     COMBAT's FAMILY block runs the bond. Numbers here, rules there:
+     - band: every member that takes its action adds `per` Crescendo (the
+       drummer `beat`); at `max` the whole band plays a SOLO next turn, each
+       member hitting for `solo[id]` (scaled like any attack) x (1 + `harm`
+       per other member playing). Knock one out first and the rest lose the
+       beat; a member lost otherwise drops the meter by `drop`.
+     - vending: `restock` heals the most dented member and gives half as much
+       Block, `cans` lobs empty cans (junk `fam_can`) into your bin, `change`
+       takes up to v of your gold and gives every member 1 Armor per `per`
+       gold (the Change Machine banks it and pays it back when it breaks).
+     - choir: the members hum in lockstep (the hum is an attack with
+       `fam: 'chorus'`, the same `harm` rule); the first hum of a turn
+       scrambles the pile; a globe that shatters gives the rest `angry` Strength. */
+  const FAM = {
+    band: { id: 'band', name: 'The Band', act: 1, icon: '♫', color: '#ff2e88', color2: '#ffc94d',
+      members: ['fam_drummer', 'fam_bassist', 'fam_singer'], tag: 'THEY PLAY BETTER TOGETHER',
+      bond: 'Every turn they play, the Crescendo builds. At full Crescendo they play a SOLO together. Knock one out first to cancel it.',
+      max: 8, per: 1, beat: { fam_drummer: 2 }, drop: 3, harm: 0.25, solo: { fam_drummer: 4, fam_bassist: 4, fam_singer: 5 } },
+    vending: { id: 'vending', name: 'The Vending Gang', act: 2, icon: '\u{1F964}', color: '#2ee6d6', color2: '#ff5a4a',
+      members: ['fam_pop', 'fam_snack', 'fam_change'], tag: 'THEY RESTOCK EACH OTHER',
+      bond: 'They restock each other with cans, pelt your bin with empties, and the Change Machine turns your gold into their Armor. Break it to get your gold back.',
+      per: 4, take: 12 },
+    choir: { id: 'choir', name: 'The Snow Globe Choir', act: 3, icon: '❄', color: '#8dfff5', color2: '#b8a4ff',
+      members: ['fam_soprano', 'fam_alto', 'fam_baritone'], tag: 'THEY SING AS ONE',
+      bond: 'They hum in sync: every globe shakes the cabinet at once and scrambles your pile. Shatter one globe and the rest get angry.',
+      harm: 0.25, angry: 3 },
+  };
+  const FAM_IDS = ['band', 'vending', 'choir'];
+  const FAM_KINDS = ['restock', 'cans', 'change'];
+  const famAtk = (id, name, v, n, txt, fam) => Object.assign(atk(id, name, v, n, txt), fam ? { fam } : {});
+  const FAM_ENEMIES = [
+    // ---- act 1: The Band (the Crescendo meter, then a SOLO)
+    { id: 'fam_drummer', fam: 'band', name: 'Buster Beats', act: 1, tier: 'normal', hp: [18, 22], art: 'gremlin', look: 'fam_drummer', size: 0.9, color: '#ff8a2e', color2: '#ffc94d', color3: '#2ee6d6',
+      desc: 'Drums on anything. Mostly the cabinet. Keeps the whole band on the beat, and the beat builds twice as fast with him.', ai: 'cycle', pattern: [0, 1, 2, 3],
+      moves: [atk('rimshot', 'Rimshot', 3, 2, 'Rimshot: 3 x2'), mv('drumroll', 'Drumroll', 'shake', 'Drums on the cabinet. Your bin rattles.'),
+        atk('crash', 'Cymbal Crash', 6, 1, 'Cymbal crash for 6'), blk('kit', 'Behind the Kit', 5, 'Hides behind the kit (Block 5)')] },
+    { id: 'fam_bassist', fam: 'band', name: 'Low-Note Lenny', act: 1, tier: 'normal', hp: [20, 24], art: 'slime', look: 'fam_bassist', size: 1, color: '#7a5cff', color2: '#ffc94d', color3: '#ff2e88',
+      desc: 'A slime with a bass guitar. You feel him before you hear him.', ai: 'cycle', pattern: [0, 1, 2],
+      moves: [atk('slap', 'Slap Bass', 7, 1, 'Slap bass for 7'), debuff('rumble', 'Rumble', 'weak', 1, 'A low rumble (Weak)'),
+        blk('groove', 'In the Groove', 6, 'Settles into the groove (Block 6)')] },
+    { id: 'fam_singer', fam: 'band', name: 'Mic Drop Mimi', act: 1, tier: 'normal', hp: [15, 19], art: 'bat', look: 'fam_singer', size: 0.85, color: '#ff2e88', color2: '#ffc94d', color3: '#ffffff',
+      desc: 'The front bat. Hits the high notes, then hits you.', ai: 'cycle', pattern: [0, 1, 2],
+      moves: [atk('belt', 'Belt It Out', 5, 1, 'Belts it out for 5'), debuff('shriek', 'High Note', 'vuln', 1, 'Hits a high note (Vulnerable)'),
+        atk('encore', 'Encore', 2, 3, 'Encore: 2 x3')] },
+    // ---- act 2: The Vending Gang (restocks, empty cans, the Change Machine)
+    { id: 'fam_pop', fam: 'vending', name: 'Pop Top', act: 2, tier: 'normal', hp: [40, 46], art: 'clockwork', look: 'fam_pop', size: 1.05, color: '#ff5a4a', color2: '#f4f8ff', color3: '#2ee6d6',
+      desc: 'A soda machine with a pitching arm. Every can it throws is empty. Every single one.', ai: 'cycle', pattern: [0, 1, 2, 3],
+      moves: [mv('lob', 'Lob Cans', 'cans', 'Lobs 2 empty cans into your bin', { n: 2 }), atk('fizz', 'Fizz Blast', 9, 1, 'Fizz blast for 9'),
+        mv('refill', 'Restock', 'restock', 'Dispenses a soda to its most dented friend (heals 10, Block 5)', { v: 10 }), atk('spray', 'Shaken Can', 4, 2, 'Sprays a shaken can: 4 x2')] },
+    { id: 'fam_snack', fam: 'vending', name: 'Snackatron', act: 2, tier: 'normal', hp: [44, 50], art: 'clockwork', look: 'fam_snack', size: 1.1, color: '#3b6fd6', color2: '#ffc94d', color3: '#ff9ec7',
+      desc: 'Row B4 is always stuck. It keeps the good snacks for its friends.', ai: 'cycle', pattern: [1, 0, 3, 2],
+      moves: [mv('restock', 'Restock', 'restock', 'Dispenses a snack to its most dented friend (heals 12, Block 6)', { v: 12 }), atk('coil', 'Spiral Coil', 5, 2, 'Spiral coil punch: 5 x2'),
+        blk('glass', 'Shatterproof', 10, 'Shatterproof glass (Block 10)'), atk('drop', 'Snack Drop', 11, 1, 'Drops a family-size bag on you for 11')] },
+    { id: 'fam_change', fam: 'vending', name: 'The Change Machine', act: 2, tier: 'normal', hp: [36, 42], art: 'clockwork', look: 'fam_change', size: 0.95, color: '#ffc94d', color2: '#5a6373', color3: '#2ee6d6',
+      desc: 'It only ever gives you change for the gang. Break it open and your coins come pouring back.', ai: 'cycle', pattern: [1, 0, 2],
+      moves: [mv('change', 'Make Change', 'change', 'Takes up to 12 of your gold and turns it into Armor for the gang', { v: 12 }),
+        atk('spit', 'Coin Spit', 3, 3, 'Spits coins: 3 x3'), blk('vault', 'Coin Vault', 8, 'Locks its coin box (Block 8)')] },
+    // ---- act 3: The Snow Globe Choir (a synchronized hum that scrambles the pile, anger when one shatters)
+    { id: 'fam_soprano', fam: 'choir', name: 'Soprano Globe', act: 3, tier: 'normal', hp: [44, 50], art: 'wisp', look: 'fam_soprano', size: 0.9, color: '#b8a4ff', color2: '#e8fdff', color3: '#ffc94d',
+      desc: 'A tiny angel in a snow globe. Her high C cracks glass. Mostly her own.', ai: 'cycle', pattern: [0, 1, 2],
+      moves: [debuff('aria', 'Frost Aria', 'chill', 2, 'A frosty aria (2 Chill)'), blk('dome', 'Polish the Dome', 10, 'Polishes her dome (Block 10)'),
+        famAtk('hum', 'Hum in Harmony', 6, 1, 'Hums in sync with the choir: every globe shakes the cabinet', 'chorus')] },
+    { id: 'fam_alto', fam: 'choir', name: 'Penguin Alto', act: 3, tier: 'normal', hp: [48, 54], art: 'yeti', look: 'fam_alto', size: 0.95, color: '#2ee6d6', color2: '#e8fdff', color3: '#ff8a2e',
+      desc: 'Waddles in circles inside her globe. Pecks at anyone who taps the glass.', ai: 'cycle', pattern: [0, 1, 2],
+      moves: [atk('peck', 'Peck', 6, 2, 'Pecks: 6 x2'), debuff('flurry', 'Flurry', 'weak', 1, 'A flurry in your face (Weak)'),
+        famAtk('hum', 'Hum in Harmony', 6, 1, 'Hums in sync with the choir: every globe shakes the cabinet', 'chorus')] },
+    { id: 'fam_baritone', fam: 'choir', name: 'Snowman Baritone', act: 3, tier: 'normal', hp: [52, 58], art: 'yeti', look: 'fam_baritone', size: 1.05, color: '#e8fdff', color2: '#ff8a2e', color3: '#2b3a6a',
+      desc: 'The low end of the choir. His hum rattles every globe on the shelf.', ai: 'cycle', pattern: [0, 1, 2],
+      moves: [atk('thump', 'Deep Thump', 12, 1, 'A deep thump for 12'), mv('squall', 'Snow Squall', 'fog', 'Snows up the glass (fog 1 turn)', { v: 1 }),
+        famAtk('hum', 'Hum in Harmony', 6, 1, 'Hums in sync with the choir: every globe shakes the cabinet', 'chorus')] },
+  ];
+  for (const e of FAM_ENEMIES) ENEMIES[e.id] = Object.assign({ size: 1 }, e);
+  // The Vending Gang's empties: reachable as ITEMS.fam_can, never listed (no pool, shop or Prizedex sees it).
+  Object.defineProperty(ITEMS, 'fam_can', { value: { id: 'fam_can', name: 'Empty Can', rarity: 'junk', cost: 0, tags: ['junk', 'light'], shape: box(18, 30),
+    density: 0.6, friction: 0.45, restitution: 0.3, color: '#ff5a4a', color2: '#e8e8f0', art: 'bottle', target: 'self', exhaust: true, fam: 'can',
+    fx: [{ k: 'heal', v: 1 }], text: 'An empty can from the Vending Gang. Grab it out for {v} HP of flat soda. Mostly it is in the way.' },
+  enumerable: false, configurable: true, writable: true });
+  // Encounters: duos first, the whole family last (the lists run easy -> hard, MAP leans later columns to the back).
+  ENCOUNTERS[1].normal.push(['fam_drummer', 'fam_singer'], ['fam_bassist', 'fam_drummer'], ['fam_drummer', 'fam_bassist', 'fam_singer']);
+  ENCOUNTERS[2].normal.push(['fam_pop', 'fam_change'], ['fam_snack', 'fam_pop'], ['fam_pop', 'fam_snack', 'fam_change']);
+  ENCOUNTERS[3].normal.push(['fam_soprano', 'fam_alto'], ['fam_alto', 'fam_baritone'], ['fam_soprano', 'fam_alto', 'fam_baritone']);
+  // The family of an enemy id (or null), and every family in a fight's enemy list.
+  const famOf = (id) => { const e = ENEMIES[id]; return e && e.fam && FAM[e.fam] ? e.fam : null; };
+  const famsIn = (ids) => { const out = []; for (const id of ids || []) { const f = famOf(id); if (f && out.indexOf(f) < 0) out.push(f); } return out; };
+  // ================================================================ /FAMILY
+
   // ================================================================ HISTORY (round 8: run history and the death recap)
   /* Every finished run leaves a compact record on the profile (meta.his,
      DESIGN.md "Run history, the death recap and photo mode (round 8)"): the
@@ -4785,7 +4875,496 @@ const DATA = (() => {
   }
   // ================================================================ /HISTORY
 
+  // ================================================================ LORE (round 9: the Codex, landmark lore, act intros, the weekly challenge)
+  /* Pure data and pure helpers (DESIGN.md "Lore and the weekly challenge
+     (round 9)"). The Codex is a book of chapters and pages; a page unlocks by
+     a rule read off the profile (loreVal / loreOk / loreCheck never mutate
+     it). The book is built on first use (loreBook), so boot stays light.
+     Map landmarks speak one-liners (loreSnippet), the old high score board
+     reads the Hall of Fame (loreBoard), every act opens on a title card
+     (loreIntro). The weekly challenge is a fixed seed by ISO week with a
+     theme, 2 or 3 mutators, a crawler and a claw, and medal targets (wk*);
+     every date is passed in, nothing here reads the clock. */
+  const LORE_CH = [
+    { id: 'spire', name: 'The Clawspire', icon: '\u{1F5FC}', col: '#ff2e88', blurb: 'The tower, the arcade, and the rules nobody wrote down.' },
+    { id: 'master', name: 'The Prize Master', icon: '\u{1F3A9}', col: '#ffc94d', blurb: 'The host. The house. The hand on the joystick.' },
+    { id: 'floors', name: 'The Floors', icon: '\u{1F3E2}', col: '#2ee6d6', blurb: 'Three storeys of arcade stacked on top of each other, all closed.' },
+    { id: 'crawlers', name: 'The Crawlers', icon: '\u{1F392}', col: '#a6ff5e', blurb: 'Five fools with a claw machine strapped to their backs.' },
+    { id: 'bosses', name: 'The Bosses', icon: '\u{1F451}', col: '#ff5a4a', blurb: 'The floor managers. Every one of them used to be something else.' },
+    { id: 'bestiary', name: 'The Bestiary', icon: '\u{1F47E}', col: '#b388ff', blurb: 'Who lives in the machines, and what they want from your bin.' },
+    { id: 'gary', name: 'Grabby Gary', icon: '\u{1F9E2}', col: '#3ddc84', blurb: 'Undefeated. Unbearable. Unfortunately, very good.' },
+    { id: 'machine', name: 'The Machine', icon: '\u{1F50C}', col: '#ff2e30', spoiler: true, blurb: 'It was always plugged in.' },
+  ];
+  const LORE_SPOIL = 'Some pages are better found than told. Keep climbing, keep looking.';
+  // The pages: {id, ch, name, art {k, id?, act?}, r: [rule kind, ...args], text, hint?, spoiler?}.
+  // Kept in a function so the text is only turned into objects when the Codex (or a check) first asks.
+  function loreEntries() {
+    return [
+      // ---- the Clawspire
+      { id: 'spire_tower', ch: 'spire', name: 'The Tower', art: { k: 'tower' }, r: ['runs', 1],
+        text: 'Nobody built the Clawspire on purpose. It started as one claw machine in the back of a laundromat, and every time somebody lost, it grew another floor. Arcades got stacked on arcades. Carpets got stacked on carpets. Now it goes up past the clouds, humming, blinking, taking quarters from people who stopped carrying quarters years ago. The sign out front still says OPEN 24 HOURS. It does not say which hours, or whose.' },
+      { id: 'spire_rig', ch: 'spire', name: 'The Rig', art: { k: 'rig' }, r: ['played', 25],
+        text: 'Every Crawler climbs with a claw machine strapped to their back. It is heavy, it is cursed, and it is the only weapon the tower respects. You do not swing a sword in here. You win one. Whatever the claw drops down the chute gets played, fair and square, the way the machines like it. The Rig has opinions about grip strength. The Rig has opinions about everything. Some Crawlers swear it hums along when they win.' },
+      { id: 'spire_dark', ch: 'spire', name: 'The Dark', art: { k: 'dark' }, r: ['fights', 10],
+        text: 'The Clawspire lost power on every floor at once, one Tuesday, and never got it back. What is left runs on marquee bulbs: little glass promises that something is still switched on. Light one and the floor remembers itself for a while. Towers see further. Roads stay lit because somebody keeps walking them. Nobody has found the fuse box. Nobody has looked very hard, either. In the dark the machines are cheaper to run, and they know it.' },
+      { id: 'spire_tickets', ch: 'spire', name: 'Tickets', art: { k: 'tickets' }, r: ['caps', 5],
+        text: 'Tickets are the only currency older than the tower. Every jackpot spits a ribbon of them, every prize counter pretends they are worth something, and every Crawler keeps a fat roll in a back pocket just in case. In the old days kids traded ten thousand tickets for a rubber spider and walked away happy. The rubber spiders are still here, on the top shelf behind the glass, and some of them have started trading tickets back.' },
+      { id: 'spire_cabinets', ch: 'spire', name: 'The Cabinets', art: { k: 'cabinet' }, r: ['arc', 5],
+        text: 'Plinko, the wheel, the slots, whack-a-mole, skee-ball. The tower kept all of its old games plugged in, even the ones nobody ever won. They are not traps, exactly. They just remember what it felt like to be fed a coin, and they would like to feel it again. Play one and the lights come up the way they used to on a Friday night. Walk away and you can hear them powering down behind you, a little slower than they need to.' },
+      { id: 'spire_keys', ch: 'spire', name: 'Golden Keys', art: { k: 'key' }, r: ['keys', 1], spoiler: true,
+        text: 'There are three of them, one to a floor, and none of them are where a key should be. One rides around in a monster\'s pocket. One pays out from a jackpot. One lies in the dark where nobody walks. The Prize Master pretends not to know about them. He checks the lost and found every night, though, and always leaves looking a little disappointed. Whatever they open, it is not the front door.' },
+      { id: 'spire_loop', ch: 'spire', name: 'Insert Another Coin', art: { k: 'loop' }, r: ['loop', 1],
+        text: 'Beating the Prize Master does not turn the tower off. It just reboots it. The screens go white, the marquee spells BIOS in a font nobody has used since the nineties, and the floors come back meaner, shuffled like a deck. The monsters remember nothing. The bulbs remember everything. Crawlers who stay for another loop call it Endless, because saying Forever out loud in an arcade is bad luck. The high score table only goes to seven digits.' },
+      // ---- the Prize Master
+      { id: 'pm_host', ch: 'master', name: 'The Host', art: { k: 'enemy', id: 'prizemaster', act: 3 }, r: ['seen', 'prizemaster'], hint: 'Climb to the top floor and meet the host.',
+        text: 'The Prize Master runs the Clawspire the way a cat runs a fishbowl. Tall hat, bright teeth, a voice like a jackpot in a tin can. He greets every Crawler personally, compliments their grip, and asks them to step right up. Everybody wins, he says, and technically he is right: somebody always wins, and it is always the house. He has never been seen blinking. He has once been seen dusting a trophy, very tenderly.' },
+      { id: 'pm_wall', ch: 'master', name: 'The Prize Wall', art: { k: 'prizes' }, r: ['wins', 1],
+        text: 'Behind the Prize Master\'s counter is a wall of prizes that goes up forever. Plush bears. Glass swans. A surprising number of helmets. Look closer and the helmets have names scratched inside them, and so do the swans. Those are the Crawlers who lost. He does not hurt them, exactly. He just wins them, and keeps them, and polishes them on Sundays. When you beat him, a few prizes on the wall turn their heads to watch you leave.' },
+      { id: 'pm_tilt', ch: 'master', name: 'Tilt', art: { k: 'tilt' }, r: ['tilt', 3],
+        text: 'Every time you beat him, the Prize Master gets up, straightens his hat, and bends the machine a little further. A looser coin here, a stickier joystick there, a bent prong in the elites\' claws. He calls it Tilt, the way pinball players do, as if the table were the one cheating. He is not angry about losing. He is interested. Nobody has made him interested in a very long time, and it is not a good look on him.' },
+      { id: 'pm_chair', ch: 'master', name: 'The Empty Chair', art: { k: 'chair' }, r: ['wins', 5],
+        text: 'After the fifth time, the Prize Master stops saying step right up. He starts saying welcome back. He keeps a chair behind the counter now, with your name taped on it, just in case you ever want to stay and help. Great hours, he says. Great prizes. He was a Crawler too, you know, a long time ago, before the tower offered him the counter. He does not remember his real name. He remembers his high score.' },
+      // ---- the floors
+      { id: 'fl_cellar', ch: 'floors', name: 'The Damp Arcade', art: { k: 'act', act: 1 }, r: ['fights', 1],
+        text: 'The basement level, where the prizes rust. The carpet is wet in places nobody can explain and the moss has learned to glow in time with the attract mode. Coin Rats live in the returns. Slimes live in the drip trays. The machines down here are the oldest in the tower and the most forgiving, which is not saying much. Every Crawler starts here, standing in a puddle, looking up the stairs, wondering why the elevator has a claw instead of a button.' },
+      { id: 'fl_foundry', ch: 'floors', name: 'The Clockwork Foundry', art: { k: 'act', act: 2 }, r: ['act', 2],
+        text: 'The mezzanine, where the prizes are made. Somewhere a furnace never stops, and the air tastes of pennies. Conveyor belts carry half finished plush toward machines that stamp, stitch and glue them into something you might want. Gremlins wind the clocks. Golems haul the scrap. Everything here was built to make prizes faster than anybody could win them, and it worked. The foundry has been overproducing for decades. Nobody told it to stop, so it never did.' },
+      { id: 'fl_vault', ch: 'floors', name: 'The Frozen Penthouse', art: { k: 'act', act: 3 }, r: ['act', 3],
+        text: 'The top floor, where the prizes are kept forever. It is cold up here on purpose: cold keeps things mint. The shelves are glass, the floors are ice, and the cabinets hum a lullaby to themselves in a key that makes your teeth ache. Every prize nobody claimed ends up in the penthouse eventually, labelled and frozen and very quiet. The view is incredible. You can see the whole city from up here, all of its lights, none of them yours.' },
+      { id: 'fl_room', ch: 'floors', name: 'The Back Room', art: { k: 'room' }, r: ['rooms', 1], spoiler: true,
+        text: 'Behind the Prize Master\'s counter there is a door marked STAFF ONLY, and behind that door is the part of the arcade nobody was supposed to see. Circuit boards for floors. Coin hoppers for walls. Service lights blinking in a rhythm that sounds like breathing. This is where the tower keeps its insides. Every quarter ever lost in the Clawspire rolled downhill to this room eventually, and something has been counting them the whole time.' },
+      // ---- the crawlers
+      { id: 'cr_knight', ch: 'crawlers', name: 'Sir Grabsworth', art: { k: 'char', id: 'knight' }, r: ['win', 'knight'],
+        text: 'Sir Grabsworth was knighted for services to the claw machine at a county fair, by a mayor who had lost a bet. He took it seriously. He takes everything seriously. He polishes his shield before every drop and apologises to prizes he fails to pick up. His grip is the strongest in the tower and his rails are the slowest, because he refuses to rush a gentleman. He climbs the Clawspire to rescue his squire, who went up for a stuffed dragon in 1987.' },
+      { id: 'cr_alchemist', ch: 'crawlers', name: 'Mira Fizzwick', art: { k: 'char', id: 'alchemist' }, r: ['win', 'alchemist'],
+        text: 'Mira Fizzwick failed her alchemy exam three times, on account of the explosions, and passed the fourth on account of a better explosion. She carries a tiny claw because a tiny claw fits a tiny flask, and everything she owns bubbles, fizzes or glows. She says she climbs for science. She is really climbing for the penthouse freezer, where rumour says the tower keeps a soda that never goes flat. She has a very specific idea of immortality.' },
+      { id: 'cr_rogue', ch: 'crawlers', name: 'Pip Quickclaw', art: { k: 'char', id: 'rogue' }, r: ['win', 'rogue'],
+        text: 'Pip Quickclaw has the fastest rails in the tower and the lightest fingers in the city, which is how Pip ended up with a claw machine in the first place. It was supposed to be a quick job: lift the Rig, sell the Rig, retire somewhere with a beach. The Rig had other plans and would not come off. So Pip climbs, pocketing every coin on the way up, telling anyone who asks that the whole tower is technically a heist.' },
+      { id: 'cr_gambler', ch: 'crawlers', name: 'Lucky Lou', art: { k: 'char', id: 'gambler' }, r: ['win', 'gambler'],
+        text: 'Lucky Lou has never won a thing in his life on purpose. He loses so well, so reliably and with such style that his luck has nowhere to go but up, and it piles up behind him like a debt coming due. Every whiff is a deposit. Every double is a withdrawal. He climbs the Clawspire because the Prize Master owes him a rematch from a card game in the car park. The Prize Master says that was a different Lou.' },
+      { id: 'cr_engineer', ch: 'crawlers', name: 'Mama Mech', art: { k: 'char', id: 'engineer' }, r: ['win', 'engineer'],
+        text: 'Mama Mech repaired every machine in the Damp Arcade for thirty years and never got a single thank you, only more quarters stuck in more slots. When the tower started taking Crawlers, she stopped fixing and started building. Everything metal she wins goes into the turret on her Rig, bolt by bolt, until it has opinions of its own. She climbs to have a word with the management. Not an angry word. A long word, with a clipboard.' },
+      // ---- the bosses
+      { id: 'bo_hoard', ch: 'bosses', name: 'The Hoard', art: { k: 'enemy', id: 'hoard', act: 1 }, r: ['kills', 'hoard', 1],
+        text: 'Every prize nobody ever won, piled up in the basement and angry about it. The Hoard started as a heap of lost plush behind the coin return and grew a mouth out of sheer resentment. It flings coins it never earned and sulks when you take them back. It is not evil, just jealous: it watched a thousand kids walk past to the good machines. Beat it and the heap falls apart into ordinary junk, and for a moment it looks almost relieved.' },
+      { id: 'bo_smelter', ch: 'bosses', name: 'The Smelter', art: { k: 'enemy', id: 'smelter', act: 2 }, r: ['kills', 'smelter', 1],
+        text: 'The foundry furnace, awake. The Smelter used to melt down broken prizes so they could be made into new ones, which is recycling, which is nice. Then the tower ran low on broken prizes and it started melting down Crawlers instead, into shiny little tokens with surprised faces. It runs very hot and very proud. It heats your metal until it bites your hands. Somewhere in its belly there are still a few tokens that remember their names.' },
+      { id: 'bo_glacius', ch: 'bosses', name: 'Glacius, the Ice Box', art: { k: 'enemy', id: 'glacius', act: 3 }, r: ['kills', 'glacius', 1],
+        text: 'The penthouse freezer, standing up. Glacius was built to keep prizes mint forever, and it took the job personally. It ices over your chute, your rails and eventually your patience. It is lonely up there in the cold, with nothing but perfect things that never move. It asks Crawlers to stay a while. It means forever. Behind Glacius there is a door marked STAFF ONLY, and it has guarded that door for so long it forgot why.' },
+      { id: 'bo_plush', ch: 'bosses', name: 'The Plushie Queen', art: { k: 'enemy', id: 'plushqueen', act: 1 }, r: ['kills', 'plushqueen', 1],
+        text: 'Every unclaimed plush in the tower pledged itself to her, and there are a lot of unclaimed plush. The Plushie Queen rules the basement from a throne of bears that will never be hugged by a child, and she takes that personally too. Her subjects throw themselves between you and her, soft and loyal and very hard to hit through. Grab them out of the bin and she gets small and sad. Some Crawlers feel bad. Most keep grabbing.' },
+      { id: 'bo_conveyor', ch: 'bosses', name: 'The Conveyor King', art: { k: 'enemy', id: 'conveyorking', act: 2 }, r: ['kills', 'conveyorking', 1],
+        text: 'Head of shipping for the Clockwork Foundry, crowned by nobody, which he considers a technicality. The Conveyor King believes everything should keep moving, always, preferably away from you. He turns the floor of your bin into a belt and ships crates in while he is at it. He has never delivered a single parcel. The loading dock outside his office is stacked to the ceiling with boxes addressed to people who stopped waiting years ago.' },
+      { id: 'bo_arctic', ch: 'bosses', name: 'The Arctic Arcade', art: { k: 'enemy', id: 'arcticarcade', act: 3 }, r: ['kills', 'arcticarcade', 1],
+        text: 'A whole arcade froze solid one winter and decided to keep running anyway. The Arctic Arcade is thirty cabinets fused into one block of ice, every screen still playing its attract mode, every speaker still chirping INSERT COIN through two feet of frost. It freezes your prizes into its growing collection because that is the only way it knows how to hold on to anything. Smash the block and they come back out cold, blinking, a little embarrassed.' },
+      // ---- the bestiary
+      { id: 'be_rat', ch: 'bestiary', name: 'Coin Rat', art: { k: 'enemy', id: 'rat', act: 1 }, r: ['kills', 'rat', 5],
+        text: 'Coin Rats live in the coin returns of every machine in the Damp Arcade, which is why nobody ever gets their change back. They bite anything shiny, including you, and they are sure that everything is shiny if you look at it hopefully enough. A Coin Rat has never spent a coin. It stacks them into little towers in the dark and sits on top, the king of its own small Clawspire, squeaking at the ceiling.' },
+      { id: 'be_slime', ch: 'bestiary', name: 'Sticky Slime', art: { k: 'enemy', id: 'slime', act: 1 }, r: ['kills', 'slime', 5],
+        text: 'Mostly water, the rest attitude. Sticky Slimes seep out of the drip trays after closing and wobble around looking for trouble, or crumbs, or both. Pop one and it splits into smaller, angrier ones, which is a lesson in something. They are harmless the way a spilled drink on a joystick is harmless: technically yes, but the game is ruined. Somebody once watched one dissolve a whole bag of gummy worms and look extremely pleased with itself.' },
+      { id: 'be_panda', ch: 'bestiary', name: 'Trash Panda', art: { k: 'enemy', id: 'trashpanda', act: 1 }, r: ['kills', 'trashpanda', 5],
+        text: 'Trash Pandas live behind the prize counter and consider everything on the other side of it an open buffet. Anything shiny goes straight down the hatch: coins, keys, your best sword. They are not malicious. They are just hungry, and the tower has been feeding them the wrong things for a very long time. Hit one hard enough and it hiccups your stuff back up, slightly damp. They are ashamed of this, and wash their paws afterwards, thoroughly.' },
+      { id: 'be_tickler', ch: 'bestiary', name: 'Tickle Monster', art: { k: 'enemy', id: 'tickler', act: 1 }, r: ['kills', 'tickler', 5],
+        text: 'The Tickle Monster lives under the prize counter and has eleven arms, all of them feathers. It cannot hurt you. It does not want to hurt you. It only wants your claw to laugh so hard it drops what it is holding, which, in the Clawspire, is worse. Rumour says it used to be the arcade\'s mascot suit, back when there were birthday parties and somebody inside the suit. Nobody is inside it now. Probably.' },
+      { id: 'be_mimic', ch: 'bestiary', name: 'Prize Mimic', art: { k: 'enemy', id: 'mimic', act: 1 }, r: ['kills', 'mimic', 3],
+        text: 'It looks like a prize. It is a mouth. The Prize Mimic sits on the shelf with a price tag in its teeth and waits for a Crawler to reach for it, and then it reaches back. It eats the best thing in your bin first, because it has taste. Mimics are what happens when a prize waits so long to be won that it decides to go and win somebody instead. Deep down they just want to be picked first.' },
+      { id: 'be_barker', ch: 'bestiary', name: 'Carnival Barker', art: { k: 'enemy', id: 'barker', act: 1 }, r: ['kills', 'barker', 3],
+        text: 'The Carnival Barker runs the prize wheel, and the prize wheel has eight wedges, most of which say BARKER. He tips his hat, he spins, he wins. He has been spinning that wheel since the tower was a single boardwalk, and he has never once lost on purpose. Beat him anyway and he laughs, genuinely, like nothing has surprised him in years. Then he writes your name on a wedge. By morning the wedge says BARKER again.' },
+      { id: 'be_ironjaw', ch: 'bestiary', name: 'Ironjaw', art: { k: 'enemy', id: 'ironjaw', act: 2 }, r: ['kills', 'ironjaw', 3],
+        text: 'A bear trap that learned to walk, and then learned to swallow. Ironjaw clanks around the foundry floor chewing anything metal, and it considers you mostly metal. It opens wide before it bites, a whole turn early, as a courtesy nobody appreciates. More Crawlers have lost their climbs to Ironjaw than to any boss in the tower. It keeps no trophies. It just keeps chewing, patient and hungry, like a door that has been waiting all day to slam.' },
+      { id: 'be_magbat', ch: 'bestiary', name: 'Magnet Bat', art: { k: 'enemy', id: 'magbat', act: 2 }, r: ['kills', 'magbat', 5],
+        text: 'Magnet Bats roost upside down on the claw rail, humming. Every piece of metal in the cabinet wants to roost with them, which is why your swords keep drifting up to the lid. The bats think they are being hospitable. They are very social animals and very bad at reading a room. A foundry worker once taught one to fetch bolts. It fetched every bolt in the building, including the ones holding the building up.' },
+      { id: 'be_ghost', ch: 'bestiary', name: 'Peekaboo Ghost', art: { k: 'enemy', id: 'ghost', act: 3 }, r: ['kills', 'ghost', 5],
+        text: 'The Peekaboo Ghost haunts the prize shelf and plays peekaboo with your things. It always wins, because it is a ghost, and because what it hides is still there, invisible, waiting for your claw to brush against it. It is not a scary ghost. It is the ghost of a kid who once spent a whole afternoon looking for a lost ticket and never found it. It hides things so somebody else can have the fun of finding them.' },
+      { id: 'be_collector', ch: 'bestiary', name: 'The Claw Collector', art: { k: 'enemy', id: 'collector', act: 3 }, r: ['kills', 'collector', 3],
+        text: 'The Claw Collector brought its own claw. It rides a little trolley under the lid, picks your rarest prize and lifts it into a glass case, mint in box, never to be touched again. It is the most dangerous kind of collector: the kind that does not even want to play with anything. Its case is full of things Crawlers loved. Beat it and the glass cracks, and every prize inside tumbles out, confused and grateful and a little dusty.' },
+      // ---- Grabby Gary
+      { id: 'gy_meet', ch: 'gary', name: 'Grabby Gary', art: { k: 'gary', gear: 0 }, r: ['gary', 'met', 1],
+        text: 'Grabby Gary is sixteen, undefeated and happy to tell you about it. He has his own claw, his own sweatband and his own theme song, which he hums while he plays. He challenges every Crawler he meets to a claw-off, three drops each, winner takes the best prize in the bin. He is extremely good. He is also extremely annoying about it. Nobody knows how he got into the tower. He says he was born here, next to the skee-ball.' },
+      { id: 'gy_beat', ch: 'gary', name: 'The Rematch', art: { k: 'gary', gear: 2 }, r: ['gary', 'wins', 1],
+        text: 'The first time you beat Grabby Gary in a claw-off, he goes very quiet, checks the claw for faults, checks the prize for faults, checks you for faults, and then asks for a rematch. Every time after that he turns up with new gear: shades, a gold chain, a jacket with his own name on the back. He is not getting better so much as more expensive. Secretly he writes down every one of your drops in a notebook.' },
+      { id: 'gy_duel', ch: 'gary', name: 'The Showdown', art: { k: 'gary', gear: 4 }, r: ['gary', 'beat', 1],
+        text: 'Beat Gary twice in one climb and he stops asking for claw-offs and asks for a real fight, up in the penthouse, with his own claw bolted to his back like yours. It is the first time anyone has ever made him try. When he loses the showdown he sits on the floor for a long time. Then he laughs, the real kind, and says nobody ever beat him fair before. Everybody else just stopped showing up.' },
+      // ---- The Machine (the whole chapter stays shut until it has been met)
+      { id: 'mc_machine', ch: 'machine', name: 'The Machine', art: { k: 'enemy', id: 'machine', act: 3 }, r: ['seen', 'machine'],
+        text: 'The Prize Master never owned the Clawspire. The Clawspire owned the Prize Master. Down in the Back Room, wired into every cabinet on every floor, sits the first claw machine: the one from the laundromat, grown to fill a room, its marquee eyes wide open. It has been playing all of you, every Crawler, every monster, every host in a top hat. It does not want your quarters any more. It wants you to keep playing.' },
+      { id: 'mc_down', ch: 'machine', name: 'Powered Down', art: { k: 'dawn' }, r: ['ends', 1],
+        text: 'When The Machine finally goes dark, it does not explode. It powers down, one bulb at a time, the way an arcade closes at the end of a long night. SYSTEM FAILURE. POWERING DOWN. GOODNIGHT, CONTESTANT. Then quiet, for the first time in the tower\'s life. Walk out the front door and the sun is coming up over the car park. The prizes on the shelves are just prizes now. Somewhere a kid finds a quarter in the gutter.' },
+      { id: 'mc_again', ch: 'machine', name: 'Goodnight, Contestant', art: { k: 'enemy', id: 'machine', act: 3, sleep: true }, r: ['ends', 2],
+        text: 'Here is the secret the true ending does not tell you: the Clawspire always switches back on. Somebody feeds it a coin, somewhere, some night, and the marquee flickers, and the floors stack themselves up again, and the rats find the coin returns. Maybe that is not a curse. Maybe an arcade is just a place that refuses to stay closed. The Machine remembers you now. It saved your initials. Next time, it says, you can go first.' },
+    ];
+  }
+  const LORE_RULES = ['runs', 'fights', 'played', 'act', 'wins', 'win', 'kills', 'seen', 'caps', 'arc', 'keys', 'rooms', 'ends', 'gary', 'tilt', 'loop'];
+  const LORE_ART = ['tower', 'rig', 'dark', 'tickets', 'cabinet', 'key', 'loop', 'enemy', 'prizes', 'tilt', 'chair', 'act', 'room', 'char', 'gary', 'dawn'];
+  let LORE_BOOK = null;
+  // The book: chapters in order, pages in order, lookups. Built once, on first use.
+  function loreBook() {
+    if (LORE_BOOK) return LORE_BOOK;
+    const entries = loreEntries(), byId = {}, ch = {};
+    for (const c of LORE_CH) ch[c.id] = [];
+    for (const e of entries) { byId[e.id] = e; if (ch[e.ch]) ch[e.ch].push(e.id); }
+    LORE_BOOK = { chapters: LORE_CH, entries, byId, ids: entries.map((e) => e.id), ch };
+    return LORE_BOOK;
+  }
+  const loreN = (x) => Math.max(0, Math.floor(+x || 0));
+  const loreObj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
+  // A rule's progress off the profile: {v, goal} (pure; a missing field reads 0).
+  function loreVal(r, m) {
+    m = loreObj(m) || {};
+    r = Array.isArray(r) ? r : [];
+    const st = loreObj(m.stats) || {}, L = loreObj(m.lore) || {}, sec = loreObj(m.sec) || {}, g = loreObj(m.gary) || {};
+    switch (r[0]) {
+      case 'runs': case 'fights': case 'played': case 'wins': return { v: loreN(st[r[0]]), goal: r[1] | 0 };
+      case 'act': return { v: loreN(st.bestAct), goal: r[1] | 0 };
+      case 'win': return { v: Math.min(1, loreN((loreObj(m.winsBy) || {})[r[1]])), goal: 1 };
+      case 'kills': return { v: loreN((loreObj(L.kills) || {})[r[1]]), goal: r[2] | 0 };
+      case 'seen': return { v: m.seen && m.seen.enemies && m.seen.enemies[r[1]] ? 1 : 0, goal: 1 };
+      case 'caps': return { v: loreN((loreObj(m.loot) || {}).caps), goal: r[1] | 0 };
+      case 'arc': return { v: loreN((loreObj(m.arc) || {}).plays), goal: r[1] | 0 };
+      case 'keys': case 'rooms': case 'ends': return { v: loreN(sec[r[0]]), goal: r[1] | 0 };
+      case 'gary': return { v: loreN(g[r[1]]), goal: r[2] | 0 };
+      case 'tilt': { let v = -1; const b = loreObj(m.bestTilt) || {}; for (const k in b) if (+b[k] >= 0) v = Math.max(v, Math.floor(+b[k])); return { v: Math.max(0, v), goal: r[1] | 0, won: v >= 0 }; }
+      case 'loop': return { v: loreN((loreObj(m.endless) || {}).best), goal: r[1] | 0 };
+      default: return { v: 0, goal: 1 };
+    }
+  }
+  // A chapter is open (its title shows) unless it is a spoiler nobody has met yet.
+  function loreChOpen(chId, m) {
+    const c = LORE_CH.find((x) => x.id === chId);
+    if (!c) return false;
+    if (!c.spoiler) return true;
+    return !!(m && m.seen && m.seen.enemies && m.seen.enemies.machine);
+  }
+  // Has the profile earned this page? (an id or an entry)
+  function loreOk(e, m) {
+    e = typeof e === 'string' ? loreBook().byId[e] : e;
+    if (!e || !e.r) return false;
+    if (!loreChOpen(e.ch, m)) return false;
+    const x = loreVal(e.r, m);
+    if (e.r[0] === 'tilt') return !!x.won && x.v >= x.goal;
+    return x.goal > 0 && x.v >= x.goal;
+  }
+  // The pages a profile newly earns (have: {id: truthy} already unlocked), in book order.
+  function loreCheck(m, have) {
+    have = loreObj(have) || {};
+    const out = [];
+    for (const e of loreBook().entries) {
+      if (have[e.id]) continue;
+      let ok = false;
+      try { ok = loreOk(e, m); } catch (err) { ok = false; }
+      if (ok) out.push(e.id);
+    }
+    return out;
+  }
+  // How a locked page is earned, in words (a spoiler page keeps its secret).
+  function loreHint(e, m) {
+    e = typeof e === 'string' ? loreBook().byId[e] : e;
+    if (!e) return '';
+    if (e.spoiler || !loreChOpen(e.ch, m)) return LORE_SPOIL;
+    if (e.hint) return e.hint;
+    const r = e.r || [], n = r[r.length - 1] | 0;
+    const en = (id) => (ENEMIES[id] && ENEMIES[id].name) || id;
+    switch (r[0]) {
+      case 'runs': return 'Start a climb.';
+      case 'fights': return n === 1 ? 'Fight your first fight.' : `Fight ${n} fights in the tower.`;
+      case 'played': return `Deliver ${n} prizes down the chute.`;
+      case 'act': return `Reach act ${n}.`;
+      case 'wins': return n === 1 ? 'Beat the Prize Master.' : `Beat the Prize Master ${n} times.`;
+      case 'win': return `Win a climb as ${(CHARACTERS[r[1]] && CHARACTERS[r[1]].name) || r[1]}.`;
+      case 'kills': return n === 1 ? `Defeat ${en(r[1])}.` : `Defeat ${en(r[1])} ${n} times.`;
+      case 'seen': return `Meet ${en(r[1])}.`;
+      case 'caps': return `Open ${n} prize capsules.`;
+      case 'arc': return `Play the arcade cabinets on the map ${n} times.`;
+      case 'gary': return r[1] === 'met' ? 'Somebody by the road wants a claw-off.' : r[1] === 'wins' ? 'Win a claw-off against Grabby Gary.' : 'Beat Grabby Gary in the showdown.';
+      case 'tilt': return `Win a climb at Tilt ${n} or higher.`;
+      case 'loop': return 'Keep playing past the Prize Master.';
+      default: return LORE_SPOIL;
+    }
+  }
+  // meta.lore repaired: {got, new, kills, intros}; junk is dropped, NEW only on pages owned.
+  function loreFix(o) {
+    const src = loreObj(o) || {}, B = loreBook();
+    const flags = (x) => { const out = {}; const s = loreObj(x) || {}; for (const id in s) if (B.byId[id] && s[id]) out[id] = 1; return out; };
+    const got = flags(src.got), fresh = flags(src.new);
+    for (const id in fresh) if (!got[id]) delete fresh[id];
+    const kills = {}, ks = loreObj(src.kills) || {};
+    for (const id in ks) { const n = loreN(ks[id]); if (n > 0 && id.length <= 40) kills[id] = Math.min(n, 1e9); }
+    const intros = {}, is = loreObj(src.intros) || {};
+    for (const k in is) { const n = loreN(is[k]); if (n > 0 && /^(a[1-3]|room|L\d{1,4})$/.test(k)) intros[k] = Math.min(n, 1e6); }
+    return { got, new: fresh, kills, intros };
+  }
+  function loreCount(m) {
+    const L = m && loreObj(m.lore), g = L && loreObj(L.got), B = loreBook();
+    if (!g) return 0;
+    let n = 0;
+    for (const id in g) if (g[id] && B.byId[id]) n++;
+    return n;
+  }
+  // {n, total, pct, per: {chapter: {n, total, fresh}}} from meta.lore.got / new.
+  function loreProgress(m) {
+    const B = loreBook(), L = (m && loreObj(m.lore)) || {}, got = loreObj(L.got) || {}, fresh = loreObj(L.new) || {};
+    const per = {};
+    let n = 0;
+    for (const c of LORE_CH) {
+      const ids = B.ch[c.id] || [];
+      const k = ids.filter((id) => got[id]).length;
+      per[c.id] = { n: k, total: ids.length, fresh: ids.filter((id) => got[id] && fresh[id]).length };
+      n += k;
+    }
+    const total = B.entries.length;
+    return { n, total, pct: total ? (n * 100) / total : 0, per };
+  }
+  function loreHash(s) {
+    s = String(s);
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h >>> 0;
+  }
+  /* Map landmarks. The three decorative ones (MAP.LORE_KINDS) stand on empty
+     land and speak when stepped on or tapped; towers, arcade cabinets and the
+     pet shop speak when tapped. One line each, picked by the map's seed and
+     the hex, so the same hex always says the same thing. */
+  const LORE_MARKS = {
+    jukebox: { name: 'Broken Jukebox', icon: '\u{1F3B5}', col: '#ff6bb0' },
+    tickets: { name: 'Lost Tickets', icon: '\u{1F39F}', col: '#ffb347' },
+    hiscore: { name: 'Old High Score Board', icon: '\u{1F3C6}', col: '#2ee6d6' },
+    tower: { name: 'Lookout Tower', icon: '\u{1F5FC}', col: '#ffc94d' },
+    plinko: { name: 'Plinko', icon: '\u{1F53B}', col: '#ff2e88' },
+    wheel: { name: 'Prize Wheel', icon: '\u{1F3A1}', col: '#ffc94d' },
+    slots: { name: 'Lucky Slots', icon: '\u{1F3B0}', col: '#a6ff5e' },
+    moles: { name: 'Whack-a-Mole', icon: '\u{1F528}', col: '#ff8a2e' },
+    skee: { name: 'Skee-Ball', icon: '\u{1F3B3}', col: '#2ee6d6' },
+    petshop: { name: 'Pet Shop', icon: '\u{1F43E}', col: '#a6ff5e' },
+  };
+  const LORE_SNIPS = {
+    tower: ['A lookout tower. The coin-op telescope on top only shows yesterday.', 'Someone carved I WAS HERE, 1994 into the rail. And STILL HERE under it.',
+      'The tower keeper sleeps with one eye on the stairs and one on the view.', 'From up there you can count every lit bulb on the floor. It is not many.',
+      'The lift is out. The lift has been out since before there were lifts.', 'Towers were built to watch for Crawlers. Now they just watch.'],
+    plinko: ['A Plinko board. Every peg has been hit a million times and still says ding.', 'The pegs remember every token. They are rooting for the middle.',
+      'A sticker on the glass: NO SHAKING. Someone has drawn a sad face on it.'],
+    wheel: ['The prize wheel creaks. JACKPOT is painted on the smallest wedge, on purpose.', 'A wheel of fortune. Fortune has not been seen since the last power cut.',
+      'The flapper is worn thin. It has said no to a lot of people.'],
+    slots: ['A slot machine with one arm. It waves at you anyway.', 'Three cherries, a bell and a bulb, spinning in the dark for nobody.',
+      'The payout tray is polished smooth by fingers checking it, just in case.'],
+    moles: ['Whack-a-mole. The moles unionised years ago and ask to be whacked gently.', 'You can hear them in there, practising their pop-ups.',
+      'A laminated card: THE MOLES ARE FINE. THE MOLES ARE ACTORS.'],
+    skee: ['A skee-ball lane. The 100 cups are hit so rarely they have cobwebs.', 'The balls roll back on their own. The lane gets lonely.',
+      'Somebody scratched a tally of perfect games into the rail. It says one.'],
+    petshop: ['A pet shop. Every animal in here was a prize once. Now they want a Crawler of their own.', 'Every pen has a name tag. Some names are crossed out and written again, bigger.',
+      'A sign: PETS ARE FOR LIFE, NOT JUST FOR ONE CLIMB.'],
+    jukebox: ['A broken jukebox. It only plays B-sides now, and only to itself.', 'Press any button: same song. Everyone in the tower knows the words.',
+      'The jukebox hums the attract mode tune, off key, like a lullaby.', 'Somebody left a quarter on top of the jukebox in case it ever gets better.'],
+    tickets: ['A pile of lost tickets, thousands deep. Nobody ever came back for them.', 'Somebody saved these tickets for a whole summer. The bear they wanted is still upstairs.',
+      'Lost tickets drift down here from every floor, like leaves.', 'The top ticket has FOR MOM written on it in crayon. Then nothing.'],
+    hiscore: ['An old high score board, still lit. Somebody keeps it plugged in.', 'The high score board. The top name has not changed in years.',
+      'A high score board with a cracked screen. The scores glow through the cracks.'],
+  };
+  function loreSnippet(kind, seed, q, r) {
+    const L = LORE_SNIPS[kind];
+    if (!L || !L.length) return '';
+    return L[loreHash(kind + ':' + ((seed >>> 0) || 0) + ':' + (q | 0) + ',' + (r | 0)) % L.length];
+  }
+  /* The old high score board: the Prize Master holds the top slot for good,
+     then your best climbs from the Hall of Fame (their own fake arcade
+     initials) and a few old regulars, highest first. hof: DATA.hisFix(...).hof. */
+  const LORE_INI = {
+    knight: ['SIR', 'GRB', 'KNT'], alchemist: ['MRA', 'FZZ', 'POP'], rogue: ['PIP', 'QIK', 'YNK'], gambler: ['LOU', 'DBL', 'ACE'], engineer: ['MCH', 'BLT', 'WRN'],
+    _: ['YOU', 'CRW', 'ME!'],
+  };
+  const LORE_HOUSE = [['P.M', 999990, 'prizemaster'], ['GRY', 42000, 'gary'], ['AAA', 25000, ''], ['JAZ', 15000, ''], ['RXR', 9000, ''], ['DAD', 4000, ''], ['ZZZ', 1000, ''], ['CPU', 500, '']];
+  function loreInitials(rec) {
+    const L = LORE_INI[rec && rec.c] || LORE_INI._;
+    return L[loreHash('ini:' + ((rec && rec.id) || '') + ':' + ((rec && rec.c) || '')) % L.length];
+  }
+  function loreBoard(hof, n) {
+    n = Math.max(1, (n | 0) || 8);
+    const mine = (Array.isArray(hof) ? hof : []).filter((x) => loreObj(x) && Number.isFinite(+x.s))
+      .map((x, i) => ({ ini: loreInitials(x), s: Math.max(0, Math.floor(+x.s)), c: typeof x.c === 'string' ? x.c : '', r: x.r || '', you: true, id: String(x.id || ''), d: +x.d || 0, i }));
+    mine.sort((a, b) => b.s - a.s || a.d - b.d || a.i - b.i);
+    const house = LORE_HOUSE.map(([ini, s, who], i) => ({ ini, s, who, house: true, you: false, i: 100 + i }));
+    const all = mine.slice(0, n).concat(house);
+    // a tie goes to the house: the regulars were here first
+    all.sort((a, b) => b.s - a.s || (a.house === b.house ? a.i - b.i : a.house ? -1 : 1));
+    return all.slice(0, n).map((x, i) => ({ rank: i + 1, ini: x.ini, s: x.s, you: !!x.you, house: !!x.house, who: x.who || '', c: x.c || '', r: x.r || '', id: x.id || '' }));
+  }
+  /* Act intros: the title card when a floor is entered. a1..a3 the acts,
+     room the Back Room, L<n> an Endless loop (in the biome of act, the run's
+     act). Two lines each, typed out under the name. */
+  const LORE_ACTS = {
+    a1: { title: 'ACT 1', name: 'The Damp Arcade', biome: 'cellar', act: 1, lines: ['Basement level. The carpet squelches.', 'Somewhere in the dark, a coin return is chewing.'] },
+    a2: { title: 'ACT 2', name: 'The Clockwork Foundry', biome: 'foundry', act: 2, lines: ['Mezzanine. The air tastes of pennies.', 'Every machine up here was built to win.'] },
+    a3: { title: 'ACT 3', name: 'The Frozen Penthouse', biome: 'vault', act: 3, lines: ['Top floor. Everything is kept forever.', 'Mind the ice. Mind the view.'] },
+    room: { title: 'ACT 4', name: 'The Back Room', biome: 'machine', act: 3, lines: ['STAFF ONLY. It hums like breathing.', 'Every lost quarter rolled down here.'] },
+  };
+  const LORE_LOOPS = [
+    ['The tower reboots. The monsters remember nothing.', 'The bulbs remember everything.'],
+    ['BIOS OK. MONSTERS OK. MERCY NOT FOUND.', 'Same floor. Meaner carpet.'],
+    ['Somebody fed the Clawspire another coin.', 'It was you. It is always you.'],
+    ['The high score table has room for one more digit.', 'Just one.'],
+    ['The prizes on the wall are watching now.', 'Some of them are cheering.'],
+  ];
+  function loreIntro(key, act) {
+    key = String(key || '');
+    const A = LORE_ACTS[key];
+    if (A) return { key, title: A.title, name: A.name, biome: A.biome, act: A.act, lines: A.lines.slice(), loop: 0 };
+    const m = /^L(\d{1,4})$/.exec(key);
+    if (!m) return null;
+    const n = Math.max(1, +m[1]), a = Math.max(1, Math.min(3, (act | 0) || (((n - 1) % 3) + 1))), base = LORE_ACTS['a' + a];
+    return { key, title: 'LOOP ' + n, name: base.name + ', again', biome: base.biome, act: a, lines: LORE_LOOPS[(n - 1) % LORE_LOOPS.length].slice(), loop: n };
+  }
+
+  /* The weekly challenge. One seed per ISO week (Monday to Sunday, local
+     dates), the same for everyone: a theme with its headline mutator plus 1
+     or 2 more, a crawler and a claw, and four medal targets for the run score
+     (DATA.runScore), scaled by the mutators' multiplier. Themes never repeat
+     two weeks running. meta.wk keeps the best score and medal per week. */
+  const WK = {
+    MEDALS: ['bronze', 'silver', 'gold', 'platinum'],
+    BASE: { bronze: 1200, silver: 2600, gold: 5500, platinum: 8000 },
+    MEDAL: {
+      bronze: { name: 'Bronze', col: '#d08a4a', icon: '\u{1F949}' }, silver: { name: 'Silver', col: '#cfd8e6', icon: '\u{1F948}' },
+      gold: { name: 'Gold', col: '#ffc94d', icon: '\u{1F947}' }, platinum: { name: 'Platinum', col: '#8dfff5', icon: '\u{1F48E}' },
+    },
+    KEEP: 156, DAY: 86400000, EPOCH: Date.UTC(1970, 0, 5),
+    THEMES: [
+      { id: 'zerog', name: 'Zero-G Week', icon: '\u{1F388}', col: '#8dfff5', lead: 'lowgrav', blurb: 'Everything floats. Aim low, grab gently.' },
+      { id: 'fragile', name: 'Handle With Care', icon: '\u{1F48E}', col: '#bff4ff', lead: 'glass', blurb: 'Every prize cracks. Some of them shatter.' },
+      { id: 'boom', name: 'Boom Town', icon: '\u{1F4A3}', col: '#ff5a4a', lead: 'bombs', blurb: 'Firecrackers in every bin. Mind the fuses.' },
+      { id: 'storm', name: 'Magnet Storm', icon: '\u{1F9F2}', col: '#ff6bb0', lead: 'magnet', blurb: 'The pile creeps toward the claw.', claws: ['magnet', 'classic'] },
+      { id: 'giants', name: 'Land of Giants', icon: '\u{1F418}', col: '#ffc94d', lead: 'giant', blurb: 'One prize at a time, pal.', claws: ['hand', 'hook'] },
+      { id: 'tiny', name: 'Tiny Town', icon: '\u{1F52C}', col: '#a6ff5e', lead: 'tiny', blurb: 'Handfuls, if you can hold them.', claws: ['scoop', 'vacuum'] },
+      { id: 'rink', name: 'Ice Rink', icon: '⛸️', col: '#8dfff5', lead: 'slippery', blurb: 'Somebody waxed every bin in the tower.' },
+      { id: 'lights', name: 'Lights Out', icon: '\u{1F526}', col: '#b3a4d6', lead: 'blackout', blurb: 'A flashlight on the claw is all you get.' },
+      { id: 'feeding', name: 'Feeding Time', icon: '\u{1F37D}', col: '#a6ff5e', lead: 'hungry', blurb: 'Every monster is hungry. Guard your best prizes.' },
+      { id: 'fever', name: 'Jackpot Fever', icon: '\u{1F3B0}', col: '#ffc94d', lead: 'fever', blurb: 'Combos fire twice. So do the monsters.' },
+      { id: 'line', name: 'Assembly Line', icon: '⏩', col: '#ffb347', lead: 'conveyor', blurb: 'The bin floor rolls. Ride it to the chute.' },
+      { id: 'quake', name: 'Shake Week', icon: '\u{1F4F3}', col: '#ff9ad0', lead: 'quake', blurb: 'The cabinet lurches every turn.' },
+      { id: 'rush', name: 'Rush Hour', icon: '\u{1F46F}', col: '#ff2e88', lead: 'crowd', blurb: 'Every fight brings a friend.' },
+      { id: 'twofer', name: 'Two for One', icon: '✌️', col: '#2ee6d6', lead: 'double', blurb: 'Twice the grabs. Half the punch.', claws: ['twin', 'tri'] },
+    ],
+  };
+  // A date as local {y, m (0..11), d}: a Date, a timestamp or 'YYYY-MM-DD'; null for junk.
+  function wkDate(x) {
+    if (typeof x === 'string') {
+      const s = /^(\d{4})-(\d{2})-(\d{2})$/.exec(x);
+      if (!s) return null;
+      return { y: +s[1], m: +s[2] - 1, d: +s[3] };
+    }
+    const dt = x instanceof Date ? x : typeof x === 'number' ? new Date(x) : null;
+    if (!dt || !Number.isFinite(dt.getTime())) return null;
+    return { y: dt.getFullYear(), m: dt.getMonth(), d: dt.getDate() };
+  }
+  // The ISO week of a date: {y (the week's year), w (1..53), dow (0 Monday..6 Sunday), mon (UTC ms of that Monday)}.
+  function wkIso(x) {
+    const p = wkDate(x);
+    if (!p) return null;
+    const t = Date.UTC(p.y, p.m, p.d), dow = (new Date(t).getUTCDay() + 6) % 7;
+    const thu = t + (3 - dow) * WK.DAY, y = new Date(thu).getUTCFullYear();
+    const w = 1 + Math.floor((thu - Date.UTC(y, 0, 1)) / (7 * WK.DAY));
+    return { y, w, dow, mon: t - dow * WK.DAY };
+  }
+  const wkPad = (n) => (n < 10 ? '0' : '') + n;
+  function wkKey(x) { const i = wkIso(x); return i ? i.y + '-W' + wkPad(i.w) : ''; }
+  // 'YYYY-Www' -> {y, w, mon (UTC ms of its Monday), idx (weeks since 1970-01-05)} or null.
+  function wkParse(key) {
+    const s = /^(\d{4})-W(\d{2})$/.exec(String(key || ''));
+    if (!s) return null;
+    const y = +s[1], w = +s[2];
+    const jan4 = Date.UTC(y, 0, 4), dow = (new Date(jan4).getUTCDay() + 6) % 7, mon = jan4 - dow * WK.DAY + (w - 1) * 7 * WK.DAY;
+    if (w < 1 || w > 53 || wkKey(new Date(mon + 3 * WK.DAY).toISOString().slice(0, 10)) !== key) return null;
+    return { y, w, mon, idx: Math.round((mon - WK.EPOCH) / (7 * WK.DAY)) };
+  }
+  function wkSeed(key) { return loreHash('clawspire-weekly:' + key) || 1; }
+  // Milliseconds from x until the week ends (the next Monday, local midnight). A plain date counts from its midnight.
+  function wkLeft(x) {
+    const p = wkDate(x), i = wkIso(x);
+    if (!p || !i) return 0;
+    const now = typeof x === 'string' ? new Date(p.y, p.m, p.d).getTime() : (x instanceof Date ? x.getTime() : +x);
+    return Math.max(0, new Date(p.y, p.m, p.d + 7 - i.dow).getTime() - now);
+  }
+  // The theme of week idx: a seeded shuffle of every theme per cycle, so no theme comes twice in a row.
+  function wkCycle(c) {
+    const n = WK.THEMES.length, perm = [];
+    for (let i = 0; i < n; i++) perm.push(i);
+    let x = loreHash('clawspire-weekly:cycle:' + c) || 1;
+    for (let i = n - 1; i > 0; i--) { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; const j = x % (i + 1); const t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
+    return perm;
+  }
+  function wkThemeAt(idx) {
+    const n = WK.THEMES.length, c = Math.floor(idx / n), k = ((idx % n) + n) % n;
+    let perm = wkCycle(c);
+    if (k <= 1) {
+      // across a cycle's seam the first theme must differ from the last one of the cycle before
+      const prevLast = wkCycle(c - 1)[n - 1];
+      if (perm[0] === prevLast) perm = [perm[1], perm[0]].concat(perm.slice(2));
+    }
+    return WK.THEMES[perm[k]];
+  }
+  // The week's challenge: {key, seed, y, w, theme, name, icon, col, blurb, muts, char, claw, mult, targets}.
+  function wkDef(key) {
+    const P = wkParse(key);
+    if (!P) return null;
+    const seed = wkSeed(key), T = wkThemeAt(P.idx);
+    let x = wkSeed(key + ':mut');
+    const r = () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; };
+    const muts = MUTATORS[T.lead] ? [T.lead] : [];
+    const want = seed % 3 === 0 ? 3 : 2;
+    while (muts.length < want) { const id = mutPick(r, muts); if (!id) break; muts.push(id); }
+    const chars = Object.keys(CHARACTERS), cl = (T.claws || Object.keys(CLAWS)).filter((id) => CLAWS[id]);
+    const mult = mutMult(muts), targets = {};
+    for (const m of WK.MEDALS) targets[m] = Math.max(50, Math.round((WK.BASE[m] * mult) / 50) * 50);
+    return {
+      key, seed, y: P.y, w: P.w, theme: T.id, name: T.name, icon: T.icon, col: T.col, blurb: T.blurb, muts,
+      char: chars.length ? chars[wkSeed(key + ':char') % chars.length] : 'knight', claw: cl.length ? cl[wkSeed(key + ':claw') % cl.length] : 'classic', mult, targets,
+    };
+  }
+  // The best medal a score earns against the targets ('' for none).
+  function wkMedal(score, targets) {
+    let out = '';
+    for (const m of WK.MEDALS) if (targets && +score >= +targets[m]) out = m;
+    return out;
+  }
+  const wkRank = (m) => WK.MEDALS.indexOf(m);
+  // meta.wk repaired: {best: {key: score}, medal: {key: medal}, runs}; the newest WK.KEEP weeks.
+  function wkFix(o) {
+    const src = loreObj(o) || {}, bs = loreObj(src.best) || {}, ms = loreObj(src.medal) || {};
+    const okKey = (k) => /^\d{4}-W\d{2}$/.test(k);
+    const keys = new Set();
+    for (const k in bs) if (okKey(k) && Number.isFinite(+bs[k]) && +bs[k] >= 0) keys.add(k);
+    for (const k in ms) if (okKey(k) && wkRank(ms[k]) >= 0) keys.add(k);
+    const keep = [...keys].sort().reverse().slice(0, WK.KEEP);
+    const best = {}, medal = {};
+    for (const k of keep) { if (k in bs && Number.isFinite(+bs[k]) && +bs[k] >= 0) best[k] = Math.floor(+bs[k]); if (wkRank(ms[k]) >= 0) medal[k] = ms[k]; }
+    return { best, medal, runs: loreN(src.runs) };
+  }
+  // The medal cabinet: every week on record, newest first, and how many of each medal.
+  function wkCabinet(wk) {
+    const W = wkFix(wk), keys = new Set(Object.keys(W.best).concat(Object.keys(W.medal)));
+    const list = [...keys].sort().reverse().map((key) => ({ key, best: W.best[key] | 0, medal: W.medal[key] || '' }));
+    const counts = {};
+    for (const m of WK.MEDALS) counts[m] = list.filter((x) => x.medal === m).length;
+    return { list, counts, weeks: list.length };
+  }
+  // Weeks with at least medal `min` (a platinum week counts as gold too).
+  function wkMedalCount(m, min) {
+    const W = m && loreObj(m.wk), md = (W && loreObj(W.medal)) || {}, r0 = Math.max(0, wkRank(min));
+    let n = 0;
+    for (const k in md) if (wkRank(md[k]) >= r0) n++;
+    return n;
+  }
+  for (const a of [
+    A_('podium', 'Podium Finish', '\u{1F3C5}', '#ffc94d', 'Earn a gold medal in a weekly challenge.', (c) => wkMedalCount(c.meta, 'gold') >= 1),
+    A_('lorekeeper', 'Lorekeeper', '\u{1F4DC}', '#e9dcc4', 'Unlock 25 pages of the Codex.', (c) => loreCount(c.meta) >= 25, { goal: 25, val: (c) => loreCount(c.meta) }),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  // ================================================================ /LORE
+
   return {
+    // lore and the weekly challenge (DESIGN.md "Lore and the weekly challenge (round 9)")
+    LORE_CH, LORE_RULES, LORE_ART, LORE_MARKS, LORE_SNIPS, LORE_ACTS, loreBook, loreVal, loreOk, loreCheck, loreChOpen, loreHint, loreFix, loreCount, loreProgress,
+    loreSnippet, loreInitials, loreBoard, loreIntro,
+    WK, wkDate, wkIso, wkKey, wkParse, wkSeed, wkLeft, wkDef, wkMedal, wkRank, wkFix, wkCabinet, wkMedalCount,
+    // enemy families (DESIGN.md "Enemy families (round 9)")
+    FAM, FAM_IDS, FAM_KINDS, FAM_ENEMIES, famOf, famsIn,
     // Mama Mech and two new claws (DESIGN.md "Mama Mech and two new claws (round 8)")
     CR8,
     // run history and the death recap (DESIGN.md "Run history, the death recap and photo mode (round 8)")

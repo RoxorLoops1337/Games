@@ -1631,6 +1631,56 @@ const MAP = (() => {
   }
   // ================================================================ /SECRET
 
+  // ================================================================ LORE (round 9)
+  /* Decorative landmarks (DESIGN.md "Lore and the weekly challenge (round 9)"):
+     a broken jukebox, a pile of lost tickets and an old high score board on
+     empty land, one of each per map. Only the game reads them: M.lore =
+     [{k, q, r}], placed on their own rng drawn from M.seed after everything
+     else, so the terrain, the content, the road, the cabinets, the monsters
+     and the keys are untouched and no tile changes type. A landmark stands a
+     hex or three off the road where it can be seen, never on the start, the
+     boss, a golden key or a monster's hex, LORE_GAP apart (small maps relax
+     the rules in steps). The Back Room has none. */
+  const LORE_KINDS = ['jukebox', 'tickets', 'hiscore'];
+  const LORE_GAP = 4;
+  function lorePlace(M) {
+    if (!M || !M.tiles || M.room || !M.start || !M.boss) return [];
+    const rng = U.rng((((M.seed >>> 0) ^ 0x10ae5a1d) >>> 0) || 1);
+    const T = M.tiles, road = M.road || [], sec = M.sec || {}, roam = Array.isArray(M.roam) ? M.roam : [];
+    const free = [];
+    for (const k in T) {
+      const t = T[k];
+      if (t.type !== 'empty' || t.terrain !== 'land' || !isLand(t) || t.road) continue;
+      if (hexDist(t.q, t.r, M.start.q, M.start.r) < 2 || hexDist(t.q, t.r, M.boss.q, M.boss.r) < 2) continue;
+      if (sec.q === t.q && sec.r === t.r) continue;
+      if (roam.some((m) => m && m.q === t.q && m.r === t.r)) continue;
+      let d = Infinity;
+      for (const s of road) { const x = hexDist(t.q, t.r, s[0], s[1]); if (x < d) d = x; }
+      free.push({ t, d: road.length ? d : 2 });
+    }
+    const out = [];
+    // [nearest to the road, farthest, gap to the others]
+    const passes = [[1, 3, LORE_GAP], [1, 5, 3], [1, 99, 2], [0, 99, 1]];
+    for (const kind of rng.shuffle(LORE_KINDS.slice())) {
+      let pick = null;
+      for (const [d0, d1, gap] of passes) {
+        const cand = free.filter((f) => f.d >= d0 && f.d <= d1 && out.every((o) => hexDist(o.q, o.r, f.t.q, f.t.r) >= gap));
+        if (cand.length) { pick = rng.pick(cand).t; break; }
+      }
+      if (!pick) break;
+      out.push({ k: kind, q: pick.q, r: pick.r });
+    }
+    // listed by kind, so a save and a fresh placement read the same
+    return out.sort((a, b) => LORE_KINDS.indexOf(a.k) - LORE_KINDS.indexOf(b.k));
+  }
+  // The landmark on a hex, or null (M.lore, as the game placed it).
+  function loreAt(M, q, r) {
+    const L = M && Array.isArray(M.lore) ? M.lore : [];
+    for (const x of L) if (x && x.q === q && x.r === r) return x;
+    return null;
+  }
+  // ================================================================ /LORE
+
   // Charted hexes: lit tiles that are not sea (lit sea is seen, not charted).
   function countRevealed(M) {
     let n = 0;
@@ -1840,5 +1890,7 @@ const MAP = (() => {
     ARC_R5, PET_TILE, placeR5,
     // SECRET (round 6): the golden keys and the Back Room
     SEC_BIOME, SEC_ROOM, secKeys, secKeyAt, secRoom,
+    // LORE (round 9): the decorative landmarks (a jukebox, lost tickets, the old high score board)
+    LORE_KINDS, LORE_GAP, lorePlace, loreAt,
   };
 })();
