@@ -1471,4 +1471,156 @@ t.test('bestiary: the new enemies, their acts and encounters', () => {
   for (const id of ['tickler', 'jelly', 'magbat']) t.ok(ENEMIES[id].moves.find(m => m.k === KIND[id]).v === 1, `${id}: its trick lasts one turn`);
 });
 
+// VAULT (round 5): the Prize Vault's cosmetics, prices and the Vault Capsule.
+t.test('vault: the cosmetics table', () => {
+  const { VAULT, VAULT_CATS, VAULT_DEFAULT, COSMETICS, COSMETIC_IDS } = DATA;
+  t.ok(VAULT && COSMETICS && Array.isArray(COSMETIC_IDS), 'DATA.VAULT, COSMETICS, COSMETIC_IDS');
+  t.eq(VAULT_CATS.map(c => c.id).join(','), 'skin,paint,marquee,outfit,trail', 'five shelves in order');
+  const per = {};
+  for (const id of COSMETIC_IDS) {
+    const c = COSMETICS[id], W = 'cosmetic ' + id;
+    per[c.cat] = (per[c.cat] || 0) + 1;
+    t.eq(c.id, id, W + ': id matches');
+    t.ok(VAULT_CATS.some(k => k.id === c.cat), W + ': a known category');
+    t.ok(['c', 'u', 'r', 'l'].includes(c.rarity), W + ': a rarity');
+    t.ok(typeof c.name === 'string' && c.name.length >= 3 && c.name.length <= 20, W + ': a name that fits a card');
+    t.ok(typeof c.text === 'string' && c.text.length >= 12 && c.text.length <= 80, W + ': one line of copy');
+    t.ok(c.look && typeof c.look === 'object', W + ': look fields for the renderer');
+    t.ok(JSON.stringify(c).indexOf(String.fromCharCode(0x2014)) < 0, W + ': no em dashes');
+    if (c.ach) t.ok(!!DATA.ACHIEVEMENTS[c.ach], W + ': its sticker exists');
+  }
+  t.ok(per.skin >= 8 && per.skin <= 10, `8 to 10 cabinet skins (${per.skin})`);
+  t.ok(per.paint >= 8 && per.paint <= 10, `8 to 10 claw paints (${per.paint})`);
+  t.ok(per.marquee >= 5 && per.trail >= 5, 'marquees and trails');
+  for (const ch of CHARS) t.eq(DATA.vaultList('outfit', ch).length, 2, `two outfits for ${ch}`);
+  for (const cat of ['skin', 'paint', 'marquee', 'trail']) {
+    const d = COSMETICS[VAULT_DEFAULT[cat]];
+    t.ok(d && d.cat === cat && d.free && DATA.vaultPrice(d.id) === 0 && DATA.vaultHow(d.id) === 'own', `the default ${cat} is owned, free and never sold`);
+  }
+  for (const cat of ['skin', 'paint', 'marquee', 'trail']) t.ok(DATA.vaultList(cat).some(id => COSMETICS[id].rarity === 'l'), `a legendary (rainbow) ${cat}`);
+  const skins = DATA.vaultList('skin').map(id => COSMETICS[id].look);
+  t.ok(new Set(skins.map(l => l.frame + l.panel + l.pp)).size === skins.length, 'every skin has its own frame and panel');
+  t.ok(COSMETICS.skin_gold && COSMETICS.skin_gold.ach === 'mega', 'the Gold Jackpot cabinet comes from the Mega Jackpot sticker');
+  t.eq(DATA.vaultForSticker('mega').join(','), 'skin_gold', 'vaultForSticker(mega)');
+  t.eq(DATA.vaultForSticker('first_prize').length, 0, 'most stickers carry no prize');
+});
+t.test('vault: prices and how each prize is won', () => {
+  const { VAULT, COSMETICS } = DATA;
+  for (const id of DATA.COSMETIC_IDS) {
+    const c = COSMETICS[id], how = DATA.vaultHow(id), p = DATA.vaultPrice(id);
+    if (how === 'buy') t.eq(p, VAULT.PRICE[c.rarity], id + ': priced by rarity');
+    else t.eq(p, 0, id + ': not for sale (' + how + ')');
+    if (c.rarity === 'l' && !c.ach) t.eq(how, 'capsule', id + ': a legendary only comes from a capsule');
+  }
+  t.ok(VAULT.PRICE.c < VAULT.PRICE.u && VAULT.PRICE.u < VAULT.PRICE.r && VAULT.PRICE.r < VAULT.PRICE.l, 'rarer costs more');
+  t.ok(VAULT.CAP_PRICE > VAULT.PRICE.c && VAULT.CAP_PRICE < VAULT.PRICE.u, 'a capsule costs between a common and an uncommon');
+  t.ok(VAULT.DUPE.c < VAULT.CAP_PRICE && VAULT.DUPE.l > VAULT.CAP_PRICE, 'a dupe refunds less than a capsule, a legendary dupe more');
+  t.eq(VAULT.SHARE, 1, 'every ticket won banks in the vault');
+  const pool = DATA.vaultPool();
+  t.ok(pool.length >= 30 && pool.every(id => !COSMETICS[id].free && !COSMETICS[id].ach), 'the capsule pool: no defaults, no sticker prizes');
+});
+t.test('vault: the Vault Capsule odds, dupes and the pity', () => {
+  const { VAULT, COSMETICS } = DATA;
+  // odds by tier, with nothing owned (a fresh profile)
+  const cnt = { c: 0, u: 0, r: 0, l: 0 }, N = 20000, rng = U.rng(4242);
+  let bad = 0;
+  for (let i = 0; i < N; i++) { const r = DATA.vaultRoll(rng, {}, 0); cnt[r.tier]++; if (!(r.tier === COSMETICS[r.id].rarity && !r.dupe && r.tix === 0)) bad++; }
+  t.eq(bad, 0, 'every roll is a real prize of its tier, never a dupe on a fresh profile');
+  const tot = Object.values(VAULT.CAP_W).reduce((s, v) => s + v, 0);
+  for (const k of ['c', 'u', 'r', 'l']) t.near(cnt[k] / N, VAULT.CAP_W[k] / tot, 0.012, `tier ${k} lands about ${Math.round(VAULT.CAP_W[k] * 100 / tot)}% of the time`);
+  // deterministic by the rng
+  const a = DATA.vaultRoll(U.rng(9), {}, 3), b = DATA.vaultRoll(U.rng(9), {}, 3);
+  t.eq(JSON.stringify(a), JSON.stringify(b), 'same rng, same capsule');
+  // the reveal climbs to the tier
+  const T = ['c', 'u', 'r', 'l'];
+  for (let i = 0; i < 300; i++) {
+    const r = DATA.vaultRoll(rng, {}, 0);
+    const ok = T.indexOf(r.tier0) <= T.indexOf(r.tier) && (r.ups.length ? r.ups[r.ups.length - 1] === r.tier : r.tier0 === r.tier) && r.ups.every((x, j) => T.indexOf(x) === T.indexOf(r.tier0) + j + 1);
+    if (!ok) { t.ok(false, 'tier0 and ups climb to the tier: ' + JSON.stringify(r)); break; }
+  }
+  // own everything: every roll is a dupe that pays tickets
+  const all = {};
+  for (const id of DATA.vaultPool()) all[id] = 1;
+  let dupes = 0, pay = 0;
+  for (let i = 0; i < 400; i++) { const r = DATA.vaultRoll(rng, all, 0); if (r.dupe) { dupes++; pay += r.tix === VAULT.DUPE[r.tier] ? 1 : 0; } }
+  t.eq(dupes, 400, 'with everything owned, every capsule is a dupe');
+  t.eq(pay, 400, 'a dupe pays DUPE[tier] tickets');
+  // fresh prizes come first most of the time
+  const half = {};
+  DATA.vaultPool('c').slice(0, 3).forEach(id => { half[id] = 1; });
+  let fresh = 0, commons = 0;
+  for (let i = 0; i < 2000; i++) { const r = DATA.vaultRoll(rng, half, 0); if (r.tier === 'c') { commons++; if (!half[r.id]) fresh++; } }
+  t.ok(fresh / commons > 0.7, `unowned prizes are preferred (${Math.round(fresh * 100 / commons)}% fresh)`);
+  // the pity: PITY - 1 capsules without a legendary, then one is
+  const p = DATA.vaultRoll(U.rng(1), {}, VAULT.PITY - 1);
+  t.ok(p.tier === 'l' && p.lucky && p.pity === 0, 'the pity capsule is a legendary and resets the count');
+  const q = DATA.vaultRoll(U.rng(1), {}, 2);
+  t.ok(q.pity === (q.tier === 'l' ? 0 : 3), 'the count climbs by one below a legendary');
+  const allL = {};
+  DATA.vaultPool('l').forEach(id => { allL[id] = 1; });
+  t.ok(!DATA.vaultRoll(U.rng(1), allL, VAULT.PITY + 5).lucky, 'no pity once every legendary is owned');
+});
+
+// ---------------------------------------------------------------- PETS (round 5)
+t.test('pets: the table, levels, the shop offer, repairs and card lines', () => {
+  const { PETS, PET_IDS, PET_XP, PET_MAX, PET_GAIN, PET_SHOP } = DATA;
+  t.ok(PETS && Array.isArray(PET_IDS), 'DATA.PETS and PET_IDS exist');
+  t.eq(PET_IDS.length, 8, 'eight pets');
+  t.eq(JSON.stringify(PET_IDS.slice().sort()), JSON.stringify(Object.keys(PETS).sort()), 'PET_IDS lists every pet');
+  const acts = new Set();
+  for (const id of PET_IDS) {
+    const p = PETS[id], L = 'pet ' + id;
+    t.eq(p.id, id, L + ': id');
+    t.ok(typeof p.name === 'string' && p.name.length >= 3 && p.name.length <= 16, L + ': name');
+    t.ok(['turn', 'lift', 'grab'].includes(p.when), L + ': when');
+    t.ok(typeof p.act === 'string' && !acts.has(p.act), L + ': its own action (' + p.act + ')');
+    acts.add(p.act);
+    t.ok(typeof p.verb === 'string' && p.verb === p.verb.toUpperCase(), L + ': verb');
+    t.ok(Array.isArray(p.names) && p.names.length >= 3 && p.names.every(n => typeof n === 'string' && n.length <= 12), L + ': names');
+    t.ok(Array.isArray(p.quips) && p.quips.length >= 2, L + ': quips');
+    t.ok(/^#[0-9a-f]{6}$/i.test(p.col) && /^#[0-9a-f]{6}$/i.test(p.col2), L + ': colours');
+    t.ok(typeof p.text === 'string' && p.text.length > 20 && p.text.length < 110, L + ': text');
+    for (const s of [p.name, p.text, ...p.names, ...p.quips]) t.ok(!s.includes(String.fromCharCode(0x2014)) && !/\bink\b/i.test(s), L + ': no em dash, no ink: ' + s);
+  }
+  t.eq(PET_XP.length, PET_MAX, 'an xp step per level');
+  const lv = [[0, 1], [11, 1], [12, 2], [29, 2], [30, 3], [59, 3], [60, 4], [99, 4], [100, 5], [9999, 5], [-5, 1], [NaN, 1]];
+  for (const [xp, want] of lv) t.eq(DATA.petLevel(xp), want, `petLevel(${xp})`);
+  t.eq(DATA.petNext(100), null, 'no next level at the top');
+  const nx = DATA.petNext(20);
+  t.ok(nx.need === 10 && nx.into === 8 && nx.span === 18, 'petNext: need, into, span');
+  t.eq(DATA.petPow(1), 1, 'Lv 1 power x1');
+  t.ok(Math.abs(DATA.petPow(5) - 1.8) < 1e-9, 'Lv 5 power x1.8');
+  t.ok(DATA.petUses(1) === 1 && DATA.petUses(2) === 1 && DATA.petUses(3) === 2 && DATA.petUses(5) === 2, 'one use a turn, two from Lv 3');
+  t.ok(DATA.petEgg(1).need === 3 && DATA.petEgg(3).need === 2 && DATA.petEgg(5).gold > DATA.petEgg(1).gold, 'the egg: a jackpot at first, a double from Lv 3, richer with levels');
+  t.ok(DATA.petGlow(5) > DATA.petGlow(1), 'the spotlight pays more with levels');
+  const L = DATA.petLook(1), L4 = DATA.petLook(4), L5 = DATA.petLook(5);
+  t.ok(!L.scarf && !L.crown && DATA.petLook(2).scarf && L4.crown && !L4.aura && L5.aura, 'the looks: scarf Lv 2, crown Lv 4, aura Lv 5');
+  t.ok(PET_GAIN.item >= 1 && PET_GAIN.boss > PET_GAIN.elite && PET_GAIN.elite > PET_GAIN.fight && PET_GAIN.treat > 0, 'xp gains');
+  t.ok(PET_SHOP.offer === 3 && PET_SHOP.treat > 0 && PET_SHOP.swap > 0 && PET_SHOP.treats >= 1, 'the shop dials');
+  // the offer: three different pets, never the one you have, the same for the same seed
+  for (let s = 1; s <= 60; s++) {
+    const have = PET_IDS[s % 8];
+    const o = DATA.petOffer(U.rng(s), have, 3), o2 = DATA.petOffer(U.rng(s), have, 3);
+    t.ok(o.length === 3 && new Set(o).size === 3 && !o.includes(have) && o.every(id => PETS[id]), `offer ${s}: three new pets`);
+    t.eq(JSON.stringify(o), JSON.stringify(o2), `offer ${s}: deterministic`);
+  }
+  const seen = new Set(); for (let s = 1; s <= 60; s++) DATA.petOffer(U.rng(s), null, 3).forEach(id => seen.add(id));
+  t.eq(seen.size, 8, 'every pet shows up in some shop');
+  // names, a new pet, repairs
+  for (const id of PET_IDS) t.ok(PETS[id].names.includes(DATA.petName(id, 12345)), id + ': a name from its list');
+  t.eq(DATA.petName('hamster', 7), DATA.petName('hamster', 7), 'names are stable by seed');
+  const p = DATA.petNew('cat', 99);
+  t.ok(p.id === 'cat' && p.xp === 0 && p.lv === 1 && PETS.cat.names.includes(p.name), 'petNew');
+  t.eq(DATA.petNew('dragon', 1), null, 'no unknown pets');
+  for (const junk of [null, 5, 'cat', {}, { id: 'unicorn' }, []]) t.eq(DATA.petFix(junk), null, 'petFix drops ' + JSON.stringify(junk));
+  const fx = DATA.petFix({ id: 'goose', xp: '65', lv: 1, name: '' });
+  t.ok(fx.xp === 65 && fx.lv === 4 && PETS.goose.names.includes(fx.name) && fx.fed === 0, 'petFix repairs the level, the name, the counters');
+  t.eq(DATA.petFix({ id: 'mouse', xp: -4 }).xp, 0, 'petFix: no negative xp');
+  // the card line carries the level's numbers
+  t.ok(/9 gold, 2 tickets/.test(DATA.petText('goose', 3)) && /Twice a turn/.test(DATA.petText('goose', 3)), 'the goose card at Lv 3');
+  t.ok(DATA.petText('firefly', 1).includes(DATA.petGlow(1) + ' bonus gold'), 'the firefly card names its bonus');
+  t.ok(!/Twice/.test(DATA.petText('hamster', 1)), 'one use at Lv 1');
+  t.ok(!SRC.slice(SRC.indexOf('PETS (companion pets'), SRC.indexOf('/PETS')).includes('Math.random'), 'no Math.random in the pets block');
+});
+
 t.done();

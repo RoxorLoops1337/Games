@@ -49,7 +49,7 @@ function inkTo(M, t) {
   return Infinity;
 }
 const SPECIAL = ['shop', 'rest', 'forge', 'elite', 'treasure', 'tower'];
-const LANDMARK = ['shop', 'rest', 'forge', 'elite', 'treasure', 'boss', 'tower', 'plinko', 'wheel', 'slots'];   // the arcade cabinets are landmarks too
+const LANDMARK = ['shop', 'rest', 'forge', 'elite', 'treasure', 'boss', 'tower', 'plinko', 'wheel', 'slots', 'moles', 'skee', 'petshop'];   // the arcade cabinets (and round 5's pet shop) are landmarks too
 const inB = (M, q, r) => r >= 0 && r < M.rows && colOf(q, r) >= 0 && colOf(q, r) < M.cols;
 const snapshot = (M) => JSON.stringify(M);
 const revealedSet = (M) => new Set(tilesOf(M).filter(t => t.revealed).map(t => MAP.key(t.q, t.r)));
@@ -1408,5 +1408,70 @@ if (fs.existsSync(dataPath)) {
     h.eq(seen.size, 18, 'eighteen loops, eighteen maps');
   });
 }
+
+// ---------------------------------------------------------------- PETS (round 5): whack-a-mole, skee-ball, the pet shop
+const R5 = ['moles', 'skee', 'petshop'];
+h.test('round 5 tiles: one whack-a-mole, one skee-ball, one pet shop per map, by the cabinet rules', () => {
+  h.ok(R5.every(k => MAP.TYPES.includes(k)), 'the new tile types are known');
+  h.ok(MAP.ARC_R5 && MAP.ARC_R5.includes('moles') && MAP.ARC_R5.includes('skee') && MAP.PET_TILE === 'petshop', 'MAP.ARC_R5 and MAP.PET_TILE');
+  h.ok(MAP.isArcade({ type: 'moles' }) && MAP.isArcade({ type: 'skee' }) && !MAP.isArcade({ type: 'petshop' }) && MAP.isArcade({ type: 'plinko' }), 'isArcade: the two new games (the pet shop is no game)');
+  let near = 0, far = 0, n = 0, offRoad = 0, total = 0;
+  for (let s = 1; s <= 60; s++) {
+    const act = 1 + (s % 3), M = world(s, { act });
+    const roadSet = new Set(M.road.map(([q, r]) => MAP.key(q, r)));
+    const roam = new Set((M.roam || []).map(m => MAP.key(m.q, m.r)));
+    const cabs = tilesOf(M).filter(t => MAP.isArcade(t) || t.type === 'petshop');
+    for (const k of R5) {
+      const list = tilesOf(M).filter(t => t.type === k);
+      const L = `world ${s} ${k}`;
+      h.eq(list.length, 1, L + ': exactly one');
+      const t = list[0];
+      if (!t) continue;
+      total++;
+      h.ok(isLand(t) && !t.road && !roadSet.has(MAP.key(t.q, t.r)), L + ' on land, off the road');
+      if (Math.min(...M.road.map(([q, r]) => hexDist(t, { q, r }))) >= MAP.ARC_ROAD_GAP) offRoad++;
+      h.ok(t.known && MAP.isLandmark(t), L + ' is a landmark');
+      h.ok(!roam.has(MAP.key(t.q, t.r)), L + ' never under a roaming monster');
+      h.ok(hexDist(t, M.start) >= 3 && hexDist(t, M.boss) >= 2, L + ' away from the start and the boss');
+      h.ok(!MAP.neighbors(M, t.q, t.r).some(([q, r]) => M.tiles[MAP.key(q, r)].type === 'tower'), L + ' not on a tower doorstep');
+      h.ok(MAP.pathExists(M, M.start, t, { any: true }), L + ' reachable');
+      h.ok(Number.isFinite(t.content.seed) && Number.isFinite(t.content.diff) && t.content.game === k, L + ' content: seed, diff, game');
+      if (k !== 'petshop') h.ok(t.content.tokens >= 1 && t.content.tokens <= 2, L + ' plays in range');
+      for (const o of cabs) if (o !== t) h.ok(hexDist(o, t) >= 2, L + ' spread from the other cabinets');
+    }
+    // the pet shop leans toward the start
+    const ps = tilesOf(M).find(t => t.type === 'petshop'), mo = tilesOf(M).find(t => t.type === 'moles'), sk = tilesOf(M).find(t => t.type === 'skee');
+    if (ps && mo && sk) { n++; if (hexDist(ps, M.start) <= Math.max(hexDist(mo, M.start), hexDist(sk, M.start))) near++; }
+    // the round 3 cabinets and the monsters keep their own rules
+    const old = tilesOf(M).filter(t => ['plinko', 'wheel', 'slots'].includes(t.type));
+    h.ok(old.length >= 2 && old.length <= 3, `world ${s}: the round 3 cabinets are still 2-3`);
+    for (const m of M.roam) h.eq(M.tiles[MAP.key(m.q, m.r)].type, 'empty', `world ${s} ${m.id}: its hex is still empty`);
+    far++;
+  }
+  h.ok(offRoad / total > 0.9, `the new cabinets sit >= ${MAP.ARC_ROAD_GAP} off the road (${offRoad}/${total})`);
+  h.ok(near / n > 0.6, `the pet shop is nearer the start than a game most of the time (${near}/${n})`);
+  // deterministic, and small maps still get them (relaxed) on land off the road
+  const A = world(21), B = world(21);
+  h.eq(JSON.stringify(tilesOf(A).filter(t => R5.includes(t.type)).map(t => [t.q, t.r, t.type, t.content])), JSON.stringify(tilesOf(B).filter(t => R5.includes(t.type)).map(t => [t.q, t.r, t.type, t.content])), 'same seed, same round 5 tiles');
+  // (a 10 x 7 map has a handful of free hexes: what fits is placed, on land off the road, and nothing breaks)
+  for (let s = 1; s <= 30; s++) { const M = gen(s); const got = tilesOf(M).filter(t => R5.includes(t.type)); h.ok(got.every(t => isLand(t) && !t.road && t.known), `10x7 ${s}: on land off the road`); h.ok(new Set(got.map(t => t.type)).size === got.length, `10x7 ${s}: none twice`); }
+});
+h.test('round 5 tiles: save round trip, old saves, the arcade session carried', () => {
+  const M = world(5);
+  const ps = tilesOf(M).find(t => t.type === 'petshop'), mo = tilesOf(M).find(t => t.type === 'moles');
+  ps.content.pet = { offer: ['cat', 'goose', 'parrot'], names: ['A', 'B', 'C'], adopted: 'goose', treats: 2 };
+  mo.content.arc = { g: 'moles', tokens: 0, used: 1, res: [], pend: { score: 210 }, caps: [], mult: 1, rot: 0, live: null, best: 210 };
+  ps.done = true;
+  const D2 = MAP.deserialize(JSON.parse(JSON.stringify(MAP.serialize(M))));
+  const ps2 = D2.tiles[MAP.key(ps.q, ps.r)], mo2 = D2.tiles[MAP.key(mo.q, mo.r)];
+  h.ok(ps2.type === 'petshop' && ps2.known && ps2.done && ps2.content.pet.adopted === 'goose' && ps2.content.pet.treats === 2, 'the pet shop and its pens survive a save');
+  h.ok(mo2.type === 'moles' && mo2.content.arc.pend.score === 210 && mo2.content.arc.best === 210, 'a pending whack-a-mole score survives a save');
+  h.ok(MAP.isArcade(mo2) && MAP.isLandmark(ps2), 'still a cabinet, still a landmark');
+  // an old save: no round 5 tiles at all, loads as ever
+  const O = JSON.parse(JSON.stringify(MAP.serialize(world(6))));
+  for (const k in O.tiles) if (R5.includes(O.tiles[k].type)) { O.tiles[k].type = 'empty'; O.tiles[k].known = false; O.tiles[k].content = {}; }
+  const O2 = MAP.deserialize(O);
+  h.ok(O2 && !tilesOf(O2).some(t => R5.includes(t.type)) && tilesOf(O2).every(t => t.known === LANDMARK.includes(t.type)), 'an old save without them loads, landmarks intact');
+});
 
 h.done();

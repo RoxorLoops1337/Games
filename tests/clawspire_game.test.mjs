@@ -3370,6 +3370,76 @@ function feelBoot(meta, extra) {
 // Every tip but the listed ones counts as seen, so a test controls the queue.
 function feelOnly(Gt, ids) { Gt.meta.tips = {}; for (const d of Gt.feel.TIPS) if (ids.indexOf(d.id) < 0) Gt.meta.tips[d.id] = 1; }
 
+/* ------------------------------------------------- POLISH (round 5): the turn banner, the player hit number */
+h.test('polish: turn banners keep clear of the GRABS pill and the END TURN button', () => {
+  const T = boot();
+  const Gt = T.GAME, P = Gt.pol;
+  h.ok(P && typeof P.bannerBox === 'function', 'GAME.pol exposed');
+  const WORDS = ['ENEMY TURN', 'YOUR TURN', 'TURN 12', 'TURN OVER', 'FIGHT', 'ELITE', 'BOSS', 'AMBUSH!', 'JACKPOT', 'VICTORY', 'FINAL PHASE', 'THE CLAW COLLECTOR GETS SERIOUS'];
+  const CTRL_TOP = 830;   // the control bar (END TURN) starts here
+  for (let gw = 100; gw <= 340; gw += 20) {
+    for (const w of WORDS) {
+      const kind = w === 'VICTORY' ? 'victory' : 'turn';
+      const b = P.bannerBox(gw, w, kind);
+      h.ok(b.x1 <= b.grabsX0 - P.BAN.gap + 0.01, `banner right edge ${b.x1.toFixed(0)} left of the pill ${b.grabsX0.toFixed(0)} (grabs ${gw}px, "${w}")`);
+      h.ok(b.x0 >= 0 && b.x1 > b.x0 + 150, `a usable span (${b.x0}..${b.x1.toFixed(0)})`);
+      h.ok(b.size <= b.big && b.size >= 16, `font ${b.size.toFixed(1)} within 16..${b.big}`);
+      const need = w.length * b.size * P.BAN.k + 24;
+      h.ok(need <= b.x1 - b.x0 + 0.5 || b.size === 16, `"${w}" fits its span (${need.toFixed(0)} <= ${(b.x1 - b.x0).toFixed(0)})`);
+      h.ok(b.y1 < CTRL_TOP, 'the banner row ends above the END TURN bar');
+    }
+  }
+  // the estimate for a pill with n pips (headless has no layout) grows with the grabs
+  Gt.newRun('knight', 5101);
+  Gt.startFight(['rat'], 'normal');
+  settle(Gt, 6);
+  const w3 = P.grabsW();
+  Gt.fight.player.grabsMax = 7;
+  h.ok(P.grabsW() > w3, 'more grabs, a wider pill, a shorter banner span');
+  Gt.fight.player.grabsMax = 3;
+  // live: the announcer places the real banner in that span and keeps labels out of it
+  Gt.ann.banner('ENEMY TURN', 'enemy', 1.2);
+  stepFor(Gt, 0.1);
+  const bb = P.bannerBox0;
+  h.ok(bb && bb.x1 <= bb.grabsX0 - P.BAN.gap, 'the shown banner stops short of the pill');
+  const el = T._nodes.banner;
+  h.eq(el && el.style.right, (540 - bb.x1) + 'px', 'the banner element is pulled in from the right');
+  const zone = T.RENDER.fx.zones().find(z => z.id === 'ann');
+  h.ok(zone && zone.x1 === bb.x1 && zone.x0 === bb.x0, 'the label keep-out zone matches the banner');
+});
+
+h.test('polish: a hit on the player floats its number by the HP stat, never down into the bin', () => {
+  const T = boot();
+  const Gt = T.GAME, fx = T.RENDER.fx;
+  Gt.newRun('knight', 5102);
+  Gt.startFight(['rat'], 'normal');
+  settle(Gt, 6);
+  const nums = [];
+  const orig = fx.num;
+  fx.num = (x, y, str, col, o) => { const p = orig(x, y, str, col, o); if (col === '#ff5a4a') nums.push({ p, x0: x, y0: y }); return p; };
+  for (const amt of [7, 49, 12]) Gt.fs.queue.push({ ev: { t: 'dmg', who: 'p', amt, blocked: 0 }, beat: 0.01 });
+  let n = 0;
+  while (nums.length < 3 && n++ < 600) Gt.update(1 / 60);
+  h.eq(nums.length, 3, 'three player hit numbers popped');
+  const P = Gt.pol.PNUM;
+  for (const q of nums) {
+    h.ok(q.y0 >= 72 && q.y0 <= P.yMax, `spawned just under the top bar (${q.y0})`);
+    h.ok(Math.abs(q.x0 - 118) < 80, `beside the HP stat (${q.x0.toFixed(0)})`);
+  }
+  h.ok(new Set(nums.map(q => Math.round(q.x0))).size >= 2, 'consecutive hits fan out sideways');
+  // follow them for their whole life: never near the cabinet (y 380)
+  let maxY = 0, minY = 999, frames = 0;
+  while (nums.some(q => q.p.life > 0) && frames++ < 400) {
+    Gt.update(1 / 60);
+    for (const q of nums) if (q.p.life > 0) { maxY = Math.max(maxY, q.p.y); minY = Math.min(minY, q.p.y); }
+  }
+  h.ok(maxY < 220, `the numbers stay up by the HP stat (lowest ${maxY.toFixed(0)})`);
+  h.ok(minY > 60, `and clear of the top bar at their highest (${minY.toFixed(0)})`);
+  fx.num = orig;
+  // headless keeps no live relic canvases
+  h.eq(Gt.pol.liveRelics, 0, 'headless: no relic canvases to animate');
+});
+
 h.test('feel: tip cards queue, show one at a time and never twice', () => {
   const T = feelBoot();
   const Gt = T.GAME, Fe = Gt.feel;
@@ -4143,5 +4213,716 @@ h.test('endless: saves and profiles from before Endless load and play', () => {
     }
   });
 }
+
+// VAULT (round 5): the Prize Vault, its wallet, the shelves, the Vault Capsule, the trail and the share card.
+h.test('vault: a fresh profile, the title button, and every ticket won banks in the wallet', () => {
+  const T = boot();
+  const G = T.GAME, V = G.vault, DV = T.DATA.VAULT_DEFAULT;
+  h.eq(V.state.tix, 0, 'an empty wallet');
+  for (const cat of ['skin', 'paint', 'marquee', 'trail']) h.ok(V.state.owned[DV[cat]] && V.state.eq[cat] === DV[cat], `the default ${cat} is owned and on`);
+  G.showTitle();
+  h.ok(G.S.ui.buttons.some(b => b.label === 'Prize Vault'), 'the title has a Prize Vault button');
+  h.ok(/new run/i.test(G.S.ui.buttons[0].label), 'New run is still the first choice');
+  G.newRun('knight', 51);
+  G.loot.addTickets(12);
+  h.eq(G.run.tickets, 12, 'the run has its tickets');
+  h.eq(V.state.tix, 12, 'the vault banked every one');
+  G.loot.addTickets(-7);
+  h.eq(G.run.tickets, 5, 'spent in the run');
+  h.ok(V.state.tix === 12 && V.state.earned === 12, 'spending in the run never takes vault tickets back');
+  stepFor(G, 0.8);
+  h.eq(JSON.parse(T._store.clawspire_meta).vault.tix, 12, 'the wallet is saved a moment later');
+  // a real fight's payout banks exactly what the run won
+  const v0 = V.state.tix, t0 = G.run.tickets;
+  G.startFight(['rat'], 'normal');
+  settle(G, 6);
+  for (const e of G.fight.enemies) { e.hp = 0; e.alive = false; }
+  G.endFight('win');
+  if (G.screen === 'fight') G.tap(270, 600);
+  G.loot.finishPay();
+  h.eq(G.screen, 'reward', 'on the reward screen');
+  h.ok(G.run.tickets > t0, 'the fight paid tickets (' + (G.run.tickets - t0) + ')');
+  h.eq(V.state.tix - v0, G.run.tickets - t0, 'the vault banked exactly the payout');
+});
+h.test('vault: the screen, buying, equipping, the outfits, and old or broken profiles', () => {
+  const T = boot();
+  const G = T.GAME, V = G.vault, D = T.DATA, R = T.RENDER;
+  const save0 = T._store[G.RUN_KEY];
+  V.bank(300);
+  const ui = V.show('skin');
+  h.eq(G.screen, 'vault', 'the vault screen');
+  h.ok(G.S.ui.buttons.some(b => b.label === 'Candy Shop') && G.S.ui.buttons.some(b => b.label === 'Vault Capsule') && G.S.ui.buttons.some(b => b.label === 'Back'), 'shelf slots, the capsule and Back are choices');
+  h.eq(T._store[G.RUN_KEY], save0, 'opening the vault never touches the run save');
+  // every tab and every prize can be picked and drawn
+  const ctx = T._ctx;
+  let threw = null;
+  for (const c of D.VAULT_CATS) {
+    V.show(c.id);
+    for (const id of D.vaultList(c.id)) { try { V.select(id); G.update(1 / 60); G.draw(); } catch (e) { threw = threw || id + ': ' + e.stack; } }
+  }
+  h.ok(!threw, 'every prize previews and draws: ' + threw);
+  // buying
+  h.ok(!V.buy('skin_rainbow') && !V.state.owned.skin_rainbow, 'a legendary is not for sale');
+  h.ok(!V.buy('skin_gold') && !V.state.owned.skin_gold, 'a sticker prize is not for sale');
+  const price = D.vaultPrice('skin_space');
+  h.ok(V.buy('skin_space'), 'buy Deep Space');
+  h.ok(V.state.owned.skin_space && V.state.tix === 300 - price && V.state.spent === price, 'the price comes off the wallet');
+  h.eq(V.state.eq.skin, 'skin_space', 'a new prize goes on at once');
+  h.eq(R.vault.equipped.skin, 'skin_space', 'the renderer wears it');
+  h.ok(!V.buy('skin_space'), 'no buying it twice');
+  V.state.tix = 10;
+  h.ok(!V.buy('paint_gold') && !V.state.owned.paint_gold && V.state.tix === 10, 'short of tickets: refused, nothing spent');
+  // equipping
+  h.ok(!V.equip('paint_gold'), 'an unowned prize cannot be equipped');
+  h.ok(V.equip('skin_classic') && V.state.eq.skin === 'skin_classic' && R.vault.equipped.skin === 'skin_classic', 'equip an owned one');
+  V.state.tix = 500;
+  h.ok(V.buy('fit_alch_wizard'), 'buy an outfit');
+  h.eq(V.state.eq.outfit.alchemist, 'fit_alch_wizard', 'it goes on its crawler');
+  h.ok(!V.state.eq.outfit.knight, 'nobody else wears it');
+  h.ok(V.unequip('fit_alch_wizard') && !V.state.eq.outfit.alchemist, 'outfits come off');
+  V.equip('fit_alch_wizard');
+  V.equip('skin_space');
+  V.leave();
+  h.eq(G.screen, 'title', 'Back to the title');
+  // save and load: the equipped set survives and is applied at boot
+  stepFor(G, 0.6);
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  const V2 = T2.GAME.vault;
+  h.ok(V2.state.owned.skin_space && V2.state.eq.skin === 'skin_space' && V2.state.eq.outfit.alchemist === 'fit_alch_wizard', 'the vault loads back');
+  h.eq(T2.RENDER.vault.equipped.skin, 'skin_space', 'the renderer wears it from the first frame');
+  h.eq(T2.RENDER.vault.equipped.outfit.alchemist, 'fit_alch_wizard', 'and the outfit');
+  // an old profile (no vault), and junk
+  const old = JSON.parse(T._store.clawspire_meta);
+  delete old.vault;
+  const T3 = boot({ store: { clawspire_meta: JSON.stringify(old) } });
+  h.ok(T3.GAME.vault.state.tix === 0 && T3.GAME.vault.state.eq.skin === 'skin_classic', 'an old profile gets an empty vault and the old look');
+  old.vault = { tix: 'lots', owned: 7, eq: { skin: 'nope', paint: 'skin_space', outfit: { knight: 'fit_alch_wizard' } }, pend: { id: 'nope' }, news: 'x' };
+  const T4 = boot({ store: { clawspire_meta: JSON.stringify(old) } });
+  const V4 = T4.GAME.vault.state;
+  h.ok(V4.tix === 0 && V4.eq.skin === 'skin_classic' && V4.eq.paint === 'paint_chrome' && !V4.eq.outfit.knight && !V4.pend, 'junk is repaired: no bad ids, nothing worn that is not owned');
+  h.ok(T4.GAME.vault.show() && T4.GAME.screen === 'vault', 'and the vault still opens');
+});
+h.test('vault: the Vault Capsule, paid once, cracked, a dupe pays back, and a reload keeps the prize', () => {
+  const T = boot();
+  const G = T.GAME, V = G.vault, D = T.DATA;
+  V.bank(200);
+  V.show();
+  const price = D.VAULT.CAP_PRICE;
+  h.ok(V.capsule(), 'buy a capsule');
+  const p = V.state.pend;
+  h.ok(!!p && D.COSMETICS[p.id] && V.state.tix === 200 - price, 'paid and rolled at once (' + (p && p.id) + ')');
+  h.ok(V.cap && V.cap.phase === 'drop', 'the ritual starts');
+  // a reload before the burst: the same capsule, no second charge
+  stepFor(G, 0.6);
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  const G2 = T2.GAME, V2 = G2.vault;
+  h.eq(V2.state.pend && V2.state.pend.id, p.id, 'the paid capsule survives a reload');
+  h.eq(V2.state.tix, 200 - price, 'and nothing is charged again');
+  V2.show();
+  h.ok(V2.cap && V2.cap.p.id === p.id, 'the vault reopens it');
+  let n = 0;
+  while (V2.cap && V2.cap.phase !== 'done' && n++ < 40) { V2.tap(); stepFor(G2, 0.3); G2.draw(); }
+  h.eq(V2.cap && V2.cap.phase, 'done', 'taps crack it open');
+  h.ok(V2.state.owned[p.id] && !V2.state.pend && V2.state.caps === 1 && V2.state.news[p.id], 'the prize is paid once and marked NEW');
+  h.ok(G2.S.ui.buttons.some(b => b.label === 'Equip it'), 'Equip it is offered');
+  G2.choose(G2.S.ui.buttons.findIndex(b => b.label === 'Equip it'));
+  const d = D.COSMETICS[p.id];
+  h.ok(d.cat === 'outfit' ? V2.state.eq.outfit[d.char] === p.id : V2.state.eq[d.cat] === p.id, 'Equip it puts it on');
+  h.ok(!V2.cap && G2.screen === 'vault', 'back on the shelves');
+  // dupes: own the whole pool, every capsule pays tickets back
+  for (const id of D.vaultPool()) V2.state.owned[id] = 1;
+  V2.state.tix = 1000;
+  let spent = 0, back = 0;
+  for (let i = 0; i < 6; i++) {
+    const t0 = V2.state.tix;
+    V2.capsule();
+    spent += t0 - V2.state.tix;
+    const t1 = V2.state.tix;
+    V2.skip(); V2.skip();
+    h.ok(V2.cap && V2.cap.res && V2.cap.res.dupe && V2.cap.res.tix === D.VAULT.DUPE[V2.cap.res.tier], 'a dupe: ' + JSON.stringify(V2.cap && V2.cap.res));
+    back += V2.state.tix - t1;
+    V2.close();
+  }
+  h.eq(spent, 6 * price, 'six capsules paid');
+  h.ok(back > 0, 'dupes paid tickets back (' + back + ')');
+  // too poor: refused, nothing rolled
+  V2.state.tix = 5;
+  h.ok(!V2.capsule() && !V2.state.pend && V2.state.tix === 5, 'short of tickets: no capsule');
+  // the pity: a legendary after PITY - 1 capsules without one
+  const T3 = boot();
+  const V3 = T3.GAME.vault;
+  V3.bank(500); V3.state.pity = T3.DATA.VAULT.PITY - 1;
+  V3.show(); V3.capsule();
+  h.ok(V3.state.pend && V3.state.pend.tier === 'l' && V3.state.pend.lucky, 'the pity capsule holds a legendary');
+  V3.skip(); V3.skip();
+  h.eq(V3.state.pity, 0, 'and resets the count');
+});
+h.test('vault: stickers unlock their prizes, old stickers too', () => {
+  const T = boot();
+  const G = T.GAME, V = G.vault;
+  h.ok(!V.state.owned.skin_gold, 'no Gold Jackpot yet');
+  G.prog.achUnlock('mega');
+  h.ok(V.state.owned.skin_gold && V.state.news.skin_gold, 'the Mega Jackpot sticker unlocks the Gold Jackpot cabinet');
+  h.ok(V.equip('skin_gold'), 'and it can go on');
+  const meta = JSON.parse(T._store.clawspire_meta);
+  meta.ach.champion = { run: 3, at: 1 };
+  delete meta.vault;
+  const T2 = boot({ store: { clawspire_meta: JSON.stringify(meta) } });
+  h.ok(T2.GAME.vault.state.owned.mq_winner && T2.GAME.vault.state.owned.skin_gold, 'a profile that already had the stickers owns their prizes');
+});
+h.test('vault: every cosmetic in a real fight and on the map, the trail follows a walk', () => {
+  const T = boot();
+  const G = T.GAME, V = G.vault, D = T.DATA;
+  for (const id of D.COSMETIC_IDS) V.state.owned[id] = 1;
+  G.newRun('rogue', 61);
+  G.startFight(['rat'], 'normal');
+  settle(G, 6);
+  const skins = D.vaultList('skin'), paints = D.vaultList('paint'), mqs = D.vaultList('marquee');
+  let threw = null;
+  for (let i = 0; i < Math.max(skins.length, paints.length); i++) {
+    V.equip(skins[i % skins.length], true); V.equip(paints[i % paints.length], true); V.equip(mqs[i % mqs.length], true); V.equip('fit_rogue_pirate', true);
+    try { G.steer(100 + i * 30); stepFor(G, 0.2); G.draw(); } catch (e) { threw = threw || e.stack; }
+  }
+  h.ok(!threw, 'every skin, paint and marquee draws in a fight: ' + threw);
+  G.dropClaw();
+  h.ok(settle(G, 20), 'a real grab with a painted claw settles');
+  // the map: the trail follows the walk
+  G.toMap();
+  const M = G.run.map;
+  const road = M.road || [];
+  const i0 = road.findIndex(([q, r]) => q === M.pos.q && r === M.pos.r);
+  const path = road.slice(i0 + 1, i0 + 3);
+  for (const id of D.vaultList('trail')) {
+    V.equip(id, true);
+    try { G.draw(); } catch (e) { threw = threw || id + ' ' + e.stack; }
+  }
+  V.equip('trail_rainbow', true);
+  // a quiet stretch of road: nothing on it resolves, no monster prowls
+  for (const [q, r] of path) { const tl = M.tiles[q + ',' + r]; if (tl) { tl.type = 'empty'; tl.done = true; tl.content = {}; } }
+  M.roam = [];
+  if (path.length && G.screen === 'map') {
+    G.startWalk(path);
+    for (let k = 0; k < 20 && G.screen === 'map'; k++) { G.update(1 / 60); }
+    h.ok(V.trail && V.trail.pts.length > 0, 'walking leaves trail marks (' + (V.trail ? V.trail.pts.length : 0) + ')');
+    G.draw();
+    stepFor(G, 4);
+    h.ok(!V.trail.pts.length || G.screen !== 'map' || !!G.S.walk, 'the marks fade');
+  }
+  h.ok(!threw, 'every trail draws on the map: ' + threw);
+});
+h.test('vault: the share card renders headless, the Share button sits on both run ends', () => {
+  const T = boot();
+  const G = T.GAME, V = G.vault;
+  G.newRun('gambler', 71);
+  const run = G.run;
+  run.loot.bigHit = 42; run.loot.bestCombo = { name: 'Royal Flush', tier: 3 }; run.muts = ['glass'];
+  let card = null, threw = null;
+  try { card = V.shareCard(run, false); } catch (e) { threw = e.stack; }
+  h.ok(!threw && card && card.cv, 'the card renders on a stub canvas: ' + threw);
+  h.ok(card.st.url === 'https://games-71g.pages.dev/clawspire/' && card.st.bigHit === 42 && card.st.combo.name === 'Royal Flush' && card.st.char === 'gambler', 'the card carries the run');
+  h.ok(card.st.score > 0 && typeof card.st.boss === 'string', 'a score and the boss line');
+  h.eq(card.cv.width, 1080, '1080 wide'); h.eq(card.cv.height, 1350, '1350 tall');
+  let ok = false;
+  try { ok = V.share(run, false); } catch (e) { threw = e.stack; }
+  h.ok(ok && !threw, 'Share falls back to a download headless without throwing');
+  h.eq(V.state.shares, 1, 'shares are counted');
+  G.showGameOver();
+  h.eq(G.S.ui.buttons[0].label, 'Back to title', 'game over: Back to title is still the first choice');
+  h.ok(G.S.ui.buttons.some(b => b.label === 'Share run card'), 'game over: a Share run card button');
+  const T2 = boot();
+  const G2 = T2.GAME;
+  G2.newRun('knight', 72);
+  G2.showWin();
+  h.eq(G2.S.ui.buttons[0].label, 'Cash out', 'win: Cash out is still the first choice');
+  h.ok(G2.S.ui.buttons.some(b => b.label === 'Share run card'), 'win: a Share run card button');
+  const w = G2.vault.shareCard(G2.run, true);
+  h.ok(/Prize Master/.test(w.st.boss) && w.st.won, 'a win names the Prize Master');
+});
+
+// ---------------------------------------------------------------- PETS (round 5): companion pets, the pet shop, whack-a-mole, skee-ball
+const PET_META = JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } });
+function petBoot(store) { return boot({ store: Object.assign({ clawspire_meta: PET_META }, store || {}) }); }
+// A fight with this pet (xp sets its level), paused before its first move (0.9 s into the turn).
+function petFight(G, id, xp, seed, extra) {
+  G.pet.give(id, xp || 0);
+  for (const jid of extra || []) G.run.bin.push({ uid: 'x' + jid + G.run.bin.length, id: jid, plus: false });
+  G.startFight(['rat', 'slime'], 'normal', { seed: seed || 4242 });
+  stepFor(G, 0.5);
+  return G.pet.fs();
+}
+// Steps until the pet's trick has fired (a log entry with fx); the frame count, or -1.
+function petUntilFx(G, secs) {
+  const P = G.pet.fs(), n0 = P.log.filter(e => e.fx).length;
+  for (let i = 0; i < Math.round((secs || 4) / DT); i++) { G.update(DT); if (P.log.filter(e => e.fx).length > n0) return i; }
+  return -1;
+}
+const petBody = (G, uid) => G.fs.items.find(b => b.data.inst && b.data.inst.uid === uid) || null;
+
+h.test('pets: a pet sits on the frame, acts once a turn by itself, twice from Lv 3, and draws', () => {
+  const T = petBoot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 5151);
+  h.eq(G.run.pet || null, null, 'a new run has no pet');
+  for (const id of D.PET_IDS) {
+    const P = petFight(G, id, 0, 700);
+    h.ok(P && P.id === id && P.lv === 1, id + ': the fight has the pet at Lv 1');
+    h.ok(Math.abs(P.x - G.pet.K.perchX) < 1 && Math.abs(P.y - G.pet.K.perchY) < 1 && !P.act, id + ': on its perch');
+    h.ok(G.S.petRow, id + ': the player row makes room');
+    G.draw();
+    if (D.PETS[id].when === 'turn') {
+      const f = petUntilFx(G, 3);
+      h.ok(f >= 0, id + ': it acts on its own early in the turn');
+      h.eq(P.uses, 0, id + ': Lv 1: one use a turn');
+      stepFor(G, 3);
+      h.ok(!P.act && Math.abs(P.x - G.pet.K.perchX) < 1, id + ': and hops back to the perch');
+      h.eq(P.log.filter(e => e.fx).length, 1, id + ': once, not twice, with no grab');
+    }
+    for (let i = 0; i < 20; i++) { G.update(DT); G.draw(); }
+    G.endFight('win');
+    G.toMap();
+    G.draw();
+  }
+  // Lv 3: a second use after the first grab
+  const P = petFight(G, 'parrot', 40, 701);
+  h.eq(P.lv, 3, 'Lv 3 at 40 xp');
+  petUntilFx(G, 3);
+  h.eq(P.uses, 1, 'a use left after the first');
+  stepFor(G, 1.5);
+  G.steer(120); stepFor(G, 0.4);
+  h.ok(G.dropClaw(), 'a grab');
+  let t = 0;
+  while (t < 14 && P.log.filter(e => e.fx).length < 2) { G.update(DT); t += DT; }
+  h.eq(P.log.filter(e => e.fx).length, 2, 'the second use comes after the grab');
+  h.eq(P.uses, 0, 'and that was the last this turn');
+  // the next turn refills
+  let n = 0; while (n++ < 900 && !G.state().grabs) G.update(DT);
+  if (G.fight && G.fight.phase === 'player' && G.fight.turn === 1) { stepFor(G, 1); G.endTurn(); }
+  n = 0; while (n++ < 1200 && !(G.fight && G.fight.turn >= 2 && G.fight.phase === 'player' && !G.fs.enemyTurn)) G.update(DT);
+  stepFor(G, 0.2);
+  h.ok(P.turn === G.fight.turn && P.uses >= 1, 'a new turn, the uses are back');
+});
+
+h.test('pets: every trick moves the right thing', () => {
+  const T = petBoot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 5252);
+  // hamster: the farthest floor item goes toward the chute
+  let P = petFight(G, 'hamster', 0, 800);
+  petUntilFx(G, 3);
+  let b = petBody(G, P.log[P.log.length - 1].uid);
+  let x0 = b ? b.x : 0;
+  stepFor(G, 0.6);
+  h.ok(b && b.x > x0 + 8, `hamster: NUDGE moved it toward the chute (${x0 | 0} -> ${b ? b.x | 0 : '?'})`);
+  G.endFight('win'); G.toMap();
+  // parrot: the most buried item pops up
+  P = petFight(G, 'parrot', 0, 801);
+  petUntilFx(G, 3);
+  b = petBody(G, P.log[P.log.length - 1].uid);
+  let y0 = b ? b.y : 0, top = y0;
+  for (let i = 0; i < 30; i++) { G.update(DT); if (b) top = Math.min(top, b.y); }
+  h.ok(b && top < y0 - 20, `parrot: PECK popped it up (${y0 | 0} -> ${top | 0})`);
+  G.endFight('win'); G.toMap();
+  // cat: an item flies up and over toward the chute
+  P = petFight(G, 'cat', 0, 802);
+  petUntilFx(G, 3);
+  b = petBody(G, P.log[P.log.length - 1].uid);
+  x0 = b ? b.x : 0; y0 = b ? b.y : 0; top = y0;
+  let right = x0;
+  for (let i = 0; i < 50; i++) { G.update(DT); if (b && G.fs.items.indexOf(b) >= 0) { top = Math.min(top, b.y); right = Math.max(right, b.x); } else right = 9999; }
+  h.ok(top < y0 - 60 && right > x0 + 30, `cat: BAT threw it high toward the chute (up ${(y0 - top) | 0}, right ${(right - x0) | 0})`);
+  G.endFight('win'); G.toMap();
+  // magnet mouse: a metal item slides to the claw's aim
+  P = petFight(G, 'mouse', 0, 803);
+  G.steer(260);
+  petUntilFx(G, 3);
+  b = petBody(G, P.log[P.log.length - 1].uid);
+  const aim = G.rig.targetX;
+  const d0 = b ? Math.abs(b.x - aim) : 0;
+  stepFor(G, 0.8);
+  h.ok(b && b.data.mat && b.data.mat.traits.metal, 'mouse: it picked a metal item');
+  h.ok(b && Math.abs(b.x - aim) < d0 - 10, `mouse: PULL brought it nearer the claw (${d0 | 0} -> ${b ? Math.abs(b.x - aim) | 0 : '?'})`);
+  G.endFight('win'); G.toMap();
+  // trash raccoon: one junk item is eaten for the fight; with no junk, it rummages
+  P = petFight(G, 'raccoon', 0, 804, ['rock', 'slag']);
+  const junk0 = G.fight.bin.filter(i => D.ITEMS[i.id].rarity === 'junk').length, bin0 = G.fight.bin.length;
+  petUntilFx(G, 3);
+  const eaten = G.fight.bin.filter(i => D.ITEMS[i.id].rarity === 'junk').length;
+  h.eq(eaten, junk0 - 1, 'raccoon: CHOMP, one junk fewer in the bin');
+  h.eq(G.fight.bin.length, bin0 - 1, 'raccoon: nothing else taken');
+  h.ok(G.fight.purged && G.fight.purged.some(i => D.ITEMS[i.id].rarity === 'junk'), 'raccoon: it is gone for the fight (purged)');
+  h.ok(G.fs.items.every(x => G.fight.bin.indexOf(x.data.inst) >= 0 || !x.data.inst), 'raccoon: its body left the cabinet');
+  G.endFight('win'); G.toMap();
+  G.run.bin = G.run.bin.filter(i => D.ITEMS[i.id].rarity !== 'junk');
+  P = petFight(G, 'raccoon', 0, 805);
+  const n1 = G.fight.bin.length;
+  petUntilFx(G, 3);
+  h.eq(G.fight.bin.length, n1, 'raccoon: no junk, nothing eaten (a rummage)');
+  G.endFight('win'); G.toMap();
+  // firefly: the spotlight pays gold when that item is delivered this turn; it finds invisible items
+  P = petFight(G, 'firefly', 0, 806);
+  petUntilFx(G, 3);
+  h.ok(P.glowUid, 'firefly: an item in the spotlight');
+  const lit = petBody(G, P.glowUid), g0 = G.fight.gain.gold;
+  G.playDelivered([lit]);
+  h.eq(G.fight.gain.gold - g0, D.petGlow(1), 'firefly: delivering it pays the spotlight bonus');
+  h.eq(P.glowUid, null, 'firefly: once');
+  G.endFight('win'); G.toMap();
+  P = petFight(G, 'firefly', 0, 807);
+  const hide = G.fight.bin.slice(0, 2);
+  G.best.event({ t: 'binVanish', idx: 0, insts: hide });
+  petUntilFx(G, 3);
+  const B = G.best.state;
+  h.eq(hide.filter(i => B.invGo[i.uid]).length, 1, 'firefly: its light finds an invisible item (one at Lv 1)');
+  G.endFight('win'); G.toMap();
+  // golden goose: a jackpot lays a golden egg (gold and tickets); a double does not at Lv 1
+  P = petFight(G, 'goose', 0, 808);
+  P.turn = G.fight.turn; P.uses = 1;
+  const gg = G.fight.gain.gold, tt = G.fight.stats.tix || 0;
+  G.pet.grab(2);
+  stepFor(G, 1.2);
+  h.eq(G.fight.gain.gold, gg, 'goose: a double lays nothing at Lv 1');
+  G.pet.grab(3);
+  stepFor(G, 1.2);
+  const egg = D.petEgg(1);
+  h.eq(G.fight.gain.gold - gg, egg.gold, 'goose: a jackpot lays a golden egg (gold)');
+  h.eq((G.fight.stats.tix || 0) - tt, egg.tix, 'goose: and tickets on the payout');
+  G.endFight('win'); G.toMap();
+});
+
+h.test('pets: the octopus holds a prize tight through a real lift', () => {
+  const T = petBoot(), G = T.GAME;
+  G.newRun('knight', 5353);
+  let held = 0, worst = 0, lifted = false;
+  for (const seed of [900, 901, 902, 903]) {
+    const P = petFight(G, 'octopus', 0, seed);
+    stepFor(G, 1.5);
+    const top = G.fs.items.slice().sort((a, b) => a.y - b.y)[0];
+    G.steer(top.x); stepFor(G, 0.8);
+    G.dropClaw();
+    let t = 0, H = null;
+    while (t < 12 && G.fs.grabInFlight) {
+      G.update(DT); t += DT;
+      if (P.hold) { H = P.hold; lifted = true; const r = G.rig; if (r.phase === 'carrying') worst = Math.max(worst, Math.abs(H.b.y - (r.y + H.dy))); }
+    }
+    if (H) {
+      held++;
+      h.ok(P.log.some(e => e.k === 'hold'), 'seed ' + seed + ': the hold is logged');
+      h.ok(G.fight.bin.indexOf(H.b.data.inst) < 0, 'seed ' + seed + ': the held prize made it out of the bin');
+    }
+    h.ok(!P.hold && !P.act || P.act === null || P.act.ph === 'back', 'seed ' + seed + ': it lets go when the claw opens');
+    G.endFight('win'); G.toMap();
+  }
+  h.ok(lifted && held >= 2, `the octopus rode the claw and held on (${held} of 4 grabs had cargo)`);
+  h.ok(worst < 30, `the prize stays in its spot under the hub while carried (off by ${worst | 0} px at worst)`);
+});
+
+h.test('pets: deterministic by the fight seed', () => {
+  const run = (id) => {
+    const T = petBoot(), G = T.GAME;
+    G.newRun('knight', 6060);
+    const P = petFight(G, id, 40, 777);
+    stepFor(G, 3);
+    return JSON.stringify({ log: P.log, items: G.fs.items.map(b => [Math.round(b.x), Math.round(b.y)]) });
+  };
+  for (const id of ['hamster', 'cat', 'parrot', 'mouse']) h.eq(run(id), run(id), id + ': the same fight, the same trick, the same pile');
+});
+
+h.test('pets: XP, levels, the banner, reactions, save and load', () => {
+  const T = petBoot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 6161);
+  petFight(G, 'cat', 10, 1000);
+  const P = G.pet.fs();
+  h.eq(P.lv, 1, 'Lv 1 at 10 xp');
+  const inst = G.fight.bin[0];
+  G.playDelivered([petBody(G, inst.uid)]);
+  h.eq(G.run.pet.xp, 11, 'a delivered item gives 1 xp');
+  G.pet.gain(1);
+  h.eq(G.run.pet.lv, 2, 'Lv 2 at 12 xp');
+  h.ok(G.ann.log.some(e => e.cls === 'pet'), 'a level up is a banner through the announcer');
+  h.eq(P.lv, 2, 'the pet on the frame levels up too');
+  h.ok(G.meta.pets.cat && G.meta.pets.cat.lv >= 2, 'the album keeps its best level');
+  // reactions
+  G.pet.event({ t: 'enrage', idx: 0, name: 'x', text: 'y' });
+  h.eq(P.mood, 'scared', 'a roar scares it');
+  G.pet.event({ t: 'die', idx: 0 });
+  h.eq(P.mood, 'cheer', 'a kill cheers it');
+  G.pet.rig('slip');
+  h.eq(P.mood, 'sad', 'a slip upsets it');
+  // a tap on it says what it does
+  h.ok(G.pet.tap(P.x, P.y - 20), 'a tap on the pet');
+  h.ok(G.S.popover && /Cat/.test(G.S.popover.html) && /Lv 2/.test(G.S.popover.html), 'the popover names it and its level');
+  // a won fight
+  const xp0 = G.run.pet.xp;
+  G.endFight('win');
+  h.eq(G.run.pet.xp - xp0, D.PET_GAIN.fight, 'a won fight gives its xp');
+  G.toMap();
+  G.draw();
+  // save and load
+  const name = G.run.pet.name, xp1 = G.run.pet.xp;
+  const T2 = petBoot(Object.assign({}, T._store));
+  h.ok(T2.GAME.load(), 'reloads');
+  h.ok(T2.GAME.run.pet && T2.GAME.run.pet.id === 'cat' && T2.GAME.run.pet.name === name && T2.GAME.run.pet.xp === xp1, 'the pet survives a reload');
+  T2.GAME.draw();
+  // a broken pet and an old save
+  const o = JSON.parse(T._store.clawspire_run);
+  o.run.pet = { id: 'unicorn', xp: 9 };
+  const T3 = petBoot({ clawspire_run: JSON.stringify(o) });
+  h.ok(T3.GAME.load() && T3.GAME.run.pet === null, 'an unknown pet is dropped');
+  delete o.run.pet;
+  const T4 = petBoot({ clawspire_run: JSON.stringify(o) });
+  h.ok(T4.GAME.load() && T4.GAME.run.pet === null, 'a save from before pets has none');
+  T4.GAME.startFight(['rat'], 'normal', { seed: 3 });
+  stepFor(T4.GAME, 1);
+  h.eq(T4.GAME.pet.fs(), null, 'and fights without one');
+  h.ok(!T4.GAME.S.petRow, 'the player row keeps its old layout');
+});
+
+h.test('pets: the pet shop (adopt free, swap for gold, treats, reload)', () => {
+  const T = petBoot(), G = T.GAME, D = T.DATA;
+  G.newRun('knight', 6262);
+  const M = G.run.map;
+  const shop = Object.values(M.tiles).find(t => t.type === 'petshop');
+  h.ok(shop, 'the map has a pet shop');
+  G.enterTile(shop);
+  h.eq(G.screen, 'arcade', 'the pet shop opens on the arcade screen');
+  h.eq(G.arc.state.g, 'petshop', 'as the pet shop');
+  const offer = shop.content.pet.offer.slice();
+  h.ok(offer.length === 3 && new Set(offer).size === 3, 'three pets in the pens');
+  let labels = G.S.ui.buttons.map(b => b.label);
+  h.ok(labels.slice(0, 3).every(l => l === 'Adopt (free)') && labels[3] === 'Leave', 'three free adoptions and Leave (' + labels.join(', ') + ')');
+  G.draw();
+  // reload in the shop: the same pens
+  const T2 = petBoot(Object.assign({}, T._store));
+  h.ok(T2.GAME.load() && T2.GAME.screen === 'arcade' && T2.GAME.arc.state.g === 'petshop', 'a reload is back in the shop');
+  h.eq(JSON.stringify(T2.GAME.arc.state.PS.offer), JSON.stringify(offer), 'with the same pets');
+  const g0 = G.run.gold;
+  h.ok(G.choose(1), 'adopt the middle one');
+  h.ok(G.run.pet && G.run.pet.id === offer[1] && G.run.pet.lv === 1, 'the pet joins the run');
+  h.eq(G.run.gold, g0, 'the first one is free');
+  h.ok(shop.done && shop.content.pet.adopted === offer[1], 'the shop is done, the pen empty');
+  h.ok(G.meta.pets[offer[1]] && G.meta.pets[offer[1]].n === 1, 'the album has it');
+  labels = G.S.ui.buttons.map(b => b.label);
+  h.ok(labels.includes('Leave') && labels.some(l => /^Treat/.test(l)), 'now Treat and Leave');
+  h.ok(G.S.ui.buttons.slice(0, 3).every(b => b.el.disabled), 'one adoption per shop');
+  G.pet.adopt(0);
+  h.eq(G.run.pet.id, offer[1], 'a second adoption here is refused');
+  // treats
+  G.run.gold = 30;
+  const xp0 = G.run.pet.xp;
+  h.ok(G.pet.treat(), 'a treat');
+  h.ok(G.run.gold === 30 - D.PET_SHOP.treat && G.run.pet.xp === xp0 + D.PET_GAIN.treat, 'costs gold, gives xp');
+  G.run.gold = 5;
+  h.ok(!G.pet.treat() && G.run.gold === 5, 'too little gold: refused');
+  G.run.gold = 100;
+  while (G.pet.treat());
+  h.eq(shop.content.pet.treats, D.PET_SHOP.treats, 'treats run out per shop');
+  G.draw();
+  G.choose(G.S.ui.buttons.map(b => b.label).indexOf('Leave'));
+  h.eq(G.screen, 'map', 'Leave goes to the map');
+  G.draw();
+  G.enterTile(shop);
+  h.eq(G.screen, 'map', 'an emptied shop does not reopen');
+  // a second shop: a swap costs gold
+  const t2 = Object.values(M.tiles).find(t => t.type === 'empty' && t.terrain === 'land' && t.ground !== 'mountain' && !t.road);
+  t2.type = 'petshop'; t2.content = { seed: 99, game: 'petshop' }; t2.known = true;
+  G.enterTile(t2);
+  h.ok(G.S.ui.buttons[0].label.startsWith('Swap'), 'with a pet, the pens offer a swap');
+  h.ok(!t2.content.pet.offer.includes(G.run.pet.id), 'never your own pet');
+  G.run.gold = 3;
+  h.ok(!G.pet.adopt(0) && G.run.pet.id === offer[1], 'too little gold: no swap');
+  G.run.gold = 100;
+  h.ok(G.pet.adopt(0), 'a swap');
+  h.ok(G.run.pet.id === t2.content.pet.offer[0] && G.run.gold === 100 - D.PET_SHOP.swap, 'the new pet, for its price');
+  h.ok(G.meta.pets[offer[1]], 'the old one stays in the album');
+  G.arc.leave();
+  h.eq(G.screen, 'map', 'and back to the map');
+});
+
+h.test('pets: tip cards and the map', () => {
+  const T = petBoot(), G = T.GAME;
+  h.ok(['pet', 'petshop', 'moles', 'skee'].every(id => G.feel.TIPS.some(d => d.id === id)), 'four new tip cards');
+  G.newRun('knight', 6363);
+  G.meta.tips = {};
+  G.pet.give('hamster', 0);
+  G.startFight(['rat'], 'normal', { seed: 5 });
+  stepFor(G, 0.5);
+  h.ok(G.feel.queue.includes('pet') || (G.feel.cur && G.feel.cur.id === 'pet') || G.meta.tips.pet, 'a fight with a pet brings its tip');
+  G.endFight('win'); G.toMap();
+  const M = G.run.map;
+  for (const k of ['petshop', 'moles', 'skee']) { const t = Object.values(M.tiles).find(x => x.type === k); t.revealed = true; }
+  stepFor(G, 0.5);
+  h.ok(['petshop', 'moles', 'skee'].every(id => G.feel.queue.includes(id) || G.meta.tips[id] || (G.feel.cur && G.feel.cur.id === id)), 'lit cabinets bring theirs');
+  // the pet on its bed beside the crawler
+  G.draw();
+  G.S.petMapIdle = 9;
+  G.draw();
+});
+
+// ---- WHACK-A-MOLE
+function wamPlay(G, rule) {
+  // whacks per a rule over the live round: rule(p) true means whack this pop 0.12 s after it shows
+  let n = 0;
+  while (n++ < 60 * 20) {
+    const st = G.wam.state;
+    if (!st || st.state === 'end') break;
+    if (st.state === 'play') for (const p of st.sched) if (st.hit[p.i] == null && rule(p) && st.t >= p.t + 0.12 && st.t < p.t + p.up) G.wam.whack(p.hole);
+    G.update(DT);
+  }
+}
+h.test('whack-a-mole: a seeded round, scoring and combos, paid once by tier', () => {
+  const T = petBoot(), G = T.GAME;
+  G.newRun('knight', 7171);
+  const a = G.wam.sched(42), b = G.wam.sched(42);
+  h.eq(JSON.stringify(a), JSON.stringify(b), 'the pop schedule is a pure function of its seed');
+  h.ok(a.length >= 18 && a.every(p => p.t >= 0 && p.t + p.up <= G.wam.WAM.dur + 1 && p.hole >= 0 && p.hole < 9), 'pops fill the round (' + a.length + ')');
+  h.ok(a.some(p => p.kind === 'bomb') && a.some(p => p.kind === 'mole'), 'moles and bombs');
+  for (let hole = 0; hole < 9; hole++) { const L = a.filter(p => p.hole === hole); for (let i = 1; i < L.length; i++) h.ok(L[i].t >= L[i - 1].t + L[i - 1].up, 'hole ' + hole + ': never two at once'); }
+  let gold = 0; for (let s = 1; s <= 50; s++) gold += G.wam.sched(s * 31).filter(p => p.kind === 'gold').length;
+  h.ok(gold >= 20, 'golden moles show up (' + gold + ' in 50 rounds)');
+  h.ok(G.wam.pays(0).tier === 0 && G.wam.pays(50).tier === 1 && G.wam.pays(250).tier === 2 && G.wam.pays(600).tier === 3, 'tiers by score');
+  const t = arcCab(G, 'moles', 2);
+  G.enterTile(t);
+  h.eq(G.screen, 'arcade', 'the whack-a-mole opens from its tile');
+  h.eq(G.S.ui.buttons[0].label, 'Play', 'Play');
+  G.draw();
+  h.ok(G.choose(0), 'play');
+  const A = G.arc.state.A;
+  h.ok(A.tokens === 1 && A.live && A.live.seed, 'a round spends its token and saves its seed');
+  h.eq(G.wam.state.state, 'count', 'the countdown');
+  h.eq(JSON.stringify(G.wam.state.sched), JSON.stringify(G.wam.sched(A.live.seed)), 'the round plays its saved schedule');
+  h.eq(G.wam.whack(0), null, 'no whacks during the countdown');
+  stepFor(G, 2.6);
+  h.eq(G.wam.state.state, 'play', 'WHACK!');
+  G.draw();
+  // hand-scored: three moles in a row, then an empty hole, then a bomb
+  const st = G.wam.state;
+  const moles = st.sched.filter(p => p.kind !== 'bomb').slice(0, 3);
+  let want = 0, chain = 0, last = -9;
+  for (const p of moles) {
+    while (st.t < p.t + 0.1) G.update(DT);
+    const r = G.wam.whack(p.hole);
+    chain = st.t - last <= G.wam.WAM.chainGap ? chain + 1 : 1; last = st.t;
+    want += G.wam.WAM.pts[p.kind] + 2 * Math.min(10, chain - 1);
+    h.ok(r && r.pts > 0 && r.chain === chain, 'a whack scores (' + (r && r.pts) + ', chain ' + chain + ')');
+  }
+  h.eq(st.score, want, 'the score is the sum with combos (' + want + ')');
+  G.draw();
+  let empty = -1;
+  for (let hole = 0; hole < 9; hole++) if (!st.sched.some(p => p.hole === hole && st.t >= p.t && st.t <= p.t + p.up)) { empty = hole; break; }
+  if (empty >= 0) { const r = G.wam.whack(empty); h.ok(r && r.miss && st.chain === 0, 'an empty hole breaks the combo'); }
+  const bomb = st.sched.find(p => p.kind === 'bomb' && p.t > st.t);
+  if (bomb) {
+    while (st.t < bomb.t + 0.1) G.update(DT);
+    const s0 = st.score, r = G.wam.whack(bomb.hole);
+    h.ok(r && r.kind === 'bomb' && st.score === Math.max(0, s0 - 20) && st.chain === 0, 'a bomb costs 20 and the combo');
+  }
+  // the rest of the round, then TIME
+  wamPlay(G, (p) => p.kind !== 'bomb');
+  h.ok(A.pend && A.pend.score === G.wam.state.score && !A.live, 'the final score is saved the moment the round ends (' + A.pend.score + ')');
+  const res = G.wam.pays(A.pend.score);
+  // reload inside the TIME! beat: paid once, on load
+  const T2 = petBoot(Object.assign({}, T._store));
+  const G2 = T2.GAME, g0 = G2.run ? 0 : 0;
+  h.ok(G2.load() && G2.screen === 'arcade', 'a reload in the beat');
+  const gAfter = G2.run.gold, tAfter = G2.run.tickets;
+  h.ok(!G2.arc.state.A.pend && G2.arc.state.A.best === A.pend.score, 'it settled on load');
+  const T3 = petBoot(Object.assign({}, T2._store));
+  T3.GAME.load(); stepFor(T3.GAME, 3);
+  h.ok(T3.GAME.run.gold === gAfter && T3.GAME.run.tickets === tAfter, 'a second reload pays nothing more');
+  // the original session: settles after the beat, paying exactly the tier
+  const gold0 = G.run.gold, tix0 = G.run.tickets;
+  stepFor(G, 1.2);
+  h.eq(G.run.gold - gold0, payOf(res, 'gold'), 'gold paid once (' + res.label + ')');
+  h.eq(G.run.tickets - tix0, payOf(res, 'tix'), 'tickets paid once');
+  h.ok(!A.pend && A.used === 1, 'nothing pending');
+  arcFinish(G, 6);
+  if (G.screen === 'capsule') { G.loot.skipCapsule(); stepFor(G, 0.8); G.loot.collectCapsule(); }
+  G.draw();
+  // a reload mid-round restarts the same round, the token spent, nothing paid
+  h.eq(G.screen, 'arcade', 'back at the machine');
+  G.arc.act();
+  const seed2 = G.arc.state.A.live.seed;
+  stepFor(G, 4);
+  const T4 = petBoot(Object.assign({}, T._store)), G4 = T4.GAME;
+  h.ok(G4.load() && G4.wam.state && G4.wam.state.state === 'count', 'a reload mid-round: the countdown again');
+  h.ok(G4.arc.state.A.live.seed === seed2 && G4.arc.state.A.tokens === 0 && !G4.arc.state.A.pend, 'the same round, the token not refunded, nothing paid');
+  // leaving mid-round pays what you have
+  stepFor(G4, 2.7);
+  const s1 = G4.wam.state; const p1 = s1.sched.find(p => p.kind !== 'bomb');
+  while (s1.t < p1.t + 0.1) G4.update(DT);
+  G4.wam.whack(p1.hole);
+  const tix1 = G4.run.tickets;
+  G4.arc.leave();
+  if (G4.screen === 'capsule') { G4.loot.skipCapsule(); stepFor(G4, 0.8); G4.loot.collectCapsule(); }
+  h.ok(G4.run.tickets > tix1, 'Leave mid-round pays the score so far');
+  h.ok(t.done || G4.run.map.tiles[Object.keys(G4.run.map.tiles).find(k => G4.run.map.tiles[k].type === 'moles')].done, 'the cabinet is spent');
+});
+
+// ---- SKEE-BALL
+h.test('skee-ball: the rolls, the rings, five balls paid once', () => {
+  const T = petBoot(), G = T.GAME;
+  G.newRun('knight', 7272);
+  const S = G.skee;
+  h.eq(JSON.stringify(S.sim(250, 0.6, 9)), JSON.stringify(S.sim(250, 0.6, 9)), 'a roll is a pure function of aim, power and seed');
+  let mid = 0, cups = 0, weak = 0, back = 0;
+  for (let s = 1; s <= 200; s++) {
+    if (S.sim(270, 0.456, s).score >= 40) mid++;
+    if (S.sim(212, 0.96, s).score === 100 || S.sim(328, 0.96, s).score === 100) cups++;
+    if (S.sim(270, 0, s).score === 10) weak++;
+    const o = S.sim(270, 1.25, s); if (o.back && o.score === 10) back++;
+  }
+  h.ok(mid > 120, `a centred roll at the right power finds the 40 or 50 (${mid}/200)`);
+  h.ok(cups > 80, `a corner roll can drop in a 100 cup (${cups}/200)`);
+  h.eq(weak, 200, 'a dribble scores 10');
+  h.eq(back, 200, 'too hard bounces off the back into the 10');
+  const sim = S.sim(270, 0.6, 3);
+  h.ok(sim.path.length / 3 > 40 && sim.hopF < sim.landF && sim.landF < sim.path.length / 3, 'the path: a roll, a hop, a drop');
+  h.ok(S.pays(0).tier === 0 && S.pays(100).pays.some(p => p.k === 'tix' && p.n === 10) && S.pays(300).tier === 2 && S.pays(400).tier === 3, 'pays: tickets for every 10, more at the top');
+  const t = arcCab(G, 'skee', 2);
+  G.enterTile(t);
+  h.eq(G.screen, 'arcade', 'the skee-ball opens from its tile');
+  G.draw();
+  h.eq(G.S.ui.buttons[0].label, 'Play (5 balls)', 'Play');
+  G.choose(0);
+  const A = G.arc.state.A;
+  h.ok(A.live && A.tokens === 1 && A.live.balls.length === 0, 'a game spends its token');
+  h.ok(S.roll(262, 0.5), 'a roll');
+  const R0 = JSON.parse(JSON.stringify(A.live.roll));
+  h.ok(R0 && R0.seed, 'the roll is saved the moment it goes');
+  stepFor(G, 0.4);
+  G.draw();
+  // reload mid-roll: the same ball lands the same
+  const T2 = petBoot(Object.assign({}, T._store)), G2 = T2.GAME;
+  h.ok(G2.load() && G2.arc.state.phase === 'play', 'a reload mid-roll replays it');
+  arcFinish(G2, 5);
+  const want = S.sim(R0.aim, R0.pow, R0.seed).score;
+  h.eq(G2.arc.state.A.live.balls[0], want, 'the same score');
+  arcFinish(G, 5);
+  h.eq(A.live.balls[0], want, 'the ball is scored where it lands (' + want + ')');
+  // four more
+  const tix0 = G.run.tickets, gold0 = G.run.gold;
+  for (const [aim, pow] of [[212, 0.96], [270, 0.46], [328, 0.96], [270, 0.3]]) { h.ok(S.roll(aim, pow), 'roll ' + aim); arcFinish(G, 6); }
+  const balls = G.arc.state.A.res.length ? null : null;
+  h.ok(!A.live && !A.pend && A.used === 1, 'five balls: the game is over and settled');
+  const total = A.best;
+  const res = S.pays(total);
+  h.eq(G.run.tickets - tix0, payOf(res, 'tix'), 'tickets paid once (' + total + ' points)');
+  h.eq(G.run.gold - gold0, payOf(res, 'gold'), 'gold paid once');
+  stepFor(G, 3);
+  if (G.screen === 'capsule') { G.loot.skipCapsule(); stepFor(G, 0.8); G.loot.collectCapsule(); }
+  const T3 = petBoot(Object.assign({}, G === T.GAME ? T._store : {})), G3 = T3.GAME;
+  G3.load(); stepFor(G3, 2);
+  h.eq(G3.run.tickets, G.run.tickets, 'a reload after the game pays nothing again');
+  // a swipe up the lane rolls; leaving mid-game pays the balls so far
+  if (G.screen === 'arcade') {
+    G.arc.act();
+    G.arc.pointer('down', 272, 760); G.update(DT); G.arc.pointer('move', 268, 640); G.update(DT); G.update(DT); G.arc.pointer('move', 266, 520); G.arc.pointer('up', 266, 520);
+    h.ok(G.arc.state.A.live && G.arc.state.A.live.roll, 'a swipe up the lane rolls');
+    arcFinish(G, 5);
+    const s1 = G.arc.state.A.live.balls[0], tx = G.run.tickets;
+    G.arc.leave();
+    if (G.screen === 'capsule') { G.loot.skipCapsule(); stepFor(G, 0.8); G.loot.collectCapsule(); }
+    h.eq(G.run.tickets - tx, Math.floor(s1 / 10), 'Leave mid-game pays the balls rolled');
+    h.ok(t.done, 'both games spent: the lane is cleared');
+  }
+});
 
 h.done();

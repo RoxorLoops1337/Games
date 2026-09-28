@@ -156,7 +156,39 @@ const GAME = (() => {
     return canvasEl(px, (ctx, p) => { if (X.RENDER && X.RENDER.item) X.RENDER.item(ctx, def, p / 2, p / 2, 0, Math.min(1, (p * 0.8) / shapeLong(def.shape)), { plus }); });
   }
   function relicCanvas(def, px) {
-    return canvasEl(px, (ctx, p) => { if (X.RENDER && X.RENDER.relicIcon) X.RENDER.relicIcon(ctx, def, p / 2, p / 2, p * 0.8); });
+    const c = canvasEl(px, (ctx, p) => { if (X.RENDER && X.RENDER.relicIcon) X.RENDER.relicIcon(ctx, def, p / 2, p / 2, p * 0.8); });
+    polRelicLive(c, def, px);   // POLISH: the badge shines and the rainbow turns
+    return c;
+  }
+  /* POLISH (round 5): relic medallions on the DOM (the HUD bar, rewards, the
+     reveal, the Prizedex) are canvases drawn once; the few that animate at a
+     given moment (a legendary's rainbow, a shine sweeping across) are redrawn
+     by polTick about 30 times a second. Detached canvases drop out. */
+  const POL_RL = [];
+  const POL_RL_MAX = 160;
+  function polRelicLive(c, def, px) {
+    if (S.headless || !c || !def) return;
+    if (POL_RL.length >= POL_RL_MAX) POL_RL.shift();
+    POL_RL.push({ c, def, px, on: false });
+  }
+  function polTick(real) {
+    S.polT = (S.polT || 0) + real;
+    if (S.headless || !POL_RL.length || S.polT < 1 / 30) return;
+    S.polT = 0;
+    const R = X.RENDER;
+    if (!R || !R.relicLive || !R.relicIcon) return;
+    const t = S.t;
+    for (let i = POL_RL.length - 1; i >= 0; i--) {
+      const e = POL_RL[i];
+      if (e.c.isConnected === false) { POL_RL.splice(i, 1); continue; }
+      const on = R.relicLive(e.def, t);
+      if (!on && !e.on) continue;
+      e.on = on;
+      let ctx = null;
+      try { ctx = e.c.getContext('2d'); } catch (err) { ctx = null; }
+      if (!ctx) continue;
+      try { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, e.c.width, e.c.height); ctx.scale(2, 2); R.relicIcon(ctx, e.def, e.px / 2, e.px / 2, e.px * 0.8, on ? t : undefined); ctx.setTransform(1, 0, 0, 1, 0, 0); } catch (err) { /* art is optional */ }
+    }
   }
   function portraitCanvas(charId, px) {
     return canvasEl(px, (ctx, p) => { if (X.RENDER && X.RENDER.portrait) X.RENDER.portrait(ctx, charId, p / 2, p / 2, p * 0.9, S.t); });
@@ -205,9 +237,37 @@ const GAME = (() => {
     // the pips and statuses share the row: fade them while the banner is up
     const pr = $('playerRow'); if (pr && pr.classList) pr.classList.add('bannerOn');
     S.bannerStr = a.str;
+    // POLISH (round 5): the banner keeps to the span left of the GRABS pill
+    const bb = polBannerBox(polGrabsW(), a.str, a.kind);
+    try {
+      if (el && el.style) { el.style.left = bb.x0 + 'px'; el.style.right = (W - bb.x1) + 'px'; }
+      if (tx && tx.style) tx.style.fontSize = bb.size < bb.big ? bb.size.toFixed(1) + 'px' : '';
+    } catch (e) { /* stub DOM */ }
+    S.bannerBox = bb;
     // floating labels keep out of it while it is up
-    const n = String(a.str).length, big = a.kind === 'victory' ? 46 : 34, w = Math.min(520, n * big * 0.76 + 24);
-    fx().zone && fx().zone('ann', 270 - w / 2, 330, 270 + w / 2, 386);
+    fx().zone && fx().zone('ann', bb.x0, 330, bb.x1, 386);
+  }
+  /* POLISH (round 5): turn banners share the player row with the GRABS pill
+     (right) and sit above the cabinet, the END TURN button far below. The
+     banner takes the span left of the pill, POL_BAN.gap clear of it, and
+     shrinks its words to fit that span; it never covers the pill. */
+  const POL_BAN = { gap: 12, pad: 10, minW: 110, maxW: 320, left: 4, k: 0.76 };
+  function polGrabsW() {
+    const el = $('grabs');
+    let w = 0;
+    try { w = !S.headless && el ? el.offsetWidth : 0; } catch (e) { w = 0; }
+    if (w > 60 && w < 400) return w;
+    // no layout (headless): the pill's own CSS, 24 px padding + border, the label, 27 px a pip
+    const n = F ? Math.max(F.player.grabsMax || 0, F.player.grabs || 0) : 3;
+    return Math.max(120, 28 + 56 + n * 27);
+  }
+  function polBannerBox(grabsW, str, kind) {
+    const gw = U.clamp(+grabsW || 0, POL_BAN.minW, POL_BAN.maxW);
+    const x0 = POL_BAN.left, x1 = W - POL_BAN.pad - gw - POL_BAN.gap;
+    const big = kind === 'victory' ? 46 : 34, n = Math.max(1, String(str == null ? '' : str).length);
+    // a glyph is about k x size wide (letter spacing included), plus the 24 px of the span's own padding
+    const size = Math.max(16, Math.min(big, (x1 - x0 - 24) / (n * POL_BAN.k)));
+    return { x0, x1, size, big, grabsX0: W - POL_BAN.pad - gw, y0: 338 - 30, y1: 338 - 30 + 100 };
   }
   function bannerOff(a, quick) {
     const el = $('banner');
@@ -550,13 +610,16 @@ const GAME = (() => {
           metaFix(S.meta, o);   // meta progression fields (META block)
           endlessMetaFix(S.meta, o);   // scores, Endless bests, the mutator pick (ENDLESS block)
           feelFix(S.meta, o);   // seen tips, the Buzz setting (FEEL block)
+          vaultFix(S.meta, o);   // the Prize Vault's wallet and cosmetics (VAULT block)
           if (o.arc && typeof o.arc === 'object' && !Array.isArray(o.arc)) S.meta.arc = Object.assign({}, o.arc);   // ARCADE play counts (were dropped on load)
+          if (o.pets && typeof o.pets === 'object' && !Array.isArray(o.pets)) S.meta.pets = Object.assign({}, o.pets);   // PETS: the album
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
     metaFix(S.meta);
     endlessMetaFix(S.meta);
     feelFix(S.meta);
+    vaultFix(S.meta);   // defaults, sticker prizes, and the equipped cosmetics to the renderer (VAULT block)
     if (fx()) fx().reduced = !S.meta.settings.shake;
     applyCalm();
     return S.meta;
@@ -631,6 +694,7 @@ const GAME = (() => {
       S.run = run;
       lootRun(run);   // tickets, pity, banked capsules, highlights: defaults for older saves
       endlessRunFix(run);   // mutators, the Endless loop, score counters (ENDLESS block)
+      petRunFix(run);   // the companion pet (PETS block)
       S.rolls = null;
       S.sd = o.sd || null;
       S.after = o.after || null;
@@ -801,7 +865,7 @@ const GAME = (() => {
   }
 
   // ---------------------------------------------------------------- screens
-  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection', 'capsule', 'counter', 'stickers', 'arcade', 'loop', 'tips'];
+  const SCREENS = ['intro', 'title', 'chars', 'map', 'fight', 'reward', 'shop', 'event', 'rest', 'forge', 'treasure', 'parts', 'bin', 'gameover', 'win', 'help', 'collection', 'capsule', 'counter', 'stickers', 'arcade', 'loop', 'tips', 'vault'];
   /* Screen transitions: an iris opening onto a fight, a diagonal wipe
      between the map and the tile screens, a quick fade for the rest (DOM
      #wipe, CSS only, never blocks input). */
@@ -846,7 +910,7 @@ const GAME = (() => {
     else if (name === 'map' || name === 'shop' || name === 'event' || name === 'rest' || name === 'forge' || name === 'treasure' || name === 'parts' || name === 'reward' || name === 'capsule' || name === 'counter' || name === 'arcade') music('map');
     else if (name === 'win') music('win');
     else if (name === 'gameover') music('off');
-    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips'].indexOf(name) < 0) save();
+    if (['intro', 'fight', 'bin', 'help', 'collection', 'stickers', 'title', 'chars', 'gameover', 'win', 'tips', 'vault'].indexOf(name) < 0) save();
   }
 
   // ---- title
@@ -859,6 +923,7 @@ const GAME = (() => {
     m.appendChild(btn('New run', () => showChars(), 'pri'));
     metaDailyBtn(m);   // the daily run (META block)
     endlessDailyTag(m);   // today's mutators on it (ENDLESS block)
+    vaultTitleBtn(m);   // the Prize Vault with the vault ticket wallet (VAULT block)
     const row = h('div', 'row');
     row.appendChild(btn('Prizedex', () => showCollection()));
     row.appendChild(btn('Stickers', () => showStickers()));
@@ -1301,6 +1366,7 @@ const GAME = (() => {
     m.ach[id] = { run: m.stats.runs | 0, at: Date.now() };
     m.achNew[id] = 1;
     if (S.run) (S.run.achNew || (S.run.achNew = [])).push(id);
+    vaultOnSticker(id);   // a sticker with a Prize Vault prize (VAULT block)
     saveMeta();
     metaToast({ k: 'ach', id });
     return true;
@@ -1439,7 +1505,7 @@ const GAME = (() => {
   }
   // The entry's own art (sil: a dark silhouette for an undiscovered one).
   function dexArt(tab, def, px, sil) {
-    return canvasEl(px, (ctx, p) => {
+    const cv = canvasEl(px, (ctx, p) => {
       const R = X.RENDER;
       if (!R) return;
       if (tab === 'items' && R.item) R.item(ctx, def, p / 2, p / 2, 0, Math.min(1, (p * 0.8) / shapeLong(def.shape)), {});
@@ -1462,6 +1528,8 @@ const GAME = (() => {
       }
       if (sil) { ctx.save(); ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = '#2d1f4d'; ctx.fillRect(0, 0, p, p); ctx.restore(); }
     });
+    if (tab === 'relics' && !sil) polRelicLive(cv, def, px);   // POLISH: the medallion shines
+    return cv;
   }
   function metaBar(n, total, label, cls) {
     const w = h('div', 'mBar' + (cls ? ' ' + cls : ''));
@@ -2325,6 +2393,828 @@ const GAME = (() => {
   }
   // ================================================================ /ENDLESS
 
+  // ================================================================ VAULT (round 5)
+  /* The Prize Vault (DESIGN.md "Prize Vault"): a meta ticket sink. Every
+     arcade ticket a run wins also banks into the lifetime Vault Tickets
+     wallet (meta.vault.tix; spending tickets in the run never takes any
+     back). The title's Prize Vault (screen 'vault') is a redemption counter:
+     a prize wall behind glass, a live preview window (a mini cabinet whose
+     claw keeps grabbing, the crawler in the outfit, a walker leaving the
+     trail), five shelves, Buy and Equip, and the Vault Capsule (a cosmetic
+     gacha cracked like the run's capsules; a dupe pays tickets back, the
+     legendaries are the rainbow ones). A few prizes come from stickers.
+     The run end has a Share button: a 1080 x 1350 run card
+     (RENDER.vault.share) shared as a file, else saved.
+     Hooks, one line each: loadMeta (vaultFix), addTickets (vaultBank),
+     achUnlock (vaultOnSticker), showTitle (vaultTitleBtn), showGameOver /
+     showWin (vaultShareBtn), update (vaultTick), draw (vaultDraw), drawMap
+     (vaultTrailDraw), onKey (vaultKey). Meta: vault {tix, earned, spent,
+     caps, pity, shares, owned {id: 1}, eq {skin, paint, marquee, trail,
+     outfit {char: id}}, news {id: 1}, pend (a paid, unopened capsule)}. */
+  const VLT0 = { SHARE: 1, CAP_PRICE: 60, CAP_W: { c: 58, u: 30, r: 10, l: 2 }, PITY: 12, DUPE: { c: 12, u: 25, r: 55, l: 150 },
+    NAME: { c: 'Common', u: 'Uncommon', r: 'Rare', l: 'Legendary' }, COLOR: { c: '#b9b0cc', u: '#2ee6d6', r: '#ff2e88', l: '#ffc94d' } };
+  const VLT = () => D().VAULT || VLT0;
+  const VLT_SLOTS = ['skin', 'paint', 'marquee', 'trail'];
+  const VLT_DEF0 = { skin: 'skin_classic', paint: 'paint_chrome', marquee: 'mq_classic', trail: 'trail_dust' };
+  const vaultDefault = (cat) => (D().VAULT_DEFAULT || VLT_DEF0)[cat];
+  const vaultDef = (id) => (id && D().COSMETICS ? D().COSMETICS[id] || null : null);
+  const vaultHowOf = (id) => (D().vaultHow ? D().vaultHow(id) : 'buy');
+  const vaultPriceOf = (id) => (D().vaultPrice ? D().vaultPrice(id) : 0);
+  const fmtN = (n) => String(Math.max(0, Math.floor(+n || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const VLT_URL = 'https://games-71g.pages.dev/clawspire/';
+  const VLT_WIN = { x: 14, y: 84, w: 512, h: 252 };      // the counter window on the wall (stage px)
+  const VLT_PREV = { x: 36, y: 126, k: 1.2 };             // the preview cabinet: interior top-left, scale
+  const VLT_TRAIL = { x0: 350, x1: 506, y: 264, max: 36, every: 0.06 };
+  const VLT_MAPTRAIL = { max: 48, every: 0.05 };
+  const VLT_J = { t: 0, mood: '', blink: 0, idle: 0, hold: [], holdN: 0, pull: [], pullN: 0 };
+
+  // The vault's meta fields with their defaults (o: the raw stored profile).
+  function vaultFix(m, o) {
+    if (!m) return m;
+    const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : null;
+    const src = obj(o && typeof o === 'object' ? o.vault : null) || obj(m.vault) || {};
+    const num = (v) => Math.max(0, Math.floor(+v || 0));
+    const V = { tix: num(src.tix), earned: num(src.earned), spent: num(src.spent), caps: num(src.caps), pity: num(src.pity), shares: num(src.shares),
+      owned: {}, eq: { outfit: {} }, news: {}, pend: null };
+    const own = obj(src.owned) || {};
+    for (const id in own) if (own[id]) V.owned[id] = 1;
+    for (const cat of VLT_SLOTS) V.owned[vaultDefault(cat)] = 1;
+    // a profile that already has a sticker owns its prize
+    const ach = obj(m.ach) || {};
+    if (D().vaultForSticker) for (const a in ach) for (const id of D().vaultForSticker(a)) V.owned[id] = 1;
+    const eq = obj(src.eq) || {};
+    for (const cat of VLT_SLOTS) { const id = eq[cat], d = vaultDef(id); V.eq[cat] = d && d.cat === cat && V.owned[id] ? id : vaultDefault(cat); }
+    const fit = obj(eq.outfit) || {};
+    for (const c in fit) { const d = vaultDef(fit[c]); if (d && d.cat === 'outfit' && d.char === c && V.owned[fit[c]]) V.eq.outfit[c] = fit[c]; }
+    const nw = obj(src.news) || {};
+    for (const id in nw) if (nw[id] && V.owned[id] && vaultDef(id)) V.news[id] = 1;
+    const p = obj(src.pend);
+    if (p && vaultDef(p.id)) {
+      const tier = vaultDef(p.id).rarity;
+      V.pend = { id: p.id, tier0: String(p.tier0 || tier), ups: Array.isArray(p.ups) ? p.ups.filter((x) => typeof x === 'string') : [], tier, dupe: !!p.dupe, tix: num(p.tix), lucky: !!p.lucky };
+    }
+    m.vault = V;
+    if (m === S.meta) vaultApply();
+    return m;
+  }
+  function vaultM() {
+    if (!S.meta) S.meta = freshMeta();
+    const V = S.meta.vault;
+    if (!V || !V.owned || !V.eq || !V.eq.outfit || !V.news) vaultFix(S.meta);
+    return S.meta.vault;
+  }
+  // The equipped cosmetics go to the renderer (the cabinet, the claw, the portraits, the trail).
+  function vaultApply() {
+    const V = S.meta && S.meta.vault, R = X.RENDER;
+    if (V && R && R.vault && R.vault.equip) { try { R.vault.equip(V.eq); } catch (e) { /* art is optional */ } }
+  }
+  function vaultSave() { S.vaultDirty = false; S.vaultSaveT = 0; saveMeta(); }
+  // Every ticket a run wins banks a share (all of it) in the vault; a spend never touches it.
+  function vaultBank(n) {
+    const k = VLT().SHARE == null ? 1 : VLT().SHARE;
+    n = Math.floor((+n || 0) * k);
+    if (!(n > 0)) return 0;
+    const V = vaultM();
+    V.tix += n; V.earned += n;
+    S.vaultDirty = true;
+    return n;
+  }
+  // A sticker that carries a vault prize (the Gold Jackpot cabinet, the WINNER! marquee, Confetti).
+  function vaultOnSticker(achId) {
+    if (!D().vaultForSticker) return [];
+    const V = vaultM(), got = [];
+    for (const id of D().vaultForSticker(achId)) if (!V.owned[id]) { V.owned[id] = 1; V.news[id] = 1; got.push(id); }
+    if (got.length) { const d = vaultDef(got[0]); S.vaultDirty = true; toast(`Unlocked in the Prize Vault: ${d ? d.name : got[0]}!`, 2.6); }
+    return got;
+  }
+  const vaultNewN = () => { const V = vaultM(); return Object.keys(V.news).length + (V.pend ? 1 : 0); };
+  // The title's gold-and-pink Prize Vault button with the wallet on it.
+  function vaultTitleBtn(menu) {
+    if (!menu || !D().COSMETICS) return null;
+    const V = vaultM(), n = vaultNewN();
+    const b = btn('Prize Vault', () => showVault(), 'vaultBtn');
+    b.textContent = '';
+    b.appendChild(h('span', 'v1', 'Prize Vault'));
+    const v2 = h('span', 'v2');
+    v2.appendChild(h('i', 'tixi'));
+    v2.appendChild(h('b', null, fmtN(V.tix)));
+    v2.appendChild(h('span', null, ' vault tickets' + (n ? ` · ${n} new` : '')));
+    b.appendChild(v2);
+    if (n) b.appendChild(h('i', 'vdot', String(n)));
+    menu.appendChild(b);
+    return b;
+  }
+
+  // ---- the vault screen
+  function showVault(tab) {
+    vaultM();
+    const Vs = S.vault || (S.vault = { tab: 'skin', sel: null, char: null, claw: null, party: 0, mq: 'YOURS!', flash: 0, t: 0, tp: [], tT: 0, wx: VLT_TRAIL.x0, wy: VLT_TRAIL.y, demo: null });
+    const cats = (D().VAULT_CATS || []).map((c) => c.id);
+    if (tab && cats.indexOf(tab) >= 0) { Vs.tab = tab; Vs.sel = null; }
+    if (!Vs.char || !charDef(Vs.char)) Vs.char = (S.run && charDef(S.run.char) ? S.run.char : 'knight');
+    if (!Vs.claw) Vs.claw = pickedClaw();
+    S.vcap = null;
+    setScreen('vault');
+    vaultDemo();
+    const scr = $('scr-vault');
+    if (scr) scr.onpointerdown = (ev) => { if (!S.vcap) return; if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return; vaultCapTap(); };
+    if (vaultM().pend) vaultCapOpen();   // a capsule paid for before a reload opens now (the same prize)
+    else vaultDom();
+    snd('vaultOpen');
+    return Vs;
+  }
+  function vaultLeave() { S.vcap = null; showTitle(); }
+  // The preview's demo cabinet (the claw picker's demo world) for the preview claw type.
+  function vaultDemo() {
+    const Vs = S.vault;
+    if (!Vs || !X.PHYS || !X.PHYS.clawRig) return null;
+    if (Vs.demo && Vs.demo.id === Vs.claw) return Vs.demo;
+    try { Vs.demo = clawDemoBuild(clawTypeOk(Vs.claw) ? Vs.claw : 'classic'); } catch (e) { Vs.demo = null; }
+    return Vs.demo;
+  }
+  // The cosmetic the detail strip shows: the picked one, else what the tab has on.
+  function vaultSelId() {
+    const Vs = S.vault, V = vaultM();
+    if (!Vs) return null;
+    if (Vs.sel && vaultDef(Vs.sel)) return Vs.sel;
+    if (Vs.tab === 'outfit') {
+      const list = D().vaultList ? D().vaultList('outfit', Vs.char) : [];
+      return V.eq.outfit[Vs.char] || list[0] || null;
+    }
+    return V.eq[Vs.tab] || null;
+  }
+  function vaultIsEq(id) {
+    const d = vaultDef(id), V = vaultM();
+    if (!d) return false;
+    return d.cat === 'outfit' ? V.eq.outfit[d.char] === id : V.eq[d.cat] === id;
+  }
+  // What the preview window wears: everything equipped, with the picked cosmetic swapped in.
+  function vaultPreview() {
+    const V = vaultM(), Vs = S.vault || {}, sel = vaultDef(Vs.sel);
+    const pv = { skin: V.eq.skin, paint: V.eq.paint, marquee: V.eq.marquee, trail: V.eq.trail, char: Vs.char || 'knight', outfit: null };
+    if (sel && sel.cat === 'outfit' && sel.char) pv.char = sel.char;
+    pv.outfit = sel && sel.cat === 'outfit' ? sel.id : V.eq.outfit[pv.char] || null;
+    if (sel && VLT_SLOTS.indexOf(sel.cat) >= 0) pv[sel.cat] = sel.id;
+    return pv;
+  }
+  function vaultDom() {
+    const b = $('vaultBody');
+    if (!b) return;
+    const shelf0 = b.querySelector ? b.querySelector('.vShelf') : null;
+    const scroll = shelf0 && shelf0.scrollTop ? shelf0.scrollTop : 0;
+    clear(b);
+    S.ui.buttons = [];
+    b.className = S.vcap ? 'vaultBody capBody vcap' : 'vaultBody';
+    if (S.vcap) { vaultCapDom(b); return; }
+    const V = vaultM(), Vs = S.vault;
+    const top = h('div', 'vTop');
+    top.appendChild(btn('Back', () => vaultLeave(), 'sm ghost vBack'));
+    top.appendChild(h('div', 'grow'));
+    const wal = h('div', 'vWallet');
+    wal.id = 'vWallet';
+    wal.appendChild(h('i', 'tixi'));
+    wal.appendChild(h('b', null, fmtN(V.tix)));
+    wal.appendChild(h('span', null, 'vault tix'));
+    wal.onclick = () => popover(`<b>Vault tickets: ${fmtN(V.tix)}</b><br>Every arcade ticket you win in a run also banks here, for good. Spending tickets in a run never takes any back.<br>Won so far: ${fmtN(V.earned)}.`, 400, 60);
+    top.appendChild(wal);
+    b.appendChild(top);
+    // two little switches on the preview window's sill
+    const pw = h('div', 'vPrevBar');
+    const ids = clawIds(), chars = Object.keys(tbl('CHARACTERS'));
+    const cl = h('button', 'vMini', '⟳ ' + (clawInfo(Vs.claw).name || 'Claw'));
+    cl.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); Vs.claw = ids[(ids.indexOf(Vs.claw) + 1) % ids.length]; vaultDemo(); snd('clawCoin'); vaultDom(); };
+    const cr = h('button', 'vMini', '⟳ ' + ((charDef(Vs.char) || {}).name || 'Crawler'));
+    cr.onclick = (ev) => {
+      if (ev && ev.stopPropagation) ev.stopPropagation();
+      Vs.char = chars[(chars.indexOf(Vs.char) + 1) % Math.max(1, chars.length)] || 'knight';
+      const sd = vaultDef(Vs.sel); if (sd && sd.cat === 'outfit') Vs.sel = null;
+      snd('click'); vaultDom();
+    };
+    pw.appendChild(cl); pw.appendChild(h('div', 'grow')); pw.appendChild(cr);
+    b.appendChild(pw);
+    b.appendChild(vaultDetail());
+    // the category tabs, a dot for anything new behind them
+    const tabs = h('div', 'vTabs');
+    for (const c of D().VAULT_CATS || []) {
+      const tb = h('button', 'vTab' + (c.id === Vs.tab ? ' on' : ''));
+      tb.appendChild(h('span', 'ic', c.icon || ''));
+      tb.appendChild(h('span', 'lb', c.label));
+      const nn = Object.keys(V.news).filter((id) => { const d = vaultDef(id); return d && d.cat === c.id; }).length;
+      if (nn) tb.appendChild(h('i', 'nd', String(nn)));
+      tb.onclick = () => { Vs.tab = c.id; Vs.sel = null; snd('cardFlip'); vaultDom(); };
+      tabs.appendChild(tb);
+    }
+    b.appendChild(tabs);
+    // the shelf: a glowing slot per prize
+    const shelf = h('div', 'vShelf');
+    const list = D().vaultList ? D().vaultList(Vs.tab) : [];
+    for (const id of list) shelf.appendChild(vaultCard(id));
+    b.appendChild(shelf);
+    try { if (scroll) shelf.scrollTop = scroll; } catch (e) { /* stub */ }
+    // the capsule counter
+    const bot = h('div', 'vBottom');
+    const price = VLT().CAP_PRICE || 60;
+    const cb = btn('Vault Capsule', () => vaultCapBuy(), 'gold vCapBtn' + (!V.pend && V.tix < price ? ' poor' : ''));
+    cb.textContent = '';
+    cb.appendChild(capCanvas(V.pend ? V.pend.tier0 : 'r', 44));
+    const cw = h('span', 'cw');
+    cw.appendChild(h('span', 'c1', V.pend ? 'Open your capsule' : 'Vault Capsule'));
+    const c2 = h('span', 'c2');
+    if (V.pend) c2.textContent = 'paid for, waiting';
+    else { c2.appendChild(h('i', 'tixi')); c2.appendChild(h('b', null, String(price))); c2.appendChild(h('span', null, ' tickets')); }
+    cw.appendChild(c2);
+    cb.appendChild(cw);
+    bot.appendChild(cb);
+    const W0 = VLT().CAP_W || VLT0.CAP_W, tot = Object.keys(W0).reduce((s, k) => s + W0[k], 0) || 1;
+    const left = Math.max(1, (VLT().PITY || 12) - V.pity);
+    bot.appendChild(h('div', 'vOdds', `Rare ${Math.round(W0.r * 100 / tot)}% · Legendary ${Math.round(W0.l * 100 / tot)}%. Dupes pay tickets back. A legendary in ${left} or sooner.`));
+    b.appendChild(bot);
+  }
+  // One prize slot on the shelf.
+  function vaultCard(id) {
+    const d = vaultDef(id), V = vaultM(), Vs = S.vault;
+    const own = !!V.owned[id], eq = vaultIsEq(id), how = vaultHowOf(id), price = vaultPriceOf(id);
+    const el = h('div', 'vCard r-' + d.rarity + (own ? ' own' : '') + (eq ? ' eq' : '') + (vaultSelId() === id ? ' sel' : '') + (!own && how !== 'buy' ? ' lock' : '') + (!own && how === 'buy' && V.tix < price ? ' poor' : ''));
+    try { el.style.setProperty('--vc', (VLT().COLOR || VLT0.COLOR)[d.rarity] || '#b9b0cc'); } catch (e) { /* stub */ }
+    el.appendChild(canvasEl(70, (ctx, p) => { if (X.RENDER && X.RENDER.vault) X.RENDER.vault.thumb(ctx, id, p / 2, p / 2, p, 0.8); }));
+    el.appendChild(h('div', 'nm', d.name));
+    const tg = h('div', 'tg');
+    if (eq) tg.textContent = '★ ON';
+    else if (own) tg.textContent = 'OWNED';
+    else if (how === 'buy') { tg.appendChild(h('i', 'tixi')); tg.appendChild(h('b', null, String(price))); }
+    else tg.textContent = how === 'sticker' ? '🔒 STICKER' : '🎰 CAPSULE';
+    el.appendChild(tg);
+    if (d.char && Vs.tab === 'outfit') el.appendChild(h('div', 'who', ((charDef(d.char) || {}).name || d.char).split(' ')[0]));
+    if (V.news[id]) el.appendChild(h('i', 'nb', 'NEW'));
+    const fn = () => vaultSelect(id);
+    el.onclick = fn;
+    S.ui.buttons.push({ el, fn, label: d.name });
+    return el;
+  }
+  // The strip under the window: the picked prize, its words and what you can do with it.
+  function vaultDetail() {
+    const box = h('div', 'vDetail');
+    const id = vaultSelId(), d = vaultDef(id), V = vaultM();
+    if (!d) return box;
+    try { box.style.setProperty('--vc', (VLT().COLOR || VLT0.COLOR)[d.rarity] || '#b9b0cc'); } catch (e) { /* stub */ }
+    const cat = (D().VAULT_CATS || []).find((c) => c.id === d.cat) || { label: d.cat };
+    const tx = h('div', 'vdTx');
+    tx.appendChild(h('div', 'vdK', `${(VLT().NAME || VLT0.NAME)[d.rarity] || ''} · ${cat.label}` + (d.char ? ` · ${((charDef(d.char) || {}).name || d.char)}` : '')));
+    tx.appendChild(h('div', 'vdN' + (d.rarity === 'l' ? ' lg' : ''), d.name));
+    tx.appendChild(h('div', 'vdT', d.text || ''));
+    box.appendChild(tx);
+    const own = !!V.owned[id], how = vaultHowOf(id), price = vaultPriceOf(id);
+    let act;
+    if (own && vaultIsEq(id)) act = d.cat === 'outfit' ? btn('Take off', () => vaultUnequip(id), 'sm ghost') : h('div', 'vdOn', '★ Equipped');
+    else if (own) act = btn('Equip', () => vaultEquip(id), 'go');
+    else if (how === 'buy') {
+      act = btn('Buy', () => vaultBuy(id), 'gold vBuy' + (V.tix < price ? ' poor' : ''));
+      act.textContent = '';
+      act.appendChild(h('span', null, 'Buy '));
+      act.appendChild(h('i', 'tixi'));
+      act.appendChild(h('b', null, String(price)));
+    } else if (how === 'sticker') {
+      const a = (D().ACHIEVEMENTS || {})[d.ach];
+      act = h('div', 'vdLock', `🔒 Sticker: ${a ? a.name : d.ach}`);
+      act.onclick = () => popover(`<b>${a ? a.icon + ' ' + a.name : d.ach}</b><br>${a ? a.text : ''}<br><i>Earn the sticker and this is yours.</i>`, 400, 400);
+    } else act = h('div', 'vdLock', '🎰 Vault Capsule only');
+    box.appendChild(act);
+    return box;
+  }
+  function vaultSelect(id) {
+    const d = vaultDef(id), Vs = S.vault, V = vaultM();
+    if (!d || !Vs) return false;
+    Vs.sel = id;
+    if (d.cat === 'outfit' && d.char) Vs.char = d.char;
+    if (V.news[id]) { delete V.news[id]; S.vaultDirty = true; }
+    Vs.flash = 0.6;
+    snd('click', { pitch: 1.2 });
+    haptic('tap');
+    vaultDom();
+    return true;
+  }
+  // Buy with vault tickets: the price comes off, the prize goes on at once.
+  function vaultBuy(id) {
+    const d = vaultDef(id), V = vaultM(), price = vaultPriceOf(id);
+    if (!d || V.owned[id]) return false;
+    if (!(price > 0)) { toast(vaultHowOf(id) === 'sticker' ? 'That one only comes with its sticker.' : 'That one only comes out of a Vault Capsule.', 2.2); snd('click'); return false; }
+    if (V.tix < price) {
+      toast(`${fmtN(price - V.tix)} more vault tickets. Every ticket you win in a run banks here.`, 2.4);
+      replay($('vWallet'), 'nope'); snd('click'); haptic('tap');
+      return false;
+    }
+    V.tix -= price; V.spent += price; V.owned[id] = 1;
+    vaultEquip(id, true);
+    if (S.vault) { S.vault.sel = id; S.vault.party = 1.6; S.vault.mq = 'YOURS!'; S.vault.flash = 1; }
+    vaultSave();
+    snd('vaultBuy'); haptic('jackpot');
+    if (!S.headless) {
+      const wp = hudPoint($('vWallet'), 470, 30), tx = VLT_WIN.x + VLT_WIN.w * 0.32, ty = VLT_WIN.y + VLT_WIN.h * 0.5;
+      const n = U.clamp(Math.round(price / 25), 3, 9);
+      for (let k = 0; k < n; k++) domFly(h('div', 'dtix'), wp.x + (k - n / 2) * 5, wp.y, tx, ty, 460, k * 45);
+    }
+    fx().emit('confetti', VLT_WIN.x + VLT_WIN.w * 0.3, VLT_WIN.y + 40, { power: 0.9, n: 0.8 });
+    fx().ring(VLT_WIN.x + VLT_WIN.w * 0.32, VLT_WIN.y + VLT_WIN.h * 0.5, (VLT().COLOR || VLT0.COLOR)[d.rarity] || PAL0.gold, { r0: 20, r1: 240, w: 10, life: 0.6 });
+    fx().shake(5);
+    vaultDom();
+    replay($('vWallet'), 'dip');
+    return true;
+  }
+  function vaultEquip(id, quiet) {
+    const d = vaultDef(id), V = vaultM();
+    if (!d || !V.owned[id]) return false;
+    if (d.cat === 'outfit') { if (!d.char) return false; V.eq.outfit[d.char] = id; }
+    else if (VLT_SLOTS.indexOf(d.cat) >= 0) V.eq[d.cat] = id;
+    else return false;
+    if (V.news[id]) delete V.news[id];
+    vaultApply();
+    if (!quiet) {
+      vaultSave();
+      snd('vaultEquip'); haptic('tap');
+      if (S.vault) { S.vault.flash = 1; S.vault.party = Math.max(S.vault.party, 0.5); S.vault.mq = 'EQUIPPED'; }
+      fx().ring(VLT_WIN.x + VLT_WIN.w * 0.32, VLT_WIN.y + VLT_WIN.h * 0.5, PAL0.cyan, { r0: 10, r1: 180, w: 8, life: 0.45 });
+      if (S.screen === 'vault') vaultDom();
+    }
+    return true;
+  }
+  // Outfits come off (the other slots always wear something).
+  function vaultUnequip(id) {
+    const d = vaultDef(id), V = vaultM();
+    if (!d || d.cat !== 'outfit' || V.eq.outfit[d.char] !== id) return false;
+    delete V.eq.outfit[d.char];
+    vaultApply(); vaultSave();
+    snd('click');
+    if (S.vault) S.vault.sel = null;
+    if (S.screen === 'vault') vaultDom();
+    return true;
+  }
+
+  // ---- the Vault Capsule: paid and rolled at once (saved as pend), then the same crack-and-burst ritual as the run's capsules
+  function vaultCapBuy() {
+    const V = vaultM();
+    if (V.pend) return vaultCapOpen();
+    const price = VLT().CAP_PRICE || 60;
+    if (V.tix < price) {
+      toast(`A Vault Capsule is ${price} tickets. You have ${fmtN(V.tix)}: go win some in a run!`, 2.4);
+      replay($('vWallet'), 'nope'); snd('click');
+      return false;
+    }
+    if (!D().vaultRoll) return false;
+    const rng = U.rng(U.hashStr('vault:' + V.caps + ':' + V.spent + ':' + V.earned + ':' + V.pity + ':' + Object.keys(V.owned).length));
+    const r = D().vaultRoll(rng, V.owned, V.pity);
+    V.tix -= price; V.spent += price; V.pity = r.pity | 0;
+    V.pend = { id: r.id, tier0: r.tier0, ups: r.ups.slice(), tier: r.tier, dupe: !!r.dupe, tix: r.tix | 0, lucky: !!r.lucky };
+    vaultSave();
+    snd('coinIn');
+    return vaultCapOpen();
+  }
+  function vaultCapOpen() {
+    const V = vaultM(), p = V.pend;
+    if (!p) return false;
+    const fast = V.caps >= ((LT().FAST_AFTER) || 12);
+    const taps = fast ? (LT().FAST_TAPS || 2) : (LT().TAPS || 3);
+    S.vcap = { p, phase: 'drop', t: 0, taps: 0, burstTap: Math.max(taps, p.ups.length + 2) - 1, shown: p.tier0, stage: 0, crack: 0, rot: 0, rotV: 0, sq: 0, sqV: 0,
+      flash: 0, open: 0, dropT: fast ? 0.35 : 0.7, fast, x: 270, y: 450, r: 84, bt: 0, idleT: 0, sparkT: 0, res: null };
+    vaultDom();
+    snd('whoosh', { pitch: 0.8 });
+    return true;
+  }
+  const vcapName = (t) => (VLT().NAME || VLT0.NAME)[t] || 'Mystery';
+  function vaultCapDom(b) {
+    const C = S.vcap, p = C.p, d = vaultDef(p.id);
+    const top = h('div', 'capTop');
+    try { top.style.setProperty('--cc', capCol(C.shown)); } catch (e) { /* stub */ }
+    const tierEl = h('div', 'capTier' + (C.shown === 'l' ? ' lg' : ''), vcapName(C.shown));
+    tierEl.id = 'vcapTier';
+    top.appendChild(tierEl);
+    const tag = h('div', null, '');
+    tag.id = 'vcapTag';
+    top.appendChild(tag);
+    top.appendChild(h('div', 'capSrc', 'Vault Capsule · a cosmetic prize'));
+    if (C.phase !== 'done' && p.lucky) top.appendChild(h('div', 'capPity', 'Twelve in a row without a legendary: this one is.'));
+    b.appendChild(top);
+    if (C.phase === 'done' && C.res) {
+      const r = C.res, V = vaultM(), price = VLT().CAP_PRICE || 60;
+      const card = h('div', 'prize vPrize' + (r.dupe ? ' dupe' : ''));
+      try { card.style.setProperty('--cc', capCol(r.tier)); } catch (e) { /* stub */ }
+      const pic = h('div', 'pic');
+      pic.appendChild(canvasEl(76, (ctx, px) => { if (X.RENDER && X.RENDER.vault) X.RENDER.vault.thumb(ctx, r.id, px / 2, px / 2, px, 0.8); }));
+      card.appendChild(pic);
+      const cat = (D().VAULT_CATS || []).find((c) => c.id === (d && d.cat)) || { label: '' };
+      card.appendChild(h('div', 'pk', `${vcapName(r.tier)} ${cat.label}` + (d && d.char ? ` · ${(charDef(d.char) || {}).name || d.char}` : '')));
+      card.appendChild(h('div', 'pn', d ? d.name : r.id));
+      card.appendChild(h('div', 'pt', r.dupe ? `Already yours: +${r.tix} vault tickets back.` : (d ? d.text : '')));
+      if (!r.dupe) card.appendChild(h('div', 'vNew', 'NEW!'));
+      const row = h('div', 'row center');
+      if (!r.dupe) row.appendChild(btn('Equip it', () => { vaultEquip(r.id, true); vaultSave(); snd('vaultEquip'); vaultCapClose(r.id); }, 'go'));
+      if (V.tix >= price) row.appendChild(btn(`Again · ${price}`, () => { S.vcap = null; vaultCapBuy(); }, 'gold'));
+      row.appendChild(btn('Back to the vault', () => vaultCapClose(r.dupe ? null : r.id), 'sm ghost'));
+      card.appendChild(row);
+      b.appendChild(card);
+    } else {
+      const hint = h('div', 'capHint');
+      hint.id = 'vcapHint';
+      try { hint.style.setProperty('--cc', capCol(C.shown)); } catch (e) { /* stub */ }
+      b.appendChild(hint);
+      vaultCapHint();
+      S.ui.buttons.push({ el: $('scr-vault'), fn: () => vaultCapTap(), label: 'Crack' });
+      b.appendChild(btn('Skip', () => vaultCapSkip(), 'sm ghost capSkip'));
+    }
+  }
+  function vaultCapHint() {
+    const C = S.vcap, el = $('vcapHint');
+    if (!C || !el) return;
+    const left = Math.max(0, C.burstTap + 1 - C.taps);
+    clear(el);
+    el.appendChild(h('span', null, C.phase === 'drop' ? '' : left <= 1 ? 'TAP TO OPEN!' : 'TAP TO CRACK'));
+    el.appendChild(h('small', null, '●'.repeat(Math.min(C.taps, C.burstTap + 1)) + '○'.repeat(left)));
+  }
+  function vaultCapTap() {
+    const C = S.vcap;
+    if (!C || S.screen !== 'vault') return false;
+    if (C.phase === 'drop') { vaultCapLand(); return true; }
+    if (C.phase === 'burst') { vaultCapReveal(); return true; }
+    if (C.phase !== 'idle') return false;
+    const i = C.taps++;
+    C.idleT = 0;
+    if (i >= C.burstTap) { vaultCapBurst(); return true; }
+    const reduced = !!fx().reduced, col = capCol(C.shown);
+    C.crack = (i + 1) / (C.burstTap + 1);
+    C.rotV += (i % 2 ? -1 : 1) * (3 + i * 2.5) * (reduced ? 0.4 : 1);
+    C.sqV += 0.9 + i * 0.35;
+    fx().emit('sparks', C.x, C.y, { col, n: 1 + i * 0.6, power: 1 + i * 0.3 });
+    fx().emit('shatter', C.x, C.y, { col: '#ffffff', n: 0.3 + i * 0.2 });
+    fx().ring(C.x, C.y, col, { r0: C.r * 0.8, r1: C.r * (1.8 + i * 0.4), w: 5 + i * 2, life: 0.4 });
+    fx().shake(3 + i * 3);
+    snd('capCrack', { n: i });
+    haptic('capCrack');
+    if (i >= 1 && C.stage < C.p.ups.length) vaultCapUp();
+    vaultCapHint();
+    return true;
+  }
+  // Mid-open, the capsule turns a rarer colour: a flash, chromatic rings, the riser.
+  function vaultCapUp() {
+    const C = S.vcap, next = C.p.ups[C.stage++];
+    if (!next) return;
+    C.shown = next; C.flash = 1;
+    const col = capCol(next);
+    if (!fx().reduced) fx().flash(col, 0.5);
+    fx().ring(C.x, C.y, col, { r0: 20, r1: 260, w: 12, life: 0.6 });
+    fx().ring(C.x - 5, C.y, PAL0.pink, { r0: 10, r1: 320, w: 8, life: 0.7, delay: 0.05 });
+    fx().ring(C.x + 5, C.y, PAL0.cyan, { r0: 10, r1: 320, w: 8, life: 0.7, delay: 0.1 });
+    fx().emit('confetti', C.x, C.y - 20, { power: 0.8, n: 0.6 });
+    fx().shake(9);
+    snd('capUpgrade'); haptic('jackpot');
+    const tEl = $('vcapTier');
+    if (tEl) { tEl.textContent = vcapName(next); tEl.className = 'capTier' + (next === 'l' ? ' lg' : ''); replay(tEl, 'up'); }
+    try { const top = tEl && tEl.parentNode; if (top && top.style) top.style.setProperty('--cc', col); const hEl = $('vcapHint'); if (hEl && hEl.style) hEl.style.setProperty('--cc', col); } catch (e) { /* stub */ }
+    const tag = $('vcapTag');
+    if (tag) { tag.textContent = next === 'l' ? 'RAINBOW UPGRADE!' : 'UPGRADE!'; tag.className = ''; replay(tag, 'capUpTag'); }
+  }
+  function vaultCapLand(quiet) {
+    const C = S.vcap;
+    C.phase = 'idle'; C.t = C.dropT; C.sqV += 1.6;
+    if (quiet) return;
+    fx().emit('dust', C.x, C.y + C.r + 18, { power: 1.2 });
+    fx().shake(4);
+    snd('capDrop');
+    vaultCapHint();
+  }
+  function vaultCapSkip() {
+    const C = S.vcap;
+    if (!C) return;
+    if (C.phase === 'burst') { vaultCapReveal(); return; }
+    if (C.phase === 'drop') vaultCapLand(true);
+    if (C.phase === 'idle') { C.stage = C.p.ups.length; C.shown = C.p.tier; vaultCapBurst(); }
+  }
+  // The last tap: the prize is paid now and saved, so a reload never pays twice.
+  function vaultCapPay() {
+    const C = S.vcap, V = vaultM(), p = C.p;
+    if (C.res) return C.res;
+    const dupe = !!V.owned[p.id];
+    const tix = dupe ? ((VLT().DUPE || VLT0.DUPE)[p.tier] || p.tix || 0) : 0;
+    if (dupe) V.tix += tix;
+    else { V.owned[p.id] = 1; V.news[p.id] = 1; }
+    V.caps++;
+    V.pend = null;
+    C.res = { id: p.id, dupe, tix, tier: p.tier };
+    vaultSave();
+    return C.res;
+  }
+  function vaultCapBurst() {
+    const C = S.vcap;
+    C.phase = 'burst'; C.bt = 0; C.flash = 1; C.shown = C.p.tier;
+    const r = vaultCapPay();
+    const tier = TIER_I[r.tier] || 0, col = capCol(r.tier), reduced = !!fx().reduced;
+    if (!reduced) fx().flash('#ffffff', 0.5 + tier * 0.1);
+    fx().emit('confetti', C.x, C.y, { power: 1 + tier * 0.15, dir: -Math.PI / 2 - 0.5, spread: 1.4 });
+    fx().emit('confetti', C.x, C.y, { power: 1 + tier * 0.15, dir: -Math.PI / 2 + 0.5, spread: 1.4 });
+    fx().emit('shatter', C.x, C.y, { col, n: 1.2 });
+    fx().emit('poof', C.x, C.y);
+    if (r.dupe) fx().emit('coins', C.x, C.y, { n: 1.5, power: 1.1 });
+    fx().ring(C.x, C.y, col, { r0: C.r, r1: 360, w: 14, life: 0.7 });
+    fx().ring(C.x, C.y, '#ffffff', { r0: 10, r1: 240, w: 8, life: 0.5, delay: 0.06 });
+    if (tier >= 2) { fx().ring(C.x, C.y, PAL0.pink, { r0: 10, r1: 420, w: 10, life: 0.8, delay: 0.1 }); fx().ring(C.x, C.y, PAL0.cyan, { r0: 10, r1: 460, w: 10, life: 0.85, delay: 0.16 }); }
+    if (tier >= 3) {
+      // a legendary: a rainbow of rings, confetti from the top, slow motion
+      const rb = (X.RENDER && X.RENDER.vault && X.RENDER.vault.RB) || [PAL0.lime];
+      for (let i = 0; i < 6; i++) fx().ring(C.x, C.y, rb[i * 4 % rb.length], { r0: 10, r1: 420 + i * 30, w: 9, life: 0.9, delay: 0.1 + i * 0.06 });
+      fx().emit('confetti', 270, 120, { power: 1.2, dir: Math.PI / 2, spread: 2.4 });
+      slowmo(0.35, 0.45);
+    }
+    fx().shake(10 + tier * 3);
+    snd('capBurst', { tier });
+    snd(r.dupe ? 'vaultDupe' : 'vaultNew', { tier });
+    haptic('capBurst');
+    const hEl = $('vcapHint'); if (hEl) clear(hEl);
+    const tEl = $('vcapTier'); if (tEl) { tEl.textContent = vcapName(r.tier); tEl.className = 'capTier' + (r.tier === 'l' ? ' lg' : ''); }
+  }
+  function vaultCapReveal() {
+    const C = S.vcap;
+    if (!C || C.phase === 'done') return;
+    C.phase = 'done'; C.open = 1;
+    vaultDom();
+    snd('relic');
+  }
+  function vaultCapClose(selId) {
+    S.vcap = null;
+    if (S.vault && selId) { const d = vaultDef(selId); S.vault.sel = selId; if (d) { S.vault.tab = d.cat; if (d.char) S.vault.char = d.char; } }
+    if (S.screen === 'vault') vaultDom();
+  }
+  function vaultCapTick(dt) {
+    const C = S.vcap;
+    if (!C) return;
+    C.t += dt;
+    if (C.phase === 'drop' && C.t >= C.dropT) vaultCapLand();
+    const reduced = !!fx().reduced;
+    C.rotV += (-C.rot * 140 - C.rotV * 9) * dt; C.rot += C.rotV * dt;
+    C.sqV += (-C.sq * 220 - C.sqV * 12) * dt; C.sq += C.sqV * dt;
+    C.sq = U.clamp(C.sq, -0.25, 0.25); C.rot = U.clamp(C.rot, -0.6, 0.6);
+    C.flash = Math.max(0, C.flash - dt * 2.5);
+    if (C.phase === 'idle') {
+      C.idleT += dt;
+      if (C.idleT > 1.6 && !reduced) { C.idleT = 0.9; C.rotV += (C.taps % 2 ? 1 : -1) * (1.5 + C.taps); C.sqV += 0.4; }
+      C.sparkT -= dt;
+      if (C.sparkT <= 0) { C.sparkT = 0.5 - (TIER_I[C.shown] || 0) * 0.1; fx().emit('glint', C.x + Math.sin(C.t * 7) * C.r * 0.9, C.y - C.r * 0.5 + Math.cos(C.t * 5) * C.r * 0.5, { col: capCol(C.shown) }); }
+    }
+    if (C.phase === 'burst') {
+      C.bt += dt;
+      C.open = Math.min(1, C.open + dt * (C.fast ? 4 : 2.8));
+      if (C.bt >= (C.fast ? 0.3 : 0.55)) vaultCapReveal();
+    }
+  }
+  // The capsule scene over the vault wall: dim, rays (a rainbow set for a legendary), the pedestal, the capsule.
+  function vaultCapDraw(ctx, t) {
+    const C = S.vcap, R = X.RENDER;
+    if (!C || !R || !R.capsule) return;
+    const col = capCol(C.shown), tier = TIER_I[C.shown] || 0, burst = C.phase === 'burst' || C.phase === 'done';
+    const u = C.phase === 'drop' ? U.clamp(C.t / C.dropT, 0, 1) : 1;
+    const y = C.phase === 'drop' ? C.y - (1 - U.ease.outBounce(u)) * 560 : C.y;
+    const rg = R.rgba || ((c) => c);
+    ctx.save();
+    ctx.fillStyle = 'rgba(10,5,20,0.86)';
+    ctx.fillRect(-40, -40, W + 80, H + 80);
+    try {
+      const n = 16, rot = t * (burst ? 0.45 : 0.22) * (fx().reduced ? 0.2 : 1), len = burst ? 640 : 280 + tier * 70;
+      const g = ctx.createRadialGradient(C.x, y, 10, C.x, y, len);
+      g.addColorStop(0, rg(burst ? '#ffffff' : col, burst ? 0.34 : 0.16 + tier * 0.05));
+      g.addColorStop(0.5, rg(col, burst ? 0.16 : 0.06 + tier * 0.03));
+      g.addColorStop(1, rg(col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) { const a = rot + i * Math.PI * 2 / n; ctx.moveTo(C.x, y); ctx.arc(C.x, y, len, a, a + Math.PI / n * 0.8); ctx.closePath(); }
+      ctx.fill();
+      if (tier >= 3) {
+        const rb = (R.vault && R.vault.RB) || ['#ff2e88', '#a6ff5e', '#2ee6d6', '#9b7bff'];
+        for (let i = 0; i < 12; i++) {
+          const a = -rot * 1.3 + i * Math.PI / 6;
+          ctx.fillStyle = rg(rb[(i * 2) % rb.length], 0.12);
+          ctx.beginPath(); ctx.moveTo(C.x, y); ctx.arc(C.x, y, len * 0.85, a, a + 0.14); ctx.closePath(); ctx.fill();
+        }
+      }
+    } catch (e) { /* stub ctx */ }
+    const py = C.y + C.r + 26;
+    ctx.fillStyle = '#231640';
+    ctx.beginPath(); ctx.ellipse(C.x, py + 10, 118, 26, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#34245c';
+    ctx.beginPath(); ctx.ellipse(C.x, py, 110, 22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = rg(col, 0.8); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(C.x, py, 110, 22, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    const sh = 0.4 + 0.6 * U.clamp(1 - (C.y - y) / 560, 0, 1);
+    ctx.beginPath(); ctx.ellipse(C.x, py - 2, 70 * sh, 12 * sh, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    R.capsule(ctx, C.x, y, C.r, { tier: C.shown, t, rot: C.rot, sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 11, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    // the prize floats up out of the halves as it opens
+    if (burst && C.res && R.vault) {
+      const k = U.clamp(C.open, 0, 1);
+      R.vault.thumb(ctx, C.res.id, C.x, y - 40 * k, 60 + 60 * k, t);
+    }
+  }
+
+  // ---- per frame: the wallet's save, the map trail, the preview's claw and walker, the capsule
+  function vaultTick(dt) {
+    if (S.vaultDirty) { S.vaultSaveT = (S.vaultSaveT || 0) + dt; if (S.vaultSaveT >= 0.5) vaultSave(); }
+    vaultMapTrailTick(dt);
+    const Vs = S.vault;
+    if (S.screen !== 'vault' || !Vs) return;
+    Vs.t += dt;
+    Vs.party = Math.max(0, Vs.party - dt * 0.6);
+    Vs.flash = Math.max(0, Vs.flash - dt * 2.2);
+    if (Vs.demo && !S.vcap) { try { clawDemoStep(Vs.demo, dt); } catch (e) { Vs.demo = null; } }
+    // the little walker on the window sill leaves the trail
+    const L = (X.RENDER && X.RENDER.vault && X.RENDER.vault.TRAIL_LIFE) || 2.6;
+    for (const p of Vs.tp) p.a += dt;
+    while (Vs.tp.length && Vs.tp[0].a > L) Vs.tp.shift();
+    Vs.wx = VLT_TRAIL.x0 + (0.5 - 0.5 * Math.cos(Vs.t * 0.9)) * (VLT_TRAIL.x1 - VLT_TRAIL.x0);
+    Vs.wy = VLT_TRAIL.y + Math.sin(Vs.t * 7) * 2;
+    Vs.tT += dt;
+    if (Vs.tT >= VLT_TRAIL.every) { Vs.tT = 0; Vs.tp.push({ x: Vs.wx, y: Vs.wy + 8, a: 0, s: Vs.t * 13 }); if (Vs.tp.length > VLT_TRAIL.max) Vs.tp.shift(); }
+    if (S.vcap) vaultCapTick(dt);
+  }
+  function vaultMapTrailTick(dt) {
+    const T = S.vtrail || (S.vtrail = { pts: [], pool: [], t: 0, seq: 0 });
+    if (!T.pts.length && !(S.screen === 'map' && S.walk)) return;
+    const L = (X.RENDER && X.RENDER.vault && X.RENDER.vault.TRAIL_LIFE) || 2.6;
+    for (const p of T.pts) p.a += dt;
+    while (T.pts.length && T.pts[0].a > L) T.pts.shift();
+    if (S.screen !== 'map' || !S.walk || !mapLayout()) return;
+    T.t += dt;
+    if (T.t < VLT_MAPTRAIL.every) return;
+    T.t = 0;
+    const p = walkXY();
+    if (!p) return;
+    const w = stageToWorld(p.x, p.y + 6);
+    T.pts.push({ x: w.x, y: w.y, a: 0, s: ++T.seq });
+    if (T.pts.length > VLT_MAPTRAIL.max) T.pts.shift();
+  }
+  // The map trail behind the crawler (drawMap calls this under the crawler).
+  function vaultTrailDraw(ctx, t, z, ox, oy, size) {
+    const T = S.vtrail, R = X.RENDER;
+    if (!T || !T.pts.length || !R || !R.vault || !R.vault.trail) return;
+    const P = T.pool;
+    for (let i = 0; i < T.pts.length; i++) {
+      const q = P[i] || (P[i] = { x: 0, y: 0, a: 0, s: 0 }), p = T.pts[i];
+      q.x = p.x * z + ox; q.y = p.y * z + oy; q.a = p.a; q.s = p.s;
+    }
+    R.vault.trail(ctx, P, T.pts.length, t, undefined, size * 1.6);
+  }
+  // The vault screen's canvas: the wall, the live preview behind the glass, the capsule.
+  function vaultDraw(ctx, t) {
+    if (S.screen !== 'vault' || !S.vault) return;
+    const R = X.RENDER;
+    if (!R || !R.vault) return;
+    R.vault.wall(ctx, W, H, t, { win: VLT_WIN });
+    vaultPrevDraw(ctx, t);
+    R.vault.glass(ctx, VLT_WIN, t);
+    if (S.vcap) vaultCapDraw(ctx, t);
+  }
+  function vaultPrevDraw(ctx, t) {
+    const R = X.RENDER, Vs = S.vault, Dm = Vs.demo, pv = vaultPreview();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(VLT_WIN.x, VLT_WIN.y, VLT_WIN.w, VLT_WIN.h); ctx.clip();
+    ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(141,255,245,0.75)'; ctx.fillText('LIVE PREVIEW', VLT_WIN.x + 12, VLT_WIN.y + 14);
+    // the mini cabinet: the skin, the marquee, the paint on the preview's claw type
+    ctx.save();
+    ctx.translate(VLT_PREV.x, VLT_PREV.y); ctx.scale(VLT_PREV.k, VLT_PREV.k);
+    const cfg = { w: DEMO.w, h: DEMO.h, chuteW: DEMO.chuteW, dividerH: 0.45, frame: 14, railY: 26 };
+    const st = { t, act: 1, party: Math.min(1, Vs.party), marquee: Vs.mq || 'YOURS!', skin: pv.skin, mqId: pv.marquee };
+    if (R.cabinetBack) R.cabinetBack(ctx, 0, 0, cfg, st);
+    if (Dm) {
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, DEMO.w, DEMO.h); ctx.clip();
+      for (const b of Dm.W.bodies) if (b.type === 'dynamic' && R.item) R.item(ctx, b.data.def, b.x, b.y, b.a, 1, {});
+      const r = Dm.rig, busy = r.phase !== 'idle' && r.phase !== 'moving';
+      VLT_J.t = t; VLT_J.mood = busy && r.locked().length ? 'happy' : busy ? 'focus' : '';
+      VLT_J.idle = busy ? 0 : 1; VLT_J.holdN = 0;
+      for (const b of (r.stuck ? r.stuck() : [])) { if (VLT_J.holdN >= 6) break; if (!VLT_J.hold[VLT_J.holdN]) VLT_J.hold[VLT_J.holdN] = { x: 0, y: 0 }; const p = VLT_J.hold[VLT_J.holdN++]; p.x = b.x; p.y = b.y; }
+      if (R.claw) R.claw(ctx, r, 0, 0, { paint: pv.paint, juice: VLT_J });
+      ctx.restore();
+    }
+    if (R.cabinetFront) R.cabinetFront(ctx, 0, 0, cfg, st);
+    ctx.restore();
+    // the crawler in the outfit, and the walker on the sill with the trail
+    const pxX = 430, pxY = 158;
+    ctx.fillStyle = 'rgba(46,230,214,0.08)'; ctx.beginPath(); ctx.ellipse(pxX, pxY + 58, 64, 11, 0, 0, Math.PI * 2); ctx.fill();
+    if (R.vault.withOutfit) R.vault.withOutfit(ctx, pv.char, pxX, pxY, 104, t, pv.outfit);
+    const cn = (charDef(pv.char) || {}).name || pv.char;
+    ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#f3ecff'; ctx.fillText(cn, pxX, pxY + 70);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(VLT_TRAIL.x0 - 16, VLT_TRAIL.y + 12, VLT_TRAIL.x1 - VLT_TRAIL.x0 + 32, 3);
+    if (R.vault.trail) R.vault.trail(ctx, Vs.tp, Vs.tp.length, t, pv.trail, 40);
+    if (R.crawler) R.crawler(ctx, Vs.wx, Vs.wy, 22, t);
+    if (R.vault.withOutfit) R.vault.withOutfit(ctx, pv.char, Vs.wx, Vs.wy - 4, 30, t, pv.outfit);
+    if (Vs.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,' + (0.18 * Vs.flash).toFixed(3) + ')'; ctx.fillRect(VLT_WIN.x, VLT_WIN.y, VLT_WIN.w, VLT_WIN.h); }
+    ctx.restore();
+  }
+  // Space / Enter crack a capsule; Escape leaves.
+  function vaultKey(ev, down) {
+    if (!down) return;
+    const k = ev.key;
+    if (S.vcap && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); vaultCapTap(); }
+    else if (k === 'Escape' && !S.vcap) vaultLeave();
+  }
+
+  // ---- the share card: a 1080 x 1350 PNG of the run, shared as a file or saved
+  function vaultBossName(run, won) {
+    const n = (run.sc && run.sc.bosses) | 0;
+    const nm = (id) => (tbl('ENEMIES')[id] || {}).name || id;
+    const more = n > 1 ? ` (${n} bosses down)` : '';
+    if (won || run.endless) return nm('prizemaster') + more;
+    if (!n) return 'not yet';
+    const enc = (tbl('ENCOUNTERS')[U.clamp((run.act | 0) - 1, 1, 3)] || {}).boss;
+    const id = enc && enc[0] && enc[0][0];
+    return (id ? nm(id) : 'A boss') + more;
+  }
+  function vaultShareInfo(run, won) {
+    const c = charDef(run.char) || {}, L = (lootRun(run) || {}).loot || {}, V = vaultM();
+    let score = run.scoreTop | 0;
+    if (!score && D().runScore) { try { score = D().runScore(run, won).total | 0; } catch (e) { score = 0; } }
+    const MU = tbl('MUTATORS');
+    const RK = { l: 4, r: 3, u: 2, c: 1 };
+    const items = [], seen = {};
+    for (const i of (run.bin || []).slice().sort((a, b) => (RK[itemDef(b.id).rarity] || 0) - (RK[itemDef(a.id).rarity] || 0))) {
+      const d = itemDef(i.id);
+      if (seen[i.id] || d.rarity === 'junk' || !tbl('ITEMS')[i.id]) continue;
+      seen[i.id] = 1; items.push(d);
+      if (items.length >= 9) break;
+    }
+    let date = '';
+    try { date = run.daily || new Date().toISOString().slice(0, 10); } catch (e) { date = ''; }
+    return {
+      char: run.char, name: c.name || run.char, title: c.title || '', won: !!won, score, mode: D().runMode ? D().runMode(run) : 'classic',
+      tilt: run.tilt | 0, loop: run.endless ? run.endless.loop | 0 : 0, act: run.act | 0,
+      muts: (run.muts || []).map((id) => MU[id]).filter(Boolean).map((m) => ({ icon: m.icon, name: m.name, color: m.color })),
+      combo: L.bestCombo || null, bigHit: L.bigHit | 0, boss: vaultBossName(run, won), items,
+      outfit: V.eq.outfit[run.char] || null, clawType: runClawType(run), url: VLT_URL, date, t: 0.8,
+    };
+  }
+  // Renders the card on an offscreen canvas; {cv, st} (cv may be a stub headless).
+  function vaultShareCard(run, won) {
+    run = run || S.run;
+    if (!run) return null;
+    const R = X.RENDER, st = vaultShareInfo(run, won);
+    let cv = null, ctx = null;
+    try { cv = document.createElement('canvas'); cv.width = 1080; cv.height = 1350; ctx = cv.getContext ? cv.getContext('2d') : null; } catch (e) { ctx = null; }
+    if (ctx && R && R.vault && R.vault.share) { try { R.vault.share(ctx, st); } catch (e) { /* art is optional */ } }
+    S.vaultCard = { cv, st };
+    return S.vaultCard;
+  }
+  // The Share button: navigator.share with the PNG when the device can share files, else a download.
+  function vaultShare(run, won) {
+    const card = vaultShareCard(run, won);
+    const V = vaultM();
+    V.shares++; S.vaultDirty = true;
+    snd('vaultShare'); haptic('tap');
+    if (!fx().reduced) fx().flash('#ffffff', 0.35);
+    if (!card || !card.cv) return false;
+    const cv = card.cv, name = 'clawspire-run-' + ((run || S.run || {}).seed || 'card') + '.png';
+    const text = `I scored ${fmtN(card.st.score)} in CLAWSPIRE, the claw machine roguelike.`;
+    const fallback = (blob) => vaultDownload(cv, blob, name);
+    const go = (blob) => {
+      try {
+        const nav = typeof navigator !== 'undefined' ? navigator : null;
+        if (blob && nav && typeof nav.share === 'function' && typeof File === 'function') {
+          const file = new File([blob], name, { type: 'image/png' });
+          if (!nav.canShare || nav.canShare({ files: [file] })) {
+            const p = nav.share({ files: [file], title: 'CLAWSPIRE', text, url: VLT_URL });
+            if (p && p.catch) p.catch((e) => { if (!e || e.name !== 'AbortError') fallback(blob); });
+            return;
+          }
+        }
+      } catch (e) { /* no share sheet: save it instead */ }
+      fallback(blob);
+    };
+    try { if (typeof cv.toBlob === 'function') { cv.toBlob((b) => go(b), 'image/png'); return true; } } catch (e) { /* stub canvas */ }
+    go(null);
+    return true;
+  }
+  function vaultDownload(cv, blob, name) {
+    try {
+      let url = null;
+      if (blob && typeof URL !== 'undefined' && URL.createObjectURL) url = URL.createObjectURL(blob);
+      else if (cv && cv.toDataURL) url = cv.toDataURL('image/png');
+      if (!url) return false;
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      try { document.body.appendChild(a); } catch (e) { /* stub */ }
+      if (a.click) a.click();
+      setTimeout(() => { try { a.remove(); if (blob && URL.revokeObjectURL) URL.revokeObjectURL(url); } catch (e) { /* gone */ } }, 4000);
+      toast('Run card saved. Show it off!', 2);
+      return true;
+    } catch (e) { toast('This browser cannot save the card.', 2); return false; }
+  }
+  // The run end's Share button: registered after the screen's own buttons (their
+  // GAME.choose indices stay put), shown above the Highlights heading.
+  function vaultShareBtn(b, run, won) {
+    if (!b || !run) return null;
+    const bt = btn('Share run card', () => vaultShare(run, won), 'go vShareBtn');
+    const kids = Array.from(b.children || []);
+    const at = kids.find((c) => c && c.tagName === 'H3' && c.textContent === 'Highlights');
+    if (at && b.insertBefore) b.insertBefore(bt, at); else b.appendChild(bt);
+    return bt;
+  }
+  // ================================================================ /VAULT
+
   // ---------------------------------------------------------------- map
   function toMap() {
     const run = S.run;
@@ -2986,6 +3876,7 @@ const GAME = (() => {
       case 'forge': finish(); showForge(); return;
       // ARCADE: a mini-game cabinet (done once its plays are spent and you leave)
       case 'plinko': case 'wheel': case 'slots': arcShow({ q: t.q, r: t.r }); return;
+      case 'moles': case 'skee': case 'petshop': arcShow({ q: t.q, r: t.r }); return;   // PETS (round 5)
       case 'empty': {
         if (t.terrain === 'shallow') {
           const wade = X.MAP && X.MAP.moveCost ? X.MAP.moveCost(t) : 2;
@@ -3722,6 +4613,19 @@ const GAME = (() => {
   }
   // Player-side floating text: left of the turn banner, above the cabinet.
   const PLAYER_FX = { x: 110, y: 386 };
+  /* POLISH (round 5): a hit on the player pops its number just under the HP
+     stat in the top bar and floats there (a soft arc), instead of from the
+     player row, whose gravity used to drop a faded "-49" into the cabinet. */
+  const POL_PNUM = { dy: 76, vy: -70, g: 170, vx: 26, yMax: 170 };   // clear of the top bar (DOM, y < 72) at the top of the arc
+  const POL_PN = { x: 0, y: 0, vx: 0, vy: 0, g: 0 };
+  function polPlayerNum(fan) {
+    const p = hudPoint($('hpStat'), HP_HUD.x, HP_HUD.y);
+    POL_PN.x = U.clamp(p.x + (fan || 0) * 1.3, 40, W - 40);
+    POL_PN.y = Math.min(POL_PNUM.yMax - 50, p.y + POL_PNUM.dy);
+    POL_PN.vx = (fan > 0 ? 1 : fan < 0 ? -1 : 0.3) * POL_PNUM.vx;
+    POL_PN.vy = POL_PNUM.vy; POL_PN.g = POL_PNUM.g;
+    return POL_PN;
+  }
   function nextActor() {
     const list = FS.actors;
     let i = list.indexOf(FS.actor);
@@ -3733,6 +4637,7 @@ const GAME = (() => {
     if (!F || !ev) return;
     metaEvent(ev);   // Prizedex sightings and sticker checks, read only (META block)
     feelEvent(ev);   // tip cards for things met for the first time (FEEL block)
+    petEvent(ev);   // the pet reacts (PETS block)
     bumpShown(ev);
     if (ev.t === 'turn') { FS.shown.p.block = F.player.block; }
     // die/summon/intent carry only an enemy index, no who.
@@ -3776,7 +4681,9 @@ const GAME = (() => {
           }
           if (ev.amt > 0) {
             const crushing = ev.amt >= F.player.maxHp * 0.15;
-            fx().num(pos.x, pos.y, '\u2212' + ev.amt, '#ff5a4a', { crit: crushing });
+            // POLISH (round 5): the number floats by the HP stat, never down into the bin
+            const pn = polPlayerNum(fan);
+            fx().num(pn.x, pn.y, '\u2212' + ev.amt, '#ff5a4a', { crit: crushing, vx: pn.vx, vy: pn.vy, gravity: pn.g });
             fx().shake(U.clamp(4 + ev.amt * 0.7, 4, 18));
             fx().vignette('#ff2e30', U.clamp(0.35 + ev.amt / 25, 0.35, 0.9));
             if (big || crushing) {
@@ -3785,7 +4692,7 @@ const GAME = (() => {
               FS.hitStop = Math.max(FS.hitStop, HIT_STOP * 1.5);
               if (!reduced) fx().flash('#ff5a4a', 0.3);
             }
-            fx().emit('blood', PLAYER_FX.x, PLAYER_FX.y, { n: U.clamp(ev.amt / 8, 0.5, 2) });
+            fx().emit('blood', pn.x, pn.y, { n: U.clamp(ev.amt / 8, 0.5, 2) });
             S.hudHit = 1; replay($('hpStat'), 'hit');
             snd('playerHurt'); haptic('hurt');
           } else {
@@ -5342,6 +6249,7 @@ const GAME = (() => {
   function onRigEvent(ev) {
     const rig = FS.rig;
     const cj = FS.claw;
+    petRig(ev);   // the pet watches the claw; the octopus holds on (PETS block)
     if (clawTypeEvent(ev)) return;   // per claw type sounds and sparks (CLAW TYPES block)
     switch (ev) {
       case 'drop': cj.bendV += (FS.rng() - 0.5) * 160; cj.sq = -0.5; setMood('focus', 1.2); break;
@@ -5509,6 +6417,7 @@ const GAME = (() => {
     if (FS.golden && FS.golden.uid === inst.uid) goldenPrize(pos);
     else if (free) freePrize(chuteMid, CAB.y + CAB.h - 105);
     if (S.coachStep === 2) coachNext();
+    petDeliver(inst);   // hearts, XP, the firefly's spotlight (PETS block)
   }
   function playInst(inst) {
     if (!F || F.phase !== 'player') return;
@@ -5542,6 +6451,7 @@ const GAME = (() => {
   function grabFinished() {
     FS.grabInFlight = false;
     FS.watch = false;
+    petGrab(FS.delivered);   // the pet cheers or sulks; the goose lays on a big one (PETS block)
     luckAfterGrab();
     nearMissAfterGrab();
     const evs = X.COMBAT.grabDone ? X.COMBAT.grabDone(F, FS.delivered) : [];
@@ -5879,6 +6789,7 @@ const GAME = (() => {
     const then = FS.then;
     metaFightEnd(result);   // won-fight stickers (META block)
     endlessFightEnd(result, tier);   // score counters: bosses, combos (ENDLESS block)
+    petFightEnd(result, tier);   // pet XP for a win (PETS block)
     hint('');
     if (result === 'lose') {
       run.killer = FS.killer || 'the Clawspire';
@@ -6333,6 +7244,7 @@ const GAME = (() => {
     if (!run || !n) return;
     run.tickets = Math.max(0, run.tickets + n);
     if (n > 0) run.loot.tixEarned += n;
+    if (n > 0) vaultBank(n);   // every ticket won also banks in the Prize Vault (VAULT block)
   }
   const comboTier = (id) => { const c = tbl('COMBOS')[id]; return c ? U.clamp(c.tier | 0, 1, 3) : 1; };
 
@@ -7505,6 +8417,7 @@ const GAME = (() => {
   // ---- the shared flow: show, act, tick, settle, pay, celebrate, leave
   function arcShow(o) {
     const t = arcTile(o);
+    if (t && t.type === 'petshop') return petShopShow(t);   // PETS (round 5): the pet shop
     if (!arcIsCab(t)) { toMap(); return false; }
     const A = arcSession(t);
     S.sd = { arcade: { q: t.q, r: t.r } };
@@ -7512,7 +8425,7 @@ const GAME = (() => {
       lit: {}, flash: 0, party: 0, drag: null, lever: 0, leverV: 0, rot: A.rot || 0, flap: 0, flapV: 0, pl: null, wh: null, sl: null };
     setScreen('arcade');
     arcDom();
-    if (A.pend) arcBegin();                    // a reload mid-play: the same outcome plays out again
+    if (A.pend || A.live) arcBegin();          // a reload mid-play: the same outcome plays out again (A.live: a round 5 game in progress)
     else if (A.caps.length) S.arc.capT = 0.6;  // a capsule won before the reload: crack it now
     if (!A.used && !A.pend) snd('arcIn');
     save();
@@ -7521,6 +8434,7 @@ const GAME = (() => {
   function arcActLabel() {
     const C = S.arc, A = C && C.A;
     if (!A) return 'Play';
+    if (r5Own(C)) return r5Label(C);   // PETS (round 5): whack-a-mole, skee-ball
     if (C.phase === 'play') return 'Skip';
     if (A.g === 'plinko') return A.tokens > 0 ? 'Drop' : 'No tokens';
     if (A.g === 'wheel') return A.tokens > 0 ? (A.mult > 1 ? `Spin x${A.mult}` : 'Spin') : 'No spins';
@@ -7553,6 +8467,7 @@ const GAME = (() => {
   function arcInfo() {
     const C = S.arc;
     if (!C) return;
+    if (r5Own(C)) { if (C.g === 'petshop') petShopInfo(); else r5Info(C); return; }   // PETS (round 5)
     const A = C.A, tix = (S.run && S.run.tickets) || 0;
     const s = A.g === 'plinko' ? `TOKENS ${A.tokens}`
       : A.g === 'wheel' ? `SPINS ${A.tokens}` + (A.mult > 1 ? `  ·  NEXT PRIZE x${A.mult}` : '')
@@ -7566,6 +8481,7 @@ const GAME = (() => {
   function arcCanPlay() {
     const A = S.arc && S.arc.A;
     if (!A) return false;
+    if (A.live) return true;   // PETS (round 5): a game in progress
     return A.tokens > 0 || (A.g === 'slots' && ((S.run && S.run.tickets) || 0) >= ARC.slotCost);
   }
   function arcMsg(str, cls, sub) {
@@ -7584,6 +8500,7 @@ const GAME = (() => {
     C.flash = 0.4;
     snd('arcLose', { pitch: 1.4 });
     if (A.g === 'slots') toast(`${ARC.slotCost} tickets a pull, you have ${(S.run && S.run.tickets) || 0}. Jackpots and combos in fights pay tickets.`, 2.4);
+    else if (r5Own(C)) toast(A.g === 'moles' ? 'Out of rounds. Thanks for playing!' : 'Out of games. Thanks for playing!');   // PETS (round 5)
     else toast(A.g === 'plinko' ? 'Out of tokens. Thanks for playing!' : 'Out of spins. Thanks for playing!');
     if (A.g === 'slots') { C.leverV = -6; }
     return false;
@@ -7592,6 +8509,7 @@ const GAME = (() => {
   function arcAct(x) {
     const C = S.arc;
     if (!C || S.screen !== 'arcade') return false;
+    if (r5Own(C)) return r5Act(x);   // PETS (round 5): whack-a-mole, skee-ball, the pet shop
     if (C.phase === 'play') { arcHurry(); return true; }
     if (C.phase === 'win') { arcWinDone(); return true; }
     if (C.capT > 0) { arcOpenCap(); return true; }
@@ -7602,6 +8520,7 @@ const GAME = (() => {
   // Starts the animation of the pending play (fresh, or again after a reload).
   function arcBegin() {
     const C = S.arc, A = C.A, p = A.pend;
+    if (r5Own(C)) return r5Begin();   // PETS (round 5)
     if (!p) return;
     C.phase = 'play'; C.win = null;
     arcMsg('');
@@ -7616,6 +8535,7 @@ const GAME = (() => {
   // A tap mid-play: plinko fast-forwards (a second tap skips), the wheel skips, the reels slam to a stop.
   function arcHurry() {
     const C = S.arc;
+    if (r5Own(C)) return r5Hurry();   // PETS (round 5)
     if (C.g === 'plinko' && C.pl && C.pl.speed < 4) { C.pl.speed = 4; return; }
     if (C.g === 'slots' && C.sl && C.sl.reels.some((r) => r.phase === 'spin' && r.stopT > C.sl.t + 0.05)) { for (const r of C.sl.reels) if (r.phase === 'spin') r.stopT = Math.min(r.stopT, C.sl.t); return; }
     arcSkip();
@@ -7625,6 +8545,7 @@ const GAME = (() => {
   function arcSkip() {
     const C = S.arc;
     if (!C) return;
+    if (r5Own(C)) return r5Skip();   // PETS (round 5)
     if (C.phase === 'play' && C.A.pend) {
       if (C.g === 'plinko' && C.pl) C.pl.i = C.pl.sim.path.length / 2 - 1;
       else if (C.g === 'wheel' && C.wh) { C.wh.t = C.wh.D; C.rot = C.wh.rot1; }
@@ -7641,6 +8562,7 @@ const GAME = (() => {
     let res;
     if (A.g === 'plinko') { const slot = C.pl ? C.pl.sim.slot : plkSim(p.x, p.seed).slot; res = plkPays(slot); res.slot = slot; }
     else if (A.g === 'wheel') { res = wheelPays(A, p); res.wedge = p.i; A.rot = ((whTarget(p) % ARC_TAU) + ARC_TAU) % ARC_TAU; C.rot = A.rot; }
+    else if (A.g === 'moles' || A.g === 'skee') res = r5Pays(A, p);   // PETS (round 5): the saved score, by tier
     else { A.stops = p.stops.slice(); res = slotPays(A, slotEval(A, p.stops), p); }
     A.pend = null;
     A.used++;
@@ -7661,6 +8583,7 @@ const GAME = (() => {
   // Where the prize shows on screen (the slot, the pointer, the payline).
   function arcPrizeAt() {
     const C = S.arc;
+    if (r5Own(C)) return r5PrizeAt();   // PETS (round 5)
     if (C.g === 'plinko') { const sl = C.win && C.win.slot != null ? C.win.slot : 4; return { x: plkSlotX(sl), y: PLK.floor - 30 }; }
     if (C.g === 'wheel') return { x: WH.x, y: WH.y - WH.r + 30 };
     return { x: 250, y: 470 };
@@ -7747,6 +8670,7 @@ const GAME = (() => {
   function arcLeave() {
     const C = S.arc;
     if (!C) { toMap(); return; }
+    if (r5Own(C) && r5Leave(C)) return;   // PETS (round 5): the pet shop leaves; a game in progress pays what it has
     if (C.phase !== 'idle') { arcSkip(); arcSkip(); }   // a play in flight lands (and pays) first
     const A = C.A;
     if (A.caps.length) {
@@ -7756,7 +8680,7 @@ const GAME = (() => {
       A.caps = [];
     }
     if (A.tokens <= 0) C.tile.done = true;
-    else toast(`${A.tokens} ${A.g === 'plinko' ? 'token' : A.g === 'wheel' ? 'spin' : 'free pull'}${A.tokens === 1 ? '' : 's'} left. Come back any time.`);
+    else toast(`${A.tokens} ${ARC_UNIT[A.g] || 'free pull'}${A.tokens === 1 ? '' : 's'} left. Come back any time.`);
     S.arc = null;
     snd('whoosh', { pitch: 0.9 });
     toMap();
@@ -7765,6 +8689,7 @@ const GAME = (() => {
   function arcPointer(type, x, y) {
     const C = S.arc;
     if (!C) return;
+    if (r5Own(C)) return r5Pointer(type, x, y);   // PETS (round 5): whacks and swipes
     if (type === 'down') {
       if (C.g === 'slots' && C.phase === 'idle' && x > 440 && y > 360 && y < 720) { C.drag = { y0: y, pulled: false }; return; }
       C.down = { x, y };
@@ -7787,6 +8712,7 @@ const GAME = (() => {
     if (S.screen === 'event' && S.arcEv) arcEvTick(dt);
     const C = S.arc;
     if (!C || S.screen !== 'arcade') return;
+    if (C.g === 'petshop') return petShopTick(dt);   // PETS (round 5)
     C.t += dt;
     if (S.t - (S.hudT || 0) > 0.15) { S.hudT = S.t; refreshHud(false); }   // the counters roll as prizes land
     C.flash = Math.max(0, C.flash - dt * 2);
@@ -7794,7 +8720,8 @@ const GAME = (() => {
     for (const k in C.lit) { C.lit[k] -= dt * 1.6; if (C.lit[k] <= 0) delete C.lit[k]; }
     if (!C.drag) { C.leverV += (-C.lever * 160 - C.leverV * 11) * dt; C.lever = U.clamp(C.lever + C.leverV * dt, -0.15, 1); }
     C.flapV += (-C.flap * 420 - C.flapV * 16) * dt; C.flap = U.clamp(C.flap + C.flapV * dt, -1.2, 1.2);
-    if (C.phase === 'play') {
+    if (C.phase === 'play' && r5Own(C)) r5Tick(dt);   // PETS (round 5): the moles, the rolling ball
+    else if (C.phase === 'play') {
       if (C.g === 'plinko' && C.pl) plkTick(dt);
       else if (C.g === 'wheel' && C.wh) whTick(dt);
       else if (C.sl) slTick(dt);
@@ -7818,7 +8745,8 @@ const GAME = (() => {
     V.t = t; V.g = C.g; V.col = ARC_COL[C.g]; V.title = ARC_NAME[C.g]; V.party = C.party; V.flash = C.flash;
     V.win = -1; V.winTier = C.win ? C.win.tier : 0; V.tokens = A.tokens;
     if (R.arcCabinet) R.arcCabinet(ctx, 20, 96, 500, 740, V);
-    if (C.g === 'plinko' && R.arcPlinko) {
+    if (r5Own(C)) r5Draw(ctx, t, V);   // PETS (round 5): whack-a-mole, skee-ball, the pet shop
+    else if (C.g === 'plinko' && R.arcPlinko) {
       V.lit = C.lit; V.pegs = plkPegs(); V.slots = PLK_SLOTS; V.edges = plkEdges(); V.x0 = PLK.x0; V.x1 = PLK.x1; V.top = PLK.top; V.divTop = PLK.divTop; V.floor = PLK.floor; V.ballR = PLK.ballR; V.pegR = PLK.pegR;
       V.ball = null; V.aim = -1;
       if (C.phase === 'play' && C.pl) {
@@ -8574,6 +9502,1334 @@ const GAME = (() => {
   }
   // ================================================================ /FEEL
 
+  // ================================================================ PETS (round 5)
+  /* Companion pets (DESIGN.md "Pets"). A run carries one pet (run.pet = {id,
+     name, xp, lv, seed, fed}; DATA.petFix repairs it, an old save has none).
+     In a fight it sits on the cabinet's top frame (the player row leaves it
+     room), reacts to everything (hearts on a delivery, cheers on a kill and
+     a jackpot, scared at a roar and on the versus card, a sulk on a slip,
+     asleep when you dawdle) and helps once a turn, twice from Lv 3: it
+     leaves the perch, does its trick in the cabinet and hops back. FS.pet is
+     the fight's animation state (never saved); every pick comes from its own
+     rng stream off the fight seed, so the same fight and inputs give the
+     same action. XP: one per delivered item, more per won fight
+     (DATA.PET_GAIN); a level up is a banner through the announcer (class
+     'pet'). The map draws it on a little bed beside the crawler. The pet
+     shop tile opens on the arcade screen (petShop*): three pets in pens,
+     the first adoption of a run free, a swap for gold, treats for XP.
+     meta.pets is the album. Hooks: petTick (update), petDraw (drawFight),
+     petMapDraw (drawMap), petEvent (applyEvent), petRig (onRigEvent),
+     petDeliver (deliver), petGrab (grabFinished), petFightEnd (endFight),
+     petTap (pointer), petRunFix (load). */
+  const PET_K = { perchX: 64, perchY: 381, tagY: 399, scale: 1.22, first: 0.9, second: 0.55, doT: 0.5, fly: 520, run: 430, sleepAfter: 14, floorX: 22 };
+  Object.assign(ANN.PRI, { pet: 52 });
+  Object.assign(ANN.WAIT, { pet: 2.5 });
+  const PET_PITCH = { hamster: 1.5, parrot: 1.2, cat: 0.95, octopus: 0.8, firefly: 1.8, mouse: 1.7, raccoon: 0.75, goose: 0.6 };
+  // How each pet travels to its job: a leap and a run along the floor, one leap, or flying.
+  const PET_MOVE = { hamster: 'ground', mouse: 'ground', cat: 'leap', raccoon: 'leap', octopus: 'leap', parrot: 'fly', firefly: 'fly', goose: 'stay' };
+  const PET_BED = { hamster: '#2ee6d6', parrot: '#ffc94d', cat: '#ff2e88', octopus: '#a6ff5e', firefly: '#9b7bff', mouse: '#ff5a4a', raccoon: '#2ee6d6', goose: '#ff9ec7' };
+  const PET_TIP_LIST = [
+    { id: 'pet', title: 'Your pet', col: '#ff9ec7', text: 'Your buddy helps the claw once a turn (twice from Lv 3). Every prize delivered gives it XP. Tap it to see its trick.' },
+    { id: 'petshop', title: 'Pet shop', col: '#ff2e88', text: 'Adopt a companion pet. Your first one is free. Each pet has its own trick to help the claw.' },
+    { id: 'moles', title: 'Whack-a-mole', col: '#c8a070', text: 'Tap the moles as they pop up. Quick whacks chain a combo, golden moles pay triple. Never whack a bomb.' },
+    { id: 'skee', title: 'Skee-ball', col: '#2ee6d6', text: 'Swipe up the lane to roll. A harder swipe goes higher. The 100 cups sit in the top corners.' },
+  ];
+  for (const d of PET_TIP_LIST) if (!FEEL_TIPS.some((x) => x.id === d.id)) FEEL_TIPS.push(d);
+  Object.assign(TILE_NAMES, { moles: 'a whack-a-mole', skee: 'a skee-ball lane', petshop: 'a pet shop' });
+  Object.assign(LANDMARK_LABELS, { moles: 'Moles', skee: 'Skee', petshop: 'Pets' });
+  const petD = () => D().PETS || {};
+  const petDefOf = (id) => petD()[id] || null;
+  const petGainOf = (k) => ((D().PET_GAIN || {})[k]) || ({ item: 1, fight: 2, elite: 4, boss: 6, treat: 8 })[k] || 1;
+  const petShopK = () => D().PET_SHOP || { offer: 3, treat: 12, treats: 3, swap: 25 };
+  function petOf(run) { run = run || S.run; return run && run.pet && petDefOf(run.pet.id) ? run.pet : null; }
+  // Old saves carry no pet; a broken one is dropped, the fields repaired.
+  function petRunFix(run) {
+    if (!run) return;
+    run.pet = run.pet && D().petFix ? D().petFix(run.pet) : null;
+  }
+  // A fresh pet of this kind for the run (tests, the pet shop, the screenshot drivers).
+  function petGive(id, xp) {
+    const run = S.run;
+    if (!run || !petDefOf(id) || !D().petNew) return null;
+    const p = D().petNew(id, U.hashStr(run.seed + ':pet:' + id));
+    if (xp > 0) { p.xp = xp | 0; p.lv = D().petLevel(p.xp); }
+    run.pet = p;
+    if (FS) FS.pet = null;
+    petAlbum(id);
+    return p;
+  }
+  function petMeta() {
+    if (!S.meta) S.meta = freshMeta();
+    return S.meta.pets && typeof S.meta.pets === 'object' && !Array.isArray(S.meta.pets) ? S.meta.pets : (S.meta.pets = {});
+  }
+  // The album: pets adopted (n) and the best level each reached.
+  function petAlbum(id, lv) {
+    const m = petMeta();
+    const e = m[id] && typeof m[id] === 'object' ? m[id] : (m[id] = { n: 0, lv: 1 });
+    if (lv == null) e.n = (e.n | 0) + 1;
+    e.lv = Math.max(e.lv | 0, lv | 0, 1);
+    saveMeta();
+  }
+  // XP: n points; a level up celebrates where the pet is (fight, shop, anywhere else a toast).
+  function petGain(n) {
+    const p = petOf();
+    if (!p || !(n > 0) || !D().petLevel) return false;
+    const lv0 = p.lv || 1;
+    p.xp = (p.xp | 0) + n;
+    p.lv = D().petLevel(p.xp);
+    if (p.lv > lv0) { petLevelUp(p, lv0); return true; }
+    return false;
+  }
+  function petLevelUp(p, lv0) {
+    petAlbum(p.id, p.lv);
+    snd('petLevel');
+    const P = FS && FS.pet;
+    if (P) { P.lv = p.lv; P.lvUp = 1.4; if (D().petUses(p.lv) > D().petUses(lv0)) P.uses++; petMood(P, 'cheer', 2); }
+    S.petTagFl = 1.5;
+    if (S.screen === 'fight' && FS && !FS.done) {
+      banner(`${p.name} LV ${p.lv}!`, 'pet', 1.5, 'pet');
+      const at = petXY();
+      fx().emit('confetti', at.x, at.y - 20, { n: 0.6, power: 0.6 });
+      fx().ring(at.x, at.y - 18, PAL0.gold, { r0: 6, r1: 70, w: 5, life: 0.5 });
+      fx().text(at.x + 40, at.y - 50, 'LEVEL UP!', PAL0.gold, { size: 16 });
+    } else if (S.screen === 'arcade' && S.arc && S.arc.g === 'petshop') {
+      arcMsg('LEVEL UP!', 'big', `${p.name} is Lv ${p.lv}!`);
+      fx().emit('confetti', 130, 620, { n: 0.8, power: 0.7 });
+    } else toast(`${p.name} grew to Lv ${p.lv}!`, 2.2);
+  }
+  function petMood(P, m, secs) { if (!P) return; P.mood = m; P.moodT = secs || 1; P.idleT = 0; }
+  function petQuip(P, str, secs) { if (P && str) P.quip = { str, t: secs || 1.6 }; }
+  function petSay(P) {
+    const d = petDefOf(P.id), q = d && d.quips;
+    if (q && q.length) petQuip(P, q[Math.floor(P.rng() * q.length)]);
+    snd('petChirp', { pitch: PET_PITCH[P.id] || 1 });
+  }
+  // The pet's stage position (the perch when there is no fight state).
+  const PET_XY = { x: 0, y: 0 };
+  function petXY() {
+    const P = FS && FS.pet;
+    PET_XY.x = P ? P.x : PET_K.perchX; PET_XY.y = P ? P.y : PET_K.perchY;
+    return PET_XY;
+  }
+  // The fight's pet state, made on first use (the pet's own rng off the fight seed).
+  function petFS() {
+    if (!FS || !F) return null;
+    const p = petOf();
+    if (!p) { if (FS.pet) FS.pet = null; return null; }
+    if (FS.pet && FS.pet.id === p.id) return FS.pet;
+    FS.pet = {
+      id: p.id, lv: p.lv || 1, rng: U.rng((((FS.seed >>> 0) ^ 0x7e7a11) >>> 0) || 7), x: PET_K.perchX, y: PET_K.perchY, dir: 1, pose: 'sit', air: false, t: 0,
+      turn: -1, uses: 0, acted: 0, turnT: 0, grabN0: 0, waitT: 0, idleT: 0, act: null, mood: '', moodT: 0, blinkT: 2.2, look: 0, sq: 0, lvUp: 0,
+      glowUid: null, hold: null, hookW: null, quip: null, log: [], eat: null,
+    };
+    return FS.pet;
+  }
+  // Per frame (real time for the room, fight time inside the fight).
+  function petTick(dt, real) {
+    petRowPad();
+    if (S.screen === 'fight' && F && FS) petFightTick(dt);
+    if (S.screen === 'map') { const w = !!(S.walk && !S.walk.done); S.petMapIdle = w ? 0 : (S.petMapIdle || 0) + real; }
+    if (S.petTagFl > 0) S.petTagFl = Math.max(0, S.petTagFl - real);
+    petScan();
+  }
+  // The player row leaves room for the pet on the frame.
+  function petRowPad() {
+    const on = !!(S.screen === 'fight' && petOf());
+    if (S.petRow === on) return;
+    S.petRow = on;
+    const pr = $('playerRow');
+    if (pr && pr.classList) pr.classList[on ? 'add' : 'remove']('hasPet');
+    // floating labels keep off the pet and its name tag
+    try { if (on) fx().zone('pet', 14, 330, 116, 410); else fx().zone('pet'); } catch (e) { /* no layout */ }
+  }
+  // Tip cards for the pet and the round's cabinets (FEEL).
+  function petScan() {
+    if (!S.meta || S.t - (S.petScanT || 0) < 0.3) return;
+    S.petScanT = S.t;
+    if (S.screen === 'fight' && F && FS && petOf()) feelTipWant('pet');
+    const M = S.run && S.run.map;
+    if (S.screen !== 'map' || !M) return;
+    if (feelSeen('petshop') && feelSeen('moles') && feelSeen('skee')) return;
+    for (const k in M.tiles) {
+      const tl = M.tiles[k];
+      if (!tl.revealed || tl.done) continue;
+      if (tl.type === 'petshop' || tl.type === 'moles' || tl.type === 'skee') feelTipWant(tl.type);
+    }
+  }
+  function petCanAct() {
+    const rig = FS.rig;
+    if (!rig || FS.grabInFlight || FS.pendingDrop || FS.queue.length || FS.playQ.length || FS.spawnQ.length || (FS.bs && FS.bs.hj)) return false;
+    for (const th of FS.throws) if (!th.landed) return false;
+    // the pile has settled (a shower or a blast still flying waits)
+    for (const b of FS.items) if (b.vx * b.vx + b.vy * b.vy > 22500) return false;
+    return (rig.phase === 'idle' || rig.phase === 'moving') && F.player.grabs > 0 && FS.items.length > 0;
+  }
+  function petFightTick(dt) {
+    const P = petFS();
+    if (!P) return;
+    const def = petDefOf(P.id), rig = FS.rig;
+    P.t += dt;
+    P.blinkT -= dt;
+    if (P.blinkT < -0.14) P.blinkT = 2 + P.rng() * 2.5;
+    const lx = rig ? CAB.x + rig.x : 270;
+    P.look += (U.clamp((lx - P.x) / 160, -1, 1) - P.look) * Math.min(1, dt * 6);
+    if (P.moodT > 0 && P.moodT < 900) { P.moodT -= dt; if (P.moodT <= 0) { P.moodT = 0; P.mood = ''; } }
+    if (P.lvUp > 0) P.lvUp = Math.max(0, P.lvUp - dt);
+    if (P.sq > 0) P.sq = Math.max(0, P.sq - dt * 4);
+    if (P.quip) { P.quip.t -= dt; if (P.quip.t <= 0) P.quip = null; }
+    const busy = FS.grabInFlight || (rig && rig.phase !== 'idle') || FS.enemyTurn || FS.queue.length || FS.vs;
+    P.idleT = busy || P.act ? 0 : P.idleT + dt;
+    if (!P.act && !P.mood && P.idleT > PET_K.sleepAfter) { P.mood = 'sleep'; P.moodT = 999; }
+    if (P.mood === 'sleep' && P.idleT < 0.05) { P.mood = ''; P.moodT = 0; }
+    if (FS.vs && P.mood !== 'scared') petMood(P, 'scared', 0.6);
+    // your turn: the uses refill
+    const mine = F.phase === 'player' && !FS.enemyTurn && !FS.done && !FS.vs && !FS.outro;
+    if (mine && P.turn !== F.turn) { P.turn = F.turn; P.uses = D().petUses ? D().petUses(P.lv) : 1; P.acted = 0; P.turnT = 0; P.grabN0 = FS.grabN; P.glowUid = null; P.waitT = 0; }
+    if (mine) P.turnT += dt;
+    if (P.act) petActTick(P, dt);
+    else if (def && def.when === 'turn' && mine && P.uses > 0 && petCanAct()) {
+      if (P.acted === 0 && P.turnT >= PET_K.first) petStart(P);
+      else if (P.acted >= 1 && FS.grabN > P.grabN0) { P.waitT += dt; if (P.waitT >= PET_K.second) petStart(P); }
+    } else P.waitT = 0;
+    // the octopus lets go when the claw opens
+    if (P.hold) P.hold.t += dt;
+    // (the octopus lets its prize drop straight down through the opening prongs, then lets go)
+    if (P.hold && (FS.items.indexOf(P.hold.b) < 0 || (!P.hold.beak && (!rig || !(rig.phase === 'lifting' || rig.phase === 'carrying' || (rig.phase === 'releasing' && P.hold.b.y < rig.y + 110)))))) petHoldEnd(P);
+    if (!P.act) {
+      // Blackout: the firefly hovers in the cabinet beside the flashlight and lights the pile
+      const m = mutF();
+      if (P.id === 'firefly' && m && m.dark && rig) { P.x = U.clamp(CAB.x + rig.x - 70, CAB.x + 40, CAB.x + CAB.w - 110); P.y = CAB.y + CAB.h - 120; P.air = true; P.pose = 'fly'; }
+      else { P.x = PET_K.perchX; P.y = PET_K.perchY; P.air = false; P.pose = 'sit'; }
+      P.dir = 1;
+    }
+  }
+  const petFloorY = () => CAB.y + CAB.h - 3;
+  const petAlive = (b) => !!(b && FS.items.indexOf(b) >= 0);
+  const petItems = () => FS.items.filter((b) => b.data && b.data.inst && !(b.held > 0) && !(FS.cabinet && FS.cabinet.inChute(b)));
+  // Items with nothing resting on them (the top of the pile).
+  function petTops(list) {
+    return list.filter((b) => !list.some((o) => o !== b && o.y < b.y - 4 && Math.abs(o.x - b.x) < ((o.br || 14) + (b.br || 14)) * 0.8));
+  }
+  function petBuried(b, list) {
+    let n = 0;
+    for (const o of list) if (o !== b && o.y < b.y - 4 && Math.abs(o.x - b.x) < ((o.br || 14) + (b.br || 14)) * 0.8) n++;
+    return n;
+  }
+  // The picks: {b} a body, or {x, y} a spot (the raccoon's rummage).
+  function petPick(P, k) {
+    const list = petItems();
+    if (!list.length && k !== 'eat') return null;
+    const floor = (FS.cabinet && FS.cabinet.bounds.floorY != null ? FS.cabinet.bounds.floorY : CAB.h) - 60;
+    if (k === 'nudge') {
+      // the free item (nothing resting on it) lowest in the pile and farthest from the chute
+      const cand = petTops(list).filter((b) => b.x < binWidth() - 120), low = cand.filter((b) => b.y > floor - 30);
+      let best = null; for (const b of low.length ? low : cand) if (!best || b.x < best.x) best = b;
+      return best ? { b: best } : null;
+    }
+    if (k === 'peck') {
+      let best = null, bn = -1;
+      for (const b of list) { const n = petBuried(b, list); if (n > bn || (n === bn && best && b.x > best.x)) { best = b; bn = n; } }
+      return best ? { b: best } : null;
+    }
+    if (k === 'bat') { const tops = petTops(list); const pool = tops.length ? tops : list; return { b: pool[Math.floor(P.rng() * pool.length)] }; }
+    if (k === 'glow') {
+      const B = FS.best;
+      if (B && B.inv) for (const b of list) if (B.inv[b.data.inst.uid] > 0 && !B.invGo[b.data.inst.uid]) return { b, ghost: true };
+      const tops = petTops(list);
+      let best = null; for (const b of tops.length ? tops : list) if (!best || b.x > best.x) best = b;
+      return best ? { b: best } : null;
+    }
+    if (k === 'pull') {
+      const aim = FS.rig ? FS.rig.targetX : binWidth() / 2;
+      const metal = list.filter((b) => b.data.mat && b.data.mat.traits && b.data.mat.traits.metal && !b.data.inst.frozen);
+      let best = null; for (const b of metal.length ? metal : list) if (!best || Math.abs(b.x - aim) > Math.abs(best.x - aim)) best = b;
+      return best && Math.abs(best.x - aim) > 30 ? { b: best, metal: metal.length > 0 } : null;
+    }
+    if (k === 'eat') {
+      const junk = list.filter((b) => { const i = b.data.inst; return i.junk || itemDef(i.id).rarity === 'junk'; });
+      if (junk.length) return { b: junk[Math.floor(P.rng() * junk.length)] };
+      return { x: 60 + P.rng() * Math.max(40, binWidth() - 160), y: CAB.h - 40, rummage: true };
+    }
+    return null;
+  }
+  // Where the pet stands for its job (stage px), from the target now (it may have rolled).
+  function petSpot(P) {
+    const A = P.act, b = A.b, k = A.k;
+    if (k === 'hold') { const r = FS.rig; return { x: CAB.x + (r ? r.x : 200), y: CAB.y + (r ? r.y : 40) - 6 }; }
+    if (k === 'pull') { const r = FS.rig; return { x: CAB.x + U.clamp(r ? r.targetX : 200, 40, binWidth() - 40), y: petFloorY() }; }
+    const bx = CAB.x + (b && petAlive(b) ? b.x : A.x), by = CAB.y + (b && petAlive(b) ? b.y : A.y), br = b ? (b.br || 14) : 14;
+    if (k === 'nudge') return { x: Math.max(CAB.x + 14, bx - br - 12), y: petFloorY() };
+    if (k === 'peck') return { x: bx - 10, y: by - br - 8 };
+    if (k === 'glow') return { x: bx - 6, y: by - br - 16 };
+    return { x: Math.max(CAB.x + 14, bx - br - 12), y: Math.min(petFloorY(), by + br * 0.5) };
+  }
+  function petLeg(x0, y0, x1, y1, pose, home) {
+    const d = Math.hypot(x1 - x0, y1 - y0);
+    const dur = pose === 'run' ? Math.max(0.12, d / PET_K.run) : pose === 'fly' ? Math.max(0.35, d / PET_K.fly) : 0.3 + Math.min(0.35, d / 900);
+    return { x0, y0, x1, y1, pose, d: dur, arc: pose === 'run' ? 0 : pose === 'fly' ? Math.min(40, d * 0.15) : 30 + Math.min(60, d * 0.2), home: !!home };
+  }
+  function petGoLegs(P, style) {
+    const s = petSpot(P), fx0 = CAB.x + PET_K.floorX;
+    if (style === 'ground') return [petLeg(P.x, P.y, fx0, petFloorY(), 'leap'), petLeg(fx0, petFloorY(), s.x, s.y, 'run', true)];
+    if (style === 'fly') return [petLeg(P.x, P.y, s.x, s.y, 'fly', true)];
+    return [petLeg(P.x, P.y, s.x, s.y, 'leap', true)];
+  }
+  function petBackLegs(P, style) {
+    const fx0 = CAB.x + PET_K.floorX;
+    if (style === 'ground') return [petLeg(P.x, P.y, fx0, petFloorY(), 'run'), petLeg(fx0, petFloorY(), PET_K.perchX, PET_K.perchY, 'leap')];
+    if (style === 'fly') return [petLeg(P.x, P.y, PET_K.perchX, PET_K.perchY, 'fly')];
+    return [petLeg(P.x, P.y, PET_K.perchX, PET_K.perchY, 'leap')];
+  }
+  // A turn action begins: the pet picks its target and sets off.
+  function petStart(P) {
+    const def = petDefOf(P.id), k = def.act;
+    P.uses--; P.acted++; P.waitT = 0; P.idleT = 0;
+    if (P.mood === 'sleep') { P.mood = ''; P.moodT = 0; }
+    FS.delivered = 0;   // a prize the pet knocks in is a prize of its own, never the last grab's DOUBLE
+    const tg = petPick(P, k);
+    if (!tg) { petQuip(P, 'Hmm, nothing to do.', 1.4); petMood(P, 'sad', 1); P.log.push({ k, turn: F.turn, none: true }); return false; }
+    const style = PET_MOVE[P.id] || 'leap';
+    P.act = { k, b: tg.b || null, uid: tg.b ? tg.b.data.inst.uid : null, x: tg.b ? tg.b.x : tg.x, y: tg.b ? tg.b.y : tg.y, ghost: !!tg.ghost, rummage: !!tg.rummage, metal: tg.metal !== false,
+      style, ph: 'go', t: 0, li: 0, legs: null, fx: false, fxAt: 0.15, dur: PET_K.doT };
+    P.act.legs = style === 'stay' ? [] : petGoLegs(P, style);
+    if (k === 'eat') { P.act.dur = 0.8; P.act.fxAt = 0.3; }
+    if (k === 'glow') P.act.dur = 0.7;
+    if (k === 'peck') { P.act.dur = 1.05; P.act.fxAt = 0.3; }
+    snd('petHop', { pitch: PET_PITCH[P.id] || 1 });
+    if (P.act.legs.length === 0) petDoStart(P);
+    return true;
+  }
+  function petActTick(P, dt) {
+    const A = P.act;
+    A.t += dt;
+    if (A.ph === 'go' || A.ph === 'back') {
+      const L = A.legs[A.li];
+      if (!L) { if (A.ph === 'go') petDoStart(P); else petActEnd(P); return; }
+      if (L.home && A.ph === 'go') { const s = petSpot(P); L.x1 = s.x; L.y1 = s.y; }
+      const u = Math.min(1, A.t / L.d), e = L.pose === 'run' ? u : U.ease.inOut(u);
+      P.x = L.x0 + (L.x1 - L.x0) * e; P.y = L.y0 + (L.y1 - L.y0) * e - Math.sin(u * Math.PI) * L.arc;
+      P.pose = L.pose === 'leap' ? 'run' : L.pose; P.air = L.pose !== 'run';
+      if (Math.abs(L.x1 - L.x0) > 2) P.dir = L.x1 >= L.x0 ? 1 : -1;
+      if (u >= 1) {
+        A.li++; A.t = 0;
+        if (L.pose === 'leap') { P.sq = 0.8; snd('petHop', { pitch: (PET_PITCH[P.id] || 1) * 0.9 }); if (!S.headless) fx().emit('dust', P.x, P.y, { n: 0.4, power: 0.4 }); }
+        if (A.li >= A.legs.length) { if (A.ph === 'go') petDoStart(P); else petActEnd(P); }
+      }
+      return;
+    }
+    // doing it: the octopus rides the claw until it lets go
+    P.pose = A.k === 'hold' ? 'ride' : A.k === 'peck' && A.fx ? 'fly' : 'act';
+    P.k = U.clamp(A.t / A.dur, 0, 1);
+    if (A.k === 'peck' && A.fx && A.tx != null) {
+      // the parrot flies its catch up onto the pile
+      const u = U.clamp((A.t - A.fxAt) / Math.max(0.1, A.dur - A.fxAt), 0, 1), e = U.ease.inOut(u);
+      P.x = A.sx + (A.tx - A.sx) * e; P.y = A.sy + (A.ty - A.sy) * e - Math.sin(u * Math.PI) * 30;
+      if (Math.abs(A.tx - A.sx) > 2) P.dir = A.tx >= A.sx ? 1 : -1;
+    } else if (A.k === 'hold' || A.style === 'fly' || A.k === 'glow') { const s = petSpot(P); P.x += (s.x - P.x) * Math.min(1, dt * 12); P.y += (s.y - P.y) * Math.min(1, dt * 12); }
+    if (A.k === 'pull' && A.b && petAlive(A.b)) P.dir = CAB.x + A.b.x >= P.x ? 1 : -1;
+    if (!A.fx && A.t >= A.fxAt) { A.fx = true; petEffect(P); }
+    if (A.k === 'hold') { if (!P.hold && A.t > 0.2) petBackStart(P); return; }
+    if (A.t >= A.dur) petBackStart(P);
+  }
+  function petDoStart(P) {
+    const A = P.act;
+    A.ph = 'do'; A.t = 0;
+    P.air = A.style === 'fly' || A.k === 'hold';
+    if (A.k !== 'hold') snd('petAct', { pitch: PET_PITCH[P.id] || 1 });
+  }
+  function petBackStart(P) {
+    const A = P.act;
+    if (P.hold && P.hold.beak) { const b = P.hold.b; petHoldEnd(P); b.vx = 40 * P.dir; b.vy = 0; }   // the parrot drops its catch on the pile
+    A.ph = 'back'; A.t = 0; A.li = 0;
+    A.legs = A.style === 'stay' ? [] : petBackLegs(P, A.style);
+    if (!A.legs.length) petActEnd(P);
+  }
+  function petActEnd(P) {
+    const A = P.act;
+    if (A) P.log.push({ k: A.k, turn: F ? F.turn : 0, uid: A.uid, end: true });
+    P.act = null; P.eat = null;
+    P.x = PET_K.perchX; P.y = PET_K.perchY; P.pose = 'sit'; P.air = false; P.dir = 1; P.sq = 0.6;
+  }
+  function petWake(b) { b.sl = false; b.slT = 0; }
+  // The trick itself, on the body where it is now.
+  function petEffect(P) {
+    const A = P.act, b = A.b, ok = petAlive(b), lv = P.lv, pow = D().petPow ? D().petPow(lv) : 1;
+    const def = petDefOf(P.id), col = (X.RENDER && X.RENDER.pets && X.RENDER.pets.COL[P.id] || ['#ffc94d'])[0];
+    const sx = ok ? CAB.x + b.x : P.x, sy = ok ? CAB.y + b.y : P.y;
+    const label = (s) => fx().text(sx, sy - 34, s, col, { size: 15 });
+    switch (A.k) {
+      case 'nudge':
+        if (!ok) break;
+        petWake(b); if (FS.world) FS.world.wakeAll();
+        b.vx = Math.max(b.vx, 380 * pow); b.vy = Math.min(b.vy, -170); b.av += 4;
+        fx().emit('dust', sx - 10, sy + 8, { n: 0.7, power: 0.6 });
+        label('NUDGE!');
+        break;
+      case 'peck': {
+        if (!ok || !FS.world) break;
+        // it pecks the buried item loose, then pulls it out in its beak and flies it up
+        // onto the pile, a little toward the chute (higher levels carry it further)
+        FS.world.wakeAll();
+        let topY = CAB.h;
+        for (const o of FS.items) if (o !== b) topY = Math.min(topY, o.y - (o.br || 14));
+        A.sx = P.x; A.sy = P.y;
+        A.tx = CAB.x + U.clamp(b.x + 60 + 25 * (lv - 1), 50, binWidth() - 60); A.ty = CAB.y + U.clamp(topY - 40 - (b.br || 14), 70, CAB.h - 120);
+        P.hold = { b, dx: 0, dy: 0, t: 0, beak: true };
+        if (P.hookW !== FS.world) { FS.world.addHook(petHook); P.hookW = FS.world; }
+        fx().emit('sparks', sx, sy - 8, { n: 0.5 });
+        label('PECK!');
+        petSay(P);
+        break;
+      }
+      case 'bat': {
+        if (!ok) break;
+        if (FS.world) FS.world.wakeAll();
+        petWake(b);
+        // a pounce that throws the item at the chute; the aim gets truer with levels
+        const cx = binWidth() + CAB.chuteW / 2, cy = CAB.h - 70, T = 1.0, g = GRAVITY * (b.gs == null ? 1 : b.gs);
+        const err = (P.rng() - 0.5) * 2 * 110 / pow;
+        b.vx = (cx + err - b.x) / T; b.vy = (cy - b.y) / T - 0.5 * g * T; b.av += 6;
+        b.data.petBat = FS.grabN;
+        fx().emit('sparks', sx, sy, { n: 0.6 });
+        label('BAT!');
+        break;
+      }
+      case 'glow': {
+        const B = FS.best;
+        if (A.ghost && B && B.inv) {
+          // the light finds invisible items (more from Lv 3)
+          let n = 1 + Math.floor((lv - 1) / 2);
+          for (const o of FS.items) {
+            const u = o.data.inst && o.data.inst.uid;
+            if (!u || !(B.inv[u] > 0) || B.invGo[u] || n <= 0) continue;
+            B.invGo[u] = true; n--;
+            fx().emit('glint', CAB.x + o.x, CAB.y + o.y, { col: '#fff6a0', n: 1.2 });
+            fx().text(CAB.x + o.x, CAB.y + o.y - 26, 'FOUND IT!', '#fff6a0', { size: 13 });
+          }
+          snd('boo', { pitch: 1.8 });
+        } else if (ok) {
+          P.glowUid = b.data.inst.uid;
+          fx().emit('glint', sx, sy, { col: '#fff6a0', n: 1.5 });
+          label(`SPOTLIGHT +${D().petGlow ? D().petGlow(lv) : 3}`);
+        }
+        break;
+      }
+      case 'pull': {
+        if (!ok) break;
+        const aim = FS.rig ? FS.rig.targetX : binWidth() / 2, dx = aim - b.x, k = A.metal ? 1 : 0.55;
+        petWake(b); if (FS.world) FS.world.wakeAll();
+        b.vx = Math.sign(dx) * Math.min(Math.sqrt(2 * 520 * Math.abs(dx)), 560) * (0.8 + 0.2 * pow) * k; b.vy = -150;
+        fx().emit('shock', sx, sy, { n: 0.5 });
+        label(A.metal ? 'MAGNET!' : 'TUG!');
+        snd('magZap', { pitch: 1.4 });
+        break;
+      }
+      case 'eat': {
+        if (A.rummage || !ok) {
+          if (X.PHYS && X.PHYS.hop && FS.world) X.PHYS.hop(FS.world, A.x, A.y, 110, 240 * pow, null);
+          fx().emit('dust', CAB.x + A.x, CAB.y + A.y, { n: 0.8 });
+          fx().text(P.x, P.y - 40, 'RUMMAGE', col, { size: 14 });
+          petQuip(P, 'No snacks...', 1.2);
+          break;
+        }
+        const inst = b.data.inst, i = F.bin.indexOf(inst);
+        if (i >= 0) F.bin.splice(i, 1);
+        if (Array.isArray(F.purged)) F.purged.push(inst);
+        P.eat = { def: itemDef(inst.id), t: 0 };
+        removeBody(b);
+        fx().emit('crumbs', sx, sy, { n: 1 });
+        label('CHOMP!');
+        petMood(P, 'eat', 1.2);
+        snd('petCrunch');
+        petGain(petGainOf('item'));
+        break;
+      }
+      case 'egg': {
+        const e = D().petEgg ? D().petEgg(lv) : { gold: 5, tix: 1 };
+        if (X.COMBAT.gainGold) X.COMBAT.gainGold(F, e.gold);
+        if (X.COMBAT.tickets) X.COMBAT.tickets(F, e.tix);
+        drainF(PLAY_BEAT);
+        const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
+        fx().fly(P.x + 10, P.y - 10, gp.x, gp.y, { kind: 'coin', col: PAL0.gold, dur: 0.7, arc: 110, size: 9, cb: () => snd('coin', { pitch: 1.3 }) });
+        fx().emit('coins', P.x + 10, P.y - 10, { n: 0.6, power: 0.7 });
+        fx().text(P.x + 50, P.y - 50, `GOLDEN EGG! +${e.gold}`, PAL0.gold, { size: 15 });
+        snd('petHonk');
+        petQuip(P, 'HONK!', 1);
+        break;
+      }
+      default: break;
+    }
+    if (def) P.log.push({ k: A.k, fx: true, turn: F.turn, uid: A.uid });
+    haptic('tap');
+  }
+  // The octopus: on a lift it rides the claw and holds the likeliest slipper tight.
+  function petHoldStart(P) {
+    const rig = FS.rig;
+    const cargo = carried().filter((b) => b.data && b.data.inst);
+    if (!rig || !cargo.length || !FS.world) return false;
+    let b = cargo[0];
+    for (const c of cargo) if (c.y > b.y) b = c;
+    P.uses--; P.acted++; P.idleT = 0;
+    if (P.mood === 'sleep') { P.mood = ''; P.moodT = 0; }
+    const s = rig.geo && rig.geo.s ? rig.geo.s : 0.74;
+    P.hold = { b, dx: U.clamp(b.x - rig.x, -40, 40), dy: U.clamp(b.y - rig.y, 12, 62 * s + 16), t: 0 };
+    if (P.hookW !== FS.world) { FS.world.addHook(petHook); P.hookW = FS.world; }
+    P.act = { k: 'hold', b, uid: b.data.inst.uid, x: b.x, y: b.y, style: 'leap', ph: 'go', t: 0, li: 0, legs: null, fx: false, fxAt: 0, dur: 0.5 };
+    P.act.legs = petGoLegs(P, 'leap');
+    fx().text(CAB.x + b.x, CAB.y + b.y + 24, 'HOLD ON!', '#c77dff', { size: 14 });
+    petSay(P);
+    return true;
+  }
+  function petHoldEnd(P) {
+    if (P.hookW && P.hookW.removeHook) { try { P.hookW.removeHook(petHook); } catch (e) { /* the world is gone */ } }
+    P.hookW = null; P.hold = null;
+  }
+  // Pre-physics hook: the held prize follows its spot under the hub (no slip).
+  function petHook(h) {
+    const P = FS && FS.pet, H = P && P.hold, rig = FS && FS.rig;
+    if (!H || !rig) return;
+    const b = H.b;
+    // the octopus draws its prize in under the hub; the parrot carries its catch under its feet
+    const k = Math.max(0, 1 - H.t / 0.5);
+    const tx = H.beak ? P.x - CAB.x + 6 * P.dir : rig.x + H.dx * k, ty = H.beak ? P.y - CAB.y + (b.br || 14) - 2 : rig.y + H.dy;
+    // it moves with its carrier (the hub's own velocity, fed forward) and closes the gap
+    const fvx = H.px == null || !(h > 0) ? 0 : (tx - H.px) / h, fvy = H.py == null || !(h > 0) ? 0 : (ty - H.py) / h;
+    H.px = tx; H.py = ty;
+    let vx = U.clamp(fvx, -600, 600) + (tx - b.x) * 16, vy = U.clamp(fvy, -600, 600) + (ty - b.y) * 16;
+    if (!H.beak && rig.phase === 'releasing') { vx = (rig.x - b.x) * 10; vy = 380; }
+    const sp = Math.hypot(vx, vy);
+    if (sp > 900) { vx *= 900 / sp; vy *= 900 / sp; }
+    b.vx = vx; b.vy = vy - GRAVITY * (b.gs == null ? 1 : b.gs) * h;
+    b.av *= 0.8; b.sl = false; b.slT = 0;
+  }
+  // Reactions to the fight's events (the top of applyEvent).
+  function petEvent(ev) {
+    const P = FS && FS.pet;
+    if (!P || !ev) return;
+    switch (ev.t) {
+      case 'dmg': if (ev.who === 'p' && ev.amt > 0) petMood(P, 'scared', ev.amt >= 10 ? 1.4 : 0.8); break;
+      case 'enrage': petMood(P, 'scared', 2.4); P.sq = 1; petQuip(P, 'Eek!', 1.2); break;
+      case 'boss': petMood(P, 'scared', 1.4); break;
+      case 'die': petMood(P, 'cheer', 1.3); break;
+      case 'combo': petMood(P, 'happy', 1.4); break;
+      default: break;
+    }
+  }
+  // The claw's events (the top of onRigEvent).
+  function petRig(ev) {
+    const P = FS && FS.pet;
+    if (!P) return;
+    if (ev === 'slip') petMood(P, 'sad', 1.2);
+    else if (ev === 'drop') { P.idleT = 0; if (P.mood === 'sleep') { P.mood = ''; P.moodT = 0; } }
+    else if (ev === 'lift') {
+      const def = petDefOf(P.id);
+      if (def && def.act === 'hold' && P.uses > 0 && !P.act && F.phase === 'player') petHoldStart(P);
+      else if (!P.act) petMood(P, 'focus', 1.2);
+    }
+  }
+  // A delivery: hearts, XP, and the firefly's spotlight bonus.
+  function petDeliver(inst) {
+    const p = petOf();
+    if (!p || !FS) return;
+    const P = petFS();
+    if (P) {
+      petMood(P, FS.delivered >= 3 ? 'cheer' : 'happy', FS.delivered >= 3 ? 2 : 1.1);
+      if (P.glowUid && inst && inst.uid === P.glowUid && F) {
+        const g = D().petGlow ? D().petGlow(P.lv) : 3;
+        P.glowUid = null;
+        if (X.COMBAT.gainGold) X.COMBAT.gainGold(F, g);
+        drainF(PLAY_BEAT);
+        fx().text(CAB.x + CAB.w - 120, CAB.y + CAB.h - 110, `SPOTLIGHT +${g} GOLD`, '#fff6a0', { size: 15 });
+        snd('coin', { pitch: 1.4 });
+      }
+      if (inst && P.act && P.act.k === 'bat' && P.act.uid === inst.uid) fx().text(CAB.x + CAB.w - 120, CAB.y + CAB.h - 140, 'NICE SHOT, CAT!', '#ff9a3c', { size: 14 });
+    }
+    petGain(petGainOf('item'));
+  }
+  // A grab settled: the goose lays on a big one.
+  function petGrab(n) {
+    const P = petFS();
+    if (!P) return;
+    if (n > 0) petMood(P, n >= 3 ? 'cheer' : 'happy', 1.2); else if (!P.act) petMood(P, 'sad', 0.9);
+    const def = petDefOf(P.id);
+    if (!def || def.act !== 'egg' || P.uses <= 0 || P.act || !D().petEgg) return;
+    if (n < D().petEgg(P.lv).need) return;
+    P.uses--; P.acted++;
+    P.act = { k: 'egg', b: null, uid: null, x: 0, y: 0, style: 'stay', ph: 'go', t: 0, li: 0, legs: [], fx: false, fxAt: 0.35, dur: 0.9 };
+    petDoStart(P);
+  }
+  // The end of a fight: XP for a win, a cheer or a sulk.
+  function petFightEnd(result, tier) {
+    const P = FS && FS.pet;
+    if (P) { petMood(P, result === 'win' ? 'cheer' : 'sad', 3); if (P.hold) petHoldEnd(P); }
+    if (result === 'win' && petOf()) petGain(petGainOf(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight'));
+  }
+  // A tap on the pet: what it does, in words.
+  function petTap(x, y) {
+    const P = FS && FS.pet, p = petOf();
+    if (!P || !p || P.act) return false;
+    if (Math.abs(x - P.x) > 34 || y < P.y - 46 || y > P.y + 26) return false;
+    const def = petDefOf(p.id), nx = D().petNext ? D().petNext(p.xp) : null;
+    popover(`<b>${p.name}</b> the ${def.name}, Lv ${p.lv}<br>${D().petText ? D().petText(p.id, p.lv) : def.text}<br><i>${nx ? `XP ${p.xp}, ${nx.need} to Lv ${p.lv + 1}` : 'Max level!'}</i>`, P.x + 60, P.y - 10);
+    petMood(P, 'happy', 1.2); P.sq = 0.7;
+    snd('petChirp', { pitch: PET_PITCH[p.id] || 1 });
+    return true;
+  }
+  // Drawn over the cabinet (drawFight, after the frame and signs).
+  const PETV = { t: 0, lv: 1, mood: '', moodK: 1, blink: 0, look: 0, dir: 1, pose: 'sit', k: 0, sq: 0, air: false, glow: 1, reach: null, talk: 0, lvUp: 0 };
+  const PET_REACH = { x: 0, y: 0 };
+  const PET_TAGV = { name: '', lv: 1, col: '#ffc94d', xpK: 0, t: 0, flash: 0 };
+  function petDraw(ctx, t) {
+    const P = FS && FS.pet, p = petOf(), R = X.RENDER;
+    if (!P || !p || !R || !R.pet) return;
+    const sc = PET_K.scale;
+    // the firefly's light in a Blackout: the pile shows through around it
+    const m = mutF();
+    if (P.id === 'firefly' && m && m.dark && R.item) petLight(ctx, P, t, R);
+    // the spotlit item sparkles
+    if (P.glowUid) {
+      for (const b of FS.items) {
+        if (!b.data.inst || b.data.inst.uid !== P.glowUid) continue;
+        const x = CAB.x + b.x, y = CAB.y + b.y, r = (b.br || 16) + 8 + Math.sin(t * 6) * 2;
+        ctx.save(); ctx.strokeStyle = 'rgba(255,246,160,0.9)'; ctx.lineWidth = 2.5; ctx.setLineDash([5, 5]); ctx.lineDashOffset = -t * 30;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        if (R.glint) R.glint(ctx, x, y, r, t, 3, '#fff6a0');
+      }
+    }
+    // the name tag stays on the frame
+    const nx = D().petNext ? D().petNext(p.xp) : null;
+    PET_TAGV.name = p.name; PET_TAGV.lv = p.lv; PET_TAGV.col = PET_BED[p.id] || '#ffc94d'; PET_TAGV.xpK = nx ? nx.into / nx.span : 1; PET_TAGV.t = t; PET_TAGV.flash = S.petTagFl || 0;
+    if (R.petTag) R.petTag(ctx, PET_K.perchX, PET_K.tagY, PET_TAGV);
+    const V = PETV;
+    V.t = t; V.lv = P.lv; V.mood = P.mood; V.moodK = P.moodT >= 900 ? 1 : U.clamp(P.moodT * 2, 0, 1); V.blink = P.blinkT < 0 ? 1 : 0; V.look = P.look;
+    V.dir = P.dir; V.pose = P.pose; V.k = P.k || 0; V.sq = fx().reduced ? 0 : P.sq; V.air = !!P.air; V.lvUp = P.lvUp; V.talk = P.quip ? 1 : 0;
+    V.reach = null;
+    if (P.hold && petAlive(P.hold.b)) { PET_REACH.x = (CAB.x + P.hold.b.x - P.x) / sc * P.dir; PET_REACH.y = (CAB.y + P.hold.b.y - P.y) / sc; V.reach = PET_REACH; }
+    R.pet(ctx, P.id, P.x, P.y, sc, V);
+    // the raccoon's snack shrinks in its paws
+    if (P.eat && P.eat.def && R.item) {
+      const u = P.act ? U.clamp(P.act.t / P.act.dur, 0, 1) : 1;
+      if (u < 1) R.item(ctx, P.eat.def, P.x + 12 * P.dir, P.y - 12, Math.sin(t * 20) * 0.2, Math.max(0.05, 0.55 * (1 - u)), { glow: 0 });
+    }
+    if (P.quip) petBubble(ctx, P.x + 18, P.y - 48, P.quip.str, U.clamp(P.quip.t * 3, 0, 1));
+  }
+  // A small speech bubble.
+  function petBubble(ctx, x, y, str, a) {
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.font = 'bold 12px system-ui, "Segoe UI", Helvetica, Arial, sans-serif';
+    let w = 20;
+    try { w = ctx.measureText(str).width + 16; } catch (e) { /* stub */ }
+    w = Math.min(220, Math.max(40, w || 40));
+    const x0 = U.clamp(x, 8, W - w - 8), y0 = y - 22;
+    ctx.fillStyle = '#fffaf0'; ctx.strokeStyle = '#12091f'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x0, y0, w, 22, 9); else ctx.rect(x0, y0, w, 22);
+    ctx.moveTo(x0 + 10, y0 + 22); ctx.lineTo(x0 + 4, y0 + 30); ctx.lineTo(x0 + 18, y0 + 22);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#12091f'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(str, x0 + 8, y0 + 11);
+    ctx.restore();
+  }
+  // Blackout: redraw the pile inside the firefly's pool of light, and the glow.
+  function petLight(ctx, P, t, R) {
+    const r = 76 + 10 * P.lv + Math.sin(t * 5) * 4;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
+    ctx.beginPath(); ctx.arc(P.x, P.y, r, 0, Math.PI * 2); ctx.clip();
+    for (const b of FS.items) {
+      const x = CAB.x + b.x, y = CAB.y + b.y;
+      if ((x - P.x) * (x - P.x) + (y - P.y) * (y - P.y) > (r + 30) * (r + 30)) continue;
+      if (FS.best && FS.best.inv && FS.best.inv[b.data.inst.uid] > 0) continue;
+      R.item(ctx, b.data.def, x, y, b.a, 1, { plus: b.data.inst.plus, frozen: b.data.inst.frozen });
+    }
+    ctx.restore();
+    if (R.glowSprite) {
+      const sp = R.glowSprite('#fff6a0', Math.round(r));
+      if (sp) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35; try { ctx.drawImage(sp, P.x - r - 1, P.y - r - 1, r * 2 + 2, r * 2 + 2); } catch (e) { /* stub */ } ctx.restore(); }
+    }
+  }
+  // The map: the pet on its bed beside the crawler (hopping along on a walk).
+  const PETM = { t: 0, lv: 1, mood: '', moodK: 1, blink: 0, look: 0, dir: 1, pose: 'sit', k: 0, sq: 0, air: false };
+  function petMapDraw(ctx, x, y, size, t) {
+    const p = petOf(), R = X.RENDER;
+    if (!p || !R || !R.pet) return;
+    const k = size / 46, bx = x + size * 0.74, by = y + size * 0.62;
+    const walking = !!(S.walk && !S.walk.done);
+    if (!walking && R.petBed) R.petBed(ctx, bx, by, 0.85 * k, PET_BED[p.id]);
+    PETM.t = t; PETM.lv = p.lv; PETM.pose = walking ? 'run' : 'sit';
+    PETM.mood = walking ? '' : (S.petMapIdle || 0) > 5 ? 'sleep' : (S.petTagFl > 0 ? 'cheer' : '');
+    PETM.blink = Math.sin(t * 1.3 + 1) > 0.97 ? 1 : 0;
+    R.pet(ctx, p.id, bx, by - (walking ? 0 : 2 * k), 0.78 * k, PETM);
+  }
+
+  // ---- the PET SHOP: three pens, adopt, swap, treats (screen 'arcade', g 'petshop')
+  const PET_SHOP_COL = '#ff9ec7';
+  const PET_PEN_X = [108, 270, 432];
+  function petShopState(t) {
+    const c = t.content || (t.content = {});
+    let PS = c.pet;
+    if (!PS || typeof PS !== 'object' || !Array.isArray(PS.offer) || !PS.offer.length) {
+      const rng = U.rng((((c.seed | 0) ^ 0x9e75) >>> 0) || 5);
+      const have = petOf() ? petOf().id : null;
+      const offer = D().petOffer ? D().petOffer(rng, have, petShopK().offer) : ['hamster', 'cat', 'parrot'];
+      PS = c.pet = { offer, names: offer.map((id, i) => (D().petName ? D().petName(id, ((c.seed | 0) + i * 7919) >>> 0) : id)), adopted: null, treats: 0 };
+    }
+    if (!Array.isArray(PS.names)) PS.names = PS.offer.map((id) => id);
+    PS.treats = PS.treats | 0;
+    return PS;
+  }
+  function petShopShow(t) {
+    const PS = petShopState(t);
+    S.sd = { arcade: { q: t.q, r: t.r } };
+    S.arc = {
+      g: 'petshop', tile: t, PS, A: { g: 'petshop', tokens: 0, used: 0, res: [], pend: null, caps: [], mult: 1, rot: 0 },
+      phase: 'idle', t: 0, win: null, winT: 0, capT: 0, fast: false, lit: {}, flash: 0, party: 0, drag: null, lever: 0, leverV: 0, rot: 0, flap: 0, flapV: 0,
+      adoptI: -1, adoptT: 0, heart: 0, hop: [0, 0, 0],
+    };
+    setScreen('arcade');
+    petShopDom();
+    snd('arcIn', { pitch: 1.25 });
+    save();
+    return true;
+  }
+  function petShopDom() {
+    const C = S.arc, b = $('arcadeBody');
+    if (!C || !b) return;
+    clear(b);
+    S.ui.buttons = [];
+    try { b.style.setProperty('--ac', PET_SHOP_COL); } catch (e) { /* stub */ }
+    const msg = h('div', 'arcMsg');
+    msg.id = 'arcMsg';
+    b.appendChild(msg);
+    const PS = C.PS, cur = petOf(), K = petShopK();
+    const pens = h('div', 'petPens');
+    PS.offer.forEach((id, i) => {
+      const d = petDefOf(id) || { name: id, text: '' };
+      const col = h('div', 'petPen' + (PS.adopted === id ? ' got' : ''));
+      col.appendChild(h('div', 'n', PS.names[i] || d.name));
+      col.appendChild(h('div', 'k', d.name));
+      col.appendChild(h('div', 't', D().petText ? D().petText(id, 1) : d.text));
+      const lab = PS.adopted ? (PS.adopted === id ? 'Adopted!' : 'Maybe next time') : cur ? `Swap (${K.swap} gold)` : 'Adopt (free)';
+      const bt = btn(lab, () => petAdopt(i), 'pri sm');
+      if (PS.adopted) bt.disabled = true;
+      col.appendChild(bt);
+      pens.appendChild(col);
+    });
+    b.appendChild(pens);
+    const bot = h('div', 'arcBot');
+    bot.appendChild(h('div', 'arcHow', cur ? `A pet helps the claw every turn. Swapping sends ${cur.name} home to the album. Treats are XP.` : 'Pick a buddy for the climb. Your first pet is free, and it helps the claw every turn.'));
+    const info = h('div', 'arcInfo');
+    info.id = 'arcInfo';
+    bot.appendChild(info);
+    const row = h('div', 'row');
+    if (cur) row.appendChild(btn(`Treat (${K.treat} gold)`, () => petTreat(), 'go'));
+    row.appendChild(btn('Leave', () => arcLeave(), 'ghost'));
+    bot.appendChild(row);
+    b.appendChild(bot);
+    petShopInfo();
+  }
+  function petShopInfo() {
+    const C = S.arc;
+    if (!C || !C.PS) return;
+    const p = petOf(), K = petShopK();
+    const s = p ? `${p.name.toUpperCase()} LV ${p.lv}  ·  TREATS ${Math.max(0, K.treats - C.PS.treats)}  ·  GOLD ${(S.run && S.run.gold) || 0}` : `NO PET YET  ·  GOLD ${(S.run && S.run.gold) || 0}`;
+    const el = $('arcInfo');
+    if (el) el.textContent = s;
+    S.arcInfoStr = s;
+  }
+  function petAdopt(i) {
+    const C = S.arc, PS = C && C.PS, run = S.run;
+    if (!PS || !run || S.screen !== 'arcade') return false;
+    const id = PS.offer[i];
+    if (!id || PS.adopted) return false;
+    const cur = petOf(), cost = cur ? petShopK().swap : 0;
+    if (cost && run.gold < cost) { toast(`A swap costs ${cost} gold, you have ${run.gold}.`); snd('arcLose', { pitch: 1.4 }); C.flash = 0.3; return false; }
+    if (cost) addGold(-cost);
+    const p = D().petNew(id, U.hashStr(`${run.seed}:pet:${id}:${C.tile.q},${C.tile.r}`));
+    p.name = PS.names[i] || p.name;
+    run.pet = p;
+    PS.adopted = id; PS.from = cur ? cur.id : null;
+    petAlbum(id);
+    C.tile.done = true;
+    save();
+    C.adoptI = i; C.adoptT = 1.6; C.party = 1.6; C.flash = 0.5; C.heart = 1.4;
+    arcMsg(cur ? 'NEW BUDDY!' : 'ADOPTED!', 'big', `${p.name} the ${petDefOf(id).name} joins the climb!`);
+    snd('petLevel'); snd('petChirp', { pitch: PET_PITCH[id] || 1 }); snd('petLove');
+    fx().emit('confetti', PET_PEN_X[i], 250, { n: 0.8, power: 0.8 });
+    fx().ring(PET_PEN_X[i], 280, PET_SHOP_COL, { r0: 10, r1: 150, w: 6, life: 0.6 });
+    if (!fx().reduced) fx().shake(5);
+    haptic('win');
+    petShopDom();
+    arcMsg(cur ? 'NEW BUDDY!' : 'ADOPTED!', 'big', `${p.name} the ${petDefOf(id).name} joins the climb!`);
+    return true;
+  }
+  function petTreat() {
+    const C = S.arc, PS = C && C.PS, p = petOf(), run = S.run, K = petShopK();
+    if (!PS || !p || !run) return false;
+    if (PS.treats >= K.treats) { toast(`${p.name} is full. No more treats here.`); snd('arcLose', { pitch: 1.5 }); return false; }
+    if (run.gold < K.treat) { toast(`Treats cost ${K.treat} gold, you have ${run.gold}.`); snd('arcLose', { pitch: 1.4 }); C.flash = 0.3; return false; }
+    addGold(-K.treat);
+    PS.treats++;
+    p.fed = (p.fed | 0) + 1;
+    C.heart = 1.4;
+    snd('petLove'); snd('squish', { pitch: 1.4 });
+    fx().emit('heal', 130, 640, { n: 0.7 });
+    fx().text(170, 600, `+${petGainOf('treat')} XP`, PAL0.lime, { size: 16 });
+    petGain(petGainOf('treat'));
+    save();
+    petShopInfo();
+    return true;
+  }
+  function petShopLeave() {
+    S.arc = null;
+    snd('whoosh', { pitch: 0.9 });
+    toMap();
+    return true;
+  }
+  function petShopTick(dt) {
+    const C = S.arc;
+    C.t += dt;
+    C.flash = Math.max(0, C.flash - dt * 2);
+    C.party = Math.max(0, C.party - dt);
+    C.heart = Math.max(0, C.heart - dt);
+    if (C.adoptT > 0) C.adoptT = Math.max(0, C.adoptT - dt);
+    if (S.t - (S.hudT || 0) > 0.15) { S.hudT = S.t; refreshHud(false); petShopInfo(); }
+  }
+  // The shop drawn in the arcade cabinet: the pens, your buddy on its bed, the album.
+  const PSV = { t: 0, lv: 1, mood: '', moodK: 1, blink: 0, look: 0, dir: 1, pose: 'sit', k: 0, sq: 0, air: false };
+  function petShopDraw(ctx, t, V) {
+    const C = S.arc, R = X.RENDER, PS = C.PS;
+    if (!R || !R.pet) return;
+    ctx.save();
+    for (let i = 0; i < PS.offer.length; i++) {
+      const id = PS.offer[i], x = PET_PEN_X[i], y0 = 182, w = 146, hgt = 166;
+      const got = PS.adopted === id, gone = got && C.adoptT <= 0;
+      ctx.fillStyle = got ? 'rgba(255,158,199,0.18)' : 'rgba(255,255,255,0.05)';
+      ctx.strokeStyle = got ? PET_SHOP_COL : 'rgba(255,255,255,0.18)'; ctx.lineWidth = 3;
+      ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x - w / 2, y0, w, hgt, 14); else ctx.rect(x - w / 2, y0, w, hgt); ctx.fill(); ctx.stroke();
+      // straw
+      ctx.fillStyle = '#c9a24a'; ctx.beginPath(); ctx.ellipse(x, y0 + hgt - 22, w * 0.4, 10, 0, 0, Math.PI * 2); ctx.fill();
+      const u = got ? 1 - C.adoptT / 1.6 : 0;
+      if (!gone) {
+        PSV.t = t + i * 1.7; PSV.lv = 1; PSV.mood = got ? 'cheer' : (Math.sin(t * 0.7 + i * 2) > 0.8 ? 'happy' : ''); PSV.moodK = 1;
+        PSV.blink = Math.sin(t * 1.1 + i * 3) > 0.96 ? 1 : 0; PSV.look = Math.sin(t * 0.5 + i) * 0.8; PSV.pose = got ? 'run' : 'sit'; PSV.air = got;
+        R.pet(ctx, id, x, y0 + hgt - 22 - (got ? Math.sin(u * Math.PI) * 120 : 0), 2.1 * (got ? 1 - u * 0.5 : 1), PSV);
+      }
+      // the bars (the door swings open when adopted)
+      ctx.strokeStyle = 'rgba(201,211,224,0.75)'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let j = 1; j < 6; j++) { const bx = x - w / 2 + (w / 6) * j; if (got && j >= 2 && j <= 4) continue; ctx.moveTo(bx, y0 + 6); ctx.lineTo(bx, y0 + hgt - 8); }
+      ctx.stroke();
+      if (got) { ctx.fillStyle = PAL0.gold; ctx.font = 'bold 14px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('ADOPTED', x, y0 + 16); }
+    }
+    // your buddy
+    const p = petOf();
+    const py = 690;
+    ctx.fillStyle = 'rgba(18,9,31,0.75)'; ctx.strokeStyle = 'rgba(255,158,199,0.6)'; ctx.lineWidth = 2;
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(46, 572, 448, 144, 16); else ctx.rect(46, 572, 448, 144); ctx.fill(); ctx.stroke();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    if (p) {
+      if (R.petBed) R.petBed(ctx, 118, py, 1.6, PET_BED[p.id]);
+      PSV.t = t; PSV.lv = p.lv; PSV.mood = C.heart > 0 ? 'happy' : (C.adoptT > 0 ? 'cheer' : ''); PSV.pose = 'sit'; PSV.air = false; PSV.look = 0.5; PSV.blink = Math.sin(t * 1.3) > 0.97 ? 1 : 0;
+      R.pet(ctx, p.id, 118, py - 4, 1.9, PSV);
+      const nx = D().petNext ? D().petNext(p.xp) : null;
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px system-ui, sans-serif'; ctx.fillText(p.name, 190, 604);
+      ctx.fillStyle = PET_SHOP_COL; ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText(`YOUR BUDDY: ${(petDefOf(p.id) || {}).name || ''}  ·  LV ${p.lv}`, 190, 628);
+      ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(190, 644, 280, 10);
+      ctx.fillStyle = PAL0.lime; ctx.fillRect(190, 644, 280 * (nx ? nx.into / nx.span : 1), 10);
+      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.fillText(nx ? `${nx.need} XP to Lv ${p.lv + 1}` : 'MAX LEVEL', 190, 668);
+    } else {
+      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 16px system-ui, sans-serif'; ctx.fillText('No buddy yet. Pick one above!', 76, 644);
+    }
+    // the album
+    const al = petMeta(), ids = D().PET_IDS || [];
+    let met = 0; for (const id of ids) if (al[id]) met++;
+    ctx.fillStyle = '#e8f4ff'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`PET ALBUM ${met}/${ids.length}`, 270, 734);
+    ids.forEach((id, i) => {
+      const x = 270 + (i - (ids.length - 1) / 2) * 54, y = 790;
+      if (al[id]) { PSV.t = t + i; PSV.lv = Math.max(1, al[id].lv | 0); PSV.mood = ''; PSV.pose = 'sit'; PSV.air = false; PSV.blink = 0; R.pet(ctx, id, x, y, 0.95, PSV); }
+      else { ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.beginPath(); ctx.arc(x, y - 16, 16, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillText('?', x, y - 15); }
+    });
+    ctx.restore();
+  }
+
+  // ================================================================ ARCADE R5 (round 5): whack-a-mole and skee-ball
+  /* Two more cabinets on the arcade's model (DESIGN.md "Pets", the round 5
+     cabinets): the play spends its token and is saved the moment it starts
+     (A.live), the outcome is saved the moment it is settled (A.pend) and
+     paid on the same beat as the landing (arcSettle clears it), so a
+     reload never pays twice. WHACK-A-MOLE is skill: the round's pop
+     schedule is seeded (A.live.seed), the final score is saved once the
+     round ends and paid by tier. SKEE-BALL: five balls a game, each roll's
+     outcome simulated at the swipe (skeeSim, saved as A.live.roll), the
+     score of each landed ball saved on A.live.balls, the total paid after
+     the fifth. The shared ARCADE flow reaches these through one-line
+     dispatches (r5Own). */
+  const R5_G = { moles: 1, skee: 1, petshop: 1 };
+  const r5Own = (C) => !!(C && R5_G[C.g]);
+  Object.assign(ARC_NAME, { moles: 'WHACK-A-MOLE', skee: 'SKEE-BALL', petshop: 'PET SHOP' });
+  Object.assign(ARC_COL, { moles: '#c8a070', skee: '#2ee6d6', petshop: PET_SHOP_COL });
+  Object.assign(ARC_HOW, {
+    moles: 'Tap the moles as they pop up. Quick whacks chain a combo, golden moles pay triple, bombs cost you.',
+    skee: 'Swipe up the lane to roll (or tap ROLL on the meter). Five balls. The 100 cups sit in the top corners.',
+  });
+  const ARC_UNIT = { plinko: 'token', wheel: 'spin', slots: 'free pull', moles: 'round', skee: 'game' };
+
+  // ---- WHACK-A-MOLE
+  const WAM = { dur: 14, count: 2.4, countFast: 1.2, endT: 0.8, chainGap: 1.1, rise: 0.12, hitT: 0.35, pts: { mole: 10, gold: 30, bomb: -20 }, comboPts: 2, comboMax: 10,
+    xs: [130, 270, 410], ys: [372, 512, 652] };
+  const WAM_TIERS = [
+    // (a simulated player over 300 rounds: casual 180, good 336, sharp 532 median; a perfect round ~710)
+    { min: 480, tier: 3, label: 'MOLE MASTER!', pays: (m) => [{ k: 'cap', tier: 'r' }, { k: 'gold', n: Math.round(30 * m) }, { k: 'tix', n: 12 }] },
+    { min: 340, tier: 2, label: 'MOLE MANIA!', pays: () => [{ k: 'cap', tier: 'u' }, { k: 'tix', n: 8 }] },
+    { min: 220, tier: 2, label: 'GREAT WHACKING!', pays: (m) => [{ k: 'gold', n: Math.round(25 * m) }, { k: 'tix', n: 6 }] },
+    { min: 110, tier: 1, label: 'NICE WHACKING!', pays: (m) => [{ k: 'gold', n: Math.round(12 * m) }, { k: 'tix', n: 3 }] },
+    { min: 1, tier: 1, label: 'KEEP SWINGING', pays: () => [{ k: 'tix', n: 2 }] },
+    { min: -1e9, tier: 0, label: 'THEY GOT AWAY', pays: () => [] },
+  ];
+  let WAM_HOLES = null;
+  function wamHoles() {
+    if (WAM_HOLES) return WAM_HOLES;
+    const out = [];
+    for (const y of WAM.ys) for (const x of WAM.xs) out.push({ x, y });
+    return (WAM_HOLES = out);
+  }
+  /* The round's pops, seeded: [{i, t, hole, kind: mole|gold|bomb, up}] (up:
+     seconds above ground). The pace quickens and the stays shorten over the
+     round; doubles come in the second half; a hole is never reused while busy. */
+  function wamSched(seed) {
+    const rng = U.rng((seed >>> 0) || 1);
+    const out = [], busy = [];
+    for (let h = 0; h < 9; h++) busy.push(-1);
+    let t = 0.35;
+    while (t < WAM.dur - 0.5) {
+      const u = t / WAM.dur, n = u > 0.45 && rng() < 0.3 ? 2 : 1;
+      for (let j = 0; j < n; j++) {
+        const free = [];
+        for (let h = 0; h < 9; h++) if (busy[h] < t) free.push(h);
+        if (!free.length) break;
+        const hole = free[Math.floor(rng() * free.length)];
+        const r = rng(), kind = r < 0.08 ? 'gold' : r < 0.24 ? 'bomb' : 'mole';
+        const up = Math.round((1.05 - 0.38 * u) * (kind === 'gold' ? 0.75 : kind === 'bomb' ? 1.15 : 1) * (0.9 + rng() * 0.2) * 1000) / 1000;
+        out.push({ i: out.length, t: Math.round(t * 1000) / 1000, hole, kind, up });
+        busy[hole] = t + up + 0.2;
+      }
+      t += (0.62 - 0.26 * u) * (0.8 + rng() * 0.4);
+    }
+    return out;
+  }
+  // The best possible score of a schedule (every mole whacked in one chain, no bombs).
+  function wamPerfect(sched) {
+    let s = 0, chain = 0, last = -9;
+    for (const p of sched) {
+      if (p.kind === 'bomb') continue;
+      chain = p.t - last <= WAM.chainGap ? chain + 1 : 1;
+      last = p.t;
+      s += WAM.pts[p.kind] + WAM.comboPts * Math.min(WAM.comboMax, chain - 1);
+    }
+    return s;
+  }
+  function wamPays(score) {
+    const m = arcMul();
+    for (const T of WAM_TIERS) if (score >= T.min) return { tier: T.tier, label: T.label, sub: `Score ${score | 0}`, pays: T.pays(m) };
+    return { tier: 0, label: 'THEY GOT AWAY', pays: [] };
+  }
+  // A round starts (a token spent and saved), or a saved one restarts from the countdown.
+  function wamStart(fresh) {
+    const C = S.arc, A = C.A;
+    if (fresh) {
+      if (A.tokens <= 0) return arcNoPlays();
+      A.tokens--;
+      A.live = { seed: U.hashStr(`${(C.tile.content && C.tile.content.seed) | 0}:moles:${A.used}`) };
+      save();
+    }
+    const cd = C.fast ? WAM.countFast : WAM.count;
+    C.wm = { state: 'count', cd, cd0: cd, t: 0, sched: wamSched(A.live.seed), hit: {}, popped: {}, score: 0, chain: 0, best: 0, lastT: -9, hits: 0, bombs: 0, miss: 0, mallet: null, flash: {}, endT: 0, lastCount: 99 };
+    C.phase = 'play'; C.win = null;
+    arcMsg('');
+    snd('arcIn');
+    arcInfo();
+    return true;
+  }
+  // A whack at hole h now: {pts, kind, chain} on a hit, {miss} on an empty hole, null outside a round.
+  function wamWhack(hole) {
+    const C = S.arc, Wm = C && C.wm;
+    if (!Wm || Wm.state !== 'play' || !(hole >= 0 && hole < 9)) return null;
+    const T = Wm.t, H = wamHoles()[hole];
+    Wm.mallet = { hole, k: 1 };
+    let hit = null;
+    for (const p of Wm.sched) { if (p.hole !== hole || Wm.hit[p.i] != null || T < p.t || T > p.t + p.up) continue; hit = p; break; }
+    if (!hit) { Wm.chain = 0; Wm.miss++; snd('clawTouch', { pitch: 1.3 }); return { miss: true }; }
+    Wm.hit[hit.i] = T;
+    let pts;
+    if (hit.kind === 'bomb') {
+      pts = WAM.pts.bomb; Wm.chain = 0; Wm.bombs++;
+      Wm.flash[hole] = 0.4;
+      snd('moleBomb'); snd('kaboom', { vol: 0.5 });
+      fx().emit('blast', H.x, H.y - 40, { n: 0.8 });
+      if (!fx().reduced) { fx().shake(12); fx().flash('#ff5a4a', 0.25); }
+      fx().num(H.x, H.y - 90, String(pts), '#ff5a4a', {});
+      haptic('hurt');
+    } else {
+      Wm.chain = T - Wm.lastT <= WAM.chainGap ? Wm.chain + 1 : 1;
+      Wm.lastT = T;
+      pts = WAM.pts[hit.kind] + WAM.comboPts * Math.min(WAM.comboMax, Wm.chain - 1);
+      Wm.best = Math.max(Wm.best, Wm.chain);
+      Wm.hits++;
+      Wm.flash[hole] = 1;
+      snd('bonk', { pitch: hit.kind === 'gold' ? 1.5 : 1 });
+      if (Wm.chain > 1) snd('moleCombo', { pitch: 1 + Math.min(10, Wm.chain) * 0.06 });
+      fx().emit(hit.kind === 'gold' ? 'coins' : 'hit', H.x, H.y - 50, { n: hit.kind === 'gold' ? 0.8 : 0.6 });
+      fx().ring(H.x, H.y - 40, hit.kind === 'gold' ? PAL0.gold : '#ffffff', { r0: 10, r1: 70, w: 5, life: 0.3 });
+      fx().num(H.x, H.y - 96, '+' + pts, hit.kind === 'gold' ? PAL0.gold : '#ffffff', { crit: hit.kind === 'gold' });
+      if (Wm.chain >= 3) fx().text(H.x, H.y - 130, `x${Wm.chain} COMBO!`, PAL0.pink, { size: 14 + Math.min(8, Wm.chain) });
+      if (!fx().reduced) fx().kick(0, 5);
+      haptic('hit');
+    }
+    Wm.score = Math.max(0, Wm.score + pts);
+    return { pts, kind: hit.kind, chain: Wm.chain };
+  }
+  // The round is over: the score is saved (pend) at once, paid after the TIME! beat.
+  function wamEnd() {
+    const C = S.arc, A = C.A, Wm = C.wm;
+    if (!Wm || Wm.state === 'end') return;
+    Wm.state = 'end'; Wm.endT = WAM.endT;
+    C.lastWam = Wm.score;
+    A.pend = { score: Wm.score, hits: Wm.hits, best: Wm.best, bombs: Wm.bombs };
+    A.live = null;
+    save();
+    snd('whistle');
+    arcMsg('TIME!', 'win', `Score ${Wm.score}`);
+  }
+  function wamTick(dt) {
+    const C = S.arc, Wm = C.wm;
+    if (!Wm) return;
+    if (Wm.mallet && Wm.mallet.k > 0) Wm.mallet.k = Math.max(0, Wm.mallet.k - dt * 6);
+    for (const k in Wm.flash) { Wm.flash[k] -= dt * 2; if (Wm.flash[k] <= 0) delete Wm.flash[k]; }
+    if (Wm.state === 'count') {
+      Wm.cd -= dt;
+      const n = Math.ceil(Wm.cd / (Wm.cd0 / 3));
+      if (n !== Wm.lastCount) { Wm.lastCount = n; snd(n > 0 ? 'tick' : 'whistle', { pitch: 1 + (3 - n) * 0.1 }); }
+      if (Wm.cd <= 0) { Wm.state = 'play'; Wm.t = 0; arcInfo(); }
+      return;
+    }
+    if (Wm.state === 'play') {
+      const t0 = Wm.t;
+      Wm.t += dt;
+      for (const p of Wm.sched) if (p.t > t0 && p.t <= Wm.t) { Wm.popped[p.i] = 1; snd('molePop', { pitch: p.kind === 'gold' ? 1.4 : p.kind === 'bomb' ? 0.7 : 1 }); }
+      if (Wm.t >= WAM.dur) wamEnd();
+      return;
+    }
+    if (Wm.state === 'end') { Wm.endT -= dt; if (Wm.endT <= 0) { C.wm = null; arcSettle(); } }
+  }
+  // What stands in each hole now (the renderer's list).
+  const WAM_V = [];
+  for (let i = 0; i < 12; i++) WAM_V.push({ hole: 0, kind: 'mole', up: 0, hit: 0 });
+  function wamVisible(Wm, out) {
+    let n = 0;
+    if (!Wm || Wm.state !== 'play' && Wm.state !== 'end') { out.length = 0; return out; }
+    const T = Wm.t;
+    for (const p of Wm.sched) {
+      if (T < p.t || T > p.t + p.up + WAM.hitT) continue;
+      const h = Wm.hit[p.i];
+      let up, hitK = 0;
+      if (h != null) { const u = (T - h) / WAM.hitT; if (u >= 1) continue; hitK = 1 - u; up = 1 - U.clamp((T - h - 0.15) / 0.2, 0, 1); }
+      else {
+        if (T > p.t + p.up) continue;
+        up = Math.min(1, (T - p.t) / WAM.rise, (p.t + p.up - T) / WAM.rise);
+      }
+      if (n >= WAM_V.length) break;
+      const v = WAM_V[n++];
+      v.hole = p.hole; v.kind = p.kind; v.up = U.clamp(up, 0, 1); v.hit = hitK;
+    }
+    out.length = 0;
+    for (let i = 0; i < n; i++) out.push(WAM_V[i]);
+    return out;
+  }
+
+  // ---- SKEE-BALL
+  const SKEE = {
+    balls: 5, jit: 20, roll: 0.8, air: 0.5, drop: 0.28,
+    board: { cx: 270, cy: 322, rings: [108, 84, 62, 42, 22], cups: [{ x: 140, y: 196, r: 15 }, { x: 400, y: 196, r: 15 }] },
+    lane: { x0: 205, x1: 335, y0: 452, x2: 135, x3: 405, y1: 790 }, vals: [10, 20, 30, 40, 50], cup: 100, top: 172, bottom: 436,
+  };
+  /* A roll, simulated at once (deterministic by its seed): where the ball
+     lands on the board, its score, and the path to play back: {land, score,
+     ring (-1 a cup), cup, back (off the backboard), path: [x, y, r, ...] per
+     1/60 s, hopF, landF}. Power sets the height, the aim the side. */
+  function skeeSim(aim, pow, seed) {
+    const rng = U.rng((seed >>> 0) || 1), B = SKEE.board, L = SKEE.lane;
+    aim = U.clamp(+aim || 270, L.x0 + 8, L.x1 - 8); pow = U.clamp(+pow || 0, 0, 1.25);
+    const lx = aim + (aim - 270) * 1.25 + (rng() - 0.5) * 2 * SKEE.jit;
+    const ly = SKEE.bottom - pow * 250 + (rng() - 0.5) * 2 * SKEE.jit;
+    const back = ly < SKEE.top;   // off the backboard: it rattles down into the 10
+    const land = { x: U.clamp(lx, 104, 436), y: U.clamp(ly, SKEE.top, SKEE.bottom) };
+    let score = SKEE.vals[0], ring = 0, cup = -1;
+    if (!back) {
+      for (let i = 0; i < B.cups.length; i++) { const c = B.cups[i]; if (Math.hypot(land.x - c.x, land.y - c.y) <= c.r + 6) { cup = i; score = SKEE.cup; ring = -1; } }
+      if (cup < 0) { const d = Math.hypot(land.x - B.cx, land.y - B.cy); for (let i = 0; i < B.rings.length; i++) if (d <= B.rings[i]) ring = i; score = SKEE.vals[ring]; }
+    }
+    // the hole it drops into: the cup, the ring's pocket under the landing, or the 10 at the bottom
+    const hole = cup >= 0 ? { x: B.cups[cup].x, y: B.cups[cup].y } : back ? { x: land.x, y: SKEE.bottom - 8 } : { x: land.x, y: land.y + 6 };
+    const path = [], F1 = Math.round((SKEE.roll - 0.25 * Math.min(1, pow)) * 60), F2 = Math.round(SKEE.air * 60), F3 = Math.round(SKEE.drop * 60);
+    const x0 = (L.x2 + L.x3) / 2, y0 = L.y1 - 18;
+    for (let f = 0; f <= F1; f++) { const u = f / F1, e = 1 - (1 - u) * (1 - u); path.push(x0 + (aim - x0) * e, y0 + (L.y0 - y0) * e, 15 - 5 * e); }
+    const top = back ? SKEE.top - 10 : land.y, hgt = 50 + pow * 40;
+    for (let f = 1; f <= F2; f++) { const u = f / F2; path.push(aim + (land.x - aim) * u, L.y0 + (top - L.y0) * u - Math.sin(u * Math.PI) * hgt, 10 - 2 * u); }
+    for (let f = 1; f <= F3; f++) { const u = f / F3, e = u * u; path.push(land.x + (hole.x - land.x) * e, top + (hole.y - top) * e, Math.max(0.5, 8 * (1 - u * 0.9))); }
+    return { land, score, ring, cup, back, path, hopF: F1, landF: F1 + F2 };
+  }
+  function skeePays(total, balls) {
+    const m = arcMul(), tix = Math.floor(total / 10), sub = `${(balls || []).join(' + ') || 0} = ${total}`;
+    if (total >= 380) return { tier: 3, label: 'SKEE JACKPOT!', sub, pays: [{ k: 'cap', tier: 'r' }, { k: 'gold', n: Math.round(30 * m) }, { k: 'tix', n: tix }] };
+    if (total >= 270) return { tier: 2, label: 'HIGH ROLLER!', sub, pays: [{ k: 'cap', tier: 'u' }, { k: 'tix', n: tix }] };
+    if (total >= 180) return { tier: 2, label: `+${tix} TICKETS`, sub, pays: [{ k: 'gold', n: Math.round(15 * m) }, { k: 'tix', n: tix }] };
+    if (total > 0) return { tier: 1, label: `+${tix} TICKETS`, sub, pays: [{ k: 'tix', n: tix }] };
+    return { tier: 0, label: 'GUTTER GAME', pays: [] };
+  }
+  // The meter for a tap roll: the aim sways across the lane, the power pulses.
+  const skeeMeter = (t) => ({ aim: 270 + Math.sin(t * 1.9) * 60, pow: 0.55 + 0.45 * Math.sin(t * 2.7 + 1) });
+  function skeeStart() {
+    const C = S.arc, A = C.A;
+    if (A.live) return true;
+    if (A.tokens <= 0) return arcNoPlays();
+    A.tokens--;
+    A.live = { seed: U.hashStr(`${(C.tile.content && C.tile.content.seed) | 0}:skee:${A.used}`), balls: [], roll: null };
+    save();
+    snd('arcIn', { pitch: 0.9 });
+    arcInfo();
+    return true;
+  }
+  // A roll: its outcome saved now (A.live.roll), played back, scored on the landing.
+  function skeeRoll(aim, pow) {
+    const C = S.arc, A = C && C.A;
+    if (!A || A.g !== 'skee' || C.phase !== 'idle' || C.capT > 0) return false;
+    if (!A.live && !skeeStart()) return false;
+    const L = A.live;
+    if (L.roll || L.balls.length >= SKEE.balls) return false;
+    L.roll = { aim: Math.round(U.clamp(aim, SKEE.lane.x0 + 8, SKEE.lane.x1 - 8)), pow: Math.round(U.clamp(pow, 0, 1.25) * 1000) / 1000, seed: U.hashStr(`${L.seed}:${L.balls.length}`) };
+    save();
+    skeeBegin();
+    return true;
+  }
+  function skeeBegin() {
+    const C = S.arc, R0 = C.A.live && C.A.live.roll;
+    if (!R0) return;
+    C.phase = 'play'; C.win = null;
+    C.sk = { sim: skeeSim(R0.aim, R0.pow, R0.seed), i: 0, speed: C.fast ? 1.5 : 1, hop: false, landed: false };
+    arcMsg('');
+    snd('skeeRoll');
+    arcInfo();
+  }
+  function skeeTick(dt) {
+    const C = S.arc, P = C.sk;
+    if (!P) return;
+    const n = P.sim.path.length / 3;
+    P.i += dt * 60 * P.speed;
+    if (!P.hop && P.i >= P.sim.hopF) { P.hop = true; snd('skeeHop'); }
+    if (!P.landed && P.i >= P.sim.landF) { P.landed = true; skeeLandFx(P.sim); }
+    if (P.i >= n - 1) skeeLand();
+  }
+  function skeeLandFx(sim) {
+    const C = S.arc;
+    const key = sim.cup >= 0 ? 'c' + sim.cup : sim.ring;
+    C.lit[key] = 1.6;
+    const at = sim.land, big = sim.score >= 50;
+    snd('skeeRing', { pitch: 0.8 + sim.score / 100 * 0.6 });
+    fx().num(at.x, at.y - 30, String(sim.score), sim.score >= 100 ? PAL0.pink : big ? PAL0.gold : '#ffffff', { crit: sim.score >= 100 });
+    fx().ring(at.x, at.y, sim.score >= 100 ? PAL0.pink : PAL0.gold, { r0: 6, r1: 50 + sim.score * 0.6, w: 5, life: 0.4 });
+    if (sim.score >= 100) { snd('arcWin', { pitch: 1.3 }); fx().emit('confetti', at.x, at.y, { n: 0.6, power: 0.7 }); if (!fx().reduced) fx().shake(6); }
+    if (sim.back) fx().text(at.x, at.y - 56, 'OFF THE BACK!', '#b3a4d6', { size: 13 });
+  }
+  // The ball is down: its score saved; after the fifth the game settles and pays.
+  function skeeLand() {
+    const C = S.arc, A = C.A, L = A.live, P = C.sk;
+    if (!L || !L.roll) { C.sk = null; C.phase = 'idle'; return; }
+    const sim = P ? P.sim : skeeSim(L.roll.aim, L.roll.pow, L.roll.seed);
+    if (P && !P.landed) skeeLandFx(sim);
+    L.balls.push(sim.score);
+    L.roll = null;
+    C.sk = null;
+    if (L.balls.length >= SKEE.balls) {
+      const total = L.balls.reduce((s, v) => s + v, 0);
+      A.pend = { score: total, balls: L.balls.slice() };
+      A.live = null;
+      save();
+      C.phase = 'play';
+      arcSettle();
+      return;
+    }
+    C.phase = 'idle';
+    save();
+    arcInfo();
+  }
+
+  // ---- the dispatch from the shared ARCADE flow
+  function r5Label(C) {
+    const A = C.A;
+    if (C.g === 'moles') {
+      if (C.phase === 'play') return C.wm && C.wm.state === 'count' ? 'Skip' : 'Stop';
+      return A.tokens > 0 ? 'Play' : 'No rounds';
+    }
+    if (C.g === 'skee') {
+      if (C.phase === 'play') return 'Skip';
+      if (A.live) return `Roll (${SKEE.balls - A.live.balls.length} left)`;
+      return A.tokens > 0 ? 'Play (5 balls)' : 'No games';
+    }
+    return 'Play';
+  }
+  function r5Info(C) {
+    const A = C.A;
+    const s = C.g === 'moles' ? `ROUNDS ${A.tokens}  ·  BEST ${A.best | 0}`
+      : A.live ? `BALL ${Math.min(SKEE.balls, A.live.balls.length + 1)} OF ${SKEE.balls}  ·  TOTAL ${A.live.balls.reduce((a, v) => a + v, 0)}` : `GAMES ${A.tokens}  ·  BEST ${A.best | 0}`;
+    const el = $('arcInfo');
+    if (el) el.textContent = s;
+    const go = $('arcGo');
+    if (go) { go.textContent = r5Label(C); if (go.classList) go.classList[C.phase === 'idle' && arcCanPlay() ? 'add' : 'remove']('ready'); }
+    S.arcInfoStr = s;
+  }
+  function r5Act(x) {
+    const C = S.arc, A = C.A;
+    if (C.g === 'petshop') return false;
+    if (C.phase === 'win') { arcWinDone(); return true; }
+    if (C.capT > 0) { arcOpenCap(); return true; }
+    if (C.g === 'moles') {
+      if (C.phase === 'play') { r5Skip(); return true; }
+      return wamStart(true);
+    }
+    if (C.phase === 'play') { r5Hurry(); return true; }
+    if (!A.live) return skeeStart();
+    const mt = skeeMeter(C.t);
+    return skeeRoll(x != null ? x : mt.aim, mt.pow);
+  }
+  function r5Begin() {
+    const C = S.arc, A = C.A;
+    if (C.g === 'petshop') return;
+    if (A.pend) { C.phase = 'play'; arcSettle(); return; }
+    if (C.g === 'moles' && A.live) { wamStart(false); return; }
+    if (C.g === 'skee' && A.live && A.live.roll) { skeeBegin(); return; }
+    C.phase = 'idle';
+    arcInfo();
+  }
+  function r5Hurry() {
+    const C = S.arc;
+    if (C.g === 'skee' && C.sk) { if (C.sk.speed < 4) { C.sk.speed = 4; return; } skeeLand(); }
+  }
+  function r5Skip() {
+    const C = S.arc;
+    if (C.phase === 'win') { arcWinDone(); return; }
+    if (C.g === 'moles' && C.wm) {
+      if (C.wm.state === 'count') { C.wm.cd = 0; C.wm.state = 'play'; C.wm.t = 0; return; }
+      if (C.wm.state === 'play') { wamEnd(); return; }
+      if (C.wm.state === 'end') { C.wm = null; arcSettle(); }
+      return;
+    }
+    if (C.g === 'skee' && C.phase === 'play') skeeLand();
+  }
+  // The outcome's prize (arcSettle): the saved score, by the game's own tiers.
+  function r5Pays(A, p) {
+    const score = p ? p.score | 0 : 0;
+    A.best = Math.max(A.best | 0, score);
+    if (A.g === 'moles') { const r = wamPays(score); if (p && p.best > 1) r.sub = `Score ${score}, best combo x${p.best}`; return r; }
+    const r = skeePays(score, p && p.balls);
+    // the ticket spray out of the machine's mouth
+    snd('ticketSpray');
+    if (!S.headless) for (let i = 0; i < 3; i++) fx().emit('confetti', 200 + i * 70, 780, { col: '#ff9ec7', n: 0.5, power: 0.9, dir: -Math.PI / 2 });
+    return r;
+  }
+  function r5PrizeAt() {
+    const C = S.arc;
+    return C.g === 'moles' ? { x: 110, y: 222 } : { x: 270, y: 190 };
+  }
+  // Leaving mid-game: a round in progress ends now and pays its score; a
+  // skee-ball game pays the balls rolled so far. The pet shop leaves at once.
+  function r5Leave(C) {
+    if (C.g === 'petshop') return petShopLeave();
+    const A = C.A;
+    if (C.g === 'moles' && C.wm && C.wm.state !== 'end') { if (C.wm.state === 'count') { C.wm.state = 'play'; C.wm.t = 0; } wamEnd(); C.wm = null; arcSettle(); }
+    else if (C.g === 'moles' && C.wm) { C.wm = null; arcSettle(); }
+    else if (C.g === 'skee' && A.live) {
+      if (C.sk) skeeLand();
+      if (A.live) { A.pend = { score: A.live.balls.reduce((s, v) => s + v, 0), balls: A.live.balls.slice() }; A.live = null; save(); C.phase = 'play'; arcSettle(); }
+    }
+    return false;
+  }
+  function r5Pointer(type, x, y) {
+    const C = S.arc;
+    if (C.g === 'petshop') return;
+    if (C.g === 'moles') {
+      if (type === 'down' && C.phase === 'play' && C.wm && C.wm.state === 'play') {
+        const H = wamHoles();
+        let best = -1, bd = 1e9;
+        for (let i = 0; i < H.length; i++) { const dx = x - H[i].x, dy = y - (H[i].y - 45); if (Math.abs(dx) < 72 && dy > -85 && dy < 70 && Math.abs(dx) + Math.abs(dy) < bd) { bd = Math.abs(dx) + Math.abs(dy); best = i; } }
+        if (best >= 0) wamWhack(best);
+        return;
+      }
+      if (type === 'up' && C.phase !== 'play' && y > 150 && y < 830) arcAct(x);
+      return;
+    }
+    // skee: swipe up the lane to roll
+    if (type === 'down') { C.down = { x, y, t: C.t }; if (C.phase === 'idle' && y > 520 && y < 830 && x > 90 && x < 450) C.sw = { x0: x, y0: y, x1: x, y1: y, t0: C.t }; return; }
+    if (type === 'move') { if (C.sw) { C.sw.x1 = x; C.sw.y1 = y; } return; }
+    const sw = C.sw;
+    C.sw = null;
+    if (sw && type === 'up' && sw.y0 - y > 40) {
+      const dy = sw.y0 - y, secs = Math.max(0.06, C.t - sw.t0), speed = dy / secs;
+      // a typical flick (250 px in 0.15 s) lands mid-board; a long fast one flies to the top
+      const pow = U.clamp(0.35 * dy / 300 + 0.65 * speed / 3000, 0.05, 1.25);
+      const aim = 270 + (x - 270) * 0.45 + (x - sw.x0) * 0.6;
+      skeeRoll(aim, pow);
+      return;
+    }
+    if (type === 'up' && C.down && y > 150 && y < 830) arcAct();
+    C.down = null;
+  }
+  function r5Tick(dt) {
+    const C = S.arc;
+    if (C.g === 'moles') wamTick(dt);
+    else if (C.g === 'skee' && C.sk) skeeTick(dt);
+  }
+  const MOLEV = { t: 0, holes: null, moles: [], score: 0, best: 0, combo: 0, time: 0, dur: 14, phase: 'idle', count: 0, countK: 0, mallet: null, flash: null };
+  const SKEEV = { t: 0, board: null, lane: null, ball: null, balls: 5, thrown: [], total: 0, lit: null, aim: 270, pow: 0.5, phase: 'idle', swipe: null };
+  const SKEE_BALL = { x: 0, y: 0, r: 10, air: false, sy: 0, spin: 0 };
+  function r5Draw(ctx, t, V) {
+    const C = S.arc, R = X.RENDER, A = C.A;
+    if (C.g === 'petshop') { petShopDraw(ctx, t, V); return; }
+    if (C.g === 'moles' && R.arcMoles) {
+      const Wm = C.wm, M = MOLEV;
+      M.t = t; M.holes = wamHoles(); wamVisible(Wm, M.moles);
+      M.score = Wm ? Wm.score : (C.lastWam | 0); M.best = A.best | 0; M.combo = Wm ? Wm.chain : 0;
+      M.dur = WAM.dur; M.time = Wm && Wm.state !== 'count' ? Math.max(0, WAM.dur - Wm.t) : WAM.dur;
+      M.phase = Wm ? Wm.state : 'idle';
+      M.count = Wm && Wm.state === 'count' ? Math.max(0, Math.ceil(Wm.cd / (Wm.cd0 / 3))) : 0;
+      M.countK = Wm && Wm.state === 'count' ? (Wm.cd / (Wm.cd0 / 3)) % 1 : 0;
+      M.mallet = Wm && Wm.mallet ? { x: wamHoles()[Wm.mallet.hole].x, y: wamHoles()[Wm.mallet.hole].y - 40, k: Wm.mallet.k } : null;
+      M.flash = Wm ? Wm.flash : null;
+      R.arcMoles(ctx, M);
+      return;
+    }
+    if (C.g === 'skee' && R.arcSkee) {
+      const K = SKEEV, L = A.live;
+      K.t = t; K.board = SKEE.board; K.lane = SKEE.lane; K.lit = C.lit; K.phase = C.phase;
+      K.thrown = L ? L.balls : []; K.total = L ? L.balls.reduce((s, v) => s + v, 0) : (A.best | 0);
+      K.balls = L ? SKEE.balls - L.balls.length - (L.roll ? 1 : 0) : (A.tokens > 0 ? SKEE.balls : 0);
+      const mt = skeeMeter(C.t);
+      K.aim = mt.aim; K.pow = mt.pow;
+      K.swipe = C.sw ? C.sw : null;
+      K.ball = null;
+      if (C.sk) {
+        const P = C.sk, n = P.sim.path.length / 3, i = Math.min(n - 1, Math.floor(P.i));
+        SKEE_BALL.x = P.sim.path[i * 3]; SKEE_BALL.y = P.sim.path[i * 3 + 1]; SKEE_BALL.r = P.sim.path[i * 3 + 2];
+        SKEE_BALL.air = i > P.sim.hopF; SKEE_BALL.sy = i > P.sim.hopF ? SKEE.lane.y0 : SKEE_BALL.y; SKEE_BALL.spin = t * 12;
+        K.ball = SKEE_BALL;
+      }
+      R.arcSkee(ctx, K);
+    }
+  }
+  // ================================================================ /PETS
+
   // ---------------------------------------------------------------- shop
   function rollShop(tile) {
     const run = S.run;
@@ -8951,6 +11207,7 @@ const GAME = (() => {
     b.appendChild(statsList(run));
     if (unl.length) b.appendChild(h('div', 'tag lime', 'Unlocked: ' + unl.map((id) => (charDef(id) || {}).name || id).join(', ')));
     b.appendChild(btn('Back to title', () => { S.run = null; save(); showTitle(); }, 'pri'));
+    vaultShareBtn(b, run, !!run.endless);   // the Share run card button, over the highlights (VAULT block)
     try { localStorage.removeItem(RUN_KEY); } catch (e) { /* ignore */ }
     music('off');
   }
@@ -8978,6 +11235,7 @@ const GAME = (() => {
     b.appendChild(lootHighlights(run));
     b.appendChild(statsList(run));
     if (unl.length) b.appendChild(h('div', 'tag lime', 'Unlocked: ' + unl.map((id) => (charDef(id) || {}).name || id).join(', ')));
+    vaultShareBtn(b, run, true);   // the Share run card button, over the highlights (VAULT block)
     save();   // the run stays saved while the Endless offer is open (ENDLESS block)
     snd('win');
   }
@@ -9028,7 +11286,7 @@ const GAME = (() => {
         const def = relicDef(id);
         const r = h('button', 'relic');
         S.relicEls[id] = r;
-        r.appendChild(relicCanvas(def, 36));
+        r.appendChild(relicCanvas(def, 40));   // POLISH: the medallion fills the slot
         r.onclick = (ev) => { popover(`<b>${def.name}</b><br>${def.text || ''}`, 400, 70); if (ev && ev.stopPropagation) ev.stopPropagation(); };
         el.appendChild(r);
       }
@@ -9086,6 +11344,7 @@ const GAME = (() => {
       if (FS.steering && S.ptrId != null && pid !== null && pid !== S.ptrId) return;
       S.ptrId = pid;
       S.ptr = { x, y };
+      if (petTap(x, y)) return;   // a tap on the pet says what it does (PETS block)
       if (y >= ARENA.y0 && y < ARENA.y1) { tapEnemy(x, y); return; }
       if (inCabinet(x, y) && canSteer()) {
         FS.steering = true;
@@ -9149,6 +11408,7 @@ const GAME = (() => {
     if (down && k === 'Escape') { popover(null); return; }
     if (S.screen === 'intro') { if (down && X.INTRO) X.INTRO.skip(); return; }
     if (S.screen === 'capsule') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); capsuleTap(); } return; }
+    if (S.screen === 'vault') { vaultKey(ev, down); return; }   // VAULT: crack a capsule, Escape leaves
     if (S.screen === 'arcade') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); arcKey(); } return; }   // ARCADE
     if (S.screen === 'reward' && S.pay && !S.pay.done) { if (down && (k === ' ' || k === 'Enter')) finishPay(); return; }
     if (S.screen !== 'fight' || !FS) return;
@@ -9173,7 +11433,8 @@ const GAME = (() => {
     ctx.translate(off.x || 0, off.y || 0);
     if (off.r) { ctx.translate(W / 2, H / 2); ctx.rotate(off.r); ctx.translate(-W / 2, -H / 2); }
     const run = S.run;
-    if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection' || S.screen === 'stickers' || S.screen === 'tips') {
+    if (S.screen === 'vault') vaultDraw(ctx, t);   // the Prize Vault: the wall, the preview, the capsule (VAULT block)
+    else if (S.screen === 'title' || S.screen === 'chars' || S.screen === 'help' || S.screen === 'collection' || S.screen === 'stickers' || S.screen === 'tips') {
       if (R && R.title) R.title(ctx, W, H, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
     } else if (S.screen === 'map' || (run && S.screen !== 'fight' && S.screen !== 'gameover' && S.screen !== 'win')) {
       drawMap(ctx, t);
@@ -9332,9 +11593,11 @@ const GAME = (() => {
     drawBeam(ctx, t, size);
     drawAmbient(ctx);
     arcDrawRoam(ctx, t, size, z, ox, oy);   // ARCADE: roaming monsters and their next step
+    vaultTrailDraw(ctx, t, z, ox, oy, size);   // the Prize Vault trail behind the crawler (VAULT block)
     const meXY = wxy || curXY;
     if (meXY && R && R.crawler) R.crawler(ctx, meXY.x, meXY.y, size, t);
     if (meXY && R && R.portrait) R.portrait(ctx, run.char, meXY.x, meXY.y, size * 1.2, t);
+    if (meXY) petMapDraw(ctx, meXY.x, meXY.y, size, t);   // the pet on its bed (PETS block)
     if (pv && R && R.mapPath) {
       if (pv.tool) {
         // the flare: a line from the player through the hexes it would light
@@ -9350,6 +11613,10 @@ const GAME = (() => {
       }
     }
     ctx.restore();
+    // The map's own chrome belongs to the map screen: under the arcade,
+    // shop or event overlays the plate showed through their bottom buttons
+    // (POLISH round 5 audit).
+    if (S.screen !== 'map') return;
     // Off-screen boss: an arrow on the edge of the map area pointing at it.
     const ba = bossArrow();
     if (ba && R && R.mapArrow) R.mapArrow(ctx, ba.x, ba.y, ba.a, 16, t, 'Boss');
@@ -9520,6 +11787,7 @@ const GAME = (() => {
     luckDraw(ctx, t);   // Lucky Lou's Luck meter (CONTENT block)
     bossCabDraw(ctx, t, cfg, 'front');
     bestCabTop(ctx, t);   // the prize wheel sign, the trick's warning sign (BESTIARY)
+    petDraw(ctx, t);   // the companion pet on the frame, or at work in the cabinet (PETS block)
     drawMonsterFx(ctx, t);
     if (S.debug && R && R.bodyDebug && FS.world) { ctx.save(); ctx.translate(CAB.x, CAB.y); R.bodyDebug(ctx, FS.world); ctx.restore(); }
     // Items in flight from the chute to their target, over everything.
@@ -9546,6 +11814,9 @@ const GAME = (() => {
     metaTick(real);   // stickers, discoveries (META block)
     feelTick(real);   // tip cards, the room scenes, the exit beats (FEEL block)
     endlessTick(real);   // the score count-up, the reboot's beeps (ENDLESS block)
+    petTick(dt, real);   // the companion pet, its tips (PETS block)
+    vaultTick(real);     // VAULT (round 5): the wallet's save, the map trail, the vault preview and capsule
+    polTick(real);       // POLISH (round 5): relic badges shine
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
     if (S.screen === 'map') {
       walkTick(dt); camStep(dt); bloomTick(); chimeTick();
@@ -9722,6 +11993,15 @@ const GAME = (() => {
       get state() { return S.arc; }, get ev() { return S.arcEv; }, get msg() { return S.arcMsgStr || ''; }, get info() { return S.arcInfoStr || ''; },
       get force() { return !!S.arcForce; }, set force(v) { S.arcForce = !!v; },
     },
+    // PETS (round 5): companion pets, the pet shop, whack-a-mole and skee-ball (tests and the screenshot drivers)
+    pet: {
+      K: PET_K, MOVE: PET_MOVE, of: () => petOf(), give: petGive, gain: petGain, fix: petRunFix, fs: () => (FS ? petFS() : null),
+      start: () => { const P = FS ? petFS() : null; return P && !P.act ? petStart(P) : false; }, hold: () => { const P = FS ? petFS() : null; return P ? petHoldStart(P) : false; },
+      tick: petTick, draw: petDraw, mapDraw: petMapDraw, event: petEvent, rig: petRig, grab: petGrab, deliver: petDeliver, tap: petTap,
+      shop: petShopShow, adopt: petAdopt, treat: petTreat, album: () => petMeta(),
+    },
+    wam: { WAM, TIERS: WAM_TIERS, sched: wamSched, perfect: wamPerfect, pays: wamPays, whack: wamWhack, holes: wamHoles, visible: (out) => wamVisible(S.arc && S.arc.wm, out || []), get state() { return S.arc ? S.arc.wm || null : null; } },
+    skee: { SKEE, sim: skeeSim, pays: skeePays, roll: skeeRoll, meter: skeeMeter, get state() { return S.arc ? S.arc.sk || null : null; } },
     // FEEL (DESIGN.md "Feel (round 4)"): tip cards, the rooms, haptics, toast lanes.
     feel: {
       TIPS: FEEL_TIPS, TIP: FEEL_TIP, BUZZ: FEEL_BUZZ, LANE: FEEL_LANE, QUIPS: FEEL_QUIPS, CORNER: FEEL_CORNER,
@@ -9736,6 +12016,16 @@ const GAME = (() => {
       pick: mutSetPick, toggle: mutToggle, picked: () => ((S.meta && S.meta.mutPick) || []).slice(), openPicker: (on) => { S.mutOpen = on !== false; mutPickerFill(); },
       mods: () => mutF(), runMods: () => mutRun(), score: endlessScore, offer: endlessOffer, tick: endlessTick, draw: mutCabDraw,
       get scoreUp() { return S.scoreUp || null; }, get loopFx() { return S.loopFx || null; },
+    },
+    // POLISH (round 5): the turn banner's span, the player hit number, the live relic badges.
+    pol: { BAN: POL_BAN, PNUM: POL_PNUM, bannerBox: polBannerBox, grabsW: polGrabsW, playerNum: (fan) => Object.assign({}, polPlayerNum(fan)),
+      get bannerBox0() { return S.bannerBox || null; }, get liveRelics() { return POL_RL.length; } },
+    // The Prize Vault (DESIGN.md "Prize Vault"): the wallet, the shelves, the Vault Capsule, the share card.
+    vault: {
+      show: showVault, leave: vaultLeave, select: vaultSelect, buy: vaultBuy, equip: vaultEquip, unequip: vaultUnequip, bank: vaultBank, fix: vaultFix,
+      capsule: vaultCapBuy, open: vaultCapOpen, tap: vaultCapTap, skip: vaultCapSkip, close: vaultCapClose, preview: vaultPreview, draw: vaultDraw,
+      shareCard: vaultShareCard, shareInfo: vaultShareInfo, share: vaultShare, onSticker: vaultOnSticker, tick: vaultTick, URL: VLT_URL, WIN: VLT_WIN,
+      get state() { return vaultM(); }, get ui() { return S.vault || null; }, get cap() { return S.vcap || null; }, get trail() { return S.vtrail || null; }, get card() { return S.vaultCard || null; },
     },
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },

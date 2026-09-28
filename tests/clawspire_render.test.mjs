@@ -1136,6 +1136,154 @@ h.test('bestiary: the machine tricks draw clean and read differently', () => {
   h.ok(fingerprint(g1) !== fingerprint(g0), 'hidden vs found');
 });
 
+/* ------------------------------------------------- POLISH (round 5): item identity, relic medallions */
+h.test('polish: every item at every rarity and state draws (decals, silhouettes, rim light)', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  h.ok(R.pol && typeof R.pol.art === 'function' && R.pol.on === true, 'RENDER.pol exposed and on by default');
+  let n = 0;
+  for (const id in D.ITEMS) {
+    for (const rarity of ['c', 'u', 'r', 'l', 'junk']) {
+      const def = Object.assign({}, D.ITEMS[id], { rarity });
+      for (const o of [{}, { plus: true }, { frozen: true }, { plus: true, frozen: true }]) {
+        // the raw art (no sprite cache, no try/catch): a throw fails the test
+        const st = drawCheck('pol art ' + id + ' ' + rarity + ' ' + JSON.stringify(o), c => R.pol.art(c, def, o));
+        if (st.paints) n++;
+      }
+    }
+    drawCheck('pol item ' + id, c => R.item(c, D.ITEMS[id], 50, 50, 0.7, 0.8, { plus: true, glow: true }));
+  }
+  h.ok(n >= Object.keys(D.ITEMS).length * 20, 'every item x rarity x state drawn (' + n + ')');
+  // the silhouettes are real items, the decals are known kinds
+  for (const id in R.pol.SIL) h.ok(!!D.ITEMS[id], 'silhouette for a real item: ' + id);
+  h.ok(Object.keys(R.pol.SIL).length >= 20 && Object.keys(R.pol.SIL).length <= 45, 'twenty to forty-odd unique silhouettes (' + Object.keys(R.pol.SIL).length + ')');
+  const KINDS = ['skull', 'flame', 'rime', 'glint', 'rune', 'pips', 'coin', 'star'];
+  const used = {};
+  for (const id in D.ITEMS) for (const d of R.pol.info(D.ITEMS[id]).decals) { h.ok(KINDS.includes(d), id + ' decal kind ' + d); used[d] = 1; }
+  for (const k of KINDS) h.ok(used[k], 'the ' + k + ' decal is on some item');
+  // keyword driven: poison items carry the skull, legendaries the star; small items one decal at most
+  for (const id in D.ITEMS) {
+    const def = D.ITEMS[id], info = R.pol.info(def), kw = D.kwIds(def);
+    if (def.rarity === 'l') h.ok(info.decals.includes('star'), id + ': a legendary star');
+    if (kw.includes('poison') && def.rarity !== 'junk') h.ok(info.decals.includes('skull'), id + ': poison skull');
+    const sh = def.shape, L = sh.kind === 'circle' ? sh.r * 2 : sh.kind === 'box' ? Math.max(sh.w, sh.h) : 99;
+    if (L < 22) h.ok(info.decals.filter(d => d !== 'star').length <= 1, id + ': a small item keeps to one decal');
+    if (def.rarity === 'junk') h.eq(info.decals.length, 0, id + ': junk has no decals');
+  }
+});
+
+h.test('polish: items that share an art key now look different (call fingerprints)', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  const count = () => {
+    const fps = new Map();
+    for (const id in D.ITEMS) { const { ctx, stat } = seqCtx(); R.pol.art(ctx, D.ITEMS[id], {}); fps.set(id, fingerprint(stat)); }
+    return new Set(fps.values()).size;
+  };
+  R.pol.on = false;
+  const off = count();
+  R.pol.on = true;
+  const on = count();
+  const total = Object.keys(D.ITEMS).length;
+  h.ok(off <= 60, 'without the pass the items look like their art key (' + off + ' of ' + total + ')');
+  h.ok(on >= total - 3, 'with it nearly every item has its own drawing (' + on + ' of ' + total + ')');
+});
+
+h.test('polish: the item sprite cache keys include the decals and rebuild when they change', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  const venom = D.ITEMS.venom_dart, shiv = D.ITEMS.shiv, aegis = D.ITEMS.aegis;
+  h.ok(R.pol.key(venom).includes('skull'), 'the poison dart key names its skull');
+  h.ok(R.pol.key(aegis).includes('star') && R.pol.key(aegis).includes(':l'), 'a legendary key names its star and rim');
+  h.ok(R.pol.key(venom) !== R.pol.key(shiv), 'two daggers with different decals key differently');
+  h.ok(R.pol.key(venom, { plus: true }) !== R.pol.key(venom), 'plus is in the key');
+  h.ok(R.pol.key(venom, { frozen: true }) !== R.pol.key(venom), 'frozen is in the key');
+  // a transformable ctx: RENDER.item builds a sprite on an offscreen canvas
+  const mk = () => { const { ctx, stat } = seqCtx(); ctx.getTransform = () => ({ a: 2, b: 0, c: 0, d: 2, e: 0, f: 0 }); return { ctx, stat }; };
+  const a = mk();
+  R.item(a.ctx, venom, 40, 40, 0, 1, {});
+  const V1 = R.pol.sprites(venom);
+  const sp1 = V1 && Object.values(V1).find(Boolean);
+  h.ok(!!sp1, 'a sprite was cached');
+  h.eq(sp1 && sp1.dk, R.pol.info(venom).key, 'the sprite carries its decal key');
+  h.ok(a.stat.seq.includes('drawImage'), 'the cached sprite is blitted');
+  R.item(mk().ctx, venom, 40, 40, 0, 1, {});
+  h.ok(Object.values(R.pol.sprites(venom)).includes(sp1), 'a second draw reuses the sprite');
+  // the identity layer off: the key changes and the sprite is drawn again
+  R.pol.on = false;
+  R.item(mk().ctx, venom, 40, 40, 0, 1, {});
+  const sp2 = Object.values(R.pol.sprites(venom)).find(Boolean);
+  h.ok(sp2 && sp2 !== sp1 && sp2.dk === 'off', 'turning the layer off re-keys and redraws the sprite');
+  R.pol.on = true;
+  R.item(mk().ctx, venom, 40, 40, 0, 1, {});
+  const sp3 = Object.values(R.pol.sprites(venom)).find(Boolean);
+  h.ok(sp3 && sp3 !== sp2 && sp3.dk === R.pol.info(venom).key, 'and back on again');
+});
+
+h.test('polish: PNG overrides still win over the drawn item and relic art', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, ART = api.ART;
+  const img = { naturalWidth: 64, naturalHeight: 64, width: 64, height: 64, complete: true };
+  const orig = ART.get;
+  const st0 = Object.assign({}, R.pol.stats);
+  drawCheck('pol no png', c => R.pol.art(c, D.ITEMS.cherry_bomb, {}));
+  drawCheck('pol no png aegis', c => R.pol.art(c, D.ITEMS.aegis, {}));
+  h.ok(R.pol.stats.decal > st0.decal && R.pol.stats.rim > st0.rim, 'drawn art gets its decals and rim');
+  // an item PNG (by id, then by art key)
+  for (const kind of ['itemId', 'item']) {
+    ART.get = (k, key) => (k === kind && (key === 'aegis' || key === 'shield') ? img : null);
+    const s1 = Object.assign({}, R.pol.stats);
+    const st = drawCheck('pol png ' + kind, c => R.pol.art(c, D.ITEMS.aegis, { plus: true }));
+    h.ok(st.seq.includes('drawImage'), kind + ' PNG is drawn');
+    h.eq(R.pol.stats.decal, s1.decal, kind + ' PNG: no decals over it');
+    h.eq(R.pol.stats.rim, s1.rim, kind + ' PNG: no rim pass');
+    const stItem = drawCheck('pol png item ' + kind, c => R.item(c, D.ITEMS.aegis, 30, 30, 0, 1, {}));
+    h.ok(stItem.seq.includes('drawImage'), kind + ' PNG wins in RENDER.item too');
+    h.eq(R.pol.stats.decal, s1.decal, kind + ' PNG in RENDER.item: still no decals');
+  }
+  // a relic PNG: no medallion
+  const rid = Object.keys(D.RELICS)[0];
+  ART.get = (k, key) => (k === 'relic' && key === rid ? img : null);
+  const b0 = R.pol.stats.badge;
+  const st = drawCheck('relic png', c => R.relicIcon(c, D.RELICS[rid], 20, 20, 32, 1.2));
+  h.ok(st.seq.includes('drawImage'), 'the relic PNG is drawn');
+  h.eq(R.pol.stats.badge, b0, 'no medallion around a relic PNG');
+  h.ok(!R.relicLive(D.RELICS[rid], 0.1), 'a relic PNG never needs a redraw');
+  ART.get = orig;
+  drawCheck('relic drawn', c => R.relicIcon(c, D.RELICS[rid], 20, 20, 32));
+  h.eq(R.pol.stats.badge, b0 + 1, 'without the PNG the medallion is drawn');
+});
+
+h.test('polish: relic medallions for every relic at every rarity, the shine and the rainbow', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  const TIERS = { c: 'c', u: 'u', r: 'r', boss: 'l', l: 'l', event: 'event' };
+  for (const id in D.RELICS) {
+    for (const rarity in TIERS) {
+      const def = Object.assign({}, D.RELICS[id], { rarity });
+      h.eq(R.pol.tier(def), TIERS[rarity], id + ' ' + rarity + ' tier');
+      for (const t of [undefined, 0, 0.37, 2.2, 7.9]) drawCheck('relic ' + id + ' ' + rarity + ' t' + t, c => R.relicIcon(c, def, 30, 30, 44, t));
+    }
+  }
+  drawCheck('relic without a def', c => R.relicIcon(c, null, 10, 10, 20, 1));
+  const def = D.RELICS[Object.keys(D.RELICS)[0]];
+  const fp = (rar) => fingerprint(drawCheck('relic fp ' + rar, c => R.relicIcon(c, Object.assign({}, def, { rarity: rar }), 30, 30, 44)));
+  h.ok(fp('r') !== fp('c') && fp('boss') !== fp('r') && fp('boss') !== fp('c'), 'gold and rainbow frames draw differently from bronze');
+  // animation: legendary always live; a common only while its shine sweeps, each relic on its own phase
+  const leg = Object.assign({}, def, { rarity: 'boss' }), com = Object.assign({}, def, { rarity: 'c' });
+  h.ok(R.relicLive(leg, 0) && R.relicLive(leg, 3.3), 'the rainbow is always turning');
+  let live = 0, steps = 0;
+  for (let t = 0; t < R.pol.SHINE.period; t += 0.05, steps++) if (R.relicLive(com, t)) live++;
+  const frac = live / steps;
+  h.ok(frac > 0.08 && frac < 0.3, 'a common shines a short part of the time (' + frac.toFixed(2) + ')');
+  const phases = new Set();
+  for (const id of Object.keys(D.RELICS).slice(0, 12)) { let t = 0; while (R.pol.shine(D.RELICS[id], t) < 0 && t < 10) t += 0.05; phases.add(Math.round(t * 4)); }
+  h.ok(phases.size > 3, 'relics shine on their own phases (' + phases.size + ')');
+  h.eq(R.pol.shine(def, undefined), -1, 'no t: a still badge (no sweep)');
+  let tIn = 0; while ((R.pol.shine(def, tIn) < 0.3 || R.pol.shine(def, tIn) > 0.7) && tIn < 10) tIn += 0.01;
+  h.ok(fingerprint(drawCheck('still', c => R.relicIcon(c, def, 30, 30, 44))) !== fingerprint(drawCheck('sweep', c => R.relicIcon(c, def, 30, 30, 44, tIn))), 'the shine sweep draws');
+});
+
 h.test('bestiary: map decor on lit land per biome, never on the dark or the sea; the act 3 aurora', () => {
   const api = boot({ only: ['util', 'data', 'map', 'render'] });
   const R = api.RENDER;
@@ -1162,6 +1310,205 @@ h.test('bestiary: map decor on lit land per biome, never on the dark or the sea;
   h.ok(sky3.paints > 3, 'the act 3 map has an aurora');
   const { ctx, stat } = seqCtx(); R.best.sky(ctx, 0, 172, 540, 1, 1.5); R.best.sky(ctx, 0, 172, 540, 2, 1.5);
   h.eq(stat.paints, 0, 'acts 1 and 2 keep their sky');
+});
+
+// VAULT (round 5): the Prize Vault's cosmetics on the cabinet, the claw, the portraits, the trail; thumbnails, the wall, the share card.
+h.test('vault: render-only (no DATA) every slot is the default look', () => {
+  const R = boot({ only: ['util', 'render'] }).RENDER;
+  h.ok(R.vault && typeof R.vault.equip === 'function' && typeof R.vault.thumb === 'function' && typeof R.vault.share === 'function', 'RENDER.vault loads without DATA');
+  const cfg = { w: 480, h: 390 };
+  const base = fingerprint(drawCheck('cabinet, no vault', c => R.cabinetBack(c, 30, 410, cfg, { t: 1, act: 1 })));
+  R.vault.equip({ skin: 'skin_space', paint: 'paint_gold', marquee: 'mq_hot', trail: 'trail_fire', outfit: { knight: 'fit_knight_cape' } });
+  h.eq(fingerprint(drawCheck('cabinet, ids without DATA', c => R.cabinetBack(c, 30, 410, cfg, { t: 1, act: 1 }))), base, 'unknown ids change nothing');
+  drawCheck('a thumbnail without DATA', c => R.vault.thumb(c, 'skin_space', 50, 50, 100, 0.5));
+  drawCheck('the share card without DATA', c => R.vault.share(c, { char: 'knight', score: 10 }));
+});
+h.test('vault: every skin, marquee, paint, outfit and trail draws, balanced and distinct', () => {
+  const api = boot({ only: ['util', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, P = api.PHYS;
+  const cfg = { w: 480, h: 390, frame: 30, chuteW: 64, dividerH: 0.45 };
+  const base = fingerprint(drawCheck('cabinet, nothing equipped', c => R.cabinetBack(c, 30, 410, cfg, { t: 1.3, act: 2 })));
+  h.eq(fingerprint(drawCheck('cabinet, the classic skin', c => R.cabinetBack(c, 30, 410, cfg, { t: 1.3, act: 2, skin: 'skin_classic', mqId: 'mq_classic' }))), base, 'the default skin and marquee are the old cabinet exactly');
+  // skins
+  const skins = new Map();
+  for (const id of D.vaultList('skin')) {
+    const fp = drawCheck('skin ' + id, c => { R.cabinetBack(c, 30, 410, cfg, { t: 2.1, act: 1, skin: id }); R.cabinetFront(c, 30, 410, cfg, { t: 2.1, skin: id }); });
+    skins.set(id, fingerprint(fp));
+    drawCheck('skin ' + id + ' in a party, tilted', c => R.cabinetBack(c, 30, 410, cfg, { t: 0.7, act: 3, skin: id, party: 1, marquee: 'JACKPOT!', tilt: 1 }));
+    drawCheck('skin ' + id + ' under the alarm', c => R.cabinetBack(c, 30, 410, cfg, { t: 0.7, act: 3, skin: id, alarm: 1 }));
+  }
+  const us = uniqueRatio(skins);
+  h.eq(us.ratio, 1, 'every skin draws differently ' + JSON.stringify(us.dupes));
+  // the equipped skin applies with no st.skin
+  R.vault.equip({ skin: 'skin_space' });
+  h.eq(fingerprint(drawCheck('equipped skin', c => { R.cabinetBack(c, 30, 410, cfg, { t: 2.1, act: 1 }); R.cabinetFront(c, 30, 410, cfg, { t: 2.1 }); })), skins.get('skin_space'), 'equip: the cabinet wears the equipped skin');
+  h.eq(fingerprint(drawCheck('st.skin wins', c => R.cabinetBack(c, 30, 410, cfg, { t: 1.3, act: 2, skin: null }))), base, 'st.skin null is the default look, whatever is equipped');
+  R.vault.equip({});
+  // marquees
+  const mqs = new Map();
+  for (const id of D.vaultList('marquee')) mqs.set(id, fingerprint(drawCheck('marquee ' + id, c => R.cabinetBack(c, 30, 410, cfg, { t: 1.7, act: 1, mqId: id }))));
+  h.eq(uniqueRatio(mqs).ratio, 1, 'every marquee draws differently (text, style, bulbs)');
+  for (const id of D.vaultList('marquee')) drawCheck('marquee plate ' + id, c => R.vault.marquee(c, D.COSMETICS[id].look, 100, 20, 13, 0.9, '#ff2e88'));
+  // paints on every claw type (a paint may only change colours: fingerprint the colours too)
+  const colorPrint = (fn) => {
+    const seq = [];
+    const ctx = new Proxy({ canvas: { width: 540, height: 960 } }, {
+      get(t, k) {
+        if (k === 'canvas') return t.canvas;
+        if (k === 'measureText') return () => ({ width: 40 });
+        if (k === 'createLinearGradient' || k === 'createRadialGradient' || k === 'createPattern') return () => ({ addColorStop(o, c) { seq.push('stop:' + c); } });
+        if (typeof k !== 'string' || k === 'then') return t[k];
+        if (k in t) return t[k];
+        return () => { seq.push(k); };
+      },
+      set(t, k, v) { if (k === 'fillStyle' || k === 'strokeStyle') seq.push(k + '=' + (typeof v === 'string' ? v : 'obj')); t[k] = v; return true; },
+    });
+    fn(ctx);
+    return seq.join(',');
+  };
+  const J = { t: 1.1, mood: 'happy' };
+  const pose = (ty) => P.clawPose(ty, { x: 200, y: 120, open: 0.6 });
+  const paints = new Map();
+  const plain = colorPrint(c => R.claw(c, pose('classic'), 0, 0, { juice: J }));
+  for (const id of D.vaultList('paint')) {
+    for (const ty of Object.keys(P.CLAW_TYPES)) {
+      drawCheck(`paint ${id} on ${ty}`, c => R.claw(c, pose(ty), 0, 0, { paint: id, juice: J }));
+      const fp = colorPrint(c => R.claw(c, pose(ty), 0, 0, { paint: id, juice: J }));
+      if (ty === 'classic') paints.set(id, fp);
+      else if (id !== 'paint_chrome') h.ok(fp !== colorPrint(c => R.claw(c, pose(ty), 0, 0, { juice: J })), `${id} shows on the ${ty}`);
+    }
+  }
+  h.eq(uniqueRatio(paints).ratio, 1, 'every paint draws differently');
+  h.eq(paints.get('paint_chrome'), plain, 'Factory Chrome is the old claw');
+  h.eq(colorPrint(c => R.claw(c, pose('classic'), 0, 0, { juice: J })), plain, 'the paint never leaks into the next claw');
+  R.vault.equip({ paint: 'paint_frost' });
+  h.eq(colorPrint(c => R.claw(c, pose('classic'), 0, 0, { juice: J })), paints.get('paint_frost'), 'equip: the claw wears the equipped paint');
+  R.vault.equip({});
+  // outfits
+  const bare = {};
+  for (const ch of ['knight', 'alchemist', 'rogue', 'gambler']) bare[ch] = fingerprint(drawCheck('portrait ' + ch, c => R.portrait(c, ch, 60, 60, 90, 0.8)));
+  const fits = new Map();
+  for (const id of D.vaultList('outfit')) {
+    const ch = D.COSMETICS[id].char;
+    const fp = fingerprint(drawCheck('outfit ' + id, c => R.vault.withOutfit(c, ch, 60, 60, 90, 0.8, id)));
+    h.ok(fp !== bare[ch], id + ' shows on ' + ch);
+    fits.set(id, fp);
+    const other = ch === 'knight' ? 'rogue' : 'knight';
+    h.eq(fingerprint(drawCheck('outfit ' + id + ' on ' + other, c => R.vault.withOutfit(c, other, 60, 60, 90, 0.8, id))), bare[other], id + ' is not for ' + other);
+  }
+  h.eq(uniqueRatio(fits).ratio, 1, 'every outfit draws differently');
+  R.vault.equip({ outfit: { alchemist: 'fit_alch_wizard' } });
+  h.eq(fingerprint(drawCheck('equipped outfit', c => R.portrait(c, 'alchemist', 60, 60, 90, 0.8))), fits.get('fit_alch_wizard'), 'equip: the portrait (HUD, map token, versus card) wears it');
+  h.eq(fingerprint(drawCheck('other crawler', c => R.portrait(c, 'knight', 60, 60, 90, 0.8))), bare.knight, 'the other crawlers are untouched');
+  R.vault.equip({});
+  // trails
+  const pts = [];
+  for (let i = 0; i < 12; i++) pts.push({ x: 40 + i * 12, y: 100 + Math.sin(i) * 8, a: i * 0.18, s: i });
+  const trails = new Map();
+  for (const id of D.vaultList('trail')) {
+    if (id === D.VAULT_DEFAULT.trail) { const { ctx, stat } = seqCtx(); R.vault.trail(ctx, pts, pts.length, 1, id, 46); h.eq(stat.paints, 0, 'the default trail adds nothing (the old dust puffs stay)'); continue; }
+    trails.set(id, fingerprint(drawCheck('trail ' + id, c => R.vault.trail(c, pts, pts.length, 1.3, id, 46))));
+  }
+  h.eq(uniqueRatio(trails).ratio, 1, 'every trail draws differently');
+  const old = pts.map(p => ({ x: p.x, y: p.y, a: 9, s: p.s }));
+  const { ctx: c0, stat: s0 } = seqCtx(); R.vault.trail(c0, old, old.length, 1, 'trail_hearts', 46);
+  h.eq(s0.paints, 0, 'marks past their life are gone');
+  // thumbnails
+  const th = new Map();
+  for (const id of D.COSMETIC_IDS) { drawCheck('thumb ' + id, c => R.vault.thumb(c, id, 50, 50, 80, 0.6)); th.set(id, colorPrint(c => R.vault.thumb(c, id, 50, 50, 80, 0.6))); }
+  h.ok(uniqueRatio(th).ratio === 1, 'every thumbnail is distinct ' + JSON.stringify(uniqueRatio(th).dupes.slice(0, 3)));
+});
+h.test('vault: the wall, the glass and the share card', () => {
+  const api = boot({ only: ['util', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  const win = { x: 14, y: 84, w: 512, h: 252 };
+  drawCheck('the vault wall', c => R.vault.wall(c, 540, 960, 1.2, { win }));
+  drawCheck('the vault wall, no window', c => R.vault.wall(c, 540, 960, 0, {}));
+  drawCheck('the glass', c => R.vault.glass(c, win, 3.3));
+  const items = ['rusty_sword', 'dented_shield', 'bubble_flask', 'prize_marble'].map(id => D.ITEMS[id]).filter(Boolean);
+  const card = { char: 'alchemist', name: 'Mira', title: 'The Alchemist', won: true, score: 123456, mode: 'endless', tilt: 4, loop: 3, act: 3,
+    muts: [{ icon: 'G', name: 'Glass', color: '#8dfff5' }, { icon: 'L', name: 'Low Gravity', color: '#a6ff5e' }], combo: { name: 'Mega Jackpot', tier: 3 }, bigHit: 88,
+    boss: 'The Prize Master', items, skin: 'skin_rainbow', paint: 'paint_rainbow', marquee: 'mq_rainbow', outfit: 'fit_alch_wizard', clawType: 'magnet', url: 'https://games-71g.pages.dev/clawspire/', date: '2026-09-28', t: 0.8 };
+  const won = drawCheck('the share card, a win', c => R.vault.share(c, card));
+  const lost = drawCheck('the share card, a loss', c => R.vault.share(c, Object.assign({}, card, { won: false, muts: [], combo: null, outfit: null, loop: 0, mode: 'classic' })));
+  h.ok(fingerprint(won) !== fingerprint(lost), 'a win and a loss make different cards');
+  const { ctx, stat } = seqCtx();
+  R.vault.share(ctx, card);
+  h.ok(stat.seq.filter(k => k === 'fillText').length >= 12, 'the card is full of words (score, stats, the URL)');
+  drawCheck('the share card, empty', c => R.vault.share(c, {}));
+});
+
+// ---------------------------------------------------------------- PETS (round 5)
+h.test('pets: every pet in every pose, mood and level look, distinct', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  for (const n of ['pet', 'petTag', 'petBed', 'petIcon', 'arcMoles', 'arcSkee']) h.eq(typeof R[n], 'function', 'RENDER.' + n + ' exists');
+  h.eq(JSON.stringify(R.pets.KEYS.slice().sort()), JSON.stringify(D.PET_IDS.slice().sort()), 'the renderer draws exactly the pets in DATA');
+  const kinds = new Map();
+  for (const id of D.PET_IDS) {
+    const base = drawCheck('pet ' + id, c => R.pet(c, id, 100, 200, 1.2, { t: 1.3, lv: 1 }));
+    kinds.set(id, fingerprint(base));
+    const looks = new Map(), moods = new Map(), poses = new Map();
+    for (const lv of [1, 2, 4, 5]) looks.set(lv, fingerprint(drawCheck(`pet ${id} lv ${lv}`, c => R.pet(c, id, 100, 200, 1, { t: 1.3, lv }))));
+    h.eq(uniqueRatio(looks).ratio, 1, id + ': a new look at Lv 2, 4 and 5');
+    for (const mood of ['', 'happy', 'cheer', 'scared', 'sleep', 'sad', 'eat']) moods.set(mood || 'none', fingerprint(drawCheck(`pet ${id} ${mood}`, c => R.pet(c, id, 100, 200, 1, { t: 1.3, lv: 1, mood, moodK: 1 }))));
+    h.ok(uniqueRatio(moods).ratio >= 6 / 7, id + ': the moods read differently ' + JSON.stringify(uniqueRatio(moods).dupes));
+    for (const pose of ['sit', 'run', 'fly', 'act', 'ride']) poses.set(pose, fingerprint(drawCheck(`pet ${id} ${pose}`, c => R.pet(c, id, 100, 200, 1, { t: 1.3, lv: 3, pose, k: 0.4, dir: -1, sq: 0.5, air: pose === 'fly', lvUp: 0.5, blink: 1, look: -0.6 }))));
+  }
+  h.eq(uniqueRatio(kinds).ratio, 1, 'every pet is drawn differently');
+  // the octopus's holding arm
+  const arm = drawCheck('octopus holding', c => R.pet(c, 'octopus', 100, 200, 1, { t: 1, lv: 1, pose: 'ride', reach: { x: 20, y: 30 } }));
+  h.ok(fingerprint(arm) !== fingerprint(drawCheck('octopus riding', c => R.pet(c, 'octopus', 100, 200, 1, { t: 1, lv: 1, pose: 'ride' }))), 'the octopus reaches for what it holds');
+  drawCheck('an unknown pet falls back', c => R.pet(c, 'dragon', 100, 200, 1, null));
+  drawCheck('a pet with no state', c => R.pet(c, 'cat', 100, 200));
+  // deterministic: the same frame twice
+  h.eq(fingerprint(drawCheck('goose again', c => R.pet(c, 'goose', 1, 2, 1, { t: 2.5, lv: 5, mood: 'happy' }))), fingerprint(drawCheck('goose again 2', c => R.pet(c, 'goose', 1, 2, 1, { t: 2.5, lv: 5, mood: 'happy' }))), 'a pet frame is a pure function of its state');
+  // the tag, the bed, the icons
+  const t0 = drawCheck('tag', c => R.petTag(c, 64, 399, { name: 'Mittens', lv: 3, col: '#ff2e88', xpK: 0.4 }));
+  h.ok(t0.seq.includes('fillText'), 'the tag writes the name');
+  drawCheck('tag, flash and full xp', c => R.petTag(c, 64, 399, { name: 'A very long name', lv: 5, xpK: 1, flash: 1 }));
+  drawCheck('tag, no state', c => R.petTag(c, 64, 399, null));
+  drawCheck('bed', c => R.petBed(c, 50, 50, 1, '#2ee6d6'));
+  const icons = new Map();
+  for (const ty of ['petshop', 'moles', 'skee']) icons.set(ty, fingerprint(drawCheck('icon ' + ty, c => R.petIcon(c, ty, 20, 1.2))));
+  h.eq(uniqueRatio(icons).ratio, 1, 'three distinct map icons');
+  // the map hexes: lit with the icon, dark as a landmark silhouette
+  for (const type of ['petshop', 'moles', 'skee']) {
+    const lit = drawCheck('hex ' + type, c => R.hex(c, 100, 100, 40, { q: 1, r: 1, type, revealed: true, terrain: 'land', ground: 'grass' }, { t: 1, fill: '#556b2f', orient: 'v' }));
+    const empty = drawCheck('hex empty', c => R.hex(c, 100, 100, 40, { q: 1, r: 1, type: 'empty', revealed: true, terrain: 'land', ground: 'grass' }, { t: 1, fill: '#556b2f', orient: 'v' }));
+    h.ok(lit.paints > empty.paints + 5, type + ': the hex shows its icon');
+    drawCheck('hex dark ' + type, c => R.hex(c, 100, 100, 40, { q: 1, r: 1, type, revealed: false, known: true, terrain: 'land' }, { t: 1, fill: '#556b2f', orient: 'v' }));
+  }
+});
+h.test('pets: the whack-a-mole and skee-ball machines, the tip pictures', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER;
+  const holes = []; for (const y of [372, 512, 652]) for (const x of [130, 270, 410]) holes.push({ x, y });
+  const base = { t: 1.1, holes, moles: [], score: 0, best: 0, combo: 0, time: 14, dur: 14, phase: 'idle' };
+  const states = new Map();
+  states.set('idle', fingerprint(drawCheck('moles idle', c => R.arcMoles(c, base))));
+  states.set('count', fingerprint(drawCheck('moles count', c => R.arcMoles(c, Object.assign({}, base, { phase: 'count', count: 2, countK: 0.4 })))));
+  states.set('go', fingerprint(drawCheck('moles go', c => R.arcMoles(c, Object.assign({}, base, { phase: 'count', count: 0, countK: 0.2 })))));
+  const up = [{ hole: 0, kind: 'mole', up: 1, hit: 0 }, { hole: 4, kind: 'gold', up: 0.6, hit: 0 }, { hole: 8, kind: 'bomb', up: 1, hit: 0 }];
+  states.set('play', fingerprint(drawCheck('moles play', c => R.arcMoles(c, Object.assign({}, base, { phase: 'play', moles: up, score: 120, combo: 4, time: 6.2 })))));
+  states.set('whack', fingerprint(drawCheck('moles whack', c => R.arcMoles(c, Object.assign({}, base, { phase: 'play', moles: [{ hole: 3, kind: 'mole', up: 1, hit: 0.8 }], mallet: { x: 130, y: 470, k: 0.7 }, flash: { 3: 1 }, time: 2 })))));
+  states.set('bomb', fingerprint(drawCheck('moles bomb', c => R.arcMoles(c, Object.assign({}, base, { phase: 'play', moles: [{ hole: 3, kind: 'bomb', up: 1, hit: 0.8 }], flash: { 3: 0.3 }, time: 1 })))));
+  h.eq(uniqueRatio(states).ratio, 1, "every whack-a-mole state draws differently " + JSON.stringify(uniqueRatio(states).dupes));
+  drawCheck('moles with no state', c => R.arcMoles(c, null));
+  const board = { cx: 270, cy: 322, rings: [108, 84, 62, 42, 22], cups: [{ x: 140, y: 196, r: 15 }, { x: 400, y: 196, r: 15 }] };
+  const lane = { x0: 205, x1: 335, y0: 452, x2: 135, x3: 405, y1: 790 };
+  const sk = { t: 0.7, board, lane, ball: null, balls: 5, thrown: [], total: 0, lit: {}, aim: 250, pow: 0.6, phase: 'idle' };
+  const ss = new Map();
+  ss.set('idle', fingerprint(drawCheck('skee idle', c => R.arcSkee(c, sk))));
+  ss.set('swipe', fingerprint(drawCheck('skee swipe', c => R.arcSkee(c, Object.assign({}, sk, { swipe: { x0: 270, y0: 760, x1: 260, y1: 600 } })))));
+  ss.set('roll', fingerprint(drawCheck('skee roll', c => R.arcSkee(c, Object.assign({}, sk, { phase: 'play', balls: 4, ball: { x: 262, y: 600, r: 13 } })))));
+  ss.set('air', fingerprint(drawCheck('skee air', c => R.arcSkee(c, Object.assign({}, sk, { phase: 'play', balls: 4, ball: { x: 262, y: 380, r: 9, air: true, sy: 452 } })))));
+  ss.set('lit', fingerprint(drawCheck('skee lit', c => R.arcSkee(c, Object.assign({}, sk, { phase: 'play', balls: 3, thrown: [50, 100], total: 150, lit: { 4: 1, c1: 1 } })))));
+  h.eq(uniqueRatio(ss).ratio, 1, "every skee-ball state draws differently " + JSON.stringify(uniqueRatio(ss).dupes));
+  drawCheck('skee with no state', c => R.arcSkee(c, null));
+  const tips = new Map();
+  for (const id of ['pet', 'petshop', 'moles', 'skee', 'arcade', 'map']) tips.set(id, fingerprint(drawCheck('tip art ' + id, c => R.feelTipArt(c, id, 56, 1.1, {}))));
+  h.eq(uniqueRatio(tips).ratio, 1, 'the round 5 tips have their own pictures');
 });
 
 h.done();
