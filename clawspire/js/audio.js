@@ -1153,6 +1153,61 @@ const AUDIO = (() => {
   Object.assign(LEVEL, { arcJackpot: 1.15, peg: 0.8, wheelTick: 0.85 });
   NAMES.push('plinkDrop', 'peg', 'wheelSpin', 'wheelTick', 'lever', 'reelSpin', 'reelStop', 'drumroll', 'arcWin', 'arcJackpot', 'arcLose', 'arcIn', 'diceRoll', 'diceLand', 'roamWake', 'roamStep', 'ambush');
 
+  // ---------------------------------------------------------------- bestiary
+  // The round 4 enemies' tricks (DESIGN.md "Enemies", the bestiary): a
+  // giggle for the tickled claw, a goo splat, the magnetic lid's rising hum,
+  // digging, a ghost's boo, the bulldozer's engine and scrape, the rival
+  // claw's servo whirr. (The prize wheel uses the arcade's spin and ticks.)
+  Object.assign(BANK, {
+    // A giggle: quick rising squeaks with a wobble.
+    giggle(out, t, o, p) {
+      for (let i = 0; i < 5; i++) blip(out, t, { at: i * 0.07, w: 'triangle', f: (700 + i * 90) * p, to: (900 + i * 110) * p, dur: 0.06, v: 0.09, vib: [30, 40] });
+      return 0.4;
+    },
+    // A wet splat: a low noise thump and a sliding bubble.
+    gooSplat(out, t, o, p) {
+      hiss(out, t, { type: 'lowpass', f: 900 * p, to: 200, dur: 0.18, v: 0.3 });
+      blip(out, t, { at: 0.02, w: 'sine', f: 220 * p, to: 520 * p, dur: 0.12, v: 0.14 });
+      blip(out, t, { at: 0.1, w: 'sine', f: 380 * p, to: 180 * p, dur: 0.1, v: 0.08 });
+      return 0.24;
+    },
+    // The lid magnetizes: a rising electric hum and a zap.
+    magLift(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 60 * p, to: 180 * p, dur: 0.55, v: 0.1, lp: 900, vib: [50, 6] });
+      blip(out, t, { w: 'square', f: 120 * p, to: 360 * p, dur: 0.5, v: 0.04, lp: 1600 });
+      hiss(out, t, { at: 0.45, type: 'highpass', f: 3000, dur: 0.06, v: 0.14 });
+      return 0.6;
+    },
+    // Digging: two gritty shovel scrapes and a thump of earth.
+    dig(out, t, o, p) {
+      for (let i = 0; i < 2; i++) hiss(out, t, { at: i * 0.11, type: 'bandpass', f: 1400 * p, to: 500, q: 1.5, dur: 0.09, v: 0.2, crunch: true });
+      blip(out, t, { at: 0.2, w: 'sine', f: 110 * p, to: 60, dur: 0.12, v: 0.22 });
+      return 0.34;
+    },
+    // BOO: a hollow sliding whistle.
+    boo(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 520 * p, to: 260 * p, dur: 0.5, v: 0.14, vib: [6, 18] });
+      blip(out, t, { w: 'triangle', f: 780 * p, to: 390 * p, dur: 0.45, v: 0.05, vib: [6, 25] });
+      return 0.55;
+    },
+    // The bulldozer: an engine rev and the blade's scrape along the floor.
+    dozer(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 55 * p, to: 95 * p, dur: 0.6, v: 0.16, lp: 600, vib: [22, 8] });
+      hiss(out, t, { at: 0.15, type: 'bandpass', f: 700, to: 1500, q: 1.2, dur: 0.9, v: 0.12, crunch: true });
+      blip(out, t, { at: 0.9, w: 'square', f: 1000 * p, dur: 0.08, v: 0.05, lp: 3000 });
+      blip(out, t, { at: 1.05, w: 'square', f: 1000 * p, dur: 0.08, v: 0.05, lp: 3000 });
+      return 1.15;
+    },
+    // The rival claw: a thin servo whirr up and a ratchet.
+    rivalClaw(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 420 * p, to: 760 * p, dur: 0.35, v: 0.05, lp: 2200, vib: [40, 30] });
+      for (let i = 0; i < 4; i++) hiss(out, t, { at: 0.35 + i * 0.04, type: 'bandpass', f: 3200, q: 7, dur: 0.02, v: 0.1 });
+      return 0.55;
+    },
+  });
+  Object.assign(GAP, { giggle: 0.35, gooSplat: 0.1, magLift: 0.4, dig: 0.15, boo: 0.3, dozer: 0.8, rivalClaw: 0.4 });
+  NAMES.push('giggle', 'gooSplat', 'magLift', 'dig', 'boo', 'dozer', 'rivalClaw');
+
   /* Plays a named effect. opts: {vol, pitch, mass (itemLand), vel (itemLand
      impact 0..1), amt (hit damage)}. Returns true when something was queued. */
   function sfx(name, opts) {

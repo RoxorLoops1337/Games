@@ -11,7 +11,9 @@ const NAMES = ['clawMove', 'clawDrop', 'clawTouch', 'clawClose', 'clawLift', 'cl
   'enemyDie', 'playerHurt', 'win', 'lose', 'click', 'buy', 'reveal', 'brush', 'step', 'coin', 'upgrade',
   'turn', 'boss',
   // the juice pass
-  'proc', 'combo', 'crit', 'shatter', 'tick', 'cardFlip', 'relic', 'footstep', 'bloom', 'heartbeat', 'whoosh', 'stamp', 'victory'];
+  'proc', 'combo', 'crit', 'shatter', 'tick', 'cardFlip', 'relic', 'footstep', 'bloom', 'heartbeat', 'whoosh', 'stamp', 'victory',
+  // the bestiary (round 4): the new enemies' tricks
+  'giggle', 'gooSplat', 'magLift', 'dig', 'boo', 'dozer', 'rivalClaw'];
 const MODES = ['off', 'title', 'map', 'fight', 'elite', 'boss', 'win'];
 
 /* ---------------------------------------------------------------- part 1: headless */

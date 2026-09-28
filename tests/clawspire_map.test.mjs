@@ -1377,4 +1377,36 @@ h.test('roaming monsters and cabinets survive the save; old saves load', () => {
   h.eq(MAP.deserialize(bad).roam.length, M.roam.length, 'broken monsters are dropped');
 });
 
+// ---------------------------------------------------------------- ENDLESS (DESIGN.md "Endless and mutators")
+// game.js newMap seeds an Endless loop's map with ':loop' + n after the act
+// (a classic run's seed string is unchanged): every loop is a new map of its
+// act's biome, and every rule of the world holds on it.
+if (fs.existsSync(dataPath)) {
+  h.test('endless: every loop gets a fresh map of its biome with every rule intact', () => {
+    const R = boot({ only: ['util', 'data', 'map'] });
+    const seen = new Set();
+    for (const seed of [11, 202, 3003]) {
+      for (let loop = 1; loop <= 6; loop++) {
+        const act = R.DATA.endlessAct(loop);
+        const M = R.MAP.generate({ act, rng: R.U.rng(R.U.hashStr(seed + ':map:' + act + ':loop' + loop)) });
+        const C = R.MAP.generate({ act, rng: R.U.rng(R.U.hashStr(seed + ':map:' + act)) });
+        const label = `seed ${seed} loop ${loop}`;
+        h.eq(M.act, act, label + ' plays its act');
+        h.eq(M.biome, R.MAP.biomeOf(act), label + ' in its biome');
+        h.ok(M.seed !== C.seed, label + ' is not the classic act map');
+        seen.add(M.seed);
+        checkMap(M, label, R.DATA);
+        checkRoad(M, label);
+        h.ok(R.MAP.walkCost(M, M.pos, M.boss) === 0, label + ' the boss is a free walk down the road');
+        const towers = tilesOf(M).filter(t => t.type === 'tower').length;
+        h.ok(towers >= 2 && towers <= 3, label + ' has its towers');
+        h.ok(tilesOf(M).some(t => ['plinko', 'wheel', 'slots'].includes(t.type)), label + ' has its arcade cabinets');
+        const back = R.MAP.deserialize(JSON.parse(JSON.stringify(R.MAP.serialize(M))));
+        h.eq(back.seed, M.seed, label + ' survives the save');
+      }
+    }
+    h.eq(seen.size, 18, 'eighteen loops, eighteen maps');
+  });
+}
+
 h.done();

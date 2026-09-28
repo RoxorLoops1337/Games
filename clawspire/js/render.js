@@ -148,8 +148,14 @@ const RENDER = (() => {
   function line(ctx, x1, y1, x2, y2, col, w) {
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); S(ctx, col, w); ctx.stroke();
   }
+  // Enemy life (BESTIARY block): RENDER.enemy sets these per draw (the blink,
+  // the fidget, the wrench spin) and clears them after, so every other eye
+  // and art stays as it was.
+  const LIFE = { blink: 0, fid: 0, fk: 0, spin: 0, kind: '', boss: false, hpk: 1, sd: 0 };
   // Cartoon eye: white with ink rim and a pupil that looks toward (lx,ly).
+  // Mid-blink (LIFE.blink) it is a shut lid: one curved ink stroke.
   function eye(ctx, x, y, r, lx, ly, col) {
+    if (LIFE.blink > 0.45) { ctx.beginPath(); ctx.moveTo(x - r, y); ctx.quadraticCurveTo(x, y + r * 0.75, x + r, y); S(ctx, INK, Math.max(1.5, r * 0.42)); ctx.stroke(); return; }
     tone(ctx, c => circ(c, x, y, r), '#ffffff', x, y, r, NOSPEC);
     F(ctx, col || INK); ctx.beginPath(); ctx.arc(x + lx * r * 0.35, y + ly * r * 0.35, r * 0.5, 0, TAU); ctx.fill();
     if (!FLAT) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + lx * r * 0.35 - r * 0.18, y + ly * r * 0.35 - r * 0.2, r * 0.16, 0, TAU); ctx.fill(); }
@@ -1059,8 +1065,9 @@ const RENDER = (() => {
     tone(ctx, c => rrect(c, -16, -46 + bob, 32, 38, 8), p.b, 0, -28, 18, { dark: -0.3 });
     line(ctx, -8, -40 + bob, 8, -40 + bob, shade(p.b, -0.4), 2);
     limb(ctx, -14, -38 + bob, -30, -46 + bob, 5, p.a);
-    ctx.save(); ctx.translate(-30, -46 + bob); ctx.rotate(-1.2 + Math.sin(t * 4) * 0.1);
-    IA.dagger(ctx, 26, 8, '#c9d3e0', '#4a3a6a');
+    // its wrench (the fidget twirls it a full turn: LIFE.spin)
+    ctx.save(); ctx.translate(-30, -46 + bob); ctx.rotate(-1.2 + Math.sin(t * 4) * 0.1 + LIFE.spin);
+    wrench(ctx, 6, 0, 0.36, 0, true);
     ctx.restore();
     limb(ctx, 14, -36 + bob, 24, -26 + bob, 5, p.a);
     tone(ctx, c => circ(c, -2, -62 + bob, 16), p.a, -2, -62, 16, { dark: -0.3 });
@@ -1515,6 +1522,7 @@ const RENDER = (() => {
       const s = (def.size || 1) * (scale == null ? 1 : scale) * (boss ? 1.6 : 1);
       const p = enemyPal(def, key);
       const hurt = U.clamp(+st.hurt || 0, 0, 1), atk = U.clamp(+st.attack || 0, 0, 1), dead = U.clamp(+st.dead || 0, 0, 1);
+      bestLife(def, key, t, st, x || 0, boss, dead);   // blink, fidget, breath, low hp (BESTIARY block)
       ctx.translate(x || 0, y || 0);
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
       if (boss && dead < 1) {
@@ -1547,11 +1555,13 @@ const RENDER = (() => {
       const sx = (1 + hurt * 0.28 + Math.max(0, lunge) * 0.12 - sq * 0.25 + chomp * 0.16 - spitK * 0.1) * (1 - dead * 0.2) * rageK,
         sy = (1 - hurt * 0.28 - Math.max(0, lunge) * 0.08 + sq * 0.22 - chomp * 0.18 + spitK * 0.16) * (1 - dead * 0.5) * (1 + Math.sin(t * 3) * 0.02) * rageK;
       ctx.scale(s * sx, s * sy);
+      bestPose(ctx, art, t);   // the idle breath and this enemy's fidget (BESTIARY block)
       // PNG override: height = the nominal body box, feet on the origin.
       const img = artImg('enemy', def.id) || artImg('enemy', key);
       const ih = art.h, iw = img ? ih * imW(img) / imH(img) : 0;
       if (img) blit(ctx, img, -iw / 2, -ih, iw, ih);
       else art.draw(ctx, t, p, art === EA.blob ? (def.name || key) : null);
+      bestHurtLook(ctx, art, t);   // sweat, cracks, dizzy stars at low hp (BESTIARY block)
       if (st.frozen) {
         if (img) silhouette(ctx, img, -iw / 2, -ih, iw, ih, 'rgba(120,200,255,0.45)');
         else { FLAT = 'rgba(120,200,255,0.45)'; try { art.draw(ctx, 0, p); } finally { FLAT = null; } }
@@ -1596,6 +1606,7 @@ const RENDER = (() => {
         else { try { art.draw(ctx, t, p); } finally { FLAT = null; } }
       }
     } catch (e) { FLAT = null; }
+    LIFE.blink = 0; LIFE.spin = 0; LIFE.fid = 0;   // the next art (a portrait, a claw face) blinks on its own
     ctx.restore();
   }
   const dashAura = [10, 8];
@@ -1701,7 +1712,10 @@ const RENDER = (() => {
         const k = Math.min(1.1, (r * (n > 1 ? 0.95 : 1.4)) / Math.max(12, d.w, d.h)) * U.ease.outBack(pop);
         item(ctx, def, ix, iy, Math.sin(t * 1.5 + i * 2) * 0.6, k, { plus: it.inst && it.inst.plus, alpha: 0.95 });
         const left = o.turns ? o.turns[i] : 0;
-        if (left > 0) {
+        if (left > 9) {
+          // kept for good (the Claw Collector's case): a gold star, no clock
+          ctx.beginPath(); star(ctx, ix + 9, iy - 9, 6, 5, 0.45); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+        } else if (left > 0) {
           // turns until digested, on a little clock chip
           const cx = ix + 9, cy = iy - 9, col = left <= 1 ? PAL.blood : '#ffc94d';
           ctx.beginPath(); ctx.arc(cx, cy, 7, 0, TAU); F(ctx, INK); ctx.fill(); S(ctx, col, 1.5); ctx.stroke();
@@ -2684,6 +2698,8 @@ const RENDER = (() => {
           // lit ground: a thin dark seam between hexes, nothing else
           ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat);
           S(ctx, rgba(INK, 0.28), 1); ctx.stroke();
+          // the biome's props on lit land, under the pickup (BESTIARY block; map draws pass the tile seed)
+          if (terr === 'land' && st.seed != null) { const g = groundOf(tile); if (g !== 'mountain') bestDecor(ctx, r, biomePal(st.biome), g, st.seed >>> 0, t, flat); }
         } else {
           const base = tile.visited ? '#3a3648' : (TILE_COL[type] || TILE_COL.empty);
           ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.96, flat);
@@ -3376,7 +3392,8 @@ const RENDER = (() => {
     } catch (e) { /* */ }
     ctx.restore();
   }
-  const BIN_KINDS = { shake: 1, grease: 1, fog: 1, junk: 1, tilt: 1, steal: 1, freezeItem: 1, gulp: 1, bomb: 1, corrode: 1, jam: 1, eggs: 1 };
+  const BIN_KINDS = { shake: 1, grease: 1, fog: 1, junk: 1, tilt: 1, steal: 1, freezeItem: 1, gulp: 1, bomb: 1, corrode: 1, jam: 1, eggs: 1,
+    tickle: 1, glue: 1, ceiling: 1, plow: 1, vanish: 1, bury: 1, wheel: 1 };   // (the bestiary's too)
   function intent(ctx, x, y, enemy, t) {
     ctx.save();
     try {
@@ -3458,6 +3475,7 @@ const RENDER = (() => {
           break;
         }
         default: {
+          if (bestIntentIcon(ctx, k, it, cy, t, shakeX)) break;   // the bestiary's machine tricks (BESTIARY block)
           // shaking box for bin attacks
           ctx.save(); ctx.translate(shakeX - 2, cy); ctx.rotate(Math.sin(t * 30) * 0.08);
           IA.crate(ctx, 22, 20, '#b07a3c', '#6a4a1c');
@@ -3498,6 +3516,7 @@ const RENDER = (() => {
         txt(ctx, String(label), 0, 0.5, 11, col, true, 'center', INK);
         ctx.restore();
       }
+      bestIntentRide(ctx, enemy, bw, cy, t);   // the Claw Collector's claw chip (BESTIARY block)
     } catch (e) { /* */ }
     ctx.restore();
   }
@@ -5038,6 +5057,725 @@ const RENDER = (() => {
     ctx.restore();
   }
 
+  /* ============================================================ BESTIARY
+     Round 4 (DESIGN.md "Enemies", the bestiary). Three things live here:
+     1. Enemy life. Every enemy breathes (bosses heave, slow and deep),
+        blinks (eye() draws a shut lid mid-blink), fidgets now and then in
+        its own way (the rat sniffs, slimes jiggle, the goblin twirls its
+        wrench, bats loop the loop, mimics snap) and looks hurt at low hp
+        (sweat under 40%, cracks under 25%, dizzy stars under 15%).
+        RENDER.enemy calls bestLife (reads t, the enemy's x so two rats
+        never sync, st.seed and st.hpk), bestPose (the transform) and
+        bestHurtLook; LIFE is cleared after every enemy. No allocations.
+     2. The new enemies' art (tickler, jelly, barker, magbat, mole, dozer,
+        ghost, collector) and their machine tricks: the intent icons, the
+        magnetic lid, goo strands, dirt mounds, invisible items, the plow
+        blade, the prize wheel sign, tickling feathers and the rival claw.
+     3. Map decor on lit land (drawn by terrainHex, under the pickups):
+        tickets and neon puddles (act 1), gears and steam vents (act 2),
+        icicles, snow drifts and glints (act 3), and an aurora on the sky
+        edge of the act 3 map (bestSky, from the map's draw). */
+  const FIDGET = {
+    rat: 'sniff', raccoon: 'sniff', mole: 'peek', slime: 'jiggle', jelly: 'jiggle', bat: 'loop', magbat: 'loop',
+    gremlin: 'hop', tinker: 'hop', goat: 'hop', clockwork: 'hop', goblin: 'spin', mimic: 'snap', icemimic: 'snap', ironjaw: 'snap',
+    spider: 'tap', crab: 'tap', imp: 'twirl', frostmage: 'twirl', wisp: 'flicker', wraith: 'flicker', ghost: 'peekaboo',
+    golem: 'shrug', yeti: 'shrug', knight: 'shrug', mushroom: 'puff', drone: 'bank', magnet: 'buzz', dozer: 'rev',
+    cultist: 'sway', magpie: 'preen', tickler: 'wiggle', barker: 'tip', collector: 'tip', prizemaster: 'tip', hoard: 'rattle', furnace: 'rattle',
+  };
+  const FID_T = 0.9;   // a fidget lasts this long (s)
+  // The ctx's alpha right now (a stub ctx may not keep it: then 1).
+  function alphaOf(ctx) { const a = +ctx.globalAlpha; return a >= 0 && a <= 1 ? a : 1; }
+  const lifeSeeds = new Map();
+  // A stable 0..1 number per art key (cached: no string work per frame).
+  function lifeSeed(key) {
+    let s = lifeSeeds.get(key);
+    if (s == null) {
+      const k = String(key || '');
+      s = 7;
+      for (let i = 0; i < k.length; i++) s = (s * 31 + k.charCodeAt(i)) % 997;
+      s /= 997;
+      lifeSeeds.set(key, s);
+    }
+    return s;
+  }
+  // Set LIFE for one enemy draw: the blink, the fidget, low hp.
+  function bestLife(def, key, t, st, x, boss, dead) {
+    LIFE.blink = 0; LIFE.fid = 0; LIFE.fk = 0; LIFE.spin = 0;
+    LIFE.kind = FIDGET[key] || 'shrug'; LIFE.boss = !!boss;
+    LIFE.hpk = st.hpk == null ? 1 : clamp01(+st.hpk || 0);
+    const sd = lifeSeed(key) + (st.seed != null ? (+st.seed || 0) * 0.37 : 0) + x * 0.0131;
+    LIFE.sd = sd;
+    if (dead > 0 || st.frozen || st.still) { LIFE.hpk = 1; return; }
+    // a blink every 2.6..4.3 s (0.14 s long), a double blink for some
+    const bp = 2.6 + (sd * 7.3) % 1.7, bu = (t + sd * 11.3) % bp;
+    const b1 = bu < 0.14 ? 1 - Math.abs(bu / 0.07 - 1) : 0;
+    const b2 = (sd * 5) % 1 > 0.6 && bu > 0.24 && bu < 0.38 ? 1 - Math.abs((bu - 0.24) / 0.07 - 1) : 0;
+    LIFE.blink = b1 > b2 ? b1 : b2;
+    // a fidget every 5..7.5 s (bosses 7..9.5 s), never mid-strike or mid-flinch
+    const fp = (boss ? 7 : 5) + (sd * 13.1) % 2.5, fu = (t + sd * 17.9) % fp;
+    if (fu < FID_T && !(st.attack > 0) && !(st.hurt > 0.2) && !(st.windup > 0)) { LIFE.fk = fu / FID_T; LIFE.fid = Math.sin(LIFE.fk * Math.PI); }
+    if (LIFE.kind === 'spin' && LIFE.fid > 0) LIFE.spin = U.ease.inOut(LIFE.fk) * TAU;
+  }
+  // The breath (about the feet) and the fidget, applied before the art.
+  function bestPose(ctx, art, t) {
+    const h = art.h, w = art.w, sd = LIFE.sd;
+    const br = LIFE.boss ? Math.sin(t * 1.6 + sd * 9) * 0.04 : Math.sin(t * 2.3 + sd * 9) * 0.018;
+    const low = LIFE.hpk < 0.35 ? 0.03 : 0;   // a tired slump
+    ctx.scale(1 - br * 0.45 + low * 0.3, 1 + br - low);
+    const f = LIFE.fid, k = LIFE.fk;
+    if (!(f > 0)) return;
+    switch (LIFE.kind) {
+      case 'sniff': ctx.translate(-w * 0.35, -h * 0.45); ctx.rotate(Math.sin(k * Math.PI * 10) * 0.06 * f); ctx.translate(w * 0.35, h * 0.45); break;
+      case 'jiggle': { const j = Math.sin(k * Math.PI * 9) * 0.13 * f; ctx.scale(1 + j, 1 - j); break; }
+      case 'loop': { const a = U.ease.inOut(k) * TAU; ctx.translate(0, -h * 0.6); ctx.rotate(-a); ctx.translate(0, h * 0.6); break; }
+      case 'hop': ctx.translate(0, -Math.abs(Math.sin(k * Math.PI * 2)) * 11); break;
+      case 'snap': { const j = Math.abs(Math.sin(k * Math.PI * 4)) * 0.1 * f; ctx.scale(1 + j, 1 - j); break; }
+      case 'tap': ctx.translate(Math.sin(k * Math.PI * 12) * 2.2 * f, 0); break;
+      case 'twirl': ctx.translate(0, -h * 0.5); ctx.rotate(Math.sin(k * TAU) * 0.14 * f); ctx.translate(0, h * 0.5); break;
+      case 'flicker': ctx.globalAlpha = alphaOf(ctx) * (1 - 0.55 * f * (0.5 + 0.5 * Math.sin(k * 60))); break;
+      case 'peekaboo': ctx.globalAlpha = alphaOf(ctx) * (1 - 0.85 * f); break;   // gone... and back
+      case 'shrug': ctx.scale(1, 1 + 0.07 * f); break;
+      case 'puff': ctx.scale(1 + 0.09 * f, 1 - 0.09 * f); break;
+      case 'bank': ctx.translate(0, -h * 0.5); ctx.rotate(0.25 * f); ctx.translate(0, h * 0.5); break;
+      case 'buzz': ctx.translate(Math.sin(k * 90) * 1.6 * f, 0); break;
+      case 'rev': ctx.translate(Math.sin(k * 110) * 1.5 * f, Math.cos(k * 97) * f); break;
+      case 'sway': ctx.rotate(Math.sin(k * TAU) * 0.07 * f); break;
+      case 'wiggle': ctx.rotate(Math.sin(k * Math.PI * 6) * 0.1 * f); break;
+      case 'preen': ctx.rotate(-0.16 * f); break;
+      case 'tip': ctx.rotate(-0.09 * f); break;
+      case 'rattle': ctx.translate(Math.sin(k * 70) * 2.4 * f, 0); break;
+      default: break;   // spin and peek are drawn by the art itself
+    }
+  }
+  const DASH_GHOST = [5, 4];
+  // Low hp: sweat drops slide off the brow, then cracks, then dizzy stars.
+  function bestHurtLook(ctx, art, t) {
+    const hk = LIFE.hpk;
+    if (!(hk < 0.4) || FLAT) return;
+    const w = art.w, h = art.h, sd = LIFE.sd, a0 = alphaOf(ctx);
+    for (let i = 0; i < 2; i++) {
+      const u = (t * 0.9 + i * 0.5 + sd) % 1, x = i ? w * 0.1 : -w * 0.32, y = -h * 0.84 + u * h * 0.22;
+      ctx.globalAlpha = a0 * (1 - u);
+      ctx.beginPath(); ctx.moveTo(x, y - 7); ctx.quadraticCurveTo(x + 5.5, y + 2.5, x, y + 5.5); ctx.quadraticCurveTo(x - 5.5, y + 2.5, x, y - 7);
+      F(ctx, '#9fe4ff'); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
+    }
+    ctx.globalAlpha = a0;
+    if (hk < 0.25) {
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.12, -h * 0.72); ctx.lineTo(-w * 0.04, -h * 0.6); ctx.lineTo(-w * 0.14, -h * 0.5); ctx.lineTo(-w * 0.02, -h * 0.38);
+      ctx.moveTo(w * 0.14, -h * 0.5); ctx.lineTo(w * 0.06, -h * 0.42); ctx.lineTo(w * 0.16, -h * 0.34);
+      S(ctx, rgba(INK, 0.85), 2.2); ctx.stroke();
+    }
+    if (hk < 0.15) {
+      for (let i = 0; i < 3; i++) {
+        const a = t * 3.2 + i * TAU / 3, sx = Math.cos(a) * w * 0.22, sy = -h * 1.04 + Math.sin(a) * 4;
+        ctx.beginPath(); star(ctx, sx, sy, 4.5, 5, 0.45); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+      }
+    }
+  }
+  // A small gold claw on a cable (the Claw Collector's rival claw): hub at
+  // (x, y), s scale, open 0..1, a the swing angle.
+  function bestMiniClaw(ctx, x, y, s, open, t, a) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(-(a || 0)); ctx.scale(s, s);
+    const o = clamp01(open);
+    for (let d = -1; d <= 1; d += 2) {
+      ctx.save(); ctx.translate(d * 6, 5); ctx.rotate(-d * (0.12 + o * 0.62));
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(d * 8, 14); ctx.lineTo(d * 2, 25);
+      S(ctx, INK, 7.5); ctx.stroke(); S(ctx, PAL.gold, 4.2); ctx.stroke();
+      ctx.restore();
+    }
+    tone(ctx, c => circ(c, 0, 0, 9), PAL.gold, 0, 0, 9, { dark: -0.3 });
+    F(ctx, PAL.blood); ctx.beginPath(); circ(ctx, 0, 1, 3); ctx.fill();
+    ctx.restore();
+  }
+
+  // ---- the new enemies' art (feet at the origin, facing -x)
+  EA.tickler = { w: 72, h: 76, draw(ctx, t, p) {
+    const wig = LIFE.kind === 'wiggle' ? LIFE.fid : 0, cy = -38 + Math.sin(t * 4.2) * 2;
+    shadow(ctx, 60);
+    // four long arms, each ending in a feather that never stops tickling the air
+    for (let i = 0; i < 4; i++) {
+      const side = i < 2 ? -1 : 1, up = i % 2;
+      const a = (side < 0 ? Math.PI : 0) + side * (-0.3 - up * 0.8) + Math.sin(t * (5 + wig * 12) + i * 1.9) * (0.3 + wig * 0.3) * side;
+      const x0 = side * 14, y0 = cy + 2 - up * 6, x1 = x0 + Math.cos(a) * 30, y1 = y0 + Math.sin(a) * 30;
+      limb(ctx, x0, y0, x1, y1, 3.5, p.b);
+      ctx.save(); ctx.translate(x1, y1); ctx.rotate(a + Math.sin(t * 9 + i) * 0.4); IA.feather(ctx, 18, 9, '#ffe066', '#ff9a2e'); ctx.restore();
+    }
+    tone(ctx, c => { ell(c, -11, -3, 8, 4, 0); ell(c, 11, -3, 8, 4, 0); }, p.b, 0, -3, 10, NOSPEC);
+    // a fuzzy ball of a body
+    tone(ctx, c => {
+      for (let i = 0; i <= 18; i++) { const a = i / 18 * TAU, rr = i % 2 ? 26 : 29.5, px = Math.cos(a) * rr, py = cy + Math.sin(a) * rr * 0.95; if (i) c.lineTo(px, py); else c.moveTo(px, py); }
+      c.closePath();
+    }, p.a, 0, cy, 26, { dark: -0.28 });
+    if (!FLAT) { F(ctx, shade(p.a, 0.35)); ctx.beginPath(); ell(ctx, 3, cy + 11, 13, 8, 0); ctx.fill(); }
+    eye(ctx, -11, cy - 9, 7, -0.6, 0.1, '#7a3aa8'); eye(ctx, 7, cy - 11, 6, -0.6, 0.1, '#7a3aa8');
+    // the grin
+    ctx.beginPath(); ctx.moveTo(-17, cy + 3); ctx.quadraticCurveTo(-3, cy + 18 + wig * 3, 13, cy + 2); ctx.quadraticCurveTo(-3, cy + 8, -17, cy + 3); ctx.closePath();
+    F(ctx, '#5a1030'); ctx.fill(); S(ctx, INK, OL); ctx.stroke();
+    fangs(ctx, -3, cy + 5, 4, 2.6);
+  } };
+  EA.jelly = { w: 66, h: 62, draw(ctx, t, p) {
+    const wob = Math.sin(t * 3.4) * 0.06;
+    shadow(ctx, 64, 0.3);
+    ctx.save(); ctx.transform(1, 0, -wob * 0.6, 1, 0, 0); ctx.scale(1 + wob * 0.4, 1 - wob * 0.4);
+    // the see-through cube: whatever it absorbed floats inside
+    tone(ctx, c => rrect(c, -30, -58, 60, 58, 13), rgba(p.a, 0.62), 0, -30, 28, { dark: -0.22 });
+    if (!FLAT) {
+      const a0 = alphaOf(ctx);
+      ctx.globalAlpha = a0 * 0.75;
+      ctx.save(); ctx.translate(-12, -16 + Math.sin(t * 1.3) * 2); ctx.rotate(t * 0.4); IA.coin(ctx, 13, 13, '#ffc94d', '#b08a2b'); ctx.restore();
+      ctx.save(); ctx.translate(12, -26 + Math.sin(t * 1.1 + 1) * 2); ctx.rotate(-0.6 + Math.sin(t * 0.7) * 0.3); IA.key(ctx, 20, 9, '#c9d3e0', '#4a4e58'); ctx.restore();
+      ctx.globalAlpha = a0;
+      F(ctx, rgba('#ffffff', 0.5)); ctx.beginPath();
+      for (let i = 0; i < 3; i++) { const u = (t * 0.35 + i * 0.33) % 1; circ(ctx, -18 + i * 16, -6 - u * 44, 1.6 + i * 0.6); }
+      ctx.fill();
+      F(ctx, rgba('#ffffff', 0.42)); ctx.beginPath(); rrect(ctx, -24, -53, 9, 24, 4.5); ctx.fill();
+    }
+    eye(ctx, -13, -40, 5.5, -0.6, 0.2); eye(ctx, 3, -42, 5.5, -0.6, 0.2);
+    mouth(ctx, -6, -30, 11, 4, '#2e6a4a');
+    tone(ctx, c => { c.moveTo(11, -2); c.quadraticCurveTo(14, 7 + Math.sin(t * 2) * 2, 18, -2); c.closePath(); }, rgba(p.a, 0.85), 14, 0, 3, NOSPEC);
+    ctx.restore();
+  } };
+  EA.barker = { w: 66, h: 102, draw(ctx, t, p) {
+    const bob = Math.sin(t * 3.1) * 1.5, talk = Math.abs(Math.sin(t * 7));
+    shadow(ctx, 56);
+    limb(ctx, -8, -24, -10, -3, 7, '#3a2a5a'); limb(ctx, 8, -24, 10, -3, 7, '#3a2a5a');
+    tone(ctx, c => { ell(c, -13, -2, 8, 3.5, 0); ell(c, 12, -2, 7, 3.5, 0); }, INK, 0, -2, 8, NOSPEC);
+    // the cane in the back hand
+    limb(ctx, 25, -36 + bob, 27, -1, 3, '#8a5a2b');
+    ctx.beginPath(); ctx.arc(21, -37 + bob, 4.5, Math.PI, 0); S(ctx, INK, 6); ctx.stroke(); S(ctx, '#8a5a2b', 3); ctx.stroke();
+    limb(ctx, 14, -54 + bob, 24, -39 + bob, 5, p.a);
+    // the striped jacket
+    tone(ctx, c => rrect(c, -18, -64 + bob, 36, 42, 9), p.a, 0, -44, 20, { dark: -0.3 });
+    if (!FLAT) { F(ctx, rgba('#ffffff', 0.85)); ctx.fillRect(-11, -62 + bob, 5, 38); ctx.fillRect(1, -62 + bob, 5, 38); ctx.fillRect(12, -60 + bob, 3, 34); }
+    ctx.beginPath(); rrect(ctx, -18, -64 + bob, 36, 42, 9); S(ctx, INK, OL); ctx.stroke();
+    tone(ctx, c => { poly(c, [0, -63 + bob, -8, -68 + bob, -8, -58 + bob]); poly(c, [0, -63 + bob, 8, -68 + bob, 8, -58 + bob]); }, p.b, 0, -63, 6, NOSPEC);
+    // the head, a curly moustache, the straw boater
+    tone(ctx, c => circ(c, -1, -77 + bob, 13), '#f1c6a0', -1, -77, 13, { dark: -0.25 });
+    eye(ctx, -7, -81 + bob, 3.6, -0.7, 0); eye(ctx, 3, -82 + bob, 3.6, -0.7, 0);
+    F(ctx, '#5a1030'); ctx.beginPath(); ell(ctx, -6, -69 + bob, 4, 1 + talk * 2, 0); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-2, -73 + bob); ctx.quadraticCurveTo(-9, -76 + bob, -15, -71 + bob); ctx.quadraticCurveTo(-18, -75 + bob, -13, -78 + bob);
+    ctx.moveTo(-2, -73 + bob); ctx.quadraticCurveTo(6, -76 + bob, 10, -71 + bob); ctx.quadraticCurveTo(14, -74 + bob, 10, -78 + bob);
+    S(ctx, INK, 3.2); ctx.stroke();
+    tone(ctx, c => ell(c, -1, -89 + bob, 19, 4, 0), p.b, -1, -89, 16, NOSPEC);
+    tone(ctx, c => rrect(c, -12, -101 + bob, 22, 12, 3), p.b, -1, -95, 10, NOSPEC);
+    F(ctx, PAL.blood); ctx.fillRect(-12, -93 + bob, 22, 3.5);
+    // the megaphone at its mouth
+    limb(ctx, -14, -52 + bob, -22, -64 + bob, 5, p.a);
+    tone(ctx, c => poly(c, [-20, -70 + bob, -42, -79 + bob, -42, -55 + bob, -20, -63 + bob]), p.b, -31, -67, 10, { dark: -0.3 });
+    ctx.beginPath(); ell(ctx, -42, -67 + bob, 3, 12, 0); F(ctx, PAL.blood); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+  } };
+  EA.magbat = { w: 92, h: 62, draw(ctx, t, p) {
+    const fl = Math.sin(t * 9), y0 = -42 + Math.sin(t * 2.5) * 4;
+    shadow(ctx, 40, 0.2);
+    for (let dir = -1; dir <= 1; dir += 2) {
+      tone(ctx, c => { c.moveTo(dir * 10, y0 - 4); c.quadraticCurveTo(dir * 26, y0 - 26 + fl * 8, dir * 46, y0 - 14 + fl * 10); c.quadraticCurveTo(dir * 38, y0 - 2 + fl * 6, dir * 30, y0 + 2 + fl * 6); c.quadraticCurveTo(dir * 24, y0 + 6 + fl * 4, dir * 16, y0 + 6); c.closePath(); }, p.b, dir * 28, y0 - 8, 22, { dark: -0.35, spec: false });
+    }
+    if (!FLAT) { F(ctx, shade(p.b, -0.45)); ctx.beginPath(); for (let d = -1; d <= 1; d += 2) { circ(ctx, d * 24, y0 - 11 + fl * 5, 1.8); circ(ctx, d * 35, y0 - 9 + fl * 7, 1.8); } ctx.fill(); }
+    // a horseshoe magnet for a head, poles up, a spark jumping between them
+    ctx.beginPath(); ctx.moveTo(-10, y0 - 30); ctx.lineTo(-10, y0 - 18); ctx.arc(0, y0 - 18, 10, Math.PI, 0, true); ctx.lineTo(10, y0 - 30);
+    S(ctx, INK, 12); ctx.stroke(); S(ctx, p.a, 7.5); ctx.stroke();
+    tone(ctx, c => { c.rect(-14, y0 - 37, 8, 7); c.rect(6, y0 - 37, 8, 7); }, '#c9d3e0', 0, y0 - 33, 8, NOSPEC);
+    if (!FLAT) {
+      const k = Math.sin(t * 23) > 0 ? 1 : -1;
+      glow(ctx, 0, y0 - 35, 12, PAL.cyan, 0.5);
+      ctx.beginPath(); ctx.moveTo(-6, y0 - 34); ctx.lineTo(-2, y0 - 38 - k * 2); ctx.lineTo(2, y0 - 31 + k * 2); ctx.lineTo(6, y0 - 34); S(ctx, PAL.cyan, 2); ctx.stroke();
+    }
+    tone(ctx, c => ell(c, 0, y0, 14, 15, 0), p.a, 0, y0, 14, { dark: -0.3 });
+    eye(ctx, -6, y0 - 3, 4, -0.7, 0.3, '#ffcf3a'); eye(ctx, 6, y0 - 3, 4, -0.7, 0.3, '#ffcf3a');
+    fangs(ctx, 0, y0 + 7, 2, 3);
+  } };
+  EA.mole = { w: 72, h: 64, draw(ctx, t, p) {
+    // the fidget: it ducks into its hole and pops back up
+    const dip = LIFE.kind === 'peek' ? Math.sin(LIFE.fk * Math.PI) * LIFE.fid * 18 : 0, b = Math.sin(t * 3) * 1.5 + dip;
+    shadow(ctx, 72);
+    ctx.save(); ctx.beginPath(); ctx.rect(-42, -90, 84, 82); ctx.clip();
+    tone(ctx, c => { c.moveTo(-21, 0); c.quadraticCurveTo(-25, -50 + b, 0, -52 + b); c.quadraticCurveTo(25, -50 + b, 21, 0); c.closePath(); }, p.a, 0, -30 + b, 22, { dark: -0.3 });
+    if (!FLAT) { F(ctx, shade(p.a, 0.25)); ctx.beginPath(); ell(ctx, -2, -20 + b, 10, 12, 0); ctx.fill(); }
+    // a hard hat with a lamp (the foundry floor is dark)
+    tone(ctx, c => { c.moveTo(-19, -44 + b); c.arc(0, -44 + b, 19, Math.PI, 0); c.closePath(); }, '#ffc94d', 0, -52 + b, 16, { dark: -0.3 });
+    tone(ctx, c => rrect(c, -24, -46 + b, 44, 5, 2), '#e8a82a', -2, -44, 20, NOSPEC);
+    tone(ctx, c => circ(c, -12, -54 + b, 5), '#fff6c0', -12, -54, 5, NOSPEC);
+    if (!FLAT) glow(ctx, -14, -54 + b, 16, '#fff6c0', 0.5 + Math.sin(t * 5) * 0.1);
+    eye(ctx, -11, -36 + b, 3.4, -0.7, 0.3); eye(ctx, 2, -37 + b, 3.4, -0.7, 0.3);
+    tone(ctx, c => star(c, -18, -26 + b, 7, 8, 0.55), p.b, -18, -26, 7, { dark: -0.2 });
+    tone(ctx, c => { ell(c, -20, -12 + b * 0.5, 7, 5, -0.4); ell(c, 17, -10 + b * 0.5, 7, 5, 0.4); }, p.b, 0, -11, 8, { dark: -0.25 });
+    ctx.restore();
+    // the mound it pops out of
+    tone(ctx, c => { c.moveTo(-36, 0); c.quadraticCurveTo(-30, -16, -10, -10); c.quadraticCurveTo(0, -16, 12, -10); c.quadraticCurveTo(30, -16, 36, 0); c.closePath(); }, '#6a4428', 0, -6, 30, { dark: -0.3 });
+    F(ctx, '#3e2616'); ctx.beginPath(); circ(ctx, -22, -6, 3); circ(ctx, 8, -8, 2.4); circ(ctx, 24, -5, 2.8); ctx.fill();
+  } };
+  EA.dozer = { w: 112, h: 80, draw(ctx, t, p) {
+    const y = Math.sin(t * 38) * 0.6;   // the engine idles
+    shadow(ctx, 112);
+    if (!FLAT) for (let i = 0; i < 3; i++) { const u = (t * 0.8 + i / 3) % 1; F(ctx, rgba('#8e8a96', 0.45 * (1 - u))); ctx.beginPath(); circ(ctx, 36 + u * 8, -86 - u * 26 + y, 4 + u * 7); ctx.fill(); }
+    tone(ctx, c => rrect(c, 32, -88 + y, 7, 26, 2), '#4a4e58', 35, -76, 5, NOSPEC);
+    // tracks and wheels
+    tone(ctx, c => rrect(c, -42, -20, 90, 20, 10), '#2b2340', 3, -10, 40, { dark: -0.25, spec: false });
+    for (let i = 0; i < 4; i++) {
+      const wx = -30 + i * 24, a = -t * 6 + i;
+      tone(ctx, c => circ(c, wx, -10, 7), '#6b6f7a', wx, -10, 7, NOSPEC);
+      ctx.beginPath(); ctx.moveTo(wx + Math.cos(a) * 6, -10 + Math.sin(a) * 6); ctx.lineTo(wx - Math.cos(a) * 6, -10 - Math.sin(a) * 6); S(ctx, INK, 1.6); ctx.stroke();
+    }
+    // the body and the cab
+    tone(ctx, c => rrect(c, -36, -46 + y, 64, 28, 5), p.a, -4, -32, 30, { dark: -0.3 });
+    tone(ctx, c => rrect(c, -2, -76 + y, 34, 32, 4), p.a, 15, -60, 16, { dark: -0.3 });
+    if (!FLAT) {
+      F(ctx, rgba('#9fd8ff', 0.75)); ctx.beginPath(); rrect(ctx, 2, -72 + y, 25, 17, 3); ctx.fill();
+      F(ctx, rgba('#ffffff', 0.6)); ctx.beginPath(); poly(ctx, [6, -70 + y, 12, -70 + y, 8, -57 + y, 4, -57 + y]); ctx.fill();
+      ctx.save(); ctx.beginPath(); ctx.rect(-36, -24 + y, 64, 5); ctx.clip();
+      for (let i = 0; i < 9; i++) { F(ctx, i % 2 ? INK : PAL.gold); ctx.beginPath(); poly(ctx, [-40 + i * 8, -19 + y, -34 + i * 8, -24 + y, -28 + i * 8, -24 + y, -34 + i * 8, -19 + y]); ctx.fill(); }
+      ctx.restore();
+    }
+    // headlight eyes under angry brows, a grille grin
+    eye(ctx, -26, -37 + y, 5.5, -0.8, 0, '#ff5a4a'); eye(ctx, -12, -38 + y, 5, -0.8, 0, '#ff5a4a');
+    ctx.beginPath(); ctx.moveTo(-32, -46 + y); ctx.lineTo(-20, -43 + y); ctx.moveTo(-17, -46 + y); ctx.lineTo(-6, -44 + y); S(ctx, INK, 3); ctx.stroke();
+    tone(ctx, c => rrect(c, -30, -30 + y, 22, 7, 2), '#4a4e58', -19, -27, 10, NOSPEC);
+    ctx.beginPath(); for (let i = 0; i < 4; i++) { ctx.moveTo(-26 + i * 5, -29 + y); ctx.lineTo(-26 + i * 5, -24 + y); } S(ctx, INK, 1.4); ctx.stroke();
+    // the push arm and the blade, facing you
+    limb(ctx, -30, -30 + y, -48, -22, 5, '#4a4e58');
+    tone(ctx, c => { c.moveTo(-46, -3); c.quadraticCurveTo(-54, -22, -48, -48); c.lineTo(-58, -48); c.quadraticCurveTo(-65, -22, -58, -2); c.closePath(); }, '#aab3bd', -52, -24, 14, { dark: -0.35 });
+    if (!FLAT) { F(ctx, PAL.gold); ctx.beginPath(); poly(ctx, [-48, -48, -58, -48, -59, -43, -49, -43]); ctx.fill(); }
+  } };
+  EA.ghost = { w: 62, h: 82, draw(ctx, t, p) {
+    const y0 = -14 + Math.sin(t * 2) * 5, wv = t * 5;
+    shadow(ctx, 44, 0.15);
+    tone(ctx, c => { ell(c, -25, y0 - 30 + Math.sin(t * 3) * 3, 7, 4.5, -0.7); ell(c, 24, y0 - 28 - Math.sin(t * 3) * 3, 7, 4.5, 0.7); }, rgba(p.a, 0.9), 0, y0 - 29, 8, NOSPEC);
+    tone(ctx, c => {
+      c.moveTo(-24, y0 - 6); c.lineTo(-24, y0 - 40); c.arc(0, y0 - 40, 24, Math.PI, 0); c.lineTo(24, y0 - 6);
+      for (let i = 0; i < 4; i++) { const x = 24 - i * 12; c.quadraticCurveTo(x - 6, y0 + 4 + Math.sin(wv + i * 1.6) * 4, x - 12, y0 - 6); }
+      c.closePath();
+    }, rgba(p.a, 0.9), 0, y0 - 30, 26, { dark: -0.18 });
+    const sh = 1 - LIFE.blink * 0.9;
+    F(ctx, INK); ctx.beginPath(); ell(ctx, -10, y0 - 42, 4.5, 7 * sh, 0); ell(ctx, 6, y0 - 43, 4.5, 7 * sh, 0); ctx.fill();
+    if (!FLAT && sh > 0.5) { F(ctx, '#fff'); ctx.beginPath(); circ(ctx, -11.5, y0 - 45, 1.5); circ(ctx, 4.5, y0 - 46, 1.5); ctx.fill(); }
+    F(ctx, INK); ctx.beginPath(); ell(ctx, -3, y0 - 28, 4, 5 + Math.sin(t * 4) * 1.2, 0); ctx.fill();
+    if (!FLAT) { F(ctx, rgba('#ff9ec7', 0.55)); ctx.beginPath(); ell(ctx, -17, y0 - 33, 4, 2.5, 0); ell(ctx, 12, y0 - 34, 4, 2.5, 0); ctx.fill(); }
+  } };
+  EA.collector = { w: 80, h: 120, draw(ctx, t, p) {
+    const bob = Math.sin(t * 2.6) * 1.5, sw = Math.sin(t * 1.8) * 0.3;
+    shadow(ctx, 64);
+    // the crane arm off its back, its own mini claw swinging on a cable
+    limb(ctx, 13, -62 + bob, 30, -110 + bob, 4, '#4a4e58');
+    limb(ctx, 30, -110 + bob, 40, -112 + bob, 4, '#4a4e58');
+    const cx = 40, cy = -112 + bob, hx = cx + Math.sin(sw) * 20, hy = cy + Math.cos(sw) * 20;
+    line(ctx, cx, cy, hx, hy, INK, 1.5);
+    bestMiniClaw(ctx, hx, hy, 0.55, 0.35 + Math.sin(t * 2) * 0.15, t, sw);
+    // legs, the long coat, gold buttons, a cravat
+    limb(ctx, -9, -18, -11, -2, 6, '#2b2340'); limb(ctx, 9, -18, 11, -2, 6, '#2b2340');
+    tone(ctx, c => { c.moveTo(-24, -16); c.lineTo(-17, -70 + bob); c.lineTo(17, -70 + bob); c.lineTo(25, -16); c.closePath(); }, p.a, 0, -44, 24, { dark: -0.32 });
+    F(ctx, p.b); ctx.beginPath(); for (let i = 0; i < 3; i++) circ(ctx, -3, -58 + bob + i * 12, 2.2); ctx.fill();
+    tone(ctx, c => poly(c, [-6, -70 + bob, 6, -70 + bob, 0, -57 + bob]), '#f4ecff', 0, -64, 5, NOSPEC);
+    // the cane arm
+    limb(ctx, -15, -58 + bob, -26, -42 + bob, 5, p.a);
+    limb(ctx, -27, -46 + bob, -29, -1, 3, '#1d1233');
+    tone(ctx, c => circ(c, -27, -48 + bob, 4), p.b, -27, -48, 4, NOSPEC);
+    // the head, a monocle on a chain, a thin smile, the top hat
+    tone(ctx, c => circ(c, 0, -82 + bob, 13), '#d8cdea', 0, -82, 13, { dark: -0.25 });
+    eye(ctx, -6, -84 + bob, 4, -0.7, 0.1); eye(ctx, 5, -84 + bob, 3.4, -0.7, 0.1);
+    ctx.beginPath(); circ(ctx, -6, -84 + bob, 6.2); S(ctx, p.b, 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-6, -78 + bob); ctx.quadraticCurveTo(-11, -70 + bob, -4, -64 + bob); S(ctx, p.b, 1.2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-8, -75 + bob); ctx.quadraticCurveTo(-2, -72 + bob, 5, -76 + bob); S(ctx, INK, 2); ctx.stroke();
+    tone(ctx, c => ell(c, 0, -94 + bob, 17, 3.5, 0), '#1d1233', 0, -94, 16, NOSPEC);
+    tone(ctx, c => rrect(c, -10, -117 + bob, 20, 23, 2), '#1d1233', 0, -106, 10, NOSPEC);
+    F(ctx, p.b); ctx.fillRect(-10, -100 + bob, 20, 3.5);
+  } };
+  ENEMY_KEYS.push('tickler', 'jelly', 'barker', 'magbat', 'mole', 'dozer', 'ghost', 'collector');
+  Object.assign(ENEMY_PAL, {
+    tickler: ['#ff8ad8', '#7a3aa8', '#ffe066'], jelly: ['#7af0c8', '#2e9e8a', '#ffffff'], barker: ['#ff2e88', '#ffc94d', '#ffffff'],
+    magbat: ['#d81f3a', '#c9d3e0', '#2ee6d6'], mole: ['#8a5a3a', '#ffb0c0', '#ffc94d'], dozer: ['#ffc94d', '#3a3230', '#ff5a4a'],
+    ghost: ['#e8f4ff', '#9fd8ff', '#ff9ec7'], collector: ['#7a3aa8', '#ffc94d', '#d8cdea'],
+  });
+
+  // ---- intent icons (the bubble over the head) and the rival claw chip
+  const BW_SHORT = { str: 'STR', block: 'BLK', heal: 'HP', gold: '$', thorns: 'SPK' };
+  function bestIntentIcon(ctx, k, it, cy, t, shakeX) {
+    switch (k) {
+      case 'tickle':
+        ctx.save(); ctx.translate(shakeX, cy); ctx.rotate(-0.6 + Math.sin(t * 14) * 0.35); IA.feather(ctx, 22, 10, '#ffe066', '#ff9a2e'); ctx.restore();
+        return true;
+      case 'glue': {
+        const d = Math.sin(t * 3) * 2;
+        tone(ctx, c => { c.moveTo(-9, cy - 6); c.quadraticCurveTo(0, cy - 12, 9, cy - 6); c.lineTo(9, cy + 1); c.quadraticCurveTo(5, cy + 2, 4, cy + 6 + d); c.quadraticCurveTo(2, cy + 10 + d, 0, cy + 6 + d); c.quadraticCurveTo(-2, cy + 2, -9, cy + 2); c.closePath(); }, '#7af0c8', 0, cy - 2, 9, { dark: -0.25 });
+        return true;
+      }
+      case 'ceiling':
+        ctx.save(); ctx.translate(shakeX, cy + 2);
+        ctx.beginPath(); ctx.moveTo(-7, 6); ctx.lineTo(-7, -1); ctx.arc(0, -1, 7, Math.PI, 0); ctx.lineTo(7, 6);
+        S(ctx, INK, 7); ctx.stroke(); S(ctx, '#d81f3a', 4); ctx.stroke();
+        F(ctx, '#c9d3e0'); ctx.fillRect(-9, 4, 4, 4); ctx.fillRect(5, 4, 4, 4);
+        ctx.restore();
+        txt(ctx, '^', 12, cy - 7 - Math.abs(Math.sin(t * 5)) * 2, 12, PAL.cyan, true, 'center', INK);
+        return true;
+      case 'plow':
+        ctx.save(); ctx.translate(shakeX + 3, cy);
+        tone(ctx, c => { c.moveTo(-4, -9); c.quadraticCurveTo(-10, 0, -4, 9); c.lineTo(2, 9); c.quadraticCurveTo(-3, 0, 2, -9); c.closePath(); }, '#aab3bd', -2, 0, 8, NOSPEC);
+        F(ctx, PAL.gold); ctx.fillRect(1, -3, 9, 6);
+        ctx.restore();
+        txt(ctx, '<', -10 - (t * 16) % 4, cy + 0.5, 12, PAL.gold, true, 'center', INK);
+        return true;
+      case 'vanish':
+        ctx.save(); ctx.setLineDash(DASH_GHOST); ctx.lineDashOffset = -t * 20;
+        ctx.beginPath(); circ(ctx, 0, cy, 8.5); S(ctx, '#e8f4ff', 2); ctx.stroke(); ctx.setLineDash(NODASH); ctx.restore();
+        txt(ctx, '?', 0, cy + 0.5, 11, '#e8f4ff', true, 'center', INK);
+        return true;
+      case 'bury':
+        tone(ctx, c => { c.moveTo(-12, cy + 8); c.quadraticCurveTo(0, cy - 6, 12, cy + 8); c.closePath(); }, '#7a5230', 0, cy + 3, 8, NOSPEC);
+        txt(ctx, 'v', 0, cy - 7 + Math.abs(Math.sin(t * 4)) * 3, 11, PAL.gold, true, 'center', INK);
+        return true;
+      case 'wheel':
+        bestWheelDisc(ctx, 0, cy, 11, t * 3, -1, false);
+        return true;
+      default: return false;
+    }
+  }
+  function bestIntentRide(ctx, e, bw, cy, t) {
+    if (!e || !e.def || !e.def.rival) return;
+    const pul = 1 + Math.abs(Math.sin(t * 5)) * 0.08;
+    ctx.save(); ctx.translate(-bw / 2 - 16, cy); ctx.scale(pul, pul);
+    glow(ctx, 0, 0, 18, PAL.gold, 0.35);
+    ctx.beginPath(); ctx.arc(0, 0, 11, 0, TAU); F(ctx, shade(PAL.gold, -0.62)); ctx.fill(); S(ctx, PAL.gold, 2); ctx.stroke();
+    bestMiniClaw(ctx, 0, -4, 0.42, 0.4 + Math.sin(t * 4) * 0.3, t, 0);
+    ctx.restore();
+    if (e.enraged) txt(ctx, 'x2', -bw / 2 - 16, cy + 15, 9, PAL.gold, true, 'center', INK);
+  }
+
+  // ---- the machine tricks inside the cabinet (stage coordinates)
+  // The magnetized lid (Magnet Bat): a red bar under the lid, field ripples.
+  function bestCeiling(ctx, x, y, w, k, t) {
+    if (!(k > 0.01)) return;
+    ctx.save();
+    try {
+      const a = clamp01(k);
+      ctx.globalAlpha = a;
+      glow(ctx, x + w * 0.5, y + 10, 150, PAL.cyan, 0.3 + Math.sin(t * 6) * 0.08);
+      ctx.beginPath(); rrect(ctx, x + 6, y, w - 12, 12, 5); F(ctx, '#d81f3a'); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke();
+      for (let i = 0; i < 8; i++) txt(ctx, i % 2 ? '-' : '+', x + 16 + i * (w - 32) / 7, y + 6.5, 10, i % 2 ? '#c9d3e0' : '#ffffff', true, 'center');
+      S(ctx, PAL.cyan, 2);
+      for (let i = 0; i < 3; i++) {
+        const u = (t * 0.9 + i / 3) % 1;
+        ctx.globalAlpha = a * (1 - u) * 0.6;
+        ctx.beginPath(); ctx.moveTo(x + 22, y + 16 + u * 80); ctx.quadraticCurveTo(x + w / 2, y + 28 + u * 80, x + w - 22, y + 16 + u * 80); ctx.stroke();
+      }
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // A crackling field line from the lid to one hanging item.
+  function bestField(ctx, x0, y0, x1, y1, t, k, seed) {
+    ctx.save();
+    try {
+      ctx.globalAlpha = clamp01(k) * (0.5 + 0.3 * Math.sin(t * 17 + seed));
+      ctx.beginPath(); ctx.moveTo(x0, y0);
+      for (let i = 1; i < 5; i++) { const u = i / 5, j = ((i + Math.floor(t * 14 + seed)) % 2 ? 1 : -1) * 4; ctx.lineTo(x0 + (x1 - x0) * u + j, y0 + (y1 - y0) * u); }
+      ctx.lineTo(x1, y1);
+      S(ctx, PAL.cyan, 1.6); ctx.stroke();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // A goo strand between two glued items (Jelly Cube); s = stretch 0..1.
+  function bestGoo(ctx, ax, ay, bx, by, s, t) {
+    ctx.save();
+    try {
+      s = clamp01(s);
+      const mx = (ax + bx) / 2, my = (ay + by) / 2 + 5 + s * 10 + Math.sin(t * 3 + ax * 0.1) * 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by);
+      S(ctx, 'rgba(46,158,138,0.55)', 6.5 - s * 4); ctx.stroke();
+      S(ctx, 'rgba(157,255,216,0.75)', 3.2 - s * 2); ctx.stroke();
+      F(ctx, 'rgba(122,240,200,0.8)'); ctx.beginPath(); ell(ctx, mx, (ay + by) / 2 + 7 + s * 5, 2.2, 3.2 + s * 2, 0); ctx.fill();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The slime coat on a glued item: a sheen and a drip.
+  function bestSlimed(ctx, x, y, r, t, seed) {
+    ctx.save();
+    try {
+      ctx.beginPath(); ctx.arc(x, y, r * 0.95, 0, TAU); F(ctx, 'rgba(122,240,200,0.16)'); ctx.fill(); S(ctx, 'rgba(157,255,216,0.5)', 1.6); ctx.stroke();
+      const u = (t * 0.6 + seed) % 1;
+      F(ctx, rgba('#7af0c8', 0.8 * (1 - u))); ctx.beginPath(); ell(ctx, x + r * 0.3, y + r * 0.8 + u * 8, 2, 3, 0); ctx.fill();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // A dirt mound on the floor with the buried item's tip poking out (Mole):
+  // the claw dropped on it digs it up. k 0..1 grows it in.
+  function bestMound(ctx, x, y, def, t, k, seed) {
+    ctx.save();
+    try {
+      k = clamp01(k == null ? 1 : k);
+      const tw = Math.sin(t * 0.9 + seed) > 0.85 ? Math.sin(t * 40 + seed) * 1.5 : 0;   // it twitches now and then
+      ctx.translate(x + tw, y); ctx.scale(k * 1.3, k * 1.3);
+      if (def) { ctx.save(); ctx.beginPath(); ctx.rect(-30, -44, 60, 32); ctx.clip(); item(ctx, def, 4, -12, -0.5 + (seed % 1) * 0.4, 0.75, NOEST); ctx.restore(); }
+      tone(ctx, c => { c.moveTo(-27, 2); c.quadraticCurveTo(-21, -19, 0, -19); c.quadraticCurveTo(21, -19, 27, 2); c.closePath(); }, '#7a5230', 0, -8, 20, { dark: -0.3 });
+      F(ctx, '#4a2e18'); ctx.beginPath(); circ(ctx, -12, -6, 2.4); circ(ctx, 7, -11, 2); circ(ctx, 15, -3, 2.6); ctx.fill();
+      const pul = 0.5 + 0.5 * Math.sin(t * 5 + seed);
+      ctx.setLineDash(DASH_GHOST); ctx.lineDashOffset = -t * 18;
+      ctx.beginPath(); ell(ctx, 0, -6, 32 + pul * 3, 15 + pul * 2, 0); S(ctx, rgba(PAL.gold, 0.5 + pul * 0.35), 2); ctx.stroke();
+      ctx.setLineDash(NODASH);
+      txt(ctx, 'DIG', 0, -30 - pul * 3, 10, PAL.gold, true, 'center', INK);
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // An invisible item (Peekaboo Ghost): a faint ghost of it, a dashed
+  // outline and a glint crawling round it. k 1 = hidden, 0 = back to normal.
+  const GHOSTO = { plus: false, alpha: 0.1 };
+  function bestGhostItem(ctx, def, x, y, a, r, t, k, plus, seed) {
+    ctx.save();
+    try {
+      k = clamp01(k);
+      GHOSTO.plus = !!plus; GHOSTO.alpha = 1 - k * 0.9;
+      item(ctx, def, x, y, a, 1, GHOSTO);
+      if (k > 0.05) {
+        ctx.globalAlpha = k;
+        glow(ctx, x, y, r * 1.6, '#bfe8ff', 0.25 + Math.sin(t * 2.5 + seed) * 0.08);
+        ctx.setLineDash(DASH_GHOST); ctx.lineDashOffset = -t * 14 - seed * 10;
+        ctx.beginPath(); circ(ctx, x, y, r * 0.8 + 3 + Math.sin(t * 3 + seed) * 1.5); S(ctx, '#e8f4ff', 2.4); ctx.stroke();
+        ctx.setLineDash(NODASH);
+        const ga = t * 1.7 + seed * 3;
+        ctx.beginPath(); star(ctx, x + Math.cos(ga) * (r * 0.8 + 3), y + Math.sin(ga) * (r * 0.8 + 3), 4.5, 4, 0.35); F(ctx, '#ffffff'); ctx.fill();
+        txt(ctx, '?', x, y + 0.5, 13, 'rgba(232,244,255,0.9)', true, 'center', INK);
+      }
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The Bulldozer's blade sweeping the bin: a steel plate at x from y0 to
+  // y1, its hydraulic arms back to xr (the chute side wall).
+  function bestBlade(ctx, x, y0, y1, xr, t, k) {
+    if (!(k > 0.01)) return;
+    ctx.save();
+    try {
+      ctx.globalAlpha = clamp01(k);
+      const h = y1 - y0;
+      limb(ctx, x + 8, y0 + h * 0.4, xr, y0 + h * 0.36, 8, '#4a4e58');
+      limb(ctx, x + 8, y0 + h * 0.75, xr, y0 + h * 0.7, 6, '#6b6f7a');
+      tone(ctx, c => { c.moveTo(x, y1); c.quadraticCurveTo(x - 16, y0 + h * 0.5, x, y0); c.lineTo(x + 18, y0); c.quadraticCurveTo(x + 4, y0 + h * 0.5, x + 18, y1); c.closePath(); }, '#aab3bd', x + 4, y0 + h * 0.5, 16, { dark: -0.35 });
+      ctx.save(); ctx.beginPath(); ctx.rect(x - 4, y0, 24, 16); ctx.clip();
+      for (let i = 0; i < 6; i++) { F(ctx, i % 2 ? INK : PAL.gold); ctx.beginPath(); poly(ctx, [x - 6, y0 + i * 7, x + 22, y0 + i * 7 - 11, x + 22, y0 + i * 7 - 4, x - 6, y0 + i * 7 + 7]); ctx.fill(); }
+      ctx.restore();
+      // rivets down the plate
+      F(ctx, INK); ctx.beginPath(); for (let i = 1; i < 5; i++) circ(ctx, x + 7 - Math.sin(i / 5 * Math.PI) * 5, y0 + h * i / 5, 1.8); ctx.fill();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The prize wheel's disc: eight wedges (yours cyan / gold / green, its own
+  // pink), hi = the landed wedge (it glows), labels at big sizes.
+  function bestWheelDisc(ctx, x, y, r, rot, hi, labels) {
+    const Wd = (typeof COMBAT !== 'undefined' && COMBAT.BEST_WHEEL) || null;
+    const n = Wd ? Wd.length : 8, wd = TAU / n;
+    for (let i = 0; i < n; i++) {
+      const w = Wd ? Wd[i] : null, you = w ? w.who === 'you' : i % 2 === 1;
+      const a0 = rot + i * wd - Math.PI / 2 - wd / 2;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, r, a0, a0 + wd); ctx.closePath();
+      F(ctx, you ? (w ? w.col : PAL.cyan) : (i % 4 === 0 ? '#ff2e88' : '#c21f6a'));
+      ctx.fill();
+      if (i === hi) { F(ctx, 'rgba(255,255,255,0.35)'); ctx.fill(); }
+      S(ctx, INK, r > 20 ? 2 : 1.2); ctx.stroke();
+      if (labels && r >= 30 && w) {
+        ctx.save(); ctx.translate(x + Math.cos(a0 + wd / 2) * r * 0.66, y + Math.sin(a0 + wd / 2) * r * 0.66); ctx.rotate(a0 + wd / 2 + Math.PI / 2);
+        txt(ctx, BW_SHORT[w.k] || '?', 0, -3, Math.max(8, r * 0.2), '#ffffff', true, 'center', INK);
+        txt(ctx, you ? 'YOU' : 'IT', 0, 7, Math.max(7, r * 0.15), you ? '#12091f' : '#ffe0f0', true, 'center');
+        ctx.restore();
+      }
+    }
+    ctx.beginPath(); circ(ctx, x, y, r); S(ctx, PAL.gold, r > 20 ? 3.5 : 2); ctx.stroke();
+    ctx.beginPath(); star(ctx, x, y, r * 0.2, 5, 0.5); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+  }
+  /* The Carnival Barker's prize wheel sign, hung by chains at (x, y) with
+     radius r. st: {rot, hi, t, k (0..1 grow in), label, who, flash 0..1}. */
+  function bestWheelSign(ctx, x, y, r, st) {
+    ctx.save();
+    try {
+      const t = st.t || 0, k = clamp01(st.k == null ? 1 : st.k);
+      if (k <= 0) { ctx.restore(); return; }
+      ctx.translate(x, y); ctx.scale(k, k);
+      S(ctx, '#8e98a8', 2);
+      ctx.beginPath(); ctx.moveTo(-r * 0.6, -r - 30); ctx.lineTo(-r * 0.5, -r * 0.8); ctx.moveTo(r * 0.6, -r - 30); ctx.lineTo(r * 0.5, -r * 0.8); ctx.stroke();
+      glow(ctx, 0, 0, r * 1.6, st.who === 'you' ? PAL.cyan : PAL.pink, 0.25 + (st.flash || 0) * 0.5);
+      tone(ctx, c => circ(c, 0, 0, r + 9), '#5a3414', 0, 0, r + 9, { dark: -0.35 });
+      for (let i = 0; i < 16; i++) {
+        const a = i / 16 * TAU, on = (i + Math.floor(t * (st.hi >= 0 ? 14 : 5))) % 3 === 0;
+        ctx.beginPath(); circ(ctx, Math.cos(a) * (r + 4.5), Math.sin(a) * (r + 4.5), 2.4); F(ctx, on ? '#fff6c0' : '#8a6a2a'); ctx.fill();
+      }
+      bestWheelDisc(ctx, 0, 0, r, st.rot || 0, st.hi == null ? -1 : st.hi, true);
+      // the flapper on top
+      tone(ctx, c => poly(c, [-7, -r - 12, 7, -r - 12, 0, -r + 4]), PAL.gold, 0, -r - 5, 7, { dark: -0.3 });
+      if (st.label && st.hi >= 0) {
+        const col = st.who === 'you' ? PAL.cyan : PAL.pink;
+        ctx.font = 'bold 13px ' + FONT;
+        let tw = 90;
+        try { const m = ctx.measureText(String(st.label)); if (m && m.width > 0) tw = m.width; } catch (e) { /* stub */ }
+        const pw = tw + 20;
+        ctx.beginPath(); rrect(ctx, -pw / 2, r + 12, pw, 22, 8); F(ctx, shade(col, -0.62)); ctx.fill(); S(ctx, col, 2); ctx.stroke();
+        txt(ctx, String(st.label), 0, r + 23.5, 13, col, true, 'center', INK);
+      }
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // Tickling feathers poking at the claw (Tickle Monster): hub at (x, y).
+  function bestFeathers(ctx, x, y, t, k) {
+    if (!(k > 0.01)) return;
+    ctx.save();
+    try {
+      ctx.globalAlpha = clamp01(k);
+      for (let d = -1; d <= 1; d += 2) {
+        const ex = x + d * 26, ey = y + 12 + Math.sin(t * 11 + d * 2) * 4;
+        limb(ctx, x + d * 72, y - 26, ex + d * 8, ey, 3, '#b06ad8');
+        ctx.save(); ctx.translate(ex, ey); ctx.rotate((d < 0 ? 0 : Math.PI) + Math.sin(t * 16 + d) * 0.5); IA.feather(ctx, 32, 14, '#ffe066', '#ff9a2e'); ctx.restore();
+      }
+      txt(ctx, 'hee hee', x, y - 34 + Math.sin(t * 7) * 3, 12, '#ff8ad8', true, 'center', INK);
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The rival claw in the cabinet (Claw Collector): its trolley under the
+  // lid at top, the cable, the gold claw at (x, y), open 0..1, lamp on.
+  function bestRival(ctx, x, y, top, open, t, lamp) {
+    ctx.save();
+    try {
+      tone(ctx, c => rrect(c, x - 13, top - 7, 26, 11, 3), '#5a3a7a', x, top - 1, 12, NOSPEC);
+      if (lamp) glow(ctx, x, top - 2, 14, PAL.blood, 0.6 + Math.sin(t * 12) * 0.2);
+      F(ctx, lamp ? PAL.blood : '#5a1030'); ctx.beginPath(); circ(ctx, x, top - 2, 2.6); ctx.fill();
+      line(ctx, x, top + 4, x, y - 6, INK, 2);
+      bestMiniClaw(ctx, x, y, 1, open, t, 0);
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // The red crosshair on the item the rival claw has its eye on.
+  function bestReticle(ctx, x, y, r, t) {
+    ctx.save();
+    try {
+      const rr = r + 6 + Math.sin(t * 6) * 2;
+      ctx.translate(x, y); ctx.rotate(t * 0.8);
+      ctx.beginPath(); circ(ctx, 0, 0, rr); S(ctx, rgba(PAL.blood, 0.85), 2); ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; ctx.moveTo(Math.cos(a) * (rr - 5), Math.sin(a) * (rr - 5)); ctx.lineTo(Math.cos(a) * (rr + 6), Math.sin(a) * (rr + 6)); }
+      S(ctx, PAL.blood, 2.5); ctx.stroke();
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+
+  // ---- map decor (terrainHex, lit land only, under the pickups)
+  // A small cog of n teeth, radius R, turned a.
+  function bestGear(ctx, x, y, R, n, a, col) {
+    ctx.beginPath();
+    for (let i = 0; i < n * 2; i++) {
+      const a0 = a + i * Math.PI / n, rr = i % 2 ? R * 0.74 : R, hw = Math.PI / n * 0.42;
+      ctx.lineTo(x + Math.cos(a0 - hw) * rr, y + Math.sin(a0 - hw) * rr); ctx.lineTo(x + Math.cos(a0 + hw) * rr, y + Math.sin(a0 + hw) * rr);
+    }
+    ctx.closePath();
+    F(ctx, col); ctx.fill(); S(ctx, rgba(INK, 0.7), Math.max(1, R * 0.12)); ctx.stroke();
+    ctx.beginPath(); circ(ctx, x, y, R * 0.3); F(ctx, rgba(INK, 0.6)); ctx.fill();
+  }
+  /* The biome's props on one lit land hex (origin at its centre, radius r):
+     about four hexes in eleven get one, picked from the tile's seed so the
+     map is stable. Cheap: a handful of paths, no gradients. */
+  function bestDecor(ctx, r, p, ground, seed, t, flat) {
+    let sel = ((seed >>> 13) ^ (seed >>> 5)) % 11;
+    if (sel > 4) return;
+    if (sel === 4) sel = 1;   // the signature prop (a puddle, a vent, icicles) is the common one
+    const ox = ((((seed >>> 17) & 15) / 15) - 0.5) * r * 0.6, oy = ((((seed >>> 21) & 15) / 15) - 0.5) * r * 0.45;
+    const ph = (seed & 255) / 40, lw = Math.max(1, r * 0.04);
+    const busy = ground === 'forest';   // trees fill the hex: only small props there
+    // props read at map zoom: drawn 1.5x about their spot (1.1x among trees)
+    const K = busy ? 1.1 : 1.5;
+    ctx.save(); ctx.translate(ox, oy); ctx.scale(K, K); ctx.translate(-ox, -oy);
+    bestProp(ctx, r, p, sel, busy, ox, oy, ph, lw, seed, t);
+    ctx.restore();
+  }
+  function bestProp(ctx, r, p, sel, busy, ox, oy, ph, lw, seed, t) {
+    if (p.accent === 'ash') {
+      // the foundry: half-sunk gears turning, steam vents puffing
+      if (sel === 1 && !busy) {
+        tone(ctx, c => rrect(c, ox - r * 0.14, oy - r * 0.06, r * 0.28, r * 0.12, r * 0.03), '#3a3230', ox, oy, r * 0.12, NOSPEC);
+        S(ctx, rgba(INK, 0.8), lw); ctx.beginPath();
+        for (let i = 0; i < 3; i++) { ctx.moveTo(ox - r * 0.08 + i * r * 0.08, oy - r * 0.04); ctx.lineTo(ox - r * 0.08 + i * r * 0.08, oy + r * 0.04); }
+        ctx.stroke();
+        for (let i = 0; i < 3; i++) {
+          const u = (t * 0.45 + i / 3 + ph) % 1;
+          F(ctx, rgba('#f4ecff', 0.4 * (1 - u))); ctx.beginPath(); circ(ctx, ox + Math.sin(u * 6 + i) * r * 0.05, oy - r * 0.08 - u * r * 0.6, r * (0.06 + 0.1 * u)); ctx.fill();
+        }
+      } else {
+        const R = r * (sel === 3 || busy ? 0.12 : 0.19), dir = seed & 2 ? 1 : -1;
+        bestGear(ctx, ox, oy, R, 8, t * 0.5 * dir + ph, '#5a5a66');
+        if (sel === 2 && !busy) bestGear(ctx, ox + R * 1.55, oy - R * 0.7, R * 0.62, 6, -t * 0.8 * dir + ph + 0.3, '#8a6a3a');
+      }
+    } else if (p.accent === 'snow') {
+      // the vault: snow drifts, icicles on an ice ledge, twinkling glints
+      if (sel === 0 && !busy) {
+        tone(ctx, c => { c.moveTo(ox - r * 0.38, oy + r * 0.12); c.quadraticCurveTo(ox - r * 0.12, oy - r * 0.16, ox + r * 0.1, oy - r * 0.04); c.quadraticCurveTo(ox + r * 0.3, oy - r * 0.12, ox + r * 0.4, oy + r * 0.12); c.closePath(); }, '#f4f8ff', ox, oy, r * 0.25, { dark: -0.12, ol: lw, olc: rgba('#6a8ab8', 0.7), spec: false });
+      } else if (sel === 1) {
+        const ly = oy - r * 0.12;
+        ctx.beginPath(); rrect(ctx, ox - r * 0.26, ly - r * 0.05, r * 0.52, r * 0.08, r * 0.04); F(ctx, '#dff4ff'); ctx.fill(); S(ctx, rgba('#6a8ab8', 0.8), lw); ctx.stroke();
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) { const ix = ox - r * 0.2 + i * r * 0.1, len = r * (0.1 + ((seed >>> (i * 3)) & 3) * 0.06); ctx.moveTo(ix - r * 0.035, ly + r * 0.02); ctx.lineTo(ix, ly + r * 0.02 + len); ctx.lineTo(ix + r * 0.035, ly + r * 0.02); }
+        F(ctx, '#bfe8ff'); ctx.fill(); S(ctx, rgba('#6a8ab8', 0.8), lw * 0.8); ctx.stroke();
+        const u = (t * 0.5 + ph) % 1;   // a drop falls off the longest
+        if (u < 0.6) { F(ctx, rgba('#dff4ff', 1 - u / 0.6)); ctx.beginPath(); circ(ctx, ox, ly + r * 0.3 + u * r * 0.3, r * 0.025); ctx.fill(); }
+      }
+      if (sel >= 2 || busy) {
+        for (let i = 0; i < 2; i++) {
+          const a = 0.5 + 0.5 * Math.sin(t * 2.2 + ph * 3 + i * 2.4);
+          if (a < 0.35) continue;
+          F(ctx, rgba('#ffffff', a)); ctx.beginPath(); star(ctx, ox + (i ? r * 0.2 : -r * 0.1), oy + (i ? -r * 0.12 : r * 0.1), r * 0.05 + a * r * 0.04, 4, 0.3); ctx.fill();
+        }
+      }
+    } else {
+      // the damp arcade: dropped tickets, neon puddles, a lost token
+      if (sel === 1 && !busy) {
+        const col = seed & 64 ? PAL.cyan : PAL.pink, pul = 0.5 + 0.3 * Math.sin(t * 1.8 + ph);
+        glow(ctx, ox, oy, r * 0.42, col, 0.3 * pul);
+        ctx.beginPath(); ell(ctx, ox, oy, r * 0.3, r * 0.12, 0); F(ctx, 'rgba(26,15,46,0.72)'); ctx.fill();
+        S(ctx, rgba(col, pul), Math.max(1, r * 0.05)); ctx.stroke();
+        if (Math.sin(t * 9 + ph * 3) > -0.8) { F(ctx, rgba(col, 0.6 * pul)); ctx.beginPath(); rrect(ctx, ox - r * 0.15, oy - r * 0.03, r * 0.2, r * 0.05, r * 0.025); ctx.fill(); }
+        const u = (t * 0.35 + ph) % 1;
+        S(ctx, rgba(col, 0.4 * (1 - u)), 1); ctx.beginPath(); ell(ctx, ox + r * 0.05, oy, r * 0.28 * u + 1, r * 0.1 * u + 0.5, 0); ctx.stroke();
+      } else {
+        const tw = r * 0.3, th = r * 0.14;
+        ticket(ctx, ox, oy, tw, th, ((seed >>> 9) & 7) * 0.4 - 1.4, seed & 128 ? '#ffc94d' : '#ff9ec7');
+        if (sel === 0 && !busy) ticket(ctx, ox + r * 0.2, oy + r * 0.1, tw, th, ((seed >>> 12) & 7) * 0.4 - 1.2, '#ff9ec7');
+        if (sel === 2 && !busy) { F(ctx, PAL.gold); ctx.beginPath(); circ(ctx, ox - r * 0.22, oy + r * 0.12, r * 0.07); ctx.fill(); S(ctx, rgba(INK, 0.7), lw); ctx.stroke(); }
+      }
+    }
+  }
+  /* The aurora on the sky edge of the act 3 map: three slow ribbons, added
+     light, over the top of the map area (x, y, w wide). Other acts: nothing. */
+  const AURORA = ['#3dffb0', '#2ee6d6', '#b06aff'];
+  function bestSky(ctx, x, y, w, act, t) {
+    if (act !== 3) return;
+    ctx.save();
+    try {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (let k = 0; k < 3; k++) {
+        ctx.beginPath();
+        for (let i = 0; i <= 18; i++) {
+          const u = i / 18, px = x + u * w, py = y + 16 + k * 15 + Math.sin(u * 5 + t * (0.35 + k * 0.12) + k * 2) * 10 + Math.sin(u * 13 - t * 0.6 + k) * 3;
+          if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+        }
+        S(ctx, rgba(AURORA[k], 0.1 + 0.04 * Math.sin(t * 0.8 + k)), 30 - k * 6); ctx.stroke();
+        S(ctx, rgba(AURORA[k], 0.18), 5); ctx.stroke();
+      }
+      for (let i = 0; i < 10; i++) {
+        const u = (i + 0.5) / 10, px = x + u * w + Math.sin(t * 0.3 + i) * 8, a = 0.04 + 0.04 * Math.sin(t * 1.3 + i * 2.1);
+        ctx.beginPath(); ctx.moveTo(px, y + 20 + Math.sin(u * 5 + t * 0.35) * 10); ctx.lineTo(px + 4, y + 70);
+        S(ctx, rgba(AURORA[i % 3], a), 9); ctx.stroke();
+      }
+    } catch (e) { /* */ }
+    ctx.restore();
+  }
+  // For tests and the screenshot drivers: the life of one enemy draw.
+  function bestLifeOf(def, t, st, x) {
+    def = def || {}; st = st || NOEST_B;
+    bestLife(def, def.art, t || 0, st, x || 0, def.tier === 'boss', +st.dead || 0);
+    const out = { blink: LIFE.blink, fid: LIFE.fid, fk: LIFE.fk, spin: LIFE.spin, kind: LIFE.kind, hpk: LIFE.hpk };
+    LIFE.blink = 0; LIFE.fid = 0; LIFE.spin = 0;
+    return out;
+  }
+  const NOEST_B = {};
+  const BEST = { FIDGET, life: bestLifeOf, miniClaw: bestMiniClaw, ceiling: bestCeiling, field: bestField, goo: bestGoo, slimed: bestSlimed,
+    mound: bestMound, ghostItem: bestGhostItem, blade: bestBlade, wheelSign: bestWheelSign, wheelDisc: bestWheelDisc, feathers: bestFeathers,
+    rival: bestRival, reticle: bestReticle, decor: bestDecor, sky: bestSky };
+  /* ============================================================ end BESTIARY */
+
   /* ============================================================ ARCADE */
   /* The map's arcade (DESIGN.md "Arcade"): the cabinet icons on the hexes,
      the three machines (plinko, the prize wheel, the slots) inside one
@@ -5563,6 +6301,383 @@ const RENDER = (() => {
     ctx.restore();
   }
 
+  /* ================================================================ FEEL (round 4)
+     DESIGN.md "Feel (round 4)": the tip card illustrations, the shopkeeper,
+     the rest stop's campfire and the forge's anvil. Pure drawing from the
+     state the game hands over (st.t in seconds); every function saves,
+     restores and never throws. Deterministic: no random calls, particles are
+     placed from t and their index. */
+  const FEEL_CHAR = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c' };
+  const FEEL_TIERS = ['c', 'u', 'r', 'l'];
+  const FEEL_BADGES = ['armored', 'hasty', 'vampiric'];
+  const FEEL_TOWER = { type: 'tower', revealed: true, terrain: 'land', ground: 'hill', biome: 'cellar', elev: 0.7 };
+  const FEEL_TOOL = { type: 'brush', revealed: true, terrain: 'land', ground: 'grass', biome: 'cellar', elev: 0.3 };
+  const FEEL_HEX = { type: 'empty', revealed: true, terrain: 'land', ground: 'grass', biome: 'cellar', elev: 0.2 };
+  const FEEL_DARK = { type: 'empty', revealed: false, terrain: 'land', ground: 'grass', biome: 'cellar', elev: 0.2 };
+  const FEEL_V = { t: 0, orient: 'v' };
+  // Fit an item def inside a box of side s (the art is drawn at its real size).
+  function feelItemK(def, s) { const d = shapeDims(def && def.shape); return s / Math.max(8, d.w, d.h); }
+  // A crooked white crack across an item (the cracked glass tip).
+  function feelCrack(ctx, r, t) {
+    const a = 0.6 + Math.sin(t * 5) * 0.25;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.7, -r * 0.5); ctx.lineTo(-r * 0.2, -r * 0.1); ctx.lineTo(-r * 0.35, r * 0.25); ctx.lineTo(r * 0.15, r * 0.1); ctx.lineTo(r * 0.55, r * 0.6);
+    ctx.moveTo(-r * 0.2, -r * 0.1); ctx.lineTo(r * 0.3, -r * 0.55);
+    S(ctx, rgba('#ffffff', a), 2.2); ctx.lineJoin = 'round'; ctx.stroke();
+  }
+  /* RENDER.feelTipArt(ctx, id, s, t, o): the little picture on a tip card,
+     centred on (0, 0) inside an s x s box. o carries the defs the game looks
+     up: {enemy, item, items: [def, def], clover}. Unknown ids get a "?". */
+  function feelTipArt(ctx, id, s, t, o) {
+    ctx.save();
+    try {
+      o = o || NOEST; t = t || 0; s = s || 56;
+      const r = s / 2;
+      glow(ctx, 0, 0, r * 1.2, PAL.cyan, 0.12);
+      if (id === 'hungry' && o.enemy) {
+        const b = enemyBox(o.enemy, 1), k = (s * 0.86) / Math.max(8, b.h, b.w);
+        enemy(ctx, o.enemy, -r * 0.08, r * 0.46, k, t, NOEST);
+        if (o.item) { const u = (t * 0.7) % 1; item(ctx, o.item, r * 0.62 - u * r * 0.5, -r * 0.55 + Math.sin(u * Math.PI) * -r * 0.3, u * 4, feelItemK(o.item, s * 0.3) * (1 - u * 0.5), NOEST); }
+      } else if ((id === 'bomb' || id === 'fuse') && o.item) {
+        const k = feelItemK(o.item, s * 0.72), p = 0.5 + 0.5 * Math.sin(t * (id === 'bomb' ? 12 : 7));
+        glow(ctx, 0, 0, r * 1.1, PAL.blood, 0.25 + p * 0.3);
+        item(ctx, o.item, 0, r * 0.08, Math.sin(t * 3) * 0.12, k, NOEST);
+        ctx.beginPath(); star(ctx, r * 0.36, -r * 0.62, 5 + p * 4, 6, 0.45); F(ctx, '#fff6c0'); ctx.fill();
+        ctx.beginPath(); circ(ctx, r * 0.62, r * 0.52, r * 0.3); F(ctx, PAL.blood); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        txt(ctx, id === 'bomb' ? '1' : '2', r * 0.62, r * 0.54, r * 0.4, '#ffffff', true, 'center');
+      } else if (id === 'crack' && o.item) {
+        const k = feelItemK(o.item, s * 0.8);
+        glow(ctx, 0, 0, r, '#8dfff5', 0.3);
+        ctx.save(); ctx.rotate(Math.sin(t * 2) * 0.1); item(ctx, o.item, 0, 0, 0, k, NOEST); feelCrack(ctx, r * 0.62, t); ctx.restore();
+        for (let i = 0; i < 4; i++) { const u = (t * 0.8 + i * 0.25) % 1, a = i * 1.7 + 0.4; ctx.save(); ctx.translate(Math.cos(a) * r * (0.4 + u * 0.6), Math.sin(a) * r * (0.4 + u * 0.6)); ctx.globalAlpha = 1 - u; ctx.beginPath(); poly(ctx, [0, -3, 3, 0, 0, 3, -2, 0]); F(ctx, '#dffcff'); ctx.fill(); ctx.restore(); }
+      } else if (id === 'capsule') {
+        const tier = FEEL_TIERS[Math.floor(t * 0.8) % 4];
+        capsule(ctx, 0, r * 0.05, r * 0.72, { tier, t, rot: Math.sin(t * 5) * 0.12, crack: 0.25 + 0.2 * Math.sin(t * 2), glow: 0.7, seed: 3 });
+      } else if (id === 'tickets') {
+        for (let i = 0; i < 3; i++) ticket(ctx, (i - 1) * r * 0.3, (i - 1) * r * 0.22 + Math.sin(t * 3 + i) * 2, s * 0.64, s * 0.3, -0.35 + i * 0.28, i === 1 ? '#ffc94d' : '#ff9ec7');
+      } else if (id === 'combo' && o.items && o.items.length > 1) {
+        const bump = 1 + Math.max(0, Math.sin(t * 4)) * 0.08;
+        item(ctx, o.items[0], -r * 0.38, 0, -0.5, feelItemK(o.items[0], s * 0.55) * bump, NOEST);
+        item(ctx, o.items[1], r * 0.38, 0, 0.5, feelItemK(o.items[1], s * 0.55) * bump, NOEST);
+        ctx.beginPath(); star(ctx, 0, -r * 0.1, r * 0.38, 8, 0.5); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        txt(ctx, '+', 0, -r * 0.08, r * 0.5, INK, true, 'center');
+      } else if (id === 'arcade') {
+        ctx.save(); ctx.translate(0, r * 0.1); arcIcon(ctx, ['slots', 'plinko', 'wheel'][Math.floor(t * 0.5) % 3], r * 0.62, t); ctx.restore();
+      } else if (id === 'roam' && o.enemy) {
+        arcRoamer(ctx, 0, r * 0.05, r * 0.8, { def: o.enemy, awake: true, t, seed: 1, arrow: null, hop: Math.max(0, Math.sin(t * 5)) * 0.4 });
+      } else if (id === 'tower') {
+        FEEL_V.t = t; hex(ctx, 0, 0, r * 0.9, FEEL_TOWER, FEEL_V);
+      } else if (id === 'tool') {
+        FEEL_V.t = t; hex(ctx, 0, 0, r * 0.9, FEEL_TOOL, FEEL_V);
+      } else if (id === 'map') {
+        FEEL_V.t = t; hex(ctx, -r * 0.36, r * 0.24, r * 0.62, FEEL_HEX, FEEL_V); hex(ctx, r * 0.4, -r * 0.24, r * 0.62, FEEL_DARK, FEEL_V);
+        const on = Math.sin(t * 3) > -0.3;
+        if (on) glow(ctx, r * 0.4, -r * 0.3, r * 0.7, PAL.gold, 0.45);
+        bulb(ctx, r * 0.4, -r * 0.3, r * 0.34, t, on);
+      } else if (id === 'luck') {
+        const n = 5, lit = Math.floor(t * 2.5) % (n + 2);
+        for (let i = 0; i < n; i++) {
+          const a = Math.PI + (i / (n - 1)) * Math.PI, x = Math.cos(a) * r * 0.62, y = r * 0.3 + Math.sin(a) * r * 0.62, on = i < lit;
+          if (on) glow(ctx, x, y, r * 0.35, '#3ddc84', 0.5);
+          ctx.beginPath(); circ(ctx, x, y, r * 0.17); F(ctx, on ? '#3ddc84' : '#1b3a28'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+        }
+        if (o.clover) item(ctx, o.clover, 0, r * 0.28, Math.sin(t * 2) * 0.2, feelItemK(o.clover, s * 0.42), NOEST);
+        else txt(ctx, '☘', 0, r * 0.3, r * 0.6, '#3ddc84', true, 'center');
+      } else if (id === 'sig') {
+        ctx.save(); ctx.scale(s / 170, s / 170); bossSign(ctx, 0, 6, 'NEXT TURN', PAL.blood, t, 1); ctx.restore();
+        txt(ctx, '!', 0, -r * 0.62, r * 0.5, PAL.blood, true, 'center', INK);
+      } else if (id === 'affix') {
+        if (o.enemy) { const b = enemyBox(o.enemy, 1), k = (s * 0.8) / Math.max(8, b.h, b.w); enemy(ctx, o.enemy, -r * 0.25, r * 0.46, k, t, NOEST); }
+        affixBadges(ctx, r * 0.62, -r * 0.62, FEEL_BADGES, t, r * 0.42);
+      } else {
+        ctx.beginPath(); circ(ctx, 0, 0, r * 0.62); F(ctx, '#241836'); ctx.fill(); S(ctx, PAL.cyan, 2.5); ctx.stroke();
+        txt(ctx, '?', 0, 1, r * 0.8, PAL.cyan, true, 'center');
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // A warm backroom wall with a few dead cabinets (the rooms share it).
+  function feelRoomBack(ctx, w, h, top, bot, t) {
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, top); g.addColorStop(1, bot);
+    ctx.fillStyle = FLAT || g; ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 9; i++) {
+      const x = 8 + i * 58, y = 10 + (i % 3) * 5;
+      ctx.beginPath(); rrect(ctx, x, y, 44, h, 6); F(ctx, rgba(INK, 0.35)); ctx.fill();
+      const on = Math.sin(t * (1.3 + i * 0.37) + i * 2.1) > 0.75;
+      ctx.beginPath(); rrect(ctx, x + 7, y + 10, 30, 22, 3); F(ctx, rgba(i % 2 ? PAL.cyan : PAL.pink, on ? 0.16 : 0.06)); ctx.fill();
+    }
+  }
+  /* RENDER.feelKeeper(ctx, w, h, st): the shop. Chester, a prize chest
+     mimic in a tiny top hat, sits on the counter under a flickering SHOP
+     sign with loot on the shelves behind. st: {t, mood 'idle' | 'happy'
+     (a purchase: the lid flies open, the eyes smile, coins glint) | 'broke'
+     (you are short: the lid clamps, the brows knit, a head shake) | 'talk',
+     moodK 0..1 (how fresh the mood is), talk 0..1 (the lid flaps with the
+     speech bubble), blink 0..1, look -1..1}. */
+  function feelKeeper(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || NOEST;
+      const t = st.t || 0, mood = st.mood || 'idle', mk = clamp01(st.moodK == null ? 1 : st.moodK);
+      feelRoomBack(ctx, w, h, '#1d1236', '#2c1846', t);
+      // the neon sign
+      const fl = Math.sin(t * 13) > 0.93 ? 0.35 : 1;
+      glow(ctx, 70, 30, 60, PAL.pink, 0.35 * fl);
+      txt(ctx, 'SHOP', 70, 30, 30, rgba('#ffd1e6', fl), true, 'center', PAL.pink);
+      // shelves of loot
+      for (let row = 0; row < 2; row++) {
+        const y = 44 + row * 40;
+        ctx.beginPath(); rrect(ctx, 300, y, 196, 7, 2); F(ctx, '#5a3a24'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        for (let i = 0; i < 6; i++) {
+          const x = 316 + i * 32, c = [PAL.gold, PAL.cyan, PAL.pink, PAL.lime, '#c3adff', PAL.blood][(i + row * 2) % 6];
+          ctx.beginPath();
+          if ((i + row) % 3 === 0) circ(ctx, x, y - 10, 9); else if ((i + row) % 3 === 1) rrect(ctx, x - 7, y - 22, 14, 22, 4); else poly(ctx, [x, y - 22, x + 9, y - 8, x, y, x - 9, y - 8]);
+          F(ctx, c); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+          if (Math.sin(t * 2 + i * 1.7 + row) > 0.96) feelGlint(ctx, x + 2, y - 14, 7);
+        }
+      }
+      // the counter
+      const cy = h - 32;
+      ctx.beginPath(); ctx.rect(0, cy, w, h - cy); F(ctx, '#6b4326'); ctx.fill();
+      ctx.beginPath(); ctx.rect(0, cy, w, 6); F(ctx, PAL.gold); ctx.fill();
+      for (let x = 20; x < w; x += 70) { ctx.beginPath(); ctx.rect(x, cy + 12, 40, h - cy - 16); F(ctx, rgba(INK, 0.22)); ctx.fill(); }
+      line(ctx, 0, cy, w, cy, INK, 2.5);
+      // the cash register
+      const rx = 420, happy = mood === 'happy', broke = mood === 'broke';
+      tone(ctx, c => rrect(c, rx - 34, cy - 40, 68, 40, 6), '#8e98a8', rx, cy - 20, 34, { dark: -0.35 });
+      ctx.beginPath(); rrect(ctx, rx - 22, cy - 34, 44, 16, 3); F(ctx, '#0d1a14'); ctx.fill();
+      txt(ctx, happy ? '+$' : broke ? '0' : '$', rx, cy - 26, 12, happy ? PAL.lime : broke ? PAL.blood : PAL.gold, true, 'center');
+      if (happy) { ctx.beginPath(); rrect(ctx, rx - 26, cy - 4 + 8 * mk, 52, 8, 2); F(ctx, '#6d7888'); ctx.fill(); S(ctx, INK, 2); ctx.stroke(); }
+      // Chester
+      const kx = 170, shake = broke ? Math.sin(t * 34) * 3 * mk : 0, hop = happy ? Math.abs(Math.sin(t * 9)) * 7 * mk : Math.sin(t * 1.6) * 1.2;
+      let open = 0.24 + Math.sin(t * 1.6) * 0.05;
+      if (happy) open = 0.62 + 0.18 * mk + Math.sin(t * 9) * 0.05;
+      else if (broke) open = 0.05;
+      open += (st.talk || 0) * Math.abs(Math.sin(t * 15)) * 0.28;
+      const bw = 108, bh = 44, base = cy - hop, gap = open * 34;
+      ctx.save(); ctx.translate(kx + shake, 0);
+      ctx.beginPath(); ell(ctx, 0, cy + 2, bw * 0.55, 6, 0); F(ctx, rgba(INK, 0.4)); ctx.fill();
+      // stubby arms (behind the chest)
+      const wave = mood === 'idle' ? Math.max(0, Math.sin(t * 0.9)) * Math.sin(t * 9) * 0.5 : 0;
+      const armUp = happy ? -1 : broke ? 0.2 : 0;
+      for (const sd of [-1, 1]) {
+        const ax = sd * bw * 0.5, ay = base - bh * 0.55;
+        const ang = sd < 0 ? Math.PI * (0.85 + armUp * 0.35) : Math.PI * (0.15 - armUp * 0.35) + wave;
+        const hx = ax + Math.cos(ang) * 26, hy = ay - Math.sin(ang) * 26 * (armUp < 0 ? 1 : -0.4);
+        limb(ctx, ax, ay, hx, hy, 7, '#7a4a28');
+        tone(ctx, c => circ(c, hx, hy, 7), '#fff8ec', hx, hy, 7, { ol: 2, spec: false });
+      }
+      // the base: wood, gold bands, a lock plate
+      tone(ctx, c => rrect(c, -bw / 2, base - bh, bw, bh, 8), '#8a5a30', 0, base - bh / 2, bw / 2, { dark: -0.3 });
+      for (const bx of [-bw * 0.3, bw * 0.3]) { ctx.beginPath(); ctx.rect(bx - 5, base - bh, 10, bh); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke(); }
+      tone(ctx, c => rrect(c, -10, base - bh * 0.62, 20, 20, 4), PAL.gold, 0, base - bh * 0.5, 10, { ol: 2 });
+      ctx.beginPath(); circ(ctx, 0, base - bh * 0.46, 3); F(ctx, INK); ctx.fill();
+      // the mouth: dark red inside, teeth on both rims, a tongue
+      const my = base - bh;
+      if (gap > 2) {
+        ctx.beginPath(); rrect(ctx, -bw / 2 + 5, my - gap, bw - 10, gap + 4, 6); F(ctx, '#3a0a1c'); ctx.fill();
+        const tw = (st.talk || 0) > 0 || happy ? 1 : 0;
+        F(ctx, '#ff6b9a');
+        ctx.beginPath(); ell(ctx, Math.sin(t * 4) * 6 * tw, my - 2, 22, Math.min(9, gap * 0.4 + 2), 0); ctx.fill();
+        for (let i = 0; i < 7; i++) {
+          const tx0 = -bw / 2 + 12 + i * ((bw - 24) / 6);
+          F(ctx, '#fffaf0');
+          ctx.beginPath(); poly(ctx, [tx0 - 5, my, tx0 + 5, my, tx0, my - Math.min(9, gap * 0.45)]); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke();
+          ctx.beginPath(); poly(ctx, [tx0 - 5, my - gap, tx0 + 5, my - gap, tx0, my - gap + Math.min(9, gap * 0.45)]); ctx.fill(); ctx.stroke();
+        }
+      }
+      // the lid, riding up by the gap, with the eyes and a tiny top hat
+      const ly = my - gap, lh = 30;
+      ctx.save(); ctx.translate(0, ly); ctx.rotate(broke ? 0 : -open * 0.12);
+      tone(ctx, c => { c.moveTo(-bw / 2, 0); c.lineTo(-bw / 2, -lh * 0.45); c.quadraticCurveTo(0, -lh * 1.35, bw / 2, -lh * 0.45); c.lineTo(bw / 2, 0); c.closePath(); }, '#9a6536', 0, -lh * 0.4, bw / 2, { dark: -0.28 });
+      ctx.beginPath(); ctx.rect(-bw / 2, -5, bw, 5); F(ctx, PAL.gold); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+      const lk = clamp01(st.look || 0) - clamp01(-(st.look || 0)), bl = clamp01(st.blink || 0);
+      for (const sd of [-1, 1]) {
+        const ex = sd * 20, ey = -lh * 0.52;
+        ctx.beginPath(); ell(ctx, ex, ey, 11, 11 * (1 - bl * 0.9), 0); F(ctx, '#ffffff'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+        if (happy) { ctx.beginPath(); ctx.moveTo(ex - 7, ey + 2); ctx.quadraticCurveTo(ex, ey - 8, ex + 7, ey + 2); S(ctx, INK, 3); ctx.stroke(); }
+        else if (bl < 0.6) { ctx.beginPath(); circ(ctx, ex + lk * 4, ey + (broke ? 2 : 1), 4.5); F(ctx, INK); ctx.fill(); ctx.beginPath(); circ(ctx, ex + lk * 4 - 1.5, ey - 0.5, 1.4); F(ctx, '#ffffff'); ctx.fill(); }
+        if (broke) { ctx.beginPath(); ctx.moveTo(ex - 11 * sd, ey - 15); ctx.lineTo(ex + 9 * sd, ey - 8); S(ctx, INK, 3.5); ctx.stroke(); ctx.beginPath(); ctx.rect(ex - 11, ey - 12, 22, 7); F(ctx, '#9a6536'); ctx.fill(); }
+      }
+      ctx.save(); ctx.translate(22, -lh * 0.98); ctx.rotate(0.18 + (happy ? Math.sin(t * 9) * 0.2 * mk : 0));
+      tone(ctx, c => rrect(c, -16, -2, 32, 5, 2), '#1b1030', 0, 0, 16, { ol: 2, spec: false });
+      tone(ctx, c => rrect(c, -10, -20, 20, 19, 3), '#1b1030', 0, -10, 10, { ol: 2 });
+      ctx.beginPath(); ctx.rect(-10, -7, 20, 4); F(ctx, PAL.pink); ctx.fill();
+      ctx.restore();
+      ctx.restore();
+      ctx.restore();
+      if (happy) for (let i = 0; i < 6; i++) { const u = (t * 1.2 + i / 6) % 1; ctx.globalAlpha = (1 - u) * mk; feelGlint(ctx, kx - 50 + i * 20, base - 70 - u * 40, 9); }
+      ctx.globalAlpha = 1;
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A four-point sparkle.
+  function feelGlint(ctx, x, y, r) {
+    ctx.beginPath(); star(ctx, x, y, r, 4, 0.28); F(ctx, '#fff6c0'); ctx.fill();
+  }
+  /* RENDER.feelCampfire(ctx, w, h, st): the rest stop. A fire in a stone
+     ring between dead cabinets, sparks and smoke rising, the crawler on a log
+     warming their hands and toasting a marshmallow, the Rig on their back.
+     st: {t, charId, heal 0..1 (a rest just healed: green glow, hearts rise;
+     counts down to 0), sit 0..1}. */
+  function feelCampfire(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || NOEST;
+      const t = st.t || 0, heal = clamp01(st.heal || 0), col = FEEL_CHAR[st.charId] || '#8e98a8';
+      feelRoomBack(ctx, w, h, '#150b24', '#2a1430', t);
+      const fx0 = 300, fy = h - 28;
+      const flick = 0.8 + 0.2 * Math.sin(t * 11) * Math.sin(t * 7.3);
+      glow(ctx, fx0, fy - 30, 170, '#ff8a2b', 0.3 * flick);
+      glow(ctx, fx0, fy - 20, 80, '#ffd27a', 0.3 * flick);
+      ctx.beginPath(); ctx.rect(0, fy, w, h - fy); F(ctx, '#1a0f14'); ctx.fill();
+      ctx.beginPath(); ell(ctx, fx0, fy + 4, 190, 16, 0); F(ctx, rgba('#ff8a2b', 0.12 * flick)); ctx.fill();
+      // smoke
+      for (let i = 0; i < 5; i++) {
+        const u = (t * 0.18 + i / 5) % 1;
+        ctx.globalAlpha = 0.18 * Math.sin(u * Math.PI);
+        ctx.beginPath(); circ(ctx, fx0 + Math.sin(u * 5 + i) * 18 + u * 30, fy - 60 - u * 90, 10 + u * 22); F(ctx, '#8e7aa8'); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // logs and stones
+      limb(ctx, fx0 - 34, fy - 2, fx0 + 30, fy - 12, 9, '#6b4326');
+      limb(ctx, fx0 + 34, fy - 2, fx0 - 28, fy - 13, 9, '#7a4a28');
+      for (let i = 0; i < 7; i++) { const a = Math.PI * (i / 6); tone(ctx, c => ell(c, fx0 - Math.cos(a) * 44, fy + 2 - Math.sin(a) * 3, 10, 7, 0), '#5a5068', fx0 - Math.cos(a) * 44, fy, 9, { dark: -0.3, ol: 2 }); }
+      // the fire
+      flames(ctx, fx0, fy - 8, 70, 80 * flick, t, 1);
+      flames(ctx, fx0 + 4, fy - 8, 36, 44 * flick, t * 1.3, 4);
+      // sparks
+      for (let i = 0; i < 16; i++) {
+        const u = (t * 0.55 + i * 0.0731 + (i % 3) * 0.21) % 1;
+        const x = fx0 + Math.sin(i * 12.9 + t * 2) * 16 * u + ((i % 5) - 2) * 5, y = fy - 30 - u * 115;
+        ctx.globalAlpha = 1 - u;
+        ctx.beginPath(); circ(ctx, x, y, 1.6 + (i % 3) * 0.6); F(ctx, i % 2 ? '#ffd27a' : '#ff8a2b'); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // the crawler on a log, left of the fire, leaning in
+      const cx = 176, sy = fy - 14, breathe = Math.sin(t * 1.8) * 1.2, lean = 0.12 + Math.sin(t * 0.7) * 0.03;
+      limb(ctx, cx - 36, fy - 4, cx + 30, fy - 4, 13, '#6b4326');
+      if (heal > 0) glow(ctx, cx, sy - 30, 70, PAL.lime, 0.55 * heal);
+      ctx.save(); ctx.translate(cx, sy); ctx.rotate(lean);
+      // legs toward the fire
+      limb(ctx, 4, -2, 30, 2, 7, '#4a3a6a'); limb(ctx, 30, 2, 36, 14, 7, '#4a3a6a');
+      limb(ctx, -2, -2, 24, 4, 7, '#3d2f5a'); limb(ctx, 24, 4, 28, 15, 7, '#3d2f5a');
+      // the Rig on the back
+      tone(ctx, c => rrect(c, -30, -46 + breathe, 20, 30, 4), '#1d1233', -20, -31, 12, { dark: -0.3 });
+      ctx.beginPath(); rrect(ctx, -27, -42 + breathe, 14, 14, 2); F(ctx, rgba(PAL.cyan, 0.7)); ctx.fill();
+      F(ctx, PAL.pink); ctx.beginPath(); circ(ctx, -20, -21 + breathe, 2); ctx.fill();
+      // body
+      tone(ctx, c => rrect(c, -14, -40 + breathe, 28, 38, 9), col, 0, -21, 14, { dark: -0.3 });
+      // arms out to the fire: the far one warming its hand, the near one on a toasting stick
+      const armF = shade(col, -0.32), armN = shade(col, -0.12);
+      limb(ctx, 3, -31 + breathe, 17, -19, 6, armF); limb(ctx, 17, -19, 31, -23, 5, armF);
+      tone(ctx, c => circ(c, 32, -23, 4.2), '#f1c9a6', 32, -23, 4, { ol: 1.5, spec: false });
+      limb(ctx, 8, -30 + breathe, 21, -21, 6, armN); limb(ctx, 21, -21, 36, -31, 5, armN);
+      tone(ctx, c => circ(c, 37, -31, 4.4), '#f1c9a6', 37, -31, 4, { ol: 1.5, spec: false });
+      ctx.restore();
+      const cl = Math.cos(lean), sl = Math.sin(lean);
+      const sx0 = cx + 37 * cl + 31 * sl, sy0 = sy + 37 * sl - 31 * cl, sx1 = fx0 - 12, sy1 = fy - 70 + Math.sin(t * 1.2) * 3;
+      line(ctx, sx0, sy0, sx1, sy1, '#7a4a28', 2.5);
+      const toast = clamp01((t % 14) / 12);
+      tone(ctx, c => rrect(c, sx1 - 6, sy1 - 5, 12, 10, 4), toast < 0.5 ? '#fff8ec' : shade('#e0a060', -toast * 0.4), sx1, sy1, 6, { ol: 1.5, spec: false });
+      // the head: the crawler's portrait as a bobble head
+      portrait(ctx, st.charId, cx - 2 + Math.sin(lean) * 40, sy - 58 + breathe, 34, t);
+      // hearts rise while the rest heals
+      if (heal > 0) {
+        for (let i = 0; i < 5; i++) {
+          const u = clamp01((1 - heal) * 1.4 - i * 0.12);
+          if (u <= 0 || u >= 1) continue;
+          const hx = cx - 20 + i * 12 + Math.sin(u * 6 + i) * 6, hy = sy - 60 - u * 60;
+          ctx.globalAlpha = 1 - u;
+          ctx.save(); ctx.translate(hx, hy); ctx.scale(0.8 + u * 0.4, 0.8 + u * 0.4);
+          ctx.beginPath(); ctx.moveTo(0, 5); ctx.bezierCurveTo(-9, -2, -5, -10, 0, -5); ctx.bezierCurveTo(5, -10, 9, -2, 0, 5); F(ctx, PAL.lime); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* RENDER.feelForge(ctx, w, h, st): the forge. A furnace glowing in a
+     brick wall, an anvil, and a hammer on a piston arm. st: {t, item (the
+     def on the anvil, or null), heat 0..1 (the item glows orange), hit (s
+     since the last strike, big when idle), strikes: [s since each strike]
+     (sparks fly from each for 0.7 s), done 0..1 (the upgrade sparkle)}. */
+  const FORGE_HIT = { x: 250, y: 0 };
+  function feelForge(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || NOEST;
+      const t = st.t || 0, heat = clamp01(st.heat || 0), done = clamp01(st.done || 0);
+      // bricks
+      ctx.fillStyle = FLAT || '#2a1420'; ctx.fillRect(0, 0, w, h);
+      for (let row = 0; row < 8; row++) for (let i = 0; i < 12; i++) {
+        const x = i * 46 - (row % 2) * 23, y = row * 20;
+        ctx.beginPath(); rrect(ctx, x + 2, y + 2, 42, 16, 3); F(ctx, (i + row) % 3 ? '#3a1c26' : '#44202c'); ctx.fill();
+      }
+      // the furnace
+      const fx0 = 430, fl = 0.8 + 0.2 * Math.sin(t * 9) * Math.sin(t * 5.3);
+      glow(ctx, fx0, h - 50, 150, '#ff6a2b', 0.35 * fl);
+      ctx.beginPath(); ctx.moveTo(fx0 - 56, h); ctx.lineTo(fx0 - 56, h - 70); ctx.arc(fx0, h - 70, 56, Math.PI, 0); ctx.lineTo(fx0 + 56, h); ctx.closePath(); F(ctx, '#5a2a2a'); ctx.fill(); S(ctx, INK, 3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(fx0 - 38, h - 18); ctx.lineTo(fx0 - 38, h - 64); ctx.arc(fx0, h - 64, 38, Math.PI, 0); ctx.lineTo(fx0 + 38, h - 18); ctx.closePath(); F(ctx, '#1a0606'); ctx.fill();
+      glow(ctx, fx0, h - 40, 50, '#ffb347', 0.6 * fl);
+      flames(ctx, fx0, h - 20, 48, 40 * fl, t, 2);
+      // floor
+      const fy = h - 18;
+      ctx.beginPath(); ctx.rect(0, fy, w, 18); F(ctx, '#1a0d12'); ctx.fill();
+      // the anvil
+      const ax = 230, at = h - 64;
+      tone(ctx, c => { c.moveTo(ax - 64, at); c.lineTo(ax + 50, at); c.lineTo(ax + 50, at + 14); c.lineTo(ax + 26, at + 18); c.lineTo(ax + 30, fy - 10); c.lineTo(ax + 44, fy); c.lineTo(ax - 44, fy); c.lineTo(ax - 30, fy - 10); c.lineTo(ax - 26, at + 18); c.lineTo(ax - 40, at + 14); c.quadraticCurveTo(ax - 64, at + 10, ax - 86, at + 2); c.closePath(); }, '#6d7888', ax, at + 20, 50, { dark: -0.4 });
+      ctx.beginPath(); ctx.rect(ax - 60, at, 108, 3); F(ctx, '#c9d3e0'); ctx.fill();
+      // the item on it, glowing hot
+      if (st.item) {
+        const k = feelItemK(st.item, 44);
+        if (heat > 0) glow(ctx, ax - 4, at - 12, 46, '#ff8a2b', 0.8 * heat);
+        item(ctx, st.item, ax - 4, at - 11, 0, k, NOEST);
+        if (heat > 0) { ctx.save(); ctx.globalAlpha = 0.35 * heat; ctx.globalCompositeOperation = 'lighter'; ctx.beginPath(); circ(ctx, ax - 4, at - 11, 18); F(ctx, '#ff8a2b'); ctx.fill(); ctx.restore(); }
+        if (done > 0) for (let i = 0; i < 6; i++) { const a = i * TAU / 6 + t * 2, rr = 24 + (1 - done) * 20; ctx.globalAlpha = done; feelGlint(ctx, ax - 4 + Math.cos(a) * rr, at - 11 + Math.sin(a) * rr * 0.7, 6); }
+        ctx.globalAlpha = 1;
+        if (done > 0) txt(ctx, '+', ax + 24, at - 30 - (1 - done) * 10, 26, PAL.lime, true, 'center', INK);
+      } else {
+        // a hot ingot waits on the anvil
+        const p = 0.5 + 0.5 * Math.sin(t * 2.4);
+        glow(ctx, ax - 4, at - 7, 34, '#ff8a2b', 0.35 + p * 0.25);
+        tone(ctx, c => rrect(c, ax - 24, at - 12, 40, 12, 3), '#ff9a3b', ax - 4, at - 6, 20, { dark: -0.25, ol: 2 });
+      }
+      // the hammer on a piston arm hung from a rail
+      const px = 330, py = 22;
+      ctx.beginPath(); rrect(ctx, 250, 10, 160, 10, 4); F(ctx, '#3d3548'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+      const hit = st.hit == null ? 9 : st.hit;
+      let raise = 0.85 - 0.08 * Math.sin(t * 1.5);
+      if (hit < 0.07) raise = 1 - hit / 0.07; else if (hit < 0.45) raise = (hit - 0.07) / 0.38;
+      FORGE_HIT.y = at - 26;
+      const dx = FORGE_HIT.x - px, dy = FORGE_HIT.y - py, L = Math.hypot(dx, dy), th = Math.atan2(dy, dx) + raise * 0.52;
+      const hx = px + Math.cos(th) * L, hy = py + Math.sin(th) * L;
+      limb(ctx, px, py, hx, hy, 6, '#8e6a44');
+      tone(ctx, c => circ(c, px, py, 8), '#6d7888', px, py, 8, { ol: 2 });
+      ctx.save(); ctx.translate(hx, hy); ctx.rotate(th - Math.PI / 2);
+      tone(ctx, c => rrect(c, -22, -12, 44, 24, 5), '#8e98a8', 0, 0, 22, { dark: -0.35 });
+      ctx.restore();
+      // strike flashes and sparks
+      const sk = st.strikes || [];
+      for (let j = 0; j < sk.length; j++) {
+        const s = sk[j];
+        if (s < 0 || s > 0.7) continue;
+        if (s < 0.25) glow(ctx, FORGE_HIT.x - 4, at - 8, 90, '#ffd27a', 0.9 * (1 - s / 0.25));
+        for (let i = 0; i < 14; i++) {
+          const a = -Math.PI * (0.1 + 0.8 * ((i * 0.618 + j * 0.27) % 1)), v = 120 + ((i * 37) % 90);
+          const x = FORGE_HIT.x - 4 + Math.cos(a) * v * s, y = at - 8 + Math.sin(a) * v * s + 420 * s * s;
+          ctx.globalAlpha = 1 - s / 0.7;
+          line(ctx, x, y, x - Math.cos(a) * 6, y - Math.sin(a) * 6 + 4, i % 2 ? '#ffd27a' : '#fff6c0', 2);
+        }
+        ctx.globalAlpha = 1;
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
   return {
     item, itemFx, shard, enemy, enemyBox, cabinet, cabinetBack, cabinetFront, claw, clawHead, bodyDebug, hex, mapBg, mapAxis, mapPath, mapRoad, crawler, bg, hpBar, statusPips, intent,
     vsCard, bossSign, bossCab, hotItem, eliteBadge, finale, SIG_COL, VS,
@@ -5576,5 +6691,9 @@ const RENDER = (() => {
     perf: { get cabLayer() { return CABL.on; }, set cabLayer(v) { CABL.on = !!v; CABL.list.length = 0; } },
     // ARCADE (DESIGN.md "Arcade")
     arcIcon, arcCabinet, arcPlinko, arcWheel, arcSlots, arcSym, arcRoamer, arcScene, arcDice,
+    // BESTIARY (round 4): enemy life, the new enemies' machine tricks, map decor
+    best: BEST,
+    // FEEL (round 4): tip card art, the shopkeeper, the campfire, the forge
+    feelTipArt, feelKeeper, feelCampfire, feelForge,
   };
 })();

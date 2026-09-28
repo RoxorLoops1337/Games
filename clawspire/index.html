@@ -763,6 +763,172 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 @media (prefers-reduced-motion:reduce){.btn.arcGo.ready,.arcMsg.jp span{animation:none!important}}
 /* ================= /ARCADE ================= */
 </style>
+<style id="endless-css">
+/* ================= ENDLESS: the loop reboot, the score, the choice, mutators (DESIGN.md "Endless and mutators") ================= */
+/* the loop reboot: a CRT powering on, the boot log, LOOP N */
+.screen.loop{background:#000;padding:0;overflow:hidden}
+#loopBody{position:absolute;inset:0}
+.crt{position:absolute;inset:0;background:#000;overflow:hidden}
+.crt .tube{position:absolute;inset:26px 16px;border-radius:40px/32px;overflow:hidden;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;padding:26px 22px;
+  background:radial-gradient(ellipse at 50% 42%,#231646 0,#0d0720 62%,#030108 100%);
+  box-shadow:inset 0 0 90px rgba(0,0,0,.95),inset 0 0 0 3px #2c1d4a,0 0 0 6px #120a22,0 0 60px rgba(46,230,214,.22);
+  animation:crtOn 1.15s cubic-bezier(.2,.8,.3,1) both}
+@keyframes crtOn{0%{transform:scale(0,.004);filter:brightness(12)}16%{transform:scale(1.02,.004);filter:brightness(12)}
+  38%{transform:scale(1,1.04);filter:brightness(3.5)}60%{transform:scale(1,.99);filter:brightness(1.5)}100%{transform:none;filter:none}}
+.crt .tube::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.3) 0 2px,rgba(0,0,0,0) 2px 4px)}
+.crt .tube::before{content:'';position:absolute;left:0;right:0;top:-140px;height:140px;pointer-events:none;z-index:3;
+  background:linear-gradient(180deg,rgba(141,255,245,0),rgba(141,255,245,.07),rgba(141,255,245,0));animation:crtRoll 3.4s linear infinite}
+@keyframes crtRoll{to{transform:translateY(1100px)}}
+.crt .boot{align-self:stretch;font-family:"Courier New",ui-monospace,monospace;font-size:14px;font-weight:700;line-height:1.55;color:#8dfff5;
+  text-shadow:0 0 6px rgba(46,230,214,.85);min-height:0}
+.crt .boot div{opacity:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:bootLn .01s steps(1) forwards}
+.crt .boot .warn{color:#ff8ac4;text-shadow:0 0 6px rgba(255,46,136,.85)}
+.crt .boot .ok{color:#c6ff8e;text-shadow:0 0 6px rgba(166,255,94,.8)}
+@keyframes bootLn{to{opacity:1}}
+.crt .loopN{position:relative;font-size:84px;font-weight:900;letter-spacing:.06em;line-height:.95;color:#fff;text-align:center;opacity:0;
+  text-shadow:-4px 0 0 rgba(255,46,136,.9),4px 0 0 rgba(46,230,214,.9),0 0 34px rgba(255,201,77,.85),0 6px 0 #3a0a22;
+  animation:loopSlam .55s cubic-bezier(.3,1.6,.5,1) forwards,loopGlitch 2.6s steps(1) infinite}
+.crt .loopN small{display:block;font-size:17px;letter-spacing:.55em;color:var(--gold);text-shadow:0 0 12px rgba(255,201,77,.9);margin-bottom:6px}
+@keyframes loopSlam{0%{opacity:0;transform:scale(3.4) rotate(-8deg);filter:brightness(4)}55%{opacity:1}100%{opacity:1;transform:rotate(-3deg);filter:none}}
+@keyframes loopGlitch{0%,90%{clip-path:none}92%{clip-path:inset(18% 0 52% 0);translate:-7px 0}95%{clip-path:inset(58% 0 8% 0);translate:7px 0}98%{clip-path:none;translate:0 0}}
+.crt .lsub{font-size:15px;font-weight:900;letter-spacing:.08em;color:var(--dim);text-align:center;opacity:0;animation:crtFade .4s forwards}
+.crt .mutNew{--mc:var(--lime);display:flex;align-items:center;gap:12px;max-width:440px;padding:10px 14px;border-radius:16px;opacity:0;
+  border:3px solid var(--mc);background:linear-gradient(180deg,#1f1438,#120a22);box-shadow:0 0 26px color-mix(in srgb,var(--mc) 45%,transparent);
+  animation:mutIn .5s cubic-bezier(.3,1.6,.5,1) forwards}
+.crt .mutNew .ic{font-size:40px;line-height:1}
+.crt .mutNew .k{font-size:12px;font-weight:900;letter-spacing:.24em;color:var(--mc)}
+.crt .mutNew .n{font-size:20px;font-weight:900;color:#fff}
+.crt .mutNew .t{font-size:13px;color:var(--dim);line-height:1.35}
+@keyframes mutIn{0%{opacity:0;transform:translateY(30px) scale(.7) rotate(4deg)}100%{opacity:1;transform:none}}
+.crt .btn.go{opacity:0;animation:crtFade .35s forwards;min-width:200px;z-index:4}
+@keyframes crtFade{to{opacity:1}}
+.crt.fast .tube,.crt.fast .boot div,.crt.fast .loopN,.crt.fast .lsub,.crt.fast .mutNew,.crt.fast .btn.go{animation-delay:0s!important;animation-duration:.01s!important}
+.crt.fast .loopN{animation:loopSlam .01s forwards}
+.calm .crt .tube{animation-duration:.01s}
+.calm .crt .loopN{animation:loopSlam .01s forwards!important}
+.calm .crt .tube::before{animation:none}
+/* the run score on the end screens */
+.scoreBox{position:relative;display:flex;flex-direction:column;gap:6px;padding:10px 14px 12px;border-radius:16px;border:2px solid var(--gold);
+  background:linear-gradient(180deg,#2e2008,#1a1030);box-shadow:0 0 24px rgba(255,201,77,.22),inset 0 1px 0 rgba(255,255,255,.08)}
+.scoreBox.endless{border-color:var(--pink);box-shadow:0 0 24px rgba(255,46,136,.28)}
+.scoreBox .sk{font-size:12px;font-weight:900;letter-spacing:.3em;color:var(--dim)}
+.scoreBox .sv{font-size:48px;font-weight:900;line-height:1;color:var(--gold);font-variant-numeric:tabular-nums;
+  text-shadow:0 0 18px rgba(255,201,77,.75),0 4px 0 #4d3608}
+.scoreBox.landed .sv{animation:bump .45s}
+.scoreBox .sls{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}
+.scoreBox .sl{display:flex;justify-content:space-between;gap:6px;font-size:12px;color:var(--dim);line-height:1.4}
+.scoreBox .sl b{color:#fff;font-variant-numeric:tabular-nums}
+.scoreBox .sm{display:flex;gap:6px;flex-wrap:wrap}
+.scoreBox .nb{position:absolute;right:12px;top:12px;padding:6px 12px;border-radius:10px;background:var(--pink);color:#fff;font-size:16px;font-weight:900;
+  letter-spacing:.1em;box-shadow:0 0 0 3px #fff,0 0 22px rgba(255,46,136,.9);opacity:0;transform:rotate(8deg) scale(0);pointer-events:none}
+.scoreBox .nb.on{animation:nbSlap .5s cubic-bezier(.3,1.7,.5,1) forwards,nbGlow 1.2s .5s ease-in-out infinite}
+@keyframes nbSlap{0%{opacity:0;transform:rotate(30deg) scale(3)}100%{opacity:1;transform:rotate(8deg) scale(1)}}
+@keyframes nbGlow{50%{box-shadow:0 0 0 3px #fff,0 0 34px rgba(255,201,77,1)}}
+/* the win screen's choice */
+.endChoice{display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:16px;border:2px dashed var(--line2);background:rgba(0,0,0,.28)}
+.endChoice .btn.endless{min-height:62px;font-size:19px;border-color:var(--gold);color:#fff;
+  background:linear-gradient(180deg,#ff2e88,#7a1a4c);box-shadow:0 5px 0 #3a0a22,0 0 26px rgba(255,46,136,.55);animation:endPulse 1.3s ease-in-out infinite}
+@keyframes endPulse{50%{box-shadow:0 5px 0 #3a0a22,0 0 40px rgba(255,201,77,.8);filter:brightness(1.15)}}
+.endChoice .sub{font-size:12px;text-align:center}
+.calm .endChoice .btn.endless{animation:none}
+/* Endless over */
+.loopEnd{display:flex;align-items:baseline;justify-content:center;gap:10px;padding:8px;border-radius:12px;border:2px solid #7a1a4c;background:rgba(0,0,0,.3)}
+.loopEnd .k{font-size:12px;font-weight:900;letter-spacing:.14em;color:var(--dimmer)}
+.loopEnd b{font-size:34px;color:var(--pink2);text-shadow:0 0 14px rgba(255,46,136,.7)}
+.loopEnd .s{font-size:13px;font-weight:900;color:var(--dim)}
+.loopEnd.best .s{color:var(--lime);animation:bump .5s .5s 3}
+/* the HUD: the Loop stat and the mutator badges */
+.stat.act.endless{border-color:var(--gold);background:linear-gradient(180deg,rgba(255,46,136,.25),rgba(0,0,0,.35));animation:loopGlow 1.8s ease-in-out infinite}
+.stat.act.endless .k{color:var(--gold)}
+.stat.act.endless .v{color:#fff;font-size:14px;text-shadow:0 0 8px rgba(255,201,77,.9)}
+@keyframes loopGlow{50%{box-shadow:0 0 14px rgba(255,201,77,.6)}}
+.mutBadge{--mc:var(--lime);width:44px;height:44px;flex:0 0 auto;border-radius:50%;padding:0;cursor:pointer;font-size:20px;line-height:1;
+  display:flex;align-items:center;justify-content:center;border:2px dashed var(--mc);
+  background:radial-gradient(circle at 35% 30%,color-mix(in srgb,var(--mc) 45%,#1a1030),#12091f 75%);box-shadow:0 0 10px color-mix(in srgb,var(--mc) 45%,transparent);
+  animation:mutBob 2.6s ease-in-out infinite}
+.mutBadge:nth-child(2){animation-delay:-.8s}.mutBadge:nth-child(3){animation-delay:-1.6s}
+.mutBadge.loopAdd{border-style:solid}
+@keyframes mutBob{50%{transform:translateY(-2px) rotate(-6deg)}}
+.calm .mutBadge,.calm .stat.act.endless{animation:none}
+/* character select: the Mutators panel */
+.mutBox{border:2px solid var(--line2);border-radius:14px;padding:6px 10px;background:linear-gradient(180deg,#221638,#150c26);display:flex;flex-direction:column;gap:8px}
+.mutBox.on{border-color:var(--lime);box-shadow:0 0 16px rgba(166,255,94,.22)}
+.mb-head{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer}
+.mb-head .k{font-size:13px;font-weight:900;letter-spacing:.22em;color:var(--lime)}
+.mb-head .pk{display:flex;gap:4px;flex:1;min-width:0;align-items:center;overflow:hidden}
+.mb-head .pk i{--mc:var(--lime);font-style:normal;font-size:18px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  border:2px solid var(--mc);background:#12091f}
+.mb-head .pk .off{font-size:12px;font-weight:900;letter-spacing:.14em;color:var(--dimmer)}
+.mb-head .x{font-size:18px;font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums}
+.mb-head .ar{font-size:16px;color:var(--dim);width:16px;text-align:center}
+.mb-info{font-size:12px;color:var(--dim);line-height:1.35}
+.mb-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mutChip{--mc:var(--lime);display:flex;align-items:center;gap:6px;min-height:44px;padding:4px 8px;border-radius:10px;border:2px solid var(--line);
+  background:#150c26;color:var(--text);font-family:inherit;text-align:left;cursor:pointer}
+.mutChip .ic{font-size:19px;width:24px;text-align:center;flex:0 0 auto}
+.mutChip .nm{flex:1;min-width:0;font-size:12px;font-weight:900;line-height:1.15}
+.mutChip .ml{font-size:12px;font-weight:900;color:var(--dimmer);font-variant-numeric:tabular-nums}
+.mutChip.on{border-color:var(--mc);background:linear-gradient(180deg,color-mix(in srgb,var(--mc) 26%,#150c26),#150c26);
+  box-shadow:0 0 12px color-mix(in srgb,var(--mc) 45%,transparent)}
+.mutChip.on .ml{color:var(--gold)}
+.btn.daily .d3{font-size:12px;letter-spacing:.02em;text-transform:none;color:#c6ff8e;font-weight:700}
+/* ================= /ENDLESS ================= */
+</style>
+<style id="feel-css">
+/* ================= FEEL (round 4): tip cards, room scenes, toast lanes (DESIGN.md "Feel (round 4)") ================= */
+/* toast lanes: screens with a central play area keep their toasts off it */
+#toast[data-lane="arc"]{top:826px;max-width:500px;font-size:14px}
+#toast[data-lane="bot"]{top:842px;max-width:520px}
+#toast[data-lane="bothi"]{top:772px}
+#toast[data-lane="top"]{top:10px}
+#toast[data-lane="keep"]{display:none}
+/* the tip card: slides in over the bottom lane, a tap puts it away */
+#tipCard{--tc:var(--cyan);position:absolute;left:8px;top:836px;width:364px;min-height:100px;z-index:44;display:none;align-items:center;gap:10px;
+  padding:8px 12px 8px 8px;border-color:var(--tc);cursor:pointer;pointer-events:auto;
+  box-shadow:0 0 18px color-mix(in srgb,var(--tc) 40%,transparent),0 8px 24px rgba(0,0,0,.6)}
+#tipCard.show{display:flex;animation:tipIn .45s cubic-bezier(.2,1.4,.4,1) both}
+#tipCard.out{display:flex;pointer-events:none;animation:tipOut .28s ease-in forwards}
+#tipCard canvas{width:64px;height:64px;flex:0 0 auto;border-radius:12px;background:radial-gradient(circle,#2c1d4a,#150c26);border:2px solid var(--line2)}
+#tipCard .tx{min-width:0;display:flex;flex-direction:column;gap:2px}
+#tipCard .k{font-size:12px;font-weight:900;letter-spacing:.16em;color:var(--tc)}
+#tipCard .n{font-size:16px;font-weight:900;color:#fff;line-height:1.1}
+#tipCard .t{font-size:13px;color:var(--text);line-height:1.3}
+#tipCard .x{position:absolute;right:9px;top:7px;font-size:12px;color:var(--dimmer);font-weight:900;letter-spacing:.1em}
+@keyframes tipIn{0%{transform:translateX(-120%) rotate(-4deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes tipOut{to{transform:translateX(-120%);opacity:0}}
+/* the Tips page */
+.tipList{display:flex;flex-direction:column;gap:8px}
+.tipRow{--tc:var(--line2);display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:#150d26;border:2px dashed var(--line)}
+.tipRow canvas{width:56px;height:56px;flex:0 0 auto}
+.tipRow .col{gap:2px;min-width:0}
+.tipRow .n{font-size:15px;font-weight:900;color:var(--dimmer)}
+.tipRow .t{font-size:13px;color:var(--dimmer);line-height:1.35}
+.tipRow.got{border:2px solid var(--tc);background:linear-gradient(180deg,#261842,#170e2a)}
+.tipRow.got .n{color:#fff}
+.tipRow.got .t{color:var(--dim)}
+/* the room scenes: a canvas strip at the top of the shop, the rest stop and the forge */
+.feelScene{position:relative;width:100%;flex:0 0 auto;border-radius:14px;overflow:hidden;border:2px solid var(--line2);box-shadow:0 6px 0 #0a0514}
+.feelScene canvas{display:block;width:100%;height:auto}
+.feelScene.thud{animation:feelThud .18s ease-out}
+@keyframes feelThud{30%{transform:translateY(3px) scale(1.01)}}
+.keepBub{position:absolute;left:238px;top:10px;max-width:176px;padding:7px 11px;border-radius:14px 14px 14px 4px;background:#fffaf0;color:#1b1030;
+  font-size:13px;font-weight:900;line-height:1.25;box-shadow:0 4px 0 rgba(0,0,0,.35);border:2px solid #12091f}
+.keepBub::before{content:'';position:absolute;left:-17px;bottom:6px;border:7px solid transparent;border-right:10px solid #12091f}
+.keepBub .nt{display:block;margin-top:3px;font-size:12px;font-weight:900;color:#7a1a4c}
+.keepBub .nt:empty{display:none}
+.keepBub.pop{animation:bubPop .35s cubic-bezier(.2,1.8,.4,1)}
+@keyframes bubPop{0%{transform:scale(.5);opacity:0}100%{transform:none;opacity:1}}
+.feelBusy .choice,.feelBusy .card{pointer-events:none;opacity:.55;transition:opacity .2s}
+.dfloat.lime{color:var(--lime);font-size:24px}
+/* the corner lane on the reward, shop and counter screens: up in the title row */
+.mSticker.tight.hi{top:6px;right:6px}
+.mDex.tight.hi{top:6px}
+.calm #tipCard.show,.calm .keepBub.pop,.calm .feelScene.thud{animation-duration:.01s!important}
+@media (prefers-reduced-motion:reduce){#tipCard.show,#tipCard.out,.keepBub.pop,.feelScene.thud{animation:none!important}}
+/* ================= /FEEL ================= */
+</style>
 </head>
 <body>
 <div id="wrap"><div id="stage">
@@ -801,6 +967,8 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   <div id="coach" class="panel"><div class="t" id="coachTxt"></div><div class="row"><button id="coachBtn" class="btn go sm">Got it</button></div><div class="arrow"></div></div>
   <div id="pop" class="panel"></div>
   <div id="toast"></div>
+  <!-- FEEL: the tip card (one at a time, a tap puts it away) -->
+  <div id="tipCard" class="panel"><canvas id="tipArt" width="128" height="128"></canvas><div class="tx"><div class="k">TIP</div><div class="n" id="tipTitle"></div><div class="t" id="tipText"></div></div><div class="x">TAP</div></div>
 
   <!-- overlays -->
   <div id="scr-title" class="screen clear"><div class="menu" id="titleMenu"></div></div>
@@ -819,11 +987,14 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
   <div id="scr-help" class="screen"><div id="helpBody" class="col help"></div></div>
   <div id="scr-collection" class="screen"><div id="collectionBody" class="col"></div></div>
   <div id="scr-stickers" class="screen"><div id="stickersBody" class="col"></div></div>
+  <div id="scr-tips" class="screen"><div id="tipsBody" class="col"></div></div>
   <!-- loot: the capsule ritual (the canvas draws the capsule under it) and the prize counter -->
   <div id="scr-capsule" class="screen capsule"><div id="capsuleBody" class="capBody"></div></div>
   <div id="scr-counter" class="screen"><div id="counterBody" class="col"></div></div>
   <!-- ARCADE: the mini-game cabinets (the canvas draws the machine under this frame) -->
   <div id="scr-arcade" class="screen arcade"><div id="arcadeBody" class="arcBody"></div></div>
+  <!-- ENDLESS: the loop reboot (a CRT powering on) -->
+  <div id="scr-loop" class="screen loop"><div id="loopBody"></div></div>
   <!-- screen transitions (iris / wipe / fade), never takes input -->
   <div id="wipe"></div>
 </div></div>

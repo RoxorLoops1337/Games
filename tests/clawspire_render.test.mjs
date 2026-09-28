@@ -52,9 +52,11 @@ function seqCtx() {
 
 const ITEM_KEYS = ['sword', 'dagger', 'axe', 'hammer', 'anvil', 'shield', 'buckler', 'potion', 'flask', 'bomb', 'torch', 'iceshard', 'snowball', 'coin', 'gem', 'rock', 'slag', 'iceblock', 'apple', 'bread', 'book', 'scroll', 'orb', 'ring', 'key', 'chain', 'horn', 'whetstone', 'feather', 'skull', 'star', 'boot', 'bone', 'bottle', 'heart', 'lantern', 'wand', 'mask', 'egg', 'dice',
   'chip', 'card', 'horseshoe', 'clover', 'slot', 'potato', 'pill', 'cookie'];
-const ENEMY_KEYS = ['rat', 'slime', 'bat', 'gremlin', 'mimic', 'spider', 'goblin', 'hoard', 'imp', 'clockwork', 'golem', 'furnace', 'magnet', 'ironjaw', 'wraith', 'yeti', 'frostmage', 'icemimic', 'prizemaster', 'mushroom', 'knight', 'wisp', 'crab', 'drone', 'tinker', 'cultist', 'raccoon', 'goat', 'magpie'];
+const ENEMY_KEYS = ['rat', 'slime', 'bat', 'gremlin', 'mimic', 'spider', 'goblin', 'hoard', 'imp', 'clockwork', 'golem', 'furnace', 'magnet', 'ironjaw', 'wraith', 'yeti', 'frostmage', 'icemimic', 'prizemaster', 'mushroom', 'knight', 'wisp', 'crab', 'drone', 'tinker', 'cultist', 'raccoon', 'goat', 'magpie',
+  'tickler', 'jelly', 'barker', 'magbat', 'mole', 'dozer', 'ghost', 'collector'];   // (round 4: the bestiary)
 const TILE_TYPES = ['empty', 'fight', 'elite', 'treasure', 'gem', 'ink', 'brush', 'event', 'shop', 'rest', 'forge', 'boss', 'start'];
-const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'];
+const MOVE_KINDS = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs',
+  'tickle', 'glue', 'ceiling', 'plow', 'vanish', 'bury', 'wheel'];
 
 const SHAPES = { circle: { kind: 'circle', r: 14 }, box: { kind: 'box', w: 44, h: 10 }, poly: { kind: 'poly', verts: [{ x: -16, y: 4 }, { x: -10, y: -12 }, { x: 10, y: -14 }, { x: 18, y: 0 }, { x: 12, y: 14 }] } };
 // A rig the way PHYS.clawRig describes itself: a hub circle, two prongs as
@@ -1013,6 +1015,153 @@ h.test('arcade: cabinet icons on the map, the three machines, monsters, scenes a
   for (const roll of [0, 0.4, 1]) for (const act of [1, 2, 3]) drawCheck(`arcScene dice ${roll} act ${act}`, c => R.arcScene(c, 508, 190, { id: 'ring_toss', t: 1, act, roll, face: 5 }));
   drawCheck('arcScene empty', c => R.arcScene(c, 508, 190, null));
   for (let f = 1; f <= 6; f++) drawCheck('arcDice ' + f, c => R.arcDice(c, 30, 30, 30, 0.3, f));
+});
+
+// ---- Feel (round 4): tip card art, the shopkeeper, the campfire, the forge
+h.test('feel: every tip has its own picture, the rooms draw every state', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  for (const n of ['feelTipArt', 'feelKeeper', 'feelCampfire', 'feelForge']) h.eq(typeof R[n], 'function', 'RENDER.' + n + ' exists');
+  const I = Object.values(D.ITEMS), E = D.ENEMIES;
+  const pick = (f) => I.find(f) || I[0];
+  const o = {
+    enemy: E.trashpanda || E.rat, item: pick(d => d.art === 'bomb'), items: [pick(d => (d.tags || []).includes('weapon')), pick(d => d.art === 'shield')],
+    clover: pick(d => d.art === 'clover'),
+  };
+  const ids = ['map', 'combo', 'hungry', 'bomb', 'fuse', 'crack', 'capsule', 'tickets', 'arcade', 'roam', 'tower', 'tool', 'luck', 'sig', 'affix', '?'];
+  const arts = new Map();
+  for (const id of ids) {
+    const args = Object.assign({}, o, id === 'crack' ? { item: pick(d => (d.tags || []).includes('glass')) } : id === 'hungry' ? { item: pick(d => (d.tags || []).includes('food')) } : {});
+    arts.set(id, fingerprint(drawCheck('feelTipArt ' + id, c => R.feelTipArt(c, id, 56, 1.1, args))));
+  }
+  h.eq(uniqueRatio(arts).ratio, 1, 'every tip picture is distinct (' + uniqueRatio(arts).dupes.map(d => d.join('=')).join(' ') + ')');
+  drawCheck('feelTipArt with no defs falls back', c => R.feelTipArt(c, 'hungry', 56, 0, null));
+  const moods = new Map();
+  for (const [mood, extra] of [['idle', {}], ['happy', { moodK: 1 }], ['broke', { moodK: 1 }], ['talk', { talk: 1 }], ['blink', { blink: 1 }]])
+    moods.set(mood, fingerprint(drawCheck('feelKeeper ' + mood, c => R.feelKeeper(c, 508, 132, Object.assign({ t: 1.7, mood: mood === 'talk' || mood === 'blink' ? 'idle' : mood, look: 0.5 }, extra)))));
+  h.eq(uniqueRatio(moods).ratio, 1, 'the keeper looks different in every mood');
+  drawCheck('feelKeeper no state', c => R.feelKeeper(c, 508, 132, null));
+  const f0 = drawCheck('feelCampfire', c => R.feelCampfire(c, 508, 170, { t: 2.2, charId: 'knight', heal: 0 }));
+  const f1 = drawCheck('feelCampfire healing', c => R.feelCampfire(c, 508, 170, { t: 2.2, charId: 'knight', heal: 0.6 }));
+  for (const ch of ['alchemist', 'rogue', 'gambler', 'nobody']) drawCheck('feelCampfire ' + ch, c => R.feelCampfire(c, 508, 170, { t: 5, charId: ch, heal: 0 }));
+  h.ok(fingerprint(f0) !== fingerprint(f1), 'a heal shows at the fire');
+  const flames = new Set();
+  for (const t of [0.1, 0.5, 1.3]) flames.add(fingerprint(drawCheck('feelCampfire t ' + t, c => R.feelCampfire(c, 508, 170, { t, charId: 'rogue' }))));
+  h.ok(flames.size === 3, 'the fire moves');
+  const sword = pick(d => (d.tags || []).includes('weapon'));
+  const g0 = drawCheck('feelForge idle', c => R.feelForge(c, 508, 150, { t: 1, item: null, hit: 9, strikes: [] }));
+  const g1 = drawCheck('feelForge strike', c => R.feelForge(c, 508, 150, { t: 1, item: sword, heat: 1, hit: 0.03, strikes: [0.05] }));
+  const g2 = drawCheck('feelForge done', c => R.feelForge(c, 508, 150, { t: 1, item: sword, heat: 0.3, hit: 0.6, strikes: [0.6, 0.3], done: 0.8 }));
+  drawCheck('feelForge no state', c => R.feelForge(c, 508, 150, null));
+  h.ok(fingerprint(g0) !== fingerprint(g1) && fingerprint(g1) !== fingerprint(g2), 'the hammer falls, the sparks fly, the upgrade sparkles');
+});
+
+// ---------------------------------------------------------------- BESTIARY (round 4)
+h.test('bestiary: every enemy breathes, blinks and fidgets its own way; low hp shows', () => {
+  const api = boot({ only: ['util', 'data', 'combat', 'render'] });
+  const R = api.RENDER, D = api.DATA, L = R.best && R.best.life;
+  h.ok(typeof L === 'function', 'RENDER.best.life');
+  if (!L) return;
+  const kinds = new Set();
+  for (const key of ENEMY_KEYS) {
+    const def = { id: key, art: key, size: 1, tier: 'normal' };
+    let blink = false, fid = false, kind = '';
+    for (let t = 0; t < 12; t += 0.02) { const s = L(def, t, {}, 150); if (s.blink > 0.6) blink = true; if (s.fid > 0.9) { fid = true; kind = s.kind; } }
+    h.ok(blink, key + ' blinks within 12 s');
+    h.ok(fid, key + ' fidgets within 12 s (' + kind + ')');
+    kinds.add(kind);
+    // deterministic in its inputs (the intro redraws frames), never while frozen or dead
+    h.eq(JSON.stringify(L(def, 3.3, {}, 150)), JSON.stringify(L(def, 3.3, {}, 150)), key + ' life is a pure function of t and x');
+    let still = true;
+    for (let t = 0; t < 12; t += 0.05) { const a = L(def, t, { frozen: true }, 150), b = L(def, t, { dead: 0.5 }, 150); if (a.blink || a.fid || b.blink || b.fid) still = false; }
+    h.ok(still, key + ' frozen or dying: no blink, no fidget');
+    // low hp changes the drawing (sweat, cracks, dizzy stars)
+    const full = drawCheck('enemy ' + key + ' full hp', c => R.enemy(c, def, 200, 250, 1, 1.1, { hpk: 1 }));
+    const low = drawCheck('enemy ' + key + ' low hp', c => R.enemy(c, def, 200, 250, 1, 1.1, { hpk: 0.1 }));
+    h.ok(fingerprint(full) !== fingerprint(low), key + ' looks hurt at low hp');
+  }
+  h.ok(kinds.size >= 12, `a dozen or more different fidgets (${[...kinds].join(', ')})`);
+  // two of the same enemy side by side never blink together
+  const rat = { id: 'rat', art: 'rat', size: 1 };
+  let apart = 0;
+  for (let t = 0; t < 10; t += 0.02) { const a = L(rat, t, { seed: 0 }, 150), b = L(rat, t, { seed: 1 }, 330); if ((a.blink > 0.6) !== (b.blink > 0.6)) apart++; }
+  h.ok(apart > 5, 'twins blink on their own clocks');
+  // the blink is cleared after each enemy: a portrait drawn after a mid-blink enemy keeps its eyes open
+  let tb = 0;
+  for (let t = 0; t < 12 && !tb; t += 0.01) if (L(rat, t, {}, 200).blink > 0.6) tb = t;
+  const p0 = drawCheck('portrait before', c => R.portrait(c, 'knight', 40, 40, 64, 1));
+  const p1 = drawCheck('portrait after a blink', c => { R.enemy(c, rat, 200, 200, 1, tb, {}); c.stat.seq.length = 0; R.portrait(c, 'knight', 40, 40, 64, 1); });
+  h.eq(fingerprint(p0), fingerprint(p1), 'LIFE never leaks into the next drawing');
+  // the goblin twirls its wrench, bosses heave
+  const gob = { art: 'goblin', size: 1 };
+  let tf = 0;
+  for (let t = 0; t < 12 && !tf; t += 0.01) if (L(gob, t, {}, 200).fid > 0.95) tf = t;
+  h.ok(L(gob, tf, {}, 200).spin > 0.5, 'the goblin spins its wrench');
+  for (const id of ['tickler', 'jelly', 'barker', 'magbat', 'mole', 'dozer', 'ghost', 'collector']) drawCheck('DATA enemy ' + id + ' mid fidget', c => { for (let t = 0; t < 8; t += 0.37) R.enemy(c, D.ENEMIES[id], 200, 250, 1, t, { hpk: (t % 1) }); });
+});
+
+h.test('bestiary: the machine tricks draw clean and read differently', () => {
+  const api = boot({ only: ['util', 'data', 'combat', 'render'] });
+  const R = api.RENDER, D = api.DATA, B = R.best;
+  const sword = D.ITEMS.rusty_sword || Object.values(D.ITEMS)[0];
+  const fps = new Map();
+  fps.set('ceiling', fingerprint(drawCheck('best ceiling', c => B.ceiling(c, 30, 412, 416, 1, 1.3))));
+  fps.set('field', fingerprint(drawCheck('best field', c => B.field(c, 100, 424, 140, 520, 1.3, 1, 2))));
+  fps.set('goo', fingerprint(drawCheck('best goo', c => B.goo(c, 100, 700, 150, 720, 0.4, 1.3))));
+  fps.set('slimed', fingerprint(drawCheck('best slimed', c => B.slimed(c, 100, 700, 16, 1.3, 2))));
+  fps.set('mound', fingerprint(drawCheck('best mound', c => B.mound(c, 200, 797, sword, 1.3, 1, 3))));
+  fps.set('ghostItem', fingerprint(drawCheck('best ghostItem', c => B.ghostItem(c, sword, 200, 700, 0.3, 20, 1.3, 1, false, 2))));
+  fps.set('blade', fingerprint(drawCheck('best blade', c => B.blade(c, 300, 650, 800, 446, 1.3, 1))));
+  fps.set('wheelSign', fingerprint(drawCheck('best wheelSign', c => B.wheelSign(c, 270, 530, 66, { rot: 1, t: 1.3, k: 1, hi: 3, label: 'YOU: +15 GOLD', who: 'you', flash: 0.5 }))));
+  fps.set('feathers', fingerprint(drawCheck('best feathers', c => B.feathers(c, 250, 450, 1.3, 1))));
+  fps.set('rival', fingerprint(drawCheck('best rival', c => B.rival(c, 100, 470, 420, 0.5, 1.3, true))));
+  fps.set('reticle', fingerprint(drawCheck('best reticle', c => B.reticle(c, 200, 760, 16, 1.3))));
+  fps.set('miniClaw', fingerprint(drawCheck('best miniClaw', c => B.miniClaw(c, 50, 50, 1, 0.5, 1, 0.2))));
+  h.eq(uniqueRatio(fps).ratio, 1, 'every trick has its own look');
+  // off states draw nothing, bad input never throws
+  for (const [n, fn] of [['ceiling', c => B.ceiling(c, 30, 412, 416, 0, 1)], ['blade', c => B.blade(c, 300, 650, 800, 446, 1, 0)], ['feathers', c => B.feathers(c, 250, 450, 1, 0)]]) {
+    const { ctx, stat } = seqCtx(); fn(ctx); h.eq(stat.paints, 0, n + ' off: nothing drawn');
+  }
+  const { ctx } = seqCtx();
+  let threw = false;
+  try { B.mound(ctx, 0, 0, null, NaN, undefined, 0); B.ghostItem(ctx, null, 0, 0, 0, 0, 0, 0); B.wheelSign(ctx, 0, 0, 10, {}); B.goo(ctx, 0, 0, 0, 0, 5, 0); } catch (e) { threw = true; }
+  h.ok(!threw, 'bad input never throws');
+  // the wheel: its landed wedge lights up; the sign grows in
+  const w0 = drawCheck('wheel no hi', c => B.wheelSign(c, 270, 530, 66, { rot: 1, t: 1, k: 1, hi: -1 }));
+  const w1 = drawCheck('wheel hi', c => B.wheelSign(c, 270, 530, 66, { rot: 1, t: 1, k: 1, hi: 2, label: 'IT HEALS 12', who: 'it' }));
+  h.ok(fingerprint(w0) !== fingerprint(w1), 'the landed wedge and its prize show');
+  // the invisible item: fading back in draws differently at each step
+  const g1 = drawCheck('ghost 1', c => B.ghostItem(c, sword, 200, 700, 0, 20, 1, 1, false, 0));
+  const g0 = drawCheck('ghost 0', c => B.ghostItem(c, sword, 200, 700, 0, 20, 1, 0, false, 0));
+  h.ok(fingerprint(g1) !== fingerprint(g0), 'hidden vs found');
+});
+
+h.test('bestiary: map decor on lit land per biome, never on the dark or the sea; the act 3 aurora', () => {
+  const api = boot({ only: ['util', 'data', 'map', 'render'] });
+  const R = api.RENDER;
+  const land = (biome, ground, revealed) => ({ q: 1, r: 2, type: 'empty', terrain: 'land', ground, biome, elev: 0.3, revealed });
+  for (const biome of ['cellar', 'foundry', 'vault']) {
+    let decorated = 0;
+    for (let seed = 1; seed < 400; seed += 7) {
+      const st = { t: 1.2, orient: 'v', biome, fill: '#333', seed: (seed * 2654435761) >>> 0 };
+      const lit = drawCheck('hex decor ' + biome + ' ' + seed, c => R.hex(c, 100, 100, 46, land(biome, 'grass', true), st));
+      const bare = drawCheck('hex no seed ' + biome, c => R.hex(c, 100, 100, 46, land(biome, 'grass', true), { t: 1.2, orient: 'v', biome, fill: '#333' }));
+      if (fingerprint(lit) !== fingerprint(bare)) decorated++;
+      const dark = drawCheck('hex dark ' + biome, c => R.hex(c, 100, 100, 46, land(biome, 'grass', false), st));
+      const darkBare = drawCheck('hex dark bare ' + biome, c => R.hex(c, 100, 100, 46, land(biome, 'grass', false), { t: 1.2, orient: 'v', biome, fill: '#333' }));
+      h.eq(fingerprint(dark), fingerprint(darkBare), biome + ' dark hex: no decor');
+      const sea = { q: 1, r: 2, type: 'empty', terrain: 'sea', ground: 'sea', biome, revealed: true };
+      h.eq(fingerprint(drawCheck('sea ' + biome, c => R.hex(c, 100, 100, 46, sea, st))), fingerprint(drawCheck('sea bare', c => R.hex(c, 100, 100, 46, sea, { t: 1.2, orient: 'v', biome, fill: '#333' }))), biome + ' sea: no decor');
+    }
+    h.ok(decorated >= 12 && decorated <= 45, `${biome}: about four lit hexes in eleven get a prop (${decorated} of 57)`);
+  }
+  // animated but a pure function of t (the intro redraws frames)
+  const st = { t: 2.7, orient: 'v', biome: 'foundry', fill: '#333', seed: 12345677 };
+  h.eq(fingerprint(drawCheck('decor a', c => R.hex(c, 100, 100, 46, land('foundry', 'dirt', true), st))), fingerprint(drawCheck('decor b', c => R.hex(c, 100, 100, 46, land('foundry', 'dirt', true), st))), 'decor is deterministic in t');
+  const sky3 = drawCheck('sky act 3', c => R.best.sky(c, 0, 172, 540, 3, 1.5));
+  h.ok(sky3.paints > 3, 'the act 3 map has an aurora');
+  const { ctx, stat } = seqCtx(); R.best.sky(ctx, 0, 172, 540, 1, 1.5); R.best.sky(ctx, 0, 172, 540, 2, 1.5);
+  h.eq(stat.paints, 0, 'acts 1 and 2 keep their sky');
 });
 
 h.done();

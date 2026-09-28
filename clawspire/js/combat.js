@@ -8,6 +8,9 @@
 const COMBAT = (() => {
   const MAX_ALIVE = 3;       // enemies alive at once (summon cap)
   const MAX_STACK = 99;      // status stacks clamp to [0, 99]
+  // Feel (round 4): an enemy's Armor stops at ARMOR_MAX. Uncapped, the Frozen
+  // Knight's Temper reached 34 Armor and a low-damage build could never hurt it.
+  const ARMOR_MAX = 8;
   // Starting bins are 19 items now (6 of them r 9-11 fillers, cheap circles
   // for the physics budget), so both caps grew: 40 -> 48 and 30 -> 34.
   const MAX_ITEMS = 48;      // bin + used cap for junk/copies (physics budget)
@@ -303,6 +306,87 @@ const COMBAT = (() => {
   api.tiltScale = tiltScale;
   // ================= /TILT =================
 
+  // ================= ENDLESS (endless mode and run mutators, DESIGN.md "Endless and mutators") =================
+  // newFight sets F.loop (the Endless loop, 0 outside it), F.mix (the boss
+  // whose signature this loop's boss borrows) and F.mut (DATA.mutMods of
+  // run.muts, null when none). Read here only: the loop's hp / attack lift
+  // (makeEnemy, summons too), extra affixes, phase two from the opening bell
+  // and the borrowed signature (endlessFight), the mutators' grabs and rules
+  // (endlessSetup), their affixes on every enemy (endlessEnemy) and the
+  // halved hits (damage). A run with neither is untouched.
+  const END_ONE = [1, 1];
+  function endlessScaleOf(F) {
+    const loop = F ? num(F.loop, 0) : 0, fn = D().endlessScale;
+    if (!(loop > 0) || typeof fn !== 'function') return null;
+    try { return fn(loop, F.act); } catch (err) { return null; }
+  }
+  // [hpMul, dmgMul] for makeEnemy.
+  function endlessMul(F) {
+    const s = endlessScaleOf(F);
+    return s ? [Math.max(0.1, num(s.hp, 1)), Math.max(0.1, num(s.dmg, 1))] : END_ONE;
+  }
+  function endlessSetup(F, run) {
+    const E = run && run.endless && typeof run.endless === 'object' ? run.endless : null;
+    F.loop = E ? clamp(num(E.loop, 0) | 0, 0, 999) : 0;
+    F.mix = F.loop > 0 && E.mix ? String(E.mix) : null;
+    let m = null;
+    if (Array.isArray(run.muts) && run.muts.length && typeof D().mutMods === 'function') { try { m = D().mutMods(run.muts); } catch (err) { m = null; } }
+    F.mut = m && m.ids && m.ids.length ? m : null;
+    if (!F.mut) return;
+    if (num(F.mut.grabs, 1) !== 1) F.claw.grabs = clamp(Math.round(F.claw.grabs * num(F.mut.grabs, 1)), 1, 9);
+    for (const k in F.mut.rules || {}) {
+      F.rules[k] = num(F.rules[k], 0) + num(F.mut.rules[k], 0);
+      if (!F.ruleSrc[k]) F.ruleSrc[k] = F.mut.ids.find(id => (((D().MUTATORS || {})[id] || {}).fx || {}).rules) || k;
+    }
+  }
+  // Every enemy (summons too): the mutators' affixes (a gulper is never also Greedy).
+  function endlessEnemy(F, e) {
+    if (!F.mut || !F.mut.affix || !F.mut.affix.length) return;
+    const eats = (e.def.moves || []).some(mv => mv && mv.k === 'gulp');
+    for (const id of F.mut.affix) if ((D().AFFIXES || {})[id] && !(id === 'greedy' && eats)) giveAffix(F, e, id);
+  }
+  // Once per fight after the rolled and Tilt affixes: the loop's extra
+  // affixes, the borrowed signature, phase two from the opening bell.
+  function endlessFight(F, rng) {
+    const s = endlessScaleOf(F);
+    if (!s) return;
+    for (const e of F.enemies) {
+      const tier = (e.def && e.def.tier) || 'normal';
+      const n = tier === 'normal' ? num(s.normalAffix, 0) : num(s.bigAffix, 0);
+      if (n > 0) {
+        const eats = (e.def.moves || []).some(mv => mv && mv.k === 'gulp');
+        const ids = Object.keys(D().AFFIXES || {}).filter(id => !hasAffix(e, id) && !(id === 'greedy' && eats));
+        for (let k = 0; k < n && ids.length; k++) giveAffix(F, e, ids.splice(Math.floor(rng() * ids.length), 1)[0]);
+      }
+      if (tier === 'boss' && s.mix && F.mix) endlessBorrow(F, e);
+      if ((tier === 'boss' && s.rage) || (tier === 'elite' && s.eliteRage)) endlessRage(F, e);
+    }
+  }
+  // The loop's boss learns another boss's trick (its own cadence stays the borrowed one's).
+  function endlessBorrow(F, e) {
+    const src = enemyDef(F.mix), sig = src && src.sig;
+    if (!sig || typeof sig !== 'object' || !e.def.sig || e.def.sig.id === sig.id) return false;
+    e.def = Object.assign({}, e.def, { sig: Object.assign({}, sig) });
+    e.borrowed = F.mix;
+    return true;
+  }
+  // Phase two from the opening bell (no half hp needed): the roar, the
+  // Strength, the new pattern and the boss's phase two trick.
+  function endlessRage(F, e) {
+    if (e.enraged || !e.alive || e.def.enrage === false) return;
+    e.enraged = true;
+    const R = (e.def.enrage && typeof e.def.enrage === 'object') ? e.def.enrage : {};
+    const moves = e.def.moves || [];
+    emit(F, { t: 'enrage', idx: F.enemies.indexOf(e), name: R.name || 'ENRAGED', text: `Loop ${F.loop}: ${e.def.name || e.id} is furious from the bell` });
+    const str = R.str != null ? num(R.str, 0) : (F.act >= 2 ? 2 : 1);
+    if (str > 0) e.status.str = clamp(st(e, 'str') + str, 0, MAX_STACK);
+    const pat = Array.isArray(R.pattern) ? R.pattern.filter(i => i >= 0 && i < moves.length) : [];
+    if (pat.length && (e.def.ai || 'cycle') === 'cycle') { e.def = Object.assign({}, e.def, { pattern: pat }); e.cyc = 0; }
+    bossPhase(F, e);
+  }
+  api.endlessScaleOf = endlessScaleOf;
+  // ================= /ENDLESS =================
+
   // ---------- fight setup ----------
   function makeEnemy(F, id) {
     const def = enemyDef(id);
@@ -325,6 +409,7 @@ const COMBAT = (() => {
       if (step > 0) { hpMul *= 1 + step * num(ramp.hp, 0); dmgMul *= 1 + step * num(ramp.dmg, 0); }
     }
     { const tsc = tiltScale(F); hpMul *= tsc[0]; dmgMul *= tsc[1]; }   // meta: the run's Tilt level (TILT block)
+    { const esc = endlessMul(F); hpMul *= esc[0]; dmgMul *= esc[1]; }   // the Endless loop's lift (ENDLESS block)
     let edef = def;
     if (hpMul !== 1) hp = Math.max(1, Math.round(hp * hpMul));
     if (dmgMul !== 1 && Array.isArray(def.moves)) {
@@ -340,8 +425,9 @@ const COMBAT = (() => {
     };
     // Optional starting statuses (e.g. a golem's armor): def.status {s: v}.
     if (def.status && typeof def.status === 'object') {
-      for (const s in def.status) e.status[s] = clamp(Math.round(num(def.status[s], 0)), 0, MAX_STACK);
+      for (const s in def.status) e.status[s] = clamp(Math.round(num(def.status[s], 0)), 0, s === 'armor' ? ARMOR_MAX : MAX_STACK);
     }
+    endlessEnemy(F, e);   // the run's mutators: Hungry Hungry, Jackpot Fever (ENDLESS block)
     return e;
   }
 
@@ -404,12 +490,14 @@ const COMBAT = (() => {
       F.used = all.slice(MAX_CABINET);
     }
     F.tiltLv = clamp(num(run.tilt, 0) | 0, 0, 10);   // meta: the run's Tilt level (TILT block)
+    endlessSetup(F, run);   // the Endless loop and the run's mutators (ENDLESS block)
     for (const id of (enemyIds || []).slice(0, MAX_ALIVE)) F.enemies.push(makeEnemy(F, id));
     if (!F.enemies.length) F.enemies.push(makeEnemy(F, 'dummy'));
     // Elite affixes ride their own rng stream so the fight's rolls stay put.
     const arng = (typeof U !== 'undefined' && U.rng) ? U.rng((num(F.seed, 0) ^ 0x51f15e) + 1) : null;
     if (arng) F.enemies.forEach(e => rollAffixes(F, e, arng));
     if (arng) tiltFight(F, arng);   // meta: Tilt's extra elite affix and boss rage (TILT block)
+    if (arng) endlessFight(F, arng);   // Endless: extra affixes, a borrowed trick, rage from the bell (ENDLESS block)
     F.digested = [];   // items enemies swallowed and digested: gone for this fight only
     for (const e of F.enemies) api.pickIntent(F, e);
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
@@ -526,6 +614,8 @@ const COMBAT = (() => {
         amt = Math.floor(amt * (1 + sh));
         if (F.shatterAt !== F.stats.played) { F.shatterAt = F.stats.played; ruleProc(F, 'shatter', 'SHATTER', tgt); }
       }
+      // Double Grabs, Half Damage (a run mutator, ENDLESS block): the player's hits land for less
+      if (F.mut && num(F.mut.dmgOut, 1) !== 1 && isPlayer(F, src) && !isPlayer(F, tgt) && amt > 0) amt = Math.max(1, Math.round(amt * num(F.mut.dmgOut, 1)));
     }
     let blocked = 0;
     if (!opts.pierce) { blocked = Math.min(tgt.block, amt); tgt.block -= blocked; }
@@ -576,7 +666,8 @@ const COMBAT = (() => {
     if (!isPlayer(F, u) && !u.alive) return 0;
     if (id === 'block') return gainBlock(F, u, v);
     const before = st(u, id);
-    const now = clamp(before + v, 0, id === 'luck' ? LUCK.max : MAX_STACK);
+    const cap = id === 'luck' ? LUCK.max : (id === 'armor' && !isPlayer(F, u)) ? Math.max(ARMOR_MAX, before) : MAX_STACK;
+    const now = clamp(before + v, 0, cap);
     if (now) u.status[id] = now; else delete u.status[id];
     const d = now - before;
     // Debuffs an enemy puts on the player skip this round's decay, so a
@@ -648,6 +739,7 @@ const COMBAT = (() => {
     log(F, `${e.def.name || e.id} is defeated.`);
     // Everything it swallowed bursts out and rains back into the bin.
     if (e.belly && e.belly.length) spit(F, e, e.belly.length, 'burst');
+    bestDeath(F, e);   // a Mole's buried items pop back up (BESTIARY block)
     // Explosive affix: a parting blast (it never finishes the player off).
     if (hasAffix(e, 'explosive') && F.player.hp > 1) {
       const v = Math.min(F.player.hp - 1, Math.round((4 + 4 * F.act) * num(e.dmgMul, 1)));
@@ -742,6 +834,7 @@ const COMBAT = (() => {
     const extra = [];
     if (api.hasteNext(e)) extra.push('twice (Hasty)');
     if (api.greedNext(e)) extra.push('and gulps an item (Greedy)');
+    if (bestRide(e)) extra.push(bestRide(e));   // the rival claw (BESTIARY block)
     // A boss signature rides on the next action too (see bossSig).
     if (api.sigNext && api.sigNext(e)) { const si = api.sigInfo(e); if (si && si.text) extra.push('then ' + si.text); }
     return extra.length ? s + ', ' + extra.join(', ') : s;
@@ -782,7 +875,7 @@ const COMBAT = (() => {
       case 'jam': return 'Jams your claw rail';
       case 'eggs': return `Lays ${Math.max(1, num(m.n, 1) | 0)} eggs in your bin`;
       case 'none': return 'Waits';
-      default: return m.txt || m.name || '???';
+      default: return bestIntent(e, m) || m.txt || m.name || '???';
     }
   }
 
@@ -830,7 +923,7 @@ const COMBAT = (() => {
     e.affix.push(id);
     const add = Math.round(e.maxHp * num(A && A.hp, 0.1));
     if (add > 0) { e.maxHp += add; e.hp += add; }
-    if (id === 'armored') e.status.armor = clamp(st(e, 'armor') + 1, 0, MAX_STACK);
+    if (id === 'armored') e.status.armor = clamp(st(e, 'armor') + 1, 0, ARMOR_MAX);
     if (id === 'spiky') e.status.thorns = clamp(st(e, 'thorns') + (F.act >= 3 ? 2 : 1), 0, MAX_STACK);
     return true;
   }
@@ -964,7 +1057,7 @@ const COMBAT = (() => {
     const b = { inst, turns: Math.max(1, num(e.def.digest, DIGEST) | 0), kind, str: 0, armor: 0 };
     e.belly.push(b);
     if (kind === 'armed') { b.str = 2; api.status(F, e, 'str', 2); }
-    if (kind === 'plated') { b.armor = 1; api.status(F, e, 'armor', 1); }
+    if (kind === 'plated') b.armor = Math.max(0, api.status(F, e, 'armor', 1));   // at the Armor cap it lends none (and takes none back)
     hook(F, 'onEat', e, inst, def);
   }
   // Swallow up to n bin items. Returns how many went down.
@@ -1141,6 +1234,7 @@ const COMBAT = (() => {
   api.hasAffix = hasAffix;
   api.BELLY_MAX = BELLY_MAX;
   api.DIGEST = DIGEST;
+  api.ARMOR_MAX = ARMOR_MAX;
   api.DIGEST_FLOOR = DIGEST_FLOOR;
 
   // ---------- boss signatures (DESIGN.md "Bosses") ----------
@@ -1357,7 +1451,7 @@ const COMBAT = (() => {
         checkOver(F);
         break;
       }
-      default: break;
+      default: bestMove(F, e, m); break;   // the bestiary's machine tricks (BESTIARY block)
     }
   }
 
@@ -1397,6 +1491,7 @@ const COMBAT = (() => {
     tickDmg(F, e, 'bleed');
     if (!e.alive || F.phase === 'over') return;
     actMove(F, e);
+    bestAfterAct(F, e);   // the Claw Collector's rival claw (BESTIARY block)
     if (e.alive && F.phase !== 'over') api.pickIntent(F, e);
     decayTurns(e);
   }
@@ -2041,6 +2136,177 @@ const COMBAT = (() => {
     }
     return Math.max(0, Math.round(total));
   };
+
+  /* ================================================================ BESTIARY
+     Round 4 (DESIGN.md "Enemies", the bestiary): enemies whose tricks play
+     with the claw machine itself. COMBAT decides and emits a bin event; the
+     game stages it in the cabinet (game.js BESTIARY block). The only fight
+     state kept here is F.buried (the Mole's items under the floor, [{inst,
+     by: enemy uid}]); the physical looks (a wiggling claw, sticky goo, a
+     magnetic lid, invisible items) live in the game's FS and end with the
+     player's next turn.
+       tickle  {v}  {t:'binTickle', idx, turns}            the claw wiggles on every drop next turn
+       glue    {v}  {t:'binGlue', idx, turns}              the pile sticks together next turn
+       ceiling {v}  {t:'binCeiling', idx, turns, insts}    metal floats up under the lid for a turn
+       plow         {t:'binPlow', idx, dir}                the pile is shoved to the far wall
+       vanish  {n}  {t:'binVanish', idx, insts}            items go invisible until the claw touches them
+       bury    {n}  {t:'binBury', idx, inst} per item      under the floor (F.buried) until dug up
+       wheel        {t:'binWheel', idx, w, who, label}     then the prize itself (status / block / heal / gold)
+       def.rival    {t:'binRival', idx, inst}, then binEat  the rival claw takes the rarest item every turn
+     A Mole that dies gives its buried items back ({t:'binUnbury', idx, insts}). */
+  const BEST_KINDS = ['tickle', 'glue', 'ceiling', 'plow', 'vanish', 'bury', 'wheel'];
+  const BEST_FLOOR = 4;      // bury and the rival claw never take the player below this many real items
+  // The Carnival Barker's prize wheel: eight wedges, its own and yours in turn.
+  const BEST_WHEEL = [
+    { who: 'it', k: 'str', v: 2, label: '+2 STRENGTH', col: '#ff5a4a' },
+    { who: 'you', k: 'block', v: 8, label: 'YOU: +8 BLOCK', col: '#2ee6d6' },
+    { who: 'it', k: 'heal', v: 12, label: 'IT HEALS 12', col: '#a6ff5e' },
+    { who: 'you', k: 'gold', v: 15, label: 'YOU: +15 GOLD', col: '#ffc94d' },
+    { who: 'it', k: 'thorns', v: 2, label: '+2 THORNS', col: '#8fae3a' },
+    { who: 'you', k: 'str', v: 1, label: 'YOU: +1 STRENGTH', col: '#ff9a2e' },
+    { who: 'it', k: 'block', v: 12, label: '+12 BLOCK', col: '#8fb6ff' },
+    { who: 'you', k: 'heal', v: 8, label: 'YOU: HEAL 8', col: '#6bd35e' },
+  ];
+  const BEST_HOUSE = 1.3;    // the house edge: its own wedges weigh this much (twice that once enraged)
+
+  // Resolve one bestiary move. False for a kind this block does not know.
+  function bestMove(F, e, m) {
+    if (!m || BEST_KINDS.indexOf(m.k) < 0) return false;
+    const idx = F.enemies.indexOf(e), turns = Math.max(1, num(m.v, 1) | 0);
+    switch (m.k) {
+      case 'tickle': emit(F, { t: 'binTickle', idx, turns }); text(F, e, 'COOCHIE COO'); break;
+      case 'glue': emit(F, { t: 'binGlue', idx, turns }); text(F, e, 'SPLORT'); break;
+      case 'ceiling': {
+        const insts = F.bin.filter(i => !i.frozen && tagHas(itemDef(i.id), 'metal'));
+        if (!insts.length) { text(F, e, 'NO METAL'); break; }
+        emit(F, { t: 'binCeiling', idx, turns, insts });
+        text(F, e, 'ZZZT');
+        break;
+      }
+      case 'plow': emit(F, { t: 'binPlow', idx, dir: -1 }); text(F, e, 'BEEP BEEP'); break;
+      case 'vanish': {
+        const pool = F.bin.filter(i => !isJunk(i));
+        const insts = [];
+        for (let k = Math.min(pool.length, Math.max(1, num(m.n, 1) | 0)); k > 0; k--) insts.push(pool.splice(Math.floor(F.rng() * pool.length), 1)[0]);
+        if (!insts.length) { text(F, e, 'NOTHING'); break; }
+        emit(F, { t: 'binVanish', idx, insts });
+        text(F, e, 'BOO!');
+        break;
+      }
+      case 'bury': if (!bestBury(F, e, Math.max(1, num(m.n, 1) | 0))) text(F, e, 'NOTHING'); break;
+      case 'wheel': bestWheel(F, e); break;
+      default: break;
+    }
+    return true;
+  }
+  // The Mole: n random real items go under the floor (never below BEST_FLOOR).
+  function bestBury(F, e, n) {
+    if (!Array.isArray(F.buried)) F.buried = [];
+    let got = 0;
+    for (let k = 0; k < n; k++) {
+      if (playable(F) <= BEST_FLOOR) break;
+      const pool = F.bin.filter(i => !isJunk(i) && !i.frozen);
+      if (!pool.length) break;
+      const inst = pool[Math.floor(F.rng() * pool.length)];
+      F.bin.splice(F.bin.indexOf(inst), 1);
+      F.buried.push({ inst, by: e.uid });
+      emit(F, { t: 'binBury', idx: F.enemies.indexOf(e), inst });
+      got++;
+    }
+    if (got) text(F, e, 'DIG DIG');
+    return got;
+  }
+  // The claw dug a mound up: the item is back in the bin ('bin'), or the used
+  // pile when the cabinet is full ('used'); null when it was not buried.
+  api.bestUnbury = function (F, inst) {
+    if (!F || !Array.isArray(F.buried)) return null;
+    for (let k = 0; k < F.buried.length; k++) {
+      const b = F.buried[k];
+      if (b.inst !== inst && !(inst && b.inst.uid === inst.uid)) continue;
+      F.buried.splice(k, 1);
+      if (F.bin.length < MAX_CABINET) { F.bin.push(b.inst); return 'bin'; }
+      F.used.push(b.inst);
+      return 'used';
+    }
+    return null;
+  };
+  // A Mole that goes down coughs up everything it buried.
+  function bestDeath(F, e) {
+    if (!F || !e || !Array.isArray(F.buried) || !F.buried.length) return;
+    const back = [];
+    for (let k = 0; k < F.buried.length; k++) if (F.buried[k].by === e.uid) back.push(F.buried[k].inst);
+    if (!back.length) return;
+    F.buried = F.buried.filter(b => b.by !== e.uid);
+    for (const inst of back) (F.bin.length < MAX_CABINET ? F.bin : F.used).push(inst);
+    emit(F, { t: 'binUnbury', idx: F.enemies.indexOf(e), insts: back });
+  }
+  // The Carnival Barker spins its wheel: the wedge is rolled here (the house
+  // edge weighs its own wedges), the event goes first so the game can spin
+  // it, then the prize lands through the usual status / block / heal / gold.
+  function bestWheel(F, e) {
+    const p = F.player, itW = BEST_HOUSE * (e.enraged ? 2 : 1);
+    let tot = 0;
+    for (const w of BEST_WHEEL) tot += w.who === 'it' ? itW : 1;
+    let r = F.rng() * tot, wi = BEST_WHEEL.length - 1;
+    for (let k = 0; k < BEST_WHEEL.length; k++) { r -= BEST_WHEEL[k].who === 'it' ? itW : 1; if (r < 0) { wi = k; break; } }
+    const w = BEST_WHEEL[wi], u = w.who === 'it' ? e : p;
+    emit(F, { t: 'binWheel', idx: F.enemies.indexOf(e), w: wi, who: w.who, label: w.label });
+    if (w.k === 'heal') api.heal(F, u, w.v);
+    else if (w.k === 'block') gainBlock(F, u, w.v);
+    else if (w.k === 'gold') api.gainGold(F, w.v);
+    else api.status(F, u, w.k, w.v);
+    return wi;
+  }
+  // The item the rival claw goes for next: the rarest, upgraded first, metal
+  // breaks ties, then bin order. Pure (no rng), so the game can mark it on
+  // the player's turn and the telegraph is the truth.
+  api.bestRivalPick = function (F) {
+    let best = null, bs = -1;
+    for (const i of (F && F.bin) || []) {
+      if (isJunk(i) || i.frozen) continue;
+      const d = itemDef(i.id);
+      const s = num(RAR[d.rarity], 1) * 10 + (i.plus ? 5 : 0) + (tagHas(d, 'metal') ? 3 : 0);
+      if (s > bs) { bs = s; best = i; }
+    }
+    return best;
+  };
+  // After a rival's move its own claw grabs the rarest item into its case
+  // (the belly rules: hiccups and its death give them back; digest 99 means
+  // it keeps them for the fight). Twice once enraged.
+  function bestAfterAct(F, e) {
+    if (!e || !e.def || !e.def.rival || !e.alive || F.phase === 'over' || F.player.hp <= 0) return;
+    for (let k = e.enraged ? 2 : 1; k > 0; k--) {
+      if (!Array.isArray(e.belly) || e.belly.length >= BELLY_MAX) { text(F, e, 'CASE FULL'); return; }
+      if (playable(F) <= BEST_FLOOR) return;
+      const inst = api.bestRivalPick(F);
+      if (!inst) return;
+      emit(F, { t: 'binRival', idx: F.enemies.indexOf(e), inst });
+      eat(F, e, inst);
+    }
+  }
+  // The rival claw rides on every action: the telegraph says so.
+  function bestRide(e) {
+    if (!e || !e.def || !e.def.rival || !e.alive) return '';
+    return e.enraged ? 'then its claw grabs your 2 rarest items' : 'then its claw grabs your rarest item';
+  }
+  function bestIntent(e, m) {
+    const n = Math.max(1, num(m && m.n, 1) | 0);
+    switch (m && m.k) {
+      case 'tickle': return 'Tickles your claw (it wiggles next turn)';
+      case 'glue': return 'Slimes the bin (sticky next turn)';
+      case 'ceiling': return 'Magnetizes the lid (metal floats up)';
+      case 'plow': return 'Plows your pile to the far wall';
+      case 'vanish': return `Turns ${n} items invisible`;
+      case 'bury': return n > 1 ? `Buries ${n} items under the floor` : 'Buries an item under the floor';
+      case 'wheel': return 'Spins the prize wheel';
+      default: return '';
+    }
+  }
+  api.BEST_KINDS = BEST_KINDS;
+  api.BEST_WHEEL = BEST_WHEEL;
+  api.BEST_FLOOR = BEST_FLOOR;
+  api.bestRide = bestRide;
+  /* ============================================================ end BESTIARY */
 
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).
