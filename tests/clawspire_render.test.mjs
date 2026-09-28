@@ -1914,6 +1914,109 @@ if (HAS_DATA) {
   });
 }
 
+// ---------------------------------------------------------------- WIN (round 12): Winter Wonderclaw
+{
+  const api = boot({ only: ['util', 'art', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, Wn = R.sea.win;
+  const cab = { w: 480, h: 390, frame: 30, chuteW: 64, dividerH: 0.45, railY: 26 };
+  h.test('winter: the title, the map, the arena and the cabinet in winter; animated; nothing out of season', () => {
+    for (const t of [0, 1.7, 33.3]) {
+      drawCheck(`winter title t${t}`, (c) => R.sea.title(c, 540, 960, t, 'winter'));
+      drawCheck(`winter map t${t}`, (c) => R.sea.map(c, 0, 172, 540, 768, t, 'winter'));
+      drawCheck(`winter sky t${t}`, (c) => R.sea.sky(c, 540, 70, 380, t, 'winter'));
+      drawCheck(`winter cabinet t${t}`, (c) => R.sea.cab(c, 30, 410, cab, { t }, 'winter'));
+      for (let s = 0; s < 3; s++) drawCheck(`winter prop ${s} t${t}`, (c) => R.sea.prop(c, 100, 100, 8, t, 'winter', s));
+    }
+    const lit = drawCheck('winter cabinet with its lights', (c) => R.sea.cab(c, 30, 410, cab, { t: 1 }, 'winter'));
+    for (const st of [{ skinned: true }, { party: 1 }, { alarm: 1 }]) h.ok(drawCheck('winter cabinet ' + Object.keys(st)[0], (c) => R.sea.cab(c, 30, 410, cab, Object.assign({ t: 1 }, st), 'winter')).paints < lit.paints, 'the fairy lights step aside for ' + Object.keys(st)[0]);
+    const tw = new Set();
+    for (const t of [0.2, 1.1, 2.3, 3.9, 5.2]) tw.add(fingerprint(drawCheck('twinkle ' + t, (c) => Wn.garland(c, 0, 540, 80, 20, 3, 22, t, 4))));
+    h.ok(tw.size >= 3, `the fairy lights twinkle (${tw.size} looks in 5 frames)`);
+    h.ok([0, 1, 2].every(k => Array.from({ length: 30 }, (_, i) => Wn.twinkle(i * 3 + k, 1.3)).some(Boolean)), 'every colour of bulb lights up');
+    h.ok(fingerprint(drawCheck('snowman prop', (c) => R.sea.prop(c, 100, 100, 8, 1, 'winter', 0))) !== fingerprint(drawCheck('cottage prop', (c) => R.sea.prop(c, 100, 100, 8, 1, 'winter', 1))), 'snowmen and cottages on the map');
+    h.ok(fingerprint(drawCheck('winter title a', (c) => R.sea.title(c, 540, 960, 1, 'winter'))) !== fingerprint(drawCheck('winter title b', (c) => R.sea.title(c, 540, 960, 2.6, 'winter'))), 'the snow falls, the aurora ripples');
+    for (const fn of [(c) => Wn.title(c, 540, 960, 1), (c) => Wn.cab(c, R.cabCfg ? R.cabCfg(cab) : Object.assign({}, cab), {}, 1, true), (c) => Wn.map(c, 0, 172, 540, 768, 1)]) drawCheck('winter part', fn);
+  });
+  h.test('winter: the costumes, the winter hats and Krampus', () => {
+    const E = D.ENEMIES;
+    for (const id of ['rat_reindeer', 'slime_snowman', 'goblin_elf', 'krampus']) {
+      for (const st of [{}, { hurt: 0.6 }, { attack: 0.5 }, { dead: 0.5 }, { frozen: true }, { chilled: true }, { windup: 0.7, enraged: true }]) drawCheck(`${id} ${Object.keys(st).join(',') || 'idle'}`, (c) => R.enemy(c, E[id], 200, 300, 1, 1.3, st));
+    }
+    for (const [base, cos] of [['rat', 'rat_reindeer'], ['slime', 'slime_snowman'], ['goblin', 'goblin_elf']]) {
+      const a = drawCheck(base, (c) => R.enemy(c, E[base], 200, 300, 1, 1.3, {})), b = drawCheck(cos, (c) => R.enemy(c, E[cos], 200, 300, 1, 1.3, {}));
+      h.ok(b.paints > a.paints, `${cos} wears a costume over the ${base}`);
+    }
+    const goat = Object.assign({}, E.krampus, { look: undefined, sig: undefined });
+    h.ok(fingerprint(drawCheck('goat', (c) => R.enemy(c, goat, 200, 300, 1, 1.3, {}))) !== fingerprint(drawCheck('krampus', (c) => R.enemy(c, E.krampus, 200, 300, 1, 1.3, {}))), 'Krampus has his own drawing, not his art key\'s');
+    const box = R.enemyBox(E.krampus, 1);
+    h.ok(box.w > 120 && box.h > 160, `his body box is his own (${box.w} x ${box.h})`);
+    for (const hat of ['elf', 'antlers']) {
+      const plain = drawCheck('bat', (c) => R.enemy(c, E.bat, 200, 300, 1, 1, {}));
+      const hatted = drawCheck('bat in ' + hat, (c) => R.enemy(c, Object.assign({}, E.bat, { seaHat: hat }), 200, 300, 1, 1, {}));
+      h.ok(hatted.paints > plain.paints, `a ${hat} hat on a bat`);
+    }
+    for (const t of [0.3, 1.2, 2.1]) drawCheck('vs card of Krampus t' + t, (c) => R.vsCard(c, 540, 960, { t, dur: 2.3, boss: false, title: 'ELITE', name: E.krampus.name, taunt: E.krampus.taunt, def: E.krampus, charId: 'knight', color: E.krampus.color, now: t }));
+  });
+  h.test('winter: the advent tile, the unwrapping at every beat and gift, the winter items', () => {
+    const lit = drawCheck('advent hex lit', (c) => R.hex(c, 60, 60, 46, { type: 'advent', revealed: true, q: 1, r: 2 }, { t: 1, orient: 'v' }));
+    const dark = drawCheck('advent hex known in the dark', (c) => R.hex(c, 60, 60, 46, { type: 'advent', revealed: false, known: true, q: 1, r: 2 }, { t: 1, orient: 'v' }));
+    const treat = drawCheck('treat hex', (c) => R.hex(c, 60, 60, 46, { type: 'treat', revealed: true, q: 1, r: 2 }, { t: 1, orient: 'v' }));
+    h.ok(fingerprint(lit) !== fingerprint(treat) && dark.paints > 0, 'the advent present has its own icon, and a silhouette in the dark');
+    const outs = [null, { kind: 'treat', k: 'flakes', day: 3, candy: 9 }, { kind: 'treat', k: 'item', day: 6, big: true, id: 'hot_cocoa' }, { kind: 'treat', k: 'gold', day: 9, gold: 14 }, { kind: 'treat', k: 'capsule', day: 11, tier: 'c' }, { kind: 'treat', k: 'relic', day: 18, id: 'warm_scarf' }];
+    const prints = new Set();
+    for (const out of outs) for (const [tugs, tug, open, rev] of [[0, 0, 0, 0], [2, 0.8, 0, 0], [3, 0, 0.5, 0], [3, 0, 1, 0.3], [3, 0, 1, 1]]) {
+      const st = { t: 1.4, tug, tugs, open, reveal: rev, out: open ? out : null, day: out ? out.day : 5, prize: out && out.id ? (D.ITEMS[out.id] || D.RELICS[out.id]) : null };
+      prints.add(fingerprint(drawCheck(`gift ${out ? out.k : 'wrapped'} tugs ${tugs} open ${open} reveal ${rev}`, (c) => R.sea.gift(c, 540, 960, st))));
+    }
+    h.ok(prints.size >= 15, `the present looks different at every beat and gift (${prints.size})`);
+    for (const day of [1, 12, 24]) drawCheck('calendar on door ' + day, (c) => R.sea.gift(c, 540, 960, { t: 2, day }));
+    drawCheck('gift, null state', (c) => R.sea.gift(c, 540, 960, null));
+    let threw = null;
+    try { R.sea.gift(seqCtx().ctx, 540, 960, { t: NaN, open: 'x', reveal: -3, day: 99 }); } catch (e) { threw = e; }
+    h.ok(!threw, 'junk state never throws');
+    const fps = new Set();
+    const ids = D.SEASONS.winter.items.concat(['win_snowball', 'win_coal']);
+    for (const id of ids) {
+      const def = D.ITEMS[id];
+      h.ok(typeof R.pol.SIL[id] === 'function' && Object.keys(R.pol.SIL).indexOf(id) < 0, id + ': a drawing of its own, kept out of the year-round list');
+      for (const o of [{}, { plus: true }, { frozen: true }, { glow: '#ffc94d' }]) drawCheck(`item ${id} ${Object.keys(o).join(',') || 'plain'}`, (c) => R.item(c, def, 50, 50, 0.4, 1, o));
+      const { ctx, stat } = seqCtx();
+      R.pol.art(ctx, def, {});
+      fps.add(fingerprint(stat));
+      for (const layer of ['back', 'front', 'top']) {
+        const s2 = seqCtx();
+        let thr = null;
+        try { R.itemFx(s2.ctx, def, 50, 50, 0.3, 1, { t: 1, mat: api.PHYS.materialOf(def), fuse: 1, crack: 1 }, layer); } catch (e) { thr = e; }
+        h.ok(!thr && s2.stat.save === s2.stat.restore && !s2.stat.nan.length, `itemFx ${id} ${layer}: clean`);
+      }
+    }
+    h.eq(fps.size, ids.length, 'every winter item draws differently');
+  });
+  h.test('winter: the Snowflake Stand\'s looks on the cabinet, the claw, the marquee, the crawlers and the trail', () => {
+    const prints = new Set();
+    for (const id of D.WIN_COSMETIC_IDS) prints.add(fingerprint(drawCheck('thumb ' + id, (c) => R.vault.thumb(c, id, 50, 50, 90, 0.8))));
+    h.eq(prints.size, D.WIN_COSMETIC_IDS.length, 'every winter prize has its own thumbnail');
+    const ginger = drawCheck('gingerbread cabinet', (c) => R.cabinetBack(c, 30, 410, cab, { t: 1, act: 1, skin: 'skin_sea_ginger' }));
+    h.ok(fingerprint(ginger) !== fingerprint(drawCheck('frosted cabinet', (c) => R.cabinetBack(c, 30, 410, cab, { t: 1, act: 1, skin: 'skin_sea_frost' }))), 'the Gingerbread House is a cabinet of its own');
+    const mq = drawCheck('festive marquee', (c) => R.cabinet(c, 30, 410, cab, { t: 1, act: 1, mqId: 'mq_sea_festive' }));
+    h.ok(fingerprint(mq) !== fingerprint(drawCheck('classic marquee', (c) => R.cabinet(c, 30, 410, cab, { t: 1, act: 1, mqId: 'mq_classic' }))), 'MERRY CLAWMAS on the marquee');
+    const on = [], offs = [];
+    for (let k = 0; k < 20; k++) { const v = R.vault.bulbOn('sea_twinkle', k, 1.3, 0, 3); (v ? on : offs).push(k); }
+    h.ok(on.length > 5 && offs.length > 1, `the festive bulbs twinkle at random (${on.length} lit of 20)`);
+    h.ok([0, 1, 2, 3, 4].some(k => [0.2, 0.9, 1.6, 2.4].some(t => R.vault.bulbOn('sea_twinkle', k, t, 0, 3) !== R.vault.bulbOn('sea_twinkle', k, t + 0.5, 0, 3))), '...and change over time');
+    for (const ch of ['knight', 'alchemist', 'rogue', 'gambler', 'engineer', 'bubbler']) {
+      const fit = D.seaCosmetics('winter', 'outfit', ch)[0];
+      const a = drawCheck(ch + ' in a scarf', (c) => R.vault.withOutfit(c, ch, 60, 60, 80, 1, fit));
+      const b = drawCheck(ch + ' bare', (c) => R.vault.withOutfit(c, ch, 60, 60, 80, 1, null));
+      h.ok(a.paints > b.paints, ch + ': scarf and earmuffs drawn');
+    }
+    const pts = [];
+    for (let i = 0; i < 12; i++) pts.push({ x: 20 + i * 12, y: 60 + Math.sin(i) * 8, a: i * 0.15, s: i * 1.3 });
+    h.ok(fingerprint(drawCheck('flake trail', (c) => R.vault.trail(c, pts, pts.length, 1, 'trail_sea_flakes', 46))) !== fingerprint(drawCheck('snowfall trail', (c) => R.vault.trail(c, pts, pts.length, 1, 'trail_snow', 46))), 'the Snowflake Trail is not the old Snowfall');
+    h.ok(fingerprint(drawCheck('peppermint claw', (c) => R.vault.thumb(c, 'paint_sea_cane', 50, 50, 90, 0.4))) !== fingerprint(drawCheck('candy cane claw', (c) => R.vault.thumb(c, 'paint_candy', 50, 50, 90, 0.4))), 'Peppermint Swirl is not the old Candy Cane paint');
+  });
+}
+
 // ---------------------------------------------------------------- QA (round 7): the intent bubble reads the real numbers
 h.test('qa: the intent bubble: the real hit, a multi-hit total over "hit x n", a charge\'s unleash; the old bubble without numbers', () => {
   const api = boot({ only: ['util', 'data', 'combat', 'render'] });
@@ -2689,6 +2792,112 @@ h.test('SCHOOL: the chalkboard, Professor Pincher, stars, the scoreboard, the ta
   drawCheck('diploma reduced', c => Rs.diploma(c, 50, 516, 440, 250, { name: 'X', t: 1, reduced: true }));
   drawCheck('diploma with nothing', c => Rs.diploma(c, 0, 0, 200, 120, null));
   h.eq(Rs.E.n - e0, 0, 'no school draw fell over inside its try ' + Rs.E.last);
+});
+
+// ---------- round 12 (LEG): legends: the crest, the fight's looks, the animated cabinets
+// A context that records every call with its rounded numbers and every style
+// and text it is given, so a sprite that moved (or changed colour) reads differently.
+function argCtx() {
+  const log = [];
+  const r = (v) => (typeof v === 'number' ? Math.round(v * 10) / 10 : typeof v === 'string' ? v : '');
+  const ctx = new Proxy({ canvas: { width: 540, height: 960 } }, {
+    get(o, p) {
+      if (p === 'log') return log;
+      if (p === 'canvas') return o.canvas;
+      if (p === 'measureText') return () => ({ width: 40 });
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (typeof p !== 'string' || p === 'then') return o[p];
+      if (p in o) return o[p];
+      return (...a) => { log.push(p + '(' + a.map(r).join(',') + ')'); };
+    },
+    set(o, p, v) { if (p === 'fillStyle' || p === 'strokeStyle' || p === 'globalAlpha') log.push(p + '=' + r(v)); o[p] = v; return true; },
+  });
+  return ctx;
+}
+const argPrint = (fn) => { const c = argCtx(); let bad = null; try { fn(c); } catch (e) { bad = e; } h.ok(!bad, 'arg draw does not throw ' + (bad || '')); return c.log.join(';'); };
+h.test('LEG: the animated cabinets draw live, hold still under reduced motion, and keep the cache bounded', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, L = R.leg;
+  h.ok(L && typeof L.anim === 'function', 'RENDER.leg');
+  const cfg = { w: 480, h: 390, frame: 30, chuteW: 64, dividerH: 0.45, railY: 26 };
+  const animated = D.vaultList('skin').filter(id => L.animOf(D.COSMETICS[id]));
+  for (const id of ['skin_space', 'skin_lava', 'skin_haunted', 'skin_jungle', 'skin_gold', 'skin_rainbow'].concat(D.LEG.SKINS)) h.ok(animated.includes(id), id + ' animates');
+  for (const id of ['skin_classic', 'skin_candy', 'skin_wood', 'skin_chrome']) h.ok(!animated.includes(id), id + ' stays still');
+  // the live layer on its own (the cabinet's own bulbs and chute glow move with t anyway)
+  const lay = (id, t, red) => { R.fx.reduced = !!red; const s = argPrint(c => L.anim(c, cfg, D.COSMETICS[id], t, false)); R.fx.reduced = false; return s; };
+  const moving = new Map();
+  for (const id of animated) {
+    const a = lay(id, 1.1), b = lay(id, 2.35);
+    h.ok(a.length > 40 && a !== b, id + ': the live layer moves between frames');
+    moving.set(id, a);
+    h.eq(lay(id, 1.1, true), lay(id, 7.9, true), id + ': reduced motion holds one still pose');
+    drawCheck(id + ' cabinet', c => { R.cabinetBack(c, 30, 410, cfg, { t: 2.1, act: 1, skin: id }); R.cabinetFront(c, 30, 410, cfg, { t: 2.1, skin: id }); });
+    R.acc.set({ noFlash: true });
+    drawCheck(id + ' reduced flashing', c => R.cabinetBack(c, 30, 410, cfg, { t: 3.3, act: 2, skin: id }));
+    R.acc.set({ noFlash: false });
+    drawCheck(id + ' under the alarm and the party', c => R.cabinetBack(c, 30, 410, cfg, { t: 3.3, act: 3, skin: id, alarm: 1, party: 1, marquee: 'JACKPOT!' }));
+    drawCheck(id + ' thumbnail', c => R.vault.thumb(c, id, 50, 50, 100, 2.2));
+  }
+  h.eq(new Set(moving.values()).size, moving.size, 'every animated cabinet draws its own');
+  h.eq(lay('skin_classic', 1.1), '', 'the classic cabinet has no live layer (the old look exactly)');
+  // the cache: a fake document; 60 frames of every animated skin build one layer each, never more than the cap
+  const mk = () => new Proxy({ calls: [] }, { get(o, p) {
+    if (p === 'getTransform') return () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+    if (p === 'measureText') return () => ({ width: 10 });
+    if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+    if (p === 'calls') return o.calls;
+    if (typeof p !== 'string' || p === 'then') return o[p];
+    return (...a) => { o.calls.push(p); };
+  }, set(o, p, v) { o[p] = v; return true; } });
+  let built = 0;
+  const doc = api._document, ce0 = doc.createElement;
+  doc.createElement = () => ({ width: 0, height: 0, getContext: () => { built++; return mk(); } });
+  try {
+    R.perf.cabLayer = true;
+    const main = mk();
+    const b0 = built;
+    for (let f = 0; f < 60; f++) R.cabinetBack(main, 30, 410, cfg, { t: f / 60, act: 1, skin: 'skin_space' });
+    const once = built - b0;
+    h.ok(once >= 1 && once <= 4, 'skin_space: 60 frames build its back once (plus a few glow sprites) [' + once + ']');
+    for (const id of animated) for (let f = 0; f < 20; f++) R.cabinetBack(main, 30, 410, cfg, { t: f / 20, act: 1, skin: id });
+    const before = built;
+    for (let f = 0; f < 30; f++) R.cabinetBack(main, 30, 410, cfg, { t: 2 + f / 30, act: 1, skin: animated[animated.length - 1] });
+    h.ok(built - before <= 1, 'the live layers never rebuild the cached back frame to frame');
+  } finally { doc.createElement = ce0; R.perf.cabLayer = true; }
+});
+
+h.test('LEG: the legendary crest, the Hype plate, the peek chip, the black hole, the golden sparkle, the new evolved art', () => {
+  const api = boot({ only: ['util', 'art', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, L = R.leg;
+  for (const id of D.LEG.RELICS) {
+    const def = D.RELICS[id];
+    const a = fingerprint(drawCheck('legendary ' + id, c => R.relicIcon(c, def, 30, 30, 44, 1.2)));
+    const b = fingerprint(drawCheck('as a boss relic ' + id, c => R.relicIcon(c, Object.assign({}, def, { rarity: 'boss' }), 30, 30, 44, 1.2)));
+    h.ok(a !== b, id + ': the crest sets a legendary apart from a boss relic');
+    h.ok(R.relicLive(def, 0), id + ': its medallion is live');
+  }
+  for (const n of [0, 1, 5, 10]) drawCheck('hype ' + n, c => L.hype(c, 40, 830, n, 1.3));
+  const hy = [0, 1, 5, 10].map(n => argPrint(c => L.hype(c, 40, 830, n, 1.3)));
+  h.eq(new Set(hy).size, 4, 'the Hype plate reads every level');
+  const PK = [{ k: 'attack', v: 12, n: 1 }, { k: 'attack', v: 4, n: 3 }, { k: 'block', v: 6, n: 1 }, { k: 'charge', v: 0, n: 1 }, { k: '?', unknown: true }];
+  for (const o of PK) drawCheck('peek ' + JSON.stringify(o), c => L.peek(c, 200, 100, o, 0.7));
+  const pk = PK.map(o => argPrint(c => L.peek(c, 200, 100, o, 0.7)));
+  h.eq(new Set(pk).size, pk.length, 'the peek chip says what comes');
+  h.eq(argPrint(c => L.peek(c, 0, 0, null, 0)).indexOf('fill('), -1, 'no peek, nothing drawn');
+  h.ok(fingerprint(drawCheck('vortex', c => L.vortex(c, 480, 780, 16, 1, 0))) !== fingerprint(drawCheck('vortex flared', c => L.vortex(c, 480, 780, 16, 1, 1))), 'the black hole flares');
+  drawCheck('golden sparkle', c => L.gold(c, 200, 450, 2, 1));
+  // the new evolved items: their own drawings, apart from their bases
+  const prints = new Set();
+  for (const id of D.LEG.EVOS) {
+    const d = D.ITEMS[id], base = D.ITEMS[D.EVOLUTIONS[id].from];
+    const a = fingerprint(drawCheck('evolved ' + id, c => R.pol.art(c, d, {})));
+    const b = fingerprint(drawCheck('base ' + base.id, c => R.pol.art(c, base, {})));
+    h.ok(a !== b, id + ': drawn apart from its base');
+    h.ok(typeof R.evo.ART[id] === 'function', id + ': an EVO_ART drawing');
+    prints.add(a);
+    drawCheck('evolved ' + id + ' in the cabinet', c => { R.item(c, d, 100, 100, 0.4, 1, {}); R.itemFx(c, d, 100, 100, 0.4, 1, { t: 1, mat: { traits: {} } }, 'back'); });
+  }
+  h.eq(prints.size, D.LEG.EVOS.length, 'ten distinct drawings');
 });
 
 h.done();

@@ -44,7 +44,9 @@ const DATA = (() => {
     // 'shatter' | 'fuse' | 'blast', inst, def)
     'onCashOut', 'onEat', 'onMaterial',
     // round 6: the companion pet did a trick in the fight (F, petId)
-    'onPet'];
+    'onPet',
+    // round 12 (LEG): bubbles popped (F, where 'chute' | 'bin', n), after they paid
+    'onBubble'];
   // Engine rules a build-defining relic can bend (relic.rules, merged into
   // F.rules by COMBAT.newFight). See DESIGN.md "Builds and synergies".
   // luck: empty grabs and near misses fill the Luck meter (Lucky Lou's gift);
@@ -52,10 +54,11 @@ const DATA = (() => {
   // turret (CR8, round 8): any crawler builds Mama Mech's turret (Blueprints).
   // bubbles (ROS, round 10): any crawler blows Ms. Bubbles' bubbles (the Foam Machine).
   const RELIC_RULES = ['poisonKeep', 'blockKeep', 'shatter', 'glassBreak', 'amp', 'comboTwice', 'echo', 'luck', 'cashAmp', 'turret', 'bubbles'];
+  // BALANCE (round 12, owner request): fewer rare and legendary reward cards (was 70/25/5/0, 55/33/11/1, 40/38/18/4)
   const RARITY_WEIGHTS = {
-    1: { c: 70, u: 25, r: 5, l: 0 },
-    2: { c: 55, u: 33, r: 11, l: 1 },
-    3: { c: 40, u: 38, r: 18, l: 4 },
+    1: { c: 76, u: 22, r: 2, l: 0 },
+    2: { c: 64, u: 29, r: 6.5, l: 0.5 },
+    3: { c: 52, u: 35, r: 11.5, l: 1.5 },
   };
   // Chance that a reward slot is drawn from the character's own pool.
   const CHAR_BIAS = 0.4;
@@ -79,7 +82,11 @@ const DATA = (() => {
   // hp/dmg multiply every enemy. ramp is the hidden escalation: after every
   // `every` fights of a run, enemies gain +hp/+dmg (as fractions) per step,
   // up to `max` steps. The player never sees the counter.
-  const DIFFICULTY = { hp: 2.0, dmg: 1.8, ramp: { every: 3, hp: 0.12, dmg: 0.12, max: 8 } };   // the owner tunes by hand
+  // BALANCE (round 12, owner request: a skilled player should lose about 70% of runs): was hp 2.0, dmg 1.8,
+  // ramp every 3 fights +12% / +12% up to 8 steps. Now a harder start and a slower, longer ramp, so the
+  // deaths spread over the three acts instead of piling up in act 2. tierDmg: elites and bosses hit 50% harder
+  // on top (normals stay where a starting bin can still beat every one of them; the balance suite guards that).
+  const DIFFICULTY = { hp: 3.1, dmg: 2.6, ramp: { every: 4, hp: 0.1, dmg: 0.1, max: 10 }, tierDmg: { elite: 1.5, boss: 1.5 } };   // the owner tunes by hand
 
   const ECONOMY = {
     startInk: 10,          // bulbs at the start of every act (was 5)
@@ -90,6 +97,9 @@ const DATA = (() => {
     eliteToolChance: 0.35, // a beaten elite hands over a tool this often
     trickle: 2,            // used items that rain back into the bin at every turn start
     binFloor: 6,           // a bin below this at turn start is topped up from the used pile first (then the trickle)
+    // BALANCE (round 12, owner request): gold is earned all the time but a good relic takes a few fights and an elite
+    goldK: 0.7,            // x the gold a won fight pays (the 10-25 roll, +4 an act, x1.6 elite, x2.5 boss); was 1
+    shopK: 1.3,            // x every shop price (items, the relic, a reroll's shelf); Tilt's Price Hike still stacks; was 1
   };
   // The player-facing words for the map's light and its tools: every piece
   // of copy reads them, so the rename lives in one place.
@@ -1115,13 +1125,16 @@ const DATA = (() => {
         atk('slap', 'Slap', 14, 1, 'Slaps for 14'), debuff('ooze', 'Ooze', 'weak', 2, 'Oozes on your gloves (Weak 2)'),
         debuff('fumes', 'Fumes', 'poison', 4, 'Breathes oil fumes (4 Poison)')] },
     // act 2 elites
-    { id: 'ironjaw', name: 'Ironjaw', act: 2, tier: 'elite', hp: [136, 148], art: 'ironjaw', size: 1.2, color: '#7d8590',
+    // (BALANCE round 12: with the harder difficulty dial Ironjaw one-shot a full-hp crawler; hp 136-148 -> 88-98,
+    // Bite 22 -> 11, Gape 46 -> 20, Thorns 4 -> 2 (4 per hit bit a many-prize drop for 40): still the act 2
+    // wall, now one you can block)
+    { id: 'ironjaw', name: 'Ironjaw', act: 2, tier: 'elite', hp: [88, 98], art: 'ironjaw', size: 1.2, color: '#7d8590',
       desc: 'A bear trap that learned to walk. And swallow. Metal goes down easiest.', ai: 'cycle', pattern: [0, 1, 2, 3, 0],
       taunt: 'CLANK. CLANK. CHOMP.',
-      status: { thorns: 4 },
+      status: { thorns: 2 },
       enrage: { name: 'LOCKJAW', text: 'The springs wind all the way tight', str: 3, pattern: [1, 0, 1, 3, 0] },
-      moves: [atk('bite', 'Bite', 22, 1, 'Bites for 22'), gulp('swallow', 'Swallow', 1, 'metal', 'Swallows a metal item from your bin'),
-        buff('clench', 'Clench', 'armor', 1, 'Clenches (+1 Armor)'), mv('gape', 'Gape', 'charge', 'Opens wide (46 next turn)', { v: 46 })] },
+      moves: [atk('bite', 'Bite', 11, 1, 'Bites for 11'), gulp('swallow', 'Swallow', 1, 'metal', 'Swallows a metal item from your bin'),
+        buff('clench', 'Clench', 'armor', 1, 'Clenches (+1 Armor)'), mv('gape', 'Gape', 'charge', 'Opens wide (20 next turn)', { v: 20 })] },
     { id: 'lodestone', name: 'The Lodestone', act: 2, tier: 'elite', hp: [125, 135], art: 'magnet', size: 1.2, color: '#ff2e4a',
       desc: 'A living magnet. Your metal things are very interested in it.', ai: 'cycle', pattern: [0, 1, 2, 4, 3, 4],
       taunt: 'Your sword already agrees with me.',
@@ -2632,6 +2645,7 @@ const DATA = (() => {
     return Object.keys(RELICS).filter(id => {
       const r = RELICS[id];
       if (r.starter || r.rarity === 'event') return false;
+      if (!rarity && r.rarity === 'l') return false;   // (LEG: legendaries only come when asked for by name)
       if (rarity && r.rarity !== rarity) return false;
       return ex.indexOf(id) < 0;
     });
@@ -2649,41 +2663,51 @@ const DATA = (() => {
     NAME: { c: 'Common', u: 'Uncommon', r: 'Rare', l: 'Legendary' },
     COLOR: { c: '#b9b0cc', u: '#2ee6d6', r: '#ff2e88', l: '#ffc94d' },
     // Base tier weights per source. 'counter' capsules have a fixed tier.
+    // BALANCE (round 12, owner request: capsules stay, their contents get smaller). Was normal 62/28/9/1,
+    // bonus 45/37/15/3, elite 20/46/27/7, boss 0/20/58/22, treasure 34/40/22/4; UP 0.16/0.11/0.07; PITY 5.
     WEIGHTS: {
-      normal: { c: 62, u: 28, r: 9, l: 1 },
-      bonus: { c: 45, u: 37, r: 15, l: 3 },      // a jackpot or a tier 3 combo in the fight
-      elite: { c: 20, u: 46, r: 27, l: 7 },
-      boss: { c: 0, u: 20, r: 58, l: 22 },
-      treasure: { c: 34, u: 40, r: 22, l: 4 },
+      normal: { c: 72, u: 22, r: 5.5, l: 0.5 },
+      bonus: { c: 60, u: 30, r: 9, l: 1 },      // a jackpot or a tier 3 combo in the fight
+      elite: { c: 36, u: 44, r: 17, l: 3 },
+      boss: { c: 0, u: 34, r: 56, l: 10 },
+      treasure: { c: 46, u: 38, r: 14, l: 2 },
       counter: { c: 100, u: 0, r: 0, l: 0 },
     },
     // Chance per step that a capsule turns one tier better mid-open; the
     // steps chain (a common can go all the way, rarely).
-    UP: { c: 0.16, u: 0.11, r: 0.07 },
-    PITY: 5,                 // capsules in a row below rare, then the next one turns rare mid-open
+    UP: { c: 0.12, u: 0.08, r: 0.05 },
+    PITY: 8,                 // capsules in a row below rare, then the next one turns rare mid-open
     TAPS: 3, FAST_TAPS: 2, FAST_AFTER: 12,   // taps to crack one; fewer once the player has opened plenty
     // What falls out, by tier (weights). A kind with nothing in stock rerolls to gold.
+    // (BALANCE round 12: far fewer relics, more gold, tickets and plain items. Was c 34/26/20/12/8 gold/item/
+    // tickets/ink/tool; u item 30, gold 16, relic 16, tool 12, maxhp 10, tickets 10, ink 6; r relic 34, item 28,
+    // itemPlus 10, maxhp 10, gold 10, claw 8; l relic 32, item 26, claw 24, maxhp 18.)
     PRIZES: {
-      c: { gold: 34, item: 26, tickets: 20, ink: 12, tool: 8 },
-      u: { item: 30, gold: 16, relic: 16, tool: 12, maxhp: 10, tickets: 10, ink: 6 },
-      r: { relic: 34, item: 28, itemPlus: 10, maxhp: 10, gold: 10, claw: 8 },
-      l: { relic: 32, item: 26, claw: 24, maxhp: 18 },
+      c: { gold: 36, item: 26, tickets: 22, ink: 10, tool: 6 },
+      u: { item: 30, gold: 24, tickets: 18, relic: 6, tool: 10, maxhp: 6, ink: 6 },
+      r: { item: 26, gold: 24, relic: 16, tickets: 14, itemPlus: 8, maxhp: 6, claw: 6 },
+      l: { relic: 24, item: 22, gold: 20, claw: 18, maxhp: 16 },
     },
-    RELIC_RAR: { c: ['c'], u: ['c', 'u'], r: ['u', 'r'], l: ['r', 'boss'] },
-    ITEM_RAR: { c: ['c'], u: ['u'], r: ['r'], l: ['l'] },
-    GOLD: { c: [12, 25], u: [30, 50], r: [70, 100], l: [120, 160] },
+    RELIC_RAR: { c: ['c'], u: ['c', 'u'], r: ['u', 'r'], l: ['r', 'boss', 'l'] },   // (LEG: a legendary capsule may hold a legendary relic)
+    // (BALANCE round 12: an item prize draws from its tier and the one below; was c/u/r/l each its own tier.
+    // Capsule gold was c 12-25, u 30-50, r 70-100, l 120-160.)
+    ITEM_RAR: { c: ['c'], u: ['c', 'u'], r: ['u', 'r'], l: ['r', 'l'] },
+    GOLD: { c: [8, 16], u: [15, 28], r: [30, 45], l: [50, 80] },
     TICKET_PRIZE: { c: [8, 14], u: [18, 28], r: [30, 40], l: [50, 60] },
     INK: { c: 2, u: 3, r: 4, l: 5 },
     MAXHP: { c: 2, u: 3, r: 6, l: 10 },
     // Arcade tickets a won fight spits out, and the gold bonus lines of the
     // payout screen (per jackpot, per combo tier, flawless, speedy, overkill).
-    TICKETS: { normal: 4, elite: 8, boss: 15, jackpot: 3, combo: 1, flawless: 5, speedy: 3, overkillPer: 5, overkillMax: 4 },
-    BONUS_GOLD: { jackpot: 4, combo: 2, flawless: 8, speedy: 5, overkillPer: 3, overkillMax: 8 },
+    // (BALANCE round 12: was TICKETS normal 4, elite 8, boss 15, jackpot 3, combo 1, flawless 5, speedy 3,
+    // overkill 1 per 5 up to 4; BONUS_GOLD jackpot 4, combo 2, flawless 8, speedy 5, overkill 1 per 3 up to 8.)
+    TICKETS: { normal: 3, elite: 6, boss: 12, jackpot: 1, combo: 0, flawless: 3, speedy: 2, overkillPer: 6, overkillMax: 2 },
+    BONUS_GOLD: { jackpot: 1, combo: 1, flawless: 3, speedy: 2, overkillPer: 4, overkillMax: 3 },
     SPEEDY_TURNS: 2,         // won by the end of this turn
     OVERKILL_MIN: 5,
-    DOUBLE: 1 / 20,          // the lucky DOUBLE REWARD roulette
-    // Prize counter prices, in tickets.
-    PRICE: { cap: { c: 12, u: 28, r: 55, l: 110 }, item: { c: 14, u: 24, r: 40, l: 70 }, maxhp: 30, ink: 10, tool: 18 },
+    BONUS_P: 0.35,           // (BALANCE round 12) the chance a fight with a jackpot or a tier 3 combo drops a bonus capsule (was always)
+    DOUBLE: 1 / 30,          // the lucky DOUBLE REWARD roulette (was 1 / 20)
+    // Prize counter prices, in tickets (BALANCE round 12: was cap 12 / 28 / 55 / 110, item 14 / 24 / 40 / 70, max hp 30, bulbs 10, tool 18).
+    PRICE: { cap: { c: 30, u: 70, r: 130, l: 260 }, item: { c: 24, u: 44, r: 75, l: 130 }, maxhp: 45, ink: 16, tool: 28 },
   };
   const capIdx = (t) => Math.max(0, CAP_TIERS.indexOf(t));
   const capNext = (t) => CAP_TIERS[Math.min(3, capIdx(t) + 1)];
@@ -4082,11 +4106,15 @@ const DATA = (() => {
     winter: {
       id: 'winter', name: 'Winter Wonderclaw', icon: '❄', from: [12, 10], to: [1, 6], col: '#8dfff5', col2: '#ff2e4a',
       cur: { id: 'flakes', name: 'snowflakes', one: 'snowflake', icon: '❄', col: '#bff4ff' },
-      blurb: 'Snow on the machine, frost on the glass, snowflakes in every fight for the Snowflake Stand in the Prize Vault.',
+      blurb: 'Costumed monsters, advent calendars on every map, Krampus on the prowl, snowflakes in every fight. Spend them at the Snowflake Stand in the Prize Vault.',
       counter: 'Snowflake Stand', look: 'snowy', music: 'jingle',
-      items: [], relics: [], costumes: {}, elite: null, tile: null,
-      cosmetics: ['skin_sea_frost', 'paint_sea_holly'],
-      hats: ['santa'],
+      // WIN (round 12): the winter content, defined in the WIN block after /SEASON
+      items: ['bag_snowball', 'candy_cane', 'hot_cocoa', 'present_box', 'ornament', 'fruitcake', 'jingle_bell', 'yule_log'],
+      relics: ['win_stocking', 'mistletoe', 'sleigh_bells', 'warm_scarf'],
+      costumes: { rat: 'rat_reindeer', slime: 'slime_snowman', goblin: 'goblin_elf' }, elite: 'krampus', tile: 'advent',
+      cosmetics: ['skin_sea_frost', 'skin_sea_ginger', 'paint_sea_holly', 'paint_sea_cane', 'mq_sea_festive', 'trail_sea_flakes',
+        'fit_knight_scarf', 'fit_alch_scarf', 'fit_rogue_scarf', 'fit_lou_scarf', 'fit_mama_scarf', 'fit_bub_scarf'],
+      hats: ['santa', 'elf', 'antlers'],
     },
   };
   const SEASON_IDS = Object.keys(SEASONS);
@@ -4154,7 +4182,7 @@ const DATA = (() => {
     const bag = (v) => { const out = {}; if (v && typeof v === 'object' && !Array.isArray(v)) for (const k in v) out[k] = num(v[k]); return out; };
     const pv = typeof src.preview === 'string' && (src.preview === 'off' || SEASONS[src.preview]) ? src.preview : '';
     return { preview: pv, wallet: bag(src.wallet), earned: bag(src.earned), spent: bag(src.spent), knocks: num(src.knocks), king: num(src.king),
-      runs: bag(src.runs), seen: bag(src.seen) };
+      runs: bag(src.runs), seen: bag(src.seen), adv: winAdvFix(src.adv) };   // (WIN: the advent calendar)
   }
   // Currency a won fight drops: by tier, plus the costumed monsters beaten and the season's elite.
   function seaEarn(tier, costumed, king) {
@@ -4303,6 +4331,176 @@ const DATA = (() => {
       (c) => (((c.meta && c.meta.sea) || {}).knocks | 0) >= 5, { goal: 5, val: (c) => ((c.meta && c.meta.sea) || {}).knocks | 0, season: 'halloween' }),
   ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
   // ================================================================ /SEASON
+
+  // ================================================================ WIN (round 12: Winter Wonderclaw)
+  /* The winter event's content (DESIGN.md "Winter Wonderclaw (round 12)") on
+     the round 7 season system: eight items (plus the Packed Snowball filler
+     their sack holds), a Lump of Coal (Krampus's junk), four relics, three
+     costumed monsters, Krampus (the winter elite), the advent calendar's
+     gifts and the Snowflake Stand's cosmetics. Everything goes in through
+     seaAdd (non-enumerable), so the year-round tables, pools, capsules and
+     shelves never list it. Pure: the advent roll reads only its rng. */
+  const WIN_K = {
+    advMax: 24,              // the calendar's last door (Christmas Eve); later doors keep its gift size
+    // an advent door's gift by weight: mostly snowflakes and a little gold, rarely more (loot stays modest)
+    adv: { flakes: 44, gold: 28, item: 20, capsule: 5, relic: 3 },
+    advFlakes: [4, 7],       // every door's snowflakes, +1 per 3 doors opened before it (at most +6)
+    advGold: [8, 14],        // a gold gift, +1 per 2 doors opened before it, +4 an act after the first
+    advCapsuleDay: 8,        // no capsule behind the doors before this one
+    advRelicDay: 16,         // no relic behind the doors before this one
+    advBig: 6,               // every 6th door is a bigger present: +6 snowflakes
+    giftU: 0.2,              // the Present Box unwraps an uncommon item this often (else a common one)
+  };
+  // The profile's advent calendar (meta.sea.adv): the season year it counts for and the doors opened.
+  function winAdvFix(o) {
+    const src = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+    return { y: typeof src.y === 'string' ? src.y.slice(0, 12) : '', n: Math.max(0, Math.min(99, Math.floor(+src.n || 0))) };
+  }
+  /* An advent door: rng, day (1..24, the door's number on the calendar), act,
+     ctx {items: common item ids, relics: ids still to win}. -> {kind: 'treat',
+     k, candy (snowflakes), day, big?, gold?, id?, tier?}. Every door carries
+     snowflakes; the later the door, the more (bigger if you opened the
+     ones before it); capsules and relics are rare and never early. */
+  function winAdventRoll(rng, day, act, ctx) {
+    ctx = ctx || {};
+    const K = WIN_K, d = Math.max(1, Math.min(K.advMax, Math.floor(+day || 1))), prev = d - 1;
+    const w = Object.assign({}, K.adv);
+    const items = (ctx.items || []).filter((id) => ITEMS[id]);
+    const relics = (ctx.relics || []).filter((id) => RELICS[id]);
+    if (!items.length) w.item = 0;
+    if (!relics.length || d < K.advRelicDay) w.relic = 0;
+    if (d < K.advCapsuleDay) w.capsule = 0;
+    const k = wpick(rng, w);
+    const [f0, f1] = K.advFlakes;
+    const out = { kind: 'treat', k, day: d, candy: f0 + Math.floor(rng() * (f1 - f0 + 1)) + Math.min(6, Math.floor(prev / 3)) };
+    if (d % K.advBig === 0) { out.big = true; out.candy += 6; }
+    if (k === 'flakes') out.candy += 4;
+    if (k === 'gold') out.gold = K.advGold[0] + Math.floor(rng() * (K.advGold[1] - K.advGold[0] + 1)) + Math.floor(prev / 2) + 4 * (Math.max(1, act | 0) - 1);
+    if (k === 'item') out.id = items[Math.floor(rng() * items.length)];
+    if (k === 'capsule') out.tier = 'c';
+    if (k === 'relic') out.id = relics[Math.floor(rng() * relics.length)];
+    return out;
+  }
+  // The common items an advent door (or a Present Box, uncommons too) can hold: the season's commons and the shared pool.
+  function winGiftPool(char, rarity) {
+    const r = rarity || 'c';
+    const sea = SEASONS.winter.items.filter((id) => ITEMS[id] && ITEMS[id].rarity === r && !ITEMS[id].bag);
+    return sea.concat(pool(r, char || null).filter((id) => !ITEMS[id].bag && !ITEMS[id].season));
+  }
+  // ---- the winter items (the Present Box unwraps, the Packed Snowball pays a snowflake, the ornament is glass)
+  const WIN_ITEMS = [
+    { id: 'win_snowball', name: 'Packed Snowball', rarity: 'c', cost: 15, season: 'winter', sea: { candy: 1 },
+      tags: ['small'], shape: circle(10), density: 0.8, friction: 0.35, restitution: 0.1,
+      color: '#f4fbff', color2: '#9fd8ff', art: 'snowball',
+      fx: [dmg(2), status('chill', 1)], plus: { fx: [dmg(3), status('chill', 2)] }, text: 'Deal {v} damage and apply {v2} Chill. In season, every one you land is a snowflake.' },
+    { id: 'bag_snowball', name: 'Snowball Sack', rarity: 'c', cost: 30, season: 'winter',
+      tags: [], shape: circle(14), density: 1.0, friction: 0.5,
+      color: '#c8b08a', color2: '#d81f3a', art: 'orb', target: 'none', exhaust: true,
+      bag: ['win_snowball', 'win_snowball', 'win_snowball'], fx: [],
+      text: 'Adds 3 Packed Snowballs to your bin. Rolled fresh this morning.' },
+    { id: 'candy_cane', name: 'Candy Cane', rarity: 'u', cost: 60, season: 'winter',
+      tags: ['weapon', 'food'], shape: box(44, 10), density: 0.9, friction: 0.4,
+      color: '#ffffff', color2: '#e8203a', art: 'wand',
+      fx: [dmg(4, 2), heal(1)], plus: { fx: [dmg(5, 2), heal(2)] }, text: 'Deal {v} damage {n} times and heal {v2}. Sharpened peppermint.' },
+    { id: 'hot_cocoa', name: 'Hot Cocoa', rarity: 'c', cost: 40, season: 'winter',
+      tags: ['potion', 'food'], shape: poly([[-12, -12], [12, -12], [10, 12], [-10, 12]]), density: 1.0, friction: 0.5,
+      color: '#7a4a2a', color2: '#fff4e0', art: 'potion', target: 'self',
+      fx: [heal(5), cleanse()], plus: { fx: [heal(8), cleanse()] }, text: 'Heal {v} and wash off your debuffs. Marshmallows included.' },
+    { id: 'present_box', name: 'Present Box', rarity: 'u', cost: 55, season: 'winter', sea: { gift: 1 },
+      tags: ['light'], shape: box(30, 28), density: 0.7, friction: 0.55,
+      color: '#d81f3a', color2: '#ffc94d', art: 'dice', target: 'self',
+      fx: [block(3)], plus: { fx: [block(5)] }, text: 'Gain {v} Block, then it unwraps into a random item that joins your bin this fight.' },
+    { id: 'ornament', name: 'Glass Ornament', rarity: 'u', cost: 65, season: 'winter',
+      tags: ['glass', 'magic'], shape: circle(13), density: 0.6, friction: 0.35, restitution: 0.25,
+      color: '#2e9cff', color2: '#ffc94d', art: 'orb', target: 'all',
+      fx: [dmg(5), status('vuln', 1, 'all')], plus: { fx: [dmg(7), status('vuln', 2, 'all')] },
+      text: 'Deal {v} damage and apply {v2} Vulnerable to ALL enemies. Glass: it floats down gently.' },
+    { id: 'fruitcake', name: 'Fruitcake', rarity: 'c', cost: 20, season: 'winter',
+      tags: ['heavy', 'food'], shape: SHAPES.bread, density: 2.6, friction: 0.8,
+      color: '#7a3f1f', color2: '#e8203a', art: 'bread', target: 'self',
+      fx: [heal(3), block(3)], plus: { fx: [heal(4), block(5)] }, text: 'Heal {v} and gain {v2} Block. Weighs as much as an anvil. Nobody has ever finished one.' },
+    { id: 'jingle_bell', name: 'Jingle Bell', rarity: 'r', cost: 95, season: 'winter',
+      tags: ['magic', 'light', 'metal'], shape: circle(11), density: 0.7, friction: 0.4, restitution: 0.2,
+      color: '#ffc94d', color2: '#d81f3a', art: 'ring', target: 'all',
+      fx: [status('weak', 2, 'all'), status('chill', 2, 'all')], plus: { fx: [status('weak', 3, 'all'), status('chill', 3, 'all')] },
+      text: 'Apply {v} Weak and {v2} Chill to ALL enemies. It floats, jingling all the way.' },
+    { id: 'yule_log', name: 'Yule Log', rarity: 'r', cost: 100, season: 'winter',
+      tags: ['heavy'], shape: box(48, 18), density: 1.4, friction: 0.6,
+      color: '#8a5a2e', color2: '#ff8a2e', art: 'torch', target: 'all',
+      fx: [status('burn', 4, 'all'), block(4)], plus: { fx: [status('burn', 6, 'all'), block(6)] },
+      text: 'Apply {v} Burn to ALL enemies and gain {v2} Block. Cosy for you, not for them.' },
+    // Krampus's junk: heavy, sooty, useless
+    { id: 'win_coal', name: 'Lump of Coal', rarity: 'junk', cost: 0, season: 'winter',
+      tags: ['junk', 'heavy'], shape: poly([[-12, -5], [-4, -11], [9, -9], [13, 2], [6, 10], [-9, 9]]), density: 2.2, friction: 0.75,
+      color: '#2a2628', color2: '#ff6a3a', art: 'rock', target: 'none', exhaust: true,
+      fx: [], text: 'For the naughty. Heavy, sooty, useless. Grab it out to clear it for this fight.' },
+  ];
+  for (const d of WIN_ITEMS) {
+    const def = Object.assign({ density: 1, friction: 0.5, restitution: 0.1, target: 'enemy', tags: [] }, d);
+    if (def.plus) def.plus = Object.assign({ name: def.name + '+' }, def.plus);
+    seaAdd(ITEMS, def);
+  }
+  // ---- the winter relics (the Stocking's sea field: more snowflakes per win)
+  const WIN_RELICS = [
+    { id: 'win_stocking', name: 'Stocking', icon: '\u{1F9E6}', rarity: 'c', season: 'winter', sea: { candy: 2 }, kw: ['feast'], proc: 'STUFFED',
+      text: 'Whenever you play a food item, heal 2 HP. In season, each fight you win drops 2 more snowflakes.',
+      hooks: { onPlay(F, inst, def) { if (tagged(def, 'food') && !isJunkPlay(inst, def)) healP(F, 2); } } },
+    { id: 'mistletoe', name: 'Mistletoe', icon: '\u{1F33F}', rarity: 'u', season: 'winter', kw: ['fortress'], proc: 'SMOOCH',
+      text: 'At the start of each fight, apply 1 Weak to ALL enemies. Nobody fights well under the mistletoe.',
+      hooks: { onFightStart(F) { allStatus(F, 'weak', 1); } } },
+    { id: 'sleigh_bells', name: 'Sleigh Bells', icon: '\u{1F514}', rarity: 'u', season: 'winter', kw: ['frost'], proc: 'JINGLE',
+      text: 'At the start of your turn, apply 1 Chill to a random enemy.',
+      hooks: { onTurnStart(F) { foeStatus(F, randomFoe(F), 'chill', 1); } } },
+    { id: 'warm_scarf', name: 'Warm Scarf', icon: '\u{1F9E3}', rarity: 'r', season: 'winter', kw: ['fortress'], proc: 'TOASTY',
+      text: 'Whenever you heal, gain that much Block. Toasty.',
+      hooks: { onHeal(F, amt) { if (amt > 0) gainBlock(F, Math.min(12, amt | 0)); } } },
+  ];
+  for (const r of WIN_RELICS) seaAdd(RELICS, r);
+  // ---- costumed monsters (the base monster plus a winter twist) and Krampus
+  const WIN_ENEMIES = [
+    { id: 'rat_reindeer', name: 'Red-Nosed Rat', act: 1, tier: 'normal', hp: [17, 21], art: 'rat', costume: 'reindeer', base: 'rat', size: 0.85, color: '#a0703f',
+      season: 'winter', desc: 'A Coin Rat in antlers, with a nose you could land a sleigh by. It glows right into your glass.', ai: 'weighted',
+      moves: [w(atk('antler', 'Antler Butt', 5, 1, 'Butts for 5'), 3), w(atk('dash', 'Sleigh Dash', 2, 3, 'Dashes 2 x3'), 2),
+        w(mv('glow', 'Nose Glow', 'fog', 'Its nose glows so bright your glass fogs (1 turn)', { v: 1 }), 1)] },
+    { id: 'slime_snowman', name: 'Snowman Slime', act: 1, tier: 'normal', hp: [30, 38], art: 'slime', costume: 'snowman', base: 'slime', size: 1, color: '#eef6ff',
+      season: 'winter', desc: 'A slime that rolled through a snowdrift and liked it. Packed hard: every hit loses 1.', ai: 'cycle', pattern: [0, 1, 0, 2],
+      status: { armor: 1 },
+      moves: [atk('snowball', 'Snowball', 6, 1, 'Throws a snowball for 6'), debuff('hug', 'Cold Hug', 'chill', 2, 'A cold hug (2 Chill)'),
+        mv('drift', 'Snow Drift', 'junk', 'Dumps an Ice Block into your bin', { item: 'iceblock', n: 1 })],
+      onDeath: { k: 'summon', id: 'slimeling' } },
+    { id: 'goblin_elf', name: 'Elf Goblin', act: 1, tier: 'normal', hp: [26, 33], art: 'goblin', costume: 'elf', base: 'goblin', size: 1, color: '#8fae3a',
+      season: 'winter', desc: 'Works the toy line now. Wraps presents nobody asked for and throws them at you.', ai: 'cycle', pattern: [0, 1, 2, 3],
+      moves: [atk('jab', 'Candy Cane Jab', 5, 1, 'Jabs for 5'), mv('regift', 'Regift', 'junk', 'Regifts a heavy Fruitcake into your bin', { item: 'fruitcake', n: 1 }),
+        buff('cheer', 'Holiday Cheer', 'str', 1, 'Whistles a carol (+1 Strength)'), mv('windup', 'Wind Up', 'charge', 'Winding up a big swing (14 next turn)', { v: 14 })] },
+    { id: 'krampus', name: 'Krampus', act: 1, tier: 'elite', hp: [64, 70], art: 'goat', look: 'krampus', size: 1.2,
+      color: '#4a3032', color2: '#e8dcc0', color3: '#ffcf3a', season: 'winter',
+      desc: 'Keeps the naughty list. Horns, chains, a birch switch and a sack with room for one more.',
+      ai: 'cycle', pattern: [0, 1, 2, 4, 3, 5], taunt: 'Naughty. Definitely naughty. Get in the sack.',
+      // Signature (the Hoard's spill, with coal): a sack of coal into your bin, heavy junk to dig through; two more once enraged.
+      sig: { id: 'spill', name: 'Sack of Coal', sign: 'COAL', shout: 'NAUGHTY!', text: 'empties a sack of coal into your bin', first: 2, every: 3, n: 2, item: 'win_coal' },
+      moves: [atk('switch', 'Birch Switch', 4, 3, 'Birch switch: 4 x3'), debuff('chains', 'Rattle Chains', 'vuln', 2, 'Rattles its chains (Vulnerable 2)'),
+        atk('hoof', 'Hoof Kick', 10, 1, 'Kicks for 10'), buff('list', 'Check the List', 'str', 2, 'Checks the naughty list twice (+2 Strength)'),
+        mv('sack', 'Open the Sack', 'charge', 'Opening the sack (20 next turn)', { v: 20 }), debuff('frost', 'Frost Breath', 'chill', 2, 'Breathes frost on you (2 Chill)')],
+      enrage: { name: 'NAUGHTY OR NICE', text: 'It checked the list twice. You are on the wrong one.', str: 2, pattern: [0, 2, 4, 1, 5] } },
+  ];
+  for (const e of WIN_ENEMIES) seaAdd(ENEMIES, Object.assign({ size: 1 }, e));
+  // ---- the Snowflake Stand's cosmetics (on top of the Frosted Cabinet and Hollyberry): owned for good
+  const WIN_COSMETICS = [
+    V_('skin_sea_ginger', 'skin', 'Gingerbread House', 'r', 'Gingerbread walls, icing on every seam, gumdrops on the roof.',
+      { frame: '#a0622d', trim: '#fff6ec', fp: 'sea_ginger', panel: '#2a140a', pp: 'sea_gumdrops', bulb: '#fff0c8', glow: '#ffb070', neon: '#ffe0b8' }, { season: 'winter', price: 120 }),
+    V_('paint_sea_cane', 'paint', 'Peppermint Swirl', 'u', 'Red and white stripes, a mint green pinstripe and a sugar sparkle.', { c1: '#ffffff', c2: '#e8203a', fx: 'sea_cane', glow: '#3ddc84' }, { season: 'winter', price: 80 }),
+    V_('mq_sea_festive', 'marquee', 'MERRY CLAWMAS', 'r', 'Red and green letters in holly, the bulbs twinkling red, green and gold.', { text: 'MERRY CLAWMAS', style: 'sea_festive', bulbs: 'sea_twinkle', col: '#ff2e4a' }, { season: 'winter', price: 100 }),
+    V_('trail_sea_flakes', 'trail', 'Snowflake Trail', 'r', 'Six-armed crystal flakes twirl up out of every step.', { art: 'sea_flakes', col: '#dff6ff' }, { season: 'winter', price: 90 }),
+    V_('fit_knight_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'A red scarf over the gorget, earmuffs over the visor. Toasty.', { kind: 'hat', style: 'sea_scarf', c1: '#d81f3a', c2: '#fff8ec' }, { char: 'knight', season: 'winter', price: 60 }),
+    V_('fit_alch_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Knitted from bubbling yarn. It smells faintly of cinnamon.', { kind: 'hat', style: 'sea_scarf', c1: '#3ddc84', c2: '#ffffff' }, { char: 'alchemist', season: 'winter', price: 60 }),
+    V_('fit_rogue_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Black and pink, for sneaking through the snow in style.', { kind: 'hat', style: 'sea_scarf', c1: '#2a2a3a', c2: '#ff2e88' }, { char: 'rogue', season: 'winter', price: 60 }),
+    V_('fit_lou_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Green and gold with a clover pin. Lou bet it would not snow.', { kind: 'hat', style: 'sea_scarf', c1: '#2e9c4a', c2: '#ffc94d' }, { char: 'gambler', season: 'winter', price: 60 }),
+    V_('fit_mama_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Hi-vis orange, riveted earmuffs. Scarf safety rules apply.', { kind: 'hat', style: 'sea_scarf', c1: '#ff8a2e', c2: '#3a3f4a' }, { char: 'engineer', season: 'winter', price: 60 }),
+    V_('fit_bub_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Fluffy as foam, with pompom earmuffs. Very, very soft.', { kind: 'hat', style: 'sea_scarf', c1: '#8dfff5', c2: '#ff9ad0' }, { char: 'bubbler', season: 'winter', price: 60 }),
+  ];
+  for (const c of WIN_COSMETICS) { seaAdd(COSMETICS, c); if (SEA_COSMETIC_IDS.indexOf(c.id) < 0) SEA_COSMETIC_IDS.push(c.id); }
+  const WIN_COSMETIC_IDS = WIN_COSMETICS.map((c) => c.id);
+  // ================================================================ /WIN
 
   // ================================================================ CR8 (round 8: Mama Mech and two new claws)
   // DESIGN.md "Mama Mech and two new claws". The crawler, her items, relics,
@@ -6208,6 +6406,309 @@ const DATA = (() => {
   Object.defineProperty(COSMETICS, SCH_COSMETIC.id, { value: SCH_COSMETIC, enumerable: false, configurable: true, writable: true });
   // ================================================================ /SCHOOL
 
+  // ================================================================ LEG (round 12: legendary relics, more evolutions, animated cabinets)
+  /* DESIGN.md "Legends (round 12)". Twelve legendary relics (rarity 'l'),
+     each one a build of its own with a catch, that reach into the newer
+     systems (the rig, combos, bubbles, the turret, Luck, pets, materials,
+     elites and bosses). They never sit in a common pool: only the boss
+     relic after an act (LEG_K.bossP of the time), a legendary capsule's
+     relic prize (LOOT.RELIC_RAR.l) and the Back Room's service counter hand
+     them out. A relic's `leg` object is merged into F.leg by COMBAT (numbers
+     add, see combat.js LEG block): golden (every nth grab is golden), peek
+     (enemy moves two turns ahead), noCash (Luck never cashes out), noVolley
+     (the turret fires per delivery, not at the turn's end), hypeK (damage
+     per Hype), slay (the Giant Slayer's scale), glass (the game makes every
+     body glass). The hooks below are ordinary relic hooks. Then ten more
+     evolutions (the round 7 mechanism, added here with legEvoAdd) and three
+     animated cabinet skins for the Prize Vault (RENDER.leg draws them). */
+  const LEG_K = {
+    gold: 5, goldDmg: 4, goldBlock: 2,            // The Golden Claw: every 5th grab; per prize on a golden grab of 2+
+    slot: 3, slotMax: 2,                          // Infinite Coin Slot: every 3rd prize a turn, 2 grabs a turn at most
+    peekDmg: 6,                                   // the Monocle: EXPOSED, once a turn
+    voidDmg: 8, voidGrow: 2,                      // Black Hole Bin: junk falling in, +2 per 3 swallowed
+    bounce: 2, bounceHp: 1,                       // Perpetual Motion: prizes a turn, HP a bounce
+    hypeMax: 10, hypeK: 0.1,                      // The Crowd: +10% a Hype
+    binSting: 2,                                  // Crown of Foam: a bubble bursting in the bin
+    overStart: 4,                                 // Overclocked Core: turret parts at the bell (Lv 2)
+    fate: 10, fateDmg: 25,                        // Fate Engine: FATE at 10 Luck
+    collarDmg: 3,                                 // Alpha Collar: every trick, ALL
+    crackDmg: 4, shatterDmg: 6,                   // Glass Heart
+    slayUp: 0.3, slayDown: 0.2, slayStr: 3,       // Giant Slayer's Crown
+    bossP: 0.15,                                  // the act boss's relic is a legendary this often (BALANCE round 12: was 0.25)
+    price: 250,                                   // the Back Room's service counter
+  };
+  const legHas = (F, id) => !!F && Array.isArray(F.relics) && F.relics.indexOf(id) >= 0;
+  const legL = (F) => F.leg || (F.leg = {});
+  const legLuck = (F) => ((F.player && F.player.status && F.player.status.luck) | 0);
+  // Is the grab that just finished (grabDone's onGrab) a golden one?
+  const legGoldNow = (F) => { const k = (F.leg && F.leg.golden) || LEG_K.gold; return (((F.stats && F.stats.grabs) | 0) % k) === 0; };
+  const LEG_RELICS = [
+    { id: 'leg_golden_claw', name: 'The Golden Claw', icon: '\u{1F3C6}', rarity: 'l', leg: { golden: LEG_K.gold }, kw: ['jackpot'], proc: 'GOLDEN GRAB',
+      text: 'Every 5th grab is a GOLDEN GRAB: the claw turns gold and grips far harder. A golden grab that brings up 2+ prizes deals 4 damage to ALL and gives 2 Block per prize. The other grabs grip a little looser.',
+      mods: { grip: -0.15 },
+      hooks: {
+        onGrab(F, n) {
+          if (!legGoldNow(F)) return;
+          if ((n | 0) >= 2) { proc(F, 'leg_golden_claw', 'GOLDEN x' + n); zapAll(F, LEG_K.goldDmg * n); gainBlock(F, LEG_K.goldBlock * n); }
+          else proc(F, 'leg_golden_claw', 'GOLDEN WHIFF');
+        },
+      } },
+    { id: 'leg_coin_slot', name: 'Infinite Coin Slot', icon: '♾', rarity: 'l', leg: { slot: 1 }, kw: ['jackpot', 'swarm'], proc: 'COIN SLOT',
+      text: 'Every 3rd prize you deliver in a turn feeds the slot: +1 grab (2 a turn at most). The slot keeps a cut: lose 12 Max HP.',
+      mods: { maxhp: -12 },
+      hooks: {
+        onPlay(F) {
+          const m = mem(F);
+          if (m.csT !== F.turn) { m.csT = F.turn; m.csN = 0; m.csG = 0; }
+          m.csN++;
+          if (m.csN % LEG_K.slot === 0 && m.csG < LEG_K.slotMax) { m.csG++; moreGrabs(F, 1); }
+        },
+      } },
+    { id: 'leg_monocle', name: "Prize Master's Monocle", icon: '\u{1F9D0}', rarity: 'l', leg: { peek: 1 }, kw: ['brawler'], proc: 'EXPOSED',
+      text: "You see every enemy's move two turns ahead. The first enemy you hit each turn while it winds up an attack takes 6 more. Squinting slows the claw 15%.",
+      mods: { speed: -0.15 },
+      hooks: {
+        onFightStart(F) { proc(F, 'leg_monocle', 'I SEE YOU'); },
+        onDmgDealt(F, e, amt) {
+          if (!e || !e.alive || !(amt > 0)) return;
+          const k = e.intent && e.intent.k;
+          if (k !== 'attack' && k !== 'charge') return;
+          const m = mem(F);
+          if (m.monoT === F.turn) return;
+          m.monoT = F.turn;
+          zap(F, e, LEG_K.peekDmg);
+        },
+      } },
+    { id: 'leg_black_hole', name: 'Black Hole Bin', icon: '\u{1F573}', rarity: 'l', kw: ['junk'], proc: 'EVENT HORIZON',
+      text: 'Start each fight with a Rock. Junk you grab out falls into the black hole for good this fight and hits the target for 8, 2 more for every 3 it has swallowed. A turn with nothing for it, the hole feeds on a random item from your used pile.',
+      hooks: {
+        onFightStart(F) { const c = CB(); if (c) c.addJunk(F, 'rock', 1); },
+        onPlay(F, inst, def) {
+          if (!inst || !isJunkPlay(inst, def)) return;
+          inst.legGo = 'void';
+          const m = mem(F);
+          m.bhT = F.turn;
+          zap(F, focus(F), LEG_K.voidDmg + LEG_K.voidGrow * Math.floor((m.bhN | 0) / 3));
+          m.bhN = (m.bhN | 0) + 1;
+        },
+        onTurnEnd(F) {
+          const m = mem(F);
+          if (m.bhT === F.turn || !CB() || !Array.isArray(F.used)) return;
+          const pool = F.used.filter(i => i && !isJunkPlay(i, ITEMS[i.id]));
+          if (!pool.length) return;
+          const inst = pool[Math.floor((typeof F.rng === 'function' ? F.rng() : 0) * pool.length)];
+          F.used.splice(F.used.indexOf(inst), 1);
+          (F.purged || (F.purged = [])).push(inst);
+          proc(F, 'leg_black_hole', 'THE HOLE FEEDS');
+        },
+      } },
+    { id: 'leg_perpetual', name: 'Perpetual Motion Machine', icon: '⚙', rarity: 'l', kw: ['echo'], proc: 'BOUNCE BACK',
+      text: 'The first 2 prizes you deliver each turn bounce back into the cabinet after they play (each prize once a fight), ready to grab again. Friction is not free: each bounce costs 1 HP.',
+      hooks: {
+        onPlay(F, inst, def) {
+          if (!inst || inst.legB || inst.frozen || isJunkPlay(inst, def)) return;
+          const m = mem(F);
+          if (m.pmT !== F.turn) { m.pmT = F.turn; m.pmN = 0; }
+          if (m.pmN >= LEG_K.bounce) return;
+          m.pmN++;
+          inst.legB = 1; inst.legGo = 'bounce';
+          zap(F, F.player, LEG_K.bounceHp);
+        },
+      } },
+    { id: 'leg_crowd', name: 'The Crowd', icon: '\u{1F4E3}', rarity: 'l', leg: { hypeK: LEG_K.hypeK }, kw: ['jackpot', 'brawler'], proc: 'HYPE',
+      text: 'Every combo gets the crowd going: +1 Hype (10 at most), and your hits deal 10% more per Hype. A turn with no combo, the Hype halves; with none left, they boo you: 1 Weak.',
+      hooks: {
+        onCombo(F) {
+          if (!CB()) return;
+          const L = legL(F);
+          L.hype = Math.min(LEG_K.hypeMax, (L.hype | 0) + 1);
+          mem(F).crT = F.turn;
+          proc(F, 'leg_crowd', 'HYPE ' + L.hype);
+        },
+        onTurnStart(F) {
+          if (!CB() || (F.turn | 0) <= 1 || mem(F).crT === F.turn - 1) return;
+          const L = legL(F), h0 = L.hype | 0;
+          L.hype = Math.floor(h0 / 2);
+          if (h0 > 0) proc(F, 'leg_crowd', 'HYPE ' + L.hype);
+          else { proc(F, 'leg_crowd', 'BOO!'); selfStatus(F, 'weak', 1); }
+        },
+      } },
+    { id: 'leg_foam_crown', name: 'Crown of Foam', icon: '\u{1FAE7}', rarity: 'l', kw: ['jackpot', 'fortress'], proc: 'FOAM CROWN',
+      text: 'Any crawler blows 2 bubbles every turn (Ms. Bubbles 2 more). A Bubble Combo gives 1 Strength for the fight. A bubble left to burst in the bin stings you for 2.',
+      rules: { bubbles: 1 }, bub: { n: 1 },
+      hooks: {
+        onBubble(F, where, n) {
+          n = n | 0;
+          if (n <= 0) return;
+          if (where === 'bin') { proc(F, 'leg_foam_crown', 'STING x' + n); zap(F, F.player, LEG_K.binSting * n); }
+          else if (n >= 2) { proc(F, 'leg_foam_crown', 'FOAM ROYALTY'); selfStatus(F, 'str', 1); }
+        },
+      } },
+    { id: 'leg_overclock', name: 'Overclocked Core', icon: '\u{1F50B}', rarity: 'l', leg: { noVolley: 1 }, kw: ['metal'], proc: 'OVERCLOCK',
+      text: 'Any crawler builds the turret, and it starts every fight at Lv 2. Every metal prize you deliver fires a turret shot on the spot. The turret no longer fires at the end of your turn.',
+      rules: { turret: 1 },
+      hooks: {
+        onFightStart(F) { turParts(F, LEG_K.overStart, 'OVERCLOCK'); },
+        onPlay(F, inst, def) {
+          if (!tagged(def, 'metal')) return;
+          const c = CB();
+          if (c && F.tur && c.legShot) c.legShot(F); else zap(F, focus(F), 3);   // (no turret: a spark)
+        },
+      } },
+    { id: 'leg_fate_engine', name: 'Fate Engine', icon: '\u{1F320}', rarity: 'l', leg: { noCash: 1 }, kw: ['luck'], proc: 'FATE',
+      text: 'Any crawler fills the Luck meter, and every whiff adds 1 more. Luck never cashes out: at 10 Luck FATE strikes, 25 damage to ALL, and the meter empties.',
+      rules: { luck: 1 },
+      hooks: {
+        onGrab(F, n) { if (!(n | 0)) luckUp(F, 1); },
+        onStatus(F, u, s) {
+          if (u !== F.player || s !== 'luck' || legLuck(F) < LEG_K.fate) return;
+          proc(F, 'leg_fate_engine', 'FATE STRIKES');
+          zapAll(F, LEG_K.fateDmg);
+          selfStatus(F, 'luck', -legLuck(F));
+        },
+      } },
+    { id: 'leg_alpha_collar', name: 'Alpha Collar', icon: '\u{1F43A}', rarity: 'l', kw: ['brawler'], proc: 'ALPHA',
+      text: 'Your pet does one more trick a turn, 50% stronger, and every trick hits ALL enemies for 3. Each trick eats from your plate: 1 HP. No pet: a stray bites a random enemy for 3 every turn.',
+      pet: { uses: 1, pow: 0.5 },
+      hooks: {
+        onPet(F) { zapAll(F, LEG_K.collarDmg); zap(F, F.player, 1); },
+        onTurnStart(F) { if (!F.petId) zap(F, randomFoe(F), LEG_K.collarDmg); },
+      } },
+    { id: 'leg_glass_heart', name: 'Glass Heart', icon: '\u{1F4A0}', rarity: 'l', leg: { glass: 1 }, kw: ['glass'], proc: 'GLASS HEART',
+      text: 'Everything in your cabinet is glass: a hard landing cracks it (+50% when played), a second crack shatters it for the fight. Every crack hits a random enemy for 4, every shatter hits ALL for 6.',
+      hooks: {
+        onMaterial(F, kind) {
+          if (kind === 'crack') zap(F, randomFoe(F), LEG_K.crackDmg);
+          else if (kind === 'shatter') zapAll(F, LEG_K.shatterDmg);
+        },
+      } },
+    { id: 'leg_slayer_crown', name: "Giant Slayer's Crown", icon: '\u{1F451}', rarity: 'l', leg: { slay: 1 }, kw: ['brawler'], proc: 'GIANT SLAYER',
+      text: 'Your hits on elites and bosses deal 30% more, and when one of them enrages you gain 3 Strength. Small fry bore you: your hits on normal enemies deal 20% less.',
+      hooks: {
+        onFightStart(F) {
+          const big = aliveOf(F).some(e => e.def && (e.def.tier === 'elite' || e.def.tier === 'boss'));
+          proc(F, 'leg_slayer_crown', big ? 'GIANT SLAYER' : 'SMALL FRY');
+        },
+        onTurnStart(F) {
+          const m = mem(F), seen = m.slay || (m.slay = {});
+          for (const e of F.enemies || []) {
+            if (!e || !e.alive || !e.enraged || !e.def || (e.def.tier !== 'elite' && e.def.tier !== 'boss') || seen[e.uid]) continue;
+            seen[e.uid] = 1;
+            proc(F, 'leg_slayer_crown', 'STAND AND FIGHT');
+            selfStatus(F, 'str', LEG_K.slayStr);
+          }
+        },
+      } },
+  ];
+  for (const r of LEG_RELICS) { r.leg = r.leg || {}; RELIC_LIST.push(r); RELICS[r.id] = r; }
+  const LEG_RELIC_IDS = LEG_RELICS.map(r => r.id);
+
+  /* Ten more evolutions (DESIGN.md "Legends (round 12)"): the round 7
+     mechanism exactly (base item + relic, an evolved def reachable as
+     ITEMS[id] through a non-enumerable property, an aura in EVO_FX), for the
+     crawlers with few (Ms. Bubbles, Mama Mech, Lucky Lou, the Rogue) and the
+     new legendary relics. */
+  function legEvoAdd(d) {
+    const def = Object.assign({ density: 1, friction: 0.5, restitution: 0.1, target: 'enemy', tags: [] }, d, { rarity: 'l', cost: 0, evolved: true });
+    delete def.aura;
+    const a = d.aura, fxId = 'evo:' + d.id;
+    def.auraId = fxId; def.auraName = a.name; def.auraText = a.text;
+    EVOLVED[d.id] = def;
+    Object.defineProperty(ITEMS, d.id, { value: def, enumerable: false, configurable: true, writable: true });
+    EVOLUTIONS[d.id] = { id: d.id, from: d.from, relic: d.relic, to: d.id, name: d.name, icon: d.icon, glow: d.glow };
+    EVO_OF[d.from] = d.id;
+    EVO_FX[fxId] = Object.assign({ id: fxId, name: a.name, icon: d.icon, rarity: 'evo', kw: kwIds(def).slice(0, 1), proc: a.proc, text: a.text,
+      color: d.glow, evo: d.id }, a.hooks ? { hooks: a.hooks } : {}, a.rules ? { rules: a.rules } : {}, a.bub ? { bub: a.bub } : {}, a.tur ? { tur: a.tur } : {});
+    EVO_LIST.push(d);
+    EVO_IDS.push(d.id);
+  }
+  const LEG_EVOS = [
+    // Ms. Bubbles
+    { id: 'calliope_pipe', name: 'Calliope Pipe', from: 'bubble_pipe', relic: 'squeaky_toy', icon: '\u{1F3BA}', glow: '#8dfff5', soap: 2,
+      tags: ['light', 'magic'], shape: box(40, 14), density: 0.7, friction: 0.5, color: '#ffd23f', color2: '#8dfff5', art: 'horn', target: 'all',
+      fx: [dmg(5)], text: 'Deal {v} damage to ALL enemies and blow two bubbles. It plays a little tune.',
+      aura: { name: 'Steam Organ', proc: 'STEAM ORGAN', text: 'Bubble Combos hit 2 harder per bubble. No bubbles: a grab of 2+ items hits ALL for 2.',
+        bub: { combo: 2 }, hooks: { onGrab(F, n) { if (!F.bub && (n | 0) >= 2) zapAll(F, 2); } } } },
+    { id: 'kraken_sponge', name: 'Kraken Sponge', from: 'sponge', relic: 'leg_foam_crown', icon: '\u{1F991}', glow: '#ff9ad0', soap: 1,
+      tags: ['light'], shape: box(30, 22), density: 0.4, friction: 0.9, restitution: 0.2, color: '#ffe066', color2: '#c77dff', art: 'bread', target: 'self',
+      fx: [heal(6), block(6)], text: 'Heal {v} HP, gain {v2} Block and blow a bubble. It soaks up anything.',
+      aura: { name: 'Deep Soak', proc: 'DEEP SOAK', text: 'A bubble bursting in the bin heals 2 HP. No bubbles: heal 2 at the end of your turn.',
+        hooks: { onBubble(F, where, n) { if (where === 'bin' && (n | 0) > 0) healP(F, 2 * (n | 0)); }, onTurnEnd(F) { if (!F.bub) healP(F, 2); } } } },
+    // Mama Mech
+    { id: 'gear_grinder', name: 'Gear Grinder', from: 'pipe_wrench', relic: 'leg_overclock', icon: '⚙', glow: '#ffb347', part: 4,
+      tags: ['metal', 'weapon', 'tool', 'heavy'], shape: box(46, 16), density: 1.8, friction: 0.5, color: '#d8343a', color2: '#ffc94d', art: 'hammer',
+      fx: [dmg(12)], text: 'Deal {v} damage. The teeth spin: it counts as 4 turret parts.',
+      aura: { name: 'Flywheel', proc: 'FLYWHEEL', text: 'The turret fires one shot at your turn start. No turret: zap a random enemy for 3.',
+        hooks: { onTurnStart(F) { const c = CB(); if (c && F.tur && c.legShot) c.legShot(F); else zap(F, randomFoe(F), 3); } } } },
+    { id: 'railgun_coil', name: 'Railgun Coil', from: 'spring_coil', relic: 'armor_piercing', icon: '\u{1F529}', glow: '#7ff7ff',
+      tags: ['metal', 'weapon'], shape: circle(14), density: 1.2, friction: 0.4, restitution: 0.5, color: '#2ee6d6', color2: '#ffc94d', art: 'ring',
+      fx: [dmg(5, 3)], text: 'Fire {v} damage {n} times down the rails. A turret part.',
+      aura: { name: 'Magnetic Rail', proc: 'MAG RAIL', text: 'Turret shots deal 1 more. No turret: a grab of 2+ metal items zaps the target for 3.',
+        tur: { amp: 1 }, hooks: { onGrab(F) { if (!F.tur && grabDefs(F).filter(d => tagged(d, 'metal')).length >= 2) zap(F, focus(F), 3); } } } },
+    // Lucky Lou
+    { id: 'all_in_chip', name: 'All-In Chip', from: 'poker_chip', relic: 'leg_fate_engine', icon: '\u{1F0CF}', glow: '#3ddc84',
+      tags: [], shape: circle(15), density: 1.3, friction: 0.3, restitution: 0.15, color: '#1a1a2a', color2: '#ffc94d', art: 'chip', target: 'self',
+      fx: [block(9), status('luck', 3, 'self')], text: 'Gain {v} Block and {v2} Luck. All of it on red.',
+      aura: { name: 'Poker Face', proc: 'POKER FACE', text: 'An empty grab gives 2 Block, +1 per Luck you hold (12 at most).',
+        hooks: { onGrab(F, n) { if (!(n | 0)) gainBlock(F, Math.min(12, 2 + legLuck(F))); } } } },
+    { id: 'showstopper', name: 'Showstopper Deck', from: 'marked_deck', relic: 'leg_crowd', icon: '\u{1F3B4}', glow: '#ff2e88',
+      tags: ['tool', 'magic'], shape: box(28, 36), density: 0.9, friction: 0.55, color: '#ff2e88', color2: '#ffe066', art: 'card', target: 'none',
+      fx: [grab(1), status('luck', 3, 'self'), block(4)], text: 'Gain {v} extra grab, {v2} Luck and {v3} Block. The whole deck is aces.',
+      aura: { name: 'Standing Ovation', proc: 'OVATION', text: 'Every combo also gives 1 Luck, and 1 Hype with The Crowd.',
+        hooks: { onCombo(F) { luckUp(F, 1); if (legHas(F, 'leg_crowd')) { const L = legL(F); L.hype = Math.min(LEG_K.hypeMax, (L.hype | 0) + 1); } } } } },
+    // the Rogue
+    { id: 'boomerang_blades', name: 'Boomerang Blades', from: 'twin_daggers', relic: 'leg_perpetual', icon: '\u{1FA83}', glow: '#2ee6d6',
+      tags: ['metal', 'weapon'], shape: box(38, 14), density: 1.2, friction: 0.45, color: '#e6ebf0', color2: '#ff2e88', art: 'dagger', target: 'random',
+      fx: [dmg(5, 3)], text: 'Throw {v} damage {n} times at random enemies. They always come back.',
+      aura: { name: 'Return Flight', proc: 'RETURN FLIGHT', text: 'A prize that bounces back hits a random enemy for 3 (else your first weapon each turn does).',
+        hooks: {
+          onPlay(F, inst, def) {
+            if (inst && inst.legB === 1) { inst.legB = 2; zap(F, randomFoe(F), 3); return; }
+            if (legHas(F, 'leg_perpetual') || !tagged(def, 'weapon')) return;
+            const m = mem(F);
+            if (m.rfT === F.turn) return;
+            m.rfT = F.turn;
+            zap(F, randomFoe(F), 3);
+          },
+        } } },
+    { id: 'vanishing_act', name: 'Vanishing Act', from: 'smoke_bomb', relic: 'leg_monocle', icon: '\u{1F3A9}', glow: '#b08cff',
+      tags: ['light', 'magic'], shape: circle(16), density: 0.7, friction: 0.5, restitution: 0.2, color: '#2a2238', color2: '#b08cff', art: 'mask', target: 'self',
+      fx: [status('dodge', 2, 'self'), status('weak', 2, 'all'), status('vuln', 1, 'all')], text: 'Gain {v} Dodge, and {v2} Weak and {v3} Vulnerable on ALL enemies. And now, you do not see me.',
+      aura: { name: 'Now You See Me', proc: 'NOW YOU SEE ME', text: '1 Dodge at the bell. Each turn start, every enemy winding up an attack gets 1 Weak.',
+        hooks: {
+          onFightStart(F) { selfStatus(F, 'dodge', 1); },
+          onTurnStart(F) { aliveOf(F).filter(e => e.intent && (e.intent.k === 'attack' || e.intent.k === 'charge')).forEach(e => foeStatus(F, e, 'weak', 1)); },
+        } } },
+    { id: 'master_key', name: 'Master Key', from: 'skeleton_key', relic: 'leg_golden_claw', icon: '\u{1F5DD}', glow: '#ffe066',
+      tags: ['metal', 'tool'], shape: box(38, 14), density: 1.5, friction: 0.4, color: '#ffe066', color2: '#b8860b', art: 'key', target: 'none',
+      fx: [grab(1), block(6)], text: 'Gain {v} extra grab this turn and {v2} Block. It opens the glass.',
+      aura: { name: 'Open Sesame', proc: 'OPEN SESAME', text: 'A golden grab (every 5th) that brings something up gives a grab back.',
+        hooks: { onGrab(F, n) { if ((n | 0) > 0 && legGoldNow(F)) moreGrabs(F, 1); } } } },
+    // a shared bomb, for the black hole
+    { id: 'singularity', name: 'Singularity', from: 'rubble_bomb', relic: 'leg_black_hole', icon: '\u{1F311}', glow: '#9b7bff',
+      tags: ['weapon', 'heavy', 'magic'], shape: circle(18), density: 1.6, friction: 0.5, restitution: 0.15, color: '#1a1030', color2: '#9b7bff', art: 'orb', target: 'all',
+      fx: [dmg(14), junk('rock', 2)], text: 'Deal {v} damage to ALL enemies, and {n} Rocks fall out of the event horizon.',
+      aura: { name: 'Accretion', proc: 'ACCRETION', text: 'Junk you grab out also hits ALL enemies for 3 on its way down.',
+        hooks: { onPlay(F, inst, def) { if (isJunkPlay(inst, def)) zapAll(F, 3); } } } },
+  ];
+  for (const d of LEG_EVOS) legEvoAdd(d);
+  const LEG_EVO_IDS = LEG_EVOS.map(d => d.id);
+
+  /* Three animated cabinets for the Prize Vault. look.anim names the live
+     layer RENDER.leg draws over the cached back (the older rare skins get
+     theirs by id in render.js); fp / pp name their frame and panel. */
+  const LEG_SKINS = [
+    V_('skin_leg_aqua', 'skin', 'Aquarium', 'u', 'A fish tank behind the pile: fish, bubbles and swaying weed.',
+      { frame: '#0f4a6b', trim: '#8dfff5', fp: 'leg_aqua', panel: '#04263a', pp: 'leg_aqua', bulb: '#d8fbff', glow: '#2ee6d6', neon: '#2ee6d6', anim: 'aqua' }),
+    V_('skin_leg_tokyo', 'skin', 'Neon Tokyo', 'r', 'Rain on the glass, a skyline behind it and signs that scroll.',
+      { frame: '#1a0f2e', trim: '#ff2e88', fp: 'leg_tokyo', panel: '#0b0716', pp: 'leg_tokyo', bulb: '#ffe0f4', glow: '#ff2e88', neon: '#ff2e88', anim: 'tokyo' }),
+    V_('skin_leg_crt', 'skin', 'Retro CRT', 'l', 'Phosphor green, scanlines rolling, a tube that hums.',
+      { frame: '#3a3a36', trim: '#c9c3a6', fp: 'leg_crt', panel: '#031a0a', pp: 'leg_crt', bulb: '#d8ffd8', glow: '#6bff9a', neon: '#6bff9a', anim: 'crt' }),
+  ];
+  for (const c of LEG_SKINS) { COSMETIC_LIST.push(c); COSMETICS[c.id] = c; COSMETIC_IDS.push(c.id); }
+  const LEG = { K: LEG_K, RELICS: LEG_RELIC_IDS, EVOS: LEG_EVO_IDS, SKINS: LEG_SKINS.map(c => c.id), goldNow: legGoldNow };
+  // ================================================================ /LEG
+
   return {
     // SCHOOL (round 11): Claw School and the Practice Cabinet (DESIGN.md "Claw School and the Practice Cabinet (round 11)")
     SCH, SCH_LESSONS, SCH_CH, SCH_IDS, schMatch, schEval, schStars, schStarText, schPay, schTotal, schLessonStars, schOpen, schChOpen, schGrade, schFix,
@@ -6226,12 +6727,16 @@ const DATA = (() => {
     CR8,
     // ROS (round 10): Ms. Bubbles, the mutator pack, three pets (DESIGN.md "Ms. Bubbles, the mutator pack and three pets (round 10)")
     ROS, rosMutMerge,
+    // LEG (round 12): legendary relics, ten more evolutions, animated cabinets (DESIGN.md "Legends (round 12)")
+    LEG,
     // run history and the death recap (DESIGN.md "Run history, the death recap and photo mode (round 8)")
     HIS, hisRecFix, hisFix, hisPush, hisRank, hisFilter, hisChart, hisMapPack, hisMapCells, hisKillLine, hisTips, hisWon,
     // stories, the rival, alternate bosses (DESIGN.md "Stories, the rival and alternate bosses (round 8)")
     STO, STORIES, STORY_IDS, STO_ENEMIES, STO_ICE, stoBeatText, stoOk, stoChoose, stoStage, stoDue, stoPick, stoFix, stoAltOf, GARY, GARY_LINES, garyGear, garyTaunt, garyVal, garyPile, garyPrize, garyFix,
     // seasonal events (DESIGN.md "Seasonal events (round 7)")
     SEASONS, SEASON_IDS, SEA_K, SEA_ITEMS, SEA_RELICS, SEA_ENEMIES, SEA_COSMETIC_IDS, seasonAt, seasonWindow, seasonLeft, seaFix, seaEarn, seaTreatRoll, seaCosmetics, seaCostumeOf,
+    // Winter Wonderclaw (DESIGN.md "Winter Wonderclaw (round 12)")
+    WIN_K, WIN_ITEMS, WIN_RELICS, WIN_ENEMIES, WIN_COSMETIC_IDS, winAdvFix, winAdventRoll, winGiftPool,
     // item evolutions and pet synergies (DESIGN.md "Evolutions and pet synergies (round 7)")
     EVOLVED, EVOLUTIONS, EVO_IDS, EVO_FX, EVO_COMBOS, evoOf, evoReady, evoAuraIds, evoMetaFix, evoProc, PET_SYN, petSynOn,
     // the secret act (DESIGN.md "Secret act (round 6)")

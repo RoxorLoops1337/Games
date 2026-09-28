@@ -409,6 +409,8 @@ const COMBAT = (() => {
       const step = Math.min(Math.floor(num(F.fights, 0) / ramp.every), num(ramp.max, 99));
       if (step > 0) { hpMul *= 1 + step * num(ramp.hp, 0); dmgMul *= 1 + step * num(ramp.dmg, 0); }
     }
+    // BALANCE (round 12): elites and bosses hit harder than the normals' dial (DATA.DIFFICULTY.tierDmg, 1 = off)
+    if (diff.tierDmg && diff.tierDmg[tier] != null) dmgMul *= num(diff.tierDmg[tier], 1);
     { const tsc = tiltScale(F); hpMul *= tsc[0]; dmgMul *= tsc[1]; }   // meta: the run's Tilt level (TILT block)
     { const esc = endlessMul(F); hpMul *= esc[0]; dmgMul *= esc[1]; }   // the Endless loop's lift (ENDLESS block)
     let edef = def;
@@ -509,6 +511,7 @@ const COMBAT = (() => {
     famFight(F);   // enemy families: the Crescendo, the choir's lockstep (FAMILY block)
     cr8Fight(F, run);   // Mama Mech's turret (CR8 block)
     rosFight(F, run);   // Ms. Bubbles' bubbles, Tiny Claw's size (ROS block)
+    legFight(F);   // the legendary relics' merged `leg` numbers (LEG block)
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
     api.startTurn(F);
     if (num(mods.startStr, 0)) api.status(F, F.player, 'str', mods.startStr);
@@ -625,6 +628,7 @@ const COMBAT = (() => {
       }
       // Double Grabs, Half Damage (a run mutator, ENDLESS block): the player's hits land for less
       if (F.mut && num(F.mut.dmgOut, 1) !== 1 && isPlayer(F, src) && !isPlayer(F, tgt) && amt > 0) amt = Math.max(1, Math.round(amt * num(F.mut.dmgOut, 1)));
+      if (F.leg) amt = legDmgOut(F, src, tgt, amt);   // The Crowd's Hype, the Giant Slayer (LEG block)
       amt = stoAbsorb(F, tgt, amt);   // the Plushie Queen's plushies soak the hit (STORY block)
     }
     let blocked = 0;
@@ -1801,7 +1805,7 @@ const COMBAT = (() => {
     if (got === 0 && F.luckK > 0) {
       if (num(F.rules.luck, 0) > 0) ruleProc(F, 'luck', 'LUCKY FOOT');
       addLuck(F, LUCK.miss * F.luckK, 'BAD BEAT');
-    } else if (got >= 2 && st(F.player, 'luck') > 0) cashOut(F, got);
+    } else if (got >= 2 && st(F.player, 'luck') > 0 && !(F.leg && F.leg.noCash > 0)) cashOut(F, got);   // (LEG: the Fate Engine keeps it)
   }
   // The game calls this on a near miss (SO CLOSE): +1 Luck with the meter on.
   api.nearMiss = function (F) {
@@ -2183,6 +2187,7 @@ const COMBAT = (() => {
       const glass = tagHas(def, 'glass');
       const gone = exhausts(def, plus) || (glass && num(F.rules.glassBreak, 0) > 0);
       (gone ? F.exhausted : F.used).push(inst);
+      legAfterPlay(F, inst);   // the black hole takes it, or it bounces back into the cabinet (LEG block)
       if (gone && glass && F.result !== 'lose') {
         F.stats.shattered++;
         itemProc(F, def, 'SHATTER');
@@ -2210,7 +2215,7 @@ const COMBAT = (() => {
     const p = F.player;
     hook(F, 'onTurnEnd');
     if (checkOver(F)) return end(F, c);
-    cr8TurnEnd(F);   // Mama Mech's turret fires its volley (CR8 block)
+    if (!(F.leg && F.leg.noVolley > 0)) cr8TurnEnd(F);   // Mama Mech's turret fires its volley (CR8 block) (LEG: not with the Overclocked Core)
     if (checkOver(F)) return end(F, c);
     hotHands(F);   // a Hot Potato left in the bin (round 3)
     tickDmg(F, p, 'burn');
@@ -2979,6 +2984,7 @@ const COMBAT = (() => {
         for (const e of alive(F)) { if (F.phase === 'over') break; api.damage(F, null, e, dmg); }
       }
     }
+    if (F.phase !== 'over') hook(F, 'onBubble', where === 'bin' ? 'bin' : 'chute', n);   // (LEG: the Crown of Foam, the Kraken Sponge)
     sanitize(F);
     checkOver(F);
     return end(F, c);
@@ -3225,6 +3231,99 @@ const COMBAT = (() => {
   api.famState = (F) => (F && F.fam ? F.fam : null);
   api.famOf = (e) => famId(e);
   /* ================= /FAMILY ================= */
+
+  /* ================= LEG (round 12): legendary relics ================= */
+  // DESIGN.md "Legends (round 12)". A legendary relic (or an evolved aura)
+  // may carry a `leg` object; newFight merges every one the fight holds into
+  // F.leg (numbers add): golden (every nth grab is a golden grab), peek (see
+  // the move after the telegraphed one), noCash (Luck never cashes out:
+  // luckAfterGrab), noVolley (the turret skips its turn-end volley: endTurn),
+  // hypeK (the player's hits +hypeK per Hype, F.leg.hype, kept by The Crowd's
+  // hooks), slay (the Giant Slayer: elites and bosses take more, normals
+  // less), glass (the game makes every body glass). A fight without one has
+  // F.leg === null and is bit for bit the old one. The hooks set two flags
+  // on a played instance that play() honours right after it lands in the
+  // used pile: legGo 'void' (Black Hole Bin: gone for the fight) and
+  // 'bounce' (Perpetual Motion: back into the cabinet).
+  const LEG_SLAY = { up: 0.3, down: 0.2 };
+  function legFight(F) {
+    let L = null;
+    for (const id of setHookIds(F)) {
+      const r = relicDef(id), g = r && r.leg;
+      if (!g || typeof g !== 'object') continue;
+      L = L || { hype: 0, voided: 0, bounced: 0 };
+      for (const k in g) L[k] = num(L[k], 0) + num(g[k], 0);
+    }
+    F.leg = L;
+  }
+  // The player's hit on an enemy after the Hype and the Giant Slayer.
+  function legDmgOut(F, src, tgt, amt) {
+    const L = F.leg;
+    if (!L || !(amt > 0) || !isPlayer(F, src) || isPlayer(F, tgt) || !tgt) return amt;
+    let k = 1;
+    if (L.hypeK > 0 && L.hype > 0) k *= 1 + L.hypeK * L.hype;
+    if (L.slay > 0) {
+      const K = (D().LEG && D().LEG.K) || {}, tier = tgt.def && tgt.def.tier;
+      k *= tier === 'elite' || tier === 'boss' ? 1 + num(K.slayUp, LEG_SLAY.up) : 1 - num(K.slayDown, LEG_SLAY.down);
+    }
+    return k === 1 ? amt : Math.max(1, Math.round(amt * k));
+  }
+  // play(): a played instance's legGo flag, after it went to the used pile.
+  function legAfterPlay(F, inst) {
+    const go = inst && inst.legGo;
+    if (!go) return;
+    delete inst.legGo;
+    const at = F.used.indexOf(inst);
+    if (go === 'void') {
+      // (a Rock already exhausts; anything else junk would cycle back: not any more)
+      if (at >= 0) { F.used.splice(at, 1); F.purged.push(inst); }
+      if (F.leg) F.leg.voided++;
+      emit(F, { t: 'leg', k: 'void', inst, idx: F.target });
+    } else if (go === 'bounce' && at >= 0 && F.bin.length < MAX_CABINET) {   // (exhausted or shattered: it stays gone)
+      F.used.splice(at, 1);
+      F.bin.push(inst);
+      if (F.leg) F.leg.bounced++;
+      emit(F, { t: 'leg', k: 'bounce', inst });
+    }
+  }
+  // Overclocked Core (and the Gear Grinder's Flywheel): one turret shot now.
+  api.legShot = function (F) {
+    const c = begin(F);
+    if (F && F.tur && F.tur.lv >= 1 && F.phase === 'player') { turretShot(F, 'fire', 0, 1, false); sanitize(F); checkOver(F); }
+    return end(F, c);
+  };
+  // The Golden Claw: is the next grab (idle) or this one (a grab in flight) golden?
+  api.legGolden = function (F, inFlight) {
+    const k = F && F.leg ? Math.round(num(F.leg.golden, 0)) : 0;
+    if (k <= 0 || F.phase !== 'player') return false;
+    const g = num(F.stats && F.stats.grabs, 0) | 0;
+    return inFlight ? g > 0 && g % k === 0 : (g + 1) % k === 0;
+  };
+  /* The Monocle: the move after the telegraphed one (pure), or null. A charge
+     is followed by its unleash; a cycling enemy by the next step of its
+     pattern (a phase two may still change it); a random one is unknown.
+     -> {k, v, n, name, txt, unknown} (v: the per-hit number with its Strength now). */
+  api.legPeek = function (F, e) {
+    e = unit(F, e) || e;
+    if (!F || !F.leg || !(F.leg.peek > 0) || !e || !e.alive || !e.def) return null;
+    const m = e.intent;
+    const hit = (v) => calcHit(num(v, 0), st(e, 'str'), st(e, 'weak') > 0, st(F.player, 'vuln') > 0, st(F.player, 'armor'));
+    if (m && m.k === 'charge') return { k: 'attack', v: hit(m.v), n: 1, name: 'Unleash', txt: 'Unleashes ' + hit(m.v), charged: true };
+    const moves = (e.def.moves || []).filter(Boolean);
+    const ai = e.def.ai || 'cycle';
+    if (!moves.length) return { k: 'none', v: 0, n: 1, name: 'Idle', txt: 'Waits' };
+    if (ai !== 'cycle') return { k: '?', v: 0, n: 1, name: '???', txt: 'Anything', unknown: true };
+    const pat = (Array.isArray(e.def.pattern) && e.def.pattern.length) ? e.def.pattern.filter(p => p >= 0 && p < moves.length) : null;
+    const seq = pat && pat.length ? pat : moves.map((x, k) => k);
+    const nx = moves[clamp(seq[num(e.cyc, 0) % seq.length] | 0, 0, moves.length - 1)];
+    const n = Math.max(1, num(nx.n, 1) | 0);
+    const v = nx.k === 'attack' ? hit(nx.v) : Math.round(num(nx.v, 0));
+    const txt = nx.k === 'attack' ? 'Attacks ' + v + (n > 1 ? ' x' + n : '') : nx.k === 'charge' ? 'Charges' : nx.k === 'block' ? 'Blocks ' + v : String(nx.name || nx.k);
+    return { k: nx.k, v, n, name: nx.name || nx.k, txt };
+  };
+  api.LEG_SLAY = LEG_SLAY;
+  api.legOf = (F) => (F && F.leg ? F.leg : null);
+  /* ================= /LEG ================= */
 
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).

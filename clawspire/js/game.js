@@ -875,6 +875,7 @@ const GAME = (() => {
       const r = tbl('RELICS')[id];
       if (own.indexOf(id) >= 0) continue;
       if (r.starter) continue;
+      if (!rarities && r.rarity === 'l') continue;   // (LEG: a legendary only when asked for by name)
       if (rarities && rarities.indexOf(r.rarity || 'c') < 0) continue;
       out.push(id);
     }
@@ -2274,7 +2275,7 @@ const GAME = (() => {
     addInk(START_INK);
     metaActStart(run);
     newMap(run);
-    const id = rollRelic(rngFor('bossrelic'), ['boss', 'r']);
+    const id = legBossRelic(rollRelic(rngFor('bossrelic'), ['boss', 'r']));   // (LEG: now and then a legendary)
     const td = { relic: id, gold: 0, title: `Loop ${E.loop}: ${actDef(run.act).name}`, sub: `Healed ${Math.round((cfg.heal || 0.3) * 100)}%. +${bulbs(START_INK)}. The machine rebooted meaner and coughed something up.` };
     const pick = rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3);
     showLoop({ loop: E.loop, act: run.act, added, mix: E.mix, then: pick.length ? { parts: { pick, then: td } } : { treasure: td } });
@@ -3893,7 +3894,7 @@ const GAME = (() => {
     // A cleared tile: nothing to do (no toast for one merely crossed mid-walk).
     if (t.done) { if (!(S.walk && !S.walk.done && S.walk.i < S.walk.path.length)) toast('Already cleared.'); save(); return; }
     const finish = () => { t.done = true; };
-    if (t.type === 'treat' && seaEnterTile(t)) return;   // a trick-or-treat door (SEASON)
+    if ((t.type === 'treat' || t.type === 'advent') && seaEnterTile(t)) return;   // a trick-or-treat door (SEASON), an advent present (WIN)
     if (t.type === 'rival' && stoRivalTile(t)) return;   // Grabby Gary (STORY)
     switch (t.type) {
       case 'fight': case 'elite': {
@@ -4135,7 +4136,7 @@ const GAME = (() => {
     // the material's physics (magic floats, ice slides, rubber bounces) and its look
     const mat = !inst.frozen && X.PHYS.materialOf ? X.PHYS.materialOf(def) : null;
     if (mat && X.PHYS.applyMaterial) X.PHYS.applyMaterial(b, mat);
-    matInit(b, mutBody(b, mat));   // Low Gravity, Slippery Floor, Everything Is Glass (ENDLESS block)
+    matInit(b, legMat(mutBody(b, mat)));   // (LEG: the Glass Heart makes it glass)   // Low Gravity, Slippery Floor, Everything Is Glass (ENDLESS block)
     rosBody(b);   // Moon Bounce (ROS block)
     b.vx = (r() - 0.5) * 60; b.av = (r() - 0.5) * 2;
     FS.world.add(b);
@@ -5091,6 +5092,7 @@ const GAME = (() => {
         fx().text(270, 430, 'PURGED', '#a6ff5e');
         break;
       }
+      case 'leg': legEvent(ev); break;   // a prize bounces back, junk falls into the black hole (LEG block)
       case 'binCopy': queueSpawn([ev.inst]); fx().text(270, 430, 'COPY', '#ffc94d'); fx().emit('glint', 270, 450, { n: 2 }); break;
       // the monsters pass (monsterEvent below)
       case 'binEat': case 'binReturn': case 'binDigest': case 'binBomb': case 'binEggs': case 'binBoom': case 'binHatch':
@@ -6025,6 +6027,7 @@ const GAME = (() => {
   function bossEvent(ev) {
     if (secBossEvent(ev)) return;   // The Machine's cabinet events (SECRET)
     if (stoBossEvent(ev)) return;   // the alternate bosses' plushies, belt and ice block (STORY)
+    if (winBossEvent(ev)) return;   // Krampus's sack of coal (WIN)
     const bs = BS(), reduced = !!fx().reduced;
     const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
     const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
@@ -6507,6 +6510,7 @@ const GAME = (() => {
     FS.wasHeld = 0;
     FS.grabN++;
     S.run.grabs++;
+    legGrabStart();   // the Golden Claw's golden grab grips hard (LEG block)
     for (const b of FS.items) b.data.chuteT = 0;
     hint('...');
     snd('clawDrop');
@@ -6736,6 +6740,7 @@ const GAME = (() => {
   }
   function grabFinished() {
     FS.grabInFlight = false;
+    legGrabEnd();   // the golden grip lets go (LEG block)
     FS.watch = false;
     rosGrabDone();   // the grab's popped bubbles pay out, a Bubble Combo (ROS block)
     petGrab(FS.delivered);   // the pet cheers or sulks; the goose lays on a big one (PETS block)
@@ -7103,6 +7108,7 @@ const GAME = (() => {
     let gold = rng.int(10, 25) + 4 * (run.act - 1);
     if (tier === 'elite') gold = Math.round(gold * 1.6);
     if (tier === 'boss') gold = Math.round(gold * 2.5);
+    gold = Math.round(gold * (ECON().goldK || 1));   // BALANCE (round 12): DATA.ECONOMY.goldK scales the fight's gold
     const econ = ECON();
     const ink = tier === 'elite' ? (econ.eliteInk || 1) : (tier === 'normal' && rng() < (econ.fightInkChance || 0) ? 1 : 0);
     // A beaten elite (a tower keeper too) sometimes hands over a tool.
@@ -7429,7 +7435,7 @@ const GAME = (() => {
     addInk(START_INK);
     metaActStart(run);   // Tilt: Dim Marquee (META block)
     newMap(run);
-    const id = rollRelic(rngFor('bossrelic'), ['boss', 'r']);
+    const id = legBossRelic(rollRelic(rngFor('bossrelic'), ['boss', 'r']));   // (LEG: now and then a legendary)
     const td = { relic: id, gold: 0, title: `Act ${run.act}: ${actDef(run.act).name}`, sub: `Healed 30%. +${bulbs(START_INK)}. The Prize Master left you something.` + (unl.length ? ` Unlocked: ${unl.map((c) => (charDef(c) || {}).name || c).join(', ')}.` : '') };
     // Claw upgrades come from bosses (and tower bonuses) only: the spare
     // parts screen first, then the relic. Everything maxed skips straight on.
@@ -7564,7 +7570,7 @@ const GAME = (() => {
   function capCtx(prefer) {
     const run = S.run;
     const relics = {};
-    for (const r of ['c', 'u', 'r', 'boss']) relics[r] = relicPool([r]);
+    for (const r of ['c', 'u', 'r', 'boss', 'l']) relics[r] = relicPool([r]);   // (LEG: a legendary capsule may hold a legendary)
     return { act: run.act, char: run.char, relics, claws: openClawUpgrades(), tools: toolIds(), prefer: prefer || null };
   }
   /* A fresh capsule from a source ('normal', 'bonus', 'elite', 'boss',
@@ -8062,7 +8068,8 @@ const GAME = (() => {
     }
     rw.caps = [];
     if (rw.tier === 'elite' || rw.tier === 'boss') rw.caps.push(makeCapsule(rw.tier));
-    if (jp > 0 || combos.some((c) => c.tier >= 3)) rw.caps.push(makeCapsule('bonus'));
+    // BALANCE (round 12): DATA.LOOT.BONUS_P is the chance such a fight drops its bonus capsule (its own rng stream)
+    if ((jp > 0 || combos.some((c) => c.tier >= 3)) && rngFor('bonuscap')() < ((D().LOOT && D().LOOT.BONUS_P != null) ? D().LOOT.BONUS_P : 1)) rw.caps.push(makeCapsule('bonus'));
     const L = run.loot;
     L.bigHit = Math.max(L.bigHit, st.bigHit || 0);
     L.overkill = Math.max(L.overkill, st.overkill || 0);
@@ -10010,6 +10017,9 @@ const GAME = (() => {
     if (P.hold) P.hold.t += dt;
     // (the octopus lets its prize drop straight down through the opening prongs, then lets go)
     if (P.hold && (FS.items.indexOf(P.hold.b) < 0 || (!P.hold.beak && (!rig || !(rig.phase === 'lifting' || rig.phase === 'carrying' || (rig.phase === 'releasing' && P.hold.b.y < rig.y + 110)))))) petHoldEnd(P);
+    // (QA round 11: the parrot drops its catch on the pile the moment the claw goes to work; carried
+    // through a grab, its beak weld dragged prizes out of the prongs and cost a fast player ~10% of the yield)
+    if (P.hold && P.hold.beak && rig && rig.phase !== 'idle' && rig.phase !== 'moving') petHoldEnd(P);
     if (!P.act) {
       // Blackout: the firefly hovers in the cabinet beside the flashlight and lights the pile
       const m = mutF();
@@ -11493,8 +11503,9 @@ const GAME = (() => {
     const run = S.run, rng = U.rng(U.hashStr(run.seed + ':secshop:' + tile.q + ',' + tile.r));
     const st = D().secShopStock ? D().secShopStock(rng) : { items: [], relicPrice: 200 };
     for (const it of st.items) seeItem(it.id);
-    const rid = rollRelic(rng, ['boss']);
-    return { items: st.items, relic: rid ? { id: rid, price: st.relicPrice || 200, sold: false } : null, removeUsed: false, sec: true };
+    const lg = legSecRelic(rng);   // (LEG: the counter keeps a legendary back here)
+    const rid = lg ? lg.id : rollRelic(rng, ['boss']);
+    return { items: st.items, relic: rid ? { id: rid, price: lg ? lg.price : st.relicPrice || 200, sold: false } : null, removeUsed: false, sec: true };
   }
   function secShopNote(b, shop) {
     if (!shop || !shop.sec || !b) return;
@@ -11820,9 +11831,10 @@ const GAME = (() => {
     if (tile && tile.content && tile.content.sec) return secShop(tile);   // the Back Room's service counter (SECRET)
     const run = S.run;
     const rng = U.rng(U.hashStr(run.seed + ':shop:' + run.act + ':' + (tile ? tile.q + ',' + tile.r : run.floor)));
-    const items = rollItems(rng, 5).map((id) => ({ id, price: Math.max(20, Math.round((itemDef(id).cost || 60) * (0.9 + rng() * 0.3))), sold: false }));
+    // BALANCE (round 12): DATA.ECONOMY.shopK scales every shelf price (items and the relic; Price Hike still applies on top)
+    const items = rollItems(rng, 5).map((id) => ({ id, price: Math.max(20, Math.round((itemDef(id).cost || 60) * (0.9 + rng() * 0.3) * (ECON().shopK || 1))), sold: false }));
     const relicId = rollRelic(rng, ['c', 'u', 'r']);
-    const relic = relicId ? { id: relicId, price: RELIC_PRICE[relicDef(relicId).rarity] || 160, sold: false } : null;
+    const relic = relicId ? { id: relicId, price: Math.round((RELIC_PRICE[relicDef(relicId).rarity] || 160) * (ECON().shopK || 1)), sold: false } : null;
     // No claw upgrades for sale: those come from bosses and towers only.
     return metaShop({ items, relic, removeUsed: false });   // Tilt: Price Hike (META block)
   }
@@ -13367,7 +13379,7 @@ const GAME = (() => {
     const tags = h('div', 'hisTags');
     const ci = clawInfo(rec.cl);
     tags.appendChild(h('span', 'tag cyan', (ci && ci.name) || rec.cl));
-    if (rec.se) tags.appendChild(h('span', 'tag gold', rec.se === 'halloween' ? 'Claw-o-ween' : rec.se));
+    if (rec.se) tags.appendChild(h('span', 'tag gold', ((D().SEASONS || {})[rec.se] || {}).name || rec.se));   // (WIN: the season's own name)
     const MU = tbl('MUTATORS');
     for (const id of rec.mu || []) if (MU[id]) tags.appendChild(h('span', 'tag pink', (MU[id].icon || '') + ' ' + MU[id].name));
     b.appendChild(tags);
@@ -14703,6 +14715,7 @@ const GAME = (() => {
     mutCabDraw(ctx, t, 'front');   // Blackout: the dark, and the flashlight on the claw (ENDLESS block)
     rosCabDraw(ctx, t, 'front');   // bubbles, the flood, glue, the mirror and quake signs (ROS block)
     stoCabDraw(ctx, t, 'front');   // the prizes frozen in the Arctic Arcade's ice block (STORY)
+    legClawCfg(cfg);   // the Golden Claw's gold paint (LEG block)
     if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
     bestCabDraw(ctx, t);   // goo, the magnetic lid, mounds, the plow, feathers, the rival claw (BESTIARY)
     if (FS.fog > 0 && !split) { ctx.fillStyle = 'rgba(180,190,210,0.55)'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
@@ -14718,6 +14731,7 @@ const GAME = (() => {
     bestCabTop(ctx, t);   // the prize wheel sign, the trick's warning sign (BESTIARY)
     qaCabTop(ctx, t);     // a big charge's warning sign a turn ahead (QA round 7)
     petDraw(ctx, t);   // the companion pet on the frame, or at work in the cabinet (PETS block)
+    legDraw(ctx, t);   // the black hole, the golden claw, the Hype plate, the Monocle's peek (LEG block)
     drawMonsterFx(ctx, t);
     if (S.debug && R && R.bodyDebug && FS.world) { ctx.save(); ctx.translate(CAB.x, CAB.y); R.bodyDebug(ctx, FS.world); ctx.restore(); }
     // Items in flight from the chute to their target, over everything.
@@ -16032,7 +16046,7 @@ const GAME = (() => {
     if (king) {
       rs.king++; seaM().king++;
       const want = (def.relics || []).filter((r) => tbl('RELICS')[r] && S.run.relics.indexOf(r) < 0);
-      if (want.length) { const got = want[U.hashStr(S.run.seed + ':king:' + rs.king) % want.length]; gainRelic(got); toast(`The Pumpkin King drops ${relicDef(got).name}!`, 2.4); }
+      if (want.length) { const got = want[U.hashStr(S.run.seed + ':king:' + rs.king) % want.length]; gainRelic(got); toast(`${enemyDef(def.elite).name} drops ${relicDef(got).name}!`, 2.4); }   // (WIN: Krampus too)
     }
     const cur = seaCur(id);
     try { fx().text(W / 2, 300, `+${n} ${cur.icon}`, cur.col, { size: 26 }); } catch (e) { /* optional */ }
@@ -16050,6 +16064,7 @@ const GAME = (() => {
       if (n) { try { fx().text(CAB.x + CAB.w - 40, CAB.y - 16, `+${n} ${cur.icon}`, cur.col, { size: 18 }); } catch (e) { /* optional */ } }
     }
     if (s.sweep) seaSweep();
+    if (s.gift) winGift(ev);   // WIN: the Present Box unwraps
   }
   // The Witch Broom: everything low in the pile slides toward the chute.
   function seaSweep() {
@@ -16107,6 +16122,7 @@ const GAME = (() => {
     const D0 = { q: sd.q, r: sd.r, t: 0, ph: 'door', knock: 0, knocks: 0, kT: 0, open: 0, reveal: 0, out: c.out || null };
     if (c.out && c.paid) { D0.ph = 'done'; D0.open = 1; D0.reveal = 1; }
     else if (c.out) { D0.ph = 'open'; }   // knocked before a reload: the same outcome plays again, and is paid once
+    D0.adv = winIsAdv(t);   // WIN: an advent present instead of a door
     S.seaDoor = D0;
     setScreen('sea');
     const scr = $('scr-sea');
@@ -16121,14 +16137,14 @@ const GAME = (() => {
     clear(b);
     S.ui.buttons = [];
     const t = seaTile(Dd), c = t && t.content ? t.content.sea : null;
-    const top = h('div', 'seaTop');
-    top.appendChild(h('div', 'seaK', '\u{1F383} Trick or treat'));
-    top.appendChild(h('div', 'seaSub', Dd.ph === 'door' ? 'A door with a pumpkin on every step. Knock and see what opens it.' : Dd.ph === 'done' ? '' : 'Knock, knock...'));
+    const top = h('div', 'seaTop' + (Dd.adv ? ' win' : ''));   // (WIN: an advent present)
+    top.appendChild(h('div', 'seaK', Dd.adv ? winAdvTitle(c) : '\u{1F383} Trick or treat'));
+    top.appendChild(h('div', 'seaSub', Dd.adv ? winAdvSub(Dd, c) : Dd.ph === 'door' ? 'A door with a pumpkin on every step. Knock and see what opens it.' : Dd.ph === 'done' ? '' : 'Knock, knock...'));
     b.appendChild(top);
     b.appendChild(h('div', 'grow'));
-    const bot = h('div', 'seaBot');
+    const bot = h('div', 'seaBot' + (Dd.adv ? ' win' : ''));
     if (Dd.ph === 'door') {
-      bot.appendChild(btn('Knock', () => seaKnock(), 'pri seaKnock'));
+      bot.appendChild(btn(Dd.adv ? 'Unwrap' : 'Knock', () => seaKnock(), 'pri seaKnock' + (Dd.adv ? ' win' : '')));
       bot.appendChild(btn('Leave', () => seaLeave(), 'ghost'));
     } else if (Dd.ph === 'done' && c) {
       const card = h('div', 'seaCard ' + (c.out && c.out.kind === 'trick' ? 'trick' : 'treat'));
@@ -16144,6 +16160,7 @@ const GAME = (() => {
     const Dd = S.seaDoor, t = seaTile(Dd), run = S.run;
     if (!Dd || !t || !t.content || !t.content.sea || Dd.ph !== 'door') return null;
     const c = t.content.sea;
+    if (!c.out && winIsAdv(t)) winAdvKnock(t, c);   // WIN: an advent present rolls its gift (counted on the calendar)
     if (!c.out) {
       const def = seaDef(seaRun()) || seaDef('halloween');
       const want = (def.relics || []).filter((r) => tbl('RELICS')[r] && run.relics.indexOf(r) < 0);
@@ -16185,7 +16202,7 @@ const GAME = (() => {
     }
     if (o.k === 'curse' && o.id) { addItem(o.id); lines.push(`CURSED: a ${itemDef(o.id).name} joins your bin for good`); }
     if (o.k === 'fight') lines.push('Something in a costume wants a fight!');
-    c.lines = lines; c.paid = true; t.done = true;
+    c.lines = winAdvLines(t, o, lines); c.paid = true; t.done = true;   // (WIN: the advent door's number first)
     SEA.log.push({ k: 'pay', out: o.k, candy: o.candy | 0 });
     saveMeta(); SEA.dirty = false;
     save();
@@ -16199,10 +16216,10 @@ const GAME = (() => {
     if (Dd.ph === 'knock') {
       Dd.kT += real;
       const want = Math.min(SEA_DOOR.knocks, Math.floor(Dd.kT / SEA_DOOR.knock) + 1);
-      while (Dd.knocks < want) { Dd.knocks++; Dd.knock = 1; snd('knock', { pitch: 1 + Dd.knocks * 0.04 }); haptic('tap'); }
+      while (Dd.knocks < want) { Dd.knocks++; Dd.knock = 1; snd(Dd.adv ? 'winRibbon' : 'knock', { pitch: 1 + Dd.knocks * 0.04 }); haptic('tap'); }   // (WIN: a ribbon tug)
       if (Dd.kT >= SEA_DOOR.knocks * SEA_DOOR.knock + SEA_DOOR.gap) { Dd.ph = 'open'; Dd.open = 0; }
     } else if (Dd.ph === 'open') {
-      if (Dd.open === 0) snd('creak');
+      if (Dd.open === 0) snd(Dd.adv ? 'winPop' : 'creak');   // (WIN: the lid pops)
       Dd.open = Math.min(1, Dd.open + real / SEA_DOOR.open);
       if (Dd.open >= 1) seaReveal();
     } else if (Dd.ph === 'reveal') {
@@ -16218,7 +16235,8 @@ const GAME = (() => {
     seaPay();
     const o = Dd.out || {};
     const trick = o.kind === 'trick';
-    snd(trick ? (o.k === 'curse' ? 'cackle' : 'boo') : 'treat');
+    snd(Dd.adv ? 'winGift' : trick ? (o.k === 'curse' ? 'cackle' : 'boo') : 'treat');   // (WIN: a present's jingle)
+    if (Dd.adv) winRevealFx(Dd);
     try {
       if (!trick) { fx().emit('confetti', W / 2, 520, { power: 0.9 }); fx().emit('coins', W / 2, 520, { n: 0.6 }); }
       else { fx().flash(o.k === 'curse' ? '#7dff7a' : '#9b4dff', 0.25); fx().shake(8); }
@@ -16349,7 +16367,7 @@ const GAME = (() => {
     const id = seaNow(), def = seaDef(id), Vs = S.vault;
     if (Vs && Vs.tab === 'sea' && !def) { Vs.tab = 'skin'; Vs.sel = null; }
     if (!def || !tabs) return null;
-    const tb = h('button', 'vTab seaTab' + (Vs && Vs.tab === 'sea' ? ' on' : ''));
+    const tb = h('button', 'vTab seaTab s-' + id + (Vs && Vs.tab === 'sea' ? ' on' : ''));   // (WIN: the season's colours)
     tb.appendChild(h('span', 'ic', def.icon));
     tb.appendChild(h('span', 'lb', def.counter));
     tb.onclick = () => { if (Vs) { Vs.tab = 'sea'; Vs.sel = (D().seaCosmetics ? D().seaCosmetics(id) : [])[0] || null; } snd('cardFlip'); vaultDom(); };
@@ -16360,8 +16378,8 @@ const GAME = (() => {
       const cur = seaCur(id), m = seaM();
       clear(wal);
       wal.appendChild(h('b', null, String(m.wallet[cur.id] | 0)));
-      wal.appendChild(h('span', null, cur.icon + ' ' + cur.name));
-      wal.onclick = () => popover(`<b>${cur.icon} ${m.wallet[cur.id] | 0} ${cur.name}</b><br>Won in fights and at trick-or-treat doors during ${def.name}. It buys the event prizes here, and they stay yours after the event.<br>Won so far: ${m.earned[cur.id] | 0}.`, 400, 60);
+      wal.appendChild(h('span', null, cur.icon + (cur.name.length > 6 ? '' : ' ' + cur.name)));   // (WIN: 'snowflakes' is too long for the pill)
+      wal.onclick = () => popover(`<b>${cur.icon} ${m.wallet[cur.id] | 0} ${cur.name}</b><br>Won in fights and at ${def.tile === 'advent' ? 'advent calendars' : 'trick-or-treat doors'} during ${def.name}. It buys the event prizes here, and they stay yours after the event.<br>Won so far: ${m.earned[cur.id] | 0}.`, 400, 60);
     }
     return tb;
   }
@@ -16377,7 +16395,7 @@ const GAME = (() => {
   }
   function seaTag(tg, id) {
     const d = vaultDef(id), cur = seaCur(d && d.season);
-    if (tg.classList) tg.classList.add('seaTg');
+    if (tg.classList) { tg.classList.add('seaTg'); if (d && d.season) tg.classList.add('s-' + d.season); }   // (WIN: the season's colours)
     tg.appendChild(h('b', null, String((d && d.price) | 0)));
     tg.appendChild(h('span', null, ' ' + cur.icon));
   }
@@ -16399,11 +16417,11 @@ const GAME = (() => {
     if (!d || !d.season || V.owned[id]) return false;
     if (seaNow() !== d.season) { toast(`That one is only sold during ${seaDef(d.season) ? seaDef(d.season).name : 'its event'}.`, 2.2); return false; }
     const cur = seaCur(d.season), price = d.price | 0, have = m.wallet[cur.id] | 0;
-    if (have < price) { toast(`${price - have} more ${cur.name}. Win fights and knock on doors during the event.`, 2.4); snd('click'); haptic('tap'); return false; }
+    if (have < price) { toast(`${price - have} more ${cur.name}. Win fights and ${d.season === 'winter' ? 'open advent presents' : 'knock on doors'} during the event.`, 2.4); snd('click'); haptic('tap'); return false; }
     m.wallet[cur.id] = have - price; m.spent[cur.id] = (m.spent[cur.id] | 0) + price;
     V.owned[id] = 1;
     vaultEquip(id, true);
-    if (S.vault) { S.vault.sel = id; S.vault.party = 1.6; S.vault.mq = 'SPOOKY!'; S.vault.flash = 1; }
+    if (S.vault) { S.vault.sel = id; S.vault.party = 1.6; S.vault.mq = d.season === 'winter' ? 'MERRY!' : 'SPOOKY!'; S.vault.flash = 1; }   // (WIN)
     vaultSave();
     snd('vaultBuy'); haptic('jackpot');
     try { fx().emit('confetti', VLT_WIN.x + VLT_WIN.w * 0.3, VLT_WIN.y + 40, { power: 0.9, n: 0.8 }); fx().ring(VLT_WIN.x + VLT_WIN.w * 0.32, VLT_WIN.y + VLT_WIN.h * 0.5, cur.col, { r0: 20, r1: 240, w: 10, life: 0.6 }); } catch (e) { /* optional */ }
@@ -16464,6 +16482,7 @@ const GAME = (() => {
     if (S.screen !== 'sea' || !Dd || !R || !R.sea) return;
     const o = Dd.out || {};
     const prize = o.k === 'item' && o.id && tbl('ITEMS')[o.id] ? itemDef(o.id) : o.k === 'relic' && o.id && tbl('RELICS')[o.id] ? relicDef(o.id) : null;
+    if (Dd.adv && R.sea.gift) { R.sea.gift(ctx, W, H, { t: Dd.t, tug: Dd.knock, tugs: Dd.knocks, open: Dd.open, reveal: Dd.reveal, out: Dd.open > 0 ? Dd.out : null, prize, day: (Dd.out && Dd.out.day) || winNextDay() }); return; }   // WIN: an advent present
     R.sea.door(ctx, W, H, { t: Dd.t, knock: Dd.knock, knocks: Dd.knocks, open: Dd.open, reveal: Dd.reveal, out: Dd.open > 0 ? Dd.out : null, prize });
   }
   function seaTick(real) {
@@ -16475,6 +16494,137 @@ const GAME = (() => {
     if (SEA.dirty && S.screen !== 'fight') { SEA.dirty = false; saveMeta(); }
   }
   // ================================================================ /SEASON
+
+  // ================================================================ WIN (round 12: Winter Wonderclaw)
+  /* DESIGN.md "Winter Wonderclaw (round 12)". The winter event rides the
+     SEASON block: its items, relics, costumes, Krampus and the Snowflake
+     Stand go through the same hooks. What is winter's own lives here: the
+     advent calendar tile ('advent', on the 'sea' screen: a present behind a
+     numbered door, a ribbon pulled three times, the lid popping, confetti),
+     its gift rolled and saved at the first pull and paid once at the
+     reveal, the profile's calendar (meta.sea.adv {y, n}: the season year and
+     the doors opened; the next door is n + 1, so the gifts grow door by
+     door), the Present Box unwrapping into a random item mid fight, and
+     Krampus's sack of coal arcing into the bin. Hooks, one line each:
+     enterTile ('advent'), seaShow (Dd.adv), seaDom (the words and the
+     button), seaKnock (winAdvKnock), seaTickDoor and seaReveal (the
+     sounds), seaPay (winAdvLines), seaDraw (RENDER.sea.gift), seaEvent
+     (winGift), bossEvent (winBossEvent). */
+  const WIN = { log: [] };
+  const winK = () => D().WIN_K || { advMax: 24, giftU: 0.2 };
+  const winIsAdv = (t) => !!(t && t.type === 'advent');
+  // The winter span's year on the live date ('' headless without one): a January day counts for the December before.
+  function winYear() {
+    const d = seaDate();
+    if (d == null || !D().seasonWindow) return '';
+    const w = D().seasonWindow('winter', d);
+    return w ? String(new Date(w.start).getFullYear()) : '';
+  }
+  // The profile's advent calendar, restarted on a new winter.
+  function winCal() {
+    const m = seaM();
+    if (!m.adv || typeof m.adv !== 'object') m.adv = D().winAdvFix ? D().winAdvFix(null) : { y: '', n: 0 };
+    const y = winYear();
+    if (y && m.adv.y !== y) { m.adv.y = y; m.adv.n = 0; }
+    return m.adv;
+  }
+  // The door the next advent tile opens (1..24).
+  const winNextDay = () => Math.max(1, Math.min(winK().advMax || 24, (winCal().n | 0) + 1));
+  /* The first pull of the ribbon: the gift is rolled, saved on the tile with
+     its door number and counted on the calendar at once (a reload replays
+     the same gift, paid once). */
+  function winAdvKnock(t, c) {
+    const run = S.run;
+    if (!run || !t || !c || c.out) return null;
+    const def = seaDef(seaRun()) || seaDef('winter') || { relics: [] };
+    const cal = winCal(), day = winNextDay();
+    const want = (def.relics || []).filter((r) => tbl('RELICS')[r] && run.relics.indexOf(r) < 0);
+    const rng = U.rng(U.hashStr(run.seed + ':advent:' + t.q + ',' + t.r + ':' + (c.seed >>> 0) + ':' + day));
+    const items = D().winGiftPool ? D().winGiftPool(run.char, 'c') : [];
+    c.out = D().winAdventRoll ? D().winAdventRoll(rng, day, run.act, { items, relics: want }) : { kind: 'treat', k: 'flakes', candy: 6, day };
+    c.day = day; c.paid = false;
+    cal.n = Math.min(99, (cal.n | 0) + 1);
+    const rs = seaRS(); rs.adv = (rs.adv | 0) + 1;
+    WIN.log.push({ k: 'advent', day, out: c.out.k });
+    saveMeta();
+    save();
+    return c.out;
+  }
+  // The result card's first line: the door's number (a bigger present every sixth).
+  function winAdvLines(t, o, lines) {
+    if (!winIsAdv(t) || !o) return lines;
+    lines.unshift(o.big ? `Door ${o.day | 0}: a BIG present!` : `Door ${o.day | 0} of the advent calendar`);
+    return lines;
+  }
+  // The door screen's words for an advent present.
+  function winAdvTitle(c) { return '❄ Advent calendar'; }
+  function winAdvSub(Dd, c) {
+    if (Dd.ph === 'door') {
+      const d = winNextDay();
+      return `Door ${d} is open, and a present waits behind it.${d > 1 ? ' The more doors you open, the bigger they get.' : ''}`;
+    }
+    return Dd.ph === 'done' ? '' : 'Pull the ribbon...';
+  }
+  // The reveal's extra sparkle: snowflakes and confetti out of the box.
+  function winRevealFx(Dd) {
+    try {
+      fx().emit('confetti', W / 2, 540, { power: Dd && Dd.out && Dd.out.big ? 1.3 : 1 });
+      fx().emit('glint', W / 2, 500, { n: 2 });
+    } catch (e) { /* optional */ }
+  }
+  /* The Present Box, delivered: it unwraps into a random item (a common one,
+     an uncommon now and then; never another box) that arcs out of the chute
+     into the bin for this fight. Seeded by the run, the box and the turn. */
+  function winGift(ev) {
+    if (!F || !FS || !X.COMBAT || !X.COMBAT.addTemp || !S.run) return null;
+    const run = S.run, K = winK();
+    const rng = U.rng(U.hashStr(run.seed + ':gift:' + String((ev && ev.inst && ev.inst.uid) || '') + ':' + (F.turn | 0)));
+    const rar = rng() < (K.giftU || 0.2) ? 'u' : 'c';
+    const pool = (D().winGiftPool ? D().winGiftPool(run.char, rar) : []).filter((id) => id !== 'present_box' && tbl('ITEMS')[id]);
+    if (!pool.length) return null;
+    const id = pool[Math.floor(rng() * pool.length)];
+    const got = X.COMBAT.addTemp(F, id, 1);
+    if (!got.length) return null;
+    const x0 = CAB.x + CAB.w - (CAB.chuteW || 64) / 2, y0 = CAB.y + CAB.h - 40;
+    got.forEach((inst, k) => {
+      const spot = { x: Math.max(40, binW() * 0.55), y: 30 };
+      try { arcItem(inst, x0, y0, CAB.x + spot.x, CAB.y + spot.y, 0.5, () => { dropIn(inst, spot); snd('winPop', { pitch: 1.2 }); }, 0.15 + k * 0.08); } catch (e) { queueSpawn([inst]); }
+    });
+    try {
+      fx().emit('confetti', x0, y0, { power: 0.8, n: 0.7 });
+      fx().text(CAB.x + CAB.w / 2, CAB.y + 60, `UNWRAPPED: ${itemDef(id).name.toUpperCase()}!`, '#ffc94d', { size: 20 });
+    } catch (e) { /* optional */ }
+    snd('winGift');
+    WIN.log.push({ k: 'gift', id });
+    return id;
+  }
+  // Krampus's signature: the sack of coal arcs out of his sack into the bin (the Hoard's spill, with soot instead of coins).
+  function winBossEvent(ev) {
+    if (!ev || ev.k !== 'spill' || !F || !(ev.items || []).some((i) => i && i.id === 'win_coal')) return false;
+    const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
+    const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
+    let k = 0;
+    for (const inst of ev.items || []) {
+      if (F.bin.indexOf(inst) < 0 || bodyOf(inst)) continue;
+      const q = FS.spawnQ.indexOf(inst);
+      if (q >= 0) FS.spawnQ.splice(q, 1);
+      const spot = { x: 40 + ((hashOf(inst) % 1000) / 1000) * Math.max(40, binW() * 0.6), y: 26 + (k % 3) * 12 };
+      const kk = k;
+      arcItem(inst, m.x, m.y, CAB.x + spot.x, CAB.y + spot.y, 0.5, () => { dropIn(inst, spot); snd('winCoal', { pitch: 1 + (kk % 3) * 0.06 }); }, k * 0.1);
+      k++;
+    }
+    try {
+      fx().emit('dust', m.x, m.y, { n: 1.4 });
+      fx().ring(m.x, m.y, '#ff6a3a', { r0: 10, r1: 120, w: 8, life: 0.5 });
+      fx().text(270, 430, 'SACK OF COAL!', '#ff6a3a', { big: true });
+      fx().shake(8);
+    } catch (e) { /* optional */ }
+    if (has) anim(ev.idx).spitT = S.t;
+    snd('winCoal'); snd('shake');
+    WIN.log.push({ k: 'coal', n: k });
+    return true;
+  }
+  // ================================================================ /WIN
 
   // ================================================================ STORY (round 8)
   /* DESIGN.md "Stories, the rival and alternate bosses (round 8)". Branching
@@ -19240,7 +19390,7 @@ const GAME = (() => {
       if (D().prizeShelf) { try { shelf = D().prizeShelf(rng, run.act, capCtx()) || []; } catch (e) { shelf = []; } }
       return shelf.length ? shelf : (shop.counter || []).map((s) => Object.assign({}, s, { sold: false }));
     }
-    const items = rollItems(rng, 5).map((id) => ({ id, price: Math.max(20, Math.round((itemDef(id).cost || 60) * (0.9 + rng() * 0.3))), sold: false }));
+    const items = rollItems(rng, 5).map((id) => ({ id, price: Math.max(20, Math.round((itemDef(id).cost || 60) * (0.9 + rng() * 0.3) * (ECON().shopK || 1))), sold: false }));   // (BALANCE round 12: shopK)
     metaShop({ items });   // Tilt: Price Hike
     return items;
   }
@@ -22320,6 +22470,153 @@ const GAME = (() => {
   }
   // ================================================================ /DUO
 
+  // ================================================================ LEG (round 12: legends)
+  /* DESIGN.md "Legends (round 12)". The legendary relics' places in the run
+     and their looks in the cabinet; the rules are data hooks and COMBAT's
+     LEG block. Reached through one-line hooks:
+       - where they come from: the act boss's relic is a legendary LEG_K.bossP
+         of the time (legBossRelic, its own seeded draw, so no other stream
+         moves), the Back Room's service counter sells one (legSecRelic), a
+         legendary capsule may hold one (capCtx's `l` pool, DATA.LOOT.RELIC_RAR);
+         no common pool ever lists them (relicPool(null) leaves them out).
+       - The Golden Claw: the golden grab grips far harder (legGrabStart /
+         legGrabEnd around it), the claw wears gold paint with sparkles while
+         the golden grab is next or in flight, pips count to it.
+       - Perpetual Motion: a bounced prize flies back out of the chute into
+         the bin as a fresh body ({t:'leg', k:'bounce'}); Black Hole Bin: a
+         vortex in the chute swallows the junk ({t:'leg', k:'void'}).
+       - Glass Heart: every body's material gets the glass trait (legMat).
+       - The Crowd's Hype plate, the Coin Slot's count and the golden pips on
+         the bottom frame; the Monocle's peek chip over each intent bubble.
+     Fight-only state (FS.legGold, FS.legFx), never saved. */
+  const LEGG = { grip: 0.7, flare: 0.9, stripX: 124, stripY: CAB.y + CAB.h + 15, fxMax: 6 };
+  const legK = () => (D().LEG && D().LEG.K) || {};
+  const legOn = () => !!(F && F.leg);
+  // The act boss's relic, now and then a legendary (an unowned one).
+  function legBossRelic(id) {
+    const run = S.run, K = legK();
+    if (!run || !(K.bossP > 0)) return id;
+    const r = U.rng(U.hashStr(run.seed + ':leg:boss:' + run.act + ':' + ((run.endless && run.endless.loop) | 0)));
+    if (r() >= K.bossP) return id;
+    const pool = relicPool(['l']);
+    return pool.length ? pool[Math.floor(r() * pool.length)] : id;
+  }
+  // The Back Room's service counter: a legendary while one is left, else a boss relic.
+  function legSecRelic(rng) {
+    const pool = relicPool(['l']);
+    return pool.length ? { id: pool[Math.floor(rng() * pool.length)], price: legK().price || 250 } : null;
+  }
+  // The Golden Claw: this grab is golden (COMBAT counted it in useGrab): grip hard.
+  function legGrabStart() {
+    if (!legOn() || !X.COMBAT.legGolden || !X.COMBAT.legGolden(F, true)) return;
+    FS.legGold = true;
+    if (FS.rig) FS.rig.setConfig({ grip: clawFor().grip + (FS.luckyOn ? MAT.luckyGrip : 0) + LEGG.grip });
+    FS.party = Math.max(FS.party, 0.45); FS.marquee = 'GOLDEN GRAB!';
+    const x = CAB.x + (FS.rig ? FS.rig.x : 200), y = CAB.y + (FS.rig ? FS.rig.y : 40);
+    fx().text(x, y + 110, 'GOLDEN GRAB!', '#ffe066', { size: 20, life: 1.2, dy: -24 });
+    fx().burst(x, y + 20, '#ffe066', fx().reduced ? 4 : 12, { kind: 'star', speed: 170, size: 4.5, life: 0.6, gravity: 140 });
+    snd('lucky', { pitch: 1.2 });
+  }
+  function legGrabEnd() {
+    if (!FS || !FS.legGold) return;
+    FS.legGold = false;
+    if (FS.rig) FS.rig.setConfig({ grip: clawFor().grip + (FS.luckyOn ? MAT.luckyGrip : 0) });
+  }
+  // Glass Heart: the material every body is made of.
+  function legMat(mat) {
+    if (!mat || !F || !F.leg || !(F.leg.glass > 0) || !mat.traits || mat.traits.glass) return mat;
+    return Object.assign({}, mat, { traits: Object.assign({}, mat.traits, { glass: true }) });
+  }
+  function legFxPush(o) { const L = FS.legFx || (FS.legFx = []); L.push(o); if (L.length > LEGG.fxMax) L.shift(); }
+  const legChuteX = () => CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW * 0.5;
+  // {t:'leg'} events: a prize bounces back, junk falls into the black hole.
+  function legEvent(ev) {
+    if (!FS || !ev) return;
+    const cx = legChuteX();
+    if (ev.k === 'bounce' && ev.inst) {
+      if (F.bin.indexOf(ev.inst) < 0 || bodyOf(ev.inst)) return;
+      const bx = (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) - 36;
+      const b = spawnBody(ev.inst, { x: bx, y: 70, a: 0.4 });
+      if (b) { b.vx = -240 - FS.rng() * 90; b.vy = -60; b.av = -6; b.data.clawG = -1; }
+      fx().text(cx - 40, CAB.y + 90, 'BOING!', '#2ee6d6', { size: 18, dy: -30 });
+      fx().ring(CAB.x + bx, CAB.y + 70, '#2ee6d6', { r0: 6, r1: 40, w: 4 });
+      snd('boing');
+      legFxPush({ k: 'bounce', t0: S.t, x: CAB.x + bx, y: CAB.y + 70 });
+    } else if (ev.k === 'void') {
+      legFxPush({ k: 'void', t0: S.t, def: ev.inst ? itemDef(ev.inst.id) : null });
+      fx().text(cx - 30, CAB.y + CAB.h - 110, 'SPAGHETTIFIED', '#c77dff', { size: 15, dy: -40 });
+      fx().shake(4);
+      snd('whoosh', { pitch: 0.6 });
+    }
+  }
+  // The claw goes gold for the golden grab (next, or in flight).
+  function legGoldLive() { return !!(legOn() && X.COMBAT.legGolden && (FS.legGold || (!FS.grabInFlight && X.COMBAT.legGolden(F, false)))); }
+  function legClawCfg(cfg) { if (FS && legGoldLive()) cfg.paint = 'paint_gold'; }
+  // A bottom-frame chip (the coin slot count, the golden pips).
+  function legChip(ctx, x, y, label, col, pips, of) {
+    ctx.save();
+    ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const m = ctx.measureText ? ctx.measureText(label) : null, tw = m && m.width > 0 ? m.width : label.length * 7.2;
+    const w = 16 + tw + (of ? of * 8 + 6 : 0);
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y - 10, w, 20, 6); else ctx.rect(x, y - 10, w, 20);
+    ctx.fillStyle = '#1d1233'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.stroke();
+    ctx.fillStyle = col;
+    ctx.fillText(label, x + 8, y + 0.5);
+    for (let i = 0; i < (of | 0); i++) { ctx.beginPath(); ctx.arc(x + 14 + tw + i * 8, y, 3, 0, Math.PI * 2); ctx.fillStyle = i < pips ? col : '#3a2d55'; ctx.fill(); }
+    ctx.restore();
+    return w;
+  }
+  function legDraw(ctx, t) {
+    if (!F || !FS || !legOn()) return;
+    const R = X.RENDER, L = R && R.leg, G = F.leg, now = S.t;
+    if (!L) return;
+    // the black hole in the chute, flaring as junk falls in
+    if (F.relics.indexOf('leg_black_hole') >= 0) {
+      const cx = legChuteX(), cy = CAB.y + CAB.h - 23;   // in the chute's prize slot, under the PRIZE sign
+      let k = 0;
+      for (const o of FS.legFx || []) if (o.k === 'void') {
+        const a = (now - o.t0) / LEGG.flare;
+        if (a < 0 || a > 1) continue;
+        k = Math.max(k, 1 - a);
+        if (o.def && R.item) {   // the junk spirals in, shrinking
+          const ang = a * 7, rr = 50 * (1 - a);
+          R.item(ctx, o.def, cx + Math.cos(ang) * rr, cy - 40 * (1 - a) + Math.sin(ang) * rr * 0.4, ang * 2, Math.max(0.1, 1 - a), { glow: '#c77dff', glowA: 0.6 * (1 - a) });
+        }
+      }
+      L.vortex(ctx, cx, cy, 15, t, k);
+    }
+    // the golden claw: sparkles on the hub while the golden grab is next or in flight
+    if (FS.rig && legGoldLive()) L.gold(ctx, CAB.x + FS.rig.x, CAB.y + FS.rig.y, t, FS.legGold ? 1 : 0.4);
+    // the bottom-frame strip
+    let x = LEGG.stripX;
+    const y = LEGG.stripY;
+    if (G.golden > 0) {
+      const k = Math.round(G.golden), g = (F.stats.grabs | 0) % k, ready = X.COMBAT.legGolden(F, false) || FS.legGold;
+      x += legChip(ctx, x, y, ready ? 'GOLDEN!' : 'GOLD', '#ffe066', ready ? k : g, k) + 6;
+    }
+    if (F.relics.indexOf('leg_coin_slot') >= 0) {
+      const m = F.rs || {}, n = m.csT === F.turn ? (m.csN | 0) % ((legK().slot | 0) || 3) : 0, used = m.csT === F.turn ? m.csG | 0 : 0;
+      x += legChip(ctx, x, y, used >= (legK().slotMax || 2) ? 'SLOT DRY' : 'SLOT', '#8dfff5', n, (legK().slot | 0) || 3) + 6;
+    }
+    if (G.hypeK > 0) L.hype(ctx, x, y - 10, G.hype | 0, t, legK().hypeMax || 10);
+    // the Monocle: the move after each telegraph, over its bubble
+    if (G.peek > 0 && X.COMBAT.legPeek && !FS.enemyTurn && !FS.vs) {
+      F.enemies.forEach((e, i) => {
+        if (!e.alive) return;
+        const p = enemyPos(i), info = X.COMBAT.legPeek(F, e);
+        if (info) L.peek(ctx, p.x + 6, Math.max(ARENA.y0 + 14, intentY(p) - 46), info, t);
+      });
+    }
+  }
+  function LEG_API() {
+    return {
+      K: LEGG, bossRelic: legBossRelic, secRelic: legSecRelic, grabStart: legGrabStart, grabEnd: legGrabEnd, mat: legMat, event: legEvent, draw: legDraw,
+      goldLive: () => !!(FS && legGoldLive()), clawCfg: legClawCfg,
+      get fx() { return FS ? FS.legFx || [] : []; }, get gold() { return !!(FS && FS.legGold); },
+    };
+  }
+  // ================================================================ /LEG
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -22475,6 +22772,8 @@ const GAME = (() => {
       shelf: seaShelf, buy: seaBuy, countdown: seaCountdown, fmt: seaFmt, musicId: seaMusicId,
       get door() { return S.seaDoor || null; }, get log() { return SEA.log; }, get date() { return SEA.date; }, get url() { return SEA.url; },
     },
+    // WIN (round 12, DESIGN.md "Winter Wonderclaw (round 12)"): the advent calendar, the Present Box, Krampus's coal.
+    win: { cal: winCal, year: winYear, nextDay: winNextDay, knock: winAdvKnock, gift: winGift, bossEvent: winBossEvent, get log() { return WIN.log; } },
     // HISTORY (round 8, DESIGN.md "Run history, the death recap and photo mode (round 8)"): the records, the screen, the recap, photo mode.
     his: {
       K: HIS_UI, PHO, show: showHistory, find: hisFind, build: hisBuild, runEnd: hisRunEnd, quit: hisQuit, metaFix: hisMetaFix, idOf: hisIdOf, verb: hisVerb,
@@ -22543,6 +22842,8 @@ const GAME = (() => {
     },
     // SCHOOL (round 11, DESIGN.md "Claw School and the Practice Cabinet (round 11)"): the practice cabinet, the lessons, the report card
     sch: SCH_API(),
+    // LEG (round 12, DESIGN.md "Legends (round 12)"): legendary relics' sources and cabinet looks
+    leg: LEG_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

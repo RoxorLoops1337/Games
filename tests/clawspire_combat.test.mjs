@@ -854,9 +854,11 @@ else {
   });
 
   h.test('build: fortress (Castle Walls + Battering Ram)', () => {
-    const F = mk(['tower_shield', 'rusty_sword'], ['castle_walls', 'battering_ram']);
-    pid(F, 'tower_shield');
+    // two shields: the round 12 rat (DATA.DIFFICULTY.dmg 2.6+) bites through a single one, leaving no Block to keep
+    const F = mk(['tower_shield', 'tower_shield', 'rusty_sword'], ['castle_walls', 'battering_ram']);
+    pid(F, 'tower_shield'); pid(F, 'tower_shield');
     const b0 = F.player.block, blocked0 = F.stats.blocked;
+    h.ok(F.enemies[0].intent && F.enemies[0].intent.v < b0, `the rat's bite (${F.enemies[0].intent && F.enemies[0].intent.v}) leaves Block to keep (${b0})`);
     C.endTurn(F);
     h.eq(F.enemies[0].hp, 300 - Math.floor(b0 / 2), 'the Ram hits for half the Block');
     h.eq(F.player.block, b0 - (F.stats.blocked - blocked0), 'Block survives the turn start (minus what it soaked)');
@@ -1491,7 +1493,7 @@ h.test('bin trickle: 2 a turn, floor of 6, cabinet cap, immediate refill mid-tur
     h.ok(atk(c.enemies[0]) >= atk(a.enemies[0]) && Math.abs(atk(c.enemies[0]) - Math.round(atk(a.enemies[0]) * 1.1)) <= 1, `Tilt 2: +10% damage (${atk(a.enemies[0])} -> ${atk(c.enemies[0])})`);
     h.eq(c.enemies[0].maxHp, b.enemies[0].maxHp, 'Tilt 2 keeps Tilt 1 hp (cumulative)');
     h.ok(c.enemies[0].dmgMul > a.enemies[0].dmgMul, 'the bomb multiplier follows');
-    h.ok(TD.DIFFICULTY.hp === 2.0 && TD.DIFFICULTY.dmg === 1.8, 'DATA.DIFFICULTY defaults untouched');
+    h.ok(TD.DIFFICULTY.hp === 3.1 && TD.DIFFICULTY.dmg === 2.6 && TD.DIFFICULTY.tierDmg.elite === 1.5, 'DATA.DIFFICULTY defaults untouched (the round 12 balance pass values)');
   });
   h.test('tilt: Bent Prong gives elites one more affix, normals none', () => {
     for (let s = 1; s <= 12; s++) {
@@ -2143,6 +2145,7 @@ if (hasData) {
   h.test('bestiary: the Claw Collector grabs your rarest item every turn and keeps it on display', () => {
     const bin = ['rusty_sword'].concat(realItems.filter(id => BD.ITEMS[id].rarity === 'r').slice(0, 2), realItems.filter(id => BD.ITEMS[id].rarity === 'c').slice(0, 8));
     const F = mk('collector', { bin });
+    F.player.maxHp = F.player.hp = 5000;   // (13 turns of a round 12 elite, tierDmg x1.5, out-hit 999 hp)
     const e = F.enemies[0];
     const pick = BC.bestRivalPick(F);
     h.ok(pick && BD.ITEMS[pick.id].rarity === 'r', 'it has its eye on a rare item');
@@ -3452,6 +3455,281 @@ if (hasData) {
       h.eq(F.player.block, b0 + 3, 'Turbo Suction: 3 Block');
       F.phase = 'over';
       h.eq(C.rosPetSyn(F, 'roomba', 'block', { v: 3 }).length, 0, 'never after the fight');
+    });
+  }
+}
+
+// ---------- round 12 (LEG): the legendary relics, the new evolutions
+{
+  const LB = boot({ only: ['util', 'data', 'combat'] });
+  const C = LB.COMBAT, D = LB.DATA, UB = LB.U;
+  if (D && D.LEG) {
+    const K = D.LEG.K;
+    const KBIN = D.CHARACTERS.knight.bin;
+    const lrun = (extra, bin) => Object.assign({ hp: 300, maxHp: 300, act: 1, char: 'knight', relics: [], claw: { grabs: 3, width: 1, grip: 1 }, gold: 40,
+      bin: (bin || KBIN).map((id, i) => (typeof id === 'string' ? { uid: 'l' + i, id, plus: false } : Object.assign({ uid: 'l' + i }, id))) }, extra || {});
+    const lfight = (relics, extra, bin, enc, seed) => {
+      const F = C.newFight(lrun(Object.assign({ relics }, extra || {}), bin), enc || ['slime', 'spider'], UB.rng(seed || 7));
+      for (const e of F.enemies) { e.hp = e.maxHp = 500; e.block = 0; e.status = {}; }
+      return F;
+    };
+    const binOf = (F, id) => F.bin.find(i => i.id === id);
+    const grab = (F, ids) => { C.useGrab(F); let n = 0; for (const id of ids) { const i = binOf(F, id); if (i && F.phase === 'player') { C.play(F, i); n++; } } return C.grabDone(F, n); };
+    h.test('round 12: twelve legendaries, F.leg only when one is held', () => {
+      h.eq(D.LEG.RELICS.length, 12, 'twelve legendary relics');
+      h.eq(lfight([]).leg, null, 'no legendary: F.leg is null (the old fight)');
+      const F = lfight(['leg_golden_claw', 'leg_crowd']);
+      h.ok(F.leg && F.leg.golden === K.gold && F.leg.hypeK === K.hypeK && F.leg.hype === 0, 'the leg numbers merge');
+    });
+    h.test('round 12: The Golden Claw: every 5th grab is golden, pays per prize on 2+, and the rest grip looser', () => {
+      const F = lfight(['leg_golden_claw']), P = lfight([]);
+      h.ok(Math.abs(F.claw.grip - (P.claw.grip - 0.15)) < 1e-9, 'the grip mod: -0.15');
+      const seen = [];
+      for (let g = 0; g < 5; g++) { seen.push(C.legGolden(F)); if (g < 4) { if (!F.player.grabs) C.endTurn(F); grab(F, []); } }
+      h.eq(seen.join(), 'false,false,false,false,true', 'the 5th grab is golden (idle telegraph)');
+      if (!F.player.grabs) C.endTurn(F);
+      C.useGrab(F);
+      h.ok(C.legGolden(F, true), 'and it is golden while in flight');
+      const hp = F.enemies.map(e => e.hp), b0 = F.player.block;
+      const three = F.bin.filter(i => i.id === 'dented_shield').slice(0, 3);
+      for (const i of three) C.play(F, i);
+      const ev = C.grabDone(F, 3);
+      h.ok(ev.some(e => e.t === 'proc' && e.id === 'leg_golden_claw' && /GOLDEN x3/.test(e.text)), 'GOLDEN x3');
+      h.ok(F.enemies.every((e, i) => hp[i] - e.hp >= K.goldDmg * 3), '4 a prize to ALL');
+      h.ok(F.player.block >= b0 + 3 * 5 + K.goldBlock * 3, '2 Block a prize on top of the shields');
+      grab(F, ['rusty_sword']);
+      h.ok(!C.legGolden(F, true), 'the 6th is not');
+    });
+    h.test('round 12: Infinite Coin Slot: every 3rd prize a turn is a grab, 2 a turn at most, and 12 Max HP gone', () => {
+      const F = lfight(['leg_coin_slot']), P = lfight([]);
+      for (const X of [F, P]) { C.useGrab(X); for (let k = 0; k < 9; k++) C.play(X, X.bin[0]); C.grabDone(X, 9); }
+      h.eq(F.player.grabs, P.player.grabs + 2, '9 prizes: +2 grabs over the same grab without it (the cap)');
+      C.endTurn(F);
+      const g1 = F.player.grabs;
+      C.useGrab(F); for (let k = 0; k < 3; k++) C.play(F, F.bin[0]); C.grabDone(F, 3);
+      h.eq(F.player.grabs, g1, 'a new turn: 3 prizes pay the grab back');
+      const run = { maxHp: 80, hp: 80, relics: [] };
+      C.gainRelic(run, 'leg_coin_slot');
+      h.eq(run.maxHp, 68, 'the slot keeps a cut: 80 -> 68 Max HP');
+    });
+    h.test("round 12: the Prize Master's Monocle sees the next move and EXPOSES an attacker once a turn", () => {
+      const F = lfight(['leg_monocle'], {}, null, ['slime', 'goblin']);
+      h.ok(F.claw.speed < lfight([]).claw.speed, 'the claw squints: slower');
+      h.eq(C.legPeek(lfight([]), F.enemies[0]), null, 'no monocle: no peek');
+      let ok = 0, n = 0;
+      for (let t = 0; t < 6 && F.phase === 'player'; t++) {
+        const want = F.enemies.map(e => C.legPeek(F, e));
+        C.endTurn(F);
+        F.enemies.forEach((e, i) => { if (!want[i] || want[i].unknown) return; n++; if ((e.intent.charged ? 'attack' : e.intent.k) === want[i].k) ok++; });
+      }
+      h.ok(n >= 8 && ok === n, `the peek is the move they pick next (${ok}/${n})`);
+      const G = lfight(['leg_monocle'], {}, null, ['slime']);
+      const e = G.enemies[0];
+      e.intent = { k: 'attack', v: 5 };
+      const hp = e.hp;
+      C.damage(G, G.player, e, 10);
+      h.eq(hp - e.hp, 10 + K.peekDmg, 'EXPOSED: 6 more on an attacker');
+      C.damage(G, G.player, e, 10);
+      h.eq(hp - e.hp, 20 + K.peekDmg, 'once a turn');
+      e.intent = { k: 'block', v: 5 };
+      G.turn++;
+      C.damage(G, G.player, e, 10);
+      h.eq(hp - e.hp, 30 + K.peekDmg, 'not while it blocks');
+      const R = lfight(['leg_monocle'], {}, null, ['bat']);
+      h.ok(C.legPeek(R, R.enemies[0]).unknown, 'a random enemy is a ? to the monocle');
+    });
+    h.test('round 12: Black Hole Bin: a Rock at the bell, junk falls in for 8, a hungry turn eats an item', () => {
+      const F = lfight(['leg_black_hole']);
+      const rock = F.bin.find(i => i.id === 'rock');
+      h.ok(!!rock, 'a Rock in the bin at the bell');
+      const t = F.enemies[F.target], hp = t.hp;
+      C.useGrab(F);
+      const ev = C.play(F, rock);
+      C.grabDone(F, 1);
+      h.ok(ev.some(e => e.t === 'leg' && e.k === 'void' && e.inst === rock), 'the void event');
+      h.ok(!F.used.includes(rock) && !F.bin.includes(rock), 'gone for the fight');
+      h.eq(hp - t.hp, K.voidDmg, 'the target takes 8');
+      const cans = C.addJunk(F, 'slag', 4), t2 = F.enemies[F.target];
+      let got = [];
+      for (const s of cans) { const h0 = t2.hp; C.play(F, s); got.push(h0 - t2.hp); }
+      h.ok(cans.every(s => !F.used.includes(s) && !F.bin.includes(s)), 'Slag falls in for good too (it would cycle back)');
+      h.eq(got.join(), [K.voidDmg, K.voidDmg, K.voidDmg + K.voidGrow, K.voidDmg + K.voidGrow].join(), 'the hole grows: +2 after every 3 swallowed');
+      C.endTurn(F);
+      const used0 = F.used.length, pur0 = F.purged.length;
+      C.useGrab(F); C.play(F, binOf(F, 'rusty_sword')); C.grabDone(F, 1);
+      const evs = C.endTurn(F);
+      h.ok(evs.some(e => e.t === 'proc' && /FEEDS/.test(e.text)) && F.purged.length === pur0 + 1, 'nothing fell in: the hole feeds on a used item');
+      h.ok(F.used.length <= used0 + 1, 'from the used pile');
+    });
+    h.test('round 12: Perpetual Motion Machine: two prizes a turn bounce back (once a fight each) for 1 HP', () => {
+      const F = lfight(['leg_perpetual']);
+      const a = binOf(F, 'rusty_sword'), hp0 = F.player.hp;
+      C.useGrab(F);
+      const ev = C.play(F, a);
+      h.ok(ev.some(e => e.t === 'leg' && e.k === 'bounce' && e.inst === a) && F.bin.includes(a) && !F.used.includes(a), 'it bounces back into the cabinet');
+      h.eq(hp0 - F.player.hp, K.bounceHp, 'for 1 HP');
+      C.play(F, binOf(F, 'dented_shield'));
+      const c = F.bin.find(i => i.id === 'crisp_apple');
+      C.play(F, c);
+      h.ok(F.used.includes(c), 'the third one this turn stays played');
+      C.grabDone(F, 3);
+      C.endTurn(F);
+      C.useGrab(F); C.play(F, a); C.grabDone(F, 1);
+      h.ok(F.used.includes(a) || !F.bin.includes(a), 'a prize bounces once a fight');
+      h.eq(F.leg.bounced, 2, 'two bounces booked');
+    });
+    h.test('round 12: The Crowd: combos build Hype, Hype multiplies your hits, a dull turn halves it, none left boos', () => {
+      const F = lfight(['leg_crowd']);
+      const e = F.enemies[0];
+      grab(F, ['rusty_sword', 'iron_chain']);
+      h.ok(F.leg.hype >= 1, 'a combo: +1 Hype (' + F.leg.hype + ')');
+      F.leg.hype = 5;
+      const hp = e.hp;
+      C.damage(F, F.player, e, 10);
+      h.eq(hp - e.hp, 15, '5 Hype: a 10 hit lands for 15');
+      C.endTurn(F);
+      h.eq(F.leg.hype, 5, 'the combo turn keeps it');
+      C.endTurn(F);
+      h.eq(F.leg.hype, 2, 'a dull turn: 5 -> 2');
+      F.leg.hype = 0;
+      C.endTurn(F);
+      h.ok((F.player.status.weak | 0) >= 1, 'no Hype left: BOO, 1 Weak');
+      const r0 = e.hp; F.leg.hype = 10;
+      C.damage(F, null, e, 10);
+      h.eq(r0 - e.hp, 10, 'relic damage has no attacker: no Hype');
+    });
+    h.test('round 12: Crown of Foam: anyone blows bubbles, a Bubble Combo is Strength, a bin burst stings', () => {
+      const F = lfight(['leg_foam_crown']);
+      h.ok(F.bub && F.bub.n === 2, 'the Knight blows two a turn');
+      const B = C.newFight(lrun({ char: 'bubbler', relics: ['bubble_wand', 'leg_foam_crown'] }, D.CHARACTERS.bubbler.bin), ['slime'], UB.rng(3));
+      h.eq(B.bub.n, 4, 'Ms. Bubbles four');
+      const s0 = F.player.status.str | 0;
+      C.rosPop(F, 2, 'chute');
+      h.eq((F.player.status.str | 0) - s0, 1, 'FOAM ROYALTY: +1 Strength');
+      const hp = F.player.hp;
+      C.rosPop(F, 2, 'bin');
+      h.eq(hp - F.player.hp, 2 * K.binSting, 'two bursts in the bin sting for 4');
+    });
+    h.test('round 12: Overclocked Core: a Lv 2 turret for anyone, a shot per metal prize, no turn-end volley', () => {
+      const F = lfight(['leg_overclock']);
+      h.ok(F.tur && F.tur.lv === 2, 'the Knight has a Lv 2 turret at the bell');
+      const ev = C.play(F, binOf(F, 'rusty_sword'));
+      h.ok(ev.some(e => e.t === 'turret' && e.k === 'fire'), 'a metal prize fires a shot');
+      const shots = F.tur.shots;
+      C.play(F, binOf(F, 'crisp_apple'));
+      h.eq(F.tur.shots, shots, 'an apple does not');
+      const et = C.endTurn(F);
+      h.ok(!et.some(e => e.t === 'turret' && e.k === 'fire'), 'no volley at the end of the turn');
+      const M = C.newFight(lrun({ char: 'engineer', relics: ['socket_set'] }, D.CHARACTERS.engineer.bin), ['slime'], UB.rng(3));
+      h.ok(C.endTurn(M).some(e => e.t === 'turret' && e.k === 'fire'), 'without it Mama\'s turret still fires its volley');
+    });
+    h.test('round 12: Fate Engine: the meter for anyone, whiffs +1, no cash out, FATE at 10', () => {
+      const F = lfight(['leg_fate_engine']);
+      h.eq(F.luckK, 1, 'the Knight fills the meter');
+      grab(F, []);
+      h.eq(F.player.status.luck | 0, 3, 'a whiff: 2 + 1 Luck');
+      grab(F, ['rusty_sword', 'dented_shield']);
+      h.eq(F.player.status.luck | 0, 3, 'two prizes: no cash out, the Luck stays');
+      const hp = F.enemies.map(e => e.hp);
+      const ev = C.addLuck(F, 7);
+      h.ok(ev.some(e => e.t === 'proc' && /FATE/.test(e.text)), 'FATE STRIKES at 10');
+      h.ok(F.enemies.every((e, i) => hp[i] - e.hp === K.fateDmg), '25 to ALL');
+      h.eq(F.player.status.luck | 0, 0, 'the meter empties');
+    });
+    h.test('round 12: Alpha Collar: tricks hit ALL for 3 and cost 1 HP; no pet, a stray bites', () => {
+      const F = lfight(['leg_alpha_collar'], { pet: { id: 'cat' } });
+      const hp = F.enemies.map(e => e.hp), p0 = F.player.hp;
+      C.petTrick(F, 'cat');
+      h.ok(F.enemies.every((e, i) => hp[i] - e.hp === K.collarDmg) && p0 - F.player.hp === 1, 'a trick: 3 to ALL, 1 HP');
+      h.ok(D.RELICS.leg_alpha_collar.pet.uses === 1, 'one more trick a turn (pet.uses)');
+      const S = lfight(['leg_alpha_collar']);
+      const tot = S.enemies.reduce((s, e) => s + e.hp, 0);
+      C.endTurn(S);
+      h.ok(S.enemies.reduce((s, e) => s + e.hp, 0) < tot, 'no pet: a stray bites at the turn start');
+    });
+    h.test('round 12: Glass Heart: cracks and shatters in the cabinet hit back', () => {
+      const F = lfight(['leg_glass_heart']);
+      h.ok(F.leg.glass === 1, 'the game reads F.leg.glass');
+      const tot = () => F.enemies.reduce((s, e) => s + e.hp, 0);
+      const t0 = tot();
+      C.material(F, 'crack', F.bin[0]);
+      h.eq(t0 - tot(), K.crackDmg, 'a crack: 4 to a random enemy');
+      const t1 = tot();
+      C.material(F, 'shatter', F.bin[1]);
+      h.eq(t1 - tot(), K.shatterDmg * F.enemies.length, 'a shatter: 6 to ALL');
+    });
+    h.test("round 12: Giant Slayer's Crown: +30% on elites and bosses, -20% on the rest, Strength when one enrages", () => {
+      const F = lfight(['leg_slayer_crown'], {}, null, ['mimic', 'slime']);
+      const el = F.enemies[0], no = F.enemies[1];
+      const a = el.hp, b = no.hp;
+      C.damage(F, F.player, el, 10); C.damage(F, F.player, no, 10);
+      h.eq(a - el.hp, 13, 'an elite takes 13 from a 10');
+      h.eq(b - no.hp, 8, 'a slime 8');
+      el.enraged = true;
+      const s0 = F.player.status.str | 0;
+      C.endTurn(F);
+      h.eq((F.player.status.str | 0) - s0, K.slayStr, 'it enraged: +3 Strength at your turn');
+      C.endTurn(F);
+      h.eq((F.player.status.str | 0) - s0, K.slayStr, 'once per enemy');
+    });
+    h.test('round 12: the ten evolutions: only the right item + relic, auras at work', () => {
+      const R = D.EVOLUTIONS;
+      h.eq(D.LEG.EVOS.length, 10, 'ten more recipes');
+      for (const id of D.LEG.EVOS) {
+        const r = R[id];
+        const inst = { uid: 'x', id: r.from, plus: true };
+        const F = lfight([r.relic], {}, [r.from]);
+        h.eq(C.evoCheck(F, inst), r, id + ': the right pieces evolve');
+        h.eq(C.evoCheck(F, Object.assign({}, inst, { plus: false })), null, id + ': not upgraded, no');
+        h.eq(C.evoCheck(lfight(['trophy_rack'], {}, [r.from]), inst), null, id + ': the wrong relic, no');
+        const other = D.LEG.EVOS.find(x => x !== id);
+        h.eq(C.evoCheck(F, { uid: 'y', id: R[other].from, plus: true }), R[other].relic === r.relic ? R[other] : null, id + ': another base item, no');
+        const G = lfight([r.relic], {}, [{ id: r.from, plus: true }, 'rusty_sword']);
+        const got = C.evolve(G, G.bin[0]);
+        h.ok(got && G.bin[0].id === id && G.evos.includes('evo:' + id), id + ': evolves, its aura joins');
+      }
+      // a few auras in a fight
+      const A = C.newFight(lrun({ relics: ['leg_fate_engine'] }, ['all_in_chip', 'rusty_sword']), ['slime'], UB.rng(4));
+      const b0 = A.player.block;
+      grab(A, []);
+      h.ok(A.player.block >= b0 + 2 + 3, 'Poker Face: a whiff gives 2 Block + 1 per Luck');
+      const G = C.newFight(lrun({ char: 'engineer', relics: ['leg_overclock'] }, ['gear_grinder', 'hex_bolt']), ['slime'], UB.rng(4));
+      const s0 = G.tur.shots;
+      C.endTurn(G);
+      h.ok(G.tur.shots > s0, 'Flywheel: a turret shot at the turn start');
+      const Rg = C.newFight(lrun({ char: 'engineer', relics: ['socket_set'] }, ['railgun_coil', 'hex_bolt']), ['slime'], UB.rng(4));
+      h.eq(Rg.tur.amp, 1, 'Magnetic Rail: turret shots +1');
+      const V = C.newFight(lrun({ relics: [] }, ['vanishing_act', 'rusty_sword']), ['goblin'], UB.rng(4));
+      h.eq(V.player.status.dodge | 0, 1, 'Now You See Me: 1 Dodge at the bell');
+      const S = C.newFight(lrun({ relics: ['leg_black_hole'] }, ['singularity', 'rusty_sword']), ['slime', 'spider'], UB.rng(4));
+      for (const e of S.enemies) e.hp = e.maxHp = 500;
+      const rock = S.bin.find(i => i.id === 'rock');
+      C.play(S, rock);
+      h.ok(S.enemies.every(e => e.hp <= 500 - 3), 'Accretion: junk falling in hits ALL for 3');
+      const Bm = C.newFight(lrun({ relics: ['leg_perpetual'] }, ['boomerang_blades', 'rusty_sword', 'crisp_apple']), ['slime'], UB.rng(4));
+      Bm.enemies[0].hp = Bm.enemies[0].maxHp = 500;
+      C.play(Bm, Bm.bin.find(i => i.id === 'rusty_sword'));
+      h.ok(Bm.enemies[0].hp <= 500 - 7 - 3, 'Return Flight: the bouncing sword hits again for 3');
+    });
+    h.test('round 12: a 30 turn fuzz holding every legendary and every new evolved item never NaNs', () => {
+      const bin = D.LEG.EVOS.concat(KBIN.slice(0, 8), ['rock', 'glass_bead']);
+      const Z = C.newFight(lrun({ relics: D.LEG.RELICS.slice(), pet: { id: 'cat' } }, bin), ['slime', 'mimic', 'spider'], UB.rng(12));
+      const r = UB.rng(9);
+      let bad = 0;
+      for (let t = 0; t < 30 && Z.phase !== 'over'; t++) {
+        for (let g = 0; g < 4 && Z.phase === 'player' && Z.player.grabs > 0; g++) {
+          C.useGrab(Z);
+          const n = Math.floor(r() * 4);
+          for (let k = 0; k < n && Z.bin.length && Z.phase === 'player'; k++) C.play(Z, Z.bin[Math.floor(r() * Z.bin.length)]);
+          C.grabDone(Z, n);
+          if (Z.phase === 'player' && r() < 0.3) C.rosPop(Z, 1 + Math.floor(r() * 3), r() < 0.5 ? 'chute' : 'bin');
+          if (Z.phase === 'player' && r() < 0.2) C.material(Z, r() < 0.5 ? 'crack' : 'shatter', Z.bin[0]);
+          if (Z.phase === 'player' && r() < 0.2) C.petTrick(Z, 'cat');
+        }
+        if (Z.phase === 'player') C.endTurn(Z);
+        if (!Number.isFinite(Z.player.hp) || Z.enemies.some(e => !Number.isFinite(e.hp)) || Z.hookErrors.length) bad++;
+      }
+      h.eq(bad, 0, 'finite, no hook errors ' + (Z.hookErrors[0] || ''));
     });
   }
 }

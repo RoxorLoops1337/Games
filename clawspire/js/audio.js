@@ -2100,9 +2100,9 @@ const AUDIO = (() => {
     },
     winter: {
       title: { bpm: 92, root: 43, scale: 'major', bass: 'long', lead: 'dreamy', hat: 'soft', drums: 'none', wave: 'triangle', bassWave: 'sine',
-        stab: 0.25, swing: 0.1, vol: 0.85, leadUp: 36, sleigh: 0.5, chime: 1, prog: [[0, 3, 4, 0], [0, 5, 3, 4], [3, 4, 0, 5], [0, 4, 5, 3]] },
+        stab: 0.25, swing: 0.1, vol: 0.85, leadUp: 36, sleigh: 0.5, chime: 1, jingle: 0.9, prog: [[0, 3, 4, 0], [0, 5, 3, 4], [3, 4, 0, 5], [0, 4, 5, 3]] },
       map: { bpm: 116, root: 45, scale: 'major', bass: 'bounce', lead: 'pluck', hat: '8', drums: 'four', wave: 'square', bassWave: 'triangle',
-        stab: 0.35, swing: 0, vol: 0.8, leadUp: 24, sleigh: 1, chime: 0.6, prog: [[0, 3, 4, 0], [0, 5, 3, 4], [0, 3, 1, 4], [3, 4, 0, 0]] },
+        stab: 0.35, swing: 0, vol: 0.8, leadUp: 24, sleigh: 1, chime: 0.6, jingle: 1, prog: [[0, 3, 4, 0], [0, 5, 3, 4], [0, 3, 1, 4], [3, 4, 0, 0]] },
     },
   };
   const SEA_NAMES = { halloween: 'spooky organ swing', winter: 'sleigh bell jingle' };
@@ -2123,6 +2123,7 @@ const AUDIO = (() => {
     if (c.toll && b % 4 === 0) push(steps, base, { v: 'bell', n: tone(0, 12), g: 1.3 });
     if (c.sleigh) for (let s = 0; s < BAR; s += 2) if (s % 4 === 0 || rng.chance(c.sleigh)) push(steps, base + s, { v: 'sleigh', g: s % 4 === 0 ? 1 : 0.6 });
     if (c.chime) for (const s of [0, 8]) if (s === 0 || rng.chance(c.chime * 0.6)) push(steps, base + s, { v: 'bell', n: tone(rng.pick([0, 2, 4]), 36), g: 0.8 });
+    if (c.jingle) winJingle(c, steps, base, b, tone);   // WIN (round 12): the winter hook (draws nothing from the rng)
   }
   function seaVoice(dest, t, ev, g, sd) {
     if (ev.v === 'organ') {
@@ -2187,6 +2188,53 @@ const AUDIO = (() => {
   });
   Object.assign(GAP, { knock: 0.1, creak: 0.8, treat: 0.5, boo: 0.6, cackle: 0.5, candy: 0.06 });
   NAMES.push('knock', 'creak', 'treat', 'boo', 'cackle', 'candy');
+
+  /* ---------------------------------------------------------------- WIN (round 12)
+     Winter Wonderclaw (DESIGN.md "Winter Wonderclaw (round 12)"): the winter
+     title and map tunes carry a jingle, a sleigh bell hook in the old
+     three-three-six rhythm on the bar's own chord tones (so it always fits
+     the harmony), on the first four bars of each half; fights keep their
+     tunes. And the advent present and Krampus get their sounds: a ribbon
+     tug, the lid's pop, the present's jingle, a lump of coal. */
+  // [step, chord-relative degree, length in steps] per bar of the hook.
+  const WIN_JINGLE = [[[0, 2, 4], [4, 2, 4], [8, 2, 8]], [[0, 2, 4], [4, 2, 4], [8, 2, 8]], [[0, 2, 4], [4, 4, 4], [8, 0, 6], [14, 1, 2]], [[0, 2, 16]]];
+  function winJingle(c, steps, base, b, tone) {
+    const bar = b % 8;
+    if (bar > 3) return;
+    for (const [s, rel, d] of WIN_JINGLE[bar]) push(steps, base + s, { v: 'bell', n: tone(rel, 36), g: 0.9 * c.jingle, d });
+    if (bar === 3) push(steps, base + 8, { v: 'sleigh', g: 1 });
+  }
+  Object.assign(BANK, {
+    // A satin ribbon tugged: a rising zip of cloth and a little squeak.
+    winRibbon(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 1800 * p, to: 5200 * p, q: 2.2, dur: 0.16, v: 0.22, a: 0.01 });
+      blip(out, t, { at: 0.05, w: 'sine', f: 1300 * p, to: 1900 * p, dur: 0.08, v: 0.03 });
+      return 0.25;
+    },
+    // The lid pops off: a cork pop and a bright ping.
+    winPop(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 420 * p, to: 160 * p, dur: 0.07, v: 0.4, a: 0.001 });
+      hiss(out, t, { type: 'bandpass', f: 1600 * p, q: 1.2, dur: 0.05, v: 0.3 });
+      blip(out, t, { at: 0.04, w: 'triangle', f: mtof(88) * p, dur: 0.22, v: 0.05 });
+      return 0.35;
+    },
+    // A present opens: sleigh bells shaking over a major arpeggio, then a chime.
+    winGift(out, t, o, p) {
+      [76, 79, 83, 88].forEach((n, i) => blip(out, t, { at: i * 0.06, w: 'triangle', f: mtof(n) * p, dur: 0.22, v: 0.08 }));
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: 0.02 + i * 0.055, type: 'highpass', f: 7200, q: 0.8, dur: 0.06, v: 0.07 });
+      blip(out, t, { at: 0.26, w: 'sine', f: mtof(100) * p, dur: 0.6, v: 0.05, vib: [7, 12] });
+      return 0.95;
+    },
+    // A lump of coal thuds into the bin, soot hissing off it.
+    winCoal(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 120 * p, to: 55, dur: 0.14, v: 0.5, a: 0.001 });
+      hiss(out, t, { type: 'lowpass', f: 900 * p, dur: 0.12, v: 0.25, crunch: true });
+      hiss(out, t, { at: 0.05, type: 'bandpass', f: 3000, q: 0.7, dur: 0.25, v: 0.06, a: 0.03 });
+      return 0.35;
+    },
+  });
+  Object.assign(GAP, { winRibbon: 0.08, winPop: 0.2, winGift: 0.4, winCoal: 0.05 });
+  NAMES.push('winRibbon', 'winPop', 'winGift', 'winCoal');
 
   /* ---------------------------------------------------------------- STORY (round 8)
      DESIGN.md "Stories, the rival and alternate bosses (round 8)": a story
@@ -3050,9 +3098,9 @@ const AUDIO = (() => {
       'magHum magDrop scoopSlosh handSquish hookFire twinClick vacWhoosh vacSlurp vacBlow turBuild clawCoin clawSpin clawTap ' +
       'plinkDrop lever reelSpin reelStop skeeRoll skeeHop drip sizzle petChirp petAct petLove giggle dig magLift ' +
       'beltRun iceGrow secHum secGrav glassCrack creak knock molePop diceLand famCan famHum plushSqueak rrShine ' +
-      'arcLose arcIn petHonk moleCombo ticketSpray boonDeal petSyn secVoice crabSnip famReady famChange groan rosBlow rosSlide rosSweep',
+      'arcLose arcIn petHonk moleCombo ticketSpray boonDeal petSyn secVoice crabSnip famReady famChange groan rosBlow rosSlide rosSweep winRibbon winCoal',
     big: 'hitBig crit combo upgrade relic capUpgrade slam boom roar vsSlam kaboom turMega arcWin ambush famSolo ' +
-      'cmpCrunch doorOpen loreSting wkMedal fanfare lucky lose stingBoss rosCombo schPass',
+      'cmpCrunch doorOpen loreSting wkMedal fanfare lucky lose stingBoss rosCombo schPass winGift',
     huge: 'jackpot win victory capBurst double bossDown arcJackpot setDone evoBurst powerDown boss',
   };
   // mid (the default): hits, blocks, statuses, pickups, the stingElite, clawCheer, petLevel, setPiece, evoRise ...
@@ -3085,6 +3133,8 @@ const AUDIO = (() => {
     rosBlow: -3, rosPop: -3.5, rosCombo: 8, rosQuake: 1.5, rosSlide: 5, rosSweep: 7.5,
     // round 11 (SCHOOL): the bell, a star, the pass, a try again, chalk
     schBell: 6, schStar: 4, schPass: 7.5, schFail: 4, schChalk: 10,
+    // round 12 (WIN): the advent present's ribbon (soft), its jingle (big), Krampus's coal (soft); the lid's pop sits on mid untrimmed
+    winRibbon: 6.5, winGift: 8.5, winCoal: -8.5,
   };
   // [pitch spread (fraction), level spread (dB)] for the sounds that repeat back to back
   const MIX_VARY = {};
