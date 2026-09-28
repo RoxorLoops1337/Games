@@ -1,0 +1,1722 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#2a1f33">
+<title>Pixel Colony</title>
+<style>
+  :root{
+    --bg1:#3b2a4a; --bg2:#1d1626; --ink:#fff7e8; --dim:#b9a8c9; --acc:#ffd23f; --acc2:#ff8fb1;
+    --panel:#2c2138; --panel2:#3a2c49; --good:#7be07b; --bad:#ff6b6b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg2);color:var(--ink);
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
+  #cv{position:fixed;inset:0;width:100%;height:100%;display:block}
+  button{font:inherit;color:inherit;cursor:pointer;border:0}
+  .hidden{display:none!important}
+
+  /* top HUD */
+  #hud{position:fixed;left:0;right:0;top:0;height:60px;display:flex;align-items:center;gap:8px;
+    padding:8px max(12px,env(safe-area-inset-left));max-width:560px;margin:0 auto;pointer-events:none}
+  #hud > *{pointer-events:auto}
+  .ibtn{width:44px;height:44px;border-radius:14px;background:var(--panel2);font-size:20px;
+    box-shadow:0 3px 0 #120d18;display:grid;place-items:center;flex:none}
+  .ibtn:active{transform:translateY(2px);box-shadow:0 1px 0 #120d18}
+  #hudMid{flex:1;min-width:0;text-align:center;line-height:1.1}
+  #hudMode{font-size:12px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;font-weight:700}
+  #hudName{font-size:18px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .coins{height:36px;padding:0 12px;border-radius:18px;background:var(--panel);display:flex;align-items:center;gap:6px;
+    font-weight:800;flex:none}
+
+  /* booster bar */
+  #boost{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:10px;
+    padding:8px 12px calc(10px + env(safe-area-inset-bottom));pointer-events:none}
+  #boost button{pointer-events:auto;position:relative;min-width:84px;height:52px;border-radius:16px;background:var(--panel2);
+    box-shadow:0 4px 0 #120d18;font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;padding:0 12px}
+  #boost button:active{transform:translateY(3px);box-shadow:0 1px 0 #120d18}
+  #boost button .ic{font-size:20px}
+  #boost button .badge{position:absolute;top:-6px;right:-6px;min-width:22px;height:22px;border-radius:11px;background:var(--acc);
+    color:#2a1f33;font-size:12px;display:grid;place-items:center;padding:0 5px;box-shadow:0 2px 0 #0006}
+  #boost button .badge.buy{background:#ffb347}
+  #boost button[disabled]{opacity:.45}
+
+  #hint{position:fixed;left:50%;top:66px;transform:translate(-50%,-100%);max-width:min(92vw,480px);background:#fff7e8;color:#2a1f33;
+    padding:10px 14px;border-radius:14px;font-weight:700;font-size:14px;text-align:center;box-shadow:0 4px 0 #0005;
+    transition:opacity .3s;pointer-events:none;z-index:4}
+  #hint.off{opacity:0}
+
+  /* screens */
+  .scr{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;z-index:10;
+    background:rgba(20,14,28,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+  .scr.clear{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+  .card{width:min(100%,420px);max-height:100%;overflow:auto;background:var(--panel);border-radius:24px;padding:22px 18px;
+    box-shadow:0 8px 0 #120d18,0 20px 50px #0008;text-align:center;animation:pop .35s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+  .big{display:block;width:100%;padding:16px;border-radius:18px;margin-top:12px;font-size:18px;font-weight:800;
+    box-shadow:0 5px 0 #0007;text-align:left;display:flex;align-items:center;gap:12px}
+  .big:active{transform:translateY(3px);box-shadow:0 2px 0 #0007}
+  .big .ic{font-size:30px;width:40px;text-align:center}
+  .big small{display:block;font-size:13px;font-weight:700;opacity:.8}
+  .b-feast{background:linear-gradient(#ff6f61,#e8413c);color:#fff}
+  .b-build{background:linear-gradient(#6fb6ff,#3f7fe0);color:#fff}
+  .b-gal{background:linear-gradient(#b88cff,#7d44c9);color:#fff}
+  .b-plain{background:var(--panel2);color:var(--ink);justify-content:center}
+  .b-go{background:linear-gradient(#9cf07a,#4cb944);color:#10300f;justify-content:center}
+  .b-gold{background:linear-gradient(#ffe27a,#ffb347);color:#3a2300;justify-content:center}
+  .logo{font-size:44px;font-weight:900;letter-spacing:.02em;line-height:.95;margin:4px 0 6px;
+    text-shadow:0 4px 0 #120d18;color:var(--acc)}
+  .logo span{color:var(--acc2)}
+  .tag{color:var(--dim);font-weight:700;margin-bottom:6px}
+  .row{display:flex;gap:10px;justify-content:center;margin-top:12px}
+  .row .big{margin-top:0;justify-content:center;flex:1}
+  .how{font-size:13px;color:var(--dim);text-align:left;margin-top:14px;line-height:1.45}
+  .how b{color:var(--ink)}
+  h2{margin:4px 0 2px;font-size:30px;font-weight:900}
+  .sub{color:var(--dim);font-weight:700}
+  .stars{font-size:40px;letter-spacing:6px;margin:6px 0;color:#5a4a6a}
+  .stars .on{color:var(--acc);text-shadow:0 3px 0 #9a6b00}
+  .thumb{image-rendering:pixelated;display:block;margin:10px auto;border-radius:12px;background:#fbf3e2;padding:8px}
+  .reward{font-size:20px;font-weight:900;color:var(--acc)}
+  #galGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:10px;margin-top:12px}
+  .gi{background:var(--panel2);border-radius:14px;padding:8px 4px 6px;font-size:11px;font-weight:700}
+  .gi canvas{image-rendering:pixelated;width:64px;height:64px;display:block;margin:0 auto 4px}
+  .gi .gs{color:var(--acc);font-size:11px;min-height:14px}
+  .gi.lock{opacity:.6}
+  .toggles{display:flex;gap:8px;justify-content:center;margin-top:14px}
+  .toggles button{background:var(--panel2);border-radius:12px;padding:8px 12px;font-weight:700;font-size:13px}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="hud" class="hidden">
+  <button class="ibtn" data-act="home" aria-label="Home">🏠</button>
+  <div id="hudMid"><div id="hudMode">Feast · Level 1</div><div id="hudName">Heart</div></div>
+  <div class="coins"><span>🪙</span><span id="hudCoins">0</span></div>
+  <button class="ibtn" data-act="restart" aria-label="Restart">↻</button>
+</div>
+
+<div id="boost" class="hidden">
+  <button data-act="undo"><span class="ic">↶</span>Undo<span class="badge" id="bgUndo">0</span></button>
+  <button data-act="slot"><span class="ic">➕</span>Spot<span class="badge" id="bgSlot">0</span></button>
+  <button data-act="peek"><span class="ic">👁</span>Peek<span class="badge" id="bgPeek">0</span></button>
+</div>
+
+<div id="hint" class="off"></div>
+
+<div id="scrTitle" class="scr clear">
+  <div class="card">
+    <div class="logo">PIXEL<br><span>COLONY</span></div>
+    <div class="tag">Feed the swarm. Build the picture.</div>
+    <button class="big b-feast" data-act="feast"><span class="ic">🐜</span><span>Feast<small id="tFeast">Level 1 · ants eat the picture</small></span></button>
+    <button class="big b-build" data-act="build"><span class="ic">🧱</span><span>Build<small id="tBuild">Level 1 · ants build the picture</small></span></button>
+    <button class="big b-gal" data-act="gallery"><span class="ic">🖼</span><span>Gallery<small id="tGal">0 / 0 pictures</small></span></button>
+    <div class="toggles">
+      <button data-act="sound" id="tgSound">🔊 Sound on</button>
+      <button data-act="music" id="tgMusic">🥁 Beat on</button>
+      <span class="coins"><span>🪙</span><span id="tCoins">0</span></span>
+    </div>
+    <div class="how">
+      <b>Tap a colony</b> at the bottom to send its ants. They go for every pixel of their colour they can reach.<br>
+      <b>Feast:</b> ants only reach pixels touching the open air, so eat from the outside in.<br>
+      <b>Build:</b> a block needs the ground, open air below it, or a block it touches.<br>
+      Ants that can't finish <b>wait in a spot</b>. Fill every spot and the colony jams!
+    </div>
+  </div>
+</div>
+
+<div id="scrWin" class="scr hidden">
+  <div class="card">
+    <h2 id="winTitle">Delicious!</h2>
+    <div class="sub" id="winSub">You devoured the Heart</div>
+    <canvas id="winThumb" class="thumb" width="160" height="160"></canvas>
+    <div class="stars" id="winStars"><span>★</span><span>★</span><span>★</span></div>
+    <div class="reward" id="winReward">+20 🪙</div>
+    <div class="row">
+      <button class="big b-plain" data-act="home">🏠</button>
+      <button class="big b-go" data-act="next">Next ▶</button>
+    </div>
+  </div>
+</div>
+
+<div id="scrLose" class="scr hidden">
+  <div class="card">
+    <h2>Colony jam!</h2>
+    <div class="sub">Every waiting spot is full and nobody can reach their food.</div>
+    <button class="big b-gold" data-act="rescue" id="btnRescue">➕ Open an extra spot</button>
+    <div class="row">
+      <button class="big b-plain" data-act="undoLose" id="btnUndoLose">↶ Undo</button>
+      <button class="big b-plain" data-act="restart">↻ Retry</button>
+    </div>
+  </div>
+</div>
+
+<div id="scrGallery" class="scr hidden">
+  <div class="card">
+    <h2>Gallery</h2>
+    <div class="sub" id="galSub">Pictures your colony has eaten and built</div>
+    <div id="galGrid"></div>
+    <button class="big b-plain" data-act="home">Back</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+   Pixel Colony
+   A pixel-art ant puzzle in two modes:
+     Feast  - the picture starts full; ant swarms eat it from the outside in.
+     Build  - the picture starts as holes; ants carry blocks and build it up.
+   Colonies wait in stacks at the bottom. Tapping one sends its ants into a
+   waiting spot; they work on every reachable pixel of their colour, and any
+   that can't finish stay in the spot until the board opens up. Fill every
+   spot with stuck ants and the colony jams.
+   Levels are generated from a replayable solution, so every level is
+   solvable even with zero spare spots.
+   ============================================================ */
+
+const PAL = {
+  k:'#2b2233', r:'#e8413c', R:'#a8232e', p:'#ff8fb1', o:'#f5892a', O:'#c45a14',
+  y:'#ffd23f', Y:'#fff4a8', l:'#a8e05a', g:'#4cb944', G:'#23793a', b:'#96602f',
+  B:'#5b3a1d', t:'#e9bf86', w:'#fbf6ec', s:'#a2a8b3', S:'#5d6470', u:'#3f7fe0',
+  c:'#62d2ef', P:'#7d44c9', v:'#c392ff', q:'#4a2a7a',
+};
+
+/* ---------------- pixel-art composer ----------------
+   Big pictures are painted from shapes on a small grid, then shaded
+   (light from the top left) and outlined like hand-made pixel art. */
+const MAX_COLORS = 12;
+const SH = {
+  E: (cx, cy, rx, ry) => (x, y) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1,
+  C: (cx, cy, r) => SH.E(cx, cy, r, r),
+  RE: (cx, cy, rx, ry, a) => { const c = Math.cos(a), s = Math.sin(a);
+    return (x, y) => { const dx = x - cx, dy = y - cy, u = dx * c + dy * s, v = -dx * s + dy * c; return (u / rx) ** 2 + (v / ry) ** 2 <= 1; }; },
+  R: (x0, y0, x1, y1) => (x, y) => x >= x0 && x < x1 && y >= y0 && y < y1,
+  RR: (x0, y0, x1, y1, r) => (x, y) => {
+    if (x < x0 || x >= x1 || y < y0 || y >= y1) return false;
+    const qx = Math.max(x0 + r - x, 0, x - (x1 - r)), qy = Math.max(y0 + r - y, 0, y - (y1 - r));
+    return qx * qx + qy * qy <= r * r;
+  },
+  P: (pts) => (x, y) => {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  },
+  L: (x0, y0, x1, y1, th) => (x, y) => {
+    const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / l2));
+    return Math.hypot(x - x0 - t * dx, y - y0 - t * dy) <= th / 2;
+  },
+  RING: (cx, cy, r0, r1, a0, a1) => (x, y) => {
+    const d = Math.hypot(x - cx, y - cy);
+    if (d < r0 || d > r1) return false;
+    if (a0 === undefined) return true;
+    let a = Math.atan2(y - cy, x - cx);
+    while (a < a0) a += Math.PI * 2;
+    return a <= a1;
+  },
+  or: (...f) => (x, y) => f.some((g) => g(x, y)),
+  and: (...f) => (x, y) => f.every((g) => g(x, y)),
+  sub: (a, b) => (x, y) => a(x, y) && !b(x, y),
+};
+function compose(w, h, paint){
+  const px = new Array(w * h).fill(null);
+  let sid = 0;
+  const own = new Int16Array(w * h).fill(-1);
+  const fill = (test, col, o) => {
+    o = o || {};
+    const me = sid++;
+    const cover = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (test(x + 0.5, y + 0.5)) cover[y * w + x] = 1;
+    const inS = (x, y) => x >= 0 && y >= 0 && x < w && y < h && cover[y * w + x];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+      const i = y * w + x;
+      if (!cover[i]) continue;
+      let c = typeof col === 'function' ? col(x, y) : col;
+      if (!c) continue;
+      if (o.shade !== false){
+        const dark = !inS(x + 1, y) || !inS(x, y + 1) || (o.soft !== false && !inS(x + 1, y + 1) && !inS(x + 2, y + 2));
+        const lite = !inS(x - 1, y) || !inS(x, y - 1);
+        if (dark && !lite) c = shade(c, o.dk || -0.28);
+        else if (lite && !dark && o.hi !== false) c = shade(c, o.lt || 0.28);
+      }
+      px[i] = c; own[i] = me;
+    }
+    if (o.ol){
+      const oc = o.ol === true ? shade(typeof col === 'function' ? col(0, 0) : col, -0.55) : o.ol;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+        const i = y * w + x;
+        if (cover[i] || (px[i] && !o.olOver)) continue;
+        if (inS(x - 1, y) || inS(x + 1, y) || inS(x, y - 1) || inS(x, y + 1)){ px[i] = oc; own[i] = me; }
+      }
+    }
+  };
+  const dot = (x, y, col) => { if (x >= 0 && y >= 0 && x < w && y < h) px[y * w + x] = col; };
+  paint(fill, dot);
+  // keep the colony count sane: fold the rarest colour into its nearest
+  // neighbour until at most MAX_COLORS are left
+  const rgb = (c) => { const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  for (;;){
+    const cnt = {};
+    for (const c of px) if (c) cnt[c] = (cnt[c] || 0) + 1;
+    const cols = Object.keys(cnt);
+    if (cols.length <= MAX_COLORS) break;
+    cols.sort((p, q) => cnt[p] - cnt[q]);
+    const rare = cols[0], a = rgb(rare);
+    let best = null, bd = Infinity;
+    for (const c of cols.slice(1)){
+      const b = rgb(c), d = (a[0] - b[0]) ** 2 * 0.3 + (a[1] - b[1]) ** 2 * 0.59 + (a[2] - b[2]) ** 2 * 0.11;
+      if (d < bd){ bd = d; best = c; }
+    }
+    for (let i = 0; i < px.length; i++) if (px[i] === rare) px[i] = best;
+  }
+  // hand the picture over as rows + a private palette
+  const CH = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const pal = {}, back = {};
+  const rows = [];
+  for (let y = 0; y < h; y++){
+    let r = '';
+    for (let x = 0; x < w; x++){
+      const c = px[y * w + x];
+      if (!c){ r += '.'; continue; }
+      if (!back[c]){ const k = CH[Object.keys(pal).length]; pal[k] = c; back[c] = k; }
+      r += back[c];
+    }
+    rows.push(r);
+  }
+  return { rows, pal };
+}
+function big(id, name, w, h, paint){ const a = compose(w, h, paint); a.id = id; a.name = name; return a; }
+
+const { E, C, RE, R, RR, P, L: Ln, RING, or, and, sub } = SH;
+const PI = Math.PI;
+const K = '#2b2233';
+const BIG_ART = [
+  big('watermelon', 'Watermelon', 34, 21, (f, dot) => {
+    const half = R(0, 1, 34, 30);
+    f(and(half, E(17, 1, 16.5, 19.5)), '#23793a', { ol: K });
+    f(and(half, E(17, 1, 15, 18)), '#7cc84a', { shade: false });
+    f(and(half, E(17, 1, 14, 17)), '#e9f5c8', { shade: false });
+    f(and(half, E(17, 1, 13, 16)), '#e8413c', { dk: -0.18 });
+    for (const [x, y] of [[8, 4], [13, 3], [19, 3], [25, 4], [10, 8], [16, 7], [22, 8], [13, 12], [19, 12], [16, 15]]){
+      dot(x, y, K); dot(x, y + 1, K); dot(x + 1, y, '#5d4a6a');
+    }
+    f(and(half, E(17, 1, 11, 4.5), R(0, 1, 34, 3)), '#ff7a6b', { shade: false });
+  }),
+  big('strawberry', 'Strawberry', 28, 32, (f, dot) => {
+    const body = or(E(14, 15, 12, 9.5), P([[2.3, 16], [25.7, 16], [15, 31], [13, 31]]));
+    f(body, '#e8413c', { ol: '#7a1622' });
+    f(RE(8.5, 13.5, 2, 4, 0.5), '#ff8f86', { shade: false });
+    for (let y = 9; y < 30; y += 3) for (let x = 3 + (y % 2) * 2; x < 26; x += 4)
+      if (body(x + 0.5, y + 0.5) && body(x + 1.5, y + 1.5) && body(x - 0.5, y + 0.5)) { dot(x, y, '#ffe27a'); dot(x, y + 1, '#c9831e'); }
+    const leaf = or(RE(9, 7, 5.5, 1.8, -0.25), RE(19, 7, 5.5, 1.8, 0.25), RE(11.5, 5, 4.5, 1.6, -0.9), RE(16.5, 5, 4.5, 1.6, 0.9), E(14, 7, 3, 2));
+    f(leaf, '#4cb944', { ol: '#1d5a2a' });
+    f(Ln(14, 0.5, 14.5, 5, 1.6), '#2e7a36', { shade: false });
+  }),
+  big('avocado', 'Avocado', 26, 34, (f) => {
+    const egg = (d) => or(E(13, 22, 12 - d, 11.5 - d), E(13, 12, 8.5 - d, 10.5 - d));
+    f(egg(0), '#2f5d2a', { ol: '#16301a' });
+    f(egg(1.5), '#9ccf4a', { shade: false });
+    f(egg(3), '#d7ea7a', { shade: false });
+    f(E(13, 21.5, 7.5, 7.5), '#f4f1a8', { shade: false });
+    f(E(13, 22, 5.5, 6), '#96602f', { ol: '#b58a3c' });
+    f(E(11.5, 20, 1.5, 2), '#c98d58', { shade: false });
+  }),
+  big('mic', 'Beatbox Mic', 30, 36, (f, dot) => {
+    f(RING(15, 10, 11.5, 12.8, -PI * 0.95, -PI * 0.55), '#c392ff', { shade: false });
+    f(RING(15, 10, 11.5, 12.8, -PI * 0.45, -PI * 0.05), '#c392ff', { shade: false });
+    f(RING(15, 10, 14.2, 15.4, -PI * 0.9, -PI * 0.62), '#ff8fb1', { shade: false });
+    f(RING(15, 10, 14.2, 15.4, -PI * 0.38, -PI * 0.1), '#ff8fb1', { shade: false });
+    f(C(15, 10, 8.5), (x, y) => ((x + y) % 2 ? '#8a929e' : '#c9ced6'), { ol: K, shade: false });
+    f(E(12, 7, 2.5, 1.6), '#f4f6fa', { shade: false });
+    f(R(7, 17, 23, 20.5), '#e8413c', { ol: K });
+    f(P([[8.5, 20.5], [21.5, 20.5], [18, 35], [12, 35]]), '#3b3346', { ol: K });
+    f(Ln(11.5, 21.5, 13, 33, 1.3), '#6d6480', { shade: false });
+    f(R(13, 25, 17, 28), '#ffd23f', { shade: false });
+  }),
+  big('sunflower', 'Sunflower', 32, 36, (f, dot) => {
+    for (let k = 0; k < 12; k++){
+      const a = k / 12 * PI * 2 + 0.26;
+      f(RE(16 + Math.cos(a) * 8.5, 13 + Math.sin(a) * 8.5, 4.6, 2.6, a), '#f5a623', { ol: '#9a5a10' });
+    }
+    for (let k = 0; k < 12; k++){
+      const a = k / 12 * PI * 2;
+      f(RE(16 + Math.cos(a) * 8, 13 + Math.sin(a) * 8, 4.6, 2.4, a), '#ffd23f', { dk: -0.2 });
+    }
+    f(C(16, 13, 6.5), (x, y) => ((x * 2 + y) % 3 ? '#5b3a1d' : '#8b5a2b'), { ol: '#3a230f', shade: false });
+    f(Ln(16, 21, 16, 35.5, 2.4), '#3d9a3f', {});
+    f(RE(10.5, 28, 5, 2.2, 0.5), '#4cb944', { ol: '#1d5a2a' });
+    f(RE(21.5, 31, 5, 2.2, -0.5), '#4cb944', { ol: '#1d5a2a' });
+  }),
+  big('ladybug', 'Ladybug', 30, 28, (f, dot) => {
+    for (const [x0, y0, x1, y1] of [[5, 11, 1, 8], [4, 17, 0, 18], [5, 22, 1, 26], [25, 11, 29, 8], [26, 17, 30, 18], [25, 22, 29, 26]])
+      f(Ln(x0, y0, x1, y1, 1.3), K, { shade: false });
+    f(E(15, 6.5, 6.5, 4.5), K, {});
+    f(Ln(12, 3, 9, 0.5, 1.2), K, { shade: false }); f(Ln(18, 3, 21, 0.5, 1.2), K, { shade: false });
+    f(C(12.5, 5.5, 1.3), '#fbf6ec', { shade: false }); f(C(17.5, 5.5, 1.3), '#fbf6ec', { shade: false });
+    f(E(15, 17, 12.5, 10.5), '#e8413c', { ol: K });
+    f(R(14.3, 7, 15.7, 28), K, { shade: false });
+    for (const [x, y, r] of [[9, 13, 2.4], [21, 13, 2.4], [7.5, 20, 2], [22.5, 20, 2], [11.5, 23.5, 1.8], [18.5, 23.5, 1.8]])
+      f(C(x, y, r), K, { shade: false });
+    f(RE(8, 10, 2.2, 1.2, -0.6), '#ff8f86', { shade: false });
+  }),
+  big('mushroom_house', 'Mushroom House', 32, 34, (f, dot) => {
+    f(R(0, 31, 32, 34), '#4cb944', {});
+    f(RR(8, 14, 24, 32, 3), '#f4e4c1', { ol: '#8b6a44' });
+    f(RR(13, 21, 19, 32, 3), '#96602f', { ol: '#5b3a1d' });
+    dot(17, 26, '#ffd23f');
+    f(C(20.5, 17.5, 1.8), '#62d2ef', { ol: '#5b3a1d' });
+    f(C(11, 17.5, 1.8), '#62d2ef', { ol: '#5b3a1d' });
+    f(sub(E(16, 14, 15.5, 12.5), R(0, 14, 32, 40)), '#e8413c', { ol: '#7a1622' });
+    f(R(3, 14, 29, 15.5), '#e9bf86', { shade: false });
+    for (const [x, y, rx, ry] of [[9, 7, 2.5, 2], [17, 4.5, 2.2, 1.6], [23.5, 9, 2.4, 2], [14, 10.5, 1.8, 1.5], [4.5, 11.5, 1.4, 1.2]])
+      f(E(x, y, rx, ry), '#fbf6ec', {});
+    for (const x of [3, 7, 26, 29]) f(P([[x - 1, 31], [x + 1, 31], [x, 28.5]]), '#3d9a3f', { shade: false });
+  }),
+  big('frog', 'Frog', 32, 26, (f) => {
+    f(E(8, 7, 5.5, 5.5), '#4cb944', { ol: '#1d5a2a' });
+    f(E(24, 7, 5.5, 5.5), '#4cb944', { ol: '#1d5a2a' });
+    f(E(16, 17, 15, 8.5), '#4cb944', { ol: '#1d5a2a' });
+    f(E(16, 20, 10, 4.5), '#a8e05a', { shade: false });
+    f(C(8, 7, 3.6), '#fbf6ec', { shade: false }); f(C(24, 7, 3.6), '#fbf6ec', { shade: false });
+    f(E(8.5, 7.5, 1.6, 2.4), K, { shade: false }); f(E(24.5, 7.5, 1.6, 2.4), K, { shade: false });
+    f(RING(16, 12, 7.2, 8.3, PI * 0.2, PI * 0.8), '#1d5a2a', { shade: false });
+    f(E(6, 16, 2.4, 1.4), '#ff8fb1', { shade: false }); f(E(26, 16, 2.4, 1.4), '#ff8fb1', { shade: false });
+  }),
+  big('boombox', 'Boombox', 36, 26, (f, dot) => {
+    f(sub(RR(8, 0, 28, 9, 3), RR(10.5, 2.5, 25.5, 9, 1.5)), '#a2a8b3', { ol: K });
+    f(RR(1, 7, 35, 25, 3), '#3f7fe0', { ol: K });
+    f(R(3, 9, 33, 11), '#6fa6f5', { shade: false });
+    for (const cx of [9, 27]){
+      f(C(cx, 17, 6.3), '#2b2233', {});
+      f(C(cx, 17, 4.6), '#5d6470', {});
+      f(C(cx, 17, 2.4), '#a2a8b3', {});
+      f(C(cx - 0.6, 16.4, 0.9), '#fbf6ec', { shade: false });
+    }
+    f(RR(15, 13, 21, 20, 1), '#fbf6ec', { ol: K });
+    f(R(16, 15, 20, 17), '#ff8fb1', { shade: false });
+    for (const [x, c] of [[15, '#e8413c'], [17, '#ffd23f'], [19, '#4cb944']]) f(R(x, 21, x + 1.5, 23), c, { shade: false });
+  }),
+  big('balloon', 'Hot Air Balloon', 28, 36, (f) => {
+    const stripes = (x) => ['#e8413c', '#fbf6ec', '#ffd23f', '#fbf6ec', '#3f7fe0'][Math.floor(Math.abs(x - 14) / 2.6) % 5];
+    const env = or(E(14, 12, 12.5, 12), P([[2.5, 15], [25.5, 15], [18, 26], [10, 26]]));
+    f(env, stripes, { ol: K });
+    f(R(10, 25.5, 18, 27.5), '#96602f', { ol: K });
+    f(Ln(10.5, 27.5, 11, 30.5, 1), K, { shade: false }); f(Ln(17.5, 27.5, 17, 30.5, 1), K, { shade: false });
+    f(RR(9.5, 30, 18.5, 35.5, 1.2), (x, y) => ((x + y) % 3 ? '#b87a46' : '#96602f'), { ol: K });
+    f(RE(7.5, 7, 1.5, 3.5, 0.5), '#fff7e8', { shade: false });
+  }),
+  big('bee', 'Bumblebee', 34, 26, (f) => {
+    f(RE(13, 7.5, 6, 4, -0.5), '#e6f6ff', { ol: '#7aa7c7' });
+    f(RE(21, 7, 6, 4, 0.45), '#e6f6ff', { ol: '#7aa7c7' });
+    f(P([[29, 15], [33.5, 16], [29, 17.5]]), K, { shade: false });
+    f(E(17, 16, 12, 8), (x) => (Math.floor((x - 5) / 3.4) % 2 ? K : '#ffd23f'), { ol: K });
+    f(C(6.5, 14.5, 5.2), K, {});
+    f(C(5, 13, 1.5), '#fbf6ec', { shade: false });
+    f(Ln(5, 9.5, 2.5, 3.5, 1.1), K, { shade: false }); f(Ln(7.5, 9.5, 8.5, 3.5, 1.1), K, { shade: false });
+    f(E(3.5, 17.5, 1.5, 1), '#ff8fb1', { shade: false });
+  }),
+  big('rocket', 'Rocket', 26, 38, (f) => {
+    f(P([[13, 30], [18, 30], [15.5, 37.5], [13, 33], [10.5, 37.5], [8, 30]]), '#f5892a', { shade: false });
+    f(P([[10.5, 30], [15.5, 30], [13, 35]]), '#ffd23f', { shade: false });
+    f(P([[7, 20], [2, 29], [2, 31], [8, 29]]), '#e8413c', { ol: K });
+    f(P([[19, 20], [24, 29], [24, 31], [18, 29]]), '#e8413c', { ol: K });
+    f(E(13, 17, 6.8, 14), '#e8e6ef', { ol: K });
+    f(sub(E(13, 17, 6.8, 14), R(0, 8.5, 26, 40)), '#e8413c', {});
+    f(R(8, 27, 18, 30.5), '#a2a8b3', { ol: K });
+    f(C(13, 15, 3.4), '#3f7fe0', {});
+    f(C(13, 15, 2.2), '#62d2ef', {});
+    f(Ln(13, 20, 13, 29, 1.2), '#e8413c', { shade: false });
+  }),
+  big('panda', 'Panda', 30, 28, (f) => {
+    f(C(6, 6, 4.8), K, {}); f(C(24, 6, 4.8), K, {});
+    f(E(15, 16, 13.5, 11.5), '#fbf6ec', { ol: K, dk: -0.1 });
+    f(RE(9.5, 14.5, 3.4, 4.6, 0.6), K, {}); f(RE(20.5, 14.5, 3.4, 4.6, -0.6), K, {});
+    f(C(10, 14, 1.3), '#fbf6ec', { shade: false }); f(C(20, 14, 1.3), '#fbf6ec', { shade: false });
+    f(E(15, 20, 2.4, 1.6), K, {});
+    f(RING(13, 21.5, 1.6, 2.5, 0, PI), K, { shade: false }); f(RING(17, 21.5, 1.6, 2.5, 0, PI), K, { shade: false });
+    f(E(6.5, 20.5, 2.2, 1.3), '#ff8fb1', { shade: false }); f(E(23.5, 20.5, 2.2, 1.3), '#ff8fb1', { shade: false });
+    f(Ln(24, 23, 29, 16, 2), '#4cb944', {}); f(RE(27.5, 14, 2.4, 1.2, -0.9), '#a8e05a', { shade: false });
+  }),
+  big('snail', 'Snail', 34, 24, (f) => {
+    f(P([[1, 22], [5, 17], [8, 12], [11, 18], [30, 18], [33, 22]]), '#e9bf86', { ol: '#8b6a44' });
+    f(Ln(5.5, 13, 3, 4.5, 1.6), '#e9bf86', { shade: false }); f(Ln(8.5, 13, 9, 4, 1.6), '#e9bf86', { shade: false });
+    f(C(3, 4, 1.5), K, { shade: false }); f(C(9, 3.5, 1.5), K, { shade: false });
+    const shell = C(20, 11, 9);
+    f(shell, (x, y) => { const a = Math.atan2(y - 11, x - 20), d = Math.hypot(x - 20, y - 11);
+      return (Math.floor(d - a * 1.3 + 20) % 4) < 2 ? '#f5892a' : '#c45a14'; }, { ol: '#5b3a1d' });
+    f(C(20, 11, 2), '#ffd23f', {});
+    f(E(7, 10.5, 0.8, 0.8), K, { shade: false });
+  }),
+  big('tree', 'Apple Tree', 32, 36, (f, dot) => {
+    f(R(0, 33, 32, 36), '#4cb944', {});
+    f(P([[13, 34], [19, 34], [18, 18], [22, 14], [16, 17], [14, 13], [14, 18]]), '#96602f', { ol: '#5b3a1d' });
+    const crown = or(C(10, 12, 7.5), C(22, 12, 7.5), C(16, 7, 7.5), C(16, 15, 7), C(6, 17, 4.5), C(26, 17, 4.5));
+    f(crown, (x, y) => ((x * 7 + y * 3) % 11 < 2 ? '#3d9a3f' : '#4cb944'), { ol: '#1d5a2a' });
+    for (const [x, y] of [[8, 10], [15, 5], [22, 9], [12, 16], [20, 16], [25, 14], [5, 17], [17, 11]]){
+      f(C(x + 0.5, y + 0.5, 1.4), '#e8413c', { hi: false });
+    }
+    for (const x of [6, 25]) f(C(x, 32, 1.4), '#e8413c', { hi: false });
+  }),
+  big('rainbow', 'Rainbow', 36, 22, (f) => {
+    const bands = ['#e8413c', '#f5892a', '#ffd23f', '#4cb944', '#3f7fe0', '#7d44c9'];
+    bands.forEach((c, k) => f(RING(18, 19, 15.5 - k * 1.7, 17.2 - k * 1.7, PI, PI * 2), c, { shade: false }));
+    const cloud = (x, y) => or(C(x, y, 3.6), C(x + 3.6, y - 1.6, 3.8), C(x + 7, y, 3.4), R(x, y, x + 7, y + 3.3));
+    f(cloud(1.5, 17.5), '#fbf6ec', { ol: '#a2a8b3', dk: -0.12 });
+    f(cloud(27.5, 17.5), '#fbf6ec', { ol: '#a2a8b3', dk: -0.12 });
+  }),
+  big('owl', 'Owl', 28, 32, (f) => {
+    f(P([[4, 3], [9, 8], [5, 10]]), '#7a4a26', { ol: K }); f(P([[24, 3], [19, 8], [23, 10]]), '#7a4a26', { ol: K });
+    f(E(14, 18, 11.5, 13), '#96602f', { ol: K });
+    f(E(14, 22, 7.5, 8), (x, y) => ((y % 3 === 0 && (x + y) % 2) ? '#b8875a' : '#e9bf86'), { shade: false });
+    f(C(9, 12, 4.4), '#f5892a', {}); f(C(19, 12, 4.4), '#f5892a', {});
+    f(C(9, 12, 3), '#fbf6ec', { shade: false }); f(C(19, 12, 3), '#fbf6ec', { shade: false });
+    f(C(9.5, 12.5, 1.5), K, { shade: false }); f(C(18.5, 12.5, 1.5), K, { shade: false });
+    f(P([[12.5, 15], [15.5, 15], [14, 18.5]]), '#ffd23f', { shade: false });
+    f(R(8, 30.5, 13, 32), '#f5892a', { shade: false }); f(R(15, 30.5, 20, 32), '#f5892a', { shade: false });
+  }),
+  big('fish', 'Goldfish', 34, 24, (f) => {
+    f(P([[25, 12], [33.5, 3], [31, 12], [33.5, 21]]), '#f5892a', { ol: '#9a3d0a' });
+    f(P([[12, 4.5], [19, 1], [20, 6]]), '#f5892a', { ol: '#9a3d0a' });
+    f(E(14, 12, 12.5, 8), (x, y) => ((x + (y % 2) * 2) % 4 === 0 && x > 8 && x < 24 ? '#f5892a' : '#ffa94d'), { ol: '#9a3d0a' });
+    f(C(7, 10.5, 2.2), '#fbf6ec', { shade: false });
+    f(C(6.5, 10.5, 1.1), K, { shade: false });
+    f(RING(9, 12, 3.5, 4.4, -PI * 0.35, PI * 0.35), '#c45a14', { shade: false });
+    f(RE(15, 16.5, 3, 1.4, 0.4), '#ffd23f', { shade: false });
+    f(C(2, 8, 0.9), '#62d2ef', { shade: false }); f(C(3.5, 4.5, 1.2), '#62d2ef', { shade: false });
+  }),
+  big('lighthouse', 'Lighthouse', 26, 38, (f) => {
+    f(R(0, 33, 26, 38), (x, y) => ((x + y * 2) % 6 < 2 ? '#62d2ef' : '#3f7fe0'), { shade: false });
+    f(P([[8, 33], [18, 33], [16.5, 12], [9.5, 12]]), (x, y) => (Math.floor(y / 4) % 2 ? '#e8413c' : '#fbf6ec'), { ol: K });
+    f(R(8, 10, 18, 12), K, { shade: false });
+    f(R(9.5, 5, 16.5, 10), '#ffd23f', { ol: K });
+    f(P([[8, 5.5], [18, 5.5], [13, 0.5]]), '#e8413c', { ol: K });
+    f(P([[0, 5], [9, 6.5], [9, 8.5], [0, 10]]), '#fff4a8', { shade: false });
+    f(P([[26, 5], [17, 6.5], [17, 8.5], [26, 10]]), '#fff4a8', { shade: false });
+    f(RR(11.5, 26, 14.5, 33, 1.4), '#5b3a1d', {});
+  }),
+  big('saturn', 'Saturn', 36, 28, (f) => {
+    const ring = (front) => and(sub(RE(18, 14, 17, 5, -0.25), RE(18, 14, 12.5, 2.8, -0.25)), (x, y) => (front ? y > 14 + (x - 18) * -0.25 : true));
+    f(ring(false), '#e9bf86', { ol: '#8b6a44' });
+    f(C(18, 14, 10), (x, y) => ['#f5a623', '#ffd23f', '#c45a14', '#f5a623', '#fff4a8'][Math.floor((y + 1) / 3) % 5], { ol: '#6b3408' });
+    f(ring(true), '#e9bf86', { ol: '#8b6a44' });
+    for (const [x, y] of [[2, 2], [33, 4], [5, 25], [31, 25], [27, 1]]) f(C(x + 0.5, y + 0.5, 0.9), '#fff4a8', { shade: false });
+  }),
+  big('butterfly', 'Butterfly', 34, 28, (f) => {
+    const wing = (x, y, rx, ry, a, c) => f(RE(x, y, rx, ry, a), c, { ol: K });
+    wing(9, 9, 8, 6.5, -0.5, '#7d44c9'); wing(25, 9, 8, 6.5, 0.5, '#7d44c9');
+    wing(10.5, 20, 5.5, 4.5, 0.5, '#ff8fb1'); wing(23.5, 20, 5.5, 4.5, -0.5, '#ff8fb1');
+    for (const [x, y, r, c] of [[8, 8, 2.8, '#c392ff'], [26, 8, 2.8, '#c392ff'], [10, 20, 1.8, '#fbf6ec'], [24, 20, 1.8, '#fbf6ec'], [5, 11, 1.2, '#ffd23f'], [29, 11, 1.2, '#ffd23f']])
+      f(C(x, y, r), c, { shade: false });
+    f(E(17, 15, 1.6, 10), K, {});
+    f(Ln(16, 5.5, 13, 0.5, 1), K, { shade: false }); f(Ln(18, 5.5, 21, 0.5, 1), K, { shade: false });
+  }),
+  big('pineapple', 'Pineapple', 24, 38, (f) => {
+    for (const [a, l] of [[-0.5, 9], [0.5, 9], [0, 11], [-1.1, 7], [1.1, 7]])
+      f(RE(12 + Math.sin(a) * l * 0.5, 12 - Math.cos(a) * l * 0.5, 1.6, l / 2, a), '#4cb944', { ol: '#1d5a2a' });
+    f(E(12, 25, 9.5, 12), (x, y) => (((x + y) % 4 === 0 || (x - y + 40) % 4 === 0) ? '#c9831e' : '#ffd23f'), { ol: '#7a4a10' });
+    f(RE(7.5, 21, 1.4, 4, 0.2), '#fff4a8', { shade: false });
+  }),
+  big('castle', 'Castle', 36, 32, (f) => {
+    const stone = (x, y) => ((y % 4 === 0) || ((x + (Math.floor(y / 4) % 2) * 2) % 5 === 0) ? '#8a929e' : '#b9bec7');
+    f(or(R(8, 12, 28, 32), R(8, 10, 10.5, 12), R(12.5, 10, 15, 12), R(17, 10, 19, 12), R(21, 10, 23.5, 12), R(25.5, 10, 28, 12)), stone, { ol: K, shade: false });
+    for (const x of [1, 27]) f(or(R(x, 8, x + 8, 32), R(x, 6, x + 2, 8), R(x + 3, 6, x + 5, 8), R(x + 6, 6, x + 8, 8)), stone, { ol: K, shade: false });
+    for (const x of [5, 31]){ f(R(x - 0.5, 0, x + 0.5, 6), K, { shade: false }); f(P([[x + 0.5, 0.5], [x + 5, 2], [x + 0.5, 3.5]]), '#e8413c', { shade: false }); }
+    f(sub(RR(14, 20, 22, 36, 4), R(0, 32, 40, 40)), '#5b3a1d', {});
+    f(R(17.5, 21, 18.5, 32), '#3a230f', { shade: false });
+    for (const x of [4, 30]) f(RR(x, 14, x + 2, 18, 1), '#ffd23f', { shade: false });
+    f(RR(17, 14, 19, 17.5, 1), '#ffd23f', { shade: false });
+  }),
+  big('broccoli', 'Broccoli', 30, 32, (f) => {
+    f(P([[11, 32], [19, 32], [17, 18], [22, 13], [15, 16], [8, 13], [13, 18]]), '#a8e05a', { ol: '#4a7a1a' });
+    const head = or(C(8, 11, 6), C(15, 7, 6.5), C(22, 11, 6), C(12, 14, 5), C(18, 14, 5), C(15, 11, 5));
+    f(head, (x, y) => (((x * 3 + y * 5) % 7) < 2 ? '#a8e05a' : ((x + y * 2) % 5 === 0 ? '#23793a' : '#4cb944')), { ol: '#1d4a1a' });
+  }),
+];
+
+/* Tutorial pictures are hand-drawn and tiny; everything after is big. '.' is empty air. */
+const SMALL_ART = [
+  { id:'heart', name:'Heart', rows:[
+    '.RR...RR.',
+    'RrrR.RrrR',
+    'RrprRrrrR',
+    'RrrrrrrrR',
+    '.RrrrrrR.',
+    '..RrrrR..',
+    '...RrR...',
+    '....R....',
+  ]},
+  { id:'note', name:'Beat Note', rows:[
+    '....PPPPPPPP',
+    '....PPPPPPPP',
+    '....P......P',
+    '....P......P',
+    '....P......P',
+    '....P......P',
+    '....P......P',
+    '..PPP....PPP',
+    '.PvPP...PvPP',
+    'PvPPP..PvPPP',
+    'PPPP...PPPP.',
+    '.PP.....PP..',
+  ]},
+  { id:'cherry', name:'Cherries', rows:[
+    '........GG..',
+    '.......GGb..',
+    '......b.b...',
+    '.....b...b..',
+    '....b.....b.',
+    '..rrr....b..',
+    '.rprrr..rrr.',
+    '.rprrr.rprrr',
+    '.rrrrR.rprrr',
+    '.rrrRR.rrrrR',
+    '..RRR..rrRR.',
+    '........RR..',
+  ]},
+  { id:'mushroom', name:'Mushroom', rows:[
+    '....rrrrrr....',
+    '..rrwwrrrrrr..',
+    '.rrwwwrrrwwrr.',
+    '.rrwwrrrrwwwr.',
+    'rrrrrrrwwrrrrr',
+    'rwwrrrrwwrrrwR',
+    'rwwwrrrrrrrrRR',
+    '.RRRRRRRRRRRR.',
+    '....twwwwt....',
+    '....twwwwt....',
+    '....twwwwt....',
+    '...ttwwwwtt...',
+    '...tttttttt...',
+  ]},
+];
+const BIG_ORDER = ["frog", "ladybug", "watermelon", "avocado", "strawberry", "panda", "rainbow", "fish", "bee", "mic", "owl", "pineapple", "sunflower", "balloon", "snail", "butterfly", "rocket", "tree", "mushroom_house", "boombox", "lighthouse", "saturn", "broccoli", "castle"];
+const ART = SMALL_ART.concat(BIG_ORDER.map((id) => BIG_ART.find((a) => a.id === id)));
+
+const SAVE_KEY = 'pixelcolony_v1';
+const MAX_SLOTS = 7;
+const PRICE = { undo: 30, slot: 60, peek: 25 };
+const HINTS = {
+  feast: {
+    1: 'Tap a colony to send its ants. They eat every pixel of their colour they can reach!',
+    2: 'Ants only reach pixels that touch the open air. Eat the picture from the outside in!',
+    3: 'Ants that can\'t finish wait in a spot. If every spot fills up, the colony jams.',
+    6: 'Colonies marked ? stay a secret until they reach the top. Peek to see them.',
+  },
+  build: {
+    1: 'Tap a colony: its ants carry blocks and build the picture from the ground up.',
+    2: 'A block needs something to rest on: the ground, open air below it, or a block it touches.',
+    3: 'Ants that can\'t place their blocks wait in a spot. Don\'t let every spot fill up!',
+    6: 'Colonies marked ? stay a secret until they reach the top. Peek to see them.',
+  },
+};
+
+/* ---------------- small utils ---------------- */
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeOut = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
+const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+function mulberry(seed){
+  let a = seed >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashStr(s){
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function shade(hex, f){
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (f >= 0){ r += (255 - r) * f; g += (255 - g) * f; b += (255 - b) * f; }
+  else { r *= 1 + f; g *= 1 + f; b *= 1 + f; }
+  return '#' + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+}
+function lum(hex){
+  const n = parseInt(hex.slice(1), 16);
+  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+}
+
+/* ---------------- picture parsing ---------------- */
+const PARSED = {};
+function parseArt(a){
+  if (PARSED[a.id]) return PARSED[a.id];
+  let rows = a.rows.slice();
+  while (rows.length && !/[^.]/.test(rows[0])) rows.shift();
+  while (rows.length && !/[^.]/.test(rows[rows.length - 1])) rows.pop();
+  let x0 = Infinity, x1 = -1;
+  for (const r of rows){
+    const f = r.search(/[^.]/);
+    if (f < 0) continue;
+    x0 = Math.min(x0, f);
+    for (let x = r.length - 1; x >= 0; x--) if (r[x] !== '.'){ x1 = Math.max(x1, x); break; }
+  }
+  rows = rows.map((r) => r.slice(x0, x1 + 1).padEnd(x1 - x0 + 1, '.'));
+  const h = rows.length, w = rows[0].length;
+  const count = {};
+  for (const r of rows) for (const ch of r) if (ch !== '.') count[ch] = (count[ch] || 0) + 1;
+  const keys = Object.keys(count).sort((p, q) => count[q] - count[p] || (p < q ? -1 : 1));
+  const cell = new Int8Array(w * h).fill(-1);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){
+    const ch = rows[y][x];
+    if (ch !== '.') cell[y * w + x] = keys.indexOf(ch);
+  }
+  const colors = keys.map((k) => (a.pal || PAL)[k]);
+  // each colour's cells in the order ants take them: lowest first, then nearest the middle
+  const order = keys.map(() => []);
+  for (let i = 0; i < cell.length; i++) if (cell[i] >= 0) order[cell[i]].push(i);
+  const key = (i) => ((i / w) | 0) * 64 - Math.abs(2 * (i % w) - (w - 1));
+  for (const o of order) o.sort((p, q) => key(q) - key(p) || p - q);
+  const P = {
+    id: a.id, name: a.name, w, h, cell, keys, colors, order,
+    light: colors.map((c) => shade(c, 0.35)),
+    dark: colors.map((c) => shade(c, -0.3)),
+  };
+  PARSED[a.id] = P;
+  return P;
+}
+
+/* ---------------- board rules ---------------- */
+function newBoard(P, mode){
+  const n = P.w * P.h;
+  const B = { P, mode, w: P.w, h: P.h, todo: new Uint8Array(n), open: new Uint8Array(n),
+    left: new Array(P.keys.length).fill(0), total: 0 };
+  for (let i = 0; i < n; i++){
+    const c = P.cell[i];
+    if (c >= 0){ B.todo[i] = 1; B.left[c]++; B.total++; }
+  }
+  if (mode === 'feast'){
+    const st = [];
+    for (let i = 0; i < n; i++){
+      const x = i % B.w, y = (i / B.w) | 0;
+      if ((x === 0 || y === 0 || x === B.w - 1 || y === B.h - 1) && !B.todo[i]){ B.open[i] = 1; st.push(i); }
+    }
+    floodOpen(B, st);
+  }
+  return B;
+}
+/* Feast: `open` marks empty cells joined to the outside air. */
+function floodOpen(B, st){
+  const w = B.w, h = B.h;
+  while (st.length){
+    const i = st.pop(), x = i % w, y = (i / w) | 0;
+    if (x > 0 && !B.todo[i - 1] && !B.open[i - 1]){ B.open[i - 1] = 1; st.push(i - 1); }
+    if (x < w - 1 && !B.todo[i + 1] && !B.open[i + 1]){ B.open[i + 1] = 1; st.push(i + 1); }
+    if (y > 0 && !B.todo[i - w] && !B.open[i - w]){ B.open[i - w] = 1; st.push(i - w); }
+    if (y < h - 1 && !B.todo[i + w] && !B.open[i + w]){ B.open[i + w] = 1; st.push(i + w); }
+  }
+}
+function avail(B, i){
+  if (!B.todo[i]) return false;
+  const w = B.w, h = B.h, x = i % w, y = (i / w) | 0;
+  if (B.mode === 'feast'){
+    // ants reach any pixel touching the open air
+    if (x === 0 || y === 0 || x === w - 1 || y === h - 1) return true;
+    return !!(B.open[i - 1] || B.open[i + 1] || B.open[i - w] || B.open[i + w]);
+  }
+  const cell = B.P.cell;
+  if (y === h - 1) return true;
+  const d = i + w;
+  if (cell[d] < 0 || !B.todo[d]) return true;
+  if (x > 0 && cell[i - 1] >= 0 && !B.todo[i - 1]) return true;
+  if (x < w - 1 && cell[i + 1] >= 0 && !B.todo[i + 1]) return true;
+  if (y > 0 && cell[i - w] >= 0 && !B.todo[i - w]) return true;
+  return false;
+}
+/* The one cell of colour c the next ant takes: lowest first, then nearest the middle. */
+function pickCell(B, c){
+  for (const i of B.P.order[c]) if (B.todo[i] && avail(B, i)) return i;
+  return -1;
+}
+function doCell(B, i){
+  B.todo[i] = 0;
+  B.left[B.P.cell[i]]--;
+  B.total--;
+  if (B.mode === 'feast'){ B.open[i] = 1; floodOpen(B, [i]); }
+}
+function runSquad(B, c, cap){
+  const cells = [];
+  while (cells.length < cap){
+    const i = pickCell(B, c);
+    if (i < 0) break;
+    doCell(B, i);
+    cells.push(i);
+  }
+  return cells;
+}
+function availCounts(B){
+  const out = new Array(B.P.keys.length).fill(0);
+  for (let i = 0; i < B.P.cell.length; i++) if (B.todo[i] && avail(B, i)) out[B.P.cell[i]]++;
+  return out;
+}
+
+/* ---------------- levels ---------------- */
+function artIndex(n){
+  if (n <= ART.length) return n - 1;
+  const raw = (k) => hashStr('art' + k) % ART.length;
+  const prev = n - 1 <= ART.length ? n - 2 : raw(n - 1);
+  const k = raw(n);
+  return k === prev ? (k + 1) % ART.length : k;
+}
+function levelParams(n, mode){
+  return {
+    stacks: n <= 1 ? 2 : n <= 3 ? 3 : n <= 12 ? 4 : 5,
+    slots: n <= 2 ? 5 : n <= 30 || mode === 'build' ? 4 : 3,
+    size: n <= 4 ? 0 : clamp(24 - n * 0.35, 12, 24),
+    target: clamp(Math.round(4 + n * 0.8), 4, 28),
+    hop: n <= 2 ? 1 : clamp(0.55 - n * 0.012, 0.25, 0.55),
+    hide: n < 6 ? 99 : n < 14 ? 3 : n < 24 ? 2 : 1,
+  };
+}
+let squadUid = 1;
+function makeLevel(n, mode){
+  const art = ART[artIndex(n)];
+  const P = parseArt(art);
+  const prm = levelParams(n, mode);
+  const rng = mulberry(hashStr(mode + ':' + n + ':' + art.id));
+  const sim = newBoard(P, mode);
+  const avg = prm.size || sim.total / prm.target;
+  const lo = Math.max(2, Math.round(avg * 0.6)), hi = Math.max(lo + 1, Math.round(avg * 1.4));
+  // Play the level forward once; the moves we made become the colonies.
+  const seq = [];
+  while (sim.total > 0){
+    const av = availCounts(sim);
+    let sum = 0;
+    for (const a of av) sum += Math.sqrt(a);
+    let r = rng() * sum, c = 0;
+    for (; c < av.length; c++){ r -= Math.sqrt(av[c]); if (r <= 0 && av[c] > 0) break; }
+    if (c >= av.length) c = av.findIndex((a) => a > 0);
+    const cap = lo + Math.floor(rng() * (hi - lo + 1));
+    const got = runSquad(sim, c, cap).length;
+    const last = seq[seq.length - 1];
+    if (last && last.c === c && last.n + got <= hi * 1.5) last.n += got;
+    else seq.push({ c, n: got });
+  }
+  // Deal the moves into stacks in runs, keeping their order inside each
+  // stack: some stack top always holds the next move of the solution, while
+  // the other tops show colonies from much later that jam you if sent early.
+  const K = Math.min(prm.stacks, seq.length);
+  const stacks = Array.from({ length: K }, () => []);
+  const tall = Math.ceil(seq.length / K * 1.6) + 1;
+  let cur = Math.floor(rng() * K);
+  for (const q of seq){
+    if (rng() < prm.hop || stacks[cur].length >= tall){
+      const opts = stacks.map((s, k) => k).filter((k) => k !== cur && stacks[k].length < tall);
+      if (opts.length) cur = opts[Math.floor(rng() * opts.length)];
+    }
+    stacks[cur].push({ c: q.c, n: q.n, total: q.n, id: squadUid++ });
+  }
+  for (let k = stacks.length - 1; k >= 0; k--) if (!stacks[k].length) stacks.splice(k, 1);
+  return {
+    n, mode, art, P, B: newBoard(P, mode), stacks,
+    slots: new Array(prm.slots).fill(null), seq, hide: prm.hide, peek: false,
+    peak: 0, continued: false, history: [], taps: 0,
+  };
+}
+function cloneSquad(q){ return q ? { c: q.c, n: q.n, total: q.total, id: q.id } : null; }
+function snapshot(L){
+  return {
+    todo: L.B.todo.slice(), open: L.B.open.slice(), left: L.B.left.slice(), total: L.B.total,
+    stacks: L.stacks.map((s) => s.map(cloneSquad)), slots: L.slots.map(cloneSquad), peak: L.peak,
+  };
+}
+function restore(L, s){
+  L.B.todo = s.todo; L.B.open = s.open; L.B.left = s.left; L.B.total = s.total;
+  L.stacks = s.stacks; L.peak = s.peak;
+  // an extra spot bought after the snapshot stays bought
+  L.slots = s.slots.concat(new Array(Math.max(0, L.slots.length - s.slots.length)).fill(null));
+}
+/* Let every waiting colony work until nobody can reach anything more. */
+function resolve(L){
+  const ev = [];
+  let prog = true;
+  while (prog){
+    prog = false;
+    for (let i = 0; i < L.slots.length; i++){
+      const q = L.slots[i];
+      if (!q) continue;
+      const cells = runSquad(L.B, q.c, q.n);
+      if (!cells.length) continue;
+      q.n -= cells.length;
+      ev.push({ slot: i, c: q.c, cells });
+      prog = true;
+      if (q.n === 0) L.slots[i] = null;
+    }
+  }
+  return ev;
+}
+function tapStack(L, s){
+  const st = L.stacks[s];
+  if (!st || !st.length) return { ok: false, why: 'empty' };
+  const fi = L.slots.indexOf(null);
+  if (fi < 0) return { ok: false, why: 'full' };
+  L.history.push(snapshot(L));
+  if (L.history.length > 40) L.history.shift();
+  const q = st.shift();
+  L.slots[fi] = q;
+  L.taps++;
+  const ev = resolve(L);
+  L.peak = Math.max(L.peak, L.slots.filter(Boolean).length);
+  return { ok: true, slot: fi, squad: q, ev };
+}
+function levelStatus(L){
+  if (L.B.total === 0) return 'won';
+  if (L.slots.every(Boolean)) return 'lost';
+  return 'play';
+}
+function starsFor(L){
+  if (L.continued) return 1;
+  const S = L.slots.length;
+  if (L.peak <= Math.ceil(S / 2)) return 3;
+  if (L.peak < S) return 2;
+  return 1;
+}
+function isHidden(L, s, k){ return !L.peek && k >= L.hide; }
+
+/* ---------------- save ---------------- */
+function defaultSave(){
+  return { v: 1, lvl: { feast: 1, build: 1 }, coins: 0, inv: { undo: 3, slot: 2, peek: 2 },
+    done: {}, sound: true, music: true };
+}
+let SAVE = defaultSave();
+function loadSave(){
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    const def = defaultSave();
+    SAVE = Object.assign(defaultSave(), d);
+    SAVE.lvl = Object.assign(def.lvl, d.lvl || {});
+    SAVE.inv = Object.assign(def.inv, d.inv || {});
+    SAVE.done = d.done || {};
+  } catch (e){ SAVE = defaultSave(); }
+}
+function writeSave(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e){} }
+
+/* ---------------- audio ---------------- */
+const AU = { ctx: null, master: null, sfx: null, mus: null, noise: null, lastChomp: 0, beatT: 0, step: 0, timer: null };
+function audioInit(){
+  if (AU.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    AU.ctx = new AC();
+    AU.master = AU.ctx.createGain(); AU.master.gain.value = 0.8; AU.master.connect(AU.ctx.destination);
+    AU.sfx = AU.ctx.createGain(); AU.sfx.connect(AU.master);
+    AU.mus = AU.ctx.createGain(); AU.mus.gain.value = 0.32; AU.mus.connect(AU.master);
+    const len = AU.ctx.sampleRate * 0.5;
+    AU.noise = AU.ctx.createBuffer(1, len, AU.ctx.sampleRate);
+    const d = AU.noise.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    syncAudio();
+    AU.timer = setInterval(beatTick, 40);
+  } catch (e){ AU.ctx = null; }
+}
+function syncAudio(){
+  if (!AU.ctx) return;
+  AU.sfx.gain.value = SAVE.sound ? 1 : 0;
+  AU.mus.gain.value = SAVE.music && SAVE.sound ? 0.32 : 0;
+}
+function noiseHit(t, dur, freq, q, gain, type, dest){
+  const src = AU.ctx.createBufferSource(); src.buffer = AU.noise;
+  src.playbackRate.value = 0.8 + Math.random() * 0.4;
+  const f = AU.ctx.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+  const g = AU.ctx.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  src.connect(f); f.connect(g); g.connect(dest || AU.sfx);
+  src.start(t, Math.random() * 0.3); src.stop(t + dur + 0.02);
+}
+function tone(t, freq, dur, type, gain, dest, slideTo){
+  const o = AU.ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  const g = AU.ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  o.connect(g); g.connect(dest || AU.sfx); o.start(t); o.stop(t + dur + 0.02);
+}
+const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+function sfx(name, arg){
+  if (!AU.ctx || !SAVE.sound) return;
+  const t = AU.ctx.currentTime;
+  if (name === 'chomp'){
+    if (t - AU.lastChomp < 0.035) return;
+    AU.lastChomp = t;
+    noiseHit(t, 0.07, 900 + Math.random() * 900, 1.2, 0.35);
+    tone(t, 150 + Math.random() * 40, 0.06, 'sine', 0.18, null, 80);
+  } else if (name === 'place'){
+    if (t - AU.lastChomp < 0.035) return;
+    AU.lastChomp = t;
+    const semi = PENTA[(arg || 0) % PENTA.length];
+    tone(t, 392 * Math.pow(2, semi / 12), 0.12, 'triangle', 0.16);
+    noiseHit(t, 0.03, 3000, 0.8, 0.08);
+  } else if (name === 'tap'){
+    tone(t, 520, 0.07, 'square', 0.05, null, 780);
+    noiseHit(t, 0.04, 1800, 1, 0.1);
+  } else if (name === 'deny'){
+    tone(t, 180, 0.16, 'square', 0.06, null, 120);
+  } else if (name === 'clear'){
+    [0, 4, 7].forEach((s, k) => tone(t + k * 0.06, 523 * Math.pow(2, s / 12), 0.18, 'triangle', 0.12));
+  } else if (name === 'win'){
+    [0, 4, 7, 12, 16, 19, 24].forEach((s, k) => tone(t + k * 0.08, 392 * Math.pow(2, s / 12), 0.3, 'triangle', 0.14));
+  } else if (name === 'lose'){
+    [7, 4, 0, -5].forEach((s, k) => tone(t + k * 0.13, 330 * Math.pow(2, s / 12), 0.25, 'sawtooth', 0.05));
+  } else if (name === 'coin'){
+    tone(t, 988, 0.08, 'square', 0.05); tone(t + 0.07, 1319, 0.16, 'square', 0.05);
+  }
+}
+/* A tiny beatbox groove under the game: boots-n-cats with a hummed bass. */
+const BEAT = {
+  kick:  [1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,0,0],
+  snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1],
+  hat:   [0,0,1,0, 0,1,1,0, 0,0,1,0, 0,1,1,1],
+  bass:  [0,-1,-1,-1, -1,-1,3,-1, 5,-1,-1,-1, 7,-1,5,-1],
+};
+function beatTick(){
+  if (!AU.ctx || AU.ctx.state !== 'running') return;
+  const spb = 60 / 92 / 4;
+  const now = AU.ctx.currentTime;
+  if (AU.beatT < now) AU.beatT = now + 0.05;
+  while (AU.beatT < now + 0.15){
+    const s = AU.step % 16, t = AU.beatT, bar = Math.floor(AU.step / 16) % 4;
+    if (SAVE.music && SAVE.sound){
+      if (BEAT.kick[s]) tone(t, 120, 0.22, 'sine', 0.7, AU.mus, 42);
+      if (BEAT.snare[s]){ noiseHit(t, 0.14, 1700, 0.7, 0.45, 'bandpass', AU.mus); tone(t, 210, 0.06, 'triangle', 0.15, AU.mus, 160); }
+      if (BEAT.hat[s]) noiseHit(t, s % 2 ? 0.03 : 0.05, 7500, 1.5, 0.18, 'highpass', AU.mus);
+      const b = BEAT.bass[s];
+      if (b >= 0){
+        const root = [0, 0, -4, -2][bar];
+        tone(t, 65.4 * Math.pow(2, (root + b) / 12), spb * 1.8, 'triangle', 0.22, AU.mus);
+      }
+    }
+    AU.step++;
+    AU.beatT += spb;
+  }
+}
+function buzz(ms){ try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms); } catch (e){} }
+
+/* ---------------- runtime state ---------------- */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let DPR = 1, VW = 390, VH = 780;
+let phase = 'title';     // title | play | won | lost | gallery
+let L = null;            // current level
+let T = 0;               // clock (s)
+const V = { ants: [], parts: [], floats: [], vis: null, vT: null, claim: null, press: [], shake: 0,
+  endT: 0, ending: false, parade: [], combo: 0, comboT: 0, hungry: [] };
+const LAY = { bx: 0, by: 0, cs: 20, bw: 0, bh: 0, slots: [], stacks: [], stackTop: 0 };
+
+function $(id){ return document.getElementById(id); }
+function show(id, on){ const e = $(id); if (e) e.classList.toggle('hidden', !on); }
+
+/* ---------------- layout ---------------- */
+function fit(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  VW = window.innerWidth || 390; VH = window.innerHeight || 780;
+  cv.width = Math.round(VW * DPR); cv.height = Math.round(VH * DPR);
+  layout();
+}
+function layout(){
+  if (!L) return;
+  const W = Math.min(VW, 560), ox = (VW - W) / 2;
+  const top = 64, bottom = 80;
+  const stackH = clamp(VH * 0.2, 120, 176);
+  const slotH = clamp(VH * 0.08, 52, 66);
+  const areaTop = top + 6, areaBot = VH - bottom - stackH - slotH - 14;
+  const P = L.P;
+  const cs = Math.floor(Math.max(6, Math.min((W - 40) / P.w, (areaBot - areaTop - 20) / P.h, 40)));
+  LAY.cs = cs; LAY.bw = cs * P.w; LAY.bh = cs * P.h;
+  LAY.bx = Math.round(ox + (W - LAY.bw) / 2);
+  LAY.by = Math.round(areaTop + (areaBot - areaTop - LAY.bh) / 2);
+  // waiting spots
+  const S = L.slots.length;
+  const ss = Math.min(56, (W - 24) / S - 8);
+  const sy = areaBot + 8 + (slotH - ss) / 2;
+  LAY.slots = [];
+  for (let i = 0; i < S; i++){
+    const x = ox + W / 2 + (i - (S - 1) / 2) * (ss + 8) - ss / 2;
+    LAY.slots.push({ x, y: sy, s: ss });
+  }
+  // colony stacks
+  const K = L.stacks.length;
+  const colW = Math.min(92, (W - 24) / K - 10);
+  LAY.stackTop = areaBot + slotH + 16;
+  LAY.stacks = [];
+  for (let k = 0; k < K; k++){
+    const x = ox + W / 2 + (k - (K - 1) / 2) * (colW + 10) - colW / 2;
+    LAY.stacks.push({ x, y: LAY.stackTop, w: colW, h: Math.min(colW * 0.78, stackH * 0.52), full: stackH });
+  }
+  const he = $('hint');
+  if (he) he.style.top = Math.round(sy - 10) + 'px';
+}
+function cellCenter(i){
+  const w = L.P.w;
+  return { x: LAY.bx + ((i % w) + 0.5) * LAY.cs, y: LAY.by + (((i / w) | 0) + 0.5) * LAY.cs };
+}
+
+/* ---------------- level flow ---------------- */
+function startLevel(mode, n){
+  L = makeLevel(n, mode);
+  phase = 'play';
+  resetVisuals();
+  layout();
+  for (const id of ['scrTitle', 'scrWin', 'scrLose', 'scrGallery']) show(id, false);
+  show('hud', true); show('boost', true);
+  updateHud();
+  const h = HINTS[mode][n];
+  hint(h || '', h ? 6 : 0);
+}
+function resetVisuals(){
+  const n = L.P.w * L.P.h;
+  V.ants = []; V.parts = []; V.floats = [];
+  V.vis = new Uint8Array(n); V.vT = new Float32Array(n).fill(-9); V.claim = new Uint8Array(n);
+  for (let i = 0; i < n; i++) V.vis[i] = L.mode === 'feast' ? L.B.todo[i] : (L.P.cell[i] >= 0 && !L.B.todo[i] ? 1 : 0);
+  V.press = new Array(L.stacks.length).fill(-9);
+  V.hungry = [];
+  V.ending = false; V.endT = 0;
+  refreshHungry();
+}
+function refreshHungry(){
+  if (!L) return;
+  const av = availCounts(L.B);
+  V.hungry = av.map((a) => a > 0);
+}
+let hintTimer = 0;
+function hint(text, secs){
+  const e = $('hint');
+  if (!e) return;
+  if (text){ e.textContent = text; e.classList.remove('off'); hintTimer = secs || 4; }
+  else { e.classList.add('off'); hintTimer = 0; }
+}
+function updateHud(){
+  if (!L) return;
+  const name = L.mode === 'build' && phase === 'play' ? '???' : L.P.name;
+  $('hudMode').textContent = (L.mode === 'feast' ? 'Feast' : 'Build') + ' · Level ' + L.n;
+  $('hudName').textContent = name;
+  $('hudCoins').textContent = SAVE.coins;
+  for (const k of ['undo', 'slot', 'peek']){
+    const id = 'bg' + k[0].toUpperCase() + k.slice(1);
+    const b = $(id);
+    const have = SAVE.inv[k] || 0;
+    b.textContent = have > 0 ? have : PRICE[k] + '🪙';
+    b.classList.toggle('buy', have <= 0);
+  }
+}
+function onTapStack(s){
+  if (phase !== 'play' || !L) return;
+  const r = tapStack(L, s);
+  if (!r.ok){
+    if (r.why === 'full'){ sfx('deny'); buzz(30); V.shake = 0.25; hint('Every spot is busy. Wait for the ants, or use ➕ Spot.', 2.5); }
+    return;
+  }
+  V.press[s] = T;
+  sfx('tap'); buzz(8);
+  spawnFromEvents(r.ev);
+  if (!r.ev.length){
+    const sl = LAY.slots[r.slot];
+    if (sl) V.floats.push({ x: sl.x + sl.s / 2, y: sl.y - 6, txt: 'can\'t reach!', col: '#ffd23f', life: 1.2, t: 0 });
+  }
+  refreshHungry();
+  checkEnd();
+}
+function checkEnd(){
+  const st = levelStatus(L);
+  if (st === 'won' || st === 'lost'){ V.ending = true; V.endT = T; }
+}
+function spawnFromEvents(evs){
+  let base = 0;
+  for (const ev of evs){
+    const sl = LAY.slots[ev.slot] || { x: VW / 2, y: VH - 200, s: 40 };
+    const gap = Math.min(0.055, 1.3 / ev.cells.length);
+    ev.cells.forEach((cell, k) => {
+      V.claim[cell] = 1;
+      const sx = sl.x + sl.s / 2 + (Math.random() - 0.5) * sl.s * 0.5;
+      const sy = sl.y + sl.s / 2 + (Math.random() - 0.5) * sl.s * 0.3;
+      V.ants.push({ cell, c: ev.c, st: 0, t: 0, delay: base + k * gap, sx, sy, x: sx, y: sy,
+        dur: 0.5, ph: Math.random() * 6, ang: -Math.PI / 2, wob: Math.random() * 6, a: 1, seq: k });
+    });
+    base += 0.12 + Math.min(ev.cells.length * gap, 0.4);
+  }
+}
+function landCell(ant){
+  const i = ant.cell, P = L.P, c = P.cell[i];
+  V.claim[i] = 0;
+  V.vT[i] = T;
+  const cc = cellCenter(i);
+  if (L.mode === 'feast'){
+    V.vis[i] = 0;
+    for (let k = 0; k < 5; k++){
+      V.parts.push({ x: cc.x, y: cc.y, vx: (Math.random() - 0.5) * 160, vy: -60 - Math.random() * 120,
+        life: 0.5 + Math.random() * 0.3, t: 0, col: P.colors[c], sz: Math.max(2, LAY.cs * 0.18) });
+    }
+    sfx('chomp');
+  } else {
+    V.vis[i] = 1;
+    for (let k = 0; k < 4; k++){
+      V.parts.push({ x: cc.x + (Math.random() - 0.5) * LAY.cs, y: cc.y + LAY.cs * 0.4, vx: (Math.random() - 0.5) * 60,
+        vy: -20 - Math.random() * 30, life: 0.4, t: 0, col: '#fff7e8', sz: Math.max(2, LAY.cs * 0.12) });
+    }
+    V.combo = T - V.comboT < 0.4 ? V.combo + 1 : 0;
+    V.comboT = T;
+    sfx('place', V.combo);
+  }
+  // a whole colour finished on screen?
+  let any = false;
+  for (let j = 0; j < P.cell.length; j++){
+    if (P.cell[j] === c && (L.mode === 'feast' ? V.vis[j] : !V.vis[j])){ any = true; break; }
+  }
+  if (!any){
+    sfx('clear');
+    V.floats.push({ x: cc.x, y: cc.y - 10, txt: 'colour cleared!', col: P.colors[c], life: 1.3, t: 0 });
+  }
+}
+
+/* ---------------- boosters ---------------- */
+function spend(kind){
+  if ((SAVE.inv[kind] || 0) > 0){ SAVE.inv[kind]--; return true; }
+  if (SAVE.coins >= PRICE[kind]){ SAVE.coins -= PRICE[kind]; return true; }
+  hint('Not enough coins. Win levels to earn more!', 2.5);
+  sfx('deny');
+  return false;
+}
+function useUndo(){
+  if (!L || !L.history.length){ hint('Nothing to undo yet.', 2); return false; }
+  if (!spend('undo')) return false;
+  restore(L, L.history.pop());
+  resetVisuals();
+  phase = 'play';
+  show('scrLose', false);
+  writeSave(); updateHud();
+  return true;
+}
+function useSlot(){
+  if (!L) return false;
+  if (L.slots.length >= MAX_SLOTS){ hint('That\'s as many spots as the colony has room for.', 2); return false; }
+  if (!spend('slot')) return false;
+  L.slots.push(null);
+  if (phase === 'lost'){ L.continued = true; phase = 'play'; show('scrLose', false); V.ending = false; }
+  layout();
+  writeSave(); updateHud();
+  return true;
+}
+function usePeek(){
+  if (!L || L.peek){ hint('Every colony is already showing.', 2); return false; }
+  if (!spend('peek')) return false;
+  L.peek = true;
+  writeSave(); updateHud();
+  return true;
+}
+
+/* ---------------- end of level ---------------- */
+function winLevel(){
+  phase = 'won';
+  hint('');
+  const stars = starsFor(L);
+  const reward = 10 + stars * 5 + Math.floor(L.n / 5) * 2;
+  SAVE.coins += reward;
+  const rec = SAVE.done[L.art.id] || (SAVE.done[L.art.id] = {});
+  rec[L.mode] = Math.max(rec[L.mode] || 0, stars);
+  if (SAVE.lvl[L.mode] <= L.n) SAVE.lvl[L.mode] = L.n + 1;
+  writeSave();
+  sfx('win'); buzz(40);
+  for (let k = 0; k < 70; k++){
+    V.parts.push({ x: VW / 2, y: LAY.by + LAY.bh / 2, vx: (Math.random() - 0.5) * 700, vy: -200 - Math.random() * 500,
+      life: 1.4 + Math.random(), t: 0, col: L.P.colors[k % L.P.colors.length], sz: 4 + Math.random() * 5, conf: 1 });
+  }
+  $('winTitle').textContent = L.mode === 'feast' ? ['Delicious!', 'Yum yum!', 'Crumbs!', 'Munched!'][L.n % 4] : ['Built it!', 'Masterpiece!', 'Nailed it!', 'Ta-da!'][L.n % 4];
+  $('winSub').textContent = (L.mode === 'feast' ? 'Your colony devoured the ' : 'Your colony built the ') + L.P.name;
+  const st = $('winStars');
+  st.innerHTML = [1, 2, 3].map((k) => '<span class="' + (k <= stars ? 'on' : '') + '">★</span>').join('');
+  $('winReward').textContent = '+' + reward + ' 🪙';
+  drawThumb($('winThumb'), L.P, true);
+  updateHud();
+  setTimeout(() => { if (phase === 'won') show('scrWin', true); }, 700);
+}
+function loseLevel(){
+  phase = 'lost';
+  sfx('lose'); buzz(80);
+  const have = SAVE.inv.slot || 0;
+  const can = L.slots.length < MAX_SLOTS;
+  const b = $('btnRescue');
+  b.textContent = !can ? 'No room for more spots' : have > 0 ? '➕ Open an extra spot (' + have + ' left)' : '➕ Open an extra spot (' + PRICE.slot + ' 🪙)';
+  b.disabled = !can;
+  const u = $('btnUndoLose');
+  u.textContent = '↶ Undo' + ((SAVE.inv.undo || 0) > 0 ? ' (' + SAVE.inv.undo + ')' : ' (' + PRICE.undo + '🪙)');
+  setTimeout(() => { if (phase === 'lost') show('scrLose', true); }, 500);
+}
+
+/* ---------------- screens ---------------- */
+function toTitle(){
+  phase = 'title';
+  L = null;
+  for (const id of ['scrWin', 'scrLose', 'scrGallery', 'hud', 'boost']) show(id, false);
+  show('scrTitle', true);
+  hint('');
+  $('tFeast').textContent = 'Level ' + SAVE.lvl.feast + ' · ants eat the picture';
+  $('tBuild').textContent = 'Level ' + SAVE.lvl.build + ' · ants build the picture';
+  const got = ART.filter((a) => SAVE.done[a.id]).length;
+  $('tGal').textContent = got + ' / ' + ART.length + ' pictures';
+  $('tCoins').textContent = SAVE.coins;
+  $('tgSound').textContent = SAVE.sound ? '🔊 Sound on' : '🔇 Sound off';
+  $('tgMusic').textContent = SAVE.music ? '🥁 Beat on' : '🥁 Beat off';
+  makeParade();
+}
+function openGallery(){
+  phase = 'gallery';
+  show('scrTitle', false); show('scrGallery', true);
+  const grid = $('galGrid');
+  grid.innerHTML = '';
+  let got = 0;
+  for (const a of ART){
+    const rec = SAVE.done[a.id];
+    if (rec) got++;
+    const d = document.createElement('div');
+    d.className = 'gi' + (rec ? '' : ' lock');
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    d.appendChild(c);
+    const lbl = document.createElement('div');
+    lbl.textContent = rec ? a.name : '???';
+    d.appendChild(lbl);
+    const s = document.createElement('div');
+    s.className = 'gs';
+    s.textContent = rec ? (rec.feast ? '🐜' + '★'.repeat(rec.feast) + ' ' : '') + (rec.build ? '🧱' + '★'.repeat(rec.build) : '') : '';
+    d.appendChild(s);
+    grid.appendChild(d);
+    drawThumb(c, parseArt(a), !!rec);
+  }
+  $('galSub').textContent = got + ' of ' + ART.length + ' pictures collected';
+}
+function drawThumb(canvas, P, color){
+  const g = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  g.clearRect(0, 0, W, H);
+  const s = Math.floor(Math.min(W / P.w, H / P.h));
+  const ox = Math.floor((W - s * P.w) / 2), oy = Math.floor((H - s * P.h) / 2);
+  for (let i = 0; i < P.cell.length; i++){
+    const c = P.cell[i];
+    if (c < 0) continue;
+    g.fillStyle = color ? P.colors[c] : '#5a4a6a';
+    g.fillRect(ox + (i % P.w) * s, oy + ((i / P.w) | 0) * s, s, s);
+  }
+}
+function act(a){
+  audioInit();
+  if (AU.ctx && AU.ctx.state === 'suspended') AU.ctx.resume();
+  if (a === 'feast' || a === 'build') startLevel(a, SAVE.lvl[a]);
+  else if (a === 'gallery') openGallery();
+  else if (a === 'home') toTitle();
+  else if (a === 'restart'){ if (L) startLevel(L.mode, L.n); }
+  else if (a === 'next'){ if (L) startLevel(L.mode, SAVE.lvl[L.mode]); }
+  else if (a === 'undo' || a === 'undoLose'){ if (phase === 'play' || phase === 'lost') useUndo(); }
+  else if (a === 'slot' || a === 'rescue'){ if (phase === 'play' || phase === 'lost') useSlot(); }
+  else if (a === 'peek'){ if (phase === 'play') usePeek(); }
+  else if (a === 'sound'){ SAVE.sound = !SAVE.sound; writeSave(); syncAudio(); toTitle(); }
+  else if (a === 'music'){ SAVE.music = !SAVE.music; writeSave(); syncAudio(); toTitle(); }
+  if (a !== 'sound' && a !== 'music') sfx('tap');
+}
+
+/* ---------------- update ---------------- */
+function update(dt){
+  T += dt;
+  if (hintTimer > 0){ hintTimer -= dt; if (hintTimer <= 0) hint(''); }
+  V.shake = Math.max(0, V.shake - dt);
+  if (L){
+    for (let k = V.ants.length - 1; k >= 0; k--){
+      const a = V.ants[k];
+      a.ph += dt * 26;
+      if (a.st === 0){
+        a.delay -= dt;
+        if (a.delay <= 0){
+          a.st = 1; a.t = 0;
+          const cc = cellCenter(a.cell);
+          a.dur = clamp(Math.hypot(cc.x - a.sx, cc.y - a.sy) / 900, 0.22, 0.7);
+        }
+      } else if (a.st === 1){
+        a.t += dt;
+        const cc = cellCenter(a.cell);
+        const p = easeInOut(clamp(a.t / a.dur, 0, 1));
+        const dx = cc.x - a.sx, dy = cc.y - a.sy, d = Math.hypot(dx, dy) || 1;
+        const wob = Math.sin(p * Math.PI * 3 + a.wob) * LAY.cs * 0.35 * (1 - p);
+        a.x = lerp(a.sx, cc.x, p) - dy / d * wob;
+        a.y = lerp(a.sy, cc.y, p) + dx / d * wob;
+        a.ang = Math.atan2(dy, dx);
+        if (a.t >= a.dur){ a.st = 2; a.t = 0; }
+      } else if (a.st === 2){
+        a.t += dt;
+        const cc = cellCenter(a.cell);
+        a.x = cc.x + Math.sin(a.t * 60) * LAY.cs * 0.06;
+        a.y = cc.y;
+        if (a.t >= 0.14){ landCell(a); a.st = 3; a.t = 0; a.bx = a.x; a.by = a.y; }
+      } else {
+        a.t += dt;
+        const p = clamp(a.t / 0.45, 0, 1);
+        a.x = lerp(a.bx, a.sx, easeInOut(p));
+        a.y = lerp(a.by, a.sy, easeInOut(p));
+        a.ang = Math.atan2(a.sy - a.by, a.sx - a.bx);
+        a.a = 1 - p * p;
+        if (p >= 1) V.ants.splice(k, 1);
+      }
+    }
+    if (phase === 'play' && V.ending && !V.ants.some((a) => a.st < 3)){
+      const st = levelStatus(L);
+      if (st === 'won' && T - V.endT > 0.3) winLevel();
+      else if (st === 'lost' && T - V.endT > 0.3) loseLevel();
+    }
+  }
+  for (let k = V.parts.length - 1; k >= 0; k--){
+    const p = V.parts[k];
+    p.t += dt;
+    p.vy += (p.conf ? 520 : 700) * dt;
+    if (p.conf){ p.vx *= 0.985; p.vy *= 0.985; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.t >= p.life) V.parts.splice(k, 1);
+  }
+  for (let k = V.floats.length - 1; k >= 0; k--){
+    const f = V.floats[k];
+    f.t += dt;
+    if (f.t >= f.life) V.floats.splice(k, 1);
+  }
+  if (phase === 'title' || phase === 'gallery') paradeTick(dt);
+}
+
+/* title screen: a line of ants hauling pixels across the soil */
+function makeParade(){
+  V.parade = [];
+  const cols = Object.values(PAL);
+  for (let k = 0; k < 18; k++){
+    V.parade.push({ x: Math.random() * VW, lane: k % 3, sp: 40 + Math.random() * 30, ph: Math.random() * 6,
+      col: cols[(Math.random() * cols.length) | 0], dir: k % 2 ? 1 : -1 });
+  }
+}
+function paradeTick(dt){
+  for (const a of V.parade){
+    a.x += a.sp * a.dir * dt;
+    a.ph += dt * 22;
+    if (a.dir > 0 && a.x > VW + 30) a.x = -30;
+    if (a.dir < 0 && a.x < -30) a.x = VW + 30;
+  }
+}
+
+/* ---------------- drawing ---------------- */
+function rr(x, y, w, h, r){
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawBg(){
+  const g = ctx.createLinearGradient(0, 0, 0, VH);
+  g.addColorStop(0, '#3b2a4a'); g.addColorStop(1, '#1d1626');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, VW, VH);
+  // soil speckles
+  ctx.fillStyle = 'rgba(255,255,255,0.035)';
+  for (let k = 0; k < 60; k++){
+    const x = (hashStr('sx' + k) % 1000) / 1000 * VW, y = (hashStr('sy' + k) % 1000) / 1000 * VH;
+    ctx.fillRect(x, y, 3, 3);
+  }
+}
+function block(x, y, s, P, c, scale){
+  if (scale !== 1){
+    const d = s * (1 - scale) / 2;
+    x += d; y += d; s *= scale;
+  }
+  const e = Math.max(1, Math.round(s * 0.14));
+  ctx.fillStyle = P.dark[c]; ctx.fillRect(x, y, s, s);
+  ctx.fillStyle = P.colors[c]; ctx.fillRect(x, y, s - e, s - e);
+  ctx.fillStyle = P.light[c]; ctx.fillRect(x, y, s - e, e);
+  ctx.fillRect(x, y, e, s - e);
+}
+function drawBoard(){
+  const P = L.P, cs = LAY.cs, bx = LAY.bx, by = LAY.by;
+  const pad = Math.max(8, cs * 0.5);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  rr(bx - pad, by - pad + 6, LAY.bw + pad * 2, LAY.bh + pad * 2, 18); ctx.fill();
+  ctx.fillStyle = '#fbf3e2';
+  rr(bx - pad, by - pad, LAY.bw + pad * 2, LAY.bh + pad * 2, 18); ctx.fill();
+  // picnic-cloth checks
+  ctx.fillStyle = '#f3e4c8';
+  for (let y = 0; y < P.h; y++) for (let x = 0; x < P.w; x++) if ((x + y) & 1) ctx.fillRect(bx + x * cs, by + y * cs, cs, cs);
+  const feast = L.mode === 'feast';
+  for (let i = 0; i < P.cell.length; i++){
+    const c = P.cell[i];
+    if (c < 0) continue;
+    const x = bx + (i % P.w) * cs, y = by + ((i / P.w) | 0) * cs;
+    const age = T - V.vT[i];
+    if (V.vis[i]){
+      let sc = 1, jx = 0, jy = 0;
+      if (!feast && age < 0.22) sc = 1 + Math.sin(age / 0.22 * Math.PI) * 0.28;
+      if (feast && V.claim[i]){ jx = Math.sin(T * 38 + i) * cs * 0.05; jy = Math.cos(T * 31 + i) * cs * 0.05; }
+      block(x + jx, y + jy, cs, P, c, sc);
+    } else {
+      if (feast){
+        if (age < 0.16) block(x, y, cs, P, c, 1 - age / 0.16);
+      } else {
+        // an empty hole waiting for its block
+        const inset = Math.max(1, cs * 0.1);
+        ctx.fillStyle = 'rgba(80,60,90,0.16)';
+        ctx.fillRect(x + inset, y + inset, cs - inset * 2, cs - inset * 2);
+        ctx.globalAlpha = V.claim[i] ? 0.9 : 0.5;
+        ctx.fillStyle = P.colors[c];
+        const d = cs * (V.claim[i] ? 0.26 : 0.16);
+        ctx.fillRect(x + cs / 2 - d, y + cs / 2 - d, d * 2, d * 2);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  if (!feast){
+    // ground line under the picture
+    ctx.fillStyle = '#b89a73';
+    ctx.fillRect(bx - pad * 0.6, by + LAY.bh + 1, LAY.bw + pad * 1.2, Math.max(2, cs * 0.12));
+  }
+}
+function drawSlots(){
+  const P = L.P;
+  const av = V.hungry;
+  LAY.slots.forEach((sl, i) => {
+    ctx.fillStyle = '#150f1c';
+    rr(sl.x, sl.y, sl.s, sl.s, 14); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
+    rr(sl.x + 3, sl.y + 3, sl.s - 6, sl.s - 6, 11); ctx.stroke();
+    const q = L.slots[i];
+    if (!q) return;
+    const col = P.colors[q.c];
+    ctx.fillStyle = col;
+    rr(sl.x + 4, sl.y + 4, sl.s - 8, sl.s - 8, 11); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    rr(sl.x + 4, sl.y + sl.s * 0.62, sl.s - 8, sl.s * 0.38 - 4, 9); ctx.fill();
+    const stuck = !av[q.c];
+    drawAnt(sl.x + sl.s * 0.38, sl.y + sl.s * 0.45, sl.s * 0.5, stuck ? 0 : -Math.PI / 2 + Math.sin(T * 6) * 0.2, col,
+      stuck ? 0 : T * 20, false, 1);
+    label(String(q.n), sl.x + sl.s * 0.72, sl.y + sl.s * 0.7, Math.max(12, sl.s * 0.34), col);
+    if (stuck){
+      ctx.fillStyle = '#fff7e8';
+      ctx.font = '800 ' + Math.round(sl.s * 0.24) + 'px "Trebuchet MS",sans-serif';
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.6 + Math.sin(T * 3 + i) * 0.3;
+      ctx.fillText('z', sl.x + sl.s * 0.8, sl.y + sl.s * 0.28 - Math.sin(T * 2 + i) * 3);
+      ctx.globalAlpha = 1;
+    }
+  });
+}
+function label(txt, x, y, size, bgCol){
+  ctx.font = '900 ' + Math.round(size) + 'px "Trebuchet MS",sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const light = bgCol && lum(bgCol) > 0.72;
+  ctx.lineWidth = Math.max(2, size * 0.18);
+  ctx.strokeStyle = light ? 'rgba(255,255,255,0.7)' : 'rgba(20,12,28,0.75)';
+  ctx.strokeText(txt, x, y);
+  ctx.fillStyle = light ? '#2b2233' : '#fff';
+  ctx.fillText(txt, x, y);
+  ctx.textBaseline = 'alphabetic';
+}
+function drawStacks(){
+  const P = L.P;
+  const free = L.slots.indexOf(null) >= 0;
+  const helper = L.n <= 4;
+  L.stacks.forEach((st, k) => {
+    const S = LAY.stacks[k];
+    if (!S) return;
+    // soil mound
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    rr(S.x - 3, S.y - 3, S.w + 6, S.full - 4, 16); ctx.fill();
+    if (!st.length){
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.font = '700 13px "Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('empty', S.x + S.w / 2, S.y + S.h / 2 + 4);
+      return;
+    }
+    // the layers underneath, shallowest first
+    const more = st.length - 1 > 4;
+    const under = Math.min(st.length - 1, more ? 3 : 4);
+    const lh = Math.max(12, (S.full - S.h - 14) / 4);
+    for (let j = under; j >= 1; j--){
+      const q = st[j];
+      const y = S.y + S.h + 4 + (j - 1) * lh;
+      const hid = isHidden(L, k, j);
+      ctx.fillStyle = hid ? '#4a3d57' : P.colors[q.c];
+      rr(S.x + 4 + j * 2, y, S.w - 8 - j * 4, lh - 3, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.fillRect(S.x + 6 + j * 2, y + lh - 6, S.w - 12 - j * 4, 3);
+      if (hid) label('?', S.x + S.w / 2, y + lh / 2 - 1, lh * 0.7, '#4a3d57');
+      else label(String(q.n), S.x + S.w / 2, y + lh / 2 - 1, lh * 0.7, P.colors[q.c]);
+    }
+    if (more){
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = '800 ' + Math.round(clamp(lh * 0.55, 10, 13)) + 'px "Trebuchet MS",sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('+' + (st.length - 4) + ' more', S.x + S.w / 2, S.y + S.h + 4 + 3 * lh + lh * 0.6);
+    }
+    // top colony: the one you tap
+    const q = st[0], col = P.colors[q.c];
+    const pt = T - V.press[k];
+    const pop = pt < 0.25 ? 1 - Math.sin(pt / 0.25 * Math.PI) * 0.12 : 1;
+    const hungry = helper && V.hungry[q.c] && free;
+    const bob = hungry ? Math.sin(T * 5 + k) * 2 : 0;
+    const w = S.w * pop, h = S.h * pop, x = S.x + (S.w - w) / 2, y = S.y + (S.h - h) / 2 + bob;
+    ctx.globalAlpha = free ? 1 : 0.55;
+    ctx.fillStyle = shade(col, -0.35);
+    rr(x, y + 5, w, h, 14); ctx.fill();
+    ctx.fillStyle = col;
+    rr(x, y, w, h, 14); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    rr(x + 5, y + 4, w - 10, h * 0.28, 8); ctx.fill();
+    // three little ants poking out
+    for (let m = 0; m < 3; m++){
+      drawAnt(x + w * (0.25 + m * 0.25), y + h * 0.3 + (m === 1 ? -2 : 2), Math.min(w, h) * 0.34,
+        -Math.PI / 2 + Math.sin(T * 4 + m + k) * 0.35, col, T * (hungry ? 18 : 6) + m, false, 1);
+    }
+    label(String(q.n), x + w / 2, y + h * 0.7, h * 0.36, col);
+    ctx.globalAlpha = 1;
+  });
+}
+function drawAnt(x, y, s, ang, col, ph, carry, alpha){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  ctx.globalAlpha = alpha;
+  const dark = lum(col) < 0.25;
+  const line = dark ? '#d9cce6' : '#2b2233';
+  ctx.strokeStyle = line;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = Math.max(1, s * 0.07);
+  ctx.beginPath();
+  for (let k = -1; k <= 1; k++){
+    const sw = Math.sin(ph + k * 2.1) * 0.12 * s;
+    ctx.moveTo(k * s * 0.1, 0); ctx.lineTo(k * s * 0.2 + sw, -s * 0.36);
+    ctx.moveTo(k * s * 0.1, 0); ctx.lineTo(k * s * 0.2 - sw, s * 0.36);
+  }
+  ctx.moveTo(s * 0.34, -s * 0.05); ctx.quadraticCurveTo(s * 0.5, -s * 0.28, s * 0.58, -s * 0.24);
+  ctx.moveTo(s * 0.34, s * 0.05); ctx.quadraticCurveTo(s * 0.5, s * 0.28, s * 0.58, s * 0.24);
+  ctx.stroke();
+  ctx.fillStyle = col;
+  ctx.lineWidth = Math.max(1, s * 0.06);
+  const ell = (cx, rx, ry) => { ctx.beginPath(); ctx.ellipse(cx, 0, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); };
+  ell(-s * 0.28, s * 0.21, s * 0.16);
+  ell(0, s * 0.12, s * 0.09);
+  ell(s * 0.25, s * 0.13, s * 0.12);
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.beginPath(); ctx.ellipse(-s * 0.32, -s * 0.06, s * 0.07, s * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = dark ? '#fff' : '#2b2233';
+  ctx.beginPath(); ctx.arc(s * 0.31, -s * 0.05, Math.max(0.8, s * 0.03), 0, Math.PI * 2); ctx.arc(s * 0.31, s * 0.05, Math.max(0.8, s * 0.03), 0, Math.PI * 2); ctx.fill();
+  if (carry){
+    const cs = s * 0.34;
+    ctx.fillStyle = shade(carry, -0.3); ctx.fillRect(s * 0.42, -cs / 2, cs, cs);
+    ctx.fillStyle = carry; ctx.fillRect(s * 0.42, -cs / 2, cs * 0.85, cs * 0.85);
+  }
+  ctx.restore();
+}
+function drawAnts(){
+  const P = L.P, feast = L.mode === 'feast';
+  const s = clamp(LAY.cs * 1.25, 11, 26);
+  for (const a of V.ants){
+    if (a.st === 0) continue;
+    const col = P.colors[a.c];
+    // feast ants haul a crumb home; build ants haul a block out
+    const carry = feast ? (a.st === 3 ? col : null) : (a.st < 3 ? col : null);
+    drawAnt(a.x, a.y, s, a.ang, col, a.ph, carry, a.a);
+  }
+}
+function drawFx(){
+  for (const p of V.parts){
+    const k = 1 - p.t / p.life;
+    ctx.globalAlpha = clamp(k * 1.5, 0, 1);
+    ctx.fillStyle = p.col;
+    if (p.conf){
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.t * 8 + p.vx);
+      ctx.fillRect(-p.sz / 2, -p.sz / 4, p.sz, p.sz / 2); ctx.restore();
+    } else ctx.fillRect(p.x - p.sz / 2, p.y - p.sz / 2, p.sz, p.sz);
+  }
+  ctx.globalAlpha = 1;
+  for (const f of V.floats){
+    const k = f.t / f.life;
+    ctx.globalAlpha = 1 - k * k;
+    label(f.txt, f.x, f.y - k * 30, 15, f.col);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawParade(){
+  const base = VH - 70;
+  for (const a of V.parade){
+    const y = base + a.lane * 18 + Math.sin(a.ph * 0.2) * 1.5;
+    drawAnt(a.x, y, 22, a.dir > 0 ? 0 : Math.PI, '#5b3a1d', a.ph, a.col, 1);
+  }
+}
+function draw(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawBg();
+  if (L && (phase === 'play' || phase === 'won' || phase === 'lost')){
+    const sh = V.shake > 0 ? Math.sin(T * 90) * V.shake * 14 : 0;
+    ctx.save();
+    ctx.translate(sh, 0);
+    drawBoard();
+    drawSlots();
+    ctx.restore();
+    drawStacks();
+    drawAnts();
+  } else {
+    drawParade();
+  }
+  drawFx();
+}
+
+/* ---------------- input ---------------- */
+function hitStack(px, py){
+  if (!L) return -1;
+  for (let k = 0; k < LAY.stacks.length; k++){
+    const S = LAY.stacks[k];
+    if (px >= S.x - 5 && px <= S.x + S.w + 5 && py >= S.y - 8 && py <= S.y + S.full) return k;
+  }
+  return -1;
+}
+function bindInput(){
+  cv.addEventListener('pointerdown', (e) => {
+    audioInit();
+    if (AU.ctx && AU.ctx.state === 'suspended') AU.ctx.resume();
+    if (phase !== 'play') return;
+    const k = hitStack(e.clientX, e.clientY);
+    if (k >= 0) onTapStack(k);
+  });
+  document.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
+    if (b) act(b.dataset.act);
+  });
+  window.addEventListener('resize', fit);
+  window.addEventListener('keydown', (e) => {
+    if (phase !== 'play') return;
+    const n = parseInt(e.key, 10);
+    if (n >= 1 && n <= 9) onTapStack(n - 1);
+    else if (e.key === 'z' || e.key === 'u') act('undo');
+  });
+}
+
+let lastTs = 0;
+function loop(ts){
+  const dt = Math.min(0.05, Math.max(0, (ts - lastTs) / 1000 || 0));
+  lastTs = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+function boot(){
+  loadSave();
+  bindInput();
+  fit();
+  toTitle();
+  requestAnimationFrame(loop);
+}
+boot();
+</script>
+</body>
+</html>
