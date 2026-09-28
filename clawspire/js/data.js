@@ -1138,6 +1138,65 @@ const DATA = (() => {
         buff('rules', 'House Rules', 'shield_up', 2, 'House rules (Block persists 2 turns)'),
         blk('glass', 'Glass Case', 20, 'Steps into a glass case (Block 20)'),
         mv('outoforder', 'Out of Order', 'jam', 'Hangs an OUT OF ORDER sign on your rail (one grab fewer)', { v: 1 })] },
+
+    // ================= BESTIARY (round 4): they play with the machine itself =====
+    // New move kinds (combat.js BESTIARY block, staged by game.js):
+    // tickle (the claw shakes on your drops next turn), glue (the pile is
+    // sticky next turn: the claw lifts clumps), wheel (a prize wheel: a random
+    // prize for it or for you), ceiling (metal floats up to the lid for a
+    // turn, grabbable mid-air), bury (items go under the floor; the claw digs
+    // the mound up), plow (the pile is shoved to the far wall), vanish (items
+    // go invisible until the claw touches them) and the Claw Collector's
+    // rival claw (def.rival: it grabs your rarest item every turn).
+    { id: 'tickler', name: 'Tickle Monster', act: 1, tier: 'normal', hp: [22, 27], art: 'tickler', size: 0.95, color: '#ff8ad8', color2: '#7a3aa8',
+      desc: 'Lives under the prize counter. Has eleven arms, all of them feathers.', ai: 'cycle', pattern: [0, 1, 2, 1],
+      moves: [mv('tickle', 'Tickle Fingers', 'tickle', 'Tickles your claw: it wiggles on every drop next turn', { v: 1 }),
+        atk('flurry', 'Feather Flurry', 2, 3, 'Feather flurry: 2 x3'), debuff('giggle', 'Giggle Fit', 'weak', 1, 'Gives you the giggles (Weak)')] },
+    { id: 'jelly', name: 'Jelly Cube', act: 1, tier: 'normal', hp: [28, 34], art: 'jelly', size: 1, color: '#7af0c8', color2: '#2e9e8a',
+      desc: 'A cube of lime gelatin. You can see a coin, a key and a very old sandwich inside.', ai: 'cycle', pattern: [0, 1, 3, 2, 1],
+      moves: [mv('goo', 'Goo Coat', 'glue', 'Slimes your bin: items stick together next turn (the claw lifts clumps)', { v: 1 }),
+        atk('slam', 'Jiggle Slam', 7, 1, 'Slams for 7'), mv('absorb', 'Absorb', 'junk', 'Spits out a Rock it absorbed', { item: 'rock', n: 1 }),
+        blk('wobble', 'Wobble', 6, 'Wobbles defensively (Block 6)')] },
+    { id: 'barker', name: 'Carnival Barker', act: 1, tier: 'elite', hp: [58, 64], art: 'barker', size: 1.1, color: '#ff2e88', color2: '#ffc94d',
+      desc: 'Runs the prize wheel. The wheel has eight wedges. Most of them say BARKER.', ai: 'cycle', pattern: [0, 1, 3, 0, 2, 4, 5],
+      taunt: 'Step right up! Every spin a winner! (The winner is me.)',
+      enrage: { name: 'RIGGED WHEEL', text: 'Every wedge says BARKER now', str: 2, pattern: [0, 1, 0, 5] },
+      moves: [mv('spin', 'Spin the Wheel', 'wheel', 'Spins the prize wheel: a prize for it... or for you'),
+        atk('cane', 'Cane Rap', 10, 1, 'Raps you with its cane for 10'), atk('pitch', 'Sales Pitch', 4, 2, 'Sales pitch: 4 x2'),
+        debuff('hype', 'Hype', 'vuln', 1, 'Hypes the crowd against you (Vulnerable)'),
+        mv('ballyhoo', 'Ballyhoo', 'shake', 'Bangs on the cabinet. Your bin rattles.'),
+        mv('bigtop', 'Big Top', 'charge', 'Raising the big top (18 next turn)', { v: 18 })] },
+    { id: 'magbat', name: 'Magnet Bat', act: 2, tier: 'normal', hp: [40, 48], art: 'magbat', size: 0.9, color: '#d81f3a', color2: '#c9d3e0',
+      desc: 'Roosts on the claw rail. Everything made of metal wants to roost with it.', ai: 'cycle', pattern: [0, 1, 3, 2, 1],
+      moves: [mv('polar', 'Reverse Polarity', 'ceiling', 'Magnetizes the lid: your metal items float up for a turn (grab them mid-air)', { v: 1 }),
+        atk('zap', 'Zap', 5, 2, 'Zaps 5 x2'), atk('dive', 'Iron Dive', 11, 1, 'Dives for 11'),
+        buff('cling', 'Cling', 'armor', 1, 'Clings to scrap (+1 Armor)')] },
+    { id: 'mole', name: 'Cinder Mole', act: 2, tier: 'normal', hp: [44, 52], art: 'mole', size: 0.95, color: '#8a5a3a', color2: '#ffb0c0',
+      desc: 'Tunnels under the foundry floor. Takes souvenirs down with it.', ai: 'cycle', pattern: [0, 1, 3, 0, 2],
+      moves: [mv('dig', 'Dig Under', 'bury', 'Digs an item under the floor (drop the claw on the mound to dig it up)', { n: 1 }),
+        atk('claws', 'Digging Claws', 6, 2, 'Digging claws: 6 x2'), atk('pop', 'Pop Up', 12, 1, 'Pops up for 12'),
+        blk('burrow', 'Burrow', 10, 'Burrows in (Block 10)')] },
+    { id: 'dozer', name: 'The Bulldozer', act: 2, tier: 'elite', hp: [120, 132], art: 'dozer', size: 1.2, color: '#ffc94d', color2: '#3a3230',
+      desc: 'Clears the lot every night. Tonight the lot is your bin.', ai: 'cycle', pattern: [0, 1, 2, 3, 0, 4],
+      taunt: 'BEEP. BEEP. BEEP. Clearing the lot.',
+      enrage: { name: 'NO BRAKES', text: 'The throttle snaps off', str: 3, pattern: [0, 1, 4, 0, 2] },
+      moves: [mv('plow', 'Plow', 'plow', 'Plows your whole pile to the far wall, away from the chute'),
+        atk('ram', 'Ram', 20, 1, 'Rams you for 20'), mv('dump', 'Dump Truck', 'junk', 'Dumps 2 Slag into your bin', { item: 'slag', n: 2 }),
+        blk('grille', 'Grille Guard', 16, 'Lowers its grille (Block 16)'),
+        mv('rev', 'Rev Up', 'charge', 'Revving up (40 next turn)', { v: 40 })] },
+    { id: 'ghost', name: 'Peekaboo Ghost', act: 3, tier: 'normal', hp: [76, 88], art: 'ghost', size: 1, color: '#e8f4ff', color2: '#9fd8ff',
+      desc: 'Haunts the prize shelf. Plays peekaboo with your stuff. It always wins.', ai: 'cycle', pattern: [0, 1, 2, 0, 3, 1],
+      moves: [mv('vanish', 'Now You See It', 'vanish', 'Turns 3 of your items invisible until the claw touches them', { n: 3 }),
+        atk('boo', 'BOO!', 18, 1, 'Boos you for 18'), debuff('spook', 'Spook', 'weak', 2, 'Spooks you (Weak 2)'),
+        buff('fade', 'Fade', 'dodge', 1, 'Fades out (Dodge 1)')] },
+    { id: 'collector', name: 'The Claw Collector', act: 3, tier: 'elite', hp: [176, 190], art: 'collector', size: 1.2, color: '#7a3aa8', color2: '#ffc94d',
+      desc: 'Brought its own claw. Every turn it takes your rarest prize for its glass case.', ai: 'cycle', pattern: [0, 1, 3, 2, 4],
+      taunt: 'Mint condition. Into the case you go.',
+      rival: true, digest: 99, noAffix: ['greedy'],
+      enrage: { name: 'RARE FIND', text: 'Its claw goes back for seconds', str: 2 },
+      moves: [atk('cane', 'Swordcane', 24, 1, 'Swordcane for 24'), blk('case', 'Glass Case', 20, 'Steps into its glass case (Block 20)'),
+        debuff('appraise', 'Appraise', 'vuln', 2, 'Appraises you (Vulnerable 2)'), atk('pins', 'Pin Flurry', 9, 3, 'Pin flurry: 9 x3'),
+        mv('display', 'Grand Display', 'charge', 'Polishing its big claw (48 next turn)', { v: 48 })] },
   ];
   const ENEMIES = {};
   for (const e of ENEMY_LIST) ENEMIES[e.id] = Object.assign({ size: 1 }, e);
@@ -1187,21 +1246,21 @@ const DATA = (() => {
   // Normal lists run easy -> hard: MAP biases later columns toward the back.
   const ENCOUNTERS = {
     1: {
-      normal: [['rat', 'rat'], ['bat', 'bat'], ['gremlin'], ['slime'], ['spider', 'rat'], ['goblin'],
-        ['mushroom', 'bat'], ['crab'], ['gremlin', 'rat'], ['trashpanda', 'rat'], ['gloop'], ['trashpanda', 'bat']],
-      elite: [['mimic'], ['broodmother']],
+      normal: [['rat', 'rat'], ['bat', 'bat'], ['gremlin'], ['slime'], ['tickler'], ['spider', 'rat'], ['goblin'],
+        ['mushroom', 'bat'], ['jelly'], ['crab'], ['gremlin', 'rat'], ['tickler', 'bat'], ['trashpanda', 'rat'], ['gloop'], ['jelly', 'rat'], ['trashpanda', 'bat']],
+      elite: [['mimic'], ['broodmother'], ['barker']],
       boss: [['hoard']],
     },
     2: {
-      normal: [['drone', 'imp'], ['imp', 'imp'], ['clockwork'], ['tinker'], ['oilslick', 'drone'], ['tinknight'],
-        ['golem'], ['clockwork', 'drone'], ['scrapgoat'], ['rustmite', 'imp'], ['scrapgoat', 'rustmite']],
-      elite: [['ironjaw'], ['lodestone']],
+      normal: [['drone', 'imp'], ['imp', 'imp'], ['magbat', 'imp'], ['clockwork'], ['tinker'], ['mole'], ['oilslick', 'drone'], ['tinknight'],
+        ['golem'], ['magbat', 'drone'], ['clockwork', 'drone'], ['mole', 'imp'], ['scrapgoat'], ['rustmite', 'imp'], ['scrapgoat', 'rustmite']],
+      elite: [['ironjaw'], ['lodestone'], ['dozer']],
       boss: [['smelter']],
     },
     3: {
-      normal: [['wisp', 'wisp'], ['wraith'], ['frostmage'], ['rimecap', 'wisp'], ['cultist'], ['icemimic'],
-        ['wraith', 'wisp'], ['yeti'], ['magpie', 'wisp'], ['magpie']],
-      elite: [['frostknight'], ['highcultist']],
+      normal: [['wisp', 'wisp'], ['wraith'], ['ghost'], ['frostmage'], ['rimecap', 'wisp'], ['cultist'], ['icemimic'],
+        ['wraith', 'wisp'], ['ghost', 'wisp'], ['yeti'], ['magpie', 'wisp'], ['magpie']],
+      elite: [['frostknight'], ['highcultist'], ['collector']],
       boss: [['glacius']],
     },
   };
@@ -2649,6 +2708,12 @@ const DATA = (() => {
     A_('big_payout', 'Big Payout', '\u{1F340}', '#3ddc84', 'Cash out 10 Luck in one grab.', (c) => c.kind === 'ev' && !!c.ev && c.ev.t === 'luck' && c.ev.k === 'cash' && (c.ev.v | 0) >= 10),
     A_('secret_menu', 'Secret Menu', '\u{1F92B}', '#ff2e88', 'Discover a secret combo.', (c) => c.kind === 'ev' && !!c.ev && c.ev.t === 'combo' && !!COMBOS[c.ev.id] && !!COMBOS[c.ev.id].secret),
     A_('house_loses', 'The House Loses', '\u{1F3B2}', '#ffc94d', 'Win a run as Lucky Lou.', (c) => c.kind === 'win' && RUNS(c).char === 'gambler'),
+    // endless mode and run mutators (the ENDLESS block below)
+    A_('endless_on', 'Insert Another Coin', '\u{1FA99}', '#ffc94d', 'Keep playing into Endless mode.', (c) => !!RUNS(c).endless),
+    A_('loop3', 'Loop de Loop', '➰', '#ff6bb0', 'Reach Loop 3 in Endless mode.', (c) => ((RUNS(c).endless || {}).loop | 0) >= 3),
+    A_('loop6', 'Groundhog Claw', '♾', '#ff2e88', 'Reach Loop 6 in Endless mode.', (c) => endlessBest(c) >= 6, { goal: 6, val: endlessBest }),
+    A_('mad_science', 'Mad Science', '\u{1F9EA}', '#a6ff5e', 'Win a run with 2 or more mutators on.', (c) => c.kind === 'win' && mutClean(RUNS(c).muts).length >= 2),
+    A_('high_score', 'High Score', '\u{1F947}', '#2ee6d6', 'Score 25,000 points in one run.', (c) => (RUNS(c).scoreTop | 0) >= 25000),
   ];
   function winCount(c) { const w = (c && c.meta && c.meta.winsBy) || {}; return Object.keys(w).filter((k) => w[k] > 0).length; }
   function maxTilt(c) { const t = (c && c.meta && c.meta.tilt) || {}; let m = 0; for (const k in t) m = Math.max(m, t[k] | 0); return m; }
@@ -2725,7 +2790,194 @@ const DATA = (() => {
   }
   // ================================================================ /META
 
+  // ================================================================ ENDLESS (endless mode and run mutators)
+  /* DESIGN.md "Endless and mutators". Pure data and pure helpers: the flow
+     lives in game.js (the ENDLESS block), the fight side in combat.js (the
+     ENDLESS block). A run without run.endless and run.muts is untouched. */
+
+  /* Run mutators: fun rules that change the claw machine itself, picked on
+     character select (up to MUT_MAX), fixed per date for the daily run, and
+     one more every Endless loop from ENDLESS.mutFrom. fx is what the engine
+     reads; mutMods(ids) merges a set of them:
+       gs, drag     every prize's gravity scale (x) and extra air drag (+)
+       scale        every prize's size (x)          slick  pile and floor friction (x), never the claw's grip
+       glass        every prize cracks like glass   drift  px/s^2 pull toward the claw's column
+       belt         the bin floor rolls toward the chute (px/s)
+       quake        the cabinet lurches a random way every turn
+       dark         the cabinet lights are out, a flashlight rides the claw
+       temp         {id, n, turn, max}: n temporary prizes at the bell, `turn` more each turn, at most max
+       grabs        grabs per turn (x)              dmgOut  the player's hits (x)
+       affix        an affix every enemy carries    rules   relic rules added to every fight
+       extra        more monsters in every normal fight
+     mult is the run score multiplier (under 1 for the ones that help). */
+  const MUT_MAX = 3;
+  const MUT_LIST = [
+    { id: 'lowgrav', name: 'Low Gravity', icon: '\u{1F388}', color: '#8dfff5', mult: 1.15,
+      text: 'Everything floats. Prizes drift down like feathers and bob off each other.', fx: { gs: 0.36, drag: 0.7 } },
+    { id: 'glass', name: 'Everything Is Glass', icon: '\u{1F48E}', color: '#bff4ff', mult: 1.25,
+      text: 'Every prize cracks on a hard landing: a cracked one hits for +50%, a second crack shatters it.', fx: { glass: true } },
+    { id: 'bombs', name: 'Bomb Party', icon: '\u{1F4A3}', color: '#ff5a4a', mult: 1.1,
+      text: 'Two Firecrackers roll into every fight and one more each turn. Mind the fuses.', fx: { temp: { id: 'firecracker', n: 2, turn: 1, max: 5 } } },
+    { id: 'magnet', name: 'Magnet Storm', icon: '\u{1F9F2}', color: '#ff6bb0', mult: 0.9,
+      text: 'The whole pile creeps toward the claw. Handfuls come easy.', fx: { drift: 420 } },
+    { id: 'tiny', name: 'Tiny Items', icon: '\u{1F52C}', color: '#a6ff5e', mult: 1.05, excl: ['giant'],
+      text: 'Every prize shrinks to 70%. Handfuls, if you can hold them.', fx: { scale: 0.7 } },
+    { id: 'giant', name: 'Giant Items', icon: '\u{1F418}', color: '#ffc94d', mult: 1.2, excl: ['tiny'],
+      text: 'Every prize grows to 135%. One at a time, pal.', fx: { scale: 1.35 } },
+    { id: 'slippery', name: 'Slippery Floor', icon: '⛸️', color: '#8dfff5', mult: 1.1,
+      text: 'Somebody waxed the bin. The pile slides at a touch.', fx: { slick: 0.1 } },
+    { id: 'double', name: 'Double Grabs, Half Damage', icon: '✌️', color: '#2ee6d6', mult: 1.1,
+      text: 'Twice the grabs every turn. Your hits land for half.', fx: { grabs: 2, dmgOut: 0.5 } },
+    { id: 'hungry', name: 'Hungry Hungry', icon: '\u{1F37D}', color: '#a6ff5e', mult: 1.3,
+      text: 'Every monster is Greedy: it gulps your prizes on its first action and every third after.', fx: { affix: 'greedy' } },
+    { id: 'fever', name: 'Jackpot Fever', icon: '\u{1F3B0}', color: '#ffc94d', mult: 1.2,
+      text: 'Every grab combo fires twice. So do the monsters: every one is Hasty.', fx: { rules: { comboTwice: 1 }, affix: 'hasty' } },
+    { id: 'blackout', name: 'Blackout', icon: '\u{1F526}', color: '#b3a4d6', mult: 1.3,
+      text: 'The cabinet lights are out. A flashlight on the claw is all you get.', fx: { dark: true } },
+    { id: 'conveyor', name: 'Conveyor Belt', icon: '⏩', color: '#ffb347', mult: 0.95,
+      text: 'The bin floor rolls toward the chute. The pile piles up against the divider.', fx: { belt: 55 } },
+    { id: 'quake', name: 'Wobbly Legs', icon: '\u{1F4F3}', color: '#ff9ad0', mult: 1.15,
+      text: 'The cabinet lurches to one side every turn. Everything slides.', fx: { quake: true } },
+    { id: 'crowd', name: 'Double Trouble', icon: '\u{1F46F}', color: '#ff2e88', mult: 1.35,
+      text: 'Every normal fight brings one more monster.', fx: { extra: 1 } },
+  ];
+  const MUTATORS = {};
+  for (const m of MUT_LIST) MUTATORS[m.id] = m;
+  const MUT_IDS = MUT_LIST.map((m) => m.id);
+  // Two mutators that cannot run together (Tiny and Giant).
+  function mutClash(a, b) {
+    const A = MUTATORS[a], B = MUTATORS[b];
+    return !!((A && (A.excl || []).indexOf(b) >= 0) || (B && (B.excl || []).indexOf(a) >= 0));
+  }
+  // Known, unique and compatible ids in order (a later clash is dropped); max caps the count.
+  function mutClean(ids, max) {
+    const out = [];
+    for (const id of Array.isArray(ids) ? ids : []) {
+      if (!MUTATORS[id] || out.indexOf(id) >= 0 || out.some((o) => mutClash(o, id))) continue;
+      out.push(id);
+      if (max && out.length >= max) break;
+    }
+    return out;
+  }
+  // The merged effects of a set of mutators (neutral for none).
+  function mutMods(ids) {
+    const m = { ids: [], gs: 1, drag: 0, scale: 1, slick: 1, glass: false, drift: 0, belt: 0, quake: false, dark: false,
+      temp: [], grabs: 1, dmgOut: 1, affix: [], rules: {}, extra: 0, mult: 1 };
+    for (const id of mutClean(ids)) {
+      const M = MUTATORS[id], f = M.fx || {};
+      m.ids.push(id);
+      m.mult *= M.mult || 1;
+      if (f.gs != null) m.gs *= f.gs;
+      if (f.drag) m.drag += f.drag;
+      if (f.scale) m.scale *= f.scale;
+      if (f.slick != null) m.slick *= f.slick;
+      if (f.glass) m.glass = true;
+      if (f.drift) m.drift += f.drift;
+      if (f.belt) m.belt += f.belt;
+      if (f.quake) m.quake = true;
+      if (f.dark) m.dark = true;
+      if (f.temp) m.temp.push(Object.assign({}, f.temp));
+      if (f.grabs) m.grabs *= f.grabs;
+      if (f.dmgOut != null) m.dmgOut *= f.dmgOut;
+      if (f.affix && m.affix.indexOf(f.affix) < 0) m.affix.push(f.affix);
+      for (const k in f.rules || {}) m.rules[k] = (m.rules[k] || 0) + f.rules[k];
+      if (f.extra) m.extra += f.extra;
+    }
+    m.mult = Math.round(m.mult * 100) / 100;
+    return m;
+  }
+  const mutMult = (ids) => mutMods(ids).mult;
+  // A seeded pick of one more mutator that is not in `have` and clashes with none of it (null when none is left).
+  function mutPick(rng, have) {
+    have = mutClean(have);
+    const pool = MUT_IDS.filter((id) => have.indexOf(id) < 0 && !have.some((o) => mutClash(o, id)));
+    return pool.length ? pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))] : null;
+  }
+  // The daily run's 1 or 2 mutators: the same for everyone on that date.
+  function dailyMutators(key) {
+    let x = dailySeed(String(key) + ':mutators');
+    const r = () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 4294967296; };
+    const out = [];
+    const n = r() < 0.5 ? 1 : 2;
+    while (out.length < n) { const id = mutPick(r, out); if (!id) break; out.push(id); }
+    return out;
+  }
+
+  /* Endless mode: after the Prize Master the machine reboots and loops the
+     three act biomes and their enemy pools (Loop 1 is act 4, Loop 2 act 5 ...,
+     each loop one map). endlessScale(loop, act) is the lift for a fight in a
+     loop drawn from act `act`'s pools: enemies are first lifted to act 3
+     strength (liftHp / liftDmg per pool act: the roster's act 3 / act n hp
+     and attack ratios, about 3.2 / 1.6 and 2.6 / 1.35), then grow by hpGrow /
+     dmgGrow per loop, compounding; normals carry floor(loop / 2) extra affixes,
+     elites and bosses ceil(loop / 2) (at most 3); bosses start in phase two
+     from rageFrom, elites from eliteRageFrom; from mixFrom each loop's boss
+     borrows another boss's signature; from mutFrom every loop adds a random
+     mutator. */
+  const ENDLESS = {
+    liftHp: [1, 3.2, 1.6, 1], liftDmg: [1, 2.6, 1.35, 1],
+    hpGrow: 0.25, dmgGrow: 0.1, affixMax: 3,
+    rageFrom: 2, eliteRageFrom: 4, mixFrom: 1, mutFrom: 2,
+    heal: 0.3,
+  };
+  function endlessScale(loop, act) {
+    loop = Math.max(0, Math.floor(+loop || 0));
+    const a = Math.max(1, Math.min(3, Math.floor(+act || 1)));
+    if (!loop) return { loop: 0, hp: 1, dmg: 1, normalAffix: 0, bigAffix: 0, rage: false, eliteRage: false, mix: false };
+    const E = ENDLESS;
+    return {
+      loop,
+      hp: E.liftHp[a] * Math.pow(1 + E.hpGrow, loop),
+      dmg: E.liftDmg[a] * Math.pow(1 + E.dmgGrow, loop),
+      normalAffix: Math.min(E.affixMax, Math.floor(loop / 2)),
+      bigAffix: Math.min(E.affixMax, Math.ceil(loop / 2)),
+      rage: loop >= E.rageFrom, eliteRage: loop >= E.eliteRageFrom, mix: loop >= E.mixFrom,
+    };
+  }
+  // The loop's act (the biome and the enemy pools): 1, 2, 3, 1, 2, 3 ...
+  const endlessAct = (loop) => ((Math.max(1, Math.floor(+loop || 1)) - 1) % 3) + 1;
+  // The boss whose signature this loop's boss borrows (never its own).
+  function endlessMix(rng, act) {
+    const own = ((ENCOUNTERS[act] || {}).boss || [[]])[0] || [];
+    const ids = Object.keys(ENEMIES).filter((id) => ENEMIES[id].tier === 'boss' && ENEMIES[id].sig && own.indexOf(id) < 0);
+    return ids.length ? ids[Math.min(ids.length - 1, Math.floor(rng() * ids.length))] : null;
+  }
+
+  /* The run score (every end screen, a best per mode in meta.scores): the
+     climb (floors = acts reached, 3 + the loop in Endless), kills, bosses
+     beaten, jackpots, combos, loops, the win; times the Tilt multiplier (+10%
+     a level) and the mutator multiplier. The daily keeps its own dailyScore. */
+  const SCORE = { floor: 400, kill: 25, boss: 300, jackpot: 40, combo: 15, loop: 1000, win: 2500, tilt: 0.1 };
+  const runMode = (run) => (run && run.endless ? 'endless' : run && run.daily ? 'daily' : 'classic');
+  function runScore(run, won) {
+    run = run || {};
+    const E = run.endless && typeof run.endless === 'object' ? run.endless : null;
+    const loops = E ? Math.max(0, Math.floor(+E.loop || 0)) : 0;
+    const floors = E ? 3 + loops : Math.max(1, Math.min(3, run.act | 0));
+    const sc = run.sc || {};
+    won = !!won || !!E;
+    const lines = [];
+    const add = (k, label, n, per) => { if (n > 0) lines.push({ k, label, n, v: Math.round(n * per) }); };
+    add('floors', 'Floors climbed', floors, SCORE.floor);
+    add('kills', 'Monsters beaten', run.kills | 0, SCORE.kill);
+    add('bosses', 'Bosses down', sc.bosses | 0, SCORE.boss);
+    add('jackpots', 'Jackpots', run.jackpots | 0, SCORE.jackpot);
+    add('combos', 'Combos', sc.combos | 0, SCORE.combo);
+    add('loops', 'Endless loops', loops, SCORE.loop);
+    if (won) lines.push({ k: 'win', label: 'Prize Master down', n: 1, v: SCORE.win });
+    const base = lines.reduce((s, l) => s + l.v, 0);
+    const tiltM = Math.round((1 + SCORE.tilt * Math.max(0, run.tilt | 0)) * 100) / 100;
+    const mutM = mutMult(run.muts);
+    const mult = Math.round(tiltM * mutM * 100) / 100;
+    return { mode: runMode(run), base, tiltM, mutM, mult, total: Math.max(0, Math.round(base * tiltM * mutM)), lines };
+  }
+  // (a declaration: the sticker table above reads it before this line runs)
+  function endlessBest(c) { return (((c && c.meta && c.meta.endless) || {}).best | 0); }
+  // ================================================================ /ENDLESS
+
   return {
+    // endless mode and run mutators (DESIGN.md "Endless and mutators")
+    MUTATORS, MUT_IDS, MUT_MAX, mutMods, mutMult, mutClean, mutClash, mutPick, dailyMutators, ENDLESS, endlessScale, endlessAct, endlessMix, SCORE, runMode, runScore,
     // meta progression (Tilt, achievements, Prizedex, daily)
     TILT, TILT_MAX, tiltMods, ACHIEVEMENTS, ACH_IDS, achCheck, DEX_TABS, dexEntries, dexProgress, dailyKey, dailySeed, dailyChar, dailyScore,
     LOOT, rollCapsule, capsulePrize, prizeInfo, prizeShelf, payout,

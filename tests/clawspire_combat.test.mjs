@@ -743,7 +743,7 @@ else {
         h.ok(!invariants(F, id), `enemy ${id} onDeath resolves`);
       }
     }
-    const known = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'];
+    const known = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'].concat(C.BEST_KINDS || []);
     for (const k of kinds) h.ok(known.includes(k), `enemy move kind ${k} is one the engine implements`);
   });
 
@@ -1901,6 +1901,280 @@ if (hasData) {
         }
       } catch (e) { err = e.stack; }
       h.ok(!err && !F.hookErrors.length, `${claw}: clean (${err || F.hookErrors.join(' | ') || 'ok'})`);
+    }
+  });
+}
+
+// ---------- Feel (round 4): enemy Armor is capped ----------
+h.test('feel: enemy Armor stops at ARMOR_MAX, the player\'s does not', () => {
+  COMBAT.useDefs(STUB);
+  const cap = COMBAT.ARMOR_MAX;
+  h.eq(cap, 8, 'the cap is 8');
+  let F = COMBAT.newFight({ hp: 70, maxHp: 70, act: 1, bin: [], relics: [], claw: {} }, ['dummy'], U.rng(5));
+  const e = F.enemies[0];
+  for (let i = 0; i < 20; i++) COMBAT.status(F, e, 'armor', 2);
+  h.eq(e.status.armor, cap, 'twenty Tempers stop at the cap');
+  h.eq(COMBAT.status(F, e, 'armor', 3), 0, 'a gain at the cap adds nothing');
+  h.eq(COMBAT.status(F, e, 'armor', -3), -3, 'it can still come down');
+  COMBAT.status(F, F.player, 'armor', 20);
+  h.eq(F.player.status.armor, 20, 'the player is not capped');
+});
+if (hasData) {
+  const L4 = boot({ only: ['util', 'data', 'combat'] });
+  const C4 = L4.COMBAT;
+  h.test('feel: the Frozen Knight tempers for 120 turns and never passes the Armor cap', () => {
+    const F = C4.newFight({ hp: 9999, maxHp: 9999, act: 3, bin: [], relics: [], claw: { grabs: 3 } }, ['frostknight'], L4.U.rng(11));
+    const e = F.enemies[0];
+    e.hp = e.maxHp = 1e6;
+    let top = 0;
+    for (let t = 0; t < 120 && F.phase !== 'over'; t++) {
+      C4.endTurn(F);
+      F.player.hp = F.player.maxHp;
+      top = Math.max(top, e.status.armor | 0);
+    }
+    h.ok(top > 0 && top <= C4.ARMOR_MAX, `armor peaked at ${top} (cap ${C4.ARMOR_MAX})`);
+    const G = C4.newFight({ hp: 70, maxHp: 70, act: 1, bin: [], relics: [], claw: {} }, ['frostknight'], L4.U.rng(12));
+    const g = G.enemies[0];
+    g.status.armor = C4.ARMOR_MAX;
+    C4.giveAffix(G, g, 'armored');
+    h.ok((g.status.armor | 0) <= C4.ARMOR_MAX, 'Armored at the cap stays at the cap');
+  });
+}
+
+// ================================================================ ENDLESS (DESIGN.md "Endless and mutators")
+{
+  const E5 = boot({ only: ['util', 'data', 'combat'] });
+  const C5 = E5.COMBAT, D5 = E5.DATA, U5 = E5.U;
+  const bin5 = ['rusty_sword', 'rusty_sword', 'dented_shield', 'dented_shield', 'rusty_sword', 'dented_shield'].map((id, i) => ({ uid: 'e' + i, id }));
+  const run5 = (extra) => Object.assign({ hp: 80, maxHp: 80, act: 1, bin: bin5, relics: [], claw: { grabs: 3 }, fights: 0, seed: 5 }, extra || {});
+  const atkOf = (e) => (e.def.moves || []).filter(m => m.k === 'attack' && m.v != null).map(m => m.v);
+
+  h.test('endless: the loop lifts every enemy (hp and hits), summons too', () => {
+    const F0 = C5.newFight(run5(), ['rat'], U5.rng(11));
+    h.ok(F0.loop === 0 && F0.mut === null && F0.mix === null, 'a plain run: no loop, no mutators');
+    for (const loop of [1, 2, 3, 4]) {
+      const act = D5.endlessAct(loop), s = D5.endlessScale(loop, act);
+      const Fa = C5.newFight(run5({ act }), ['rat'], U5.rng(11));
+      const Fb = C5.newFight(run5({ act, endless: { loop } }), ['rat'], U5.rng(11));
+      h.eq(Fb.loop, loop, `loop ${loop}: F.loop`);
+      const a = Fa.enemies[0], b = Fb.enemies[0];
+      const affixHp = b.affix.reduce((k, id) => k * (1 + ((D5.AFFIXES[id] || {}).hp || 0.1)), 1) / a.affix.reduce((k, id) => k * (1 + ((D5.AFFIXES[id] || {}).hp || 0.1)), 1);
+      h.near(b.maxHp / (a.maxHp * affixHp), s.hp, 0.12 * s.hp, `loop ${loop}: hp x${s.hp.toFixed(2)}`);
+      const ka = atkOf(a), kb = atkOf(b);
+      h.ok(kb.length && kb.every((v, i) => Math.abs(v - Math.max(1, Math.round(ka[i] * s.dmg))) <= Math.ceil(ka[i] * 0.05) + 1), `loop ${loop}: attacks x${s.dmg.toFixed(2)} (${ka} -> ${kb})`);
+      h.ok(b.affix.length >= Math.min(3, a.affix.length + s.normalAffix) - 0 && b.affix.length >= s.normalAffix, `loop ${loop}: ${s.normalAffix} extra affixes on a normal (${b.affix})`);
+    }
+    // a summon made mid fight carries the lift too (makeEnemy)
+    h.ok(C5.endlessScaleOf({ loop: 2, act: 2 }).hp === D5.endlessScale(2, 2).hp, 'endlessScaleOf reads the loop and the act');
+  });
+
+  h.test('endless: bosses rage from the bell, elites later, and borrow another trick', () => {
+    const b1 = C5.newFight(run5({ endless: { loop: 1, mix: 'smelter' } }), ['hoard'], U5.rng(3)).enemies[0];
+    h.ok(!b1.enraged, 'loop 1: the boss waits for half hp as usual');
+    h.eq(b1.def.sig.id, 'heat', 'loop 1: the Hoard learned the Furnace Blast');
+    h.eq(b1.borrowed, 'smelter', 'it knows who it borrowed from');
+    h.eq(D5.ENEMIES.hoard.sig.id, 'spill', 'the data is never touched');
+    h.ok(b1.affix.length >= 1, 'loop 1: a boss carries an extra affix');
+    const F2 = C5.newFight(run5({ endless: { loop: 2, mix: 'glacius' } }), ['hoard'], U5.rng(3));
+    const b2 = F2.enemies[0];
+    h.ok(b2.enraged && (b2.status.str | 0) > 0, 'loop 2: phase two and its Strength from the bell');
+    h.ok(F2.events.some(e => e.t === 'enrage' && e.idx === 0), 'the roar plays at the start');
+    h.eq(b2.def.sig.id, 'ice', 'loop 2: Glacius\' Deep Freeze');
+    const hp0 = b2.hp;
+    C5.damage(F2, F2.player, b2, Math.ceil(b2.maxHp * 0.6), { pierce: true });
+    h.ok(F2.events.filter(e => e.t === 'enrage').length === 1, 'the half hp transformation never fires again');
+    h.ok(b2.hp < hp0, 'it still takes damage');
+    const el3 = C5.newFight(run5({ act: 2, endless: { loop: 3 } }), ['ironjaw'], U5.rng(3)).enemies[0];
+    const el4 = C5.newFight(run5({ act: 1, endless: { loop: 4 } }), ['mimic'], U5.rng(3)).enemies[0];
+    h.ok(!el3.enraged && el4.enraged, 'elites rage from the bell from loop 4');
+    // every boss with every other boss's trick plays 24 clean turns
+    const bosses = Object.keys(D5.ENEMIES).filter(id => D5.ENEMIES[id].tier === 'boss' && D5.ENEMIES[id].sig);
+    for (const id of bosses) for (const mix of bosses) {
+      if (mix === id) continue;
+      const act = D5.ENEMIES[id].act || 1;
+      const F = C5.newFight(run5({ act, hp: 999, maxHp: 999, endless: { loop: 2, mix } }), [id], U5.rng(id.length * 7 + mix.length));
+      let bad = 0;
+      for (let turn = 0; turn < 24 && F.phase !== 'over'; turn++) {
+        try {
+          if (F.bin.length) C5.play(F, F.bin[0], 0);
+          C5.endTurn(F);
+        } catch (err) { bad++; }
+        F.events.length = 0;
+        if (F.enemies.some(e => !Number.isFinite(e.hp)) || !Number.isFinite(F.player.hp)) bad++;
+      }
+      h.eq(bad, 0, `${id} with ${mix}'s trick: 24 clean turns`);
+    }
+  });
+
+  h.test('endless: mutators in the fight (grabs, half hits, affixes, rules), gone without them', () => {
+    const F0 = C5.newFight(run5(), ['rat'], U5.rng(4));
+    const Fd = C5.newFight(run5({ muts: ['double'] }), ['rat'], U5.rng(4));
+    h.eq(Fd.player.grabsMax, F0.player.grabsMax * 2, 'Double Grabs: twice the grabs');
+    h.eq(Fd.player.grabs, Fd.player.grabsMax, 'from the first turn');
+    const e0 = F0.enemies[0], ed = Fd.enemies[0];
+    e0.status = {}; ed.status = {}; e0.block = ed.block = 0;
+    const l0 = C5.damage(F0, F0.player, e0, 10), ld = C5.damage(Fd, Fd.player, ed, 10);
+    h.eq(l0, 10, 'a plain hit');
+    h.eq(ld, 5, 'Half Damage: the player hits for half');
+    const hit = C5.damage(Fd, ed, Fd.player, 8);
+    h.eq(hit, 8, 'monsters still hit in full');
+    const Fh = C5.newFight(run5({ muts: ['hungry'] }), ['rat', 'hoard'], U5.rng(4));
+    h.ok(Fh.enemies[0].affix.includes('greedy'), 'Hungry Hungry: the rat is Greedy');
+    h.ok(!Fh.enemies[1].affix.includes('greedy'), 'a gulper is never Greedy on top');
+    const Ff = C5.newFight(run5({ muts: ['fever'] }), ['rat'], U5.rng(4));
+    h.ok(Ff.rules.comboTwice >= 1 && Ff.ruleSrc.comboTwice, 'Jackpot Fever: combos fire twice');
+    h.ok(Ff.enemies[0].affix.includes('hasty'), 'and the monsters are Hasty');
+    const Fp = C5.newFight(run5({ muts: [] }), ['rat'], U5.rng(4));
+    h.ok(Fp.mut === null && !Fp.rules.comboTwice && Fp.player.grabsMax === F0.player.grabsMax && !Fp.enemies[0].affix.includes('hasty'), 'a run without mutators is untouched');
+    const Fj = C5.newFight(run5({ muts: ['nope', 42] }), ['rat'], U5.rng(4));
+    h.ok(Fj.mut === null, 'unknown mutators are ignored');
+  });
+}
+
+// ---------------------------------------------------------------- BESTIARY (round 4): the machine tricks
+{
+  const Bx = boot({ only: ['util', 'data', 'combat'] });
+  const BC = Bx.COMBAT, BD = Bx.DATA, BU = Bx.U;
+  const NEW = ['tickler', 'jelly', 'barker', 'magbat', 'mole', 'dozer', 'ghost', 'collector'];
+  const realItems = Object.keys(BD.ITEMS).filter(id => BD.ITEMS[id].rarity !== 'junk' && !BD.ITEMS[id].bag);
+  const metal = realItems.filter(id => (BD.ITEMS[id].tags || []).includes('metal'));
+  const bin18 = realItems.slice(0, 14).concat(metal.slice(0, 4));
+  const mk = (id, o) => {
+    o = o || {};
+    const def = BD.ENEMIES[id];
+    const run = { hp: 999, maxHp: 999, act: def.act, relics: [], claw: { grabs: 3 }, bin: (o.bin || bin18).map((x, i) => ({ uid: 'b' + i, id: x, plus: !!o.plus })) };
+    return BC.newFight(run, [id], BU.rng(o.seed || 5));
+  };
+  const act = (F, k) => { const e = F.enemies[0]; e.intent = e.def.moves.find(m => m.k === k) || e.intent; e.acts = 1; return BC.endTurn(F); };
+  const evs = (list, t) => (list || []).filter(e => e.t === t);
+  const count = (F) => F.bin.length + F.used.length + F.exhausted.length + F.stolen.length + (F.digested || []).length + F.purged.length + (F.buried || []).length + F.enemies.reduce((a, e) => a + (e.belly || []).length, 0);
+
+  h.test('bestiary: eight new enemies, one new trick each, telegraphed', () => {
+    h.eq((BC.BEST_KINDS || []).length, 7, 'seven new move kinds (plus the rival claw)');
+    for (const id of NEW) h.ok(!!BD.ENEMIES[id], id + ' exists');
+    const kinds = new Set();
+    for (const id of NEW) for (const m of BD.ENEMIES[id].moves) if (BC.BEST_KINDS.includes(m.k)) kinds.add(m.k);
+    for (const k of BC.BEST_KINDS) h.ok(kinds.has(k), 'kind ' + k + ' is used by a new enemy');
+    h.ok(BD.ENEMIES.collector.rival && NEW.filter(id => BD.ENEMIES[id].rival).length === 1, 'only the Claw Collector brings its own claw');
+    for (const id of NEW) {
+      const F = mk(id), e = F.enemies[0];
+      for (const m of e.def.moves) {
+        e.intent = m;
+        const s = BC.intentText(e);
+        h.ok(typeof s === 'string' && s.length > 4 && !/undefined|NaN|\?\?\?/.test(s), `${id}.${m.id} telegraph: "${s}"`);
+      }
+    }
+    const Fc = mk('collector');
+    h.ok(/claw grabs your rarest item/.test(BC.intentText(Fc.enemies[0])), 'the rival claw rides on every telegraph: ' + BC.intentText(Fc.enemies[0]));
+  });
+
+  h.test('bestiary: each trick emits its bin event', () => {
+    const want = { tickle: 'binTickle', glue: 'binGlue', ceiling: 'binCeiling', plow: 'binPlow', vanish: 'binVanish', bury: 'binBury', wheel: 'binWheel' };
+    const who = { tickle: 'tickler', glue: 'jelly', ceiling: 'magbat', plow: 'dozer', vanish: 'ghost', bury: 'mole', wheel: 'barker' };
+    for (const k in want) {
+      const F = mk(who[k]);
+      const out = act(F, k);
+      const e = evs(out, want[k]);
+      h.ok(e.length >= 1 && e[0].idx === 0, `${who[k]} ${k} -> ${want[k]}`);
+      if (k === 'tickle' || k === 'glue') h.eq(e[0].turns, 1, k + ' lasts one turn');
+      if (k === 'ceiling') h.ok(e[0].insts.length === F.bin.filter(i => (BD.ITEMS[i.id].tags || []).includes('metal')).length && e[0].insts.length >= 4 && e[0].insts.every(i => (BD.ITEMS[i.id].tags || []).includes('metal')), 'the lid takes the metal (and only the metal)');
+      if (k === 'vanish') h.ok(e[0].insts.length === 3 && new Set(e[0].insts.map(i => i.uid)).size === 3 && e[0].insts.every(i => F.bin.includes(i)), 'three different items go invisible (they stay in the bin)');
+    }
+    const Fn = mk('magbat', { bin: realItems.filter(id => !(BD.ITEMS[id].tags || []).includes('metal')).slice(0, 8) });
+    const outN = act(Fn, 'ceiling');
+    h.ok(!evs(outN, 'binCeiling').length && evs(outN, 'text').some(t => t.str === 'NO METAL'), 'no metal: nothing floats, it says so');
+  });
+
+  h.test('bestiary: the Mole buries items, the claw digs them up, its death gives them back', () => {
+    const F = mk('mole');
+    const n0 = count(F);
+    const out = act(F, 'bury');
+    const b = evs(out, 'binBury');
+    h.ok(b.length === 1 && F.buried.length === 1 && F.buried[0].inst === b[0].inst && !F.bin.includes(b[0].inst), 'one item goes under the floor (out of the bin)');
+    h.eq(count(F), n0, 'every item accounted for');
+    h.eq(BC.bestUnbury(F, b[0].inst), 'bin', 'digging it up puts it back in the bin');
+    h.ok(F.bin.includes(b[0].inst) && !F.buried.length, 'back in the bin, the floor is empty');
+    h.eq(BC.bestUnbury(F, b[0].inst), null, 'a second dig finds nothing');
+    act(F, 'bury'); act(F, 'bury');
+    h.ok(F.buried.length >= 1, 'buried again');
+    const buried = F.buried.map(x => x.inst);
+    const d = [];
+    const e = F.enemies[0];
+    const res = BC.damage(F, F.player, e, 9999, { pierce: true });
+    h.ok(res > 0 && !e.alive, 'the Mole goes down');
+    const un = evs(F.events, 'binUnbury');
+    h.ok(un.length === 1 && un[0].insts.length === buried.length && buried.every(i => F.bin.includes(i) || F.used.includes(i)) && !F.buried.length, 'its death coughs every buried item back up');
+    // the floor: never below BEST_FLOOR real items
+    const Fs = mk('mole', { bin: realItems.slice(0, 5) });
+    for (let i = 0; i < 6; i++) act(Fs, 'bury');
+    const real = Fs.bin.concat(Fs.used).filter(i => !BC.isJunk(i)).length;
+    h.ok(real >= BC.BEST_FLOOR, `burying never takes you below ${BC.BEST_FLOOR} real items (${real})`);
+  });
+
+  h.test('bestiary: the prize wheel spins first, then pays its wedge, with a house edge', () => {
+    const W = BC.BEST_WHEEL;
+    h.ok(W.length === 8 && W.filter(w => w.who === 'it').length === 4 && W.every(w => w.label && w.k && w.v > 0), 'eight wedges, four of them its own');
+    let it = 0, you = 0, rage = 0;
+    for (let s = 1; s <= 300; s++) {
+      const F = mk('barker', { seed: s });
+      const out = act(F, 'wheel');
+      const i = out.findIndex(e => e.t === 'binWheel');
+      const w = out[i];
+      h.ok(i >= 0 && W[w.w] && W[w.w].who === w.who, 'spin ' + s + ' names a wedge');
+      if (w.who === 'it') it++; else you++;
+      if (s <= 40) {
+        const after = out.slice(i + 1);
+        const k = W[w.w].k;
+        const hit = k === 'gold' ? F.gain.gold === W[w.w].v : k === 'block' ? after.some(e => e.t === 'block' && e.who === (w.who === 'it' ? 'e' : 'p')) : k === 'heal' ? true : after.some(e => e.t === 'status' && e.s === k && e.who === (w.who === 'it' ? 'e' : 'p'));
+        h.ok(hit, `spin ${s}: the ${w.label} lands after the spin`);
+      }
+      const F2 = mk('barker', { seed: s }); F2.enemies[0].enraged = true;
+      if (evs(act(F2, 'wheel'), 'binWheel')[0].who === 'it') rage++;
+    }
+    h.ok(it / 300 > 0.5 && it / 300 < 0.66, `the house wins about 57% of spins (${Math.round(it / 3)}%)`);
+    h.ok(rage / 300 > 0.64, `once enraged, far more (${Math.round(rage / 3)}%)`);
+    const a = act(mk('barker', { seed: 9 }), 'wheel'), b = act(mk('barker', { seed: 9 }), 'wheel');
+    h.eq(JSON.stringify(evs(a, 'binWheel')), JSON.stringify(evs(b, 'binWheel')), 'deterministic by the fight seed');
+  });
+
+  h.test('bestiary: the Claw Collector grabs your rarest item every turn and keeps it on display', () => {
+    const bin = ['rusty_sword'].concat(realItems.filter(id => BD.ITEMS[id].rarity === 'r').slice(0, 2), realItems.filter(id => BD.ITEMS[id].rarity === 'c').slice(0, 8));
+    const F = mk('collector', { bin });
+    const e = F.enemies[0];
+    const pick = BC.bestRivalPick(F);
+    h.ok(pick && BD.ITEMS[pick.id].rarity === 'r', 'it has its eye on a rare item');
+    h.eq(BC.bestRivalPick(F), pick, 'the pick is pure (no rng): the reticle tells the truth');
+    const n0 = count(F);
+    e.intent = e.def.moves.find(m => m.k === 'block'); e.acts = 1;
+    const out = BC.endTurn(F);
+    const r = evs(out, 'binRival'), eat = evs(out, 'binEat');
+    h.ok(r.length === 1 && r[0].inst === pick && eat.length === 1 && eat[0].inst === pick, 'binRival then binEat: its claw takes exactly that item');
+    h.ok(out.indexOf(r[0]) < out.indexOf(eat[0]), 'the claw shows up before the item leaves');
+    h.eq(count(F), n0, 'every item accounted for');
+    for (let t = 0; t < 12 && F.phase !== 'over'; t++) BC.endTurn(F);
+    h.ok(e.belly.length <= 4 && !(F.digested || []).length, 'it keeps up to four, never digests them (' + e.belly.length + ')');
+    const real = F.bin.concat(F.used).filter(i => !BC.isJunk(i)).length;
+    h.ok(real >= BC.BEST_FLOOR, 'never below the floor of real items');
+    BC.damage(F, F.player, e, 9999, { pierce: true });
+    h.ok(!e.alive && !e.belly.length && count(F) === n0, 'beat it and the whole collection comes back');
+    // enraged: two a turn
+    const F2 = mk('collector', { bin: realItems.slice(0, 16) });
+    F2.enemies[0].enraged = true; F2.enemies[0].intent = F2.enemies[0].def.moves[1]; F2.enemies[0].acts = 1;
+    h.eq(evs(BC.endTurn(F2), 'binRival').length, 2, 'enraged, its claw goes back for seconds');
+    h.ok(/2 rarest/.test(BC.intentText(F2.enemies[0])), 'and the telegraph says so');
+  });
+
+  h.test('bestiary: 16 turns of every new enemy stay clean, nothing vanishes', () => {
+    for (const id of NEW) {
+      const F = mk(id, { seed: 11 });
+      const n0 = count(F);
+      let ok = true;
+      for (let t = 0; t < 16 && F.phase !== 'over'; t++) {
+        try { BC.endTurn(F); } catch (err) { ok = false; h.ok(false, id + ' threw ' + err.stack); break; }
+        if (count(F) < n0) { ok = false; h.ok(false, `${id}: an item vanished at turn ${t}`); break; }
+        if (!Number.isFinite(F.player.hp) || F.enemies.some(e => !Number.isFinite(e.hp))) { ok = false; h.ok(false, id + ': NaN hp'); break; }
+      }
+      h.ok(ok, `${id}: 16 turns clean, every item accounted for`);
     }
   });
 }

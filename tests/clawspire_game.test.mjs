@@ -3362,4 +3362,786 @@ h.test('arcade: old saves (no monsters, no cabinets, old events) load and play',
   G2.draw();
 });
 
+// ---------------------------------------------------------------- Feel (round 4)
+function feelBoot(meta, extra) {
+  const store = Object.assign({ clawspire_meta: JSON.stringify(Object.assign({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }, meta || {})) }, extra || {});
+  return boot({ store });
+}
+// Every tip but the listed ones counts as seen, so a test controls the queue.
+function feelOnly(Gt, ids) { Gt.meta.tips = {}; for (const d of Gt.feel.TIPS) if (ids.indexOf(d.id) < 0) Gt.meta.tips[d.id] = 1; }
+
+h.test('feel: tip cards queue, show one at a time and never twice', () => {
+  const T = feelBoot();
+  const Gt = T.GAME, Fe = Gt.feel;
+  h.ok(Gt.meta.tips && !Object.keys(Gt.meta.tips).length, 'a fresh profile has met no tips');
+  h.eq(Gt.meta.settings.haptics, true, 'Buzz is on by default');
+  Gt.newRun('knight', 4101);
+  feelOnly(Gt, ['combo', 'tickets']);
+  h.ok(Fe.want('combo') && Fe.want('tickets'), 'two tips queued');
+  h.ok(!Fe.want('combo'), 'the same tip queues once');
+  h.ok(!Fe.want('nonsense'), 'unknown tips are ignored');
+  stepFor(Gt, 0.2);
+  h.eq(Fe.cur && Fe.cur.id, 'combo', 'the first in line shows');
+  h.ok(Gt.meta.tips.combo && JSON.parse(T._store[Gt.META_KEY]).tips.combo, 'marked met and saved at once');
+  stepFor(Gt, 3);
+  h.eq(Fe.cur && Fe.cur.id, 'combo', 'it stays up (it never stacks: the next one waits)');
+  h.eq(Fe.queue.join(), 'tickets', 'the rest wait in line');
+  Fe.dismiss();
+  h.ok(!Fe.cur, 'a tap puts it away');
+  stepFor(Gt, 0.3);
+  h.ok(!Fe.cur, 'a short breath before the next');
+  stepFor(Gt, 1);
+  h.eq(Fe.cur && Fe.cur.id, 'tickets', 'then the next one');
+  stepFor(Gt, Fe.TIP.life + 0.2);
+  h.ok(!Fe.cur, 'a card left alone goes by itself');
+  Gt.draw();
+  const T2 = boot({ store: { [Gt.META_KEY]: T._store[Gt.META_KEY] } });
+  h.ok(T2.GAME.meta.tips.combo && T2.GAME.meta.tips.tickets, 'met tips survive a reload');
+  T2.GAME.newRun('knight', 4101);
+  h.ok(!T2.GAME.feel.want('combo'), 'and never come back');
+  T2.GAME.feel.reset();
+  h.ok(!Object.keys(T2.GAME.meta.tips).length && T2.GAME.feel.want('combo'), 'until Reset tips');
+});
+
+h.test('feel: no tip while the claw is busy, over the coach, or on a screen without a lane', () => {
+  const T = feelBoot();
+  const Gt = T.GAME, Fe = Gt.feel;
+  Gt.newRun('knight', 4102);
+  Gt.startFight(['rat'], 'normal');
+  h.ok(settle(Gt, 20), 'the fight is ready');
+  feelOnly(Gt, ['combo']);
+  h.ok(Fe.safe(), 'a calm fight has room for a card');
+  Gt.fs.grabInFlight = true;
+  h.ok(!Fe.safe(), 'not while a grab is in flight');
+  Gt.fs.grabInFlight = false;
+  const ph = Gt.rig.phase;
+  Gt.rig.phase = 'carrying';
+  h.ok(!Fe.safe(), 'not while the claw carries');
+  Gt.rig.phase = ph;
+  Gt.S.coachStep = 1;
+  h.ok(!Fe.safe(), 'not over the coach marks');
+  Gt.S.coachStep = -1;
+  Fe.want('combo');
+  stepFor(Gt, 0.2);
+  h.eq(Fe.cur && Fe.cur.id, 'combo', 'once the claw is home and the coach is done');
+  h.eq(Fe.lane(), 'bothi', 'a fight toast moves above the card');
+  Fe.dismiss();
+  h.eq(Fe.lane(), 'bot', 'else fight toasts use the bottom lane, off the cabinet');
+  // a card that has only just shown goes back in line when its screen goes
+  feelOnly(Gt, ['luck']);
+  Fe.want('luck');
+  stepFor(Gt, 1.2);
+  h.eq(Fe.cur && Fe.cur.id, 'luck', 'up');
+  Gt.showRest();
+  stepFor(Gt, 0.1);
+  h.ok(!Fe.cur && Fe.queue[0] === 'luck' && !Gt.meta.tips.luck, 'the rest stop has no tip lane: it waits for later, unread');
+  Gt.toMap();
+  stepFor(Gt, 1.5);
+  h.eq(Fe.cur && Fe.cur.id, 'luck', 'and shows on the map');
+});
+
+h.test('feel: meeting something new queues its tip', () => {
+  const T = feelBoot();
+  const Gt = T.GAME, Fe = Gt.feel, has = (id) => Fe.queue.includes(id) || (Fe.cur && Fe.cur.id === id);
+  Gt.newRun('knight', 4103);
+  Gt.toMap();
+  Fe.scan();
+  h.ok(has('map'), 'the first map: Light the way');
+  h.ok(!has('tool'), 'no tool yet');
+  Gt.run.brushes.push('flare');
+  Gt.run.tickets = 3;
+  const tw = Object.values(Gt.run.map.tiles).find(t => t.type === 'tower');
+  if (tw) tw.revealed = true;
+  Fe.scan();
+  h.ok(has('tool') && has('tickets'), 'a tool and tickets');
+  h.ok(!tw || has('tower'), 'a lit tower');
+  const gulper = Object.values(DATA.ENEMIES).find(e => e.act === 1 && e.tier === 'normal' && (e.moves || []).some(m => m.k === 'gulp'));
+  Gt.startFight([gulper.id], 'normal');
+  Fe.scan();
+  h.ok(has('hungry'), 'a gulper: Hungry monster (' + gulper.id + ')');
+  COMBAT.giveAffix(Gt.fight, Gt.fight.enemies[0], 'armored');
+  Gt.fight.luckK = 1;
+  Gt.fs.mst.feelTest = { crack: 1 };
+  Fe.scan();
+  h.ok(has('affix') && has('luck') && has('crack'), 'an affix, the Luck meter, a cracked item');
+  settle(Gt, 20);
+  Gt.fs.queue.push({ ev: { t: 'combo', id: 'hat_trick', name: 'Hat Trick', text: '', color: '#fff', n: 1, tier: 2 }, beat: 0 });
+  Gt.fs.queue.push({ ev: { t: 'binBomb', inst: Gt.fight.bin[0], idx: 0 }, beat: 0 });
+  stepFor(Gt, 1.5);
+  h.ok(has('combo') && has('bomb'), 'a combo and a lit bomb from the fight events');
+  // the enemy popover names the affix the tip points at
+  Gt.S.popover = null;
+  for (let y = 120; y <= 320 && !Gt.S.popover; y += 20) Gt.tap(270, y);
+  h.ok(Gt.S.popover && /Armored/.test(Gt.S.popover.html), 'a tap on the enemy reads its affixes');
+});
+
+h.test('feel: haptics buzz in patterns and respect Buzz and reduced motion', () => {
+  const T = feelBoot();
+  const Gt = T.GAME, Fe = Gt.feel, calls = [];
+  T._window.navigator.vibrate = (p) => { calls.push(p); return true; };
+  for (const k of ['clamp', 'deliver', 'jackpot', 'bigHit', 'hurt', 'capCrack', 'capBurst', 'slotWin']) h.ok(Fe.BUZZ[k] != null, k + ' has a pattern');
+  h.ok(Fe.haptic('clamp'), 'a clamp buzzes');
+  h.eq(JSON.stringify(calls[0]), JSON.stringify(Fe.BUZZ.clamp), 'in its own pattern');
+  h.ok(!Fe.haptic('nonsense'), 'unknown kinds do nothing');
+  Fe.setHaptics(false);
+  const n = calls.length;
+  h.ok(!Fe.haptic('jackpot') && calls.length === n, 'Buzz off: still');
+  h.eq(JSON.parse(T._store[Gt.META_KEY]).settings.haptics, false, 'the switch is saved');
+  Gt.showTitle();
+  h.ok(Gt.S.ui.buttons.some(b => b.label === 'Buzz off'), 'the title shows Buzz off');
+  Gt.choose(Gt.S.ui.buttons.findIndex(b => b.label === 'Buzz off'));
+  h.ok(Gt.meta.settings.haptics && Gt.S.ui.buttons.some(b => b.label === 'Buzz on'), 'and turns it back on');
+  Gt.meta.settings.shake = false;
+  h.ok(!Fe.haptic('hurt'), 'reduced motion (Shake off): still');
+  Gt.meta.settings.shake = true;
+  const mm = T._window.matchMedia;
+  T._window.matchMedia = (q) => ({ matches: /reduce/.test(q), addEventListener() {} });
+  h.ok(!Fe.haptic('hurt'), 'prefers-reduced-motion: still');
+  T._window.matchMedia = mm;
+  // in a fight: the clamp, the delivery
+  Gt.newRun('knight', 4104);
+  Gt.startFight(['rat'], 'normal');
+  settle(Gt, 20);
+  const b0 = Fe.buzz.length;
+  Gt.rigEvent('close');
+  Gt.playDelivered([Gt.fs.items[0]]);
+  h.ok(Fe.buzz.slice(b0).includes('clamp') && Fe.buzz.slice(b0).includes('deliver'), 'a real grab buzzes on the clamp and the delivery (' + Fe.buzz.slice(b0).join() + ')');
+  delete T._window.navigator.vibrate;
+  let threw = false;
+  try { Fe.haptic('deliver'); } catch (e) { threw = true; }
+  h.ok(!threw, 'no vibrate API: a quiet no-op');
+});
+
+h.test('feel: toasts keep off the play area', () => {
+  const T = feelBoot();
+  const Gt = T.GAME, Fe = Gt.feel;
+  Gt.newRun('knight', 4105);
+  Gt.toMap();
+  h.eq(Fe.lane(), '', 'the map keeps the old spot');
+  const cab = arcCab(Gt, 'slots', 1);
+  Gt.arc.show({ q: cab.q, r: cab.r });
+  h.eq(Gt.screen, 'arcade', 'at the slots');
+  h.eq(Fe.lane(), 'arc', 'the arcade lane sits under the machine, over the how-to line');
+  Gt.showShop(Gt.rollShop({ q: 1, r: 2 }));
+  h.eq(Fe.lane(), 'keep', 'on the shop the keeper says it');
+  Gt.run.gold = 0;
+  Gt.choose(0);
+  h.ok(Fe.keeper.note === 'Not enough gold.' && Fe.keeper.noteT > 0, 'the toast is his note, under his line');
+  Gt.loot.showCounter(Gt.S.sd.shop);
+  h.eq(Fe.lane(), 'top', 'the prize counter lane is the top edge, off the case');
+  h.ok(Fe.CORNER.reward === 'hi' && Fe.CORNER.shop === 'tight' && Fe.CORNER.counter === 'tight', 'the corner lane goes compact there (and up into the title row on the reward)');
+  Gt.startFight(['rat'], 'normal');
+  h.eq(Fe.lane(), 'bot', 'the fight lane is the tray, off the cabinet');
+});
+
+h.test('feel: the shopkeeper, the campfire and the forge', () => {
+  const T = feelBoot();
+  const Gt = T.GAME, Fe = Gt.feel;
+  Gt.newRun('knight', 4106);
+  const shop = Gt.rollShop({ q: 2, r: 2 });
+  Gt.run.gold = 1;
+  Gt.showShop(shop);
+  const K = Fe.keeper;
+  h.ok(K.cv && K.ctx && Fe.QUIPS.hi.includes(K.quip), 'Chester greets you (' + K.quip + ')');
+  const nBtn = Gt.S.ui.buttons.length;
+  h.eq(Gt.S.ui.buttons[nBtn - 1].label, 'Prize counter', 'the shop buttons keep their order');
+  Gt.choose(0);
+  h.ok(K.mood === 'broke' && Fe.QUIPS.broke.includes(K.quip), 'broke: he frowns and says so');
+  Gt.run.gold = 999;
+  Gt.showShop(shop);
+  Gt.choose(0);
+  h.ok(K.mood === 'happy' && Fe.QUIPS.buy.includes(K.quip), 'a buy: he beams');
+  h.eq(Gt.S.ui.buttons.length, nBtn, 'no extra buttons');
+  Gt.draw();
+  stepFor(Gt, 2);
+  h.eq(K.mood, 'idle', 'and settles down');
+  const said = K.log.length;
+  stepFor(Gt, 7.5);
+  h.ok(K.log.length > said && K.log[K.log.length - 1] === 'idle', 'idle quips rotate');
+  Gt.showShop(shop);
+  h.ok(Fe.QUIPS.idle.includes(K.quip), 'coming back to the same shop keeps the chat going (no new hello)');
+  // the rest stop: headless it goes straight on, as before
+  Gt.run.hp = 10;
+  Gt.showRest();
+  h.ok(Fe.fire.cv && Fe.fire.ctx, 'a campfire');
+  Gt.draw();
+  // in a page the campfire holds a beat, saved as done so a reload never heals twice
+  Gt.S.headless = false;
+  Gt.choose(0);
+  const healed = Gt.run.hp;
+  h.ok(healed > 10 && Gt.screen === 'rest' && Fe.fire.heal > 0, 'hearts rise at the fire');
+  h.ok(Gt.S.sd.rest && Gt.S.sd.done, 'the rest is marked done');
+  const saved = JSON.parse(T._store[Gt.RUN_KEY]);
+  h.ok(saved.screen === 'rest' && saved.sd.done && saved.run.hp === healed, 'saved healed and done');
+  const T2 = boot({ store: { [Gt.RUN_KEY]: T._store[Gt.RUN_KEY], [Gt.META_KEY]: T._store[Gt.META_KEY] } });
+  h.ok(T2.GAME.load() && T2.GAME.screen === 'map' && T2.GAME.run.hp === healed, 'a reload in the beat lands on the map, healed once');
+  Gt.choose(0);
+  h.eq(Gt.run.hp, healed, 'no second heal during the beat');
+  Gt.draw();
+  stepFor(Gt, 1.6);
+  h.eq(Gt.screen, 'map', 'then the map');
+  // the forge: three blows and a sparkle, then the map
+  Gt.showForge();
+  h.ok(Fe.forge.cv && !Fe.forge.item, 'an anvil with a hot ingot');
+  const plus0 = Gt.run.bin.filter(i => i.plus).length;
+  Gt.choose(0);
+  h.eq(Gt.run.bin.filter(i => i.plus).length, plus0 + 1, 'the item is upgraded at once');
+  h.ok(Gt.screen === 'forge' && Fe.forge.item, 'the item goes on the anvil');
+  stepFor(Gt, 0.9);
+  h.eq(Fe.forge.strikes.length, 3, 'three hammer blows');
+  h.ok(Fe.forge.done > 0, 'then the sparkle');
+  Gt.draw();
+  stepFor(Gt, 1);
+  h.eq(Gt.screen, 'map', 'then the map');
+  // a tap skips the beat
+  Gt.showRest();
+  Gt.choose(0);
+  stepFor(Gt, 0.4);
+  h.ok(Fe.beatSkip() && Gt.screen === 'map', 'a tap skips the campfire');
+  Gt.S.headless = true;
+});
+
+h.test('feel: the Tips page, old profiles and veterans', () => {
+  const T = feelBoot({ tips: { combo: 1, luck: 1 } });
+  const Gt = T.GAME;
+  Gt.showTitle();
+  let labels = Gt.S.ui.buttons.map(b => b.label);
+  h.ok(labels.includes('Tips'), 'the title has Tips');
+  Gt.choose(labels.indexOf('Tips'));
+  h.eq(Gt.screen, 'tips', 'the Tips page');
+  const list = T._nodes.tipsBody.children.find(c => c.className === 'tipList');
+  h.eq(list.children.length, Gt.feel.TIPS.length, 'one row per tip');
+  const got = list.children.filter(r => /got/.test(r.className));
+  h.eq(got.length, 2, 'the two met ones in full');
+  h.ok(got.some(r => r.children[1].children[0].textContent === 'Grab combo'), 'with their title');
+  h.ok(list.children.filter(r => !/got/.test(r.className)).every(r => r.children[1].children[0].textContent === '???'), 'the rest dark');
+  Gt.draw();
+  labels = Gt.S.ui.buttons.map(b => b.label);
+  Gt.choose(labels.indexOf('Reset tips'));
+  h.ok(Gt.screen === 'tips' && !Object.keys(Gt.meta.tips).length, 'Reset tips clears them');
+  Gt.choose(Gt.S.ui.buttons.map(b => b.label).indexOf('Back'));
+  h.eq(Gt.screen, 'title', 'Back to the title');
+  // profiles from before the tips
+  const V = feelBoot({ stats: { fights: 40, runs: 5 } }).GAME;
+  h.ok(V.meta.tips.combo && V.meta.tips.hungry && V.meta.tips.crack, 'a veteran has met the old systems');
+  h.ok(!V.meta.tips.luck && !V.meta.tips.arcade && !V.meta.tips.roam, 'but not the round 3 ones');
+  h.eq(Object.keys(feelBoot({ stats: { fights: 2 } }).GAME.meta.tips).length, 0, 'a newcomer meets every tip');
+  const J = feelBoot({ tips: 'junk', settings: { shake: true, haptics: 'yes' } }).GAME;
+  h.ok(J.meta.tips && typeof J.meta.tips === 'object' && J.meta.settings.haptics === true, 'junk fields are repaired');
+  const A = feelBoot({ arc: { plays: 9, jackpots: 1 } }).GAME;
+  h.eq(A.meta.arc && A.meta.arc.plays, 9, 'arcade play counts survive a reload');
+  // an old rest save (no done flag) still opens the rest stop
+  const O = feelBoot();
+  O.GAME.newRun('knight', 4107);
+  O.GAME.showRest();
+  const O2 = boot({ store: { [O.GAME.RUN_KEY]: O._store[O.GAME.RUN_KEY], [O.GAME.META_KEY]: O._store[O.GAME.META_KEY] } });
+  h.ok(O2.GAME.load() && O2.GAME.screen === 'rest', 'a saved rest stop reopens');
+});
+
+// ---------------------------------------------------------------- ENDLESS (DESIGN.md "Endless and mutators")
+function endBoot(meta) { return metaBoot(Object.assign({ unlocks: { knight: true, rogue: true } }, meta || {})); }
+// A run won right now (the act 3 boss down): the win screen and its offer.
+function endWin(G, seed, muts) { G.endless.pick(muts || []); G.newRun('knight', seed); G.run.act = 3; G.showWin(); }
+const endSkip = (G) => { if (G.boss.vs) { G.boss.vsSkip(); G.boss.vsSkip(); } stepFor(G, 0.05); };
+const toMapFrom = (G) => { for (let i = 0; i < 4 && G.screen !== 'map'; i++) chooseFirst(G); };
+const badgesOf = (T) => ((T._nodes.relics && T._nodes.relics.children) || []).filter(c => /mutBadge/.test(c.className || ''));
+
+h.test('endless: the win screen offers Cash out or Endless, and the offer survives a reload', () => {
+  const { T, G, saved } = endBoot();
+  endWin(G, 404);
+  h.eq(G.screen, 'win', 'the win screen');
+  h.eq(G.S.ui.buttons[0].label, 'Cash out', 'the first choice cashes out');
+  h.ok(G.S.ui.buttons.findIndex(b => /Endless/.test(b.label)) > 0, 'KEEP PLAYING: ENDLESS is offered');
+  h.ok(G.endless.offer(), 'the offer is open');
+  h.eq(G.meta.stats.wins, 1, 'the win is banked at once');
+  h.ok(T._store[G.RUN_KEY] && JSON.parse(T._store[G.RUN_KEY]).screen === 'win', 'the run stays saved on the win screen');
+  h.ok(G.run.scoreRec && G.run.scoreRec.classic && saved().scores.classic === G.run.scoreRec.classic.total, 'the run score is recorded');
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  const G2 = T2.GAME;
+  h.ok(G2.load(), 'CONTINUE works');
+  h.eq(G2.screen, 'win', 'back on the win screen');
+  h.eq(G2.meta.stats.wins, 1, 'the win is not counted twice');
+  h.eq(G2.meta.winsBy.knight, 1, 'nor per crawler');
+  G2.choose(0);
+  h.eq(G2.screen, 'title', 'Cash out goes to the title');
+  h.ok(!T2._store[G2.RUN_KEY], 'and the run is over');
+});
+
+h.test('endless: the reboot, a new map per loop, the Loop stat, the loop boss, save and load', () => {
+  const { T, G, saved } = endBoot();
+  endWin(G, 405);
+  const classic = MAP.generate({ act: 1, rng: U.rng(U.hashStr(G.run.seed + ':map:1')), cols: MAP.DEFAULT_COLS, rows: MAP.DEFAULT_ROWS });
+  G.run.hp = 20;
+  G.choose(G.S.ui.buttons.findIndex(b => /Endless/.test(b.label)));
+  h.eq(G.screen, 'loop', 'the reboot screen');
+  const E = G.run.endless;
+  h.ok(E && E.loop === 1, 'Loop 1');
+  h.eq(G.run.act, 1, 'loop 1 plays act 1\'s biome and pools');
+  h.ok(G.run.map.act === 1 && G.run.map.seed !== classic.seed, 'a fresh act 1 map, never the run\'s own act 1 map');
+  h.ok(G.run.hp > 20, 'healed');
+  h.ok(G.meta.ach.endless_on, 'Insert Another Coin');
+  h.ok(saved().endless.best === 1 && saved().endless.runs === 1, 'the deepest loop and the Endless runs are on the profile');
+  h.eq(G.run.muts.length, 0, 'no mutator joins in loop 1');
+  h.ok(E.mix && DATA.ENEMIES[E.mix].tier === 'boss' && E.mix !== 'hoard', 'the loop boss borrows a trick: ' + E.mix);
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T2.GAME.load() && T2.GAME.screen === 'loop' && T2.GAME.run.endless.loop === 1, 'a reload on the reboot screen');
+  G.endless.cont();
+  toMapFrom(G);
+  h.eq(G.screen, 'map', 'the spare parts, the relic, then the map');
+  h.eq(T._nodes.actTxt.textContent, 'Loop 1', 'the HUD says Loop 1');
+  G.draw();
+  G.startFight(['hoard'], 'boss');
+  h.eq(G.boss.vs && G.boss.vs.title, 'LOOP 1 BOSS', 'the versus card says LOOP 1 BOSS');
+  h.eq(G.fight.loop, 1, 'the fight knows its loop');
+  h.eq(G.fight.enemies[0].def.sig.id, DATA.ENEMIES[E.mix].sig.id, 'with the borrowed trick');
+  endSkip(G);
+  G.endFight('win');
+  h.eq(G.run.sc.bosses, 1, 'a boss down is counted for the score');
+  G.choose(3);
+  h.eq(G.screen, 'loop', 'the boss down: the next reboot');
+  h.ok(G.run.endless.loop === 2 && G.run.act === 2, 'Loop 2 in act 2\'s biome');
+  h.ok(G.run.muts.length === 1 && G.run.endless.adds[0] === G.run.muts[0] && G.S.sd.loop.added === G.run.muts[0], 'a random mutator joins from loop 2: ' + G.run.muts[0]);
+  h.eq(saved().endless.best, 2, 'the deepest loop moves');
+  G.endless.cont();
+  toMapFrom(G);
+  h.eq(badgesOf(T).length, 1, 'its badge leads the relic strip');
+  G.startFight(['rat'], 'normal');
+  endSkip(G);
+  const F = G.fight;
+  h.ok(F.loop === 2 && F.mut && F.mut.ids.join() === G.run.muts.join(), 'the fight carries the loop and the mutators');
+  const ids = F.enemies.map(e => e.id).join(), hps = F.enemies.map(e => e.maxHp).join();
+  G.save();
+  const T3 = boot({ store: Object.assign({}, T._store) });
+  h.ok(T3.GAME.load() && T3.GAME.screen === 'fight', 'a reload mid fight in Endless');
+  const F3 = T3.GAME.fight;
+  h.ok(F3.loop === 2 && F3.enemies.map(e => e.id).join() === ids && F3.enemies.map(e => e.maxHp).join() === hps && F3.mut.ids.join() === G.run.muts.join(), 'the same lifted monsters, the same mutators');
+  h.eq(T3._nodes.actTxt.textContent, 'Loop 2', 'the reloaded HUD says Loop 2');
+  T3.GAME.draw();
+});
+
+h.test('endless: death ends it (the win stays banked; the loops, the score and the best are recorded)', () => {
+  const { T, G, saved } = endBoot({ scores: { classic: 0, daily: 0, endless: 10 } });
+  endWin(G, 406, ['lowgrav']);
+  G.endless.start();
+  G.endless.next();
+  G.endless.next();
+  h.eq(G.run.endless.loop, 3, 'Loop 3');
+  h.ok(G.meta.ach.loop3, 'Loop de Loop');
+  h.ok(G.run.muts.length === 3 && G.run.muts[0] === 'lowgrav', 'the pick stays and two more joined');
+  G.endless.cont();
+  toMapFrom(G);
+  G.startFight(['rat'], 'normal');
+  G.run.kills += 10;
+  G.fight.player.hp = 0;
+  G.endFight('lose');
+  h.eq(G.screen, 'gameover', 'game over');
+  h.eq(G.meta.stats.wins, 1, 'still one win');
+  const rec = G.run.scoreRec;
+  h.ok(rec.endless && rec.endless.total > rec.classic.total, 'the Endless score beats the classic one');
+  h.ok(rec.endless.newBest && saved().scores.endless === rec.endless.total, 'a NEW BEST Endless score is saved');
+  h.eq(saved().endless.best, 3, 'the deepest loop');
+  h.ok(G.run.endless.over && !T._store[G.RUN_KEY], 'recorded once, the run is over');
+  G.draw();
+});
+
+h.test('mutators: each one changes the machine, and a run without them is the plain machine', () => {
+  const { T, G } = endBoot();
+  const start = (ids, enc, secs) => { G.endless.pick(ids); G.newRun('knight', 808); G.startFight(enc || ['rat'], 'normal'); endSkip(G); stepFor(G, secs == null ? 1.5 : secs); return G.fight; };
+  const brOf = () => { const o = {}; for (const b of G.fs.items) o[b.data.inst.id] = Math.max(o[b.data.inst.id] || 0, b.br); return o; };
+  const spread = () => { const r = G.rig; const xs = G.fs.items.map(b => Math.abs(b.x - r.x)); return xs.reduce((a, v) => a + v, 0) / Math.max(1, xs.length); };
+  const meanX = () => G.fs.items.reduce((a, b) => a + b.x, 0) / Math.max(1, G.fs.items.length);
+  const F0 = start([]);
+  h.ok(F0.mut === null && G.endless.mods() === null, 'no mutators: none in the fight');
+  const base = { br: brOf(), grabs: F0.player.grabsMax, n: F0.enemies.length, gs: G.fs.items.map(b => b.gs), slick: G.fs.items.map(b => b.slick) };
+  // Low Gravity
+  start(['lowgrav']);
+  h.ok(G.fs.items.every((b, i) => b.gs < 0.5 * Math.max(0.62, base.gs[i] || 1) + 0.01 && b.drag > 0), 'Low Gravity: everything floats');
+  // Everything Is Glass
+  start(['glass']);
+  h.ok(G.fs.items.every(b => !b.data.mat || b.data.mat.traits.glass), 'Everything Is Glass: every prize is glass');
+  h.ok(!CS.PHYS.materialOf(DATA.ITEMS.rusty_sword).traits.glass, 'the shared material table is untouched');
+  const b0 = G.fs.items.find(b => b.data.inst.id === 'rusty_sword');
+  G.toys.crack(b0);
+  h.eq(G.toys.mstOf(b0.data.inst).crack, 1, 'a sword cracks');
+  // Bomb Party
+  const Fb = start(['bombs']);
+  const bombs = () => G.fight.bin.filter(i => i.id === 'firecracker' && i.temp).length;
+  h.eq(bombs(), 2, 'Bomb Party: two Firecrackers at the bell');
+  h.ok(G.fs.items.some(b => b.data.inst.id === 'firecracker'), 'in the cabinet');
+  G.endTurn(); settle(G, 30);
+  h.ok(G.screen !== 'fight' || bombs() === 3 || G.fight.used.some(i => i.id === 'firecracker'), 'one more each turn');
+  // Magnet Storm
+  start(['magnet'], null, 0.6);
+  const s0 = spread(); stepFor(G, 3.5);
+  h.ok(spread() < s0 - 10, `Magnet Storm: the pile creeps toward the claw (${s0.toFixed(0)} -> ${spread().toFixed(0)})`);
+  // Tiny / Giant Items
+  start(['tiny']);
+  const tiny = brOf();
+  start(['giant']);
+  const giant = brOf();
+  h.ok(tiny.rusty_sword < base.br.rusty_sword * 0.8 && giant.rusty_sword > base.br.rusty_sword * 1.2, `Tiny and Giant Items: the bodies scale (${tiny.rusty_sword.toFixed(1)} / ${base.br.rusty_sword.toFixed(1)} / ${giant.rusty_sword.toFixed(1)})`);
+  // Slippery Floor
+  start(['slippery']);
+  h.ok(G.fs.items.every((b, i) => b.slick <= (base.slick[i] || 1) * 0.1 + 1e-9), 'Slippery Floor: the pile slides');
+  // Double Grabs, Half Damage
+  h.eq(start(['double']).player.grabsMax, base.grabs * 2, 'Double Grabs: twice the grabs');
+  // Hungry Hungry, Jackpot Fever
+  h.ok(start(['hungry']).enemies[0].affix.includes('greedy'), 'Hungry Hungry: the rat is Greedy');
+  const Ff = start(['fever']);
+  h.ok(Ff.rules.comboTwice >= 1 && Ff.enemies[0].affix.includes('hasty'), 'Jackpot Fever: combos twice, a Hasty rat');
+  // Blackout
+  start(['blackout']);
+  h.ok(G.endless.mods().dark, 'Blackout: the lights are out');
+  T._resetCounts(); G.draw();
+  h.ok((T._counts.fillRect | 0) > 0, 'the dark and the flashlight draw');
+  // Conveyor Belt
+  start(['conveyor'], null, 1.2);
+  const x0 = meanX(); stepFor(G, 3.5);
+  h.ok(meanX() > x0 + 8, `Conveyor Belt: the pile rolls toward the chute (${x0.toFixed(0)} -> ${meanX().toFixed(0)})`);
+  G.draw();
+  // Wobbly Legs
+  start(['quake'], null, 0.2);
+  h.ok(G.fs.tilt !== 0, 'Wobbly Legs: the cabinet lurches at the bell');
+  G.endTurn(); settle(G, 30);
+  h.ok(G.screen !== 'fight' || G.fs.tilt !== 0, 'and again every turn');
+  // Double Trouble
+  h.eq(start(['crowd']).enemies.length, 2, 'Double Trouble: one more monster in a normal fight');
+  G.startFight(['hoard'], 'boss');
+  h.eq(G.fight.enemies.length, 1, 'never in a boss fight');
+  // cleared after the run
+  const Fz = start([]);
+  h.ok(Fz.mut === null && Fz.enemies.length === base.n && Fz.player.grabsMax === base.grabs && G.fs.tilt === 0, 'the next run without mutators is the plain machine');
+  h.ok(G.fs.items.every((b, i) => b.gs === base.gs[i] && b.slick === base.slick[i]), 'the plain physics');
+});
+
+h.test('mutators: real grabs finish and deliver with every mutator on', () => {
+  const { G } = endBoot();
+  let total = 0, drops = 0;
+  for (const id of DATA.MUT_IDS) {
+    G.endless.pick([id]);
+    G.newRun('knight', 2600 + id.length);
+    G.startFight(['slime'], 'normal');
+    endSkip(G);
+    for (const e of G.fight.enemies) e.hp = e.maxHp = 999;
+    stepFor(G, 2);
+    const rng = U.rng(id.length * 131);
+    let stuck = 0, got = 0;
+    for (let k = 0; k < 4; k++) {
+      if (!settle(G, 30)) { stuck++; break; }
+      if (G.screen !== 'fight') break;
+      const bodies = itemBodies(G);
+      if (!bodies.length) { stepFor(G, 1); continue; }
+      G.steer(bodies[Math.floor(rng() * bodies.length)].x);
+      const before = G.run.delivered;
+      if (!G.dropClaw()) { stepFor(G, 0.5); continue; }
+      drops++;
+      let n = 0;
+      while (G.screen === 'fight' && G.state().grabInFlight && n++ < 60 * 20) G.update(DT);
+      if (G.state().grabInFlight) stuck++;
+      got += G.run.delivered - before;
+    }
+    total += got;
+    h.eq(stuck, 0, `${id}: every grab finishes`);
+    const out = G.fs ? G.fs.items.filter(b => !Number.isFinite(b.x) || !Number.isFinite(b.y) || b.x < -5 || b.x > G.CAB.w + 5 || b.y > G.CAB.h + 80) : [];
+    h.eq(out.length, 0, `${id}: nothing leaves the glass`);
+    G.draw();
+  }
+  h.ok(total >= drops * 0.4, `the claw still delivers (${total} items from ${drops} drops)`);
+});
+
+h.test('mutators: the panel on character select, the saved pick, the daily\'s own, the HUD badges', () => {
+  const { T, G, saved } = endBoot();
+  G.showChars();
+  h.eq(G.S.ui.buttons[0].label, DATA.CHARACTERS.knight.name, 'the crawler cards keep their indices');
+  h.ok(G.S.mutBox, 'the Mutators panel is there');
+  G.endless.openPicker(true);
+  h.ok(G.endless.toggle('tiny') && G.endless.toggle('giant'), 'Tiny, then Giant');
+  h.eq(G.endless.picked().join(), 'giant', 'Giant swaps Tiny out');
+  G.endless.toggle('glass'); G.endless.toggle('bombs');
+  h.ok(!G.endless.toggle('blackout') && G.endless.picked().length === 3, 'a fourth is refused');
+  h.ok(!G.endless.toggle('glass') && G.endless.picked().join() === 'giant,bombs', 'a tap switches one off');
+  h.eq(saved().mutPick.join(), 'giant,bombs', 'saved on the profile');
+  const T2 = boot({ store: Object.assign({}, T._store) });
+  h.eq(T2.GAME.endless.picked().join(), 'giant,bombs', 'and loaded');
+  G.choose(0);
+  h.eq(G.run.muts.join(), 'giant,bombs', 'the run carries the pick');
+  h.eq(badgesOf(T).length, 2, 'two badges in the HUD');
+  G.prog.startDaily();
+  h.eq(G.run.muts.join(), DATA.dailyMutators(G.run.daily).join(), 'the daily run brings the day\'s own');
+  h.eq(badgesOf(T).length, G.run.muts.length, 'and shows them');
+  G.showTitle();
+  h.eq(G.screen, 'title', 'the title names today\'s mutators on the daily button');
+});
+
+h.test('score: counts up on the end screen, one best per mode, NEW BEST once, the High Score sticker', () => {
+  const { T, G, saved } = endBoot();
+  G.endless.pick([]);
+  G.newRun('knight', 909);
+  G.run.kills = 12; G.run.act = 2;
+  G.S.headless = false;
+  try {
+    G.showGameOver();
+    const u = G.endless.scoreUp;
+    h.ok(u && !u.done && u.v.textContent === '0', 'the score starts at 0');
+    G.endless.tick(0.5); G.endless.tick(u.dur * 0.3);
+    const mid = parseInt(String(u.v.textContent).replace(/,/g, ''), 10);
+    h.ok(mid > 0 && mid < u.to, `it counts up (${mid} of ${u.to})`);
+    for (let i = 0; i < 60; i++) G.endless.tick(0.1);
+    h.ok(u.done && parseInt(String(u.v.textContent).replace(/,/g, ''), 10) === u.to, 'it lands on the total');
+    h.ok(u.newBest && G.run.scoreRec.classic.newBest, 'a first score is a NEW BEST');
+  } finally { G.S.headless = true; }
+  const first = saved().scores.classic;
+  h.ok(first > 0, 'saved per mode');
+  G.newRun('knight', 910);
+  G.showGameOver();
+  h.ok(!G.run.scoreRec.classic.newBest && saved().scores.classic === first, 'a worse run keeps the best');
+  h.ok(!G.meta.ach.high_score, 'no High Score yet');
+  G.newRun('knight', 911);
+  G.run.kills = 2000;
+  G.showGameOver();
+  h.ok(G.meta.ach.high_score && G.run.metaEnd.stickers.includes('high_score'), 'High Score, listed with the run\'s stickers');
+  G.prog.startDaily();
+  G.showGameOver();
+  h.ok(G.run.scoreRec.daily && saved().scores.daily === G.run.scoreRec.daily.total, 'the daily keeps its own best');
+});
+
+h.test('endless: saves and profiles from before Endless load and play', () => {
+  const { T, G } = endBoot();
+  G.newRun('knight', 1212);
+  h.eq(G.run.map.seed, MAP.generate({ act: 1, rng: U.rng(U.hashStr(G.run.seed + ':map:1')), cols: MAP.DEFAULT_COLS, rows: MAP.DEFAULT_ROWS, ink: START_INK }).seed, 'a classic run keeps its old map seeds');
+  G.save();
+  const raw = JSON.parse(T._store[G.RUN_KEY]);
+  for (const k of ['muts', 'sc', 'endless', 'scoreTop', 'scoreRec', 'winDone']) delete raw.run[k];
+  const meta = JSON.parse(T._store.clawspire_meta);
+  delete meta.scores; delete meta.endless; delete meta.mutPick;
+  const T2 = boot({ store: { [G.RUN_KEY]: JSON.stringify(raw), clawspire_meta: JSON.stringify(meta) } });
+  const G2 = T2.GAME;
+  h.ok(G2.load(), 'loads');
+  h.ok(Array.isArray(G2.run.muts) && !G2.run.muts.length && G2.run.endless === null && G2.run.sc.bosses === 0, 'run defaults');
+  h.ok(G2.meta.scores.classic === 0 && G2.meta.endless.best === 0 && G2.endless.picked().length === 0, 'profile defaults');
+  G2.startFight(['rat'], 'normal');
+  h.ok(G2.fight.mut === null && G2.fight.loop === 0, 'a plain fight');
+  G2.run.act = 3;
+  G2.showWin();
+  h.ok(G2.screen === 'win' && G2.endless.offer(), 'and a win still offers Endless');
+});
+
+// ---------------------------------------------------------------- BESTIARY (round 4): the tricks in the cabinet
+{
+  const BCS = boot();
+  const BG = BCS.GAME, BD = BCS.DATA;
+  BG.newRun('knight', 4242);
+  const bestFight = (ids, tier, act, bin) => {
+    BG.run.act = act;
+    if (bin) BG.run.bin = bin.map((id, i) => ({ uid: 'bb' + i + ':' + id, id, plus: false }));
+    BG.startFight(ids, tier || 'normal');
+    if (BG.boss.vs) { BG.boss.vsSkip(); BG.boss.vsSkip(); }
+    stepFor(BG, 0.1);
+    settle(BG, 20);
+  };
+  // The enemy at i does its trick of kind k this enemy turn; the rest wait.
+  const force = (i, k) => {
+    BG.fight.enemies.forEach((e, j) => { if (!e.alive) return; e.intent = j === i ? (e.def.moves.find(m => m.k === k) || e.def.moves[0]) : { id: 'w', k: 'block', v: 1, txt: 'waits' }; });
+    BG.fs.queue.length = 0;
+    return BG.endTurn();
+  };
+  const B = () => BG.best.state;
+  const cabItems = () => BG.fs.items.filter(b => !BG.cabinet.inChute(b));
+  const isMetal = (b) => (b.data.def.tags || []).includes('metal');
+  const knightBin = () => BD.CHARACTERS.knight.bin.slice();
+
+  h.test('bestiary: the Tickle Monster makes the claw wiggle on the next turn\'s drops', () => {
+    // a control drop first: a calm claw goes straight down
+    bestFight(['tickler'], 'normal', 1);
+    const dev = () => {
+      BG.steer(200); stepFor(BG, 0.8);
+      h.ok(BG.dropClaw(), 'drop');
+      let m = 0;
+      for (let i = 0; i < 120; i++) { BG.update(DT); const r = BG.rig; if (r.phase === 'dropping' || r.phase === 'closing' || r.phase === 'lifting') m = Math.max(m, Math.abs(r.x - 200)); }
+      settle(BG, 20);
+      return m;
+    };
+    const calm = dev();
+    h.ok(force(0, 'tickle'), 'enemy turn');
+    h.ok(settle(BG, 30), 'back to the player');
+    h.eq(B().tickle, 1, 'the claw is ticklish this turn');
+    const tick = dev();
+    h.ok(calm < 1 && tick > 3, `a tickled claw wiggles on its way down (calm ${calm.toFixed(2)} px, tickled ${tick.toFixed(2)} px)`);
+    BG.draw();
+    h.ok(BG.endTurn() && settle(BG, 30), 'end the turn');
+    h.eq(B().tickle, 0, 'the tickle wears off when the turn ends');
+  });
+
+  h.test('bestiary: the Jelly Cube glues the pile; goo pulls, snaps, and dries up at the turn end', () => {
+    bestFight(['jelly'], 'normal', 1);
+    force(0, 'glue');
+    h.ok(settle(BG, 30), 'back to the player');
+    stepFor(BG, 1.0);
+    const g = B().glue;
+    h.ok(g.length >= 3, `the pile is glued (${g.length} strands)`);
+    h.ok(g.every(p => BG.fs.items.includes(p.a) && BG.fs.items.includes(p.b) && p.a !== p.b), 'strands join two live items');
+    const per = {};
+    for (const p of g) { per[p.a.id] = (per[p.a.id] || 0) + 1; per[p.b.id] = (per[p.b.id] || 0) + 1; }
+    h.ok(Object.values(per).every(n => n <= BG.best.K.glueMax), 'two strands per item at most');
+    // pull one glued item away: its partner follows until the strand snaps
+    const p = g[0];
+    const bx = p.b.x;
+    p.a.vx = 900; p.a.vy = -600;
+    stepFor(BG, 0.05);
+    h.ok(p.off || Math.abs(p.b.x - bx) > 0.5 || p.b.vx !== 0, 'the goo drags the partner along (or snaps)');
+    stepFor(BG, 0.6);
+    BG.draw();
+    h.ok(BG.endTurn() && settle(BG, 30), 'end the turn');
+    h.eq(B().glue.length, 0, 'the goo dries up when the turn ends');
+  });
+
+  h.test('bestiary: the Magnet Bat floats the metal up to the lid; the claw grabs it mid-air', () => {
+    bestFight(['magbat'], 'normal', 2);
+    const n = cabItems().filter(isMetal).length;
+    h.ok(n >= 2, 'the knight has metal in the cabinet (' + n + ')');
+    force(0, 'ceiling');
+    h.ok(settle(BG, 30), 'back to the player');
+    stepFor(BG, 2.5);
+    const hang = BG.fs.items.filter(b => b.data.bestHang === 1);
+    h.ok(hang.length >= 2 && hang.every(isMetal), `metal hangs under the lid (${hang.length})`);
+    h.ok(hang.every(b => b.y < 190), 'high up: ' + hang.map(b => Math.round(b.y)).join(','));
+    h.ok(BG.fs.items.filter(b => !isMetal(b) && !BG.cabinet.inChute(b)).every(b => b.y > 200), 'everything else stays in the pile');
+    const tgt = hang[0], inst = tgt.data.inst;
+    BG.steer(tgt.x); stepFor(BG, 1.2);
+    const x0 = tgt.x;
+    BG.steer(x0); stepFor(BG, 0.3);
+    h.ok(BG.dropClaw(), 'drop on it');
+    let caught = false;
+    for (let i = 0; i < 600 && !caught; i++) { BG.update(DT); if (BG.rig.phase === 'lifting' && tgt.held > 0) caught = true; }
+    h.ok(caught, 'the claw closes on it in mid-air');
+    settle(BG, 20);
+    h.ok(!BG.fight.bin.includes(inst) || tgt.data.bestHang !== 1, 'and it is carried off (played or dropped, never still hanging)');
+    BG.draw();
+    h.ok(BG.endTurn() && settle(BG, 30), 'end the turn');
+    stepFor(BG, 2);
+    h.ok(BG.fs.items.every(b => b.data.bestHang !== 1), 'the lid lets go at the turn end');
+    h.ok(BG.fs.items.filter(isMetal).every(b => b.y > 190), 'the metal falls back into the pile');
+  });
+
+  h.test('bestiary: the Bulldozer plows the pile to the far wall', () => {
+    bestFight(['dozer'], 'elite', 2);
+    const mean = () => { const L = cabItems(); return L.reduce((a, b) => a + b.x, 0) / Math.max(1, L.length); };
+    const before = mean();
+    force(0, 'plow');
+    stepFor(BG, 0.6);
+    h.ok(B().plow && B().plow.push, 'the blade is sweeping');
+    h.ok(BG.fs.queue.length > 0, 'the enemy turn waits for it');
+    BG.draw();
+    h.ok(settle(BG, 30), 'back to the player');
+    const after = mean();
+    h.ok(after < before - 40, `the pile moved toward the far wall (mean x ${Math.round(before)} -> ${Math.round(after)})`);
+    h.ok(!B().plow, 'the blade is gone');
+  });
+
+  h.test('bestiary: the Peekaboo Ghost hides items until the claw touches them', () => {
+    bestFight(['ghost'], 'normal', 3);
+    force(0, 'vanish');
+    h.ok(settle(BG, 30), 'back to the player');
+    const inv = Object.keys(B().inv);
+    h.eq(inv.length, 3, 'three items invisible');
+    h.ok(inv.every(u => BG.fight.bin.some(i => i.uid === u)), 'they are still in the bin');
+    BG.draw();
+    const b = BG.fs.items.find(x => B().inv[x.data.inst.uid] > 0);
+    // the claw brushes it on a drop (a parked claw sheds riders, so touch it mid-drop)
+    BG.steer(b.x); stepFor(BG, 1);
+    h.ok(BG.dropClaw(), 'drop');
+    for (let i = 0; i < 60 && BG.rig.phase !== 'dropping'; i++) BG.update(DT);
+    b.held = 2; BG.update(DT);
+    stepFor(BG, 0.6);
+    h.ok(!(B().inv[b.data.inst.uid] > 0), 'the claw\'s touch finds it');
+    h.eq(Object.keys(B().inv).length, 2, 'the other two stay hidden');
+  });
+
+  h.test('bestiary: the Cinder Mole buries an item; a claw on the mound digs it up', () => {
+    bestFight(['mole'], 'normal', 2, knightBin().slice(0, 7));
+    force(0, 'bury');
+    h.ok(settle(BG, 30), 'back to the player');
+    const F = BG.fight, m = B().mounds;
+    h.ok(m.length === 1 && F.buried.length === 1 && m[0].inst === F.buried[0].inst, 'one mound, one buried item');
+    h.ok(!BG.fs.items.some(b => b.data.inst === m[0].inst), 'its body left the cabinet');
+    BG.draw();
+    const inst = m[0].inst;
+    // clear the floor above the mound so the drop reaches it
+    for (const b of BG.fs.items.slice()) if (Math.abs(b.x - m[0].x) < 70) { b.x = m[0].x < 200 ? 380 : 60; b.vx = 0; }
+    stepFor(BG, 1);
+    BG.steer(m[0].x); stepFor(BG, 1.2);
+    h.ok(BG.dropClaw(), 'drop on the mound');
+    for (let i = 0; i < 180 && B().mounds.length; i++) BG.update(DT);
+    h.ok(!B().mounds.length && !F.buried.length, 'dug up');
+    h.ok(F.bin.includes(inst) || F.used.includes(inst), 'the item is back');
+    settle(BG, 20);
+    // a Mole that goes down gives everything back
+    force(0, 'bury'); settle(BG, 30);
+    const left = F.buried.map(x => x.inst);
+    h.ok(left.length === 1 && B().mounds.length === 1, 'buried again');
+    BCS.COMBAT.damage(F, F.player, F.enemies[0], 9999, { pierce: true });
+    const list = F.events.splice(0);
+    for (const e of list) BG.fs.queue.push({ ev: e, beat: 0.1 });
+    stepFor(BG, 1.5);
+    h.ok(!B().mounds.length && left.every(i => F.bin.includes(i) || F.used.includes(i)), 'its death pops the mound');
+  });
+
+  h.test('bestiary: the Carnival Barker spins its prize wheel before the prize lands', () => {
+    bestFight(['barker'], 'elite', 1);
+    force(0, 'wheel');
+    stepFor(BG, 0.7);
+    const W = B().wheel;
+    h.ok(W && !W.done && W.t > 0, 'the wheel is spinning');
+    h.ok(BG.fs.queue.length > 0, 'the prize waits for the wheel');
+    const r0 = B().wrot; stepFor(BG, 0.2);
+    h.ok(B().wrot > r0, 'it turns');
+    BG.draw();
+    h.ok(settle(BG, 30), 'back to the player');
+    h.ok(!B().wheel && B().wheelSeen, 'it landed and hangs on the cabinet as a sign');
+    const n = BCS.COMBAT.BEST_WHEEL.length;
+    h.ok(((W.rot1 % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) - ((-W.w * Math.PI * 2 / n) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) < 1e-6, 'it stops with the rolled wedge under the flapper');
+    BG.draw();
+  });
+
+  h.test('bestiary: the Claw Collector\'s own claw comes into the cabinet and takes the rarest item', () => {
+    bestFight(['collector'], 'elite', 3);
+    const F = BG.fight;
+    const pick = BCS.COMBAT.bestRivalPick(F);
+    const pb = BG.fs.items.find(b => b.data.inst === pick);
+    h.ok(pick && pb, 'the rival claw has its eye on an item in the cabinet');
+    BG.draw();
+    force(0, 'block');
+    let seen = false, pinned = false;
+    for (let i = 0; i < 300; i++) {
+      BG.update(DT);
+      const r = B() && B().rival;
+      if (r) { seen = true; if (r.carry && pb.world && Math.abs(pb.x - r.x) < 1 && Math.abs(pb.y - (r.y + 22)) < 2) pinned = true; }
+      if (seen && !r) break;
+    }
+    h.ok(seen, 'its claw comes down');
+    h.ok(pinned, 'and lifts the item out through the lid');
+    h.ok(settle(BG, 30), 'back to the player');
+    h.ok(F.enemies[0].belly.some(b => b.inst === pick), 'the item is in its case');
+    h.ok(!BG.fs.items.some(b => b.data.inst === pick), 'and out of the cabinet');
+    BG.draw();
+  });
+
+  h.test('bestiary: every new enemy fights six real turns with random drops', () => {
+    const NEW = [['tickler', 1, 'normal'], ['jelly', 1, 'normal'], ['barker', 1, 'elite'], ['magbat', 2, 'normal'], ['mole', 2, 'normal'], ['dozer', 2, 'elite'], ['ghost', 3, 'normal'], ['collector', 3, 'elite']];
+    const r = BCS.U.rng(77);
+    for (const [id, act, tier] of NEW) {
+      BG.run.hp = BG.run.maxHp = 999;
+      bestFight([id], tier, act);
+      let ok = true;
+      try {
+        for (let t = 0; t < 6 && BG.screen === 'fight' && BG.fight && BG.fight.phase === 'player'; t++) {
+          for (let g = 0; g < 2 && ready(BG) && BG.fight.player.grabs > 0; g++) { BG.steer(60 + r() * 320); stepFor(BG, 0.6); BG.dropClaw(); settle(BG, 20); BG.draw(); }
+          if (ready(BG)) { BG.endTurn(); settle(BG, 30); BG.draw(); }
+        }
+      } catch (err) { ok = false; h.ok(false, id + ' threw ' + err.stack); }
+      h.ok(ok && (BG.screen !== 'fight' || ready(BG) || !BG.fight || BG.fight.phase === 'over'), `${id}: six turns in the machine, no hang`);
+    }
+  });
+}
+
 h.done();

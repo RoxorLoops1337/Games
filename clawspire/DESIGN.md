@@ -312,13 +312,15 @@ DATA.ENEMIES[id] = {
 Move kinds (combat implements): `attack {v, n}`, `block {v}`, `buff {s, v}` (self), `debuff {s, v}`
 (player), `heal {v}`, `shake`, `grease`, `fog`, `junk {item, n}`, `steal` (remove a random non-junk item from the bin until end of fight),
 `freezeItem` (encase a random bin item in an ice block for the fight), `summon {id}`, `tilt` (gravity tilt for a turn), `charge {v}` (big telegraphed attack next turn), `escape`,
-and the monsters pass (see Enemies): `gulp {n, like?}`, `bomb {v, fuse}`, `corrode {n}`, `jam {v}`, `eggs {n, hatch, turns}`.
-Optional enemy fields: `enrage: {name, text, str?, pattern?} | false` (phase two), `digest` (turns), `noAffix`,
+and the monsters pass (see Enemies): `gulp {n, like?}`, `bomb {v, fuse}`, `corrode {n}`, `jam {v}`, `eggs {n, hatch, turns}`,
+and the bestiary (see Enemies, round 4): `tickle {v}`, `glue {v}`, `ceiling {v}`, `plow`, `vanish {n}`, `bury {n}`, `wheel`.
+Optional enemy fields: `enrage: {name, text, str?, pattern?} | false` (phase two), `digest` (turns), `noAffix`, `rival` (its own claw, the bestiary),
 `taunt` (the versus card's line) and `sig: {id, name, sign, shout, text, first, every, ...}` (a boss signature, see Bosses).
 At least **26 enemies**: act 1 six normal + 2 elites + 1 boss; act 2 the same; act 3 the same; plus
 the final boss `prizemaster`. Art keys: `rat, slime, bat, gremlin, mimic, spider, goblin, hoard,
 imp, clockwork, golem, furnace, magnet, ironjaw, wraith, yeti, frostmage, icemimic, prizemaster,
-mushroom, knight, wisp, crab, drone, tinker, cultist, raccoon, goat, magpie`.
+mushroom, knight, wisp, crab, drone, tinker, cultist, raccoon, goat, magpie`, and the bestiary's `tickler, jelly,
+barker, magbat, mole, dozer, ghost, collector`.
 
 ```js
 DATA.ENCOUNTERS[act] = { normal: [[ids...], ...], elite: [[ids]], boss: [[ids]] }   // >=6 normal, 2 elite, 1 boss per act
@@ -415,7 +417,10 @@ Event objects (renderer/game consume these; keep this list exact):
 `{t:'binBomb', inst, idx}`, `{t:'binBoom', inst}`, `{t:'binEggs', items, idx}`, `{t:'binHatch', inst}`,
 `{t:'binRust', inst, idx}`, `{t:'binJam', idx}`, `{t:'enrage', idx, name, text}`, and the boss signatures (see Bosses):
 `{t:'boss', k:'spill'|'lean'|'heat'|'sear'|'cool'|'ice'|'thaw'|'rig'|'final', idx, ...}`
-(`items` / `insts` / `part` / `dir` / `stage` / `name` / `text` / `v` by kind).
+(`items` / `insts` / `part` / `dir` / `stage` / `name` / `text` / `v` by kind), and the bestiary (see Enemies):
+`{t:'binTickle', idx, turns}`, `{t:'binGlue', idx, turns}`, `{t:'binCeiling', idx, turns, insts}`, `{t:'binPlow', idx, dir}`,
+`{t:'binVanish', idx, insts}`, `{t:'binBury', idx, inst}`, `{t:'binUnbury', idx, insts}`, `{t:'binWheel', idx, w, who, label}`,
+`{t:'binRival', idx, inst}`.
 COMBAT also has `sigNext(e)`, `sigInfo(e)`, `crackIce(F, heavy)`, `breakIce(F)`, `unrig(F)`.
 
 Damage formula: `base + str` per hit, ×0.75 if weak, ×1.5 if vuln on target, −armor, then block
@@ -1419,6 +1424,71 @@ escalation, every new user fights 14 turns with every item accounted for),
 data (move fields, phase two specs, affixes, act introductions), game (the
 events move real bodies and draw with the stub ctx), render (the new art).
 
+### The bestiary (round 4): enemies that play with the machine
+
+Eight enemies whose tricks change how the claw works for a turn, each
+telegraphed three ways: the intent bubble (its own icon), the intent text,
+and the cabinet's warning sign ("TICKLE NEXT TURN" on the player's turn
+before, then the state while it lasts: TICKLISH CLAW, STICKY PILE, MAGNETIC
+LID, DIG UP THE MOUNDS, INVISIBLE ITEMS; a boss sign always wins the frame).
+COMBAT decides and emits a bin event (combat.js BESTIARY block); the game
+stages it in the cabinet (game.js BESTIARY block, state in `FS.best`, never
+saved); the art, the tricks' looks and the intent icons live in render.js
+(BESTIARY block, `RENDER.best`); the sounds in audio.js.
+
+| enemy | act, tier | trick (move kind) | in the cabinet | the counter |
+| --- | --- | --- | --- | --- |
+| Tickle Monster `tickler` | 1 normal | `tickle {v: 1}` | feathers poke at the claw; while it drops, closes, lifts and carries it wiggles (`BST_K.tickleA` 7 px at 7.5 Hz, real velocity, so the cargo can slip) | fewer drops, round things |
+| Jelly Cube `jelly` | 1 normal | `glue {v: 1}` | once the pile settles on your turn, touching items are glued in pairs (two per item, goo strands drawn between them); the goo only pulls, snaps past 22 px of stretch; the claw lifts clumps (junk too) | aim for clumps, or for a loner |
+| Carnival Barker `barker` | 1 elite | `wheel` | a prize wheel spins over the cabinet (the enemy turn waits), lands on the rolled wedge, pays it, then hangs as a small sign on the frame | kill it before the house edge adds up |
+| Magnet Bat `magbat` | 2 normal | `ceiling {v: 1}` | the lid turns into a magnet: every metal item floats up to a hang line under it (a damped spring, spread along the lid, field lines), grabbable mid-air (a dropping claw with one between its prongs stops and closes on it; lifted, it has gravity again); the lid lets go when the turn ends | grab the metal while it hangs |
+| Cinder Mole `mole` | 2 normal | `bury {n: 1}` | the item leaves the bin into `F.buried` and a dirt mound with its tip poking out appears on the floor (a pulsing DIG ring); a claw that comes down over it near the floor digs it up (`COMBAT.bestUnbury`) and it pops up into the closing claw; the Mole's death gives every buried item back (`binUnbury`) | drop on the mound |
+| The Bulldozer `dozer` | 2 elite | `plow` | a steel blade sweeps the bin from the chute side to the far wall (a moving wall: nothing passes it), then backs off; the pile ends up far from the chute | long carries: grip and speed |
+| Peekaboo Ghost `ghost` | 3 normal | `vanish {n: 3}` | three random real items turn invisible: a faint ghost, a dashed outline, a "?" and a crawling glint; the claw's touch finds one (it fades back in, FOUND IT!) | brush the pile |
+| The Claw Collector `collector` | 3 elite | `rival: true` | after every action its own gold claw rides a trolley under the lid to the rarest item, drops, clamps, lifts it out through the lid, and the item goes into its case (the belly rules: `digest: 99` keeps it, a hiccup or its death gives it back); enraged it goes twice. On your turn the claw waits in its corner with a red reticle on its next prize (`COMBAT.bestRivalPick`, pure, so the telegraph is the truth) | grab the marked item first, hit it hard |
+
+Rules that keep it fair: bury and the rival claw never take the player below
+`BEST_FLOOR` (4) real items; the tricks that last "a turn" end when the
+player ends it (`bestTurnEnd`); the wheel's house edge weighs its own wedges
+x1.3 (x2.6 enraged, about 57% / 72% of spins); every trick is deterministic
+by the fight seed (the physics hook keeps its own rng).
+
+**Enemy life** (every enemy, render.js). Each draw sets `LIFE` from t, the
+enemy's x and `st.seed` (the game passes its slot, so twins never sync) and
+clears it after: a breath about the feet (bosses slow and deep), a blink
+every 2.6-4.3 s (some double blink; `eye()` draws a shut lid), a fidget every
+5-7.5 s of 0.9 s in its own style (`RENDER.best.FIDGET`: the rat sniffs,
+slimes jiggle, the goblin twirls its wrench a full turn, bats loop the loop,
+mimics snap, spiders tap, the ghost plays peekaboo, the mole ducks into its
+hole, the dozer revs, the barker tips its hat...), none while frozen, dead,
+striking or flinching; hit reactions are unchanged. Low hp (`st.hpk`, from
+the game): sweat drops under 40%, cracks under 25%, dizzy stars under 15%,
+and a tired slump. All of it is a pure function of the draw's inputs (the
+intro redraws frames and pins it).
+
+**Map decor** (lit land only, drawn by `RENDER.hex` under the pickup, from
+the tile's seed; about 5 hexes in 11 get a prop, smaller among trees; the
+sea, mountains and the dark never do): act 1 dropped tickets, neon puddles
+that pulse and ripple, a lost token; act 2 half-sunk gears turning, steam
+vents puffing; act 3 snow drifts, icicles on an ice ledge dripping, twinkling
+glints, and an aurora on the sky edge of the map (`RENDER.best.sky`, three
+slow ribbons of added light over the top of the map area).
+
+Sounds: `giggle, gooSplat, magLift, dig, boo, dozer, rivalClaw` (the wheel
+uses the arcade's `wheelSpin`, `wheelTick`, `arcWin`, `arcLose`).
+`GAME.best` = `{K, event, turnEnd, glue, hook, dig, state}`; COMBAT adds
+`BEST_KINDS, BEST_WHEEL, BEST_FLOOR, bestUnbury, bestRivalPick, bestRide`.
+Tests: combat (every trick's event, the ceiling takes only metal, bury /
+dig / death with every item accounted for and the floor, the wheel's order,
+edge and determinism, the rival's pick, order, case, floor and seconds, 16
+clean turns each), data (acts, tiers, encounters, taunts), game (a tickled
+claw wiggles, glue pairs pull and dry up, metal hangs and is grabbed
+mid-air, the plow moves the pile, a touch finds a ghosted item, a claw digs
+a mound up, the wheel lands on its wedge while the turn waits, the rival
+claw lifts its prize out, six real turns each), render (life for every
+key: blinks, fidgets, determinism, no leak, low hp; every trick's look;
+decor per biome, never dark or sea; the aurora), audio (every voice).
+
 ## Bosses (the boss arena: spectacle for elites and bosses, round 2)
 
 Every elite and boss fight is an event: a versus card before it, a trick of
@@ -2139,7 +2209,8 @@ case the lite mode exists for. Unthrottled: 52-54 fps in software raster.
 
 Known and left for the owner: an elite's Armor can stack without a cap (the
 bot's Frost Knight reached 34 Armor by turn 110 against a low-damage build;
-the player loses rather than locks), and the magnet claw on a crawler with
+the player loses rather than locks; fixed in round 4, see "Feel (round 4)":
+`COMBAT.ARMOR_MAX`), and the magnet claw on a crawler with
 little metal (Lucky Lou) makes very long act 1 fights for a random bot.
 - JACKPOT outranks the combos it causes: it holds its 1.4 s and the combos
   chain after it (the old way showed both at once, one over the arena and
@@ -2156,6 +2227,276 @@ mid-fight and mid-screen now and then. It watches for page and console
 errors, no progress for 25 s of game time, NaN / undefined / Infinity in
 the DOM and the HUD, overlapping or off-stage buttons, screens with no
 enabled button, clipped single-line text, and two big banners at once.
+
+## Endless and mutators (round 4)
+
+Beating the Prize Master is no longer the end of the machine: it reboots
+meaner and loops, and a run can bend the machine's own rules. Pure data in
+`data.js` (the ENDLESS block), the fight side in `combat.js` (the ENDLESS
+block), the flow and the look in `game.js` (the ENDLESS block, reached
+through one-line hooks), the CSS in `index.html` (`<style id="endless-css">`,
+the `#scr-loop` frame). No new sound names: the reboot and the score use
+`whoosh, rumble, tick, vsSlam, coinIn, fanfare, stamp, ding, tiltUp`.
+
+### Endless mode
+
+- **The choice.** The win screen (`showWin`) banks the win as before (wins,
+  Tilt unlock, daily score, stickers, `run.winDone`), shows the run score and
+  offers **CASH OUT** (always the first `GAME.choose` entry: to the title, the
+  run is over) or **KEEP PLAYING: ENDLESS**. While the offer is open the run
+  stays saved on screen `win` (`save` keeps it, `load` reopens the win screen
+  and counts nothing twice).
+- **Loops.** Endless loops the three act biomes and their enemy pools: Loop 1
+  is act 4 in act 1's biome, Loop 2 act 5 in act 2's ... (`DATA.endlessAct`),
+  one map per loop. `run.act` stays 1..3 (the biome, the encounter pools,
+  every act-keyed rule), `run.endless.loop` counts on. `newMap` seeds a loop's
+  map with `':loop' + n` after the act (a classic run's seed string is
+  unchanged), so every loop is a new map with every map rule intact (the map
+  suite proves it over 18 loops).
+- **Scaling** (`DATA.ENDLESS`, `DATA.endlessScale(loop, act)`, read by
+  combat's `makeEnemy`, summons too): the pool is first lifted to act 3
+  strength (`liftHp` [-, 3.2, 1.6, 1], `liftDmg` [-, 2.6, 1.35, 1]: the
+  roster's act 3 / act n averages), then grows x1.25 hp and x1.1 hits per
+  loop, compounding, on top of `DATA.DIFFICULTY`, its ramp and Tilt (never
+  touched). `endlessFight`: normals carry floor(loop / 2) extra affixes,
+  elites and bosses ceil(loop / 2) (at most 3, never Greedy on a gulper);
+  bosses start in phase two from Loop 2 (`endlessRage`: the roar, the
+  Strength, the pattern and the phase two trick at the bell; the half hp
+  transformation never comes again), elites from Loop 4; every loop's boss
+  borrows another boss's signature (`DATA.endlessMix`, `run.endless.mix`,
+  `e.borrowed`: the Hoard with a Deep Freeze, Glacius with a Coin Avalanche;
+  the data is copied, never mutated; a 24 turn fuzz covers every boss with
+  every other trick). From Loop 2 each loop adds a random mutator
+  (`DATA.mutPick`, never a repeat or a clash).
+- **Between loops** (`endlessNext`, from `nextAct` once `run.endless` is set):
+  heal 30%, +10 bulbs (Dim Marquee still dims), a new map, then the reboot
+  screen, then the spare parts (if any claw part is left) and the boss relic
+  as after acts 1 and 2. Relic, item, capsule and ticket rewards go on.
+- **The reboot** (screen `loop`, `showLoop(lp)`, sd `{loop}`): the cabinet
+  powers on like a CRT (a white line that opens to the full tube with a
+  brightness flash, scanlines and a rolling band), a boot log types in (BIOS
+  v(3 + loop), the loop's biome, MONSTER FIRMWARE with the hp / hit
+  multipliers, the boss patches: phase two from the bell, the borrowed trick,
+  the new mutator), LOOP N slams in chrome with a pink / cyan split and a
+  glitch, the new mutator's card flips in, CONTINUE. A tap anywhere finishes
+  the animation; reduced motion drops the power-on and the glitch; the music
+  is off while it reboots. A reload shows the same screen.
+- **The HUD.** The act stat becomes the Loop stat (label ENDLESS, "Loop N",
+  a gold glow); the versus card says LOOP N BOSS (the Prize Master stays
+  FINAL BOSS); the map head says Loop N; the stats list says Loop reached.
+- **The end.** Death in Endless (`endlessOver`, from `showGameOver`) is not a
+  loss: the win was banked. It records the loops (`meta.endless.best`), the
+  Endless score and its best, lists the stickers earned since the reboot, and
+  shows GAME OVER, MAN with LOOPS REACHED (DEEPEST YET!). The run save goes as
+  for any finished run.
+
+### Run mutators
+
+`DATA.MUTATORS` (14, `MUT_IDS` in panel order), each `{id, name, icon, color,
+mult, text, fx, excl?}`; `DATA.mutMods(ids)` merges them (neutral for none),
+`mutClean(ids, max)` keeps the known, unique, compatible ones in order,
+`mutClash(a, b)`, `mutMult(ids)`, `mutPick(rng, have)`. The effects are data
+the engine reads; nothing is hard wired per id:
+
+| mutator | x | fx | where |
+| --- | --- | --- | --- |
+| Low Gravity | 1.15 | `gs` 0.36, `drag` +0.7 | every body (`mutBody`) |
+| Everything Is Glass | 1.25 | `glass` | the body's material is copied with the glass trait: cracks (+50% play), a second crack shatters |
+| Bomb Party | 1.1 | `temp` 2 Firecrackers, +1 a turn (max 5) | real bombs in `F.bin` (`mutFightStart`, `mutTurn`) |
+| Magnet Storm | 0.9 | `drift` 420 px/s^2 toward the claw's column | a world pre-hook while the claw is idle / aiming / dropping / closing |
+| Tiny Items / Giant Items | 1.05 / 1.2 | `scale` 0.7 / 1.35 (they clash) | `PHYS.scaleShape` on the body, the art drawn at the same scale |
+| Slippery Floor | 1.1 | `slick` x0.1 | pile and floor friction, never the claw's grip |
+| Double Grabs, Half Damage | 1.1 | `grabs` x2, `dmgOut` x0.5 | `F.claw.grabs`; `COMBAT.damage` from the player |
+| Hungry Hungry | 1.3 | `affix` greedy | every enemy, summons too (not gulpers) |
+| Jackpot Fever | 1.2 | `rules.comboTwice`, `affix` hasty | `F.rules` (combos fire twice), every enemy Hasty |
+| Blackout | 1.3 | `dark` | the cabinet goes dark but for a flashlight cone and pool under the claw, the chute keeps a faint green glow |
+| Conveyor Belt | 0.95 | `belt` 55 px/s | bodies on the floor ride toward the chute (the pile heaps on the divider); chevrons and rollers drawn on the floor |
+| Wobbly Legs | 1.15 | `quake` | the cabinet tilts a random way at the bell and every turn (the `tilt` gravity) |
+| Double Trouble | 1.35 | `extra` 1 | one more monster from the act's normal pool in every new normal fight (`FS.start` keeps it for a reload) |
+
+- **Picking.** Character select has a Mutators panel under the claw row
+  (`mutPickerRow`, plain taps, the crawler cards keep their `GAME.choose`
+  indices): a header with the picked badges and the multiplier (tap to open),
+  then 14 chips with their multiplier. Off by default, up to `MUT_MAX` 3, a
+  clash swaps (Giant switches Tiny off), a fourth is refused with a toast.
+  The pick lives on the profile (`meta.mutPick`) and is copied to `run.muts`
+  by `newRun`. The daily run brings its own 1 or 2 (`DATA.dailyMutators(key)`,
+  the same for everyone that date), named on the title's daily button.
+- **In the run.** Every fight reads `run.muts` fresh (`COMBAT.newFight` sets
+  `F.mut`), so nothing outlives the run. The badges lead the relic strip in
+  the HUD (a tap explains; a loop's own ones have a solid rim).
+
+### The score
+
+`DATA.runScore(run, won)` -> `{mode, base, tiltM, mutM, mult, total, lines}`:
+floors climbed (the act, or 3 + the loop) x400, monsters beaten x25, bosses
+down x300 (`run.sc.bosses`), jackpots x40, combos x15 (`run.sc.combos`, from
+`F.stats.combos`), Endless loops x1000, the Prize Master +2500 (a win, and
+always in Endless); times the Tilt multiplier (+10% a level) and the mutator
+multiplier. Modes `classic | daily | endless` (the daily keeps its own
+`dailyScore` too). Recorded once per mode per run (`endlessScore`,
+`run.scoreRec[mode]`, `run.scoreTop`) before the run-end stickers are listed;
+the best per mode is `meta.scores`. The win screen, the game over and the
+Endless end show it in a gold box: the number counts up (ticks rising in
+pitch), the lines and the multipliers under it, then NEW BEST! slaps on with
+the fanfare (or a ding), and "was N" / "best N".
+
+### Stickers
+
+Insert Another Coin (enter Endless), Loop de Loop (Loop 3), Groundhog Claw
+(Loop 6 on the profile, with a progress bar), Mad Science (win with 2+
+mutators), High Score (25,000 in one run).
+
+### Save fields
+
+Run (all optional, `endlessRunFix` defaults them for older saves): `muts`
+[ids], `endless` {loop, mix, since (the sticker count at the reboot), adds
+(the loop's mutators), over} or null, `sc` {bosses, combos}, `scoreTop`,
+`scoreRec` {mode: result}, `winDone`. Screen `loop` (sd `{loop: {loop, act,
+added, mix, then}}`) and `win` (while the offer is open). Meta
+(`endlessMetaFix`): `scores` {classic, daily, endless}, `endless` {best,
+runs, score}, `mutPick` [ids]. No key was renamed.
+
+`GAME.endless` = `{start, next, showLoop, cont, pick, toggle, picked,
+openPicker, mods, runMods, score, offer, tick, draw, scoreUp, loopFx}`.
+Tests: data (the mutators, clashes, merges and picks, the daily's by date,
+the loop scaling and the borrowed tricks, the score formula, the stickers),
+combat (the lift on hp and hits per loop, rage from the bell, the borrowed
+trick and a fuzz over every pairing, the mutators' grabs, half hits,
+affixes and rules, a plain run untouched), map (18 loop maps with every
+rule), game (the win screen's offer and its reload, Cash out, the reboot and
+its reload, the loop map, the Loop stat, LOOP N BOSS, the next loop's
+mutator, a reload mid fight in Endless, the Endless end and its bests, every
+mutator's effect in the cabinet and gone after the run, real grabs with
+every mutator, the panel and the pick, the daily's own, the count-up and
+NEW BEST, the High Score sticker, old saves and profiles).
+
+## Feel (round 4): onboarding, rooms with character, haptics
+
+The game grew four rounds of systems on top of a three-card coach. This pass
+teaches them as the player meets them, gives the quiet rooms a face, puts a
+buzz in the hand and moves words off the play areas. Presentation only,
+except the Armor cap. The flow lives in `game.js` (the FEEL block, reached
+through one-line hooks), the art in `render.js` (the FEEL block, `feel*`),
+the frame in `index.html` (`#tipCard`, `#scr-tips`, `<style id="feel-css">`).
+
+**The first fight coach** stays three short cards (steer, drop, the chute;
+the third now says three in one grab is the JACKPOT, a double is two, and
+that new things get a tip card). The help page says the same.
+
+**Contextual tip cards** (`FEEL_TIPS`, 15): `map` (light the way), `combo`,
+`hungry` (a gulper), `bomb` (an enemy's lit bomb), `fuse` (your own bomb's
+fuse caught), `crack` (cracked glass), `capsule`, `tickets`, `arcade` (a lit
+cabinet), `roam` (a monster on a lit hex), `tower` (a lit tower), `tool`,
+`luck` (the meter), `sig` (a boss signature), `affix` (an enemy with
+affixes). Each is a title, one or two sentences and a tiny animated picture
+drawn with the game's own art (`RENDER.feelTipArt(ctx, id, s, t, {enemy,
+item, items, clover})`, the defs picked from what is on screen).
+- Triggers: `feelScan` every 0.3 s reads the state (the map's lit tiles, the
+  run's tools, tickets and banked capsules, the fight's enemies, affixes,
+  signatures, the Luck meter, lit bombs, cracked items: `FS.mst`), and
+  `feelEvent` (at the top of `applyEvent`) the events `combo`, `binBomb`,
+  `binEat`, `luck`, `boss`. A tip queues once (`feelTipWant`).
+- One at a time: the card slides in over the bottom lane (left 8, y 836, 364
+  wide: the tray and the hint in a fight, END TURN stays clear), a tap puts
+  it away (or it goes after `FEEL_TIP.life` 12 s), the next waits
+  `FEEL_TIP.gap` 0.9 s. Only on the fight, map, reward and capsule screens;
+  in a fight never while a grab is in flight or the claw is not idle / moving,
+  never over the coach, the versus card, a finale card, the enemy turn or the
+  outro; on the map never mid-walk.
+- Saved as met the moment it shows (`meta.tips[id] = 1`). A card that the
+  player leaves for a screen without a lane within `FEEL_TIP.keep` (2 s) goes
+  back to the front of the queue, unmet.
+- Veterans: a profile from before the tips with 20+ fights starts with the
+  pre-round-3 systems met (`FEEL_VETERAN`), so they only meet the new ones.
+- **Tips page** (screen `tips`, the title's `Tips` button): a bar "n of 15
+  tips met", every met tip in full with its picture, the rest dark "???",
+  and `Reset tips` (clears `meta.tips`, they pop up again).
+- The enemy popover (a tap on an enemy) now lists its affixes in words, which
+  the affix tip points at.
+
+**Rooms with character.** A canvas strip (508 wide, drawn at 2x every frame
+by `feelDraw`) at the top of three screens, the flows and button indices
+unchanged:
+- The shop: **Chester**, a prize chest mimic in a tiny top hat, on the
+  counter under a flickering SHOP sign, loot on the shelves, a cash register
+  (`RENDER.feelKeeper`, st `{t, mood, moodK, talk, blink, look}`). He idles
+  (the lid breathes, blinks, looks around, waves), greets you once per shop
+  (`FEEL_QUIPS.hi`), rotates a quip every 7 s, beams on a buy or a sale (the
+  lid flies open, smiling eyes, sparkles, the drawer pops, a ding), frowns
+  and shakes his head when you are short (clamped lid, knitted brows, a
+  groan). The speech bubble is DOM (`.keepBub`); under his line it shows what
+  just happened (the shop's toast: "Bought X.", "Not enough gold.").
+- The rest stop: a campfire in a stone ring between dead cabinets, flames,
+  rising sparks and smoke, the crawler on a log with their Rig on their
+  back, warming a hand and toasting a marshmallow (`RENDER.feelCampfire`, st
+  `{t, charId, heal}`). Resting: hearts rise, a green glow, a "+N HP" float, a
+  chime.
+- The forge: a furnace in a brick wall, an anvil with a hot ingot, a hammer
+  on a piston arm (`RENDER.feelForge`, st `{t, item, heat, hit, strikes,
+  done}`). Upgrading: the item goes on the anvil glowing orange, three blows
+  (a clank, a flash, sparks, a buzz and a thud of the strip each), then a
+  sparkle and a "+"; a card picked further down scrolls the anvil into view.
+- The exit beat (`feelLeave(kind, fn, secs)`): in a page the rest (1.5 s) and
+  the forge (1.7 s) play their moment before the map; a tap skips it
+  (`feelBeatSkip`), the choices are inert meanwhile. The effect is applied and
+  saved first with `sd.done`, so a reload during the beat goes to the map and
+  never heals or upgrades twice (`showRest` / `showForge` check `feelDone`).
+  Headless (the suites) it goes straight on, as before.
+
+**Haptics** (`feelHaptic(kind)`, the game's `haptic` helper): `navigator.vibrate`
+with a pattern per kind (`FEEL_BUZZ`): `clamp` (the prongs close), `deliver`
+(each delivery), `jackpot`, `bigHit` (a crushing hit or crit), `hurt` (taking
+damage), `capCrack` / `capBurst` (the capsule), `slotWin` (a slots win; other
+cabinets `win`), plus the older `tap`, `hit`, `boss`. Guarded (no API: a quiet
+no-op), one buzz per kind per 0.08 s, off with the title's `Buzz` toggle
+(`meta.settings.haptics`) and off in reduced motion (Shake off, or
+`prefers-reduced-motion`). `AUDIO.haptic` is unchanged and unused by the game.
+
+**Toast lanes** (`feelToastLane`, `#toast[data-lane]`). Screens with a
+central play area keep toasts off it: the arcade (`arc`: y 826, over the
+how-to line under the machine, never over the reels, the peg board or the
+wheel), the fight (`bot`: the tray row under the cabinet; `bothi` y 772 while
+a tip card holds that lane), the prize counter (`top`), the shop (`keep`: the
+keeper says it in his bubble; scrolled past him, the bottom lane). The lane
+follows the screen while a toast is up. The corner lane (stickers, discovery
+toasts, `feelCorner`, `FEEL_CORNER`) goes compact on the reward, shop and
+counter screens too, and on the reward it lifts into the empty right of the
+title row (`.hi`, top 6 px), so it no longer covers the payout; it follows a
+screen change (a sticker slapped on the map shrinks when the reward opens).
+
+**Fixes.**
+- Enemy Armor is capped at `COMBAT.ARMOR_MAX` (8): `COMBAT.status` clamps an
+  enemy's gain (a gain at the cap adds nothing, the player is not capped),
+  `def.status` seeds and the Armored affix respect it, and a swallowed metal
+  item lends only the Armor it really added (so it never takes back more).
+- 360 px: the stage scales uniformly, so layout is the 540 one; an audit of
+  the reward (a crowded payout with a DOUBLE, two capsules, the three longest
+  item names), the shop (scrolled) and the prize counter found no box past
+  the edge and no clipped text. What did cover them was the corner lane (a
+  full-size sticker over the first payout rows, the shop's gold and the
+  counter's case): compact there now, and up in the title row on the reward.
+- The arcade's play counts (`meta.arc`) were dropped on every load (the
+  veteran speed-up never stuck); `loadMeta` keeps them now.
+
+**Save fields.** Meta: `tips {id: 1}`, `settings.haptics` (both defaulted by
+`feelFix`; junk is repaired). Run sd: `rest.done` / `forge.done` during the
+exit beat. No key was renamed; old profiles and saves load.
+
+`GAME.feel` exposes `TIPS, TIP, BUZZ, LANE, QUIPS, want, show, dismiss, safe,
+scan, reset, showTips, haptic, hapticOn, setHaptics, lane, say, beatSkip, fix`
+and the live `cur, queue, log, buzz, keeper, fire, forge, beat`.
+Tests: combat (the cap on gains, the player uncapped, the Frozen Knight over
+120 turns, Armored at the cap), render (a distinct picture for every tip,
+the keeper in every mood, the campfire and its heal, the forge's strike and
+sparkle, null states), game (the queue, one at a time, met and saved,
+reload, reset; never during a grab, a carry, the coach; unread cards requeue;
+every trigger from the map and a fight and the events; haptics patterns, the
+toggle and its save, reduced motion both ways, a real clamp and delivery, no
+API; the lanes per screen and the keeper's note; the shop's moods, quips and
+unchanged buttons; the campfire's beat, its save and a reload in it, no
+second heal; the forge's three blows; a tap skip; the Tips page; veterans,
+newcomers, junk fields, old rest saves, the arcade counts).
 
 ## Quality bar (Game of the Year, mobile)
 

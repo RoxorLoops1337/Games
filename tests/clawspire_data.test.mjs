@@ -15,11 +15,11 @@ const {
 // The bible's closed lists, written out here independently of data.js so a
 // drifted list in data.js is caught too.
 const ITEM_ART = 'sword dagger axe hammer anvil shield buckler potion flask bomb torch iceshard snowball coin gem rock slag iceblock apple bread book scroll orb ring key chain horn whetstone feather skull star boot bone bottle heart lantern wand mask egg dice chip card horseshoe clover slot potato pill cookie'.split(' ');
-const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork golem furnace magnet ironjaw wraith yeti frostmage icemimic prizemaster mushroom knight wisp crab drone tinker cultist raccoon goat magpie'.split(' ');
+const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork golem furnace magnet ironjaw wraith yeti frostmage icemimic prizemaster mushroom knight wisp crab drone tinker cultist raccoon goat magpie tickler jelly barker magbat mole dozer ghost collector'.split(' ');
 const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
 const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again'.split(' ');
 const PER = 'block junk metal grabsUsed poison burn small streak gold luck'.split(' ');
-const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs'.split(' ');
+const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
 const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBlock startStr'.split(' ');
 const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial'.split(' ');
@@ -31,7 +31,7 @@ const CHARS = 'knight alchemist rogue gambler'.split(' ');
 // below, left out of the build pass's own "new content" counts.
 const R3_ITEMS = 'bone_dice poker_chip scratch_card fortune_cookie double_or_nothing lucky_horseshoe marked_deck one_armed_bandit roulette_wheel golden_dice poison_pill hot_potato crystal_dice floating_token firecracker lucky_clover'.split(' ');
 const R3_RELICS = 'snake_eyes pity_timer dealers_visor lucky_ticket lucky_cat wheel_of_fortune rabbits_foot high_roller ticket_roll gacha_charm heartburn broken_mirror blasting_cap lodestone sand_pail big_catch'.split(' ');
-const BIN_KINDS = ['shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'tilt', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'];
+const BIN_KINDS = ['shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'tilt', 'gulp', 'bomb', 'corrode', 'jam', 'eggs', 'tickle', 'glue', 'wheel', 'ceiling', 'bury', 'plow', 'vanish'];
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isHex = (c) => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
 const junkIds = () => Object.keys(ITEMS).filter(id => ITEMS[id].rarity === 'junk');
@@ -330,7 +330,8 @@ t.test('enemies', () => {
       t.ok(bin.has('shake') && bin.has('junk'), 'act 1 introduces shake and junk');
       // The monsters pass: act 1 also eats items, drops a bomb and lays eggs
       // (each shown in its telegraph); grease, steal, tilt, fog, ice stay later.
-      t.ok([...bin].every(k => ['shake', 'junk', 'gulp', 'bomb', 'eggs'].includes(k)), `act 1 only shakes, junks, gulps, bombs and lays eggs [${[...bin]}]`);
+      // (the bestiary adds the gentle machine tricks: a tickled claw, a sticky pile, the prize wheel)
+      t.ok([...bin].every(k => ['shake', 'junk', 'gulp', 'bomb', 'eggs', 'tickle', 'glue', 'wheel'].includes(k)), `act 1 only shakes, junks, gulps, bombs, lays eggs, tickles, glues and spins [${[...bin]}]`);
       for (const k of ['gulp', 'bomb', 'eggs']) t.ok(bin.has(k), `act 1 introduces ${k}`);
     }
     if (act === 2) {
@@ -1323,6 +1324,151 @@ t.test('round 3: combos, secret recipes and the loot hooks', () => {
   t.ok(A.big_payout.check({ kind: 'ev', ev: { t: 'luck', k: 'cash', v: 10 } }) && !A.big_payout.check({ kind: 'ev', ev: { t: 'luck', k: 'cash', v: 9 } }), 'Big Payout: 10 Luck cashed out');
   t.ok(A.secret_menu.check({ kind: 'ev', ev: { t: 'combo', id: 'midas_touch' } }) && !A.secret_menu.check({ kind: 'ev', ev: { t: 'combo', id: 'armory' } }), 'Secret Menu: a secret recipe');
   t.ok(A.house_loses.check({ kind: 'win', run: { char: 'gambler' } }) && !A.house_loses.check({ kind: 'win', run: { char: 'knight' } }), 'The House Loses: a win with Lou');
+});
+
+// ================================================================ ENDLESS (DESIGN.md "Endless and mutators")
+const MUT_FX = ['gs', 'drag', 'scale', 'slick', 'glass', 'drift', 'belt', 'quake', 'dark', 'temp', 'grabs', 'dmgOut', 'affix', 'rules', 'extra'];
+t.test('endless: the mutators are well formed and the engine reads every effect', () => {
+  const M = DATA.MUTATORS, ids = DATA.MUT_IDS;
+  t.ok(ids.length >= 10 && ids.length <= 14, `10 to 14 mutators (${ids.length})`);
+  t.eq(new Set(ids).size, ids.length, 'unique ids');
+  t.eq(DATA.MUT_MAX, 3, 'up to 3 at once');
+  for (const id of ids) {
+    const m = M[id];
+    t.ok(m && m.id === id && m.name && m.icon && m.text && /^#[0-9a-f]{6}$/i.test(m.color), `${id}: name, icon, text, colour`);
+    t.ok(m.mult >= 0.8 && m.mult <= 1.5, `${id}: a score multiplier in range (${m.mult})`);
+    t.ok(m.text.length <= 110 && m.name.length <= 26, `${id}: the copy fits a chip and the reboot card`);
+    const keys = Object.keys(m.fx || {});
+    t.ok(keys.length > 0 && keys.every((k) => MUT_FX.includes(k)), `${id}: effects the engine reads (${keys.join()})`);
+    if (m.fx.temp) t.ok(ITEMS[m.fx.temp.id] && m.fx.temp.n > 0 && m.fx.temp.max >= m.fx.temp.n, `${id}: its temporary item exists`);
+    if (m.fx.affix) t.ok(DATA.AFFIXES[m.fx.affix], `${id}: its affix exists`);
+    for (const k in m.fx.rules || {}) t.ok(DATA.RELIC_RULES.includes(k), `${id}: rule ${k} is a relic rule`);
+  }
+  for (const want of ['lowgrav', 'glass', 'bombs', 'magnet', 'tiny', 'giant', 'slippery', 'double', 'hungry', 'fever', 'blackout', 'conveyor']) t.ok(M[want], `the brief's mutator ${want} exists`);
+});
+t.test('endless: mutators clash, clean, merge and pick', () => {
+  t.ok(DATA.mutClash('tiny', 'giant') && DATA.mutClash('giant', 'tiny') && !DATA.mutClash('tiny', 'lowgrav'), 'Tiny and Giant clash, others do not');
+  t.eq(DATA.mutClean(['tiny', 'giant', 'nope', 'tiny', 'lowgrav']).join(), 'tiny,lowgrav', 'clean: known, unique, no clash, in order');
+  t.eq(DATA.mutClean(['lowgrav', 'glass', 'bombs', 'magnet'], DATA.MUT_MAX).join(), 'lowgrav,glass,bombs', 'the cap keeps the first three');
+  t.eq(DATA.mutClean(null).length, 0, 'junk is no mutators');
+  const none = DATA.mutMods([]);
+  t.ok(none.ids.length === 0 && none.mult === 1 && none.gs === 1 && none.scale === 1 && none.slick === 1 && none.grabs === 1 && none.dmgOut === 1 && !none.dark && !none.glass && !none.quake && none.extra === 0 && none.temp.length === 0 && none.affix.length === 0, 'no mutators: neutral');
+  const m = DATA.mutMods(['lowgrav', 'double', 'hungry', 'fever']);
+  t.ok(m.gs < 0.5 && m.drag > 0, 'Low Gravity floats');
+  t.ok(m.grabs === 2 && m.dmgOut === 0.5, 'Double Grabs, Half Damage');
+  t.ok(m.affix.includes('greedy') && m.affix.includes('hasty'), 'Hungry Hungry and Jackpot Fever affixes');
+  t.eq(m.rules.comboTwice, 1, 'Jackpot Fever: combos fire twice');
+  const prod = ['lowgrav', 'double', 'hungry', 'fever'].reduce((p, id) => p * DATA.MUTATORS[id].mult, 1);
+  t.near(m.mult, prod, 0.006, 'the multiplier is the product');
+  t.eq(DATA.mutMult(['tiny', 'giant']), DATA.MUTATORS.tiny.mult, 'a clash never counts twice');
+  t.ok(DATA.mutMods(['magnet']).mult < 1, 'a helpful mutator lowers the score multiplier');
+  let bad = 0;
+  for (let s = 1; s <= 200; s++) {
+    const rng = U.rng(s), have = s % 2 ? ['tiny', 'bombs'] : ['giant'];
+    const id = DATA.mutPick(rng, have);
+    if (!id || have.includes(id) || have.some((o) => DATA.mutClash(o, id))) bad++;
+  }
+  t.eq(bad, 0, 'mutPick never repeats one or picks a clash');
+  t.eq(DATA.mutPick(U.rng(3), DATA.MUT_IDS), null, 'nothing left to pick: null');
+});
+t.test('endless: the daily run brings 1 or 2 fixed mutators for the date', () => {
+  const k = '2026-09-28';
+  t.eq(DATA.dailyMutators(k).join(), DATA.dailyMutators(k).join(), 'the same date, the same mutators');
+  const seen = new Set(), counts = {};
+  for (let d = 1; d <= 60; d++) {
+    const key = `2026-${d <= 30 ? '10' : '11'}-${String(((d - 1) % 30) + 1).padStart(2, '0')}`;
+    const ids = DATA.dailyMutators(key);
+    t.ok(ids.length >= 1 && ids.length <= 2, `${key}: 1 or 2 mutators`);
+    t.eq(DATA.mutClean(ids).length, ids.length, `${key}: known and compatible`);
+    seen.add(ids.join());
+    counts[ids.length] = (counts[ids.length] | 0) + 1;
+  }
+  t.ok(seen.size >= 20, `the mix changes day to day (${seen.size} sets in 60 days)`);
+  t.ok(counts[1] > 5 && counts[2] > 5, 'some days bring one, some two');
+});
+t.test('endless: the loop scaling', () => {
+  const s0 = DATA.endlessScale(0, 1);
+  t.ok(s0.hp === 1 && s0.dmg === 1 && !s0.normalAffix && !s0.bigAffix && !s0.rage && !s0.mix, 'loop 0 is neutral');
+  t.eq([1, 2, 3, 4, 5, 6, 7].map(DATA.endlessAct).join(), '1,2,3,1,2,3,1', 'the loops cycle the three acts');
+  let prev = null;
+  for (let loop = 1; loop <= 9; loop++) {
+    const act = DATA.endlessAct(loop), s = DATA.endlessScale(loop, act);
+    t.ok(s.hp > 1 && s.dmg > 1, `loop ${loop}: tougher than the act it borrows`);
+    // the strength over act 3's own numbers grows every loop, whatever the pool
+    const hp3 = s.hp / DATA.ENDLESS.liftHp[act], dmg3 = s.dmg / DATA.ENDLESS.liftDmg[act];
+    if (prev) t.ok(hp3 > prev[0] && dmg3 > prev[1], `loop ${loop}: stronger than loop ${loop - 1}`);
+    prev = [hp3, dmg3];
+    t.eq(s.normalAffix, Math.min(3, Math.floor(loop / 2)), `loop ${loop}: normals' extra affixes`);
+    t.eq(s.bigAffix, Math.min(3, Math.ceil(loop / 2)), `loop ${loop}: elites' and bosses' extra affixes`);
+    t.eq(s.rage, loop >= 2, `loop ${loop}: bosses in phase two from loop 2`);
+    t.eq(s.eliteRage, loop >= 4, `loop ${loop}: elites too from loop 4`);
+    t.ok(s.mix, `loop ${loop}: the boss borrows a trick`);
+  }
+  t.ok(DATA.endlessScale(1, 1).hp > DATA.endlessScale(1, 3).hp, 'act 1 pools are lifted further than act 3 pools');
+  for (let act = 1; act <= 3; act++) {
+    const own = ENCOUNTERS[act].boss[0];
+    for (let s = 1; s <= 40; s++) {
+      const id = DATA.endlessMix(U.rng(s), act);
+      t.ok(ENEMIES[id] && ENEMIES[id].tier === 'boss' && ENEMIES[id].sig && !own.includes(id), `act ${act} seed ${s}: another boss's trick (${id})`);
+    }
+    t.eq(DATA.endlessMix(U.rng(7), act), DATA.endlessMix(U.rng(7), act), 'deterministic by rng');
+  }
+  t.ok(DATA.DIFFICULTY.hp === 2.0 && DATA.DIFFICULTY.dmg === 1.8, 'DIFFICULTY defaults untouched');
+});
+t.test('endless: the run score', () => {
+  const S0 = DATA.SCORE;
+  const run = { act: 2, kills: 30, jackpots: 4, tilt: 0, sc: { bosses: 1, combos: 10 } };
+  const r = DATA.runScore(run, false);
+  t.eq(r.mode, 'classic', 'a plain run is classic');
+  t.eq(r.base, 2 * S0.floor + 30 * S0.kill + S0.boss + 4 * S0.jackpot + 10 * S0.combo, 'base = floors, kills, bosses, jackpots, combos');
+  t.eq(r.total, r.base, 'no Tilt, no mutators: x1');
+  t.eq(r.lines.map((l) => l.k).join(), 'floors,kills,bosses,jackpots,combos', 'one line per scored thing');
+  const won = DATA.runScore(Object.assign({}, run, { act: 3 }), true);
+  t.eq(won.base - DATA.runScore(Object.assign({}, run, { act: 3 }), false).base, S0.win, 'a win adds the Prize Master line');
+  const tilt = DATA.runScore(Object.assign({}, run, { tilt: 5 }), false);
+  t.eq(tilt.total, Math.round(r.base * 1.5), 'Tilt 5: x1.5');
+  const mut = DATA.runScore(Object.assign({}, run, { muts: ['blackout', 'hungry'] }), false);
+  t.eq(mut.mutM, DATA.mutMult(['blackout', 'hungry']), 'the mutator multiplier');
+  t.eq(mut.total, Math.round(r.base * mut.mutM), 'total = base x Tilt x mutators');
+  const end = DATA.runScore(Object.assign({}, run, { act: 1, endless: { loop: 4 } }), false);
+  t.eq(end.mode, 'endless', 'Endless mode');
+  t.ok(end.lines.some((l) => l.k === 'loops' && l.n === 4 && l.v === 4 * S0.loop), 'loops scored');
+  t.ok(end.lines.some((l) => l.k === 'floors' && l.n === 7), 'floors = 3 + the loop');
+  t.ok(end.lines.some((l) => l.k === 'win'), 'Endless always carries the win');
+  t.eq(DATA.runScore(Object.assign({}, run, { daily: '2026-09-28' }), false).mode, 'daily', 'a daily run');
+  const empty = DATA.runScore(null, false);
+  t.ok(empty.total >= 0 && Number.isFinite(empty.total), 'an empty run is safe');
+});
+t.test('endless: the stickers', () => {
+  const A = DATA.ACHIEVEMENTS;
+  for (const id of ['endless_on', 'loop3', 'loop6', 'mad_science', 'high_score']) t.ok(A[id] && DATA.ACH_IDS.includes(id), `${id} is on the board`);
+  t.ok(A.endless_on.check({ kind: 'tick', run: { endless: { loop: 1 } } }) && !A.endless_on.check({ kind: 'tick', run: {} }), 'Insert Another Coin: an Endless run');
+  t.ok(A.loop3.check({ kind: 'tick', run: { endless: { loop: 3 } } }) && !A.loop3.check({ kind: 'tick', run: { endless: { loop: 2 } } }), 'Loop de Loop: loop 3');
+  t.ok(A.loop6.check({ kind: 'meta', meta: { endless: { best: 6 } } }) && !A.loop6.check({ kind: 'meta', meta: { endless: { best: 5 } } }), 'Groundhog Claw: loop 6 on the profile');
+  t.eq(A.loop6.val({ meta: { endless: { best: 4 } } }), 4, 'its progress bar');
+  t.ok(A.mad_science.check({ kind: 'win', run: { muts: ['tiny', 'glass'] } }) && !A.mad_science.check({ kind: 'win', run: { muts: ['tiny', 'giant'] } }) && !A.mad_science.check({ kind: 'end', run: { muts: ['tiny', 'glass'] } }), 'Mad Science: a win with 2+ mutators');
+  t.ok(A.high_score.check({ kind: 'end', run: { scoreTop: 25000 } }) && !A.high_score.check({ kind: 'end', run: { scoreTop: 24999 } }), 'High Score: 25,000');
+});
+
+// BESTIARY (round 4): eight enemies that play with the machine itself.
+t.test('bestiary: the new enemies, their acts and encounters', () => {
+  const NEW = { tickler: [1, 'normal'], jelly: [1, 'normal'], barker: [1, 'elite'], magbat: [2, 'normal'], mole: [2, 'normal'], dozer: [2, 'elite'], ghost: [3, 'normal'], collector: [3, 'elite'] };
+  const KIND = { tickler: 'tickle', jelly: 'glue', barker: 'wheel', magbat: 'ceiling', mole: 'bury', dozer: 'plow', ghost: 'vanish' };
+  for (const id in NEW) {
+    const e = ENEMIES[id], [act, tier] = NEW[id], W = 'bestiary ' + id;
+    t.ok(!!e && e.act === act && e.tier === tier, `${W}: act ${act} ${tier}`);
+    if (!e) continue;
+    t.eq(e.art, id, `${W}: its own art key`);
+    if (KIND[id]) t.ok(e.moves.some(m => m.k === KIND[id]), `${W}: uses ${KIND[id]}`);
+    const pools = ENCOUNTERS[act][tier];
+    t.ok(pools.some(enc => enc.includes(id)), `${W}: appears in the act ${act} ${tier} encounters`);
+    t.ok(JSON.stringify(e).indexOf(String.fromCharCode(0x2014)) < 0, `${W}: no em dashes`);
+    if (tier === 'elite') t.ok(typeof e.taunt === 'string' && e.taunt.length > 8 && e.enrage && e.enrage.name, `${W}: a versus-card taunt and a phase two`);
+  }
+  const C = ENEMIES.collector;
+  t.ok(C.rival === true && C.digest >= 10 && Array.isArray(C.noAffix) && C.noAffix.includes('greedy'), 'the Claw Collector: rival claw, keeps what it takes, never Greedy on top');
+  t.ok(ENEMIES.mole.moves.find(m => m.k === 'bury').n === 1 && ENEMIES.ghost.moves.find(m => m.k === 'vanish').n === 3, 'bury 1 item, vanish 3');
+  for (const id of ['tickler', 'jelly', 'magbat']) t.ok(ENEMIES[id].moves.find(m => m.k === KIND[id]).v === 1, `${id}: its trick lasts one turn`);
 });
 
 t.done();
