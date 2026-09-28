@@ -3384,7 +3384,7 @@ const RENDER = (() => {
       const hidden = !tile.revealed && type !== 'boss';
       if (hidden) {
         ctx.beginPath(); brushedHex(ctx, r * (terr ? 1.01 : 0.96), tile.q, tile.r, flat);
-        if (terr) { F(ctx, rgba(DARK, st.nearLight ? (ford ? 0.62 : 0.76) : 0.92)); ctx.fill(); }
+        if (terr) { F(ctx, rgba(depDark(st.biome), st.nearLight ? (ford ? 0.62 : 0.76) : 0.92)); ctx.fill(); }   // (DEP: the Depths' fog is teal-black)
         else { F(ctx, FOG); ctx.fill(); S(ctx, rgba(INK, 0.9), 3); ctx.stroke(); }
         if (!terr) { ctx.beginPath(); brushedHex(ctx, r * 0.8, tile.r, tile.q, flat); S(ctx, rgba('#6a5a8a', 0.18), 5); ctx.stroke(); }
         if (ford) {
@@ -3399,7 +3399,7 @@ const RENDER = (() => {
           const limg = artImg('hex', type);
           if (limg) blitContain(ctx, limg, 0, 0, r * 1.2, r * 1.2); else hexIcon(ctx, type, r * 0.95, t);
           ctx.globalAlpha = terr ? 0.62 : 0.42;
-          F(ctx, terr ? DARK : FOG); ctx.fillRect(-r, -r, r * 2, r * 2);
+          F(ctx, terr ? depDark(st.biome) : FOG); ctx.fillRect(-r, -r, r * 2, r * 2);
           ctx.restore();
           ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.86, flat);
           ctx.setLineDash([3, 4]); S(ctx, rgba('#f4ecd6', 0.35), 1.5); ctx.stroke(); ctx.setLineDash([]);
@@ -3718,6 +3718,7 @@ const RENDER = (() => {
   // stones. st: { fill, seed, biome, orient, t }.
   function terrainHex(ctx, x, y, size, tile, st) {
     if ((st && st.biome === 'machine') || (tile && tile.biome === 'machine')) return secTerrain(ctx, x, y, size, tile, st);   // the Back Room (SECRET)
+    if ((st && st.biome === 'depths') || (tile && tile.biome === 'depths' && !(st && st.biome))) return depTerrain(ctx, x, y, size, tile, st);   // the Neon Depths (DEP round 15)
     ctx.save();
     try {
       tile = tile || {}; st = st || {};
@@ -4225,6 +4226,7 @@ const RENDER = (() => {
         default: {
           if (famIntentIcon(ctx, k, it, cy, t, shakeX)) break;   // the families' moves (FAMILY block)
           if (bestIntentIcon(ctx, k, it, cy, t, shakeX)) break;   // the bestiary's machine tricks (BESTIARY block)
+          if (depIntentIcon(ctx, k, it, cy, t, shakeX)) break;   // the Neon Depths' water tricks (DEP round 15)
           // shaking box for bin attacks
           ctx.save(); ctx.translate(shakeX - 2, cy); ctx.rotate(Math.sin(t * 30) * 0.08);
           IA.crate(ctx, 22, 20, '#b07a3c', '#6a4a1c');
@@ -5697,7 +5699,8 @@ const RENDER = (() => {
       if (t >= VS.name) {
         const u = clamp01((t - VS.name) / 0.18), sc = red ? 1 : 1.7 - 0.7 * U.ease.outBack(u);
         ctx.save(); ctx.globalAlpha = vis * u; ctx.translate(midX, 752); ctx.scale(sc, sc);
-        const nm = String(st.name || '').toUpperCase(), size = Math.min(42, (w - 40) / Math.max(4, nm.length) * 1.55);
+        // (DEP round 15: the chrome face runs about 0.8 em a letter, so a long name, THE DROWNED JUKEBOX or its Dutch, is fitted to the card)
+        const nm = String(st.name || '').toUpperCase(), size = Math.min(42, (w - 40) / Math.max(4, nm.length) * 1.55, (w - 24) / (Math.max(4, nm.length) * 0.8));
         chrome(ctx, nm, 0, 0, size, boss ? PAL.gold : ecol, boss ? PAL.blood : null);
         ctx.restore();
       }
@@ -5744,7 +5747,7 @@ const RENDER = (() => {
       label = String(label || '').toUpperCase();
       ctx.font = 'bold 15px ' + FONT;
       let tw = 120;
-      try { const m = ctx.measureText(label); if (m && m.width > 0) tw = m.width; } catch (e) { /* stub */ }
+      try { const m = ctx.measureText(i18nTr(label)); if (m && m.width > 0) tw = m.width; } catch (e) { /* stub */ }   // (the plate fits the words it shows: txt draws them translated)
       const pw = Math.max(150, tw + 58), ph = 32;
       const drop = (1 - U.ease.outBack(k)) * -60;
       q9Rec(Q9A.bsR, ctx, x - pw / 2 - 4, y + drop - ph / 2 - 14, x + pw / 2 + 4, y + drop + ph / 2 + 4); Q9A.bs = Q9A.bsR;   // LABELS (round 9)
@@ -6626,6 +6629,7 @@ const RENDER = (() => {
     ctx.restore();
   }
   function bestProp(ctx, r, p, sel, busy, ox, oy, ph, lw, seed, t) {
+    if (p.accent === 'depths') { depProp(ctx, r, p, sel, busy, ox, oy, ph, lw, seed, t); return; }   // the Neon Depths (DEP round 15)
     if (p.accent === 'ash') {
       // the foundry: half-sunk gears turning, steam vents puffing
       if (sel === 1 && !busy) {
@@ -13121,6 +13125,7 @@ const RENDER = (() => {
   }
   // A bold line shrunk to fit maxW.
   function loreFit(ctx, s, x, y, size, maxW, col, ol, align) {
+    s = i18nTr(String(s));   // (QA round 15) fit the words shown (a longer Dutch name measured as its English ran past maxW)
     ctx.font = 'bold ' + size + 'px ' + FONT;
     const mw = ctx.measureText(String(s)).width || 0;
     const sz = mw > maxW && mw > 0 ? Math.max(10, size * maxW / mw) : size;
@@ -13149,6 +13154,7 @@ const RENDER = (() => {
   // The scene behind a Codex page, by its art kind (the game passes the defs and poses).
   function loreScene(ctx, art, w, h, st, t) {
     const k = art.k, fy = h * 0.82, cx = w / 2, col = st.col || PAL.pink;
+    if (k === 'act' && art.dep) { depLoreAct(ctx, art, w, h, st, t); return; }   // the Neon Depths' page (DEP round 15)
     if (k === 'act') {
       const act = U.clamp(art.act | 0, 1, 3);
       bg(ctx, w, h, act, t);
@@ -13166,7 +13172,7 @@ const RENDER = (() => {
     }
     if (k === 'enemy' || k === 'gary') {
       const def = st.def || null, mach = !!(def && (def.look === 'machine' || def.id === 'machine'));
-      if (mach) secMapBg(ctx, w, h, t); else bg(ctx, w, h, art.act || 1, t);
+      if (mach) secMapBg(ctx, w, h, t); else if (art.dep) depArena(ctx, w, h, t, {}); else bg(ctx, w, h, art.act || 1, t);   // (DEP: a Depths monster under water)
       F(ctx, 'rgba(10,5,20,0.35)'); ctx.fillRect(0, 0, w, h);
       if (k === 'gary') {
         const g0 = STO_G.gear;
@@ -14645,7 +14651,7 @@ const RENDER = (() => {
       if (st.msg && st.msg.text) {
         portrait(ctx, st.fromChar || 'knight', 58, 88, 64, now);
         duoTag(ctx, 58, 132, duoNm(st.from || ''), fromCol, false, 11);
-        if (typeof stoBubble === 'function') stoBubble(ctx, 310, 78, 400, (st.msg.icon ? st.msg.icon + ' ' : '') + st.msg.text, +st.msgT || 1, 96, 92);
+        if (typeof stoBubble === 'function') stoBubble(ctx, 310, 78, 400, (st.msg.icon ? st.msg.icon + ' ' : '') + i18nTr(st.msg.text), +st.msgT || 1, 96, 92);   // (the words translated on their own: an icon in front can hide them from I18N.tr)
       }
     } catch (e) { duoErr(e); }
     ctx.restore();
@@ -14775,7 +14781,136 @@ const RENDER = (() => {
     } catch (e) { duoErr(e); }
     ctx.restore();
   }
-  const DUO_R = { T: DUO_T, E: DUO_E, spot: duoSpot, tag: duoTag, target: duoTarget, card: duoCard, handoff: duoHandoff, coin: duoCoin, board: duoBoard, podium: duoPodium };
+  /* ---- DUO NET (round 15): online co-op (DESIGN.md "Online co-op (round 15)").
+     The watch screen while the partner grabs on their own phone: both
+     players up top (portrait, name, hp, DOWN), the shared boss with its hp
+     and what it does next, and the NAME'S TURN beat, then "NAME is
+     grabbing" (the game draws their cabinet under it from the stream).
+     st {t, now, names, cols, chars, who (the seat grabbing), me, hp: [{hp,
+     mx, bk, down}] per seat, boss {def, hp, mx, bk, intent}, beat (s left
+     of the turn beat), reduced}. */
+  function duoWatch(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = +st.t || 0, now = +st.now || t, names = st.names || ['P1', 'P2'], chars = st.chars || ['knight', 'knight'];
+      const cols = [duoCol((st.cols || [])[0], PAL.pink), duoCol((st.cols || [])[1], PAL.cyan)], who = st.who === 1 ? 1 : 0;
+      ctx.fillStyle = 'rgba(18,9,31,0.45)'; ctx.fillRect(0, 0, w, 392);
+      // both players: the one grabbing lit in their colour
+      for (let i = 0; i < 2; i++) {
+        const x = i ? w - 132 : 132, y = 44, lit = i === who, p = (st.hp || [])[i] || {}, col = cols[i];
+        ctx.save();
+        ctx.globalAlpha = p.down ? 0.5 : lit ? 1 : 0.75;
+        if (lit) glow(ctx, x, y, 120, col, 0.3 + Math.sin(now * 5) * 0.06);
+        ctx.beginPath(); rrect(ctx, x - 120, y - 32, 240, 64, 16); F(ctx, rgba(INK, 0.9)); ctx.fill(); S(ctx, lit ? col : rgba(col, 0.6), lit ? 3 : 2); ctx.stroke();
+        portrait(ctx, chars[i] || 'knight', x - 88, y, 50, now);
+        txt(ctx, duoNm(names[i]) + (i === st.me ? ' (' + i18nTr('YOU') + ')' : ''), x - 56, y - 14, 14, col, true, 'left', true);
+        if (p.down) txt(ctx, 'DOWN', x + 22, y + 12, 18, PAL.blood, true, 'center', true);
+        else hpBar(ctx, x - 56, y + 4, 164, 16, p.hp, p.mx || 1, p.bk || 0, null);
+        ctx.restore();
+      }
+      // the boss, feet on the floor line, its hp under it and its next move
+      const B = st.boss;
+      if (B && B.def) {
+        const bx = enemyBox(B.def, 1), sc = clamp01(Math.min(150 / Math.max(1, bx.h), 230 / Math.max(1, bx.w)) / 2) * 2;
+        enemy(ctx, B.def, w / 2, 262, Math.max(0.25, sc), now, {});
+        hpBar(ctx, w / 2 - 110, 272, 220, 18, B.hp, B.mx || 1, B.bk || 0, null);
+        if (B.intent) txt(ctx, String(B.intent).slice(0, 64), w / 2, 306, 13, '#fff6c0', true, 'center', true);
+      }
+      // the turn beat, then who is at the claw
+      const beat = Math.max(0, +st.beat || 0), col = cols[who];
+      if (beat > 0) {
+        const u = st.reduced ? 1 : clamp01((1.4 - beat) / 0.25), k = st.reduced ? 1 : 1 + (1 - u) * 0.6;
+        ctx.save(); ctx.globalAlpha = Math.min(1, beat / 0.3);
+        chrome(ctx, duoNm(names[who]) + "'S TURN", w / 2, 350, Math.round(17 * k) * 2, col, col);   // (sizes in steps of 2: chrome caches a sprite per size)
+        ctx.restore();
+      } else {
+        duoTag(ctx, w / 2, 352, '\u{1F3AE} ' + i18nTr(duoNm(names[who]) + ' is grabbing'), col, true, 15);   // ("{s} is grabbing", translated before the pill is measured)
+      }
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  /* YOUR TURN: the card of the hand-off, face up, in your colour (no phone
+     to pass). st {t, now, name, col, char, label, sub, left (s until it
+     starts by itself), total, reduced}. */
+  function duoYourTurn(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = +st.t || 0, now = +st.now || t, col = duoCol(st.col, PAL.cyan);
+      rushBack(ctx, w, h, now, { col, band: false });
+      stripes(ctx, 0, 0, w, 12, '#1a0c10', rgba(col, 0.75), now);
+      const cx = w / 2, cy = 398, cw = Math.min(430, w - 60), ch = 520, pop = st.reduced ? 1 : 1 + Math.max(0, 0.3 - t) * 1.2;
+      ctx.beginPath(); rrect(ctx, cx - cw / 2, cy - ch / 2, cw, ch, 26); F(ctx, '#1b1030'); ctx.fill(); S(ctx, col, 5); ctx.stroke();
+      chrome(ctx, i18nTr('YOUR TURN'), cx, cy - ch / 2 + 58, Math.round(23 * pop) * 2, col, col);
+      txt(ctx, duoNm(st.name || ''), cx, cy - ch / 2 + 108, 22, '#fff6c0', true, 'center', true);
+      duoSpot(ctx, cx, cy + 24, 104, col, 0.3);
+      portrait(ctx, st.char || 'knight', cx, cy + 6, 164 * pop, now);
+      if (st.label) txt(ctx, String(st.label).toUpperCase(), cx, cy + 116, 16, '#e8dcff', true, 'center', true);
+      if (st.sub) txt(ctx, String(st.sub), cx, cy + 140, 14, rgba('#ffffff', 0.8), true, 'center', true);
+      const total = Math.max(0.1, +st.total || 5), left = Math.max(0, Math.min(total, +st.left || 0)), ry = cy + ch / 2 - 56;
+      ctx.beginPath(); ctx.arc(cx, ry, 30, 0, TAU); F(ctx, rgba(INK, 0.9)); ctx.fill(); S(ctx, rgba(col, 0.3), 6); ctx.stroke();
+      if (left > 0) { ctx.beginPath(); ctx.arc(cx, ry, 30, -Math.PI / 2, -Math.PI / 2 + TAU * (left / total)); S(ctx, col, 6); ctx.lineCap = 'round'; ctx.stroke(); }
+      txt(ctx, '\u{1F3AE}', cx, ry + 1, 26, '#ffffff', false);
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  /* The line to the partner is down: the screen dims under a card (title,
+     a line, a spinner while it retries). st {t, title, sub, spin, col}. */
+  function duoLost(ctx, w, h, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      w = w || 540; h = h || 960;
+      const t = +st.t || 0, col = duoCol(st.col, PAL.gold);
+      ctx.fillStyle = 'rgba(12,6,22,0.72)'; ctx.fillRect(0, 0, w, h);
+      const cx = w / 2, cy = 420, cw = Math.min(440, w - 50), ch = 200;
+      ctx.beginPath(); rrect(ctx, cx - cw / 2, cy - ch / 2, cw, ch, 22); F(ctx, '#1b1030'); ctx.fill(); S(ctx, col, 4); ctx.stroke();
+      if (st.spin) {
+        ctx.save(); ctx.translate(cx, cy - 44); ctx.rotate(t * 5);
+        ctx.beginPath(); ctx.arc(0, 0, 18, 0, TAU * 0.72); S(ctx, col, 5); ctx.lineCap = 'round'; ctx.stroke();
+        ctx.restore();
+      } else txt(ctx, '\u{1F4E1}', cx, cy - 44, 34, '#ffffff', false);
+      txt(ctx, String(st.title || ''), cx, cy + 6, 20, '#ffffff', true, 'center', true);
+      if (st.sub) txt(ctx, String(st.sub), cx, cy + 40, 14, rgba('#ffffff', 0.8), true, 'center', true);
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  /* The partner's moments over their cabinet: a prize flying out of the
+     chute up to their corner, a named combo in its colour, a number.
+     list [{k: 'prize' | 'combo' | 'num', t, life, def, name, col, text, x, y}],
+     st {chute {x, y}, tray {x, y}, reduced}. */
+  function duoWfx(ctx, list, st) {
+    ctx.save();
+    try {
+      st = st || {};
+      const ch = st.chute || { x: 470, y: 760 }, tr = st.tray || { x: 132, y: 44 };
+      for (const f of list || []) {
+        const life = Math.max(0.2, +f.life || 1.2), u = clamp01((+f.t || 0) / life);
+        if (f.k === 'prize' && f.def) {
+          const e = U.ease.inOut(u), x = ch.x + (tr.x - ch.x) * e, y = ch.y + (tr.y - ch.y) * e - Math.sin(u * Math.PI) * 120;
+          ctx.globalAlpha = u > 0.85 ? (1 - u) / 0.15 : 1;
+          glow(ctx, x, y, 44, '#ffc94d', 0.5);
+          item(ctx, f.def, x, y, u * 6, 0.8 - u * 0.3, { plus: !!f.plus });
+          ctx.globalAlpha = 1;
+        } else if (f.k === 'combo') {
+          const k = st.reduced ? 1 : u < 0.15 ? 0.6 + u / 0.15 * 0.6 : 1.2 - Math.min(0.2, (u - 0.15)), a = u > 0.75 ? (1 - u) / 0.25 : 1;
+          ctx.globalAlpha = Math.max(0, a);
+          chrome(ctx, String(f.name || 'COMBO').toUpperCase(), 270, 560 - u * 30, Math.round(16 * k) * 2, duoCol(f.col, PAL.gold), duoCol(f.col, PAL.gold));
+          ctx.globalAlpha = 1;
+        } else if (f.k === 'num') {
+          ctx.globalAlpha = u > 0.6 ? (1 - u) / 0.4 : 1;
+          txt(ctx, String(f.text || ''), +f.x || 270, (+f.y || 300) - u * 40, 22, duoCol(f.col, '#ff5a4a'), true, 'center', true);
+          ctx.globalAlpha = 1;
+        }
+      }
+    } catch (e) { duoErr(e); }
+    ctx.restore();
+  }
+  const DUO_R = { T: DUO_T, E: DUO_E, spot: duoSpot, tag: duoTag, target: duoTarget, card: duoCard, handoff: duoHandoff, coin: duoCoin, board: duoBoard, podium: duoPodium,
+    watch: duoWatch, turn: duoYourTurn, lost: duoLost, wfx: duoWfx };   // (DUO NET round 15)
   /* ============================================================ end DUO */
 
   /* ============================================================ SCHOOL (round 11)
@@ -14835,7 +14970,7 @@ const RENDER = (() => {
       for (const L of st.lines || []) {
         if (!L || !L.s) { yy += 8; continue; }
         const size = L.size || 17;
-        for (const ln of schWrap(ctx, L.s, w - 2 * (st.pad || 14), size)) {
+        for (const ln of schWrap(ctx, i18nTr(L.s), w - 2 * (st.pad || 14), size)) {   // (QA round 15) translated whole, then wrapped (a wrapped piece has no translation)
           if (yy > y + h - 6) break;
           schChalk(ctx, ln, L.align === 'left' ? x + 14 : x + w / 2, yy + size * 0.5, size, L.col || SCH_C.chalk, L.align === 'left' ? 'left' : 'center');
           yy += size * 1.28;
@@ -15786,7 +15921,702 @@ const RENDER = (() => {
   const TRD_R = { LOOK: PEV_LOOK, scene: trdScene, rocco: trdRocco, cart: trdCart, icon: trdIcon, token: trdToken, pevBack, pevFront };
   /* ============================================================ /TRD */
 
+  /* ============================================================ DEP (round 15): the Neon Depths */
+  /* DESIGN.md "The Neon Depths (round 15)": the flooded basement's looks.
+     The tileset (BIOME_PAL.depths, depTerrain: a flooded tile floor, glowing
+     kelp, sunken tiles, sand, pipes, stacked drowned cabinets, fords of
+     sunken stools, deep water), the map's props (depProp, via bestDecor),
+     its deep water under the hexes and the shimmer, light shafts and bubbles
+     over them, the fog tinted teal (depDark), the underwater arcade behind a
+     fight (light rays through the water, fish, a sunken marquee, kelp, sand),
+     the cabinet's tint and caustics, its water (a live current, the tide's
+     notes), and every trick's look: the angler's lure, a crab's pincer, a
+     jelly's glow, the chests' tells. The six monsters' drawings (EA.dep_*,
+     def.look), their intent icons, the jellies', boots' and chests' own
+     silhouettes, the Codex's Depths scenes and the act card's colours. Pure
+     drawing from the inputs, saved and restored, never throws. */
+  const DEP_TEAL = '#2ee6d6', DEP_DEEP = '#04141f', DEP_MID = '#0c3a4c', DEP_PINK = '#ff6bd6', DEP_GLOW = '#8dfff5';
+  BIOME_PAL.depths = {
+    low: '#1d5a64', high: '#5fd0c8',
+    grass: '#2a6f78', grass2: '#17464f', flower: '#ff6bd6',
+    forest: '#1f5a5a', tree: '#3dd6a8', tree2: '#ff6bd6', trunk: '#14343c',
+    dirt: '#35486a', dirt2: '#1f2a44', pebble: '#6a8098',
+    sand: '#b8a472', sand2: '#7a6a44',
+    hill: '#2c5670', hill2: '#163446',
+    mtn: '#35305a', mtn2: '#1a1830', cap: '#ff2e88',
+    sea: '#0e3a4e', deep: '#04141f', shallow: '#2f9aa0', foam: '#8dfff5', coast: '#06121c', hatch: '#123040', ripple: '#5fe8e0',
+    tint: 'rgba(20,130,150,0.14)', accent: 'depths', glow: '#8dfff5', name: 'the flooded basement',
+  };
+  LORE_BIOME.depths = { col: DEP_TEAL, col2: DEP_PINK, bg: '#041a24' };
+  SIG_COL.tide = DEP_PINK;
+  Object.assign(FIDGET, { dep_angler: 'bank', dep_jelly: 'jiggle', dep_crab: 'tap', dep_eel: 'buzz', dep_mimic: 'snap', dep_jukebox: 'rattle' });
+  const DEP_DARK = '#03141c';
+  // The darkness over the map: teal-black in the Depths.
+  const depDark = (biome) => (biome === 'depths' ? DEP_DARK : DARK);
+  // a steady 0..1 from two numbers
+  const depR = (a, b) => { const x = Math.sin(a * 91.7 + b * 47.3) * 43758.5453; return x - Math.floor(x); };
+
+  // ---- the tileset
+  function depTerrain(ctx, x, y, size, tile, st) {
+    ctx.save();
+    try {
+      tile = tile || {}; st = st || {};
+      const r = size || 30, t = st.t || 0, flat = st.orient === 'v', p = BIOME_PAL.depths, seed = (st.seed || 0) >>> 0;
+      const terrain = tile.terrain || 'land', ground = groundOf(tile);
+      ctx.translate(x || 0, y || 0);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); hexPath(ctx, 0, 0, r * 1.02, flat);
+      F(ctx, st.fill || terrainFill('depths', terrain, tile.elev, ground)); ctx.fill();
+      const px = (j) => ((((seed >>> (j * 5)) & 31) / 31) - 0.5) * r * 0.9;
+      const py = (j) => ((((seed >>> (j * 5 + 3)) & 31) / 31) - 0.5) * r * 0.8;
+      const lw = Math.max(1, r * 0.05);
+      if (terrain === 'sea') {
+        // deep water: a slow shimmer band, a ripple, now and then a rising bubble
+        const sh = Math.sin(t * 0.8 + (seed & 63) * 0.3);
+        F(ctx, rgba(p.ripple, 0.08 + 0.05 * sh)); ctx.beginPath(); ell(ctx, px(0) * 0.4, py(0) * 0.4, r * 0.55, r * 0.16, 0.3); ctx.fill();
+        if ((seed % 3) === 0) { S(ctx, rgba(p.ripple, 0.5), Math.max(1, r * 0.04)); ctx.beginPath(); ctx.arc(px(1) * 0.5 + Math.sin(t * 0.6 + seed) * r * 0.05, py(1) * 0.5, r * 0.2, Math.PI * 1.1, Math.PI * 1.8); ctx.stroke(); }
+        const u = (t * 0.25 + (seed & 255) / 255) % 1;
+        if ((seed & 7) < 3) { S(ctx, rgba(p.foam, 0.55 * (1 - u)), 1); ctx.beginPath(); circ(ctx, px(2) * 0.5, r * 0.4 - u * r * 0.8, r * 0.06 + u * r * 0.03); ctx.stroke(); }
+        S(ctx, rgba(p.deep, 0.5), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
+      } else if (terrain === 'shallow') {
+        // a ford: the tops of three sunken arcade stools, a pale wave
+        S(ctx, rgba(p.foam, 0.6), Math.max(1, r * 0.045));
+        ctx.beginPath(); ctx.moveTo(-r * 0.5, r * 0.42); ctx.quadraticCurveTo(-r * 0.25, r * 0.28 + Math.sin(t * 2) * r * 0.03, 0, r * 0.42); ctx.quadraticCurveTo(r * 0.25, r * 0.56, r * 0.5, r * 0.42); ctx.stroke();
+        for (let i = 0; i < 3; i++) {
+          const sx = (i - 1) * r * 0.34, sy = -r * 0.12 + (i === 1 ? r * 0.12 : 0);
+          ctx.beginPath(); ell(ctx, sx, sy, r * 0.14, r * 0.09, 0); F(ctx, i === 1 ? '#ff2e88' : '#c9d3e0'); ctx.fill(); S(ctx, p.coast, Math.max(1, r * 0.04)); ctx.stroke();
+          ctx.beginPath(); ell(ctx, sx - r * 0.03, sy - r * 0.02, r * 0.05, r * 0.025, 0); F(ctx, rgba('#ffffff', 0.5)); ctx.fill();
+        }
+        S(ctx, rgba(p.coast, 0.35), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
+      } else if (ground === 'mountain') {
+        // a drift of drowned arcade cabinets, one tipped over, screens still faintly on
+        ctx.beginPath(); ell(ctx, 0, r * 0.45, r * 0.8, r * 0.18, 0); F(ctx, rgba(INK, 0.3)); ctx.fill();
+        const cab = (cx, by, w, h, rot, on) => {
+          ctx.save(); ctx.translate(cx, by); ctx.rotate(rot);
+          tone(ctx, c => rrect(c, -w / 2, -h, w, h, w * 0.12), p.mtn, 0, -h / 2, w * 0.6, { dark: -0.35, spec: false, ol: lw });
+          ctx.beginPath(); rrect(ctx, -w * 0.34, -h * 0.84, w * 0.68, h * 0.36, w * 0.06); F(ctx, on ? rgba(DEP_TEAL, 0.45 + 0.2 * Math.sin(t * 3 + cx)) : '#101a26'); ctx.fill();
+          F(ctx, p.cap); ctx.fillRect(-w * 0.4, -h * 0.98, w * 0.8, h * 0.08);
+          F(ctx, rgba('#c9d3e0', 0.6)); ctx.beginPath(); circ(ctx, -w * 0.18, -h * 0.3, w * 0.07); circ(ctx, w * 0.2, -h * 0.34, w * 0.05); ctx.fill();   // barnacles
+          ctx.restore();
+        };
+        const lean = (seed & 1) ? 1 : -1;
+        cab(-lean * r * 0.28, r * 0.44, r * 0.42, r * 0.78, -lean * 0.08, true);
+        cab(lean * r * 0.26, r * 0.48, r * 0.4, r * 0.6, lean * 0.5, (seed & 4) > 0);
+      } else if (ground === 'hill') {
+        // pipes: a fat pipe across the hex with a valve wheel and a leak
+        const a = ((seed >> 3) & 3) * 0.2 - 0.3;
+        ctx.save(); ctx.rotate(a);
+        tone(ctx, c => rrect(c, -r * 0.8, -r * 0.14, r * 1.6, r * 0.28, r * 0.12), p.hill, 0, 0, r * 0.3, { dark: -0.3, ol: lw });
+        F(ctx, p.hill2); ctx.fillRect(-r * 0.36, -r * 0.18, r * 0.1, r * 0.36); ctx.fillRect(r * 0.3, -r * 0.18, r * 0.1, r * 0.36);
+        S(ctx, '#ff6b4a', Math.max(1.2, r * 0.05)); ctx.beginPath(); circ(ctx, 0, -r * 0.24, r * 0.13); ctx.moveTo(-r * 0.13, -r * 0.24); ctx.lineTo(r * 0.13, -r * 0.24); ctx.moveTo(0, -r * 0.37); ctx.lineTo(0, -r * 0.11); ctx.stroke();
+        ctx.restore();
+        const u = (t * 0.6 + (seed & 31) / 31) % 1;
+        S(ctx, rgba(p.foam, 0.7 * (1 - u)), 1); ctx.beginPath(); circ(ctx, r * 0.18, -r * 0.2 - u * r * 0.5, r * 0.04 + u * r * 0.03); ctx.stroke();
+      } else if (ground === 'forest') {
+        // glowing kelp: two or three swaying fronds with bioluminescent tips
+        const n = 2 + (seed & 1);
+        for (let i = 0; i < n; i++) {
+          const bx = (i - (n - 1) / 2) * r * 0.36 + px(i) * 0.2, by = r * 0.45, hgt = r * (0.7 + ((seed >>> (i * 3)) & 3) * 0.08);
+          const sw = Math.sin(t * 1.4 + i * 1.7 + (seed & 15)) * r * 0.12;
+          ctx.beginPath(); ctx.moveTo(bx, by); ctx.quadraticCurveTo(bx + sw * 1.4, by - hgt * 0.5, bx + sw, by - hgt);
+          S(ctx, INK, Math.max(3, r * 0.14)); ctx.stroke(); S(ctx, i % 2 ? p.tree : '#2ab08a', Math.max(2, r * 0.09)); ctx.stroke();
+          for (let k = 1; k <= 2; k++) { const lx = bx + sw * (k / 3) * 1.2, ly = by - hgt * k / 3; F(ctx, p.tree); ctx.beginPath(); ell(ctx, lx + (k % 2 ? r * 0.08 : -r * 0.08), ly, r * 0.1, r * 0.04, k % 2 ? 0.6 : -0.6); ctx.fill(); }
+          const pul = 0.55 + 0.45 * Math.sin(t * 2.6 + i * 2 + (seed & 7));
+          F(ctx, rgba(i % 2 ? p.tree2 : DEP_GLOW, 0.5 + 0.5 * pul)); ctx.beginPath(); circ(ctx, bx + sw, by - hgt, r * 0.07); ctx.fill();
+        }
+      } else if (ground === 'dirt') {
+        // sunken floor tiles, a checkerboard coming through the silt, a glowing puddle
+        ctx.save(); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.95, flat); ctx.clip();
+        const s = r * 0.32;
+        F(ctx, rgba(p.dirt2, 0.8)); ctx.beginPath();
+        for (let gy = -2; gy <= 2; gy++) for (let gx = -2; gx <= 2; gx++) if (((gx + gy) & 1) === 0) ctx.rect(gx * s - s / 2 + px(0) * 0.1, gy * s - s / 2, s, s);
+        ctx.fill();
+        ctx.restore();
+        const pul = 0.5 + 0.3 * Math.sin(t * 1.9 + (seed & 15));
+        ctx.beginPath(); ell(ctx, px(2) * 0.5, py(2) * 0.5, r * 0.22, r * 0.09, 0); F(ctx, rgba(DEP_TEAL, 0.25 + pul * 0.3)); ctx.fill();
+      } else if (ground === 'sand') {
+        // sand ripples, a starfish or a shell
+        S(ctx, rgba(p.sand2, 0.8), Math.max(1.2, r * 0.055));
+        for (let i = 0; i < 3; i++) { const yy = -r * 0.4 + i * r * 0.36 + py(i) * 0.12; ctx.beginPath(); ctx.moveTo(-r * 0.5, yy); ctx.quadraticCurveTo(-r * 0.25, yy - r * 0.1, 0, yy); ctx.quadraticCurveTo(r * 0.25, yy + r * 0.1, r * 0.5, yy); ctx.stroke(); }
+        if (seed & 2) { F(ctx, '#ff8a5a'); ctx.beginPath(); star(ctx, px(3) * 0.5, py(3) * 0.5, r * 0.12, 5, 0.45); ctx.fill(); S(ctx, rgba(INK, 0.6), 1); ctx.stroke(); }
+        else { F(ctx, '#f4e6d0'); ctx.beginPath(); ell(ctx, px(3) * 0.5, py(3) * 0.5, r * 0.08, r * 0.06, 0.4); ctx.fill(); }
+      } else {
+        // the flooded tile floor: a grid of floor tiles under a film of water, a shimmer sliding across
+        S(ctx, rgba(p.grass2, 0.7), Math.max(1, r * 0.035));
+        ctx.save(); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.95, flat); ctx.clip();
+        ctx.beginPath(); const s = r * 0.42;
+        for (let k = -3; k <= 3; k++) { ctx.moveTo(k * s + px(1) * 0.1, -r); ctx.lineTo(k * s + px(1) * 0.1 + r * 0.2, r); ctx.moveTo(-r, k * s); ctx.lineTo(r, k * s + r * 0.1); }
+        ctx.stroke();
+        const u = ((t * 0.12 + (seed & 255) / 255) % 1) * 2 - 1;
+        F(ctx, rgba(DEP_GLOW, 0.12)); ctx.beginPath(); ctx.moveTo(u * r * 1.4 - r * 0.2, -r); ctx.lineTo(u * r * 1.4 + r * 0.1, -r); ctx.lineTo(u * r * 1.4 - r * 0.2, r); ctx.lineTo(u * r * 1.4 - r * 0.5, r); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      if (terrain === 'land') {
+        // the Depths' accent on every land hex: a bioluminescent speck that breathes, then the tint and a seam
+        const pul = 0.5 + 0.5 * Math.sin(t * 2.2 + (seed & 31) * 0.4);
+        F(ctx, rgba((seed & 64) ? DEP_PINK : DEP_GLOW, 0.35 + 0.45 * pul)); ctx.beginPath(); circ(ctx, px(4) * 0.8, py(4) * 0.8, r * 0.035 + pul * r * 0.02); ctx.fill();
+        F(ctx, p.tint); ctx.beginPath(); hexPath(ctx, 0, 0, r * 1.02, flat); ctx.fill();
+        S(ctx, rgba(p.coast, 0.3), 1); ctx.beginPath(); hexPath(ctx, 0, 0, r * 0.99, flat); ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Props on lit land (bestDecor): a drowned cabinet, a glowing puddle, a kelp tuft, a pipe elbow.
+  function depProp(ctx, r, p, sel, busy, ox, oy, ph, lw, seed, t) {
+    if (sel === 1 && !busy) {
+      const pul = 0.5 + 0.35 * Math.sin(t * 1.7 + ph);
+      glow(ctx, ox, oy, r * 0.42, DEP_TEAL, 0.32 * pul);
+      ctx.beginPath(); ell(ctx, ox, oy, r * 0.3, r * 0.12, 0); F(ctx, 'rgba(4,30,40,0.75)'); ctx.fill();
+      S(ctx, rgba(DEP_TEAL, 0.5 + pul * 0.4), Math.max(1, r * 0.05)); ctx.stroke();
+      const u = (t * 0.4 + ph) % 1;
+      S(ctx, rgba(DEP_GLOW, 0.5 * (1 - u)), 1); ctx.beginPath(); ell(ctx, ox, oy, r * 0.28 * u + 1, r * 0.1 * u + 0.5, 0); ctx.stroke();
+    } else if (sel === 0 && !busy) {
+      ctx.save(); ctx.translate(ox, oy); ctx.rotate((seed & 1 ? 1 : -1) * 0.25);
+      tone(ctx, c => rrect(c, -r * 0.12, -r * 0.3, r * 0.24, r * 0.34, r * 0.04), '#35305a', 0, -r * 0.13, r * 0.14, { dark: -0.3, spec: false, ol: lw });
+      F(ctx, rgba(DEP_TEAL, 0.5 + 0.3 * Math.sin(t * 4 + ph))); ctx.fillRect(-r * 0.08, -r * 0.26, r * 0.16, r * 0.1);
+      F(ctx, '#ff2e88'); ctx.fillRect(-r * 0.1, -r * 0.31, r * 0.2, r * 0.03);
+      ctx.restore();
+    } else if (sel === 2 || busy) {
+      const sw = Math.sin(t * 1.5 + ph) * r * 0.06;
+      S(ctx, '#3dd6a8', Math.max(1.4, r * 0.05)); ctx.beginPath();
+      for (let i = -1; i <= 1; i++) { ctx.moveTo(ox + i * r * 0.07, oy + r * 0.1); ctx.quadraticCurveTo(ox + i * r * 0.1 + sw, oy - r * 0.1, ox + i * r * 0.05 + sw * 1.4, oy - r * 0.24); }
+      ctx.stroke();
+      F(ctx, rgba(DEP_PINK, 0.6 + 0.4 * Math.sin(t * 3 + ph))); ctx.beginPath(); circ(ctx, ox + sw * 1.4, oy - r * 0.25, r * 0.035); ctx.fill();
+    } else {
+      S(ctx, INK, Math.max(3, r * 0.12)); ctx.beginPath(); ctx.moveTo(ox - r * 0.2, oy + r * 0.06); ctx.lineTo(ox, oy + r * 0.06); ctx.quadraticCurveTo(ox + r * 0.1, oy + r * 0.06, ox + r * 0.1, oy - r * 0.08); ctx.stroke();
+      S(ctx, '#4f7a8a', Math.max(2, r * 0.08)); ctx.stroke();
+      const u = (t * 0.5 + ph) % 1;
+      S(ctx, rgba(DEP_GLOW, 0.7 * (1 - u)), 1); ctx.beginPath(); circ(ctx, ox + r * 0.1, oy - r * 0.12 - u * r * 0.3, r * 0.03 + u * r * 0.02); ctx.stroke();
+    }
+  }
+
+  // ---- the map
+  // Under the hexes: the deep water of the flooded basement (the whole map screen).
+  function depMapBg(ctx, w, h, t) {
+    ctx.save();
+    try {
+      w = w || 540; h = h || 960; t = t || 0;
+      try { const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#0b3a4c'); g.addColorStop(0.5, '#062432'); g.addColorStop(1, '#021019'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = DEP_MID; }
+      ctx.fillRect(0, 0, w, h);
+      F(ctx, rgba(DEP_TEAL, 0.05));
+      for (let i = 0; i < 7; i++) { const cx = (i * 173 + Math.sin(t * 0.2 + i) * 30) % w, cy = (i * 241 + 90) % h; ctx.beginPath(); ctx.ellipse(cx, cy, 110 + i * 12, 40 + i * 6, i, 0, TAU); ctx.fill(); }
+      S(ctx, rgba(DEP_GLOW, 0.18), 1);
+      for (let i = 0; i < 16; i++) { const u = (t * 0.05 + i / 16) % 1; ctx.beginPath(); circ(ctx, (i * 131 + 40) % w, h - u * h, 1.5 + (i % 3)); ctx.stroke(); }
+      ctx.beginPath(); ctx.rect(6, 6, w - 12, h - 12); S(ctx, rgba(DEP_GLOW, 0.1), 4); ctx.stroke();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // Over the hexes (clipped to the map area by the game): light shafts from the surface, a caustic shimmer, rising bubbles, a teal edge.
+  function depMapFx(ctx, x, y, w, h, t, reduced) {
+    ctx.save();
+    try {
+      t = t || 0;
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 4; i++) {
+        const sx = x + w * (0.12 + i * 0.26) + Math.sin(t * 0.3 + i * 1.9) * 24, a = 0.05 + 0.025 * Math.sin(t * 0.7 + i);
+        F(ctx, rgba(DEP_GLOW, a)); ctx.beginPath(); ctx.moveTo(sx - 18, y); ctx.lineTo(sx + 26, y); ctx.lineTo(sx + 26 + h * 0.28, y + h); ctx.lineTo(sx - 60 + h * 0.28, y + h); ctx.closePath(); ctx.fill();
+      }
+      S(ctx, rgba(DEP_TEAL, 0.07), 2);
+      for (let i = 0; i < 6; i++) {
+        const cx = x + ((i * 97 + t * 8) % w), cy = y + ((i * 173 + 60) % h), rr = 34 + (i % 3) * 14 + Math.sin(t * 1.3 + i) * 6;
+        ctx.beginPath(); ctx.ellipse(cx, cy, rr, rr * 0.45, Math.sin(t * 0.4 + i) * 0.6, 0, TAU); ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      const n = reduced ? 6 : 14;
+      for (let i = 0; i < n; i++) {
+        const u = (t * (0.04 + depR(i, 2) * 0.05) + depR(i, 1)) % 1, bx = x + depR(i, 3) * w + Math.sin(t * 1.6 + i) * 6, by = y + h - u * (h + 20);
+        S(ctx, rgba(DEP_GLOW, 0.55 * Math.min(1, (1 - u) * 3)), 1.2); ctx.beginPath(); circ(ctx, bx, by, 2 + depR(i, 4) * 3.5); ctx.stroke();
+      }
+      try {
+        const g = ctx.createRadialGradient(x + w / 2, y + h / 2, Math.min(w, h) * 0.45, x + w / 2, y + h / 2, Math.max(w, h) * 0.7);
+        g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(2,40,52,0.45)'); ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+      } catch (e) { /* stub */ }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- the arena: an underwater arcade
+  function depFish(ctx, x, y, s, dir, col, t) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(dir * s, s);
+    const wag = Math.sin(t * 9) * 0.25;
+    F(ctx, col); ctx.beginPath(); ctx.ellipse(0, 0, 9, 4.5, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-7, 0); ctx.lineTo(-14, -5 + wag * 8); ctx.lineTo(-14, 5 + wag * 8); ctx.closePath(); ctx.fill();
+    F(ctx, INK); ctx.beginPath(); circ(ctx, 5, -1, 1.1); ctx.fill();
+    ctx.restore();
+  }
+  function depArena(ctx, w, h, t, st) {
+    ctx.save();
+    try {
+      w = w || 540; h = h || 340; t = t || 0; st = st || {};
+      const fy = h > 420 ? 302 : h * 0.82, reduced = !!st.reduced;
+      try { const g = ctx.createLinearGradient(0, 0, 0, fy); g.addColorStop(0, '#12607a'); g.addColorStop(0.45, '#0a3a50'); g.addColorStop(1, '#052232'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = DEP_MID; }
+      ctx.fillRect(0, 0, w, h);
+      // the surface far above: a wavering bright line and its glitter
+      S(ctx, rgba(DEP_GLOW, 0.5), 2); ctx.beginPath();
+      for (let xx = 0; xx <= w; xx += 18) { const yy = 6 + Math.sin(t * 1.2 + xx * 0.03) * 3; if (!xx) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); }
+      ctx.stroke();
+      // light rays slanting down through the water
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 5; i++) {
+        const sx = w * (0.08 + i * 0.22) + Math.sin(t * 0.35 + i * 1.3) * 18, a = 0.07 + 0.035 * Math.sin(t * 0.8 + i * 2.1);
+        F(ctx, rgba('#bff8ff', a)); ctx.beginPath(); ctx.moveTo(sx - 14, 0); ctx.lineTo(sx + 22, 0); ctx.lineTo(sx + 70, fy); ctx.lineTo(sx + 8, fy); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+      // far back: drowned cabinets in a row, their screens on, kelp between
+      for (let i = 0; i < 6; i++) {
+        const cx = w * (0.06 + i * 0.18) + (i % 2 ? 8 : 0), ch = fy * (0.36 + (i % 3) * 0.06), tilt = ((i * 37) % 7 - 3) * 0.03;
+        ctx.save(); ctx.translate(cx, fy); ctx.rotate(tilt);
+        F(ctx, '#0d2e3e'); ctx.beginPath(); rrect(ctx, -26, -ch, 52, ch, 6); ctx.fill(); S(ctx, rgba(DEP_GLOW, 0.18), 2); ctx.stroke();
+        const on = Math.sin(t * (2 + i) + i * 3) > -0.6;
+        F(ctx, on ? rgba(i % 2 ? DEP_PINK : DEP_TEAL, 0.32) : '#08202c'); ctx.fillRect(-18, -ch + 12, 36, ch * 0.3);
+        ctx.restore();
+      }
+      for (let i = 0; i < 7; i++) {
+        const kx = w * (0.02 + i * 0.16) + 20, kh = fy * (0.3 + (i % 3) * 0.12), sw = Math.sin(t * 1.1 + i * 1.4) * 12;
+        ctx.beginPath(); ctx.moveTo(kx, fy + 4); ctx.quadraticCurveTo(kx + sw * 1.5, fy - kh * 0.5, kx + sw, fy - kh);
+        S(ctx, '#0f5a4a', 7); ctx.stroke(); S(ctx, '#1f8a6a', 3.5); ctx.stroke();
+        if (!reduced || i % 2) { F(ctx, rgba(i % 2 ? DEP_PINK : DEP_GLOW, 0.5 + 0.4 * Math.sin(t * 2.5 + i))); ctx.beginPath(); circ(ctx, kx + sw, fy - kh, 3); ctx.fill(); }
+      }
+      // the sunken marquee: the old ARCADE sign, tilted, half its bulbs still on (right of the INCOMING slot)
+      {
+        const on = Math.sin(t * 5) + Math.sin(t * 11) > -1.1, ssz = Math.max(15, w * 0.05), mx = Math.max(w * 0.34, Q9A.slotX + 90), my = fy * 0.26;
+        ctx.save(); ctx.translate(mx, my); ctx.rotate(-0.09);
+        const mw = ssz * 5.4, mh = ssz * 1.9;
+        ctx.beginPath(); ctx.moveTo(-mw * 0.3, -mh * 0.5); ctx.lineTo(-mw * 0.25, -my - 10); ctx.moveTo(mw * 0.3, -mh * 0.5); ctx.lineTo(mw * 0.36, -my - 10); S(ctx, rgba('#3a4a5a', 0.8), 2); ctx.stroke();
+        tone(ctx, c => rrect(c, -mw / 2, -mh / 2, mw, mh, 8), '#16303e', 0, 0, mw * 0.3, { dark: -0.2, spec: false, ol: 2.5 });
+        for (let i = 0; i < 14; i++) {
+          const a = i / 14, bx = -mw / 2 + 6 + a * (mw - 12), lit = on && ((i * 5 + Math.floor(t * 3)) % 7 > 1);
+          F(ctx, lit ? '#fff6c0' : '#34424c'); ctx.beginPath(); circ(ctx, bx, -mh / 2 + 5, 2.2); circ(ctx, bx, mh / 2 - 5, 2.2); ctx.fill();
+        }
+        txt(ctx, 'ARCADE', 0, 1, ssz, on ? DEP_PINK : shade(DEP_PINK, -0.65), true, 'center', on ? rgba(DEP_PINK, 0.35) : INK);
+        if (on) glow(ctx, 0, 0, mw * 0.5, DEP_PINK, 0.28);
+        F(ctx, rgba('#c9d3e0', 0.55)); ctx.beginPath(); circ(ctx, mw * 0.38, mh * 0.2, 3.5); circ(ctx, mw * 0.43, mh * 0.05, 2.2); circ(ctx, -mw * 0.42, mh * 0.25, 2.8); ctx.fill();   // barnacles
+        ctx.restore();
+        q9Rec(Q9A.signR, ctx, mx - mw / 2, my - mh / 2 - 4, mx + mw / 2, my + mh / 2 + 4); Q9A.sign = Q9A.signR;
+      }
+      // fish: two little schools crossing, a jellyfish far behind
+      {
+        for (let s = 0; s < 2; s++) {
+          const dir = s ? -1 : 1, spd = 26 + s * 12, span = w + 160, base = ((t * spd + s * 211) % span) - 80, bx = dir > 0 ? base : w - base, by = fy * (0.44 + s * 0.2);
+          for (let k = 0; k < 5; k++) depFish(ctx, bx - dir * (k % 3) * 16 - dir * k * 7, by + Math.sin(t * 2 + k) * 5 + ((k * 13) % 17) - 8, 0.8 + (k % 2) * 0.25, dir, s ? '#ffb347' : '#8dfff5', t + k);
+        }
+        const jx = w * 0.82 + Math.sin(t * 0.3) * 20, jy = fy * 0.4 - ((t * 6) % 40), pul = 1 + Math.sin(t * 2.2) * 0.12;
+        F(ctx, rgba(DEP_PINK, 0.35)); ctx.beginPath(); ctx.ellipse(jx, jy, 10 * pul, 7 / pul, 0, Math.PI, 0); ctx.fill();
+        S(ctx, rgba(DEP_PINK, 0.3), 1.2); ctx.beginPath(); for (let k = -2; k <= 2; k++) { ctx.moveTo(jx + k * 3.5, jy); ctx.quadraticCurveTo(jx + k * 3.5 + Math.sin(t * 3 + k) * 3, jy + 9, jx + k * 3, jy + 16); } ctx.stroke();
+      }
+      // the sand floor, ripples, a shell, bubbles from a vent
+      try { const g = ctx.createLinearGradient(0, fy, 0, h); g.addColorStop(0, '#6a6a4a'); g.addColorStop(0.2, '#3a4234'); g.addColorStop(1, '#10181a'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = '#3a4234'; }
+      ctx.fillRect(0, fy, w, h - fy);
+      ctx.beginPath(); ctx.moveTo(0, fy); ctx.lineTo(w, fy); S(ctx, rgba(DEP_GLOW, 0.45), 2); ctx.stroke();
+      S(ctx, rgba('#e8d8a0', 0.25), 1.5); ctx.beginPath(); for (let i = 0; i < 5; i++) { const yy = fy + 8 + i * 7; ctx.moveTo(0, yy); for (let xx = 0; xx <= w; xx += 30) ctx.quadraticCurveTo(xx + 7, yy - 3, xx + 15, yy); } ctx.stroke();
+      F(ctx, rgba(DEP_TEAL, 0.14)); ctx.beginPath(); ctx.ellipse(w * 0.5, fy + 8, w * 0.32, 6, 0, 0, TAU); ctx.fill();
+      for (let i = 0; i < (reduced ? 4 : 9); i++) {
+        const u = (t * 0.45 + i / 9) % 1, bx = w * (0.22 + (i % 3) * 0.28) + Math.sin(t * 3 + i) * 4, by = fy - u * fy * 0.9;
+        S(ctx, rgba('#dffcff', 0.6 * (1 - u)), 1.2); ctx.beginPath(); circ(ctx, bx, by, 2 + (i % 3)); ctx.stroke();
+      }
+      // High Tide (st.tide 0..1): the whole arena pulses pink with the bass and notes rise off the jukebox's end
+      if (st.tide > 0.02) {
+        const k = Math.min(1, st.tide), beat = reduced ? 0.5 : 0.5 + 0.5 * Math.sin(t * 9.2);
+        F(ctx, rgba(DEP_PINK, (0.05 + 0.07 * beat) * k)); ctx.fillRect(0, 0, w, fy);
+        for (let i = 0; i < 4; i++) {
+          const u = (t * 0.5 + i / 4) % 1;
+          txt(ctx, i % 2 ? '♫' : '♪', w * (0.2 + i * 0.2) + Math.sin(t * 2 + i) * 10, fy - 20 - u * fy * 0.7, 16, rgba(DEP_PINK, k * (1 - u)), true, 'center', rgba(INK, 0.5 * k * (1 - u)));
+        }
+      }
+      // live water (st.live 0..1): current crackles across the deep
+      if (st.live > 0.02) {
+        const k = Math.min(1, st.live);
+        S(ctx, rgba(DEP_TEAL, 0.55 * k), 2); ctx.beginPath();
+        for (let j = 0; j < 2; j++) {
+          const yy = fy * (0.5 + j * 0.2), ph = Math.floor(t * 14) + j * 5;
+          ctx.moveTo(0, yy);
+          for (let xx = 24; xx <= w; xx += 24) ctx.lineTo(xx, yy + (((xx / 24 + ph) * 7) % 11 - 5) * 2.2);
+        }
+        ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- the cabinet: a teal wash behind the pile, the caustics over it, the water, the tricks
+  function depCabBack(ctx, x, y, w, h, t) {
+    ctx.save();
+    try {
+      try { const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(46,230,214,0.06)'); g.addColorStop(1, 'rgba(10,90,110,0.26)'); ctx.fillStyle = g; } catch (e) { ctx.fillStyle = 'rgba(20,130,150,0.14)'; }
+      ctx.fillRect(x, y, w, h);
+      // kelp swaying against the back glass
+      for (let i = 0; i < 3; i++) {
+        const kx = x + w * (0.12 + i * 0.36), kh = h * (0.32 + (i % 2) * 0.12), sw = Math.sin(t * 1.2 + i * 2) * 10;
+        ctx.beginPath(); ctx.moveTo(kx, y + h); ctx.quadraticCurveTo(kx + sw * 1.4, y + h - kh * 0.5, kx + sw, y + h - kh);
+        S(ctx, 'rgba(31,138,106,0.35)', 5); ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The caustic web: light netting that wanders over the pile (stronger under the waterline).
+  function depCaustics(ctx, x, y, w, h, t, level) {
+    ctx.save();
+    try {
+      ctx.globalCompositeOperation = 'lighter';
+      const wl = y + Math.min(h, Math.max(0, level == null ? h : level));
+      for (let i = 0; i < 9; i++) {
+        const sy = y + (i + 0.5) * h / 9, a = sy > wl ? 0.1 : 0.045;
+        S(ctx, rgba('#bff8ff', a), 1.6);
+        ctx.beginPath();
+        for (let xx = 0; xx <= w; xx += 16) {
+          const yy = sy + Math.sin(xx * 0.045 + t * 1.3 + i * 1.7) * 7 + Math.sin(xx * 0.021 - t * 0.9 + i) * 5;
+          if (!xx) ctx.moveTo(x + xx, yy); else ctx.lineTo(x + xx, yy);
+        }
+        ctx.stroke();
+      }
+      F(ctx, 'rgba(20,160,170,0.05)'); ctx.fillRect(x, y, w, h);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The water in the bin: a teal body with a moving surface, glowing specks and bubbles; st {t, live (0..1: electrified), tide (0..1: notes rise), rise}.
+  function depWater(ctx, x0, x1, y, yb, t, st) {
+    if (!(yb - y >= 1)) return;   // (before the save: an early return inside would skip the restore)
+    ctx.save();
+    try {
+      st = st || {};
+      const amp = 2.5 + (st.tide || 0) * 3;
+      const surf = (xx) => y + Math.sin(t * 2.2 + xx * 0.035) * amp + Math.sin(t * 1.3 - xx * 0.02) * amp * 0.5;
+      try { const g = ctx.createLinearGradient(0, y, 0, yb); g.addColorStop(0, 'rgba(60,220,210,0.24)'); g.addColorStop(1, 'rgba(8,80,110,0.5)'); ctx.fillStyle = FLAT || g; } catch (e) { ctx.fillStyle = 'rgba(30,140,160,0.35)'; }
+      ctx.beginPath(); ctx.moveTo(x0, yb);
+      for (let xx = x0; xx <= x1; xx += 12) ctx.lineTo(xx, surf(xx));
+      ctx.lineTo(x1, surf(x1)); ctx.lineTo(x1, yb); ctx.closePath(); ctx.fill();
+      if ((st.live || 0) > 0.02) { F(ctx, rgba(DEP_TEAL, 0.08 + 0.1 * st.live * (0.5 + 0.5 * Math.sin(t * 30)))); ctx.fill(); }
+      ctx.beginPath();
+      for (let xx = x0; xx <= x1; xx += 12) { if (xx === x0) ctx.moveTo(xx, surf(xx)); else ctx.lineTo(xx, surf(xx)); }
+      S(ctx, 'rgba(191,248,255,0.85)', 2); ctx.stroke();
+      // glowing specks drifting in the water, bubbles rising
+      for (let i = 0; i < 10; i++) {
+        const sx = x0 + depR(i, 7) * (x1 - x0) + Math.sin(t * 0.7 + i) * 6, sy = y + 8 + depR(i, 8) * Math.max(4, yb - y - 12);
+        F(ctx, rgba(i % 3 ? DEP_GLOW : DEP_PINK, 0.35 + 0.35 * Math.sin(t * 2 + i * 1.3))); ctx.beginPath(); circ(ctx, sx, sy, 1.4); ctx.fill();
+      }
+      S(ctx, 'rgba(223,251,255,0.6)', 1.2);
+      for (let i = 0; i < 8; i++) {
+        const u = (t * 0.4 + i * 0.137) % 1, bx = x0 + ((i * 97.3) % (x1 - x0)) + Math.sin(t * 3 + i) * 3, by = yb - u * (yb - y);
+        ctx.beginPath(); circ(ctx, bx, by, 1.5 + (i % 3)); ctx.stroke();
+      }
+      // live water: crackles run along the surface
+      if ((st.live || 0) > 0.02) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        for (let k = 0; k < 3; k++) {
+          const ph = Math.floor(t * 14 + k * 5), cx = x0 + depR(ph, k) * (x1 - x0);
+          S(ctx, rgba(k % 2 ? '#ffffff' : DEP_TEAL, 0.85 * st.live), 2); ctx.beginPath(); ctx.moveTo(cx - 30, surf(cx - 30));
+          for (let j = 1; j <= 6; j++) { const xx = cx - 30 + j * 10; ctx.lineTo(xx, surf(xx) + (depR(ph, j) - 0.5) * 14); }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      // High Tide: notes rise off the surface in time
+      if ((st.tide || 0) > 0.02 && !st.reduced) {
+        for (let i = 0; i < 4; i++) {
+          const u = (t * 0.6 + i * 0.25) % 1, nx = x0 + (x1 - x0) * (0.15 + i * 0.22) + Math.sin(t * 2 + i) * 8;
+          txt(ctx, i % 2 ? '♫' : '♪', nx, surf(nx) - 10 - u * 50, 15, rgba(DEP_PINK, st.tide * (1 - u)), true, 'center', rgba(INK, 0.5 * (1 - u)));
+        }
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The Angler Token's lure: a line from the lid down to a glowing bulb that bobs over the bait.
+  function depLure(ctx, x, yTop, y, t, k) {
+    ctx.save();
+    try {
+      k = k == null ? 1 : k;
+      const by = y + Math.sin(t * 2.2) * 4, bx = x + Math.sin(t * 1.3) * 3;
+      ctx.globalAlpha = Math.max(0, Math.min(1, k));
+      ctx.beginPath(); ctx.moveTo(x - 4, yTop); ctx.quadraticCurveTo(x + 8, (yTop + by) / 2, bx, by - 8); S(ctx, rgba('#e8f4ff', 0.7), 1.2); ctx.stroke();
+      glow(ctx, bx, by, 46, '#ffe066', 0.55 * k);
+      F(ctx, rgba('#ffe066', 0.12 * k)); ctx.beginPath(); ctx.moveTo(bx - 6, by); ctx.lineTo(bx + 6, by); ctx.lineTo(bx + 34, by + 90); ctx.lineTo(bx - 34, by + 90); ctx.closePath(); ctx.fill();
+      tone(ctx, c => circ(c, bx, by, 6.5), '#fff6a0', bx, by, 6.5, { ol: 1.6 });
+      ctx.beginPath(); ctx.moveTo(bx, by - 6.5); ctx.lineTo(bx, by - 9); S(ctx, INK, 1.6); ctx.stroke();
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A crab's pincer clamped on a prize from the far-wall side, drag marks behind it.
+  function depPincer(ctx, x, y, r, t, k) {
+    ctx.save();
+    try {
+      k = k == null ? 1 : k;
+      ctx.globalAlpha = Math.max(0, Math.min(1, k));
+      ctx.setLineDash([4, 5]); ctx.lineDashOffset = t * 30;
+      S(ctx, rgba('#ff6b4a', 0.55), 2); ctx.beginPath(); ctx.moveTo(x - r - 14, y + r * 0.6); ctx.lineTo(x - r - 60, y + r * 0.6); ctx.stroke();
+      ctx.setLineDash([]);
+      const cx = x - r * 0.95, sn = Math.sin(t * 7) * 0.08;
+      ctx.translate(cx, y);
+      tone(ctx, c => { c.moveTo(-14, -4); c.quadraticCurveTo(-4, -16, 10, -8 - sn * 20); c.lineTo(4, -2); c.quadraticCurveTo(-4, -6, -10, 0); c.closePath(); }, '#ff6b4a', 0, -6, 10, { dark: -0.3, ol: 2 });
+      tone(ctx, c => { c.moveTo(-14, 4); c.quadraticCurveTo(-4, 16, 10, 8 + sn * 20); c.lineTo(4, 2); c.quadraticCurveTo(-4, 6, -10, 0); c.closePath(); }, '#e0503a', 0, 6, 10, { dark: -0.3, ol: 2, spec: false });
+      tone(ctx, c => rrect(c, -26, -5, 14, 10, 4), '#ff6b4a', -19, 0, 7, { ol: 2, spec: false });
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // A jelly in the bin: a soft glow, sparks when the claw is on it.
+  function depJellyGlow(ctx, x, y, r, t, touched) {
+    ctx.save();
+    try {
+      glow(ctx, x, y, r * 2.2, DEP_PINK, 0.3 + 0.15 * Math.sin(t * 3 + x * 0.1));
+      if (touched) {
+        ctx.globalCompositeOperation = 'lighter';
+        S(ctx, '#ffffff', 1.5); ctx.beginPath();
+        for (let k = 0; k < 3; k++) { const a = t * 20 + k * 2.1; ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * r * 1.2, y + Math.sin(a) * r * 1.2); ctx.lineTo(x + Math.cos(a + 0.4) * r * 1.8, y + Math.sin(a + 0.4) * r * 1.8); }
+        ctx.stroke();
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // The Sunken Mimic's chests: the real one glints gold now and then (k), a biter peeks through its keyhole (k).
+  function depChestTell(ctx, x, y, r, t, real, k) {
+    if (!(k > 0)) return;   // (before the save, so the restore always runs)
+    ctx.save();
+    try {
+      if (real) {
+        const s = 4 + Math.sin(t * 20) * 1.5;
+        glow(ctx, x + r * 0.35, y - r * 0.35, r * 1.2, '#ffc94d', 0.6);
+        F(ctx, '#fff6c0'); ctx.beginPath(); star(ctx, x + r * 0.35, y - r * 0.35, s + 3, 4, 0.3); ctx.fill();
+      } else {
+        const dx = Math.sin(t * 3) * 1.5;
+        F(ctx, '#ff2e30'); ctx.beginPath(); circ(ctx, x - 4 + dx, y - 1, 1.8); circ(ctx, x + 4 + dx, y - 1, 1.8); ctx.fill();
+        glow(ctx, x, y, r * 0.8, '#ff2e30', 0.35);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+
+  // ---- the junk's own drawings (the physics box is w x h)
+  const DEP_SIL = {};
+  DEP_SIL.dep_boot = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, q => { q.moveTo(-hw * 0.2, -hh); q.lineTo(hw * 0.35, -hh); q.lineTo(hw * 0.35, hh * 0.1); q.quadraticCurveTo(hw, hh * 0.1, hw, hh * 0.6); q.lineTo(hw, hh); q.lineTo(-hw * 0.9, hh); q.quadraticCurveTo(-hw, hh * 0.2, -hw * 0.3, hh * 0.1); q.closePath(); }, '#6a5a3a', 0, 0, Math.max(hw, hh) * 0.7, { dark: -0.3 });
+    F(ctx, FLAT || '#2e6a5a'); ctx.fillRect(-hw * 0.9, hh * 0.72, w * 0.95, hh * 0.28);
+    S(ctx, FLAT || '#e8d8a0', 1.2); ctx.beginPath(); for (let i = 0; i < 3; i++) { ctx.moveTo(-hw * 0.1, -hh * 0.6 + i * hh * 0.35); ctx.lineTo(hw * 0.25, -hh * 0.5 + i * hh * 0.35); } ctx.stroke();
+    if (!FLAT) { S(ctx, '#3dd6a8', 2); ctx.beginPath(); ctx.moveTo(hw * 0.1, -hh); ctx.quadraticCurveTo(hw * 0.3, -hh * 1.4, hw * 0.05, -hh * 1.6); ctx.stroke(); }
+  };
+  DEP_SIL.dep_jellyling = (ctx, w, h) => {
+    const r = Math.min(w, h) / 2;
+    if (!FLAT) { S(ctx, rgba(DEP_PINK, 0.8), 1.6); ctx.beginPath(); for (let k = -2; k <= 2; k++) { ctx.moveTo(k * r * 0.3, r * 0.1); ctx.quadraticCurveTo(k * r * 0.4 + r * 0.15, r * 0.6, k * r * 0.25, r * 0.95); } ctx.stroke(); }
+    tone(ctx, q => { q.moveTo(-r * 0.9, r * 0.15); q.quadraticCurveTo(-r * 0.95, -r * 0.85, 0, -r * 0.85); q.quadraticCurveTo(r * 0.95, -r * 0.85, r * 0.9, r * 0.15); q.quadraticCurveTo(0, r * 0.4, -r * 0.9, r * 0.15); q.closePath(); }, DEP_PINK, 0, -r * 0.3, r * 0.8, { dark: -0.2 });
+    F(ctx, FLAT || rgba('#ffffff', 0.6)); ctx.beginPath(); ell(ctx, -r * 0.3, -r * 0.45, r * 0.22, r * 0.12, -0.5); ctx.fill();
+    F(ctx, FLAT || INK); ctx.beginPath(); circ(ctx, -r * 0.25, -r * 0.1, r * 0.1); circ(ctx, r * 0.25, -r * 0.1, r * 0.1); ctx.fill();
+  };
+  DEP_SIL.dep_chest = (ctx, w, h) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, q => rrect(q, -hw, -hh * 0.2, w, hh * 1.2, 3), '#8a5a2b', 0, hh * 0.4, Math.max(hw, hh) * 0.6, { dark: -0.3, spec: false });
+    tone(ctx, q => { q.moveTo(-hw, -hh * 0.2); q.lineTo(-hw, -hh * 0.5); q.quadraticCurveTo(-hw, -hh, -hw * 0.5, -hh); q.lineTo(hw * 0.5, -hh); q.quadraticCurveTo(hw, -hh, hw, -hh * 0.5); q.lineTo(hw, -hh * 0.2); q.closePath(); }, '#9a6a35', 0, -hh * 0.6, hw * 0.6, { dark: -0.3 });
+    F(ctx, FLAT || '#ffc94d'); ctx.fillRect(-hw * 0.7, -hh, hw * 0.18, h); ctx.fillRect(hw * 0.52, -hh, hw * 0.18, h);
+    F(ctx, FLAT || '#ffc94d'); ctx.beginPath(); rrect(ctx, -hw * 0.18, -hh * 0.4, hw * 0.36, hh * 0.5, 2); ctx.fill();
+    F(ctx, FLAT || INK); ctx.fillRect(-1, -hh * 0.28, 2, hh * 0.26);
+    F(ctx, FLAT || rgba('#c9d3e0', 0.8)); ctx.beginPath(); circ(ctx, -hw * 0.3, hh * 0.6, 2.4); circ(ctx, hw * 0.3, hh * 0.45, 1.8); ctx.fill();
+  };
+  for (const k in DEP_SIL) Object.defineProperty(POL_SIL, k, { value: DEP_SIL[k], enumerable: false, configurable: true, writable: true });
+
+  // ---- the monsters (feet at the origin, facing -x)
+  // Angler Token: a sunken arcade token with a lantern on a rod, a big underbite and one eye.
+  EA.dep_angler = { w: 92, h: 96, draw(ctx, t, p) {
+    const bob = Math.sin(t * 1.8) * 4, cy = -50 + bob;
+    shadow(ctx, 70, 0.28);
+    // fins and tail (behind)
+    tone(ctx, q => { q.moveTo(26, cy); q.lineTo(46, cy - 16); q.lineTo(44, cy + 16); q.closePath(); }, p.c, 36, cy, 10, { dark: -0.3, spec: false });
+    tone(ctx, q => { q.moveTo(-2, cy - 28); q.lineTo(10, cy - 44); q.lineTo(16, cy - 26); q.closePath(); }, p.c, 8, cy - 32, 8, NOSPEC);
+    // the token body: a tarnished brass rim round a teal face with a star stamp
+    tone(ctx, q => circ(q, 0, cy, 30), '#c9a64d', 0, cy, 30, { dark: -0.35 });
+    tone(ctx, q => circ(q, 0, cy, 23), p.a, 0, cy, 23, { dark: -0.3 });
+    if (!FLAT) { S(ctx, rgba('#ffe7a0', 0.5), 1.5); ctx.beginPath(); for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; ctx.moveTo(Math.cos(a) * 26, cy + Math.sin(a) * 26); ctx.lineTo(Math.cos(a) * 29, cy + Math.sin(a) * 29); } ctx.stroke(); }
+    F(ctx, FLAT || rgba('#ffe066', 0.25)); ctx.beginPath(); star(ctx, 8, cy + 4, 9, 5, 0.45); ctx.fill();
+    // the underbite and its fangs
+    ctx.beginPath(); ctx.moveTo(-30, cy + 2); ctx.quadraticCurveTo(-12, cy + 22, 6, cy + 14); ctx.quadraticCurveTo(-10, cy + 10, -30, cy + 2); ctx.closePath(); F(ctx, '#300a1c'); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+    fangs(ctx, -16, cy + 5, 4, 3.4);
+    eye(ctx, -10, cy - 10, 8, -0.7, 0.1, '#1a1030');
+    // the rod curling out over its face, the lantern on the end
+    const lx = -40 + Math.sin(t * 1.3) * 4, ly = cy - 36 + Math.sin(t * 2.2) * 3;
+    ctx.beginPath(); ctx.moveTo(-4, cy - 28); ctx.quadraticCurveTo(-10, cy - 58, lx, ly - 6); S(ctx, INK, 4.5); ctx.stroke(); S(ctx, p.c, 2.2); ctx.stroke();
+    if (!FLAT) glow(ctx, lx, ly, 26, p.b, 0.7 + Math.sin(t * 4) * 0.15);
+    tone(ctx, q => circ(q, lx, ly, 6), p.b, lx, ly, 6, { ol: 2 });
+  } };
+  // Jellyfish Coin: a gold coin for a bell, glowing tentacles that pulse.
+  EA.dep_jelly = { w: 80, h: 104, draw(ctx, t, p) {
+    const pul = 1 + Math.sin(t * 2.6) * 0.07, bob = Math.sin(t * 1.3) * 5, cy = -66 + bob;
+    shadow(ctx, 50, 0.2);
+    for (let k = -3; k <= 3; k++) {
+      const x0 = k * 7, sw = Math.sin(t * 2.2 + k) * 6;
+      ctx.beginPath(); ctx.moveTo(x0, cy + 10); ctx.quadraticCurveTo(x0 + sw, cy + 30, x0 - sw * 0.5, cy + 52 + (k % 2) * 6);
+      S(ctx, INK, 4); ctx.stroke(); S(ctx, k % 2 ? p.b : p.c, 2); ctx.stroke();
+    }
+    if (!FLAT) glow(ctx, 0, cy, 44, p.b, 0.4 + Math.sin(t * 2.6) * 0.1);
+    ctx.save(); ctx.translate(0, cy); ctx.scale(pul, 1 / pul);
+    tone(ctx, q => { q.moveTo(-30, 10); q.quadraticCurveTo(-32, -26, 0, -28); q.quadraticCurveTo(32, -26, 30, 10); q.quadraticCurveTo(0, 18, -30, 10); q.closePath(); }, p.a, 0, -8, 26, { dark: -0.3 });
+    if (!FLAT) { S(ctx, rgba('#fff6c0', 0.6), 1.5); ctx.beginPath(); ctx.arc(0, 4, 22, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); }
+    F(ctx, FLAT || rgba('#8a5a10', 0.6)); ctx.beginPath(); star(ctx, 6, -10, 7, 5, 0.45); ctx.fill();
+    eye(ctx, -12, -2, 5.5, -0.6, 0.3); eye(ctx, 2, -1, 4.5, -0.6, 0.3);
+    ctx.beginPath(); ctx.moveTo(-10, 8); ctx.quadraticCurveTo(-5, 12, 0, 8); S(ctx, INK, 1.8); ctx.stroke();
+    ctx.restore();
+  } };
+  // Crab Changer: a hermit crab in a coin changer box, eye stalks, one big crusher claw.
+  EA.dep_crab = { w: 104, h: 84, draw(ctx, t, p) {
+    const clk = Math.abs(Math.sin(t * 5)) * 0.25;
+    shadow(ctx, 96);
+    for (let i = 0; i < 3; i++) { const lx = -10 + i * 14, k = Math.sin(t * 6 + i) * 2; limb(ctx, lx, -14, lx - 8, -2 + k, 3.5, p.a); limb(ctx, lx + 30, -14, lx + 40, -2 - k, 3.5, p.a); }
+    // the changer: a steel box with a coin slot and a little display
+    tone(ctx, q => rrect(q, -6, -62, 58, 52, 6), p.b, 23, -36, 28, { dark: -0.35 });
+    tone(ctx, q => rrect(q, 2, -56, 42, 14, 3), '#16303e', 23, -49, 16, NOSPEC);
+    if (!FLAT) { txt(ctx, '$0.25', 23, -49, 9, '#8dfff5', true); F(ctx, INK); ctx.fillRect(18, -36, 12, 3); F(ctx, p.c); ctx.beginPath(); circ(ctx, 12, -24, 3); circ(ctx, 34, -22, 2.5); ctx.fill(); }
+    // the crab out front: body, eye stalks, the claws
+    tone(ctx, q => ell(q, -12, -22, 22, 14, 0), p.a, -12, -22, 18, { dark: -0.3 });
+    limb(ctx, -18, -32, -22, -50, 2.5, p.a); limb(ctx, -6, -32, -4, -52, 2.5, p.a);
+    eye(ctx, -22, -52, 5, -0.6, 0); eye(ctx, -4, -54, 5, -0.6, 0);
+    ctx.save(); ctx.translate(-34, -22); ctx.rotate(-0.1);
+    tone(ctx, q => { q.moveTo(0, 0); q.quadraticCurveTo(-18, -22 - clk * 20, -30, -8); q.lineTo(-10, -4); q.closePath(); }, p.a, -14, -8, 14, { dark: -0.3 });
+    tone(ctx, q => { q.moveTo(0, 0); q.quadraticCurveTo(-18, 18 + clk * 20, -30, 6); q.lineTo(-10, 4); q.closePath(); }, shade(p.a, -0.1), -14, 6, 12, { dark: -0.3, spec: false });
+    ctx.restore();
+    ctx.beginPath(); ctx.moveTo(-20, -14); ctx.quadraticCurveTo(-14, -10, -8, -14); S(ctx, INK, 1.8); ctx.stroke();
+  } };
+  // Volt Eel: a neon tube coiled into an eel, a head with a grin, sparks along the glass.
+  EA.dep_eel = { w: 108, h: 96, draw(ctx, t, p) {
+    shadow(ctx, 80, 0.25);
+    const pts = [];
+    for (let i = 0; i <= 12; i++) { const u = i / 12; pts.push([-28 + u * 70, -52 + Math.sin(u * 7.5 - t * 3) * 18 * (0.4 + u * 0.6) + u * 12]); }
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    S(ctx, INK, 15); ctx.stroke(); S(ctx, p.a, 10); ctx.stroke();
+    if (!FLAT) { S(ctx, rgba('#ffffff', 0.7), 3); ctx.stroke(); glow(ctx, 10, -48, 50, p.a, 0.35 + 0.15 * Math.sin(t * 9)); }
+    // the tail fin
+    const tx = pts[12][0], ty = pts[12][1];
+    tone(ctx, q => { q.moveTo(tx, ty); q.lineTo(tx + 14, ty - 12); q.lineTo(tx + 12, ty + 12); q.closePath(); }, p.b, tx + 8, ty, 8, NOSPEC);
+    // the head: a tube cap with a grin and two eyes
+    const hx = pts[0][0], hy = pts[0][1];
+    tone(ctx, q => ell(q, hx - 6, hy, 18, 13, -0.2), p.a, hx - 6, hy, 14, { dark: -0.25 });
+    tone(ctx, q => rrect(q, hx + 6, hy - 8, 10, 16, 3), '#8e98a8', hx + 11, hy, 7, NOSPEC);
+    eye(ctx, hx - 10, hy - 5, 5.5, -0.7, 0.1, '#1a1030');
+    ctx.beginPath(); ctx.moveTo(hx - 22, hy + 4); ctx.quadraticCurveTo(hx - 12, hy + 12, hx - 2, hy + 5); S(ctx, INK, 2); ctx.stroke();
+    fangs(ctx, hx - 14, hy + 6, 3, 2.6);
+    if (!FLAT) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      S(ctx, p.c, 1.6); ctx.beginPath();
+      for (let k = 0; k < 2; k++) { const ph = Math.floor(t * 12 + k * 7), j = pts[2 + (ph % 9)]; ctx.moveTo(j[0], j[1] - 8); ctx.lineTo(j[0] + 6, j[1] - 18); ctx.lineTo(j[0] - 2, j[1] - 22); ctx.lineTo(j[0] + 4, j[1] - 32); }
+      ctx.stroke(); ctx.restore();
+    }
+  } };
+  // Sunken Mimic: a barnacled treasure chest, seaweed on the lid, teeth, a glow inside.
+  EA.dep_mimic = { w: 100, h: 90, draw(ctx, t, p) {
+    const gape = 10 + Math.sin(t * 2.4) * 4;
+    shadow(ctx, 100);
+    tone(ctx, q => rrect(q, -46, -44, 92, 44, 5), p.a, 0, -22, 46, { dark: -0.35 });
+    F(ctx, p.c); ctx.fillRect(-40, -44, 8, 44); ctx.fillRect(32, -44, 8, 44);
+    ctx.beginPath(); ctx.rect(-46, -44, 92, gape * 1.2); F(ctx, '#200818'); ctx.fill();
+    if (!FLAT) glow(ctx, 0, -40, 40, p.b, 0.45);
+    ctx.beginPath(); ctx.ellipse(-6, -40, 20, 9, 0, 0, Math.PI); F(ctx, '#ff5a8a'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+    fangs(ctx, -2, -44, 8, 4.2);
+    ctx.save(); ctx.translate(0, -44 - gape); ctx.rotate(-0.1 - gape * 0.008);
+    tone(ctx, q => { q.moveTo(-46, 0); q.lineTo(-46, -12); q.quadraticCurveTo(-46, -34, -24, -34); q.lineTo(24, -34); q.quadraticCurveTo(46, -34, 46, -12); q.lineTo(46, 0); q.closePath(); }, p.a, 0, -17, 46, { dark: -0.35 });
+    F(ctx, p.c); ctx.fillRect(-40, -32, 8, 32); ctx.fillRect(32, -32, 8, 32);
+    ctx.save(); ctx.scale(1, -1); F(ctx, '#fff'); ctx.beginPath(); for (let i = 0; i < 8; i++) { ctx.moveTo(-40 + i * 11, 0); ctx.lineTo(-33 + i * 11, 0); ctx.lineTo(-36.5 + i * 11, 6); ctx.closePath(); } ctx.fill(); S(ctx, INK, 1.2); ctx.stroke(); ctx.restore();
+    eye(ctx, -16, -20, 6, -0.6, 0.6, '#ffcf3a'); eye(ctx, 14, -20, 6, -0.6, 0.6, '#ffcf3a');
+    if (!FLAT) { F(ctx, rgba('#c9d3e0', 0.85)); ctx.beginPath(); circ(ctx, 30, -26, 4); circ(ctx, 36, -18, 2.5); circ(ctx, -34, -28, 3); ctx.fill(); S(ctx, INK, 1); ctx.stroke(); }
+    // seaweed hanging off the lid
+    for (let i = 0; i < 3; i++) { const sx = -30 + i * 26, sw = Math.sin(t * 1.6 + i) * 5; ctx.beginPath(); ctx.moveTo(sx, -30); ctx.quadraticCurveTo(sx + sw, -12, sx + sw * 1.4, 4); S(ctx, INK, 4.5); ctx.stroke(); S(ctx, '#2ab08a', 2.5); ctx.stroke(); }
+    ctx.restore();
+    // coins spilling at its feet
+    if (!FLAT) { F(ctx, PAL.gold); ctx.beginPath(); ell(ctx, -38, -4, 6, 3, 0); ell(ctx, -28, -2, 5, 2.5, 0.3); ell(ctx, 40, -3, 5, 2.5, -0.2); ctx.fill(); S(ctx, INK, 1.2); ctx.stroke(); }
+  } };
+  // The Drowned Jukebox: an arched jukebox flooded to the coin slot, neon arches, a record turning, a grille of teeth.
+  EA.dep_jukebox = { w: 110, h: 150, draw(ctx, t, p) {
+    shadow(ctx, 120, 0.3);
+    const bump = Math.pow(1 - ((t * 88 / 60) % 1), 3) * 0.04;   // it thumps on its own beat
+    ctx.save(); ctx.scale(1 + bump, 1 - bump);
+    // the cabinet: an arched top, wood sides
+    tone(ctx, q => { q.moveTo(-52, 0); q.lineTo(-52, -92); q.arc(0, -92, 52, Math.PI, 0); q.lineTo(52, 0); q.closePath(); }, '#6a3a2a', 0, -70, 52, { dark: -0.35 });
+    // the neon arches
+    for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.arc(0, -92, 44 - i * 9, Math.PI, 0); S(ctx, INK, 7); ctx.stroke(); S(ctx, i ? p.b : p.a, 3.5); ctx.stroke(); }
+    if (!FLAT) glow(ctx, 0, -110, 70, p.a, 0.35 + 0.15 * Math.sin(t * 5));
+    // the window with the water inside and the record turning
+    ctx.save(); ctx.beginPath(); rrect(ctx, -34, -110, 68, 50, 8); ctx.clip();
+    F(ctx, '#0a1a24'); ctx.fillRect(-34, -110, 68, 50);
+    ctx.save(); ctx.translate(0, -86); ctx.rotate(t * 2.2);
+    F(ctx, '#111'); ctx.beginPath(); circ(ctx, 0, 0, 20); ctx.fill();
+    S(ctx, '#333', 1); ctx.beginPath(); circ(ctx, 0, 0, 14); circ(ctx, 0, 0, 9); ctx.stroke();
+    F(ctx, p.c); ctx.beginPath(); circ(ctx, 0, 0, 5); ctx.fill(); F(ctx, '#fff'); ctx.fillRect(-1, -18, 2, 5);
+    ctx.restore();
+    const wl = -84 + Math.sin(t * 1.1) * 8;
+    F(ctx, FLAT || rgba(DEP_TEAL, 0.35)); ctx.fillRect(-34, wl, 68, 40);
+    if (!FLAT) { S(ctx, rgba('#bff8ff', 0.8), 1.5); ctx.beginPath(); ctx.moveTo(-34, wl); for (let xx = -34; xx <= 34; xx += 6) ctx.lineTo(xx, wl + Math.sin(t * 3 + xx * 0.2) * 1.5); ctx.stroke(); }
+    ctx.restore();
+    ctx.beginPath(); rrect(ctx, -34, -110, 68, 50, 8); S(ctx, INK, 2.5); ctx.stroke();
+    // the bulb eyes on the arch
+    eye(ctx, -24, -126, 7, -0.6, 0.3, '#ff2e88'); eye(ctx, 24, -126, 7, -0.6, 0.3, '#ff2e88');
+    // the speaker grille: a mouth of teeth
+    tone(ctx, q => rrect(q, -40, -52, 80, 36, 8), '#2a1418', 0, -34, 40, { dark: -0.2, spec: false });
+    ctx.beginPath(); ctx.moveTo(-34, -40); ctx.quadraticCurveTo(0, -20 - Math.abs(Math.sin(t * 5.9)) * 8, 34, -40); ctx.lineTo(34, -46); ctx.lineTo(-34, -46); ctx.closePath(); F(ctx, '#5a0a24'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+    fangs(ctx, 0, -46, 7, 4.2);
+    F(ctx, p.b); ctx.fillRect(-44, -12, 88, 5);
+    // barnacles and a strand of kelp
+    if (!FLAT) {
+      F(ctx, rgba('#c9d3e0', 0.85)); ctx.beginPath(); circ(ctx, 42, -60, 4); circ(ctx, 46, -70, 2.5); circ(ctx, -44, -20, 3.5); ctx.fill(); S(ctx, INK, 1); ctx.stroke();
+      const sw = Math.sin(t * 1.4) * 6; ctx.beginPath(); ctx.moveTo(-50, -2); ctx.quadraticCurveTo(-58 + sw, -40, -52 + sw * 1.4, -80); S(ctx, INK, 5); ctx.stroke(); S(ctx, '#2ab08a', 3); ctx.stroke();
+    }
+    ctx.restore();
+    // notes drifting off it
+    if (!FLAT) for (let i = 0; i < 2; i++) { const u = (t * 0.5 + i * 0.5) % 1; txt(ctx, i ? '♫' : '♪', (i ? -1 : 1) * (30 + u * 30), -150 - u * 40, 16, rgba(p.a, 1 - u), true, 'center', rgba(INK, 0.6 * (1 - u))); }
+  } };
+
+  // ---- the intent icons (RENDER.intent's default branch)
+  function depIntentIcon(ctx, k, it, cy, t, shakeX) {
+    switch (k) {
+      case 'lure': {
+        ctx.beginPath(); ctx.moveTo(-8, cy - 11); ctx.quadraticCurveTo(-2, cy - 12, 2, cy - 2); S(ctx, '#e8f4ff', 1.4); ctx.stroke();
+        glow(ctx, 3, cy + 1, 9, '#ffe066', 0.8);
+        tone(ctx, c => circ(c, 3, cy + 1, 5 + Math.sin(t * 5) * 0.8), '#fff6a0', 3, cy + 1, 5, { ol: 1.5 });
+        return true;
+      }
+      case 'jellies': {
+        ctx.save(); ctx.translate(shakeX - 2, cy + Math.sin(t * 3) * 1.5);
+        S(ctx, DEP_PINK, 1.4); ctx.beginPath(); for (let q = -1; q <= 1; q++) { ctx.moveTo(q * 4, 1); ctx.lineTo(q * 4 + Math.sin(t * 4 + q) * 2, 10); } ctx.stroke();
+        tone(ctx, c => { c.moveTo(-9, 2); c.quadraticCurveTo(-9, -9, 0, -9); c.quadraticCurveTo(9, -9, 9, 2); c.closePath(); }, DEP_PINK, 0, -3, 8, { ol: 1.5 });
+        ctx.restore();
+        if (it.n > 1) txt(ctx, 'x' + it.n, 12, cy - 8, 11, DEP_PINK, true, 'center', INK);
+        return true;
+      }
+      case 'pinch': {
+        const o = Math.abs(Math.sin(t * 6)) * 0.3;
+        ctx.save(); ctx.translate(shakeX, cy);
+        tone(ctx, c => { c.moveTo(-8, 0); c.quadraticCurveTo(0, -10 - o * 10, 10, -3); c.lineTo(2, -1); c.closePath(); }, '#ff6b4a', 0, -4, 8, { ol: 1.5 });
+        tone(ctx, c => { c.moveTo(-8, 0); c.quadraticCurveTo(0, 10 + o * 10, 10, 3); c.lineTo(2, 1); c.closePath(); }, '#e0503a', 0, 4, 8, { ol: 1.5, spec: false });
+        ctx.restore();
+        if (it.n > 1) txt(ctx, 'x' + it.n, 12, cy - 8, 11, '#ff6b4a', true, 'center', INK);
+        return true;
+      }
+      case 'shock': {
+        F(ctx, rgba(DEP_TEAL, 0.5)); ctx.beginPath(); ctx.moveTo(-11, cy + 6); for (let x = -11; x <= 11; x += 4) ctx.lineTo(x, cy + 6 + Math.sin(t * 6 + x * 0.5) * 1.5); ctx.lineTo(11, cy + 11); ctx.lineTo(-11, cy + 11); ctx.closePath(); ctx.fill();
+        tone(ctx, c => poly(c, [2, cy - 12, -6, cy + 1, -1, cy + 1, -4, cy + 10, 6, cy - 3, 1, cy - 3]), '#ffe066', 0, cy, 7, { ol: 1.5, spec: false });
+        return true;
+      }
+      case 'decoy': {
+        ctx.save(); ctx.translate(shakeX - 3, cy + 1);
+        tone(ctx, c => rrect(c, -9, -5, 18, 12, 2), '#8a5a2b', 0, 1, 8, { ol: 1.5, spec: false });
+        tone(ctx, c => rrect(c, -9, -10, 18, 6, 3), '#9a6a35', 0, -7, 8, { ol: 1.5, spec: false });
+        F(ctx, '#ffc94d'); ctx.fillRect(-2, -6, 4, 4);
+        ctx.restore();
+        txt(ctx, '?', 11, cy - 8, 12, PAL.gold, true, 'center', INK);
+        return true;
+      }
+      default: return false;
+    }
+  }
+  // The Codex's Depths scenes: the floor (the underwater arcade and two locals).
+  function depLoreAct(ctx, art, w, h, st, t) {
+    depArena(ctx, w, h, t, {});
+    const fy = h * 0.82;
+    (st.defs || []).slice(0, 2).forEach((d, i) => { if (d) loreFoe(ctx, d, i ? w * 0.8 : w * 0.2, fy, w * 0.2, h * 0.42, t + i * 1.7, { col: st.col || DEP_TEAL }); });
+  }
+  const DEP_R = {
+    PAL: BIOME_PAL.depths, SIL: DEP_SIL, dark: depDark, terrain: depTerrain, prop: depProp, mapBg: depMapBg, mapFx: depMapFx, arena: depArena,
+    cabBack: depCabBack, caustics: depCaustics, water: depWater, lure: depLure, pincer: depPincer, jellyGlow: depJellyGlow, chestTell: depChestTell,
+    intentIcon: depIntentIcon, fish: depFish, loreAct: depLoreAct, KEYS: ['dep_angler', 'dep_jelly', 'dep_crab', 'dep_eel', 'dep_mimic', 'dep_jukebox'],
+  };
+  /* ============================================================ /DEP */
+
   return {
+    // DEP (round 15): the Neon Depths' tileset, map, arena, cabinet water and caustics, the monsters and their tricks
+    dep: DEP_R,
     // TRD (round 14): the Trading Post (Rocco, his cart, the counter, the haggle, the map icon) and the evolved pets' looks
     trd: TRD_R,
     // LEG (round 12): the legendary relics' crest, the new evolved art, the Hype plate, the Monocle's peek, the black hole, the animated cabinets

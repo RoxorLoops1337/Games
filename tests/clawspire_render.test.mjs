@@ -2948,4 +2948,78 @@ h.test('TRD: Rocco, his cart, the counter and the haggle at every beat; the map 
   h.eq(drew, 2, 'the ceremony drew the pet both times');
 });
 
+/* ------------------------------------------------- DEP (round 15): the Neon Depths */
+if (HAS_DATA) h.test('DEP: the Depths\' tiles, map, arena, cabinet water, the six monsters, their tricks and intents', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA, X = R.dep;
+  h.ok(X && ['terrain', 'prop', 'mapBg', 'mapFx', 'arena', 'cabBack', 'caustics', 'water', 'lure', 'pincer', 'jellyGlow', 'chestTell', 'intentIcon', 'fish', 'loreAct'].every(k => typeof X[k] === 'function'), 'RENDER.dep has every piece');
+  h.ok(R.BIOME_PAL.depths && R.SIG_COL.tide, 'the Depths\' palette and the High Tide sign colour');
+  // the tiles: every ground, both orientations, animated, and not the vault's
+  const tiles = new Map();
+  for (const g of ['grass', 'forest', 'dirt', 'sand', 'mountain', 'sea', 'shallow', 'ford']) for (const orient of ['v', 'h']) {
+    const terrain = g === 'sea' || g === 'shallow' ? 'sea' : 'land';
+    const tile = { q: 1, r: 2, terrain, ground: g, biome: 'depths', elev: g === 'mountain' ? 0.9 : 0.3, ford: g === 'ford' };
+    tiles.set(g + orient, fingerprint(drawCheck(`depths ${g} ${orient}`, c => R.terrainHex(c, 100, 100, 40, tile, { t: 1.2, orient, seed: 5, biome: 'depths' }))));
+  }
+  const grounds = new Set(['grass', 'forest', 'dirt', 'sand', 'mountain', 'sea'].map(g => tiles.get(g + 'v')));
+  h.ok(grounds.size >= 5, `the grounds read apart (${grounds.size} of 6)`);
+  const vault = fingerprint(drawCheck('vault grass', c => R.terrainHex(c, 100, 100, 40, { terrain: 'land', ground: 'grass', biome: 'vault' }, { t: 1.2, orient: 'v', seed: 5, biome: 'vault' })));
+  h.ok(vault !== tiles.get('grassv'), 'the Depths draw their own tiles');
+  const seas = new Set([0, 1, 2, 3, 5, 8].map(seed => fingerprint(drawCheck('depths sea seed ' + seed, c => X.terrain(c, 100, 100, 40, { terrain: 'sea', ground: 'sea' }, { t: 1 + seed * 0.3, orient: 'v', seed })))));
+  h.ok(seas.size >= 3, `the deep water varies (ripples, rising bubbles) with its seed (${seas.size})`);
+  h.ok(X.dark('depths') !== X.dark('vault'), 'the fog is tinted teal');
+  drawCheck('depths map bg', c => X.mapBg(c, 540, 960, 2));
+  drawCheck('depths map fx', c => X.mapFx(c, 0, 0, 540, 960, 2, false));
+  drawCheck('depths map fx reduced', c => X.mapFx(c, 0, 0, 540, 960, 2, true));
+  // the arena: animated, the tide and the live water read
+  const arena = new Map();
+  for (const st of [{}, { tide: 1 }, { live: 1 }]) arena.set(JSON.stringify(st), fingerprint(drawCheck(`arena ${JSON.stringify(st)}`, c => X.arena(c, 540, 340, 1, st))));
+  h.eq(uniqueRatio(arena).ratio, 1, 'the arena floods and sparks');
+  for (const t of [0, 2.5, 9.7]) drawCheck('arena t' + t, c => X.arena(c, 540, 340, t, {}));
+  drawCheck('arena reduced', c => X.arena(c, 540, 340, 1, { reduced: true }));
+  drawCheck('arena tall', c => X.arena(c, 540, 960, 1, {}));
+  // the cabinet: back, caustics, the water at every level and state
+  drawCheck('cab back', c => X.cabBack(c, 30, 410, 480, 390, 1));
+  const water = new Map();
+  for (const st of [{}, { tide: 1 }, { live: 1 }]) water.set(JSON.stringify(st), fingerprint(drawCheck(`water ${JSON.stringify(st)}`, c => { X.caustics(c, 30, 410, 480, 390, 1.3, 700); X.water(c, 30, 510, 700, 800, 1.3, st); })));
+  h.eq(uniqueRatio(water).ratio, 1, 'the water, at high tide, live');
+  for (const y of [420, 520, 790]) drawCheck('water at ' + y, c => { X.caustics(c, 30, 410, 480, 390, 1.3, y); X.water(c, 30, 510, y, 800, 1.3, {}); });
+  drawCheck('water empty', c => { c.fillRect(0, 0, 1, 1); X.water(c, 30, 510, 800, 800, 1, {}); });
+  // the tricks in the cabinet
+  const lu = [0.2, 1].map(k => fingerprint(drawCheck('lure ' + k, c => X.lure(c, 200, 420, 600, 1, k))));
+  h.ok(lu[0] !== lu[1], 'the lure fades in');
+  drawCheck('pincer', c => X.pincer(c, 200, 700, 14, 1, 1));
+  const jg = [false, true].map(tc => fingerprint(drawCheck('jelly glow ' + tc, c => X.jellyGlow(c, 200, 700, 16, 1, tc))));
+  h.ok(jg[0] !== jg[1], 'a touched jelly flares');
+  const tell = [true, false].map(real => fingerprint(drawCheck('chest tell ' + real, c => { c.fillRect(0, 0, 1, 1); X.chestTell(c, 200, 700, 15, 1.7, real, 1); })));
+  h.ok(tell[0] !== tell[1], 'the real chest glints');
+  // the six monsters: their own looks, every state
+  const looks = new Map();
+  for (const id of X.KEYS) {
+    const def = D.ENEMIES[id];
+    h.ok(def && def.look === id, id + ' has its look');
+    looks.set(id, fingerprint(drawCheck('monster ' + id, c => R.enemy(c, def, 200, 280, 1, 1.3, {}))));
+    for (const s of [{ hurt: 1 }, { attack: 0.6 }, { dead: 0.5 }, { frozen: true }, { windup: 1 }, { hpk: 0.1 }, { enraged: true, rage: 0.5 }]) drawCheck(id + ' ' + JSON.stringify(s), c => R.enemy(c, def, 200, 280, 1, 2.2, s));
+    const base = fingerprint(drawCheck('base ' + def.art, c => R.enemy(c, Object.assign({}, def, { look: null }), 200, 280, 1, 1.3, {})));
+    h.ok(base !== looks.get(id), id + ' differs from its fallback art (' + def.art + ')');
+    const box = R.enemyBox(def, 1);
+    h.ok(box.w > 20 && box.h > 20, id + ' has a body box');
+  }
+  h.eq(uniqueRatio(looks).ratio, 1, 'all six look different ' + uniqueRatio(looks).dupes.join(' '));
+  h.ok(R.enemyBox(D.ENEMIES.dep_jukebox, 1).h > R.enemyBox(D.ENEMIES.dep_jelly, 1).h, 'the boss stands taller than a jelly');
+  // the junk items draw their own silhouettes
+  for (const id of ['dep_boot', 'dep_jellyling', 'dep_chest']) h.ok(typeof X.SIL[id] === 'function' || X.SIL[id], id + ' has a silhouette');
+  // the intent icons, one for each trick
+  const icons = new Map();
+  for (const k of D.DEP_KINDS) {
+    let ok = false;
+    icons.set(k, fingerprint(drawCheck('intent ' + k, c => { ok = X.intentIcon(c, k, { n: 2 }, 0, 1, 0); })));
+    h.ok(ok, k + ': an icon');
+  }
+  h.eq(uniqueRatio(icons).ratio, 1, 'each trick has its own icon');
+  h.ok(!X.intentIcon(seqCtx().ctx, 'attack', {}, 0, 1, 0), 'other kinds are not the Depths\'');
+  // the Codex pictures
+  for (const e of D.loreBook().entries.filter(e => e.art && e.art.dep)) drawCheck('codex ' + e.id, c => R.lore.scene(c, e.art, 300, 200, {}, 1));
+});
+
 h.done();

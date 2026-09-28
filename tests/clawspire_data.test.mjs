@@ -19,7 +19,7 @@ const ENEMY_ART = 'rat slime bat gremlin mimic spider goblin hoard imp clockwork
 const TAGS = 'metal weapon glass potion heavy light junk magic food tool small'.split(' ');
 const FX = 'dmg block heal status grab gold ink maxhp shake junk purge copy dmgPer cleanse lifesteal random poisonAll blockPer pay again'.split(' ');
 const PER = 'block junk metal grabsUsed poison burn small streak gold luck'.split(' ');
-const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish restock cans change'.split(' ');
+const MOVES = 'attack block buff debuff heal shake grease fog junk steal freezeItem summon tilt charge escape gulp bomb corrode jam eggs tickle glue wheel ceiling bury plow vanish restock cans change lure jellies pinch shock decoy'.split(' ');
 const EVENT_FX = 'hp maxhp gold ink brush item relic remove upgrade claw fight junk'.split(' ');
 const MODS = 'grabs width grip speed prongs rubber magnet maxhp gold ink startBlock startStr'.split(' ');
 const HOOKS = 'onFightStart onTurnStart onTurnEnd onPlay onGrab onDmgDealt onKill onHurt onStatus onBlock onHeal onJunk onCombo onJackpot onShatter onGold onCashOut onEat onMaterial onPet onBubble'.split(' ');
@@ -1108,8 +1108,9 @@ t.test('meta: Tilt levels 0..10, named, each one adds its own twist', () => {
 t.test('meta: achievements are well formed and checked safely', () => {
   const ids = DATA.ACH_IDS;
   // The board is a 3-column grid on a phone: room for the seasonal and evolution
-  // stickers of round 7, but a runaway list still fails here (round 7 QA: 50 -> 60).
-  t.ok(ids.length >= 25 && ids.length <= 60, `25 to 60 stickers (${ids.length})`);
+  // stickers of round 7, but a runaway list still fails here (round 7 QA: 50 -> 60;
+  // round 15, the Neon Depths' Deep Diver: 60 -> 63, the grid's next full row of three).
+  t.ok(ids.length >= 25 && ids.length <= 63, `25 to 63 stickers (${ids.length})`);
   t.eq(new Set(ids).size, ids.length, 'unique ids');
   t.eq(new Set(ids.map(id => DATA.ACHIEVEMENTS[id] && DATA.ACHIEVEMENTS[id].name)).size, ids.length, 'unique sticker names (the board and the slap tell them apart)');
   for (const id of ids) {
@@ -2522,7 +2523,7 @@ t.test('round 8: her relics, outfits, stickers and evolutions', () => {
   for (const id of ['fit_mama_welder', 'fit_mama_hardhat']) t.ok(fits.includes(id) && DATA.COSMETICS[id].look.style, `${id}: an outfit of hers`);
   t.ok(DATA.vaultPrice('fit_mama_welder') > 0 && DATA.vaultPrice('fit_mama_hardhat') > 0, 'both for sale');
   for (const id of ['fully_armed', 'clean_sweep']) t.ok(DATA.ACHIEVEMENTS[id] && DATA.ACH_IDS.includes(id), `sticker ${id}`);
-  t.ok(DATA.ACH_IDS.length <= 60, `the sticker board holds 60 at most (${DATA.ACH_IDS.length})`);
+  t.ok(DATA.ACH_IDS.length <= 63, `the sticker board holds 63 at most (${DATA.ACH_IDS.length})`);
   const tick = (n, clawType) => DATA.achCheck({ kind: 'tick', run: { clawType }, f: { grab: n } }, {});
   t.ok(tick(3, 'vacuum').includes('clean_sweep'), 'Clean Sweep: three up the hose in one grab');
   t.ok(!tick(2, 'vacuum').includes('clean_sweep') && !tick(3, 'classic').includes('clean_sweep'), 'not two, not another claw');
@@ -2816,7 +2817,7 @@ t.test('weekly: medals, the cabinet and the repaired record', () => {
 t.test('lore: the two stickers (a gold weekly medal, 25 Codex pages), inside the board\'s cap', () => {
   const A = DATA.ACHIEVEMENTS;
   t.ok(A.podium && A.lorekeeper, 'Podium Finish and Lorekeeper');
-  t.ok(DATA.ACH_IDS.length <= 60, `the board holds ${DATA.ACH_IDS.length} of 60`);
+  t.ok(DATA.ACH_IDS.length <= 63, `the board holds ${DATA.ACH_IDS.length} of 63`);
   t.ok(!DATA.achCheck({ kind: 'meta', meta: { wk: { medal: { '2026-W40': 'silver' } } } }, {}).includes('podium'), 'silver is not the podium');
   t.ok(DATA.achCheck({ kind: 'meta', meta: { wk: { medal: { '2026-W40': 'gold' } } } }, {}).includes('podium'), 'gold is');
   t.ok(DATA.achCheck({ kind: 'end', meta: { wk: { medal: { '2026-W40': 'platinum' } } } }, {}).includes('podium'), 'platinum too');
@@ -2981,7 +2982,7 @@ t.test('ghost: compact checkpoints, a record repaired, the delta at the same ste
 t.test('rush: two stickers (a cleared rush, an overtaken ghost), inside the cap', () => {
   const A = DATA.ACHIEVEMENTS;
   t.ok(A.rush_clear && A.photo_finish, 'Rush Hour and Photo Finish');
-  t.ok(DATA.ACH_IDS.length <= 60, `the board holds ${DATA.ACH_IDS.length} of 60`);
+  t.ok(DATA.ACH_IDS.length <= 63, `the board holds ${DATA.ACH_IDS.length} of 63`);
   t.ok(new Set(DATA.ACH_IDS.map(id => A[id].name)).size === DATA.ACH_IDS.length, 'the names stay unique');
   t.ok(!DATA.achCheck({ kind: 'end', run: { rush: { won: false } } }, {}).includes('rush_clear'), 'a fall is not a clear');
   t.ok(!DATA.achCheck({ kind: 'tick', run: { rush: { won: true } } }, {}).includes('rush_clear'), 'only at the rush\'s end');
@@ -3555,6 +3556,81 @@ t.test('trd: pet evolution: gated by level, once, the fee by act, a final form f
   t.eq(top.evo, 1, 'an evolved pet stays evolved');
   t.ok(!('evo' in DATA.petFix({ id: 'cat', xp: 100 })), 'an old save has no flag');
   t.ok(!('evo' in DATA.petFix({ id: 'cat', xp: 20, evo: 1 })), 'a flag below the top level is dropped');
+});
+
+/* ------------------------------------------------- DEP (round 15): the Neon Depths */
+t.test('dep: every third loop from 3 dives into the Neon Depths; the classic cycle carries on between', () => {
+  const K = DATA.DEP_K;
+  t.eq(K.from, 3, 'the first dive is Loop 3');
+  t.eq(K.every, 3, 'then every third loop');
+  const seq = [];
+  for (let l = 1; l <= 12; l++) seq.push(DATA.depLoop(l) ? 'D' + DATA.depAct(l) : String(DATA.depAct(l)));
+  t.eq(seq.join(' '), '1 2 D3 3 1 D3 2 3 D3 1 2 D3', 'the loops: cellar, foundry, a dive, vault, ...');
+  t.eq([1, 2, 3, 4, 5, 6, 7].map(DATA.endlessAct).join(), '1,2,3,1,2,3,1', 'endlessAct itself is unchanged');
+  t.eq([0, 1, 2, 3, 4, 5, 6, 9, 12].map(DATA.depDives).join(), '0,0,0,1,1,1,2,3,4', 'the dives counted up to a loop');
+  t.ok(!DATA.depLoop(0) && !DATA.depLoop(-3) && !DATA.depLoop('junk') && !DATA.depLoop(null), 'junk is never a dive');
+  // every classic act still comes round between dives
+  const acts = new Set(); for (let l = 1; l <= 12; l++) if (!DATA.depLoop(l)) acts.add(DATA.depAct(l));
+  t.eq([...acts].sort().join(), '1,2,3', 'all three classic acts come round');
+});
+
+t.test('dep: five monsters, an elite and a boss, each with its trick; pools, junk, Codex and a sticker', () => {
+  const E = DATA.ENEMIES, K = DATA.DEP_K;
+  const ids = DATA.DEP_ENEMIES.map((e) => e.id);
+  t.eq(ids.join(), 'dep_angler,dep_jelly,dep_crab,dep_eel,dep_mimic,dep_jukebox', 'the six Depths monsters');
+  const kinds = new Set();
+  for (const id of ids) {
+    const d = E[id];
+    t.ok(d && d.dep && d.act === 3 && d.look === id && d.name && d.desc, id + ': a Depths monster with its own look');
+    t.ok(d.hp[0] > 0 && d.hp[1] >= d.hp[0] && d.pattern.every((i) => d.moves[i]), id + ': hp and a pattern that points at its moves');
+    for (const m of d.moves) { if (DATA.DEP_KINDS.includes(m.k)) kinds.add(m.k); t.ok(m.name && m.txt && m.txt.indexOf(String.fromCharCode(0x2014)) < 0, id + '.' + m.id + ': named, no em dash'); }
+  }
+  t.eq([...kinds].sort().join(), 'decoy,jellies,lure,pinch,shock', 'every Depths trick is used by a move');
+  t.eq(E.dep_mimic.tier, 'elite', 'the Sunken Mimic is the elite');
+  t.ok(E.dep_mimic.enrage && E.dep_mimic.taunt, 'with an enrage and a taunt');
+  const J = E.dep_jukebox;
+  t.ok(J.tier === 'boss' && J.sig && J.sig.id === 'tide' && J.sig.sign && J.sig.shout && J.sig.text && J.taunt && J.enrage, 'The Drowned Jukebox: High Tide, a taunt, a B-side');
+  t.eq(K.boss, 'dep_jukebox', 'the Depths boss');
+  t.ok(K.tide.lo > 0 && K.tide.lo < K.tide.hi && K.tide.hi < K.tide.hiRage && K.tide.hiRage < 0.9, 'the tide stays inside the bin');
+  t.ok(K.hpK >= 1 && K.dmgK >= 1, 'the Depths are never softer than the act 3 pools');
+  // the pools: only Depths monsters, the right tiers
+  const P = DATA.DEP_ENC;
+  for (const tier of ['normal', 'elite', 'boss']) {
+    t.ok(P[tier].length > 0, tier + ': a pool');
+    for (const g of P[tier]) for (const id of g) t.ok(E[id] && E[id].dep, `${tier} ${g}: a Depths monster`);
+  }
+  t.ok(P.normal.every((g) => g.every((id) => E[id].tier === 'normal')), 'normals are normals');
+  t.ok(P.elite.every((g) => E[g[0]].tier === 'elite'), 'each elite pool leads with the elite');
+  t.eq(P.boss[0][0], 'dep_jukebox', 'the boss pool');
+  t.eq(DATA.depEnc(), P, 'depEnc hands them out');
+  // the classic pools never see them; an Endless mix never borrows High Tide
+  for (const a of [1, 2, 3]) for (const tier of ['normal', 'elite', 'boss']) for (const g of DATA.ENCOUNTERS[a][tier] || []) t.ok(g.every((id) => !E[id].dep), `act ${a} ${tier} has no Depths monster`);
+  for (let s = 1; s <= 200; s++) { const r = U.rng(s); for (const a of [1, 2, 3]) { const m = DATA.endlessMix(r, a); t.ok(!m || !E[m].dep, 'the mix never borrows the Jukebox'); } }
+  // the junk: reachable, never listed
+  for (const id of ['dep_boot', 'dep_jellyling', 'dep_chest']) {
+    t.ok(DATA.ITEMS[id] && DATA.ITEMS[id].rarity === 'junk' && DATA.ITEMS[id].name && DATA.ITEMS[id].text, id + ': a junk item');
+    t.ok(Object.keys(DATA.ITEMS).indexOf(id) < 0, id + ': never in a pool or the Prizedex');
+  }
+  t.ok(DATA.ITEMS.dep_jellyling.density < 1 && DATA.ITEMS.dep_boot.density > 1 && DATA.ITEMS.dep_chest.density > 1, 'jellies float, boots and chests sink');
+  // the Codex: the floor, the boss and the five monsters
+  const book = DATA.loreBook();
+  for (const id of ['fl_depths', 'bo_jukebox', 'be_dep_angler', 'be_dep_jelly', 'be_dep_crab', 'be_dep_eel', 'be_dep_mimic']) {
+    const p = book.byId[id];
+    t.ok(p && p.name && p.text && p.text.length > 200 && p.text.indexOf(String.fromCharCode(0x2014)) < 0, id + ': a Codex page');
+  }
+  // meta.dep repairs; the sticker
+  t.eq(JSON.stringify(DATA.depFix()), '{"dives":0,"jukebox":0,"best":0}', 'an old profile: no dives');
+  t.eq(JSON.stringify(DATA.depFix({ dives: '3', jukebox: -2, best: 1e99 })), '{"dives":3,"jukebox":0,"best":1000000000}', 'junk is repaired');
+  t.ok(DATA.ACHIEVEMENTS.deep_diver && DATA.ACH_IDS.includes('deep_diver'), 'the Deep Diver sticker');
+  t.ok(DATA.achCheck({ kind: 'meta', meta: { dep: { jukebox: 1 } } }, {}).includes('deep_diver'), 'unplugging a Jukebox earns it');
+  t.ok(!DATA.achCheck({ kind: 'meta', meta: { dep: { dives: 4 } } }, {}).includes('deep_diver'), 'diving alone does not');
+  // the score line and the history record
+  const sc = DATA.runScore({ endless: { loop: 3 }, sc: { dep: 1 } }, true);
+  t.ok(sc.lines.some((l) => l.k === 'dep' && l.v === K.dive), 'a Jukebox unplugged scores');
+  t.ok(!DATA.runScore({ endless: { loop: 3 }, sc: {} }, true).lines.some((l) => l.k === 'dep'), 'no line without one');
+  const rec = DATA.hisRecFix({ id: 'x1', c: 'knight', dp: 2 }), rec0 = DATA.hisRecFix({ id: 'x2', c: 'knight', dp: 'junk' });
+  t.eq(rec.dp, 2, 'a history record keeps its dives');
+  t.ok(!('dp' in rec0), 'junk dives are dropped');
 });
 
 t.done();

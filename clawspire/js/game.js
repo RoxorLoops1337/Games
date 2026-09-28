@@ -110,7 +110,7 @@ const GAME = (() => {
   const actDef = (n) => (tbl('ACTS')[n]) || { name: 'Act ' + n, sub: '', palette: {} };
   const itemName = (def, plus) => (plus && def.plus && def.plus.name) ? def.plus.name : (def.name + (plus ? '+' : ''));
   const itemText = (def, plus) => {
-    if (D().itemText) { try { return i18nOn() ? i18nItemText(def, plus) : D().itemText(def, plus); } catch (e) { /* fall through */ } }   // (I18N: the text in the current language)
+    if (D().itemText) { try { return typeof I18N !== 'undefined' && I18N && I18N.itemText ? i18nItemText(def, plus) : D().itemText(def, plus); } catch (e) { /* fall through */ } }   // (I18N: the text in the current language; round 15: English too, so a switch can redo it)
     return (plus && def.plus && def.plus.text) || def.text || '';
   };
   const snd = (name, opts) => { if (X.AUDIO && X.AUDIO.sfx) { try { X.AUDIO.sfx(name, opts); } catch (e) { /* audio is optional */ } } };
@@ -639,6 +639,7 @@ const GAME = (() => {
           rushMetaFix(S.meta, o); ghoMetaFix(S.meta, o);   // RUSH (round 10): the Boss Rush's bests; the ghosts of the day and the week
           schMetaFix(S.meta, o);   // SCHOOL (round 11): Claw School's stars, bests and diploma, the practice cabinet's setup
           duoMetaFix(S.meta, o);   // DUO (round 11): the duel record, wins per name
+          depMetaFix(S.meta, o);   // DEP (round 15): the Neon Depths' dives and Drowned Jukeboxes
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -808,7 +809,7 @@ const GAME = (() => {
   function newMap(run) {
     if (!X.MAP) return null;
     const rng = U.rng(U.hashStr(run.seed + ':map:' + run.act + endlessMapTag(run)));   // a new map every Endless loop (ENDLESS block)
-    run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes });
+    run.map = X.MAP.generate({ act: run.act, rng, cols: X.MAP.DEFAULT_COLS || 10, rows: X.MAP.DEFAULT_ROWS || 7, ink: run.ink, brushes: run.brushes, biome: depMapBiome(run) });   // (DEP: an Endless dive's flooded map)
     secNewMap(run);   // this act's golden key (SECRET)
     seaNewMap(run);   // trick-or-treat doors in season (SEASON)
     stoNewMap(run);   // Grabby Gary's tile, a Card Shark on the hunt (STORY)
@@ -972,6 +973,7 @@ const GAME = (() => {
   // ---- title
   function showTitle() {
     S.sd = null;
+    const uiFrom = S.screen;   // TITLE (round 15): a group sheet you left through comes back open
     setScreen('title');
     const m = $('titleMenu');
     clear(m);
@@ -1002,7 +1004,167 @@ const GAME = (() => {
     schTitleTip(m); schTitleBtn(row);   // SCHOOL (round 11): "New here?" under New run, the Claw School button (before History)
     hisTitleBtn(row);   // HISTORY: registered last, shown in the first row
     duoTitleBtn(m);   // DUO (round 11): pass and play, beside New run (registered after History)
+    uiTitleTidy(m, uiFrom);   // TITLE (round 15): one big button, the daily run and the modes, a row of tiles; the rest in sheets
     q9TitleFit(-1);   // TITLE (round 9): lift the logo clear of the menu, scroll the menu if it cannot fit
+  }
+
+  /* ================= TITLE MENU (round 15): one clear action, the rest in groups =================
+     DESIGN.md "HUD and title menu polish (round 15)". Every older builder still makes its own button
+     (so S.ui.buttons, their labels, their GAME.choose indices and their handlers are exactly as
+     before: Continue / New run first, Duo last); this pass only moves the elements into place:
+       - the big action: CONTINUE with a saved run (NEW RUN under it, smaller), else NEW RUN
+       - "New here? Try Claw School" (a fresh profile only)
+       - the play row: the Daily run card and MODES (a sheet: Weekly, Boss Rush, Duo)
+       - the tiles: Vault, Collection (a sheet: Prizedex, Stickers, Codex, History), School,
+         Settings, More (a sheet: Help, Tips, Intro, Sound, Music)
+       - the stats line
+     The group buttons are plain taps (not GAME.choose entries). A sheet you left through (Back from
+     the Prizedex, the Sound toggle) opens again when the title comes back. Escape closes a sheet. */
+  const UIT = { reopen: null, keys: false, sheets: {}, open: null, opener: null };
+  // Adds a class by its name string (a stub DOM keeps className only).
+  function uiCls(el, c) {
+    if (el && c && !new RegExp('(^|\\s)' + c + '(\\s|$)').test(el.className || '')) el.className = ((el.className || '') + ' ' + c).trim();
+    return el;
+  }
+  const UIT_BACK = ['title', 'collection', 'stickers', 'codex', 'history', 'help', 'tips', 'intro', 'weekly', 'rushmenu', 'duo', 'school', 'vault'];
+  function uiTitleTidy(m, from) {
+    if (!m || !m.appendChild) return null;
+    const B = {};
+    for (const b of S.ui.buttons) if (b && b.el && b.label && !B[b.label]) B[b.label] = b.el;
+    const lab = (re) => { const b = S.ui.buttons.find((x) => re.test(x.label || '')); return b ? b.el : null; };
+    const kids = Array.prototype.slice.call(m.children || []);
+    const stats = kids.find((c) => /\bmStats\b/.test(c.className || '')) || null;
+    const tip = kids.find((c) => /\bschTip\b/.test(c.className || '')) || null;
+    const scr = $('scr-title');
+    for (const id in UIT.sheets) { const s = UIT.sheets[id]; if (s && s.parentNode && s.parentNode.removeChild) s.parentNode.removeChild(s); }
+    UIT.sheets = {}; UIT.open = null;
+    clear(m);
+    const cls = uiCls;
+    // the big action
+    const pri = h('div', 'uiPri');
+    if (B.Continue) pri.appendChild(cls(B.Continue, 'uiBig'));
+    if (B['New run']) pri.appendChild(B.Continue ? B['New run'] : cls(B['New run'], 'uiBig'));
+    m.appendChild(pri);
+    if (tip) m.appendChild(tip);
+    // the play row: today's daily run and the other modes
+    const play = h('div', 'uiPlay');
+    if (B['Daily run']) play.appendChild(B['Daily run']);
+    const modes = [B['Weekly challenge'], B['Boss Rush'], B.Duo].filter(Boolean);
+    if (modes.length) {
+      const mb = h('button', 'btn uiModes');
+      mb.appendChild(h('span', 'uiTi', '\u{1F579}️'));
+      mb.appendChild(h('span', 'm1', 'Modes'));
+      mb.appendChild(h('span', 'm2', 'Weekly, Boss Rush, Duo'));
+      mb.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiSheetOpen('modes', false, !!ev && ev.detail === 0); };
+      play.appendChild(mb);
+      uiSheet(scr, 'modes', 'Play modes', modes, ['uiI-wk', 'uiI-rush', 'uiI-duo']);
+    }
+    if (play.children && play.children.length) m.appendChild(play);
+    // the tiles
+    const tiles = h('div', 'uiTiles');
+    const tile = (el, icon, label, extra) => {
+      if (!el) return null;
+      const keep = [];
+      for (const c of Array.prototype.slice.call(el.children || [])) if (/\bvdot\b/.test(c.className || '')) keep.push(c);
+      clear(el);
+      el.appendChild(h('span', 'uiTi', icon));
+      el.appendChild(h('span', 'uiTl', label));
+      for (const c of keep) el.appendChild(c);
+      cls(el, 'uiTile');
+      if (extra) cls(el, extra);
+      tiles.appendChild(el);
+      return el;
+    };
+    const grp = (id, icon, label, title, els, icons) => {
+      const list = els.filter(Boolean);
+      if (!list.length) return null;
+      const g = h('button', 'btn uiTile uiGrp');
+      try { g.setAttribute('data-g', id); } catch (e) { /* stub */ }
+      g.appendChild(h('span', 'uiTi', icon));
+      g.appendChild(h('span', 'uiTl', label));
+      g.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiSheetOpen(id, false, !!ev && ev.detail === 0); };
+      tiles.appendChild(g);
+      uiSheet(scr, id, title, list, icons);
+      return g;
+    };
+    tile(B['Prize Vault'], '\u{1F381}', 'Vault');
+    const col = grp('collection', '\u{1F4DA}', 'Collection', 'Collection', [B.Prizedex, B.Stickers, B.Codex, B.History], ['uiI-dex', 'uiI-stk', 'uiI-codex', 'uiI-his']);
+    if (col) {
+      // something new inside: a badge on the tile (fresh Codex pages, stickers not yet looked at)
+      let n = 0;
+      try { n += parseInt((B.Codex && B.Codex.getAttribute && B.Codex.getAttribute('data-n')) || '0', 10) || 0; } catch (e) { /* stub */ }
+      n += Object.keys((S.meta && S.meta.achNew) || {}).length;
+      if (n > 0) col.appendChild(h('i', 'vdot', String(Math.min(99, n))));
+    }
+    tile(B['Claw School'], '\u{1F393}', 'School');
+    tile(lab(/Settings$/), '⚙️', 'Options');   // (the tile's short word: "Instellingen" does not fit a tile)
+    const more = [B.Help, B.Tips, B.Intro, lab(/^Sound /), lab(/^Music /)];
+    // a title button this pass does not know (a newer builder's) still has a home: the More sheet
+    const known = new Set([B.Continue, B['New run'], B['Daily run'], B['Prize Vault'], B['Claw School'], lab(/Settings$/), B.Prizedex, B.Stickers, B.Codex, B.History].concat(modes, more).filter(Boolean));
+    for (const b of S.ui.buttons) if (b && b.el && !known.has(b.el)) { known.add(b.el); more.push(b.el); }
+    grp('more', '☰', 'More', 'More', more, ['uiI-help', 'uiI-tips', 'uiI-intro', '', '']);
+    if (tiles.children && tiles.children.length) m.appendChild(tiles);
+    // and anything else a builder put in the menu (not one of the old rows) stays, under the tiles
+    for (const c of kids) if (c && c !== stats && c !== tip && !known.has(c) && !/\b(row|dwRow|vrRow|duoRow)\b/.test(c.className || '')) m.appendChild(c);
+    if (stats) m.appendChild(stats);
+    // the keys: Escape puts a sheet away (once per page)
+    if (!UIT.keys && !S.headless) {   // (a browser only: the game's own key handler is the one listener headless)
+      UIT.keys = true;
+      try { document.addEventListener('keydown', (ev) => { if (ev && ev.key === 'Escape' && UIT.open && S.screen === 'title') uiSheetOpen(null); }); } catch (e) { /* headless */ }
+    }
+    // back from a page you opened out of a sheet: that sheet again, at once
+    const back = UIT.reopen;
+    UIT.reopen = null;
+    if (back && UIT.sheets[back] && UIT_BACK.indexOf(from) >= 0) uiSheetOpen(back, true);
+    return pri;
+  }
+  // A group sheet: a dimmed backdrop and a panel rising from the bottom with the group's buttons.
+  function uiSheet(scr, id, title, els, icons) {
+    if (!scr || !scr.appendChild) return null;
+    const s = h('div', 'uiSheet');
+    s.id = 'uiSheet-' + id;
+    const p = h('div', 'panel uiSheetP');
+    const hd = h('div', 'uiSheetH');
+    hd.appendChild(h('h3', null, title));
+    const x = h('button', 'btn ghost sm uiX uiSheetX', '×');
+    x.setAttribute('aria-label', i18nT('Close'));
+    x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiSheetOpen(null); };
+    hd.appendChild(x);
+    p.appendChild(hd);
+    const body = h('div', 'uiSheetB');
+    els.forEach((el, i) => { if (!el) return; if (icons && icons[i]) uiCls(el, icons[i]); body.appendChild(el); });
+    p.appendChild(body);
+    s.appendChild(p);
+    // a tap inside remembers the sheet (Back comes here again); a tap on the dim closes it
+    if (p.addEventListener) p.addEventListener('click', () => { UIT.reopen = id; }, true);
+    s.onclick = (ev) => { if (ev && ev.target === s) { snd('click'); uiSheetOpen(null); } };
+    scr.appendChild(s);
+    UIT.sheets[id] = s;
+    return s;
+  }
+  // Opens a sheet by id (null closes); quiet skips the rise (coming back to it); kb (opened from the
+  // keyboard, a click with no pointer) moves the focus into the sheet.
+  function uiSheetOpen(id, quiet, kb) {
+    for (const k in UIT.sheets) {
+      const s = UIT.sheets[k];
+      if (!s || !s.classList) continue;
+      s.classList.remove('quiet');
+      if (k === id) { if (quiet) s.classList.add('quiet'); s.classList.add('show'); } else s.classList.remove('show');
+    }
+    UIT.open = id && UIT.sheets[id] ? id : null;
+    if (!UIT.open) UIT.reopen = null;
+    const scr = $('scr-title');
+    if (scr && scr.classList) scr.classList[UIT.open ? 'add' : 'remove']('uiSheetOn');
+    // keyboard: into the sheet's first button; closing hands the focus back to the group button
+    if (UIT.open && kb && !S.headless) {
+      try { const f = UIT.sheets[id].querySelector('.uiSheetB .btn'); if (f && f.focus) f.focus({ preventScroll: true }); } catch (e) { /* optional */ }
+    }
+    if (UIT.open) UIT.opener = kb ? UIT.open : null;
+    else if (UIT.opener && !S.headless) {
+      try { const g = document.querySelector(UIT.opener === 'modes' ? '#titleMenu .uiModes' : '#titleMenu .uiGrp[data-g="' + UIT.opener + '"]'); if (g && g.focus) g.focus({ preventScroll: true }); } catch (e) { /* optional */ }
+      UIT.opener = null;
+    }
+    return UIT.open;
   }
 
   // ---- intro cinematic (js/intro.js). The first launch plays it once;
@@ -1965,7 +2127,7 @@ const GAME = (() => {
     run.muts = mutClean(run.muts);
     if (!run.sc || typeof run.sc !== 'object') run.sc = { bosses: 0, combos: 0 };
     const E = run.endless;
-    run.endless = E && typeof E === 'object' ? { loop: Math.max(0, E.loop | 0), mix: E.mix || null, since: E.since | 0, adds: Array.isArray(E.adds) ? E.adds : [], over: !!E.over } : null;
+    run.endless = E && typeof E === 'object' ? { loop: Math.max(0, E.loop | 0), mix: E.mix || null, since: E.since | 0, adds: Array.isArray(E.adds) ? E.adds : [], over: !!E.over, dep: !!E.dep, dp: Math.max(0, E.dp | 0) } : null;   // (DEP: the loop dives, the dives this run)
     return run;
   }
   // A fresh run: the picked mutators (the daily run has its own for the date).
@@ -2152,10 +2314,13 @@ const GAME = (() => {
     const st = S.actStat || (S.actStat = ($('actTxt') || {}).parentNode || null);
     if (!st || !st.classList) return;
     const on = !!(run && run.endless && run.endless.loop > 0), sec = !on && !!(run && secIn(run));
-    if (S.loopHud === on && S.secHud === sec) return;
-    S.loopHud = on; S.secHud = sec;
+    let dep = false;
+    try { dep = on && depIn(run); } catch (e) { /* DEP block not up yet */ }
+    if (S.loopHud === on && S.secHud === sec && S.depHud === dep) return;
+    S.loopHud = on; S.secHud = sec; S.depHud = dep;
     st.classList[on ? 'add' : 'remove']('endless');
     st.classList[sec ? 'add' : 'remove']('secret');   // the Back Room: a gold key stat (round 7 QA)
+    st.classList[dep ? 'add' : 'remove']('depths');   // (DEP, round 15) a dive: the Loop chip turns teal with a wave
     const k = st.querySelector ? st.querySelector('.k') : null;
     if (k) k.textContent = on ? 'Endless' : 'Act';
   }
@@ -2276,13 +2441,13 @@ const GAME = (() => {
   function endlessNext() {
     const run = S.run, E = run.endless, cfg = ENDL();
     E.loop++;
-    run.act = D().endlessAct ? D().endlessAct(E.loop) : ((E.loop - 1) % 3) + 1;
+    run.act = depLoopAct(E);   // (DEP round 15: every third loop from Loop 3 dives into the Neon Depths; the classic biomes carry on between)
     let added = null;
     if (E.loop >= (cfg.mutFrom || 2) && D().mutPick) {
       added = D().mutPick(rngFor('endless:mut'), run.muts);
       if (added) { run.muts = mutClean(run.muts.concat([added])); E.adds.push(added); }
     }
-    E.mix = E.loop >= (cfg.mixFrom || 1) && D().endlessMix ? D().endlessMix(rngFor('endless:mix'), run.act) : null;
+    E.mix = depMix(E, E.loop >= (cfg.mixFrom || 1) && D().endlessMix ? D().endlessMix(rngFor('endless:mix'), run.act) : null);   // (DEP: a dive's boss keeps its own trick)
     const m = endlessMetaFix(S.meta);
     m.endless.best = Math.max(m.endless.best, E.loop);
     saveMeta();
@@ -2292,9 +2457,9 @@ const GAME = (() => {
     metaActStart(run);
     newMap(run);
     const id = legBossRelic(rollRelic(rngFor('bossrelic'), ['boss', 'r']));   // (LEG: now and then a legendary)
-    const td = { relic: id, gold: 0, title: `Loop ${E.loop}: ${actDef(run.act).name}`, sub: `Healed ${Math.round((cfg.heal || 0.3) * 100)}%. +${bulbs(START_INK)}. The machine rebooted meaner and coughed something up.` };
+    const td = { relic: id, gold: 0, title: `Loop ${E.loop}: ${depActName(run)}`, sub: `Healed ${Math.round((cfg.heal || 0.3) * 100)}%. +${bulbs(START_INK)}. The machine rebooted meaner and coughed something up.` };
     const pick = rngFor('spareparts').shuffle(openClawUpgrades()).slice(0, 3);
-    showLoop({ loop: E.loop, act: run.act, added, mix: E.mix, then: pick.length ? { parts: { pick, then: td } } : { treasure: td } });
+    showLoop({ loop: E.loop, act: run.act, added, mix: E.mix, dep: !!E.dep, then: pick.length ? { parts: { pick, then: td } } : { treasure: td } });
     return E.loop;
   }
   // The reboot: a CRT power-on, the boot log, LOOP N slams in, then on.
@@ -2305,7 +2470,7 @@ const GAME = (() => {
     const b = $('loopBody');
     clear(b);
     const run = S.run, sc = D().endlessScale ? D().endlessScale(lp.loop, lp.act) : { hp: 1, dmg: 1 };
-    const crt = h('div', 'crt' + (S.loopFast ? ' fast' : ''));
+    const crt = h('div', 'crt' + (S.loopFast ? ' fast' : '') + (lp.dep ? ' dep' : ''));   // (DEP: a dive's tube floods)
     const tube = h('div', 'tube');
     const boot = h('div', 'boot');
     const lines = [
@@ -2318,6 +2483,7 @@ const GAME = (() => {
     if (lp.mix) lines.push([`BOSS PATCH: LEARNED ${String(((enemyDef(lp.mix).sig || {}).name) || 'A NEW TRICK').toUpperCase()}`, 'warn']);
     if (lp.added) lines.push([`NEW MUTATOR: ${mutDef(lp.added).name.toUpperCase()}`, 'ok']);
     lines.push(['PRESS START', 'ok']);
+    depBootLines(lp, lines);   // (DEP: the drain pump failed, the loop dives into the Neon Depths)
     lines.forEach((ln, i) => { const d = h('div', ln[1] || null, '> ' + ln[0]); d.style.animationDelay = (0.9 + i * 0.17).toFixed(2) + 's'; boot.appendChild(d); });
     tube.appendChild(boot);
     const tSlam = 1.0 + lines.length * 0.17;
@@ -2326,7 +2492,8 @@ const GAME = (() => {
     big.appendChild(document.createTextNode ? document.createTextNode('LOOP ' + lp.loop) : h('span', null, 'LOOP ' + lp.loop));
     big.style.animationDelay = tSlam.toFixed(2) + 's, ' + (tSlam + 1).toFixed(2) + 's';
     tube.appendChild(big);
-    const sub = h('div', 'lsub', `${actDef(lp.act).name}, again. Act ${3 + lp.loop} of forever.`);
+    depLoopCard(tube, lp, tSlam);   // (DEP: THE NEON DEPTHS under LOOP N, over rising water)
+    const sub = h('div', 'lsub', depLoopSub(lp));
     sub.style.animationDelay = (tSlam + 0.3).toFixed(2) + 's';
     tube.appendChild(sub);
     if (lp.added) {
@@ -3754,7 +3921,7 @@ const GAME = (() => {
      cellar, embers in the foundry, snow in the vault) over the map area, or
      over the arena band in a fight. Seeded, never Math.random. */
   const AMB_N = 30;
-  const AMB_KIND = { cellar: 0, foundry: 1, vault: 2 };
+  const AMB_KIND = { cellar: 0, foundry: 1, vault: 2, depths: 3 };   // (DEP round 15: bubbles rise in the Neon Depths)
   function ambientTick(dt) {
     const run = S.run;
     if (!run) return;
@@ -3774,7 +3941,7 @@ const GAME = (() => {
       if (m.life <= 0) {
         m.x = area.x + r() * area.w; m.ph = r() * 6.28; m.life = 4 + r() * 6;
         if (kind === 0) { m.y = area.y + r() * area.h; m.vx = (r() - 0.5) * 14; m.vy = (r() - 0.5) * 10; }
-        else if (kind === 1) { m.y = area.y + area.h * (0.4 + r() * 0.6); m.vx = (r() - 0.5) * 10; m.vy = -18 - r() * 26; }
+        else if (kind === 1 || kind === 3) { m.y = area.y + area.h * (0.4 + r() * 0.6); m.vx = (r() - 0.5) * 10; m.vy = -18 - r() * 26; }   // (DEP: bubbles rise like embers)
         else { m.y = area.y + r() * area.h * 0.5; m.vx = 6 + r() * 10; m.vy = 16 + r() * 22; }
         m.max = m.life;
       }
@@ -3788,10 +3955,11 @@ const GAME = (() => {
     const A = S.amb, R = X.RENDER;
     if (!A) return;
     const kind = S.ambKind || 0;
-    const col = kind === 0 ? '#d8ff7a' : kind === 1 ? '#ff8a2b' : '#ffffff';
-    const sp = R && R.glowSprite ? R.glowSprite(col, 10) : null;
+    const col = kind === 0 ? '#d8ff7a' : kind === 1 ? '#ff8a2b' : kind === 3 ? '#bff8ff' : '#ffffff';
+    const sp = R && R.glowSprite && kind !== 3 ? R.glowSprite(col, 10) : null;
     ctx.save();
-    ctx.globalCompositeOperation = kind === 2 ? 'source-over' : 'lighter';
+    ctx.globalCompositeOperation = kind >= 2 ? 'source-over' : 'lighter';
+    if (kind === 3) { ctx.strokeStyle = col; ctx.lineWidth = 1.2; }   // (DEP: a bubble is a ring with a glint)
     for (const m of A) {
       if (m.life <= 0) continue;
       const u = m.life / (m.max || 1), fade = Math.min(1, u * 3, (1 - u) * 4);
@@ -3799,6 +3967,7 @@ const GAME = (() => {
       ctx.globalAlpha = fade * blink * (kind === 2 ? 0.8 : 0.9);
       if (sp && kind !== 2) { try { ctx.drawImage(sp, m.x - 10, m.y - 10, 20, 20); } catch (e) { /* stub */ } }
       ctx.fillStyle = col;
+      if (kind === 3) { const br = 1.6 + (m.max % 2.2); ctx.beginPath(); ctx.arc(m.x, m.y, br, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(m.x - br * 0.35, m.y - br * 0.35, br * 0.3, 0, Math.PI * 2); ctx.fill(); continue; }
       ctx.beginPath(); ctx.arc(m.x, m.y, kind === 2 ? 1.8 : 1.4, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
@@ -4003,7 +4172,7 @@ const GAME = (() => {
   }
   function encounterFor(kind) {
     const run = S.run;
-    const enc = tbl('ENCOUNTERS')[run.act];
+    const enc = depEncFor(run);   // (DEP: the Depths' own pools on a dive's map)
     const list = enc && enc[kind];
     if (list && list.length) return rngFor('enc').pick(list).slice();
     const ids = Object.keys(tbl('ENEMIES')).filter((id) => { const e = enemyDef(id); return e.act === run.act && (e.tier || 'normal') === (kind === 'normal' ? 'normal' : kind); });
@@ -5068,6 +5237,7 @@ const GAME = (() => {
       case 'boss': bossEvent(ev); break;
       case 'sto': stoFightEvent(ev); break;   // a friend's cameo, a sabotage (STORY)
       case 'fam': famEvent(ev); break;   // enemy families: Crescendo, SOLO, cans, change, the choir (FAMILY)
+      case 'dep': depEvent(ev); break;   // DEP (round 15): the Neon Depths' lure, jellies, pincers, live water and chests
       case 'intent': if (FS.enemyTurn && FS.actor === ev.idx) nextActor(); break;
       case 'text': {
         fx().text(pos.x, pos.y, ev.str, '#ffc94d');
@@ -5742,6 +5912,7 @@ const GAME = (() => {
       else if (gl) { lab = 'STICKY PILE'; col = BST_COL.glue; }
       else if (B.mounds.length) { lab = 'DIG UP THE MOUNDS'; col = BST_COL.bury; }
       else if (inv) { lab = 'INVISIBLE ITEMS'; col = BST_COL.vanish; }
+      else { const ds = depSignNow(); if (ds) { lab = ds[0]; col = ds[1]; } }   // the Neon Depths' tricks (DEP)
     }
     if (lab) bestSignSet(B, lab, col, real);
     else bestNextSign(B, real);
@@ -6045,6 +6216,7 @@ const GAME = (() => {
     if (secBossEvent(ev)) return;   // The Machine's cabinet events (SECRET)
     if (stoBossEvent(ev)) return;   // the alternate bosses' plushies, belt and ice block (STORY)
     if (winBossEvent(ev)) return;   // Krampus's sack of coal (WIN)
+    if (depBossEvent(ev)) return;   // The Drowned Jukebox's High Tide (DEP)
     const bs = BS(), reduced = !!fx().reduced;
     const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
     const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
@@ -6384,6 +6556,8 @@ const GAME = (() => {
     const bs = FS.bs;
     const sl = secSign();   // The Machine's cabinet events hold the sign (SECRET)
     if (sl) return sl;
+    const dp = depSign();   // High Tide while it runs (DEP)
+    if (dp) return dp;
     const so = stoSign();   // the belt, the plush shield, the ice block (STORY)
     if (so) return so;
     if (F.rigged || (bs && bs.hj)) return ['RIGGED', 'rig'];
@@ -6555,6 +6729,7 @@ const GAME = (() => {
     const cj = FS.claw;
     petRig(ev);   // the pet watches the claw; the octopus holds on (PETS block)
     rosRig(ev);   // bubbles ride the claw and pop over the chute, Sticky Fingers (ROS block)
+    depRig(ev);   // a prize lifted from the water is wet, a pinched one is let go (DEP)
     if (clawTypeEvent(ev)) return;   // per claw type sounds and sparks (CLAW TYPES block)
     switch (ev) {
       case 'drop': cj.bendV += (FS.rng() - 0.5) * 160; cj.sq = -0.5; setMood('focus', 1.2); break;
@@ -6679,6 +6854,7 @@ const GAME = (() => {
     const pos = { x: CAB.x + b.x, y: CAB.y + b.y };
     bossDeliver(b);   // a heavy prize smashes an iced rail (boss arena)
     secDeliver(b);   // a metal prize grounds the live rail (SECRET)
+    depDeliver(b);   // a wet prize on live water shocks you (DEP)
     // the claw never touched it this grab: shaken, blasted or knocked in
     const free = b.data.clawG !== FS.grabN;
     const ms = FS.mst[inst.uid];
@@ -6687,6 +6863,7 @@ const GAME = (() => {
     FS.playQ.push(inst);
     FS.delivered++;
     S.run.delivered++;
+    duoNetDeliver(inst);   // DUO NET (round 15): the watching phone sees it fly into this player's tray
     fx().burst(pos.x, pos.y, '#ffc94d', fx().reduced ? 6 : 14);
     fx().trail(pos.x, pos.y, '#ffc94d');
     fx().ring(pos.x, pos.y, '#ffc94d', { r0: 8, r1: 46, w: 4 });
@@ -7101,6 +7278,7 @@ const GAME = (() => {
     run.history.push({ act: run.act, enemies: F.enemies.map((e) => e.id), result, turns: F.turn });
     const tier = FS.tier;
     const then = FS.then;
+    depFightEnd(result);   // DEP (round 15): a Drowned Jukebox unplugged counts (before the sticker checks)
     metaFightEnd(result);   // won-fight stickers (META block)
     endlessFightEnd(result, tier);   // score counters: bosses, combos (ENDLESS block)
     petFightEnd(result, tier);   // pet XP for a win (PETS block)
@@ -10470,6 +10648,7 @@ const GAME = (() => {
   }
   // A small speech bubble.
   function petBubble(ctx, x, y, str, a) {
+    str = i18nTr(str);   // (QA round 15) a quip in the current language (it drew its English on the canvas)
     ctx.save();
     ctx.globalAlpha = a;
     ctx.font = 'bold 12px system-ui, "Segoe UI", Helvetica, Arial, sans-serif';
@@ -10676,7 +10855,7 @@ const GAME = (() => {
       ctx.beginPath();
       for (let j = 1; j < 6; j++) { const bx = x - w / 2 + (w / 6) * j; if (got && j >= 2 && j <= 4) continue; ctx.moveTo(bx, y0 + 6); ctx.lineTo(bx, y0 + hgt - 8); }
       ctx.stroke();
-      if (got) { ctx.fillStyle = PAL0.gold; ctx.font = 'bold 14px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('ADOPTED', x, y0 + 16); }
+      if (got) { ctx.fillStyle = PAL0.gold; ctx.font = 'bold 14px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.fillText(i18nTr('ADOPTED'), x, y0 + 16); }
     }
     // your buddy
     const p = petOf();
@@ -10690,18 +10869,18 @@ const GAME = (() => {
       R.pet(ctx, p.id, 118, py - 4, 1.9, PSV);
       const nx = D().petNext ? D().petNext(p.xp) : null;
       ctx.fillStyle = '#ffffff'; ctx.font = 'bold 20px system-ui, sans-serif'; ctx.fillText(p.name, 190, 604);
-      ctx.fillStyle = PET_SHOP_COL; ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText(`YOUR BUDDY: ${(petDefOf(p.id) || {}).name || ''}  ·  LV ${p.lv}`, 190, 628);
+      ctx.fillStyle = PET_SHOP_COL; ctx.font = 'bold 13px system-ui, sans-serif'; ctx.fillText(i18nTr(`YOUR BUDDY: ${(petDefOf(p.id) || {}).name || ''}  ·  LV ${p.lv}`), 190, 628);
       ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(190, 644, 280, 10);
       ctx.fillStyle = PAL0.lime; ctx.fillRect(190, 644, 280 * (nx ? nx.into / nx.span : 1), 10);
-      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.fillText(nx ? `${nx.need} XP to Lv ${p.lv + 1}` : 'MAX LEVEL', 190, 668);
+      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.fillText(i18nTr(nx ? `${nx.need} XP to Lv ${p.lv + 1}` : 'MAX LEVEL'), 190, 668);
     } else {
-      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 16px system-ui, sans-serif'; ctx.fillText('No buddy yet. Pick one above!', 76, 644);
+      ctx.fillStyle = '#b3a4d6'; ctx.font = 'bold 16px system-ui, sans-serif'; ctx.fillText(i18nTr('No buddy yet. Pick one above!'), 76, 644);
     }
     // the album
     const al = petMeta(), ids = D().PET_IDS || [];
     let met = 0; for (const id of ids) if (al[id]) met++;
     ctx.fillStyle = '#e8f4ff'; ctx.font = 'bold 12px system-ui, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(`PET ALBUM ${met}/${ids.length}`, 270, 734);
+    ctx.fillText(i18nTr(`PET ALBUM ${met}/${ids.length}`), 270, 734);
     ids.forEach((id, i) => {
       const x = 270 + (i - (ids.length - 1) / 2) * Math.min(54, 470 / Math.max(1, ids.length - 1)), y = 790;   // (ROS: 11 pets fit the stage)
       if (al[id]) { PSV.t = t + i; PSV.lv = Math.max(1, al[id].lv | 0); PSV.evo = al[id].evo ? pevForm(id) : null; PSV.mood = ''; PSV.pose = 'sit'; PSV.air = false; PSV.blink = 0; R.pet(ctx, id, x, y, 0.95, PSV); }
@@ -13095,7 +13274,7 @@ const GAME = (() => {
     const rec = {
       id: hisIdOf(run), d, c: run.char, cl: runClawType(run), o: outfit || '', tl: run.tilt | 0, mu: (run.muts || []).slice(),
       se: typeof run.season === 'string' ? run.season : '', dl: typeof run.daily === 'string' ? run.daily : '',
-      m: mode, s: score, r: result, a: run.act | 0, lp: run.endless ? run.endless.loop | 0 : 0,
+      m: mode, s: score, r: result, a: run.act | 0, lp: run.endless ? run.endless.loop | 0 : 0, dp: depHisDives(run),   // (DEP: the Neon Depths dives)
       tu: run.turns | 0, kl: run.kills | 0, f: run.fights | 0, bs: (run.sc && run.sc.bosses) | 0, bh: L.bigHit | 0,
       bc: L.bestCombo ? { n: L.bestCombo.name, t: L.bestCombo.tier } : null, jp: run.jackpots | 0, ev: run.evoN | 0, st: sets, b: bin,
       rl: (run.relics || []).slice(0, hisDat().RELICS), mp: D().hisMapPack ? D().hisMapPack(run.map) : null,
@@ -13373,6 +13552,7 @@ const GAME = (() => {
     const tags = h('div', 'hisTags');
     if (rec.m === 'daily') tags.appendChild(h('span', 'tag gold', 'DAILY'));
     if (rec.lp > 0) tags.appendChild(h('span', 'tag cyan', 'ENDLESS'));
+    if (rec.dp > 0) tags.appendChild(h('span', 'tag cyan', 'NEON DEPTHS'));   // (DEP: this run dove into the Depths)
     const MU = tbl('MUTATORS');
     for (const id of rec.mu || []) if (MU[id]) tags.appendChild(h('span', 'tag hisMu', MU[id].icon || '?'));
     if (tags.children && tags.children.length) mid.appendChild(tags);
@@ -13911,7 +14091,7 @@ const GAME = (() => {
     // outcome stamping in (arcEvOutcome). Headless it resolves straight to
     // the map as before.
     S.arcEv = null;
-    b.appendChild(h('h1', 'evTitle', def.title || 'Event'));
+    b.appendChild(h('h1', 'evTitle qaKeep', def.title || 'Event'));   // (POLISH round 15: .qaKeep, the corner lane keeps off it)
     const evPic = typeof ART !== 'undefined' && ART && ART.get ? ART.get('event', ed.id) : null;
     if (evPic) {
       // an illustration dropped at art/events/<id>.png replaces the vignette
@@ -14164,10 +14344,10 @@ const GAME = (() => {
       const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
       // the numbers roll (headless snaps); the hp bar drains with a ghost chunk
       rollTo('hpTxt', hp, false, (v) => `${v}/${max}`);
-      set('blockTxt', block ? `+${block} block` : '');
+      set('blockTxt', block ? String(block) : '');   // HUD (round 15): the shield chip at the bar's end shows the number
       rollTo('goldTxt', gold, false);
       rollTo('inkTxt', run.ink, false);
-      set('actTxt', endlessHudAct(run));   // "2 of 3", or "Loop 4" in Endless (ENDLESS block)
+      set('actTxt', uiActTxt(run));   // "2/3", or "Loop 4" in Endless (ENDLESS block)
       const pct = U.clamp(hp / Math.max(1, max), 0, 1) * 100;
       const fl = $('hpFill'), gh = $('hpGhost'), hs = $('hpStat');
       if (fl && fl.style) fl.style.width = pct.toFixed(1) + '%';
@@ -14201,7 +14381,9 @@ const GAME = (() => {
         el.appendChild(r);
       }
       setBarLink(el);   // set members chained together behind their badge (SETS block)
-    }
+      uiRelicFit();   // HUD (round 15): what does not fit folds into a "+N" chip
+    } else if (UIH.need) uiRelicFit();
+    if (force) { uiHudInit(); uiRelicList(false); }
     if (F && FS) {
       const st = F.player.status;
       const sk = JSON.stringify(st) + '|' + F.target;
@@ -14235,6 +14417,134 @@ const GAME = (() => {
       const e = $('endTurn');
       if (e) e.disabled = !canEndTurn();
     }
+  }
+
+  /* ================= HUD (round 15): the top bar's chips, the relic overflow =================
+     DESIGN.md "HUD and title menu polish (round 15)". The markup (index.html #top) is the portrait,
+     the vitals column (the hp bar with the shield chip, the resource chips under it) and the relic
+     strip. The strip shows the medallions that fit; the rest fold into a "+N" chip that opens the
+     whole list (a relic folded away hands its proc flash to that chip). Headless there is no layout,
+     so the strip is left whole (the tests see every relic). */
+  const UIH = { need: false, init: false, more: null, list: null, hidden: [], closer: false };
+  // The act chip: "2/3" (Endless, the Back Room and the rush keep their own words).
+  function uiActTxt(run) {
+    const s = endlessHudAct(run);
+    return run && !run.endless && s === `${run.act} of 3` ? `${run.act}/3` : s;
+  }
+  // The resource chips answer a tap with what they count (once; the markup is static).
+  function uiHudInit() {
+    if (UIH.init) return;
+    UIH.init = true;
+    const tip = (id, name, text) => {
+      const v = $(id), st = v && v.parentNode;
+      if (!st || !st.addEventListener) return;
+      st.addEventListener('click', (ev) => {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        const p = hudPoint(st, 200, 50);
+        popover(`<b>${name}</b> ${v.textContent || ''}<br>${text}`, p.x, p.y + 6);
+        snd('click');
+      });
+    };
+    tip('goldTxt', 'Gold', 'Spend it at the shop.');
+    tip('inkTxt', 'Bulbs', 'Light dark tiles on the map with them.');
+    tip('tixTxt', 'Tickets', 'Win them in fights. Spend them at the prize counter.');
+    tip('actTxt', 'Act', 'Where you are on the climb.');
+  }
+  // Folds what does not fit in the strip into a "+N" chip (a browser only).
+  function uiRelicFit() {
+    UIH.need = false;
+    const el = $('relics');
+    if (!el || S.headless || !el.classList || !el.children) return;
+    if (UIH.more && UIH.more.parentNode === el) el.removeChild(UIH.more);
+    const kids = Array.prototype.slice.call(el.children);
+    for (const k of kids) if (k.classList) k.classList.remove('uiOver');
+    el.classList.remove('uiFit');
+    UIH.hidden = [];
+    const avail = el.clientWidth;
+    if (!(avail > 0)) { UIH.need = !!(S.run && S.run.relics.length); return; }   // hidden: again once the bar shows
+    if (el.scrollWidth <= avail + 1) return;
+    const GAP = 4, CHIP = 40;
+    let used = 0, over = false, n = 0;
+    for (const k of kids) {
+      const w = (k.offsetWidth || 44) + (used ? GAP : 0);
+      if (!over && used + w + GAP + CHIP <= avail) { used += w; continue; }
+      over = true;
+      k.classList.add('uiOver');
+      n += /\b(relic|mutBadge)\b/.test(k.className || '') ? 1 : (k.querySelectorAll ? k.querySelectorAll('.relic').length : 1);
+    }
+    if (!n) return;
+    const more = UIH.more || (UIH.more = h('button', 'relic uiRelMore'));
+    more.textContent = '+' + n;
+    more.setAttribute('aria-label', i18nT('Relics ({n})', { n: (S.run ? S.run.relics.length : n) }));
+    more.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiRelicList(); };
+    el.appendChild(more);
+    el.classList.add('uiFit');
+    // a folded relic's proc flashes the chip instead
+    for (const id in (S.relicEls || {})) {
+      const r = S.relicEls[id];
+      let p = r, off = false;
+      for (let i = 0; i < 3 && p && p !== el; i++, p = p.parentNode) if (p.classList && p.classList.contains('uiOver')) off = true;
+      if (off) { UIH.hidden.push(id); S.relicEls[id] = more; }
+    }
+  }
+  // The whole relic list (and the run's mutators) in a panel under the top bar. open: true / false / toggle.
+  function uiRelicList(open) {
+    const st = $('stage');
+    let el = UIH.list;
+    const on = !!(el && el.classList && el.classList.contains('show'));
+    if (open == null) open = !on;
+    if (!open) { if (on) el.classList.remove('show'); return false; }
+    const run = S.run;
+    if (!st || !run || !st.appendChild) return false;
+    if (!el) {
+      el = UIH.list = h('div', 'panel uiRelList');
+      el.id = 'uiRelList';
+      el.onpointerdown = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); };
+      st.appendChild(el);
+    }
+    if (!UIH.closer && st.addEventListener && !S.headless) {
+      UIH.closer = true;
+      // a tap anywhere else puts it away (the chip toggles it itself)
+      st.addEventListener('pointerdown', (ev) => {
+        const t = ev && ev.target;
+        if (!UIH.list || !UIH.list.classList.contains('show')) return;
+        if (t && ((UIH.list.contains && UIH.list.contains(t)) || t === UIH.more)) return;
+        uiRelicList(false);
+      }, true);
+    }
+    clear(el);
+    const head = h('div', 'uiRlHead');
+    head.appendChild(h('h3', null, i18nT('Relics ({n})', { n: run.relics.length })));
+    const x = h('button', 'btn ghost sm uiX', '×');
+    x.setAttribute('aria-label', i18nT('Close'));
+    x.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); uiRelicList(false); };
+    head.appendChild(x);
+    el.appendChild(head);
+    const body = h('div', 'uiRlBody');
+    for (const id of run.muts || []) {
+      const d = mutDef(id), r = h('div', 'uiRl');
+      r.appendChild(h('div', 'ic', d.icon || '?'));
+      const c = h('div', 'col');
+      c.style.gap = '2px';
+      c.appendChild(h('div', 'n', d.name || id));
+      c.appendChild(h('div', 't', d.text || ''));
+      r.appendChild(c);
+      body.appendChild(r);
+    }
+    for (const id of run.relics) {
+      const def = relicDef(id), r = h('div', 'uiRl');
+      r.appendChild(relicCanvas(def, 40));
+      const c = h('div', 'col');
+      c.style.gap = '2px';
+      c.appendChild(h('div', 'n', def.name));
+      c.appendChild(h('div', 't', def.text || ''));
+      r.appendChild(c);
+      body.appendChild(r);
+    }
+    el.appendChild(body);
+    el.classList.add('show');
+    popover(null);
+    return true;
   }
 
   // ---------------------------------------------------------------- input
@@ -14451,6 +14761,7 @@ const GAME = (() => {
     const R = X.RENDER, run = S.run, M = run && run.map;
     if (R && R.mapBg) R.mapBg(ctx, W, H, run ? run.act : 1, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
     secMapBg(ctx, t);   // the Back Room's circuit board (SECRET)
+    depMapBg(ctx, t);   // the Neon Depths' deep water (DEP)
     if (!M || !X.MAP) return;
     const L = mapLayout(), P = mapPaint(), c = cam();
     if (!L || !P) return;
@@ -14531,7 +14842,7 @@ const GAME = (() => {
     }
     // The start-boss axis shows through the dark so the direction is obvious.
     if (R && R.mapAxis && hidden.length) { const a = hexToStage(M.start.q, M.start.r), b = hexToStage(M.boss.q, M.boss.r); R.mapAxis(ctx, a.x, a.y, b.x, b.y, size, hidden, t, flat); }
-    if (R && R.best && !secIn(run)) R.best.sky(ctx, A.x, A.y, A.w, run.act, t);   // the act 3 aurora on the sky edge (BESTIARY; none inside the machine: SECRET)
+    if (R && R.best && !secIn(run) && !depIn(run)) R.best.sky(ctx, A.x, A.y, A.w, run.act, t);   // (DEP: no aurora under water)   // the act 3 aurora on the sky edge (BESTIARY; none inside the machine: SECRET)
     // The crawler and the portrait: on the current hex, or easing between
     // hexes while a walk plays (hex() left the crawler out then).
     drawBossPulse(ctx, t, size);
@@ -14564,6 +14875,7 @@ const GAME = (() => {
     }
     ctx.restore();
     seaMapDraw(ctx, t);   // SEASON: fog and bats (or snow) over the map, under its chrome
+    depMapDraw(ctx, t);   // DEP: the Neon Depths' shimmer, light shafts and bubbles over the map
     // The map's own chrome belongs to the map screen: under the arcade,
     // shop or event overlays the plate showed through their bottom buttons
     // (POLISH round 5 audit).
@@ -14573,7 +14885,7 @@ const GAME = (() => {
     if (ba && R && R.mapArrow) R.mapArrow(ctx, ba.x, ba.y, ba.a, 16, t, 'Boss');
     if (R && R.mapCompass) R.mapCompass(ctx, A.x + A.w - 42, A.y + A.h - 42, 28, t);
     if (R && R.mapHeader) {
-      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, secIn(run) ? 'The Back Room' : actDef(run.act).name, MC.prog, t);   // (SECRET)
+      R.mapHeader(ctx, A.x + 10, A.y + A.h - 42, 190, 32, secIn(run) ? 'The Back Room' : depActName(run), MC.prog, t);   // (SECRET) (DEP: the Neon Depths)
     }
   }
   // Reused per-frame objects for the fight draw (no allocation per enemy).
@@ -14592,7 +14904,7 @@ const GAME = (() => {
     // full width from y 380, the control bar the rest): clip it there
     // instead of filling the whole stage twice (Polish and QA perf)
     ctx.save(); ctx.beginPath(); ctx.rect(-30, -30, W + 60, CAB.y - CAB.frame + 30 + 24); ctx.clip();
-    if (R && R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
+    if (depBg(ctx, t)) { /* DEP: the underwater arcade */ } else if (R && R.bg) R.bg(ctx, W, H, run.act, t); else { ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, H); }
     secBg(ctx, t);   // the Back Room: the machine's insides (SECRET)
     seaBg(ctx, t);   // SEASON: a moon and bats (or snow) over the arena
     ctx.restore();
@@ -14664,6 +14976,7 @@ const GAME = (() => {
     ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
     mutCabDraw(ctx, t, 'back');   // the Conveyor Belt under the pile (ENDLESS block)
     stoCabDraw(ctx, t, 'back');   // the Conveyor King's belt, running the other way (STORY)
+    depCabDraw(ctx, t, 'back');   // the Neon Depths' tint behind the pile (DEP)
     const rigPh = FS.rig ? FS.rig.phase : 'idle';
     const inHand = (rigPh === 'lifting' || rigPh === 'carrying') ? carried() : null;
     const RC = R && R.RARITY_COL;
@@ -14739,6 +15052,7 @@ const GAME = (() => {
     mutCabDraw(ctx, t, 'front');   // Blackout: the dark, and the flashlight on the claw (ENDLESS block)
     rosCabDraw(ctx, t, 'front');   // bubbles, the flood, glue, the mirror and quake signs (ROS block)
     stoCabDraw(ctx, t, 'front');   // the prizes frozen in the Arctic Arcade's ice block (STORY)
+    depCabDraw(ctx, t, 'front');   // the water, caustics, the lure, pincers, jellies and chests (DEP)
     legClawCfg(cfg);   // the Golden Claw's gold paint (LEG block)
     if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
     bestCabDraw(ctx, t);   // goo, the magnetic lid, mounds, the plow, feathers, the rival claw (BESTIARY)
@@ -14999,12 +15313,12 @@ const GAME = (() => {
     let sz = qaSizeOf(el, cur.qaTight);
     if (!sz || !(sz.w > 0) || !(sz.h > 0)) return null;
     const keys = qaKeys(S.screen, S.toastT > 0 ? QA.tRect : null);
-    let spot = qaSpot(pol13Cands(sz.w, sz.h), sz.w, sz.h, keys);   // (POLISH round 13: a screen's own extra spots after the eight)
+    let spot = qaSpot(pol13Cands(sz.w, sz.h, keys), sz.w, sz.h, keys);   // (POLISH round 13: a screen's own extra spots after the eight; round 15: they may read the keys)
     if (spot && spot.o > 0 && !cur.qaTight) {
       cur.qaTight = true;
       if (el.classList) el.classList.add('tight');
       const s2 = qaSizeOf(el, true);
-      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = qaSpot(pol13Cands(sz.w, sz.h), sz.w, sz.h, keys); }
+      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = qaSpot(pol13Cands(sz.w, sz.h, keys), sz.w, sz.h, keys); }
     }
     if (!spot) return null;
     el.style.left = Math.round(spot.x) + 'px'; el.style.top = Math.round(spot.y) + 'px';
@@ -15048,8 +15362,8 @@ const GAME = (() => {
     vault: (w) => [[W - w - 6, 700], [6, 700]],
     rush: (w) => [[W - w - 6, 80], [6, 80]],
   };
-  function pol13Cands(w, h) {
-    const f = POL13_SPOTS[S.screen], more = typeof f === 'function' ? f(w, h) : null;
+  function pol13Cands(w, h, keys) {
+    const f = POL13_SPOTS[S.screen], more = typeof f === 'function' ? f(w, h, keys) : null;
     return more && more.length ? qaCands(w, h).concat(more) : qaCands(w, h);
   }
   // the advent calendar (its garland and doors) and the gift's words; the haunted house's door and TREAT! (RENDER.sea.gift / door)
@@ -15073,6 +15387,37 @@ const GAME = (() => {
   // and the game's own readouts under it: the 777 sign (SLOTG), the wheel's pointer (WH), skee's TOTAL, its 100 cups and the ring values (SKEE.board)
   const POL13_ARC = { slots: [[106, 240, 390, 294]], wheel: [[248, 256, 292, 302]], skee: [[100, 164, 440, 236], [256, 236, 284, 440]] };
   QA_SIGNS.arcade = () => (S.arc ? [[60, 104, W - 60, 166]].concat(POL13_ARC[S.arc.g] || []) : []);
+  /* ================= POLISH (round 15): the event and story pages keep their titles =================
+     NIEUWE CODEXPAGINA sat on DANSDUEL: an event's title (h1.evTitle) weighed as a heading and the
+     vignette canvas as text, and with the toast at the bottom the least covered spot was the title.
+     The title and a story's tags are .qaKeep now (the pill is their box), the vignette's neon sign
+     (RENDER.arcScene draws it at 0.82 w, 0.2 h of its 508 x 190) is a sign, and the page gets spots
+     under its last button (tried after qaCands' eight). */
+  const Q15_EV_SIGN = [0.68, 0.02, 0.96, 0.38];   // the neon word and its glow, a share of the scene canvas
+  // The event scene canvas's box in stage px (tests hand it in as QA.q15Scene), else null.
+  function q15SceneRect() {
+    if (QA.q15Scene !== undefined) return QA.q15Scene;
+    const E = S.arcEv, st = $('stage');
+    if (S.headless || !E || !E.cv || !E.ctx || !st || !st.getBoundingClientRect) return null;
+    try {
+      if (E.cv.offsetParent === null) return null;
+      const sr = st.getBoundingClientRect(), r = E.cv.getBoundingClientRect(), k = S.scale || 1;
+      return r.width > 1 && r.height > 1 ? [(r.left - sr.left) / k, (r.top - sr.top) / k, (r.right - sr.left) / k, (r.bottom - sr.top) / k] : null;
+    } catch (e) { return null; }
+  }
+  QA_SIGNS.event = () => {
+    const r = q15SceneRect(), s = Q15_EV_SIGN;
+    if (!r) return [];
+    const w = r[2] - r[0], hh = r[3] - r[1];
+    return [[r[0] + w * s[0], r[1] + hh * s[1], r[0] + w * s[2], r[1] + hh * s[3]]];
+  };
+  // under the page's last button (its choices, or Continue under the outcome), while that fits above the bottom edge
+  POL13_SPOTS.event = (w, h, keys) => {
+    let y = 0;
+    for (const r of keys || []) if ((r.w || 1) >= QA_W.btn && r.y1 > y && r.y1 < H) y = r.y1;
+    y = Math.round(y + 12);
+    return y > 12 && y + h <= H - 6 ? [[W - w - 6, y], [6, y], [(W - w) / 2, y]] : [];
+  };
   /* ================= LABELS (round 9): the arena reserves its space =================
      Presentation only. Every frame of a fight the things that live in the
      arena become keep-out zones for the floating labels and the damage
@@ -15243,6 +15588,7 @@ const GAME = (() => {
     petTick(dt, real);   // the companion pet, its tips (PETS block)
     cr8Tick(dt);   // CR8 (round 8): Mama Mech's turret, the player row beside it
     rosTick(dt);   // ROS (round 10): bubbles, quakes, the flood, the robot vacuum's dump
+    depTick(dt, real);   // DEP (round 15): the Neon Depths' water and tide, the lure, the stings
     vaultTick(real);     // VAULT (round 5): the wallet's save, the map trail, the vault preview and capsule
     polTick(real);       // POLISH (round 5): relic badges shine
     secTickAll(real);    // SECRET (round 6): a key celebration, the hidden door, the true ending
@@ -15397,6 +15743,7 @@ const GAME = (() => {
     if (typeof I18N === 'undefined' || !I18N) return 'en';
     const s = S.meta && S.meta.settings;
     if (s && s.lang !== undefined && I18N.LANGS.indexOf(s.lang) < 0) delete s.lang;   // a junk value follows the browser again
+    if (I18N.onLand) I18N.onLand(() => i18nRefresh());   // (round 15) a table fetched on a switch lands: redo the screen in it
     const was = I18N.get();
     const now = I18N.set(I18N.pick(s, typeof navigator !== 'undefined' ? navigator : null));
     if (was !== now) i18nRefresh();
@@ -15552,7 +15899,7 @@ const GAME = (() => {
   function accMusicAct() {
     const A = X.AUDIO;
     if (!A || !A.setAct) return 0;
-    return A.setAct(S.run && S.screen !== 'title' && S.screen !== 'chars' ? (S.run.act | 0) : 0);
+    return A.setAct(S.run && S.screen !== 'title' && S.screen !== 'chars' ? depMusicAct(S.run) : 0);   // (DEP: the Neon Depths' dub is act 4)
   }
 
   // ---- the Settings panel (a modal over any screen)
@@ -16871,11 +17218,11 @@ const GAME = (() => {
     const b = $('eventBody');
     clear(b);
     S.arcEv = null;
-    b.appendChild(h('h1', 'evTitle', S0.title));
+    b.appendChild(h('h1', 'evTitle qaKeep', S0.title));   // (POLISH round 15: the title and its tags are .qaKeep)
     const tags = h('div', 'stoTags');
-    tags.appendChild(h('span', 'stoTag', 'STORY'));
-    if (!ed.cb) tags.appendChild(h('span', 'stoTag part', 'PART ' + Math.max(1, ed.n | 0)));
-    if (ed.cb) tags.appendChild(h('span', 'stoTag back', 'IT CAME BACK'));
+    tags.appendChild(h('span', 'stoTag qaKeep', 'STORY'));
+    if (!ed.cb) tags.appendChild(h('span', 'stoTag part qaKeep', 'PART ' + Math.max(1, ed.n | 0)));
+    if (ed.cb) tags.appendChild(h('span', 'stoTag back qaKeep', 'IT CAME BACK'));
     b.appendChild(tags);
     // an illustration dropped at art/events/<story id>.png replaces the drawn vignette (the dice still run)
     const evPic = typeof ART !== 'undefined' && ART && ART.get ? ART.get('event', ed.id) : null;
@@ -17341,6 +17688,7 @@ const GAME = (() => {
     startFight(['gary'], 'elite', { then: { gary: { q: t.q, r: t.r } } });
     return true;
   }
+  const Q15_AIM_STUCK = 6;   // (QA round 15) seconds a claw-off aim waits on a busy claw before the prongs are forced open
   function stoRivalTick(real) {
     const G = S.gary;
     G.t += real; G.lineT += real;
@@ -17349,6 +17697,15 @@ const GAME = (() => {
     const c = stoGaryC(G);
     if (!c || !c.live) return;
     const rig = G.rig, bd = G.C.bounds;
+    // (QA round 15) an aim that cannot start (the claw still busy from the last drop: a prize wedged in the prongs)
+    // never waits for good (Gary's retried every 0.2 s forever): the prongs open, then the drop is skipped
+    const q15k = c.live.drops.length;
+    if (G.q15k !== q15k) { G.q15k = q15k; G.q15wait = 0; G.q15open = false; }
+    if (G.sub === 'aim' && rig.phase !== 'idle' && rig.phase !== 'moving') {
+      G.q15wait += real;
+      if (G.q15wait > Q15_AIM_STUCK && !G.q15open && rig.open) { G.q15open = true; rig.open(); STOX.log.push({ k: 'unstick', who: G.who }); }
+      if (G.q15wait > Q15_AIM_STUCK + 4) { STOX.log.push({ k: 'skip', who: G.who }); stoDropEnd(G, c); return; }
+    }
     if (G.sub === 'aim' && G.who === 'g') {
       G.think -= real;
       if (G.think <= 0) {
@@ -18097,7 +18454,7 @@ const GAME = (() => {
     return !!loreIntroStart(key);
   }
   function loreIntroStart(key) {
-    const run = S.run, def = i18nIntroDef(D().loreIntro ? D().loreIntro(key, run && run.act) : null);   // (I18N: typed in the current language)
+    const run = S.run, def = i18nIntroDef(depIntro(D().loreIntro ? D().loreIntro(key, run && run.act) : null));   // (I18N: typed in the current language) (DEP: a dive's card names the Depths)
     if (!def) return null;
     const L = loreM(), fast = (L.intros[key] | 0) > 0;
     L.intros[key] = Math.min(1e6, (L.intros[key] | 0) + 1);
@@ -18917,13 +19274,13 @@ const GAME = (() => {
       if (act) act.textContent = `${Math.min(R.order.length, R.i + 1)}/${R.order.length}`;
       const k = st && st.querySelector ? st.querySelector('.k') : null;
       if (k && k.textContent !== 'Boss') k.textContent = 'Boss';
-      if (top && (!RSH.clk || RSH.clk.parentNode !== top)) {
+      if (top && (!RSH.clk || !(top.contains ? top.contains(RSH.clk) : RSH.clk.parentNode === top))) {   // (HUD round 15: the clock sits in the resource row inside the bar)
         const el = h('div', 'stat rushClk');
         el.appendChild(h('span', 'k', 'Time'));
         const v = h('span', 'v mono', '0:00.0');
         el.appendChild(v);
         RSH.clk = el; RSH.clkV = v;
-        if (st && st.parentNode === top && top.insertBefore) top.insertBefore(el, st); else top.appendChild(el);
+        if (st && st.parentNode && st.parentNode.insertBefore) st.parentNode.insertBefore(el, st); else top.appendChild(el);   // (HUD round 15: the act chip lives in the resource row)
       }
       RSH.hudOn = true;
       rushClock();
@@ -20128,7 +20485,7 @@ const GAME = (() => {
   }
   // Rising Water: the level for this turn, eased in; the physics hook does the floating and sinking.
   function rosFloodTick(R0, m, dt) {
-    if (!m || !(m.flood > 0) || !FS.world || !X.PHYS || !X.PHYS.rosFlood) return;
+    if (!m || !(m.flood > 0) || !FS.world || !X.PHYS || !X.PHYS.rosFlood || depOwnsWater()) return;   // (DEP: in the Depths the cabinet's water is theirs)
     if (R0.floodW !== FS.world) {
       if (R0.flood && R0.flood.remove) R0.flood.remove();
       R0.flood = X.PHYS.rosFlood(FS.world, { y: R0.level, xMax: binWidth() - 2, g: GRAVITY, rho: ROSK.rho });
@@ -21413,7 +21770,7 @@ const GAME = (() => {
   const SCH_WHY = { cracked: 'It cracked! Glass hates a hard landing.', blew: 'KABOOM. Grab the bomb out before its fuse runs out.', never: 'Oops, that one was not allowed.',
     drops: 'Out of drops.', time: 'Out of time.' };
   const schResLine = (r) => `${r.drops} drop${r.drops === 1 ? '' : 's'} · ${r.t.toFixed(1)}s · best grab ${r.items}`;
-  const schTxt = (ctx, s, x, y, size, col, align) => { ctx.font = 'bold ' + size + 'px sans-serif'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = col; ctx.fillText(s, x, y); };
+  const schTxt = (ctx, s, x, y, size, col, align) => { ctx.font = 'bold ' + size + 'px sans-serif'; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = col; ctx.fillText(i18nTr(s), x, y); };   // (QA round 15: i18nTr, it drew English)
   // The challenge's board: its name, the goal, the star rules, the drops left and the clock (or the fuse), Professor Pincher.
   function schDrawBoard(ctx, t, G, RS) {
     const ch = G.ch, rules = D().schStarText ? D().schStarText(ch) : [], got = schM().stars[ch.id] | 0;
@@ -21518,6 +21875,7 @@ const GAME = (() => {
   // ---- the duel's own save (never the run's)
   function duoSaveState() {
     if (!S.duo) return false;
+    if (S.duo.net) return true;   // DUO NET (round 15): an online duel is never saved (it cannot be resumed alone), the local one stays put
     try { localStorage.setItem(DUO_KEY, JSON.stringify(S.duo)); } catch (e) { /* storage may be blocked */ }
     return true;
   }
@@ -21552,7 +21910,9 @@ const GAME = (() => {
   // ---- the title: DUO shares the NEW RUN row (registered last, so every index stays put)
   function duoTitleBtn(menu) {
     // the title is outside the duo area: a duel still in memory is parked (saved) and the run set aside comes back
+    duoNetOff();   // DUO NET (round 15): the title closes any online game
     if (S.duo || S.duoStash) { if (S.duo) duoSaveState(); S.duo = null; S.duoLive = null; S.duoV = null; duoRestore(true); }
+    duoNetBoot();   // DUO NET (round 15): a page opened with ?join=CODE goes straight to joining
     if (!menu || !D().DUO) return null;
     const saved = duoSaved();
     const b = btn('Duo', () => duoMenu(), 'duoBtn');
@@ -21581,6 +21941,7 @@ const GAME = (() => {
     return b;
   }
   function duoMenu() {
+    duoNetOff();   // DUO NET (round 15): the duo menu is outside any online game: the link closes
     duoStashRun();
     S.duoUi = { ph: 'menu' };
     if (S.duo && S.duo.ph !== 'end') duoPark();
@@ -21603,7 +21964,7 @@ const GAME = (() => {
     const modes = h('div', 'duoModes');
     for (const [mode, name, icon, text] of [['coop', 'Co-op Boss', '\u{1F91D}', 'Two crawlers, one boss. Take turns grabbing; the boss hits whoever just went. Win together.'],
       ['vs', 'Versus Claw-off', '\u{1F94A}', 'One bin of prizes, drops turn about, sabotage cards in between. Best of three rounds.']]) {
-      const c = btn(name, () => duoSetup(mode), 'duoMode dm-' + mode);
+      const c = btn(name, () => (mode === 'coop' ? duoNetChoose() : duoSetup(mode)), 'duoMode dm-' + mode);   // (DUO NET round 15: co-op asks same phone or online)
       c.textContent = '';
       c.appendChild(h('span', 'mi', icon));
       c.appendChild(h('span', 'mn', name));
@@ -21751,6 +22112,7 @@ const GAME = (() => {
     duoStashRun();
     const toss = D().duoToss ? D().duoToss(seed) : { w: 0, flips: 9 };
     const Dd = { v: 1, mode, seed, p: P.map((p) => Object.assign({}, p)), first: toss.w, flips: toss.flips, ph: 'toss', turn: toss.w, from: 1 - toss.w, msg: null, res: null, paid: false };
+    if (o.net) Dd.net = o.net;   // DUO NET (round 15): {me, code}: this phone plays seat me only
     if (mode === 'vs') Object.assign(Dd, { drops: DK().DROPS.indexOf(o.drops | 0) >= 0 ? o.drops | 0 : DK().DROPS_DEF, round: 0, rounds: [], k: 0, used: [0, 0], taken: [], score: [0, 0], deck: [], hands: [[], []], pend: null, last: null });
     else {
       const all = duoBossList().map((x) => x.id);
@@ -21762,7 +22124,7 @@ const GAME = (() => {
     S.duoLive = null; S.duoV = null;
     S.duoT = { t: 0, now: 0 };
     const M = duoM();
-    M.last = { p: P.map((p) => Object.assign({}, p)), drops: Dd.drops || M.last.drops || DK().DROPS_DEF, boss: mode === 'coop' ? (o.boss || 'random') : M.last.boss, mode };
+    if (!o.net) M.last = { p: P.map((p) => Object.assign({}, p)), drops: Dd.drops || M.last.drops || DK().DROPS_DEF, boss: mode === 'coop' ? (o.boss || 'random') : M.last.boss, mode };   // (DUO NET: the online look is kept apart)
     saveMeta();
     duoLog({ k: 'begin', mode, seed, first: Dd.first });
     duoShow();
@@ -21779,11 +22141,13 @@ const GAME = (() => {
     else if (ph === 'sabo') duoSaboDom();
     else if (ph === 'round') duoRoundDom();
     else if (ph === 'end') duoEndDom();
+    else if (Dd.net && (ph === 'yours' || ph === 'watch')) duoNetDom();   // DUO NET (round 15): your turn, or watching theirs
     duoSaveState();
   }
   function duoAfterToss() {
     const Dd = S.duo;
     if (!Dd || Dd.ph !== 'toss') return false;
+    if (Dd.net) return duoNetAfterToss();   // DUO NET (round 15): your turn, or watch theirs
     if (Dd.mode === 'vs') duoRoundStart(1);
     duoHand(Dd.mode === 'vs' ? Dd.turn : Dd.first, { from: 1 - (Dd.mode === 'vs' ? Dd.turn : Dd.first) });
     return true;
@@ -21794,6 +22158,7 @@ const GAME = (() => {
   function duoHand(nx, o) {
     const Dd = S.duo;
     if (!Dd) return false;
+    if (Dd.net) return duoNetPass(nx);   // DUO NET (round 15): no phone to pass: the turn goes over the line
     o = o || {};
     Dd.turn = nx | 0;
     Dd.from = o.from != null ? o.from | 0 : 1 - Dd.turn;
@@ -21861,7 +22226,7 @@ const GAME = (() => {
   }
   // A finished duel is let go (its save too): New duo, or the menu after the podium.
   function duoDone() {
-    duoClear();
+    if (!(S.duo && S.duo.net)) duoClear();   // (DUO NET: an online duel never touched the local duel save)
     S.duo = null; S.duoLive = null; S.duoV = null;
     duoRestore(false);
   }
@@ -21985,9 +22350,12 @@ const GAME = (() => {
       startFight([Dd.boss], 'boss', { seed: Dd.fseed, duoF: L.F[seat] });
       // one Golden Prize a seat per fight: a fresh pick on every turn would upgrade the whole bin
       const g = FS.golden;
-      if (g && !g.was) { const inst = F.bin.find((x) => x.uid === g.uid); if (inst) inst.plus = false; }
-      FS.golden = L.gold[seat] && F.bin.some((x) => x.uid === L.gold[seat].uid) ? L.gold[seat] : null;
-      L.gold[seat] = FS.golden;
+      if (Dd.net && !L.n[seat]) L.gold[seat] = g;   // DUO NET (round 15): this phone's first turn keeps the fresh pick (its seat's one Golden Prize)
+      else {
+        if (g && !g.was) { const inst = F.bin.find((x) => x.uid === g.uid); if (inst) inst.plus = false; }
+        FS.golden = L.gold[seat] && F.bin.some((x) => x.uid === L.gold[seat].uid) ? L.gold[seat] : null;
+        L.gold[seat] = FS.golden;
+      }
     }
     L.n[seat]++;
     duoSeatOn(seat);
@@ -22001,7 +22369,7 @@ const GAME = (() => {
     FS.party = Math.max(FS.party || 0, 1.1); FS.marquee = duoUp(seat);
     const R = X.RENDER, V = S.meta && S.meta.vault;
     if (R && R.vault && R.vault.equip && V && V.eq) { try { R.vault.equip(Object.assign({}, V.eq, { paint: duoPaint(seat) || V.eq.paint })); } catch (e) { /* art is optional */ } }
-    banner(`${duoUp(seat)}'S TURN`, 'turn', 1.3, 'fight');
+    banner(Dd.net && Dd.net.me === seat ? 'YOUR TURN' : `${duoUp(seat)}'S TURN`, 'turn', 1.3, 'fight');   // (DUO NET: online it is always yours here)
     S.lastHud = ''; S.lastRelics = ''; S.lastStatus = ''; S.lastGrabs = '';
     duoHud(true);
     duoLog({ k: 'seat', seat, turn: F ? F.turn : 0, down: Dd.down.slice() });
@@ -22014,7 +22382,7 @@ const GAME = (() => {
     let bar = $('duoBar');
     if (bar && !bar.parentNode && top.appendChild) top.appendChild(bar);
     if (!bar || !bar.parentNode) { bar = h('div'); bar.id = 'duoBar'; const rl = $('relics'); if (rl && rl.parentNode === top && top.insertBefore) top.insertBefore(bar, rl); else top.appendChild(bar); }
-    const key = [0, 1].map((i) => { const Fi = L.F[i]; return Fi ? Fi.player.hp + '/' + Fi.player.maxHp : '-'; }).join('|') + '|' + Dd.turn + '|' + Dd.down.join('');
+    const key = [0, 1].map((i) => { const Fi = L.F[i]; return Fi ? Fi.player.hp + '/' + Fi.player.maxHp : '-'; }).join('|') + '|' + Dd.turn + '|' + Dd.down.join('') + '|' + duoNetLinkK();   // (DUO NET: the link's dot)
     if (!force && key === S.duoHudK) return;
     S.duoHudK = key;
     clear(bar);
@@ -22026,6 +22394,7 @@ const GAME = (() => {
       c.appendChild(h('span', null, down ? 'DOWN' : Fi ? `♥ ${Fi.player.hp}/${Fi.player.maxHp}` : ''));
       bar.appendChild(c);
     }
+    duoNetDot(bar);   // DUO NET (round 15): the link to the partner's phone, a dot (green, amber retrying, grey alone)
   }
   /* The boss acts once per seat turn, turn about, so a boss whose move
      cycle has an even length would show each seat only half of it (a
@@ -22055,11 +22424,12 @@ const GAME = (() => {
     if (!Dd || Dd.mode !== 'coop' || !S.duoLive || !F || !FS) return false;
     Dd.turns++;
     const cur = Dd.turn, nx = 1 - cur;
-    if (Dd.down[nx]) { duoHud(true); duoSaveState(); return false; }
+    if (Dd.down[nx]) { if (Dd.net) duoNetSendTurn({ next: cur }); duoHud(true); duoSaveState(); return false; }   // (DUO NET: the watcher still sees it)
     if (cur !== Dd.first) duoCycShift();   // a round is over (both seats went)
     FS.enemyTurn = true;   // hold the input through the beat
     const T = S.duoT || (S.duoT = { t: 0, now: 0 });
     T.passT = DUOC.pass; T.passTo = nx; T.passFrom = cur;
+    if (Dd.net) { duoNetSendTurn({ next: nx, pass: true }); banner(`${duoUp(nx)}'S TURN`, 'turn', DUOC.pass, 'turn'); duoSaveState(); return true; }   // DUO NET (round 15): sent at once, the beat plays here
     banner('PASS THE PHONE!', 'turn', DUOC.pass, 'turn');
     duoSaveState();
     return true;
@@ -22107,6 +22477,7 @@ const GAME = (() => {
     Dd.res = { won: !!won, turns: Dd.turns | 0, boss: Dd.boss };
     Dd.paid = true;
     if (D().duoRecord) D().duoRecord(duoM(), { mode: 'coop', names: Dd.p.map((p) => p.name), won: !!won });
+    if (Dd.net) duoNetBooked(!!won);   // DUO NET (round 15): the online count, and the result to the partner when it happened here
     saveMeta();
     duoLog({ k: 'book', mode: 'coop', won: !!won });
     duoSaveState();
@@ -22125,6 +22496,7 @@ const GAME = (() => {
   }
   // The fight screen in co-op: the pass beat, the duo bar's numbers.
   function duoFightTick(real) {
+    if (S.duo && S.duo.net) duoNetFightTick(real);   // DUO NET (round 15): the claw, the bin and the moments to the watching phone
     const T = S.duoT;
     if (T && T.passT > 0) {
       T.passT -= real;
@@ -22153,6 +22525,7 @@ const GAME = (() => {
       }
     } catch (e) { /* optional */ }
     ctx.restore();
+    if (Dd.net) duoNetOver(ctx, t);   // DUO NET (round 15): a cheer from the watching phone, in its bubble
   }
 
   // ---- VERSUS CLAW-OFF
@@ -22283,6 +22656,7 @@ const GAME = (() => {
     const Dd = S.duo, k = ev.key;
     if (down && k === 'Escape') { if (!Dd) duoMenu(); else if (Dd.ph === 'hand' || Dd.ph === 'end') duoMenu(); return; }
     if (!Dd) return;
+    if (Dd.net && Dd.ph === 'yours') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); duoNetGo(); } return; }   // (DUO NET)
     if (Dd.ph === 'toss') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); duoTossTap(); } return; }
     if (Dd.ph === 'hand') { if (down && !ev.repeat && (k === ' ' || k === 'Enter')) { if (ev.preventDefault) ev.preventDefault(); duoReady(); } return; }
     const V = S.duoV;
@@ -22297,6 +22671,16 @@ const GAME = (() => {
     const V = S.duoV, Dd = S.duo;
     V.W.remove(body);
     const d = body.data, v = d.v | 0;
+    if (!V.cur) {   // (QA round 15) a straggler rolls in after the drop was booked (V.cur is gone: it threw): it scores for the one who knocked it loose
+      if (Dd && (Dd.ph === 'sabo' || Dd.ph === 'play' || Dd.ph === 'hand')) {
+        const who = Dd.last ? Dd.last.who : Dd.turn, pts = v * (d.gold ? 2 : 1);
+        Dd.score[who] = (Dd.score[who] | 0) + pts; Dd.taken.push(d.pile);
+        if (Dd.last) Dd.last.pts += pts;
+        V.flash[who] = 1;
+        duoLog({ k: 'late', who, i: d.pile, v: pts });
+      }
+      return;
+    }
     V.cur.got.push({ i: d.pile, id: d.def.id, v, gold: d.gold ? 1 : 0 });
     V.flash[Dd.turn] = 1;
     V.party = Math.max(V.party, v >= 4 || d.gold ? 1.2 : 0.6);
@@ -22453,6 +22837,7 @@ const GAME = (() => {
   }
   // The podium: the result, the record per name, taunts for the winner, Rematch.
   function duoEndDom() {
+    if (S.duo && S.duo.net) { duoNetEndDom(); return; }   // DUO NET (round 15): play again together, or the title
     const Dd = S.duo, b = duoBody('dp-canvas dp-end');
     if (!b) return;
     const res = Dd.res || {};
@@ -22485,6 +22870,7 @@ const GAME = (() => {
 
   // ---- the frame: phase clocks, the countdown, the claw-off's world, the fight's pass
   function duoTick(real) {
+    duoNetTick(real);   // DUO NET (round 15): the link's clock, the watch screen, YOUR TURN
     const Dd = S.duo;
     if (!Dd) return;
     const T = S.duoT || (S.duoT = { t: 0, now: 0 });
@@ -22517,6 +22903,7 @@ const GAME = (() => {
     }
     const RD = R.duo;
     const names = [duoNameOf(0), duoNameOf(1)], cols = [duoCol(0), duoCol(1)], chars = [Dd.p[0].char, Dd.p[1].char];
+    if (Dd.net && (Dd.ph === 'yours' || Dd.ph === 'watch')) { duoNetDraw(ctx, t); return; }   // DUO NET (round 15)
     if (Dd.ph === 'toss' && RD) RD.coin(ctx, W, H, { t: T.t, dur: DUOC.tossDur, w: Dd.first, flips: Dd.flips, names, cols, chars, reduced: !!fx().reduced });
     else if (Dd.ph === 'hand' && RD) {
       const nx = Dd.turn, fr = Dd.from;
@@ -22531,7 +22918,7 @@ const GAME = (() => {
       RD.podium(ctx, W, H, { t: T.now, names, cols, chars, coop: Dd.mode === 'coop', won: !!res.won, win: res.w, sc: res.wins, label: Dd.mode === 'coop' ? `vs ${enemyDef(Dd.boss).name || Dd.boss}` : 'rounds won', reduced: !!fx().reduced });
       // the last taunt, from whoever sent it (the winner's tall step, or their side of a shared one)
       const fi = Dd.msg && (Dd.msg.from === 1 ? 1 : 0), tx = Dd.mode === 'vs' && (res.w === 0 || res.w === 1) ? (fi === res.w ? W * 0.38 : W * 0.74) : (fi ? W * 0.68 : W * 0.32);
-      if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble) R.sto.bubble(ctx, 270, 292, 400, Dd.msg.icon + ' ' + Dd.msg.text, T.msgT || 1, tx, 380);
+      if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble) R.sto.bubble(ctx, 270, 292, 400, Dd.msg.icon + ' ' + i18nTr(Dd.msg.text), T.msgT || 1, tx, 380);   // (the words translated on their own, the icon kept in front)
     } else {
       if (R.title) R.title(ctx, W, H, t);
       ctx.fillStyle = 'rgba(18,9,31,0.55)'; ctx.fillRect(0, 0, W, H);
@@ -22601,6 +22988,1181 @@ const GAME = (() => {
       ctx.restore();
     }
   }
+
+  // ---------------------------------------------------------------- DUO NET (round 15): online co-op
+  /* DESIGN.md "Online co-op (round 15)". CO-OP BOSS with each player on
+     their own phone, over the shared relay (js/net.js, NET). Each phone plays
+     its own seat only (its own crawler, claw, paint, name and colour); the
+     host (the relay's side 0) is seat 0 and owns the setup: the seed, the
+     boss, the colours. Turns alternate strictly, so nothing conflicts: the
+     active phone grabs, the boss answers on its seat (COMBAT's own enemy
+     phase), then it sends the turn: the shared enemies (duoNetFoesOut), its
+     seat's public state (duoNetPubOut) and the down flags; the other phone
+     applies them (duoNetFoesIn, duoNetPubIn) and it is their turn. The
+     active phone's result is taken as it is (the claw's physics may differ
+     from phone to phone, so nothing is simulated twice).
+     While a partner grabs, their claw and bin stream in (DUO.NET.STREAM /
+     BODIES) and play in their colour on the watch screen, with each prize
+     they land flying to their corner, their combos, and the cheers.
+     A dropped line retries for 30 s (NET), then Keep fighting alone (the
+     partner's seat counts as DOWN, the local rule) or Quit to title. A
+     phone that lost the game (a reload) and comes back to the code asks for
+     it ('need') and gets the whole table ('sync'). An online duel never
+     touches the local duel save (clawspire_duo) or the run save. */
+  const DNX = { log: [], build: '', boot: null, booted: false };
+  const DNK = () => DK().NET || { PROTO: 1, STREAM: 0.1, BODIES: 0.25, YOURS: 5, AWAY: 45, FX_MAX: 24, BODIES_MAX: 40, CODE_LEN: 4 };
+  const netOk = () => typeof NET !== 'undefined' && !!NET;
+  function duoNetLog(o) { DNX.log.push(o); if (DNX.log.length > 300) DNX.log.splice(0, 100); }
+  const dnInt = (v, lo, hi, d) => { const n = Math.round(+v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+  const dnNum = (v, lo, hi, d) => { const n = +v; return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
+  const dnStr = (v, max) => (typeof v === 'string' ? v.slice(0, max || 40) : '');
+  const dnHas = (o, k) => !!o && typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+  // the page's own ?join=CODE, read once as the scripts load (the address is tidied when the online game is left)
+  try { DNX.boot = typeof window !== 'undefined' && window.location && D().duoNetJoinParam ? D().duoNetJoinParam(window.location.search) : null; } catch (e) { DNX.boot = null; }
+  /* This build's fingerprint: two phones on different builds could disagree
+     on a boss's moves, so the hello carries it and a mismatch says reload. */
+  function duoNetBuild() {
+    if (DNX.build) return DNX.build;
+    let s = String(SAVE_VER) + '|' + ((DK().NET && DK().NET.PROTO) || 1);
+    try {
+      const E = tbl('ENEMIES');
+      for (const x of (D().duoBosses ? D().duoBosses() : [])) { const e = E[x.id] || {}; s += '|' + x.id + ':' + JSON.stringify([e.hp, e.moves, e.pattern, e.enrage, e.sig]); }
+      s += '|' + Object.keys(tbl('ITEMS')).length + '|' + Object.keys(tbl('CHARACTERS')).join(',') + '|' + JSON.stringify(DK().COOP || {}) + '|' + JSON.stringify(D().DIFFICULTY || {});
+    } catch (e) { /* the version alone */ }
+    DNX.build = (U.hashStr(s) >>> 0).toString(36);
+    return DNX.build;
+  }
+  // ---- the session (S.duoNet): the lobby, then the game's link state
+  function duoNetW() { return { claw: null, cd: null, bodies: {}, fx: [], hp: null, e: null, beat: 0, t: 0, n: 0 }; }
+  function duoNetFresh(role) {
+    return { ph: 'menu', role: role || 'host', code: '', me: role === 'guest' ? 1 : 0, mine: { p: duoNetMine(role === 'guest' ? 1 : 0), ready: false }, part: null, boss: 'random',
+      inN: 0, outN: 0, lastOut: null, lost: false, gone: false, left: false, alone: false, awayAt: 0, hid: false, rx: false, ask: false, err: '',
+      w: duoNetW(), stT: 0, bdT: 0, lastCl: '', cmb: {}, cheerT: 0, lostDom: '', t: 0, games: 0, dom: null };
+  }
+  // My look online: the one used there last, else Player 1 of the last duel on this phone; only what this profile has.
+  function duoNetMine(seat) {
+    const M = duoM(), o = M.online && M.online.me, l = M.last && M.last.p && M.last.p[0];
+    const p = D().duoNetPlayer ? D().duoNetPlayer(o || l || {}, seat | 0) : { name: 'P' + ((seat | 0) + 1), color: 'pink', char: 'knight', claw: 'classic', paint: '' };
+    const chars = duoChars();
+    if (chars.indexOf(p.char) < 0) p.char = chars[0];
+    if (clawIds().indexOf(p.claw) < 0) p.claw = 'classic';
+    if (duoPaints().indexOf(p.paint) < 0) p.paint = '';
+    return p;
+  }
+  function duoNetBind() {
+    if (!netOk()) return false;
+    NET.reset();
+    NET.hello(() => { const N = S.duoNet; return N ? { b: duoNetBuild(), p: N.mine.p, ready: !!N.mine.ready, g: S.duo && S.duo.net ? 1 : 0, n: Math.max(N.inN, N.outN) } : {}; });
+    const wrap = (t, fn) => NET.on(t, (m) => { try { fn(m); } catch (e) { duoNetLog({ k: 'err', t, e: String((e && e.message) || e) }); } });
+    wrap('@peer', duoNetOnPeer); wrap('@lost', duoNetOnLost); wrap('@back', duoNetOnBack); wrap('@gone', duoNetOnGone); wrap('@error', duoNetOnError);
+    wrap('@code', (c) => { const N = S.duoNet; if (N && !N.code) { N.code = c; if (N.ph === 'lobby' && !S.duo) duoNetLobbyDom(); } });
+    wrap('@pulse', duoNetOnPulse);
+    for (const [t, fn] of [['me', duoNetOnMe], ['lobby', duoNetOnLobby], ['go', duoNetOnGo], ['turn', duoNetOnTurn], ['cl', duoNetOnCl], ['fx', duoNetOnFx], ['cheer', duoNetOnCheer],
+      ['bye', duoNetOnBye], ['away', duoNetOnAway], ['again', duoNetOnAgain], ['need', duoNetOnNeed], ['sync', duoNetOnSync]]) wrap(t, fn);
+    return true;
+  }
+  const duoNetSend = (m) => (netOk() && S.duoNet && !S.duoNet.alone ? NET.send(m) : false);
+  // Out of online play: the partner is told, the link closes, the session goes, the address loses its ?join (never the local duel save).
+  function duoNetOff() {
+    const had = !!S.duoNet;
+    if (netOk() && NET.state !== 'idle' && NET.state !== 'closed') { if (NET.state === 'connected') NET.send({ t: 'bye' }); NET.close(); }
+    S.duoNet = null;
+    if (S.duo && S.duo.net) { S.duo = null; S.duoLive = null; S.duoV = null; }
+    if (had) {
+      try {
+        const L = window.location, Hs = window.history;
+        if (L && /[?&]join=/i.test(L.search || '') && Hs && Hs.replaceState) Hs.replaceState(null, '', (L.pathname || '') + String(L.search).replace(/([?&])join=[^&#]*&?/i, '$1').replace(/[?&]$/, '') + (L.hash || ''));
+      } catch (e) { /* the address stays */ }
+    }
+  }
+  // The title: a page opened with ?join=CODE goes to joining that code, once.
+  function duoNetBoot() {
+    if (DNX.booted || !DNX.boot || !D().DUO) return false;
+    DNX.booted = true;
+    const code = DNX.boot;
+    setTimeout(() => { if (S.screen === 'title' && !S.duo && !S.duoNet) duoNetJoin(code); }, 60);
+    return true;
+  }
+  function duoNetMsg(code) {
+    return ({
+      unreachable: 'Can\'t reach the online lobby, check your connection.',
+      full: 'That game is already full.',
+      nobody: 'No game with that code. Check the letters with your friend.',
+      foreign: 'That code belongs to a different game.',
+      version: 'Your partner has a different game version, both reload.',
+      hostgone: 'The host left the lobby.',
+      badcode: 'A code is four letters (no I or O).',
+    })[code] || 'The online game stopped.';
+  }
+  // ---- the screens: co-op's choice, the online menu, joining, the lobby
+  function duoNetHead(b, title, back) {
+    const head = h('div', 'duoHead');
+    head.appendChild(btn('Back', back, 'ghost sm'));
+    head.appendChild(h('h1', null, title));
+    b.appendChild(head);
+  }
+  function duoNetBig(parent, id, name, icon, text, fn) {
+    const c = btn(name, fn, 'duoMode dm-' + id);
+    c.textContent = '';
+    c.appendChild(h('span', 'mi', icon));
+    c.appendChild(h('span', 'mn', name));
+    c.appendChild(h('span', 'mt', text));
+    parent.appendChild(c);
+    return c;
+  }
+  // CO-OP BOSS from the duo menu: this phone (pass and play) or online.
+  function duoNetChoose() {
+    duoNetOff();
+    duoStashRun();
+    S.duoUi = { ph: 'coop' };
+    const b = duoBody('dp-menu dp-net');
+    if (!b) return false;
+    duoNetHead(b, 'Co-op Boss', () => duoMenu());
+    b.appendChild(h('div', 'sub duoSub', 'Two crawlers, one boss. Play on one phone, or each on your own.'));
+    const modes = h('div', 'duoModes');
+    duoNetBig(modes, 'local', 'Same phone', '\u{1F4F1}', 'Pass one phone back and forth. No internet needed.', () => duoSetup('coop'));
+    duoNetBig(modes, 'online', 'Online', '\u{1F310}', 'Each on your own phone, anywhere. Share a four letter code.', () => duoNetMenu());
+    b.appendChild(modes);
+    return true;
+  }
+  function duoNetMenu(err) {
+    duoNetOff();
+    duoStashRun();
+    S.duoUi = { ph: 'net' };
+    const b = duoBody('dp-menu dp-net');
+    if (!b) return false;
+    duoNetHead(b, 'Online co-op', () => duoNetChoose());
+    b.appendChild(h('div', 'sub duoSub', 'Fight a boss together, each on your own phone. One of you hosts, the other types the code.'));
+    if (err) b.appendChild(h('div', 'duoNetErr panel', err));
+    const modes = h('div', 'duoModes');
+    duoNetBig(modes, 'host', 'Host a game', '\u{1F3E0}', 'Get a code to share with a friend.', () => duoNetHost());
+    duoNetBig(modes, 'join', 'Join a game', '\u{1F511}', 'Type the code your friend got.', () => duoNetJoinDom(''));
+    b.appendChild(modes);
+    const O = duoM().online || { games: 0, wins: 0 };
+    b.appendChild(h('div', 'sub duoNetRec', `Online: ${O.games | 0} games, ${O.wins | 0} team wins`));
+    return true;
+  }
+  function duoNetHost() {
+    if (!netOk() || !duoNetBind()) { duoNetMenu(duoNetMsg('unreachable')); return false; }
+    duoStashRun();
+    const N = S.duoNet = duoNetFresh('host');
+    N.ph = 'lobby';
+    duoNetLobbyDom();
+    let p = null;
+    try { p = NET.host(); } catch (e) { p = null; }
+    if (p && p.then) p.then((code) => { if (S.duoNet === N && code && !S.duo) { N.code = code; duoNetLobbyDom(); } }, () => {});
+    duoNetLog({ k: 'host' });
+    return true;
+  }
+  // The join screen: four big letter boxes (typing moves on, a paste spreads out, the fourth letter joins).
+  function duoNetJoinDom(pre, err) {
+    duoNetOff();
+    duoStashRun();
+    S.duoUi = { ph: 'join' };
+    const b = duoBody('dp-menu dp-net dp-join');
+    if (!b) return false;
+    duoNetHead(b, 'Join a game', () => duoNetMenu());
+    b.appendChild(h('div', 'sub duoSub', 'Type the four letters your friend sees on their phone.'));
+    const row = h('div', 'duoCodeIn'), boxes = [], L = DNK().CODE_LEN || 4;
+    const code = () => boxes.map((x) => String(x.value || '')).join('');
+    const go = () => { const c = code(); if (c.length === L) duoNetJoin(c); };
+    const s0 = String(pre || '').toUpperCase().replace(/[^A-Z]/g, '');
+    for (let i = 0; i < L; i++) {
+      const inp = h('input', 'duoCodeBox');
+      try { inp.type = 'text'; inp.maxLength = L; inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('autocapitalize', 'characters'); inp.setAttribute('aria-label', 'Letter ' + (i + 1)); } catch (e) { /* stub */ }
+      inp.value = s0[i] || '';
+      inp.oninput = () => {
+        const s = String(inp.value || '').toUpperCase().replace(/[^A-Z]/g, '');
+        if (s.length > 1) { for (let k = 0; k < s.length && i + k < L; k++) boxes[i + k].value = s[k]; const nx = boxes[Math.min(L - 1, i + s.length)]; try { nx.focus(); } catch (e) { /* stub */ } }
+        else { inp.value = s; if (s && boxes[i + 1]) { try { boxes[i + 1].focus(); } catch (e) { /* stub */ } } }
+        if (code().length === L) go();
+      };
+      inp.onkeydown = (ev) => {
+        const k = ev && ev.key;
+        if (k === 'Backspace' && !inp.value && boxes[i - 1]) { boxes[i - 1].value = ''; try { boxes[i - 1].focus(); } catch (e) { /* stub */ } }
+        else if (k === 'Enter') go();
+      };
+      boxes.push(inp);
+      row.appendChild(inp);
+    }
+    b.appendChild(row);
+    if (err) b.appendChild(h('div', 'duoNetErr panel', err));
+    b.appendChild(btn('Join', go, 'pri duoGo'));
+    try { if (!S.headless && boxes[Math.min(L - 1, s0.length)]) boxes[Math.min(L - 1, s0.length)].focus(); } catch (e) { /* no focus */ }
+    return true;
+  }
+  function duoNetJoin(raw) {
+    const c = D().duoNetCode ? D().duoNetCode(raw) : null;
+    if (!c) { duoNetJoinDom(raw, duoNetMsg('badcode')); return false; }
+    if (!netOk() || !duoNetBind()) { duoNetJoinDom(c, duoNetMsg('unreachable')); return false; }
+    duoStashRun();
+    const N = S.duoNet = duoNetFresh('guest');
+    N.code = c; N.ph = 'joining';
+    const b = duoBody('dp-menu dp-net dp-join');
+    if (b) {
+      duoNetHead(b, 'Join a game', () => duoNetJoinDom(c));
+      b.appendChild(h('div', 'duoCodeBig', c.split('').join(' ')));
+      b.appendChild(h('div', 'sub duoNetSpin', `Joining ${c}...`));
+    }
+    NET.join(c);
+    duoNetLog({ k: 'join', code: c });
+    return true;
+  }
+  // Something went wrong before a game: back to where it started, with the reason.
+  function duoNetFail(code) {
+    const N = S.duoNet, guest = N && N.role === 'guest', c = N && N.code;
+    duoNetLog({ k: 'fail', code });
+    if (N && S.duo && S.duo.net) { N.lost = true; N.gone = true; N.err = code; if (S.screen === 'duo') duoNetDom(); return; }
+    duoNetOff();
+    if (guest && (code === 'nobody' || code === 'full' || code === 'badcode' || code === 'foreign')) duoNetJoinDom(c || '', duoNetMsg(code));
+    else duoNetMenu(duoNetMsg(code));
+  }
+  // ---- the lobby: both players (mine to edit), the boss (the host picks), ready
+  function duoNetSeatP(i) { const N = S.duoNet; if (!N) return null; return i === N.me ? N.mine.p : N.part ? N.part.p : null; }
+  // The host's view of the two, colours kept apart (the guest's moves when both want the same).
+  function duoNetPair() {
+    const N = S.duoNet, pl = D().duoNetPlayer;
+    const p0 = pl(duoNetSeatP(0) || {}, 0), p1 = duoNetSeatP(1) ? pl(duoNetSeatP(1), 1) : null;
+    if (p1 && p1.color === p0.color) p1.color = (DK().COLORS.find((c) => c.id !== p0.color) || DK().COLORS[1]).id;
+    if (N && N.role === 'host' && N.part && p1) N.part.p.color = p1.color;
+    return [p0, p1];
+  }
+  function duoNetSendMe() {
+    const N = S.duoNet;
+    if (!N) return false;
+    if (N.role === 'host') { const P = duoNetPair(); return duoNetSend({ t: 'lobby', p: P, ready: [N.mine.ready ? 1 : 0, N.part && N.part.ready ? 1 : 0], boss: N.boss }); }
+    return duoNetSend({ t: 'me', p: D().duoNetPlayer(N.mine.p, 1), ready: N.mine.ready ? 1 : 0 });
+  }
+  // One field of my own look in the lobby (tests and the DOM): name, color, char, claw, paint.
+  function duoNetSet(k, v) {
+    const N = S.duoNet;
+    if (!N || S.duo) return false;
+    const p = N.mine.p;
+    if (k === 'name') p.name = String(v == null ? '' : v).slice(0, 24);
+    else if (k === 'color') { if (!DK().COLORS.some((c) => c.id === v)) return false; p.color = v; }
+    else if (k === 'char') { if (duoChars().indexOf(v) < 0) return false; p.char = v; }
+    else if (k === 'claw') { if (clawIds().indexOf(v) < 0) return false; p.claw = v; }
+    else if (k === 'paint') { if (duoPaints().indexOf(v) < 0) return false; p.paint = v; }
+    else return false;
+    duoNetSendMe();
+    return true;
+  }
+  function duoNetBoss(v) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'host' || S.duo) return false;
+    if (!(v === 'random' || duoBossList().some((x) => x.id === v && x.beaten))) return false;
+    N.boss = v;
+    duoNetSendMe();
+    return true;
+  }
+  function duoNetReady(on) {
+    const N = S.duoNet;
+    if (!N || S.duo || N.ph !== 'lobby') return false;
+    N.mine.ready = on == null ? !N.mine.ready : !!on;
+    if (N.mine.ready) snd('duoReady');
+    duoNetSendMe();
+    if (!duoNetStart()) duoNetLobbyDom();
+    return true;
+  }
+  function duoNetLobbyDom() {
+    const N = S.duoNet;
+    if (!N || S.duo) return;
+    S.duoUi = { ph: 'lobby' };
+    const b = duoBody('dp-menu dp-net dp-lobby');
+    if (!b) return;
+    duoNetHead(b, 'Online co-op', () => duoNetMenu());
+    // the room code, big, to copy or share
+    const cc = h('div', 'duoCodeCard panel');
+    cc.appendChild(h('div', 'rkH', 'Room code'));
+    const big = h('div', 'duoCodeL');
+    for (const ch of (N.code || '....').split('')) big.appendChild(h('span', null, ch));
+    cc.appendChild(big);
+    if (N.code) {
+      const r = h('div', 'row center');
+      r.appendChild(btn('Copy code', () => duoNetCopy(N.code, 'Code copied!'), 'sm'));
+      r.appendChild(btn('Share invite', () => duoNetShare(), 'sm go'));
+      cc.appendChild(r);
+    } else cc.appendChild(h('div', 'sub duoNetSpin', 'Opening a room...'));
+    b.appendChild(cc);
+    N.dom = { status: h('div', 'duoNetStatus') };
+    b.appendChild(N.dom.status);
+    // both players in seat order: mine to edit, theirs to see
+    for (let i = 0; i < 2; i++) {
+      const slot = h('div', 'duoNetSlot');
+      if (i === N.me) duoNetMinePanel(slot); else { N.dom.part = slot; duoNetPartPanel(slot); }
+      b.appendChild(slot);
+    }
+    N.dom.boss = h('div', 'duoOpt panel');
+    b.appendChild(N.dom.boss);
+    duoNetBossPanel();
+    const rd = btn(N.mine.ready ? 'Not ready' : 'Ready!', () => duoNetReady(), (N.mine.ready ? 'ghost' : 'pri') + ' duoGo duoNetReady');
+    b.appendChild(rd);
+    duoNetStatus();
+  }
+  function duoNetMinePanel(slot) {
+    const N = S.duoNet, p = N.mine.p, COL = DK().COLORS, paints = duoPaints();
+    const col = (COL.find((c) => c.id === p.color) || COL[0]).col;
+    const pan = h('div', 'duoP panel');
+    try { if (pan.style && pan.style.setProperty) pan.style.setProperty('--dc', col); } catch (e) { /* stub */ }
+    const top = h('div', 'duoPTop');
+    top.appendChild(portraitCanvas(p.char, 44));
+    top.appendChild(h('span', 'duoPN', N.role === 'host' ? 'You (host)' : 'You'));
+    const inp = h('input', 'duoName');
+    try { inp.type = 'text'; inp.maxLength = (DK().NAME_MAX || 10); inp.placeholder = 'P' + (N.me + 1); inp.autocomplete = 'off'; inp.spellcheck = false; inp.setAttribute('aria-label', 'Your name'); } catch (e) { /* stub */ }
+    inp.value = /^P[12]$/.test(p.name) ? '' : p.name;
+    inp.oninput = () => { p.name = inp.value; duoNetSendMe(); };
+    inp.onchange = () => { p.name = inp.value; duoNetSendMe(); };
+    top.appendChild(inp);
+    if (N.mine.ready) top.appendChild(h('span', 'duoNetRdy', '✔'));
+    pan.appendChild(top);
+    const cr = h('div', 'duoSw');
+    for (const c of COL) {
+      const s = btn('me ' + c.id, () => { duoNetSet('color', c.id); duoNetLobbyDom(); }, 'duoCol' + (p.color === c.id ? ' on' : ''));
+      s.textContent = '';
+      try { s.style.background = c.col; s.setAttribute('aria-label', c.name || c.id); } catch (e) { /* stub */ }
+      cr.appendChild(s);
+    }
+    pan.appendChild(cr);
+    const ch = h('div', 'duoChips');
+    for (const id of duoChars()) {
+      const c = btn('me ' + id, () => { duoNetSet('char', id); duoNetLobbyDom(); }, 'duoChip' + (p.char === id ? ' on' : ''));
+      c.textContent = '';
+      c.appendChild(portraitCanvas(id, 30));
+      c.appendChild(h('span', null, String((charDef(id) || {}).name || id).split(' ')[0]));
+      ch.appendChild(c);
+    }
+    pan.appendChild(ch);
+    const cl = h('div', 'duoChips claws');
+    for (const id of clawIds()) {
+      const inf = clawInfo(id);
+      const c = btn('me claw ' + id, () => { duoNetSet('claw', id); duoNetLobbyDom(); }, 'duoChip' + (p.claw === id ? ' on' : ''));
+      c.textContent = (inf.icon ? inf.icon + ' ' : '') + String(inf.name || id).replace(/ Claws?$/, '');
+      cl.appendChild(c);
+    }
+    pan.appendChild(cl);
+    const k = paints.indexOf(p.paint), nm = p.paint ? ((D().COSMETICS || {})[p.paint] || {}).name || p.paint : 'Team colour';
+    pan.appendChild(btn('me look', () => { duoNetSet('paint', paints[(k + 1) % paints.length]); duoNetLobbyDom(); }, 'sm duoLook')).textContent = '\u{1F3A8} Claw paint: ' + nm + (paints.length > 1 ? '  ↻' : '');
+    slot.appendChild(pan);
+  }
+  function duoNetPartPanel(slot) {
+    const N = S.duoNet;
+    if (!N || !slot) return;
+    clear(slot);
+    const pan = h('div', 'duoP panel duoNetPart');
+    const P = N.part && N.part.p;
+    if (!P) {
+      pan.appendChild(h('div', 'duoNetWait', N.role === 'host' ? 'Waiting for a friend to join...' : 'Waiting for the host...'));
+      slot.appendChild(pan);
+      return;
+    }
+    const col = D().duoColor ? D().duoColor(P.color).col : '#2ee6d6';
+    try { if (pan.style && pan.style.setProperty) pan.style.setProperty('--dc', col); } catch (e) { /* stub */ }
+    const top = h('div', 'duoPTop');
+    top.appendChild(portraitCanvas(P.char, 44));
+    const col2 = h('div', 'col');
+    col2.appendChild(h('span', 'duoPN', N.role === 'host' ? 'Your friend' : 'The host'));
+    col2.appendChild(h('b', 'duoNetPName', P.name));
+    top.appendChild(col2);
+    top.appendChild(h('span', 'duoNetRdy' + (N.part.ready ? ' on' : ''), N.lost ? '\u{1F4E1}' : N.part.ready ? '✔' : '…'));
+    pan.appendChild(top);
+    const inf = clawInfo(P.claw);
+    pan.appendChild(h('div', 'sub', `${String((charDef(P.char) || {}).name || P.char)} · ${(inf.icon ? inf.icon + ' ' : '') + String(inf.name || P.claw)}`));
+    slot.appendChild(pan);
+  }
+  function duoNetBossPanel() {
+    const N = S.duoNet, el = N && N.dom && N.dom.boss;
+    if (!el) return;
+    clear(el);
+    if (N.role === 'host') {
+      el.appendChild(h('div', 'rkH', 'The boss (the ones you have beaten, or a surprise)'));
+      const row = h('div', 'duoChips');
+      row.appendChild(btn('boss random', () => { duoNetBoss('random'); duoNetBossPanel(); }, 'duoChip' + (N.boss === 'random' ? ' on' : ''))).textContent = '\u{1F3B2} Random';
+      for (const x of duoBossList()) {
+        const c = btn('boss ' + x.id, () => { if (x.beaten) { duoNetBoss(x.id); duoNetBossPanel(); } else toast('Beat ' + (enemyDef(x.id).name || x.id) + ' in a run first. Random can still pick it.'); }, 'duoChip' + (N.boss === x.id ? ' on' : '') + (x.beaten ? '' : ' locked'));
+        c.textContent = x.beaten ? (enemyDef(x.id).name || x.id) : '\u{1F512} ???';
+        row.appendChild(c);
+      }
+      el.appendChild(row);
+    } else {
+      el.appendChild(h('div', 'rkH', 'The boss (the host picks)'));
+      el.appendChild(h('div', 'duoNetBossName', N.boss === 'random' ? '\u{1F3B2} Random' : (enemyDef(N.boss).name || N.boss)));
+    }
+  }
+  function duoNetStatus() {
+    const N = S.duoNet, el = N && N.dom && N.dom.status;
+    if (!el) return;
+    let s = '';
+    if (!N.code) s = 'Opening a room...';
+    else if (N.lost && N.part) s = 'Partner connection lost, reconnecting...';
+    else if (!N.part) s = N.role === 'host' ? 'Share the code. Your friend taps Duo, Co-op Boss, Online, Join a game.' : 'Waiting for the host...';
+    else if (!N.mine.ready) s = 'Tap Ready when you are set.';
+    else if (!N.part.ready) s = `${duoNetUp(N.part.p.name)} is getting ready...`;
+    else s = 'Starting!';
+    clear(el);
+    el.appendChild(h('span', null, s));
+  }
+  const duoNetUp = (s) => String(s || '').toUpperCase();
+  function duoNetCopy(text, done) {
+    let ok = false;
+    try { const c = typeof navigator !== 'undefined' && navigator.clipboard; if (c && c.writeText) { c.writeText(text).then(() => {}, () => {}); ok = true; } } catch (e) { ok = false; }
+    toast(ok ? done : 'Code: ' + text, 2.4);
+    return ok;
+  }
+  function duoNetLink(code) {
+    let base = 'https://games-71g.pages.dev/clawspire/';
+    try { const L = window.location; if (L && /^https?:$/.test(L.protocol || '') && L.host && !/games-71g\.pages\.dev$/.test(L.host)) base = L.protocol + '//' + L.host + (L.pathname || '/'); } catch (e) { /* the live address */ }
+    return base + '?join=' + code;
+  }
+  function duoNetShare() {
+    const N = S.duoNet;
+    if (!N || !N.code) return false;
+    const url = duoNetLink(N.code), text = i18nTr('Fight a boss with me in Clawspire! Room code:') + ' ' + N.code;
+    try {
+      const nav = typeof navigator !== 'undefined' ? navigator : null;
+      if (nav && nav.share) { nav.share({ title: 'Clawspire', text, url }).then(() => {}, () => {}); return true; }
+    } catch (e) { /* fall back */ }
+    return duoNetCopy(url, 'Invite link copied!');
+  }
+  // ---- the link's events
+  function duoNetOnPeer(m) {
+    const N = S.duoNet;
+    if (!N) return;
+    if (dnStr(m.b, 24) !== duoNetBuild()) { duoNetLog({ k: 'build', them: dnStr(m.b, 24) }); if (netOk()) NET.close(); duoNetFail('version'); return; }
+    const seat = 1 - N.me, was = N.part;
+    N.part = { p: D().duoNetPlayer(m.p, seat), ready: !!m.ready, g: m.g ? 1 : 0, n: dnInt(m.n, 0, 1e6, 0) };
+    duoNetLog({ k: 'peer', seat, g: N.part.g });
+    if (S.duo && S.duo.net) {
+      // back in a game after a drop: the '@back' that follows resends the last turn; a partner that lost the game will ask ('need')
+      if (was) N.part.ready = was.ready;
+      return;
+    }
+    if (m.g) { N.ph = 'sync'; duoNetSend({ t: 'need' }); return; }   // they are in a game this phone is not: ask for it
+    N.ph = 'lobby';
+    snd('duoLink', { k: 'join' }); haptic('tap');
+    duoNetSendMe();
+    duoNetLobbyDom();
+  }
+  function duoNetOnMe(m) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'host' || S.duo || !N.part) return;
+    N.part.p = D().duoNetPlayer(m.p, 1);
+    N.part.ready = !!m.ready;
+    duoNetSendMe();   // the colours kept apart, back to them
+    if (!duoNetStart()) { duoNetPartPanel(N.dom && N.dom.part); duoNetStatus(); }
+  }
+  function duoNetOnLobby(m) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'guest' || S.duo || !Array.isArray(m.p)) return;
+    const pl = D().duoNetPlayer, host = pl(m.p[0], 0), mine = m.p[1] ? pl(m.p[1], 1) : null;
+    N.part = Object.assign(N.part || {}, { p: host, ready: !!(Array.isArray(m.ready) && m.ready[0]) });
+    const b = dnStr(m.boss, 24);
+    N.boss = b === 'random' || duoBossList().some((x) => x.id === b) ? b : 'random';
+    if (mine && mine.color !== N.mine.p.color) { N.mine.p.color = mine.color; duoNetLobbyDom(); return; }   // the host moved my colour off theirs
+    if (N.dom) { duoNetPartPanel(N.dom.part); duoNetBossPanel(); duoNetStatus(); } else duoNetLobbyDom();
+  }
+  // The host starts it once both are ready: the seed (the relay's, stirred), the boss, the two looks.
+  function duoNetStart() {
+    const N = S.duoNet;
+    if (!N || N.role !== 'host' || !N.part || !N.mine.ready || !N.part.ready || S.duo || N.lost || !netOk() || NET.state !== 'connected') return false;
+    const P = duoNetPair();
+    const seed = ((U.hashStr((NET.seed >>> 0) + ':' + N.code + ':' + (N.games | 0)) >>> 0) || 1);
+    const all = duoBossList().map((x) => x.id);
+    const boss = N.boss !== 'random' && all.indexOf(N.boss) >= 0 ? N.boss : all.length ? all[U.rng((seed ^ 0xb055) >>> 0 || 1).int(0, all.length - 1)] : 'hoard';
+    duoNetSend({ t: 'go', seed, boss, pick: N.boss, p: P });
+    duoNetBegin(P, seed, boss, N.boss);
+    return true;
+  }
+  function duoNetOnGo(m) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'guest' || S.duo || !Array.isArray(m.p)) return;
+    const seed = dnInt(m.seed, 1, 4294967295, 0), boss = dnStr(m.boss, 24);
+    if (!seed || !duoBossList().some((x) => x.id === boss)) { duoNetLog({ k: 'badgo' }); return; }
+    const pl = D().duoNetPlayer, P = [pl(m.p[0], 0), pl(m.p[1], 1)];
+    // my own look is mine (the host may only have moved my colour)
+    P[1] = Object.assign({}, pl(N.mine.p, 1), { color: P[1].color });
+    duoNetBegin(P, seed, boss, dnStr(m.pick, 24) || 'random');
+  }
+  function duoNetBegin(P, seed, boss, pick) {
+    const N = S.duoNet;
+    Object.assign(N, { ph: 'game', inN: 0, outN: 0, lastOut: null, rx: false, alone: false, left: false, lost: false, gone: false, ask: false, awayAt: 0, w: duoNetW(), games: (N.games | 0) + 1, dom: null });
+    const M = duoM();
+    M.online = D().duoNetOnline ? D().duoNetOnline(M.online) : (M.online || { games: 0, wins: 0 });
+    M.online.me = Object.assign({}, N.mine.p);
+    const Dd = duoBegin('coop', P, seed, { boss, net: { me: N.me, code: N.code } });
+    if (Dd) Dd.pick = pick || 'random';
+    if (netOk()) NET.have(1);
+    duoNetLog({ k: 'begin', seed, boss, me: N.me, first: Dd && Dd.first });
+    return Dd;
+  }
+  function duoNetAfterToss() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph !== 'toss') return false;
+    duoNetLive();
+    if (Dd.first === N.me) duoNetYours(); else duoNetWatch(Dd.first);
+    return true;
+  }
+  // Both seats' runs and fights for this phone (the partner's is a shell its turns fill in), one enemy list.
+  function duoNetLive() {
+    const Dd = S.duo;
+    if (!Dd || Dd.mode !== 'coop' || !X.COMBAT) return null;
+    if (S.duoLive) return S.duoLive;
+    const runs = [duoSeatRun(0), duoSeatRun(1)];
+    const F0 = X.COMBAT.newFight(runs[0], [Dd.boss], U.rng(Dd.fseed));
+    const F1 = X.COMBAT.newFight(runs[1], [Dd.boss], U.rng((Dd.fseed ^ 0x2f00d) >>> 0 || 1));
+    duoCoopScale(F0);
+    F1.enemies = F0.enemies; F1.target = 0; F1.events.length = 0; F0.events.length = 0;
+    S.duoLive = { runs, F: [F0, F1], gold: [null, null], n: [0, 0] };
+    return S.duoLive;
+  }
+  // ---- turns
+  function duoNetYours() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    Dd.turn = N.me; Dd.from = 1 - N.me; Dd.ph = 'yours';
+    const T = S.duoT || (S.duoT = { t: 0, now: 0 });
+    T.t = 0;
+    snd('duoLink', { k: 'turn' }); haptic('tap');
+    duoNetLog({ k: 'yours' });
+    duoShow();
+    music('boss');
+    return true;
+  }
+  function duoNetGo() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph !== 'yours') return false;
+    snd('duoReady');
+    const ok = duoCoopEnter(N.me);
+    if (ok && F) { N.cmb = Object.assign({}, F.combos || {}); N.stT = 0; N.bdT = 0; N.lastCl = ''; }
+    return ok;
+  }
+  function duoNetWatch(who) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    Dd.turn = who === 0 || who === 1 ? who : 1 - N.me; Dd.from = N.me; Dd.ph = 'watch';
+    N.w = duoNetW(); N.w.beat = 1.4;
+    const T = S.duoT || (S.duoT = { t: 0, now: 0 });
+    T.t = 0;
+    const top = $('top');
+    if (top && top.classList) top.classList.remove('duoOn');
+    vaultApply();
+    duoNetLog({ k: 'watch', who: Dd.turn });
+    duoShow();
+    music('boss');
+    return true;
+  }
+  // The pass (duoHand's online form): the turn was sent as it ended (duoTurnPass), or goes now (a seat went down).
+  function duoNetPass(nx) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    if (!N.passSent) duoNetSendTurn({ next: nx });
+    N.passSent = false;
+    if (N.alone || Dd.down[nx]) { if (!Dd.down[N.me]) return duoNetYours(); }
+    return duoNetWatch(nx);
+  }
+  function duoNetSendTurn(o) {
+    const Dd = S.duo, N = S.duoNet, L = S.duoLive;
+    if (!Dd || !Dd.net || !N || !L) return null;
+    o = o || {};
+    const me = N.me;
+    N.outN = Math.max(N.outN, N.inN) + 1;
+    const m = { t: 'turn', n: N.outN, seat: me, next: o.next === 0 || o.next === 1 ? o.next : 1 - me, res: o.res || '', turns: Dd.turns | 0,
+      foes: duoNetFoesOut(L.F[0].enemies), pub: duoNetPubOut(L.F[me].player), down: [Dd.down[0] ? 1 : 0, Dd.down[1] ? 1 : 0] };
+    N.lastOut = m;
+    if (o.pass) N.passSent = true;
+    const sent = duoNetSend(m);
+    if (netOk() && !N.alone) NET.have(N.outN + 1);
+    duoNetLog({ k: 'send', n: m.n, next: m.next, res: m.res, sent: !!sent });
+    return m;
+  }
+  function duoNetOnTurn(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || N.alone) return false;
+    const n = dnInt(m.n, 0, 1e7, 0);
+    if (!(n > N.inN)) return false;   // a turn already applied (a resend after a rejoin)
+    const seat = m.seat === 0 || m.seat === 1 ? m.seat : -1;
+    if (seat !== 1 - N.me) return false;
+    if (Dd.ph !== 'watch' && Dd.ph !== 'toss') { duoNetLog({ k: 'turn?', ph: Dd.ph }); return false; }
+    const L = duoNetLive();
+    if (!L || !duoNetFoesIn(L.F[0].enemies, m.foes)) { duoNetLog({ k: 'badturn', n }); return false; }
+    duoNetPubIn(L.F[seat].player, m.pub);
+    if (Array.isArray(m.down)) Dd.down[seat] = m.down[seat] ? 1 : 0;   // only theirs: this phone knows its own
+    N.inN = n; N.outN = Math.max(N.outN, n);
+    Dd.turns = Math.max(Dd.turns | 0, dnInt(m.turns, 0, 1e6, 0));
+    if (netOk()) NET.have(n + 1);
+    duoNetLog({ k: 'recv', n, next: m.next, res: m.res });
+    if (m.res === 'win' || m.res === 'ko') return duoNetResult(m.res === 'win');
+    const next = m.next === 0 || m.next === 1 ? m.next : 1 - seat;
+    if (next === N.me && !Dd.down[N.me]) return duoNetYours();
+    return duoNetWatch(seat);
+  }
+  // The result came from the partner's phone: booked here too, then the podium.
+  function duoNetResult(won) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    N.rx = true;
+    if (!won) Dd.down = [1, 1];
+    duoCoopBook(won);
+    Dd.ph = 'end';
+    snd(won ? 'win' : 'lose');
+    if (won) fx().emit('confetti', 270, 300, { power: 1 });
+    const top = $('top');
+    if (top && top.classList) top.classList.remove('duoOn');
+    vaultApply();
+    duoShow();
+    return true;
+  }
+  // duoCoopBook's hook: the online count, and the result to the partner when it happened on this phone.
+  function duoNetBooked(won) {
+    const N = S.duoNet, M = duoM();
+    M.online = D().duoNetOnline ? D().duoNetOnline(M.online) : (M.online || { games: 0, wins: 0 });
+    M.online.games++;
+    if (won) M.online.wins++;
+    if (N && !N.rx) duoNetSendTurn({ res: won ? 'win' : 'ko', next: N.me });
+  }
+  /* ---- the shared enemies over the wire. Out: the numbers COMBAT keeps on
+     an enemy that its turns change (hp, block, statuses, the move cycle, the
+     intent, phase two's pattern, the belly). In: every field checked and
+     clamped, every id checked against DATA; a slot whose enemy changed (a
+     summon) is made fresh. False (nothing applied) when the list is junk. */
+  const DN_BELLY = 8;
+  function duoNetStOut(st) { const o = {}; for (const k in st || {}) { const v = +st[k]; if (Number.isFinite(v) && v !== 0) o[k] = Math.round(v); } return o; }
+  // statuses: a plain name (the STATUS table's, or one a block keeps as a counter) and a clamped count
+  function duoNetStIn(o) {
+    const out = {};
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return out;
+    let n = 0;
+    for (const k in o) {
+      if (++n > 40) break;
+      if (!/^[a-z][a-z0-9_]{0,23}$/i.test(k) || k === 'constructor' || k === 'prototype') continue;
+      const v = dnInt(o[k], -99, 999, 0);
+      if (v) out[k] = v;
+    }
+    return out;
+  }
+  function duoNetIntentOut(it) {
+    if (!it || typeof it !== 'object') return null;
+    return { id: dnStr(String(it.id || ''), 40), k: dnStr(String(it.k || ''), 20), v: dnNum(it.v, -99999, 99999, 0), n: dnInt(it.n, 0, 99, 1), ch: it.charged ? 1 : 0, name: dnStr(String(it.name || ''), 40) };
+  }
+  function duoNetFoesOut(list) {
+    return (list || []).slice(0, 6).map((e) => (!e ? null : {
+      id: e.id, hp: e.hp, mx: e.maxHp, bk: e.block || 0, st: duoNetStOut(e.status), al: e.alive ? 1 : 0, es: e.escaped ? 1 : 0, ch: e.charged || 0,
+      cy: e.cyc || 0, mi: e.moveIdx == null ? -1 : e.moveIdx, it: duoNetIntentOut(e.intent), en: e.enraged ? 1 : 0, fi: e.final ? 1 : 0,
+      pt: Array.isArray(e.def && e.def.pattern) ? e.def.pattern.slice(0, 24) : null, sn: e.sigN || 0, sf: e.sigForce ? 1 : 0, ac: e.acts || 0, gt: e.gut || 0,
+      af: Array.isArray(e.affix) ? e.affix.slice(0, 8) : [], dm: e.dmgMul == null ? 1 : e.dmgMul, bn: e.bank || 0,
+      bl: (e.belly || []).slice(0, DN_BELLY).map((b) => ({ u: String((b.inst && b.inst.uid) || ''), id: b.inst && b.inst.id, p: b.inst && b.inst.plus ? 1 : 0, j: b.inst && b.inst.junk ? 1 : 0, tu: b.turns | 0, k: b.kind || '', s: b.str | 0, a: b.armor | 0 })),
+    }));
+  }
+  // A fresh enemy object for a slot the partner's turn filled (a summon): COMBAT's own maker, through a shell fight.
+  function duoNetFoeMake(id) {
+    try {
+      const run = S.duoLive && S.duoLive.runs ? S.duoLive.runs[0] : { hp: 1, maxHp: 1, act: 1, bin: [], relics: [] };
+      const Fx = X.COMBAT.newFight({ hp: 1, maxHp: 1, act: run.act || 1, bin: [], relics: [], claw: {}, char: null }, [id], U.rng(7));
+      return Fx && Fx.enemies[0] ? Fx.enemies[0] : null;
+    } catch (e) { return null; }
+  }
+  function duoNetFoesIn(list, arr) {
+    if (!Array.isArray(list) || !Array.isArray(arr) || !arr.length || arr.length > 6) return false;
+    const E = tbl('ENEMIES'), I = tbl('ITEMS');
+    // all or nothing: every entry must name a real enemy
+    for (const o of arr) if (o !== null && (!o || typeof o !== 'object' || !dnHas(E, o.id))) return false;
+    for (let i = 0; i < arr.length; i++) {
+      const o = arr[i];
+      if (o === null) continue;
+      let e = list[i];
+      if (!e || e.id !== o.id) { e = duoNetFoeMake(o.id); if (!e) return false; list[i] = e; }
+      const moves = (e.def && e.def.moves) || [];
+      e.maxHp = dnInt(o.mx, 1, 999999, e.maxHp || 1);
+      e.hp = dnInt(o.hp, 0, e.maxHp, e.hp);
+      e.block = dnInt(o.bk, 0, 99999, 0);
+      e.status = duoNetStIn(o.st, true);
+      e.alive = !!o.al && e.hp > 0; e.escaped = !!o.es;
+      e.charged = dnInt(o.ch, 0, 99999, 0);
+      e.cyc = dnInt(o.cy, 0, 1e6, 0);
+      e.moveIdx = dnInt(o.mi, -1, Math.max(-1, moves.length - 1), -1);
+      e.enraged = !!o.en; e.final = !!o.fi;
+      e.sigN = dnInt(o.sn, 0, 1e5, 0); e.sigForce = !!o.sf; e.acts = dnInt(o.ac, 0, 999, 0); e.gut = dnInt(o.gt, 0, 9999, 0); e.bank = dnInt(o.bn, 0, 99999, 0);
+      e.dmgMul = dnNum(o.dm, 0.05, 50, e.dmgMul || 1);
+      if (Array.isArray(o.af)) e.affix = o.af.filter((a) => typeof a === 'string' && a.length < 30).slice(0, 8);
+      if (Array.isArray(o.pt) && e.def && (e.def.ai || 'cycle') === 'cycle') {
+        const pt = o.pt.slice(0, 24).map((k) => dnInt(k, 0, Math.max(0, moves.length - 1), 0));
+        if (pt.length && JSON.stringify(pt) !== JSON.stringify(e.def.pattern || null)) e.def = Object.assign({}, e.def, { pattern: pt });
+      }
+      e.belly = Array.isArray(o.bl) ? o.bl.slice(0, DN_BELLY).filter((b) => b && dnHas(I, b.id)).map((b) => ({
+        inst: { uid: dnStr(String(b.u || ''), 24) || U.uid(), id: b.id, plus: !!b.p, frozen: false, junk: !!b.j }, turns: dnInt(b.tu, 0, 99, 1), kind: dnStr(b.k, 16), str: dnInt(b.s, 0, 99, 0), armor: dnInt(b.a, 0, 99, 0) })) : [];
+      e.intent = duoNetIntentIn(e, o.it);
+    }
+    list.length = arr.length;
+    for (let i = 0; i < list.length; i++) if (!list[i]) { const d = duoNetFoeMake(arr.find((x) => x) ? arr.find((x) => x).id : 'dummy'); if (d) { d.alive = false; d.hp = 0; } list[i] = d; }
+    return true;
+  }
+  // The intent: this game's own move object when the partner's names one of the moves, else a checked copy.
+  function duoNetIntentIn(e, it) {
+    if (!it || typeof it !== 'object' || !e.alive) return e.alive ? e.intent : null;
+    const moves = (e.def && e.def.moves) || [], id = dnStr(String(it.id || ''), 40);
+    const m = e.moveIdx >= 0 && moves[e.moveIdx] && moves[e.moveIdx].id === id ? moves[e.moveIdx] : moves.find((x) => x && x.id === id);
+    if (m && !it.ch) return m;
+    if (id === 'unleash' || it.ch) { const v = Math.max(1, e.charged || dnInt(it.v, 1, 99999, 1)); return { id: 'unleash', name: 'Unleash', k: 'attack', v, n: 1, charged: true, txt: `Unleashes a charged hit for ${v}.` }; }
+    if (id === 'idle') return { id: 'idle', name: 'Idle', k: 'none', txt: 'Waits.' };
+    const k = ['attack', 'block', 'buff', 'debuff', 'none'].indexOf(it.k) >= 0 ? it.k : 'none';
+    return { id: id || 'move', name: dnStr(String(it.name || ''), 40) || 'Move', k, v: dnInt(it.v, 0, 99999, 0), n: dnInt(it.n, 1, 20, 1), txt: '' };
+  }
+  function duoNetPubOut(p) { return p ? { hp: p.hp, mx: p.maxHp, bk: p.block || 0, st: duoNetStOut(p.status) } : null; }
+  function duoNetPubIn(p, o) {
+    if (!p || !o || typeof o !== 'object') return false;
+    p.maxHp = dnInt(o.mx, 1, 99999, p.maxHp || 1);
+    p.hp = dnInt(o.hp, 0, p.maxHp, p.hp);
+    p.block = dnInt(o.bk, 0, 99999, 0);
+    p.status = duoNetStIn(o.st, false);
+    return true;
+  }
+  // ---- the live stream while this phone grabs (the fight screen's frame)
+  function duoNetFightTick(real) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || N.alone || !F || !FS || Dd.turn !== N.me || Dd.ph !== 'fight') return;
+    // the named combos as they fire (COMBAT counts them per fight)
+    for (const id in (F.combos || {})) {
+      const c = F.combos[id] | 0, was = N.cmb[id] | 0;
+      if (c > was) { N.cmb[id] = c; duoNetSend({ t: 'fx', k: 'combo', id }); }
+    }
+    N.stT -= real; N.bdT -= real;
+    if (N.stT > 0) return;
+    N.stT = DNK().STREAM || 0.1;
+    const rig = FS.rig;
+    if (!rig) return;
+    const K = rig.ctl, Tt = K && K.T;
+    let op = 1;
+    if (Tt && Number.isFinite(K.pL) && Tt.open !== Tt.closed) op = U.clamp((K.pL - Tt.closed) / (Tt.open - Tt.closed), 0, 1);
+    const r1 = (v) => Math.round((+v || 0) * 10) / 10;
+    const m = { t: 'cl', x: r1(rig.x), y: r1(rig.y), ct: r1(rig.cableTop && rig.cableTop.x), op: Math.round(op * 100) / 100, ph: String(rig.phase || ''), ty: rig.type || 'classic', w: r1((rig.cfg && rig.cfg.width) || 1),
+      hp: [F.player.hp, F.player.block || 0], e: F.enemies.slice(0, 6).map((e) => (e ? [e.hp, e.block || 0, e.alive ? 1 : 0] : [0, 0, 0])) };
+    const key = JSON.stringify(m);
+    let bodies = false;
+    if (N.bdT <= 0) {
+      N.bdT = DNK().BODIES || 0.25;
+      m.b = FS.items.slice(0, DNK().BODIES_MAX || 40).filter((b) => b && b.data && b.data.def).map((b) => [String((b.data.inst && b.data.inst.uid) || '').slice(0, 16), b.data.def.id, Math.round(b.x), Math.round(b.y), Math.round((b.a || 0) * 100)]);
+      const bk = JSON.stringify(m.b);
+      bodies = bk !== N.lastB;
+      N.lastB = bk;
+      if (!bodies) delete m.b;
+    }
+    if (key === N.lastCl && !bodies) return;   // nothing moved
+    N.lastCl = key;
+    duoNetSend(m);
+  }
+  // deliver()'s hook: a prize went down the chute on this phone's turn.
+  function duoNetDeliver(inst) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || !inst || Dd.turn !== N.me) return;
+    duoNetSend({ t: 'fx', k: 'prize', id: inst.id, plus: inst.plus ? 1 : 0 });
+  }
+  // ---- watching the partner's turn
+  function duoNetOnCl(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.turn === N.me || (Dd.ph !== 'watch' && Dd.ph !== 'toss')) return;
+    const w = N.w, bw = CAB.w, bh = CAB.h, x = dnNum(m.x, -60, bw + 60, bw / 2);
+    w.claw = { x, y: dnNum(m.y, -60, bh + 60, 60), ct: dnNum(m.ct, -60, bw + 60, x), op: dnNum(m.op, 0, 1, 1), ph: dnStr(m.ph, 12), ty: clawIds().indexOf(m.ty) >= 0 ? m.ty : 'classic', w: dnNum(m.w, 0.3, 3, 1) };
+    if (Array.isArray(m.b)) {
+      const seen = {}, I = tbl('ITEMS');
+      for (const r of m.b.slice(0, DNK().BODIES_MAX || 40)) {
+        if (!Array.isArray(r) || !dnHas(I, r[1])) continue;
+        const uid = dnStr(String(r[0]), 16) || String(r[1]) + ':' + Object.keys(seen).length;
+        seen[uid] = 1;
+        const bx = dnNum(r[2], -60, bw + 60, bw / 2), by = dnNum(r[3], -60, bh + 60, bh / 2), ba = dnNum(r[4], -100000, 100000, 0) / 100;
+        const b = w.bodies[uid];
+        if (!b) w.bodies[uid] = { def: itemDef(r[1]), x: bx, y: by, a: ba, tx: bx, ty: by, ta: ba };
+        else { b.tx = bx; b.ty = by; b.ta = ba; }
+      }
+      for (const uid in w.bodies) if (!seen[uid]) delete w.bodies[uid];
+    }
+    const p = 1 - N.me;
+    if (Array.isArray(m.hp)) {
+      const hp = dnInt(m.hp[0], 0, 99999, 0);
+      if (w.hp && hp < w.hp[0]) duoNetNum(p ? W - 132 : 132, 96, '-' + (w.hp[0] - hp), '#ff5a4a');
+      w.hp = [hp, dnInt(m.hp[1], 0, 99999, 0)];
+    }
+    if (Array.isArray(m.e)) {
+      const e = m.e.slice(0, 6).map((r) => (Array.isArray(r) ? [dnInt(r[0], 0, 999999, 0), dnInt(r[1], 0, 99999, 0), r[2] ? 1 : 0] : [0, 0, 0]));
+      if (w.e && w.e[0] && e[0] && e[0][0] < w.e[0][0]) duoNetNum(270 + (Math.random() - 0.5) * 60, 200, '-' + (w.e[0][0] - e[0][0]), '#ffc94d');
+      w.e = e;
+    }
+    w.n++;
+  }
+  function duoNetNum(x, y, text, col) {
+    const N = S.duoNet;
+    if (!N) return;
+    N.w.fx.push({ k: 'num', x, y, text, col, t: 0, life: 1 });
+    if (N.w.fx.length > (DNK().FX_MAX || 24)) N.w.fx.shift();
+  }
+  function duoNetOnFx(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.turn === N.me || Dd.ph !== 'watch') return;
+    const w = N.w;
+    if (m.k === 'prize') {
+      if (!dnHas(tbl('ITEMS'), m.id)) return;
+      w.fx.push({ k: 'prize', def: itemDef(m.id), plus: !!m.plus, t: 0, life: 1.1 });
+      snd('chute');
+    } else if (m.k === 'combo') {
+      const c = (D().COMBOS || {})[m.id];
+      if (!c || !dnHas(D().COMBOS, m.id)) return;
+      w.fx.push({ k: 'combo', name: c.name || m.id, col: c.color || '#ffc94d', t: 0, life: 1.8 });
+      snd('combo'); haptic('tap');
+    } else return;
+    if (w.fx.length > (DNK().FX_MAX || 24)) w.fx.shift();
+  }
+  // Cheers go over the line and play on both phones, in the sender's bubble.
+  function duoNetCheer(id) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    const x = D().duoTaunt ? D().duoTaunt(id, true) : null;
+    if (!x || N.cheerT > N.t) return false;
+    N.cheerT = N.t + 0.6;
+    Dd.msg = { id: x.id, from: N.me, text: x.text, icon: x.icon };
+    if (S.duoT) S.duoT.msgT = 0;
+    snd('duoTaunt', { v: x.v }); haptic('tap');
+    duoNetSend({ t: 'cheer', id: x.id });
+    duoLog({ k: 'taunt', id: x.id, from: N.me });
+    return true;
+  }
+  function duoNetOnCheer(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return;
+    const x = D().duoTaunt ? D().duoTaunt(dnStr(m.id, 24), true) : null;
+    if (!x) return;
+    Dd.msg = { id: x.id, from: 1 - N.me, text: x.text, icon: x.icon };
+    if (S.duoT) S.duoT.msgT = 0;
+    snd('duoTaunt', { v: x.v });
+  }
+  // Over the fight on this phone's turn: the partner's cheer in its bubble.
+  function duoNetOver(ctx, t) {
+    const Dd = S.duo, T = S.duoT, R = X.RENDER;
+    if (!Dd || !Dd.msg || !T || !(T.msgT < 3) || !R || !R.sto || !R.sto.bubble || Dd.msg.from === (S.duoNet && S.duoNet.me)) return;
+    try { R.sto.bubble(ctx, 270, 120, 380, (Dd.msg.icon ? Dd.msg.icon + ' ' : '') + i18nTr(Dd.msg.text), T.msgT, 60, 150); } catch (e) { /* optional */ }
+  }
+  // ---- the link going and coming back
+  function duoNetOnLost(why) {
+    const N = S.duoNet;
+    if (!N) return;
+    N.lost = true; N.gone = false;
+    duoNetLog({ k: 'lost', why });
+    snd('duoLink', { k: 'lost' });
+    if (!S.duo) { if (N.dom) { duoNetPartPanel(N.dom.part); duoNetStatus(); } return; }
+    if (S.screen !== 'duo') toast('Partner connection lost, reconnecting...', 3);
+    duoHud(true);
+  }
+  function duoNetOnBack() {
+    const N = S.duoNet;
+    if (!N) return;
+    N.lost = false; N.gone = false; N.left = false;
+    duoNetLog({ k: 'back' });
+    snd('duoLink', { k: 'back' });
+    if (!S.duo) { duoNetSendMe(); if (N.dom) { duoNetPartPanel(N.dom.part); duoNetStatus(); } return; }
+    if (N.lastOut) duoNetSend(N.lastOut);   // the last turn again, in case it was lost on the way (a repeat is ignored)
+    if (N.hid) duoNetSend({ t: 'away', on: 1 });
+    if (S.screen !== 'duo') toast('Back online!', 1.6);
+    duoHud(true);
+  }
+  function duoNetOnGone() {
+    const N = S.duoNet;
+    if (!N) return;
+    N.gone = true;
+    duoNetLog({ k: 'gone' });
+    if (!S.duo) {
+      if (N.role === 'guest') { duoNetFail('hostgone'); return; }
+      N.part = null; N.lost = false; N.mine.ready = false;   // the host waits for a friend again, same code
+      duoNetLobbyDom();
+      return;
+    }
+    if (S.screen !== 'duo') toast('Your partner is still gone. Finish your turn.', 3);
+  }
+  function duoNetOnError(code) {
+    const N = S.duoNet;
+    if (!N) return;
+    duoNetFail(code);
+  }
+  function duoNetOnBye() {
+    const N = S.duoNet;
+    if (!N) return;
+    duoNetLog({ k: 'bye' });
+    if (!S.duo) {
+      if (N.role === 'guest') { duoNetFail('hostgone'); return; }
+      N.part = null; N.mine.ready = false;
+      duoNetLobbyDom();
+      return;
+    }
+    if (S.duo.ph === 'end') { N.left = true; N.lost = true; N.gone = true; duoShow(); return; }
+    N.left = true; N.lost = true; N.gone = true;
+    if (S.screen !== 'duo') toast(`${duoUp(1 - N.me)} left the game.`, 3);
+    duoHud(true);
+  }
+  function duoNetOnAway(m) {
+    const N = S.duoNet;
+    if (!N || !S.duo) return;
+    N.awayAt = m.on ? (N.awayAt || N.t) : 0;
+  }
+  // The link's clock (NET): this page hidden (a pocket, another app) tells the partner.
+  function duoNetOnPulse() {
+    const N = S.duoNet;
+    if (!N || !S.duo) return;
+    let hid = false;
+    try { hid = !!(typeof document !== 'undefined' && document.hidden); } catch (e) { hid = false; }
+    if (hid !== N.hid) { N.hid = hid; duoNetSend({ t: 'away', on: hid ? 1 : 0 }); }
+  }
+  // Somebody came back to the code without the game (a reload): the whole table, and on from there.
+  function duoNetOnNeed() {
+    const Dd = S.duo, N = S.duoNet, L = S.duoLive;
+    if (!Dd || !Dd.net || !N || !L || Dd.ph === 'end') return false;
+    const turn = Dd.ph === 'watch' ? Dd.turn : N.me;   // their turn was cut short: it starts again
+    N.outN = Math.max(N.outN, N.inN) + 1;
+    duoNetSend({ t: 'sync', seed: Dd.seed, boss: Dd.boss, pick: Dd.pick || 'random', p: Dd.p, first: Dd.first, turn, turns: Dd.turns | 0, n: N.outN,
+      down: [Dd.down[0] ? 1 : 0, Dd.down[1] ? 1 : 0], foes: duoNetFoesOut(L.F[0].enemies), pubs: [duoNetPubOut(L.F[0].player), duoNetPubOut(L.F[1].player)] });
+    N.inN = N.outN;
+    if (Dd.ph === 'watch') { N.w = duoNetW(); N.w.beat = 1.4; }
+    duoNetLog({ k: 'sync-out', turn });
+    return true;
+  }
+  function duoNetOnSync(m) {
+    const N = S.duoNet;
+    if (!N || S.duo || !Array.isArray(m.p) || !Array.isArray(m.pubs)) return false;
+    const seed = dnInt(m.seed, 1, 4294967295, 0), boss = dnStr(m.boss, 24);
+    if (!seed || !duoBossList().some((x) => x.id === boss)) return false;
+    const pl = D().duoNetPlayer, P = [pl(m.p[0], 0), pl(m.p[1], 1)];
+    if (netOk() && (NET.side === 0 || NET.side === 1)) { N.me = NET.side; N.role = N.me ? 'guest' : 'host'; }   // the seat the relay kept for this phone
+    const Dd = duoNetBegin(P, seed, boss, dnStr(m.pick, 24));
+    if (!Dd) return false;
+    const L = duoNetLive();
+    if (!L || !duoNetFoesIn(L.F[0].enemies, m.foes)) return false;
+    duoNetPubIn(L.F[0].player, m.pubs[0]); duoNetPubIn(L.F[1].player, m.pubs[1]);
+    if (Array.isArray(m.down)) Dd.down = [m.down[0] ? 1 : 0, m.down[1] ? 1 : 0];
+    Dd.turns = dnInt(m.turns, 0, 1e6, 0);
+    N.inN = N.outN = dnInt(m.n, 0, 1e7, 0);
+    if (netOk()) NET.have(N.inN + 1);
+    duoNetLog({ k: 'sync-in', turn: m.turn });
+    snd('duoLink', { k: 'back' });
+    if (m.turn === N.me && !Dd.down[N.me]) return duoNetYours();
+    return duoNetWatch(1 - N.me);
+  }
+  // ---- leaving, alone, again
+  function duoNetAlone() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph === 'end') return false;
+    if (Dd.down[N.me]) return duoNetQuit();
+    if (netOk()) { if (NET.state === 'connected') NET.send({ t: 'bye' }); NET.close(); }
+    const p = 1 - N.me;
+    Object.assign(N, { alone: true, lost: false, gone: false, left: false, awayAt: 0, ask: false });
+    Dd.down[p] = 1;
+    duoNetLog({ k: 'alone' });
+    duoHud(true);
+    if (Dd.ph === 'watch' || Dd.ph === 'yours') { duoNetLive(); return duoNetYours(); }
+    if (S.screen === 'fight') toast('Fighting on alone!', 1.8);
+    return true;
+  }
+  function duoNetQuit(noAsk) {
+    const N = S.duoNet, Dd = S.duo;
+    if (!noAsk && N && Dd && Dd.net && Dd.ph !== 'end' && !N.ask && !N.lost && !N.alone) { N.ask = true; duoShow(); return false; }
+    duoNetLog({ k: 'quit' });
+    duoNetOff();
+    S.duo = null; S.duoLive = null; S.duoV = null; S.duoSet = null;
+    duoRestore(true);
+    showTitle();
+    return true;
+  }
+  function duoNetAgain(fromThem) {
+    const N = S.duoNet;
+    if (!N || !S.duo || S.duo.ph !== 'end') return false;
+    if (!fromThem) duoNetSend({ t: 'again' });
+    S.duo = null; S.duoLive = null; S.duoV = null;
+    duoRestore(false);
+    Object.assign(N, { ph: 'lobby', inN: 0, outN: 0, lastOut: null, rx: false, lost: false, gone: false, left: false, ask: false, awayAt: 0, w: duoNetW() });
+    N.mine.ready = false;
+    if (N.part) N.part.ready = false;
+    if (netOk()) NET.have(0);
+    duoNetLobbyDom();
+    return true;
+  }
+  function duoNetOnAgain() { const N = S.duoNet; if (N && S.duo && S.duo.ph === 'end' && !N.left) duoNetAgain(true); }
+  // ---- the frame, the DOM, the canvas
+  function duoNetTick(real) {
+    const N = S.duoNet;
+    if (!N) return;
+    if (netOk()) { try { NET.pulse(); } catch (e) { /* the link is optional */ } }
+    N.t += real;
+    const Dd = S.duo;
+    if (!Dd || !Dd.net || S.screen !== 'duo') return;
+    if (Dd.ph === 'watch' || Dd.ph === 'yours') {
+      duoNetWatchStep(real);
+      if (Dd.ph === 'yours' && S.duoT && S.duoT.t > (DNK().YOURS || 5) && !N.ask && !duoNetSheetKey()) { duoNetGo(); return; }
+    }
+    if (Dd.ph === 'watch' || Dd.ph === 'yours' || Dd.ph === 'end') {
+      const k = duoNetSheetKey();
+      if (k !== N.lostDom) duoShow();
+    }
+  }
+  function duoNetWatchStep(real) {
+    const N = S.duoNet, w = N.w;
+    w.t += real;
+    if (w.beat > 0) w.beat = Math.max(0, w.beat - real);
+    const k = 1 - Math.pow(0.00005, real);
+    if (w.claw) {
+      if (!w.cd) w.cd = Object.assign({}, w.claw);
+      else { for (const f of ['x', 'y', 'ct', 'op']) w.cd[f] += (w.claw[f] - w.cd[f]) * k; w.cd.ph = w.claw.ph; w.cd.ty = w.claw.ty; w.cd.w = w.claw.w; }
+    }
+    for (const id in w.bodies) { const b = w.bodies[id]; b.x += (b.tx - b.x) * k; b.y += (b.ty - b.y) * k; b.a += (b.ta - b.a) * k; }
+    for (let i = w.fx.length - 1; i >= 0; i--) { const f = w.fx[i]; f.t += real; if (f.t > (f.life || 1.2)) w.fx.splice(i, 1); }
+  }
+  // Which sheet (if any) is up over the watch screen or the podium: the DOM is rebuilt when this changes.
+  function duoNetSheetKey() {
+    const N = S.duoNet, Dd = S.duo;
+    if (!N || !Dd) return '';
+    if (N.alone) return '';
+    if (Dd.ph === 'end') return N.left || N.lost ? 'off' : '';
+    if (N.ask) return 'ask';
+    if (N.left) return 'left';
+    if (N.lost) return N.gone ? 'gone' : 'lost';
+    if (N.awayAt && N.t - N.awayAt > (DNK().AWAY || 45)) return 'away';
+    return '';
+  }
+  // The #duoBar dot's state (duoHud's key).
+  function duoNetLinkK() { const N = S.duoNet; return !N ? '' : N.alone ? 'alone' : N.lost ? 'lost' : 'ok'; }
+  function duoNetDot(bar) {
+    const k = duoNetLinkK();
+    if (!k || !bar) return;
+    const d = h('span', 'duoNetDot ' + k);
+    try { d.setAttribute('aria-label', k === 'ok' ? 'Online' : k === 'lost' ? 'Reconnecting' : 'Alone'); d.title = k === 'ok' ? 'Online' : k === 'lost' ? 'Reconnecting' : 'Alone'; } catch (e) { /* stub */ }
+    bar.appendChild(d);
+  }
+  function duoNetDom() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return;
+    const b = duoBody('dp-canvas dp-net-' + Dd.ph);
+    if (!b) return;
+    const key = duoNetSheetKey();
+    N.lostDom = key;
+    const dock = h('div', 'duoDock');
+    const pn = duoUp(1 - N.me);
+    if (key) {
+      const sh = h('div', 'duoSheet panel center duoNetSheet');
+      if (key === 'ask') {
+        sh.appendChild(h('div', 'duoSc', 'Leave the game?'));
+        sh.appendChild(h('div', 'sub', 'Your partner can keep fighting alone.'));
+        const r = h('div', 'row center');
+        r.appendChild(btn('Stay', () => { N.ask = false; duoShow(); }, 'pri'));
+        r.appendChild(btn('Leave', () => duoNetQuit(true), 'ghost'));
+        sh.appendChild(r);
+      } else if (key === 'lost') {
+        sh.appendChild(h('div', 'sub', 'Hang on, trying for 30 seconds.'));   // (the card on the canvas says what happened)
+      } else {
+        const r = h('div', 'row center');
+        if (!Dd.down[N.me]) r.appendChild(btn('Keep fighting alone', () => duoNetAlone(), 'pri'));
+        if (key === 'away') r.appendChild(btn('Wait', () => { N.awayAt = N.t; duoShow(); }, 'go'));
+        r.appendChild(btn('Quit to title', () => duoNetQuit(true), 'ghost'));
+        sh.appendChild(r);
+      }
+      dock.appendChild(sh);
+    }
+    if (Dd.ph === 'yours') {
+      const go = btn('Grab!', () => duoNetGo(), 'pri duoReady');
+      go.textContent = '\u{1F3AE} ' + i18nTr('Grab!');
+      dock.appendChild(go);
+    } else if (Dd.ph === 'watch') {
+      dock.appendChild(h('div', 'duoTh', `Cheer ${pn} on`));
+      const row = h('div', 'duoTaunts');
+      for (const x of (DK().CHEERS || [])) { const tb = btn('cheer ' + x.id, () => duoNetCheer(x.id), 'sm duoTaunt'); tb.textContent = x.icon + ' ' + i18nTr(x.short || x.text.split(/[ ,!.?]/)[0]); row.appendChild(tb); }
+      dock.appendChild(row);
+    }
+    if (key !== 'ask') dock.appendChild(btn('Leave', () => duoNetQuit(), 'ghost sm duoPause'));
+    b.appendChild(dock);
+  }
+  function duoNetEndDom() {
+    const Dd = S.duo, N = S.duoNet, b = duoBody('dp-canvas dp-end');
+    if (!b || !Dd) return;
+    if (N) N.lostDom = duoNetSheetKey();
+    const res = Dd.res || {}, card = h('div', 'duoSheet panel center'), O = duoM().online || { games: 0, wins: 0 };
+    card.appendChild(h('div', 'duoSc', res.won ? `${enemyDef(Dd.boss).name || Dd.boss} is down in ${res.turns | 0} turns!` : `${enemyDef(Dd.boss).name || Dd.boss} knocked you both out.`));
+    card.appendChild(h('div', 'sub', `Online team wins: ${O.wins | 0} of ${O.games | 0}`));
+    const row = h('div', 'duoTaunts');
+    for (const x of (DK().CHEERS || [])) { const tb = btn('cheer ' + x.id, () => duoNetCheer(x.id), 'sm duoTaunt'); tb.textContent = x.icon; row.appendChild(tb); }
+    card.appendChild(row);
+    const bt = h('div', 'row center');
+    const live = N && !N.alone && !N.left && !N.lost && netOk() && NET.state === 'connected';
+    if (live) bt.appendChild(btn('Play again', () => duoNetAgain(), 'pri'));
+    else if (N && !N.alone) card.appendChild(h('div', 'sub', `${duoUp(1 - N.me)} left the game.`));
+    bt.appendChild(btn('Title', () => duoNetQuit(true), live ? 'ghost' : 'pri'));
+    card.appendChild(bt);
+    b.appendChild(card);
+    if (!S.duoT || !S.duoT.crowd) { snd('duoCrowd'); fx().emit('confetti', 270, 300, { n: 1.4 }); if (S.duoT) S.duoT.crowd = 1; }
+    music('win');
+  }
+  function duoNetDraw(ctx, t) {
+    const Dd = S.duo, N = S.duoNet, R = X.RENDER, T = S.duoT || { t: 0, now: 0 };
+    if (!R || !R.duo || !N || !Dd) return;
+    const L = S.duoLive, me = N.me, p = 1 - me;
+    const names = [duoNameOf(0), duoNameOf(1)], cols = [duoCol(0), duoCol(1)], chars = [Dd.p[0].char, Dd.p[1].char];
+    const act = D().rushActOf ? D().rushActOf(Dd.boss) || 1 : 1;
+    const foe = L && L.F[0] ? (L.F[0].enemies.find((e) => e && e.alive) || L.F[0].enemies[0]) : null;
+    const fi = foe && L ? L.F[0].enemies.indexOf(foe) : 0, live = N.w.e && N.w.e[fi];
+    const bossSub = foe ? `Boss ${Math.max(0, live ? live[0] : foe.hp)}/${foe.maxHp} hp` : '';
+    if (Dd.ph === 'yours') {
+      R.duo.turn(ctx, W, H, { t: T.t, now: T.now, name: names[me], col: cols[me], char: chars[me], label: `Co-op · vs ${enemyDef(Dd.boss).name || Dd.boss}`, sub: bossSub, left: Math.max(0, (DNK().YOURS || 5) - T.t), total: DNK().YOURS || 5, reduced: !!fx().reduced });
+    } else {
+      const who = Dd.turn, w = N.w;
+      if (R.bg) R.bg(ctx, W, H, act, t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
+      const hp = [0, 1].map((i) => {
+        const Fi = L && L.F[i], pl = Fi ? Fi.player : { hp: 0, maxHp: 1, block: 0 }, st = i === who && w.hp ? w.hp : null;
+        return { hp: st ? st[0] : pl.hp, mx: pl.maxHp, bk: st ? st[1] : pl.block || 0, down: !!Dd.down[i] };
+      });
+      let intent = '';
+      try { intent = foe && foe.alive && X.COMBAT && X.COMBAT.intentText ? X.COMBAT.intentText(foe) : ''; } catch (e) { intent = ''; }
+      R.duo.watch(ctx, W, H, { t, now: T.now, names, cols, chars, who, me, hp, boss: foe ? { def: foe.def, hp: live ? live[0] : foe.hp, mx: foe.maxHp, bk: live ? live[1] : foe.block, intent } : null, beat: w.beat, reduced: !!fx().reduced });
+      duoNetCab(ctx, t, who, act);
+      R.duo.wfx(ctx, w.fx, { chute: { x: CAB.x + CAB.w - CAB.chuteW / 2, y: CAB.y + CAB.h - 40 }, tray: { x: who ? W - 132 : 132, y: 44 }, reduced: !!fx().reduced });
+    }
+    // a cheer, from its sender's side
+    if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble && T.msgT != null && T.msgT < 3.5) {
+      const tx = Dd.msg.from === 1 ? W - 132 : 132;
+      try { R.sto.bubble(ctx, 270, 120, 400, (Dd.msg.icon ? Dd.msg.icon + ' ' : '') + i18nTr(Dd.msg.text), T.msgT || 1, tx, 76); } catch (e) { /* optional */ }
+    }
+    const key = N.lostDom;
+    if (key && key !== 'ask') {
+      const pn = duoUp(p), secs = netOk() ? Math.max(0, Math.ceil(30 - NET.lostFor / 1000)) : 0;
+      const title = key === 'lost' ? 'Partner connection lost' : key === 'left' ? `${pn} left the game.` : key === 'away' ? `${pn} stepped away.` : 'Your partner is still gone.';
+      R.duo.lost(ctx, W, H, { t, title, sub: key === 'lost' ? `Reconnecting... ${secs} s` : '', spin: key === 'lost', col: cols[p] });
+    }
+  }
+  // The partner's cabinet from the stream: their bin, their claw in their paint, their colour round the glass.
+  function duoNetCab(ctx, t, who, act) {
+    const R = X.RENDER, N = S.duoNet, w = N.w;
+    const cst = { t, act, party: 0, marquee: duoUp(who), fog: 0, grease: 0, tilt: 0 };
+    DUO_CFG.chuteX = CAB.w - CAB.chuteW;
+    if (R.cabinetBack) R.cabinetBack(ctx, CAB.x, CAB.y, DUO_CFG, cst);
+    ctx.save(); ctx.beginPath(); ctx.rect(CAB.x, CAB.y, CAB.w, CAB.h); ctx.clip();
+    const RC = R.RARITY_COL || {};
+    for (const id in w.bodies) {
+      const b = w.bodies[id], d = b.def, rar = d && d.rarity;
+      if (R.item && d) R.item(ctx, d, CAB.x + b.x, CAB.y + b.y, b.a, 1, { glow: rar === 'u' || rar === 'r' || rar === 'l' ? RC[rar] : 0, glowA: rar === 'l' ? 0.85 : 0.4 });
+    }
+    const c = w.cd || { x: (CAB.w - CAB.chuteW) * 0.5, y: 62, ct: (CAB.w - CAB.chuteW) * 0.5, op: 1, ph: 'idle', ty: (S.duo.p[who] || {}).claw || 'classic', w: 1 };
+    if (R.claw && X.PHYS && X.PHYS.clawPose) {
+      try {
+        const pose = X.PHYS.clawPose(c.ty, { x: c.x, y: c.y, open: c.op, cable: Math.max(8, c.y - 26), width: c.w, phase: c.ph });
+        if (pose && pose.cableTop) pose.cableTop.x = c.ct;
+        const busy = c.ph && c.ph !== 'idle' && c.ph !== 'moving';
+        DUO_CJ.t = t; DUO_CJ.mood = busy ? 'focus' : ''; DUO_CJ.idle = busy ? 0 : 1;
+        R.claw(ctx, pose, CAB.x, CAB.y, { juice: DUO_CJ, paint: duoPaint(who) || undefined });
+      } catch (e) { /* art is optional */ }
+    }
+    ctx.restore();
+    if (R.cabinetFront) R.cabinetFront(ctx, CAB.x, CAB.y, DUO_CFG, cst);
+    ctx.save();
+    ctx.globalAlpha = 0.55 + Math.sin(t * 3) * 0.2; ctx.strokeStyle = duoCol(who); ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.rect(CAB.x - CAB.frame - 3, CAB.y - CAB.frame - 3, CAB.w + CAB.frame * 2 + 6, CAB.h + CAB.frame * 2 + 6); ctx.stroke();
+    ctx.restore();
+  }
+  const DUON_API = () => ({
+    choose: duoNetChoose, menu: duoNetMenu, host: duoNetHost, joinDom: duoNetJoinDom, join: duoNetJoin, set: duoNetSet, boss: duoNetBoss, ready: duoNetReady, start: duoNetStart,
+    go: duoNetGo, alone: duoNetAlone, quit: duoNetQuit, again: duoNetAgain, cheer: duoNetCheer, live: duoNetLive, send: duoNetSendTurn, onTurn: duoNetOnTurn, boot: duoNetBoot,
+    foesOut: duoNetFoesOut, foesIn: duoNetFoesIn, pubOut: duoNetPubOut, pubIn: duoNetPubIn, build: duoNetBuild, sheet: duoNetSheetKey, draw: duoNetDraw,
+    get state() { return S.duoNet || null; }, get log() { return DNX.log; }, get bootCode() { return DNX.boot; }, set bootCode(v) { DNX.boot = v || null; DNX.booted = false; },
+  });
   // ================================================================ /DUO
 
   // ================================================================ LEG (round 12: legends)
@@ -22689,6 +24251,7 @@ const GAME = (() => {
   function legChip(ctx, x, y, label, col, pips, of) {
     ctx.save();
     ctx.font = 'bold 11px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    label = i18nTr(label);   // (QA round 15) the chip's word in the current language (GOLD, SLOT DRY...)
     const m = ctx.measureText ? ctx.measureText(label) : null, tw = m && m.width > 0 ? m.width : label.length * 7.2;
     const w = 16 + tw + (of ? of * 8 + 6 : 0);
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y - 10, w, 20, 6); else ctx.rect(x, y - 10, w, 20);
@@ -23292,6 +24855,408 @@ const GAME = (() => {
   }
   // ================================================================ /TRD
 
+  // ================================================================ DEP (round 15): the Neon Depths
+  /* DESIGN.md "The Neon Depths (round 15)". Endless's fourth biome, the
+     flooded basement under the Clawspire: every third loop from Loop 3 dives
+     into it (DATA.depLoop / depAct; run.endless.dep for the loop, .dp the
+     dives this run). The flow: endlessNext asks depLoopAct for the loop's act
+     and the dive, newMap passes the 'depths' biome to MAP.generate (its pools
+     come from DATA.DEP_ENC), the reboot card (showLoop) floods, the map intro
+     names the Depths, the music plays the Depths' dub (AUDIO act 4), the map
+     and the arena draw underwater (RENDER.dep). In a fight the cabinet holds
+     standing water (PHYS.rosFlood, DATA.DEP_K.water of the bin; one water in
+     the cabinet: the Rising Water mutator's level is folded in and its own
+     flood is switched off), and the monsters' tricks are staged here (COMBAT
+     decides, DEP block there): the Angler Token's lure pulls the aim and a
+     falling claw toward its light, a jelly the claw touches stings once a
+     grab (COMBAT.depSting), a Crab Changer drags pinched prizes along the
+     floor (a lift frees one: COMBAT.depUnpinch), a Volt Eel's live water
+     shocks a prize lifted from under the waterline (COMBAT.depZap at the
+     delivery), the Sunken Mimic's real chest glints, and The Drowned
+     Jukebox's High Tide moves the water with its music (depTideAt) while a
+     surface current carries the floaters away and back. Fight-only state in
+     FS.dep (never saved; a reload replays the seeded fight). Meta: dep
+     {dives, jukebox, best} (DATA.depFix). Run: endless.dep, endless.dp,
+     sc.dep. Reached through one-line hooks in endlessNext, showLoop,
+     endlessRunFix, newMap, encounterFor, accMusicAct, loreIntroStart,
+     loadMeta, endFight, applyEvent, bossEvent, signLabel, bestTick, deliver,
+     onRigEvent, update, drawMap, drawFight, ambientTick, rosFloodTick and the
+     history record. */
+  const DEPK = {
+    rise: 220,                    // the level eases toward its mark at this many px/s
+    lurePull: 60, lureDrop: 55, lureDead: 6,   // the lure's pull on the aim and on a falling claw (px/s), and its dead zone (px)
+    pinchV: 50, pinchX: 34, pinchFloor: 70,    // a pinched prize rides the floor toward the far wall at pinchV, within pinchFloor px of the floor
+    undertow: 60, undertowK: 3,   // High Tide's surface current (px/s) and how fast floaters take it up
+    wet: 0.2,                     // lifted with its middle this far (x its radius) under the surface: wet
+    glint: 2.6, glintOn: 0.45,    // the real chest glints for glintOn s every glint s
+  };
+  const DEP_SIGN = { lure: 'LURE', jellies: 'JELLIES', pinch: 'PINCH', shock: 'LIVE WIRE', decoy: 'CHESTS' };
+  const DEP_COL = { lure: '#ffe066', jellies: '#ff6bd6', pinch: '#ff6b4a', shock: '#2ee6d6', decoy: '#ffc94d', tide: '#ff6bd6' };
+  Object.assign(BST_SIGN, DEP_SIGN); Object.assign(BST_COL, DEP_COL);
+  for (const k in DEP_SIGN) BST_NEXT[k] = DEP_SIGN[k] + ' NEXT TURN';
+  // Every new English line this block shows (the i18n suite checks each has its Dutch) and the patterns with an example.
+  const DEP_WORDS = ['LURED CLAW! It drifts toward the light', 'LURE LOST: the bait is gone', 'JELLIES! They sting the claw that touches them',
+    'PINCHED! Grab them back before your turn ends', 'SNIP! FREE', 'INTO THE SHELL', 'LIVE WATER! A wet prize shocks you', 'WET PRIZE!',
+    'SUNKEN CHESTS! One holds treasure', 'HIGH TIDE! The water rises and falls with the music', 'THE TIDE GOES OUT',
+    'LURED CLAW', 'LIVE WATER', 'PINCHED PRIZES', 'STINGING JELLIES', 'ONE CHEST IS REAL', 'HIGH TIDE',
+    'LURE NEXT TURN', 'JELLIES NEXT TURN', 'PINCH NEXT TURN', 'LIVE WIRE NEXT TURN', 'CHESTS NEXT TURN', 'HIGH TIDE NEXT TURN',
+    'OOH, A LIGHT', 'BLOOP', 'SNIP SNIP', 'BZZZT', 'PICK ONE', 'LURE LOST', 'TREASURE!', 'CHOMP!', 'STUNG!', 'ZAP!', 'MINE NOW', 'DROP THE BASS!',
+    'Lures your claw toward junk', 'Pinches your best item', 'THE NEON DEPTHS', 'The Neon Depths', 'DRAIN PUMP ...... FAILED', 'WARNING: WATER IN THE CABINET',
+    'The machine forgot to drain.', 'Mind the water. Things live in it now.', 'NEON DEPTHS', 'Drowned Jukeboxes unplugged', 'Deep Diver',
+    'Unplug The Drowned Jukebox in the Neon Depths.', 'DIVE', 'HIGH TIDE!'];
+  const DEP_PATTERNS = { 'Drifts {n} stinging jellies into your bin': 'Drifts 2 stinging jellies into your bin', 'Pinches your {n} best items': 'Pinches your 2 best items',
+    'Electrifies the water ({n} per wet prize)': 'Electrifies the water (7 per wet prize)', 'Scatters {n} chests (one holds treasure)': 'Scatters 3 chests (one holds treasure)',
+    'LOADING LOOP {n}: THE NEON DEPTHS': 'LOADING LOOP 3: THE NEON DEPTHS', 'The Neon Depths, flooded. Act {n} of forever.': 'The Neon Depths, flooded. Act 6 of forever.',
+    'Loop {n}: The Neon Depths': 'Loop 6: The Neon Depths' };
+  const depK = () => tbl('DEP_K');
+  const depM = () => { const m = S.meta; if (!m.dep || typeof m.dep !== 'object') m.dep = D().depFix ? D().depFix() : { dives: 0, jukebox: 0, best: 0 }; return m.dep; };
+  function depMetaFix(m, o) { if (m) m.dep = D().depFix ? D().depFix((o && o.dep) || m.dep) : { dives: 0, jukebox: 0, best: 0 }; }
+  // In the Depths: the map is a dive's (never the Back Room).
+  const depIn = (run) => { run = run || S.run; return !!(run && run.map && run.map.biome === 'depths' && !run.map.room); };
+  const depName = () => depK().name || 'The Neon Depths';
+  const depActName = (run) => (depIn(run) ? depName() : actDef((run || S.run).act).name);
+  // endlessNext: the loop's act (3 for a dive, else the classic cycle carries on) and whether it dives.
+  function depLoopAct(E) {
+    const dive = !!(D().depLoop && D().depLoop(E.loop));
+    E.dep = dive;
+    if (dive) { E.dp = Math.max(0, E.dp | 0) + 1; const m = depM(); m.dives++; m.best = Math.max(m.best, E.loop | 0); }
+    return D().depAct ? D().depAct(E.loop) : D().endlessAct ? D().endlessAct(E.loop) : ((E.loop - 1) % 3) + 1;
+  }
+  // The Drowned Jukebox keeps its own trick: a dive's boss borrows none (the rng was still drawn, so every later stream holds).
+  const depMix = (E, mix) => (E && E.dep ? null : mix);
+  // newMap: a dive's map is the Depths' (MAP.generate reads it).
+  const depMapBiome = (run) => (run && run.endless && run.endless.dep && !(run.sec && run.sec.room) ? 'depths' : undefined);
+  // accMusicAct: the Depths play their own dub (AUDIO act 4).
+  const depMusicAct = (run) => (depIn(run) ? 4 : (run.act | 0));
+  // encounterFor: the Depths' pools on a dive's map.
+  const depEncFor = (run) => (depIn(run) && tbl('DEP_ENC').normal ? tbl('DEP_ENC') : tbl('ENCOUNTERS')[run.act]);
+  // The reboot card: a dive's boot log floods.
+  function depBootLines(lp, lines) {
+    if (!lp || !lp.dep) return;
+    lines[2] = [`LOADING LOOP ${lp.loop}: THE NEON DEPTHS`, 'warn'];
+    lines.splice(2, 0, ['DRAIN PUMP ...... FAILED', 'warn']);
+    lines.splice(lines.length - 1, 0, ['WARNING: WATER IN THE CABINET', 'warn']);
+  }
+  const depLoopSub = (lp) => (lp && lp.dep ? `${depName()}, flooded. Act ${3 + lp.loop} of forever.` : `${actDef(lp.act).name}, again. Act ${3 + lp.loop} of forever.`);
+  // Under LOOP N: THE NEON DEPTHS slams in over rising water (the CSS in index.html, #dep-css).
+  function depLoopCard(tube, lp, tSlam) {
+    if (!lp || !lp.dep || !tube) return;
+    const nm = h('div', 'depName', 'THE NEON DEPTHS');
+    try { nm.style.animationDelay = (tSlam + 0.15).toFixed(2) + 's'; } catch (e) { /* stub */ }
+    tube.appendChild(nm);
+    const wv = h('div', 'depWave');
+    for (let i = 0; i < 7; i++) { const b = h('i', null); try { b.style.left = (8 + i * 13) + '%'; b.style.animationDelay = (tSlam + i * 0.23).toFixed(2) + 's'; } catch (e) { /* stub */ } wv.appendChild(b); }
+    tube.appendChild(wv);
+  }
+  // The act intro card on a dive's map: the Depths' name and lines.
+  function depIntro(def) {
+    if (!def || !depIn()) return def;
+    return Object.assign({}, def, { name: depName(), biome: 'depths', lines: ['The machine forgot to drain.', 'Mind the water. Things live in it now.'] });
+  }
+  // endFight: a Depths boss beaten counts for the score and the sticker.
+  function depFightEnd(result) {
+    if (result !== 'win' || !F || !S.run) return;
+    const n = (F.killed || []).filter((id) => { const d = enemyDef(id); return d.dep && d.tier === 'boss'; }).length;
+    if (!n) return;
+    const run = S.run;
+    run.sc = run.sc || {};
+    run.sc.dep = (run.sc.dep | 0) + n;
+    depM().jukebox += n;
+    saveMeta();
+  }
+  // The history record: the dives this run.
+  const depHisDives = (run) => (run && run.endless ? Math.max(0, run.endless.dp | 0) : 0);
+
+  // ---- the fight: the water, the tide, the tricks
+  function depFS() {
+    if (!FS) return null;
+    if (!FS.dep) {
+      const f = depWaterFrac();
+      FS.dep = { flood: null, floodW: null, level: f > 0 ? CAB.h * (1 - f) : CAB.h + 40, levelTo: CAB.h + 40, tideT: 0, tideRef: null, tideDir: 0, tideV: 0,
+        hookW: null, hookRig: null, lureX: null, lureK: 0, shockK: 0, tideK: 0, pinchN: 0, glintT: 0, stings: 0, zaps: 0, log: [] };
+    }
+    return FS.dep;
+  }
+  // High Tide at secs into the player's turn: lo..hi of the bin, a full swell every tide.beats beats of its music.
+  function depTideAt(T, secs) {
+    if (!T) return 0;
+    const per = Math.max(0.5, Math.max(2, T.beats || 8) * 60 / Math.max(30, T.bpm || 88));
+    const u = (Math.max(0, +secs || 0) % per) / per;
+    return (T.lo || 0) + ((T.hi || 0) - (T.lo || 0)) * (0.5 - 0.5 * Math.cos(u * Math.PI * 2));
+  }
+  // The water's mark (a share of the bin's height): the Depths' standing water, the Rising Water mutator's, the tide.
+  function depWaterFrac() {
+    if (!F || !FS) return 0;
+    let f = depIn() ? Math.max(0, +depK().water || 0) : 0;
+    const m = mutF();
+    if (m && m.flood > 0 && (f > 0 || F.tide)) f = Math.max(f, Math.min(ROSK.floodMax, ROSK.flood0 + ROSK.floodStep * Math.max(0, (F.turn | 0) - 1) * m.flood));
+    if (F.tide) f = Math.max(f, depTideAt(F.tide, FS.dep ? FS.dep.tideT : 0));
+    return f;
+  }
+  // rosFloodTick: the cabinet has one water; in the Depths (or under a tide) it is ours.
+  const depOwnsWater = () => !!(FS && ((FS.dep && FS.dep.flood) || depWaterFrac() > 0));
+  function depWaterTick(Q, want, dt) {
+    const R0 = FS.ros;
+    if (want > 0 && R0 && R0.flood) { if (R0.flood.remove) R0.flood.remove(); R0.flood = null; R0.floodW = null; }
+    if (!(want > 0) && !Q.flood) return;
+    if (Q.floodW !== FS.world) {
+      if (Q.flood && Q.flood.remove) Q.flood.remove();
+      Q.flood = X.PHYS && X.PHYS.rosFlood ? X.PHYS.rosFlood(FS.world, { y: Q.level, xMax: binWidth() - 2, g: GRAVITY, rho: ROSK.rho }) : null;
+      Q.floodW = FS.world;
+    }
+    const to = want > 0 ? CAB.h * (1 - want) : CAB.h + 40, k = DEPK.rise * dt, was = Q.level;
+    Q.level = Q.level < to ? Math.min(to, Q.level + k) : Math.max(to, Q.level - k);
+    Q.levelTo = to;
+    Q.tideV = dt > 0 ? (was - Q.level) / dt : 0;   // + rising
+    if (Q.flood) Q.flood.set(Q.level);
+  }
+  // Where the lure hangs: over its Old Boot, else the junk farthest from the chute, else the far wall.
+  function depLureX() {
+    const L = F.depLure;
+    let b = L && L.inst ? bodyOf(L.inst) : null;
+    if (!b) for (const x of FS.items) if ((x.data.inst.junk || x.data.def.rarity === 'junk') && (!b || x.x < b.x)) b = x;
+    return b ? U.clamp(b.x, 30, binWidth() - 30) : 60;
+  }
+  function depLureBody() { const L = F && F.depLure; return L && L.inst ? bodyOf(L.inst) : null; }
+  // Per physics substep: the lure on a falling claw, the crab's drag, the tide's current.
+  function depHook(h, Wd) {
+    if (!FS || !F || Wd !== FS.world) return;
+    const Q = FS.dep;
+    if (!Q) return;
+    const K = FS.rig && FS.rig.ctl;
+    if (F.depLure && K && K.st === 'drop' && Q.lureX != null) {
+      const dx = Q.lureX - K.x;
+      if (Math.abs(dx) > DEPK.lureDead) K.vx += U.clamp(dx * 3, -DEPK.lureDrop, DEPK.lureDrop);
+    }
+    if (Q.pinchN > 0) {
+      for (const b of FS.items) {
+        if (!b.data.inst.depPinch || b.held > 0 || b.x <= DEPK.pinchX) continue;
+        if (b.y + (b.br || 12) < CAB.h - DEPK.pinchFloor) continue;   // it rides the floor
+        b.sl = false; b.slT = 0;
+        b.vx += (-DEPK.pinchV - b.vx) * Math.min(1, 8 * h);
+      }
+    }
+    if (F.tide && Q.flood && Q.tideDir) {
+      for (const b of FS.items) {
+        if (b.held > 0 || (b.density || 1) >= ROSK.rho) continue;
+        const r = b.br || 10;
+        if (b.y + r < Q.level - 4 || b.y - r > Q.level + 30) continue;
+        b.sl = false; b.slT = 0;
+        b.vx += (Q.tideDir * DEPK.undertow - b.vx) * Math.min(1, DEPK.undertowK * h);
+      }
+    }
+  }
+  // Is anything Depths-like going on in this fight?
+  function depLive() {
+    if (FS.dep || depIn() || F.depLure || F.depShock || F.tide) return true;
+    for (const i of F.bin) if (i.depPinch || i.depSting || i.depBite) return true;
+    return false;
+  }
+  function depTick(dt, real) {
+    if (S.screen !== 'fight' || !F || !FS || FS.done || !FS.world || !depLive()) return;
+    const Q = depFS();
+    if (FS.evo) return;
+    if (Q.hookW !== FS.world || Q.hookRig !== FS.rig) { if (Q.hookW) Q.hookW.removeHook(depHook); FS.world.addHook(depHook); Q.hookW = FS.world; Q.hookRig = FS.rig; }
+    if (F.tide !== Q.tideRef) { Q.tideRef = F.tide; Q.tideT = 0; }
+    const mine = F.phase === 'player' && !FS.enemyTurn && !FS.vs && !FS.outro;
+    if (F.tide && mine) Q.tideT += dt;
+    depWaterTick(Q, depWaterFrac(), dt);
+    Q.tideDir = F.tide ? (Q.tideV > 4 ? -1 : Q.tideV < -4 ? 1 : 0) : 0;   // the flood runs toward the far wall, the ebb back to the chute
+    // the lure: its light hangs over the bait and the aim creeps toward it
+    Q.lureX = F.depLure ? depLureX() : null;
+    const rig = FS.rig;
+    if (F.depLure && mine && rig && !rig.auto && !FS.pendingDrop && (rig.phase === 'idle' || rig.phase === 'moving')) {
+      const dx = Q.lureX - rig.targetX;
+      if (Math.abs(dx) > DEPK.lureDead) rig.setTarget(rig.targetX + U.clamp(dx, -DEPK.lurePull * dt, DEPK.lurePull * dt));
+    }
+    // jellies sting the claw that touches them, once a grab each
+    if (FS.grabInFlight && F.phase === 'player') {
+      for (const b of FS.items) {
+        const d = b.data;
+        if (d.def.dep !== 'jelly' || !(b.held > 0) || d.depStungG === FS.grabN) continue;
+        d.depStungG = FS.grabN;
+        Q.stings++;
+        fx().emit('shock', CAB.x + b.x, CAB.y + b.y, { n: 0.8, col: '#ff6bd6' });
+        fx().ring(CAB.x + b.x, CAB.y + b.y, '#ff6bd6', { r0: 6, r1: 44, w: 4, life: 0.3 });
+        FS.claw.bendV += 120; setMood('sad', 0.8);
+        haptic('hurt');
+        snd('depSting');
+        enqueue(X.COMBAT.depSting ? X.COMBAT.depSting(F, d.inst) : [], 0.05);
+        if (!FS) return;
+      }
+    }
+    let pn = 0;
+    for (const i of F.bin) if (i.depPinch) pn++;
+    Q.pinchN = pn;
+    Q.glintT += real;
+    const ease = (v, to, k) => v + (to - v) * Math.min(1, real * k);
+    Q.lureK = ease(Q.lureK, F.depLure ? 1 : 0, 4);
+    Q.shockK = ease(Q.shockK, F.depShock ? 1 : 0, 4);
+    Q.tideK = ease(Q.tideK, F.tide ? 1 : 0, 3);
+  }
+  // onRigEvent 'lift': the cargo lifted from under the waterline is wet; a pinched prize lifted clear is let go.
+  function depRig(ev) {
+    if (ev !== 'lift' || !F || !FS || !FS.rig) return;
+    const Q = FS.dep, cargo = carried();
+    let freed = false;
+    for (const b of cargo) {
+      const d = b.data;
+      if (!d || !d.inst) continue;
+      if (Q && Q.flood && Q.level < CAB.h - 2 && b.y + (b.br || 10) * DEPK.wet > Q.level) d.depWetG = FS.grabN;
+      if (d.inst.depPinch && X.COMBAT.depUnpinch && X.COMBAT.depUnpinch(F, d.inst)) freed = true;
+    }
+    if (freed) enqueue([], 0.05);
+  }
+  // deliver: a wet prize on live water shocks the hand that delivered it.
+  function depDeliver(b) {
+    if (!F || !FS || !b || !b.data || !F.depShock || b.data.depWetG !== FS.grabN) return;
+    const x = CAB.x + b.x, y = CAB.y + b.y;
+    FS.dep && FS.dep.zaps++;
+    fx().emit('shock', x, y, { n: 1.2, col: '#2ee6d6' });
+    fx().text(x - 30, y - 40, 'WET PRIZE!', '#2ee6d6', { size: 14, life: 0.9 });
+    haptic('hurt');
+    enqueue(X.COMBAT.depZap ? X.COMBAT.depZap(F, b.data.inst) : [], 0.05);
+  }
+  // applyEvent 'dep': the tricks arrive in the cabinet.
+  function depEvent(ev) {
+    if (!F || !FS || !ev) return;
+    const Q = depFS();
+    BST();   // the cabinet sign lives on the bestiary's
+    const has = ev.idx != null && ev.idx >= 0 && !!F.enemies[ev.idx];
+    const m = has ? mouthOf(ev.idx) : { x: 270, y: 200 };
+    switch (ev.k) {
+      case 'lure':
+        stoArcIn(ev.items || [], m, 'thud');
+        fx().text(270, 430, 'LURED CLAW! It drifts toward the light', '#ffe066');
+        fx().ring(m.x, m.y, '#ffe066', { r0: 8, r1: 90, w: 5, life: 0.45 });
+        snd('depLure');
+        break;
+      case 'lureOff': if (ev.why === 'bait') { fx().text(270, 470, 'LURE LOST: the bait is gone', '#ffe066'); snd('depLure', { pitch: 0.7 }); } break;
+      case 'jellies':
+        stoArcIn(ev.items || [], m, 'depBubble');
+        fx().text(270, 430, 'JELLIES! They sting the claw that touches them', '#ff6bd6');
+        fx().emit('bubble', m.x, m.y, { n: 1, col: '#ff9ad0' });
+        snd('depBubble');
+        break;
+      case 'pinch':
+        for (const inst of ev.insts || []) { const b = bodyOf(inst); if (b) fx().ring(CAB.x + b.x, CAB.y + b.y, '#ff6b4a', { r0: 6, r1: 40, w: 4, life: 0.35 }); }
+        fx().text(270, 430, 'PINCHED! Grab them back before your turn ends', '#ff6b4a');
+        fx().shake(3);
+        snd('depPinch');
+        break;
+      case 'unpinch':
+        for (const inst of ev.insts || []) { const b = bodyOf(inst); if (b) fx().text(CAB.x + b.x, CAB.y + b.y - 30, 'SNIP! FREE', '#a6ff5e', { size: 13 }); }
+        snd('depPinch', { pitch: 1.4 });
+        break;
+      case 'take': fx().text(m.x, m.y - 34, 'INTO THE SHELL', '#ff6b4a'); snd('depPinch', { pitch: 0.8 }); break;
+      case 'shock':
+        fx().text(270, 430, 'LIVE WATER! A wet prize shocks you', '#2ee6d6');
+        fx().emit('shock', 270, CAB.y + (Q ? Math.min(CAB.h - 10, Q.level) : CAB.h - 40), { n: 1.4, col: '#2ee6d6' });
+        if (!fx().reduced) fx().flash('#2ee6d6', 0.12);
+        snd('depZap');
+        break;
+      case 'zap': snd('depZap', { pitch: 1.2 }); break;
+      case 'sting': break;   // (staged at the touch, the number comes with the hit)
+      case 'decoy':
+        stoArcIn(ev.items || [], m, 'thud');
+        fx().text(270, 430, 'SUNKEN CHESTS! One holds treasure', '#ffc94d');
+        snd('depChest');
+        break;
+      case 'chest':
+        if (ev.real) { fx().emit('coins', PLAYER_FX.x, PLAYER_FX.y, { n: 1 }); snd('coin', { pitch: 1.2 }); }
+        else { fx().emit('blood', PLAYER_FX.x, PLAYER_FX.y, { n: 0.6 }); snd('depChest', { bite: 1 }); haptic('hurt'); }
+        break;
+      default: break;
+    }
+    if (Q) { Q.log.push(ev.k); if (Q.log.length > 60) Q.log.splice(0, Q.log.length - 60); }
+  }
+  // bossEvent 'tide' / 'ebb': the Drowned Jukebox floods the cabinet, then the tide goes out.
+  function depBossEvent(ev) {
+    if (!ev || (ev.k !== 'tide' && ev.k !== 'ebb') || !F || !FS) return false;
+    const Q = depFS();
+    if (ev.k === 'tide') {
+      fx().text(270, 430, 'HIGH TIDE! The water rises and falls with the music', '#ff6bd6', { big: true });
+      fx().shake(6);
+      FS.party = Math.max(FS.party || 0, 0.6); FS.marquee = 'HIGH TIDE!';
+      if (ev.idx != null && ev.idx >= 0 && F.enemies[ev.idx]) anim(ev.idx).spitT = S.t;
+      snd('depTide');
+    } else { fx().text(270, 470, 'THE TIDE GOES OUT', '#8dfff5'); snd('depTide', { pitch: 0.7 }); }
+    if (Q) Q.log.push(ev.k);
+    return true;
+  }
+  // signLabel: High Tide holds the boss sign while it runs.
+  function depSign() { return F && F.tide && F.phase === 'player' ? ['HIGH TIDE', 'tide'] : null; }
+  // bestTick: the trick that is on now, for the cabinet sign.
+  function depSignNow() {
+    if (!F) return null;
+    if (F.depLure) return ['LURED CLAW', DEP_COL.lure];
+    if (F.depShock) return ['LIVE WATER', DEP_COL.shock];
+    let pin = false, jel = false, box = false;
+    for (const i of F.bin) { if (i.depPinch) pin = true; else if (i.id === 'dep_jellyling') jel = true; else if (i.id === 'dep_chest') box = true; }
+    if (pin) return ['PINCHED PRIZES', DEP_COL.pinch];
+    if (box) return ['ONE CHEST IS REAL', DEP_COL.decoy];
+    if (jel) return ['STINGING JELLIES', DEP_COL.jellies];
+    return null;
+  }
+  // ---- the drawing
+  const DEP_CST = { t: 0, live: 0, tide: 0, notes: 0, rise: 0, level: 0, reduced: false };
+  // drawFight: the underwater arcade instead of the act's backdrop (true when it drew).
+  function depBg(ctx, t) {
+    const R = X.RENDER;
+    if (!depIn() || !R || !R.dep || !R.dep.arena) return false;
+    const Q = FS && FS.dep;
+    R.dep.arena(ctx, W, H, t, { reduced: !!fx().reduced, tide: Q ? Q.tideK : 0, live: Q ? Q.shockK : 0 });
+    return true;
+  }
+  // Inside the cabinet's clip: the tint behind the pile ('back'); the water, the caustics and every trick's look over it ('front').
+  function depCabDraw(ctx, t, layer) {
+    const R = X.RENDER, RD = R && R.dep;
+    if (!RD || !F || !FS) return;
+    const Q = FS.dep, bw = binWidth(), deep = depIn();
+    if (layer === 'back') { if (deep && RD.cabBack) RD.cabBack(ctx, CAB.x, CAB.y, bw, CAB.h, t); return; }
+    if (Q && Q.flood && Q.level < CAB.h - 1 && RD.water) {
+      DEP_CST.t = t; DEP_CST.live = Q.shockK; DEP_CST.tide = Q.tideK; DEP_CST.rise = U.clamp(Q.tideV / 90, -1, 1); DEP_CST.level = Q.level; DEP_CST.reduced = !!fx().reduced;
+      RD.water(ctx, CAB.x, CAB.x + bw, CAB.y + Q.level, CAB.y + CAB.h, t, DEP_CST);
+    }
+    if (deep && RD.caustics) RD.caustics(ctx, CAB.x, CAB.y, bw, CAB.h, t, Q ? Q.level : CAB.h);
+    for (const b of FS.items) {
+      const inst = b.data.inst, x = CAB.x + b.x, y = CAB.y + b.y, r = b.br || 14;
+      if (inst.depPinch && RD.pincer) RD.pincer(ctx, x, y, r, t, b.held > 0 ? 0.4 : 1);
+      else if (inst.id === 'dep_jellyling' && RD.jellyGlow) RD.jellyGlow(ctx, x, y, r, t, b.held > 0 ? 1 : 0);
+      else if (inst.id === 'dep_chest' && RD.chestTell) {
+        const ph = ((hashOf(inst) % 100) / 100) * DEPK.glint, u = (Q ? Q.glintT : t) + ph, k = (u % DEPK.glint) < DEPK.glintOn ? 1 : 0;
+        RD.chestTell(ctx, x, y, r, t + ph, !!inst.depReal, k);
+      }
+    }
+    if (Q && Q.lureK > 0.02 && Q.lureX != null && RD.lure) {
+      const lb = depLureBody(), by = lb ? lb.y - (lb.br || 14) - 34 : CAB.h - 90;
+      RD.lure(ctx, CAB.x + Q.lureX, CAB.y + 4, CAB.y + Math.max(70, by), t, Q.lureK);
+    }
+  }
+  // drawMap: the Depths' deep water under the hexes, then the shimmer, the light and the bubbles over them.
+  function depMapBg(ctx, t) {
+    const R = X.RENDER;
+    if (depIn() && R && R.dep && R.dep.mapBg) R.dep.mapBg(ctx, W, H, t);
+  }
+  function depMapDraw(ctx, t) {
+    const R = X.RENDER;
+    if (!depIn() || !R || !R.dep || !R.dep.mapFx || S.screen !== 'map') return;
+    ctx.save();
+    try { ctx.beginPath(); ctx.rect(MAP_AREA.x, MAP_AREA.y, MAP_AREA.w, MAP_AREA.h); ctx.clip(); R.dep.mapFx(ctx, MAP_AREA.x, MAP_AREA.y, MAP_AREA.w, MAP_AREA.h, t, !!fx().reduced); } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  function DEP_API() {
+    return {
+      K: DEPK, SIGN: DEP_SIGN, COL: DEP_COL, WORDS: DEP_WORDS, PATTERNS: DEP_PATTERNS,
+      in: (run) => depIn(run), name: depName, actName: (run) => depActName(run), meta: depM, metaFix: depMetaFix, loopAct: depLoopAct, mapBiome: depMapBiome,
+      bootLines: depBootLines, loopSub: depLoopSub, intro: depIntro, musicAct: (run) => depMusicAct(run || S.run), encFor: (run) => depEncFor(run || S.run),
+      tideAt: depTideAt, water: () => (F && FS ? depWaterFrac() : 0), level: () => (FS && FS.dep ? FS.dep.level : null), owns: () => depOwnsWater(),
+      lureX: () => (F && FS && F.depLure ? depLureX() : null), fs: () => (FS ? FS.dep || null : null), hook: depHook, tick: (dt) => depTick(dt || 1 / 60, dt || 1 / 60),
+      event: (ev) => { if (FS && ev) depEvent(ev); }, sign: () => depSignNow(), rig: depRig, deliver: depDeliver, hisDives: depHisDives,
+    };
+  }
+  // ================================================================ /DEP
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -23304,6 +25269,8 @@ const GAME = (() => {
     showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, playIntro, resolveFx, gainRelic, applyClawUpgrade, rollShop,
     // meta progression (DESIGN.md "Meta"): Tilt, the Prizedex, stickers, the daily run, the attract mode
     showStickers,
+    // HUD AND TITLE MENU (round 15): the title's group sheets, the HUD's act chip, the relic overflow
+    ui15: { T: UIT, H: UIH, sheet: uiSheetOpen, actTxt: uiActTxt, relicFit: uiRelicFit, relicList: uiRelicList },
     // I18N (round 13): the language (setLang saves it; lang() reads it; i18n.apply re-picks from the save / browser)
     setLang: i18nSetLang, lang: i18nLang, i18n: { apply: i18nApply, refresh: i18nRefresh, itemText: i18nItemText },
     // relic sets, the boon draft, the Compactor (DESIGN.md "Sets, boons and the Compactor")
@@ -23516,6 +25483,7 @@ const GAME = (() => {
       aim: () => { const V = S.duoV; if (!V || !V.W) return null; let best = null, bs = -1e9; const cx = (V.C && V.C.bounds.chuteX) || CAB.w - CAB.chuteW; for (const b of V.W.bodies) { if (b.type !== 'dynamic' || !b.data || b.data.pile == null || b.x > cx - 10) continue; const s = (b.data.v | 0) * 10 + (CAB.h - b.y) * 0.15; if (s > bs) { bs = s; best = b; } } return best ? U.clamp(best.x, 24, cx - 24) : cx * 0.5; },
       get state() { return S.duo || null; }, get v() { return S.duoV || null; }, get live() { return S.duoLive || null; }, get t() { return S.duoT || null; },
       get setupState() { return S.duoSet || null; }, get log() { return DUOX.log; }, get seed() { return DUOX.seed; }, set seed(v) { DUOX.seed = v == null ? null : v >>> 0; },
+      net: DUON_API(),   // DUO NET (round 15): online co-op (DESIGN.md "Online co-op (round 15)")
     },
     // SCHOOL (round 11, DESIGN.md "Claw School and the Practice Cabinet (round 11)"): the practice cabinet, the lessons, the report card
     sch: SCH_API(),
@@ -23523,6 +25491,8 @@ const GAME = (() => {
     leg: LEG_API(),
     // TRD (round 14): the Trading Post and pet evolution (DESIGN.md "The Trading Post and pet evolution (round 14)")
     trd: TRD_API(), pev: PEV_API(),
+    // DEP (round 15): the Neon Depths, Endless's fourth biome (DESIGN.md "The Neon Depths (round 15)")
+    dep: DEP_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

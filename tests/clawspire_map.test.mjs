@@ -1663,4 +1663,46 @@ h.test('trd: one Trading Post per map, off the road, a landmark by the cabinet r
   h.eq(tilesOf(MAP.deserialize(JSON.parse(JSON.stringify(world(5))))).filter((x) => x.type === 'trader').length, 0, 'a map from before the round has no Trading Post');
 });
 
+/* ------------------------------------------------- DEP (round 15): an Endless dive's Neon Depths map */
+h.test('dep: a Depths map keeps every map rule over many seeds, and only Depths monsters live on it', () => {
+  const R = boot({ only: ['util', 'data', 'map'] });
+  const D = R.DATA, E = D.ENEMIES;
+  h.eq(R.MAP.DEP_BIOME, 'depths', 'the biome id');
+  let fights = 0, roam = 0, bad = 0;
+  // the dive floods the vault's own layout: the same seed draws the same map, only the biome differs,
+  // so every map rule checkMap / checkRoad hold for act 3 holds on the flooded copy too
+  const asVault = (M) => { const o = JSON.parse(JSON.stringify(M)); o.biome = R.MAP.BIOMES[3]; for (const t of Object.values(o.tiles)) t.biome = R.MAP.BIOMES[3]; return o; };
+  const shape = (M) => JSON.stringify(Object.values(M.tiles).map((t) => [t.q, t.r, t.type, t.ground, t.elev, t.content && t.content.diff])) + JSON.stringify([M.road, M.start, M.boss]);
+  for (let s = 1; s <= 60; s++) {
+    const M = R.MAP.generate({ act: 3, biome: 'depths', rng: R.U.rng(s * 31) });
+    h.eq(M.biome, 'depths', 'seed ' + s + ': the flooded biome');
+    h.ok(Object.values(M.tiles).every((t) => t.biome === 'depths'), 'seed ' + s + ': every hex is flooded');
+    h.eq(M.act, 3, 'seed ' + s + ': act 3 underneath');
+    h.eq(shape(M), shape(R.MAP.generate({ act: 3, rng: R.U.rng(s * 31) })), 'seed ' + s + ': the vault\'s own layout');
+    checkMap(asVault(M), 'depths seed ' + s, D);
+    checkRoad(asVault(M), 'depths seed ' + s);
+    for (const t of tilesOf(M)) {
+      const c = t.content || {};
+      if (!c.enc || c.sec) continue;
+      fights++;
+      if (!c.enc.every((id) => E[id] && E[id].dep)) bad++;
+      if (t.type === 'boss' && c.enc[0] !== 'dep_jukebox') bad++;
+      if (t.type === 'elite' && c.enc[0] !== 'dep_mimic') bad++;
+    }
+    for (const m of M.roam || []) { roam++; if (!m.enc || !m.enc.every((id) => E[id] && E[id].dep)) bad++; }
+    // a round trip keeps the biome
+    h.eq(R.MAP.deserialize(JSON.parse(JSON.stringify(R.MAP.serialize(M)))).biome, 'depths', 'seed ' + s + ': the biome survives a save');
+  }
+  h.ok(fights > 300 && roam > 60, `fights and roamers counted (${fights}, ${roam})`);
+  h.eq(bad, 0, 'every fight, elite, boss and roamer on a Depths map is a Depths one');
+  // the same seed without the flag is the vault, with its own monsters (the dive is opt-in)
+  const V = R.MAP.generate({ act: 3, rng: R.U.rng(31) });
+  h.ok(V.biome !== 'depths' && tilesOf(V).every((t) => !(t.content && t.content.enc) || t.content.enc.every((id) => !E[id].dep)), 'an ordinary act 3 map has no Depths monster');
+  h.ok(!R.MAP.generate({ act: 3, biome: 'lava', rng: R.U.rng(5) }).biome.startsWith('dep'), 'an unknown biome falls back to the act\'s');
+  // util+map alone (no DATA): the flag still floods the map, and nothing throws
+  const M0 = MAP.generate({ act: 3, biome: 'depths', rng: U.rng(12) });
+  h.eq(M0.biome, 'depths', 'without DATA too');
+  checkMap(asVault(M0), 'depths no data');
+});
+
 h.done();

@@ -33,6 +33,10 @@ export function scriptFiles() {
   if (!fs.existsSync(HTML)) return canon;
   const html = fs.readFileSync(HTML, 'utf8');
   const found = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
+  // (round 15) the language tables load lazily in a browser (js/i18n.js writes them in for a Dutch
+  // player, or fetches them on a switch); the suites carry them right after i18n as before
+  const i = found.indexOf('js/i18n.js');
+  if (i >= 0) for (const f of ['js/lang_nl2.js', 'js/lang_nl.js']) if (found.indexOf(f) < 0) found.splice(i + 1, 0, f);
   return found.length ? found : canon;
 }
 
@@ -155,7 +159,8 @@ export function boot(opts) {
   const wanted = only ? files.filter(f => only.includes(f)) : files;
   const expose = '\n;__out.mods = {' + wanted.map((f, i) => `${names[files.indexOf(f)]}: (typeof ${names[files.indexOf(f)]} !== 'undefined' ? ${names[files.indexOf(f)]} : undefined)`).join(', ') + '};\n';
   // (round 13) the i18n module brings its language tables along
-  const src = source(only ? wanted.concat(wanted.includes('i18n') ? ['lang_nl', 'lang_nl2'] : []) : null) + expose;
+  // (round 15) opts.noLang: no language table, as an English player's browser boots (only-mode suites)
+  const src = source(only ? wanted.concat(wanted.includes('i18n') && !opts.noLang ? ['lang_nl', 'lang_nl2'] : []) : null) + expose;
   const fn = new Function('window', 'document', 'localStorage', 'requestAnimationFrame', 'cancelAnimationFrame',
     'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'navigator', '__out', src);
   fn(sandbox.window, sandbox.document, sandbox.localStorage, sandbox.requestAnimationFrame, sandbox.cancelAnimationFrame,

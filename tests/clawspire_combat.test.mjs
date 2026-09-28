@@ -743,7 +743,7 @@ else {
         h.ok(!invariants(F, id), `enemy ${id} onDeath resolves`);
       }
     }
-    const known = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'].concat(C.BEST_KINDS || [], C.FAM_KINDS || []);
+    const known = ['attack', 'block', 'buff', 'debuff', 'heal', 'shake', 'grease', 'fog', 'junk', 'steal', 'freezeItem', 'summon', 'tilt', 'charge', 'escape', 'gulp', 'bomb', 'corrode', 'jam', 'eggs'].concat(C.BEST_KINDS || [], C.FAM_KINDS || [], C.DEP_KINDS || []);
     for (const k of kinds) h.ok(known.includes(k), `enemy move kind ${k} is one the engine implements`);
   });
 
@@ -3768,6 +3768,209 @@ if (hasData) {
     const Z = tfight('mouse');
     for (let i = 0; i < 400 && Z.phase !== 'over'; i++) C.pevTrick(Z, 'mouse');
     h.ok(Z.phase === 'over' && Z.enemies.every(e => Number.isFinite(e.hp) && e.hp >= 0), 'Arc Zap over and over wins the fight cleanly');
+  });
+}
+
+// ---------- DEP (round 15): the Neon Depths' tricks and The Drowned Jukebox's High Tide ----------
+{
+  const R = boot({ only: ['util', 'data', 'combat'] });
+  const C = R.COMBAT, D = R.DATA, K = D.DEP_K;
+  const IDS = Object.keys(D.ITEMS).filter(id => D.ITEMS[id].rarity !== 'junk' && !D.ITEMS[id].bag && !D.ITEMS[id].hot);
+  const dfight = (ids, seed, o) => {
+    o = o || {};
+    const bin = o.bin || IDS.slice(seed % 40, seed % 40 + 12).map((id, i) => ({ uid: 'd' + seed + '_' + i, id, plus: i === 3 }));
+    // (a plain act 3 run: the Endless lift and its random affixes would blur the numbers; the Depths' own dial stays)
+    const run = { hp: 400, maxHp: 400, act: 3, relics: [], claw: { grabs: 3 }, gold: 40, bin };
+    return C.newFight(run, ids, R.U.rng(seed));
+  };
+  const evOf = (evs, k) => evs.filter(ev => ev.t === 'dep' && ev.k === k);
+  const hpb = (F) => F.player.hp + F.player.block;
+
+  h.test('dep: the Depths monsters hit and last a little more than act 3 (the danger dial)', () => {
+    for (const d of D.DEP_ENEMIES) {
+      const F = dfight([d.id], 7), e = F.enemies[0];
+      h.ok(e.maxHp >= Math.round(d.hp[0] * K.hpK) && e.dmgMul >= K.dmgK, `${d.id}: hp ${e.maxHp} and hits x${e.dmgMul.toFixed(2)}`);
+      const atk = d.moves.find(m => m.k === 'attack');
+      if (atk) h.eq(e.def.moves.find(m => m.id === atk.id).v, Math.max(1, Math.round(atk.v * e.dmgMul)), `${d.id}: its ${atk.id} is scaled`);
+    }
+    const V = dfight([Object.keys(D.ENEMIES).find(id => D.ENEMIES[id].act === 3 && D.ENEMIES[id].tier === 'normal' && !D.ENEMIES[id].dep && !D.ENEMIES[id].secret)], 7);
+    const W = dfight(['dep_angler'], 7);
+    h.ok(Math.abs(W.enemies[0].dmgMul / V.enemies[0].dmgMul - K.dmgK) < 1e-9, `the Depths hit x${K.dmgK} over an ordinary act 3 monster, no more`);
+  });
+
+  h.test('dep: the Angler Token hangs its lure over an Old Boot; grabbing the boot out snaps it off', () => {
+    const F = dfight(['dep_angler'], 11), e = F.enemies[0];
+    h.eq(e.intent.k, 'lure', 'it opens with the lure');
+    h.eq(C.intentText(e), 'Lures your claw toward junk', 'the intent says so');
+    const n0 = F.bin.length;
+    const evs = C.endTurn(F);
+    const ev = evOf(evs, 'lure')[0];
+    h.ok(ev && ev.inst && ev.inst.id === 'dep_boot', 'a lure event with its boot');
+    h.eq(F.bin.length, n0 + 1, 'the Old Boot is in the bin');
+    h.ok(C.depOf(F).lure && C.depOf(F).lure.inst === ev.inst && C.depOf(F).lure.by === e.uid, 'the lure hangs for this turn');
+    const out = C.play(F, ev.inst);
+    h.ok(out.some(x => x.t === 'dep' && x.k === 'lureOff' && x.why === 'bait'), 'grabbing the boot out snaps the lure off');
+    h.eq(C.depOf(F).lure, null, 'no lure left');
+    // left alone, the lure goes when the turn ends
+    const G = dfight(['dep_angler'], 12);
+    C.endTurn(G);
+    h.ok(C.depOf(G).lure, 'a lure');
+    h.ok(evOf(C.endTurn(G), 'lureOff').length === 1 && !C.depOf(G).lure, 'gone with the turn');
+  });
+
+  h.test('dep: Jellyfish Coin jellies sting the claw that touches them (through Block), and sting an enemy when delivered', () => {
+    const F = dfight(['dep_jelly'], 13), e = F.enemies[0];
+    h.eq(e.intent.k, 'jellies', 'it opens with its jellies');
+    h.eq(C.intentText(e), 'Drifts 2 stinging jellies into your bin', 'the intent counts them');
+    const evs = C.endTurn(F);
+    const ev = evOf(evs, 'jellies')[0];
+    const v = Math.max(1, Math.round(2 * e.dmgMul));
+    h.ok(ev && ev.items.length === 2 && ev.items.every(i => i.id === 'dep_jellyling' && i.depSting === v) && ev.v === v, `two jellies, each stings for ${v}`);
+    F.player.block = 5;
+    const b0 = hpb(F);
+    const st = C.depSting(F, ev.items[0]);
+    h.ok(st.some(x => x.t === 'dep' && x.k === 'sting' && x.v === v), 'a sting event');
+    h.eq(b0 - hpb(F), v, 'the sting takes its number');
+    // delivered, it stings a random enemy for DEP_K.jelly
+    const hp0 = e.hp + e.block;
+    C.play(F, ev.items[1]);
+    h.ok(hp0 - (e.hp + e.block) >= 1, 'a delivered jelly stings the Jellyfish Coin back');
+    // off the player's turn a sting is nothing
+    F.phase = 'enemy';
+    h.eq(C.depSting(F, ev.items[0]).length, 0, 'no sting outside the player turn');
+  });
+
+  h.test('dep: the Crab Changer pinches your best, and takes only what is still pinched a turn later', () => {
+    const F = dfight(['dep_crab'], 17), e = F.enemies[0];
+    h.eq(e.intent.k, 'pinch', 'it opens with a pinch');
+    h.eq(C.intentText(e), 'Pinches your 2 best items', 'the intent counts them');
+    const want = C.depPinchPick(F, 2).map(i => i.uid);
+    let evs = C.endTurn(F);
+    const ev = evOf(evs, 'pinch')[0];
+    h.eq(ev.insts.map(i => i.uid).join(), want.join(), 'it pinched what the preview named');
+    h.eq(C.depPinched(F).length, 2, 'two prizes pinched');
+    h.eq(evOf(evs, 'take').length, 0, 'nothing taken the turn it pinched');
+    // the claw frees one; the other is taken when the next enemy phase ends
+    h.ok(C.depUnpinch(F, ev.insts[0]), 'the claw lifts one clear');
+    h.ok(!C.depUnpinch(F, ev.insts[0]), 'only once');
+    evs = C.endTurn(F);
+    const tk = evOf(evs, 'take')[0];
+    h.ok(tk && tk.insts.length === 1 && tk.insts[0].uid === ev.insts[1].uid, 'the still pinched one goes into its shell');
+    h.ok(evs.some(x => x.t === 'binEat' && x.inst === ev.insts[1] && x.idx === 0), 'it is swallowed (the belly rules: a drink is drunk on the spot)');
+    h.ok(F.bin.includes(ev.insts[0]), 'the freed one stayed');
+    // a delivered pinched prize is simply played; killing the crab lets go
+    const G = dfight(['dep_crab'], 18);
+    C.endTurn(G);
+    const pin = C.depPinched(G);
+    C.play(G, pin[0]);
+    h.ok(!pin[0].depPinch, 'a delivered prize is no longer pinched');
+    const k = C.damage(G, G.player, G.enemies[0], 9999);
+    h.ok(!G.enemies[0].alive && C.depPinched(G).length === 0, 'killing the crab lets go of the rest');
+    void k;
+  });
+
+  h.test('dep: the Volt Eel\'s live water shocks a wet delivery for its number, for one turn', () => {
+    const F = dfight(['dep_eel'], 19), e = F.enemies[0];
+    h.eq(e.intent.k, 'shock', 'it opens with Live Wire');
+    const v = Math.max(1, Math.round(3 * e.dmgMul));
+    h.eq(C.intentText(e), `Electrifies the water (${v} per wet prize)`, 'the intent says the number');
+    h.eq(C.depZap(F, null).length, 0, 'dry water: no zap');
+    const evs = C.endTurn(F);
+    h.ok(evOf(evs, 'shock')[0] && C.depOf(F).shock.v === v, 'the water is live');
+    F.player.block = 2;
+    const b0 = hpb(F);
+    h.ok(C.depZap(F, F.bin[0]).some(x => x.k === 'zap' && x.v === v), 'a zap');
+    h.eq(b0 - hpb(F), v, 'for its number');
+    h.ok(evOf(C.endTurn(F), 'shockOff').length === 1 && !C.depOf(F).shock, 'the current goes with the turn');
+  });
+
+  h.test('dep: the Sunken Mimic\'s chests: exactly one pays, the rest bite', () => {
+    let reals = 0;
+    for (const seed of [21, 22, 23, 24, 25, 26]) {
+      const F = dfight(['dep_mimic'], seed), e = F.enemies[0];
+      h.eq(e.intent.k, 'decoy', 'it opens with its chests');
+      h.eq(C.intentText(e), 'Scatters 3 chests (one holds treasure)', 'the intent');
+      const ev = evOf(C.endTurn(F), 'decoy')[0];
+      h.ok(ev && ev.items.length === 3 && ev.items.every(i => i.id === 'dep_chest'), 'three chests');
+      const real = ev.items.filter(i => i.depReal);
+      h.eq(real.length, 1, 'exactly one is real');
+      reals += ev.items.indexOf(real[0]);
+      const g0 = F.gain.gold, b0 = F.player.block;
+      const out = C.play(F, real[0]);
+      h.ok(out.some(x => x.k === 'chest' && x.real), 'the real one pays');
+      h.ok(F.player.block >= b0 + K.real.block, 'with Block');
+      h.eq(F.gain.gold - g0, K.real.gold, 'and gold');
+      const bite = ev.items.find(i => !i.depReal);
+      F.player.block = 0;
+      const h0 = F.player.hp;
+      const ob = C.play(F, bite);
+      h.ok(ob.some(x => x.k === 'chest' && !x.real && x.v === bite.depBite), 'a biter bites');
+      h.eq(h0 - F.player.hp, bite.depBite, 'for its number');
+    }
+    h.ok(reals > 0, 'the treasure is not always the first chest');
+  });
+
+  h.test('dep: The Drowned Jukebox\'s High Tide floods the next turn, faster and higher on the B-side', () => {
+    const F = dfight(['dep_jukebox'], 29), e = F.enemies[0];
+    let tide = null, turns = 0;
+    for (; turns < 6 && !tide; turns++) { const evs = C.endTurn(F); tide = evs.find(x => x.t === 'boss' && x.k === 'tide'); if (F.player.hp < 200) F.player.hp = 400; }
+    h.ok(tide, `High Tide within ${turns} turns`);
+    const T = C.depOf(F).tide;
+    h.ok(T && T.lo === K.tide.lo && T.hi === K.tide.hi && T.bpm === K.tide.bpm && T.by === e.uid && !T.rage, 'the tide rises and falls between its marks');
+    const evs = C.endTurn(F);
+    h.ok(evs.some(x => x.t === 'boss' && x.k === 'ebb') && !C.depOf(F).tide, 'it ebbs when the turn ends');
+    // enraged: higher, faster
+    const G = dfight(['dep_jukebox'], 30);
+    G.enemies[0].enraged = true;
+    let T2 = null;
+    for (let i = 0; i < 8 && !T2; i++) { C.endTurn(G); T2 = C.depOf(G).tide; if (G.player.hp < 200) G.player.hp = 400; }
+    h.ok(T2 && T2.rage && T2.hi === K.tide.hiRage && T2.bpm === K.tide.bpm * K.tide.rageK, 'the B-side floods higher and faster');
+    // the boss dies: its tide goes with it
+    const X = dfight(['dep_jukebox'], 31);
+    for (let i = 0; i < 8 && !C.depOf(X).tide; i++) { C.endTurn(X); if (X.player.hp < 200) X.player.hp = 400; }
+    h.ok(C.depOf(X).tide, 'a tide up');
+    C.damage(X, X.player, X.enemies[0], 99999);
+    h.ok(!C.depOf(X).tide, 'unplugged: the water goes down');
+  });
+
+  h.test('dep: the telegraph stays exact over every Depths encounter (qaThreat is what the enemy phase takes)', () => {
+    let same = 0, n = 0;
+    const miss = [];
+    for (const enc of D.DEP_ENC.normal.concat(D.DEP_ENC.elite, D.DEP_ENC.boss)) for (const seed of [3, 11, 19]) {
+      const F = dfight(enc, seed);
+      for (let turn = 0; turn < 10 && F.phase === 'player'; turn++) {
+        if (turn % 2) F.player.block = 7;
+        const odd = F.enemies.some(e => e.alive && (C.greedNext(e) || (e.intent && e.intent.k === 'gulp')));
+        const T = C.qaThreat(F), hp0 = F.player.hp;
+        C.endTurn(F);
+        if (!odd) { n++; if (hp0 - F.player.hp === T.loss) same++; else miss.push(enc.join('+') + ' t' + turn + ': ' + T.loss + ' vs ' + (hp0 - F.player.hp)); }
+        if (F.player.hp < 150) F.player.hp = 400;
+      }
+    }
+    h.ok(n > 200, `turns checked (${n})`);
+    h.eq(same, n, 'every preview exact: ' + miss.slice(0, 3).join(' | '));
+  });
+
+  h.test('dep: fuzz: random grabs, stings, zaps and unpinches over many seeds never break a fight', () => {
+    let bad = 0, over = 0;
+    for (let s = 1; s <= 40; s++) {
+      const enc = D.DEP_ENC.normal.concat(D.DEP_ENC.elite, D.DEP_ENC.boss)[s % 13];
+      const F = dfight(enc, 100 + s), r = R.U.rng(s);
+      for (let t = 0; t < 30 && F.phase !== 'over'; t++) {
+        for (let k = 0; k < 3 && F.phase === 'player' && F.bin.length; k++) {
+          const inst = F.bin[Math.floor(r() * F.bin.length)];
+          if (inst.depSting && r() < 0.5) C.depSting(F, inst);
+          if (inst.depPinch && r() < 0.5) C.depUnpinch(F, inst);
+          if (r() < 0.3) C.depZap(F, inst);
+          if (F.phase === 'player') C.play(F, inst);
+        }
+        if (F.phase === 'player') C.endTurn(F);
+        if (!Number.isFinite(F.player.hp) || F.enemies.some(e => !Number.isFinite(e.hp) || e.hp < 0)) bad++;
+      }
+      if (F.phase === 'over') over++;
+    }
+    h.eq(bad, 0, 'never a NaN or a negative hp');
+    h.ok(over > 0, `some fights end (${over})`);
   });
 }
 
