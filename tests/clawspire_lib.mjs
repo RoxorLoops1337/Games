@@ -124,7 +124,7 @@ export function makeSandbox(opts) {
     clearTimeout: () => {},
     setInterval: () => 0, clearInterval: () => {},
     performance: { now: () => now },
-    navigator: { userAgent: 'node', vibrate() {}, maxTouchPoints: 0 },
+    navigator: { userAgent: 'node', vibrate() {}, maxTouchPoints: 0, language: opts.language || '' },   // (round 13: opts.language, the browser's)
     __out: {},
   };
   sandbox.window.localStorage = sandbox.localStorage;
@@ -150,11 +150,12 @@ export function boot(opts) {
   const sb = makeSandbox(opts);
   const { sandbox } = sb;
   const only = opts.only;
-  const names = ['U', 'ART', 'PHYS', 'DATA', 'COMBAT', 'MAP', 'AUDIO', 'RENDER', 'GAME'];
-  const files = ['util', 'art', 'physics', 'data', 'combat', 'map', 'audio', 'render', 'game'];
+  const names = ['U', 'ART', 'I18N', 'PHYS', 'DATA', 'COMBAT', 'MAP', 'AUDIO', 'RENDER', 'GAME'];
+  const files = ['util', 'art', 'i18n', 'physics', 'data', 'combat', 'map', 'audio', 'render', 'game'];
   const wanted = only ? files.filter(f => only.includes(f)) : files;
   const expose = '\n;__out.mods = {' + wanted.map((f, i) => `${names[files.indexOf(f)]}: (typeof ${names[files.indexOf(f)]} !== 'undefined' ? ${names[files.indexOf(f)]} : undefined)`).join(', ') + '};\n';
-  const src = source(only ? wanted : null) + expose;
+  // (round 13) the i18n module brings its language tables along
+  const src = source(only ? wanted.concat(wanted.includes('i18n') ? ['lang_nl'] : []) : null) + expose;
   const fn = new Function('window', 'document', 'localStorage', 'requestAnimationFrame', 'cancelAnimationFrame',
     'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'navigator', '__out', src);
   fn(sandbox.window, sandbox.document, sandbox.localStorage, sandbox.requestAnimationFrame, sandbox.cancelAnimationFrame,

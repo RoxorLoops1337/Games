@@ -110,7 +110,7 @@ const GAME = (() => {
   const actDef = (n) => (tbl('ACTS')[n]) || { name: 'Act ' + n, sub: '', palette: {} };
   const itemName = (def, plus) => (plus && def.plus && def.plus.name) ? def.plus.name : (def.name + (plus ? '+' : ''));
   const itemText = (def, plus) => {
-    if (D().itemText) { try { return D().itemText(def, plus); } catch (e) { /* fall through */ } }
+    if (D().itemText) { try { return i18nOn() ? i18nItemText(def, plus) : D().itemText(def, plus); } catch (e) { /* fall through */ } }   // (I18N: the text in the current language)
     return (plus && def.plus && def.plus.text) || def.text || '';
   };
   const snd = (name, opts) => { if (X.AUDIO && X.AUDIO.sfx) { try { X.AUDIO.sfx(name, opts); } catch (e) { /* audio is optional */ } } };
@@ -128,10 +128,22 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- DOM helpers
   const $ = (id) => { try { return document.getElementById(id); } catch (e) { return null; } };
+  /* I18N (round 13): English in, the current language out (js/i18n.js; a
+     no-op in English and when the module is missing). i18nText sets an
+     element's words and keeps the English on it, so a language switch can
+     redo a screen in place (I18N.dom). */
+  const i18nOn = () => typeof I18N !== 'undefined' && !!I18N && I18N.get() !== 'en';
+  const i18nTr = (s) => (i18nOn() ? I18N.tr(s) : s);
+  const i18nT = (key, vars) => (typeof I18N !== 'undefined' && I18N ? I18N.T(key, vars) : key);
+  function i18nText(el, text) {
+    if (i18nOn()) { I18N.el(el, text); return; }
+    el.textContent = text;
+    el.__i18nSrc = String(text); el.__i18nOut = el.textContent;
+  }
   function h(tag, cls, text) {
     const el = document.createElement(tag);
     if (cls) el.className = cls;
-    if (text != null) el.textContent = text;
+    if (text != null) i18nText(el, text);   // I18N (round 13): the words in the current language, the English kept for a switch
     return el;
   }
   function clear(el) { if (!el) return; if (el.replaceChildren) el.replaceChildren(); else el.innerHTML = ''; }
@@ -204,7 +216,7 @@ const GAME = (() => {
   // ---------------------------------------------------------------- toast, popover, banner
   function toast(str, secs) {
     const el = $('toast');
-    if (el) { el.textContent = str; el.classList.add('show'); }
+    if (el) { el.textContent = i18nTr(str); el.classList.add('show'); }
     S.toastT = secs || 1.8;
     S.lastToast = str;
     feelToastLane(true);   // off the play area on the arcade and fight screens; the shopkeeper says it (FEEL block)
@@ -215,6 +227,7 @@ const GAME = (() => {
     if (!el) return;
     if (html == null) { el.classList.remove('show'); S.popover = null; return; }
     el.innerHTML = html;
+    if (i18nOn()) I18N.dom(el);   // I18N: the popover's words
     const w = 300, hh = 90;
     const px = U.clamp(x - w / 2, 8, W - w - 8);
     const py = y + 12 + hh > H ? y - hh - 12 : y + 12;
@@ -233,13 +246,14 @@ const GAME = (() => {
   }
   function bannerOn(a) {
     const el = $('banner'), tx = $('bannerTxt');
-    if (tx) tx.textContent = a.str;
+    const say = i18nTr(a.str);   // I18N: the banner's words (sized as shown)
+    if (tx) tx.textContent = say;
     if (el) { el.className = a.kind || ''; replay(el, 'show'); }
     // the pips and statuses share the row: fade them while the banner is up
     const pr = $('playerRow'); if (pr && pr.classList) pr.classList.add('bannerOn');
     S.bannerStr = a.str;
     // POLISH (round 5): the banner keeps to the span left of the GRABS pill
-    const bb = polBannerBox(polGrabsW(), a.str, a.kind);
+    const bb = polBannerBox(polGrabsW(), say, a.kind);
     try {
       if (el && el.style) { el.style.left = bb.x0 + 'px'; el.style.right = (W - bb.x1) + 'px'; }
       if (tx && tx.style) tx.style.fontSize = bb.size < bb.big ? bb.size.toFixed(1) + 'px' : '';
@@ -276,7 +290,7 @@ const GAME = (() => {
     if (el && el.classList) { if (quick) el.classList.add('quick'); el.classList.remove('show'); }
     const pr = $('playerRow'); if (pr && pr.classList) pr.classList.remove('bannerOn');
   }
-  function hint(str) { const el = $('hint'); if (el) el.textContent = str; S.hint = str; }
+  function hint(str) { const el = $('hint'); if (el) el.textContent = i18nTr(str); S.hint = str; }
 
   // ---------------------------------------------------------------- juice helpers
   // Restart a CSS animation class on an element (remove, reflow, add).
@@ -1246,10 +1260,10 @@ const GAME = (() => {
     clear(b);
     b.appendChild(h('h1', null, 'How it works'));
     b.appendChild(h('h3', null, 'The rig'));
-    let p = h('p'); p.innerHTML = 'Your deck is a <b>bin of objects</b> in a glass cabinet. Drag on the glass to steer the claw, let go to drop it. The prongs close on whatever is under them, lift, swing to the chute on the right and open. <b>Whatever lands in the chute is played.</b> What slips out lands back in the pile. A turn is a handful of grabs; two items in one grab is a double, three is a <b>jackpot</b>.'; b.appendChild(p);
-    p = h('p'); p.innerHTML = 'Long thin things are hard to hold, balls are easy, flat discs slip, heavy things need grip. The claw only gets better at the top of the tower: every boss you beat leaves spare parts (pick 1 of 3), and a tower keeper can hand you one too. More grabs, a wider palm, stronger grip, a third prong, rubber tips, a magnet.'; b.appendChild(p);
+    let p = h('p'); p.innerHTML = i18nTr('Your deck is a <b>bin of objects</b> in a glass cabinet. Drag on the glass to steer the claw, let go to drop it. The prongs close on whatever is under them, lift, swing to the chute on the right and open. <b>Whatever lands in the chute is played.</b> What slips out lands back in the pile. A turn is a handful of grabs; two items in one grab is a double, three is a <b>jackpot</b>.'); b.appendChild(p);
+    p = h('p'); p.innerHTML = i18nTr('Long thin things are hard to hold, balls are easy, flat discs slip, heavy things need grip. The claw only gets better at the top of the tower: every boss you beat leaves spare parts (pick 1 of 3), and a tower keeper can hand you one too. More grabs, a wider palm, stronger grip, a third prong, rubber tips, a magnet.'); b.appendChild(p);
     b.appendChild(h('h3', null, 'Fights'));
-    p = h('p'); p.innerHTML = 'Enemies show their <b>intent</b> above their heads. Tap an enemy to target it. Block soaks damage until your next turn. <b>End turn</b> when you are out of grabs (it happens by itself too).'; b.appendChild(p);
+    p = h('p'); p.innerHTML = i18nTr('Enemies show their <b>intent</b> above their heads. Tap an enemy to target it. Block soaks damage until your next turn. <b>End turn</b> when you are out of grabs (it happens by itself too).'); b.appendChild(p);
     b.appendChild(h('h3', null, 'Statuses'));
     const list = h('div', 'statusList');
     const st = tbl('STATUS');
@@ -1258,16 +1272,16 @@ const GAME = (() => {
     for (const id of ids) {
       const s = st[id];
       const kv = h('div', 'kv');
-      const k = h('span'); k.innerHTML = `<b>${s.icon || ''} ${s.name || id}</b>`;
+      const k = h('span'); k.innerHTML = `<b>${s.icon || ''} ${i18nTr(s.name || id)}</b>`;
       kv.appendChild(k);
       kv.appendChild(h('span', 'sub', s.text || ''));
       list.appendChild(kv);
     }
     b.appendChild(list);
     b.appendChild(h('h3', null, 'The map'));
-    p = h('p'); p.innerHTML = `The Clawspire is dark. <b>Tap a dark hex next to the light to light it for 1 ${TERM('ink')}</b>, or tap a far one to light the whole way there. Walking lights the ring around you (two rings from a hill), a taken tower lights everything in view, and ${TERM('brushPlural')} light for free: a flare shoots a line, a lantern rings a lit hex, a kite scouts a patch. Tap a lit hex to walk there; the road leads to the boss. Fights give loot, elites give ${TERM('inkPlural')}, the boss is at the top. Three acts, then the Prize Master.`; b.appendChild(p);
+    p = h('p'); p.innerHTML = i18nTr(`The Clawspire is dark. <b>Tap a dark hex next to the light to light it for 1 ${TERM('ink')}</b>, or tap a far one to light the whole way there. Walking lights the ring around you (two rings from a hill), a taken tower lights everything in view, and ${TERM('brushPlural')} light for free: a flare shoots a line, a lantern rings a lit hex, a kite scouts a patch. Tap a lit hex to walk there; the road leads to the boss. Fights give loot, elites give ${TERM('inkPlural')}, the boss is at the top. Three acts, then the Prize Master.`); b.appendChild(p);
     b.appendChild(h('h3', null, 'Keys'));
-    p = h('p'); p.innerHTML = 'Arrows steer, Space or Enter drops, E ends the turn, Esc closes popups.'; b.appendChild(p);
+    p = h('p'); p.innerHTML = i18nTr('Arrows steer, Space or Enter drops, E ends the turn, Esc closes popups.'); b.appendChild(p);
     b.appendChild(btn('Back', () => { if (back === 'map') toMap(); else showTitle(); }, 'pri mixStick'));   // MIX: the way out stays on screen
   }
   // ================================================================ META
@@ -2639,7 +2653,7 @@ const GAME = (() => {
     const top = h('div', 'vTop');
     top.appendChild(btn('Back', () => vaultLeave(), 'sm ghost vBack'));
     top.appendChild(h('div', 'grow'));
-    const wal = h('div', 'vWallet');
+    const wal = h('div', 'vWallet qaKeep');   // (POLISH round 13: the corner lane keeps off the wallet)
     wal.id = 'vWallet';
     wal.appendChild(h('i', 'tixi'));
     wal.appendChild(h('b', null, fmtN(V.tix)));
@@ -3146,7 +3160,7 @@ const GAME = (() => {
     ctx.save();
     ctx.beginPath(); ctx.rect(VLT_WIN.x, VLT_WIN.y, VLT_WIN.w, VLT_WIN.h); ctx.clip();
     ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(141,255,245,0.75)'; ctx.fillText('LIVE PREVIEW', VLT_WIN.x + 12, VLT_WIN.y + 14);
+    ctx.fillStyle = 'rgba(141,255,245,0.75)'; ctx.fillText(i18nTr('LIVE PREVIEW'), VLT_WIN.x + 12, VLT_WIN.y + 14);
     // the mini cabinet: the skin, the marquee, the paint on the preview's claw type
     ctx.save();
     ctx.translate(VLT_PREV.x, VLT_PREV.y); ctx.scale(VLT_PREV.k, VLT_PREV.k);
@@ -5922,7 +5936,7 @@ const GAME = (() => {
     const title = rushVsTitle(e) || secVsTitle(e) || ((kind === 'final' || e.id === 'prizemaster') ? 'FINAL BOSS' : boss ? endlessBossTitle(run) : (FS.then && FS.then.tower) ? 'TOWER KEEPER' : 'ELITE');   // (SECRET BOSS: The Machine)
     FS.vs = {
       t: 0, dur: boss ? VS_DUR.boss : VS_DUR.elite, rate: (seen ? VS_FAST : 1) * (fx().reduced ? 1.3 : 1), idx, id: e.id, boss, seen, kind: kind || (boss ? 'boss' : 'elite'),
-      title, name: e.def.name || e.id, taunt: e.def.taunt || '', color: e.def.color || '#ff2e88', def: e.def,
+      title, name: e.def.name || e.id, taunt: i18nTr(e.def.taunt || ''), color: e.def.color || '#ff2e88', def: e.def,   // (I18N: the taunt is typed out, so it is translated whole first)
       affixes: (e.affix || []).map((id) => ({ icon: (A[id] && A[id].icon) || '', name: (A[id] && A[id].name) || id, color: (A[id] && A[id].color) || '#ffc94d' })),
       slam: false, named: false, rumbleT: 0,
     };
@@ -7292,7 +7306,7 @@ const GAME = (() => {
   function showCoach() {
     const el = $('coach'), tx = $('coachTxt'), b = $('coachBtn');
     if (S.coachStep < 0 || S.coachStep >= TUTORIAL.length) { if (el) el.classList.remove('show'); return; }
-    if (tx) tx.innerHTML = TUTORIAL[S.coachStep];
+    if (tx) tx.innerHTML = i18nTr(TUTORIAL[S.coachStep]);
     if (b) { b.textContent = S.coachStep === TUTORIAL.length - 1 ? 'Got it' : 'Next'; b.onclick = () => { snd('click'); coachNext(); }; }
     if (el) el.classList.add('show');
   }
@@ -14975,12 +14989,12 @@ const GAME = (() => {
     let sz = qaSizeOf(el, cur.qaTight);
     if (!sz || !(sz.w > 0) || !(sz.h > 0)) return null;
     const keys = qaKeys(S.screen, S.toastT > 0 ? QA.tRect : null);
-    let spot = qaSpot(qaCands(sz.w, sz.h), sz.w, sz.h, keys);
+    let spot = qaSpot(pol13Cands(sz.w, sz.h), sz.w, sz.h, keys);   // (POLISH round 13: a screen's own extra spots after the eight)
     if (spot && spot.o > 0 && !cur.qaTight) {
       cur.qaTight = true;
       if (el.classList) el.classList.add('tight');
       const s2 = qaSizeOf(el, true);
-      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = qaSpot(qaCands(sz.w, sz.h), sz.w, sz.h, keys); }
+      if (s2 && s2.w > 0 && s2.h > 0) { sz = s2; spot = qaSpot(pol13Cands(sz.w, sz.h), sz.w, sz.h, keys); }
     }
     if (!spot) return null;
     el.style.left = Math.round(spot.x) + 'px'; el.style.top = Math.round(spot.y) + 'px';
@@ -15007,6 +15021,48 @@ const GAME = (() => {
     if (spot) { el.style.top = Math.round(spot.y) + 'px'; QA.tRect = { x0: x, y0: spot.y, x1: x + sz.w, y1: spot.y + sz.h, w: 5 }; }
     return spot;
   }
+  /* ================= POLISH (round 13): the newer screens keep their titles =================
+     The corner lane and the toast never saw the titles these screens draw on
+     the canvas: the advent calendar and the haunted house (their DOM title
+     is .qaKeep now), the Claw School's chalkboards and report card, the
+     Prize Vault's neon sign and counter window (the wallet is .qaKeep), the
+     arcade cabinets' marquees. They are QA_SIGNS here (stage px). A screen
+     whose top strip is all title gets extra spots (POL13_SPOTS), tried after
+     qaCands' eight: the season doors above the result card, the arcade just
+     under the marquee (skee-ball beside its rings, the moles under their
+     holes), the vault over its shelf, the rush's challenger between its
+     plate and its band. */
+  const POL13_SPOTS = {
+    sea: (w) => [[W - w - 6, 712], [6, 712]],
+    arcade: (w) => { const g = S.arc && S.arc.g, y = g === 'moles' ? 766 : g === 'skee' ? 238 : 168; return [[W - w - 6, y], [6, y]]; },
+    vault: (w) => [[W - w - 6, 700], [6, 700]],
+    rush: (w) => [[W - w - 6, 80], [6, 80]],
+  };
+  function pol13Cands(w, h) {
+    const f = POL13_SPOTS[S.screen], more = typeof f === 'function' ? f(w, h) : null;
+    return more && more.length ? qaCands(w, h).concat(more) : qaCands(w, h);
+  }
+  // the advent calendar (its garland and doors) and the gift's words; the haunted house's door and TREAT! (RENDER.sea.gift / door)
+  QA_SIGNS.sea = () => {
+    const Dd = S.seaDoor;
+    if (!Dd) return [];
+    const said = Dd.reveal > 0 && !!Dd.out;
+    if (Dd.adv) return said ? [[64, 106, W - 64, 364], [60, 368, W - 60, 420]] : [[64, 106, W - 64, 364]];
+    return said ? [[168, 352, W - 168, 636], [140, 136, W - 140, 198]] : [[168, 352, W - 168, 636]];
+  };
+  // the Claw School's chalkboard (the hub, a lesson's page, a lesson's challenge) and the report card's heading (RENDER.sch)
+  QA_SIGNS.school = () => {
+    const v = SCHX.view, G = SCHX.G;
+    if (v === 'hub' || v === 'lesson') return [[40, 58, W - 40, 166]];
+    if (v === 'report') return [[26, 66, W - 26, 130]];
+    return v === 'play' && G && G.mode === 'lesson' ? [[24, 60, W - 24, 308]] : [];
+  };
+  // the PRIZE VAULT sign in its bulbs, the counter window with the live preview (RENDER.vault.wall, VLT_WIN)
+  QA_SIGNS.vault = () => (S.vcap ? [] : [[140, 10, 390, 70], [VLT_WIN.x, VLT_WIN.y, VLT_WIN.x + VLT_WIN.w, VLT_WIN.y + VLT_WIN.h]]);
+  // the cabinet's marquee (RENDER.arcCabinet at 20, 96: its plate spans x + 44 .. x + w - 44, y + 12 .. y + 64)
+  // and the game's own readouts under it: the 777 sign (SLOTG), the wheel's pointer (WH), skee's TOTAL, its 100 cups and the ring values (SKEE.board)
+  const POL13_ARC = { slots: [[106, 240, 390, 294]], wheel: [[248, 256, 292, 302]], skee: [[100, 164, 440, 236], [256, 236, 284, 440]] };
+  QA_SIGNS.arcade = () => (S.arc ? [[60, 104, W - 60, 166]].concat(POL13_ARC[S.arc.g] || []) : []);
   /* ================= LABELS (round 9): the arena reserves its space =================
      Presentation only. Every frame of a fight the things that live in the
      arena become keep-out zones for the floating labels and the damage
@@ -15321,6 +15377,70 @@ const GAME = (() => {
     if (!S.meta.introSeen && !renderMode) playIntro(true);
   }
 
+  // ================================================================ I18N (round 13)
+  /* English / Dutch (DESIGN.md "Localization (round 13)"). js/i18n.js holds
+     the words; this block picks the language (meta.settings.lang, else the
+     browser's: nl* is Dutch), applies it live and draws the Settings row.
+     Old profiles have no lang and follow the browser. */
+  function i18nApply() {
+    if (typeof I18N === 'undefined' || !I18N) return 'en';
+    const s = S.meta && S.meta.settings;
+    if (s && s.lang !== undefined && I18N.LANGS.indexOf(s.lang) < 0) delete s.lang;   // a junk value follows the browser again
+    const was = I18N.get();
+    const now = I18N.set(I18N.pick(s, typeof navigator !== 'undefined' ? navigator : null));
+    if (was !== now) i18nRefresh();
+    return now;
+  }
+  // Redo what is on screen in the new language: the DOM in place (every
+  // h() element keeps its English), the HUD, the Settings sheet, the title
+  // and the map head. The canvas follows on the next frame.
+  function i18nRefresh() {
+    try { const st = $('stage'); if (st) I18N.dom(st); } catch (e) { /* stub DOM */ }
+    S.lastHud = ''; S.lastStatus = ''; S.lastRelics = ''; S.lastGrabs = '';
+    if (S.hint) hint(S.hint);
+    try {
+      if (S.accOpen) accBuild();
+      else if (S.screen === 'title') showTitle();
+      else if (S.screen === 'map' && S.run && S.run.map) buildMapHead();
+      if (S.booted) refreshHud(true);
+    } catch (e) { /* a half-built screen keeps its words */ }
+  }
+  // Pick a language for good (the Settings row, GAME.setLang): saved at once.
+  function i18nSetLang(code) {
+    if (typeof I18N === 'undefined' || !I18N || I18N.LANGS.indexOf(code) < 0) return i18nLang();
+    if (!S.meta) S.meta = freshMeta();
+    accFix(S.meta);
+    S.meta.settings.lang = code;
+    saveMeta();
+    i18nApply();
+    return I18N.get();
+  }
+  function i18nLang() { return typeof I18N !== 'undefined' && I18N ? I18N.get() : 'en'; }
+  // An item's rules text in the current language (the numbers stay DATA's).
+  function i18nItemText(def, plus) { return I18N.itemText(def, plus, D().itemText); }
+  // An act's title card (LORE): translated before it is typed out letter by letter.
+  function i18nIntroDef(d) {
+    if (!d || !i18nOn()) return d;
+    const tr = (s) => (typeof s === 'string' ? I18N.tr(s) : s);
+    return Object.assign({}, d, { title: tr(d.title), name: tr(d.name), lines: Array.isArray(d.lines) ? d.lines.map(tr) : d.lines });
+  }
+  // The Settings sheet's Language row: each language named in its own words.
+  function i18nSettings(sec, row) {
+    if (typeof I18N === 'undefined' || !I18N) return null;
+    const r = row(sec('Language'), 'Language', 'Taal / Language. Until you pick one it follows your browser.');
+    const g = h('div', 'accSeg');
+    const cur = I18N.get();
+    for (const code of I18N.LANGS) {
+      const b = btn(I18N.NAMES[code], () => { i18nSetLang(code); if (S.accOpen) accBuild(); }, 'sm accOpt i18nOpt' + (cur === code ? ' sel' : ''));
+      b.lang = code;
+      g.appendChild(b);
+    }
+    r.appendChild(g);
+    r.classList.add('wide');
+    return r;
+  }
+  // ================================================================ /I18N
+
   // ================================================================ ACCESS (round 6)
   /* Accessibility, the map camera's travel juice and the per-act music
      hand-off (DESIGN.md "Accessibility, camera and music (round 6)").
@@ -15391,6 +15511,7 @@ const GAME = (() => {
     } catch (e) { /* headless */ }
     // the slow claw applies to a live rig at once (never over the iced rail's own slow down)
     if (FS && FS.rig && FS.rig.setConfig && !(F && F.ice && F.ice.part === 'rail')) { try { FS.rig.setConfig({ speed: clawFor().speed * accClawK() }); } catch (e) { /* optional */ } }
+    i18nApply();   // I18N (round 13): the saved language, else the browser's
     return s;
   }
   // Change one setting (the panel and the tests): repaired, applied, saved.
@@ -15526,6 +15647,7 @@ const GAME = (() => {
       S.ui.buttons.push({ el: inp, fn: () => {}, label: label + ' volume', range: true });
       return r;
     };
+    i18nSettings(sec, row);   // I18N (round 13): English / Nederlands, first
     const snd0 = sec('Sound');
     slider(snd0, 'Master', 'volMaster');
     slider(snd0, 'Music', 'volMusic');
@@ -15573,7 +15695,7 @@ const GAME = (() => {
         try { const m = ctx.measureText(str); if (m && m.width > 0) w = m.width; } catch (e) { /* stub */ }
         nx += w + 14;
       };
-      num('−12', '#ff5a4a'); num('+6', '#a6ff5e'); num('+5 block', '#2ee6d6');
+      num('−12', '#ff5a4a'); num('+6', '#a6ff5e'); num(i18nTr('+5 block'), '#2ee6d6');   // (I18N: the word)
       if (R.statusPips) R.statusPips(ctx, Math.max(nx, 250), 18, { poison: 3, str: 2, weak: 1 }, 18);
       const RC = R.RARITY_COL || {};
       ['c', 'u', 'r', 'l'].forEach((r, i) => {
@@ -16137,7 +16259,7 @@ const GAME = (() => {
     clear(b);
     S.ui.buttons = [];
     const t = seaTile(Dd), c = t && t.content ? t.content.sea : null;
-    const top = h('div', 'seaTop' + (Dd.adv ? ' win' : ''));   // (WIN: an advent present)
+    const top = h('div', 'seaTop qaKeep' + (Dd.adv ? ' win' : ''));   // (WIN: an advent present; POLISH round 13: the corner lane keeps off the title)
     top.appendChild(h('div', 'seaK', Dd.adv ? winAdvTitle(c) : '\u{1F383} Trick or treat'));
     top.appendChild(h('div', 'seaSub', Dd.adv ? winAdvSub(Dd, c) : Dd.ph === 'door' ? 'A door with a pumpkin on every step. Knock and see what opens it.' : Dd.ph === 'done' ? '' : 'Knock, knock...'));
     b.appendChild(top);
@@ -16147,7 +16269,7 @@ const GAME = (() => {
       bot.appendChild(btn(Dd.adv ? 'Unwrap' : 'Knock', () => seaKnock(), 'pri seaKnock' + (Dd.adv ? ' win' : '')));
       bot.appendChild(btn('Leave', () => seaLeave(), 'ghost'));
     } else if (Dd.ph === 'done' && c) {
-      const card = h('div', 'seaCard ' + (c.out && c.out.kind === 'trick' ? 'trick' : 'treat'));
+      const card = h('div', 'seaCard qaKeep ' + (c.out && c.out.kind === 'trick' ? 'trick' : 'treat'));   // (POLISH round 13: .qaKeep)
       for (const ln of c.lines || []) card.appendChild(h('div', 'ln', ln));
       bot.appendChild(card);
       if (c.out && c.out.k === 'fight' && !c.fought) bot.appendChild(btn('Fight!', () => seaCont(), 'pri'));
@@ -17964,7 +18086,7 @@ const GAME = (() => {
     return !!loreIntroStart(key);
   }
   function loreIntroStart(key) {
-    const run = S.run, def = D().loreIntro ? D().loreIntro(key, run && run.act) : null;
+    const run = S.run, def = i18nIntroDef(D().loreIntro ? D().loreIntro(key, run && run.act) : null);   // (I18N: typed in the current language)
     if (!def) return null;
     const L = loreM(), fast = (L.intros[key] | 0) > 0;
     L.intros[key] = Math.min(1e6, (L.intros[key] | 0) + 1);
@@ -18427,7 +18549,7 @@ const GAME = (() => {
     if (!Fi || !th || th.rush == null || !rushOf()) return;
     for (const e of Fi.enemies) {
       if (!e || !e.def) continue;
-      const k = D().rushHpK ? D().rushHpK(e.id) : 1, dk = D().rushDmgK ? D().rushDmgK(e.id) : 1;
+      const k = D().rushHpK ? D().rushHpK(e.id) : 1, dk = (D().rushDmgK ? D().rushDmgK(e.id) : 1) * (D().rushTierK ? D().rushTierK(e.id) : 1);   // (ROUND 13: RUSH.TIERK takes DIFFICULTY.tierDmg back out)
       if (k > 0 && k !== 1) { e.maxHp = Math.max(1, Math.round(e.maxHp * k)); e.hp = e.maxHp; }
       const od = e.def.onDeath;
       if (od && od.k === 'summon' && enemyDef(od.id).tier === 'boss') e.def = Object.assign({}, e.def, { onDeath: null });
@@ -20391,7 +20513,7 @@ const GAME = (() => {
   function schPlayDom(b, G) {
     const L = schLs()[G.ch.lesson];
     schTop(b, (top) => {
-      top.appendChild(h('div', 'schTopTag', `${L ? L.name : ''} · ${G.ch.idx + 1} of ${L ? L.ch.length : 1}`));
+      top.appendChild(h('div', 'schTopTag qaKeep', `${L ? L.name : ''} · ${G.ch.idx + 1} of ${L ? L.ch.length : 1}`));   // (POLISH round 13: .qaKeep, the corner lane keeps off it)
       top.appendChild(btn('Retry', () => schRetry(), 'sm schRetry'));
     });
     b.appendChild(h('div', 'grow'));
@@ -20418,7 +20540,7 @@ const GAME = (() => {
   function schPracDom(b, keep) {
     const G = SCHX.G;
     schTop(b, (top) => {
-      top.appendChild(h('div', 'schTopTag pr', 'PRACTICE CABINET'));
+      top.appendChild(h('div', 'schTopTag pr qaKeep', 'PRACTICE CABINET'));   // (POLISH round 13: .qaKeep)
       top.appendChild(btn('Reset pile', () => schReset(), 'sm schRetry'));
     });
     b.appendChild(h('div', 'schScoreGap'));
@@ -21811,7 +21933,7 @@ const GAME = (() => {
     const K = DK().COOP || { hpK: 1.6 };
     for (const e of Fi.enemies) {
       if (!e || !e.def) continue;
-      const k = (D().rushHpK ? D().rushHpK(e.id) : 1) * (K.hpK || 1), dk = D().rushDmgK ? D().rushDmgK(e.id) : 1;
+      const k = (D().rushHpK ? D().rushHpK(e.id) : 1) * (K.hpK || 1), dk = (D().rushDmgK ? D().rushDmgK(e.id) : 1) * (D().rushTierK ? D().rushTierK(e.id, K.tierK) : 1);   // (ROUND 13: DUO.COOP.tierK)
       e.maxHp = Math.max(1, Math.round(e.maxHp * k)); e.hp = e.maxHp;
       const od = e.def.onDeath;
       if (od && od.k === 'summon' && enemyDef(od.id).tier === 'boss') e.def = Object.assign({}, e.def, { onDeath: null });
@@ -22629,6 +22751,8 @@ const GAME = (() => {
     showTreasure, showSpareParts, showGameOver, showWin, showHelp, showCollection, openBin, playIntro, resolveFx, gainRelic, applyClawUpgrade, rollShop,
     // meta progression (DESIGN.md "Meta"): Tilt, the Prizedex, stickers, the daily run, the attract mode
     showStickers,
+    // I18N (round 13): the language (setLang saves it; lang() reads it; i18n.apply re-picks from the save / browser)
+    setLang: i18nSetLang, lang: i18nLang, i18n: { apply: i18nApply, refresh: i18nRefresh, itemText: i18nItemText },
     // relic sets, the boon draft, the Compactor (DESIGN.md "Sets, boons and the Compactor")
     sets: { barLink: setBarLink, tagOn: setTagOn, onGain: setOnGain, fanfare: setFanfare, popHtml: setPopHtml, petStat: setPetStat, metaFix: setMetaFix, fxFor: setFxFor,
       get queue() { return S.setQ || []; }, get log() { return S.setLog || []; } },
@@ -22868,5 +22992,6 @@ window.CS = {
   AUDIO: typeof AUDIO !== 'undefined' ? AUDIO : undefined,
   RENDER: typeof RENDER !== 'undefined' ? RENDER : undefined,
   INTRO: typeof INTRO !== 'undefined' ? INTRO : undefined,
+  I18N: typeof I18N !== 'undefined' ? I18N : undefined,   // (round 13: English / Dutch)
   GAME,
 };

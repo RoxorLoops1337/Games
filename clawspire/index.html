@@ -2135,6 +2135,12 @@ input.duoName:focus{box-shadow:0 0 12px var(--dc)}
 .calm #toast.show,.calm #titleMenu > .btn.go:first-child,.calm #titleMenu > .btn.pri:first-child{animation:none}
 @media (prefers-reduced-motion:reduce){#toast.show,#titleMenu > .btn.go:first-child,#titleMenu > .btn.pri:first-child,#top.mixHud,#ctrl.mixHud,#playerRow.mixHud{animation:none}}
 </style>
+<style id="i18n-css">
+/* I18N (round 13): Dutch runs longer than English. Only the Dutch page changes: long compound words
+   break at their soft hyphens, fixed-width labels size to their words. */
+html[lang="nl"] .clawChip .n{hyphens:manual;overflow-wrap:break-word;max-width:100%}
+html[lang="nl"] .clawInfo .cpip .k{width:64px}
+</style>
 </head>
 <body>
 <div id="csBoot" role="status" aria-live="polite" aria-label="Loading CLAWSPIRE">
@@ -2269,6 +2275,8 @@ input.duoName:focus{box-shadow:0 0 12px var(--dc)}
 
 <script src="js/util.js"></script>
 <script src="js/art.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/lang_nl.js"></script>
 <script src="js/physics.js"></script>
 <script src="js/data.js"></script>
 <script src="js/combat.js"></script>
