@@ -23,6 +23,7 @@ const DIST = path.join(REPO, 'dist');
 // Anything not in this list (node_modules, build.js, package.json, .git, etc.)
 // stays out of the deploy.
 const STATIC_PATHS = [
+  'inkbound',
   'index.html',
   'beatborne',
   'README.md',
