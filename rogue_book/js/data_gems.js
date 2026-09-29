@@ -14,15 +14,18 @@
 //   RED   offence. Lives in slots of cards that have a dmg op. Flat damage, extra hits, a life-stealing rider, a front-row power
 //         gem, and at tier 3 a card that also splashes the whole line. The flat keys (`dmg`, `hits`) do nothing on a card
 //         without a dmg op, which is exactly why the slot rules only put red on attacks.
-//   BLUE  defence. Lives on cards with Block, heal or a hero status. Flat Block, Thorns, Dodge, healing and, at tier 3, Block for
-//         the ally. Appended `status` and `fx` work on any card; the flat `block` key needs a Block op.
+//   BLUE  defence. Lives on cards with Block, heal or a hero status. Flat Block and healing, Thorns, Dodge and, at tier 3, a
+//         Block skill that shields the whole party. Appended `status` and `fx` work on any card; the flat `block` and `heal` keys
+//         need a matching op (Tidewatch Sapphire carries both, because a blue slot sits on a Block card or a healing card).
 //   GREEN utility. Works on ANY card: no flat damage, Block or heal keys, only draw, Retain, cost, Energy and pick effects.
 //   GOLD  wild. Works on ANY card: status seeds (Might, Ritual, Dodge), gold and Ink on play, a resource amplifier, and a
 //         back row gem that draws and dodges. No flat keys either.
 //
 // THE POWER LADDER (rough "damage equivalents" per play of the card, see the model in the test): tier 1 is a solid small bonus
 // worth about 2.5 to 5, tier 2 is a real upgrade worth about 5 to 10, tier 3 changes what the card is for: a strike becomes a
-// sweep, a Block skill becomes a Thorns engine, any card gets cheaper or pays Energy back, an ordinary card starts a Ritual.
+// sweep, a Block skill becomes a Thorns engine or a party shield, any card gets cheaper or pays Energy back, an ordinary card
+// starts a Ritual. Measured with the greedy bot (a gem in every matching slot of an 18 card deck, Chapter 1 and 2 elites): damage
+// taken falls by about 9 for a tier 1 gem, 16 to 20 for tier 2 and 22 to 25 for tier 3, the ladder the value model in the test predicts.
 //
 // TARGETING. Appended ops with `tgt:'enemy'` make an area card ask for a target, and `tgt:'all'` never does; the one enemy op that
 // could be either (Bloodmoon Carnelian's life steal) is written `enemy` on purpose: it is a single bite and it should land on the
@@ -56,13 +59,14 @@
     },
     kirin_jasper: {
       name: 'Kirin Jasper', color: 'red', tier: 3, art: { cut: 'drop' }, locked: true,
-      mod: { cond: 'front', hits: 1, dmg: 2 },
+      mod: { cond: 'front', hits: 1, dmg: 3 },
     },
 
     // ------------------------------------------------------------------ BLUE: defence
     tidewatch_sapphire: {
+      // Both flat keys on purpose: a blue slot sits on a Block card or a healing card, and this gem must work on either.
       name: 'Tidewatch Sapphire', color: 'blue', tier: 1, art: { cut: 'round' },
-      mod: { block: 3 },
+      mod: { block: 3, heal: 2 },
     },
     thornwake_lapis: {
       name: 'Thornwake Lapis', color: 'blue', tier: 1, art: { cut: 'oval' },
@@ -78,11 +82,11 @@
     },
     ironbark_sapphire: {
       name: 'Ironbark Sapphire', color: 'blue', tier: 3, art: { cut: 'star' },
-      mod: { block: 2, status: { s: 'thorns', n: 3, tgt: 'self' } },
+      mod: { block: 3, status: { s: 'thorns', n: 4, tgt: 'self' } },
     },
     sanctum_iolite: {
       name: 'Sanctum Iolite', color: 'blue', tier: 3, art: { cut: 'drop' }, locked: true,
-      mod: { fx: [{ op: 'block', n: 8, tgt: 'ally' }] },
+      mod: { fx: [{ op: 'block', n: 6, tgt: 'both' }] },
     },
 
     // ------------------------------------------------------------------ GREEN: utility (works on any card)

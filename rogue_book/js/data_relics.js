@@ -17,15 +17,21 @@
 //     `every` counts triggers per fight (combat) or per run (run hooks), and never fires on the 1st trigger.
 //   * The onSwap hook fires for the free swap, the paid swap and the card `swap` op, never for a forced swap.
 //   * combatEnd fires on a win only, before downed heroes revive, so a heal there cannot lift a fallen hero.
+//   * The engine emits a `relic` event when a hook RUNS, before a `cond` inside it is checked (remembrance_candle, crescent_kanzashi and
+//     lotus_sanctuary flash their icon on turns where the condition then fails). `limit`, `once` and `every` are checked first.
+//   * A row bonus belongs to the ROW, not the hero, and both rows are always occupied while two heroes live. So a `rows` relic
+//     is a party wide effect in disguise: a back row `drawAdd` would be a free +1 hand size, which is a boss trade, so no relic has one.
 //
-// THE SET, BY JOB (every mod key, every hook and both row keys appear at least once; the audit and the test check it)
+// THE SET, BY JOB (every mod key, every combat and run hook and rows on both the front and the back row appear at least once; the
+// audit and the test check it). Energy and hand size come only from boss relics and always with a drawback.
 //   MAP AND INK   brass_lantern paints 2 hexes a chapter, pilgrim_compass and plum_pendant refund Ink on paints, ink_jar and
 //                 heavy inkstone move the Ink floor and ceiling, well_kasa and bottomless_gourd feed on wells, sable_brush hands
 //                 out a Brush every chapter, shrine_box pays Ink at camps, jade_key adds a second camp action.
 //   COMMONS       small, readable, always on: 1 Block a turn, 25% gold, 25% healing, 2 HP after fights, Block on a kill,
 //                 Block after a hit, a Burn or Weak opener, first turn Block, and so on.
-//   ROW SYSTEM    war_banner and formation_scroll are `rows` relics; fox_mask, flute_of_changing_tunes, mirror_of_two_faces and
-//                 dancer_geta pay for swapping; longbow_of_reach and remembrance_candle read the row or the front hero.
+//   ROW SYSTEM    war_banner (front damage) and formation_scroll (front Block, back Block from cards) are `rows` relics; fox_mask,
+//                 flute_of_changing_tunes, mirror_of_two_faces and dancer_geta pay for swapping; longbow_of_reach reads the
+//                 row with a cond and remembrance_candle watches the front hero.
 //   GEM RELICS    facet_lens (gold), jewelers_loupe (draw) and prism_crown (Energy) key on `filter.gems`; koi_pouch and
 //                 pearl_satchel hand out gems.
 //   HEROES        three per hero, each built on that hero's resource: Hanae (Bloom), Kuro (Sumi), Suzu (Ward), Raiga (Charge).
@@ -291,8 +297,8 @@
     },
     formation_scroll: {
       name: 'Formation Scroll', rarity: 'rare', art: { m: 'scroll', c: 'ink' },
-      text: 'Front hero starts turns with 3 Block, and the back hero gains 2 extra Block from cards.',
-      rows: { front: { startBlock: 3 }, back: { blockAdd: 2 } },
+      text: 'Front hero starts turns with 3 Block, and the back hero gains 1 extra Block from cards.',
+      rows: { front: { startBlock: 3 }, back: { blockAdd: 1 } },
     },
     dragon_pearl: {
       name: 'Dragon Pearl', rarity: 'rare', art: { m: 'dragon', c: 'teal' }, locked: true,
@@ -317,8 +323,8 @@
     },
     lotus_sanctuary: {
       name: 'Lotus Sanctuary', rarity: 'rare', hero: 'suzu', art: { m: 'lotus', c: 'moon' },
-      text: 'Each turn Suzu gains 1 Ward, and at 4 spends them for 1 Weak on all foes and 5 Block each.',
-      hooks: [{ on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }, { op: 'cond', if: { status: { s: 'ward', gte: 4 } }, then: [{ op: 'removeStatus', s: 'ward', n: 4, tgt: 'self' }, { op: 'status', s: 'weak', n: 1, tgt: 'all' }, { op: 'block', n: 5, tgt: 'both' }] }] }],
+      text: 'Suzu gains 1 Ward a turn and, at 4, spends them for 1 Weak on all foes and 3 Block each.',
+      hooks: [{ on: 'turnStart', fx: [{ op: 'status', s: 'ward', n: 1, tgt: 'self' }, { op: 'cond', if: { status: { s: 'ward', gte: 4 } }, then: [{ op: 'removeStatus', s: 'ward', n: 4, tgt: 'self' }, { op: 'status', s: 'weak', n: 1, tgt: 'all' }, { op: 'block', n: 3, tgt: 'both' }] }] }],
     },
     stormtiger_sash: {
       name: 'Stormtiger Sash', rarity: 'rare', hero: 'raiga', art: { m: 'tiger', c: 'amber' },

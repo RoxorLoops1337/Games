@@ -534,14 +534,14 @@ const AUDIO = (() => {
   function combatKit(o) {
     return [
       { role: 'perc', voice: 'taiko', range: [33, 57], pattern: o.perc, fill: true, vel: 0.9, gain: 0.95, layer: 0 },
-      { role: 'bass', voice: 'biwa', range: [33, 57], pattern: 'drive', vel: 0.7, gain: 0.8, layer: 0 },
+      { role: 'bass', voice: 'biwa', range: [40, 62], pattern: 'drive', vel: 0.7, gain: 0.8, layer: 0 },
       { role: 'ostinato', voice: 'shamisen', range: [50, 74], template: o.ost, vel: 0.55, gain: 0.7, pan: -0.2, layer: 0 },
       { role: 'arp', voice: 'koto', range: [64, 88], step: 0.25, pattern: 'up', skip: o.skip || 0, vel: 0.36, len: 1.2, gain: 0.7, pan: 0.3, layer: 1 },
       { role: 'clack', voice: 'hyoshigi', pattern: 'offbeat', vel: 0.32, gain: 0.7, layer: 1 },
       { role: 'melody', voice: 'shakuhachi', range: o.mel, cells: o.cells, leaps: true, phrase: 4, vel: 0.8, gap: 0.1, gain: 0.95, pan: 0.1, layer: 2,
         also: [{ voice: 'koto', shift: 0, gain: 0.55 }, { voice: 'shamisen', shift: 1, gain: 0.45, layer: 3 }] },
       { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'combatL3', vel: 0.7, gain: 0.7, layer: 3 },
-      { role: 'pad', voice: 'pad', range: [40, 72], voicing: 'full', vel: 0.42, gain: 0.8, layer: 3 },
+      { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'full', vel: 0.42, gain: 0.8, layer: 3 },
       { role: 'bell', voice: 'rin', range: [76, 100], p: 0.8, vel: 0.45, gain: 0.55, pan: -0.3, layer: 3 },
     ];
   }
@@ -551,7 +551,7 @@ const AUDIO = (() => {
     title: {
       key: 50, scale: 'yo', tempo: 60, bpb: 4, mood: 'grand, slow, moonlit', xfade: 3,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 2], [3, 2], [2, 2], [1, 2], [0, 2], [3, 2], [4, 2], [0, 2]], roles: [
-        { role: 'pad', voice: 'pad', range: [38, 76], voicing: 'full', vel: 0.55, gain: 1 },
+        { role: 'pad', voice: 'pad', range: [45, 76], voicing: 'full', vel: 0.55, gain: 1 },
         { role: 'melody', voice: 'shakuhachi', range: [62, 88], cells: 'long', phrase: 4, form: ['A', 'a2', 'B', 'a'], vel: 0.85, gap: 0.12, gain: 1, pan: 0.1 },
         { role: 'arp', voice: 'koto', range: [50, 76], step: 0.5, pattern: 'pluck3', skip: 0.45, vel: 0.42, len: 2, gain: 0.8, pan: -0.35 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'sparseDon', vel: 0.7, gain: 0.8 },
@@ -563,8 +563,8 @@ const AUDIO = (() => {
       sections: [{ id: 'loop', bars: 16, loop: true, prog: P1([0, 3, 2, 4, 0, 3, 1, 4, 0, 2, 3, 1, 3, 4, 3, 0]), roles: [
         { role: 'melody', voice: 'koto', range: [64, 88], cells: 'flow', phrase: 4, form: ['A', 'a2', 'B', 'a'], vel: 0.85, gain: 1, pan: 0.1 },
         { role: 'arp', voice: 'koto', range: [45, 69], step: 0.5, pattern: 'roll', skip: 0.1, vel: 0.42, len: 1.6, gain: 0.7, pan: -0.3 },
-        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.36, gain: 0.85 },
-        { role: 'bass', voice: 'biwa', range: [36, 56], pattern: 'root', vel: 0.55, gain: 0.8 },
+        { role: 'pad', voice: 'pad', range: [47, 74], voicing: 'open', vel: 0.36, gain: 0.85 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'root', vel: 0.55, gain: 0.8 },
         { role: 'bell', voice: 'rin', range: [76, 100], p: 0.35, perBlock: true, vel: 0.4, gain: 0.6, pan: 0.35 },
       ] }],
     },
@@ -574,8 +574,8 @@ const AUDIO = (() => {
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 2], [3, 2], [2, 2], [4, 2], [0, 2], [1, 2], [3, 2], [0, 2]], roles: [
         { role: 'melody', voice: 'shakuhachi', range: [60, 86], cells: 'flow', phrase: 4, vel: 0.72, gap: 0.12, gain: 0.95, pan: 0.1 },
         { role: 'arp', voice: 'koto', range: [48, 74], step: 0.5, pattern: 'roll', skip: 0.25, vel: 0.4, len: 1.8, gain: 0.8, pan: -0.3 },
-        { role: 'pad', voice: 'pad', range: [43, 70], voicing: 'full', vel: 0.4, gain: 0.9 },
-        { role: 'bass', voice: 'biwa', range: [36, 55], pattern: 'half', vel: 0.5, gain: 0.75 },
+        { role: 'pad', voice: 'pad', range: [47, 72], voicing: 'full', vel: 0.4, gain: 0.9 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'half', vel: 0.5, gain: 0.75 },
         { role: 'clack', voice: 'hyoshigi', pattern: 'phraseEnd', vel: 0.35, gain: 0.6 },
         { role: 'bell', voice: 'rin', range: [74, 98], p: 0.3, perBlock: true, vel: 0.4, gain: 0.6, pan: 0.3 },
       ] }],
@@ -585,18 +585,18 @@ const AUDIO = (() => {
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 2], [2, 2], [3, 2], [0, 2], [0, 2], [4, 2], [3, 2], [0, 2]], roles: [
         { role: 'arp', voice: 'koto', range: [57, 84], step: 0.5, pattern: 'wave', skip: 0.12, vel: 0.5, len: 2.2, gain: 0.95, pan: -0.25 },
         { role: 'melody', voice: 'shakuhachi', range: [64, 88], cells: 'sparse', phrase: 4, vel: 0.68, gap: 0.12, gain: 0.9, pan: 0.15 },
-        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.4, gain: 0.9 },
+        { role: 'pad', voice: 'pad', range: [47, 74], voicing: 'open', vel: 0.4, gain: 0.9 },
         { role: 'bell', voice: 'rin', range: [76, 102], p: 0.55, vel: 0.42, gain: 0.65, pan: 0.35 },
-        { role: 'bass', voice: 'biwa', range: [36, 55], pattern: 'pedal', vel: 0.42, gain: 0.7, every: 2 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'pedal', vel: 0.42, gain: 0.7, every: 2 },
       ] }],
     },
     map3: {
       key: 50, scale: 'miyako-bushi', tempo: 70, bpb: 4, mood: 'ominous, wide, storm on the horizon', xfade: 3,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 4], [1, 2], [0, 2], [4, 2], [3, 2], [1, 2], [0, 2]], roles: [
-        { role: 'drone', voice: 'pad', range: [38, 62], tones: [0, 7], bars: 4, vel: 0.5, gain: 0.95 },
+        { role: 'drone', voice: 'pad', range: [43, 65], tones: [0, 7], bars: 4, vel: 0.5, gain: 0.95 },
         { role: 'pad', voice: 'pad', range: [50, 74], voicing: 'open', vel: 0.32, gain: 0.8 },
         { role: 'melody', voice: 'shakuhachi', range: [69, 91], cells: 'sparse', phrase: 4, vel: 0.65, gap: 0.12, gain: 0.9, pan: 0.2 },
-        { role: 'bass', voice: 'biwa', range: [33, 52], pattern: 'pedal', vel: 0.55, gain: 0.8 },
+        { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'pedal', vel: 0.55, gain: 0.8 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'heartbeat', vel: 0.5, gain: 0.7 },
         { role: 'bell', voice: 'rin', range: [74, 100], p: 0.4, perBlock: true, vel: 0.4, gain: 0.6, pan: -0.3 },
       ] }],
@@ -622,11 +622,11 @@ const AUDIO = (() => {
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 2], [1, 1], [4, 1], [0, 2], [1, 1], [4, 1], [0, 1], [1, 1], [4, 1], [1, 1], [4, 1], [1, 1], [0, 2]], roles: [
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'marchHeavy', fill: true, vel: 0.95, gain: 1, layer: 0 },
         { role: 'stab', voice: 'shamisen', range: [50, 74], at: [0, 2.5], len: 0.5, vel: 0.75, gain: 0.85, pan: -0.15, layer: 0 },
-        { role: 'bass', voice: 'biwa', range: [31, 52], pattern: 'pedal', vel: 0.75, gain: 0.9, layer: 0 },
+        { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'pedal', vel: 0.75, gain: 0.9, layer: 0 },
         { role: 'ostinato', voice: 'shamisen', range: [50, 72], template: 'tremolo', vel: 0.4, gain: 0.6, pan: 0.2, layer: 1 },
         { role: 'clack', voice: 'hyoshigi', pattern: 'tick', vel: 0.35, gain: 0.7, layer: 1 },
         { role: 'melody', voice: 'shakuhachi', range: [72, 91], cells: 'sparse', leaps: true, phrase: 4, vel: 0.8, gap: 0.1, gain: 0.95, pan: 0.15, layer: 2 },
-        { role: 'pad', voice: 'pad', range: [40, 70], voicing: 'open', vel: 0.45, gain: 0.85, layer: 2 },
+        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.45, gain: 0.85, layer: 2 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'bossL3', vel: 0.65, gain: 0.7, layer: 3 },
         { role: 'bell', voice: 'rin', range: [74, 100], p: 0.7, vel: 0.5, gain: 0.55, pan: -0.3, layer: 3 },
       ] }],
@@ -635,9 +635,9 @@ const AUDIO = (() => {
     boss1: {
       key: 50, scale: 'in-sen', tempo: 140, bpb: 4, mood: 'mythic, elegant menace, nine tails', xfade: 0.6, thresholds: TH_BOSS,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 2], [1, 1], [4, 1], [0, 2], [3, 1], [4, 1], [0, 1], [1, 1], [2, 1], [4, 1], [3, 1], [1, 1], [4, 1], [0, 1]], roles: [
-        { role: 'pad', voice: 'pad', range: [38, 66], voicing: 'open', vel: 0.5, gain: 0.9, layer: 0 },
+        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.5, gain: 0.9, layer: 0 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'bossA', fill: true, vel: 1, gain: 1, layer: 0 },
-        { role: 'bass', voice: 'biwa', range: [33, 55], pattern: 'drive', vel: 0.75, gain: 0.85, layer: 0 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'drive', vel: 0.75, gain: 0.85, layer: 0 },
         { role: 'ostinato', voice: 'shamisen', range: [50, 74], template: 'gallop', vel: 0.55, gain: 0.7, pan: -0.2, layer: 0 },
         { role: 'melody', voice: 'shakuhachi', range: [64, 90], cells: 'flow', leaps: true, phrase: 4, vel: 0.85, gap: 0.1, gain: 1, pan: 0.1, layer: 0,
           also: [{ voice: 'koto', shift: 0, gain: 0.5, layer: 1 }] },
@@ -652,9 +652,9 @@ const AUDIO = (() => {
     boss2: {
       key: 57, scale: 'miyako-bushi', tempo: 148, bpb: 4, mood: 'seductive, silken, deadly', xfade: 0.6, thresholds: TH_BOSS,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: [[0, 2], [1, 2], [0, 2], [4, 2], [0, 2], [3, 1], [1, 1], [4, 2], [0, 2]], roles: [
-        { role: 'pad', voice: 'pad', range: [38, 66], voicing: 'open', vel: 0.48, gain: 0.9, layer: 0 },
+        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.48, gain: 0.9, layer: 0 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'marchHeavy', fill: true, vel: 0.95, gain: 0.95, layer: 0 },
-        { role: 'bass', voice: 'biwa', range: [33, 55], pattern: 'drive', vel: 0.7, gain: 0.85, layer: 0 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'drive', vel: 0.7, gain: 0.85, layer: 0 },
         { role: 'ostinato', voice: 'koto', range: [52, 76], template: 'silk', vel: 0.6, gain: 0.75, pan: -0.25, layer: 0 },
         { role: 'melody', voice: 'shamisen', range: [57, 84], cells: 'lively', phrase: 4, vel: 0.9, gain: 1, pan: 0.1, layer: 0,
           also: [{ voice: 'shakuhachi', shift: 1, gain: 0.5, layer: 1 }] },
@@ -669,10 +669,10 @@ const AUDIO = (() => {
     boss3: {
       key: 48, scale: 'yo', tempo: 152, bpb: 4, mood: 'cold, relentless, erased', xfade: 0.6, thresholds: TH_BOSS,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: P1([0, 3, 2, 4, 0, 3, 4, 1, 0, 2, 3, 4, 1, 3, 4, 0]), roles: [
-        { role: 'pad', voice: 'pad', range: [36, 66], voicing: 'open', vel: 0.5, gain: 0.9, layer: 0 },
+        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.5, gain: 0.9, layer: 0 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'bossA', fill: true, vel: 1, gain: 1, layer: 0 },
         { role: 'ostinato', voice: 'koto', range: [48, 74], template: 'staccato', vel: 0.5, gain: 0.7, pan: -0.2, layer: 0 },
-        { role: 'bass', voice: 'biwa', range: [33, 52], pattern: 'drive', vel: 0.7, gain: 0.85, layer: 0 },
+        { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'drive', vel: 0.7, gain: 0.85, layer: 0 },
         { role: 'melody', voice: 'shakuhachi', range: [64, 90], cells: 'flow', leaps: true, phrase: 4, vel: 0.85, gap: 0.1, gain: 1, pan: 0.1, layer: 0 },
         { role: 'arp', voice: 'arp', range: [64, 96], step: 0.25, pattern: 'rise', skip: 0.3, vel: 0.36, len: 1.2, gain: 0.7, pan: 0.3, layer: 1 },
         { role: 'clack', voice: 'hyoshigi', pattern: 'tick', vel: 0.38, gain: 0.7, layer: 1 },
@@ -685,9 +685,9 @@ const AUDIO = (() => {
     final: {
       key: 47, scale: 'in-sen', tempo: 160, bpb: 4, mood: 'epic, desperate, the last page', xfade: 0.6, thresholds: TH_FINAL,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: P1([0, 1, 4, 1, 0, 1, 3, 4, 0, 1, 4, 1, 3, 4, 1, 0]), roles: [
-        { role: 'pad', voice: 'pad', range: [36, 68], voicing: 'full', vel: 0.5, gain: 0.95, layer: 0 },
+        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'full', vel: 0.5, gain: 0.95, layer: 0 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'bossA', fill: true, vel: 1, gain: 1, layer: 0 },
-        { role: 'bass', voice: 'biwa', range: [31, 52], pattern: 'drive', vel: 0.8, gain: 0.9, layer: 0 },
+        { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'drive', vel: 0.8, gain: 0.9, layer: 0 },
         { role: 'ostinato', voice: 'shamisen', range: [50, 74], template: 'gallop', vel: 0.6, gain: 0.75, pan: -0.2, layer: 0 },
         { role: 'melody', voice: 'shakuhachi', range: [62, 90], cells: 'flow', leaps: true, phrase: 4, vel: 0.9, gap: 0.1, gain: 1, pan: 0.1, layer: 0,
           also: [{ voice: 'koto', shift: 0, gain: 0.55 }] },
@@ -706,17 +706,17 @@ const AUDIO = (() => {
       key: 48, scale: 'yo', tempo: 104, bpb: 4, mood: 'playful, bustling, plucked', xfade: 1.2,
       sections: [{ id: 'loop', bars: 16, loop: true, prog: P1([0, 3, 2, 3, 0, 3, 4, 3, 0, 2, 3, 1, 0, 3, 4, 0]), roles: [
         { role: 'melody', voice: 'shamisen', range: [55, 79], cells: 'lively', phrase: 4, vel: 0.85, gain: 1, pan: 0.1, also: [{ voice: 'koto', shift: 1, gain: 0.45 }] },
-        { role: 'bass', voice: 'biwa', range: [36, 55], pattern: 'walk', vel: 0.6, gain: 0.8 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'walk', vel: 0.6, gain: 0.8 },
         { role: 'clack', voice: 'hyoshigi', pattern: 'offbeat', vel: 0.45, gain: 0.7 },
         { role: 'arp', voice: 'arp', range: [72, 96], step: 0.5, pattern: 'sparkle', skip: 0.6, vel: 0.36, len: 1, gain: 0.6, pan: -0.3 },
-        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.28, gain: 0.7 },
+        { role: 'pad', voice: 'pad', range: [47, 74], voicing: 'open', vel: 0.28, gain: 0.7 },
       ] }],
     },
     camp: {
       key: 53, scale: 'yo', tempo: 54, bpb: 3, mood: 'a lullaby by the fire', xfade: 2.5,
       sections: [{ id: 'loop', bars: 12, loop: true, prog: [[0, 3], [3, 3], [2, 3], [0, 3]], roles: [
         { role: 'melody', voice: 'koto', range: [60, 84], cells: 'lull', phrase: 4, form: ['A', 'B', 'a'], vel: 0.72, gain: 1, pan: 0.1 },
-        { role: 'pad', voice: 'pad', range: [41, 69], voicing: 'full', vel: 0.4, gain: 0.9 },
+        { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'full', vel: 0.4, gain: 0.9 },
         { role: 'arp', voice: 'arp', range: [53, 77], step: 1, pattern: 'pluck3', skip: 0.35, vel: 0.3, len: 1.5, gain: 0.7, pan: -0.3 },
         { role: 'crackle', voice: 'crackle', perBar: 3, vel: 0.5, gain: 0.8 },
         { role: 'bell', voice: 'rin', range: [76, 98], p: 0.35, perBlock: true, vel: 0.35, gain: 0.55, pan: 0.3 },
@@ -725,10 +725,10 @@ const AUDIO = (() => {
     event: {
       key: 47, scale: 'in-sen', tempo: 58, bpb: 4, mood: 'mysterious, sparse, fogbound', xfade: 2.5,
       sections: [{ id: 'loop', bars: 12, loop: true, prog: [[0, 4], [3, 2], [1, 2], [0, 2], [4, 2]], roles: [
-        { role: 'drone', voice: 'pad', range: [35, 59], tones: [0, 7], bars: 4, vel: 0.5, gain: 0.95 },
+        { role: 'drone', voice: 'pad', range: [43, 62], tones: [0, 7], bars: 4, vel: 0.5, gain: 0.95 },
         { role: 'melody', voice: 'shakuhachi', range: [66, 88], cells: 'sparse', phrase: 4, form: ['A', 'B', 'a'], vel: 0.62, gap: 0.12, gain: 0.9, pan: 0.15 },
         { role: 'bell', voice: 'rin', range: [72, 100], p: 0.6, vel: 0.42, gain: 0.65, pan: -0.3 },
-        { role: 'bass', voice: 'biwa', range: [33, 52], pattern: 'root', vel: 0.4, gain: 0.7, every: 2 },
+        { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'root', vel: 0.4, gain: 0.7, every: 2 },
         { role: 'clack', voice: 'hyoshigi', pattern: 'sparse', vel: 0.28, gain: 0.6 },
       ] }],
     },
@@ -738,8 +738,8 @@ const AUDIO = (() => {
       sections: [{ id: 'loop', bars: 8, loop: true, prog: P1([0, 3, 2, 4, 0, 3, 4, 0]), roles: [
         { role: 'run', voice: 'koto', range: [62, 90], runs: [{ bar: 0, beat: 0, from: 0, to: 7, step: 0.25 }, { bar: 4, beat: 0, from: 2, to: 9, step: 0.25 }], vel: 0.6, gain: 0.85, pan: -0.2 },
         { role: 'melody', voice: 'koto', range: [66, 90], cells: 'lively', phrase: 2, vel: 0.9, gain: 1, pan: 0.1, also: [{ voice: 'shamisen', shift: 0, gain: 0.5 }] },
-        { role: 'pad', voice: 'pad', range: [43, 72], voicing: 'full', vel: 0.42, gain: 0.85 },
-        { role: 'bass', voice: 'biwa', range: [36, 55], pattern: 'half', vel: 0.6, gain: 0.8 },
+        { role: 'pad', voice: 'pad', range: [47, 74], voicing: 'full', vel: 0.42, gain: 0.85 },
+        { role: 'bass', voice: 'biwa', range: [40, 60], pattern: 'half', vel: 0.6, gain: 0.8 },
         { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'march', vel: 0.55, gain: 0.7 },
         { role: 'bell', voice: 'rin', range: [78, 102], p: 1, vel: 0.5, gain: 0.6, pan: 0.3 },
         { role: 'clack', voice: 'hyoshigi', pattern: 'offbeat', vel: 0.3, gain: 0.6 },
@@ -752,11 +752,11 @@ const AUDIO = (() => {
           { role: 'run', voice: 'koto', range: [62, 93], runs: [{ bar: 0, beat: 0, from: 0, to: 9, step: 0.25 }], vel: 0.75, gain: 0.95, pan: -0.2 },
           { role: 'melody', voice: 'shakuhachi', range: [62, 88], cells: 'flow', phrase: 3, vel: 0.9, gap: 0.1, gain: 1, pan: 0.1, also: [{ voice: 'koto', shift: 1, gain: 0.5 }] },
           { role: 'perc', voice: 'taiko', range: [33, 57], pattern: 'fanfare', vel: 0.85, gain: 0.95 },
-          { role: 'pad', voice: 'pad', range: [43, 72], voicing: 'full', vel: 0.5, gain: 0.9 },
+          { role: 'pad', voice: 'pad', range: [47, 74], voicing: 'full', vel: 0.5, gain: 0.9 },
           { role: 'bell', voice: 'rin', range: [74, 100], p: 1, vel: 0.6, gain: 0.7, perBlock: true, pan: 0.3 },
         ] },
         { id: 'loop', bars: 8, loop: true, prog: [[0, 2], [3, 2], [2, 2], [0, 2]], roles: [
-          { role: 'pad', voice: 'pad', range: [43, 72], voicing: 'full', vel: 0.36, gain: 0.9 },
+          { role: 'pad', voice: 'pad', range: [47, 74], voicing: 'full', vel: 0.36, gain: 0.9 },
           { role: 'melody', voice: 'koto', range: [64, 86], cells: 'long', phrase: 4, vel: 0.5, gain: 0.9, pan: 0.1 },
           { role: 'arp', voice: 'arp', range: [62, 86], step: 0.5, pattern: 'pluck3', skip: 0.55, vel: 0.28, len: 1.5, gain: 0.7, pan: -0.3 },
           { role: 'bell', voice: 'rin', range: [76, 100], p: 0.4, perBlock: true, vel: 0.35, gain: 0.55, pan: 0.3 },
@@ -768,15 +768,15 @@ const AUDIO = (() => {
       sections: [
         { id: 'stinger', bars: 3, loop: false, prog: [[0, 1], [1, 1], [0, 1]], roles: [
           { role: 'perc', voice: 'taiko', range: [33, 57], pattern: ['X..x............', 'X..x............', 'D...............'], vel: 0.8, gain: 0.9 },
-          { role: 'bass', voice: 'biwa', range: [31, 52], pattern: 'pedal', vel: 0.75, gain: 0.85 },
+          { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'pedal', vel: 0.75, gain: 0.85 },
           { role: 'melody', voice: 'shakuhachi', range: [62, 86], cells: 'long', phrase: 3, shape: 'fall', vel: 0.8, gap: 0.12, gain: 1, pan: 0.1 },
-          { role: 'pad', voice: 'pad', range: [38, 66], voicing: 'open', vel: 0.45, gain: 0.9 },
+          { role: 'pad', voice: 'pad', range: [45, 72], voicing: 'open', vel: 0.45, gain: 0.9 },
           { role: 'bell', voice: 'rin', range: [72, 96], p: 1, perBlock: true, vel: 0.45, gain: 0.6, pan: -0.3 },
         ] },
         { id: 'loop', bars: 8, loop: true, prog: [[0, 4], [1, 2], [0, 2]], roles: [
-          { role: 'drone', voice: 'pad', range: [38, 62], tones: [0, 7], bars: 4, vel: 0.3, gain: 0.9 },
+          { role: 'drone', voice: 'pad', range: [43, 65], tones: [0, 7], bars: 4, vel: 0.3, gain: 0.9 },
           { role: 'bell', voice: 'rin', range: [72, 98], p: 0.35, vel: 0.3, gain: 0.5, pan: 0.25 },
-          { role: 'bass', voice: 'biwa', range: [33, 52], pattern: 'pedal', vel: 0.45, gain: 0.6, every: 2 },
+          { role: 'bass', voice: 'biwa', range: [38, 58], pattern: 'pedal', vel: 0.45, gain: 0.6, every: 2 },
         ] },
       ],
     },
@@ -786,25 +786,25 @@ const AUDIO = (() => {
   // (A-weighted momentary loudness per role against a target per role type). Regenerate after changing a score.
   // MIX-BEGIN
   const MIX = {
-    title: [0.653, 0.776, 1.334, 1.622, 1.0],
-    hero_select: [0.902, 3.236, 1.096, 1.679, 1.738],
-    map1: [0.881, 2.042, 0.741, 1.738, 2.754, 1.679],
-    map2: [0.61, 1.084, 0.851, 1.462, 2.239],
-    map3: [0.933, 1.349, 1.0, 2.213, 1.995, 1.259],
-    combat1: [0.495, 1.778, 1.413, 1.862, 2.6, 1.072, 2.188, 1.972, 1.135, 0.912, 1.334],
-    combat2: [0.442, 1.479, 1.622, 1.82, 2.541, 0.813, 1.928, 1.928, 1.0, 0.841, 1.531],
-    combat3: [0.489, 1.718, 1.603, 1.928, 2.483, 1.0, 2.317, 1.841, 1.0, 0.912, 1.365],
-    elite: [0.38, 1.0, 1.109, 3.631, 3.02, 0.813, 0.832, 1.0, 1.148],
-    boss1: [0.923, 0.537, 1.841, 1.82, 0.822, 1.622, 2.163, 2.512, 1.096, 1.259, 1.135, 0.661],
-    boss2: [1.084, 0.785, 1.841, 1.972, 1.38, 1.274, 2.344, 2.512, 1.084, 1.303, 1.189, 0.631],
-    boss3: [1.084, 0.582, 2.754, 2.239, 0.7, 1.641, 2.483, 1.189, 0.841, 1.189, 0.638],
-    final: [0.841, 0.668, 1.884, 1.549, 0.861, 1.66, 2.018, 2.541, 1.175, 3.311, 1.175, 0.891, 0.596, 2.065],
-    shop: [1.161, 1.514, 1.23, 1.567, 1.334, 1.679],
-    camp: [1.059, 0.646, 2.163, 0.841, 1.679],
-    event: [1.0, 1.122, 1.148, 3.236, 3.673],
-    reward: [1.479, 1.109, 2.138, 1.0, 1.396, 2.344, 1.274, 3.589],
-    victory: [1.0, 1.0, 2.163, 0.881, 0.841, 1.135, 1.274, 2.512, 3.388, 2.786],
-    defeat: [1.135, 2.041, 1.175, 1.549, 1.95, 2.818, 3.981, 2.4],
+    title: [0.359, 0.716, 1.231, 0.842, 0.944],
+    hero_select: [0.804, 2.213, 0.891, 0.75, 1.549],
+    map1: [0.813, 1.531, 0.543, 0.804, 2.483, 1.479],
+    map2: [0.563, 1.0, 0.684, 1.288, 1.216],
+    map3: [0.457, 1.035, 0.933, 0.616, 1.084, 1.122],
+    combat1: [0.288, 0.813, 1.413, 1.679, 2.291, 0.989, 1.995, 1.621, 0.676, 0.638, 1.162],
+    combat2: [0.263, 0.832, 1.622, 1.622, 2.265, 0.75, 1.779, 1.585, 0.624, 0.595, 1.38],
+    combat3: [0.285, 0.813, 1.603, 1.738, 2.239, 0.923, 2.065, 1.531, 0.61, 0.631, 1.203],
+    elite: [0.224, 0.891, 0.417, 3.631, 2.661, 0.75, 0.631, 0.61, 1.0],
+    boss1: [0.427, 0.184, 0.582, 1.303, 0.537, 1.035, 1.38, 1.603, 0.431, 0.785, 0.684, 0.457],
+    boss2: [0.479, 0.219, 0.631, 1.462, 0.822, 0.842, 1.514, 1.514, 0.431, 0.794, 0.733, 0.442],
+    boss3: [0.427, 0.197, 2.018, 0.596, 0.457, 1.072, 1.567, 0.742, 0.359, 0.684, 0.441],
+    final: [0.376, 0.216, 0.569, 1.109, 0.562, 1.047, 1.303, 1.585, 0.661, 1.905, 0.75, 0.367, 0.412, 1.318],
+    shop: [1.011, 1.319, 0.692, 1.365, 1.217, 1.413],
+    camp: [1.047, 0.468, 2.24, 0.785, 1.718],
+    event: [0.437, 1.035, 1.047, 1.148, 3.35],
+    reward: [1.072, 0.785, 1.413, 0.537, 0.638, 1.0, 0.902, 2.541],
+    victory: [0.708, 0.75, 1.479, 0.355, 0.457, 0.786, 0.272, 0.724, 0.988, 0.786],
+    defeat: [0.462, 0.518, 0.966, 0.708, 1.585, 0.447, 1.135, 0.479],
   };
   // MIX-END
 
@@ -889,87 +889,87 @@ const AUDIO = (() => {
   // each entry: [vol, opts, layersFn]. opts: var (pitch cents), gainVar (dB), duck (ms), cd (cooldown ms), pri (0..3), pan
   const SFX_DEFS = {
     // ---- interface: crisp, soft, short
-    ui_click: [0.435, { var: 50, cd: 25, pri: 1 }, () => [N('white', 0, 0.014, 0.5, 'bandpass', 3200, 0, 1.4, { a: 0.001 }), O('sine', 900, 620, 0, 0.05, 0.42, { a: 0.001 }), O('triangle', 1800, 1500, 0, 0.03, 0.14, { a: 0.001 })]],
+    ui_click: [0.346, { var: 50, cd: 25, pri: 1 }, () => [N('white', 0, 0.014, 0.5, 'bandpass', 3200, 0, 1.4, { a: 0.001 }), O('sine', 900, 620, 0, 0.05, 0.42, { a: 0.001 }), O('triangle', 1800, 1500, 0, 0.03, 0.14, { a: 0.001 })]],
     ui_hover: [0.202, { var: 90, cd: 55, pri: 0 }, () => [O('sine', 2400, 2000, 0, 0.035, 0.3, { a: 0.005 }), N('white', 0, 0.02, 0.12, 'highpass', 5000, 0, 0.7, { a: 0.004 })]],
-    ui_back: [0.376, { var: 40, cd: 40 }, () => [O('triangle', 660, 440, 0, 0.1, 0.4, { a: 0.002 }), O('sine', 990, 660, 0, 0.1, 0.16, { a: 0.002 }), N('white', 0, 0.02, 0.25, 'bandpass', 1800, 0, 1.2, { a: 0.001 })]],
-    ui_error: [0.507, { var: 15, cd: 90 }, () => [O('square', 150, 140, 0, 0.12, 0.28, { lp: { f: 700 } }), O('square', 120, 110, 0.1, 0.16, 0.28, { lp: { f: 600 } }), N('white', 0, 0.05, 0.25, 'lowpass', 400, 0, 1)]],
-    ui_open: [0.447, { var: 40, cd: 60 }, () => [N('white', 0, 0.16, 0.32, 'bandpass', 700, 2600, 1.3, { a: 0.05 }), O('sine', 1568, 0, 0.11, 0.18, 0.25, { a: 0.002 }), O('sine', 2349, 0, 0.14, 0.14, 0.1, { a: 0.002 })]],
-    ui_close: [0.435, { var: 40, cd: 60 }, () => [N('white', 0, 0.14, 0.3, 'bandpass', 2400, 650, 1.3, { a: 0.03 }), O('sine', 1175, 880, 0.02, 0.12, 0.22, { a: 0.002 })]],
+    ui_back: [0.331, { var: 40, cd: 40 }, () => [O('triangle', 660, 440, 0, 0.1, 0.4, { a: 0.002 }), O('sine', 990, 660, 0, 0.1, 0.16, { a: 0.002 }), N('white', 0, 0.02, 0.25, 'bandpass', 1800, 0, 1.2, { a: 0.001 })]],
+    ui_error: [0.692, { var: 15, cd: 90 }, () => [O('square', 150, 140, 0, 0.12, 0.28, { lp: { f: 700 } }), O('square', 120, 110, 0.1, 0.16, 0.28, { lp: { f: 600 } }), N('white', 0, 0.05, 0.25, 'lowpass', 400, 0, 1)]],
+    ui_open: [0.631, { var: 40, cd: 60 }, () => [N('white', 0, 0.16, 0.32, 'bandpass', 700, 2600, 1.3, { a: 0.05 }), O('sine', 1568, 0, 0.11, 0.18, 0.25, { a: 0.002 }), O('sine', 2349, 0, 0.14, 0.14, 0.1, { a: 0.002 })]],
+    ui_close: [0.477, { var: 40, cd: 60 }, () => [N('white', 0, 0.14, 0.3, 'bandpass', 2400, 650, 1.3, { a: 0.03 }), O('sine', 1175, 880, 0.02, 0.12, 0.22, { a: 0.002 })]],
     ui_toggle: [0.631, { var: 40, cd: 45 }, () => [V('hyoshigi', 60, 0, 0.05, 0.6), O('sine', 1320, 0, 0.015, 0.06, 0.25, { a: 0.002 })]],
     // ---- cards
     card_draw: [0.852, { var: 90, cd: 30 }, () => [N('white', 0, 0.11, 0.42, 'bandpass', 1200, 3400, 0.9, { a: 0.02 }), N('white', 0.07, 0.03, 0.12, 'highpass', 4000, 0, 0.8, { a: 0.001 })]],
     card_hover: [0.23, { var: 120, cd: 60, pri: 0 }, () => [N('white', 0, 0.05, 0.4, 'bandpass', 2600, 3100, 1.1, { a: 0.012 })]],
-    card_pick: [0.536, { var: 50, cd: 40 }, () => [N('white', 0, 0.02, 0.4, 'bandpass', 2800, 0, 1.5, { a: 0.001 }), O('triangle', 660, 990, 0, 0.07, 0.32, { a: 0.002 }), O('sine', 1320, 0, 0.03, 0.09, 0.14, { a: 0.002 })]],
-    card_play_attack: [0.568, { var: 60, duck: 180, cd: 30 }, () => [N('white', 0, 0.16, 0.7, 'bandpass', 600, 3800, 1.1, { a: 0.05 }), O('sine', 150, 60, 0.06, 0.14, 0.35, { a: 0.002 }), O('sawtooth', 3000, 1800, 0.05, 0.1, 0.1, { lp: { f: 5000 }, a: 0.003 }), N('white', 0.06, 0.06, 0.4, 'bandpass', 1500, 900, 0.9, { a: 0.002 }), O('triangle', 320, 140, 0.05, 0.1, 0.25, { a: 0.002 })]],
-    card_play_skill: [0.692, { var: 40, cd: 30 }, () => [O('triangle', 523, 784, 0, 0.28, 0.32, { a: 0.01 }), V('koto', 79, 0.03, 0.4, 0.45), V('koto', 86, 0.11, 0.4, 0.4), N('white', 0, 0.25, 0.12, 'bandpass', 3500, 5000, 0.8, { a: 0.08 })]],
-    card_play_power: [0.391, { var: 30, duck: 350, cd: 60, pri: 2 }, () => [V('taiko', 38, 0, 0.6, 0.9), O('sine', 73, 0, 0, 0.55, 0.5, { a: 0.004 }), V('rin', 74, 0.08, 0.5, 0.6), V('koto', 81, 0.14, 0.5, 0.5), swell(0, 0.6, 0.18, 300, 1600)]],
-    card_discard: [0.429, { var: 80, cd: 25 }, () => [N('white', 0, 0.09, 0.35, 'bandpass', 3200, 900, 1, { a: 0.01 }), N('white', 0.05, 0.02, 0.15, 'bandpass', 2000, 0, 1.5, { a: 0.001 })]],
+    card_pick: [0.5, { var: 50, cd: 40 }, () => [N('white', 0, 0.02, 0.4, 'bandpass', 2800, 0, 1.5, { a: 0.001 }), O('triangle', 660, 990, 0, 0.07, 0.32, { a: 0.002 }), O('sine', 1320, 0, 0.03, 0.09, 0.14, { a: 0.002 })]],
+    card_play_attack: [0.691, { var: 60, duck: 180, cd: 30 }, () => [N('white', 0, 0.16, 0.7, 'bandpass', 600, 3800, 1.1, { a: 0.05 }), O('sine', 150, 60, 0.06, 0.14, 0.35, { a: 0.002 }), O('sawtooth', 3000, 1800, 0.05, 0.1, 0.1, { lp: { f: 5000 }, a: 0.003 }), N('white', 0.06, 0.06, 0.4, 'bandpass', 1500, 900, 0.9, { a: 0.002 }), O('triangle', 320, 140, 0.05, 0.1, 0.25, { a: 0.002 })]],
+    card_play_skill: [0.785, { var: 40, cd: 30 }, () => [O('triangle', 523, 784, 0, 0.28, 0.32, { a: 0.01 }), V('koto', 79, 0.03, 0.4, 0.45), V('koto', 86, 0.11, 0.4, 0.4), N('white', 0, 0.25, 0.12, 'bandpass', 3500, 5000, 0.8, { a: 0.08 })]],
+    card_play_power: [0.325, { var: 30, duck: 350, cd: 60, pri: 2 }, () => [V('taiko', 38, 0, 0.6, 0.9), O('sine', 73, 0, 0, 0.55, 0.5, { a: 0.004 }), V('rin', 74, 0.08, 0.5, 0.6), V('koto', 81, 0.14, 0.5, 0.5), swell(0, 0.6, 0.18, 300, 1600)]],
+    card_discard: [0.4, { var: 80, cd: 25 }, () => [N('white', 0, 0.09, 0.35, 'bandpass', 3200, 900, 1, { a: 0.01 }), N('white', 0.05, 0.02, 0.15, 'bandpass', 2000, 0, 1.5, { a: 0.001 })]],
     card_exhaust: [0.477, { var: 60, cd: 40 }, () => [N('white', 0, 0.5, 0.5, 'bandpass', 2600, 500, 0.8, { a: 0.02 })].concat(pops(41, 6, 0.04, 0.4, 0.2, 3000, 5500), [O('sine', 420, 120, 0, 0.4, 0.2, { a: 0.01 })])],
-    shuffle: [0.55, { var: 40, cd: 120 }, () => [0, 0.045, 0.09, 0.14, 0.19, 0.24, 0.3].map((t, i) => N('white', t, 0.05, 0.35, 'bandpass', [1800, 2600, 2000, 3000, 2300, 3400, 2700][i], 0, 1, { a: 0.004 }))],
+    shuffle: [0.768, { var: 40, cd: 120 }, () => [0, 0.045, 0.09, 0.14, 0.19, 0.24, 0.3].map((t, i) => N('white', t, 0.05, 0.35, 'bandpass', [1800, 2600, 2000, 3000, 2300, 3400, 2700][i], 0, 1, { a: 0.004 }))],
     // ---- turn flow
-    swap: [0.534, { var: 40, cd: 60 }, () => [N('white', 0, 0.22, 0.4, 'bandpass', 500, 2200, 1, { a: 0.06 }), O('sine', 330, 520, 0, 0.18, 0.3, { a: 0.01 }), O('sine', 180, 90, 0.19, 0.12, 0.4, { a: 0.002 })]],
-    energy_gain: [0.573, { var: 40, cd: 60 }, () => [V('rin', 86, 0, 0.4, 0.55), O('sine', 1760, 2637, 0.04, 0.25, 0.2, { a: 0.003 })]],
-    turn_start: [0.49, { var: 20, duck: 250, cd: 200, pri: 2 }, () => [V('hyoshigi', 60, 0, 0.05, 0.8, { double: 1 }), V('koto', 74, 0.12, 0.6, 0.6), V('koto', 81, 0.2, 0.6, 0.5)]],
-    turn_end: [0.5, { var: 30, cd: 150 }, () => [V('koto', 62, 0, 0.6, 0.4), O('sine', 150, 100, 0, 0.14, 0.3, { a: 0.003 })]],
-    enemy_turn: [0.417, { var: 20, duck: 300, cd: 200, pri: 2 }, () => [V('taiko', 38, 0, 0.7, 0.85), V('biwa', 38, 0.12, 0.6, 0.6), N('white', 0, 0.4, 0.16, 'bandpass', 200, 500, 1, { a: 0.15 })]],
+    swap: [0.746, { var: 40, cd: 60 }, () => [N('white', 0, 0.22, 0.4, 'bandpass', 500, 2200, 1, { a: 0.06 }), O('sine', 330, 520, 0, 0.18, 0.3, { a: 0.01 }), O('sine', 180, 90, 0.19, 0.12, 0.4, { a: 0.002 })]],
+    energy_gain: [0.614, { var: 40, cd: 60 }, () => [V('rin', 86, 0, 0.4, 0.55), O('sine', 1760, 2637, 0.04, 0.25, 0.2, { a: 0.003 })]],
+    turn_start: [0.676, { var: 20, duck: 250, cd: 200, pri: 2 }, () => [V('hyoshigi', 60, 0, 0.05, 0.8, { double: 1 }), V('koto', 74, 0.12, 0.6, 0.6), V('koto', 81, 0.2, 0.6, 0.5)]],
+    turn_end: [0.416, { var: 30, cd: 150 }, () => [V('koto', 62, 0, 0.6, 0.4), O('sine', 150, 100, 0, 0.14, 0.3, { a: 0.003 })]],
+    enemy_turn: [0.38, { var: 20, duck: 300, cd: 200, pri: 2 }, () => [V('taiko', 38, 0, 0.7, 0.85), V('biwa', 38, 0.12, 0.6, 0.6), N('white', 0, 0.4, 0.16, 'bandpass', 200, 500, 1, { a: 0.15 })]],
     // ---- blows: light, heavy, crit and multi are clearly different
-    hit_light: [0.478, { var: 90, cd: 20, pri: 2 }, () => [N('white', 0, 0.05, 0.85, 'bandpass', 1900, 1100, 0.9, { a: 0.001 }), O('sine', 260, 120, 0, 0.09, 0.42, { a: 0.001 }), O('triangle', 480, 220, 0, 0.05, 0.35, { a: 0.001 }), O('sawtooth', 190, 110, 0, 0.07, 0.16, { lp: { f: 1200 }, a: 0.001 })]],
-    hit_heavy: [0.647, { var: 70, duck: 260, pri: 3 }, () => [O('sine', 190, 48, 0, 0.34, 0.5, { a: 0.001 }), O('triangle', 330, 110, 0, 0.2, 0.5, { a: 0.001 }), N('white', 0, 0.24, 0.6, 'lowpass', 1700, 400, 0.8, { a: 0.001 }), N('white', 0, 0.06, 0.95, 'bandpass', 2400, 900, 1, { a: 0.001 }), O('sawtooth', 120, 65, 0, 0.2, 0.32, { lp: { f: 900, f2: 300 }, a: 0.001 }), N('white', 0.03, 0.4, 0.2, 'lowpass', 700, 160, 0.7, { a: 0.01 })]],
-    hit_crit: [0.76, { var: 40, duck: 350, pri: 3 }, () => [O('sine', 170, 45, 0, 0.36, 0.6, { a: 0.001 }), O('triangle', 360, 120, 0, 0.2, 0.4, { a: 0.001 }), N('white', 0, 0.2, 0.5, 'lowpass', 1800, 350, 0.8, { a: 0.001 }), N('white', 0, 0.05, 0.75, 'bandpass', 3000, 0, 1, { a: 0.001 }), FM(2400, 2.76, 3.5, 0, 0.5, 0.3), O('sine', 1568, 3136, 0.02, 0.22, 0.22, { a: 0.003 }), shimmer(0.02, 0.35, 0.14, 6000, 9000)]],
-    hit_multi: [0.338, { var: 60, cd: 60, pri: 2 }, () => [0, 0.075, 0.15].reduce((acc, t, i) => acc.concat([N('white', t, 0.045, 0.8, 'bandpass', 1600 + i * 300, 950, 0.9, { a: 0.001 }), O('sine', 270 + i * 55, 125 + i * 20, t, 0.08, 0.4, { a: 0.001 }), O('triangle', 480 + i * 70, 240 + i * 30, t, 0.05, 0.3, { a: 0.001 })]), [])],
-    slash: [0.466, { var: 80, cd: 25 }, () => [N('white', 0, 0.14, 0.5, 'highpass', 1800, 5000, 0.8, { a: 0.008 }), O('sawtooth', 3000, 1000, 0, 0.09, 0.1, { lp: { f: 4500 }, a: 0.003 }), O('sine', 280, 120, 0.03, 0.1, 0.45, { a: 0.002 }), N('white', 0.02, 0.1, 0.3, 'bandpass', 900, 600, 0.9, { a: 0.004 })]],
-    thud: [0.5, { var: 60, cd: 40 }, () => [O('sine', 150, 55, 0, 0.24, 0.8, { a: 0.002 }), O('triangle', 300, 130, 0, 0.14, 0.4, { a: 0.001 }), N('white', 0, 0.14, 0.4, 'lowpass', 520, 180, 0.8, { a: 0.001 })]],
-    zap: [0.617, { var: 60, cd: 40 }, () => [O('sawtooth', 220, 1800, 0, 0.12, 0.4, { lp: { f: 4000 }, a: 0.001 }), N('white', 0, 0.25, 0.2, 'highpass', 2500, 4000, 0.7, { a: 0.002 }), O('square', 1200, 700, 0.05, 0.03, 0.2, { a: 0.001 }), O('square', 1600, 900, 0.1, 0.03, 0.2, { a: 0.001 }), O('square', 2000, 1100, 0.15, 0.03, 0.18, { a: 0.001 }), N('white', 0.02, 0.08, 0.35, 'bandpass', 3200, 0, 2, { a: 0.001 })]],
-    flame: [0.483, { var: 50, duck: 150, cd: 50 }, () => [N('white', 0, 0.5, 0.6, 'bandpass', 350, 1500, 0.8, { a: 0.08 }), N('white', 0.1, 0.45, 0.35, 'highpass', 2000, 0, 0.7, { a: 0.05 }), O('sine', 90, 70, 0, 0.4, 0.4, { a: 0.05 })].concat(pops(52, 5, 0.1, 0.4, 0.22, 2500, 5000))],
-    ice: [0.513, { var: 60, cd: 50 }, () => [FM(3136, 2.76, 2.2, 0, 0.35, 0.28), FM(4186, 2.76, 2.0, 0.05, 0.3, 0.22), FM(2349, 3.51, 2.0, 0.1, 0.32, 0.22), N('white', 0, 0.12, 0.25, 'highpass', 6500, 0, 0.8, { a: 0.003 }), O('sine', 1568, 1176, 0, 0.2, 0.15, { a: 0.003 })]],
-    poison_tick: [0.45, { var: 90, cd: 40 }, () => [O('sine', 260, 720, 0, 0.07, 0.5, { a: 0.003 }), O('sine', 340, 900, 0.08, 0.06, 0.4, { a: 0.003 }), N('white', 0, 0.22, 0.14, 'bandpass', 3200, 2400, 1.2, { a: 0.05 })]],
-    thorn: [0.371, { var: 80, cd: 40 }, () => [N('white', 0, 0.03, 0.55, 'highpass', 3000, 0, 0.8, { a: 0.001 }), O('sawtooth', 700, 300, 0, 0.06, 0.28, { lp: { f: 2500 }, a: 0.001 }), O('sine', 420, 250, 0, 0.05, 0.3, { a: 0.001 }), N('white', 0.055, 0.025, 0.4, 'highpass', 3000, 0, 0.8, { a: 0.001 })]],
-    dodge: [0.6, { var: 80, cd: 50 }, () => [N('white', 0, 0.16, 0.4, 'bandpass', 1200, 3000, 1.2, { a: 0.04 }), O('sine', 1568, 2093, 0.06, 0.16, 0.22, { a: 0.004 })]],
+    hit_light: [0.331, { var: 90, cd: 20, pri: 2 }, () => [N('white', 0, 0.05, 0.85, 'bandpass', 1900, 1100, 0.9, { a: 0.001 }), O('sine', 260, 120, 0, 0.09, 0.42, { a: 0.001 }), O('triangle', 480, 220, 0, 0.05, 0.35, { a: 0.001 }), O('sawtooth', 190, 110, 0, 0.07, 0.16, { lp: { f: 1200 }, a: 0.001 })]],
+    hit_heavy: [0.514, { var: 70, duck: 260, pri: 3 }, () => [O('sine', 190, 48, 0, 0.34, 0.5, { a: 0.001 }), O('triangle', 330, 110, 0, 0.2, 0.5, { a: 0.001 }), N('white', 0, 0.24, 0.6, 'lowpass', 1700, 400, 0.8, { a: 0.001 }), N('white', 0, 0.06, 0.95, 'bandpass', 2400, 900, 1, { a: 0.001 }), O('sawtooth', 120, 65, 0, 0.2, 0.32, { lp: { f: 900, f2: 300 }, a: 0.001 }), N('white', 0.03, 0.4, 0.2, 'lowpass', 700, 160, 0.7, { a: 0.01 })]],
+    hit_crit: [0.693, { var: 40, duck: 350, pri: 3 }, () => [O('sine', 170, 45, 0, 0.36, 0.6, { a: 0.001 }), O('triangle', 360, 120, 0, 0.2, 0.4, { a: 0.001 }), N('white', 0, 0.2, 0.5, 'lowpass', 1800, 350, 0.8, { a: 0.001 }), N('white', 0, 0.05, 0.75, 'bandpass', 3000, 0, 1, { a: 0.001 }), FM(2400, 2.76, 3.5, 0, 0.5, 0.3), O('sine', 1568, 3136, 0.02, 0.22, 0.22, { a: 0.003 }), shimmer(0.02, 0.35, 0.14, 6000, 9000)]],
+    hit_multi: [0.477, { var: 60, cd: 60, pri: 2 }, () => [0, 0.075, 0.15].reduce((acc, t, i) => acc.concat([N('white', t, 0.045, 0.8, 'bandpass', 1600 + i * 300, 950, 0.9, { a: 0.001 }), O('sine', 270 + i * 55, 125 + i * 20, t, 0.08, 0.4, { a: 0.001 }), O('triangle', 480 + i * 70, 240 + i * 30, t, 0.05, 0.3, { a: 0.001 })]), [])],
+    slash: [0.43, { var: 80, cd: 25 }, () => [N('white', 0, 0.14, 0.5, 'highpass', 1800, 5000, 0.8, { a: 0.008 }), O('sawtooth', 3000, 1000, 0, 0.09, 0.1, { lp: { f: 4500 }, a: 0.003 }), O('sine', 280, 120, 0.03, 0.1, 0.45, { a: 0.002 }), N('white', 0.02, 0.1, 0.3, 'bandpass', 900, 600, 0.9, { a: 0.004 })]],
+    thud: [0.441, { var: 60, cd: 40 }, () => [O('sine', 150, 55, 0, 0.24, 0.8, { a: 0.002 }), O('triangle', 300, 130, 0, 0.14, 0.4, { a: 0.001 }), N('white', 0, 0.14, 0.4, 'lowpass', 520, 180, 0.8, { a: 0.001 })]],
+    zap: [0.468, { var: 60, cd: 40 }, () => [O('sawtooth', 220, 1800, 0, 0.12, 0.4, { lp: { f: 4000 }, a: 0.001 }), N('white', 0, 0.25, 0.2, 'highpass', 2500, 4000, 0.7, { a: 0.002 }), O('square', 1200, 700, 0.05, 0.03, 0.2, { a: 0.001 }), O('square', 1600, 900, 0.1, 0.03, 0.2, { a: 0.001 }), O('square', 2000, 1100, 0.15, 0.03, 0.18, { a: 0.001 }), N('white', 0.02, 0.08, 0.35, 'bandpass', 3200, 0, 2, { a: 0.001 })]],
+    flame: [0.706, { var: 50, duck: 150, cd: 50 }, () => [N('white', 0, 0.5, 0.6, 'bandpass', 350, 1500, 0.8, { a: 0.08 }), N('white', 0.1, 0.45, 0.35, 'highpass', 2000, 0, 0.7, { a: 0.05 }), O('sine', 90, 70, 0, 0.4, 0.4, { a: 0.05 })].concat(pops(52, 5, 0.1, 0.4, 0.22, 2500, 5000))],
+    ice: [0.463, { var: 60, cd: 50 }, () => [FM(3136, 2.76, 2.2, 0, 0.35, 0.28), FM(4186, 2.76, 2.0, 0.05, 0.3, 0.22), FM(2349, 3.51, 2.0, 0.1, 0.32, 0.22), N('white', 0, 0.12, 0.25, 'highpass', 6500, 0, 0.8, { a: 0.003 }), O('sine', 1568, 1176, 0, 0.2, 0.15, { a: 0.003 })]],
+    poison_tick: [0.505, { var: 90, cd: 40 }, () => [O('sine', 260, 720, 0, 0.07, 0.5, { a: 0.003 }), O('sine', 340, 900, 0.08, 0.06, 0.4, { a: 0.003 }), N('white', 0, 0.22, 0.14, 'bandpass', 3200, 2400, 1.2, { a: 0.05 })]],
+    thorn: [0.302, { var: 80, cd: 40 }, () => [N('white', 0, 0.03, 0.55, 'highpass', 3000, 0, 0.8, { a: 0.001 }), O('sawtooth', 700, 300, 0, 0.06, 0.28, { lp: { f: 2500 }, a: 0.001 }), O('sine', 420, 250, 0, 0.05, 0.3, { a: 0.001 }), N('white', 0.055, 0.025, 0.4, 'highpass', 3000, 0, 0.8, { a: 0.001 })]],
+    dodge: [0.773, { var: 80, cd: 50 }, () => [N('white', 0, 0.16, 0.4, 'bandpass', 1200, 3000, 1.2, { a: 0.04 }), O('sine', 1568, 2093, 0.06, 0.16, 0.22, { a: 0.004 })]],
     // ---- defence
-    block_gain: [0.406, { var: 40, cd: 40 }, () => [FM(660, 2.5, 2.0, 0, 0.3, 0.4), O('sine', 130, 110, 0, 0.2, 0.55, { a: 0.002 }), N('white', 0, 0.02, 0.4, 'bandpass', 2500, 0, 1.2, { a: 0.001 })]],
-    block_hit: [0.456, { var: 50, cd: 30, pri: 2 }, () => [N('white', 0, 0.06, 0.6, 'bandpass', 1100, 0, 1.1, { a: 0.001 }), FM(520, 2.3, 1.8, 0, 0.22, 0.35), O('sine', 150, 80, 0, 0.14, 0.6, { a: 0.001 })]],
-    block_break: [0.405, { var: 40, duck: 250, pri: 3 }, () => [N('white', 0, 0.35, 0.6, 'highpass', 3000, 1500, 0.8, { a: 0.001 }), FM(2800, 3.4, 2.5, 0, 0.4, 0.2), FM(3520, 3.4, 2.5, 0.06, 0.35, 0.18), O('sine', 110, 50, 0, 0.3, 0.7, { a: 0.001 }), N('white', 0.05, 0.3, 0.4, 'bandpass', 1800, 600, 0.8, { a: 0.005 })]],
-    heal: [0.442, { var: 30, cd: 80 }, () => [V('koto', 74, 0, 0.6, 0.5), V('koto', 81, 0.09, 0.6, 0.5), V('koto', 86, 0.18, 0.7, 0.5), shimmer(0, 0.6, 0.1, 4500, 6000), V('rin', 98, 0.2, 0.4, 0.25)]],
-    buff: [0.468, { var: 40, cd: 60 }, () => [O('sine', 440, 880, 0, 0.3, 0.4, { a: 0.01 }), O('triangle', 660, 1320, 0.03, 0.28, 0.28, { a: 0.01 }), shimmer(0, 0.3, 0.16, 4500, 7000), V('rin', 93, 0.12, 0.3, 0.3)]],
-    debuff: [0.55, { var: 40, cd: 60 }, () => [O('sawtooth', 360, 150, 0, 0.35, 0.35, { lp: { f: 900, f2: 300 }, a: 0.005 }), O('sawtooth', 380, 158, 0, 0.35, 0.25, { lp: { f: 900, f2: 300 }, a: 0.005 }), N('white', 0, 0.3, 0.2, 'lowpass', 500, 200, 0.8, { a: 0.02 })]],
-    stun: [0.607, { var: 30, duck: 200, cd: 100 }, () => [O('sine', 320, 200, 0, 0.12, 0.6, { a: 0.001 }), O('sine', 900, 0, 0.02, 0.4, 0.22, { vib: { r: 12, d: 60 }, a: 0.005 }), O('sine', 1130, 0, 0.02, 0.4, 0.16, { vib: { r: 9, d: 60 }, a: 0.005 }), N('white', 0, 0.02, 0.4, 'bandpass', 1500, 0, 1, { a: 0.001 })]],
+    block_gain: [0.33, { var: 40, cd: 40 }, () => [FM(660, 2.5, 2.0, 0, 0.3, 0.4), O('sine', 130, 110, 0, 0.2, 0.55, { a: 0.002 }), N('white', 0, 0.02, 0.4, 'bandpass', 2500, 0, 1.2, { a: 0.001 })]],
+    block_hit: [0.366, { var: 50, cd: 30, pri: 2 }, () => [N('white', 0, 0.06, 0.6, 'bandpass', 1100, 0, 1.1, { a: 0.001 }), FM(520, 2.3, 1.8, 0, 0.22, 0.35), O('sine', 150, 80, 0, 0.14, 0.6, { a: 0.001 })]],
+    block_break: [0.369, { var: 40, duck: 250, pri: 3 }, () => [N('white', 0, 0.35, 0.6, 'highpass', 3000, 1500, 0.8, { a: 0.001 }), FM(2800, 3.4, 2.5, 0, 0.4, 0.2), FM(3520, 3.4, 2.5, 0.06, 0.35, 0.18), O('sine', 110, 50, 0, 0.3, 0.7, { a: 0.001 }), N('white', 0.05, 0.3, 0.4, 'bandpass', 1800, 600, 0.8, { a: 0.005 })]],
+    heal: [0.624, { var: 30, cd: 80 }, () => [V('koto', 74, 0, 0.6, 0.5), V('koto', 81, 0.09, 0.6, 0.5), V('koto', 86, 0.18, 0.7, 0.5), shimmer(0, 0.6, 0.1, 4500, 6000), V('rin', 98, 0.2, 0.4, 0.25)]],
+    buff: [0.544, { var: 40, cd: 60 }, () => [O('sine', 440, 880, 0, 0.3, 0.4, { a: 0.01 }), O('triangle', 660, 1320, 0.03, 0.28, 0.28, { a: 0.01 }), shimmer(0, 0.3, 0.16, 4500, 7000), V('rin', 93, 0.12, 0.3, 0.3)]],
+    debuff: [0.463, { var: 40, cd: 60 }, () => [O('sawtooth', 360, 150, 0, 0.35, 0.35, { lp: { f: 900, f2: 300 }, a: 0.005 }), O('sawtooth', 380, 158, 0, 0.35, 0.25, { lp: { f: 900, f2: 300 }, a: 0.005 }), N('white', 0, 0.3, 0.2, 'lowpass', 500, 200, 0.8, { a: 0.02 })]],
+    stun: [0.488, { var: 30, duck: 200, cd: 100 }, () => [O('sine', 320, 200, 0, 0.12, 0.6, { a: 0.001 }), O('sine', 900, 0, 0.02, 0.4, 0.22, { vib: { r: 12, d: 60 }, a: 0.005 }), O('sine', 1130, 0, 0.02, 0.4, 0.16, { vib: { r: 9, d: 60 }, a: 0.005 }), N('white', 0, 0.02, 0.4, 'bandpass', 1500, 0, 1, { a: 0.001 })]],
     // ---- falls and arrivals
-    enemy_die: [0.602, { var: 60, duck: 200, pri: 3 }, () => [N('white', 0, 0.4, 0.5, 'bandpass', 3000, 300, 0.9, { a: 0.002 }), O('sine', 320, 70, 0, 0.32, 0.7, { a: 0.001 }), O('triangle', 880, 1760, 0.05, 0.35, 0.16, { a: 0.05 }), N('white', 0, 0.03, 0.5, 'bandpass', 2000, 0, 1, { a: 0.001 })]],
-    hero_down: [0.649, { var: 20, duck: 700, pri: 3 }, () => [V('koto', 57, 0, 0.8, 0.55), V('koto', 53, 0.22, 0.9, 0.5), O('sine', 100, 45, 0, 0.4, 0.7, { a: 0.002 }), V('rin', 65, 0.4, 0.6, 0.28)]],
-    hero_revive: [0.637, { var: 20, duck: 600, pri: 3 }, () => [V('koto', 62, 0, 0.6, 0.5), V('koto', 69, 0.1, 0.6, 0.5), V('koto', 74, 0.2, 0.6, 0.5), V('koto', 81, 0.3, 0.8, 0.55), V('rin', 93, 0.35, 0.5, 0.3), swell(0, 0.8, 0.18, 400, 1800)]],
+    enemy_die: [0.495, { var: 60, duck: 200, pri: 3 }, () => [N('white', 0, 0.4, 0.5, 'bandpass', 3000, 300, 0.9, { a: 0.002 }), O('sine', 320, 70, 0, 0.32, 0.7, { a: 0.001 }), O('triangle', 880, 1760, 0.05, 0.35, 0.16, { a: 0.05 }), N('white', 0, 0.03, 0.5, 'bandpass', 2000, 0, 1, { a: 0.001 })]],
+    hero_down: [0.559, { var: 20, duck: 700, pri: 3 }, () => [V('koto', 57, 0, 0.8, 0.55), V('koto', 53, 0.22, 0.9, 0.5), O('sine', 100, 45, 0, 0.4, 0.7, { a: 0.002 }), V('rin', 65, 0.4, 0.6, 0.28)]],
+    hero_revive: [0.83, { var: 20, duck: 600, pri: 3 }, () => [V('koto', 62, 0, 0.6, 0.5), V('koto', 69, 0.1, 0.6, 0.5), V('koto', 74, 0.2, 0.6, 0.5), V('koto', 81, 0.3, 0.8, 0.55), V('rin', 93, 0.35, 0.5, 0.3), swell(0, 0.8, 0.18, 400, 1800)]],
     boss_die: [0.36, { var: 15, duck: 1400, pri: 3 }, () => [V('taiko', 38, 0, 0.9, 1.0), V('taiko', 31, 0.28, 1.0, 1.0, { big: 1 }), O('sine', 80, 30, 0, 1.4, 0.9, { a: 0.005 }), N('white', 0, 1.4, 0.55, 'lowpass', 2800, 120, 0.8, { a: 0.005 }), FM(880, 2.76, 3, 0.15, 1.6, 0.25), N('white', 0.05, 1.0, 0.35, 'highpass', 2500, 900, 0.8, { a: 0.005 }), V('rin', 62, 0.5, 0.9, 0.35)]],
-    boss_intro: [0.372, { var: 10, duck: 1600, pri: 3 }, () => [V('taiko', 38, 0, 0.6, 0.8), V('taiko', 38, 0.22, 0.6, 0.85), V('taiko', 38, 0.4, 0.6, 0.9), V('taiko', 31, 0.62, 1.0, 1.0, { big: 1 }), swell(0, 1.6, 0.3, 150, 700), V('biwa', 31, 0.7, 1.2, 0.9), V('shakuhachi', 62, 0.8, 1.4, 0.5)]],
-    phase_change: [0.328, { var: 10, duck: 900, pri: 3 }, () => [N('white', 0, 0.7, 0.5, 'bandpass', 300, 5000, 1.2, { a: 0.5 }), V('taiko', 38, 0.55, 0.7, 1.0), V('taiko', 38, 0.72, 0.7, 1.0), FM(700, 3.7, 4, 0.55, 1.0, 0.3), N('white', 0.6, 0.5, 0.4, 'highpass', 3000, 800, 0.8, { a: 0.003 })]],
+    boss_intro: [0.452, { var: 10, duck: 1600, pri: 3 }, () => [V('taiko', 38, 0, 0.6, 0.8), V('taiko', 38, 0.22, 0.6, 0.85), V('taiko', 38, 0.4, 0.6, 0.9), V('taiko', 31, 0.62, 1.0, 1.0, { big: 1 }), swell(0, 1.6, 0.3, 150, 700), V('biwa', 31, 0.7, 1.2, 0.9), V('shakuhachi', 62, 0.8, 1.4, 0.5)]],
+    phase_change: [0.413, { var: 10, duck: 900, pri: 3 }, () => [N('white', 0, 0.7, 0.5, 'bandpass', 300, 5000, 1.2, { a: 0.5 }), V('taiko', 38, 0.55, 0.7, 1.0), V('taiko', 38, 0.72, 0.7, 1.0), FM(700, 3.7, 4, 0.55, 1.0, 0.3), N('white', 0.6, 0.5, 0.4, 'highpass', 3000, 800, 0.8, { a: 0.003 })]],
     // ---- the map
-    paint: [0.867, { var: 50, cd: 60 }, () => [N('white', 0, 0.3, 0.5, 'bandpass', 600, 2000, 1.1, { a: 0.08 }), N('white', 0.05, 0.25, 0.3, 'lowpass', 900, 300, 0.7, { a: 0.04 }), V('rin', 86, 0.2, 0.35, 0.3), O('sine', 392, 523, 0, 0.18, 0.18, { a: 0.01 })]],
-    ink_splash: [0.452, { var: 60, cd: 50 }, () => [N('white', 0, 0.2, 0.6, 'lowpass', 1600, 300, 0.8, { a: 0.002 }), O('sine', 200, 70, 0, 0.18, 0.7, { a: 0.002 }), O('sine', 500, 900, 0.12, 0.06, 0.3, { a: 0.002 }), O('sine', 380, 700, 0.19, 0.06, 0.25, { a: 0.002 }), O('sine', 620, 1000, 0.25, 0.05, 0.2, { a: 0.002 })]],
-    brush_pick: [0.55, { var: 50, cd: 60 }, () => [N('white', 0, 0.04, 0.4, 'bandpass', 900, 0, 1.3, { a: 0.002 }), V('koto', 67, 0.03, 0.4, 0.4), N('white', 0.02, 0.12, 0.15, 'bandpass', 2500, 1800, 1, { a: 0.03 })]],
-    brush_use: [0.519, { var: 40, cd: 80 }, () => [N('white', 0, 0.32, 0.45, 'bandpass', 900, 3200, 1.1, { a: 0.06 }), V('koto', 74, 0.05, 0.4, 0.45), V('koto', 79, 0.1, 0.4, 0.4), V('koto', 86, 0.16, 0.5, 0.45)]],
-    step: [0.439, { var: 120, cd: 70, pri: 0 }, () => [N('white', 0, 0.05, 0.5, 'lowpass', 700, 300, 0.8, { a: 0.002 }), N('white', 0, 0.015, 0.3, 'bandpass', 2000, 0, 1.2, { a: 0.001 })]],
-    reveal_landmark: [0.707, { var: 20, duck: 500, pri: 2 }, () => [V('rin', 74, 0, 0.5, 0.5), V('rin', 81, 0.22, 0.5, 0.42), shimmer(0, 0.8, 0.12, 2500, 4500), V('koto', 93, 0.4, 0.7, 0.4)]],
-    ink_gain: [0.477, { var: 60, cd: 60 }, () => [O('sine', 600, 1400, 0, 0.09, 0.5, { a: 0.002 }), O('sine', 900, 1800, 0.09, 0.08, 0.3, { a: 0.002 }), N('white', 0, 0.15, 0.12, 'bandpass', 4500, 0, 1, { a: 0.01 })]],
-    well: [0.431, { var: 30, cd: 100 }, () => [0, 0.1, 0.17, 0.26].map((t, i) => O('sine', 300 + i * 40, 800 + i * 60, t, 0.07, 0.4, { a: 0.003 })).concat([N('white', 0, 0.6, 0.2, 'lowpass', 1500, 600, 0.8, { a: 0.1 }), V('rin', 86, 0.3, 0.4, 0.3)])],
+    paint: [1.17, { var: 50, cd: 60 }, () => [N('white', 0, 0.3, 0.5, 'bandpass', 600, 2000, 1.1, { a: 0.08 }), N('white', 0.05, 0.25, 0.3, 'lowpass', 900, 300, 0.7, { a: 0.04 }), V('rin', 86, 0.2, 0.35, 0.3), O('sine', 392, 523, 0, 0.18, 0.18, { a: 0.01 })]],
+    ink_splash: [0.363, { var: 60, cd: 50 }, () => [N('white', 0, 0.2, 0.6, 'lowpass', 1600, 300, 0.8, { a: 0.002 }), O('sine', 200, 70, 0, 0.18, 0.7, { a: 0.002 }), O('sine', 500, 900, 0.12, 0.06, 0.3, { a: 0.002 }), O('sine', 380, 700, 0.19, 0.06, 0.25, { a: 0.002 }), O('sine', 620, 1000, 0.25, 0.05, 0.2, { a: 0.002 })]],
+    brush_pick: [0.661, { var: 50, cd: 60 }, () => [N('white', 0, 0.04, 0.4, 'bandpass', 900, 0, 1.3, { a: 0.002 }), V('koto', 67, 0.03, 0.4, 0.4), N('white', 0.02, 0.12, 0.15, 'bandpass', 2500, 1800, 1, { a: 0.03 })]],
+    brush_use: [0.832, { var: 40, cd: 80 }, () => [N('white', 0, 0.32, 0.45, 'bandpass', 900, 3200, 1.1, { a: 0.06 }), V('koto', 74, 0.05, 0.4, 0.45), V('koto', 79, 0.1, 0.4, 0.4), V('koto', 86, 0.16, 0.5, 0.45)]],
+    step: [0.365, { var: 120, cd: 70, pri: 0 }, () => [N('white', 0, 0.05, 0.5, 'lowpass', 700, 300, 0.8, { a: 0.002 }), N('white', 0, 0.015, 0.3, 'bandpass', 2000, 0, 1.2, { a: 0.001 })]],
+    reveal_landmark: [1.058, { var: 20, duck: 500, pri: 2 }, () => [V('rin', 74, 0, 0.5, 0.5), V('rin', 81, 0.22, 0.5, 0.42), shimmer(0, 0.8, 0.12, 2500, 4500), V('koto', 93, 0.4, 0.7, 0.4)]],
+    ink_gain: [0.392, { var: 60, cd: 60 }, () => [O('sine', 600, 1400, 0, 0.09, 0.5, { a: 0.002 }), O('sine', 900, 1800, 0.09, 0.08, 0.3, { a: 0.002 }), N('white', 0, 0.15, 0.12, 'bandpass', 4500, 0, 1, { a: 0.01 })]],
+    well: [0.595, { var: 30, cd: 100 }, () => [0, 0.1, 0.17, 0.26].map((t, i) => O('sine', 300 + i * 40, 800 + i * 60, t, 0.07, 0.4, { a: 0.003 })).concat([N('white', 0, 0.6, 0.2, 'lowpass', 1500, 600, 0.8, { a: 0.1 }), V('rin', 86, 0.3, 0.4, 0.3)])],
     // ---- economy and treasure
-    gold: [0.479, { var: 120, cd: 40 }, () => [FM(2637, 2.76, 2.5, 0, 0.28, 0.4), FM(3520, 2.76, 2.2, 0.055, 0.3, 0.34), N('white', 0, 0.01, 0.3, 'highpass', 6000, 0, 0.8, { a: 0.001 })]],
-    buy: [0.512, { var: 40, cd: 80 }, () => [FM(2637, 2.76, 2.5, 0, 0.26, 0.38), FM(3136, 2.76, 2.5, 0.06, 0.26, 0.34), FM(4186, 2.76, 2.2, 0.12, 0.32, 0.3), V('rin', 88, 0.14, 0.4, 0.3)]],
-    chest_open: [0.635, { var: 20, duck: 700, pri: 3 }, () => [O('sawtooth', 90, 180, 0, 0.32, 0.3, { lp: { f: 500, f2: 900 }, vib: { r: 22, d: 120 }, a: 0.05 }), N('white', 0.32, 0.02, 0.6, 'bandpass', 2200, 0, 1.3, { a: 0.001 }), O('sine', 330, 240, 0.32, 0.06, 0.4, { a: 0.002 }), V('koto', 81, 0.42, 0.7, 0.45), V('koto', 86, 0.5, 0.7, 0.45), V('koto', 93, 0.58, 0.8, 0.5), V('rin', 98, 0.6, 0.5, 0.32), shimmer(0.4, 0.8, 0.12, 5000, 8000)]],
-    relic_get: [0.623, { var: 15, duck: 1000, pri: 3 }, () => [V('taiko', 38, 0, 0.5, 0.6)].concat(run([62, 69, 74, 81], 0, 0.12, 0.7, 0.55), [V('koto', 86, 0.5, 1.2, 0.65), V('rin', 74, 0.5, 0.8, 0.5), swell(0, 0.8, 0.16, 300, 1600), shimmer(0.5, 0.9, 0.14, 5000, 8000)])],
+    gold: [0.38, { var: 120, cd: 40 }, () => [FM(2637, 2.76, 2.5, 0, 0.28, 0.4), FM(3520, 2.76, 2.2, 0.055, 0.3, 0.34), N('white', 0, 0.01, 0.3, 'highpass', 6000, 0, 0.8, { a: 0.001 })]],
+    buy: [0.616, { var: 40, cd: 80 }, () => [FM(2637, 2.76, 2.5, 0, 0.26, 0.38), FM(3136, 2.76, 2.5, 0.06, 0.26, 0.34), FM(4186, 2.76, 2.2, 0.12, 0.32, 0.3), V('rin', 88, 0.14, 0.4, 0.3)]],
+    chest_open: [0.721, { var: 20, duck: 700, pri: 3 }, () => [O('sawtooth', 90, 180, 0, 0.32, 0.3, { lp: { f: 500, f2: 900 }, vib: { r: 22, d: 120 }, a: 0.05 }), N('white', 0.32, 0.02, 0.6, 'bandpass', 2200, 0, 1.3, { a: 0.001 }), O('sine', 330, 240, 0.32, 0.06, 0.4, { a: 0.002 }), V('koto', 81, 0.42, 0.7, 0.45), V('koto', 86, 0.5, 0.7, 0.45), V('koto', 93, 0.58, 0.8, 0.5), V('rin', 98, 0.6, 0.5, 0.32), shimmer(0.4, 0.8, 0.12, 5000, 8000)]],
+    relic_get: [0.775, { var: 15, duck: 1000, pri: 3 }, () => [V('taiko', 38, 0, 0.5, 0.6)].concat(run([62, 69, 74, 81], 0, 0.12, 0.7, 0.55), [V('koto', 86, 0.5, 1.2, 0.65), V('rin', 74, 0.5, 0.8, 0.5), swell(0, 0.8, 0.16, 300, 1600), shimmer(0.5, 0.9, 0.14, 5000, 8000)])],
     gem_socket: [0.575, { var: 30, cd: 60 }, () => [N('white', 0, 0.012, 0.5, 'bandpass', 3200, 0, 1.4, { a: 0.001 }), FM(3136, 2.76, 2.2, 0.02, 0.3, 0.35), FM(4699, 2.76, 2.0, 0.08, 0.4, 0.3), O('sine', 1760, 0, 0.02, 0.2, 0.15, { a: 0.002 })]],
-    gem_get: [0.477, { var: 30, cd: 80 }, () => run([93, 86, 93, 98], 0, 0.07, 0.5, 0.45).concat([shimmer(0, 0.5, 0.12, 5500, 8500)])],
-    forge_hit: [0.447, { var: 40, duck: 200, cd: 60, pri: 2 }, () => clang(0, 900, 0.5, 0.5).concat([O('sine', 140, 70, 0, 0.16, 0.8, { a: 0.001 }), FM(600, 2.7, 2.0, 0, 0.4, 0.2)])],
+    gem_get: [0.658, { var: 30, cd: 80 }, () => run([93, 86, 93, 98], 0, 0.07, 0.5, 0.45).concat([shimmer(0, 0.5, 0.12, 5500, 8500)])],
+    forge_hit: [0.328, { var: 40, duck: 200, cd: 60, pri: 2 }, () => clang(0, 900, 0.5, 0.5).concat([O('sine', 140, 70, 0, 0.16, 0.8, { a: 0.001 }), FM(600, 2.7, 2.0, 0, 0.4, 0.2)])],
     upgrade: [0.528, { var: 20, duck: 600, pri: 3 }, () => clang(0, 900, 0.42, 0.45).concat(run([74, 79, 86, 93], 0.18, 0.09, 0.6, 0.5), [V('rin', 91, 0.4, 0.5, 0.35), shimmer(0.2, 0.7, 0.14, 5000, 8500)])],
-    camp_fire: [0.668, { var: 30, cd: 200 }, () => pops(61, 12, 0, 0.85, 0.3, 1800, 5500).concat([N('white', 0, 0.9, 0.25, 'lowpass', 500, 180, 0.8, { a: 0.2 }), N('white', 0, 0.8, 0.18, 'bandpass', 900, 600, 0.8, { a: 0.15 })])],
-    rest: [0.75, { var: 20, duck: 900, pri: 2 }, () => [V('koto', 69, 0, 0.6, 0.4), V('koto', 67, 0.35, 0.6, 0.4), V('koto', 62, 0.7, 0.9, 0.4), swell(0, 1.4, 0.12, 800, 2400)]],
-    event_open: [0.589, { var: 30, cd: 200 }, () => [V('rin', 86, 0, 0.5, 0.35), V('rin', 91, 0.08, 0.5, 0.3), V('rin', 98, 0.19, 0.5, 0.28), N('white', 0, 0.9, 0.16, 'bandpass', 900, 1500, 0.8, { a: 0.3 }), O('sine', 147, 0, 0, 0.9, 0.18, { a: 0.3 })]],
-    choice: [0.554, { var: 40, cd: 60 }, () => [V('hyoshigi', 60, 0, 0.05, 0.5), V('koto', 74, 0.02, 0.5, 0.45)]],
+    camp_fire: [0.708, { var: 30, cd: 200 }, () => pops(61, 12, 0, 0.85, 0.3, 1800, 5500).concat([N('white', 0, 0.9, 0.25, 'lowpass', 500, 180, 0.8, { a: 0.2 }), N('white', 0, 0.8, 0.18, 'bandpass', 900, 600, 0.8, { a: 0.15 })])],
+    rest: [0.989, { var: 20, duck: 900, pri: 2 }, () => [V('koto', 69, 0, 0.6, 0.4), V('koto', 67, 0.35, 0.6, 0.4), V('koto', 62, 0.7, 0.9, 0.4), swell(0, 1.4, 0.12, 800, 2400)]],
+    event_open: [0.813, { var: 30, cd: 200 }, () => [V('rin', 86, 0, 0.5, 0.35), V('rin', 91, 0.08, 0.5, 0.3), V('rin', 98, 0.19, 0.5, 0.28), N('white', 0, 0.9, 0.16, 'bandpass', 900, 1500, 0.8, { a: 0.3 }), O('sine', 147, 0, 0, 0.9, 0.18, { a: 0.3 })]],
+    choice: [0.629, { var: 40, cd: 60 }, () => [V('hyoshigi', 60, 0, 0.05, 0.5), V('koto', 74, 0.02, 0.5, 0.45)]],
     // ---- fanfares and progress
-    page_turn: [0.55, { var: 60, cd: 120 }, () => [N('white', 0, 0.22, 0.5, 'bandpass', 3200, 900, 0.8, { a: 0.05 }), N('white', 0.14, 0.18, 0.35, 'bandpass', 2000, 700, 0.9, { a: 0.02 }), N('white', 0.3, 0.06, 0.2, 'highpass', 4000, 0, 0.8, { a: 0.002 })]],
+    page_turn: [0.654, { var: 60, cd: 120 }, () => [N('white', 0, 0.22, 0.5, 'bandpass', 3200, 900, 0.8, { a: 0.05 }), N('white', 0.14, 0.18, 0.35, 'bandpass', 2000, 700, 0.9, { a: 0.02 }), N('white', 0.3, 0.06, 0.2, 'highpass', 4000, 0, 0.8, { a: 0.002 })]],
     level_up: [0.733, { var: 15, duck: 800, pri: 3 }, () => run([62, 69, 74, 81], 0, 0.1, 0.7, 0.55).concat([V('rin', 86, 0.36, 0.6, 0.5), V('taiko', 38, 0, 0.5, 0.7), shimmer(0.3, 0.9, 0.14, 5000, 8500)])],
-    victory: [0.461, { var: 10, duck: 1500, pri: 3 }, () => [V('taiko', 38, 0, 0.8, 0.9), V('taiko', 38, 0.2, 0.8, 0.9)].concat(run([62, 69, 74, 79, 86], 0.4, 0.09, 0.7, 0.55), [V('rin', 74, 0.8, 0.8, 0.5), swell(0.2, 0.9, 0.14, 400, 1800)])],
-    defeat: [0.661, { var: 10, duck: 1500, pri: 3 }, () => [V('taiko', 33, 0, 1.0, 1.0), V('koto', 62, 0.2, 1.0, 0.5), V('koto', 57, 0.55, 1.0, 0.5), V('koto', 53, 0.95, 1.4, 0.5), V('biwa', 38, 0.3, 1.0, 0.7), swell(0.3, 1.4, 0.1, 200, 800)]],
-    achievement: [0.775, { var: 15, duck: 800, pri: 3 }, () => [V('rin', 86, 0, 0.5, 0.5), V('rin', 93, 0.12, 0.5, 0.45), V('koto', 93, 0.24, 0.8, 0.5), shimmer(0.1, 0.8, 0.14, 5000, 8500)]],
-    unlock: [0.536, { var: 20, pri: 2 }, () => [N('white', 0, 0.015, 0.5, 'bandpass', 2800, 0, 1.3, { a: 0.001 }), V('koto', 79, 0.05, 0.5, 0.5), V('koto', 91, 0.14, 0.6, 0.5), FM(3136, 2.76, 2, 0.14, 0.4, 0.25), shimmer(0.1, 0.6, 0.12, 5000, 8000)]],
-    save: [0.348, { var: 20, cd: 300, pri: 0 }, () => [V('koto', 74, 0, 0.4, 0.35), V('koto', 81, 0.08, 0.5, 0.35), N('white', 0, 0.015, 0.2, 'bandpass', 3000, 0, 1.3, { a: 0.001 })]],
+    victory: [0.7, { var: 10, duck: 1500, pri: 3 }, () => [V('taiko', 38, 0, 0.8, 0.9), V('taiko', 38, 0.2, 0.8, 0.9)].concat(run([62, 69, 74, 79, 86], 0.4, 0.09, 0.7, 0.55), [V('rin', 74, 0.8, 0.8, 0.5), swell(0.2, 0.9, 0.14, 400, 1800)])],
+    defeat: [0.582, { var: 10, duck: 1500, pri: 3 }, () => [V('taiko', 33, 0, 1.0, 1.0), V('koto', 62, 0.2, 1.0, 0.5), V('koto', 57, 0.55, 1.0, 0.5), V('koto', 53, 0.95, 1.4, 0.5), V('biwa', 38, 0.3, 1.0, 0.7), swell(0.3, 1.4, 0.1, 200, 800)]],
+    achievement: [0.87, { var: 15, duck: 800, pri: 3 }, () => [V('rin', 86, 0, 0.5, 0.5), V('rin', 93, 0.12, 0.5, 0.45), V('koto', 93, 0.24, 0.8, 0.5), shimmer(0.1, 0.8, 0.14, 5000, 8500)]],
+    unlock: [0.637, { var: 20, pri: 2 }, () => [N('white', 0, 0.015, 0.5, 'bandpass', 2800, 0, 1.3, { a: 0.001 }), V('koto', 79, 0.05, 0.5, 0.5), V('koto', 91, 0.14, 0.6, 0.5), FM(3136, 2.76, 2, 0.14, 0.4, 0.25), shimmer(0.1, 0.6, 0.12, 5000, 8000)]],
+    save: [0.428, { var: 20, cd: 300, pri: 0 }, () => [V('koto', 74, 0, 0.4, 0.35), V('koto', 81, 0.08, 0.5, 0.35), N('white', 0, 0.015, 0.2, 'bandpass', 3000, 0, 1.3, { a: 0.001 })]],
   };
 
   // ---- recipe finishing: defaults, validation-friendly numbers, total length
@@ -1082,13 +1082,17 @@ const AUDIO = (() => {
   }
 
   // ---- envelopes and small helpers
+  // Envelope gains start at 0, not at the node default of 1: a source may begin one sample before its first automation event
+  // (float rounding of the start time), and that sample would otherwise play at full scale as a click.
   function decayEnv(p, t, peak, a, decay) {
+    p.setValueAtTime(0, 0);
     p.setValueAtTime(EPS, t);
     p.linearRampToValueAtTime(Math.max(EPS * 2, peak), t + a);
     p.exponentialRampToValueAtTime(EPS, t + a + decay);
     return t + a + decay;
   }
   function holdEnv(p, t, peak, a, dur, rel) {
+    p.setValueAtTime(0, 0);
     p.setValueAtTime(EPS, t);
     p.linearRampToValueAtTime(Math.max(EPS * 2, peak), t + a);
     const h = Math.max(t + a, t + dur);
@@ -1185,7 +1189,7 @@ const AUDIO = (() => {
     go(o1, t, end + 0.05); go(o2, t, end + 0.05); go(o3, t, end + 0.05); go(lfo, t, end + 0.05);
     // breath: pink noise through a band around the pitch, loud in the attack and settling
     const nz = noiseSrc(ctx, 'pink', t, dur + rel, n.r), bp = filt(ctx, 'bandpass', f * 1.6, 3.5), ng = ctx.createGain();
-    ng.gain.setValueAtTime(EPS, t); ng.gain.linearRampToValueAtTime(0.3 * v, t + a * 0.6);
+    ng.gain.setValueAtTime(0, 0); ng.gain.setValueAtTime(EPS, t); ng.gain.linearRampToValueAtTime(0.3 * v, t + a * 0.6);
     ng.gain.exponentialRampToValueAtTime(0.09 * v, t + a + 0.15);
     const h = Math.max(t + a + 0.16, t + dur);
     ng.gain.setValueAtTime(0.09 * v, h); ng.gain.exponentialRampToValueAtTime(EPS, h + rel);
@@ -1210,7 +1214,7 @@ const AUDIO = (() => {
     o.connect(g); g.connect(out); go(o, t, end + 0.03);
     if (f >= 45) {
       const s = oscAt(ctx, 'sine', f, t), sg = ctx.createGain();
-      const se = decayEnv(sg.gain, t, (big ? 0.5 : 0.32) * v, 0.004, decay * 0.85);
+      const se = decayEnv(sg.gain, t, (big ? 0.35 : 0.18) * v, 0.004, decay * 0.85);
       s.connect(sg); sg.connect(out); go(s, t, se + 0.03);
     }
     const nz = noiseSrc(ctx, 'white', t, 0.09, n.r), bp = filt(ctx, 'bandpass', 1600, 0.9), ng = ctx.createGain();
@@ -1345,12 +1349,13 @@ const AUDIO = (() => {
 
   // ---- the master chain: [music bus -> duck] and [sfx bus] -> master -> glue -> limiter -> soft clip -> out, plus a small hall
   const taper = (v) => Math.pow(clamp(v, 0, 1), TAPER);
-  // unity gain below the knee, then a tanh shoulder that never passes the ceiling
+  // Unity gain below the knee, then a tanh shoulder that saturates towards the ceiling. The shaper sits between a x0.5 and a x2
+  // gain, so its curve (defined on -1..1) describes the signal range -2..+2: an overshoot is squeezed, not chopped at full scale.
   function softClipCurve() {
     const n = 2049, c = new Float32Array(n), knee = 0.6, ceil = 0.98;
     for (let i = 0; i < n; i++) {
-      const x = (i / (n - 1)) * 2 - 1, a = Math.abs(x);
-      c[i] = Math.sign(x) * (a <= knee ? a : knee + (ceil - knee) * Math.tanh((a - knee) / (ceil - knee)));
+      const x = ((i / (n - 1)) * 2 - 1) * 2, a = Math.abs(x);
+      c[i] = Math.sign(x) * (a <= knee ? a : knee + (ceil - knee) * Math.tanh((a - knee) / (ceil - knee))) / 2;
     }
     return c;
   }
@@ -1367,11 +1372,17 @@ const AUDIO = (() => {
     g.limiter = opt(() => { const c = ctx.createDynamicsCompressor(); c.threshold.value = -5; c.knee.value = 0; c.ratio.value = 20; c.attack.value = 0.002; c.release.value = 0.09; return c; });
     if (g.limiter) link(g.limiter);
     g.shaper = opt(() => { const w = ctx.createWaveShaper(); w.curve = softClipCurve(); w.oversample = '2x'; return w; });
-    if (g.shaper) link(g.shaper);
+    if (g.shaper) { g.clipIn = link(gainOf(ctx, 0.5)); link(g.shaper); g.clipOut = link(gainOf(ctx, 2)); }
     g.out = gainOf(ctx, 0.92);
     link(g.out); g.out.connect(ctx.destination);
     g.musicBus = ctx.createGain(); g.duck = gainOf(ctx, 1); g.musicOut = gainOf(ctx, 1);
-    g.musicBus.connect(g.duck); g.duck.connect(g.musicOut); g.musicOut.connect(g.master);
+    // the score is high-passed below 55 Hz (nothing there is audible, it only eats headroom) and given a gentle shelf for clarity
+    let mh = g.musicBus;
+    g.musicHp = opt(() => filt(ctx, 'highpass', 55, 0.7));
+    if (g.musicHp) { mh.connect(g.musicHp); mh = g.musicHp; }
+    g.musicShelf = opt(() => { const f = filt(ctx, 'highshelf', 3000, 0.7); f.gain.value = 2.5; return f; });
+    if (g.musicShelf) { mh.connect(g.musicShelf); mh = g.musicShelf; }
+    mh.connect(g.duck); g.duck.connect(g.musicOut); g.musicOut.connect(g.master);
     g.sfxBus = ctx.createGain(); g.sfxBus.connect(g.master);
     g.verb = null;
     try {
@@ -1556,6 +1567,9 @@ const AUDIO = (() => {
     if (!S.hooked && typeof document !== 'undefined' && document.addEventListener) {
       S.hooked = true;
       document.addEventListener('visibilitychange', () => { S.susp.hidden = !!document.hidden; applySuspend(); });
+      // iOS Safari only lets a click, key press or pointerup wake a context (not pointerdown): keep nudging it until it runs
+      const wake = () => { const c = S.ctx; if (c && !S.susp.user && !S.susp.hidden && c.state !== 'running' && c.state !== 'closed') safe(c.resume()); };
+      for (const ev of ['click', 'keydown', 'pointerup']) document.addEventListener(ev, wake, true);
     }
     if (ctx.state !== 'running') safe(ctx.resume());
     startTimer();

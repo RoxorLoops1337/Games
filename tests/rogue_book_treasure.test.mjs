@@ -20,10 +20,11 @@
 //   8 run hooks   when js/run.js and js/map.js exist: pickup, chapter start, paint, rest, shop and fight won hooks through RUN.
 //
 // ROUGH VALUE MODEL (block 4). Points are "damage equivalents" for one play of the card the gem sits on:
-//   flat damage 1.3 per point (a card averages a bit more than one hit), Block 1, healing 1.4 per HP (HP lasts across fights), an extra
+//   flat damage 1.3 per point (a card averages a bit more than one hit), Block 1, healing 1.4 per HP (HP lasts across fights; a gem with both
+//   flat Block and flat heal counts the better of the two), an extra
 //   hit 6, one Energy 8 (cost -1 is worth 6.5: it is ignored on 0 cost and X cards), a card drawn 3.5, Might 4, Thorns 2.5, Dodge 3.5,
 //   Ritual 10, gold 0.7, Ink 3, a pick from the discard pile 5, a resource point 3 (a list of conditions counts as its best branch), Retain 2.5, losing Exhaust 3, Poison 1.8; a splash
-//   op counts x1.8 (two victims), life steal adds 0.7 per point; a row gated gem is worth 75 percent of its raw value.
+//   op counts x1.8 (two victims), Block for both heroes x2, life steal adds 0.7 per point; a row gated gem is worth 75 percent of its raw value.
 //   BANDS: tier 1 in [2, 5.5], tier 2 in [5, 10.5], tier 3 in [6.5, 16]; per colour the tier means must climb by at least 1.4 a tier.
 //   The model is deliberately crude: it exists to catch a typo that makes a gem twice as strong or a tier that is not an upgrade.
 import fs from 'node:fs';
@@ -222,7 +223,7 @@ const MODWORD = {
 const ROWWORD = { dmgAdd: /damage/i, blockAdd: /block/i, startBlock: /block/i, regen: /regen/i, thorns: /thorns/i, drawAdd: /draw/i };
 const TRIG = {
   combatStart: /start(s)? (of )?(each )?(combat|fight)/i, combatEnd: /end of (each|the) (combat|fight)/i,
-  turnStart: /start of (your|each|every) turn|turn start|first turn|\d(st|nd|rd|th) turn|each turn|every turn/i, turnEnd: /end of (your|each) turn/i,
+  turnStart: /start of (your|each|every) turn|turn start|first turn|\d(st|nd|rd|th) turn|each turn|every turn|\ba turn\b/i, turnEnd: /end of (your|each) turn/i,
   onPlay: /\bplay(s)?\b/i, onDamaged: /\bhit\b/i, onKill: /defeat|kill/i, onSwap: /swap/i, onHeroDown: /falls?\b/i, onShuffle: /reshuffle/i, onExhaust: /exhaust/i,
   onPickup: /when you take this|taking this/i, onChapterStart: /chapter/i, onRest: /rest/i, onPaint: /paint/i, onFightWon: /fight|winning/i, onShopEnter: /shop/i,
 };
@@ -284,6 +285,13 @@ t.test('text agrees with the data: every number, noun, status, target and trigge
     s.nums.forEach((x) => t.ok(mentions(r.text, x.n), `${r.id}: "${r.text}" must mention ${x.n} (${x.why})`));
     s.words.forEach((x) => t.ok(x.re.test(r.text), `${r.id}: "${r.text}" must match ${x.re} (${x.why})`));
     if (r.hero) t.ok(r.text.indexOf(DATA.heroes[r.hero].name) >= 0, `${r.id}: names ${r.hero}`);
+    // the second, independent path: what DATA.opsText prints for the hook bodies, number by number
+    if (HAS_TEXT && typeof DATA.opsText === 'function') hooksOf(r).forEach((h) => {
+      const run = L.runHooks.indexOf(h.on) >= 0;
+      const out = DATA.opsText(h.fx, { run });
+      t.ok(out.length > 0 && !/undefined|NaN|\[object/.test(out), `${r.id}: opsText reads the ${h.on} body: ${out}`);
+      (out.match(/\d+/g) || []).map(Number).filter((n) => n >= 2).forEach((n) => t.ok(mentions(r.text, n), `${r.id}: opsText says "${out}", so the text "${r.text}" must mention ${n}`));
+    });
   });
 });
 
@@ -311,7 +319,7 @@ t.test('text: the machine summaries themselves are sane (DATA.hookText reads eve
   t.eq(say('blood_moon_vow'), 'At the start of your turn, both heroes lose 1 HP.', 'blood_moon_vow');
   t.eq(say('apothecary_jar'), 'At the end of combat, heal both heroes for 3 HP.', 'apothecary_jar is a combatEnd hook');
   t.eq(say('longbow_of_reach'), 'Up to 2 times per turn, whenever you play an Attack, Back: deal 3 damage to the same target.', 'longbow_of_reach reads the row');
-  t.eq(JSON.stringify(DATA.relics.formation_scroll.rows), '{"front":{"startBlock":3},"back":{"blockAdd":2}}', 'formation_scroll rows');
+  t.eq(JSON.stringify(DATA.relics.formation_scroll.rows), '{"front":{"startBlock":3},"back":{"blockAdd":1}}', 'formation_scroll rows');
   t.eq(JSON.stringify(DATA.relics.war_banner.rows), '{"front":{"dmgAdd":1}}', 'war_banner rows');
 });
 
@@ -374,7 +382,7 @@ function valueOfOps(ops) {
   (ops || []).forEach((o) => {
     const n = typeof o.n === 'number' ? o.n : 0;
     if (o.op === 'dmg') { v += n * (o.tgt === 'all' ? 1.8 : 1) + (o.lifesteal ? 0.7 * n : 0); }
-    else if (o.op === 'block') v += n;
+    else if (o.op === 'block') v += n * (o.tgt === 'both' ? 2 : 1);
     else if (o.op === 'heal') v += n * 1.4 * (o.tgt === 'both' ? 2 : 1);
     else if (o.op === 'draw') v += 3.5 * n;
     else if (o.op === 'energy') v += 8 * n;
@@ -390,8 +398,7 @@ function gemValue(g) {
   const m = g.mod;
   let v = 0;
   if (m.dmg) v += 1.3 * m.dmg * (m.hits ? 2 : 1);
-  if (m.block) v += m.block;
-  if (m.heal) v += 1.4 * m.heal;
+  if (m.block || m.heal) v += Math.max(m.block || 0, 1.4 * (m.heal || 0));            // a card usually has one of the two ops: the gem is worth the better fit
   if (m.hits) v += 6 * m.hits;
   if (m.cost) v += 6.5 * -m.cost;
   if (m.draw) v += 3.5 * m.draw;
@@ -429,7 +436,7 @@ t.test('gem text: generated text is readable for every gem, and a hand written t
   t.deep(gems.filter((g) => g.text).map((g) => g.id), ['heartflame_topaz'], 'only the four way resource gem has hand written text');
   const say = (id) => DATA.gemText(id);
   t.eq(say('ember_ruby'), '+2 damage', 'ember_ruby'); t.eq(say('vanguard_garnet'), 'Front row: +3 damage', 'vanguard_garnet'); t.eq(say('twinfang_spinel'), '+1 hit', 'twinfang_spinel');
-  t.eq(say('kirin_jasper'), 'Front row: +2 damage, +1 hit', 'kirin_jasper'); t.eq(say('tidewatch_sapphire'), '+3 Block', 'tidewatch_sapphire');
+  t.eq(say('kirin_jasper'), 'Front row: +3 damage, +1 hit', 'kirin_jasper'); t.eq(say('tidewatch_sapphire'), '+3 Block, +2 healing', 'tidewatch_sapphire'); t.eq(say('sanctum_iolite'), 'Both heroes gain 6 Block', 'sanctum_iolite'); t.eq(say('ironbark_sapphire'), '+3 Block, gain 4 Thorns', 'ironbark_sapphire');
   t.eq(say('featherlight_emerald'), 'Costs 1 less', 'featherlight_emerald'); t.eq(say('wellspring_tourmaline'), 'Gain 1 Energy', 'wellspring_tourmaline');
   t.eq(say('dusklight_amber'), 'Back row: draw 2 cards, gain 1 Dodge', 'dusklight_amber'); t.eq(say('sunfall_ruby'), 'Deal 6 damage to all enemies', 'sunfall_ruby');
 });
@@ -445,6 +452,7 @@ function addProbes(D, hero) {
   defs[`zz_${hero}_zero`] = PROBE(hero, { name: 'Probe Free', cost: 0, fx: [{ op: 'dmg', n: 3, tgt: 'enemy' }], up: { fx: [{ op: 'dmg', n: 4, tgt: 'enemy' }] }, kw: ['innate'] });
   defs[`zz_${hero}_x`] = PROBE(hero, { name: 'Probe X', cost: 'X', fx: [{ op: 'dmg', n: { per: 'X', mul: 4 }, tgt: 'enemy' }], up: { fx: [{ op: 'dmg', n: { per: 'X', mul: 5 }, tgt: 'enemy' }] }, kw: ['innate'] });
   defs[`zz_${hero}_exhaust`] = PROBE(hero, { name: 'Probe Exhaust', kw: ['innate', 'exhaust'], fx: [{ op: 'dmg', n: 6, tgt: 'enemy' }] });
+  defs[`zz_${hero}_heal`] = PROBE(hero, { name: 'Probe Heal', type: 'skill', fx: [{ op: 'heal', n: 5, tgt: 'self' }], up: { fx: [{ op: 'heal', n: 7, tgt: 'self' }] }, kw: ['innate'] });
   defs[`zz_${hero}_plain`] = PROBE(hero, { name: 'Probe Plain', fx: [{ op: 'dmg', n: 6, tgt: 'enemy' }] });          // not innate: filler that may or may not be drawn
   defs[`zz_${hero}_area`] = PROBE(hero, { name: 'Probe Area', fx: [{ op: 'dmg', n: 4, tgt: 'all' }], kw: ['innate'] });
   defs[`zz_${hero}_two`] = PROBE(hero, { name: 'Probe Two Gems', slots: ['any', 'any'], fx: [{ op: 'dmg', n: 5, tgt: 'enemy' }] });      // deck instances carry two gems
@@ -472,7 +480,7 @@ t.test('gems on cards: a flat dmg or hits gem does nothing on a skill or a power
     t.ok(!active(g, 'skill', 'front') && !active(g, 'power', 'front'), `${g} does nothing on a skill or a power even in front`);
     t.ok(resolve(g, 'attack', 'back').gemNotes.length === 1 && resolve(g, 'attack', 'back').gemNotes[0].cond === 'front', `${g}: the back row card lists the gem as a front row note`);
   });
-  t.ok(active('tidewatch_sapphire', 'skill') && !active('tidewatch_sapphire', 'attack') && !active('tidewatch_sapphire', 'power'), 'flat Block works on a Block skill only (hook bodies do not count)');
+  t.ok(active('tidewatch_sapphire', 'skill') && active('tidewatch_sapphire', 'heal') && !active('tidewatch_sapphire', 'attack') && !active('tidewatch_sapphire', 'power'), 'flat Block and heal work on a Block skill and a healing skill only (hook bodies do not count)');
   t.ok(active('twinfang_spinel', 'zero') && active('ember_ruby', 'x'), 'flat gems work on free and X attacks');
 });
 
@@ -481,17 +489,17 @@ t.test('gems on cards: the numbers land on the ops (dmg plus, hits plus, Block p
   t.eq(resolve('ember_ruby', 'attack').fx[0].plus, 2, 'ember_ruby adds 2 to the hit');
   t.eq(resolve('twinfang_spinel', 'attack').fx[0].hitsPlus, 1, 'twinfang_spinel adds a hit');
   t.eq(resolve('vanguard_garnet', 'attack', 'front').fx[0].plus, 3, 'vanguard_garnet adds 3 in front');
-  const k = resolve('kirin_jasper', 'attack', 'front').fx[0]; t.ok(k.plus === 2 && k.hitsPlus === 1, 'kirin_jasper adds 2 damage and a hit in front');
-  t.eq(resolve('tidewatch_sapphire', 'skill').fx[0].plus, 3, 'tidewatch_sapphire adds 3 Block');
+  const k = resolve('kirin_jasper', 'attack', 'front').fx[0]; t.ok(k.plus === 3 && k.hitsPlus === 1, 'kirin_jasper adds 3 damage and a hit in front');
+  t.eq(resolve('tidewatch_sapphire', 'skill').fx[0].plus, 3, 'tidewatch_sapphire adds 3 Block'); t.eq(resolve('tidewatch_sapphire', 'heal').fx[0].plus, 2, 'tidewatch_sapphire adds 2 healing');
   const mir = resolve('mirrorlake_aquamarine', 'skill'); t.ok(mir.fx[0].plus === 2 && mir.fx.some((o) => o.op === 'status' && o.s === 'dodge' && o.n === 1), 'mirrorlake_aquamarine: +2 Block and a Dodge');
-  const iron = resolve('ironbark_sapphire', 'skill'); t.ok(iron.fx[0].plus === 2 && iron.fx.some((o) => o.op === 'status' && o.s === 'thorns' && o.n === 3), 'ironbark_sapphire: +2 Block and 3 Thorns');
-  t.ok(resolve('sanctum_iolite', 'skill').fx.some((o) => o.op === 'block' && o.tgt === 'ally' && o.n === 8), 'sanctum_iolite gives the ally 8 Block');
+  const iron = resolve('ironbark_sapphire', 'skill'); t.ok(iron.fx[0].plus === 3 && iron.fx.some((o) => o.op === 'status' && o.s === 'thorns' && o.n === 4), 'ironbark_sapphire: +3 Block and 4 Thorns');
+  t.ok(resolve('sanctum_iolite', 'skill').fx.some((o) => o.op === 'block' && o.tgt === 'both' && o.n === 6), 'sanctum_iolite shields both heroes for 6');
   t.ok(resolve('sunfall_ruby', 'attack').fx.some((o) => o.op === 'dmg' && o.tgt === 'all' && o.n === 6), 'sunfall_ruby splashes 6 to all');
   t.ok(resolve('bloodmoon_carnelian', 'attack').fx.some((o) => o.op === 'dmg' && o.lifesteal), 'bloodmoon_carnelian appends a life stealing bite');
   DATA.add('cards', { zz_hanae_triple: Object.assign({}, DATA.cards.zz_hanae_skill, { id: undefined, name: 'Probe Triple', slots: ['any', 'any', 'any'] }) });
   const stack = DATA.resolveCard({ id: 'zz_hanae_triple', up: 0, gems: ['tidewatch_sapphire', 'sanctum_iolite', 'mirrorlake_aquamarine'] });
   t.eq(stack.fx[0].plus, 5, 'three gems on a three slot card stack: +3 and +2 Block on the card');
-  t.ok(stack.fx.some((o) => o.op === 'block' && o.tgt === 'ally' && o.plus === 5) && stack.fx.some((o) => o.op === 'status' && o.s === 'dodge'), 'and the flat Block also lifts the ally Block another gem appended');
+  t.ok(stack.fx.some((o) => o.op === 'block' && o.tgt === 'both' && o.plus === 5) && stack.fx.some((o) => o.op === 'status' && o.s === 'dodge'), 'and the flat Block also lifts the party Block another gem appended');
 });
 
 t.test('gems on cards: green and gold gems work on an attack, a skill and a power alike', () => {
@@ -573,7 +581,8 @@ else if (!exists('data_text.js')) skipWhy = 'js/data_text.js is missing';
 else {
   try { E = boot({ only: ['combat'] }); } catch (e) { skipWhy = 'combat.js did not load: ' + String(e && e.message).split('\n')[0]; }
 }
-if (E && (E._errors.length || !E.COMBAT || !E.DATA.relics.brass_lantern || !E.DATA.gems.ember_ruby || !E.DATA.cards.curse_regret)) { skipWhy = 'the engine boot is incomplete: ' + JSON.stringify(E._errors.map((x) => x.file + ' ' + x.message)); E = null; }
+const contentReady = (D) => !!(D.relics.brass_lantern && D.gems.ember_ruby && D.cards.curse_regret && D.cards.hanae_slash && D.cards.kuro_ink_bolt && D.cards.suzu_ofuda && D.cards.raiga_jab && D.enemies.kappa && D.enemies.oni_brute && D.enemies.boss_kuzunoha && D.enemies.bamboo_sprite && D.enemies.leaf_imp && D.enemies.paper_kodama && D.enemies.moss_guardian && D.enemies.oni_cub && D.enemies.karakasa);   // the peers' cards and enemies the scenarios lean on
+if (E && (E._errors.length || !E.COMBAT || !contentReady(E.DATA))) { skipWhy = 'the engine boot is incomplete: ' + JSON.stringify(E._errors.map((x) => x.file + ' ' + x.message)); E = null; }
 if (!E) console.log('treasure: engine tests skipped (' + skipWhy + ')');
 
 if (E) {
@@ -597,6 +606,26 @@ if (E) {
   const cardOf = (C, id) => C.hand.find((c) => c.id === id);
   const playAll = (C, id) => { const c = cardOf(C, id); const tg = C.needsTarget(c.uid) ? C.legalTargets(c.uid)[0] : undefined; return C.play(c.uid, tg); };
 
+  t.test('gems on the real cards: every gem works on nearly every real card whose slot takes it (the slot colour rules and the gems agree)', () => {
+    const cards = Object.values(ED.cards).filter((c) => c.rarity !== 'token' && !/^zz_/.test(c.id) && (c.slots || []).length);
+    if (cards.length < 100) { console.log('treasure: real card coverage skipped (only ' + cards.length + ' real cards with slots are loaded)'); return; }
+    const MIN = { ember_ruby: 0.8, vanguard_garnet: 0.8, kirin_jasper: 0.8, twinfang_spinel: 0.75, tidewatch_sapphire: 0.75, keepsake_peridot: 0.8, featherlight_emerald: 0.7 };
+    Object.values(ED.gems).forEach((g) => {
+      let n = 0, act = 0;
+      cards.forEach((c) => c.slots.forEach((slot, si) => {
+        if (slot !== g.color) return;                                                                 // prism slots are the player's free choice, so only count the dedicated colour slots
+        [0, 1].forEach((up) => { const r = ED.resolveCard({ id: c.id, up, gems: c.slots.map((_, i) => (i === si ? g.id : null)) }, { unit: { id: c.hero, row: g.mod.cond || 'front' } }); n++; if (r.gemActive[si]) act++; });
+      }));
+      t.ok(n >= 20, `${g.id}: at least 20 real card slots take it (${n})`);
+      t.ok(act / n >= (MIN[g.id] || 0.95), `${g.id}: works on ${act} of ${n} real card slots (${Math.round(100 * act / n)}%), needs ${Math.round(100 * (MIN[g.id] || 0.95))}%`);
+    });
+    // every power has a gold slot, and every gold gem does something on a power
+    Object.values(ED.cards).filter((c) => c.type === 'power' && !/^zz_/.test(c.id) && c.rarity !== 'token').forEach((c) => {
+      const si = c.slots.indexOf('gold');
+      Object.values(ED.gems).filter((g) => g.color === 'gold').forEach((g) => t.ok(ED.resolveCard({ id: c.id, up: 0, gems: c.slots.map((_, i) => (i === si ? g.id : null)) }, { unit: { id: c.hero, row: g.mod.cond || 'front' } }).gemActive[si], `${g.id} works on the power ${c.id}`));
+    });
+  });
+
   t.test('engine: every gem, played in a real combat, does what its text says', () => {
     const base = (probe, gem, o) => { const C = mk(Object.assign({ deck: [{ id: `zz_hanae_${probe}`, gems: gem ? [gem] : [] }, ...Array.from({ length: 8 }, () => 'zz_hanae_plain')], enemies: ['kappa'], hp: [50, 40] }, o)); return { C, ev: playAll(C, `zz_hanae_${probe}`) }; };
     const hits = (ev) => of(ev, 'hit', (e) => e.dst.kind === 'enemy');
@@ -609,15 +638,16 @@ if (E) {
     t.eq(hits(base('attack', 'twinfang_spinel').ev).length, hits(base('attack', null).ev).length + 1, 'twinfang_spinel: one more hit');
     { const r = base('attack', 'bloodmoon_carnelian'); t.eq(hits(r.ev).length, 2, 'bloodmoon_carnelian: an extra bite'); t.ok(of(r.ev, 'heal').length >= 1 && of(r.ev, 'heal')[0].amount > 0, 'bloodmoon_carnelian: and it heals the wounded attacker'); }
     { const r = base('attack', 'sunfall_ruby', { enemies: ['kappa', 'kappa', 'kappa'] }); t.eq(hits(r.ev).length, 4, 'sunfall_ruby: the strike plus 6 to each of the three enemies'); }
-    { const w = base('attack', 'kirin_jasper'); const n = base('attack', null); t.eq(hits(w.ev).length, hits(n.ev).length + 1, 'kirin_jasper: an extra hit in front'); t.eq(total(w.ev) - total(n.ev), 2 * (8 + 2) - 8, 'kirin_jasper: two hits of 6 + 2 row + 2 gem each, against one plain hit of 8'); }
+    { const w = base('attack', 'kirin_jasper'); const n = base('attack', null); t.eq(hits(w.ev).length, hits(n.ev).length + 1, 'kirin_jasper: an extra hit in front'); t.eq(total(w.ev) - total(n.ev), 2 * (8 + 3) - 8, 'kirin_jasper: two hits of 6 + 2 row + 3 gem each, against one plain hit of 8'); }
     // blue
     const blockOf = (ev) => of(ev, 'block', (e) => e.dst.id === 'hanae').reduce((s, e) => s + e.amount, 0);
     t.eq(blockOf(base('skill', 'tidewatch_sapphire').ev) - blockOf(base('skill', null).ev), 3, 'tidewatch_sapphire: +3 Block');
+    { const wounded = { hp: [40, 40] }; const a = base('heal', 'tidewatch_sapphire', wounded), b = base('heal', null, wounded); const amt = (r) => of(r.ev, 'heal').reduce((x, e) => x + e.amount, 0); t.eq(amt(a) - amt(b), 2, 'tidewatch_sapphire: +2 healing on a healing card'); }
     { const r = base('skill', 'thornwake_lapis'); t.ok(of(r.ev, 'status', (e) => e.s === 'thorns' && e.dst.id === 'hanae' && e.delta === 1).length === 1, 'thornwake_lapis: +1 Thorns'); }
     { const r = base('skill', 'mirrorlake_aquamarine'); t.eq(blockOf(r.ev), 7, 'mirrorlake_aquamarine: 5 + 2 Block'); t.ok(r.C.unit('hanae').st.dodge === 1, 'and a Dodge'); }
     { const r = base('skill', 'springwell_tanzanite'); t.eq(of(r.ev, 'heal').map((e) => e.dst.id).sort().join(), 'hanae,kuro', 'springwell_tanzanite: heals both heroes'); t.ok(of(r.ev, 'heal').every((e) => e.amount === 2), 'for 2 each'); }
-    { const r = base('skill', 'ironbark_sapphire'); t.eq(blockOf(r.ev), 7, 'ironbark_sapphire: +2 Block'); t.eq(r.C.unit('hanae').st.thorns >= 3, true, 'and 3 Thorns'); }
-    { const r = base('skill', 'sanctum_iolite'); t.eq(of(r.ev, 'block', (e) => e.dst.id === 'kuro').reduce((s, e) => s + e.amount, 0), 8, 'sanctum_iolite: 8 Block for the ally'); }
+    { const r = base('skill', 'ironbark_sapphire'); t.eq(blockOf(r.ev), 8, 'ironbark_sapphire: +3 Block'); t.eq(r.C.unit('hanae').st.thorns >= 4, true, 'and 4 Thorns'); }
+    { const r = base('skill', 'sanctum_iolite'); t.eq(of(r.ev, 'block', (e) => e.dst.id === 'kuro').reduce((s, e) => s + e.amount, 0), 6, 'sanctum_iolite: 6 Block for the ally'); t.eq(blockOf(r.ev), 5 + 6, 'sanctum_iolite: and 6 more for the hero who played it'); }
     // green
     { const r = base('attack', 'quickthought_emerald'); t.eq(of(r.ev, 'draw').reduce((s, e) => s + e.cards.length, 0), 1, 'quickthought_emerald: draws 1'); }
     { const C = mk({ deck: [{ id: 'zz_hanae_attack', gems: ['keepsake_peridot'] }, 'zz_hanae_skill', ...Array.from({ length: 8 }, () => 'zz_hanae_plain')], seed: 3 }); const gemmed = C.hand.find((c) => c.gems[0] === 'keepsake_peridot'); const other = C.hand.find((c) => c.id === 'zz_hanae_skill');
@@ -649,7 +679,7 @@ if (E) {
   t.test('engine: every gem in every slot of every probe card plays through a whole combat without throwing, and piles stay honest', () => {
     const probes = ['attack', 'skill', 'power', 'zero', 'x', 'exhaust', 'area'];
     let n = 0;
-    ED.gemPool ? Object.values(ED.gems).forEach((g) => probes.forEach((p, pi) => {
+    Object.values(ED.gems).forEach((g) => probes.forEach((p, pi) => {
       const deck = [{ id: `zz_hanae_${p}`, gems: [g.id] }, { id: `zz_hanae_${p}`, gems: [g.id] }, ...startersOf('hanae'), ...startersOf('kuro')];
       [0, 1].forEach((front) => {
         const s = COMBAT.simulate({ heroes: [{ id: 'hanae', hp: 76, maxHp: 76 }, { id: 'kuro', hp: 60, maxHp: 60 }], frontIdx: front, deck: deck.map((d, i) => ({ uid: i + 1, id: typeof d === 'string' ? d : d.id, up: 0, gems: typeof d === 'string' ? [] : d.gems })), enemies: ['kappa', 'oni_cub'], tier: 'normal', chapter: 1, seed: 11 + pi + front, mods: ED.foldMods([]), relics: [], gold: 0, maxTurns: 25 });
@@ -659,7 +689,7 @@ if (E) {
         t.eq(total, deck.length + C.added, `${g.id} on ${p}: conservation`);
         n++;
       });
-    })) : null;
+    }));
     t.eq(n, 24 * 7 * 2, 'every gem on every probe in both rows was played');
   });
 
@@ -771,7 +801,7 @@ if (E) {
     t.deep(W(['paper_umbrella', 'ironclad_tsuba']).heroes.map((h) => h.block), [5, 5], 'startBlock relics add');
     { const C = W('formation_scroll'); t.deep(C.heroes.map((h) => h.block), [3, 0], 'formation_scroll: the front hero starts with 3 Block, the back hero with none'); t.eq(C.hand.length, 5, 'formation_scroll: and it does not touch the hand size (only boss relics do)'); const D2 = W('formation_scroll', { front: 1 }); t.deep(D2.heroes.map((h) => h.block), [0, 3], 'formation_scroll follows the ROW, not the hero');
       const blockPlayed = (X, id) => { const c = X.hand.find((x) => x.id === id); return X.play(c.uid).filter((e) => e.type === 'block').reduce((a, e) => a + e.amount, 0); };
-      t.eq(blockPlayed(W('formation_scroll'), 'zz_kuro_skill') - blockPlayed(W(null), 'zz_kuro_skill'), 2, 'formation_scroll: the back hero (Kuro) gains 2 more Block from a card'); t.eq(blockPlayed(W('formation_scroll'), 'zz_hanae_skill') - blockPlayed(W(null), 'zz_hanae_skill'), 0, 'formation_scroll: the front hero (Hanae) does not'); }
+      t.eq(blockPlayed(W('formation_scroll'), 'zz_kuro_skill') - blockPlayed(W(null), 'zz_kuro_skill'), 1, 'formation_scroll: the back hero (Kuro) gains 1 more Block from a card'); t.eq(blockPlayed(W('formation_scroll'), 'zz_hanae_skill') - blockPlayed(W(null), 'zz_hanae_skill'), 0, 'formation_scroll: the front hero (Hanae) does not'); }
     { const C = W('war_banner'); const n = W(null); const uid = C.hand.find((c) => c.id === 'zz_hanae_attack').uid; t.eq(C.preview(uid, C.legalTargets(uid)[0]).dmg - n.preview(uid, n.legalTargets(uid)[0]).dmg, 1, 'war_banner: +1 damage to the front hero');
       const B = W('war_banner', { front: 1 }); const ub = B.hand.find((c) => c.id === 'zz_hanae_attack').uid; const nb = W(null, { front: 1 }); t.eq(B.preview(ub, B.legalTargets(ub)[0]).dmg - nb.preview(ub, nb.legalTargets(ub)[0]).dmg, 0, 'war_banner: nothing for the hero standing in the back'); }
     { const C = W('green_bamboo'); t.deep(C.heroes.map((h) => h.block), [6, 6], 'green_bamboo: 6 Block each on the first turn'); C.endTurn(); t.deep(C.heroes.map((h) => h.block).map((b) => b >= 0), [true, true], '(sanity)'); t.eq(C.turn, 2, 'turn 2'); t.deep(C.heroes.map((h) => h.block), [0, 0], 'green_bamboo: and nothing on the second turn'); }
@@ -787,6 +817,8 @@ if (E) {
     const evs = (C, type, f) => of(C.events, type, f);
     const after = (C, relicId) => { const i = C.events.findIndex((e) => e.type === 'relic' && e.id === relicId); return i < 0 ? [] : C.events.slice(i + 1); };
     const relicCount = (C, id) => evs(C, 'relic', (e) => e.id === id).length;
+    const heroHits = (C) => evs(C, 'hit', (e) => e.dst.kind === 'hero');
+    const pump = (C, pred, max = 4) => { for (let i = 0; i < max && !pred() && C.phase === 'player'; i++) C.endTurn(); return pred(); };     // end turns until something has happened (enemy openers may take a turn)
     const attackFirst = (C, id) => { const c = C.hand.find((x) => x.id === id); return C.play(c.uid, C.needsTarget(c.uid) ? C.legalTargets(c.uid)[0] : undefined); };
 
     // swap relics
@@ -797,17 +829,17 @@ if (E) {
     // the card swap op counts as a swap
     { ED.add('cards', { zz_swapper: { hero: 'hanae', name: 'Probe Swapper', type: 'skill', rarity: 'common', cost: 0, fx: [{ op: 'swap' }], kw: ['innate'], slots: ['any'], art: { m: 'wind', c: 'azure' }, up: { cost: 0 } } }); const C = R('mirror_of_two_faces', { deck: D('zz_swapper', P('kuro') + 'plain') }); const c = C.hand.find((x) => x.id === 'zz_swapper'); C.play(c.uid); t.eq(C.energy, 4, 'a swap op on a card also pays out (and leaves the free swap alone)'); t.eq(C.canSwap().cost, 0, 'the free swap is still there'); }
     // hits and kills
-    { const C = R('silver_bell', { enemies: ['bamboo_sprite'], deck: D(P('hanae') + 'plain') }); C.endTurn(); C.endTurn(); t.eq(relicCount(C, 'silver_bell'), 1, 'silver_bell: exactly once per fight, however many hits land'); const b = evs(C, 'block').slice(0, 2); t.deep(b.map((e) => e.dst.id).sort(), ['hanae', 'kuro'], 'silver_bell: Block for both heroes'); t.ok(b.every((e) => e.amount === 6), 'silver_bell: 6 each'); }
-    { const C = R('sturdy_shell', { enemies: ['bamboo_sprite', 'bamboo_sprite'], deck: D(P('hanae') + 'plain'), seed: 2 }); C.endTurn(); const per = {}; evs(C, 'relic', (e) => e.id === 'sturdy_shell').forEach((e, k) => { per[C.turn] = k + 1; }); t.ok(relicCount(C, 'sturdy_shell') <= 2 * (C.turn - 1), 'sturdy_shell: never more than twice per turn'); t.ok(relicCount(C, 'sturdy_shell') >= 1, 'sturdy_shell fires when a hero is hit'); }
-    { const C = R('juzu_beads', { heroes: ['raiga', 'suzu'], enemies: ['bamboo_sprite'], deck: D(P('raiga') + 'plain'), hp: [80, 60], seed: 3 }); C.endTurn(); const back = evs(C, 'hit', (e) => e.src === null && e.dst.kind === 'enemy'); t.ok(back.length >= 1 && back.every((e) => e.raw === 3), 'juzu_beads: 3 damage back at the attacker'); t.ok(back.length <= 2, 'juzu_beads: twice a turn at most'); }
-    { const C = R('juzu_beads', { heroes: ['raiga', 'suzu'], front: 1, enemies: ['bamboo_sprite'], deck: D(P('raiga') + 'plain'), seed: 3 }); C.endTurn(); t.ok(relicCount(C, 'juzu_beads') === 0 || evs(C, 'hit', (e) => e.dst.kind === 'hero').every((e) => e.dst.id === 'raiga'), 'juzu_beads: only when Raiga herself is hit'); }
+    { const C = R('silver_bell', { enemies: ['bamboo_sprite'], deck: D(P('hanae') + 'plain') }); t.ok(pump(C, () => heroHits(C).length >= 2), '(sanity) the sprite lands at least two hits'); t.eq(relicCount(C, 'silver_bell'), 1, 'silver_bell: exactly once per fight, however many hits land'); const b = after(C, 'silver_bell').filter((e) => e.type === 'block').slice(0, 2); t.deep(b.map((e) => e.dst.id).sort(), ['hanae', 'kuro'], 'silver_bell: Block for both heroes'); t.ok(b.every((e) => e.amount === 6), 'silver_bell: 6 each'); }
+    { const C = R('sturdy_shell', { enemies: ['bamboo_sprite', 'bamboo_sprite'], deck: D(P('hanae') + 'plain'), seed: 2 }); t.ok(pump(C, () => heroHits(C).length >= 3), '(sanity) two sprites land at least three hits'); t.ok(relicCount(C, 'sturdy_shell') >= 1, 'sturdy_shell fires when a hero is hit'); const perTurn = {}; let turn = 1; C.events.forEach((e) => { if (e.type === 'turn_start' && e.who === 'player') turn = e.turn; if (e.type === 'relic' && e.id === 'sturdy_shell') perTurn[turn] = (perTurn[turn] || 0) + 1; }); t.ok(Object.keys(perTurn).every((k) => perTurn[k] <= 2), 'sturdy_shell: never more than twice a turn: ' + JSON.stringify(perTurn)); }
+    { const C = R('juzu_beads', { heroes: ['raiga', 'suzu'], enemies: ['bamboo_sprite'], deck: D(P('raiga') + 'plain'), hp: [80, 60], seed: 3 }); t.ok(pump(C, () => heroHits(C).length >= 1), '(sanity) Raiga is hit'); const back = evs(C, 'hit', (e) => e.src === null && e.dst.kind === 'enemy'); t.ok(back.length >= 1 && back.every((e) => e.raw === 3), 'juzu_beads: 3 damage back at the attacker'); t.ok(back.length <= 2, 'juzu_beads: twice a turn at most'); }
+    { const C = R('juzu_beads', { heroes: ['raiga', 'suzu'], front: 1, enemies: ['bamboo_sprite'], deck: D(P('raiga') + 'plain'), seed: 3 }); t.ok(pump(C, () => heroHits(C).length >= 3), '(sanity) three hits land'); let bad = 0, fired = 0; C.events.forEach((e, i) => { if (e.type === 'relic' && e.id === 'juzu_beads') { fired++; let j = i - 1; while (j >= 0 && !(C.events[j].type === 'hit' && C.events[j].dst.kind === 'hero')) j--; if (j < 0 || C.events[j].dst.id !== 'raiga') bad++; } }); t.eq(bad, 0, 'juzu_beads: it only ever follows a hit on Raiga herself (Suzu leads here, Raiga stands in the back)'); t.eq(fired > 0, heroHits(C).some((e) => e.dst.id === 'raiga'), 'juzu_beads: fires exactly when Raiga was hit at least once (and stays silent when only Suzu was)'); }
     { const C = R('wolf_fang', { enemies: ['leaf_imp'], deck: D(P('hanae') + 'plain') }); C.enemies[0].hp = 1; attackFirst(C, P('hanae') + 'plain'); t.eq(C.result, 'win', '(sanity) the imp dies'); const b = evs(C, 'block').filter((e) => e.dst.id === 'hanae'); t.ok(b.length === 1 && b[0].amount === 3, 'wolf_fang: 3 Block for the hero who struck'); }
     { const C = R('hungry_skull', { enemies: ['kappa', 'kappa'], hp: [30, 60], deck: D(P('hanae') + 'plain', P('hanae') + 'plain', P('hanae') + 'plain') }); C.enemies[0].hp = 1; attackFirst(C, P('hanae') + 'plain'); const h = evs(C, 'heal'); t.ok(h.length === 1 && h[0].amount === 2 && h[0].dst.id === 'hanae', 'hungry_skull: the killer heals 2'); }
     { const C = R('spring_tsuba', { enemies: ['kappa', 'kappa'], deck: D(P('hanae') + 'plain', P('kuro') + 'plain') }); C.enemies[0].hp = 1; attackFirst(C, P('hanae') + 'plain'); t.ok(C.unit('hanae').st.bloom >= 2 && evs(C, 'block', (e) => e.dst.id === 'hanae' && e.amount === 3).length === 1, 'spring_tsuba: 2 Bloom and 3 Block for Hanae on her kill');
       const D2 = R('spring_tsuba', { enemies: ['kappa', 'kappa'], deck: D(P('hanae') + 'plain', P('kuro') + 'plain'), front: 1 }); D2.enemies[0].hp = 1; const c = D2.hand.find((x) => x.id === P('kuro') + 'plain'); D2.play(c.uid, D2.legalTargets(c.uid)[0]); t.eq(relicCount(D2, 'spring_tsuba'), 0, 'spring_tsuba: nothing when Kuro makes the kill'); }
     { const C = R('dragon_pearl', { enemies: ['oni_brute'], tier: 'elite', deck: D(P('hanae') + 'plain') }); C.enemies[0].hp = 1; attackFirst(C, P('hanae') + 'plain'); const m = evs(C, 'max_hp'); t.deep(m.map((e) => e.hero + ':' + e.n).sort(), ['hanae:2', 'kuro:2'], 'dragon_pearl: +2 max HP for both heroes on an Elite kill'); t.deep(C.summary().maxHpGain, { hanae: 2, kuro: 2 }, 'dragon_pearl: reported in the summary');
       const n = R('dragon_pearl', { enemies: ['kappa'], deck: D(P('hanae') + 'plain') }); n.enemies[0].hp = 1; attackFirst(n, P('hanae') + 'plain'); t.eq(evs(n, 'max_hp').length, 0, 'dragon_pearl: nothing for a normal enemy'); }
-    { const C = R('phoenix_feather', { enemies: ['oni_brute'], tier: 'elite', hp: [3, 40], deck: D(P('hanae') + 'plain'), seed: 5 }); C.endTurn(); const down = evs(C, 'hero_down'), rev = evs(C, 'hero_revive'); t.ok(down.length >= 1, '(sanity) Hanae falls'); t.eq(rev.length, 1, 'phoenix_feather: one revive'); t.eq(rev[0].hero, 'hanae', 'the fallen hero rises'); t.eq(rev[0].hp, 19, '25% of 76 max HP'); t.eq(C.unit('hanae').row, 'back', 'in the back row'); }
+    { const C = R('phoenix_feather', { enemies: ['oni_brute'], tier: 'elite', hp: [3, 40], deck: D(P('hanae') + 'plain'), seed: 5 }); t.ok(pump(C, () => evs(C, 'hero_down').length >= 1, 5), '(sanity) Hanae falls'); const rev = evs(C, 'hero_revive'); t.eq(rev.length, 1, 'phoenix_feather: one revive'); t.eq(rev[0].hero, 'hanae', 'the fallen hero rises'); const mx = ED.heroes.hanae.maxHp; t.ok(rev[0].hp >= Math.floor(mx * 0.25) && rev[0].hp <= Math.ceil(mx * 0.25), '25% of her max HP'); t.eq(C.unit('hanae').row, 'back', 'in the back row'); t.eq(relicCount(C, 'phoenix_feather'), 1, 'and only once a fight'); }
     { const C = R('remembrance_candle', { deck: D(P('hanae') + 'plain'), enemies: ['paper_kodama'] }); C.endTurn(); t.ok(evs(C, 'block', (e) => e.dst.id === 'hanae' && e.amount === 6).length === 1, 'remembrance_candle: 6 Block for a front hero with none');
       const B = R('remembrance_candle', { deck: D(P('hanae') + 'cheap'), enemies: ['paper_kodama'] }); const c = B.hand.find((x) => x.id === P('hanae') + 'cheap'); B.play(c.uid); B.endTurn(); t.eq(evs(B, 'block', (e) => e.amount === 6).length, 0, 'remembrance_candle: nothing when the front hero already has Block'); }
     // playing cards
@@ -819,11 +851,11 @@ if (E) {
     { const C = R('hundred_petal_fan', { deck: D(P('hanae') + 'plain', P('hanae') + 'attack', 'zz_kuro_zero'), seed: 2 }); const z = C.hand.find((x) => x.id === 'zz_kuro_zero'); if (z) { C.play(z.uid, C.legalTargets(z.uid)[0]); t.eq(relicCount(C, 'hundred_petal_fan'), 0, 'hundred_petal_fan: only Hanae\'s own 0 cost Attacks'); } }
     { const C = R('scholars_spectacles', { heroes: ['kuro', 'hanae'], deck: D(P('kuro') + 'skill', P('kuro') + 'skill', P('kuro') + 'skill', ...Array.from({ length: 8 }, () => P('kuro') + 'plain')), seed: 2 }); const sk = C.hand.filter((x) => x.id === P('kuro') + 'skill'); t.eq(sk.length, 3, '(sanity) three innate skills in hand'); C.play(sk[0].uid); t.eq(relicCount(C, 'scholars_spectacles'), 0, 'scholars_spectacles: nothing on the 1st Skill'); const s0 = C.unit('kuro').st.sumi || 0; const n0 = C.hand.length; C.play(sk[1].uid); t.eq(relicCount(C, 'scholars_spectacles'), 1, 'scholars_spectacles: the 2nd Skill'); t.eq(C.unit('kuro').st.sumi - s0, 1, 'scholars_spectacles: 1 Sumi (his own passive already paid on the first Skill of the turn)'); t.eq(C.hand.length, n0, 'scholars_spectacles: and a card (hand size unchanged after playing the Skill)'); C.play(sk[2].uid); t.eq(relicCount(C, 'scholars_spectacles'), 1, 'scholars_spectacles: not on the 3rd'); }
     { const C = R('thunder_wheel', { heroes: ['raiga', 'suzu'], enemies: ['kappa', 'kappa'], deck: D(P('raiga') + 'zero', P('raiga') + 'zero', P('raiga') + 'zero', P('raiga') + 'zero'), seed: 3 }); const zs = C.hand.filter((x) => x.id === P('raiga') + 'zero'); zs.slice(0, 3).forEach((z, i) => { C.play(z.uid, C.legalTargets(z.uid)[0]); t.eq(relicCount(C, 'thunder_wheel'), i === 2 ? 1 : 0, `thunder_wheel: fires on the 3rd Attack only (play ${i + 1})`); }); t.ok(C.unit('raiga').st.charge >= 2, 'thunder_wheel: 2 Charge'); const splash = evs(C, 'hit', (e) => e.src === null); t.eq(splash.length, 2, 'thunder_wheel: a hit on each of the two enemies'); t.ok(splash.every((e) => e.raw === 4), 'for 4'); }
-    { const C = R('stormtiger_sash', { heroes: ['raiga', 'suzu'], enemies: ['bamboo_sprite'], deck: D(P('raiga') + 'plain'), hp: [80, 60], seed: 2 }); C.unit('raiga').st.charge = 7; const cur = C.enemies[0].hp; C.endTurn(); t.ok(relicCount(C, 'stormtiger_sash') >= 1, 'stormtiger_sash fires when Raiga is hit'); t.ok(evs(C, 'hit', (e) => e.src === null && e.raw === 10).length >= 1, 'stormtiger_sash: 10 to everyone at 8 Charge'); t.ok((C.unit('raiga').st.charge || 0) < 8, 'and the Charge was spent'); }
+    { const C = R('stormtiger_sash', { heroes: ['raiga', 'suzu'], enemies: ['bamboo_sprite'], deck: D(P('raiga') + 'plain'), hp: [80, 60], seed: 2 }); C.unit('raiga').st.charge = 7; t.ok(pump(C, () => relicCount(C, 'stormtiger_sash') >= 1), 'stormtiger_sash fires when Raiga is hit'); t.ok(evs(C, 'hit', (e) => e.src === null && e.raw === 10).length >= 1, 'stormtiger_sash: 10 to everyone at 8 Charge'); t.ok((C.unit('raiga').st.charge || 0) < 8, 'and the Charge was spent'); }
     { const C = R('nightlong_inkwell', { heroes: ['kuro', 'hanae'], enemies: ['kappa', 'kappa'], deck: D(P('kuro') + 'plain') }); C.endTurn(); const p = evs(C, 'status', (e) => e.s === 'poison' && e.dst.kind === 'enemy' && e.delta === 2); t.eq(p.length, 2, 'nightlong_inkwell: 2 Poison on each enemy at the end of the turn'); }
     { const C = R('nightlong_inkwell', { heroes: ['hanae', 'suzu'], enemies: ['kappa'], deck: D(P('hanae') + 'plain') }); C.endTurn(); t.eq(relicCount(C, 'nightlong_inkwell'), 0, 'nightlong_inkwell: nothing without Kuro in the party'); }
     { const C = R('crescent_kanzashi', { heroes: ['suzu', 'raiga'], enemies: ['paper_kodama'], deck: D(P('suzu') + 'plain'), hp: [50, 50] }); C.unit('suzu').st.ward = 2; C.unit('raiga').st.weak = 2; C.unit('suzu').st.frail = 1; C.endTurn(); t.ok(relicCount(C, 'crescent_kanzashi') >= 1, 'crescent_kanzashi fires at 3 Ward'); t.ok(!C.unit('raiga').st.weak && !C.unit('suzu').st.frail, 'crescent_kanzashi: debuffs are cleansed from both heroes'); t.ok(evs(C, 'heal').filter((e) => e.amount === 2).length === 2, 'crescent_kanzashi: heals both for 2'); }
-    { const C = R('lotus_sanctuary', { heroes: ['suzu', 'raiga'], enemies: ['kappa', 'kappa'], deck: D(P('suzu') + 'plain') }); C.unit('suzu').st.ward = 3; C.endTurn(); t.ok(relicCount(C, 'lotus_sanctuary') >= 1, 'lotus_sanctuary fires each turn'); t.ok(C.enemies.every((e) => e.st.weak >= 1 || e.down), 'lotus_sanctuary: Weak on every enemy at 4 Ward'); t.ok(evs(C, 'block', (e) => e.amount === 5).length >= 2, 'lotus_sanctuary: 5 Block for both heroes'); t.ok((C.unit('suzu').st.ward || 0) <= 2, 'lotus_sanctuary: the Ward is spent'); }
+    { const C = R('lotus_sanctuary', { heroes: ['suzu', 'raiga'], enemies: ['kappa', 'kappa'], deck: D(P('suzu') + 'plain') }); C.unit('suzu').st.ward = 3; C.endTurn(); t.ok(relicCount(C, 'lotus_sanctuary') >= 1, 'lotus_sanctuary fires each turn'); t.ok(C.enemies.every((e) => e.st.weak >= 1 || e.down), 'lotus_sanctuary: Weak on every enemy at 4 Ward'); { const li = C.events.map((e) => e.type === 'relic' && e.id === 'lotus_sanctuary').lastIndexOf(true); const seq = C.events.slice(li + 1, li + 13).filter((e) => e.type === 'block'); t.deep(seq.map((e) => e.dst.id + ':' + e.amount).sort(), ['raiga:3', 'suzu:3'], 'lotus_sanctuary: 3 Block for both heroes right after the hook'); } t.ok((C.unit('suzu').st.ward || 0) <= 2, 'lotus_sanctuary: the Ward is spent'); }
     { const C = R('mizuhiki_cord', { heroes: ['suzu', 'raiga'], deck: D(P('suzu') + 'plain'), front: 1 }); const base0 = mk({ heroes: ['suzu', 'raiga'], deck: D(P('suzu') + 'plain'), front: 1 }); t.eq(C.unit('raiga').block - base0.unit('raiga').block, 3, 'mizuhiki_cord: 3 Block for Suzu\'s ally at the start of the turn (on top of Raiga\'s own front row Block)'); t.eq(C.unit('suzu').block, 0, 'and not for Suzu'); }
     { const C = R('pressed_petal', { deck: D(P('hanae') + 'plain') }); t.eq(C.unit('hanae').st.bloom, 1, 'pressed_petal: 1 Bloom at the first turn start'); C.endTurn(); t.eq(C.unit('hanae').st.bloom, 2, 'pressed_petal: and 1 more each turn'); }
     { const C = R('vial_of_spare_ink', { heroes: ['kuro', 'hanae'], deck: D(P('kuro') + 'plain') }); t.eq(C.unit('kuro').st.sumi, 3, 'vial_of_spare_ink: 3 Sumi at the start of combat'); const N = R('vial_of_spare_ink', { heroes: ['hanae', 'suzu'], deck: D(P('hanae') + 'plain') }); t.ok(!N.unit('hanae').st.sumi, 'vial_of_spare_ink: nothing without Kuro'); }
@@ -851,7 +883,7 @@ if (E) {
 let RB = null, runWhy = null;
 if (!exists('run.js') || !exists('map.js') || !exists('combat.js')) runWhy = 'js/run.js, js/map.js or js/combat.js is missing';
 else { try { RB = boot({ only: ['run'] }); } catch (e) { runWhy = 'run.js did not load: ' + String(e && e.message).split('\n')[0]; } }
-if (RB && (RB._errors.length || !RB.RUN || !RB.MAP || !RB.DATA.relics.brass_lantern)) { runWhy = 'the run boot is incomplete: ' + JSON.stringify(RB._errors.map((x) => x.file + ' ' + x.message)); RB = null; }
+if (RB && (RB._errors.length || !RB.RUN || !RB.MAP || !contentReady(RB.DATA))) { runWhy = 'the run boot is incomplete: ' + JSON.stringify(RB._errors.map((x) => x.file + ' ' + x.message)); RB = null; }
 if (!RB) console.log('treasure: run hook tests skipped (' + runWhy + ')');
 
 if (RB) {
@@ -863,7 +895,7 @@ if (RB) {
   const curses = (R) => R.deck.filter((c) => RD.cards[c.id].hero === 'curse').length;
 
   t.test('run hooks: onPickup relics act once, when taken, and never twice', () => {
-    { const R = NEW(); const r = RUN.addRelic(R, 'heart_charm'); t.ok(r.ok, 'taken'); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), [[81, 81], [65, 65]], 'heart_charm: +5 max HP and current HP for both heroes'); t.eq(RUN.addRelic(R, 'heart_charm').ok, false, 'a relic cannot be taken twice'); t.deep(R.heroes.map((h) => h.maxHp), [81, 65], '(so it does not pay twice)'); }
+    { const R = NEW(); const hp0 = R.heroes.map((h) => h.maxHp); const r = RUN.addRelic(R, 'heart_charm'); t.ok(r.ok, 'taken'); t.deep(R.heroes.map((h) => [h.hp, h.maxHp]), hp0.map((m) => [m + 5, m + 5]), 'heart_charm: +5 max HP and current HP for both heroes'); t.eq(RUN.addRelic(R, 'heart_charm').ok, false, 'a relic cannot be taken twice'); t.deep(R.heroes.map((h) => h.maxHp), hp0.map((m) => m + 5), '(so it does not pay twice)'); }
     { const R = NEW(); const b = upgraded(R); RUN.addRelic(R, 'whetstone'); t.eq(upgraded(R), b + 2, 'whetstone: 2 cards upgraded'); }
     { const R = NEW(); RUN.addRelic(R, 'koi_pouch'); t.eq(R.gems.length, 1, 'koi_pouch: one gem'); t.eq(RD.gems[R.gems[0]].tier, 2, 'koi_pouch: of tier 2'); }
     { const R = NEW(); const n = R.deck.length; RUN.addRelic(R, 'tyrants_crown'); t.eq(curses(R), 2, 'tyrants_crown: 2 curses in the deck'); t.eq(R.deck.length, n + 2, 'and nothing else'); t.eq(RUN.mods(R).energy, 4, 'tyrants_crown: 4 Energy in the run mods'); }
@@ -907,7 +939,7 @@ if (RB) {
     t.eq(M('book_of_falling_leaves').m.hand, 6, 'book_of_falling_leaves: 6 cards'); t.eq(M('ironclad_tsuba').m.hand, 4, 'ironclad_tsuba: 4 cards'); t.eq(M('book_of_falling_leaves', 'ironclad_tsuba').m.hand, 5, 'the two cancel to 5');
     t.eq(M('blood_moon_vow').m.energy, 4, 'blood_moon_vow: 4 Energy');
     t.eq(RD.rowFor('hanae', 'front', ['war_banner']).dmgAdd, 3, 'war_banner: Hanae\'s +2 front row damage becomes +3'); t.eq(RD.rowFor('hanae', 'back', ['war_banner']).dmgAdd, undefined, 'war_banner: nothing in the back row');
-    t.deep(RD.rowFor('kuro', 'back', ['formation_scroll']), { dmgAdd: 2, blockAdd: 2 }, 'formation_scroll: Kuro in the back gains 2 more Block from cards'); t.deep(RD.rowFor('raiga', 'front', ['formation_scroll']), { thorns: 2, startBlock: 6 }, 'formation_scroll: Raiga\'s front Block doubles');
+    t.deep(RD.rowFor('kuro', 'back', ['formation_scroll']), { dmgAdd: 2, blockAdd: 1 }, 'formation_scroll: Kuro in the back gains 1 more Block from cards'); t.deep(RD.rowFor('raiga', 'front', ['formation_scroll']), { thorns: 2, startBlock: 6 }, 'formation_scroll: Raiga\'s front Block doubles');
   });
 
   t.test('run: taking every relic in a row never throws, keeps the run consistent and survives a save round trip', () => {
@@ -934,7 +966,6 @@ if (RB) {
     t.deep(RD.relicPool('boss', fresh, ['suzu', 'raiga']).map((x) => x.id).sort(), Object.values(RD.relics).filter((x) => x.rarity === 'boss' && !x.locked).map((x) => x.id).sort(), 'boss pool = the unlocked boss relics');
     t.ok(RD.relicPool('shop', undefined, ['hanae', 'kuro']).length === 4, 'with everything unlocked, all four shop relics can be sold');
     t.ok(RD.relicPool('common', undefined, ['hanae', 'kuro']).length === 18 + 2, 'a Hanae and Kuro party can see 18 generic and 2 hero commons');
-    const R = NEW({ seed: 3 }); const stock = null; t.ok(R.unlocked !== undefined, '(sanity) the run knows its unlocks');
   });
 }
 

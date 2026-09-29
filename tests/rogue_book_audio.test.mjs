@@ -118,6 +118,46 @@ t.test('volumes: slider, taper and the 0.55 music scale', () => {
   t.eq(A.setVolume('bass', 0.5), false, 'unknown bus ignored');
   t.eq(A.volume('bass'), null, 'unknown bus has no volume');
 });
+t.test('the soft clip is unity below its knee, symmetric, monotonic and saturates gently above full scale', () => {
+  const gg = live();
+  const gr = gg.AUDIO.debug().graph, curve = gr.shaper.curve, n = curve.length;
+  t.ok(n >= 512, 'a curve of ' + n + ' points');
+  // the shaper sits between a x0.5 and a x2 gain so its curve describes the range -2..+2 of the signal
+  t.ok(gr.clipIn && gr.clipOut && gr.clipIn.gain.value === 0.5 && gr.clipOut.gain.value === 2, 'bracketed by a half and a double gain');
+  const at = (i) => ((i / (n - 1)) * 2 - 1) * 2, y = (i) => curve[i] * 2;
+  let mono = true, odd = true, peak = 0;
+  for (let i = 0; i < n; i++) { if (i && curve[i] < curve[i - 1] - 1e-9) mono = false; if (Math.abs(curve[i] + curve[n - 1 - i]) > 1e-6) odd = false; peak = Math.max(peak, Math.abs(y(i))); }
+  t.ok(mono && odd, 'monotonic and odd');
+  t.ok(peak <= 0.9801 && peak >= 0.97, 'the ceiling is ' + peak.toFixed(3));
+  for (const x of [0.05, 0.2, 0.45, 0.59]) { const i = Math.round((x / 2 + 1) / 2 * (n - 1)); t.near(y(i), at(i), 1e-6, 'unity gain at ' + x); }
+  const i1 = Math.round(((1 / 2) + 1) / 2 * (n - 1));
+  t.ok(y(i1) < 0.97 && y(i1) > 0.85, 'a signal at full scale is squeezed, not chopped: ' + y(i1).toFixed(3));
+  t.ok(reaches(gr.limiter, gr.clipIn) && reaches(gr.clipIn, gr.shaper) && reaches(gr.shaper, gr.clipOut) && reaches(gr.clipOut, gr.out), 'wired limiter, in gain, shaper, out gain, out');
+});
+t.test('every envelope starts silent: no source can play a sample at full scale before its gain event', () => {
+  const gg = fresh();
+  const A = gg.AUDIO, W = gg._win;
+  gg._run(`globalThis.__env = [];
+    const cg = AudioContext.prototype.createGain;
+    OfflineAudioContext.prototype.createGain = function () {
+      const n = cg.call(this), p = n.gain, ev = []; __env.push(ev);
+      for (const m of ['setValueAtTime', 'linearRampToValueAtTime', 'exponentialRampToValueAtTime']) { const o = p[m].bind(p); p[m] = (v, t) => { ev.push([m, v, t]); return o(v, t); }; }
+      return n;
+    };`);
+  const off = new W.OfflineAudioContext(2, 44100 * 4, 44100), dest = off.destination;
+  for (const v of A.VOICES) for (const n of [{ midi: 60, dur: 0.5, vel: 0.7, r: 0.3 }, { midi: 48, dur: 3, vel: 1, r: 0.9, hit: 'ka', big: 1, double: 1 }]) A.voice(v, off, dest, 0.09, n);
+  for (const id of L.sfx) A.renderSfx(off, dest, id, { t0: 0.09, seed: 4 });
+  const all = gg._run('__env');
+  let checked = 0, bad = 0;
+  for (const ev of all) {
+    if (!ev.some((e) => e[0] === 'exponentialRampToValueAtTime' && e[1] === 0.0001)) continue;          // an amplitude envelope (decays to the floor)
+    checked++;
+    const f = ev[0];
+    if (!(f[0] === 'setValueAtTime' && f[1] === 0 && f[2] === 0)) bad++;
+  }
+  t.ok(checked > 400, 'checked ' + checked + ' amplitude envelopes');
+  t.eq(bad, 0, bad + ' envelopes do not begin with a zero at time 0 (the click bug)');
+});
 t.test('graceful degradation: no API, throwing constructor, webkit prefix, missing nodes', () => {
   let gg = fresh();
   gg._run('delete window.AudioContext; delete window.webkitAudioContext;');
@@ -305,8 +345,8 @@ t.test('victory and defeat are short stingers that fall into a soft loop', () =>
     t.ok(d.loopBars >= 8, id + ' has a loop to fall into');
     const stinger = d.tracks.filter((tr) => tr.section === 'stinger'), soft = d.tracks.filter((tr) => tr.section === 'loop');
     t.ok(stinger.length >= 3 && soft.length >= 2, id + ' has both sections');
-    const avg = (trs) => { const v = trs.flatMap((tr) => tr.notes.map((n) => n.vel * tr.gain)); return v.reduce((a, b) => a + b, 0) / v.length; };
-    t.ok(avg(soft) < avg(stinger), id + ' loop is softer than the stinger');
+    const avg = (trs) => { const v = trs.flatMap((tr) => tr.notes.map((n) => n.vel)); return v.reduce((a, b) => a + b, 0) / v.length; };
+    t.ok(avg(soft) < avg(stinger), id + ' loop is played softer than the stinger (' + avg(soft).toFixed(2) + ' vs ' + avg(stinger).toFixed(2) + ')');
     t.ok(d.tracks.every((tr) => tr.section !== 'loop' || tr.notes.every((n) => n.t >= d.introBeats - 1e-9)), id + ' loop notes start after the stinger');
   }
   t.ok(descs.elite.tracks.some((tr) => tr.role === 'stab' && new Set(tr.notes.map((n) => n.t)).size < tr.notes.length), 'elite plays dyads');
@@ -497,6 +537,21 @@ t.test('suspend, resume and tab visibility', () => {
   t.eq(ctx.state, 'running', 'until resume is called');
   t.eq(gg._uncaught.length, 0, 'nothing threw');
 });
+t.test('a context the browser left suspended is woken by the next click, key press or pointerup', () => {
+  const gg = live();
+  const A = gg.AUDIO, ctx = ctxOf(gg);
+  for (const type of ['click', 'keydown', 'pointerup']) {
+    ctx.suspend();
+    t.eq(ctx.state, 'suspended', 'suspended behind our back');
+    gg._fire(type, {});
+    t.eq(ctx.state, 'running', 'a ' + type + ' wakes it');
+  }
+  A.suspend();
+  gg._fire('click', {});
+  t.eq(ctx.state, 'suspended', 'but never against an explicit suspend');
+  A.resume();
+  t.eq(ctx.state, 'running', 'resume still works');
+});
 t.test('music: crossfades between tracks, never restarts the same one, stops on null', () => {
   const gg = live();
   const A = gg.AUDIO, au = gg._audio;
@@ -612,6 +667,35 @@ t.test('the voice cap sheds low priority sounds instead of piling up', () => {
   A.sfx('boss_die');
   gg._advance(8000, 100);
   t.eq(A.debug().live, 0, 'and it all ends');
+});
+
+t.test('soak: five minutes of switching, storms, intensity and suspends leaks nothing and stays bounded', () => {
+  const gg = live();
+  const A = gg.AUDIO, au = gg._audio, rnd = gg.U.rng(20260101);
+  const musicIds = L.music, sfxIds = L.sfx;
+  let maxLive = 0, maxDecks = 0;
+  for (let step = 0; step < 1500; step++) {                                   // 1500 steps of 200 ms
+    const r = rnd();
+    if (r < 0.05) A.music(rnd.pick(musicIds), rnd() < 0.3 ? { fade: 0.2 } : undefined);
+    else if (r < 0.09) A.music(null);
+    else if (r < 0.2) A.intensity(rnd());
+    else if (r < 0.7) { for (let k = rnd.int(1, 4); k > 0; k--) A.sfx(rnd.pick(sfxIds), { pitch: 0.8 + rnd() * 0.5, pan: rnd() * 2 - 1, vol: rnd() * 1.5 }); }
+    else if (r < 0.72) A.duck(rnd.int(50, 1500));
+    else if (r < 0.73) { A.suspend(); gg._advance(400, 20); A.resume(); }
+    else if (r < 0.75) A.setVolume(rnd() < 0.5 ? 'music' : 'sfx', rnd());
+    gg._advance(200, 20);
+    const d = A.debug();
+    maxLive = Math.max(maxLive, d.live); maxDecks = Math.max(maxDecks, d.decks.length);
+  }
+  A.music(null, { fade: 0.2 });
+  gg._advance(20000, 100);
+  const d = A.debug();
+  t.ok(maxLive < 330, 'live sources never exceeded the cap by much: ' + maxLive);
+  t.ok(maxDecks <= 8, 'decks stay few even with rapid switching: ' + maxDecks);
+  t.eq(d.decks.length, 0, 'every deck is disposed once the music stops');
+  t.eq(d.live, 0, 'no source is left running');
+  t.eq(au.stopped, au.started, 'every source that started ended');
+  t.eq(gg._uncaught.length, 0, 'nothing threw in ' + au.started + ' sources');
 });
 
 // ------------------------------------------------------------------------------------------------ 6. offline rendering
