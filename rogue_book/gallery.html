@@ -2,19 +2,46 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>INKWOVEN gallery</title>
 <style>
+/* Art sheet viewer. Nothing here is game code: it is the workbench drawing owners use with tools/rogue_book/shot.mjs. */
 html,body{margin:0;background:#0d0b1e;color:#f3e6c8;font:14px Georgia,serif}
-nav{padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px;background:#161232}
-nav a{color:#ff9ac8;text-decoration:none;border:1px solid #3a2f7a;border-radius:6px;padding:3px 9px}
-canvas{display:block}
+#nav{padding:8px 12px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:#161232;position:sticky;top:0;z-index:5}
+#nav .links{display:flex;flex-wrap:wrap;gap:6px}
+#nav a{color:#ff9ac8;text-decoration:none;border:1px solid #3a2f7a;border-radius:6px;padding:3px 9px}
+#nav a.on{background:#3a2f7a;color:#fff}
+#nav label{display:inline-flex;gap:5px;align-items:center;color:#c9bff0;font:12px system-ui,sans-serif}
+#nav input,#nav select,#nav button{font:12px system-ui,sans-serif;background:#0d0b1e;color:#f3e6c8;border:1px solid #3a2f7a;border-radius:4px;padding:2px 6px}
+#nav input[type=range]{width:120px;padding:0}
+#nav .warn{color:#ffb454;font:12px system-ui,sans-serif}
+body.nonav #nav{display:none}
+#sheets{display:flex;flex-direction:column;gap:var(--gap,0)}
+.sheet h2{margin:8px 12px 4px;font:600 13px system-ui,sans-serif;color:#c9bff0}
+body.nolabel .sheet h2{display:none}
+.sheet canvas{display:block}
+#hint{padding:24px;color:#9c93c8;font:14px system-ui,sans-serif}
 </style>
 </head>
 <body>
 <nav id="nav"></nav>
-<canvas id="c"></canvas>
-<!-- Art sheets: ?sheet=NAME&w=1600&h=900&t=0&any=param. Each art file registers
-     ART.sheets.NAME = (canvas, params) => void. Missing files 404 harmlessly. -->
+<main id="sheets"></main>
+<div id="hint" hidden></div>
+<script>
+/* Records script errors and 404s before any game script runs: window.__errors and window.__missing, read by
+   tools/rogue_book/shot.mjs. A missing art file is normal while the art is still being written. */
+(function () {
+  window.__errors = []; window.__missing = [];
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t !== window && (t.src || t.href)) { window.__missing.push(String(t.src || t.href).split('/').slice(-2).join('/')); return; }
+    window.__errors.push({ message: String(e.message), file: String(e.filename || '').split('/').pop(), line: e.lineno });
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) { window.__errors.push({ message: String(e.reason && e.reason.message || e.reason) }); });
+})();
+</script>
+<!-- Art sheets: ?sheet=a,b&w=1600&h=900&t=0&scale=1&bg=dark&frames=6&t0=0&t1=1. The script list below is a PREFIX of
+     index.html's (the hygiene suite checks it): everything up to the last art file. Missing files 404 harmlessly. -->
 <script src="js/util.js"></script>
 <script src="js/data.js"></script>
 <script src="js/data_text.js"></script>
@@ -41,22 +68,209 @@ canvas{display:block}
 <script src="js/art_map.js"></script>
 <script src="js/art_fx.js"></script>
 <script>
+/* The gallery. CONTRACT for sheet authors (register with ART.sheet(name, fn); a throwaway sheet without art.js can use
+   registerSheet(name, fn) from this page):
+     fn(canvas, params) draws in LOGICAL pixels params.w x params.h. The canvas is already sized and its context already
+     scaled (scale * dpr), so never assign canvas.width or canvas.height and never reset the transform (save/restore is fine).
+     params: everything on the query string (numbers and true/false converted), plus w, h, scale, dpr, res (= scale * dpr),
+     sheet (its name), index, and t. t is the animation argument: the URL's t (default 0) plus the virtual clock that
+     __advance(ms) moves, or, in a frames strip, the value across t0..t1. Its unit is the sheet's own (ART.fx sheets: progress
+     0..1; every other art: seconds). A sheet may return a promise. A sheet that throws is drawn as an error panel and reported.
+   Page API (used by tools/rogue_book/shot.mjs and by --js):
+     renderSheet(names, extra?) -> Promise<[{sheet, ok, error?}]>   names: 'a,b' or ['a','b']; extra overrides the URL params
+     __render(name, extra?)     same, one name (the older spelling used by DESIGN 7.4)
+     registerSheet(name, fn)    a page-local sheet (throws on a duplicate name, like ART.sheet)
+     sheetNames() -> [names]    refreshNav()    __advance(ms, step?) advances the virtual clock and re-renders (deterministic frames)
+     __clock (seconds)          __sheetReady (true when every requested sheet finished)     __sheetError (null or the error text)
+     __sheetErrors ([{sheet, message, stack}])   __errors / __missing (script errors and 404s, set by the script above) */
 (function () {
-  var q = new URLSearchParams(location.search), params = {};
-  q.forEach(function (v, k) { params[k] = isNaN(+v) || v === '' ? v : +v; });
-  var sheets = (typeof ART !== 'undefined' && ART.sheets) || {};
-  var nav = document.getElementById('nav');
-  Object.keys(sheets).sort().forEach(function (k) {
-    var a = document.createElement('a'); a.href = '?sheet=' + k; a.textContent = k; nav.appendChild(a);
-  });
-  var c = document.getElementById('c');
-  c.width = params.w || 1600; c.height = params.h || 900;
-  window.__sheetError = null;
-  try {
-    if (params.sheet && sheets[params.sheet]) sheets[params.sheet](c, params);
-    else if (params.sheet) throw new Error('unknown sheet ' + params.sheet);
-  } catch (e) { window.__sheetError = String(e && e.stack || e); console.error(window.__sheetError); }
-  window.__sheetReady = true;
+  var PANEL = '#0d0b1e';
+  var local = {};                                   // sheets registered with registerSheet
+  var params = parse(window.location.search);
+  var clock = 0, current = [], rendering = 0, autoplay = false, lastNav = '';
+  window.__sheetReady = false; window.__sheetError = null; window.__sheetErrors = []; window.__clock = 0;
+
+  function parse(search) {
+    var out = {}, q = new URLSearchParams(search);
+    q.forEach(function (v, k) { out[k] = k === 'bg' || k === 'sheet' ? v : v === 'true' ? true : v === 'false' ? false : (v === '' || isNaN(+v)) ? v : +v; });
+    return out;
+  }
+  function art() { return typeof ART !== 'undefined' ? ART : null; }
+  function sheets() {
+    var out = {}, reg = art() && art().sheets;
+    if (reg) { if (typeof reg.forEach === 'function' && typeof reg.get === 'function') reg.forEach(function (fn, k) { out[k] = fn; }); else Object.keys(reg).forEach(function (k) { if (typeof reg[k] === 'function') out[k] = reg[k]; }); }
+    Object.keys(local).forEach(function (k) { out[k] = local[k]; });
+    return out;
+  }
+  function sheetNames() { return Object.keys(sheets()).sort(); }
+  function registerSheet(name, fn) {
+    if (typeof fn !== 'function') throw new TypeError('registerSheet(name, fn): fn must be a function');
+    if (local[name] || sheets()[name]) throw new Error('duplicate sheet name "' + name + '"');
+    local[name] = fn; refreshNav(); return fn;
+  }
+  var bgCss = { dark: PANEL, paper: '#f3e6c8', white: '#ffffff', black: '#000000', transparent: 'transparent',
+    checker: 'repeating-conic-gradient(#3b3b3b 0% 25%, #5a5a5a 0% 50%) 50% / 24px 24px' };
+  function background(v) {
+    v = v === undefined || v === '' ? 'dark' : String(v);
+    if (bgCss[v]) return bgCss[v];
+    if (/^[0-9a-f]{3,8}$/i.test(v)) return '#' + v;
+    return v;                                        // any CSS colour, e.g. bg=%23336699 or bg=rebeccapurple
+  }
+
+  function sized(canvas, p) {
+    var W = Math.max(1, Math.round(p.w)), H = Math.max(1, Math.round(p.h));
+    var res = p.scale * p.dpr;
+    while (Math.max(W, H) * res > 16000 && res > 0.25) res /= 2;                       // browsers refuse giant canvases
+    canvas.width = Math.round(W * res); canvas.height = Math.round(H * res);
+    canvas.style.width = Math.round(W * p.scale) + 'px'; canvas.style.height = Math.round(H * p.scale) + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(res, 0, 0, res, 0, 0);
+    return { ctx: ctx, res: res, W: W, H: H };
+  }
+  function errorPanel(canvas, p, name, text) {
+    var s = sized(canvas, p), ctx = s.ctx, W = s.W, H = s.H;                           // resizing resets whatever state the failed sheet left behind
+    ctx.fillStyle = '#3a0d1e'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#ff5f7e'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, W - 4, H - 4);
+    ctx.fillStyle = '#ffd0da'; ctx.font = '600 18px system-ui, sans-serif'; ctx.textBaseline = 'top';
+    ctx.fillText('sheet "' + name + '" failed', 16, 14);
+    ctx.font = '13px ui-monospace, Menlo, Consolas, monospace';
+    String(text).split('\n').slice(0, Math.max(1, Math.floor((H - 50) / 17))).forEach(function (l, i) { ctx.fillText(l.slice(0, Math.floor((W - 32) / 7.4)), 16, 44 + i * 17); });
+  }
+  function record(name, e) {
+    var msg = String(e && e.message || e), stack = String(e && e.stack || e);
+    window.__sheetErrors.push({ sheet: name, message: msg, stack: stack });
+    window.__sheetError = (window.__sheetError ? window.__sheetError + '\n' : '') + 'sheet ' + name + ': ' + stack;
+    if (window.console && console.warn) console.warn('sheet ' + name + ': ' + stack);
+  }
+
+  /* Draw one sheet (or a frames strip of it) into a fresh section. Resolves {sheet, ok, error?}. */
+  function drawSheet(name, index, p, section) {
+    var canvas = document.createElement('canvas');
+    section.appendChild(canvas);
+    var s = sized(canvas, p), fn = sheets()[name];
+    var base = { sheet: name, index: index, scale: p.scale, dpr: p.dpr, res: s.res };
+    var done = function (ok, e) { if (!ok) { record(name, e); errorPanel(canvas, p, name, e && e.stack || e); } return { sheet: name, ok: ok, error: ok ? undefined : String(e && e.message || e) }; };
+    if (!fn) return Promise.resolve(done(false, new Error('unknown sheet "' + name + '" (registered: ' + (sheetNames().join(', ') || 'none') + (art() ? '' : '; ART is not defined, js/art.js is missing or failed') + ')')));
+    try {
+      var n = Math.floor(p.frames || p.strip || 1), pending = [];
+      if (n > 1) {                                                                       // contact strip: t across t0..t1
+        var cw = Math.floor(s.W / n), t0 = p.t0 === undefined ? 0 : p.t0, t1 = p.t1 === undefined ? 1 : p.t1;
+        for (var i = 0; i < n; i++) {
+          var cell = document.createElement('canvas'), cs = sized(cell, Object.assign({}, p, { w: cw, h: s.H }));
+          var r = fn(cell, Object.assign({}, p, base, { w: cw, h: s.H, res: cs.res, t: t0 + (t1 - t0) * i / (n - 1), frame: i }));
+          (function (cellCanvas, x) { pending.push(Promise.resolve(r).then(function () { s.ctx.drawImage(cellCanvas, x, 0, cw, s.H); })); })(cell, i * cw);
+        }
+        return Promise.all(pending).then(function () { return done(true); }, function (e) { return done(false, e); });
+      }
+      var res = fn(canvas, Object.assign({}, p, base, { w: s.W, h: s.H, t: (p.t || 0) + clock }));
+      return Promise.resolve(res).then(function () { return done(true); }, function (e) { return done(false, e); });
+    } catch (e) { return Promise.resolve(done(false, e)); }
+  }
+
+  function renderSheet(names, extra) {
+    if (names === undefined || names === null || names === '') names = current;
+    if (typeof names === 'string') names = names.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    current = names.slice();
+    var token = ++rendering;
+    window.__sheetReady = false; window.__sheetError = null; window.__sheetErrors = [];
+    var p = Object.assign({}, params, extra || {});
+    p.w = +p.w || 1600; p.h = +p.h || 900; p.scale = +p.scale || 1;
+    p.dpr = Math.max(1, Math.min(4, +p.dpr || window.devicePixelRatio || 1));
+    var a = art();
+    if (a && 'res' in a) { var res = p.scale * p.dpr; if (a.res !== res) { a.res = res; if (a.sprite && typeof a.sprite.clear === 'function') { try { a.sprite.clear(); } catch (e) { record('(ART.sprite.clear)', e); } } } }
+    var host = document.getElementById('sheets');
+    host.textContent = '';
+    host.style.setProperty('--gap', (p.pad !== undefined ? +p.pad : (p.label === 0 || p.label === false ? 0 : 8)) + 'px');
+    document.body.classList.toggle('nolabel', p.label === 0 || p.label === false);
+    document.body.classList.toggle('nonav', p.nav === 0 || p.nav === false);
+    var bg = background(p.bg);
+    var hint = document.getElementById('hint');
+    hint.hidden = names.length > 0;
+    hint.textContent = names.length ? '' : 'Pick a sheet above, or open gallery.html?sheet=NAME. Registered: ' + (sheetNames().join(', ') || 'none yet (js/art.js and the art files register sheets with ART.sheet)') + '.';
+    var jobs = names.map(function (name, i) {
+      var section = document.createElement('section');
+      section.className = 'sheet'; section.id = 'sheet-' + i; section.setAttribute('data-sheet', name);
+      var h2 = document.createElement('h2'); h2.textContent = name; section.appendChild(h2);
+      host.appendChild(section);
+      return drawSheet(name, i, p, section).then(function (r) { var c = section.querySelector('canvas'); if (c) c.style.background = bg; return r; });
+    });
+    return Promise.all(jobs).then(function (results) {
+      if (token === rendering) { window.__sheetReady = true; refreshNav(); }
+      return results;
+    }, function (e) { record('(gallery)', e); if (token === rendering) window.__sheetReady = true; return []; });
+  }
+
+  /* ---- deterministic time: advance the virtual clock and redraw (shot.mjs --frames) ---- */
+  function advance(ms, step) {
+    autoplay = false;
+    clock += (+ms || 0) / 1000; window.__clock = clock;
+    return renderSheet(current);
+  }
+
+  /* ---- live nav ---- */
+  function keepQuery(over) {
+    var q = new URLSearchParams(window.location.search);
+    Object.keys(over).forEach(function (k) { if (over[k] === null) q.delete(k); else q.set(k, over[k]); });
+    return '?' + q.toString();
+  }
+  function go(names) {
+    var qs = keepQuery({ sheet: names.join(',') });
+    try { window.history.replaceState(null, '', qs); } catch (e) { /* file: pages may refuse; the render still happens */ }
+    params.sheet = names.join(',');
+    return renderSheet(names);
+  }
+  function control(label, el) { var l = document.createElement('label'); l.textContent = label; l.appendChild(el); return l; }
+  function refreshNav() {
+    var nav = document.getElementById('nav'), names = sheetNames(), key = names.join('|') + '#' + current.join(',') + '#' + (window.__missing || []).length;
+    if (key === lastNav) return;
+    lastNav = key;
+    nav.textContent = '';
+    var b = document.createElement('b'); b.textContent = 'INKWOVEN gallery'; nav.appendChild(b);
+    var links = document.createElement('div'); links.className = 'links';
+    names.forEach(function (n) {
+      var a = document.createElement('a'); a.href = keepQuery({ sheet: n }); a.textContent = n; a.setAttribute('data-sheet', n);
+      if (current.indexOf(n) >= 0) a.className = 'on';
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        var next = e.shiftKey || e.ctrlKey || e.metaKey ? (current.indexOf(n) >= 0 ? current.filter(function (x) { return x !== n; }) : current.concat([n])) : [n];
+        go(next);
+      });
+      links.appendChild(a);
+    });
+    if (!names.length) { var none = document.createElement('span'); none.className = 'warn'; none.textContent = 'no sheets registered yet'; links.appendChild(none); }
+    nav.appendChild(links);
+    var t = document.createElement('input'); t.type = 'range'; t.min = 0; t.max = 1; t.step = 0.01; t.value = params.t || 0;
+    t.addEventListener('input', function () { params.t = +t.value; clock = 0; window.__clock = 0; renderSheet(current); });
+    nav.appendChild(control('t', t));
+    var play = document.createElement('button'); play.textContent = autoplay ? 'pause' : 'play';
+    play.addEventListener('click', function () { autoplay = !autoplay; play.textContent = autoplay ? 'pause' : 'play'; if (autoplay) loop(performance.now()); });
+    nav.appendChild(play);
+    var sc = document.createElement('select');
+    [0.5, 1, 2, 3].forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v + 'x'; if (v === (+params.scale || 1)) o.selected = true; sc.appendChild(o); });
+    sc.addEventListener('change', function () { params.scale = +sc.value; renderSheet(current); });
+    nav.appendChild(control('scale', sc));
+    var bgSel = document.createElement('select');
+    ['dark', 'paper', 'white', 'black', 'checker'].forEach(function (v) { var o = document.createElement('option'); o.value = v; o.textContent = v; if (v === (params.bg || 'dark')) o.selected = true; bgSel.appendChild(o); });
+    bgSel.addEventListener('change', function () { params.bg = bgSel.value; renderSheet(current); });
+    nav.appendChild(control('background', bgSel));
+    var miss = window.__missing || [];
+    if (miss.length) { var w = document.createElement('span'); w.className = 'warn'; w.textContent = miss.length + ' script' + (miss.length > 1 ? 's' : '') + ' not found'; w.title = miss.join('\n'); nav.appendChild(w); }
+  }
+  var lastFrame = 0;
+  function loop(now) {
+    if (!autoplay) return;
+    if (now - lastFrame >= 33) { clock += (now - lastFrame) / 1000; window.__clock = clock; lastFrame = now; renderSheet(current); }
+    window.requestAnimationFrame(loop);
+  }
+
+  window.registerSheet = registerSheet; window.sheetNames = sheetNames; window.renderSheet = renderSheet; window.refreshNav = refreshNav;
+  window.__render = function (name, extra) { return renderSheet(name, extra); };
+  window.__advance = advance;
+  window.__gallery = { params: params, sheets: sheets };
+  document.body.classList.toggle('nonav', params.nav === 0 || params.nav === false);
+  refreshNav();
+  setInterval(refreshNav, 1000);                    // sheets registered after load (ART.sheet from --js) appear in the nav
+  renderSheet(params.sheet || '');
 })();
 </script>
 </body>

@@ -3,8 +3,9 @@
 const U = (() => {
   // mulberry32: small, fast, identical everywhere. The closure state is a single
   // uint32, exposed by .seed(), so a stream can be saved and resumed: U.rng(r.seed()).
+  // Seed 0 maps to a fixed odd constant so U.rng(0) and U.rng(1) are different streams.
   function rng(seed) {
-    let a = (seed >>> 0) || 1;
+    let a = (seed >>> 0) || 0x9e3779b9;
     const next = () => {
       a = (a + 0x6D2B79F5) | 0;
       let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -77,6 +78,9 @@ const U = (() => {
     return h >>> 0;
   };
   const hash = (...parts) => hashStr(parts.map(String).join('|'));
+
+  // YYYYMMDD integer for a Date the caller passes in (logic never reads the clock itself: GAME does).
+  const dateKey = (d) => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 
   const deepCopy = (o) => (o === undefined ? undefined : JSON.parse(JSON.stringify(o)));
   const sum = (arr, f) => arr.reduce((s, x) => s + (f ? f(x) : x), 0);
@@ -165,5 +169,5 @@ const U = (() => {
   // Escape user-facing text for innerHTML
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  return { rng, clamp, lerp, inv, smooth, wrap, ease, uid, resetUid, uidPeek, hashStr, hash, deepCopy, sum, range, dist, fmt, cap, plural, roman, commas, mmss, color, noise, bus, el, esc };
+  return { rng, clamp, lerp, inv, smooth, wrap, ease, uid, resetUid, uidPeek, hashStr, hash, dateKey, deepCopy, sum, range, dist, fmt, cap, plural, roman, commas, mmss, color, noise, bus, el, esc };
 })();

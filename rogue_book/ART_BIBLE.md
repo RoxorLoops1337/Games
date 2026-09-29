@@ -3,7 +3,8 @@
 The look is the game's identity. It must read as **one confident, unique anime art style**, not
 "canvas shapes". Everything is code (canvas paths, gradients, DOM/CSS), so the style has to be
 achieved through discipline: a shared toolkit (`ART.tk`), a strict palette, and honest visual
-iteration with screenshots. Read `DESIGN.md` first for contracts.
+iteration with screenshots. Read `DESIGN.md` first for contracts: every signature, id meaning, unit and coordinate
+convention lives in `DESIGN.md` 5.6 (ART), 5.8 (UI) and 5.9 (SCENE). This file says how things should LOOK.
 
 ## 1. Style in one line: "Sumi-Shonen"
 
@@ -57,10 +58,10 @@ Card palettes (`art.c` values) map to hue families: `rose sakura-pink`, `crimson
 
 ## 2. Heroes (the design targets)
 
-Each hero has a nominal sprite height of 250 px at s=1, origin at the feet centre, and these poses:
+Each hero has a nominal sprite height of 250 px at s=1, origin at the feet centre, faces RIGHT, and these poses:
 `idle attack cast hurt block down cheer walk` (`DATA.LISTS.poses`). Attack = lunge and swing (weapon arc), cast = raise a hand
 and glow, hurt = recoil with squint and flash, block = brace, down = kneeling or fallen, cheer = victory pose, walk = 4-frame bob used on the map token.
-All poses are procedural (offsets, rotations, limb angles, weapon angles driven by a pose blend and `t`), no sprite sheets.
+All poses are procedural (offsets, rotations, limb angles, weapon angles driven by a pose blend, `pt` for one-shots and `t` for loops, see `DESIGN.md` 5.6), no sprite sheets.
 
 - **Hanae, the Blossom Blade.** Late teens, bright, composed. Long sakura-pink hair in a high ponytail with a white ribbon, side-swept bangs, one ahoge, a flower hairpin. Rose-magenta eyes. White and pink short haori over a rose obi, short black hakama skirt, dark-red arm guards, tabi and geta boots. A katana with a flower-shaped tsuba, petals trailing every cut. Palette: `#ff7eb6 #fff4f8 #b0245c` plus gold.
 - **Kuro, the Inkweaver.** Early twenties, calm scholar with a sly smile. Indigo-black messy hair with a long side lock and cyan-tinted tips, round glasses with a glint. Violet eyes. Long dark indigo coat with an ink-splash hem and a high collar, cyan glowing calligraphy on the backs of his hands, an oversized fude (calligraphy brush) staff whose bristles glow, floating ink orbs and a scroll strip. Palette: `#7a6bff #5ff5ff #1a1740`.
@@ -72,28 +73,29 @@ Bust portraits (`ART.hero.portrait`, expressions `neutral smile angry hurt deter
 ## 3. Enemies
 
 Yokai and storybook creatures drawn with the same line, shading and glow rules. Each enemy has a distinct **emissive accent** (glowing eyes, markings, a lantern) so intent reads at a glance.
-Size classes and nominal heights at s=1: `s` 110, `m` 170, `l` 250, `xl` 340 px. Poses: `idle attack hurt block buff die telegraph` (`LISTS.enemyPoses`). `telegraph` is the wind-up shown while the intent is a big attack.
-Elites get extra ornament, a coloured aura and a slightly larger size; bosses are layered assemblies with parallax pieces (tails, arms, masks) that animate independently and change look per phase (`opts.phase`).
+Size classes and nominal heights at s=1: `s` 110, `m` 170, `l` 250, `xl` 340 px (`LISTS.sizeHeight`). Enemies face LEFT toward the heroes. Poses: `idle attack hurt block buff die telegraph` (`LISTS.enemyPoses`). `telegraph` is the wind-up shown while the intent is a big attack.
+Elites get extra ornament, a coloured aura and a slightly larger size (x1.08, drawn by `ART.enemy.draw` from the tier); bosses are layered assemblies with parallax pieces (tails, arms, masks) that animate independently and change look per phase (`opts.phase`, 0 = opening form).
+The creatures of each chapter are the FIXED ROSTER in `CONTENT_SPEC.md` 4.1 (id, name, tier, size, role): `art_enemies_N.js` draws exactly the ids of chapter N and registers each with `ART.enemy.register`. Minions are small `s` creatures that read as "summoned": simpler, paler, one accent colour.
 
-- **Chapter 1, the Whispering Bamboo Grove:** forest spirits and folk monsters. Kappa, tanuki bandits, kodama, karakasa umbrella yokai, wisps, oni cubs, crow tengu. Boss: **Kuzunoha, the Nine-Tail Ink Fox**, a huge white fox whose nine tails end in brush tips dripping ink, glowing violet eyes, a floating mask.
-- **Chapter 2, the Sunken Lantern City:** haunted canal town at night. Lantern ghosts, paper puppets, faceless nopperabo, drowned samurai, spiderlings, koi spirits, tsukumogami (haunted objects). Boss: **Jorogumo, the Silk Courtesan**, an elegant spider-woman in a layered kimono with silk threads and lantern eyes.
-- **Chapter 3, the Crimson Sky Citadel:** a fortress in a storm above the clouds, where the Blank is eating the words. Storm drones, stone komainu guardians, redaction knights (black bars over their faces), void scribes, blank paper soldiers. Boss: **The Editor**, three phases: a pale tall figure in a scholar's robe with a red pen (phase 1), a hulking eraser-armed giant (phase 2), a rip in the page shaped like a colossal face (phase 3).
+- **Chapter 1, the Whispering Bamboo Grove:** forest spirits and folk monsters, warm golden dusk. Boss: **Kuzunoha, the Nine-Tail Ink Fox**, a huge white fox whose nine tails end in brush tips dripping ink, glowing violet eyes, a floating mask. Second form (`phase` 1): all nine tails fan out and the mask splits.
+- **Chapter 2, the Sunken Lantern City:** haunted canal town at night, lantern light on black water. Boss: **Jorogumo, the Silk Courtesan**, an elegant spider-woman in a layered kimono with silk threads and lantern eyes. Second form (`phase` 1): the kimono tears open on a spider's body.
+- **Chapter 3, the Crimson Sky Citadel:** a fortress in a storm above the clouds, where the Blank is eating the words. Boss: **The Editor**, three phases (`opts.phase` 0, 1, 2): a pale tall figure in a scholar's robe with a red pen (0), a hulking eraser-armed giant (1), a rip in the page shaped like a colossal face (2).
 
 ## 4. Cards
 
-`ART.card.draw(ctx, cardIdOrInst, w, h)` paints the illustration window (roughly 196 x 132 at 'hand' size, scales to any). Composition: a gradient sky or wash in the card's palette, halftone dots, speed lines, the **motif** (`art.m`, 58 motifs in `LISTS.motifs`) large and dynamic, and if `art.hero` is true the owning hero's silhouette in an action pose cut into the scene. Every card art must be recognisable at 120 px wide and must not repeat a neighbour: vary composition by hashing the card id (mirror, scale, motif offset, secondary motifs, palette accent).
+`ART.card.draw(ctx, cardIdOrInst, w, h)` paints the illustration window at (0,0) (roughly 170 x 116 at `hand` size, which is a 190 x 266 card; scales to any). Composition: a gradient sky or wash in the card's palette, halftone dots, speed lines, the **motif** (`art.m`, every id in `LISTS.motifs`, currently 59) large and dynamic, and if `art.hero` is true the owning hero's silhouette in an action pose cut into the scene. Every card art must be recognisable at 120 px wide and must not repeat a neighbour: vary composition by hashing the card id (mirror, scale, motif offset, secondary motifs, palette accent).
 
-The **card frame** is DOM/CSS (`UI.card`): parchment body with a hero-coloured ribbon header, an ink-drop **cost orb** (top-left, glowing, animates on change), a type glyph, the illustration window with gold-leaf bevel, **gem sockets** (small coloured cut-outs, lit when filled), a rules text area with brush-underlined keywords, rarity ornament (common: ink line, uncommon: silver leaf, rare: gold leaf with a slow shimmer sweep), a tiny hero medallion. Upgraded cards get a `+`, a warm golden glow and sparkle corners. Curses look torn, blotched and black-violet.
+The **card frame** is DOM/CSS (`UI.card`, sizes in `DESIGN.md` 5.8, all 5:7): parchment body with a hero-coloured ribbon header, an ink-drop **cost orb** (top-left, glowing, animates on change), a type glyph, the illustration window with gold-leaf bevel, **gem sockets** (small cut-outs, lit when filled, display only: each carries its colour-independent glyph), a rules text area with brush-underlined keywords, rarity ornament (common: ink line, uncommon: silver leaf, rare: gold leaf with a slow shimmer sweep), a tiny hero medallion. Upgraded cards get a `+`, a warm golden glow and sparkle corners. Curses look torn, blotched and black-violet.
 
 ## 5. Icons (`ART.icon.draw(ctx, kind, id, x, y, size, opts)`)
 
-Chunky, readable at 24 px, same line and cel rules, centred on `(x, y)`.
+Chunky, readable at 24 px, same line and cel rules, centred on `(x, y)`. What `id` means for each `kind` is defined in `DESIGN.md` 5.6.
 - `status`: all 20 statuses in `DATA.statuses`, buffs on warm/blue discs, debuffs on red-violet, resources on hero-coloured discs.
-- `relic`: the 58 motifs of `LISTS.relicIcons`, with `art.c` palette and a subtle gold leaf rim.
-- `gem`: cut (`round oval square drop star`) by colour (`red blue green gold`) and `tier` (1 to 3: more facets, more glint, tier 3 has an orbiting sparkle).
+- `relic`: every id of `LISTS.relicIcons` (currently 58), with `art.c` palette and a subtle gold leaf rim. The ids shared with `LISTS.motifs` reuse `ART.card.motif`.
+- `gem`: cut (`round oval square drop star`) by `tier` (1 to 3: more facets, more glint, tier 3 has an orbiting sparkle) and colour (`red blue green gold`). Colour is never the only signal: every gem, socket and prism carries an engraved glyph (red sword, blue shield, green leaf, gold star, prism ring).
 - `tile`: map tile icons as ink-stamp glyphs (a vermilion hanko circle behind a black-ink drawing) for all `LISTS.tiles`.
 - `intent`: enemy intent icons for `LISTS.intents`, sumi-e brush style, with room for a number.
-- `stat`: gold (koban coin), ink (an ink drop), hp (a heart with a brush stroke), energy (a glowing tama orb), brush, inkstone, shield/block.
+- `stat`: gold (koban coin), ink (an ink drop), hp (a heart with a brush stroke), energy (a glowing tama orb), brush, inkstone, block (a shield). `motif`: any `LISTS.motifs` id as a standalone icon.
 - `type`: card type glyphs (attack: crossed blade, skill: fan, power: lotus, curse: skull seal, status: torn page). `row`: front and back glyphs.
 
 ## 6. Scenes (`ART.scene.draw`, `LISTS.scenes`)
@@ -103,12 +105,12 @@ Layered parallax with animated atmosphere, drawn once into cached layers where p
 - `ch1`: bamboo grove at golden dusk, god rays, mist layers, a far torii, drifting leaves. `ch2`: night canal city, hanging lanterns and their reflections, rooftops, red arched bridges, drifting paper charms. `ch3`: storm citadel above crimson clouds, lightning, floating stones, white tears of void in the sky.
 - `boss1 boss2 boss3`: the chapter scene pushed darker and more dramatic with a hard vignette and a colour shift.
 - `camp` (fire under a giant sakura at night, sparks), `shop` (a lantern-lit peddler stall), `event` (a fogbound shrine path), `treasure` (a glowing chest in a dark hall), `victory` (dawn, petals, warm light), `defeat` (ink fading to blank), `paper` (a reusable parchment texture with fibre and stains).
-- Combat scenes have a ground plane at about y=520 of 720 where feet sit, heroes at left third, enemies at right two thirds.
-- **Map art** (`ART.map.*`): the page is warm parchment. Hidden hexes are blank paper with a faint fibre texture and stitched dotted edges, `known` landmarks show a dim silhouette. Painted hexes bloom with a watercolour wash whose colour depends on the tile type, with wobbly ink outlines and the tile's ink-stamp icon. An open-book frame with a gutter and page curl surrounds the map view. `ART.map.paintBloom(ctx, x, y, size, t)` is the reveal animation (ink spreading from the brush touch point), and `ART.map.token(ctx, heroIds, x, y, t, moving)` draws the two chibi hero tokens.
+- Combat scenes are composed for the actor layout in `DESIGN.md` 5.9: ground line at y=520 of 720 where feet sit, heroes on the left third, five enemy lanes across the right two thirds.
+- **Map art** (`ART.map.*`, hex geometry and kinds in `DESIGN.md` 4.8 and 5.6): the page is warm parchment. Hidden hexes (`fog`) are blank paper with a faint fibre texture and stitched dotted edges, `known` landmarks show a dim silhouette. `painted` hexes bloom with a watercolour wash whose colour depends on the tile type, with wobbly ink outlines and the tile's ink-stamp icon. An open-book frame with a gutter and page curl surrounds the map view. `ART.map.paintBloom(ctx, x, y, size, p)` is the reveal animation (ink spreading from the brush touch point, `p` 0..1), and `ART.map.token(ctx, heroIds, x, y, t, moving)` draws the two chibi hero tokens.
 
 ## 7. VFX (`ART.fx.*`, used by `SCENE`)
 
-All take `(ctx, ..., t)` where `t` runs 0 to 1 across the effect, so SCENE owns timing. Required set:
+Every effect is `ART.fx.NAME(ctx, o, t)` with `t` = progress 0 to 1 (signature, options, default durations and the exact list of 24 names are in `DESIGN.md` 5.6 and `LISTS.fx`; SCENE owns timing). How they should look:
 `slash` (calligraphic crescent arc), `cross`, `thrust`, `burst` (radial impact with speed lines), `ring` (expanding shock ring), `inkSplash` (splatter that dries), `petals`, `lightning` (branching bolt), `chain` (between two points), `flame`, `frost`, `poison` (bubbling), `shield` (hex-ripple barrier), `heal` (rising light motes), `buff`/`debuff` auras (upward or downward glyph streams), `sparkle`, `speedLines`, `impactFrame` (invert flash with radial burst), `sfxText` (onomatopoeia), `vignette`, `chromatic` (RGB split pass), `brushDrag` (a brush stroke drawn across the screen), `numberPop` (damage digits in comic style: white fill, thick indigo outline, red for big, green for heal, blue for block).
 
 ## 8. UI look (DOM and CSS)
@@ -118,12 +120,13 @@ All take `(ctx, ..., t)` where `t` runs 0 to 1 across the effect, so SCENE owns 
 - Badges are hanko seals (vermilion rounded squares with white glyphs). Dividers are brush strokes. Tooltips are manga speech bubbles with a small tail pointing at the source.
 - Type: display serif for titles and card names (`--font-display`: "Hiragino Mincho ProN","Yu Mincho","Noto Serif JP","Palatino Linotype",Georgia,serif), clean sans for body and UI (`--font-ui`: "Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP","Segoe UI",system-ui,sans-serif), heavy rounded sans for numbers (`--font-num`: "Trebuchet MS","Segoe UI",system-ui,sans-serif, weight 900, with text stroke). Text sizes scale with the `textScale` setting.
 - HUD (map): top-left the two hero badges (medallion, HP bar, name), top-right gold, ink (drop icons with a fill meter), brush tray (chips), menu and deck buttons, chapter title as a brush-written banner, relic strip along the bottom-left.
-- HUD (combat): hero panels bottom-left (HP, Block, statuses, row label with swap button), enemy HP bars and intents as DOM positioned via `SCENE.anchor`, hand fanned along the bottom, energy orb bottom-left of the hand, draw pile bottom-left and discard pile bottom-right as small card stacks with counts, end-turn button bottom-right as a big lacquer plaque.
-- Motion budget: screens fade or page-turn between each other (`UI.transition`), cards ease with `outBack`, numbers count up, panels slide 12 px and fade, buttons breathe when they are the obvious next action. Respect `reduceMotion` (turn off shake, flashes, parallax, particle counts x0.3).
+- HUD (combat): the zones and coordinates are fixed in `DESIGN.md` 5.8 (top bar with relic strip and menu button, hero panels top-left with HP, Block, up to 6 status chips, row label and Swap button, enemy HP bars and intent bubbles positioned via `SCENE.anchor`, hand fanned along the bottom, energy orb and draw pile bottom-left, discard pile and the big lacquer End Turn plaque bottom-right). Every HUD piece that a tutorial points at carries a `data-tut` anchor.
+- Cards, gems and rarity read without colour alone: a keyboard focus ring in 3 px gold, colour-independent gem glyphs, and with `colorblind` a pattern fill on rarity and status discs (`DESIGN.md` 5.8). Text never clips at `textScale` 1.3.
+- Motion budget: screens fade or page-turn between each other (`UI.transition`), cards ease with `outBack`, numbers count up, panels slide 12 px and fade, buttons breathe when they are the obvious next action. `reduceMotion` is defined once, in `DESIGN.md` 5.8 (no shake, no flashes, parallax 0, particles x0.3, 150 ms fades).
 
 ## 9. Audio (`AUDIO`)
 
 Synthesised only. Scales: in-sen (`D E F A B`), yo (`D E G A B`), miyako-bushi (`E F A B C`). Voices: **koto/shamisen pluck** (Karplus-Strong or damped triangle plus noise burst), **shakuhachi** (breathy sine plus band-passed noise with vibrato and pitch scoop), **taiko** (sine sweep plus noise slap, low tom), **hyoshigi** wood clacks (short noise bursts), **rin bell** (inharmonic FM), **biwa** thumps, soft **pad** (detuned saw through a low-pass) for atmosphere, a gentle **arpeggio** layer for combat.
-- Music is generative but musical: each track is a set of patterns (chord loop, melody generated from the scale by a seeded walk with motif repetition, percussion pattern) sequenced by a lookahead scheduler. Tracks: `title` (slow, grand, shakuhachi over pad, distant taiko), `hero_select` (warm koto), `map1..3` (calm exploration per chapter mood), `combat1..3` (driving taiko, ostinato, rising layers as enemies fall), `elite` (tense, tritone-ish hits), `boss1..3` and `final` (big, layered, phase-aware `AUDIO.intensity(n)` optional), `shop` (playful plucks), `camp` (crackle plus soft lullaby), `event` (mysterious sparse), `reward` (short fanfare loop), `victory`, `defeat` (one-shot stingers that then fall to silence or a soft loop).
-- SFX: every id in `LISTS.sfx`, short, punchy, layered from synth primitives, slightly randomised pitch per play to avoid repetition, a global compressor and limiter so stacking never clips. Music sits at about 0.55 of SFX gain by default and ducks under big hits.
-- Volumes come from `META.get('musicVol')` and `('sfxVol')`. Audio starts on the first pointer or key event.
+- Music is generative but musical: each track is a set of patterns (chord loop, melody generated from the scale by a seeded walk with motif repetition, percussion pattern) sequenced by a lookahead scheduler. Tracks: `title` (slow, grand, shakuhachi over pad, distant taiko), `hero_select` (warm koto), `map1..3` (calm exploration per chapter mood), `combat1..3` (driving taiko, ostinato, rising layers as enemies fall), `elite` (tense, tritone-ish hits), `boss1..3` and `final` (big, layered, phase-aware through `AUDIO.intensity(n)`), `shop` (playful plucks), `camp` (crackle plus soft lullaby), `event` (mysterious sparse), `reward` (short fanfare loop), `victory`, `defeat` (one-shot stingers that then fall to silence or a soft loop).
+- SFX: every id in `LISTS.sfx`, short, punchy, layered from synth primitives, slightly randomised pitch per play to avoid repetition, a global compressor and limiter so stacking never clips. AUDIO scales music to 0.55 of SFX gain at equal slider values (an internal constant, `MUSIC_SCALE`), and the default sliders are musicVol 0.7 and sfxVol 0.8 (`DATA.SETTINGS`), so by default the music sits about half as loud as the SFX; it ducks under big hits.
+- `audio.js` never references `META` (it loads before it): `UI.applySettings()` is the only bridge (`AUDIO.setVolume`). Audio starts on the first pointer or key event; a track requested earlier is remembered and starts then. `AUDIO.intensity(n)` (0..1, from the fraction of enemies fallen plus boss phases) layers the combat and boss tracks up.

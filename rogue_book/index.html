@@ -2,18 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0d0b1e">
 <title>INKWOVEN -- a rogue storybook</title>
 <meta name="description" content="Two heroes, one living book. Paint the fog away with ink, build a deck of gem-socketed cards, and rewrite the ending. An anime deckbuilding roguelike.">
-<link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/menu.css">
-<link rel="stylesheet" href="css/map.css">
-<link rel="stylesheet" href="css/combat.css">
-<link rel="stylesheet" href="css/node.css">
-<link rel="stylesheet" href="css/end.css">
 <style id="boot-css">
-/* Painted from the HTML while the scripts download; UI removes #boot on the first frame. */
+/* Painted from the HTML while the scripts download; GAME.boot removes #boot after the first frame. Kept ABOVE the
+   stylesheet links so base.css can override html,body. */
 html,body{margin:0;height:100%;background:#0d0b1e;overflow:hidden}
 #boot{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
   background:radial-gradient(ellipse at 50% 40%,#2a1d5a 0%,#0d0b1e 70%);font-family:Georgia,"Hiragino Mincho ProN","Yu Mincho",serif;color:#f3e6c8;transition:opacity .4s}
@@ -21,18 +16,54 @@ html,body{margin:0;height:100%;background:#0d0b1e;overflow:hidden}
 #boot b{font-size:clamp(34px,8vw,72px);letter-spacing:.18em;font-weight:700;text-shadow:0 0 22px #ff7eb6,0 3px 0 #0d0b1e}
 #boot i{display:block;width:14px;height:20px;border-radius:50% 50% 50% 50%/62% 62% 38% 38%;background:#7a6bff;box-shadow:0 0 14px #5ff5ff;animation:bootDrip 1.1s ease-in infinite}
 @keyframes bootDrip{0%{transform:translateY(-14px) scaleY(.8);opacity:0}30%{opacity:1}100%{transform:translateY(16px) scaleY(1.2);opacity:0}}
+#boot p{max-width:80vw;margin:0;text-align:center;font-size:16px;line-height:1.4}
+#boot button{font:inherit;color:#0d0b1e;background:#f5c96a;border:0;border-radius:6px;padding:12px 22px;min-height:44px;cursor:pointer}
+#sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}   /* screen reader live region, written by UI.announce */
 @media (prefers-reduced-motion:reduce){#boot i{animation:none}}
 </style>
+<script>
+/* Boot watchdog. In the head, ABOVE the stylesheet links, so it also sees a missing stylesheet. With 40 classic scripts, any throw or missing file before GAME.boot would leave the boot
+   splash up forever. This records load errors and, if the game has not set window.__booted after 6 s,
+   replaces the splash with the reason and a Try again button. tools/rogue_book/shot.mjs reads window.__errors. */
+(function () {
+  window.__errors = []; window.__missing = [];
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t !== window && (t.src || t.href)) { window.__missing.push(String(t.src || t.href).split('/').slice(-2).join('/')); return; }
+    window.__errors.push({ message: String(e.message), file: String(e.filename || '').split('/').pop(), line: e.lineno });
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) { window.__errors.push({ message: String(e.reason && e.reason.message || e.reason) }); });
+  setTimeout(function () {
+    var b = document.getElementById('boot');
+    if (window.__booted || !b) return;
+    var why = window.__errors[0] ? window.__errors[0].message + ' (' + window.__errors[0].file + ':' + window.__errors[0].line + ')' : window.__missing.length ? 'Could not load ' + window.__missing[0] : 'The game did not start.';
+    b.innerHTML = '';
+    var h = document.createElement('b'); h.textContent = 'INKWOVEN';
+    var p = document.createElement('p'); p.textContent = 'The book would not open. ' + why;
+    var r = document.createElement('button'); r.textContent = 'Try again'; r.onclick = function () { window.location.reload(); };
+    b.appendChild(h); b.appendChild(p); b.appendChild(r);
+  }, 6000);
+})();
+</script>
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/menu.css">
+<link rel="stylesheet" href="css/map.css">
+<link rel="stylesheet" href="css/combat.css">
+<link rel="stylesheet" href="css/node.css">
+<link rel="stylesheet" href="css/end.css">
 </head>
 <body>
 <div id="boot"><b>INKWOVEN</b><i></i></div>
 <div id="wrap">
   <div id="stage">
-    <canvas id="view" width="1280" height="720"></canvas>
-    <div id="screens"></div>
-    <div id="overlays"></div>
-    <div id="toasts"></div>
+    <canvas id="view" width="1280" height="720"></canvas>   <!-- z0  world, painted by the current screen.draw -->
+    <div id="screens"></div>                                <!-- z10 -->
+    <div id="overlays"></div>                               <!-- z20 -->
+    <canvas id="over" width="1280" height="720"></canvas>   <!-- z30 transitions, impact frames, full-screen flashes -->
+    <div id="tips"></div>                                   <!-- z40 tooltips and tutorial hints -->
+    <div id="toasts"></div>                                 <!-- z50 -->
   </div>
+  <div id="sr" role="status" aria-live="polite"></div>      <!-- visually hidden: one line per combat batch, written by UI.announce -->
 </div>
 <noscript>Inkwoven needs JavaScript.</noscript>
 
