@@ -1127,8 +1127,8 @@ const DATA = (() => {
     // act 2 elites
     // (BALANCE round 12: with the harder difficulty dial Ironjaw one-shot a full-hp crawler; hp 136-148 -> 88-98,
     // Bite 22 -> 11, Gape 46 -> 20, Thorns 4 -> 2 (4 per hit bit a many-prize drop for 40): still the act 2
-    // wall, now one you can block)
-    { id: 'ironjaw', name: 'Ironjaw', act: 2, tier: 'elite', hp: [88, 98], art: 'ironjaw', size: 1.2, color: '#7d8590',
+    // wall, now one you can block) (round 16: hp 88-98 -> 80-90, still the top act 2 killer)
+    { id: 'ironjaw', name: 'Ironjaw', act: 2, tier: 'elite', hp: [80, 90], art: 'ironjaw', size: 1.2, color: '#7d8590',
       desc: 'A bear trap that learned to walk. And swallow. Metal goes down easiest.', ai: 'cycle', pattern: [0, 1, 2, 3, 0],
       taunt: 'CLANK. CLANK. CHOMP.',
       status: { thorns: 2 },
@@ -1964,6 +1964,7 @@ const DATA = (() => {
       text: 'A clamshell bucket. Scoops loose small things by the handful. Swords stick out and tip over the rim.',
       joke: 'Technically a shovel. The union is looking into it.',
       stats: { grip: 3, reach: 5, speed: 2 }, good: 'Small loose things, heaps', bad: 'Swords, axes, anything long',
+      bal: { grabs: -1 },   // (round 16) the claw type's own start on top of the crawler's (GAME newRun): a handful a drop, one drop fewer a turn
       ups: { prongs: 'Taller bucket lips: grips a little better.', rubber: 'A rubber lining.' } },
     hand: { id: 'hand', name: 'Grabber Hand', icon: '🧤', color: '#ff9ad0', order: 3,
       text: 'A big rubber glove with curling fingers. Sticky. Always takes the biggest thing it touched, and only that.',
@@ -1990,6 +1991,7 @@ const DATA = (() => {
       text: 'Two small claws on one bar. Each slides to the prize nearest it and closes on its own, so one drop brings up a pair.',
       joke: 'Twins. One is five minutes older and never lets the other forget it.',
       stats: { grip: 2, reach: 4, speed: 3 }, good: 'Pairs, doubles, combos', bad: 'Big heavy things, swords',
+      bal: { hp: 10, grabs: 1 },   // (round 16) two small heads bring up less a drop: one more grab a turn and 10 Max HP
       ups: { width: 'Bigger heads, spread further apart.', prongs: 'Grippier fingertips on both heads.' } },
   };
   /* The claw type def for an id (a missing or unknown id is the classic). */
@@ -2195,7 +2197,7 @@ const DATA = (() => {
     // cabinet, and the turret fires at the end of every turn, bigger each level.
     engineer: { id: 'engineer', name: 'Mama Mech', title: 'The Engineer', color: '#ff8a2e',
       blurb: 'Bolts, plates and a wrench. Every metal thing she delivers builds the turret on her cabinet, and it fires every turn.',
-      hp: 75, gold: 95, unlock: 'act2', unlockText: 'Reach Act 2 with any Crawler.',
+      hp: 84, gold: 95, unlock: 'act2', unlockText: 'Reach Act 2 with any Crawler.',   // (round 16: 75 -> 84)
       claw: { grabs: 3, width: 1, grip: 1.1, speed: 0.95, prongs: 2, rubber: 0, magnet: 0 },
       relic: 'socket_set', turret: true,
       bin: ['hex_bolt', 'hex_bolt', 'hex_bolt', 'hex_bolt', 'hex_bolt',
@@ -4922,7 +4924,7 @@ const DATA = (() => {
       moves: [atk('jab', 'Joystick Jab', 10, 2, 'Joystick jab: 10 x2'), debuff('trash', 'Trash Talk', 'weak', 2, 'Trash talks you (Weak 2)'),
         blk('trophy', 'Trophy Shield', 22, 'Hides behind a trophy (Block 22)'), atk('slam', 'Champion Slam', 26, 1, 'Champion slam for 26'),
         buff('hype', 'Hype Up', 'str', 2, 'Hypes himself up (+2 Strength)'), mv('wind', 'Wind Up', 'charge', 'Winding up the big grab (44 next turn)', { v: 44 })] },
-    { id: 'plushqueen', name: 'The Plushie Queen', act: 1, tier: 'boss', hp: [100, 100], art: 'slime', look: 'plushqueen', size: 1, color: '#ff9ec7', color2: '#ffd1e6', color3: '#ffc94d',
+    { id: 'plushqueen', name: 'The Plushie Queen', act: 1, tier: 'boss', hp: [92, 92], art: 'slime', look: 'plushqueen', size: 1, color: '#ff9ec7', color2: '#ffd1e6', color3: '#ffc94d',
       desc: 'Every unclaimed plush in the tower pledged itself to her. Every one of them is a pillow between you and her.', ai: 'cycle',
       taunt: 'Hugs are mandatory. Resistance is fluffy.',
       // Boss signature: a parade of plush toys into your bin; each one soaks a point of every hit on her until you grab it out.
@@ -6169,7 +6171,9 @@ const DATA = (() => {
   // ---- DUO NET (round 15): online co-op (DESIGN.md "Online co-op (round 15)"). The rules the
   // game's DUO NET block and js/net.js share: the room code, the timings, a partner's profile repaired.
   DUO.NET = {
-    PROTO: 1,                                  // the message format; a partner on another one is told to reload
+    PROTO: 2,                                  // the message format; a partner on another one is told to reload (2: round 16's online versus)
+    MODES: ['coop', 'vs'],                     // (round 16) what an online room plays: the host's pick, the guest follows it
+    VS_BODIES: 40,                             // (round 16) at most this many bin bodies in one versus stream or end-of-drop snapshot
     ALPHA: 'ABCDEFGHJKLMNPQRSTUVWXYZ', CODE_LEN: 4,   // the relay's room codes: no I, no O, no digits
     STREAM: 0.1, BODIES: 0.25,                 // the claw to the spectator 10 times a second, the bin 4 times
     YOURS: 5,                                  // YOUR TURN starts on its own after this many seconds
@@ -6206,11 +6210,13 @@ const DATA = (() => {
       paint: pick(p.paint, (v) => has(COSMETICS, v) && COSMETICS[v].cat === 'paint', ''),
     };
   }
-  // meta.duo.online: games and wins played online, the look last used there.
+  // meta.duo.online: games and wins played online, the look last used there; (round 16) vsGames /
+  // vsWins: the online versus claw-offs and the ones won (a forfeit win counts), wins never above games.
   function duoNetOnline(o) {
     const d = o && typeof o === 'object' && !Array.isArray(o) ? o : {};
     const n = (v) => Math.max(0, Math.floor(+v) || 0);
-    return { games: n(d.games), wins: Math.min(n(d.wins), n(d.games)), me: d.me && typeof d.me === 'object' && !Array.isArray(d.me) ? duoNetPlayer(d.me, 0) : null };
+    return { games: n(d.games), wins: Math.min(n(d.wins), n(d.games)), me: d.me && typeof d.me === 'object' && !Array.isArray(d.me) ? duoNetPlayer(d.me, 0) : null,
+      vsGames: n(d.vsGames), vsWins: Math.min(n(d.vsWins), n(d.vsGames)) };
   }
   /* A finished duel on the record. o {mode: 'vs' | 'coop', names: [a, b],
      w: 0 | 1 | -1 (versus), won (co-op)}. Returns the record (mutated). */

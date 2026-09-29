@@ -7648,7 +7648,7 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     h.eq(G.run.char, 'engineer', 'the run is Mama Mech\'s');
     h.eq(G.run.bin.length, 19, 'with her 19 item bin');
     h.ok(G.run.relics.includes('socket_set'), 'and the Socket Set');
-    h.eq(G.run.maxHp, 75, '75 hp');
+    h.eq(G.run.maxHp, 84, '84 hp (round 16: 75 -> 84)');
     const fresh = mamaBoot({ knight: true }).G;
     fresh.showChars();
     const j = fresh.S.ui.buttons.findIndex(b => b.label === 'Mama Mech');
@@ -10906,6 +10906,278 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
     const rec = G.meta.his.runs[0];
     h.ok(rec && rec.dp === 1 && rec.lp === 3, 'the history record keeps the dive');
     G.draw();
+  });
+}
+
+/* ------------------------------------------------- CAB (round 16): the cabinet is alive */
+{
+  const cabBoot = (force, meta) => { const o = metaBoot(Object.assign({ cab: { tip: 1 } }, meta || {})); o.G.cab.force = force !== false; return o; };
+  const cabFight = (G, seed, bin, fight, lamp) => {
+    G.newRun('knight', seed || 4242);
+    if (bin) for (const id of bin) G.addItem(id);
+    G.run.hp = G.run.maxHp = 999;
+    if (lamp != null) G.run.cabLamp = lamp;
+    G.startFight(['slime'], 'normal', { seed: fight || 777 });
+    stepFor(G, 2.5);
+    return G.cab.fs();
+  };
+  // End the turn and play the enemy phase out (the next turn's event, if any, is rolled).
+  const nextTurn = (G) => { G.endTurn(); for (let i = 0; i < 1800 && (G.fight.phase !== 'player' || G.fs.enemyTurn || G.fs.queue.length); i++) G.update(DT); };
+  const grabAt = (G, x) => { G.steer(x); stepFor(G, 1.2); G.dropClaw(); settle(G, 12); };
+
+  h.test('cab: off headless unless forced, and off in Duo; the default fight is untouched', () => {
+    const { G } = cabBoot(false);
+    cabFight(G);
+    h.eq(G.cab.on(), false, 'off headless by default');
+    const g0 = G.rig.cfg.grip, s0 = G.rig.cfg.speed;
+    h.eq(G.cab.gripAdd(), 0, 'no grip bonus');
+    for (let k = 0; k < 6; k++) nextTurn(G);
+    const C = G.cab.fs();
+    h.ok(!C.ev && !C.surge && C.bodies.length === 0, 'no event ever rolled');
+    h.eq(G.rig.cfg.grip, g0, 'the grip is the claw\'s own'); h.eq(G.rig.cfg.speed, s0, 'and so is the speed');
+    h.eq(G.cab.lampAdd(3), 0, 'the lamp does not fill');
+    G.fight.enemies.forEach((e) => { e.hp = 0; e.alive = false; });
+    G.endFight('win');
+    h.eq(G.run.cabLamp, undefined, 'the run carries no lamp field');
+    const { G: G2 } = cabBoot(true);
+    cabFight(G2);
+    h.ok(G2.cab.on(), 'forced on');
+    G2.S.duo = { mode: 'coop' };
+    h.eq(G2.cab.on(), false, 'never in Duo');
+    G2.S.duo = null;
+  });
+
+  h.test('cab: the events roll from the fight\'s seed and the turn (never turn 1), and a reload mid fight replays them', () => {
+    const roll = (G) => { const out = []; for (let k = 0; k < 9; k++) { nextTurn(G); const C = G.cab.fs(); out.push(C.ev ? C.ev.id : '-'); if (C.ev) { stepFor(G, 0.1); G.cab.land(); } } return out; };
+    const { T, G } = cabBoot(true);
+    cabFight(G, 4242, null, 1603);
+    h.ok(!G.cab.fs().ev, 'no event at the bell (turn 1)');
+    const a = roll(G);
+    h.ok(a.some((x) => x !== '-'), 'some turns open with an event: ' + a.join(' '));
+    h.ok(a.every((x) => x === '-' || G.cab.IDS.includes(x)), 'every event is a known one');
+    // the same fight again (a reload restarts it from the bell): the same events on the same turns
+    const { G: G2 } = cabBoot(true);
+    cabFight(G2, 4242, null, 1603);
+    h.eq(roll(G2).join(), a.join(), 'the same seed, the same events');
+    // the rolls over many fights: roughly CABK.evP of the turns from turn 2
+    let n = 0, ev = 0;
+    const cnt = {};
+    for (let s = 1; s <= 12; s++) { const o = cabBoot(true); cabFight(o.G, 50 + s, null, 900 + s); for (const x of roll(o.G)) { n++; if (x !== '-') { ev++; cnt[x] = (cnt[x] || 0) + 1; } } }
+    const p = ev / n;
+    h.ok(p > 0.2 && p < 0.56, `about ${G.cab.K.evP} of the turns: ${p.toFixed(2)}`);
+    h.ok(cnt.surge > 0 && cnt.coins > 0 && cnt.capsule > 0, 'all three come up: ' + JSON.stringify(cnt));
+  });
+
+  h.test('cab: a reload mid fight: the fight restarts from its bell with the same events and the lamp the fight started with', () => {
+    const { T, G } = cabBoot(true);
+    cabFight(G, 5150, null, 1603, 5);
+    // fill the lamp in the fight, then save mid turn (a fight saves as its opening bell)
+    G.cab.lampAdd(4);
+    h.eq(G.cab.fs().lamp, 9, 'the fight\'s lamp is 5 + 4');
+    nextTurn(G);
+    const ev1 = G.cab.fs().ev ? G.cab.fs().ev.id : '-';
+    G.save();
+    const raw = JSON.parse(T._store[G.RUN_KEY]);
+    h.eq(raw.run.cabLamp, 5, 'the save keeps the lamp the fight started with');
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    const G2 = T2.GAME;
+    G2.cab.force = true;
+    h.ok(G2.load() && G2.screen === 'fight', 'the fight comes back');
+    h.eq(G2.cab.fs().lamp, 5, 'the lamp starts where the fight did (no double fill)');
+    stepFor(G2, 2.5);
+    nextTurn(G2);
+    h.eq(G2.cab.fs().ev ? G2.cab.fs().ev.id : '-', ev1, 'turn 2 opens the same way: ' + ev1);
+    G2.draw();
+  });
+
+  h.test('cab: POWER SURGE grips harder and runs faster for the turn; the end of the turn takes it back', () => {
+    const { G } = cabBoot(true);
+    cabFight(G);
+    const g0 = G.rig.cfg.grip, s0 = G.rig.cfg.speed;
+    G.cab.event('surge', true);
+    const C = G.cab.fs();
+    h.ok(C.surge, 'surging');
+    h.near(G.rig.cfg.grip, g0 + G.cab.K.surgeGrip, 1e-9, 'the grip +' + G.cab.K.surgeGrip);
+    h.near(G.rig.cfg.speed, s0 * G.cab.K.surgeSpeed, 1e-9, 'the carriage x' + G.cab.K.surgeSpeed);
+    G.draw();
+    // a grab in between keeps it (the Lucky Claw and the golden grab set the grip absolutely)
+    grabAt(G, G.fs.items[0].x);
+    h.near(G.rig.cfg.grip, g0 + G.cab.K.surgeGrip + (G.fs.luckyOn ? G.toys.MAT.luckyGrip : 0), 1e-9, 'still surging after a grab');
+    nextTurn(G);
+    h.ok(!C.surge, 'the surge ran out');
+    h.near(G.rig.cfg.grip, g0 + (G.fs.luckyOn ? G.toys.MAT.luckyGrip : 0), 1e-9, 'the grip is back');
+    h.near(G.rig.cfg.speed, s0, 1e-9, 'the speed is back');
+  });
+
+  h.test('cab: COIN SHOWER rains coins around the claw (never into it); a coin in the chute pays 1 gold; the rest sink away at the end of the turn', () => {
+    const { G, T } = cabBoot(true);
+    cabFight(G);
+    G.steer(200); stepFor(G, 1.2);
+    G.cab.event('coins', true);
+    stepFor(G, 1.5);
+    const C = G.cab.fs();
+    const coins = C.bodies.filter((b) => b.data.cab === 'coin');
+    h.eq(coins.length, G.cab.K.coinN, G.cab.K.coinN + ' coins in the bin');
+    h.eq(G.rig.held().length, 0, 'none landed in the open claw');
+    h.ok(coins.every((b) => b.x > 0 && b.x < G.cabinet.bounds.chuteX && b.y < G.CAB.h + 1), 'all in the bin');
+    h.ok(G.fs.items.every((b) => !b.data.cab), 'never an item of the bin');
+    const g0 = T.COMBAT.gold(G.fight);
+    // a coin knocked into the chute pays
+    const c = coins[0];
+    c.x = G.cabinet.bounds.chuteX + 30; c.y = G.cabinet.bounds.dividerTop + 30; c.vx = 0; c.vy = 50;
+    stepFor(G, 0.3);
+    h.eq(T.COMBAT.gold(G.fight), g0 + 1, '+1 gold');
+    h.eq(C.bodies.length, coins.length - 1, 'the coin is gone');
+    G.draw();
+    nextTurn(G);
+    h.eq(C.bodies.filter((b) => b.data.cab === 'coin').length, 0, 'the rest sank away');
+    h.eq(T.COMBAT.gold(G.fight), g0 + 1, 'and paid nothing');
+  });
+
+  h.test('cab: CAPSULE DROP: deliver it and a real capsule waits on the reward screen (Cabinet prize); two a fight at most, none in a Boss Rush', () => {
+    const { G } = cabBoot(true);
+    cabFight(G);
+    G.cab.event('capsule', true);
+    stepFor(G, 1.5);
+    const C = G.cab.fs();
+    const cap = C.bodies.find((b) => b.data.cab === 'cap');
+    h.ok(cap && G.cab.face(cap), 'a capsule with a face in the pile');
+    const tier = cap.data.tier;
+    cap.x = G.cabinet.bounds.chuteX + 30; cap.y = G.cabinet.bounds.dividerTop + 30; cap.vx = 0; cap.vy = 50;
+    stepFor(G, 0.3);
+    h.eq(C.won.join(), tier, 'won: ' + tier);
+    G.cab.event('capsule', true); G.cab.event('capsule', true); G.cab.event('capsule', true);
+    h.eq(C.caps, G.cab.K.capMax, 'no more than ' + G.cab.K.capMax + ' capsules a fight (the rest are coins)');
+    G.fight.enemies.forEach((e) => { e.hp = 0; e.alive = false; });
+    G.endFight('win');
+    const rw = G.S.sd && G.S.sd.reward;
+    h.ok(rw && rw.caps.some((c) => c.src === 'cabinet' && c.tier0 === tier && c.prize), 'the reward holds the cabinet capsule, in its colour');
+    h.eq(G.S && G.fs && G.fs.cab ? G.fs.cab.won.length : 0, 0, 'paid once');
+    // a Boss Rush fight has no reward screen for it: coins instead
+    const o = cabBoot(true);
+    cabFight(o.G);
+    o.G.run.rush = { order: ['slime'], k: 0 };
+    h.ok(o.G.rush.of(o.G.run), 'a rush run');
+    o.G.cab.event('capsule', true); stepFor(o.G, 1);
+    h.eq(o.G.cab.fs().caps, 0, 'no capsule in a rush');
+    h.ok(o.G.cab.fs().bodies.every((b) => b.data.cab !== 'cap'), 'none in the pile');
+    o.G.run.rush = null;
+  });
+
+  h.test('cab: the Jackpot Lamp fills with deliveries (a double, a jackpot and a rare prize add more), SO CLOSE consoles, full goes FEVER and rains prizes; the run keeps the level', () => {
+    const { G } = cabBoot(true);
+    const C = cabFight(G);
+    h.eq(C.lamp, 0, 'a fresh run starts empty');
+    const body = G.fs.items.find((b) => b.data.def.rarity === 'c');
+    G.playDelivered([body]);
+    h.eq(C.lamp, 1, 'a delivery: +1');
+    G.fs.delivered = 1; G.playDelivered([G.fs.items.find((b) => b.data.def.rarity === 'c')]);
+    h.eq(C.lamp, 3, 'the second in a grab: +1 more');
+    G.toys.soClose(300, 700);
+    h.eq(C.lamp, 4, 'SO CLOSE: +1');
+    stepFor(G, 0.8);
+    h.eq(C.lampShow, 4, 'the sparks landed');
+    h.ok(C.lampUsed, 'used');
+    G.cab.lampAdd(G.cab.K.lampMax - 4 + 2);
+    h.ok(C.fever, 'full: FEVER');
+    const before = C.bodies.length;
+    stepFor(G, 3);
+    h.eq(C.feverN, 1, 'one fever');
+    h.ok(C.bodies.length >= before + G.cab.K.rainCoins, 'coins rained in: ' + (C.bodies.length - before));
+    h.ok(C.bodies.some((b) => b.data.cab === 'cap'), 'and a capsule');
+    h.eq(C.lamp, 2, 'the overflow carries');
+    h.eq(G.meta.cab.fevers, 1, 'the profile counts it');
+    G.draw();
+    G.fight.enemies.forEach((e) => { e.hp = 0; e.alive = false; });
+    G.endFight('win');
+    h.eq(G.run.cabLamp, 2, 'the run keeps the level');
+    // the next fight starts there; a lamp left full goes off after the bell
+    G.run.cabLamp = G.cab.K.lampMax;
+    G.S.sd = null;
+    G.startFight(['slime'], 'normal', { seed: 11 });
+    h.ok(G.cab.fs().fever && G.cab.fs().fever.t < 0, 'a full lamp: FEVER after the bell');
+  });
+
+  h.test('cab: PERFECT: a drop dead centre on the prize under the palm that comes up with it; the grip holds harder for that lift only', () => {
+    let perfects = 0, offs = 0, tried = 0;
+    for (let s = 1; s <= 10; s++) {
+      const { G } = cabBoot(true);
+      cabFight(G, 100 + s, null, 300 + s);
+      const C = G.cab.fs();
+      const tgt = G.fs.items.filter((b) => b.x < 380).sort((a, b) => a.y - b.y)[0];
+      const g0 = G.rig.cfg.grip;
+      G.steer(tgt.x); stepFor(G, 1.2);
+      G.dropClaw();
+      let sawGrip = false;
+      for (let i = 0; i < 600 && G.fs.grabInFlight; i++) { G.update(DT); if (C.perf && G.rig.cfg.grip > g0 + 0.2) sawGrip = true; }
+      settle(G, 10);
+      tried++;
+      if (C.perfG === G.fs.grabN) { perfects++; h.ok(sawGrip, 'the PERFECT grip was on for the lift'); h.ok(!C.perf, 'and off after'); }
+      // 14 px off the prize under the palm is not dead centre
+      const o = cabBoot(true);
+      cabFight(o.G, 100 + s, null, 300 + s);
+      const t2 = o.G.fs.items.filter((b) => b.x < 380).sort((a, b) => a.y - b.y)[0];
+      o.G.steer(t2.x + 14); stepFor(o.G, 1.2);
+      o.G.dropClaw(); settle(o.G, 12);
+      if (o.G.cab.fs().perfG === o.G.fs.grabN) offs++;   // (only when another prize sat dead centre under the palm)
+    }
+    h.ok(perfects >= 4, `dead-centre drops go PERFECT most of the time (${perfects}/${tried})`);
+    h.ok(offs <= perfects, `an aim 14 px off goes PERFECT less often (${offs}/${tried})`);
+  });
+
+  h.test('cab: the strain of a heavy lift (HEAVY! once a grab, the creak, gritted eyes) and the prizes\' faces (watch, gasp, ride, dizzy)', () => {
+    const { G } = cabBoot(true);
+    h.eq(G.cab.strainK(5), 0, 'a marble is no strain'); h.eq(G.cab.strainK(60), 1, 'an anvil and a shield is all of it');
+    h.ok(G.cab.strainK(26) > 0.4 && G.cab.strainK(26) < 0.6, 'in between, in between');
+    cabFight(G, 4242, ['tower_shield', 'war_hammer', 'family_anvil', 'aegis', 'dragon_egg', 'golden_duck']);
+    const faced = G.fs.items.filter((b) => G.cab.face(b));
+    h.ok(faced.length >= 4 && faced.every((b) => ['r', 'l'].includes(b.data.def.rarity) || (G.fs.golden && b.data.inst.uid === G.fs.golden.uid)), 'rare and legendary prizes have faces: ' + faced.length);
+    h.ok(G.fs.items.filter((b) => b.data.def.rarity === 'c' && !(G.fs.golden && b.data.inst.uid === G.fs.golden.uid)).every((b) => !G.cab.face(b)), 'commons do not');
+    const heavy = G.fs.items.find((b) => b.data.def.id === 'family_anvil') || G.fs.items.find((b) => b.data.def.id === 'tower_shield');
+    G.steer(heavy.x); stepFor(G, 1.2); G.dropClaw();
+    const C = G.cab.fs();
+    let maxK = 0, gasp = false, ride = false;
+    for (let i = 0; i < 700 && G.fs.grabInFlight; i++) {
+      G.update(DT); maxK = Math.max(maxK, C.strain);
+      for (const b of faced) { const fc = b.data.fc; if (fc.mood === 'gasp') gasp = true; if (fc.mood === 'ride') ride = true; }
+      if (i % 20 === 0) G.draw();
+    }
+    const lifted = C.heavyG === G.fs.grabN;
+    h.ok(maxK > 0.2, 'the claw strained: ' + maxK.toFixed(2));
+    if (lifted) h.ok(maxK >= G.cab.K.heavyK - 0.05, 'a HEAVY lift strains hard');
+    h.ok(gasp || ride || !faced.some((b) => b.held > 0), 'a caught face gasps or rides');
+    h.ok(C.strain < 0.05 || G.rig.phase !== 'idle', 'the strain eases off when the claw is home');
+    // a slip makes the dropped face dizzy
+    const f = faced[0];
+    G.fs.cargo = [f];
+    G.rigEvent('slip');
+    h.eq(f.data.fc.mood, 'dizzy', 'dropped: dizzy');
+    // faces look at the claw when it is near
+    stepFor(G, 1.5);
+    const near = faced.find((b) => Math.hypot(G.rig.x - b.x, G.rig.y + 30 - b.y) < G.cab.K.faceLook);
+    if (near) h.ok(Math.sign(near.data.fc.lx) === Math.sign(G.rig.x - near.x) || Math.abs(G.rig.x - near.x) < 4, 'a face near the claw looks its way');
+    G.toys && G.draw();
+  });
+
+  h.test('cab: the physics stays deterministic with the cabinet on (the same seed and inputs, the same pile)', () => {
+    const run = () => {
+      const { G } = cabBoot(true);
+      cabFight(G, 777, null, 2024);
+      G.cab.event('coins', true); stepFor(G, 1);
+      grabAt(G, 150); nextTurn(G); grabAt(G, 260);
+      return G.fs.items.map((b) => b.x.toFixed(3) + ',' + b.y.toFixed(3)).join(';') + '|' + G.cab.fs().bodies.map((b) => b.x.toFixed(3)).join(';');
+    };
+    h.eq(run(), run(), 'bit for bit');
+  });
+
+  h.test('cab: reduced motion: no shake on the claw, the sign still reads, nothing throws while drawing every state', () => {
+    const { G } = cabBoot(true, { settings: { shake: false } });
+    cabFight(G, 4242, ['dragon_egg', 'aegis']);
+    h.ok(G.S && G.fs, 'a fight');
+    for (const id of G.cab.IDS) { G.cab.event(id); for (let i = 0; i < 20; i++) { G.update(DT * 8); G.draw(); } }
+    G.cab.lampAdd(40); for (let i = 0; i < 30; i++) { G.update(DT * 6); G.draw(); }
+    h.ok(true, 'drew the events, the fever and the rain');
+    h.eq(G.cab.WORDS.filter((w) => w.indexOf(String.fromCharCode(0x2014)) >= 0).length, 0, 'no em dash in the words');
   });
 }
 

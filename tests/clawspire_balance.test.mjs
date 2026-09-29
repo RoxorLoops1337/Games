@@ -388,5 +388,33 @@ h.test('spare heart heals exactly its max hp gain', () => {
   h.eq(F.player.hp, 40 + g, 'healed by the same amount, once');
 });
 
+// Round 16 (DESIGN.md "Balance touch-up (round 16)"): a claw type's own start, DATA.CLAWS[id].bal
+// {hp, grabs}, read once by GAME newRun. The skilled bot measured the scoop far ahead and the twins far
+// behind; the dials are small (some Max HP, one grab at most) and land on a real run.
+h.test('claw type balance dials: small, and a new run gets them', () => {
+  const CL = DATA.CLAWS;
+  for (const id in CL) {
+    const b = CL[id].bal;
+    if (b == null) continue;
+    h.ok(Number.isInteger(b.hp || 0) && Math.abs(b.hp || 0) <= 15, `${id}: bal.hp ${b.hp} is a small whole number`);
+    h.ok(Number.isInteger(b.grabs || 0) && Math.abs(b.grabs || 0) <= 1, `${id}: bal.grabs ${b.grabs} is at most one grab`);
+  }
+  h.ok((CL.twin.bal && CL.twin.bal.grabs) === 1, 'the twins bring one more grab a turn');
+  h.ok((CL.scoop.bal && CL.scoop.bal.grabs) === -1, 'the scoop takes one grab a turn fewer');
+  for (const ch in DATA.CHARACTERS) h.ok(DATA.CHARACTERS[ch].claw.grabs + CL.scoop.bal.grabs >= 2, `${ch} with the scoop keeps 2+ grabs a turn`);
+  const T = boot();
+  const G = T.GAME, D = T.DATA;
+  for (const ct of ['classic', 'scoop', 'twin']) for (const ch of ['knight', 'alchemist', 'engineer']) {
+    h.ok(G.claws.pick(ct), `${ct} picked`);
+    const run = G.newRun(ch, 40 + ch.length);
+    const b = D.CLAWS[ct].bal || {}, c = D.CHARACTERS[ch];
+    h.eq(run.clawType, ct, `${ch} runs with the ${ct}`);
+    h.eq(run.maxHp, c.hp + (b.hp || 0), `${ch} + ${ct}: Max HP ${c.hp} ${b.hp || 0 ? 'with ' + b.hp : 'as is'}`);
+    h.eq(run.hp, run.maxHp, `${ch} + ${ct}: starts full`);
+    h.eq(run.claw.grabs, c.claw.grabs + (b.grabs || 0), `${ch} + ${ct}: grabs a turn`);
+  }
+  G.claws.pick('classic');
+});
+
 console.log(`  balance suite: ${((Date.now() - T0) / 1000).toFixed(1)} s`);
 h.done();

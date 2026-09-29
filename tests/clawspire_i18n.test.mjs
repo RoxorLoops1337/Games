@@ -802,4 +802,40 @@ h.test('dep: every Neon Depths line has its Dutch (the tricks, the reboot card, 
   h.ok(ok, 'the Depths map and a boss fight draw in Dutch');
 });
 
+h.test('cab: every line of the living cabinet has its Dutch (the events, the lamp, PERFECT, the faces), and the fight draws it', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  const { GAME: G, I18N } = T;
+  const ui = I18N.table('nl').ui;
+  const same = new Set(['LAMP +1']);
+  const miss = [], flat = [], em = [];
+  for (const k of G.cab.WORDS) { if (!ui[k]) miss.push(k); else if (ui[k] === k && !same.has(k)) flat.push(k); if (ui[k] && ui[k].indexOf(EM) >= 0) em.push(k); }
+  h.eq(miss.length, 0, 'every word has a Dutch entry: ' + miss.slice(0, 4).join(' | '));
+  h.eq(flat.length, 0, 'and it is Dutch: ' + flat.slice(0, 4).join(' | '));
+  h.eq(em.length, 0, 'no em dash');
+  for (const k in G.cab.PATTERNS) {
+    h.ok(ui[k], 'a pattern: ' + k);
+    const ex = G.cab.PATTERNS[k], out = I18N.tr(ex);
+    h.ok(out !== ex && !/\{\w+\}/.test(out), `the example comes back in Dutch: ${ex} -> ${out}`);
+  }
+  for (const id of G.cab.IDS) { const e = G.cab.EV[id]; for (const s of [e.name, e.text, e.marquee]) h.ok(G.cab.WORDS.includes(s), `${id}: "${s}" is listed`); }
+  h.eq(I18N.tr('Cabinet prize! Tap to crack it open.'), 'Kastprijs! Tik om hem open te kraken.', 'the reward slot says where the capsule came from');
+  h.eq(I18N.tr('holding a cabinet prize'), 'vast: een kastprijs', 'the hint while the claw holds a coin');
+  // a fight with every event, the fever and a PERFECT: the canvas words are Dutch
+  const seen = new Set(), tr0 = I18N.tr;
+  I18N.tr = function (s) { const r = tr0.call(this, s); if (typeof s === 'string') seen.add(s + '=>' + r); return r; };
+  let ok = true;
+  try {
+    G.cab.force = true;
+    G.newRun('knight', 31); G.run.hp = G.run.maxHp = 999; G.startFight(['slime'], 'normal', { seed: 5 }); stepFor(G, 2.5);
+    for (const id of G.cab.IDS) { G.cab.event(id); for (let i = 0; i < 30; i++) { G.update(DT * 4); G.draw(); } }
+    G.cab.lampAdd(20); for (let i = 0; i < 40; i++) { G.update(DT * 4); G.draw(); }
+  } catch (e) { ok = false; console.log(e && e.stack); }
+  I18N.tr = tr0;
+  h.ok(ok, 'the living cabinet draws in Dutch');
+  const drawn = [...seen];
+  for (const [en, nl] of [['CABINET EVENT', 'KASTGEBEURTENIS'], ['POWER SURGE!', 'STROOMSTOOT!'], ['COIN SHOWER!', 'MUNTENREGEN!'], ['CAPSULE DROP!', 'CAPSULE ERIN!'], ['SURGE', 'STROOM'], ['FEVER', 'KOORTS']]) {
+    h.ok(drawn.includes(en + '=>' + nl), `${en} is drawn as ${nl}`);
+  }
+});
+
 h.done();
