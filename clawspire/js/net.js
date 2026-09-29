@@ -1,5 +1,6 @@
-// Clawspire -- NET (round 15). The online link for Duo co-op (DESIGN.md
-// "Online co-op (round 15)").
+// Clawspire -- NET (round 15). The online link for Duo co-op and, since round
+// 16, the versus claw-off (DESIGN.md "Online co-op (round 15)", "Online
+// versus (round 16)").
 //
 // A small WebSocket client for the shared relay the owner already runs for
 // Ironbridge (ironbridge-relay/worker.js, a Cloudflare Durable Object per
@@ -27,11 +28,14 @@
 //   NET.pulse()       the clock: heartbeats, silence, retries (an interval runs
 //                     it; the game's frame calls it too; tests call it by hand)
 //
-// Nothing here knows about co-op: versus (or anything else) can ride the same
-// link later with its own message types. Never throws into the game.
+// Nothing here knows about co-op or versus: both ride the same link with
+// message types of their own (round 16 added the versus claw-off, DESIGN.md
+// "Online versus (round 16)"). Never throws into the game.
 const NET = (() => {
   'use strict';
-  const PROTO = 1;
+  // 2 (round 16): the hello names the mode (co-op or versus) and the versus claw-off's messages
+  // joined the format, so a round 15 phone (co-op only) is told to reload instead of misreading them.
+  const PROTO = 2;
   const GAME = 'clawspire';
   const HOST = 'ironbridge-relay.danhieux-senjka.workers.dev';
   const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ';

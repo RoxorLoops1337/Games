@@ -3399,6 +3399,88 @@ const AUDIO = (() => {
   Object.assign(MIX_TRIM, { depLure: -0.5, depBubble: 1, depSting: 4, depPinch: 5.5, depZap: 1.5, depChest: 5.5, depTide: -1.5 });
   /* ---------------------------------------------------------------- /DEP */
 
+  /* ---------------------------------------------------------------- CAB (round 16): the cabinet is alive
+     DESIGN.md "The cabinet is alive (round 16)". The machine's own voices:
+     the event sign's reel ticking round and slamming down, the surge's
+     power-up, a shower of coins, the PERFECT chime (opts.n, a streak, climbs),
+     a claw straining under a heavy load (opts.vel), a prize's squeak, a spark
+     landing in the Jackpot Lamp (pitch climbs with the level) and the
+     lamp's FEVER siren. Calibrated into their MIX tiers. */
+  Object.assign(BANK, {
+    // The event reel: a dry slot tick.
+    cabRoll(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 3400 * p, q: 6, dur: 0.025, v: 0.3 });
+      blip(out, t, { w: 'square', f: 1250 * p, dur: 0.03, v: 0.08, lp: 3000 });
+      return 0.05;
+    },
+    // The sign lands: a clack, a thump and a bright two-note ding.
+    cabLand(out, t, o, p) {
+      hiss(out, t, { type: 'bandpass', f: 1800 * p, q: 2, dur: 0.05, v: 0.3, crunch: true });
+      blip(out, t, { w: 'sine', f: 150 * p, to: 70, dur: 0.14, v: 0.35 });
+      blip(out, t, { at: 0.05, w: 'triangle', f: mtof(84) * p, dur: 0.18, v: 0.12 });
+      blip(out, t, { at: 0.12, w: 'triangle', f: mtof(91) * p, dur: 0.26, v: 0.1 });
+      return 0.4;
+    },
+    // POWER SURGE: a rising electric whine over a crackle, then a zap.
+    cabSurge(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 110 * p, to: 880 * p, dur: 0.45, v: 0.08, lp: 3200, q: 4, vib: [30, 25] });
+      blip(out, t, { w: 'square', f: 55 * p, to: 440 * p, dur: 0.45, v: 0.04, lp: 1400 });
+      hiss(out, t, { type: 'highpass', f: 3500, dur: 0.4, v: 0.08, crunch: true, a: 0.1 });
+      blip(out, t, { at: 0.42, w: 'square', f: 1760 * p, to: 440 * p, dur: 0.12, v: 0.08, lp: 5000 });
+      hiss(out, t, { at: 0.42, type: 'highpass', f: 2500, dur: 0.12, v: 0.2, crunch: true });
+      return 0.6;
+    },
+    // COIN SHOWER: a patter of little clinks falling in.
+    cabRain(out, t, o, p) {
+      const notes = [96, 91, 98, 93, 100, 95, 101, 94];
+      notes.forEach((n, i) => {
+        blip(out, t, { at: i * 0.055, w: 'triangle', f: mtof(n) * p, to: mtof(n) * p * 0.94, dur: 0.09, v: 0.07 });
+        hiss(out, t, { at: i * 0.055, type: 'bandpass', f: 6000, q: 5, dur: 0.02, v: 0.06 });
+      });
+      return 0.55;
+    },
+    // PERFECT: a glassy chime with a sparkle on top; a streak (opts.n) climbs.
+    cabPerfect(out, t, o, p) {
+      const up = Math.min(4, Math.max(1, (o && o.n) | 0 || 1)) - 1, k = p * Math.pow(2, up * 2 / 12);
+      [79, 86, 91].forEach((n, i) => blip(out, t, { at: i * 0.045, w: 'sine', f: mtof(n) * k, dur: 0.5 - i * 0.08, v: 0.16 - i * 0.03, a: 0.003 }));
+      blip(out, t, { w: 'triangle', f: mtof(98) * k, dur: 0.35, v: 0.05, vib: [12, 18] });
+      hiss(out, t, { type: 'highpass', f: 7000, to: 11000, dur: 0.3, v: 0.05 });
+      return 0.55;
+    },
+    // A claw straining: a low metal groan with a creak (opts.vel, the load).
+    cabCreak(out, t, o, p) {
+      const v = U.clamp(o && o.vel != null ? +o.vel : 0.6, 0.1, 1.2);
+      blip(out, t, { w: 'sawtooth', f: 95 * p, to: 70 * p, dur: 0.35, v: 0.07 * (0.5 + v), lp: 700, q: 6, vib: [22, 6] });
+      for (let i = 0; i < 4; i++) hiss(out, t, { at: i * 0.07, type: 'bandpass', f: (900 + i * 170) * p, q: 12, dur: 0.035, v: 0.12 * (0.5 + v) });
+      return 0.4;
+    },
+    // A prize's squeak (a rubber-duck chirp up).
+    cabSqueak(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 900 * p, to: 1700 * p, dur: 0.09, v: 0.06, lp: 3500, q: 3 });
+      blip(out, t, { at: 0.08, w: 'sine', f: 1500 * p, to: 1150 * p, dur: 0.08, v: 0.08 });
+      return 0.18;
+    },
+    // A spark lands in the Jackpot Lamp: a soft bell blip (pitch climbs with the level).
+    cabLamp(out, t, o, p) {
+      blip(out, t, { w: 'sine', f: 1320 * p, dur: 0.16, v: 0.12, a: 0.003 });
+      blip(out, t, { w: 'triangle', f: 2640 * p, dur: 0.08, v: 0.03 });
+      return 0.18;
+    },
+    // LAMP FEVER: a siren sweep into a fanfare run.
+    cabFever(out, t, o, p) {
+      for (let i = 0; i < 2; i++) blip(out, t, { at: i * 0.3, w: 'square', f: 620 * p, to: 1240 * p, dur: 0.28, v: 0.06, lp: 3000, lin: true });
+      [72, 76, 79, 84, 88].forEach((n, i) => blip(out, t, { at: 0.6 + i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.16, v: 0.06, lp: 4200 }));
+      blip(out, t, { at: 0.95, w: 'triangle', f: mtof(96) * p, dur: 0.5, v: 0.08, vib: [6, 10] });
+      hiss(out, t, { at: 0.6, type: 'highpass', f: 5000, dur: 0.6, v: 0.05 });
+      return 1.45;
+    },
+  });
+  Object.assign(GAP, { cabRoll: 0.04, cabLand: 0.2, cabSurge: 0.5, cabRain: 0.3, cabPerfect: 0.2, cabCreak: 0.25, cabSqueak: 0.12, cabLamp: 0.05, cabFever: 1 });
+  NAMES.push('cabRoll', 'cabLand', 'cabSurge', 'cabRain', 'cabPerfect', 'cabCreak', 'cabSqueak', 'cabLamp', 'cabFever');
+  Object.assign(MIX_TIER, { cabRoll: 'tick', cabLamp: 'ui', cabCreak: 'soft', cabSqueak: 'soft', cabLand: 'mid', cabSurge: 'mid', cabRain: 'mid', cabPerfect: 'big', cabFever: 'big' });
+  Object.assign(MIX_TRIM, { cabRoll: -3.6, cabLamp: -3.1, cabCreak: 5.1, cabSqueak: 3.1, cabLand: -2.4, cabSurge: 0.1, cabRain: 8.5, cabPerfect: 1.1, cabFever: 7.5 });
+  /* ---------------------------------------------------------------- /CAB */
+
   const mixApi = {
     TIERS: MIX_TIERS, TARGET: MIX_TARGET, WIN: MIX_WIN, CAP: MIX_CAP, TIER: MIX_TIER, TRIM: MIX_TRIM, VARY: MIX_VARY,
     DUCK: MIX_DUCK, LIM: MIX_LIM, MUS: MIX_MUS, MINOR: MIX_MINOR, STING: MIX_STING,

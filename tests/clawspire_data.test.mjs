@@ -665,7 +665,7 @@ t.test('tools, terms and the light copy', () => {
 // ------------------------------------------------------------- characters
 t.test('characters', () => {
   t.eq(Object.keys(CHARACTERS).sort().join(), 'alchemist,bubbler,engineer,gambler,knight,rogue', 'six characters');
-  const hp = { knight: 80, alchemist: 60, rogue: 65, gambler: 70, engineer: 75, bubbler: 68 };
+  const hp = { knight: 80, alchemist: 60, rogue: 65, gambler: 70, engineer: 84, bubbler: 68 };   // (round 16: Mama Mech 75 -> 84)
   for (const id in CHARACTERS) {
     const c = CHARACTERS[id], W = `char ${id}`;
     t.eq(c.id, id, `${W}: key`);
@@ -2493,7 +2493,7 @@ t.test('round 8: Mama Mech, the Engineer', () => {
   t.ok(c.bin.filter(id => ITEMS[id].char === 'engineer').length >= 10 && c.bin.every(id => R8_ITEMS.includes(id) || !ITEMS[id].char), 'the bin is mostly her new kit');
   t.ok(c.bin.filter(id => (ITEMS[id].tags || []).includes('metal')).length >= 12, 'and mostly metal (turret parts)');
   t.ok(c.turret === true && c.relic === 'socket_set' && RELICS.socket_set.starter && RELICS.socket_set.rarity === 'event', 'her gift: the turret; her starter: the Socket Set');
-  t.ok(c.hp === 75 && c.gold > 0 && c.claw.grabs === 3, 'hp, gold, grabs');
+  t.ok(c.hp === 84 && c.gold > 0 && c.claw.grabs === 3, 'hp, gold, grabs');   // (round 16: hp 75 -> 84)
   t.eq(c.unlock, 'act2', 'unlocked by reaching act 2');
   t.eq(c.vsLine, 'Hold still. Measuring you.', 'her versus line');
   const seen = new Set();

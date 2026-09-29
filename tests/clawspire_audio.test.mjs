@@ -1273,4 +1273,37 @@ T.test('dep: the dub plays live (a tape echo lead, bubbles), the act switch cros
   }
 });
 
+T.test('cab (round 16): the cabinet\'s voices play after init, no-op before, sit in their tiers and scale', () => {
+  const want = { cabRoll: 'tick', cabLamp: 'ui', cabCreak: 'soft', cabSqueak: 'soft', cabLand: 'mid', cabSurge: 'mid', cabRain: 'mid', cabPerfect: 'big', cabFever: 'big' };
+  const cold = boot({ only: ['util', 'audio'] }).AUDIO;
+  for (const n in want) { T.ok(cold.names.includes(n), n + ' is a sound'); T.eq(cold.sfx(n), false, n + ' no-ops before init'); }
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n in want) {
+    ac.currentTime += 2;
+    const before = fake.count.total;
+    T.ok(AUDIO.sfx(n, { vel: 0.8, n: 2, pitch: 1.1 }), n + ' plays');
+    T.ok(fake.count.total > before, n + ' makes nodes');
+    T.eq(AUDIO.mix.tier(n), want[n], `${n} is ${want[n]}`);
+  }
+  ac.currentTime += 2; T.ok(AUDIO.sfx('cabRoll'), 'a reel tick');
+  T.eq(AUDIO.sfx('cabRoll'), false, 'the reel ticks are throttled');
+  ac.currentTime += 2; T.ok(AUDIO.sfx('cabFever'), 'the fever');
+  ac.currentTime += 0.3; T.eq(AUDIO.sfx('cabFever'), false, 'a second fever right after is held back');
+  // as heard: each inside its tier's window (the renderer's numbers, printed for the trims)
+  const M = boot({ only: ['util', 'audio'] }).AUDIO;
+  const lv = [];
+  for (const n in want) {
+    const r = mixRenderSfx(M, n), t = M.mix.tier(n), lo = M.mix.TARGET[t] - M.mix.WIN - 1, hi = M.mix.TARGET[t] + M.mix.WIN + 2.5;
+    lv.push(n + ' ' + r.st.toFixed(1) + ' (' + t + ' ' + M.mix.TARGET[t] + ')');
+    T.ok(r.st >= lo && r.st <= hi, `${n} sits in its ${t} tier: ${r.st.toFixed(1)} dB in ${lo}..${hi}`);
+    T.ok(r.peak < 0, `${n} never clips (${r.peak.toFixed(1)} dBFS)`);
+  }
+  if (process.env.CAB_LEVELS) console.log('cab levels: ' + lv.join(' | '));
+  // the load and a streak scale inside their voices
+  T.ok(mixRenderSfx(M, 'cabCreak', { vel: 1.1 }).st > mixRenderSfx(M, 'cabCreak', { vel: 0.2 }).st + 2, 'a heavier load creaks louder');
+  T.ok(mixRenderSfx(M, 'cabPerfect', { n: 1 }).st > -80 && mixRenderSfx(M, 'cabPerfect', { n: 4 }).st > -80, 'a PERFECT streak still chimes');
+});
+
 T.done();

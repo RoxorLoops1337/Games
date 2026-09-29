@@ -6168,7 +6168,8 @@ The owner asked for Duo's CO-OP BOSS to work online. Duo, Co-op Boss now asks
 **Same phone** (the round 11 pass and play, unchanged) or **Online**: each
 player on their own phone, anywhere, sharing a four letter room code. Versus
 stays pass and play this round; the link (`NET`) is generic, so a versus claw-off
-(or anything else) can ride it later with message types of its own.
+(or anything else) can ride it later with message types of its own (round 16 did:
+"Online versus (round 16)" below).
 
 ### Transport: the shared relay
 
@@ -6330,6 +6331,177 @@ stays pass and play this round; the link (`NET`) is generic, so a versus claw-of
   co-op match is a few thousand messages (the stream only while someone grabs,
   only when something moved).
 
+## Online versus (round 16)
+
+The owner loves the duo modes, so the VERSUS CLAW-OFF went online too, on the
+same link, lobby and code as co-op (round 15 above). Duo, Versus Claw-off now
+asks **Same phone** (round 11's pass and play, unchanged) or **Online**, then
+Host a game / Join a game exactly like co-op: the four letter boxes, Copy code,
+Share invite ("Take me on in a Clawspire claw-off! Room code:"), `?join=CODE`.
+
+### The mode, the lobby, the setup
+
+- **The guest follows the host's mode.** Every hello now carries `m` (`coop` or
+  `vs`), and so do the host's `lobby` and `go`: a guest takes whatever the room
+  plays, whichever menu it came through (or none: an invite link from the
+  title). So a versus guest in a co-op room (or the other way round) never
+  gets an error, it simply plays the host's game; the lobby's title says which
+  ("Online versus" / "Online co-op").
+- The host owns the setup: the seed (the relay's, stirred with the code and
+  the game count) and **the drops each per round** (3, 4 or 5, chips in place of
+  the boss; the guest sees the number). Each player edits only their own look,
+  as in co-op; the colours are kept apart the same way.
+- **The protocol went to v2** (`NET.PROTO`, `DUO.NET.PROTO`): the hello's mode
+  and the claw-off's messages are new, so a round 15 phone (co-op only) is told
+  "Your partner has a different game version, both reload." instead of
+  misreading them. The build fingerprint (`duoNetBuild`) also hashes the
+  claw-off's rules (`VAL, PILE, PILE_MORE, BONUS, DROPS, CARD_IDS, COPIES, HAND,
+  WIN_ROUNDS, MAX_ROUNDS`, the combo count, the cabinet's size): two phones that
+  would roll a different pile or score a drop differently are told to reload.
+
+### One pile, two phones
+
+- `go` carries the seed; each phone runs round 11's own `duoBegin('vs')`, the
+  toss (`duoToss`), `duoRoundStart` (the deck `duoDeck`, the dealt hands, the
+  starter `duoStarter`) and `duoPile`, so both build the identical pile, deck,
+  hands and toss from the seed. Turns alternate exactly as on one phone.
+- **YOUR TURN** (the co-op card in your colour, "Round 1 · drop 1 of 6" and the
+  score, Grab! or 5 s): your drop is the round 11 claw-off on your own phone
+  (`duoVsPlay`, `duoVsTick`, `duoVsDropEnd`), your finger on your glass. **The
+  active phone's drop stands**: nothing is simulated twice.
+- **The table.** Every change of hands goes over as one `vt` message with the
+  WHOLE claw-off table (round, drops made, drops each, the scores, the pile
+  indexes won, both hands, the deck, a pending card, the finished rounds, the
+  last drop's prizes and points) plus a snapshot of the bin's bodies by stable
+  pile index `[i, x, y, angle x100]`. Three events:
+  - `drop` (after `duoVsDropEnd`; `end: 1` when the round is over): the watcher
+    takes the table and the bin, shows "NAME +7" with the score lines (worked
+    out HERE from the pile with `duoDropScore`, never taken from the wire) and
+    "NAME is picking a sabotage card...", the points pop over their side of the
+    board, a JACKPOT and their combos play. With `end` each phone runs its own
+    `duoRoundEnd`: the round sheet, or the podium, booked on its own profile.
+  - `pass` (the dropper played a card, or kept its hand): the table carries the
+    pending card; it is the rival's turn on their phone.
+  - `next` (Next round, on either phone): the other phone starts the same round
+    from the seed; a phone already there takes nothing (a repeat is a no-op).
+  Because each table is complete, a lost message is healed by the next one; a
+  bin missing a prize the table says is still there is rebuilt (`duoVsBuild`)
+  and then set to the snapshot, so both phones always continue from one pile.
+- **Sabotage cards** are round 11's, unchanged (Shake Up, Butter Fingers, Fog
+  Machine, Tilt!, Mirror Mirror, Tiny Claw, Too Much Coffee): played on your
+  sabotage sheet after your drop, the card rides the `pass` table (`pend {id, on,
+  by}`) and bites on the rival's phone when their drop starts (`duoVsPlay`
+  applies it there: the shake, the grease, the fog, the lean, the mirrored
+  steering, the small claw, the fast claw). The card slams onto BOTH glasses:
+  the rival's `vgo` ("my drop starts", round and drop count) makes the card
+  player's phone slam it, show its tag and the fog or the lean too.
+- **Watching the rival** (`duoVsDraw` with the stream): the board, both
+  crawlers, the rival's claw in their type and paint (`PHYS.clawPose`, 10 times
+  a second, `vc`), the bin's bodies gliding to the samples (4 times a second,
+  by pile index; no physics on the watching phone), each prize they land flying
+  from the chute to their side of the board (`fx {k: 'vprize', i}`, a straggler
+  after the drop too), "NAME'S DROP" then "NAME PICKS A CARD". Under the glass
+  one row: the six taunts as icons (Nyah, Spoon, Wah wah, Air horn, Boots and
+  cats, Mic drop; their words in the bubble) and Leave. Taunts ride co-op's
+  `cheer` with the claw-off's list and play with their own voices on both
+  phones, in the sender's bubble (over the dropper's glass too); on the round
+  sheet and the podium as well.
+
+### Messages (v2: new, or new fields; everything checked on arrival)
+
+| t | from | carries |
+|---|---|---|
+| `hi` | both | + `m` (the room's mode, the host's word counts) |
+| `lobby` | host | + `mode`, `drops` |
+| `go` | host | + `mode: 'vs'`, `drops` (no boss) |
+| `vt` | active | `n` (the counter co-op uses), `ev` (drop, pass, next), `end`, `tb` (the table), `sn` (the bin: `[i, x, y, a]`) |
+| `vgo` | active | `r`, `k`: my drop starts (the card slams on the watcher) |
+| `vc` | active | the claw (as co-op's `cl`) and every 0.25 s `b`, the bin by pile index |
+| `fx` | active | + `k: 'vprize'`, `i` (a pile index) |
+| `cheer` | either | the claw-off's taunt ids in versus |
+| `sync` | staying | + `mode: 'vs'`, `drops`, `first`, `ph` (where the returning phone comes in), `vw`, `tb`, `sn` |
+
+- **Never trust the partner.** `duoVsNetTableIn` is all or nothing: the round
+  and the drop count in range, the drops each within the round's and adding up
+  to the count, the pile indexes real (for that round's pile, rolled here) and
+  unique, the hands and the deck real cards within their sizes, a pending card
+  on one player by the other, the finished rounds' scores as number pairs (the
+  winners worked out here), the last drop's prizes among the ones won. A bin
+  row needs a real pile index (once), a position clamped to the glass. A table
+  from an older round, a repeat, one this phone should not take (it is not
+  watching), or a `drop` claiming to be this phone's is ignored.
+
+### Reconnect, reload, forfeit, the record
+
+- A dropped line is co-op's: the heartbeat, 30 s of retries, the seat claimed
+  back, the last message sent again on `@back` (the table: a repeat is
+  ignored). The dropper plays on through it (a "Reconnecting" pill over its
+  board, never a card over its glass); the watcher gets the "Partner connection
+  lost" card and then the table that heals it.
+- A reload (the invite link again) asks for the game (`need`) and gets `sync`:
+  the whole table, the bin and where to come in (its own drop starting over, its
+  card choice, watching the other's drop or card choice, or the round sheet).
+- **Forfeit instead of alone.** After the 30 s (or at once when the rival left,
+  `bye`, or was hidden for 45 s) the sheet offers **Win by forfeit** (instead of
+  co-op's Keep fighting alone), Wait (hidden only) and Quit to title. A forfeit
+  books the match once for this phone's seat (`duoVsBook`, the podium says
+  "NAME wins by forfeit!" and "rounds won, then a forfeit", the points include
+  the round cut short) and closes the link. Leave asks first ("Your rival wins
+  by forfeit."); the one who leaves books nothing.
+- **Booking**: both phones book the result on their own profile the local way
+  (`duoRecord`: `meta.duo.vs`, the names' wins and losses) plus
+  `meta.duo.online.vsGames` / `vsWins` (`duoNetOnline` repairs them, wins never
+  above games; no key renamed). The online menu shows "Online versus: N games,
+  N wins"; the podium "Online versus wins: N of N". **Play again** takes both
+  back to the versus lobby on the same code (a fresh seed). An online duel is
+  never saved (`clawspire_duo` and the run save untouched).
+
+### Code map, API, tests
+
+- `game.js` DUO block: the DUO NET VS part (`duoVsNet*`, after `duoNetClawDraw`),
+  reached through one-line hooks in round 11's code (the menu's Versus button,
+  `duoVsCredit`, `duoVsDropEnd`, `duoSaboDom`, `duoRoundDom`, `duoVsBook`,
+  `duoNextRound`, `duoVsDraw`, the podium's label) and round 15's (`duoNetChoose(mode)`,
+  the lobby, `go`, `duoNetBegin` {mode, drops}, `duoNetAfterToss`, `duoNetGo`,
+  `duoNetPass`, `duoNetOnFx`, the cheers, `need` / `sync`, `duoNetAlone`, the
+  sheets `duoNetSheetEl`, `duoNetTick`, `duoNetDraw`, `duoNetEndDom`). Shared
+  helpers: `duoNetClawIn` / `duoNetClawOut` (the stream's claw), `duoNetClawDraw`.
+  `data.js` DUO block: `DUO.NET.PROTO` 2, `MODES`, `VS_BODIES`, `duoNetOnline`'s
+  `vsGames`, `vsWins`. `net.js`: `PROTO` 2. `index.html` `duo-css`: the watch
+  bar (`.duoVsNetBar`). Dutch in `lang_nl2.js` (the DUO NET VS block).
+- `GAME.duo.net.vs = {go, drops, forfeit, out, onTable, tableOut, tableIn,
+  snapOut, snapIn, onClaw, onGo}`.
+- `tests/clawspire_net.test.mjs` (two whole games against the REAL relay worker
+  in memory): the online record's repair, the menus (same phone is round 11's
+  setup), a versus room hosted, a guest from co-op's menu following it, the
+  drops the host's only, the Dutch guest's lobby, one seed, pile, deck and toss;
+  a drop streaming (the claw, the bin, a prize flying), the table and the bin
+  agreeing after it, a taunt, a sabotage card biting on the rival's phone and
+  slamming on both; junk tables, rows and starts refused (nothing changes); the
+  line cut mid drop, the drop and the card choice made offline, the table
+  healing the watcher on the rejoin; a whole match to the podium on both, booked
+  on both once, Play again to the same room; the rival gone 30 s, Win by forfeit
+  booked once; a reload mid claw-off syncing back in and playing on. (The
+  suite resets the relay's per real second flood cap on every pump: it plays
+  minutes of game in one real second.)
+- End to end (scratchpad `r16vs/e2e_vs.mjs`, round 15's `r15net/relay.mjs` with
+  the real worker): two Chromium pages at 390x844, one English, one Dutch: host
+  versus, join through the invite link, the lobby, the toss, real finger drops,
+  cards played and slamming on both, a line cut mid drop and healed, a whole
+  match to both podiums, Play again, a reload through the invite link synced
+  back in, the page closed, 30 s, Win by forfeit. Screenshots `r16_vs_ennl_*.png`.
+
+### Known limits
+
+- A drop cut short by a reload starts over (the table is sent when a drop
+  ends), like co-op's turn; the prizes its stream showed falling are back in the
+  bin.
+- The watcher's bin is a picture of the dropper's: the bodies glide between
+  samples, and the end-of-drop snapshot sets them exactly (0.1 px, 0.01 rad), so
+  the next dropper starts from a copy, not the same floats.
+- The one who leaves (or whose page dies for good) books nothing; only the one
+  still there books the forfeit.
+
 ## The Neon Depths (round 15)
 
 A fourth biome, for Endless only: the flooded basement under the Clawspire.
@@ -6474,6 +6646,169 @@ The two Dutch tables are 116 KB gzipped (`lang_nl.js` 80, `lang_nl2.js` 36; 323 
 the round 14 growth (+147 KB, +846 ms to the first frame). They now load only for a Dutch player (written in while
 the page parses, so a Dutch boot is exactly as before) or on a switch (fetched, the screen redone when they land). An
 English player saves 113 KB and about 0.6 s cold, 1 s warm.
+
+## The cabinet is alive (round 16)
+
+The owner asked for more that can happen with the claw machine itself: more juice, more cool stuff per grab, addictive
+loot. This round makes the Rig a character with moods of its own. Five things, each readable on a phone, none of
+them touching a number the incoming-damage preview reads (coins and capsules pay gold and loot, never damage).
+Code: game.js (the CAB block before `state()`, reached through one-line hooks in `startFight`, `buildRig`,
+`endTurn`, `finishEnemyTurn`, `onRigEvent`, `deliver`, `soClose`, `grabFinished`, `endFight`, `lootReward`,
+`loadMeta`, `update`, `drawFight` and `holdHint`), render.js (the CAB block: `RENDER.cab`, plus the claw head's
+`strain` mood), audio.js (the CAB block: nine voices in their MIX tiers), the Dutch in the CAB block at the end of
+`lang_nl2.js`. Dials: `GAME.cab.K` (`CABK`).
+
+**Cabinet events.** From turn 2 (`evFirst`) a player turn opens with an event `evP` (38%) of the time. After the
+turn banner a sign swings down on two chains into the glass (CABINET EVENT on its tag), its icon window spins like a
+slot reel with ticking (`cabRoll`), and it slams down (`cabLand`, rays, a ring, the marquee) on one of:
+
+| event | weight | what happens |
+| --- | --- | --- |
+| POWER SURGE! | 0.36 | the claw grips +0.3 and the carriage runs x1.35 for the turn; lightning crawls along the rail, a SURGE plate on the glass, a zap (`cabSurge`) |
+| COIN SHOWER! | 0.40 | 6 coins rain into the bin (never into the open claw: a coin dropped in its column moves aside); a coin in the chute pays 1 gold (`COMBAT.gainGold`, so Money Bags and Golden Touch fire on your own turn), flying to the gold counter; the coins left sink away at the end of the turn |
+| CAPSULE DROP! | 0.24 | a prize capsule (tier rolled c 55 / u 30 / r 12 / l 3%) with a face drops into the pile; deliver it and it waits on the reward screen as a real capsule (`makeCapsule('cabinet', {tier})`, "Cabinet prize", it can still upgrade as it cracks); at most 2 cabinet capsules a fight, never in a Boss Rush or The Machine's fight (no reward screen there: coins instead) |
+
+The roll uses its own stream (the fight's seed and the turn number, never `FS.rng`), so the pile's physics are
+untouched on a quiet turn and a reload (a fight restarts from its bell) replays the same events on the same turns. A
+turn that ends puts the sign away and the surge out.
+
+**The Jackpot Lamp.** A dome and a 12-cell tube on the cabinet's top frame, right of the marquee (the pet's name tag
+sits on the left, Mama Mech's turret in the corner). Every delivered prize throws a gold star from the chute into the
+lamp (+1; the second prize of a grab +1 more, the third +2, a rare or legendary prize +1, a PERFECT grab +1), and SO
+CLOSE now has a consolation: LAMP +1. Each spark lights its cell with a bell blip that climbs with the level
+(`cabLamp`); the last cells glow. Full: LAMP FEVER! (`cabFever`, a siren into a fanfare): the dome's beacon sweeps
+two light cones across the arena, the dome bursts (its cap flies off, confetti, coins, a gold ring, a flash) and 5
+coins and a capsule rain into the bin. One fever at a time; an overflow carries. The level is the run's
+(`run.cabLamp`, 0..12), written back only when a fight ends, so a reload mid fight starts from the level the fight
+began with (no double fill); a lamp left full goes off after the next fight's bell. The first spark on a profile
+shows a toast explaining it (`meta.cab.tip`).
+
+**PERFECT grab.** When the drop comes down dead centre (within 5 px, x the claw's width; the scoop 1.4x) on the
+prize the palm meets first (the topmost one under the hub), and the claw comes up with it: slow motion (0.3 for 0.4
+s), a white flash, gold and white rings, a star burst, PERFECT! over the claw (PERFECT x2! on a streak), a glassy
+chime that climbs with the streak (`cabPerfect`), the marquee, a lamp spark, and the grip holds +0.25 harder for
+that lift only. Measured over 30 seeded drops: aimed dead on 70% PERFECT, 3 px off 63%, 6 px off or more about 15%
+(only when another prize happened to sit dead centre). Claws: classic, tri, scoop, hand, magnet (the harpoon's barb
+and the twin and vacuum claws aim differently).
+
+**The straining lift.** The claw feels its load: the cargo's mass maps to a strain 0..1 (`strainM` 12..40, a Tower
+Shield alone is most of it). The claw shakes (up to 1.8 px), white tension arcs quiver beside the hub, the cable
+glints taut, steam puffs off the head, it sweats drops, glows hot red past 0.65, its eyes grit (the head's `strain`
+mood: > <) and it creaks (`cabCreak`, louder with the load). A load past `heavyK` (0.6) gets HEAVY!, a small shake
+and a kick, once a grab. Presentation only: the physics never sees it.
+
+**Prize faces.** Rare and legendary prizes, the Golden Prize and the cabinet's capsules have eyes (legendary pupils
+are gold stars). They watch the claw when it is near and glance around when it is not, blink, look scared as it comes
+down over them (wide eyes, a wavy mouth, a sweat drop), gasp with an EEK! and a squeak when the claw closes on them
+(`cabSqueak`), grin and blush on the ride, go dizzy (spiral eyes) when they slip out, and yell WHEE! when delivered.
+A prize frozen in ice keeps a straight face.
+
+**Juice rules.** Shake off (reduced motion): no claw shake, no sign swing or reel scroll, no fever beacon, the
+flashes capped, slow motion gentler (the game's `slowmo`), fewer sweat drops. Every canvas word goes through the
+language (`i18nTr`), the sign sizes its tag and name to the words shown, text is 12 px or more.
+
+**Where it is off.** The physical parts (the events, the lamp, the rain, the PERFECT grip) are off in Duo and in the
+headless suites unless `GAME.cab.force` is set, so every older test's physics are bit for bit what they were; the
+faces and the strain are looks only and always on.
+
+**State.** Fight-only in `FS.cab` (the sign, the surge, the cabinet's bodies, the lamp as shown, the fever, the
+strain), never saved (a reload replays the seeded fight). Run: `cabLamp` (optional, 0..12; a run from before has
+none and starts empty). Meta: `cab` {tip, fevers, perfects, events} (`cabMetaFix` keeps it through `loadMeta`). No
+key was renamed.
+
+`GAME.cab` = `{K, EV, IDS, WORDS, PATTERNS, LAMP, COL, force, on, fs, turn, turnEnd, event(id, now), land, lampAdd,
+spawn, collect, perfect, face, strainK, gripAdd, speedK, tick, draw, rewardCaps, fightEnd}`; `RENDER.cab` =
+`{sign, lamp, coin, icon, surge, face, strain, bolt}`; sounds `cabRoll` (tick), `cabLamp` (ui), `cabCreak`,
+`cabSqueak` (soft), `cabLand`, `cabSurge`, `cabRain` (mid), `cabPerfect`, `cabFever` (big).
+
+Tests (`cab:`): physics (a coin and a capsule body are grabbed and carried, skipped by the default aim, the pile
+deterministic), game (off headless and in Duo with the old numbers; the events by seed and turn, never turn 1, the
+same after a reload, the rate and all three kinds; a reload mid fight keeps the lamp the fight started with; the
+surge's grip and speed and their end; the coin shower around the claw, a paid coin, the rest sinking; a delivered
+capsule on the reward screen, the cap per fight, none in a rush; the lamp's fills, SO CLOSE, the fever's rain, the
+carry, the run's level, a full lamp at the next bell; PERFECT on dead-centre drops with its grip for the lift only;
+the strain, HEAVY!, the faces' moods; determinism with everything on; drawing in reduced motion), render (the sign
+at every beat for every event, every lamp state, coins, icons, the surge, every face mood, the strain, the gritted
+claw), audio (every voice plays after init and no-ops before, the throttles, the tiers as rendered, the load and the
+streak scaling), i18n (every word and pattern in Dutch, the reward slot and the hint, the drawn words in a Dutch
+fight). Screenshots: scratchpad `r16cab/r16_cab_*_{en,nl}.png`.
+
+## Balance touch-up (round 16)
+
+Owner of this section: the balance pass. The request: the round 15 check (above) found outliers (the scoop won 61%,
+the twins 13%, Mama Mech 13%, Ironjaw and the Plushie Queen the top killers); pull them toward the middle and keep
+the skilled bot at about 30% overall (the owner's target: a skilled player loses about 70% of runs).
+
+**Method.** The round 15 bot unchanged (`r15/bal15.mjs`: the round 12 skilled bot, `PRO=2`, plus the Trading Post
+and pet evolution), copied to scratchpad `r16bal/` and pointed at a snapshot of the build (`r16bal/base`, the round
+15 commit; `r16bal/mk.mjs` builds a dial set on top of it, `r16bal/cal15.sh` runs the batch, `r16bal/perclaw.mjs`
+and `r16bal/deep.mjs` make the tables). Six crawlers x classic / tri / scoop / twins, 6 seeds, Tilt 0. The bot is
+deterministic per seed, so before and after play the same seeds. Before: 143 runs; after: 126 runs (the batch was
+stopped at 126 of 144 to close the round).
+
+**Why a new dial.** The claw types had no combat dial in `data.js`: `CLAWS[id].stats` are the picker's pips, and
+all the difference is the physics (`PHYS.CLAW_TYPES`, not touched here). The skilled bot's scoop brings up 4.4 prizes
+a drop, the classic 3.2, the tri 2.9 and the twins 2.5. So `CLAWS[id].bal = { hp, grabs }` is new: the claw type's
+own start on top of the crawler's, read once by `GAME` `newRun` (`clawBalRun`: Max HP and grabs a turn, the grabs
+kept 1 to 9). Daily, weekly and Boss Rush runs get it too (they are made by `newRun`); the co-op seats, whose
+runs are built by the DUO block, do not.
+
+### Before and after
+
+| skilled bot, Tilt 0 | before (143 runs) | after (126 runs) |
+| --- | --- | --- |
+| win | 30% | 30% |
+| deaths act 1 / 2 / 3 | 24 / 47 / 27 | 16 / 51 / 20 |
+
+| claw type | before: win, prizes a drop, turns a fight | after |
+| --- | --- | --- |
+| classic | 25%, 3.2, 2.0 | 29%, 3.2, 2.1 |
+| tri | 31%, 2.9, 2.2 | 35%, 2.9, 2.2 |
+| scoop | 51%, 4.4, 1.6 | 34%, 4.4, 2.0 |
+| twins | 14%, 2.6, 2.5 | 22%, 2.5, 2.3 |
+
+| crawler | before | after |
+| --- | --- | --- |
+| Knight | 29% | 30% |
+| Alchemist | 46% | 41% |
+| Rogue | 57% | 62% |
+| Lucky Lou | 17% | 10% |
+| Mama Mech | 13% | 15% (21% in the first after batch, 18% over both: 44 runs) |
+| Ms. Bubbles | 21% | 20% |
+
+| the killers | before | after |
+| --- | --- | --- |
+| a fight lost to (elites and bosses) | the Claw Collector 32%, Ironjaw 22%, the Plushie Queen 19%, the Conveyor King 13%, the Dozer 12% | the Claw Collector 29%, the Conveyor King 24%, Ironjaw 21%, the Plushie Queen 17%, the Dozer 17% |
+| hp lost a fight: Ironjaw / the Plushie Queen | 50 / 38% | 45 / 34% |
+| deaths | the Plushie Queen 14, the Collector 12, Ironjaw 11, the Dozer 6 (+18 to thorns and poison, mostly Tin Knight and the Golem) | the Plushie Queen 11, Ironjaw 10, the Collector 10, the Conveyor King 8, the Dozer 8 (+11) |
+
+The first after batch (142 runs) tried the twins at +1 grab alone and the scoop at -8 Max HP: the twins stayed at 11%
+(their act 1 got easier, they died in act 2 instead) and the scoop at 51% (it rarely loses hp, so Max HP does not
+touch it). The final set gives the twins 10 Max HP as well and takes a grab off the scoop.
+
+### The dials (old -> new)
+
+| dial | where | old | new |
+| --- | --- | --- | --- |
+| the scoop's start (new) | `data.js` `CLAWS.scoop.bal` | none | grabs -1 (2 a turn, the Alchemist 3) |
+| the twins' start (new) | `CLAWS.twin.bal` | none | grabs +1, Max HP +10 |
+| Mama Mech's Max HP | `CHARACTERS.engineer.hp` | 75 | 84 |
+| Ironjaw's hp | `ENEMIES` ironjaw `hp` | 88-98 | 80-90 |
+| the Plushie Queen's hp | `ENEMIES` plushqueen `hp` | 100 | 92 |
+
+The enemies' moves were left alone (their numbers are in the move text and its Dutch line).
+
+### What is left for the owner
+
+- **The claw picker does not show the new dial.** A twins run starts with 4 grabs and 10 more Max HP, a scoop run
+  with 2 grabs, but the picker still shows only the pips and the matchups; a line for it (and its Dutch words) is
+  left for the picker's owner. The real fix for the twins is their physics (their small heads catch least a drop).
+- **The twins still trail (22%)** and die in act 2 (19 of 25 losses; the Conveyor King and Ironjaw 4 each).
+- **Lucky Lou (10%) and the Rogue (62%)** are now the widest crawler gap; the Rogue was 55 to 57% in every batch.
+- **Ironjaw and the Plushie Queen barely moved** per fight (21 and 17% of fights lost); the Claw Collector (29%) and
+  the Conveyor King (24%) are as dangerous. Their Bite, Gape and Nap are the next dials.
+- Tests: `tests/clawspire_balance.test.mjs` checks the `bal` dials (small, the twins +1 grab, the scoop -1 grab, every
+  crawler keeps 2+ grabs with the scoop) and that a new run gets them; the data and game suites pin Mama Mech's 84 hp.
 
 ## Quality bar (Game of the Year, mobile)
 

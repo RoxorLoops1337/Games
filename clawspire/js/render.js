@@ -3178,7 +3178,7 @@ const RENDER = (() => {
   /* The claw's little robot head above the palm: a chrome dome with a dark
      visor and two LED eyes that show its mood (J.mood), blink, look where it
      travels, and a row of LEDs that chase on a loaded return (J.chase). */
-  const MOOD_COL = { '': PAL.cyan, focus: PAL.cyan, happy: PAL.gold, sad: '#6f8cff', wow: PAL.pink, lucky: PAL.gold, sleepy: '#9b7bff' };
+  const MOOD_COL = { '': PAL.cyan, focus: PAL.cyan, happy: PAL.gold, sad: '#6f8cff', wow: PAL.pink, lucky: PAL.gold, sleepy: '#9b7bff', strain: '#ff8a2b' };   // (CAB round 16: strain, the gritted eyes of a heavy lift)
   function clawHead(ctx, x, y, r, J, t) {
     const w = r * 2.3, h = r * 1.35, mood = J.mood || '';
     const col = PAINT.on && PAINT.fx === 'stealth' ? '#ff2e30' : MOOD_COL[mood] || PAL.cyan;   // Stealth Black paint: red eyes (VAULT block)
@@ -3208,6 +3208,7 @@ const RENDER = (() => {
       else if (mood === 'lucky') tone(ctx, q => star(q, cx, cy, er * 1.5, 4, 0.4), col, cx, cy, er, { ol: 0, spec: false });
       else if (mood === 'focus') { ctx.rect(cx - er, cy - er * 0.35, er * 2, er * 0.7); F(ctx, col); ctx.fill(); }
       else if (mood === 'sleepy') { ctx.arc(cx, cy - er * 0.3, er, Math.PI * 0.15, Math.PI * 0.85); S(ctx, col, Math.max(1.3, er * 0.6)); ctx.stroke(); }
+      else if (mood === 'strain') { ctx.moveTo(cx + sd * er, cy - er * 0.8); ctx.lineTo(cx - sd * er * 0.6, cy); ctx.lineTo(cx + sd * er, cy + er * 0.8); S(ctx, col, Math.max(1.4, er * 0.65)); ctx.stroke(); }   // (CAB round 16) > <
       else { ell(ctx, cx, cy, er, er * Math.max(0.12, 1 - blink)); F(ctx, col); ctx.fill(); }
     }
     if (mood === 'sleepy') {
@@ -16614,7 +16615,270 @@ const RENDER = (() => {
   };
   /* ============================================================ /DEP */
 
+  /* ============================================================ CAB (round 16): the cabinet is alive
+     DESIGN.md "The cabinet is alive (round 16)". The looks of game.js's CAB
+     block: the event sign that spins in over the glass, the Jackpot Lamp on
+     the top frame (and its FEVER beacon), the cabinet's coins, the surge on
+     the rail, the prizes' faces and the strain of a heavy lift. Every
+     function draws at stage px, allocates nothing per frame and never throws. */
+  const CAB_ICON_COL = { surge: '#2ee6d6', coins: '#ffc94d', capsule: '#ff2e88' };
+  const CAB_CAPST = { tier: 'r', t: 0, rot: 0, sq: 0, glow: 0.4, seed: 3 };
+  // A lightning bolt centred at (x, y), height s.
+  function cabBolt(ctx, x, y, s, col) {
+    const k = s / 20;
+    ctx.beginPath();
+    ctx.moveTo(x + 2 * k, y - 10 * k); ctx.lineTo(x - 6 * k, y + 1 * k); ctx.lineTo(x - 0.5 * k, y + 1 * k);
+    ctx.lineTo(x - 3 * k, y + 10 * k); ctx.lineTo(x + 6 * k, y - 2 * k); ctx.lineTo(x + 0.5 * k, y - 2 * k); ctx.closePath();
+    F(ctx, col); ctx.fill(); S(ctx, INK, Math.max(1.2, 1.6 * k)); ctx.stroke();
+  }
+  // A gold coin (a flip reads as the x squash of its angle).
+  function cabCoin(ctx, x, y, r, a, t) {
+    ctx.save();
+    try {
+      const sx = Math.max(0.3, Math.abs(Math.cos(a || 0)));
+      ctx.translate(x, y); ctx.scale(sx, 1);
+      tone(ctx, q => circ(q, 0, 0, r), PAL.gold, 0, 0, r, { dark: -0.35, ol: 1.8 });
+      ctx.beginPath(); circ(ctx, 0, 0, r * 0.62); S(ctx, shade(PAL.gold, -0.35), Math.max(1, r * 0.14)); ctx.stroke();
+      F(ctx, '#fff6c0'); ctx.beginPath(); star(ctx, 0, 0, r * 0.42, 5, 0.45); ctx.fill();
+      const g = (t * 1.3 + x * 0.01) % 2.2;
+      if (g < 0.35) { ctx.globalAlpha = 1 - g / 0.35; F(ctx, '#ffffff'); ctx.beginPath(); ell(ctx, -r * 0.35 + g * r * 2, -r * 0.3, r * 0.18, r * 0.5, 0.5); ctx.fill(); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // One event's icon in a box of size s (a bolt, a coin stack, a capsule).
+  function cabIcon(ctx, id, x, y, s, t) {
+    if (id === 'surge') { glow(ctx, x, y, s * 0.8, PAL.cyan, 0.5); cabBolt(ctx, x, y, s * 0.8, PAL.cyan); return; }
+    if (id === 'coins') { for (let i = 0; i < 3; i++) cabCoin(ctx, x - s * 0.18 + i * s * 0.18, y + s * 0.14 - i * s * 0.16, s * 0.2, i * 0.7, t + i); return; }
+    CAB_CAPST.t = t; CAB_CAPST.rot = Math.sin(t * 3) * 0.12; CAB_CAPST.tier = 'r';
+    capsule(ctx, x, y, s * 0.3, CAB_CAPST);
+  }
+  // Words wrapped to a width (the translated words; at most maxLines, the last one shrinks to fit).
+  const CAB_LINES = [];
+  function cabWrap(ctx, str, w, size, maxLines) {
+    CAB_LINES.length = 0;
+    const words = String(i18nTr(str) || '').split(/\s+/);
+    ctx.font = 'bold ' + size + 'px ' + FONT;
+    let cur = '';
+    for (const wd of words) {
+      const next = cur ? cur + ' ' + wd : wd;
+      let mw = next.length * size * 0.55;
+      try { const m = ctx.measureText(next); if (m && m.width > 0) mw = m.width; } catch (e) { /* stub */ }
+      if (mw > w && cur && CAB_LINES.length < maxLines - 1) { CAB_LINES.push(cur); cur = wd; } else cur = next;
+    }
+    if (cur) CAB_LINES.push(cur);
+    return CAB_LINES;
+  }
+  /* The cabinet event sign, centred at (x, y). st: {id, k 0..1 (swinging
+     in, out), roll 0..1 (the reel spinning; 1 landed), land 0..1 (just
+     landed: a pop and rays), spin (reel steps so far), idx (the landed
+     event's index in ids), ids, names, name, text, col, t, reduced}. */
+  function cabSign(ctx, x, y, st) {
+    const k = U.clamp(st.k || 0, 0, 1);
+    if (k <= 0) return;
+    ctx.save();
+    try {
+      const t = st.t || 0, landed = st.roll >= 1, land = U.clamp(st.land || 0, 0, 1);
+      const w = 340, h = 98, ids = st.ids || [], n = Math.max(1, ids.length);
+      const cur = landed ? st.idx : ((st.spin | 0) % n + n) % n, id = ids[cur] || st.id;
+      const col = landed ? st.col : CAB_ICON_COL[id] || st.col || PAL.gold;
+      const drop = (1 - k) * -150, sw = st.reduced ? 0 : Math.sin(t * 5) * (1 - land) * 0.02 * (landed ? 1 : 0.5);
+      ctx.translate(x, y + drop); ctx.rotate(sw);
+      const pop = landed && !st.reduced ? 1 + Math.sin(land * Math.PI) * 0.08 : 1;
+      ctx.scale(pop, pop);
+      ctx.globalAlpha = Math.min(1, k * 1.4);
+      // the chains up to the top of the glass (st.top, stage y; never out over the frame)
+      const cy0 = st.top != null ? Math.min(-h / 2, st.top - y - drop) : -h / 2 - 150;
+      S(ctx, '#8e98a8', 2.5); ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(-w * 0.36, -h / 2); ctx.lineTo(-w * 0.36, cy0); ctx.moveTo(w * 0.36, -h / 2); ctx.lineTo(w * 0.36, cy0); ctx.stroke();
+      ctx.setLineDash([]);
+      if (landed && !st.reduced) {
+        // rays behind the plate as it lands
+        ctx.save(); ctx.globalAlpha *= (1 - land) * 0.7;
+        for (let i = 0; i < 10; i++) { const a = i * TAU / 10 + t * 0.8; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 150 + land * 60, a, a + 0.14); ctx.closePath(); F(ctx, col); ctx.fill(); }
+        ctx.restore();
+      }
+      glow(ctx, 0, 0, w * 0.55, col, 0.35 + (landed ? (1 - land) * 0.4 : 0.15 * Math.sin(t * 20)));
+      ctx.beginPath(); rrect(ctx, -w / 2, -h / 2, w, h, 16); F(ctx, 'rgba(18,9,31,0.92)'); ctx.fill();
+      S(ctx, INK, 6); ctx.stroke(); S(ctx, col, 3); ctx.stroke();
+      // the CABINET EVENT tag on the top edge
+      let tagW = 116;
+      try { ctx.font = 'bold 12px ' + FONT; const m = ctx.measureText(i18nTr('CABINET EVENT')); if (m && m.width > 0) tagW = Math.min(w - 40, m.width + 22); } catch (e) { /* stub */ }
+      ctx.beginPath(); rrect(ctx, -tagW / 2, -h / 2 - 10, tagW, 20, 10); F(ctx, col); ctx.fill(); S(ctx, INK, 2); ctx.stroke();
+      txt(ctx, 'CABINET EVENT', 0, -h / 2, 12, INK, true, 'center');
+      // the icon window: a reel while it spins
+      const bx = -w / 2 + 14, by = -h / 2 + 18, bs = 62;
+      ctx.beginPath(); rrect(ctx, bx, by, bs, bs, 10); F(ctx, '#0b0616'); ctx.fill(); S(ctx, rgba(col, 0.9), 2); ctx.stroke();
+      ctx.save(); ctx.beginPath(); rrect(ctx, bx, by, bs, bs, 10); ctx.clip();
+      if (landed) cabIcon(ctx, id, bx + bs / 2, by + bs / 2, bs, t);
+      else {
+        const off = st.reduced ? 0 : ((t * 9) % 1) * bs;
+        cabIcon(ctx, id, bx + bs / 2, by + bs / 2 + off, bs, t);
+        cabIcon(ctx, ids[(cur + 1) % n], bx + bs / 2, by + bs / 2 + off - bs, bs, t);
+      }
+      ctx.restore();
+      // the name and the line
+      const tx = bx + bs + 12, tw = w / 2 - 12 - tx;
+      const name = landed ? st.name : (st.names && st.names[cur]) || st.name || '';
+      const lines = cabWrap(ctx, name, tw, 22, 1);
+      let ns = 22;
+      try { ctx.font = 'bold 22px ' + FONT; const m = ctx.measureText(lines[0] || ''); if (m && m.width > tw) ns = Math.max(14, Math.floor(22 * tw / m.width)); } catch (e) { /* stub */ }
+      txt(ctx, lines[0] || '', tx, landed ? -h / 2 + 30 : 0, ns, landed ? col : rgba(col, 0.75 + 0.25 * Math.sin(t * 30)), true, 'left', INK);
+      if (landed) {
+        ctx.globalAlpha *= U.clamp(land * 2, 0, 1);
+        const ls = cabWrap(ctx, st.text || '', tw, 13, 2);
+        for (let i = 0; i < ls.length; i++) txt(ctx, ls[i], tx, -h / 2 + 56 + i * 17, 13, '#ffffff', true, 'left', false);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* The Jackpot Lamp on the top frame: a dome at (x, y) and a tube of cells
+     to x1. st: {n, max, pop 0..1 (the newest cell just lit), fever 0..1 (the
+     beacon spins), burst 0..1 (the dome has burst: its cap flies off), t,
+     reduced}. */
+  function cabLamp(ctx, x, y, x1, st) {
+    ctx.save();
+    try {
+      const t = st.t || 0, max = Math.max(1, st.max | 0 || 12), n = U.clamp(st.n | 0, 0, max), pop = U.clamp(st.pop || 0, 0, 1);
+      const fever = U.clamp(st.fever || 0, 0, 1), burst = U.clamp(st.burst || 0, 0, 1), full = n >= max;
+      // the tube runs from the dome to x1 (either side); the cells always fill left to right
+      const tx0 = x1 < x ? x1 : x + 14, tw = Math.max(20, x1 < x ? x - 14 - x1 : x1 - tx0), th = 12;
+      // the beacon sweeping the arena during a fever
+      if (fever > 0 && !st.reduced) {
+        ctx.save(); ctx.globalAlpha = fever * 0.35; ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 2; i++) {
+          const a = t * 5 + i * Math.PI;
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, 420, a - 0.16, a + 0.16); ctx.closePath();
+          F(ctx, i ? '#ff2e88' : '#ffe066'); ctx.fill();
+        }
+        ctx.restore();
+      }
+      // the tube and its cells
+      ctx.beginPath(); rrect(ctx, tx0, y - th / 2, tw, th, th / 2); F(ctx, '#1a1030'); ctx.fill(); S(ctx, INK, 2.5); ctx.stroke();
+      const cw = (tw - 4) / max;
+      for (let i = 0; i < max; i++) {
+        const cx = tx0 + 2 + i * cw + cw / 2, lit = i < n, newest = lit && i === n - 1 && pop > 0;
+        const hot = fever > 0 && ((Math.floor(t * 16) + i) % 3 === 0);
+        const r = cw * 0.36 * (newest ? 1 + pop * 0.6 : 1);
+        if (lit || hot) glow(ctx, cx, y, r * 3, hot ? '#ff2e88' : '#ffe066', lit ? 0.35 + 0.2 * Math.sin(t * 5 + i) : 0.5);
+        F(ctx, hot ? '#ff9ad0' : lit ? (i >= max - 2 ? '#fff6c0' : PAL.gold) : '#3a2c55');
+        ctx.beginPath(); circ(ctx, cx, y, Math.max(1.5, r)); ctx.fill();
+      }
+      if (n >= max - 3 && !full && fever <= 0) glow(ctx, tx0 + tw, y, 16, '#ffe066', 0.25 + 0.25 * Math.sin(t * 9));
+      if (fever > 0) txt(ctx, 'FEVER', tx0 + tw / 2, y, 12, '#ffffff', true, 'center', INK);
+      // the dome: gold liquid fills it with the cells; a burst throws its cap off
+      const R = 13, lvl = full || fever > 0 ? 1 : n / max;
+      tone(ctx, q => rrect(q, x - R - 2, y + R * 0.35, R * 2 + 4, 8, 3), '#8e98a8', x, y + R * 0.6, R, { dark: -0.4, spec: false, ol: 2 });
+      ctx.save(); ctx.beginPath(); ctx.arc(x, y + R * 0.35, R, Math.PI, TAU); ctx.closePath(); ctx.clip();
+      F(ctx, 'rgba(159,228,255,0.18)'); ctx.fillRect(x - R, y - R, R * 2, R * 1.4);
+      const top = y + R * 0.35 - lvl * R * 1.02, wv = st.reduced ? 0 : Math.sin(t * 4) * 1.2;
+      ctx.beginPath(); ctx.moveTo(x - R, y + R * 0.4); ctx.lineTo(x - R, top + wv); ctx.quadraticCurveTo(x, top - wv * 2, x + R, top - wv); ctx.lineTo(x + R, y + R * 0.4); ctx.closePath();
+      F(ctx, fever > 0 ? (Math.floor(t * 10) % 2 ? '#ff2e88' : '#ffe066') : PAL.gold); ctx.fill();
+      if (!st.reduced && lvl > 0.1) for (let i = 0; i < 3; i++) { const u = (t * 0.8 + i * 0.33) % 1; F(ctx, rgba('#ffffff', 0.7 * (1 - u))); ctx.beginPath(); circ(ctx, x - 5 + i * 5, y + R * 0.3 - u * lvl * R, 1.4); ctx.fill(); }
+      ctx.restore();
+      ctx.save();
+      if (burst > 0) { ctx.translate(burst * 26, -burst * 60); ctx.rotate(burst * 4); ctx.globalAlpha = 1 - burst; }
+      ctx.beginPath(); ctx.arc(x, y + R * 0.35, R, Math.PI, TAU); ctx.closePath(); S(ctx, INK, 2.5); ctx.stroke();
+      F(ctx, 'rgba(255,255,255,0.45)'); ctx.beginPath(); ell(ctx, x - R * 0.45, y - R * 0.2, R * 0.2, R * 0.35, 0.5); ctx.fill();
+      tone(ctx, q => circ(q, x, y + R * 0.35 - R - 2, 3), '#ff5a4a', x, y - R, 3, { dark: -0.3, spec: false, ol: 1.5 });
+      ctx.restore();
+      if (fever > 0 || full) glow(ctx, x, y, 26 + fever * 14, '#ffe066', 0.45 + 0.35 * Math.sin(t * 12));
+      if (pop > 0) glow(ctx, x, y, 18, '#ffe066', pop * 0.6);
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  // POWER SURGE on the rail: lightning crawling along it (y is the rail, w the bin), and a SURGE plate.
+  function cabSurge(ctx, x, y, w, t, reduced) {
+    ctx.save();
+    try {
+      const seg = 14, step = w / seg, ph = Math.floor(t * (reduced ? 6 : 24));
+      glow(ctx, x + w / 2, y, w * 0.35, PAL.cyan, 0.25 + 0.1 * Math.sin(t * 17));
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.beginPath(); ctx.moveTo(x + 6, y);
+        for (let i = 1; i <= seg; i++) { const h = Math.sin((i * 12.9898 + ph * 78.233 + pass * 3.1) * 43.1) * 7; ctx.lineTo(x + i * step - (i === seg ? 6 : 0), y + (i === seg ? 0 : h)); }
+        S(ctx, pass ? '#ffffff' : PAL.cyan, pass ? 1.2 : 3); ctx.globalAlpha = pass ? 0.9 : 0.65; ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      let tw = 48;
+      try { ctx.font = 'bold 12px ' + FONT; const m = ctx.measureText(i18nTr('SURGE')); if (m && m.width > 0) tw = Math.min(150, m.width); } catch (e) { /* stub */ }
+      ctx.beginPath(); rrect(ctx, x + 8, y + 12, tw + 42, 22, 11); F(ctx, 'rgba(18,9,31,0.85)'); ctx.fill(); S(ctx, PAL.cyan, 2); ctx.stroke();
+      cabBolt(ctx, x + 22, y + 23, 14, PAL.cyan);
+      txt(ctx, 'SURGE', x + 34, y + 23, 12, PAL.cyan, true, 'left');
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* A prize's face at (x, y), r its half size. st: {mood '' | 'scared' |
+     'gasp' | 'ride' | 'dizzy', lx, ly (where the pupils look, -1..1), blink
+     0..1, t, legend (star glints in its eyes)}. */
+  function cabFace(ctx, x, y, r, st) {
+    ctx.save();
+    try {
+      const mood = st.mood || '', t = st.t || 0;
+      const er = U.clamp(r * 0.27, 2.8, 5.4) * (mood === 'gasp' ? 1.3 : mood === 'scared' ? 1.15 : 1), ex = er * 1.2 + 1;
+      const lx = U.clamp(st.lx || 0, -1, 1), ly = U.clamp(st.ly || 0, -1, 1);
+      const ey = y - er * 0.4;
+      ctx.lineCap = 'round';
+      for (const sd of [-1, 1]) {
+        const cx = x + sd * ex;
+        if (mood === 'ride') { ctx.beginPath(); ctx.arc(cx, ey + er * 0.4, er * 0.9, Math.PI * 1.1, Math.PI * 1.9); S(ctx, INK, Math.max(1.6, er * 0.55)); ctx.stroke(); continue; }
+        if (mood === 'dizzy') {
+          tone(ctx, q => circ(q, cx, ey, er), '#ffffff', cx, ey, er, NOSPEC);
+          ctx.beginPath();
+          for (let i = 0; i <= 14; i++) { const a = i * 0.9 + t * 9 * sd, rr = er * 0.85 * i / 14; if (i) ctx.lineTo(cx + Math.cos(a) * rr, ey + Math.sin(a) * rr); else ctx.moveTo(cx, ey); }
+          S(ctx, INK, 1.1); ctx.stroke();
+          continue;
+        }
+        if (st.blink > 0.5 && mood !== 'gasp' && mood !== 'scared') { ctx.beginPath(); ctx.moveTo(cx - er, ey); ctx.quadraticCurveTo(cx, ey + er * 0.7, cx + er, ey); S(ctx, INK, Math.max(1.4, er * 0.45)); ctx.stroke(); continue; }
+        tone(ctx, q => circ(q, cx, ey, er), '#ffffff', cx, ey, er, { spec: false, ol: Math.max(1.2, er * 0.32) });
+        const pr = er * (mood === 'gasp' || mood === 'scared' ? 0.32 : 0.52), pl = er - pr - 0.6;
+        const px = cx + (mood === 'scared' ? 0 : lx) * pl, py = ey + (mood === 'scared' ? -0.7 : ly) * pl;
+        F(ctx, INK); ctx.beginPath(); circ(ctx, px, py, pr); ctx.fill();
+        if (st.legend) { F(ctx, PAL.gold); ctx.beginPath(); star(ctx, px, py, pr * 0.9, 4, 0.4); ctx.fill(); }
+        else { F(ctx, '#ffffff'); ctx.beginPath(); circ(ctx, px - pr * 0.35, py - pr * 0.4, Math.max(0.6, pr * 0.32)); ctx.fill(); }
+      }
+      // the mouth
+      const my = ey + er * 1.55;
+      ctx.beginPath();
+      if (mood === 'gasp') { ell(ctx, x, my + er * 0.2, er * 0.5, er * 0.65); F(ctx, INK); ctx.fill(); }
+      else if (mood === 'ride') { ctx.arc(x, my - er * 0.3, er * 0.75, 0.15 * Math.PI, 0.85 * Math.PI); S(ctx, INK, Math.max(1.3, er * 0.4)); ctx.stroke(); F(ctx, rgba(PAL.pink, 0.55)); ctx.beginPath(); ell(ctx, x - ex * 1.6, my - er * 0.4, er * 0.55, er * 0.3); ell(ctx, x + ex * 1.6, my - er * 0.4, er * 0.55, er * 0.3); ctx.fill(); }
+      else if (mood === 'scared' || mood === 'dizzy') {
+        ctx.moveTo(x - er * 0.9, my); for (let i = 1; i <= 4; i++) ctx.lineTo(x - er * 0.9 + i * er * 0.45, my + (i % 2 ? -1 : 1) * er * 0.22);
+        S(ctx, INK, Math.max(1.1, er * 0.3)); ctx.stroke();
+        if (mood === 'scared') { const u = (t * 1.2) % 1; F(ctx, rgba('#9fd8ff', 1 - u * 0.6)); ctx.beginPath(); ell(ctx, x + ex * 1.9, ey - er * 0.2 + u * er * 2, er * 0.35, er * 0.55); ctx.fill(); }
+      } else { ctx.arc(x, my - er * 0.55, er * 0.55, 0.2 * Math.PI, 0.8 * Math.PI); S(ctx, INK, Math.max(1.1, er * 0.32)); ctx.stroke(); }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  /* A heavy lift: tension marks either side of the hub (hx, hy, radius r),
+     steam off the head and a hot glow as the load (k 0..1) grows; the cable
+     from (tx, ty) glints taut. */
+  function cabStrain(ctx, hx, hy, r, k, t, reduced, tx, ty) {
+    ctx.save();
+    try {
+      k = U.clamp(k || 0, 0, 1);
+      if (k <= 0) return;
+      if (tx != null) { ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy - r); ctx.globalAlpha = 0.25 + 0.35 * k; S(ctx, '#ffffff', 1.2); ctx.stroke(); ctx.globalAlpha = 1; }
+      if (k > 0.65) glow(ctx, hx, hy, r * 2.4, '#ff5a4a', (k - 0.6) * 0.9 * (0.7 + 0.3 * Math.sin(t * 20)));
+      const n = 1 + Math.round(k * 2), wob = reduced ? 0 : Math.sin(t * 40) * 1.5;
+      S(ctx, '#ffffff', 2); ctx.lineCap = 'round';
+      for (const sd of [-1, 1]) for (let i = 0; i < n; i++) {
+        const rr = r * 1.5 + i * 5 + wob;
+        ctx.globalAlpha = (0.85 - i * 0.2) * (0.5 + 0.5 * k);
+        ctx.beginPath(); ctx.arc(hx, hy, rr, sd > 0 ? -0.5 : Math.PI - 0.5, sd > 0 ? 0.5 : Math.PI + 0.5); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      if (k > 0.45) for (let i = 0; i < (reduced ? 1 : 3); i++) {
+        const u = (t * 1.1 + i / 3) % 1;
+        glow(ctx, hx + (i - 1) * 8 + Math.sin(u * 6 + i) * 4, hy - r * 2.4 - u * 34, 7 + u * 9, '#e8e0ff', (1 - u) * 0.5 * k);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const CAB_R = { sign: cabSign, lamp: cabLamp, coin: cabCoin, icon: cabIcon, surge: cabSurge, face: cabFace, strain: cabStrain, bolt: cabBolt };
+  /* ============================================================ /CAB */
+
   return {
+    // CAB (round 16): the cabinet is alive: the event sign, the Jackpot Lamp, coins, the surge, prize faces, the strain
+    cab: CAB_R,
     // DEP (round 15): the Neon Depths' tileset, map, arena, cabinet water and caustics, the monsters and their tricks
     dep: DEP_R,
     // TRD (round 14): the Trading Post (Rocco, his cart, the counter, the haggle, the map icon) and the evolved pets' looks

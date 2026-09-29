@@ -640,6 +640,7 @@ const GAME = (() => {
           schMetaFix(S.meta, o);   // SCHOOL (round 11): Claw School's stars, bests and diploma, the practice cabinet's setup
           duoMetaFix(S.meta, o);   // DUO (round 11): the duel record, wins per name
           depMetaFix(S.meta, o);   // DEP (round 15): the Neon Depths' dives and Drowned Jukeboxes
+          cabMetaFix(S.meta, o);   // CAB (round 16): the Jackpot Lamp's tip seen, fevers and PERFECT grabs
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -793,6 +794,7 @@ const GAME = (() => {
     seaNewRun(run);   // the season the run starts in, kept for good (SEASON block)
     stoNewRun(run);   // stories, callbacks, Gary on or off (STORY)
     hisNewRun(run);   // the run's own id for its history record (HISTORY block)
+    clawBalRun(run);   // BALANCE (round 16): the claw type's own Max HP and grabs (DATA.CLAWS[id].bal)
     S.run = run;
     lootRun(run);
     S.tix = null; S.pay = null; S.cap = null;
@@ -1248,6 +1250,15 @@ const GAME = (() => {
     const ids = Object.keys(t).filter(clawTypeOk).sort((a, b) => (t[a].order || 0) - (t[b].order || 0));
     return ids.length ? ids : ['classic'];
   }
+  // BALANCE (round 16, DESIGN.md "Balance touch-up (round 16)"): a claw type's own start on top of the
+  // crawler's, from DATA.CLAWS[id].bal {hp: Max HP, grabs: grabs a turn}. Once, when the run is made.
+  function clawBalRun(run) {
+    const b = clawInfo(runClawType(run)).bal;
+    if (!b || typeof b !== 'object') return;
+    const hp = Math.round(+b.hp || 0), g = Math.round(+b.grabs || 0);
+    if (hp) { run.maxHp = Math.max(1, run.maxHp + hp); run.hp = Math.max(1, Math.min(run.maxHp, run.hp + hp)); }
+    if (g) run.claw.grabs = U.clamp((run.claw.grabs || 3) + g, 1, 9);
+  }
   // A still of a claw type for a picker chip (half open, a little cable).
   function clawCanvas(id, px) {
     return canvasEl(px, (ctx, p) => {
@@ -1292,6 +1303,11 @@ const GAME = (() => {
       const mt = h('div', 'stats');
       if (c.good) mt.appendChild(h('span', 'tag lime', '+ ' + c.good));
       if (c.bad) mt.appendChild(h('span', 'tag pink', '- ' + c.bad));
+      // (round 16) the claw type's run start (CLAWS[id].bal, clawBalRun) said out loud
+      const cb = c.bal || {}, bg = Math.round(+cb.grabs || 0), bh = Math.round(+cb.hp || 0);
+      if (bg > 0) mt.appendChild(h('span', 'tag lime', '+1 grab a turn'));
+      if (bg < 0) mt.appendChild(h('span', 'tag pink', '-1 grab a turn'));
+      if (bh > 0) mt.appendChild(h('span', 'tag lime', `+${bh} Max HP`));
       tx.appendChild(mt);
       tx.appendChild(h('div', 'joke', c.joke || ''));
       schPracticeBtn(tx, id);   // SCHOOL (round 11): try this claw in the Practice Cabinet
@@ -4233,6 +4249,7 @@ const GAME = (() => {
     mutFightStart();   // Bomb Party, Wobbly Legs (ENDLESS block)
     spawnAll();
     pickGolden();
+    cabFightStart();   // CAB (round 16): the Jackpot Lamp comes in from the run
     setScreen('fight');
     if (opts.seed == null) { S.meta.stats.fights++; run.fights++; }
     music(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight');
@@ -4269,7 +4286,7 @@ const GAME = (() => {
     const b = FS.cabinet.bounds;
     FS.rig = P.clawRig(FS.world, {
       cabinet: FS.cabinet, homeX: (b.chuteX || CAB.w - CAB.chuteW) * 0.5, chuteX: (b.chuteX || CAB.w - CAB.chuteW) + CAB.chuteW * 0.5,
-      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip + (FS.luckyOn ? MAT.luckyGrip : 0), speed: c.speed * accClawK(), rubber: c.rubber,   // ACCESS: the slow claw assist magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
+      railY: 26, prongs: c.prongs, width: c.width, grip: c.grip + (FS.luckyOn ? MAT.luckyGrip : 0) + cabGripAdd(), speed: c.speed * accClawK() * cabSpeedK(), rubber: c.rubber,   // (CAB round 16: a surge, a PERFECT lift)   // ACCESS: the slow claw assist magnet: c.magnet, grease: FS.grease > 0 ? 1 : 0,
       type: runClawType(),
       rand: U.rng(FS.seed ^ 0x1234567),
     });
@@ -4741,6 +4758,7 @@ const GAME = (() => {
     snd('groan');
     setMood('sad', 1.8);
     if (F && X.COMBAT.nearMiss) enqueue(X.COMBAT.nearMiss(F), PROC_BEAT);   // Lucky Lou: a near miss is Luck (CONTENT block)
+    cabClose(x, y);   // CAB (round 16): the consolation, a spark for the Jackpot Lamp
   }
 
   // ================================================================ CONTENT (round 3)
@@ -6719,7 +6737,7 @@ const GAME = (() => {
   // "holding <item>" while lifting/carrying, or the empty-claw shrug.
   function holdHint() {
     const list = carried().filter((b) => b.data && b.data.inst);   // glass shards are not prizes
-    if (!list.length) { hint('empty claw...'); return; }
+    if (!list.length) { hint(carried().some((b) => b.data && b.data.cab) ? 'holding a cabinet prize' : 'empty claw...'); return; }   // (CAB round 16: a coin or a capsule)
     const names = list.map((b) => itemName(itemDef(b.data.inst.id), b.data.inst.plus));
     // Claw Crawl scoops: a big cargo reads as "A + B + 3 more"
     hint('holding ' + (names.length > 3 ? names.slice(0, 2).join(' + ') + ' + ' + (names.length - 2) + ' more' : names.join(' + ')));
@@ -6730,6 +6748,7 @@ const GAME = (() => {
     petRig(ev);   // the pet watches the claw; the octopus holds on (PETS block)
     rosRig(ev);   // bubbles ride the claw and pop over the chute, Sticky Fingers (ROS block)
     depRig(ev);   // a prize lifted from the water is wet, a pinched one is let go (DEP)
+    cabRig(ev);   // CAB (round 16): a PERFECT grab, a HEAVY lift, the prizes' faces
     if (clawTypeEvent(ev)) return;   // per claw type sounds and sparks (CLAW TYPES block)
     switch (ev) {
       case 'drop': cj.bendV += (FS.rng() - 0.5) * 160; cj.sq = -0.5; setMood('focus', 1.2); break;
@@ -6757,7 +6776,7 @@ const GAME = (() => {
       case 'lift': {
         snd('clawLift'); FS.wasHeld = carried().length; FS.cargo = carried().slice(); cj.sq = -0.6; cj.bendV += 40; holdHint();
         // the claw's face: beaming with a prize, glum when it came up empty
-        if (FS.cargo.some((b) => b.data && b.data.inst)) setMood('happy', 8); else setMood('sad', 1.5);
+        if (FS.cargo.some((b) => b.data && (b.data.inst || b.data.cab))) setMood('happy', 8); else setMood('sad', 1.5);   // (CAB round 16: a coin or a capsule is a prize too)
         break;
       }
       case 'carry': snd('clawMove'); holdHint(); break;
@@ -6902,6 +6921,7 @@ const GAME = (() => {
     if (S.coachStep === 2) coachNext();
     petDeliver(inst);   // hearts, XP, the firefly's spotlight (PETS block)
     rosDeliver(inst);   // a popped bubble's prize landed (ROS block)
+    cabDeliver(inst, pos);   // CAB (round 16): sparks for the Jackpot Lamp, a prize with a face cheers
   }
   function playInst(inst) {
     if (!F || F.phase !== 'player') return;
@@ -6940,6 +6960,7 @@ const GAME = (() => {
     petGrab(FS.delivered);   // the pet cheers or sulks; the goose lays on a big one (PETS block)
     luckAfterGrab();
     nearMissAfterGrab();
+    cabGrabDone();   // CAB (round 16): the PERFECT grip lets go, the surge's stays
     const evs = X.COMBAT.grabDone ? X.COMBAT.grabDone(F, FS.delivered) : [];
     enqueue(evs, PLAY_BEAT);
     afterAction();
@@ -7231,6 +7252,7 @@ const GAME = (() => {
     if (FS.fog > 0) FS.fog--;
     bestTurnEnd();   // the tickle, the goo and the magnetic lid wear off (BESTIARY)
     rosTurnEnd();   // floating bubbles burst in the bin (ROS block)
+    cabTurnEnd();   // CAB (round 16): the surge runs out, the coins sink away
     FS.actors = F.enemies.map((e, i) => (e.alive ? i : -1)).filter((i) => i >= 0);
     FS.actor = FS.actors.length ? FS.actors[0] : -1;
     hisTurnEnd();   // HISTORY: the recap's snapshot of the telegraphs and your Block
@@ -7255,6 +7277,7 @@ const GAME = (() => {
     // lit fuses burn down (a bomb may go off), ice melts
     if (FS && !FS.done) matTurn();
     if (FS && !FS.done) mutTurn();   // Bomb Party's next bomb, Wobbly Legs' lurch (ENDLESS block)
+    if (FS && !FS.done) cabTurn();   // CAB (round 16): a cabinet event may open the turn
     save();
   }
   /* outro (the natural end of a won fight, not the public call): the
@@ -7279,6 +7302,7 @@ const GAME = (() => {
     const tier = FS.tier;
     const then = FS.then;
     depFightEnd(result);   // DEP (round 15): a Drowned Jukebox unplugged counts (before the sticker checks)
+    cabFightEnd(result);   // CAB (round 16): the Jackpot Lamp goes back to the run
     metaFightEnd(result);   // won-fight stickers (META block)
     endlessFightEnd(result, tier);   // score counters: bosses, combos (ENDLESS block)
     petFightEnd(result, tier);   // pet XP for a win (PETS block)
@@ -8265,6 +8289,7 @@ const GAME = (() => {
     if (rw.tier === 'elite' || rw.tier === 'boss') rw.caps.push(makeCapsule(rw.tier));
     // BALANCE (round 12): DATA.LOOT.BONUS_P is the chance such a fight drops its bonus capsule (its own rng stream)
     if ((jp > 0 || combos.some((c) => c.tier >= 3)) && rngFor('bonuscap')() < ((D().LOOT && D().LOOT.BONUS_P != null) ? D().LOOT.BONUS_P : 1)) rw.caps.push(makeCapsule('bonus'));
+    cabRewardCaps(rw);   // CAB (round 16): capsules delivered out of the cabinet
     const L = run.loot;
     L.bigHit = Math.max(L.bigHit, st.bigHit || 0);
     L.overkill = Math.max(L.overkill, st.overkill || 0);
@@ -15023,6 +15048,7 @@ const GAME = (() => {
       if (R && R.item) R.item(ctx, d.def, x, yy, b.a, melt, { plus: inst.plus, frozen: inst.frozen, glow: glowC, glowA, hc: accHc() });   // ACCESS: high-contrast outlines
       else { ctx.fillStyle = d.def.color || '#888'; ctx.beginPath(); ctx.arc(x, yy, 12, 0, Math.PI * 2); ctx.fill(); }
       if (fxOn) R.itemFx(ctx, d.def, x, yy, b.a, melt, MST, 'front');
+      if (d.fc) cabFaceDraw(ctx, b, x, yy, t);   // CAB (round 16): a rare prize's face
       if (xf) ctx.restore();
       if ((rar === 'r' || rar === 'l') && R && R.glint) R.glint(ctx, x, yy, (b.br || 16), t, (inst.uid ? inst.uid.length * 7 : 0) + b.x * 0.01, rar === 'l' ? '#ff9ad0' : '#fff6c0');
     }
@@ -15035,6 +15061,7 @@ const GAME = (() => {
     }
     // glass shards left by a shattered item
     if (R && R.shard) for (const s2 of FS.debris) R.shard(ctx, CAB.x + s2.x, CAB.y + s2.y, s2.a, (s2.parts && s2.parts[0] ? s2.parts[0].r : 4) + 1.5, s2.data.col);
+    cabDrawIn(ctx, t);   // CAB (round 16): the surge on the rail, the cabinet's coins and capsules
     if (FS.chuteFlash > 0) {
       const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
       ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
@@ -15054,11 +15081,12 @@ const GAME = (() => {
     stoCabDraw(ctx, t, 'front');   // the prizes frozen in the Arctic Arcade's ice block (STORY)
     depCabDraw(ctx, t, 'front');   // the water, caustics, the lure, pincers, jellies and chests (DEP)
     legClawCfg(cfg);   // the Golden Claw's gold paint (LEG block)
-    if (R && R.claw && FS.rig) R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg);
+    if (R && R.claw && FS.rig) { const cabXf = cabClawPre(ctx, t, CLAWJ); R.claw(ctx, FS.rig, CAB.x, CAB.y, cfg); if (cabXf) ctx.restore(); cabClawPost(ctx, t); }   // (CAB round 16: a heavy lift shakes and sweats)
     bestCabDraw(ctx, t);   // goo, the magnetic lid, mounds, the plow, feathers, the rival claw (BESTIARY)
     if (FS.fog > 0 && !split) { ctx.fillStyle = 'rgba(180,190,210,0.55)'; ctx.fillRect(CAB.x, CAB.y, CAB.w, CAB.h); }
     ctx.restore();
     if (split) R.cabinetFront(ctx, CAB.x, CAB.y, cfg, cabSt);
+    cabDraw(ctx, t);   // CAB (round 16): the Jackpot Lamp on the frame, the event sign over the glass
     clawSlotDraw(ctx, t);   // the coin slot (CLAW TYPES block)
     luckDraw(ctx, t);   // Lucky Lou's Luck meter (CONTENT block)
     cr8Draw(ctx, t);   // Mama Mech's turret on the frame, its shots (CR8 block)
@@ -15614,6 +15642,7 @@ const GAME = (() => {
       if (FS) bossTick(dt, real);   // the versus card, signatures, finales (boss arena)
       if (FS) bestTick(dt, real);   // the bestiary's machine tricks (BESTIARY)
       if (FS) secTick(dt, real);   // The Machine: phases, the shutter, the cracks, the power down (SECRET)
+      if (FS) cabTick(dt, real);   // CAB (round 16): the event sign, the lamp, the cabinet's coins and capsules, the strain, the faces
       if (FS && FS.outro) { FS.outro.t -= real; if (FS.outro.t <= 0) finishOutro(); }
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
     }
@@ -21964,7 +21993,7 @@ const GAME = (() => {
     const modes = h('div', 'duoModes');
     for (const [mode, name, icon, text] of [['coop', 'Co-op Boss', '\u{1F91D}', 'Two crawlers, one boss. Take turns grabbing; the boss hits whoever just went. Win together.'],
       ['vs', 'Versus Claw-off', '\u{1F94A}', 'One bin of prizes, drops turn about, sabotage cards in between. Best of three rounds.']]) {
-      const c = btn(name, () => (mode === 'coop' ? duoNetChoose() : duoSetup(mode)), 'duoMode dm-' + mode);   // (DUO NET round 15: co-op asks same phone or online)
+      const c = btn(name, () => duoNetChoose(mode), 'duoMode dm-' + mode);   // (DUO NET round 15: co-op asks same phone or online; round 16: versus too)
       c.textContent = '';
       c.appendChild(h('span', 'mi', icon));
       c.appendChild(h('span', 'mn', name));
@@ -22671,6 +22700,7 @@ const GAME = (() => {
     const V = S.duoV, Dd = S.duo;
     V.W.remove(body);
     const d = body.data, v = d.v | 0;
+    if (Dd && Dd.net) duoVsNetCredit(d);   // DUO NET (round 16): the prize flies on the watching phone too
     if (!V.cur) {   // (QA round 15) a straggler rolls in after the drop was booked (V.cur is gone: it threw): it scores for the one who knocked it loose
       if (Dd && (Dd.ph === 'sabo' || Dd.ph === 'play' || Dd.ph === 'hand')) {
         const who = Dd.last ? Dd.last.who : Dd.turn, pts = v * (d.gold ? 2 : 1);
@@ -22732,8 +22762,9 @@ const GAME = (() => {
     for (const ln of sc.lines) if (ln.k === 'combo') fx().text(270, 470, ln.label.toUpperCase() + ' +' + ln.v, ln.color || '#ff9ad0', { size: 20, life: 1.6, dy: -50 });
     if (D().duoDrawCards) D().duoDrawCards(Dd.deck, Dd.hands[who], 1);
     duoLog({ k: 'drop', who, pts: sc.pts, n: sc.n, round: Dd.round, k2: Dd.k });
-    const total = 2 * (Dd.drops | 0);
-    if (Dd.k >= total || duoLeft(Dd) === 0) return duoRoundEnd();
+    const total = 2 * (Dd.drops | 0), over = Dd.k >= total || duoLeft(Dd) === 0;
+    if (Dd.net) duoVsNetOut('drop', over);   // DUO NET (round 16): the drop's result, the hands and the bin to the rival's phone
+    if (over) return duoRoundEnd();
     Dd.turn = 1 - who;
     Dd.from = who;
     Dd.ph = 'sabo';
@@ -22769,8 +22800,9 @@ const GAME = (() => {
       });
       sheet.appendChild(row);
       sheet.appendChild(btn('Keep my cards', () => duoSaboKeep(), 'ghost sm'));
-    } else sheet.appendChild(btn('Pass the phone', () => duoSaboKeep(), 'go'));
+    } else sheet.appendChild(btn(Dd.net ? 'Your rival\'s turn' : 'Pass the phone', () => duoSaboKeep(), 'go'));   // (DUO NET round 16: online there is no phone to pass)
     b.appendChild(sheet);
+    if (Dd.net) duoVsNetDock(b);   // DUO NET (round 16): the link's sheet (lost, gone, leave) under it
   }
   function duoSaboPlay(i) {
     const Dd = S.duo;
@@ -22810,6 +22842,7 @@ const GAME = (() => {
     Dd.res = { w: m.w, wins: m.wins.slice(), pts: m.pts.slice() };
     Dd.paid = true;
     if (D().duoRecord) D().duoRecord(duoM(), { mode: 'vs', names: Dd.p.map((p) => p.name), w: m.w });
+    if (Dd.net) duoVsNetBooked(m.w);   // DUO NET (round 16): the online versus count on this profile
     saveMeta();
     duoLog({ k: 'book', mode: 'vs', w: m.w });
     return true;
@@ -22827,10 +22860,12 @@ const GAME = (() => {
     card.appendChild(h('div', 'sub', `Rounds: ${duoUp(0)} ${m.wins[0]}, ${duoUp(1)} ${m.wins[1]}. First to 2.`));
     card.appendChild(btn('Next round', () => duoNextRound(), 'pri'));
     b.appendChild(card);
+    if (Dd.net) duoVsNetDock(b);   // DUO NET (round 16): taunts and the link's sheet under it
   }
   function duoNextRound() {
     const Dd = S.duo;
     if (!Dd || Dd.ph !== 'round') return false;
+    if (Dd.net) return duoVsNetNext();   // DUO NET (round 16): either phone starts the next round, the other follows
     duoRoundStart((Dd.round | 0) + 1);
     duoHand(Dd.turn, { from: 1 - Dd.turn });
     return true;
@@ -22915,7 +22950,7 @@ const GAME = (() => {
     } else if ((Dd.ph === 'play' || Dd.ph === 'sabo' || Dd.ph === 'round') && Dd.mode === 'vs') duoVsDraw(ctx, t);
     else if (Dd.ph === 'end' && RD) {
       const res = Dd.res || {};
-      RD.podium(ctx, W, H, { t: T.now, names, cols, chars, coop: Dd.mode === 'coop', won: !!res.won, win: res.w, sc: res.wins, label: Dd.mode === 'coop' ? `vs ${enemyDef(Dd.boss).name || Dd.boss}` : 'rounds won', reduced: !!fx().reduced });
+      RD.podium(ctx, W, H, { t: T.now, names, cols, chars, coop: Dd.mode === 'coop', won: !!res.won, win: res.w, sc: res.wins, label: Dd.mode === 'coop' ? `vs ${enemyDef(Dd.boss).name || Dd.boss}` : res.ff ? 'rounds won, then a forfeit' : 'rounds won', reduced: !!fx().reduced });   // (DUO NET round 16: a forfeit says so)
       // the last taunt, from whoever sent it (the winner's tall step, or their side of a shared one)
       const fi = Dd.msg && (Dd.msg.from === 1 ? 1 : 0), tx = Dd.mode === 'vs' && (res.w === 0 || res.w === 1) ? (fi === res.w ? W * 0.38 : W * 0.74) : (fi ? W * 0.68 : W * 0.32);
       if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble) R.sto.bubble(ctx, 270, 292, 400, Dd.msg.icon + ' ' + i18nTr(Dd.msg.text), T.msgT || 1, tx, 380);   // (the words translated on their own, the icon kept in front)
@@ -22928,13 +22963,14 @@ const GAME = (() => {
   function duoVsDraw(ctx, t) {
     const Dd = S.duo, V = S.duoV, R = X.RENDER;
     if (!V || !R) return;
-    const who = Dd.ph === 'play' ? Dd.turn : (Dd.from != null ? Dd.from : Dd.turn);
+    const watching = !!Dd.net && Dd.ph === 'watch';   // DUO NET (round 16): the rival's drop, from the stream
+    const who = Dd.ph === 'play' || watching ? Dd.turn : (Dd.from != null ? Dd.from : Dd.turn);
     if (R.bg) R.bg(ctx, W, H, U.clamp(Dd.round | 0, 1, 3), t); else { ctx.fillStyle = '#12091f'; ctx.fillRect(0, 0, W, H); }
     ctx.fillStyle = 'rgba(18,9,31,0.35)'; ctx.fillRect(0, 0, W, CAB.y - CAB.frame);
     const m = D().duoMatch ? D().duoMatch(Dd.rounds) : { wins: [0, 0] };
     const B = DUO_BOARD;
     B.t = t; B.names = [duoNameOf(0), duoNameOf(1)]; B.cols = [duoCol(0), duoCol(1)]; B.sc = Dd.score; B.wins = m.wins; B.drops = Dd.drops; B.used = Dd.used; B.who = who; B.flash = V.flash; B.round = Dd.round;
-    B.label = Dd.ph === 'play' ? `${duoUp(who)}'S DROP` : '';
+    B.label = Dd.ph === 'play' || (watching && !(S.duoNet && S.duoNet.vw)) ? `${duoUp(who)}'S DROP` : watching ? `${duoUp(who)} PICKS A CARD` : '';   // (DUO NET round 16: the watcher's label)
     if (R.duo) R.duo.board(ctx, B);
     // both crawlers beside the machine: the one dropping under the spotlight
     for (let i = 0; i < 2; i++) {
@@ -22967,7 +23003,8 @@ const GAME = (() => {
         }
       }
     }
-    if (V.rig && R.claw) {
+    if (watching) duoNetClawDraw(ctx, t, who);   // DUO NET (round 16): the rival's claw as it streams in
+    else if (V.rig && R.claw) {
       const busy = V.rig.phase !== 'idle' && V.rig.phase !== 'moving';
       DUO_CJ.t = t; DUO_CJ.mood = busy ? 'focus' : ''; DUO_CJ.idle = busy ? 0 : 1;
       R.claw(ctx, V.rig, CAB.x, CAB.y, { juice: DUO_CJ, paint: duoPaint(who) || undefined });
@@ -22987,6 +23024,7 @@ const GAME = (() => {
       R.duo.card(ctx, 270, 600, 150, 214, cs, { rot: -0.08 + Math.sin(u * 9) * 0.02, k: fx().reduced ? 1 : k, glow: true, text: true });
       ctx.restore();
     }
+    if (Dd.net) duoVsNetOver(ctx, t, who);   // DUO NET (round 16): the rival's taunt, their prizes flying, the link's card
   }
 
   // ---------------------------------------------------------------- DUO NET (round 15): online co-op
@@ -23009,8 +23047,8 @@ const GAME = (() => {
      phone that lost the game (a reload) and comes back to the code asks for
      it ('need') and gets the whole table ('sync'). An online duel never
      touches the local duel save (clawspire_duo) or the run save. */
-  const DNX = { log: [], build: '', boot: null, booted: false };
-  const DNK = () => DK().NET || { PROTO: 1, STREAM: 0.1, BODIES: 0.25, YOURS: 5, AWAY: 45, FX_MAX: 24, BODIES_MAX: 40, CODE_LEN: 4 };
+  const DNX = { log: [], build: '', boot: null, booted: false, mode: 'coop' };   // (round 16) mode: what the next room this phone hosts plays
+  const DNK = () => DK().NET || { PROTO: 2, STREAM: 0.1, BODIES: 0.25, YOURS: 5, AWAY: 45, FX_MAX: 24, BODIES_MAX: 40, CODE_LEN: 4, VS_BODIES: 40 };
   const netOk = () => typeof NET !== 'undefined' && !!NET;
   function duoNetLog(o) { DNX.log.push(o); if (DNX.log.length > 300) DNX.log.splice(0, 100); }
   const dnInt = (v, lo, hi, d) => { const n = Math.round(+v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : d; };
@@ -23028,6 +23066,9 @@ const GAME = (() => {
       const E = tbl('ENEMIES');
       for (const x of (D().duoBosses ? D().duoBosses() : [])) { const e = E[x.id] || {}; s += '|' + x.id + ':' + JSON.stringify([e.hp, e.moves, e.pattern, e.enrage, e.sig]); }
       s += '|' + Object.keys(tbl('ITEMS')).length + '|' + Object.keys(tbl('CHARACTERS')).join(',') + '|' + JSON.stringify(DK().COOP || {}) + '|' + JSON.stringify(D().DIFFICULTY || {});
+      // (round 16) the versus claw-off: both phones roll the same pile and score a drop the same way
+      const K = DK();
+      s += '|vs:' + JSON.stringify([K.VAL, K.PILE, K.PILE_MORE, K.BONUS, K.DROPS, K.CARD_IDS, K.COPIES, K.HAND, K.WIN_ROUNDS, K.MAX_ROUNDS, Object.keys(D().COMBOS || {}).length, CAB.w, CAB.h]);
     } catch (e) { /* the version alone */ }
     DNX.build = (U.hashStr(s) >>> 0).toString(36);
     return DNX.build;
@@ -23037,7 +23078,9 @@ const GAME = (() => {
   function duoNetFresh(role) {
     return { ph: 'menu', role: role || 'host', code: '', me: role === 'guest' ? 1 : 0, mine: { p: duoNetMine(role === 'guest' ? 1 : 0), ready: false }, part: null, boss: 'random',
       inN: 0, outN: 0, lastOut: null, lost: false, gone: false, left: false, alone: false, awayAt: 0, hid: false, rx: false, ask: false, err: '',
-      w: duoNetW(), stT: 0, bdT: 0, lastCl: '', cmb: {}, cheerT: 0, lostDom: '', t: 0, games: 0, dom: null };
+      w: duoNetW(), stT: 0, bdT: 0, lastCl: '', cmb: {}, cheerT: 0, lostDom: '', t: 0, games: 0, dom: null,
+      // (round 16) mode: 'coop' or 'vs' (a guest takes the host's); drops: the claw-off's drops each per round (the host's pick); vw: the rival's last drop, shown while they pick a card
+      mode: DNX.mode === 'vs' ? 'vs' : 'coop', drops: duoVsNetDrops0(), vw: null };
   }
   // My look online: the one used there last, else Player 1 of the last duel on this phone; only what this profile has.
   function duoNetMine(seat) {
@@ -23052,13 +23095,14 @@ const GAME = (() => {
   function duoNetBind() {
     if (!netOk()) return false;
     NET.reset();
-    NET.hello(() => { const N = S.duoNet; return N ? { b: duoNetBuild(), p: N.mine.p, ready: !!N.mine.ready, g: S.duo && S.duo.net ? 1 : 0, n: Math.max(N.inN, N.outN) } : {}; });
+    NET.hello(() => { const N = S.duoNet; return N ? { b: duoNetBuild(), p: N.mine.p, ready: !!N.mine.ready, g: S.duo && S.duo.net ? 1 : 0, n: Math.max(N.inN, N.outN), m: N.mode } : {}; });   // (round 16: m, the room's mode)
     const wrap = (t, fn) => NET.on(t, (m) => { try { fn(m); } catch (e) { duoNetLog({ k: 'err', t, e: String((e && e.message) || e) }); } });
     wrap('@peer', duoNetOnPeer); wrap('@lost', duoNetOnLost); wrap('@back', duoNetOnBack); wrap('@gone', duoNetOnGone); wrap('@error', duoNetOnError);
     wrap('@code', (c) => { const N = S.duoNet; if (N && !N.code) { N.code = c; if (N.ph === 'lobby' && !S.duo) duoNetLobbyDom(); } });
     wrap('@pulse', duoNetOnPulse);
     for (const [t, fn] of [['me', duoNetOnMe], ['lobby', duoNetOnLobby], ['go', duoNetOnGo], ['turn', duoNetOnTurn], ['cl', duoNetOnCl], ['fx', duoNetOnFx], ['cheer', duoNetOnCheer],
-      ['bye', duoNetOnBye], ['away', duoNetOnAway], ['again', duoNetOnAgain], ['need', duoNetOnNeed], ['sync', duoNetOnSync]]) wrap(t, fn);
+      ['bye', duoNetOnBye], ['away', duoNetOnAway], ['again', duoNetOnAgain], ['need', duoNetOnNeed], ['sync', duoNetOnSync],
+      ['vt', duoVsNetOnTable], ['vc', duoVsNetOnClaw], ['vgo', duoVsNetOnGo]]) wrap(t, fn);   // (round 16: the versus claw-off's own)
     return true;
   }
   const duoNetSend = (m) => (netOk() && S.duoNet && !S.duoNet.alone ? NET.send(m) : false);
@@ -23110,17 +23154,19 @@ const GAME = (() => {
     parent.appendChild(c);
     return c;
   }
-  // CO-OP BOSS from the duo menu: this phone (pass and play) or online.
-  function duoNetChoose() {
+  // CO-OP BOSS (or, round 16, VERSUS CLAW-OFF) from the duo menu: this phone (pass and play) or online.
+  function duoNetChoose(mode) {
     duoNetOff();
     duoStashRun();
-    S.duoUi = { ph: 'coop' };
+    if (mode === 'coop' || mode === 'vs') DNX.mode = mode;
+    const vs = DNX.mode === 'vs';
+    S.duoUi = { ph: vs ? 'vs' : 'coop' };
     const b = duoBody('dp-menu dp-net');
     if (!b) return false;
-    duoNetHead(b, 'Co-op Boss', () => duoMenu());
-    b.appendChild(h('div', 'sub duoSub', 'Two crawlers, one boss. Play on one phone, or each on your own.'));
+    duoNetHead(b, vs ? 'Versus Claw-off' : 'Co-op Boss', () => duoMenu());
+    b.appendChild(h('div', 'sub duoSub', vs ? 'One bin of prizes, two claws. Play on one phone, or each on your own.' : 'Two crawlers, one boss. Play on one phone, or each on your own.'));
     const modes = h('div', 'duoModes');
-    duoNetBig(modes, 'local', 'Same phone', '\u{1F4F1}', 'Pass one phone back and forth. No internet needed.', () => duoSetup('coop'));
+    duoNetBig(modes, 'local', 'Same phone', '\u{1F4F1}', 'Pass one phone back and forth. No internet needed.', () => duoSetup(vs ? 'vs' : 'coop'));
     duoNetBig(modes, 'online', 'Online', '\u{1F310}', 'Each on your own phone, anywhere. Share a four letter code.', () => duoNetMenu());
     b.appendChild(modes);
     return true;
@@ -23128,18 +23174,19 @@ const GAME = (() => {
   function duoNetMenu(err) {
     duoNetOff();
     duoStashRun();
+    const vs = DNX.mode === 'vs';
     S.duoUi = { ph: 'net' };
     const b = duoBody('dp-menu dp-net');
     if (!b) return false;
-    duoNetHead(b, 'Online co-op', () => duoNetChoose());
-    b.appendChild(h('div', 'sub duoSub', 'Fight a boss together, each on your own phone. One of you hosts, the other types the code.'));
+    duoNetHead(b, vs ? 'Online versus' : 'Online co-op', () => duoNetChoose());
+    b.appendChild(h('div', 'sub duoSub', vs ? 'A claw-off against a friend, each on your own phone. One of you hosts, the other types the code.' : 'Fight a boss together, each on your own phone. One of you hosts, the other types the code.'));
     if (err) b.appendChild(h('div', 'duoNetErr panel', err));
     const modes = h('div', 'duoModes');
     duoNetBig(modes, 'host', 'Host a game', '\u{1F3E0}', 'Get a code to share with a friend.', () => duoNetHost());
     duoNetBig(modes, 'join', 'Join a game', '\u{1F511}', 'Type the code your friend got.', () => duoNetJoinDom(''));
     b.appendChild(modes);
     const O = duoM().online || { games: 0, wins: 0 };
-    b.appendChild(h('div', 'sub duoNetRec', `Online: ${O.games | 0} games, ${O.wins | 0} team wins`));
+    b.appendChild(h('div', 'sub duoNetRec', vs ? `Online versus: ${O.vsGames | 0} games, ${O.vsWins | 0} wins` : `Online: ${O.games | 0} games, ${O.wins | 0} team wins`));
     return true;
   }
   function duoNetHost() {
@@ -23230,7 +23277,7 @@ const GAME = (() => {
   function duoNetSendMe() {
     const N = S.duoNet;
     if (!N) return false;
-    if (N.role === 'host') { const P = duoNetPair(); return duoNetSend({ t: 'lobby', p: P, ready: [N.mine.ready ? 1 : 0, N.part && N.part.ready ? 1 : 0], boss: N.boss }); }
+    if (N.role === 'host') { const P = duoNetPair(); return duoNetSend({ t: 'lobby', p: P, ready: [N.mine.ready ? 1 : 0, N.part && N.part.ready ? 1 : 0], boss: N.boss, mode: N.mode, drops: N.drops }); }   // (round 16: the mode and the drops)
     return duoNetSend({ t: 'me', p: D().duoNetPlayer(N.mine.p, 1), ready: N.mine.ready ? 1 : 0 });
   }
   // One field of my own look in the lobby (tests and the DOM): name, color, char, claw, paint.
@@ -23268,9 +23315,9 @@ const GAME = (() => {
     const N = S.duoNet;
     if (!N || S.duo) return;
     S.duoUi = { ph: 'lobby' };
-    const b = duoBody('dp-menu dp-net dp-lobby');
+    const b = duoBody('dp-menu dp-net dp-lobby' + (N.mode === 'vs' ? ' dp-net-vs' : ''));
     if (!b) return;
-    duoNetHead(b, 'Online co-op', () => duoNetMenu());
+    duoNetHead(b, N.mode === 'vs' ? 'Online versus' : 'Online co-op', () => duoNetMenu());
     // the room code, big, to copy or share
     const cc = h('div', 'duoCodeCard panel');
     cc.appendChild(h('div', 'rkH', 'Room code'));
@@ -23373,6 +23420,7 @@ const GAME = (() => {
     const N = S.duoNet, el = N && N.dom && N.dom.boss;
     if (!el) return;
     clear(el);
+    if (N.mode === 'vs') { duoVsNetDropsPanel(el); return; }   // (round 16) the claw-off: drops each per round instead of a boss
     if (N.role === 'host') {
       el.appendChild(h('div', 'rkH', 'The boss (the ones you have beaten, or a surprise)'));
       const row = h('div', 'duoChips');
@@ -23394,7 +23442,7 @@ const GAME = (() => {
     let s = '';
     if (!N.code) s = 'Opening a room...';
     else if (N.lost && N.part) s = 'Partner connection lost, reconnecting...';
-    else if (!N.part) s = N.role === 'host' ? 'Share the code. Your friend taps Duo, Co-op Boss, Online, Join a game.' : 'Waiting for the host...';
+    else if (!N.part) s = N.role === 'host' ? (N.mode === 'vs' ? 'Share the code. Your friend taps Duo, Versus Claw-off, Online, Join a game.' : 'Share the code. Your friend taps Duo, Co-op Boss, Online, Join a game.') : 'Waiting for the host...';
     else if (!N.mine.ready) s = 'Tap Ready when you are set.';
     else if (!N.part.ready) s = `${duoNetUp(N.part.p.name)} is getting ready...`;
     else s = 'Starting!';
@@ -23416,7 +23464,7 @@ const GAME = (() => {
   function duoNetShare() {
     const N = S.duoNet;
     if (!N || !N.code) return false;
-    const url = duoNetLink(N.code), text = i18nTr('Fight a boss with me in Clawspire! Room code:') + ' ' + N.code;
+    const url = duoNetLink(N.code), text = i18nTr(N.mode === 'vs' ? 'Take me on in a Clawspire claw-off! Room code:' : 'Fight a boss with me in Clawspire! Room code:') + ' ' + N.code;
     try {
       const nav = typeof navigator !== 'undefined' ? navigator : null;
       if (nav && nav.share) { nav.share({ title: 'Clawspire', text, url }).then(() => {}, () => {}); return true; }
@@ -23430,7 +23478,8 @@ const GAME = (() => {
     if (dnStr(m.b, 24) !== duoNetBuild()) { duoNetLog({ k: 'build', them: dnStr(m.b, 24) }); if (netOk()) NET.close(); duoNetFail('version'); return; }
     const seat = 1 - N.me, was = N.part;
     N.part = { p: D().duoNetPlayer(m.p, seat), ready: !!m.ready, g: m.g ? 1 : 0, n: dnInt(m.n, 0, 1e6, 0) };
-    duoNetLog({ k: 'peer', seat, g: N.part.g });
+    if (N.role === 'guest' && !S.duo) N.mode = m.m === 'vs' ? 'vs' : 'coop';   // (round 16) the guest plays whatever the host's room plays
+    duoNetLog({ k: 'peer', seat, g: N.part.g, m: N.mode });
     if (S.duo && S.duo.net) {
       // back in a game after a drop: the '@back' that follows resends the last turn; a partner that lost the game will ask ('need')
       if (was) N.part.ready = was.ready;
@@ -23457,6 +23506,10 @@ const GAME = (() => {
     N.part = Object.assign(N.part || {}, { p: host, ready: !!(Array.isArray(m.ready) && m.ready[0]) });
     const b = dnStr(m.boss, 24);
     N.boss = b === 'random' || duoBossList().some((x) => x.id === b) ? b : 'random';
+    // (round 16) the room's mode and the claw-off's drops are the host's
+    const mode = m.mode === 'vs' ? 'vs' : 'coop', drops = DK().DROPS.indexOf(m.drops | 0) >= 0 ? m.drops | 0 : N.drops;
+    if (mode !== N.mode) { N.mode = mode; N.drops = drops; duoNetLobbyDom(); return; }
+    N.drops = drops;
     if (mine && mine.color !== N.mine.p.color) { N.mine.p.color = mine.color; duoNetLobbyDom(); return; }   // the host moved my colour off theirs
     if (N.dom) { duoNetPartPanel(N.dom.part); duoNetBossPanel(); duoNetStatus(); } else duoNetLobbyDom();
   }
@@ -23466,6 +23519,11 @@ const GAME = (() => {
     if (!N || N.role !== 'host' || !N.part || !N.mine.ready || !N.part.ready || S.duo || N.lost || !netOk() || NET.state !== 'connected') return false;
     const P = duoNetPair();
     const seed = ((U.hashStr((NET.seed >>> 0) + ':' + N.code + ':' + (N.games | 0)) >>> 0) || 1);
+    if (N.mode === 'vs') {   // (round 16) the claw-off: the seed rolls the pile, the deck and the toss on both phones alike
+      duoNetSend({ t: 'go', mode: 'vs', seed, drops: N.drops, p: P });
+      duoNetBegin(P, seed, '', 'random', { mode: 'vs', drops: N.drops });
+      return true;
+    }
     const all = duoBossList().map((x) => x.id);
     const boss = N.boss !== 'random' && all.indexOf(N.boss) >= 0 ? N.boss : all.length ? all[U.rng((seed ^ 0xb055) >>> 0 || 1).int(0, all.length - 1)] : 'hoard';
     duoNetSend({ t: 'go', seed, boss, pick: N.boss, p: P });
@@ -23475,28 +23533,33 @@ const GAME = (() => {
   function duoNetOnGo(m) {
     const N = S.duoNet;
     if (!N || N.role !== 'guest' || S.duo || !Array.isArray(m.p)) return;
-    const seed = dnInt(m.seed, 1, 4294967295, 0), boss = dnStr(m.boss, 24);
-    if (!seed || !duoBossList().some((x) => x.id === boss)) { duoNetLog({ k: 'badgo' }); return; }
+    const seed = dnInt(m.seed, 1, 4294967295, 0), boss = dnStr(m.boss, 24), vs = m.mode === 'vs';
+    const drops = DK().DROPS.indexOf(m.drops | 0) >= 0 ? m.drops | 0 : 0;
+    if (!seed || (vs ? !drops : !duoBossList().some((x) => x.id === boss))) { duoNetLog({ k: 'badgo' }); return; }   // (round 16: a claw-off needs its drops, not a boss)
     const pl = D().duoNetPlayer, P = [pl(m.p[0], 0), pl(m.p[1], 1)];
     // my own look is mine (the host may only have moved my colour)
     P[1] = Object.assign({}, pl(N.mine.p, 1), { color: P[1].color });
-    duoNetBegin(P, seed, boss, dnStr(m.pick, 24) || 'random');
+    N.mode = vs ? 'vs' : 'coop';
+    duoNetBegin(P, seed, vs ? '' : boss, dnStr(m.pick, 24) || 'random', { mode: N.mode, drops });
   }
-  function duoNetBegin(P, seed, boss, pick) {
-    const N = S.duoNet;
-    Object.assign(N, { ph: 'game', inN: 0, outN: 0, lastOut: null, rx: false, alone: false, left: false, lost: false, gone: false, ask: false, awayAt: 0, w: duoNetW(), games: (N.games | 0) + 1, dom: null });
+  // o (round 16): {mode: 'coop' | 'vs', drops} (co-op when left out)
+  function duoNetBegin(P, seed, boss, pick, o) {
+    const N = S.duoNet, vs = !!(o && o.mode === 'vs');
+    Object.assign(N, { ph: 'game', inN: 0, outN: 0, lastOut: null, rx: false, alone: false, left: false, lost: false, gone: false, ask: false, awayAt: 0, w: duoNetW(), games: (N.games | 0) + 1, dom: null, vw: null, ff: false });
+    if (vs) { N.mode = 'vs'; N.drops = (o.drops | 0) || N.drops; }
     const M = duoM();
     M.online = D().duoNetOnline ? D().duoNetOnline(M.online) : (M.online || { games: 0, wins: 0 });
     M.online.me = Object.assign({}, N.mine.p);
-    const Dd = duoBegin('coop', P, seed, { boss, net: { me: N.me, code: N.code } });
-    if (Dd) Dd.pick = pick || 'random';
+    const Dd = vs ? duoBegin('vs', P, seed, { drops: N.drops, net: { me: N.me, code: N.code } }) : duoBegin('coop', P, seed, { boss, net: { me: N.me, code: N.code } });
+    if (Dd && !vs) Dd.pick = pick || 'random';
     if (netOk()) NET.have(1);
-    duoNetLog({ k: 'begin', seed, boss, me: N.me, first: Dd && Dd.first });
+    duoNetLog({ k: 'begin', seed, boss, me: N.me, first: Dd && Dd.first, mode: vs ? 'vs' : 'coop' });
     return Dd;
   }
   function duoNetAfterToss() {
     const Dd = S.duo, N = S.duoNet;
     if (!Dd || !N || Dd.ph !== 'toss') return false;
+    if (Dd.mode === 'vs') return duoVsNetAfterToss();   // (round 16) the claw-off: round one, then your drop or theirs
     duoNetLive();
     if (Dd.first === N.me) duoNetYours(); else duoNetWatch(Dd.first);
     return true;
@@ -23524,12 +23587,13 @@ const GAME = (() => {
     snd('duoLink', { k: 'turn' }); haptic('tap');
     duoNetLog({ k: 'yours' });
     duoShow();
-    music('boss');
+    music(Dd.mode === 'vs' ? 'elite' : 'boss');   // (round 16: the claw-off keeps the toss's tune)
     return true;
   }
   function duoNetGo() {
     const Dd = S.duo, N = S.duoNet;
     if (!Dd || !N || Dd.ph !== 'yours') return false;
+    if (Dd.mode === 'vs') return duoVsNetGo();   // (round 16) your drop in the claw-off
     snd('duoReady');
     const ok = duoCoopEnter(N.me);
     if (ok && F) { N.cmb = Object.assign({}, F.combos || {}); N.stT = 0; N.bdT = 0; N.lastCl = ''; }
@@ -23547,13 +23611,14 @@ const GAME = (() => {
     vaultApply();
     duoNetLog({ k: 'watch', who: Dd.turn });
     duoShow();
-    music('boss');
+    music(Dd.mode === 'vs' ? 'elite' : 'boss');
     return true;
   }
   // The pass (duoHand's online form): the turn was sent as it ended (duoTurnPass), or goes now (a seat went down).
   function duoNetPass(nx) {
     const Dd = S.duo, N = S.duoNet;
     if (!Dd || !N) return false;
+    if (Dd.mode === 'vs') return duoVsNetPass(nx);   // (round 16) the claw-off: your card (or none) and the bin go over, then you watch
     if (!N.passSent) duoNetSendTurn({ next: nx });
     N.passSent = false;
     if (N.alone || Dd.down[nx]) { if (!Dd.down[N.me]) return duoNetYours(); }
@@ -23561,7 +23626,7 @@ const GAME = (() => {
   }
   function duoNetSendTurn(o) {
     const Dd = S.duo, N = S.duoNet, L = S.duoLive;
-    if (!Dd || !Dd.net || !N || !L) return null;
+    if (!Dd || !Dd.net || !N || !L || Dd.mode !== 'coop') return null;
     o = o || {};
     const me = N.me;
     N.outN = Math.max(N.outN, N.inN) + 1;
@@ -23576,7 +23641,7 @@ const GAME = (() => {
   }
   function duoNetOnTurn(m) {
     const Dd = S.duo, N = S.duoNet;
-    if (!Dd || !Dd.net || !N || N.alone) return false;
+    if (!Dd || !Dd.net || !N || N.alone || Dd.mode !== 'coop') return false;   // (round 16: co-op's; a claw-off speaks 'vt')
     const n = dnInt(m.n, 0, 1e7, 0);
     if (!(n > N.inN)) return false;   // a turn already applied (a resend after a rejoin)
     const seat = m.seat === 0 || m.seat === 1 ? m.seat : -1;
@@ -23729,12 +23794,7 @@ const GAME = (() => {
     N.stT = DNK().STREAM || 0.1;
     const rig = FS.rig;
     if (!rig) return;
-    const K = rig.ctl, Tt = K && K.T;
-    let op = 1;
-    if (Tt && Number.isFinite(K.pL) && Tt.open !== Tt.closed) op = U.clamp((K.pL - Tt.closed) / (Tt.open - Tt.closed), 0, 1);
-    const r1 = (v) => Math.round((+v || 0) * 10) / 10;
-    const m = { t: 'cl', x: r1(rig.x), y: r1(rig.y), ct: r1(rig.cableTop && rig.cableTop.x), op: Math.round(op * 100) / 100, ph: String(rig.phase || ''), ty: rig.type || 'classic', w: r1((rig.cfg && rig.cfg.width) || 1),
-      hp: [F.player.hp, F.player.block || 0], e: F.enemies.slice(0, 6).map((e) => (e ? [e.hp, e.block || 0, e.alive ? 1 : 0] : [0, 0, 0])) };
+    const m = Object.assign(duoNetClawOut(rig, 'cl'), { hp: [F.player.hp, F.player.block || 0], e: F.enemies.slice(0, 6).map((e) => (e ? [e.hp, e.block || 0, e.alive ? 1 : 0] : [0, 0, 0])) });
     const key = JSON.stringify(m);
     let bodies = false;
     if (N.bdT <= 0) {
@@ -23756,11 +23816,24 @@ const GAME = (() => {
     duoNetSend({ t: 'fx', k: 'prize', id: inst.id, plus: inst.plus ? 1 : 0 });
   }
   // ---- watching the partner's turn
+  // A streamed claw, checked (co-op's 'cl' and, round 16, the claw-off's 'vc'): where it is, the cable's top, how open, its phase, type and width.
+  function duoNetClawIn(m) {
+    const bw = CAB.w, bh = CAB.h, x = dnNum(m.x, -60, bw + 60, bw / 2);
+    return { x, y: dnNum(m.y, -60, bh + 60, 60), ct: dnNum(m.ct, -60, bw + 60, x), op: dnNum(m.op, 0, 1, 1), ph: dnStr(m.ph, 12), ty: clawIds().indexOf(m.ty) >= 0 ? m.ty : 'classic', w: dnNum(m.w, 0.3, 3, 1) };
+  }
+  // ...and out: a rig as the stream carries it (the fight's rig in co-op, the claw-off's own in versus).
+  function duoNetClawOut(rig, t) {
+    const K = rig.ctl, Tt = K && K.T;
+    let op = 1;
+    if (Tt && Number.isFinite(K.pL) && Tt.open !== Tt.closed) op = U.clamp((K.pL - Tt.closed) / (Tt.open - Tt.closed), 0, 1);
+    const r1 = (v) => Math.round((+v || 0) * 10) / 10;
+    return { t, x: r1(rig.x), y: r1(rig.y), ct: r1(rig.cableTop && rig.cableTop.x), op: Math.round(op * 100) / 100, ph: String(rig.phase || ''), ty: rig.type || 'classic', w: r1((rig.cfg && rig.cfg.width) || 1) };
+  }
   function duoNetOnCl(m) {
     const Dd = S.duo, N = S.duoNet;
-    if (!Dd || !N || Dd.turn === N.me || (Dd.ph !== 'watch' && Dd.ph !== 'toss')) return;
-    const w = N.w, bw = CAB.w, bh = CAB.h, x = dnNum(m.x, -60, bw + 60, bw / 2);
-    w.claw = { x, y: dnNum(m.y, -60, bh + 60, 60), ct: dnNum(m.ct, -60, bw + 60, x), op: dnNum(m.op, 0, 1, 1), ph: dnStr(m.ph, 12), ty: clawIds().indexOf(m.ty) >= 0 ? m.ty : 'classic', w: dnNum(m.w, 0.3, 3, 1) };
+    if (!Dd || !N || Dd.mode !== 'coop' || Dd.turn === N.me || (Dd.ph !== 'watch' && Dd.ph !== 'toss')) return;
+    const w = N.w, bw = CAB.w, bh = CAB.h;
+    w.claw = duoNetClawIn(m);
     if (Array.isArray(m.b)) {
       const seen = {}, I = tbl('ITEMS');
       for (const r of m.b.slice(0, DNK().BODIES_MAX || 40)) {
@@ -23796,6 +23869,7 @@ const GAME = (() => {
   function duoNetOnFx(m) {
     const Dd = S.duo, N = S.duoNet;
     if (!Dd || !N || Dd.turn === N.me || Dd.ph !== 'watch') return;
+    if (Dd.mode === 'vs') { duoVsNetOnPrize(m); return; }   // (round 16) a prize down the rival's chute
     const w = N.w;
     if (m.k === 'prize') {
       if (!dnHas(tbl('ITEMS'), m.id)) return;
@@ -23813,7 +23887,7 @@ const GAME = (() => {
   function duoNetCheer(id) {
     const Dd = S.duo, N = S.duoNet;
     if (!Dd || !N) return false;
-    const x = D().duoTaunt ? D().duoTaunt(id, true) : null;
+    const x = D().duoTaunt ? D().duoTaunt(id, Dd.mode !== 'vs') : null;   // (round 16: a claw-off sends taunts)
     if (!x || N.cheerT > N.t) return false;
     N.cheerT = N.t + 0.6;
     Dd.msg = { id: x.id, from: N.me, text: x.text, icon: x.icon };
@@ -23826,7 +23900,7 @@ const GAME = (() => {
   function duoNetOnCheer(m) {
     const Dd = S.duo, N = S.duoNet;
     if (!Dd || !N) return;
-    const x = D().duoTaunt ? D().duoTaunt(dnStr(m.id, 24), true) : null;
+    const x = D().duoTaunt ? D().duoTaunt(dnStr(m.id, 24), Dd.mode !== 'vs') : null;   // (round 16: the claw-off's taunts)
     if (!x) return;
     Dd.msg = { id: x.id, from: 1 - N.me, text: x.text, icon: x.icon };
     if (S.duoT) S.duoT.msgT = 0;
@@ -23910,6 +23984,7 @@ const GAME = (() => {
   // Somebody came back to the code without the game (a reload): the whole table, and on from there.
   function duoNetOnNeed() {
     const Dd = S.duo, N = S.duoNet, L = S.duoLive;
+    if (Dd && Dd.net && N && Dd.mode === 'vs') return duoVsNetOnNeed();   // (round 16) the claw-off's table
     if (!Dd || !Dd.net || !N || !L || Dd.ph === 'end') return false;
     const turn = Dd.ph === 'watch' ? Dd.turn : N.me;   // their turn was cut short: it starts again
     N.outN = Math.max(N.outN, N.inN) + 1;
@@ -23922,6 +23997,7 @@ const GAME = (() => {
   }
   function duoNetOnSync(m) {
     const N = S.duoNet;
+    if (N && !S.duo && m && m.mode === 'vs') return duoVsNetOnSync(m);   // (round 16) back into a claw-off
     if (!N || S.duo || !Array.isArray(m.p) || !Array.isArray(m.pubs)) return false;
     const seed = dnInt(m.seed, 1, 4294967295, 0), boss = dnStr(m.boss, 24);
     if (!seed || !duoBossList().some((x) => x.id === boss)) return false;
@@ -23945,6 +24021,7 @@ const GAME = (() => {
   function duoNetAlone() {
     const Dd = S.duo, N = S.duoNet;
     if (!Dd || !N || Dd.ph === 'end') return false;
+    if (Dd.mode === 'vs') return duoVsNetForfeit();   // (round 16) a claw-off has nobody to fight alone: the one left wins by forfeit
     if (Dd.down[N.me]) return duoNetQuit();
     if (netOk()) { if (NET.state === 'connected') NET.send({ t: 'bye' }); NET.close(); }
     const p = 1 - N.me;
@@ -23972,7 +24049,7 @@ const GAME = (() => {
     if (!fromThem) duoNetSend({ t: 'again' });
     S.duo = null; S.duoLive = null; S.duoV = null;
     duoRestore(false);
-    Object.assign(N, { ph: 'lobby', inN: 0, outN: 0, lastOut: null, rx: false, lost: false, gone: false, left: false, ask: false, awayAt: 0, w: duoNetW() });
+    Object.assign(N, { ph: 'lobby', inN: 0, outN: 0, lastOut: null, rx: false, lost: false, gone: false, left: false, ask: false, awayAt: 0, w: duoNetW(), vw: null, ff: false });
     N.mine.ready = false;
     if (N.part) N.part.ready = false;
     if (netOk()) NET.have(0);
@@ -23988,11 +24065,14 @@ const GAME = (() => {
     N.t += real;
     const Dd = S.duo;
     if (!Dd || !Dd.net || S.screen !== 'duo') return;
+    const vs = Dd.mode === 'vs';
+    if (vs && Dd.ph === 'play' && Dd.turn === N.me) duoVsNetStream(real);   // (round 16) my drop, to the rival's phone
     if (Dd.ph === 'watch' || Dd.ph === 'yours') {
       duoNetWatchStep(real);
+      if (vs && Dd.ph === 'watch') duoVsNetWatchStep(real);
       if (Dd.ph === 'yours' && S.duoT && S.duoT.t > (DNK().YOURS || 5) && !N.ask && !duoNetSheetKey()) { duoNetGo(); return; }
     }
-    if (Dd.ph === 'watch' || Dd.ph === 'yours' || Dd.ph === 'end') {
+    if (Dd.ph === 'watch' || Dd.ph === 'yours' || Dd.ph === 'end' || (vs && (Dd.ph === 'sabo' || Dd.ph === 'round'))) {   // (round 16: the claw-off's own sheets carry the link's too)
       const k = duoNetSheetKey();
       if (k !== N.lostDom) duoShow();
     }
@@ -24030,6 +24110,29 @@ const GAME = (() => {
     try { d.setAttribute('aria-label', k === 'ok' ? 'Online' : k === 'lost' ? 'Reconnecting' : 'Alone'); d.title = k === 'ok' ? 'Online' : k === 'lost' ? 'Reconnecting' : 'Alone'; } catch (e) { /* stub */ }
     bar.appendChild(d);
   }
+  // The link's sheet over the watch screen (or, round 16, the claw-off's own sheets): leave?, reconnecting, or the choice when the partner is gone.
+  function duoNetSheetEl(key) {
+    const Dd = S.duo, N = S.duoNet, vs = Dd && Dd.mode === 'vs';
+    const sh = h('div', 'duoSheet panel center duoNetSheet');
+    if (key === 'ask') {
+      sh.appendChild(h('div', 'duoSc', 'Leave the game?'));
+      sh.appendChild(h('div', 'sub', vs ? 'Your rival wins by forfeit.' : 'Your partner can keep fighting alone.'));
+      const r = h('div', 'row center');
+      r.appendChild(btn('Stay', () => { N.ask = false; duoShow(); }, 'pri'));
+      r.appendChild(btn('Leave', () => duoNetQuit(true), 'ghost'));
+      sh.appendChild(r);
+    } else if (key === 'lost') {
+      sh.appendChild(h('div', 'sub', 'Hang on, trying for 30 seconds.'));   // (the card on the canvas says what happened)
+    } else {
+      const r = h('div', 'row center');
+      if (vs) r.appendChild(btn('Win by forfeit', () => duoVsNetForfeit(), 'pri'));   // (round 16) instead of fighting on alone
+      else if (!Dd.down[N.me]) r.appendChild(btn('Keep fighting alone', () => duoNetAlone(), 'pri'));
+      if (key === 'away') r.appendChild(btn('Wait', () => { N.awayAt = N.t; duoShow(); }, 'go'));
+      r.appendChild(btn('Quit to title', () => duoNetQuit(true), 'ghost'));
+      sh.appendChild(r);
+    }
+    return sh;
+  }
   function duoNetDom() {
     const Dd = S.duo, N = S.duoNet;
     if (!Dd || !N) return;
@@ -24039,40 +24142,24 @@ const GAME = (() => {
     N.lostDom = key;
     const dock = h('div', 'duoDock');
     const pn = duoUp(1 - N.me);
-    if (key) {
-      const sh = h('div', 'duoSheet panel center duoNetSheet');
-      if (key === 'ask') {
-        sh.appendChild(h('div', 'duoSc', 'Leave the game?'));
-        sh.appendChild(h('div', 'sub', 'Your partner can keep fighting alone.'));
-        const r = h('div', 'row center');
-        r.appendChild(btn('Stay', () => { N.ask = false; duoShow(); }, 'pri'));
-        r.appendChild(btn('Leave', () => duoNetQuit(true), 'ghost'));
-        sh.appendChild(r);
-      } else if (key === 'lost') {
-        sh.appendChild(h('div', 'sub', 'Hang on, trying for 30 seconds.'));   // (the card on the canvas says what happened)
-      } else {
-        const r = h('div', 'row center');
-        if (!Dd.down[N.me]) r.appendChild(btn('Keep fighting alone', () => duoNetAlone(), 'pri'));
-        if (key === 'away') r.appendChild(btn('Wait', () => { N.awayAt = N.t; duoShow(); }, 'go'));
-        r.appendChild(btn('Quit to title', () => duoNetQuit(true), 'ghost'));
-        sh.appendChild(r);
-      }
-      dock.appendChild(sh);
-    }
+    if (key) dock.appendChild(duoNetSheetEl(key));
     if (Dd.ph === 'yours') {
       const go = btn('Grab!', () => duoNetGo(), 'pri duoReady');
       go.textContent = '\u{1F3AE} ' + i18nTr('Grab!');
       dock.appendChild(go);
+    } else if (Dd.ph === 'watch' && Dd.mode === 'vs') {
+      duoVsNetWatchDock(dock);   // (round 16) the rival's drop: its result while they pick a card, and the taunts
     } else if (Dd.ph === 'watch') {
       dock.appendChild(h('div', 'duoTh', `Cheer ${pn} on`));
       const row = h('div', 'duoTaunts');
       for (const x of (DK().CHEERS || [])) { const tb = btn('cheer ' + x.id, () => duoNetCheer(x.id), 'sm duoTaunt'); tb.textContent = x.icon + ' ' + i18nTr(x.short || x.text.split(/[ ,!.?]/)[0]); row.appendChild(tb); }
       dock.appendChild(row);
     }
-    if (key !== 'ask') dock.appendChild(btn('Leave', () => duoNetQuit(), 'ghost sm duoPause'));
+    if (key !== 'ask' && !(Dd.ph === 'watch' && Dd.mode === 'vs')) dock.appendChild(btn('Leave', () => duoNetQuit(), 'ghost sm duoPause'));   // (round 16: the claw-off's watch bar carries its own)
     b.appendChild(dock);
   }
   function duoNetEndDom() {
+    if (S.duo && S.duo.mode === 'vs') { duoVsNetEndDom(); return; }   // (round 16) the claw-off's podium
     const Dd = S.duo, N = S.duoNet, b = duoBody('dp-canvas dp-end');
     if (!b || !Dd) return;
     if (N) N.lostDom = duoNetSheetKey();
@@ -24095,13 +24182,16 @@ const GAME = (() => {
   function duoNetDraw(ctx, t) {
     const Dd = S.duo, N = S.duoNet, R = X.RENDER, T = S.duoT || { t: 0, now: 0 };
     if (!R || !R.duo || !N || !Dd) return;
+    if (Dd.mode === 'vs' && Dd.ph === 'watch') { duoVsDraw(ctx, t); return; }   // (round 16) the rival's drop in the claw-off's own cabinet (duoVsNetOver adds the rest)
     const L = S.duoLive, me = N.me, p = 1 - me;
     const names = [duoNameOf(0), duoNameOf(1)], cols = [duoCol(0), duoCol(1)], chars = [Dd.p[0].char, Dd.p[1].char];
     const act = D().rushActOf ? D().rushActOf(Dd.boss) || 1 : 1;
     const foe = L && L.F[0] ? (L.F[0].enemies.find((e) => e && e.alive) || L.F[0].enemies[0]) : null;
     const fi = foe && L ? L.F[0].enemies.indexOf(foe) : 0, live = N.w.e && N.w.e[fi];
     const bossSub = foe ? `Boss ${Math.max(0, live ? live[0] : foe.hp)}/${foe.maxHp} hp` : '';
-    if (Dd.ph === 'yours') {
+    if (Dd.ph === 'yours' && Dd.mode === 'vs') {   // (round 16) the claw-off's YOUR TURN: the round, the drop, the score
+      R.duo.turn(ctx, W, H, { t: T.t, now: T.now, name: names[me], col: cols[me], char: chars[me], label: `Round ${Dd.round} · drop ${Math.min(2 * Dd.drops, (Dd.k | 0) + 1)} of ${2 * Dd.drops}`, sub: `${names[0]} ${Dd.score[0] | 0} : ${Dd.score[1] | 0} ${names[1]}`, left: Math.max(0, (DNK().YOURS || 5) - T.t), total: DNK().YOURS || 5, reduced: !!fx().reduced });
+    } else if (Dd.ph === 'yours') {
       R.duo.turn(ctx, W, H, { t: T.t, now: T.now, name: names[me], col: cols[me], char: chars[me], label: `Co-op · vs ${enemyDef(Dd.boss).name || Dd.boss}`, sub: bossSub, left: Math.max(0, (DNK().YOURS || 5) - T.t), total: DNK().YOURS || 5, reduced: !!fx().reduced });
     } else {
       const who = Dd.turn, w = N.w;
@@ -24140,16 +24230,7 @@ const GAME = (() => {
       const b = w.bodies[id], d = b.def, rar = d && d.rarity;
       if (R.item && d) R.item(ctx, d, CAB.x + b.x, CAB.y + b.y, b.a, 1, { glow: rar === 'u' || rar === 'r' || rar === 'l' ? RC[rar] : 0, glowA: rar === 'l' ? 0.85 : 0.4 });
     }
-    const c = w.cd || { x: (CAB.w - CAB.chuteW) * 0.5, y: 62, ct: (CAB.w - CAB.chuteW) * 0.5, op: 1, ph: 'idle', ty: (S.duo.p[who] || {}).claw || 'classic', w: 1 };
-    if (R.claw && X.PHYS && X.PHYS.clawPose) {
-      try {
-        const pose = X.PHYS.clawPose(c.ty, { x: c.x, y: c.y, open: c.op, cable: Math.max(8, c.y - 26), width: c.w, phase: c.ph });
-        if (pose && pose.cableTop) pose.cableTop.x = c.ct;
-        const busy = c.ph && c.ph !== 'idle' && c.ph !== 'moving';
-        DUO_CJ.t = t; DUO_CJ.mood = busy ? 'focus' : ''; DUO_CJ.idle = busy ? 0 : 1;
-        R.claw(ctx, pose, CAB.x, CAB.y, { juice: DUO_CJ, paint: duoPaint(who) || undefined });
-      } catch (e) { /* art is optional */ }
-    }
+    duoNetClawDraw(ctx, t, who);
     ctx.restore();
     if (R.cabinetFront) R.cabinetFront(ctx, CAB.x, CAB.y, DUO_CFG, cst);
     ctx.save();
@@ -24157,7 +24238,523 @@ const GAME = (() => {
     ctx.beginPath(); ctx.rect(CAB.x - CAB.frame - 3, CAB.y - CAB.frame - 3, CAB.w + CAB.frame * 2 + 6, CAB.h + CAB.frame * 2 + 6); ctx.stroke();
     ctx.restore();
   }
+  // The streamed claw (the partner's in co-op, the rival's in the claw-off), built with PHYS.clawPose in their claw type and paint.
+  function duoNetClawDraw(ctx, t, who) {
+    const R = X.RENDER, N = S.duoNet, w = N && N.w;
+    if (!w || !R || !R.claw || !X.PHYS || !X.PHYS.clawPose || !S.duo) return;
+    const c = w.cd || { x: (CAB.w - CAB.chuteW) * 0.5, y: 62, ct: (CAB.w - CAB.chuteW) * 0.5, op: 1, ph: 'idle', ty: (S.duo.p[who] || {}).claw || 'classic', w: 1 };
+    try {
+      const pose = X.PHYS.clawPose(c.ty, { x: c.x, y: c.y, open: c.op, cable: Math.max(8, c.y - 26), width: c.w, phase: c.ph });
+      if (pose && pose.cableTop) pose.cableTop.x = c.ct;
+      const busy = c.ph && c.ph !== 'idle' && c.ph !== 'moving';
+      DUO_CJ.t = t; DUO_CJ.mood = busy ? 'focus' : ''; DUO_CJ.idle = busy ? 0 : 1;
+      R.claw(ctx, pose, CAB.x, CAB.y, { juice: DUO_CJ, paint: duoPaint(who) || undefined });
+    } catch (e) { /* art is optional */ }
+  }
+
+  // ---------------------------------------------------------------- DUO NET VS (round 16): the versus claw-off online
+  /* DESIGN.md "Online versus (round 16)". VERSUS CLAW-OFF with each player
+     on their own phone, over the same link as co-op (NET, the lobby, the
+     code, the heartbeat, the 30 s retry window). The host owns the setup
+     (the seed, the drops each per round); the seed rolls the pile, the
+     sabotage deck and the coin toss identically on both phones. Drops go
+     turn about as they do on one phone: the active phone plays its drop in
+     its own world (duoVsPlay / duoVsTick) and its result stands. Every
+     change of hands goes over as one 'vt' message carrying the WHOLE
+     claw-off table (round, drop count, scores, the pile indexes won, both
+     hands, the deck, a pending sabotage card, the rounds, the last drop)
+     plus a snapshot of the bin's bodies by pile index, so a lost message is
+     healed by the next one and both phones continue from the same pile:
+       drop  a drop ended (end: the round is over; each phone books it)
+       pass  the dropper played a card on the rival (or kept its hand)
+       next  a new round started (either phone's Next round; a repeat is a no-op)
+     While a rival drops, 'vgo' says it started (the card they suffer slams
+     here too), 'vc' streams their claw 10 times a second and the bin 4 times,
+     and 'fx' {k: 'vprize', i} flies each prize they land. Taunts ride co-op's
+     'cheer'. A partner gone past the retry window (or who left) hands the
+     one still here the match by forfeit. Nothing from the wire is trusted:
+     duoVsNetTableIn checks every field (all or nothing) against this phone's
+     own pile and deck. */
+  const dvsIs = (v, lo, hi) => { const n = +v; return typeof v === 'number' && Number.isInteger(n) && n >= lo && n <= hi; };
+  // The drops each per round a host offers first: the last pick on this phone.
+  function duoVsNetDrops0() {
+    let l = {};
+    try { l = duoM().last || {}; } catch (e) { l = {}; }
+    return DK().DROPS.indexOf(l.drops | 0) >= 0 ? l.drops | 0 : (DK().DROPS_DEF || 3);
+  }
+  // The lobby's options for a claw-off: the host picks the drops, the guest sees them.
+  function duoVsNetDropsPanel(el) {
+    const N = S.duoNet;
+    if (!N || !el) return;
+    if (N.role === 'host') {
+      el.appendChild(h('div', 'rkH', 'Drops each per round'));
+      const row = h('div', 'duoChips');
+      for (const n of DK().DROPS) row.appendChild(btn(String(n), () => { duoVsNetSetDrops(n); duoNetBossPanel(); }, 'duoChip num' + (N.drops === n ? ' on' : '')));
+      el.appendChild(row);
+    } else {
+      el.appendChild(h('div', 'rkH', 'Drops each per round (the host picks)'));
+      el.appendChild(h('div', 'duoNetBossName', String(N.drops | 0)));
+    }
+  }
+  function duoVsNetSetDrops(v) {
+    const N = S.duoNet;
+    if (!N || N.role !== 'host' || S.duo || N.mode !== 'vs' || DK().DROPS.indexOf(v | 0) < 0) return false;
+    N.drops = v | 0;
+    duoNetSendMe();
+    return true;
+  }
+  // ---- the turns
+  function duoVsNetAfterToss() {
+    duoRoundStart(1);
+    return duoVsNetTurn();
+  }
+  // Whose drop it is now (Dd.turn): mine (YOUR TURN) or the rival's (watch).
+  function duoVsNetTurn() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N) return false;
+    N.vw = null;
+    if (Dd.turn === N.me) return duoNetYours();
+    return duoVsNetWatch(Dd.turn);
+  }
+  function duoVsNetWatch(who) {
+    const V = S.duoV;
+    if (V) { V.card = null; V.fog = 0; V.mirror = false; V.tilt = 0; V.slam = null; }
+    for (const b of (V && V.W ? V.W.bodies : [])) b.tgt = null;
+    return duoNetWatch(who);
+  }
+  // YOUR TURN's Grab: the rival's phone is told (their card slams there too), then the drop is this phone's own.
+  function duoVsNetGo() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph !== 'yours' || Dd.turn !== N.me) return false;
+    snd('duoReady');
+    duoNetSend({ t: 'vgo', r: Dd.round | 0, k: Dd.k | 0 });
+    N.stT = 0; N.bdT = 0; N.lastCl = ''; N.lastB = '';
+    duoNetLog({ k: 'vgo-out', r: Dd.round, k2: Dd.k });
+    return duoVsPlay();
+  }
+  // The sabotage choice is made (duoHand's online form): the table goes over, and the rival drops.
+  function duoVsNetPass(nx) {
+    const Dd = S.duo, N = S.duoNet;
+    Dd.turn = nx === 0 || nx === 1 ? nx : 1 - N.me;
+    Dd.from = N.me;
+    duoVsNetOut('pass', false);
+    return duoVsNetTurn();
+  }
+  // Next round (either phone): made here from the seed like the other phone makes it, and told.
+  function duoVsNetNext() {
+    const Dd = S.duo;
+    duoRoundStart((Dd.round | 0) + 1);
+    duoVsNetOut('next', false);
+    return duoVsNetTurn();
+  }
+  // duoVsBook's hook: the online count on this profile (a forfeit win counts).
+  function duoVsNetBooked(w) {
+    const N = S.duoNet, M = duoM();
+    M.online = D().duoNetOnline ? D().duoNetOnline(M.online) : (M.online || { games: 0, wins: 0 });
+    M.online.vsGames = (M.online.vsGames | 0) + 1;
+    if (N && w === N.me) M.online.vsWins = (M.online.vsWins | 0) + 1;
+  }
+  // The rival is gone for good (or left): the one still here takes the match, booked once, then the podium.
+  function duoVsNetForfeit() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || !Dd.net || Dd.mode !== 'vs' || Dd.ph === 'end') return false;
+    if (netOk()) { if (NET.state === 'connected') NET.send({ t: 'bye' }); NET.close(); }
+    Object.assign(N, { ff: true, alone: true, left: true, lost: false, gone: false, ask: false, awayAt: 0, vw: null });
+    const V = S.duoV;
+    if (V) { V.sub = 'done'; V.cur = null; V.keyDir = 0; if (V.tilt && V.W) { V.W.setGravity(0, GRAVITY); V.tilt = 0; } }
+    const m = D().duoMatch ? D().duoMatch(Dd.rounds) : { wins: [0, 0], pts: [0, 0] };
+    const pts = [0, 1].map((i) => (m.pts[i] | 0) + (Dd.round > Dd.rounds.length ? Dd.score[i] | 0 : 0));   // the round cut short counts in the points shown
+    duoVsBook({ w: N.me, wins: m.wins, pts });
+    if (Dd.res) Dd.res.ff = 1;
+    Dd.ph = 'end';
+    snd('win'); fx().emit('confetti', 270, 300, { power: 1 });
+    duoNetLog({ k: 'forfeit', w: N.me });
+    duoShow();
+    return true;
+  }
+  // ---- the table over the wire
+  function duoVsNetTableOut() {
+    const Dd = S.duo, L = Dd.last;
+    return {
+      r: Dd.round | 0, k: Dd.k | 0, turn: Dd.turn | 0, used: [Dd.used[0] | 0, Dd.used[1] | 0], score: [Dd.score[0] | 0, Dd.score[1] | 0], taken: (Dd.taken || []).map((i) => i | 0),
+      hands: [(Dd.hands[0] || []).slice(), (Dd.hands[1] || []).slice()], deck: (Dd.deck || []).slice(), pend: Dd.pend ? { id: Dd.pend.id, on: Dd.pend.on, by: Dd.pend.by } : null,
+      rounds: (Dd.rounds || []).map((x) => ({ s: [x.s[0] | 0, x.s[1] | 0] })), last: L ? { who: L.who | 0, got: (L.got || []).map((i) => i | 0), pts: L.pts | 0 } : null,
+    };
+  }
+  /* A table from the other phone, checked against this game's rules (all or
+     nothing, null when anything is off): the round and the drop count in
+     range, the drops each within the round's, the pile indexes real and
+     unique for that round's pile (rolled here from the seed), the hands and
+     the deck real cards within their sizes, a pending card on one player by
+     the other, the finished rounds' scores, the last drop's prizes among the
+     ones won. The round winners and the last drop's lines are worked out
+     here, never taken from the wire. */
+  function duoVsNetTableIn(o, seed, drops) {
+    const Dd = S.duo, K = DK();
+    seed = seed || (Dd && Dd.seed); drops = drops || (Dd && Dd.drops) | 0;
+    if (!seed || !drops || !o || typeof o !== 'object' || Array.isArray(o)) return null;
+    const ids = K.CARD_IDS || [], hmax = (K.HAND || {}).max || 3, maxR = K.MAX_ROUNDS || 5;
+    const pair = (a, lo, hi) => (Array.isArray(a) && a.length === 2 && dvsIs(a[0], lo, hi) && dvsIs(a[1], lo, hi) ? [a[0], a[1]] : null);
+    const cards = (a, max) => (Array.isArray(a) && a.length <= max && a.every((c) => typeof c === 'string' && ids.indexOf(c) >= 0) ? a.slice() : null);
+    if (!dvsIs(o.r, 1, maxR) || !dvsIs(o.k, 0, 2 * drops) || !dvsIs(o.turn, 0, 1)) return null;
+    const r = o.r, used = pair(o.used, 0, drops), score = pair(o.score, 0, 99999);
+    if (!used || !score || used[0] + used[1] !== o.k) return null;
+    const n = duoPileOf({ seed, round: r, drops }).length;
+    if (!n || !Array.isArray(o.taken) || o.taken.length > n) return null;
+    const taken = [], seen = {};
+    for (const i of o.taken) { if (!dvsIs(i, 0, n - 1) || seen[i]) return null; seen[i] = 1; taken.push(i); }
+    if (!Array.isArray(o.hands) || o.hands.length !== 2) return null;
+    const hands = [cards(o.hands[0], hmax), cards(o.hands[1], hmax)], deck = cards(o.deck, ids.length * (K.COPIES || 2));
+    if (!hands[0] || !hands[1] || !deck) return null;
+    let pend = null;
+    if (o.pend != null) {
+      const p = o.pend;
+      if (!p || typeof p !== 'object' || ids.indexOf(p.id) < 0 || !dvsIs(p.on, 0, 1) || !dvsIs(p.by, 0, 1) || p.on === p.by) return null;
+      pend = { id: p.id, on: p.on, by: p.by };
+    }
+    if (!Array.isArray(o.rounds) || o.rounds.length < r - 1 || o.rounds.length > r) return null;
+    const rounds = [];
+    for (const x of o.rounds) {
+      const s = x && typeof x === 'object' ? pair(x.s, 0, 99999) : null;
+      if (!s) return null;
+      rounds.push({ s, w: D().duoRoundWin ? D().duoRoundWin(s) : (s[0] > s[1] ? 0 : s[1] > s[0] ? 1 : -1) });
+    }
+    let last = null;
+    if (o.last != null) {
+      const L = o.last;
+      if (!L || typeof L !== 'object' || !dvsIs(L.who, 0, 1) || !Array.isArray(L.got) || L.got.length > n || !dvsIs(L.pts, 0, 99999)) return null;
+      if (!L.got.every((i) => dvsIs(i, 0, n - 1) && seen[i])) return null;
+      last = { who: L.who, got: L.got.slice(), pts: L.pts };
+    }
+    return { r, k: o.k, turn: o.turn, used, score, taken, hands, deck, pend, rounds, last };
+  }
+  // A checked table taken as it is (a round this phone has not started is started first, from the seed).
+  function duoVsNetAdopt(tb) {
+    const Dd = S.duo;
+    if (tb.r !== (Dd.round | 0) || !S.duoV) { Dd.rounds = tb.rounds.slice(0, tb.r - 1); duoRoundStart(tb.r); }
+    Object.assign(Dd, { k: tb.k, turn: tb.turn, used: tb.used, score: tb.score, taken: tb.taken, hands: tb.hands, deck: tb.deck, pend: tb.pend, rounds: tb.rounds });
+    if (tb.last) {
+      const pile = S.duoV && S.duoV.pile.length ? S.duoV.pile : duoPileOf(Dd);
+      const sc = D().duoDropScore ? D().duoDropScore(tb.last.got.map((i) => ({ i, id: pile[i].id, v: pile[i].v, gold: pile[i].gold }))) : { lines: [], combos: [] };
+      Dd.last = { who: tb.last.who, got: tb.last.got, pts: tb.last.pts, lines: sc.lines, combos: sc.combos };
+    } else Dd.last = null;
+  }
+  // The bin's bodies by pile index: [i, x, y, angle x100] (the stream and the end-of-drop snapshot).
+  function duoVsNetSnapOut() {
+    const V = S.duoV, out = [];
+    if (!V || !V.W) return out;
+    for (const b of V.W.bodies) {
+      if (b.type !== 'dynamic' || !b.data || b.data.pile == null) continue;
+      out.push([b.data.pile | 0, Math.round(b.x * 10) / 10, Math.round(b.y * 10) / 10, Math.round((b.a || 0) * 100)]);
+      if (out.length >= (DNK().VS_BODIES || 40)) break;
+    }
+    return out;
+  }
+  // Rows from the wire, checked: a real pile index (once each), a position in or near the glass, an angle.
+  function duoVsNetRows(sn, n) {
+    const out = [], seen = {};
+    if (!Array.isArray(sn)) return out;
+    for (const r of sn.slice(0, DNK().VS_BODIES || 40)) {
+      if (!Array.isArray(r) || !dvsIs(r[0], 0, n - 1) || seen[r[0]]) continue;
+      seen[r[0]] = 1;
+      out.push({ i: r[0], x: dnNum(r[1], -60, CAB.w + 60, CAB.w / 2), y: dnNum(r[2], -60, CAB.h + 60, CAB.h / 2), a: dnNum(r[3], -1e5, 1e5, 0) / 100 });
+    }
+    return out;
+  }
+  function duoVsNetByPile() {
+    const V = S.duoV, o = {};
+    if (V && V.W) for (const b of V.W.bodies) if (b.type === 'dynamic' && b.data && b.data.pile != null) o[b.data.pile] = b;
+    return o;
+  }
+  // The bin as the table says: what was won is gone, the rest where the other phone left it (a prize missing here: the bin is rebuilt first).
+  function duoVsNetSnapIn(sn) {
+    const Dd = S.duo;
+    let V = S.duoV;
+    if (!Dd) return false;
+    if (!V || !V.W) { V = duoVsBuild(); if (!V || !V.W) return false; }
+    const taken = {};
+    for (const i of Dd.taken || []) taken[i] = 1;
+    let by = duoVsNetByPile();
+    for (const i in by) if (taken[i]) { V.W.remove(by[i]); delete by[i]; }
+    let miss = false;
+    for (let i = 0; i < V.pile.length; i++) if (!taken[i] && !by[i]) miss = true;
+    if (miss) { V = duoVsBuild(); by = duoVsNetByPile(); }
+    for (const r of duoVsNetRows(sn, V.pile.length)) {
+      const b = by[r.i];
+      if (!b) continue;
+      b.x = r.x; b.y = r.y; b.a = r.a; b.vx = 0; b.vy = 0; b.av = 0; b.tgt = null;
+      if (V.W.sync) V.W.sync(b);
+    }
+    return true;
+  }
+  function duoVsNetOut(ev, over) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || Dd.mode !== 'vs') return null;
+    N.outN = Math.max(N.outN, N.inN) + 1;
+    const m = { t: 'vt', n: N.outN, ev, end: over ? 1 : 0, tb: duoVsNetTableOut(), sn: duoVsNetSnapOut() };
+    N.lastOut = m;
+    const sent = duoNetSend(m);
+    if (netOk() && !N.alone) NET.have(N.outN + 1);
+    duoNetLog({ k: 'vsend', n: m.n, ev, end: m.end, sent: !!sent });
+    return m;
+  }
+  function duoVsNetOnTable(m) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || N.alone || Dd.mode !== 'vs' || Dd.ph === 'end') return false;
+    const n = dnInt(m.n, 0, 1e7, 0);
+    if (!(n > N.inN)) return false;   // already applied (a resend after a rejoin)
+    const ev = m.ev === 'drop' || m.ev === 'pass' || m.ev === 'next' ? m.ev : '';
+    const tb = ev ? duoVsNetTableIn(m.tb) : null;
+    if (!tb) { duoNetLog({ k: 'badtable', n, ev }); return false; }
+    if (tb.r < (Dd.round | 0)) return false;   // an old round
+    const newer = tb.r > (Dd.round | 0);
+    if (!newer && Dd.ph !== 'watch' && Dd.ph !== 'toss') { duoNetLog({ k: 'vt?', ph: Dd.ph, ev }); return false; }   // only the one watching takes a table
+    if (ev === 'drop' && (!tb.last || tb.last.who === N.me)) { duoNetLog({ k: 'badtable', n, ev }); return false; }
+    N.inN = n; N.outN = Math.max(N.outN, n);
+    if (netOk()) NET.have(n + 1);
+    duoVsNetAdopt(tb);
+    duoVsNetSnapIn(m.sn);
+    const V = S.duoV;
+    if (V) { V.card = null; V.fog = 0; V.mirror = false; V.tilt = 0; }
+    duoNetLog({ k: 'vrecv', n, ev, end: !!m.end });
+    if (ev !== 'drop') return duoVsNetTurn();   // a pass (my drop now) or a new round (whoever starts it)
+    const L = Dd.last;
+    duoVsNetDropFx(L);
+    if (m.end) { N.vw = null; return duoRoundEnd(); }   // the round is over here too: the round sheet, or the podium (booked on this profile)
+    if (Dd.ph !== 'watch') duoVsNetWatch(L.who);
+    Dd.turn = L.who; Dd.from = L.who;
+    N.vw = { who: L.who, pts: L.pts | 0, lines: L.lines || [] };
+    duoShow();
+    return true;
+  }
+  // The rival's drop scored on this phone: the points over their side of the board, a jackpot, their combos.
+  function duoVsNetDropFx(L) {
+    const V = S.duoV, N = S.duoNet;
+    if (!L) return;
+    if (L.pts > 0) { if (V) V.flash[L.who] = 1.4; fx().text(L.who ? 400 : 140, 190, '+' + L.pts, '#ffc94d', { size: 30, life: 1.4, dy: -40 }); }
+    if ((L.got || []).length >= 3) { snd('jackpot'); fx().emit('confetti', 270, 420, { n: 1.2 }); banner('JACKPOT', 'jackpot', 1.3); }
+    for (const ln of L.lines || []) {
+      if (ln.k !== 'combo' || !N) continue;
+      N.w.fx.push({ k: 'combo', name: ln.label, col: ln.color || '#ff9ad0', t: 0, life: 1.8 });
+      snd('combo');
+    }
+    if (N && N.w.fx.length > (DNK().FX_MAX || 24)) N.w.fx.splice(0, N.w.fx.length - (DNK().FX_MAX || 24));
+  }
+  // ---- the rival's drop, live
+  function duoVsNetStream(real) {
+    const N = S.duoNet, V = S.duoV;
+    if (!N || N.alone || !V || !V.rig) return;
+    N.stT -= real; N.bdT -= real;
+    if (N.stT > 0) return;
+    N.stT = DNK().STREAM || 0.1;
+    const m = duoNetClawOut(V.rig, 'vc');
+    const key = JSON.stringify(m);
+    let bodies = false;
+    if (N.bdT <= 0) {
+      N.bdT = DNK().BODIES || 0.25;
+      m.b = duoVsNetSnapOut();
+      const bk = JSON.stringify(m.b);
+      bodies = bk !== N.lastB;
+      N.lastB = bk;
+      if (!bodies) delete m.b;
+    }
+    if (key === N.lastCl && !bodies) return;   // nothing moved
+    N.lastCl = key;
+    duoNetSend(m);
+  }
+  function duoVsNetOnGo(m) {
+    const Dd = S.duo, N = S.duoNet, V = S.duoV;
+    if (!Dd || !N || Dd.mode !== 'vs' || Dd.ph !== 'watch' || Dd.turn === N.me || !V) return false;
+    if (dnInt(m.r, -1, 99, -1) !== (Dd.round | 0) || dnInt(m.k, -1, 99, -1) !== (Dd.k | 0)) { duoNetLog({ k: 'vgo?', r: m.r, k2: m.k }); return false; }
+    const who = Dd.turn, card = Dd.pend && Dd.pend.on === who ? Dd.pend.id : null;
+    V.card = card; V.fog = card === 'fog' ? 1 : 0; V.mirror = card === 'mirror'; V.tilt = 0;
+    if (card === 'tilt') { const r = U.rng((U.hashStr(Dd.seed + ':sab:' + Dd.round + ':' + Dd.k) >>> 0) || 1); V.tilt = r() < 0.5 ? -1 : 1; }   // the lean duoVsPlay rolls there
+    if (card) { V.slam = { id: card, t: 0 }; snd('duoSabo'); haptic('hit'); fx().text(270, 380, 'SABOTAGE!', '#ff5a4a', { size: 26, life: 1.4, dy: -30 }); }
+    V.party = 0.8;
+    N.vw = null; N.w.claw = null; N.w.cd = null;
+    duoNetLog({ k: 'vgo', who, card });
+    duoShow();
+    return true;
+  }
+  function duoVsNetOnClaw(m) {
+    const Dd = S.duo, N = S.duoNet, V = S.duoV;
+    if (!Dd || !N || Dd.mode !== 'vs' || Dd.ph !== 'watch' || Dd.turn === N.me) return;
+    N.w.claw = duoNetClawIn(m);
+    N.w.n++;
+    if (!Array.isArray(m.b) || !V || !V.W) return;
+    const by = duoVsNetByPile(), seen = {};
+    for (const r of duoVsNetRows(m.b, V.pile.length)) { seen[r.i] = 1; const b = by[r.i]; if (b) b.tgt = { x: r.x, y: r.y, a: r.a }; }
+    for (const i in by) if (!seen[i]) V.W.remove(by[i]);   // gone from their bin (down the chute: the table books it)
+  }
+  // duoVsCredit's hook: a prize down this phone's chute on its own drop (or a straggler after it) flies on the rival's phone.
+  function duoVsNetCredit(d) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || !d || d.pile == null || (Dd.ph !== 'play' && Dd.ph !== 'sabo')) return;
+    if ((Dd.ph === 'play' ? Dd.turn : Dd.from) !== N.me) return;
+    duoNetSend({ t: 'fx', k: 'vprize', i: d.pile | 0 });
+  }
+  function duoVsNetOnPrize(m) {
+    const Dd = S.duo, N = S.duoNet, V = S.duoV;
+    if (!Dd || !N || !V || m.k !== 'vprize') return;
+    const i = dnInt(m.i, -1, V.pile.length - 1, -1);
+    if (i < 0 || (Dd.taken || []).indexOf(i) >= 0) return;
+    const p = V.pile[i], def = itemDef(p.id), who = Dd.turn, v = p.v | 0;
+    const b = duoVsNetByPile()[i];
+    if (b && V.W) V.W.remove(b);
+    V.flash[who] = 1; V.party = Math.max(V.party, v >= 4 || p.gold ? 1.2 : 0.6);
+    const x = CAB.x + CAB.w - CAB.chuteW / 2, y = CAB.y + CAB.h - 40;
+    fx().text(x - 36, y - 30, v ? (p.gold ? 'GOLDEN +' + v * 2 : '+' + v) : 'A ROCK!', p.gold || v >= 4 ? '#ffc94d' : v ? '#ffffff' : '#b3a4d6', { size: v >= 4 || p.gold ? 22 : 17 });
+    N.w.fx.push({ k: 'prize', def, plus: false, t: 0, life: 1.1 });
+    if (N.w.fx.length > (DNK().FX_MAX || 24)) N.w.fx.shift();
+    snd(v >= 4 || p.gold ? 'arcWin' : v ? 'coin' : 'thud');
+  }
+  // The watcher's frame: the bodies glide to the stream, the flashes and the card's slam run down (no physics here).
+  function duoVsNetWatchStep(real) {
+    const V = S.duoV;
+    if (!V) return;
+    V.flash[0] = Math.max(0, V.flash[0] - real * 2.5); V.flash[1] = Math.max(0, V.flash[1] - real * 2.5); V.party = Math.max(0, V.party - real * 1.1);
+    if (V.slam) { V.slam.t += real; if (V.slam.t > DUOC.slam) V.slam = null; }
+    if (!V.W) return;
+    const k = 1 - Math.pow(0.00005, real);
+    for (const b of V.W.bodies) {
+      const g = b.tgt;
+      if (!g) continue;
+      b.x += (g.x - b.x) * k; b.y += (g.y - b.y) * k; b.a += (g.a - b.a) * k;
+      if (V.W.sync) V.W.sync(b);
+    }
+  }
+  // ---- the DOM: the watch dock, the sheets' dock, the podium
+  // The six taunts: words on the sheets, icons only on the watch bar (one row under the glass, the bin stays in sight).
+  function duoVsNetTauntRow(parent, icons) {
+    const row = h('div', 'duoTaunts' + (icons ? ' duoVsNetIcons' : ''));
+    for (const x of (DK().TAUNTS || [])) {
+      const tb = btn('taunt ' + x.id, () => duoNetCheer(x.id), 'sm duoTaunt');
+      tb.textContent = icons ? x.icon : x.icon + ' ' + i18nTr(x.short || x.text.split(/[ ,!.?]/)[0]);
+      try { tb.setAttribute('aria-label', i18nTr(x.text)); tb.title = i18nTr(x.text); } catch (e) { /* stub */ }
+      row.appendChild(tb);
+    }
+    parent.appendChild(row);
+    return row;
+  }
+  function duoVsNetWatchDock(dock) {
+    const N = S.duoNet, vw = N && N.vw;
+    if (!N) return;
+    if (vw) {
+      const sheet = h('div', 'duoSheet panel duoVsNetRes');
+      try { if (sheet.style && sheet.style.setProperty) sheet.style.setProperty('--dc', duoCol(vw.who)); } catch (e) { /* stub */ }
+      sheet.appendChild(h('div', 'duoSc', `${duoUp(vw.who)} +${vw.pts | 0}`));
+      const ls = h('div', 'duoLines');
+      if (!vw.lines.length) ls.appendChild(h('span', 'ln k-none', 'Nothing in the chute. Ouch.'));
+      for (const ln of vw.lines) ls.appendChild(h('span', 'ln k-' + ln.k, `${ln.label} +${ln.v}`));
+      sheet.appendChild(ls);
+      sheet.appendChild(h('div', 'duoTh duoNetSpin', `${duoUp(vw.who)} is picking a sabotage card...`));
+      dock.appendChild(sheet);
+    }
+    // one row under the glass: the taunts (icons, their words on the bubble) and Leave
+    const bar = h('div', 'duoVsNetBar');
+    try { bar.setAttribute('aria-label', i18nTr(`Taunt ${duoUp(1 - N.me)}`)); } catch (e) { /* stub */ }
+    duoVsNetTauntRow(bar, true);
+    if (duoNetSheetKey() !== 'ask') bar.appendChild(btn('Leave', () => duoNetQuit(), 'ghost sm duoPause'));
+    dock.appendChild(bar);
+  }
+  // Under the claw-off's own sheets (your card choice, a round's result): the link's sheet, the taunts, Leave.
+  function duoVsNetDock(b) {
+    const Dd = S.duo, N = S.duoNet;
+    if (!N || !b || !Dd) return;
+    const key = duoNetSheetKey();
+    N.lostDom = key;
+    const dock = h('div', 'duoDock duoVsNetDock');
+    if (key) dock.appendChild(duoNetSheetEl(key));
+    if (Dd.ph === 'round' && !key) duoVsNetTauntRow(dock, true);
+    if (key !== 'ask') dock.appendChild(btn('Leave', () => duoNetQuit(), 'ghost sm duoPause'));
+    b.appendChild(dock);
+  }
+  function duoVsNetEndDom() {
+    const Dd = S.duo, N = S.duoNet, b = duoBody('dp-canvas dp-end');
+    if (!b || !Dd) return;
+    if (N) N.lostDom = duoNetSheetKey();
+    const res = Dd.res || {}, O = duoM().online || {};
+    const card = h('div', 'duoSheet panel center');
+    card.appendChild(h('div', 'duoSc', res.ff && (res.w === 0 || res.w === 1) ? `${duoUp(res.w)} wins by forfeit!` : res.w === 0 || res.w === 1 ? `${duoUp(res.w)} wins the claw-off!` : 'A draw!'));
+    card.appendChild(h('div', 'sub', `Rounds ${(res.wins || [0, 0]).join(' : ')} · points ${(res.pts || [0, 0]).join(' : ')}`));
+    card.appendChild(h('div', 'sub', `Online versus wins: ${O.vsWins | 0} of ${O.vsGames | 0}`));
+    duoVsNetTauntRow(card, true);
+    const bt = h('div', 'row center');
+    const live = N && !N.alone && !N.left && !N.lost && netOk() && NET.state === 'connected';
+    if (live) bt.appendChild(btn('Play again', () => duoNetAgain(), 'pri'));
+    else if (N && !res.ff) card.appendChild(h('div', 'sub', `${duoUp(1 - N.me)} left the game.`));
+    bt.appendChild(btn('Title', () => duoNetQuit(true), live ? 'ghost' : 'pri'));
+    card.appendChild(bt);
+    b.appendChild(card);
+    if (!S.duoT || !S.duoT.crowd) { snd('duoCrowd'); fx().emit('confetti', 270, 300, { n: 1.4 }); if (S.duoT) S.duoT.crowd = 1; }
+    music('win');
+  }
+  // ---- the canvas over the claw-off (duoVsDraw's hook): the rival's prizes flying, a taunt's bubble, the link
+  function duoVsNetOver(ctx, t, who) {
+    const Dd = S.duo, N = S.duoNet, R = X.RENDER, T = S.duoT;
+    if (!Dd || !N || !R || !R.duo) return;
+    try { R.duo.wfx(ctx, N.w.fx, { chute: { x: CAB.x + CAB.w - CAB.chuteW / 2, y: CAB.y + CAB.h - 40 }, tray: { x: who ? 400 : 140, y: 150 }, reduced: !!fx().reduced }); } catch (e) { /* optional */ }
+    if (Dd.msg && Dd.msg.text && R.sto && R.sto.bubble && T && T.msgT != null && T.msgT < 3.5) {
+      const tx = Dd.msg.from === 1 ? 400 : 140;
+      try { R.sto.bubble(ctx, 270, 246, 400, (Dd.msg.icon ? Dd.msg.icon + ' ' : '') + i18nTr(Dd.msg.text), T.msgT || 1, tx, 200); } catch (e) { /* optional */ }
+    }
+    const key = duoNetSheetKey();
+    if (!key || key === 'ask') return;
+    const pn = duoUp(1 - N.me), col = duoCol(1 - N.me);
+    if (Dd.ph === 'play') {   // your own drop goes on: a pill, never a card over the glass
+      R.duo.tag(ctx, 270, 40, '\u{1F4E1} ' + i18nTr(key === 'lost' ? 'Reconnecting' : 'Your rival is still gone.'), col, true, 13);
+      return;
+    }
+    const secs = netOk() ? Math.max(0, Math.ceil(30 - NET.lostFor / 1000)) : 0;
+    const title = key === 'lost' ? 'Partner connection lost' : key === 'left' ? `${pn} left the game.` : key === 'away' ? `${pn} stepped away.` : 'Your rival is still gone.';
+    R.duo.lost(ctx, W, H, { t, title, sub: key === 'lost' ? `Reconnecting... ${secs} s` : '', spin: key === 'lost', col });
+  }
+  // ---- a phone back without the game (a reload): the whole claw-off
+  function duoVsNetOnNeed() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !N || Dd.ph === 'end') return false;
+    if (Dd.ph === 'toss') duoAfterToss();
+    // where the returning phone comes in: my drop or my card choice goes on (they watch), their cut drop starts over, their card choice waits
+    const ph = Dd.ph === 'round' ? 'round' : Dd.ph === 'watch' ? (N.vw ? 'sabo' : 'yours') : 'watch';
+    N.outN = Math.max(N.outN, N.inN) + 1;
+    duoNetSend({ t: 'sync', mode: 'vs', seed: Dd.seed, p: Dd.p, drops: Dd.drops, first: Dd.first, n: N.outN, ph, vw: Dd.ph === 'sabo' ? 1 : 0, tb: duoVsNetTableOut(), sn: duoVsNetSnapOut() });
+    N.inN = N.outN;
+    if (ph === 'yours') duoVsNetWatch(Dd.turn);   // their drop starts over: a fresh watch here
+    duoNetLog({ k: 'vsync-out', ph });
+    return true;
+  }
+  function duoVsNetOnSync(m) {
+    const N = S.duoNet;
+    if (!N || S.duo || !Array.isArray(m.p)) return false;
+    const seed = dnInt(m.seed, 1, 4294967295, 0), drops = DK().DROPS.indexOf(m.drops | 0) >= 0 ? m.drops | 0 : 0;
+    const ph = ['yours', 'watch', 'sabo', 'round'].indexOf(m.ph) >= 0 ? m.ph : '';
+    const tb = seed && drops ? duoVsNetTableIn(m.tb, seed, drops) : null;
+    if (!tb || !ph || (ph === 'round') !== (tb.rounds.length === tb.r)) { duoNetLog({ k: 'badsync' }); return false; }
+    if (netOk() && (NET.side === 0 || NET.side === 1)) { N.me = NET.side; N.role = N.me ? 'guest' : 'host'; }   // the seat the relay kept for this phone
+    const pl = D().duoNetPlayer, P = [pl(m.p[0], 0), pl(m.p[1], 1)];
+    const Dd = duoNetBegin(P, seed, '', 'random', { mode: 'vs', drops });
+    if (!Dd) return false;
+    duoVsNetAdopt(tb);
+    duoVsNetSnapIn(m.sn);
+    N.inN = N.outN = dnInt(m.n, 0, 1e7, 0);
+    if (netOk()) NET.have(N.inN + 1);
+    duoNetLog({ k: 'vsync-in', ph });
+    snd('duoLink', { k: 'back' });
+    const me = N.me;
+    if (ph === 'yours') { Dd.turn = me; return duoNetYours(); }
+    if (ph === 'sabo') { Dd.turn = 1 - me; Dd.from = me; Dd.ph = 'sabo'; duoShow(); return true; }
+    if (ph === 'round') { Dd.ph = 'round'; duoShow(); return true; }
+    duoVsNetWatch(1 - me);
+    if (m.vw && Dd.last) { N.vw = { who: Dd.last.who, pts: Dd.last.pts | 0, lines: Dd.last.lines || [] }; duoShow(); }
+    return true;
+  }
+  const DUOVS_API = () => ({
+    go: duoVsNetGo, drops: duoVsNetSetDrops, forfeit: duoVsNetForfeit, out: duoVsNetOut, onTable: duoVsNetOnTable, tableOut: duoVsNetTableOut, tableIn: duoVsNetTableIn,
+    snapOut: duoVsNetSnapOut, snapIn: duoVsNetSnapIn, onClaw: duoVsNetOnClaw, onGo: duoVsNetOnGo,
+  });
+
   const DUON_API = () => ({
+    vs: DUOVS_API(),   // (round 16) the versus claw-off online (DESIGN.md "Online versus (round 16)")
     choose: duoNetChoose, menu: duoNetMenu, host: duoNetHost, joinDom: duoNetJoinDom, join: duoNetJoin, set: duoNetSet, boss: duoNetBoss, ready: duoNetReady, start: duoNetStart,
     go: duoNetGo, alone: duoNetAlone, quit: duoNetQuit, again: duoNetAgain, cheer: duoNetCheer, live: duoNetLive, send: duoNetSendTurn, onTurn: duoNetOnTurn, boot: duoNetBoot,
     foesOut: duoNetFoesOut, foesIn: duoNetFoesIn, pubOut: duoNetPubOut, pubIn: duoNetPubIn, build: duoNetBuild, sheet: duoNetSheetKey, draw: duoNetDraw,
@@ -25257,6 +25854,588 @@ const GAME = (() => {
   }
   // ================================================================ /DEP
 
+  // ================================================================ CAB (round 16): the cabinet is alive
+  /* DESIGN.md "The cabinet is alive (round 16)". Five things that happen in
+     and around the claw machine itself, so a single grab is more varied:
+     - Cabinet events: from turn CABK.evFirst some player turns open with a
+       sign that drops into the glass, spins like a slot reel and lands on
+       POWER SURGE (the claw grips harder and runs faster this turn), COIN
+       SHOWER (coins rain into the bin: 1 gold for each one delivered, the
+       rest sink away when the turn ends) or CAPSULE DROP (a prize capsule in
+       the pile: deliver it and it waits on the reward screen). Rolled from
+       the fight's seed and the turn (never FS.rng), so a reload replays them.
+     - The Jackpot Lamp: a dome and a tube on the cabinet's top frame. Every
+       delivered prize sends a spark into it (a double, a jackpot, a rare
+       prize, a PERFECT grab and a SO CLOSE add more); full, it goes FEVER:
+       the beacon spins, the dome bursts and coins and a capsule rain into
+       the bin. The level is the run's (run.cabLamp), written back when a
+       fight ends, so a reload mid fight starts it where the fight did.
+     - PERFECT grab: the claw lifts with its palm right over a prize's middle:
+       a slow motion beat, a flash, a chime, and the grip holds harder for
+       that lift.
+     - The straining lift: the heavier the catch, the more the claw shakes,
+       creaks, sweats and grits its eyes (HEAVY! over a big load).
+     - Prize faces: rare and legendary prizes (the Golden Prize and the
+       cabinet's capsules too) have eyes: they watch the claw, look nervous as
+       it comes down, gasp and squeak when caught, grin on the ride, go dizzy
+       when dropped and cheer when delivered.
+     Nothing here touches a number the incoming-damage preview reads (coins
+     and capsules pay gold and loot, never damage). The physical parts (the
+     events, the lamp, the rain and the PERFECT grip) are off in Duo and
+     headless unless CABK.force; the faces and the strain are looks only.
+     Fight-only state lives in FS.cab. Reached through one-line hooks in
+     startFight, buildRig, endTurn, finishEnemyTurn, onRigEvent, deliver,
+     soClose, grabFinished, endFight, lootReward, update and drawFight. */
+  const CABK = {
+    force: false,                 // the suites switch the physical parts on by hand
+    evFirst: 2, evP: 0.38,        // from this turn, the chance a player turn opens with an event
+    evW: { surge: 0.36, coins: 0.4, capsule: 0.24 },
+    delay: 0.45, roll: 0.95, hold: 1.7, out: 0.35,   // the sign: after the turn banner, spins, holds, leaves (real s)
+    surgeGrip: 0.3, surgeSpeed: 1.35,
+    coinN: 6, coinR: 9, coinGold: 1, coinGap: 0.07,
+    capR: 12, capMax: 2, capTier: { c: 0.55, u: 0.3, r: 0.12, l: 0.03 },
+    lampMax: 12, lamp: { deliver: 1, double: 1, jackpot: 2, rare: 1, close: 1, perfect: 1 }, lampFly: 0.5,
+    rainCoins: 5, rainCaps: 1, feverBurst: 0.75, feverEnd: 2.2,
+    perfX: 5, perfGrip: 0.25, perfTypes: { classic: 1, tri: 1, scoop: 1, hand: 1, magnet: 1 },
+    strainM: [12, 40], heavyK: 0.6,
+    faceRar: { r: 1, l: 1 }, faceLook: 170,
+  };
+  const CAB_LAMP = { x: 454, y: 395, x1: 352 };   // the dome and the tube on the top frame, right of the marquee (stage px; the pet's tag sits on the left, the turret in the corner)
+  const CAB_COL = { surge: '#2ee6d6', coins: '#ffc94d', capsule: '#ff2e88', fever: '#ffe066' };
+  const CAB_EV = {
+    surge: { name: 'POWER SURGE!', text: 'The claw grips harder and moves faster this turn.', marquee: 'POWER SURGE!' },
+    coins: { name: 'COIN SHOWER!', text: 'Coins rain in: 1 gold for each one you deliver.', marquee: 'COIN SHOWER!' },
+    capsule: { name: 'CAPSULE DROP!', text: 'Deliver the capsule to win it.', marquee: 'CAPSULE DROP!' },
+  };
+  const CAB_IDS = ['surge', 'coins', 'capsule'];
+  // Every new English line this block shows (the i18n suite checks each has its Dutch) and the patterns with an example.
+  const CAB_WORDS = ['POWER SURGE!', 'COIN SHOWER!', 'CAPSULE DROP!', 'The claw grips harder and moves faster this turn.',
+    'Coins rain in: 1 gold for each one you deliver.', 'Deliver the capsule to win it.', 'LAMP FEVER!', 'Prizes rain into the cabinet!',
+    'PERFECT!', 'HEAVY!', 'WHEE!', 'EEK!', 'CAPSULE WON!', 'LAMP +1', 'SURGE', 'FEVER', 'CABINET EVENT', 'Cabinet prize',
+    'The coins sink away.', 'The Jackpot Lamp fills with every prize. Fill it up for a FEVER!', 'holding a cabinet prize'];
+  const CAB_PATTERNS = { 'PERFECT x{n}!': 'PERFECT x3!' };
+  CAP_SRC.cabinet = 'Cabinet prize';   // the reward screen's capsule slot says where it came from
+  const cabOn = () => !!(F && FS && !S.duo && (!S.headless || CABK.force));
+  // The profile's record (meta.cab): {tip: the lamp's tip was shown, fevers, perfects, events}. Junk is repaired.
+  function cabM() {
+    const m = S.meta;
+    if (!m.cab || typeof m.cab !== 'object') m.cab = {};
+    for (const k of ['tip', 'fevers', 'perfects', 'events']) m.cab[k] = Math.max(0, Math.floor(+m.cab[k] || 0));
+    return m.cab;
+  }
+  function cabMetaFix(m, o) { if (m && o && o.cab && typeof o.cab === 'object') m.cab = Object.assign({}, o.cab); }
+  const cabLampOf = () => U.clamp(Math.floor(+((S.run && S.run.cabLamp) || 0)) || 0, 0, CABK.lampMax);
+  function cabFS() {
+    if (!FS) return null;
+    if (!FS.cab) {
+      const lamp = cabLampOf();
+      FS.cab = {
+        ev: null, evTurn: -9, surge: false, perf: false, perfN: 0, perfG: -9, gripOn: false,
+        bodies: [], spawnQ: [], spawnT: 0, won: [], caps: 0, rng: U.rng((((FS.seed >>> 0) ^ 0xcab160) >>> 0) || 7),
+        lamp, lampShow: lamp, lampQ: [], lampPop: 0, lampUsed: false, fever: null, feverN: 0,
+        strain: 0, heavyG: -9, creakT: 0, sweatT: 0, squeakT: -9, coinSnd: 0, coinSnd2: -9,
+      };
+    }
+    return FS.cab;
+  }
+  // startFight: the lamp comes in from the run; a lamp left full goes FEVER after the bell.
+  function cabFightStart() {
+    const C = cabFS();
+    if (!C || !cabOn()) return;
+    if (C.lamp >= CABK.lampMax) { C.fever = { t: -1.6, burst: false }; }
+  }
+  // A player turn starts (finishEnemyTurn): maybe a cabinet event.
+  function cabTurn() {
+    const C = cabFS();
+    if (!C || !cabOn() || FS.done || F.phase !== 'player') return;
+    const turn = (FS.turnsTaken | 0) + 1;
+    if (turn < CABK.evFirst || C.evTurn === turn) return;
+    C.evTurn = turn;
+    const r = U.rng((((FS.seed >>> 0) ^ 0xcab16e ^ Math.imul(turn, 0x9e3779b1)) >>> 0) || 1);
+    if (r() >= CABK.evP) return;
+    let u = r() * (CABK.evW.surge + CABK.evW.coins + CABK.evW.capsule), id = 'capsule';
+    for (const k of CAB_IDS) { if (u < CABK.evW[k]) { id = k; break; } u -= CABK.evW[k]; }
+    if (id === 'capsule' && !cabCapOk()) id = 'coins';
+    cabEvStart(id, r);
+  }
+  function cabEvStart(id, r) {
+    const C = cabFS();
+    if (!C || !CAB_EV[id]) return null;
+    r = r || C.rng;
+    C.ev = { id, t: -CABK.delay, landed: false, tickT: 0, tick: 0, seed: r(), tier: cabTier(r()), xs: [] };
+    for (let i = 0; i < CABK.coinN + 1; i++) C.ev.xs.push(r());
+    return C.ev;
+  }
+  function cabTier(u) {
+    const T = CABK.capTier;
+    for (const k of ['l', 'r', 'u']) { if (u < T[k]) return k; u -= T[k]; }
+    return 'c';
+  }
+  // A cabinet capsule may drop: at most CABK.capMax a fight, never where the reward screen would not show it.
+  const cabCapOk = () => !!(FS && FS.cab && FS.cab.caps < CABK.capMax && !(S.run && rushOf(S.run)) && !(F && F.enemies.some((e) => e && e.def && e.def.secret)));
+  // The sign lands: the event happens.
+  function cabEvLand() {
+    const C = cabFS(), E = C && C.ev;
+    if (!E || E.landed) return;
+    if (E.id === 'capsule' && !cabCapOk()) E.id = 'coins';   // the fight's capsules ran out while it spun: the reel lands on coins
+    E.landed = true;
+    cabM().events++;
+    const bw = binW(), sx = CAB.x + bw / 2, sy = CAB.y + 150;
+    snd('cabLand'); haptic('tap');
+    fx().ring(sx, sy, CAB_COL[E.id], { r0: 20, r1: 170, w: 6, life: 0.4 });
+    fx().shake(3);
+    FS.party = Math.max(FS.party, 0.9); FS.marquee = CAB_EV[E.id].marquee;
+    if (E.id === 'surge') {
+      C.surge = true;
+      cabGripSync(); cabSpeedSync();
+      for (let i = 0; i < 6; i++) fx().emit('shock', CAB.x + 30 + i * (bw - 60) / 5, CAB.y + 26, { n: 0.35 });
+      if (!fx().reduced) fx().flash('#2ee6d6', 0.16);
+      snd('cabSurge');
+      setMood('wow', 1.2);
+    } else if (E.id === 'coins') {
+      for (let i = 0; i < CABK.coinN; i++) C.spawnQ.push({ kind: 'coin', x: 30 + E.xs[i] * Math.max(20, bw - 60), y: 14 + (i % 3) * 10 });
+      C.spawnT = 0;
+      snd('cabRain');
+    } else if (E.id === 'capsule') {
+      if (cabCapOk()) { C.caps++; C.spawnQ.push({ kind: 'cap', tier: E.tier, x: 50 + E.xs[CABK.coinN] * Math.max(20, bw - 100), y: 16 }); C.spawnT = 0; }
+      snd('capDrop');
+    }
+    FS.dirty = true;
+  }
+  // endTurn: the surge runs out, the coins left in the bin sink away, a sign still spinning is put away.
+  function cabTurnEnd() {
+    const C = FS && FS.cab;
+    if (!C) return;
+    C.ev = null;   // the sign goes with the turn (a spinning one never lands)
+    if (C.surge) { C.surge = false; cabGripSync(); cabSpeedSync(); }
+    let n = 0;
+    for (let i = C.bodies.length - 1; i >= 0; i--) {
+      const b = C.bodies[i];
+      if (b.data.cab !== 'coin') continue;
+      fx().emit('glint', CAB.x + b.x, CAB.y + b.y, { col: '#ffe066' });
+      cabRemove(b); n++;
+    }
+    C.spawnQ = C.spawnQ.filter((q) => q.kind !== 'coin');
+    if (n) { fx().text(CAB.x + binW() / 2, CAB.y + CAB.h - 60, 'The coins sink away.', '#ffe066', { size: 14, life: 1 }); snd('tinkle', { vel: 0.5, pitch: 1.4 }); }
+  }
+  // The claw's grip and speed with the cabinet's bonuses (the surge, a PERFECT lift) on top.
+  function cabGripAdd() {
+    const C = FS && FS.cab;
+    if (!C || !cabOn()) return 0;
+    return (C.surge ? CABK.surgeGrip : 0) + (C.perf ? CABK.perfGrip : 0);
+  }
+  const cabSpeedK = () => (FS && FS.cab && FS.cab.surge && cabOn() ? CABK.surgeSpeed : 1);
+  function cabGripSync() {
+    const C = FS && FS.cab, rig = FS && FS.rig;
+    if (!C || !rig || !rig.setConfig) return;
+    const add = cabGripAdd();
+    if (!add && !C.gripOn) return;
+    C.gripOn = add > 0;
+    rig.setConfig({ grip: clawFor().grip + (FS.luckyOn ? MAT.luckyGrip : 0) + (FS.legGold ? LEGG.grip : 0) + add });
+  }
+  function cabSpeedSync() {
+    const rig = FS && FS.rig;
+    if (!rig || !rig.setConfig || !rig.cfg || (F.ice && F.ice.part === 'rail')) return;
+    const want = clawFor().speed * accClawK() * cabSpeedK();
+    if (Math.abs((rig.cfg.speed || 0) - want) > 1e-6) rig.setConfig({ speed: want });
+  }
+
+  // ---- the cabinet's own prizes: coins and capsules (physical, never in F.bin)
+  function cabSpawn(q) {
+    const C = cabFS();
+    if (!C || !FS.world || !X.PHYS) return null;
+    const cap = q.kind === 'cap', r = cap ? CABK.capR : CABK.coinR;
+    // never into the open claw: a prize dropped in its column moves over to the roomier side
+    let x = U.clamp(q.x, r + 8, binW() - r - 8);
+    const rig = FS.rig, reach = 40 * (clawFor().width || 1) + 24 + r;
+    if (rig && Math.abs(x - rig.x) < reach) {
+      const lo = rig.x - reach, hi = rig.x + reach, bw = binW() - r - 8;
+      x = lo > r + 8 && (x < rig.x || hi > bw) ? lo - (reach - (rig.x - x)) * 0.4 : hi + (reach - (x - rig.x)) * 0.4;
+    }
+    x = U.clamp(x, r + 8, binW() - r - 8);
+    const b = X.PHYS.body({ type: 'dynamic', shape: { kind: 'circle', r }, x, y: q.y, angle: 0,
+      density: cap ? 0.7 : 1.5, friction: cap ? 0.45 : 0.35, restitution: cap ? 0.38 : 0.25, group: 'prize',
+      data: { cab: cap ? 'cap' : 'coin', tier: q.tier || 'c', seed: (C.bodies.length * 1.37 + q.x * 0.013) % 7, born: S.t, pvy: 0 } });
+    const r2 = C.rng;
+    b.vx = (r2() - 0.5) * 80; b.vy = 60 + r2() * 60; b.av = (r2() - 0.5) * 8;
+    FS.world.add(b);
+    C.bodies.push(b);
+    const sx = CAB.x + b.x, sy = CAB.y + b.y;
+    if (cap) {
+      fx().ring(sx, sy, (X.RENDER && X.RENDER.CAP_COL && X.RENDER.CAP_COL[q.tier]) || '#ff2e88', { r0: 6, r1: 60, w: 5 });
+      fx().emit('confetti', sx, sy, { n: 0.35, power: 0.6 });
+      fx().text(sx, sy + 40, 'CAPSULE DROP!', '#ff9ad0', { size: 16, life: 1 });
+    } else fx().emit('glint', sx, sy, { col: '#ffe066' });
+    return b;
+  }
+  function cabRemove(b) {
+    const C = FS && FS.cab;
+    if (!C || !b) return;
+    const i = C.bodies.indexOf(b);
+    if (i >= 0) C.bodies.splice(i, 1);
+    if (FS.world && b.world === FS.world) FS.world.remove(b);
+  }
+  // A coin or capsule falls into the chute: it pays.
+  function cabCollect(b) {
+    const C = cabFS(), d = b.data, x = CAB.x + b.x, y = CAB.y + Math.min(b.y, CAB.h - 30);
+    cabRemove(b);
+    if (d.cab === 'coin') {
+      if (F.phase !== 'player' || FS.done || !X.COMBAT.gainGold) return;
+      X.COMBAT.gainGold(F, CABK.coinGold);
+      enqueue([], PLAY_BEAT);
+      const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
+      fx().fly(x, y, gp.x, gp.y, { kind: 'coin', dur: 0.55, arc: 140, size: 7, cb: () => { const g = $('goldTxt'); replay(g && g.parentNode, 'bump'); } });
+      fx().emit('coins', x - 10, y - 10, { n: 0.3, power: 0.7, dir: -Math.PI / 2 - 0.3 });
+      snd('coin', { pitch: 1.1 + (C.coinSnd++ % 5) * 0.06 });
+      return;
+    }
+    C.won.push(d.tier || 'c');
+    const col = (X.RENDER && X.RENDER.CAP_COL && X.RENDER.CAP_COL[d.tier]) || '#ff2e88';
+    fx().text(CAB.x + CAB.w * 0.45, CAB.y + CAB.h * 0.36, 'CAPSULE WON!', col, { size: 24, life: 1.5, dy: -60 });
+    fx().emit('confetti', x - 20, y - 20, { n: 0.8, power: 0.9, dir: -Math.PI / 2 - 0.4 });
+    fx().ring(x, y, col, { r0: 10, r1: 100, w: 7, life: 0.5 });
+    if (!fx().reduced) fx().flash(col, 0.18);
+    snd('capDrop'); snd('fanfare', { pitch: 1.12 });
+    FS.party = Math.max(FS.party, 1.2); FS.marquee = 'CAPSULE WON!';
+    setMood('wow', 1.4);
+    haptic('capBurst');
+  }
+  // lootReward: the capsules won out of the cabinet wait on the reward screen with the fight's own.
+  function cabRewardCaps(rw) {
+    const C = FS && FS.cab;
+    if (!C || !C.won.length || !rw || !Array.isArray(rw.caps)) return;
+    for (const tier of C.won) rw.caps.push(makeCapsule('cabinet', { tier }));
+    C.won = [];
+  }
+  // endFight: the lamp goes back to the run.
+  function cabFightEnd(result) {
+    const C = FS && FS.cab;
+    if (!C || !C.lampUsed || !S.run) return;
+    S.run.cabLamp = U.clamp(C.lamp | 0, 0, CABK.lampMax);
+  }
+
+  // ---- the Jackpot Lamp
+  // n points into the lamp; a spark flies from (x, y) (stage) and lights it when it lands.
+  function cabLampAdd(n, x, y) {
+    const C = cabFS();
+    if (!C || !cabOn() || !(n > 0) || FS.done) return 0;
+    C.lampUsed = true;
+    C.lamp += n;
+    const sx = x == null ? CAB.x + CAB.w - 40 : x, sy = y == null ? CAB.y + CAB.h - 40 : y;
+    C.lampQ.push({ at: S.t + CABK.lampFly, n });
+    fx().fly(sx, sy, CAB_LAMP.x, CAB_LAMP.y, { kind: 'star', col: '#ffe066', dur: CABK.lampFly, arc: 90, size: 6 });
+    if (!cabM().tip) { cabM().tip = 1; saveMeta(); toast('The Jackpot Lamp fills with every prize. Fill it up for a FEVER!', 3); }
+    if (C.lamp >= CABK.lampMax && !C.fever) { C.fever = { t: -CABK.lampFly - 0.1, burst: false }; }
+    return n;
+  }
+  // The lamp goes FEVER: the beacon spins, the dome bursts, prizes rain in.
+  function cabFeverTick(real) {
+    const C = FS.cab, Fv = C.fever;
+    if (!Fv) return;
+    const t0 = Fv.t;
+    Fv.t += real;
+    if (t0 < 0 && Fv.t >= 0) {
+      snd('cabFever');
+      fx().text(W / 2, CAB.y + 120, 'LAMP FEVER!', '#ffe066', { size: 30, life: 1.8, dy: -40 });
+      FS.party = 2.2; FS.marquee = 'LAMP FEVER!';
+      C.feverN++; cabM().fevers++;
+    }
+    if (!Fv.burst && Fv.t >= CABK.feverBurst) {
+      Fv.burst = true;
+      C.lamp = U.clamp(C.lamp - CABK.lampMax, 0, CABK.lampMax - 1); C.lampShow = C.lamp; C.lampPop = 1; C.lampUsed = true;   // one fever at a time: an overflow carries, never a second burst
+      fx().emit('confetti', CAB_LAMP.x, CAB_LAMP.y, { n: 1.2, power: 1.1 });
+      fx().emit('coins', CAB_LAMP.x, CAB_LAMP.y, { n: 1, power: 1, dir: -Math.PI / 2 - 0.4 });
+      fx().ring(CAB_LAMP.x, CAB_LAMP.y, '#ffe066', { r0: 10, r1: 220, w: 9, life: 0.6 });
+      if (!fx().reduced) fx().flash('#ffe066', 0.3);
+      fx().shake(8);
+      fx().text(W / 2, CAB.y + 160, 'Prizes rain into the cabinet!', '#fff6c0', { size: 16, life: 1.6 });
+      haptic('jackpot');
+      const bw = binW(), r = C.rng;
+      let coins = CABK.rainCoins;
+      for (let i = 0; i < CABK.rainCaps; i++) {
+        if (cabCapOk()) { C.caps++; C.spawnQ.push({ kind: 'cap', tier: cabTier(r()), x: 40 + r() * Math.max(20, bw - 80), y: 14 }); } else coins += 2;
+      }
+      for (let i = 0; i < coins; i++) C.spawnQ.splice(Math.min(C.spawnQ.length, i + 1), 0, { kind: 'coin', x: 30 + r() * Math.max(20, bw - 60), y: 12 + (i % 3) * 10 });
+      C.spawnT = 0;
+    }
+    if (Fv.t >= CABK.feverEnd) C.fever = null;
+  }
+
+  // ---- PERFECT, the strain and the faces (onRigEvent)
+  function cabRig(ev) {
+    const C = cabFS(), rig = FS && FS.rig;
+    if (!C || !rig) return;
+    if (ev === 'drop') { C.perf = false; C.aimB = cabUnderPalm(rig.x); cabGripSync(); return; }
+    if (ev === 'lift') {
+      const cargo = carried();
+      if (!cargo.length) return;
+      let mass = 0;
+      for (const b of cargo) {
+        mass += b.m || 0;
+        const fc = cabFace(b);
+        if (fc) { fc.mood = 'gasp'; fc.mt = 0.55; }
+      }
+      if (cargo.some((b) => cabFace(b))) cabSqueak(CAB.x + rig.x, CAB.y + rig.y + 40);
+      const k = cabStrainK(mass);
+      if (k >= CABK.heavyK && C.heavyG !== FS.grabN) {
+        C.heavyG = FS.grabN;
+        fx().text(CAB.x + rig.x + 58, CAB.y + rig.y - 10, 'HEAVY!', '#ff8a2b', { size: 18, life: 1, dy: -30 });
+        snd('cabCreak', { vel: 1 }); fx().shake(2 + k * 3); fx().kick(0, 3);
+      }
+      // PERFECT: the drop came down dead centre on the prize under the palm, and the claw came up with it
+      const A = C.aimB;
+      C.aimB = null;
+      if (cabOn() && A && cargo.indexOf(A.b) >= 0 && CABK.perfTypes[rig.type || 'classic']) cabPerfect(A.b);
+      return;
+    }
+    if (ev === 'slip') {
+      const now = carried();
+      for (const b of FS.cargo || []) if (now.indexOf(b) < 0) { const fc = cabFace(b); if (fc) { fc.mood = 'dizzy'; fc.mt = 1.3; } }
+    }
+  }
+  function cabPerfect(b) {
+    const C = FS.cab, rig = FS.rig;
+    C.perf = true;
+    C.perfN = C.perfG === FS.grabN - 1 ? C.perfN + 1 : 1;
+    C.perfG = FS.grabN;
+    cabM().perfects++;
+    cabGripSync();
+    const x = CAB.x + rig.x, y = CAB.y + b.y;
+    slowmo(0.3, 0.4);
+    if (!fx().reduced) fx().flash('#ffffff', 0.22);
+    fx().ring(x, y, '#ffe066', { r0: 6, r1: 70, w: 6, life: 0.35 });
+    fx().ring(x, y, '#ffffff', { r0: 4, r1: 40, w: 3, life: 0.25, delay: 0.06 });
+    fx().burst(x, y, '#ffe066', fx().reduced ? 4 : 14, { kind: 'star', speed: 200, size: 4.5, life: 0.55, gravity: 120 });
+    fx().text(x, y - 46, C.perfN > 1 ? `PERFECT x${C.perfN}!` : 'PERFECT!', '#ffe066', { size: 22 + Math.min(3, C.perfN) * 2, life: 1.1, dy: -40 });
+    snd('cabPerfect', { n: C.perfN });
+    haptic('clamp');
+    FS.party = Math.max(FS.party, 0.5); FS.marquee = 'PERFECT!';
+    cabLampAdd(CABK.lamp.perfect, x, y);
+  }
+  /* The prize the palm comes down on (the topmost one under the hub at the
+     drop), when the aim is dead centre on it (within CABK.perfX x the claw's
+     width): {b, dx}, else null. */
+  function cabUnderPalm(x) {
+    let top = null;
+    const look = (b) => { if (b.held > 0 || b.x > binW()) return; const dx = Math.abs(b.x - x); if (dx < Math.max(6, (b.br || 12) * 0.8) && (!top || b.y - (b.br || 12) < top.y - (top.br || 12))) top = b; };
+    for (const b of FS.items) look(b);
+    if (FS.cab) for (const b of FS.cab.bodies) look(b);
+    if (!top) return null;
+    const dx = Math.abs(top.x - x), k = (clawFor().width || 1) * (FS.rig && FS.rig.type === 'scoop' ? 1.4 : 1);
+    return dx <= CABK.perfX * k ? { b: top, dx } : null;
+  }
+  // The strain of a load of this mass, 0..1.
+  const cabStrainK = (m) => U.clamp(((+m || 0) - CABK.strainM[0]) / (CABK.strainM[1] - CABK.strainM[0]), 0, 1);
+  // A body with a face (a rare or legendary prize, the Golden Prize, a cabinet capsule): its face state, else null.
+  function cabFace(b) {
+    const d = b && b.data;
+    if (!d) return null;
+    if (d.fc) return d.fc;
+    const faced = d.cab === 'cap' || (d.inst && d.def && (CABK.faceRar[d.def.rarity] || (FS && FS.golden && FS.golden.uid === d.inst.uid)) && !d.inst.frozen);
+    if (!faced) return null;
+    d.fc = { mood: '', mt: 0, lx: 0, ly: -0.3, blink: 0, bt: 1.5 + ((d.seed || 0) % 1.7) };
+    return d.fc;
+  }
+  function cabSqueak(x, y) {
+    const C = FS.cab;
+    if (S.t - C.squeakT < 0.4) return;
+    C.squeakT = S.t;
+    snd('cabSqueak', { pitch: 0.9 + (FS.grabN % 4) * 0.08 });
+    fx().text(x + 40, y, 'EEK!', '#ff9ad0', { size: 14, life: 0.7, dy: -24 });
+  }
+  // deliver: the lamp's sparks (and a cheer from a prize with a face).
+  function cabDeliver(inst, pos) {
+    if (!FS || !inst) return;
+    const def = itemDef(inst.id), L = CABK.lamp;
+    const faced = CABK.faceRar[def.rarity] && !inst.frozen;
+    if (faced) fx().text(pos.x - 40, pos.y - 30, 'WHEE!', '#ff9ad0', { size: 15, life: 0.8, dy: -30 });
+    let n = L.deliver + (FS.delivered === 2 ? L.double : 0) + (FS.delivered === 3 ? L.jackpot : 0) + (CABK.faceRar[def.rarity] ? L.rare : 0);
+    cabLampAdd(n, pos.x, pos.y);
+  }
+  // soClose: the consolation is a spark for the lamp.
+  function cabClose(x, y) {
+    if (cabLampAdd(CABK.lamp.close, x, y)) fx().text(x, y + 2, 'LAMP +1', '#ffe066', { size: 13, life: 1, dy: -26 });
+  }
+  // grabFinished: the PERFECT grip lets go (the Lucky Claw set the grip just before, the surge stays on).
+  function cabGrabDone() {
+    const C = FS && FS.cab;
+    if (!C) return;
+    C.perf = false;
+    cabGripSync();
+    if (C.surge) cabSpeedSync();
+  }
+
+  // ---- per frame (update: real time for the sign, the fever and the looks; the physics dt for spawns)
+  function cabTick(dt, real) {
+    const C = FS && FS.cab;
+    if (!C || S.screen !== 'fight') return;
+    const E = C.ev;
+    if (E) {
+      const t0 = E.t;
+      E.t += real;
+      if (E.t >= 0 && !E.landed) {
+        if (t0 < 0) snd('cabRoll', { pitch: 1 });
+        E.tickT -= real;
+        if (E.tickT <= 0) { E.tick++; E.tickT = 0.06 + 0.16 * U.clamp(E.t / CABK.roll, 0, 1); snd('cabRoll', { pitch: 0.9 + E.tick * 0.05 }); }
+        if (E.t >= CABK.roll) cabEvLand();
+      }
+      if (E.t >= CABK.roll + CABK.hold + CABK.out) C.ev = null;
+    }
+    if (C.fever && !FS.done) cabFeverTick(real);
+    // the lamp lights as its sparks land
+    for (let i = C.lampQ.length - 1; i >= 0; i--) {
+      const q = C.lampQ[i];
+      if (S.t < q.at) continue;
+      C.lampQ.splice(i, 1);
+      if (!C.fever || C.fever.burst) { C.lampShow = Math.min(CABK.lampMax, C.lampShow + q.n); C.lampPop = 1; snd('cabLamp', { pitch: 0.8 + C.lampShow * 0.06 }); }
+    }
+    if (C.lampPop > 0) C.lampPop = Math.max(0, C.lampPop - real * 3);
+    // spawns ride the physics clock
+    if (C.spawnQ.length) {
+      C.spawnT -= dt;
+      while (C.spawnQ.length && C.spawnT <= 0) { cabSpawn(C.spawnQ.shift()); C.spawnT += CABK.coinGap; }
+    }
+    // the cabinet's prizes: a clink on landing, paid in the chute, gone with a rebuilt world
+    const bnd = FS.cabinet && FS.cabinet.bounds;
+    for (let i = C.bodies.length - 1; i >= 0; i--) {
+      const b = C.bodies[i];
+      if (!FS.world || b.world !== FS.world) { C.bodies.splice(i, 1); continue; }
+      const pv = b.data.pvy || 0;
+      if (pv > 240 && b.vy < pv * 0.35 && S.t - C.coinSnd2 > 0.06) { C.coinSnd2 = S.t; snd(b.data.cab === 'coin' ? 'tinkle' : 'boing', { vel: U.clamp(pv / 900, 0.2, 0.8), pitch: b.data.cab === 'coin' ? 1.8 : 1.3 }); }
+      b.data.pvy = b.vy;
+      if (bnd && FS.cabinet.inChute(b) && b.y > bnd.dividerTop + 10) cabCollect(b);
+    }
+    cabStrainTick(real);
+    cabFaceTick(real);
+  }
+  function cabStrainTick(real) {
+    const C = FS.cab, rig = FS.rig;
+    const ph = rig ? rig.phase : 'idle', up = ph === 'lifting' || ph === 'carrying';
+    let k = 0;
+    if (up) { let m = 0; for (const b of carried()) m += b.m || 0; k = cabStrainK(m); }
+    C.strain += (k - C.strain) * Math.min(1, real * (k > C.strain ? 8 : 4));
+    if (C.strain < 0.01) { C.strain = 0; return; }
+    C.creakT -= real;
+    if (up && C.strain > 0.3 && C.creakT <= 0) { C.creakT = 0.9 - C.strain * 0.4; snd('cabCreak', { vel: C.strain }); }
+    C.sweatT -= real;
+    if (up && C.strain > 0.5 && C.sweatT <= 0 && rig) {
+      C.sweatT = fx().reduced ? 0.6 : 0.22;
+      const hx = CAB.x + rig.x, hy = CAB.y + rig.y - 14;
+      fx().burst(hx + (FS.frameN % 2 ? 10 : -10), hy, '#9fd8ff', 1, { kind: 'bubble', speed: 90, size: 2.6, life: 0.45, gravity: 500, dir: FS.frameN % 2 ? -0.6 : -2.5, spread: 0.5 });
+    }
+  }
+  // The faces: where they look, their moods wearing off, blinks.
+  function cabFaceTick(real) {
+    const rig = FS.rig;
+    const hx = rig ? rig.x : 0, hy = rig ? rig.y + 30 : 0, ph = rig ? rig.phase : 'idle';
+    const each = (b) => {
+      const fc = cabFace(b);
+      if (!fc) return;
+      if (fc.mt > 0) { fc.mt -= real; if (fc.mt <= 0) { fc.mt = 0; fc.mood = ''; } }
+      fc.bt -= real;
+      if (fc.bt < -0.12) fc.bt = 2.2 + ((b.data.seed || 0) * 1.3) % 2;
+      fc.blink = fc.bt < 0 ? 1 : 0;
+      const dx = hx - b.x, dy = hy - b.y, L = Math.hypot(dx, dy) || 1;
+      const near = L < CABK.faceLook;
+      fc.lx += ((near ? dx / L : Math.sin(S.t * 0.7 + (b.data.seed || 0)) * 0.4) - fc.lx) * Math.min(1, real * 6);
+      fc.ly += ((near ? dy / L : -0.2) - fc.ly) * Math.min(1, real * 6);
+      if (!fc.mt) {
+        if (b.held > 0) fc.mood = 'ride';
+        else if ((ph === 'dropping' || ph === 'closing') && Math.abs(dx) < 70 && dy < 0) fc.mood = 'scared';
+        else fc.mood = '';
+      }
+    };
+    for (const b of FS.items) if (b.data && b.data.def && (CABK.faceRar[b.data.def.rarity] || b.data.fc || (FS.golden && b.data.inst && FS.golden.uid === b.data.inst.uid))) each(b);
+    for (const b of FS.cab.bodies) if (b.data.cab === 'cap') each(b);
+  }
+
+  // ---- drawing
+  const CAB_SIGN = { id: '', k: 0, roll: 0, land: 0, t: 0, reduced: false, name: '', text: '', col: '', names: null, ids: CAB_IDS, idx: 0, spin: 0, top: 0 };
+  const CAB_LST = { n: 0, max: 12, pop: 0, fever: 0, burst: 0, t: 0, reduced: false, surge: 0 };
+  const CAB_FST = { mood: '', lx: 0, ly: 0, blink: 0, t: 0, legend: false };
+  const CAB_CST = { tier: 'c', t: 0, rot: 0, sq: 0, glow: 0.5, seed: 1 };
+  const CAB_NAMES = CAB_IDS.map((k) => CAB_EV[k].name);
+  // Inside the cabinet's clip, after the pile: the surge on the rail, the coins and capsules.
+  function cabDrawIn(ctx, t) {
+    const C = FS && FS.cab, R = X.RENDER, RC = R && R.cab;
+    if (!C || !RC) return;
+    if (C.surge && RC.surge) RC.surge(ctx, CAB.x, CAB.y + 26, binW(), t, !!fx().reduced);
+    for (const b of C.bodies) {
+      const x = CAB.x + b.x, y = CAB.y + b.y;
+      if (b.data.cab === 'coin') { if (RC.coin) RC.coin(ctx, x, y, CABK.coinR, b.a, t); continue; }
+      if (R.capsule) {
+        CAB_CST.tier = b.data.tier; CAB_CST.t = t; CAB_CST.rot = b.a; CAB_CST.seed = 1 + (b.data.seed || 0); CAB_CST.glow = 0.55;
+        R.capsule(ctx, x, y, CABK.capR, CAB_CST);
+      }
+      cabFaceDraw(ctx, b, x, y, t);
+    }
+  }
+  // One item's (or capsule's) face, drawn over its art.
+  function cabFaceDraw(ctx, b, x, y, t) {
+    const fc = b && b.data && b.data.fc, RC = X.RENDER && X.RENDER.cab;
+    if (!fc || !RC || !RC.face || (b.data.inst && b.data.inst.frozen)) return;   // (a prize frozen in ice keeps a straight face)
+    CAB_FST.mood = fc.mood; CAB_FST.lx = fc.lx; CAB_FST.ly = fc.ly; CAB_FST.blink = fc.blink; CAB_FST.t = t;
+    CAB_FST.legend = !!(b.data.def && b.data.def.rarity === 'l') || b.data.tier === 'l';
+    const r = b.data.cab === 'cap' ? CABK.capR * 0.95 : U.clamp((b.br || 14) * 0.75, 10, 20);
+    RC.face(ctx, x, y + (b.data.cab === 'cap' ? r * 0.25 : 0), r, CAB_FST);
+  }
+  // Before the claw draws: its strain (a shake, gritted eyes). Returns true when it pushed a transform.
+  function cabClawPre(ctx, t, J) {
+    const C = FS && FS.cab;
+    J.strain = C ? C.strain : 0;
+    if (J.strain > 0.45 && (!J.mood || J.mood === 'happy')) J.mood = 'strain';
+    if (!C || C.strain < 0.05 || fx().reduced) return false;
+    const a = C.strain * 1.8;
+    ctx.save(); ctx.translate(Math.sin(t * 71) * a, Math.cos(t * 53) * a * 0.5);
+    return true;
+  }
+  // After the claw: sweat, steam and the tension marks of a heavy lift.
+  function cabClawPost(ctx, t) {
+    const C = FS && FS.cab, RC = X.RENDER && X.RENDER.cab, rig = FS && FS.rig;
+    if (!C || !RC || !RC.strain || !rig || C.strain < 0.05) return;
+    const hub = rig.bodies && rig.bodies.hub;
+    if (!hub) return;
+    RC.strain(ctx, CAB.x + hub.x, CAB.y + hub.y, Math.max(8, hub.r || 12), C.strain, t, !!fx().reduced, CAB.x + rig.cableTop.x, CAB.y + rig.cableTop.y);
+  }
+  // Over the cabinet (after its front): the lamp, the event sign, the surge chip.
+  function cabDraw(ctx, t) {
+    const C = FS && FS.cab, RC = X.RENDER && X.RENDER.cab;
+    if (!C || !RC) return;
+    if (C.lampUsed || C.lampShow > 0 || C.fever || cabOn()) {
+      CAB_LST.n = C.lampShow; CAB_LST.max = CABK.lampMax; CAB_LST.pop = C.lampPop; CAB_LST.t = t; CAB_LST.reduced = !!fx().reduced;
+      CAB_LST.fever = C.fever ? U.clamp(C.fever.t + 0.3, 0, 1) * (C.fever.t < CABK.feverEnd - 0.4 ? 1 : U.clamp((CABK.feverEnd - C.fever.t) / 0.4, 0, 1)) : 0;
+      CAB_LST.burst = C.fever && C.fever.burst ? U.clamp(C.fever.t - CABK.feverBurst, 0, 1) : 0;
+      CAB_LST.surge = C.surge ? 1 : 0;
+      if (RC.lamp) RC.lamp(ctx, CAB_LAMP.x, CAB_LAMP.y, CAB_LAMP.x1, CAB_LST);
+    }
+    const E = C.ev;
+    if (E && E.t > -0.2 && RC.sign) {
+      const S0 = CAB_SIGN, ev = CAB_EV[E.id];
+      S0.id = E.id; S0.t = t; S0.reduced = !!fx().reduced; S0.name = ev.name; S0.text = ev.text; S0.col = CAB_COL[E.id]; S0.names = CAB_NAMES;
+      const end = CABK.roll + CABK.hold;
+      S0.k = E.t < 0 ? U.clamp((E.t + 0.2) / 0.2, 0, 1) * 0.3 : E.t < 0.25 ? 0.3 + 0.7 * U.ease.outBack(U.clamp(E.t / 0.25, 0, 1)) : E.t < end ? 1 : U.clamp(1 - (E.t - end) / CABK.out, 0, 1);
+      S0.roll = E.landed ? 1 : U.clamp(E.t / CABK.roll, 0, 1);
+      S0.land = E.landed ? U.clamp((E.t - CABK.roll) / 0.35, 0, 1) : 0;
+      S0.spin = E.tick; S0.idx = CAB_IDS.indexOf(E.id); S0.top = CAB.y;
+      RC.sign(ctx, CAB.x + binW() / 2, CAB.y + 150, S0);
+    }
+  }
+
+  function CAB_API() {
+    return {
+      K: CABK, EV: CAB_EV, IDS: CAB_IDS, WORDS: CAB_WORDS, PATTERNS: CAB_PATTERNS, LAMP: CAB_LAMP, COL: CAB_COL,
+      get force() { return CABK.force; }, set force(v) { CABK.force = !!v; },
+      on: () => cabOn(), fs: () => (FS ? cabFS() : null), turn: () => { if (FS) cabTurn(); }, turnEnd: () => { if (FS) cabTurnEnd(); },
+      // start an event now (it lands after its roll), or land it at once
+      event: (id, now) => { if (!FS || !cabFS()) return null; const E = cabEvStart(id); if (E && now) { E.t = CABK.roll; cabEvLand(); } return E; },
+      land: () => { if (FS && FS.cab) cabEvLand(); }, lampAdd: (n, x, y) => (FS ? cabLampAdd(n, x, y) : 0), spawn: (q) => (FS ? cabSpawn(q) : null),
+      collect: (b) => { if (FS && b) cabCollect(b); }, perfect: (b) => { if (FS && FS.rig && b) { cabFS(); cabPerfect(b); } }, face: (b) => (FS ? cabFace(b) : null),
+      strainK: cabStrainK, gripAdd: () => (FS ? cabGripAdd() : 0), speedK: () => cabSpeedK(), tick: (dt, real) => { if (FS) cabTick(dt || 1 / 60, real == null ? dt || 1 / 60 : real); },
+      draw: (ctx, t) => { if (FS && FS.cab) { cabDrawIn(ctx, t); cabDraw(ctx, t); } }, rewardCaps: cabRewardCaps, fightEnd: cabFightEnd,
+    };
+  }
+  // ================================================================ /CAB
+
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
   }
@@ -25493,6 +26672,8 @@ const GAME = (() => {
     trd: TRD_API(), pev: PEV_API(),
     // DEP (round 15): the Neon Depths, Endless's fourth biome (DESIGN.md "The Neon Depths (round 15)")
     dep: DEP_API(),
+    // CAB (round 16): the cabinet is alive (events, the Jackpot Lamp, PERFECT grabs, the strain, prize faces) (DESIGN.md "The cabinet is alive (round 16)")
+    cab: CAB_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

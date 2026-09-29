@@ -1134,3 +1134,72 @@ I18N.add('nl', {
 "content": {}
 });
 // ---------------------------------------------------------------- /DUO NET
+
+// ---------------------------------------------------------------- DUO NET VS (round 16): online versus
+// DESIGN.md "Online versus (round 16)": the claw-off on two phones: the menu, the lobby's drops, the
+// rival's drop being watched, the forfeit. Versus is "tegen elkaar", the claw-off a "grijpwedstrijd".
+I18N.add('nl', {
+"ui": {
+"One bin of prizes, two claws. Play on one phone, or each on your own.": "Eén bak vol prijzen, twee grijpers. Speel op één telefoon, of ieder op je eigen.",
+"Online versus": "Online tegen elkaar",
+"A claw-off against a friend, each on your own phone. One of you hosts, the other types the code.": "Een grijpwedstrijd tegen een vriend, ieder op je eigen telefoon. Eén van jullie maakt een spel aan, de ander typt de code.",
+"Online versus: {n} games, {n2} wins": "Online tegen elkaar: {n} {n|potje|potjes}, {n2} gewonnen",
+"Drops each per round (the host picks)": "Drops per speler per ronde (de maker kiest)",
+"Share the code. Your friend taps Duo, Versus Claw-off, Online, Join a game.": "Deel de code. Je vriend tikt op Duo, Grijpwedstrijd tegen elkaar, Online, Meedoen.",
+"Take me on in a Clawspire claw-off! Room code:": "Daag me uit voor een grijpwedstrijd in Clawspire! Spelcode:",
+"Your rival's turn": "Je rivaal is aan de beurt",
+"{s} PICKS A CARD": "{s} KIEST EEN KAART",
+"{s} is picking a sabotage card...": "{s} kiest een sabotagekaart...",
+"Taunt {s}": "Daag {s} uit",
+"Your rival wins by forfeit.": "Je rivaal wint dan door opgave.",
+"Win by forfeit": "Winnen door opgave",
+"{s} wins by forfeit!": "{s} wint door opgave!",
+"Online versus wins: {n} of {n2}": "Online gewonnen tegen elkaar: {n} van {n2}",
+"Your rival is still gone.": "Je rivaal is nog steeds weg.",
+"rounds won, then a forfeit": "rondes gewonnen, daarna opgegeven"
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /DUO NET VS
+
+// ---------------------------------------------------------------- CLAW BAL (round 16): the claw picker's run-start tags
+I18N.add('nl', {
+"ui": {
+"+1 grab a turn": "+1 greep per beurt",
+"-1 grab a turn": "-1 greep per beurt",
+"+10 Max HP": "+10 Max HP"
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /CLAW BAL
+
+// ---------------------------------------------------------------- CAB (round 16): the cabinet is alive
+// The cabinet events, the Jackpot Lamp, PERFECT grabs, the strain and the prizes' faces (game.js CAB block, G.cab.WORDS).
+I18N.add('nl', {
+"ui": {
+"POWER SURGE!": "STROOMSTOOT!",
+"COIN SHOWER!": "MUNTENREGEN!",
+"CAPSULE DROP!": "CAPSULE ERIN!",
+"The claw grips harder and moves faster this turn.": "De grijper knijpt harder en is sneller deze beurt.",
+"Coins rain in: 1 gold for each one you deliver.": "Het regent munten: 1 goud voor elke munt die je aflevert.",
+"Deliver the capsule to win it.": "Lever de capsule af en hij is van jou.",
+"LAMP FEVER!": "LAMPKOORTS!",
+"Prizes rain into the cabinet!": "Het regent prijzen in de kast!",
+"PERFECT!": "PRECIES RAAK!",
+"PERFECT x{n}!": "PRECIES RAAK x{n}!",
+"HEAVY!": "ZWAAR!",
+"WHEE!": "JIEHAA!",
+"EEK!": "IEK!",
+"CAPSULE WON!": "CAPSULE GEWONNEN!",
+"LAMP +1": "LAMP +1",
+"SURGE": "STROOM",
+"FEVER": "KOORTS",
+"CABINET EVENT": "KASTGEBEURTENIS",
+"Cabinet prize": "Kastprijs",
+"The coins sink away.": "De munten zakken weg.",
+"The Jackpot Lamp fills with every prize. Fill it up for a FEVER!": "De Jackpotlamp loopt vol met elke prijs. Helemaal vol? Dan krijgt hij KOORTS!",
+"holding a cabinet prize": "vast: een kastprijs"
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /CAB

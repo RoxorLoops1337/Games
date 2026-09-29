@@ -3022,4 +3022,48 @@ if (HAS_DATA) h.test('DEP: the Depths\' tiles, map, arena, cabinet water, the si
   for (const e of D.loreBook().entries.filter(e => e.art && e.art.dep)) drawCheck('codex ' + e.id, c => R.lore.scene(c, e.art, 300, 200, {}, 1));
 });
 
+// CAB (round 16): the cabinet is alive (DESIGN.md "The cabinet is alive (round 16)")
+h.test('CAB: the event sign at every beat, the Jackpot Lamp and its fever, coins, the surge, every face, the strain, the gritted claw', () => {
+  const { RENDER: R, PHYS: P } = boot({ only: ['util', 'i18n', 'physics', 'data', 'render'] });
+  const RC = R.cab;
+  h.ok(RC && ['sign', 'lamp', 'coin', 'icon', 'surge', 'face', 'strain', 'bolt'].every((k) => typeof RC[k] === 'function'), 'RENDER.cab has its pieces');
+  const ids = ['surge', 'coins', 'capsule'], names = ['POWER SURGE!', 'COIN SHOWER!', 'CAPSULE DROP!'];
+  const signs = new Map();
+  for (const [i, id] of ids.entries()) {
+    for (const [lab, st] of [['swing in', { k: 0.4, roll: 0.1, spin: 1 }], ['spinning', { k: 1, roll: 0.5, spin: 4 }], ['landed', { k: 1, roll: 1, land: 0.3 }], ['held', { k: 1, roll: 1, land: 1 }], ['leaving', { k: 0.3, roll: 1, land: 1 }], ['reduced', { k: 1, roll: 1, land: 0.5, reduced: true }]]) {
+      const s = drawCheck(`sign ${id} ${lab}`, (c) => RC.sign(c, 238, 560, Object.assign({ id, idx: i, ids, names, name: names[i], text: 'A line of words that has to wrap onto a second line here.', col: '#2ee6d6', t: 1.3, top: 410 }, st)));
+      if (lab === 'held') signs.set(id, fingerprint(s));
+    }
+  }
+  h.eq(uniqueRatio(signs).ratio, 1, 'each event\'s sign looks different');
+  const { ctx: c0, stat: s0 } = seqCtx();
+  RC.sign(c0, 238, 560, { k: 0 });
+  h.eq(s0.paints, 0, 'a sign at k 0 draws nothing');
+  const lamps = new Map();
+  for (const [lab, st] of [['empty', { n: 0 }], ['half', { n: 6, pop: 0.5 }], ['almost', { n: 10 }], ['full', { n: 12 }], ['fever', { n: 12, fever: 0.8 }], ['burst', { n: 0, fever: 1, burst: 0.5 }], ['reduced fever', { n: 12, fever: 1, reduced: true }]]) {
+    lamps.set(lab, fingerprint(drawCheck('lamp ' + lab, (c) => RC.lamp(c, 104, 395, 206, Object.assign({ max: 12, t: 2.1 }, st)))));
+  }
+  h.eq(uniqueRatio(lamps).ratio, 1, 'every lamp state looks different');
+  drawCheck('lamp junk state', (c) => RC.lamp(c, 104, 395, 206, { n: NaN, max: 0, fever: null }));
+  for (const a of [0, 0.7, 1.57, 3]) drawCheck('coin ' + a, (c) => RC.coin(c, 100, 700, 7.5, a, 1));
+  for (const id of ids) drawCheck('icon ' + id, (c) => RC.icon(c, id, 100, 500, 60, 1));
+  drawCheck('surge', (c) => RC.surge(c, 30, 436, 416, 1.7, false));
+  drawCheck('surge reduced', (c) => RC.surge(c, 30, 436, 416, 1.7, true));
+  const faces = new Map();
+  for (const mood of ['', 'scared', 'gasp', 'ride', 'dizzy']) for (const legend of (mood === 'ride' || mood === 'dizzy' ? [false] : [false, true])) {   // (closed or spinning eyes have no pupils to glint)
+    faces.set(mood + legend, fingerprint(drawCheck(`face ${mood || 'idle'}${legend ? ' legendary' : ''}`, (c) => RC.face(c, 200, 700, 14, { mood, lx: 0.5, ly: -0.4, blink: 0, t: 1.2, legend }))));
+  }
+  h.eq(uniqueRatio(faces).ratio, 1, 'every face looks different');
+  const { ctx: cb, stat: sb } = seqCtx(); RC.face(cb, 200, 700, 14, { mood: '', blink: 1, t: 1 });
+  h.ok(fingerprint(sb) !== faces.get('false'), 'a blink shuts the eyes');
+  for (const k of [0.2, 0.6, 1]) drawCheck('strain ' + k, (c) => RC.strain(c, 238, 500, 13, k, 1.1, false, 238, 436));
+  const { ctx: cz, stat: sz } = seqCtx(); RC.strain(cz, 238, 500, 13, 0, 1, false);
+  h.eq(sz.paints, 0, 'no strain, nothing drawn');
+  // the claw's gritted eyes
+  const pose = P.clawPose('classic', {});
+  const strained = fingerprint(drawCheck('claw strain mood', (c) => R.claw(c, pose, 0, 0, { juice: { mood: 'strain', t: 3 } })));
+  const plain = fingerprint(drawCheck('claw no mood', (c) => R.claw(c, pose, 0, 0, { juice: { mood: '', t: 3 } })));
+  h.ok(strained !== plain, 'a straining claw grits its eyes');
+});
+
 h.done();
