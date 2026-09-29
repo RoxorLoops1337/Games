@@ -5,55 +5,74 @@
 // PUBLIC API (everything is a silent no-op headless, before init, or when WebAudio is missing; nothing here throws)
 //   AUDIO.init(opts?) -> bool      Call from the first user gesture. Creates the AudioContext lazily (try/catch, webkit prefix),
 //                                  builds the master chain, resumes the context, starts any remembered music. Safe to call
-//                                  repeatedly. While window.__HEADLESS is true it does nothing unless opts.force is true
-//                                  (the audio suite forces it to drive the stubbed WebAudio). Returns AUDIO.ready.
+//                                  repeatedly. A context the browser leaves suspended (iOS Safari ignores pointerdown) is woken by
+//                                  the next click, key press or pointerup. While window.__HEADLESS is true it does nothing
+//                                  unless opts.force is true (the audio suite forces it to drive the stubbed WebAudio).
 //   AUDIO.ready    bool            true once a context exists and the graph is built. AUDIO.current is the requested track id.
 //   AUDIO.sfx(id, {vol, pitch, pan, delay}?) -> bool   id in DATA.LISTS.sfx. vol multiplier (0..2), pitch multiplier (1 = as
-//                                  written), pan -1..1, delay in MILLISECONDS (a value under 5 is read as seconds).
-//                                  Every play gets a small seeded pitch and gain variation (never Math.random). Dropped before init.
+//                                  written), pan -1..1 (exact when given), delay in MILLISECONDS (a value under 5 is read as
+//                                  seconds). Every play gets a small seeded pitch, gain and pan variation (a local seeded stream, no platform RNG),
+//                                  rapid ids have a cooldown, and the voice cap sheds low priority sounds. Dropped before init.
 //   AUDIO.music(id|null, {fade, restart}?)   id in DATA.LISTS.music; crossfades; null fades out and stops. Asking for the track
 //                                  that is already current does nothing. `fade` is seconds (a value above 20 is read as ms).
-//                                  Before init the request is remembered and starts inside init().
+//                                  Before init the request is remembered and starts inside init(). Unknown ids are ignored.
 //   AUDIO.intensity(n)             0..1. Layered tracks (combat1..3, elite, boss1..3, final) fade extra layers in as n rises.
-//                                  Calling with no argument returns the current value. Leaving a layered track resets it to 0.
-//   AUDIO.setVolume('music'|'sfx', 0..1)   AUDIO.volume(kind) -> the stored slider value
-//   AUDIO.duck(ms)                 dip the music under a big moment for ms milliseconds, then swell back
-//   AUDIO.suspend() / AUDIO.resume()       explicit suspend; init also listens to visibilitychange (hidden suspends, visible resumes)
+//                                  Calling with no argument returns the current value. Leaving a layered track for a plain one
+//                                  resets it to 0; a value set just before a layered track starts is kept.
+//   AUDIO.setVolume('music'|'sfx', 0..1)   AUDIO.volume(kind) -> the stored slider value (remembered before init)
+//   AUDIO.duck(ms)                 dip the music under a big moment for ms milliseconds, then swell back. Big sfx do it themselves.
+//   AUDIO.suspend() / AUDIO.resume()       explicit suspend; init also listens to visibilitychange (hidden suspends, visible resumes,
+//                                  but never against an explicit suspend). resume() clears every reason.
 //   AUDIO.list(kind?) -> {sfx:[ids], music:[ids]} (or one of the two arrays when kind is 'sfx' or 'music')
 //   AUDIO.preview(id) -> bool      plays an sfx id for the settings screen (no random variation, does not touch the music)
 //
 // COMPOSITION (pure, deterministic, seeded, testable in Node; nothing here touches WebAudio)
-//   AUDIO.compose(trackId) -> frozen description (cached, treat as read-only):
+//   AUDIO.compose(trackId) -> frozen description (cached, treat as read-only) or null:
 //     { id, mood, tempo (bpm), key ('D'), tonic (midi of the key), scale ('in-sen'|'yo'|'miyako-bushi'), scaleIntervals:[semitones],
 //       beatsPerBar, bars (introBars + loopBars), introBars, loopBars, beats, loopBeats, introBeats, seconds, loopSeconds,
 //       layers (1, or 4 for the intensity tracks), thresholds:[intensity where each layer is fully in], xfade (seconds),
-//       tracks:[{voice, role, layer, gain, pan, range:[lo,hi], notes:[{t, dur, midi, vel, hit?, bend?}]}] }
+//       tracks:[{voice, role, layer, gain, pan, range:[lo,hi], section, notes:[{t, dur, midi, vel, hit?, big?, double?, bend?}]}] }
 //     t and dur are in BEATS (quarter notes, from the start of the intro), midi is a note number, vel is 0..1. Every note lies
 //     inside the declared scale and inside its track's range, every note ends before bars * beatsPerBar (nothing overhangs the
 //     loop end; only the synthesised ring of a note crosses the seam), and the loop returns to beat introBeats.
+//     Melodies are a seeded motif walk (statement, variation, sequence, cadence; forms like A a2 B a) that ends on the tonic.
 //     Tracks with introBars > 0 (victory, defeat) play a short stinger once and then fall into a soft loop.
 //   AUDIO.sfxRecipe(id) -> fresh plain recipe or null:
 //     { id, vol, var (random pitch cents), gainVar (dB), pan, duck (ms), cd (cooldown ms), pri (0..3), dur (seconds, tail included),
 //       layers:[ {k:'osc', w, f, f2, t, d, a, g, ...} | {k:'noise', n, ft, f, f2, q, t, d, a, g} | {k:'fm', f, ratio, idx, t, d, g}
 //              | {k:'voice', v, m, t, d, vel} ] }
-//     Layer times are seconds from the start of the sound, g is a linear gain. The synth turns a recipe into WebAudio nodes.
+//     Layer times are seconds from the start of the sound, g is a linear gain, a is the attack and d the whole length (the
+//     envelope decays exponentially to silence over d). f2 sweeps the frequency over the layer. The synth turns a recipe into nodes.
 //
 // SYNTHESIS (every voice takes any BaseAudioContext, so an OfflineAudioContext renders exactly what the game plays)
 //   AUDIO.VOICES  names of the instruments: koto shamisen biwa arp shakuhachi taiko hyoshigi rin pad crackle
-//   AUDIO.graph(ctx, {musicVol, sfxVol}?) -> {music, sfx, out, ...}   master chain (soft glue compressor, limiter, soft clip,
-//                                  a small temple-hall reverb) with a music bus and an sfx bus to connect voices into
+//   AUDIO.voice(name, ctx, out, t, note) -> bool   one note of one instrument, note = {midi, dur (s), vel, r, hit?, big?, bend?}
+//   AUDIO.graph(ctx, {musicVol, sfxVol}?) -> {music, sfx, out, ...}   master chain: music bus (high-pass 55 Hz, gentle high shelf,
+//                                  duck) and sfx bus into glue compressor, limiter, soft clip (unity below 0.6, squeezes
+//                                  overshoots up to +6 dB) and a small temple-hall reverb; missing optional nodes are skipped
 //   AUDIO.render(ctx, dest, desc, {t0, loops, intensity}?) -> {end, notes}   schedule a whole composition (intro plus `loops`
-//                                  passes of the loop) into dest, for offline analysis
-//   AUDIO.renderSfx(ctx, dest, id, {t0, vol, pitch, seed}?) -> {end}   schedule one sound effect
-//   AUDIO.debug() -> {ctx, graph, decks, live, intensity, ...}         inspection hook for the suite
+//                                  passes of the loop) into dest, for offline analysis (no voice cap)
+//   AUDIO.renderSfx(ctx, dest, idOrRecipe, {t0, vol, pitch, pan, seed}?) -> {end}   schedule one sound effect (a plain recipe
+//                                  object as returned by sfxRecipe also works, for experiments)
+//   AUDIO.debug() -> inspection hook for the suite: ctx, graph nodes, live source count, decks (with raw deck), tick(), mixLengths
+//   AUDIO.SCALES  AUDIO.RANGES  AUDIO.MUSIC_SCALE   plain data copies
 //
 // SOUND DESIGN NOTES
 //   Instruments: koto and shamisen are damped-wave plucks (custom PeriodicWave, filter envelope, noise pick), biwa is a low
 //   slapped string, shakuhachi is a sine with breath noise, vibrato and a pitch scoop, taiko is a pitch-dropped sine with a
-//   noise slap, hyoshigi is two resonant noise clacks, rin is inharmonic FM, pad is detuned saws through a low-pass.
-//   Levels: the music bus runs at MUSIC_SCALE (0.55) of the sfx bus at equal slider values, both through a v^1.5 taper.
+//   noise slap (its body sits an octave above the written pitch so it carries on small speakers), hyoshigi is two resonant
+//   noise clacks, rin is inharmonic FM, pad is detuned saws through a low-pass, crackle is filtered noise pops.
 //   Layered tracks: layer 0 is always audible, layers 1..3 fade in at AUDIO.compose(id).thresholds. Boss tracks are
 //   already full at intensity 0 and the layers add drama as phases begin (intensity 0.25 per phase entered).
+//   Scheduling: a setInterval lookahead (60 ms tick, 0.42 s ahead) on the AudioContext clock, never rAF or Date. A deck that
+//   falls far behind (a throttled timer) skips whole loops instead of replaying them. Every envelope gain starts at zero: a
+//   source can begin one sample before its first automation event, which would otherwise click.
+//   Levels: the music bus runs at MUSIC_SCALE (0.55) of the sfx bus at equal slider values, both through a v^1.5 taper. The sfx
+//   `vol` values and the MIX table below were measured offline (peak per sfx against a target that ranks hover < click < card
+//   sounds < hits < crits < boss moments; A-weighted loudness per score role against a target per role type), with the master
+//   chain in the path, in a real browser. At the default sliders the score measures about -25 to -28 dBFS RMS in a fight
+//   (more layers, louder) and -28 to -31 in calm scenes, with peaks under -3 dBFS, and big sfx duck it. The suite fails if a
+//   score is edited without regenerating its MIX row (row lengths); remeasure after changing a role.
 const AUDIO = (() => {
   'use strict';
 
@@ -458,10 +477,10 @@ const AUDIO = (() => {
   }
   function roleBell(rng, S, R) {
     const lo = R.range[0], hi = R.range[1], notes = [], p = R.p == null ? 0.6 : R.p;
-    S.blocks.forEach((b, bi) => {
+    S.blocks.forEach((b) => {
       const per = R.perBlock ? b.bars : 1;
       for (let k = 0; k < b.bars; k += per) {
-        if (rng() > p && !(bi === 0 && k === 0 && !notes.length && p < 1 && S.blocks.length < 3)) continue;
+        if (rng() > p) continue;
         const pcs = chordPcs(S, b.deg);
         const pc = pcs[rng() < 0.65 ? 0 : 2];
         const m = foldInto(lowestPc(lo + Math.floor((hi - lo) * 0.3 * rng()), pc), lo, hi);
@@ -1280,10 +1299,10 @@ const AUDIO = (() => {
     nz.connect(bp); bp.connect(hp); hp.connect(g); g.connect(out);
   }
   const VOICES = { koto: vKoto, shamisen: vShamisen, biwa: vBiwa, arp: vArp, shakuhachi: vShakuhachi, taiko: vTaiko, hyoshigi: vHyoshigi, rin: vRin, pad: vPad, crackle: vCrackle };
-  // small timing looseness per instrument (seconds, peak to peak) so a loop never sounds machine-perfect
   // per-voice loudness trim for the score, measured with A-weighted momentary loudness so a note at the same velocity is about
-  // equally loud on every instrument (the sfx recipes were balanced by ear against the raw voices and do not use it)
+  // equally loud on every instrument (the sfx recipes were balanced against the raw voices and do not use it)
   const TRIM = { koto: 0.67, shamisen: 1.4, biwa: 0.78, arp: 0.99, shakuhachi: 0.43, taiko: 0.78, hyoshigi: 1, rin: 0.69, pad: 1.9, crackle: 1 };
+  // small timing looseness per instrument (seconds, peak to peak) so a loop never sounds machine-perfect
   const HUMAN = { koto: 0.012, shamisen: 0.008, biwa: 0.008, arp: 0.01, shakuhachi: 0.02, taiko: 0.008, hyoshigi: 0.006, rin: 0.01, pad: 0.03, crackle: 0 };
 
   // ---- sound effect layers
