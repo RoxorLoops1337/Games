@@ -289,6 +289,12 @@
   .btnico{height:18px;width:auto;vertical-align:-4px;margin-right:2px;}
   .amcic .cardimg{width:62px;height:62px;object-fit:contain;display:block;margin:0 auto;}
   .cardghost .ic .cardimg{width:90px;height:90px;object-fit:contain;display:block;margin:0 auto;}
+  .forgeic .cardimg{width:40px;height:40px;object-fit:contain;display:block;margin:0 auto;}
+  /* painted Combo Codex icons: inline in prose (~1.3em), big on the Codex reaction cards */
+  .cxic{width:1.3em;height:1.3em;object-fit:contain;display:inline-block;vertical-align:-.32em;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
+  .cxbig{width:40px;height:40px;object-fit:contain;display:block;flex:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55));}
+  #overlay h1 .cxic{width:1.15em;height:1.15em;vertical-align:-.2em;}
+  .btnbig{width:28px;height:28px;object-fit:contain;vertical-align:-7px;margin-right:2px;}
   .choice h3{margin:6px 0 4px;font-size:16px;color:var(--gold);}
   .choice .desc{font-size:12px;opacity:.85;line-height:1.35;}
   .choice .stats{font-size:11px;margin-top:6px;opacity:.8;}
@@ -734,7 +740,7 @@ const ROOMS = {
 // Cards you can DRAFT (minions only come from corrupting heroes in town).
 const ROOM_KEYS = Object.keys(ROOMS).filter(k=>k!=='minion');
 // Room types with a painted card-art icon (icons/<type>.png); else fall back to the emoji.
-const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','warcamp','slime','runestone','shop','dragon']);
+const HAS_ICON = new Set(['spike','flame','arrow','oil','frost','tesla','magebane','maul','gallows','hexward','bombard','venom','corrode','hexbrand','goblin','skeleton','ogre','warden','totem','warcamp','slime','runestone','shop','dragon','web','horn','censer','harpy','mimic','minion']);
 function cardFace(type){ return HAS_ICON.has(type) ? '<img class="cardimg" src="icons/'+type+'.png" alt="" draggable="false">' : null; }
 // Painted boss-ability icons (abilities/<id>.png); graceful fallback to the emoji.
 const ABIL_ICONS=new Set(['slam','breath','bolt','curse','freeze','drain','dread','mend','quake','hellfire','siphon','devour','raise','entangle']);
@@ -770,6 +776,15 @@ function townActFace(id,cls){ return TOWNACT_ICON[id] ? '<img class="'+(cls||'re
 // Painted shop-item icons (items/<key>.png); emoji fallback.
 const ITEM_ICON=new Set(['sword','armor','potion','great']);
 function itemFace(key,cls){ return ITEM_ICON.has(key) ? '<img class="'+(cls||'itemimg')+'" src="items/'+key+'.png" alt="" draggable="false">' : null; }
+// Painted Combo Codex icons (icons/codex_<key>.png): reactions, elements, statuses. A missing or
+// corrupt file swaps back to its emoji (codexIconFail), so a re-upload under the same name just works.
+const CODEX_ICON=new Set(['combust','conduct','detonate','encase','fire','ice','ignite','marked','oiled','overload','phys','poisoned','shatter','shock','thermalshock']);
+const ELEM_CX={fire:'fire', ice:'ice', shock:'shock', phys:'phys', oil:'oiled'};   // def.elem -> codex icon key
+function codexTag(src,cls,fb){ return '<img class="'+(cls||'cxic')+'" src="'+src+'" alt="'+(fb||'')+'" data-fb="'+(fb||'')+'" draggable="false" onerror="codexIconFail(this)">'; }
+function codexIconFail(img){ img.replaceWith(document.createTextNode(img.dataset.fb||'')); }
+function codexFace(key,cls,fb){ return CODEX_ICON.has(key) ? codexTag('icons/codex_'+key+'.png',cls,fb) : null; }
+function cx(key,fb){ return codexFace(key,'cxic',fb)||fb||''; }   // inline icon token for prose (emoji fallback)
+function codexBookFace(cls){ return codexTag('icons/codex.png',cls,'⚛️'); }   // the Codex's own book icon
 const MAX_LEVEL = 5;   // a TRAP can be stacked-upgraded this many levels
 const MAX_SLOTS = 5;   // a room can hold this many units (grown +1 per gold upgrade)
 const MAX_TRAPS = 2;   // …of which at most this many may be traps
@@ -3250,7 +3265,7 @@ function openLibrary(){
   const sub=t=>`<br><span class="small" style="font-weight:normal;opacity:.75">${t}</span>`;
   overlay.innerHTML = `<h1>📖 Library</h1>
     <div class="menu-btns" style="flex-direction:column;align-items:center;gap:8px">
-      <button class="go" style="min-width:270px" onclick="openCodex()">⚛️ Combo Codex${sub('reactions, rooms & keywords')}</button>
+      <button class="go" style="min-width:270px" onclick="openCodex()">${codexBookFace('btnbig')} Combo Codex${sub('reactions, rooms & keywords')}</button>
       <button style="min-width:270px" onclick="showHelp()">❓ How to play${sub('the loop in five lines')}</button>
     </div>
     <div class="menu-btns" style="margin-top:10px"><button onclick="gotoMenu()">← Back</button></div>`;
@@ -3518,15 +3533,16 @@ const KEYWORDS={
   Scaling:   {col:'#5fae54', txt:'Grows permanently with every hero that dies in its room.'},
   Counter:   {col:'#b163ff', txt:'Bonus damage to a specific kind of hero (class / elite / wounded).'},
 };
+// `key` picks the painted icons/codex_<key>.png header; `ic` stays as the emoji fallback.
 const REACTIONS=[
-  {ic:'🔥', name:'Ignite',        how:'🔥 fire on an 🛢️ oiled hero',          pay:'heavy burst + big burn'},
-  {ic:'☠️', name:'Combust',       how:'🔥 fire on a ☠️ poisoned hero',         pay:'burst scaling with poison stacks'},
-  {ic:'💥', name:'Thermal Shock', how:'fire on a chilled hero, or ice on a burning one', pay:'sudden-swing burst'},
-  {ic:'🧊', name:'Encase',        how:'❄ ice on an 🛢️ oiled hero',            pay:'freezes them solid (a sitting duck)'},
-  {ic:'❄', name:'Shatter',        how:'💥 phys or ⚡ shock on a chilled/frozen hero', pay:'burst, cracks the ice'},
-  {ic:'⚡', name:'Conduct',        how:'⚡ shock on an 🛢️ oiled hero',          pay:'arcs to the WHOLE party'},
-  {ic:'⚡', name:'Overload',       how:'⚡ shock on a ❄ chilled hero',          pay:'stuns them solid'},
-  {ic:'🎯', name:'Detonate',      how:'any hit on a 🎯 marked hero',           pay:'+120% damage (consumes the mark)'},
+  {key:'ignite',  ic:'🔥', name:'Ignite',        how:`${cx('fire','🔥')} fire on an ${cx('oiled','🛢️')} oiled hero`,          pay:'heavy burst + big burn'},
+  {key:'combust', ic:'☠️', name:'Combust',       how:`${cx('fire','🔥')} fire on a ${cx('poisoned','☠️')} poisoned hero`,     pay:'burst scaling with poison stacks'},
+  {key:'thermalshock', ic:'💥', name:'Thermal Shock', how:`${cx('fire','🔥')} fire on a chilled hero, or ${cx('ice','❄')} ice on a burning one`, pay:'sudden-swing burst'},
+  {key:'encase',  ic:'🧊', name:'Encase',        how:`${cx('ice','❄')} ice on an ${cx('oiled','🛢️')} oiled hero`,            pay:'freezes them solid (a sitting duck)'},
+  {key:'shatter', ic:'❄', name:'Shatter',        how:`${cx('phys','💥')} phys or ${cx('shock','⚡')} shock on a chilled/frozen hero`, pay:'burst, cracks the ice'},
+  {key:'conduct', ic:'⚡', name:'Conduct',        how:`${cx('shock','⚡')} shock on an ${cx('oiled','🛢️')} oiled hero`,        pay:'arcs to the WHOLE party'},
+  {key:'overload', ic:'⚡', name:'Overload',       how:`${cx('shock','⚡')} shock on a ${cx('ice','❄')} chilled hero`,        pay:'stuns them solid'},
+  {key:'detonate', ic:'🎯', name:'Detonate',      how:`any hit on a ${cx('marked','🎯')} marked hero`,                       pay:'+120% damage (consumes the mark)'},
 ];
 // Derive a card's keyword tags from its properties.
 function cardTags(def){
@@ -3557,15 +3573,20 @@ function cardTags(def){
 function openCodex(){
   overlay.classList.add('show');
   const react=REACTIONS.map(r=>`<div class="ucard" style="width:auto;min-width:150px;text-align:left;padding:8px 10px">
-    <div style="font-weight:bold">${r.ic} ${r.name}</div>
+    <div style="font-weight:bold;display:flex;align-items:center;gap:8px">${codexFace(r.key,'cxbig',r.ic)||r.ic}<span>${r.name}</span></div>
     <div class="small" style="opacity:.85">${r.how}</div>
     <div class="small" style="color:#7bdc6b">→ ${r.pay}</div></div>`).join('');
+  // elements + statuses strip: the icons the reaction recipes above are written in
+  const chips=[['fire','🔥','Fire'],['ice','❄','Ice'],['shock','⚡','Shock'],['phys','💥','Phys'],['oiled','🛢️','Oiled'],['poisoned','☠️','Poisoned'],['marked','🎯','Marked']]
+    .map(([k,fb,lb])=>`<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:52px">${codexFace(k,'cxbig',fb)||fb}<div class="small">${lb}</div></div>`).join('');
   const keys=Object.keys(KEYWORDS).map(k=>`<div class="small" style="margin:3px 0;line-height:1.3">
     <b style="color:${KEYWORDS[k].col}">${k}</b> — ${KEYWORDS[k].txt}</div>`).join('');
-  overlay.innerHTML=`<h1>⚛️ Combo Codex</h1>
+  overlay.innerHTML=`<h1>${codexBookFace()} Combo Codex</h1>
     <p>Traps & monsters apply <b>statuses</b> that linger as heroes walk. The right <b>order</b> sets off a reaction — and each reaction <b>escalates</b> the next (a chain).</p>
     <h2 style="margin:6px 0 4px">Reactions</h2>
     <div class="unlockgrid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">${react}</div>
+    <h2 style="margin:12px 0 4px">Elements &amp; statuses</h2>
+    <div class="row" style="justify-content:center;gap:10px">${chips}</div>
     <h2 style="margin:12px 0 4px">Rooms</h2>
     <p class="small" style="opacity:.85;margin:0 0 4px">Each room holds up to <b>${MAX_SLOTS} slots</b> — ⬆ spend gold to add one (every room starts with 1). At most <b>${MAX_TRAPS} traps</b>; fill the rest with monsters, mix &amp; match. Drop the <b>same trap</b> on itself to level it up (max ${maxLevel()}); monsters <b>stack as independent copies</b> and toughen from the room's <b>veteran</b> kills. Pair the right two traps and the room becomes a 🔗 <b>synergy room</b> — bonus damage plus a signature effect — and elemental reactions stack on top.</p>
     <h2 style="margin:12px 0 4px">Keywords</h2>
@@ -5501,12 +5522,13 @@ const PRIME_OIL=12, PRIME_ICE=7, PRIME_SHOCK=9;    // long enough to cross a roo
 const MARK_AMP=1.2;                                // 🎯 Hex Brand: the next hit deals +120%
 const POISON_CAP=10;                               // ☠️ poison stacks cap (keeps Combust from snowballing)
 // Teach the ordering combos in tooltips. Element → how to chain it across rooms.
+// HTML only (card + room tooltips): the emoji ride along as fallbacks for the painted codex icons.
 const ELEM_COMBO={
-  oil:  'Coats heroes (slows them) and primes them. Put it <b>before</b> a 🔥flame (Ignite), ⚡tesla (Conduct) or ❄frost (Encase) room.',
-  fire: '🔥 Ignites <b>oiled</b> heroes, ☠️ <b>Combusts</b> poisoned ones, and 💥 thermal-shocks <b>chilled</b> ones. Put it <b>after</b> an oil, venom or frost room.',
-  ice:  '❄ Chills (slows); a later phys/shock hit then <b>Shatters</b>. Encases <b>oiled</b> heroes. Put before crushers, or after oil.',
-  shock:'⚡ Conducts through <b>oiled</b> heroes to the party, and ⚡ <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.',
-  phys: '💥 Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.',
+  oil:  `Coats heroes (slows them) and primes them. Put it <b>before</b> a ${cx('fire','🔥')}flame (Ignite), ${cx('shock','⚡')}tesla (Conduct) or ${cx('ice','❄')}frost (Encase) room.`,
+  fire: `${cx('ignite','🔥')} Ignites <b>oiled</b> heroes, ${cx('poisoned','☠️')} <b>Combusts</b> poisoned ones, and ${cx('thermalshock','💥')} thermal-shocks <b>chilled</b> ones. Put it <b>after</b> an oil, venom or frost room.`,
+  ice:  `${cx('ice','❄')} Chills (slows); a later phys/shock hit then <b>Shatters</b>. Encases <b>oiled</b> heroes. Put before crushers, or after oil.`,
+  shock:`${cx('conduct','⚡')} Conducts through <b>oiled</b> heroes to the party, and ${cx('overload','⚡')} <b>Overloads</b> (stuns) <b>chilled</b> ones. Put it <b>after</b> an oil or frost room.`,
+  phys: `${cx('shatter','💥')} Shatters <b>chilled/frozen</b> heroes for a burst. Put it <b>after</b> a frost room.`,
 };
 function reactMul(h){ return (1 + Math.min(h.reactCount||0, 4)*0.25) * (hasMandate('conductor')?1.3:1); }   // escalating chain (capped at +100%); Conductor mandate +30%
 const REACT_FILL={IGNITE:'fire', COMBUST:'venom', OVERLOAD:'volt', CONDUCT:'volt', ENCASE:'ice', SHATTER:'ice', 'THERMAL SHOCK':'blood'};
@@ -6746,7 +6768,7 @@ function renderTown(){
             ${G.hand.map((c,i)=>{ const d=ROOMS[c.type]; const price=forgePrice(c.type); const can=G.gold>=price;
               return `<button ${can?'':'disabled'} onclick="forgeCard(${i})" title="Duplicate ${c.label||d.name} (${cardRarity(c.type)}) for ${price}g"
                 style="display:flex;flex-direction:column;align-items:center;min-width:96px;gap:1px;height:auto;padding:7px;border-color:#e0743a">
-                <span style="font-size:20px">${cardFace(c.type)||d.ic}</span><span style="font-size:11px">${c.label||d.name}</span>
+                <span class="forgeic" style="font-size:20px">${cardFace(c.type)||d.ic}</span><span style="font-size:11px">${c.label||d.name}</span>
                 <span style="color:#ffd34d">${price} 💰</span></button>`;}).join('')}
           </div>`}
     </div>`;
@@ -9482,7 +9504,7 @@ function describeCard(card){
     const dmg=Math.round(def.dmg*(1+(lvl-1)*0.4)*(1+(RB.trapDmg||0)));
     lines.push(`<b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${def.burn?' +burn':''}${def.poison?' +☠poison':''}${def.acid?' +🧪acid':''}${def.mark?' +🎯mark':''}${def.aoe?' · 💥 AoE':''}`);
     if(def.aoe) lines.push(`<span class="small" style="color:#e0a060">💥 Blasts every hero within ${def.aoe} room${def.aoe>1?'s':''} of this one</span>`);
-    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}:</span> <span class="small">${ELEM_COMBO[def.elem]}</span>`);
+    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span style="color:#9adfff">${cx(ELEM_CX[def.elem],'⚛️')} ${def.elem.toUpperCase()}:</span> <span class="small">${ELEM_COMBO[def.elem]}</span>`);
   } else if(def.kind==='monster'){
     const bHp=card.type==='minion'?card.minHp:def.hp, bAtk=card.type==='minion'?card.minAtk:def.atk;
     const bas=bastionMul();
@@ -9605,7 +9627,7 @@ function describeRoom(room, detail){
     const _sm=TRAP_STACK_MUL[Math.min(_trapDi++,2)];
     const dmg=Math.round(def.dmg*(1+(lv-1)*0.4)*vm*(1+(RB.trapDmg||0))*_sm);
     lines.push(`${def.ic} ${def.name} <span style="color:#ffd34d">Lv ${lv}/${maxLevel()}</span>: <b>${dmg}</b> dmg / ${def.rate}s · ~${Math.round(dmg/def.rate)}/s${_sm<1?` <span class="small" style="opacity:.7">(stacked ×${_sm})</span>`:''}${def.burn?' +burn':''}${def.poison?' +☠':''}${def.acid?' +🧪':''}${def.mark?' +🎯':''}${def.aoe?` · 💥 AoE ${def.aoe} room${def.aoe>1?'s':''}`:''}`);
-    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">⚛️ ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
+    if(def.elem && ELEM_COMBO[def.elem]) lines.push(`<span class="small" style="color:#9adfff">${cx(ELEM_CX[def.elem],'⚛️')} ${def.elem.toUpperCase()}: ${ELEM_COMBO[def.elem]}</span>`); });
   // monsters
   const gobUnits = monUnits.filter(u=>u.type==='goblin');       // 👺 the den (spawns & marches out)
   const guardUnits = monUnits.filter(u=>u.type!=='goblin');     // stationary guards (shown beside a mixed den)
@@ -9702,8 +9724,10 @@ function describeHero(h){
     `🏃 speed ${Math.round(h.spd)} · 💰 ${h.gold}${h.dodge?' · 35% dodge':''}`];
   if(ch) lines.push(`<span style="color:${ch.col}">${ch.desc}</span>`+(h.shieldT>0?' · 🛡 shielded':''));
   if(h.traits&&h.traits.length) lines.push('Traits: '+h.traits.map(t=>TRAITS[t].ic+' '+TRAITS[t].name+(TRAITS[t].beh?' — '+TRAITS[t].desc:'')).join(', '));
-  const fx=[h.burn>0?'🔥 burning':'',h.freeze>0?'❄️ frozen':'',h.chill>0?'❄️ chilled':'',
-    h.oil>0?'🛢️ oiled':'',h.shock>0?'⚡ shocked':'',h.reactCount>1?'⚛️ reaction ×'+h.reactCount:'',
+  const fx=[h.burn>0?cx('fire','🔥')+' burning':'',h.freeze>0?cx('encase','❄️')+' frozen':'',h.chill>0?cx('ice','❄️')+' chilled':'',
+    h.oil>0?cx('oiled','🛢️')+' oiled':'',h.shock>0?cx('shock','⚡')+' shocked':'',
+    h.poison>0?cx('poisoned','☠️')+' poisoned ×'+Math.ceil(h.poison):'',h.mark>0?cx('marked','🎯')+' marked':'',
+    h.reactCount>1?'⚛️ reaction ×'+h.reactCount:'',
     h.corrupt>0?'☣ corrupt ×'+h.corrupt:'',h.hasPotion?'🧪 potion':''].filter(Boolean).join(' · ');
   if(fx) lines.push(fx);
   if(h.loot) lines.push(`💎 Carrying ${gearTag(h.loot)} <span class="small" style="opacity:.85">— drops on the floor when slain</span>`);
