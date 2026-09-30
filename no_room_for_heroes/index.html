@@ -4868,6 +4868,7 @@ function startWave(){
   if(!tutAllow('start')){ tutNudge(); return; }   // tutorial: only when prompted
   smithyRestock();                  // ensure shops built this phase get their free gear
   buildCells();
+  abilFx.length=0; abilFxProbe();   // 🎆 clear old VFX, preload only this boss's equipped ability art
   G._waveStartBreaches=(G.stats&&G.stats.breaches)||0;   // baseline for the "flawless wave" feat
   spawnGroup(G.guildLvl+1);
   spawnDenGoblinsForWave();         // 👺 +1 goblin per den (cap 12) marches out this wave
@@ -5633,6 +5634,83 @@ function bossBolt(tx,ty,col,ic){
     x1:tx, y1:(ty!=null?ty-28:FLOOR-40), t:0, dur:0.12, col:c, ic:ic||'' });   // fast streak — lands ~with the hit, not after it
   burst(bossX(), FLOOR-90, c, 9); sparks(bossX(), FLOOR-92, c, 6); flash(c, 0.09, 0.15);   // cast pop at the throne
 }
+// 🎆 Boss ability VFX: painted frame sequences in abilities/fx/ability_<name>_01.png …
+// (any naming artProbe accepts). Pure cosmetic and graceful: no art (or not yet
+// loaded) means nothing extra is drawn; the bolt/burst/flash juice always plays.
+// dh = draw height of the WHOLE canvas in world px for a 46px-tall hero (scaled by
+// heroFxScale); ax/ay = anchor fraction inside the canvas; at: 'feet' (ay sits on
+// the floor under the hero) or 'chest' (the anchor sits on the hero's mid-body).
+// Abilities without an entry (bolt, freeze, dread, mend, siphon, raise) keep just
+// the bolt/burst; a new entry here is all a future painted sequence needs.
+const FX_FADE=0.15;
+const ABIL_FX={
+  slam:    {art:'ability_slam',       at:'feet',  dh:110, ax:.50, ay:.843, fps:14, mode:'once', layer:'front'},
+  quake:   {art:'ability_slam',       at:'feet',  dh:88,  ax:.50, ay:.843, fps:14, mode:'once', layer:'front', stagger:.05},   // no own art: the slam blast on every hero
+  devour:  {art:'ability_devour',     at:'feet',  dh:96,  ax:.50, ay:1.0,  fps:12, mode:'once', layer:'front'},
+  drain:   {art:'ability_drain',      at:'chest', dh:60,  ax:.50, ay:.50,  fps:12, mode:'once', layer:'front'},
+  curse:   {art:'ability_curse',      at:'chest', dh:70,  ax:.50, ay:.50,  fps:10, mode:'loop', dur:1.1, layer:'back',  follow:true, pop:true, alpha:.9},   // behind the hero
+  breath:  {art:'ability_firebreath', at:'feet',  dh:88,  ax:.52, ay:.989, fps:12, mode:'loop', dur:0.9, layer:'front', follow:true, rise:true},
+  hellfire:{art:'ability_hellfire',   at:'feet',  dh:104, ax:.50, ay:1.0,  fps:10, mode:'loop', dur:1.1, layer:'front', follow:true, rise:true, stagger:.06},
+  entangle:{art:'ability_entangle',   at:'feet',  dh:66,  ax:.50, ay:.99,  fps:10, mode:'hold', holdFrom:1, holdFps:6, max:4, layer:'front', follow:true, alpha:.92},
+};
+const abilFx=[];                       // live effects (mutated in place, never reassigned)
+function heroFxScale(h){
+  const hh=(h && h._figTop!=null) ? (FLOOR+(h.yOff||0)-h._figTop) : (h&&h.king?123:h&&h.champion?88:46);
+  return clamp(hh/46, 0.85, 2.2);
+}
+function fxFrames(art){ const r=ART[art]; return r ? (r.frames.length || (r.static?1:0)) : 0; }
+function abilFxProbe(){ if(!G||!G.boss) return;          // preload only the equipped abilities' art
+  for(const a of (G.boss.abil||[])){ const f=a&&ABIL_FX[a.id]; if(f) artProbe(f.art); } }
+function spawnAbilFx(id, targets){
+  const f=ABIL_FX[id]; if(!f || !targets) return;
+  artProbe(f.art);                     // idempotent; normally already probed at startWave
+  let i=0;
+  for(const h of targets){ if(!h) continue;
+    abilFx.push({ f, h, x:h.x, s:heroFxScale(h), t:-(f.stagger||0)*(i++), end:null }); }
+  if(abilFx.length>48) abilFx.splice(0, abilFx.length-48);   // hard cap (huge AoE parties)
+}
+function abilFxTick(dt){
+  if(!abilFx.length) return;
+  for(const e of abilFx){
+    e.t+=dt; const f=e.f;
+    if(f.follow && e.h && e.h.state!=='dead') e.x=e.h.x;
+    if(e.end!=null || e.t<0) continue;
+    const N=fxFrames(f.art);
+    if(!N){ if(e.t>0.05) e.end=e.t-FX_FADE; continue; }          // no art: drop silently
+    if(f.mode==='once'){ if(e.t>=N/f.fps) e.end=e.t; }
+    else if(f.mode==='loop'){ if(e.t>=f.dur) e.end=e.t; }
+    else if(e.t>=N/f.fps && (!e.h || e.h.state==='dead' || !(e.h.freeze>0) || e.t>=f.max)) e.end=e.t;  // 'hold': until the root thaws
+  }
+  compact(abilFx, e=>e.end==null || e.t<e.end+FX_FADE);
+}
+function drawAbilFx(tx, layer){
+  if(!abilFx.length) return;
+  const sm=X.imageSmoothingEnabled; X.imageSmoothingEnabled=false;   // crisp pixel art
+  for(const e of abilFx){
+    const f=e.f; if(f.layer!==layer || e.t<0) continue;
+    const r=ART[f.art]; if(!r) continue;
+    const fr=r.frames, N=fr.length; let im;
+    if(!N) im=r.static;
+    else { let k=Math.floor(e.t*f.fps);
+      if(f.mode==='loop') k%=N;
+      else if(f.mode==='hold' && k>=N){ const a=Math.min(f.holdFrom||0,N-1);   // cycle the stirring vines
+        k=a+Math.floor((e.t-N/f.fps)*(f.holdFps||f.fps))%Math.max(1,N-a); }
+      else k=Math.min(N-1,k);
+      im=fr[k]||fr[0]; }
+    if(!(im && im.width)) continue;
+    let a=f.alpha||1; if(e.end!=null) a*=clamp(1-(e.t-e.end)/FX_FADE,0,1);
+    if(a<=0) continue;
+    const sc=f.pop ? 0.4+0.6*clamp(e.t/0.15,0,1) : 1;        // curse vortex pops open
+    const sy=f.rise ? clamp(e.t/0.12,0.25,1) : 1;            // flames climb from the floor
+    const dh=f.dh*e.s*sc, dw=dh*im.width/im.height, h2=dh*sy;
+    const foot=FLOOR+((e.h&&e.h.yOff)||0);
+    const top=(e.h&&e.h._figTop!=null)?e.h._figTop:foot-46;
+    const ay=f.at==='chest' ? (foot+top)/2 : foot;
+    X.globalAlpha=a;
+    X.drawImage(im, Math.round(tx(e.x)-dw*f.ax), Math.round(ay-h2*f.ay), Math.round(dw), Math.round(h2));
+  }
+  X.globalAlpha=1; X.imageSmoothingEnabled=sm;
+}
 
 // 🎯 Smart ability targeting: single-target casts pick the tactically RIGHT hero
 // via the ability's optional `pick` scorer (highest score wins — Devour hunts the
@@ -5668,7 +5746,11 @@ function castAbility(slot){
   if(G.boss.mana<cost){ showHint('Not enough mana.'); return; }
   G.boss.mana-=cost; a.cd=def.cd*(1-(RB.abilCd||0));
   G.boss.castAt=performance.now();             // play the boss's attack animation
+  const pre=(G.heroes||[]).filter(h=>h&&h.state!=='dead');   // captured before run: AoE/execute kills still get their VFX
   def.run(target);
+  spawnAbilFx(a.id, def.aoe ? pre                              // 🎆 painted ability VFX on exactly the heroes run() hit
+    : a.id==='entangle' ? pre.filter(o=>o===target || o.cellIndex===target.cellIndex)
+    : [target]);
   bumpStat('abil');                            // feat: abilities cast
   tutEvent('ability');
   // bolt(s) from the boss to the target(s) so you see where the power comes from
@@ -6844,6 +6926,7 @@ function renderTown(){
 
 /* ============================ UPDATE / SIM ============================== */
 function update(dt){
+  abilFxTick(dt);                    // cosmetic; ticks even while paused so the tutorial's paused ability beats still animate
   if(G && G.tutorial && G.phase==='run' && tutRunTick()) return;   // auto-pause beat just triggered
   if(paused) return;                 // pause menu freezes the whole simulation
   // animate floaters/particles always (compacted in place — no per-frame arrays)
@@ -7638,6 +7721,7 @@ function draw(){
   const tx = (wx)=>wx-camX;
   const isBuild = (G.phase==='build');
   drawDungeon(tx, 1, isBuild);
+  if(G.phase==='run') drawAbilFx(tx,'front');   // 🎆 ability VFX over heroes/traps, under particles + damage numbers
 
   // floaters & particles (world space)
   for(const p of particles){ X.globalAlpha=clamp(p.life,0,1); X.fillStyle=p.col;
@@ -7841,6 +7925,7 @@ function drawDungeon(tx, scale, isBuild){
   // draw the whole raiding party (dead first so living draw on top)
   const party=(G.heroes&&G.heroes.length)?G.heroes:(G.hero?[G.hero]:[]);
   for(const h of party) if(h.state==='dead' && !h.escaped) drawHeroDead(tx(h.x), h);   // an ESCAPED thief is gone, not a corpse
+  if(G.phase==='run') drawAbilFx(tx,'back');     // 🎆 back-layer VFX (curse vortex) behind the living heroes
   for(const h of party) if(h.state!=='dead') drawHero(tx(h.x), h);
   if(G.phase==='run') drawDenGoblins(tx);    // 👺 marching goblins from Den spawners
   // front-of-hero trap layers, replayed over the party (see HERO_LAYER)
@@ -8156,7 +8241,7 @@ const ART_DIR={poison1:'rooms/traps/',poison2:'rooms/traps/',candle:'rooms/fx/'}
 function artProbe(id){
   if(ART[id] || typeof Image==='undefined') return;
   const rec={frames:[],static:null}; ART[id]=rec;
-  const dir=ART_DIR[id]||'rooms/traps/';
+  const dir=ART_DIR[id]||(id.startsWith('ability_')?'abilities/fx/':'rooms/traps/');   // boss ability VFX live in abilities/fx/
   const st=new Image(); st.onload=()=>{ st._ok=true; rec.static=st; }; st.onerror=()=>{}; st.src=dir+id+'.png';
   const namers=[k=>id+'_'+k+'.png', k=>id+'_'+String(k+1).padStart(2,'0')+'.png', k=>id+'_'+(k+1)+'.png'];
   const tryNamer=ni=>{
