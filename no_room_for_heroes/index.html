@@ -8055,7 +8055,7 @@ function drawTrapPart(x0,w,type,p,pi,cell){
   for(let c=0;c<n;c++){
     let img, inten=1;
     if(N>1){
-      const idx=(mode==='loop') ? Math.floor(performance.now()/110+seed+c*3)%N
+      const idx=(mode==='loop') ? Math.floor(performance.now()/(p.ms||TRAP_LOOP_MS[type]||110)+seed+c*3)%N
                                 : strikeIdx(N, firedAt!=null?firedAt+c*70:null, type);
       img=rec.frames[idx]||rec.frames[0]; inten=idx/(N-1);
     } else img=rec.frames[0]||rec.static;
@@ -8087,6 +8087,8 @@ function drawTrapPart(x0,w,type,p,pi,cell){
       trapAccentGlow('corrode',x0,w,fx,p,LIGHT_COL.corrode, (0.18+0.30*inten)*bub); }
     else if(type==='magebane'){ const pu=0.74+0.26*Math.sin(performance.now()/380+seed); // arcane pulse
       trapAccentGlow('magebane',x0,w,fx,p,LIGHT_COL.magebane, (0.16+0.30*inten)*pu); }
+    else if(type==='censer'){ const pu=0.8+0.2*Math.sin(performance.now()/300+seed); // violet incense swell, flares with the puff
+      trapAccentGlow('censer',x0,w,fx,p,LIGHT_COL.censer, (0.14+0.30*inten)*pu); }
   }
   X.imageSmoothingEnabled=sm;
   return drew;
@@ -8140,6 +8142,18 @@ function drawTrapProp(x0,w,cx,type,cell){
     X.fillStyle='#4dc3ff'; X.beginPath(); X.ellipse(cx,FLOOR-48,13,9,0,0,7); X.fill();   // eye white
     X.fillStyle='#0a1a2a'; X.beginPath(); X.arc(cx,FLOOR-48,4.5,0,7); X.fill();          // pupil
     X.fillStyle='#fff'; X.beginPath(); X.arc(cx-1.5,FLOOR-49,1.5,0,7); X.fill();         // glint
+  } else if(type==='web'){
+    X.globalAlpha=0.55;                                                     // pale strands on the back wall
+    for(let s=0;s<5;s++) px(cx-30+s*15,FLOOR-96,1,56,'#d8d2c2');
+    for(let r=0;r<3;r++) px(cx-30,FLOOR-86+r*16,61,1,'#d8d2c2');
+    X.globalAlpha=1;
+  } else if(type==='horn'){
+    px(cx+14,FLOOR-88,6,26,'#5a4326');                                      // wall bracket
+    px(cx-12,FLOOR-80,28,8,'#caa15e');                                      // brass tube
+    px(cx-22,FLOOR-86,10,20,'#e0b85e');                                     // bell, facing the raiders
+  } else if(type==='censer'){
+    px(cx-1,FLOOR-176,2,82,'#6a6a7a');                                      // chain from the vault
+    px(cx-9,FLOOR-94,18,22,'#c9a14d'); px(cx-5,FLOOR-88,10,10,'#b86bff');   // gilded box, violet ember
   }
 }
 // Shop interior art: a wall shelf, the keeper behind a counter. Sizes/positions
@@ -8288,12 +8302,15 @@ let LAYOUT={
     bombard:[{art:'bombard', fx:.50, fy:0, h:122, layer:7}],   // mortar lobbing shells
     hexbrand:[{art:'hexbrand', fx:.50, fy:30, h:104, layer:5}],// branding sigil
     runestone:[{art:'runestone', fx:.50, fy:0, h:126, layer:5}],// standing rune (passive glow)
+    web:[{art:'web', fx:.50, fy:32, h:108, layer:0}],          // back-wall web (loops)
+    horn:[{art:'horn', fx:.50, fy:40, h:82, layer:3}],         // wall-mounted horn, bell faces LEFT at raiders
+    censer:[{art:'censer', fx:.518, fy:64, h:112, layer:5}],   // hangs from the ceiling bracket
   },
   candles:[{art:'candle', fx:.18, fy:118, h:26},{art:'candle', fx:.89, fy:118, h:26}],
 };
 // In-room layering when a fused room has several traps: low draws first.
 // Poison behind everything, flames over it, spikes ALWAYS on top.
-const TRAP_LAYER={venom:0, oil:1, frost:2, corrode:3, tesla:4, hexward:5, magebane:5, gallows:6, arrow:7, maul:8, flame:1, spike:9};
+const TRAP_LAYER={venom:0, oil:1, frost:2, corrode:3, tesla:4, hexward:5, magebane:5, gallows:6, arrow:7, maul:8, flame:1, spike:9, web:0, horn:3, censer:5};
 // Heroes draw at this z within the trap stack: any trap PART whose layer is
 // ABOVE it renders in FRONT of the party (e.g. translucent flames licking over
 // a hero). Overridable via LAYOUT.heroLayer (tuned in align.html). The high
@@ -8302,7 +8319,10 @@ let HERO_LAYER=999;
 let _frontTraps=null;   // deferred front-of-hero trap draws, flushed after the party renders
 // Per-trap animation mode: 'strike' (default — synced to firing) or 'loop'
 // (continuous). The poison vents pour non-stop.
-const TRAP_ANIM={venom:'loop', oil:'loop', runestone:'loop'};   // oil keeps flowing; the Runestone is a passive always-glowing rune (no strike)
+const TRAP_ANIM={venom:'loop', oil:'loop', runestone:'loop', web:'loop'};   // oil keeps flowing; the Runestone is a passive always-glowing rune (no strike); the web shimmers
+// Loop speed in ms per frame (default 110). The 6-frame web wobble jitters at
+// 110ms, so it gets a slower 0.9s shimmer cycle. A layout part's `ms` overrides.
+const TRAP_LOOP_MS={web:150};
 // Per-trap strike profile {rise,fall} in ms so they don't all move identically.
 // rise = time to slam to the last frame, fall = time to ease back to rest.
 // e.g. the maul SLAMS down fast then grinds back up slow.
@@ -8314,13 +8334,15 @@ const TRAP_TIMING={
   hexward: {rise:240, fall:520},
   tesla:   {rise:45,  fall:240},
   spike:   {rise:70,  fall:430},
+  horn:    {rise:120, fall:620},   // snaps up to the wail, the sound-wave rings recede slowly
+  censer:  {rise:560, fwd:true},   // one smoke puff per fire, never sucked back into the censer
 };
 // Build-phase idle preview fires each trap on its own offset within the 2.4s
 // loop so a multi-trap room doesn't pulse all at once.
-const TRAP_PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexward:1700, maul:2000, tesla:2250};
+const TRAP_PHASE={spike:0, flame:300, horn:500, gallows:650, frost:1000, arrow:1350, censer:1500, hexward:1700, maul:2000, tesla:2250};
 // Additive light glows (cached radial gradients): candle flicker, flame heat,
 // poison vapor, plus per-trap accents (frost chill, tesla spark, hex sigil).
-const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff'};
+const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff', censer:'#b86bff'};
 let _glowG={};
 // Each (colour, radius-bucket) glow is rendered ONCE into a small offscreen
 // canvas and blitted with drawImage. Filling with a live radial gradient every
@@ -9133,6 +9155,7 @@ function drawHero(sx,h){
   else if(h.chill>0){ X.globalAlpha=.25; px(sx-10,yy-48,20,48,'#9adfff'); X.globalAlpha=1; }
   if(h.oil>0){ X.globalAlpha=.3; px(sx-10,yy-46,20,46,'#0a0a06'); X.globalAlpha=1; }
   if(h.shock>0){ X.globalAlpha=.3+0.2*Math.sin(performance.now()/70); px(sx-10,yy-48,20,48,'#fff34d'); X.globalAlpha=1; }
+  if(h.root>0) drawWebRoot(sx,y,h,figTop);          // 🕸️ Web Snare: webbed to the floor (feet line, the body still bobs)
   // 🩸 damage hit-flash — a quick red pop the instant this hero is struck
   { const fa=performance.now()-(h.flashAt||0); if(fa<120){ X.globalAlpha=(1-fa/120)*0.55; px(sx-11,yy-50,22,50,'#ff5a72'); X.globalAlpha=1; } }
   // champion shield bubble
@@ -9202,6 +9225,20 @@ function drawHeroDead(sx,h){
   px(sx-16,y-8,32,8,h.col); px(sx-20,y-12,12,8,h.tint); // fallen
   X.globalAlpha=1;
   X.font='16px Trebuchet MS'; X.textAlign='center'; X.fillText('💀',sx,y-14); X.textAlign='left';
+}
+
+// 🕸️ Web Snare root effect (rooms/fx/web_root.png): a web cocoon over a rooted
+// hero's legs, sized to the figure and anchored at the feet. Symmetric, so no
+// facing flip. Missing art falls back to a pale veil.
+const WEB_ROOT_IMG=(typeof Image!=='undefined')?loadImg('rooms/fx/web_root.png'):null;
+function drawWebRoot(sx,y,h,figTop){
+  const a=Math.min(1,h.root/0.25);                 // fades out over the last 0.25s
+  const im=WEB_ROOT_IMG;
+  if(im&&im._ok&&im.width){
+    const tall=Math.max(40,y-figTop), dh=Math.round(Math.min(64,Math.max(26,tall*0.55))), dw=Math.round(dh*im.width/im.height);
+    X.save(); X.globalAlpha*=a; X.imageSmoothingEnabled=false;
+    X.drawImage(im, Math.round(sx-dw/2), Math.round(y-dh+1), dw, dh); X.restore();
+  } else { X.globalAlpha=.35*a; px(sx-10,y-22,20,22,'#d8d2c2'); X.globalAlpha=1; }   // graceful fallback
 }
 
 // Real boss artwork (small quantized PNGs in bosses/). Preloaded; drawBoss
