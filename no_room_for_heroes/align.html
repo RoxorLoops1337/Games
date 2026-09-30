@@ -87,9 +87,11 @@ const W=CELLW*S, OX=(CV.width-W)/2, FLOORY=620;
 const RISE=110, FALL=480, CASCADE=70;
 // per-trap strike profile + idle phase offset (mirror the game)
 const TIMING={maul:{rise:55,fall:560}, arrow:{rise:300,fwd:true}, frost:{rise:200,fall:680},
-  gallows:{rise:90,fall:600}, hexward:{rise:240,fall:520}, tesla:{rise:45,fall:240}, spike:{rise:70,fall:430}};
-const PHASE={spike:0, flame:300, gallows:650, frost:1000, arrow:1350, hexward:1700, maul:2000, tesla:2250};
-const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff'};
+  gallows:{rise:90,fall:600}, hexward:{rise:240,fall:520}, tesla:{rise:45,fall:240}, spike:{rise:70,fall:430},
+  horn:{rise:120,fall:620}, censer:{rise:560,fwd:true}};
+const PHASE={spike:0, flame:300, horn:500, gallows:650, frost:1000, arrow:1350, censer:1500, hexward:1700, maul:2000, tesla:2250};
+const LOOP_MS={web:150};   // per-trap loop speed (ms per frame, default 110), mirrors TRAP_LOOP_MS
+const LIGHT_COL={candle:'#ffb45e', heat:'#ff7a2e', vapor:'#5ae06a', frost:'#5ec8ff', tesla:'#ffe14d', hexward:'#b163ff', corrode:'#9ee84d', magebane:'#b163ff', censer:'#b86bff'};
 const ART={};
 function probeSeq(id,dir,cb){
   const namers=[k=>id+'_'+k+'.png', k=>id+'_'+String(k+1).padStart(2,'0')+'.png', k=>id+'_'+(k+1)+'.png'];
@@ -110,7 +112,8 @@ const room=new Image(); room.onload=()=>render(); room.src='rooms/empty.png';
  ['maul','rooms/traps/'],['arrow','rooms/traps/'],['frost','rooms/traps/'],['gallows','rooms/traps/'],
  ['hexward','rooms/traps/'],['tesla','rooms/traps/'],
  ['oil','rooms/traps/'],['corrode','rooms/traps/'],['magebane','rooms/traps/'],
- ['bombard','rooms/traps/'],['hexbrand','rooms/traps/'],['runestone','rooms/traps/'],['candle','rooms/fx/']]
+ ['bombard','rooms/traps/'],['hexbrand','rooms/traps/'],['runestone','rooms/traps/'],
+ ['web','rooms/traps/'],['horn','rooms/traps/'],['censer','rooms/traps/'],['candle','rooms/fx/']]
   .forEach(([id,dir])=>probeSeq(id,dir,()=>{ render(); refreshItems(); }));
 
 // ---- editable pieces: sprites + lights (defaults mirror the game) ----
@@ -131,6 +134,9 @@ let pieces=[
   {role:'bombard',      trap:'bombard',art:'bombard', fx:.50, fy:0,   h:122, layer:7},
   {role:'hexbrand',     trap:'hexbrand',art:'hexbrand',fx:.50, fy:30, h:104, layer:5},
   {role:'runestone',    trap:'runestone',art:'runestone',fx:.50,fy:0, h:126, layer:5, mode:'loop'},
+  {role:'web snare',    trap:'web',    art:'web',     fx:.50, fy:32,  h:108, layer:0, mode:'loop'},
+  {role:'wailing horn', trap:'horn',   art:'horn',    fx:.50, fy:40,  h:82,  layer:3},
+  {role:'censer',       trap:'censer', art:'censer',  fx:.518,fy:64,  h:112, layer:5},
   {role:'candle L',     candle:0,      art:'candle',  fx:.18, fy:118, h:26},
   {role:'candle R',     candle:1,      art:'candle',  fx:.89, fy:118, h:26},
   {role:'light candle L', light:'candle0', kind:'candle', fx:.18, fy:134, h:34},
@@ -143,24 +149,25 @@ let pieces=[
   {role:'light hexward',  light:'hexward', kind:'hexward',fx:.50, fy:60,  h:54},
   {role:'light corrode',  light:'corrode', kind:'corrode',fx:.50, fy:40,  h:46},
   {role:'light magebane', light:'magebane',kind:'magebane',fx:.50,fy:60,  h:54},
+  {role:'light censer',   light:'censer',  kind:'censer', fx:.50, fy:96,  h:48},
 ];
 const DEFAULT_PIECES=pieces;   // keep the built-in defaults to merge any trap the saved layout doesn't have yet
 fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   if(!j) return;
   const np=[];
-  const defLayer={venom:0, oil:1, frost:2, corrode:3, tesla:4, hexward:5, magebane:5, gallows:6, arrow:7, maul:8, flame:1, spike:9, bombard:7, hexbrand:5, runestone:5};
+  const defLayer={venom:0, oil:1, frost:2, corrode:3, tesla:4, hexward:5, magebane:5, gallows:6, arrow:7, maul:8, flame:1, spike:9, bombard:7, hexbrand:5, runestone:5, web:0, horn:3, censer:5};
   const seen=new Set();
   for(const t in (j.traps||{})){ seen.add(t); j.traps[t].forEach((p,k)=>{
     const e={role:t+(j.traps[t].length>1?(k?' R':' L'):''),trap:t,layer:(p.layer!=null?p.layer:(defLayer[t]!=null?defLayer[t]:1)),...p};
     if(t==='flame'&&!e.n){ e.n=4; e.gap=.21; }
     if(t==='flame') e.role='flame ×4';
-    if(t==='venom'&&!e.mode) e.mode='loop';
+    if((t==='venom'||t==='web')&&!e.mode) e.mode='loop';
     np.push(e);
   }); }
   // any trap with art but missing from the saved layout → seed from the defaults
   for(const d of DEFAULT_PIECES) if(d.trap && !seen.has(d.trap)) np.push({...d});
   (j.candles||[]).forEach((c,k)=>np.push({role:'candle '+(k?'R':'L'),candle:k,art:c.art||'candle',...c}));
-  const kindOf=a=>a==='flame'?'heat':(a.startsWith('venom')?'vapor':(a==='frost'||a==='tesla'||a==='hexward'||a==='corrode'||a==='magebane')?a:'candle');
+  const kindOf=a=>a==='flame'?'heat':(a.startsWith('venom')?'vapor':(a==='frost'||a==='tesla'||a==='hexward'||a==='corrode'||a==='magebane'||a==='censer')?a:'candle');
   const lights=j.lights||[];
   if(lights.length){
     lights.forEach(l=>np.push({role:'light '+l.attach, light:l.attach, kind:kindOf(l.attach),
@@ -173,7 +180,7 @@ fetch('rooms/layout.json').then(r=>r.ok?r.json():null).then(j=>{
   }
   // seed the per-trap accent lights (frost/tesla/hexward) if the layout lacks them yet
   const haveLight=new Set(np.filter(p=>p.light).map(p=>p.light));
-  for(const d of DEFAULT_PIECES) if(d.light && /^(frost|tesla|hexward|corrode|magebane)$/.test(d.light) && !haveLight.has(d.light)) np.push({...d});
+  for(const d of DEFAULT_PIECES) if(d.light && /^(frost|tesla|hexward|corrode|magebane|censer)$/.test(d.light) && !haveLight.has(d.light)) np.push({...d});
   if(np.length) pieces=np;
   if(typeof j.heroLayer==='number'){ heroLayer=j.heroLayer; const el=document.getElementById('heroLayer'); if(el) el.value=heroLayer; }
   refreshItems(); render();
@@ -183,7 +190,7 @@ let sel=0, anim=true, showLights=true, firedAt=performance.now();
 function frameIdx(rec,mode,c,type){
   const N=rec.frames.length; if(N<2) return 0;
   if(!anim) return 0;
-  if(mode==='loop') return Math.floor(performance.now()/110+c*3)%N;
+  if(mode==='loop') return Math.floor(performance.now()/(LOOP_MS[type]||110)+c*3)%N;
   const t=TIMING[type], rise=t?t.rise:RISE, fall=t?t.fall:FALL, ph=PHASE[type]||0;
   const e=(performance.now()-firedAt-c*CASCADE-ph+24e5)%2400;
   if(e<rise) return Math.max(0,Math.min(N-1,Math.floor(e/rise*N)));
@@ -221,12 +228,13 @@ function lightAlpha(p){
   if(p.kind==='candle'){ const sd=(p.light==='candle1')?4.1:1.3;
     return (0.18+0.16*((Math.sin(t/91+sd)+Math.sin(t/37+sd*1.7))*0.25+0.5))*A; }
   if(p.kind==='vapor') return 0.32*A*(0.825+0.175*Math.sin(t/260+(p.light==='venom1'?2:0)));
-  if(p.kind==='frost'||p.kind==='tesla'||p.kind==='hexward'||p.kind==='corrode'||p.kind==='magebane'){
+  if(p.kind==='frost'||p.kind==='tesla'||p.kind==='hexward'||p.kind==='corrode'||p.kind==='magebane'||p.kind==='censer'){
     const rec=ART[p.kind], N=rec?rec.frames.length:0;
     const i=N>1?frameIdx(rec,null,0,p.kind)/(N-1):0;
     if(p.kind==='tesla') return (0.14+0.40*i)*(0.62+0.38*Math.abs(Math.sin(t/55)))*A;
     if(p.kind==='hexward'||p.kind==='magebane') return (0.16+0.30*i)*(0.78+0.22*Math.sin(t/400))*A;
     if(p.kind==='corrode') return (0.18+0.30*i)*(0.85+0.15*Math.sin(t/180))*A;
+    if(p.kind==='censer') return (0.14+0.30*i)*(0.8+0.2*Math.sin(t/300))*A;
     return (0.16+0.34*i)*A;   // frost
   }
   // heat: follow the brightest flame column

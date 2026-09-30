@@ -149,6 +149,34 @@
     "mode": "loop",
     "layer": 5
    }
+  ],
+  "web": [
+   {
+    "art": "web",
+    "fx": 0.5,
+    "fy": 32,
+    "h": 108,
+    "mode": "loop",
+    "layer": 0
+   }
+  ],
+  "horn": [
+   {
+    "art": "horn",
+    "fx": 0.5,
+    "fy": 40,
+    "h": 82,
+    "layer": 3
+   }
+  ],
+  "censer": [
+   {
+    "art": "censer",
+    "fx": 0.518,
+    "fy": 64,
+    "h": 112,
+    "layer": 5
+   }
   ]
  },
  "candles": [
@@ -231,6 +259,12 @@
    "attach": "magebane",
    "fy": 60,
    "r": 54,
+   "fx": 0.5
+  },
+  {
+   "attach": "censer",
+   "fy": 96,
+   "r": 48,
    "fx": 0.5
   }
  ]
