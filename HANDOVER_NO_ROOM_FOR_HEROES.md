@@ -143,7 +143,7 @@ positions in code.**
   The harpy hovers `hover:14`. The new orc falls back to the old sheet (`orcSheet`).
 - **Corrupted** (`minion`) guards draw via `corruptLookKey`: the Edrik/Vesna LPC skin
   (`corrupt_edrik`/`corrupt_vesna`; picked by the thrall's name, else a name hash), the
-  painted demon (`minion` frames) once the room hits veteran rank 3, and the procedural
+  painted demon (`minion` frames) once the room has 3 kills (`CORRUPT_DEMON_KILLS`), and the procedural
   wraith when no art loads. The guard's `label` is draw-only.
 
 ### The LIFT (heroes + monsters share one walking line)

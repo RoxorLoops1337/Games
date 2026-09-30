@@ -14,7 +14,7 @@ import { loadGame, harness } from './no_room_for_heroes_lib.mjs';
 const GAME = join(dirname(fileURLToPath(import.meta.url)), '..', 'no_room_for_heroes');
 const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,update,draw,render,
   makeRoom,makeUnit,applyRunes,BOSSES,MON_SPRITES,MON_IMG,monSpriteReady,drawMonsterSprite,monClipName,
-  corruptSkinKey,corruptLookKey,CORRUPT_SKINS,loadFrameSeq,roomDrawInfo,VET_KILLS,FLOOR,LIFT,
+  corruptSkinKey,corruptLookKey,CORRUPT_SKINS,loadFrameSeq,roomDrawInfo,VET_KILLS,CORRUPT_DEMON_KILLS,FLOOR,LIFT,
   get G(){return G;},set G(v){G=v;},
   get X(){return X;},set X(v){X=v;},
   get bar(){return bar;},set bar(v){bar=v;}`);
@@ -205,10 +205,10 @@ A.X=origX;
   t.ok(A.corruptSkinKey(undefined)!==null, 'an unnamed thrall still gets a skin');
   const room={kills:0};
   t.ok(A.corruptLookKey('Vesna', room)==='corrupt_vesna', 'a fresh Corrupted room wears the LPC skin');
-  room.kills=A.VET_KILLS*3-1;
-  t.ok(A.corruptLookKey('Vesna', room)==='corrupt_vesna', 'still the skin one kill short of veteran rank 3');
-  room.kills=A.VET_KILLS*3;
-  t.ok(A.corruptLookKey('Vesna', room)==='minion', 'a rank-3 veteran thrall room turns into the painted demon');
+  room.kills=A.CORRUPT_DEMON_KILLS-1;
+  t.ok(A.corruptLookKey('Vesna', room)==='corrupt_vesna', 'still the skin one kill short of the demon');
+  room.kills=A.CORRUPT_DEMON_KILLS;
+  t.ok(A.corruptLookKey('Vesna', room)==='minion', 'a thrall room with 3 kills turns into the painted demon');
   // fallbacks down the chain
   const V=A.MON_IMG.corrupt_vesna.idle, E=A.MON_IMG.corrupt_edrik.idle, D=Object.values(A.MON_IMG.minion).flat();
   D.forEach(im=>im._ok=false);

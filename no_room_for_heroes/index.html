@@ -8790,12 +8790,13 @@ function corruptSkinKey(label){
   for(const s of CORRUPT_SKINS) if(monSpriteReady('corrupt_'+s)) return 'corrupt_'+s;   // one skin missing: wear the other
   return null;
 }
-// Which MON_SPRITES key a Corrupted guard draws with. A veteran thrall room (the
-// same tier-3 rank that turns skeleton3/goblin3 on, see monVariantKey) grows into the
-// painted demon; otherwise the LPC skin. Each missing look falls down the chain:
+// Which MON_SPRITES key a Corrupted guard draws with. A thrall room that has claimed
+// CORRUPT_DEMON_KILLS heroes grows into the painted demon; before that, the LPC skin.
+// Each missing look falls down the chain:
 // skin -> other skin -> demon -> 'minion' with no art = the procedural wraith.
+const CORRUPT_DEMON_KILLS=3;
 function corruptLookKey(label, room){
-  if(vetRank(room)>=3 && monSpriteReady('minion')) return 'minion';
+  if(((room&&room.kills)||0)>=CORRUPT_DEMON_KILLS && monSpriteReady('minion')) return 'minion';
   return corruptSkinKey(label) || 'minion';
 }
 function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
