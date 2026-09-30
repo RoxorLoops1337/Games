@@ -68,6 +68,7 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 - Positions/sizes/layers/lights ALL come from `rooms/layout.json` (made with align.html). Don't hand-tune draw positions in code — fix the layout or the align tool.
 - Lights: `LAYOUT.lights` {attach, fx, fy, r, a} — candle flicker / flame heat / venom vapor, additive glows.
 - Champion death anim: `sprites/champion/death/champion_death_*.png`, plays once, holds last frame.
+- Per-frame monster guards (orc, harpy, sentinel, mimic, minion): `sprites/<key>/<key>_<clip>_01.png` (or `_0`), configured in `MON_SPRITES` with `frames:true` (`s`, `ax`, `ay`, `fps`, `pp`, `once`), regenerated from the owner uploads with `tools/art/monster_frames.py`. The mimic draws `disguise:'chest'` until `g.ambushDone`, then plays `transform` once. Corrupted guards wear the Edrik/Vesna LPC skins (`corruptLookKey`), the painted demon at veteran rank 3.
 
 # Balance dials (single-constant tweaks, safe for small sessions)
 
