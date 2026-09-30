@@ -8150,9 +8150,13 @@ function drawTrapPart(x0,w,type,p,pi,cell){
     const fx=(p.fx!=null?p.fx:.5)+(c-(n-1)/2)*gap;
     const px0=x0+w*fx-dw/2, py=FLOOR-(p.fy||0)-dh;
     if(partAlpha<1){ X.save(); X.globalAlpha*=partAlpha; }
-    if(p.flip){ X.save(); X.translate(Math.round(px0+dw/2),0); X.scale(-1,1);
-      X.drawImage(img, Math.round(-dw/2), Math.round(py), Math.round(dw), Math.round(dh)); X.restore(); }
-    else X.drawImage(img, Math.round(px0), Math.round(py), Math.round(dw), Math.round(dh));
+    const put=im=>{ if(p.flip){ X.save(); X.translate(Math.round(px0+dw/2),0); X.scale(-1,1);
+        X.drawImage(im, Math.round(-dw/2), Math.round(py), Math.round(dw), Math.round(dh)); X.restore(); }
+      else X.drawImage(im, Math.round(px0), Math.round(py), Math.round(dw), Math.round(dh)); };
+    put(img);
+    const ghostA=(N>1 && mode!=='loop') ? strikeFade(firedAt!=null?firedAt+c*70:null, type) : 0;
+    const ghost=ghostA>0 && rec.frames[N-1];
+    if(ghost && (ghost._ok||ghost.complete) && ghost.width){ X.save(); X.globalAlpha*=ghostA; put(ghost); X.restore(); }
     if(partAlpha<1) X.restore();
     // light: heat per flame column (follows the strike), vapor per poison part
     if(type==='flame'){ const l=lightCfg('flame');
@@ -8420,7 +8424,7 @@ const TRAP_TIMING={
   tesla:   {rise:45,  fall:240},
   spike:   {rise:70,  fall:430},
   horn:    {rise:120, fall:620},   // snaps up to the wail, the sound-wave rings recede slowly
-  censer:  {rise:560, fwd:true},   // one smoke puff per fire, never sucked back into the censer
+  censer:  {rise:560, fwd:true, fade:260},   // …and the last puff dissolves (fade) instead of vanishing   // one smoke puff per fire, never sucked back into the censer
 };
 // Build-phase idle preview fires each trap on its own offset within the 2.4s
 // loop so a multi-trap room doesn't pulse all at once.
@@ -8474,6 +8478,10 @@ function trapAccentGlow(attach,x0,w,fx,p,col,a){
   const r=(l&&l.r)?l.r:(p.h||100)*0.55;
   drawGlow(cx,cy,r,col,a*((l&&l.a)||1));
 }
+// Forward-only traps with a `fade` let their LAST frame (e.g. the censer's smoke
+// cloud) dissolve over the rest frame for `fade` ms after the rise: 0..1 ghost alpha.
+function strikeFade(firedAt,type){ const t=TRAP_TIMING[type]; if(!(t&&t.fwd&&t.fade)||firedAt==null) return 0;
+  const e=performance.now()-firedAt-t.rise; return (e>=0&&e<t.fade) ? 1-e/t.fade : 0; }
 function strikeIdx(N,firedAt,type){
   if(firedAt==null) return 0;
   const e=performance.now()-firedAt;
@@ -9051,7 +9059,10 @@ function drawRoomContents(x0,w,room,i){
     // stand a touch to the hero's right (facing him); clamp inside the room so a
     // hero who slips deep in doesn't drag the guard out the far wall. (frontHx is a
     // WORLD x — convert to a cell fraction with the cell's world bounds, not x0/w.)
-    const targetF = engaged
+    // a disguised mimic (unsprung ambusher) never walks out to meet anyone: it lies
+    // at rest as clutter, so the hero walks up to the chest and the reveal is in melee
+    const lurk = !!(cell && cell.mon && cell.mon.ambush && !cell.mon.ambushDone);
+    const targetF = (engaged && !lurk)
       ? Math.max(0.20, Math.min(0.74, (frontHx - cellX(cell.index))/ROOM_W + 0.10))
       : 0.74;
     // build phase: stand at rest (right side) — don't inherit a stale run position

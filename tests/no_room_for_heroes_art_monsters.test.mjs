@@ -301,4 +301,17 @@ try{
 t.ok(!threw, 'update()/draw() with the new guard art never threw'
   + (threw ? (': '+threw.message+'\n'+String(threw.stack||'').split('\n').slice(0,4).join('\n')) : ''));
 
+// ---- 9) a disguised mimic lies in wait at rest: the guard pack does not walk out to meet the hero ----
+try{
+  A.G = A.freshGame('campaign'); A.chooseBoss(BOSS);
+  A.G.slots = 1; A.G.rooms = [A.makeRoom('mimic', 1)];
+  A.prepCampaignWave(); A.startWave();
+  const room=A.G.rooms[0], cell=A.G.cells[0];
+  let minF=1, sprung=false;
+  for(let i=0;i<400 && A.G.phase==='run';i++){ A.update(0.05); A.draw();
+    if(cell.mon && !cell.mon.ambushDone && room._monF!=null) minF=Math.min(minF, room._monF);
+    if(cell.mon && cell.mon.ambushDone) { sprung=true; break; } }
+  t.ok(minF>=0.73, 'an unsprung mimic holds its rest spot (min '+minF.toFixed(3)+')');
+  t.ok(sprung, 'the hero reaches the chest and the ambush springs');
+}catch(e){ t.ok(false, 'mimic lurk threw: '+e.message); }
 t.done();

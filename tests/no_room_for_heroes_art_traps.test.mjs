@@ -51,7 +51,7 @@ t.ok(/light:'censer'/.test(AL), 'align.html has the censer light piece');
 // ---- 3) game config --------------------------------------------------------------
 const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,update,draw,render,
   makeRoom,BOSSES,ART,LAYOUT,TRAP_ANIM,TRAP_LOOP_MS,TRAP_TIMING,TRAP_PHASE,TRAP_LAYER,LIGHT_COL,ROOMS,
-  strikeIdx,drawTrapPart,drawTrapProp,drawWebRoot,WEB_ROOT_IMG,FLOOR,
+  strikeIdx,strikeFade,drawTrapPart,drawTrapProp,drawWebRoot,WEB_ROOT_IMG,FLOOR,
   get G(){return G;},set G(v){G=v;},
   get X(){return X;},set X(v){X=v;},
   get HERO_LAYER(){return HERO_LAYER;},set HERO_LAYER(v){HERO_LAYER=v;}`);
@@ -160,6 +160,9 @@ function freshRun(types){
   A.G.slots = types.length;
   A.G.rooms = types.map(tp=>A.makeRoom(tp, 2));
   A.prepCampaignWave(); A.startWave();
+  // rogues disarm every trap room they enter, so a random all-rogue party would fire
+  // nothing; make the wave deterministic for the "traps fired" checks below
+  for(const h of A.G.heroes||[]) if(h && h.cls==='rogue') h.cls='warrior';
 }
 for(const loaded of [true, false]){
   const tag = loaded ? 'art loaded' : 'art missing (procedural fallback)';
@@ -193,4 +196,13 @@ for(const loaded of [true, false]){
   }catch(e){ t.ok(false, 'update/draw threw ('+tag+'): '+e.message+'\n'+String(e.stack||'').split('\n').slice(0,4).join('\n')); }
 }
 A.HERO_LAYER = 999;
+// ---- 6) the censer's smoke cloud dissolves instead of vanishing in one frame ----
+{
+  const T=A.TRAP_TIMING.censer, now=performance.now();
+  t.ok(T && T.fwd && T.fade>0 && T.rise+T.fade<850, 'censer: forward-only with a fade that fits inside its 0.85s fire rate');
+  t.ok(A.strikeFade(now-T.rise-10,'censer')>0.8, 'just after the puff peaks the last frame is still nearly opaque');
+  t.ok(A.strikeFade(now-T.rise-T.fade-20,'censer')===0, 'after the fade window the ghost is gone');
+  t.ok(A.strikeFade(now-10,'censer')===0 && A.strikeFade(null,'censer')===0 && A.strikeFade(now-T.rise-10,'spike')===0,
+    'no ghost while rising, when unfired, or on traps without a fade');
+}
 t.done();
