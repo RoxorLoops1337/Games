@@ -8723,9 +8723,9 @@ const MON_SPRITES={
     attack:   {seq:'mimic_attack',   n:4,fps:10, s:0.343, ax:94, ay:155} }},
   // 🧟 Corrupted, veteran look: the painted horned demon (see corruptLookKey).
   minion:{ frames:true, dir:'sprites/minion/', idle:'idle', atk:'attack', clips:{
-    idle:  {seq:'minion_idle',  n:3,fps:4, pp:true, s:0.394, ax:60, ay:130},
-    walk:  {seq:'minion_walk',  n:4,fps:8,  s:0.394, ax:67, ay:131},
-    attack:{seq:'minion_attack',n:4,fps:10, s:0.394, ax:131, ay:124} }},
+    idle:  {seq:'minion_idle',  n:3,fps:4, pp:true, s:0.47, ax:60, ay:130},     // ~60 world px: a veteran reads bigger than the thrall
+    walk:  {seq:'minion_walk',  n:4,fps:8,  s:0.47, ax:67, ay:131},
+    attack:{seq:'minion_attack',n:4,fps:10, s:0.47, ax:131, ay:124} }},
   // Veteran-tier appearances: a guard's room upgrades its look as it racks up
   // kills (see monVariantKey). Same LPC pipeline as the base sprites; the 192px
   // attack sheets carry their swing arc, the 64px idle/walk are the body.
