@@ -5014,7 +5014,7 @@ function buildCells(){
           guards.push({type:u.type, hp, maxHp:hp, atk, atkT:0, alive:true, split:!!def.split,
                        breath:def.breath||null, haste:ge.haste, ambush:!!def.ambush,
                        dr:Math.max(ge.dr||0, def.dr||0), leech:ge.leech, proc:ge.proc, crush:ge.crush, poison:ge.poison, thorns:ge.thorns,
-                       gear:(u.gear||[]).slice()});
+                       gear:(u.gear||[]).slice(), label:u.label});   // label: draw-only (a thrall's name picks its look)
         } else if(def.kind==='shop'){
           hasShop=true; (r.stock||[]).forEach(s=>s.sold=false);
         }
@@ -7562,7 +7562,7 @@ function fightTick(h, mon, dt, cell, isFront, frozen){
         if(!t || t.state==='dead') continue;
         const vr=cell.vet||0; const bite=vr?Math.round(vr*VET_BITE*t.maxHp):0;
         let dmg=Math.round((g.atk+bite)*amp);
-        if(g.ambush && !g.ambushDone){ g.ambushDone=true; dmg*=3; floater(cell.x0+ROOM_W*0.6, FLOOR-90, '👄 AMBUSH!', '#9a5cff'); }
+        if(g.ambush && !g.ambushDone){ g.ambushDone=true; g.ambushAt=performance.now(); dmg*=3; floater(cell.x0+ROOM_W*0.6, FLOOR-90, '👄 AMBUSH!', '#9a5cff'); }
         _roomDmgCtx=cell.room; dealToHero(t, dmg, 'HIT'); _roomDmgCtx=null;
         if(G.stats) G.stats.monDmg+=dmg;
         if(g.leech){ const heal=Math.round(dmg*g.leech);   // 💍 Charm: the monster drinks the wound
@@ -8636,6 +8636,13 @@ function drawSprite(sx, footY, h, key, scaleMul=1){
   return true;
 }
 // ---- animated monster sprites (guard a room; face LEFT toward the raiders) ----
+// A per-frame clip (<path>_01.png, _02 ...; the 0-based <path>_0.png naming also
+// works). A missing or corrupt frame never gets _ok and the draw just skips it.
+function loadFrameSeq(path,n){ const a=[];
+  for(let k=0;k<n;k++){ const im=new Image(); im.onload=()=>{ im._ok=true; };
+    im.onerror=()=>{ if(im._alt) return; im._alt=1; im.src=path+'_'+k+'.png'; };
+    im.src=path+'_'+String(k+1).padStart(2,'0')+'.png'; a.push(im); }
+  return a; }
 const MON_SPRITES={
   goblin:{ base:'sprites/goblin/goblin_', scale:0.8, dirRow:1, idle:'idle', atk:'slash', clips:{
     idle: {sheet:'idle', fw:64,fh:64,n:2,fps:4,  ax:25, ay:61},
@@ -8683,11 +8690,42 @@ const MON_SPRITES={
     idle: {sheet:'idle', fw:298,fh:210,n:6,fps:7,  ax:174, ay:210},
     slash:{sheet:'slash',fw:346,fh:210,n:7,fps:13, ax:172, ay:210},
   }},
-  // 🪓 Orc Marauder: a static 2-frame idle bob (cropped from the orc-warrior art),
-  // mirrored to face LEFT toward incoming heroes. Anchor = frame centre / feet in
-  // source px; no walk/attack clips → always draws idle. Graceful emoji fallback.
-  orc:{ base:'sprites/orc/orc_', scale:1.7, dirRow:0, idle:'idle', atk:'idle', clips:{
+  // Per-frame guards (frames:true): one PNG per frame at native pixel-art size, made
+  // from the owner's uploads by tools/art/monster_frames.py. Per clip: s = world px
+  // per native px, ax/ay = foot anchor in native px, pp = ping-pong, once = play once.
+  // All of this art already faces LEFT (a `flip` flag mirrors future art that doesn't).
+  // 🪓 Orc Marauder: idle / walk / mace swing. Falls back to the old 2-frame sheet.
+  orc:{ frames:true, dir:'sprites/orc/', fallback:'orcSheet', idle:'idle', atk:'attack', clips:{
+    idle:  {seq:'orc_idle',  n:4,fps:5, pp:true, s:0.566, ax:126, ay:114},
+    walk:  {seq:'orc_walk',  n:5,fps:9,  s:0.566, ax:114, ay:136},
+    attack:{seq:'orc_attack',n:6,fps:11, s:0.566, ax:213, ay:201} }},
+  // Legacy orc: a static 2-frame idle bob (cropped from the orc-warrior art),
+  // mirrored to face LEFT. Only drawn when the per-frame orc art is missing.
+  orcSheet:{ base:'sprites/orc/orc_', scale:1.7, dirRow:0, idle:'idle', atk:'idle', clips:{
     idle:{sheet:'idle', fw:192,fh:192,n:2,fps:3, ax:96, ay:125} }},
+  // 🦅 Harpy Roost: hovers `hover` px off the floor and bobs; no walk clip, so it
+  // glides with the pack on its idle wingbeat.
+  harpy:{ frames:true, dir:'sprites/harpy/', hover:14, idle:'idle', atk:'attack', clips:{
+    idle:  {seq:'harpy_idle',  n:6,fps:8,  s:0.386, ax:86, ay:185},
+    attack:{seq:'harpy_attack',n:5,fps:10, s:0.386, ax:89, ay:145} }},
+  // 🪨 Stone Sentinel: the biggest walker (~70 px).
+  sentinel:{ frames:true, dir:'sprites/sentinel/', idle:'idle', atk:'attack', clips:{
+    idle:  {seq:'sentinel_idle',  n:3,fps:4, pp:true, s:0.714, ax:48, ay:99},
+    walk:  {seq:'sentinel_walk',  n:5,fps:8,  s:0.714, ax:71, ay:103},
+    attack:{seq:'sentinel_attack',n:4,fps:8,  s:0.714, ax:77, ay:94} }},
+  // 👄 Mimic: sits as a closed chest (disguise) until its ambush strike, bursts open
+  // once (reveal), then walks. idle and walk share the walk frames (one load per seq).
+  mimic:{ frames:true, dir:'sprites/mimic/', disguise:'chest', reveal:'transform', idle:'idle', atk:'attack', clips:{
+    chest:    {seq:'mimic_chest',    n:1,fps:1,  s:0.256, ax:74, ay:134},
+    transform:{seq:'mimic_transform',n:3,fps:10, once:true, s:0.343, ax:90, ay:135},
+    idle:     {seq:'mimic_walk',     n:6,fps:4,  s:0.343, ax:99, ay:135},
+    walk:     {seq:'mimic_walk',     n:6,fps:10, s:0.343, ax:99, ay:135},
+    attack:   {seq:'mimic_attack',   n:4,fps:10, s:0.343, ax:94, ay:155} }},
+  // 🧟 Corrupted, veteran look: the painted horned demon (see corruptLookKey).
+  minion:{ frames:true, dir:'sprites/minion/', idle:'idle', atk:'attack', clips:{
+    idle:  {seq:'minion_idle',  n:3,fps:4, pp:true, s:0.394, ax:60, ay:130},
+    walk:  {seq:'minion_walk',  n:4,fps:8,  s:0.394, ax:67, ay:131},
+    attack:{seq:'minion_attack',n:4,fps:10, s:0.394, ax:131, ay:124} }},
   // Veteran-tier appearances: a guard's room upgrades its look as it racks up
   // kills (see monVariantKey). Same LPC pipeline as the base sprites; the 192px
   // attack sheets carry their swing arc, the 64px idle/walk are the body.
@@ -8703,6 +8741,16 @@ const MON_SPRITES={
     idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:25,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:25,ay:61}, slash:{sheet:'slash',fw:192,fh:192,n:5,fps:12,ax:96,ay:126} }},
   goblin3:{ base:'sprites/goblin3/goblin3_', scale:0.8, dirRow:1, idle:'idle', atk:'smash', clips:{
     idle:{sheet:'idle',fw:64,fh:64,n:2,fps:4,ax:25,ay:61}, walk:{sheet:'walk',fw:64,fh:64,n:8,fps:10,ax:25,ay:61}, smash:{sheet:'smash',fw:192,fh:192,n:4,fps:11,ax:96,ay:126} }},
+  // Corrupted (turned hero) skins: LPC zombie sheets, row 1 faces LEFT. Picked per
+  // thrall by corruptSkinKey().
+  corrupt_edrik:{ base:'sprites/edrik/edrik_', scale:0.9, dirRow:1, idle:'idle', atk:'slash', clips:{
+    idle: {sheet:'idle', fw:64,fh:64,n:2,fps:4,  ax:31, ay:61},
+    walk: {sheet:'walk', fw:64,fh:64,n:8,fps:10, ax:31, ay:61},
+    slash:{sheet:'slash',fw:64,fh:64,n:5,fps:12, ax:31, ay:61} }},
+  corrupt_vesna:{ base:'sprites/vesna/vesna_', scale:0.9, dirRow:1, idle:'idle', atk:'thrust', clips:{
+    idle:  {sheet:'idle',  fw:192,fh:192,n:2,fps:4,  ax:99, ay:126},
+    walk:  {sheet:'walk',  fw:192,fh:192,n:8,fps:10, ax:99, ay:126},
+    thrust:{sheet:'thrust',fw:192,fh:192,n:7,fps:14, ax:99, ay:126} }},
 };
 // A guard's room shows a fancier sprite as it becomes a veteran (kills → vetRank):
 // base → tier-2 (rank ≥1) → tier-3 (rank ≥3). Only skeleton/ogre/goblin have variants.
@@ -8716,13 +8764,86 @@ function monVariantKey(key, room){
 const MON_IMG={};
 if(typeof Image!=='undefined'){
   for(const key in MON_SPRITES){ const cfg=MON_SPRITES[key]; MON_IMG[key]={};
-    for(const c in cfg.clips){ const sh=cfg.clips[c].sheet; if(!MON_IMG[key][sh]){ MON_IMG[key][sh]=loadImg(cfg.base+sh+'.png'); } } }
+    for(const c in cfg.clips){
+      const cl=cfg.clips[c];
+      if(cfg.frames){                            // per-frame art: images keyed by seq (clips may share one)
+        if(!MON_IMG[key][cl.seq]) MON_IMG[key][cl.seq] = cl.n>1 ? loadFrameSeq(cfg.dir+cl.seq, cl.n) : [loadImg(cfg.dir+cl.seq+'.png')];
+        continue;
+      }
+      const sh=cl.sheet; if(!MON_IMG[key][sh]){ MON_IMG[key][sh]=loadImg(cfg.base+sh+'.png'); } } }
 }
-function monSpriteReady(key){ const s=MON_IMG[key]; return !!(s && s.idle && s.idle._ok); }
+function monSpriteReady(key){
+  const cfg=MON_SPRITES[key], s=MON_IMG[key]; if(!cfg||!s) return false;
+  // per-frame guards are ready once ANY frame landed (or their fallback sheet did)
+  if(cfg.frames) return Object.values(s).some(a=>a.some(im=>im&&im._ok)) || (!!cfg.fallback && monSpriteReady(cfg.fallback));
+  return !!(s.idle && s.idle._ok);
+}
+// 🧟 Corrupted guards wear a turned hero's LPC look: a thrall literally named Edrik
+// or Vesna wears its own, any other name gets a fixed one from a hash of the name
+// (so the same thrall always looks the same). Draw-time only, nothing is saved.
+const CORRUPT_SKINS=['edrik','vesna'];
+function corruptSkinKey(label){
+  const n=String(label||'').trim().toLowerCase();
+  let k=CORRUPT_SKINS.includes(n)?n:null;
+  if(!k){ let h=0; for(let i=0;i<n.length;i++) h=(h*31+n.charCodeAt(i))|0; k=CORRUPT_SKINS[Math.abs(h)%CORRUPT_SKINS.length]; }
+  if(monSpriteReady('corrupt_'+k)) return 'corrupt_'+k;
+  for(const s of CORRUPT_SKINS) if(monSpriteReady('corrupt_'+s)) return 'corrupt_'+s;   // one skin missing: wear the other
+  return null;
+}
+// Which MON_SPRITES key a Corrupted guard draws with. A veteran thrall room (the
+// same tier-3 rank that turns skeleton3/goblin3 on, see monVariantKey) grows into the
+// painted demon; otherwise the LPC skin. Each missing look falls down the chain:
+// skin -> other skin -> demon -> 'minion' with no art = the procedural wraith.
+function corruptLookKey(label, room){
+  if(vetRank(room)>=3 && monSpriteReady('minion')) return 'minion';
+  return corruptSkinKey(label) || 'minion';
+}
 function monsterAttacking(cell){ return !!(cell && G.phase==='run' && (G.heroes||[]).some(h=>h && h.state==='fighting' && h.cellIndex===cell.index)); }
-function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase, scaleMul){
+// Per-frame guards: which clip plays right now. `g` is the live guard (null in the
+// build preview). The mimic is a chest until its ambush lands, then bursts open once.
+function monClipName(cfg, g, moving, attacking, now){
+  if(cfg.disguise && !(g && g.ambushDone)) return cfg.disguise;
+  const rv=cfg.reveal && cfg.clips[cfg.reveal];
+  if(rv && g && g.ambushAt && now-g.ambushAt < rv.n/rv.fps*1000) return cfg.reveal;
+  if(moving && cfg.clips.walk) return 'walk';
+  return attacking ? cfg.atk : cfg.idle;
+}
+function drawMonsterFrames(cx, footY, room, cell, key, cfg, alive, moving, phase, scaleMul, g){
+  const now=performance.now();
+  let name=monClipName(cfg, g, moving, alive && monsterAttacking(cell), now), clip=cfg.clips[name];
+  const imgs=MON_IMG[key]||{};
+  let fr=(imgs[clip.seq]||[]).filter(im=>im&&im._ok);           // holes (a corrupt frame) are skipped
+  if(!fr.length){ name=cfg.idle; clip=cfg.clips[name]; fr=(imgs[clip.seq]||[]).filter(im=>im&&im._ok); }
+  if(!fr.length) return false;
+  // same per-key timer as the sheet path, but on the live guard when there is one:
+  // two mimics in a room can sit in different clips (one still a chest)
+  const H=g||room, KC='_mc_'+key, KT='_mt_'+key, KL='_ml_'+key;
+  if(H[KC]!==name){ H[KC]=name; H[KT]=0; }
+  const dt=Math.min(0.1,(now-(H[KL]||now))/1000); H[KL]=now;
+  H[KT]=(H[KT]||0)+dt;
+  const len=fr.length; let fi;
+  if(clip.once) fi=Math.min(len-1, Math.floor((now-((g&&g.ambushAt)||now))/1000*clip.fps));
+  else if(clip.pp){ if(!clip._pp||clip._pp.n!==len){ clip._pp=pingpong(len); clip._pp.n=len; }
+    fi=clip._pp[Math.floor((H[KT]+(phase||0))*clip.fps)%clip._pp.length]; }
+  else fi=Math.floor((H[KT]+(phase||0))*clip.fps)%len;
+  const im=fr[fi], S=clip.s*(scaleMul||1);
+  const dw=Math.round(im.width*S), dh=Math.round(im.height*S), dy=Math.round(footY-clip.ay*S);
+  // crisp while magnified, but smooth once a zoomed-out camera shrinks the art below
+  // ~1 device px per art px (nearest-neighbour would drop whole pixel rows)
+  const T=X.getTransform&&X.getTransform(), sm=X.imageSmoothingEnabled;
+  X.imageSmoothingEnabled = S*((T&&T.a)||1) < 1.25;
+  if(cfg.flip){ X.save(); X.translate(cx,0); X.scale(-1,1); X.drawImage(im, Math.round(-clip.ax*S), dy, dw, dh); X.restore(); }
+  else X.drawImage(im, Math.round(cx-clip.ax*S), dy, dw, dh);
+  X.imageSmoothingEnabled=sm;
+  return true;
+}
+function drawMonsterSprite(cx, footY, room, cell, key, alive, moving, phase, scaleMul, g){
   key=monVariantKey(key, room);                  // 💀 veteran rooms wear a fancier sprite
   const cfg=MON_SPRITES[key]; if(!cfg||!room) return false;
+  if(cfg.frames){
+    if(drawMonsterFrames(cx, footY, room, cell, key, cfg, alive, moving, phase, scaleMul, g||null)) return true;
+    return !!cfg.fallback && drawMonsterSprite(cx, footY, room, cell, cfg.fallback, alive, moving, phase, scaleMul, g);
+  }
   const name = moving && cfg.clips.walk ? 'walk'
              : (alive && monsterAttacking(cell)) ? cfg.atk : cfg.idle;
   const clip=cfg.clips[name], img=MON_IMG[key][clip.sheet];
@@ -8838,8 +8959,10 @@ function roomDrawInfo(room){
         layer:(pp.layer!=null?pp.layer:(TRAP_LAYER[tp]!=null?TRAP_LAYER[tp]:1))}));
     }
     items.sort((a,b)=>a.layer-b.layer);
+    // the guard UNITS in guardParts order, so the build preview can read each thrall's name
+    const guardUnits=(units||[]).filter(u=>u && ROOMS[u.type] && ROOMS[u.type].kind==='monster' && u.type!=='goblin');
     c=room._rdi={units, len:(units?units.length:-1), rev:_layoutRev, type:room.type,
-      parts, monParts, guardParts, trapTypes, items, hasGob:monParts.includes('goblin')};
+      parts, monParts, guardParts, guardUnits, trapTypes, items, hasGob:monParts.includes('goblin')};
   }
   return c;
 }
@@ -8941,30 +9064,50 @@ function drawRoomContents(x0,w,room,i){
     const mbx = x0 + w*room._monF;                     // animated monster base x
     // Run phase draws the LIVE guards (a Gel Cube SPLIT can grow this beyond the
     // placed-unit count); build phase previews the placed units. Each entry is
-    // {type, small}. Gel Cubes (split) PAINT FIRST so they sit behind the rest.
+    // {type, small, g (the live guard, null in build), label (a thrall's name)}.
+    // Gel Cubes (split) PAINT FIRST so they sit behind the rest.
     const drawList = (G.phase==='run' && cell && cell.guards)
-      ? cell.guards.filter(g=>g && g.alive).map(g=>({type:g.type, small:!!g.small}))
-      : guardParts.map(mp=>({type:mp, small:false}));
+      ? cell.guards.filter(g=>g && g.alive).map(g=>({type:g.type, small:!!g.small, g, label:g.label}))
+      : guardParts.map((mp,gi)=>({type:mp, small:false, g:null, label:((info.guardUnits||[])[gi]||{}).label}));
     const n=drawList.length, sp=n>3?20:(n>2?28:44);
     const order=[...drawList.keys()].sort((a,b)=>((ROOMS[drawList[a].type]||{}).split?0:1)-((ROOMS[drawList[b].type]||{}).split?0:1));
     for(const li of order){
       const g=drawList[li], mp=g.type, def=ROOMS[mp], sprite=mp==='minion'?'minion':mp;
+      const mc=MON_SPRITES[mp];
       const ox=(li-(n-1)/2)*sp;                                // stand them side by side
       const oy=(n>1)?[0,3,1,4,2][li%5]:0;                      // distinct heights so a stack reads as a crowd
       const ph=li*0.31, sc=g.small?0.7:1;                      // de-sync cycles; split cubes draw smaller
       // 🐲 Drakeling is a flyer: hover high on the room's RIGHT and don't wade in (no walk)
       const fly=mp==='dragon';
-      const dgx=fly ? x0+w*0.82 : mbx+ox;
-      const dgy=fly ? FLOOR-DRAKE_HOVER+Math.sin(performance.now()/450+li)*7 : FLOOR-LIFT-oy;
-      const drew = MON_SPRITES[mp] && monSpriteReady(mp) && drawMonsterSprite(dgx, dgy, room, cell, mp, alive, fly?false:moving, ph, sc);
+      let gx=mbx+ox, gMove=moving;
+      if(mc && mc.disguise){
+        const gg=g.g;
+        if(!gg || !gg.ambushDone){ gx=x0+w*0.74+ox; gMove=false; }   // 👄 a chest doesn't walk with the pack
+        else {                                                    // sprung: burst open in place, then scuttle over
+          const rv=mc.clips[mc.reveal], revMs=rv ? rv.n/rv.fps*1000 : 0;
+          if(gg._pinF===undefined) gg._pinF=0.74;
+          if(!(gg.ambushAt && now-gg.ambushAt<revMs)){ const d=room._monF-gg._pinF, st=rate*mdt;
+            gg._pinF = Math.abs(d)<=st ? room._monF : gg._pinF+Math.sign(d)*st; }
+          gx=x0+w*gg._pinF+ox; gMove=moving || (alive && Math.abs(gg._pinF-room._monF)>0.004);
+        }
+      }
+      const hov=mc && mc.hover;                                // 🦅 the harpy hovers and bobs over the floor
+      const dgx=fly ? x0+w*0.82 : gx;
+      const dgy=fly ? FLOOR-DRAKE_HOVER+Math.sin(performance.now()/450+li)*7
+                    : FLOOR-LIFT-oy-(hov ? hov+Math.sin(performance.now()/380+li)*4 : 0);
+      // 🧟 a Corrupted guard wears its thrall's look (LPC skin, or the demon once a veteran)
+      const mk = mp==='minion' ? corruptLookKey(g.label||room.label, room) : mp;
+      const drew = MON_SPRITES[mk] && monSpriteReady(mk) && drawMonsterSprite(dgx, dgy, room, cell, mk, alive, fly?false:gMove, ph, sc, g.g);
       if(!drew) drawMonster(dgx, sprite, def.col);
       if(cell && cell.mon && cell.mon.flashAt){ const mf=performance.now()-cell.mon.flashAt;   // struck-just-now flash
         if(mf<120){ X.save(); X.globalAlpha=(1-mf/120)*0.45; X.globalCompositeOperation='lighter';
           X.fillStyle='#ffffff'; X.beginPath(); X.ellipse(dgx, dgy-26, 20, 30, 0,0,6.2832); X.fill(); X.restore(); } }
     }
-    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run'){
+    if(cell&&cell.mon&&cell.mon.alive&&G.phase==='run' && !(cell.mon.ambush && !cell.mon.ambushDone)){   // 👄 no bar gives an unsprung mimic away
       const mb=cell.mon.type==='dragon';                       // put the bar by the hovering drakeling
-      bar((mb?x0+w*0.82:mbx)-26, (mb?FLOOR-DRAKE_HOVER-26:FLOOR-78), 52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
+      const hv=(MON_SPRITES[cell.mon.type]||{}).hover||0;       // …and above a hovering harpy
+      const bx=mb ? x0+w*0.82 : (cell.mon._pinF!==undefined ? x0+w*cell.mon._pinF : mbx);   // a sprung mimic scuttles on its own
+      bar(bx-26, (mb?FLOOR-DRAKE_HOVER-26:FLOOR-78-hv), 52,6, cell.mon.hp/cell.mon.maxHp,'#ff4d6d', cell.mon);
     }
     // 💎 equipped-gear badge (build phase) — show what this room's monsters loot-out with
     if(G.phase==='build'){
