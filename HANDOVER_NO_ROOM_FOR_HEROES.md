@@ -133,6 +133,18 @@ positions in code.**
   (`sprites/slime/slime_*.png`); walk frames were scaled up ~1.4× so the cube stays
   the same size across clips. Monsters still WITHOUT sprites (procedural): `totem`,
   `warcamp`, `minion` — they'd need directional LPC sheets.
+- **Per-frame guards** (`frames:true` in `MON_SPRITES`: orc, harpy, sentinel, mimic,
+  minion): one PNG per frame at `sprites/<key>/<key>_<clip>_01.png` (or `_0`), each
+  clip with `s` (world px per native px), `ax/ay` foot anchor, `fps`, `pp` (ping-pong),
+  `once`. Regenerate from the owner's upscaled uploads with
+  `python3 tools/art/monster_frames.py "<upload dir>" no_room_for_heroes`. The mimic
+  draws `disguise:'chest'` (no HP bar) until its ambush sets `g.ambushDone`/`g.ambushAt`,
+  plays `transform` once, then walks; guards are rebuilt per wave so it re-disguises.
+  The harpy hovers `hover:14`. The new orc falls back to the old sheet (`orcSheet`).
+- **Corrupted** (`minion`) guards draw via `corruptLookKey`: the Edrik/Vesna LPC skin
+  (`corrupt_edrik`/`corrupt_vesna`; picked by the thrall's name, else a name hash), the
+  painted demon (`minion` frames) once the room has 3 kills (`CORRUPT_DEMON_KILLS`), and the procedural
+  wraith when no art loads. The guard's `label` is draw-only.
 
 ### The LIFT (heroes + monsters share one walking line)
 - `const LIFT=14`. Heroes get `h.yOff=-LIFT` (flat — no per-hero spread; they walk

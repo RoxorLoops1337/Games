@@ -31,7 +31,42 @@ by its card key (the left column below):
 | totem.png   | 🗿 War Totem     |
 | slime.png   | 🟩 Gel Cube      |
 | shop.png    | 🛒 Shop          |
-| minion.png  | 🧟 Corrupted (optional) |
+| web.png     | 🕸️ Web Snare     |
+| horn.png    | 📯 Wailing Horn  |
+| censer.png  | 🌀 Confusion Censer |
+| harpy.png   | 🦅 Harpy Roost   |
+| mimic.png   | 👄 Mimic         |
+| minion.png  | 🧟 Corrupted     |
+| sentinel.png| 🪨 Stone Sentinel (still missing) |
+| orc.png     | 🪓 Orc Marauder (still missing) |
 
 If they arrived as one big grid/sheet instead, just upload the sheet and tell me
 the grid layout — I'll slice and name them.
+
+## Combo Codex icons
+
+`codex.png` + `codex_<key>.png`, 100x100 transparent cut-outs. They show in the
+Combo Codex (reaction cards, the elements & statuses strip, the title and the
+Library button), in card/room tooltips and in the hero inspect panel. A missing
+or broken file falls back to the emoji, so re-uploading under the same name just
+works. Uploads named `icon_combocodex_<key>.png` are renamed to `codex_<key>.png`
+(and `icon_combocodex.png` to `codex.png`).
+
+| file                  | shows                      |
+|-----------------------|----------------------------|
+| codex.png             | the Combo Codex book       |
+| codex_ignite.png      | Ignite reaction            |
+| codex_combust.png     | Combust reaction           |
+| codex_thermalshock.png| Thermal Shock reaction     |
+| codex_encase.png      | Encase reaction, frozen    |
+| codex_shatter.png     | Shatter reaction           |
+| codex_conduct.png     | Conduct reaction           |
+| codex_overload.png    | Overload reaction          |
+| codex_detonate.png    | Detonate reaction          |
+| codex_fire.png        | fire element, burning      |
+| codex_ice.png         | ice element, chilled       |
+| codex_shock.png       | shock element, shocked     |
+| codex_phys.png        | phys element               |
+| codex_oiled.png       | oil element, oiled         |
+| codex_poisoned.png    | poisoned status            |
+| codex_marked.png      | marked status              |

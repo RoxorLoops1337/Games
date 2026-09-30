@@ -186,7 +186,7 @@ t.ok(fm(100) < 2.0 && fm(100) > 1.5, `tamed late game: 100 kills → ×${fm(100)
 
 // --- 🔗 TRAP SYNERGIES: a curated trap pair → a themed room + damage amp + rider ---
 const synKeys = Object.keys(A.SYNERGIES);
-t.ok(synKeys.length === 35, `all 35 curated synergy pairs are defined (${synKeys.length})`);
+t.ok(synKeys.length === 102, `all 102 curated synergy pairs are defined (${synKeys.length})`);
 let badSyn = '';
 for(const k of synKeys){
   const s = A.SYNERGIES[k], ids = k.split('+');
