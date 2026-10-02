@@ -6810,6 +6810,348 @@ The enemies' moves were left alone (their numbers are in the move text and its D
 - Tests: `tests/clawspire_balance.test.mjs` checks the `bal` dials (small, the twins +1 grab, the scoop -1 grab, every
   crawler keeps 2+ grabs with the scoop) and that a new run gets them; the data and game suites pin Mama Mech's 84 hp.
 
+## Capsule fever (round 17)
+
+The owner loves the capsules and asked for more fun, more visual animation and more addictive loot,
+while loot must stay rare and never make a run easier (a run should still kill you about 70% of the
+time). So this round is feel and collection only: nothing here touches `LOOT.WEIGHTS`, `LOOT.UP`,
+`LOOT.PITY`, `LOOT.PRIZES`, `VAULT.CAP_W` or any prize. Code: `data.js` (`DATA.GACHA`, appended after
+the DATA module), `game.js` (the GACHA block before `state()`, reached through one-line hooks),
+`render.js` (`RENDER.gacha`, appended after the RENDER module), `audio.js` (the GACHA block after
+CAB), `index.html` (`<style id="gacha-css">`), `lang_nl2.js` (the GACHA block). `GAME.gacha` is the
+test surface.
+
+**The build-up** (both rituals: the run capsule and the Vault Capsule).
+- Every crack throws shell chips in the capsule's colour (canvas, `RENDER.gacha.chips`, 80 at most,
+  halved in calm mode) and plays `gachaTap`, a glassy note that climbs a scale with each tap.
+- One tap left, the capsule is PRIMED: it trembles (`gachaJit`), light leaks out of the cracks as
+  beams in its colour (`RENDER.gacha.leak`), sparks drift off it, a hum (`gachaPrime`, buzz
+  `g17Prime`).
+- The rare tease: a common or uncommon capsule whose look-seed says so (`DATA.GACHA.tease`, 20%,
+  stable per capsule, never a rare or legendary) flickers gold 0.35 s after it is primed: gold
+  beams, a gold ring, the shell flashing gold for a moment, a shimmer that fizzles (`gachaTease`),
+  then it settles back. Looks only: its tier, prize and payout never change.
+- The last tap pays at once, as before (a reload from here lands on the card), but the pop waits
+  a charge (`GK.pre`: 0.22 / 0.32 / 0.6 / 1.25 s by tier; x0.6 for a veteran, x0.4 calm): the
+  capsule shakes harder, the beams grow, a riser (`gachaCharge`, longer and brighter by tier),
+  buzz `g17Charge`. A tap during the charge pops it and shows the card; Skip pops at once (no
+  charge, no linger).
+- The pop: chips burst, the rarity chime ladder (`gachaChime`: two notes for common up to a long
+  run for legendary), confetti by tier (uncommon adds streams from both sides, rare a star ring,
+  legendary a coin rain), the tier label slams in (`.g17slam`, rare and up).
+- A legendary gets its own moment: through the charge the room goes dark around the capsule, gold
+  god rays sweep the whole screen and sparks rush in (`RENDER.gacha.legend`); the pop adds the
+  `gachaLegend` jingle, buzz `g17Legend`, a bigger shake and the old slow motion; the moment
+  lingers 0.9 s before the card (`GK.hold`, rare 0.25 s) and the gold rays stay behind the card.
+- Hold to crack: a press that is not on a button auto-taps after 0.3 s, then every 0.19 s, and
+  stops at the burst (`gachaBind`, `G17.hold`).
+
+**Open all.** Two or more unopened capsules on the reward screen show an Open all (N) button under
+the slots (a DOM tap, never a `GAME.choose` entry, so the cards stay 0..2 and Skip 3); the banked
+capsule's ritual shows Open all (N) beside Skip. The capsules drop onto little pedestals (rows of
+up to three), then pop one after another (0.32 s apart, 0.2 for a veteran; a tap hurries, Skip pops
+the rest): each is paid at its pop (`gachaPayCap`: the prize, its mini, highlights, `meta.loot.caps`,
+saved at once), its prize appears in its place (the item or relic art, a coin stack, tickets, its
+icon) with its mini beside it, then a label under each and Collect all. The screen saves as
+`sd.capsule = {all, caps, rwIdx | bank, then}`: a reload resumes the fan with the paid ones popped,
+never paying twice; banked capsules leave `run.caps` when the fan starts and live in the screen's
+save until paid.
+
+**Capsule Minis** (`DATA.GACHA`). Twenty four collectible figurines in four series of six (two
+common, two uncommon, a rare, a legendary each): Arcade Pals, Spire Snacks, Neon Beasts, Lucky
+Charms. Each has its own drawing (`RENDER.gacha.BODY`, a face that blinks, a stand in its rarity).
+- A run capsule carries one `CHANCE` of the time by its tier (c 30%, u 45%, r 70%, l 100%); a Vault
+  or daily capsule always does. The mini's rarity follows `W` by the capsule's tier (a common
+  capsule: c 62, u 28, r 8, l 2). Rolled at the burst from its own stream (meta counters), so the
+  capsule's tiers and prizes and the run's rng are untouched (a test runs 14 capsules with the minis
+  on and off: the same tiers and prizes). Saved on the capsule (`cap.mini`) and the reward slot.
+- The prize card shows it (a figure, Capsule Mini, its name, its series n/6, NEW! with a toy pop
+  sound, or a dupe's vault tickets); the reward slot of an opened capsule names it.
+- Dupes pay vault tickets (`DUPE` c 3, u 6, r 12, l 30). A finished series pays its rainbow Prize
+  Vault cosmetic, capsule-only until now (Arcade Pals the JACKPOT marquee, Spire Snacks Rainbow Road,
+  Neon Beasts Rainbow Riot, Lucky Charms Rainbow Chrome), or 150 vault tickets when you own it:
+  SERIES COMPLETE! on the card, a march (`gachaSeries`), confetti.
+- The Prize Vault has a Minis tab: the four series with their progress bars and prizes, a slot per
+  mini (a dark silhouette and ??? until found, x2 for dupes, NEW until picked), the detail strip, and
+  the window shows the picked mini turning on a lit turntable beside its series' shelf.
+
+**The daily capsule.** Once a real day (the local date, `DATA.dailyKey`) the Prize Vault's capsule
+button becomes FREE DAILY CAPSULE: a free Vault Capsule (the same `vaultRoll` odds and pity, saved
+as `vault.pend` with `daily`, so a reload reopens the same one and a second claim is refused) plus a
+streak bonus of 5 vault tickets a day in a row (up to 35 at 7 days; a missed day starts over). The
+title's Vault tile glows gold with its badge counting it (`vaultTitleBtn`, no new title element);
+once claimed a small fire chip with the streak sits on the capsule button. Headless there is no
+clock (no daily capsule) unless a test sets `GAME.gacha.now`.
+
+**Reward screen slots.** Rarity lighting on each capsule slot (a shine sweeps it, faster on rare and
+legendary, a rainbow rim on legendary), the mini an opened one held, Open all.
+
+**Calm.** Shake off (reduced motion): the charge x0.4, no linger, no tremble, half the chips, slow
+rays, no slow motion pulse beyond the old rule, CSS loops off (`.calm`, `prefers-reduced-motion`);
+Reduced flashing drops the slam.
+
+**Save.** Meta `gacha {minis {id: n}, news, series, rolls, opened, dupeTix, day, streak, best, days,
+bonus}` (`gachaMetaFix` repairs junk; a new key, nothing renamed); `vault.pend.daily`; `cap.mini`;
+`sd.capsule.all`.
+
+Tests: data (the table, the mini and chance rates over 20,000 rolls, determinism, the tease rate
+and never on rare or legendary, the LOOT and Vault odds unchanged), game (the build-up and its
+timings, the legendary moment, a tap in the charge, Skip, calm, the tease never changing the
+prize, hold to crack, minis across reloads before and after the burst, capsule rolls the same with
+minis on or off, dupes and series prizes, junk saves, Open all from the bank with a reload mid-fan
+and from the reward screen with its indices kept, the daily capsule with a stubbed clock: once a
+day, a reload mid-open, the streak and its reset, the Minis tab), render (every mini found and as a
+silhouette, all distinct, chips, leak, legend, turntable, balanced and NaN free), audio (the nine
+voices in their tiers, no clipping at the loud ends), i18n (every word, pattern, mini and series in
+Dutch, the screens drawn in Dutch).
+
+## Cabinet Tech and the new crawler (round 17)
+
+The owner asked for cooler combos and many builds, and for more that can happen with the claw machine. Round 16 made
+the cabinet a character (events, the Jackpot Lamp and LAMP FEVER, PERFECT grabs, coins); nothing in the relic pool
+played with it. This round adds a relic family that builds around those systems, a keyword so the existing synergy
+systems see it, three combos, and a seventh crawler whose kit is the cabinet itself.
+
+**Where it lives.** `TECH` blocks: data (`data.js`: her items after Ms. Bubbles', the starter after the Bubble Wand,
+the family after the ROS relics, `TECH_K` with the relic helpers, the archetype, the combos, the character, her
+outfits and Codex page, and the TECH block after `/ROS` with The Motherboard, two stickers, `techMods`, exported as
+`DATA.TECH = {K, RELICS, ITEMS, COMBOS, mods, TIP}`), the rules (`combat.js` TECH block: `techFight`,
+`COMBAT.techOn / techCab / techOf`; one line in `newFight`, the grab's `perfect` in the combo ctx and its clearing in
+`grabDone`), the cabinet (`game.js` TECH block after `/CAB`, `GAME.tech`), the art (`render.js` TECH block,
+`RENDER.tech`), two sounds (`audio.js` TECH block), the Dutch (`lang_nl2.js`, the TECH block at the end). Ids are
+new, nothing was renamed, no save field was added (fight state in `FS.tech` and `F.tech`, rebuilt from the seed).
+
+### How the cabinet reaches the relics
+
+- **A new hook, `onCab(F, kind, v, id)`** (`DATA.RELIC_HOOKS`): `kind` is `'event'` (`id`: surge, coins, capsule),
+  `'perfect'` (`v`: the PERFECT streak, 1, 2, 3...), `'fever'` (`v`: fevers this fight) or `'double'` (Double
+  Feature's second reel, `id`). The game calls `COMBAT.techCab(F, kind, v, id)`, which only acts on the player's own
+  turn: everything a Cabinet Tech relic does (damage, Block, healing, a grab) happens on your turn, never on the
+  enemy's, so the incoming-damage preview never has to guess. A LAMP FEVER that goes off after END TURN waits in
+  `FS.tech.pend` and pays at the start of your next turn (`techTurn` in `finishEnemyTurn`).
+- **Cabinet numbers** (`relic.tech`, added up by `DATA.techMods(run.relics, run.char)` once at the bell): `evP` (more
+  event chance a turn, capped at 1), `first` (events from turn 1), `perfX` (px more room for a PERFECT), `laser`,
+  `lampStart`, `coins` (more a Coin Shower and a fever), `coinGold`, `double`, `perfLamp`, `drain`. The CAB block reads
+  them through `techMods()` (all zeros without a live cabinet).
+- **CAB hooks (one line each, in the CAB block):** `cabTurn` (the `evFirst` and `evP` lines), `cabEvLand`
+  (`techEvLand(E)` at the end), `cabCollect` (a coin's gold `+ techMods().coinGold`), `cabFeverTick` (`techFever(n)`
+  at the fever's start, `+ techMods().coins` on the rain), `cabPerfect` (`techPerfect(n, x, y)` after the lamp spark),
+  `cabUnderPalm` (the look radius and the PERFECT window `+ techMods().perfX`). **Outside it:** `startFight`
+  (`techFightStart`), `deliver` (`techDeliver`), `grabFinished` (`techGrabDone`), `finishEnemyTurn` (`techTurn`),
+  `update` (`techTick`), `drawFight` (`techDrawIn`, inside the cabinet's clip), `unlocked` / `unlockRule` (the
+  `fever` rule).
+- **Quiet cabinet.** The cabinet's physical parts are off in Duo (and headless unless `GAME.cab.force`); there
+  `F.tech.on` is false, `techMods()` is zeros and the event relics (the Service Remote, the Service Key) ring every
+  2nd turn instead, so Joy Stick's kit still works in a Duo seat.
+- **The cabinet's own event** (`{t: 'tech', k, n, id}`) is read at once by the sticker check and never queued, so a
+  turn where no relic answers keeps its pace.
+
+### The relics (the Tech chip, 🕹 Tech, `#ff7ad9`)
+
+| relic | rarity | the build | what it does |
+| --- | --- | --- | --- |
+| 📟 Service Remote | Joy Stick's starter | events | every event that lands: 3 to ALL and 3 Block; a quiet cabinet: every 2nd turn |
+| 🔦 Laser Sight | c | PERFECT | a red laser shows the drop (gold with LOCK when it would be PERFECT); the PERFECT window x2 (+5 px); every PERFECT: 3 Block |
+| 🔑 Service Key | c | events (fortress) | events +15% a turn and from turn 1; every event: 5 Block (quiet: every 2nd turn) |
+| 🪔 Lamp Oil | c | lamp (feast) | the lamp starts every fight 4 cells fuller; every LAMP FEVER heals 3 |
+| 🪙 Coin Hopper | c | coins (greed) | Coin Showers and fevers drop 3 more coins; a coin pays 2 gold (Money Bags, Golden Touch and every gold relic hear it) |
+| ⏱ Metronome | u | PERFECT | a PERFECT hits a random enemy for 4 per PERFECT in the streak (4, 8, 12, 16 at most) |
+| 🌀 Fever Dream | u | lamp | LAMP FEVER: 8 to ALL and 4 Block |
+| ⚡ Circuit Breaker | u | events (metal) | a POWER SURGE zaps ALL for 6, a COIN SHOWER gives 6 Block, a CAPSULE DROP heals 5 |
+| 🎯 Trick Shot | r | PERFECT (jackpot) | a PERFECT x2 or better gives the grab back, once a turn |
+| 🎞 Double Feature | r | events | every event lands twice: the reel spins again for a second, different event (+8% events) |
+| 💾 The Motherboard | l | all of it | an event every turn from turn 1, a PERFECT lights 2 more cells, LAMP FEVER deals 15 to ALL; the catch: a grab that brings up nothing drains 3 cells |
+
+The legendary follows the round 12 rule (`leg`, rarity `l`): only the boss relic, a legendary capsule and the Back
+Room hand it out. Every relic draws its own glyph inside its rarity medallion (`RENDER.tech.GLYPH`: the remote with a
+blinking LED, a scope, a key ring, an oil can dripping into the lamp's dome, a coin funnel, a swinging metronome, a
+turning spiral, a breaker box, a bullseye, two film frames, a glowing board), and every answer flashes where the
+cabinet did it (a pink ring and a circuit spark at the sign, the claw or the lamp, `techZap`) with a service beep
+(`techBeep`, pitched by kind); Double Feature's reel spins up with `techDouble` and DOUBLE FEATURE!.
+
+### The archetypes
+
+- **PERFECT streak** (Laser Sight, Metronome, Trick Shot, Bullseye): aim dead centre and chain it. The laser makes the
+  aim readable, the Metronome climbs with the streak, Trick Shot turns a streak into more grabs. Bridges: Jackpot.
+- **The lamp** (Lamp Oil, Fever Dream, The Motherboard, Joy Stick's arcade parts): every arcade part lights more
+  cells; Lamp Oil starts fights near FEVER (two fevers a fight come easily), Fever Dream turns each into damage and
+  Block. Bridges: Feast (Lamp Oil's healing).
+- **Events** (Service Remote, Service Key, Circuit Breaker, Double Feature): more events, earlier, twice, each one
+  paying in its own way. Bridges: Fortress (the key), Magnet (the breaker).
+- **Coins** (Coin Hopper, Coin Mech, Coin-Op): Coin Showers and fevers pour gold, and every gold relic that already
+  existed (Money Bags hits ALL for every gain, Golden Touch, Piggy Bank) fires off it. Bridges: Greed.
+
+### Combos (3 new, `DATA.TECH.COMBOS`)
+
+| tier | combo | recipe | effect |
+| --- | --- | --- | --- |
+| 1 | Coin-Op | a Tech item and a coin (Lucky Penny, Arcade Token, the Coin Mech...) | 5 damage, 3 gold |
+| 2 | Short Circuit | a Tech item and two metal items | 6 and 1 Weak to ALL |
+| 2 | Bullseye | a PERFECT grab of 2+ items (`ctx.perfect`, COMBAT passes the grab's streak) | 8 damage, 4 Block |
+
+### Joy Stick, The Technician (`CHARACTERS.techie`)
+
+- **The kit.** 70 hp, 100 gold, 3 grabs, width 1, grip 1, quick rails (1.15). Starter relic the Service Remote.
+  Unlock `fever`: set off LAMP FEVER with any crawler (`checkUnlocks('fever')` in `techFever`; a profile that has
+  already seen a fever, `meta.cab.fevers`, has her at once). The picker says "Set off LAMP FEVER to unlock".
+- **Her gift** (`tech: true`): the cabinet works for her. Events come +22% a turn and can land on her first turn
+  (the sign waits for the bell's banner), and a PERFECT lights one more lamp cell. Her first fight of a run shows a
+  toast saying so (`DATA.TECH.TIP`).
+- **Her bin (19):** 5 Arcade Sticks (4, a lamp cell), 5 Arcade Buttons (5 Block, a lamp cell), a Coin Mech, a Neon
+  Tube, an apple, 3 Lucky Pennies (Coin-Op with her parts) and 3 bouncy balls. Her pool: Coin Mech, Neon Tube (c),
+  Circuit Board, Extension Cord (u), CRT Monitor (r), Golden Joystick (l). An item's `lamp` (1 to 4) lights that many
+  more cells when it is delivered (for anyone who holds it) and gives it the Tech chip.
+- **Looks.** Her portrait (`RENDER.tech.portrait`): a backwards pink cap with a service LED that blinks pink and cyan,
+  a dark bob with a pink streak, a screwdriver behind her ear, a hoodie with a lanyard card, eyes that blink. Outfits:
+  Service Headset (u, with a boom mic whose tip blinks), Scanline Visor (r, a scanline that scrolls), plus her
+  Claw-o-ween Witch Hat and her winter Scarf & Earmuffs. Crawlers have no hurt or win poses of their own (the
+  portrait is one drawing everywhere, animated by `t`); hers idles like the others' outfits do. Versus line: "Hold
+  on, rebooting you." Codex page `cr_techie`, history initials JOY / TEK / LMP.
+- **Everywhere else.** The daily and weekly rotations, Tilt, pets, sets and every claw type read `CHARACTERS`. Boss
+  Rush kit (`RUSH.KIT.techie`): CRT Monitor, Circuit Board, Extension Cord, Neon Tube, Protein Bar and Fever Dream.
+  A Duo seat gets her starter and that kit (`duoSeatRun`), in a quiet cabinet.
+- **Stickers** (the board at 63 of 63): Perfect Game (five PERFECT grabs in a row) and Tech Support (win as her).
+
+### Balance (the skilled bot)
+
+The round 16 bot (`r16bal/bal15.mjs`, `PRO=2`, Tilt 0, the Trading Post on), copied to scratchpad `r17new/`
+and pointed at a snapshot of this round (`r17new/base`). New: the bot sets `GAME.cab.force`, so the cabinet is alive
+as in a real game (round 16's balance runs had it off), and it records PERFECTs, events, fevers and the Tech relics
+held. It plays Tech relics passively (they need no choices); it does not aim at the cabinet's coins.
+
+| skilled bot, Tilt 0, cabinet on | runs | win |
+| --- | --- | --- |
+| Joy Stick (4 claws) | 40 | 35% (classic 33%, scoop 78%, tri 22%, twins 22% in her 36 run batch) |
+| the six others (4 claws, one seed each) | 22 | 36% |
+| all | 62 | 35% |
+
+She dies mostly in acts 2 and 3 (3 / 13 / 10), to the Frost Knight, the Claw Collector, the Tin Knight and Ironjaw,
+like the others. Nothing was tuned: she landed in the 20 to 45% band at once. Tech relics the bot ended holding (runs,
+win): Trick Shot 13 (54%), Service Key 12 (33%), Double Feature 11 (36%), Metronome, Lamp Oil, Fever Dream 8 each
+(50%), Laser Sight 7 (43%), Circuit Breaker 6 (83%), Coin Hopper 5 (60%).
+
+**For the owner.** The bot's "perfect hands" deliver about 3 prizes a drop, so with the cabinet on it lands PERFECT
+on 53% of its drops and sets off LAMP FEVER about 200 times a run (5 a fight): the lamp is tuned for a human's 1.5 to 2
+prizes a grab, so the bot overrates the lamp's payoffs (Fever Dream, Lamp Oil) and the capsules the fevers rain (about
+60 a run). A real player sees a fever about every one or two turns. The balance suite's COMBAT-only model has no
+cabinet, so its relic draw leaves the Tech relics out (`deckFor`).
+
+### Tests
+
+data (her kit, pools, rotations, items' lamp counts and chips, the ten relics' rarities and pools, `techMods`, every
+hook through a recording COMBAT, the quiet cabinet, the combos' examples, the stickers, the outfits), combat (`F.tech`,
+`techCab` on your own turn only, the remote's numbers, Bullseye and the Metronome on a PERFECT and its clearing, the
+quiet remote and key, a 20 fight fuzz with every Tech relic), game (the unlock by a knight's fever and for an old
+profile, her run and gift, turn 1 events for her and never for the knight, the same cabinet for the same seed, quiet
+headless and in Duo, the remote, the breaker and Double Feature in a real fight, PERFECT with her extra cell, the
+Metronome and the laser's window, the Coin Hopper's coins and gold, Lamp Oil, an arcade part's cells, Fever Dream and a
+fever held over END TURN, The Motherboard's events and drain, real grabs with every Tech relic deterministic and a
+reload, a Duo seat's kit and the quiet remote), render (her face, blink, every outfit, eight distinct parts, eleven
+distinct medallions, the laser's states), audio (the two voices in their tiers), i18n (every word, pattern, relic,
+item, combo, sticker and outfit in Dutch; her fight draws DUBBELE VOORSTELLING! and RAAK). Screenshots: scratchpad
+`r17new/shots/r17_tech_*_{en,nl}.png`.
+
+## QA pass 6 (round 17)
+
+Owner of this section: the QA pass. The round 15 and 16 features (the HUD and title sheets, online co-op and versus,
+the Neon Depths, the cabinet events / Jackpot Lamp / PERFECT / heavy lift / faces, the claw dials) played like a player
+on phones (390 x 844 and 360 x 780), in English and in Dutch, in Chromium with real taps. Scratchpad `r17qa/`: `lib.mjs`
+(the page helpers and a layout audit: text spilling out of its box, buttons covered or overlapping, English on a Dutch
+screen), `title.mjs` (every title button by a tap, every sheet and back, Escape, the Duo path to both online menus),
+`hud.mjs` (the top bar in a fight, Endless with Blackout and Rising Water, a Depths dive and the Jukebox, Boss Rush,
+daily, weekly, Duo co-op and versus; gold 99999, Block 999, tickets 9999, 30 relics and the relic list, every chip's
+popover, 4 hp with eight statuses), `cab.mjs` (every event mid roll and landed, coins delivered for gold, a delivered
+capsule on the reward screen, a fever from a real grab, PERFECT and HEAVY on real drops, calm mode, a save and reload
+mid turn with each of surge / coins / capsule / fever / a half lamp, Blackout + Rising Water + the Depths water, the
+incoming preview against what the enemy phase really took on every one), `net17.mjs` (online: a code nobody hosts, a
+bad code, a full room, the host leaving the lobby, the guest leaving and coming back on the same code, a 24 letter
+name, both phones pressing Ready and Play again at once, the watching phone frozen 20 s (a phone in a pocket), the
+active phone hidden 20 s, Play again twice, English against Dutch), round 16's `r16vs/e2e_vs.mjs` (Dutch host, English
+guest, a whole claw-off with cards, a cut line, a reload, a forfeit), `dep.mjs` (a whole dive by the in-page bot, the
+Jukebox, out to Loop 4, both languages). Screenshots `r17qa/r17_*.png` and `r17qa/vs/`.
+
+### Found and fixed (tests `qa17:`)
+
+1. **Escape back from a page opened out of a title sheet closed that sheet again.** The page's Escape (the weekly, the
+   Boss Rush menu, the Codex, the History) went to the title, which reopened the sheet, and then the title's own Escape
+   listener, running after `onKey` in the same key press, closed it. The listener now acts only on a key press that
+   began on the title (`qa17Key` notes the screen first thing in `onKey`; `qa17TitleEsc`). Game suite.
+2. **Escape did nothing on the Prizedex, Stickers, Help and Tips pages** (every other page has it): it now presses the
+   page's Back (Help from the map goes back to the map); a popover or the Settings panel closes first. Game suite.
+3. **In season the title's ribbon landed inside the More sheet.** The round 15 tidy moves any title button it does not
+   know into More; the Claw-o-ween / Winter ribbon is one, and inside the sheet it kept its absolute place over the
+   sheet's X (the X could not be tapped) and ran off the right edge. It was out of season when round 15 was measured.
+   The ribbon now stays where SEASON hangs it, over the sky (`qa17TitleKeep`). Game suite.
+4. **The HUD's resource row ran under the relic strip** with big numbers (gold 99999 and 9999 tickets: 24 px) and even
+   with normal ones in a weekly run (the WEEKLY badge in the act chip: gold 250, 45 tickets overlapped the first relic).
+   The row now squeezes when it outgrows its column: tighter chips (`qa17Tight`), then the act chip without its word and
+   a size smaller (`qa17Tight2`); measured only when a number's length, the act text, the badge or the language changes
+   (`qa17HudFit`, a browser only; `qa17Fit` is tested with a stand-in row). Game suite.
+5. **The Dutch map head said "A..." / "R..."**: "AKTE 1" and "RONDE 12" got 41 px beside the longer Dutch buttons (BAK,
+   STOPPEN, "40 lampjes"), on every Dutch map at every width. Under `html[lang="nl"]` the row's gaps, the buttons' side
+   padding and the bulb pill are a little tighter: "RONDE 12" fits whole (measured at 360 and 390). Game suite (the rules).
+6. **The Jackpot Lamp after a FEVER lit more cells than its level**: sparks still flying when the dome burst were already
+   in the carried level and lit again on landing (a fever from a double grab showed 4 cells over a level of 2, so the lamp
+   could look full without a fever). The burst now shows the carry less what is still flying (`qa17LampShown`). Game.
+7. **Online versus: the two phones' tables disagreed after a late prize** (the net suite's flaky "the table is the same on
+   both phones" and "a drop after the reload agrees too", about 1 relay seed in 8, already in round 16's build). A prize
+   that rolls into the chute after the drop was booked scores on the dropper's phone (round 15's straggler rule), but the
+   table had already gone over and the watcher never heard of it until the card choice. The dropper now sends the table
+   again with `ev: 'late'` (`qa17VsLate`); the watcher takes it only while watching that rival's drop, quietly (the
+   result card's points, a flash, no second fanfare: `qa17VsLateIn`); a late table from the wrong side is refused. Net
+   suite: 52 relay seeds green (seeded `crypto.getRandomValues`, `r17qa/netseed.mjs`), plus the new test, which fails on
+   round 16's code.
+8. **The co-op watch screen's corner card covered the partner's hp**: a Prizedex discovery or a sticker sat right over the
+   second player's card (both cards are canvas, so the corner lane did not know about them). `QA_SIGNS.duo` now hands it
+   both cards on the online watch screen; it settles under them. Game suite.
+9. **"DOOR ELKAAR" ran out of its pill** on the claw-off (the Shake Up card's tag, and every Duo pill in Dutch):
+   `RENDER.duo.tag` measured the English and drew the Dutch. It measures the words it shows. i18n suite.
+10. **The claw-off board's round stars poked through the lit frame** (the outer star crossed the frame of the player
+   whose drop it is, and a long name ran into them): the stars sit beside the score, inside the frame. Render suite.
+
+Checked and fine: every title button reachable by a tap in both languages and sizes (the sticky Ready! / Toss over a
+scrolling list is by design), the sheets' X, the dim and Escape; the online messages (nobody, bad code, full, the host
+gone, the guest back on the same code); a frozen or hidden partner for 20 s comes back without a stuck sheet; Play
+again twice books three games on both; the Dutch phone stays Dutch against an English host; a whole versus match, its
+reload and forfeit; every cabinet event, the coin pay, the capsule on the reward screen (Cabinet prize), the fever's
+rain, PERFECT and HEAVY, calm mode (no beacon, no reel scroll, no flash); a reload mid turn with each active starts the
+fight from its bell with the lamp the fight began with and the gold unchanged; the incoming preview equalled the hp
+the enemy phase took in all 14 checks (coins, a fever, five reloads, Blackout + Rising Water, the Depths, three Jukebox
+turns, and coins and a fever again in Dutch); a whole dive in both languages (the in-page bot in god mode, its fights
+shortened) reached the Jukebox and Loop 4. No page error or console error in any of it.
+
+Found, not fixed (not this pass's code, or by design):
+- **Deaths with no killer.** In the bot's runs 23 of 74 losses (31%) read "Killed by the Clawspire": a run that dies on
+  its own turn to thorns (Tin Knight and the Brass Golem against the Rogue's many-hit daggers, 71 hp to 0 in one turn).
+  The death recap and the history card should name the thorns' owner; that is COMBAT's and the recap's (`FS.killer` is
+  only set by an enemy's hit). For the owner.
+- The cabinet event sign passes through a boss plate (HIGH TIDE) for the 0.35 s it takes to swing in or out; it never
+  rests on it.
+- The new Cabinet Tech relics' rules were English on a Dutch relic list while their Dutch was still being written by
+  that pass (Service Remote, seen mid round).
+
+### Balance nudge (round 17)
+
+The round 16 report had the Rogue at 55 to 62% and Lucky Lou at 10% (about 21 runs each). Re-measured with the same
+bot (`r16bal/bal15.mjs`, `PRO=2`, Tilt 0, copied to `r17qa/bal/`, `cal17.sh` with a shared queue) on a snapshot of the
+round 16 build: the Rogue and Lucky Lou x classic / tri / scoop / twins x 12 seeds (17000 on), 96 runs. The bot is
+deterministic per seed; a seed the round 16 build lost replays the same on its own snapshot (checked), so the
+difference is the seeds: on 48 runs each the Rogue wins **27%** and Lucky Lou **19%**. The Rogue is not an outlier,
+so its dial is left alone; Lou trails, so his Max HP goes up.
+
+| dial | where | old | new |
+| --- | --- | --- | --- |
+| Lucky Lou's Max HP | `data.js` `CHARACTERS.gambler.hp` | 70 | 78 |
+
+| skilled bot, Tilt 0 | before | after |
+| --- | --- | --- |
+| Lucky Lou (48 runs, the same seeds) | 19% (9 won; deaths act 1 / 2 / 3: 7 / 25 / 7) | 25% (12 won; 5 / 21 / 8) |
+| the Rogue (48 runs) | 27% | 27% (unchanged) |
+| all six crawlers (95 runs, 4 seeds each from 18000, Lou at 78) | | 28% overall (Knight 25, Alchemist 31, Rogue 44, Lou 27, Mama Mech 25, Ms. Bubbles 19%; 16 runs each, so a crawler's figure is rough) |
+
+The data suite pins Lou's 78. The balance suite's "every normal is beatable" holds for every crawler (the Rogue's
+weakest act 2 normal at 1% in that COMBAT-only model, unchanged here).
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the

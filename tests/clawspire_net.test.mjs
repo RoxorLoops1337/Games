@@ -750,6 +750,43 @@ await atest('online versus: a reload mid claw-off asks for the table and gets it
   H.GAME.duo.net.quit(true); J2.GAME.duo.net.quit(true);
 });
 
+// ================================================================ QA17 (round 17): QA pass 6
+await atest('qa17: a straggler that scores after the drop was booked reaches the rival\'s phone too (the tables agree)', async () => {
+  const QA = boot(), QB = boot({ language: 'nl-NL' });
+  wire(QA); wire(QB);
+  QA.GAME.duo.menu(); QA.GAME.duo.net.choose('vs'); QA.GAME.duo.net.host();
+  await settle([QA, QB]);
+  QB.GAME.duo.menu(); QB.GAME.duo.net.join(QA.GAME.duo.net.state.code);
+  await settle([QA, QB]);
+  QA.GAME.duo.net.ready(true); QB.GAME.duo.net.ready(true);
+  await settle([QA, QB]);
+  QA.GAME.duo.afterToss(); QB.GAME.duo.afterToss();
+  const act = vsActive([QA, QB]), wat = act === QA ? QB : QA;
+  h.ok(act && await vsDrop(act, wat), 'a drop played out');
+  const Da = act.GAME.duo.state, Dw = wat.GAME.duo.state;
+  h.ok(Da.ph === 'sabo' && Dw.ph === 'watch' && !vsSame(act, wat), 'the dropper picks a card, the tables agree: ' + vsSame(act, wat));
+  // a prize still in the bin rolls into the chute now (the drop is booked: V.cur is gone)
+  const V = act.GAME.duo.v, bd = V.C.bounds;
+  const b = V.W.bodies.find((x) => x.type === 'dynamic' && x.data && x.data.pile != null && (x.data.v | 0) > 0 && Da.taken.indexOf(x.data.pile) < 0);
+  h.ok(!!b, 'a prize left in the bin');
+  const pts0 = Da.score[Da.last.who], i0 = b.data.pile;
+  b.x = bd.chuteX + bd.chuteW / 2; b.y = bd.h + 10; b.vx = b.vy = 0;
+  for (let i = 0; i < 120 && Da.taken.indexOf(i0) < 0; i++) act.GAME.update(DT);
+  h.ok(Da.taken.indexOf(i0) >= 0 && Da.score[Da.last.who] > pts0, 'it scores late for the dropper (' + pts0 + ' -> ' + Da.score[Da.last.who] + ')');
+  await settle([act, wat], 1);
+  h.eq(vsSame(act, wat), '', 'the rival\'s phone has the late points and the pile too');
+  h.ok(Dw.last && Dw.last.pts === Da.last.pts && Dw.ph === 'watch', 'the result it shows counts them, still watching the card choice');
+  h.eq(wat.GAME.duo.net.state.vw && wat.GAME.duo.net.state.vw.pts, Da.last.pts, 'the result card\'s points too');
+  // a late table claiming to be the receiver's own drop changes nothing
+  const before = JSON.stringify(Da.score);
+  act.GAME.duo.net.vs.onTable({ t: 'vt', n: 999, ev: 'late', tb: act.GAME.duo.net.vs.tableOut(), sn: [] });
+  h.eq(JSON.stringify(Da.score), before, 'a late table is only taken by the one watching');
+  // and the match goes on: the card, then the rival's drop
+  await vsCard(act, wat, true);
+  h.ok(!vsSame(act, wat) && vsActive([QA, QB]) === wat, 'the card choice, the rival\'s turn, one table: ' + vsSame(act, wat));
+  QA.GAME.duo.net.quit(true); QB.GAME.duo.net.quit(true);
+});
+
 // ================================================================ failures
 await atest('failures: a foreign game, another version, no relay, nobody there, a bad code', async () => {
   // an Ironbridge player on the code: its first word is not our hello

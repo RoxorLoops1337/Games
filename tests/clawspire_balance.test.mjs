@@ -161,7 +161,9 @@ function deckFor(char, act, seed, picks) {
       acts++;
       let up = 0;
       for (const inst of bin) { if (up >= 2) break; if (!inst.plus && DATA.ITEMS[inst.id].starter) { inst.plus = true; up++; } }
-      for (const rar of ['c', 'u']) { const pool = DATA.relicPool(rar, relics); if (pool.length) relics.push(rng.pick(pool)); }
+      // (round 17) the Cabinet Tech relics answer the cabinet (events, the lamp, PERFECT grabs), which this
+      // COMBAT-only model does not have: they would be dead picks here, so the model draws from the rest
+      for (const rar of ['c', 'u']) { const pool = DATA.relicPool(rar, relics).filter((id) => !(DATA.TECH && DATA.TECH.RELICS.includes(id))); if (pool.length) relics.push(rng.pick(pool)); }
     }
   }
   const claw = Object.assign({}, c.claw);
@@ -414,6 +416,21 @@ h.test('claw type balance dials: small, and a new run gets them', () => {
     h.eq(run.claw.grabs, c.claw.grabs + (b.grabs || 0), `${ch} + ${ct}: grabs a turn`);
   }
   G.claws.pick('classic');
+});
+
+// TECH (round 17, DESIGN.md "Cabinet Tech and the new crawler (round 17)"): the dials the skilled bot tuned.
+h.test('tech: Joy Stick and the Cabinet Tech dials stay where the bot left them', () => {
+  const c = DATA.CHARACTERS.techie, K = DATA.TECH.K;
+  h.ok(c && c.hp === 70 && c.claw.grabs === 3 && c.gold === 100, 'Joy Stick: 70 hp, 3 grabs, 100 gold');
+  h.ok(K.giftEvP > 0 && K.giftEvP <= 0.3 && K.giftPerfLamp === 1, 'her gift: a few more events, one more cell a PERFECT');
+  h.ok(K.remoteDmg <= 4 && K.remoteBlock <= 4, 'the remote is a nudge, not a nuke');
+  h.ok(K.metroDmg * 4 >= K.metroMax && K.metroMax <= 16, 'the Metronome caps at 16');
+  h.ok(K.feverDmg <= 10 && K.mbDmg <= 20, 'a fever hits, but the lamp fills fast');
+  // the relic damage that runs off the cabinet never comes from an enemy's turn: every Tech hook is onCab or a turn-start ring
+  for (const id of DATA.TECH.RELICS.concat(['service_remote'])) {
+    const hk = Object.keys(DATA.RELICS[id].hooks || {});
+    h.ok(hk.every((k) => k === 'onCab' || k === 'onTurnStart'), id + ': only onCab (and the quiet turn start)');
+  }
 });
 
 console.log(`  balance suite: ${((Date.now() - T0) / 1000).toFixed(1)} s`);

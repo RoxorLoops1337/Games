@@ -1203,3 +1203,174 @@ I18N.add('nl', {
 "content": {}
 });
 // ---------------------------------------------------------------- /CAB
+
+// ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+// DESIGN.md "Capsule fever (round 17)": Open all, the Capsule Minis (capsulemini's) and their four series,
+// the Minis tab in the Prijzenkluis, the free daily capsule and its streak (reeks). Vault tickets stay kluistickets.
+I18N.add('nl', {
+"ui": {
+"Capsule Mini": "Capsulemini",
+"SERIES COMPLETE!": "SERIE COMPLEET!",
+"Series prize": "Serieprijs",
+"Open all": "Alles openen",
+"Open all ({n})": "Alles openen ({n})",
+"TAP TO HURRY": "TIK VOOR SNELLER",
+"Collect all": "Alles ophalen",
+"Free daily capsule": "Gratis dagcapsule",
+"Daily capsule": "Dagcapsule",
+"Once a day, on the house": "Eén per dag, van het huis",
+"Daily capsule · free": "Dagcapsule · gratis",
+"A free Vault Capsule every day. Come back tomorrow for the next one.": "Elke dag een gratis Kluiscapsule. Kom morgen terug voor de volgende.",
+"Day {n} streak": "Reeks: dag {n}",
+"Day {n} streak! +{n2} vault tickets": "Reeks: dag {n}! +{n2} kluistickets",
+"Daily capsule! +{n} vault tickets": "Dagcapsule! +{n} kluistickets",
+"Streak bonus: +{n} vault tickets": "Reeksbonus: +{n} kluistickets",
+"Minis": "Mini's",
+"CAPSULE MINIS": "CAPSULEMINI'S",
+"COMPLETE": "COMPLEET",
+"Finish it for": "Maak hem af voor",
+"Comes out of capsules, now and then.": "Komt af en toe uit een capsule.",
+"Not found yet": "Nog niet gevonden",
+"Found: {n}": "Gevonden: {n}",
+"Arcade Pals": "Speelhalmaatjes",
+"Spire Snacks": "Torensnacks",
+"Neon Beasts": "Neonbeesten",
+"Lucky Charms": "Gelukbrengers",
+"Coin Critter": "Muntbeestje",
+"Rolls under every machine. Never comes back out.": "Rolt onder elke machine. Komt er nooit meer onder vandaan.",
+"Ticket Tot": "Kaartjeskind",
+"Worth exactly one ticket. Knows it.": "Precies één kaartje waard. En dat weet hij.",
+"Joystick Jr": "Joystick Jr",
+"Up, up, down, down. Then a nap.": "Omhoog, omhoog, omlaag, omlaag. Daarna een dutje.",
+"Pixel Ghost": "Pixelspook",
+"Haunts the high score table. Only the top spot.": "Spookt door de topscorelijst. Alleen op de eerste plek.",
+"Prize Duck": "Prijseend",
+"The rubber duck every claw is secretly after.": "De badeend waar elke grijper stiekem op aast.",
+"Golden Claw": "Gouden Grijper",
+"It never drops anything. Ever.": "Hij laat nooit iets vallen. Nooit.",
+"Gummy Bear": "Gombeer",
+"Chewy, brave, a little sticky.": "Taai, dapper, een beetje plakkerig.",
+"Popcorn Puff": "Popcornpluf",
+"Pops when surprised. Always surprised.": "Popt als hij schrikt. Hij schrikt altijd.",
+"Donut Pup": "Donutpup",
+"Good boy. Glazed boy.": "Brave hond. Geglazuurde hond.",
+"Soda Slime": "Frisdrankslijm",
+"Fizzy, bubbly, slightly flat on Mondays.": "Bruisend, bubbelend, op maandag een beetje verschaald.",
+"Cupcake King": "Cupcakekoning",
+"Rules a kingdom of crumbs.": "Heerst over een rijk van kruimels.",
+"Golden Gumball": "Gouden Kauwgombal",
+"One coin, one gumball, one legend.": "Eén muntje, één kauwgombal, één legende.",
+"Glow Frog": "Gloeikikker",
+"Ribbits in neon green.": "Kwaakt in neongroen.",
+"Neon Cat": "Neonkat",
+"Nine lives, all of them lit.": "Negen levens, allemaal verlicht.",
+"Laser Bunny": "Laserkonijn",
+"Hops at the speed of light. Mostly sideways.": "Huppelt met de snelheid van het licht. Meestal zijwaarts.",
+"Volt Bat": "Voltvleermuis",
+"Hangs upside down from power lines.": "Hangt ondersteboven aan hoogspanningskabels.",
+"Disco Crab": "Discokrab",
+"Only dances sideways. Dances all night.": "Danst alleen zijwaarts. Danst de hele nacht.",
+"Rainbow Dragon": "Regenboogdraak",
+"Breathes every colour at once.": "Spuwt alle kleuren tegelijk.",
+"Clover Sprout": "Klaverkiempje",
+"Four leaves. Counted twice.": "Vier blaadjes. Twee keer geteld.",
+"Lucky Dice": "Geluksdobbelsteen",
+"Always lands on six. Please do not check.": "Valt altijd op zes. Niet nakijken, alsjeblieft.",
+"Horseshoe Hero": "Hoefijzerheld",
+"Holds all the luck in. Upside up.": "Houdt al het geluk binnen. Met de goede kant boven.",
+"Wish Star": "Wensster",
+"Grants one wish. The wish is \"more capsules\".": "Vervult één wens. De wens is \"meer capsules\".",
+"Fortune Cat": "Gelukskat",
+"Waves in the jackpots. Paw never gets tired.": "Wuift de jackpots naar binnen. Het pootje wordt nooit moe.",
+"Jackpot Seven": "Jackpotzeven",
+"Three of him and the whole tower lights up.": "Drie van hem en de hele toren licht op."
+},
+"content": {}
+});
+// ---------------------------------------------------------------- /GACHA
+
+// ---------------------------------------------------------------- TECH (round 17): Cabinet Tech and Joy Stick
+// DESIGN.md "Cabinet Tech and the new crawler (round 17)": the relic family, Joy Stick's kit, her
+// outfits, stickers, combos and Codex page, the words the game draws (G.tech.WORDS / PATTERNS).
+// A cell of the Jackpot Lamp is a "streepje" (a bulb stays a "lampje"), PERFECT stays PRECIES RAAK.
+I18N.add('nl', {
+"ui": {
+"DOUBLE FEATURE!": "DUBBELE VOORSTELLING!",
+"Set off LAMP FEVER to unlock": "Laat de LAMPKOORTS losgaan om vrij te spelen",
+"LOCK": "RAAK",
+"REMOTE": "BEDIENING",
+"LASER": "LASER",
+"SERVICE KEY": "SERVICESLEUTEL",
+"LAMP OIL": "LAMPOLIE",
+"HOPPER": "TRECHTER",
+"METRONOME": "METRONOOM",
+"FEVER DREAM": "KOORTSDROOM",
+"BREAKER": "ONDERBREKER",
+"TRICK SHOT": "KUNSTSCHOT",
+"DOUBLE FEATURE": "DUBBELE SHOW",
+"MOTHERBOARD": "MOEDERBORD",
+"LAMP +{n}": "LAMP +{n}",
+"LAMP -{n}": "LAMP -{n}",
+"LAMP OIL +{n}": "LAMPOLIE +{n}",
+"METRONOME x{n}": "METRONOOM x{n}",
+"The cabinet works for Joy Stick: more events, from turn 1.": "De kast werkt voor Joy Stick: meer gebeurtenissen, vanaf beurt 1.",
+"Perfect Game": "Perfecte Partij",
+"Land five PERFECT grabs in a row.": "Laat vijf grepen achter elkaar PRECIES RAAK zijn.",
+"Tech Support": "Helpdesk",
+"Win a run as Joy Stick.": "Win een run als Joy Stick.",
+"Service Headset": "Servicekoptelefoon",
+"Big padded cans and a boom mic. She hears the cabinets humming.": "Dikke oorschelpen en een microfoonarm. Ze hoort de kasten zoemen.",
+"Scanline Visor": "Scanlijnvizier",
+"A wraparound visor with a scanline that never stops scrolling.": "Een vizier rondom, met een scanlijn die nooit ophoudt met rollen.",
+"A pointy hat with a blinking service LED on the band. Spooky, but serviced.": "Een puntige hoed met een knipperend service-ledje op de band. Griezelig, maar wel onderhouden.",
+"Striped in arcade pink, earmuffs with a little antenna each.": "Gestreept in speelhalroze, met oorwarmers die elk een klein antennetje hebben."
+},
+"content": {
+"char": {
+"techie": {
+"title": "De Monteur",
+"blurb": "Joysticks, knoppen en een servicebediening. De kast werkt voor haar: gebeurtenissen komen vaker en al vanaf haar eerste beurt, en elke gebeurtenis die landt, geeft alles een schok.",
+"unlockText": "Laat de LAMPKOORTS losgaan met een willekeurige Crawler.",
+"vsLine": "Even wachten, ik herstart je."
+}
+},
+"kw": {
+"tech": {
+"label": "Techniek",
+"blurb": "De machine staat aan jouw kant: PRECIES RAAK, kastgebeurtenissen, LAMPKOORTS en de munten die het regent."
+}
+},
+"relic": {
+"service_remote": { "name": "Servicebediening", "text": "Elke kastgebeurtenis die landt, geeft ALLE vijanden een schok van 3 en jou 3 Blok. Is de kast stil (Duo), dan gaat hij elke 2e beurt af." },
+"laser_sight": { "name": "Laservizier", "text": "Een rode laser toont waar de grijper zakt, en PRECIES RAAK lukt twee keer zo makkelijk. Elke greep die PRECIES RAAK is, geeft je 3 Blok." },
+"service_key": { "name": "Servicesleutel", "text": "Kastgebeurtenissen komen vaker en kunnen al in je eerste beurt landen. Elke gebeurtenis die landt, geeft je 5 Blok." },
+"lamp_oil": { "name": "Lampolie", "text": "De Jackpotlamp begint elk gevecht 4 streepjes voller, en elke LAMPKOORTS geneest je 3 HP." },
+"coin_hopper": { "name": "Muntentrechter", "text": "Een MUNTENREGEN en de LAMPKOORTS laten 3 munten meer in de kast vallen, en elke munt die je aflevert, levert 2 goud op in plaats van 1." },
+"metronome": { "name": "Metronoom", "text": "Elke greep die PRECIES RAAK is, raakt een willekeurige vijand voor 4, plus 4 voor elke PRECIES RAAK vlak daarvoor (hoogstens 16)." },
+"fever_dream": { "name": "Koortsdroom", "text": "De LAMPKOORTS doet 8 schade aan ALLE vijanden en geeft je 4 Blok." },
+"circuit_breaker": { "name": "Stroomonderbreker", "text": "Kastgebeurtenissen slaan terug: een STROOMSTOOT geeft ALLE vijanden een schok van 6, een MUNTENREGEN geeft je 6 Blok en een CAPSULE ERIN geneest je 5 HP." },
+"trick_shot": { "name": "Kunstschot", "text": "Een greep die PRECIES RAAK is, vlak na een andere (x2 of beter), geeft je de greep terug, één keer per beurt." },
+"double_feature": { "name": "Dubbele Voorstelling", "text": "Elke kastgebeurtenis landt twee keer: de rol draait nog een keer voor een tweede, andere gebeurtenis. Gebeurtenissen komen ook iets vaker." },
+"leg_motherboard": { "name": "Het Moederbord", "text": "De kast luistert naar jou: elke beurt landt er een gebeurtenis, grepen die PRECIES RAAK zijn, laten 2 streepjes meer oplichten en de LAMPKOORTS doet 15 schade aan ALLE vijanden. De keerzijde: een greep die niets opbrengt, laat 3 streepjes leeglopen." }
+},
+"item": {
+"arcade_stick": { "name": "Arcadestick", "text": "Doe {v} schade. Afgeleverd laat hij een streepje van de Jackpotlamp oplichten." },
+"arcade_button": { "name": "Arcadeknop", "text": "Krijg {v} Blok. Druk erop: een streepje van de lamp licht op." },
+"coin_mech": { "name": "Muntmechaniek", "text": "Doe {v} schade en krijg {v2} goud. Het muntdeurtje van een oude kast: klonk, klonk." },
+"neon_tube": { "name": "Neonbuis", "text": "Doe {v} schade. Afgeleverd laat hij 2 streepjes van de lamp oplichten. Breekbaar, zoals elk goed uithangbord." },
+"circuit_board": { "name": "Printplaat", "text": "Doe {v} schade aan ALLE vijanden. Afgeleverd licht er een streepje van de lamp op." },
+"extension_cord": { "name": "Verlengsnoer", "text": "Krijg {v} extra greep en {v2} Blok. Ingeplugd licht er een streepje van de lamp op." },
+"crt_monitor": { "name": "Beeldbuismonitor", "text": "Doe {v} schade. Loodzwaar. Afgeleverd laat hij 3 streepjes van de lamp oplichten." },
+"golden_stick": { "name": "Gouden Joystick", "text": "Sla {n} keer {v} schade op willekeurige vijanden en laat 4 streepjes van de lamp oplichten. Materiaal voor de hoogste score." }
+},
+"combo": {
+"coin_op": { "name": "Muntautomaat", "text": "Een Techniek-voorwerp en een munt: munt erin, doe 5 schade en krijg 3 goud." },
+"short_circuit": { "name": "Kortsluiting", "text": "Een Techniek-voorwerp en twee metalen voorwerpen: de vonken vliegen, 6 schade en 1 Zwak aan ALLE vijanden." },
+"bullseye": { "name": "Roos", "text": "Een greep die PRECIES RAAK is en 2+ voorwerpen boven haalt: doe 8 schade en krijg 4 Blok." }
+},
+"lore": {
+"cr_techie": { "name": "Joy Stick", "text": "Joy Stick is de speelhalmonteur die niemand ooit ziet: degene die na sluitingstijd binnenkomt, de kasten openmaakt met een bos piepkleine sleuteltjes en tegen ze praat terwijl ze werkt. Ze weet welk lampje knippert als een machine blij is en welk muntdeurtje klemt als hij mokt. Toen de Clawspire zijn kasten op eigen houtje begon te laten draaien, nam ze dat persoonlijk op. Nu klimt ze met een servicebediening in haar zak, en elke machine op elke verdieping lijkt stilletjes aan haar kant te staan." }
+}
+}
+});
+// ---------------------------------------------------------------- /TECH

@@ -3481,6 +3481,116 @@ const AUDIO = (() => {
   Object.assign(MIX_TRIM, { cabRoll: -3.6, cabLamp: -3.1, cabCreak: 5.1, cabSqueak: 3.1, cabLand: -2.4, cabSurge: 0.1, cabRain: 8.5, cabPerfect: 1.1, cabFever: 7.5 });
   /* ---------------------------------------------------------------- /CAB */
 
+  /* ---------------------------------------------------------------- TECH (round 17): Cabinet Tech
+     DESIGN.md "Cabinet Tech and the new crawler (round 17)". A Cabinet Tech
+     relic answering the machine: a two-tone circuit beep (opts.kind: a
+     PERFECT answers higher, a FEVER lower), and Double Feature's reel
+     spinning up again (a rising arpeggio over a ratchet). Calibrated into
+     their MIX tiers. */
+  Object.assign(BANK, {
+    // A relic answers the cabinet: a quick service-remote beep-beep.
+    techBeep(out, t, o, p) {
+      const k = o && o.kind === 'perfect' ? 1.19 : o && o.kind === 'fever' ? 0.84 : 1;
+      blip(out, t, { w: 'square', f: 1480 * p * k, dur: 0.05, v: 0.06, lp: 4200 });
+      blip(out, t, { at: 0.07, w: 'square', f: 1975 * p * k, dur: 0.07, v: 0.06, lp: 4200 });
+      hiss(out, t, { type: 'bandpass', f: 5200, q: 4, dur: 0.03, v: 0.05, crunch: true });
+      return 0.18;
+    },
+    // Double Feature: the reel spins up again (a ratchet under a rising arpeggio).
+    techDouble(out, t, o, p) {
+      for (let i = 0; i < 6; i++) hiss(out, t, { at: i * 0.045, type: 'bandpass', f: (2600 + i * 250) * p, q: 7, dur: 0.02, v: 0.22 });
+      [72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: 0.05 + i * 0.07, w: 'triangle', f: mtof(n) * p, dur: 0.16, v: 0.1 }));
+      blip(out, t, { at: 0.34, w: 'sine', f: mtof(91) * p, dur: 0.3, v: 0.08, vib: [8, 10] });
+      return 0.66;
+    },
+  });
+  Object.assign(GAP, { techBeep: 0.08, techDouble: 0.5 });
+  NAMES.push('techBeep', 'techDouble');
+  Object.assign(MIX_TIER, { techBeep: 'soft', techDouble: 'mid' });
+  Object.assign(MIX_TRIM, { techBeep: 3, techDouble: 5.1 });
+  /* ---------------------------------------------------------------- /TECH */
+
+  /* ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+     DESIGN.md "Capsule fever (round 17)". The capsule's build-up and the
+     Capsule Minis: a ladder note per crack (opts.n climbs), the primed hum
+     when one tap is left, the rare tease (a gold shimmer that fizzles), the
+     charge before the pop (opts.tier), the rarity chime ladder (opts.tier:
+     longer and brighter per tier), the legendary jingle, a NEW! mini, a
+     finished series and the daily capsule. Calibrated into their MIX tiers. */
+  Object.assign(BANK, {
+    // One crack: a glassy ladder note that climbs with opts.n.
+    gachaTap(out, t, o, p) {
+      const n = U.clamp((o && o.n) | 0, 0, 7), f = mtof(76 + [0, 2, 4, 7, 9, 12, 14, 16][n]) * p;
+      blip(out, t, { w: 'triangle', f, dur: 0.14, v: 0.1, a: 0.002 });
+      blip(out, t, { at: 0.02, w: 'sine', f: f * 2, dur: 0.1, v: 0.04 });
+      return 0.18;
+    },
+    // Primed (one tap left): a low hum swelling under a shimmer.
+    gachaPrime(out, t, o, p) {
+      blip(out, t, { w: 'sawtooth', f: 110 * p, to: 220 * p, dur: 0.6, v: 0.05, lp: 900, a: 0.25, vib: [9, 6] });
+      hiss(out, t, { type: 'bandpass', f: 3000, to: 7000, q: 3, dur: 0.6, v: 0.05, a: 0.4 });
+      return 0.65;
+    },
+    // The rare tease: a golden shimmer climbs... then fizzles back down.
+    gachaTease(out, t, o, p) {
+      [79, 83, 86, 91].forEach((n, i) => blip(out, t, { at: i * 0.05, w: 'sine', f: mtof(n) * p, dur: 0.12, v: 0.07 }));
+      blip(out, t, { at: 0.25, w: 'square', f: mtof(79) * p, to: mtof(67) * p, dur: 0.35, v: 0.035, lp: 2200, vib: [7, 8] });
+      hiss(out, t, { at: 0.25, type: 'highpass', f: 5000, to: 2000, dur: 0.3, v: 0.04 });
+      return 0.62;
+    },
+    // The charge before the pop: a riser, longer and brighter with opts.tier.
+    gachaCharge(out, t, o, p) {
+      const tier = U.clamp((o && o.tier) | 0, 0, 3), d = [0.22, 0.32, 0.6, 1.2][tier];
+      blip(out, t, { w: 'sawtooth', f: mtof(48 + tier * 3) * p, to: mtof(72 + tier * 4) * p, dur: d, v: 0.05, lp: 2600 + tier * 600, lin: true });
+      hiss(out, t, { type: 'bandpass', f: 500, to: 5000 + tier * 1500, q: 1.4, dur: d, v: 0.08, a: d * 0.8 });
+      if (tier >= 2) for (let i = 0; i < 4 + tier * 2; i++) blip(out, t, { at: d * (i / (4 + tier * 2)), w: 'sine', f: mtof(84 + (i % 4) * 3) * p, dur: 0.05, v: 0.03 });
+      return d + 0.05;
+    },
+    // The rarity chime ladder: common a two-note ding, up to legendary's long bright run.
+    gachaChime(out, t, o, p) {
+      const tier = U.clamp((o && o.tier) | 0, 0, 3);
+      const notes = [[84, 88], [84, 88, 91], [84, 88, 91, 96], [84, 88, 91, 96, 100, 103]][tier];
+      notes.forEach((n, i) => blip(out, t, { at: i * 0.06, w: 'sine', f: mtof(n) * p, dur: 0.3 + tier * 0.1, v: 0.09, a: 0.003 }));
+      notes.forEach((n, i) => blip(out, t, { at: i * 0.06 + 0.01, w: 'triangle', f: mtof(n + 12) * p, dur: 0.12, v: 0.025 }));
+      return 0.4 + notes.length * 0.06 + tier * 0.1;
+    },
+    // The legendary jingle: a gold fanfare over a sub drop and a twinkling tail.
+    gachaLegend(out, t, o, p) {
+      duck(1.8);
+      blip(out, t, { w: 'sine', f: 90, to: 38, dur: 0.6, v: 0.4 });
+      [60, 64, 67, 72, 76, 79, 84].forEach((n, i) => blip(out, t, { at: 0.05 + i * 0.07, w: 'square', f: mtof(n) * p, dur: 0.18, v: 0.05, lp: 4200 }));
+      [72, 76, 79, 84, 88].forEach((n) => blip(out, t, { at: 0.6, w: 'triangle', f: mtof(n) * p, dur: 1.1, v: 0.05, vib: [6, 6] }));
+      for (let i = 0; i < 10; i++) blip(out, t, { at: 0.7 + i * 0.08, w: 'sine', f: mtof(96 + (i % 5) * 2) * p, dur: 0.1, v: 0.035 });
+      return 1.8;
+    },
+    // A NEW! mini: a toy squeak and a sparkly three-note pop.
+    gachaNew(out, t, o, p) {
+      blip(out, t, { w: 'square', f: 700 * p, to: 1400 * p, dur: 0.08, v: 0.05, lp: 3000 });
+      [88, 91, 96].forEach((n, i) => blip(out, t, { at: 0.08 + i * 0.06, w: 'triangle', f: mtof(n) * p, dur: 0.22, v: 0.09 }));
+      hiss(out, t, { at: 0.08, type: 'highpass', f: 6000, dur: 0.25, v: 0.05 });
+      return 0.5;
+    },
+    // A series is complete: a little march up to a held chord.
+    gachaSeries(out, t, o, p) {
+      duck(1.2);
+      [67, 72, 76, 79, 76, 79, 84].forEach((n, i) => blip(out, t, { at: i * 0.09, w: 'square', f: mtof(n) * p, dur: 0.12, v: 0.05, lp: 4000 }));
+      [72, 76, 79, 84].forEach((n) => blip(out, t, { at: 0.66, w: 'triangle', f: mtof(n) * p, dur: 0.8, v: 0.06, vib: [5, 5] }));
+      blip(out, t, { at: 0.66, w: 'sine', f: 130, to: 60, dur: 0.3, v: 0.3 });
+      return 1.5;
+    },
+    // The daily capsule: a coin rolls down a chute into a music box ding.
+    gachaDaily(out, t, o, p) {
+      for (let i = 0; i < 5; i++) blip(out, t, { at: i * 0.05, w: 'triangle', f: (1800 - i * 120) * p, dur: 0.04, v: 0.05 });
+      [79, 84, 88].forEach((n, i) => blip(out, t, { at: 0.3 + i * 0.1, w: 'sine', f: mtof(n) * p, dur: 0.4, v: 0.08 }));
+      return 0.75;
+    },
+  });
+  Object.assign(GAP, { gachaTap: 0.04, gachaPrime: 0.5, gachaTease: 0.5, gachaCharge: 0.2, gachaChime: 0.08, gachaLegend: 1.2, gachaNew: 0.3, gachaSeries: 1, gachaDaily: 0.5 });
+  NAMES.push('gachaTap', 'gachaPrime', 'gachaTease', 'gachaCharge', 'gachaChime', 'gachaLegend', 'gachaNew', 'gachaSeries', 'gachaDaily');
+  Object.assign(MIX_TIER, { gachaTap: 'ui', gachaPrime: 'soft', gachaTease: 'mid', gachaCharge: 'mid', gachaDaily: 'mid', gachaChime: 'big', gachaNew: 'big', gachaSeries: 'big', gachaLegend: 'huge' });
+  Object.assign(MIX_TRIM, { gachaTap: 1.2, gachaPrime: 4.1, gachaTease: 7, gachaCharge: 11.3, gachaDaily: 4.6, gachaChime: 6.9, gachaNew: 8, gachaSeries: 0.6, gachaLegend: 1.6 });
+  /* ---------------------------------------------------------------- /GACHA */
+
   const mixApi = {
     TIERS: MIX_TIERS, TARGET: MIX_TARGET, WIN: MIX_WIN, CAP: MIX_CAP, TIER: MIX_TIER, TRIM: MIX_TRIM, VARY: MIX_VARY,
     DUCK: MIX_DUCK, LIM: MIX_LIM, MUS: MIX_MUS, MINOR: MIX_MINOR, STING: MIX_STING,

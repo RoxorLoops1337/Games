@@ -1306,4 +1306,34 @@ T.test('cab (round 16): the cabinet\'s voices play after init, no-op before, sit
   T.ok(mixRenderSfx(M, 'cabPerfect', { n: 1 }).st > -80 && mixRenderSfx(M, 'cabPerfect', { n: 4 }).st > -80, 'a PERFECT streak still chimes');
 });
 
+// ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+T.test('gacha (round 17): the capsule build-up and the minis play after init, sit in their tiers, and the ladders climb', () => {
+  const want = { gachaTap: 'ui', gachaPrime: 'soft', gachaTease: 'mid', gachaCharge: 'mid', gachaDaily: 'mid', gachaChime: 'big', gachaNew: 'big', gachaSeries: 'big', gachaLegend: 'huge' };
+  const cold = boot({ only: ['util', 'audio'] }).AUDIO;
+  for (const n in want) { T.ok(cold.names.includes(n), n + ' is a sound'); T.eq(cold.sfx(n), false, n + ' no-ops before init'); }
+  const { AUDIO, fake } = bootFake();
+  AUDIO.init();
+  const ac = fake.ctxs[0];
+  for (const n in want) {
+    ac.currentTime += 3;
+    const before = fake.count.total;
+    T.ok(AUDIO.sfx(n, { tier: 3, n: 5 }), n + ' plays');
+    T.ok(fake.count.total > before, n + ' makes nodes');
+    T.eq(AUDIO.mix.tier(n), want[n], `${n} is ${want[n]}`);
+  }
+  ac.currentTime += 3; T.ok(AUDIO.sfx('gachaLegend'), 'the legendary jingle');
+  ac.currentTime += 0.3; T.eq(AUDIO.sfx('gachaLegend'), false, 'never twice on top of itself');
+  const M = boot({ only: ['util', 'audio'] }).AUDIO;
+  for (const n in want) {
+    const r = mixRenderSfx(M, n), t = M.mix.tier(n), lo = M.mix.TARGET[t] - M.mix.WIN - 1, hi = M.mix.TARGET[t] + M.mix.WIN + 2.5;
+    T.ok(r.st >= lo && r.st <= hi, `${n} sits in its ${t} tier: ${r.st.toFixed(1)} dB in ${lo}..${hi}`);
+    T.ok(r.peak < 0, `${n} never clips (${r.peak.toFixed(1)} dBFS)`);
+  }
+  // the rarity ladder: a legendary chime rings longer and louder than a common one; the charge of a legendary never clips
+  const c0 = mixRenderSfx(M, 'gachaChime', { tier: 0 }), c3 = mixRenderSfx(M, 'gachaChime', { tier: 3 });
+  T.ok(c3.st >= c0.st - 0.5, `the legendary chime is no quieter (${c0.st.toFixed(1)} -> ${c3.st.toFixed(1)})`);
+  T.ok(mixRenderSfx(M, 'gachaCharge', { tier: 3 }).peak < 0 && mixRenderSfx(M, 'gachaChime', { tier: 3 }).peak < 0, 'the loud ends never clip');
+  T.ok(mixRenderSfx(M, 'gachaTap', { n: 7 }).st > -80, 'the top of the crack ladder still sounds');
+});
+
 T.done();
