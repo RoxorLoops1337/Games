@@ -399,7 +399,7 @@
     if (ri > 3) { ctx.beginPath(); ctx.arc(ox, oy, ri - 1, 0, TAU); ctx.lineWidth = 3; ctx.stroke(); }
     ctx.beginPath(); ctx.arc(0, 0, ro, 0, TAU); ctx.moveTo(ox + ri, oy); ctx.arc(ox, oy, ri, 0, TAU); ctx.fillStyle = bodyCol; ctx.fill('evenodd');
     if (th > 3.5) {
-      const hi = ro - th * 0.55;
+      const hi = max(0.5, ro - th * 0.55);   // at tiny tau ro is smaller than the band, and arc() throws on a negative radius
       ctx.beginPath(); ctx.arc(0, 0, ro - th * 0.12, 0, TAU); ctx.moveTo(hi, 0); ctx.arc(0, 0, hi, 0, TAU); ctx.fillStyle = accentCol; ctx.fill('evenodd');
     }
     ctx.globalAlpha = ga;

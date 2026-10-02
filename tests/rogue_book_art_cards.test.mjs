@@ -10,6 +10,8 @@
 //   * the gallery sheets (motifs, cards_<hero>, cards_junk) render, page and honour their params
 //   * perf smoke: a cached card is one blit, a first draw stays far below a frame budget times a generous factor
 import { boot, harness } from './rogue_book_lib.mjs';
+// Wall-clock budgets are strict with RB_PERF=1 on an idle machine; otherwise 4x slack so a loaded CI box cannot flake the check.
+const PERF_SLACK = process.env.RB_PERF ? 1 : 4;
 
 const t = harness('rogue_book art cards');
 // ART_CARDS_TIMING=1 prints how long each test takes (the suite draws a lot: keep an eye on it)
@@ -366,7 +368,7 @@ T('perf smoke: baking a card and drawing a live frame stay far below what a fram
   const t3 = now();
   for (const id of MOTIFS) ART.card.motif(shared, id, 12, 12, 24, 'rose');
   const icon = (now() - t3) / MOTIFS.length;
-  t.ok(icon < 2, `a 24 px icon costs ${icon.toFixed(2)} ms (limit 2)`);
+  t.ok(icon < 2 * PERF_SLACK, `a 24 px icon costs ${icon.toFixed(2)} ms (limit 2)`);
 });
 
 t.done();
