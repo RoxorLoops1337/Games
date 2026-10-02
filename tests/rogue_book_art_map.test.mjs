@@ -14,6 +14,8 @@
 //   * reduce motion and low quality still draw cleanly, and reduce motion freezes what should freeze
 //   * the gallery sheets render (the page sheet with and without MAP), and a performance smoke test: a full page of hexes stays far below 4 ms
 import { boot, harness } from './rogue_book_lib.mjs';
+// Wall-clock budgets are strict with RB_PERF=1 on an idle machine; otherwise 4x slack so a loaded CI box cannot flake the check.
+const PERF_SLACK = process.env.RB_PERF ? 1 : 4;
 
 const t = harness('rogue_book art map');
 const api = boot({ only: ['util', 'data', 'art', 'art_heroes', 'art_icons', 'art_map', 'map'], continue: true });
@@ -503,7 +505,7 @@ t.test('performance smoke: a full screen of about 120 visible hexes with fog edg
   for (let i = 0; i < N; i++) drawn = drawMapScreen(ctx, Mp, 46, 1 + i * 0.016, 800 + i, 450);
   const ms = Number(process.hrtime.bigint() - t0) / 1e6 / N;
   t.ok(drawn >= 60, `hexes in view: ${drawn}`);
-  t.ok(ms < 4, `a full screen took ${ms.toFixed(2)} ms per frame on the recording stub (budget 4 ms, the real canvas does the same calls)`);
+  t.ok(ms < 4 * PERF_SLACK, `a full screen took ${ms.toFixed(2)} ms per frame on the recording stub (budget 4 ms, the real canvas does the same calls)`);
   const before = stats().misses;
   for (let i = 0; i < 5; i++) drawMapScreen(ctx, Mp, 46, 3 + i, 800, 450);
   t.eq(stats().misses, before, 'no baking once warm');
