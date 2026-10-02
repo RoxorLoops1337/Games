@@ -2803,7 +2803,7 @@ h.test('Lucky Lou: his card on character select, the unlock, a new run', () => {
   h.eq(G.run.char, 'gambler', 'the run is Lucky Lou\'s');
   h.eq(G.run.bin.length, 19, 'with his 19 item bin');
   h.ok(G.run.relics.includes('snake_eyes'), 'and Snake Eyes');
-  h.eq(G.run.maxHp, 70, '70 hp');
+  h.eq(G.run.maxHp, 78, '78 hp (QA pass 6, round 17: 70 -> 78)');
   const fresh = louBoot({ knight: true }).G;
   fresh.showChars();
   const j = fresh.S.ui.buttons.findIndex(b => b.label === 'Lucky Lou');
