@@ -21,9 +21,8 @@ const A = loadGame(`freshGame,chooseBoss,buildCells,prepCampaignWave,startWave,u
 const t = harness('monster art');
 const BOSS = Object.keys(A.BOSSES)[0];
 const FRAME_KEYS = ['orc', 'harpy', 'sentinel', 'mimic', 'minion'];
-// uploads that arrived corrupt: the game plays without them, and once re-uploaded
-// (tools/art/monster_frames.py again) they are checked like every other frame
-const KNOWN_MISSING = new Set(['sprites/mimic/mimic_walk_01.png', 'sprites/mimic/mimic_attack_01.png']);
+// frames allowed to be absent on disk (none now: the corrupt uploads were replaced)
+const KNOWN_MISSING = new Set();
 
 function pngSize(p){ const b=readFileSync(p); return [b.readUInt32BE(16), b.readUInt32BE(20)]; }
 function framePath(cfg, cl, k){ return cl.n>1 ? cfg.dir+cl.seq+'_'+String(k+1).padStart(2,'0')+'.png' : cfg.dir+cl.seq+'.png'; }
