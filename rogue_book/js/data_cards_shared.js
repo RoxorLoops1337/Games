@@ -112,7 +112,7 @@
       kw: ['unplayable'], fx: [],
       hand: { drawn: [{ op: 'energy', n: -1 }] },
       art: { m: 'petals' },
-      flavor: 'A pressed flower gone brittle. Every page it touches loses a little color.',
+      flavor: 'A pressed flower gone brittle. Every page it touches loses a little colour.',
     },
   };
 

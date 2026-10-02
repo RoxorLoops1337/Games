@@ -444,6 +444,35 @@ await t.test('shop: the peddler talks (hello, buy, poor, sold, leave) and idles;
   t.eq(g._issues.length, 0, 'the painter made no canvas mistakes: ' + JSON.stringify(g._issues.slice(0, 2)));
 });
 
+await t.test('shop: late in a session (the frame clock is far past zero) the greeting is written out, idle lines too, and nothing ever sticks half typed', async () => {
+  const g = fresh({ seed: 12 }); const R = mkRun(g, { seed: 12, gold: 60 });
+  const frames = (n, from) => { g._win.__HEADLESS = false; let now = from; for (let i = 0; i < n; i++) { now += 48; g.UI.frame(now); } g._win.__HEADLESS = true; return now; };
+  let now = frames(600, 0);                    // 28 s of play before the stall: the page clock is no longer near 0
+  const node = nodeAt(g, R, 'shop', { shop: { seed: 8 } });
+  await open(g, 'shop', R, node);
+  const typed = () => ({ on: txt($(g, '.sh-say .tw-on')), off: txt($(g, '.sh-say .tw-off')) });
+  g._win.__HEADLESS = false;
+  now = frames(1, now);
+  t.ok($(g, '.sh-say .tw-on'), 'the greeting is a typewriter line');
+  now = frames(40, now);                       // 1.9 s: a line of 50 characters at 75 a second is done
+  const hello = typed();
+  t.ok(hello.on.length > 20 && hello.off === '', 'the hello line is fully typed after a moment (' + JSON.stringify(hello) + ')');
+  t.ok(/Welcome|travellers|Everything here|Step closer/.test(hello.on), 'and it is a greeting, not an idle remark that cut in on the first frame: ' + hello.on);
+  const seen = new Set([hello.on]);
+  let lastLine = txt($(g, '.sh-say'));
+  for (let i = 0; i < 1500 && seen.size < 4; i++) {   // up to 72 s of idling: each new line must type out to the end
+    now = frames(1, now);
+    const line = txt($(g, '.sh-say'));
+    if (line === lastLine) continue;
+    lastLine = line;
+    now = frames(40, now);
+    const cur = typed();
+    t.ok(cur.on.length > 15 && cur.off === '' && cur.on === line, 'idle line ' + seen.size + ' types out completely (' + JSON.stringify(cur) + ')');
+    seen.add(cur.on);
+  }
+  t.ok(seen.size >= 2, 'the peddler spoke more than once while idle (' + seen.size + ' lines)');
+  t.eq(errs(g), 0, 'no console errors');
+});
 
 // ==================================================================================================== event
 // answer whatever overlay RUN's pending choice opened: pick the first card (twice for a removal's confirm), or the first cards of a multi pick

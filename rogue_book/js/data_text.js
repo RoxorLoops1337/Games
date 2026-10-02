@@ -42,9 +42,10 @@
 //   DATA.gemText(gemId | def)          plain text of a gem mod ("+2 damage", "Front row: +1 hit, draw 1 card"); def.text wins
 //   DATA.relicText(id | def)           the relic's own hand written text
 //   DATA.statusText(id, n?)            "Poison 4: At the start of its turn, lose 4 HP (ignores Block), then Poison falls by 1."
-//   DATA.intentText(intent)            "Deals 7 x2 to the front hero and applies 2 Weak" from a C.intent object. C.intent reports help for OTHER
-//                                      enemies as if the enemy gave it to itself, so the move is looked up by id and name and the
-//                                      sentence says "Gives all enemies 8 Block" when every enemy move of that name agrees.
+//   DATA.intentText(intent)            "Deals 7 x2 to the front hero and applies 2 Weak" from a C.intent object. The intent carries who gets each
+//                                      effect (statuses[].to, blockTo, healTo, removes[].to), so the sentence says "Gives all enemies 8 Block".
+//                                      An older intent object that reports help for other enemies as help for itself is still read right: the
+//                                      move is looked up by id and name and every enemy move of that name must agree.
 //   DATA.rowText(heroId, row)          "Front: +2 damage on attacks"
 //   DATA.targetMode(inst | id | resolved) -> 'enemy' | 'none'   whether the player must choose an enemy (DESIGN 4.3)
 //   DATA.cardOps(resolved | inst | id) -> flat list of every op (through cond, repeat and hook fx)
@@ -1215,8 +1216,9 @@
   }
 
   // ---- intents ----
-  // C.intent reports buffs, Block and heals aimed at OTHER enemies as if they were aimed at the enemy itself, so the sentence looks the
-  // move up (by id and name) and, when every enemy move of that name agrees, says who really gets the effect.
+  // C.intent says who gets a buff, Block, heal or removal (to, blockTo, healTo). Older intent objects (and a Block for another enemy that the intent could
+  // not size) reported help for OTHER enemies as help for itself, so the sentence also looks the move up (by id and name) and, when every enemy move
+  // of that name agrees, says who really gets the effect.
   const SIDE_WORD = { allEnemies: 'all enemies', otherEnemy: 'another enemy', lowestEnemy: 'the enemy with the lowest HP' };
   function moveSides(it) {
     if (!it || !it.move) return null;
@@ -1254,6 +1256,9 @@
     };
     const DEST = { front: 'the front hero', back: 'the back hero', both: 'both heroes', random: 'a random hero', lowest: 'the weakest hero' };
     const sides = moveSides(it);
+    // C.intent now says who gets a Block, heal or removal (blockTo, healTo, to): trust it, and fall back to the move lookup for older intent objects
+    const blockSide = SIDE_WORD[it.blockTo] ? it.blockTo : it.blockTo === 'self' ? null : sides && sides.block;
+    const healSide = SIDE_WORD[it.healTo] ? it.healTo : it.healTo === 'self' ? null : sides && sides.heal;
     const clauses = [];
     let dmgWord = null;
     if (it.dmg !== null && it.dmg !== undefined) {
@@ -1262,9 +1267,9 @@
     }
     // what the enemy gives itself: "Gains 12 Block and 6 Thorns"
     const own = [];
-    if (it.block && !(sides && sides.block)) own.push(`${it.block} Block`);
+    if (it.block && !blockSide) own.push(`${it.block} Block`);
     const others = [];   // "Gives all enemies 1 Ritual"
-    if (it.block && sides && sides.block) others.push({ who: SIDE_WORD[sides.block], what: `${it.block} Block` });
+    if (it.block && blockSide) others.push({ who: SIDE_WORD[blockSide], what: `${it.block} Block` });
     const byDest = [];   // [dest, [items]] in first-seen order
     list(it.statuses).forEach((st) => {
       const item = `${st.n} ${stName(st.s)}`;
@@ -1282,12 +1287,13 @@
     byDest.forEach(([dest, items]) => clauses.push(`applies ${joinAnd(items)}${dest === dmgWord ? '' : ` to ${dest}`}`));
     if (!it.block && sides && sides.block && sides.blockN) others.push({ who: SIDE_WORD[sides.block], what: `${sides.blockN} Block` });
     others.forEach((o) => clauses.push(`gives ${o.who} ${o.what}`));
-    if (it.heal) clauses.push(sides && sides.heal ? `heals ${SIDE_WORD[sides.heal]} for ${it.heal}` : `heals ${it.heal}`);
+    if (it.heal) clauses.push(healSide ? `heals ${SIDE_WORD[healSide]} for ${it.heal}` : `heals ${it.heal}`);
     // removals: "removes Bloom, Sumi, Ward and Charge from both heroes", "loses its Thorns"
     const rem = [];
     list(it.removes).forEach((r) => {
       const word = r.s === 'buffs' || r.s === 'debuffs' ? `all ${r.s}` : stName(r.s);
       if (r.to === 'self') clauses.push(r.s === 'buffs' || r.s === 'debuffs' ? `removes ${word} from itself` : `loses its ${word}`);
+      else if (SIDE_WORD[r.to]) clauses.push(`removes ${word} from ${SIDE_WORD[r.to]}`);
       else { const dest = DEST[r.to] || DEST.front; let g = rem.find((x) => x[0] === dest); if (!g) { g = [dest, []]; rem.push(g); } g[1].push(word); }
     });
     rem.forEach(([dest, items]) => clauses.push(`removes ${joinAnd(items)}${dest === dmgWord ? '' : ` from ${dest}`}`));

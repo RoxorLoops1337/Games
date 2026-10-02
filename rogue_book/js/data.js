@@ -212,20 +212,20 @@ const DATA = (() => {
     poison:     { id: 'poison', name: 'Poison', kind: 'debuff', stack: 'int', text: 'At the start of its turn, lose N HP (ignores Block), then Poison falls by 1.' },
     burn:       { id: 'burn', name: 'Burn', kind: 'debuff', stack: 'int', text: 'At the end of the round, take N damage (ignores Block), then Burn halves.' },
     stun:       { id: 'stun', name: 'Stun', kind: 'debuff', stack: 'dur', text: 'Skips its next action. A stunned hero cannot play cards on their next turn.' },
-    bind:       { id: 'bind', name: 'Bind', kind: 'debuff', stack: 'dur', text: 'While either hero is Bound, neither hero can swap rows.' },
+    bind:       { id: 'bind', name: 'Bind', kind: 'debuff', stack: 'dur', text: 'While either hero has Bind, neither hero can swap rows.' },
     mark:       { id: 'mark', name: 'Mark', kind: 'debuff', stack: 'int', text: 'The next N attack hits against it deal +3 damage each (one stack per hit).' },
   };
 
   // Glossary shown in tooltips. Keys are the words the UI highlights in card text.
   const keywords = {
     block: { name: 'Block', text: 'Absorbs damage this turn. Wears off at the start of the owner\'s next turn.' },
-    exhaust: { name: 'Exhaust', text: 'Removed from your deck for the rest of this combat after it is played.' },
+    exhaust: { name: 'Exhaust', text: 'Removed from the fight after it is played. It returns next combat.' },
     retain: { name: 'Retain', text: 'Stays in your hand at the end of the turn.' },
     innate: { name: 'Innate', text: 'Always in your opening hand.' },
     ethereal: { name: 'Ethereal', text: 'Exhausted if still in your hand at the end of the turn.' },
     unplayable: { name: 'Unplayable', text: 'Cannot be played.' },
-    front: { name: 'Front row', text: 'The hero in front takes most enemy attacks. Many cards and heroes change when in front.' },
-    back: { name: 'Back row', text: 'Safe from most attacks. Many cards and heroes change when in back.' },
+    front: { name: 'Front row', text: 'The hero in front takes most enemy attacks. A card line starting Front: only works while its hero stands here.' },
+    back: { name: 'Back row', text: 'The hero in back is safe from most enemy attacks. A card line starting Back: only works while its hero stands here.' },
     swap: { name: 'Swap', text: 'Trade rows. One swap per turn is free, more cost 1 Energy.' },
     ink: { name: 'Ink', text: 'Spend Ink on the map to paint a hex and reveal it.' },
     brush: { name: 'Brush', text: 'A one-use brush that paints a shape of hexes for free.' },

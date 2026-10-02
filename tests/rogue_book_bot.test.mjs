@@ -5,9 +5,11 @@
 //   * the same options give byte-identical run records, in this process and through the worker pool, in any job count;
 //   * economy and state invariants hold (gold, Ink, HP, deck, chapter counters);
 //   * the report builder produces sane numbers, flags and both renderings;
-//   * the search combat bot loses less HP than COMBAT.greedyPolicy on a fixed set of fights;
+//   * the search combat bot loses less HP than COMBAT.greedyPolicy on a fixed set of fights, and plans without seeing the order of its draw pile;
+//   * long jobs survive a kill: --stream appends finished runs, --resume skips them, --from rebuilds a report from the file;
 //   * the bot source obeys the house rules (no em or en dashes, no unseeded random).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { harness, ROOT } from './rogue_book_lib.mjs';
 import { loadGame, ALL_PAIRS } from '../tools/rogue_book/bot/game.mjs';
@@ -16,7 +18,7 @@ import { runPool, runSerial } from '../tools/rogue_book/bot/pool.mjs';
 import { buildReport, renderText, renderMarkdown } from '../tools/rogue_book/bot/report.mjs';
 import { createValuer } from '../tools/rogue_book/bot/cardval.mjs';
 import { createCombatAI } from '../tools/rogue_book/bot/combat_ai.mjs';
-import { parseArgs, buildTasks } from '../tools/rogue_book/bot.mjs';
+import { parseArgs, buildTasks, collect, taskKey, recKey } from '../tools/rogue_book/bot.mjs';
 
 const t = harness('rogue_book bot');
 const G = loadGame();
@@ -51,6 +53,20 @@ t.test('the greedy-combat runs are not all one outcome (the map, draft and comba
   t.ok(recs.some((r) => r.fights.length >= 10), 'some run fights ten or more times');
 });
 
+t.test('map walks interrupted by events and shops no longer strand the party (the three-strikes visit cap used to stall these seeds)', () => {
+  [[['kuro', 'raiga'], 1529785], [['hanae', 'kuro'], 1063355]].forEach(([pair, seed]) => {
+    const r = playRun(G, task(pair, 0, seed));
+    t.ok(r.result === 'win' || r.result === 'lose', `${pair.join(',')} seed ${seed}: finished, got ${r.result}`);
+    t.ok(!r.stall, `${pair.join(',')} seed ${seed}: no map stall`);
+  });
+});
+t.test('a fresh profile (locked content out of every pool) plays through too', () => {
+  const r = playRun(G, task(['suzu', 'raiga'], 0, 77, { unlocked: 'none' }));
+  t.ok(!r.error && (r.result === 'win' || r.result === 'lose') && !r.stall, `finished with ${r.result}`);
+  const lockedIds = [].concat(r.picks.map((p) => p.picked), r.finalRelics, r.finalGems).filter((id) => id && ((DATA.cards[id] || DATA.relics[id] || DATA.gems[id] || {}).locked));
+  t.eq(lockedIds.length, 0, 'no locked card, relic or gem was ever drafted or found');
+});
+
 // ------------------------------------------------------------------ determinism
 t.test('the same task gives an identical record twice, and through the worker pool', async () => {
   const a = playRun(G, task(['hanae', 'kuro'], 0, 11));
@@ -78,6 +94,36 @@ t.test('the CLI option parser and the task builder are deterministic and shape t
   t.eq(seeds.size, 18, 'every run of every pair gets its own seed');
   t.deep(tk.filter((x) => x.trial === 5).map((x) => x.seed), tk.filter((x) => x.trial === 0).map((x) => x.seed), 'trials share seeds, so they are paired');
   t.throws(() => parseArgs(['--nonsense']), 'an unknown option is an error', /unknown option/);
+});
+
+t.test('a long job streams every finished run to a file, resumes from it and rebuilds the report from it (--stream, --resume, --from)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rb_bot_'));
+  const file = path.join(dir, 'runs.jsonl');
+  const base = ['--pair', 'hanae,kuro', '--pair', 'suzu,raiga', '--combat', 'greedy', '--effort', 'fast', '--seed', '3', '--jobs', '1', '--stream', file, '--quiet'];
+  try {
+    const o2 = parseArgs(base.concat(['--runs', '2']));
+    const first = await collect(o2, () => {});
+    const lines = () => fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
+    t.eq(first.recs.length, 4, 'two pairs x two runs');
+    t.eq(lines().length, 4, 'every finished run is in the stream file');
+    t.ok(first.tasks.every((tk, i) => taskKey(tk) === recKey(first.recs[i])), 'a record carries the identity of the task that made it');
+    const again = await collect(parseArgs(base.concat(['--runs', '2', '--resume'])), () => {});
+    t.eq(lines().length, 4, 'a resumed job plays nothing that is already in the file');
+    t.ok(JSON.stringify(again.recs) === JSON.stringify(first.recs), 'and returns the same records in the same order');
+    const more = await collect(parseArgs(base.concat(['--runs', '3', '--resume'])), () => {});
+    t.eq(lines().length, 6, 'asking for one more run per pair plays only the two missing runs');
+    t.ok(JSON.stringify(more.recs.filter((r) => first.recs.some((x) => recKey(x) === recKey(r)))) === JSON.stringify(first.recs), 'the runs played before come back unchanged');
+    fs.appendFileSync(file, '{ truncated line from a killed job');
+    const from = await collect(parseArgs(['--from', file, '--pair', 'suzu,raiga']), () => {});
+    t.eq(from.recs.length, 3, '--from reads the file (a torn last line is ignored) and --pair selects runs');
+    const rep = buildReport(from.recs, G, {});
+    t.eq(rep.meta.runs, 3, 'a report can be built from the stored runs alone');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+t.test('tasks are ordered run by run, so any finished prefix covers every pair and trial', () => {
+  const tk = buildTasks(parseArgs(['--runs', '4', '--all-pairs', '--trial', '0,5']));
+  const firstRound = tk.slice(0, 12);
+  t.eq(new Set(firstRound.map((x) => x.heroes.join(',') + '|' + x.trial)).size, 12, 'the first 12 tasks are one run of every pair at every trial');
 });
 
 // ------------------------------------------------------------------ invariants
@@ -165,6 +211,28 @@ t.test('the search combat bot loses less HP than COMBAT.greedyPolicy on a fixed 
   });
   t.ok(n === groups.length && winsA >= winsG - 1, `the search bot wins as often (${winsA} vs ${winsG} of ${n})`);
   t.ok(lossA <= lossG * 1.02 + 5, `total HP lost by the search bot ${lossA} is not above greedy's ${lossG}`);
+});
+
+t.test('the search combat bot plans on a hidden draw pile: its choice cannot depend on the real order of the pile, and the real fight stays legal', () => {
+  const V = createValuer(G);
+  const fair = createCombatAI(G, V, { beam: 1, maxReplays: 30 });
+  const states = [[['hanae', 'kuro'], ['kappa', 'karakasa'], 41], [['suzu', 'raiga'], ['oni_cub'], 42], [['kuro', 'suzu'], ['crow_tengu', 'bamboo_boar'], 43], [['hanae', 'raiga'], ['tengu_duelist'], 44]];
+  states.forEach(([pair, enemies, seed]) => {
+    const R = RUN.newRun({ heroes: pair, seed, trial: 0 });
+    for (let k = 0; k < 6; k++) { const pool = DATA.rewardPool(pair[k % 2], k % 2 ? 'uncommon' : 'common', null); if (pool.length) RUN.addCard(R, pool[(k * 3 + seed) % pool.length].id, {}); }
+    const opts = RUN.combatInit(R, { enemies, tier: 'normal', seed: 900 + seed });
+    const a = fair.decide(opts, []);
+    const b = fair.decide(opts, [], (C) => C.draw.reverse());
+    const c = fair.decide(opts, [], (C) => { const x = C.draw; for (let i = 0; i < x.length; i++) { const j = (i * 7 + 3) % x.length; const tmp = x[i]; x[i] = x[j]; x[j] = tmp; } });
+    t.ok(JSON.stringify(a) === JSON.stringify(b) && JSON.stringify(a) === JSON.stringify(c), `${pair.join(',')} vs ${enemies.join('+')}: the same first action for any order of the draw pile (${JSON.stringify(a)})`);
+  });
+  const R = RUN.newRun({ heroes: ['hanae', 'kuro'], seed: 9, trial: 0 });
+  const opts = Object.assign(RUN.combatInit(R, { enemies: ['kappa', 'tanuki_bandit'], tier: 'normal', seed: 31 }), { maxTurns: 40 });
+  const f1 = fair.fight(opts), f2 = fair.fight(opts);
+  t.ok(f1.summary.result === 'win' || f1.summary.result === 'lose', 'the fight finishes');
+  t.ok(JSON.stringify(f1.summary) === JSON.stringify(f2.summary), 'and replays identically');
+  const C = f1.C;
+  t.eq(C.hand.length + C.draw.length + C.discard.length + C.exhaust.length + C.powers.length + (C.inPlay ? 1 : 0), opts.deck.length + C.added, 'the real combat the bot played obeys card conservation');
 });
 
 // ------------------------------------------------------------------ house rules for the bot source

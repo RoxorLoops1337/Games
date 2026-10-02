@@ -625,10 +625,16 @@ DATA.cardHtml(inst | id, ctx?)     -> HTML string for the rules text. Keywords w
                                      un-gemmed, un-boosted card, or to base when ctx has live modifiers). ctx = { unit (acting hero unit, for live Might/row numbers), C (combat) } optional.
 DATA.cardPlain(inst | id, ctx?)    -> the same text without markup, for tests and aria labels
 DATA.opsText(ops, ctx?)            -> plain text for an op list (relic hooks, events). A `hook` op reads "Whenever you play a Skill, gain 1 Sumi.", "At the start of your turn, ...", "Next turn: ..."
+                                     The move, start, phase and hook fx arrays of registered ENEMIES are recognised by identity and read from the enemy's side ("Deal 5 damage and
+                                     apply 1 Vulnerable to the front hero."); ctx.enemy forces the enemy side for any other list.
+DATA.moveText(move)                -> the bestiary sentence for one enemy move (opsText of its fx with the enemy side forced)
+DATA.hookText(hook, ctx?)          -> one sentence for a hook {on, fx, filter?, limit?, once?, every?}. A hook inside a CARD says "you" for its own hero and "either hero" when filter.hero is
+                                     'any'; a relic or passive keeps the plain "you".
 DATA.gemText(gemId | def)          -> plain text, e.g. "+2 damage"
 DATA.relicText(id)                 -> relic.text
 DATA.statusText(id, n)             -> "Poison 4: At the start of its turn..." with the stack inserted
-DATA.intentText(intent)            -> e.g. "Deals 7 x2 to the front hero"
+DATA.intentText(intent)            -> e.g. "Deals 7 x2 to the front hero". Parts are grouped by target into one sentence: "Deals 6 to the front hero and applies 1 Weak and 1 Frail to both
+                                     heroes", "Gives all enemies 8 Block", "Heals the enemy with the lowest HP for 12" (C.intent carries who gets each effect: statuses[].to, blockTo, healTo)
 DATA.rowText(heroId, row)          -> e.g. "Front: +2 damage on attacks"
 DATA.targetMode(inst | id)         -> 'enemy' | 'none'
 DATA.cardOps(resolved)             -> flat op list
@@ -661,7 +667,7 @@ C.swap() -> events
 C.endTurn() -> events                  // 4.2 steps 3 to 6: discards, enemy phase, next turn start (or combat end)
 C.resolvePick(uids[]) -> events        // answers C.pending: unique candidates, count == min(n, candidates) (or <= n when optional or random)
 C.preview(uid, targetId?) -> { dmg: perHit|null, hits, block, heal }   // adjusted numbers for the live card text
-C.intent(enemyUnit) -> { move, name, kind, dmg (per hit or null), hits, tgt:[hero ids it would hit right now, taunt applied]|'random', block?, statuses:[{s, n, to:'front'|'back'|'both'|'random'|'lowest'|'self'}], adds:[{card,n,to}], summons:[{enemy,n}], text, stunned? }
+C.intent(enemyUnit) -> { move, name, kind, dmg (per hit or null), hits, tgt:[hero ids it would hit right now, taunt applied]|'random', block?, blockTo?, heal?, healTo?, statuses:[{s, n, to:'front'|'back'|'both'|'random'|'lowest'|'self'|'allEnemies'|'otherEnemy'|'lowestEnemy'}], adds:[{card,n,to}], summons:[{enemy,n}], text, stunned? }
 C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold }
 ```
 
@@ -951,11 +957,14 @@ parallax 0, particles x0.3, transitions become 150 ms fades, idle breathing ampl
 `{uid}`, `'combat:play'` `{uid, target}`, `'combat:endturn'`, `'combat:swap'`, `'combat:pick'` `{pending}`, `'combat:end'` `{result}`; screen_map emits `'map:paint'` `{q,r,cost}`, `'map:brush'` `{id}`, `'map:walk'` `{q,r}`. Screen owners
 must emit these. `tutorial.js` is one IIFE that only subscribes (`UI.bus.on`) and renders hint bubbles into `#tips` pointing at `UI.anchorEl(selector)`; it never mutates other screens and never gates input. Screens mark stable anchors with
 `data-tut="hand|energy|endturn|swap|intent|enemy|ink|hex|brushes|deck|relics"` (`LISTS.tutAnchors`). Each hint has a `META.tutorial` flag and shows once; the settings toggle "Hints" and `?notutorial=1` disable it. The `tutorial`
-suite drives the whole guided run beat by beat through the bus.
+suite drives the whole guided run beat by beat through the bus. Public API: `UI.tutorial = {enabled(), fire(id, force?), current() -> {id, el}|null, queue() -> [ids], dismiss(why?), reset(),
+seen(id), flag(id) -> 'tut_<id>', idle(), HINTS, RULES, shown, counts}`. The map's `hex` anchor is an invisible box: it marks the first hex of the cheapest chain toward the boss (the `paint`
+hint), moves to the hex that was just painted after a paint or a brush (the `walk` hint) and goes back to the chain once a walk starts.
 
 **Accessibility.** Keyboard: every interactive element is a real `<button>` or has `tabindex=0` and `role=button`, with a 3 px gold focus ring; Tab and arrows move focus, Enter or Space activate, Esc = back or close top overlay or pause.
-Combat: `1`..`9` and `0` select a hand card, Left and Right move between cards and then cycle targets, Enter plays, `E` ends the turn, `S` swaps, `D` and `G` open the draw and discard piles, `Z` toggles fast animation. Map: arrows pan, plus and
-minus zoom, Enter paints or walks to the selected hex, `B` opens the brush tray. Screen reader: every `UI.card` has `aria-label` = `DATA.cardPlain(inst)` plus cost and type; status, intent and relic elements use `statusText`, `intentText`,
+Combat: `1`..`9` and `0` select a hand card, Left and Right move between cards and then cycle targets, Enter plays, `E` ends the turn, `S` swaps, `D` and `G` open the draw and discard piles, `Z` toggles fast animation. Map: arrows pan (Shift pans three times
+faster), plus and minus zoom, `F` fits the whole page (again: follows the party), `Q E A D Z C` move a hex cursor (NW NE W E SW SE), Enter or Space paints or walks to the
+cursor hex like a tap, Esc cancels a chain preview or a brush, `B` opens the brush tray and `1` to `9` pick a brush. Screen reader: every `UI.card` has `aria-label` = `DATA.cardPlain(inst)` plus cost and type; status, intent and relic elements use `statusText`, `intentText`,
 `relicText`; a visually hidden `aria-live=polite` `#sr` region (declared in index.html, written with `UI.announce(text)`) receives one line per drained combat batch ("Kappa attacks Hanae for 7"). `textScale`: text uses `calc(var(--fs) * var(--ts))`; fixed-size parts must not clip at ts 1.3 (card
 rules text auto-shrinks to 0.8 then scrolls; buttons grow in width, not height); every screen is screenshotted once at ts 1.3. `colorblind` also draws gem and slot glyphs at 1.4x and adds a pattern fill to rarity (common solid, uncommon dots,
 rare stripes) and to buff, debuff and resource status discs.
@@ -1039,7 +1048,9 @@ URL params handled by `GAME.boot` (they work without `?debug=1`): `?goto=combat&
 
 ### 5.11 Screens
 
-Each screen file registers `UI.screens.<name>` and any overlays in `UI.overlays`. Screens build DOM inside `root` on `enter`. They never route on their own: they call `GAME.nodeDone()` or `UI.go(...)` for menu navigation.
+Each screen file registers `UI.screens.<name>` and any overlays in `UI.overlays`. Beyond this document the map screen exposes `UI.screens.map.mapDebug {state(), cam(), screenOf(q, r), hexAt(x, y)}`,
+a read-only window onto the live visit (camera, where a hex is on the stage, which hex is under a stage point) for suites and the screenshot and autoplay tools; the menu screens expose
+`state()` (title, heroSelect, library, settings, howto) and return null once left. Screens build DOM inside `root` on `enter`. They never route on their own: they call `GAME.nodeDone()` or `UI.go(...)` for menu navigation.
 Screen names and params (closed, `LISTS.screens`): `title`, `heroSelect`, `library {tab?}` (tabs `LISTS.libraryTabs`: Unlocks, Achievements, Story, Bestiary, History), `settings`, `howto`, `story {id, then?:{name, params}}`, `map`, `combat {node}`,
 `reward {rewards, source}`, `shop {node}`, `event {node}`, `camp {node}`, `forge {node}`, `chest {node}`, `gemcache {node}`, `chapterClear {chapter}` (chapters 1 and 2 only), `gameOver {summary}`, `victory {summary}`.
 Overlays (`LISTS.overlays`): `deck {mode:'view'|'pick'|'upgrade'|'remove'|'socket', cards?:[inst] (defaults to RUN.deck; the pile buttons pass their own), title?, filter?}` -> `Promise<uid|null>`; `pause`; `settings`; `relics {}`; `legend {}`;

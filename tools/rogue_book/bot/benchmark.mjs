@@ -18,8 +18,10 @@ export function benchmark(G, records, opts) {
   const { DATA, RUN, COMBAT } = G;
   const V = createValuer(G);
   const E = EFFORT[opts.effort || 'normal'];
-  const mk = (t) => createCombatAI(G, V, { beam: t[0], maxReplays: t[1] });
-  const ais = { normal: { 1: mk(E.normal[1]), 2: mk(E.normal[2]), 3: mk(E.normal[3]) }, elite: mk(E.elite), boss: mk(E.boss) };
+  const mkWith = (clair) => (t) => createCombatAI(G, V, { beam: t[0], maxReplays: t[1], clairvoyant: clair });
+  const build = (clair) => { const mk = mkWith(clair); return { normal: { 1: mk(E.normal[1]), 2: mk(E.normal[2]), 3: mk(E.normal[3]) }, elite: mk(E.elite), boss: mk(E.boss) }; };
+  const ais = build(false);
+  const aisClair = opts.clairvoyant ? build(true) : null;
   const cells = new Map();
   records.forEach((r) => {
     if (!r || !r.fights) return;
@@ -31,7 +33,7 @@ export function benchmark(G, records, opts) {
     });
   });
   const rows = [];
-  const total = { n: 0, lossG: 0, lossA: 0, winG: 0, winA: 0 };
+  const total = { n: 0, lossG: 0, lossA: 0, winG: 0, winA: 0, lossC: 0, winC: 0 };
   Array.from(cells.keys()).sort().forEach((key) => {
     const all = cells.get(key);
     const per = opts.perCell || 40;
@@ -39,7 +41,7 @@ export function benchmark(G, records, opts) {
     const picks = [];
     for (let k = 0; k < all.length && picks.length < per; k += step) picks.push(all[k]);
     const [ch, tier] = key.split(':');
-    let n = 0, lossG = 0, lossA = 0, winG = 0, winA = 0, turnsG = 0, turnsA = 0;
+    let n = 0, lossG = 0, lossA = 0, winG = 0, winA = 0, turnsG = 0, turnsA = 0, lossC = 0, winC = 0;
     picks.forEach(({ r, f, i }) => {
       const R = RUN.newRun({ heroes: r.pair.split(','), trial: r.trial, seed: r.seed });
       R.chapter = f.ch;
@@ -51,18 +53,20 @@ export function benchmark(G, records, opts) {
       o.maxTurns = 60;
       const maxSum = f.max0.reduce((a, b) => a + b, 0);
       const sg = COMBAT.simulate(Object.assign({}, o));
-      const ai = tier === 'boss' ? ais.boss : tier === 'elite' ? ais.elite : ais.normal[ch] || ais.normal[3];
-      const fa = ai.fight(o);
+      const pickAi = (set) => (tier === 'boss' ? set.boss : tier === 'elite' ? set.elite : set.normal[ch] || set.normal[3]);
+      const fa = pickAi(ais).fight(o);
       const sa = fa.summary;
+      if (aisClair) { const sc = pickAi(aisClair).fight(Object.assign({}, o)).summary; lossC += sc.result === 'win' ? sc.heroes.reduce((x, h) => x + (h.down ? h.maxHp : h.maxHp - h.hp), 0) : maxSum; winC += sc.result === 'win' ? 1 : 0; }
       const loss = (s) => (s.result === 'win' ? s.heroes.reduce((x, h) => x + (h.down ? h.maxHp : h.maxHp - h.hp), 0) : maxSum);
       n += 1; lossG += loss(sg); lossA += loss(sa);
       winG += sg.result === 'win' ? 1 : 0; winA += sa.result === 'win' ? 1 : 0; turnsG += sg.turns; turnsA += fa.turns || 0;
     });
     if (!n) return;
     const row = { ch: +ch, tier, n, lossG: Math.round(lossG / n * 10) / 10, lossA: Math.round(lossA / n * 10) / 10, winG: Math.round(1000 * winG / n) / 10, winA: Math.round(1000 * winA / n) / 10, turnsG: Math.round(turnsG / n * 10) / 10, turnsA: Math.round(turnsA / n * 10) / 10 };
+    if (aisClair) { row.lossC = Math.round(lossC / n * 10) / 10; row.winC = Math.round(1000 * winC / n) / 10; }
     row.change = row.lossG ? Math.round(1000 * (row.lossA - row.lossG) / row.lossG) / 10 : 0;
     rows.push(row);
-    total.n += n; total.lossG += lossG; total.lossA += lossA; total.winG += winG; total.winA += winA;
+    total.n += n; total.lossG += lossG; total.lossA += lossA; total.winG += winG; total.winA += winA; total.lossC += lossC; total.winC += winC;
   });
-  return { rows, total: { n: total.n, lossG: Math.round(total.lossG / Math.max(1, total.n) * 10) / 10, lossA: Math.round(total.lossA / Math.max(1, total.n) * 10) / 10, winG: Math.round(1000 * total.winG / Math.max(1, total.n)) / 10, winA: Math.round(1000 * total.winA / Math.max(1, total.n)) / 10 } };
+  return { rows, total: { n: total.n, lossG: Math.round(total.lossG / Math.max(1, total.n) * 10) / 10, lossA: Math.round(total.lossA / Math.max(1, total.n) * 10) / 10, winG: Math.round(1000 * total.winG / Math.max(1, total.n)) / 10, winA: Math.round(1000 * total.winA / Math.max(1, total.n)) / 10, lossC: Math.round(total.lossC / Math.max(1, total.n) * 10) / 10, winC: Math.round(1000 * total.winC / Math.max(1, total.n)) / 10 } };
 }

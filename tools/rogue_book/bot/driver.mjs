@@ -19,7 +19,7 @@ const STYLE = {
 
 const cache = new WeakMap();
 function toolsFor(G, cfg) {
-  const k = JSON.stringify([cfg.draftNoise, cfg.archetype, cfg.beam, cfg.depth, cfg.potential, cfg.effort, cfg.combat === 'beam']);
+  const k = JSON.stringify([cfg.draftNoise, cfg.archetype, cfg.beam, cfg.depth, cfg.potential, cfg.effort, cfg.combat === 'beam', !!cfg.clairvoyant]);
   let m = cache.get(G.DATA);
   if (!m) { m = new Map(); cache.set(G.DATA, m); }
   if (m.has(k)) return m.get(k);
@@ -30,7 +30,7 @@ function toolsFor(G, cfg) {
     normal: { normal: { 1: [1, 6, 50], 2: [2, 7, 80], 3: [2, 8, 90] }, elite: [2, 8, 100], boss: [3, 9, 130] },
     deep: { normal: { 1: [3, 8, 120], 2: [3, 8, 120], 3: [3, 8, 120] }, elite: [4, 10, 180], boss: [4, 10, 180] },
   }[cfg.effort || 'normal'] || null;
-  const mk = (t) => createCombatAI(G, V, { beam: cfg.beam || t[0], depth: cfg.depth || t[1], maxReplays: cfg.beam ? undefined : t[2], potential: cfg.potential, debugTurn: cfg.debugTurn, mode: cfg.combat === 'beam' ? 'beam' : 'rollout' });
+  const mk = (t) => createCombatAI(G, V, { beam: cfg.beam || t[0], depth: cfg.depth || t[1], maxReplays: cfg.beam ? undefined : t[2], potential: cfg.potential, debugTurn: cfg.debugTurn, mode: cfg.combat === 'beam' ? 'beam' : 'rollout', clairvoyant: !!cfg.clairvoyant });
   const AI = { 1: mk(EFFORT.normal[1]), 2: mk(EFFORT.normal[2]), 3: mk(EFFORT.normal[3]) };
   const AIelite = mk(EFFORT.elite);
   const AIboss = mk(EFFORT.boss);
@@ -49,7 +49,7 @@ export function playRun(G, cfg) {
   const R = RUN.newRun({ heroes: cfg.heroes, trial: cfg.trial, seed: cfg.seed, unlocked });
   const rng = U.rng(U.hash(cfg.seed, 'bot', cfg.heroes.join(','), cfg.trial));
   const rec = {
-    seed: cfg.seed, pair: cfg.heroes.join(','), trial: cfg.trial, style: cfg.style, combat: cfg.combat,
+    seed: cfg.seed, pair: cfg.heroes.join(','), trial: cfg.trial, style: cfg.style, combat: cfg.combat, effort: cfg.effort || 'normal', unlocked: cfg.unlocked, draftNoise: cfg.draftNoise, clairvoyant: !!cfg.clairvoyant,
     result: 'cap', chapter: 1, chaptersCleared: 0, death: null, steps: 0,
     fights: [], picks: [], buys: [], events: [], relics: [], gems: [], chapters: [], camps: [], flags: {},
     forcedFights: 0, starve: 0, replays: 0, finalDeck: [], finalRelics: [], finalGold: 0,
@@ -180,7 +180,8 @@ export function playRun(G, cfg) {
     const before = R.gold;
     const log = P.shopVisit(R, node, cfg.shopRatio);
     log.forEach((b) => rec.buys.push(Object.assign({ ch: R.chapter }, b)));
-    rec.camps.push({ ch: R.chapter, kind: 'shop', spent: before - R.gold, gold: before, buys: log.length });
+    const left = P.shopLeft(R, node);
+    rec.camps.push({ ch: R.chapter, kind: 'shop', spent: before - R.gold, gold: before, goldAfter: R.gold, buys: log.length, left: left.filter((x) => x.price <= R.gold).map((x) => x.kind + ':' + x.id + '@' + x.price + ':' + x.ratio), unaffordable: left.filter((x) => x.price > R.gold).length });
     return finish();
   }
   function doEvent(node) {
@@ -379,6 +380,7 @@ export function playRun(G, cfg) {
       let moved = false;
       for (const c of path) {
         const res = RUN.step(R, c[0], c[1]);
+        if (cfg.trace) cfg.trace.push(`    step ${c[0]},${c[1]} -> ${res ? res.kind || 'x' : 'null'} pos ${M.pos.q},${M.pos.r}`);
         moved = true;
         if (R.node || R.done) break;
         if (res && res.kind && res.kind !== 'well' && res.kind !== 'brush') break;
@@ -465,8 +467,14 @@ export function playRun(G, cfg) {
     void before;
     if (cfg.trace) cfg.trace.push(`  visit ${best.t.type} at ${best.t.q},${best.t.r}`);
     const vk = R.chapter + ':' + key(best.t.q, best.t.r);
-    visits.set(vk, (visits.get(vk) || 0) + 1);
+    // a visit that got somewhere (arrived, was cut short by a node on the way, or came closer) is progress and costs nothing; only a walk that
+    // goes nowhere counts against the three-strikes rule (a tile that does not resolve is then left alone)
+    const d0 = MAP.dist(M.pos.q, M.pos.r, best.t.q, best.t.r);
+    const nodes0 = R.stats.eventsSeen + R.stats.shopsVisited + R.stats.kills + R.stats.chestsOpened + R.stats.wellsDrunk + R.stats.brushesUsed;
     walkTo(best.t, false);
+    const nodes1 = R.stats.eventsSeen + R.stats.shopsVisited + R.stats.kills + R.stats.chestsOpened + R.stats.wellsDrunk + R.stats.brushesUsed;
+    const progressed = R.node || R.done || nodes1 !== nodes0 || MAP.dist(M.pos.q, M.pos.r, best.t.q, best.t.r) < d0;
+    visits.set(vk, (visits.get(vk) || 0) + (progressed ? 0.15 : 1));
     return true;
   }
 
@@ -626,7 +634,7 @@ export function playRun(G, cfg) {
     if (cfg.debugIslands) { const M = R.map; const painted = Object.values(M.tiles).filter((t) => t.painted && t.type !== 'block').length; const reach = MAP.reachable(M).size; if (painted > reach) cfg.debugIslands.push({ ch: R.chapter, painted, reach, step }); }
     if (!moved) {
       rec.stall = (rec.stall || 0) + 1;
-      if (rec.stall > 6) { rec.result = 'stall'; break; }
+      if (rec.stall > 6) { rec.result = 'stall'; if (cfg.debugStall) cfg.debugStall(R); break; }
     }
     void sig;
   }

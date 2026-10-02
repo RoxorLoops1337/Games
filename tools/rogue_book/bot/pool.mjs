@@ -8,18 +8,22 @@ import { playRun } from './driver.mjs';
 
 export function defaultJobs() { return Math.max(1, Math.min(os.cpus().length, 8)); }
 
-export function runSerial(tasks, onProgress) {
+// onRecord(i, rec) fires as each run finishes (completion order, i is the index in the task list): the CLI uses it to stream results to
+// a file, so a long balance run that is killed half way keeps everything it had finished.
+export function runSerial(tasks, onProgress, onRecord) {
   const G = loadGame();
   return tasks.map((cfg, i) => {
     let rec;
     try { rec = playRun(G, cfg); } catch (e) { rec = { error: String((e && e.stack) || e), pair: cfg.heroes.join(','), seed: cfg.seed, trial: cfg.trial, result: 'error', fights: [], picks: [] }; }
+    if (onRecord) onRecord(i, rec);
     if (onProgress) onProgress(i + 1, tasks.length);
     return rec;
   });
 }
 
-export function runPool(tasks, jobs, onProgress) {
-  if (jobs <= 1 || tasks.length <= 1) return Promise.resolve(runSerial(tasks, onProgress));
+export function runPool(tasks, jobs, onProgress, onRecord) {
+  if (!tasks.length) return Promise.resolve([]);
+  if (jobs <= 1 || tasks.length <= 1) return Promise.resolve(runSerial(tasks, onProgress, onRecord));
   const n = Math.min(jobs, tasks.length);
   const out = new Array(tasks.length);
   let next = 0, done = 0;
@@ -38,6 +42,7 @@ export function runPool(tasks, jobs, onProgress) {
         if (m.ready) { feed(); return; }
         const cfg = tasks[m.id];
         out[m.id] = m.error ? { error: m.error, pair: cfg.heroes.join(','), seed: cfg.seed, trial: cfg.trial, result: 'error', fights: [], picks: [] } : m.rec;
+        if (onRecord) onRecord(m.id, out[m.id]);
         done += 1;
         if (onProgress) onProgress(done, tasks.length);
         if (done === tasks.length) finish(); else feed();

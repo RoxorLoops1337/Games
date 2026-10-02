@@ -20,9 +20,14 @@
 // Measured against COMBAT.greedyPolicy on the same decks and fights it loses 30 to 45 percent less HP and wins more fights (see the
 // report header and tests/rogue_book_bot.test.mjs).
 //
-// Honesty about bias (also in the report): the replay sees the real RNG, so the bot is clairvoyant about the order of cards a draw
-// effect will bring and about "random" targets inside one turn. It does NOT see the next turn's hand or the enemy's next weighted
-// roll (it never ends the turn inside a lookahead), and like a human it reads the visible intents.
+// Fair planning (default; cfg.clairvoyant turns it off). A replay uses the real RNG, so left alone the bot would know the order of its
+// own draw pile and what a draw effect will bring. Before it tries its candidate actions it therefore RE-SHUFFLES the draw pile of its
+// planning copy (a determinization: same cards, hidden order, one sample per decision, shared by every candidate so the comparison is
+// fair), the way a human who knows the contents but not the order of the pile reasons. The real combat is never touched: the chosen
+// action is then played on the true state. What is still seen: "random" targets and a reshuffle in the middle of a lookahead come from
+// the engine's private RNG, which the bot cannot reseed, so for the plays inside one turn they are partly predictable. The bot does
+// NOT see the next turn's hand or the enemy's next weighted roll (it never ends the turn inside a lookahead), and like a human it
+// reads the visible intents.
 import { isNum, isObj, asList } from './game.mjs';
 
 const WIN = 1000;
@@ -30,11 +35,11 @@ const LOSE = -1000;
 const DOWN_PEN = 45;
 
 export function createCombatAI(G, V, cfg) {
-  const defaults = { beam: 3, depth: 8, maxReplays: 150, potential: 0, mode: 'rollout' };
+  const defaults = { beam: 3, depth: 8, maxReplays: 150, potential: 0, mode: 'rollout', clairvoyant: false };
   const given = cfg || {};
   cfg = Object.assign({}, defaults);
   Object.keys(given).forEach((k) => { if (given[k] !== undefined) cfg[k] = given[k]; });
-  const { COMBAT, DATA } = G;
+  const { COMBAT, DATA, U } = G;
   const threatCache = new Map();
 
   // ------------------------------------------------------------------ static enemy threat (damage-equivalents per round)
@@ -275,11 +280,29 @@ export function createCombatAI(G, V, cfg) {
   }
 
   // ------------------------------------------------------------------ search
-  function replay(opts, hist) {
+  // fair = { at, seed } hides the order of the draw pile from the planner: after the first `at` actions (the real history) the draw pile of
+  // this throwaway copy is shuffled with a seeded stream, then the remaining (hypothetical) actions are applied.
+  function replay(opts, hist, fair) {
     const C = COMBAT.create(opts);
     C.start();
-    for (let i = 0; i < hist.length; i++) COMBAT.applyAction(C, hist[i]);
+    for (let i = 0; i < hist.length; i++) {
+      if (fair && i === fair.at) hideDrawOrder(C, fair.seed, fair.pre);
+      COMBAT.applyAction(C, hist[i]);
+    }
+    if (fair && hist.length <= fair.at) hideDrawOrder(C, fair.seed, fair.pre);
     return C;
+  }
+  // The pile is put in a canonical order first (by uid), so what the planner sees depends on WHICH cards are in the draw pile and never on
+  // the order the real shuffle gave them (tests/rogue_book_bot.test.mjs checks this by permuting the real pile).
+  function hideDrawOrder(C, seed, pre) {
+    if (pre) pre(C);
+    if (C.phase !== 'player' || C.draw.length < 2) return;
+    C.draw.sort((a, b) => a.uid - b.uid);
+    const r = U.rng(seed);
+    for (let i = C.draw.length - 1; i > 0; i--) {
+      const j = Math.floor(r() * (i + 1));
+      const t = C.draw[i]; C.draw[i] = C.draw[j]; C.draw[j] = t;
+    }
   }
 
   function stateKey(C) {
@@ -332,7 +355,7 @@ export function createCombatAI(G, V, cfg) {
   }
 
   // answer the pending pick of C (a state reached by hist) by trying each sensible answer
-  function resolvePending(opts, hist, C, fx, budget) {
+  function resolvePending(opts, hist, C, fx, budget, fair) {
     const p = C.pending;
     if (!p) return { hist, C };
     const pile = p.from === 'hand' ? C.hand : p.from === 'draw' ? C.draw : p.from === 'discard' ? C.discard : C.exhaust;
@@ -350,7 +373,7 @@ export function createCombatAI(G, V, cfg) {
     let best = null;
     for (const uids of options) {
       const h2 = hist.concat([{ type: 'pick', uids }]);
-      const C2 = replay(opts, h2);
+      const C2 = replay(opts, h2, fair);
       budget.n += 1;
       if (C2.pending) continue;                                      // refused or chained: skip
       const v = evaluate(C2, fx) + (junkFirst ? 0 : 0);
@@ -359,7 +382,7 @@ export function createCombatAI(G, V, cfg) {
     if (!best) {
       const uids = cands.slice(0, p.n).map((c) => c.uid);
       const h2 = hist.concat([{ type: 'pick', uids }]);
-      return { hist: h2, C: replay(opts, h2), v: -1e9 };
+      return { hist: h2, C: replay(opts, h2, fair), v: -1e9 };
     }
     return best;
   }
@@ -419,12 +442,12 @@ export function createCombatAI(G, V, cfg) {
     }
     return evaluate(C, fx);
   }
-  function scoreChild(opts, hist, a, fx, budget) {
+  function scoreChild(opts, hist, a, fx, budget, fair) {
     let h2 = hist.concat([a]);
-    let C2 = replay(opts, h2);
+    let C2 = replay(opts, h2, fair);
     budget.n += 1;
     if (!C2.hand) return null;
-    if (C2.pending) { const r = resolvePending(opts, h2, C2, fx, budget); h2 = r.hist; C2 = r.C; }
+    if (C2.pending) { const r = resolvePending(opts, h2, C2, fx, budget, fair); h2 = r.hist; C2 = r.C; }
     if (C2.pending) return null;
     const key = stateKey(C2);
     const v1 = evaluate(C2, fx);
@@ -432,14 +455,15 @@ export function createCombatAI(G, V, cfg) {
     if (!C2.result && C2.phase === 'player') vr = Math.max(v1, rolloutValue(C2, fx));       // C2 is a throwaway replay: the rollout may mutate it
     return { a, hist: h2, v1, key, score: Math.max(v1, vr) };
   }
-  function planRollout(opts, hist, C, fx) {
+  function planRollout(opts, hist, C, fx, pre) {
     const budget = { n: 0 };
     const root = evaluate(C, fx);
+    const fair = cfg.clairvoyant ? null : { at: hist.length, seed: U.hash(opts.seed, 'fair', C.turn, hist.length), pre };
     const seen = new Set([stateKey(C)]);
     const firsts = [];
     for (const a of candidates(C)) {
       if (budget.n >= cfg.maxReplays) break;
-      const r = scoreChild(opts, hist, a, fx, budget);
+      const r = scoreChild(opts, hist, a, fx, budget, fair);
       if (!r || seen.has(r.key)) continue;
       seen.add(r.key);
       firsts.push(r);
@@ -449,11 +473,11 @@ export function createCombatAI(G, V, cfg) {
     // second ply on the best few first moves
     for (const f of firsts.slice(0, cfg.beam)) {
       if (budget.n >= cfg.maxReplays) break;
-      const Cf = replay(opts, f.hist); budget.n += 1;
+      const Cf = replay(opts, f.hist, fair); budget.n += 1;
       if (Cf.phase !== 'player' || Cf.result || Cf.pending) continue;
       for (const a of candidates(Cf)) {
         if (budget.n >= cfg.maxReplays) break;
-        const r = scoreChild(opts, f.hist, a, fx, budget);
+        const r = scoreChild(opts, f.hist, a, fx, budget, fair);
         if (r && r.score > f.score + 1e-6 && r.score > (best ? best.score : -1e9) + 1e-6) best = { a: f.a, hist: f.hist, v1: f.v1, score: r.score, via: r.a };
       }
     }
@@ -462,14 +486,13 @@ export function createCombatAI(G, V, cfg) {
 
   // ------------------------------------------------------------------ one whole fight
   // opts: the COMBAT.create options. Returns { C, hist, actions, replays, summary }
-  function fight(opts, info) {
-    info = info || {};
+  function makeFx(opts) {
     const deck = opts.deck || [];
     const relicIds = opts.relics || [];
     const heroIds = (opts.heroes || []).map((h) => h.id);
     const profile = V.profile(deck, heroIds, relicIds);
     const prior = Math.max(9, Math.min(60, profile.n ? (profile.dmgPts / profile.n) * 3.4 * (0.8 + 0.12 * (opts.chapter || 1)) : 14));
-    const fx = {
+    return {
       profile,
       worth: new Map(),                                              // per fight: it depends on this fight's deck profile
       D: (C) => {
@@ -478,6 +501,19 @@ export function createCombatAI(G, V, cfg) {
         return Math.max(7, (prior * 1.6 + seenDmg) / (1.6 + t));
       },
     };
+  }
+  // One decision of the rollout planner at the state reached by hist: the action it would play, or { type: 'end' }. `pre(C)` (tests only) may
+  // reorder the draw pile of the planning copy before it is hidden, to prove the choice does not depend on the real order.
+  function decide(opts, hist, pre) {
+    const fx = makeFx(opts);
+    const C = replay(opts, hist);
+    if (C.phase !== 'player' || C.pending) return null;
+    const plan = planRollout(opts, hist, C, fx, pre);
+    return plan.best && plan.best.score > plan.root + 1e-6 ? plan.best.a : { type: 'end' };
+  }
+  function fight(opts, info) {
+    info = info || {};
+    const fx = makeFx(opts);
     let hist = [];
     let C = replay(opts, hist);
     let replays = 0, turns = 0, guard = 0;
@@ -508,7 +544,8 @@ export function createCombatAI(G, V, cfg) {
       replays += plan.replays;
       if (info.trace) info.trace({ turn: C.turn, energy: C.energy, hand: C.hand.map((c) => c.id + (c.up ? '+' : '')), enemies: C.enemies.filter((e) => !e.down).map((e) => e.id + ':' + e.hp), rootV: plan.root, bestV: plan.best ? plan.best.score : plan.root, plan: plan.best ? plan.best.hist.slice(hist.length) : [], replays: plan.replays, D: fx.D(C) });
       if (plan.best && plan.best.score > plan.root + 1e-6) {
-        hist = plan.best.hist;
+        // play only the first action of the plan, on the true state: a pick it raises is answered next, from the real piles
+        hist = hist.concat([plan.best.a]);
         C = replay(opts, hist);
         replays += 1;
         continue;
@@ -522,5 +559,5 @@ export function createCombatAI(G, V, cfg) {
     return { C, hist, turns: C.turn, actions: hist.length, replays, summary };
   }
 
-  return { fight, evaluate, enemyDpr, cfg };
+  return { fight, decide, evaluate, enemyDpr, cfg };
 }

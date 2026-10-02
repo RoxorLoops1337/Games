@@ -209,7 +209,9 @@
   box-shadow: inset 0 0 0 1.5px rgba(245, 201, 106, .85), inset 0 0 0 3px rgba(20, 15, 46, .9), 0 3px 6px rgba(60, 35, 10, .4); animation: nkPop .5s var(--ease-back) both; animation-delay: calc(var(--i, 0) * 110ms + 60ms); }
 .ev-chip.k-good { box-shadow: inset 0 0 0 1.5px #8dffc2, inset 0 0 0 3px rgba(20, 15, 46, .9), 0 3px 6px rgba(60, 35, 10, .4); } .ev-chip.k-bad { box-shadow: inset 0 0 0 1.5px #ff8a9a, inset 0 0 0 3px rgba(20, 15, 46, .9), 0 3px 6px rgba(60, 35, 10, .4); }
 .ev-chip-ico { display: grid; place-items: center; flex: none; }
-.ev-chip.card { padding-left: 10px; border-radius: 16px; min-height: 60px; } .ev-chip.card .ev-chip-ico .card { --cw: 44px; }
+/* the modifier is `has-card`, never `card`: a bare .card class makes the chip a full size playing card (base.css), 266 px tall, and pushes Continue off the stage */
+.ev-chip.has-card { padding-left: 10px; border-radius: 16px; min-height: 60px; } .ev-chip.has-card .ev-chip-ico .card { --cw: 44px; }
+.ev-gains { align-items: flex-start; align-content: flex-start; }
 .ev-chip-ico .ico { border-radius: 50%; }
 .ev-go { align-self: flex-end; margin-top: 6px; } .ev-go.ev-fight { animation: breathe 1.2s ease-in-out infinite; }
 

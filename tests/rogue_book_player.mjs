@@ -16,6 +16,7 @@
 //   cfg: heroes [idA, idB], trial, seed text, daily, cheat (default true), plan (node kinds to visit per chapter, in order),
 //        eventPick (index of the fable choice to take, -1 = last), dragPlays (play no-target cards by dragging), pickBy (a function
 //        (screen, options) -> index for reward cards), maxCombatTurns.
+//   With cheat on it also unlocks the requested heroes and the Ink Trial in the live profile (see the top of makePlayer).
 //   step() does ONE thing for the current screen or overlay and resolves to a short label. Everything is virtual time (g._tick).
 //   shown: Set of screen names and overlay names seen so far.  stats: counters (plays, drags, taps, ...).
 export function makePlayer(g, cfg = {}) {
@@ -26,6 +27,17 @@ export function makePlayer(g, cfg = {}) {
   const shown = new Set();
   const log = [];
   const state = { doneKinds: new Set(), chapter: 0, planIdx: 0, visited: {}, fightTurns: 0, lastKey: '', stuck: 0, brushTried: false, campDone: 0, shopBought: 0, evPick: C0.eventPick };
+
+  // The documented cheat for a fresh profile: heroes 3 and 4 and the higher Ink Trials are locked until achievements are earned, so a
+  // test that wants Suzu, Raiga or Trial 5 unlocks them in the live profile first (cfg.cheat only; locked CARDS stay locked).
+  if (C0.cheat && META && META.profile) {
+    try {
+      const P = META.profile;
+      C0.heroes.forEach((id) => { if (!META.isUnlocked('hero', id) && P.unlocked && Array.isArray(P.unlocked.hero)) P.unlocked.hero.push(id); });
+      if (C0.trial > 0 && P.stats) { P.stats.wins = Math.max(P.stats.wins || 0, 1); P.stats.trialBest = Math.max(P.stats.trialBest || 0, C0.trial - 1); }
+      if (META.save) META.save();
+    } catch (e) { /* a profile that cannot be edited just leaves the screens to refuse, and the player reports it */ }
+  }
 
   const $ = (sel, root) => (root || doc).querySelector(sel);
   const $$ = (sel, root) => [...(root || doc).querySelectorAll(sel)];
@@ -225,7 +237,9 @@ export function makePlayer(g, cfg = {}) {
     shown.add('combat');
     // keep a cheating party alive: the policy is greedy, the point is to cross the screens
     // the screen still drains the events of the last action (a real browser plays the beats in real frames): input is locked until it finishes
-    if (d.state && (d.state.draining || d.state.turnEnding)) { await tick(250); return note('combat drain'); }
+    // (an open pick prompt keeps the screen "draining" until it is answered, so it is answered first)
+    const pickOpen = !!(C.pending && (C.pending.kind || C.pending.length));
+    if (!pickOpen && d.state && (d.state.draining || d.state.turnEnding)) { await tick(250); return note('combat drain'); }
     if (C0.cheat) C.heroes.forEach((h) => { if (!h.down && h.hp < h.maxHp * 0.5) { d.setHp(h.id, Math.floor(h.maxHp * 0.9)); } });
     if (C.phase === 'over' || C.result) { await tick(900); return note('combat over ' + C.result); }
     // an open pick prompt (hand select mode): answer it through the Confirm plaque

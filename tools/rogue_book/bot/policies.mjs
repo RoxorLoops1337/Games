@@ -406,12 +406,27 @@ export function createPolicies(G, V, cfg) {
     return 0;
   }
   // buys what is worth its price, removes junk, cuts gems. Returns a log of purchases.
+  // Gold is worth nothing once the run is over, so a human buys more freely the later it is and the more gold is piling up: the bar
+  // (utility per gold) falls with the chapter and with the size of the purse. Chapter 1 keeps the full bar (saving for a better shop is
+  // right early), chapter 3 buys anything that helps.
+  function spendBar(R, base) {
+    const chap = R.chapter >= 3 ? 0.3 : R.chapter === 2 ? 0.6 : 1;
+    const purse = R.gold >= 260 ? 0.4 : R.gold >= 180 ? 0.65 : 1;
+    return base * chap * purse;
+  }
+  // what is left on the shelves, for the report: the best bot utility per gold among the unsold items the party could not or would not buy
+  function shopLeft(R, node) {
+    const P = profileOf(R);
+    const m = mean(deckNets(R, P).map((x) => x.net));
+    return node.stock.items.filter((it) => !it.sold).map((it) => ({ kind: it.kind, id: it.id, price: it.price, ratio: Math.round(100 * shopItemUtility(R, it, P, m) / it.price) / 100 }));
+  }
   function shopVisit(R, node, minRatio) {
     const stock = node.stock;
     const log = [];
-    minRatio = minRatio === undefined ? 0.15 : minRatio;
+    const base = minRatio === undefined ? 0.15 : minRatio;
     socketAll(R, false);
     for (let guard = 0; guard < 14; guard++) {
+      minRatio = spendBar(R, base);
       const P = profileOf(R);
       const nets = deckNets(R, P);
       const m = mean(nets.map((x) => x.net));
@@ -511,5 +526,5 @@ export function createPolicies(G, V, cfg) {
     }
   }
 
-  return { chooseCard, bestSocket, bestGemOf, socketAll, socketGain, bestUpgrade, removalCandidates, relicScore, runOpsValue, chooseEventOption, eventChoiceValue, shopVisit, campUtilities, resolvePendingChoices, hpFrac, profileOf, isJunk, deckNets, mean };
+  return { chooseCard, bestSocket, bestGemOf, socketAll, socketGain, bestUpgrade, removalCandidates, relicScore, runOpsValue, chooseEventOption, eventChoiceValue, shopVisit, shopLeft, campUtilities, resolvePendingChoices, hpFrac, profileOf, isJunk, deckNets, mean };
 }

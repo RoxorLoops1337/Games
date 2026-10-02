@@ -1777,6 +1777,36 @@ t.test('C.intent: live numbers (Might, Weak, enemyDmg, the target\'s Vulnerable)
   t.eq(C.intent('t_rich#1').move, 'cnd', 'C.intent also takes an id'); u.down = true; t.eq(C.intent(u), null, 'a dead unit has no intent');
 });
 
+t.test('C.intent: help for other enemies says who gets it (to, blockTo, healTo) and what Block it shows', () => {
+  const W = world();
+  const pal = W.enemy('pal', { hp: [30, 30], moves: { idle: { name: 'Idle', kind: 'attack', fx: [{ op: 'dmg', n: 1 }] } }, ai: { seq: ['idle'] } });
+  const hurt = W.enemy('hurt', { hp: [40, 40], moves: { idle: { name: 'Idle', kind: 'attack', fx: [{ op: 'dmg', n: 1 }] } }, ai: { seq: ['idle'] } });
+  const boss = W.enemy('boss', { hp: [100, 100], moves: {
+    wall: { name: 'Wall', kind: 'defend', fx: [{ op: 'block', n: 8, tgt: 'allEnemies' }] },
+    warm: { name: 'Warm', kind: 'defend', fx: [{ op: 'block', n: 5, tgt: 'otherEnemy' }] },
+    mend: { name: 'Mend', kind: 'heal', fx: [{ op: 'heal', n: 12, tgt: 'lowestEnemy' }, { op: 'block', n: 4, tgt: 'lowestEnemy' }] },
+    tight: { name: 'Tight', kind: 'attack', fx: [{ op: 'dmg', n: 10, tgt: 'front' }, { op: 'status', s: 'might', n: 2, tgt: 'otherEnemy' }, { op: 'status', s: 'ritual', n: 1 }, { op: 'status', s: 'weak', n: 1 }] },
+    own: { name: 'Own', kind: 'defend', fx: [{ op: 'block', n: 6 }, { op: 'heal', n: 3 }] },
+    strip: { name: 'Strip', kind: 'debuff', fx: [{ op: 'removeStatus', s: 'might', tgt: 'allEnemies' }, { op: 'removeStatus', s: 'thorns', tgt: 'self' }] },
+  }, ai: { seq: ['wall'] } });
+  const C = W.fight({ enemies: [boss, pal, hurt] });
+  const u = C.enemies[0];
+  C.enemies[2].hp = 7;
+  const at = (m) => { u._move = m; return C.intent(u); };
+  let it = at('wall'); t.deep([it.block, it.blockTo], [8, 'allEnemies'], 'a Block for every enemy is reported as that');
+  it = at('warm'); t.deep([it.block, it.blockTo], [5, 'otherEnemy'], 'a Block for another enemy is no longer dropped');
+  it = at('mend'); t.deep([it.heal, it.healTo, it.block, it.blockTo], [12, 'lowestEnemy', 4, 'lowestEnemy'], 'a heal and a Block for the weakest enemy');
+  it = at('tight'); t.deep(it.statuses, [{ s: 'might', n: 2, to: 'otherEnemy' }, { s: 'ritual', n: 1, to: 'self' }, { s: 'weak', n: 1, to: 'front' }], 'a buff for another enemy keeps its target, help for itself stays self');
+  it = at('own'); t.deep([it.block, it.blockTo, it.heal, it.healTo], [6, 'self', 3, 'self'], 'help for itself says self');
+  it = at('strip'); t.deep(it.removes, [{ s: 'might', to: 'allEnemies' }, { s: 'thorns', to: 'self' }], 'a removal keeps its side too');
+  C.enemies[2].down = true; it = at('mend'); t.deep([it.heal, it.healTo], [12, 'lowestEnemy'], 'still aimed at the lowest living enemy');
+  // reading the same objects: the sentence needs no lookup
+  t.eq(at('wall').text, 'Gives all enemies 8 Block', 'text: all enemies');
+  t.eq(at('warm').text, 'Gives another enemy 5 Block', 'text: another enemy');
+  t.eq(at('tight').text, 'Deals 10 to the front hero, gains 1 Ritual, applies 1 Weak and gives another enemy 2 Might', 'text: a strike with help for itself and for another');
+  t.eq(at('own').text, 'Gains 6 Block and heals 3', 'text: help for itself');
+});
+
 // ------------------------------------------------------------------ phases, summons, lanes
 t.test('phases: fire when hp/maxHp falls below at, in descending order, run fx, replace the ai and re-roll at once; never on a killing blow', () => {
   const W = world();

@@ -846,7 +846,7 @@
       const extras = mk('div', { class: 'ib-x' });
       (it.statuses || []).forEach((s) => {
         if (!DATA.statuses[s.s]) return;
-        const c = UI.status(s.s, s.n, { size: 'xs', focusable: false, tip: false, class: 'ib-st to-' + (s.to === 'self' ? 'self' : 'hero') });
+        const c = UI.status(s.s, s.n, { size: 'xs', focusable: false, tip: false, class: 'ib-st to-' + (s.to === 'self' || s.to === 'allEnemies' || s.to === 'otherEnemy' || s.to === 'lowestEnemy' ? 'self' : 'hero') });
         extras.appendChild(c);
       });
       (it.summons || []).forEach((s) => extras.appendChild(mk('span', { class: 'ib-chip' }, ico('intent', 'summon', 22, {}), mk('b', { text: '+' + (s.n || 1) }))));

@@ -36,8 +36,10 @@
 //   C.endTurn()                   DESIGN 4.2 steps 3 to 6: turn end effects, the enemy phase, round end, new intents, the next player phase (or the end)
 //   C.preview(uid, targetId?) -> { dmg (per hit of the first dmg op, or null), hits, block, heal }   adjusted for Might, rows, Weak, Frail, Bulwark and the
 //        chosen target's Vulnerable and Mark. Pure: never consumes C.rng.
-//   C.intent(enemyUnit | id) -> { move, name, kind, dmg, hits, tgt:[hero ids]|'random', tgtKind, taunted, block?, heal?, statuses:[{s,n,to}], adds, summons,
-//        removes, steals?, swap?, flee?, text, stunned? }   computed live from current state (Weak, Might, Vulnerable, Taunt, enemyDmg). Pure.
+//   C.intent(enemyUnit | id) -> { move, name, kind, dmg, hits, tgt:[hero ids]|'random', tgtKind, taunted, block?, blockTo?, heal?, healTo?, statuses:[{s,n,to}],
+//        adds, summons, removes:[{s,to}], steals?, swap?, flee?, text, stunned? }   computed live from current state (Weak, Might, Vulnerable, Taunt, enemyDmg). Pure.
+//        `to`, `blockTo` and `healTo` say who gets the effect as the op does: 'self' (the default for help), 'allEnemies', 'otherEnemy', 'lowestEnemy' for
+//        the enemy side, 'front' 'back' 'both' 'random' 'lowest' for heroes. block and heal count every op, whoever it is aimed at (read blockTo and healTo).
 //   C.summary() -> { result, heroes:[{id,hp,maxHp,down}], maxHpGain:{heroId:n}, stats, kills, ink, gold }
 //        Downed heroes are reported as down with hp 0: RUN revives them at mods.reviveFrac (COMBAT never does, except through a revive op).
 //        heroes[].maxHp already includes maxHpGain. gold is the NET change of run gold: gold ops, minus gold stolen, plus stolen gold returned by
@@ -546,7 +548,8 @@ const COMBAT = (() => {
       const info = { move: u._move, name: move.name, kind: move.kind, dmg: null, hits: 0, tgt: [], tgtKind: null, taunted: false, statuses: [], adds: [], summons: [], removes: [] };
       const env = { kind: 'enemy', enemy: u };
       let best = -1;
-      const toName = (t, dflt) => (t === undefined ? dflt : (t === 'allEnemies' || t === 'otherEnemy' || t === 'lowestEnemy') ? 'self' : t);
+      // who an effect lands on, as the op says it ('allEnemies' 'otherEnemy' 'lowestEnemy' stay what they are, so help for another enemy is not mistaken for help for itself)
+      const toName = (t, dflt) => (t === undefined ? dflt : t);
       dryWalk(move.fx || [], env, (op) => {
         switch (op.op) {
           case 'dmg': {
@@ -565,10 +568,17 @@ const COMBAT = (() => {
           }
           case 'block': {
             const t = op.tgt || 'self';
-            if (t === 'self' || t === 'allEnemies') info.block = (info.block || 0) + blockAmount(u, Math.max(0, evalV(op.n, env, front())), 0);
+            const n = Math.max(0, evalV(op.n, env, front()));
+            // the recipient of a Block for "another enemy" is rolled when the move runs, so the intent shows the plain amount; the lowest enemy is known now
+            const low = t === 'lowestEnemy' ? livingEnemies().slice().sort((a, b) => (a.hp - b.hp) || (a.lane - b.lane))[0] : null;
+            info.block = (info.block || 0) + (t === 'otherEnemy' ? Math.floor(n) : blockAmount(low || u, n, 0));
+            if (!info.blockTo) info.blockTo = t;
             break;
           }
-          case 'heal': info.heal = (info.heal || 0) + Math.max(0, evalV(op.n, env, front())); break;
+          case 'heal':
+            info.heal = (info.heal || 0) + Math.max(0, evalV(op.n, env, front()));
+            if (!info.healTo) info.healTo = op.tgt || 'self';
+            break;
           case 'status': {
             const dflt = D.isDebuff(op.s) ? 'front' : 'self';
             info.statuses.push({ s: op.s, n: evalV(op.n, env, front()), to: toName(op.tgt, dflt) });

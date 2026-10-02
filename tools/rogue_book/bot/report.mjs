@@ -85,6 +85,7 @@ export function buildReport(records, G, opts) {
   S.meta = {
     runs: good.length, errors: errors.length, errorSamples: errors.slice(0, 3).map((e) => e.error), timeouts: good.filter((r) => r.death && r.death.timeout).length, stalls: good.filter((r) => r.result === 'stall').length, caps: good.filter((r) => r.result === 'cap').length,
     pairs, trials, combat: Array.from(new Set(good.map((r) => r.combat))).join(','), style: Array.from(new Set(good.map((r) => r.style))).join(','),
+    effort: Array.from(new Set(good.map((r) => r.effort || 'normal'))).join(','), unlocked: Array.from(new Set(good.map((r) => r.unlocked || 'all'))).join(','), noise: Array.from(new Set(good.map((r) => r.draftNoise))).join(','), clairvoyant: good.some((r) => r.clairvoyant),
     note: 'chapter clear rates are cumulative shares of all runs unless marked conditional',
   };
 
@@ -162,6 +163,26 @@ export function buildReport(records, G, opts) {
     chestsOpened: r1(sumField(good, (r) => r.stats.chestsOpened)), relicsFound: r1(sumField(good, (r) => r.stats.relicsFound)), eventsSeen: r1(sumField(good, (r) => r.stats.eventsSeen)),
     perChapter,
   };
+  // camp, forge and shop behaviour: what the party does at each stop (the bot decides by value, so a lopsided table is a design finding)
+  {
+    const camps = [];
+    good.forEach((r) => r.camps.forEach((c) => camps.push(c)));
+    const campRows = camps.filter((c) => c.kind === 'camp');
+    const used = { rest: 0, sharpen: 0, gems: 0, meditate: 0, none: 0 };
+    campRows.forEach((c) => { if (!c.used || !c.used.length) used.none += 1; else c.used.forEach((a) => { used[a] = (used[a] || 0) + 1; }); });
+    const forgeRows = camps.filter((c) => c.kind === 'forge');
+    const shopRows = camps.filter((c) => c.kind === 'shop');
+    const leftRatios = [];
+    shopRows.forEach((c) => (c.left || []).forEach((x) => { const p = x.split(':'); leftRatios.push(+p[p.length - 1]); }));
+    S.stops = {
+      camps: campRows.length, campsPerRun: r2(campRows.length / Math.max(1, good.length)), campUse: used,
+      campRestShare: r0p(used.rest, campRows.length), campSharpenShare: r0p(used.sharpen, campRows.length), campGemShare: r0p(used.gems, campRows.length), campMeditateShare: r0p(used.meditate, campRows.length),
+      forges: forgeRows.length, forgeUpgradeShare: r0p(forgeRows.filter((c) => c.used === 'upgrade').length, forgeRows.length), forgeGemShare: r0p(forgeRows.filter((c) => c.used === 'gems').length, forgeRows.length),
+      shops: shopRows.length, shopGoldIn: r1(mean(shopRows.map((c) => c.gold))), shopSpent: r1(mean(shopRows.map((c) => c.spent))), shopEmpty: r0p(shopRows.filter((c) => !c.buys).length, shopRows.length),
+      shopGoldOut: r1(mean(shopRows.map((c) => (c.goldAfter === undefined ? c.gold - c.spent : c.goldAfter)))), shopUnaffordable: r1(mean(shopRows.map((c) => c.unaffordable || 0))),
+      byChapter: [1, 2, 3].map((ch) => { const x = shopRows.filter((c) => c.ch === ch); return { ch, shops: x.length, perRun: r2(x.length / Math.max(1, good.length)), goldIn: r1(mean(x.map((c) => c.gold))), spent: r1(mean(x.map((c) => c.spent))), empty: r0p(x.filter((c) => !c.buys).length, x.length) }; }),
+    };
+  }
   S.deck = {
     size: r1(mean(good.map((r) => r.deckSize))), sizeWins: r1(mean(good.filter((r) => r.result === 'win').map((r) => r.deckSize))), upgraded: r1(mean(good.map((r) => r.upgraded))),
     gemsFilled: r1(mean(good.map((r) => r.gemsFilled))), curses: r2(mean(good.map((r) => r.curses))), relics: r1(mean(good.map((r) => r.finalRelics.length))),
@@ -483,8 +504,9 @@ export function sections(S, opts) {
   sec('Headline (all pairs)', ['trial', 'runs', 'ch1 clear %', 'ch2 clear %', 'full clear %', '+/- 95%', 'cond ch2', 'cond ch3', 'turns med', 'fights med', 'fights med (wins)', 'deck', 'score'],
     S.trials.map((t) => [t.trial, t.runs, t.clear1, t.clear2, t.win, t.winCi, t.cond2, t.cond3, t.turnsMedian, t.fightsMedian, t.fightsWinMedian, t.deckMean, t.scoreMean]),
     'ch1/ch2 clear are cumulative shares of all runs; cond = share of runs that reached the chapter and cleared it. Targets at trial 0: ch1 85-97, ch2 60-80, full 15-35.');
-  sec('By hero pair and trial', ['pair', 'trial', 'runs', 'ch1 %', 'ch2 %', 'full %', '+/- 95%', 'turns avg', 'turns med', 'fights avg', 'fights med', 'deck'],
-    S.cells.map((c) => [c.pair, c.trial, c.runs, c.clear1, c.clear2, c.win, c.winCi, c.turnsMean, c.turnsMedian, c.fightsMean, c.fightsMedian, c.deckMean]));
+  sec('By hero pair and trial', ['pair', 'trial', 'runs', 'ch1 clear %', 'ch2 clear %', 'ch3 clear = full %', '+/- 95%', 'reach ch2 %', 'reach ch3 %', 'cond ch2 %', 'cond ch3 %', 'turns avg', 'turns med', 'fights avg', 'fights med', 'deck'],
+    S.cells.map((c) => [c.pair, c.trial, c.runs, c.clear1, c.clear2, c.win, c.winCi, c.reach2, c.reach3, c.cond2, c.cond3, c.turnsMean, c.turnsMedian, c.fightsMean, c.fightsMedian, c.deckMean]),
+    'reach chN = share of all runs that got to chapter N (reach ch2 = ch1 clear); cond chN = share of the runs that reached chapter N and cleared it; reach ch1 is 100.');
   sec('By hero (runs containing the hero)', ['hero', 'runs', 'ch1 %', 'ch2 %', 'full %'], S.heroes.map((h) => [h.hero, h.runs, h.clear1, h.clear2, h.win]));
   sec('Boss fights', ['boss', 'attempts', 'win %', '+/-', 'avg turns', 'HP lost % of max'], S.bosses.map((b) => [b.id, b.attempts, b.winRate, b.ci, b.turns, b.hpLostPct]));
   sec('Fights by chapter and tier', ['ch', 'tier', 'n', 'avg turns', 'HP lost', 'HP lost % of max', 'lose %', 'cards/turn', 'dmg/turn', 'block/turn', 'swaps/fight'], S.fights.map((f) => [f.ch, f.tier, f.n, f.turns, f.hpLost, f.hpLostPct, f.loseRate, f.cardsPerTurn, f.dmgPerTurn, f.blockPerTurn, f.swapsPerFight]));
@@ -500,6 +522,14 @@ export function sections(S, opts) {
     ['final deck size', S.deck.size], ['final deck upgraded', S.deck.upgraded], ['final deck gems', S.deck.gemsFilled], ['final deck curses', S.deck.curses], ['relics owned', S.deck.relics],
   ]);
   sec('Economy per chapter (runs that finished the chapter)', ['ch', 'n', 'hexes painted', 'wells', 'brushes used', 'fights', 'Ink left', 'runs with mercy %', 'gold left', 'deck size'], e.perChapter.map((c) => [c.ch, c.n, c.painted, c.wells, c.brushes, c.fights, c.inkEnd, c.mercyRuns, c.goldEnd, c.deckEnd]));
+  const st = S.stops;
+  if (st) {
+    sec('Stops: camps, forges and shops', ['metric', 'value'], [
+      ['camps visited per run', st.campsPerRun], ['camp action: rest %', st.campRestShare], ['camp action: sharpen %', st.campSharpenShare], ['camp action: cut gems %', st.campGemShare], ['camp action: meditate %', st.campMeditateShare],
+      ['forge: upgrade %', st.forgeUpgradeShare], ['forge: gems %', st.forgeGemShare],
+      ['shop: gold on arrival', st.shopGoldIn], ['shop: gold spent per visit', st.shopSpent], ['shop: gold left after the visit', st.shopGoldOut], ['shop: visits that bought nothing %', st.shopEmpty], ['shop: items still too dear after the visit', st.shopUnaffordable],
+    ].concat(st.byChapter.map((c) => [`shops in chapter ${c.ch}: per run / gold in / spent / bought nothing %`, `${c.perRun} / ${c.goldIn} / ${c.spent} / ${c.empty}`])));
+  }
   sec('Archetype usage (dominant archetype of each hero in the final deck)', ['hero', 'archetype', 'runs', 'share %', 'win %', 'avg chapters cleared'], S.archetypes.map((a) => [a.hero, a.arch, a.runs, a.share, a.winRate, a.prog]));
   const withN = (cs, minF) => cs.filter((c) => c.fights >= minF);
   DATA_HEROES.forEach((h) => {
@@ -527,7 +557,7 @@ const DATA_HEROES = ['hanae', 'kuro', 'suzu', 'raiga'];
 
 export function renderText(S, opts) {
   const parts = [];
-  parts.push(`INKWOVEN balance bot: ${S.meta.runs} runs (${S.meta.pairs.join(' ')}; trials ${S.meta.trials.join(',')}; combat ${S.meta.combat}; style ${S.meta.style})`);
+  parts.push(`INKWOVEN balance bot: ${S.meta.runs} runs (${S.meta.pairs.join(' ')}; trials ${S.meta.trials.join(',')}; combat ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' effort ' + S.meta.effort + (S.meta.clairvoyant ? ' clairvoyant' : ' fair')}; style ${S.meta.style}; unlocked ${S.meta.unlocked}; draft noise ${S.meta.noise})`);
   if (S.meta.errors) parts.push(`ERRORS: ${S.meta.errors}\n${S.meta.errorSamples.join('\n')}`);
   if (S.meta.stalls || S.meta.caps || S.meta.timeouts) parts.push(`stalled runs ${S.meta.stalls}, capped runs ${S.meta.caps}, fights that hit the 60 turn cap ${S.meta.timeouts}`);
   sections(S, opts).forEach((s) => { parts.push(`\n== ${s.title}\n${s.note ? s.note + '\n' : ''}${table(s.headers, s.rows)}`); });
@@ -537,7 +567,7 @@ export function renderText(S, opts) {
 
 export function renderMarkdown(S, opts) {
   const parts = [];
-  parts.push(`# INKWOVEN balance bot report\n\n${S.meta.runs} runs. Pairs: ${S.meta.pairs.join(', ')}. Trials: ${S.meta.trials.join(', ')}. Combat: ${S.meta.combat}. Style: ${S.meta.style}.`);
+  parts.push(`# INKWOVEN balance bot report\n\n${S.meta.runs} runs. Pairs: ${S.meta.pairs.join(', ')}. Trials: ${S.meta.trials.join(', ')}. Combat: ${S.meta.combat}${S.meta.combat === 'greedy' ? '' : ' (effort ' + S.meta.effort + (S.meta.clairvoyant ? ', clairvoyant' : ', fair') + ')'}. Style: ${S.meta.style}. Unlocked: ${S.meta.unlocked}. Draft noise: ${S.meta.noise}.`);
   if (S.meta.errors) parts.push(`**Errors: ${S.meta.errors}**\n\n\`\`\`\n${S.meta.errorSamples.join('\n')}\n\`\`\``);
   sections(S, opts).forEach((s) => { parts.push(`## ${s.title}\n\n${s.note ? s.note + '\n\n' : ''}${mdTable(s.headers, s.rows)}`); });
   parts.push('## Flags\n\n' + (S.flags.length ? S.flags.map((f) => `- [${f.sev}] ${f.msg}`).join('\n') : 'none'));

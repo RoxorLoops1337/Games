@@ -1192,7 +1192,8 @@
     const bubble = mk('div', { class: 'sh-bubble', role: 'status' }, bubbleText, mk('i', { class: 'sh-tail', 'aria-hidden': 'true' }));
     wrap.appendChild(bubble);
     wrap.appendChild(mk('div', { class: 'sh-sign' }, mk('h1', { class: 'nk-banner' }, mk('span', { text: 'The Peddler' }))));
-    let lineNo = 0, nextIdle = 11;
+    // S.t is the frame clock since boot (0 only until the first frame), so the idle timer is armed by the first tick after a line, never from S.t at enter time
+    let lineNo = 0, idleGap = 11, nextIdle = null;
     const say = (kind, mood) => {
       const list = PEDDLER[kind] || PEDDLER.idle;
       const line = list[cosRng(S, 'line' + kind).int(0, list.length - 1)];
@@ -1200,11 +1201,15 @@
       bubble.classList.remove('pop'); void bubble.offsetWidth; bubble.classList.add('pop');
       typewriter(S, bubbleText, line, { cps: 75 });
       if (mood) S.mood = { name: mood, until: S.t + 1.6 };
-      nextIdle = S.t + 12 + (lineNo % 3) * 3;
+      idleGap = 12 + (lineNo % 3) * 3; nextIdle = null;
       return line;
     };
     S.say = say;
-    tickerAdd(S, () => { if (S.t > nextIdle && !S.busy && !UI.overlay.count()) say('idle'); return false; });
+    tickerAdd(S, () => {
+      if (nextIdle === null) { nextIdle = S.t + idleGap; return false; }
+      if (S.t > nextIdle && !S.busy && !UI.overlay.count()) say('idle');
+      return false;
+    });
 
     // ---- wares
     const by = { card: [], gem: [], relic: [], brush: [] };
@@ -1392,14 +1397,14 @@
         case 'heal': (l.who || []).forEach((w) => { if (w.n) chips.push(chip('good', UI.medallion(w.id, 30), heroName(w.id) + ' +' + w.n + ' HP')); }); break;
         case 'hurt': (l.who || []).forEach((w) => { if (w.n) chips.push(chip('bad', UI.medallion(w.id, 30), heroName(w.id) + ' -' + w.n + ' HP')); }); break;
         case 'maxHp': (l.who || []).forEach((w) => { if (w.n) chips.push(chip(w.n > 0 ? 'good' : 'bad', UI.icon('stat', 'hp', 30), heroName(w.id) + ' ' + sign(w.n) + ' max HP')); }); break;
-        case 'addCard': case 'cardReward': if (l.id && has(l.id)) chips.push(chip('good', UI.card(instOf(l.id), { size: 'mini', tip: false }), cardName(l.id), 'card')); else if (l.text) chips.push(chip('info', UI.icon('type', 'skill', 28), l.text)); break;
-        case 'addCurse': if (l.id && has(l.id)) chips.push(chip('bad', UI.card(instOf(l.id), { size: 'mini', tip: false }), cardName(l.id), 'card')); break;
-        case 'upgradeCard': if (l.id && has(l.id)) chips.push(chip('good', UI.card(instOf(l.id, 1), { size: 'mini', tip: false }), cardName(l.id) + '+', 'card')); break;
-        case 'duplicateCard': if (l.id && has(l.id)) chips.push(chip('good', UI.card(instOf(l.id), { size: 'mini', tip: false }), 'A copy of ' + cardName(l.id), 'card')); break;
-        case 'transformCard': if (l.id && has(l.id)) chips.push(chip('good', UI.card(instOf(l.id), { size: 'mini', tip: false }), (l.from ? cardName(l.from) + ' became ' : '') + cardName(l.id), 'card')); break;
+        case 'addCard': case 'cardReward': if (l.id && has(l.id)) chips.push(chip('good', UI.card(instOf(l.id), { size: 'mini', tip: false }), cardName(l.id), 'has-card')); else if (l.text) chips.push(chip('info', UI.icon('type', 'skill', 28), l.text)); break;
+        case 'addCurse': if (l.id && has(l.id)) chips.push(chip('bad', UI.card(instOf(l.id), { size: 'mini', tip: false }), cardName(l.id), 'has-card')); break;
+        case 'upgradeCard': if (l.id && has(l.id)) chips.push(chip('good', UI.card(instOf(l.id, 1), { size: 'mini', tip: false }), cardName(l.id) + '+', 'has-card')); break;
+        case 'duplicateCard': if (l.id && has(l.id)) chips.push(chip('good', UI.card(instOf(l.id), { size: 'mini', tip: false }), 'A copy of ' + cardName(l.id), 'has-card')); break;
+        case 'transformCard': if (l.id && has(l.id)) chips.push(chip('good', UI.card(instOf(l.id), { size: 'mini', tip: false }), (l.from ? cardName(l.from) + ' became ' : '') + cardName(l.id), 'has-card')); break;
         case 'removeCard': if (l.text) chips.push(chip('bad', UI.icon('motif', 'fire', 28), l.text)); break;
-        case 'addRelic': if (l.id && DATA.relics[l.id]) chips.push(chip('good', UI.relic(l.id, { size: 'sm', tip: false }), relicName(l.id), 'relic')); break;
-        case 'addGem': if (l.id && DATA.gems[l.id]) chips.push(chip('good', UI.gem(l.id, { size: 'sm', tip: false }), gemName(l.id), 'gem')); break;
+        case 'addRelic': if (l.id && DATA.relics[l.id]) chips.push(chip('good', UI.relic(l.id, { size: 'sm', tip: false }), relicName(l.id), 'has-relic')); break;
+        case 'addGem': if (l.id && DATA.gems[l.id]) chips.push(chip('good', UI.gem(l.id, { size: 'sm', tip: false }), gemName(l.id), 'has-gem')); break;
         case 'addBrush': if (l.id && DATA.brushes[l.id]) chips.push(chip('good', UI.icon('brush', l.id, 30), DATA.brushes[l.id].name)); break;
         case 'paint': if (l.n) chips.push(chip('good', UI.icon('tile', 'empty', 30), l.text || 'The path opens')); break;
         case 'fight': chips.push(chip('bad', UI.icon('tile', 'enemy', 30), 'A fight breaks out!')); break;
@@ -2833,7 +2838,11 @@
         const S = CUR;
         if (!S || S.dead) return;
         S.t = t;
-        if (S.tickers.length) S.tickers = S.tickers.filter((fn) => { try { return !fn(dt, t); } catch (e) { warnOnce('ticker', e); return false; } });
+        if (S.tickers.length) {
+          // a ticker may add tickers (a line of the peddler starts a typewriter): they land in the fresh array and survive the pass
+          const running = S.tickers; S.tickers = [];
+          S.tickers = running.filter((fn) => { try { return !fn(dt, t); } catch (e) { warnOnce('ticker', e); return false; } }).concat(S.tickers);
+        }
         S.lives.forEach((rec) => paintLive(rec, t));
       },
       draw(ctx, t) {
