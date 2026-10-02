@@ -16,7 +16,7 @@ const t = harness('trap art (web/horn/censer)');
 
 // ---- 1) assets on disk --------------------------------------------------------
 function pngSize(p){ const b=readFileSync(p); return [b.readUInt32BE(16), b.readUInt32BE(20)]; }
-const SEQ = { web:{n:6, w:668, h:531}, horn:{n:4, w:534, h:435}, censer:{n:4, w:749, h:540} };
+const SEQ = { web:{n:6, w:668, h:531}, horn:{n:4, w:534, h:435}, censer:{n:8, w:749, h:540} };
 for(const id in SEQ){
   const s=SEQ[id];
   for(let k=1;k<=s.n;k++){
@@ -25,10 +25,6 @@ for(const id in SEQ){
     if(existsSync(f)){ const [w,h]=pngSize(f); t.ok(w===s.w && h===s.h, id+' frame '+k+' is '+s.w+'x'+s.h+' (got '+w+'x'+h+')'); }
   }
 }
-// censer_08 ships under its real index; it joins the sequence once 05-07 land
-const c8=join(GAME,'rooms','traps','censer_08.png');
-t.ok(existsSync(c8), 'censer_08.png shipped under its real index');
-if(existsSync(c8)){ const [w,h]=pngSize(c8); t.ok(w===749 && h===540, 'censer_08 is 749x540'); }
 const wr=join(GAME,'rooms','fx','web_root.png');
 t.ok(existsSync(wr), 'hero effect on disk: rooms/fx/web_root.png');
 if(existsSync(wr)){ const [w,h]=pngSize(wr); t.ok(w===200 && h===162, 'web_root.png is 200x162'); }

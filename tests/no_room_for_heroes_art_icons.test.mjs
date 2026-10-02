@@ -62,7 +62,8 @@ t.ok(Object.keys(A.ELEM_COMBO).every(e => A.CODEX_ICON.has(A.ELEM_CX[e])), 'ever
 
 // --- 3) helpers + graceful fallback ---
 t.ok((A.cardFace('web') || '').includes('src="icons/web.png"') && (A.cardFace('minion') || '').includes('icons/minion.png'), 'cardFace paints the new room cards');
-t.ok(A.cardFace('sentinel') === null && A.cardFace('orc') === null, 'Stone Sentinel + Orc still fall back to the emoji (no art yet)');
+t.ok((A.cardFace('sentinel') || '').includes('icons/sentinel.png') && (A.cardFace('orc') || '').includes('icons/orc.png'), 'Stone Sentinel + Orc cards are painted');
+for (const k of ['orc', 'sentinel']) t.ok(!shipped100(k + '.png'), 'icons/' + k + '.png is 100x100 RGBA');
 const face = A.codexFace('ignite', 'cxbig', '🔥');
 t.ok(face && face.includes('src="icons/codex_ignite.png"') && face.includes('class="cxbig"') && face.includes('data-fb="🔥"')
   && face.includes('onerror="codexIconFail(this)"'), 'codexFace builds a sized <img> that carries its emoji fallback');

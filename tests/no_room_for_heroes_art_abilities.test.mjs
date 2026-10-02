@@ -48,7 +48,7 @@ for(const id of ['slam','breath','curse','drain','devour','entangle','hellfire',
 
 // ---- 2) the game ----
 const A = loadGame(`freshGame,chooseBoss,prepCampaignWave,startWave,update,draw,render,makeRoom,applyRunes,BOSSES,
-  ABIL,ABIL_FX,FX_FADE,abilFx,spawnAbilFx,abilFxTick,drawAbilFx,abilFxProbe,heroFxScale,fxFrames,castAbility,ART,artProbe,FLOOR,
+  ABIL,ABIL_FX,FX_FADE,abilFx,spawnAbilFx,abilFxTick,drawAbilFx,abilFxProbe,heroFxScale,fxFrames,castAbility,ART,artProbe,FLOOR,buildHeroFromSpec,nextSpec,LIFT,
   get G(){return G;},set G(v){G=v;},
   get X(){return X;},set X(v){X=v;},
   get paused(){return paused;},set paused(v){paused=v;}`);
@@ -161,8 +161,10 @@ try{
   t.ok(A.abilFx.length===0, 'missing-art effect drops within ~0.1s');
   delete A.ART.ability_drain; A.artProbe('ability_drain');
 
-  // castAbility spawns on exactly the heroes run() hits
+  // castAbility spawns on exactly the heroes run() hits; a small first wave
+  // (one hero on some days) gets a few more so multi-target casts have targets
   freshRun();
+  while(A.G.heroes.length<4){ const h=A.buildHeroFromSpec(A.nextSpec()); h.x=-60-A.G.heroes.length*40; h.yOff=-A.LIFT; A.G.heroes.push(h); }
   for(let i=0;i<30;i++){ A.update(0.05); A.draw(); }
   function cast(id, keepHp){
     A.abilFx.length=0;
