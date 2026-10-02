@@ -35,7 +35,8 @@
 //
 // UI.bus: map:paint {q, r, cost} once per paint action (q, r is the tapped target, cost the whole Ink), map:brush {id} when a brush is applied,
 // map:walk {q, r} when a walk starts (the real destination: the walk may stop short on unresolved content). Anchors (data-tut): ink, hex (an
-// invisible box that follows the first hex of the cheapest chain toward the boss), brushes, deck, relics.
+// invisible box: the first hex of the cheapest chain toward the boss, which is what the `paint` hint points at; right after a paint or a brush it
+// moves to the hex that was just painted, which is what the `walk` hint points at, and goes back to the chain once a walk starts), brushes, deck, relics.
 //
 // TIME. Animation runs on update(dt) (the frame clock), so GAME.debug.tick is exact. With window.__HEADLESS every animation is skipped and
 // every walk, bloom and beat completes at once, so suites read final states. reduceMotion: no intro swoop, no petals, no particles, walks
@@ -1045,6 +1046,8 @@
     startReveals(s, res.tiles, fromW);
     const lastT = res.tiles[res.tiles.length - 1];
     if (lastT) { const lw = worldOf(lastT.q, lastT.r); revealOnScreen(s, lw.x, lw.y); }
+    s.walkCell = [q, r];                                       // the tutorial's `hex` anchor now points at what was just painted: that is the hex to walk onto
+    s.anchorKey = '';
     UI.bus.emit('map:paint', { q, r, cost: res.cost });
     UI.announce('Painted ' + U.plural(res.tiles.length, 'hex', 'hexes') + ' for ' + res.cost + ' Ink. ' + R.ink + ' Ink left.');
     drainPending(s);
@@ -1227,6 +1230,7 @@
     snd('brush_use');
     snd('paint');
     startReveals(s, tiles, origin, 0.07);
+    { const lt = tiles[tiles.length - 1]; s.walkCell = lt ? [lt.q, lt.r] : null; s.anchorKey = ''; }
     UI.bus.emit('map:brush', { id });
     UI.announce('The ' + brushDef(id).name + ' paints ' + U.plural(tiles.length, 'hex', 'hexes') + '.');
     drainPending(s);
@@ -1264,6 +1268,7 @@
     s.walk = { path, i: 0, t: 0, from: { x: s.tok.x, y: s.tok.y } };
     followParty(s, true);
     const dest = path[path.length - 1];
+    s.walkCell = null; s.anchorKey = '';
     UI.bus.emit('map:walk', { q: dest[0], r: dest[1] });
     UI.announce('Walking ' + U.plural(path.length, 'step') + '.');
     if (headless()) { let guardN = 0; while (s.walk && guardN++ < 400) stepWalk(s, STEP_S); }
@@ -1595,8 +1600,10 @@
     const key = s.ver + ':' + s.M.pos.q + ',' + s.M.pos.r;
     if (s.anchorKey !== key) {
       s.anchorKey = key;
-      const sol = safe(() => MAP.solve(s.M), null);
-      const cell = sol && sol.path && sol.path.length ? sol.path[0] : [s.M.boss.q, s.M.boss.r];
+      // after a paint or a brush the anchor marks the painted hex to walk onto; before that, and again after the first walk, the next hex of the cheapest chain to paint
+      const wt = s.walkCell && s.M.tiles[MAP.key(s.walkCell[0], s.walkCell[1])];
+      const sol = wt && wt.painted ? null : safe(() => MAP.solve(s.M), null);
+      const cell = wt && wt.painted ? s.walkCell : sol && sol.path && sol.path.length ? sol.path[0] : [s.M.boss.q, s.M.boss.r];
       s.anchorCell = cell;
     }
     const c = s.cam, size = HEX * c.z, p = worldOf(s.anchorCell[0], s.anchorCell[1]);

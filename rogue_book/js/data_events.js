@@ -57,7 +57,7 @@
             { w: 2, text: "He bows back so smoothly that not one drop spills. 'Ah,' he says, straightening. 'Someone raised you properly. Regrettable.' The next part is less polite.", ops: [{ op: 'fight', enemies: ['kappa'] }] },
           ] },
         { label: 'Mention the fox you helped', req: { flag: 'fox_spared' },
-          out: [{ w: 1, text: "His eyes go round. 'You freed the kit? She is my cousin's student!' The toll is waived, the bridge is swept, and a cucumber arrives with a small bow and a large amount of gratitude.", ops: [{ op: 'heal', n: 8 }, { op: 'ink', n: 1 }] }] },
+          out: [{ w: 1, text: "His eyes go round. 'You freed the kit? She is my cousin's student!' The toll is waived, the bridge is swept, and a cucumber arrives with a small bow and a very large thank you.", ops: [{ op: 'heal', n: 8 }, { op: 'ink', n: 1 }] }] },
         { label: 'Take the long way round',
           out: [{ w: 1, text: 'It costs an hour and most of your patience, and the kappa watches you go with the calm of a professional. But you come out downstream, dry, unbilled, and a little smug.', ops: [{ op: 'heal', n: 3 }] }] },
       ],
@@ -97,9 +97,9 @@
 
     mushroom_ring: {
       title: 'The Mushroom Ring', art: { scene: 'ch1' }, chapters: [1],
-      text: "Mushroom folk dance in a ring of tiny caps and beckon you closer. The ring smells of rain, wet earth, and a rumour you can't quite place. One of them is holding out a cap.",
+      text: "Mushroom folk dance in a ring of tiny caps and beckon you closer. The ring smells of rain, wet earth, and a rumour you cannot quite place. One of them is holding out a cap.",
       choices: [
-        { label: 'Dance with them', cost: 'A card may change',
+        { label: 'Dance with them', cost: 'A card changes, spores sting',
           out: [
             { w: 3, text: 'Nine dances and one very long turn. Somewhere in there, a card in your deck rearranges itself, politely, into something else.', ops: [{ op: 'transformCard' }, { op: 'heal', n: 4 }] },
             { w: 1, text: 'A spore goes up your nose and the dance turns out to be a good deal longer than you remember. Everyone wakes up aching and covered in glitter.', ops: [{ op: 'hurt', n: 4 }] },
@@ -254,7 +254,7 @@
 
     lantern_ferry: {
       title: 'The Lantern Ferry', art: { scene: 'ch2' }, chapters: [2],
-      text: 'The ferryman is a paper lantern on a pole, steering a boat of folded newsprint. Fare is one gold, he says. Or one story. Or, if you are honest, one thing you are afraid of.',
+      text: 'The ferryman is a paper lantern on a pole, steering a boat of folded newsprint. Fare is thirty gold, he says. Or one story. Or, if you are honest, one thing you are afraid of.',
       choices: [
         { label: 'Pay the fare', cost: '30 gold', req: { gold: 30 },
           out: [{ w: 1, text: 'He poles you through a wide glowing arc of canals, humming. When you step off, the map ahead has been quietly redrawn in your favour.', ops: [{ op: 'gold', n: -30 }, { op: 'paint', n: 3 }] }] },
@@ -274,7 +274,7 @@
       title: 'The Endless Supper', art: { scene: 'ch2' }, chapters: [2],
       text: "A long table under paper lanterns, laid for supper. The guests are pale and polite and will not stop chewing. 'Sit,' says a voice from everywhere. 'Every guest stays for supper.'",
       choices: [
-        { label: 'Sit and eat', cost: 'You may stay a while',
+        { label: 'Sit and eat', cost: 'May leave a curse: Burden',
           out: [
             { w: 3, text: 'The rice is warm, the tea is hot, the company silent. You leave full, mended, and only slightly haunted.', ops: [{ op: 'heal', pct: 0.3 }] },
             { w: 1, text: 'You look up. The table is longer than when you sat. The guests are wearing your faces, one by one. You rise very slowly, very politely, and leave a good deal behind.', ops: [{ op: 'heal', pct: 0.15 }, { op: 'addCurse', id: 'curse_burden' }] },
@@ -449,7 +449,7 @@
         { label: 'Let her mend you',
           out: [{ w: 1, text: 'She writes better on each of you, in a cramped, careful hand, and it holds. The ache goes out of your bones as if it had never been written in.', ops: [{ op: 'heal', pct: 0.35 }, { op: 'maxHp', n: 3 }] }] },
         { label: 'Take her pawprint',
-          out: [{ w: 1, text: "She presses a paw to the flat of your hand. The ink dries into a stone the colour of the last light in the grove. 'For luck,' she says, and it is the first thing she has ever said in plain words.", ops: [{ op: 'addGem', tier: 3 }] }] },
+          out: [{ w: 1, text: "She presses a paw to the flat of your hand. The ink dries into a stone the colour of the last light in the grove. 'For luck,' she says, which, for a fox, is practically a speech.", ops: [{ op: 'addGem', tier: 3 }] }] },
         { label: 'Ask her for something bigger',
           out: [
             { w: 1, text: "She thinks very hard, writes one word on the gate, and steps back. The word is RELIC. Something small and brass drops out of the stone, still warm, looking faintly surprised.", ops: [{ op: 'addRelic', rarity: 'rare' }] },
@@ -552,7 +552,7 @@
           out: [{ w: 1, text: 'It eats, or half eats, or thoughtfully considers eating. In gratitude it stands, stretches, and leaves you a brush it had been sitting on. You did not notice the brush.', ops: [{ op: 'gold', n: -10 }, { op: 'addBrush', id: 'random' }] }] },
         { label: 'Move the cat (risky)',
           out: [
-            { w: 2, text: 'It moves like water, with contempt. Under it, a few clean pages nobody thought to cut.', ops: [{ op: 'cardReward', n: 3 }] },
+            { w: 2, text: 'It moves like water, with contempt. Under it lie a few clean pages, still crisp from never being read.', ops: [{ op: 'cardReward', n: 3 }] },
             { w: 1, text: 'It moves, but not before it bites you, precisely, in the fleshy part of the thumb. Under it, a few clean pages.', ops: [{ op: 'hurt', n: 5, who: 'front' }, { op: 'cardReward', n: 3 }] },
           ] },
       ],
@@ -748,7 +748,7 @@
 
     two_doors: {
       title: 'The Honest Door and the Kind One', art: { scene: 'event' },
-      text: 'Two doors stand in the middle of the road, both wearing name tags. The left one says I WILL TELL YOU THE TRUTH. The right one says YOU LOOK WONDERFUL. Neither has a wall attached.',
+      text: 'Two doors stand side by side on the road, both wearing name tags. The left one says I WILL TELL YOU THE TRUTH. The right one says YOU LOOK WONDERFUL. Neither has a wall attached.',
       choices: [
         { label: 'The honest door',
           out: [{ w: 1, text: "'Your deck is bloated,' says the door, 'and your best card is not the one you think.' It is rude and correct. Something in your hand sharpens.", ops: [{ op: 'upgradeCard', random: true }] }] },
@@ -794,7 +794,7 @@
         { label: 'Throw in a cursed page',
           out: [{ w: 1, text: 'The Blank eats it without chewing. Even it looks a little unwell afterward.', ops: [{ op: 'removeCard', filter: { type: 'curse' } }] }] },
         { label: 'Step around it',
-          out: [{ w: 1, text: 'You give it a wide berth. It pretends not to watch you go, which is worse than watching.', ops: [{ op: 'heal', n: 3 }] }] },
+          out: [{ w: 1, text: 'You step around it, keeping to the green. The white does not follow. It only waits, which is the Blank\'s whole personality.', ops: [{ op: 'heal', n: 3 }] }] },
       ],
     },
 
@@ -830,7 +830,7 @@
             { w: 1, text: 'He does. The thunder answers, and for once it means it. Everybody is deafened for a full minute and delighted for a good deal longer.', ops: [{ op: 'hurt', n: 5 }, { op: 'ink', n: 2 }] },
           ] },
         { label: 'Bottle the echo',
-          out: [{ w: 1, text: 'You catch the last of the laugh in a jar, and it hums warm the whole way home. When you look, it has turned into a gem.', ops: [{ op: 'addGem', color: 'gold', tier: 1 }] }] },
+          out: [{ w: 1, text: 'You catch the last of the laugh in a jar and carry it carefully. By nightfall it has set, warm and bright, into a gem.', ops: [{ op: 'addGem', color: 'gold', tier: 1 }] }] },
       ],
     },
 

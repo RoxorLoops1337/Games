@@ -1213,13 +1213,20 @@ await t.test('the hex anchor sits on the first hex of the cheapest chain to the 
   const cx = parseFloat(a.style.left) + parseFloat(a.style.width) / 2, cy = parseFloat(a.style.top) + parseFloat(a.style.height) / 2;
   t.near(cx, p.x, 1.5, 'centred on that hex (x)'); t.near(cy, p.y, 1.5, 'and y');
   t.ok(parseFloat(a.style.width) > 20, 'sized like a hex on screen');
-  // after painting it the anchor moves on to the next cell
+  // right after painting it the anchor marks the hex that was just painted (that is what the `walk` hint points at) ...
   await clickHex(g, cell[0], cell[1]);
   for (let i = 0; i < 8; i++) g._raf(16);
   const next = g.MAP.solve(R.map).path[0];
   t.ok(next && (next[0] !== cell[0] || next[1] !== cell[1]), 'the cheapest chain moved on');
-  const p2 = md(g).screenOf(next[0], next[1]);
-  t.near(parseFloat(a.style.left) + parseFloat(a.style.width) / 2, p2.x, 1.5, 'and so did the anchor');
+  const pc = md(g).screenOf(cell[0], cell[1]);
+  t.near(parseFloat(a.style.left) + parseFloat(a.style.width) / 2, pc.x, 1.5, 'the anchor now sits on the hex that was just painted (x)');
+  t.near(parseFloat(a.style.top) + parseFloat(a.style.height) / 2, pc.y, 1.5, 'and y');
+  // ... and once a walk starts it goes back to the next hex of the chain
+  await clickHex(g, cell[0], cell[1]);
+  for (let i = 0; i < 8; i++) g._raf(16);
+  const next2 = g.MAP.solve(R.map).path[0];
+  const p2 = md(g).screenOf(next2[0], next2[1]);
+  t.near(parseFloat(a.style.left) + parseFloat(a.style.width) / 2, p2.x, 1.5, 'after a walk starts the anchor returns to the next hex to paint');
   // moving the camera moves the anchor
   const s8 = st(g); s8.cam.z = 1; s8.tz = 1; s8.cam.x = (s8.world.x0 + s8.world.x1) / 2; s8.cam.y = (s8.world.y0 + s8.world.y1) / 2;
   for (let i = 0; i < 8; i++) g._raf(16);

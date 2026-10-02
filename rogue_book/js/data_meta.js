@@ -35,8 +35,8 @@
     ch2_clear: { name: 'Lanterns Out', text: 'Defeat Jorogumo, the Silk Courtesan, and let the guests go home.', stat: { k: 'boss2Kills', gte: 1 }, reward: { inkstones: 15 } },
     ch3_clear: { name: 'The Last Page', text: 'Defeat the Editor and rewrite the ending.', stat: { k: 'boss3Kills', gte: 1 }, reward: { inkstones: 30 } },
 
-    first_draft: { name: 'First Draft', text: 'Begin your first run. Every book starts somewhere.', stat: { k: 'runs', gte: 1 }, reward: { inkstones: 3 } },
-    regular_reader: { name: 'Regular Reader', text: 'Begin 10 runs. The book is starting to recognise you.', stat: { k: 'runs', gte: 10 }, reward: { inkstones: 8 } },
+    first_draft: { name: 'First Draft', text: 'Finish your first run, win or lose. Every book starts somewhere.', stat: { k: 'runs', gte: 1 }, reward: { inkstones: 3 } },
+    regular_reader: { name: 'Regular Reader', text: 'Finish 10 runs. The book is starting to recognise you.', stat: { k: 'runs', gte: 10 }, reward: { inkstones: 8 } },
     happy_endings: { name: 'Happy Endings', text: 'Win 5 runs. Some tales are worth telling more than once.', stat: { k: 'wins', gte: 5 }, reward: { inkstones: 20 } },
 
     petal_and_steel: { name: 'Petal and Steel', text: 'Win 3 runs with Hanae in the party.', stat: { k: 'winsHanae', gte: 3 }, reward: { inkstones: 15 } },
@@ -57,7 +57,7 @@
     champion_hunter: { name: 'Champion Hunter', text: 'Defeat 40 elite enemies.', stat: { k: 'elites', gte: 40 }, reward: { inkstones: 12 } },
     not_a_scratch: { name: 'Not a Scratch', text: 'Defeat a boss without taking a single point of damage.', stat: { k: 'flawlessBosses', gte: 1 }, reward: { inkstones: 25 } },
     wall_breaker: { name: 'Wall Breaker', text: 'Land a single hit for 50 or more damage.', stat: { k: 'maxHit', gte: 50 }, reward: { inkstones: 10 } },
-    one_big_sentence: { name: 'One Big Sentence', text: 'Deal 120 damage in a single turn.', stat: { k: 'maxTurnDamage', gte: 120 }, reward: { inkstones: 12 } },
+    one_big_sentence: { name: 'One Big Sentence', text: 'Deal 100 damage in a single turn.', stat: { k: 'maxTurnDamage', gte: 100 }, reward: { inkstones: 12 } },
     free_verse: { name: 'Free Verse', text: 'Play 3 or more free cards in one turn, on 10 different turns.', stat: { k: 'zeroCostTurns', gte: 10 }, reward: { inkstones: 8 } },
     slow_burn: { name: 'Slow Burn', text: 'Finish off 30 enemies with Poison. Patience is a weapon.', stat: { k: 'poisonKills', gte: 30 }, reward: { inkstones: 8 } },
 
@@ -65,7 +65,7 @@
 
     charity_case: { name: 'Charity Case', text: "Be rescued by the book's mercy 3 times. It happens to the best of us.", stat: { k: 'mercy', gte: 3 }, reward: { inkstones: 5 } },
     face_in_the_petals: { name: 'Face in the Petals', text: 'Have a hero knocked down 30 times. Getting back up counts too.', stat: { k: 'heroDowns', gte: 30 }, reward: { inkstones: 5 } },
-    musical_chairs: { name: 'Musical Chairs', text: 'Swap rows 150 times. Nobody is sitting down.', stat: { k: 'swaps', gte: 150 }, reward: { inkstones: 8 } },
+    musical_chairs: { name: 'Musical Chairs', text: 'Swap rows 300 times. Nobody is sitting down.', stat: { k: 'swaps', gte: 300 }, reward: { inkstones: 8 } },
 
     daily_reader: { name: 'A Tale a Day', text: 'Play 5 Daily Tales.', stat: { k: 'dailyRuns', gte: 5 }, reward: { inkstones: 10 } },
 
@@ -104,17 +104,17 @@
     'Poison ignores Block. It is slow, but nothing can defend against it, which makes it wonderful against armour.',
     'Bind stops both heroes from swapping. Keep a plan that works without a swap.',
     'Gems only fit slots of their own colour. A prism slot takes any colour.',
-    'Red gems sharpen attacks, blue gems bolster Block and healing, green gems bend the rules, gold gems are odd.',
+    'Red gems sharpen attacks, blue bolster Block and healing, green bend the rules, gold do a bit of everything.',
     'Replacing a socketed gem destroys the old one. Be sure before you cut.',
-    'A camp lets you Rest, Sharpen a card, cut gems, or Meditate. Pick what your run needs most.',
-    'A forge offers one upgrade or a round of gem cutting. Either one is worth a detour.',
+    'Camps offer Rest, Sharpen, Cut Gems or Meditate, one per visit. Forges do Sharpen or Cut Gems.',
+    'A power that says "either hero" counts your ally\'s cards too. One that says "you" counts only its own hero.',
     'Shops sell card removal. A leaner deck draws your best cards more often.',
     'Curse cards are dead weight in your hand. A shop can remove them, and a few fables will take them away.',
     'A fable is a choice, not a test. There is usually a safe option, a gamble, and a price. Pick your risk.',
     'In a fable, good manners are sometimes a weapon. Try bowing to a kappa.',
     'A treasure can change how you play. Read its text twice before you build around it.',
     'Stranded with no Ink and no path? The book takes pity and gives you enough for one hex.',
-    'Every kill refills a little Ink, and elites refill more. Fighting is part of how you cross the page.',
+    'Most kills refill a little Ink, and elites more. Minions give none. Fighting is how you cross the page.',
     'An X cost card spends all your remaining Energy. Play it last, when you know how much you have.',
     'Retain keeps a card in hand at the end of a turn. Hold your finisher until you can afford it.',
     'Exhaust removes a card for the rest of the fight. Powerful, but count how many you can spare.',
@@ -202,13 +202,13 @@
         hurt: ['I am all right. Truly.', 'That stung. Keep going, I am fine.', 'It is only a bruise. Do not stop.', 'I will not fall. Not yet.', 'Steady... steady. I am still here.'],
         kill: ['Rest now. You have been through enough.', 'I am sorry. Sleep well.', 'Go in peace, little one.', 'It is over. Go back to the page.', 'Be still. The story has room for you elsewhere.'],
         down: ['Forgive me. I need a moment.', 'Hold the thread for me.', 'Keep going. I will catch up.', 'The moon is very bright tonight.', 'Do not worry. I am only resting.'],
-        win: ['We made it. All of us.', 'Thank you. Truly.', 'It is quiet now. That is a good sign.', 'The moon shines a little kinder tonight.', 'Rest. We have earned it.'],
+        win: ['We made it. All of us.', 'Thank you, all of you.', 'It is quiet now. That is a good sign.', 'The moon shines a little kinder tonight.', 'Rest. We have earned it.'],
         swap: ['I will stand in front. It is all right.', 'Let me carry this one.', 'I will keep watch. Go and rest.', 'Behind me. I will take it.', 'Someone has to stand in the light.'],
       },
     },
     barks_raiga: {
       lines: {
-        start: ['HA! A fine day for it!', 'Let the thunder speak, friend!', 'Stand behind me! Or beside! Either!', 'Ah, a storm! My oldest friend!', 'Well met, friend! Let us make some noise!'],
+        start: ['HA! A fine day for it!', 'Let the thunder speak, friend!', 'Stand behind me! Or beside! Either!', 'Ah, a storm! My oldest friend!', 'Well met! Who wants to make some noise?'],
         hurt: ['HA! Good one! Do it again!', 'Ouch! Friend, that was rude!', 'Nothing! It is nothing! ...It is a little something.', 'You hit like an old friend!', 'I have had worse from a puddle!'],
         kill: ['THUNDER!', 'Sleep well, friend!', 'A good fight! Truly!', 'Thank you for the exercise!', 'BOOM! And that is that!'],
         down: ['Ha... ha... I will be back.', 'Carry on, friend. I am listening.', 'Fine, fine. Just resting my thunder.', 'Nap time. Apparently.', 'Tell the storm I will call later.'],

@@ -558,7 +558,8 @@ function repoFixture(files, { html, gallery, design, css, tests, pkg, build } = 
   fs.writeFileSync(path.join(root, 'build.js'), build || "const STATIC_PATHS = ['rogue_book'];\n");
   return game;
 }
-const runHygiene = (game) => spawnSync(process.execPath, [HYGIENE], { env: { ...process.env, ROGUE_BOOK_DIR: game }, encoding: 'utf8', timeout: 60000 });
+// RB_STRICT is dropped from the child's environment: `rogue_book_all.mjs --strict` sets it for every suite, and a tiny fixture game must not be held to the real game's strict gate
+const runHygiene = (game) => { const env = { ...process.env, ROGUE_BOOK_DIR: game }; delete env.RB_STRICT; return spawnSync(process.execPath, [HYGIENE], { env, encoding: 'utf8', timeout: 60000 }); };
 t.test('the hygiene suite passes a small well-formed game', () => {
   const game = repoFixture({
     util: realJs('util.js'), data: realJs('data.js'),

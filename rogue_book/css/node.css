@@ -448,3 +448,18 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--verm-dd)); }
 /* compact stages make every button taller: keep the foot buttons clear of hints and price tags */
 #stage.compact .rw-hint { bottom: 70px; }
 #stage.compact .sh-foot { bottom: 2px; right: 14px; }
+/* compact stages (phones) scale the text up by --nkc, and the stage cannot scroll by touch: everything that must be reachable has to FIT.
+   The elite relic box (its Take it and Leave it buttons used to fall off the bottom of the stage; `.dense` is added by the screen when 3 rows sit above it and `.tall` when 4 do) and the four camp tiles are trimmed to do so. */
+#stage.compact .rw-relicbox, .rw-ledger.tall .rw-relicbox { padding: 8px 10px 10px; gap: 4px; margin-top: 4px; }
+#stage.compact .rw-relicbox .rw-h3, .rw-ledger.tall .rw-relicbox .rw-h3 { display: none; }
+#stage.compact .rw-relic, .rw-ledger.tall .rw-relic { padding: 4px; gap: 2px; }
+#stage.compact .rw-relic .ico, .rw-ledger.tall .rw-relic .ico { width: 60px; height: 60px; }
+#stage.compact .rw-ledger.dense { top: 114px; max-height: 600px; }
+#stage.compact .rw-ledger.dense .nk-row { min-height: 44px; margin-bottom: 5px; padding-top: 2px; padding-bottom: 2px; }
+#stage.compact .rw-ledger.dense .rw-relic .ico { width: 46px; height: 46px; }
+#stage.compact .rw-ledger.dense .rw-relicbox { padding: 6px 8px 8px; gap: 2px; margin-top: 2px; }
+#stage.compact .cp-grid { top: 140px; max-height: 470px; gap: 12px 16px; }
+#stage.compact .cp-tile { min-height: 0; padding: 8px 10px; gap: 2px; }
+#stage.compact .cp-illus { height: 56px; }
+#stage.compact .cp-art { margin-top: -24px; }
+#stage.compact .cp-lines { margin-top: 2px; }

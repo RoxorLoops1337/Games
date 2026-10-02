@@ -1101,6 +1101,8 @@
       take.addEventListener('click', () => relicChoice(id, take, []));
       const leave = UI.btn('Leave it', { kind: 'ghost', size: 'sm', onclick: relicLeave });
       const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A treasure guarded here' }), take, mk('div', { class: 'row center gap-s' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
+      if (rows.length >= 3) ledger.classList.add('dense');     // a gem or a brush above it: the box must slim down or Take it and Leave it fall off the bottom of the stage (phones: from 3 rows)
+      if (rows.length >= 4) ledger.classList.add('tall');      // gold, ink, a gem AND a brush: even the desktop stage needs the slim box
       ledger.appendChild(box);
       box.classList.add('rise'); box.style.setProperty('--i', '4');
     }

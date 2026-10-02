@@ -149,7 +149,7 @@ const GAME = (() => {
   }
 
   function instant(node) {
-    if (node.kind === 'well') { UI.toast('The well refills your Ink' + (node.gained ? ' (+' + node.gained + ')' : ''), 'good'); sfx('well'); }
+    if (node.kind === 'well') { UI.toast(node.toast || 'The well refills your Ink' + (node.gained ? ' (+' + node.gained + ')' : ''), 'good'); sfx('well'); }   // node.toast: RUN's fable fallback (a well with its own words)
     else { const b = DATA.brushes[node.id]; UI.toast('You take a brush' + (b ? ': ' + b.name : ''), 'good'); sfx('brush_pick'); }
   }
 

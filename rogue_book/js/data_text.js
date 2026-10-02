@@ -31,12 +31,20 @@
 //        Weak included), "up" or "down" versus the number without live modifiers, or, when those are equal, versus the
 //        printed card. Target-specific effects (Vulnerable, Mark) are C.preview's business, not the card text.
 //   DATA.cardPlain(inst | id, ctx?)    the same text without markup (tests, aria labels)
-//   DATA.opsText(ops, ctx?)            plain text for an op list (card, hook, hand, gem and run ops)
-//   DATA.hookText(hook, ctx?)          plain sentence for one hook {on, fx, filter?, limit?, once?, every?}; run hooks too
+//   DATA.opsText(ops, ctx?)            plain text for an op list (card, hook, hand, gem and run ops). The move, start, phase and hook fx
+//                                      arrays of registered ENEMIES are recognised by identity and read from the enemy's side
+//                                      ("Deal 5 damage and apply 1 Vulnerable to the front hero."), so the bestiary needs no flag;
+//                                      ctx.enemy forces the enemy side for any other list.
+//   DATA.moveText(move)                the bestiary sentence for one enemy move (opsText of its fx with the enemy side forced)
+//   DATA.hookText(hook, ctx?)          plain sentence for one hook {on, fx, filter?, limit?, once?, every?}; run hooks and enemy hooks too.
+//                                      A hook inside a CARD (an owned hook) says "you" for its own hero and "either hero" when
+//                                      filter.hero is 'any'; a relic or passive (a party hook) keeps the plain "you".
 //   DATA.gemText(gemId | def)          plain text of a gem mod ("+2 damage", "Front row: +1 hit, draw 1 card"); def.text wins
 //   DATA.relicText(id | def)           the relic's own hand written text
 //   DATA.statusText(id, n?)            "Poison 4: At the start of its turn, lose 4 HP (ignores Block), then Poison falls by 1."
-//   DATA.intentText(intent)            "Deals 7 x2 to the front hero. Applies 2 Weak to the front hero." from a C.intent object
+//   DATA.intentText(intent)            "Deals 7 x2 to the front hero and applies 2 Weak" from a C.intent object. C.intent reports help for OTHER
+//                                      enemies as if the enemy gave it to itself, so the move is looked up by id and name and the
+//                                      sentence says "Gives all enemies 8 Block" when every enemy move of that name agrees.
 //   DATA.rowText(heroId, row)          "Front: +2 damage on attacks"
 //   DATA.targetMode(inst | id | resolved) -> 'enemy' | 'none'   whether the player must choose an enemy (DESIGN 4.3)
 //   DATA.cardOps(resolved | inst | id) -> flat list of every op (through cond, repeat and hook fx)
@@ -45,6 +53,14 @@
 // well ("Apply 2 Vulnerable and 1 Weak." "Deal 4 damage 3 times."), a conditional bonus after a same-kind op reads "Front:
 // deal 3 more damage.", leading keywords (Innate, Retain, Ethereal, Unplayable) come first and Exhaust comes last.
 // A hook op reads "Whenever you play a Skill, gain 1 Sumi." / "At the start of your turn, ..." / "Next turn: gain 2 Energy."
+//
+// Editor's rules (what the generator does so a card never has to): gains of different kinds share a sentence ("Gain 5 Block and 1
+// Taunt."); a status taken back by a once-hook reads "until the end of this turn" or "until your next turn"; a swap that only happens
+// from one row reads "Move to the front row."; row bonuses after a swap read "Now Front:"; "Spend up to 3 Sumi. Deal 4 damage to all
+// enemies, plus 2 for each Sumi spent." keeps the target next to "damage"; doubling reads "Double the target's Poison (adds at most
+// 10)."; Curse and Status cards are acted by the front hero ("The front hero loses 2 HP."); a "If you have Sumi" line on another
+// hero's card is not printed (a hero never holds another hero's resource); numbers inside a hook are never given the hero's row,
+// Might or Weak, because hook damage has no attacker (DESIGN 4.2).
 (() => {
   const D = DATA;
   const ST = D.statuses;
@@ -241,24 +257,32 @@
     return map;
   }
 
-  // live numbers for a combat hero unit (ctx.unit)
+  // live numbers for a combat hero unit (ctx.unit). `hook` is the same thing for the ops inside a hook: hook damage has no attacker
+  // (no Might, row bonus or Weak) and hook Block gets no row bonus, only Bulwark and Frail (DESIGN 4.2).
   function liveFns(ctx) {
     if (!ctx || !ctx.unit || !ctx.unit.st) return {};
     const u = ctx.unit;
     const relics = (ctx.C && ctx.C.relics) || ctx.relics || [];
     const row = D.rowFor(u.id, u.row, relics);
+    const blk = (rowAdd) => (n) => Math.max(0, fl((n + (u.st.bulwark || 0) + rowAdd) * ((u.st.frail || 0) > 0 ? 0.75 : 1)));
     return {
       dmg: (n) => { let r = Math.max(0, n + (row.dmgAdd || 0) + (u.st.might || 0)); if ((u.st.weak || 0) > 0) r = fl(r * 0.75); return r; },
-      block: (n) => Math.max(0, fl((n + (u.st.bulwark || 0) + (row.blockAdd || 0)) * ((u.st.frail || 0) > 0 ? 0.75 : 1))),
+      block: blk(row.blockAdd || 0),
+      hook: { block: blk(0) },
     };
   }
 
   // ------------------------------------------------------------------------------------------------
   // Text: value expressions
   // ------------------------------------------------------------------------------------------------
-  const whoPos = (w) => (w === 'ally' ? "your ally's" : (w === 'target' || w === 'enemy') ? "the target's" : 'your');
-  const whoHas = (w) => (w === 'ally' ? 'your ally has' : (w === 'target' || w === 'enemy') ? 'the target has' : 'you have');
-  const whoIs = (w) => (w === 'ally' ? 'your ally is' : (w === 'target' || w === 'enemy') ? 'the target is' : 'you are');
+  // Enemy ops (a move's fx, an enemy hook) read from the enemy's side: `self` is the enemy, `target` the hero it is hitting.
+  // The flag is module state set by withEnemy(), because perInfo and the helpers below are called from deep inside amt().
+  let enemyMode = false;
+  const withEnemy = (on, fn) => { const prev = enemyMode; enemyMode = on; try { return fn(); } finally { enemyMode = prev; } };
+  const isTarget = (w) => w === 'target' || w === 'enemy';
+  const whoPos = (w) => (enemyMode ? (w === 'self' || w === undefined ? 'its' : "the hero's") : w === 'ally' ? "your ally's" : isTarget(w) ? "the target's" : 'your');
+  const whoHas = (w) => (enemyMode ? (w === 'self' || w === undefined ? 'it has' : 'the hero has') : w === 'ally' ? 'your ally has' : isTarget(w) ? 'the target has' : 'you have');
+  const whoIs = (w) => (enemyMode ? (w === 'self' || w === undefined ? 'it is' : 'the hero is') : w === 'ally' ? 'your ally is' : isTarget(w) ? 'the target is' : 'you are');
 
   function perInfo(v) {
     const w = v.who;
@@ -268,18 +292,19 @@
       case 'drawPile': return { eq: 'the number of cards in your draw pile', unit: 'card in your draw pile' };
       case 'discardPile': return { eq: 'the number of cards in your discard pile', unit: 'card in your discard pile' };
       case 'exhaustPile': return { eq: `the number of cards in your ${KW_EXHAUST()} pile`, unit: `card in your ${KW_EXHAUST()} pile` };
-      case 'cardsPlayed': return { eq: 'the number of cards you have played this turn', unit: 'card played this turn' };
-      case 'attacksPlayed': return { eq: 'the number of Attacks you have played this turn', unit: 'Attack played this turn' };
-      case 'skillsPlayed': return { eq: 'the number of Skills you have played this turn', unit: 'Skill played this turn' };
+      // the engine reads these BEFORE the card being played counts, so they are "earlier" plays
+      case 'cardsPlayed': return { eq: 'the number of cards you played earlier this turn', unit: 'card played earlier this turn' };
+      case 'attacksPlayed': return { eq: 'the number of Attacks you played earlier this turn', unit: 'Attack played earlier this turn' };
+      case 'skillsPlayed': return { eq: 'the number of Skills you played earlier this turn', unit: 'Skill played earlier this turn' };
       case 'energy': return { eq: 'your remaining Energy', unit: 'Energy you have left' };
       case 'block': return { eq: `${whoPos(w)} ${KW_BLOCK()}`, unit: `${KW_BLOCK()} ${whoHas(w)}` };
       case 'hp': return { eq: `${whoPos(w)} current HP`, unit: `HP ${whoHas(w)}` };
       case 'missingHp': return { eq: `${whoPos(w)} missing HP`, unit: `HP ${whoIs(w)} missing` };
       case 'status': return { eq: `${whoPos(w)} ${KS(v.s)}`, unit: `${KS(v.s)} ${whoHas(w)}` };
-      case 'debuffs': { const t = w === 'self' ? 'you' : w === 'ally' ? 'your ally' : 'the target'; return { eq: `the number of debuffs on ${t}`, unit: `debuff on ${t}` }; }
-      case 'enemies': return { eq: 'the number of living enemies', unit: 'living enemy' };
+      case 'debuffs': { const t = enemyMode ? (w === 'self' ? 'it' : 'the hero') : w === 'self' ? 'you' : w === 'ally' ? 'your ally' : 'the target'; return { eq: `the number of debuffs on ${t}`, unit: `debuff on ${t}` }; }
+      case 'enemies': return enemyMode ? { eq: 'the number of enemies still standing', unit: 'enemy still standing' } : { eq: 'the number of living enemies', unit: 'living enemy' };
       case 'kills': return { eq: 'the number of enemies defeated this combat', unit: 'enemy defeated this combat' };
-      case 'turn': return { eq: 'the turn number', unit: 'turn of this combat' };
+      case 'turn': return enemyMode ? { eq: 'its turn count', unit: 'turn it has had' } : { eq: 'the turn number', unit: 'turn of this combat' };
       case 'gems': return { eq: 'the number of gems in this card', unit: 'gem in this card' };
       case 'damageTaken': return { eq: 'the damage you took last enemy turn', unit: 'damage you took last enemy turn' };
       case 'hitsTaken': return { eq: 'the number of hits you took last enemy turn', unit: 'hit you took last enemy turn' };
@@ -291,6 +316,14 @@
   const capSuffix = (v) => `${v.upTo !== undefined ? ` (up to ${NUM(v.upTo)})` : ''}${v.cap !== undefined ? ` (max ${NUM(v.cap)})` : ''}`;
 
   // "6 damage" | "damage equal to your Block" | "3 damage for each Bloom you have". noun may be ''.
+  // o.mid is text that belongs right after the noun (a target, a hit count): the "plus" and "for each" forms put it there, so
+  // "Deal 4 damage to all enemies, plus 2 for each Sumi spent." never hangs the target on the tail; the plain and "equal to"
+  // forms leave it to the caller (o.out.mid reports whether it was used).
+  function frac(mul) {
+    // 0.5 reads "1 for every 2", 0.25 "1 for every 4", 0.75 "3 for every 4": a player never sees a decimal
+    for (const d of [2, 3, 4, 5, 6, 8, 10]) { const n = Math.round(mul * d); if (Math.abs(n / d - mul) < 1e-9) return { n, d }; }
+    return { n: Math.round(mul * 100), d: 100 };
+  }
   function amt(v, noun, o) {
     o = o || {};
     if (v === undefined || v === null) v = 0;
@@ -301,23 +334,34 @@
       return `${NUM(shown, clsOf(shown, resolved, o.ref))}${noun ? ' ' + noun : ''}`;
     }
     const base = v.base || 0, mul = v.mul === undefined ? 1 : v.mul;
+    const rv = o.refV;
+    const rb = isObj(rv) ? (rv.base || 0) : isNum(rv) ? rv : undefined;
+    const rm = isObj(rv) ? (rv.mul === undefined ? 1 : rv.mul) : undefined;
+    const NB = (x) => NUM(x, rb === undefined ? '' : clsOf(x, x, rb));
+    const NM = (x) => NUM(x, rm === undefined ? '' : clsOf(x, x, rm));
     const plus = o.plus ? `, plus ${NUM(o.plus, 'up')}` : '';
     const n = noun || 'an amount';
+    const take = () => { if (o.out) o.out.mid = true; return o.mid || ''; };
+    const eachUnit = (info) => (Number.isInteger(mul) ? `for each ${info.unit}` : `for every ${NUM(frac(mul).d)} ${info.plural || info.unit}`);
+    const mulNum = () => (Number.isInteger(mul) ? NM(mul) : NUM(frac(mul).n));
     if (v.per === 'front') {
       if (base === 0) return `${NUM(mul)} ${n} while in the ${ROWKW.front()} row${plus}`;
-      return `${NUM(base)} ${n} (${NUM(base + mul)} in the ${ROWKW.front()} row)${plus}`;
+      return `${NB(base)} ${n} (${NUM(base + mul)} in the ${ROWKW.front()} row)${plus}`;
     }
     const info = perInfo(v);
     const cap = capSuffix(v);
     if (o.spent) {
       // the "Spend N Foo." sentence came first: name the count instead of restating it
-      if (base === 0) return mul === 1 ? `${n} equal to the ${KS(v.s)} spent${plus}` : `${NUM(mul)} ${n} for each ${KS(v.s)} spent${plus}`;
-      return `${NUM(base)} ${n}, plus ${NUM(mul)} for each ${KS(v.s)} spent${plus}`;
+      if (base === 0) return mul === 1 ? `${n} equal to the ${KS(v.s)} spent${plus}` : `${NM(mul)} ${n}${take()} for each ${KS(v.s)} spent${plus}`;
+      return `${NB(base)} ${n}${take()}, plus ${NM(mul)} for each ${KS(v.s)} spent${plus}`;
     }
+    if (v.per === 'picked' && mul === 1) return base === 0 ? `${NUM(1)} ${n}${take()} for each card chosen${plus}` : `${NUM(base)} ${n}${take()}, plus ${NUM(1)} for each card chosen${plus}`;
     if (mul === 1 && base === 0) return `${n} equal to ${info.eq}${cap}${plus}`;
-    if (mul === 1) return `${n} equal to ${NUM(base)} plus ${info.eq}${cap}${plus}`;
-    if (base === 0) return `${NUM(mul)} ${n} for each ${info.unit}${cap}${plus}`;
-    return `${NUM(base)} ${n}, plus ${NUM(mul)} for each ${info.unit}${cap}${plus}`;
+    // a counted thing with a count limit and no total cap reads "5 damage, plus 1 for each Charge you have (up to 3)"
+    if (mul === 1 && v.upTo !== undefined && v.cap === undefined) return `${NB(base)} ${n}${take()}, plus ${NUM(1)} for each ${info.unit}${cap}${plus}`;
+    if (mul === 1) return `${n} equal to ${NB(base)} plus ${info.eq}${cap}${plus}`;
+    if (base === 0) return `${mulNum()} ${n}${take()} ${eachUnit(info)}${cap}${plus}`;
+    return `${NB(base)} ${n}${take()}, plus ${mulNum()} ${eachUnit(info)}${cap}${plus}`;
   }
 
   // "3 times" | "X times" | "for each card in your hand"
@@ -341,7 +385,7 @@
   function enemySuffix(tgt, S) {
     if (tgt === 'all') return ' to all enemies';
     if (tgt === 'random') return ' to a random enemy';
-    if (tgt === 'lowest') return ' to the weakest enemy';
+    if (tgt === 'lowest') return ' to the enemy with the lowest HP';
     if (tgt === 'others') return ' to all other enemies';
     if (S.hookOn) return S.hookOn === 'onDamaged' ? ' to the attacker' : S.hookOn === 'onPlay' ? ' to the same target' : ' to a random enemy';
     return '';
@@ -349,15 +393,18 @@
   function enemyObj(tgt, S) {
     if (tgt === 'all') return 'all enemies';
     if (tgt === 'random') return 'a random enemy';
-    if (tgt === 'lowest') return 'the weakest enemy';
+    if (tgt === 'lowest') return 'the enemy with the lowest HP';
     if (tgt === 'others') return 'all other enemies';
     if (S.hookOn) return S.hookOn === 'onDamaged' ? 'the attacker' : S.hookOn === 'onPlay' ? 'the same target' : 'a random enemy';
     return 'the enemy';
   }
-  const GAIN = (t, obj) => (t === 'ally' ? `give your ally ${obj}` : t === 'both' ? `both heroes gain ${obj}` : t === 'front' ? `the front hero gains ${obj}` : t === 'back' ? `the back hero gains ${obj}` : `gain ${obj}`);
-  const LOSE = (t, obj) => (t === 'ally' ? `your ally loses ${obj}` : t === 'both' ? `both heroes lose ${obj}` : t === 'front' ? `the front hero loses ${obj}` : t === 'back' ? `the back hero loses ${obj}` : `lose ${obj}`);
-  const HEAL = (t, obj) => (t === 'ally' ? `heal your ally for ${obj}` : t === 'both' ? `heal both heroes for ${obj}` : t === 'front' ? `heal the front hero for ${obj}` : t === 'back' ? `heal the back hero for ${obj}` : `heal ${obj}`);
-  const HERO_FROM = (t) => (t === 'ally' ? 'your ally' : t === 'both' ? 'both heroes' : t === 'front' ? 'the front hero' : t === 'back' ? 'the back hero' : 'you');
+  // Curse and Status cards are acted by the FRONT hero (DESIGN 4.4): for them `self` reads "the front hero"
+  let junkMode = false;
+  const selfT = (t) => (junkMode && (t === 'self' || t === undefined) ? 'front' : t);
+  const GAIN = (t, obj) => { t = selfT(t); return t === 'ally' ? `give your ally ${obj}` : t === 'both' ? `both heroes gain ${obj}` : t === 'front' ? `the front hero gains ${obj}` : t === 'back' ? `the back hero gains ${obj}` : `gain ${obj}`; };
+  const LOSE = (t, obj) => { t = selfT(t); return t === 'ally' ? `your ally loses ${obj}` : t === 'both' ? `both heroes lose ${obj}` : t === 'front' ? `the front hero loses ${obj}` : t === 'back' ? `the back hero loses ${obj}` : `lose ${obj}`; };
+  const HEAL = (t, obj) => { t = selfT(t); return t === 'ally' ? `heal your ally for ${obj}` : t === 'both' ? `heal both heroes for ${obj}` : t === 'front' ? `heal the front hero for ${obj}` : t === 'back' ? `heal the back hero for ${obj}` : `heal ${obj}`; };
+  const HERO_FROM = (t) => { t = selfT(t); return t === 'ally' ? 'your ally' : t === 'both' ? 'both heroes' : t === 'front' ? 'the front hero' : t === 'back' ? 'the back hero' : 'you'; };
   const isEnemyTgt = (t) => ENEMY_TGTS.indexOf(t) >= 0;
 
   // ------------------------------------------------------------------------------------------------
@@ -371,13 +418,13 @@
     if (c.gte !== undefined && c.lte !== undefined) return `${subject} ${verbHave} ${n(c.gte)} to ${n(c.lte)} ${thing}`;
     return `${subject} ${verbHave} ${o.one || thing}`;
   }
-  function condPhrases(c) {
+  function condPhrases(c, S) {
     const out = [];
     const subj = (w) => (w === 'ally' ? 'your ally' : (w === 'target' || w === 'enemy') ? 'the target' : 'you');
     const have = (w) => (w === 'ally' || w === 'target' || w === 'enemy' ? 'has' : 'have');
     const be = (w) => (w === 'ally' || w === 'target' || w === 'enemy' ? 'is' : 'are');
     const pct = (v) => Math.round(v * 100);
-    if (c.row) out.push(`you are in the ${KW(c.row === 'front' ? 'front' : 'back', c.row)} row`);
+    if (c.row) out.push(`you are ${S && S.swapped ? 'now ' : ''}in the ${KW(c.row === 'front' ? 'front' : 'back', c.row)} row`);
     if (c.status) { const s = c.status; out.push(cmpPhrase(s, subj(s.who), have(s.who), KS(s.s), {})); }
     if (c.hpPct) {
       const h = c.hpPct;
@@ -465,17 +512,23 @@
     return t.length ? `${aAn(t[0])} ${t.join(' or ')} fight` : 'a fight';
   }
 
-  // the trigger clause of a hook, e.g. "whenever you play a Skill"; opts.once/every/limit change the wording
-  function triggerPhrase(h) {
+  // the trigger clause of a hook, e.g. "whenever you play a Skill"; opts.once/every/limit change the wording.
+  // In a card (S.owned) "you" is the hero who owns the card: a hook only counts that hero's own events unless its filter says
+  // hero:'any', which reads "either hero" so a player never takes "whenever you play an Attack" to mean the ally's too.
+  // A relic or any other party hook fires for either hero already, and keeps the plain "you".
+  function triggerPhrase(h, S) {
     const on = h.on, f = h.filter || {};
+    const owned = !!(S && S.owned);
+    const any = owned && f.hero === 'any';
     let core = null;
     switch (on) {
-      case 'onPlay': core = `you play ${cardPhrase(f)}`; break;
+      case 'onPlay': core = `${any ? 'either hero plays' : 'you play'} ${cardPhrase(f)}`; break;
       case 'onExhaust': core = `${cardPhrase(f)} is ${KW('Exhausted', 'exhaust')}`; break;
-      case 'onKill': core = `you defeat ${tierPhrase(f.tier)}`; break;
-      case 'onDamaged': core = 'you are hit'; break;
-      case 'onSwap': core = 'you swap rows'; break;
-      case 'onHeroDown': core = 'a hero falls'; break;
+      case 'onKill': core = `${any ? 'either hero defeats' : 'you defeat'} ${tierPhrase(f.tier)}`; break;
+      case 'onDamaged': core = any ? 'either hero is hit' : 'you are hit'; break;
+      // the swap event names the hero who ends up in front, so an owned hook without hero:'any' only hears swaps that put its owner there
+      case 'onSwap': core = any ? 'either hero swaps rows' : owned ? `you swap into the ${KW('front', 'front')} row` : 'you swap rows'; break;
+      case 'onHeroDown': core = owned && !any ? 'you fall' : 'a hero falls'; break;
       case 'onShuffle': core = 'you reshuffle your draw pile'; break;
       case 'onPaint': core = 'you paint a hex'; break;
       case 'onFightWon': core = `you win ${fightPhrase(f.tier)}`; break;
@@ -487,6 +540,11 @@
       case 'combatEnd': return 'at the end of combat';
       case 'turnStart': return h.every ? `at the start of every ${ordinal(h.every)} turn` : h.once ? 'next turn' : 'at the start of your turn';
       case 'turnEnd': return h.every ? `at the end of every ${ordinal(h.every)} turn` : h.once ? 'at the end of this turn' : 'at the end of your turn';
+      // enemy hooks
+      case 'onDeath': return 'when it dies';
+      case 'onHurt': return 'when it is hurt';
+      case 'onAllyDeath': return 'when another enemy dies';
+      case 'onHeroPlay': return f.type ? `when a hero plays ${cardPhrase(f)}` : 'when a hero plays a card';
       default: return `when ${on}`;
     }
     if (h.every) return `every ${ordinal(h.every)} time ${core}`;
@@ -511,6 +569,12 @@
     return b[key] === undefined ? dflt : vKey(b[key]);
   }
   const noNeg = (r) => (r !== undefined && r < 0 ? undefined : r);
+  // the printed (un-upgraded) V of the op aligned with this one: lets the "plus" and "for each" forms colour their base and multiplier
+  function refVOf(S, op, key) {
+    if (!S.ref.has(op)) return undefined;
+    const b = S.ref.get(op);
+    return b ? b[key] : undefined;
+  }
 
   function consumeParts(op) {
     if (op.consume === undefined) return { pre: null, post: null, s: null };
@@ -526,27 +590,39 @@
     const spent = cons.s && isObj(op.n) && op.n.per === 'status' && op.n.s === cons.s;
     const n = op.n;
     const refN = noNeg(refOf(S, op, 'n', 0));
-    let A;
-    if (more && isNum(n)) A = `${amt(n, '', { plus: op.plus, ref: refN, live: S.live.dmg })} more damage`;
-    else A = amt(n, 'damage', { plus: op.plus, ref: refN, live: S.live.dmg, spent });
     const tgt = op.tgt || 'enemy';
-    let h = `deal ${A}${enemySuffix(tgt, S)}`;
+    const sfx = enemySuffix(tgt, S);
+    // how many times: "2 times", "X times", "for each Charge you have"
+    let timesTxt = '';
     const hv = timesV !== undefined ? timesV : op.hits;
     if (hv !== undefined && !(isNum(hv) && hv === 1 && !op.hitsPlus)) {
       const plus = timesV !== undefined ? 0 : op.hitsPlus || 0;
       const spentHits = timesV === undefined && cons.s && isObj(hv) && hv.per === 'status' && hv.s === cons.s;
-      const t = timesPhrase(hv, { plus, ref: timesV !== undefined ? undefined : refOf(S, op, 'hits', 1), spent: spentHits });
-      h += ` ${t}`;
+      timesTxt = ` ${timesPhrase(hv, { plus, ref: timesV !== undefined ? undefined : refOf(S, op, 'hits', 1), spent: spentHits })}`;
     } else if (op.hitsPlus) {
-      h += ` ${timesPhrase(1, { plus: op.hitsPlus, ref: refOf(S, op, 'hits', 1) })}`;
+      timesTxt = ` ${timesPhrase(1, { plus: op.hitsPlus, ref: refOf(S, op, 'hits', 1) })}`;
+    }
+    let A, h;
+    const out0 = {};
+    if (more && isNum(n)) {
+      A = `${amt(n, '', { plus: op.plus, ref: refN, live: S.live.dmg })} more damage`;
+      // "more" always follows a strike on the same enemies, so the target is not said twice: "Back: deal 2 more damage."
+      h = `deal ${A}${timesTxt}`;
+    } else {
+      // the "plus" and "for each" forms carry the target and the count right after "damage": "Deal 4 damage to all enemies, plus 2 for each Sumi spent."
+      A = amt(n, 'damage', { plus: op.plus, ref: refN, refV: refVOf(S, op, 'n'), live: S.live.dmg, spent, mid: sfx + timesTxt, out: out0 });
+      h = `deal ${A}${out0.mid ? '' : sfx + timesTxt}`;
     }
     if (op.pierce) h += `, ignoring ${KW_BLOCK()}`;
-    const out = [];
-    if (cons.pre) out.push({ h: cons.pre, k: 'consume' });
-    out.push({ h, k: `dmg|${tgt}` });
-    if (op.lifesteal) out.push({ h: 'heal HP equal to the unblocked damage dealt', k: 'heal|self' });
-    if (cons.post) out.push({ h: cons.post, k: 'consume' });
-    return out;
+    const res = [];
+    if (cons.pre) res.push({ h: cons.pre, k: 'consume' });
+    const f = { h, k: `dmg|${tgt}` };
+    // an area hit followed by a debuff on the same enemies shares the target: "Deal 5 damage and apply 1 Weak to all enemies."
+    if (sfx && !out0.mid && !timesTxt && !op.pierce && !op.lifesteal && !cons.post && !(more && isNum(n))) f.dmgm = { lead: `deal ${A}`, sfx, key: `e|${tgt}` };
+    res.push(f);
+    if (op.lifesteal) res.push({ h: 'heal for the HP it removes', k: 'heal|self' });
+    if (cons.post) res.push({ h: cons.post, k: 'consume' });
+    return res;
   }
 
   function blockFrags(op, S, more) {
@@ -556,10 +632,13 @@
     const tgt = op.tgt || 'self';
     let A;
     if (more && isNum(op.n)) A = `${amt(op.n, '', { plus: op.plus, ref: refN, live: S.live.block })} more ${KW_BLOCK()}`;
-    else A = amt(op.n, KW_BLOCK(), { plus: op.plus, ref: refN, live: S.live.block, spent });
+    else A = amt(op.n, KW_BLOCK(), { plus: op.plus, ref: refN, refV: refVOf(S, op, 'n'), live: S.live.block, spent });
     const out = [];
     if (cons.pre) out.push({ h: cons.pre, k: 'consume' });
-    out.push({ h: GAIN(tgt, A), k: `block|${tgt}` });
+    const f = { h: GAIN(tgt, A), k: `block|${tgt}` };
+    // a plain number of Block can share a "gain" sentence with plain statuses: "Gain 5 Block and 1 Taunt."
+    if (isNum(op.n) && !cons.pre && !cons.post && !more) f.gain = { key: tgt, kinds: ['block'], items: [A], build: (items) => GAIN(tgt, joinAnd(items)) };
+    out.push(f);
     if (cons.post) out.push({ h: cons.post, k: 'consume' });
     return out;
   }
@@ -569,7 +648,7 @@
     const spent = cons.s && isObj(op.n) && op.n.per === 'status' && op.n.s === cons.s;
     const tgt = op.tgt || 'self';
     const refN = noNeg(refOf(S, op, 'n', 0));
-    const A = more && isNum(op.n) ? `${amt(op.n, '', { plus: op.plus, ref: refN })} more HP` : amt(op.n, 'HP', { plus: op.plus, ref: refN, spent });
+    const A = more && isNum(op.n) ? `${amt(op.n, '', { plus: op.plus, ref: refN })} more HP` : amt(op.n, 'HP', { plus: op.plus, ref: refN, refV: refVOf(S, op, 'n'), spent });
     const out = [];
     if (cons.pre) out.push({ h: cons.pre, k: 'consume' });
     out.push({ h: HEAL(tgt, A), k: `heal|${tgt}` });
@@ -600,8 +679,20 @@
     const plainPos = isNum(n) && n > 0 && !cons.pre && !cons.post;
     if (plainPos) {
       const item = `${NUM(n, clsOf(n, n, refN))} ${KS(op.s)}`;
+      if (S.temps && S.temps.get(op) && !enemy) {
+        // "gain 2 Might this turn": the status plus the hook that takes it back (see tempPairs)
+        out.push({ h: `${GAIN(tgt, item)} ${S.temps.get(op) === 'next' ? 'until your next turn' : 'until the end of this turn'}`, k: 'temp' });
+        return out;
+      }
       const key = `${enemy ? 'e' : 'h'}|${tgt}`;
-      if (prev && prev.mk === key) {
+      if (enemy && prev && prev.dmgm && prev.dmgm.key === key) {
+        const dm = prev.dmgm;
+        prev.items = [item]; prev.ss = [op.s]; prev.mk = key; prev.k = 'status'; prev.dmgm = null;
+        prev.build = (items) => `${dm.lead} and apply ${joinAnd(items)}${dm.sfx}`;
+        prev.h = prev.build(prev.items);
+        return { merged: true };
+      }
+      if (enemy && prev && prev.mk === key) {
         prev.items.push(item);
         prev.ss.push(op.s);
         prev.h = prev.build(prev.items);
@@ -609,15 +700,22 @@
       }
       const build = enemy ? (items) => `apply ${joinAnd(items)}${enemySuffix(tgt, S)}` : (items) => GAIN(tgt, joinAnd(items));
       const f = { h: build([item]), k: 'status', mk: key, items: [item], ss: [op.s], build };
+      if (!enemy) f.gain = { key: tgt, kinds: ['s:' + op.s], items: [item], build };
       out.push(f);
       return out;
     }
     let h;
-    if (isNum(n) && n < 0) {
+    const dbl = !cons.pre && !cons.post && isObj(n) && n.per === 'status' && n.s === op.s && (n.mul === undefined || n.mul === 1) && !n.base && n.upTo === undefined;
+    if (dbl) {
+      // "Double the target's Poison (adds at most 10)"
+      const capTxt = n.cap !== undefined ? ` (adds at most ${NUM(n.cap)})` : '';
+      const whoTxt = enemy || isTarget(n.who) ? "the target's" : n.who === 'ally' ? "your ally's" : 'your';
+      h = `double ${whoTxt} ${KS(op.s)}${capTxt}`;
+    } else if (isNum(n) && n < 0) {
       const item = `${NUM(-n)} ${KS(op.s)}`;
       h = enemy ? `remove ${item} from ${enemyObj(tgt, S)}` : LOSE(tgt, item);
     } else {
-      const A = amt(n, KS(op.s), { ref: refN, spent });
+      const A = amt(n, KS(op.s), { ref: refN, refV: refVOf(S, op, 'n'), spent });
       h = enemy ? `apply ${A}${enemySuffix(tgt, S)}` : GAIN(tgt, A);
     }
     out.push({ h, k: 'statusx' });
@@ -627,7 +725,7 @@
 
   function removeStatusFrag(op, S) {
     const s = op.s;
-    const tgt = op.tgt || ((s === 'debuffs' || D.isDebuff(s)) ? 'self' : (s === 'buffs' || D.isBuff(s)) ? 'enemy' : 'self');
+    const tgt = selfT(op.tgt || ((s === 'debuffs' || D.isDebuff(s)) ? 'self' : (s === 'buffs' || D.isBuff(s)) ? 'enemy' : 'self'));
     const enemy = isEnemyTgt(tgt);
     const from = enemy ? enemyObj(tgt, S) : HERO_FROM(tgt);
     if (s === 'debuffs' || s === 'buffs') return { h: !enemy && tgt === 'self' ? `remove all ${s}` : `remove all ${s} from ${from}`, k: 'remove' };
@@ -667,13 +765,14 @@
 
   function addFrag(op, S) {
     const def = D.cards[op.card];
-    const name = esc((def ? def.name : String(op.card)) + (op.up ? '+' : ''));
     const junk = def && (def.hero === 'curse' || def.hero === 'status');
+    // a Curse or Status card has a plain word for a name ("Blot"), so it says what it is: "a Blot card", "2 Blot cards"
+    const name = esc((def ? def.name : String(op.card)) + (op.up ? '+' : '')) + (junk ? ' card' : '');
     const to = op.to || (junk ? 'discard' : 'hand');
     const n = op.n === undefined ? 1 : op.n;
-    const what = isNum(n) ? (n === 1 ? `${aAn(name)} ${name}` : `${NUM(n)} ${name} cards`) : `${amt(n, '', {})} ${name} cards`;
+    const what = isNum(n) ? (n === 1 ? `${aAn(name)} ${name}` : `${NUM(n)} ${junk ? name + 's' : name + ' cards'}`) : `${amt(n, '', {})} ${junk ? name + 's' : name + ' cards'}`;
     let h;
-    if (to === 'draw') h = `shuffle ${what} into your draw pile`;
+    if (to === 'draw') h = op.top ? `put ${what} on top of your draw pile` : `shuffle ${what} into your draw pile`;
     else if (to === 'discard') h = `add ${what} to your discard pile`;
     else if (to === 'exhaust') h = `add ${what} to your ${KW_EXHAUST()} pile`;
     else h = `add ${what} to your hand`;
@@ -682,23 +781,156 @@
 
   function reviveFrag(op, S) {
     const A = op.pct !== undefined ? `${NUM(Math.round(op.pct * 100))}% HP` : `${amt(op.n, 'HP', {})}`;
-    return { h: `revive ${S.hookOn === 'onHeroDown' ? 'that hero' : 'a fallen hero'} with ${A}`, k: 'revive' };
+    const who = S.hookOn === 'onHeroDown' ? (S.owned && !S.hookAny ? 'yourself' : 'that hero') : 'a fallen hero';
+    return { h: `revive ${who} with ${A}`, k: 'revive' };
   }
 
   function joinFrags(frs) { return joinAnd(frs.map((f) => f.h)); }
 
+  // "Gain 2 Might. ... At the end of this turn, lose 2 Might." is one idea: a status followed (in the same op list) by a `once`
+  // turnEnd or turnStart hook that takes exactly that status back from the same target. It reads "Gain 2 Might this turn." or
+  // "Gain 1 Dodge until your next turn.", and the hook op is not printed a second time.
+  function tempPairs(ops) {
+    const marks = new Map(), skip = new Set();
+    const dflt = (o) => o.tgt || (D.isDebuff(o.s) ? 'enemy' : 'self');
+    ops.forEach((op, i) => {
+      if (!op || op.op !== 'status' || !isNum(op.n) || op.n <= 0 || isEnemyTgt(dflt(op))) return;
+      for (let j = i + 1; j < ops.length; j++) {
+        const h = ops[j];
+        if (!h || h.op !== 'hook' || skip.has(h) || !h.once || (h.on !== 'turnEnd' && h.on !== 'turnStart') || h.filter || h.limit !== undefined || h.every) continue;
+        const fx = list(h.fx);
+        const u = fx[0];
+        if (fx.length !== 1 || !u || u.op !== 'status' || u.s !== op.s || u.n !== -op.n || dflt(u) !== dflt(op) || u.consume !== undefined) continue;
+        marks.set(op, h.on === 'turnEnd' ? 'turn' : 'next');
+        skip.add(h);
+        break;
+      }
+    });
+    return { marks, skip };
+  }
+
   function fragsOfList(ops, S) {
     const out = [];
-    list(ops).forEach((op) => {
-      if (!op || typeof op !== 'object') return;
+    const arr = list(ops);
+    const tp = tempPairs(arr);
+    const saved = { temps: S.temps, swapped: S.swapped };
+    S.temps = tp.marks;
+    arr.forEach((op) => {
+      if (!op || typeof op !== 'object' || tp.skip.has(op)) return;
       const r = opFrags(op, S, out[out.length - 1] || null);
-      if (r && !r.merged) r.forEach((f) => out.push(f));
+      if (op.op === 'swap') S.swapped = true;
+      if (!r || r.merged) return;
+      r.forEach((f) => {
+        const p = out[out.length - 1];
+        // "gain" items of different kinds share one sentence: "Gain 5 Block and 1 Taunt."
+        if (f.gain && p && p.gain && p.gain.key === f.gain.key && !f.gain.kinds.some((k) => p.gain.kinds.indexOf(k) >= 0)) {
+          p.gain.items = p.gain.items.concat(f.gain.items);
+          p.gain.kinds = p.gain.kinds.concat(f.gain.kinds);
+          p.h = p.gain.build(p.gain.items);
+          p.ss = (p.ss || []).concat(f.ss || []);
+          p.k = f.k;
+          if (f.mk) p.mk = f.mk;
+        } else out.push(f);
+      });
     });
+    S.temps = saved.temps; S.swapped = saved.swapped;
     return out;
+  }
+
+  // ---- enemy ops (a move's fx, an enemy's start ops and hooks), read from the enemy's side: DESIGN 4.5 targets ----
+  const E_HERO = { front: 'the front hero', back: 'the back hero', both: 'both heroes', random: 'a random hero', lowest: 'the weakest hero' };
+  const E_SIDE = { allEnemies: 'all enemies', otherEnemy: 'another enemy', lowestEnemy: 'the enemy with the lowest HP' };
+  const pluralName = (name, n) => (n > 1 && !/Kodama$/.test(name) ? name + 's' : name);
+  const E_NAME = (id) => (D.enemies[id] ? D.enemies[id].name : String(id));
+
+  function enemyFrags(op, S, prev) {
+    switch (op.op) {
+      case 'dmg': {
+        const tgt = op.tgt || 'front';
+        const etgt = E_HERO[tgt] || 'the front hero';
+        const hv = op.hits;
+        const timesTxt = hv !== undefined && !(isNum(hv) && hv === 1) ? ` ${timesPhrase(hv, {})}` : '';
+        const out = {};
+        const A = amt(op.n, 'damage', { mid: ` to ${etgt}${timesTxt}`, out });
+        const head = `deal ${A}`;
+        let h = out.mid ? head : `${head} to ${etgt}${timesTxt}`;
+        if (op.pierce) h += `, ignoring ${KW_BLOCK()}`;
+        const res = [];
+        if (op.lifesteal) { h += ' and heal for the damage dealt'; }
+        res.push({ h, k: 'edmg', etgt: out.mid || op.pierce || op.lifesteal ? null : etgt, lead: out.mid || timesTxt ? null : head, head: `${head}${timesTxt}` });
+        return res;
+      }
+      case 'block': case 'heal': {
+        const tgt = op.tgt || 'self';
+        if (tgt === 'self') {
+          const A = op.op === 'block' ? amt(op.n, KW_BLOCK(), {}) : amt(op.n, 'HP', {});
+          const f = { h: op.op === 'block' ? `gain ${A}` : `heal ${A}`, k: 'eself' };
+          if (op.op === 'block' && isNum(op.n)) f.gain = { key: 'self', kinds: ['block'], items: [A], build: (items) => `gain ${joinAnd(items)}` };
+          return [f];
+        }
+        const who = E_SIDE[tgt] || 'an enemy';
+        return [op.op === 'block'
+          ? { h: `${who} ${tgt === 'allEnemies' ? 'gain' : 'gains'} ${amt(op.n, KW_BLOCK(), {})}`, k: 'eother' }
+          : { h: `heal ${who} for ${amt(op.n, 'HP', {})}`, k: 'eother' }];
+      }
+      case 'status': {
+        const tgt = op.tgt || (D.isDebuff(op.s) ? 'front' : 'self');
+        const n = op.n;
+        const item = isNum(n) ? `${NUM(Math.abs(n))} ${KS(op.s)}` : amt(n, KS(op.s), {});
+        if (E_HERO[tgt]) {
+          if (isNum(n) && n < 0) return [{ h: `remove ${item} from ${E_HERO[tgt]}`, k: 'eremove' }];
+          const etgt = E_HERO[tgt];
+          // "Deal 5 damage and apply 1 Vulnerable to the front hero." / "Apply 1 Weak and 1 Frail to both heroes."
+          if (prev && prev.k === 'edmg' && prev.etgt === etgt && prev.lead) {
+            prev.k = 'estatus'; prev.items = [item]; prev.ss = [op.s];
+            prev.build = (items) => `${prev.lead} and apply ${joinAnd(items)} to ${etgt}`;
+            prev.h = prev.build(prev.items);
+            return { merged: true };
+          }
+          if (prev && prev.k === 'estatus' && prev.etgt === etgt) {
+            prev.items.push(item); prev.ss.push(op.s); prev.h = prev.build(prev.items);
+            return { merged: true };
+          }
+          const f = { h: `apply ${item} to ${etgt}`, k: 'estatus', etgt, items: [item], ss: [op.s] };
+          f.build = (items) => `apply ${joinAnd(items)} to ${etgt}`;
+          return [f];
+        }
+        if (tgt === 'self') {
+          if (isNum(n) && n < 0) return [{ h: `lose ${item}`, k: 'eself' }];
+          const f = { h: `gain ${item}`, k: 'eself', ss: [op.s] };
+          if (isNum(n)) f.gain = { key: 'self', kinds: ['s:' + op.s], items: [item], build: (items) => `gain ${joinAnd(items)}` };
+          return [f];
+        }
+        const who = E_SIDE[tgt] || 'an enemy';
+        return [{ h: `${who} ${tgt === 'allEnemies' ? 'gain' : 'gains'} ${item}`, k: 'eother' }];
+      }
+      case 'removeStatus': {
+        const s = op.s;
+        const tgt = op.tgt || ((s === 'debuffs' || D.isDebuff(s)) ? 'self' : 'front');
+        const word = s === 'buffs' || s === 'debuffs' ? `all ${s}` : `${op.n === undefined ? '' : amt(op.n, '', {}) + ' '}${KS(s)}`;
+        if (tgt === 'self') return [{ h: s === 'buffs' || s === 'debuffs' ? `remove ${word} from itself` : `lose ${op.n === undefined ? 'all ' : ''}${op.n === undefined ? '' : amt(op.n, '', {}) + ' '}${KS(s)}`, k: 'eremove' }];
+        const etgt = E_HERO[tgt] || E_SIDE[tgt] || 'the front hero';
+        // consecutive removals from the same side share one sentence: "Remove Bloom, Sumi, Ward and Charge from both heroes."
+        if (prev && prev.k === 'eremoveh' && prev.etgt === etgt) { prev.items.push(word); prev.h = `remove ${joinAnd(prev.items)} from ${etgt}`; return { merged: true }; }
+        return [{ h: `remove ${word} from ${etgt}`, k: 'eremoveh', etgt, items: [word] }];
+      }
+      case 'add': return [addFrag(op, S)];
+      case 'summon': {
+        const n = op.n && op.n > 1 ? op.n : 1;
+        const name = esc(E_NAME(op.enemy));
+        return [{ h: n > 1 ? `summon ${NUM(n)} ${pluralName(name, n)}` : `summon ${aAn(name)} ${name}`, k: 'summon' }];
+      }
+      case 'swap': return [{ h: 'swap your rows', k: 'swap' }];
+      case 'stealGold': return [{ h: `steal ${amt(op.n, 'gold', {})}`, k: 'steal' }];
+      case 'flee': return [{ h: 'flee', k: 'flee' }];
+      case 'cond': return condFrags(op, S, prev);
+      default: return null;
+    }
   }
 
   // one op -> array of fragments (or {merged:true} when it joined the previous fragment)
   function opFrags(op, S, prev) {
+    if (S.enemy) { const e = enemyFrags(op, S, prev); if (e !== null) return e; }
     if ((S.run || op.pct !== undefined || op.who !== undefined) && (op.op === 'gold' || op.op === 'ink' || op.op === 'heal' || op.op === 'hurt' || op.op === 'maxHp')) return runFrags(op, S);
     switch (op.op) {
       case 'dmg': return dmgFrags(op, S);
@@ -713,7 +945,9 @@
         const out = [];
         if (cons.pre) out.push({ h: cons.pre, k: 'consume' });
         let h;
-        if (isNum(op.n)) { const r = noNeg(refOf(S, op, 'n', 0)); h = `draw ${NUM(op.n, clsOf(op.n, op.n, r))} ${op.n === 1 ? 'card' : 'cards'}`; } else h = `draw ${amt(op.n, 'cards', { spent })}`;
+        if (isNum(op.n)) { const r = noNeg(refOf(S, op, 'n', 0)); h = `draw ${NUM(op.n, clsOf(op.n, op.n, r))} ${op.n === 1 ? 'card' : 'cards'}`; }
+        else if (isObj(op.n) && op.n.per === 'picked' && !op.n.base && op.n.cap === undefined && op.n.upTo === undefined) { const m = op.n.mul === undefined ? 1 : op.n.mul; h = `draw ${NUM(m)} ${m === 1 ? 'card' : 'cards'} for each card chosen`; }
+        else h = `draw ${amt(op.n, 'cards', { spent })}`;
         out.push({ h, k: 'draw' });
         if (cons.post) out.push({ h: cons.post, k: 'consume' });
         return out;
@@ -733,8 +967,15 @@
       case 'pick': return [pickFrag(op)];
       case 'add': return [addFrag(op, S)];
       case 'swap': return [{ h: `${KW('Swap', 'swap')} rows`, k: 'swap' }];
-      case 'gold': return op.pct !== undefined ? runFrags(op, S) : [{ h: isNum(op.n) && op.n < 0 ? `lose ${NUM(-op.n)} gold` : `gain ${amt(op.n, 'gold', {})}`, k: 'gold' }];
-      case 'ink': return op.pct !== undefined ? runFrags(op, S) : [{ h: isNum(op.n) && op.n < 0 ? `lose ${NUM(-op.n)} ${KW('Ink', 'ink')}` : `gain ${amt(op.n, KW('Ink', 'ink'), {})}`, k: 'ink' }];
+      case 'gold': case 'ink': {
+        if (op.pct !== undefined) return runFrags(op, S);
+        const word = op.op === 'gold' ? 'gold' : KW('Ink', 'ink');
+        if (isNum(op.n) && op.n < 0) return [{ h: `lose ${NUM(-op.n)} ${word}`, k: op.op }];
+        const A = amt(op.n, word, {});
+        const f = { h: `gain ${A}`, k: op.op };
+        if (isNum(op.n)) f.gain = { key: 'self', kinds: [op.op], items: [A], build: (items) => `gain ${joinAnd(items)}` };
+        return [f];
+      }
       case 'maxHp': { const t = op.tgt || 'self'; const A = `${NUM(Math.abs(op.n))} max HP`; return [{ h: isNum(op.n) && op.n < 0 ? LOSE(t, A) : GAIN(t, A), k: 'maxhp' }]; }
       case 'revive': return [reviveFrag(op, S)];
       case 'hook': { const f = hookFrag(op, S); return f ? [f] : []; }
@@ -757,10 +998,10 @@
   }
 
   function hookFrag(op, S) {
-    const S2 = Object.assign({}, S, { hookOn: op.on, hand: false });
+    const S2 = Object.assign({}, S, { hookOn: op.on, hand: false, hookAny: !!(op.filter && op.filter.hero === 'any'), live: S.live.hook || {} });
     const frs = fragsOfList(op.fx, S2);
     if (!frs.length) return null;
-    const lead = triggerPhrase(op);
+    const lead = triggerPhrase(op, S2);
     const lim = limitPhrase(op);
     // DESIGN 5.1: a one-shot next-turn hook reads "Next turn: gain 2 Energy."
     let h = `${lead}${lead === 'next turn' ? ': ' : ', '}${joinFrags(frs)}`;
@@ -772,15 +1013,22 @@
     const c = op.if || {};
     const keys = Object.keys(c);
     const thenOps = list(op.then), elseOps = list(op.else);
+    const rowOnly = keys.length === 1 && !!c.row;
+    // "If you have Sumi, gain 2 more" on a Hanae card can never fire (a hero only ever holds their own resource): leave it out
+    if (S.heroId && keys.length === 1 && c.status && (c.status.who === undefined || c.status.who === 'self') && c.status.lte === undefined && ST[c.status.s] && ST[c.status.s].kind === 'resource' && ST[c.status.s].hero && ST[c.status.s].hero !== S.heroId) return elseOps.length ? fragsOfList(elseOps, S) : [];
+    // "Front:" / "Back:" lead a sentence; after a swap in the same card they read "Now Front:" (the row you ended up in)
+    const lead = (row) => `${S.swapped ? 'Now ' : ''}${ROWKW[row]()}: `;
+    // a step: "if you are in the Back row, swap" is "Move to the Front row" (it never pushes you out of the front)
+    if (rowOnly && !elseOps.length && thenOps.length === 1 && thenOps[0].op === 'swap') { const to = c.row === 'front' ? 'back' : 'front'; return [{ h: `move to the ${KW(to, to)} row`, k: 'swap' }]; }
     // "Front: deal 3 more damage." after a same-kind, same-target op
     if (!elseOps.length && thenOps.length === 1 && prev && ['dmg', 'block', 'heal'].indexOf(thenOps[0].op) >= 0) {
       const t = thenOps[0];
       const plain = isNum(t.n) && t.consume === undefined && t.hits === undefined && !t.lifesteal && !t.pierce && !t.hitsPlus;
       const kind = `${t.op}|${t.tgt || (t.op === 'dmg' ? 'enemy' : 'self')}`;
-      if (plain && prev.k === kind) {
+      if (plain && (prev.k === kind || (t.op === 'block' && prev.gain && prev.gain.kinds[prev.gain.kinds.length - 1] === 'block' && prev.gain.key === (t.tgt || 'self')))) {
         const inner = t.op === 'dmg' ? dmgFrags(t, S, undefined, true) : t.op === 'block' ? blockFrags(t, S, true) : healFrags(t, S, true);
-        const lead = keys.length === 1 && c.row ? `${ROWKW[c.row]()}: ` : `if ${condPhrases(c).join(' and ')}, `;
-        return [{ h: lead + joinFrags(inner), k: kind }];
+        const ld = rowOnly ? lead(c.row) : `if ${condPhrases(c, S).join(' and ')}, `;
+        return [{ h: ld + joinFrags(inner), k: kind }];
       }
     }
     // "Front: apply 2 more Burn." after a plain status of the same kind on the same target
@@ -788,11 +1036,12 @@
       const t = thenOps[0];
       const tgt = t.tgt || (D.isDebuff(t.s) ? 'enemy' : 'self');
       const enemy = isEnemyTgt(tgt);
-      if (isNum(t.n) && t.n > 0 && t.consume === undefined && prev.mk === `${enemy ? 'e' : 'h'}|${tgt}` && prev.ss[prev.ss.length - 1] === t.s) {
+      const sameTgt = prev.mk === `${enemy ? 'e' : 'h'}|${tgt}` || (prev.gain && prev.gain.key === tgt && !enemy);
+      if (isNum(t.n) && t.n > 0 && t.consume === undefined && sameTgt && prev.ss && prev.ss[prev.ss.length - 1] === t.s) {
         const item = `${NUM(t.n, clsOf(t.n, t.n, noNeg(refOf(S, t, 'n', 0))))} more ${KS(t.s)}`;
         const inner = enemy ? `apply ${item}${enemySuffix(tgt, S)}` : GAIN(tgt, item);
-        const lead = keys.length === 1 && c.row ? `${ROWKW[c.row]()}: ` : `if ${condPhrases(c).join(' and ')}, `;
-        return [{ h: lead + inner, k: 'statusx' }];
+        const ld = rowOnly ? lead(c.row) : `if ${condPhrases(c, S).join(' and ')}, `;
+        return [{ h: ld + inner, k: 'statusx' }];
       }
     }
     const thenH = joinFrags(fragsOfList(thenOps, S));
@@ -800,16 +1049,16 @@
     if (!thenH && !elseH) return [];
     if (!thenH) {
       // only the else branch does anything: "Back: ..." or "Unless you have Bloom, ..."
-      if (keys.length === 1 && c.row) return [{ h: `${ROWKW[c.row === 'front' ? 'back' : 'front']()}: ${elseH}`, k: 'cond' }];
-      return [{ h: `unless ${condPhrases(c).join(' and ')}, ${elseH}`, k: 'cond' }];
+      if (rowOnly) return [{ h: `${lead(c.row === 'front' ? 'back' : 'front')}${elseH}`, k: 'cond' }];
+      return [{ h: `unless ${condPhrases(c, S).join(' and ')}, ${elseH}`, k: 'cond' }];
     }
-    if (keys.length === 1 && c.row) {
+    if (rowOnly) {
       const other = c.row === 'front' ? 'back' : 'front';
-      let h = `${ROWKW[c.row]()}: ${thenH}`;
-      if (elseH) h += `. ${ROWKW[other]()}: ${elseH}`;
+      let h = `${lead(c.row)}${thenH}`;
+      if (elseH) h += `. ${lead(other)}${elseH}`;
       return [{ h, k: 'cond' }];
     }
-    let h = `if ${condPhrases(c).join(' and ')}, ${thenH}`;
+    let h = `if ${condPhrases(c, S).join(' and ')}, ${thenH}`;
     if (elseH) h += `. Otherwise, ${elseH}`;
     return [{ h, k: 'cond' }];
   }
@@ -847,7 +1096,7 @@
   }
 
   function makeState(res, ctx, run) {
-    return { ref: res ? buildRef(res) : new Map(), live: liveFns(ctx), hookOn: null, hand: false, run: !!run || !!(ctx && ctx.run) };
+    return { ref: res ? buildRef(res) : new Map(), live: liveFns(ctx), hookOn: null, hand: false, run: !!run || !!(ctx && ctx.run), owned: !!res, enemy: false, temps: null, swapped: false, heroId: res && res.hero ? res.hero : null };
   }
   const renderOps = (ops, S) => fragsOfList(ops, S).map((f) => sentence(f.h));
 
@@ -883,19 +1132,45 @@
 
   function cardHtml(x, ctx) {
     const res = asResolved(x, ctx && ctx.unit ? ctx : undefined);
-    return cardSentences(res, ctx).join(' ');
+    const prev = junkMode;
+    junkMode = !!(res.def && (res.def.hero === 'curse' || res.def.hero === 'status'));
+    try { return cardSentences(res, ctx).join(' '); } finally { junkMode = prev; }
   }
   function cardPlain(x, ctx) { return plainOf(cardHtml(x, ctx)); }
 
+  // Enemy op lists are told apart from card op lists by identity: the move, start, phase and hook fx arrays of every registered enemy
+  // are remembered (rebuilt when the roster changes), so `DATA.opsText(move.fx)` reads from the enemy's side with no extra argument.
+  let enemyKnown = -1, enemyArrays = new WeakSet(), enemyHookObjs = new WeakSet();
+  function enemyLists() {
+    const defs = Object.values(D.enemies);
+    if (enemyKnown !== defs.length) {
+      enemyKnown = defs.length; enemyArrays = new WeakSet(); enemyHookObjs = new WeakSet();
+      defs.forEach((e) => {
+        if (Array.isArray(e.start)) enemyArrays.add(e.start);
+        Object.values(e.moves || {}).forEach((m) => { if (Array.isArray(m.fx)) enemyArrays.add(m.fx); });
+        (e.phases || []).forEach((p) => { if (Array.isArray(p.fx)) enemyArrays.add(p.fx); });
+        (e.hooks || []).forEach((h) => { enemyHookObjs.add(h); if (Array.isArray(h.fx)) enemyArrays.add(h.fx); });
+      });
+    }
+    return { arrays: enemyArrays, hooks: enemyHookObjs };
+  }
+  function enemyState(ctx, on) { const S = makeState(null, ctx); S.enemy = on; return S; }
+
   function opsText(ops, ctx) {
-    const S = makeState(null, ctx);
-    return plainOf(renderOps(ops, S).join(' '));
+    const on = !!(ctx && ctx.enemy) || (Array.isArray(ops) && enemyLists().arrays.has(ops));
+    return withEnemy(on, () => plainOf(renderOps(ops, enemyState(ctx, on)).join(' ')));
   }
   function hookText(h, ctx) {
-    const S = makeState(null, ctx, RUN_HOOKS.indexOf(h.on) >= 0);
-    const f = hookFrag(Object.assign({ op: 'hook' }, h), S);
-    return f ? plainOf(sentence(f.h)) : '';
+    const on = !!(ctx && ctx.enemy) || enemyLists().hooks.has(h) || D.LISTS.enemyHooks.indexOf(h.on) >= 0;
+    return withEnemy(on, () => {
+      const S = enemyState(ctx, on);
+      S.run = RUN_HOOKS.indexOf(h.on) >= 0 || !!(ctx && ctx.run);
+      const f = hookFrag(Object.assign({ op: 'hook' }, h), S);
+      return f ? plainOf(sentence(f.h)) : '';
+    });
   }
+  // one enemy move as the bestiary prints it: "Deal 5 damage and apply 1 Vulnerable to the front hero."
+  function moveText(m) { return m && Array.isArray(m.fx) ? opsText(m.fx, { enemy: true }) : ''; }
 
   // ---- gems ----
   function gemModText(m, skipCond) {
@@ -940,11 +1215,32 @@
   }
 
   // ---- intents ----
+  // C.intent reports buffs, Block and heals aimed at OTHER enemies as if they were aimed at the enemy itself, so the sentence looks the
+  // move up (by id and name) and, when every enemy move of that name agrees, says who really gets the effect.
+  const SIDE_WORD = { allEnemies: 'all enemies', otherEnemy: 'another enemy', lowestEnemy: 'the enemy with the lowest HP' };
+  function moveSides(it) {
+    if (!it || !it.move) return null;
+    let found = null, clash = false;
+    Object.values(D.enemies).forEach((e) => {
+      const m = e.moves && e.moves[it.move];
+      if (!m || m.name !== it.name) return;
+      const info = { block: null, heal: null, blockN: null, healN: null, status: {} };
+      D.walkOps(m.fx || [], (o) => {
+        if ((o.op === 'block' || o.op === 'heal') && SIDE_WORD[o.tgt]) { info[o.op] = o.tgt; info[o.op + 'N'] = isNum(o.n) ? o.n : null; }
+        if (o.op === 'status' && SIDE_WORD[o.tgt]) info.status[o.s] = o.tgt;
+      });
+      const key = JSON.stringify(info);
+      if (found && found.key !== key) clash = true;
+      found = { key, info };
+    });
+    return found && !clash ? found.info : null;
+  }
+  const pluralOf = (name, n) => (n > 1 && !/Kodama$/.test(name) ? name + 's' : name);
+
   function intentText(it) {
     if (!it) return '';
     if (it.stunned) return it.text && it.text !== '' ? it.text : 'Stunned';
-    const parts = [];
-    const tgtWord = (kind, tgt, taunted) => {
+    const heroWord = (kind, tgt, taunted) => {
       const names = Array.isArray(tgt) ? tgt.map(HERO_NAME) : [];
       if (taunted && names.length) return names.join(' and ');
       if (kind === 'front') return 'the front hero';
@@ -956,22 +1252,57 @@
       if (names.length === 1) return names[0];
       return 'the front hero';
     };
-    if (it.dmg !== null && it.dmg !== undefined) parts.push(`Deals ${it.dmg}${it.hits > 1 ? ` x${it.hits}` : ''} to ${tgtWord(it.tgtKind, it.tgt, it.taunted)}`);
-    if (it.block) parts.push(`Gains ${it.block} Block`);
-    if (it.heal) parts.push(`Heals ${it.heal}`);
-    list(it.statuses).forEach((s) => {
-      const nm = stName(s.s);
-      const dest = s.to === 'self' ? '' : ` ${s.to === 'random' ? 'to a random hero' : s.to === 'lowest' ? 'to the weakest hero' : s.to === 'both' ? 'to both heroes' : s.to === 'back' ? 'to the back hero' : 'to the front hero'}`;
-      parts.push(s.to === 'self' ? `Gains ${s.n} ${nm}` : `Applies ${s.n} ${nm}${dest}`);
+    const DEST = { front: 'the front hero', back: 'the back hero', both: 'both heroes', random: 'a random hero', lowest: 'the weakest hero' };
+    const sides = moveSides(it);
+    const clauses = [];
+    let dmgWord = null;
+    if (it.dmg !== null && it.dmg !== undefined) {
+      dmgWord = heroWord(it.tgtKind, it.tgt, it.taunted);
+      clauses.push(`Deals ${it.dmg}${it.hits > 1 ? ` x${it.hits}` : ''} to ${dmgWord}`);
+    }
+    // what the enemy gives itself: "Gains 12 Block and 6 Thorns"
+    const own = [];
+    if (it.block && !(sides && sides.block)) own.push(`${it.block} Block`);
+    const others = [];   // "Gives all enemies 1 Ritual"
+    if (it.block && sides && sides.block) others.push({ who: SIDE_WORD[sides.block], what: `${it.block} Block` });
+    const byDest = [];   // [dest, [items]] in first-seen order
+    list(it.statuses).forEach((st) => {
+      const item = `${st.n} ${stName(st.s)}`;
+      if (st.to === 'self') {
+        if (sides && sides.status[st.s]) others.push({ who: SIDE_WORD[sides.status[st.s]], what: item });
+        else own.push(item);
+      } else if (SIDE_WORD[st.to]) others.push({ who: SIDE_WORD[st.to], what: item });
+      else {
+        let g = byDest.find((x) => x[0] === (DEST[st.to] || DEST.front));
+        if (!g) { g = [DEST[st.to] || DEST.front, []]; byDest.push(g); }
+        g[1].push(item);
+      }
     });
-    list(it.removes).forEach((r) => parts.push(r.s === 'buffs' || r.s === 'debuffs' ? `Removes ${r.s}` : `Removes ${stName(r.s)}`));
-    list(it.adds).forEach((a) => { const c = D.cards[a.card]; parts.push(`Adds ${a.n > 1 ? a.n + ' ' : ''}${c ? c.name : a.card} to your ${a.to === 'draw' ? 'draw' : 'discard'} pile`); });
-    list(it.summons).forEach((s) => { const e = D.enemies[s.enemy]; parts.push(`Summons ${s.n > 1 ? s.n + ' ' : ''}${e ? e.name : s.enemy}`); });
-    if (it.steals) parts.push(`Steals ${it.steals} gold`);
-    if (it.swap) parts.push('Swaps your rows');
-    if (it.flee) parts.push('Flees');
-    if (!parts.length) return it.name || (it.kind === 'none' ? '' : it.kind || '');
-    return parts.map((x, i) => (i === 0 ? x : x[0].toLowerCase() + x.slice(1))).join(', ');
+    if (own.length) clauses.push(`gains ${joinAnd(own)}`);
+    byDest.forEach(([dest, items]) => clauses.push(`applies ${joinAnd(items)}${dest === dmgWord ? '' : ` to ${dest}`}`));
+    if (!it.block && sides && sides.block && sides.blockN) others.push({ who: SIDE_WORD[sides.block], what: `${sides.blockN} Block` });
+    others.forEach((o) => clauses.push(`gives ${o.who} ${o.what}`));
+    if (it.heal) clauses.push(sides && sides.heal ? `heals ${SIDE_WORD[sides.heal]} for ${it.heal}` : `heals ${it.heal}`);
+    // removals: "removes Bloom, Sumi, Ward and Charge from both heroes", "loses its Thorns"
+    const rem = [];
+    list(it.removes).forEach((r) => {
+      const word = r.s === 'buffs' || r.s === 'debuffs' ? `all ${r.s}` : stName(r.s);
+      if (r.to === 'self') clauses.push(r.s === 'buffs' || r.s === 'debuffs' ? `removes ${word} from itself` : `loses its ${word}`);
+      else { const dest = DEST[r.to] || DEST.front; let g = rem.find((x) => x[0] === dest); if (!g) { g = [dest, []]; rem.push(g); } g[1].push(word); }
+    });
+    rem.forEach(([dest, items]) => clauses.push(`removes ${joinAnd(items)}${dest === dmgWord ? '' : ` from ${dest}`}`));
+    list(it.adds).forEach((a) => {
+      const c = D.cards[a.card];
+      const nm = (c ? c.name : a.card) + (c && (c.hero === 'curse' || c.hero === 'status') ? ' card' : '');
+      clauses.push(`adds ${a.n > 1 ? `${a.n} ${nm}s` : `${aAn(nm)} ${nm}`} to your ${a.to === 'draw' ? 'draw' : 'discard'} pile`);
+    });
+    list(it.summons).forEach((sm) => { const e = D.enemies[sm.enemy]; const nm = e ? e.name : sm.enemy; clauses.push(`summons ${sm.n > 1 ? `${sm.n} ${pluralOf(nm, sm.n)}` : `${aAn(nm)} ${nm}`}`); });
+    if (it.steals) clauses.push(`steals ${it.steals} gold`);
+    if (it.swap) clauses.push('swaps your rows');
+    if (it.flee) clauses.push('flees');
+    if (!clauses.length) return it.name || (it.kind === 'none' ? '' : it.kind || '');
+    const first = clauses[0][0].toUpperCase() + clauses[0].slice(1);
+    return clauses.length === 1 ? first : joinAnd([first].concat(clauses.slice(1)));
   }
 
   // ---- rows ----
@@ -990,5 +1321,5 @@
     return `${label}: ${parts.join(', ')}`;
   }
 
-  Object.assign(D, { resolveCard, cardHtml, cardPlain, opsText, hookText, gemText, relicText, statusText, intentText, rowText, targetMode, cardOps });
+  Object.assign(D, { resolveCard, cardHtml, cardPlain, opsText, hookText, moveText, gemText, relicText, statusText, intentText, rowText, targetMode, cardOps });
 })();
