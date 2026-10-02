@@ -27,6 +27,8 @@
 // EXTRAS beyond DESIGN 5.6
 //   ART.enemy.warm3(id, s) -> parts baked      pre-bake every sprite of a chapter 3 creature at the raster scale for s (avoids a first-frame hitch)
 //   ART.enemy.ids3() -> the 17 ids drawn here
+//   boss_editor is ONE spec holding the parts of all three forms (prefixes p0_ p1_ p2_) and one rig per form, chosen by o.phase (0 Editor, 1 Eraser, 2 Blank
+//   Page; later values keep the last form); each form has its own bounds-compatible dissolve (paper and red marks, pink crumbs, letters and bars imploding).
 //   Gallery sheets: enemies3 (normals, elites, minions, several poses each), boss3 (The Editor, three phases, every pose, large), enemies3_anim (film
 //   strips of two creatures), enemies3_dev (params id[,id]|all pose|all zoom t pt phase hp: the workbench).
 (() => {
@@ -2542,6 +2544,1151 @@
     },
   });
 
+  // ---------------------------------------------------------------------------------------------------------------
+  // BLACK-BAR INQUISITOR (elite, l): the Blank's hanging judge. A tall black robe under an ivory mantle that is more black bar than paper, a pointed
+  // capirote hood over a blank white porcelain mask whose mouth has been blacked out with a censor bar (Gag Order), two hard gold slits for eyes, a gavel
+  // the size of a mallet and a sentence scroll that unrolls to the floor with its words struck through. Iron chains with open shackles hang from the belt.
+  // A halo of loose black bars circles its head and snaps into a cage when it is about to pass sentence. Accent: cold gold eyes and the hot gold gavel.
+  // ---------------------------------------------------------------------------------------------------------------
+  const BI = { robe: '#241c4c', robeL: '#3d3274', robeD: '#130e2c', paper: '#fff8f0', paperD: '#d8c8e8', bar: '#0b0916', gold: '#ffd24a', goldD: '#b8801c', iron: '#575d86', ironD: '#33375a', wood: '#8a5a2a', woodD: '#4e3014', brass: '#e2ae4c', lilac: '#c9b8ff', skin: '#fdf4e6' };
+  function biLink(S, x, y, rot, big) { S.cel(E(x, y, big ? 8 : 6.4, big ? 11 : 9, 10, rot), BI.iron, { depth: 3, line: 2.4, hi: false, rim: S.c.rim, rimW: 1.2, shadow: BI.ironD }); S.ell(x, y, 2.4, 4.4, '#140f2e', { line: 0, hi: false, rim: null, shadow: false }); }
+  function biChainDraw(S, sp) {
+    for (let i = 0; i < 9; i++) { const p = along(sp, 0.04 + i * 0.1); biLink(S, p.x, p.y, Math.atan2(p.ty, p.tx) + (i % 2 ? PI / 2 : 0), false); }
+    const e = along(sp, 0.99);
+    S.cel(E(e.x, e.y + 8, 13, 13, 14), BI.iron, { depth: 4, line: 3, hi: true, hiW: 1.6, rim: S.c.rim });
+    S.ell(e.x, e.y + 8, 6.6, 6.6, '#140f2e', { line: 0, hi: false, rim: null, shadow: false });
+    S.cel({ poly: [[e.x - 5, e.y - 6], [e.x + 6, e.y - 6], [e.x + 4, e.y + 2], [e.x - 4, e.y + 2]] }, BI.ironD, { depth: 1, line: 2, hi: false, rim: null, shadow: false });
+  }
+  const BI_CH1 = [[-40, -112], [-68, -86], [-80, -54], [-70, -24]], BI_CH2 = [[38, -112], [66, -90], [78, -58], [66, -28]];
+  define('black_bar_inquisitor', {
+    size: 'l', lw: 3.4,
+    col: { rim: '#c9b8ff', shT: 0.42 },
+    bounds: { w: 240, h: 266, head: { x: -10, y: -262 }, body: { x: 0, y: -126 }, feet: { x: 0, y: 0 } },
+    die: { box: [-90, -292, 90, 4], nx: 9, ny: 18, from: 'top', order: 0.6, shape: 'strips', kinds: ['bar', 'scrap', 'letter', 'bar'], cols: ['#0b0916', '#fff8f0', '#ffd24a', '#241c4c'], wind: [-8, -12], size: 12, thin: 0.3, life: 0.5 },
+    parts: {
+      scroll: {
+        box: [-34, -10, 34, 112], pivot: [0, -2],
+        draw(S) {
+          S.cel({ poly: [[-22, 2], [22, 0], [24, 92], [14, 98], [4, 90], [-6, 100], [-22, 92]] }, BI.paper, { depth: 6, line: 3, hi: true, hiW: 1.4, rim: S.c.rim, tension: 0.1, halftone: { d: 5, alpha: 0.18, color: '#8a7aa8' } });
+          for (let i = 0; i < 8; i++) tk.inkPath(S.g, [[-16, 12 + i * 10], [-16 + 24 * (0.45 + 0.5 * tk.vary('bis', 'w' + i)), 12.4 + i * 10]], { w: 1.8, color: '#4a3a66', alpha: 0.85, taper: 0.1, pressure: 'flat', wobble: 0.1 });
+          // the words struck out: black bars across the sentence, a gold wax seal at the foot
+          S.cel({ poly: [[-20, 18], [22, 17], [22, 27], [-20, 28]] }, BI.bar, { depth: 1, line: 2.4, hi: false, rim: null, shadow: false });
+          S.cel({ poly: [[-20, 46], [14, 45], [14, 55], [-20, 56]] }, BI.bar, { depth: 1, line: 2.4, hi: false, rim: null, shadow: false });
+          S.cel({ poly: [[-20, 66], [22, 65], [22, 74], [-20, 75]] }, BI.bar, { depth: 1, line: 2.4, hi: false, rim: null, shadow: false });
+          S.cel(E(0, 88, 8.6, 8.6, 12), BI.gold, { depth: 3, line: 2.6, hi: true, hiW: 1.4, rim: '#fff4c0', shadow: BI.goldD });
+          S.line([[-3, 88], [3, 88]], { w: 1.6, color: BI.goldD, taper: 0.1, pressure: 'flat' }); S.line([[0, 85], [0, 91]], { w: 1.6, color: BI.goldD, taper: 0.1, pressure: 'flat' });
+          S.cel(cap(-26, 1, 26, -1, 9, 9), BI.wood, { depth: 3, line: 2.8, hi: true, hiW: 1.2, rim: '#e0b070', tension: 0.5 });
+          S.cel(E(-27, 0, 5.6, 5.6, 8), BI.brass, { depth: 1, line: 2, hi: false, rim: null }); S.cel(E(27, -1, 5.6, 5.6, 8), BI.brass, { depth: 1, line: 2, hi: false, rim: null });
+        },
+      },
+      armB: {
+        box: [20, -204, 112, -90], pivot: [42, -178],
+        draw(S) {
+          S.cel([[34, -196], [58, -190], [78, -158], [86, -128, 1], [60, -116, 1], [46, -140], [30, -166]], BI.robe, { depth: 10, tension: 0.6, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 } });
+          S.cel({ poly: [[56, -126], [88, -134], [92, -120], [62, -112]] }, BI.paper, { depth: 2, line: 2.8, hi: false, rim: null, shadow: BI.paperD });
+          S.cel({ poly: [[62, -125], [90, -131], [91, -124], [63, -118]] }, BI.bar, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
+          S.cel(E(74, -108, 8.6, 8, 10), BI.skin, { depth: 2, line: 2.6, hi: false, rim: '#ffffff' });
+        },
+      },
+      robe: {
+        box: [-94, -214, 96, 4], pivot: [0, -110],
+        draw(S) {
+          const hem = zig(68, -68, -8, 12, 11, 6, 41);
+          const pts = [[-24, -206], [2, -212], [28, -206], [42, -190], [48, -150], [58, -100], [68, -40]].concat(hem).concat([[-66, -42], [-58, -100], [-48, -150], [-42, -190]]);
+          S.cel(pts, BI.robe, {
+            depth: 22, tension: 0.5, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
+            decor(g) {
+              g.fillStyle = BI.robeL;
+              [[-34, -170, -48, -20], [-6, -176, -10, -16], [26, -172, 38, -18]].forEach((f) => { g.beginPath(); g.moveTo(f[0], f[1]); g.lineTo(f[0] + 14, f[1] + 4); g.lineTo(f[2] + 18, f[3]); g.lineTo(f[2], f[3]); g.closePath(); g.globalAlpha = 0.5; g.fill(); g.globalAlpha = 1; });
+              for (let i = 0; i < 6; i++) tk.inkPath(g, [[-44 + i * 18, -150], [-50 + i * 20, -30]], { w: 2, color: '#0e0a24', alpha: 0.7, taper: 0.3, wobble: 0.1, seed: i });
+              // the paper hem the Blank has eaten: a white band with black bars
+              g.fillStyle = BI.paper; g.beginPath(); g.moveTo(-90, -24);
+              for (let k = 0; k <= 12; k++) g.lineTo(-90 + k * 15, -24 + (k % 2 ? -5 : 1) + (tk.vary('bihem', 'k' + k) - 0.5) * 3);
+              g.lineTo(100, 8); g.lineTo(-90, 8); g.closePath(); g.fill();
+              g.fillStyle = BI.bar; [[-56, -14, 30], [-8, -17, 22], [28, -14, 28]].forEach((b) => g.fillRect(b[0], b[1], b[2], 7));
+              // the belt
+              g.fillStyle = '#0e0a24'; g.beginPath(); g.moveTo(-60, -122); g.lineTo(62, -126); g.lineTo(64, -106); g.lineTo(-64, -102); g.closePath(); g.fill();
+              g.fillStyle = BI.brass; g.fillRect(-26, -120, 18, 14); g.fillStyle = '#0e0a24'; g.fillRect(-21, -116, 8, 6);
+            },
+          });
+        },
+      },
+      tabs: {
+        box: [-44, -112, 44, -10], pivot: [0, -112],
+        draw(S) {
+          [[-34, 44, 0.04], [-14, 52, -0.02], [6, 40, 0.03], [24, 48, -0.04]].forEach((tb, i) => {
+            const x = tb[0], h = tb[1];
+            S.cel({ poly: [[x - 8, -108], [x + 8, -108 + tb[2] * 20], [x + 7, -108 + h], [x - 7, -108 + h + 4]] }, BI.paper, { depth: 3, line: 2.6, hi: false, rim: S.c.rim, tension: 0.1, shadow: BI.paperD });
+            S.cel({ poly: [[x - 8, -108 + h * 0.4], [x + 8, -108 + h * 0.4 + 1], [x + 7, -108 + h * 0.4 + 9], [x - 8, -108 + h * 0.4 + 8]] }, BI.bar, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
+          });
+        },
+      },
+      mantle: {
+        box: [-76, -214, 76, -138], pivot: [0, -196],
+        draw(S) {
+          S.cel([[-54, -196], [-34, -210], [0, -214], [34, -210], [54, -196], [58, -172, 1], [46, -152], [30, -162, 1], [16, -146], [0, -160, 1], [-16, -146], [-30, -162, 1], [-46, -152], [-58, -172, 1]], BI.paper, {
+            depth: 14, tension: 0.4, hi: true, hiW: 2.4, rim: S.c.rim, shadow: BI.paperD, halftone: { d: 5, alpha: 0.22, color: '#8a7aa8' },
+            decor(g) {
+              g.fillStyle = BI.bar; [[-62, -190, 124, 12], [-54, -171, 80, 10]].forEach((b) => g.fillRect(b[0], b[1], b[2], b[3]));
+              g.fillStyle = BI.bar; g.fillRect(16, -156, 30, 9);
+              for (let i = 0; i < 4; i++) tk.inkPath(g, [[-48 + i * 4, -148 + i * 0], [-30 + i * 4, -150]], { w: 1.4, color: '#8a7aa8', alpha: 0, taper: 0.1 });
+            },
+          });
+          // the clasp, gold, over the chest
+          S.cel(E(-4, -194, 10, 10, 12), BI.gold, { depth: 3, line: 2.8, hi: true, hiW: 1.4, rim: '#fff4c0', shadow: BI.goldD });
+          S.line([[-9, -194], [1, -194]], { w: 1.6, color: BI.goldD, taper: 0.1, pressure: 'flat' });
+        },
+      },
+      bands: {
+        box: [-34, -210, 26, -150], pivot: [-4, -200],
+        draw(S) {
+          [[-18, 0], [6, 1]].forEach((b) => {
+            S.cel({ poly: [[b[0] - 9, -204], [b[0] + 9, -204], [b[0] + 8, -162], [b[0] - 8, -158]] }, BI.paper, { depth: 3, line: 2.6, hi: false, rim: S.c.rim, shadow: BI.paperD });
+            S.line([[b[0] - 4, -192], [b[0] + 4, -192]], { w: 1.2, color: '#8a7aa8', taper: 0.1, pressure: 'flat' }); S.line([[b[0] - 4, -184], [b[0] + 4, -184]], { w: 1.2, color: '#8a7aa8', taper: 0.1, pressure: 'flat' });
+          });
+        },
+      },
+      armG: {
+        box: [-122, -204, -16, -66], pivot: [-40, -178],
+        draw(S) {
+          S.cel([[-28, -196], [-54, -192], [-76, -158], [-90, -122, 1], [-62, -104, 1], [-42, -136], [-22, -170]], BI.robe, { depth: 11, tension: 0.6, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 } });
+          S.cel({ poly: [[-94, -126], [-60, -108], [-56, -92], [-92, -112]] }, BI.paper, { depth: 2, line: 2.8, hi: false, rim: null, shadow: BI.paperD });
+          S.cel({ poly: [[-88, -122], [-64, -108], [-62, -101], [-86, -113]] }, BI.bar, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
+          S.cel(E(-74, -96, 9, 8.4, 10), BI.skin, { depth: 2, line: 2.6, hi: false, rim: '#ffffff' });
+        },
+      },
+      gavel: {
+        box: [-44, -126, 44, 22], pivot: [0, 0],
+        draw(S) {
+          S.cel(cap(0, 12, 0, -86, 10, 8), BI.woodD, { depth: 3, line: 3, hi: true, hiW: 1.4, rim: '#e0b070', tension: 0.5 });
+          S.cel({ poly: [[-32, -118], [30, -122], [34, -86], [-28, -82]] }, BI.wood, { depth: 8, line: 3.4, hi: true, hiW: 2, rim: '#e0b070', halftone: { d: 5, alpha: 0.26 } });
+          S.cel({ poly: [[-34, -120], [-24, -121], [-22, -84], [-32, -83]] }, BI.brass, { depth: 2, line: 2.4, hi: true, hiW: 1.2, rim: '#fff0b0' });
+          S.cel({ poly: [[22, -122], [32, -122], [35, -86], [25, -85]] }, BI.brass, { depth: 2, line: 2.4, hi: false, rim: null });
+          S.cel(E(0, 14, 7, 7, 8), BI.brass, { depth: 1, line: 2.4, hi: false, rim: null });
+        },
+      },
+      hood: {
+        box: [-60, -304, 56, -186], pivot: [-6, -198],
+        draw(S) {
+          // the capirote: a tall cone with a white paper hem, a black bar around it, then the mask
+          S.cel([[-40, -200], [-38, -226], [-28, -256], [-16, -286, 1], [-5, -284, 1], [12, -254], [26, -226], [34, -200], [-2, -192]], BI.robe, {
+            depth: 14, tension: 0.5, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
+            decor(g) { g.fillStyle = BI.bar; g.beginPath(); g.moveTo(-30, -252); g.lineTo(22, -246); g.lineTo(24, -234); g.lineTo(-33, -240); g.closePath(); g.fill(); },
+          });
+          S.cel(E(-6, -222, 25, 30, 18), BI.skin, {
+            depth: 8, line: 3, hi: true, hiW: 2.2, rim: '#ffffff', shadow: '#d4c4e4', halftone: { d: 5, alpha: 0.22, color: '#8a7aa8' },
+            decor(g) { tk.inkPath(g, [[-18, -240], [-12, -232], [-14, -224]], { w: 1.2, color: '#8a7aa8', alpha: 0.8, taper: 0.4 }); tk.inkPath(g, [[8, -204], [4, -210], [8, -216]], { w: 1.2, color: '#8a7aa8', alpha: 0.8, taper: 0.4 }); },
+          });
+          // brow ridge shadow so the slits read as stern
+          S.cel([[-26, -238], [-6, -242], [16, -238], [14, -230], [-6, -234], [-26, -232]], '#c4b4d8', { depth: 1, line: 0, tension: 0.4, hi: false, rim: null, shadow: false });
+          // the gag: a black censor bar across the mouth with white stitches
+          S.cel({ poly: [[-34, -218], [24, -222], [25, -202], [-35, -198]] }, BI.bar, { depth: 2, line: 3.2, hi: false, rim: '#c9b8ff', rimW: 1.2, shadow: '#1a1430' });
+          for (let i = 0; i < 4; i++) { const x = -24 + i * 14; tk.inkPath(S.g, [[x - 3, -214 - i * 0.3], [x + 3, -206 - i * 0.3]], { w: 1.8, color: '#fff8f0', alpha: 0.85, taper: 0.1, pressure: 'flat', wobble: 0 }); tk.inkPath(S.g, [[x + 3, -214 - i * 0.3], [x - 3, -206 - i * 0.3]], { w: 1.8, color: '#fff8f0', alpha: 0.85, taper: 0.1, pressure: 'flat', wobble: 0 }); }
+        },
+      },
+      tassel: {
+        box: [-34, -306, 18, -240], pivot: [-10, -284],
+        draw(S) {
+          S.cel([[-10, -284, 1], [-18, -272], [-22, -256, 1], [-14, -262], [-8, -272, 1]], BI.paper, { depth: 2, line: 2.4, tension: 0.3, hi: false, rim: null, shadow: BI.paperD });
+          S.cel(E(-9, -286, 4.4, 4.4, 8), BI.gold, { depth: 1, line: 2, hi: false, rim: '#fff4c0', shadow: BI.goldD });
+        },
+      },
+    },
+    chains: {
+      ch1: { spine: BI_CH1, cuts: [0.34, 0.68], reach: 30, overlap: 6, draw(S) { biChainDraw(S, BI_CH1); } },
+      ch2: { spine: BI_CH2, cuts: [0.34, 0.68], reach: 30, overlap: 6, draw(S) { biChainDraw(S, BI_CH2); } },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.6) * m, hot = clamp(tele + buff + strike + guard * 0.5 + st.wound * 0.4, 0, 1);
+      const dx = -strike * 28 + hurt * 14 + E0.shake * 1.2 + 8 * tele - 5 * wind, dy = 3 * tele + 4 * guard + 8 * die + 2 * br;
+      const rot = -0.03 * strike + 0.05 * tele + 0.07 * hurt + 0.01 * br;
+      // arm and gavel angles (world angle of the gavel is chosen, then made relative to the arm)
+      let aS = 0.05 * br, gW = -0.18 + 0.05 * br, aB = -0.04 * br;
+      if (atk) {
+        if (p < 0.3) { const k = sm(p / 0.3); aS = lerp(0, 2.2, k); gW = lerp(-0.18, 0.35, k); }
+        else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aS = lerp(2.2, -0.3, k); gW = lerp(0.35, -2.3, k); }
+        else { const k = sm((p - 0.5) / 0.5); aS = lerp(-0.3, 0.05 * br, k); gW = lerp(-2.3, -0.18, k); }
+      } else if (E0.pose === 'telegraph') { aS = 2.2 * tele + 0.03 * E0.shake; gW = 0.35 * tele - 0.18 * (1 - tele) + 0.03 * E0.shake; aB = -0.5 * tele; }
+      else if (E0.pose === 'block') { aS = 0.8 * guard; gW = -1.2 * guard - 0.18 * (1 - guard); aB = 1.5 * guard; }
+      else if (E0.pose === 'buff') { aS = 1.2 * buff; gW = 0.4 * buff - 0.18; aB = -1.0 * buff; }
+      else if (E0.pose === 'hurt') { aS = 0.4 * hurt; gW = 0.3 * hurt - 0.18; aB = 0.4 * hurt; }
+      else if (die > 0) { aS = 0.5 * die; aB = -0.4 * die; }
+      ctx.save();
+      if (die > 0) ctx.transform(1, 0, 0, 1 - 0.12 * die, 0, -2 * die);
+      xform(ctx, 0, -110, dx, dy, rot, 1, 1 + 0.01 * br);
+      const sway = sin(t * 1.6) * m;
+      putChain(ctx, st, 'ch2', [0.14 * sway - 0.3 * buff, 0.18 * sin(t * 1.6 - 0.9) * m + 0.2 * hurt, 0.2 * sin(t * 1.6 - 1.8) * m + 0.4 * buff * sin(t * 14)]);
+      if (guard < 0.3) put(ctx, st, 'armB', { r: aB });
+      put(ctx, st, 'robe', { sy: 1 + 0.01 * br, r: 0.006 * br });
+      put(ctx, st, 'tabs', { r: 0.05 * sin(t * 1.9 + 1) * m + 0.1 * strike - 0.08 * tele, sy: 1 + 0.02 * sin(t * 2.7) * m });
+      putChain(ctx, st, 'ch1', [0.14 * sin(t * 1.6 + 1) * m + 0.2 * strike + 0.4 * wind - 0.3 * buff, 0.18 * sin(t * 1.6 + 0.1) * m + 0.3 * hurt, 0.2 * sin(t * 1.6 - 0.8) * m + 0.3 * buff * sin(t * 13 + 1)]);
+      put(ctx, st, 'mantle', { sy: 1 + 0.015 * br, r: 0.01 * br, sx: 1 + 0.01 * br });
+      if (guard >= 0.3) put(ctx, st, 'armB', { r: aB });
+      put(ctx, st, 'bands', { r: 0.04 * sin(t * 1.9) * m });
+      // the scroll hangs from the back hand and swings
+      {
+        const hx = 74, hy = -108, ca = cos(aB), sa = sin(aB), px = 42 + (hx - 42) * ca - (hy + 178) * sa, py = -178 + (hx - 42) * sa + (hy + 178) * ca;
+        put(ctx, st, 'scroll', { x: px, y: py, r: 0.1 * sin(t * 1.5) * m + 0.3 * hurt, sy: 1 - 0.06 * guard });
+      }
+      // the arm with the gavel riding on the hand
+      put(ctx, st, 'armG', {
+        r: aS,
+        kids(c) {
+          put(c, st, 'gavel', { x: -74, y: -96, r: gW - aS });
+        },
+      });
+      // gavel head heats up gold
+      {
+        const ang = gW, hx = -40 + (-74 + 40) * cos(aS) - (-96 + 178) * sin(aS), hy = -178 + (-74 + 40) * sin(aS) + (-96 + 178) * cos(aS);
+        const gx = hx + sin(ang) * 102, gy = hy - cos(ang) * 102;
+        if (hot > 0.15) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, gx, gy, 38 + 30 * hot, BI.gold, 0.55 * hot); ctx.restore(); }
+      }
+      put(ctx, st, 'hood', {
+        r: 0.02 * sin(t * 1.1) * m - 0.04 * tele + 0.05 * strike + 0.1 * hurt, y: 2 * tele - 1 * strike,
+        kids(c) {
+          const sweep = 1.5 * sin(t * 0.9) * m, ob = blink(t, 'inq', 5.2) * (1 - 0.5 * hurt), ex = hot > 0.4;
+          eyeLive(c, -17 + sweep, -233, 7.4 + 1.6 * hot, 4.2 + 1.6 * hot, { open: ob, iris: ['#fff2b0', BI.gold], sclera: '#fff8e0', pupil: 'none', glow: BI.gold, glowK: 0.9 + 0.1 * hot, glowR: 3, lw: 2, lidTop: 0.34 + 0.3 * (1 - hot), lidColor: '#1a1430', rot: 0.18 });
+          eyeLive(c, 5 + sweep, -233, 7.4 + 1.6 * hot, 4.2 + 1.6 * hot, { open: ob, iris: ['#fff2b0', BI.gold], sclera: '#fff8e0', pupil: 'none', glow: BI.gold, glowK: 0.9 + 0.1 * hot, glowR: 3, lw: 2, lidTop: 0.34 + 0.3 * (1 - hot), lidColor: '#1a1430', rot: -0.18 });
+          void ex;
+        },
+      });
+      put(ctx, st, 'tassel', { r: 0.2 * sin(t * 2.3) * m + 0.2 * hurt - 0.1 * tele, sy: 1 + 0.04 * sin(t * 3.1) * m });
+      // the halo of loose bars: it spins slowly, speeds up and closes into a cage over the head when the sentence is near
+      {
+        const n = 5, cx = -6, cy = -268, rx = lerp(58, 40, tele) + 6 * buff, ry = lerp(12, 7, tele);
+        const spin = t * (0.5 + 1.2 * hot) + 0.3;
+        const list = [];
+        for (let i = 0; i < n; i++) { const a = spin + i * TAU / n; list.push({ a, z: sin(a), x: cos(a) * rx, y: sin(a) * ry, w: 24 + 16 * hv('bib', 'w' + i), h: 7 + 3 * hv('bib', 'h' + i), r: 0.14 * cos(a * 2 + i) }); }
+        list.sort((a, b) => a.z - b.z);
+        list.forEach((b) => {
+          ctx.save(); ctx.translate(cx + b.x + dx * 0.9, cy + b.y + dy - 4 * tele); ctx.rotate(b.r + 0.4 * tele * b.z);
+          ctx.globalAlpha = (0.55 + 0.45 * (b.z * 0.5 + 0.5)) * (1 - die);
+          ctx.fillStyle = BI.bar; ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+          ctx.strokeStyle = tele > 0.4 ? BI.gold : '#8a86c8'; ctx.lineWidth = 1.4; ctx.strokeRect(-b.w / 2, -b.h / 2, b.w, b.h);
+          ctx.restore();
+        });
+        if (tele > 0.3) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, cx + dx, cy + dy, 70, BI.gold, 0.28 * tele); ctx.restore(); }
+      }
+      ctx.restore();
+      // the slam: a shock ring on the floor in front, black bars and paper flying, the gavel dust
+      if (atk && p > 0.48 && p < 0.9) {
+        const u = (p - 0.48) / 0.42;
+        ctx.save(); ctx.translate(-150 + dx, -8); ctx.scale(1, 0.28); ctx.globalAlpha = (1 - u) * 0.95; ctx.strokeStyle = BI.gold; ctx.lineWidth = 7 * (1 - u) + 1; ctx.beginPath(); ctx.arc(0, 0, 20 + 100 * ease.outCubic(u), 0, TAU); ctx.stroke(); ctx.restore();
+        for (let i = 0; i < 7; i++) { const fj = fling('biimp' + i, 'b', u, { spread: 160, up: 110, g: 380, bias: -50 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.translate(-150 + dx + fj.x, -14 + fj.y); ctx.rotate(fj.r); ctx.fillStyle = i % 3 ? BI.bar : BI.paper; ctx.fillRect(-8, -3, 16, 6); ctx.restore(); }
+        sparks(ctx, -150 + dx, -14, u, 9, 51, { col: '#ffe08a', speed: 80, size: 8, spread: PI, dir: -PI / 2, life: 1, alpha: 1 - u });
+      }
+      if (buff > 0.1) motes(ctx, -6 + dx, -150 + dy, t, 10, 'bibuff', { col: '#ffd24a', size: 2.6, rise: 80, spread: 40, life: 0.9, alpha: buff });
+    },
+  });
+  // ---------------------------------------------------------------------------------------------------------------
+  // BLANK PAGE (minion, s): a sheet that has not decided to be a story yet. Cream paper with a torn left edge, a dog-eared corner, pale ruled lines and one
+  // pink margin rule, two big ink-dot eyes and a tiny mouth: innocent, and it folds both flaps around whoever tries to write on it. Three strips hinged at
+  // the fold lines flutter on their own (idle), close over the front (wrap and block) or spread wide (buff). Accent: the white glow of the Blank and the
+  // pink margin line.
+  // ---------------------------------------------------------------------------------------------------------------
+  const BP = { paper: '#fff8f0', rule: '#9ec0f0', margin: '#ff5f86', ink: '#2a2250', glow: '#f4ecff', lilac: '#cdbfe8' };
+  const BPL = -31, BPR = 33, BPT = -106, BPB = -20;
+  function bpSheet(S) {
+    const g = S.g, L = BPL, R = BPR, T = BPT, B = BPB;
+    const pts = [[L + 3, T + 1, 1], [-12, T - 2], [12, T], [R - 13, T - 1, 1], [R, T + 13, 1], [R + 1, -62], [R - 2, B - 2, 1], [10, B + 3], [-12, B + 1], [L + 4, B - 1, 1],
+      [L - 1, B - 12, 1], [L + 4, B - 24, 1], [L - 2, B - 36, 1], [L + 4, B - 48, 1], [L - 2, B - 60, 1], [L + 3, B - 72, 1], [L - 1, B - 84, 1]];
+    S.cel(pts, BP.paper, {
+      depth: 9, tension: 0.2, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.2, color: '#9a8ac0' },
+      decor(gg) {
+        for (let i = 0; i < 7; i++) tk.inkPath(gg, [[L + 4, T + 24 + i * 11], [R - 3, T + 24 + i * 11 + (i % 2 ? 0.8 : -0.4)]], { w: 1.2, color: BP.rule, alpha: 0.75, taper: 0.05, pressure: 'flat', wobble: 0.06 });
+        tk.inkPath(gg, [[L + 15, T + 4], [L + 15.6, -62], [L + 15, B - 3]], { w: 1.5, color: BP.margin, alpha: 0.9, taper: 0.05, pressure: 'flat', wobble: 0.05 });
+      },
+    });
+    // the dog-ear: a folded triangle in shade, outlined
+    S.cel({ poly: [[R - 13, T - 1], [R, T + 13], [R - 13, T + 13]] }, '#e6dcf4', { depth: 2, line: 2.4, hi: false, rim: null, shadow: '#b8a8d8' });
+    void g;
+  }
+  function bpStrip(x0, x1) {
+    return (S) => { const g = S.g; g.save(); g.beginPath(); g.rect(x0, BPT - 12, x1 - x0, BPB - BPT + 24); g.clip(); bpSheet(S); g.restore(); };
+  }
+  define('blank_page', {
+    size: 's', lw: 2.8,
+    col: { rim: '#ffffff', shT: 0.3 },
+    bounds: { w: 96, h: 112, head: { x: -4, y: -108 }, body: { x: 0, y: -62 }, feet: { x: 0, y: 0 } },
+    die: { box: [-52, -118, 52, -8], nx: 8, ny: 10, from: 'out', order: 0.5, shape: 'paper', kinds: ['scrap', 'scrap', 'letter', 'ink'], cols: ['#fff8f0', '#e6dcf4', '#2a2250', '#ff5f86'], wind: [-12, -20], size: 8, thin: 0.3 },
+    parts: {
+      pageL: { box: [-35, -116, -13, -12], pivot: [-13, -62], draw: bpStrip(-35, -12) },
+      pageR: { box: [13, -116, 38, -12], pivot: [13, -62], draw: bpStrip(12, 38) },
+      pageM: { box: [-14, -116, 14, -12], pivot: [0, -62], draw: bpStrip(-13.5, 13.5) },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
+      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0;
+      const bob = sin(t * 1.9) * 5 * m, flut = sin(t * 3.1) * m, wrap = clamp(strike * 1.1 + guard + (E0.pose === 'telegraph' ? tele * 0.55 : 0), 0, 1), spread = buff;
+      const dx = -strike * 44 + hurt * 14 + 3 * tele - 5 * wind, dy = bob - 5 * tele - 4 * wind + 7 * die - 6 * buff;
+      const rot = 0.05 * sin(t * 1.2) * m + 0.16 * hurt - 0.14 * strike + 0.1 * tele - 0.12 * wind;
+      ctx.save();
+      tk.glow(ctx, dx, -62 + dy, 50 + 16 * buff + 10 * tele, BP.glow, 0.28 + 0.3 * buff + 0.2 * tele);
+      xform(ctx, 0, -62, dx, dy, rot, 1 - 0.18 * hurt, 1 + 0.06 * hurt);
+      // the flaps: a flutter, a close over the front (narrow, swing, move in), a spread on a buff
+      const closed = clamp(guard, 0, 1), fl = 0.05 * flut + 0.2 * spread - 0.7 * strike - 0.5 * tele + 0.03 * E0.shake, fr = -0.05 * sin(t * 3.1 + 1.3) * m - 0.2 * spread + 0.5 * strike + 0.5 * tele - 0.03 * E0.shake;
+      const sxL = lerp(1 + 0.3 * strike, -0.9, closed), sxR = lerp(1 + 0.3 * strike, -0.9, closed);
+      if (closed < 0.35) { put(ctx, st, 'pageR', { r: fr, sx: sxR }); put(ctx, st, 'pageL', { r: fl, sx: sxL }); }
+      put(ctx, st, 'pageM', {
+        sy: 1 + 0.015 * sin(t * 2.4) * m,
+        kids(c) {
+          const ob = blink(t, 'bpage', 4.2) * (1 - 0.7 * hurt) * (1 - wrap * 0.7), lk = [-0.9 + 0.4 * sin(t * 0.7) * m, 0.1];
+          const ang = 0.12 * tele + 0.2 * strike;
+          eyeLive(c, -7, -67, 4.8, 6.6 + 1.2 * tele, { open: ob, iris: [BP.ink, '#4a3a86'], sclera: '#ffffff', pupil: 'none', look: lk, glow: BP.glow, glowK: 0.5, glowR: 2.2, lw: 1.8, rot: -ang });
+          eyeLive(c, 7, -67, 4.4, 6.2 + 1.2 * tele, { open: ob, iris: [BP.ink, '#4a3a86'], sclera: '#ffffff', pupil: 'none', look: lk, glow: BP.glow, glowK: 0.5, glowR: 2.2, lw: 1.8, rot: ang });
+          // the mouth: a tiny smile, round and shocked when hit, a thin sly line while it wraps
+          c.save();
+          if (hurt > 0.3) { c.beginPath(); c.ellipse(0, -50, 3.4, 4.4, 0, 0, TAU); c.fillStyle = BP.ink; c.fill(); }
+          else if (wrap > 0.4 || tele > 0.4) tk.inkPath(c, [[-5, -51], [0, -49.4], [5, -52]], { w: 1.8, color: BP.ink, taper: 0.3, wobble: 0 });
+          else tk.inkPath(c, [[-5, -52], [0, -48.6], [5, -52]], { w: 1.8, color: BP.ink, taper: 0.3, wobble: 0 });
+          c.restore();
+        },
+      });
+      if (closed >= 0.35) { put(ctx, st, 'pageR', { r: fr, sx: sxR }); put(ctx, st, 'pageL', { r: fl, sx: sxL }); }
+      ctx.restore();
+      // a paper cut: a bright slash line over the target on the strike
+      if (atk && E0.p > 0.46 && E0.p < 0.75) {
+        const u = (E0.p - 0.46) / 0.29;
+        ctx.save(); ctx.globalAlpha = (1 - u) * 0.95;
+        swoosh(ctx, -66 + dx, -62, 54, 14, -0.9, 0.9 + 2.2 * 0, { alpha: 1, fill: '#ffffff', edge: BP.lilac });
+        ctx.restore();
+      }
+      if (buff > 0.05) motes(ctx, dx, -40 + dy, t, 8, 'bpbuff', { col: '#ffffff', size: 2.6, rise: 54, spread: 24, life: 0.8, alpha: buff });
+      if (st.wound > 0.3) for (let i = 0; i < 2; i++) { const u = ((t * 0.9 + i * 0.5) % 1 + 1) % 1; ctx.save(); ctx.globalAlpha = (1 - u) * 0.8; ctx.translate(-6 + dx + 14 * i, -26 + dy + u * 24); ctx.rotate(u * 3 + i); ctx.fillStyle = BP.paper; ctx.fillRect(-3, -2, 6, 4); ctx.restore(); }
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // SPARK MOTE (minion, s): a crumb of storm no bigger than a seed: a hot yellow ball with eight little fins, big shiny eyes, a sprig of cyan arcs and a
+  // thimble of thundercloud to ride on. It hums, jitters and has exactly one thing to say. Idle is a nervous hover; attack is a dash; telegraph swells
+  // and whitens; death is a bang. Accent: electric yellow with cyan arcs.
+  // ---------------------------------------------------------------------------------------------------------------
+  const SM = { core: '#ffe45e', coreD: '#e8a41c', fin: '#ffc92e', white: '#fffbe0', cyan: '#5ff5ff', cloud: '#6a60a8', cloudD: '#3d3478', rim: '#fffbd0' };
+  define('spark_mote', {
+    size: 's', lw: 2.8,
+    col: { rim: '#ffffff', shT: 0.32 },
+    bounds: { w: 92, h: 106, head: { x: -4, y: -100 }, body: { x: 0, y: -62 }, feet: { x: 0, y: 0 } },
+    die: { box: [-50, -112, 50, -8], nx: 7, ny: 9, from: 'out', order: 0.4, shape: 'diamond', kinds: ['spark', 'spark', 'puff', 'shard'], cols: ['#ffe45e', '#fffbe0', '#5ff5ff', '#6a60a8'], wind: [0, -6], size: 9, thin: 0.15, life: 0.55 },
+    parts: {
+      cloud: {
+        box: [-34, -34, 34, 2], pivot: [0, -22],
+        draw(S) { [[-14, -18, 11], [0, -22, 14], [14, -18, 11], [-4, -12, 9], [8, -11, 9]].forEach((c, i) => S.ell(c[0], c[1], c[2], c[2] * 0.86, i % 2 ? SM.cloud : SM.cloudD, { depth: 4, line: 2.4, hi: false, rim: '#a8f4ff', rimW: 1.2, halftone: { d: 4, alpha: 0.3 } })); },
+      },
+      fins: {
+        box: [-44, -108, 44, -16], pivot: [0, -62],
+        draw(S) {
+          for (let i = 0; i < 8; i++) {
+            const a = i * TAU / 8 + 0.2, big = i % 2 === 0, r0 = 16, r1 = big ? 38 : 29, w = big ? 9 : 7, c = cos(a), s = sin(a), nx = -s, ny = c;
+            S.cel([[c * r0 - nx * w, s * r0 - 62 - ny * w, 1], [c * r1, s * r1 - 62, 1], [c * r0 + nx * w, s * r0 - 62 + ny * w, 1]], big ? SM.core : SM.fin, { depth: 3, line: 2.6, tension: 0, hi: false, rim: big ? '#ffffff' : null, shadow: SM.coreD });
+          }
+        },
+      },
+      core: {
+        box: [-30, -92, 30, -32], pivot: [0, -62],
+        draw(S) {
+          S.cel(E(0, -62, 22, 22, 16), SM.core, {
+            depth: 9, hi: true, hiW: 2.4, rim: S.c.rim, shadow: SM.coreD, halftone: { d: 4, alpha: 0.28, color: '#c07810' },
+            decor(g) { g.fillStyle = 'rgba(255,255,255,0.8)'; g.beginPath(); g.ellipse(-8, -72, 7, 4.4, -0.6, 0, TAU); g.fill(); },
+          });
+        },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
+      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, hot = clamp(tele + buff + strike + guard * 0.5, 0, 1);
+      const jx = (hv('smj', 'x' + Math.floor(t * 18)) - 0.5) * 3.2 * m * (0.5 + hot), jy = (hv('smj', 'y' + Math.floor(t * 18)) - 0.5) * 3.2 * m * (0.5 + hot);
+      const bob = sin(t * 2.6) * 6 * m + sin(t * 5.3) * 1.5 * m;
+      const dx = -strike * 120 + hurt * 14 + 4 * wind + jx + 3 * E0.shake * 0.3, dy = bob - 4 * tele - 3 * wind + jy + 6 * die - 8 * buff;
+      const sw = 1 + 0.2 * tele + 0.18 * buff + 0.16 * wind + 0.12 * strike - 0.1 * die;
+      ctx.save();
+      // the heat haze: a big soft glow that pulses with the hum
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, dx, -62 + dy, 64 + 30 * hot, SM.core, (0.4 + 0.25 * sin(t * 6) * m + 0.35 * hot) * (1 - die)); ctx.restore();
+      put(ctx, st, 'cloud', { x: dx * 0.6, y: dy * 0.5 + 3 * sin(t * 2.6 + 1) * m, sx: 1 + 0.05 * sin(t * 3) * m - 0.1 * strike, sy: 1 + 0.05 * sin(t * 3 + 1) * m });
+      xform(ctx, 0, -62, dx, dy, 0, sw, sw);
+      put(ctx, st, 'fins', { r: t * 0.7 * m + 0.5 * sin(t * 9) * m * 0.1 + 2.6 * strike + 0.4 * hurt, sx: 1 + 0.06 * sin(t * 12) * m, sy: 1 - 0.06 * sin(t * 12) * m });
+      put(ctx, st, 'core', {
+        sy: 1 + 0.03 * sin(t * 5) * m,
+        kids(c) {
+          const ob = blink(t, 'smote', 2.9) * (1 - 0.6 * hurt), lk = [-0.7 + 0.2 * sin(t * 1.9), 0];
+          eyeLive(c, -8.5, -63, 5.4, 8 + 1.6 * tele, { open: ob, iris: ['#14102e', '#3a2a88'], sclera: '#ffffff', pupil: 'none', look: lk, glow: '#ffffff', glowK: 0.3, glowR: 2, lw: 1.8, lidTop: hot > 0.4 ? 0.28 : 0, rot: -0.15 * hot });
+          eyeLive(c, 7.5, -63, 5, 7.6 + 1.6 * tele, { open: ob, iris: ['#14102e', '#3a2a88'], sclera: '#ffffff', pupil: 'none', look: lk, glow: '#ffffff', glowK: 0.3, glowR: 2, lw: 1.8, lidTop: hot > 0.4 ? 0.28 : 0, rot: 0.15 * hot });
+          if (hurt > 0.25 || strike > 0.3) { c.beginPath(); c.ellipse(-1, -50, 3.6, 4.6, 0, 0, TAU); c.fillStyle = '#14102e'; c.fill(); }
+          else tk.inkPath(c, [[-6, -51], [-1, -47.6], [5, -51]], { w: 1.9, color: '#14102e', taper: 0.3, wobble: 0 });
+        },
+      });
+      ctx.restore();
+      // arcs hopping between the fins, more of them the angrier it is; a long bolt when it dashes
+      ctx.save();
+      const nArc = 2 + Math.round(3 * hot);
+      for (let i = 0; i < nArc; i++) {
+        const a0 = hv('smarc', 'a' + i) * TAU + t * 0.6, r0 = 26, a1 = a0 + 0.9 + 0.5 * hv('smarc', 'b' + i);
+        zap(ctx, dx + cos(a0) * r0, -62 + dy + sin(a0) * r0, dx + cos(a1) * (r0 + 14), -62 + dy + sin(a1) * (r0 + 14), t * (0.4 + 0.2 * i), { seed: 20 + i, w: 1.8, jag: 5, n: 4, color: SM.cyan, core: '#ffffff' });
+      }
+      if (strike > 0.2) for (let i = 0; i < 3; i++) zap(ctx, dx + 20, -62 + dy + (i - 1) * 9, dx + 120 + 30 * i, -62 + dy + (i - 1) * 14, t, { seed: 40 + i, w: 2.4 - i * 0.5, jag: 8, n: 6, color: SM.cyan, core: '#ffffff' });
+      ctx.restore();
+      sparks(ctx, dx, -62 + dy, t, 5 + Math.round(6 * hot), 77, { col: '#fff2a0', speed: 36 + 30 * hot, size: 5, life: 0.5, spread: TAU, alpha: 1 - die });
+      if (die > 0) {
+        const u = die;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = cA((1 - u) * 0.9); ctx.strokeStyle = SM.white; ctx.lineWidth = 5 * (1 - u) + 1; ctx.beginPath(); ctx.arc(0, -62, 12 + 74 * ease.outCubic(u), 0, TAU); ctx.stroke();
+        tk.glow(ctx, 0, -62, 40 + 60 * u, '#ffffff', (1 - u) * 0.9); ctx.restore();
+      }
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // TYPO SPRITE (minion, s): a typewriter key that came loose and went wrong: a cream ring of keycap round a dark face glowing with a magenta ":)" that
+  // glitches (an X eye, a flipped mouth, an offset ghost in magenta and cyan) every second or so, on two ink-stained stick legs with a curl of ribbon
+  // for an antenna and a proofreader's caret for a hat. Accent: glitch magenta with a cyan ghost (the same magenta as its summoner, the Margin Imp).
+  // ---------------------------------------------------------------------------------------------------------------
+  const TS = { ring: '#f3e6c8', ringD: '#c8b080', brass: '#d9a441', face: '#2a1f4a', faceL: '#4a3a86', mag: '#ff3a8a', magL: '#ff8cc0', cyan: '#5ff5ff', ribbon: '#241a3a', ink: '#140f2e' };
+  // the glitch clock: 0 normally, 1 inside a short burst; `k` lets the angry poses force it
+  function glitch(t, force) {
+    const ph = ((t * 0.83 + 0.2) % 1 + 1) % 1, burst = ph > 0.88 ? 1 - Math.abs((ph - 0.94) / 0.06) : 0;
+    return clamp(Math.max(burst, force || 0), 0, 1);
+  }
+  define('typo_sprite', {
+    size: 's', lw: 2.8,
+    col: { rim: '#ffd0e8', shT: 0.34 },
+    bounds: { w: 96, h: 110, head: { x: -4, y: -104 }, body: { x: 0, y: -58 }, feet: { x: 0, y: 0 } },
+    die: { box: [-52, -112, 52, 0], nx: 8, ny: 10, from: 'top', order: 0.6, shape: 'paper', kinds: ['letter', 'scrap', 'spark', 'letter'], cols: ['#ff3a8a', '#f3e6c8', '#5ff5ff', '#ffffff'], wind: [-10, 6], size: 8, thin: 0.25 },
+    parts: {
+      legN: { box: [-24, -34, 4, 4], pivot: [-8, -32], draw(S) { S.line([[-8, -32], [-10, -10]], { w: 4.6, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 }); S.cel([[-24, -8], [-4, -10], [2, -2], [-20, 2]], TS.ringD, { depth: 3, line: 2.6, tension: 0.3, hi: false, rim: S.c.rim }); S.ell(-8, -4, 2.6, 2, TS.mag, { line: 0, shadow: false, hi: false, rim: null }); } },
+      legF: { box: [-2, -34, 26, 4], pivot: [10, -32], draw(S) { S.line([[10, -32], [12, -10]], { w: 4.2, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 }); S.cel([[-2, -8], [18, -10], [24, -2], [2, 2]], TS.ringD, { depth: 3, line: 2.6, tension: 0.3, hi: false, rim: null }); } },
+      armN: {
+        box: [-48, -66, -10, -30], pivot: [-24, -52],
+        draw(S) {
+          S.line([[-24, -52], [-36, -46], [-42, -40]], { w: 4.2, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 });
+          S.cel([[-42, -36, 1], [-46, -42], [-40, -48, 1]], TS.mag, { depth: 2, line: 2.2, tension: 0.2, hi: false, rim: null, shadow: '#b0245c' });   // the nib that does the poking
+        },
+      },
+      armF: { box: [8, -66, 40, -30], pivot: [22, -52], draw(S) { S.line([[22, -52], [32, -46], [30, -38]], { w: 3.8, color: TS.ink, taper: 0.05, pressure: 'flat', wobble: 0.06 }); S.ell(30, -37, 3.4, 3.4, TS.ring, { depth: 1, line: 2, hi: false, rim: null }); } },
+      key: {
+        box: [-38, -92, 38, -22], pivot: [0, -57],
+        draw(S) {
+          S.cel(E(0, -57, 31, 31, 18), TS.ring, { depth: 11, hi: true, hiW: 2.4, rim: S.c.rim, shadow: TS.ringD, halftone: { d: 5, alpha: 0.22, color: '#8a6a30' } });
+          S.cel(E(0, -57, 25.4, 25.4, 18), TS.brass, { depth: 6, line: 2.6, hi: true, hiW: 1.4, rim: '#fff0b0' });
+          S.cel(E(0, -57, 22, 22, 18), TS.face, {
+            depth: 8, line: 2.6, hi: false, rim: S.c.rim, rimW: 1.2, shadow: '#17102e', halftone: { d: 4, alpha: 0.3, color: '#7a5ac0' },
+            decor(g) { g.fillStyle = 'rgba(255,255,255,0.16)'; g.beginPath(); g.ellipse(-8, -68, 9, 4, -0.6, 0, TAU); g.fill(); },
+          });
+        },
+      },
+      ribbon: {
+        box: [-12, -118, 30, -74], pivot: [6, -86],
+        draw(S) {
+          S.rib([[6, -86], [14, -98], [4, -108], [-2, -102], [8, -96]], TS.ribbon, { wMax: 6, w0: 5, w1: 3, line: 2.2, tipPow: 1, shadow: '#0d0a1e', rim: null });
+          S.cel({ poly: [[-3, -112], [7, -122], [17, -112], [13, -112], [7, -117], [1, -112]] }, TS.mag, { depth: 2, line: 2.2, hi: false, rim: '#ffd0e8', shadow: '#b0245c' });
+        },
+      },
+    },
+    rig(ctx, st) {
+      const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack';
+      const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, hot = clamp(tele + buff + strike + hurt * 0.6, 0, 1);
+      const gl = glitch(t, hot * 0.9 + 0.8 * hurt);
+      const hop = Math.max(0, sin(t * 3.4)) * 7 * m, br = sin(t * 3.4 - 1.2) * m, hopT = 1 - hop / 7;
+      const gx = gl > 0.3 ? (hv('tsg', 'x' + Math.floor(t * 24)) - 0.5) * 10 * gl : 0;
+      const dx = -strike * 42 + hurt * 14 + 5 * wind + gx, dy = -hop - 6 * tele + 6 * die - 3 * wind;
+      const rot = 0.05 * sin(t * 1.7) * m + 0.2 * hurt - 0.1 * strike + 0.1 * tele;
+      const sq = 1 - 0.08 * hopT * (1 - Math.abs(sin(t * 3.4))) * 0 + 0.0;
+      ctx.save();
+      xform(ctx, 0, -2, dx, 0, 0, 1, 1);
+      put(ctx, st, 'legF', { r: 0.34 * sin(t * 3.4) * m + 0.2 * strike, y: dy * 0.2 });
+      put(ctx, st, 'legN', { r: -0.34 * sin(t * 3.4) * m - 0.2 * strike, y: dy * 0.2 });
+      xform(ctx, 0, -57, 0, dy, rot, sq, 1 - 0.04 * br * 0 + 0.02 * br);
+      // ghosts first: the same key twice, shifted, in cyan and magenta, only inside a glitch
+      if (gl > 0.05) {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = cA(gl * 0.55);
+        ctx.save(); ctx.translate(-5 * gl, 1.5 * gl); ctx.globalAlpha = cA(gl * 0.6); ctx.fillStyle = TS.cyan; ctx.beginPath(); ctx.arc(0, -57, 29, 0, TAU); ctx.fill(); ctx.restore();
+        ctx.save(); ctx.translate(5 * gl, -1.5 * gl); ctx.fillStyle = TS.mag; ctx.beginPath(); ctx.arc(0, -57, 29, 0, TAU); ctx.fill(); ctx.restore();
+        ctx.restore();
+      }
+      put(ctx, st, 'armF', { r: 0.2 * sin(t * 2.8 + 1) * m + 0.4 * buff + 0.2 * guard, x: 0, y: 0 });
+      put(ctx, st, 'ribbon', { r: 0.14 * sin(t * 2.3) * m - 0.18 * tele + 0.2 * hurt + 0.1 * br, sy: 1 + 0.05 * sin(t * 4.4) * m });
+      put(ctx, st, 'key', {
+        sy: 1 + 0.02 * br, sx: 1 - 0.02 * br + 0.06 * guard,
+        kids(c) {
+          // the face: normally ":)" in glowing magenta; in a glitch an X for an eye, a flipped mouth and a stuttering offset
+          const ob = blink(t, 'typo', 3.4), off = gl > 0.3 ? 2.4 * (hv('tsf', 'o' + Math.floor(t * 20)) - 0.5) : 0, bad = gl > 0.3 || hot > 0.5;
+          c.save(); c.translate(off, 0);
+          tk.glow(c, 0, -58, 30, TS.mag, 0.32 + 0.3 * gl);
+          const lw = 3.2;
+          // eyes
+          if (ob < 0.3) { tk.inkPath(c, [[-14, -61], [-9, -59.4], [-4, -61]], { w: lw, color: TS.magL, taper: 0.3, wobble: 0 }); tk.inkPath(c, [[4, -61], [9, -59.4], [14, -61]], { w: lw, color: TS.magL, taper: 0.3, wobble: 0 }); }
+          else {
+            c.fillStyle = bad ? TS.cyan : TS.magL; c.beginPath(); c.ellipse(-9, -62, 3.6, 5, 0, 0, TAU); c.fill();
+            if (bad) { tk.inkPath(c, [[5, -67], [13, -57]], { w: lw, color: TS.magL, taper: 0.1, pressure: 'flat', wobble: 0 }); tk.inkPath(c, [[13, -67], [5, -57]], { w: lw, color: TS.magL, taper: 0.1, pressure: 'flat', wobble: 0 }); }
+            else { c.beginPath(); c.ellipse(9, -62, 3.6, 5, 0, 0, TAU); c.fill(); c.fillStyle = '#ffffff'; c.beginPath(); c.arc(7.8, -63.6, 1.3, 0, TAU); c.fill(); c.beginPath(); c.arc(-10.2, -63.6, 1.3, 0, TAU); c.fill(); }
+          }
+          // mouth
+          if (bad) tk.inkPath(c, [[-9, -46], [-3, -50], [3, -46], [9, -50]], { w: lw, color: TS.magL, taper: 0.25, wobble: 0 });
+          else tk.inkPath(c, [[-9, -50], [-3, -45.4], [3, -45.4], [9, -50]], { w: lw, color: TS.magL, taper: 0.25, wobble: 0 });
+          c.restore();
+          if (gl > 0.3) { c.save(); c.globalAlpha = 0.85; c.fillStyle = TS.cyan; const sy0 = -72 + 22 * hv('tsb', 'y' + Math.floor(t * 20)); c.fillRect(-20, sy0, 40, 2.6); c.restore(); }
+        },
+      });
+      put(ctx, st, 'armN', { r: -0.2 * sin(t * 2.8) * m - 0.9 * wind - 0.2 * tele + 1.6 * strike + 0.4 * hurt + 0.8 * guard });
+      ctx.restore();
+      // stray letters peeling off the key, always a few, many when glitching
+      const nL = 2 + Math.round(4 * gl);
+      for (let i = 0; i < nL; i++) {
+        const per = 1.2 + 0.4 * hv('tsl', 'p' + i), u = (((t + hv('tsl', 'o' + i) * per) % per) + per) % per / per, ch = 'xq#@?!%&zt'.charAt(Math.floor(hv('tsl', 'c' + i) * 10));
+        ctx.save(); ctx.globalAlpha = cA(sin(u * PI) * 0.9) * (1 - die); ctx.translate(dx + (hv('tsl', 'x' + i) - 0.5) * 60 + sin(u * 4 + i) * 6, -92 + dy - u * 34); ctx.rotate(sin(u * 3 + i) * 0.5);
+        ctx.fillStyle = i % 2 ? TS.mag : TS.cyan; ctx.font = '900 ' + Math.round(9 + 4 * hv('tsl', 's' + i)) + 'px ' + tk.font.num; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(ch, 0, 0); ctx.restore();
+      }
+      if (atk && E0.p > 0.46 && E0.p < 0.8) { const u = (E0.p - 0.46) / 0.34; ctx.save(); ctx.globalAlpha = (1 - u) * 0.9; ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, -70 + dx, -52 + dy, 20 + 24 * u, TS.mag, 0.9); ctx.restore(); tk.sparkle(ctx, -72 + dx, -52 + dy, 12 * (1 - u * 0.4), { color: '#ffd0e8', alpha: 1 - u, rot: u }); }
+    },
+  });
+  // ===============================================================================================================
+  // THE EDITOR (boss, xl), three forms in one spec. Parts and chains of all three forms live in BE_P and BE_C (prefixes p0_ p1_ p2_), each form has its
+  // own rig in BE_RIG[phase]; the registered rig dispatches on st.phase.
+  //   phase 0, THE EDITOR: a pale, tall, gaunt scholar in an ink-black gown with a stiff paper cravat, half-moon spectacles, silver hair swept back in a long
+  //     tail, a stack of manuscript under one arm and a red pen as long as a spear in the other hand. Behind him a fan of manuscript pages (red edits and
+  //     black bars on them) sways like a peacock's tail; proofreader's marks orbit him; the pen drips red. Accent: crimson ink.
+  //   phase 1, THE ERASER: the gown has split: a hulking giant of pink rubber (the paper sleeve of an eraser round his belly, used blocks for pauldrons and
+  //     knuckles, brass ferrules at the knees), the scholar's head small and furious on top, the robe in rags on his back, crumbs and graphite smears
+  //     flying off him. Accent: furious red eyes behind cracked spectacles.
+  //   phase 2, THE BLANK PAGE: a colossal tear in the page in the shape of a face: ragged paper lips curling back from a violet-black void, eyes and
+  //     mouth as slits of blank white light, his broken spectacles floating over them, paper hands clawing in from the sides, a crack running to the floor,
+  //     letters being sucked into the mouth, the storm leaking through. Accent: blinding blank white with storm cyan.
+  // ===============================================================================================================
+  const BE_P = {}, BE_C = {}, BE_RIG = [];
+  const BE = {
+    ink: '#140f2e', robe: '#231c4c', robeL: '#3d3274', robeD: '#120d2a', skin: '#ebe8f8', skinD: '#b9b3d8', hair: '#f6f2ff', hairD: '#b8b0e0', paper: '#fff8f0', paperD: '#d8c8e8',
+    red: '#ff2a4a', redD: '#9a1226', redL: '#ff9aa8', lac: '#e8383d', gold: '#e2ae4c', goldD: '#a06f20', bar: '#0b0916', lilac: '#c9b8ff', cyan: '#5ff5ff', pink: '#f4a3b8', pinkL: '#ffd0dc', pinkD: '#c4607e',
+  };
+  // a manuscript page with its pivot at the bottom centre: kind 'a' is covered in red edits, 'b' in black bars
+  function bePage(S, kind) {
+    const g = S.g;
+    S.cel([[-34, -106, 1], [-4, -109], [30, -107, 1], [36, -96, 1], [37, -52], [34, -2, 1], [2, 2], [-32, -1, 1], [-37, -50]], BE.paper, {
+      depth: 8, tension: 0.2, hi: true, hiW: 2, rim: S.c.rim, shadow: BE.paperD, halftone: { d: 5, alpha: 0.2, color: '#8a7aa8' },
+      decor(gg) {
+        for (let i = 0; i < 10; i++) tk.inkPath(gg, [[-28, -94 + i * 9], [-28 + 50 * (0.55 + 0.45 * tk.vary('bep' + kind, 'w' + i)), -94 + i * 9 + (i % 2 ? 0.6 : -0.3)]], { w: 1.6, color: '#3b2f60', alpha: 0.8, taper: 0.1, pressure: 'flat', wobble: 0.1 });
+        if (kind === 'a') {
+          tk.inkPath(gg, [[-30, -85], [26, -86]], { w: 2.4, color: BE.red, taper: 0.1, pressure: 'flat', wobble: 0.1 });
+          tk.inkPath(gg, [[-26, -58], [14, -59]], { w: 2.4, color: BE.red, taper: 0.1, pressure: 'flat', wobble: 0.1 });
+          tk.inkPath(gg, [[8, -40], [12, -48], [16, -40]], { w: 2.2, color: BE.red, taper: 0.1, pressure: 'flat', wobble: 0 });
+          tk.inkPath(gg, [[-30, -30], [-18, -40], [-6, -28], [6, -42]], { w: 2.2, color: BE.red, taper: 0.1, wobble: 0.1 });
+          gg.beginPath(); gg.arc(22, -70, 9, 0, TAU); gg.strokeStyle = BE.red; gg.lineWidth = 2.2; gg.stroke();
+        } else {
+          gg.fillStyle = BE.bar; [[-30, -74, 46, 8], [-30, -48, 56, 8], [-30, -22, 30, 8]].forEach((b) => gg.fillRect(b[0], b[1], b[2], b[3]));
+        }
+      },
+    });
+    S.cel({ poly: [[24, -107], [36, -96], [24, -94]] }, BE.paperD, { depth: 1, line: 2.2, hi: false, rim: null, shadow: '#a898c8' });
+    void g;
+  }
+  BE_P.p0_pageA = { box: [-46, -118, 46, 10], pivot: [0, 0], draw(S) { bePage(S, 'a'); } };
+  BE_P.p0_pageB = { box: [-46, -118, 46, 10], pivot: [0, 0], draw(S) { bePage(S, 'b'); } };
+  BE_P.p0_robe = {
+    box: [-92, -262, 94, 4], pivot: [0, -150],
+    draw(S) {
+      const hem = zig(70, -70, -8, 14, 11, 6, 61);
+      const pts = [[-16, -254], [2, -258], [18, -254], [38, -240], [46, -206], [40, -158], [52, -100], [68, -40]].concat(hem).concat([[-66, -42], [-50, -100], [-36, -158], [-42, -206], [-38, -240]]);
+      S.cel(pts, BE.robe, {
+        depth: 24, tension: 0.5, hi: true, hiW: 3, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
+        decor(g) {
+          g.fillStyle = BE.robeL; g.globalAlpha = 0.5;
+          [[-26, -230, -44, -20], [4, -236, 4, -14], [30, -226, 40, -18]].forEach((f) => { g.beginPath(); g.moveTo(f[0], f[1]); g.lineTo(f[0] + 14, f[1] + 4); g.lineTo(f[2] + 20, f[3]); g.lineTo(f[2], f[3]); g.closePath(); g.fill(); });
+          g.globalAlpha = 1;
+          for (let i = 0; i < 6; i++) tk.inkPath(g, [[-34 + i * 14, -150], [-44 + i * 18, -22]], { w: 2, color: '#0a0720', alpha: 0.7, taper: 0.3, wobble: 0.1, seed: i });
+          // gold thread down the front edge and white ink splashes: the gown is covered in corrections
+          tk.inkPath(g, [[-4, -250], [-6, -150], [-12, -22]], { w: 2.4, color: BE.gold, alpha: 0.9, taper: 0.1, pressure: 'flat', wobble: 0.04 });
+          for (let i = 0; i < 9; i++) { const x = -34 + 70 * tk.vary('bes', 'x' + i), y = -226 + 200 * tk.vary('bes', 'y' + i); g.fillStyle = 'rgba(255,248,240,0.7)'; g.beginPath(); g.arc(x, y, 1.6 + 2 * tk.vary('bes', 'r' + i), 0, TAU); g.fill(); }
+          // the belt of a cord with a brass pen-case
+          g.fillStyle = '#0a0720'; g.beginPath(); g.moveTo(-40, -160); g.lineTo(42, -164); g.lineTo(44, -150); g.lineTo(-42, -146); g.closePath(); g.fill();
+          g.fillStyle = BE.gold; g.fillRect(-14, -158, 16, 10);
+          // a ragged white hem: the Blank has already begun on him
+          g.fillStyle = BE.paper; g.beginPath(); g.moveTo(-90, -22);
+          for (let k = 0; k <= 12; k++) g.lineTo(-90 + k * 15, -22 + (k % 2 ? -6 : 1) + (tk.vary('behem', 'k' + k) - 0.5) * 3);
+          g.lineTo(100, 8); g.lineTo(-90, 8); g.closePath(); g.fill();
+          g.fillStyle = BE.bar; [[-50, -14, 26], [-6, -16, 22], [30, -14, 28]].forEach((b) => g.fillRect(b[0], b[1], b[2], 6));
+        },
+      });
+    },
+  };
+  BE_P.p0_strips = {
+    box: [-50, -162, 50, -10], pivot: [0, -158],
+    draw(S) {
+      [[-30, 78, 0.04], [-10, 92, -0.02], [10, 70, 0.03], [30, 84, -0.04]].forEach((tb, i) => {
+        const x = tb[0], h = tb[1];
+        S.cel({ poly: [[x - 8, -154], [x + 8, -154 + tb[2] * 20], [x + 7, -154 + h], [x - 7, -154 + h + 4]] }, BE.paper, { depth: 3, line: 2.6, hi: false, rim: S.c.rim, tension: 0.1, shadow: BE.paperD });
+        for (let k = 0; k < 3; k++) tk.inkPath(S.g, [[x - 4, -146 + k * 12 + i], [x + 4, -146 + k * 12 + i]], { w: 1.2, color: '#8a7aa8', alpha: 0.85, taper: 0.1, pressure: 'flat' });
+        S.cel({ poly: [[x - 8, -154 + h * 0.55], [x + 8, -154 + h * 0.55 + 1], [x + 8, -154 + h * 0.55 + 8], [x - 8, -154 + h * 0.55 + 7]] }, BE.bar, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
+      });
+    },
+  };
+  BE_P.p0_cravat = {
+    box: [-36, -262, 30, -184], pivot: [-4, -250],
+    draw(S) {
+      // a stiff high collar, then three layers of pleated white frill down the chest and a red ink-drop brooch
+      S.cel([[-26, -250], [-22, -266], [-8, -270], [-8, -252]], BE.robe, { depth: 3, line: 2.6, tension: 0.3, hi: false, rim: S.c.rim });
+      [[-24, 24, -250, -226], [-20, 20, -230, -208], [-15, 15, -212, -190]].forEach((fr, i) => {
+        const pts = [[fr[0] - 4, fr[2]], [fr[1] + 4, fr[2]], [fr[1] + 2, fr[3]]];
+        for (let k = 4; k >= 0; k--) pts.push([lerp(fr[1], fr[0], k / 4) + (k % 2 ? 0 : 0), fr[3] + (k % 2 ? 6 : 0) - 2]);
+        S.cel(pts, BE.paper, { depth: 4, line: 2.8, tension: 0.3, hi: true, hiW: 1.2, rim: S.c.rim, shadow: BE.paperD, halftone: { d: 4, alpha: 0.2, color: '#8a7aa8' } });
+        for (let k = 0; k < 4; k++) tk.inkPath(S.g, [[fr[0] + 6 + k * (fr[1] - fr[0] - 8) / 3, fr[2] + 4], [fr[0] + 6 + k * (fr[1] - fr[0] - 8) / 3 - 1, fr[3] - 2]], { w: 1.2, color: '#a898c8', alpha: 0.8, taper: 0.2 });
+      });
+      S.cel([[-4, -222], [-9, -214], [-4, -205], [1, -214]], BE.red, { depth: 2, line: 2.4, tension: 0.4, hi: false, rim: '#ffd0d8', shadow: BE.redD });
+    },
+  };
+  // the head: a long pale face turned to the left, with the nose out front and the hair slicked back (the long tail is a chain)
+  BE_P.p0_head = {
+    box: [-48, -332, 40, -236], pivot: [-2, -258],
+    draw(S) {
+      S.cel([[22, -300], [30, -284], [26, -266], [14, -252]], BE.skinD, { depth: 1, line: 0, tension: 0.5, hi: false, rim: null, shadow: false });
+      S.cel([[-22, -304], [-6, -314], [14, -306], [23, -286], [20, -266], [10, -250], [-6, -246], [-14, -254], [-23, -266], [-24, -270], [-35, -271, 1], [-27, -279], [-25, -292]], BE.skin, {
+        depth: 11, tension: 0.5, hi: true, hiW: 2.2, rim: '#ffffff', shadow: BE.skinD, halftone: { d: 5, alpha: 0.22, color: '#7a6ac0' },
+        decor(g) {
+          tk.inkPath(g, [[-20, -262], [-12, -259], [-6, -262]], { w: 1.6, color: '#7a6a9a', taper: 0.4 });                  // the thin pressed mouth
+          tk.inkPath(g, [[2, -256], [6, -262], [10, -270]], { w: 1.2, color: '#a898c8', alpha: 0.8, taper: 0.4 });          // a hollow cheek
+          tk.inkPath(g, [[-24, -279], [-18, -277]], { w: 1.4, color: '#a898c8', taper: 0.4 });
+        },
+      });
+      // the ear, then the slicked hair
+      S.cel(E(14, -276, 4.6, 8, 10), BE.skin, { depth: 1, line: 2.4, hi: false, rim: null, shadow: BE.skinD });
+      S.cel([[-22, -302], [-4, -316], [16, -308], [26, -286], [18, -296], [2, -300], [-10, -298]], BE.hair, { depth: 4, line: 3, tension: 0.5, hi: true, hiW: 1.6, rim: S.c.rim, shadow: BE.hairD });
+      tk.inkPath(S.g, [[-14, -306], [0, -310], [12, -304]], { w: 2, color: '#ffffff', alpha: 0.9, taper: 0.4, wobble: 0 });
+    },
+  };
+  BE_C.p0_hair = {
+    spine: [[14, -298], [40, -298], [58, -278], [64, -246], [56, -212]], cuts: [0.3, 0.62], reach: 40, overlap: 6,
+    draw(S) {
+      const sp = [[14, -298], [40, -298], [58, -278], [64, -246], [56, -212]];
+      S.rib(sp, BE.hair, { wMax: 15, w0: 11, w1: 2, tipPow: 1.1, shadow: BE.hairD, rim: S.c.rim, rimW: 1.4, line: 3, gloss: true, glossColor: '#ffffff', glossAlpha: 0.9, strands: 3 });
+      S.cel(E(34, -303, 4.6, 8, 8, 0.4), BE.red, { depth: 1, line: 2.4, hi: false, rim: '#ffd0d8', shadow: BE.redD });          // a red ribbon tie
+    },
+  };
+  BE_P.p0_armF = {
+    box: [-130, -262, -10, -120], pivot: [-38, -238],
+    draw(S) {
+      S.cel([[-26, -250], [-52, -250], [-80, -214], [-100, -168, 1], [-72, -144, 1], [-52, -178], [-26, -214]], BE.robe, { depth: 12, tension: 0.6, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 } });
+      // the cuff: white, spattered red
+      S.cel({ poly: [[-104, -172], [-70, -148], [-64, -130], [-102, -150]] }, BE.paper, { depth: 2, line: 2.8, hi: false, rim: null, shadow: BE.paperD });
+      for (let i = 0; i < 4; i++) S.ell(-96 + i * 8, -150 + i * 5 - 4, 2 + (i % 2), 2 + (i % 2), BE.red, { line: 0, hi: false, rim: null, shadow: false });
+      // the hand: long pale fingers around the pen
+      S.cel(E(-84, -142, 9.6, 8.6, 10), BE.skin, { depth: 2, line: 2.6, hi: false, rim: '#ffffff', shadow: BE.skinD });
+      [[-92, -148], [-86, -151], [-80, -150]].forEach((f) => S.line([[f[0], f[1]], [f[0] - 4, f[1] - 6]], { w: 3, color: BE.skin, taper: 0.3 }));
+    },
+  };
+  // the red pen: a lacquer barrel with gold bands and a long dipped nib, grip point at the origin, the nib pointing up
+  BE_P.p0_pen = {
+    box: [-20, -214, 20, 76], pivot: [0, 0],
+    draw(S) {
+      S.cel(cap(0, 66, 0, -118, 14, 10), BE.lac, { depth: 4, line: 3.2, hi: true, hiW: 1.8, rim: '#ffb0b8', tension: 0.5, shadow: BE.redD });
+      [[-100, 5], [40, 4], [-16, 4]].forEach((b) => S.cel({ poly: [[-8, b[0]], [8, b[0]], [8, b[0] + b[1]], [-8, b[0] + b[1]]] }, BE.gold, { depth: 1, line: 2, hi: false, rim: '#fff0b0', shadow: BE.goldD }));
+      S.cel(E(0, 70, 8, 8, 10), BE.gold, { depth: 2, line: 2.6, hi: true, hiW: 1.2, rim: '#fff0b0', shadow: BE.goldD });
+      // the nib
+      S.cel([[-9, -118, 1], [-12, -142], [-5, -176], [0, -204, 1], [5, -176], [12, -142], [9, -118, 1]], BE.gold, { depth: 4, line: 3, tension: 0.5, hi: true, hiW: 1.6, rim: '#fff4c0', shadow: BE.goldD });
+      S.line([[0, -190], [0, -150]], { w: 1.8, color: BE.goldD, taper: 0.2, pressure: 'flat' });
+      S.cel(E(0, -146, 3.2, 3.2, 8), BE.ink, { depth: 0, line: 1.4, hi: false, rim: null, shadow: false });
+      S.cel([[-6, -176, 1], [0, -204, 1], [6, -176, 1], [3, -184], [0, -198], [-3, -184]], BE.red, { depth: 1, line: 0, tension: 0, hi: false, rim: null, shadow: false });   // ink on the tip
+    },
+  };
+  BE_P.p0_armB = {
+    box: [4, -262, 104, -120], pivot: [40, -238],
+    draw(S) {
+      S.cel([[30, -250], [56, -246], [82, -208], [92, -170, 1], [56, -150, 1], [44, -184], [28, -216]], BE.robe, { depth: 12, tension: 0.6, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 } });
+      S.cel({ poly: [[56, -156], [92, -174], [98, -160], [62, -142]] }, BE.paper, { depth: 2, line: 2.8, hi: false, rim: null, shadow: BE.paperD });
+      S.cel(E(76, -150, 9, 8, 10), BE.skin, { depth: 2, line: 2.6, hi: false, rim: '#ffffff', shadow: BE.skinD });
+    },
+  };
+  BE_P.p0_stack = {
+    box: [-46, -50, 46, 50], pivot: [0, 0],
+    draw(S) {
+      for (let i = 0; i < 5; i++) S.cel({ poly: [[-34 + i * 2, -34 + i * 9], [32 - i * 1, -36 + i * 9 + (i % 2)], [34 - i * 2, -26 + i * 9], [-32 + i, -24 + i * 9]] }, i % 2 ? BE.paper : '#f0e6d4', { depth: 2, line: 2.4, hi: false, rim: S.c.rim, shadow: BE.paperD });
+      S.cel({ poly: [[-30, -8], [30, -10], [30, -2], [-30, 0]] }, BE.lac, { depth: 1, line: 2.2, hi: false, rim: null, shadow: BE.redD });      // a red ribbon round the pile
+      S.cel({ poly: [[-26, -46], [28, -48], [28, -36], [-26, -34]] }, BE.bar, { depth: 1, line: 2.4, hi: false, rim: null, shadow: false });
+      S.cel(E(0, -4, 6, 6, 8), BE.gold, { depth: 1, line: 2, hi: false, rim: '#fff0b0', shadow: BE.goldD });
+    },
+  };
+  // a floating proofreader's mark painted live: kind 0 pilcrow, 1 caret, 2 delete loop, 3 stet dots, 4 strike line
+  function beMark(ctx, kind, x, y, s, rot, col, a) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha = cA(a); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 3.4 * s; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    if (kind === 0) { ctx.moveTo(4 * s, 12 * s); ctx.lineTo(4 * s, -12 * s); ctx.moveTo(-3 * s, 12 * s); ctx.lineTo(-3 * s, -12 * s); ctx.moveTo(9 * s, -12 * s); ctx.lineTo(-3 * s, -12 * s); ctx.arc(-3 * s, -6 * s, 6 * s, -PI / 2, PI / 2, true); ctx.stroke(); }
+    else if (kind === 1) { ctx.moveTo(-10 * s, 6 * s); ctx.lineTo(0, -8 * s); ctx.lineTo(10 * s, 6 * s); ctx.stroke(); }
+    else if (kind === 2) { ctx.moveTo(-12 * s, 4 * s); ctx.bezierCurveTo(-4 * s, -12 * s, 12 * s, 8 * s, 12 * s, -2 * s); ctx.bezierCurveTo(12 * s, -14 * s, -6 * s, 6 * s, -2 * s, 12 * s); ctx.stroke(); }
+    else if (kind === 3) { for (let i = -1; i <= 1; i++) { ctx.moveTo(i * 8 * s + 1.4 * s, 0); ctx.arc(i * 8 * s, 0, 1.4 * s, 0, TAU); } ctx.fill(); }
+    else { ctx.moveTo(-12 * s, 0); ctx.lineTo(12 * s, 0); ctx.stroke(); }
+    ctx.restore();
+  }
+  BE_RIG[0] = function (ctx, st) {
+    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+    const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 4.0) * m, hot = clamp(tele + buff + strike + guard * 0.4 + st.wound * 0.5, 0, 1);
+    const dx = -strike * 36 + hurt * 14 + E0.shake * 1.2 + 6 * tele - 6 * wind, dy = 3 * tele + 3 * guard + 10 * die + 2 * br;
+    const rot = -0.02 * strike + 0.04 * tele + 0.06 * hurt + 0.008 * br;
+    let aF = 0.05 * br, gW = -0.8 + 0.04 * br, aB = -0.03 * br;
+    if (atk) {
+      if (p < 0.3) { const k = sm(p / 0.3); aF = lerp(0, 2.1, k); gW = lerp(-0.8, 0.45, k); }
+      else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aF = lerp(2.1, -0.2, k); gW = lerp(0.45, -2.2, k); }
+      else { const k = sm((p - 0.5) / 0.5); aF = lerp(-0.2, 0.05 * br, k); gW = lerp(-2.2, -0.8, k); }
+    } else if (E0.pose === 'telegraph') { aF = 2.1 * tele + 0.03 * E0.shake; gW = lerp(-0.8, 0.4, tele) + 0.03 * E0.shake; aB = -0.4 * tele; }
+    else if (E0.pose === 'block') { aF = 0.7 * guard; gW = lerp(-0.8, -1.3, guard); aB = 1.5 * guard; }
+    else if (E0.pose === 'buff') { aF = 0.9 * buff; gW = -0.8 + 0.7 * buff; aB = -0.7 * buff; }
+    else if (E0.pose === 'hurt') { aF = 0.4 * hurt; gW = -0.8 + 0.4 * hurt; aB = 0.3 * hurt; }
+    else if (die > 0) { aF = 0.5 * die; aB = -0.4 * die; }
+    // the fan of pages: spread with the mood, each page swaying about the shoulders on its own phase
+    const spread = 1 + 0.18 * tele + 0.3 * buff - 0.25 * guard;
+    ctx.save();
+    if (die > 0) ctx.transform(1, 0, 0, 1 - 0.1 * die, 0, 0);
+    xform(ctx, 0, -150, dx, dy, rot, 1, 1 + 0.01 * br);
+    {
+      const n = 9;
+      for (let i = 0; i < n; i++) {
+        const u = i / (n - 1) - 0.5, a = u * 2.9 * spread + 0.05 * sin(t * (0.9 + 0.15 * i) + i) * m + 0.08 * hurt * (u > 0 ? 1 : -1), z = 0.88 + 0.12 * Math.abs(Math.cos(i * 1.7));
+        ctx.save(); ctx.translate(4, -206); ctx.rotate(a); ctx.translate(0, -34 * (1 + 0.1 * hot)); ctx.scale(z, z);
+        put(ctx, st, i % 2 ? 'p0_pageB' : 'p0_pageA', { r: 0.03 * sin(t * 1.3 + i * 1.7) * m });
+        ctx.restore();
+      }
+      tk.glow(ctx, 4, -230, 130, BE.lilac, 0.16 + 0.12 * hot);
+      { const gr = ctx.createRadialGradient(-4, -282, 8, -4, -282, 74); gr.addColorStop(0, 'rgba(26,19,64,0.92)'); gr.addColorStop(0.7, 'rgba(26,19,64,0.7)'); gr.addColorStop(1, 'rgba(26,19,64,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(-4, -282, 74, 0, TAU); ctx.fill(); }
+    }
+    putChain(ctx, st, 'p0_hair', [0.1 * sin(t * 1.6) * m + 0.15 * hurt - 0.2 * strike, 0.14 * sin(t * 1.6 - 0.9) * m, 0.2 * sin(t * 1.6 - 1.8) * m + 0.3 * tele * sin(t * 12)], { r: 0.02 * br + 0.06 * tele });
+    if (guard < 0.3) put(ctx, st, 'p0_armB', { r: aB });
+    put(ctx, st, 'p0_robe', { sy: 1 + 0.01 * br, r: 0.005 * br });
+    put(ctx, st, 'p0_strips', { r: 0.05 * sin(t * 1.8 + 1) * m + 0.1 * strike - 0.07 * tele, sy: 1 + 0.02 * sin(t * 2.6) * m });
+    put(ctx, st, 'p0_cravat', { sy: 1 + 0.015 * br, r: 0.01 * br });
+    // the stack held in the back arm, its ribbon trailing
+    {
+      const ca = cos(aB), sa = sin(aB), hx = 76, hy = -150, px = 40 + (hx - 40) * ca - (hy + 238) * sa, py = -238 + (hx - 40) * sa + (hy + 238) * ca;
+      put(ctx, st, 'p0_stack', { x: px - 18 - 40 * guard, y: py + 10 - 40 * guard, r: -0.1 + 0.03 * sin(t * 1.7) * m - 0.2 * guard + 0.2 * hurt });
+    }
+    if (guard >= 0.3) put(ctx, st, 'p0_armB', { r: aB });
+    put(ctx, st, 'p0_head', {
+      r: 0.02 * sin(t * 1.1) * m - 0.04 * tele + 0.05 * strike + 0.1 * hurt, y: 2 * tele, sx: 1.2, sy: 1.2,
+      kids(c) {
+        const ob = blink(t, 'editor', 4.6) * (1 - 0.5 * hurt), look = [-0.6 + 0.3 * sin(t * 0.7) * m, 0.1];
+        // eyes: pale with red pupils, narrowed; flaring when hot
+        eyeLive(c, -15, -279, 6.6, 4.4 + 1.8 * hot, { open: ob, iris: ['#ff6a7a', BE.red], sclera: '#fff8f0', pupil: 'slit', look, glow: BE.red, glowK: 0.5 + 0.5 * hot, glowR: 3, lw: 2, lidTop: 0.3 - 0.1 * hot, lidColor: BE.skinD, rot: 0.12 });
+        eyeLive(c, 3, -280, 5.6, 4.2 + 1.8 * hot, { open: ob, iris: ['#ff6a7a', BE.red], sclera: '#fff8f0', pupil: 'slit', look, glow: BE.red, glowK: 0.5 + 0.5 * hot, glowR: 3, lw: 2, lidTop: 0.3 - 0.1 * hot, lidColor: BE.skinD, rot: -0.1 });
+        // the half-moon spectacles in gold wire, with a glint that slides across the lenses
+        c.save();
+        tk.inkPath(c, [[-23, -281], [-15, -272], [-6, -278]], { w: 1.8, color: BE.gold, taper: 0.2, pressure: 'flat', wobble: 0 });
+        tk.inkPath(c, [[-6, -278], [-2, -280], [-3, -280]], { w: 1.8, color: BE.gold, taper: 0.2, pressure: 'flat', wobble: 0 });
+        tk.inkPath(c, [[-1, -281], [3, -272], [11, -278]], { w: 1.8, color: BE.gold, taper: 0.2, pressure: 'flat', wobble: 0 });
+        c.globalAlpha = 0.25; c.fillStyle = '#cfe6ff'; c.beginPath(); c.moveTo(-24, -282); c.lineTo(-6, -280); c.lineTo(-10, -270); c.lineTo(-20, -270); c.fill(); c.beginPath(); c.moveTo(-1, -282); c.lineTo(11, -280); c.lineTo(8, -271); c.lineTo(0, -271); c.fill();
+        c.globalAlpha = 1;
+        const gl = ((t * 0.37) % 1 + 1) % 1;
+        if (gl < 0.3) { c.globalAlpha = sin(gl / 0.3 * PI) * 0.9; c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(-20 + gl * 40, -282); c.lineTo(-17 + gl * 40, -282); c.lineTo(-20 + gl * 40, -272); c.lineTo(-23 + gl * 40, -272); c.fill(); }
+        c.restore();
+        // brows: thin, arched, one lifted; lower with the temper
+        tk.inkPath(c, [[-24, -290 + 2 * hot], [-14, -293 + 2 * hot], [-5, -289 + 4 * hot]], { w: 2.4, color: '#6a5a96', taper: 0.4, wobble: 0 });
+        tk.inkPath(c, [[-2, -290 + 4 * hot], [6, -294 + 2 * hot], [14, -289]], { w: 2.4, color: '#6a5a96', taper: 0.4, wobble: 0 });
+        if (hurt > 0.25 || strike > 0.3) { c.fillStyle = BE.ink; c.beginPath(); c.ellipse(-14, -260, 4.4, 3 + 2 * hurt, 0, 0, TAU); c.fill(); }
+      },
+    });
+    // the red pen on the hand of the front arm, dripping
+    put(ctx, st, 'p0_armF', {
+      r: aF,
+      kids(c) { put(c, st, 'p0_pen', { x: -84, y: -142, r: gW - aF }); },
+    });
+    {
+      const ang = gW, hx = -38 + (-84 + 38) * cos(aF) - (-142 + 238) * sin(aF), hy = -238 + (-84 + 38) * sin(aF) + (-142 + 238) * cos(aF);
+      const tx = hx + sin(ang) * 204, ty = hy - cos(ang) * 204;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, tx, ty, 26 + 34 * hot, BE.red, 0.5 + 0.4 * hot); ctx.restore();
+      for (let i = 0; i < 3; i++) { const per = 1.1 + 0.25 * i, u = ((t / per + i * 0.33) % 1 + 1) % 1; ctx.save(); ctx.globalAlpha = cA(sin(u * PI) * 1.3) * (1 - die); ctx.fillStyle = BE.red; ctx.beginPath(); ctx.ellipse(tx + 2 - 4 * i, ty + 6 + u * 70, 2.2, 3.4 + u * 3, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+      if (tele > 0.05 || (atk && p < 0.32)) { const k = tele || sm(p / 0.3); tk.sparkle(ctx, tx, ty - 6, 8 + 16 * k, { color: '#ffd0d8', alpha: 0.9 }); }
+      // the strike: a long red strike-through line across the front, then a splash
+      if (atk && p > 0.44 && p < 0.9) {
+        const u = clamp((p - 0.44) / 0.46, 0, 1);
+        ctx.save(); ctx.globalAlpha = (1 - ease.inQuad(u)) * 0.95;
+        tk.inkPath(ctx, [[-60 + dx, -120 + dy], [-170 + dx, -110], [-300 + dx, -96 + 10 * sin(u * 9)]], { w: 14 * (1 - u * 0.5), color: BE.red, taper: 0.4, wobble: 0.06, pressure: 'mid' });
+        tk.inkPath(ctx, [[-180 + dx, -132], [-300 + dx, -136]], { w: 4, color: '#ffd0d8', taper: 0.4, wobble: 0.1 });
+        ctx.restore();
+        for (let i = 0; i < 8; i++) { const fj = fling('beink' + i, 'b', u, { spread: 220, up: 90, g: 300, bias: -70 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.fillStyle = BE.red; ctx.beginPath(); ctx.arc(-200 + dx + fj.x, -90 + fj.y, 2 + 3 * hv('beink', 's' + i), 0, TAU); ctx.fill(); ctx.restore(); }
+      }
+    }
+    // proofreader's marks orbit him: a slow ring of red glyphs that tightens and speeds up when he is about to strike
+    {
+      const n = 6, spin = t * (0.4 + 0.9 * hot), rx = lerp(120, 96, tele) + 8 * buff;
+      for (let i = 0; i < n; i++) {
+        const a = spin + i * TAU / n, z = sin(a), x = cos(a) * rx - 4, y = -200 + sin(a * 1.0) * 20 + 14 * sin(t * 1.3 + i), s = 0.8 + 0.25 * z;
+        beMark(ctx, i % 5, x + dx, y + dy, s, 0.3 * sin(t * 1.1 + i), z > 0 ? BE.red : '#8a1a34', (0.35 + 0.45 * (z * 0.5 + 0.5)) * (1 - die));
+      }
+    }
+    ctx.restore();
+    if (buff > 0.1) motes(ctx, dx, -200 + dy, t, 12, 'bebuff', { col: '#ff6a7a', size: 2.6, rise: 90, spread: 70, life: 0.9, alpha: buff });
+  };
+  // ---- phase 1: THE ERASER ---------------------------------------------------------------------------------------
+  const BEE = { pink: '#f08ab0', pinkL: '#ffc4d8', pinkD: '#b8506e', smudge: '#767690', blue: '#4a7ae0', white: '#fff8f0', brass: '#e2ae4c', steel: '#b8bcd8', steelD: '#6a6e90' };
+  // smudges of graphite and chewed corners painted into an eraser shape (decor)
+  function eraserDecor(g, x0, y0, x1, y1, seed, n) {
+    for (let i = 0; i < (n || 4); i++) {
+      const x = x0 + (x1 - x0) * tk.vary('eras' + seed, 'x' + i), y = y0 + (y1 - y0) * tk.vary('eras' + seed, 'y' + i);
+      tk.inkPath(g, [[x, y], [x + 14 + 10 * tk.vary('eras' + seed, 'l' + i), y + 3 * (tk.vary('eras' + seed, 'a' + i) - 0.5)], [x + 30, y + 2]], { w: 3.6 + 2 * tk.vary('eras' + seed, 'w' + i), color: BEE.smudge, alpha: 0.4, taper: 0.5, wobble: 0.2, seed: i });
+    }
+  }
+  function eraserSleeve(S, x0, y0, x1, y1, sk) {
+    S.cel({ poly: [[x0, y0], [x1, y0 + (sk || 0)], [x1, y1 + (sk || 0)], [x0, y1]] }, BEE.white, { depth: 4, line: 3, hi: false, rim: S.c.rim, shadow: '#d8c8e8', halftone: { d: 5, alpha: 0.2, color: '#8a7aa8' } });
+    S.cel({ poly: [[x0, y0 + (y1 - y0) * 0.38], [x1, y0 + (y1 - y0) * 0.38 + (sk || 0)], [x1, y0 + (y1 - y0) * 0.62 + (sk || 0)], [x0, y0 + (y1 - y0) * 0.62]] }, BEE.blue, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
+  }
+  function eraserLeg(S, cx, flip) {
+    const sg = flip ? -1 : 1;
+    S.cel([[cx - 28, -118], [cx + 28, -120], [cx + 31, -52, 1], [cx + 36, -10, 1], [cx - 36, -8, 1], [cx - 31, -54, 1]], BEE.pink, { depth: 12, tension: 0.3, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 }, decor(g) { eraserDecor(g, cx - 28, -112, cx + 4, -16, cx, 3); } });
+    S.cel({ poly: [[cx - 32, -62], [cx + 32, -62], [cx + 34, -42], [cx - 34, -42]] }, BEE.steel, { depth: 3, line: 3, hi: true, hiW: 1.4, rim: '#ffffff', shadow: BEE.steelD, decor(g) { for (let k = -3; k <= 3; k++) tk.inkPath(g, [[cx + k * 9, -62], [cx + k * 9, -42]], { w: 1.4, color: BEE.steelD, alpha: 0.8, taper: 0.1, pressure: 'flat' }); } });
+    S.cel({ poly: [[cx - 40, -16], [cx + 40, -16], [cx + 42, 0], [cx - 42, 0]] }, '#5a5a6e', { depth: 2, line: 3, hi: false, rim: S.c.rim, shadow: '#3a3a4e' });     // the worn graphite foot
+    void sg;
+  }
+  BE_P.p1_legN = { box: [-100, -128, 0, 6], pivot: [-44, -112], draw(S) { eraserLeg(S, -44, false); } };
+  BE_P.p1_legF = { box: [-4, -128, 96, 6], pivot: [42, -112], draw(S) { eraserLeg(S, 42, true); } };
+  BE_P.p1_torso = {
+    box: [-112, -276, 114, -104], pivot: [0, -190],
+    draw(S) {
+      S.cel([[-84, -258, 1], [-30, -268], [34, -268], [88, -260, 1], [102, -232, 1], [92, -178], [76, -124, 1], [-66, -122, 1], [-90, -176], [-100, -232, 1]], BEE.pink, {
+        depth: 26, tension: 0.35, hi: true, hiW: 3.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 },
+        decor(g) { eraserDecor(g, -84, -250, -40, -130, 11, 4); eraserDecor(g, 50, -250, 70, -130, 12, 3); tk.inkPath(g, [[62, -262], [56, -240], [66, -224], [58, -208]], { w: 2.4, color: BEE.pinkD, alpha: 0.9, taper: 0.4, wobble: 0.1 }); tk.inkPath(g, [[-70, -236], [-20, -228], [34, -240], [80, -226]], { w: 9, color: BEE.smudge, alpha: 0.22, taper: 0.5, wobble: 0.2 }); tk.inkPath(g, [[-60, -142], [0, -136], [60, -144]], { w: 7, color: BEE.smudge, alpha: 0.2, taper: 0.5, wobble: 0.2 }); tk.inkPath(g, [[-60, -134], [-52, -146], [-58, -158]], { w: 2.2, color: BEE.pinkD, alpha: 0.9, taper: 0.4, wobble: 0.1 }); },
+      });
+      // the paper sleeve of the eraser: a white wrap round the belly with a blue band and the maker's mark
+      eraserSleeve(S, -86, -204, 96, -150, 3);
+      S.g.save(); S.g.font = '900 17px ' + tk.font.num; S.g.textAlign = 'center'; S.g.textBaseline = 'middle'; S.g.fillStyle = '#ffffff'; S.g.strokeStyle = BEE.blue;
+      S.g.fillText('ERASE', 4, -177); S.g.restore();
+      // chewed bites out of the torso where he has rubbed himself away
+      [[-92, -200], [96, -214], [-70, -134]].forEach((b, i) => S.cel([[b[0] - 7, b[1] - 6, 1], [b[0] + 5, b[1] - 2, 1], [b[0] - 2, b[1] + 8, 1]], '#7a2a44', { depth: 1, line: 2, tension: 0, hi: false, rim: null, shadow: false }));
+    },
+  };
+  function eraserPad(S, cx, sg) {
+    S.cel([[cx - 34, -246, 1], [cx + 32, -252, 1], [cx + 40, -222], [cx + 28, -204, 1], [cx - 34, -208, 1], [cx - 42, -228]], BEE.pink, { depth: 9, tension: 0.3, hi: true, hiW: 2.4, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 }, decor(g) { eraserDecor(g, cx - 30, -240, cx + 8, -210, cx, 3); } });
+    S.cel([[cx - 24, -264, 1], [cx + 22, -268, 1], [cx + 30, -248, 1], [cx - 28, -246, 1]], BEE.pinkL, { depth: 5, line: 3.2, tension: 0.2, hi: true, hiW: 1.6, rim: S.c.rim, shadow: BEE.pink });
+    S.cel(E(cx + 8 * sg, -236, 4, 4, 8), BEE.brass, { depth: 1, line: 2, hi: false, rim: null });
+  }
+  BE_P.p1_padN = { box: [-146, -278, -50, -194], pivot: [-100, -232], draw(S) { eraserPad(S, -100, -1); } };
+  BE_P.p1_padF = { box: [52, -278, 148, -194], pivot: [100, -232], draw(S) { eraserPad(S, 100, 1); } };
+  function eraserArm(S, sx) {
+    // shoulder to fist: a thick arm and a fist that is one whole eraser block, worn at the knuckles
+    const x = (v) => sx * v;
+    S.cel(cap(x(100), -232, x(122), -150, 58, 52), BEE.pink, { depth: 10, tension: 0.4, hi: true, hiW: 2.2, rim: S.c.rim, halftone: { d: 5, alpha: 0.3 } });
+    S.cel(cap(x(122), -150, x(130), -84, 54, 50), BEE.pinkL, { depth: 9, tension: 0.4, hi: true, hiW: 2, rim: S.c.rim });
+    S.cel({ poly: [[x(94), -154], [x(150), -158], [x(152), -142], [x(96), -138]] }, BEE.steel, { depth: 2, line: 2.8, hi: false, rim: '#ffffff', shadow: BEE.steelD });
+    const pts = [[x(86), -108, 1], [x(176), -110, 1], [x(186), -84], [x(178), -26, 1], [x(90), -24, 1], [x(80), -64]];
+    S.cel(sx < 0 ? pts.slice().reverse() : pts, BEE.pink, { depth: 14, tension: 0.3, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 5, alpha: 0.32 }, decor(g) { eraserDecor(g, Math.min(x(90), x(170)), -100, Math.max(x(90), x(170)), -30, 7 + sx, 5); } });
+    S.cel({ poly: [[x(86), -108], [x(176), -110], [x(172), -98], [x(90), -96]] }, BEE.pinkL, { depth: 1, line: 0, hi: false, rim: null, shadow: false });
+    eraserSleeve(S, Math.min(x(88), x(178)), -76, Math.max(x(88), x(178)), -50, 0);
+  }
+  BE_P.p1_armF = { box: [-206, -272, -50, -14], pivot: [-100, -232], draw(S) { eraserArm(S, -1); } };
+  BE_P.p1_armB = { box: [50, -272, 206, -14], pivot: [100, -232], draw(S) { eraserArm(S, 1); } };
+  BE_P.p1_head = { box: BE_P.p0_head.box, pivot: BE_P.p0_head.pivot, draw: BE_P.p0_head.draw };
+  BE_C.p1_cloak = {
+    spine: [[0, -262], [0, -200], [0, -130], [0, -64]], cuts: [0.34, 0.68], reach: 118, overlap: 6,
+    draw(S) {
+      const pts = [[-70, -262], [0, -274], [70, -262], [112, -230], [106, -150], [118, -92, 1]].concat(zig(118, -118, -92, 26, 8, 16, 71)).concat([[-106, -150], [-112, -230]]);
+      S.cel(pts, BE.robe, {
+        depth: 22, tension: 0.4, hi: true, hiW: 2.6, rim: S.c.rim, halftone: { d: 5, alpha: 0.34 },
+        decor(g) { for (let i = 0; i < 7; i++) tk.inkPath(g, [[-90 + i * 30, -240], [-96 + i * 32, -110]], { w: 2, color: '#0a0720', alpha: 0.7, taper: 0.3, wobble: 0.1, seed: i }); g.fillStyle = 'rgba(255,248,240,0.75)'; for (let i = 0; i < 8; i++) { g.beginPath(); g.arc(-96 + 190 * tk.vary('bec', 'x' + i), -250 + 150 * tk.vary('bec', 'y' + i), 2 + 2 * tk.vary('bec', 'r' + i), 0, TAU); g.fill(); } },
+      });
+    },
+  };
+  BE_RIG[1] = function (ctx, st) {
+    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+    const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.2) * m, hot = clamp(tele + buff + strike + guard * 0.3 + st.wound * 0.6, 0, 1);
+    const dx = -strike * 56 + hurt * 18 + E0.shake * 1.3 + 8 * tele - 10 * wind, dy = 5 * tele + 4 * guard + 12 * die + 3 * br * 0.5 - 4 * buff;
+    const rot = -0.05 * strike + 0.05 * tele + 0.06 * hurt + 0.012 * br;
+    let aF = 0.06 * br, aB = -0.06 * br - 0.04;
+    if (atk) {
+      if (p < 0.3) { const k = sm(p / 0.3); aF = lerp(0, 2.5, k); aB = lerp(-0.04, -2.2, k); }
+      else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aF = lerp(2.5, -0.5, k); aB = lerp(-2.2, 0.3, k); }
+      else { const k = sm((p - 0.5) / 0.5); aF = lerp(-0.5, 0.06 * br, k); aB = lerp(0.3, -0.04, k); }
+    } else if (E0.pose === 'telegraph') { aF = 2.5 * tele + 0.03 * E0.shake; aB = -2.3 * tele - 0.03 * E0.shake; }
+    else if (E0.pose === 'block') { aF = 1.4 * guard; aB = 1.1 * guard; }
+    else if (E0.pose === 'buff') { aF = 1.5 * buff; aB = -1.5 * buff; }
+    else if (E0.pose === 'hurt') { aF = 0.5 * hurt; aB = -0.3 * hurt; }
+    else if (die > 0) { aF = 0.5 * die; aB = -0.5 * die; }
+    const heave = 1 + 0.018 * br - 0.03 * tele + 0.02 * buff;
+    ctx.save();
+    if (die > 0) ctx.transform(1 + 0.08 * die, 0, 0, 1 - 0.12 * die, -6 * die, 0);
+    { ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, dx, -190 + dy, 190, '#ff6a8a', (0.12 + 0.25 * hot) * (1 - die)); ctx.restore(); }
+    xform(ctx, 0, -112, dx, dy, rot, 1, 1);
+    putChain(ctx, st, 'p1_cloak', [0.04 * sin(t * 1.4) * m + 0.05 * tele, 0.08 * sin(t * 1.4 - 0.9) * m + 0.1 * hurt, 0.12 * sin(t * 1.4 - 1.8) * m + 0.2 * strike]);
+    put(ctx, st, 'p1_legF', { r: 0.02 * br });
+    put(ctx, st, 'p1_armB', { r: aB });
+    put(ctx, st, 'p1_padF', { r: 0.03 * br + 0.1 * (tele + buff), y: -3 * tele });
+    put(ctx, st, 'p1_torso', { sy: heave, sx: 1 + 0.008 * br });
+    put(ctx, st, 'p1_legN', { r: -0.02 * br });
+    if (guard >= 0.3) put(ctx, st, 'p1_armB', { r: aB });
+    // hair, then the little furious head on the big body (the Editor's own head, scaled up, with its cracked spectacles)
+    ctx.save();
+    ctx.translate(-2, -266); ctx.scale(1.34, 1.34); ctx.translate(2, 258);
+    putChain(ctx, st, 'p0_hair', [-0.1 + 0.2 * sin(t * 4.1) * m * (0.4 + hot) + 0.2 * hurt, 0.3 * sin(t * 4.1 - 0.9) * m * (0.4 + hot), 0.4 * sin(t * 4.1 - 1.8) * m * (0.4 + hot)], { r: -0.3 + 0.1 * tele });
+    ctx.restore();
+    put(ctx, st, 'p1_head', {
+      x: 0, y: -8 + 2 * br, sx: 1.34, sy: 1.34, r: 0.03 * sin(t * 1.2) * m - 0.1 * tele + 0.08 * strike + 0.12 * hurt,
+      kids(c) {
+        const ob = blink(t, 'editor1', 6.2) * (1 - 0.5 * hurt), jaw = clamp(0.25 + 0.75 * (tele + strike * 0.8 + buff + hurt * 0.7), 0, 1);
+        // red furious eyes, big, with a hard angry lid
+        eyeLive(c, -15, -279, 7.4, 5.4 + 1.6 * hot, { open: ob, iris: ['#ff8a96', '#ff1a3a'], sclera: '#fff0f0', pupil: 'dot', pupilColor: '#3a0010', look: [-0.8, 0.1], glow: BE.red, glowK: 0.9 + 0.1 * hot, glowR: 3.4, lw: 2, lidTop: 0.5, lidColor: BE.skinD, rot: 0.34 });
+        eyeLive(c, 3, -280, 6.4, 5.2 + 1.6 * hot, { open: ob, iris: ['#ff8a96', '#ff1a3a'], sclera: '#fff0f0', pupil: 'dot', pupilColor: '#3a0010', look: [-0.8, 0.1], glow: BE.red, glowK: 0.9 + 0.1 * hot, glowR: 3.4, lw: 2, lidTop: 0.5, lidColor: BE.skinD, rot: -0.3 });
+        // the spectacles, cracked: one lens starred, the frame bent
+        c.save();
+        tk.inkPath(c, [[-23, -282], [-15, -271], [-6, -279]], { w: 2, color: BE.gold, taper: 0.2, pressure: 'flat', wobble: 0 });
+        tk.inkPath(c, [[-1, -283], [3, -271], [11, -279]], { w: 2, color: BE.gold, taper: 0.2, pressure: 'flat', wobble: 0 });
+        c.globalAlpha = 0.28; c.fillStyle = '#cfe6ff'; c.beginPath(); c.moveTo(-24, -282); c.lineTo(-6, -280); c.lineTo(-10, -270); c.lineTo(-20, -270); c.fill();
+        c.globalAlpha = 1;
+        [[-14, -276, -22, -283], [-14, -276, -8, -270], [-14, -276, -19, -270], [-14, -276, -6, -281]].forEach((k) => tk.inkPath(c, [[k[0], k[1]], [k[2], k[3]]], { w: 1.2, color: '#ffffff', alpha: 0.95, taper: 0.4, wobble: 0 }));
+        c.restore();
+        // a snarling mouth: the gritted line opens into a roar
+        c.save(); c.fillStyle = '#2a0a1a'; c.beginPath(); c.ellipse(-12, -260, 7, 2 + 6 * jaw, 0, 0, TAU); c.fill();
+        c.fillStyle = '#ffffff'; c.fillRect(-18, -262 - 2 * jaw, 12, 2.4); c.restore();
+        tk.inkPath(c, [[-26, -292 + 5], [-14, -289 + 5], [-4, -283 + 3]], { w: 3, color: '#4a3a76', taper: 0.4, wobble: 0 });
+        tk.inkPath(c, [[-2, -284 + 3], [8, -289 + 5], [16, -293 + 5]], { w: 3, color: '#4a3a76', taper: 0.4, wobble: 0 });
+      },
+    });
+    if (guard < 0.3) { /* the front arm is always in front of the torso */ }
+    put(ctx, st, 'p1_padN', { r: -0.03 * br - 0.1 * (tele + buff), y: -3 * tele });
+    put(ctx, st, 'p1_armF', { r: aF });
+    ctx.restore();
+    // crumbs shedding off him and graphite smoke: more when he is angry
+    const nc = 6 + Math.round(8 * hot);
+    for (let i = 0; i < nc; i++) {
+      const per = 1.1 + 0.5 * hv('beer', 'p' + i), u = (((t + hv('beer', 'o' + i) * per) % per) + per) % per / per, x = dx + (hv('beer', 'x' + i) - 0.5) * 220, y0 = -240 + 200 * hv('beer', 'y' + i);
+      ctx.save(); ctx.globalAlpha = cA(sin(u * PI) * 0.95) * (1 - die); ctx.translate(x + sin(u * 5 + i) * 4, y0 + dy + u * 54); ctx.rotate(u * 6 + i);
+      ctx.fillStyle = i % 3 ? BEE.pink : BEE.pinkD; ctx.strokeStyle = 'rgba(100,30,50,0.6)'; ctx.lineWidth = 1; const sz = 3 + 3 * hv('beer', 's' + i); ctx.fillRect(-sz / 2, -sz / 3, sz, sz * 0.66); ctx.strokeRect(-sz / 2, -sz / 3, sz, sz * 0.66); ctx.restore();
+    }
+    puffs(ctx, -150 + dx, -60 + dy, t, 3, 91, { col: '#8a8aa8', rise: 34, spread: 14, size: 7, life: 1.1, alpha: 0.35 * (1 - die) });
+    // the slam: a white rubbed wipe across the front and a shock ring
+    if (atk && p > 0.46 && p < 0.9) {
+      const u = (p - 0.46) / 0.44;
+      ctx.save(); ctx.translate(-190 + dx, -10); ctx.scale(1, 0.3); ctx.globalAlpha = (1 - u) * 0.95; ctx.strokeStyle = '#ffd0dc'; ctx.lineWidth = 9 * (1 - u) + 1; ctx.beginPath(); ctx.arc(0, 0, 30 + 150 * ease.outCubic(u), 0, TAU); ctx.stroke(); ctx.restore();
+      swoosh(ctx, -110 + dx, -110, 150, 44, -0.4, -2.9, { alpha: (1 - u) * 0.85, fill: '#ffffff', edge: '#ffd0dc' });
+      for (let i = 0; i < 9; i++) { const fj = fling('beer2' + i, 'b', u, { spread: 220, up: 120, g: 380, bias: -70 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.translate(-190 + dx + fj.x, -20 + fj.y); ctx.rotate(fj.r); ctx.fillStyle = i % 2 ? BEE.pink : '#ffffff'; ctx.fillRect(-5, -3, 10, 6); ctx.restore(); }
+    }
+    if (buff > 0.1) motes(ctx, dx, -150 + dy, t, 14, 'beebuff', { col: '#ff8aa8', size: 3, rise: 100, spread: 90, life: 0.9, alpha: buff });
+  };
+  // ---- phase 2: THE BLANK PAGE -------------------------------------------------------------------------------------
+  const BEB = { void: '#0d0720', voidL: '#3a2272', white: '#ffffff', cyan: '#5ff5ff', lilac: '#c9b8ff', gold: '#e2ae4c' };
+  const BEB_CY = -196;
+  // the outline of the tear: a face shape (wide brow, narrow chin) with a ragged edge; k scales it, jag roughens it
+  function tearPts(k, jag, seed) {
+    const pts = [], n = 46;
+    for (let i = 0; i < n; i++) {
+      const a = i / n * TAU - PI / 2, s = sin(a), c = cos(a), down = Math.max(0, s);
+      const rx = 100 * k * (1 - 0.4 * Math.pow(down, 1.4)) * (1 + 0.08 * Math.max(0, -s)), ry = 158 * k;
+      const r = 1 + jag * ((i % 2 ? 1 : -0.6) * (0.5 + tk.vary('tear' + seed, 'j' + i)));
+      pts.push([c * rx * r, BEB_CY + s * ry * r, 1]);
+    }
+    return pts;
+  }
+  BE_P.p2_face = {
+    box: [-136, -372, 136, 8], pivot: [0, BEB_CY],
+    draw(S) {
+      const g = S.g, lip = tearPts(1.0, 0.05, 'lip'), hole = tearPts(0.83, 0.07, 'hole');
+      // the paper lip of the tear, curling back: cream, with its own shadow and fibres
+      S.cel(lip, BE.paper, { depth: 18, tension: 0, hi: true, hiW: 3, rim: S.c.rim, shadow: BE.paperD, halftone: { d: 5, alpha: 0.22, color: '#8a7aa8' }, lineColor: BE.ink });
+      // fibres along the torn edge
+      for (let i = 0; i < lip.length; i += 2) { const p = lip[i], a = Math.atan2(p[1] - BEB_CY, p[0]); tk.inkPath(g, [[p[0], p[1]], [p[0] - cos(a) * (8 + 8 * tk.vary('fib', 'a' + i)), p[1] - sin(a) * (8 + 8 * tk.vary('fib', 'a' + i))]], { w: 1.4, color: '#a898c8', alpha: 0.85, taper: 0.5, wobble: 0.1 }); }
+      // the void: violet-black with a hint of stars, a storm light low in the throat and hairline storm cracks
+      g.save();
+      g.beginPath(); tk.trace(g, hole, 0, 0, 0); g.clip();
+      const gr = g.createRadialGradient(0, BEB_CY - 20, 10, 0, BEB_CY, 150); gr.addColorStop(0, '#4a2a8a'); gr.addColorStop(0.55, '#1c0e3c'); gr.addColorStop(1, '#07030f');
+      g.fillStyle = gr; g.fillRect(-120, -360, 240, 330);
+      for (let i = 0; i < 26; i++) { g.fillStyle = 'rgba(255,255,255,' + (0.3 + 0.5 * tk.vary('vs', 'a' + i)).toFixed(2) + ')'; g.beginPath(); g.arc(-80 + 160 * tk.vary('vs', 'x' + i), -330 + 260 * tk.vary('vs', 'y' + i), 0.8 + 1.2 * tk.vary('vs', 'r' + i), 0, TAU); g.fill(); }
+      tk.halftone(g, -90, -330, 180, 240, { d: 7, r: 1.2, color: '#6a4ac8', alpha: 0.12, force: true });
+      g.restore();
+      tk.inkPath(g, hole.concat([hole[0]]), { w: 3.6, color: BE.ink, closed: true, taper: 0.02, pressure: 'flat', wobble: 0.04, tension: 0 });
+      // a thin white glow along the inside of the lip, the Blank leaking round the edge
+      g.save(); g.globalAlpha = 0.55; tk.inkPath(g, hole.concat([hole[0]]), { w: 1.8, color: '#ffffff', closed: true, taper: 0.02, pressure: 'flat', wobble: 0.04, tension: 0, align: -0.4 }); g.restore();
+    },
+  };
+  // the crack that carries the tear down to the floor
+  BE_P.p2_crack = {
+    box: [-30, -60, 30, 8], pivot: [0, -40],
+    draw(S) {
+      S.cel([[-16, -48, 1], [-20, -30, 1], [-8, -16, 1], [-12, 0, 1], [4, 2, 1], [6, -14, 1], [16, -30, 1], [12, -48, 1]], BEB.void, { depth: 2, line: 3, tension: 0, hi: false, rim: '#ffffff', rimW: 1.8, shadow: false });
+    },
+  };
+  BE_P.p2_stripA = {
+    box: [-24, -112, 24, 10], pivot: [0, 0],
+    draw(S) {
+      S.cel([[-11, 2, 1], [11, 0, 1], [13, -30], [9, -62], [16, -88, 1], [2, -100, 1], [-9, -84], [-13, -50], [-10, -24]], BE.paper, {
+        depth: 7, tension: 0.4, hi: true, hiW: 1.8, rim: S.c.rim, shadow: BE.paperD, halftone: { d: 5, alpha: 0.2, color: '#8a7aa8' },
+        decor(g) { for (let i = 0; i < 7; i++) tk.inkPath(g, [[-8, -10 - i * 12], [8, -10 - i * 12 - 0.5]], { w: 1.3, color: '#6a5a96', alpha: 0.8, taper: 0.1, pressure: 'flat', wobble: 0.1 }); g.fillStyle = BE.bar; g.fillRect(-12, -52, 20, 6); },
+      });
+    },
+  };
+  BE_P.p2_stripB = {
+    box: [-22, -84, 22, 10], pivot: [0, 0],
+    draw(S) {
+      S.cel([[-9, 2, 1], [9, 0, 1], [11, -24], [8, -50], [13, -70, 1], [1, -78, 1], [-8, -62], [-11, -36]], BE.paper, {
+        depth: 6, tension: 0.4, hi: true, hiW: 1.6, rim: S.c.rim, shadow: BE.paperD, halftone: { d: 5, alpha: 0.2, color: '#8a7aa8' },
+        decor(g) { for (let i = 0; i < 5; i++) tk.inkPath(g, [[-6, -10 - i * 12], [7, -10 - i * 12 - 0.5]], { w: 1.2, color: '#6a5a96', alpha: 0.8, taper: 0.1, pressure: 'flat', wobble: 0.1 }); g.fillStyle = BEB.cyan; g.globalAlpha = 0.6; g.fillRect(-10, -34, 18, 3); g.globalAlpha = 1; },
+      });
+    },
+  };
+  // a long arm of torn paper ending in a clawing paper hand; shoulder at the origin, pointing left
+  BE_P.p2_arm = {
+    box: [-216, -52, 14, 52], pivot: [0, 0],
+    draw(S) {
+      S.cel([[8, -16, 1], [-30, -20], [-70, -15], [-110, -20], [-128, -26, 1], [-134, 4, 1], [-112, 18], [-70, 14], [-30, 19], [8, 16, 1]], BE.paper, {
+        depth: 8, tension: 0.35, hi: true, hiW: 2.2, rim: S.c.rim, shadow: BE.paperD, halftone: { d: 5, alpha: 0.22, color: '#8a7aa8' },
+        decor(g) { for (let i = 0; i < 5; i++) tk.inkPath(g, [[-10 - i * 24, -8], [-24 - i * 24, 8]], { w: 1.3, color: '#6a5a96', alpha: 0.7, taper: 0.1, pressure: 'flat', wobble: 0.1 }); g.fillStyle = BE.bar; g.fillRect(-92, -6, 30, 8); },
+      });
+      // the palm and four long fingers, a thumb that hooks
+      S.cel([[-124, -30, 1], [-156, -34], [-170, -18, 1], [-172, 6, 1], [-156, 20], [-126, 18, 1]], BE.paper, { depth: 6, tension: 0.4, hi: true, hiW: 1.8, rim: S.c.rim, shadow: BE.paperD });
+      [[-30, -208, -34, 0.0], [-12, -214, -14, 0.1], [6, -212, 4, 0.2], [20, -200, 16, 0.3]].forEach((f, i) => {
+        const y0 = f[0], xe = f[1], ye = f[2];
+        S.cel([[-166, y0 - 6, 1], [-190, y0 - 8 + (ye - y0) * 0.3], [xe, ye + (i - 1.5) * 6, 1], [-190, y0 + 6 + (ye - y0) * 0.3], [-166, y0 + 6, 1]], BE.paper, { depth: 3, line: 2.8, tension: 0.4, hi: false, rim: S.c.rim, shadow: BE.paperD });
+      });
+      S.cel([[-150, -28, 1], [-166, -48], [-184, -50, 1], [-170, -38], [-158, -24, 1]], BE.paper, { depth: 3, line: 2.8, tension: 0.4, hi: false, rim: S.c.rim, shadow: BE.paperD });
+    },
+  };
+  // the broken spectacles: a pair of round gold-wire lenses on the bridge, cracked; drawn live so they can float
+  function beSpecs(ctx, x, y, rot, a, hot) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha = cA(a);
+    [-1, 1].forEach((sg, i) => {
+      const cx = sg * 44, r = 25;
+      ctx.beginPath(); ctx.arc(cx, 0, r, 0, TAU); ctx.fillStyle = 'rgba(200,225,255,0.13)'; ctx.fill();
+      ctx.lineWidth = 3.4; ctx.strokeStyle = BE.ink; ctx.beginPath(); ctx.arc(cx, 0, r + 1.8, 0, TAU); ctx.stroke();
+      ctx.lineWidth = 2.6; ctx.strokeStyle = BE.gold; ctx.beginPath(); ctx.arc(cx, 0, r, 0, TAU); ctx.stroke();
+      ctx.lineWidth = 1.3; ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath();
+      if (i === 0) { ctx.moveTo(cx - 6, -4); ctx.lineTo(cx - 20, -16); ctx.moveTo(cx - 6, -4); ctx.lineTo(cx + 12, -16); ctx.moveTo(cx - 6, -4); ctx.lineTo(cx - 18, 10); ctx.moveTo(cx - 6, -4); ctx.lineTo(cx + 10, 12); }
+      else { ctx.moveTo(cx + 8, 4); ctx.lineTo(cx + 18, -12); ctx.moveTo(cx + 8, 4); ctx.lineTo(cx - 10, 14); }
+      ctx.stroke();
+      ctx.globalAlpha = cA(a) * 0.8; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(cx - 10, -12, 7, 3, -0.6, 0, TAU); ctx.fill(); ctx.globalAlpha = cA(a);
+    });
+    ctx.lineWidth = 3; ctx.strokeStyle = BE.gold; ctx.beginPath(); ctx.moveTo(-19, -2); ctx.quadraticCurveTo(0, -14, 19, -2); ctx.stroke();
+    ctx.restore();
+  }
+  // a jagged mouth polygon: a white maw with black fangs of void biting into it from the top and the bottom
+  function beMouth(ctx, cx, cy, w, open, t, hot) {
+    const h = 8 + open * 76, n = 9, top = [], bot = [];
+    for (let i = 0; i <= n; i++) { const u = i / n, x = cx + (u - 0.5) * w, bow = 1 - Math.pow(2 * u - 1, 2); top.push([x, cy - h * 0.45 * bow - 3 + (i % 2 ? 5 : -2) + sin(t * 3 + i) * 1.2]); bot.push([x, cy + h * 0.55 * bow + 3 + (i % 2 ? -5 : 2) + sin(t * 2.6 + i * 1.7) * 1.2]); }
+    ctx.save();
+    tk.glow(ctx, cx, cy, w * 0.8, '#ffffff', 0.3 + 0.4 * hot);
+    ctx.beginPath(); ctx.moveTo(top[0][0], top[0][1]); top.forEach((p) => ctx.lineTo(p[0], p[1])); for (let i = n; i >= 0; i--) ctx.lineTo(bot[i][0], bot[i][1]); ctx.closePath();
+    const gr = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.5, '#eae0ff'); gr.addColorStop(1, '#b8a4ff');
+    ctx.fillStyle = gr; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = BE.ink; ctx.stroke();
+    ctx.fillStyle = BEB.void; ctx.strokeStyle = BE.ink; ctx.lineWidth = 1.6;
+    for (let i = 0; i < n; i++) {
+      if (i % 2 === 0) { const a = top[i], b = top[i + 1], mx = (a[0] + b[0]) / 2; ctx.beginPath(); ctx.moveTo(a[0], a[1] - 2); ctx.lineTo(b[0], b[1] - 2); ctx.lineTo(mx, a[1] + 8 + 8 * open); ctx.closePath(); ctx.fill(); }
+      else { const a = bot[i], b = bot[i + 1], mx = (a[0] + b[0]) / 2; ctx.beginPath(); ctx.moveTo(a[0], a[1] + 2); ctx.lineTo(b[0], b[1] + 2); ctx.lineTo(mx, a[1] - 8 - 8 * open); ctx.closePath(); ctx.fill(); }
+    }
+    ctx.restore();
+  }
+  BE_RIG[2] = function (ctx, st) {
+    const E0 = st.E, t = st.t, m = st.m, tele = E0.tele, hurt = E0.hurt, buff = E0.buff, guard = E0.guard, die = E0.die, atk = E0.pose === 'attack', p = atk ? E0.p : 0;
+    const strike = atk ? E0.strike : 0, wind = atk ? E0.wind : 0, br = sin(TAU * t / 3.4) * m, hot = clamp(tele + buff + strike + guard * 0.3 + st.wound * 0.6 + die, 0, 1);
+    const hover = sin(t * 1.1) * 7 * m, dx = -strike * 40 + hurt * 18 + E0.shake * 1.3 + 8 * tele - 8 * wind, dy = hover - 5 * tele + 3 * guard + 4 * die - 4 * buff;
+    const rot = -0.03 * strike + 0.03 * tele + 0.05 * hurt + 0.008 * br;
+    const open = clamp(0.3 + 0.1 * sin(t * 1.7) * m + 0.9 * tele + 0.9 * strike + 0.7 * buff + 0.5 * hurt + 0.4 * wind, 0, 1);
+    const sc = (1 + 0.012 * br + 0.04 * buff + 0.03 * tele - 0.03 * guard) * (1 - 0.35 * die);
+    // arms: shoulder pose in rad (positive raises), front and back
+    let aF = -0.45 + 0.06 * sin(t * 1.3) * m, aB = -0.6 + 0.07 * sin(t * 1.3 + 1.1) * m;
+    if (atk) {
+      if (p < 0.3) { const k = sm(p / 0.3); aF = lerp(aF, 1.1, k); aB = lerp(aB, 0.8, k); }
+      else if (p < 0.5) { const k = ease.inCubic((p - 0.3) / 0.2); aF = lerp(1.1, -0.15, k); aB = lerp(0.8, -0.2, k); }
+      else { const k = sm((p - 0.5) / 0.5); aF = lerp(-0.15, -0.45, k); aB = lerp(-0.2, -0.6, k); }
+    } else if (E0.pose === 'telegraph') { aF = lerp(aF, 1.1, tele) + 0.03 * E0.shake; aB = lerp(aB, 0.9, tele) - 0.03 * E0.shake; }
+    else if (E0.pose === 'block') { aF = lerp(aF, 0.25, guard); aB = lerp(aB, 0.1, guard); }
+    else if (E0.pose === 'buff') { aF = lerp(aF, 0.7, buff); aB = lerp(aB, 0.5, buff); }
+    else if (E0.pose === 'hurt') { aF = aF - 0.25 * hurt; aB = aB - 0.25 * hurt; }
+    // the blank behind everything: a big pale glow, brighter when hot
+    ctx.save();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, dx, BEB_CY + dy, 260, '#ffffff', (0.16 + 0.28 * hot + 0.05 * sin(t * 2.3) * m) * (1 - die * 0.6)); tk.glow(ctx, dx, BEB_CY + dy, 190, BEB.lilac, 0.18 + 0.2 * hot); ctx.restore();
+    put(ctx, st, 'p2_crack', { y: 0, sy: 1 + 0.04 * br, sx: 1 + 0.1 * hot });
+    ctx.save();
+    xform(ctx, 0, BEB_CY, dx, dy, rot, sc, sc);
+    // the back arm and the ring of curling strips behind the lip
+    const n = 13;
+    ctx.save();
+    ctx.translate(70, -150);
+    put(ctx, st, 'p2_arm', { r: aB, sx: 0.8, sy: 0.8, a: 0.9, noFlash: false });
+    ctx.restore();
+    for (let i = 0; i < n; i++) {
+      const hj = hv('bestrip', 'j' + i), a = -PI / 2 + (i + 0.5 + (hj - 0.5) * 0.7) / n * TAU, s = sin(a), c = cos(a), down = Math.max(0, s), rxx = 100 * (1 - 0.4 * Math.pow(down, 1.4)) * (1 + 0.08 * Math.max(0, -s)) * 0.98, px = c * rxx, py = BEB_CY + s * 156 * 0.98;
+      if (s > 0.62) continue;                                   // none along the chin, where the crack is
+      const long = hv('bestrip', 'l' + i) > 0.4, k = (0.62 + 0.9 * hv('bestrip', 'k' + i)) * (1 - 0.4 * Math.max(0, -s)), ang = a + PI / 2 + (hv('bestrip', 'a' + i) - 0.5) * 0.9, flare = 0.5 * buff + 0.25 * tele - 0.5 * guard, wob = 0.16 * sin(t * (1.1 + 0.13 * i) + i) * m + 0.08 * hurt * (i % 2 ? 1 : -1);
+      ctx.save(); ctx.translate(px, py); ctx.rotate(ang + wob + (c > 0 ? flare : -flare) * 0.4);
+      put(ctx, st, long ? 'p2_stripA' : 'p2_stripB', { r: 0.14 * sin(t * 1.9 + i * 2) * m + (hv('bestrip', 'c' + i) - 0.5) * 0.5, sy: k * (1 + 0.08 * hot), sx: 0.8 + 0.5 * hv('bestrip', 'w' + i) });
+      ctx.restore();
+    }
+    put(ctx, st, 'p2_face', { sy: 1 + 0.01 * br, sx: 1 });
+    // the features, live, inside the void
+    {
+      const ob = blink(t, 'blankpage', 5.0) * (1 - 0.4 * hurt), look = -0.35 + 0.1 * sin(t * 0.8) * m;
+      const sq = Math.max(0.12, ob * (1 - 0.3 * (guard))), th = 1 + 0.35 * hot;
+      // eyes: slanted slits of blank light with a tiny dark pupil, and a thin tear trailing from each
+      [[-1, -50, -228, 0.34], [1, 48, -228, -0.34]].forEach((e, i) => {
+        const ex = e[1], ey = e[2], w = 44 * th, h = 18 * th * sq;
+        ctx.save(); ctx.translate(ex, ey); ctx.rotate(e[3] * (1 + 0.5 * hot));
+        tk.glow(ctx, 0, 0, 60, '#ffffff', 0.5 + 0.4 * hot);
+        ctx.beginPath(); ctx.moveTo(-w, 0); ctx.quadraticCurveTo(0, -h * 1.2, w, 0); ctx.quadraticCurveTo(0, h * 1.4, -w, 0); ctx.closePath(); ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = BE.ink; ctx.stroke();
+        if (sq > 0.3) { ctx.fillStyle = '#15082c'; ctx.beginPath(); ctx.ellipse(look * w * 0.6, 0, 4.4, h * 0.85, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(look * w * 0.6 - 1.4, -h * 0.3, 1.4, 0, TAU); ctx.fill(); }
+        ctx.restore();
+        tk.inkPath(ctx, [[ex + e[0] * 4, ey + 16], [ex + e[0] * 9, ey + 38], [ex + e[0] * 6, ey + 58]], { w: 2, color: '#ffffff', alpha: 0.7, taper: 0.5, wobble: 0.1 });
+      });
+      // black bar brows, angry, twitching
+      [[-1, -52, -258, 0.4], [1, 48, -258, -0.4]].forEach((b) => {
+        ctx.save(); ctx.translate(b[1], b[2] + 3 * hot); ctx.rotate(b[3] * (1 + 0.35 * hot) + 0.04 * sin(t * 9 + b[0]) * hot); ctx.fillStyle = BE.bar; ctx.fillRect(-32, -6, 64, 12);
+        ctx.strokeStyle = '#8a86c8'; ctx.lineWidth = 1.2; ctx.strokeRect(-32, -6, 64, 12); ctx.restore();
+      });
+      // the nose: a thin rip of light
+      ctx.save(); ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.moveTo(-2, -204); ctx.lineTo(4, -170); ctx.lineTo(-6, -150); ctx.lineTo(0, -172); ctx.closePath(); ctx.fill(); ctx.restore();
+      // the mouth and the black bar that slides across it every so often (and always when he is guarding)
+      beMouth(ctx, 0, -118, 124, open, t, hot);
+      const ph = ((t / 6.5) % 1 + 1) % 1, slide = Math.max(ph < 0.16 ? sin(ph / 0.16 * PI) : 0, guard);
+      if (slide > 0.02) { ctx.save(); ctx.globalAlpha = cA(slide * 1.4); ctx.translate(lerp(-130, 0, ease.outCubic(clamp(slide * 1.3, 0, 1))), -118); ctx.fillStyle = BE.bar; ctx.fillRect(-90, -13, 180, 26); ctx.strokeStyle = '#8a86c8'; ctx.lineWidth = 1.4; ctx.strokeRect(-90, -13, 180, 26); ctx.restore(); }
+      // the spectacles float over the eyes, bobbing and slightly askew
+      beSpecs(ctx, -1 + 2 * sin(t * 0.9) * m, -228 + 5 * sin(t * 1.3 + 1) * m - 6 * tele, 0.06 * sin(t * 0.8) * m + 0.12 * hurt, 0.95 * (1 - die), hot);
+      // letters sucked into the mouth in a spiral, the words being unwritten
+      const nl = 12 + Math.round(6 * hot);
+      for (let i = 0; i < nl; i++) {
+        const per = 1.8 + 0.8 * hv('belet', 'p' + i), u = (((t + hv('belet', 'o' + i) * per) % per) + per) % per / per, a0 = hv('belet', 'a' + i) * TAU, rad = 210 * Math.pow(1 - u, 1.3), ang = a0 + u * 3.4;
+        const x = cos(ang) * rad * 1.1, y = -118 + sin(ang) * rad * 0.8 - 20 * u, ch = 'aeoitnsrhdlcum#@?!%&'.charAt(Math.floor(hv('belet', 'c' + i) * 20));
+        ctx.save(); ctx.globalAlpha = cA(sin(u * PI) * 0.95) * (1 - die); ctx.translate(x, y); ctx.rotate(ang + u * 6); ctx.fillStyle = i % 4 === 0 ? BEB.cyan : '#ffffff'; ctx.strokeStyle = BE.ink; ctx.lineWidth = 2;
+        ctx.font = '900 ' + Math.round((12 + 8 * hv('belet', 's' + i)) * (0.4 + 0.6 * (1 - u))) + 'px ' + tk.font.num; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeText(ch, 0, 0); ctx.fillText(ch, 0, 0); ctx.restore();
+      }
+      // storm leaking through the rim: cyan arcs hopping off the edge, many more when he is hurt
+      const nz = 3 + Math.round(5 * hot) + Math.round(3 * st.wound);
+      for (let i = 0; i < nz; i++) {
+        const a = hv('bez', 'a' + i) * TAU + t * 0.1, s = sin(a), c = cos(a), rxx = 100 * (1 - 0.4 * Math.pow(Math.max(0, s), 1.4)) * 0.92, x0 = c * rxx, y0 = BEB_CY + s * 156 * 0.92;
+        zap(ctx, x0, y0, x0 + c * (38 + 40 * hv('bez', 'l' + i)), y0 + s * (38 + 40 * hv('bez', 'l' + i)) + 10, t * (0.5 + 0.2 * (i % 3)), { seed: 60 + i, w: 2.2, jag: 7, n: 5, color: BEB.cyan, core: '#ffffff' });
+      }
+      if (tele > 0.05) {
+        // the maw gathers light: rays and a swelling orb
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        tk.glow(ctx, 0, -118, 50 + 120 * tele, '#ffffff', 0.7 * tele);
+        for (let i = 0; i < 14; i++) { const a = i / 14 * TAU + t * 0.5; ctx.globalAlpha = 0.5 * tele; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cos(a) * 70, -118 + sin(a) * 60); ctx.lineTo(cos(a) * (90 + 120 * tele), -118 + sin(a) * (80 + 100 * tele)); ctx.stroke(); }
+        ctx.restore();
+      }
+    }
+    // the front arm over everything
+    ctx.save(); ctx.translate(-70, -118);
+    put(ctx, st, 'p2_arm', { r: aF });
+    ctx.restore();
+    ctx.restore();
+    ctx.restore();
+    // the rip: a long white jagged tear across the front on the strike and a burst of paper
+    if (atk && p > 0.44 && p < 0.9) {
+      const u = clamp((p - 0.44) / 0.46, 0, 1);
+      ctx.save(); ctx.globalAlpha = (1 - ease.inQuad(u)) * 0.95;
+      const pts = []; for (let k = 0; k <= 10; k++) pts.push([-80 + dx - 230 * k / 10, -110 - 20 * sin(k * 1.3) + (k % 2 ? 12 : -12)]);
+      tk.inkPath(ctx, pts, { w: 18 * (1 - u * 0.5), color: '#ffffff', taper: 0.4, wobble: 0.05, pressure: 'mid', tension: 0 });
+      tk.inkPath(ctx, pts, { w: 4, color: BEB.cyan, taper: 0.4, wobble: 0.05, pressure: 'mid', tension: 0, alpha: 0.9 });
+      ctx.restore();
+      for (let i = 0; i < 9; i++) { const fj = fling('bepg' + i, 'b', u, { spread: 240, up: 100, g: 320, bias: -80 }); ctx.save(); ctx.globalAlpha = fj.a; ctx.translate(-240 + dx + fj.x, -90 + fj.y); ctx.rotate(fj.r); ctx.fillStyle = i % 3 ? '#fff8f0' : BE.bar; ctx.fillRect(-7, -4, 14, 8); ctx.restore(); }
+    }
+    if (die > 0.2) {
+      // the end of the book: the tear flares white and snaps shut into a line
+      const u = clamp((die - 0.2) / 0.8, 0, 1);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; tk.glow(ctx, 0, BEB_CY, 120 + 220 * u, '#ffffff', 0.9 * Math.sin(u * PI)); ctx.restore();
+    }
+    if (buff > 0.1) motes(ctx, dx, -100 + dy, t, 14, 'bebbuff', { col: '#ffffff', size: 3, rise: 100, spread: 100, life: 0.9, alpha: buff });
+  };
+  // the registered boss: bounds cover all three forms, the dissolve differs per form, the rig dispatches on the phase
+  const BE_DIE = [
+    { key: 'p0', box: [-150, -340, 110, 4], nx: 11, ny: 18, from: 'top', order: 0.55, shape: 'paper', kinds: ['scrap', 'letter', 'bar', 'scrap'], cols: ['#fff8f0', '#ff2a4a', '#0b0916', '#c9b8ff'], wind: [-10, -10], size: 12, thin: 0.25, life: 0.6 },
+    { key: 'p1', box: [-170, -350, 150, 4], nx: 12, ny: 18, from: 'out', order: 0.5, shape: 'paper', kinds: ['crumb', 'crumb', 'scrap', 'ink'], cols: ['#f4a3b8', '#ffd0dc', '#c4607e', '#5a5a6a'], wind: [-6, -8], size: 13, thin: 0.2, life: 0.6 },
+    { key: 'p2', box: [-170, -360, 150, 4], nx: 12, ny: 18, from: 'in', order: 0.35, shape: 'paper', kinds: ['letter', 'scrap', 'letter', 'bar'], cols: ['#ffffff', '#fff8f0', '#5ff5ff', '#0b0916'], wind: [0, -22], size: 14, thin: 0.15, life: 0.6 },
+  ];
+  define('boss_editor', {
+    size: 'xl', lw: 3.8,
+    col: { rim: '#c9b8ff', shT: 0.42 },
+    bounds: { w: 340, h: 352, head: { x: -6, y: -330 }, body: { x: 0, y: -170 }, feet: { x: 0, y: 0 } },
+    die: (st) => BE_DIE[clamp(st.phase, 0, 2)],
+    parts: BE_P,
+    chains: BE_C,
+    rig(ctx, st) { const ph = clamp(st.phase, 0, 2); (BE_RIG[ph] || BE_RIG[0])(ctx, st); },
+  });
   // ===============================================================================================================
   // registration of every spec and the gallery
   // ===============================================================================================================
@@ -2612,5 +3759,71 @@
       ids.forEach((id, i) => ART.enemy.draw(ctx, id, { x: W * (i + 0.5) / ids.length, y: gy, s: zoom, pose, t, pt: params.pt !== undefined ? params.pt : KEYPT[pose], phase: params.phase | 0, hpPct: params.hp }));
     }
     tk.paperGrain(ctx, 0, 0, W, H, { alpha: 0.25 });
+  });
+  // ---------------------------------------------------------------------------------------------------------------
+  // gallery sheets
+  // ---------------------------------------------------------------------------------------------------------------
+  const NORMALS = ['storm_drone', 'komainu_guardian', 'redaction_knight', 'void_scribe', 'blank_soldier', 'sky_serpent', 'eraser_wraith', 'thunder_crow', 'paper_golem', 'margin_imp'];
+  const ELITES = ['censor_golem', 'storm_whelp', 'black_bar_inquisitor'];
+  const MINIONS = ['blank_page', 'spark_mote', 'typo_sprite'];
+  const cellBg = (g, w, h, t, seed) => {
+    tk.sky(g, 0, 0, w, h, 'crimson');
+    tk.glow(g, w * 0.5, h * 0.8, h * 0.6, '#ff7a5a', 0.25);
+    const fl = Math.max(0, sin(t * 0.9 + (seed || 0) * 1.7) * 6 - 5.3);
+    if (fl > 0) { g.fillStyle = 'rgba(255,240,255,' + (fl * 0.3).toFixed(3) + ')'; g.fillRect(0, 0, w, h); }
+    g.fillStyle = 'rgba(36,16,44,0.9)'; g.fillRect(0, h * 0.88, w, h * 0.12);
+    tk.kirakira(g, 0, 0, w, h * 0.85, t, { n: 6, seed: (seed || 0) + 3, size: 2, color: '#ffe9a8' });
+  };
+  const fitScale = (id, w, h, cap) => { const b = ART.enemy.bounds(id); return Math.min(h * 0.86 / (b.h + 14), w * 0.96 / (b.w + 10), cap || 2); };
+  const tierOf = (id) => (DATA.enemies && DATA.enemies[id] ? DATA.enemies[id].tier : '');
+
+  // every normal, elite and minion, each in three poses (params.poses = "idle,attack,telegraph" by default), fitted to its cell
+  ART.sheet('enemies3', (canvas, params) => {
+    const t = num(params.t, 0), poses = String(params.poses || 'idle,attack,telegraph').split(',').filter((p) => POSES.indexOf(p) >= 0);
+    const ids = NORMALS.concat(ELITES, MINIONS), np = poses.length || 1;
+    const cells = ids.map((id) => ({ id, label: id + '  (' + tierOf(id) + ')' }));
+    ART.sheetGrid(canvas, params, cells, (g, cell, w, h, i) => {
+      cellBg(g, w, h, t, i);
+      const gy = h * 0.9, sc = fitScale(cell.id, w / np, h, 1.7);
+      (poses.length ? poses : ['idle']).forEach((pose, k) => ART.enemy.draw(g, cell.id, { x: w * (k + 0.5) / np, y: gy, s: sc, pose, t: t + i * 0.37, pt: params.pt !== undefined ? params.pt : KEYPT[pose], phase: 0 }));
+    }, { cols: 4, title: 'Chapter 3, the Crimson Sky Citadel: normals, elites, minions (' + poses.join(', ') + ')', gap: 6, labelH: 16 });
+  });
+
+  // the boss: all three forms large in idle, then every pose of each form underneath
+  ART.sheet('boss3', (canvas, params) => {
+    const g = canvas.getContext('2d'), W = params.w, H = params.h, t = num(params.t, 0), id = 'boss_editor';
+    const topH = H * 0.56, gy = topH * 0.95, names = ['phase 0: the Editor', 'phase 1: the Eraser', 'phase 2: the Blank Page'];
+    backdrop(g, W, H, t, gy, 2);
+    const sc = Math.min(topH * 0.9 / 350, W / 3 * 0.9 / 330);
+    [0, 1, 2].forEach((ph) => {
+      const cx = W * (ph + 0.5) / 3;
+      ART.enemy.draw(g, id, { x: cx, y: gy, s: sc, pose: 'idle', t, pt: 0, phase: ph, hpPct: ph === 2 ? 0.25 : ph === 1 ? 0.5 : 1 });
+      g.font = '700 15px system-ui'; g.fillStyle = '#f3e6c8'; g.textAlign = 'center'; g.fillText(names[ph], cx, topH - 6);
+    });
+    const poses = ['attack', 'hurt', 'block', 'buff', 'die', 'telegraph'], bandH = (H - topH) / 3, cw = W / poses.length, s2 = Math.min(bandH * 0.84 / 350, cw * 0.96 / 340);
+    [0, 1, 2].forEach((ph) => poses.forEach((pose, k) => {
+      const x = cw * (k + 0.5), y = topH + bandH * ph + bandH * 0.9;
+      g.fillStyle = 'rgba(36,16,44,0.7)'; g.fillRect(cw * k, topH + bandH * ph, cw - 2, bandH - 2);
+      ART.enemy.draw(g, id, { x, y, s: s2, pose, t, pt: KEYPT[pose], phase: ph });
+      g.font = '600 12px system-ui'; g.fillStyle = '#c9bff0'; g.textAlign = 'center'; g.fillText('phase ' + ph + ' ' + pose, x, topH + bandH * (ph + 1) - 4);
+    }));
+    tk.paperGrain(g, 0, 0, W, H, { alpha: 0.25 });
+  });
+
+  // film strips: two creatures (params.ids), each with an idle loop, an attack and a death across the pose (8 frames each)
+  ART.sheet('enemies3_anim', (canvas, params) => {
+    const ids = String(params.ids || 'black_bar_inquisitor,spark_mote').split(',').filter((id) => SPECS[id]).slice(0, 2), n = 8, t0 = num(params.t, 0), cells = [];
+    ids.forEach((id) => {
+      for (let i = 0; i < n; i++) cells.push({ id, kind: 'idle', i, label: id.split('_')[0] + ' idle ' + (i * 0.3).toFixed(1) + 's' });
+      for (let i = 0; i < n; i++) cells.push({ id, kind: 'attack', i, label: 'attack ' + Math.round(i / (n - 1) * POSE_MS.attack) + 'ms' });
+      for (let i = 0; i < n; i++) cells.push({ id, kind: 'die', i, label: 'die ' + Math.round(i / (n - 1) * POSE_MS.die) + 'ms' });
+    });
+    ART.sheetGrid(canvas, params, cells, (g, cell, w, h) => {
+      cellBg(g, w, h, t0, 2);
+      const sc = fitScale(cell.id, w, h, 1.6), u = cell.i / (n - 1);
+      const o = { x: w * 0.5, y: h * 0.9, s: sc, t: t0 + cell.i * (cell.kind === 'idle' ? 0.3 : 0.033) };
+      if (cell.kind === 'idle') ART.enemy.draw(g, cell.id, Object.assign(o, { pose: 'idle', pt: 0 }));
+      else ART.enemy.draw(g, cell.id, Object.assign(o, { pose: cell.kind, pt: u * POSE_MS[cell.kind] / 1000 }));
+    }, { cols: n, title: 'Chapter 3 film strips: ' + ids.join(' and ') + ' (idle loop, attack, death)', gap: 4, labelH: 14 });
   });
 })();

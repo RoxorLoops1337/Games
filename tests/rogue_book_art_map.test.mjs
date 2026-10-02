@@ -485,6 +485,15 @@ t.test('a real page draws at every chapter, seed and zoom from 0.6 to 2.0 withou
   })));
   t.eq(issues(), '', 'no canvas issues from a real page');
 });
+t.test('paper: the chunk blits tile the view with no gap at any zoom or camera (no seams)', () => {
+  [[0.6, 0, 0], [1, 700.3, 411.7], [1.37, -250.5, 90.2], [2, 1500, 800.9]].forEach(([z, cx, cy]) => {
+    const rects = drawImages(record((c) => M.paper(c, 1280, 720, cx, cy, z, { doodles: false }))).filter((a) => a.length === 5).map((a) => ({ x: a[1], y: a[2], w: a[3], h: a[4] }));
+    t.ok(rects.length >= 2, `zoom ${z}: ${rects.length} chunk blits`);
+    let gaps = 0;
+    for (let x = 0; x < 1280; x += 23) for (let y = 0; y < 720; y += 19) if (!rects.some((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)) gaps++;
+    t.eq(gaps, 0, `zoom ${z}: sample points not covered by a chunk`);
+  });
+});
 t.test('performance smoke: a full screen of about 120 visible hexes with fog edge, token and frame is far below 4 ms once warm', () => {
   const Mp = pageHexes(1, 20260101, 0.6), ctx = newCtx();
   ART.sprite.clear();

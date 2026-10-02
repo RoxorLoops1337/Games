@@ -12,7 +12,7 @@
 //                    n      a number (or short string) painted in heavy comic lettering at the lower right: the intent's damage, a stack count.
 //                           For status icons n = 0 draws nothing (SCENE passes {n: 0}).
 //                    t      seconds (drives the live parts only: the tier 3 gem's orbiting sparkle, glow pulses, a rare relic's glint). The body is a
-//                           cached sprite, so animation costs one drawImage plus a few sparkles. ART.tk.opt.reduceMotion freezes it.
+//                           cached sprite, so animation costs one drawImage plus a few sparkles. ART.tk.opt.reduceMotion slows it to 0.3x (ART.tk.motion()).
 //                    dim    greyed and darkened (locked, unaffordable, spent)              glow   true | 0..1: an additive halo behind the icon
 //                    on     lit / filled (stat icons: a full ink drop or energy orb, false draws the empty outline; a socket: glowing rim)
 //                    done   tiles: the stamp fades into the ground (a resolved tile)      color  hex or a LISTS.palettes name: recolours the icon
@@ -26,7 +26,8 @@
 //   ART.icon.kinds -> the ten kinds       ART.icon.glyphOf(color) -> 'sword' | 'shield' | 'leaf' | 'star' | 'ring'  (red blue green gold any)
 //   ART.icon.glyph(ctx, name, x, y, size, opts)   just the engraved gem glyph (opts.color, opts.engrave)
 //   ART.icon.palettes(id) -> the palette name a relic icon id uses when no relic def says otherwise
-//   Gallery sheets: icons_status icons_relics icons_gems icons_tiles icons_ui (params: size=N big size, bg=paper, page=N for relics, ids=a,b)
+//   Gallery sheets: icons_status icons_relics icons_gems icons_tiles icons_ui, plus icons_motifs and icons_zoom (true pixel sizes, magnified)
+//        params: size=N big size, bg=paper, part=0|1 (relic motifs | real relics), ids=a,b, cols=N, flags=dim,glow,on,pattern,done, n=12, color=name or xRRGGBB, t=s
 //
 // LEVELS OF DETAIL. Every icon is authored in a 100 x 100 design box centred on (0, 0) (y down, key light from the upper right, so shadows fall to
 // the lower left) and its detail follows the PHYSICAL pixel size (size * ART.res): d0 under 40 px (chunky, one idea per icon, outlines never under
@@ -306,7 +307,7 @@
   // ---- the 20 pictograms (design box, glyph radius about 30)
   GLYPH.might = (S) => {
     S.spark(-24, -22, 8, { color: N.gold2 }); S.spark(26, 20, 5.5, { color: N.gold2, rot: 0.4 });
-    S.at(2, 1, 0.6, 1, 1, () => sword(S, { len: 68, w: 11 }));
+    S.at(2, 1, 0.6, 1, 1, () => sword(S, { len: S.d ? 68 : 72, w: S.d ? 11 : 15 }));
   };
   GLYPH.bulwark = (S) => {
     const shield = [[-25, -26], [0, -32, 1], [25, -26], [25, -2], [17, 17], [0, 33, 1], [-17, 17], [-25, -2]];
@@ -391,7 +392,7 @@
     S.stroke([[2, -31], [-6, -14], [7, -6], [-5, 8], [5, 18], [0, 32]], 2.2, '#ff5a6e', { ow: 0, poly: true, step: 3 });
   };
   GLYPH.weak = (S) => {
-    S.at(-4, 3, 0.5, 1, 1, () => sword(S, { len: 70, w: 11.5, broken: true, blade: '#dcd6ea' }));
+    S.at(-4, 3, 0.5, 1, 1, () => sword(S, { len: S.d ? 70 : 72, w: S.d ? 11.5 : 15, broken: true, blade: '#dcd6ea' }));
     // the snapped-off tip tumbling away
     S.at(21, -19, 1.05, 1, 1, () => S.cel(poly([[-5.2, 11], [-2, 7], [1.2, 12], [5.2, 8], [5.2, -3], [0, -16], [-5.2, -3]]), '#dcd6ea', { line: S.L(2), shadow: N.steelD, depth: 3, hi: false }));
     if (S.d) { S.spark(-24, -22, 5, { color: WHITE }); S.circle(29, -3, 1.6, WHITE); S.circle(24, 6, 1.4, WHITE); }
@@ -546,7 +547,7 @@
   };
   TYPEF.skill = (S, c) => {
     // a folding fan: five ribbed panels alternating two blues, a gold pin at the pivot
-    const cx = 0, cy = 30, R = 62, a0 = -PI * 0.86, a1 = -PI * 0.14, n = 5;
+    const cx = 0, cy = 28, R = 56, a0 = -PI * 0.85, a1 = -PI * 0.15, n = 5;
     const cols = [c || '#5fb4ff', '#e6f3ff'];
     for (let i = 0; i < n; i++) {
       const u0 = a0 + (a1 - a0) * i / n, u1 = a0 + (a1 - a0) * (i + 1) / n;
@@ -611,6 +612,7 @@
     S.g.save(); S.g.beginPath(); S.g.ellipse(12, 40, 32, 8, 0, 0, TAU); S.g.fillStyle = tk.rgba(N.gold, 0.6); S.g.fill(); S.g.restore();
     pawn(S, -24, 6, 0.74, '#5fb4ff', false);
     pawn(S, 14, 3, 1.12, col, true);
+    S.at(41, 12, 0.32, 1, 1, () => sword(S, { len: 50, w: 8.5 }));     // the vanguard carries a blade
     if (S.d) { S.stroke([[36, -34], [43, -27], [36, -20]], 4.6, N.gold, { ow: 1.6 }); S.stroke([[27, -34], [34, -27], [27, -20]], 4.6, N.gold, { ow: 1.6 }); }
   };
   ROWF.back = (S, c) => {
@@ -618,6 +620,8 @@
     S.g.save(); S.g.beginPath(); S.g.ellipse(-14, 40, 32, 8, 0, 0, TAU); S.g.fillStyle = tk.rgba(N.gold, 0.6); S.g.fill(); S.g.restore();
     pawn(S, 24, 3, 0.98, '#ee4a52', false);
     pawn(S, -14, 5, 0.9, col, true);
+    S.stroke([[-38, -8], [-38, 36]], 3.6, N.woodL, { ow: 1.5 });                    // the caster keeps a staff with a glowing tip
+    S.cel(circ(-38, -13, 6.4), '#bff4ff', { line: S.L(2), shadow: '#5fb4ff', depth: 2, hi: false, rim: '#ffffff' });
     if (S.d) { S.stroke([[-36, -34], [-43, -27], [-36, -20]], 4.6, N.gold, { ow: 1.6 }); S.stroke([[-27, -34], [-34, -27], [-27, -20]], 4.6, N.gold, { ow: 1.6 }); }
   };
   REG.row = {
@@ -1445,7 +1449,7 @@
       oc(S, [[0, 12], [-4, 22], [10, 18], [10, 12]], p.light, { depth: 3, shadow: p.shade, tension: 0.6 });
       S.circle(26, -2, 3, INK); S.circle(27, -3, 1, '#ffffff');
     });
-    S.g.save(); S.g.globalAlpha *= 0.6; S.ring(0, 30, 16, 1.6, p.glow); S.g.beginPath(); S.g.ellipse(0, 30, 24, 4.5, 0, 0, TAU); S.g.strokeStyle = p.glow; S.g.lineWidth = S.T(1.4); S.g.stroke(); S.g.restore();
+    S.g.save(); S.g.globalAlpha *= 0.6; S.g.beginPath(); S.g.ellipse(0, 31, 19, 4, 0, 0, TAU); S.g.strokeStyle = p.glow; S.g.lineWidth = S.T(1.4); S.g.stroke(); S.g.restore();
   };
   RELICF.feather = (S, p) => {
     S.glow(0, 0, 40, p.glow, 0.32);
@@ -1511,6 +1515,265 @@
     if (S.d) { S.ink([[-30, 28], [-20, 24]], { w: 1.6, color: p.glow, taper: 0.5 }); S.ink([[-28, 22], [-20, 18]], { w: 1.4, color: p.glow, taper: 0.5 }); }
   };
 
+  RELICF.flute = (S, p) => {
+    // a lacquered transverse flute lying on the diagonal: gold bindings, finger holes, a red tassel, two floating notes
+    S.at(0, 3, -0.62, 1, 1, () => {
+      oc(S, rr(-40, -6.5, 80, 13, 6), p.base, { depth: 4, shadow: p.shade, tension: 0.5, rim: p.glow, rimW: S.L(1.2) });
+      S.stroke([[-30, -3], [34, -3]], 2, '#ffffff', { ow: 0, alpha: 0.5, taperEnd: 0.5 });
+      [-36, -22, 30, 36].forEach((x) => { S.cel(rect(x - 2.2, -7.5, 4.4, 15), N.gold, { line: S.L(1.8), shadow: N.goldD, depth: 1.4, hi: false }); });
+      [-12, -3, 6, 15, 23].forEach((x) => { S.circle(x, 1, 2.9, INK); S.circle(x - 0.7, 0.3, 0.9, p.glow, 0.8); });
+      S.circle(-6, -2.8, 2.2, N.gold);   // the mouth hole
+    });
+    S.stroke(bez3([-35, 20], [-36, 28], [-42, 31], [-40, 38], 8), 2.6, N.red, { ow: 0.8, taperEnd: 0.4 });
+    S.cel(circ(-40, 38, 3.6), N.red, { line: S.L(1.8), shadow: N.redD, depth: 1.6, hi: false });
+    S.circle(21, -27, 4, N.paper); S.ring(21, -27, 4, 1.9, INK); S.stroke([[24.5, -27], [24.5, -37]], 2, INK, { ow: 0 });
+    if (S.d) { S.circle(31, -16, 3, p.glow); S.ring(31, -16, 3, 1.5, INK); S.stroke([[33.5, -16], [33.5, -25]], 1.8, INK, { ow: 0 }); }
+  };
+  RELICF.katana_guard = (S, p) => {
+    // a tsuba: a pale iron disc with a four-lobed mokko edge, a gold inlay ring, four leaf-shaped openwork cut-outs round a narrow blade slot
+    const iron = '#8f8bb0', ironD = '#4a4664';
+    const lobes = []; for (let i = 0; i < 36; i++) { const a = i * TAU / 36; lobes.push([cos(a) * (30 + 3.4 * cos(a * 4)), sin(a) * (30 + 3.4 * cos(a * 4))]); }
+    oc(S, lobes, iron, { depth: 7, shadow: ironD, rim: '#d8d4f0', rimW: S.L(1.6), tension: 0.9, line: S.L(3), hi: S.d ? '#b4b0d0' : undefined });
+    S.g.save(); S.g.beginPath(); S.g.arc(0, 0, 27, 0, TAU); S.g.strokeStyle = N.gold; S.g.lineWidth = S.T(2.4); S.g.stroke(); S.g.restore();
+    for (let i = 0; i < 4; i++) {
+      S.at(0, 0, i * PI / 2, 1, 1, () => {
+        S.cel([[0, -11], [5.4, -17], [4.4, -24], [0, -25.5, 1], [-4.4, -24], [-5.4, -17]], '#0c0820', { line: S.L(1.9), depth: 1, hi: false, shadow: '#07051a', tension: 0.7 });
+        S.circle(0, -17.5, S.d ? 1.5 : 1.8, p.base);
+      });
+    }
+    S.cel(rr(-3.6, -8.5, 7.2, 17, 3), '#0c0820', { line: S.L(2), depth: 1, hi: false, shadow: '#07051a', tension: 0.6 });
+    S.gloss(0, 0, 22, -PI * 0.9, -PI * 0.55, 2.6, 0.55);
+    S.spark(21, -22, 4.6, { color: '#ffffff' });
+  };
+  RELICF.bow = (S, p) => {
+    // a long yumi: the stave bows out to the left, the string is drawn tight, an arrow lies across the grip
+    const stave = bez3([14, -40], [-30, -22], [-30, 22], [14, 40], 14);
+    S.stroke(stave, 7, p.base, { ow: 2.1, taperStart: 0.04, taperEnd: 0.04, step: 3, poly: true });
+    S.stroke(stave.slice(2, 12).map((q) => [q[0] + 1.6, q[1]]), 2, p.glow, { ow: 0, alpha: 0.7, poly: true });
+    S.stroke([[14, -40], [14, 40]], 1.7, '#fff6e0', { ow: 1.1 });
+    S.cel(rr(-27, -9, 10, 18, 3), N.woodL, { line: S.L(2), shadow: N.woodD, depth: 2.4, hi: false, tension: 0.5 });
+    [-5, 0, 5].forEach((y) => S.stroke([[-27, y], [-17, y]], 1.4, N.woodD, { ow: 0, alpha: 0.9 }));
+    S.at(0, 0, 0, 1, 1, () => {
+      S.stroke([[-36, 0], [34, 0]], 3, N.paper, { ow: 1.4 });
+      S.cel(poly([[-40, 0], [-31, -5.5], [-31, 5.5]]), N.steel, { line: S.L(2), shadow: N.steelD, depth: 1.8, hi: false });
+      S.cel(poly([[22, 0], [30, -6], [38, -6], [34, 0], [38, 6], [30, 6]]), N.red, { line: S.L(1.8), shadow: N.redD, depth: 1.6, hi: false });
+    });
+    S.spark(-12, -30, 4.5, { color: p.glow });
+  };
+  RELICF.beads = (S, p) => {
+    // a juzu: a loop of prayer beads with a big gold master bead and a tassel
+    const n = 11;
+    for (let i = 0; i < n; i++) {
+      const a = -PI / 2 + (i + 0.5) * TAU / n + 0.0, c = [cos(a) * 27, -4 + sin(a) * 25];
+      if (i === 0) continue;
+      S.cel(circ(c[0], c[1], 8.2), i % 3 === 0 ? tk.mix(p.base, '#ffffff', 0.15) : p.base, { line: S.L(2.3), shadow: p.shade, depth: 3.2, hi: false, rim: p.glow, rimW: S.L(1) });
+      S.circle(c[0] - 2.4, c[1] - 2.6, 1.7, '#ffffff', 0.85);
+    }
+    const m = [cos(-PI / 2 + 0.5 * TAU / n) * 27, -4 + sin(-PI / 2 + 0.5 * TAU / n) * 25];
+    S.cel(circ(0, -29, 9.6), N.gold, { line: S.L(2.5), shadow: N.goldD, depth: 3.6, hi: false, rim: N.gold2 });
+    S.circle(-2.4, -31.5, 2, '#ffffff', 0.9);
+    S.stroke([[0, 21], [0, 30]], 2.6, N.red, { ow: 0.8 });
+    S.cel(circ(0, 33, 5), N.gold, { line: S.L(2), shadow: N.goldD, depth: 2, hi: false });
+    [-5, 0, 5].forEach((x) => S.stroke([[x, 37], [x * 1.4, 45]], 2.4, N.red, { ow: 0.7, taperEnd: 0.3 }));
+  };
+  RELICF.gourd = (S, p) => {
+    // a hyotan: two lobes pinched at the waist, a wooden stopper, a red cord tied round the neck, a curl of vine
+    const body = [[-7, -30], [-14, -26], [-16, -14], [-11, -4], [-17, 6], [-22, 18], [-16, 31], [0, 36], [16, 31], [22, 18], [17, 6], [11, -4], [16, -14], [14, -26], [7, -30]];
+    oc(S, body, p.base, { depth: 8, shadow: p.shade, rim: p.glow, rimW: S.L(1.6), tension: 0.9, hi: S.d ? p.light : undefined });
+    S.stroke([[-8, -22], [-11, -12]], 3.6, '#ffffff', { ow: 0, alpha: 0.6, taperStart: 0.2, taperEnd: 0.5 });
+    S.stroke([[-15, 12], [-16, 22]], 4, '#ffffff', { ow: 0, alpha: 0.55, taperStart: 0.2, taperEnd: 0.5 });
+    oc(S, rr(-6, -38, 12, 11, 3), N.woodL, { depth: 2.5, shadow: N.woodD, tension: 0.5 });
+    S.stroke([[-12, -4], [12, -4]], 4, N.red, { ow: 1.2 });
+    S.stroke([[8, -4], [14, 6], [11, 14]], 2.8, N.red, { ow: 0.8, taperEnd: 0.3 });
+    S.stroke(bez3([6, -37], [14, -42], [22, -38], [22, -30], 8), 2.4, '#3fb870', { ow: 0.8 });
+    S.cel([[22, -30], [30, -34], [30, -26], [24, -24]], '#3fb870', { line: S.L(1.8), shadow: '#17794a', depth: 1.8, hi: false });
+  };
+  RELICF.heart = (S, p) => {
+    // a heartwood charm: a lacquered heart with a carved grain, a gold bail and a red tassel
+    S.stroke([[0, -34], [0, -27]], 2.4, N.gold, { ow: 0.8 });
+    S.g.save(); S.g.beginPath(); S.g.arc(0, -35.5, 4.4, 0, TAU); S.g.strokeStyle = INK; S.g.lineWidth = S.L(5.4); S.g.stroke(); S.g.strokeStyle = N.gold; S.g.lineWidth = S.T(2.4); S.g.stroke(); S.g.restore();
+    const H = poly(unit(HEART, 0, 2, 31, 30));
+    oc(S, H, p.base, { depth: 8, shadow: p.shade, rim: p.glow, rimW: S.L(1.6), line: S.L(3), hi: S.d ? p.light : undefined });
+    S.gloss(-12, -9, 14, PI * 1.12, PI * 1.58, 4, 0.7);
+    S.clip(H, () => {
+      [[-8, 14], [4, 20], [-2, 8]].forEach((q, i) => S.ink(bez2([q[0] - 14, q[1] + 4], [q[0], q[1] - 5 - i], [q[0] + 16, q[1] + 3]), { w: 1.4, color: p.deep, alpha: 0.55, taper: 0.4, wobble: 0 }));
+      S.ink(bez2([-20, -2], [0, 6], [20, -2]), { w: 1.2, color: p.deep, alpha: 0.4, taper: 0.4, wobble: 0 });
+    });
+    S.stroke([[0, 31], [-3, 38]], 2.4, N.red, { ow: 0.7 }); [-4, 0, 4].forEach((x) => S.stroke([[x * 0.4, 36], [x * 1.5, 44]], 2.2, N.red, { ow: 0.6, taperEnd: 0.3 }));
+    S.spark(15, -14, 4.6, { color: '#ffffff' });
+  };
+  RELICF.tooth = (S, p) => {
+    // a wolf fang capped in gold and hung on a cord with two beads: wide root at the top, the curve sweeping down to a point
+    const fang = [[-14, -22], [-2, -26], [12, -22], [15, -8], [11, 8], [3, 22], [-8, 34], [-19, 41, 1], [-19, 26], [-18, 10], [-17, -6]];
+    S.stroke(bez3([-33, -36], [-30, -44], [-10, -46], [0, -33], 9), 3, p.base, { ow: 1.1 });
+    S.stroke(bez3([33, -36], [30, -44], [10, -46], [0, -33], 9), 3, p.base, { ow: 1.1 });
+    [[-31, -37], [31, -37]].forEach((b) => S.cel(circ(b[0], b[1], 4.6), N.gold, { line: S.L(1.9), shadow: N.goldD, depth: 1.8, hi: false }));
+    oc(S, fang, '#f3ead6', { depth: 6, shadow: N.boneD, rim: '#ffffff', rimW: S.L(1.4), tension: 0.8, hi: S.d ? '#ffffff' : undefined });
+    S.stroke([[-6, -12], [-3, 6], [-10, 24]], 3.8, '#ffffff', { ow: 0, alpha: 0.75, taperStart: 0.2, taperEnd: 0.6 });
+    oc(S, rr(-17, -29, 32, 11, 4), N.gold, { depth: 3, shadow: N.goldD, tension: 0.5, rim: N.gold2 });
+    S.cel(circ(-1, -33, 4), N.gold, { line: S.L(1.8), shadow: N.goldD, depth: 1.4, hi: false });
+    S.circle(-1, -33, 1.6, '#0c0820');
+    S.spark(17, -2, 4.2, { color: '#ffffff' });
+  };
+  RELICF.shell = (S, p) => {
+    // a scallop: fanned ribs, hinge ears, a pearl resting at its lip
+    const sh = [[-34, 8], [-30, -10], [-18, -26], [0, -31, 1], [18, -26], [30, -10], [34, 8], [24, 20], [0, 26, 1], [-24, 20]];
+    oc(S, sh, p.base, { depth: 8, shadow: p.shade, rim: p.glow, rimW: S.L(1.6), tension: 0.7, hi: S.d ? p.light : undefined });
+    S.clip(poly(sh), () => {
+      for (let i = -4; i <= 4; i++) S.ink([[0, 26], [i * 9.4, -33 + abs(i) * 2.2]], { w: i % 2 ? 1.6 : 2.4, color: p.deep, alpha: 0.7, taper: 0.1, wobble: 0 });
+      for (let i = -3; i <= 3; i++) S.ink([[0, 26], [i * 9.4 + 4.7, -33 + abs(i) * 2.2]], { w: 1.2, color: p.pale, alpha: 0.5, taper: 0.1, wobble: 0 });
+      S.g.save(); S.g.beginPath(); S.g.arc(0, 26, 38, PI * 1.12, PI * 1.88); S.g.strokeStyle = p.pale; S.g.lineWidth = S.T(2.4); S.g.globalAlpha *= 0.55; S.g.stroke(); S.g.restore();
+    });
+    oc(S, poly([[-13, 22], [-8, 32], [8, 32], [13, 22], [0, 26]]), tk.mix(p.base, p.dark, 0.5), { depth: 2.4, shadow: p.dark, hi: false, tension: 0.4 });
+    S.cel(circ(0, 12, 8.6), '#fff8f0', { line: S.L(2.2), shadow: '#cfc6e4', depth: 3.4, hi: false, rim: '#ffffff' });
+    S.circle(-2.4, 9.6, 2.3, '#ffffff'); S.spark(14, 4, 4.4, { color: '#ffffff' });
+  };
+  RELICF.bamboo = (S, p) => {
+    // three jointed stalks of different heights, leaves splayed from the nodes
+    const stalk = (x, top, bot, w, lean) => {
+      const sp = [[x - lean, bot], [x, (top + bot) / 2], [x + lean, top]];
+      S.stroke(sp, w, p.base, { ow: 2, step: 3 });
+      S.stroke([[x - lean - w * 0.2, bot - 3], [x + lean - w * 0.2, top + 4]], max(1.3, w * 0.22), p.glow, { ow: 0, alpha: 0.8 });
+      for (let y = bot - 12; y > top + 4; y -= 17) { const xx = x + lean * (bot - y) / (bot - top) * 2 - lean; S.stroke([[xx - w * 0.62, y], [xx + w * 0.62, y]], 2.4, p.deep, { ow: 0.6 }); }
+    };
+    stalk(-17, -12, 36, 8, 1.5); stalk(1, -34, 38, 10, -1); stalk(19, -2, 36, 8, 2);
+    const leaf = (x, y, a, l) => S.at(x, y, a, 1, 1, () => S.cel([[0, 0], [l * 0.3, -4.6], [l * 0.75, -3.4], [l, 0, 1], [l * 0.75, 3.4], [l * 0.3, 4.6]], '#4fd27a', { line: S.L(1.8), shadow: '#17794a', depth: 1.8, hi: false, tension: 0.7 }));
+    leaf(2, -24, -0.9, 22); leaf(2, -24, -2.3, 20); leaf(-15, 0, -2.5, 18); leaf(-15, -4, -0.3, 17); leaf(20, 10, -0.8, 17);
+    S.spark(-26, -26, 4.5, { color: '#d8ffe0' });
+  };
+  RELICF.plum = (S, p) => {
+    // a plum blossom pendant: five round petals with a notch, gold stamens, a gold bail on a short chain
+    S.stroke([[0, -43], [0, -36]], 2, N.gold, { ow: 0.7 });
+    S.cel(circ(0, -34, 3.6), N.gold, { line: S.L(1.8), shadow: N.goldD, depth: 1.5, hi: false });
+    for (let i = 0; i < 5; i++) {
+      const a = -PI / 2 + i * TAU / 5;
+      S.at(cos(a) * 14.5, 2 + sin(a) * 14.5, a + PI / 2, 1, 1, () => S.cel(circ(0, 0, 12.6), i % 2 ? tk.mix(p.base, '#ffffff', 0.35) : p.base, { line: S.L(2.4), shadow: p.shade, depth: 4, hi: false, rim: p.glow, rimW: S.L(1) }));
+    }
+    S.cel(circ(0, 2, 8), N.gold, { line: S.L(2.2), shadow: N.goldD, depth: 2.6, hi: false, rim: N.gold2 });
+    for (let i = 0; i < 6; i++) { const a = i * TAU / 6 + 0.3; S.stroke([[0, 2], [cos(a) * 11, 2 + sin(a) * 11]], 1.3, N.goldD, { ow: 0 }); S.circle(cos(a) * 11, 2 + sin(a) * 11, 1.6, N.gold2); }
+    S.spark(22, -24, 4.4, { color: '#ffffff' });
+  };
+  RELICF.maple = (S, p) => {
+    // a five-lobed maple leaf with a stem and a heart of veins, a second leaf drifting
+    const L5 = [[0, -36, 1], [6, -22], [14, -26], [12, -12, 1], [26, -14], [20, -2], [32, 4, 1], [18, 12], [22, 22], [8, 18], [3, 30], [0, 36, 1], [-3, 30], [-8, 18], [-22, 22], [-18, 12], [-32, 4, 1], [-20, -2], [-26, -14], [-12, -12, 1], [-14, -26], [-6, -22]];
+    S.at(0, -1, -0.08, 1, 1, () => {
+      oc(S, L5, p.base, { depth: 7, shadow: p.shade, rim: p.glow, rimW: S.L(1.5), tension: 0.35, hi: S.d ? p.light : undefined });
+      S.clip(poly(L5.map((q) => [q[0], q[1]])), () => { S.fill(poly([[-40, 40], [40, 40], [40, 14], [0, 8], [-40, 14]]), p.shade, 0.35); });
+      [[0, 34, 0, -28], [0, 12, -22, -2], [0, 12, 22, -2], [0, -6, -12, -20], [0, -6, 12, -20]].forEach((q) => S.ink([[q[0], q[1]], [q[2], q[3]]], { w: 1.6, color: p.deep, alpha: 0.7, taper: 0.5, wobble: 0 }));
+      S.stroke([[0, 34], [1, 42]], 3, N.woodD, { ow: 0.9, taperEnd: 0.2 });
+    });
+    S.spark(-24, -28, 4.4, { color: '#fff6d0' });
+  };
+  RELICF.shrine = (S, p) => {
+    // a saisen-bako offering box: slatted lid, a wooden body with gold bands and a red tie, a coin dropping in
+    oc(S, poly([[-32, -6], [-24, -20], [24, -20], [32, -6]]), N.woodL, { depth: 4, shadow: N.woodD, hi: false, tension: 0.2 });
+    [-14, -4, 6, 16].forEach((x) => S.ink([[x * 0.9, -19.5], [x * 1.18, -6.5]], { w: 2.2, color: N.woodD, taper: 0, pressure: 'flat', wobble: 0 }));
+    oc(S, rr(-32, -6, 64, 38, 3), N.wood, { depth: 6, shadow: N.woodD, tension: 0.3, rim: '#ffe0a8' });
+    S.fill(rect(-32, 2, 64, 6), p.base); S.fill(rect(-32, 22, 64, 5), p.base);
+    S.ink([[-32, 2], [32, 2]], { w: 1.5, taper: 0, pressure: 'flat', wobble: 0 }); S.ink([[-32, 8], [32, 8]], { w: 1.5, taper: 0, pressure: 'flat', wobble: 0 });
+    S.cel(circ(0, 15, 7.4), N.gold, { line: S.L(2.2), shadow: N.goldD, depth: 2.6, hi: false, rim: N.gold2 });
+    S.cel(rect(-2.6, 12.4, 5.2, 5.2), p.plate, { line: S.L(1.4), depth: 1, hi: false });
+    [-30, 30].forEach((x) => S.cel(circ(x, 27, 2.6), N.gold, { line: S.L(1.6), depth: 1, hi: false, shadow: N.goldD }));
+    S.at(21, -33, 0.3, 1, 0.6, () => S.cel(circ(0, 0, 8), N.gold, { line: S.L(2.2), shadow: N.goldD, depth: 2.4, hi: false, rim: N.gold2 }));
+    S.spark(30, -40, 5, { color: '#ffffff' });
+  };
+  RELICF.bridge = (S, p) => {
+    // a red taiko-bashi over water: a stone body with a dark arch opening, the curved deck, railing posts with gilt caps
+    const arch = bez3([-40, 6], [-24, -30], [24, -30], [40, 6], 16);
+    const body = arch.map((q) => [q[0], q[1] + 1]).concat([[40, 30], [-40, 30]]);
+    S.cel(poly(body), '#8f8bb0', { line: S.L(2.4), depth: 4, shadow: '#4a4664', hi: false, tension: 0.3 });
+    S.g.save(); S.g.beginPath(); S.g.ellipse(0, 30, 21, 21, 0, PI, TAU); S.g.closePath(); S.g.fillStyle = '#0c0820'; S.g.fill(); S.g.lineWidth = S.L(2.2); S.g.strokeStyle = INK; S.g.stroke(); S.g.restore();
+    S.stroke(arch.map((q) => [q[0], q[1] + 1]), 9, p.base, { ow: 2.4, poly: true, step: 3 });
+    S.stroke(arch.map((q) => [q[0], q[1] + 4]), 2.2, p.dark, { ow: 0, alpha: 0.8, poly: true, step: 3 });
+    [0.1, 0.3, 0.5, 0.7, 0.9].forEach((u) => { const q = arch[Math.round(u * 16)]; S.stroke([[q[0], q[1] - 2], [q[0], q[1] - 13]], 3.8, N.red, { ow: 1.3 }); });
+    S.stroke(arch.map((q) => [q[0], q[1] - 12]), 2.6, N.red, { ow: 1, poly: true, step: 3 });
+    [0.1, 0.9].forEach((u) => { const q = arch[Math.round(u * 16)]; S.cel(circ(q[0], q[1] - 15, 3.2), N.gold, { line: S.L(1.6), shadow: N.goldD, depth: 1.2, hi: false }); });
+    S.clip(rr(-39, -39, 78, 78, 15), () => S.fill(poly([[-44, 30], [44, 30], [44, 44], [-44, 44]]), tk.mix(p.dark, '#2a60a8', 0.6), 0.95));
+    for (let i = 0; i < 2; i++) S.ink(bez3([-38, 34 + i * 4], [-26, 30 + i * 4], [-14, 38 + i * 4], [0, 34 + i * 4]).concat(bez3([0, 34 + i * 4], [14, 30 + i * 4], [26, 38 + i * 4], [38, 34 + i * 4])), { w: 1.9, color: '#bfe4ff', alpha: 0.85 - i * 0.25, taper: 0.3, wobble: 0 });
+    S.spark(26, -28, 4.4, { color: '#fff6d0' });
+  };
+  RELICF.petal = (S, p) => {
+    // a pressed sakura petal on a slip of washi: notched tip, veins, a second petal fallen beside
+    S.at(-3, 0, -0.18, 1, 1, () => {
+      oc(S, rr(-24, -34, 48, 68, 3), '#f6ead0', { depth: 5, shadow: '#cdb98e', tension: 0.25, rim: '#ffffff' });
+      S.fill(rect(-24, -34, 48, 8), p.base, 0.9); S.ink([[-24, -26], [24, -26]], { w: 1.4, taper: 0, pressure: 'flat', wobble: 0 });
+      const pet = [[0, 26], [-10, 14], [-16, -2], [-12, -16], [-4, -20], [0, -13, 1], [4, -20], [12, -16], [16, -2], [10, 14]];
+      S.at(0, 5, 0, 1, 1, () => {
+        oc(S, pet, p.base, { depth: 5.5, shadow: p.shade, rim: p.glow, rimW: S.L(1.3), tension: 0.85, hi: S.d ? p.light : undefined });
+        [[0, 24, 0, -8], [0, 22, -8, -10], [0, 22, 8, -10]].forEach((q) => S.ink([[q[0], q[1]], [q[2], q[3]]], { w: 1.3, color: p.deep, alpha: 0.6, taper: 0.5, wobble: 0 }));
+      });
+    });
+    S.at(27, 24, 0.9, 0.55, 0.55, () => S.cel([[0, 26], [-10, 14], [-16, -2], [-12, -16], [-4, -20], [0, -13, 1], [4, -20], [12, -16], [16, -2], [10, 14]], tk.mix(p.base, '#ffffff', 0.25), { line: S.L(2.8), shadow: p.shade, depth: 4, hi: false, tension: 0.85 }));
+  };
+  RELICF.flame = (S, p) => {
+    // an ember charm: a fat three-tone flame on a charm ring and cord, sparks lifting off
+    S.glow(0, 6, 40, '#ff9a2e', 0.5);
+    oc(S, [[0, -38, 1], [9, -24], [22, -10], [24, 8], [16, 24], [0, 32], [-16, 24], [-24, 8], [-19, -6], [-10, -16], [-8, -28]], p.base, { depth: 8, shadow: p.dark, rim: '#ffd06a', rimW: S.L(1.5), tension: 0.8, hi: false });
+    oc(S, [[0, -14, 1], [9, -2], [14, 12], [7, 25], [0, 28], [-8, 24], [-14, 12], [-8, -2]], '#ff9a2e', { depth: 5, shadow: '#d0451a', hi: false, tension: 0.8, line: S.L(2) });
+    oc(S, [[0, 2, 1], [6, 12], [4, 22], [0, 24], [-5, 21], [-6, 12]], '#ffe27a', { depth: 3, shadow: '#f0a020', hi: false, tension: 0.8, line: S.L(1.8) });
+    S.cel(circ(0, 14, 4.4), '#fff8d8', { line: false, depth: 1, hi: false });
+    [[-24, -22, 2.6], [24, -26, 2.2], [19, -4, 1.8]].forEach((q) => { S.circle(q[0], q[1], q[2], '#ffd06a'); });
+    S.g.save(); S.g.beginPath(); S.g.arc(0, 38, 5, 0, TAU); S.g.strokeStyle = INK; S.g.lineWidth = S.L(5.6); S.g.stroke(); S.g.strokeStyle = N.gold; S.g.lineWidth = S.T(2.4); S.g.stroke(); S.g.restore();
+  };
+  RELICF.snowflake = (S, p) => {
+    // six arms, each with two side branches, and a hexagonal gem heart
+    S.glow(0, 0, 40, p.glow, 0.35);
+    for (let i = 0; i < 6; i++) {
+      const a = -PI / 2 + i * PI / 3;
+      S.at(0, 0, a + PI / 2, 1, 1, () => {
+        S.stroke([[0, 0], [0, -35]], 6, '#eaf6ff', { ow: 2, taperEnd: 0.12 });
+        S.stroke([[0, -14], [-10, -26]], 4, '#eaf6ff', { ow: 1.7 }); S.stroke([[0, -14], [10, -26]], 4, '#eaf6ff', { ow: 1.7 });
+        S.stroke([[0, -26], [-7, -33]], 3.4, '#eaf6ff', { ow: 1.5 }); S.stroke([[0, -26], [7, -33]], 3.4, '#eaf6ff', { ow: 1.5 });
+        S.stroke([[0, -4], [0, -33]], 1.8, p.base, { ow: 0, alpha: 0.9 });
+      });
+    }
+    S.cel(poly(ngon(0, 0, 10, 6, -PI / 2)), p.base, { line: S.L(2.4), shadow: p.shade, depth: 3, hi: false, rim: '#ffffff' });
+    S.circle(-2, -3, 2.2, '#ffffff', 0.9);
+    S.spark(25, -26, 5, { color: '#ffffff' });
+  };
+  RELICF.bolt = (S, p) => {
+    // a thunder wheel: a gold-studded ring in the colour of the palette, a fat bolt through the middle
+    S.glow(0, 0, 44, p.glow, 0.45);
+    S.cel(circ(0, 0, 33), p.base, { line: S.L(3), shadow: p.shade, depth: 7, rim: p.glow, rimW: S.L(1.6), hi: false });
+    S.cel(circ(0, 0, 23.5), p.plate, { line: S.L(2.4), depth: 4, hi: false, shadow: tk.mix(p.plate, INK, 0.5) });
+    for (let i = 0; i < 8; i++) { const a = i * PI / 4 + PI / 8; S.circle(cos(a) * 28.2, sin(a) * 28.2, 2.4, N.gold); }
+    S.cel(poly([[11, -30], [-14, 3], [-2, 3], [-10, 31], [15, -4], [3, -4], [14, -30]]), '#fff2a0', { line: S.L(2.6), shadow: '#f3b830', depth: 5, rim: '#ffffff', hi: false });
+    S.spark(-20, -22, 4.4, { color: '#fff6c0' });
+  };
+  RELICF.ink_drop = (S, p) => {
+    // a stoppered vial of spare ink: a round glass flask, the ink inside shining cyan at the rim, a fat drop on its label
+    S.cel(rr(-6, -36, 12, 10, 3), N.woodL, { line: S.L(2.2), shadow: N.woodD, depth: 2, hi: false, tension: 0.5 });
+    S.cel(rr(-7.5, -28, 15, 11, 3), '#dcecff', { line: S.L(2.2), shadow: '#a9c4e8', depth: 2, hi: false, tension: 0.5 });
+    S.cel(circ(0, 7, 27), '#dcecff', { line: S.L(3), shadow: '#a9c4e8', depth: 5, hi: false, rim: '#ffffff', rimW: S.L(1.4) });
+    S.clip(circ(0, 7, 24.5), () => {
+      S.fill(poly([[-30, -4], [-12, -7], [0, -3], [12, -7], [30, -4], [30, 40], [-30, 40]]), '#241a3a');
+      S.fill(poly([[-30, 24], [30, 24], [30, 40], [-30, 40]]), '#140f2e');
+      S.ink(bez2([-24, -4], [-12, -9], [0, -3]).concat(bez2([0, -3], [12, -9], [24, -4])), { w: 2, color: pal.cyan, alpha: 0.85, taper: 0.3, wobble: 0 });
+    });
+    S.cel(unit(DROP, 0, 11, 8.6, 11), p.base, { line: S.L(1.8), shadow: p.shade, depth: 2.4, rim: p.glow, hi: false });
+    S.stroke([[-17, -6], [-21, 6], [-17, 18]], 4, '#ffffff', { ow: 0, alpha: 0.85, taperStart: 0.2, taperEnd: 0.4 });
+    S.spark(20, -10, 4.4, { color: pal.cyan });
+  };
+
+  // the ten motifs the card illustrator already paints as large objects (lotus moon sun star dragon tiger crane fox skull eye): reused on the plate
+  // so the whole game shares ONE drawing of each, with a chunky hand-drawn stand-in when ART.card.motif is missing
+  const SHARED = ['lotus', 'moon', 'sun', 'star', 'dragon', 'tiger', 'crane', 'fox', 'skull', 'eye'];
+  SHARED.forEach((m) => {
+    RELICF[m] = (S, p) => {
+      if (ART.card && typeof ART.card.motif === 'function' && ART.has('motif', m)) {
+        const g = S.g;
+        g.save();
+        g.beginPath(); tk.trace(g, rr(-39, -39, 78, 78, 15), 0, 0, 0.72); g.clip();   // the card art overshoots a little: keep it inside the plate
+        g.scale(100 / S.size, 100 / S.size);                // back to physical CSS px so the motif picks the right level of detail
+        ART.card.motif(g, m, 0, 0, S.size * 0.74, p.name || 'gold', undefined);
+        g.restore();
+      } else {
+        S.cel(circ(0, 0, 26), p.base, { line: S.L(3), shadow: p.shade, depth: 6, rim: p.glow, hi: false });
+        S.spark(0, 0, 18, { color: '#ffffff' });
+      }
+    };
+  });
+
   // relic spec: a relic id (def.art gives motif and palette) or a bare LISTS.relicIcons id (the palette of the first relic that uses it)
   let ICON_PAL = null;
   function iconPalette(motif) {
@@ -1541,11 +1804,48 @@
   ART.icon.palettes = (motif) => iconPalette(motif);
   // @@RELICS@@
 
-  // @@KINDS@@
+  // ---------------------------------------------------------------------------------------------------------------
+  // MOTIF: any LISTS.motifs id as a standalone round icon: the card illustrator's own drawing (ART.card.motif) on a lacquered wash disc
+  // ---------------------------------------------------------------------------------------------------------------
+  const MOTIF_PAL = { slash: 'rose', cross_slash: 'crimson', thrust: 'amber', crescent: 'moon', iai: 'ink', petals: 'rose', bloom: 'rose', petal_storm: 'rose', wind: 'jade', shield: 'azure', barrier: 'indigo', talisman: 'moon', lotus: 'jade', moon: 'moon', sun: 'crimson', star: 'gold', lightning: 'gold', thunder_fist: 'amber', chain_lightning: 'azure', fire: 'crimson', flame_orb: 'amber', ice: 'azure', ink_splash: 'violet', ink_wave: 'indigo', brush_stroke: 'ink', calligraphy: 'gold', scroll: 'amber', eye: 'violet', mask: 'ink', fan: 'rose', bell: 'gold', lantern: 'amber', koi: 'teal', dragon: 'jade', tiger: 'amber', crane: 'azure', fox: 'crimson', web: 'ash', thorns: 'jade', poison_bloom: 'violet', skull: 'ash', heal_light: 'jade', spirit_orb: 'moon', torii: 'crimson', mirror: 'gold', sword_rain: 'azure', meteor: 'crimson', wave: 'teal', tornado: 'jade', quake: 'amber', fist: 'crimson', kick: 'amber', arrow: 'crimson', coin: 'gold', key: 'jade', book: 'teal', quill: 'moon', void: 'ink', sigil: 'violet' };
+  function motifSpec(id, o) {
+    if (L.motifs.indexOf(id) < 0) return null;
+    const named = o && typeof o.color === 'string' && tk.fams[o.color] ? o.color : null;
+    const pn = named || MOTIF_PAL[id] || 'ash', f = famOf(pn), t = tone(f.base);
+    return {
+      key: 'motif|' + id + '|' + pn, glow: f.base,
+      render(S) {
+        const g = S.g, disc = circ(0, 0, 44);
+        S.cel(disc, f.dark, { line: S.L(3.4), depth: 9, shadow: tk.mix(f.dark, INK, 0.5), rim: f.light, rimW: S.L(1.6), hi: false, halftone: { d: 5.5, alpha: 0.3 } });
+        S.clip(circ(0, 0, 41), () => {
+          g.fillStyle = tk.lin(g, 0, -42, 0, 42, [[0, f.light], [0.55, f.base], [1, f.dark]]); g.fillRect(-45, -45, 90, 90);
+          if (S.d) S.glow(0, -6, 38, t.glow, 0.28);
+          if (ART.card && typeof ART.card.motif === 'function' && ART.has('motif', id)) {
+            g.save(); g.scale(100 / S.size, 100 / S.size);
+            ART.card.motif(g, id, 0, 1, S.size * 0.92, pn, undefined);
+            g.restore();
+          } else S.spark(0, 0, 20, { color: WHITE });
+        });
+        g.save(); g.beginPath(); g.arc(0, 0, 41.5, 0, TAU); g.strokeStyle = tk.rgba(N.gold, 0.9); g.lineWidth = S.T(1.8); g.stroke(); g.restore();
+        S.ring(0, 0, 44, 3.2, INK, 0.0);
+        if (S.d >= 2) tk.paperGrain(g, -44, -44, 88, 88, { alpha: 0.12 });
+      },
+    };
+  }
+  REG.motif = { ids: L.motifs.slice(), resolve: motifSpec };
 
   // ---------------------------------------------------------------------------------------------------------------
   // gallery: contact sheets. A cell shows the icon big, then the sizes the game really uses side by side.
   // ---------------------------------------------------------------------------------------------------------------
+  // gallery params to opts: flags=dim,glow,on,pattern,done (comma list), n=12, color=azure or a hex
+  function flagOpts(params) {
+    const o = { t: num(params.t, 0) };
+    String(params.flags || '').split(',').forEach((f) => { if (f) o[f] = true; });
+    if (params.on === '0') o.on = false;
+    if (params.n !== undefined) o.n = params.n;
+    if (params.color) o.color = String(params.color).charAt(0) === 'x' ? '#' + String(params.color).slice(1) : params.color;
+    return o;
+  }
   function multi(g, kind, id, w, h, o) {
     o = o || {};
     const sizes = o.sizes || [48, 32, 24, 16];
@@ -1561,34 +1861,36 @@
       const list = typeof params.ids === 'string' ? params.ids.split(',') : (typeof ids === 'function' ? ids() : ids);
       const paper = params.bg === 'paper';
       ART.sheetGrid(canvas, params, list.map((id) => ({ label: id, id })), (g, cell, w, h) => {
-        multi(g, kind, cell.id, w, h, { big: num(params.size, 0) || o.big, sizes: o.sizes, opts: o.opts ? o.opts(cell.id, params) : { t: num(params.t, 0) } });
+        multi(g, kind, cell.id, w, h, { big: num(params.size, 0) || o.big, sizes: o.sizes, opts: o.opts ? o.opts(cell.id, params) : flagOpts(params) });
       }, { title: o.title || name, cols: params.cols || o.cols, aspect: o.aspect || 1.5, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
     });
   }
   iconSheet('icons_status', 'status', () => REG.status.ids, { title: 'ART.icon status: 8 buffs (warm and blue), 4 resources (hero colours, gold rim), 8 debuffs (red-violet)', cols: 5, big: 150 });
 
+  iconSheet('icons_motifs', 'motif', () => REG.motif.ids, { title: 'ART.icon motif: every LISTS.motifs id as a round standalone icon (ART.card.motif on a wash disc)', cols: 10, big: 110, aspect: 1.2 });
+
   // icons_relics: the LISTS.relicIcons motifs (default palettes) and, below them, every relic of DATA.relics with its real palette and rarity rim.
-  // params: part=0 (motifs only) or part=1 (relics only), size, bg=paper, cols
+  // params: part=0 (motifs only) or part=1 (relics only), size (big icon edge), bg=paper, cols, ids=a,b, t
   ART.sheet('icons_relics', (canvas, params) => {
     const g = canvas.getContext('2d');
     const W = num(params.w, 1600), H = num(params.h, 900);
     const only = typeof params.ids === 'string' ? params.ids.split(',') : null;
     const motifs = L.relicIcons.filter((id) => !only || only.indexOf(id) >= 0).map((id) => ({ label: id, id }));
     const relics = Object.keys(DATA.relics || {}).filter((id) => !only || only.indexOf(id) >= 0).map((id) => ({ label: id, id }));
-    const parts = params.part === undefined ? [motifs, relics] : [params.part === 1 ? relics : motifs];
+    const part = params.part === undefined ? -1 : num(params.part, 0);
+    const parts = part < 0 ? [[motifs, 'the ' + L.relicIcons.length + ' LISTS.relicIcons motifs (default palettes)'], [relics, 'every DATA.relics id with its real palette and rarity rim (' + relics.length + ')']] : [part === 1 ? [relics, 'every DATA.relics id with its real palette (' + relics.length + ')'] : [motifs, 'the ' + motifs.length + ' LISTS.relicIcons motifs (default palettes)']];
     const paper = params.bg === 'paper';
-    const share = parts.length === 1 ? [1] : [0.5, 0.5];
     let y0 = 0;
-    parts.forEach((cells, k) => {
-      const h = H * share[k];
+    parts.forEach((pt, k) => {
+      const h = H * (parts.length === 1 ? 1 : (k === 0 ? 0.47 : 0.53));
+      const cells = pt[0], cols = num(params.cols, 0) || (parts.length === 1 ? 10 : (k === 0 ? 15 : 17));
       g.save(); g.translate(0, y0);
       ART.sheetGrid({ getContext: () => g }, { w: W, h }, cells, (gg, cell, w, hh) => {
-        const kind = 'relic';
-        const big = min(hh * 0.9, w * 0.5);
-        ART.icon.draw(gg, kind, cell.id, big / 2 + 3, hh / 2, big, { t: num(params.t, 0) });
+        const big = min(num(params.size, 0) || 9999, hh * 0.9, w * 0.64);
+        ART.icon.draw(gg, 'relic', cell.id, big / 2 + 3, hh / 2, big, flagOpts(params));
         let x = big + 10;
-        [[32, hh * 0.3], [24, hh * 0.72]].forEach((q) => { ART.icon.draw(gg, kind, cell.id, x + q[0] / 2, q[1], q[0], { t: num(params.t, 0) }); });
-      }, { title: k === 0 && parts.length > 1 || parts[0] === motifs ? 'ART.icon relic: the ' + motifs.length + ' LISTS.relicIcons motifs (default palettes)' : 'ART.icon relic: every DATA.relics id with its real palette (' + relics.length + ')', cols: params.cols || (parts.length === 1 ? 10 : (k === 0 ? 15 : 17)), aspect: 1.25, pad: 6, gap: 4, labelH: 14, bg: paper ? 'paper' : 'night' });
+        [[32, hh * 0.3], [24, hh * 0.72]].forEach((q) => { if (x + q[0] < w) ART.icon.draw(gg, 'relic', cell.id, x + q[0] / 2, q[1], q[0], flagOpts(params)); });
+      }, { title: 'ART.icon relic: ' + pt[1], cols, aspect: 1.25, pad: 6, gap: 4, labelH: 14, bg: paper ? 'paper' : 'night' });
       g.restore();
       y0 += h;
     });
@@ -1600,18 +1902,19 @@
     ART.icon.ids('tile').forEach((id) => { cells.push({ label: id, id, done: false }); cells.push({ label: id + ' (done)', id, done: true }); });
     const paper = params.bg !== 'dark';
     ART.sheetGrid(canvas, params, cells, (g, cell, w, h) => {
-      multi(g, 'tile', cell.id, w, h, { big: num(params.size, 0) || 120, sizes: [52, 40, 30, 20], opts: { t: num(params.t, 0), done: cell.done } });
+      multi(g, 'tile', cell.id, w, h, { big: num(params.size, 0) || 120, sizes: [52, 40, 30, 20], opts: Object.assign(flagOpts(params), { done: cell.done }) });
     }, { title: 'ART.icon tiles: hanko stamps with black-ink drawings (opts.done fades them into the page)', cols: params.cols || 7, aspect: 1.3, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
   });
 
   // icons_gems: every gem and every empty socket at four sizes (params: size, bg=paper, gray=1 draws in greyscale to prove the glyphs carry the colour,
   // pattern=1 the colour-blind glyph size, cols)
   ART.sheet('icons_gems', (canvas, params) => {
-    const cells = ART.icon.ids('gem').map((id) => ({ label: id, id }));
+    const only = typeof params.ids === 'string' ? params.ids.split(',') : null;
+    const cells = ART.icon.ids('gem').filter((id) => !only || only.indexOf(id) >= 0).map((id) => ({ label: id, id }));
     const paper = params.bg === 'paper';
     ART.sheetGrid(canvas, params, cells, (g, cell, w, h) => {
       if (params.gray) g.filter = 'grayscale(1)';
-      multi(g, 'gem', cell.id, w, h, { big: num(params.size, 0) || 110, sizes: [46, 32, 24, 16], opts: { t: num(params.t, 0), pattern: !!params.pattern } });
+      multi(g, 'gem', cell.id, w, h, { big: num(params.size, 0) || 110, sizes: [46, 32, 24, 16], opts: Object.assign(flagOpts(params), params.pattern ? { pattern: true } : {}) });
       if (params.gray) g.filter = 'none';
     }, { title: 'ART.icon gems: 5 cuts x 4 colours x 3 tiers, and empty sockets (sword red, shield blue, leaf green, star gold, ring prism)', cols: params.cols || 8, aspect: 1.35, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
   });
@@ -1623,7 +1926,7 @@
     kinds.forEach((k) => ART.icon.ids(k).forEach((id) => cells.push({ label: k + ' ' + id, kind: k, id, n: k === 'intent' && /attack|multi|heavy/.test(id) ? 12 : undefined })));
     const paper = params.bg === 'paper';
     ART.sheetGrid(canvas, params, cells, (g, cell, w, h) => {
-      multi(g, cell.kind, cell.id, w, h, { big: num(params.size, 0) || 120, sizes: [40, 32, 24, 16], opts: { t: num(params.t, 0), n: cell.n } });
+      multi(g, cell.kind, cell.id, w, h, { big: num(params.size, 0) || 120, sizes: [40, 32, 24, 16], opts: Object.assign(flagOpts(params), cell.n !== undefined && params.n === undefined ? { n: cell.n } : {}) });
     }, { title: 'ART.icon intents (sumi-e), stats, brushes (mini hex grids), card types, rows', cols: params.cols || 7, aspect: 1.35, pad: 8, gap: 6, labelH: 16, bg: paper ? 'paper' : 'night' });
   });
 

@@ -1,4 +1,42 @@
-// Inkwoven -- ART.map: the hand-painted map page. Extends ART (art.js). WORK IN PROGRESS HEADER (rewritten at the end of the build).
+// Inkwoven -- ART.map: the hand-painted map page (extends ART from art.js; DESIGN 4.8 geometry, 5.6 signatures, ART_BIBLE 6 look).
+//
+// The look: a storybook page being coloured in. Unpainted hexes are blank parchment with stitched dotted edges and faint pencil sketches; landmarks
+// (boss shop camp forge elite chest) are known from the start and show a ghost silhouette of their stamp. Painted hexes are watercolour washes
+// (a pigment per tile type, wet edge, granulation, a hard cel shadow with screen-tone, a wobbly ink outline varied by seed) with the tile's ink
+// stamp on top (ART.icon kind 'tile' when real art exists, otherwise a built-in hanko + glyph, so the page is complete either way).
+//
+// API (all safe with the headless no-op context, never throw for bad input, deterministic, no Math.random). Hex geometry: pointy-top, `size` is the
+// centre-to-corner radius (46 at zoom 1), (x, y) is the hex CENTRE. Everything below is in the caller's current transform.
+//   ART.map.hex(ctx, kind, x, y, size, opts)       kind in DATA.LISTS.mapKinds: fog known ground block painted edge path hover target.
+//        opts {tile, seed, done, t}: tile = LISTS.tiles id (wash and stamp; 'known' needs a landmark id), seed = U.hash(q, r), done fades the stamp,
+//        t = seconds (drives the live touches: camp and forge glow, chest glint, well ripple, boss and elite pulse, edge and target marching dashes).
+//        Cached per (kind, tile, done, seed % 8, size rung): sprites are baked on a ladder of sizes 12 percent apart and scaled, at most 8 new bakes per
+//        frame (neighbour rung is scaled meanwhile), so a smooth zoom 0.6..2.0 never stalls. 'path' 'hover' 'target' are translucent overlays drawn
+//        over the hex that is already there; 'edge' is a fog hex touching painted ground (lit, gold stitches: it can be painted); 'block' is the Void.
+//   ART.map.paintBloom(ctx, x, y, size, p, opts?)  the reveal, p 0..1. opts {tile, seed, fromX, fromY, ox, oy}. With opts.tile the wash is revealed
+//        inside a growing wet blot (draw the fog hex first); without it a neutral wet wash fades out over a hex already painted. fromX/fromY = where the
+//        brush arrives from. Droplets, a pale back-run ring, a gleam streak and a final sparkle; p >= 1 draws the settled painted hex.
+//   ART.map.token(ctx, heroIds, x, y, t, moving, opts?)  the two chibi tokens (ART.hero.draw scaled down, leader larger in front, second behind),
+//        soft shadows, a gold ink ring, idle bob or walk cycle. opts {size, dir (1 or -1 faces right or left), alpha, ring}.
+//   ART.map.frame(ctx, w, h, t)                    the open book: leather cover, page stack, gutter with sewing, bookmark ribbon, gilt corners, ink-blot
+//        vignette, page curls. Draw LAST; the window is transparent. ART.map.frameInner(w, h) -> {x, y, w, h} (1280 x 720 gives 1192 x 648, at least
+//        the contractual 1180 x 640).
+//   ART.map.paper(ctx, w, h, camX, camY, zoom, opts?)  the parchment ground in WORLD space ((camX, camY) = the world point at the view centre, hex size
+//        46 at zoom 1): fibre, mottling and stains in seamless cached chunks (about 6 opaque blits), sea-monster, compass, boat and koi doodles in the
+//        margins and faintly under the fog. opts {doodles:false, world:{x0,y0,x1,y1}, t}. ART.map.worldBox(opts) is the box the doodles are placed in.
+//   ART.map.route(ctx, pts, t, opts?)              the dotted brush-stroke path preview: pts = [[x, y]] or [{x, y}] in screen px, wet underlay, marching
+//        ink dabs, a destination ring and the ink cost pill. opts {size, cost | label, affordable (false = red, shaking pill), pill:false, alpha}.
+//   ART.map.brushPreview(ctx, hexes, size, valid, t)  the cells a brush would paint (hexes = centres) as one wet shape with a marching outline,
+//        sparkles, a wet sheen; valid === false shows a red shape with an X. ART.map.brushEdges(hexes, size) -> {inner, outer} side segments.
+//   ART.map.fogEdge(ctx, cells, size, t, opts?)    the soft ink-wash boundary where painted ground meets blank paper (and the torn rim where it meets the
+//        Void): cells = [{x, y, mask, voidMask}] for PAINTED hexes, bit d of mask = the neighbour across side d (MAP.DIRS order) is fog, of voidMask is
+//        the Void. ART.map.edgeMasks(q, r, kindAt) builds both masks from a predicate returning 'fog' | 'void' | anything else. Draw it after the hexes.
+// Extras for screens and tests: ART.map.warm(size, {tiles, done, ms}) pre-bakes the sprites of a size (call on screen load), ART.map.bakedSize(size),
+// ART.map.info(), ART.map.corners(x, y, size), ART.map.washOf(tile), ART.map.geom.
+//
+// Gallery sheets: map_kinds (every kind and tile wash), map_page (a MAP.generate page, part painted, with fog edge, token, route, brush preview and
+// hover; params zoom t cx cy moving), map_frame (guides=1 outlines the window and the 1180 x 640 minimum), map_bloom (film strip), map_token, map_paper,
+// map_doodles. Draw order for a screen: paper, hexes (row by row), fogEdge, path/target/hover overlays, route, brushPreview, token, frame.
 (() => {
   'use strict';
   const tk = ART.tk, pal = tk.pal;
@@ -402,10 +440,9 @@
   // world cell (so nothing repeats), and sea-monster doodles in the margins and, faintly, under the fog
   // ---------------------------------------------------------------------------------------------------------------
   const PAPER_BASE = '#f0e0b8', DOODLE_INK = '#5c4530';
-  const TILE = 256, CELL = 540;
-  const tilePatterns = new Map(), canvasIds = new WeakMap();
-  let canvasN = 0;
-  const idOfCanvas = (c) => { if (!canvasIds.has(c)) canvasIds.set(c, ++canvasN); return canvasIds.get(c); };
+  // The fibre tile is TILE world px and repeats. A CHUNK is 2 x 2 of it plus up to two stains kept clear of the chunk border, so chunks of any
+  // variant join with no seam, and a page is ~6 opaque blits instead of a pattern fill plus a dozen rotated alpha blits.
+  const TILE = 150, CHUNK = TILE * 2, NVAR = 5, CELL = 540;     // CELL: the grid the margin doodles are placed on
   function wrapAt(x, y, rad, fn) {
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
       const px = x + i * TILE, py = y + j * TILE;
@@ -414,19 +451,15 @@
   }
   function paperTile(g) {
     const r = R('paper', 'tile');
-    for (let i = 0; i < 16; i++) {                                    // soft mottling
-      const x = r() * TILE, y = r() * TILE, rad = 30 + r() * 70, dark = r() < 0.5;
-      wrapAt(x, y, rad, (px, py) => { const gr = g.createRadialGradient(px, py, 0, px, py, rad); const c = dark ? '#8a6a3a' : '#fff8e4'; gr.addColorStop(0, A(c, dark ? 0.07 : 0.12)); gr.addColorStop(1, A(c, 0)); g.fillStyle = gr; g.fillRect(px - rad, py - rad, rad * 2, rad * 2); });
-    }
     g.lineCap = 'round';
-    for (let i = 0; i < 340; i++) {                                    // fibres
+    for (let i = 0; i < 200; i++) {                                    // fibres
       const x = r() * TILE, y = r() * TILE, a = r() * TAU, l = 4 + r() * 12, dark = r() < 0.5, bend = (r() - 0.5) * 6;
       wrapAt(x, y, l + 3, (px, py) => {
         g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo(px + Math.cos(a) * l * 0.5 - Math.sin(a) * bend, py + Math.sin(a) * l * 0.5 + Math.cos(a) * bend, px + Math.cos(a) * l, py + Math.sin(a) * l);
         g.lineWidth = 0.4 + r() * 0.6; g.strokeStyle = dark ? A('#7a5a34', 0.1 + r() * 0.12) : A('#ffffff', 0.2 + r() * 0.22); g.stroke();
       });
     }
-    for (let i = 0; i < 260; i++) { const x = r() * TILE, y = r() * TILE, sz = 0.5 + r() * 1.2; g.fillStyle = r() < 0.55 ? A('#5a3c1c', 0.06 + r() * 0.14) : A('#ffffff', 0.12 + r() * 0.18); wrapAt(x, y, 2, (px, py) => g.fillRect(px, py, sz, sz)); }
+    for (let i = 0; i < 150; i++) { const x = r() * TILE, y = r() * TILE, sz = 0.5 + r() * 1.2; g.fillStyle = r() < 0.55 ? A('#5a3c1c', 0.06 + r() * 0.14) : A('#ffffff', 0.12 + r() * 0.18); wrapAt(x, y, 2, (px, py) => g.fillRect(px, py, sz, sz)); }
   }
   // stains: a pool of soft blotches
   const STAIN_N = 6, STAIN_S = 340;
@@ -447,6 +480,23 @@
       tk.inkPath(g, [[20, c + 34], [c, c - 6], [STAIN_S - 20, c + 24]], { w: 3, color: '#ffffff', alpha: 0.2, taper: 0.4, wobble: 0.3 });
     } else {                                                           // a wash of tea with a soft edge
       const gr = g.createRadialGradient(c, c, 10, c, c, 140); gr.addColorStop(0, A('#a87a3a', 0.09)); gr.addColorStop(0.75, A('#a87a3a', 0.05)); gr.addColorStop(1, A('#a87a3a', 0)); g.fillStyle = gr; g.fillRect(0, 0, STAIN_S, STAIN_S);
+    }
+  }
+
+  function chunkSprite(g, v) {
+    const tile = ART.sprite('map|paper|tile', TILE, TILE, paperTile);
+    ART.blit(g, tile, 0, 0, TILE, TILE); ART.blit(g, tile, TILE, 0, TILE, TILE); ART.blit(g, tile, 0, TILE, TILE, TILE); ART.blit(g, tile, TILE, TILE, TILE, TILE);
+    const r = R('chunk', v);
+    for (let i = 0; i < 4; i++) {                                      // soft mottling, fully inside the chunk so it never meets a seam
+      const rad = 40 + r() * 70, x = rad + r() * (CHUNK - 2 * rad), y = rad + r() * (CHUNK - 2 * rad), dark = r() < 0.5, c = dark ? '#8a6a3a' : '#fff8e4';
+      const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, A(c, dark ? 0.08 : 0.13)); gr.addColorStop(1, A(c, 0)); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    const idx = [0, 2, 5, 4, -1][v % 5];
+    if (idx >= 0) {
+      const sc = 0.5 + r() * 0.3, half = STAIN_S * sc / 2, rot = r() * TAU;
+      const sx = half + r() * (CHUNK - 2 * half), sy = half + r() * (CHUNK - 2 * half), al = 0.6 + r() * 0.4;
+      const spr = ART.sprite('map|paper|stain' + idx, STAIN_S, STAIN_S, (g2) => stainSprite(g2, idx));
+      g.save(); g.translate(sx, sy); g.rotate(rot); ART.blit(g, spr, -half, -half, half * 2, half * 2, al); g.restore();
     }
   }
 
@@ -555,27 +605,15 @@
     ctx.save();
     ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
     ctx.fillStyle = PAPER_BASE; ctx.fillRect(0, 0, w, h);
-    // stains
+    // the page chunks (fibre tile, mottling and stains baked together), each variant picked by a hash of its world cell
+    const px0 = Math.floor(wx0 / CHUNK), px1 = Math.floor(wx1 / CHUNK), py0 = Math.floor(wy0 / CHUNK), py1 = Math.floor(wy1 / CHUNK), cz = CHUNK * z;
+    for (let gx = px0; gx <= px1; gx++) for (let gy = py0; gy <= py1; gy++) {
+      const v = U.hash(gx, gy, 77) % NVAR;
+      const X0 = Math.floor(ox + gx * cz) - 1, Y0 = Math.floor(oy + gy * cz) - 1, X1 = Math.ceil(ox + (gx + 1) * cz) + 1, Y1 = Math.ceil(oy + (gy + 1) * cz) + 1;
+      const spr = ART.sprite('map|paper|chunk' + v, CHUNK, CHUNK, (g) => chunkSprite(g, v));
+      ART.blit(ctx, spr, X0, Y0, X1 - X0, Y1 - Y0);
+    }
     const cx0 = Math.floor(wx0 / CELL) - 1, cx1 = Math.floor(wx1 / CELL), cy0 = Math.floor(wy0 / CELL) - 1, cy1 = Math.floor(wy1 / CELL);
-    for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) {
-      const r = R('pcell', cx, cy), n = 1 + (r() < 0.55 ? 1 : 0);
-      for (let i = 0; i < n; i++) {
-        const idx = Math.floor(r() * STAIN_N), sx = (cx + r()) * CELL, sy = (cy + r()) * CELL, rot = r() * TAU, sc = 0.9 + r() * 1.1, al = 0.6 + r() * 0.4;
-        const spr = ART.sprite('map|paper|stain' + idx, STAIN_S, STAIN_S, (g) => stainSprite(g, idx)), k = STAIN_S * sc * z;
-        ctx.save(); ctx.translate(ox + sx * z, oy + sy * z); ctx.rotate(rot); ART.blit(ctx, spr, -k / 2, -k / 2, k, k, al); ctx.restore();
-      }
-    }
-    // the fibre tile, in world space, as one pattern fill (no seams at any zoom)
-    {
-      const res = ART.res > 0 ? ART.res : 1, tile = ART.sprite('map|paper|tile', TILE, TILE, paperTile);
-      let pat = tilePatterns.get(res + '|' + (tile._inert ? 'x' : idOfCanvas(tile)));
-      if (!pat && !tile._inert) { try { pat = ctx.createPattern(tile, 'repeat'); } catch (e) { pat = null; } if (pat) tilePatterns.set(res + '|' + idOfCanvas(tile), pat); }
-      if (pat) {
-        ctx.save(); ctx.translate(ox, oy); ctx.scale(z / res, z / res);
-        ctx.fillStyle = pat; ctx.fillRect(-ox * res / z, -oy * res / z, w * res / z, h * res / z);
-        ctx.restore();
-      }
-    }
     // doodles
     if (opts.doodles !== false) {
       const wb = worldBox(opts), bw = wb.x1 - wb.x0, bh = wb.y1 - wb.y0;
@@ -1086,13 +1124,19 @@
     if (lastP) Mp.pos = { q: lastP[0], r: lastP[1] };
     const nxt = m.solve(Mp);
     const fr2 = m.frontier(Mp);
-    let brush = [], bestD = 1e9;
-    fr2.forEach((T) => {
-      const d = m.dist(T.q, T.r, Mp.pos.q, Mp.pos.r), dy = T.r - Mp.pos.r;
-      if (d < 3 || d > 6 || dy > -1) return;
-      let cells = [];
-      try { cells = m.brushCells(Mp, 'stroke', T.q, T.r, 0) || []; } catch (e) { cells = []; }
-      if (cells.length >= 2 && d < bestD) { bestD = d; brush = cells; }
+    // a line brush ('stroke') starts on a painted hex near the party and runs into the fog (DESIGN 4.8), away from the previewed route
+    let brush = [], bestScore = -1e9;
+    const onRoute = (q, r) => (nxt.path || []).slice(0, 4).some((c) => c[0] === q && c[1] === r);
+    m.painted(Mp).forEach((T) => {
+      const d0 = m.dist(T.q, T.r, Mp.pos.q, Mp.pos.r);
+      if (d0 > 4) return;
+      for (let d = 0; d < 6; d++) {
+        let cells = [];
+        try { cells = m.brushCells(Mp, 'stroke', T.q, T.r, d) || []; } catch (e) { cells = []; }
+        if (cells.length < 3 || cells.some((c) => onRoute(c[0], c[1]))) continue;
+        const score = cells.length * 3 - d0 + (DIRS[d][1] < 0 ? 2 : 0);
+        if (score > bestScore) { bestScore = score; brush = cells; }
+      }
     });
     const tilesL = Object.keys(Mp.tiles).map((k) => Mp.tiles[k]);
     return { tiles: tilesL, at: (q, r) => m.tile(Mp, q, r), cols: Mp.cols, rows: Mp.rows, pos: Mp.pos, start: Mp.start, boss: Mp.boss, path: (nxt.path || []).slice(0, 4), brush, hover: fr2.length ? { q: fr2[1 % fr2.length].q, r: fr2[1 % fr2.length].r } : null };
@@ -1102,9 +1146,13 @@
     o = o || {};
     const z = pos(o.zoom, 1), size = BASE * z, t = num(o.t, 0), inner = M.frameInner(W, H);
     const cp = pxOf(page.pos.q, page.pos.r, BASE);
-    let ax = 0, ay = 0, an = 0;
-    page.tiles.forEach((T) => { if (T.painted) { const p2 = pxOf(T.q, T.r, BASE); ax += p2.x; ay += p2.y; an++; } });
-    const camX = o.cx !== undefined ? o.cx : (an ? Math.max(ax / an + 250, cp.x + 150) : cp.x), camY = o.cy !== undefined ? o.cy : (an ? (ay / an + cp.y) / 2 : cp.y);
+    // frame the painted area, the party and what is previewed: the middle of their bounding box
+    let x0 = cp.x, x1 = cp.x, y0 = cp.y, y1 = cp.y;
+    const grow = (q, r) => { const p2 = pxOf(q, r, BASE); x0 = Math.min(x0, p2.x); x1 = Math.max(x1, p2.x); y0 = Math.min(y0, p2.y); y1 = Math.max(y1, p2.y); };
+    page.tiles.forEach((T) => { if (T.painted) grow(T.q, T.r); });
+    (page.path || []).forEach((c) => grow(c[0], c[1]));
+    (page.brush || []).forEach((c) => grow(c[0], c[1]));
+    const camX = o.cx !== undefined ? o.cx : (x0 + x1) / 2, camY = o.cy !== undefined ? o.cy : (y0 + y1) / 2;
     const sx = (wx) => W / 2 + (wx - camX) * z, sy = (wy) => H / 2 + (wy - camY) * z;
     const scr = (q, r) => { const p2 = pxOf(q, r, BASE); return { x: sx(p2.x), y: sy(p2.y) }; };
     paper(g, W, H, camX, camY, z, { t });
@@ -1169,7 +1217,7 @@
     return loadMapModule().then((m) => {
       const page = samplePage(m);
       g.fillStyle = pal.night; g.fillRect(0, 0, W, H);
-      fitDesign(g, W, H, (dw, dh) => drawPage(g, dw, dh, page, { zoom: num(params.zoom, 1), t: num(params.t, 0), moving: !!params.moving, cx: params.cx, cy: params.cy }));
+      fitDesign(g, W, H, (dw, dh) => drawPage(g, dw, dh, page, { zoom: num(params.zoom, 0.8), t: num(params.t, 0), moving: !!params.moving, cx: params.cx, cy: params.cy }));
     });
   });
   ART.sheet('map_frame', (canvas, params) => {

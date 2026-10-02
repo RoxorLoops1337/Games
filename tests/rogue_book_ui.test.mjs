@@ -6,7 +6,7 @@
 import { boot, harness } from './rogue_book_lib.mjs';
 
 const t = harness('rogue_book ui');
-const SKIP = ['data_*', 'art*', 'audio', 'combat', 'map', 'run', 'meta'];
+const SKIP = ['data_*', 'art*', 'audio', 'combat', 'map', 'run', 'meta', 'scene', 'screen_*', 'tutorial'];
 
 // ---------------------------------------------------------------------------------------------------- fakes installed into the page
 const FAKES = `

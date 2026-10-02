@@ -64,7 +64,7 @@
   'use strict';
   const tk = ART.tk, pal = tk.pal;
   const PI = Math.PI, TAU = PI * 2;
-  const sin = Math.sin, cos = Math.cos, abs = Math.abs, min = Math.min, max = Math.max, floor = Math.floor, sqrt = Math.sqrt, pow = Math.pow, hypot = Math.hypot, atan2 = Math.atan2;
+  const sin = Math.sin, cos = Math.cos, abs = Math.abs, min = Math.min, max = Math.max, floor = Math.floor, sqrt = Math.sqrt, pow = Math.pow, hypot = Math.hypot, atan2 = Math.atan2, exp = Math.exp;
   const INK = pal.ink;
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -539,7 +539,7 @@
   FX.petals = (ctx, o, t) => {
     const P = prep(o, '#ff9cc6', (c) => mix(c, WHITE, 0.3)); if (!P) return;
     t = T01(t); place(ctx, P);
-    const ga = ctx.globalAlpha, spr = petalSprite(P.c1), spr2 = petalSprite(P.c2), N = cnt(36), spin = P.seed % 2 ? 1 : -1, ribbon = tint(P.c1, 0.6);
+    const ga = ctx.globalAlpha, spr = petalSprite(P.c1), spr2 = petalSprite(P.c2), N = cnt(26), spin = P.seed % 2 ? 1 : -1, ribbon = tint(P.c1, 0.6);
     glowAt(ctx, 0, -20, 130 * (0.4 + 0.6 * eo3(t)), P.c1, 0.4 * env(t, 0.1, 0.5, 0.95));
     // wind ribbons: three comet trails spiralling out, thin tapered brush flicks
     for (let w = 0; w < 3; w++) {
@@ -622,7 +622,10 @@
     const P = prep(o, '#ffe45e', (c) => (luma(c) > 0.8 ? '#8fd8ff' : tint(c, 0.7))); if (!P) return;
     t = T01(t);
     let x0 = P.x, y0 = P.y, x1 = fin(o && o.x2, P.x), y1 = fin(o && o.y2, P.y);
-    if (hypot(x1 - x0, y1 - y0) < 10) { x1 = P.x; y1 = P.y; x0 = P.x + hs(P.seed, 3) * 40 * P.s; y0 = P.y - 360 * P.s; }
+    if (hypot(x1 - x0, y1 - y0) < 10) {                                  // no end point: it strikes down onto (x, y), leaning with dir and turned by ang
+      const vx = (hs(P.seed, 3) * 30 + 36 * P.dir) * P.s, vy = -360 * P.s;
+      x1 = P.x; y1 = P.y; x0 = P.x + vx * cos(P.ang) - vy * sin(P.ang); y0 = P.y + vx * sin(P.ang) + vy * cos(P.ang);
+    }
     const k = min(1.7, max(0.55, P.s)), ga = ctx.globalAlpha, F = min(9, floor(t * 10)), fa = FLICKER[F] * (1 - ramp(t, 0.72, 1)), fs = P.seed + F * 131;
     const L = hypot(x1 - x0, y1 - y0), jag = min(60, 20 + L * 0.1) * k, grow = ramp(t, 0, 0.09);
     ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -826,7 +829,7 @@
     for (let i = 0; i < K; i++) {
       const long = i % 3 === 0, L = (44 + 36 * hv(sd, i + 10)) * (long ? 1.32 : 1), w = L * 0.17 + 3, a = (i + hs(sd, i + 30) * 0.22) / K * TAU + rot;
       const t0 = 0.02 + 0.03 * (i % 4), g = eoBack(ramp(t, t0, t0 + 0.26)), shat = ramp(t, 0.66 + 0.06 * hv(sd, i + 50), 1);
-      if (g <= 0.02) continue;
+      if (g <= 0.02 || shat >= 1) continue;
       const len = max(4, L * g * (1 - 0.35 * shat)), ww = w * (0.4 + 0.6 * min(1, g)) * (1 - 0.5 * shat);
       ctx.save(); ctx.rotate(a); ctx.translate(shat * 14 * hv(sd, i + 70), 0);
       ctx.globalAlpha = ga * (1 - shat * shat);
@@ -867,7 +870,7 @@
     // shatter debris
     for (let i = 0; i < cnt(14); i++) {
       const tau = c01((t - 0.62 - 0.12 * hv(sd, i + 400)) / 0.38);
-      if (tau <= 0) continue;
+      if (tau <= 0 || tau >= 1) continue;
       const a = hv(sd, i + 420) * TAU, d = (36 + 60 * hv(sd, i + 440)) + 40 * tau, x = cos(a) * d + hs(sd, i + 450) * 20 * tau, y = sin(a) * d * 0.8 + 130 * tau * tau, r = (3 + 4 * hv(sd, i + 460)) * (1 - tau * 0.4);
       ctx.save(); ctx.translate(x, y); ctx.rotate(a + tau * 6); ctx.globalAlpha = ga * (1 - tau);
       ctx.beginPath(); ctx.moveTo(0, -r * 1.4); ctx.lineTo(r, r); ctx.lineTo(-r, r * 0.8); ctx.closePath(); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = i % 2 ? WHITE : lite; ctx.fill();
@@ -890,12 +893,11 @@
     disc(ctx, cx + R * 0.34 * fl, cy - R * 0.42, R * 0.2, hiCol);
   }
   FX.poison = (ctx, o, t) => {
-    const P = prep(o, '#3fd6b0', (c) => mix(shade(c, 0.1), '#7a4fd0', 0.7)); if (!P) return;
+    const P = prep(o, '#74dc42', (c) => mix(shade(c, 0.1), '#8a3fd8', 0.78)); if (!P) return;
     t = T01(t); place(ctx, P);
     const ga = ctx.globalAlpha, sd = P.seed, np = cnt(8), lit = tint(P.c1, 0.28), dark = P.c2, deep = mix(dark, INK, 0.35);
     ctx.translate(0, 16);
-    glowAt(ctx, 0, -14, 110, P.c1, 0.45 * env(t, 0.15, 0.6, 0.95));
-    glowAt(ctx, 0, 16, 70, P.c2, 0.45 * env(t, 0.15, 0.6, 0.95));
+    glowAt(ctx, 0, -14, 120, P.c1, 0.5 * env(t, 0.15, 0.6, 0.95));
     // two big slow banks of violet fog behind everything
     for (let b = 0; b < 2; b++) {
       const tau = ramp(t, 0.04 + b * 0.08, 0.9), a = env(tau, 0.2, 0.6, 1) * 0.75;
@@ -1184,6 +1186,7 @@
       ctx.save(); ctx.globalAlpha = ga * 0.2 * (1 - t) * (1 - t); ctx.fillStyle = P.c1; ctx.fillRect(0, 0, w, h); ctx.restore(); return;
     }
     const inv = t < 0.5 ? 1 : 1 - ramp(t, 0.5, 1), F = floor(t * 20), sd = P.seed + F * 13;
+    if (inv < 0.02) return;
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.clip();
     // 1: the negative
     ctx.globalCompositeOperation = 'difference'; ctx.globalAlpha = ga * inv; ctx.fillStyle = WHITE; ctx.fillRect(0, 0, w, h);
@@ -1319,7 +1322,7 @@
     const P = prep(o, '#ffffff', null); if (!P) return;
     t = T01(t);
     const kind = NUM[P.kind] ? P.kind : 'dmg', st = NUM[kind], str = String(o && o.text !== undefined && o.text !== null && o.text !== '' ? o.text : '0').slice(0, 10), n = str.length, sd = P.seed, F = floor(t * 24);
-    ctx.save(); ctx.translate(P.x, P.y); if (P.s !== 1) ctx.scale(P.s, P.s);
+    ctx.save(); ctx.translate(P.x, P.y); if (P.ang) ctx.rotate(P.ang); if (P.s !== 1) ctx.scale(P.s, P.s);
     const ga = ctx.globalAlpha, size = 46 * st.k, crit = kind === 'crit', shk = crit ? (1 - ramp(t, 0.06, 0.5)) * 3.2 * (tk.motion() < 1 ? 0.3 : 1) : 0, out = ramp(t, 0.66, 1);
     // a crit is announced by a small starburst behind the digits
     if (crit) {
@@ -1428,48 +1431,79 @@
   // ===============================================================================================================
   // brushDrag
   // ===============================================================================================================
+  const PROF = new Float64Array(49);
   FX.brushDrag = (ctx, o, t) => {
     const P = prep(o, INK, (c) => (luma(c) < 0.25 ? '#7a6bff' : tint(c, 0.5))); if (!P) return;
     t = T01(t);
     let x1 = fin(o && o.x2, P.x), y1 = fin(o && o.y2, P.y);
     if (hypot(x1 - P.x, y1 - P.y) < 8) { x1 = P.x + cos(P.ang) * 420 * P.s * P.dir; y1 = P.y + sin(P.ang) * 420 * P.s; }
-    const L = hypot(x1 - P.x, y1 - P.y), k = min(1.8, max(0.5, P.s)), W = 64 * k, sd = P.seed, ga = ctx.globalAlpha;
-    const head = L * eo3(ramp(t, 0, 0.5)), tail = L * sm(ramp(t, 0.42, 0.98)), a = 1 - ramp(t, 0.86, 1);
+    const L = hypot(x1 - P.x, y1 - P.y), k = min(1.8, max(0.5, P.s)), W = 66 * k, sd = P.seed, ga = ctx.globalAlpha;
+    // the brush races along the path in the first half; the stroke then dries out from its start, bristle by bristle
+    const head = L * eo3(ramp(t, 0, 0.46)), tail = L * sm(ramp(t, 0.5, 1)), a = 1 - ramp(t, 0.9, 1);
     if (head - tail < 6 || a < 0.02) return;
     ctx.save(); ctx.translate(P.x, P.y); ctx.rotate(atan2(y1 - P.y, x1 - P.x));
-    const bow = L * 0.05 * hs(sd, 1), N = 30;
-    const cl = (u) => bow * sin(PI * c01(u / L)) + sin(u * 0.045 + sd) * 2.2 * k;
-    const tailFade = ramp(t, 0.42, 0.85);
-    const prof = (v) => (0.7 + 0.3 * sm(c01(v * 6))) * pow(max(0, 1 - pow(v, 2.4)), 0.72) * (1 - (1 - sm(c01(v / 0.35))) * tailFade);
-    // a pale rim under everything so the ink reads on a dark backdrop as well as on paper
-    for (let i = 0; i < N; i++) { const v = i / (N - 1), x = tail + (head - tail) * v; QX[i] = x; QY[i] = cl(x); QW[i] = W * 0.56 * prof(v) + (prof(v) > 0.05 ? 2.6 : 0); }
-    ctx.globalAlpha = ga * a * 0.5; ctx.beginPath(); ribbonPath(ctx, N, 1, 0); ctx.fillStyle = P.c2; ctx.fill();
-    // the fat solid core
-    for (let i = 0; i < N; i++) { const v = i / (N - 1), x = tail + (head - tail) * v; QX[i] = x; QY[i] = cl(x); QW[i] = W * 0.31 * prof(v); }
+    const bow = L * 0.06 * hs(sd, 1), cl = (u) => bow * sin(PI * c01(u / L)) + sin(u * 0.05 + sd) * 2 * k;
+    // half width along the whole stroke: a heavy press at the touchdown, a long steady belly, a thin flick at the end
+    const prof1 = (v) => { return (0.5 + 0.5 * sm(ramp(v, 0, 0.07))) * (1 - 0.5 * sm(ramp(v, 0.14, 0.8))) * (1 - sm(ramp(v, 0.9, 1))) * (1 + 0.16 * sin(v * 17 + sd)) * (1 + 0.5 * exp(-pow((v - 0.09) / 0.06, 2))); };
+    for (let i = 0; i <= 48; i++) PROF[i] = prof1(i / 48);
+    const prof0 = (u) => { const f = c01(u / L) * 48, i = f | 0, j = i < 48 ? i + 1 : 48; return PROF[i] + (PROF[j] - PROF[i]) * (f - i); };
+    const N = 28, u0 = tail, u1 = head, dry = tail > 2;
+    const prof = (u) => prof0(u) * (dry ? 0.12 + 0.88 * sm(c01((u - u0) / (80 * k))) : 1);
+    const fillRibbon = (wMul, add, col, al) => {
+      const ue = max(u0 + 4, u1 - 12 * k);
+      for (let i = 0; i < N; i++) { const u = u0 + (ue - u0) * i / (N - 1); QX[i] = u; QY[i] = cl(u); QW[i] = W * 0.5 * prof(u) * wMul * (i === N - 1 ? 0.5 : 1); }
+      ctx.globalAlpha = ga * a * al; ctx.beginPath(); ribbonPath(ctx, N, 1, add); ctx.fillStyle = col; ctx.fill();
+    };
+    // a pale halo and rim so the ink reads on a dark night backdrop as well as on paper
+    glowAt(ctx, (u0 + u1) / 2, cl((u0 + u1) / 2), (u1 - u0) * 0.5 + 30 * k, P.c2, 0.18 * a);
+    fillRibbon(1, 3.4 * k, P.c2, 0.62);
+    // the ink body: one fat solid core, trimmed at the leading edge so the bristles can run past it
+    const coreEnd = max(u0 + 4, u1 - 16 * k);
+    for (let i = 0; i < N; i++) { const u = u0 + (coreEnd - u0) * i / (N - 1); QX[i] = u; QY[i] = cl(u); QW[i] = W * 0.5 * prof(u) * 0.78; }
     ctx.globalAlpha = ga * a; ctx.beginPath(); ribbonPath(ctx, N, 1, 0); ctx.fillStyle = P.c1; ctx.fill();
-    // dry bristles: the outer ones are shorter, thinner and ragged
-    const NB = cnt(10);
-    for (let j = 0; j < NB; j++) {
-      const lat = (j / (NB - 1) - 0.5) * 2, al = abs(lat);
-      if (al < 0.3 && j % 2) continue;
-      if (hv(sd, j + 10) < 0.1 * al) continue;
-      const vs0 = hv(sd, j + 20) * 0.28 * al, ve = 1 - hv(sd, j + 30) * 0.34 * pow(al, 1.1), n = 22;
-      for (let i = 0; i < n; i++) {
-        const v = vs0 + (ve - vs0) * i / (n - 1), x = tail + (head - tail) * v, pr = prof(v), y = cl(x) + lat * W * 0.5 * pr * (0.94 + 0.08 * sin(v * 14 + j));
-        QX[i] = x; QY[i] = y; QW[i] = W / NB * (0.55 + 0.5 * hv(sd, j + 40)) * pr * sin(PI * pow(i / (n - 1), 0.75)) + 0.05;
+    // bristles: thin ribbons side by side, the outer ones shorter, gappy and lighter (dry brush); the leading edge is a slanted chisel
+    const NB = cnt(12);
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.globalAlpha = ga * a * (pass ? 0.85 : 0.95); ctx.beginPath();
+      for (let j = pass; j < NB; j += 2) {
+        const lat = (j + 0.5) / NB * 2 - 1, al = abs(lat), nn = 12;
+        const lead = u1 - (lat * 22 + 22) * k * (0.5 + hv(sd, j + 10)) + (1 - al) * 10 * k, trail = u0 + (dry ? 10 + 60 * hv(sd, j + 20) : 0) * al * ramp(t, 0.5, 0.8);
+        const gap0 = lead - (lead - trail) * (0.35 + 0.4 * hv(sd, j + 30)), gap1 = gap0 + (lead - trail) * 0.14 * al * (hv(sd, j + 40) > 0.4 ? 1 : 0);
+        if (lead - trail < 8) continue;
+        const bw = (W / NB) * 0.62 * (0.7 + 0.5 * hv(sd, j + 50));
+        for (let seg = 0; seg < 2; seg++) {
+          const ua = seg ? gap1 : trail, ub = seg ? lead : gap0;
+          if (ub - ua < 6) continue;
+          for (let i = 0; i < nn; i++) {
+            const u = ua + (ub - ua) * i / (nn - 1), pr = prof(u);
+            QX[i] = u; QY[i] = cl(u) + lat * W * 0.49 * pr; QW[i] = bw * (0.3 + 0.7 * pr) * (0.2 + 0.8 * sin(PI * pow(i / (nn - 1), 0.7))) + 0.05;
+          }
+          ribbonPath(ctx, nn, 1, 0);
+        }
       }
-      ctx.globalAlpha = ga * a * (0.78 + 0.22 * hv(sd, j + 50)); ctx.beginPath(); ribbonPath(ctx, n, 1, 0); ctx.fillStyle = j % 3 === 0 ? mix(P.c1, P.c2, 0.25) : P.c1; ctx.fill();
+      ctx.fillStyle = pass ? mix(P.c1, P.c2, 0.3) : P.c1; ctx.fill();
     }
-    // a thin lit edge along the top so it reads on a dark backdrop
-    const n2 = 24;
-    for (let i = 0; i < n2; i++) { const v = 0.08 + 0.84 * i / (n2 - 1), x = tail + (head - tail) * v; QX[i] = x; QY[i] = cl(x) - W * 0.4 * prof(v); QW[i] = 1.5 * k * sin(PI * i / (n2 - 1)) + 0.05; }
-    ctx.globalAlpha = ga * a * 0.85; ctx.beginPath(); ribbonPath(ctx, n2, 1, 0); ctx.fillStyle = P.c2; ctx.fill();
+    // a thin lit streak along the upper edge (wet sheen) and a second faint one lower down
+    for (let pass = 0; pass < 2; pass++) {
+      const n2 = 24, off = pass ? 0.3 : -0.62;
+      for (let i = 0; i < n2; i++) { const v = 0.1 + 0.8 * i / (n2 - 1), u = u0 + (coreEnd - u0) * v; QX[i] = u; QY[i] = cl(u) + off * W * 0.5 * prof(u); QW[i] = (pass ? 1 : 1.7) * k * sin(PI * i / (n2 - 1)) + 0.05; }
+      ctx.globalAlpha = ga * a * (pass ? 0.4 : 0.8); ctx.beginPath(); ribbonPath(ctx, n2, 1, 0); ctx.fillStyle = pass ? P.c2 : mix(P.c2, WHITE, 0.4); ctx.fill();
+    }
+    // the press: a ragged blot where the brush touched down, with two drips
+    const blotU = L * 0.04, blotA = a * ramp(t, 0, 0.1) * (blotU > u0 - 20 ? 1 : 0);
+    if (blotA > 0.02 && blotU < head) {
+      const R = W * 0.5 * (1 + 0.1 * hs(sd, 70));
+      ctx.globalAlpha = ga * blotA; ctx.fillStyle = P.c1; ctx.beginPath();
+      for (let i = 0; i < 14; i++) { const an = i / 14 * TAU, r = R * (0.82 + 0.3 * hv(sd, i + 300)) * (i % 2 ? 0.88 : 1.06); if (i === 0) ctx.moveTo(blotU + cos(an) * r * 0.75, cl(blotU) + sin(an) * r); else ctx.lineTo(blotU + cos(an) * r * 0.75, cl(blotU) + sin(an) * r); }
+      ctx.closePath(); ctx.fill();
+      for (let i = 0; i < 2; i++) { const dx = (i ? 0.35 : -0.3) * R, dl = (10 + 22 * hv(sd, i + 340)) * k * ramp(t, 0.08, 0.5); ctx.beginPath(); ctx.ellipse(blotU + dx, cl(blotU) + R * 0.8 + dl * 0.5, 2.2 * k, dl * 0.5 + 2, 0, 0, TAU); ctx.fill(); }
+    }
     // splatter flung off the head
-    for (let i = 0; i < cnt(11); i++) {
-      const ts = 0.08 + 0.36 * hv(sd, i + 100), tau = c01((t - ts) / 0.4);
+    for (let i = 0; i < cnt(13); i++) {
+      const ts = 0.06 + 0.36 * hv(sd, i + 100), tau = c01((t - ts) / 0.4);
       if (t < ts || tau >= 1) continue;
-      const along = L * eo3(ramp(ts, 0, 0.5)) * (0.92 + 0.1 * hv(sd, i + 120)) + 24 * eo3(tau), side = hs(sd, i + 140) > 0 ? 1 : -1, off = side * (W * 0.55 + (14 + 60 * hv(sd, i + 160)) * eo3(tau)), r = (2 + 5 * hv(sd, i + 180)) * (1 - 0.4 * tau);
-      ctx.globalAlpha = ga * a * (1 - tau * tau); ctx.beginPath(); ctx.ellipse(along, cl(along) + off + 20 * tau * tau, r * (1 + 1.4 * (1 - tau)), r, 0, 0, TAU); ctx.fillStyle = P.c1; ctx.fill();
+      const along = L * eo3(ramp(ts, 0, 0.46)) * (0.94 + 0.08 * hv(sd, i + 120)) + 30 * eo3(tau), side = hs(sd, i + 140) > 0 ? 1 : -1, off = side * (W * 0.5 + (10 + 60 * hv(sd, i + 160)) * eo3(tau)), r = (1.8 + 5 * hv(sd, i + 180)) * k * (1 - 0.4 * tau);
+      ctx.globalAlpha = ga * a * (1 - tau * tau); ctx.beginPath(); ctx.ellipse(along, cl(along) + off + 24 * tau * tau, r * (1 + 1.4 * (1 - tau)), r, 0, 0, TAU); ctx.fillStyle = i % 3 ? P.c1 : P.c2; ctx.fill();
     }
     ctx.restore(); ctx.globalAlpha = ga;
   };
@@ -1501,7 +1535,7 @@
     chain: (w, h) => ({ x: w * 0.16, y: h * 0.62, x2: w * 0.84, y2: h * 0.44, color: '#7a6bff' }),
     flame: (w, h) => ({ x: w / 2, y: h * 0.66, color: '#ff9a2e' }),
     frost: (w, h) => ({ x: w / 2, y: h * 0.52, color: '#8fdcff' }),
-    poison: (w, h) => ({ x: w / 2, y: h * 0.62, color: '#3fd6b0' }),
+    poison: (w, h) => ({ x: w / 2, y: h * 0.62, color: '#74dc42' }),
     shield: (w, h) => ({ x: w / 2, y: h * 0.52, w: 124, h: 160, color: '#5fb4ff' }),
     heal: (w, h) => ({ x: w / 2, y: h * 0.56, color: '#7dffb0' }),
     buff: (w, h) => ({ x: w / 2, y: h * 0.52, color: '#ffe45e' }),
@@ -1515,7 +1549,8 @@
     brushDrag: (w, h) => ({ x: w * 0.08, y: h * 0.72, x2: w * 0.92, y2: h * 0.3, color: '#140f2e' }),
     numberPop: (w, h) => ({ x: w / 2, y: h * 0.52, text: '128', kind: 'dmg' }),
   };
-  ART.fx.demo = (name, w, h, extra) => Object.assign({ seed: 7, s: 1 }, (DEMO[name] || DEMO.burst)(fin(w, 240), fin(h, 240)), extra || {});
+  const demoOf = (name, w, h, extra) => Object.assign({ seed: 7, s: 1 }, (DEMO[name] || DEMO.burst)(fin(w, 240), fin(h, 240)), extra || {});
+  ART.fx.demo = demoOf;
   // the dark combat backdrop every sheet draws on
   function backdrop(g, w, h, light) {
     tk.sky(g, 0, 0, w, h, light ? 'golden' : 'night');
@@ -1527,7 +1562,7 @@
     backdrop(g, w, h, light);
     const k = min(w, h) / VIRT, cw = w / k, ch = h / k;
     g.save(); g.scale(k, k);
-    const o = ART.fx.demo(name, cw, ch, extra);
+    const o = demoOf(name, cw, ch, extra);
     // faint origin cross so the anchor is visible
     g.strokeStyle = 'rgba(255,255,255,0.07)'; g.lineWidth = 1 / k; g.beginPath(); g.moveTo(o.x - 8, o.y); g.lineTo(o.x + 8, o.y); g.moveTo(o.x, o.y - 8); g.lineTo(o.x, o.y + 8); g.stroke();
     if (name === 'chromatic') underChromatic(g, cw, ch);
@@ -1608,7 +1643,7 @@
     if (params.s) extra.s = fin(params.s, 1);
     if (params.ang) extra.ang = fin(params.ang, 0);
     if (params.dir) extra.dir = fin(params.dir, 1);
-    const o = ART.fx.demo(name, w / k, h / k, extra);
+    const o = demoOf(name, w / k, h / k, extra);
     if (name === 'chromatic') underChromatic(g, w / k, h / k);
     if (ART.fx[name]) ART.fx[name](g, o, t);
     g.restore();
