@@ -641,6 +641,7 @@ const GAME = (() => {
           duoMetaFix(S.meta, o);   // DUO (round 11): the duel record, wins per name
           depMetaFix(S.meta, o);   // DEP (round 15): the Neon Depths' dives and Drowned Jukeboxes
           cabMetaFix(S.meta, o);   // CAB (round 16): the Jackpot Lamp's tip seen, fevers and PERFECT grabs
+          gachaMetaFix(S.meta, o);   // GACHA (round 17): the Capsule Minis, the daily capsule's streak
         }
       }
     } catch (e) { /* a corrupt profile is a fresh profile */ }
@@ -668,6 +669,7 @@ const GAME = (() => {
     if (!c) return false;
     if (!c.unlock || c.unlock === 'start') return true;
     if (S.meta && S.meta.unlocks[charId]) return true;
+    if (c.unlock === 'fever' && techFeverSeen()) return true;   // TECH (round 17): a profile that has set off LAMP FEVER already
     // A crawler added later (Lucky Lou) is open to a profile that already
     // met his rule with another crawler that shares it (CONTENT block).
     const tb = tbl('CHARACTERS');
@@ -676,6 +678,7 @@ const GAME = (() => {
   function unlockRule(c) {
     if (c.unlock === 'act2') return 'Reach act 2 to unlock';
     if (c.unlock === 'win') return 'Win a run to unlock';
+    if (c.unlock === 'fever') return 'Set off LAMP FEVER to unlock';   // (TECH, round 17)
     return 'Locked';
   }
   // Returns the ids newly unlocked by the given milestone.
@@ -752,6 +755,7 @@ const GAME = (() => {
       else if (sc === 'treasure' && S.sd && S.sd.treasure) showTreasure(S.sd.treasure);
       else if (sc === 'parts' && S.sd && S.sd.parts) showSpareParts(S.sd.parts);
       else if (sc === 'capsule' && S.sd && S.sd.capsule && S.sd.capsule.cap) showCapsule(S.sd.capsule);
+      else if (sc === 'capsule' && S.sd && S.sd.capsule && S.sd.capsule.all) gachaAllShow(S.sd.capsule);   // GACHA (round 17): Open all resumes (each capsule paid once)
       else if (sc === 'counter' && S.sd && S.sd.counter) showCounter(S.sd.counter);
       else if (sc === 'arcade' && S.sd && S.sd.arcade) arcShow(S.sd.arcade);   // ARCADE
       else if (sc === 'loop' && S.sd && S.sd.loop) showLoop(S.sd.loop);   // ENDLESS: the reboot screen
@@ -1103,7 +1107,7 @@ const GAME = (() => {
     const more = [B.Help, B.Tips, B.Intro, lab(/^Sound /), lab(/^Music /)];
     // a title button this pass does not know (a newer builder's) still has a home: the More sheet
     const known = new Set([B.Continue, B['New run'], B['Daily run'], B['Prize Vault'], B['Claw School'], lab(/Settings$/), B.Prizedex, B.Stickers, B.Codex, B.History].concat(modes, more).filter(Boolean));
-    for (const b of S.ui.buttons) if (b && b.el && !known.has(b.el)) { known.add(b.el); more.push(b.el); }
+    for (const b of S.ui.buttons) if (b && b.el && !known.has(b.el) && !qa17TitleKeep(b.el)) { known.add(b.el); more.push(b.el); }   // (QA17: the season ribbon stays a ribbon over the sky)
     grp('more', '☰', 'More', 'More', more, ['uiI-help', 'uiI-tips', 'uiI-intro', '', '']);
     if (tiles.children && tiles.children.length) m.appendChild(tiles);
     // and anything else a builder put in the menu (not one of the old rows) stays, under the tiles
@@ -1112,7 +1116,7 @@ const GAME = (() => {
     // the keys: Escape puts a sheet away (once per page)
     if (!UIT.keys && !S.headless) {   // (a browser only: the game's own key handler is the one listener headless)
       UIT.keys = true;
-      try { document.addEventListener('keydown', (ev) => { if (ev && ev.key === 'Escape' && UIT.open && S.screen === 'title') uiSheetOpen(null); }); } catch (e) { /* headless */ }
+      try { document.addEventListener('keydown', (ev) => qa17TitleEsc(ev)); } catch (e) { /* headless */ }   // (QA17: Escape closes a sheet, but not the Escape that just came back from a page and reopened it)
     }
     // back from a page you opened out of a sheet: that sheet again, at once
     const back = UIT.reopen;
@@ -2720,6 +2724,7 @@ const GAME = (() => {
     if (p && vaultDef(p.id)) {
       const tier = vaultDef(p.id).rarity;
       V.pend = { id: p.id, tier0: String(p.tier0 || tier), ups: Array.isArray(p.ups) ? p.ups.filter((x) => typeof x === 'string') : [], tier, dupe: !!p.dupe, tix: num(p.tix), lucky: !!p.lucky };
+      if (p.daily) V.pend.daily = true;   // GACHA (round 17): the free daily capsule
     }
     m.vault = V;
     if (m === S.meta) vaultApply();
@@ -2759,8 +2764,9 @@ const GAME = (() => {
   // The title's gold-and-pink Prize Vault button with the wallet on it.
   function vaultTitleBtn(menu) {
     if (!menu || !D().COSMETICS) return null;
-    const V = vaultM(), n = vaultNewN();
-    const b = btn('Prize Vault', () => showVault(), 'vaultBtn');
+    const free = gachaDailyReady();   // GACHA (round 17): the free daily capsule glows on the Vault tile
+    const V = vaultM(), n = vaultNewN() + (free ? 1 : 0);
+    const b = btn('Prize Vault', () => showVault(), 'vaultBtn' + (free ? ' g17Free' : ''));
     b.textContent = '';
     b.appendChild(h('span', 'v1', 'Prize Vault'));
     const v2 = h('span', 'v2');
@@ -2786,6 +2792,7 @@ const GAME = (() => {
     vaultDemo();
     const scr = $('scr-vault');
     if (scr) scr.onpointerdown = (ev) => { if (!S.vcap) return; if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return; vaultCapTap(); };
+    gachaBind(scr, () => vaultCapTap());   // GACHA (round 17): hold to crack
     if (vaultM().pend) vaultCapOpen();   // a capsule paid for before a reload opens now (the same prize)
     else vaultDom();
     snd('vaultOpen');
@@ -2860,7 +2867,7 @@ const GAME = (() => {
     };
     pw.appendChild(cl); pw.appendChild(h('div', 'grow')); pw.appendChild(cr);
     b.appendChild(pw);
-    b.appendChild(vaultDetail());
+    b.appendChild(Vs.tab === 'minis' ? gachaDetail() : vaultDetail());   // (GACHA: the Minis tab)
     // the category tabs, a dot for anything new behind them
     const tabs = h('div', 'vTabs');
     for (const c of D().VAULT_CATS || []) {
@@ -2873,11 +2880,13 @@ const GAME = (() => {
       tabs.appendChild(tb);
     }
     seaVaultTab(tabs);   // the season's counter (SEASON block)
+    gachaVaultTab(tabs);   // GACHA (round 17): the Capsule Minis
     b.appendChild(tabs);
     // the shelf: a glowing slot per prize
     const shelf = h('div', 'vShelf');
     const list = schShelf(Vs.tab, seaShelf(Vs.tab, D().vaultList ? D().vaultList(Vs.tab) : []));   // (SEASON: the counter's stock, the event cosmetics you own) (SCHOOL: the diploma's marquee once it is yours)
     for (const id of list) shelf.appendChild(vaultCard(id));
+    gachaShelf(shelf);   // GACHA (round 17): the Minis tab's four series
     b.appendChild(shelf);
     try { if (scroll) shelf.scrollTop = scroll; } catch (e) { /* stub */ }
     // the capsule counter
@@ -2893,7 +2902,7 @@ const GAME = (() => {
     else { c2.appendChild(h('i', 'tixi')); c2.appendChild(h('b', null, String(price))); c2.appendChild(h('span', null, ' tickets')); }
     cw.appendChild(c2);
     cb.appendChild(cw);
-    bot.appendChild(cb);
+    if (!gachaDailyPill(bot)) bot.appendChild(cb);   // GACHA (round 17): the free daily capsule takes the button's place (the streak sits on it)
     const W0 = VLT().CAP_W || VLT0.CAP_W, tot = Object.keys(W0).reduce((s, k) => s + W0[k], 0) || 1;
     const left = Math.max(1, (VLT().PITY || 12) - V.pity);
     bot.appendChild(h('div', 'vOdds', `Rare ${Math.round(W0.r * 100 / tot)}% · Legendary ${Math.round(W0.l * 100 / tot)}%. Dupes pay tickets back. A legendary in ${left} or sooner.`));
@@ -3061,7 +3070,7 @@ const GAME = (() => {
     const tag = h('div', null, '');
     tag.id = 'vcapTag';
     top.appendChild(tag);
-    top.appendChild(h('div', 'capSrc', 'Vault Capsule · a cosmetic prize'));
+    top.appendChild(h('div', 'capSrc', p.daily ? 'Daily capsule · free' : 'Vault Capsule · a cosmetic prize'));   // (GACHA: the daily capsule)
     if (C.phase !== 'done' && p.lucky) top.appendChild(h('div', 'capPity', 'Twelve in a row without a legendary: this one is.'));
     b.appendChild(top);
     if (C.phase === 'done' && C.res) {
@@ -3076,6 +3085,7 @@ const GAME = (() => {
       card.appendChild(h('div', 'pn', d ? d.name : r.id));
       card.appendChild(h('div', 'pt', r.dupe ? `Already yours: +${r.tix} vault tickets back.` : (d ? d.text : '')));
       if (!r.dupe) card.appendChild(h('div', 'vNew', 'NEW!'));
+      gachaCard(card, r.mini);   // GACHA (round 17): the Capsule Mini that came with it
       const row = h('div', 'row center');
       if (!r.dupe) row.appendChild(btn('Equip it', () => { vaultEquip(r.id, true); vaultSave(); snd('vaultEquip'); vaultCapClose(r.id); }, 'go'));
       if (V.tix >= price) row.appendChild(btn(`Again · ${price}`, () => { S.vcap = null; vaultCapBuy(); }, 'gold'));
@@ -3104,7 +3114,7 @@ const GAME = (() => {
     const C = S.vcap;
     if (!C || S.screen !== 'vault') return false;
     if (C.phase === 'drop') { vaultCapLand(); return true; }
-    if (C.phase === 'burst') { vaultCapReveal(); return true; }
+    if (C.phase === 'burst') { gachaPreEnd(C); vaultCapReveal(); return true; }   // (GACHA: a tap in the charge pops it now)
     if (C.phase !== 'idle') return false;
     const i = C.taps++;
     C.idleT = 0;
@@ -3120,6 +3130,7 @@ const GAME = (() => {
     snd('capCrack', { n: i });
     haptic('capCrack');
     if (i >= 1 && C.stage < C.p.ups.length) vaultCapUp();
+    gachaCrack(C, i);   // GACHA (round 17): chips, the note ladder, PRIMED
     vaultCapHint();
     return true;
   }
@@ -3154,9 +3165,9 @@ const GAME = (() => {
   function vaultCapSkip() {
     const C = S.vcap;
     if (!C) return;
-    if (C.phase === 'burst') { vaultCapReveal(); return; }
+    if (C.phase === 'burst') { gachaPreEnd(C); vaultCapReveal(); return; }
     if (C.phase === 'drop') vaultCapLand(true);
-    if (C.phase === 'idle') { C.stage = C.p.ups.length; C.shown = C.p.tier; vaultCapBurst(); }
+    if (C.phase === 'idle') { C.stage = C.p.ups.length; C.shown = C.p.tier; gachaSkip(C); vaultCapBurst(); }
   }
   // The last tap: the prize is paid now and saved, so a reload never pays twice.
   function vaultCapPay() {
@@ -3168,7 +3179,8 @@ const GAME = (() => {
     else { V.owned[p.id] = 1; V.news[p.id] = 1; }
     V.caps++;
     V.pend = null;
-    C.res = { id: p.id, dupe, tix, tier: p.tier };
+    C.res = { id: p.id, dupe, tix, tier: p.tier, daily: !!p.daily };
+    gachaOnVault(C.res);   // GACHA (round 17): a Capsule Mini rides along (saved with this beat)
     vaultSave();
     return C.res;
   }
@@ -3176,6 +3188,13 @@ const GAME = (() => {
     const C = S.vcap;
     C.phase = 'burst'; C.bt = 0; C.flash = 1; C.shown = C.p.tier;
     const r = vaultCapPay();
+    if (gachaPre(C, r.tier, vaultCapPop)) return;   // GACHA (round 17): the charge before the pop (paid already)
+    vaultCapPop();
+  }
+  function vaultCapPop() {
+    const C = S.vcap;
+    if (!C || !C.res) return;
+    const r = C.res;
     const tier = TIER_I[r.tier] || 0, col = capCol(r.tier), reduced = !!fx().reduced;
     if (!reduced) fx().flash('#ffffff', 0.5 + tier * 0.1);
     fx().emit('confetti', C.x, C.y, { power: 1 + tier * 0.15, dir: -Math.PI / 2 - 0.5, spread: 1.4 });
@@ -3199,6 +3218,7 @@ const GAME = (() => {
     haptic('capBurst');
     const hEl = $('vcapHint'); if (hEl) clear(hEl);
     const tEl = $('vcapTier'); if (tEl) { tEl.textContent = vcapName(r.tier); tEl.className = 'capTier' + (r.tier === 'l' ? ' lg' : ''); }
+    gachaPop(C, tier);   // GACHA (round 17): chips, the chime ladder, confetti by tier, the legendary moment and slam
   }
   function vaultCapReveal() {
     const C = S.vcap;
@@ -3216,6 +3236,7 @@ const GAME = (() => {
     const C = S.vcap;
     if (!C) return;
     C.t += dt;
+    gachaTick(C, dt, vaultCapTap);   // GACHA (round 17): chips, hold to crack, PRIMED, the rare tease
     if (C.phase === 'drop' && C.t >= C.dropT) vaultCapLand();
     const reduced = !!fx().reduced;
     C.rotV += (-C.rot * 140 - C.rotV * 9) * dt; C.rot += C.rotV * dt;
@@ -3229,16 +3250,17 @@ const GAME = (() => {
       if (C.sparkT <= 0) { C.sparkT = 0.5 - (TIER_I[C.shown] || 0) * 0.1; fx().emit('glint', C.x + Math.sin(C.t * 7) * C.r * 0.9, C.y - C.r * 0.5 + Math.cos(C.t * 5) * C.r * 0.5, { col: capCol(C.shown) }); }
     }
     if (C.phase === 'burst') {
+      if (gachaPreTick(C, dt)) return;   // GACHA (round 17): the charge runs first
       C.bt += dt;
       C.open = Math.min(1, C.open + dt * (C.fast ? 4 : 2.8));
-      if (C.bt >= (C.fast ? 0.3 : 0.55)) vaultCapReveal();
+      if (C.bt >= (C.fast ? 0.3 : 0.55) + gachaHoldT(C)) vaultCapReveal();
     }
   }
   // The capsule scene over the vault wall: dim, rays (a rainbow set for a legendary), the pedestal, the capsule.
   function vaultCapDraw(ctx, t) {
     const C = S.vcap, R = X.RENDER;
     if (!C || !R || !R.capsule) return;
-    const col = capCol(C.shown), tier = TIER_I[C.shown] || 0, burst = C.phase === 'burst' || C.phase === 'done';
+    const col = capCol(C.shown), tier = TIER_I[C.shown] || 0, burst = (C.phase === 'burst' && !(C.g17 && C.g17.pop)) || C.phase === 'done';   // (GACHA: not while it charges)
     const u = C.phase === 'drop' ? U.clamp(C.t / C.dropT, 0, 1) : 1;
     const y = C.phase === 'drop' ? C.y - (1 - U.ease.outBounce(u)) * 560 : C.y;
     const rg = R.rgba || ((c) => c);
@@ -3275,7 +3297,8 @@ const GAME = (() => {
     const sh = 0.4 + 0.6 * U.clamp(1 - (C.y - y) / 560, 0, 1);
     ctx.beginPath(); ctx.ellipse(C.x, py - 2, 70 * sh, 12 * sh, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    R.capsule(ctx, C.x, y, C.r, { tier: C.shown, t, rot: C.rot, sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 11, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    R.capsule(ctx, C.x, y, C.r, { tier: gachaTierDraw(C, t), t, rot: C.rot + gachaJit(C, t), sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 11, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    gachaDraw(ctx, t, C, y);   // GACHA (round 17): the light leaking out, the legendary moment, the chips
     // the prize floats up out of the halves as it opens
     if (burst && C.res && R.vault) {
       const k = U.clamp(C.open, 0, 1);
@@ -3336,7 +3359,7 @@ const GAME = (() => {
     const R = X.RENDER;
     if (!R || !R.vault) return;
     R.vault.wall(ctx, W, H, t, { win: VLT_WIN });
-    vaultPrevDraw(ctx, t);
+    if (S.vault.tab === 'minis' && R.gacha) gachaPrevDraw(ctx, t, VLT_WIN); else vaultPrevDraw(ctx, t);   // (GACHA: the Minis turntable)
     R.vault.glass(ctx, VLT_WIN, t);
     if (S.vcap) vaultCapDraw(ctx, t);
   }
@@ -4250,6 +4273,7 @@ const GAME = (() => {
     spawnAll();
     pickGolden();
     cabFightStart();   // CAB (round 16): the Jackpot Lamp comes in from the run
+    techFightStart();   // TECH (round 17): Cabinet Tech's numbers, the lamp's oil, an event on turn 1
     setScreen('fight');
     if (opts.seed == null) { S.meta.stats.fights++; run.fights++; }
     music(tier === 'boss' ? 'boss' : tier === 'elite' ? 'elite' : 'fight');
@@ -6922,6 +6946,7 @@ const GAME = (() => {
     petDeliver(inst);   // hearts, XP, the firefly's spotlight (PETS block)
     rosDeliver(inst);   // a popped bubble's prize landed (ROS block)
     cabDeliver(inst, pos);   // CAB (round 16): sparks for the Jackpot Lamp, a prize with a face cheers
+    techDeliver(inst, pos);   // TECH (round 17): an arcade part lights more lamp cells
   }
   function playInst(inst) {
     if (!F || F.phase !== 'player') return;
@@ -6961,6 +6986,7 @@ const GAME = (() => {
     luckAfterGrab();
     nearMissAfterGrab();
     cabGrabDone();   // CAB (round 16): the PERFECT grip lets go, the surge's stays
+    techGrabDone();   // TECH (round 17): The Motherboard's catch, a whiff drains the lamp
     const evs = X.COMBAT.grabDone ? X.COMBAT.grabDone(F, FS.delivered) : [];
     enqueue(evs, PLAY_BEAT);
     afterAction();
@@ -7278,6 +7304,7 @@ const GAME = (() => {
     if (FS && !FS.done) matTurn();
     if (FS && !FS.done) mutTurn();   // Bomb Party's next bomb, Wobbly Legs' lurch (ENDLESS block)
     if (FS && !FS.done) cabTurn();   // CAB (round 16): a cabinet event may open the turn
+    if (FS && !FS.done) techTurn();   // TECH (round 17): a LAMP FEVER that burst on the enemy's turn pays now
     save();
   }
   /* outro (the natural end of a won fight, not the public call): the
@@ -7861,6 +7888,7 @@ const GAME = (() => {
     capDom();
     const scr = $('scr-capsule');
     if (scr) scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return; capsuleTap(); };
+    gachaBind(scr, () => capsuleTap());   // GACHA (round 17): hold to crack
     if (!cap.opened) snd('whoosh', { pitch: 0.8 });
     save();
   }
@@ -7904,6 +7932,7 @@ const GAME = (() => {
       card.appendChild(h('div', 'pt', p.fallback ? `You had that already: ${p.fallback} gold instead.` : info.text));
       if (p.k === 'item' || p.k === 'relic') { const kw = kwChips(p.k === 'item' ? itemDef(p.id) : relicDef(p.id)); if (kw) card.appendChild(kw); }
       if (p.k === 'relic' && !p.fallback) setTagOn(card, p.id);   // its set progress (SETS block)
+      gachaCard(card, cap.mini);   // GACHA (round 17): the Capsule Mini tucked inside
       card.appendChild(btn('Collect', () => collectCapsule(), 'gold'));
       holoOn(card, cap.tier);   // HOLO (round 9): the prize card in its capsule's rarity
       b.appendChild(card);
@@ -7916,6 +7945,7 @@ const GAME = (() => {
       // the whole screen is the tap target; the entry lets GAME.choose crack it
       S.ui.buttons.push({ el: $('scr-capsule'), fn: () => capsuleTap(), label: 'Crack' });
       b.appendChild(btn('Skip', () => skipCapsule(), 'sm ghost capSkip'));
+      gachaAllBtn(b, C);   // GACHA (round 17): Open all the banked capsules
     }
   }
   function capHint() {
@@ -7930,9 +7960,9 @@ const GAME = (() => {
   // One tap: crack harder, maybe turn rarer, or burst on the last one.
   function capsuleTap() {
     const C = S.cap;
-    if (!C || S.screen !== 'capsule') return false;
+    if (!C || S.screen !== 'capsule') return gachaAllTap();   // (GACHA: Open all)
     if (C.phase === 'drop') { capLand(); return true; }
-    if (C.phase === 'burst') { capReveal(); return true; }
+    if (C.phase === 'burst') { gachaPreEnd(C); capReveal(); return true; }   // (GACHA: a tap in the charge pops it now)
     if (C.phase !== 'idle') return false;
     const i = C.taps++;
     C.idleT = 0;
@@ -7949,6 +7979,7 @@ const GAME = (() => {
     snd('capCrack', { n: i });
     haptic('capCrack');
     if (i >= 1 && C.stage < C.cap.ups.length) capUpgrade();
+    gachaCrack(C, i);   // GACHA (round 17): chips, the note ladder, PRIMED
     capHint();
     return true;
   }
@@ -7984,10 +8015,11 @@ const GAME = (() => {
   function skipCapsule() {
     const C = S.cap;
     if (!C) return;
-    if (C.phase === 'burst') { capReveal(); return; }
+    if (C.phase === 'burst') { gachaPreEnd(C); capReveal(); return; }
     if (C.phase === 'drop') capLand(true);
     if (C.phase === 'idle') {
       if (C.stage < C.cap.ups.length) { C.stage = C.cap.ups.length; C.shown = C.cap.tier; const tEl = $('capTier'); if (tEl) { tEl.textContent = capName(C.shown); tEl.className = 'capTier' + (C.shown === 'l' ? ' lg' : ''); } }
+      gachaSkip(C);   // (GACHA: a skip pops at once)
       capBurst();
     }
   }
@@ -8009,18 +8041,27 @@ const GAME = (() => {
     if (!cap.opened) {
       cap.opened = true;
       grantPrize(cap.prize);
+      gachaOnOpen(cap);   // GACHA (round 17): maybe a Capsule Mini inside (its own stream, saved with the capsule)
       run.loot.capsOpened++;
       if (!run.loot.bestCap || TIER_I[cap.tier] > TIER_I[run.loot.bestCap]) run.loot.bestCap = cap.tier;
       if (C.cd.bank && run.caps.length) run.caps.shift();
       const then = C.cd.then;
       if (then && then.k === 'reward' && then.rw && then.rw.caps && C.cd.rwIdx != null && then.rw.caps[C.cd.rwIdx]) {
         const rc = then.rw.caps[C.cd.rwIdx];
-        rc.opened = true; rc.prize = cap.prize;
+        rc.opened = true; rc.prize = cap.prize; rc.mini = cap.mini;
       }
       metaLoot().caps++;
       saveMeta();
       save();
     }
+    if (gachaPre(C, cap.tier, capPop)) return;   // GACHA (round 17): the charge before the pop (paid already)
+    capPop();
+  }
+  // The pop itself: the halves fly, light pours out, confetti, rings (after the charge).
+  function capPop() {
+    const C = S.cap;
+    if (!C) return;
+    const cap = C.cap;
     const tier = TIER_I[cap.tier] || 0, col = capCol(cap.tier), reduced = !!fx().reduced;
     if (!reduced) fx().flash('#ffffff', 0.5 + tier * 0.1);
     fx().emit('confetti', C.x, C.y, { power: 1 + tier * 0.15, dir: -Math.PI / 2 - 0.5, spread: 1.4 });
@@ -8037,6 +8078,7 @@ const GAME = (() => {
     haptic('capBurst');
     const hEl = $('capHint'); if (hEl) clear(hEl);
     const tEl = $('capTier'); if (tEl) { tEl.textContent = capName(cap.tier); tEl.className = 'capTier' + (cap.tier === 'l' ? ' lg' : ''); }
+    gachaPop(C, tier);   // GACHA (round 17): chips, the chime ladder, confetti by tier, the legendary moment and slam
   }
   function capReveal() {
     const C = S.cap;
@@ -8069,8 +8111,9 @@ const GAME = (() => {
   // an idle hop that begs for a tap, the burst opening, sparkles.
   function capTick(dt) {
     const C = S.cap;
-    if (!C) return;
+    if (!C) return gachaAllTick(dt);   // (GACHA: Open all)
     C.t += dt;
+    gachaTick(C, dt, capsuleTap);   // GACHA (round 17): chips, hold to crack, PRIMED, the rare tease
     if (C.phase === 'drop' && C.t >= C.dropT) capLand();
     const reduced = !!fx().reduced;
     // wobble and squash springs
@@ -8086,18 +8129,19 @@ const GAME = (() => {
       if (C.sparkT <= 0) { C.sparkT = 0.5 - (TIER_I[C.shown] || 0) * 0.1; fx().emit('glint', C.x + Math.sin(C.t * 7) * C.r * 0.9, C.y - C.r * 0.5 + Math.cos(C.t * 5) * C.r * 0.5, { col: capCol(C.shown) }); }
     }
     if (C.phase === 'burst') {
+      if (gachaPreTick(C, dt)) return;   // GACHA (round 17): the charge runs first
       C.bt += dt;
       C.open = Math.min(1, C.open + dt * (C.fast ? 4 : 2.8));
-      if (C.bt >= (C.fast ? 0.3 : 0.55)) capReveal();
+      if (C.bt >= (C.fast ? 0.3 : 0.55) + gachaHoldT(C)) capReveal();
     }
   }
   // The capsule scene over the dimmed map: rays, a spotlight, the pedestal,
   // the capsule itself (RENDER.capsule). Drawn under the fx layer.
   function drawCapsule(ctx, t) {
     const C = S.cap, R = X.RENDER;
-    if (!C || !R || !R.capsule) return;
+    if (!C || !R || !R.capsule) return gachaAllDraw(ctx, t);   // (GACHA: Open all)
     const col = capCol(C.shown), tier = TIER_I[C.shown] || 0;
-    const burst = C.phase === 'burst' || C.phase === 'done';
+    const burst = (C.phase === 'burst' && !(C.g17 && C.g17.pop)) || C.phase === 'done';   // (GACHA: not while it charges)
     const u = C.phase === 'drop' ? U.clamp(C.t / C.dropT, 0, 1) : 1;
     const y = C.phase === 'drop' ? C.y - (1 - U.ease.outBounce(u)) * 560 : C.y;
     ctx.save();
@@ -8140,7 +8184,8 @@ const GAME = (() => {
     const sh = 0.4 + 0.6 * U.clamp(1 - (C.y - y) / 560, 0, 1);
     ctx.beginPath(); ctx.ellipse(C.x, py - 2, 70 * sh, 12 * sh, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    R.capsule(ctx, C.x, y, C.r, { tier: C.shown, t, rot: C.rot, sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 7, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    R.capsule(ctx, C.x, y, C.r, { tier: gachaTierDraw(C, t), t, rot: C.rot + gachaJit(C, t), sq: C.sq, crack: C.crack, open: C.open, flash: C.flash, seed: 7, glow: burst ? 0 : 0.55 + tier * 0.15 });
+    gachaDraw(ctx, t, C, y);   // GACHA (round 17): the light leaking out, the legendary moment, the chips
   }
 
   // ---- the payout tally (reward screen)
@@ -8319,9 +8364,11 @@ const GAME = (() => {
       col.appendChild(h('div', 'c1', `${capName(done ? cap.tier : cap.tier0)} capsule`));
       col.appendChild(h('div', 'c2', done ? `Opened: ${prizeOf(cap.prize).name}` : `${CAP_SRC[cap.src] || 'Bonus'}! Tap to crack it open.`));
       el.appendChild(col);
+      gachaSlotLook(el, cap);   // GACHA (round 17): rarity lighting, the mini it held
       el.onclick = () => { if (!cap.opened) openRewardCap(rw, i); };
       box.appendChild(el);
     });
+    gachaSlots(box, rw);   // GACHA (round 17): Open all (a DOM tap, not a GAME.choose entry)
   }
   function openRewardCap(rw, i) {
     const cap = rw && rw.caps && rw.caps[i];
@@ -14657,6 +14704,7 @@ const GAME = (() => {
   }
   function onKey(ev, down) {
     const k = ev.key;
+    if (qa17Key(ev, down)) return;   // QA17 (round 17): the screen a key press began on; Escape is Back on the Prizedex, Stickers, Help and Tips
     if (accKey(ev, down)) return;   // ACCESS: the Settings panel takes the keys (Escape closes it)
     if (hisKey(ev, down)) return;   // HISTORY: photo mode, the recap, the History screen's Escape
     if (loreKey(ev, down)) return;   // LORE: skip the act card, close the board, Escape out of the Codex and the weekly screen
@@ -15062,6 +15110,7 @@ const GAME = (() => {
     // glass shards left by a shattered item
     if (R && R.shard) for (const s2 of FS.debris) R.shard(ctx, CAB.x + s2.x, CAB.y + s2.y, s2.a, (s2.parts && s2.parts[0] ? s2.parts[0].r : 4) + 1.5, s2.data.col);
     cabDrawIn(ctx, t);   // CAB (round 16): the surge on the rail, the cabinet's coins and capsules
+    techDrawIn(ctx, t);   // TECH (round 17): the Laser Sight's aim
     if (FS.chuteFlash > 0) {
       const cx = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW);
       ctx.fillStyle = 'rgba(255,201,77,' + (0.5 * FS.chuteFlash / 0.35).toFixed(3) + ')';
@@ -15606,6 +15655,7 @@ const GAME = (() => {
     S.t += dt;
     fx().update(dt);
     rollStep(real);
+    qa17HudFit();   // QA17 (round 17): the resource row squeezes when big numbers or a badge outgrow it
     annTick(real);   // the big banners, one at a time (ANNOUNCER)
     if (S.screen === 'map' || S.screen === 'fight') ambientTick(real);
     lootTick(real);   // payout tally, capsule ritual, the ticket stream
@@ -15643,6 +15693,7 @@ const GAME = (() => {
       if (FS) bestTick(dt, real);   // the bestiary's machine tricks (BESTIARY)
       if (FS) secTick(dt, real);   // The Machine: phases, the shutter, the cracks, the power down (SECRET)
       if (FS) cabTick(dt, real);   // CAB (round 16): the event sign, the lamp, the cabinet's coins and capsules, the strain, the faces
+      if (FS) techTick(dt, real);   // TECH (round 17): Double Feature's second reel, the laser's blink
       if (FS && FS.outro) { FS.outro.t -= real; if (FS.outro.t <= 0) finishOutro(); }
       if (FS && (FS.dirty || (S.t - (S.hudT || 0)) > 0.15)) { FS.dirty = false; S.hudT = S.t; refreshHud(false); }
     }
@@ -22708,6 +22759,7 @@ const GAME = (() => {
         if (Dd.last) Dd.last.pts += pts;
         V.flash[who] = 1;
         duoLog({ k: 'late', who, i: d.pile, v: pts });
+        if (Dd.net) qa17VsLate();   // QA17: online, the rival's phone takes the late points too (the table goes over again)
       }
       return;
     }
@@ -24503,13 +24555,14 @@ const GAME = (() => {
     if (!Dd || !Dd.net || !N || N.alone || Dd.mode !== 'vs' || Dd.ph === 'end') return false;
     const n = dnInt(m.n, 0, 1e7, 0);
     if (!(n > N.inN)) return false;   // already applied (a resend after a rejoin)
-    const ev = m.ev === 'drop' || m.ev === 'pass' || m.ev === 'next' ? m.ev : '';
+    const ev = m.ev === 'drop' || m.ev === 'pass' || m.ev === 'next' || m.ev === 'late' ? m.ev : '';   // (QA17: 'late', a straggler scored after the drop)
     const tb = ev ? duoVsNetTableIn(m.tb) : null;
     if (!tb) { duoNetLog({ k: 'badtable', n, ev }); return false; }
     if (tb.r < (Dd.round | 0)) return false;   // an old round
     const newer = tb.r > (Dd.round | 0);
     if (!newer && Dd.ph !== 'watch' && Dd.ph !== 'toss') { duoNetLog({ k: 'vt?', ph: Dd.ph, ev }); return false; }   // only the one watching takes a table
-    if (ev === 'drop' && (!tb.last || tb.last.who === N.me)) { duoNetLog({ k: 'badtable', n, ev }); return false; }
+    if ((ev === 'drop' || ev === 'late') && (!tb.last || tb.last.who === N.me)) { duoNetLog({ k: 'badtable', n, ev }); return false; }
+    if (ev === 'late' && (newer || Dd.ph !== 'watch')) { duoNetLog({ k: 'vt?', ph: Dd.ph, ev }); return false; }
     N.inN = n; N.outN = Math.max(N.outN, n);
     if (netOk()) NET.have(n + 1);
     duoVsNetAdopt(tb);
@@ -24517,6 +24570,7 @@ const GAME = (() => {
     const V = S.duoV;
     if (V) { V.card = null; V.fog = 0; V.mirror = false; V.tilt = 0; }
     duoNetLog({ k: 'vrecv', n, ev, end: !!m.end });
+    if (ev === 'late') return qa17VsLateIn();   // (QA17) the late points on the result the watcher is looking at
     if (ev !== 'drop') return duoVsNetTurn();   // a pass (my drop now) or a new round (whoever starts it)
     const L = Dd.last;
     duoVsNetDropFx(L);
@@ -25949,10 +26003,10 @@ const GAME = (() => {
     const C = cabFS();
     if (!C || !cabOn() || FS.done || F.phase !== 'player') return;
     const turn = (FS.turnsTaken | 0) + 1;
-    if (turn < CABK.evFirst || C.evTurn === turn) return;
+    if (turn < (techMods().first ? 1 : CABK.evFirst) || C.evTurn === turn) return;   // (TECH round 17: from turn 1)
     C.evTurn = turn;
     const r = U.rng((((FS.seed >>> 0) ^ 0xcab16e ^ Math.imul(turn, 0x9e3779b1)) >>> 0) || 1);
-    if (r() >= CABK.evP) return;
+    if (r() >= CABK.evP + techMods().evP) return;   // (TECH round 17: Joy Stick, the Service Key, Double Feature, the Motherboard)
     let u = r() * (CABK.evW.surge + CABK.evW.coins + CABK.evW.capsule), id = 'capsule';
     for (const k of CAB_IDS) { if (u < CABK.evW[k]) { id = k; break; } u -= CABK.evW[k]; }
     if (id === 'capsule' && !cabCapOk()) id = 'coins';
@@ -26000,6 +26054,7 @@ const GAME = (() => {
       if (cabCapOk()) { C.caps++; C.spawnQ.push({ kind: 'cap', tier: E.tier, x: 50 + E.xs[CABK.coinN] * Math.max(20, bw - 100), y: 16 }); C.spawnT = 0; }
       snd('capDrop');
     }
+    techEvLand(E);   // TECH (round 17): the relics hear it, the Coin Hopper's coins, Double Feature's second reel
     FS.dirty = true;
   }
   // endTurn: the surge runs out, the coins left in the bin sink away, a sign still spinning is put away.
@@ -26081,7 +26136,7 @@ const GAME = (() => {
     cabRemove(b);
     if (d.cab === 'coin') {
       if (F.phase !== 'player' || FS.done || !X.COMBAT.gainGold) return;
-      X.COMBAT.gainGold(F, CABK.coinGold);
+      X.COMBAT.gainGold(F, CABK.coinGold + techMods().coinGold);   // (TECH round 17: the Coin Hopper)
       enqueue([], PLAY_BEAT);
       const gp = hudPoint($('goldTxt'), GOLD_HUD.x, GOLD_HUD.y);
       fx().fly(x, y, gp.x, gp.y, { kind: 'coin', dur: 0.55, arc: 140, size: 7, cb: () => { const g = $('goldTxt'); replay(g && g.parentNode, 'bump'); } });
@@ -26139,10 +26194,11 @@ const GAME = (() => {
       fx().text(W / 2, CAB.y + 120, 'LAMP FEVER!', '#ffe066', { size: 30, life: 1.8, dy: -40 });
       FS.party = 2.2; FS.marquee = 'LAMP FEVER!';
       C.feverN++; cabM().fevers++;
+      techFever(C.feverN);   // TECH (round 17): the relics hear it (held for your turn), Joy Stick's unlock
     }
     if (!Fv.burst && Fv.t >= CABK.feverBurst) {
       Fv.burst = true;
-      C.lamp = U.clamp(C.lamp - CABK.lampMax, 0, CABK.lampMax - 1); C.lampShow = C.lamp; C.lampPop = 1; C.lampUsed = true;   // one fever at a time: an overflow carries, never a second burst
+      C.lamp = U.clamp(C.lamp - CABK.lampMax, 0, CABK.lampMax - 1); C.lampShow = qa17LampShown(C); C.lampPop = 1; C.lampUsed = true;   // one fever at a time: an overflow carries, never a second burst (QA17: the sparks still flying light their own cells)
       fx().emit('confetti', CAB_LAMP.x, CAB_LAMP.y, { n: 1.2, power: 1.1 });
       fx().emit('coins', CAB_LAMP.x, CAB_LAMP.y, { n: 1, power: 1, dir: -Math.PI / 2 - 0.4 });
       fx().ring(CAB_LAMP.x, CAB_LAMP.y, '#ffe066', { r0: 10, r1: 220, w: 9, life: 0.6 });
@@ -26151,7 +26207,7 @@ const GAME = (() => {
       fx().text(W / 2, CAB.y + 160, 'Prizes rain into the cabinet!', '#fff6c0', { size: 16, life: 1.6 });
       haptic('jackpot');
       const bw = binW(), r = C.rng;
-      let coins = CABK.rainCoins;
+      let coins = CABK.rainCoins + techMods().coins;   // (TECH round 17: the Coin Hopper)
       for (let i = 0; i < CABK.rainCaps; i++) {
         if (cabCapOk()) { C.caps++; C.spawnQ.push({ kind: 'cap', tier: cabTier(r()), x: 40 + r() * Math.max(20, bw - 80), y: 14 }); } else coins += 2;
       }
@@ -26211,18 +26267,19 @@ const GAME = (() => {
     haptic('clamp');
     FS.party = Math.max(FS.party, 0.5); FS.marquee = 'PERFECT!';
     cabLampAdd(CABK.lamp.perfect, x, y);
+    techPerfect(C.perfN, x, y);   // TECH (round 17): the relics hear it, Joy Stick's extra lamp cell
   }
   /* The prize the palm comes down on (the topmost one under the hub at the
      drop), when the aim is dead centre on it (within CABK.perfX x the claw's
      width): {b, dx}, else null. */
   function cabUnderPalm(x) {
     let top = null;
-    const look = (b) => { if (b.held > 0 || b.x > binW()) return; const dx = Math.abs(b.x - x); if (dx < Math.max(6, (b.br || 12) * 0.8) && (!top || b.y - (b.br || 12) < top.y - (top.br || 12))) top = b; };
+    const look = (b) => { if (b.held > 0 || b.x > binW()) return; const dx = Math.abs(b.x - x); if (dx < Math.max(6 + techMods().perfX, (b.br || 12) * 0.8) && (!top || b.y - (b.br || 12) < top.y - (top.br || 12))) top = b; };
     for (const b of FS.items) look(b);
     if (FS.cab) for (const b of FS.cab.bodies) look(b);
     if (!top) return null;
     const dx = Math.abs(top.x - x), k = (clawFor().width || 1) * (FS.rig && FS.rig.type === 'scoop' ? 1.4 : 1);
-    return dx <= CABK.perfX * k ? { b: top, dx } : null;
+    return dx <= (CABK.perfX + techMods().perfX) * k ? { b: top, dx } : null;   // (TECH round 17: the Laser Sight)
   }
   // The strain of a load of this mass, 0..1.
   const cabStrainK = (m) => U.clamp(((+m || 0) - CABK.strainM[0]) / (CABK.strainM[1] - CABK.strainM[0]), 0, 1);
@@ -26435,6 +26492,1016 @@ const GAME = (() => {
     };
   }
   // ================================================================ /CAB
+
+  // ================================================================ TECH (round 17): Cabinet Tech and Joy Stick
+  /* DESIGN.md "Cabinet Tech and the new crawler (round 17)". The relics of the Cabinet Tech
+     family (and Joy Stick's gift) bend the round 16 cabinet: DATA.techMods(run.relics, run.char)
+     adds up their numbers once at the bell (FS.tech.m) and the CAB block reads them through
+     techMods() in six one-line hooks (cabTurn: events from turn 1 and more often; cabEvLand:
+     techEvLand; cabCollect: a coin's gold; cabFeverTick: techFever and the rain's coins;
+     cabPerfect: techPerfect; cabUnderPalm: the PERFECT window). Whatever the relics do in the
+     fight goes through COMBAT.techCab -> the relics' onCab hook, on the player's own turn only:
+     a LAMP FEVER that goes off after END TURN waits in FS.tech.pend for the next one (techTurn).
+     A quiet cabinet (Duo, a headless suite without CABK.force) has no events: techMods() is all
+     zeros there and COMBAT's F.tech.on stays false, so the event relics ring every 2nd turn.
+     Fight-only state in FS.tech, never saved (a reload replays the seeded fight). */
+  const TECHK = { first1: 1.3, dblWait: 1.1, dblGap: 0.35 };
+  const TECH0 = Object.freeze({ evP: 0, first: 0, perfX: 0, laser: 0, lampStart: 0, coins: 0, coinGold: 0, double: 0, perfLamp: 0, drain: 0 });
+  // Every new English line this block shows (the i18n suite checks each has its Dutch) and the patterns with an example.
+  const TECH_WORDS = ['DOUBLE FEATURE!', 'Set off LAMP FEVER to unlock', 'LOCK', 'REMOTE', 'LASER', 'SERVICE KEY', 'LAMP OIL', 'HOPPER', 'METRONOME',
+    'FEVER DREAM', 'BREAKER', 'TRICK SHOT', 'DOUBLE FEATURE', 'MOTHERBOARD'];
+  const TECH_PATTERNS = { 'LAMP +{n}': 'LAMP +2', 'LAMP -{n}': 'LAMP -3', 'LAMP OIL +{n}': 'LAMP OIL +4', 'METRONOME x{n}': 'METRONOME x3' };
+  ACH_EV.tech = 1;   // Perfect Game reads the cabinet's PERFECT events (META block)
+  function techCalc() {
+    const run = S.run;
+    if (!run || !D().techMods) return TECH0;
+    try { return D().techMods(run.relics || [], run.char) || TECH0; } catch (e) { return TECH0; }
+  }
+  function techFS() {
+    if (!FS) return null;
+    if (!FS.tech) FS.tech = { m: techCalc(), pend: [], dbl: null, dblTurn: -9, oil: 0, laserT: 0 };
+    return FS.tech;
+  }
+  // The cabinet numbers of this fight (all zeros without a fight or with a quiet cabinet).
+  function techMods() {
+    if (!FS || !F || !cabOn()) return TECH0;
+    const T = techFS();
+    return T ? T.m : TECH0;
+  }
+  // A profile that has seen LAMP FEVER (Joy Stick's unlock, for a profile from round 16).
+  const techFeverSeen = () => !!(S.meta && S.meta.cab && (+S.meta.cab.fevers || 0) > 0);
+  // The cabinet did something on the player's turn: the relics answer through COMBAT.
+  function techCab(kind, v, id) {
+    if (!F || !X.COMBAT || !X.COMBAT.techCab) return [];
+    const all = X.COMBAT.techCab(F, kind, v, id) || [];
+    // the cabinet's own event is read at once (Perfect Game) and never queued: a turn with no relic answering keeps its pace
+    const evs = all.filter((e) => { if (e && e.t === 'tech') { metaEvent(e); return false; } return true; });
+    for (let i = F.events.length - 1; i >= 0; i--) if (F.events[i] && F.events[i].t === 'tech') F.events.splice(i, 1);
+    if (evs.some((e) => e && e.t === 'proc' && e.src === 'relic')) techZap(kind);
+    if (evs.length) enqueue(evs, PROC_BEAT);
+    return all;
+  }
+  // A Cabinet Tech relic answered: a pink spark where the cabinet did it (the sign, the claw, the lamp), a circuit beep.
+  function techZap(kind) {
+    const rig = FS && FS.rig;
+    const p = kind === 'fever' ? CAB_LAMP : kind === 'perfect' && rig ? { x: CAB.x + rig.x, y: CAB.y + rig.y + 40 } : { x: CAB.x + binW() / 2, y: CAB.y + 150 };
+    fx().ring(p.x, p.y, '#ff7ad9', { r0: 8, r1: 64, w: 4, life: 0.35 });
+    fx().emit('shock', p.x, p.y, { n: fx().reduced ? 0.2 : 0.5, col: '#ff7ad9' });
+    snd('techBeep', { kind });
+  }
+  // startFight: the numbers, COMBAT told, the Lamp Oil, an event on turn 1.
+  function techFightStart() {
+    if (!FS || !F) return;
+    FS.tech = null;
+    const T = techFS(), on = cabOn();
+    if (X.COMBAT && X.COMBAT.techOn) X.COMBAT.techOn(F, on);
+    if (!on || !T) return;
+    const m = T.m, C = cabFS();
+    if (!C) return;
+    if (m.lampStart > 0) {
+      const was = C.lamp;
+      C.lamp = Math.min(CABK.lampMax, C.lamp + m.lampStart); C.lampShow = C.lamp; C.lampUsed = true;
+      T.oil = C.lamp - was;
+      if (T.oil > 0) fx().text(CAB_LAMP.x - 40, CAB_LAMP.y + 30, 'LAMP OIL +' + T.oil, '#ffe066', { size: 14, life: 1.4, dy: 24 });
+      if (C.lamp >= CABK.lampMax && !C.fever) C.fever = { t: -1.6, burst: false };
+    }
+    if (m.first && !C.ev) { cabTurn(); if (C.ev) C.ev.t -= TECHK.first1; }   // the sign waits for the bell's banner
+    if (F.tech && F.tech.gift && S.run && !(S.run.fights | 0) && FS.tier === 'normal' && D().TECH) toast(D().TECH.TIP, 3);   // (never over a versus card)
+  }
+  // cabEvLand: the relics hear the event, the Coin Hopper pours more coins, Double Feature queues its second reel.
+  function techEvLand(E) {
+    const T = techFS(), C = FS && FS.cab;
+    if (!T || !C || !E || !cabOn()) return;
+    const m = T.m, turn = (FS.turnsTaken | 0) + 1;
+    techCab('event', 0, E.id);
+    if (E.id === 'coins' && m.coins > 0) {
+      const bw = binW();
+      for (let i = 0; i < m.coins; i++) C.spawnQ.push({ kind: 'coin', x: 30 + C.rng() * Math.max(20, bw - 60), y: 14 + (i % 3) * 10 });
+      C.spawnT = 0;
+    }
+    if (m.double > 0 && !E.dbl && !T.dbl) {   // the second reel never doubles again
+      T.dblTurn = turn;
+      const ids = CAB_IDS.filter((k) => k !== E.id && (k !== 'capsule' || cabCapOk()));
+      T.dbl = { id: ids[Math.floor(C.rng() * ids.length)] || 'coins', at: S.t + TECHK.dblWait, turn };
+    }
+  }
+  // cabFeverTick: LAMP FEVER went off. Joy Stick unlocks; the relics answer on your turn.
+  function techFever(n) {
+    const u = S.meta ? checkUnlocks('fever') : [];
+    if (u.length) { saveMeta(); toast('Unlocked: ' + u.map((id) => (charDef(id) || {}).name || id).join(', '), 3); }
+    const T = techFS();
+    if (!T || !F) return;
+    if (F.phase === 'player' && !FS.done) techCab('fever', n);
+    else T.pend.push(['fever', n]);
+  }
+  // finishEnemyTurn: a fever held over from the enemy's turn pays now.
+  function techTurn() {
+    const T = FS && FS.tech;
+    if (!T || !T.pend.length || !F || F.phase !== 'player') return;
+    for (const [k, n] of T.pend.splice(0)) techCab(k, n);
+  }
+  // cabPerfect: the relics hear the streak; Joy Stick (and the Motherboard) light more lamp cells.
+  function techPerfect(n, x, y) {
+    const T = techFS();
+    if (!T || !cabOn()) return;
+    if (T.m.perfLamp > 0) {
+      cabLampAdd(T.m.perfLamp, x, y);
+      fx().text(x + 44, y - 18, 'LAMP +' + T.m.perfLamp, '#ff7ad9', { size: 13, life: 1, dy: -26 });
+    }
+    techCab('perfect', n);
+  }
+  // deliver: an arcade part (an item's `lamp`) lights more cells, for anyone who holds it.
+  function techDeliver(inst, pos) {
+    if (!FS || !inst || !pos || !cabOn()) return;
+    const def = itemDef(inst.id), n = def ? def.lamp | 0 : 0;
+    if (n > 0 && !inst.frozen) cabLampAdd(n, pos.x, pos.y);
+  }
+  // grabFinished: the Motherboard's catch, a grab that brought nothing up drains the lamp.
+  function techGrabDone() {
+    const T = FS && FS.tech, C = FS && FS.cab;
+    if (!T || !C || !T.m.drain || !cabOn() || (FS.delivered | 0) > 0 || C.lamp <= 0) return;
+    const d = Math.min(C.lamp, T.m.drain);
+    C.lamp -= d; C.lampShow = Math.min(C.lampShow, C.lamp); C.lampUsed = true; C.lampPop = 1;
+    fx().text(CAB_LAMP.x - 30, CAB_LAMP.y + 28, 'LAMP -' + d, '#ff5a4a', { size: 14, life: 1, dy: 22 });
+    snd('cabCreak', { vel: 0.6 });
+  }
+  // update: Double Feature's second reel starts once the first sign has landed and held a moment.
+  function techTick(dt, real) {
+    const T = FS && FS.tech;
+    if (!T || !F || S.screen !== 'fight') return;
+    T.laserT += real || 0;
+    const Q = T.dbl, C = FS.cab;
+    if (!Q) return;
+    if (!C || FS.done || F.phase !== 'player' || Q.turn !== (FS.turnsTaken | 0) + 1) { T.dbl = null; return; }
+    if (S.t < Q.at || (C.ev && !C.ev.landed)) return;
+    T.dbl = null;
+    const E2 = cabEvStart(Q.id, C.rng);
+    if (!E2) return;
+    E2.dbl = true; E2.t = -TECHK.dblGap;
+    fx().text(CAB.x + binW() / 2, CAB.y + 92, 'DOUBLE FEATURE!', '#ff7ad9', { size: 20, life: 1.3, dy: -30 });
+    snd('techDouble');
+    techCab('double', 0, Q.id);
+  }
+  // drawFight (in the cabinet's clip): the Laser Sight's beam from the claw down to the pile, gold when a drop would be PERFECT.
+  const TECH_LST = { lock: false, t: 0, reduced: false };
+  function techDrawIn(ctx, t) {
+    const T = FS && FS.tech, rig = FS && FS.rig, R = X.RENDER;
+    if (!T || !T.m.laser || !rig || !R || !R.tech || !R.tech.laser || !cabOn()) return;
+    if (rig.phase !== 'idle' && rig.phase !== 'moving') return;
+    let y1 = CAB.h - 10;
+    for (const b of FS.items) { const r = b.br || 12; if (Math.abs(b.x - rig.x) < r * 0.8 && b.y - r < y1) y1 = b.y - r; }
+    TECH_LST.lock = !!cabUnderPalm(rig.x); TECH_LST.t = t; TECH_LST.reduced = !!fx().reduced;
+    R.tech.laser(ctx, CAB.x + rig.x, CAB.y + rig.y + 22, CAB.y + y1, TECH_LST);
+  }
+  function TECH_API() {
+    return {
+      K: TECHK, WORDS: TECH_WORDS, PATTERNS: TECH_PATTERNS, ZERO: TECH0,
+      mods: () => techMods(), fs: () => (FS ? techFS() : null), feverSeen: techFeverSeen, fightStart: techFightStart, evLand: techEvLand,
+      fever: techFever, turn: techTurn, perfect: techPerfect, deliver: techDeliver, grabDone: techGrabDone, tick: techTick, draw: techDrawIn,
+      recalc: () => { if (FS) { FS.tech = null; techFS(); } },
+      // the prize a drop at x would land PERFECT on ({b, dx} or null: the Laser Sight's LOCK)
+      palm: (x) => (FS && FS.items ? cabUnderPalm(x) : null),
+    };
+  }
+  // ================================================================ /TECH
+
+  // ================================================================ GACHA (round 17): Capsule fever
+  /* DESIGN.md "Capsule fever (round 17)". Feel and collection, never power:
+     nothing here changes a capsule's odds, tiers or prize.
+       - the build-up: each crack throws shell chips and climbs a note; one tap
+         left the capsule is PRIMED (it trembles, light leaks from the cracks
+         in its colour, a hum); a common or uncommon one sometimes flickers
+         gold and fizzles (the rare tease: looks only, DATA.GACHA.tease); the
+         last tap pays at once (as before) but the pop waits a charge
+         (0.22 / 0.32 / 0.6 / 1.25 s by tier); a legendary gets the room
+         going dark, gold god rays over the whole screen, sparks rushing in,
+         its jingle, slow motion and a LEGENDARY slam; confetti by tier
+       - hold to crack (auto taps), Skip pops at once, Open all: every
+         capsule on the reward screen (or in the bank) fans out and pops in a
+         row, each paid once, a reload resumes it
+       - Capsule Minis: a figurine tucked into a capsule (DATA.GACHA), NEW! or
+         a dupe's vault tickets, four series; a finished series pays a
+         rainbow Prize Vault cosmetic; a Minis tab in the Prize Vault
+       - the daily capsule: a free Vault Capsule once a real day, a streak
+         bonus in vault tickets (a badge on the title's Vault tile, a pill in
+         the vault's top bar)
+     Hooks (one line each): loadMeta (gachaMetaFix), showCapsule / showVault
+     (gachaBind), capsuleTap / vaultCapTap (gachaCrack, gachaPreEnd,
+     gachaAllTap), skipCapsule / vaultCapSkip (gachaSkip), capBurst /
+     vaultCapBurst (gachaOnOpen / gachaOnVault, gachaPre), capPop /
+     vaultCapPop (gachaPop), capTick / vaultCapTick (gachaTick,
+     gachaPreTick, gachaHoldT, gachaAllTick), drawCapsule / vaultCapDraw
+     (gachaJit, gachaTierDraw, gachaDraw, gachaAllDraw), capDom /
+     vaultCapDom (gachaCard, gachaAllBtn), lootCapSlots (gachaSlotLook,
+     gachaSlots), load (gachaAllShow), vaultTitleBtn (gachaDailyReady),
+     vaultDom (gachaDailyPill, gachaVaultTab, gachaDetail, gachaShelf),
+     vaultDraw (gachaPrevDraw). Meta: gacha {minis {id: n}, news {id: 1},
+     series {id: 1}, rolls, opened, dupeTix, day, streak, best, days, bonus}. */
+  const GK = {
+    pre: { c: 0.22, u: 0.32, r: 0.6, l: 1.25 },   // the charge before the pop
+    hold: { c: 0, u: 0, r: 0.25, l: 0.9 },          // the pop lingers before the card
+    holdWait: 0.3, holdEvery: 0.19,                 // hold to crack: the first auto tap, then one every
+    chipMax: 80, teaseAt: 0.35, teaseLen: 0.7,
+    allGap: 0.32, allGapFast: 0.2, allWait: 0.6,
+  };
+  const G17 = { now: null, hold: null, chips: [], chipN: 0, all: null, cel: null };
+  const GD = () => D().GACHA || null;
+  Object.assign(FEEL_BUZZ, { g17Prime: [8, 30, 8, 30, 8], g17Charge: [12, 20, 16, 20, 22, 20, 30], g17Legend: [40, 60, 40, 60, 60, 40, 220], g17New: [18, 40, 28] });
+
+  // ---- meta
+  function gachaMetaFix(m, o) {
+    if (!m) return m;
+    const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : null;
+    const src = obj(o && typeof o === 'object' ? o.gacha : null) || obj(m.gacha) || {};
+    const num = (v) => Math.max(0, Math.floor(+v || 0));
+    const Gd = GD(), ids = Gd ? Gd.MINIS : {};
+    const g = { minis: {}, news: {}, series: {}, rolls: num(src.rolls), opened: num(src.opened), dupeTix: num(src.dupeTix),
+      day: typeof src.day === 'string' ? src.day.slice(0, 10) : '', streak: num(src.streak), best: num(src.best), days: num(src.days), bonus: num(src.bonus) };
+    const mm = obj(src.minis) || {};
+    for (const id in mm) if (ids[id] && num(mm[id]) > 0) g.minis[id] = num(mm[id]);
+    const nw = obj(src.news) || {};
+    for (const id in nw) if (nw[id] && g.minis[id]) g.news[id] = 1;
+    const se = obj(src.series) || {};
+    for (const s of (Gd ? Gd.SERIES : [])) if (se[s.id] && Gd.seriesIds(s.id).every((id) => g.minis[id])) g.series[s.id] = 1;
+    g.best = Math.max(g.best, g.streak);
+    m.gacha = g;
+    return m;
+  }
+  function gachaM() {
+    if (!S.meta) S.meta = freshMeta();
+    const g = S.meta.gacha;
+    if (!g || !g.minis || !g.news || !g.series) gachaMetaFix(S.meta);
+    return S.meta.gacha;
+  }
+  const gachaMini = (id) => (GD() && GD().MINIS[id]) || null;
+  const gachaSer = (sid) => (GD() ? GD().SERIES.find((s) => s.id === sid) : null) || null;
+  const gachaSerHave = (sid) => { const g = gachaM(); return GD() ? GD().seriesIds(sid).filter((id) => g.minis[id] > 0).length : 0; };
+
+  // ---- the minis: one tucked into a capsule, a dupe's tickets, a finished series' cosmetic
+  function gachaGrant(id) {
+    const Gd = GD(), g = gachaM(), d = gachaMini(id);
+    if (!d) return null;
+    const n = (g.minis[id] | 0) + 1;
+    g.minis[id] = n;
+    const res = { id, n, fresh: n === 1, tix: 0, series: d.series, done: false, cos: null, stix: 0 };
+    const V = vaultM();
+    if (!res.fresh) { res.tix = Gd.DUPE[d.rarity] || 0; g.dupeTix += res.tix; V.tix += res.tix; }
+    else {
+      g.news[id] = 1;
+      if (!g.series[d.series] && Gd.seriesIds(d.series).every((x) => g.minis[x] > 0)) {
+        g.series[d.series] = 1; res.done = true;
+        const s = gachaSer(d.series);
+        if (s && s.reward && vaultDef(s.reward) && !V.owned[s.reward]) { V.owned[s.reward] = 1; V.news[s.reward] = 1; res.cos = s.reward; }
+        else { res.stix = Gd.SERIES_TIX || 0; V.tix += res.stix; }
+      }
+    }
+    return res;
+  }
+  // A run capsule bursts: maybe a mini inside (its own stream: the capsule's rolls are untouched).
+  function gachaOnOpen(cap) {
+    if (!cap || cap.mini !== undefined || !GD()) return cap ? cap.mini || null : null;
+    const g = gachaM(), Gd = GD();
+    const rng = U.rng(U.hashStr('gacha:' + g.rolls + ':' + ((S.run && S.run.seed) || 0) + ':' + cap.src + ':' + cap.tier));
+    g.rolls++; g.opened++;
+    cap.mini = Gd.hasMini(rng, cap.tier) ? gachaGrant(Gd.rollMini(rng, cap.tier)) : null;
+    return cap.mini;
+  }
+  // A Vault (or daily) capsule always has one.
+  function gachaOnVault(res) {
+    if (!res || res.mini !== undefined || !GD()) return res ? res.mini || null : null;
+    const g = gachaM(), Gd = GD();
+    const rng = U.rng(U.hashStr('gacha-v:' + g.rolls + ':' + vaultM().caps + ':' + res.id));
+    g.rolls++; g.opened++;
+    res.mini = gachaGrant(Gd.rollMini(rng, res.tier));
+    return res.mini;
+  }
+
+  // ---- the build-up on a capsule ritual (C: S.cap or S.vcap)
+  function gachaC(C) {
+    if (!C.g17) {
+      const cap = C.cap || C.p || {};
+      const key = C.cap ? cap.src + ':' + cap.tier0 + ':' + cap.tier + ':' + JSON.stringify(cap.prize || null) : 'v:' + cap.id + ':' + cap.tier0 + ':' + cap.tier;
+      C.g17 = { prime: 0, primed: false, tease: !!(GD() && GD().tease(key, cap.tier)), teaseT: -1, teaseK: 0, teaseOn: false, pre: 0, preMax: 0, pop: null,
+        legend: 0, seed: (U.hashStr(key) % 997) + 1, tier: cap.tier };
+    }
+    return C.g17;
+  }
+  const gachaLeft = (C) => Math.max(0, C.burstTap + 1 - C.taps);
+  // Shell chips off the capsule (x, y, r) in col.
+  function gachaChips(x, y, r, col, n, pw) {
+    const reduced = !!fx().reduced;
+    n = Math.round(n * (reduced ? 0.5 : 1));
+    for (let i = 0; i < n; i++) {
+      if (G17.chipN >= GK.chipMax) break;
+      const c = G17.chips[G17.chipN] || (G17.chips[G17.chipN] = {});
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = (220 + Math.random() * 260) * (pw || 1);
+      c.x = x + Math.cos(a) * r * 0.8; c.y = y + Math.sin(a) * r * 0.6;
+      c.vx = Math.cos(a) * sp; c.vy = Math.sin(a) * sp - 80; c.a = Math.random() * 6; c.va = (Math.random() - 0.5) * 18;
+      c.s = r * (0.07 + Math.random() * 0.08); c.col = Math.random() < 0.3 ? '#ffffff' : col; c.max = c.life = 0.7 + Math.random() * 0.5;
+      G17.chipN++;
+    }
+  }
+  function gachaChipTick(dt) {
+    for (let i = G17.chipN - 1; i >= 0; i--) {
+      const c = G17.chips[i];
+      c.life -= dt; c.vy += 1100 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.a += c.va * dt; c.vx *= 1 - dt * 0.6;
+      if (c.life <= 0 || c.y > H + 40) { G17.chips[i] = G17.chips[G17.chipN - 1]; G17.chips[G17.chipN - 1] = c; G17.chipN--; }
+    }
+  }
+  // A crack that did not burst it: chips, the climbing note, a harder buzz; one tap left primes it.
+  function gachaCrack(C, i) {
+    const g = gachaC(C);
+    gachaChips(C.x, C.y, C.r, capCol(C.shown), 4 + i * 3, 1 + i * 0.15);
+    snd('gachaTap', { n: i });
+    if (gachaLeft(C) === 1 && !g.primed) {
+      g.primed = true;
+      snd('gachaPrime');
+      haptic('g17Prime');
+      if (g.tease && !fx().reduced) g.teaseT = 0;
+    }
+  }
+  function gachaSkip(C) { if (C) C.skip17 = true; }
+  // The last tap: the charge before the pop (fn). false: pop now (a skip).
+  function gachaPre(C, tier, fn) {
+    const g = gachaC(C), ti = TIER_I[tier] || 0;
+    g.tier = tier; g.teaseT = -1; g.teaseK = 0;
+    if (C.skip17) return false;
+    let d = GK.pre[tier] || GK.pre.c;
+    if (C.fast) d *= 0.6;
+    if (fx().reduced) d *= 0.4;
+    g.pre = d; g.preMax = d; g.pop = fn;
+    snd('gachaCharge', { tier: ti });
+    haptic(ti >= 3 ? 'g17Legend' : 'g17Charge');
+    if (ti >= 3) g.legend = 0.01;
+    const hEl = $(C.cap ? 'capHint' : 'vcapHint');
+    if (hEl) clear(hEl);
+    return true;
+  }
+  // The charge runs (true while it does): the capsule shakes harder, the light pours out, then the pop.
+  function gachaPreTick(C, dt) {
+    const g = C.g17;
+    if (!g || !g.pop) return false;
+    g.pre -= dt;
+    const k = U.clamp(1 - g.pre / (g.preMax || 1), 0, 1), reduced = !!fx().reduced;
+    if (!reduced) { C.rotV += Math.sin(C.t * 83) * (6 + k * 16) * dt * 3; C.sqV += Math.sin(C.t * 61) * k * 0.3; }
+    if (g.tier === 'l') g.legend = Math.max(g.legend, U.clamp(k * 1.4, 0, 1));
+    if (Math.random() < dt * (6 + k * 20)) fx().emit('glint', C.x + (Math.random() - 0.5) * C.r * 1.6, C.y + (Math.random() - 0.5) * C.r * 1.4, { col: capCol(g.tier) });
+    if (g.pre <= 0) gachaPreEnd(C);
+    return true;
+  }
+  function gachaPreEnd(C) {
+    const g = C && C.g17;
+    if (!g || !g.pop) return false;
+    const fn = g.pop;
+    g.pop = null; g.pre = 0;
+    fn();
+    return true;
+  }
+  // After the pop: how long the moment lingers before the card (legendary longest).
+  function gachaHoldT(C) {
+    const g = C && C.g17;
+    if (!g || C.skip17 || fx().reduced) return 0;
+    return (GK.hold[g.tier] || 0) * (C.fast ? 0.55 : 1);
+  }
+  // The pop's extras: chips, the chime ladder, confetti by tier, the legendary jingle and slam.
+  function gachaPop(C, tier) {
+    const g = gachaC(C), col = capCol(g.tier), reduced = !!fx().reduced;
+    gachaChips(C.x, C.y, C.r, col, 16 + tier * 6, 1.3 + tier * 0.15);
+    snd('gachaChime', { tier });
+    if (tier >= 1) { fx().emit('confetti', 60, 220, { power: 0.9, dir: -0.6, spread: 0.9 }); fx().emit('confetti', W - 60, 220, { power: 0.9, dir: Math.PI + 0.6, spread: 0.9 }); }
+    if (tier >= 2) for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; fx().emit('glint', C.x + Math.cos(a) * C.r * 1.9, C.y + Math.sin(a) * C.r * 1.9, { col, n: 2 }); }
+    if (tier >= 3) {
+      snd('gachaLegend');
+      haptic('g17Legend');
+      for (let i = 0; i < 6; i++) fx().emit('coins', 50 + i * 88, -10, { n: 1, power: 0.6, dir: Math.PI / 2, spread: 0.5 });
+      g.legend = 1;
+      if (!reduced) fx().shake(14);
+    }
+    const tEl = $(C.cap ? 'capTier' : 'vcapTier');
+    if (tEl && tier >= 2) replay(tEl, 'g17slam');
+  }
+  // Per frame on a ritual: chips, hold to crack, the primed glow and the rare tease, the legend's fade.
+  function gachaTick(C, dt, tapFn) {
+    gachaChipTick(dt);
+    if (!C) return;
+    const g = gachaC(C), reduced = !!fx().reduced;
+    const H0 = G17.hold;
+    if (H0 && C.phase === 'idle' && tapFn) {
+      H0.t += dt;
+      if (H0.t >= GK.holdWait) { H0.e = (H0.e || 0) - dt; if (H0.e <= 0) { H0.e = GK.holdEvery; tapFn(); } }
+    }
+    if (C.phase === 'idle' && g.primed) {
+      g.prime = Math.min(1, g.prime + dt * 2.5);
+      if (!reduced && Math.random() < dt * 5) fx().emit('glint', C.x + (Math.random() - 0.5) * C.r * 1.4, C.y + (Math.random() - 0.5) * C.r, { col: capCol(C.shown) });
+      if (g.teaseT >= 0) {
+        g.teaseT += dt;
+        const u = (g.teaseT - GK.teaseAt) / GK.teaseLen;
+        const on = u >= 0 && u < 1;
+        if (on && !g.teaseOn) { g.teaseOn = true; snd('gachaTease'); fx().ring(C.x, C.y, '#ffc94d', { r0: C.r * 0.9, r1: C.r * 2.2, w: 6, life: 0.5 }); }
+        g.teaseK = on ? (u < 0.45 ? 0.9 : 0.9 * (1 - (u - 0.45) / 0.55)) : 0;
+        if (u >= 1) { g.teaseT = -1; g.teaseK = 0; }
+      }
+    } else if (!g.pop) g.prime = Math.max(0, g.prime - dt * 3);
+    if (g.legend > 0 && !g.pop) {
+      const floor = (C.phase === 'done' || C.phase === 'burst') && g.tier === 'l' ? (reduced ? 0.3 : 0.45) : 0;
+      g.legend = Math.max(floor, g.legend - dt * 0.5);
+    }
+  }
+  // The capsule's extra tremble (primed, charging).
+  function gachaJit(C, t) {
+    const g = C && C.g17;
+    if (!g || fx().reduced) return 0;
+    const k = g.pop ? 0.05 + 0.1 * U.clamp(1 - g.pre / (g.preMax || 1), 0, 1) : C.phase === 'idle' ? 0.025 * g.prime : 0;
+    return k ? Math.sin(t * 67) * k : 0;
+  }
+  // The tier the capsule is drawn in: the rare tease flickers it gold for a moment (looks only).
+  function gachaTierDraw(C, t) {
+    const g = C && C.g17;
+    if (g && g.teaseK > 0.4 && Math.floor(t * 14) % 2 === 0) return 'l';
+    return C.shown;
+  }
+  // Over the capsule: the light leaking out, the legendary moment, the flying chips.
+  function gachaDraw(ctx, t, C, y) {
+    const R = X.RENDER && X.RENDER.gacha;
+    if (!R) return;
+    const g = C && C.g17;
+    if (g) {
+      let k = 0, col = capCol(C.shown);
+      if (C.phase === 'idle') k = g.prime * 0.55;
+      if (g.pop) k = 0.55 + 0.45 * U.clamp(1 - g.pre / (g.preMax || 1), 0, 1);
+      if (g.teaseK > 0) { col = '#ffc94d'; k = Math.max(k, g.teaseK); }
+      if (k > 0 && R.leak) R.leak(ctx, C.x, y, C.r, col, k, t, g.seed);
+      if (g.legend > 0 && R.legend) R.legend(ctx, C.x, y, C.r, g.legend, t, W, H, !!fx().reduced);
+    }
+    if (G17.chipN && R.chips) R.chips(ctx, G17.chips, G17.chipN);
+  }
+  // Pointer: hold to crack (a press that is not on a button starts auto taps; letting go stops them).
+  function gachaBind(scr, fn) {
+    if (!scr) return;
+    const down = scr.onpointerdown;
+    scr.onpointerdown = (ev) => {
+      if (down) down(ev);
+      if (ev && ev.target && ev.target.closest && ev.target.closest('button,.prize')) return;
+      G17.hold = { t: 0, e: 0, fn };
+    };
+    const up = () => { G17.hold = null; };
+    scr.onpointerup = up; scr.onpointercancel = up; scr.onpointerleave = up;
+  }
+
+  // ---- the prize card: the mini that came with it
+  function gachaCard(card, m) {
+    if (!card || !m || !gachaMini(m.id)) return null;
+    const d = gachaMini(m.id), s = gachaSer(d.series), col = (LT().COLOR || {})[d.rarity] || '#b9b0cc';
+    const row = h('div', 'g17Mini' + (m.fresh ? ' fresh' : '') + (m.done ? ' done' : ''));
+    try { row.style.setProperty('--mc', col); row.style.setProperty('--sc', s ? s.col : col); } catch (e) { /* stub */ }
+    row.appendChild(canvasEl(52, (ctx, px) => { if (X.RENDER && X.RENDER.gacha) X.RENDER.gacha.mini(ctx, m.id, px / 2, px / 2, px, 0.6); }));
+    const tx = h('div', 'mt');
+    tx.appendChild(h('div', 'm1', 'Capsule Mini'));
+    tx.appendChild(h('div', 'm2', d.name));
+    const m3 = h('div', 'm3');
+    if (s) { m3.appendChild(h('span', 'ms', s.name)); m3.appendChild(h('b', null, ' ' + gachaSerHave(s.id) + '/' + GD().seriesIds(s.id).length)); }
+    if (!m.fresh && m.tix) m3.appendChild(h('span', 'md', `+${m.tix} vault tickets`));
+    tx.appendChild(m3);
+    row.appendChild(tx);
+    if (m.fresh) row.appendChild(h('i', 'mNew', 'NEW!'));
+    card.appendChild(row);
+    if (m.done) {
+      const sc = h('div', 'g17SerDone');
+      sc.appendChild(h('div', 's1', 'SERIES COMPLETE!'));
+      const s2 = h('div', 's2');
+      if (m.cos && vaultDef(m.cos)) { s2.appendChild(h('span', null, 'Series prize')); s2.appendChild(h('b', null, ' ' + i18nTr(vaultDef(m.cos).name))); }
+      else if (m.stix) s2.appendChild(h('span', null, `+${m.stix} vault tickets`));
+      sc.appendChild(s2);
+      card.appendChild(sc);
+    }
+    // the celebration, once per mini shown
+    if (G17.cel !== m) {
+      G17.cel = m;
+      if (m.done) { snd('gachaSeries'); haptic('g17New'); fx().emit('confetti', 270, 560, { power: 1.3, dir: -Math.PI / 2, spread: 2.2 }); }
+      else if (m.fresh) { snd('gachaNew'); haptic('g17New'); fx().emit('confetti', 150, 640, { power: 0.7, dir: -Math.PI / 2, spread: 1.2 }); }
+      else if (m.tix) snd('vaultDupe');
+    }
+    return row;
+  }
+
+  // ---- Open all: every capsule on the reward screen (or in the bank) fans out and pops in a row
+  function gachaAllBtn(b, C) {
+    const run = S.run;
+    if (!b || !C || !C.cd || !C.cd.bank || !run || !Array.isArray(run.caps) || run.caps.length < 2) return null;
+    const bt = btn(`Open all (${run.caps.length})`, () => gachaOpenAll('bank'), 'sm gold g17AllBtn');
+    b.appendChild(bt);
+    return bt;
+  }
+  function gachaSlotLook(el, cap) {
+    if (!el || !cap) return;
+    el.className += ' g17r-' + (cap.opened ? cap.tier : cap.tier0);
+    if (cap.opened && cap.mini && gachaMini(cap.mini.id)) {
+      const c2 = el.children && el.children[el.children.length - 1];
+      if (c2 && c2.appendChild) c2.appendChild(h('div', 'c3', '+ ' + i18nTr(gachaMini(cap.mini.id).name) + (cap.mini.fresh ? ' · ' + i18nTr('NEW!') : '')));
+    }
+  }
+  function gachaSlots(box, rw) {
+    const n = rw && rw.caps ? rw.caps.filter((c) => !c.opened).length : 0;
+    if (!box || n < 2) return null;
+    const el = h('button', 'btn sm gold g17AllBtn g17AllRw', `Open all (${n})`);
+    el.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); snd('click'); gachaOpenAll('reward', rw); };
+    box.appendChild(el);
+    return el;
+  }
+  function gachaOpenAll(src, rw) {
+    const run = lootRun();
+    if (!run) return false;
+    let cd;
+    if (src === 'reward') {
+      const idx = [];
+      ((rw && rw.caps) || []).forEach((c, i) => { if (!c.opened) idx.push(i); });
+      if (idx.length < 2) return false;
+      cd = { all: true, caps: idx.map((i) => rw.caps[i]), rwIdx: idx, then: { k: 'reward', rw } };
+    } else {
+      if (run.caps.length < 2) return false;
+      cd = { all: true, caps: run.caps.splice(0), bank: true, then: { k: 'map' } };   // (held in the screen's save until each is paid)
+    }
+    S.cap = null;
+    gachaAllShow(cd);
+    return true;
+  }
+  function gachaAllShow(cd) {
+    if (!cd || !Array.isArray(cd.caps) || !cd.caps.length) { S.sd = null; toMap(); return false; }
+    S.sd = { capsule: cd };
+    S.cap = null;
+    const n = cd.caps.length, fast = metaLoot().caps >= (LT().FAST_AFTER || 12);
+    const cols = n <= 3 ? n : n === 4 ? 2 : n <= 9 ? 3 : 4, rows = Math.ceil(n / cols);
+    const r = rows <= 1 ? 60 : rows === 2 ? 50 : cols >= 4 ? 32 : 40;
+    const dx = Math.min(170, (W - 40) / cols), dy = 2 * r + 76, y0 = 430 - (rows - 1) * dy / 2;
+    const items = cd.caps.map((cap, i) => {
+      const row = Math.floor(i / cols), inRow = Math.min(cols, n - row * cols), col = i - row * cols;
+      return { cap, x: W / 2 + (col - (inRow - 1) / 2) * dx, y: y0 + row * dy, r, d: i * 0.06, popped: !!cap.opened, pt: cap.opened ? 1 : 0, flash: 0 };
+    });
+    const done = items.every((it) => it.popped);
+    G17.all = { cd, items, t: 0, phase: done ? 'done' : 'drop', pt: 0, st: 0, gap: fast ? GK.allGapFast : GK.allGap, fast };
+    setScreen('capsule');
+    gachaAllDom();
+    const scr = $('scr-capsule');
+    if (scr) { scr.onpointerdown = (ev) => { if (ev && ev.target && ev.target.closest && ev.target.closest('button')) return; gachaAllTap(); }; scr.onpointerup = scr.onpointercancel = scr.onpointerleave = null; }
+    if (!done) snd('whoosh', { pitch: 0.7 });
+    save();
+    return true;
+  }
+  function gachaAllDom() {
+    const A = G17.all, b = $('capsuleBody');
+    if (!A || !b) return;
+    clear(b);
+    S.ui.buttons = [];
+    const top = h('div', 'capTop');
+    const best = A.items.reduce((m, it) => Math.max(m, it.popped ? TIER_I[it.cap.tier] || 0 : 0), 0);
+    try { top.style.setProperty('--cc', capCol(['c', 'u', 'r', 'l'][best])); } catch (e) { /* stub */ }
+    top.appendChild(h('div', 'capTier g17AllT' + (best >= 3 ? ' lg' : ''), 'Open all'));
+    const sub = h('div', 'capSrc');
+    sub.appendChild(h('span', null, 'Capsules'));
+    sub.appendChild(h('b', null, ' ' + A.items.filter((it) => it.popped).length + '/' + A.items.length));
+    top.appendChild(sub);
+    b.appendChild(top);
+    if (A.phase === 'done') {
+      // a label under each capsule: what it held, its mini
+      for (const it of A.items) {
+        const p = it.cap.prize || {}, info = prizeOf(p);
+        const lb = h('div', 'g17AllLb');
+        try { lb.style.left = Math.round(it.x) + 'px'; lb.style.top = Math.round(it.y + it.r + 16) + 'px'; lb.style.setProperty('--cc', capCol(it.cap.tier)); } catch (e) { /* stub */ }
+        lb.appendChild(h('div', 'a1', p.fallback ? `${p.fallback} gold` : info.name));
+        if (it.cap.mini && gachaMini(it.cap.mini.id)) lb.appendChild(h('div', 'a2', '+ ' + i18nTr(gachaMini(it.cap.mini.id).name) + (it.cap.mini.fresh ? ' · ' + i18nTr('NEW!') : '')));
+        b.appendChild(lb);
+      }
+      const bar = h('div', 'g17AllBar');
+      bar.appendChild(btn('Collect all', () => gachaAllCollect(), 'gold'));
+      b.appendChild(bar);
+      const fresh = A.items.filter((it) => it.cap.mini && it.cap.mini.fresh);
+      if (fresh.length && G17.cel !== A) { G17.cel = A; snd(fresh.some((it) => it.cap.mini.done) ? 'gachaSeries' : 'gachaNew'); haptic('g17New'); }
+    } else {
+      const hint = h('div', 'capHint');
+      hint.appendChild(h('span', null, A.phase === 'drop' ? '' : 'TAP TO HURRY'));
+      b.appendChild(hint);
+      S.ui.buttons.push({ el: $('scr-capsule'), fn: () => gachaAllTap(), label: 'Crack' });
+      b.appendChild(btn('Skip', () => gachaAllSkip(), 'sm ghost capSkip'));
+    }
+  }
+  function gachaAllTap() {
+    const A = G17.all;
+    if (!A || S.screen !== 'capsule') return false;
+    if (A.phase === 'drop') { A.phase = 'pop'; A.pt = A.gap; gachaAllDom(); return true; }
+    if (A.phase === 'pop') { A.gap = Math.min(A.gap, 0.1); A.pt = A.gap; return true; }
+    if (A.phase === 'show') { gachaAllDone(); return true; }
+    return false;
+  }
+  function gachaAllSkip() {
+    const A = G17.all;
+    if (!A) return false;
+    gachaAllDone();
+    return true;
+  }
+  // Pays one capsule of the fan (once: its opened flag is saved with the screen).
+  function gachaPayCap(cap, cd, k) {
+    const run = lootRun();
+    if (!cap || cap.opened || !run) return false;
+    cap.opened = true;
+    grantPrize(cap.prize);
+    gachaOnOpen(cap);
+    run.loot.capsOpened++;
+    if (!run.loot.bestCap || TIER_I[cap.tier] > TIER_I[run.loot.bestCap]) run.loot.bestCap = cap.tier;
+    const rw = cd && cd.then && cd.then.rw;
+    const rc = rw && cd.rwIdx && rw.caps ? rw.caps[cd.rwIdx[k]] : null;
+    if (rc && rc !== cap) { rc.opened = true; rc.prize = cap.prize; rc.mini = cap.mini; }
+    metaLoot().caps++;
+    saveMeta();
+    save();
+    return true;
+  }
+  function gachaAllPop(it, k, quiet) {
+    const A = G17.all;
+    if (!A || it.popped) return;
+    it.popped = true; it.pt = 0; it.flash = 1;
+    gachaPayCap(it.cap, A.cd, k);
+    const tier = TIER_I[it.cap.tier] || 0, col = capCol(it.cap.tier);
+    gachaChips(it.x, it.y, it.r, col, quiet ? 4 : 10 + tier * 4, 1 + tier * 0.1);
+    if (quiet) return;
+    fx().ring(it.x, it.y, col, { r0: it.r * 0.8, r1: it.r * 3 + tier * 30, w: 8 + tier * 2, life: 0.55 });
+    fx().emit('confetti', it.x, it.y, { power: 0.6 + tier * 0.2, n: 0.5 + tier * 0.2, dir: -Math.PI / 2, spread: 1.6 });
+    if (tier >= 2) fx().ring(it.x, it.y, '#ffffff', { r0: 10, r1: it.r * 3.4, w: 6, life: 0.6, delay: 0.06 });
+    if (tier >= 3) { snd('gachaLegend'); haptic('g17Legend'); slowmo(0.4, 0.35); if (!fx().reduced) fx().flash('#ffc94d', 0.35); }
+    else haptic('capCrack');
+    fx().shake(4 + tier * 3);
+    snd('capBurst', { tier });
+    snd('gachaChime', { tier, pitch: 1 + k * 0.05 });
+    gachaAllDom();
+  }
+  function gachaAllDone() {
+    const A = G17.all;
+    if (!A || A.phase === 'done') return;
+    A.items.forEach((it, k) => { if (!it.popped) gachaAllPop(it, k, true); });
+    A.phase = 'done';
+    gachaAllDom();
+    snd('relic');
+  }
+  function gachaAllCollect() {
+    const A = G17.all;
+    if (!A || A.phase !== 'done') return false;
+    const then = A.cd.then;
+    G17.all = null; S.sd = null;
+    snd('upgrade');
+    if (then && then.k === 'reward' && then.rw) { showReward(then.rw); return true; }
+    toMap();
+    return true;
+  }
+  function gachaAllTick(dt) {
+    gachaChipTick(dt);
+    const A = G17.all;
+    if (!A || S.screen !== 'capsule') return;
+    A.t += dt;
+    for (const it of A.items) { it.flash = Math.max(0, it.flash - dt * 2.5); if (it.popped) it.pt = Math.min(1, it.pt + dt * 3); }
+    if (A.phase === 'drop' && A.t >= 0.6 + A.items.length * 0.06) { A.phase = 'pop'; A.pt = A.gap * 0.5; snd('capDrop'); gachaAllDom(); }
+    if (A.phase === 'pop') {
+      A.pt += dt;
+      if (A.pt >= A.gap) {
+        A.pt = 0;
+        const k = A.items.findIndex((it) => !it.popped);
+        if (k >= 0) gachaAllPop(A.items[k], k);
+        else { A.phase = 'show'; A.st = 0; }
+      }
+    }
+    if (A.phase === 'show') { A.st += dt; if (A.st >= GK.allWait) gachaAllDone(); }
+  }
+  function gachaAllDraw(ctx, t) {
+    const A = G17.all, R = X.RENDER;
+    if (!A || !R || !R.capsule || S.screen !== 'capsule') return;
+    const rg = R.rgba || ((c) => c);
+    ctx.save();
+    ctx.fillStyle = 'rgba(10,5,20,0.88)';
+    ctx.fillRect(-40, -40, W + 80, H + 80);
+    ctx.restore();
+    const nextK = A.phase === 'pop' ? A.items.findIndex((it) => !it.popped) : -1;
+    A.items.forEach((it, k) => {
+      const tier = it.popped ? it.cap.tier : it.cap.tier0, col = capCol(tier);
+      const u = A.phase === 'drop' ? U.clamp((A.t - it.d) / 0.5, 0, 1) : 1;
+      const y = it.y - (1 - U.ease.outBounce(u)) * 520;
+      ctx.save();
+      ctx.fillStyle = '#231640'; ctx.beginPath(); ctx.ellipse(it.x, it.y + it.r + 12, it.r * 1.2, it.r * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = rg(col, 0.8); ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+      if (!it.popped || it.pt < 1) {
+        const kk = k === nextK ? U.clamp(A.pt / A.gap, 0, 1) : 0;
+        const shake = kk && !fx().reduced ? Math.sin(t * 70) * 0.08 * kk : 0;
+        R.capsule(ctx, it.x, y, it.r, { tier, t, rot: shake, crack: kk * 0.8, open: it.popped ? it.pt : 0, flash: it.flash, seed: 5 + k, glow: it.popped ? 0 : 0.5 });
+      }
+      if (it.popped) gachaPrizeDraw(ctx, it, t);
+    });
+    if (G17.chipN && R.gacha && R.gacha.chips) R.gacha.chips(ctx, G17.chips, G17.chipN);
+  }
+  // A popped capsule's prize on the canvas: its art (item, relic) or its icon, in a glow of the tier; the mini beside it.
+  function gachaPrizeDraw(ctx, it, t) {
+    const R = X.RENDER, p = it.cap.prize || {}, k = U.clamp(it.pt, 0, 1), col = capCol(it.cap.tier), rg = R.rgba || ((c) => c);
+    const s = it.r * (0.6 + 0.5 * U.ease.outBack(k));
+    ctx.save();
+    try {
+      const g = ctx.createRadialGradient(it.x, it.y, 2, it.x, it.y, it.r * 1.6);
+      g.addColorStop(0, rg(col, 0.55)); g.addColorStop(1, rg(col, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(it.x, it.y, it.r * 1.6, 0, Math.PI * 2); ctx.fill();
+    } catch (e) { /* stub ctx */ }
+    ctx.restore();
+    try {
+      if (p.k === 'item' && tbl('ITEMS')[p.id] && R.item) { const def = itemDef(p.id); R.item(ctx, def, it.x, it.y, 0, Math.min(1.4, (s * 1.5) / shapeLong(def.shape)), { plus: !!p.plus }); }
+      else if (p.k === 'relic' && tbl('RELICS')[p.id] && !p.fallback && R.relicIcon) R.relicIcon(ctx, relicDef(p.id), it.x, it.y, s * 1.5);
+      else if (p.k === 'gold' || p.fallback) {
+        // a little stack of prize coins
+        ctx.save();
+        for (let i = 2; i >= 0; i--) {
+          const cx = it.x + (i - 1) * s * 0.42, cy = it.y + (i === 1 ? -s * 0.18 : s * 0.08);
+          ctx.fillStyle = '#b8860b'; ctx.beginPath(); ctx.ellipse(cx, cy + s * 0.08, s * 0.4, s * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffc94d'; ctx.beginPath(); ctx.arc(cx, cy, s * 0.4, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#fff1a8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, s * 0.27, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
+      } else if (p.k === 'tickets' && R.ticket) { R.ticket(ctx, it.x - s * 0.15, it.y + s * 0.12, s * 1.3, s * 0.6, -0.25, '#ff9ec7'); R.ticket(ctx, it.x + s * 0.1, it.y - s * 0.12, s * 1.3, s * 0.6, 0.15, '#ffc94d'); }
+      else {
+        const info = prizeOf(p);
+        ctx.save(); ctx.fillStyle = info.col || '#ffffff'; ctx.font = `900 ${Math.round(s * 1.1)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(info.icon || '?', it.x, it.y); ctx.restore();
+      }
+    } catch (e) { /* art is optional */ }
+    if (it.cap.mini && R.gacha && R.gacha.mini) R.gacha.mini(ctx, it.cap.mini.id, it.x + it.r * 0.85, it.y + it.r * 0.45, it.r * 0.95, t);
+  }
+
+  // ---- the daily capsule: a free Vault Capsule once a real day, a streak
+  function gachaDate() {
+    const d = G17.now != null ? G17.now : (S.headless ? null : new Date());
+    if (d == null) return null;
+    const x = d instanceof Date ? d : new Date(d);
+    return isNaN(x.getTime()) ? null : x;
+  }
+  const gachaKey = (d) => (D().dailyKey ? D().dailyKey(d) : d.toISOString().slice(0, 10));
+  function gachaDailyReady() {
+    const d = gachaDate();
+    if (!d || !D().vaultRoll || !D().COSMETICS) return false;
+    return gachaM().day !== gachaKey(d) && !vaultM().pend;
+  }
+  function gachaDailyClaim() {
+    if (!gachaDailyReady()) return false;
+    const d = gachaDate(), key = gachaKey(d), g = gachaM(), V = vaultM(), Gd = GD();
+    const prev = gachaKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1));
+    g.streak = g.day === prev ? g.streak + 1 : 1;
+    g.best = Math.max(g.best, g.streak); g.days++; g.day = key;
+    const rng = U.rng(U.hashStr('gacha-daily:' + key + ':' + V.caps + ':' + Object.keys(V.owned).length));
+    const r = D().vaultRoll(rng, V.owned, V.pity);
+    V.pity = r.pity | 0;
+    V.pend = { id: r.id, tier0: r.tier0, ups: r.ups.slice(), tier: r.tier, dupe: !!r.dupe, tix: r.tix | 0, lucky: !!r.lucky, daily: true };
+    g.bonus = (Gd ? Gd.DAILY_TIX : 5) * Math.min(g.streak, Gd ? Gd.DAILY_MAX : 7);
+    V.tix += g.bonus;
+    vaultSave();   // (the claim, the roll and the streak land in one meta save: a reload reopens the same capsule)
+    snd('gachaDaily');
+    haptic('g17New');
+    toast(g.streak > 1 ? `Day ${g.streak} streak! +${g.bonus} vault tickets` : `Daily capsule! +${g.bonus} vault tickets`, 2.2);
+    if (S.screen === 'vault') vaultCapOpen();
+    return true;
+  }
+  /* The vault's capsule counter: on a new day the free daily capsule takes the Vault Capsule
+     button's place (returned, so the paid one waits until it is opened); once claimed, a small
+     streak chip sits on the button's corner (a tap explains it) and null comes back. */
+  function gachaDailyPill(bot) {
+    if (!bot || !D().vaultRoll) return null;
+    const g = gachaM();
+    if (gachaDailyReady()) {
+      const b = btn('Free daily capsule', () => gachaDailyClaim(), 'gold vCapBtn g17DayBtn');
+      b.textContent = '';
+      b.appendChild(capCanvas('l', 44));
+      const cw = h('span', 'cw');
+      cw.appendChild(h('span', 'c1', 'Free daily capsule'));
+      cw.appendChild(h('span', 'c2', g.day ? `Day ${g.day === gachaKey(new Date(gachaDate().getFullYear(), gachaDate().getMonth(), gachaDate().getDate() - 1)) ? g.streak + 1 : 1} streak` : 'Once a day, on the house'));
+      b.appendChild(cw);
+      bot.appendChild(b);
+      return b;
+    }
+    if (!g.day || !gachaDate()) return null;
+    const el = h('div', 'g17Streak', `\u{1F525} ${g.streak}`);
+    try { el.title = i18nTr(`Day ${g.streak} streak`); } catch (e) { /* stub */ }
+    el.onclick = (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); popover(`<b>${i18nTr(`Day ${g.streak} streak`)}</b><br>${i18nTr('A free Vault Capsule every day. Come back tomorrow for the next one.')}<br>${i18nTr(`Streak bonus: +${g.bonus} vault tickets`)}`, 400, 760); };
+    bot.appendChild(el);
+    return null;
+  }
+
+  // ---- the Prize Vault's Minis tab: the four series, a turntable in the window
+  function gachaVaultTab(tabs) {
+    if (!tabs || !GD()) return null;
+    const Vs = S.vault, g = gachaM();
+    const tb = h('button', 'vTab g17Tab' + (Vs && Vs.tab === 'minis' ? ' on' : ''));
+    tb.appendChild(h('span', 'ic', '\u{1F9F8}'));
+    tb.appendChild(h('span', 'lb', 'Minis'));
+    const nn = Object.keys(g.news).length;
+    if (nn) tb.appendChild(h('i', 'nd', String(nn)));
+    tb.onclick = () => { if (Vs) { Vs.tab = 'minis'; Vs.sel = null; if (!gachaMini(Vs.msel)) Vs.msel = GD().MINI_IDS.find((id) => g.minis[id]) || GD().MINI_IDS[0]; } snd('cardFlip'); vaultDom(); };
+    tabs.appendChild(tb);
+    return tb;
+  }
+  function gachaSelect(id) {
+    const Vs = S.vault, g = gachaM();
+    if (!Vs || !gachaMini(id)) return false;
+    Vs.msel = id;
+    if (g.news[id]) { delete g.news[id]; S.vaultDirty = true; }
+    snd(g.minis[id] ? 'cardFlip' : 'click');
+    if (S.screen === 'vault') vaultDom();
+    return true;
+  }
+  function gachaShelf(shelf) {
+    const Vs = S.vault, Gd = GD();
+    if (!shelf || !Vs || Vs.tab !== 'minis' || !Gd) return null;
+    const g = gachaM();
+    shelf.className += ' g17Shelf';
+    const vb = $('vaultBody');
+    if (vb) vb.className += ' g17On';   // (the claw and crawler switches have nothing to switch here)
+    for (const s of Gd.SERIES) {
+      const ids = Gd.seriesIds(s.id), have = ids.filter((id) => g.minis[id]).length, done = !!g.series[s.id];
+      const hd = h('div', 'g17Ser' + (done ? ' done' : ''));
+      try { hd.style.setProperty('--sc', s.col); } catch (e) { /* stub */ }
+      hd.appendChild(h('span', 'si', s.icon));
+      const nm = h('span', 'sn');
+      nm.appendChild(h('b', null, s.name));
+      const cos = vaultDef(s.reward);
+      nm.appendChild(h('small', null, done ? 'COMPLETE' : cos ? i18nTr('Finish it for') + ' ' + i18nTr(cos.name) : ''));
+      hd.appendChild(nm);
+      hd.appendChild(h('span', 'sc', have + '/' + ids.length));
+      const bar = h('i', 'sb');
+      const fill = h('i', null);
+      try { fill.style.width = Math.round(have * 100 / ids.length) + '%'; } catch (e) { /* stub */ }
+      bar.appendChild(fill);
+      hd.appendChild(bar);
+      shelf.appendChild(hd);
+      for (const id of ids) {
+        const d = gachaMini(id), own = g.minis[id] | 0;
+        const el = h('div', 'vCard g17Card r-' + d.rarity + (own ? ' own' : ' lock') + (Vs.msel === id ? ' sel' : ''));
+        try { el.style.setProperty('--vc', (LT().COLOR || {})[d.rarity] || '#b9b0cc'); } catch (e) { /* stub */ }
+        el.appendChild(canvasEl(62, (ctx, px) => { if (X.RENDER && X.RENDER.gacha) X.RENDER.gacha.mini(ctx, id, px / 2, px / 2, px, 0.4, { sil: !own }); }));
+        el.appendChild(h('div', 'nm', own ? d.name : '???'));
+        el.appendChild(h('div', 'tg', own > 1 ? 'x' + own : capName(d.rarity)));
+        if (g.news[id]) el.appendChild(h('i', 'nb', 'NEW'));
+        const fn = () => gachaSelect(id);
+        el.onclick = fn;
+        S.ui.buttons.push({ el, fn, label: own ? d.name : '???' });
+        shelf.appendChild(el);
+      }
+    }
+    return shelf;
+  }
+  function gachaDetail() {
+    const box = h('div', 'vDetail g17Detail');
+    const Vs = S.vault, d = gachaMini(Vs && Vs.msel), g = gachaM();
+    if (!d) return box;
+    const own = g.minis[d.id] | 0, s = gachaSer(d.series);
+    try { box.style.setProperty('--vc', (LT().COLOR || {})[d.rarity] || '#b9b0cc'); } catch (e) { /* stub */ }
+    const tx = h('div', 'vdTx');
+    tx.appendChild(h('div', 'vdK', `${i18nTr(capName(d.rarity))} · ${s ? i18nTr(s.name) : ''}`));
+    tx.appendChild(h('div', 'vdN' + (d.rarity === 'l' && own ? ' lg' : ''), own ? d.name : '???'));
+    tx.appendChild(h('div', 'vdT', own ? d.text : 'Comes out of capsules, now and then.'));
+    box.appendChild(tx);
+    box.appendChild(h('div', 'vdOn', own ? `Found: ${own}` : 'Not found yet'));
+    return box;
+  }
+  // The preview window on the Minis tab: the picked mini turning on a lit turntable, its series beside it.
+  function gachaPrevDraw(ctx, t, win) {
+    const R = X.RENDER && X.RENDER.gacha, Vs = S.vault, Gd = GD();
+    if (!R || !Vs || !Gd || !win) return;
+    const d = gachaMini(Vs.msel) || gachaMini(Gd.MINI_IDS[0]), g = gachaM(), s = gachaSer(d.series);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(win.x, win.y, win.w, win.h); ctx.clip();
+    ctx.fillStyle = '#0d0719'; ctx.fillRect(win.x, win.y, win.w, win.h);
+    ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(141,255,245,0.75)'; ctx.fillText(i18nTr('CAPSULE MINIS'), win.x + 12, win.y + 14);
+    const cx = win.x + 140, cy = win.y + win.h - 36;
+    R.turntable(ctx, cx, cy, 190, t, s ? s.col : '#2ee6d6');
+    R.mini(ctx, d.id, cx, cy - 76, 150, t, { sil: !g.minis[d.id], spin: fx().reduced ? 0 : (t * 0.18) % 1 });
+    // the series on a little shelf
+    const ids = Gd.seriesIds(d.series), x0 = win.x + 290;
+    ctx.fillStyle = s ? s.col : '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(i18nTr(s ? s.name : ''), x0 + 100, win.y + 30);
+    ids.forEach((id, i) => {
+      const x = x0 + 34 + (i % 3) * 66, y = win.y + 92 + Math.floor(i / 3) * 90;
+      ctx.fillStyle = id === d.id ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)';
+      ctx.fillRect(x - 30, y - 38, 60, 76);
+      R.mini(ctx, id, x, y, 60, t, { sil: !g.minis[id], bob: i });
+    });
+    ctx.restore();
+  }
+
+  function GACHA_API() {
+    return {
+      K: GK, get now() { return G17.now; }, set now(v) { G17.now = v; },
+      meta: () => gachaM(), fix: gachaMetaFix, grant: gachaGrant, onOpen: gachaOnOpen, onVault: gachaOnVault,
+      dailyReady: () => gachaDailyReady(), daily: () => gachaDailyClaim(), openAll: (src, rw) => gachaOpenAll(src, rw), get all() { return G17.all; },
+      allTap: () => gachaAllTap(), allSkip: () => gachaAllSkip(), allCollect: () => gachaAllCollect(), allTick: (dt) => gachaAllTick(dt),
+      state: (C) => (C && C.g17) || null, chips: () => G17.chipN, get hold() { return G17.hold; }, set hold(v) { G17.hold = v; },
+      select: (id) => gachaSelect(id), have: gachaSerHave, WORDS: GACHA_WORDS, PATTERNS: GACHA_PATTERNS,
+    };
+  }
+  // Every English line this block shows (the i18n suite checks each has its Dutch), and its patterns with an example.
+  const GACHA_WORDS = ['Capsule Mini', 'NEW!', 'SERIES COMPLETE!', 'Series prize', 'Open all', 'Capsules', 'TAP TO HURRY', 'Collect all', 'Free daily capsule', 'Once a day, on the house',
+    'Daily capsule', 'A free Vault Capsule every day. Come back tomorrow for the next one.', 'Minis', 'COMPLETE', 'Finish it for',
+    'Comes out of capsules, now and then.', 'Not found yet', 'CAPSULE MINIS', 'Daily capsule · free'];
+  const GACHA_PATTERNS = { 'Open all ({n})': 'Open all (3)', '+{n} vault tickets': '+12 vault tickets', 'Day {n} streak': 'Day 4 streak', 'Found: {n}': 'Found: 2',
+    'Streak bonus: +{n} vault tickets': 'Streak bonus: +15 vault tickets', 'Day {n} streak! +{n2} vault tickets': 'Day 3 streak! +15 vault tickets',
+    'Daily capsule! +{n} vault tickets': 'Daily capsule! +5 vault tickets' };
+  // ================================================================ /GACHA
+
+  // ================================================================ QA17 (round 17): QA pass 6
+  /* DESIGN.md "QA pass 6 (round 17)". Small fixes found playing the round 15 and 16 features on phones:
+     - Escape on a page opened out of a title sheet (the weekly, the Boss Rush menu, the Codex, the
+       History) went back to the title and reopened the sheet, and then the title's own Escape listener
+       (it runs after onKey) closed it again in the same key press: the listener now acts only on a key
+       press that began on the title (QA17K.scr, set first thing in onKey).
+     - Escape did nothing on the Prizedex, Stickers, Help and Tips pages (every other page has it): it
+       presses the page's Back (not while the Settings panel or a popover is up: those close first).
+     - The HUD's resource row (gold, bulbs, tickets, the act chip) ran under the relic strip when the
+       numbers grew (99999 gold) or a DAILY / WEEKLY badge sat in the act chip: the row squeezes its
+       chips (qa17Tight), then drops the act chip's word and a size step (qa17Tight2). Measured only when
+       a number's length, the act text or the language changes (a browser only).
+     - The Jackpot Lamp after a FEVER showed more cells than its level: sparks still flying when the dome
+       burst were already counted in the carried level and lit again when they landed.
+     - In season the title's ribbon was moved into the More sheet (it covered the sheet's X): it stays put.
+     - The online co-op watch screen: the corner lane is told where both players' cards are (QA_SIGNS.duo).
+     - Online versus: a straggler scored after the drop was booked goes over as a 'late' table. */
+  const QA17K = { scr: '', esc: ['collection', 'stickers', 'help', 'tips'] };
+  function qa17Key(ev, down) {
+    if (down) QA17K.scr = S.screen;   // the screen this key press began on
+    if (!down || !ev || ev.key !== 'Escape' || S.accOpen || S.popover || ev.repeat) return false;
+    if (QA17K.esc.indexOf(S.screen) < 0) return false;
+    const i = S.ui.buttons.findIndex((b) => b && b.label === 'Back' && !b.disabled && !(b.el && b.el.disabled));
+    if (i < 0) return false;
+    if (ev.preventDefault) ev.preventDefault();
+    choose(i);
+    return true;
+  }
+  // A title button the round 15 tidy must leave where its builder put it: the season ribbon (SEASON's seaTitle hangs it over
+  // the sky; moved into the More sheet it kept its absolute place and covered the sheet's X, half off the screen).
+  function qa17TitleKeep(el) { return !!el && /\bseaBan\b/.test(el.className || ''); }
+  // The title's Escape listener (runs after onKey): closes an open sheet, unless this key press began on another page.
+  function qa17TitleEsc(ev) {
+    if (!ev || ev.key !== 'Escape' || !UIT.open || S.screen !== 'title') return false;
+    if (QA17K.scr && QA17K.scr !== 'title') return false;
+    uiSheetOpen(null);
+    return true;
+  }
+  const QA17H = { key: '', level: 0 };
+  // Squeezes a resource row until it fits (0: as designed, 1: tighter chips, 2: no act word, a size smaller). row: an element.
+  function qa17Fit(row) {
+    if (!row || !row.classList) return 0;
+    row.classList.remove('qa17Tight', 'qa17Tight2');
+    const over = () => +row.scrollWidth > +row.clientWidth + 1;
+    if (!(+row.clientWidth > 0) || !over()) return 0;
+    row.classList.add('qa17Tight');
+    if (!over()) return 1;
+    row.classList.add('qa17Tight2');
+    return 2;
+  }
+  function qa17HudFit() {
+    if (S.headless || (S.screen !== 'fight' && S.screen !== 'map')) return;
+    const g = $('goldTxt'), row = g && g.parentNode && g.parentNode.parentNode;
+    if (!row || !row.classList) return;
+    const len = (id) => { const e = $(id); return e ? String(e.textContent || '').length : 0; };
+    const top = $('top'), a = $('actTxt'), bd = S.tiltEl;
+    const key = [len('goldTxt'), len('inkTxt'), len('tixTxt'), a ? a.textContent : '', bd ? bd.textContent : '', top ? top.className : '', i18nLang()].join('|');
+    if (key === QA17H.key) return;
+    QA17H.key = key;
+    if (!(+row.clientWidth > 0)) { QA17H.key = ''; return; }   // hidden: again once it shows
+    QA17H.level = qa17Fit(row);
+  }
+  // The lamp as shown right after the burst: the carried level less what is still flying in (it lights as it lands).
+  function qa17LampShown(C) {
+    let fly = 0;
+    for (const q of (C && C.lampQ) || []) if (q) fly += Math.max(0, +q.n || 0);   // (every spark left in the queue lights its cells after the burst)
+    return U.clamp((C ? C.lamp | 0 : 0) - fly, 0, CABK.lampMax);
+  }
+  // The online co-op watch screen: both players' cards up top are drawn on the canvas, so the corner lane (a Prizedex
+  // discovery, a sticker) is told where they are and sits elsewhere instead of over the partner's hp.
+  function qa17DuoSigns() {
+    const Dd = S.duo;
+    if (!Dd || !S.duoNet || Dd.mode === 'vs' || Dd.ph === 'yours' || Dd.ph === 'end' || Dd.ph === 'toss') return [];
+    return [[12, 12, 252, 76], [W - 252, 12, W - 12, 76]];
+  }
+  if (!QA_SIGNS.duo) QA_SIGNS.duo = qa17DuoSigns;
+  /* Online versus: a prize that rolls into the chute after a drop was booked scores on the dropper's phone (round 15's
+     duoVsCredit), but the table had already gone over, so the two phones disagreed on the score and the pile until the
+     next table (the card choice). The dropper now sends the table again ('late'); the watcher takes it quietly. */
+  function qa17VsLate() {
+    const Dd = S.duo, N = S.duoNet;
+    if (!Dd || !Dd.net || !N || N.alone || Dd.mode !== 'vs' || Dd.ph !== 'sabo' || !Dd.last || Dd.last.who !== N.me) return false;
+    return !!duoVsNetOut('late');
+  }
+  function qa17VsLateIn() {
+    const Dd = S.duo, N = S.duoNet, L = Dd && Dd.last;
+    if (!L || !N) return false;
+    if (N.vw && N.vw.who === L.who) N.vw.pts = L.pts | 0;
+    if (S.duoV) S.duoV.flash[L.who] = 1;
+    duoShow();
+    return true;
+  }
+  function QA17_API() {
+    return { K: QA17K, H: QA17H, key: qa17Key, titleEsc: qa17TitleEsc, fit: qa17Fit, hudFit: qa17HudFit, lampShown: qa17LampShown, duoSigns: qa17DuoSigns };
+  }
+  // ================================================================ /QA17
 
   function state() {
     return { screen: S.screen, run: S.run, fight: F, rigPhase: FS && FS.rig ? FS.rig.phase : null, grabs: F ? F.player.grabs : 0, grabInFlight: !!(FS && FS.grabInFlight), enemyTurn: !!(FS && FS.enemyTurn), queue: FS ? FS.queue.length + FS.playQ.length : 0 };   // playQ: items still flying to their target
@@ -26674,6 +27741,12 @@ const GAME = (() => {
     dep: DEP_API(),
     // CAB (round 16): the cabinet is alive (events, the Jackpot Lamp, PERFECT grabs, the strain, prize faces) (DESIGN.md "The cabinet is alive (round 16)")
     cab: CAB_API(),
+    // GACHA (round 17): Capsule fever (the build-up, Open all, Capsule Minis, the daily capsule) (DESIGN.md "Capsule fever (round 17)")
+    gacha: GACHA_API(),
+    // TECH (round 17): Cabinet Tech and Joy Stick (DESIGN.md "Cabinet Tech and the new crawler (round 17)")
+    tech: TECH_API(),
+    // QA17 (round 17): QA pass 6's fixes (DESIGN.md "QA pass 6 (round 17)")
+    qa17: QA17_API(),
     get run() { return S.run; }, set run(v) { S.run = v; },
     get fight() { return F; },
     get rig() { return FS ? FS.rig : null; }, get world() { return FS ? FS.world : null; }, get cabinet() { return FS ? FS.cabinet : null; },

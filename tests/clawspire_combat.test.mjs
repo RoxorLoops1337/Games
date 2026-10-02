@@ -1020,6 +1020,7 @@ else {
       if (c.ctx && c.ctx.luck) F.player.status.luck = c.ctx.luck;   // a recipe that reads the grab state (Lucky Seven)
       if (c.ctx && c.ctx.pet) F.petId = c.ctx.pet;   // a pet combo needs its pet along (round 7, EVOLVE)
       C.useGrab(F);
+      if (c.ctx && c.ctx.perfect) { C.techOn(F, true); C.techCab(F, 'perfect', c.ctx.perfect); }   // a PERFECT grab (round 17, TECH)
       for (const x of c.example) { const i = F.bin.find(b => b.id === x && F.grab.insts.indexOf(b) < 0); if (i && F.phase === 'player') C.play(F, i); }
       const ev = C.grabDone(F, c.example.length);
       h.ok(F.phase === 'over' || ev.some(e => e.t === 'combo' && e.id === id), `combo ${id} fires in a fight`);
@@ -3971,6 +3972,87 @@ if (hasData) {
     }
     h.eq(bad, 0, 'never a NaN or a negative hp');
     h.ok(over > 0, `some fights end (${over})`);
+  });
+}
+
+// ---------- TECH (round 17): Cabinet Tech (DESIGN.md "Cabinet Tech and the new crawler (round 17)") ----------
+{
+  const R = boot({ only: ['util', 'data', 'combat'] });
+  const C = R.COMBAT, D = R.DATA;
+  const tfight = (relics, o) => {
+    o = o || {};
+    const run = { hp: 999, maxHp: 999, act: 1, char: o.char || 'techie', relics: relics || [], claw: { grabs: 3 }, bin: D.CHARACTERS.techie.bin.map((id, i) => ({ uid: 't' + i, id })) };
+    const F = C.newFight(run, o.foes || ['slime', 'slime'], R.U.rng(o.seed || 7));
+    if (o.on !== false) C.techOn(F, true);
+    return F;
+  };
+  const hp = (F) => F.enemies.reduce((a, e) => a + e.hp, 0);
+
+  h.test('tech: F.tech, the cabinet hook on your own turn only, the tech event', () => {
+    const F = tfight(['service_remote']);
+    h.ok(F.tech && F.tech.gift && F.tech.on && F.tech.perf === 0, 'F.tech: her gift, the live cabinet');
+    const k = tfight([], { char: 'knight', on: false });
+    h.ok(!k.tech.gift && !k.tech.on, 'a knight in a quiet cabinet');
+    const h0 = hp(F), b0 = F.player.block;
+    const ev = C.techCab(F, 'event', 0, 'surge');
+    h.ok(ev.some((e) => e.t === 'tech' && e.k === 'event' && e.id === 'surge') && ev.some((e) => e.t === 'proc' && e.id === 'service_remote'), 'a tech event and the remote\'s proc');
+    h.eq(h0 - hp(F), 6, 'the remote: 3 to each slime');
+    h.eq(F.player.block, b0 + 3, 'and 3 Block');
+    h.eq(F.tech.events, 1, 'counted');
+    C.endTurn(F);
+    h.ok(F.phase === 'player', 'back to your turn');
+    F.phase = 'enemy';
+    h.eq(C.techCab(F, 'event', 0, 'coins').length, 0, 'nothing off your turn');
+    F.phase = 'player';
+    h.eq(C.techCab(F, '', 0).length, 0, 'nothing for no kind');
+  });
+
+  h.test('tech: a PERFECT grab feeds Bullseye and the Metronome, then clears with the grab', () => {
+    const F = tfight(['metronome']);
+    C.useGrab(F);
+    const h0 = hp(F);
+    C.techCab(F, 'perfect', 2);
+    h.eq(h0 - hp(F), 8, 'the Metronome: 8 on a PERFECT x2');
+    h.eq(F.tech.perf, 2, 'this grab is PERFECT x2');
+    for (const id of ['rubber_duck', 'arcade_stick']) { const i = F.bin.find((b) => b.id === id) || F.bin[0]; C.play(F, i); }
+    const ev = C.grabDone(F, 2);
+    h.ok(ev.some((e) => e.t === 'combo' && e.id === 'bullseye'), 'Bullseye fires on a PERFECT grab of 2');
+    h.eq(F.tech.perf, 0, 'and the PERFECT goes with the grab');
+    C.useGrab(F);
+    C.play(F, F.bin[0]); C.play(F, F.bin[1]);
+    h.ok(!C.grabDone(F, 2).some((e) => e.t === 'combo' && e.id === 'bullseye'), 'no Bullseye on an ordinary grab');
+  });
+
+  h.test('tech: the quiet cabinet rings the remote and the key every 2nd turn', () => {
+    const F = tfight(['service_remote', 'service_key'], { on: false });
+    const blk = [];
+    for (let t = 0; t < 4 && F.phase === 'player'; t++) { C.endTurn(F); blk.push(F.turn + ':' + F.player.block); }
+    h.ok(blk.filter((x) => +x.split(':')[0] % 2 === 0).every((x) => +x.split(':')[1] >= 8), 'even turns: 3 (remote) + 5 (key) Block (' + blk.join(' ') + ')');
+    h.ok(blk.filter((x) => +x.split(':')[0] % 2 === 1).every((x) => +x.split(':')[1] === 0), 'odd turns: none');
+    const L = tfight(['service_key']);
+    C.endTurn(L);
+    h.eq(L.player.block, 0, 'a live cabinet does not ring on its own');
+  });
+
+  h.test('tech: a 30 turn fuzz with every Cabinet Tech relic and random cabinet calls never breaks a fight', () => {
+    let bad = 0, errs = 0;
+    for (let s = 1; s <= 20; s++) {
+      const F = tfight(D.TECH.RELICS.concat(['money_bags']), { seed: 50 + s, foes: ['goblin', 'slime'], on: s % 3 !== 0 }), r = R.U.rng(s);
+      for (let t = 0; t < 30 && F.phase !== 'over'; t++) {
+        for (let k = 0; k < 3 && F.phase === 'player' && F.bin.length; k++) {
+          C.useGrab(F);
+          if (r() < 0.4) C.techCab(F, 'perfect', 1 + Math.floor(r() * 5));
+          if (r() < 0.3) C.techCab(F, ['event', 'fever', 'double'][Math.floor(r() * 3)], 1, ['surge', 'coins', 'capsule'][Math.floor(r() * 3)]);
+          C.play(F, F.bin[Math.floor(r() * F.bin.length)]);
+          if (F.phase === 'player') C.grabDone(F, 1);
+        }
+        if (F.phase === 'player') C.endTurn(F);
+        if (!Number.isFinite(F.player.hp) || F.enemies.some((e) => !Number.isFinite(e.hp) || e.hp < 0)) bad++;
+      }
+      errs += F.hookErrors.length;
+    }
+    h.eq(bad, 0, 'never a NaN or a negative hp');
+    h.eq(errs, 0, 'never a hook error');
   });
 }
 

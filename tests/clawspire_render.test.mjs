@@ -3066,4 +3066,96 @@ h.test('CAB: the event sign at every beat, the Jackpot Lamp and its fever, coins
   h.ok(strained !== plain, 'a straining claw grits its eyes');
 });
 
+// ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+h.test('gacha: every Capsule Mini draws (found and as a silhouette), all distinct; the chips, the leak, the legend moment and the turntable draw clean', () => {
+  const api = boot({ only: ['util', 'data', 'render'] });
+  const R = api.RENDER, G = api.DATA.GACHA, RG = R.gacha;
+  h.ok(RG && typeof RG.mini === 'function' && typeof RG.chips === 'function' && typeof RG.leak === 'function' && typeof RG.legend === 'function' && typeof RG.turntable === 'function', 'RENDER.gacha is there');
+  const fps = new Map();
+  for (const id of G.MINI_IDS) {
+    h.ok(typeof RG.BODY[G.MINIS[id].look.body] === 'function', `${id}: its body (${G.MINIS[id].look.body}) has a drawing`);
+    const st = drawCheck('mini ' + id, (c) => RG.mini(c, id, 60, 60, 90, 1.3));
+    fps.set(id, fingerprint(st));
+    drawCheck('mini ' + id + ' (silhouette, turning)', (c) => RG.mini(c, id, 60, 60, 90, 2.1, { sil: true, spin: 0.3 }));
+  }
+  const u = uniqueRatio(fps);
+  h.eq(u.ratio, 1, 'every mini draws differently: ' + u.dupes.map((d) => d.join('=')).join(' '));
+  drawCheck('an unknown mini (just the stand)', (c) => RG.mini(c, 'nope', 60, 60, 90, 0));
+  const chips = [0, 1, 2, 3].map((i) => ({ x: 100 + i * 10, y: 200, a: i, s: 8, col: '#ff2e88', life: 0.5, max: 1 }));
+  drawCheck('shell chips', (c) => RG.chips(c, chips, chips.length));
+  for (const k of [0.2, 0.7, 1]) drawCheck('the leak ' + k, (c) => RG.leak(c, 270, 440, 80, '#ffc94d', k, 2, 7));
+  for (const red of [false, true]) drawCheck('the legend moment' + (red ? ' (calm)' : ''), (c) => RG.legend(c, 270, 440, 80, 0.8, 1.5, 540, 960, red));
+  drawCheck('the turntable', (c) => RG.turntable(c, 150, 300, 190, 1, '#2ee6d6'));
+  const { ctx, stat } = seqCtx();
+  RG.leak(ctx, 270, 440, 80, '#fff', 0, 1, 1); RG.legend(ctx, 270, 440, 80, 0, 1, 540, 960, false); RG.chips(ctx, [], 0);
+  h.eq(stat.paints, 0, 'nothing at zero');
+  // without DATA the stand still draws and nothing throws
+  const bare = boot({ only: ['util', 'render'] });
+  drawCheck('a mini with no DATA', (c) => bare.RENDER.gacha.mini(c, 'neon_cat', 60, 60, 90, 0));
+});
+
+// ---------------- TECH (round 17): Joy Stick's face, outfits and items, the Cabinet Tech glyphs, the laser
+h.test('TECH: Joy Stick, her outfits and arcade parts, a drawn glyph per Cabinet Tech relic, the Laser Sight', () => {
+  const api = boot({ only: ['util', 'physics', 'data', 'render'] });
+  const R = api.RENDER, D = api.DATA;
+  h.ok(R.tech && ['portrait', 'hat', 'visor', 'glyph', 'laser'].every(k => typeof R.tech[k] === 'function'), 'RENDER.tech');
+  const pfp = new Map();
+  for (const id of Object.keys(D.CHARACTERS)) pfp.set(id, fingerprint(drawCheck('portrait ' + id, c => R.portrait(c, id, 40, 40, 64, 1))));
+  h.eq(uniqueRatio(pfp).ratio, 1, 'Joy Stick has a face of her own');
+  // idle: the LED blinks and the eyes blink with t
+  const a = fingerprint(drawCheck('joy t0', c => R.portrait(c, 'techie', 40, 40, 64, 0.1))), b = fingerprint(drawCheck('joy blink', c => R.portrait(c, 'techie', 40, 40, 64, 3.3)));
+  h.ok(a !== b, 'she blinks');
+  const bare = pfp.get('techie'), fits = new Map();
+  for (const fit of ['fit_joy_headset', 'fit_joy_visor', 'fit_joy_witch', 'fit_joy_scarf']) {
+    R.vault.equip({ outfit: { techie: fit } });
+    fits.set(fit, fingerprint(drawCheck('portrait techie ' + fit, c => R.portrait(c, 'techie', 40, 40, 64, 1.3))));
+    drawCheck('thumb ' + fit, c => R.vault.thumb(c, fit, 50, 50, 100, 0.5));
+  }
+  R.vault.equip({ outfit: {} });
+  h.ok([...fits.values()].every(fp => fp !== bare), 'every outfit shows on her');
+  h.eq(uniqueRatio(fits).ratio, 1, 'and they differ');
+  const its = new Map();
+  for (const id of D.TECH.ITEMS) {
+    h.ok(R.pol.SIL[id], id + ': a silhouette of its own');
+    its.set(id, fingerprint(drawCheck('item ' + id, c => R.item(c, D.ITEMS[id], 100, 100, 0.3, 1, {}))));
+  }
+  h.ok(its.size === 8 && uniqueRatio(its).ratio === 1, `her ${its.size} arcade parts all look different`);
+  // every Cabinet Tech relic draws its own glyph in its medallion (no emoji), still or animated
+  const gl = new Map();
+  for (const id of D.TECH.RELICS.concat(['service_remote'])) {
+    h.ok(typeof R.tech.GLYPH[id] === 'function', id + ': a glyph');
+    gl.set(id, fingerprint(drawCheck('relic ' + id, c => R.relicIcon(c, D.RELICS[id], 40, 40, 64, 1.7))));
+    drawCheck('relic still ' + id, c => R.relicIcon(c, D.RELICS[id], 40, 40, 32));
+  }
+  h.eq(uniqueRatio(gl).ratio, 1, 'eleven distinct medallions');
+  h.ok(!R.tech.glyph({ getTransform() {}, save() {}, restore() {} }, D.RELICS.grip_tape, 10, 0), 'any other relic keeps its emoji');
+  const la = new Map();
+  for (const [k, st] of [['aim', { t: 1 }], ['lock', { t: 1, lock: true }], ['still', { t: 1, lock: true, reduced: true }]]) la.set(k, fingerprint(drawCheck('laser ' + k, c => R.tech.laser(c, 200, 450, 700, st))));
+  h.eq(uniqueRatio(la).ratio, 1, 'the laser aims and locks');
+  drawCheck('laser too short', c => { R.tech.laser(c, 200, 450, 452, null); c.fillRect(0, 0, 1, 1); });
+});
+
+/* ------------------------------------------------- QA17 (round 17): QA pass 6 */
+h.test('qa17: the claw-off board\'s round stars sit inside the lit frame, beside the score', () => {
+  const { RENDER } = boot();
+  const pts = [];
+  const ctx = new Proxy({}, { get(t, p) {
+    if (p === 'moveTo' || p === 'lineTo') return (x, y) => pts.push([x, y]);
+    if (p === 'measureText') return (s) => ({ width: String(s).length * 8 });
+    if (p === 'createLinearGradient' || p === 'createRadialGradient' || p === 'createPattern') return () => ({ addColorStop() {} });
+    if (p in t) return t[p];
+    return () => {};
+  }, set(t, p, v) { t[p] = v; return true; } });
+  const x = 270, y = 150, w = 500;
+  for (const who of [0, 1]) {
+    pts.length = 0;
+    RENDER.duo.board(ctx, { x, y, w, t: 1, who, names: ['WWWWWWWWWW', 'Maximiliaa'], sc: [15, 0], wins: [1, 2], drops: 3, used: [1, 0], round: 2 });
+    const band = pts.filter((p) => p[1] > y - 6 && p[1] < y + 14);   // the stars' points (the frame's sides end above and below)
+    h.ok(band.length >= 40, 'four stars drawn (' + band.length + ' points)');
+    const off = band.filter((p) => { const cx = x + (p[0] > x ? 1 : -1) * w * 0.28; return Math.abs(p[0] - cx) > w * 0.2 - 2; });
+    h.eq(off.length, 0, 'every star inside its player\'s frame (who ' + who + ')');
+    h.ok(band.every((p) => Math.abs(p[0] - (x + (p[0] > x ? 1 : -1) * w * 0.28)) > 40), 'and clear of the score in the middle');
+  }
+});
+
 h.done();

@@ -46,7 +46,10 @@ const DATA = (() => {
     // round 6: the companion pet did a trick in the fight (F, petId)
     'onPet',
     // round 12 (LEG): bubbles popped (F, where 'chute' | 'bin', n), after they paid
-    'onBubble'];
+    'onBubble',
+    // round 17 (TECH): the cabinet did something on your turn (F, kind 'event' | 'perfect' |
+    // 'fever' | 'double', v: the PERFECT streak or the fever's count, id: the event's id)
+    'onCab'];
   // Engine rules a build-defining relic can bend (relic.rules, merged into
   // F.rules by COMBAT.newFight). See DESIGN.md "Builds and synergies".
   // luck: empty grabs and near misses fill the Luck meter (Lucky Lou's gift);
@@ -823,6 +826,49 @@ const DATA = (() => {
       color: '#ffc94d', color2: '#fff6c0', art: 'star', target: 'all',
       fx: [dmg(9)], plus: { fx: [dmg(13)] },
       text: 'Deal {v} damage to ALL enemies and blow three bubbles. Pure gold, still squeaks.' },
+    // ---- TECH (round 17, DESIGN.md "Cabinet Tech and the new crawler (round 17)"): Joy Stick's
+    // arcade parts. `lamp` is how many more cells of the Jackpot Lamp an item lights when it is
+    // delivered (game.js TECH block; for anyone who holds it). An item with `lamp` wears the Tech chip. ----
+    { id: 'arcade_stick', name: 'Arcade Stick', rarity: 'c', cost: 40, char: 'techie', starter: true, lamp: 1,
+      tags: ['weapon'], shape: box(20, 34), density: 0.9, friction: 0.5, restitution: 0.15,
+      color: '#ff2e88', color2: '#1a1030', art: 'wand',
+      fx: [dmg(4)], plus: { fx: [dmg(6)] },
+      text: 'Deal {v} damage. Delivered, it lights a cell of the Jackpot Lamp.' },
+    { id: 'arcade_button', name: 'Arcade Button', rarity: 'c', cost: 40, char: 'techie', starter: true, lamp: 1,
+      tags: [], shape: box(26, 18), density: 1, friction: 0.45, restitution: 0.1,
+      color: '#ff4a4a', color2: '#1a1030', art: 'orb', target: 'self',
+      fx: [block(5)], plus: { fx: [block(7)] },
+      text: 'Gain {v} Block. Press it: a lamp cell lights up.' },
+    { id: 'coin_mech', name: 'Coin Mech', rarity: 'c', cost: 45, char: 'techie', kw: ['tech'],
+      tags: ['metal'], shape: box(24, 30), density: 1.6, friction: 0.45, restitution: 0.1,
+      color: '#aab3bd', color2: '#ffc94d', art: 'coin',
+      fx: [dmg(4), gold(2)], plus: { fx: [dmg(6), gold(3)] },
+      text: 'Deal {v} damage and gain {v2} gold. The coin door off an old cabinet: clunk, clunk.' },
+    { id: 'neon_tube', name: 'Neon Tube', rarity: 'c', cost: 50, char: 'techie', lamp: 2,
+      tags: ['glass', 'light'], shape: box(40, 10), density: 0.6, friction: 0.4, restitution: 0.2,
+      color: '#ff7ad9', color2: '#ffffff', art: 'wand',
+      fx: [dmg(7)], plus: { fx: [dmg(10)] },
+      text: 'Deal {v} damage. Delivered, it lights 2 lamp cells. Fragile, like every good sign.' },
+    { id: 'circuit_board', name: 'Circuit Board', rarity: 'u', cost: 70, char: 'techie', lamp: 1,
+      tags: ['metal', 'magic'], shape: box(34, 24), density: 1, friction: 0.5, restitution: 0.1,
+      color: '#2e9d5a', color2: '#ffc94d', art: 'book', target: 'all',
+      fx: [dmg(5)], plus: { fx: [dmg(7)] },
+      text: 'Deal {v} damage to ALL enemies. Delivered, it lights a lamp cell.' },
+    { id: 'extension_cord', name: 'Extension Cord', rarity: 'u', cost: 70, char: 'techie', lamp: 1,
+      tags: ['tool'], shape: box(40, 14), density: 0.9, friction: 0.7, restitution: 0.1,
+      color: '#ff8a2e', color2: '#2a2a3a', art: 'chain', target: 'none',
+      fx: [grab(1), block(3)], plus: { fx: [grab(1), block(6)] },
+      text: 'Gain {v} extra grab and {v2} Block. Plugged in, a lamp cell lights up.' },
+    { id: 'crt_monitor', name: 'CRT Monitor', rarity: 'r', cost: 100, char: 'techie', lamp: 3,
+      tags: ['heavy', 'glass'], shape: box(38, 34), density: 1.7, friction: 0.55, restitution: 0.05,
+      color: '#3a3f4a', color2: '#2ee6d6', art: 'slot',
+      fx: [dmg(14)], plus: { fx: [dmg(19)] },
+      text: 'Deal {v} damage. Heavy as sin. Delivered, it lights 3 lamp cells.' },
+    { id: 'golden_stick', name: 'Golden Joystick', rarity: 'l', cost: 140, char: 'techie', lamp: 4,
+      tags: ['weapon', 'magic'], shape: box(22, 38), density: 1, friction: 0.5, restitution: 0.2,
+      color: '#ffc94d', color2: '#fff6c0', art: 'star', target: 'random',
+      fx: [dmg(6, 3)], plus: { fx: [dmg(8, 3)] },
+      text: 'Strike {v} damage {n} times at random enemies and light 4 lamp cells. High score material.' },
 
     // ---- Small fillers: marbles, beads and sweets. Circles r 9-11 so the
     // claw's cradle scoops two or three at once; each does a little. Tagged
@@ -1450,6 +1496,25 @@ const DATA = (() => {
   const d6 = (F) => 1 + Math.floor((typeof F.rng === 'function' ? F.rng() : 0.5) * 6);
   // CR8: feed Mama Mech's turret (a fight without one, or no COMBAT: nothing).
   const turParts = (F, v, label) => { const c = CB(); if (c && c.turretParts && F && F.tur) c.turretParts(F, v, label); };
+  // TECH (round 17): Cabinet Tech's numbers (the game's TECH block reads the cabinet ones through
+  // DATA.TECH.K). A live cabinet (F.tech.on, set by the game) has events, the lamp and PERFECT
+  // grabs; a quiet one (Duo, a headless suite) has none, so the event relics ring every 2nd turn.
+  const TECH_K = {
+    remoteDmg: 3, remoteBlock: 3, quietEvery: 2,       // Service Remote (Joy Stick's starter)
+    giftEvP: 0.22, giftFirst: 1, giftPerfLamp: 1,      // her gift: more events, from turn 1; a PERFECT lights 1 more cell
+    laserX: 5, laserBlock: 3,                          // Laser Sight: the PERFECT window x2 (5 px more), Block a PERFECT
+    keyEvP: 0.15, keyBlock: 5,                         // Service Key
+    oilStart: 4, oilHeal: 3,                           // Lamp Oil
+    hopperCoins: 3, hopperGold: 1,                     // Coin Hopper: coins more a shower and a fever, gold more a coin
+    metroDmg: 4, metroMax: 16,                         // Metronome: 4 per PERFECT in the streak
+    feverDmg: 8, feverBlock: 4,                        // Fever Dream
+    breakZap: 6, breakBlock: 6, breakHeal: 5,          // Circuit Breaker: a surge, a coin shower, a capsule drop
+    dblEvP: 0.08,                                      // Double Feature: a little more often too
+    mbDmg: 15, mbPerfLamp: 2, mbDrain: 3,              // The Motherboard (legendary)
+  };
+  const techLive = (F) => !!(F && F.tech && F.tech.on);
+  // A quiet cabinet's turn for the event relics: every 2nd turn from turn 2.
+  const techQuiet = (F) => !!F && !techLive(F) && (F.turn | 0) >= 2 && (F.turn | 0) % TECH_K.quietEvery === 0;
 
   const RELIC_LIST = [
     // starters (not in random pools)
@@ -1490,6 +1555,15 @@ const DATA = (() => {
     { id: 'bubble_wand', name: 'Bubble Wand', icon: '\u{1F9FC}', rarity: 'event', kw: ['fortress'], proc: 'BUBBLE WAND', starter: true,
       text: 'Start each fight with 2 Block and one more bubble. Every bubble you pop in the chute gives 2 Block.',
       bub: { first: 1, block: 2 }, hooks: { onFightStart(F) { gainBlock(F, 2); } } },
+    // Joy Stick's (TECH, round 17): the cabinet's events pay out. `onCab(F, kind, v, id)` is the
+    // cabinet hook (COMBAT.techCab, fired by the game's TECH block: 'event' id, 'perfect' n, 'fever' n,
+    // 'double' id). A quiet cabinet (Duo, where it has no events) rings the remote every 2nd turn.
+    { id: 'service_remote', name: 'Service Remote', icon: '\u{1F4DF}', rarity: 'event', kw: ['tech'], proc: 'REMOTE', starter: true,
+      text: 'Every cabinet event that lands zaps ALL enemies for 3 and gives you 3 Block. When the cabinet is quiet (Duo), it rings every 2nd turn instead.',
+      hooks: {
+        onCab(F, kind) { if (kind === 'event') { zapAll(F, TECH_K.remoteDmg); gainBlock(F, TECH_K.remoteBlock); } },
+        onTurnStart(F) { if (techQuiet(F)) { proc(F, 'service_remote', 'REMOTE'); zapAll(F, TECH_K.remoteDmg); gainBlock(F, TECH_K.remoteBlock); } },
+      } },
 
     // common
     { id: 'grip_tape', name: 'Grip Tape', icon: '🩹', rarity: 'c', kw: [], text: 'Your claw grips 25% harder. Sticky, in a good way.',
@@ -1884,6 +1958,70 @@ const DATA = (() => {
       bub: { combo: 3 },
       hooks: { onGrab(F, n) { if (!F.bub && (n | 0) >= 2) zapAll(F, 2); } } },
 
+    // ---- TECH (round 17, DESIGN.md "Cabinet Tech and the new crawler (round 17)"): the
+    // cabinet's own systems (round 16) as builds. `tech` numbers are the game's (DATA.techMods
+    // adds them up: evP / first more events, perfX the PERFECT window, laser, lampStart, coins /
+    // coinGold, double, perfLamp, drain); the hooks hear the cabinet on onCab. Every cabinet
+    // effect lands on your own turn (the game holds a fever that bursts after END TURN until
+    // your next one). The event relics ring every 2nd turn when the cabinet is quiet (Duo). ----
+    { id: 'laser_sight', name: 'Laser Sight', icon: '\u{1F526}', rarity: 'c', kw: ['tech'], proc: 'LASER',
+      text: 'A red laser shows where the claw will drop, and PERFECT grabs are twice as easy to land. Every PERFECT grab gives you 3 Block.',
+      tech: { perfX: TECH_K.laserX, laser: 1 },
+      hooks: { onCab(F, kind) { if (kind === 'perfect') gainBlock(F, TECH_K.laserBlock); } } },
+    { id: 'service_key', name: 'Service Key', icon: '\u{1F511}', rarity: 'c', kw: ['tech', 'fortress'], proc: 'SERVICE KEY',
+      text: 'Cabinet events come more often and can land on your first turn. Every event that lands gives you 5 Block.',
+      tech: { evP: TECH_K.keyEvP, first: 1 },
+      hooks: {
+        onCab(F, kind) { if (kind === 'event') gainBlock(F, TECH_K.keyBlock); },
+        onTurnStart(F) { if (techQuiet(F)) gainBlock(F, TECH_K.keyBlock); },
+      } },
+    { id: 'lamp_oil', name: 'Lamp Oil', icon: '\u{1F3EE}', rarity: 'c', kw: ['tech', 'feast'], proc: 'LAMP OIL',
+      text: 'The Jackpot Lamp starts every fight 4 cells fuller, and every LAMP FEVER heals you 3 HP.',
+      tech: { lampStart: TECH_K.oilStart },
+      hooks: { onCab(F, kind) { if (kind === 'fever') healP(F, TECH_K.oilHeal); } } },
+    { id: 'coin_hopper', name: 'Coin Hopper', icon: '\u{1FA99}', rarity: 'c', kw: ['tech', 'greed'], proc: 'HOPPER',
+      text: 'Coin Showers and LAMP FEVER drop 3 more coins into the cabinet, and every coin you deliver pays 2 gold instead of 1.',
+      tech: { coins: TECH_K.hopperCoins, coinGold: TECH_K.hopperGold },
+      hooks: { onCab(F, kind, v, id) { if ((kind === 'event' && id === 'coins') || kind === 'fever') proc(F, 'coin_hopper', 'HOPPER'); } } },
+    { id: 'metronome', name: 'Metronome', icon: '⏱', rarity: 'u', kw: ['tech'], proc: 'METRONOME',
+      text: 'Every PERFECT grab hits a random enemy for 4, plus 4 for each PERFECT right before it (16 at most).',
+      hooks: {
+        onCab(F, kind, v) {
+          if (kind !== 'perfect') return;
+          const n = Math.max(1, v | 0), d = Math.min(TECH_K.metroMax, TECH_K.metroDmg * n);
+          proc(F, 'metronome', n > 1 ? 'METRONOME x' + n : 'METRONOME');
+          zap(F, randomFoe(F), d);
+        },
+      } },
+    { id: 'fever_dream', name: 'Fever Dream', icon: '\u{1F300}', rarity: 'u', kw: ['tech'], proc: 'FEVER DREAM',
+      text: 'LAMP FEVER deals 8 damage to ALL enemies and gives you 4 Block.',
+      hooks: { onCab(F, kind) { if (kind === 'fever') { zapAll(F, TECH_K.feverDmg); gainBlock(F, TECH_K.feverBlock); } } } },
+    { id: 'circuit_breaker', name: 'Circuit Breaker', icon: '⚡', rarity: 'u', kw: ['tech', 'metal'], proc: 'BREAKER',
+      text: 'Cabinet events hit back: a POWER SURGE zaps ALL enemies for 6, a COIN SHOWER gives you 6 Block and a CAPSULE DROP heals you 5 HP.',
+      hooks: {
+        onCab(F, kind, v, id) {
+          if (kind !== 'event') return;
+          if (id === 'surge') zapAll(F, TECH_K.breakZap);
+          else if (id === 'coins') gainBlock(F, TECH_K.breakBlock);
+          else if (id === 'capsule') healP(F, TECH_K.breakHeal);
+        },
+      } },
+    { id: 'trick_shot', name: 'Trick Shot', icon: '\u{1F3AF}', rarity: 'r', kw: ['tech', 'jackpot'], proc: 'TRICK SHOT',
+      text: 'A PERFECT grab right after another PERFECT (x2 or better) gives you the grab back, once a turn.',
+      hooks: {
+        onCab(F, kind, v) {
+          if (kind !== 'perfect' || (v | 0) < 2) return;
+          const m = mem(F);
+          if (m.trick === F.turn) return;
+          m.trick = F.turn;
+          moreGrabs(F, 1);
+        },
+      } },
+    { id: 'double_feature', name: 'Double Feature', icon: '\u{1F3AC}', rarity: 'r', kw: ['tech'], proc: 'DOUBLE FEATURE',
+      text: 'Every cabinet event lands twice: the reel spins again for a second, different event. Events come a little more often too.',
+      tech: { double: 1, evP: TECH_K.dblEvP },
+      hooks: { onCab(F, kind) { if (kind === 'double') proc(F, 'double_feature', 'DOUBLE FEATURE'); } } },
+
     // boss
     { id: 'token_stack', name: 'Stack of Tokens', icon: '🪙', rarity: 'boss', kw: ['jackpot', 'junk'], proc: 'TOKENS',
       text: '+1 grab every turn. Start each fight with 2 Rocks in your bin.',
@@ -2185,7 +2323,7 @@ const DATA = (() => {
     // never wasted and a loose claw is part of the plan.
     gambler: { id: 'gambler', name: 'Lucky Lou', title: 'The Gambler', color: '#ffc94d',
       blurb: 'Dice, chips and a loose claw. Every whiff fills his Luck meter; the next double grab cashes it out on everything.',
-      hp: 70, gold: 110, unlock: 'act2', unlockText: 'Reach Act 2 with any Crawler.',
+      hp: 78, gold: 110, unlock: 'act2', unlockText: 'Reach Act 2 with any Crawler.',   // (round 17 QA: 70 -> 78)
       claw: { grabs: 3, width: 1, grip: 0.9, speed: 1.1, prongs: 2, rubber: 0, magnet: 0 },
       relic: 'snake_eyes', luck: true,
       bin: ['bone_dice', 'bone_dice', 'bone_dice', 'bone_dice', 'bone_dice',
@@ -2217,6 +2355,18 @@ const DATA = (() => {
         'soap_bar', 'soap_bar', 'soap_bar', 'soap_bar',
         'bubble_pipe', 'sponge', 'scrub_brush', 'crisp_apple',
         'glass_bead', 'glass_bead', 'glass_bead', 'peppermint', 'peppermint', 'peppermint'] },
+    // Round 17 (TECH): the Technician. `tech` is her gift (game.js TECH block): the cabinet works
+    // for her. Its events come more often and from her first turn, and every PERFECT grab lights
+    // one more lamp cell. Unlocked by setting off LAMP FEVER with anyone (`unlock: 'fever'`).
+    techie: { id: 'techie', name: 'Joy Stick', title: 'The Technician', color: '#ff7ad9',
+      blurb: 'Joysticks, buttons and a service remote. The cabinet works for her: its events come more often and from her first turn, and every one that lands zaps everything.',
+      hp: 70, gold: 100, unlock: 'fever', unlockText: 'Set off LAMP FEVER with any Crawler.',
+      claw: { grabs: 3, width: 1, grip: 1, speed: 1.15, prongs: 2, rubber: 0, magnet: 0 },
+      relic: 'service_remote', tech: true,
+      bin: ['arcade_stick', 'arcade_stick', 'arcade_stick', 'arcade_stick', 'arcade_stick',
+        'arcade_button', 'arcade_button', 'arcade_button', 'arcade_button', 'arcade_button',
+        'coin_mech', 'neon_tube', 'crisp_apple',
+        'lucky_penny', 'lucky_penny', 'lucky_penny', 'bouncy_ball', 'bouncy_ball', 'bouncy_ball'] },
   };
   // The crawler's line on the versus card before an elite or boss (RENDER.vsCard).
   const VS_LINES = {
@@ -2224,6 +2374,7 @@ const DATA = (() => {
     rogue: 'Your wallet looks heavy.', gambler: 'Double or nothing, pal.',
     engineer: 'Hold still. Measuring you.',
     bubbler: 'Hold your breath, sweetie.',
+    techie: 'Hold on, rebooting you.',
   };
   for (const id in CHARACTERS) CHARACTERS[id].vsLine = VS_LINES[id] || '';
 
@@ -2257,9 +2408,11 @@ const DATA = (() => {
     echo: { label: 'Echo', icon: '✨', color: '#b08cff', blurb: 'Magic items that copy, repeat and replay each other.' },
     // round 3: Lucky Lou's build (whiffs fill the meter, a double grab cashes it out)
     luck: { label: 'Luck', icon: '🍀', color: '#3ddc84', blurb: 'Dice that roll twice, whiffs that pay later and a meter that cashes out on everything.' },
+    // round 17 (TECH): the cabinet's own systems (events, the Jackpot Lamp, PERFECT grabs, its coins)
+    tech: { label: 'Tech', icon: '\u{1F579}', color: '#ff7ad9', blurb: 'The machine is on your side: PERFECT grabs, cabinet events, LAMP FEVER and the coins it rains.' },
   };
   // Chip order: specific engines first, broad families (glass, metal) last.
-  const ARCH_ORDER = ['poison', 'burn', 'frost', 'fortress', 'brawler', 'junk', 'jackpot', 'swarm', 'greed', 'luck', 'feast',
+  const ARCH_ORDER = ['poison', 'burn', 'frost', 'fortress', 'brawler', 'junk', 'tech', 'jackpot', 'swarm', 'greed', 'luck', 'feast',
     'echo', 'glass', 'metal'];
   const TAG_ARCH = { metal: 'metal', small: 'swarm', glass: 'glass', food: 'feast', magic: 'echo', junk: 'junk' };
   const PER_ARCH = { poison: 'poison', burn: 'burn', block: 'fortress', metal: 'metal', junk: 'junk', grabsUsed: 'jackpot',
@@ -2276,6 +2429,7 @@ const DATA = (() => {
     if (Array.isArray(def.fx)) {
       for (const t of def.tags || []) if (TAG_ARCH[t]) got.add(TAG_ARCH[t]);
       if (def.bag) got.add('swarm');
+      if (def.lamp) got.add('tech');   // (TECH, round 17: it lights the Jackpot Lamp)
       for (const f of def.fx) {
         if (!f) continue;
         const foe = f.k === 'status' && f.to !== 'self';
@@ -2468,6 +2622,20 @@ const DATA = (() => {
       text: 'A grab of 2+ items while you hold exactly 7 Luck: 7 damage 7 times at random and 7 gold.', fx: [dmg(7, 7), gold(7)],
       match: (d, ctx) => d.length >= 2 && !!ctx && (ctx.luck | 0) === 7, ctx: { luck: 7 },
       example: ['bone_dice', 'femur'], miss: ['bone_dice'] },
+    // ---- TECH (round 17): the arcade's own recipes. A Tech item (it lights the lamp, or wears the
+    // chip) with coins or metal, and a PERFECT grab (ctx.perfect: the grab's PERFECT streak, COMBAT
+    // passes it from the game's TECH block). ----
+    { id: 'coin_op', name: 'Coin-Op', tier: 1, family: 'coinop', color: '#ffc94d', target: 'enemy',
+      text: 'A Tech item and a coin: insert coin, deal 5 damage and gain 3 gold.', fx: [dmg(5), gold(3)],
+      match: (d) => roles(d, [(x) => has(x, 'tech'), artIs('coin')]), example: ['arcade_stick', 'lucky_penny'], miss: ['arcade_stick', 'crisp_apple'] },
+    { id: 'short_circuit', name: 'Short Circuit', tier: 2, family: 'circuit', color: '#ff7ad9', target: 'all',
+      text: 'A Tech item and two metal items: sparks fly, 6 damage and 1 Weak to ALL enemies.', fx: [dmg(6), status('weak', 1, 'all')],
+      match: (d) => roles(d, [(x) => has(x, 'tech'), tagOf('metal'), tagOf('metal')]),
+      example: ['arcade_button', 'rusty_sword', 'iron_chain'], miss: ['arcade_button', 'rusty_sword', 'crisp_apple'] },
+    { id: 'bullseye', name: 'Bullseye', tier: 2, family: 'bullseye', color: '#ffe066', target: 'enemy',
+      text: 'A PERFECT grab that brings up 2+ items: deal 8 damage and gain 4 Block.', fx: [dmg(8), block(4)],
+      match: (d, ctx) => d.length >= 2 && !!ctx && (ctx.perfect | 0) >= 1, ctx: { perfect: 1 },
+      example: ['rusty_sword', 'crisp_apple'], miss: ['rusty_sword'] },
   ];
   const COMBOS = {};
   for (const c of COMBO_LIST) COMBOS[c.id] = c;
@@ -3321,6 +3489,9 @@ const DATA = (() => {
     // ROS (round 10): Ms. Bubbles' two
     V_('fit_bub_showercap', 'outfit', 'Shower Cap', 'c', 'Frilly, pink, and covered in little ducks. Rain or shine.', { kind: 'hat', style: 'showercap', c1: '#ff9ad0', c2: '#ffd23f' }, { char: 'bubbler' }),
     V_('fit_bub_snorkel', 'outfit', 'Snorkel Mask', 'r', 'Diving goggles and a snorkel. For when the bin floods.', { kind: 'shades', style: 'snorkel', c1: '#2ee6d6', c2: '#ffc94d' }, { char: 'bubbler' }),
+    // TECH (round 17): Joy Stick's two
+    V_('fit_joy_headset', 'outfit', 'Service Headset', 'u', 'Big padded cans and a boom mic. She hears the cabinets humming.', { kind: 'hat', style: 'tech_headset', c1: '#2a2a3a', c2: '#ff7ad9' }, { char: 'techie' }),
+    V_('fit_joy_visor', 'outfit', 'Scanline Visor', 'r', 'A wraparound visor with a scanline that never stops scrolling.', { kind: 'shades', style: 'tech_visor', c1: '#2ee6d6', c2: '#ff7ad9' }, { char: 'techie' }),
     // ---- map trails: what the crawler's footsteps leave behind
     V_('trail_dust', 'trail', 'Dust', 'c', 'Plain old footprints in the dust.', { art: 'dust', col: '#b3a4d6' }, { free: true }),
     V_('trail_sparkle', 'trail', 'Sparkles', 'c', 'A little glitter with every step.', { art: 'sparkle', col: '#fff6c0' }),
@@ -4105,7 +4276,7 @@ const DATA = (() => {
       items: ['candy_corn', 'bag_candycorn', 'pumpkin_bomb', 'cursed_lollipop', 'haunted_teddy', 'witch_broom', 'skull_candle'],
       relics: ['candy_bucket', 'jack_o_lantern', 'witch_brew', 'ghost_sheet'],
       costumes: { rat: 'rat_vamp', slime: 'slime_ghost', goblin: 'goblin_witch' }, elite: 'pumpking', tile: 'treat',
-      cosmetics: ['skin_sea_mansion', 'paint_sea_pumpkin', 'fit_knight_witch', 'fit_alch_witch', 'fit_rogue_witch', 'fit_lou_witch', 'fit_mama_witch', 'fit_bub_witch', 'trail_sea_bats'],
+      cosmetics: ['skin_sea_mansion', 'paint_sea_pumpkin', 'fit_knight_witch', 'fit_alch_witch', 'fit_rogue_witch', 'fit_lou_witch', 'fit_mama_witch', 'fit_bub_witch', 'fit_joy_witch', 'trail_sea_bats'],
       hats: ['witch', 'pumpkin', 'horns'],
     },
     winter: {
@@ -4118,7 +4289,7 @@ const DATA = (() => {
       relics: ['win_stocking', 'mistletoe', 'sleigh_bells', 'warm_scarf'],
       costumes: { rat: 'rat_reindeer', slime: 'slime_snowman', goblin: 'goblin_elf' }, elite: 'krampus', tile: 'advent',
       cosmetics: ['skin_sea_frost', 'skin_sea_ginger', 'paint_sea_holly', 'paint_sea_cane', 'mq_sea_festive', 'trail_sea_flakes',
-        'fit_knight_scarf', 'fit_alch_scarf', 'fit_rogue_scarf', 'fit_lou_scarf', 'fit_mama_scarf', 'fit_bub_scarf'],
+        'fit_knight_scarf', 'fit_alch_scarf', 'fit_rogue_scarf', 'fit_lou_scarf', 'fit_mama_scarf', 'fit_bub_scarf', 'fit_joy_scarf'],
       hats: ['santa', 'elf', 'antlers'],
     },
   };
@@ -4311,6 +4482,7 @@ const DATA = (() => {
     V_('fit_lou_witch', 'outfit', 'Witch Hat', 'u', 'Lou bets the hat is lucky. A spider lives in it.', { kind: 'hat', style: 'witch', c1: '#241a2e', c2: '#3ddc84' }, { char: 'gambler', season: 'halloween', price: 60 }),
     V_('fit_mama_witch', 'outfit', 'Witch Hat', 'u', 'Riveted, of course. The brim folds out into a spanner.', { kind: 'hat', style: 'witch', c1: '#2a2230', c2: '#ff8a2e' }, { char: 'engineer', season: 'halloween', price: 60 }),   // (CR8)
     V_('fit_bub_witch', 'outfit', 'Witch Hat', 'u', 'A cauldron of foam on top. It bubbles over at midnight.', { kind: 'hat', style: 'witch', c1: '#3a2a5a', c2: '#8dfff5' }, { char: 'bubbler', season: 'halloween', price: 60 }),   // (ROS)
+    V_('fit_joy_witch', 'outfit', 'Witch Hat', 'u', 'A pointy hat with a blinking service LED on the band. Spooky, but serviced.', { kind: 'hat', style: 'witch', c1: '#2a1a3a', c2: '#ff7ad9' }, { char: 'techie', season: 'halloween', price: 60 }),   // (TECH)
     V_('trail_sea_bats', 'trail', 'Bat Trail', 'r', 'Little bats flap up out of every step you take.', { art: 'bats', col: '#2a1a3a' }, { season: 'halloween', price: 90 }),
     V_('skin_sea_frost', 'skin', 'Frosted Cabinet', 'r', 'Snow on the roof, icicles on the frame, a cosy frost on the glass.',
       { frame: '#dfeaf5', trim: '#ff2e4a', fp: 'sea_icicles', panel: '#0c1a2a', pp: 'sea_snow', bulb: '#ffffff', glow: '#8dfff5', neon: '#ff2e4a' }, { season: 'winter', price: 120 }),
@@ -4502,6 +4674,7 @@ const DATA = (() => {
     V_('fit_lou_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Green and gold with a clover pin. Lou bet it would not snow.', { kind: 'hat', style: 'sea_scarf', c1: '#2e9c4a', c2: '#ffc94d' }, { char: 'gambler', season: 'winter', price: 60 }),
     V_('fit_mama_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Hi-vis orange, riveted earmuffs. Scarf safety rules apply.', { kind: 'hat', style: 'sea_scarf', c1: '#ff8a2e', c2: '#3a3f4a' }, { char: 'engineer', season: 'winter', price: 60 }),
     V_('fit_bub_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Fluffy as foam, with pompom earmuffs. Very, very soft.', { kind: 'hat', style: 'sea_scarf', c1: '#8dfff5', c2: '#ff9ad0' }, { char: 'bubbler', season: 'winter', price: 60 }),
+    V_('fit_joy_scarf', 'outfit', 'Scarf & Earmuffs', 'u', 'Striped in arcade pink, earmuffs with a little antenna each.', { kind: 'hat', style: 'sea_scarf', c1: '#ff7ad9', c2: '#2ee6d6' }, { char: 'techie', season: 'winter', price: 60 }),   // (TECH)
   ];
   for (const c of WIN_COSMETICS) { seaAdd(COSMETICS, c); if (SEA_COSMETIC_IDS.indexOf(c.id) < 0) SEA_COSMETIC_IDS.push(c.id); }
   const WIN_COSMETIC_IDS = WIN_COSMETICS.map((c) => c.id);
@@ -4556,6 +4729,43 @@ const DATA = (() => {
     MUT_TIP: { mirror: 'MIRROR MODE: steer left, the claw goes right.', sticky: 'STICKY: nothing slips, but it might not let go.', flood: 'RISING WATER: heavy sinks, light floats.' },
   };
   // ================================================================ /ROS
+
+  // ================================================================ TECH (round 17: Cabinet Tech and Joy Stick)
+  // DESIGN.md "Cabinet Tech and the new crawler (round 17)". The crawler, her items, the relics,
+  // outfits, combos and her Codex page sit in their tables above (search TECH); here are the
+  // legendary (The Motherboard), two stickers and techMods, the cabinet numbers the game reads.
+  const TECH_LEG = { id: 'leg_motherboard', name: 'The Motherboard', icon: '\u{1F4BE}', rarity: 'l', kw: ['tech'], proc: 'MOTHERBOARD', leg: {},
+    text: 'The cabinet answers to you: an event lands every turn, PERFECT grabs light 2 more lamp cells and LAMP FEVER deals 15 damage to ALL enemies. The catch: a grab that brings up nothing drains 3 lamp cells.',
+    tech: { evP: 1, first: 1, perfLamp: TECH_K.mbPerfLamp, drain: TECH_K.mbDrain },
+    hooks: { onCab(F, kind) { if (kind === 'fever') zapAll(F, TECH_K.mbDmg); } } };
+  if (!RELICS[TECH_LEG.id]) { RELIC_LIST.push(TECH_LEG); RELICS[TECH_LEG.id] = TECH_LEG; }
+  const TECH_RELICS = ['laser_sight', 'service_key', 'lamp_oil', 'coin_hopper', 'metronome', 'fever_dream', 'circuit_breaker', 'trick_shot', 'double_feature', 'leg_motherboard'];
+  const TECH_ITEMS = ['arcade_stick', 'arcade_button', 'coin_mech', 'neon_tube', 'circuit_board', 'extension_cord', 'crt_monitor', 'golden_stick'];
+  const TECH_COMBOS = ['coin_op', 'short_circuit', 'bullseye'];
+  /* The cabinet numbers a run's relics and crawler add up to (the game's TECH block reads them at
+     the bell): evP (more event chance a turn), first (events from turn 1), perfX (px more room
+     for a PERFECT), laser (draw the aim), lampStart, coins (more a shower and a fever), coinGold (more a
+     coin), double (events land twice), perfLamp (more lamp a PERFECT), drain (lamp a whiff costs). */
+  function techMods(relics, charId) {
+    const m = { evP: 0, first: 0, perfX: 0, laser: 0, lampStart: 0, coins: 0, coinGold: 0, double: 0, perfLamp: 0, drain: 0 };
+    const c = CHARACTERS[charId];
+    if (c && c.tech) { m.evP += TECH_K.giftEvP; m.first += TECH_K.giftFirst; m.perfLamp += TECH_K.giftPerfLamp; }
+    for (const id of relics || []) {
+      const t = RELICS[id] && RELICS[id].tech;
+      if (!t) continue;
+      for (const k in m) if (+t[k]) m[k] += +t[k];
+    }
+    m.evP = Math.min(1, m.evP);
+    return m;
+  }
+  for (const a of [
+    A_('perfect_game', 'Perfect Game', '\u{1F3AF}', '#ffe066', 'Land five PERFECT grabs in a row.',
+      (c) => c.kind === 'ev' && !!c.ev && c.ev.t === 'tech' && c.ev.k === 'perfect' && (c.ev.n | 0) >= 5),
+    A_('tech_support', 'Tech Support', '\u{1F579}', '#ff7ad9', 'Win a run as Joy Stick.', (c) => c.kind === 'win' && RUNS(c).char === 'techie'),
+  ]) if (!ACHIEVEMENTS[a.id]) { ACH_LIST.push(a); ACHIEVEMENTS[a.id] = a; ACH_IDS.push(a.id); }
+  const TECH = { K: TECH_K, RELICS: TECH_RELICS, ITEMS: TECH_ITEMS, COMBOS: TECH_COMBOS, mods: techMods,
+    TIP: 'The cabinet works for Joy Stick: more events, from turn 1.' };
+  // ================================================================ /TECH
 
   // ================================================================ STORY (round 8: branching stories, the rival, alternate bosses)
   /* DESIGN.md "Stories, the rival and alternate bosses (round 8)". Pure data
@@ -5324,6 +5534,8 @@ const DATA = (() => {
         text: 'Mama Mech repaired every machine in the Damp Arcade for thirty years and never got a single thank you, only more quarters stuck in more slots. When the tower started taking Crawlers, she stopped fixing and started building. Everything metal she wins goes into the turret on her Rig, bolt by bolt, until it has opinions of its own. She climbs to have a word with the management. Not an angry word. A long word, with a clipboard.' },
       { id: 'cr_bubbler', ch: 'crawlers', name: 'Ms. Bubbles', art: { k: 'char', id: 'bubbler' }, r: ['win', 'bubbler'],
         text: 'Ms. Bubbles ran the laundromat next door to the Damp Arcade, and every kid who ever lost a quarter in a claw machine came to her to cry about it. She gave them soap bubbles instead. One day she noticed the bubbles could lift a prize, if you blew them right. Now she climbs the Clawspire with a wand, a duck and a very firm opinion that nobody should ever lose a prize to a slippery grip again.' },   // (ROS, round 10)
+      { id: 'cr_techie', ch: 'crawlers', name: 'Joy Stick', art: { k: 'char', id: 'techie' }, r: ['win', 'techie'],
+        text: 'Joy Stick is the arcade technician nobody ever sees: the one who comes in after closing, opens the cabinets with a ring of tiny keys and talks to them while she works. She knows which lamp flickers when a machine is happy and which coin door sticks when it sulks. When the Clawspire started running its cabinets on its own, she took it personally. Now she climbs with a service remote in her pocket, and every machine on every floor seems to be quietly on her side.' },   // (TECH, round 17)
       // ---- the bosses
       { id: 'bo_hoard', ch: 'bosses', name: 'The Hoard', art: { k: 'enemy', id: 'hoard', act: 1 }, r: ['kills', 'hoard', 1],
         text: 'Every prize nobody ever won, piled up in the basement and angry about it. The Hoard started as a heap of lost plush behind the coin return and grew a mouth out of sheer resentment. It flings coins it never earned and sulks when you take them back. It is not evil, just jealous: it watched a thousand kids walk past to the good machines. Beat it and the heap falls apart into ordinary junk, and for a moment it looks almost relieved.' },
@@ -5548,7 +5760,7 @@ const DATA = (() => {
      then your best climbs from the Hall of Fame (their own fake arcade
      initials) and a few old regulars, highest first. hof: DATA.hisFix(...).hof. */
   const LORE_INI = {
-    knight: ['SIR', 'GRB', 'KNT'], alchemist: ['MRA', 'FZZ', 'POP'], rogue: ['PIP', 'QIK', 'YNK'], gambler: ['LOU', 'DBL', 'ACE'], engineer: ['MCH', 'BLT', 'WRN'], bubbler: ['BUB', 'SUD', 'FOM'],
+    knight: ['SIR', 'GRB', 'KNT'], alchemist: ['MRA', 'FZZ', 'POP'], rogue: ['PIP', 'QIK', 'YNK'], gambler: ['LOU', 'DBL', 'ACE'], engineer: ['MCH', 'BLT', 'WRN'], bubbler: ['BUB', 'SUD', 'FOM'], techie: ['JOY', 'TEK', 'LMP'],
     _: ['YOU', 'CRW', 'ME!'],
   };
   const LORE_HOUSE = [['P.M', 999990, 'prizemaster'], ['GRY', 42000, 'gary'], ['AAA', 25000, ''], ['JAZ', 15000, ''], ['RXR', 9000, ''], ['DAD', 4000, ''], ['ZZZ', 1000, ''], ['CPU', 500, '']];
@@ -5776,6 +5988,8 @@ const DATA = (() => {
       engineer: { items: ['rivet_gun', 'toolbox', 'spring_coil', 'oil_can'], relics: ['kettle_helm', 'grease_gun'], claw: ['grip'], hp: 15 },
       // her starter bin is soft (ducks, soap, fillers): her kit brings the punch, the Golden Duck and a Strength relic
       bubbler: { items: ['golden_duck', 'foam_cannon', 'bath_bomb', 'loofah'], relics: ['protein_bar', 'squeaky_toy'], claw: ['grip'], hp: 15 },
+      // (TECH, round 17) her arcade parts, and the lamp's payoff: every LAMP FEVER in a rush hits the boss
+      techie: { items: ['crt_monitor', 'circuit_board', 'extension_cord', 'neon_tube'], relics: ['protein_bar', 'fever_dream'], claw: ['grip'], hp: 15 },
     },
     // a crawler with no kit of its own: its own uncommons and rares, else these
     KIT_ANY: { items: ['firebomb', 'frozen_heart', 'thorn_ring', 'rage_potion'], relics: ['kettle_helm', 'protein_bar'], claw: ['grip'], hp: 15, n: 4 },
@@ -7128,6 +7342,8 @@ const DATA = (() => {
     ROS, rosMutMerge,
     // LEG (round 12): legendary relics, ten more evolutions, animated cabinets (DESIGN.md "Legends (round 12)")
     LEG,
+    // TECH (round 17): Cabinet Tech and Joy Stick (DESIGN.md "Cabinet Tech and the new crawler (round 17)")
+    TECH, techMods,
     // TRD (round 14): the Trading Post and pet evolution (DESIGN.md "The Trading Post and pet evolution (round 14)")
     TRD, PEV, TRD_K, PEV_K, PEV_FORMS, trdValue, trdRoll, trdFix, pevCan, pevOn, pevFee, pevPow,
     // DEP (round 15): the Neon Depths, Endless's fourth biome (DESIGN.md "The Neon Depths (round 15)")
@@ -7163,3 +7379,88 @@ const DATA = (() => {
     AFFIXES, AFFIX_ODDS, affixRoll,
   };
 })();
+
+// ================================================================ GACHA (round 17): Capsule fever
+/* DESIGN.md "Capsule fever (round 17)". Capsule Minis: little collectible
+   figurines tucked into capsules. Pure looks and collection: a mini never
+   touches a run (no power), and rolling one never touches the capsule's own
+   tiers or prize (it is rolled from its own stream at the burst). Four
+   series of six; a finished series pays a Prize Vault cosmetic (a rainbow
+   one, else vault tickets). Dupes turn into vault tickets. look is read by
+   RENDER.gacha only. */
+DATA.GACHA = (() => {
+  'use strict';
+  const SERIES = [
+    { id: 'arcade', name: 'Arcade Pals', icon: '\u{1F579}', col: '#2ee6d6', reward: 'mq_rainbow' },
+    { id: 'snacks', name: 'Spire Snacks', icon: '\u{1F369}', col: '#ff9ec7', reward: 'trail_rainbow' },
+    { id: 'neon', name: 'Neon Beasts', icon: '\u{1F308}', col: '#9b7bff', reward: 'skin_rainbow' },
+    { id: 'lucky', name: 'Lucky Charms', icon: '\u{1F340}', col: '#a6ff5e', reward: 'paint_rainbow' },
+  ];
+  const M_ = (id, series, name, rarity, body, c1, c2, text) => ({ id, series, name, rarity, text, look: { body, c1, c2 } });
+  const LIST = [
+    M_('coin_critter', 'arcade', 'Coin Critter', 'c', 'coin', '#ffc94d', '#b8860b', 'Rolls under every machine. Never comes back out.'),
+    M_('ticket_tot', 'arcade', 'Ticket Tot', 'c', 'ticket', '#ff9ec7', '#c2185b', 'Worth exactly one ticket. Knows it.'),
+    M_('joy_jr', 'arcade', 'Joystick Jr', 'u', 'joystick', '#ff2e88', '#2a1a4a', 'Up, up, down, down. Then a nap.'),
+    M_('pixel_ghost', 'arcade', 'Pixel Ghost', 'u', 'ghost', '#c3adff', '#6b4bd8', 'Haunts the high score table. Only the top spot.'),
+    M_('prize_duck', 'arcade', 'Prize Duck', 'r', 'duck', '#ffe14d', '#ff8a1f', 'The rubber duck every claw is secretly after.'),
+    M_('golden_claw', 'arcade', 'Golden Claw', 'l', 'claw', '#ffc94d', '#fff1a8', 'It never drops anything. Ever.'),
+    M_('gummy_bear', 'snacks', 'Gummy Bear', 'c', 'bear', '#ff5a4a', '#b3261e', 'Chewy, brave, a little sticky.'),
+    M_('popcorn_puff', 'snacks', 'Popcorn Puff', 'c', 'popcorn', '#fff4d6', '#ff2e88', 'Pops when surprised. Always surprised.'),
+    M_('donut_pup', 'snacks', 'Donut Pup', 'u', 'donut', '#e0a060', '#ff6bb0', 'Good boy. Glazed boy.'),
+    M_('soda_slime', 'snacks', 'Soda Slime', 'u', 'soda', '#2ee6d6', '#ff2e88', 'Fizzy, bubbly, slightly flat on Mondays.'),
+    M_('cupcake_king', 'snacks', 'Cupcake King', 'r', 'cupcake', '#ff9ec7', '#8a4b2a', 'Rules a kingdom of crumbs.'),
+    M_('golden_gumball', 'snacks', 'Golden Gumball', 'l', 'gumball', '#ffc94d', '#ff2e88', 'One coin, one gumball, one legend.'),
+    M_('glow_frog', 'neon', 'Glow Frog', 'c', 'frog', '#a6ff5e', '#2f8a2a', 'Ribbits in neon green.'),
+    M_('neon_cat', 'neon', 'Neon Cat', 'c', 'cat', '#ff2e88', '#ffd6ea', 'Nine lives, all of them lit.'),
+    M_('laser_bunny', 'neon', 'Laser Bunny', 'u', 'bunny', '#8dfff5', '#ff2e88', 'Hops at the speed of light. Mostly sideways.'),
+    M_('volt_bat', 'neon', 'Volt Bat', 'u', 'bat', '#9b7bff', '#ffe14d', 'Hangs upside down from power lines.'),
+    M_('disco_crab', 'neon', 'Disco Crab', 'r', 'crab', '#ff5a4a', '#ffc94d', 'Only dances sideways. Dances all night.'),
+    M_('rainbow_dragon', 'neon', 'Rainbow Dragon', 'l', 'dragon', '#ff6bb0', '#8dfff5', 'Breathes every colour at once.'),
+    M_('clover_sprout', 'lucky', 'Clover Sprout', 'c', 'clover', '#a6ff5e', '#2f8a2a', 'Four leaves. Counted twice.'),
+    M_('lucky_dice', 'lucky', 'Lucky Dice', 'c', 'dice', '#ffffff', '#ff2e88', 'Always lands on six. Please do not check.'),
+    M_('horseshoe_hero', 'lucky', 'Horseshoe Hero', 'u', 'horseshoe', '#b9b0cc', '#ffc94d', 'Holds all the luck in. Upside up.'),
+    M_('wish_star', 'lucky', 'Wish Star', 'u', 'star', '#ffe14d', '#ff9ec7', 'Grants one wish. The wish is "more capsules".'),
+    M_('fortune_cat', 'lucky', 'Fortune Cat', 'r', 'maneki', '#ffffff', '#ff2e88', 'Waves in the jackpots. Paw never gets tired.'),
+    M_('jackpot_seven', 'lucky', 'Jackpot Seven', 'l', 'seven', '#ff2e88', '#ffc94d', 'Three of him and the whole tower lights up.'),
+  ];
+  const MINIS = {};
+  for (const m of LIST) MINIS[m.id] = m;
+  const MINI_IDS = LIST.map((m) => m.id);
+  // The chance a run capsule has a mini tucked in, by the capsule's tier (a Vault or daily capsule always has one).
+  const CHANCE = { c: 0.3, u: 0.45, r: 0.7, l: 1 };
+  // The mini's rarity by the capsule's tier.
+  const W = { c: { c: 62, u: 28, r: 8, l: 2 }, u: { c: 40, u: 38, r: 17, l: 5 }, r: { c: 20, u: 36, r: 32, l: 12 }, l: { c: 0, u: 20, r: 40, l: 40 } };
+  const DUPE = { c: 3, u: 6, r: 12, l: 30 };   // vault tickets for a mini you already have
+  const SERIES_TIX = 150;                      // a finished series whose cosmetic you already own
+  const DAILY_TIX = 5;                         // the daily capsule's streak bonus: 5 per day in a row, up to 7 days
+  const DAILY_MAX = 7;
+  const TEASE = 0.2;                           // a common or uncommon capsule flickers gold (looks only) this often
+  const RAR = ['c', 'u', 'r', 'l'];
+  function pickW(rng, w) {
+    let tot = 0;
+    for (const k of RAR) tot += Math.max(0, w[k] || 0);
+    let u = rng() * tot;
+    for (const k of RAR) { u -= Math.max(0, w[k] || 0); if (u < 0) return k; }
+    return RAR[0];
+  }
+  // A mini's id for a capsule of tier (rng: its own stream).
+  function rollMini(rng, tier) {
+    const r = pickW(rng, W[tier] || W.c);
+    const pool = MINI_IDS.filter((id) => MINIS[id].rarity === r);
+    return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
+  }
+  // Does a run capsule of this tier carry a mini? (one draw of its own stream)
+  const hasMini = (rng, tier) => rng() < (CHANCE[tier] == null ? CHANCE.c : CHANCE[tier]);
+  const seriesOf = (id) => SERIES.find((s) => MINIS[id] && s.id === MINIS[id].series) || null;
+  const seriesIds = (sid) => MINI_IDS.filter((id) => MINIS[id].series === sid);
+  // The rare tease: a stable yes / no per capsule seed (a string) for a common or uncommon capsule. Looks only.
+  function tease(seed, tier) {
+    if (tier !== 'c' && tier !== 'u') return false;
+    let h = 2166136261 >>> 0;
+    const s = 'tease:' + seed;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return (h % 1000) / 1000 < TEASE;
+  }
+  return { SERIES, MINIS, MINI_IDS, CHANCE, W, DUPE, SERIES_TIX, DAILY_TIX, DAILY_MAX, TEASE, rollMini, hasMini, seriesOf, seriesIds, tease };
+})();
+// ================================================================ /GACHA

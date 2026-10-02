@@ -1464,8 +1464,8 @@ const RENDER = (() => {
     ctx.beginPath(); circ(ctx, 0, 0, ri - 1.6); S(ctx, rgba(B.rainbow ? '#ffe066' : B.b, 0.7), Math.max(1, r * 0.04)); ctx.stroke();
     // a fixed specular on the ring (the metal reads even in a still)
     ctx.beginPath(); ctx.arc(0, 0, R0 * 0.9, Math.PI * 1.08, Math.PI * 1.42); S(ctx, rgba('#ffffff', 0.55), Math.max(1.2, r * 0.07)); ctx.stroke();
-    // the glyph
-    txt(ctx, String((def && def.icon) || '?'), 0, r * 0.06, Math.max(8, Math.round(ri * 1.3)), '#ffffff', true, 'center');
+    // the glyph (TECH round 17: a Cabinet Tech relic draws its own)
+    if (!techGlyph(ctx, def, ri, tt)) txt(ctx, String((def && def.icon) || '?'), 0, r * 0.06, Math.max(8, Math.round(ri * 1.3)), '#ffffff', true, 'center');
     if (B.rainbow) {
       for (let i = 0; i < 3; i++) {
         const a = tt * 0.9 + i * 2.1, k = 0.5 + 0.5 * Math.sin(tt * 4 + i * 2), x = Math.cos(a) * r * 0.62, y = Math.sin(a) * r * 0.62;
@@ -4273,7 +4273,7 @@ const RENDER = (() => {
     } catch (e) { /* */ }
     ctx.restore();
   }
-  const CHAR_COL = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e', bubbler: '#2ea8c8' };   // (ROS: Ms. Bubbles)
+  const CHAR_COL = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e', bubbler: '#2ea8c8', techie: '#c83a9c' };   // (ROS: Ms. Bubbles; TECH: Joy Stick)
   function portrait(ctx, charId, x, y, size, t) {
     ctx.save();
     try {
@@ -4321,6 +4321,7 @@ const RENDER = (() => {
           F(ctx, PAL.gold); ctx.beginPath(); rrect(ctx, 1.2, 6.3, 2.4, 2.2, 0.6); ctx.fill();
         } else if (charId === 'engineer') cr8Portrait(ctx);   // CR8: Mama Mech
         else if (charId === 'bubbler') rosPortrait(ctx);   // ROS: Ms. Bubbles
+        else if (charId === 'techie') techPortrait(ctx, t);   // TECH (round 17): Joy Stick
         else {
           tone(ctx, c => { c.moveTo(-15, 6); c.quadraticCurveTo(-16, -26, 0, -26); c.quadraticCurveTo(16, -26, 15, 6); c.closePath(); }, '#4a2a6a', 0, -8, 15, { dark: -0.35, spec: false });
           ctx.beginPath(); ctx.moveTo(-10, -4); ctx.quadraticCurveTo(0, 6, 10, -4); ctx.quadraticCurveTo(0, -18, -10, -4); ctx.closePath(); F(ctx, INK); ctx.fill();
@@ -7256,7 +7257,7 @@ const RENDER = (() => {
      state the game hands over (st.t in seconds); every function saves,
      restores and never throws. Deterministic: no random calls, particles are
      placed from t and their index. */
-  const FEEL_CHAR = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e', bubbler: '#2ea8c8' };   // (ROS)
+  const FEEL_CHAR = { knight: '#3b6fd6', alchemist: '#5ab82e', rogue: '#7a3b9c', gambler: '#1f8a4c', engineer: '#c8641e', bubbler: '#2ea8c8', techie: '#c83a9c' };   // (ROS, TECH)
   const FEEL_TIERS = ['c', 'u', 'r', 'l'];
   const FEEL_BADGES = ['armored', 'hasty', 'vampiric'];
   const FEEL_TOWER = { type: 'tower', revealed: true, terrain: 'land', ground: 'hill', biome: 'cellar', elev: 0.7 };
@@ -7932,7 +7933,8 @@ const RENDER = (() => {
   const VHEAD = { knight: { top: -0.6, eye: 0.0, w: 0.56, ex: 0.21 }, alchemist: { top: -0.74, eye: -0.04, w: 0.62, ex: 0.21 },
     rogue: { top: -0.82, eye: 0.0, w: 0.6, ex: 0.18 }, gambler: { top: -0.62, eye: 0.2, w: 0.56, ex: 0.2 },
     engineer: { top: -0.66, eye: 0.14, w: 0.58, ex: 0.19 },   // (CR8: Mama Mech)
-    bubbler: { top: -0.7, eye: -0.08, w: 0.6, ex: 0.21 } };   // (ROS: Ms. Bubbles)
+    bubbler: { top: -0.7, eye: -0.08, w: 0.6, ex: 0.21 },   // (ROS: Ms. Bubbles)
+    techie: { top: -0.72, eye: -0.04, w: 0.56, ex: 0.19 } };   // (TECH: Joy Stick)
   function vOutfit(ctx, charId, r, t) {
     const id = VFORCE.on ? VFORCE.outfit : (VEQ.outfit || {})[charId];
     const d = id ? vDef(id) : null;
@@ -7955,6 +7957,7 @@ const RENDER = (() => {
       } else if (L.kind === 'shades') {
         const y = Hd.eye * r, ex = Hd.ex * r, lr = r * 0.16;
         if (L.style === 'snorkel') rosSnorkel(ctx, L, y, ex, lr, r, t);   // ROS: Ms. Bubbles' snorkel mask
+        else if (L.style === 'tech_visor') techVisor(ctx, L, y, ex, lr, r, t);   // TECH: Joy Stick's Scanline Visor
         else if (L.style === 'star') {
           for (const sd of [-1, 1]) { tone(ctx, q => star(q, sd * ex, y, lr * 1.35, 5, 0.5), L.c1, sd * ex, y, lr, { ol: 1.6, spec: false }); }
           F(ctx, rgba(L.c2, 0.8)); ctx.beginPath(); circ(ctx, -ex - lr * 0.3, y - lr * 0.4, lr * 0.22); circ(ctx, ex - lr * 0.3, y - lr * 0.4, lr * 0.22); ctx.fill();
@@ -7998,6 +8001,7 @@ const RENDER = (() => {
         } else if (L.style === 'witch') seaWitchHat(ctx, L, top, hw, r, t);   // SEASON: the Claw-o-ween witch hats
         else if (L.style === 'welder' || L.style === 'hardhat') cr8Hat(ctx, L, top, hw, r, t);   // CR8: Mama Mech's hats
         else if (L.style === 'showercap') rosHat(ctx, L, top, hw, r, t);   // ROS: Ms. Bubbles' shower cap
+        else if (L.style === 'tech_headset') techHat(ctx, L, top, hw, r, t);   // TECH: Joy Stick's Service Headset
         else if (L.style === 'sea_scarf') winScarf(ctx, L, r, t, Hd);   // WIN (round 12): scarf and earmuffs
       }
     } catch (e) { /* never throws */ }
@@ -14548,7 +14552,7 @@ const RENDER = (() => {
     try {
       size = size || 14; col = duoCol(col);
       ctx.font = 'bold ' + size + 'px ' + FONT;
-      const s = String(text || ''), tw = (ctx.measureText(s).width || s.length * size * 0.6) + size * 1.4, h = size * 1.8;
+      const s = i18nTr(String(text || '')), tw = (ctx.measureText(s).width || s.length * size * 0.6) + size * 1.4, h = size * 1.8;   // (QA17: measured in the words it shows: "DOOR ELKAAR" ran out of its pill)
       if (lit) glow(ctx, x, y, tw * 0.7, col, 0.35);
       ctx.beginPath(); rrect(ctx, x - tw / 2, y - h / 2, tw, h, h / 2);
       F(ctx, lit ? col : rgba(INK, 0.85)); ctx.fill(); S(ctx, lit ? INK : col, 2.5); ctx.stroke();
@@ -14719,10 +14723,10 @@ const RENDER = (() => {
         // drops left this round
         const dn = Math.max(1, st.drops | 0 || 3), used = (st.used || [])[i] | 0;
         for (let k = 0; k < dn; k++) { ctx.beginPath(); circ(ctx, cx + (k - (dn - 1) / 2) * 13, y + 34, 4.5); F(ctx, k < used ? rgba(col, 0.22) : col); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke(); }
-        // rounds won: two stars
+        // rounds won: two stars (QA17: beside the score, inside the lit frame and clear of a long name)
         for (let k = 0; k < 2; k++) {
-          const sx = cx + (i ? 1 : -1) * (w * 0.16 + k * 16), won = k < ((st.wins || [])[i] | 0);
-          ctx.beginPath(); star(ctx, sx, y - 26, 7, 5, 0.45); F(ctx, won ? PAL.gold : '#3a2a50'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
+          const sx = cx + (i ? 1 : -1) * (w * 0.2 - 18 - k * 16), won = k < ((st.wins || [])[i] | 0);
+          ctx.beginPath(); star(ctx, sx, y + 4, 7, 5, 0.45); F(ctx, won ? PAL.gold : '#3a2a50'); ctx.fill(); S(ctx, INK, 1.5); ctx.stroke();
         }
       }
       txt(ctx, 'VS', x, y + 2, 24, PAL.pink, true, 'center', true);
@@ -16876,7 +16880,298 @@ const RENDER = (() => {
   const CAB_R = { sign: cabSign, lamp: cabLamp, coin: cabCoin, icon: cabIcon, surge: cabSurge, face: cabFace, strain: cabStrain, bolt: cabBolt };
   /* ============================================================ /CAB */
 
+  /* ============================================================ TECH (round 17): Cabinet Tech and Joy Stick
+     DESIGN.md "Cabinet Tech and the new crawler (round 17)". Joy Stick's
+     portrait (a backwards cap with a blinking service LED, a screwdriver
+     behind her ear, a pink streak, eyes that blink with t) and her two
+     outfits (the Service Headset with a boom mic, the Scanline Visor), her
+     eight arcade parts (silhouettes, non-enumerable on POL_SIL like the CR8
+     and ROS ones), a drawn glyph for every Cabinet Tech relic inside the
+     rarity medallion (instead of the emoji), and the Laser Sight's beam.
+     Pure drawing, never throws. */
+  const TECH_PINK = '#ff7ad9', TECH_CYAN = '#2ee6d6';
+  // Joy Stick (portrait-local, the 48 px face space; t animates the LED and the blink).
+  function techPortrait(ctx, t) {
+    t = t || 0;
+    // a hoodie collar with pink drawstrings and a lanyard card
+    tone(ctx, c => { c.moveTo(-15, 9); c.lineTo(-4, 13); c.lineTo(-2, 22); c.lineTo(-15, 22); c.closePath(); c.moveTo(15, 9); c.lineTo(4, 13); c.lineTo(2, 22); c.lineTo(15, 22); c.closePath(); }, '#3a2a5a', 0, 15, 12, { ol: 1.4, spec: false });
+    line(ctx, -3, 12, -4, 20, TECH_PINK, 1.4); line(ctx, 3, 12, 4, 20, TECH_PINK, 1.4);
+    tone(ctx, c => rrect(c, 6, 14, 7, 9, 1.5), '#e8f4ff', 9.5, 18.5, 4, { ol: 1.2, spec: false });
+    F(ctx, TECH_PINK); ctx.fillRect(7, 15.5, 5, 2);
+    // hair behind the head: a dark bob with a pink streak
+    tone(ctx, c => { c.moveTo(-14, 6); c.quadraticCurveTo(-17, -16, 0, -19); c.quadraticCurveTo(17, -16, 14, 6); c.lineTo(9, 4); c.lineTo(-9, 4); c.closePath(); }, '#2a1a3a', 0, -6, 15, { dark: -0.2, spec: false });
+    tone(ctx, c => circ(c, 0, -4, 12), '#d9a07a', 0, -4, 12, { dark: -0.22 });
+    tone(ctx, c => { c.moveTo(-12, -6); c.quadraticCurveTo(-10, -15, 1, -15); c.quadraticCurveTo(-4, -10, -7, -2); c.closePath(); }, '#2a1a3a', -6, -9, 7, { dark: -0.15, spec: false });
+    ctx.beginPath(); ctx.moveTo(-9, -12); ctx.quadraticCurveTo(-7, -7, -8.5, -2); S(ctx, TECH_PINK, 1.8); ctx.stroke();
+    // a screwdriver tucked behind the right ear
+    line(ctx, 11, -14, 16, -2, '#aab3bd', 1.6);
+    tone(ctx, c => rrect(c, 8.5, -19, 4, 7, 1.5), '#ffd23f', 10.5, -15.5, 3, { ol: 1.2, spec: false });
+    // the cap, worn backwards: the crown, a button, the strap window and the brim poking out behind
+    tone(ctx, c => { c.moveTo(-13, -9); c.quadraticCurveTo(-13, -23, 0, -23); c.quadraticCurveTo(13, -23, 13, -9); c.quadraticCurveTo(0, -13, -13, -9); c.closePath(); }, TECH_PINK, 0, -15, 12, { dark: -0.3 });
+    tone(ctx, c => { c.moveTo(-11, -12); c.quadraticCurveTo(-19, -15, -20, -10); c.quadraticCurveTo(-15, -9, -11, -9); c.closePath(); }, shade(TECH_PINK, -0.25), -15, -11, 5, { ol: 1.3, spec: false });
+    F(ctx, '#1a1030'); ctx.beginPath(); circ(ctx, 0, -22.6, 1.6); ctx.fill();
+    ctx.beginPath(); rrect(ctx, -3, -13, 6, 3, 1); F(ctx, '#1a1030'); ctx.fill();
+    // the service LED on the band: it blinks pink and cyan
+    const on = Math.sin(t * 5) > 0;
+    F(ctx, on ? '#ffffff' : TECH_CYAN); ctx.beginPath(); circ(ctx, 8, -12, 1.4); ctx.fill();
+    if (on) glow(ctx, 8, -12, 5, TECH_CYAN, 0.7);
+    // eyes (a blink every 3.4 s), brows up, a grin, a plaster on the nose
+    const shut = (t % 3.4) > 3.28;
+    for (const sd of [-1, 1]) {
+      if (shut) { ctx.beginPath(); ctx.moveTo(sd * 4.5 - 2.4, -3); ctx.quadraticCurveTo(sd * 4.5, -1.2, sd * 4.5 + 2.4, -3); S(ctx, INK, 1.4); ctx.stroke(); }
+      else {
+        tone(ctx, c => ell(c, sd * 4.5, -3, 2.5, 2.9, 0), '#ffffff', sd * 4.5, -3, 2.6, { ol: 1.2, spec: false });
+        F(ctx, '#5a2a8a'); ctx.beginPath(); circ(ctx, sd * 4.5 + 0.4, -2.6, 1.5); ctx.fill();
+        F(ctx, '#ffffff'); ctx.beginPath(); circ(ctx, sd * 4.5 - 0.2, -3.4, 0.6); ctx.fill();
+      }
+      ctx.beginPath(); ctx.moveTo(sd * 3, -7.2); ctx.lineTo(sd * 6.5, -8); S(ctx, '#2a1a3a', 1.3); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(-5, 3); ctx.quadraticCurveTo(0, 8, 5.5, 2.4); ctx.quadraticCurveTo(0, 4.4, -5, 3); ctx.closePath(); F(ctx, '#ffffff'); ctx.fill(); S(ctx, INK, 1.3); ctx.stroke();
+    F(ctx, rgba('#ff6b8b', 0.4)); ctx.beginPath(); circ(ctx, -7.5, 1, 1.9); circ(ctx, 7.5, 1, 1.9); ctx.fill();
+    ctx.save(); ctx.translate(0.5, -0.8); ctx.rotate(-0.35);
+    tone(ctx, c => rrect(c, -2.6, -0.9, 5.2, 1.8, 0.8), '#f5d6a8', 0, 0, 2.6, { ol: 0.9, spec: false });
+    ctx.restore();
+  }
+  // Her hat: the Service Headset (outfit kind 'hat', style 'tech_headset'): cans, a band, a boom mic with a light.
+  function techHat(ctx, L, top, hw, r, t) {
+    if (L.style !== 'tech_headset') return;
+    ctx.beginPath(); ctx.arc(0, top + r * 0.42, hw * 1.12, Math.PI * 1.08, Math.PI * 1.92); S(ctx, INK, Math.max(3, r * 0.16)); ctx.stroke(); S(ctx, L.c1, Math.max(1.8, r * 0.1)); ctx.stroke();
+    for (const sd of [-1, 1]) {
+      tone(ctx, q => rrect(q, sd * hw * 1.12 - r * 0.13, top + r * 0.3, r * 0.26, r * 0.4, r * 0.1), L.c1, sd * hw * 1.12, top + r * 0.5, r * 0.2, { dark: -0.3 });
+      F(ctx, L.c2); ctx.beginPath(); circ(ctx, sd * hw * 1.12, top + r * 0.5, r * 0.06); ctx.fill();
+    }
+    // the boom mic curls from the left can toward the mouth; its tip blinks
+    ctx.beginPath(); ctx.moveTo(-hw * 1.12, top + r * 0.62); ctx.quadraticCurveTo(-hw * 0.9, top + r * 1.25, -r * 0.18, top + r * 1.2);
+    S(ctx, INK, Math.max(2.4, r * 0.1)); ctx.stroke(); S(ctx, L.c1, Math.max(1.2, r * 0.05)); ctx.stroke();
+    tone(ctx, q => circ(q, -r * 0.16, top + r * 1.2, r * 0.07), '#3a3f4a', -r * 0.16, top + r * 1.2, r * 0.07, NOSPEC);
+    if (Math.sin(t * 4) > -0.2) glow(ctx, -r * 0.16, top + r * 1.2, r * 0.18, '#ff4a4a', 0.8);
+  }
+  // Her shades: the Scanline Visor (outfit kind 'shades', style 'tech_visor'): a wraparound band, a scanline scrolling down.
+  function techVisor(ctx, L, y, ex, lr, r, t) {
+    const x0 = -ex - lr * 1.6, w = (ex + lr * 1.6) * 2, h = lr * 1.9;
+    ctx.beginPath(); rrect(ctx, x0, y - h / 2, w, h, h * 0.45);
+    F(ctx, rgba(L.c1, 0.55)); ctx.fill(); S(ctx, INK, 2); ctx.stroke(); S(ctx, L.c2, 1.2); ctx.stroke();
+    ctx.save(); ctx.beginPath(); rrect(ctx, x0, y - h / 2, w, h, h * 0.45); ctx.clip();
+    const u = (t * 0.9) % 1, sy = y - h / 2 + u * h;
+    F(ctx, rgba('#ffffff', 0.55)); ctx.fillRect(x0, sy, w, Math.max(1, h * 0.12));
+    F(ctx, rgba('#ffffff', 0.18)); for (let i = 0; i < 3; i++) ctx.fillRect(x0, y - h / 2 + (i + 0.5) * h / 3, w, 0.8);
+    ctx.restore();
+  }
+
+  // ---- her arcade parts (non-enumerable silhouettes on POL_SIL, the physics box w x h)
+  const TECH_SIL = {};
+  function techStick(ctx, w, h, c1, c2, gold) {
+    const hw = w / 2, hh = h / 2, br = Math.min(hw * 0.95, hh * 0.42);
+    if (gold) glow(ctx, 0, -hh + br, br * 2.6, c1, 0.4);
+    tone(ctx, c => rrect(c, -hw, hh * 0.55, w, hh * 0.45, hh * 0.12), c2, 0, hh * 0.78, hw, { dark: -0.3, spec: false });
+    F(ctx, gold ? '#ffffff' : '#ffd23f'); ctx.beginPath(); circ(ctx, -hw * 0.55, hh * 0.78, hh * 0.08); ctx.fill();
+    F(ctx, gold ? '#fff6c0' : TECH_CYAN); ctx.beginPath(); circ(ctx, hw * 0.55, hh * 0.78, hh * 0.08); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, hh * 0.58); ctx.lineTo(0, -hh + br * 1.5); S(ctx, INK, Math.max(3, hw * 0.32)); ctx.stroke(); S(ctx, gold ? '#fff6c0' : '#aab3bd', Math.max(1.6, hw * 0.18)); ctx.stroke();
+    tone(ctx, c => circ(c, 0, -hh + br, br), c1, 0, -hh + br, br, { dark: -0.3 });
+    if (gold) { F(ctx, '#ffffff'); ctx.beginPath(); star(ctx, 0, -hh + br, br * 0.45, 5, 0.45); ctx.fill(); }
+  }
+  // Arcade Stick: a ball-top stick on a black panel with two buttons.
+  TECH_SIL.arcade_stick = (ctx, w, h, c1, c2) => techStick(ctx, w, h, c1, c2, false);
+  // Golden Joystick: the same in gold, a star in the ball, a glow.
+  TECH_SIL.golden_stick = (ctx, w, h, c1, c2) => techStick(ctx, w, h, c1, '#8a5a10', true);
+  // Arcade Button: a square black housing, a red dome, a chrome ring.
+  TECH_SIL.arcade_button = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh * 0.1, w, hh * 1.1, hh * 0.25), c2, 0, hh * 0.45, hw, { dark: -0.3, spec: false });
+    tone(ctx, c => ell(c, 0, -hh * 0.05, hw * 0.78, hh * 0.32, 0), '#cfd6df', 0, -hh * 0.05, hw * 0.6, NOSPEC);
+    tone(ctx, c => { c.moveTo(-hw * 0.62, -hh * 0.1); c.quadraticCurveTo(-hw * 0.62, -hh * 1.05, 0, -hh); c.quadraticCurveTo(hw * 0.62, -hh * 1.05, hw * 0.62, -hh * 0.1); c.closePath(); }, c1, 0, -hh * 0.5, hw * 0.55, { dark: -0.3 });
+  };
+  // Coin Mech: a steel door, the coin slot, a gold return button and two screws.
+  TECH_SIL.coin_mech = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh, w, h, hw * 0.2), c1, 0, 0, hw, { dark: -0.3 });
+    ctx.beginPath(); rrect(ctx, -hw * 0.12, -hh * 0.72, hw * 0.24, hh * 0.62, 1); F(ctx, '#1a1030'); ctx.fill();
+    F(ctx, '#ff4a4a'); ctx.beginPath(); rrect(ctx, -hw * 0.5, -hh * 0.72, hw * 0.28, hh * 0.18, 1); ctx.fill();
+    tone(ctx, c => circ(c, 0, hh * 0.35, hw * 0.34), c2, 0, hh * 0.35, hw * 0.34, { ol: 1.3 });
+    F(ctx, shade(c1, -0.45)); ctx.beginPath(); circ(ctx, -hw * 0.72, -hh * 0.82, 1.2); circ(ctx, hw * 0.72, hh * 0.82, 1.2); ctx.fill();
+  };
+  // Neon Tube: a bent glowing tube with a white core and grey end caps.
+  TECH_SIL.neon_tube = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    glow(ctx, 0, 0, hw * 0.9, c1, 0.45);
+    const path = () => { ctx.beginPath(); ctx.moveTo(-hw * 0.8, hh * 0.3); ctx.bezierCurveTo(-hw * 0.3, -hh * 1.2, hw * 0.1, hh * 1.2, hw * 0.8, -hh * 0.3); };
+    path(); S(ctx, INK, Math.max(4, h * 0.62)); ctx.lineCap = 'round'; ctx.stroke();
+    path(); S(ctx, c1, Math.max(2.4, h * 0.42)); ctx.stroke();
+    path(); S(ctx, c2, Math.max(1, h * 0.14)); ctx.stroke();
+    for (const sd of [-1, 1]) tone(ctx, c => rrect(c, sd * hw * 0.8 - hw * 0.1 - (sd > 0 ? 0 : 0), (sd > 0 ? -hh * 0.3 : hh * 0.3) - hh * 0.5, hw * 0.2, hh, 1.2), '#8e98a8', sd * hw * 0.85, 0, hh * 0.5, NOSPEC);
+  };
+  // Circuit Board: a green board, gold traces, a black chip with legs, holes.
+  TECH_SIL.circuit_board = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw, -hh, w, h, 2), c1, 0, 0, hw, { dark: -0.3 });
+    S(ctx, c2, 1.2); ctx.beginPath();
+    ctx.moveTo(-hw * 0.9, -hh * 0.5); ctx.lineTo(-hw * 0.4, -hh * 0.5); ctx.lineTo(-hw * 0.25, -hh * 0.2);
+    ctx.moveTo(-hw * 0.9, hh * 0.5); ctx.lineTo(-hw * 0.3, hh * 0.5); ctx.lineTo(-hw * 0.15, hh * 0.25);
+    ctx.moveTo(hw * 0.35, -hh * 0.1); ctx.lineTo(hw * 0.6, -hh * 0.6); ctx.lineTo(hw * 0.9, -hh * 0.6);
+    ctx.moveTo(hw * 0.35, hh * 0.2); ctx.lineTo(hw * 0.85, hh * 0.6); ctx.stroke();
+    tone(ctx, c => rrect(c, -hw * 0.25, -hh * 0.4, hw * 0.6, hh * 0.8, 1.5), '#1a1030', hw * 0.05, 0, hw * 0.3, NOSPEC);
+    F(ctx, '#cfd6df'); for (let i = 0; i < 3; i++) { ctx.fillRect(-hw * 0.2 + i * hw * 0.2, -hh * 0.55, 1.2, hh * 0.15); ctx.fillRect(-hw * 0.2 + i * hw * 0.2, hh * 0.4, 1.2, hh * 0.15); }
+    F(ctx, c2); ctx.beginPath(); for (const [dx, dy] of [[-0.9, -0.5], [-0.9, 0.5], [0.9, -0.6], [0.85, 0.6]]) circ(ctx, dx * hw, dy * hh, 1.3); ctx.fill();
+  };
+  // Extension Cord: an orange coil and a plug with two prongs.
+  TECH_SIL.extension_cord = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    const path = () => { ctx.beginPath(); for (let i = 0; i < 4; i++) { const x = -hw * 0.9 + i * hw * 0.34; ctx.moveTo(x, 0); ctx.bezierCurveTo(x, -hh * 1.1, x + hw * 0.4, -hh * 1.1, x + hw * 0.4, 0); ctx.bezierCurveTo(x + hw * 0.4, hh * 1.1, x + hw * 0.05, hh * 1.1, x + hw * 0.1, 0); } };
+    path(); S(ctx, INK, 4); ctx.stroke();
+    path(); S(ctx, c1, 2.2); ctx.stroke();
+    tone(ctx, c => rrect(c, hw * 0.5, -hh * 0.55, hw * 0.34, hh * 1.1, 2), c2, hw * 0.67, 0, hh * 0.5, NOSPEC);
+    F(ctx, '#e8d8a0'); ctx.fillRect(hw * 0.84, -hh * 0.4, hw * 0.16, 1.8); ctx.fillRect(hw * 0.84, hh * 0.25, hw * 0.16, 1.8);
+  };
+  // CRT Monitor: a chunky grey box, a curved cyan screen with scanlines and a pixel smile.
+  TECH_SIL.crt_monitor = (ctx, w, h, c1, c2) => {
+    const hw = w / 2, hh = h / 2;
+    tone(ctx, c => rrect(c, -hw * 0.35, hh * 0.72, hw * 0.7, hh * 0.28, 2), shade(c1, -0.2), 0, hh * 0.85, hw * 0.35, NOSPEC);
+    tone(ctx, c => rrect(c, -hw, -hh, w, hh * 1.75, hw * 0.18), c1, 0, -hh * 0.1, hw, { dark: -0.3 });
+    ctx.beginPath(); rrect(ctx, -hw * 0.78, -hh * 0.8, hw * 1.56, hh * 1.28, hw * 0.25); F(ctx, shade(c2, -0.35)); ctx.fill(); S(ctx, INK, 1.4); ctx.stroke();
+    F(ctx, rgba(c2, 0.9)); ctx.beginPath(); rrect(ctx, -hw * 0.7, -hh * 0.72, hw * 1.4, hh * 1.12, hw * 0.22); ctx.fill();
+    F(ctx, rgba('#000000', 0.18)); for (let i = 0; i < 5; i++) ctx.fillRect(-hw * 0.7, -hh * 0.66 + i * hh * 0.22, hw * 1.4, 1);
+    F(ctx, '#0b2a2a'); ctx.fillRect(-hw * 0.32, -hh * 0.38, 2.4, 2.4); ctx.fillRect(hw * 0.2, -hh * 0.38, 2.4, 2.4);
+    ctx.fillRect(-hw * 0.34, hh * 0.02, 2.2, 2); ctx.fillRect(-hw * 0.2, hh * 0.12, hw * 0.46, 2); ctx.fillRect(hw * 0.26, hh * 0.02, 2.2, 2);
+    F(ctx, '#ff4a4a'); ctx.beginPath(); circ(ctx, hw * 0.78, hh * 0.62, 1.3); ctx.fill();
+  };
+  for (const k in TECH_SIL) Object.defineProperty(POL_SIL, k, { value: TECH_SIL[k], enumerable: false, configurable: true, writable: true });
+  Object.assign(POL_ORIENT, { neon_tube: 'h', extension_cord: 'h', arcade_stick: 'v', golden_stick: 'v' });
+
+  // ---- the Cabinet Tech relics' glyphs (inside the medallion's inner disc, radius ri; tt animates)
+  const TECH_GLYPH = {};
+  // Service Remote: a little remote with four buttons, an LED and an antenna.
+  TECH_GLYPH.service_remote = (ctx, r, t) => {
+    line(ctx, r * 0.2, -r * 0.55, r * 0.45, -r * 0.95, '#cfd6df', Math.max(1, r * 0.08));
+    tone(ctx, c => rrect(c, -r * 0.32, -r * 0.62, r * 0.64, r * 1.3, r * 0.16), '#3a3f4a', 0, 0, r * 0.5, { dark: -0.25, ol: Math.max(1, r * 0.07) });
+    F(ctx, Math.sin(t * 5) > 0 ? '#ff4a4a' : '#7a1a1a'); ctx.beginPath(); circ(ctx, 0, -r * 0.46, r * 0.08); ctx.fill();
+    const cols = [TECH_PINK, TECH_CYAN, '#ffd23f', '#a6ff5e'];
+    for (let i = 0; i < 4; i++) { F(ctx, cols[i]); ctx.beginPath(); circ(ctx, (i % 2 ? 1 : -1) * r * 0.13, -r * 0.2 + Math.floor(i / 2) * r * 0.3, r * 0.1); ctx.fill(); }
+  };
+  // Laser Sight: a scope ring, a crosshair, a red dot and its beam.
+  TECH_GLYPH.laser_sight = (ctx, r, t) => {
+    line(ctx, -r * 0.9, r * 0.55, r * 0.05, -r * 0.05, rgba('#ff4a4a', 0.8), Math.max(1, r * 0.08));
+    ctx.beginPath(); circ(ctx, r * 0.12, -r * 0.12, r * 0.55); S(ctx, '#cfd6df', Math.max(1.2, r * 0.12)); ctx.stroke();
+    line(ctx, r * 0.12, -r * 0.62, r * 0.12, r * 0.38, '#cfd6df', Math.max(0.8, r * 0.05)); line(ctx, -r * 0.38, -r * 0.12, r * 0.62, -r * 0.12, '#cfd6df', Math.max(0.8, r * 0.05));
+    glow(ctx, r * 0.12, -r * 0.12, r * 0.45, '#ff4a4a', 0.6 + 0.3 * Math.sin(t * 6));
+    F(ctx, '#ff4a4a'); ctx.beginPath(); circ(ctx, r * 0.12, -r * 0.12, r * 0.11); ctx.fill();
+  };
+  // Service Key: a ring with two keys, gold and silver.
+  TECH_GLYPH.service_key = (ctx, r) => {
+    ctx.beginPath(); circ(ctx, -r * 0.25, -r * 0.4, r * 0.26); S(ctx, '#cfd6df', Math.max(1.2, r * 0.1)); ctx.stroke();
+    for (const [a, col] of [[0.5, '#ffd23f'], [1.05, '#cfd6df']]) {
+      ctx.save(); ctx.translate(-r * 0.25, -r * 0.4); ctx.rotate(a);
+      tone(ctx, c => circ(c, r * 0.42, 0, r * 0.17), col, r * 0.42, 0, r * 0.17, { ol: Math.max(0.8, r * 0.05), spec: false });
+      line(ctx, r * 0.55, 0, r * 1.1, 0, col, Math.max(1.4, r * 0.12));
+      line(ctx, r * 0.95, 0, r * 0.95, r * 0.14, col, Math.max(1.2, r * 0.1));
+      ctx.restore();
+    }
+  };
+  // Lamp Oil: a little oil can dripping a gold drop into the lamp's dome.
+  TECH_GLYPH.lamp_oil = (ctx, r, t) => {
+    tone(ctx, c => { c.moveTo(-r * 0.5, r * 0.75); c.quadraticCurveTo(-r * 0.5, r * 0.25, 0, r * 0.25); c.quadraticCurveTo(r * 0.5, r * 0.25, r * 0.5, r * 0.75); c.closePath(); }, '#ffe066', 0, r * 0.5, r * 0.4, { ol: Math.max(0.8, r * 0.06), spec: false });
+    glow(ctx, 0, r * 0.55, r * 0.5, '#ffe066', 0.5);
+    ctx.save(); ctx.translate(-r * 0.15, -r * 0.35); ctx.rotate(0.5);
+    tone(ctx, c => rrect(c, -r * 0.3, -r * 0.22, r * 0.6, r * 0.44, r * 0.1), '#3ddc84', 0, 0, r * 0.3, { ol: Math.max(0.8, r * 0.06), spec: false });
+    line(ctx, r * 0.28, -r * 0.05, r * 0.7, -r * 0.2, '#cfd6df', Math.max(1, r * 0.08));
+    ctx.restore();
+    const u = (t * 1.3) % 1;
+    F(ctx, '#ffc94d'); ctx.beginPath(); ell(ctx, r * 0.35, -r * 0.2 + u * r * 0.45, r * 0.07, r * 0.1, 0); ctx.fill();
+  };
+  // Coin Hopper: a funnel full of coins, one dropping out.
+  TECH_GLYPH.coin_hopper = (ctx, r, t) => {
+    tone(ctx, c => poly(c, [-r * 0.62, -r * 0.4, r * 0.62, -r * 0.4, r * 0.18, r * 0.25, -r * 0.18, r * 0.25]), '#aab3bd', 0, -r * 0.1, r * 0.5, { ol: Math.max(0.8, r * 0.06), spec: false });
+    for (const [dx, dy] of [[-0.3, -0.55], [0.05, -0.62], [0.35, -0.5]]) tone(ctx, c => ell(c, dx * r, dy * r, r * 0.17, r * 0.09, 0), '#ffc94d', dx * r, dy * r, r * 0.15, { ol: Math.max(0.7, r * 0.05), spec: false });
+    const u = (t * 1.1) % 1;
+    tone(ctx, c => circ(c, 0, r * 0.35 + u * r * 0.4, r * 0.14), '#ffe066', 0, r * 0.4, r * 0.14, { ol: Math.max(0.7, r * 0.05), spec: false });
+  };
+  // Metronome: a wooden pyramid and a swinging arm.
+  TECH_GLYPH.metronome = (ctx, r, t) => {
+    tone(ctx, c => poly(c, [-r * 0.2, -r * 0.7, r * 0.2, -r * 0.7, r * 0.5, r * 0.7, -r * 0.5, r * 0.7]), '#b0763a', 0, 0, r * 0.5, { ol: Math.max(0.8, r * 0.06), spec: false });
+    const a = Math.sin(t * 5) * 0.45;
+    ctx.save(); ctx.translate(0, r * 0.45); ctx.rotate(a);
+    line(ctx, 0, 0, 0, -r * 1.05, '#fff6c0', Math.max(1, r * 0.08));
+    F(ctx, '#ffd23f'); ctx.beginPath(); rrect(ctx, -r * 0.1, -r * 0.8, r * 0.2, r * 0.14, r * 0.04); ctx.fill();
+    ctx.restore();
+  };
+  // Fever Dream: a pink and gold spiral that turns.
+  TECH_GLYPH.fever_dream = (ctx, r, t) => {
+    ctx.save(); ctx.rotate(t * 1.6);
+    for (const [col, off] of [[TECH_PINK, 0], ['#ffe066', Math.PI]]) {
+      ctx.beginPath();
+      for (let i = 0; i <= 26; i++) { const k = i / 26, a = off + k * Math.PI * 2.2, rr = r * 0.08 + k * r * 0.7; if (i) ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); else ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+      S(ctx, col, Math.max(1.4, r * 0.14)); ctx.lineCap = 'round'; ctx.stroke();
+    }
+    ctx.restore();
+  };
+  // Circuit Breaker: a breaker box with a flipped switch and a bolt.
+  TECH_GLYPH.circuit_breaker = (ctx, r) => {
+    tone(ctx, c => rrect(c, -r * 0.55, -r * 0.65, r * 1.1, r * 1.3, r * 0.12), '#3a3f4a', 0, 0, r * 0.55, { ol: Math.max(0.8, r * 0.06), spec: false });
+    for (let i = 0; i < 2; i++) { ctx.beginPath(); rrect(ctx, -r * 0.4 + i * r * 0.45, -r * 0.45, r * 0.35, r * 0.4, r * 0.05); F(ctx, '#1a1030'); ctx.fill(); F(ctx, i ? '#a6ff5e' : '#ff4a4a'); ctx.fillRect(-r * 0.34 + i * r * 0.45, i ? -r * 0.42 : -r * 0.2, r * 0.23, r * 0.14); }
+    tone(ctx, c => poly(c, [r * 0.1, r * 0.05, -r * 0.25, r * 0.4, 0, r * 0.4, -r * 0.12, r * 0.62, r * 0.28, r * 0.25, r * 0.02, r * 0.25]), '#ffe066', 0, r * 0.35, r * 0.25, { ol: Math.max(0.7, r * 0.05), spec: false });
+  };
+  // Trick Shot: a bullseye with an arrow curving in.
+  TECH_GLYPH.trick_shot = (ctx, r) => {
+    for (const [rr, col] of [[0.62, '#ff4a4a'], [0.42, '#ffffff'], [0.22, '#ff4a4a']]) { ctx.beginPath(); circ(ctx, r * 0.1, r * 0.05, r * rr); F(ctx, col); ctx.fill(); }
+    ctx.beginPath(); circ(ctx, r * 0.1, r * 0.05, r * 0.62); S(ctx, INK, Math.max(0.8, r * 0.06)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-r * 0.85, -r * 0.1); ctx.quadraticCurveTo(-r * 0.6, -r * 0.85, r * 0.1, r * 0.05); S(ctx, rgba('#ffe066', 0.8), Math.max(1, r * 0.08)); ctx.setLineDash && ctx.setLineDash([r * 0.12, r * 0.1]); ctx.stroke(); ctx.setLineDash && ctx.setLineDash([]);
+    line(ctx, r * 0.1, r * 0.05, -r * 0.2, -r * 0.3, '#fff6c0', Math.max(1.2, r * 0.09));
+  };
+  // Double Feature: two film frames, the front one with a play mark and x2.
+  TECH_GLYPH.double_feature = (ctx, r) => {
+    for (const [dx, dy, col] of [[-0.18, -0.18, '#8e98a8'], [0.14, 0.14, TECH_PINK]]) {
+      tone(ctx, c => rrect(c, dx * r - r * 0.45, dy * r - r * 0.35, r * 0.9, r * 0.7, r * 0.08), col, dx * r, dy * r, r * 0.45, { ol: Math.max(0.8, r * 0.06), spec: false });
+      F(ctx, '#1a1030'); for (let i = 0; i < 4; i++) { ctx.fillRect(dx * r - r * 0.4 + i * r * 0.22, dy * r - r * 0.32, r * 0.1, r * 0.08); ctx.fillRect(dx * r - r * 0.4 + i * r * 0.22, dy * r + r * 0.24, r * 0.1, r * 0.08); }
+    }
+    F(ctx, '#ffffff'); ctx.beginPath(); poly(ctx, [r * 0.04, -r * 0.02, r * 0.3, r * 0.14, r * 0.04, r * 0.3]); ctx.fill();
+  };
+  // The Motherboard: a green board, gold pins, a glowing core chip.
+  TECH_GLYPH.leg_motherboard = (ctx, r, t) => {
+    tone(ctx, c => rrect(c, -r * 0.62, -r * 0.62, r * 1.24, r * 1.24, r * 0.1), '#2e9d5a', 0, 0, r * 0.6, { ol: Math.max(0.8, r * 0.06), spec: false });
+    S(ctx, '#ffd23f', Math.max(0.8, r * 0.05)); ctx.beginPath();
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; ctx.moveTo(Math.cos(a) * r * 0.3, Math.sin(a) * r * 0.3); ctx.lineTo(Math.cos(a) * r * 0.58, Math.sin(a) * r * 0.58); }
+    ctx.stroke();
+    glow(ctx, 0, 0, r * 0.6, TECH_CYAN, 0.45 + 0.25 * Math.sin(t * 3));
+    tone(ctx, c => rrect(c, -r * 0.28, -r * 0.28, r * 0.56, r * 0.56, r * 0.06), '#1a1030', 0, 0, r * 0.3, { ol: Math.max(0.8, r * 0.05), spec: false });
+    F(ctx, TECH_CYAN); ctx.beginPath(); circ(ctx, 0, 0, r * 0.1); ctx.fill();
+  };
+  // polBadge: a Cabinet Tech relic draws its glyph instead of the emoji (true when it did).
+  function techGlyph(ctx, def, ri, t) {
+    const g = def && TECH_GLYPH[def.id];
+    if (!g) return false;
+    ctx.save();
+    try { ctx.lineJoin = 'round'; g(ctx, ri * 0.92, t >= 0 ? t : 0); } catch (e) { /* never throws */ }
+    ctx.restore();
+    return true;
+  }
+  // The Laser Sight: a red beam from the claw (x, y0) down to the pile (y1), a dot there; gold with a
+  // crosshair and LOCK when a drop here would be PERFECT. st {lock, t, reduced}.
+  function techLaser(ctx, x, y0, y1, st) {
+    if (!(y1 > y0 + 4)) return;
+    ctx.save();
+    try {
+      st = st || {};
+      const t = st.t || 0, lock = !!st.lock, col = lock ? '#ffe066' : '#ff4a4a';
+      const pulse = st.reduced ? 0.8 : 0.65 + 0.25 * Math.sin(t * 9);
+      ctx.globalAlpha = 0.35 * pulse; line(ctx, x, y0, x, y1, col, 5);
+      ctx.globalAlpha = 0.9 * pulse; line(ctx, x, y0, x, y1, col, 1.4);
+      ctx.globalAlpha = 1;
+      glow(ctx, x, y1, lock ? 16 : 10, col, lock ? 0.9 : 0.7);
+      F(ctx, '#ffffff'); ctx.beginPath(); circ(ctx, x, y1, lock ? 2.6 : 2); ctx.fill();
+      if (lock) {
+        const rr = 9 + (st.reduced ? 0 : Math.sin(t * 8) * 1.5);
+        ctx.beginPath(); circ(ctx, x, y1, rr); S(ctx, col, 1.6); ctx.stroke();
+        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; line(ctx, x + Math.cos(a) * (rr - 3), y1 + Math.sin(a) * (rr - 3), x + Math.cos(a) * (rr + 4), y1 + Math.sin(a) * (rr + 4), col, 1.6); }
+        txt(ctx, 'LOCK', x + 26, y1 - 14, 12, col, true, 'center', INK);
+      }
+    } catch (e) { /* never throws */ }
+    ctx.restore();
+  }
+  const TECH_R = { portrait: techPortrait, hat: techHat, visor: techVisor, SIL: TECH_SIL, GLYPH: TECH_GLYPH, glyph: techGlyph, laser: techLaser, PINK: TECH_PINK };
+  /* ============================================================ /TECH */
+
   return {
+    // TECH (round 17): Joy Stick's portrait, outfits and arcade parts, the Cabinet Tech glyphs, the Laser Sight's beam
+    tech: TECH_R,
     // CAB (round 16): the cabinet is alive: the event sign, the Jackpot Lamp, coins, the surge, prize faces, the strain
     cab: CAB_R,
     // DEP (round 15): the Neon Depths' tileset, map, arena, cabinet water and caustics, the monsters and their tricks
@@ -16952,3 +17247,368 @@ const RENDER = (() => {
     },
   };
 })();
+
+// ================================================================ GACHA (round 17): Capsule fever
+/* DESIGN.md "Capsule fever (round 17)". The art of the capsule build-up
+   and the Capsule Minis: shell chips flying off per tap (chips), light
+   leaking through the cracks (leak), the legendary moment's blackout and
+   god rays (legend), the minis themselves (mini: a figurine on a little
+   stand, one drawing per body), the vault preview's turntable. Pure
+   functions of their inputs and t; every draw is save / restore balanced. */
+RENDER.gacha = (() => {
+  'use strict';
+  const INK = '#12091f', TAU = Math.PI * 2;
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const hex = (c) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(c || '')); return m ? parseInt(m[1], 16) : 0xffffff; };
+  const rgba = (c, a) => { const n = hex(c); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${clamp(+a || 0, 0, 1).toFixed(3)})`; };
+  const h01 = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+  const RB = ['#ff2e88', '#ffc94d', '#a6ff5e', '#2ee6d6', '#9b7bff'];
+  const BASE = { c: '#4a3a70', u: '#1f8f86', r: '#c2185b', l: '#d9a520' };
+  function glow(ctx, x, y, r, col, a) {
+    if (!(r > 0) || !(a > 0)) return;
+    try {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    } catch (e) { /* stub ctx */ }
+  }
+  function fillS(ctx, col, lw) { ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.stroke(); }
+  function star(ctx, x, y, r, n, k) {
+    for (let i = 0; i < n * 2; i++) { const a = -Math.PI / 2 + i * Math.PI / n, rr = i % 2 ? r * k : r; ctx[i ? 'lineTo' : 'moveTo'](x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+    ctx.closePath();
+  }
+  // Eyes, a smile and blush on a face centred at (x, y), s the face size.
+  function face(ctx, x, y, s, t, o) {
+    o = o || {};
+    const blink = ((t * 0.37 + (o.seed || 0)) % 3.1) < 0.12 ? 0.15 : 1, ex = s * 0.34, er = Math.max(1.2, s * 0.13);
+    ctx.fillStyle = INK;
+    for (const sx of [-1, 1]) { ctx.beginPath(); ctx.ellipse(x + sx * ex, y, er, er * blink, 0, 0, TAU); ctx.fill(); }
+    if (blink > 0.5) { ctx.fillStyle = '#ffffff'; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.arc(x + sx * ex + er * 0.35, y - er * 0.35, er * 0.38, 0, TAU); ctx.fill(); } }
+    ctx.strokeStyle = INK; ctx.lineWidth = Math.max(1, s * 0.07); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(x, y + s * 0.16, s * 0.16, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    if (!o.noBlush) { ctx.fillStyle = 'rgba(255,110,160,0.5)'; for (const sx of [-1, 1]) { ctx.beginPath(); ctx.ellipse(x + sx * ex * 1.45, y + s * 0.14, er * 1.1, er * 0.6, 0, 0, TAU); ctx.fill(); } }
+  }
+  // One body per mini (drawn around (0, 0), r the body radius).
+  const BODY = {
+    coin(ctx, r, L, t, lw) {
+      ctx.beginPath(); ctx.ellipse(0, 0, r * Math.max(0.35, Math.abs(Math.cos(t * 1.4))) , r, 0, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.72 * Math.max(0.35, Math.abs(Math.cos(t * 1.4))), r * 0.72, 0, 0, TAU); ctx.strokeStyle = L.c2; ctx.lineWidth = lw; ctx.stroke();
+      face(ctx, 0, -r * 0.05, r * 0.8, t);
+    },
+    ticket(ctx, r, L, t, lw) {
+      const w = r * 1.9, hh = r * 1.2, n = r * 0.2;
+      ctx.beginPath(); ctx.moveTo(-w / 2, -hh / 2); ctx.lineTo(w / 2, -hh / 2); ctx.lineTo(w / 2, -n); ctx.arc(w / 2, 0, n, -Math.PI / 2, Math.PI / 2, true);
+      ctx.lineTo(w / 2, hh / 2); ctx.lineTo(-w / 2, hh / 2); ctx.lineTo(-w / 2, n); ctx.arc(-w / 2, 0, n, Math.PI / 2, -Math.PI / 2, true); ctx.closePath();
+      fillS(ctx, L.c1, lw);
+      ctx.fillStyle = L.c2; ctx.fillRect(-w * 0.36, -hh * 0.4, w * 0.06, hh * 0.8);
+      face(ctx, r * 0.15, -r * 0.02, r * 0.75, t, { seed: 1 });
+    },
+    joystick(ctx, r, L, t, lw) {
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-r, r * 0.25, r * 2, r * 0.75, r * 0.2) : ctx.rect(-r, r * 0.25, r * 2, r * 0.75); fillS(ctx, L.c2, lw);
+      const a = Math.sin(t * 2.2) * 0.25;
+      ctx.save(); ctx.translate(0, r * 0.3); ctx.rotate(a);
+      ctx.fillStyle = '#b9b0cc'; ctx.fillRect(-r * 0.1, -r * 0.9, r * 0.2, r * 0.9); ctx.strokeStyle = INK; ctx.lineWidth = lw * 0.7; ctx.strokeRect(-r * 0.1, -r * 0.9, r * 0.2, r * 0.9);
+      ctx.beginPath(); ctx.arc(0, -r * 1.05, r * 0.55, 0, TAU); fillS(ctx, L.c1, lw);
+      face(ctx, 0, -r * 1.05, r * 0.5, t, { seed: 2 });
+      ctx.restore();
+      ctx.fillStyle = '#ffc94d'; ctx.beginPath(); ctx.arc(r * 0.6, r * 0.6, r * 0.14, 0, TAU); ctx.fill();
+    },
+    ghost(ctx, r, L, t, lw) {
+      const y = Math.sin(t * 2) * r * 0.08;
+      ctx.beginPath(); ctx.arc(0, y - r * 0.1, r * 0.9, Math.PI, 0);
+      for (let i = 0; i <= 4; i++) { const x = r * 0.9 - i * r * 0.45; ctx.lineTo(x, y + r * (i % 2 ? 0.6 : 0.85)); }
+      ctx.closePath(); fillS(ctx, L.c1, lw);
+      face(ctx, 0, y - r * 0.15, r * 0.8, t, { seed: 3 });
+    },
+    duck(ctx, r, L, t, lw) {
+      ctx.beginPath(); ctx.ellipse(0, r * 0.3, r, r * 0.62, 0, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.45, r * 0.55, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.beginPath(); ctx.ellipse(-r * 0.8, -r * 0.35, r * 0.3, r * 0.14, 0.2, 0, TAU); fillS(ctx, L.c2, lw * 0.8);
+      ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(-r * 0.35, -r * 0.55, r * 0.09, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(r * 0.35, r * 0.2, r * 0.4, r * 0.22, -0.4, 0, TAU); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fill();
+    },
+    claw(ctx, r, L, t, lw) {
+      const o = 0.2 + 0.15 * Math.sin(t * 2.4);
+      ctx.strokeStyle = INK; ctx.lineWidth = lw * 3.2; ctx.lineCap = 'round';
+      for (const s of [-1, 0, 1]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * r * (0.9 + o), r * 0.4, s * r * (0.45 + o * 0.6), r * 0.95); ctx.stroke(); }
+      ctx.strokeStyle = L.c1; ctx.lineWidth = lw * 1.8;
+      for (const s of [-1, 0, 1]) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(s * r * (0.9 + o), r * 0.4, s * r * (0.45 + o * 0.6), r * 0.95); ctx.stroke(); }
+      ctx.fillStyle = '#b9b0cc'; ctx.fillRect(-r * 0.08, -r * 1.2, r * 0.16, r * 0.6);
+      ctx.beginPath(); ctx.arc(0, -r * 0.15, r * 0.55, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.fillStyle = L.c2; ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.35, r * 0.14, 0, TAU); ctx.fill();
+      face(ctx, 0, -r * 0.12, r * 0.5, t, { seed: 4 });
+    },
+    bear(ctx, r, L, t, lw) {
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(s * r * 0.62, -r * 0.62, r * 0.3, 0, TAU); fillS(ctx, L.c1, lw); }
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.88, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.beginPath(); ctx.ellipse(0, r * 0.28, r * 0.38, r * 0.26, 0, 0, TAU); ctx.fill();
+      face(ctx, 0, -r * 0.05, r * 0.8, t, { seed: 5 });
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.ellipse(-r * 0.35, -r * 0.45, r * 0.18, r * 0.1, -0.6, 0, TAU); ctx.fill();
+    },
+    popcorn(ctx, r, L, t, lw) {
+      for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.arc(-r * 0.6 + (i % 3) * r * 0.6, -r * 0.55 - (i > 2 ? r * 0.35 : 0) + Math.sin(t * 3 + i) * r * 0.03, r * 0.36, 0, TAU); fillS(ctx, L.c1, lw * 0.8); }
+      ctx.beginPath(); ctx.moveTo(-r * 0.85, -r * 0.35); ctx.lineTo(r * 0.85, -r * 0.35); ctx.lineTo(r * 0.62, r * 0.95); ctx.lineTo(-r * 0.62, r * 0.95); ctx.closePath(); fillS(ctx, '#ffffff', lw);
+      ctx.save(); ctx.clip(); ctx.fillStyle = L.c2; for (let i = -2; i <= 2; i++) ctx.fillRect(i * r * 0.36 - r * 0.08, -r, r * 0.17, r * 2.2); ctx.restore();
+      ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.beginPath(); ctx.ellipse(0, r * 0.3, r * 0.48, r * 0.3, 0, 0, TAU); ctx.fill();
+      face(ctx, 0, r * 0.28, r * 0.55, t, { seed: 6, noBlush: true });
+    },
+    donut(ctx, r, L, t, lw) {
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(s * r * 0.9, -r * 0.15, r * 0.22, r * 0.4, s * 0.4, 0, TAU); fillS(ctx, '#8a4b2a', lw * 0.8); }
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.95, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.beginPath();
+      for (let i = 0; i <= 24; i++) { const a = i / 24 * TAU, rr = r * (0.82 + 0.06 * Math.sin(i * 2.7)); ctx[i ? 'lineTo' : 'moveTo'](Math.cos(a) * rr, Math.sin(a) * rr - r * 0.04); }
+      ctx.closePath(); ctx.fillStyle = L.c2; ctx.fill();
+      for (let i = 0; i < 9; i++) { ctx.fillStyle = RB[i % 5]; const a = i * 2.4, d = r * (0.45 + 0.25 * h01(i, 3)); ctx.save(); ctx.translate(Math.cos(a) * d, Math.sin(a) * d); ctx.rotate(a); ctx.fillRect(-r * 0.08, -r * 0.025, r * 0.16, r * 0.05); ctx.restore(); }
+      ctx.beginPath(); ctx.arc(0, r * 0.35, r * 0.2, 0, TAU); ctx.fillStyle = '#1b1030'; ctx.fill();
+      face(ctx, 0, -r * 0.2, r * 0.62, t, { seed: 7 });
+    },
+    soda(ctx, r, L, t, lw) {
+      ctx.strokeStyle = INK; ctx.lineWidth = lw * 2.4; ctx.beginPath(); ctx.moveTo(r * 0.2, -r * 0.7); ctx.lineTo(r * 0.5, -r * 1.35); ctx.stroke();
+      ctx.strokeStyle = L.c2; ctx.lineWidth = lw * 1.2; ctx.beginPath(); ctx.moveTo(r * 0.2, -r * 0.7); ctx.lineTo(r * 0.5, -r * 1.35); ctx.stroke();
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-r * 0.62, -r * 0.8, r * 1.24, r * 1.75, r * 0.2) : ctx.rect(-r * 0.62, -r * 0.8, r * 1.24, r * 1.75); fillS(ctx, L.c1, lw);
+      ctx.fillStyle = L.c2; ctx.fillRect(-r * 0.62, r * 0.35, r * 1.24, r * 0.25);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(-r * 0.45, -r * 0.65, r * 0.12, r * 1.3);
+      for (let i = 0; i < 3; i++) { const y = -r * 0.9 - ((t * 0.8 + i / 3) % 1) * r * 0.8; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(-r * 0.2 + i * r * 0.15, y, r * 0.07, 0, TAU); ctx.stroke(); }
+      face(ctx, 0, -r * 0.1, r * 0.6, t, { seed: 8 });
+    },
+    cupcake(ctx, r, L, t, lw) {
+      ctx.beginPath(); ctx.moveTo(-r * 0.75, 0); ctx.lineTo(r * 0.75, 0); ctx.lineTo(r * 0.55, r * 0.95); ctx.lineTo(-r * 0.55, r * 0.95); ctx.closePath(); fillS(ctx, L.c2, lw);
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.2; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(i * r * 0.28, r * 0.05); ctx.lineTo(i * r * 0.22, r * 0.9); ctx.stroke(); }
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(0, -r * 0.12 - i * r * 0.3, r * (0.85 - i * 0.22), r * 0.24, 0, 0, TAU); fillS(ctx, L.c1, lw); }
+      ctx.beginPath(); ctx.arc(0, -r * 1.05, r * 0.16, 0, TAU); fillS(ctx, '#ff2e30', lw * 0.7);
+      ctx.fillStyle = '#ffc94d'; ctx.beginPath(); ctx.moveTo(-r * 0.4, -r * 0.62); for (let i = 0; i <= 4; i++) ctx.lineTo(-r * 0.4 + i * r * 0.2, i % 2 ? -r * 0.62 : -r * 0.86); ctx.lineTo(r * 0.4, -r * 0.5); ctx.lineTo(-r * 0.4, -r * 0.5); ctx.closePath(); ctx.fill();
+      face(ctx, 0, r * 0.42, r * 0.55, t, { seed: 9 });
+    },
+    gumball(ctx, r, L, t, lw) {
+      ctx.beginPath(); ctx.moveTo(-r * 0.6, r * 0.3); ctx.lineTo(r * 0.6, r * 0.3); ctx.lineTo(r * 0.75, r); ctx.lineTo(-r * 0.75, r); ctx.closePath(); fillS(ctx, L.c2, lw);
+      ctx.fillStyle = L.c1; ctx.fillRect(-r * 0.15, r * 0.5, r * 0.3, r * 0.22);
+      ctx.beginPath(); ctx.arc(0, -r * 0.3, r * 0.75, 0, TAU); ctx.fillStyle = 'rgba(200,240,255,0.25)'; ctx.fill();
+      ctx.save(); ctx.clip(); for (let i = 0; i < 9; i++) { ctx.beginPath(); ctx.arc(-r * 0.5 + (i % 3) * r * 0.5, -r * 0.05 - Math.floor(i / 3) * r * 0.36, r * 0.2, 0, TAU); ctx.fillStyle = i === 4 ? L.c1 : RB[i % 5]; ctx.fill(); } ctx.restore();
+      ctx.beginPath(); ctx.arc(0, -r * 0.3, r * 0.75, 0, TAU); ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(0, -r * 1.05, r * 0.3, r * 0.12, 0, 0, TAU); fillS(ctx, L.c1, lw * 0.8);
+      face(ctx, 0, -r * 0.3, r * 0.55, t, { seed: 10 });
+    },
+    frog(ctx, r, L, t, lw) {
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(s * r * 0.5, -r * 0.55, r * 0.32, 0, TAU); fillS(ctx, L.c1, lw); }
+      ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.75, 0, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.fillStyle = INK; for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(s * r * 0.5, -r * 0.55, r * 0.14, 0, TAU); ctx.fill(); }
+      ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 0.5, 0.2 * Math.PI, 0.8 * Math.PI); ctx.stroke();
+      ctx.fillStyle = rgba(L.c2, 0.6); for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(-r * 0.4 + i * r * 0.4, r * 0.4, r * 0.09, 0, TAU); ctx.fill(); }
+    },
+    cat(ctx, r, L, t, lw) {
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * r * 0.85, -r * 0.2); ctx.lineTo(s * r * 0.7, -r * 1.05); ctx.lineTo(s * r * 0.2, -r * 0.7); ctx.closePath(); fillS(ctx, L.c1, lw); }
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.92, r * 0.8, 0, 0, TAU); fillS(ctx, L.c1, lw);
+      face(ctx, 0, -r * 0.05, r * 0.8, t, { seed: 11 });
+      ctx.strokeStyle = L.c2; ctx.lineWidth = 1.2; for (const s of [-1, 1]) for (let i = 0; i < 2; i++) { ctx.beginPath(); ctx.moveTo(s * r * 0.5, r * 0.12 + i * r * 0.1); ctx.lineTo(s * r * 1.05, r * 0.05 + i * r * 0.18); ctx.stroke(); }
+    },
+    bunny(ctx, r, L, t, lw) {
+      const w = Math.sin(t * 3) * 0.12;
+      for (const s of [-1, 1]) { ctx.save(); ctx.translate(s * r * 0.35, -r * 0.6); ctx.rotate(s * (0.15 + w)); ctx.beginPath(); ctx.ellipse(0, -r * 0.5, r * 0.2, r * 0.6, 0, 0, TAU); fillS(ctx, L.c1, lw); ctx.fillStyle = rgba(L.c2, 0.7); ctx.beginPath(); ctx.ellipse(0, -r * 0.5, r * 0.08, r * 0.42, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); fillS(ctx, L.c1, lw);
+      face(ctx, 0, 0, r * 0.75, t, { seed: 12 });
+    },
+    bat(ctx, r, L, t, lw) {
+      const f = Math.sin(t * 8) * 0.25;
+      for (const s of [-1, 1]) {
+        ctx.save(); ctx.scale(s, 1); ctx.rotate(-f);
+        ctx.beginPath(); ctx.moveTo(r * 0.4, -r * 0.2); ctx.lineTo(r * 1.35, -r * 0.55); ctx.lineTo(r * 1.2, r * 0.05); ctx.lineTo(r * 0.95, -r * 0.05); ctx.lineTo(r * 0.85, r * 0.3); ctx.lineTo(r * 0.5, r * 0.25); ctx.closePath(); fillS(ctx, L.c1, lw);
+        ctx.restore();
+      }
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * r * 0.5, -r * 0.3); ctx.lineTo(s * r * 0.45, -r * 0.95); ctx.lineTo(s * r * 0.15, -r * 0.55); ctx.closePath(); fillS(ctx, L.c1, lw); }
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, TAU); fillS(ctx, L.c1, lw);
+      face(ctx, 0, 0, r * 0.6, t, { seed: 13 });
+      ctx.strokeStyle = L.c2; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(-r * 0.1, r * 0.75); ctx.lineTo(r * 0.08, r * 0.95); ctx.lineTo(-r * 0.05, r * 1.1); ctx.stroke();
+    },
+    crab(ctx, r, L, t, lw) {
+      const d = Math.sin(t * 4) * r * 0.1;
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(s * (r * 1.05 + d * s), -r * 0.4, r * 0.3, s > 0 ? -2.4 : -0.7, s > 0 ? 2.4 : 3.8, s < 0); fillS(ctx, L.c1, lw); }
+      ctx.strokeStyle = INK; ctx.lineWidth = lw * 1.4; for (const s of [-1, 1]) for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(s * r * 0.5, r * 0.2 + i * r * 0.18); ctx.lineTo(s * r * 1.0, r * 0.45 + i * r * 0.2); ctx.stroke(); }
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * r * 0.25, -r * 0.4); ctx.lineTo(s * r * 0.3, -r * 0.8); ctx.stroke(); ctx.beginPath(); ctx.arc(s * r * 0.3, -r * 0.85, r * 0.14, 0, TAU); fillS(ctx, '#ffffff', lw * 0.6); ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(s * r * 0.3, -r * 0.85, r * 0.06, 0, TAU); ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.8, r * 0.55, 0, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(0, r * 0.02, r * 0.25, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+      glow(ctx, 0, -r * 1.2, r * 0.7, L.c2, 0.5 + 0.3 * Math.sin(t * 6));
+      ctx.beginPath(); ctx.arc(0, -r * 1.2, r * 0.2, 0, TAU); fillS(ctx, '#e0e0ff', lw * 0.5);
+    },
+    dragon(ctx, r, L, t, lw) {
+      const f = Math.sin(t * 5) * 0.2;
+      for (const s of [-1, 1]) { ctx.save(); ctx.scale(s, 1); ctx.rotate(-f); ctx.beginPath(); ctx.moveTo(r * 0.5, -r * 0.1); ctx.quadraticCurveTo(r * 1.4, -r * 1.0, r * 1.3, -r * 0.1); ctx.quadraticCurveTo(r * 1.0, -r * 0.2, r * 0.6, r * 0.3); ctx.closePath(); fillS(ctx, L.c2, lw); ctx.restore(); }
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.clip(); for (let i = 0; i < 5; i++) { ctx.fillStyle = rgba(RB[(i + Math.floor(t * 4)) % 5], 0.35); ctx.fillRect(-r, r * 0.25 + i * r * 0.12, r * 2, r * 0.12); } ctx.restore();
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * r * 0.3, -r * 0.7); ctx.lineTo(s * r * 0.55, -r * 1.2); ctx.lineTo(s * r * 0.6, -r * 0.6); ctx.closePath(); fillS(ctx, '#ffc94d', lw * 0.8); }
+      face(ctx, 0, -r * 0.1, r * 0.75, t, { seed: 14 });
+    },
+    clover(ctx, r, L, t, lw) {
+      ctx.strokeStyle = L.c2; ctx.lineWidth = lw * 1.6; ctx.beginPath(); ctx.moveTo(0, r * 0.2); ctx.quadraticCurveTo(r * 0.2, r * 0.7, r * 0.05, r); ctx.stroke();
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4 + Math.sin(t * 1.5) * 0.05; ctx.beginPath(); ctx.arc(Math.cos(a) * r * 0.45, Math.sin(a) * r * 0.45 - r * 0.15, r * 0.42, 0, TAU); fillS(ctx, L.c1, lw); }
+      ctx.beginPath(); ctx.arc(0, -r * 0.15, r * 0.4, 0, TAU); ctx.fillStyle = L.c1; ctx.fill();
+      face(ctx, 0, -r * 0.15, r * 0.55, t, { seed: 15 });
+    },
+    dice(ctx, r, L, t, lw) {
+      ctx.save(); ctx.rotate(Math.sin(t * 1.3) * 0.12);
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-r * 0.85, -r * 0.85, r * 1.7, r * 1.7, r * 0.3) : ctx.rect(-r * 0.85, -r * 0.85, r * 1.7, r * 1.7); fillS(ctx, L.c1, lw);
+      ctx.fillStyle = L.c2; for (const [x, y] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.55], [0, 0.55], [0.5, 0.55]]) { ctx.beginPath(); ctx.arc(x * r, y * r, r * 0.12, 0, TAU); ctx.fill(); }
+      face(ctx, 0, -r * 0.05, r * 0.55, t, { seed: 16, noBlush: true });
+      ctx.restore();
+    },
+    horseshoe(ctx, r, L, t, lw) {
+      ctx.lineCap = 'butt';
+      ctx.strokeStyle = INK; ctx.lineWidth = r * 0.55; ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 0.65, 0.85 * Math.PI, 0.15 * Math.PI); ctx.stroke();
+      ctx.strokeStyle = L.c1; ctx.lineWidth = r * 0.42; ctx.beginPath(); ctx.arc(0, -r * 0.05, r * 0.65, 0.85 * Math.PI, 0.15 * Math.PI); ctx.stroke();
+      ctx.fillStyle = L.c2; for (let i = 0; i < 6; i++) { const a = Math.PI * (0.95 + i * 0.22); ctx.beginPath(); ctx.arc(Math.cos(a) * r * 0.65, -r * 0.05 + Math.sin(a) * r * 0.65, r * 0.06, 0, TAU); ctx.fill(); }
+      face(ctx, 0, -r * 0.72, r * 0.42, t, { seed: 17 });
+      glow(ctx, 0, r * 0.2, r * 0.5, L.c2, 0.4 + 0.2 * Math.sin(t * 4));
+    },
+    star(ctx, r, L, t, lw) {
+      ctx.save(); ctx.rotate(Math.sin(t * 1.6) * 0.15);
+      ctx.beginPath(); star(ctx, 0, 0, r * 1.05, 5, 0.5); ctx.lineJoin = 'round'; fillS(ctx, L.c1, lw);
+      face(ctx, 0, r * 0.05, r * 0.6, t, { seed: 18 });
+      ctx.restore();
+      for (let i = 0; i < 3; i++) { const a = t * 2 + i * 2.1; ctx.fillStyle = rgba(L.c2, 0.8); ctx.beginPath(); star(ctx, Math.cos(a) * r * 1.3, Math.sin(a) * r * 1.0, r * 0.12, 4, 0.4); ctx.fill(); }
+    },
+    maneki(ctx, r, L, t, lw) {
+      const wave = Math.sin(t * 5) * 0.35;
+      ctx.beginPath(); ctx.ellipse(0, r * 0.35, r * 0.75, r * 0.65, 0, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.save(); ctx.translate(r * 0.55, -r * 0.1); ctx.rotate(-0.4 + wave); ctx.beginPath(); ctx.ellipse(0, -r * 0.35, r * 0.18, r * 0.38, 0, 0, TAU); fillS(ctx, L.c1, lw); ctx.restore();
+      for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * r * 0.7, -r * 0.45); ctx.lineTo(s * r * 0.6, -r * 1.15); ctx.lineTo(s * r * 0.15, -r * 0.9); ctx.closePath(); fillS(ctx, L.c1, lw); }
+      ctx.beginPath(); ctx.arc(0, -r * 0.45, r * 0.7, 0, TAU); fillS(ctx, L.c1, lw);
+      ctx.fillStyle = '#ffc94d'; ctx.beginPath(); ctx.arc(-r * 0.55, -r * 0.85, r * 0.16, 0, TAU); ctx.fill();
+      ctx.fillStyle = L.c2; ctx.fillRect(-r * 0.6, r * 0.12, r * 1.2, r * 0.14);
+      ctx.beginPath(); ctx.arc(0, r * 0.3, r * 0.15, 0, TAU); fillS(ctx, '#ffc94d', lw * 0.7);
+      face(ctx, 0, -r * 0.45, r * 0.62, t, { seed: 19 });
+    },
+    seven(ctx, r, L, t, lw) {
+      ctx.save(); ctx.rotate(Math.sin(t * 1.4) * 0.08);
+      ctx.beginPath(); ctx.moveTo(-r * 0.85, -r * 1.0); ctx.lineTo(r * 0.85, -r * 1.0); ctx.lineTo(r * 0.85, -r * 0.6); ctx.lineTo(-r * 0.05, r * 1.0); ctx.lineTo(-r * 0.6, r * 1.0); ctx.lineTo(r * 0.25, -r * 0.55); ctx.lineTo(-r * 0.85, -r * 0.55); ctx.closePath();
+      ctx.lineJoin = 'round'; ctx.fillStyle = L.c1; ctx.fill(); ctx.strokeStyle = L.c2; ctx.lineWidth = lw * 2.2; ctx.stroke(); ctx.strokeStyle = INK; ctx.lineWidth = lw * 0.8; ctx.stroke();
+      face(ctx, r * 0.05, -r * 0.3, r * 0.5, t, { seed: 20 });
+      ctx.restore();
+    },
+  };
+  const defOf = (id) => (typeof DATA !== 'undefined' && DATA.GACHA && DATA.GACHA.MINIS[id]) || null;
+  /* A mini on its stand at (x, y), size s (the whole figure fits an s box).
+     o: {sil (not found yet: a dark shape and a '?'), spin (0..1 turn)}. */
+  function mini(ctx, id, x, y, s, t, o) {
+    o = o || {};
+    const d = defOf(id);
+    t = t || 0;
+    ctx.save();
+    try {
+      ctx.translate(x, y);
+      const rar = d ? d.rarity : 'c', lw = Math.max(1.2, s * 0.028);
+      // the stand
+      const by = s * 0.36;
+      if (!o.sil && (rar === 'l' || rar === 'r')) glow(ctx, 0, by - s * 0.2, s * 0.6, rar === 'l' ? '#ffc94d' : '#ff2e88', 0.35 + 0.15 * Math.sin(t * 3));
+      ctx.beginPath(); ctx.ellipse(0, by + s * 0.04, s * 0.34, s * 0.09, 0, 0, TAU); ctx.fillStyle = INK; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(0, by, s * 0.34, s * 0.09, 0, 0, TAU); ctx.fillStyle = o.sil ? '#2a1d44' : BASE[rar] || BASE.c; ctx.fill();
+      ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.stroke();
+      if (!d) { ctx.restore(); return; }
+      const r = s * 0.27;
+      ctx.save();
+      ctx.translate(0, -s * 0.06 + Math.sin(t * 2.4 + (o.bob || 0)) * s * 0.015);
+      if (o.spin) ctx.scale(Math.cos(o.spin * TAU) >= 0 ? Math.max(0.15, Math.abs(Math.cos(o.spin * TAU))) : -Math.max(0.15, Math.abs(Math.cos(o.spin * TAU))), 1);
+      if (o.sil) { try { ctx.filter = 'brightness(0)'; } catch (e) { /* old canvas */ } ctx.globalAlpha = 0.72; }
+      const fn = BODY[d.look.body] || BODY.bear;
+      fn(ctx, r, d.look, t, lw);
+      ctx.restore();
+      try { ctx.filter = 'none'; } catch (e) { /* old canvas */ }
+      ctx.globalAlpha = 1;
+      if (o.sil) {
+        ctx.font = `900 ${Math.round(s * 0.3)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(195,173,255,0.85)'; ctx.fillText('?', 0, -s * 0.06);
+      } else if (rar === 'l') {
+        for (let i = 0; i < 4; i++) { const a = t * 1.8 + i * 1.57, k = 0.5 + 0.5 * Math.sin(t * 5 + i); ctx.fillStyle = rgba(RB[i], 0.9 * k); ctx.beginPath(); star(ctx, Math.cos(a) * s * 0.38, -s * 0.08 + Math.sin(a) * s * 0.3, s * 0.05 * (0.6 + k), 4, 0.35); ctx.fill(); }
+      }
+    } catch (e) { /* art is optional */ }
+    ctx.restore();
+  }
+  /* Shell chips: list of {x, y, a, s, col, life, max} (the game moves them). */
+  function chips(ctx, list, n) {
+    if (!list || !n) return;
+    ctx.save();
+    try {
+      for (let i = 0; i < n; i++) {
+        const c = list[i];
+        if (!c || c.life <= 0) continue;
+        const k = clamp(c.life / (c.max || 1), 0, 1);
+        ctx.save();
+        ctx.globalAlpha = clamp(k * 1.6, 0, 1);
+        ctx.translate(c.x, c.y); ctx.rotate(c.a);
+        const s = c.s;
+        ctx.beginPath(); ctx.moveTo(-s, -s * 0.4); ctx.quadraticCurveTo(0, -s * 1.1, s, -s * 0.5); ctx.lineTo(s * 0.6, s * 0.5); ctx.lineTo(-s * 0.7, s * 0.35); ctx.closePath();
+        ctx.fillStyle = c.col; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-s * 0.7, -s * 0.45); ctx.quadraticCurveTo(0, -s * 0.9, s * 0.7, -s * 0.5); ctx.stroke();
+        ctx.restore();
+      }
+    } catch (e) { /* stub ctx */ }
+    ctx.restore();
+  }
+  /* Light leaking through the cracks: beams of col from the capsule at (x, y), radius r.
+     k 0..1 (how primed it is), seed (stable angles). */
+  function leak(ctx, x, y, r, col, k, t, seed) {
+    if (!(k > 0)) return;
+    ctx.save();
+    try {
+      ctx.globalCompositeOperation = 'lighter';
+      const n = 5 + Math.round(k * 4);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU + h01(seed || 1, i) * 0.7 + Math.sin(t * 0.7 + i) * 0.04;
+        const len = r * (1.3 + k * 2.2) * (0.7 + 0.5 * h01(i, seed || 1)) * (0.85 + 0.15 * Math.sin(t * 9 + i * 1.7));
+        const wd = 0.05 + 0.05 * k;
+        const g = ctx.createLinearGradient(x, y, x + Math.cos(a) * len, y + Math.sin(a) * len);
+        g.addColorStop(0, rgba('#ffffff', 0.55 * k)); g.addColorStop(0.3, rgba(col, 0.45 * k)); g.addColorStop(1, rgba(col, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.moveTo(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5);
+        ctx.lineTo(x + Math.cos(a - wd) * len, y + Math.sin(a - wd) * len); ctx.lineTo(x + Math.cos(a + wd) * len, y + Math.sin(a + wd) * len); ctx.closePath(); ctx.fill();
+      }
+      glow(ctx, x, y, r * (1.1 + k), col, 0.35 * k);
+    } catch (e) { /* stub ctx */ }
+    ctx.restore();
+  }
+  /* The legendary moment: the room goes dark around the capsule, gold god rays sweep the whole
+     screen and sparks rush in. k 0..1, w x h the stage, reduced: slower and softer. */
+  function legend(ctx, x, y, r, k, t, w, h, reduced) {
+    if (!(k > 0)) return;
+    ctx.save();
+    try {
+      const far = Math.hypot(w, h);
+      const g = ctx.createRadialGradient(x, y, r * 1.2, x, y, far * 0.7);
+      g.addColorStop(0, 'rgba(6,2,12,0)'); g.addColorStop(0.25, rgba('#06020c', 0.7 * k)); g.addColorStop(1, rgba('#06020c', 0.92 * k));
+      ctx.fillStyle = g; ctx.fillRect(-40, -40, w + 80, h + 80);
+      ctx.globalCompositeOperation = 'lighter';
+      const n = 12, rot = t * (reduced ? 0.08 : 0.35);
+      for (let i = 0; i < n; i++) {
+        const a = rot + i * TAU / n, wd = 0.07 + 0.03 * Math.sin(t * 2 + i);
+        const rg = ctx.createLinearGradient(x, y, x + Math.cos(a) * far, y + Math.sin(a) * far);
+        rg.addColorStop(0, rgba('#fff6c0', 0.5 * k)); rg.addColorStop(0.4, rgba(i % 3 ? '#ffc94d' : RB[i % 5], 0.22 * k)); rg.addColorStop(1, rgba('#ffc94d', 0));
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a - wd) * far, y + Math.sin(a - wd) * far); ctx.lineTo(x + Math.cos(a + wd) * far, y + Math.sin(a + wd) * far); ctx.closePath(); ctx.fill();
+      }
+      // sparks rushing into the capsule
+      if (!reduced) {
+        for (let i = 0; i < 28; i++) {
+          const ph = (t * 0.9 + i / 28) % 1, a = i * 2.39996, d = (1 - ph) * 460 + r;
+          ctx.fillStyle = rgba(i % 4 ? '#ffe28a' : RB[i % 5], 0.9 * k * ph);
+          ctx.beginPath(); star(ctx, x + Math.cos(a) * d, y + Math.sin(a) * d, 2 + 5 * ph, 4, 0.35); ctx.fill();
+        }
+      }
+      glow(ctx, x, y, r * 2.6, '#ffc94d', 0.6 * k);
+    } catch (e) { /* stub ctx */ }
+    ctx.restore();
+  }
+  // The vault preview's turntable: a lit disc with a spotlight cone, col the series colour.
+  function turntable(ctx, x, y, w, t, col) {
+    ctx.save();
+    try {
+      const g = ctx.createLinearGradient(x, y - w * 1.3, x, y);
+      g.addColorStop(0, rgba(col, 0)); g.addColorStop(1, rgba(col, 0.22));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.moveTo(x - w * 0.18, y - w * 1.3); ctx.lineTo(x + w * 0.18, y - w * 1.3); ctx.lineTo(x + w * 0.62, y); ctx.lineTo(x - w * 0.62, y); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, y + 8, w * 0.62, w * 0.14, 0, 0, TAU); ctx.fillStyle = INK; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, y, w * 0.62, w * 0.14, 0, 0, TAU); ctx.fillStyle = '#2c1d4a'; ctx.fill(); ctx.strokeStyle = rgba(col, 0.9); ctx.lineWidth = 2.5; ctx.stroke();
+      for (let i = 0; i < 12; i++) { const a = t * 0.9 + i * TAU / 12; ctx.fillStyle = i % 2 ? rgba(col, 0.9) : 'rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.arc(x + Math.cos(a) * w * 0.55, y + Math.sin(a) * w * 0.12, 2.2, 0, TAU); ctx.fill(); }
+    } catch (e) { /* stub ctx */ }
+    ctx.restore();
+  }
+  return { mini, chips, leak, legend, turntable, face, BODY, RB, BASE };
+})();
+// ================================================================ /GACHA

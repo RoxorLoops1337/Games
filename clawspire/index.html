@@ -1076,6 +1076,81 @@ h3{margin:0;font-size:14px;letter-spacing:.1em;color:var(--gold);text-transform:
 @media (prefers-reduced-motion:reduce){.vCard.r-l,.btn.vCapBtn,.vdN.lg,.btn.vaultBtn .vdot,.vCard .nb{animation:none!important}}
 /* ================= /VAULT ================= */
 </style>
+<style id="gacha-css">
+/* ================= GACHA (round 17): Capsule fever ================= */
+/* the reward screen's capsule slots: rarity lighting (a shine sweeps; rare and legendary sparkle) */
+.capslot{position:relative;overflow:hidden}
+.capslot.g17r-u{background:linear-gradient(90deg,rgba(46,230,214,.16),rgba(18,9,31,.4))}
+.capslot.g17r-r{background:linear-gradient(90deg,rgba(255,46,136,.22),rgba(18,9,31,.4));box-shadow:0 0 14px rgba(255,46,136,.35)}
+.capslot.g17r-l{border-color:transparent;background:linear-gradient(90deg,rgba(255,201,77,.24),rgba(18,9,31,.5)) padding-box,
+  linear-gradient(90deg,#ff6bb0,#ffe28a,#c8ff8f,#8dfff5,#c3adff,#ff6bb0) border-box;background-size:auto,200% 100%;animation:capPulse 1.2s ease-in-out infinite,vRb 2s linear infinite}
+.capslot::after{content:"";position:absolute;top:0;bottom:0;left:-40%;width:30%;pointer-events:none;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.28),transparent);animation:g17Shine 2.6s ease-in-out infinite}
+.capslot.g17r-r::after,.capslot.g17r-l::after{animation-duration:1.6s;background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent)}
+.capslot.done::after{display:none}
+.capslot .c3{font-size:12px;font-weight:900;color:var(--gold);letter-spacing:.02em}
+@keyframes g17Shine{0%,55%{left:-40%}100%{left:120%}}
+.btn.g17AllBtn{min-height:44px;font-size:14px}
+.btn.g17AllRw{align-self:center;width:auto;min-width:200px;margin-top:2px;animation:vCapGlow 1.6s ease-in-out infinite}
+.capBody .btn.g17AllBtn:not(.g17AllRw){position:absolute;left:14px;bottom:22px}
+/* the capsule ritual: the rarity slam, the mini on the prize card, a finished series */
+.capTier.g17slam{animation:g17Slam .7s cubic-bezier(.2,1.6,.4,1) both}
+.capTier.lg.g17slam{animation:g17Slam .7s cubic-bezier(.2,1.6,.4,1) both,rainbow 1.2s linear infinite}
+@keyframes g17Slam{0%{transform:scale(3.4) rotate(10deg);opacity:0;filter:brightness(3) blur(4px)}55%{transform:scale(.9) rotate(-5deg);opacity:1;filter:none}
+  70%{transform:translateX(-6px) rotate(-3deg)}80%{transform:translateX(5px) rotate(-3deg)}100%{transform:rotate(-3deg)}}
+.g17Mini{position:relative;display:flex;align-items:center;gap:8px;width:100%;margin-top:2px;padding:5px 10px 5px 6px;border-radius:12px;
+  border:2px dashed color-mix(in srgb,var(--sc,#2ee6d6) 70%,transparent);background:rgba(10,5,20,.45)}
+.g17Mini canvas{width:52px;height:52px;flex:0 0 auto}
+.g17Mini .mt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+.g17Mini .m1{font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--sc,#2ee6d6)}
+.g17Mini .m2{font-size:16px;font-weight:900;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g17Mini .m3{font-size:12px;color:var(--dim)}
+.g17Mini .m3 b{color:#fff}
+.g17Mini .md{color:var(--gold);font-weight:900;margin-left:6px}
+.g17Mini .mNew{position:absolute;top:-10px;right:-6px;font-style:normal;font-size:14px;font-weight:900;color:#fff;background:var(--pink);padding:2px 8px;border-radius:9px;
+  transform:rotate(8deg);box-shadow:0 0 14px var(--pink);animation:g17New .6s cubic-bezier(.2,1.8,.4,1) .15s both}
+.g17Mini.fresh{border-style:solid;box-shadow:0 0 16px color-mix(in srgb,var(--sc,#2ee6d6) 55%,transparent)}
+@keyframes g17New{0%{transform:scale(3) rotate(30deg);opacity:0}100%{transform:rotate(8deg);opacity:1}}
+.g17SerDone{width:100%;text-align:center;padding:6px 8px;border-radius:12px;background:linear-gradient(90deg,#5a3a10,#7a2a8c,#5a3a10);border:2px solid var(--gold);
+  box-shadow:0 0 20px rgba(255,201,77,.6);animation:tagPop .5s cubic-bezier(.2,1.8,.4,1) .3s both}
+.g17SerDone .s1{font-size:16px;font-weight:900;letter-spacing:.18em;color:var(--gold)}
+.g17SerDone .s2{font-size:13px;color:#fff}
+/* Open all: the labels under each popped capsule, the collect bar */
+.capTier.g17AllT{font-size:30px}
+.g17AllLb{position:absolute;margin-left:-78px;width:156px;text-align:center;pointer-events:none;animation:tagPop .4s cubic-bezier(.2,1.6,.4,1) both}
+.g17AllLb .a1{font-size:13px;font-weight:900;color:#fff;overflow-wrap:anywhere;text-shadow:0 0 8px var(--cc,#fff),0 2px 0 #12091f;line-height:1.15}
+.g17AllLb .a2{font-size:12px;font-weight:900;color:var(--gold);text-shadow:0 2px 0 #12091f}
+.g17AllBar{position:absolute;left:0;right:0;bottom:70px;display:flex;justify-content:center}
+.g17AllBar .btn{min-width:220px;pointer-events:auto}
+/* the vault: the daily capsule pill, the Minis tab and shelf */
+.btn.vCapBtn.g17DayBtn{border-color:#fff1a8;background:linear-gradient(180deg,#ffd76a,#e0a020);color:#2a1204;animation:g17Pill 1.6s ease-in-out infinite}
+.btn.vCapBtn.g17DayBtn .c2{color:#4a2408;font-weight:900}
+.vBottom .g17Streak{position:absolute;top:-12px;right:max(10px,calc(50% - 200px));z-index:2;height:24px;padding:0 9px;border-radius:12px;display:flex;align-items:center;
+  font-size:13px;font-weight:900;color:#2a1204;background:var(--gold);box-shadow:0 2px 0 #6a4008;cursor:pointer;white-space:nowrap}
+@keyframes g17Pill{50%{box-shadow:0 4px 0 #6a4008,0 0 30px rgba(255,201,77,.9)}}
+.btn.vaultBtn.g17Free,#titleMenu .uiTiles .btn.vaultBtn.g17Free{border-color:var(--gold);box-shadow:0 0 0 2px rgba(255,201,77,.45),0 0 18px rgba(255,201,77,.55);animation:g17Pill 1.8s ease-in-out infinite}
+.vTab.g17Tab.on{border-color:#8dfff5;background:linear-gradient(180deg,#0f4a50,#08242a);box-shadow:0 0 14px rgba(46,230,214,.4)}
+.vShelf.g17Shelf{grid-template-columns:repeat(3,1fr)}
+.g17Ser{grid-column:1/-1;position:relative;display:flex;align-items:center;gap:8px;padding:6px 10px 10px;border-radius:12px;border:2px solid color-mix(in srgb,var(--sc) 60%,#1b1030);
+  background:linear-gradient(90deg,color-mix(in srgb,var(--sc) 22%,transparent),rgba(18,9,31,.6))}
+.g17Ser .si{font-size:22px;line-height:1}
+.g17Ser .sn{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+.g17Ser .sn b{font-size:15px;color:#fff}
+.g17Ser .sn small{font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g17Ser .sc{font-size:16px;font-weight:900;color:var(--sc)}
+.g17Ser .sb{position:absolute;left:10px;right:10px;bottom:4px;height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden}
+.g17Ser .sb i{display:block;height:100%;background:var(--sc);box-shadow:0 0 8px var(--sc)}
+.g17Ser.done{border-color:var(--gold);box-shadow:0 0 14px rgba(255,201,77,.4)}
+.g17Ser.done .sn small{color:var(--gold);font-weight:900;letter-spacing:.12em}
+.vCard.g17Card{min-height:126px;padding-bottom:8px}
+.vaultBody.g17On .vPrevBar{display:none}
+.vCard.g17Card canvas{width:62px;height:62px}
+.vCard.g17Card.lock .nm{color:var(--dim)}
+.calm .capslot::after,.calm .capslot.g17r-l,.calm .btn.g17AllRw,.calm .btn.g17DayBtn,.calm .btn.vaultBtn.g17Free,.calm .capTier.g17slam,.calm .g17SerDone,.calm .g17Mini .mNew{animation:none!important}
+@media (prefers-reduced-motion:reduce){.capslot::after,.capslot.g17r-l,.btn.g17AllRw,.btn.g17DayBtn,.btn.vaultBtn.g17Free,.capTier.g17slam,.g17SerDone,.g17Mini .mNew{animation:none!important}}
+.noflash .capTier.g17slam{animation:none!important}
+/* ================= /GACHA ================= */
+</style>
 <style id="pets-css">
 /* ================= PETS (round 5): the pet on the frame, the pet shop ================= */
 /* the player row leaves the frame's top-left corner to the pet */
@@ -2453,6 +2528,20 @@ html[class*="txt-"] #titleMenu .uiTiles .btn{height:auto}
 .calm .uiSheetP{animation:none}
 @media (prefers-reduced-motion:reduce){.uiSheetP{animation:none}}
 #scr-title.attracting .uiSheet{display:none}
+</style>
+<style id="qa17-css">
+/* ================= QA17 (round 17): QA pass 6 ================= */
+/* the resource row squeezes when big numbers or a DAILY / WEEKLY badge outgrow it (qa17HudFit) */
+#top .uiRes.qa17Tight{gap:2px}
+#top .uiRes.qa17Tight .stat{gap:2px;padding:0 5px 0 3px}
+#top .uiRes.qa17Tight .stat.act{gap:3px;padding:0 5px}
+#top .uiRes.qa17Tight2 .stat .v,#top .uiRes.qa17Tight2 .stat.act .v{font-size:12px}
+#top .uiRes.qa17Tight2 .stat.act .k{display:none}
+/* the map's head in Dutch: "AKTE 1" / "RONDE 12" showed as "A..." beside the longer buttons (BAK, STOPPEN, "40 lampjes") */
+html[lang="nl"] .mh .l1{gap:3px}
+html[lang="nl"] .mh .l1 .btn.sm{padding-left:7px;padding-right:7px}
+html[lang="nl"] .mh .l1 .mhInk{font-size:17px;padding:3px 5px}
+/* ================= /QA17 ================= */
 </style>
 </head>
 <body>

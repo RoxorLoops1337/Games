@@ -2803,7 +2803,7 @@ h.test('Lucky Lou: his card on character select, the unlock, a new run', () => {
   h.eq(G.run.char, 'gambler', 'the run is Lucky Lou\'s');
   h.eq(G.run.bin.length, 19, 'with his 19 item bin');
   h.ok(G.run.relics.includes('snake_eyes'), 'and Snake Eyes');
-  h.eq(G.run.maxHp, 70, '70 hp');
+  h.eq(G.run.maxHp, 78, '78 hp (QA pass 6, round 17: 70 -> 78)');
   const fresh = louBoot({ knight: true }).G;
   fresh.showChars();
   const j = fresh.S.ui.buttons.findIndex(b => b.label === 'Lucky Lou');
@@ -6675,7 +6675,7 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     SG.vault.show('skin');
     const tabN = SG.S.ui.buttons.length;
     h.ok(tabN > 0, 'the vault opens');
-    h.ok(SG.season.shelf('sea', []).length === 9, 'the counter stocks the nine Claw-o-ween prizes (Mama Mech\'s and Ms. Bubbles\' witch hats too)');
+    h.ok(SG.season.shelf('sea', []).length === 10, 'the counter stocks the ten Claw-o-ween prizes (Mama Mech\'s, Ms. Bubbles\' and Joy Stick\'s witch hats too)');
     h.eq(SG.vault.buy('skin_sea_mansion'), false, 'tickets never buy an event prize');
     h.ok(!SG.season.buy('skin_sea_mansion'), 'too little candy (100 of 120): refused');
     h.eq(candy(SG), 100, 'nothing taken');
@@ -6977,7 +6977,7 @@ h.test('evolve: pet synergies switch on with the build, fire their procs and bad
     SG.season.setDate('2026-12-26');
     SG.season.give(100, 'winter');
     SG.vault.show('skin');
-    h.eq(SG.season.shelf('sea', []).length, 12, 'the stand stocks twelve winter prizes');
+    h.eq(SG.season.shelf('sea', []).length, 13, 'the stand stocks thirteen winter prizes (round 17: Joy Stick\'s scarf)');
     h.ok(!SG.season.shelf('sea', []).some(id => CS.DATA.COSMETICS[id].season === 'halloween'), 'none of Claw-o-ween\'s');
     h.eq(SG.vault.buy('skin_sea_ginger'), false, 'tickets never buy it');
     h.ok(!SG.season.buy('skin_sea_ginger'), 'too few snowflakes (100 of 120): refused');
@@ -11178,6 +11178,688 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
     G.cab.lampAdd(40); for (let i = 0; i < 30; i++) { G.update(DT * 6); G.draw(); }
     h.ok(true, 'drew the events, the fever and the rain');
     h.eq(G.cab.WORDS.filter((w) => w.indexOf(String.fromCharCode(0x2014)) >= 0).length, 0, 'no em dash in the words');
+  });
+}
+
+// ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+{
+  const META0 = () => ({ clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) });
+  const gBoot = (o) => { const T = boot(Object.assign({ store: META0() }, o || {})); return { T, G: T.GAME }; };
+  const mk = (tier, n, ups) => ({ src: 'bonus', tier0: ups && ups.length ? 'c' : tier, ups: ups || [], tier, pity: false, prize: { k: 'gold', n }, opened: false });
+  const tapTo = (G, left) => { const C = G.loot.cap; for (let i = 0; i < 12 && C.phase !== 'burst' && C.burstTap + 1 - C.taps > left; i++) G.loot.capsuleTap(); return C; };
+  const walk = (el, out) => { out = out || []; if (!el || typeof el !== 'object') return out; out.push(el); for (const c of el.children || []) walk(c, out); return out; };
+  const hasCls = (root, c) => walk(root).some((e) => new RegExp('(^|\\s)' + c + '(\\s|$)').test(e.className || ''));
+
+  h.test('gacha: the build-up: chips and a note per crack, PRIMED with one tap left, paid at the last tap, the pop waits a charge by tier', () => {
+    const { G } = gBoot();
+    G.newRun('knight', 71);
+    G.loot.showCapsule({ cap: mk('c', 5), then: { k: 'map' } });
+    const C = G.loot.cap;
+    G.loot.capsuleTap();
+    h.eq(C.phase, 'idle', 'landed');
+    G.loot.capsuleTap();
+    const s = G.gacha.state(C);
+    h.ok(s && G.gacha.chips() > 0, 'a crack throws shell chips');
+    h.ok(!s.primed, 'two taps left: not primed yet');
+    G.loot.capsuleTap();
+    h.ok(s.primed, 'one tap left: PRIMED');
+    stepFor(G, 0.3);
+    h.ok(s.prime > 0.5, 'the glow builds while it waits');
+    G.draw();
+    const gold0 = G.run.gold;
+    G.loot.capsuleTap();
+    h.eq(C.phase, 'burst', 'the last tap bursts it');
+    h.eq(G.run.gold, gold0 + 5, 'paid at once (a reload now lands on the card)');
+    h.ok(!!s.pop && C.open === 0, 'the pop waits a charge');
+    G.draw();
+    stepFor(G, 0.1);
+    h.ok(!!s.pop && C.open === 0, 'still charging at 0.1 s (a common charges 0.22 s)');
+    stepFor(G, 0.2);
+    h.ok(!s.pop && C.open > 0, 'popped: the halves fly');
+    stepFor(G, 1);
+    h.eq(C.phase, 'done', 'the card');
+    h.eq(G.run.gold, gold0 + 5, 'paid once');
+    G.loot.collectCapsule();
+    h.eq(G.screen, 'map', 'back to the map');
+  });
+
+  h.test('gacha: a legendary charges longest, darkens the room (the legend moment) and lingers; a tap in the charge pops it now; Skip pops at once', () => {
+    const { G } = gBoot();
+    G.newRun('knight', 72);
+    G.loot.showCapsule({ cap: mk('l', 9), then: { k: 'map' } });
+    const C = tapTo(G, 0);
+    const s = G.gacha.state(C);
+    h.eq(C.phase, 'burst', 'burst');
+    h.ok(s.pop && s.legend > 0, 'the legend moment starts in the charge');
+    stepFor(G, 0.8);
+    h.ok(s.pop && s.legend > 0.6, 'still charging at 0.8 s, the room going dark: ' + s.legend.toFixed(2));
+    G.draw();
+    stepFor(G, 0.6);
+    h.ok(!s.pop && s.legend > 0.9, 'popped with the full moment');
+    stepFor(G, 0.8);
+    h.eq(C.phase, 'burst', 'a legendary lingers before the card');
+    stepFor(G, 1);
+    h.eq(C.phase, 'done', 'then the card');
+    stepFor(G, 3);
+    h.ok(s.legend >= 0.44, 'gold rays stay behind a legendary card');
+    G.draw();
+    G.loot.collectCapsule();
+    // a tap in the charge pops it and shows the card
+    G.loot.showCapsule({ cap: mk('l', 3), then: { k: 'map' } });
+    const C2 = tapTo(G, 0), s2 = G.gacha.state(C2);
+    h.ok(s2.pop, 'charging');
+    G.loot.capsuleTap();
+    h.ok(!s2.pop && C2.phase === 'done' && s2.legend === 1, 'a tap pops it now and shows the card');
+    G.loot.collectCapsule();
+    // Skip: no charge at all
+    G.loot.showCapsule({ cap: mk('r', 3), then: { k: 'map' } });
+    G.loot.skipCapsule();
+    const s3 = G.gacha.state(G.loot.cap);
+    h.eq(G.loot.cap.phase, 'burst', 'Skip bursts it');
+    h.ok(s3 && !s3.pop, 'and pops it at once');
+    stepFor(G, 0.7);
+    h.eq(G.loot.cap.phase, 'done', 'no lingering after a skip');
+    G.loot.collectCapsule();
+  });
+
+  h.test('gacha: reduced motion (calm) keeps it short: the charge x0.4, no lingering, nothing throws while drawing', () => {
+    const T = boot({ store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true }, settings: { shake: false } }) } });
+    const G = T.GAME;
+    G.newRun('knight', 73);
+    G.loot.showCapsule({ cap: mk('l', 4), then: { k: 'map' } });
+    const C = tapTo(G, 0), s = G.gacha.state(C);
+    h.ok(s.pop, 'a charge');
+    let t = 0;
+    while (s.pop && t < 3) { G.update(DT); G.draw(); t += DT; }
+    h.ok(t > 0.4 && t < 0.6, 'a calm legendary charges 0.5 s: ' + t.toFixed(2));
+    stepFor(G, 0.6);
+    h.eq(C.phase, 'done', 'no lingering');
+    G.draw();
+  });
+
+  h.test('gacha: the rare tease flickers a primed common capsule gold, then it settles: its tier and prize never change', () => {
+    const { T, G } = gBoot();
+    G.newRun('knight', 74);
+    let n = 1;
+    while (n < 400 && !T.DATA.GACHA.tease('bonus:c:c:' + JSON.stringify({ k: 'gold', n }), 'c')) n++;
+    h.ok(n < 400, 'a teasing capsule exists (' + n + ')');
+    G.loot.showCapsule({ cap: mk('c', n), then: { k: 'map' } });
+    const C = tapTo(G, 1), s = G.gacha.state(C);
+    h.ok(s.tease && s.primed, 'primed and a teaser');
+    let peak = 0;
+    for (let i = 0; i < 90; i++) { G.update(DT); G.draw(); peak = Math.max(peak, s.teaseK); }
+    h.ok(peak > 0.8, 'it flickered gold');
+    stepFor(G, 0.6);
+    h.eq(s.teaseK, 0, 'then it settled');
+    h.eq(C.shown, 'c', 'still common');
+    const gold0 = G.run.gold;
+    G.loot.capsuleTap(); stepFor(G, 2);
+    h.eq(C.cap.tier, 'c', 'a common capsule');
+    h.eq(G.run.gold, gold0 + n, 'its own prize');
+    G.loot.collectCapsule();
+    // a capsule that does not tease never flickers
+    let m = 1;
+    while (T.DATA.GACHA.tease('bonus:c:c:' + JSON.stringify({ k: 'gold', n: m }), 'c')) m++;
+    G.loot.showCapsule({ cap: mk('c', m), then: { k: 'map' } });
+    const C2 = tapTo(G, 1), s2 = G.gacha.state(C2);
+    let p2 = 0;
+    for (let i = 0; i < 120; i++) { G.update(DT); p2 = Math.max(p2, s2.teaseK); }
+    h.eq(p2, 0, 'no tease on the others');
+  });
+
+  h.test('gacha: hold to crack: a held press taps on its own until the burst', () => {
+    const { G } = gBoot();
+    G.newRun('knight', 75);
+    G.loot.showCapsule({ cap: mk('u', 4), then: { k: 'map' } });
+    const C = G.loot.cap;
+    G.loot.capsuleTap();
+    G.gacha.hold = { t: 0, e: 0, fn: () => G.loot.capsuleTap() };
+    stepFor(G, 0.3 + 0.19 * 1.5);
+    h.ok(C.taps >= 1, 'held: it cracks on its own (' + C.taps + ')');
+    stepFor(G, 1.2);
+    h.ok(C.phase === 'burst' || C.phase === 'done', 'held to the end: it bursts');
+    G.gacha.hold = null;
+    stepFor(G, 2);
+    h.eq(C.phase, 'done', 'the card waits for a tap (the hold stops at the burst)');
+  });
+
+  h.test('gacha: Capsule Minis: a legendary capsule always has one, NEW on the card, saved once across reloads; the capsule rolls are untouched', () => {
+    const { T, G } = gBoot();
+    G.newRun('knight', 76);
+    const sum = (g) => Object.values(g.minis).reduce((a, b) => a + b, 0);
+    G.loot.showCapsule({ cap: mk('l', 2), then: { k: 'map' } });
+    tapTo(G, 1);
+    const before = sum(G.gacha.meta());
+    G.save();
+    // a reload before the burst: no mini yet, the same capsule again
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    T2.GAME.choose(T2.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+    const G2 = T2.GAME;
+    h.eq(G2.screen, 'capsule', 'the ritual again');
+    h.ok(!G2.loot.cap.cap.opened && G2.loot.cap.cap.mini === undefined, 'nothing rolled before the burst');
+    h.eq(sum(G2.gacha.meta()), before, 'no mini yet');
+    G2.loot.skipCapsule();
+    const m = G2.loot.cap.cap.mini;
+    h.ok(m && T2.DATA.GACHA.MINIS[m.id], 'a legendary capsule always holds a mini: ' + (m && m.id));
+    h.eq(sum(G2.gacha.meta()), before + 1, 'counted once');
+    h.ok(m.fresh && G2.gacha.meta().news[m.id], 'NEW (the first one)');
+    stepFor(G2, 2);
+    h.eq(G2.loot.cap.phase, 'done', 'the card');
+    h.ok(hasCls(T2._nodes.capsuleBody, 'g17Mini') && hasCls(T2._nodes.capsuleBody, 'mNew'), 'the card shows the mini with NEW!');
+    G2.draw();
+    // a reload on the card: the same mini, never a second
+    const T3 = boot({ store: Object.assign({}, T2._store) });
+    T3.GAME.choose(T3.GAME.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+    h.eq(T3.GAME.loot.cap.phase, 'done', 'lands on the card');
+    h.eq(sum(T3.GAME.gacha.meta()), before + 1, 'still one');
+    h.eq(T3.GAME.loot.cap.cap.mini.id, m.id, 'the same mini');
+    T3.GAME.loot.collectCapsule();
+    // the capsules themselves roll the same with or without the minis
+    const seq = (off) => {
+      const B = boot({ store: META0() });
+      if (off) B.DATA.GACHA = undefined;
+      const g = B.GAME;
+      g.newRun('knight', 77);
+      const out = [];
+      for (let i = 0; i < 14; i++) {
+        const cap = g.loot.makeCapsule(i % 3 ? 'elite' : 'boss');
+        out.push(cap.tier0 + cap.tier + JSON.stringify(cap.prize));
+        g.loot.showCapsule({ cap, then: { k: 'map' } }); g.loot.skipCapsule(); stepFor(g, 0.8); g.loot.collectCapsule();
+      }
+      return { s: out.join('|'), minis: sum(g.gacha.meta()) };
+    };
+    const on = seq(false), off = seq(true);
+    h.eq(on.s, off.s, 'the same 14 capsules, tiers and prizes, with the minis on or off');
+    h.ok(on.minis > 0 && off.minis === 0, 'the minis came along only when on (' + on.minis + ')');
+  });
+
+  h.test('gacha: dupes pay vault tickets; a finished series pays its rainbow Vault prize (or tickets when owned); the save repairs junk', () => {
+    const { T, G } = gBoot();
+    const D = T.DATA.GACHA, V = G.vault.state;
+    const t0 = V.tix;
+    const a = G.gacha.grant('coin_critter'), b = G.gacha.grant('coin_critter');
+    h.ok(a.fresh && !b.fresh, 'the first is new, the second a dupe');
+    h.eq(b.tix, D.DUPE.c, 'a common dupe pays ' + D.DUPE.c);
+    h.eq(V.tix, t0 + D.DUPE.c, 'into the vault wallet');
+    h.eq(G.gacha.meta().minis.coin_critter, 2, 'two of them');
+    let last = null;
+    for (const id of D.seriesIds('arcade')) last = G.gacha.grant(id);
+    h.ok(last.done && last.cos === 'mq_rainbow', 'Arcade Pals complete: the JACKPOT marquee');
+    h.ok(V.owned.mq_rainbow && V.news.mq_rainbow, 'owned and NEW in the vault');
+    h.ok(G.gacha.meta().series.arcade, 'the series is marked complete');
+    V.owned.trail_rainbow = 1;
+    const t1 = V.tix;
+    for (const id of D.seriesIds('snacks')) last = G.gacha.grant(id);
+    h.ok(last.done && !last.cos && last.stix === D.SERIES_TIX, 'already owned: ' + D.SERIES_TIX + ' vault tickets instead');
+    h.eq(V.tix, t1 + D.SERIES_TIX, 'paid');
+    h.eq(G.gacha.grant('nope'), null, 'an unknown mini is nothing');
+    // the save round trip and junk
+    const m = {};
+    G.gacha.fix(m, JSON.parse(JSON.stringify({ gacha: G.gacha.meta() })));
+    h.eq(JSON.stringify(m.gacha.minis), JSON.stringify(G.gacha.meta().minis), 'the minis survive a save');
+    h.ok(m.gacha.series.arcade && m.gacha.series.snacks, 'the series too');
+    const j = {};
+    G.gacha.fix(j, { gacha: { minis: { nope: 3, coin_critter: -2, ticket_tot: 'x' }, series: { arcade: 1 }, news: { nope: 1 }, streak: -4, day: 12 } });
+    h.eq(JSON.stringify(j.gacha.minis) + JSON.stringify(j.gacha.series) + JSON.stringify(j.gacha.news), '{}{}{}', 'junk is dropped');
+    h.ok(j.gacha.streak === 0 && j.gacha.day === '', 'junk numbers and days are reset');
+  });
+
+  h.test('gacha: Open all from the bank: the capsules fan out and pop in a row, each paid once, a reload mid-fan resumes', () => {
+    const { T, G } = gBoot();
+    G.newRun('knight', 78);
+    const run = G.run;
+    run.caps.push(mk('c', 4), mk('u', 6), mk('r', 8));
+    G.toMap();
+    const gold0 = run.gold;
+    h.ok(G.loot.openBankedCap(), 'the first banked capsule opens');
+    const k = G.S.ui.buttons.findIndex((b) => /^Open all/.test(b.label));
+    h.ok(k >= 0 && G.S.ui.buttons[k].label === 'Open all (3)', 'the capsule screen offers Open all (3)');
+    G.choose(k);
+    const A = G.gacha.all;
+    h.ok(A && A.phase === 'drop' && A.items.length === 3, 'three capsules drop in');
+    h.eq(run.caps.length, 0, 'out of the bank (held by the screen until paid)');
+    G.draw();
+    let t = 0;
+    while (A.items.filter((i) => i.popped).length < 1 && t < 3) { G.update(DT); t += DT; }
+    h.eq(A.items.filter((i) => i.popped).length, 1, 'one popped');
+    h.eq(G.run.gold, gold0 + 4, 'and paid');
+    G.draw();
+    // reload now: the popped one is not paid again, the rest pop
+    G.save();
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    const G2 = T2.GAME;
+    G2.choose(G2.S.ui.buttons.findIndex(b => /continue/i.test(b.label)));
+    h.eq(G2.screen, 'capsule', 'back on the fan');
+    h.ok(G2.gacha.all && G2.gacha.all.items.filter((i) => i.popped).length === 1, 'the popped one stays popped');
+    h.eq(G2.run.gold, gold0 + 4, 'nothing paid twice');
+    stepFor(G2, 3);
+    h.eq(G2.gacha.all.phase, 'done', 'all popped');
+    h.eq(G2.run.gold, gold0 + 18, 'each capsule paid once');
+    h.ok(hasCls(T2._nodes.capsuleBody, 'g17AllLb'), 'a label under each prize');
+    G2.draw();
+    const c = G2.S.ui.buttons.findIndex((b) => b.label === 'Collect all');
+    h.ok(c >= 0, 'Collect all');
+    G2.choose(c);
+    h.eq(G2.screen, 'map', 'back to the map');
+    h.eq(G2.run.caps.length, 0, 'the bank is empty');
+    h.eq(G2.run.loot.capsOpened, 3, 'three opened');
+    // a tap hurries, Skip pops the rest at once
+    G2.run.caps.push(mk('c', 1), mk('c', 1));
+    G2.gacha.openAll('bank');
+    G2.gacha.allTap();
+    h.eq(G2.gacha.all.phase, 'pop', 'a tap skips the drop');
+    G2.gacha.allSkip();
+    h.eq(G2.gacha.all.phase, 'done', 'Skip: every one popped');
+    h.eq(G2.run.gold, gold0 + 20, 'and paid');
+    G2.gacha.allCollect();
+  });
+
+  h.test('gacha: Open all on the reward screen: every unopened capsule, marked on the reward, then back to it', () => {
+    const { T, G } = gBoot();
+    G.newRun('knight', 61);
+    G.startFight(T.DATA.ENCOUNTERS[1].elite[0], 'elite');
+    stepFor(G, 0.2);
+    G.endFight('win');
+    stepFor(G, 6);
+    const rw = G.S.sd.reward;
+    h.ok(rw && rw.caps.length >= 1, 'an elite capsule');
+    rw.caps.push(mk('u', 7));
+    const n = rw.caps.length, opened0 = G.run.loot.capsOpened;
+    const buttons0 = G.S.ui.buttons.length;
+    h.ok(G.gacha.openAll('reward', rw), 'Open all');
+    stepFor(G, 4);
+    h.eq(G.gacha.all.phase, 'done', 'all popped');
+    h.ok(rw.caps.every((c) => c.opened), 'every capsule is marked opened on the reward');
+    h.eq(G.run.loot.capsOpened, opened0 + n, 'counted once each');
+    G.gacha.allCollect();
+    h.eq(G.screen, 'reward', 'back on the reward screen');
+    h.eq(G.S.ui.buttons.length, buttons0, 'the cards and Skip keep their indices');
+    h.ok(!G.gacha.openAll('reward', rw), 'nothing left to open');
+  });
+
+  h.test('gacha: the daily capsule: once a real day, a streak, a badge on the Vault tile, the same capsule after a reload', () => {
+    const { T, G } = gBoot();
+    h.ok(!G.gacha.dailyReady(), 'headless without a clock: no daily capsule');
+    G.gacha.now = new Date(2026, 8, 29, 9, 30);
+    h.ok(G.gacha.dailyReady(), 'a new day: ready');
+    G.showTitle();
+    const vb = G.S.ui.buttons.find((b) => b.label === 'Prize Vault');
+    h.ok(vb && /g17Free/.test(vb.el.className), 'the Vault tile glows');
+    h.ok(walk(vb.el).some((e) => /\bvdot\b/.test(e.className || '')), 'with a badge');
+    G.vault.show();
+    const k = G.S.ui.buttons.findIndex((b) => b.label === 'Free daily capsule');
+    h.ok(k >= 0, 'the vault offers the free capsule');
+    const V = G.vault.state, tix0 = V.tix, caps0 = V.caps;
+    G.choose(k);
+    h.ok(G.vault.cap && V.pend && V.pend.daily, 'a free capsule is on the pedestal');
+    h.eq(V.tix, tix0 + 5, 'day 1 streak bonus: +5');
+    h.eq(G.gacha.meta().streak, 1, 'a 1 day streak');
+    h.ok(!G.gacha.dailyReady(), 'once a day');
+    const id = V.pend.id;
+    // a reload mid-open: the same capsule, never a second claim
+    const T2 = boot({ store: Object.assign({}, T._store) });
+    const G2 = T2.GAME;
+    G2.gacha.now = new Date(2026, 8, 29, 22, 0);
+    h.ok(!G2.gacha.dailyReady(), 'still claimed after a reload');
+    h.ok(G2.vault.state.pend && G2.vault.state.pend.daily && G2.vault.state.pend.id === id, 'the same capsule waits');
+    G2.vault.show();
+    h.eq(G2.vault.cap && G2.vault.cap.p.id, id, 'it reopens');
+    G2.vault.skip();
+    stepFor(G2, 3);
+    h.ok(G2.vault.state.owned[id] || G2.vault.cap.res.dupe, 'paid');
+    h.eq(G2.vault.state.caps, caps0 + 1, 'counted once');
+    h.ok(G2.vault.cap.res.mini, 'a Capsule Mini came with it');
+    G2.draw();
+    // tomorrow: day 2; a missed day resets
+    G2.gacha.now = new Date(2026, 8, 30, 8, 0);
+    h.ok(G2.gacha.dailyReady(), 'the next day: ready again');
+    G2.gacha.daily();
+    h.eq(G2.gacha.meta().streak, 2, 'a 2 day streak');
+    h.eq(G2.gacha.meta().bonus, 10, '+10');
+    G2.vault.skip(); stepFor(G2, 3); G2.vault.close();
+    G2.gacha.now = new Date(2026, 9, 2, 8, 0);
+    G2.gacha.daily();
+    h.eq(G2.gacha.meta().streak, 1, 'a missed day starts over');
+    h.eq(G2.gacha.meta().best, 2, 'the best streak is kept');
+    G2.vault.skip(); stepFor(G2, 3);
+    G2.draw();
+  });
+
+  h.test('gacha: the Prize Vault Minis tab: four series, silhouettes for the missing, the turntable, a pick clears NEW', () => {
+    const { T, G } = gBoot();
+    G.gacha.grant('neon_cat');
+    G.vault.show();
+    G.S.vault.tab = 'minis';
+    h.ok(G.gacha.select('neon_cat'), 'picked');
+    h.ok(!G.gacha.meta().news.neon_cat, 'NEW cleared');
+    const labels = G.S.ui.buttons.map((b) => b.label);
+    h.eq(labels.filter((l) => l === '???').length, 23, 'the 23 missing are silhouettes');
+    h.ok(labels.includes('Neon Cat'), 'the found one by name');
+    h.ok(hasCls(T._nodes.vaultBody, 'g17Ser') && hasCls(T._nodes.vaultBody, 'g17Detail'), 'series headers and the detail strip');
+    for (let i = 0; i < 10; i++) { G.update(DT * 3); G.draw(); }
+    G.gacha.select('rainbow_dragon');
+    G.draw();
+    h.ok(true, 'the turntable draws');
+  });
+}
+
+/* ------------------------------------------------- TECH (round 17): Cabinet Tech and Joy Stick */
+{
+  const techBoot = (meta) => { const o = metaBoot(Object.assign({ cab: { tip: 1 }, unlocks: { knight: true, techie: true } }, meta || {})); o.G.cab.force = true; return o; };
+  const techFight = (G, o) => {
+    o = o || {};
+    G.newRun(o.char || 'techie', o.seed || 4242);
+    for (const id of o.relics || []) G.run.relics.push(id);
+    G.run.hp = G.run.maxHp = 999;
+    if (o.lamp != null) G.run.cabLamp = o.lamp;
+    G.startFight(o.foes || ['slime', 'slime'], 'normal', { seed: o.fight || 777 });
+    return G.cab.fs();
+  };
+  const drain = (G, s) => stepFor(G, s || 1.5);
+  const hpSum = (G) => G.fight.enemies.reduce((a, e) => a + e.hp, 0);
+  const nextTurn = (G) => { G.endTurn(); for (let i = 0; i < 1800 && (G.fight.phase !== 'player' || G.fs.enemyTurn || G.fs.queue.length); i++) G.update(DT); };
+  const topItem = (G) => G.fs.items.filter((b) => b.x < G.cabinet.bounds.chuteX - 20).sort((p, q) => (p.y - (p.br || 12)) - (q.y - (q.br || 12)))[0];
+
+  h.test('tech: Joy Stick unlocks with the first LAMP FEVER (any crawler), and at once for a profile that has seen one', () => {
+    const fresh = metaBoot({ cab: { tip: 1 } });
+    fresh.G.showChars();
+    const card = (G) => G.S.ui.buttons.find((b) => b.label === 'Joy Stick');
+    h.ok(card(fresh.G) && card(fresh.G).disabled, 'locked on a fresh profile');
+    h.ok(JSON.stringify(card(fresh.G).el.children.map((c) => c.textContent)).indexOf('Set off LAMP FEVER to unlock') >= 0, 'the card says how');
+    const seen = metaBoot({ cab: { tip: 1, fevers: 2 } });
+    seen.G.showChars();
+    h.ok(card(seen.G) && !card(seen.G).disabled, 'open at once for a profile that has had a fever');
+    // a knight's run with the cabinet on: the first fever unlocks her
+    const { G } = fresh;
+    G.cab.force = true;
+    techFight(G, { char: 'knight' });
+    drain(G, 2.5);
+    h.ok(!G.meta.unlocks.techie, 'not yet');
+    G.cab.lampAdd(12);
+    drain(G, 1.5);
+    h.ok(G.meta.unlocks.techie, 'LAMP FEVER unlocks Joy Stick');
+  });
+
+  h.test('tech: her run, her gift (an event may land on turn 1), quiet headless and in Duo', () => {
+    const { G } = techBoot();
+    techFight(G);
+    h.ok(G.run.relics.includes('service_remote') && G.run.bin.length === 19 && G.run.char === 'techie', 'the Service Remote and her 19 items');
+    h.ok(G.fight.tech && G.fight.tech.gift && G.fight.tech.on, 'COMBAT knows her gift and the live cabinet');
+    const m = G.tech.mods();
+    h.ok(m.first === 1 && m.evP > 0.2 && m.perfLamp === 1, 'her cabinet numbers');
+    // turn 1 events: some fight seeds open with one for her, never for the knight
+    let hers = 0, his = 0;
+    for (let s = 1; s <= 24; s++) {
+      const a = techBoot(); techFight(a.G, { fight: 500 + s }); if (a.G.cab.fs().ev) hers++;
+      const b = techBoot(); techFight(b.G, { char: 'knight', fight: 500 + s }); if (b.G.cab.fs().ev) his++;
+    }
+    h.ok(hers >= 4 && his === 0, `an event at the bell: ${hers} of 24 for her, ${his} for the knight`);
+    const ids = []; for (let k = 0; k < 2; k++) { const a = techBoot(); techFight(a.G, { fight: 1603 }); for (let t = 0; t < 4; t++) nextTurn(a.G); ids.push(JSON.stringify(a.G.fight.tech)); }
+    h.eq(ids[0], ids[1], 'the same fight seed, the same cabinet');
+    // quiet: headless without force, and in Duo
+    const q = metaBoot({ cab: { tip: 1 }, unlocks: { knight: true, techie: true } });
+    techFight(q.G);
+    h.ok(!q.G.fight.tech.on && Object.values(q.G.tech.mods()).every((v) => v === 0), 'a quiet cabinet headless: all zeros');
+    G.S.duo = { mode: 'coop' };
+    h.ok(Object.values(G.tech.mods()).every((v) => v === 0), 'and in Duo');
+    G.S.duo = null;
+  });
+
+  h.test('tech: the Service Remote pays on every event; Circuit Breaker and Double Feature', () => {
+    const { G } = techBoot();
+    techFight(G, { relics: ['circuit_breaker', 'double_feature'] });
+    drain(G, 3);
+    if (G.cab.fs().ev) { G.cab.land(); drain(G, 3); }
+    const ev0 = G.fight.tech.events, hp0 = hpSum(G), b0 = G.fight.player.block;
+    G.cab.event('surge', true);
+    drain(G, 0.6);
+    h.eq(G.fight.tech.events, ev0 + 1, 'the relics heard the surge');
+    h.ok(hp0 - hpSum(G) >= 2 * (3 + 6) - 1, `the remote (3) and the breaker (6) hit both slimes: ${hp0} -> ${hpSum(G)}`);
+    h.ok(G.fight.player.block >= b0 + 3, 'and the remote\'s Block');
+    // Double Feature: the reel spins again for a different event
+    drain(G, 3);
+    const C = G.cab.fs();
+    h.eq(G.fight.tech.events, ev0 + 2, 'a second event landed');
+    h.ok(C.ev && C.ev.dbl && C.ev.id !== 'surge' && C.ev.landed, 'a different one: ' + (C.ev && C.ev.id));
+    for (let i = 0; i < 20; i++) { G.update(DT * 3); G.draw(); }
+    nextTurn(G);
+    h.ok(!G.tech.fs().dbl, 'nothing carries into the next turn');
+  });
+
+  h.test('tech: PERFECT grabs: her extra lamp cell, the Metronome, the Laser Sight\'s wider window', () => {
+    const k = techBoot(); techFight(k.G, { char: 'knight', relics: ['metronome'] }); drain(k.G, 2.5);
+    const j = techBoot(); techFight(j.G, { relics: ['metronome', 'laser_sight'] }); drain(j.G, 2.5);
+    const lk = k.G.cab.fs().lamp, lj = j.G.cab.fs().lamp, hk = hpSum(k.G), bj = j.G.fight.player.block;
+    k.G.steer(topItem(k.G).x); j.G.steer(topItem(j.G).x); drain(k.G, 1.2); drain(j.G, 1.2);
+    k.G.cab.perfect(topItem(k.G)); j.G.cab.perfect(topItem(j.G));
+    h.eq(k.G.cab.fs().lamp - lk, 1, 'a PERFECT lights one cell');
+    h.eq(j.G.cab.fs().lamp - lj, 2, 'two for Joy Stick');
+    drain(k.G, 0.8); drain(j.G, 0.8);
+    h.eq(hk - hpSum(k.G), 4, 'the Metronome: 4 for a first PERFECT');
+    h.ok(j.G.fight.player.block >= bj + 3, 'the Laser Sight: 3 Block');
+    h.eq(j.G.fight.tech.perfects, 1, 'COMBAT counted it');
+    // the window: 8 px off centre is PERFECT with the laser, not without
+    const b = topItem(j.G), x = b.x + 8;
+    const A = j.G.tech.palm(x);
+    j.G.run.relics.splice(j.G.run.relics.indexOf('laser_sight'), 1); j.G.tech.recalc();
+    const B = j.G.tech.palm(x);
+    h.ok(A && A.dx > 5, 'with the laser the drop locks on');
+    h.ok(!B || B.dx <= 5, 'without it, not at 8 px');
+    for (let i = 0; i < 6; i++) { j.G.update(DT); j.G.draw(); }
+  });
+
+  h.test('tech: coins (the Coin Hopper), the lamp (Lamp Oil, an arcade part), LAMP FEVER (Fever Dream, held over END TURN)', () => {
+    const { G, T } = techBoot();
+    let C = techFight(G, { relics: ['coin_hopper', 'lamp_oil', 'fever_dream'], lamp: 0 });
+    h.eq(C.lamp, 4, 'Lamp Oil: the lamp starts 4 cells fuller');
+    drain(G, 3);
+    if (G.cab.fs().ev) { G.cab.land(); drain(G, 3); }
+    G.steer(200); drain(G, 1.2);
+    const n0 = C.bodies.filter((b) => b.data.cab === 'coin').length;
+    G.cab.event('coins', true);
+    drain(G, 2);
+    const coins = C.bodies.filter((b) => b.data.cab === 'coin');
+    h.eq(coins.length - n0, G.cab.K.coinN + 3, 'the Coin Hopper: 3 more coins');
+    const g0 = T.COMBAT.gold(G.fight), c = coins[0];
+    c.x = G.cabinet.bounds.chuteX + 30; c.y = G.cabinet.bounds.dividerTop + 30; c.vx = 0; c.vy = 50;
+    drain(G, 0.3);
+    h.eq(T.COMBAT.gold(G.fight), g0 + 2, 'a coin pays 2 gold');
+    const l0 = C.lamp;
+    G.tech.deliver({ uid: 'tx', id: 'neon_tube' }, { x: 300, y: 700 });
+    h.eq(C.lamp, l0 + 2, 'a Neon Tube lights 2 more cells');
+    // a fever on your turn: Fever Dream and Lamp Oil answer
+    const hp0 = hpSum(G), f0 = G.fight.tech.fevers;
+    G.cab.lampAdd(12);
+    drain(G, 1.5);
+    h.eq(G.fight.tech.fevers, f0 + 1, 'LAMP FEVER reached the relics');
+    h.ok(hp0 - hpSum(G) >= 16, 'Fever Dream: 8 to both');
+    // a fever that goes off after END TURN waits for the next turn
+    const o = techBoot(); C = techFight(o.G, { relics: ['fever_dream'], lamp: 0 }); drain(o.G, 3);
+    o.G.cab.lampAdd(12); o.G.endTurn();
+    for (let i = 0; i < 90; i++) o.G.update(DT);
+    const mid = o.G.fight.phase !== 'player' ? o.G.tech.fs().pend.length : -1;
+    for (let i = 0; i < 1800 && (o.G.fight.phase !== 'player' || o.G.fs.enemyTurn || o.G.fs.queue.length); i++) o.G.update(DT);
+    h.ok(mid !== 0, 'held while the enemies act');
+    h.eq(o.G.fight.tech.fevers, 1, 'and paid on the next player turn');
+    h.eq(o.G.tech.fs().pend.length, 0, 'once');
+  });
+
+  h.test('tech: The Motherboard: an event every turn, a whiff drains the lamp', () => {
+    const { G } = techBoot();
+    const C = techFight(G, { relics: ['leg_motherboard'], lamp: 0 });
+    h.ok(C.ev, 'an event at the bell');
+    let all = true;
+    for (let t = 0; t < 4; t++) { nextTurn(G); if (!G.cab.fs().ev) all = false; }
+    h.ok(all, 'and every turn after');
+    C.lamp = 6; C.lampShow = 6; G.fs.delivered = 0;
+    G.tech.grabDone();
+    h.eq(C.lamp, 3, 'a grab that brought nothing up drains 3 cells');
+    G.fs.delivered = 2; G.tech.grabDone();
+    h.eq(C.lamp, 3, 'a real grab does not');
+    for (let i = 0; i < 10; i++) { G.update(DT * 2); G.draw(); }
+  });
+
+  h.test('tech: real grabs with every Tech relic are deterministic and draw; a save reloads her', () => {
+    const play = () => {
+      const o = techBoot();
+      techFight(o.G, { relics: o.T.DATA.TECH.RELICS.slice(), foes: ['goblin', 'slime'] });
+      drain(o.G, 3);
+      for (let k = 0; k < 4 && o.G.screen === 'fight'; k++) {
+        settle(o.G, 10);
+        const b = topItem(o.G);
+        if (!b || !o.G.fight || o.G.fight.player.grabs <= 0) break;
+        o.G.steer(b.x); drain(o.G, 1.2); o.G.dropClaw(); settle(o.G, 15);
+        o.G.draw();
+      }
+      return o;
+    };
+    const a = play(), b = play();
+    const sig = (o) => JSON.stringify({ t: o.G.fight && o.G.fight.tech, hp: o.G.fight && o.G.fight.enemies.map((e) => e.hp), lamp: o.G.cab.fs() && o.G.cab.fs().lamp, err: o.G.fight && o.G.fight.hookErrors });
+    h.eq(sig(a), sig(b), 'the same grabs, the same cabinet: ' + sig(a));
+    h.ok(a.G.fight && a.G.fight.hookErrors.length === 0, 'no hook errors');
+    a.G.save();
+    const T2 = boot({ store: Object.assign({}, a.T._store) });
+    T2.GAME.cab.force = true;
+    h.ok(T2.GAME.load() && T2.GAME.run.char === 'techie' && T2.GAME.screen === 'fight', 'her fight reloads');
+    h.ok(T2.GAME.fight.tech && T2.GAME.fight.tech.on, 'with its cabinet');
+    T2.GAME.draw();
+  });
+
+  h.test('tech: a Duo seat gets her starter and her kit, and the quiet cabinet rings the remote every 2nd turn', () => {
+    const { G, T } = techBoot();
+    G.S.duo = { mode: 'coop', p: [{ char: 'knight', claw: 'classic' }, { char: 'techie', claw: 'classic' }], seed: 5, boss: 'hoard' };
+    const run = G.duo.seatRun(1);
+    G.S.duo = null;
+    const K = T.DATA.rushKit('techie');
+    h.ok(run.relics.includes('service_remote') && K.relics.every((id) => run.relics.includes(id)), 'the Service Remote and the kit\'s relics');
+    h.ok(K.items.every((id) => run.bin.some((i) => i.id === id)), 'the kit\'s items');
+    // the quiet cabinet (as in Duo): the remote rings on turn 2
+    const q = metaBoot({ cab: { tip: 1 }, unlocks: { knight: true, techie: true } });
+    techFight(q.G);
+    drain(q.G, 2);
+    nextTurn(q.G);
+    h.ok(q.G.fight.turn === 2 && q.G.fight.player.block >= 3, 'turn 2: the remote\'s Block (' + q.G.fight.player.block + ')');
+  });
+}
+
+/* ------------------------------------------------- QA17 (round 17): QA pass 6 */
+{
+  const esc = (T) => { const fn = T._listeners.keydown; if (fn) fn({ key: 'Escape', preventDefault() {} }); };
+  h.test('qa17: Escape back from a page opened out of a title sheet keeps that sheet open (the title\'s listener runs after onKey)', () => {
+    for (const [name, show] of [['weekly', (G) => G.wk.show()], ['rushmenu', (G) => G.rush.menu()], ['codex', (G) => G.lore.show()], ['history', (G) => G.his.show()]]) {
+      const { T, G } = metaBoot({ stats: { runs: 3, wins: 1, fights: 20 }, unlocks: { knight: true, rogue: true } });
+      G.showTitle();
+      const sheet = name === 'weekly' || name === 'rushmenu' ? 'modes' : 'collection';
+      G.ui15.sheet(sheet);
+      G.ui15.T.reopen = sheet;   // (a tap inside the sheet remembers it; the stub DOM has no capture phase)
+      show(G);
+      h.eq(G.screen, name, name + ': the page is up');
+      esc(T);   // onKey: the page's Escape goes back to the title, which reopens the sheet
+      h.ok(G.screen === 'title' && G.ui15.T.open === sheet, `${name}: back on the title with the ${sheet} sheet (${G.screen}, ${G.ui15.T.open})`);
+      h.eq(G.qa17.titleEsc({ key: 'Escape' }), false, name + ': the same key press does not close it again');
+      h.eq(G.ui15.T.open, sheet, name + ': the sheet is still open');
+      esc(T);   // a second Escape begins on the title: it closes the sheet
+      h.eq(G.qa17.titleEsc({ key: 'Escape' }), true, name + ': the next Escape closes it');
+      h.eq(G.ui15.T.open, null, name + ': closed');
+    }
+  });
+  h.test('qa17: Escape is Back on the Prizedex, Stickers, Help and Tips (a popover or the Settings panel closes first)', () => {
+    for (const [name, show] of [['collection', (G) => G.showCollection()], ['stickers', (G) => G.showStickers()], ['help', (G) => G.showHelp('title')], ['tips', (G) => G.feel.showTips('title')]]) {
+      const { T, G } = metaBoot({});
+      G.showTitle();
+      show(G);
+      h.eq(G.screen, name, name + ': up');
+      G.S.popover = { html: 'x', x: 0, y: 0 };
+      esc(T);
+      h.ok(G.screen === name && !G.S.popover, name + ': the first Escape only closes the popover');
+      G.acc.open();
+      esc(T);
+      h.ok(G.screen === name && !G.acc.isOpen, name + ': the Settings panel closes first');
+      esc(T);
+      h.eq(G.screen, 'title', name + ': then Escape goes back');
+    }
+    // Help opened from the map goes back to the map, as its Back does
+    const { T, G } = metaBoot({});
+    G.newRun('knight', 1717); G.toMap();
+    G.showHelp('map');
+    esc(T);
+    h.eq(G.screen, 'map', 'Help from the map: back to the map');
+  });
+  h.test('qa17: the HUD\'s resource row squeezes when it outgrows its column, and only as far as it must', () => {
+    const { G } = metaBoot({});
+    const row = (need) => {   // a row whose content is `need` px at full size, 30 px less tight, 22 more at the last step
+      const cls = new Set();
+      return { clientWidth: 268, classList: { add: (...c) => c.forEach((x) => cls.add(x)), remove: (...c) => c.forEach((x) => cls.delete(x)), contains: (c) => cls.has(c) },
+        get scrollWidth() { return Math.max(268, need - (cls.has('qa17Tight') ? 30 : 0) - (cls.has('qa17Tight2') ? 22 : 0)); }, cls };
+    };
+    let r = row(250);
+    h.ok(G.qa17.fit(r) === 0 && !r.cls.size, 'it fits: as designed');
+    r = row(292);   // 99999 gold, 9999 tickets
+    h.ok(G.qa17.fit(r) === 1 && r.cls.has('qa17Tight') && !r.cls.has('qa17Tight2'), 'big numbers: tighter chips');
+    r = row(315);
+    h.ok(G.qa17.fit(r) === 2 && r.cls.has('qa17Tight2'), 'bigger still: the act word goes and a size smaller');
+    h.ok(G.qa17.fit(row(250)) === 0, 'and back as the numbers shrink');
+    r = row(292); r.clientWidth = 0;
+    h.eq(G.qa17.fit(r), 0, 'a hidden bar is left alone');
+    // the markup still carries every chip, and the per-frame check is a browser's only (no layout headless)
+    G.qa17.hudFit();
+    h.eq(G.qa17.H.level, 0, 'headless: nothing measured');
+  });
+  h.test('qa17: the online co-op watch screen tells the corner lane where both players\' cards are', () => {
+    const { G } = metaBoot({});
+    h.eq(G.qa.signs('duo').length, 0, 'no duel: nothing');
+    G.S.duo = { mode: 'coop', ph: 'watch', net: { me: 1 } }; G.S.duoNet = { me: 1 };
+    const r = G.qa.signs('duo');
+    h.ok(r.length === 2 && r[0][0] <= 12 && r[0][2] >= 252 && r[1][0] <= 288 && r[1][2] >= 528 && r.every((x) => x[1] <= 12 && x[3] >= 76), 'watching: both cards up top ' + JSON.stringify(r));
+    for (const ph of ['yours', 'toss', 'end']) { G.S.duo.ph = ph; h.eq(G.qa.signs('duo').length, 0, ph + ': not the watch screen'); }
+    G.S.duo = { mode: 'vs', ph: 'watch', net: { me: 1 } };
+    h.eq(G.qa.signs('duo').length, 0, 'the claw-off\'s watch has its own layout');
+    G.S.duoNet = null; G.S.duo = { mode: 'coop', ph: 'watch' };
+    h.eq(G.qa.signs('duo').length, 0, 'pass and play: the hand-off screens');
+    G.S.duo = null;
+  });
+  h.test('qa17: in season the ribbon stays over the sky, never moved into the More sheet (it covered the sheet\'s X)', () => {
+    for (const d of ['2026-10-02', '2026-12-24']) {
+      const { T, G } = metaBoot({});
+      G.season.setDate(d);
+      G.showTitle();
+      const ban = G.S.ui.buttons.find((b) => b.el && /\bseaBan\b/.test(b.el.className || ''));
+      h.ok(ban && ban.el.parentNode === T._nodes['scr-title'], d + ': the ribbon hangs on the title screen itself');
+      const more = G.ui15.T.sheets.more;
+      const inMore = (el) => { for (let p = el; p; p = p.parentNode) if (p === more) return true; return false; };
+      h.ok(!inMore(ban.el), d + ': not in the More sheet');
+      G.ui15.sheet('more');
+      h.eq(G.ui15.T.open, 'more', d + ': the More sheet still opens');
+      G.season.setDate(null);
+    }
+  });
+  h.test('qa17: the styles: the squeezed resource row, the Dutch map head compact enough for "RONDE 12"', () => {
+    const html = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
+    const css = (html.match(/<style id="qa17-css">([\s\S]*?)<\/style>/) || [])[1] || '';
+    h.ok(/#top \.uiRes\.qa17Tight\{/.test(css) && /#top \.uiRes\.qa17Tight2 \.stat\.act \.k\{display:none\}/.test(css), 'qa17Tight and qa17Tight2');
+    h.ok(/html\[lang="nl"\] \.mh \.l1\{gap:3px\}/.test(css) && /html\[lang="nl"\] \.mh \.l1 \.btn\.sm\{padding-left:7px;padding-right:7px\}/.test(css) && /html\[lang="nl"\] \.mh \.l1 \.mhInk\{font-size:17px/.test(css), 'the Dutch map head: tighter gaps, buttons and bulb pill');
+    h.ok(css.indexOf(String.fromCharCode(0x2014)) < 0, 'no em dash');
+  });
+  h.test('qa17: the Jackpot Lamp after a FEVER shows its level, not the sparks still flying counted twice', () => {
+    const { G } = metaBoot({ cab: { tip: 1 } });
+    G.cab.force = true;
+    G.newRun('knight', 4243);
+    G.run.hp = G.run.maxHp = 999;
+    G.startFight(['slime'], 'normal', { seed: 778 });
+    stepFor(G, 2.5);
+    const C = G.cab.fs();
+    G.cab.lampAdd(11);
+    stepFor(G, 0.7);
+    h.eq(C.lampShow, 11, 'eleven cells lit');
+    G.cab.lampAdd(1);   // full: FEVER, the dome bursts 1.35 s later
+    h.ok(C.fever && C.lamp === 12, 'FEVER');
+    stepFor(G, 1.0);
+    G.cab.lampAdd(2);   // two more sparks, still flying when the dome bursts
+    stepFor(G, 0.4);
+    h.ok(C.fever && C.fever.burst && C.lamp === 2, 'the burst carries the overflow: 2 (' + C.lamp + ')');
+    stepFor(G, 1.5);
+    h.eq(C.lampShow, C.lamp, `the lamp shows its level once the sparks land (${C.lampShow} cells, level ${C.lamp})`);
+    G.cab.force = false;
   });
 }
 

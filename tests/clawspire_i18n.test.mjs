@@ -838,4 +838,119 @@ h.test('cab: every line of the living cabinet has its Dutch (the events, the lam
   }
 });
 
+/* ------------------------------------------------- TECH (round 17): Cabinet Tech and Joy Stick */
+h.test('tech: every line of Cabinet Tech and Joy Stick has its Dutch, and her fight draws it', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true, techie: true }, cab: { tip: 1 } }) } });
+  const { GAME: G, I18N, DATA } = T;
+  const nl = I18N.table('nl'), ui = nl.ui, C = nl.content;
+  const same = new Set(['LASER', 'LAMP +{n}', 'LAMP -{n}']);
+  const miss = [], flat = [], em = [];
+  for (const k of G.tech.WORDS.concat(Object.keys(G.tech.PATTERNS))) { if (!ui[k]) miss.push(k); else if (ui[k] === k && !same.has(k)) flat.push(k); if (ui[k] && ui[k].indexOf(EM) >= 0) em.push(k); }
+  h.eq(miss.length, 0, 'every word has a Dutch entry: ' + miss.slice(0, 4).join(' | '));
+  h.eq(flat.length, 0, 'and it is Dutch: ' + flat.slice(0, 4).join(' | '));
+  h.eq(em.length, 0, 'no em dash');
+  for (const k in G.tech.PATTERNS) { const ex = G.tech.PATTERNS[k], out = I18N.tr(ex); h.ok(!/\{\w+\}/.test(out) && (same.has(k) || out !== ex), `the example comes back in Dutch: ${ex} -> ${out}`); }
+  for (const id of DATA.TECH.RELICS.concat(['service_remote'])) { const r = DATA.RELICS[id]; h.ok(C.relic[id] && C.relic[id].name && C.relic[id].text, 'relic ' + id); if (r.proc) h.ok(ui[r.proc], 'its proc label: ' + r.proc); }
+  for (const id of DATA.TECH.ITEMS) h.ok(C.item[id] && C.item[id].name && C.item[id].text, 'item ' + id);
+  for (const id of DATA.TECH.COMBOS) h.ok(C.combo[id] && C.combo[id].name && C.combo[id].text, 'combo ' + id);
+  h.ok(C.char.techie && C.char.techie.title && C.char.techie.blurb && C.char.techie.unlockText && C.char.techie.vsLine, 'Joy Stick\'s card');
+  h.ok(C.kw.tech && C.kw.tech.label, 'the Tech chip');
+  h.ok(C.lore.cr_techie && C.lore.cr_techie.text, 'her Codex page');
+  for (const id of ['perfect_game', 'tech_support']) { const a = DATA.ACHIEVEMENTS[id]; h.ok(ui[a.name] && ui[a.text], 'sticker ' + id); }
+  for (const id of ['fit_joy_headset', 'fit_joy_visor', 'fit_joy_witch', 'fit_joy_scarf']) { const c = DATA.COSMETICS[id] || (DATA.seaCosmetics('halloween').concat(DATA.seaCosmetics('winter')).map((x) => DATA.COSMETICS[x] || x).find((x) => x && x.id === id)); h.ok(c && ui[c.name] && ui[c.text], 'outfit ' + id); }
+  h.ok(ui[DATA.TECH.TIP], 'her tip');
+  h.eq(I18N.TC('relic', 'metronome', 'name'), 'Metronoom', 'a relic name through TC');
+  h.eq(I18N.tr('METRONOME x3'), 'METRONOOM x3', 'a dynamic proc label');
+  // her fight, in Dutch: the Laser Sight's LOCK, Double Feature's second reel
+  const seen = new Set(), tr0 = I18N.tr;
+  I18N.tr = function (s) { const r = tr0.call(this, s); if (typeof s === 'string') seen.add(s + '=>' + r); return r; };
+  let ok = true;
+  try {
+    G.cab.force = true;
+    G.newRun('techie', 31); G.run.relics.push('laser_sight', 'double_feature'); G.run.hp = G.run.maxHp = 999;
+    G.startFight(['slime'], 'normal', { seed: 5 }); stepFor(G, 2.5);
+    const b = G.fs.items.filter((x) => x.x < G.cabinet.bounds.chuteX - 10).sort((p, q) => (p.y - (p.br || 12)) - (q.y - (q.br || 12)))[0];
+    G.steer(b.x); stepFor(G, 1.5); G.draw();
+    G.cab.event('coins', true);
+    for (let i = 0; i < 40; i++) { G.update(DT * 3); G.draw(); }
+  } catch (e) { ok = false; console.log(e && e.stack); }
+  I18N.tr = tr0;
+  h.ok(ok, 'her fight draws in Dutch');
+  const drawn = [...seen];
+  for (const [en, nl2] of [['DOUBLE FEATURE!', 'DUBBELE VOORSTELLING!'], ['LOCK', 'RAAK']]) h.ok(drawn.includes(en + '=>' + nl2), `${en} is drawn as ${nl2}`);
+});
+
+// ---------------------------------------------------------------- GACHA (round 17): Capsule fever
+h.test('gacha: every line of capsule fever has its Dutch (the words, the patterns, the minis and series), and the screens show it', () => {
+  const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });
+  const { GAME: G, I18N, DATA } = T;
+  const ui = I18N.table('nl').ui;
+  const miss = [], flat = [], em = [];
+  for (const k of G.gacha.WORDS) { if (!ui[k]) miss.push(k); else if (ui[k] === k && k !== 'Capsules') flat.push(k); if (ui[k] && ui[k].indexOf(EM) >= 0) em.push(k); }
+  h.eq(miss.length, 0, 'every word has a Dutch entry: ' + miss.slice(0, 4).join(' | '));
+  h.eq(flat.length, 0, 'and it is Dutch: ' + flat.slice(0, 4).join(' | '));
+  h.eq(em.length, 0, 'no em dash');
+  for (const k in G.gacha.PATTERNS) {
+    h.ok(ui[k], 'a pattern: ' + k);
+    const ex = G.gacha.PATTERNS[k], out = I18N.tr(ex);
+    h.ok(out !== ex && !/\{\w+\}/.test(out), `the example comes back in Dutch: ${ex} -> ${out}`);
+  }
+  const same = new Set(['Joystick Jr']);
+  for (const id of DATA.GACHA.MINI_IDS) {
+    const m = DATA.GACHA.MINIS[id];
+    h.ok(ui[m.name] && (ui[m.name] !== m.name || same.has(m.name)), `${id}: its name in Dutch (${ui[m.name]})`);
+    h.ok(ui[m.text] && ui[m.text] !== m.text, `${id}: its line in Dutch`);
+  }
+  for (const s of DATA.GACHA.SERIES) h.ok(ui[s.name] && ui[s.name] !== s.name, `${s.id}: ${ui[s.name]}`);
+  // the screens: a capsule with its mini, Open all, the Minis tab, the daily pill; the canvas words go through the table
+  const seen = new Set(), tr0 = I18N.tr;
+  I18N.tr = function (s) { const r = tr0.call(this, s); if (typeof s === 'string') seen.add(s + '=>' + r); return r; };
+  let ok = true;
+  try {
+    G.newRun('knight', 91);
+    G.loot.showCapsule({ cap: { src: 'bonus', tier0: 'l', ups: [], tier: 'l', pity: false, prize: { k: 'gold', n: 3 }, opened: false }, then: { k: 'map' } });
+    G.loot.skipCapsule(); stepFor(G, 1); G.draw(); G.loot.collectCapsule();
+    G.run.caps.push({ src: 'bonus', tier0: 'c', ups: [], tier: 'c', pity: false, prize: { k: 'gold', n: 1 }, opened: false }, { src: 'bonus', tier0: 'u', ups: [], tier: 'u', pity: false, prize: { k: 'gold', n: 1 }, opened: false });
+    G.gacha.openAll('bank'); G.gacha.allSkip(); G.draw(); G.gacha.allCollect();
+    G.gacha.now = new Date(2026, 9, 2, 12, 0);
+    G.gacha.grant('neon_cat'); G.vault.show(); G.S.vault.tab = 'minis'; G.gacha.select('neon_cat');
+    for (let i = 0; i < 4; i++) { G.update(DT * 3); G.draw(); }
+  } catch (e) { ok = false; console.log(e && e.stack); }
+  I18N.tr = tr0;
+  h.ok(ok, 'capsule fever draws in Dutch');
+  const drawn = [...seen];
+  for (const [en, nl] of [['CAPSULE MINIS', "CAPSULEMINI'S"], ['Neon Beasts', 'Neonbeesten']]) h.ok(drawn.includes(en + '=>' + nl), `${en} is drawn as ${nl}`);
+  const texts = [];
+  const walk = (el) => { if (!el || typeof el !== 'object') return; if (typeof el.textContent === 'string' && el.textContent && !(el.children || []).length) texts.push(el.textContent); for (const c of el.children || []) walk(c); };
+  walk(T._nodes.vaultBody);
+  for (const w of ['Neonkat', "Mini's", 'Speelhalmaatjes', 'Gelukbrengers']) h.ok(texts.includes(w), `the Minis tab shows ${w}`);
+  h.eq(I18N.tr('Open all (3)'), 'Alles openen (3)', 'Open all in Dutch');
+  h.eq(I18N.tr('Day 4 streak'), 'Reeks: dag 4', 'the streak in Dutch');
+});
+
+/* ------------------------------------------------- QA17 (round 17): QA pass 6 */
+h.test('qa17: a Duo pill (the sabotage card\'s tag, a name, "is grabbing") is measured in the words it shows', () => {
+  const T = boot();
+  const run = (lang, text) => {
+    T.I18N.set(lang);
+    const log = [];
+    const ctx = new Proxy({}, { get(t, p) {
+      if (p === 'measureText') return (s) => { log.push(['m', String(s)]); return { width: String(s).length * 8 }; };
+      if (p === 'fillText' || p === 'strokeText') return (s) => log.push(['f', String(s)]);
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (p in t) return t[p];
+      return () => {};
+    }, set(t, p, v) { t[p] = v; return true; } });
+    T.RENDER.duo.tag(ctx, 270, 100, text, '#ff8a2b', true, 14);
+    return log;
+  };
+  const nl = run('nl', '\u{1F4A5} SHAKE UP');
+  const m = nl.find((x) => x[0] === 'm'), f = nl.find((x) => x[0] === 'f');
+  h.ok(m && f && m[1] === f[1], `the pill measures what it draws (${m && m[1]} / ${f && f[1]})`);
+  h.ok(f && /ELKAAR/.test(f[1]), 'in Dutch: ' + (f && f[1]));
+  const en = run('en', '\u{1F4A5} SHAKE UP');
+  h.ok(en.find((x) => x[0] === 'm')[1] === '\u{1F4A5} SHAKE UP', 'English as before');
+  T.I18N.set('en');
+});
+
 h.done();

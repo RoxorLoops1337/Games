@@ -513,6 +513,7 @@ const COMBAT = (() => {
     cr8Fight(F, run);   // Mama Mech's turret (CR8 block)
     rosFight(F, run);   // Ms. Bubbles' bubbles, Tiny Claw's size (ROS block)
     legFight(F);   // the legendary relics' merged `leg` numbers (LEG block)
+    techFight(F, run);   // Cabinet Tech: the cabinet's state for the relics, quiet until the game says (TECH block)
     // Turn 1 starts first so onFightStart / start mods land on top of the reset.
     api.startTurn(F);
     if (num(mods.startStr, 0)) api.status(F, F.player, 'str', mods.startStr);
@@ -1760,7 +1761,7 @@ const COMBAT = (() => {
       setStreak(F);
       const defs = g.defs.slice();
       // the grab's state for recipes that read it (Lucky Seven)
-      const fire = D().combosFor ? (D().combosFor(defs, { luck: st(F.player, 'luck'), streak: F.streak, pet: F.petId || null }) || []) : [];   // pet: the pet combos (EVOLVE)
+      const fire = D().combosFor ? (D().combosFor(defs, { luck: st(F.player, 'luck'), streak: F.streak, pet: F.petId || null, perfect: F.tech ? F.tech.perf | 0 : 0 }) || []) : [];   // pet: the pet combos (EVOLVE); perfect: this grab's PERFECT streak (TECH)
       for (const combo of fire) { if (F.phase !== 'player') break; if (combo && combo.id) fireCombo(F, combo, defs); }
       const got = Math.max(n, defs.length);
       if (F.phase === 'player') luckAfterGrab(F, got);
@@ -1770,6 +1771,7 @@ const COMBAT = (() => {
       checkOver(F);
     }
     F.grab = { insts: [], defs: [] };
+    if (F.tech) F.tech.perf = 0;   // (TECH) the PERFECT was this grab's
     return end(F, c);
   };
   api.comboFx = function (F, combo) { const c = begin(F); if (F && combo && F.phase === 'player') runCombo(F, combo); return end(F, c); };
@@ -3558,6 +3560,37 @@ const COMBAT = (() => {
   api.depOf = (F) => (F ? { lure: F.depLure || null, shock: F.depShock || null, tide: F.tide || null } : null);
   api.DEP_KINDS = DEP_KINDS;
   /* ================= /DEP ================= */
+
+  /* ================= TECH (round 17: Cabinet Tech, DESIGN.md "Cabinet Tech and the new crawler (round 17)") =================
+     The cabinet's round 16 systems (events, the Jackpot Lamp, PERFECT grabs) live in the game;
+     here is what the relics see of them. F.tech = {on: the cabinet is live (the game says so at
+     the bell; a quiet cabinet, as in Duo or a headless suite, has no events), gift: Joy Stick's,
+     perf: this grab's PERFECT streak (0 if none; combos read it), events, perfects, fevers}.
+     The game calls techCab on the player's own turn only; every relic answer goes through the
+     `onCab` hook, so the proc labels, Block and damage play like any relic's. */
+  function techFight(F, run) {
+    const cd = run && run.char ? (tbl('CHARACTERS')[run.char] || null) : null;
+    F.tech = { on: false, gift: !!(cd && cd.tech), perf: 0, events: 0, perfects: 0, fevers: 0 };
+  }
+  // The game: the cabinet is live (or quiet) for this fight. -> F.tech
+  api.techOn = function (F, on) { if (F && F.tech) F.tech.on = !!on; return F ? F.tech || null : null; };
+  // The cabinet did something on the player's turn: kind 'event' (id), 'perfect' (v: the streak),
+  // 'fever' (v: fevers this fight), 'double' (id: the second event). -> events
+  api.techCab = function (F, kind, v, id) {
+    const c = begin(F);
+    if (!F || !F.tech || F.phase !== 'player' || F.player.hp <= 0 || !kind) return end(F, c);
+    const T = F.tech, n = Math.max(0, num(v, 0) | 0);
+    if (kind === 'perfect') { T.perf = Math.max(1, n); T.perfects++; }
+    else if (kind === 'event') T.events++;
+    else if (kind === 'fever') T.fevers++;
+    emit(F, { t: 'tech', k: kind, n: kind === 'perfect' ? T.perf : n, id: id || null, idx: -1 });
+    hook(F, 'onCab', kind, kind === 'perfect' ? T.perf : n, id || null);
+    sanitize(F);
+    checkOver(F);
+    return end(F, c);
+  };
+  api.techOf = (F) => (F ? F.tech || null : null);
+  /* ================= /TECH ================= */
 
   // Relic hooks and other content emit through here so the event reaches
   // F.events and every open collector (play/endTurn return values).
