@@ -1656,6 +1656,40 @@ field), `R.bodies.tip` (the harpoon's barb), `R.setConfig({type})`, and the
 auto-steer API above. `PHYS.clawPose(type, {x, y, open, width, cable})` is a
 rig-shaped pose for drawing a claw without a world (the picker chips).
 
+#### Stuck prize fix (round 23)
+
+Bug: in a Magnet Crane run a sword hung motionless at the top right of the
+cabinet, at rail height, nowhere near the bin, and never fell. Cause: the
+hard clamps in `physStep` bounded only a body's CENTRE (`clampBox.xMin/xMax`,
+5 px in from the glass). A welding claw (magnet, hand, harpoon) drives its
+load by velocity, ignoring collisions, so a 48 px sword carried to the chute
+with its middle 20 px off the hub had its far end dragged through the right
+wall. The wall segments push parts that are past their centreline OUTWARD,
+so the buried half was pinned between the wall and the clamp: awake (the
+clamp zeroes the motion, `slT` never counts), no contact below it, gravity
+beaten by wall friction. Fixes, none of which changes a body that is behaving:
+
+- `physStep` also bounds the EXTENT: `wallInside` slides a body back until
+  its real part extents are at most `PH.wallTol` (3 px) past the glass
+  (checked only when `x +- br` reaches the clamp, so resting bodies cost
+  nothing and are never nudged; no trig unless a body is at the wall).
+- `weldStep` clamps a welded load's target x with the same extent, so a
+  sword rides to the chute with its tip inside the glass and drops in.
+- Safety net `PHYS.strandWatch(W, dt, {skip, after = 3, dropY = 30})`,
+  called by `GAME.strandTick` after each fight physics step: a body outside
+  the glass or NaN goes straight back in over the bin; an awake, slow
+  (< 14 px/s) body with nothing under it that has not moved 3 px for 3 s is
+  nudged down and toward the bin, and if that fails another 3 s later it is
+  set back in over the bin (still, above the pile). Sleepers, bodies with
+  support, held/tube bodies and anything `skip(b)` names are left alone;
+  `GAME.strandSkip` exempts the Magnet Bat / zero g hang (`bestHang`), ROS
+  bubbles and glue, and the rival claw's catch. Pure state, so seeded runs
+  stay deterministic.
+- Tests: `clawspire_physics` (wall tunnel, carried sword, a 20 grab seeded
+  stress for all 8 claw types plus a 45 grab magnet one, `strandWatch`),
+  `clawspire_game` (the net frees a pinned prize in a fight and leaves the
+  magnetic lid's hang alone).
+
 ### The picker, the run, the save
 
 Character select has a claw row (`clawPickerRow`, one line in `showChars`):
