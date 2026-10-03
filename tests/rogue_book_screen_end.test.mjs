@@ -467,6 +467,103 @@ await t.test('victory: Skip jumps to the showcase; Esc too; the share card draws
   g._key('Enter'); await settle(g); t.eq(UI.currentName, 'title', 'Enter on the showcase continues to the title');
 });
 
+// ================================================================================================ alignment (the overlay lines up with the art and with itself)
+// Headless has no layout, so these read end.css as text and check the placing rules against the numbers the screens use. They guard the sources of truth: a
+// variable the page and its seal share, one height the Continue button and the panels above it are both sized from, one column width for both showcase columns.
+const cssBlock = (sel) => { const m = new RegExp('(?:^|\\n|\\})\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}').exec(CSS.replace(/\/\*[\s\S]*?\*\//g, '')); return m ? m[1] : ''; };
+const cssNum = (block, prop) => { const m = new RegExp('(?:^|[;\\s])' + prop + ':\\s*(-?[\\d.]+)px').exec(block); return m ? +m[1] : NaN; };
+await t.test('finding 33: the chapter clear panels end 12 px above Continue at any hit size, and keep their 244 px', () => {
+  const root = cssBlock('.s-chapterClear'), cols = cssBlock('.cc-cols'), foot = cssBlock('.cc-foot');
+  t.ok(/--foot-h:\s*max\(56px,\s*var\(--hit\),\s*calc\(50\.2px\s*\*\s*var\(--ts\)\s*\+\s*4px\)\)/.test(root), 'the Continue row is max(56px, --hit, its own size at the text scale) tall (a phone makes it 81 to 91 px, Larger text 69.2 px)');
+  t.ok(/bottom:\s*calc\(var\(--foot-b\)\s*\+\s*var\(--foot-h\)\s*\+\s*12px\)/.test(cols), 'the panels end --foot-b + --foot-h + 12 px above the stage floor');
+  t.ok(/bottom:\s*var\(--foot-b\)/.test(foot), 'and the Continue row sits --foot-b above it: one variable for both');
+  const fb = cssNum(root, '--foot-b'), top = cssNum(root, '--cc-top');
+  t.ok(/--cc-lift:\s*calc\(var\(--foot-h\)\s*-\s*56px\)/.test(root) && /top:\s*calc\(var\(--cc-top\)\s*-\s*var\(--cc-lift\)\)/.test(cols), 'the extra height of a phone button is taken from the panels\' top, not from their content');
+  [44, 56, 81.2, 91].forEach((hit) => {
+    const F = Math.max(56, hit), panelsBottom = 720 - (fb + F + 12), buttonTop = 720 - fb - F, panelsTop = top - (F - 56);
+    t.ok(buttonTop - panelsBottom >= 12 - 1e-9, 'hit ' + hit + ': the Continue button starts ' + (buttonTop - panelsBottom) + ' px below the panels (it overlapped them by 14 to 21 px)');
+    t.eq(Math.round((panelsBottom - panelsTop) * 100) / 100, 244, 'hit ' + hit + ': the panels keep their 244 px');
+  });
+  // the button's own height: a .btn-lg is 21 px x --ts at line-height 1.15, padding .62em top and bottom and 2 px borders (50.2 x --ts + 4: 54.2 at 1, 61.7 at 1.15, 69.2 at 1.3);
+  // the panels were sized for 56, so at Larger text the button rose 13 px into them (browser: 2.4 px of overlap at 1.3 with the button's breathing scale)
+  const BASE_CSS = fs.readFileSync(path.join(DIR, 'css', 'base.css'), 'utf8').replace(/\n/g, ' ');
+  t.ok(/\.btn-lg \{[^}]*padding:\s*\.62em[^}]*font-size:\s*calc\(21px/.test(BASE_CSS) && /font:\s*800 calc\(17px \* var\(--ts\)\) \/ 1\.15/.test(BASE_CSS), 'the 50.2 x --ts + 4 model matches base.css (.btn-lg: .62em padding, 21 px font, line-height 1.15)');
+  const rowM = /--foot-h:\s*max\(56px,\s*var\(--hit\),\s*calc\(([\d.]+)px\s*\*\s*var\(--ts\)\s*\+\s*([\d.]+)px\)\)/.exec(root), rowK = rowM ? +rowM[1] : 0, rowC = rowM ? +rowM[2] : 0;      // the sheet's own numbers
+  [1, 1.15, 1.3].forEach((ts) => [44, 81.2, 91].forEach((hit) => {
+    const own = 50.2 * ts + 4, F = Math.max(56, hit, rowK * ts + rowC), panelsBottom = 720 - (fb + F + 12), panelsTop = (ts > 1.1 ? 338 : top) - (F - 56);
+    t.ok(720 - fb - F - panelsBottom >= 12 - 1e-6, 'text ' + ts + ', hit ' + hit + ': the Continue row (' + F.toFixed(1) + ' px, its button ' + own.toFixed(1) + ') starts ' + (720 - fb - F - panelsBottom).toFixed(1) + ' px below the panels (the 56 px row let a 69.2 px button overlap them by 1.2 px at 1.3)');
+    t.ok(F >= own - 0.1, 'text ' + ts + ', hit ' + hit + ': the row is never shorter than the button (' + F.toFixed(1) + ' against ' + own.toFixed(1) + ')');
+    t.eq(Math.round((panelsBottom - panelsTop) * 100) / 100, ts > 1.1 ? 302 : 244, 'text ' + ts + ', hit ' + hit + ': the panels keep their ' + (ts > 1.1 ? 302 : 244) + ' px (the lift takes the extra from the top)');
+  }));
+  const big = cssBlock('.s-chapterClear.ts-big'), topBig = cssNum(big, '--cc-top');
+  t.ok(topBig === 338 && !/--cc-lift/.test(big), 'Larger text has its own taller panels (top 338) and keeps the same lift rule');
+  [44, 81.2, 91].forEach((hit) => {
+    const F = Math.max(56, hit), h = (720 - (fb + F + 12)) - (topBig - (F - 56));
+    t.eq(Math.round(h * 100) / 100, 302, 'hit ' + hit + ': at Larger text the panels keep their 302 px (six tiles and the heal chips need it: at 270 px the last tile was cut off on a phone)');
+  });
+});
+await t.test('finding 34: the stat tile labels fit their tiles', () => {
+  const tile = cssBlock('.cc-stats .en-tile'), lab = cssBlock('.cc-stats .en-tile-lab');
+  t.ok(/letter-spacing:\s*\.06em/.test(lab), 'the label letter-spacing is .06em (DAMAGE ran 3 px past its tile at .1em)');
+  t.ok(cssNum(tile, 'column-gap') <= 7 && /padding:\s*6px 8px/.test(tile), 'with a 7 px icon gap and 8 px side padding');
+});
+await t.test('finding 32: the game over recap is a two column grid, so the two buttons share both edges and the fan gives way', async () => {
+  const body = cssBlock('.go-recap > .p-body'), btn = cssBlock('.go-deckbtn, .go-relbtn'), fan = cssBlock('.go-fan');
+  t.ok(/display:\s*grid/.test(body) && /grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto/.test(body), 'the body is a grid: what was kept, then the narrow button column');
+  t.ok(/display:\s*contents/.test(cssBlock('.go-recap-row')), 'the two rows share its columns, so the column is as wide as the wider button');
+  t.ok(/justify-self:\s*stretch/.test(btn), 'and both buttons stretch to it (the same left and right edge)');
+  t.ok(/min-width:\s*0/.test(fan), 'the fan may shrink instead of pushing a button out of the panel');
+  t.ok(/grid-column:\s*1\s*\/\s*-1/.test(cssBlock('.go-recap > .p-body > .en-h')), 'the title spans both columns');
+  // the fan: 6 mini cards (72 px wide) overlapping by --ov, in the room the column leaves it (panel body 386 less 32 padding, a 10 px gap and the button column)
+  const ov = cssNum(fan, '--ov'), room = (button) => 386 - 32 - 10 - button, width = (o) => 72 + 5 * (72 - o) + 10, swing = 12;
+  t.ok(width(ov) + swing <= room(117.6), 'at the normal size the fan (' + width(ov) + ' + ' + swing + ' px of turned cards) fits beside a 117.6 px button');
+  const ovBig = cssNum(cssBlock('.ts-big .go-fan'), '--ov'), btnBig = 128.5;
+  t.ok(width(ovBig) + swing <= room(btnBig), 'at Larger text (a 14 px x 1.12 label, ' + btnBig + ' px) it still fits with an overlap of ' + ovBig);
+  t.ok(/font-size:\s*calc\(14px \* min\(var\(--ts\), 1\.12\)\)/.test(btn), 'because the two buttons stop growing past text size 1.12');
+  const g1 = fresh({ seed: 9 }); await settle(g1);
+  await g1.UI.go('gameOver', null, { force: true, transition: 'none' }); await settle(g1);
+  const row = $(g1, '.go-recap .p-body') || $(g1, '.go-recap');
+  t.ok(!!$(g1, '.go-deckbtn', row) && !!$(g1, '.go-relbtn', row), 'both recap buttons are in the one panel');
+  t.eq(errs(g1), 0, 'no console errors');
+});
+await t.test('findings 31 and 56: the hanko seal is anchored by its centre on the page corner and stays on the stage', async () => {
+  const seal = cssBlock('.st-seal');
+  t.ok(/left:\s*calc\(var\(--pg-x\)\s*-\s*20px\)/.test(seal) && /translate:\s*-50%\s*0/.test(seal), 'the seal\'s centre (not its left edge) is 20 px left of the page edge, whatever its word');
+  t.ok(cssNum(seal, 'top') >= 27, 'its top is 36 px: the tallest stamps (ONCE, BLANK, at 12 degrees and 1.7x) need 27 px or more to stay on the stage');
+  t.eq(cssNum(cssBlock('.s-story'), '--pg-x'), 540, 'the story page starts at x 540'); t.ok(/left:\s*var\(--pg-x\)/.test(cssBlock('.st-page')), 'and the page reads the same variable');
+  t.eq(cssNum(cssBlock('.s-victory'), '--pg-x'), 250, 'the epilogue page starts at x 250'); t.ok(!/left:/.test(cssBlock('.vc-page')), 'its rule has no left of its own');
+  t.ok(!cssBlock('.vc-seal'), 'and the END seal has no rule of its own that could put it off the stage again (it was top 0, clipped by 23 px)');
+  for (const id of ['intro', 'ch1_intro', 'victory']) {
+    const root = await openStory(id);
+    t.ok(!!$('.st-seal', root), id + ': has a seal');
+  }
+});
+await t.test('finding 35: the showcase columns are equal, the page head is centred, and Skip and Continue match on the curtain call', async () => {
+  const vc = cssBlock('.s-victory'), W = cssNum(vc, '--vc-col'), l = cssBlock('.vc-left'), r = cssBlock('.vc-right');
+  t.ok(/width:\s*var\(--vc-col\)/.test(l) && /width:\s*var\(--vc-col\)/.test(r), 'both columns use --vc-col');
+  const ml = cssNum(l, 'left'), mr = cssNum(r, 'right');
+  const leftEnd = ml + W, rightStart = 1280 - mr - W;
+  t.eq((leftEnd + rightStart) / 2, 640, 'the gap between the columns is centred on the stage axis (it was 16 px right of it)'); t.eq(ml, mr, 'with equal side margins');
+  const pad = /\.st-page > \.p-body \{[^}]*padding:\s*(\d+)px (\d+)px (\d+)px (\d+)px/.exec(CSS), head = /\.st-head \{[^}]*margin:\s*0 (-?\d+)px 0 (-?\d+)px/.exec(CSS);
+  t.ok(!!pad && !!head, 'the page padding and the head margin are both there');
+  if (pad && head) { t.eq(+head[2], -(+pad[4] - +pad[2]) / 2, 'the head shifts by half the difference of the page padding (50 left, 42 right)'); t.eq(+head[1], -(+head[2]), 'and keeps its width'); }
+  t.ok(/height:\s*max\(56px,\s*var\(--hit\)\)/.test(cssBlock('.vc-cast-go, .vc-cast-skip')), 'Skip and Continue on the curtain call are the same height (and so have the same centre)');
+  t.eq(cssNum(cssBlock('.vc-cast-go'), 'top'), cssNum(cssBlock('.vc-cast-skip'), 'top'), 'at the same top'); t.eq(cssNum(cssBlock('.vc-cast-go'), 'right'), cssNum(cssBlock('.vc-cast-skip'), 'left'), 'and the same margin from their sides');
+  t.ok(/margin-left:\s*auto/.test(cssBlock('.vc-go')), 'Continue stays on the right of the showcase column when the Inkstones chip beside it is empty');
+  const R = WIN.R;
+  await UI.go('victory', { summary: RUN.summary(R), R }, { force: true, transition: 'none' }); await settle(g);
+  await click(g, btnByText(g, /^Skip/));
+  const card = $('.s-victory .vc-card');
+  t.ok(!card.style.width && !card.style.height, 'the share card has no inline size: CSS fits it to its column (width 100%)');
+  t.ok(/\.vc-card \{[^}]*width:\s*100%[^}]*height:\s*auto/.test(CSS), 'width 100% and height auto');
+  t.eq(card.width, Math.round(600 * (UI.px || 1)), 'while the saved image keeps its full 600 px backing store');
+  g._key('Enter'); await settle(g);
+});
+await t.test('finding 38 (tutorial.js): an anchor that fills most of the stage is not an anchor', () => {
+  t.ok(/const FULL_STAGE = 0\.6;/.test(TUT) && /\* W \* H\) continue;/.test(TUT), 'findAnchor skips an anchor over 60 percent of the stage');
+  t.ok(/hand: \{[^}]*anchor: \['hand'\][^}]*at: \{ x: 611, y: 620 \}/.test(TUT), 'the hand hint falls back to a point above the hand fan axis (x 611, the middle of the strip between the docks)');
+});
+
 // ================================================================================================ the score terms
 await t.test('scoreRows: every term of RUN.score for many simulated runs, with a deck and without', () => {
   const P = UI.screens.gameOver._t;

@@ -37,7 +37,7 @@
 //   SCENE.gateMs(evt, prev, next?, lookahead?) -> ms     the pure gate table (DESIGN 5.9 item 5), used by play() and by the suite
 //   SCENE.sfxForEvent(evt) -> [[id, opts?]]              the pure SFX map (DESIGN 5.9 item 7), used by play() and by the suite
 //   SCENE.actorInfo(kind, id) -> snapshot | null         pose, hp, block, st, down, row, lane, phase, x, y, offsets (for tests and tooling)
-//   SCENE.stats() -> {mounted, at, particles, fx, numbers, timers, gates, banners, bubbles, shake, freeze, speed, aim, ...}   SCENE.signature() -> int (a hash of the visible state)
+//   SCENE.stats() -> {mounted, at, particles, fx, numbers, timers, gates, banners, bubbles, shake, freeze, speed, fit, aim, ...}   SCENE.signature() -> int (a hash of the visible state)
 //   SCENE.shout(unitId, text)           jagged enemy speech bubble (raised for enemy_act.say and enemy_phase.say)
 //   SCENE.demo(name?, opts) / SCENE.stage(opts)   scene-only debugging aids for tools/rogue_book/shot.mjs --js. `SCENE.stage({boss, chapter, enemies, heroes, seed,
 //        instant})` mounts a synthetic stage on a private screen (so GAME.debug.tick drives it); `SCENE.demo('kill')` plays one named beat on it (staging first when
@@ -47,6 +47,9 @@
 // LAYOUT (stage px)    ground y 520; front hero (330, 520, s 1), back hero (170, 508, s 0.94); enemy lanes x = [560, 705, 850, 995, 1120], lane 4 nearest the right edge.
 //   Lanes are FIXED for the whole fight (a unit never changes lane, a dead unit leaves its lane empty until a summon takes it). Draw order: by ground y, then x,
 //   with an attacker or a hopping hero lifted above the rest. `anchor` is the actor bounds rect scaled from ART.*.bounds, `head` and `feet` inside it.
+//   STAGE FIT: when an enemy's art reaches past the right screen edge from its lane (ART.enemy.bounds `right`: an xl boss's tails and wings, the tengu's wing, the
+//   boss and elite ground ring), the whole enemy line slides left by that overhang plus 10 px at mount (never more than 240). Gaps between lanes are unchanged, so
+//   screen_combat's bar widths and chip caps (which only use lane DISTANCES) stay right, and SCENE.anchor already reports the shifted positions. stats().fit is the shift.
 //
 // GATES (ms at speed 1, DESIGN 5.9 item 5): hit 70 (non-final hit of a group on the same dst), 120 (final), 200 (killed); 0 when the PREVIOUS event has the same group
 //   and another dst (AoE). With the optional look-ahead the rule is exact instead: 0 when the NEXT event has the same group and another dst. play 0 block 0 heal 60 status 0
@@ -194,7 +197,7 @@ const SCENE = (() => {
       mounted: false, flushing: false, seed: 1, chapter: 1, boss: false, sceneId: 'ch1', C: null,
       at: 0, lt: 0, freeze: 0, evi: 0, prev: null, phase: 'setup', rng: U.rng(1), arng: U.rng(2),
       actors: [], order: [], hmap: {}, emap: {}, timers: [], tseq: 0, bcache: {}, enemySerial: {}, acting: null,
-      pcur: 0, fx: [], nums: [], banners: [], barks: {}, shouts: [],
+      fit: 0, pcur: 0, fx: [], nums: [], banners: [], barks: {}, shouts: [],
       shk: { mag: 0, t0: 0, dur: 1 }, zoom: { k: 0, x: 640, y: 360, t0: 0, dur: 1 }, dim: { a: 0, t0: 0, dur: 1, x: 640, y: 420 }, flashes: [],
       targetable: {}, hover: null, aim: null, ptr: { x: 640, y: 360 }, par: 0, inkFadeT0: -1, win: false, lose: false,
       drawErrors: 0, autoBanners: false, bossShown: false,
@@ -292,17 +295,35 @@ const SCENE = (() => {
     try { b = kind === 'hero' ? A.hero.bounds(id) : A.enemy.bounds(id); } catch (e) { warnOnce('bounds:' + id, e); }
     const w = fin(b && b.w, 120), h = fin(b && b.h, kind === 'hero' ? 250 : 170);
     const pt = (p, dx, dy) => ({ x: fin(p && p.x, dx), y: fin(p && p.y, dy) });
-    return { w, h, head: pt(b && b.head, 0, -h * 0.86), feet: pt(b && b.feet, 0, 0), body: pt(b && b.body, b && b.feet ? b.feet.x : 0, -h * 0.45), hand: pt(b && b.hand, 30, -h * 0.4) };
+    return { w, h, head: pt(b && b.head, 0, -h * 0.86), feet: pt(b && b.feet, 0, 0), body: pt(b && b.body, b && b.feet ? b.feet.x : 0, -h * 0.45), hand: pt(b && b.hand, 30, -h * 0.4), right: max(0, fin(b && b.right, 0)) };
   }
   function bnd(a) {
     const key = a.kind + ':' + a.def;
     return S.bcache[key] || (S.bcache[key] = normBounds(a.kind, a.def));
   }
 
-  // where the actor stands at rest (its mark or lane)
+  // STAGE FIT. An enemy whose picture reaches past the right screen edge from its lane (an xl boss's tails and wings, the tengu's wing, the boss ring) is not
+  // cropped: the WHOLE enemy line slides left by the worst overhang (`bounds.right` is the visible reach right of the feet, art plus ring, see ART.enemy.bounds)
+  // plus EDGE_PAD. Every enemy moves by the same amount, so the gaps between lanes stay exactly what screen_combat's bar and chip caps assume, and the
+  // shift is fixed at mount (a dead unit never makes the line jump). The nominal lanes in SCENE.LAYOUT stay the DESIGN 5.9 numbers. SCENE.stats().fit reports it.
+  const EDGE_PAD = 10, FIT_MAX = 240;
+  function lineFit() {
+    let need = 0;
+    for (let i = 0; i < S.actors.length; i++) {
+      const a = S.actors[i];
+      if (a.kind !== 'enemy') continue;
+      const right = bnd(a).right;
+      if (!(right > 0)) continue;
+      const lx = LAYOUT.lanes[clamp(a.lane, 0, LAYOUT.lanes.length - 1)];
+      need = max(need, lx + right * a.scale + EDGE_PAD - LAYOUT.W);
+    }
+    return min(need, FIT_MAX);
+  }
+
+  // where the actor stands at rest (its mark or lane, less the stage fit)
   function restPos(a, o) {
     if (a.kind === 'hero') { const r = a.row === 'front' ? LAYOUT.front : LAYOUT.back; o.x = r.x; o.y = r.y; o.s = r.s; }
-    else { const lx = LAYOUT.lanes[clamp(a.lane, 0, LAYOUT.lanes.length - 1)]; o.x = lx; o.y = LAYOUT.laneY; o.s = a.scale; }
+    else { const lx = LAYOUT.lanes[clamp(a.lane, 0, LAYOUT.lanes.length - 1)]; o.x = lx - S.fit; o.y = LAYOUT.laneY; o.s = a.scale; }
     o.lift = 0;
     return o;
   }
@@ -1545,6 +1566,7 @@ const SCENE = (() => {
     heroes.forEach((u, i) => addActor(makeHero(u, i)));
     const enemies = C && C.enemies ? C.enemies.filter((u) => !u.down && !u.fled) : normalizeEnemies(o.enemies || []);
     enemies.forEach((u, i) => addActor(makeEnemy(u, u.lane !== undefined ? u.lane : 5 - enemies.length + i)));
+    S.fit = lineFit();
     if (!o.instant && !headless()) {
       const rm = rmotion();
       S.actors.forEach((a) => {
@@ -1668,7 +1690,7 @@ const SCENE = (() => {
     return {
       mounted: S.mounted, at: S.at, lt: S.lt, particles, fx, numbers: nums, timers: S.timers.length, gates: S.timers.filter((t) => t.gate).length,
       banners: S.banners.map((b) => ({ style: b.style, text: b.text, sub: b.sub })), bubbles: Object.keys(S.barks), shouts: S.shouts.map((s) => s.id),
-      shake: shakeMag(), freeze: S.freeze, speed: speedK, zoom: zoomNow(), dim: dimNow(), flashes: S.flashes.length, events: S.evi, phase: S.phase, sceneId: S.sceneId, boss: S.boss, chapter: S.chapter,
+      shake: shakeMag(), freeze: S.freeze, speed: speedK, zoom: zoomNow(), dim: dimNow(), flashes: S.flashes.length, events: S.evi, phase: S.phase, sceneId: S.sceneId, boss: S.boss, chapter: S.chapter, fit: S.fit,
       aim: S.aim ? { on: S.aim.on, gold: !!S.aim.target, target: S.aim.target } : null, targetable: Object.keys(S.targetable), hover: S.hover ? { kind: S.hover.kind, id: S.hover.id } : null,
       actors: S.actors.filter((a) => !a.gone).length, drawErrors: S.drawErrors, win: S.win, lose: S.lose,
     };

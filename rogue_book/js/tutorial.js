@@ -54,7 +54,7 @@
     // ---- combat
     energy: { title: 'Energy', anchor: ['energy'], at: { x: 70, y: 650 }, side: 'top', scope: ['combat'], ttl: 14000,
       text: 'You get 3 Energy each turn, and a card\'s cost is the number in its ink drop. Whatever you do not spend is gone when the turn ends.' },
-    hand: { title: 'Play a card', after: 'energy', anchor: ['hand'], at: { x: 640, y: 600 }, side: 'top', scope: ['combat'], completeOn: ['combat:play'], ttl: 24000,
+    hand: { title: 'Play a card', after: 'energy', anchor: ['hand'], at: { x: 611, y: 620 }, side: 'top', scope: ['combat'], completeOn: ['combat:play'], ttl: 24000,
       text: 'Tap a card to lift it, then tap it again, or drag it upward, to play it. Attacks also ask you to tap an enemy.' },
     intent: { title: 'Read the intents', anchor: ['intent'], at: { x: 900, y: 200 }, side: 'bottom', scope: ['combat'], ttl: 18000,
       text: 'The bubble above each enemy shows its next move: the icon is what it does and the number is how hard. Plan around it.' },
@@ -149,13 +149,19 @@
     const a = UI.toStage(r.left, r.top), b = UI.toStage(r.right, r.bottom);
     return { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
   }
+  // An anchor that covers most of the stage is a container, not a target: a ring round it frames the whole screen and a tail aimed at its centre
+  // points at nothing (the combat hand was once such a box, finding 38). Such an anchor is skipped, so the hint's `at` point (or the next anchor) is used.
+  const FULL_STAGE = 0.6;
   function findAnchor(def) {
     const list = def.anchor || [];
     for (let i = 0; i < list.length; i++) {
       const el = safe(() => UI.anchorEl(list[i]), null);
       if (!el) continue;
       const r = safe(() => el.getBoundingClientRect(), null);
-      if (r && (r.width > 0 || r.height > 0)) return el;
+      if (!r || !(r.width > 0 || r.height > 0)) continue;
+      const q = rectOf(el);
+      if ((q.x1 - q.x0) * (q.y1 - q.y0) > FULL_STAGE * W * H) continue;
+      return el;
     }
     return null;
   }

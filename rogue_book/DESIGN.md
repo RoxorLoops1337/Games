@@ -1074,6 +1074,8 @@ URL params handled by `GAME.boot` (they work without `?debug=1`): `?goto=combat&
 
 ### 5.11 Screens
 
+**Geometry rule (alignment).** Wherever painted art and the DOM laid over it must agree (the gem cache plinths, the reward stage axis, the shop posts and planks, the hero select row, the combat docks), ONE constant table feeds both the painter and the CSS (the page writes it into custom properties), so the overlay cannot drift off the scenery. The tables are documented in the headers of `js/screen_node.js` (CACHE, RW, SHOP), `js/screen_menu.js` (HC, PARTY_CX, SLOT_DX, STAGE_BOX) and `js/screen_combat.js`. A change to a painted position is a change to its table, and the screen suites assert that the DOM centres equal the painted ones.
+
 Each screen file registers `UI.screens.<name>` and any overlays in `UI.overlays`. Beyond this document the map screen exposes `UI.screens.map.mapDebug {state(), cam(), screenOf(q, r), hexAt(x, y), hud(measure?), clamp(x, y, z)}`,
 a window onto the live visit (camera, where a hex is on the stage, which hex is under a stage point, the HUD footprint `{rects, free, box, slack, fit}` of 4.8 and where the clamp lets the camera be) for suites and the screenshot and autoplay tools. It only reads, with one exception: `hud(true)` measures the HUD again first, and when the HUD moved that re-fits, which can move the camera exactly as the next frame would have; the menu screens expose
 `state()` (title, heroSelect, library, settings, howto) and return null once left. Screens build DOM inside `root` on `enter`. They never route on their own: they call `GAME.nodeDone()` or `UI.go(...)` for menu navigation.

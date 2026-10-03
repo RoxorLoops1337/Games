@@ -20,10 +20,11 @@
 .s-title .mn-title { position: absolute; inset: 0; }
 .s-title .mn-tag {
   position: absolute; left: 0; right: 0; top: 256px; margin: 0; text-align: center; pointer-events: none;
-  font: italic 600 calc(21px * var(--ts)) var(--font-display); letter-spacing: .34em; color: var(--gold2); text-shadow: 0 2px 0 var(--ink), 0 0 14px rgba(20, 15, 46, .95), 0 0 26px rgba(122, 107, 255, .6);
+  font: italic 600 calc(21px * var(--ts)) var(--font-display); letter-spacing: .34em; text-indent: .34em; color: var(--gold2); text-shadow: 0 2px 0 var(--ink), 0 0 14px rgba(20, 15, 46, .95), 0 0 26px rgba(122, 107, 255, .6);   /* text-indent = the trailing letter-spacing: the visible words, not the box, sit on the logo and book axis */
 }
-.s-title .mn-menu { position: absolute; left: 880px; top: calc(272px - (var(--ts) - 1) * 85px); width: 344px; display: flex; flex-direction: column; gap: 8px; isolation: isolate; pointer-events: none; }
-.s-title .mn-menu::before { content: ""; position: absolute; z-index: -1; inset: -34px -64px -30px -54px; border-radius: 40%; background: radial-gradient(closest-side, rgba(7, 5, 26, .78), rgba(7, 5, 26, .38) 62%, transparent); pointer-events: none; }
+/* the painted book (art_scenes.js titleBook) spans x 292..988 (leather cover with its gold corner fittings; the cream pages end at x 958) and the pointer parallax moves it up to 7 px (layer factor 0.1 x the 70 px camera offset): the column starts at x 998, clear of the cover and its ink line (990 + 7), so no plaque covers any of the book; its right edge stays 14 px from the stage edge like the full-screen button, which makes it 268 px wide */
+.s-title .mn-menu { position: absolute; left: 998px; top: calc(272px - (var(--ts) - 1) * 85px); width: 268px; display: flex; flex-direction: column; gap: 8px; isolation: isolate; pointer-events: none; }
+.s-title .mn-menu::before { content: ""; position: absolute; z-index: -1; inset: -34px -40px -30px -8px; border-radius: 40%; background: radial-gradient(closest-side, rgba(7, 5, 26, .78), rgba(7, 5, 26, .38) 62%, transparent); pointer-events: none; }
 .mn-plaque {
   position: relative; width: 100%; justify-content: space-between; gap: 10px; text-align: left; letter-spacing: .09em; min-height: max(62px, var(--hit));
   padding: .32em 1em .32em 2.1em; border-radius: 5px 15px 5px 15px / 15px 5px 15px 5px; pointer-events: auto;
@@ -35,6 +36,8 @@
 }
 .mn-plaque:hover::before, .mn-plaque:focus-visible::before { transform: rotate(45deg) scale(1.4); box-shadow: 0 0 0 1.5px var(--ink), 0 0 14px rgba(255, 233, 168, .95); }
 .mn-slims { display: flex; flex-direction: column; gap: 8px; }
+.s-title.ts-big .mn-p-meds, .compact .s-title .mn-p-meds { display: none; }   /* Larger text and phones: the hero faces are decoration (15 screen px on a phone) (the names are in the text), and without them the run summary and the Daily seed keep two full lines in the narrow column instead of being clipped */
+.s-title .mn-menu [data-act=continue] .mn-p-sub { -webkit-line-clamp: 3; text-wrap: balance; }   /* the saved tale is written out in full ("Chapter 1, Ink 10, Hanae and Kuro"), never clipped by the narrow column */
 .mn-p-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .mn-p-main { font: 800 calc(22px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .1em; }
 .mn-slim .mn-p-main { font-size: calc(17px * var(--ts)); }
@@ -42,7 +45,7 @@
 .btn-primary .mn-p-sub { color: var(--gold2); }
 .mn-p-side { display: flex; align-items: center; gap: 5px; flex: none; }
 .mn-p-meds { display: inline-flex; }
-.mn-p-meds .ico { border-radius: 50%; box-shadow: 0 0 0 2px var(--ink), 0 0 0 3.5px var(--gold); margin-left: 7px; flex: none; }
+.mn-p-meds .ico { border-radius: 50%; box-shadow: 0 0 0 2px var(--ink), 0 0 0 3.5px var(--gold); margin-left: 5px; flex: none; }
 .mn-plaque.rise { animation: rise .45s var(--ease-out) both; animation-delay: calc(var(--i, 0) * 70ms); }
 .mn-plaque.breathe.rise { animation: rise .45s var(--ease-out) both, breathe 2.4s ease-in-out infinite; animation-delay: calc(var(--i, 0) * 70ms), 1s; }
 .s-title .mn-foot { position: absolute; left: 22px; right: 22px; bottom: 11px; display: flex; justify-content: space-between; gap: 20px; pointer-events: none; font: 600 calc(12px * var(--ts)) var(--font-ui); letter-spacing: .08em; color: rgba(243, 230, 200, .72); text-shadow: 0 1px 2px #000, 0 0 8px rgba(7, 5, 26, .9); }
@@ -65,29 +68,36 @@
 }
 .mn-gate.out { opacity: 0; pointer-events: none; }
 .mn-gate-text { font: italic 800 calc(31px * var(--ts)) var(--font-display); letter-spacing: .26em; text-indent: .26em; text-shadow: 0 3px 0 var(--ink), 0 0 22px rgba(255, 233, 168, .8); animation: mnBlink 2.2s ease-in-out infinite; }
-.mn-gate-sub { font: 700 calc(12px * var(--ts)) var(--font-ui); letter-spacing: .3em; text-transform: uppercase; color: var(--gold); opacity: .8; }
+.mn-gate-sub { font: 700 calc(12px * var(--ts)) var(--font-ui); letter-spacing: .3em; text-indent: .3em; text-transform: uppercase; color: var(--gold); opacity: .8; }
 body.reduce-motion .mn-gate-text { animation: none; }
 body.reduce-motion .mn-plaque.breathe.rise { animation: rise .15s both; }
 
 /* phone landscape (#stage.compact): the three small buttons share one row so the column still fits, and hit targets grow with --hit */
 .compact .s-title .mn-slims { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.compact .s-title .mn-slims .mn-plaque { min-width: 0; padding: .2em .4em .2em 1.5em; justify-content: center; }
-.compact .s-title .mn-slims .mn-plaque::before { left: 7px; width: 8px; height: 8px; margin-top: -4px; }
+.compact .s-title .mn-slims .mn-plaque { min-width: 0; padding: .2em .3em; justify-content: center; }
+.compact .s-title .mn-slims .mn-plaque::before { display: none; }   /* the column right of the painted book is 268 px: each of the three buttons is 84 px, and a whole word ("Settings") matters more than the gold diamond */
 .compact .s-title .mn-slims .mn-p-main { font-size: max(calc(14px * var(--ts)), var(--fs9)); letter-spacing: 0; white-space: normal; text-align: center; overflow-wrap: anywhere; }
 /* the stage is drawn at about half size on a phone: sublines, credits and the gate hint keep 8 screen px, labels 9 (--fs8, --fs9 in base.css) */
 .compact .mn-p-sub, .compact .s-title .mn-foot, .compact .mn-gate-sub { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
 .compact .mn-p-main { font-size: max(calc(22px * var(--ts)), var(--fs9)); }
 
 /* ------------------------------------------------------------------------------------------------ hero select
-   Stage coordinates mirror screen_menu.js (HC, SLOT, STAGE_BOX): cards at x 30 + i * 180, y 84, 168 x 262; party stage 30,356 400 x 350; launch panel 442,356 296 x 350;
-   detail sheet 762,76 496 x 630. The portraits and chibis are painted on #view under these boxes. */
+   Stage coordinates mirror screen_menu.js (HC, SLOT, STAGE_BOX): cards at x 30 + i * 180, y 84 (92 on a phone), 168 x 262; party stage 30,356 400 x 350; launch panel 442,356 296 x 350;
+   detail sheet 770,84 480 x 622 (top follows the cards). The portraits and chibis are painted on #view under these boxes. */
 .s-heroSelect .mn-hs { position: absolute; inset: 0; }
 .s-heroSelect .mn-cards { display: contents; }
-.mn-hs-top, .mn-lib-top { position: absolute; left: 20px; right: 20px; top: 10px; height: 60px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
-.mn-hs-top .mn-banner, .mn-lib-top .mn-banner { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); pointer-events: none; }
-.mn-hs-top .mn-banner span, .mn-lib-top .mn-banner span { font-size: calc(23px * var(--ts)); padding: .3em 2.4em .36em; }
+/* ONE header for heroSelect, library, settings and howto: Back, the ribbon and the Inkstone pill share one centre line (--bar-cy), so the bar does not jump when you navigate.
+   On a phone the bar is exactly one --hit tall and flush with the top edge: Back (a --hit square) fills it, so nothing has to be pinned and the ribbon and pill centre on Back. */
+.s-heroSelect, .s-library, .s-settings, .s-howto { --bar-top: 10px; --bar-h: 60px; --bar-cy: calc(var(--bar-top) + var(--bar-h) / 2); }
+.compact .s-heroSelect, .compact .s-library, .compact .s-settings, .compact .s-howto { --bar-top: 0px; --bar-h: var(--hit); }
+.mn-hs-top, .mn-lib-top, .mn-set-top { position: absolute; left: 20px; right: 20px; top: var(--bar-top); height: var(--bar-h); display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+.mn-hs-top .mn-banner, .mn-lib-top .mn-banner { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.mn-ht-banner { position: absolute; left: 50%; top: var(--bar-cy); transform: translate(-50%, -50%); pointer-events: none; }
+/* the ribbon grows with the text size only up to 1.12x: at Larger it would otherwise reach the library tabs and the lifted hero cards below the bar */
+.mn-hs-top .mn-banner span, .mn-lib-top .mn-banner span, .mn-ht-banner span { font-size: calc(23px * min(var(--ts), 1.12)); padding: .3em 2.4em .36em; }
+.compact .mn-hs-top .mn-banner span, .compact .mn-lib-top .mn-banner span, .compact .mn-ht-banner span { padding-top: .12em; padding-bottom: .16em; }
 .mn-back { pointer-events: auto; }
-.mn-stones { pointer-events: auto; margin-right: 8px; }
+.mn-stones { pointer-events: auto; }
 
 .mn-hcard {
   position: absolute; z-index: 2; width: 168px; height: 262px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; color: var(--paper);
@@ -107,17 +117,17 @@ body.reduce-motion .mn-plaque.breathe.rise { animation: rise .15s both; }
 .mn-hc-name { grid-column: 1; font: 800 calc(19px * var(--ts)) / 1.1 var(--font-display); letter-spacing: .05em; color: var(--white); text-shadow: 0 2px 0 var(--ink); }
 .mn-hc-title { grid-column: 1; font: italic 600 calc(11px * var(--ts)) / 1.2 var(--font-display); color: var(--paper2); }
 .mn-hc-row { grid-column: 2; grid-row: 1 / span 2; opacity: .85; }
-.mn-hc-badge { position: absolute; z-index: 3; left: -10px; top: -12px; opacity: 0; transform: scale(2.4) rotate(-16deg); transition: opacity .16s, transform .26s var(--ease-back); pointer-events: none; font-size: calc(13px * var(--ts)); padding: 0 .6em; }
+.mn-hc-badge { position: absolute; z-index: 3; left: 4px; top: 4px; opacity: 0; transform: scale(2.4) rotate(-16deg); transition: opacity .16s, transform .26s var(--ease-back); pointer-events: none; font-size: calc(13px * var(--ts)); padding: 0 .6em; }
 .mn-hc-badge.show { opacity: 1; transform: rotate(-6deg) scale(1); }
 .mn-hc-lock { position: absolute; left: 50%; top: 96px; width: 52px; height: 52px; margin-left: -26px; pointer-events: none; filter: drop-shadow(0 0 10px rgba(245, 201, 106, .7)); background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3' fill='none' stroke='%23f5c96a' stroke-width='2.4'/%3E%3Crect x='5' y='11' width='14' height='10' rx='2' fill='%23f5c96a' stroke='%23140f2e' stroke-width='1.6'/%3E%3Ccircle cx='12' cy='16' r='1.7' fill='%23140f2e'/%3E%3C/svg%3E"); animation: mnFloat 3s ease-in-out infinite; }
+.mn-hcard:not(.locked) .mn-hc-lock { display: none; }   /* the Daily Tale hands every hero out: the class (screen_menu.js heroLocked) follows it, so no padlock sits on a face the canvas paints unlocked */
 .mn-hcard.locked .mn-hc-plate { filter: grayscale(.85) brightness(.7); }
 body.reduce-motion .mn-hc-lock { animation: none; }
 .mn-hcard.fixed:not(.on) { filter: grayscale(.7) brightness(.7); }
 
 /* the party stage */
-.mn-party { position: absolute; left: 30px; top: 356px; width: 400px; height: 350px; border: 2px solid rgba(245, 201, 106, .38); border-radius: 8px; overflow: hidden; pointer-events: none; box-shadow: inset 0 0 44px rgba(7, 5, 26, .55); }
+.mn-party { position: absolute; left: 30px; top: 356px; width: 400px; height: 350px; border-radius: 8px; overflow: hidden; pointer-events: none; box-shadow: inset 0 0 0 2px rgba(245, 201, 106, .38), inset 0 0 44px rgba(7, 5, 26, .55); }   /* the gold ring is an inset shadow, not a border: a border would offset the absolute labels and bubbles by 2 px from the canvas sprites */
 .mn-slot { position: absolute; bottom: 6px; width: 170px; margin-left: -85px; text-align: center; pointer-events: none; }
-.mn-slot.front { left: 270px; } .mn-slot.back { left: 120px; }
 .mn-slot-name { display: inline-block; padding: .12em 1.1em .18em; font: 800 calc(12px * var(--ts)) / 1.3 var(--font-display); letter-spacing: .3em; text-indent: .3em; color: var(--white); background: linear-gradient(180deg, #ff6b5e, var(--vermilion) 55%, var(--verm-d)); clip-path: polygon(0 12%, 3% 0, 97% 8%, 100% 0, 98% 100%, 2% 92%); filter: drop-shadow(0 2px 0 var(--verm-dd)); }
 .mn-slot.back .mn-slot-name { background: linear-gradient(180deg, #7a6bff, var(--dusk) 55%, var(--violet)); filter: drop-shadow(0 2px 0 var(--ink)); }
 .mn-slot.empty .mn-slot-name { filter: grayscale(1) brightness(.6); }
@@ -135,7 +145,7 @@ body.reduce-motion .mn-hc-lock { animation: none; }
 .mn-bark::after { content: ""; position: absolute; left: 30px; bottom: -11px; width: 16px; height: 16px; background: #f3e6c8; border: solid var(--ink); border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) skew(8deg, 8deg); }
 
 /* the detail sheet */
-.mn-detail.panel-wrap { position: absolute; left: 762px; top: 76px; width: 496px; height: 630px; display: block; }
+.mn-detail.panel-wrap { position: absolute; left: 770px; top: var(--hc-y, 84px); width: 480px; height: calc(706px - var(--hc-y, 84px)); display: block; }   /* same top as the hero row (--hc-y comes from HC in screen_menu.js), bottom flush with the party stage, 30 px from the right edge like the row from the left */
 .mn-detail .panel { height: 100%; display: flex; flex-direction: column; }
 .mn-detail .p-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 22px 24px; overscroll-behavior: contain; -webkit-mask: linear-gradient(#000 calc(100% - 22px), transparent); mask: linear-gradient(#000 calc(100% - 22px), transparent); }
 .mn-detail-body { min-height: 100%; }
@@ -220,20 +230,18 @@ body.reduce-motion .mn-d.swap { animation: fadeIn .12s both; }
 .mn-begin { width: 100%; }
 .s-heroSelect.is-daily .mn-launch .mn-seed { opacity: .65; }
 
-/* phone landscape: the header sits at the very top (the Back button grows to a 44 px touch target), badges move inside the cards, the trial pips go */
-.compact .mn-hs-top, .compact .mn-lib-top { top: 0; z-index: 3; }
-.compact .mn-hs-top .mn-back, .compact .mn-lib-top .mn-back { align-self: flex-start; }   /* --hit makes Back taller than the 60px bar: pin its top edge to the stage instead of centring it half off the top */
-.compact .mn-hc-badge { left: 4px; top: 4px; }
+/* phone landscape: the header sits at the very top and is exactly one --hit tall (see --bar-h above), the hero row drops under it (HC.yCompact in screen_menu.js) and the trial pips go */
+.compact .mn-hs-top, .compact .mn-lib-top { z-index: 3; }
 .compact .mn-pips, .compact .mn-daily-txt i, .ts-big .mn-pips { display: none; }
 /* Larger text on a desktop: the newest rule is what the rules list is for, so the generic sub-line goes, the gaps and the Begin plaque tighten, and the list gets about 20 px more (C1) */
 .ts-big .mn-trial.has-rule .mn-tr-text { display: none; }
 .ts-big .mn-launch .p-body { gap: 6px; }
-.ts-big .mn-begin { padding-top: .36em; padding-bottom: .36em; }
+.ts-big .mn-begin { padding-top: .36em; padding-bottom: .36em; letter-spacing: .04em; }   /* the label is 27 px here: 'Begin Daily Tale' keeps 29 px each side inside the 273 px button (and 24 px in the 264 px one with a scrollbar) instead of touching the gold border */
 .compact .mn-launch .p-body { gap: 5px; padding: 6px 14px 8px; }
 /* a phone has no room for the rules list: the panel is widened (the detail sheet gives up the width), the trial name sits between the arrows
    and the newest rule is written out in full under them, never clipped: the trailing words are the penalty (C1). The panel body scrolls, and Begin stays pinned. */
 .compact .mn-launch { width: 376px; }
-.compact .mn-detail.panel-wrap { left: 836px; width: 424px; }
+.compact .mn-detail.panel-wrap { left: 836px; width: 414px; }
 .compact .mn-launch .p-body > .mn-rules { display: none; }
 .compact .mn-tr-head { display: grid; grid-template-columns: var(--hit) minmax(0, 1fr) var(--hit); grid-template-areas: "minus name plus" "text text text"; gap: 2px 6px; align-items: center; }
 .compact .mn-tr-mid { display: contents; }
@@ -288,7 +296,7 @@ body.reduce-motion .mn-tabpane.in { animation: fadeIn .12s both; }
 /* unlock tiles */
 .mn-item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .mn-item[hidden] { display: none; }
-.mn-item.k-card { width: 176px; }
+.mn-item.k-card { --lc-w: 168px; width: calc(var(--lc-w) + 8px); }   /* --lc-w is the card (size deck); the 8 px of slack lets the stamp and padlock overhang */
 .mn-item-art { position: relative; transition: filter .3s, transform .3s var(--ease-back); }
 .mn-item:not(.owned) .mn-item-art { filter: saturate(.55) brightness(.78); }
 .mn-item.afford .mn-item-art { filter: saturate(.9) brightness(.95); }
@@ -329,6 +337,7 @@ body.reduce-motion .mn-item.afford.k-card::before { animation: none; }
 .mn-tile-txt em { display: block; margin: 1px 0 4px; font: italic 600 calc(12px * var(--ts)) var(--font-display); color: var(--verm-d); }
 .mn-tile-txt p { margin: 0; font: 600 calc(13px * var(--ts)) / 1.35 var(--font-ui); color: var(--ink-soft); }
 .mn-item.k-relic .mn-item-foot, .mn-item.k-gem .mn-item-foot { margin-top: 2px; }
+.mn-item.k-card .mn-item-foot { width: var(--lc-w); }   /* price pill and Unlock button flush with the card edges, not 4 px outside them */
 
 /* achievements */
 .mn-grid.achs { grid-template-columns: 1fr 1fr; gap: 12px 16px; }
@@ -397,7 +406,7 @@ body.reduce-motion .mn-item.afford.k-card::before { animation: none; }
 
 /* history */
 .mn-pane.mn-hist-pane { padding-top: 16px; }
-.mn-hist-sum { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.mn-hist-sum { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; width: max-content; max-width: 100%; gap: 12px; margin-bottom: 14px; }   /* one column width for all four tiles: the widest content sets it */
 .mn-hist-sum span { display: flex; flex-direction: column; align-items: center; min-width: 130px; padding: 8px 16px; border-radius: 10px; background: rgba(7, 5, 26, .5); box-shadow: inset 0 0 0 1.5px rgba(245, 201, 106, .35); }
 .mn-hist-sum b { font: 900 calc(22px * var(--ts)) var(--font-num); color: var(--gold2); } .mn-hist-sum i { font: italic 600 calc(12px * var(--ts)) var(--font-ui); opacity: .75; }
 .mn-hist-list { display: flex; flex-direction: column; gap: 8px; }
@@ -430,10 +439,10 @@ body.reduce-motion .mn-emptybook { animation: none; }
 /* the Library and Settings copy a phone player reads: counts, hints and tile text keep 8 screen px (the lists scroll, so a bigger line costs nothing) */
 .compact .mn-set-hint, .compact .mn-sec-n, .compact .mn-tile-txt em, .compact .mn-ach-num, .compact .mn-filter-label { font-size: max(calc(12px * var(--ts)), var(--fs8)); }
 .compact .mn-count, .compact .mn-tile-txt p, .compact .mn-ach-text { font-size: max(calc(13px * var(--ts)), var(--fs8)); }
-.compact .mn-tabs { left: 104px; top: 66px; }
+.compact .mn-tabs { left: 104px; top: calc(var(--bar-cy) + 26px); }   /* under the ribbon (half its height + the 4 px the active tab rises) */
 .compact .mn-tabs .tab { height: var(--hit); padding: 0 .8em; gap: 6px; }
 .compact .mn-tabs .tab.on { height: calc(var(--hit) + 4px); }
-.compact .mn-lib-body { top: calc(66px + var(--hit) - 2px); }
+.compact .mn-lib-body { top: calc(var(--bar-cy) + 26px + var(--hit) - 2px); }
 .compact .mn-filters { gap: 6px 10px; }
 /* a drawn check mark for a done or played seal (no glyph, so it looks the same on every font) */
 .hanko.mn-ck::before { content: ""; position: absolute; left: 36%; top: 16%; width: 26%; height: 50%; border: solid #fff8ee; border-width: 0 .2em .2em 0; border-radius: 1px; transform: rotate(42deg); filter: drop-shadow(0 1px 0 rgba(90, 10, 20, .6)); }
@@ -460,7 +469,6 @@ body.reduce-motion .mn-emptybook { animation: none; }
 .mn-glyphs .gem { margin-bottom: 0; }
 .mn-set-done { margin-top: 10px; }
 .s-settings .mn-setscreen { position: absolute; inset: 0; }
-.mn-set-top { position: absolute; left: 20px; top: 10px; }
 .mn-set-wrap.panel-wrap { position: absolute; left: 130px; top: 62px; width: 1020px; display: block; }
 .mn-set-wrap .panel { display: flex; flex-direction: column; max-height: 630px; }
 .mn-set-wrap .p-body { overflow-y: auto; overscroll-behavior: contain; padding: 14px 32px 22px; -webkit-mask: linear-gradient(#000 calc(100% - 22px), transparent); mask: linear-gradient(#000 calc(100% - 22px), transparent); }
@@ -471,8 +479,6 @@ body.reduce-motion .mn-emptybook { animation: none; }
 
 /* ------------------------------------------------------------------------------------------------ how to play: an open book, a live diagram on the left page */
 .s-howto .mn-howscreen { position: absolute; inset: 0; }
-.mn-ht-banner { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); pointer-events: none; }
-.mn-ht-banner span { font-size: calc(23px * var(--ts)); padding: .3em 2.4em .36em; }
 .mn-howto.screen { position: absolute; inset: 0; pointer-events: none; }
 .mn-howto.overlay { position: relative; width: 1160px; height: 640px; max-width: 100%; }
 .mn-book {
@@ -481,7 +487,7 @@ body.reduce-motion .mn-emptybook { animation: none; }
 }
 .mn-howto.overlay .mn-book { left: 0; top: 0; }
 .mn-pg { position: relative; overflow: hidden; padding: 26px 30px 22px; color: var(--ink); background: var(--grain), var(--fibre), var(--paper-bg); box-shadow: inset 0 0 60px rgba(150, 110, 50, .28); }
-.mn-pg.left { border-radius: 10px 0 0 4px; transform-origin: 100% 50%; }
+.mn-pg.left { padding-left: 26px; padding-right: 26px; border-radius: 10px 0 0 4px; transform-origin: 100% 50%; }   /* 580 px page - 2 x 26 = the 528 px frame of .mn-illus (520 diagram + 2 x 4 border): the frame is centred on the page */
 .mn-pg.right { border-radius: 0 10px 4px 0; transform-origin: 0 50%; display: flex; flex-direction: column; overflow-y: auto; padding-bottom: 20px; scrollbar-width: thin; scrollbar-color: rgba(90, 60, 20, .5) transparent; }
 .mn-gutter { position: absolute; left: 50%; top: 0; bottom: 10px; width: 46px; margin-left: -23px; pointer-events: none; z-index: 3; background: linear-gradient(90deg, transparent, rgba(60, 35, 10, .35) 46%, rgba(20, 10, 5, .55) 50%, rgba(60, 35, 10, .35) 54%, transparent); }
 .mn-pg.turn-next { animation: mnTurnNext .4s var(--ease-out) both; }
@@ -507,8 +513,13 @@ body.reduce-motion .mn-pg.turn-next, body.reduce-motion .mn-pg.turn-prev { anima
 .mn-pg-extra.keys .btn-key { color: var(--ink); background: rgba(255, 255, 255, .55); border-color: rgba(20, 15, 46, .5); font-size: calc(12px * var(--ts)); }
 .mn-pg-no { align-self: flex-end; margin-top: auto; padding-top: 8px; font: 800 calc(14px * var(--ts)) var(--font-num); color: var(--ink-soft); opacity: .7; }
 .mn-margin ~ .mn-pg-no { margin-top: 0; }
-.mn-ht-nav { position: absolute; left: 60px; right: 60px; bottom: 26px; display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
+.mn-ht-nav { position: absolute; left: 60px; right: 60px; bottom: 26px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; pointer-events: none; }   /* the dots sit on the page axis whatever the two buttons weigh */
+.mn-ht-nav > .btn:first-child { justify-self: start; } .mn-ht-nav > .btn:last-child { justify-self: end; }
 .mn-howto.overlay .mn-ht-nav { left: 0; right: 0; bottom: 0; }
+/* phone landscape: Back, the book and the page buttons each get a full --hit row (the buttons grow with --hit, so the book makes room instead of being overlapped) */
+.ts-big .mn-ht-nav { bottom: 14px; }   /* Larger text makes the buttons 69 px tall: they would touch the book edge at the usual 26 px */
+.compact .mn-book { top: calc(var(--hit) + 8px); height: calc(694px - 2 * var(--hit)); }   /* 10 px (stage) between the book and the buttons: the book's own ring (3 ink + 2 gold) is 5 of them */
+.compact .mn-ht-nav { bottom: 8px; }   /* AFTER .ts-big above and the same specificity, so Larger text on a phone keeps the 8 px: the buttons are --hit tall there at every text size, and 14 px pushed them 2 px into the book */
 .mn-ht-nav .btn { pointer-events: auto; min-width: 150px; }
 .mn-dots { display: flex; pointer-events: none; }
 .mn-dot { display: grid; place-items: center; width: var(--hit); height: var(--hit); padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; }
@@ -567,7 +578,7 @@ body.reduce-motion .mn-tl-ico, body.reduce-motion .mn-tl { animation: none; }
 .mn-p-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .mn-p-chip { padding: .1em .8em; border-radius: 999px; font: 800 calc(12px * var(--ts)) / 1.7 var(--font-ui); letter-spacing: .06em; color: var(--ink); background: linear-gradient(180deg, var(--gold2), var(--gold)); box-shadow: 0 1.5px 0 var(--gold-dd); }
 .mn-p-heroes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
-.mn-p-stats { display: flex; flex-wrap: wrap; gap: 6px 12px; padding-left: 8px; }
+.mn-p-stats { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-left: -8.8px; }   /* no padding, and pulled left by the pill's own margin (0.4 x its 22 px icon): the first pill's outline starts on the heading edge and the icon hangs left of it like the hero medals above */
 .mn-p-none { margin: 8px 0; font: italic 600 calc(15px * var(--ts)) var(--font-display); color: var(--paper2); }
 .mn-p-tip { padding: 12px 16px; border-radius: 8px; transform: rotate(-.5deg); color: var(--ink); background: var(--grain), linear-gradient(180deg, #f9edcb, #ecd9a6); box-shadow: 0 3px 6px rgba(0, 0, 0, .4); }
 .mn-p-tip b { display: block; font: 800 calc(11px * var(--ts)) var(--font-display); letter-spacing: .18em; text-transform: uppercase; color: var(--verm-d); }
@@ -580,11 +591,14 @@ body.reduce-motion .mn-tl-ico, body.reduce-motion .mn-tl { animation: none; }
 .mn-plaque.mn-danger { border-color: #d9b6ff; color: #eadcff; background: linear-gradient(180deg, rgba(122, 68, 200, .35), rgba(58, 20, 100, .5)); box-shadow: 0 0 0 2px #23104a, 0 4px 0 2px #23104a, 0 8px 12px rgba(0, 0, 0, .4); }
 .mn-p-col .mn-plaque.mn-slim { min-height: max(50px, var(--hit)); }
 .mn-ht-wrap { position: relative; width: 1160px; max-width: 100%; height: 700px; }
-.mn-ht-wrap .mn-howto.overlay { position: absolute; left: 0; top: 52px; }
+.mn-ht-wrap .mn-howto.overlay { position: absolute; left: 0; top: calc(var(--hit) + 8px); }   /* 52 px at the usual 44 px hit target; grows with it (1024x768 makes Back 55 px tall) so Back never overlaps the book */
 .mn-ht-back { position: absolute; left: 0; top: 0; z-index: 5; }
-.mn-ht-banner-o { position: absolute; left: 50%; top: 4px; transform: translateX(-50%); }
+.mn-ht-banner-o { position: absolute; left: 50%; top: calc(var(--hit) / 2); transform: translate(-50%, -50%); }   /* the ribbon and Back share one centre line */
+.compact .mn-ht-wrap { height: 704px; }
+.compact .mn-ht-wrap .mn-howto.overlay { top: calc(var(--hit) + 4px); height: calc(700px - var(--hit)); }
+.compact .mn-howto.overlay .mn-book { height: calc(690px - 2 * var(--hit)); }
 .mn-ht-banner-o span { font-size: calc(21px * var(--ts)); }
-.mn-p-relics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding: 8px 6px 4px; border-top: 1px solid rgba(245, 201, 106, .25); }
+.mn-p-relics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding: 8px 0 4px; border-top: 1px solid rgba(245, 201, 106, .25); }
 .mn-p-relics .mn-p-none { margin: 2px 0; font-size: calc(13px * var(--ts)); }
 /* phone landscape: the seven plaques would be seven --hit tall rows, so they pair up into two columns beside the run card */
 .compact .mn-pause.panel { width: 1100px; }

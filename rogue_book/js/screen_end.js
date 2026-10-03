@@ -1153,8 +1153,7 @@
     const cw = 600, ch = 338;
     const canvas = mk('canvas', { class: 'vc-card', 'aria-label': 'Summary card: ' + summaryText(sm, R, true).replace(/\n/g, '. ') });
     const px = UI.px || 1;
-    canvas.width = Math.round(cw * px); canvas.height = Math.round(ch * px);
-    canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
+    canvas.width = Math.round(cw * px); canvas.height = Math.round(ch * px);      // the saved image keeps its 600 x 338; CSS fits it to its column (.vc-card width 100%)
     const cdata = { heroes: ((sm.heroes || []).map((h) => h.id)), score: sm.score || 0, trial: sm.trial | 0, seed: sm.seed, deckSize: sm.deckSize | 0, relics: sm.relics || [], chapters: (sm.stats && sm.stats.bossKills) | 0, daily: !!sm.daily, win: true };
     x.cardData = cdata;
     const g = safe(() => canvas.getContext('2d'), null);

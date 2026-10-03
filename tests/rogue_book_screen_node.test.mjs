@@ -2206,4 +2206,297 @@ await t.test('forge: a gem that fits no socket keeps Cut Gems closed with that r
   t.ok(fmode(g, 'up').getAttribute('aria-disabled') === 'true' && fmode(g, 'gem').getAttribute('aria-disabled') !== 'true', 'everything sharp but a gem in the pouch: only the gem cutter is open');
 });
 
+// ==================================================================================================== alignment: the DOM overlay against the painted art
+// Screens are a painted scene on #view with DOM laid over it, so the classic bug is an overlay that does not sit on what the art draws underneath. The painters and the
+// DOM now read ONE table per page (CACHE, RW, SHOP in screen_node.js, --cp-l and --cp-w in node.css); a headless run cannot lay out a page, so these tests read what the
+// painters really draw (a recording canvas), what the page writes to its custom properties, and the rules in the stylesheet that consume them.
+const cssRule = (sel) => { const i = CSS.indexOf(sel + ' {'); if (i < 0) return ''; return CSS.slice(i, CSS.indexOf('}', i) + 1); };
+const cssNum = (rule, prop) => { const m = new RegExp('(?:^|[\\s;{])' + prop + ':\\s*(-?[\\d.]+)px').exec(rule); return m ? Number(m[1]) : NaN; };
+const cssVar = (el, name) => parseFloat(el.style.getPropertyValue(name));
+
+// route every painter through a recording canvas: ART.sprite layers draw straight into it, and the toolkit's glow and celEllipse are logged instead of drawn
+function recordPaint(g) {
+  g._run(`globalThis.__rec = { cel: [], glow: [], ell: [], fillRect: [], strokeRect: [], translate: [], rotate: [], rg: [], rect: [], clip: [] };
+    { const real = document.querySelector('#view').getContext('2d');
+      const grab = { ellipse: 'ell', fillRect: 'fillRect', strokeRect: 'strokeRect', translate: 'translate', rotate: 'rotate', createRadialGradient: 'rg', rect: 'rect', clip: 'clip' };
+      globalThis.__ctx = new Proxy(real, { get(t, k) { const v = t[k]; if (grab[k]) return (...a) => { __rec[grab[k]].push(a); return t[k](...a); }; return typeof v === 'function' ? v.bind(t) : v; }, set(t, k, v) { t[k] = v; return true; } });
+      ART.sprite = (key, w, h, fn) => { fn(globalThis.__ctx, w, h); return null; }; ART.blit = () => {};
+      ART.tk.celEllipse = (c, ...a) => { __rec.cel.push(a); }; ART.tk.glow = (c, ...a) => { __rec.glow.push(a); }; }`);
+  return { ctx: () => g._run('__ctx'), rec: () => g._run('__rec') };
+}
+
+await t.test('gem cache: the gem columns, halos and painted glows are centred on the painted plinths, from one table (CACHE)', async () => {
+  const g = await freshS({ seed: 7 }); const R = mkRun(g, { seed: 7 });
+  const node = nodeAt(g, R, 'gemcache', {}); await open(g, 'gemcache', R, node);
+  const row = $(g, '.gc-row');
+  const x0 = cssVar(row, '--gx0'), pitch = cssVar(row, '--gp'), colw = cssVar(row, '--gcw'), top = cssVar(row, '--gtop'), h = cssVar(row, '--gh'), gy = cssVar(row, '--gy');
+  t.ok([x0, pitch, colw, top, h, gy].every((n) => Number.isFinite(n) && n > 0), 'the page writes --gx0, --gp, --gcw, --gtop, --gh and --gy on the gem row');
+  t.ok(colw < pitch, 'a column is narrower than the pitch, so neighbours never touch (gutter ' + (pitch - colw) + ' px)');
+  const pr = recordPaint(g);
+  g.UI.screens.gemcache.draw(pr.ctx(), 0);
+  const rec = pr.rec();
+  const plinths = rec.cel.filter((a) => a[2] === 82 && a[3] === 20);           // the plinth top: celOval(x, y, 82, 20)
+  t.eq(plinths.length, 3, 'the backdrop paints three plinths');
+  const columns = [0, 1, 2].map((i) => x0 + i * pitch);                        // .gc-row is a grid of three --gcw columns --gp apart: column i is centred on x0 + i * pitch
+  t.deep(plinths.map((a) => a[0]), columns, 'each plinth is centred exactly where its DOM column is');
+  t.deep(rec.glow.map((a) => a[0]), columns, 'the painted glows sit on the same three centres');
+  t.ok(rec.glow.every((a) => a[1] === top + gy), 'and at the DOM halo\'s centre height (' + (top + gy) + ')');
+  t.ok(rec.ell.filter((a) => a[2] === 110 && a[3] === 16).map((a) => a[0]).join() === columns.join(), 'the floor shadows too');
+  t.eq(columns[1], 640, 'the middle plinth is the centre of the stage');
+  const plinthY = plinths[0][1];
+  t.eq(top + h, plinthY + 20, 'the gem column ends on the plinth rim (its icon rests on the plinth)');
+  // the css that consumes them
+  const rowCss = cssRule('.gc-row');
+  t.ok(/left:\s*calc\(var\(--gx0[^)]*\)\s*-\s*var\(--gcw[^)]*\)\s*\/\s*2\)/.test(rowCss) && /column-gap:\s*calc\(var\(--gp[^)]*\)\s*-\s*var\(--gcw/.test(rowCss) && /grid-template-columns:\s*repeat\(3,\s*var\(--gcw/.test(rowCss), 'css: .gc-row places its three columns from --gx0, --gp and --gcw');
+  t.ok(!/left:\s*\d+px/.test(rowCss) && !/right:\s*\d+px/.test(rowCss), 'css: no hand-set pixel edges on the row (it used to be left 90 right 90: gems 70 px off their plinths)');
+  t.ok(/top:\s*calc\(var\(--gy[^)]*\)\s*-\s*140px\)/.test(cssRule('.gc-halo')), 'css: the halo is centred on --gy (its radius is 140)');
+  t.ok(/@supports \(grid-template-rows: subgrid\)/.test(CSS) && /\.gc-gem \{[^}]*grid-template-rows: subgrid/.test(CSS) && /\.gc-fit \{ grid-row: 4/.test(CSS), 'css: the columns share name, tier, text and fit rows (subgrid), so a wrapped name staggers nothing');
+  t.ok(/\.gc-name \{[^}]*min-height: 2\.2em/.test(CSS), 'css: and without subgrid every name reserves two lines');
+  // the status line and the buttons are ONE footer, the line above the buttons
+  const foot = $(g, '.gc-foot');
+  t.deep(Array.from(foot.children).map((e) => e.className), ['gc-detail', 'gc-btns'], 'the footer stacks the status line over the buttons');
+  t.ok($(g, '.gc-btns button') && !$(g, '.gc-detail button'), 'the buttons are in the button row');
+  t.ok(/\.gc-foot \{[^}]*flex-direction:\s*column/.test(CSS) && /\.gc-foot \{[^}]*bottom:\s*20px/.test(CSS), 'css: the footer is a column that grows upward from 20 px');
+  await click(g, $$(g, '.gc-gem')[1]);
+  t.ok(/fits|No card in your deck/.test(txt($(g, '.gc-detail'))), 'picking a gem writes the line in the same place');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('gem cache: a taken cache and an empty one keep the message centred in the row, and the footer still holds Continue', async () => {
+  const g = await freshS({ seed: 11 }); const R = mkRun(g, { seed: 11 });
+  const node = nodeAt(g, R, 'gemcache', {}); node.taken = true; await open(g, 'gemcache', R, node);
+  t.ok($(g, '.gc-row .gc-none') && $(g, '.gc-btns .btn-primary'), 'the message is a child of the row and Continue sits in the button row');
+  t.ok(/\.gc-none \{[^}]*grid-column:\s*1 \/ -1/.test(CSS) && /\.gc-none \{[^}]*justify-self:\s*center/.test(CSS), 'css: the message spans the three columns and centres');
+});
+
+await t.test('reward: the card row, the banner, the foot and the painted table share ONE axis (RW), and four cards fit the stage instead of running under the ledger and off the screen', async () => {
+  const g = await freshS({ seed: 5 }); const R = mkRun(g, { seed: 5 });
+  const pool = g.DATA.rewardPool('hanae', 'common').map((c) => c.id).concat(g.DATA.rewardPool('kuro', 'common').map((c) => c.id));
+  const rwCss = { stage: cssRule('.rw-stage'), foot: cssRule('.rw-foot'), title: cssRule('.rw-wrap .nk-titlebox'), cards: cssRule('.rw-cards'), fit: cssRule('.rw-cards.fit') };
+  const LEDGER_RIGHT = cssNum(cssRule('.rw-ledger'), 'left') + cssNum(cssRule('.rw-ledger'), 'width');      // 30 + 292: the ledger column ends here
+  t.ok(LEDGER_RIGHT > 300 && LEDGER_RIGHT < 330, 'the ledger column ends near x ' + LEDGER_RIGHT);
+  for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+    const node = winFight(g, R, 'enemy');
+    node.rewards.cards = pool.slice(0, n); node.rewards.relics = [];
+    await g.UI.go('reward', { rewards: node.rewards, source: node.source, node, R }, { force: true, transition: 'none' }); await settle(g);
+    const wrap = $(g, '.rw-wrap'), table = $(g, '.rw-cards');
+    const sx = cssVar(wrap, '--rw-x'), sw = cssVar(wrap, '--rw-w');
+    t.ok(sx >= LEDGER_RIGHT && sx + sw <= 1280, n + ' cards: the stage (x ' + sx + ' to ' + (sx + sw) + ') is right of the ledger and on the screen');
+    t.eq(sx + sw / 2, 796, n + ' cards: the stage axis is x 796');
+    // the widest the row can be: card widths, gaps, and the fan's lean
+    const cw = table.style.getPropertyValue('--rwcw') ? cssVar(table, '--rwcw') : (table.classList.contains('sz-reward') ? 240 : 168);
+    const gap = table.classList.contains('fit') ? 14 : table.classList.contains('many') ? 16 : 26;
+    const rot = Math.abs(parseFloat($$(g, '.rw-slot', table)[0].style.getPropertyValue('--rot'))) * Math.PI / 180;       // the outer card's lean, which widens the row by about 0.7 x width x sin(lean) on each side
+    const tilt = 0.7 * cw * Math.sin(rot);
+    const wide = Math.ceil(n * cw + (n - 1) * gap + 2 * tilt);
+    if (!table.classList.contains('many') || n === 5) t.ok(wide <= sw, n + ' cards: one row of ' + n + ' x ' + cw + ' px (' + wide + ' px with gaps and tilt) fits the ' + sw + ' px stage');
+    if (n === 4) t.ok(table.classList.contains('sz-reward') && table.classList.contains('fit') && !table.classList.contains('many'), 'four offers: reward size, shared row, no wrapping');
+    if (n === 3) t.ok(!table.style.getPropertyValue('--rwcw') && table.classList.contains('sz-reward'), 'three offers keep the full 240 px cards');
+    t.eq(errs(g), 0, n + ' cards: no console errors');
+  }
+  t.ok(/left:\s*var\(--rw-x/.test(rwCss.stage) && /width:\s*var\(--rw-w/.test(rwCss.stage), 'css: .rw-stage is placed by --rw-x and --rw-w');
+  t.ok(/left:\s*var\(--rw-x/.test(rwCss.foot) && /width:\s*var\(--rw-w/.test(rwCss.foot) && /bottom:\s*20px/.test(rwCss.foot), 'css: so is the foot (Skip and Continue), 20 px from the bottom like the other pages');
+  t.ok(/left:\s*var\(--rw-x/.test(rwCss.title) && /width:\s*var\(--rw-w/.test(rwCss.title) && /right:\s*auto/.test(rwCss.title), 'css: and the banner, which used to be centred on x 640 while the cards were centred on x 796');
+  // the painted table: its lantern pool and its two sides are centred on the same axis
+  const pr = recordPaint(g);
+  g.UI.screens.reward.draw(pr.ctx(), 0);
+  const rg = pr.rec().rg;
+  t.ok(rg.some((a) => a[0] === 796 && a[3] === 796), 'the lit pool on the table is centred on x 796 (the card stage), not x 640');
+  t.ok(!rg.some((a) => a[0] === 640 && a[1] === 560), 'nothing is still lit at the old x 640');
+});
+
+await t.test('reward (elite): three rows no longer scroll the first row out of the ledger at desktop size; the tall box trims; the compact bar and banner keep clear', async () => {
+  t.ok(/\.rw-ledger\.dense \.rw-relicbox/.test(CSS) && /\.rw-ledger\.dense \.rw-relicbox \.rw-h3/.test(CSS) && /\.rw-ledger\.dense \.rw-relic \.ico/.test(CSS), 'css: the trimmed relic box rules apply to .dense as well as .tall and compact (3 rows overflowed the ledger by 22 px)');
+  t.ok(/\.rw-ledger\.tall \.nk-row \{ margin-bottom: 7px/.test(CSS), 'css: four rows give back a few px so the box frame is not clipped');
+  t.ok(/scrollHeight > ledger\.clientHeight \+ 40/.test(SRC) && !/scrollHeight > ledger\.clientHeight \+ 1\)/.test(SRC), 'source: the last-resort auto scroll waits for a real overflow, so a few stray pixels never hide the first row');
+  t.ok(/#stage\.compact \.rw-ledger\.dense \.nk-row\.bonus \.nk-row-lab\s*\{[^}]*font-size/.test(CSS) && /#stage\.compact \.rw-ledger\.dense \.nk-row-val\s*\{[^}]*min\(var\(--ts\), 1\)/.test(CSS), 'css: on a phone every ledger row keeps one height (a gem or brush label is smaller; numbers stop growing with text size)');
+  t.ok(/#stage\.compact \.rw-wrap \.nk-titlebox\s*\{[^}]*top:\s*98px/.test(CSS), 'css: the reward banner sits under the taller phone bar');
+});
+
+await t.test('top bar: every medallion, chip and button shares the menu button\'s centre line, and on a phone the bar clears the menu button', async () => {
+  const bar = cssRule('.nk-top');
+  t.ok(/align-items:\s*center/.test(bar) && /padding:\s*0 84px 22px 14px/.test(bar) && /height:\s*78px/.test(bar), 'css: the content row is 56 px (78 - 22) and everything centres on it, like the 56 px menu button');
+  t.ok(!/padding-top/.test(cssRule('.nk-stats')), 'css: the stat row has no extra top padding any more (it sat 4 to 6 px below the medallions and the menu button)');
+  t.ok(/#stage\.compact \.nk-top\s*\{[^}]*height:\s*calc\(var\(--hit\) \+ 14px\)[^}]*padding:\s*0 104px 14px 14px/.test(CSS), 'css: on a phone the row is --hit tall (the buttons are 44 css px) with 104 px clear on the right for the menu button');
+});
+
+await t.test('shop: both rows of wares are centred in the opening between the painted posts, the tags sit on the planks, the nameplate stands under the peddler (SHOP)', async () => {
+  const g = await freshS({ seed: 6 }); const R = mkRun(g, { seed: 6, gold: 999 });
+  const node = nodeAt(g, R, 'shop', { shop: { seed: 6 } }); await open(g, 'shop', R, node);
+  const wrap = $(g, '.sh-wrap');
+  const l = cssVar(wrap, '--sh-l'), w = cssVar(wrap, '--sh-w'), px = cssVar(wrap, '--sh-px'), y1 = cssVar(wrap, '--sh-y1'), h1 = cssVar(wrap, '--sh-h1'), y2 = cssVar(wrap, '--sh-y2'), h2 = cssVar(wrap, '--sh-h2');
+  t.ok([l, w, px, y1, h1, y2, h2].every((n) => Number.isFinite(n) && n > 0), 'the page writes --sh-l, --sh-w, --sh-px and the two planks (--sh-y1, --sh-h1, --sh-y2, --sh-h2)');
+  const pr = recordPaint(g);
+  g.UI.screens.shop.draw(pr.ctx(), 0);
+  const rec = pr.rec();
+  const posts = rec.strokeRect.filter((a) => a[1] === 60 && a[3] === 590).sort((a, b) => a[0] - b[0]);       // the two wooden posts
+  t.eq(posts.length, 2, 'the backdrop paints two posts');
+  t.eq(l, posts[0][0] + posts[0][2], 'the opening starts at the left post\'s right edge');
+  t.eq(l + w, posts[1][0], 'and ends at the right post\'s left edge');
+  t.eq(l + w / 2, 799, 'so the opening is centred on x 799');
+  const planks = rec.fillRect.filter((a) => a[2] === 962 && (a[3] === 36 || a[3] === 34) && a[1] > 300).sort((a, b) => a[1] - b[1]);
+  t.deep(planks.map((a) => [a[1], a[3]]), [[y1, h1], [y2, h2]], 'the two painted planks are where --sh-y1 and --sh-y2 say');
+  t.ok(rec.translate.some((a) => a[0] === px && a[1] === 664), 'the peddler is drawn at the x the nameplate and speech bubble are placed from (--sh-px)');
+  t.eq(errs(g), 0, 'no console errors');
+  // the css that consumes them
+  const cards = cssRule('.sh-cards'), row2 = cssRule('.sh-row2');
+  t.ok(/left:\s*var\(--sh-l/.test(cards) && /width:\s*var\(--sh-w/.test(cards) && /justify-content:\s*center/.test(cards), 'css: the card shelf fills the opening and centres its cards');
+  t.ok(/left:\s*calc\(var\(--sh-l[^)]*\)\s*\+\s*8px\)/.test(row2) && /width:\s*calc\(var\(--sh-w[^)]*\)\s*-\s*16px\)/.test(row2), 'css: the plaque row is the opening less 8 px a side (it ran 4 px over the left post and 16 px over the right one)');
+  t.ok(/top:\s*calc\(var\(--sh-y1[^)]*\)\s*-\s*242px\)/.test(cards) && /top:\s*calc\(var\(--sh-y2[^)]*\)\s*-\s*180px\)/.test(row2), 'css: both rows hang from the planks (235 and 168 px wares, a 7 and a 12 px gap)');
+  t.ok(/bottom:\s*calc\(-1 \* \(var\(--sh-h1[^)]*\)\s*\/\s*2 \+ 17px \+ 7px\)\)/.test(cssRule('.sh-tag')) && /bottom:\s*calc\(-1 \* \(var\(--sh-h2[^)]*\)\s*\/\s*2 \+ 17px \+ 12px\)\)/.test(cssRule('.sh-plaque .sh-tag')), 'css: a 34 px price tag is centred on its plank, on both shelves');
+  t.ok(/left:\s*var\(--sh-px/.test(cssRule('.sh-sign')) && /translateX\(-50%\)/.test(cssRule('.sh-sign')), 'css: the nameplate is centred under the peddler (it was 87 px to his left)');
+  t.ok(/left:\s*calc\(var\(--sh-px[^)]*\)\s*-\s*110px\)/.test(cssRule('.sh-bubble')) && cssNum(cssRule('.sh-tail'), 'left') === 108, 'css: the speech tail points at his head (peddler x + 12)');
+  // a SOLD stamp and the SOLD OUT stamp centre by translate, not by a magic margin
+  const stamp = cssRule('.sh-stamp'), so = cssRule('.sh-soldout');
+  t.ok(/translate:\s*-50% -50%/.test(stamp) && !/margin-left/.test(stamp) && /top:\s*50%/.test(stamp), 'css: a SOLD stamp is centred on its ware (it sat 9 px right of centre)');
+  t.ok(/translate:\s*-50% -50%/.test(so) && /left:\s*calc\(var\(--sh-l[^)]*\)\s*\+\s*var\(--sh-w[^)]*\)\s*\/\s*2\)/.test(so) && !/translate\(-30%/.test(so), 'css: SOLD OUT is centred in the opening (the keyframes replaced its old transform, leaving it 64 px right)');
+  t.ok(/\.sh-plaque \.sh-stamp\s*\{[^}]*font-size:[^}]*min\(var\(--ts\), 1\)/.test(CSS), 'css: a plaque stamp is smaller than the plaque and never grows with text size');
+});
+
+await t.test('camp: the title, the tile columns and the footer share one box (--cp-l, --cp-w); the art plate keeps its height at text 1.0 so names line up', async () => {
+  const camp = cssRule('.s-camp'), l = cssNum(camp, '--cp-l'), w = cssNum(camp, '--cp-w');
+  t.ok(l > 0 && w > 0, 'css: .s-camp defines --cp-l and --cp-w (' + l + ', ' + w + ')');
+  const title = cssRule('.cp-titlebox'), grid = cssRule('.cp-grid'), foot = cssRule('.cp-foot');
+  t.ok(/left:\s*0/.test(title) && /width:\s*calc\(var\(--cp-l\) \* 2 \+ var\(--cp-w\)\)/.test(title), 'css: the banner is as wide as the left margin, the columns and the same margin again, so its centre (' + (l + w / 2) + ') is the columns\' centre');
+  t.ok(/left:\s*calc\(var\(--cp-l\) - 6px\)/.test(grid) && /width:\s*calc\(var\(--cp-w\) \+ 24px\)/.test(grid) && /padding:\s*6px 6px 10px/.test(grid) && /repeat\(2, calc\(\(var\(--cp-w\) - 20px\) \/ 2\)\)/.test(grid), 'css: the grid\'s own 6 px padding puts the first tile column at --cp-l, two columns and a 20 px gap span --cp-w');
+  t.ok(/left:\s*var\(--cp-l\)/.test(foot) && /width:\s*var\(--cp-w\)/.test(foot) && /padding:\s*0;/.test(foot), 'css: the footer is flush with the tile columns (it was inset 6 px)');
+  t.ok(/max-width:\s*calc\(\(var\(--cp-w\) - 20px\) \/ 2\)/.test(cssRule('.cp-meter')), 'css: the actions-left pill never grows past the first column');
+  t.ok(/bottom:\s*calc\(20px - \(var\(--ts\) - 1\) \* 20px\)/.test(foot), 'css: at larger text the footer sits lower, clear of the second tile row');
+  t.ok(/flex:\s*0 calc\(\(var\(--ts\) - 1\) \* 100\) auto/.test(cssRule('.cp-illus')), 'css: the art plate does not shrink at text 1.0 (it squashed to 99.7 px under a three line description, so names sat 4 px apart)');
+});
+
+await t.test('forge: while the before and after page is up the hammer rests upright behind the After card, never on the Strike! button; a blow starts from that rest', async () => {
+  const g = await freshS({ seed: 3 }); const R = mkRun(g, { seed: 3 });
+  const node = nodeAt(g, R, 'forge', {}); await open(g, 'forge', R, node);
+  const pr = recordPaint(g);
+  const angleAt = (t0) => { g._run('__rec.rotate.length = 0'); g.UI.screens.forge.draw(pr.ctx(), t0); return pr.rec().rotate[0][0]; };
+  const rest = angleAt(1);
+  t.ok(Math.abs(rest - Math.atan2(Math.sin(-0.95), -Math.cos(-0.95))) < 0.05, 'with the two plaques up the hammer hangs at its old angle');
+  // the head: a 78 x 68 block 166 to 244 px along the handle from the pivot (850, 470); its bounding box at an angle
+  const headBox = (phi) => { const P = { x: 850, y: 470 }; const xs = [], ys = []; [[166, -34], [244, -34], [244, 34], [166, 34]].forEach(([a, b]) => { xs.push(P.x + a * Math.cos(phi) - b * Math.sin(phi)); ys.push(P.y + a * Math.sin(phi) + b * Math.cos(phi)); }); return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; };
+  const oldBox = headBox(rest);
+  const MID = { l: 640 - 95, r: 640 + 95 };                           // .fg-mid is 190 px wide, centred in the page: the Strike! and Choose another column
+  t.ok(oldBox.x0 < MID.r && oldBox.x1 > MID.l, 'the old rest angle puts the head over the Strike! column (x ' + Math.round(oldBox.x0) + ' to ' + Math.round(oldBox.x1) + '), which is the bug');
+  // open the before and after page, let the rest angle settle over a second of frames
+  await click(g, $$(g, '.fg-mode')[0]);
+  const card = R.deck.find((c) => g.DATA.cards[c.id].up && !c.up);
+  await click(g, $$(g, '.o-deck .dk-card').find((c) => Number(c.dataset.uid) === card.uid));
+  await click(g, $(g, '.o-deck .dk-go'));
+  t.ok($(g, '.fg-strike') && !$(g, '.fg-stage').hidden, 'the before and after page is up');
+  let up = rest; for (let i = 0; i < 90; i++) up = angleAt(1 + i / 30);
+  const box = headBox(up);
+  t.ok(box.x0 > MID.r, 'with the page up the whole hammer head (x ' + Math.round(box.x0) + ' to ' + Math.round(box.x1) + ') is right of the Strike! column (it ends at x ' + MID.r + ')');
+  t.ok(box.x0 > 775 && box.x1 < 965 && box.y0 > 186 && box.y1 < 452, 'it sits wholly behind the After card (x 775 to 965, y 186 to 452)');
+  // a blow: starts from the rest angle and settles back to it
+  await click(g, $(g, '.fg-strike'));
+  const start = angleAt(2.0);
+  t.ok(Math.abs(start - up) < 0.08, 'the first frame of the blow starts where the hammer rested (no jump)');
+  const settled = angleAt(10);
+  t.ok(Math.abs(settled - up) < 0.08, 'and it comes to rest at the same angle');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('forge: until the first blow the hammer is painted only above the cards, so its base never pokes out under the After card or the Cut Gems plaque', async () => {
+  const g = await freshS({ seed: 3 }); const R = mkRun(g, { seed: 3 });
+  const node = nodeAt(g, R, 'forge', {}); await open(g, 'forge', R, node);
+  const pr = recordPaint(g);
+  const cutAt = (t0) => { g._run('__rec.rect.length = 0; __rec.clip.length = 0'); g.UI.screens.forge.draw(pr.ctx(), t0); const r = pr.rec(); return { cut: r.rect.find((a) => a[0] === 0 && a[1] === 0 && a[2] === 1280 && a[3] < 720), clips: r.clip.length }; };
+  // the pivot is (850, 470) and the handle is 18 px thick there: the base reaches y 479. The mode cards end at 458, the before and after cards at 452 or more.
+  const modes = cutAt(1);
+  t.ok(!!modes.cut, 'with the two plaques up the hammer is clipped');
+  t.ok(modes.cut[3] <= 452 && modes.cut[3] >= 400, 'the cut (y ' + (modes.cut && modes.cut[3]) + ') is above the shortest card bottom (452), so no stub shows, and low enough to keep the hammer');
+  await click(g, $$(g, '.fg-mode')[0]);
+  const card = R.deck.find((c) => g.DATA.cards[c.id].up && !c.up);
+  await click(g, $$(g, '.o-deck .dk-card').find((c) => Number(c.dataset.uid) === card.uid));
+  await click(g, $(g, '.o-deck .dk-go'));
+  const ready = cutAt(1);
+  t.ok(ready.cut && ready.cut[3] === modes.cut[3], 'with the before and after page up it is clipped at the same line');
+  await click(g, $(g, '.fg-strike'));
+  const swing = cutAt(2.0);
+  t.ok(!swing.cut && ready.clips - swing.clips === 1, 'once the blow starts the whole hammer is painted (the After card has moved off it)');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
+await t.test('forge on a phone: Choose another ends above the hint line (it ran 14 px into it at 844x390 and 28 px at 740x360)', () => {
+  const stageTop = cssNum(cssRule('.fg-stage'), 'top'), resultTop = cssNum(cssRule('.fg-result'), 'top');
+  const mid = cssRule('.fg-mid'), midCompact = (/#stage\.compact \.fg-mid \{[^}]*\}/.exec(CSS) || [''])[0];
+  const arrow = cssRule('.dk-arrow'), arrowH = cssNum(arrow, 'margin-top') + cssNum(arrow, 'border-top') + cssNum(arrow, 'border-bottom');
+  const gap = cssNum(mid, 'gap'), hit = 88;                                           // --hit is 44 screen px: 88 stage px at 740x360 (scale .5), the smallest phone layout
+  const bottom = (pad) => stageTop + pad + arrowH + gap + hit + gap + hit;          // arrow, Strike!, Choose another
+  t.ok(bottom(cssNum(mid, 'padding-top')) > resultTop, 'sanity: the desktop padding with 88 px buttons would reach ' + bottom(cssNum(mid, 'padding-top')) + ', past the hint at ' + resultTop + ' (the bug)');
+  t.ok(cssNum(midCompact, 'padding-top') > 0 && bottom(cssNum(midCompact, 'padding-top')) <= resultTop - 8, 'css: the compact column ends at ' + bottom(cssNum(midCompact, 'padding-top')) + ', at least 8 px above the hint line at ' + resultTop);
+});
+
+await t.test('gem cache on a phone: the one-line status sits under the plinth rims at 844x390 and 740x360, at text 1.0 and 1.3 (it sat on the middle rim at 1.3)', async () => {
+  const g = await freshS({ seed: 7 }); const R = mkRun(g, { seed: 7 });
+  const node = nodeAt(g, R, 'gemcache', {}); await open(g, 'gemcache', R, node);
+  const row = $(g, '.gc-row');
+  const rimBottom = cssVar(row, '--gtop') + cssVar(row, '--gh');                       // the plinth's rim ends where the columns end: plinthY + 20
+  t.eq(rimBottom, 568, 'the rims end at y 568 (the painters and the columns share one table)');
+  const rule = (/#stage\.compact \.gc-hint, #stage\.compact \.gc-ifit, #stage\.compact \.gc-took \{[^}]*\}/.exec(CSS) || [''])[0];
+  t.ok(/white-space:\s*nowrap/.test(rule), 'css: the status is one line on a phone (two lines were 62 px tall and sat on the rims)');
+  t.ok(/font-size:\s*calc\(18px \* min\(var\(--ts\), 1\) \* var\(--nkc, 1\)\)/.test(rule), 'css: and it is the Normal text step at every text size (nkc is 1.3 on a phone)');
+  t.ok(/\.gc-took \{[^}]*font-size/.test(CSS) && /#stage\.compact \.gc-took/.test(rule), 'css: the "is in your pouch" line follows the same rule');
+  const nkc = Number(/#stage\.compact \.nk-screen[^{]*\{[^}]*--nkc:\s*([\d.]+)/.exec(CSS)[1]);
+  const font = 18 * 1 * nkc, lh = Number(/line-height:\s*([\d.]+)/.exec(rule)[1]), padEm = Number(/padding:\s*([\d.]+)em/.exec(rule)[1]);
+  const pill = font * lh + 2 * padEm * font;
+  const gap = cssNum(/#stage\.compact \.gc-foot \{[^}]*\}/.exec(CSS)[0], 'gap');
+  [['844x390', 82], ['740x360', 90]].forEach(([vp, btn]) => {                         // the button is 44 screen px (81 and 88 stage px), plus 2 for its breathing
+    const top = 720 - 20 - btn - gap - pill;
+    t.ok(top >= rimBottom + 2, vp + ': the status line starts at y ' + top.toFixed(1) + ', at least 2 px under the rims (y ' + rimBottom + ')');
+  });
+  // the columns still stand on their plinths
+  t.deep([cssVar(row, '--gx0'), cssVar(row, '--gp')], [320, 320], 'the gems still sit on the plinths at x 320, 640 and 960');
+});
+
+await t.test('camp: the four art plates are one height, in every tile, at every text size (they were 74, 46, 69 and 74 px at 1.3), and the stamp rides on the tile', async () => {
+  // a headless run cannot lay a page out: the rules do it (subgrid rows shared by the two tiles of a row), the DOM puts the stamp outside the plate
+  const block = (/@supports \(grid-template-rows: subgrid\) \{\s*\.cp-grid[\s\S]*?\n\}/.exec(CSS) || [''])[0];
+  t.ok(block.length > 0, 'css: the camp has a subgrid block');
+  t.ok(/\.cp-grid \{[^}]*grid-template-rows:\s*minmax\(0, calc\(var\(--cp-pl\) \+ var\(--cp-pt\)\)\) auto auto 1fr [^;]*minmax\(0, calc\(var\(--cp-pl\) \+ var\(--cp-pt\)\)\) auto auto 1fr/.test(block), 'css: two plate tracks of the same size rule (one per row of tiles), then name, verb and lines');
+  t.ok(/\.cp-tile, #stage\.compact \.cp-tile \{[^}]*grid-template-rows:\s*subgrid/.test(block), 'css: a tile takes its four rows from the grid');
+  t.ok(/\.cp-tile:nth-child\(-n\+2\) \{ grid-row: 1 \/ span 4; \} \.cp-tile:nth-child\(n\+3\) \{ grid-row: 6 \/ span 4; \}/.test(block), 'css: the tiles of a row share rows 1 to 4 and 6 to 9 (5 is the gap)');
+  t.ok(/\.cp-illus, #stage\.compact \.cp-illus \{[^}]*height:\s*auto/.test(block) && /\.cp-art, #stage\.compact \.cp-art \{[^}]*position:\s*absolute/.test(block), 'css: the plate takes its track height and crops the art around its middle');
+  t.ok(/--cp-tg:\s*3px/.test(block) && /--cp-tg:\s*2px/.test(block) && /row-gap:\s*var\(--cp-tg\)/.test(block), 'css: the grid and the tile use the same row gap, so the subgrid adds no extra margin (plates were 1.5 px short)');
+  const g = await freshS({ seed: 3 }); const R = mkRun(g, { seed: 3 });
+  const node = nodeAt(g, R, 'camp', {}); await open(g, 'camp', R, node);
+  const tiles = $$(g, '.cp-tile');
+  t.eq(tiles.length, 4, 'four tiles');
+  tiles.forEach((tl) => {
+    const kids = Array.from(tl.children).map((e) => e.className.replace(/ .*/, ''));
+    t.deep(kids, ['cp-illus', 'cp-badge', 'cp-name', 'cp-verb', 'cp-lines'], 'the tile holds the plate, the stamp, the name, the verb and the lines in that order (the stamp is not inside the plate)');
+    t.ok(!$(g, '.cp-badge', $(g, '.cp-illus', tl)), 'no stamp inside the plate (a thin plate would clip it)');
+  });
+});
+
+await t.test('cardPick: six cards or more scroll inside a capped grid, so the footer never runs past the panel; four or five still show whole', async () => {
+  const g = await freshS({ seed: 14 }); const R = mkRun(g, { seed: 14 });
+  for (const n of [3, 4, 5, 6, 7, 8, 9]) {
+    const cards = R.deck.slice(0, n);
+    ovOpen(g, 'cardPick', { cards, n: 1, optional: true }); await settle(g);
+    const grid = $(g, '.o-cardPick .pk-grid');
+    t.eq(grid.classList.contains('many'), n >= 6, n + ' cards: ' + (n >= 6 ? 'a capped, scrolling grid' : 'every card shown whole'));
+    t.ok(/\.pk-grid\.many \{[^}]*max-height:\s*430px[^}]*overflow-y:\s*auto/.test(CSS), 'css: the capped grid is 430 px tall and scrolls');
+    g.UI.overlay.closeAll(); await settle(g);
+  }
+});
+
+await t.test('the exit control sits 20 px from the bottom edge on every node page (it was 20, 22 and 24)', () => {
+  const bottoms = { '.rw-foot': cssRule('.rw-foot'), '.ch-foot': cssRule('.ch-foot'), '.gc-foot': cssRule('.gc-foot'), '.sh-foot': cssRule('.sh-foot'), '.fg-foot': cssRule('.fg-foot'), '.cp-foot': cssRule('.cp-foot') };
+  Object.keys(bottoms).forEach((k) => t.ok(/bottom:\s*(20px|calc\(20px)/.test(bottoms[k]), k + ' sits 20 px up'));
+});
+
+await t.test('the exit controls share one right edge on a phone (the shop button sat 10 px right of its siblings); the shop one stays under the lower plank, whose price tags a 20 px bottom would cover', async () => {
+  t.ok(!/#stage\.compact \.(rw|ch|gc|fg|cp)-foot \{[^}]*\b(bottom|right|left)\s*:/.test(CSS), 'css: no compact override moves the reward, chest, cache, forge or camp exit');
+  const shopC = (/#stage\.compact \.sh-foot \{[^}]*\}/.exec(CSS) || [''])[0];
+  t.ok(!/\b(right|left)\s*:/.test(shopC), 'css: the shop exit keeps its right edge on a phone');
+  t.eq(cssNum(cssRule('.sh-foot'), 'right'), cssNum(cssRule('.fg-foot'), 'right'), 'the shop and the forge exits share a right edge');
+  const g = await freshS({ seed: 6 }); const R = mkRun(g, { seed: 6, gold: 999 });
+  const node = nodeAt(g, R, 'shop', { shop: { seed: 6 } }); await open(g, 'shop', R, node);
+  const wrap = $(g, '.sh-wrap');
+  const plankBottom = cssVar(wrap, '--sh-y2') + cssVar(wrap, '--sh-h2');
+  const bottom = cssNum(shopC, 'bottom');
+  t.ok(bottom > 0 && 720 - bottom - 88 >= plankBottom, 'the phone button (88 stage px at 740x360) starts at y ' + (720 - bottom - 88) + ', not above the lower plank, which ends at y ' + plankBottom);
+});
+
 await t.done();

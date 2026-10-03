@@ -42,8 +42,18 @@
 //   RUN.combatDone (merges the stats, R.done), bus combat:end {lose} (GAME records the run at once), DEFEAT card, 1 s beat, GAME.enterNode({kind:'defeat'}).
 //   The menu button is disabled during the beat so a save can never capture a won fight as a fresh one.
 //
+// ALIGNMENT (every overlay must line up with the art under it and with its neighbours; each has ONE source of truth, and the suite checks them):
+//   * the bottom docks (orb, both piles, End Turn) share the line DOCK_CY, which build() hands to combat.css as --dock-cy;
+//   * under an enemy: the HP bar's centre and the status row's top are UNDER[desktop|compact], chosen so the count digits end above the resting hand;
+//     the fan rests at HAND.restY, or HAND.restYCompact on a phone; the tutorial's `hand` anchor (.cm-handbox) is derived from slotFor;
+//   * HP bar widths come from barWidths(): living neighbours never touch (an xl boss beside a lane 3 minion gives way), BAR_W_COMPACT is a little wider
+//     for the bigger Block chip and numbers of a phone; the relic strip has RELIC_SLOTS places, the +N chip takes the last;
+//   * the top right buttons are --hit tall on a phone: hudBox() says where they are, an intent bubble that reaches them is placed below them.
+//   * the Swap seal hangs on the right edge of the hero panels, its centre --sx (26 px) past it, so its dashed ring starts beyond the 294 px where a panel's text column ends: the
+//     row bonus ("+2 dmg", up to two lines at Larger text), the tag and the status chips of either panel are never under it, at any text size.
+//
 // BUS (UI.bus): combat:turn {turn, phase} on every turn_start, combat:select {uid}, combat:play {uid, target}, combat:endturn, combat:swap, combat:pick
-//   {pending}, combat:end {result}. Tutorial anchors (data-tut): hand, energy, endturn, swap, intent (each bubble), enemy (each hit area), relics, deck (draw pile).
+//   {pending}, combat:end {result}. Tutorial anchors (data-tut): hand (a box around the fan at rest, .cm-handbox), energy, endturn, swap, intent (each bubble), enemy (each hit area), relics, deck (draw pile).
 //
 // DEBUG (main.js conventions): screen.debug() -> {C, vm, state, fire(evt), play(handIndex, targetIndex), endTurn(), swap(), setHp(who, hp),
 //   setStatus(who, s, n), setEnergy(n), pick(uids), feed(events), win()}; screen.debugSetup({hand:[cardIds], statuses:{unitId:{s:n}}, turn}) applies once
@@ -57,20 +67,34 @@
   // ==================================================================================================================
   const W = 1280, H = 720;
   // the fan lives in the free strip between the docks (draw pile ends x 224, discard pile starts x 998), and a card on the edge of the fan is turned 5.5
-// degrees about a point below the screen, which swings its top corner and its flank (at pile height) about 24 px outward: so the unturned box is x 252..970
-const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, raiseTop: 420, maxSpread: 150 };
-  const PILE = { draw: { x: 186, y: 646 }, discard: { x: 1044, y: 650 }, exhaust: { x: 1044, y: 590 }, orb: { x: 70, y: 650 } };
+// degrees about a point below the screen, which swings its top corner and its flank (at pile height) about 24 px outward (`swing`): so the unturned box is x 252..970
+  // restYCompact: on the compact stage (a phone) the status discs under the enemies are 24 px and their counts hang 5 px lower, which does not fit in the 46 px
+  // between the ground and a hand resting at 566; the fan rests 10 px lower there (see UNDER)
+  const HAND = { x0: 252, x1: 970, restY: 566, restYCompact: 576, cw: 190, ch: 266, hoverTop: 468, raiseTop: 420, maxSpread: 150, swing: 24 };
+  // The bottom docks (energy orb, draw and discard piles, End Turn plaque) share ONE centre line. combat.css positions each dock from it
+  // (top: calc(var(--dock-cy) - half its height)) and build() sets --dock-cy from this number, so the docks cannot drift apart; PILE is where card flights start and end.
+  const DOCK_CY = 654;
+  const PILE = { draw: { x: 186, y: DOCK_CY - 5 }, discard: { x: 1044, y: DOCK_CY - 5 }, exhaust: { x: 1044, y: 590 }, orb: { x: 70, y: DOCK_CY } };
   const LANE_X = [560, 705, 850, 995, 1120];    // SCENE.LAYOUT enemy lanes (DESIGN 5.9); the fallback stage and the status row caps need them
   const PLAY_ZONE_Y = 430;                       // a no-target card dragged above this line is played (DESIGN 5.8)
   const DRAG_PX = 8;                             // pointer travel that turns a press into a drag
+  // Enemy HP bars, centred on the lane. The compact stage has bigger Block chips and numbers (18 px), so its small and medium bars are a little wider: with Block
+  // the chip takes 49 px of the bar and the HP text (58 px at 18 px) must still fit in what is left (finding 21). Two living neighbours never touch: barWidths().
   const BAR_W = { s: 104, m: 120, l: 140, xl: 212 };
+  const BAR_W_COMPACT = { s: 122, m: 126, l: 140, xl: 212 };
+  const BAR_CLEAR = 4;                           // the least air between two neighbouring bars
+  // What hangs under an enemy, in px below its feet line: the HP bar's centre and the top of the status row. The count digits hang a little under the
+  // discs (dig), and they must end above the resting hand: feet 520 + row + d + dig <= restY (the suite checks it for both stages, finding 20).
+  const UNDER = { desk: { bar: 10, row: 21 }, compact: { bar: 11, row: 24 } };
   const BARK_GAP_MS = 6000, BARK_CHANCE = 0.35;
   // A status row is centred on its enemy and a neighbouring lane is only 145 px away (lanes 3 and 4: 125 px), so the row, not the chip count, is what
   // must fit. A desktop row may hold five chips, or four and a +N (131 px); the compact stage has bigger discs (24 px) and a bigger +N chip (38 px), so
   // four chips or three and a +N (122 px); the last lane is only 125 px from its neighbour, so it gets one chip less (106 px and 94 px). The +N chip says
   // how many are hidden and a tap on the foe lists them all.
-  const HERO_CHIPS = 6, RELIC_SHOWN = 7, ENEMY_CHIPS = { desk: 5, compact: 4 };
-  const ROW_CHIP = { desk: { d: 21, more: 31, gap: 4 }, compact: { d: 24, more: 38, gap: 4 } };   // mirrors combat.css (.en-st .status --d, .cm-more with a one digit count, .cm-st gap)
+  // The relic strip has RELIC_SLOTS places (x 12 to 334, 40 px icons 7 px apart, ending 26 px before the gold counter at 360): a bigger purse shows
+  // RELIC_SLOTS - 1 treasures and the +N chip in the last place, so the chip can never reach the counters (finding 18).
+  const HERO_CHIPS = 6, RELIC_SLOTS = 7, ENEMY_CHIPS = { desk: 5, compact: 4 };
+  const ROW_CHIP = { desk: { d: 21, more: 31, gap: 4, dig: 3.5 }, compact: { d: 24, more: 38, gap: 4, dig: 5.4 } };   // mirrors combat.css (.en-st .status --d, .cm-more with a one digit count, .cm-st gap, the .n count's overhang)
   const LANE_GAP = [145, 145, 145, 125];                                                          // distance from lane k to lane k+1 (LANE_X)
   const WATCHDOG_S = 6;                          // a SCENE beat that has not resolved after this many seconds is force-finished
   const FALLBACK_GATES = { hit: 120, heal: 60, draw: 40, swap: 380, enemy_act: 260, summon: 400, death: 420, enemy_phase: 900, hero_down: 500, hero_revive: 500, turn_start: 500, end: 700 };
@@ -809,10 +833,31 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     return body;
   }
 
+  // The HP bar width of every living enemy. A bar is centred on its lane, a neighbour's is LANE_X[b] - LANE_X[a] away, so two bars may add up to at most
+  // 2 * (that distance - BAR_CLEAR). Where the sizes do not fit (an xl boss beside a summoned minion in lane 3: 212 + 104 wide, 125 apart; two large foes in lanes 3
+  // and 4) the WIDER bar gives way first, down to the narrower one's width, and then both equally. One pass from left to right is enough: shrinking never
+  // makes a pair that already fits overlap. Pure, exported for the suite as _t.barWidths.
+  function barWidths(units, compact) {
+    const base = compact ? BAR_W_COMPACT : BAR_W;
+    const live = units.filter((u) => u && !u.down && !u.fled && isNum(u.lane)).sort((a, b) => a.lane - b.lane);
+    const w = {};
+    live.forEach((u) => { w[u.id] = base[u.size] || base.m; });
+    for (let i = 0; i + 1 < live.length; i++) {
+      const a = live[i], b = live[i + 1];
+      const over = w[a.id] + w[b.id] - 2 * (LANE_X[b.lane] - LANE_X[a.lane] - BAR_CLEAR);
+      if (over <= 0) continue;
+      const hi = w[a.id] >= w[b.id] ? a : b, lo = hi === a ? b : a;
+      const first = Math.min(over, w[hi.id] - w[lo.id]);
+      w[hi.id] -= first;
+      if (over > first) { w[a.id] -= (over - first) / 2; w[b.id] -= (over - first) / 2; }
+    }
+    return w;
+  }
+
   function buildEnemy(u) {
     const size = u.size || 'm';
     const bar = makeBar('en-bar tier-' + u.tier), blk = makeBlock(), st = makeStatusRow('xs', 'en-st');
-    const wrap = mk('div', { class: 'cm-ebarwrap sz-' + size, style: { width: BAR_W[size] + 'px' } }, bar.el, blk.el);
+    const wrap = mk('div', { class: 'cm-ebarwrap sz-' + size, style: { width: (BAR_W[size] || BAR_W.m) + 'px' } }, bar.el, blk.el);
     const bubble = mk('div', { class: 'cm-int', role: 'img', hidden: true });
     tut(bubble, 'intent');
     const stars = mk('i', { class: 'cm-stun', 'aria-hidden': 'true', hidden: true });
@@ -894,6 +939,7 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     if (!en) return;
     setBar(en.bar, u.hp, u.maxHp, animate);
     setBlock(en.blk, u.block, animate);
+    en.wrap.classList.toggle('has-blk', u.block > 0);            // the HP text then centres on the part of the bar the Block chip leaves free
     setStatuses(en.st, u.st, enemyChips(u, isCompact()), animate);
     en.el.classList.toggle('dead', u.down);
     en.el.classList.toggle('stunned', (u.st.stun || 0) > 0);
@@ -905,6 +951,13 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     renderIntent(en, u);
   }
 
+  // The top right buttons (speed, then menu) are max(72, --hit) and max(56, --hit) wide and at most as tall: --hit is 44 SCREEN px, so on a phone they are 80 to 90
+  // stage px square and hang below the 56 px bar. Returns where they start (left) and where the lowest ends plus 6 (bottom), in stage px.
+  function hudBox() {
+    const hit = Math.max(44, 44 / (UI.scale || 1));
+    return { left: W - 12 - Math.max(56, hit) - 12 - Math.max(72, hit), bottom: Math.max(56, hit) + 6 };
+  }
+
   // anchors are read once per frame after SCENE.update (DESIGN 5.9); only changed values touch the DOM
   function placeEnemies() {
     const sc = S.sc;
@@ -912,22 +965,29 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     if (S.compactSeen !== compact) {                  // the window crossed the 0.75 scale line: the chips changed size, so the caps change too
       const first = S.compactSeen === undefined;
       S.compactSeen = compact;
-      if (!first) S.vm.enemies.forEach((u) => { const en = S.en[u.id]; if (en) setStatuses(en.st, u.st, enemyChips(u, compact), false); });
+      if (!first) {
+        S.vm.enemies.forEach((u) => { const en = S.en[u.id]; if (en) setStatuses(en.st, u.st, enemyChips(u, compact), false); });
+        layoutHand();                                  // the fan rests lower on the compact stage (HAND.restYCompact)
+      }
     }
+    const bw = barWidths(S.vm.enemies, compact), under = compact ? UNDER.compact : UNDER.desk, hud = hudBox();
     S.vm.enemies.forEach((u) => {
       const en = S.en[u.id];
       if (!en) return;
+      if (bw[u.id] && en.barW !== bw[u.id]) { en.barW = bw[u.id]; en.wrap.style.width = px(bw[u.id]); }
       const a = safe(() => sc.anchor('enemy', u.id), null);
       if (!a || !isNum(a.x)) return;
-      const key = [a.x, a.y, a.w, a.h, a.top.x, a.top.y, a.feet.x, a.feet.y].map((v) => Math.round(v)).join(',');
+      const key = [a.x, a.y, a.w, a.h, a.top.x, a.top.y, a.feet.x, a.feet.y, hud.bottom, compact ? 1 : 0].map((v) => Math.round(v)).join(',');
       if (en.pos.key === key && en.bh) return;
       en.pos.key = key;
-      if (!en.bh) en.bh = en.bubble.hidden ? 46 : clamp(en.bubble.offsetHeight || 46, 30, 160);
-      const by = Math.max(62 + en.bh, a.top.y - 6);
+      if (!en.bh) { en.bh = en.bubble.hidden ? 46 : clamp(en.bubble.offsetHeight || 46, 30, 160); en.bubW = en.bubble.hidden ? 0 : (en.bubble.offsetWidth || 0); }
+      // a bubble that reaches the speed or menu button (a boss in lane 4 on a phone, where the buttons are --hit tall) goes below them: it is drawn later and would take their taps
+      const reach = a.top.x + en.bubW / 2 > hud.left;
+      const by = Math.max((reach ? hud.bottom : 62) + en.bh, a.top.y - 6);
       en.bubble.style.left = px(a.top.x); en.bubble.style.top = px(by);
       en.stars.style.left = px(a.top.x); en.stars.style.top = px(a.top.y + 18);
-      en.wrap.style.left = px(a.feet.x); en.wrap.style.top = px(a.feet.y + 14);
-      en.st.el.style.left = px(a.feet.x); en.st.el.style.top = px(a.feet.y + 26);
+      en.wrap.style.left = px(a.feet.x); en.wrap.style.top = px(a.feet.y + under.bar);
+      en.st.el.style.left = px(a.feet.x); en.st.el.style.top = px(a.feet.y + under.row);
       en.pv.style.left = px(a.head.x); en.pv.style.top = px(Math.max(70, a.top.y + 28));
       const w = Math.max(a.w, 96), h = Math.max(a.h, 96);
       en.hit.style.left = px(a.x + a.w / 2 - w / 2); en.hit.style.top = px(a.y + a.h / 2 - h / 2);
@@ -946,19 +1006,21 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     return h || frontOf(S.vm);
   }
 
-  function slotFor(i, n) {
+  const restYFor = (compact) => (compact ? HAND.restYCompact : HAND.restY);
+  const restY = () => restYFor(isCompact());
+  function slotFor(i, n, compact) {
     const span = HAND.x1 - HAND.x0 - HAND.cw;
     const step = n <= 1 ? 0 : Math.min(HAND.maxSpread, span / (n - 1));
     const left0 = HAND.x0 + (span - step * (n - 1)) / 2;
     const t = n <= 1 ? 0 : (i / (n - 1)) * 2 - 1;
-    return { x: left0 + step * i, y: HAND.restY + t * t * 18, rot: t * 5.5, step };
+    return { x: left0 + step * i, y: restYFor(compact) + t * t * 18, rot: t * 5.5, step };
   }
   const xf = (x, y, rot, sc) => 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px)' + (rot ? ' rotate(' + rot.toFixed(2) + 'deg)' : '') + (sc && sc !== 1 ? ' scale(' + sc + ')' : '');
   const pileXf = (p, sc) => xf(p.x - HAND.cw / 2, p.y - HAND.ch / 2, 0, sc);
 
   function layoutHand() {
     if (!S) return;
-    const list = S.vm.hand, n = list.length;
+    const list = S.vm.hand, n = list.length, compact = isCompact();
     const selUid = S.sel ? S.sel.uid : null;
     const hoverUid = S.hoverUid;
     const raised = (uid) => uid !== null && uid !== undefined && (uid === selUid || (S.picking && S.picking.chosen.indexOf(uid) >= 0));
@@ -969,7 +1031,7 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
       if (!e) return;
       const w = e.wrap;
       if (w.classList.contains('dragging') || w.classList.contains('played') || w.classList.contains('leaving')) return;
-      const s = slotFor(i, n);
+      const s = slotFor(i, n, compact);
       let x = s.x, y = s.y, rot = s.rot, z = 10 + i;
       if (raised(c.uid)) { y = HAND.raiseTop + (S.picking ? 26 : 0); rot = 0; z = 80; }
       else if (c.uid === hoverUid && !S.drag) { y = HAND.hoverTop; rot = 0; z = 60; }
@@ -981,8 +1043,25 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
       w.style.transform = xf(x, y, rot);
       w.style.zIndex = String(z);
       e.slot = { x, y, i };
-      w.classList.toggle('up', y < HAND.restY - 20);
+      w.classList.toggle('up', y < restYFor(compact) - 20);
     });
+    placeHandBox();
+  }
+
+  // The tutorial's `hand` anchor is the fan AT REST: from the first card's left edge to the last card's right edge, from the top of the resting cards
+  // to the stage edge. It is a box of its own because the .cm-hand container is the whole stage (the cards are positioned inside it), and a ring and a
+  // tail aimed at that pointed at empty sky (finding 38). It sits beside the container, not inside it: syncHand indexes the container's children.
+  function handBounds(n, compact) {
+    const y0 = restYFor(compact);
+    if (n < 1) return { x0: HAND.x0, x1: HAND.x1, y0, y1: H };
+    const swing = n > 1 ? HAND.swing : 0;           // the turned outer cards reach this far past their unturned box
+    return { x0: slotFor(0, n, compact).x - swing, x1: slotFor(n - 1, n, compact).x + HAND.cw + swing, y0, y1: H };
+  }
+  function placeHandBox() {
+    const box = S && S.ui && S.ui.handBox;
+    if (!box) return;
+    const b = handBounds(S.vm.hand.length, isCompact()), st = box.style;
+    st.left = px(b.x0); st.top = px(b.y0); st.width = px(b.x1 - b.x0); st.height = px(b.y1 - b.y0);
   }
 
   function createCard(inst, o) {
@@ -1044,7 +1123,7 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     w.classList.add('leaving', how === 'exhaust' ? 'burn' : 'toss');
     w.style.zIndex = '2';
     w.style.transitionDelay = (delay || 0) + 'ms';
-    w.style.transform = how === 'exhaust' ? xf(entry.slot ? entry.slot.x : 600, (entry.slot ? entry.slot.y : HAND.restY) - 60, 0, 1.15) : pileXf(PILE.discard, 0.3);
+    w.style.transform = how === 'exhaust' ? xf(entry.slot ? entry.slot.x : 600, (entry.slot ? entry.slot.y : restY()) - 60, 0, 1.15) : pileXf(PILE.discard, 0.3);
     UI.after(how === 'exhaust' ? 760 : 520, () => w.remove());
   }
 
@@ -1066,11 +1145,11 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
   // ==================================================================================================================
   // piles, orb, End Turn plaque, turn label
   // ==================================================================================================================
-  function buildPile(kind, x, y, label, key) {
+  function buildPile(kind, x, label, key) {
     const num = mk('b', { class: 'p-n', text: '0' });
     const back = () => UI.cardBack('mini');
     const stack = mk('span', { class: 'p-stack', 'aria-hidden': 'true' }, back(), back(), back());
-    const el = mk('button', { type: 'button', class: 'cm-pile ' + kind, 'aria-label': label, 'data-sfx': 'ui_open', style: { left: px(x), top: px(y) } },
+    const el = mk('button', { type: 'button', class: 'cm-pile ' + kind, 'aria-label': label, 'data-sfx': 'ui_open', style: { left: px(x) } },          // the top comes from the dock line (combat.css)
       stack, num, mk('span', { class: 'p-label', text: label }), mk('kbd', { class: 'btn-key', text: key, 'aria-hidden': 'true' }));
     el.addEventListener('click', () => openPile(kind));
     return { el, num, n: 0, label };
@@ -1093,7 +1172,7 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
 
   function buildOrb() {
     const n = mk('b', { class: 'o-n', text: '0' }), max = mk('span', { class: 'o-max', text: '/3' });
-    const el = mk('div', { class: 'cm-orb', role: 'img', tabindex: '0', 'aria-label': 'Energy', style: { left: px(PILE.orb.x - 44), top: px(PILE.orb.y - 44) } }, mk('i', { class: 'o-glow', 'aria-hidden': 'true' }), mk('i', { class: 'o-ring', 'aria-hidden': 'true' }), n, max);
+    const el = mk('div', { class: 'cm-orb', role: 'img', tabindex: '0', 'aria-label': 'Energy', style: { left: px(PILE.orb.x - 44) } }, mk('i', { class: 'o-glow', 'aria-hidden': 'true' }), mk('i', { class: 'o-ring', 'aria-hidden': 'true' }), n, max);
     tut(el, 'energy');
     UI.tip.attach(el, () => UI.tip.kw('Energy') || mk('div', { class: 'tk' }, mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: 'Energy' })), mk('p', { class: 'tk-text', text: 'Spend Energy to play cards. It refills every turn and never carries over.' })), { side: 'top' });
     return { el, n, max, v: null };
@@ -1421,7 +1500,7 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     if (!S.sel || S.sel.uid !== entry.uid) select(entry, { need: ev.need, targets });
     hidePreview();
     const p = UI.toStage(e.clientX, e.clientY);
-    const slot = entry.slot || { x: HAND.x0, y: HAND.restY };
+    const slot = entry.slot || { x: HAND.x0, y: restY() };
     // a finger dragging the only targeting card toward its lone foe may let go anywhere above the play line: "drag it upward" plays it
     const flick = ev.need && targets.length === 1 && fingerLike(S.press && S.press.type) ? targets[0] : null;
     S.drag = { uid: entry.uid, entry, mode: ev.need ? 'aim' : 'move', dx: p.x - slot.x, dy: p.y - slot.y, over: null, flick };
@@ -2037,18 +2116,20 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     const R = S.R;
     const u = S.ui = { root, relicEls: {} };
     root.classList.add('cm');
+    root.style.setProperty('--dock-cy', DOCK_CY + 'px');
 
     // ---- top bar (y 0..56): relic strip left, gold and ink, the turn label in the centre, speed and menu on the right
     const top = mk('div', { class: 'cm-top' });
     u.relics = tut(mk('div', { class: 'cm-relics', role: 'list', 'aria-label': 'Treasures' }), 'relics');
     const ids = (R.relics || []).filter((id) => DATA.relics[id]);
-    ids.slice(0, RELIC_SHOWN).forEach((id) => {
+    const shown = ids.length > RELIC_SLOTS ? RELIC_SLOTS - 1 : ids.length;
+    ids.slice(0, shown).forEach((id) => {
       const el = UI.relic(id, { size: 'sm', onclick: () => UI.overlay.open('relics', {}), side: 'bottom' });
       el.setAttribute('role', 'listitem');
       u.relicEls[id] = el;
       u.relics.appendChild(el);
     });
-    if (ids.length > RELIC_SHOWN) u.relics.appendChild(mk('button', { type: 'button', class: 'cm-relic-more', 'aria-label': (ids.length - RELIC_SHOWN) + ' more treasures', onclick: () => UI.overlay.open('relics', {}), text: '+' + (ids.length - RELIC_SHOWN) }));
+    if (ids.length > shown) u.relics.appendChild(mk('button', { type: 'button', class: 'cm-relic-more', 'aria-label': (ids.length - shown) + ' more treasures', onclick: () => UI.overlay.open('relics', {}), text: '+' + (ids.length - shown) }));
     u.gold = UI.stat('gold', R.gold, { size: 'sm', focusable: false });
     u.ink = UI.stat('ink', R.ink, { size: 'sm', max: R.inkMax, focusable: false });
     const tn = mk('b', { class: 'ct-n' }), tp = mk('span', { class: 'ct-p' });
@@ -2079,14 +2160,17 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
     root.appendChild(u.enemies);
     u.playzone = mk('div', { class: 'cm-playzone', 'aria-hidden': 'true' }, mk('span', { text: 'Release to play' }));
     root.appendChild(u.playzone);
-    u.hand = tut(mk('div', { class: 'cm-hand', role: 'group', 'aria-label': 'Your hand' }), 'hand');
+    u.hand = mk('div', { class: 'cm-hand', role: 'group', 'aria-label': 'Your hand' });
     root.appendChild(u.hand);
+    u.handBox = tut(mk('div', { class: 'cm-handbox', 'aria-hidden': 'true' }), 'hand');
+    root.appendChild(u.handBox);
+    placeHandBox();
 
     // ---- docks: energy orb and draw pile bottom left, exhaust, discard and End Turn bottom right
     u.orb = buildOrb();
-    u.draw = buildPile('draw', 130, 594, 'Draw', 'D');
+    u.draw = buildPile('draw', 130, 'Draw', 'D');
     tut(u.draw.el, 'deck');
-    u.disc = buildPile('discard', 1000, 594, 'Discard', 'G');
+    u.disc = buildPile('discard', 1000, 'Discard', 'G');
     const chip = (cls, label, x, y, kind) => {
       const num = mk('b', { class: 'cc-n', text: '0' });
       const el = mk('button', { type: 'button', class: 'cm-chip ' + cls, hidden: true, 'data-sfx': 'ui_open', style: { left: px(x), top: px(y) } }, mk('span', { class: 'cc-l', text: label }), num);
@@ -2255,6 +2339,7 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
       const me = S;
       me.ready = new Promise((res) => { me.readyRes = res; });
       build(root);
+      me.compactSeen = isCompact();                       // so a resize before the first frame still re-lays the hand and the chip caps
       safe(() => me.sc.mount({ C, chapter: C.chapter, boss: C.tier === 'boss' }));
       if (!me.realScene) me.ui.root.classList.add('fallback-scene');
       resync(false);
@@ -2310,7 +2395,7 @@ const HAND = { x0: 252, x1: 970, restY: 566, cw: 190, ch: 266, hoverTop: 468, ra
   };
 
   // pure pieces, exported for tests/rogue_book_screen_combat.test.mjs
-  def._t = { snapshot, applyEvent, settle, digest, describe, pickBark, rowBrief, reasonText, slotFor, counts, enemyChips, widestRow, LANE_GAP, state: () => S, HAND, PILE };
+  def._t = { snapshot, applyEvent, settle, digest, describe, pickBark, rowBrief, reasonText, slotFor, counts, enemyChips, widestRow, barWidths, handBounds, LANE_GAP, LANE_X, BAR_W, BAR_W_COMPACT, BAR_CLEAR, UNDER, ROW_CHIP, DOCK_CY, RELIC_SLOTS, state: () => S, HAND, PILE };
 
   UI.screens.combat = def;
 })();

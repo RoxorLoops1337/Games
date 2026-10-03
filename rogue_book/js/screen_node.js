@@ -59,6 +59,12 @@
 // DATA-TUT ANCHORS on every screen: `deck` (the Deck button), `relics` (the Treasures button), `ink` (the Ink stat). Music tracks:
 // reward, shop, event, camp (also forge), reward (chest), event (gem cache).
 //
+// GEOMETRY. Where the painted art and the DOM laid over it must agree, ONE table feeds both, so they cannot drift apart: CACHE (the gem cache's plinths, glows and columns),
+// RW (the reward page's card stage: the cards, the hint, the Skip and Continue foot, the banner and the pool of lantern light on the painted table all centre on its axis, x 796)
+// and SHOP (the posts, the two planks and the peddler). enterGemCache, enterReward and enterShop write them to custom properties on the page (--gx0 --gp --gcw --gtop --gh --gy;
+// --rw-x --rw-w; --sh-l --sh-w --sh-px --sh-y1 --sh-h1 --sh-y2 --sh-h2) and css/node.css places the DOM from those. The camp's left column is --cp-l and --cp-w in css only (no art
+// depends on it). tests/rogue_book_screen_node.test.mjs records what the painters draw and checks the page's properties against it.
+//
 // PUBLIC API beyond DESIGN: none exported. Tests reach everything through the DOM and RUN (tests/rogue_book_screen_node.test.mjs).
 //
 // DEVIATIONS AND NOTES (also in the final report)
@@ -803,7 +809,8 @@
       root.nkState = st;
       const fxo = miniFx(root);
       const size = cards.length <= 4 ? 'reward' : 'deck';
-      const grid = mk('div', { class: 'pk-grid sz-' + size + (cards.length > 8 ? ' many' : '') });
+      // six cards or more wrap to two rows whose footer ran past the panel (and, on a phone at text 1.3, off the stage): from six the grid scrolls inside a capped height instead
+      const grid = mk('div', { class: 'pk-grid sz-' + size + (cards.length > 5 ? ' many' : '') });
       const count = mk('span', { class: 'pick-count', role: 'status' });
       const ok = UI.btn(p.confirm || 'Choose', { kind: 'primary', size: 'lg', breathe: true, onclick: () => close(picked.slice()) });
       const refresh = () => {
@@ -838,6 +845,10 @@
   // ==================================================================================================================
   // screen: reward
   // ==================================================================================================================
+  // The reward page's stage. The card row, the hint, the Skip and Continue foot, the banner above them and the pool of lantern light on the painted table are all
+  // centred on its axis (x + w / 2 = 796), because the ledger takes the left of the page; css reads --rw-x and --rw-w from here.
+  const RW = { x: 336, w: 920 };
+  const rwAxis = () => RW.x + RW.w / 2;
   const REWARD_TITLE = { normal: 'Victory', elite: 'A Champion Falls', boss: 'The Guardian Falls', event: 'The Tale Moves On' };
   const REWARD_SUB = {
     normal: ['The page settles, and something shiny is left in the margin.', 'The ink dries. The road is a little safer.', 'A short, tidy ending to a short, tidy fight.'],
@@ -868,31 +879,33 @@
   }
 
   function paintTable(ctx) {
-    // a lacquered indigo table in perspective with a gold braid along the far edge, and a pool of lantern light on it
+    // a lacquered indigo table in perspective with a gold braid along the far edge, and a pool of lantern light on it. The table is mirrored about the stage
+    // axis (its right side runs off the screen), so the cards and the light sit on it however many are dealt.
+    const ax = rwAxis(), L = 150, B = -50;
     const g1 = ctx.createLinearGradient(0, 400, 0, 720);
     g1.addColorStop(0, '#2c1f6b'); g1.addColorStop(0.35, '#1d1550'); g1.addColorStop(1, '#0f0b30');
-    ctx.beginPath(); ctx.moveTo(150, 402); ctx.lineTo(1130, 402); ctx.lineTo(1330, 720); ctx.lineTo(-50, 720); ctx.closePath();
+    ctx.beginPath(); ctx.moveTo(L, 402); ctx.lineTo(2 * ax - L, 402); ctx.lineTo(2 * ax - B, 720); ctx.lineTo(B, 720); ctx.closePath();
     ctx.fillStyle = g1; ctx.fill();
     ctx.save(); ctx.clip();
     // seigaiha waves on the cloth
     ctx.strokeStyle = 'rgba(245,201,106,0.16)'; ctx.lineWidth = 1.4;
     for (let row = 0; row < 9; row++) {
       const y = 410 + row * row * 5 + row * 18, rr = 22 + row * 5.5;
-      for (let x = -80; x < 1400; x += rr * 2) {
+      for (let x = -80; x < 1700; x += rr * 2) {
         const ox = x + (row % 2 ? rr : 0);
         for (let k = 3; k >= 1; k--) { ctx.beginPath(); ctx.arc(ox, y + rr * 0.6, rr * k / 3, Math.PI, 0); ctx.stroke(); }
       }
     }
-    const g2 = ctx.createRadialGradient(640, 560, 20, 640, 560, 520);
+    const g2 = ctx.createRadialGradient(ax, 560, 20, ax, 560, 520);
     g2.addColorStop(0, 'rgba(255,214,140,0.32)'); g2.addColorStop(1, 'rgba(255,214,140,0)');
     ctx.fillStyle = g2; ctx.fillRect(0, 380, 1280, 340);
     ctx.restore();
     ctx.strokeStyle = '#f5c96a'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(150, 402); ctx.lineTo(1130, 402); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(L, 402); ctx.lineTo(2 * ax - L, 402); ctx.stroke();
     ctx.strokeStyle = 'rgba(20,15,46,0.85)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(146, 407); ctx.lineTo(1134, 407); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(L - 4, 407); ctx.lineTo(2 * ax - L + 4, 407); ctx.stroke();
     ctx.strokeStyle = 'rgba(245,201,106,0.45)'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(140, 414); ctx.lineTo(1140, 414); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(L - 10, 414); ctx.lineTo(2 * ax - L + 10, 414); ctx.stroke();
   }
 
   function paintRewardBack(ctx, t, S) {
@@ -903,8 +916,8 @@
     ctx.fillStyle = S.boss ? 'rgba(13,11,30,0.5)' : 'rgba(13,11,30,0.66)';
     ctx.fillRect(0, 0, 1280, 720);
     if (S.boss) {
-      // a slow sunburst behind the banner
-      ctx.save(); ctx.translate(640, 96); ctx.globalCompositeOperation = 'lighter';
+      // a slow sunburst behind the banner (which is centred on the stage axis, see RW)
+      ctx.save(); ctx.translate(rwAxis(), 96); ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 18; i++) {
         const a = i / 18 * TAU + t * 0.05; ctx.rotate(0);
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 900, a, a + 0.09); ctx.closePath();
@@ -941,6 +954,7 @@
     const rw = S.rewards;
     S.paint = paintRewardBack;
     const wrap = mk('div', { class: 'nk-wrap rw-wrap tier-' + tier });
+    UI.vars(wrap, { '--rw-x': RW.x + 'px', '--rw-w': RW.w + 'px' });
     root.appendChild(wrap);
     fxLayer(S);
     const boss = DATA.enemies[DATA.FIXED.bosses[R.chapter]];
@@ -1076,10 +1090,13 @@
     function buildCards() {
       const n = cards.length;
       const size = n <= 4 ? 'reward' : 'deck';
-      const table = mk('div', { class: 'rw-cards sz-' + size + (n >= 5 ? ' many' : '') + (n >= 6 ? ' fit' : ''), role: 'group', 'aria-label': 'Card choices' });
-      // six or more offers (a relic widens the choice) would wrap to a second row that hides under the hint and Skip: share the 920 px stage in ONE row instead
-      if (n >= 6) UI.vars(table, { '--rwcw': Math.floor((900 - 14 * (n - 1)) / n) + 'px' });
-      const w = size === 'reward' ? 240 : 168;
+      const table = mk('div', { class: 'rw-cards sz-' + size + (n >= 5 ? ' many' : '') + (n === 4 || n >= 6 ? ' fit' : ''), role: 'group', 'aria-label': 'Card choices' });
+      // six or more offers (a relic widens the choice) would wrap to a second row that hides under the hint and Skip: share the 920 px stage in ONE row instead.
+      // Four full size cards (4 x 240 + 3 x 26 = 1038) are wider than the stage and ran under the ledger and off the right edge, so four share the row at a width
+      // that leaves room for the fan's tilt on both sides (rwCardW).
+      const rwcw = n === 4 ? Math.floor((RW.w - 2 * 28 - 14 * (n - 1)) / n) : n >= 6 ? Math.floor((900 - 14 * (n - 1)) / n) : 0;
+      if (rwcw) UI.vars(table, { '--rwcw': rwcw + 'px' });
+      const w = rwcw || (size === 'reward' ? 240 : 168);
       cards.forEach((id, i) => {
         const inst = instOf(id, 0, 100 + i);
         const slot = mk('div', { class: 'rw-slot' });
@@ -1147,7 +1164,8 @@
       ledger.appendChild(box);
       box.classList.add('rise'); box.style.setProperty('--i', '4');
       // the last resort when a long treasure text still outgrows the ledger (the css above is tuned for phones and text 1.3): scroll the ledger to the box so Take it and Leave it are on screen
-      UI.after(wait(300), () => { if (S.alive()) safe(() => { if (ledger.scrollHeight > ledger.clientHeight + 1) ledger.scrollTop = ledger.scrollHeight; }); });
+      // (never by a hair: a few stray pixels would only slide the first ledger row under the top edge, so the scroll waits until the box really is cut off)
+      UI.after(wait(300), () => { if (S.alive()) safe(() => { if (ledger.scrollHeight > ledger.clientHeight + 40) ledger.scrollTop = ledger.scrollHeight; }); });
     }
     function buildRelicPage() {           // boss: choose one of three, grandly
       const page = mk('div', { class: 'rw-relics', role: 'group', 'aria-label': 'Treasure choices' });
@@ -1212,6 +1230,12 @@
     idle: ['Psst. The blue gems are the sensible ones.', 'A relic is forever. A card is a mood.', 'My grandmother sold cards, and my grandmother was never wrong. Twice.', 'Do you hear that? That is the sound of discounts.', 'Sale sticker means sale. I do not make the rules. I make the stickers.'],
   };
 
+  // The stall's geometry: the painted posts, planks and peddler (shopBackdrop, paintShop) and the DOM wares, nameplate and speech tail all read this one table. enterShop
+  // writes it to --sh-* on the page and css/node.css places everything from those, so the rows can never drift off the opening between the posts again.
+  // The opening is the gap between the posts (postL + postW .. postR, centred on x 799); both shelves of wares are centred in it; the price tags centre on the planks.
+  const SHOP = { postL: 318, postR: 1254, postW: 26, planks: [{ y: 366, h: 36 }, { y: 596, h: 34 }], peddler: { x: 206, y: 664 } };
+  const shopOpening = () => ({ l: SHOP.postL + SHOP.postW, w: SHOP.postR - (SHOP.postL + SHOP.postW) });
+
   function tipBubble(name, kind, text) {
     return mk('div', { class: 'tk' }, mk('div', { class: 'tk-head' }, mk('b', { class: 'tk-name', text: name }), kind ? mk('span', { class: 'tk-kind k-keyword', text: kind }) : null), mk('p', { class: 'tk-text', text: text || '' }));
   }
@@ -1224,6 +1248,8 @@
     S.mood = { name: 'idle', until: 0 };
     S.paint = paintShop;
     const wrap = mk('div', { class: 'nk-wrap sh-wrap' });
+    const opening = shopOpening();
+    UI.vars(wrap, { '--sh-l': opening.l + 'px', '--sh-w': opening.w + 'px', '--sh-px': SHOP.peddler.x + 'px', '--sh-y1': SHOP.planks[0].y + 'px', '--sh-h1': SHOP.planks[0].h + 'px', '--sh-y2': SHOP.planks[1].y + 'px', '--sh-h2': SHOP.planks[1].h + 'px' });
     root.appendChild(wrap);
     fxLayer(S);
     chrome(S);
@@ -1762,7 +1788,7 @@
       const lines = mk('span', { class: 'cp-lines' });
       const badge = mk('i', { class: 'cp-badge', 'aria-hidden': 'true' });
       const b = mk('button', { type: 'button', class: 'cp-tile a-' + a.id, dataset: { action: a.id } },
-        mk('span', { class: 'cp-illus' }, art, badge), mk('b', { class: 'cp-name', text: a.name }), mk('span', { class: 'cp-verb', text: a.verb }), lines);
+        mk('span', { class: 'cp-illus' }, art), badge, mk('b', { class: 'cp-name', text: a.name }), mk('span', { class: 'cp-verb', text: a.verb }), lines);   // the stamp rides on the tile, not in the plate: the plate can be a thin strip and would clip it
       b.classList.add('rise'); b.style.setProperty('--i', String(i + 1));
       b.addEventListener('click', () => doAction(a.id));
       tiles[a.id] = { b, lines, badge };
@@ -2145,6 +2171,14 @@
   // ==================================================================================================================
   // screen: gemcache (choose one of three gems, then optionally set it)
   // ==================================================================================================================
+  // The ONE table that places the gems: the painted plinths and glows (cacheBackdrop, paintCache) and the DOM gem columns (enterGemCache sets --gx0, --gp,
+  // --gcw, --gtop, --gh and --gy from it) all read this, so a gem can never drift off its plinth. The plinth centres are x0, x0 + pitch, x0 + 2 pitch
+  // (320, 640, 960); a column is the pitch minus a 20 px gutter wide; its bottom edge sits on the plinth's rim (plinthY + 20) and its gem icon rests
+  // 8 px above that; glowY is the gem's resting centre, where the painted light and the DOM halo are both centred.
+  const CACHE = { x0: 320, pitch: 320, colW: 300, top: 172, plinthY: 548, glowY: 497 };
+  const cacheX = (i) => CACHE.x0 + i * CACHE.pitch;
+  const cacheH = () => CACHE.plinthY + 20 - CACHE.top;
+
   const fitsOf = (R, id) => {
     const c = gemColorOf(id);
     let open = 0, any = 0;
@@ -2165,9 +2199,12 @@
     root.appendChild(S.chrome.menu);
     wrap.appendChild(bannerEl('The Gem Cache', node.taken ? 'The hollow is empty now.' : 'Three gems glint in the dark. Only one will come with you.', 'gc-titlebox'));
     const row = mk('div', { class: 'gc-row', role: 'group', 'aria-label': 'Gems on offer' });
+    UI.vars(row, { '--gx0': CACHE.x0 + 'px', '--gp': CACHE.pitch + 'px', '--gcw': CACHE.colW + 'px', '--gtop': CACHE.top + 'px', '--gh': cacheH() + 'px', '--gy': (CACHE.glowY - CACHE.top) + 'px' });
+    // the status line and the buttons share one footer that grows upward, so the line can never sit on the buttons (they are 44 css px tall on a phone, taller at text 1.3)
     const detail = mk('div', { class: 'gc-detail', role: 'status' });
-    const foot = mk('div', { class: 'gc-foot' });
-    wrap.appendChild(row); wrap.appendChild(detail); wrap.appendChild(foot);
+    const btns = mk('div', { class: 'gc-btns' });
+    const foot = mk('div', { class: 'gc-foot' }, detail, btns);
+    wrap.appendChild(row); wrap.appendChild(foot);
     let sel = null;
     const takeBtn = UI.btn('Take this gem', { kind: 'primary', size: 'lg', breathe: true, disabled: true, reason: 'Choose one of the gems first', onclick: () => take() });
     const contBtn = UI.btn('Continue', { kind: 'primary', size: 'lg', breathe: true, onclick: () => leaveNode(S) });
@@ -2203,14 +2240,14 @@
       S.chrome.sync(true);
       detail.textContent = '';
       detail.appendChild(mk('p', { class: 'gc-took', text: gemName(id) + ' is in your pouch.' }));
-      foot.textContent = '';
+      btns.textContent = '';
       const can = canCutAny(R) && R.gems.indexOf(id) >= 0 && fitsOf(R, id).any > 0;
       const sock = UI.btn('Set it in a card now', { kind: 'secondary', size: 'lg', disabled: !can, reason: 'No card has a socket that fits it yet', onclick: () => {
         if (S.busy) return;
         S.busy = true;
         UI.overlay.open('deck', { mode: 'socket', gem: id, title: 'Set ' + gemName(id) }).then(() => { S.busy = false; if (S.alive()) { S.chrome.sync(false); sock.rbSet({ disabled: R.gems.indexOf(id) < 0 || !canCutAny(R), reason: 'Nothing left to set' }); } });
       } });
-      foot.appendChild(sock); foot.appendChild(contBtn);
+      btns.appendChild(sock); btns.appendChild(contBtn);
       UI.announce(gemName(id) + ' is in your pouch.');
       resolvePending(S);
     }
@@ -2226,9 +2263,9 @@
     });
     if (node.taken || !offers.length) {
       row.appendChild(mk('p', { class: 'gc-none', text: node.taken ? 'You already took a gem from this cache.' : 'The cache holds nothing you can use.' }));
-      foot.appendChild(contBtn);
+      btns.appendChild(contBtn);
     } else {
-      foot.appendChild(takeBtn);
+      btns.appendChild(takeBtn);
       showDetail(null);
     }
     UI.announce(node.taken ? 'An empty cache.' : 'A gem cache. Choose one of three gems.');
@@ -2423,26 +2460,27 @@
     // far bokeh lanterns down the alley
     for (let i = 0; i < 16; i++) { const x = r() * 1280, y = 40 + r() * 260, rad = 16 + r() * 38; g.fillStyle = rgba(r() > 0.4 ? '#ff9a4a' : '#ff7eb6', 0.10 + r() * 0.12); g.beginPath(); g.arc(x, y, rad, 0, TAU); g.fill(); }
     // the shelving wall behind the wares
-    const back = g.createLinearGradient(330, 0, 1280, 0);
+    const pl = SHOP.postL, pw = SHOP.postW, pr = SHOP.postR, span = pr + pw - pl;       // the stall's width, post edge to post edge (962)
+    const back = g.createLinearGradient(pl + 12, 0, 1280, 0);
     back.addColorStop(0, '#231a52'); back.addColorStop(1, '#171040');
-    g.fillStyle = back; g.fillRect(328, 70, 952, 570);
+    g.fillStyle = back; g.fillRect(pl + 10, 70, span - 10, 570);
     g.strokeStyle = 'rgba(245,201,106,0.10)'; g.lineWidth = 2;
-    for (let x = 340; x < 1280; x += 46) { g.beginPath(); g.moveTo(x, 70); g.lineTo(x, 640); g.stroke(); }
-    g.fillStyle = 'rgba(10,7,30,0.5)'; g.fillRect(328, 400, 952, 196);
+    for (let x = pl + 22; x < 1280; x += 46) { g.beginPath(); g.moveTo(x, 70); g.lineTo(x, 640); g.stroke(); }
+    g.fillStyle = 'rgba(10,7,30,0.5)'; g.fillRect(pl + 10, 400, span - 10, 196);
     // wooden posts
-    const post = (x) => { const pg = g.createLinearGradient(x, 0, x + 26, 0); pg.addColorStop(0, '#4b2e22'); pg.addColorStop(0.4, '#7a4c32'); pg.addColorStop(1, '#2f1c17'); g.fillStyle = pg; g.fillRect(x, 60, 26, 590); g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(x, 60, 26, 590); };
-    post(318); post(1254);
+    const post = (x) => { const pg = g.createLinearGradient(x, 0, x + pw, 0); pg.addColorStop(0, '#4b2e22'); pg.addColorStop(0.4, '#7a4c32'); pg.addColorStop(1, '#2f1c17'); g.fillStyle = pg; g.fillRect(x, 60, pw, 590); g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(x, 60, pw, 590); };
+    post(pl); post(pr);
     // planks (shelves) with a gold-leaf edge
     const plank = (y, h) => {
       const pg = g.createLinearGradient(0, y, 0, y + h); pg.addColorStop(0, '#8a5a38'); pg.addColorStop(0.3, '#5f3b26'); pg.addColorStop(1, '#2d1a14');
-      g.fillStyle = pg; g.fillRect(318, y, 962, h);
+      g.fillStyle = pg; g.fillRect(pl, y, span, h);
       g.strokeStyle = 'rgba(20,10,8,0.5)'; g.lineWidth = 1;
-      for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(318, y + 6 + i * (h / 4)); g.bezierCurveTo(600, y + 4 + i * (h / 4), 900, y + 9 + i * (h / 4), 1280, y + 6 + i * (h / 4)); g.stroke(); }
-      g.fillStyle = 'rgba(245,201,106,0.9)'; g.fillRect(318, y, 962, 3);
-      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(318, y + h, 962, 10);
-      g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(318, y, 962, h);
+      for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(pl, y + 6 + i * (h / 4)); g.bezierCurveTo(600, y + 4 + i * (h / 4), 900, y + 9 + i * (h / 4), 1280, y + 6 + i * (h / 4)); g.stroke(); }
+      g.fillStyle = 'rgba(245,201,106,0.9)'; g.fillRect(pl, y, span, 3);
+      g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(pl, y + h, span, 10);
+      g.strokeStyle = INK; g.lineWidth = 3; g.strokeRect(pl, y, span, h);
     };
-    plank(366, 36); plank(596, 34);
+    SHOP.planks.forEach((p) => plank(p.y, p.h));
     // the awning: indigo cloth, gold hem, a row of white crests, a scalloped edge
     const aw = g.createLinearGradient(0, 0, 0, 96); aw.addColorStop(0, '#141a5a'); aw.addColorStop(1, '#232e86');
     g.fillStyle = aw; g.fillRect(0, 0, 1280, 78);
@@ -2467,7 +2505,7 @@
     hangLantern(ctx, 1170, 100, 26, t, 4.1, 15);
     hangLantern(ctx, 70, 96, 46, t, 5.7, 20);
     const mood = S.mood && S.t < S.mood.until ? S.mood.name : 'idle';
-    drawPeddler(ctx, 206, 664, 1, t, PD_MOODS.indexOf(mood) >= 0 ? mood : 'idle');
+    drawPeddler(ctx, SHOP.peddler.x, SHOP.peddler.y, 1, t, PD_MOODS.indexOf(mood) >= 0 ? mood : 'idle');
     const tk = TK();
     if (tk) {
       glow(ctx, 640, 380, 520, '#ff9a4a', 0.08 + 0.02 * Math.sin(t * 2));
@@ -2666,7 +2704,11 @@
 
   // ---------------------------------------------------------------- forge: a smithy, a furnace, an anvil with an inkstone, a hammer
   // Anchors: the anvil face is at FORGE.hit, the hammer pivots at FORGE.pivot (stage px).
-  const FORGE = { hit: { x: 640, y: 538 }, pivot: { x: 850, y: 470 }, arm: 205 };
+  // rest and restUp are the hammer's idle angles (radians, see drawHammer): hung at an angle while two plaques are up, and standing nearly upright behind the After card
+  // while the before and after page is open, so the head never sits on the Strike! button (the first keyframe of a blow is whichever rest it starts from)
+  // cardsEnd: the two mode cards end at y 458 and the before and after cards at 452 or more (taller on a phone), and the hammer's base sits at the pivot, 12 to 18 px below them: until the first blow
+  // (nothing has to swing yet) the hammer is painted only above y 446, so the base never pokes out from under a card (a stub of handle showed under the After card and the Cut Gems plaque)
+  const FORGE = { hit: { x: 640, y: 538 }, pivot: { x: 850, y: 470 }, arm: 205, rest: -0.95, restUp: -1.5, cardsEnd: 446 };
 
   function forgeBackdrop(g) {
     const r = U.rng(31337);
@@ -2707,15 +2749,16 @@
     g.strokeStyle = 'rgba(245,201,106,0.9)'; g.lineWidth = 2; g.beginPath(); g.ellipse(646, 524, 34, 6, 0, 0, TAU); g.stroke();
   }
 
-  const HAMMER_KEYS = [[0, -0.95], [0.19, 0.26], [0.33, -0.3], [0.52, 0.26], [0.64, -0.14], [0.84, 0.26], [1.35, -0.72]];
+  const HAMMER_KEYS = [[0, null], [0.19, 0.26], [0.33, -0.3], [0.52, 0.26], [0.64, -0.14], [0.84, 0.26], [1.35, null]];     // null: the rest angle the blow starts from and settles to
   const HIT_TIMES = [0.19, 0.52, 0.84];
-  function hammerAngle(tt) {
-    if (tt <= 0) return HAMMER_KEYS[0][1];
+  function hammerAngle(tt, rest) {
+    const key = (i) => (HAMMER_KEYS[i][1] === null ? rest : HAMMER_KEYS[i][1]);
+    if (tt <= 0) return key(0);
     for (let i = 1; i < HAMMER_KEYS.length; i++) {
-      const a = HAMMER_KEYS[i - 1], b = HAMMER_KEYS[i];
-      if (tt <= b[0]) { const u = (tt - a[0]) / (b[0] - a[0]); const e = b[1] > a[1] ? u * u * u : 1 - (1 - u) * (1 - u); return a[1] + (b[1] - a[1]) * e; }
+      const a = key(i - 1), b = key(i);
+      if (tt <= HAMMER_KEYS[i][0]) { const u = (tt - HAMMER_KEYS[i - 1][0]) / (HAMMER_KEYS[i][0] - HAMMER_KEYS[i - 1][0]); const e = b > a ? u * u * u : 1 - (1 - u) * (1 - u); return a + (b - a) * e; }
     }
-    return HAMMER_KEYS[HAMMER_KEYS.length - 1][1];
+    return key(HAMMER_KEYS.length - 1);
   }
 
   function drawHammer(ctx, ang) {
@@ -2739,8 +2782,14 @@
     ctx.restore();
     // hammer: hangs and sways until a strike starts
     const tt = S.strike ? t - S.strike.t0 : -1;
-    const ang = tt < 0 ? -0.95 + Math.sin(t * 1.3) * 0.02 * m : hammerAngle(tt);
+    const wantRest = S.phase ? FORGE.restUp : FORGE.rest;
+    S.restAng = S.restAng === undefined ? wantRest : S.restAng + (wantRest - S.restAng) * clamp((t - (S.restT === undefined ? t : S.restT)) * 7, 0, 1);
+    S.restT = t;
+    const ang = tt < 0 ? S.restAng + Math.sin(t * 1.3) * 0.02 * m : hammerAngle(tt, S.restAng);
+    const idle = tt < 0;
+    if (idle) { ctx.save(); ctx.beginPath(); ctx.rect(0, 0, 1280, FORGE.cardsEnd); ctx.clip(); }
     drawHammer(ctx, ang);
+    if (idle) ctx.restore();
     // sparks at every hit
     if (S.strike) {
       const H = FORGE.hit;
@@ -2909,18 +2958,19 @@
     // floor and three plinths
     const fl = g.createLinearGradient(0, 600, 0, 720); fl.addColorStop(0, '#19123a'); fl.addColorStop(1, '#080619');
     g.fillStyle = fl; g.fillRect(0, 606, 1280, 114);
-    [320, 640, 960].forEach((x) => {
+    const py = CACHE.plinthY;
+    [0, 1, 2].map(cacheX).forEach((x) => {
       g.fillStyle = 'rgba(0,0,0,0.5)'; g.beginPath(); g.ellipse(x, 668, 110, 16, 0, 0, TAU); g.fill();
-      cel(g, { poly: [[x - 84, 660], [x - 70, 548], [x + 70, 548], [x + 84, 660]] }, '#3a3268', { tension: 0.15, line: 3.6, hi: true, rim: '#7a6bff', rimSide: 'light' });
-      celOval(g, x, 548, 82, 20, '#4a4088', { line: 3.4, hi: true });
-      celOval(g, x, 543, 58, 12, '#8a1f3c', { line: 2.6, hi: true, rim: '#ff7eb6' });
-      g.strokeStyle = 'rgba(245,201,106,0.55)'; g.lineWidth = 2; g.beginPath(); g.ellipse(x, 543, 66, 15, 0, 0, TAU); g.stroke();
+      cel(g, { poly: [[x - 84, 660], [x - 70, py], [x + 70, py], [x + 84, 660]] }, '#3a3268', { tension: 0.15, line: 3.6, hi: true, rim: '#7a6bff', rimSide: 'light' });
+      celOval(g, x, py, 82, 20, '#4a4088', { line: 3.4, hi: true });
+      celOval(g, x, py - 5, 58, 12, '#8a1f3c', { line: 2.6, hi: true, rim: '#ff7eb6' });
+      g.strokeStyle = 'rgba(245,201,106,0.55)'; g.lineWidth = 2; g.beginPath(); g.ellipse(x, py - 5, 66, 15, 0, 0, TAU); g.stroke();
     });
   }
   function paintCache(ctx, t, S) {
     layer(ctx, 'nk:cache:bg', 1280, 720, cacheBackdrop);
     const m = UI.opt && UI.opt.reduceMotion ? 0.3 : 1;
-    [['#7a6bff', 320], ['#5ff5ff', 640], ['#ff7eb6', 960]].forEach((c, i) => glow(ctx, c[1], 470, 220 + 20 * Math.sin(t * 1.3 + i), c[0], 0.16 + 0.05 * Math.sin(t * 2 + i)));
+    ['#7a6bff', '#5ff5ff', '#ff7eb6'].forEach((c, i) => glow(ctx, cacheX(i), CACHE.glowY, 220 + 20 * Math.sin(t * 1.3 + i), c, 0.16 + 0.05 * Math.sin(t * 2 + i)));
     const tk = TK();
     if (tk) {
       safe(() => tk.mist(ctx, 0, 380, 1280, 340, t, { n: 5, seed: 12, alpha: 0.08, color: '#b9a8ff', speed: 7 }));

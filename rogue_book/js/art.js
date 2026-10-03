@@ -31,7 +31,8 @@
 // ENEMY SHELL. ART.enemy.draw(ctx, id, {x, y, s, pose, t, pt, flip, hpPct, phase, alpha, glow}) looks the id up, translates to the feet centre,
 // draws a contact shadow and (elite, boss) the tier aura, scales by s * tier scale (elite 1.08), mirrors on flip and calls
 // entry.draw(ctx, {s, pose, t, pt, hpPct, phase, glow, flip}) with the context ALREADY translated and scaled, painting around (0, 0), y negative up,
-// facing LEFT. Bounds are offsets from the feet centre at s = 1 (elite scale included), not mirrored by flip. An unknown id draws a placeholder.
+// facing LEFT. Bounds are offsets from the feet centre at s = 1 (elite scale included), not mirrored by flip; `h` is the idle body's drawn height and the optional
+// `right` the visible reach to the right of the feet (art plus ground ring), see ART.enemy.bounds. An unknown id draws a placeholder.
 //
 // THE TOOLKIT: ART.tk (all members are also plain properties, so `const tk = ART.tk` is the usual way in)
 //   Palette      pal.{ink night indigo violet dusk paper paper2 sumi gold gold2 vermilion sakura sakura2 jade azure cyan amber bloodmoon ash white}
@@ -1531,6 +1532,9 @@ const ART = (() => {
     return { w, h, head: { x: -w * 0.1, y: -h * 0.88 }, body: { x: 0, y: -h * 0.5 }, feet: { x: 0, y: 0 } };
   }
   const tierScale = (id) => { const m = enemyMeta(id); return m && m.tier === 'elite' ? 1.08 : 1; };
+  // the gold rune ring of an elite and the slow ring of a boss (drawn below): radius as a share of the bounds width, one place for the drawing and for `right`
+  const RING_K = { elite: 0.52, boss: 0.6 };
+  const ringReach = (id, w) => { const m = enemyMeta(id); return m && RING_K[m.tier] ? w * RING_K[m.tier] : 0; };
   A.enemy = {
     poseMs,
     // art_enemies_N.js call this once per id: entry = {draw(ctx, o), bounds:{w,h,head,body,feet}}
@@ -1539,10 +1543,17 @@ const ART = (() => {
       enemies.set(id, entry);
       real.add('enemy|' + id);
     },
+    // `right` (only when there is something to report) is how far the visible picture reaches to the RIGHT of the feet centre: the larger of what the entry
+    // declares for its art (the idle and the held telegraph pose) and the shell's own ground ring. SCENE slides the enemy line left by the overhang so a
+    // lane at the screen edge never crops a tail, a wing or the ring (DESIGN 5.9, SCENE.stats().fit). Every other number is the drawn silhouette too:
+    // `h` reaches the top of the idle body (not its thinnest tip), because intent bubbles sit on top.y - 6.
     bounds(id) {
       const e = enemies.get(id), b = e && e.bounds ? e.bounds : enemyBase(id), k = tierScale(id);
       const sc = (p) => ({ x: p.x * k, y: p.y * k });
-      return { w: b.w * k, h: b.h * k, head: sc(b.head), body: sc(b.body || { x: 0, y: -b.h / 2 }), feet: sc(b.feet || { x: 0, y: 0 }) };
+      const out = { w: b.w * k, h: b.h * k, head: sc(b.head), body: sc(b.body || { x: 0, y: -b.h / 2 }), feet: sc(b.feet || { x: 0, y: 0 }) };
+      const ring = ringReach(id, b.w * k), right = Math.max(num(b.right, 0) * k, ring);
+      if (right > 0) out.right = right;
+      return out;
     },
     draw(ctx, id, o) {
       o = o || {};
@@ -1564,7 +1575,7 @@ const ART = (() => {
         ctx.save(); ctx.scale(1, 0.2);
         ctx.strokeStyle = rgba(boss ? pal.gold2 : pal.gold, 0.85); ctx.lineWidth = boss ? 3 : 2.2;
         ctx.setLineDash([9, 7]); ctx.lineDashOffset = -t * (boss ? 10 : 24) * motion();
-        ctx.beginPath(); ctx.arc(0, 0, sw * (boss ? 0.6 : 0.52), 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, sw * RING_K[tier], 0, TAU); ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();
         const nSp = boss ? 5 : 3;
