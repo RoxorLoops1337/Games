@@ -168,9 +168,9 @@ function deckFor(char, act, seed, picks) {
   }
   const claw = Object.assign({}, c.claw);
   claw.grabs += Math.min(2, acts);
-  // (round 21) the bare starting bin (no picks yet) only ever meets the run's first fight, so it plays at fights 0
-  // (DATA.DIFFICULTY.act1.first); a deck with picks plays at fights 1 (act 1's full dial in act 1). Both stay under
-  // ramp.every: the hidden escalation is step 0 as before. Lucky Lou and Ms. Bubbles would start with their combo
+  // (round 21) the bare starting bin (no picks yet) only ever meets the run's first fight, so it plays at fights 0;
+  // a deck with picks plays at fights 1. (round 22) Both read act 1's full dial in act 1 (the first fight is no longer
+  // gentler). Both stay under ramp.every: the hidden escalation is step 0 as before. Lucky Lou and Ms. Bubbles would start with their combo
   // relic (DATA.CR.START); the three modelled crawlers start with none.
   const cr = DATA.CR && DATA.CR.START && DATA.CR.START[char];
   if (cr && relics.indexOf(cr) < 0) relics.push(cr);
@@ -229,7 +229,17 @@ h.test('every fight resolves and nothing is a wall', () => {
     }
     // A full-hp crawler with its starting bin can beat every normal of its
     // act at least sometimes; a wall would be a content bug, not a tuning.
-    for (const e of R[ch][act].normal) h.ok(e.win > 0, `${ch} A${act} ${e.enc}: beatable (${Math.round(100 * e.win)}%)`);
+    // (round 22) In act 1 the bare bin meets only the run's first fight, drawn from the front of the list (MAP
+    // biases later columns toward the back: the bots' first fights drew from its first 14 of 19); an encounter in
+    // the back quarter is met mid act, so it must be beatable for the deck a run holds there (PER_ACT / 2 picks).
+    R[ch][act].normal.forEach((e, i, L) => {
+      if (act === 1 && i >= Math.ceil(0.75 * L.length)) {
+        MODEL = MODELS[ch];
+        let w = 0;
+        for (let k = 0; k < FIGHTS; k++) if (fight(deckFor(ch, 1, 1000 + k, PER_ACT / 2), DATA.ENCOUNTERS[1].normal[i], 77 + k * 131).result === 'win') w++;
+        h.ok(w > 0, `${ch} A1 ${e.enc} (back of the list, a mid-act deck): beatable (${Math.round(100 * w / FIGHTS)}%; the bare bin ${Math.round(100 * e.win)}%)`);
+      } else h.ok(e.win > 0, `${ch} A${act} ${e.enc}: beatable (${Math.round(100 * e.win)}%)`);
+    });
   }
 });
 
@@ -239,8 +249,8 @@ h.test('the difficulty dial scales enemy hp and attacks', () => {
   const F = COMBAT.newFight(run, ['rat'], U.rng(4));
   const def = DATA.ENEMIES.rat;
   const e = F.enemies[0];
-  // (round 21) an act 1 normal on the run's first fight also takes DATA.DIFFICULTY.act1.first
-  const a1 = (d.act1 && d.act1.first) || { hp: 1, dmg: 1 };
+  // (round 21) an act 1 normal in act 1 also takes DATA.DIFFICULTY.act1 (round 22: the run's first fight too)
+  const a1 = d.act1 || { hp: 1, dmg: 1 };
   h.ok(e.maxHp >= Math.round(def.hp[0] * d.hp * a1.hp) - 1 && e.maxHp <= Math.round(def.hp[1] * d.hp * a1.hp) + 1, `rat hp ${e.maxHp} sits in the scaled band`);
   const atk = def.moves.find(m => m.k === 'attack');
   const scaled = e.def.moves.find(m => m.k === 'attack');
@@ -260,9 +270,9 @@ h.test('hidden escalation ramps enemies with fights fought', () => {
   h.ok(ramp && ramp.every > 0 && ramp.hp > 0 && ramp.dmg > 0, 'DATA.DIFFICULTY.ramp is set (every/hp/dmg)');
   if (!ramp) return;
   const mk = fights => COMBAT.newFight({ hp: 80, maxHp: 80, act: 1, bin: [], relics: [], claw: {}, fights }, ['goblin'], U.rng(11)).enemies[0];
-  // (round 21) fight 0 is the run's gentle first fight (DIFFICULTY.act1.first), so the steps count from fight 1
+  // (round 22) fight 0, the run's first fight, reads the same act 1 dial as fight 1 (round 21 made it gentler)
   const first = mk(0), base = mk(1), same = mk(ramp.every - 1), up = mk(ramp.every), up2 = mk(ramp.every * 2);
-  h.ok(first.maxHp <= base.maxHp, `the run's first fight is the gentle one (${first.maxHp} <= ${base.maxHp} hp)`);
+  h.eq(first.maxHp, base.maxHp, `the run's first fight is no gentler than fight 1 (${first.maxHp} hp)`);
   h.eq(same.maxHp, base.maxHp, `fight ${ramp.every - 1}: no step yet (${same.maxHp} hp)`);
   h.ok(up.maxHp > base.maxHp, `fight ${ramp.every}: first step raises hp (${base.maxHp} -> ${up.maxHp})`);
   h.ok(up2.maxHp > up.maxHp, `fight ${ramp.every * 2}: second step raises hp again (${up2.maxHp})`);
@@ -275,35 +285,50 @@ h.test('hidden escalation ramps enemies with fights fought', () => {
 });
 
 // Round 21 (DESIGN.md "Combo relics and a gentler, clearer start (round 21)"): act 1's normals are a threat.
-h.test('act 1 normals take a hit more and hit a bit harder; elites, bosses, minions and later acts do not', () => {
-  const d = DATA.DIFFICULTY, A = d.act1;
-  h.ok(A && A.hp > 1 && A.dmg >= 1 && A.first && A.first.hp > 0 && A.first.hp < A.hp && A.first.dmg < A.dmg, 'DIFFICULTY.act1 {hp, dmg, first} is set, the first fight gentler');
+// Round 22 (DESIGN.md "First fights are a threat (round 22)"): the run's first fight is no gentler, and act 1's
+// elites read their own sub-dial (a step up, not the wall they were with combos a relic power).
+h.test('act 1 normals (the first fight too) take a hit more and hit harder; elites their own dial; minions and later acts nothing', () => {
+  const d = DATA.DIFFICULTY, A = d.act1, E = A && A.elite;
+  h.ok(A && A.hp > 1 && A.dmg > 1 && !A.first, `DIFFICULTY.act1 {hp, dmg} is set, with no gentler first fight (${JSON.stringify(A)})`);
   const run = (o) => Object.assign({ hp: 80, maxHp: 80, act: 1, bin: [], relics: [], claw: {} }, o);
   const one = (id, o, seed) => COMBAT.newFight(run(o), [id], U.rng(seed || 4)).enemies[0];
   const atk = (e) => (e.def.moves.find(m => m.k === 'attack') || {}).v;
-  for (const id of ['rat', 'goblin', 'slime', 'crab']) {
+  const top = (e) => Math.max(0, ...e.def.moves.filter(m => m.k === 'attack' && m.v != null).map(m => m.v));   // the biggest single hit
+  const normals = ['rat', 'goblin', 'slime', 'crab', 'gremlin', 'jelly'];
+  for (const id of normals) {
     const def = DATA.ENEMIES[id], a0 = def.moves.find(m => m.k === 'attack');
     const e = one(id, { fights: 1 }), f = one(id, { fights: 0 });
     h.ok(e.maxHp >= Math.round(def.hp[0] * d.hp * A.hp) - 1 && e.maxHp <= Math.round(def.hp[1] * d.hp * A.hp) + 1, `${id}: hp x${A.hp} on top of the dial (${e.maxHp})`);
     if (a0) h.eq(atk(e), Math.max(1, Math.round(a0.v * d.dmg * A.dmg)), `${id}: attacks x${A.dmg} on top of the dial`);
-    h.ok(f.maxHp <= e.maxHp, `${id}: the run's first fight is gentler (${f.maxHp} <= ${e.maxHp})`);
+    h.ok(f.maxHp === e.maxHp && atk(f) === atk(e), `${id}: the run's first fight is the same fight (${f.maxHp} hp, hits ${atk(f)})`);
   }
-  // the same fight with the act 1 dial switched off: elites, minions and act 2 normals come out the same
+  // the same fight with the act 1 dial switched off: minions, act 2 normals and act 2 elites come out the same
   const off = (id, o) => { const k = d.act1; d.act1 = null; try { return one(id, o); } finally { d.act1 = k; } };
-  for (const [id, o, what] of [['mimic', { fights: 1 }, 'an act 1 elite'], ['slimeling', { fights: 1 }, 'a minion'], ['drone', { act: 2, fights: 1 }, 'an act 2 normal']]) {
+  for (const [id, o, what] of [['slimeling', { fights: 1 }, 'a minion'], ['drone', { act: 2, fights: 1 }, 'an act 2 normal'], ['ironjaw', { act: 2, fights: 1 }, 'an act 2 elite']]) {
     if (!DATA.ENEMIES[id]) continue;
     const a = one(id, o), b = off(id, o);
     h.ok(a.maxHp === b.maxHp && atk(a) === atk(b), `${what} (${id}) is untouched (${a.maxHp} hp)`);
   }
   const r1 = one('rat', { fights: 1 }), r0 = off('rat', { fights: 1 });
-  h.ok(r1.maxHp > r0.maxHp && atk(r1) >= atk(r0), `while an act 1 normal is not (${r0.maxHp} -> ${r1.maxHp} hp)`);
+  h.ok(r1.maxHp > r0.maxHp && atk(r1) > atk(r0), `while an act 1 normal is not (${r0.maxHp} -> ${r1.maxHp} hp, ${atk(r0)} -> ${atk(r1)} a hit)`);
   const late = one('rat', { act: 2, fights: 1 }), late0 = one('rat', { act: 2, fights: 0 });
   h.ok(late.maxHp === late0.maxHp && atk(late) === atk(late0), 'in act 2 an act 1 normal reads no act 1 dial (first fight or not)');
-  // the modelled first fights last longer than a grab and hurt: no one-grab wipes without combos
+  // act 1's elites: their own sub-dial on top of tierDmg (none set: untouched), and still a clear step up from a normal
+  const nTop = Math.max(...normals.map(id => top(one(id, { fights: 1 })))), nHp = mean(normals.map(id => one(id, { fights: 1 }).maxHp));
+  for (const id of ['mimic', 'broodmother', 'barker']) {
+    const a0 = DATA.ENEMIES[id].moves.find(m => m.k === 'attack'), e = one(id, { fights: 3 }), b = off(id, { fights: 3 });
+    const k = E || { hp: 1, dmg: 1 };
+    h.ok(Math.abs(e.maxHp - b.maxHp * k.hp) <= 2, `${id}: hp x${k.hp} (${b.maxHp} -> ${e.maxHp}; the same roll and affix)`);
+    h.eq(atk(e), Math.max(1, Math.round(a0.v * d.dmg * d.tierDmg.elite * k.dmg)), `${id}: attacks x${d.tierDmg.elite} x${k.dmg} (${atk(b)} -> ${atk(e)})`);
+    h.ok(e.maxHp >= 1.5 * nHp && top(e) >= 1.4 * nTop, `${id}: still a step up (${e.maxHp} hp against a normal's ${Math.round(nHp)}, its biggest hit ${top(e)} against ${nTop})`);
+  }
+  const B = A.boss || { hp: 1, dmg: 1 }, q = one('plushqueen', { fights: 9 }), q0 = off('plushqueen', { fights: 9 });
+  h.ok(Math.abs(q.maxHp - Math.round(q0.maxHp * B.hp)) <= 1 && Math.abs(atk(q) - Math.round(atk(q0) * B.dmg)) <= 1, `the act 1 boss reads act1.boss (${A.boss ? 'set' : 'none: untouched'}, ${q.maxHp} hp)`);
+  // the modelled first fights (the bare bin at fights 0) last a few turns and hurt: no one-grab wipes without combos
   for (const ch of CHARS) {
     const L = R[ch][1].normal;
-    h.ok(mean(L.map(x => x.turns)) >= 2, `${ch}: act 1 normals take 2+ turns (${f1(mean(L.map(x => x.turns)))})`);
-    h.ok(mean(L.map(x => x.lost)) > 0, `${ch}: act 1 normals deal damage (${Math.round(100 * mean(L.map(x => x.lost)))}% of Max HP)`);
+    h.ok(mean(L.map(x => x.turns)) >= 3, `${ch}: the bare bin needs 3+ turns for an act 1 normal (${f1(mean(L.map(x => x.turns)))})`);
+    h.ok(mean(L.map(x => x.lost)) >= 0.05, `${ch}: act 1 normals land real hits (${Math.round(100 * mean(L.map(x => x.lost)))}% of Max HP)`);
   }
 });
 

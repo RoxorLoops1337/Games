@@ -215,6 +215,7 @@ const GAME = (() => {
 
   // ---------------------------------------------------------------- toast, popover, banner
   function toast(str, secs) {
+    if (rr2Defer(str, secs)) return;   // ROUND 22: it waits while the resolve row fills or resolves
     const el = $('toast');
     if (el) { el.textContent = i18nTr(str); el.classList.add('show'); }
     S.toastT = secs || 1.8;
@@ -1826,7 +1827,7 @@ const GAME = (() => {
     }
     const Q = S.mq;
     // the corner lane waits while a full-stage card (versus, a finale's title) owns the screen
-    if (!Q || !Q.length || S.screen === 'intro' || (S.attract && S.screen === 'title') || annBlocked() || S.loreIntro) return;   // (LORE: and while an act's title card is up)
+    if (!Q || !Q.length || S.screen === 'intro' || (S.attract && S.screen === 'title') || annBlocked() || S.loreIntro || rr2Quiet()) return;   // (LORE: and while an act's title card is up) (ROUND 22: and while the resolve row is busy)
     const it = Q.shift();
     const el = it.k === 'ach' ? stickerEl(it.id) : it.k === 'lore' ? loreToastEl(it.list) : dexToastEl(it.list);   // (LORE: a new Codex page)
     // in a fight the toasts go compact so the intents stay readable; on the
@@ -5013,9 +5014,10 @@ const GAME = (() => {
     FS.golden = null;
     fx().text(CAB.x + CAB.w * 0.45, CAB.y + CAB.h * 0.42, 'GOLDEN PRIZE!', '#ffc94d', { size: 26, life: 1.5, dy: -60 });
     fx().emit('coins', pos.x - 10, pos.y - 20, { n: 1, power: 1.1, dir: -Math.PI / 2 - 0.35 });
-    fx().emit('confetti', pos.x - 20, pos.y - 20, { n: 0.6, power: 0.8, dir: -Math.PI / 2 - 0.4 });
+    const quiet = rr2Quiet();   // ROUND 22: no confetti or flash over the resolve row
+    if (!quiet) fx().emit('confetti', pos.x - 20, pos.y - 20, { n: 0.6, power: 0.8, dir: -Math.PI / 2 - 0.4 });
     fx().ring(pos.x, pos.y, '#ffc94d', { r0: 10, r1: 90, w: 7, life: 0.5 });
-    if (!fx().reduced) fx().flash('#ffc94d', 0.22);
+    if (!fx().reduced && !quiet) fx().flash('#ffc94d', 0.22);
     snd('fanfare');
     FS.party = Math.max(FS.party, 1.2); FS.marquee = 'GOLDEN!';
     setMood('wow', 1.6);
@@ -5024,8 +5026,9 @@ const GAME = (() => {
   // A prize the claw never touched this grab (shaken, blasted or knocked in).
   function freePrize(x, y) {
     FS.freeN++;
-    fx().text(x - 70, y, 'FREE PRIZE!', '#a6ff5e', { size: 19, life: 1.2, dy: -50 });
-    fx().emit('confetti', x - 20, y + 60, { n: 0.4, power: 0.7, dir: -Math.PI / 2 - 0.4 });
+    const quiet = rr2Quiet();   // ROUND 22: a small mark at the chute while the row is busy (its card is tagged FREE)
+    fx().text(x - 70, y + (quiet ? 40 : 0), 'FREE PRIZE!', '#a6ff5e', { size: quiet ? 13 : 19, life: quiet ? 0.8 : 1.2, dy: quiet ? -24 : -50 });
+    if (!quiet) fx().emit('confetti', x - 20, y + 60, { n: 0.4, power: 0.7, dir: -Math.PI / 2 - 0.4 });
     fx().ring(x, y + 70, '#a6ff5e', { r0: 8, r1: 64, w: 5 });
     snd('fanfare', { pitch: 1.25, vol: 0.7 });
     FS.party = Math.max(FS.party, 0.6); FS.marquee = 'FREE PRIZE!';
@@ -5415,10 +5418,10 @@ const GAME = (() => {
           // a crushing hit: a fifth of its max hp in one go (or the engine says crit)
           const crit = !!ev.crit || (ev.amt > 0 && e && ev.amt >= e.maxHp * 0.2);
           if (ev.amt > 0) {
-            fx().num(pos.x, pos.y, '\u2212' + ev.amt, crit ? '#ffc94d' : '#ffffff', { crit });
+            fx().num(pos.x, pos.y, '\u2212' + ev.amt, crit ? '#ffc94d' : '#ffffff', { crit, size: rr2NumSz(ev.amt, crit) });   // (round 22: a row's hit pops big)
             if (crit) fx().text(pos.x, pos.y - 44, 'CRUSH!', '#ff2e88', { size: 18, life: 0.8, dy: -30 });
             a.hurt = 1; a.knock = crit ? 1.6 : 1; a.barFlash = 1; a.barShake = 1;
-            const g = ghostOf(ev.idx); g.hold = 0.45;
+            const g = ghostOf(ev.idx); g.hold = rr2Ghost(0.45);   // (round 22: a row's hit holds its white chunk longer)
             fx().emit(crit ? 'crit' : 'hit', hitX, hitY, { power: crit ? 1.2 : 1 });
             fx().ring(hitX, hitY, crit ? '#ffc94d' : '#ffffff', { r0: 8, r1: crit ? 95 : 55 + Math.min(30, ev.amt * 2), w: crit ? 8 : 5, life: crit ? 0.5 : 0.35 });
             // weapons slash, everything else just lands
@@ -5465,7 +5468,7 @@ const GAME = (() => {
         break;
       }
       case 'block': {
-        fx().text(pos.x, pos.y, '+' + ev.amt + ' block', '#2ee6d6');
+        if (!rr2Block(ev, enemy)) fx().text(pos.x, pos.y, '+' + ev.amt + ' block', '#2ee6d6');   // (round 22: a row's Block flies into the shield chip as +N)
         fx().ring(hitX, hitY, '#2ee6d6', { r0: 10, r1: 58, w: 5, life: 0.4 });
         fx().emit('glint', hitX, hitY, { col: '#bfe8ff' });
         if (!enemy) replay($('hpStat'), 'shield');
@@ -7173,19 +7176,28 @@ const GAME = (() => {
     if (!evoDeliver(inst, pos)) throwItem(inst, pos);   // an evolution throws it after its ceremony (EVOLVE)
     const chuteMid = CAB.x + (FS.cabinet ? FS.cabinet.bounds.chuteX : CAB.w - CAB.chuteW) + CAB.chuteW * 0.5;
     // the chip rises just left of the divider so it never sits on the PRIZE lettering
-    fx().text(chuteMid - 66, CAB.y + CAB.h - 40, '+PLAYED', '#ffc94d', { size: 15, dy: -80, life: 0.9 });
+    const quiet = rr2Quiet();   // ROUND 22: the row shows the prize; the cabinet keeps its party small
+    if (!quiet) fx().text(chuteMid - 66, CAB.y + CAB.h - 40, '+PLAYED', '#ffc94d', { size: 15, dy: -80, life: 0.9 });
     snd('chute');
     haptic('deliver');
     // Doubles are the norm with the basket claw: a triple is the jackpot.
     // Both light the cabinet up (slot-machine chase lights, the marquee);
     // the jackpot adds confetti from the top corners and a coin fountain.
     if (FS.delivered === 2) {
-      fx().text(chuteMid - 66, CAB.y + CAB.h - 70, 'DOUBLE', '#2ee6d6', { size: 20, dy: -60, life: 0.9 });
+      if (quiet) rr2Stamp('DOUBLE', '#2ee6d6');
+      else fx().text(chuteMid - 66, CAB.y + CAB.h - 70, 'DOUBLE', '#2ee6d6', { size: 20, dy: -60, life: 0.9 });
       fx().emit('coins', chuteMid, CAB.y + CAB.h - 30, { n: 0.6, power: 0.9, dir: -Math.PI / 2 - 0.35 });
       FS.party = Math.max(FS.party, 0.7); FS.marquee = 'DOUBLE!';
       snd('coin', { pitch: 1.2 });
     }
-    if (FS.delivered === 3) {
+    if (FS.delivered === 3 && quiet) {
+      // ROUND 22: the JACKPOT is a stamp on the row and a small burst at the chute, not a banner and confetti over it
+      rr2Stamp('JACKPOT!', '#ffc94d');
+      snd('jackpot'); haptic('jackpot');
+      fx().burst(chuteMid, CAB.y + CAB.h - 40, '#ffc94d', fx().reduced ? 6 : 16);
+      fx().emit('coins', chuteMid, CAB.y + CAB.h - 30, { n: 0.8, power: 1.0, dir: -Math.PI / 2 - 0.3 });
+      fx().shake(3);
+    } else if (FS.delivered === 3) {
       banner('JACKPOT', 'jackpot', 1.4);
       snd('jackpot'); haptic('jackpot');
       fx().burst(270, 600, '#ffc94d', fx().reduced ? 12 : 40); if (!fx().reduced) fx().flash('#ffc94d', 0.4);
@@ -7194,13 +7206,15 @@ const GAME = (() => {
       fx().emit('coins', chuteMid, CAB.y + CAB.h - 30, { n: 1.6, power: 1.25, dir: -Math.PI / 2 - 0.3 });
       fx().ring(270, 600, '#ffc94d', { r0: 20, r1: 320, w: 10, life: 0.7 });
       fx().shake(10);
+    }
+    if (FS.delivered === 3) {
       FS.party = 2.2; FS.marquee = 'JACKPOT!';
       S.run.jackpots++; S.meta.stats.jackpots++;
       clawCelebrate();   // the claw twirls (CLAW TYPES block)
     }
     // the golden prize outranks a free one (one label lane each: golden over the bin, free over DOUBLE)
-    if (FS.golden && FS.golden.uid === inst.uid) goldenPrize(pos);
-    else if (free) freePrize(chuteMid, CAB.y + CAB.h - 105);
+    if (FS.golden && FS.golden.uid === inst.uid) { rr2Tag(inst, 'GOLDEN', '#ffc94d'); goldenPrize(pos); }   // (ROUND 22: the card says it too)
+    else if (free) { rr2Tag(inst, 'FREE', '#a6ff5e'); freePrize(chuteMid, CAB.y + CAB.h - 105); }
     if (S.coachStep === 2) coachNext();
     petDeliver(inst);   // hearts, XP, the firefly's spotlight (PETS block)
     rosDeliver(inst);   // a popped bubble's prize landed (ROS block)
@@ -7261,7 +7275,7 @@ const GAME = (() => {
     const over = F.phase === 'over' ? F.result : X.COMBAT.isOver(F);
     if (over) { endFight(over, true); return; }
     if (F.player.grabs > 0) hint(FS.delivered ? 'nice. steer and release' : 'steer and release');
-    else { hint('out of grabs'); FS.autoEndT = AUTO_END; banner('TURN OVER', 'turn', 0.7); }
+    else { hint('out of grabs'); FS.autoEndT = AUTO_END; if (rr2Wait()) FS.rr2Ban = true; else banner('TURN OVER', 'turn', 0.7); }   // (ROUND 22: TURN OVER after the resolve row's total)
     FS.dirty = true;
   }
   // The claw's spring: the cable bows against the carriage's acceleration and
@@ -7749,6 +7763,7 @@ const GAME = (() => {
       FS.beatT -= dt;
       while (FS.queue.length && FS.beatT <= 0) {
         const q = FS.queue.shift();
+        rr2Pre(q);   // ROUND 22: a row's numbers pop big, its hits stop for a moment
         applyEvent(q.ev);
         rrRowEv(q);   // RROW (round 21): a grab chip lights up, a proc mid grab gets its labelled chip
         // a proc is a flourish, not a beat: a relic-heavy grab can emit dozens
@@ -7771,7 +7786,8 @@ const GAME = (() => {
     // Watchdog: nothing may hold the turn hostage.
     if (FS.grabInFlight && S.t - FS.dropAt > WATCHDOG) { resetRig('The claw jammed. Reset.'); if (!FS) return; }
     // Auto end turn.
-    if (FS.autoEndT > 0) {
+    if (FS.autoEndT > 0 && !rr2Wait()) {   // (ROUND 22: the last grab's row is read, its total shown, before the turn ends)
+      if (FS.rr2Ban) { FS.rr2Ban = false; banner('TURN OVER', 'turn', 0.7); }
       FS.autoEndT -= dt;
       if (FS.autoEndT <= 0) { FS.autoEndT = 0; if (!endTurn() && FS && F.phase === 'player' && F.player.grabs <= 0) FS.autoEndT = 0.3; }
       if (!FS) return;
@@ -9993,7 +10009,7 @@ const GAME = (() => {
   function feelTipSafe() {
     if (!FEEL_TIP_SCREENS[S.screen] || annBlocked()) return false;
     if (S.screen === 'fight') {
-      if (!F || !FS || FS.done || FS.outro || FS.vs || FS.enemyTurn || FS.grabInFlight || S.coachStep >= 0) return false;
+      if (!F || !FS || FS.done || FS.outro || FS.vs || FS.enemyTurn || FS.grabInFlight || S.coachStep >= 0 || rr2Quiet()) return false;   // (ROUND 22: nor while the resolve row is busy)
       const ph = FS.rig ? FS.rig.phase : 'idle';
       if (ph !== 'idle' && ph !== 'moving') return false;
     }
@@ -15610,7 +15626,7 @@ const GAME = (() => {
     // Items in flight from the chute to their target, over everything.
     for (const th of FS.throws) {
       if (th.landed) continue;
-      const u = Math.min(1, th.t), sc = 1.25 + Math.sin(u * Math.PI) * 0.6;
+      const u = Math.min(1, th.t), sc = (th.rr2 ? 1.75 : 1.25) + Math.sin(u * Math.PI) * (th.rr2 ? 0.8 : 0.6);   // (ROUND 22: a card off the row flies big)
       if (R && R.item) R.item(ctx, th.def, th.x, th.y, u * th.spin, sc, { plus: th.inst.plus, glow: (RC && RC[th.def.rarity]) || '#ffc94d', glowA: 0.8 });
     }
   }
@@ -16206,6 +16222,7 @@ const GAME = (() => {
     schTick(dt, real);   // SCHOOL (round 11): the practice cabinet or a challenge, the result card's stars
     duoTick(real);   // DUO (round 11): the coin, the countdown, the claw-off, co-op's pass
     if (S.toastT > 0) { S.toastT -= dt; if (S.toastT <= 0) { const el = $('toast'); if (el) el.classList.remove('show'); } }
+    rr2Flush();   // ROUND 22: a toast held back while the resolve row was busy speaks now, one at a time
     if (S.screen === 'map') {
       walkTick(dt); camStep(dt); bloomTick(); chimeTick();
       if (S.t - (S.hudT || 0) > 0.15) { S.hudT = S.t; refreshHud(false); }
@@ -28150,12 +28167,22 @@ const GAME = (() => {
      pointer (rrRowTap), drawFight (rrRowDraw). The speed is
      meta.settings.rowSpd (1, 2 or 4; a new profile has none: 1x). */
   const RRW = {
-    x0: 8, x1: 532, y: 339, h: 46, gap: 5, wMax: 150, wCap: 200, wMin: 46, wHit: 40,   // the shelf (stage px): over the player row, under the enemies' feet and hp bars; slot widths
-    lift: 0.08, toss: 0.2, beat: 0.12, rest: 0.1, inT: 0.32, chip: 0.4, hold: 0.9, fade: 0.3,   // seconds at 1x (about 0.45 s an item, a frame or three included)
-    calm: { lift: 0.05, toss: 0.14, inT: 0.18 },   // Shake off / reduced motion: shorter travel
+    x0: 8, x1: 532, y: 336, h: 92, gap: 6, wMax: 120, wCap: 160, wMin: 54, wHit: 50,   // the panel (stage px): its top just under the enemies' hp bars and pips; card widths (round 22)
+    lift: 0.26, toss: 0.3, beat: 0.12, ibeat: 0.03, rest: 0.36, inT: 0.38, chip: 0.8, go: 0.7, hold: 1.5, fade: 0.4,   // seconds at 1x (round 22: about 0.95 s an item, a GO! beat first, 1.5 s on show after)
+    calm: { lift: 0.2, toss: 0.18, inT: 0.24 },   // Shake off / reduced motion: shorter travel, still slow enough to read
     SPEEDS: [1, 2, 4],
     off: false,   // true: the old immediate path (the tests' yardstick)
-    shown: false, pill: null, pillTx: '', pfxY: 128,
+    shown: false, pill: null, pillTx: '', pillLive: false, pfxY: 128,
+  };
+  /* ROUND 22 (DESIGN.md "The resolve row, round 22"): the panel has two shapes. While the claw is out it is a
+     band of cards (336..428, clear of the claw's rail at 436) with a YOUR HITS label on its left; once the claw
+     is home it opens down over the top of the glass (336..484, the claw is parked under it) with a header
+     (YOUR HITS, the running totals, the speed button) over bigger cards. op eases 0 (fill) to 1 (open). */
+  const RR2 = {
+    lab: 60, cardF: 82, head: 28, cardO: 110, pad: 5,   // the label column, the card heights, the header strip
+    btn: { w: 78, h: 24 },   // the speed button at the header's right
+    hintT: 7, hs: 0.06, ghost: 0.75,   // the first-time hint (s), the hit stop of a row hit, the hp ghost's hold at 1x
+    toasts: [],   // toasts held back while the row resolves, shown in order after it
   };
   const rrRowOn = () => !!(F && FS && !RRW.off);
   function rrRowSt() {
@@ -28189,7 +28216,7 @@ const GAME = (() => {
   }
   // The numbers in a list of events: hits on enemies (before their Block), your Block, healing, the first status, grabs.
   function rrRowNums(evs) {
-    const o = { d: 0, b: 0, h: 0, s: '', sv: 0, gr: 0, all: false, ice: false, any: false };
+    const o = { d: 0, dt: 0, b: 0, h: 0, s: '', sv: 0, gr: 0, all: false, ice: false, any: false };   // (round 22: dt, every hit added up, for the header's total)
     let hit = -1, same = true;
     const foes = {};
     for (const ev of evs || []) {
@@ -28199,7 +28226,7 @@ const GAME = (() => {
         if (foes[ev.idx]) same = false;   // one enemy hit twice: a total, not "each"
         foes[ev.idx] = 1;
         if (hit >= 0 && v !== hit) same = false;
-        hit = v; o.d += v;
+        hit = v; o.d += v; o.dt += v;
       } else if (ev.t === 'block' && ev.who === 'p') o.b += ev.amt | 0;
       else if (ev.t === 'heal' && ev.who === 'p') o.h += ev.amt | 0;
       else if (ev.t === 'status' && ev.v > 0 && !o.s && ev.s !== 'streak') { o.s = ev.s; o.sv = ev.v | 0; }
@@ -28258,9 +28285,19 @@ const GAME = (() => {
     const th = FS.throws[n0];
     if (!th) return;
     const tg = (th.def && th.def.target) || 'enemy';
-    if (tg === 'self' || tg === 'none' || th.self) { const p = hudPoint($('hpStat'), HP_HUD.x, HP_HUD.y); th.x1 = p.x; th.y1 = p.y; }
+    if (tg === 'self' || tg === 'none' || th.self) { const p = rr2SelfPt(s); th.x1 = p.x; th.y1 = p.y; }   // (round 22: Block flies into the shield chip)
     th.cx = (th.x0 + th.x1) / 2 + 20; th.cy = Math.min(th.y0, th.y1) - 46;
     th.dur = Math.max(0.02, rrRowDur('toss'));
+    th.rr2 = true;   // drawn bigger in flight (round 22)
+  }
+  // ROUND 22: where a self item lands: the shield chip for Block only, else the HP stat.
+  function rr2SelfPt(s) {
+    const n = s && s.pre, hp = hudPoint($('hpStat'), HP_HUD.x, HP_HUD.y);
+    if (!n || !(n.b > 0) || n.h > 0) return hp;
+    const el = $('blockTxt');
+    let r = null;
+    try { r = !S.headless && el && el.getBoundingClientRect ? el.getBoundingClientRect() : null; } catch (e) { r = null; }
+    return r && r.width > 0 ? hudPoint(el, hp.x, hp.y) : hp;
   }
   // playInst: what the play did lands on its slot; a relic that joined in (COMBAT stamps its id on what it did) rides along.
   function rrRowPlayed(inst, q0) {
@@ -28283,6 +28320,7 @@ const GAME = (() => {
     s.procs = procs.map((p) => ({ id: p.id, name: p.name, icon: p.icon, col: p.col, txt: p.txt, n: rrRowNums(p.evs) }));
     s.st = 'hit'; s.pop = 1; s.lift = 0;
     R.prog = S.t;
+    if (!S.headless && FS.beatT > 0) FS.beatT = 0;   // round 22: the landing is the hit (no leftover beat first)
   }
   // The playQ waits for the claw: a grab's prizes resolve once it is home (a stray prize at once).
   function rrRowGate() {
@@ -28358,6 +28396,7 @@ const GAME = (() => {
   // The queue applied q: a grab chip lights up and settles; before the row resolves, a proc the grab set off
   // right now (a PERFECT, LAMP FEVER, a pet) gets a labelled chip of its own, already played.
   function rrRowEv(q) {
+    if (FS) FS.rr2Q = null;   // (round 22: applyEvent is done with it)
     if (!q || !FS || !F || RRW.off) return;
     let R = FS.rrw;
     if (q.rr && R) R.prog = S.t;
@@ -28377,7 +28416,7 @@ const GAME = (() => {
     if (FS && FS.rrw && FS.rrw.skip) return 0;
     if (S.headless) return b;
     if (q.rrB != null) return q.rrB * rrRowK();
-    return (q.ev && q.ev.t === 'play' ? 0.02 : Math.min(b, RRW.beat)) * rrRowK();
+    return (q.ev && q.ev.t === 'play' ? 0.02 : Math.min(b, q.rr && q.rr.k === 'item' ? RRW.ibeat : RRW.beat)) * rrRowK();   // (round 22: an item's own numbers land together, its card's beat is the pause)
   }
   // Slot widths by weight: a played item 0.62, one to come 1, a grab chip 1.5 (1.15 once played); past the shelf the gaps
   // shrink, then the slots overlap.
@@ -28385,6 +28424,10 @@ const GAME = (() => {
   function rrRowWs(slots, W0) {
     const n = slots.length, out = { w: [], gap: RRW.gap };
     if (!n) return out;
+    // round 22: when the cards fit at full size (the normal 1 to 5 prizes) every one keeps it, played or not
+    let nat = 0;
+    for (const s of slots) nat += s.k === 'grab' ? RRW.wCap : RRW.wMax;
+    if (nat + RRW.gap * (n - 1) <= W0) { for (const s of slots) out.w.push(s.k === 'grab' ? RRW.wCap : RRW.wMax); return out; }
     let tot = 0, sum = 0;
     for (const s of slots) tot += rrRowKw(s);
     const unit = Math.min(RRW.wMax, (W0 - RRW.gap * (n - 1)) / tot);
@@ -28401,25 +28444,33 @@ const GAME = (() => {
     const rig = FS.rig;
     // a new drop: the last row is done by now (canSteer waits for it) and goes
     if (FS.grabInFlight && R.grabN !== FS.grabN) {
-      R.grabN = FS.grabN; R.go = false; R.skip = false; R.out = 0; R.live = null; R.hinted = false;
+      R.grabN = FS.grabN; R.go = false; R.skip = false; R.out = 0; R.live = null; R.hinted = false; R.hintT = 0; R.stamp = null;
       R.slots = R.slots.filter((s) => s.st !== 'hit' && s.st !== 'void');
     }
     // the claw is home and holds nothing: the row resolves (the grab completion test, less the row itself)
     if (FS.grabInFlight && !R.go && !FS.pendingDrop && rig && rig.phase === 'idle' && (FS.releaseAt < 0 || S.t - FS.releaseAt >= DELIVER_HOLD + 0.05) && rig.held().length === 0) {
       R.go = true; R.prog = S.t;
       if (FS.playQ.length && !R.hinted && rrRowSpd() < 4) { R.hinted = true; hint('tap the row to skip'); }
+      if (FS.playQ.length) rr2Go(R);   // ROUND 22: the GO! beat (the panel opens and pulses), the first-time hint
     }
     // the watchdog counts from the row's last step, not from the drop
     if (FS.grabInFlight && R.go && FS.dropAt < R.prog - WATCHDOG + 5) FS.dropAt = R.prog - WATCHDOG + 5;
+    // round 22: the panel opens once the claw is home (or for a stray prize), and closes for the next drop
+    const opT = R.go || !FS.grabInFlight ? 1 : 0;
+    R.op = S.headless || R.op == null ? opT : R.op + (opT - R.op) * Math.min(1, dt * 9);
+    if (R.goT > 0) R.goT -= dt;
+    if (R.goFx > 0) R.goFx = Math.max(0, R.goFx - dt / 0.9);
+    if (R.hintT > 0) R.hintT -= dt;
+    if (R.stamp && (R.stamp.t -= dt) <= 0) R.stamp = null;
     // the layout: what is still to come gets the room (a played item shrinks, a grab chip is wider for its name)
-    const n = R.slots.length, W0 = RRW.x1 - RRW.x0 - 8, ws = rrRowWs(R.slots, W0);
+    const n = R.slots.length, Gm = rr2Geo(R.op), W0 = Gm.x1 - Gm.x0, ws = rrRowWs(R.slots, W0);
     const ease = Math.min(1, dt * 14), inT = rrRowDur('inT');
-    for (let i = 0, ax = RRW.x0 + 4; i < n; i++) {
+    for (let i = 0, ax = Gm.x0; i < n; i++) {
       const s = R.slots[i], tw = ws.w[i], tx = ax + tw / 2;
       ax += tw + ws.gap;
       s.cx = s.cx == null || S.headless ? tx : s.cx + (tx - s.cx) * ease;
       s.w = s.w > 0 && !S.headless ? s.w + (tw - s.w) * ease : tw;
-      s.cy = RRW.y + RRW.h / 2;
+      s.cy = Gm.top + Gm.h / 2; s.h = Gm.h;
       if (s.pop > 0) s.pop = Math.max(0, s.pop - dt * 2.5);
       if (s.k !== 'item') continue;
       s.def = itemDef(s.inst.id); s.plus = !!s.inst.plus; s.name = itemName(s.def, s.plus);
@@ -28433,7 +28484,7 @@ const GAME = (() => {
       if (s) {
         if (F.phase !== 'player' || FS.done) { s.st = 'void'; s.lift = 0; }
         else if (R.skip) { if (s.st !== 'toss') { s.st = 'quick'; s.u = 1; } }
-        else if (s.st === 'wait' && FS.playT <= 0) { s.st = 'lift'; s.lt = 0; snd('tick', { pitch: 1.1 + Math.min(8, R.slots.indexOf(s)) * 0.09 }); }
+        else if (s.st === 'wait' && FS.playT <= 0 && !(R.goT > 0)) { s.st = 'lift'; s.lt = 0; snd('tick', { pitch: 1.1 + Math.min(8, R.slots.indexOf(s)) * 0.09 }); }   // (round 22: after the GO! beat)
         if (s.st === 'lift') {
           const L = rrRowDur('lift');
           s.lt += dt; s.lift = L > 0 ? Math.min(1, s.lt / L) : 1;
@@ -28442,27 +28493,116 @@ const GAME = (() => {
       }
     }
     if (!FS.queue.length) { R.live = null; for (const s of R.slots) if (s.k === 'grab' && (s.st === 'wait' || s.st === 'act')) s.st = 'hit'; }
-    if (!FS.grabInFlight && !FS.playQ.length && !FS.queue.length && !rrRowPending() && n) {
+    if (!FS.grabInFlight && !FS.playQ.length && (!FS.queue.length || FS.enemyTurn) && !rrRowPending() && n) {   // (round 22: the enemy turn's own queue never keeps it up)
       R.out += dt;
-      if (FS.enemyTurn) R.out = Math.max(R.out, RRW.hold);
-      if (R.out >= RRW.hold + RRW.fade) { R.slots.length = 0; R.out = 0; R.skip = false; R.go = false; R.live = null; }
+      if (FS.enemyTurn || FS.steering || (rig && rig.phase !== 'idle')) R.out = Math.max(R.out, RRW.hold);   // (round 22: and at once when you steer again)
+      if (R.out >= RRW.hold + RRW.fade) { R.slots.length = 0; R.out = 0; R.skip = false; R.go = false; R.live = null; R.hintT = 0; }
     } else R.out = 0;
     if (R.flash > 0) R.flash = Math.max(0, R.flash - dt * 3);
+    rr2Tot(R, dt);   // ROUND 22: the header's running totals count up
     rrRowShow(R.slots.length > 0);
+  }
+  /* ---- ROUND 22 helpers (DESIGN.md "The resolve row, round 22") */
+  // The panel's card area at op (0: the band while the claw is out, 1: open over the glass).
+  function rr2Geo(op) {
+    op = U.clamp(+op || 0, 0, 1);
+    const L = (a, b) => a + (b - a) * op;
+    return { x0: L(RRW.x0 + RR2.lab + 4, RRW.x0 + 5), x1: RRW.x1 - 5, top: L(RRW.y + RR2.pad, RRW.y + RR2.head + RR2.pad), h: L(RR2.cardF, RR2.cardO), ph: L(RR2.pad * 2 + RR2.cardF, RR2.head + RR2.cardO + RR2.pad * 2) };
+  }
+  // The speed button in the open header (stage px).
+  const rr2Btn = () => ({ x: RRW.x1 - 8 - RR2.btn.w, y: RRW.y + 2, w: RR2.btn.w, h: RR2.btn.h });
+  // The claw is home: a beat to see the whole row (GO!), then the first card lifts. Once a profile, the hint.
+  function rr2Go(R) {
+    R.goT = rrRowDur('go'); R.goFx = R.goT > 0 ? 1 : 0;
+    if (R.goFx) snd('whoosh', { pitch: 0.8 });
+    const st = S.meta && S.meta.settings;
+    if (st && typeof st === 'object' && !st.rowHint && !FS.vs) { st.rowHint = 1; saveMeta(); R.hintT = RR2.hintT; R.hintN = (R.hintN | 0) + 1; }
+  }
+  // The visual path's auto end turn waits for the row to resolve and show its total (headless keeps the old pace).
+  function rr2Wait() {
+    if (!rrRowOn() || S.headless) return false;
+    const R = FS.rrw;
+    return !!(R && R.slots.length && (FS.playQ.length || rrRowPending() || R.out < RRW.hold));
+  }
+  // While the panel is up (it fills, resolves, shows its total) the rest keeps quiet (round 22): banners, confetti,
+  // stickers, tips and toasts wait or shrink. The panel goes at once when you steer again or the enemy turn starts.
+  function rr2Quiet() {
+    if (!rrRowOn() || S.screen !== 'fight') return false;
+    const R = FS.rrw;
+    return !!(R && R.slots.length);
+  }
+  // toast(): held back while the row is busy (same words once: one entry).
+  function rr2Defer(str, secs) {
+    if (!rr2Quiet()) return false;
+    if (!RR2.toasts.some((o) => o.s === str)) RR2.toasts.push({ s: str, secs });
+    if (RR2.toasts.length > 4) RR2.toasts.shift();
+    return true;
+  }
+  function rr2Flush() {
+    if (!RR2.toasts.length || rr2Quiet() || S.toastT > 0.4) return;
+    const o = RR2.toasts.shift();
+    toast(o.s, o.secs);
+  }
+  // A little stamp on the panel (DOUBLE, JACKPOT!): the moment, kept on the row instead of over it.
+  function rr2Stamp(txt, col) {
+    const R = FS && FS.rrw;
+    if (R) R.stamp = { txt, col, t: 2.2 };
+  }
+  // A tag on a prize's card (FREE PRIZE, GOLDEN).
+  function rr2Tag(inst, txt, col) {
+    const s = rrRowOn() ? rrRowSlotOf(inst) : null;
+    if (s) { s.tag = txt; s.tagCol = col; }
+  }
+  // The header's totals: what the played cards and chips did, counting up.
+  function rr2Tot(R, dt) {
+    const T = R.tot || (R.tot = { d: 0, b: 0, h: 0 }), D = R.disp || (R.disp = { d: 0, b: 0, h: 0 });
+    T.d = 0; T.b = 0; T.h = 0;
+    for (const s of R.slots) {
+      const r = s.k === 'item' ? (s.st === 'hit' ? s.res : null) : s.st === 'act' || s.st === 'hit' ? s.res : null;
+      if (!r) continue;
+      T.d += (r.dt != null ? r.dt : r.d) | 0; T.b += r.b | 0; T.h += r.h | 0;
+    }
+    if (!R.slots.length) { D.d = D.b = D.h = 0; R.tp = 0; return; }
+    for (const k of ['d', 'b', 'h']) {
+      if (S.headless || T[k] < D[k]) { D[k] = T[k]; continue; }
+      if (D[k] < T[k]) { D[k] = Math.min(T[k], D[k] + Math.max(6, (T[k] - D[k]) * 7) * dt); R.tp = 1; }
+    }
+    if (R.tp > 0) R.tp = Math.max(0, R.tp - dt * 3);
+  }
+  // applyEvent's queue entry is a row's: its numbers pop big, the hp ghost holds longer, a hit stops for a moment.
+  function rr2Pre(q) {
+    if (!FS) return;
+    FS.rr2Q = q && q.rr && typeof q.rr === 'object' && !RRW.off && !(FS.rrw && FS.rrw.skip) ? q : null;
+    const ev = FS.rr2Q && FS.rr2Q.ev;
+    if (ev && ev.t === 'dmg' && ev.who === 'e' && ev.amt > 0 && !S.headless && !fx().reduced) FS.hitStop = Math.max(FS.hitStop, RR2.hs);
+  }
+  const rr2NumSz = (amt, crit) => (FS && FS.rr2Q ? U.clamp(34 + Math.sqrt(Math.max(0, amt | 0)) * 4, 34, 60) * (crit ? 1.15 : 1) : undefined);
+  const rr2Ghost = (v) => (FS && FS.rr2Q ? Math.max(v, RR2.ghost * rrRowK()) : v);
+  // A row's Block: a big +N flies into the shield chip (the default label otherwise).
+  function rr2Block(ev, enemy) {
+    if (enemy || !FS || !FS.rr2Q || !(ev.amt > 0)) return false;
+    const p = rr2SelfPt({ pre: { b: 1 } });
+    fx().num(p.x, Math.max(p.y + 66, 100), '+' + ev.amt, '#7fe8ff', { size: U.clamp(32 + Math.sqrt(ev.amt) * 3, 32, 50), vy: -50, gravity: 60, vx: 0, life: 1.3 });   // (under the top bar, which is DOM)
+    fx().ring(p.x, p.y, '#2ee6d6', { r0: 8, r1: 46, w: 5, life: 0.4 });
+    return true;
   }
   // A tap on the row (or the glass) while it resolves: the rest plays at once, with a flash.
   function rrRowTap(x, y) {
     const R = FS && FS.rrw;
-    if (!rrRowOn() || !R || R.skip || !R.slots.length) return false;
+    if (!rrRowOn() || !R || !R.slots.length) return false;
+    // ROUND 22: the speed button in the open header (a generous target)
+    const b = rr2Btn();
+    if (R.op > 0.5 && R.out < RRW.hold && x >= b.x - 10 && x <= b.x + b.w + 8 && y >= b.y - 10 && y <= b.y + b.h + 8) { rrRowCycle(); return true; }
+    if (R.skip) return false;
     if (FS.grabInFlight && !R.go) return false;   // still filling: the claw is at work
     if (!FS.playQ.length && !rrRowPending()) return false;
-    if (!(y >= RRW.y - 14 && y <= RRW.y + RRW.h + 14) && !inCabinet(x, y)) return false;
+    if (!(y >= RRW.y - 14 && y <= RRW.y + rr2Geo(R.op).ph + 14) && !inCabinet(x, y)) return false;   // (round 22: the whole panel)
     return rrRowSkip();
   }
   function rrRowSkip() {
     const R = FS && FS.rrw;
     if (!R || R.skip) return false;
-    R.skip = true; R.flash = 1;
+    R.skip = true; R.flash = 1; R.goT = 0;
     for (const th of FS.throws) if (!th.landed) th.dur = Math.min(th.dur, 0.04);
     if (FS.beatT > 0) FS.beatT = 0;
     if (FS.playT > 0) FS.playT = 0;
@@ -28482,8 +28622,10 @@ const GAME = (() => {
   // The speed pill in the fight's control row, after the camera (a plain tap, never a GAME.choose entry).
   function rrRowDom() {
     if (RRW.pill) {
-      const tx = rrRowSpd() + 'x';
+      const tx = '\u00bb ' + rrRowSpd() + 'x';   // (round 22: » 1x, the same mark as the row's own button)
       if (RRW.pillTx !== tx) { RRW.pillTx = tx; RRW.pill.textContent = tx; }
+      const R = FS && FS.rrw, live = !!(R && R.slots.length && (R.go || !FS.grabInFlight) && (FS.playQ.length || rrRowPending()));
+      if (live !== RRW.pillLive && RRW.pill.classList) { RRW.pillLive = live; RRW.pill.classList[live ? 'add' : 'remove']('rrLive'); }   // it lights up while the row resolves
       return;
     }
     const row = document.querySelector ? document.querySelector('#ctrl .ctrlRow') : null;
@@ -28507,7 +28649,8 @@ const GAME = (() => {
     if (RRW.pill) { RRW.pillTx = ''; rrRowDom(); replay(RRW.pill, 'bump'); }
     return v;
   }
-  const RRW_ST = { x0: 0, x1: 0, y: 0, h: 0, a: 1, t: 0, reduced: false, flash: 0, slots: null };
+  const RRW_ST = { x0: 0, x1: 0, y: 0, h: 0, a: 1, t: 0, reduced: false, flash: 0, slots: null,
+    op: 0, ph: 0, tot: null, tp: 0, spd: 1, live: false, go: 0, stamp: null, hint: 0, btn: null, aim: [] };   // (round 22)
   // drawFight: the shelf and its slots (RENDER.rrRow), before the throws so a toss flies over it.
   function rrRowDraw(ctx, t) {
     const R = FS && FS.rrw, Rd = X.RENDER;
@@ -28515,6 +28658,18 @@ const GAME = (() => {
     RRW_ST.x0 = RRW.x0; RRW_ST.x1 = RRW.x1; RRW_ST.y = RRW.y; RRW_ST.h = RRW.h; RRW_ST.t = t;
     RRW_ST.a = R.out > RRW.hold ? Math.max(0, 1 - (R.out - RRW.hold) / RRW.fade) : 1;
     RRW_ST.reduced = !!fx().reduced; RRW_ST.flash = R.flash; RRW_ST.slots = R.slots;
+    // round 22: the panel's shape, the header's totals and button, the GO! beat, a stamp, the hint, the aim
+    const op = R.op == null ? 1 : R.op;
+    RRW_ST.op = op; RRW_ST.ph = rr2Geo(op).ph; RRW_ST.tot = R.disp || null; RRW_ST.tp = R.tp || 0; RRW_ST.spd = rrRowSpd();
+    RRW_ST.live = !!((R.go || !FS.grabInFlight) && (FS.playQ.length || rrRowPending()));
+    RRW_ST.go = R.goFx || 0; RRW_ST.stamp = R.stamp || null; RRW_ST.btn = rr2Btn();
+    RRW_ST.hint = R.hintT > 0 ? Math.min(1, R.hintT / 0.4, (RR2.hintT - R.hintT) / 0.3) : 0;
+    RRW_ST.aim.length = 0;
+    const L = R.slots.find((s) => s.k === 'item' && (s.st === 'lift' || s.st === 'toss'));
+    if (L && L.pre && L.pre.d > 0 && F) {
+      const all = L.def && L.def.target === 'all';
+      F.enemies.forEach((e, i) => { if (e && e.alive && (all || i === F.target)) { const p = enemyPos(i); RRW_ST.aim.push({ x: p.x, y: p.y - p.h * 0.5, r: Math.max(34, p.w * 0.45) }); } });
+    }
     Rd.rrRow(ctx, RRW_ST);
   }
   function RROW_API() {
@@ -28522,6 +28677,8 @@ const GAME = (() => {
       K: RRW, on: () => rrRowOn(), speed: () => rrRowSpd(), cycle: rrRowCycle, skip: () => (FS ? rrRowSkip() : false), tap: (x, y) => (FS ? rrRowTap(x, y) : false),
       pending: () => (FS ? rrRowPending() : false), nums: rrRowNums, dur: (k) => rrRowDur(k), draw: (ctx, t) => { if (FS) rrRowDraw(ctx, t || 0); },
       get state() { return FS ? FS.rrw || null : null; }, get off() { return RRW.off; }, set off(v) { RRW.off = !!v; },
+      // round 22: the panel's shapes, the quiet window and the toasts it holds, the speed button, a toast, a sticker
+      K2: RR2, geo: rr2Geo, quiet: () => rr2Quiet(), btn: rr2Btn, toast: (s, secs) => toast(s, secs), sticker: (id) => metaToast({ k: 'ach', id }),
     };
   }
   // ================================================================ /RROW

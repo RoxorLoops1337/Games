@@ -3882,7 +3882,8 @@ t.test('round 21: the starting items hit and block for less; their upgrade keeps
   for (const ch in DATA.CHARACTERS) for (const id of new Set(DATA.CHARACTERS[ch].bin)) if (OLD[id]) t.ok(ITEMS[id].fx[0].v < OLD[id][0], `${ch}: ${id} is weaker`);
   // the act 1 dial (combat applies it; the balance suite pins the numbers)
   const A = DATA.DIFFICULTY.act1;
-  t.ok(A && A.hp > 1 && A.dmg > 1 && A.first && A.first.hp < A.hp, `DIFFICULTY.act1 ${JSON.stringify(A)}`);
+  // (round 22) no gentler first fight; act 1's elites read their own sub-dial, a notch under tierDmg's full lift
+  t.ok(A && A.hp > 1 && A.dmg > 1 && !A.first && A.elite && A.elite.hp > 0.5 && A.elite.hp <= 1 && A.elite.dmg > 0.5 && A.elite.dmg <= 1, `DIFFICULTY.act1 ${JSON.stringify(A)}`);
   t.eq(DATA.ENEMIES.golem.status.thorns, 1, 'the Brass Golem bites back for 1 (was 2)');
 });
 

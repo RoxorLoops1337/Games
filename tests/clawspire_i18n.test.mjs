@@ -979,6 +979,35 @@ h.test('rrow (round 21): the resolve row speaks Dutch: its chips, the skip hint,
   T.I18N.set('en');
 });
 
+h.test('rrow22: the big panel speaks Dutch: JOUW TREFFERS, the band\'s label, GAAN!, the tags and the first-time hint', () => {
+  const T = boot();
+  T.I18N.set('nl');
+  for (const [en, nl] of [['YOUR HITS', 'JOUW TREFFERS'], ['GO!', 'GAAN!'], ['FREE', 'GRATIS'], ['GOLDEN', 'GOUDEN'], ['Your prizes hit one by one. Tap \u00bb to speed up.', 'Je prijzen slaan één voor één toe. Tik op \u00bb om te versnellen.']]) h.eq(T.I18N.tr(en), nl, en);
+  const said = [];
+  const ctx = new Proxy({}, { get(t, p) {
+    if (p === 'measureText') return (s) => ({ width: String(s).length * 7 });
+    if (p === 'fillText') return (s) => said.push(String(s));
+    if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+    if (p in t) return t[p];
+    return () => {};
+  }, set(t, p, v) { t[p] = v; return true; } });
+  const sword = T.DATA.ITEMS.rusty_sword;
+  const slots = [{ k: 'item', st: 'wait', cx: 120, cy: 420, w: 120, h: 110, def: sword, name: 'Rusty Sword', pre: { d: 6, all: true, any: true }, tag: 'FREE' },
+    { k: 'grab', st: 'act', cx: 300, cy: 420, w: 160, h: 110, tag: 'RELIC', label: 'Jackpot Bell', col: '#ffc94d', icon: '', res: { d: 5, all: true, any: true } }];
+  T.RENDER.rrRow(ctx, { x0: 8, x1: 532, y: 336, ph: 148, op: 1, a: 1, t: 0, go: 0.6, spd: 2, tot: { d: 11, b: 4, h: 0 }, hint: 1, btn: { x: 446, y: 338, w: 78, h: 24 }, slots });
+  h.ok(said.includes('JOUW TREFFERS'), 'the header in Dutch: ' + said.join(' | '));
+  h.ok(said.includes('\u00bb 2x'), 'the speed button');
+  h.ok(said.includes('GRATIS'), 'a free prize\'s tag');
+  h.ok(said.includes('6 ALLE') && said.includes('5 ALLE'), 'the numbers: ALLE');
+  h.ok(said.some((s) => /Roestig Zwaard/.test(s)), 'the card\'s name');
+  h.ok(said.includes('Je prijzen slaan één voor één toe. Tik op \u00bb om te versnellen.'), 'the first-time hint');
+  h.ok(!said.some((s) => /YOUR|HITS|one by one/.test(s)), 'no English left');
+  said.length = 0;
+  T.RENDER.rrRow(ctx, { x0: 8, x1: 532, y: 336, ph: 92, op: 0, a: 1, t: 0, slots });
+  h.ok(said.includes('JOUW') && said.includes('TREFFERS'), 'the band\'s label, stacked: ' + said.join(' | '));
+  T.I18N.set('en');
+});
+
 // ---------------------------------------------------------------- CR (round 21): combo relics, plus 2
 h.test('cr: the combo relics, the elite\'s pick, the help and the Compactor\'s ++ in Dutch', () => {
   const T = boot({ language: 'nl-NL', store: { clawspire_meta: JSON.stringify({ introSeen: true, tutorialDone: true, unlocks: { knight: true } }) } });

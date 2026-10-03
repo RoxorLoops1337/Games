@@ -7749,6 +7749,89 @@ phones agree on the boss and both seats. Screenshots (390x844, English and Dutch
 first (under 84 px a slot shows its art and number only). The tray chips in the control bar still show the last two
 plays.
 
+### The resolve row, round 22: impossible to miss
+
+The owner played the live round 21 build: "I couldn't really see this like where I can see the damage slowly coming
+in and so on". **Why it was missed**: the shelf was a 46 px strip (33 css px on a 390 px phone) wedged between the
+enemies' hp bars and the cabinet's frame, its art 24 to 30 px and its numbers 13 to 15 px; an item resolved in about
+0.45 s and the shelf faded 0.9 s after the last one; and at the same moment the JACKPOT banner (lifted over the
+arena), the corner confetti, FREE PRIZE, DOUBLE and +PLAYED floaters, a sticker card, a toast and the TURN OVER
+banner all went off. The eye went to the noise, and the row was over before it was found. Round 22 keeps the
+pipeline and the results (the same plays in the same order, grabDone where it was, the same numbers; only
+presentation and pacing change) and rebuilds what you see.
+
+**The panel.** One canvas panel with two shapes (`RR2`, `rr2Geo(op)`, `R.op` easing 0 to 1):
+- *While the claw is out* (the band, stage 336..428, clear of the claw's rail at 436, so a carry stays in view):
+  a YOUR HITS label on the left with a little arrow, then the prizes as proper cards, 82 px tall, up to 120 wide:
+  the item's art large, a big number in its effect's colour (sword 5, shield +4, cross +3, a status pip, THAW, ALL)
+  and the name under it. Each prize still flies in from the chute onto its card. A free or golden prize wears a
+  FREE / GOLDEN ribbon on its card; DOUBLE and JACKPOT! are a stamp on the panel's corner.
+- *Once the claw is home* (open, 336..484): the panel slides down over the top of the glass (the claw is parked
+  under it) with a header (YOUR HITS, the running totals sword N and shield N (and cross N when you healed) that
+  count up as cards land, and a gold **» 1x** speed button at its right) over 110 px cards. The panel's edge
+  pulses gold while it resolves.
+- 1 to 4 cards keep full size (5 at about 100 px); past that the played ones narrow to art and number, then all
+  shrink (`rrRowWs`: natural widths first, the round 21 weights only when they do not fit).
+- Grab chips (relics, combos, Luck, pets) are cards too: the source's icon, its name as large as fits (two lines
+  for a long or Dutch name), its number big at the bottom.
+
+**The pace at 1x** (`RRW`): the claw is home: **GO!** (a chrome stamp over the panel, the edge flashes gold, a
+whoosh) and a 0.7 s beat to see the whole row; then per card about 0.95 s: it lifts, grows (x1.13) and glows gold
+while its number grows (0.26 s) and a dashed gold ring marks what it is about to hit (the target enemy, every enemy
+for ALL); it flies there drawn big (1.75x, 0.3 s); the landing is the hit (no leftover beat first), its numbers
+land together (0.03 s apart) with a short hit stop (`RR2.hs`, physics only); the damage number pops big on the
+enemy (34 to 60 px, `rr2NumSz`), the hp bar's white ghost chunk holds 0.75 s before it drains (`rr2Ghost`), Block
+lands in the shield chip with a big cyan +N under the top bar (`rr2Block`; a Block only card flies to that chip,
+`rr2SelfPt`); the card shows what it did with a green tick; a 0.36 s rest; the next card. Grab chips 0.8 s each.
+The panel then holds its total 1.5 s and fades in 0.4 s. A three prize grab is on screen about 4.8 s from GO!.
+2x and 4x divide every step (2x is about 0.47 s a card, still one by one). **Calm** (Shake off, reduced motion):
+lift 0.2 s, toss 0.18 s, fly-in 0.24 s, no growing, sway, glow or hit stop; the beats stay, so it still reads.
+
+**Quiet while it is up** (`rr2Quiet`: the panel is on screen):
+- the third prize's JACKPOT is the stamp, a small burst and coins at the chute and a little shake, not the banner,
+  the flash and the corner confetti (the jackpot still counts: stats, stickers, the marquee, the claw's twirl);
+- DOUBLE is the stamp; FREE PRIZE! a small mark at the chute and a ribbon on the card (no confetti); +PLAYED is gone;
+  a golden prize keeps its words but no flash or confetti;
+- sticker and discovery cards wait in their queue (`metaFxTick`), tip cards wait (`feelTipSafe`), and toasts wait
+  in `RR2.toasts` (one entry per text, four at most) and speak one at a time once the panel is gone (`rr2Flush`);
+- the last grab of a turn: the auto END TURN (and its TURN OVER banner) waits until the row is played and its
+  total held (`rr2Wait`, the visual path only), and the enemy turn's own queue never keeps the panel up.
+- The coach is untouched: its last step ends at the first delivery as before, and its box (stage 540+) sits under
+  the open panel.
+
+**Speed and skip.** The control row's pill reads **» 1x** and turns gold and pulses while a row resolves (`.rrLive`);
+the panel's own » button does the same (a tap on it cycles 1x, 2x, 4x and never skips). A tap anywhere else on the
+panel or the glass still skips (the rest at once, a white flash; the GO! beat too). New profiles start at 1x.
+
+**First time.** The first row a profile ever resolves shows a one-line hint under the panel, pointing up at it:
+"Your prizes hit one by one. Tap » to speed up." (7 s, gone with the panel or the next drop). Saved once as
+`meta.settings.rowHint` inside `clawspire_meta` (no new key; loadMeta keeps settings).
+
+**Code.** game.js RROW block: `RRW` (new pace, `go`, `ibeat`), `RR2` (geometry, the hint, the hit stop, the held
+toasts), `rr2Geo`, `rr2Btn`, `rr2Go`, `rr2Quiet`, `rr2Wait`, `rr2Defer`, `rr2Flush`, `rr2Stamp`, `rr2Tag`, `rr2Tot`,
+`rr2Pre`, `rr2NumSz`, `rr2Ghost`, `rr2Block`, `rr2SelfPt`; one-line hooks in toast, the queue loop (`rr2Pre`),
+applyEvent (dmg size and ghost, block), deliver, freePrize, goldenPrize, metaFxTick, feelTipSafe, afterAction and the
+auto end tick, update (`rr2Flush`) and the throw's draw size; `GAME.row` adds `K2, geo, quiet, btn, toast, sticker`.
+render.js RROW block: `rr2Paint` (taken when `st.ph` is set; the thin round 21 shelf stays for old callers),
+`rr2Card`, `rr2Chip`, `rr2Nums`, `rr2Head`, `rr2Label`, `rr2Hint`, `rr2W`, `rr2Fs`; `rrRowIn` lands on the big
+card's art. index.html: `.rrSpd.rrLive`. Dutch in lang_nl2.js (block "RROW round 22"). Headless keeps the round 21
+timings and order (no GO! beat, no hit stop, the old beats), so every older suite holds.
+
+**Tests** (game suite, `rrow22:`): at 1x a three prize grab: GO! first (0.6 s or more), cards 0.75 to 1.1 s
+apart, the panel up 1.5 s after the last hit and 4.5 s or more from GO!, 100 px plus cards once open; the header's
+totals equal the Block gained and the hits dealt, calm still takes 1.4 s or more for three; the quiet window (no
+JACKPOT banner, a stamp instead, the jackpot still counted; a toast, a sticker and a tip card wait, then come once
+the panel is gone; no row: the banner as ever); the first-time hint shows once, is saved in settings.rowHint and
+survives a reload; the panel's » button cycles the speed without skipping, 2x is still one by one (0.35 to 0.6 s
+a card); the panel draws its band, header, GO!, stamp, hint and aim, calm too, junk input safe. The round 21 tests
+now expect "» 1x" and about 0.9 s a card. i18n suite: the panel in Dutch (JOUW TREFFERS, GAAN!, GRATIS, the hint).
+
+**Seen in the real build** (`npm run build`, dist/ served, Chromium at 390x844, a fresh profile: intro, title, New
+run, Start run, a boon, the map's first fight with the coach, real drags on the glass; then later grabs and a staged
+four prize scoop with Jackpot Bell, Prize Counter and Venom Gland, English and Dutch): frames every 150 to 250 ms in
+scratchpad `r22row/` (`en/`, `nl/`, `big_en/`, `big_nl/`, contact sheets `sheet_*.png`; drivers `play.mjs`,
+`big.mjs`, `sheet.mjs`).
+
 ## Quality bar (Game of the Year, mobile)
 
 - Every action has feedback: sound + motion + number. Screen shake on big hits (respect the
@@ -7886,3 +7969,91 @@ a combo relic, the first elite's pick and its reload, a second elite offers none
 the pools, the Prizedex and help text, a +2 crush, its name, card, bin group, reload, fight number and sell price;
 the older elite and tower flows walk through the pick), render (every combo glyph, the +2 marks), i18n (the relics,
 procs, patterns and the pick in Dutch). Screenshots: scratchpad `r21rules/r21_{pick,relics,cmp_grid,cmp_pick,cmp_result}_{en,nl}.png`.
+
+### First fights are a threat (round 22)
+
+The owner played round 21 and killed the first enemy before it could hit back. Round 21 had given the run's first
+fight x0.85 hp / x0.85 hits; that discount is gone, and the act 1 dial got an elite sub-dial.
+
+**Method.** The round 19 bot copied to scratchpad `r22diff/bal22.mjs`, with an attribution mode (`DSRC=1`: every
+COMBAT call credited with the enemy damage it dealt) and `FMAX` (stop after n fights). Snapshots `r22diff/base`
+(the round 21 build) and `r22diff/fin` (these dials), batches `cal22.sh`, tables `agg22.mjs`, `ffch.mjs` (first fight
+by crawler), `a1n.mjs` (act 1 normals by fight number), `killers.mjs`. Seven crawlers x classic / tri / scoop / twins,
+Tilt 0, cabinet on, seeds from 22000. Bots: skilled (`PRO=2`, perfect hands, 2.6 to 2.8 prizes a drop), human-like
+(`HUMAN=1`, 1.0 to 1.2 prizes a drop in the first fight, a sparse pile), and a strong human (`PRO=3`, aimed but no
+bonus catch, 2.4 a drop) as the "decent player" in between. "First fight" is the run's first fight when it is a
+normal (the skilled bot opens on an elite in 1 run of 5; those are listed apart).
+
+**Where fight 1's damage comes from** (skilled bot, round 21 build, per player turn): the starter items played from
+the bin carry most of it (Knight: Rusty Swords 10.0, Spiked Buckler 4.0, Iron Chain 2.0, Prize Marbles 2.1, 18 a
+turn, nothing automatic; the Squire's Gauntlet's 5 Block is defence only). Crawler kits add: Lucky Lou's Luck cash
+out, Snake Eyes and his Casino combos (Dealer's Visor) about 23 a turn, 60% of his damage; Mama Mech's turret 13 a
+turn (35%); the Alchemist's Satchel poison and her vials' ticks 12 a turn (60%); Ms. Bubbles' bubbles and Bubble
+Combo 5; Joy Stick's Service Remote zaps 2.5. On top for everyone: the Golden Prize (3 to 4% of fight 1's damage),
+cracked glass and a thrown-back bomb (under 1 a turn), and the run-start boon (Polish, Warm-Up Tokens, a pet, or a
+rare relic from Favor / Blood Pact). No other combos (relic only), no pet without the boon.
+
+**Before (round 21).** The skilled bot ended the first fight in 4.2 turns losing 6% HP (63% of first fights cost
+nothing: the starter Block soaks it); its later act 1 normals cost 1%. Its win rate was **8%**, not round 19's 32%:
+round 21's weaker starters and relic-only combos made act 1's elites the wall (the Prize Mimic alone 15 of 77
+deaths; 23% of act 1 elite fights lost). The human-like bot already won 0%.
+
+| skilled bot (`PRO=2`), Tilt 0 | before (84 runs) | after (76 runs) |
+| --- | --- | --- |
+| first fight: turns / HP lost / lost the fight | 4.2 / 6.3% / 0% | 5.0 / 15.3% / 2% |
+| first fight: 1 / 2 / 3 / 4+ turns | 4 / 18 / 16 / 61% | 0 / 12 / 24 / 64% |
+| first fight by crawler (turns, HP lost) | Knight 5.0 2%, Alch 4.7 12%, Rogue 5.0 16%, Lou 2.1 3%, Mech 2.3 2%, Bubbles 5.8 0%, Joy 4.9 10% | Knight 6.8 16%, Alch 5.6 10%, Rogue 6.3 30%, Lou 2.8 7%, Mech 2.7 7%, Bubbles 6.6 1%, Joy 5.8 41% |
+| act 1 normals, fights 2-3 / 4-6 / 7+ (turns, HP lost) | 4.6 8%, 3.4 0%, 2.6 -1% | 4.5 3%, 3.4 0%, 2.4 0% |
+| act 1 elites: turns / HP lost / lost | 5.8 / 47% / 23% | 5.1 / 30% / 12% |
+| act 1 boss: turns / HP lost / lost | 4.1 / 37% / 32% | 4.4 / 40% / 27% |
+| deaths act 1 / 2 / 3 | 52 / 20 / 5 | 38 / 21 / 8 |
+| win | 8% | 12% |
+
+| human-like bot (`HUMAN=1`), Tilt 0 | before (84 runs) | after (84 runs) |
+| --- | --- | --- |
+| first fight: turns / HP lost / lost the fight | 7.4 / 41% / 19% | 7.8 / 54% / 36% |
+| act 1 normals after it: turns / HP lost / lost | 4.7 / 23% / 25% | 4.4 / 19% / 21% |
+| act 1 elites: HP lost / lost | 67% / 58% | 43% / 17% |
+| fights a run | 3.9 | 3.9 |
+| deaths act 1 / 2 / 3, win | 82 / 1 / 1, 0% | 82 / 2 / 0, 0% |
+
+| strong human (`PRO=3`, first 6 fights, 56 runs) | before | after |
+| --- | --- | --- |
+| first fight: turns / HP lost / lost | 4.7 / 13% / 0% | 6.0 / 25% / 7% |
+| act 1 normals after it: turns / HP lost | 4.9 / 9% | 4.7 / 7% |
+| act 1 elites: HP lost / lost | 57% / 43% | 50% / 28% |
+
+### The dials (old -> new)
+
+| dial | where | old | new |
+| --- | --- | --- | --- |
+| the run's first fight | `DIFFICULTY.act1.first` (combat.js `crAct1Mul`) | x0.85 hp, x0.85 hits | removed: it reads `act1` like every act 1 normal (x1.15, x1.05) |
+| act 1 normals' hits | `DIFFICULTY.act1.dmg` | 1.1 | 1.05 (the first fight went up x1.35 hp, x1.24 hits; this keeps it inside the band) |
+| act 1 normals' hp | `DIFFICULTY.act1.hp` | 1.15 | 1.15 |
+| act 1 elites in act 1 (new) | `DIFFICULTY.act1.elite`, on top of `tierDmg` | none | x0.85 hp, x0.85 hits |
+| act 1 boss (new, unset) | `DIFFICULTY.act1.boss` | none | none (untouched) |
+| the Claw Crab | `ENEMIES` crab thorns / hp | 2 / 26-30 | 1 / 24-28 (with the full dial on the first fight a bare Pip bin never beat it; its thorns punish the many small hits of a weak bin; the Golem's round 21 fix. The hp trim came after the batches above, which ran with thorns 1 and 26-30 hp) |
+
+**Read.** The first fight now lasts 3+ turns for the skilled bot in 88% of runs (5.0 on average) and costs it 15%
+HP; the strong human 6 turns and 25%. Act 1's elites are still the big step (30 to 50% HP), no longer the wall, and
+the skilled bot's deaths spread more evenly (act 1 from 52 to 38 of its deaths).
+
+### What is left for the owner
+
+- **The weakest hand pays for it in fight 1.** The human-like bot dies in its first fight 36% of the time (was 19%);
+  its runs are no shorter (3.9 fights: it now survives the elites more), and it still wins 0%. Its Knight (long swords
+  slip: 1.0 prizes a drop) dies in 7 of 11 first fights. If a new player's first fight on the Knight proves too hard
+  in a playtest, the knob is `act1.hp` (the first fight and every act 1 normal) or a Knight-only starter number.
+- **Later act 1 normals are still soft for a perfect hand** (about 3 turns, 0 to 3% HP: its bin has grown and it
+  heals). Raising `act1.dmg` for them would also lift the first fight above the 25% band.
+- **Crawler spread in fight 1.** Lucky Lou and Mama Mech still end it in under 3 turns (their kits: the Luck cash
+  out and the turret, not starter items); Joy Stick and Pip lose 30 to 40%. Their kits are in combat.js (`LUCK`, `TUR`).
+- **The skilled win rate is 12%, not 25 to 35%.** Round 21 took it from 32% to 8%; the deaths now sit in act 2 and 3
+  as much as act 1 (the Plushie Queen 11, the Mimic 9, then the Dozer, Ironjaw, the Collector). Getting back to the
+  round 12 target needs a pass on acts 2 and 3 (or the combo relic coming earlier), not the act 1 dial.
+- **Tests.** Balance: the first fight reads the same dial as fight 1 (escalation and dial tests), act 1 normals x hp /
+  x hits with the first fight the same fight, the elite sub-dial on mimic / Brood Mother / Barker (same roll and
+  affix) and still a step up (1.5x a normal's hp, 1.4x its biggest hit), the boss reads `act1.boss` (unset:
+  untouched), minions and act 2 normals and elites untouched, the bare bin needs 3+ turns and loses 5%+ in the model;
+  the "beatable" guard plays the back quarter of the act 1 list (the band, never a first fight) with a mid-act deck.
+  Data: `act1` has no `first` and an elite sub-dial in (0.5, 1].

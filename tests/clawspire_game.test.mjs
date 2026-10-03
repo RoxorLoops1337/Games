@@ -12217,10 +12217,10 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
     const { T, G } = rrBoot(false);
     h.eq(G.row.speed(), 1, 'a new profile: 1x');
     stepFor(G, 0.05);
-    h.ok(G.row.K.pill && G.row.K.pill.id === 'rrSpeed' && G.row.K.pill.textContent === '1x', 'the pill sits in the fight\'s control row');
+    h.ok(G.row.K.pill && G.row.K.pill.id === 'rrSpeed' && G.row.K.pill.textContent === '\u00bb 1x', 'the pill sits in the fight\'s control row (\u00bb 1x, round 22)');
     h.eq(G.row.cycle(), 2, 'a tap: 2x');
     stepFor(G, 0.05);
-    h.eq(G.row.K.pill.textContent, '2x', 'the pill says so');
+    h.eq(G.row.K.pill.textContent, '\u00bb 2x', 'the pill says so');
     const m = JSON.parse(T._store.clawspire_meta);
     h.eq(m.settings.rowSpd, 2, 'saved inside the meta object (settings.rowSpd)');
     h.ok(Object.keys(T._store).every((k) => /^clawspire_/.test(k)) && !Object.keys(T._store).some((k) => /row|speed/i.test(k)), 'no new localStorage key: ' + Object.keys(T._store).join());
@@ -12258,7 +12258,7 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
     const slow = run(false), fast = run(true);
     h.ok(fast.tapped && fast.left >= 2, 'a tap on the row skips (' + fast.left + ' left)');
     h.ok(fast.frames <= 12, 'the rest resolved in ' + fast.frames + ' frames (' + slow.frames + ' at 1x)');
-    h.ok(slow.frames >= 90 && slow.frames <= 150, 'at 1x four prizes take about 0.45 s each (' + slow.frames + ' frames, the first one\'s landing on the row included)');
+    h.ok(slow.frames >= 220 && slow.frames <= 330, 'at 1x four prizes take about 0.9 s each after a GO! beat (round 22: ' + slow.frames + ' frames, the first one\'s landing on the row included)');
     h.eq(fast.hp + '|' + fast.p, slow.hp + '|' + slow.p, 'the same hp and Block either way');
   });
 
@@ -12308,6 +12308,201 @@ h.test('ui15: the HUD: the act chip, the shield chip, the markup keeps every id'
     h.ok(!threw, 'draw never throws: ' + (threw && threw.stack));
     let threw2 = null;
     try { T.RENDER.rrRow(T._ctx, { slots: [{ k: 'item', st: 'wait', cx: 50, cy: 360, w: 40 }, { k: 'grab', st: 'act', cx: 100, cy: 360, w: 90, res: { d: 3, any: true } }, null], y: 339, h: 46, x0: 8, x1: 532 }); T.RENDER.rrRow(T._ctx, null); T.RENDER.rrRow(T._ctx, { slots: 'x' }); } catch (e) { threw2 = e; }
+    h.ok(!threw2, 'junk input never throws: ' + (threw2 && threw2.stack));
+  });
+
+  /* ---- ROUND 22: the row made impossible to miss (DESIGN.md "The resolve row, round 22") */
+  // Steps the visual path (not headless) until done(), returns the frames taken.
+  const visual = (G, n, each) => { G.S.headless = false; let i = 0; try { for (; i < n; i++) { G.update(DT); if (each && each(i) === false) break; } } finally { G.S.headless = true; } return i; };
+
+  h.test('rrow22: at 1x a three prize grab is on screen for seconds: a GO! beat, then about 0.9 s a card, then 1.5 s with its total', () => {
+    const { G, C } = rrBoot(false);
+    h.eq(G.row.speed(), 1, 'a new profile plays the row at 1x');
+    fakeGrab(G, C, pick(G, 3, (d) => (d.fx || []).some((f) => f && f.k === 'dmg' && f.v > 0)).concat(pick(G, 3)).slice(0, 3));
+    const t0 = G.S.t;
+    let goAt = -1, lifts = [], hits = [], shownUntil = -1, opMax = 0, goFx = 0, bandH = 0, openH = 0;
+    visual(G, 60 * 12, () => {
+      const R = G.row.state;
+      if (!R) return;
+      if (R.slots.length) shownUntil = G.S.t;
+      if (R.go && goAt < 0) goAt = G.S.t;
+      opMax = Math.max(opMax, R.op || 0); goFx = Math.max(goFx, R.goFx || 0);
+      const items = R.slots.filter((s) => s.k === 'item');
+      items.forEach((s, i) => { if (s.st === 'lift' && lifts[i] == null) lifts[i] = G.S.t; if (s.st === 'hit' && hits[i] == null) hits[i] = G.S.t; });
+      if (items[0] && items[0].h) { if (R.op < 0.05) bandH = items[0].h; if (R.op > 0.95) openH = items[0].h; }
+      if (!R.slots.length && shownUntil > 0) return false;
+    });
+    h.ok(goAt >= t0 && goFx > 0.9, 'the claw is home: GO! (the beat lit)');
+    h.ok(lifts[0] - goAt >= 0.6, 'the first card waits for the GO! beat (' + (lifts[0] - goAt).toFixed(2) + ' s)');
+    h.ok(hits.length === 3 && hits.every((x) => x > 0), 'three cards hit');
+    const gaps = [hits[1] - hits[0], hits[2] - hits[1]];
+    h.ok(gaps.every((g) => g >= 0.75 && g <= 1.1), 'one by one, about 0.9 s apart (' + gaps.map((g) => g.toFixed(2)).join(', ') + ')');
+    h.ok(shownUntil - hits[2] >= 1.5, 'the panel and its total stay up 1.5 s after the last hit (' + (shownUntil - hits[2]).toFixed(2) + ' s)');
+    h.ok(shownUntil - goAt >= 4.5, 'the row is on screen for ' + (shownUntil - goAt).toFixed(1) + ' s from GO!');
+    h.ok(opMax > 0.95, 'the panel opened over the glass once the claw was home');
+    h.ok(openH >= 100 && openH > (G.row.K.h - 20), 'big cards: ' + openH.toFixed(0) + ' px tall (round 21: 40)');
+  });
+
+  h.test('rrow22: the header counts what really landed; Block lands in the shield chip; a calm player keeps the slow pace', () => {
+    const { T, G, C } = rrBoot(false);
+    const blk = pick(G, 1, (d) => (d.fx || []).some((f) => f && f.k === 'block') && !(d.fx || []).some((f) => f && (f.k === 'dmg' || f.k === 'heal')));
+    const hit = pick(G, 2, (d) => (d.fx || []).some((f) => f && f.k === 'dmg' && f.v > 0)).filter((b) => blk.indexOf(b) < 0);
+    h.ok(blk.length === 1 && hit.length === 2, 'a Block prize and two weapons');
+    const e0 = G.fight.enemies.map((e) => e.hp + e.block), b0 = G.fight.player.block;
+    T.RENDER.fx.reduced = true;
+    let done = 0, lastHit = -1, firstHit = -1, sawBig = false;
+    try {
+      fakeGrab(G, C, hit.concat(blk));
+      visual(G, 60 * 10, () => {
+        const R = G.row.state, items = R ? R.slots.filter((s) => s.k === 'item' && s.st === 'hit') : [];
+        if (items.length && firstHit < 0) firstHit = G.S.t;
+        if (items.length === 3 && lastHit < 0) lastHit = G.S.t;
+        if (G.fs.rr2Q) sawBig = true;
+        if (R && !G.row.pending() && !G.fs.playQ.length && !G.state().grabInFlight && done++ > 3) return false;
+      });
+    } finally { T.RENDER.fx.reduced = false; }
+    const R = G.row.state;
+    const dealt = G.fight.enemies.reduce((a, e, i) => a + (e0[i] - (e.hp + e.block)), 0);
+    h.ok(R.tot && R.tot.b === G.fight.player.block - b0 && R.tot.b > 0, 'the header\'s Block total is the Block gained (' + (R.tot && R.tot.b) + ')');
+    h.ok(R.tot.d >= dealt && R.tot.d > 0, 'its sword total counts every hit (' + R.tot.d + ', ' + dealt + ' through Block)');
+    h.ok(lastHit - firstHit >= 1.4, 'calm (reduced motion) still reads one by one (' + (lastHit - firstHit).toFixed(2) + ' s for three)');
+    h.ok(G.row.state.slots.find((s) => s.inst === blk[0].data.inst), 'the Block prize had its card');
+  });
+
+  h.test('rrow22: while the panel is up the rest waits: no JACKPOT banner, stickers, tips or toasts over it; then they come', () => {
+    const { T, G, C } = rrBoot(false);
+    const jp = (g) => g.ann.log.filter((x) => x.k === 'in' && x.cls === 'jackpot').length;
+    for (let i = 0; i < 60 * 10 && (G.prog.current || G.prog.queue.length || G.feel.cur); i++) G.update(DT);   // what the fight's start said is done
+    const j0 = jp(G);
+    G.S.lastToast = '';
+    fakeGrab(G, C, pick(G, 3));
+    h.ok(G.row.quiet(), 'the row is busy: quiet');
+    h.eq(jp(G), j0, 'three in one grab: no JACKPOT banner over the row');
+    h.ok(G.row.state.stamp && G.row.state.stamp.txt === 'JACKPOT!', 'the JACKPOT is a stamp on the row instead');
+    h.ok(G.run.jackpots >= 1, 'and still counts as a jackpot');
+    G.row.toast('A toast in the middle of it', 2);
+    h.ok(G.S.lastToast !== 'A toast in the middle of it' && G.row.K2.toasts.length === 1, 'a toast waits');
+    G.row.sticker('first_prize');
+    G.feel.want('combo');
+    h.ok(!G.feel.safe(), 'no tip card while it is busy');
+    let stickerAt = -1, toastAt = -1, quietEnd = -1, early = false;
+    const t0 = G.S.t;
+    for (let i = 0; i < 60 * 12; i++) {
+      G.update(DT);
+      const q = G.row.quiet();
+      if (q && (G.prog.current || G.S.lastToast === 'A toast in the middle of it' || G.feel.cur)) early = true;
+      if (!q && quietEnd < 0) quietEnd = G.S.t;
+      if (G.prog.current && stickerAt < 0) stickerAt = G.S.t;
+      if (G.S.lastToast === 'A toast in the middle of it' && toastAt < 0) toastAt = G.S.t;
+      if (stickerAt > 0 && toastAt > 0) break;
+    }
+    h.ok(!early, 'nothing came up while the row was busy');
+    h.ok(quietEnd > t0, 'the quiet ends once the panel is gone (' + (quietEnd - t0).toFixed(2) + ' s)');
+    h.ok(toastAt >= quietEnd && toastAt - quietEnd < 0.5, 'then the toast speaks');
+    h.ok(stickerAt >= quietEnd && stickerAt - quietEnd < 1, 'and the sticker slaps on');
+    h.eq(G.row.K2.toasts.length, 0, 'nothing left waiting');
+    // the old path (no row): the JACKPOT banner as ever
+    const B = rrBoot(true), b0 = jp(B.G);
+    fakeGrab(B.G, B.C, pick(B.G, 3));
+    h.ok(!B.G.row.quiet(), 'no row: no quiet');
+    h.eq(jp(B.G), b0 + 1, 'no row: the JACKPOT banner as ever');
+  });
+
+  h.test('rrow22: out of grabs, the turn ends (TURN OVER, the enemy turn) only after the row is played and its total shown', () => {
+    const { G, C } = rrBoot(false);
+    G.fight.player.grabs = 1;
+    const turns = () => G.ann.log.filter((x) => x.k === 'in' && x.cls === 'turn').length;
+    fakeGrab(G, C, pick(G, 2));
+    const n0 = turns();
+    let lastHit = -1, enemyAt = -1, banAt = -1, shownAtEnemy = 0;
+    visual(G, 60 * 12, () => {
+      const R = G.row.state, items = R ? R.slots.filter((s) => s.k === 'item') : [];
+      if (lastHit < 0 && items.length && items.every((s) => s.st === 'hit')) lastHit = G.S.t;
+      if (banAt < 0 && turns() > n0) banAt = G.S.t;
+      if (G.fs.enemyTurn && enemyAt < 0) { enemyAt = G.S.t; shownAtEnemy = R ? R.slots.length : 0; }
+      if (enemyAt > 0 && G.S.t - enemyAt > 0.6) return false;
+    });
+    h.ok(lastHit > 0 && banAt > 0 && enemyAt > 0, 'the row played, TURN OVER, the enemy turn');
+    h.ok(banAt - lastHit >= 1.4, 'TURN OVER waits for the total to be shown (' + (banAt - lastHit).toFixed(2) + ' s after the last hit)');
+    h.ok(enemyAt - lastHit >= 1.5, 'and so does the enemy turn (' + (enemyAt - lastHit).toFixed(2) + ' s)');
+    h.ok(!G.row.state.slots.length, 'the panel is gone once the enemy turn is under way (it was ' + shownAtEnemy + ' cards as it began)');
+  });
+
+  h.test('rrow22: the first row a profile ever resolves gets a one-line hint, once (saved in clawspire_meta)', () => {
+    const { T, G, C } = rrBoot(false);
+    h.ok(!(G.S.meta.settings && G.S.meta.settings.rowHint), 'a new profile has not seen it');
+    fakeGrab(G, C, pick(G, 2));
+    let saw = 0;
+    visual(G, 60 * 2, () => { if (G.row.state.hintT > 0) saw++; });
+    h.ok(saw > 30, 'the hint shows under the panel (' + saw + ' frames)');
+    const m = JSON.parse(T._store.clawspire_meta);
+    h.eq(m.settings.rowHint, 1, 'saved inside the meta object (settings.rowHint)');
+    h.ok(Object.keys(T._store).every((k) => /^clawspire_/.test(k)), 'no new localStorage key');
+    settle(G, 20);
+    if (G.fight.player.grabs <= 0) { G.endTurn(); settle(G, 30); }
+    fakeGrab(G, C, pick(G, 2));
+    let again = 0;
+    visual(G, 60 * 2, () => { if (G.row.state.hintT > 0) again++; });
+    h.eq(again, 0, 'the next row: no hint');
+    const B = rrBoot(false, null, null, T._store);
+    fakeGrab(B.G, B.C, pick(B.G, 2));
+    let after = 0;
+    visual(B.G, 60, () => { if (B.G.row.state.hintT > 0) after++; });
+    h.eq(after, 0, 'a reload remembers it');
+  });
+
+  h.test('rrow22: the speed button on the panel cycles the speed (not a skip); 2x and 4x are still one by one', () => {
+    const { G, C } = rrBoot(false);
+    fakeGrab(G, C, pick(G, 3));
+    visual(G, 50);
+    const R = G.row.state, b = G.row.btn();
+    h.ok(R.op > 0.5 && R.go, 'the panel is open');
+    h.ok(G.row.tap(b.x + b.w / 2, b.y + b.h / 2), 'a tap on » 1x is taken');
+    h.eq(G.row.speed(), 2, 'it is 2x now');
+    h.ok(!R.skip, 'and the row was not skipped');
+    const hits = [];
+    visual(G, 60 * 6, () => { G.row.state.slots.forEach((s, i) => { if (s.k === 'item' && s.st === 'hit' && hits[i] == null) hits[i] = G.S.t; }); if (hits.filter((x) => x).length >= 3) return false; });
+    const gaps = [hits[1] - hits[0], hits[2] - hits[1]];
+    h.ok(gaps.every((g) => g >= 0.35 && g <= 0.6), '2x: about 0.45 s a card, still readable (' + gaps.map((g) => g.toFixed(2)).join(', ') + ')');
+    G.row.cycle(); G.row.cycle();
+    h.eq(G.row.speed(), 1, 'round to 1x');
+  });
+
+  h.test('rrow22: the panel draws its band, its open header, GO!, a stamp, the hint and the aim, in English and calm, never throwing', () => {
+    const { T, G, C } = rrBoot(false, ['jackpot_bell', 'prize_counter']);
+    const said = [];
+    const ctx = new Proxy({}, { get(t, p) {
+      if (p === 'measureText') return (s) => ({ width: String(s).length * 7 });
+      if (p === 'fillText') return (s) => said.push(String(s));
+      if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop() {} });
+      if (p === 'canvas') return { width: 540, height: 960 };
+      if (p in t) return t[p];
+      return () => {};
+    }, set(t, p, v) { t[p] = v; return true; } });
+    let threw = null;
+    G.S.headless = false;
+    try {
+      fakeGrab(G, C, pick(G, 3));
+      for (let i = 0; i < 60 * 8 && !ready(G); i++) { G.update(DT); if (i % 4 === 0) { try { G.row.draw(ctx, G.S.t); } catch (e) { threw = e; break; } } }
+      T.RENDER.fx.reduced = true;
+      fakeGrab(G, C, pick(G, 2));
+      for (let i = 0; i < 60 * 6 && !ready(G); i++) { G.update(DT); if (i % 4 === 0) { try { G.row.draw(ctx, G.S.t); } catch (e) { threw = e; break; } } }
+    } finally { G.S.headless = true; T.RENDER.fx.reduced = false; }
+    h.ok(!threw, 'never throws: ' + (threw && threw.stack));
+    h.ok(said.includes('YOUR HITS'), 'the header says YOUR HITS');
+    h.ok(said.includes('» 1x'), 'the speed button');
+    h.ok(said.some((s) => /one by one/.test(s)), 'the first-time hint');
+    h.ok(said.includes('JACKPOT!'), 'the JACKPOT stamp');
+    said.length = 0;
+    T.RENDER.rrRow(ctx, { x0: 8, x1: 532, y: 336, ph: 92, op: 0, a: 1, t: 0, slots: [{ k: 'item', st: 'wait', cx: 120, cy: 382, w: 120, h: 82, def: T.DATA.ITEMS.rusty_sword, name: 'Rusty Sword', pre: { d: 6, any: true } }] });
+    h.ok(said.includes('YOUR') && said.includes('HITS'), 'the band\'s label while the claw is out: ' + said.join(' | '));
+    h.ok(said.includes('6') && said.includes('Rusty Sword'), 'a card: its number and its name');
+    let threw2 = null;
+    try {
+      T.RENDER.rrRow(T._ctx, { x0: 8, x1: 532, y: 336, ph: 148, op: 1, a: 1, t: 1, go: 0.5, live: true, spd: 4, tot: { d: 12, b: 8, h: 3 }, tp: 1, stamp: { txt: 'DOUBLE', col: '#2ee6d6', t: 1 }, hint: 1, btn: { x: 446, y: 338, w: 78, h: 24 }, aim: [{ x: 200, y: 240, r: 40 }],
+        slots: [{ k: 'item', st: 'lift', lift: 0.5, cx: 70, cy: 420, w: 120, h: 110, def: {}, pre: { d: 5, all: true, s: 'poison', sv: 2, any: true }, tag: 'FREE' }, { k: 'item', st: 'hit', cx: 200, cy: 420, w: 40, h: 110, res: { d: 3, any: true }, procs: [{ name: 'X', n: {} }] }, { k: 'grab', st: 'act', cx: 360, cy: 420, w: 160, h: 110, tag: 'COMBO', label: 'Scrap Storm', res: { gr: 1, any: true } }, null, {}] });
+      T.RENDER.rrRow(T._ctx, { ph: 92, slots: [{}] });
+    } catch (e) { threw2 = e; }
     h.ok(!threw2, 'junk input never throws: ' + (threw2 && threw2.stack));
   });
 }

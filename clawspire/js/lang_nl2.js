@@ -1470,3 +1470,15 @@ I18N.add('nl', {
 }
 });
 // ---------------------------------------------------------------- /RROW
+// ---------------------------------------------------------------- RROW round 22: the resolve row made impossible to miss
+// DESIGN.md "The resolve row, round 22": the panel's header, its GO! beat, the card tags and the first-time hint.
+I18N.add('nl', {
+"ui": {
+"YOUR HITS": "JOUW TREFFERS",
+"GO!": "GAAN!",
+"FREE": "GRATIS",
+"GOLDEN": "GOUDEN",
+"Your prizes hit one by one. Tap » to speed up.": "Je prijzen slaan één voor één toe. Tik op » om te versnellen."
+}
+});
+// ---------------------------------------------------------------- /RROW round 22
