@@ -184,6 +184,17 @@
     if (S.root) S.root.classList.add('en-settled');
   }
   const instant = () => headless() || reduced();
+  // keep the pen in view while the page types itself. The unwritten rest of the text is already laid out (invisible), so scrolling to the bottom of the
+  // box threw the drop cap and the first lines off the top at once; scroll only as far as the caret needs, and not at all while it is on screen.
+  function followPen(bodyEl) {
+    const caret = bodyEl.querySelector ? bodyEl.querySelector('.tw-caret') : null;
+    if (!caret || !bodyEl.getBoundingClientRect || !caret.getBoundingClientRect) return;
+    const br = bodyEl.getBoundingClientRect(), cr = caret.getBoundingClientRect();
+    const k = bodyEl.clientHeight > 0 && br.height > 0 ? br.height / bodyEl.clientHeight : 1;
+    const over = (cr.bottom - br.bottom) / k + 10;
+    if (over > 0) bodyEl.scrollTop += over;
+    if (bodyEl.classList) bodyEl.classList.toggle('scrolled', bodyEl.scrollTop > 2);
+  }
   // a key press that arrives in the first moments of a screen belongs to the screen before it (a player mashing Enter through a fight must not
   // restart the run the instant the defeat page opens): keys wake up 0.7 s in. Clicks and taps are never held back.
   const armed = (S) => headless() || S.t >= 0.7;
@@ -454,7 +465,7 @@
 
       S.tw = typewriter(S, typed, rest, {
         cps: 30, delay: 700,
-        onType: () => { bodyEl.scrollTop = bodyEl.scrollHeight; },
+        onType: () => followPen(bodyEl),
       });
       S.tw.then(() => { root.classList.add('st-done'); S.doneAt = S.t; });
       at(S, 520, () => { snd('ink_splash'); seal.classList.add('stamped'); });
@@ -569,7 +580,7 @@
     o = o || {};
     const data = scoreRows(sm, R);
     const list = mk('div', { class: 'en-ledger', role: 'list', 'aria-label': 'Score breakdown' });
-    const baseDelay = o.delay === undefined ? 900 : o.delay;
+    const baseDelay = (o.delay === undefined ? 900 : o.delay) + Math.round(S.t * 1000);   // relative to NOW: the victory showcase is built seconds into the screen, and absolute times fired every row at once and left the total at the wrong number
     const gap = o.gap || 260;
     const cum = { v: 0 };
     const totalEl = mk('b', { class: 'en-total-n', text: instant() ? fmt(data.score) : '0' });
@@ -1097,7 +1108,7 @@
     const seal = mk('div', { class: 'st-seal vc-seal', 'aria-hidden': 'true' }, UI.hanko('END', { size: 'lg' }));
     root.appendChild(page); root.appendChild(seal);
     x.nodes.push(page, seal);
-    S.tw = typewriter(S, typed, dropCap ? text.slice(1) : text, { cps: 30, delay: 800, onType: () => { bodyEl.scrollTop = bodyEl.scrollHeight; } });
+    S.tw = typewriter(S, typed, dropCap ? text.slice(1) : text, { cps: 30, delay: 800, onType: () => followPen(bodyEl) });
     S.tw.then(() => { root.classList.add('st-done'); S.doneAt = S.t; });
     atPhase(S, 560, () => { snd('ink_splash'); seal.classList.add('stamped'); });
     UI.announce(title);

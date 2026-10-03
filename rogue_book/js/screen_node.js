@@ -1108,6 +1108,7 @@
       const box = mk('div', { class: 'rw-relicbox' }, mk('h3', { class: 'rw-h3', text: 'A treasure guarded here' }), take, mk('div', { class: 'row center gap-s' }, UI.btn('Take it', { kind: 'primary', size: 'sm', onclick: () => relicChoice(id, take, []) }), leave));
       if (rows.length >= 3) ledger.classList.add('dense');     // a gem or a brush above it: the box must slim down or Take it and Leave it fall off the bottom of the stage (phones: from 3 rows)
       if (rows.length >= 4) ledger.classList.add('tall');      // gold, ink, a gem AND a brush: even the desktop stage needs the slim box
+      if (rows.length >= 3 && ((UI.opt && UI.opt.textScale) || 1) > 1.01) ledger.classList.add('snug');   // bigger text grows every row: at 1.15 and 1.3 the box still fell off the bottom, so the rows and the relic text tighten too
       ledger.appendChild(box);
       box.classList.add('rise'); box.style.setProperty('--i', '4');
     }
@@ -1226,9 +1227,30 @@
     const tagEl = (price, was) => mk('span', { class: 'sh-tag' }, mk('i', { class: 'sh-coin', 'aria-hidden': 'true' }), was ? mk('s', { text: was }) : null, mk('b', { text: price }));
     const stampEl = () => mk('i', { class: 'sh-stamp', 'aria-hidden': 'true', text: 'SOLD' });
 
+    // a shelf card is 168 px wide (about 90 px on a phone), too small to read the rules, and one tap buys it: hover (mouse) or a 0.4 s press (touch) shows it BIG
+    // on the left, over the peddler; the tap that ends a long press never buys. Nothing here changes the plain click.
+    let peekTok = 0, peekHeld = false;
+    const peekHide = () => { peekTok += 1; if (S.peekShown) { S.peekShown = false; UI.tip.hide(); } };
+    const peekShow = (inst) => {
+      if (!S.alive() || UI.overlay.count()) return;
+      const w = safe(() => UI.tip.card(inst, { x: 22, y: 122, size: 'big' }), null);
+      if (w) { S.peekShown = true; const col = w.querySelector('.tip-kwcol'); if (col) col.remove(); }
+    };
+    const bindPeek = (card, inst) => {
+      card.addEventListener('pointerenter', (e) => { if (e.pointerType && e.pointerType !== 'mouse') return; const my = ++peekTok; UI.after(wait(220), () => { if (peekTok === my) peekShow(inst); }); });
+      card.addEventListener('pointerleave', () => peekHide());
+      card.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        peekHeld = false;
+        const my = ++peekTok;
+        UI.after(wait(420), () => { if (peekTok === my) { peekHeld = true; peekShow(inst); } });
+      });
+      ['pointerup', 'pointercancel'].forEach((ev) => card.addEventListener(ev, (e) => { if (e.pointerType !== 'mouse') peekHide(); }));
+    };
     by.card.forEach((it, i) => {
       const inst = instOf(it.id, 0, 200 + i);
-      const card = UI.card(inst, { size: 'deck', showGems: true, onclick: () => buy(it) });
+      const card = UI.card(inst, { size: 'deck', showGems: true, onclick: () => { if (peekHeld) { peekHeld = false; return; } buy(it); } });
+      bindPeek(card, inst);
       const tag = tagEl(it.price, it.sale ? it.was : 0);
       const slot = mk('div', { class: 'sh-item kind-card', dataset: { key: it.key } }, card, it.sale ? mk('i', { class: 'sh-sale', text: 'SALE' }) : null, tag, stampEl());
       const def = DATA.cards[it.id] || {};
@@ -1476,6 +1498,8 @@
       b.classList.add('ev-go');
       outEl.appendChild(b);
       b.classList.add('rise');
+      // a long fable with a title on two lines, a card chip and a big font fills the page: bring the button into view instead of leaving it under the page edge
+      UI.after(wait(80), () => { if (!S.dead) safe(() => { if (right.scrollHeight > right.clientHeight + 1) { if (isFn(right.scrollTo)) right.scrollTo({ top: right.scrollHeight, behavior: reduced() ? 'auto' : 'smooth' }); else right.scrollTop = right.scrollHeight; } }); });
       return b;
     };
 

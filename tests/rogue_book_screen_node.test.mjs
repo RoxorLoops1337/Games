@@ -332,6 +332,29 @@ await t.test('shop: buying each kind of ware changes exactly what RUN says, stam
   t.eq(errs(g), 0, 'no console errors');
 });
 
+await t.test('shop: a card can be read big (a mouse hover, a long press on touch) and the tap that ends a long press never buys', async () => {
+  const g = fresh({ seed: 8 }); const R = mkRun(g, { seed: 8, gold: 2000 });
+  const node = nodeAt(g, R, 'shop', { shop: { seed: 99 } });
+  await open(g, 'shop', R, node);
+  const it = node.stock.items.find((x) => x.kind === 'card' && !x.sold);
+  const card = $(g, '.card', itemEl(g, it.key));
+  g._pointer('pointerenter', card, { pointerType: 'mouse' }); await settle(g);
+  t.ok(g.UI.tip.open && txt($(g, '#tips')).indexOf(g.DATA.cards[it.id].name) >= 0, 'hovering a shelf card shows it big, with its name');
+  t.ok(!$(g, '#tips .tip-kwcol'), 'without the glossary column that would cover the neighbouring wares');
+  g._pointer('pointerleave', card, { pointerType: 'mouse' }); await settle(g);
+  t.ok(!g.UI.tip.open, 'leaving takes it away');
+  const gold = R.gold;
+  g._pointer('pointerdown', card, { pointerType: 'touch' }); await settle(g);
+  t.ok(g.UI.tip.open, 'a long press on touch shows it');
+  g._pointer('pointerup', card, { pointerType: 'touch', buttons: 0 }); await settle(g);
+  t.ok(!g.UI.tip.open, 'letting go hides it');
+  card.click(); await settle(g);
+  t.ok(!it.sold && R.gold === gold, 'the click that ends a long press buys nothing');
+  await click(g, card);
+  t.ok(it.sold && R.gold === gold - it.price, 'the next plain tap buys as before');
+  t.eq(errs(g), 0, 'no console errors');
+});
+
 await t.test('shop: a purse too thin refuses (no state change, a toast, a sad peddler) and poor wares are marked', async () => {
   const g = fresh({ seed: 3 }); const R = mkRun(g, { seed: 3, gold: 5 });
   const node = nodeAt(g, R, 'shop', { shop: { seed: 5 } });

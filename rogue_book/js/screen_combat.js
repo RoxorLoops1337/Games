@@ -61,7 +61,7 @@
   const DRAG_PX = 8;                             // pointer travel that turns a press into a drag
   const BAR_W = { s: 104, m: 120, l: 140, xl: 212 };
   const BARK_GAP_MS = 6000, BARK_CHANCE = 0.35;
-  const HERO_CHIPS = 6, ENEMY_CHIPS = 6, RELIC_SHOWN = 7;
+  const HERO_CHIPS = 6, ENEMY_CHIPS = 5, RELIC_SHOWN = 7;   // enemy rows must stay under the 145 px lane gap: five chips or four and a +N, never six
   const WATCHDOG_S = 6;                          // a SCENE beat that has not resolved after this many seconds is force-finished
   const FALLBACK_GATES = { hit: 120, heal: 60, draw: 40, swap: 380, enemy_act: 260, summon: 400, death: 420, enemy_phase: 900, hero_down: 500, hero_revive: 500, turn_start: 500, end: 700 };
   const REASONS = {
@@ -1280,6 +1280,13 @@
     const en = S.en[id], u = enemyOf(S.vm, id);
     if (!en || !u) return;
     const node = intentTip(u);
+    // the status chips under the bar are about 11 px on a phone and a long press away: a tap names what is on the foe right here
+    const st = statusList(u.st || {});
+    if (st.length) {
+      node.appendChild(mk('p', { class: 'tk-text tk-move', text: 'Right now' }));
+      st.slice(0, 6).forEach((k) => node.appendChild(mk('p', { class: 'tk-text', text: statusLabel(k) + ' ' + u.st[k] + ': ' + DATA.statuses[k].text })));
+      if (st.length > 6) node.appendChild(mk('p', { class: 'tk-text', text: '...and ' + (st.length - 6) + ' more.' }));
+    }
     UI.tip.showFor(en.bubble.hidden ? en.hit : en.bubble, node, { side: 'top' });
     S.inspectToken = (S.inspectToken || 0) + 1;
     const my = S.inspectToken;

@@ -719,6 +719,28 @@ await t.test('camera: a small screen starts closer; hexAt maps the stage to the 
   t.eq(errs(g), 0, 'clean');
 });
 
+await t.test('a phone shows fewer treasure icons so the strip never slides under the brush tray; the +N chip carries the rest', async () => {
+  const ids = Object.keys(fresh().DATA.relics).slice(0, 8);
+  const g = fresh({ viewport: { w: 844, h: 390 }, touch: true });
+  const R = mkRun(g, { relics: ids, brushes: ['stroke', 'wave', 'fan'] });
+  g._resize(844, 390);
+  await open(g, R);
+  t.eq($$(g, '.mp-relics .relic').length, 3, 'compact: three icons');
+  t.eq(txt($(g, '.mp-relic-more')), '+5', 'and +5 for the other five');
+  const g2 = fresh({ viewport: { w: 844, h: 390 }, touch: true });
+  const R2 = mkRun(g2, { relics: ids, brushes: ['stroke', 'wave', 'fan', 'splash', 'halo', 'blot'] });
+  g2._resize(844, 390);
+  await open(g2, R2);
+  t.eq($$(g2, '.mp-relics .relic').length, 2, 'six brush kinds fill the tray: two icons');
+  t.eq(txt($(g2, '.mp-relic-more')), '+6', 'and +6');
+  const g3 = fresh();
+  const R3 = mkRun(g3, { relics: ids });
+  await open(g3, R3);
+  t.eq($$(g3, '.mp-relics .relic').length, 6, 'a full-size screen keeps six');
+  t.eq(txt($(g3, '.mp-relic-more')), '+2', 'and +2');
+  t.eq(errs(g) + errs(g2) + errs(g3), 0, 'clean');
+});
+
 // ==================================================================================================== keyboard
 await t.test('keyboard: Q E A D Z C move a hex cursor (announced), Enter paints or walks, Esc cancels, modified keys and focused buttons are left alone', async () => {
   const g = fresh({ seed: 9 }); const R = mkRun(g, { seed: 9 });

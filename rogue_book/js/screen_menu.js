@@ -69,6 +69,7 @@
     console.warn('[menu] ' + msg + (e ? ': ' + (e.message || e) : ''));
   };
   const reduce = () => !!(UI.opt && UI.opt.reduceMotion);
+  const bigText = () => !!(UI.opt && UI.opt.textScale > 1.1);                 // the Larger text size: screens drop a little chrome (class ts-big) so nothing clips
   const T = () => (typeof ART !== 'undefined' && ART && ART.tk ? ART.tk : null);
   // Every ART call goes through here: a missing or throwing painter must never take a screen down (UI would stop calling draw()).
   const art = (fn, key) => { try { return fn(); } catch (e) { warnOnce('art:' + (key || 'x'), 'ART call failed (' + (key || 'x') + ')', e); return undefined; } };
@@ -512,10 +513,12 @@
       S.gate = gate;
       add(root, mk('div', { class: 'mn-title' + (gateOn ? ' gated' : '') }, mk('h1', { class: 'sr-only', text: 'Inkwoven, a rogue storybook' }), tag, menu, foot, fs, gate));
       S.wrap = root.firstChild;
+      if (gateOn) menu.setAttribute('inert', '');                // Tab must not reach the plaques hidden under the gate
 
       const dismiss = () => {
         if (!S.gate || S.gateDone) return;
         S.gateDone = true; mem.gateDone = true;
+        menu.removeAttribute('inert');
         if (typeof AUDIO !== 'undefined' && AUDIO) { safe(() => AUDIO.init()); safe(() => AUDIO.resume()); }
         S.gate.classList.add('out');
         S.wrap.classList.remove('gated');
@@ -668,6 +671,7 @@
         lift: {}, expr: {}, exprUntil: {}, pose: {}, slotFrom: {}, cache: {}, bark: [null, null], barkN: 0, banterT: 2.2, banterN: 0, atmos: makeAtmos('hero', 3), t: 0,
         saved: null, cards: {}, seedToday, sil: {},
       };
+      root.classList.toggle('ts-big', bigText());
       const trialMax = safe(() => META.trialMax(), 0) || 0;
       S.trialMax = trialMax;
       S.trial = clamp(mem.trial | 0, 0, trialMax);
@@ -722,13 +726,14 @@
       // ---- launch panel: trial, seed, daily, begin
       const trialName = mk('b', { class: 'mn-tr-name' });
       const trialText = mk('span', { class: 'mn-tr-text' });
+      const trialRule = mk('span', { class: 'mn-tr-rule' });                     // the newest rule in words: on a phone it replaces the rules list, which has no room
       const minus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Lower the Ink Trial', text: '‹' });
       const plus = mk('button', { type: 'button', class: 'mn-step', 'aria-label': 'Raise the Ink Trial', text: '›' });
       minus.addEventListener('click', () => setTrial(S.trial - 1, true));
       plus.addEventListener('click', () => setTrial(S.trial + 1, true));
       const pips = mk('div', { class: 'mn-pips', 'aria-hidden': 'true' }, U.range(11).map((n) => mk('i', { class: 'mn-pip', dataset: { n } })));
       const rules = mk('ul', { class: 'mn-rules mn-scroll', 'aria-label': 'Ink Trial rules' });
-      const trialBox = mk('div', { class: 'mn-trial' }, mk('div', { class: 'mn-tr-head' }, mk('span', { class: 'mn-tr-label', text: 'Ink Trial' }), minus, mk('div', { class: 'mn-tr-mid', 'aria-live': 'polite' }, trialName, trialText), plus), pips);
+      const trialBox = mk('div', { class: 'mn-trial' }, mk('div', { class: 'mn-tr-head' }, mk('span', { class: 'mn-tr-label', text: 'Ink Trial' }), minus, mk('div', { class: 'mn-tr-mid', 'aria-live': 'polite' }, trialName, trialRule, trialText), plus), pips);
       const dailyToggle = UI.toggle({ label: 'Daily Tale', value: S.daily, onchange: (v) => setDaily(v) });
       const seed = mk('input', { type: 'text', class: 'mn-seed', 'aria-label': 'Seed (any word or number)', placeholder: 'Random seed', title: 'Any word or number. The same seed gives the same map.', maxlength: '24', autocomplete: 'off', spellcheck: 'false', value: S.seedText });
       seed.addEventListener('input', () => { S.seedText = seed.value; mem.seedText = seed.value; });
@@ -740,7 +745,7 @@
         mk('label', { class: 'mn-daily' }, dailyToggle, mk('span', { class: 'mn-daily-txt' }, mk('b', { text: 'Daily Tale' }), mk('i', { text: 'the same tale for everyone today' }))),
         mk('div', { class: 'mn-seedrow' }, mk('span', { class: 'mn-seed-label', text: 'Seed' }), seed, dice), begin);
       launch.classList.add('mn-launch');
-      Object.assign(S, { minus, plus, trialName, trialText, pips, rules, dailyToggle, seed, dice, begin, launch, trialBox });
+      Object.assign(S, { minus, plus, trialName, trialText, trialRule, pips, rules, dailyToggle, seed, dice, begin, launch, trialBox });
 
       add(root, mk('div', { class: 'mn-hs' }, top, cardsWrap, stageEl, detail, launch));
       S.stageEl = stageEl;
@@ -858,6 +863,7 @@
         const maxT = S.trialMax;
         const tr = DATA.trials['trial_' + S.trial];
         S.trialName.textContent = S.trial === 0 ? 'Trial 0' : 'Trial ' + roman(S.trial) + ': ' + (tr ? tr.name : '');
+        S.trialRule.textContent = tr && S.trial > 0 && !S.daily ? tr.text : '';
         S.trialText.textContent = S.daily ? 'The Daily Tale is always Trial 0.' : maxT === 0 ? 'Win a tale to unlock Ink Trials.' : S.trial === 0 ? 'The tale as the Author wrote it.' : 'Every level below is added on top.';
         S.minus.classList.toggle('dim', S.daily || S.trial <= 0);
         S.plus.classList.toggle('dim', S.daily || S.trial >= maxT);
@@ -868,7 +874,7 @@
         clear(S.rules);
         if (S.trial === 0) S.rules.appendChild(mk('li', { class: 'mn-rule none', text: maxT === 0 ? 'No trials yet. Reach the last page once to open the first.' : 'No extra rules. Higher trials stack their rules here.' }));
         for (let k = 1; k <= S.trial; k++) { const d = DATA.trials['trial_' + k]; if (d) S.rules.appendChild(mk('li', { class: 'mn-rule' + (k === S.trial ? ' new' : '') }, mk('b', { text: roman(k) + '. ' + d.name }), mk('span', { text: ' ' + d.text }))); }
-        S.rules.scrollTop = S.rules.scrollHeight;
+        S.rules.scrollTop = S.trial > 0 ? S.rules.scrollHeight : 0;      // the newest rule is the one at the bottom; the lone "no trials" line starts at its top
         // seed and daily
         S.dailyToggle.rbSet(S.daily);
         S.seed.disabled = S.daily;
@@ -1823,7 +1829,7 @@
     const wrap = mk('div', { class: 'mn-tiles' });
     ['camp', 'shop', 'forge', 'event', 'chest', 'gemcache', 'well', 'brush', 'elite'].forEach((id, i) => {
       const d = DATA.tiles[id] || { name: cap(id), text: '' };
-      const el = mk('div', { class: 'mn-tl', style: { '--i': String(i) } }, mk('span', { class: 'mn-tl-ico' }, UI.icon('tile', id, 50, {})), mk('b', { text: d.name }), mk('i', { text: d.text }));
+      const el = mk('div', { class: 'mn-tl', style: { '--i': String(i) } }, mk('span', { class: 'mn-tl-ico' }, UI.icon('tile', id, bigText() ? 38 : 50, {})), mk('b', { text: d.name }), mk('i', { text: d.text }));
       wrap.appendChild(el);
     });
     return { el: wrap };
@@ -1890,7 +1896,7 @@
     const prev = btn('Previous', { kind: 'secondary', size: 'lg', sfx: QUIET, onclick: () => go(H.page - 1) });
     const next = btn('Next', { kind: 'primary', size: 'lg', sfx: QUIET, onclick: () => { if (H.page >= HOWTO.length - 1) { sfx('ui_back'); exit(); } else go(H.page + 1); } });
     const nav = mk('nav', { class: 'mn-ht-nav', 'aria-label': 'How to play pages' }, prev, dots, next);
-    const root = mk('div', { class: 'mn-howto ' + mode }, book, nav);
+    const root = mk('div', { class: 'mn-howto ' + mode + (bigText() ? ' ts-big' : '') }, book, nav);
 
     function go(i, silent) {
       if (i < 0 || i >= HOWTO.length) { if (i >= HOWTO.length) exit(); return; }

@@ -4,7 +4,7 @@
    Look: lacquered indigo panels with gold hairlines, washi paper speech bubbles for intents, vermilion hanko seals for counts, brush-stroke
    banners, an ink-drop energy orb. Text sizes follow --ts but the fixed boxes cap the growth (min(var(--ts), 1.2)) so nothing clips at 1.3. */
 
-.cm { --ts2: min(var(--ts), 1.15); position: absolute; inset: 0; overflow: hidden; color: var(--paper); font-family: var(--font-ui); }
+.cm { --ts2: min(var(--ts), 1.15); position: absolute; inset: 0; overflow: hidden; overflow: clip; color: var(--paper); font-family: var(--font-ui); }
 .cm * { box-sizing: border-box; }
 .cm > * { pointer-events: none; }
 .cm button, .cm [role=button], .cm .card, .cm .cm-int, .cm .cm-prompt { pointer-events: auto; }
@@ -260,7 +260,7 @@
 .cm-banner.foe .cb-text { color: #ffc0c6; text-shadow: 0 4px 0 rgba(20, 15, 46, .7), 0 0 26px rgba(232, 56, 61, .65); }
 .cm-banner.foe .cb-swash { background: linear-gradient(90deg, transparent, rgba(80, 12, 40, .92) 10%, rgba(40, 8, 28, .96) 50%, rgba(80, 12, 40, .92) 90%, transparent); }
 
-.cm-prompt { position: absolute; left: 50%; top: 72px; transform: translateX(-50%); display: flex; align-items: center; gap: 20px; padding: 10px 14px 10px 26px; color: var(--ink); white-space: nowrap;
+.cm-prompt { position: absolute; left: 706px; top: 72px; transform: translateX(-50%); display: flex; align-items: center; gap: 20px; padding: 10px 14px 10px 26px; color: var(--ink); white-space: nowrap;
   background: var(--grain), var(--fibre), var(--paper-bg); border: 3px solid var(--ink); border-radius: 16px 20px 16px 22px / 18px 14px 20px 14px; box-shadow: 0 4px 0 var(--ink), 0 14px 24px rgba(0, 0, 0, .55), inset 0 0 0 2px rgba(245, 201, 106, .7); z-index: 90; }
 .cm-prompt[hidden] { display: none; } .cm-prompt.show { animation: cmBubbleIn2 .4s var(--ease-back) both; }
 @keyframes cmBubbleIn2 { 0% { opacity: 0; transform: translateX(-50%) translateY(-18px) scale(.92); } 100% { opacity: 1; transform: translateX(-50%); } }

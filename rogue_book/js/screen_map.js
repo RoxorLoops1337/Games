@@ -693,15 +693,24 @@
 
   // ---- the treasure strip
   const RELIC_SHOWN = 6;
+  // On a phone every icon is a 44 px touch target and the brush tray (centred, one chip per brush kind) leaves less room on the left: fewer icons, and the "+N" chip
+  // carries the rest to the full list, so the strip never slides under the tray.
+  function relicShown(R) {
+    const st = document.getElementById('stage');
+    if (!st || !st.classList.contains('compact')) return RELIC_SHOWN;
+    return brushCounts(R).order.length >= 6 ? 2 : 3;
+  }
+  const relicKey = (R) => R.relics.join(',') + '|' + relicShown(R);
   function renderRelics(s) {
     const H = s.hud, R = s.R;
     clearKids(H.relics);
     const open = () => UI.overlay.open('relics', {});
-    R.relics.slice(-RELIC_SHOWN).forEach((id) => H.relics.appendChild(UI.relic(id, { size: 'sm', onclick: open, side: 'top' })));
-    if (R.relics.length > RELIC_SHOWN) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-more', 'aria-label': (R.relics.length - RELIC_SHOWN) + ' more treasures', text: '+' + (R.relics.length - RELIC_SHOWN), onclick: open }));
+    const shown = relicShown(R);
+    R.relics.slice(-shown).forEach((id) => H.relics.appendChild(UI.relic(id, { size: 'sm', onclick: open, side: 'top' })));
+    if (R.relics.length > shown) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-more', 'aria-label': (R.relics.length - shown) + ' more treasures', text: '+' + (R.relics.length - shown), onclick: open }));
     if (!R.relics.length) H.relics.appendChild(mk('button', { type: 'button', class: 'mp-relic-none', 'aria-label': 'Treasures: none yet', onclick: open }, UI.icon('relic', 'lantern', 24, { dim: true }, 'mp-relic-none-ico'), mk('span', { text: 'Treasures' })));
     H.relics.classList.toggle('empty', !R.relics.length);
-    s.last.relics = R.relics.join(',');
+    s.last.relics = relicKey(R);
   }
 
   function tool(label, glyph, onclick, tip, key) {
@@ -796,7 +805,7 @@
       renderTray(s);
       if (s.brush && !R.brushes.some((id) => id === s.brush.id)) exitBrush(s, false);
     }
-    if (L.relics !== R.relics.join(',')) renderRelics(s);
+    if (L.relics !== relicKey(R)) renderRelics(s);
     if (L.deck !== R.deck.length) { H.deckN.textContent = String(R.deck.length); L.deck = R.deck.length; }
     const p = MAP.progress(s.M);
     if (L.prog !== p.painted) paintProgress(s, true);

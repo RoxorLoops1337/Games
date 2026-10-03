@@ -5,6 +5,13 @@
    on a JS timer. reduce-motion swaps them for a short fade; textScale grows type through var(--ts) and lets boxes grow with it. */
 
 /* ------------------------------------------------------------------------------------------------ shared pieces */
+/* Card rules text that is taller than its box (long rules plus flavour, 'reward' and 'big' cards, text scale 1.3) must start at the top: the base.css
+   box centres its lines with justify-content, which pushes the first line out of the top edge where it can neither be read nor scrolled to. Auto margins
+   centre while there is room and collapse when there is not (the old "safe center" that every browser understands). Global on purpose: every card shows it. */
+.card .c-text { justify-content: flex-start; }
+.card .c-text > :first-child { margin-top: auto; }
+.card .c-text > :last-child { margin-bottom: auto; }
+
 .nk-screen { --nk-gold: #f5c96a; }
 .nk-wrap { position: absolute; inset: 0; pointer-events: none; }
 .nk-fx { position: absolute; inset: 0; z-index: 8; pointer-events: none; overflow: visible; }
@@ -205,8 +212,9 @@
 .ev-choice.picked::after { opacity: .7; transform: scaleX(1); }
 .ev-choice.gone { opacity: 0; transform: translateX(28px); max-height: 0; min-height: 0; padding-top: 0; padding-bottom: 0; margin: -5px 0; overflow: hidden; pointer-events: none; transition: opacity .3s, transform .3s, max-height .4s .15s, padding .4s .15s, margin .4s .15s; }
 .ev-outcome { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; animation: nkFade .5s both; }
-.ev-said { margin: 0; font: italic 700 calc(15px * var(--ts) * var(--nkc, 1)) / 1.3 var(--font-ui); color: #a91d2c; }
-.ev-gains { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 2px 0 12px; }
+/* the picked choice stays on the page and already says what was chosen: the "You chose" line is kept for screen readers only, which buys back a line on a full page */
+.ev-said { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ev-gains { display: flex; flex-wrap: wrap; gap: 8px 10px; margin: 2px 0 6px; }
 .ev-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 14px 4px 6px; border-radius: 99px; font: 800 calc(15px * var(--ts) * var(--nkc, 1)) / 1.15 var(--font-ui); color: var(--white); background: var(--lacquer-bg);
   box-shadow: inset 0 0 0 1.5px rgba(245, 201, 106, .85), inset 0 0 0 3px rgba(20, 15, 46, .9), 0 3px 6px rgba(60, 35, 10, .4); animation: nkPop .5s var(--ease-back) both; animation-delay: calc(var(--i, 0) * 110ms + 60ms); }
 .ev-chip.k-good { box-shadow: inset 0 0 0 1.5px #8dffc2, inset 0 0 0 3px rgba(20, 15, 46, .9), 0 3px 6px rgba(60, 35, 10, .4); } .ev-chip.k-bad { box-shadow: inset 0 0 0 1.5px #ff8a9a, inset 0 0 0 3px rgba(20, 15, 46, .9), 0 3px 6px rgba(60, 35, 10, .4); }
@@ -459,6 +467,11 @@ body.low .nk-banner { filter: drop-shadow(0 4px 0 var(--verm-dd)); }
 #stage.compact .rw-relicbox .rw-h3, .rw-ledger.tall .rw-relicbox .rw-h3 { display: none; }
 #stage.compact .rw-relic, .rw-ledger.tall .rw-relic { padding: 4px; gap: 2px; }
 #stage.compact .rw-relic .ico, .rw-ledger.tall .rw-relic .ico { width: 60px; height: 60px; }
+/* text scale above 1 with a gem or a brush row above the relic box (desktop): tighter rows, a smaller icon and a little more height so Take it and Leave it stay on the stage */
+.rw-ledger.snug { top: 158px; max-height: 556px; }
+.rw-ledger.snug .nk-row { min-height: 44px; margin-bottom: 5px; padding-top: 2px; padding-bottom: 2px; }
+.rw-ledger.snug .rw-relic .ico { width: 52px; height: 52px; }
+.rw-ledger.snug .rl-text { font-size: calc(15px * min(var(--ts), 1.15) * var(--nkc, 1)); }
 #stage.compact .rw-ledger.dense { top: 114px; max-height: 600px; }
 #stage.compact .rw-ledger.dense .nk-row { min-height: 44px; margin-bottom: 5px; padding-top: 2px; padding-bottom: 2px; }
 #stage.compact .rw-ledger.dense .rw-relic .ico { width: 46px; height: 46px; }

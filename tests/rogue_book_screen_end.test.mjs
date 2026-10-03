@@ -566,6 +566,21 @@ await t.test('every interactive element is a real button or has a role; images a
     t.eq(gr._doc.querySelector('.cc-hero .hp-txt').textContent, R.heroes[0].hp + '/' + R.heroes[0].maxHp, 'the bar ends on the run\'s HP');
     t.eq(gr._console.error.length, 0, 'no console errors in the realtime run');
   });
+  await t.test('victory: a showcase built seconds into the screen still counts the ledger up in turn and ends on the exact score', async () => {
+    const R = WIN.R;
+    const sm = g.RUN.summary(R);
+    await goRT('victory', { summary: sm, R }, 4200);              // the epilogue has been on screen for four seconds when Skip is pressed
+    gr._click(Array.from(gr._doc.querySelectorAll('.s-victory button')).find((b) => /Skip/.test(b.textContent)));
+    await gr._tick(300);
+    const rows = () => gr._doc.querySelectorAll('.en-row.show').length;
+    t.ok(rows() < gr._doc.querySelectorAll('.en-row').length, 'the rows are not all in at once (' + rows() + ')');
+    const total = () => Number(gr._doc.querySelector('.en-total-n').textContent.replace(/,/g, ''));
+    t.ok(total() < sm.score, 'and the total is still counting (' + total() + ')');
+    await gr._tick(6000);
+    t.eq(rows(), gr._doc.querySelectorAll('.en-row').length, 'every row is in');
+    t.eq(total(), sm.score, 'the total ends on the exact score, not on the last row that finished');
+    await goRT('title', null, 500);
+  });
   await t.test('the ledger reveals row by row and ends on the exact score; leaving mid animation is safe', async () => {
     const R = WIN.R;
     const sm = g.RUN.summary(R);

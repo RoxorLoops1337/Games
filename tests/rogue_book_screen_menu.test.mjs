@@ -358,6 +358,8 @@ await t.test('heroSelect: Ink Trial stepper lists every level cumulatively, capp
   t.eq(g.UI.screens.heroSelect.state().trial, 0, 'the stepper cannot rise');
   t.ok(/unlock/i.test($(g, '.mn-tr-text').textContent), 'and says how to unlock: ' + $(g, '.mn-tr-text').textContent);
   t.ok($$(g, '.mn-rule.none').length === 1, 'the rules list explains itself');
+  t.eq($(g, '.mn-tr-rule').textContent, '', 'trial 0 has no rule to write out');
+  t.ok(!$(g, '.s-heroSelect').classList.contains('ts-big'), 'normal text keeps every ornament');
   const g2 = fresh();
   seedProfile(g2, { trialBest: 2 });
   t.eq(g2.META.trialMax(), 3, 'after winning trial 2 the next one opens');
@@ -372,10 +374,27 @@ await t.test('heroSelect: Ink Trial stepper lists every level cumulatively, capp
   t.ok(li[0].textContent.indexOf(g2.DATA.trials.trial_1.text) >= 0, 'each rule carries the trial text');
   t.eq($$(g2, '.mn-pip.on').length, 3, 'the pips show the level');
   t.ok($(g2, '.mn-tr-name').textContent.indexOf('III') >= 0, 'the level is in Roman numerals');
+  t.eq($(g2, '.mn-tr-rule').textContent, g2.DATA.trials.trial_3.text, 'the newest rule is also written under the trial name (it replaces the list on a phone)');
   g2._click(minus); await settle(g2, 1);
   t.eq($$(g2, '.mn-rule').length, 2, 'lowering drops the newest rule');
+  t.eq($(g2, '.mn-tr-rule').textContent, g2.DATA.trials.trial_2.text, 'and the written rule follows the level');
   await go(g2, 'title'); await go(g2, 'heroSelect');
   t.eq(g2.UI.screens.heroSelect.state().trial, 2, 'the chosen trial is remembered');
+});
+
+await t.test('Larger text size adds ts-big to the hero select and the how to play page (fewer ornaments, so nothing clips)', async () => {
+  const g = fresh();
+  g.UI.setSetting('textScale', 1.3);
+  await go(g, 'heroSelect');
+  t.ok($(g, '.s-heroSelect').classList.contains('ts-big'), 'heroSelect root has ts-big at 1.3');
+  await go(g, 'howto');
+  t.ok($(g, '.mn-howto').classList.contains('ts-big'), 'the how to play book has ts-big at 1.3');
+  g.UI.setSetting('textScale', 1.15);
+  await go(g, 'heroSelect');
+  t.ok($(g, '.s-heroSelect').classList.contains('ts-big'), 'Large (1.15) counts too: the threshold is above 1.1, like the end screens');
+  g.UI.setSetting('textScale', 1);
+  await go(g, 'heroSelect');
+  t.ok(!$(g, '.s-heroSelect').classList.contains('ts-big'), 'Normal keeps every ornament');
 });
 
 await t.test('heroSelect: Begin passes heroes, trial and seed to GAME.newRun; the seed field takes numbers and words', async () => {

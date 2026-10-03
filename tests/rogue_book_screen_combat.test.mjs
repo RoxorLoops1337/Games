@@ -662,6 +662,10 @@ await t.test('status chips: up to six with counts, a +N chip beyond that, and th
   await idle(g);
   const en = $(g, '.cm-en .cm-st');
   t.eq(en.querySelectorAll('.status').length, 1, 'enemy status row'); t.ok(en.querySelector('.status.s-vulnerable'), 'shows Vulnerable');
+  ids.forEach((s, i) => scr(g).debug().setStatus(st.C.enemies[0].id, s, i + 1));
+  await idle(g);
+  t.eq($(g, '.cm-en .cm-st').querySelectorAll('.status').length, 4, 'a crowded enemy row shows four chips');
+  t.eq(txt($(g, '.cm-en .cm-st .cm-more')), '+5', 'and a +5 chip, so two neighbouring rows (145 px lanes) can never overlap');
   t.eq(errs(g), 0, 'no console errors');
 });
 
@@ -1079,6 +1083,11 @@ await t.test('touch: taps select and play, hover-only paths stay quiet, tooltips
   g._click(enemyBtn(g, st.C.enemies[0].id), { pointerType: 'touch' });
   t.ok(g.UI.tip.open, 'tapping an enemy with nothing selected shows what it is about to do');
   t.ok(g._doc.querySelector('#tips').textContent.indexOf('Kappa') >= 0, 'in a bubble with its name');
+  scr(g).debug().setStatus(st.C.enemies[1].id, 'vulnerable', 2);
+  await idle(g);
+  g._click(enemyBtn(g, st.C.enemies[1].id), { pointerType: 'touch' });
+  const tipText = g._doc.querySelector('#tips').textContent;
+  t.ok(/Right now/.test(tipText) && /Vulnerable 2/.test(tipText) && /50% more/.test(tipText), 'a tap on a foe that carries a status names it and says what it does (the chips are too small to press on a phone)');
   t.eq(errs(g), 0, 'no console errors');
 });
 
