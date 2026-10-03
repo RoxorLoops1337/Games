@@ -25,6 +25,18 @@ Daily Tale, a Library of meta unlocks, a bestiary, achievements and a story to f
 - **Meta**: Inkstones buy Library unlocks, Ink Trials 1 to 10 stack difficulty, the Daily Tale is
   the same seeded run for everybody on a date.
 
+## Controls
+
+Touch, mouse and keyboard all work. On a phone hold the device sideways (portrait shows a "turn your
+device sideways" panel with a Play anyway button).
+
+- **Combat**: tap a card to lift it, tap again (or drag it up) to play, tap an enemy for attacks.
+  Keys: 1 to 9 and 0 select a card, Left and Right walk cards then targets, Enter plays, E ends the
+  turn, S swaps rows, D and G open the piles, Z toggles animation speed, Esc puts a card back.
+- **Map**: tap fog beside the painted page to paint it for 1 Ink, tap painted ground to walk. Keys:
+  Q E A D Z C move the hex cursor, Enter or Space activates it, Esc backs out.
+- **Title**: C continue, N new tale, D daily, L library, S settings, H how to play.
+
 ## Art and sound
 
 Everything is drawn in canvas code and synthesized with WebAudio. There are no image or sound files
