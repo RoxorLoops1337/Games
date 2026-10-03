@@ -15,7 +15,9 @@ Daily Tale, a Library of meta unlocks, a bestiary, achievements and a story to f
 - **Map**: a hex page of fog. Spend 1 Ink to paint a hex next to the painted area, or use a one-use
   Brush (stroke, wave, fan, splash, halo, blot) to paint a whole shape. Landmarks show as silhouettes
   before you reach them. Fights, elites, treasures, shops, camps, forges, fables (events), wells and
-  the chapter boss.
+  the chapter boss. The camera knows where the HUD is (the brush bar included): Fit and the minimum zoom
+  show the whole page with no hex under a panel, any hex can be dragged clear of the HUD at every zoom,
+  and the party is kept clear of it.
 - **Combat**: 3 Energy, draw 5. Heroes stand front or back row and cards change with the row. One free
   row swap per turn, extra swaps cost 1 Energy. Enemies telegraph their intent.
 - **Gems**: red, blue, green, gold and wild sockets on cards change how they play.
